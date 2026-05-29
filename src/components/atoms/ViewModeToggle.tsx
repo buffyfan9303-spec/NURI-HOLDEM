@@ -1,0 +1,93 @@
+import { useId } from 'react';
+
+export type ViewMode = 'list' | 'grid';
+
+interface ViewModeToggleProps {
+  value: ViewMode;
+  onChange: (mode: ViewMode) => void;
+  className?: string;
+}
+
+// ── 아이콘 ───────────────────────────────────────────────────────────────────
+
+function ListIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg
+      width="18" height="18" viewBox="0 0 18 18" fill="none"
+      stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"
+      className={className} aria-hidden
+    >
+      <line x1="3" y1="5"  x2="15" y2="5" />
+      <line x1="3" y1="9"  x2="15" y2="9" />
+      <line x1="3" y1="13" x2="15" y2="13" />
+    </svg>
+  );
+}
+
+function GridIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg
+      width="18" height="18" viewBox="0 0 18 18" fill="none"
+      stroke="currentColor" strokeWidth="1.6"
+      className={className} aria-hidden
+    >
+      <rect x="2.5"  y="2.5"  width="5.5" height="5.5" rx="1" />
+      <rect x="10"   y="2.5"  width="5.5" height="5.5" rx="1" />
+      <rect x="2.5"  y="10"   width="5.5" height="5.5" rx="1" />
+      <rect x="10"   y="10"   width="5.5" height="5.5" rx="1" />
+    </svg>
+  );
+}
+
+/**
+ * ViewModeToggle — segmented control
+ *
+ * 헤더의 다른 아이콘 버튼(36px)과 동일한 높이로 정렬.
+ * 비활성: 투명 배경 / 활성: 골드 pill
+ */
+export default function ViewModeToggle({
+  value, onChange, className = '',
+}: ViewModeToggleProps) {
+  const id = useId();
+
+  const options: { mode: ViewMode; label: string; Icon: typeof ListIcon }[] = [
+    { mode: 'list', label: '목록 보기', Icon: ListIcon },
+    { mode: 'grid', label: '카드 보기', Icon: GridIcon },
+  ];
+
+  return (
+    <div
+      role="group"
+      aria-label="보기 방식 선택"
+      className={[
+        'inline-flex items-center h-9 p-0.5',
+        'bg-surface-high/60 rounded-input border border-border-subtle',
+        className,
+      ].join(' ')}
+    >
+      {options.map(({ mode, label, Icon }) => {
+        const active = value === mode;
+        return (
+          <button
+            key={mode}
+            id={`${id}-${mode}`}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            aria-label={label}
+            onClick={() => onChange(mode)}
+            className={[
+              'w-8 h-full flex items-center justify-center rounded-[5px]',
+              'transition-all duration-150',
+              active
+                ? 'bg-gold-300 text-ink-inverse shadow-sm'
+                : 'text-ink-muted hover:text-ink-secondary',
+            ].join(' ')}
+          >
+            <Icon />
+          </button>
+        );
+      })}
+    </div>
+  );
+}

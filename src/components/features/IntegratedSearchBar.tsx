@@ -1,0 +1,411 @@
+import {
+  useState,
+  useRef,
+  useCallback,
+  useEffect,
+  useDeferredValue,
+  useTransition,
+} from 'react';
+
+// ── 날짜 유틸 ─────────────────────────────────────────────────────────────────
+
+const DAYS_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
+
+function buildDateSlots(count = 14) {
+  const today = new Date();
+  return Array.from({ length: count }, (_, i) => {
+    const d = new Date(today);
+    d.setDate(today.getDate() + i);
+    return {
+      iso:   d.toISOString().slice(0, 10),
+      month: d.getMonth() + 1,
+      day:   d.getDate(),
+      dow:   DAYS_KO[d.getDay()],
+      isToday: i === 0,
+      isSat: d.getDay() === 6,
+      isSun: d.getDay() === 0,
+    };
+  });
+}
+
+type DateSlot = ReturnType<typeof buildDateSlots>[number];
+
+// ── 필터 상수 ─────────────────────────────────────────────────────────────────
+
+const REGION_CHIPS = ['강남', '홍대', '서울', '인천', '부산', '대전', '대구', '남양주', '판교', '광주'];
+const FORMAT_CHIPS: { id: string; label: string; color: string }[] = [
+  { id: 'MTT', label: 'MTT', color: 'bg-blue-500/20 text-blue-300 border-blue-500/40' },
+  { id: 'PKO', label: 'PKO', color: 'bg-teal-500/20 text-teal-300 border-teal-500/40' },
+  { id: 'SNG', label: 'SNG', color: 'bg-purple-500/20 text-purple-300 border-purple-500/40' },
+];
+
+// ── 서브컴포넌트: 검색 아이콘 ─────────────────────────────────────────────────
+
+function SearchIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg
+      width="18" height="18" viewBox="0 0 18 18"
+      fill="none" stroke="currentColor" strokeWidth="1.8"
+      strokeLinecap="round" strokeLinejoin="round"
+      className={className} aria-hidden
+    >
+      <circle cx="8" cy="8" r="5.5" />
+      <line x1="12.5" y1="12.5" x2="16" y2="16" />
+    </svg>
+  );
+}
+
+// ── 서브컴포넌트: 날짜 탭 단일 아이템 ────────────────────────────────────────
+
+interface DateTabProps {
+  slot: DateSlot;
+  selected: boolean;
+  onClick: () => void;
+}
+
+function DateTab({ slot, selected, onClick }: DateTabProps) {
+  const tabRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (selected) {
+      tabRef.current?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    }
+  }, [selected]);
+
+  const dowColor = slot.isSun
+    ? 'text-red-400'
+    : slot.isSat
+    ? 'text-blue-400'
+    : 'text-ink-muted';
+
+  return (
+    <button
+      ref={tabRef}
+      type="button"
+      onClick={onClick}
+      aria-pressed={selected}
+      aria-label={`${slot.month}월 ${slot.day}일 ${slot.dow}요일${slot.isToday ? ' (오늘)' : ''}`}
+      className={[
+        'relative flex flex-col items-center justify-center shrink-0',
+        'w-12 h-tab-h rounded-input',
+        'transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-300',
+        selected
+          ? 'bg-gold-300 text-ink-inverse'
+          : 'text-ink-secondary hover:bg-surface-high',
+      ].join(' ')}
+    >
+      {slot.isToday && !selected && (
+        <span aria-hidden className="absolute top-1 w-1 h-1 rounded-full bg-gold-300" />
+      )}
+      <span className={[
+        'text-2xs font-medium leading-none mb-0.5',
+        selected ? 'text-ink-inverse' : dowColor,
+      ].join(' ')}>
+        {slot.dow}
+      </span>
+      <span className="text-sm font-semibold leading-none">{slot.day}</span>
+    </button>
+  );
+}
+
+// ── 서브컴포넌트: 날짜 슬라이더 ──────────────────────────────────────────────
+
+interface DateSliderProps {
+  selectedDate: string | null;
+  onSelect: (iso: string | null) => void;
+}
+
+function DateSlider({ selectedDate, onSelect }: DateSliderProps) {
+  const slots = useRef(buildDateSlots(14)).current;
+
+  const handleSelect = (iso: string) => {
+    onSelect(selectedDate === iso ? null : iso);
+  };
+
+  return (
+    <div
+      role="group"
+      aria-label="날짜 빠른 선택"
+      className={[
+        'flex gap-1 overflow-x-auto',
+        'px-page-x pb-1',
+        'scrollbar-none [&::-webkit-scrollbar]:hidden',
+        'overflow-x-scroll [-webkit-overflow-scrolling:touch]',
+      ].join(' ')}
+    >
+      {slots.map((slot) => (
+        <DateTab
+          key={slot.iso}
+          slot={slot}
+          selected={selectedDate === slot.iso}
+          onClick={() => handleSelect(slot.iso)}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ── 메인 컴포넌트 ─────────────────────────────────────────────────────────────
+
+export interface SearchState {
+  query: string;
+  date: string | null;
+  region: string | null;
+  format: string | null;
+  gtdOnly: boolean;
+}
+
+interface IntegratedSearchBarProps {
+  onChange: (state: SearchState) => void;
+  placeholder?: string;
+  className?: string;
+}
+
+export default function IntegratedSearchBar({
+  onChange,
+  placeholder = '대회명, 펍 이름, 지역 검색…',
+  className = '',
+}: IntegratedSearchBarProps) {
+  const [rawQuery,      setRawQuery]      = useState('');
+  const [selectedDate,  setSelectedDate]  = useState<string | null>(null);
+  const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
+  const [selectedFormat, setSelectedFormat] = useState<string | null>(null);
+  const [gtdOnly,       setGtdOnly]       = useState(false);
+  const [isFocused,     setIsFocused]     = useState(false);
+  const inputRef                          = useRef<HTMLInputElement>(null);
+  const [, startTransition]              = useTransition();
+
+  const deferredQuery = useDeferredValue(rawQuery);
+
+  useEffect(() => {
+    startTransition(() => {
+      onChange({ query: deferredQuery, date: selectedDate, region: selectedRegion, format: selectedFormat, gtdOnly });
+    });
+  }, [deferredQuery, selectedDate, selectedRegion, selectedFormat, gtdOnly, onChange]);
+
+  const handleQueryChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => { setRawQuery(e.target.value); },
+    [],
+  );
+
+  const handleClear = useCallback(() => {
+    setRawQuery('');
+    inputRef.current?.focus();
+  }, []);
+
+  const handleDateSelect   = useCallback((iso: string | null) => setSelectedDate(iso), []);
+  const handleRegionSelect = useCallback((r: string) => setSelectedRegion((prev) => prev === r ? null : r), []);
+  const handleFormatSelect = useCallback((f: string) => setSelectedFormat((prev) => prev === f ? null : f), []);
+  const handleGtdToggle    = useCallback(() => setGtdOnly((v) => !v), []);
+
+  const activeCount =
+    (rawQuery.length > 0 ? 1 : 0) +
+    (selectedDate   ? 1 : 0) +
+    (selectedRegion ? 1 : 0) +
+    (selectedFormat ? 1 : 0) +
+    (gtdOnly        ? 1 : 0);
+
+  const hasActiveFilter = activeCount > 0;
+
+  const clearAll = useCallback(() => {
+    setRawQuery('');
+    setSelectedDate(null);
+    setSelectedRegion(null);
+    setSelectedFormat(null);
+    setGtdOnly(false);
+  }, []);
+
+  return (
+    <div className={['w-full', className].join(' ')}>
+      {/* ── 검색창 ─────────────────────────────────────────────────────── */}
+      <div className="px-page-x pt-2 pb-2">
+        <div
+          className={[
+            'flex items-center gap-2 px-3',
+            'bg-surface-high rounded-input h-11',
+            'border transition-all duration-150',
+            isFocused
+              ? 'border-gold-300 ring-1 ring-gold-300'
+              : 'border-border-default',
+          ].join(' ')}
+        >
+          <SearchIcon className="shrink-0 text-ink-muted" />
+
+          <input
+            ref={inputRef}
+            type="search"
+            inputMode="search"
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
+            value={rawQuery}
+            onChange={handleQueryChange}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+            placeholder={placeholder}
+            aria-label="요강 검색"
+            className={[
+              'flex-1 bg-transparent text-sm text-ink-primary',
+              'placeholder:text-ink-muted',
+              'outline-none border-none',
+              '[&::-webkit-search-cancel-button]:appearance-none',
+            ].join(' ')}
+          />
+
+          {rawQuery.length > 0 && (
+            <button
+              type="button"
+              onClick={handleClear}
+              aria-label="검색어 초기화"
+              className="shrink-0 w-5 h-5 flex items-center justify-center rounded-full bg-surface-float text-ink-muted hover:text-ink-primary transition-colors"
+            >
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" aria-hidden>
+                <path d="M1.5 1.5 L8.5 8.5 M8.5 1.5 L1.5 8.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+            </button>
+          )}
+
+          {hasActiveFilter && (
+            <span
+              aria-label="활성 필터"
+              className="shrink-0 min-w-[1.25rem] h-5 flex items-center justify-center rounded-badge bg-gold-300 text-ink-inverse text-2xs font-bold px-1"
+            >
+              {activeCount}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* ── 날짜 슬라이더 탭 ─────────────────────────────────────────────── */}
+      <DateSlider selectedDate={selectedDate} onSelect={handleDateSelect} />
+
+      {/* ── 지역 + 포맷 + GTD 필터 칩 ────────────────────────────────────── */}
+      <div className="flex flex-col gap-1.5 px-page-x pt-2 pb-1">
+        {/* 지역 칩 */}
+        <div
+          className="flex gap-1.5 overflow-x-auto scrollbar-none [-webkit-overflow-scrolling:touch]"
+          aria-label="지역 필터"
+        >
+          {REGION_CHIPS.map((r) => {
+            const active = selectedRegion === r;
+            return (
+              <button
+                key={r}
+                type="button"
+                onClick={() => handleRegionSelect(r)}
+                className={[
+                  'shrink-0 px-2.5 py-1 rounded-badge text-2xs font-semibold border transition-colors focus:outline-none',
+                  active
+                    ? 'bg-gold-300/20 border-gold-300 text-gold-300'
+                    : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary hover:border-border-strong',
+                ].join(' ')}
+              >
+                {r}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* 포맷 + GTD 칩 */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {FORMAT_CHIPS.map(({ id, label, color }) => {
+            const active = selectedFormat === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => handleFormatSelect(id)}
+                className={[
+                  'px-2.5 py-1 rounded-badge text-2xs font-bold border transition-colors focus:outline-none',
+                  active ? color : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary',
+                ].join(' ')}
+              >
+                {label}
+              </button>
+            );
+          })}
+
+          {/* GTD 토글 */}
+          <button
+            type="button"
+            onClick={handleGtdToggle}
+            aria-pressed={gtdOnly}
+            className={[
+              'px-2.5 py-1 rounded-badge text-2xs font-bold border transition-colors focus:outline-none',
+              gtdOnly
+                ? 'bg-gold-300/20 border-gold-300 text-gold-300'
+                : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary',
+            ].join(' ')}
+          >
+            GTD만
+          </button>
+
+          {/* 전체 초기화 (필터 있을 때만) */}
+          {hasActiveFilter && (
+            <button
+              type="button"
+              onClick={clearAll}
+              className="ml-auto px-2 py-1 rounded-badge text-2xs text-ink-muted hover:text-danger border border-transparent hover:border-danger/40 transition-colors focus:outline-none"
+            >
+              전체 초기화
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── 활성 필터 요약 칩 ────────────────────────────────────────────── */}
+      {hasActiveFilter && (
+        <div
+          className="flex flex-wrap gap-1.5 px-page-x pt-1 pb-2 animate-slide-up"
+          role="status"
+          aria-live="polite"
+          aria-label="적용된 필터"
+        >
+          {rawQuery && (
+            <FilterChip label={`"${rawQuery}"`} onRemove={handleClear} />
+          )}
+          {selectedDate && (
+            <FilterChip label={formatDateLabel(selectedDate)} onRemove={() => handleDateSelect(null)} />
+          )}
+          {selectedRegion && (
+            <FilterChip label={`📍 ${selectedRegion}`} onRemove={() => setSelectedRegion(null)} />
+          )}
+          {selectedFormat && (
+            <FilterChip label={selectedFormat} onRemove={() => setSelectedFormat(null)} />
+          )}
+          {gtdOnly && (
+            <FilterChip label="GTD만" onRemove={() => setGtdOnly(false)} />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── 필터 칩 ──────────────────────────────────────────────────────────────────
+
+function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
+  return (
+    <span className="inline-flex items-center gap-1 h-6 px-2 rounded-badge bg-surface-float border border-border-default text-xs text-ink-secondary">
+      {label}
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label={`${label} 필터 제거`}
+        className="text-ink-muted hover:text-ink-primary transition-colors focus:outline-none"
+      >
+        <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden>
+          <line x1="1" y1="1" x2="7" y2="7" /><line x1="7" y1="1" x2="1" y2="7" />
+        </svg>
+      </button>
+    </span>
+  );
+}
+
+function formatDateLabel(iso: string): string {
+  const d = new Date(iso);
+  const month = d.getMonth() + 1;
+  const day   = d.getDate();
+  const dow   = DAYS_KO[d.getDay()];
+  return `${month}/${day}(${dow})`;
+}

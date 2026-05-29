@@ -1,0 +1,165 @@
+import { useState } from 'react';
+import type { Comment } from '../../api/community';
+import { useAuth } from '../../contexts/AuthContext';
+
+interface CommentThreadProps {
+  comments: Comment[];
+  onSubmit: (content: string, parentId?: string) => void;
+  emptyText?: string;
+}
+
+function relativeTime(iso: string): string {
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (diff < 60)    return '방금 전';
+  if (diff < 3600)  return `${Math.floor(diff / 60)}분 전`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}시간 전`;
+  return `${Math.floor(diff / 86400)}일 전`;
+}
+
+function CommentItem({
+  comment,
+  replies,
+  onReply,
+}: {
+  comment: Comment;
+  replies: Comment[];
+  onReply: (parentId: string, content: string) => void;
+}) {
+  const [showReplyBox, setShowReplyBox] = useState(false);
+  const [replyContent, setReplyContent] = useState('');
+
+  const submitReply = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!replyContent.trim()) return;
+    onReply(comment.id, replyContent.trim());
+    setReplyContent('');
+    setShowReplyBox(false);
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        <div
+          className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-xs font-bold text-white"
+          style={{ background: comment.isOwner ? '#FFD100' : '#5A6175', color: comment.isOwner ? '#0A0C0F' : '#fff' }}
+        >
+          {comment.userName[0]}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <span className="text-xs font-semibold text-ink-primary">{comment.userName}</span>
+            {comment.isOwner && (
+              <span className="text-2xs font-bold text-gold-300 bg-gold-300/15 px-1.5 py-0.5 rounded-badge">매장 답글</span>
+            )}
+            {comment.userRole === 'admin' && (
+              <span className="text-2xs font-bold text-danger-light bg-danger/15 px-1.5 py-0.5 rounded-badge">운영자</span>
+            )}
+            <span className="text-2xs text-ink-muted">· {relativeTime(comment.createdAt)}</span>
+          </div>
+          <p className="text-sm text-ink-primary leading-relaxed whitespace-pre-wrap break-words">
+            {comment.content}
+          </p>
+          <button
+            type="button"
+            onClick={() => setShowReplyBox((v) => !v)}
+            className="mt-1 text-2xs text-ink-muted hover:text-gold-300 transition-colors"
+          >
+            {showReplyBox ? '취소' : '답글'}
+          </button>
+        </div>
+      </div>
+
+      {/* 답글 입력창 */}
+      {showReplyBox && (
+        <form onSubmit={submitReply} className="ml-10 flex gap-2 animate-slide-up">
+          <input
+            type="text"
+            autoFocus
+            value={replyContent}
+            onChange={(e) => setReplyContent(e.target.value)}
+            placeholder={`@${comment.userName} 에게 답글...`}
+            className="input flex-1"
+          />
+          <button type="submit" className="btn-primary px-3 shrink-0">등록</button>
+        </form>
+      )}
+
+      {/* 답글 목록 */}
+      {replies.length > 0 && (
+        <div className="ml-10 space-y-3 border-l-2 border-border-subtle pl-3">
+          {replies.map((r) => (
+            <CommentItem key={r.id} comment={r} replies={[]} onReply={onReply} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function CommentThread({ comments, onSubmit, emptyText = '아직 댓글이 없습니다.' }: CommentThreadProps) {
+  const { user } = useAuth();
+  const [content, setContent] = useState('');
+
+  const roots   = comments.filter((c) => !c.parentId);
+  const repliesByParent = comments
+    .filter((c) => c.parentId)
+    .reduce<Record<string, Comment[]>>((acc, c) => {
+      (acc[c.parentId!] ??= []).push(c);
+      return acc;
+    }, {});
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!content.trim()) return;
+    onSubmit(content.trim());
+    setContent('');
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* 입력창 */}
+      {user ? (
+        <form onSubmit={submit} className="flex gap-2 sticky top-0 z-10 bg-surface-mid py-2">
+          <div
+            className="w-8 h-8 shrink-0 rounded-full overflow-hidden flex items-center justify-center text-xs font-bold text-white"
+            style={user.avatarUrl ? undefined : { background: user.avatarColor ?? '#5A6175' }}
+          >
+            {user.avatarUrl
+              ? <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" />
+              : user.name[0]}
+          </div>
+          <input
+            type="text"
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            placeholder="댓글을 입력하세요..."
+            className="input flex-1"
+          />
+          <button type="submit" className="btn-primary px-4 shrink-0" disabled={!content.trim()}>
+            등록
+          </button>
+        </form>
+      ) : (
+        <div className="p-3 rounded-input bg-surface-high text-center text-xs text-ink-muted">
+          로그인하면 댓글을 작성할 수 있습니다.
+        </div>
+      )}
+
+      {/* 목록 */}
+      {roots.length === 0 ? (
+        <p className="text-center py-8 text-xs text-ink-muted">{emptyText}</p>
+      ) : (
+        <div className="space-y-4">
+          {roots.map((c) => (
+            <CommentItem
+              key={c.id}
+              comment={c}
+              replies={repliesByParent[c.id] ?? []}
+              onReply={(parentId, content) => onSubmit(content, parentId)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
