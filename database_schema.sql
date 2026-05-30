@@ -246,14 +246,19 @@ returns user_role language sql stable security definer as $$
 $$;
 
 -- 신규 가입 시 profiles 자동 생성 (+ 업주면 매장 자동 생성, 승인대기)
+-- ※ search_path를 public으로 고정해야 auth 트리거 컨텍스트에서 enum/타입이 해석됨
 create or replace function public.handle_new_user()
-returns trigger language plpgsql security definer as $$
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
 declare
-  v_role     user_role;
+  v_role     public.user_role;
   v_venue_id uuid;
   v_agreed   boolean;
 begin
-  v_role   := coalesce((new.raw_user_meta_data->>'role')::user_role, 'user');
+  v_role   := coalesce((new.raw_user_meta_data->>'role')::public.user_role, 'user');
   v_agreed := coalesce((new.raw_user_meta_data->>'agreed_to_terms')::boolean, false);
 
   insert into public.profiles (
