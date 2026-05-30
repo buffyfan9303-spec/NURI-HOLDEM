@@ -4,8 +4,6 @@ import Modal from '../atoms/Modal';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
 import { signUpUser, signUpOwner } from '../../api/auth';
-import { IS_MOCK } from '../../lib/supabase';
-import { MOCK_USERS } from '../../mock/data';
 import TermsOfService   from '../../pages/legal/TermsOfService';
 import PrivacyPolicy    from '../../pages/legal/PrivacyPolicy';
 import LegalNotice      from '../../pages/legal/LegalNotice';
@@ -231,7 +229,6 @@ interface AuthModalProps {
 
 export default function AuthModal({ open, onClose, initialMode = 'login' }: AuthModalProps) {
   const [mode, setMode] = useState<Mode>(initialMode);
-  const { loginDemo } = useAuth();
 
   return (
     <Modal open={open} onClose={onClose} title={MODE_LABEL[mode]} maxWidth="md">
@@ -253,7 +250,7 @@ export default function AuthModal({ open, onClose, initialMode = 'login' }: Auth
       </div>
 
       <div className="p-4">
-        {mode === 'login'        && <LoginForm onClose={onClose} loginDemo={loginDemo} />}
+        {mode === 'login'        && <LoginForm onClose={onClose} />}
         {mode === 'signup-user'  && <SignupUserForm  onDone={() => setMode('login')} />}
         {mode === 'signup-owner' && <SignupOwnerForm onDone={() => setMode('login')} />}
       </div>
@@ -263,10 +260,7 @@ export default function AuthModal({ open, onClose, initialMode = 'login' }: Auth
 
 // ── 로그인 폼 ─────────────────────────────────────────────────────────────────
 
-function LoginForm({ onClose, loginDemo }: {
-  onClose: () => void;
-  loginDemo: (email: string) => boolean;
-}) {
+function LoginForm({ onClose }: { onClose: () => void }) {
   const { login } = useAuth();
   const toast = useToast();
   const [email,    setEmail]    = useState('');
@@ -279,16 +273,16 @@ function LoginForm({ onClose, loginDemo }: {
     setError('');
     setLoading(true);
     try {
-      if (IS_MOCK) {
-        const ok = loginDemo(email.trim());
-        if (!ok) { setError('등록되지 않은 계정입니다.'); return; }
-      } else {
-        await login(email.trim(), password);
-      }
+      await login(email.trim(), password);
       toast.show('로그인되었습니다', 'success');
       onClose();
-    } catch {
-      setError('이메일 또는 비밀번호를 확인해 주세요.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : '';
+      setError(
+        /confirm|verified|not confirmed/i.test(msg)
+          ? '이메일 인증이 필요합니다. 받은 편지함의 인증 메일을 확인해 주세요.'
+          : '이메일 또는 비밀번호를 확인해 주세요.',
+      );
     } finally {
       setLoading(false);
     }
@@ -306,48 +300,7 @@ function LoginForm({ onClose, loginDemo }: {
       <button type="submit" disabled={loading} className="btn-primary w-full disabled:opacity-60">
         {loading ? '로그인 중…' : '로그인'}
       </button>
-
-      {IS_MOCK && (
-        <div className="pt-4 border-t border-border-subtle space-y-2">
-          <p className="text-2xs text-ink-muted uppercase tracking-wider">데모 계정 빠른 로그인</p>
-          <div className="grid gap-1.5">
-            {MOCK_USERS.map((u) => (
-              <button key={u.id} type="button"
-                onClick={() => { loginDemo(u.email); onClose(); }}
-                className="flex items-center gap-2 p-2 rounded-input bg-surface-high hover:bg-surface-float transition-colors text-left"
-              >
-                <span className="w-7 h-7 shrink-0 rounded-full flex items-center justify-center text-xs font-bold text-white"
-                  style={{ background: u.avatarColor }}>
-                  {u.name[0]}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-ink-primary truncate">{u.name}</p>
-                  <p className="text-2xs text-ink-muted truncate">{u.email}</p>
-                </div>
-                <RoleTag role={u.role} approved={u.approved} />
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
     </form>
-  );
-}
-
-function RoleTag({ role, approved }: { role: string; approved?: boolean }) {
-  const map: Record<string, { label: string; cls: string }> = {
-    user:        { label: '일반',   cls: 'bg-blue-500/15 text-blue-400' },
-    venue_owner: {
-      label: approved === false ? '업주(승인대기)' : '업주',
-      cls:   approved === false ? 'bg-amber-500/15 text-amber-400' : 'bg-gold-300/15 text-gold-300',
-    },
-    admin: { label: '관리자', cls: 'bg-danger/15 text-danger-light' },
-  };
-  const c = map[role];
-  return (
-    <span className={`shrink-0 text-2xs font-semibold px-1.5 py-0.5 rounded-badge ${c.cls}`}>
-      {c.label}
-    </span>
   );
 }
 
@@ -373,18 +326,14 @@ function SignupUserForm({ onDone }: { onDone: () => void }) {
 
     setLoading(true);
     try {
-      if (!IS_MOCK) {
-        await signUpUser({
-          email, password, name,
-          agreedToTerms:        c.terms,
-          agreedToPrivacy:      c.privacy,
-          agreedToAntiGambling: c.antiGambling,
-          agreedToMarketing:    c.marketing,
-        });
-        toast.show('가입 완료! 이메일 인증 후 로그인해 주세요.', 'success');
-      } else {
-        toast.show('가입 완료 (데모). 로그인해 주세요.', 'success');
-      }
+      await signUpUser({
+        email, password, name,
+        agreedToTerms:        c.terms,
+        agreedToPrivacy:      c.privacy,
+        agreedToAntiGambling: c.antiGambling,
+        agreedToMarketing:    c.marketing,
+      });
+      toast.show('가입 완료! 이메일 인증 메일을 확인한 뒤 로그인해 주세요.', 'success');
       onDone();
     } catch (err: unknown) {
       toast.show(err instanceof Error ? err.message : '가입 중 오류가 발생했습니다.', 'error');
@@ -446,17 +395,15 @@ function SignupOwnerForm({ onDone }: { onDone: () => void }) {
 
     setLoading(true);
     try {
-      if (!IS_MOCK) {
-        await signUpOwner({
-          name, email, password,
-          agreedToTerms:        c.terms,
-          agreedToPrivacy:      c.privacy,
-          agreedToAntiGambling: c.antiGambling,
-          agreedToMarketing:    c.marketing,
-          venueName, region, address, phone, businessNumber: bizNum,
-        });
-      }
-      toast.show('업주 가입 신청 완료. 관리자 승인 후 포스터 업로드가 활성화됩니다.', 'success');
+      await signUpOwner({
+        name, email, password,
+        agreedToTerms:        c.terms,
+        agreedToPrivacy:      c.privacy,
+        agreedToAntiGambling: c.antiGambling,
+        agreedToMarketing:    c.marketing,
+        venueName, region, address, phone, businessNumber: bizNum,
+      });
+      toast.show('업주 가입 신청 완료. 이메일 인증 후 로그인하면 관리자 승인을 거쳐 포스터 업로드가 활성화됩니다.', 'success');
       onDone();
     } catch (err: unknown) {
       toast.show(err instanceof Error ? err.message : '가입 중 오류가 발생했습니다.', 'error');

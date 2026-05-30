@@ -22,13 +22,19 @@ import type { PosterFormData } from './components/features/PosterFormModal';
 import NuriHoldemLogo from './components/atoms/NuriHoldemLogo';
 import ProfileModal from './components/features/ProfileModal';
 import { useAuth } from './contexts/AuthContext';
+import { listAllUsers, updateUserStatus, approveOwner } from './api/auth';
 import {
-  MOCK_SCHEDULES, MOCK_VENUES, MOCK_COMMENTS,
-  MOCK_NOTIFICATIONS, MOCK_COMMUNITY_POSTS, MOCK_LISTINGS, MOCK_NOTICES, MOCK_USERS,
-} from './mock/data';
+  getSchedules, createSchedule, updateSchedule, deleteSchedule,
+} from './api/schedules';
+import {
+  getVenues, getComments, getPosts, addComment, addPost, likePost,
+  updateVenueDescription, updateVenueImage,
+} from './api/community';
+import { getListings, getNotices } from './api/marketplace';
+import { getMyNotifications, markNotificationsRead } from './api/notifications';
 import type { User } from './api/auth';
 import type { Schedule } from './api/schedules';
-import type { Comment, CommunityPost } from './api/community';
+import type { Venue, Comment, CommunityPost } from './api/community';
 import type { AppNotification } from './api/notifications';
 import type { MarketplaceListing, MarketplaceNotice } from './api/marketplace';
 
@@ -235,13 +241,6 @@ function PendingApprovalBanner() {
 
 // ── App ─────────────────────────────────────────────────────────────────────
 
-const VENUE_IMG_KEY = 'holdem.demo.venueImages';
-
-function loadVenueImages(): Record<string, string> {
-  try { return JSON.parse(localStorage.getItem(VENUE_IMG_KEY) ?? '{}'); }
-  catch { return {}; }
-}
-
 export default function App() {
   const { user, isAdmin, isOwner } = useAuth();
   const toast = useToast();
@@ -254,23 +253,49 @@ export default function App() {
   const [openVenueId, setOpenVenueId] = useState<string | null>(null);
   const [openSchedule, setOpenSchedule] = useState<Schedule | null>(null);
 
-  // 데이터 (venue 이미지는 localStorage에서 복원)
-  const [schedules,     setSchedules]     = useState(MOCK_SCHEDULES);
-  const [venues,        setVenues]        = useState(() => {
-    const saved = loadVenueImages();
-    return MOCK_VENUES.map((v) => saved[v.id] ? { ...v, imageUrl: saved[v.id] } : v);
-  });
-  const [comments,      setComments]      = useState<Comment[]>(MOCK_COMMENTS);
-  const [notifications, setNotifications] = useState<AppNotification[]>(MOCK_NOTIFICATIONS);
-  const [posts,         setPosts]         = useState<CommunityPost[]>(MOCK_COMMUNITY_POSTS);
-  const [listings]                          = useState<MarketplaceListing[]>(MOCK_LISTINGS);
+  // ── 데이터 (Supabase에서 로드) ──────────────────────────────────────────────
+  const [schedules,     setSchedules]     = useState<Schedule[]>([]);
+  const [venues,        setVenues]        = useState<Venue[]>([]);
+  const [comments,      setComments]      = useState<Comment[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [posts,         setPosts]         = useState<CommunityPost[]>([]);
+  const [listings,      setListings]      = useState<MarketplaceListing[]>([]);
+  const [notices,       setNotices]       = useState<MarketplaceNotice[]>([]);
+  const [users,         setUsers]         = useState<User[]>([]);
   const [openListing, setOpenListing]      = useState<MarketplaceListing | null>(null);
   const [openNotice, setOpenNotice]        = useState<MarketplaceNotice | null>(null);
   /** 포스터 폼 — null: 닫힘 / undefined: 신규 / Schedule: 수정 */
   const [posterFormTarget, setPosterFormTarget] = useState<Schedule | null | undefined>(null);
-  const [users, setUsers] = useState<User[]>(MOCK_USERS);
   const [openPost, setOpenPost]         = useState<CommunityPost | null>(null);
   const [profileOpen, setProfileOpen]   = useState(false);
+
+  // 서버 재조회 헬퍼
+  const reloadSchedules = useCallback(() => { getSchedules().then(setSchedules).catch(() => {}); }, []);
+  const reloadVenues    = useCallback(() => { getVenues().then(setVenues).catch(() => {}); }, []);
+  const reloadPosts     = useCallback(() => { getPosts().then(setPosts).catch(() => {}); }, []);
+  const reloadComments  = useCallback(() => { getComments({}).then(setComments).catch(() => {}); }, []);
+
+  // 공개 데이터 초기 로드
+  useEffect(() => {
+    reloadSchedules();
+    reloadVenues();
+    reloadPosts();
+    reloadComments();
+    getListings().then(setListings).catch(() => {});
+    getNotices().then(setNotices).catch(() => {});
+  }, [reloadSchedules, reloadVenues, reloadPosts, reloadComments]);
+
+  // 로그인 사용자: 내 알림 로드
+  useEffect(() => {
+    if (user) getMyNotifications().then(setNotifications).catch(() => {});
+    else setNotifications([]);
+  }, [user]);
+
+  // 관리자: 회원 목록 로드
+  useEffect(() => {
+    if (isAdmin) listAllUsers().then(setUsers).catch(() => {});
+    else setUsers([]);
+  }, [isAdmin]);
 
   const unreadNotifs = notifications.filter((n) => !n.read).length;
 
@@ -331,6 +356,7 @@ export default function App() {
     setNotifications((prev) =>
       prev.map((n) => ids.includes(n.id) ? { ...n, read: true } : n),
     );
+    markNotificationsRead(ids).catch(() => {});
   }, []);
 
   // 알림 클릭 → 해당 페이지로 이동
@@ -369,93 +395,98 @@ export default function App() {
   const handleSubmitVenueComment = useCallback(
     (venueId: string, content: string, parentId?: string) => {
       if (!user) return;
-      const newComment: Comment = {
-        id: `c${Date.now()}`,
+      addComment({
         venueId, parentId,
         userId: user.id, userName: user.name, userRole: user.role,
         isOwner: user.role === 'venue_owner' && user.venueId === venueId,
-        content, createdAt: new Date().toISOString(),
-      };
-      setComments((prev) => [newComment, ...prev]);
+        content,
+      })
+        .then((saved) => setComments((prev) => [saved, ...prev]))
+        .catch(() => toast.show('댓글 등록에 실패했습니다', 'error'));
     },
-    [user],
+    [user, toast],
   );
 
   const handleSubmitScheduleComment = useCallback(
     (scheduleId: string, content: string, parentId?: string) => {
       if (!user) return;
       const s = schedules.find((x) => x.id === scheduleId);
-      const newComment: Comment = {
-        id: `c${Date.now()}`,
+      addComment({
         scheduleId, parentId,
         userId: user.id, userName: user.name, userRole: user.role,
         isOwner: user.role === 'venue_owner' && s?.ownerId === user.id,
-        content, createdAt: new Date().toISOString(),
-      };
-      setComments((prev) => [newComment, ...prev]);
+        content,
+      })
+        .then((saved) => setComments((prev) => [saved, ...prev]))
+        .catch(() => toast.show('댓글 등록에 실패했습니다', 'error'));
     },
-    [user, schedules],
+    [user, schedules, toast],
   );
 
   const handleSubmitPost = useCallback((content: string) => {
     if (!user) return;
-    const newPost: CommunityPost = {
-      id: `p${Date.now()}`,
+    addPost({
       userId: user.id, userName: user.name, userRole: user.role,
-      userColor: user.avatarColor,
-      content, createdAt: new Date().toISOString(),
-      likeCount: 0, commentCount: 0,
-    };
-    setPosts((prev) => [newPost, ...prev]);
-  }, [user]);
+      userColor: user.avatarColor, content,
+    })
+      .then((saved) => setPosts((prev) => [saved, ...prev]))
+      .catch(() => toast.show('게시글 등록에 실패했습니다', 'error'));
+  }, [user, toast]);
 
   const handleLikePost = useCallback((postId: string) => {
     setPosts((prev) =>
       prev.map((p) => p.id === postId ? { ...p, likeCount: p.likeCount + 1 } : p),
     );
+    likePost(postId).catch(() => {});
   }, []);
 
-  // 관리자: 회원 업데이트 (승인/정지/해제)
+  // 관리자: 회원 업데이트 (승인/정지/해제) — 서버 반영
   const handleUpdateUser = useCallback((id: string, patch: Partial<User>) => {
     setUsers((prev) => prev.map((u) => u.id === id ? { ...u, ...patch } : u));
-  }, []);
+    if (patch.approved !== undefined) {
+      approveOwner(id, patch.approved).catch(() => toast.show('승인 처리에 실패했습니다', 'error'));
+    }
+    if (patch.status !== undefined) {
+      updateUserStatus(id, patch.status, patch.suspendedUntil).catch(() => toast.show('상태 변경에 실패했습니다', 'error'));
+    }
+  }, [toast]);
 
-  // 관리자: 게시글 삭제
+  // 관리자: 게시글 삭제 (로컬 제거 — 영구 삭제 API는 추후 연동)
   const handleDeletePost = useCallback((id: string) => {
     setPosts((prev) => prev.filter((p) => p.id !== id));
   }, []);
 
   const handleUpdateVenueDescription = useCallback((venueId: string, description: string) => {
     setVenues((prev) => prev.map((v) => v.id === venueId ? { ...v, description } : v));
-  }, []);
+    updateVenueDescription(venueId, description).catch(() => toast.show('저장에 실패했습니다', 'error'));
+  }, [toast]);
 
   const handleUpdateVenueImage = useCallback((venueId: string, dataUrl: string) => {
     setVenues((prev) => prev.map((v) => v.id === venueId ? { ...v, imageUrl: dataUrl } : v));
-    // localStorage 영구 저장 (새로고침에도 유지)
-    try {
-      const saved = loadVenueImages();
-      saved[venueId] = dataUrl;
-      localStorage.setItem(VENUE_IMG_KEY, JSON.stringify(saved));
-      toast.show('배경이 저장되었습니다', 'success');
-    } catch {
-      toast.show('저장 공간이 부족합니다', 'error');
-    }
+    updateVenueImage(venueId, dataUrl)
+      .then(() => toast.show('배경이 저장되었습니다', 'success'))
+      .catch(() => toast.show('저장에 실패했습니다', 'error'));
   }, [toast]);
 
   const handleDeletePoster = useCallback((id: string) => {
     setSchedules((prev) => prev.filter((s) => s.id !== id));
-  }, []);
+    deleteSchedule(id).catch(() => { toast.show('삭제에 실패했습니다', 'error'); reloadSchedules(); });
+  }, [toast, reloadSchedules]);
 
-  // 관리자: 포스터 승인 / 반려
+  // 관리자: 포스터 승인 / 반려 — 서버 반영
   const handleApproveSchedule = useCallback((id: string) => {
     setSchedules((prev) => prev.map((s) => s.id === id ? { ...s, approved: true } : s));
-    toast.show('포스터가 승인되어 메인에 게시되었습니다', 'success');
-  }, [toast]);
+    updateSchedule(id, { approved: true })
+      .then(() => toast.show('포스터가 승인되어 메인에 게시되었습니다', 'success'))
+      .catch(() => { toast.show('승인에 실패했습니다', 'error'); reloadSchedules(); });
+  }, [toast, reloadSchedules]);
 
   const handleRejectSchedule = useCallback((id: string) => {
     setSchedules((prev) => prev.filter((s) => s.id !== id));
-    toast.show('포스터가 반려되었습니다', 'info');
-  }, [toast]);
+    deleteSchedule(id)
+      .then(() => toast.show('포스터가 반려되었습니다', 'info'))
+      .catch(() => { toast.show('반려에 실패했습니다', 'error'); reloadSchedules(); });
+  }, [toast, reloadSchedules]);
 
   const handleSubmitPoster = useCallback((data: PosterFormData) => {
     // 시상품 텍스트 → SeatVoucher 형태로 변환 (간단 파싱: 끝의 "N석" 인식)
@@ -464,54 +495,59 @@ export default function App() {
       return m ? { label: m[1].trim(), count: parseInt(m[2], 10) }
                : { label: p, count: 1 };
     });
+    const seats = seatsFromPrizes.length > 0 ? seatsFromPrizes : undefined;
 
-    setSchedules((prev) => {
-      // 수정 모드
-      if (data.id) {
-        return prev.map((s) => s.id === data.id ? {
-          ...s,
-          title:        data.title,
-          date:         data.date,
-          startTime:    data.startTime,
-          duration:     data.regCloseTime || s.duration,
-          regCloseTime: data.regCloseTime,
-          guaranteed:   data.prizeType === 'GTD',
-          prizePool:    data.prizeAmount * 10_000,
-          buyIn:        { ...s.buyIn, amount: data.buyIn },
-          region:       data.region,
-          paymentMethods: data.paymentMethods,
-          seats:        seatsFromPrizes.length > 0 ? seatsFromPrizes : undefined,
-          posterUrl:    data.posterUrl ?? s.posterUrl,
-        } : s);
-      }
-      // 신규 등록 (승인 대기 상태)
-      const newSchedule: Schedule = {
-        id: `s${Date.now()}`,
-        title: data.title,
-        venueId: user?.venueId ?? '',
-        pubName: venues.find((v) => v.id === user?.venueId)?.name ?? '',
-        region: data.region,
-        date: data.date,
-        startTime: data.startTime,
-        duration: data.regCloseTime || '',
+    // ── 수정 모드 ──
+    if (data.id) {
+      const patch: Partial<Schedule> = {
+        title:        data.title,
+        date:         data.date,
+        startTime:    data.startTime,
         regCloseTime: data.regCloseTime,
-        format: 'MTT',
-        guaranteed: data.prizeType === 'GTD',
-        prizePool: data.prizeAmount * 10_000,
-        buyIn: { amount: data.buyIn },
+        guaranteed:   data.prizeType === 'GTD',
+        prizePool:    data.prizeAmount * 10_000,
+        buyIn:        { amount: data.buyIn },
+        region:       data.region,
         paymentMethods: data.paymentMethods,
-        seats: seatsFromPrizes.length > 0 ? seatsFromPrizes : undefined,
-        posterUrl: data.posterUrl,
-        posterColor: '#7C2D7E',
-        displayOrder: prev.length + 1,
-        isPremium: false,
-        ownerId: user?.id ?? '',
-        unreadQnaCount: 0,
-        approved: false,
+        seats,
       };
-      return [...prev, newSchedule];
-    });
-  }, [user, venues]);
+      if (data.regCloseTime)            patch.duration  = data.regCloseTime;
+      if (data.posterUrl !== undefined) patch.posterUrl = data.posterUrl;
+
+      setSchedules((prev) => prev.map((s) =>
+        s.id === data.id ? { ...s, ...patch, posterUrl: data.posterUrl ?? s.posterUrl } : s));
+      updateSchedule(data.id, patch)
+        .then(reloadSchedules)
+        .catch(() => { toast.show('수정 저장에 실패했습니다', 'error'); reloadSchedules(); });
+      return;
+    }
+
+    // ── 신규 등록 (승인 대기) ──
+    if (!user) return;
+    createSchedule({
+      title:          data.title,
+      venueId:        user.venueId ?? '',
+      pubName:        venues.find((v) => v.id === user.venueId)?.name ?? user.name,
+      region:         data.region,
+      date:           data.date,
+      startTime:      data.startTime,
+      duration:       data.regCloseTime || '',
+      regCloseTime:   data.regCloseTime,
+      format:         'MTT',
+      guaranteed:     data.prizeType === 'GTD',
+      prizePool:      data.prizeAmount * 10_000,
+      buyIn:          { amount: data.buyIn },
+      paymentMethods: data.paymentMethods,
+      seats,
+      posterUrl:      data.posterUrl,
+      posterColor:    '#7C2D7E',
+      displayOrder:   999,
+      isPremium:      false,
+      ownerId:        user.id,
+    })
+      .then(reloadSchedules)
+      .catch(() => toast.show('포스터 등록에 실패했습니다. 매장 승인 상태를 확인해 주세요.', 'error'));
+  }, [user, venues, toast, reloadSchedules]);
 
   // ── 렌더 ──────────────────────────────────────────────────────────────
 
@@ -577,7 +613,7 @@ export default function App() {
             venues={venues}
             comments={comments}
             posts={posts}
-            notices={MOCK_NOTICES}
+            notices={notices}
             isAdmin={isAdmin}
             onWriteNotice={() => toast.show('공지 작성 기능은 곧 오픈됩니다', 'info')}
             onSelectNotice={setOpenNotice}
@@ -594,7 +630,7 @@ export default function App() {
         <main className="px-page-x py-section animate-fade-in">
           <MarketplaceTab
             listings={listings}
-            notices={MOCK_NOTICES}
+            notices={notices}
             onSelect={setOpenListing}
             onSelectNotice={setOpenNotice}
             onCreate={() => toast.show('글쓰기 기능은 곧 오픈됩니다', 'info')}

@@ -95,14 +95,24 @@ export async function createSchedule(
 export async function updateSchedule(id: string, patch: Partial<Schedule>): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.from('schedules').update({
-    ...(patch.title         !== undefined && { title:          patch.title }),
-    ...(patch.date          !== undefined && { date:           patch.date }),
-    ...(patch.startTime     !== undefined && { start_time:     patch.startTime }),
-    ...(patch.prizePool     !== undefined && { prize_pool:     patch.prizePool }),
-    ...(patch.buyIn         !== undefined && { buy_in:         patch.buyIn }),
-    ...(patch.posterUrl     !== undefined && { poster_url:     patch.posterUrl }),
-    ...(patch.description   !== undefined && { description:    patch.description }),
-    ...(patch.paymentMethods!== undefined && { payment_methods:patch.paymentMethods }),
+    ...(patch.title         !== undefined && { title:           patch.title }),
+    ...(patch.date          !== undefined && { date:            patch.date }),
+    ...(patch.startTime     !== undefined && { start_time:      patch.startTime }),
+    ...(patch.duration      !== undefined && { duration:        patch.duration }),
+    ...(patch.regCloseTime  !== undefined && { reg_close_time:  patch.regCloseTime }),
+    ...(patch.format        !== undefined && { format:          patch.format }),
+    ...(patch.guaranteed    !== undefined && { guaranteed:      patch.guaranteed }),
+    ...(patch.prizePool     !== undefined && { prize_pool:      patch.prizePool }),
+    ...(patch.buyIn         !== undefined && { buy_in:          patch.buyIn }),
+    ...(patch.region        !== undefined && { region:          patch.region }),
+    ...(patch.seats         !== undefined && { seats:           patch.seats }),
+    ...(patch.posterUrl     !== undefined && { poster_url:      patch.posterUrl }),
+    ...(patch.posterColor   !== undefined && { poster_color:    patch.posterColor }),
+    ...(patch.description   !== undefined && { description:     patch.description }),
+    ...(patch.paymentMethods!== undefined && { payment_methods: patch.paymentMethods }),
+    ...(patch.isPremium     !== undefined && { is_premium:      patch.isPremium }),
+    ...(patch.displayOrder  !== undefined && { display_order:   patch.displayOrder }),
+    ...(patch.approved      !== undefined && { approved:        patch.approved }),
     updated_at: new Date().toISOString(),
   }).eq('id', id);
   if (error) throw error;

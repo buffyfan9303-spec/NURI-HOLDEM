@@ -67,65 +67,55 @@ export async function signIn(email: string, password: string): Promise<User> {
   return rowToUser(profile);
 }
 
-// ── 공통: 동의 이력을 profiles 테이블에 기록 ────────────────────────────────
-async function writeConsent(userId: string, c: ConsentPayload): Promise<void> {
-  const { error } = await supabase.from('profiles').update({
-    agreed_to_terms:          c.agreedToTerms,
-    agreed_to_privacy:        c.agreedToPrivacy,
-    agreed_to_anti_gambling:  c.agreedToAntiGambling,
-    agreed_to_marketing:      c.agreedToMarketing,
-    terms_agreed_at:          new Date().toISOString(),
-  }).eq('id', userId);
-  // 동의 기록 실패는 가입 자체를 막지 않음 (별도 보정 가능)
-  if (error) console.error('[consent] write failed:', error.message);
-}
-
 // ── 일반 회원가입 ─────────────────────────────────────────────────────────────
+// 프로필/동의 이력은 DB 트리거(handle_new_user)가 user_metadata로부터 자동 생성.
 export async function signUpUser(payload: SignupUserPayload): Promise<void> {
   if (IS_MOCK) throw new Error('Mock mode');
   if (!payload.agreedToTerms)        throw new Error('서비스 이용약관에 동의해 주세요.');
   if (!payload.agreedToPrivacy)      throw new Error('개인정보 수집·이용에 동의해 주세요.');
   if (!payload.agreedToAntiGambling) throw new Error('불법 환전·사행성 금지 서약에 동의해 주세요.');
 
-  const { data, error } = await supabase.auth.signUp({
+  const { error } = await supabase.auth.signUp({
     email:    payload.email,
     password: payload.password,
-    options:  { data: { name: payload.name, role: 'user' } },
+    options: { data: {
+      name: payload.name,
+      role: 'user',
+      agreed_to_terms:         payload.agreedToTerms,
+      agreed_to_privacy:       payload.agreedToPrivacy,
+      agreed_to_anti_gambling: payload.agreedToAntiGambling,
+      agreed_to_marketing:     payload.agreedToMarketing,
+    } },
   });
   if (error) throw error;
-  if (data.user) await writeConsent(data.user.id, payload);
 }
 
 // ── 업주 가입 신청 ─────────────────────────────────────────────────────────────
+// 매장(venues) 레코드도 트리거가 metadata로부터 자동 생성(approved=false, 승인 대기).
 export async function signUpOwner(payload: SignupOwnerPayload): Promise<void> {
   if (IS_MOCK) throw new Error('Mock mode');
   if (!payload.agreedToTerms)        throw new Error('서비스 이용약관에 동의해 주세요.');
   if (!payload.agreedToPrivacy)      throw new Error('개인정보 수집·이용에 동의해 주세요.');
   if (!payload.agreedToAntiGambling) throw new Error('불법 환전·사행성 금지 서약에 동의해 주세요.');
 
-  // 1. Supabase Auth 계정 생성
-  const { data, error } = await supabase.auth.signUp({
+  const { error } = await supabase.auth.signUp({
     email:    payload.email,
     password: payload.password,
-    options:  { data: { name: payload.name, role: 'venue_owner' } },
+    options: { data: {
+      name: payload.name,
+      role: 'venue_owner',
+      agreed_to_terms:         payload.agreedToTerms,
+      agreed_to_privacy:       payload.agreedToPrivacy,
+      agreed_to_anti_gambling: payload.agreedToAntiGambling,
+      agreed_to_marketing:     payload.agreedToMarketing,
+      venue_name:      payload.venueName,
+      region:          payload.region,
+      address:         payload.address,
+      phone:           payload.phone,
+      business_number: payload.businessNumber,
+    } },
   });
   if (error) throw error;
-
-  if (data.user) {
-    // 2. 동의 이력 기록
-    await writeConsent(data.user.id, payload);
-
-    // 3. venue 레코드 생성 (approved: false — 관리자 승인 대기)
-    const { error: venueError } = await supabase.from('venues').insert({
-      name:          payload.venueName,
-      region:        payload.region,
-      address:       payload.address,
-      contact_phone: payload.phone,
-      owner_id:      data.user.id,
-      approved:      false,
-    });
-    if (venueError) throw venueError;
-  }
 }
 
 // ── 로그아웃 ──────────────────────────────────────────────────────────────────
