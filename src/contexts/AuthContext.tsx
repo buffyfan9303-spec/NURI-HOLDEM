@@ -40,11 +40,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event) => {
+    // ⚠️ onAuthStateChange 콜백 내부에서 supabase를 await하면 GoTrue 락 데드락 →
+    //    로그인이 "로그인 중..."에서 무한 대기. 콜백은 동기로만 두고
+    //    프로필 조회는 setTimeout(0)로 분리 실행해 락을 먼저 해제한다.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT') {
         setUser(null);
-      } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
-        setUser(await getMyProfile());
+      } else if (session?.user) {
+        setTimeout(() => {
+          getMyProfile().then((p) => setUser(p)).catch(() => {});
+        }, 0);
       }
     });
 
