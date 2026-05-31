@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import DraggableList from './DraggableList';
+import VenueDraggableList from './VenueDraggableList';
 import UserManagementTab from './UserManagementTab';
 import type { Schedule } from '../../api/schedules';
 import type { User } from '../../api/auth';
-import type { CommunityPost } from '../../api/community';
+import type { CommunityPost, Venue } from '../../api/community';
 
 interface AdminTabProps {
   schedules: Schedule[];
+  venues: Venue[];
   users: User[];
   posts: CommunityPost[];
   onApproveSchedule: (id: string) => void;
@@ -16,11 +18,14 @@ interface AdminTabProps {
 }
 
 type Section = 'pending' | 'reorder' | 'users';
+// 노출 순서 하위 항목: 포스터(요강) / 매장
+type ReorderTarget = 'posters' | 'venues';
 
 export default function AdminTab({
-  schedules, users, posts, onApproveSchedule, onRejectSchedule, onUpdateUser, onDeletePost,
+  schedules, venues, users, posts, onApproveSchedule, onRejectSchedule, onUpdateUser, onDeletePost,
 }: AdminTabProps) {
   const [section, setSection] = useState<Section>('pending');
+  const [reorderTarget, setReorderTarget] = useState<ReorderTarget>('posters');
 
   const pending = schedules.filter((s) => !s.approved);
 
@@ -51,7 +56,23 @@ export default function AdminTab({
           onReject={onRejectSchedule}
         />
       )}
-      {section === 'reorder' && <DraggableList initialItems={schedules.filter((s) => s.approved)} />}
+      {section === 'reorder' && (
+        <div className="space-y-3">
+          {/* 노출 순서 하위 선택: 포스터 / 매장 */}
+          <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5">
+            <SubPill active={reorderTarget === 'posters'} onClick={() => setReorderTarget('posters')}>
+              🃏 포스터
+            </SubPill>
+            <SubPill active={reorderTarget === 'venues'} onClick={() => setReorderTarget('venues')}>
+              🏠 매장
+            </SubPill>
+          </div>
+
+          {reorderTarget === 'posters'
+            ? <DraggableList initialItems={schedules.filter((s) => s.approved)} />
+            : <VenueDraggableList initialItems={venues} />}
+        </div>
+      )}
       {section === 'users' && (
         <UserManagementTab
           users={users}
@@ -161,6 +182,22 @@ function PendingRow({
         )}
       </div>
     </li>
+  );
+}
+
+// 노출 순서 하위 탭(포스터/매장)용 작은 토글 버튼
+function SubPill({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        'flex-1 inline-flex items-center justify-center gap-1 py-1.5 text-xs font-semibold rounded-[6px] transition-all focus:outline-none',
+        active ? 'bg-gold-300 text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary',
+      ].join(' ')}
+    >
+      {children}
+    </button>
   );
 }
 

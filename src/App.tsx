@@ -695,6 +695,7 @@ export default function App() {
         <main className="px-page-x py-section animate-fade-in">
           <AdminTab
             schedules={schedules}
+            venues={venues}
             users={users}
             posts={posts}
             onApproveSchedule={handleApproveSchedule}
@@ -726,6 +727,7 @@ export default function App() {
         onClose={() => setOpenVenueId(null)}
         schedules={schedules}
         comments={comments}
+        notices={notices}
         onSubmitComment={handleSubmitVenueComment}
         onDeleteComment={handleDeleteComment}
         onUpdateDescription={handleUpdateVenueDescription}

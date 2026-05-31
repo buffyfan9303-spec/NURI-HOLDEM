@@ -5,6 +5,7 @@ import RotiArenaLogo from '../atoms/RotiArenaLogo';
 import { useToast } from '../atoms/Toast';
 import type { Venue, Comment } from '../../api/community';
 import type { Schedule } from '../../api/schedules';
+import type { MarketplaceNotice } from '../../api/marketplace';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface VenuePageProps {
@@ -13,17 +14,20 @@ interface VenuePageProps {
   onClose: () => void;
   schedules: Schedule[];
   comments: Comment[];
+  /** 포스터 탭의 '금일 포스터'에 함께 노출할 공지글 */
+  notices?: MarketplaceNotice[];
   onSubmitComment: (venueId: string, content: string, parentId?: string) => void;
   onDeleteComment?: (commentId: string) => void;
   onUpdateDescription?: (venueId: string, description: string) => void;
   onUpdateImage?: (venueId: string, dataUrl: string) => void;
 }
 
-type Tab = 'about' | 'schedules' | 'community';
-const TABS: Tab[] = ['about', 'schedules', 'community'];
+type Tab = 'about' | 'posters' | 'schedules' | 'community';
+const TABS: Tab[] = ['about', 'posters', 'schedules', 'community'];
 
 const TAB_LABEL: Record<Tab, string> = {
   about:     '매장 소개',
+  posters:   '포스터',
   schedules: '진행 예정',
   community: '커뮤니티',
 };
@@ -39,7 +43,7 @@ const TAB_LABEL: Record<Tab, string> = {
  * - 브라우저 뒤로가기 지원 (popstate)
  */
 export default function VenuePage({
-  venue, open, onClose, schedules, comments,
+  venue, open, onClose, schedules, comments, notices = [],
   onSubmitComment, onDeleteComment, onUpdateDescription, onUpdateImage,
 }: VenuePageProps) {
   const [tab, setTab] = useState<Tab>('about');
@@ -85,6 +89,11 @@ export default function VenuePage({
     () => (venue ? comments.filter((c) => c.venueId === venue.id) : []),
     [venue, comments],
   );
+  // 금일 포스터 — 오늘 날짜(YYYY-MM-DD)와 일치하는 매장 포스터
+  const todayPosters = useMemo(() => {
+    const todayIso = new Date().toISOString().slice(0, 10);
+    return venueSchedules.filter((s) => s.date === todayIso);
+  }, [venueSchedules]);
 
   if (!open || !venue) return null;
 
@@ -154,9 +163,10 @@ export default function VenuePage({
 
         {/* ── Sticky 탭바 ─────────────────────────────────────────── */}
         <div className="sticky top-0 z-20 bg-surface-base border-b border-border-subtle">
-          <div className="grid grid-cols-3">
+          <div className="grid grid-cols-4">
             {TABS.map((t) => {
-              const count = t === 'schedules' ? venueSchedules.length
+              const count = t === 'posters'   ? venueSchedules.length
+                          : t === 'schedules' ? venueSchedules.length
                           : t === 'community' ? venueComments.length
                           : 0;
               const active = tab === t;
@@ -194,6 +204,13 @@ export default function VenuePage({
               venue={venue}
               editable={isMyVenue}
               onUpdateDescription={onUpdateDescription}
+            />
+          )}
+          {tab === 'posters' && (
+            <PostersPanel
+              todayPosters={todayPosters}
+              allPosters={venueSchedules}
+              notices={notices}
             />
           )}
           {tab === 'schedules' && <SchedulesPanel schedules={venueSchedules} />}
@@ -574,6 +591,134 @@ function KakaoMap({ address, name }: { address: string; name: string }) {
 }
 
 // ── Schedules 패널 ──────────────────────────────────────────────────────────
+
+// ── 포스터 탭 ────────────────────────────────────────────────────────────────
+// '금일 포스터' 카테고리 — 클릭 시 공지글이 포함된 상태로 아코디언이 열린다.
+// (오늘 진행 포스터 + 운영 공지를 함께 묶어 보여줌)
+
+function PostersPanel({
+  todayPosters, allPosters, notices,
+}: {
+  todayPosters: Schedule[];
+  allPosters: Schedule[];
+  notices: MarketplaceNotice[];
+}) {
+  // 금일 포스터가 있으면 기본 열림, 없으면 접힘
+  const [open, setOpen] = useState(todayPosters.length > 0);
+  const dows = ['일', '월', '화', '수', '목', '금', '토'];
+
+  // 오늘이 아닌 예정 포스터 (날짜 오름차순)
+  const upcoming = allPosters
+    .filter((s) => !todayPosters.some((t) => t.id === s.id))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  return (
+    <div className="space-y-4">
+      {/* ── 금일 포스터 아코디언 ───────────────────────────────── */}
+      <section className="rounded-card border border-gold-400/40 overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="w-full flex items-center justify-between px-3 py-2.5 bg-gradient-to-br from-gold-300/[0.08] to-transparent hover:from-gold-300/[0.12] transition-colors focus:outline-none"
+        >
+          <span className="inline-flex items-center gap-1.5 text-sm font-bold text-gold-300">
+            🔥 금일 포스터
+            <span className="text-2xs text-ink-muted font-normal">({todayPosters.length})</span>
+          </span>
+          {/* 펼침/접힘 화살표 */}
+          <svg
+            width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+            className={['text-ink-secondary transition-transform duration-200', open ? 'rotate-180' : ''].join(' ')}
+            aria-hidden
+          >
+            <polyline points="4 6 8 10 12 6" />
+          </svg>
+        </button>
+
+        {/* 아코디언 본문 — 공지글 + 금일 포스터 */}
+        {open && (
+          <div className="px-3 py-3 space-y-3 border-t border-gold-400/20 animate-slide-up">
+            {/* 공지글 (있을 때만) */}
+            {notices.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-2xs font-bold text-ink-muted">📢 공지</p>
+                <ul className="space-y-1.5">
+                  {notices.slice(0, 3).map((n) => (
+                    <li key={n.id} className="px-2.5 py-2 rounded-input bg-surface-high border-l-2 border-gold-400/50">
+                      <p className="text-xs font-semibold text-ink-primary">📌 {n.title}</p>
+                      {n.body && <p className="text-2xs text-ink-muted line-clamp-2 mt-0.5">{n.body}</p>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* 금일 포스터 목록 */}
+            {todayPosters.length === 0 ? (
+              <p className="text-center py-4 text-xs text-ink-muted">오늘 진행되는 포스터가 없습니다.</p>
+            ) : (
+              <ul className="space-y-2">
+                {todayPosters.map((s) => (
+                  <li key={s.id} className="flex items-center gap-3 p-2.5 rounded-input bg-surface-low border border-border-subtle">
+                    {/* 포스터 썸네일 */}
+                    <div
+                      className="w-10 h-14 shrink-0 rounded-input overflow-hidden flex items-center justify-center"
+                      style={s.posterUrl ? undefined : { background: `linear-gradient(135deg, ${s.posterColor ?? '#1a1d24'}, #0a0c0f)` }}
+                    >
+                      {s.posterUrl
+                        ? <img src={s.posterUrl} alt={`${s.title} 포스터`} className="w-full h-full object-cover" loading="lazy" />
+                        : <span className="text-lg opacity-30">♠</span>}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-ink-primary truncate">{s.title}</p>
+                      <p className="text-2xs text-ink-muted mt-0.5">
+                        {s.startTime} · 바이인 {s.buyIn.amount.toLocaleString()}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-2xs font-bold text-gold-300 bg-gold-300/15 px-1.5 py-0.5 rounded-badge">
+                      TODAY
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </section>
+
+      {/* ── 예정 포스터 ─────────────────────────────────────────── */}
+      <div className="space-y-2">
+        <p className="text-2xs font-bold text-ink-muted px-0.5">📅 예정 포스터 ({upcoming.length})</p>
+        {upcoming.length === 0 ? (
+          <p className="text-center py-6 text-xs text-ink-muted">예정된 포스터가 없습니다.</p>
+        ) : (
+          <ul className="space-y-2">
+            {upcoming.map((s) => {
+              const d = new Date(s.date);
+              return (
+                <li key={s.id} className="flex items-center gap-3 p-3 rounded-input bg-surface-high border border-border-subtle">
+                  <div className="text-center shrink-0">
+                    <p className="text-2xs text-ink-muted">{dows[d.getDay()]}</p>
+                    <p className="text-lg font-bold text-gold-300 tabular-nums leading-none">{d.getDate()}</p>
+                    <p className="text-2xs text-ink-muted">{d.getMonth() + 1}월</p>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-ink-primary truncate">{s.title}</p>
+                    <p className="text-2xs text-ink-muted mt-0.5">
+                      {s.startTime} · 바이인 {s.buyIn.amount.toLocaleString()}
+                    </p>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function SchedulesPanel({ schedules }: { schedules: Schedule[] }) {
   if (schedules.length === 0) {
