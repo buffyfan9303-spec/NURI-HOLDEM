@@ -111,3 +111,27 @@ export async function getNotices(): Promise<MarketplaceNotice[]> {
   if (error) throw error;
   return (data ?? []).map(rowToNotice);
 }
+
+// 공지 작성 — RLS 정책(notices_admin_all)이 관리자(my_role()='admin')만 CUD 허용.
+// 즉, 비관리자가 호출하면 서버에서 거부되므로 권한은 DB에서 강제된다.
+export async function createNotice(
+  payload: Pick<MarketplaceNotice, 'type' | 'title' | 'body' | 'authorName'>,
+): Promise<MarketplaceNotice> {
+  if (IS_MOCK) {
+    return { ...payload, id: `n_${Date.now()}`, createdAt: new Date().toISOString() };
+  }
+  const { data, error } = await supabase.from('marketplace_notices').insert({
+    type:        payload.type,
+    title:       payload.title,
+    body:        payload.body ?? null,
+    author_name: payload.authorName,
+  }).select().single();
+  if (error) throw error;
+  return rowToNotice(data);
+}
+
+export async function deleteNotice(id: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.from('marketplace_notices').delete().eq('id', id);
+  if (error) throw error;
+}

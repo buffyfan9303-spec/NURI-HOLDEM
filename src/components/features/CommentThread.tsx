@@ -5,6 +5,8 @@ import { useAuth } from '../../contexts/AuthContext';
 interface CommentThreadProps {
   comments: Comment[];
   onSubmit: (content: string, parentId?: string) => void;
+  /** 관리자(또는 본인) 댓글 삭제 콜백 — 전달되지 않으면 삭제 버튼 미노출 */
+  onDelete?: (commentId: string) => void;
   emptyText?: string;
 }
 
@@ -20,10 +22,15 @@ function CommentItem({
   comment,
   replies,
   onReply,
+  onDelete,
+  canDelete,
 }: {
   comment: Comment;
   replies: Comment[];
   onReply: (parentId: string, content: string) => void;
+  onDelete?: (commentId: string) => void;
+  /** (commentId) => 이 댓글을 삭제할 권한이 있는지 */
+  canDelete: (comment: Comment) => boolean;
 }) {
   const [showReplyBox, setShowReplyBox] = useState(false);
   const [replyContent, setReplyContent] = useState('');
@@ -59,13 +66,27 @@ function CommentItem({
           <p className="text-sm text-ink-primary leading-relaxed whitespace-pre-wrap break-words">
             {comment.content}
           </p>
-          <button
-            type="button"
-            onClick={() => setShowReplyBox((v) => !v)}
-            className="mt-1 text-2xs text-ink-muted hover:text-gold-300 transition-colors"
-          >
-            {showReplyBox ? '취소' : '답글'}
-          </button>
+          <div className="mt-1 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setShowReplyBox((v) => !v)}
+              className="text-2xs text-ink-muted hover:text-gold-300 transition-colors"
+            >
+              {showReplyBox ? '취소' : '답글'}
+            </button>
+            {/* 관리자(또는 본인)에게만 삭제 버튼 노출 */}
+            {onDelete && canDelete(comment) && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirm('이 댓글을 삭제하시겠습니까?')) onDelete(comment.id);
+                }}
+                className="text-2xs text-ink-muted hover:text-danger-light transition-colors"
+              >
+                삭제
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -88,7 +109,7 @@ function CommentItem({
       {replies.length > 0 && (
         <div className="ml-10 space-y-3 border-l-2 border-border-subtle pl-3">
           {replies.map((r) => (
-            <CommentItem key={r.id} comment={r} replies={[]} onReply={onReply} />
+            <CommentItem key={r.id} comment={r} replies={[]} onReply={onReply} onDelete={onDelete} canDelete={canDelete} />
           ))}
         </div>
       )}
@@ -96,9 +117,12 @@ function CommentItem({
   );
 }
 
-export default function CommentThread({ comments, onSubmit, emptyText = '아직 댓글이 없습니다.' }: CommentThreadProps) {
+export default function CommentThread({ comments, onSubmit, onDelete, emptyText = '아직 댓글이 없습니다.' }: CommentThreadProps) {
   const { user } = useAuth();
   const [content, setContent] = useState('');
+
+  // 관리자는 모든 댓글, 일반 사용자는 본인 댓글만 삭제 가능 (서버 RLS와 동일 규칙)
+  const canDelete = (c: Comment) => user?.role === 'admin' || user?.id === c.userId;
 
   const roots   = comments.filter((c) => !c.parentId);
   const repliesByParent = comments
@@ -156,6 +180,8 @@ export default function CommentThread({ comments, onSubmit, emptyText = '아직 
               comment={c}
               replies={repliesByParent[c.id] ?? []}
               onReply={(parentId, content) => onSubmit(content, parentId)}
+              onDelete={onDelete}
+              canDelete={canDelete}
             />
           ))}
         </div>

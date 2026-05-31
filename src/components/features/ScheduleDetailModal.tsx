@@ -12,6 +12,7 @@ interface ScheduleDetailModalProps {
   onVenueClick: (venueId: string) => void;
   comments: Comment[];
   onSubmitComment: (content: string, parentId?: string) => void;
+  onDeleteComment?: (commentId: string) => void;
 }
 
 type Tab = 'info' | 'qna';
@@ -20,7 +21,7 @@ const SUITS = ['♠','♥','♦','♣'];
 const DAYS_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
 export default function ScheduleDetailModal({
-  schedule, open, onClose, onVenueClick, comments, onSubmitComment,
+  schedule, open, onClose, onVenueClick, comments, onSubmitComment, onDeleteComment,
 }: ScheduleDetailModalProps) {
   const [tab, setTab] = useState<Tab>('info');
 
@@ -172,6 +173,7 @@ export default function ScheduleDetailModal({
           <CommentThread
             comments={qnaComments}
             onSubmit={onSubmitComment}
+            onDelete={onDeleteComment}
             emptyText="이 토너먼트에 대해 첫 질문을 남겨보세요."
           />
         </div>

@@ -105,6 +105,14 @@ export async function addComment(
   return rowToComment(data);
 }
 
+// 댓글 삭제 — RLS 정책(comments_delete)이 "본인 또는 관리자"만 허용하므로
+// 클라이언트는 단순 delete만 호출하면 권한은 서버(Postgres RLS)에서 강제된다.
+export async function deleteComment(commentId: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.from('comments').delete().eq('id', commentId);
+  if (error) throw error;
+}
+
 // ── Community Posts ────────────────────────────────────────────────────────────
 export async function getPosts(): Promise<CommunityPost[]> {
   if (IS_MOCK) {

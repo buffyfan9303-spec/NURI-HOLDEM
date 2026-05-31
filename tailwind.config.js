@@ -8,15 +8,16 @@ export default {
       // 카지노 다크: 깊은 심도감 + 눈 피로도 최소화
       // 골드 액센트: 프리미엄 권위 표현
       colors: {
-        // Surface scale (어두울수록 낮은 레이어)
+        // Surface scale — index.css 의 CSS 변수를 참조해 라이트/다크 테마 전환 지원
+        // rgb(var(--x) / <alpha-value>) 형태라 bg-surface-base/95 같은 알파 합성도 동작
         surface: {
-          base:  '#0A0C0F', // 앱 최하위 배경
-          low:   '#111318', // 카드 배경
-          mid:   '#1A1D24', // 모달, 사이드바
-          high:  '#22262F', // 호버 영역, 입력 필드
-          float: '#2C3140', // 드롭다운, 툴팁
+          base:  'rgb(var(--surface-base) / <alpha-value>)',  // 앱 최하위 배경
+          low:   'rgb(var(--surface-low) / <alpha-value>)',   // 카드 배경
+          mid:   'rgb(var(--surface-mid) / <alpha-value>)',   // 모달, 사이드바
+          high:  'rgb(var(--surface-high) / <alpha-value>)',  // 호버 영역, 입력 필드
+          float: 'rgb(var(--surface-float) / <alpha-value>)', // 드롭다운, 툴팁
         },
-        // Gold: 프리미엄·상단 고정 아이템 전용
+        // Gold: 프리미엄·상단 고정 아이템 전용 (브랜드 색 — 테마 고정)
         gold: {
           50:  '#FFF9E6',
           100: '#FFF0B3',
@@ -26,24 +27,24 @@ export default {
           500: '#B39200', // pressed state
           600: '#806800',
         },
-        // Red: 언리드 뱃지, 경고 전용
+        // Red: 언리드 뱃지, 경고 전용 (브랜드 색 — 테마 고정)
         danger: {
           DEFAULT: '#E53E3E',
           light:   '#FEB2B2',
           dark:    '#C53030',
         },
-        // Text scale
+        // Text scale — CSS 변수 기반 (테마 전환)
         ink: {
-          primary:   '#F0F2F5',
-          secondary: '#9AA3B2',
-          muted:     '#5A6175',
-          inverse:   '#0A0C0F',
+          primary:   'rgb(var(--ink-primary) / <alpha-value>)',
+          secondary: 'rgb(var(--ink-secondary) / <alpha-value>)',
+          muted:     'rgb(var(--ink-muted) / <alpha-value>)',
+          inverse:   'rgb(var(--ink-inverse) / <alpha-value>)',
         },
-        // Border scale
+        // Border scale — CSS 변수 기반 (테마 전환)
         border: {
-          subtle:  '#1E2230',
-          default: '#2C3140',
-          strong:  '#404760',
+          subtle:  'rgb(var(--border-subtle) / <alpha-value>)',
+          default: 'rgb(var(--border-default) / <alpha-value>)',
+          strong:  'rgb(var(--border-strong) / <alpha-value>)',
         },
       },
 
@@ -83,9 +84,10 @@ export default {
 
       // ── Box Shadow ────────────────────────────────────────────────────────
       boxShadow: {
-        card:   '0 0 0 1px rgba(255,255,255,0.04), 0 4px 16px rgba(0,0,0,0.5)',
+        // 헤어라인 링/그림자를 CSS 변수로 → 라이트 모드에서 흰색 테두리 선이 보이던 버그 해결
+        card:   '0 0 0 1px var(--card-ring), 0 4px 16px var(--card-shadow)',
         gold:   '0 0 12px rgba(255,209,0,0.35)',
-        dialog: '0 -4px 32px rgba(0,0,0,0.8)',
+        dialog: '0 -4px 32px var(--card-shadow)',
         badge:  '0 0 6px rgba(229,62,62,0.6)',
       },
 

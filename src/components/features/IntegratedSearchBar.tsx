@@ -111,21 +111,17 @@ function DateTab({ slot, selected, onClick }: DateTabProps) {
 // ── 서브컴포넌트: 날짜 슬라이더 ──────────────────────────────────────────────
 
 interface DateSliderProps {
-  selectedDate: string | null;
-  onSelect: (iso: string | null) => void;
+  selectedDates: string[];      // 복수 선택
+  onToggle: (iso: string) => void;
 }
 
-function DateSlider({ selectedDate, onSelect }: DateSliderProps) {
+function DateSlider({ selectedDates, onToggle }: DateSliderProps) {
   const slots = useRef(buildDateSlots(14)).current;
-
-  const handleSelect = (iso: string) => {
-    onSelect(selectedDate === iso ? null : iso);
-  };
 
   return (
     <div
       role="group"
-      aria-label="날짜 빠른 선택"
+      aria-label="날짜 빠른 선택 (복수 선택 가능)"
       className={[
         'flex gap-1 overflow-x-auto',
         'px-page-x pb-1',
@@ -137,8 +133,8 @@ function DateSlider({ selectedDate, onSelect }: DateSliderProps) {
         <DateTab
           key={slot.iso}
           slot={slot}
-          selected={selectedDate === slot.iso}
-          onClick={() => handleSelect(slot.iso)}
+          selected={selectedDates.includes(slot.iso)}
+          onClick={() => onToggle(slot.iso)}
         />
       ))}
     </div>
@@ -149,8 +145,8 @@ function DateSlider({ selectedDate, onSelect }: DateSliderProps) {
 
 export interface SearchState {
   query: string;
-  date: string | null;
-  region: string | null;
+  dates: string[];   // 복수 선택 (Multi-select) — 비어있으면 전체
+  regions: string[]; // 복수 선택 (Multi-select) — 비어있으면 전체
   format: string | null;
   gtdOnly: boolean;
 }
@@ -166,22 +162,23 @@ export default function IntegratedSearchBar({
   placeholder = '대회명, 펍 이름, 지역 검색…',
   className = '',
 }: IntegratedSearchBarProps) {
-  const [rawQuery,      setRawQuery]      = useState('');
-  const [selectedDate,  setSelectedDate]  = useState<string | null>(null);
-  const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
+  const [rawQuery,       setRawQuery]       = useState('');
+  // 단일 선택 → 복수 선택(배열)으로 변경. 토글 방식으로 추가/제거.
+  const [selectedDates,  setSelectedDates]  = useState<string[]>([]);
+  const [selectedRegions, setSelectedRegions] = useState<string[]>([]);
   const [selectedFormat, setSelectedFormat] = useState<string | null>(null);
-  const [gtdOnly,       setGtdOnly]       = useState(false);
-  const [isFocused,     setIsFocused]     = useState(false);
-  const inputRef                          = useRef<HTMLInputElement>(null);
-  const [, startTransition]              = useTransition();
+  const [gtdOnly,        setGtdOnly]        = useState(false);
+  const [isFocused,      setIsFocused]      = useState(false);
+  const inputRef                            = useRef<HTMLInputElement>(null);
+  const [, startTransition]                = useTransition();
 
   const deferredQuery = useDeferredValue(rawQuery);
 
   useEffect(() => {
     startTransition(() => {
-      onChange({ query: deferredQuery, date: selectedDate, region: selectedRegion, format: selectedFormat, gtdOnly });
+      onChange({ query: deferredQuery, dates: selectedDates, regions: selectedRegions, format: selectedFormat, gtdOnly });
     });
-  }, [deferredQuery, selectedDate, selectedRegion, selectedFormat, gtdOnly, onChange]);
+  }, [deferredQuery, selectedDates, selectedRegions, selectedFormat, gtdOnly, onChange]);
 
   const handleQueryChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => { setRawQuery(e.target.value); },
@@ -193,15 +190,19 @@ export default function IntegratedSearchBar({
     inputRef.current?.focus();
   }, []);
 
-  const handleDateSelect   = useCallback((iso: string | null) => setSelectedDate(iso), []);
-  const handleRegionSelect = useCallback((r: string) => setSelectedRegion((prev) => prev === r ? null : r), []);
+  // 배열 토글 헬퍼 — 이미 있으면 제거, 없으면 추가 (복수 선택)
+  const toggleInArray = (arr: string[], value: string) =>
+    arr.includes(value) ? arr.filter((v) => v !== value) : [...arr, value];
+
+  const handleDateToggle   = useCallback((iso: string) => setSelectedDates((prev) => toggleInArray(prev, iso)), []);
+  const handleRegionToggle = useCallback((r: string) => setSelectedRegions((prev) => toggleInArray(prev, r)), []);
   const handleFormatSelect = useCallback((f: string) => setSelectedFormat((prev) => prev === f ? null : f), []);
   const handleGtdToggle    = useCallback(() => setGtdOnly((v) => !v), []);
 
   const activeCount =
     (rawQuery.length > 0 ? 1 : 0) +
-    (selectedDate   ? 1 : 0) +
-    (selectedRegion ? 1 : 0) +
+    selectedDates.length +
+    selectedRegions.length +
     (selectedFormat ? 1 : 0) +
     (gtdOnly        ? 1 : 0);
 
@@ -209,8 +210,8 @@ export default function IntegratedSearchBar({
 
   const clearAll = useCallback(() => {
     setRawQuery('');
-    setSelectedDate(null);
-    setSelectedRegion(null);
+    setSelectedDates([]);
+    setSelectedRegions([]);
     setSelectedFormat(null);
     setGtdOnly(false);
   }, []);
@@ -276,8 +277,8 @@ export default function IntegratedSearchBar({
         </div>
       </div>
 
-      {/* ── 날짜 슬라이더 탭 ─────────────────────────────────────────────── */}
-      <DateSlider selectedDate={selectedDate} onSelect={handleDateSelect} />
+      {/* ── 날짜 슬라이더 탭 (복수 선택) ─────────────────────────────────── */}
+      <DateSlider selectedDates={selectedDates} onToggle={handleDateToggle} />
 
       {/* ── 지역 + 포맷 + GTD 필터 칩 ────────────────────────────────────── */}
       <div className="flex flex-col gap-1.5 px-page-x pt-2 pb-1">
@@ -287,12 +288,12 @@ export default function IntegratedSearchBar({
           aria-label="지역 필터"
         >
           {REGION_CHIPS.map((r) => {
-            const active = selectedRegion === r;
+            const active = selectedRegions.includes(r);
             return (
               <button
                 key={r}
                 type="button"
-                onClick={() => handleRegionSelect(r)}
+                onClick={() => handleRegionToggle(r)}
                 className={[
                   'shrink-0 px-2.5 py-1 rounded-badge text-2xs font-semibold border transition-colors focus:outline-none',
                   active
@@ -364,12 +365,14 @@ export default function IntegratedSearchBar({
           {rawQuery && (
             <FilterChip label={`"${rawQuery}"`} onRemove={handleClear} />
           )}
-          {selectedDate && (
-            <FilterChip label={formatDateLabel(selectedDate)} onRemove={() => handleDateSelect(null)} />
-          )}
-          {selectedRegion && (
-            <FilterChip label={`📍 ${selectedRegion}`} onRemove={() => setSelectedRegion(null)} />
-          )}
+          {/* 선택된 날짜마다 칩 1개 (복수 선택) */}
+          {selectedDates.map((iso) => (
+            <FilterChip key={iso} label={formatDateLabel(iso)} onRemove={() => handleDateToggle(iso)} />
+          ))}
+          {/* 선택된 지역마다 칩 1개 (복수 선택) */}
+          {selectedRegions.map((r) => (
+            <FilterChip key={r} label={`📍 ${r}`} onRemove={() => handleRegionToggle(r)} />
+          ))}
           {selectedFormat && (
             <FilterChip label={selectedFormat} onRemove={() => setSelectedFormat(null)} />
           )}
