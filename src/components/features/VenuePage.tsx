@@ -14,6 +14,7 @@ interface VenuePageProps {
   schedules: Schedule[];
   comments: Comment[];
   onSubmitComment: (venueId: string, content: string, parentId?: string) => void;
+  onDeleteComment?: (commentId: string) => void;
   onUpdateDescription?: (venueId: string, description: string) => void;
   onUpdateImage?: (venueId: string, dataUrl: string) => void;
 }
@@ -39,7 +40,7 @@ const TAB_LABEL: Record<Tab, string> = {
  */
 export default function VenuePage({
   venue, open, onClose, schedules, comments,
-  onSubmitComment, onUpdateDescription, onUpdateImage,
+  onSubmitComment, onDeleteComment, onUpdateDescription, onUpdateImage,
 }: VenuePageProps) {
   const [tab, setTab] = useState<Tab>('about');
   const { user, isApprovedOwner } = useAuth();
@@ -200,6 +201,7 @@ export default function VenuePage({
             <CommentThread
               comments={venueComments}
               onSubmit={(content, parentId) => onSubmitComment(venue.id, content, parentId)}
+              onDelete={onDeleteComment}
               emptyText="이 매장의 첫 댓글을 남겨보세요."
             />
           )}

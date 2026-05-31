@@ -21,7 +21,7 @@ interface CommunityTabProps {
   onLikePost: (postId: string) => void;
 }
 
-type Section = 'feed' | 'venues';
+type Section = 'feed' | 'live' | 'venues';
 
 function relativeTime(iso: string): string {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -63,13 +63,14 @@ export default function CommunityTab({
 
   return (
     <div className="space-y-3">
-      {/* 섹션 토글 — 전역 피드 vs 매장 목록 */}
+      {/* 섹션 토글 — 전역 피드 / 실시간 / 매장 커뮤니티 */}
       <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5">
         <SectionTab active={section === 'feed'}   label="전역 피드"   onClick={() => setSection('feed')} />
+        <SectionTab active={section === 'live'}   label="실시간"      onClick={() => setSection('live')} />
         <SectionTab active={section === 'venues'} label="매장 커뮤니티" onClick={() => setSection('venues')} />
       </div>
 
-      {section === 'feed' ? (
+      {section === 'feed' && (
         <FeedSection
           posts={sortedPosts}
           notices={notices}
@@ -80,7 +81,13 @@ export default function CommunityTab({
           onLike={onLikePost}
           onSelectPost={onSelectPost}
         />
-      ) : (
+      )}
+
+      {section === 'live' && (
+        <LiveSection posts={posts} comments={comments} onSelectPost={onSelectPost} />
+      )}
+
+      {section === 'venues' && (
         <VenuesSection
           sortedVenues={sortedVenues}
           query={query}
@@ -166,7 +173,7 @@ function FeedSection({
         <section className="rounded-card border border-gold-400/40 bg-gradient-to-br from-gold-300/[0.06] to-transparent overflow-hidden">
           <header className="flex items-center justify-between px-3 py-2 border-b border-gold-400/20">
             <h2 className="inline-flex items-center gap-1.5 text-xs font-bold text-gold-300">
-              📢 운영자 공지
+              📢 공지사항
               {notices && <span className="text-2xs text-ink-muted font-normal">({notices.length})</span>}
             </h2>
             {isAdmin && (
@@ -278,6 +285,89 @@ function PostCard({ post, onLike, onClick }: { post: CommunityPost; onLike: () =
         </div>
       </div>
     </li>
+  );
+}
+
+// ── 실시간 섹션 ──────────────────────────────────────────────────────────────
+// 게시글 + 댓글을 시간순(최신)으로 병합한 실시간 활동 스트림.
+// 게시글 활동은 클릭 시 상세 모달로 이동, 댓글 활동은 읽기 전용.
+
+type Activity =
+  | { kind: 'post';    id: string; createdAt: string; userName: string; userRole: CommunityPost['userRole']; content: string; post: CommunityPost }
+  | { kind: 'comment'; id: string; createdAt: string; userName: string; userRole: Comment['userRole']; content: string };
+
+function LiveSection({
+  posts, comments, onSelectPost,
+}: {
+  posts: CommunityPost[];
+  comments: Comment[];
+  onSelectPost: (p: CommunityPost) => void;
+}) {
+  // 게시글 + 댓글을 단일 타임라인으로 병합 후 최신순 정렬 (최대 40개)
+  const activities = useMemo<Activity[]>(() => {
+    const fromPosts: Activity[] = posts.map((p) => ({
+      kind: 'post', id: `post_${p.id}`, createdAt: p.createdAt,
+      userName: p.userName, userRole: p.userRole, content: p.content, post: p,
+    }));
+    const fromComments: Activity[] = comments.map((c) => ({
+      kind: 'comment', id: `cmt_${c.id}`, createdAt: c.createdAt,
+      userName: c.userName, userRole: c.userRole, content: c.content,
+    }));
+    return [...fromPosts, ...fromComments]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 40);
+  }, [posts, comments]);
+
+  if (activities.length === 0) {
+    return <p className="text-center py-12 text-xs text-ink-muted">아직 활동 내역이 없습니다</p>;
+  }
+
+  return (
+    <div className="space-y-2">
+      <p className="text-2xs text-ink-muted text-center py-1">
+        ⚡ 커뮤니티의 최신 게시글과 댓글이 실시간으로 표시됩니다
+      </p>
+      <ul className="rounded-card border border-border-default bg-surface-low overflow-hidden">
+        {activities.map((a) => {
+          const clickable = a.kind === 'post';
+          return (
+            <li
+              key={a.id}
+              onClick={clickable ? () => onSelectPost(a.post) : undefined}
+              className={[
+                'flex items-start gap-2 px-3 py-2 border-b border-border-subtle last:border-b-0 transition-colors',
+                clickable ? 'hover:bg-surface-high/50 cursor-pointer' : 'cursor-default',
+              ].join(' ')}
+            >
+              {/* 활동 유형 배지 */}
+              <span className={[
+                'shrink-0 mt-0.5 text-2xs font-bold px-1.5 py-0.5 rounded-badge leading-none',
+                a.kind === 'post'
+                  ? 'bg-gold-300/15 text-gold-300'
+                  : 'bg-surface-float text-ink-secondary',
+              ].join(' ')}>
+                {a.kind === 'post' ? '글' : '댓글'}
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1 text-2xs">
+                  <span className="font-semibold text-ink-primary truncate">{a.userName}</span>
+                  {a.userRole === 'venue_owner' && (
+                    <span className="font-bold text-gold-300 bg-gold-300/15 px-1 rounded-badge leading-none">업주</span>
+                  )}
+                  {a.userRole === 'admin' && (
+                    <span className="font-bold text-danger-light bg-danger/15 px-1 rounded-badge leading-none">운영자</span>
+                  )}
+                  <span className="text-ink-muted ml-auto shrink-0">{relativeTime(a.createdAt)}</span>
+                </div>
+                <p className="text-xs text-ink-secondary leading-snug line-clamp-1 mt-0.5 break-words">
+                  {a.content}
+                </p>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 

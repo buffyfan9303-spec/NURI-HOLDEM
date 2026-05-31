@@ -20,7 +20,9 @@ import NoticeDetailModal from './components/features/NoticeDetailModal';
 import PosterFormModal from './components/features/PosterFormModal';
 import type { PosterFormData } from './components/features/PosterFormModal';
 import NuriHoldemLogo from './components/atoms/NuriHoldemLogo';
+import ThemeToggle from './components/atoms/ThemeToggle';
 import ProfileModal from './components/features/ProfileModal';
+import NoticeFormModal from './components/features/NoticeFormModal';
 import { useAuth } from './contexts/AuthContext';
 import { listAllUsers, updateUserStatus, approveOwner } from './api/auth';
 import {
@@ -28,9 +30,10 @@ import {
 } from './api/schedules';
 import {
   getVenues, getComments, getPosts, addComment, addPost, likePost,
-  updateVenueDescription, updateVenueImage,
+  updateVenueDescription, updateVenueImage, deleteComment,
 } from './api/community';
-import { getListings, getNotices } from './api/marketplace';
+import { getListings, getNotices, createNotice } from './api/marketplace';
+import type { NoticeFormData } from './components/features/NoticeFormModal';
 import { getMyNotifications, markNotificationsRead } from './api/notifications';
 import type { User } from './api/auth';
 import type { Schedule } from './api/schedules';
@@ -75,8 +78,11 @@ function AppHeader({
           <NuriHoldemLogo />
         </button>
 
-        {/* RIGHT: 알림 + 로그인/아바타 */}
+        {/* RIGHT: 테마 토글 + 알림 + 로그인/아바타 */}
         <div className="flex items-center gap-1.5">
+          {/* 라이트/다크 모드 전환 */}
+          <ThemeToggle />
+
           {/* 알림 벨 — 솔리드 디자인 + 명확한 클릭 영역 */}
           <button
             type="button"
@@ -121,8 +127,14 @@ function AppHeader({
                   className="absolute right-0 top-full mt-2 w-56 bg-surface-mid border border-border-default rounded-card shadow-dialog animate-slide-up z-50 overflow-hidden"
                   onMouseLeave={() => setUserMenu(false)}
                 >
-                  {/* 사용자 정보 헤더 */}
-                  <div className="flex items-center gap-2.5 px-3 py-2.5 border-b border-border-subtle">
+                  {/* 사용자 정보 헤더 — 행 전체가 클릭/터치 영역(빈 여백 포함)이 되도록 button으로 확장 */}
+                  <button
+                    type="button"
+                    onClick={() => { onOpenProfile(); setUserMenu(false); }}
+                    aria-label="프로필 관리 열기"
+                    className="w-full text-left flex items-center gap-2.5 px-3 py-2.5 border-b border-border-subtle
+                               hover:bg-surface-high transition-colors focus:outline-none"
+                  >
                     <div
                       className="w-8 h-8 rounded-full overflow-hidden shrink-0 flex items-center justify-center text-xs font-bold text-white"
                       style={user.avatarUrl ? undefined : { background: user.avatarColor ?? '#FFD100' }}
@@ -131,11 +143,11 @@ function AppHeader({
                         ? <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" />
                         : user.name[0]}
                     </div>
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-ink-primary truncate">{user.name}</p>
                       <p className="text-2xs text-ink-muted truncate">{user.email}</p>
                     </div>
-                  </div>
+                  </button>
 
                   {/* 프로필 관리 */}
                   <button
@@ -202,7 +214,10 @@ function TabBar({
   tabs, active, onChange,
 }: { tabs: TabDef[]; active: TabId; onChange: (t: TabId) => void }) {
   return (
-    <div className="flex border-b border-border-subtle overflow-x-auto scrollbar-none">
+    // px-page-x + 첫/마지막 탭의 안쪽 패딩 제거 → 탭 글자가 페이지 좌우 여백(검색바·카드)과 정확히 정렬.
+    // 좌우 여백 불균형(첫 탭이 화면 끝에 붙던 문제) 해결.
+    <div className="flex border-b border-border-subtle overflow-x-auto scrollbar-none px-page-x
+                    [&>button:first-child]:pl-0 [&>button:last-child]:pr-0">
       {tabs.map(({ id, label }) => (
         <button
           key={id}
@@ -248,7 +263,7 @@ export default function App() {
   // UI 상태
   const [viewMode, setViewMode]       = useState<ViewMode>('list');
   const [activeTab, setActiveTab]     = useState<TabId>('browse');
-  const [searchState, setSearchState] = useState<SearchState>({ query: '', date: null, region: null, format: null, gtdOnly: false });
+  const [searchState, setSearchState] = useState<SearchState>({ query: '', dates: [], regions: [], format: null, gtdOnly: false });
   const [authOpen, setAuthOpen]       = useState(false);
   const [openVenueId, setOpenVenueId] = useState<string | null>(null);
   const [openSchedule, setOpenSchedule] = useState<Schedule | null>(null);
@@ -268,12 +283,14 @@ export default function App() {
   const [posterFormTarget, setPosterFormTarget] = useState<Schedule | null | undefined>(null);
   const [openPost, setOpenPost]         = useState<CommunityPost | null>(null);
   const [profileOpen, setProfileOpen]   = useState(false);
+  const [noticeFormOpen, setNoticeFormOpen] = useState(false);
 
   // 서버 재조회 헬퍼
   const reloadSchedules = useCallback(() => { getSchedules().then(setSchedules).catch(() => {}); }, []);
   const reloadVenues    = useCallback(() => { getVenues().then(setVenues).catch(() => {}); }, []);
   const reloadPosts     = useCallback(() => { getPosts().then(setPosts).catch(() => {}); }, []);
   const reloadComments  = useCallback(() => { getComments({}).then(setComments).catch(() => {}); }, []);
+  const reloadNotices   = useCallback(() => { getNotices().then(setNotices).catch(() => {}); }, []);
 
   // 공개 데이터 초기 로드
   useEffect(() => {
@@ -281,9 +298,9 @@ export default function App() {
     reloadVenues();
     reloadPosts();
     reloadComments();
+    reloadNotices();
     getListings().then(setListings).catch(() => {});
-    getNotices().then(setNotices).catch(() => {});
-  }, [reloadSchedules, reloadVenues, reloadPosts, reloadComments]);
+  }, [reloadSchedules, reloadVenues, reloadPosts, reloadComments, reloadNotices]);
 
   // 로그인 사용자: 내 알림 로드
   useEffect(() => {
@@ -320,8 +337,9 @@ export default function App() {
     const q = searchState.query.trim();
     return list.filter((s) => {
       const matchQ = !q || [s.title, s.pubName, s.region].some((t) => t.includes(q));
-      const matchD = !searchState.date   || s.date === searchState.date;
-      const matchR = !searchState.region || s.region.includes(searchState.region);
+      // 복수 선택: 비어있으면 전체 통과, 아니면 선택된 값 중 하나라도 일치(OR)
+      const matchD = searchState.dates.length === 0   || searchState.dates.includes(s.date);
+      const matchR = searchState.regions.length === 0 || searchState.regions.some((r) => s.region.includes(r));
       const matchF = !searchState.format || s.format === searchState.format;
       const matchG = !searchState.gtdOnly || s.guaranteed === true;
       return matchQ && matchD && matchR && matchF && matchG;
@@ -348,7 +366,7 @@ export default function App() {
     setOpenNotice(null);
     setOpenPost(null);
     setPosterFormTarget(null);
-    setSearchState({ query: '', date: null, region: null, format: null, gtdOnly: false });
+    setSearchState({ query: '', dates: [], regions: [], format: null, gtdOnly: false });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
@@ -455,6 +473,23 @@ export default function App() {
   const handleDeletePost = useCallback((id: string) => {
     setPosts((prev) => prev.filter((p) => p.id !== id));
   }, []);
+
+  // 관리자: 댓글 삭제 — 낙관적 제거 후 서버 반영(권한은 RLS가 강제)
+  const handleDeleteComment = useCallback((commentId: string) => {
+    setComments((prev) => prev.filter((c) => c.id !== commentId && c.parentId !== commentId));
+    deleteComment(commentId)
+      .then(() => toast.show('댓글이 삭제되었습니다', 'success'))
+      .catch(() => { toast.show('댓글 삭제에 실패했습니다', 'error'); reloadComments(); });
+  }, [toast, reloadComments]);
+
+  // 관리자: 공지사항 작성 — 등록 후 목록 갱신 (권한은 RLS가 강제)
+  const handleCreateNotice = useCallback(async (data: NoticeFormData) => {
+    if (!user) throw new Error('로그인이 필요합니다');
+    const saved = await createNotice({
+      type: data.type, title: data.title, body: data.body, authorName: user.name,
+    });
+    setNotices((prev) => [saved, ...prev]);
+  }, [user]);
 
   const handleUpdateVenueDescription = useCallback((venueId: string, description: string) => {
     setVenues((prev) => prev.map((v) => v.id === venueId ? { ...v, description } : v));
@@ -615,7 +650,7 @@ export default function App() {
             posts={posts}
             notices={notices}
             isAdmin={isAdmin}
-            onWriteNotice={() => toast.show('공지 작성 기능은 곧 오픈됩니다', 'info')}
+            onWriteNotice={() => setNoticeFormOpen(true)}
             onSelectNotice={setOpenNotice}
             onSelectVenue={handleVenueClick}
             onSelectPost={setOpenPost}
@@ -635,7 +670,7 @@ export default function App() {
             onSelectNotice={setOpenNotice}
             onCreate={() => toast.show('글쓰기 기능은 곧 오픈됩니다', 'info')}
             canWriteNotice={isAdmin}
-            onWriteNotice={() => toast.show('공지 작성 기능은 곧 오픈됩니다', 'info')}
+            onWriteNotice={() => setNoticeFormOpen(true)}
           />
         </main>
       )}
@@ -682,6 +717,7 @@ export default function App() {
         onSubmitComment={(content, parentId) =>
           openSchedule && handleSubmitScheduleComment(openSchedule.id, content, parentId)
         }
+        onDeleteComment={handleDeleteComment}
       />
 
       <VenuePage
@@ -691,6 +727,7 @@ export default function App() {
         schedules={schedules}
         comments={comments}
         onSubmitComment={handleSubmitVenueComment}
+        onDeleteComment={handleDeleteComment}
         onUpdateDescription={handleUpdateVenueDescription}
         onUpdateImage={handleUpdateVenueImage}
       />
@@ -724,6 +761,13 @@ export default function App() {
       <ProfileModal
         open={profileOpen}
         onClose={() => setProfileOpen(false)}
+      />
+
+      {/* 관리자 전용 공지 작성 모달 (커뮤니티/장터 '공지 작성' 버튼에서 진입) */}
+      <NoticeFormModal
+        open={noticeFormOpen}
+        onClose={() => setNoticeFormOpen(false)}
+        onSubmit={handleCreateNotice}
       />
     </div>
   );

@@ -3,7 +3,63 @@
 @tailwind utilities;
 
 @layer base {
-  /* dark 클래스는 main.tsx에서 document.documentElement.classList.add('dark')로 적용 */
+  /* ──────────────────────────────────────────────────────────────────────────
+   * 테마 토큰 (CSS 변수)
+   * - tailwind.config.js 의 surface/ink/border 색상이 이 변수들을 rgb(var(--x))로 참조한다.
+   * - 기본값(:root)은 다크 테마. html.light 클래스가 붙으면 라이트 테마로 전환된다.
+   * - 값은 "R G B" 공백 구분(알파 합성을 위해). gold/danger 등 브랜드 색은 고정.
+   * ────────────────────────────────────────────────────────────────────────── */
+  :root,
+  html.dark {
+    --surface-base:  10 12 15;
+    --surface-low:   17 19 24;
+    --surface-mid:   26 29 36;
+    --surface-high:  34 38 47;
+    --surface-float: 44 49 64;
+
+    --ink-primary:   240 242 245;
+    --ink-secondary: 154 163 178;
+    --ink-muted:     90 97 117;
+    --ink-inverse:   10 12 15;
+
+    --border-subtle:  30 34 48;
+    --border-default: 44 49 64;
+    --border-strong:  64 71 96;
+
+    /* 카드 헤어라인/그림자 — 다크에서는 미세한 흰색 링 */
+    --card-ring:   rgba(255, 255, 255, 0.04);
+    --card-shadow: rgba(0, 0, 0, 0.5);
+  }
+
+  /* 라이트 테마 오버라이드 */
+  html.light {
+    --surface-base:  245 246 248;
+    --surface-low:   255 255 255;
+    --surface-mid:   255 255 255;
+    --surface-high:  238 240 243;
+    --surface-float: 226 229 234;
+
+    --ink-primary:   20 23 31;
+    --ink-secondary: 74 81 96;
+    --ink-muted:     130 138 156;
+    --ink-inverse:   10 12 15; /* 골드 버튼 위 텍스트는 라이트/다크 모두 어둡게 유지 */
+
+    --border-subtle:  227 230 235;
+    --border-default: 210 214 221;
+    --border-strong:  180 186 198;
+
+    /* 라이트에서는 흰색 헤어라인이 보이면 안 됨 → 어두운 톤으로 교체 */
+    --card-ring:   rgba(0, 0, 0, 0.06);
+    --card-shadow: rgba(0, 0, 0, 0.08);
+
+    color-scheme: light;
+  }
+
+  /* 테마 전환 시 색상 트랜지션 (깜빡임 없이 부드럽게) */
+  html {
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
   body {
     @apply bg-surface-base text-ink-primary antialiased;
     font-family: 'Pretendard Variable', 'Pretendard', system-ui, sans-serif;
