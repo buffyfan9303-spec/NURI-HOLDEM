@@ -7,6 +7,7 @@ export interface Venue {
   description?: string; imageUrl?: string; themeColor?: string;
   ownerId?: string; approved: boolean; contactPhone?: string;
   businessHours?: string; followerCount?: number; isPaidAd?: boolean;
+  displayOrder?: number; // 관리자 노출 순서 (작을수록 앞)
 }
 
 export interface Comment {
@@ -28,6 +29,7 @@ const rowToVenue = (r: any): Venue => ({
   description: r.description, imageUrl: r.image_url, themeColor: r.theme_color,
   ownerId: r.owner_id, approved: r.approved, contactPhone: r.contact_phone,
   businessHours: r.business_hours, followerCount: r.follower_count, isPaidAd: r.is_paid_ad,
+  displayOrder: r.display_order,
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -51,11 +53,29 @@ export async function getVenues(): Promise<Venue[]> {
     const { MOCK_VENUES } = await import('../mock/data');
     return MOCK_VENUES;
   }
+  // 정렬: 유료광고 우선 → 관리자가 지정한 노출 순서(display_order) → 팔로워순
   const { data, error } = await supabase.from('venues').select('*')
-    .eq('approved', true).order('is_paid_ad', { ascending: false })
+    .eq('approved', true)
+    .order('is_paid_ad', { ascending: false })
+    .order('display_order', { ascending: true })
     .order('follower_count', { ascending: false });
   if (error) throw error;
   return (data ?? []).map(rowToVenue);
+}
+
+// ── 관리자: 매장 노출 순서 일괄 변경 ──────────────────────────────────────────
+// venues 는 NOT NULL 컬럼(name/region)이 많아 upsert가 불가하므로 개별 UPDATE로 처리.
+export async function reorderVenues(payload: { items: { id: string; displayOrder: number }[] }): Promise<void> {
+  if (IS_MOCK) return;
+  const results = await Promise.all(
+    payload.items.map(({ id, displayOrder }) =>
+      supabase.from('venues')
+        .update({ display_order: displayOrder, updated_at: new Date().toISOString() })
+        .eq('id', id),
+    ),
+  );
+  const failed = results.find((r) => r.error);
+  if (failed?.error) throw failed.error;
 }
 
 export async function updateVenueDescription(venueId: string, description: string): Promise<void> {
