@@ -7,6 +7,8 @@ import { supabase, IS_MOCK } from './supabase';
 const BUCKET_POSTERS  = import.meta.env.VITE_STORAGE_BUCKET_POSTERS  ?? 'posters';
 const BUCKET_LISTINGS = import.meta.env.VITE_STORAGE_BUCKET_LISTINGS ?? 'listings';
 const BUCKET_AVATARS  = 'avatars';
+// 커뮤니티 글쓰기 이미지 — 별도 버킷 미존재 시 listings 버킷을 공용으로 재사용(공개 읽기/로그인 업로드 정책 동일).
+const BUCKET_COMMUNITY = import.meta.env.VITE_STORAGE_BUCKET_COMMUNITY ?? BUCKET_LISTINGS;
 
 // ── 이미지 리사이징 (Canvas API) ─────────────────────────────────────────────
 export async function resizeImage(
@@ -92,6 +94,23 @@ export async function uploadListingImages(
       const blob = await resizeImage(file, 1000, 1000, 0.82);
       const path = `${sellerId}/${Date.now()}-${i}.webp`;
       return uploadToStorage(BUCKET_LISTINGS, path, blob);
+    }),
+  );
+  return urls;
+}
+
+// ── 커뮤니티 글쓰기 이미지 업로드 (최대 4장) ────────────────────────────────
+export async function uploadCommunityImages(
+  userId: string,
+  files: FileList | File[],
+  max = 4,
+): Promise<string[]> {
+  const list = Array.from(files).slice(0, max);
+  const urls = await Promise.all(
+    list.map(async (file, i) => {
+      const blob = await resizeImage(file, 1200, 1200, 0.82);
+      const path = `community/${userId}/${Date.now()}-${i}.webp`;
+      return uploadToStorage(BUCKET_COMMUNITY, path, blob);
     }),
   );
   return urls;

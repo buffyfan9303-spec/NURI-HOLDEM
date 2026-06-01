@@ -16,10 +16,17 @@ export interface Comment {
   content: string; createdAt: string; edited?: boolean;
 }
 
+// 커뮤니티 글 카테고리 (Stage 2). DB 미존재 시 'free'로 폴백.
+export type PostCategory = 'free' | 'question' | 'info' | 'review';
+
 export interface CommunityPost {
   id: string; userId: string; userName: string;
   userRole: UserRole; userColor?: string;
   content: string; createdAt: string; likeCount: number; commentCount: number;
+  // ── Stage 2 확장 (모두 옵셔널 → 구버전 데이터/호출 호환) ──
+  category?: PostCategory;  // 카테고리
+  title?: string;           // 제목
+  images?: string[];        // 첨부 이미지 URL[]
 }
 
 // ── DB 변환 ──────────────────────────────────────────────────────────────────
@@ -45,6 +52,10 @@ const rowToPost = (r: any): CommunityPost => ({
   userRole: r.user_role, userColor: r.user_color,
   content: r.content, createdAt: r.created_at,
   likeCount: r.like_count, commentCount: r.comment_count,
+  // Stage 2 컬럼 (없으면 undefined)
+  category: r.category ?? undefined,
+  title:    r.title ?? undefined,
+  images:   Array.isArray(r.images) ? r.images : undefined,
 });
 
 // ── Venues ────────────────────────────────────────────────────────────────────
@@ -146,18 +157,37 @@ export async function getPosts(): Promise<CommunityPost[]> {
 }
 
 export async function addPost(
-  payload: Pick<CommunityPost, 'userId' | 'userName' | 'userRole' | 'userColor' | 'content'>,
+  payload: Pick<CommunityPost, 'userId' | 'userName' | 'userRole' | 'userColor' | 'content'>
+    & Partial<Pick<CommunityPost, 'category' | 'title' | 'images'>>,
 ): Promise<CommunityPost> {
   if (IS_MOCK) {
-    return { ...payload, id: `p_${Date.now()}`, createdAt: new Date().toISOString(), likeCount: 0, commentCount: 0 };
+    return {
+      ...payload, id: `p_${Date.now()}`, createdAt: new Date().toISOString(),
+      likeCount: 0, commentCount: 0,
+    };
   }
-  const { data, error } = await supabase.from('community_posts').insert({
+
+  const base = {
     user_id: payload.userId, user_name: payload.userName,
     user_role: payload.userRole, user_color: payload.userColor,
     content: payload.content,
-  }).select().single();
-  if (error) throw error;
-  return rowToPost(data);
+  };
+  const extended = {
+    ...base,
+    category: payload.category ?? 'free',
+    title:    payload.title ?? null,
+    images:   payload.images ?? [],
+  };
+
+  // 1차: 신규 컬럼 포함 insert. 컬럼 미존재(42703) 등이면 content-only로 폴백.
+  const first = await supabase.from('community_posts').insert(extended).select().single();
+  if (!first.error) return rowToPost(first.data);
+  if (first.error.code !== '42703') throw first.error;
+
+  const fallback = await supabase.from('community_posts').insert(base).select().single();
+  if (fallback.error) throw fallback.error;
+  // 클라이언트 표시용으로 입력값을 합쳐 반환(DB엔 미저장이지만 UI 일관성 유지)
+  return { ...rowToPost(fallback.data), category: payload.category, title: payload.title, images: payload.images };
 }
 
 export async function likePost(postId: string): Promise<void> {

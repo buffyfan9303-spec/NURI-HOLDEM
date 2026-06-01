@@ -2,8 +2,6 @@ import { useState, useMemo } from 'react';
 import type { Venue, Comment, CommunityPost } from '../../api/community';
 import type { MarketplaceNotice } from '../../api/marketplace';
 import { useAuth } from '../../contexts/AuthContext';
-import { filterContent } from '../../lib/content-filter';
-import { useToast } from '../atoms/Toast';
 
 interface CommunityTabProps {
   venues: Venue[];
@@ -17,11 +15,13 @@ interface CommunityTabProps {
   onSelectNotice?: (notice: MarketplaceNotice) => void;
   onSelectVenue: (venueId: string) => void;
   onSelectPost: (post: CommunityPost) => void;
-  onPostSubmit: (content: string) => void;
+  /** 글쓰기 버튼 → 글쓰기 모달 열기 (Stage 2) */
+  onOpenWrite: () => void;
   onLikePost: (postId: string) => void;
 }
 
-type Section = 'feed' | 'live' | 'venues';
+// Stage 2: '실시간' 탭 삭제 → [실시간 댓글(=구 전역 피드), 매장 커뮤니티]
+type Section = 'feed' | 'venues';
 
 function relativeTime(iso: string): string {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -33,7 +33,7 @@ function relativeTime(iso: string): string {
 
 export default function CommunityTab({
   venues, comments, posts, notices = [], isAdmin = false, onWriteNotice, onSelectNotice,
-  onSelectVenue, onSelectPost, onPostSubmit, onLikePost,
+  onSelectVenue, onSelectPost, onOpenWrite, onLikePost,
 }: CommunityTabProps) {
   const [section, setSection] = useState<Section>('feed');
   const [query, setQuery] = useState('');
@@ -63,10 +63,9 @@ export default function CommunityTab({
 
   return (
     <div className="space-y-3">
-      {/* 섹션 토글 — 전역 피드 / 실시간 / 매장 커뮤니티 */}
+      {/* 섹션 토글 — 실시간 댓글 / 매장 커뮤니티 (Stage 2: '실시간' 탭 삭제) */}
       <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5">
-        <SectionTab active={section === 'feed'}   label="전역 피드"   onClick={() => setSection('feed')} />
-        <SectionTab active={section === 'live'}   label="실시간"      onClick={() => setSection('live')} />
+        <SectionTab active={section === 'feed'}   label="실시간 댓글"   onClick={() => setSection('feed')} />
         <SectionTab active={section === 'venues'} label="매장 커뮤니티" onClick={() => setSection('venues')} />
       </div>
 
@@ -77,14 +76,10 @@ export default function CommunityTab({
           isAdmin={isAdmin}
           onWriteNotice={onWriteNotice}
           onSelectNotice={onSelectNotice}
-          onSubmit={onPostSubmit}
+          onOpenWrite={onOpenWrite}
           onLike={onLikePost}
           onSelectPost={onSelectPost}
         />
-      )}
-
-      {section === 'live' && (
-        <LiveSection posts={posts} comments={comments} onSelectPost={onSelectPost} />
       )}
 
       {section === 'venues' && (
@@ -119,49 +114,36 @@ function SectionTab({ active, label, onClick }: { active: boolean; label: string
 // ── 전역 피드 ────────────────────────────────────────────────────────────────
 
 function FeedSection({
-  posts, notices, isAdmin, onWriteNotice, onSelectNotice, onSubmit, onLike, onSelectPost,
+  posts, notices, isAdmin, onWriteNotice, onSelectNotice, onOpenWrite, onLike, onSelectPost,
 }: {
   posts: CommunityPost[];
   notices?: MarketplaceNotice[];
   isAdmin?: boolean;
   onWriteNotice?: () => void;
   onSelectNotice?: (notice: MarketplaceNotice) => void;
-  onSubmit: (content: string) => void;
+  onOpenWrite: () => void;
   onLike: (id: string) => void;
   onSelectPost: (p: CommunityPost) => void;
 }) {
   const { user } = useAuth();
-  const toast    = useToast();
-  const [draft, setDraft] = useState('');
-
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!draft.trim()) return;
-    const check = filterContent(draft.trim());
-    if (check.blocked) {
-      toast.show(check.reason!, 'error');
-      return;
-    }
-    onSubmit(draft.trim());
-    setDraft('');
-  };
 
   return (
     <div className="space-y-2">
-      {/* 글쓰기 박스 — 컴팩트 한 줄 */}
+      {/* 글쓰기 — '글쓰기' 버튼 → 글쓰기 모달(카테고리·제목·내용·이미지) (Stage 2) */}
       {user ? (
-        <form onSubmit={submit} className="flex items-center gap-2">
-          <input
-            type="text"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder="짧은 이야기를 남겨보세요..."
-            className="input flex-1"
-          />
-          <button type="submit" className="btn-primary text-xs" disabled={!draft.trim()}>
-            게시
-          </button>
-        </form>
+        <button
+          type="button"
+          onClick={onOpenWrite}
+          className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-input bg-surface-high border border-border-default hover:border-gold-400/50 transition-colors text-left"
+        >
+          <span className="text-xs text-ink-muted">나누고 싶은 이야기를 적어보세요...</span>
+          <span className="shrink-0 inline-flex items-center gap-1 text-2xs font-bold text-gold-300">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+            </svg>
+            글쓰기
+          </span>
+        </button>
       ) : (
         <div className="p-2 rounded-input bg-surface-high text-center text-2xs text-ink-muted">
           로그인하면 게시글을 작성할 수 있습니다
@@ -285,89 +267,6 @@ function PostCard({ post, onLike, onClick }: { post: CommunityPost; onLike: () =
         </div>
       </div>
     </li>
-  );
-}
-
-// ── 실시간 섹션 ──────────────────────────────────────────────────────────────
-// 게시글 + 댓글을 시간순(최신)으로 병합한 실시간 활동 스트림.
-// 게시글 활동은 클릭 시 상세 모달로 이동, 댓글 활동은 읽기 전용.
-
-type Activity =
-  | { kind: 'post';    id: string; createdAt: string; userName: string; userRole: CommunityPost['userRole']; content: string; post: CommunityPost }
-  | { kind: 'comment'; id: string; createdAt: string; userName: string; userRole: Comment['userRole']; content: string };
-
-function LiveSection({
-  posts, comments, onSelectPost,
-}: {
-  posts: CommunityPost[];
-  comments: Comment[];
-  onSelectPost: (p: CommunityPost) => void;
-}) {
-  // 게시글 + 댓글을 단일 타임라인으로 병합 후 최신순 정렬 (최대 40개)
-  const activities = useMemo<Activity[]>(() => {
-    const fromPosts: Activity[] = posts.map((p) => ({
-      kind: 'post', id: `post_${p.id}`, createdAt: p.createdAt,
-      userName: p.userName, userRole: p.userRole, content: p.content, post: p,
-    }));
-    const fromComments: Activity[] = comments.map((c) => ({
-      kind: 'comment', id: `cmt_${c.id}`, createdAt: c.createdAt,
-      userName: c.userName, userRole: c.userRole, content: c.content,
-    }));
-    return [...fromPosts, ...fromComments]
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .slice(0, 40);
-  }, [posts, comments]);
-
-  if (activities.length === 0) {
-    return <p className="text-center py-12 text-xs text-ink-muted">아직 활동 내역이 없습니다</p>;
-  }
-
-  return (
-    <div className="space-y-2">
-      <p className="text-2xs text-ink-muted text-center py-1">
-        ⚡ 커뮤니티의 최신 게시글과 댓글이 실시간으로 표시됩니다
-      </p>
-      <ul className="rounded-card border border-border-default bg-surface-low overflow-hidden">
-        {activities.map((a) => {
-          const clickable = a.kind === 'post';
-          return (
-            <li
-              key={a.id}
-              onClick={clickable ? () => onSelectPost(a.post) : undefined}
-              className={[
-                'flex items-start gap-2 px-3 py-2 border-b border-border-subtle last:border-b-0 transition-colors',
-                clickable ? 'hover:bg-surface-high/50 cursor-pointer' : 'cursor-default',
-              ].join(' ')}
-            >
-              {/* 활동 유형 배지 */}
-              <span className={[
-                'shrink-0 mt-0.5 text-2xs font-bold px-1.5 py-0.5 rounded-badge leading-none',
-                a.kind === 'post'
-                  ? 'bg-gold-300/15 text-gold-300'
-                  : 'bg-surface-float text-ink-secondary',
-              ].join(' ')}>
-                {a.kind === 'post' ? '글' : '댓글'}
-              </span>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1 text-2xs">
-                  <span className="font-semibold text-ink-primary truncate">{a.userName}</span>
-                  {a.userRole === 'venue_owner' && (
-                    <span className="font-bold text-gold-300 bg-gold-300/15 px-1 rounded-badge leading-none">업주</span>
-                  )}
-                  {a.userRole === 'admin' && (
-                    <span className="font-bold text-danger-light bg-danger/15 px-1 rounded-badge leading-none">운영자</span>
-                  )}
-                  <span className="text-ink-muted ml-auto shrink-0">{relativeTime(a.createdAt)}</span>
-                </div>
-                <p className="text-xs text-ink-secondary leading-snug line-clamp-1 mt-0.5 break-words">
-                  {a.content}
-                </p>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
   );
 }
 

@@ -23,6 +23,10 @@ import NuriHoldemLogo from './components/atoms/NuriHoldemLogo';
 import ThemeToggle from './components/atoms/ThemeToggle';
 import ProfileModal from './components/features/ProfileModal';
 import NoticeFormModal from './components/features/NoticeFormModal';
+import PostFormModal from './components/features/PostFormModal';
+import type { PostFormData } from './components/features/PostFormModal';
+import MarketplaceFormModal from './components/features/MarketplaceFormModal';
+import type { MarketplaceFormData } from './components/features/MarketplaceFormModal';
 import { useAuth } from './contexts/AuthContext';
 import { listAllUsers, updateUserStatus, approveOwner } from './api/auth';
 import {
@@ -32,7 +36,7 @@ import {
   getVenues, getComments, getPosts, addComment, addPost, likePost,
   updateVenueDescription, updateVenueImage, deleteComment,
 } from './api/community';
-import { getListings, getNotices, createNotice } from './api/marketplace';
+import { getListings, getNotices, createNotice, createListing } from './api/marketplace';
 import type { NoticeFormData } from './components/features/NoticeFormModal';
 import { getMyNotifications, markNotificationsRead } from './api/notifications';
 import type { User } from './api/auth';
@@ -301,6 +305,8 @@ export default function App() {
   const [openPost, setOpenPost]         = useState<CommunityPost | null>(null);
   const [profileOpen, setProfileOpen]   = useState(false);
   const [noticeFormOpen, setNoticeFormOpen] = useState(false);
+  const [postFormOpen, setPostFormOpen]     = useState(false);   // 커뮤니티 글쓰기
+  const [marketFormOpen, setMarketFormOpen] = useState(false);   // 중고장터 글쓰기
 
   // 서버 재조회 헬퍼
   const reloadSchedules = useCallback(() => { getSchedules().then(setSchedules).catch(() => {}); }, []);
@@ -458,15 +464,42 @@ export default function App() {
     [user, schedules, toast],
   );
 
-  const handleSubmitPost = useCallback((content: string) => {
-    if (!user) return;
-    addPost({
+  // 커뮤니티 글쓰기 모달 제출 — 카테고리·제목·내용·이미지 포함 (Stage 2)
+  const handleCreatePost = useCallback(async (data: PostFormData) => {
+    if (!user) throw new Error('로그인이 필요합니다');
+    const saved = await addPost({
       userId: user.id, userName: user.name, userRole: user.role,
-      userColor: user.avatarColor, content,
-    })
-      .then((saved) => setPosts((prev) => [saved, ...prev]))
-      .catch(() => toast.show('게시글 등록에 실패했습니다', 'error'));
-  }, [user, toast]);
+      userColor: user.avatarColor,
+      content: data.content,
+      category: data.category,
+      title: data.title || undefined,
+      images: data.images.length > 0 ? data.images : undefined,
+    });
+    setPosts((prev) => [saved, ...prev]);
+  }, [user]);
+
+  // 중고장터 글쓰기 모달 제출 — createListing 연동 (Stage 2)
+  const handleCreateListing = useCallback(async (data: MarketplaceFormData) => {
+    if (!user) throw new Error('로그인이 필요합니다');
+    const saved = await createListing({
+      title: data.title,
+      category: data.category,
+      description: data.description,
+      price: data.price,
+      condition: data.condition,
+      status: 'on_sale',
+      images: data.images,
+      region: data.region,
+      shippingAvailable: data.shippingAvailable,
+      pickupOnly: data.pickupOnly,
+      sellerId: user.id,
+      sellerName: user.name,
+      sellerAvatarColor: user.avatarColor ?? '#5A6175',
+      sellerTradeCount: 0,
+      sellerVerified: user.role === 'venue_owner' || user.role === 'admin',
+    });
+    setListings((prev) => [saved, ...prev]);
+  }, [user]);
 
   const handleLikePost = useCallback((postId: string) => {
     setPosts((prev) =>
@@ -671,7 +704,7 @@ export default function App() {
             onSelectNotice={setOpenNotice}
             onSelectVenue={handleVenueClick}
             onSelectPost={setOpenPost}
-            onPostSubmit={handleSubmitPost}
+            onOpenWrite={() => user ? setPostFormOpen(true) : setAuthOpen(true)}
             onLikePost={handleLikePost}
           />
         </main>
@@ -685,7 +718,7 @@ export default function App() {
             notices={notices}
             onSelect={setOpenListing}
             onSelectNotice={setOpenNotice}
-            onCreate={() => toast.show('글쓰기 기능은 곧 오픈됩니다', 'info')}
+            onCreate={() => user ? setMarketFormOpen(true) : setAuthOpen(true)}
             canWriteNotice={isAdmin}
             onWriteNotice={() => setNoticeFormOpen(true)}
           />
@@ -787,6 +820,20 @@ export default function App() {
         open={noticeFormOpen}
         onClose={() => setNoticeFormOpen(false)}
         onSubmit={handleCreateNotice}
+      />
+
+      {/* 커뮤니티 글쓰기 모달 (Stage 2) */}
+      <PostFormModal
+        open={postFormOpen}
+        onClose={() => setPostFormOpen(false)}
+        onSubmit={handleCreatePost}
+      />
+
+      {/* 중고장터 글쓰기 모달 (Stage 2) */}
+      <MarketplaceFormModal
+        open={marketFormOpen}
+        onClose={() => setMarketFormOpen(false)}
+        onSubmit={handleCreateListing}
       />
     </div>
   );
