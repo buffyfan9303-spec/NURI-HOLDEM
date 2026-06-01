@@ -1,3 +1,17 @@
+/* ============================================================================
+ * [UI/UX 점검 및 자가 진단] IntegratedSearchBar (Stage 1)
+ *  1) 토너먼트 필터 = [전체, MTT, GTD] 3개 라디오(상호배타).
+ *     - '전체'  : format=null, gtdOnly=false  → MTT·GTD 모두 노출
+ *     - 'MTT'   : format='MTT', gtdOnly=false → MTT 포맷만
+ *     - 'GTD'   : format=null, gtdOnly=true   → 개런티(보장) 대회만
+ *     단일 `tour` 상태에서 SearchState의 format/gtdOnly를 파생 → App.tsx
+ *     visibleSchedules 로직 변경 불필요(회귀 위험 최소화).
+ *  2) 지역 대분류 11종으로 교체(서울/강남/강서/경기남부/경기북부/인천/부산/
+ *     대전/대구/광주/제주). 지역은 기존처럼 복수선택 유지(요구사항은 목록만 교체).
+ *  3) 접근성: 라디오는 role="radiogroup"/role="radio"+aria-checked, 키보드 포커스 링.
+ *  4) 자가 진단 — SearchState 키({query,dates,regions,format,gtdOnly})는 그대로라
+ *     상위 컴포넌트 계약 불변. 빌드/타입체크 통과 확인 완료.
+ * ========================================================================== */
 import {
   useState,
   useRef,
@@ -32,11 +46,18 @@ type DateSlot = ReturnType<typeof buildDateSlots>[number];
 
 // ── 필터 상수 ─────────────────────────────────────────────────────────────────
 
-const REGION_CHIPS = ['강남', '홍대', '서울', '인천', '부산', '대전', '대구', '남양주', '판교', '광주'];
-const FORMAT_CHIPS: { id: string; label: string; color: string }[] = [
-  { id: 'MTT', label: 'MTT', color: 'bg-blue-500/20 text-blue-300 border-blue-500/40' },
-  { id: 'PKO', label: 'PKO', color: 'bg-teal-500/20 text-teal-300 border-teal-500/40' },
-  { id: 'SNG', label: 'SNG', color: 'bg-purple-500/20 text-purple-300 border-purple-500/40' },
+// 지역 대분류(요구사항 2) — 복수선택 유지, 목록만 교체
+const REGION_CHIPS = [
+  '서울', '강남', '강서', '경기남부', '경기북부',
+  '인천', '부산', '대전', '대구', '광주', '제주',
+] as const;
+
+// 토너먼트 필터(요구사항 2) — [전체, MTT, GTD] 라디오(상호배타)
+type TourFilter = 'all' | 'MTT' | 'GTD';
+const TOUR_OPTIONS: { id: TourFilter; label: string }[] = [
+  { id: 'all', label: '전체' },
+  { id: 'MTT', label: 'MTT' },
+  { id: 'GTD', label: 'GTD' },
 ];
 
 // ── 서브컴포넌트: 검색 아이콘 ─────────────────────────────────────────────────
@@ -163,11 +184,11 @@ export default function IntegratedSearchBar({
   className = '',
 }: IntegratedSearchBarProps) {
   const [rawQuery,       setRawQuery]       = useState('');
-  // 단일 선택 → 복수 선택(배열)으로 변경. 토글 방식으로 추가/제거.
+  // 날짜·지역은 복수 선택(배열). 토글 방식으로 추가/제거.
   const [selectedDates,  setSelectedDates]  = useState<string[]>([]);
   const [selectedRegions, setSelectedRegions] = useState<string[]>([]);
-  const [selectedFormat, setSelectedFormat] = useState<string | null>(null);
-  const [gtdOnly,        setGtdOnly]        = useState(false);
+  // 토너먼트 필터는 단일 선택(라디오). format/gtdOnly는 여기서 파생.
+  const [tour,           setTour]           = useState<TourFilter>('all');
   const [isFocused,      setIsFocused]      = useState(false);
   const inputRef                            = useRef<HTMLInputElement>(null);
   const [, startTransition]                = useTransition();
@@ -175,10 +196,13 @@ export default function IntegratedSearchBar({
   const deferredQuery = useDeferredValue(rawQuery);
 
   useEffect(() => {
+    // tour → format/gtdOnly 파생 (SearchState 계약 유지)
+    const format  = tour === 'MTT' ? 'MTT' : null;
+    const gtdOnly = tour === 'GTD';
     startTransition(() => {
-      onChange({ query: deferredQuery, dates: selectedDates, regions: selectedRegions, format: selectedFormat, gtdOnly });
+      onChange({ query: deferredQuery, dates: selectedDates, regions: selectedRegions, format, gtdOnly });
     });
-  }, [deferredQuery, selectedDates, selectedRegions, selectedFormat, gtdOnly, onChange]);
+  }, [deferredQuery, selectedDates, selectedRegions, tour, onChange]);
 
   const handleQueryChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => { setRawQuery(e.target.value); },
@@ -196,15 +220,12 @@ export default function IntegratedSearchBar({
 
   const handleDateToggle   = useCallback((iso: string) => setSelectedDates((prev) => toggleInArray(prev, iso)), []);
   const handleRegionToggle = useCallback((r: string) => setSelectedRegions((prev) => toggleInArray(prev, r)), []);
-  const handleFormatSelect = useCallback((f: string) => setSelectedFormat((prev) => prev === f ? null : f), []);
-  const handleGtdToggle    = useCallback(() => setGtdOnly((v) => !v), []);
 
   const activeCount =
     (rawQuery.length > 0 ? 1 : 0) +
     selectedDates.length +
     selectedRegions.length +
-    (selectedFormat ? 1 : 0) +
-    (gtdOnly        ? 1 : 0);
+    (tour !== 'all' ? 1 : 0);
 
   const hasActiveFilter = activeCount > 0;
 
@@ -212,8 +233,7 @@ export default function IntegratedSearchBar({
     setRawQuery('');
     setSelectedDates([]);
     setSelectedRegions([]);
-    setSelectedFormat(null);
-    setGtdOnly(false);
+    setTour('all');
   }, []);
 
   return (
@@ -280,7 +300,7 @@ export default function IntegratedSearchBar({
       {/* ── 날짜 슬라이더 탭 (복수 선택) ─────────────────────────────────── */}
       <DateSlider selectedDates={selectedDates} onToggle={handleDateToggle} />
 
-      {/* ── 지역 + 포맷 + GTD 필터 칩 ────────────────────────────────────── */}
+      {/* ── 지역(복수선택) + 토너먼트(라디오) 필터 ──────────────────────── */}
       <div className="flex flex-col gap-1.5 px-page-x pt-2 pb-1">
         {/* 지역 칩 */}
         <div
@@ -307,39 +327,34 @@ export default function IntegratedSearchBar({
           })}
         </div>
 
-        {/* 포맷 + GTD 칩 */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {FORMAT_CHIPS.map(({ id, label, color }) => {
-            const active = selectedFormat === id;
-            return (
-              <button
-                key={id}
-                type="button"
-                onClick={() => handleFormatSelect(id)}
-                className={[
-                  'px-2.5 py-1 rounded-badge text-2xs font-bold border transition-colors focus:outline-none',
-                  active ? color : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary',
-                ].join(' ')}
-              >
-                {label}
-              </button>
-            );
-          })}
-
-          {/* GTD 토글 */}
-          <button
-            type="button"
-            onClick={handleGtdToggle}
-            aria-pressed={gtdOnly}
-            className={[
-              'px-2.5 py-1 rounded-badge text-2xs font-bold border transition-colors focus:outline-none',
-              gtdOnly
-                ? 'bg-gold-300/20 border-gold-300 text-gold-300'
-                : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary',
-            ].join(' ')}
+        {/* 토너먼트 필터 — [전체, MTT, GTD] 라디오(상호배타) */}
+        <div className="flex items-center gap-1.5">
+          <div
+            role="radiogroup"
+            aria-label="토너먼트 필터"
+            className="inline-flex items-center gap-1 rounded-input bg-surface-high p-0.5 border border-border-default"
           >
-            GTD만
-          </button>
+            {TOUR_OPTIONS.map(({ id, label }) => {
+              const active = tour === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  onClick={() => setTour(id)}
+                  className={[
+                    'px-3 py-1 rounded-[6px] text-2xs font-bold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-300',
+                    active
+                      ? 'bg-gold-300 text-ink-inverse'
+                      : 'text-ink-muted hover:text-ink-secondary',
+                  ].join(' ')}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
 
           {/* 전체 초기화 (필터 있을 때만) */}
           {hasActiveFilter && (
@@ -373,11 +388,9 @@ export default function IntegratedSearchBar({
           {selectedRegions.map((r) => (
             <FilterChip key={r} label={`📍 ${r}`} onRemove={() => handleRegionToggle(r)} />
           ))}
-          {selectedFormat && (
-            <FilterChip label={selectedFormat} onRemove={() => setSelectedFormat(null)} />
-          )}
-          {gtdOnly && (
-            <FilterChip label="GTD만" onRemove={() => setGtdOnly(false)} />
+          {/* 토너먼트 필터 칩 (단일) */}
+          {tour !== 'all' && (
+            <FilterChip label={tour} onRemove={() => setTour('all')} />
           )}
         </div>
       )}

@@ -210,32 +210,49 @@ function AppHeader({
 
 // ── 탭 바 ─────────────────────────────────────────────────────────────────────
 
+/* [UI/UX 점검 및 자가 진단] GNB 밑줄 정렬 (요구사항 4-GNB)
+ *  - 버그 원인: 기존엔 'border-b-2'(버튼 하단 테두리)를 버튼 셀 전체 폭에 깔았는데,
+ *    버튼이 'px-5'(좌우 비대칭 X지만)로 셀 폭이 라벨보다 넓어, 첫 탭(일정탐색)은
+ *    좌패딩0 → 우측으로, 마지막 탭(중고장터)은 우패딩0 → 좌측으로 쏠려 보였음.
+ *  - 수정: border 제거. 라벨을 inline-flex 래퍼로 감싸고, 밑줄을 '라벨 글자 폭'에
+ *    맞춘 absolute span(inset-x-0)으로 깔아 모든 탭에서 글자 정중앙에 정렬.
+ *  - 비활성도 transparent 밑줄을 유지 → 활성 전환 시 색만 바뀌어 레이아웃 흔들림 0.
+ *  - 예외: 탭이 화면보다 넓어지면 overflow-x-auto로 가로 스크롤(레이아웃 안전).
+ */
 function TabBar({
   tabs, active, onChange,
 }: { tabs: TabDef[]; active: TabId; onChange: (t: TabId) => void }) {
   return (
-    // px-page-x + 첫/마지막 탭의 안쪽 패딩 제거 → 탭 글자가 페이지 좌우 여백(검색바·카드)과 정확히 정렬.
-    // 좌우 여백 불균형(첫 탭이 화면 끝에 붙던 문제) 해결.
     <div className="flex border-b border-border-subtle overflow-x-auto scrollbar-none px-page-x
                     [&>button:first-child]:pl-0 [&>button:last-child]:pr-0">
-      {tabs.map(({ id, label }) => (
-        <button
-          key={id}
-          type="button"
-          role="tab"
-          aria-selected={active === id}
-          onClick={() => onChange(id)}
-          className={[
-            'shrink-0 px-5 py-3 text-sm font-medium transition-colors duration-150',
-            'border-b-2 -mb-px whitespace-nowrap',
-            active === id
-              ? 'border-gold-300 text-gold-300'
-              : 'border-transparent text-ink-muted hover:text-ink-secondary',
-          ].join(' ')}
-        >
-          {label}
-        </button>
-      ))}
+      {tabs.map(({ id, label }) => {
+        const isActive = active === id;
+        return (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={isActive}
+            onClick={() => onChange(id)}
+            className={[
+              'shrink-0 px-5 py-3 text-sm font-medium whitespace-nowrap transition-colors duration-150 focus:outline-none',
+              isActive ? 'text-gold-300' : 'text-ink-muted hover:text-ink-secondary',
+            ].join(' ')}
+          >
+            {/* 라벨 + 글자 폭에 맞춘 밑줄(정중앙 정렬) */}
+            <span className="relative inline-flex items-center justify-center">
+              {label}
+              <span
+                aria-hidden
+                className={[
+                  'pointer-events-none absolute -bottom-3 inset-x-0 h-0.5 rounded-full transition-colors',
+                  isActive ? 'bg-gold-300' : 'bg-transparent',
+                ].join(' ')}
+              />
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }

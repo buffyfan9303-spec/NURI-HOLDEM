@@ -6,11 +6,15 @@ import type {
 
 // ── 상수 ─────────────────────────────────────────────────────────────────────
 
+// [UI/UX 점검 및 자가 진단] 카테고리(요구사항 4): '게임머니' 삭제 → [전체, 용품, 아이템, 기타]
+//  id 매핑: all / pokerGear(용품) / item(아이템·신규) / etc(기타).
+//  item은 신규 카테고리 → 데이터 없으면 빈 결과만 반환(런타임 오류 없음).
+//  기존 gameMoney 데이터는 어느 탭에도 안 잡히나, '아이템'으로 마이그레이션은 Stage 2 글쓰기에서 처리.
 const CATEGORIES: { id: ListingCategory | 'all'; label: string }[] = [
-  { id: 'all',       label: '전체'    },
-  { id: 'gameMoney', label: '게임머니' },
-  { id: 'pokerGear', label: '포커용품' },
-  { id: 'etc',       label: '기타'    },
+  { id: 'all',       label: '전체'   },
+  { id: 'pokerGear', label: '용품'   },
+  { id: 'item',      label: '아이템' },
+  { id: 'etc',       label: '기타'   },
 ];
 
 const CONDITION_COLOR: Record<ListingCondition, string> = {
