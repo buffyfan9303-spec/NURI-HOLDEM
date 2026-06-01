@@ -1,9 +1,9 @@
 // src/components/features/AuthModal.tsx
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Modal from '../atoms/Modal';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
-import { signUpUser, signUpOwner } from '../../api/auth';
+import { signUpUser, signUpOwner, checkNicknameAvailable } from '../../api/auth';
 import TermsOfService   from '../../pages/legal/TermsOfService';
 import PrivacyPolicy    from '../../pages/legal/PrivacyPolicy';
 import LegalNotice      from '../../pages/legal/LegalNotice';
@@ -310,6 +310,7 @@ function SignupUserForm({ onDone }: { onDone: () => void }) {
   const toast = useToast();
   const [loading, setLoading] = useState(false);
   const [name,     setName]     = useState('');
+  const nick = useNicknameCheck();
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
   const [confirm,  setConfirm]  = useState('');
@@ -322,12 +323,13 @@ function SignupUserForm({ onDone }: { onDone: () => void }) {
     if (!c.terms)          return toast.show('서비스 이용약관에 동의해 주세요.', 'error');
     if (!c.privacy)        return toast.show('개인정보 수집·이용에 동의해 주세요.', 'error');
     if (!c.antiGambling)   return toast.show('불법 환전·사행성 금지 서약에 동의해 주세요.', 'error');
+    if (nick.status !== 'available') return toast.show('사용 가능한 닉네임을 입력해 주세요.', 'error');
     if (password !== confirm) return toast.show('비밀번호가 일치하지 않습니다.', 'error');
 
     setLoading(true);
     try {
       await signUpUser({
-        email, password, name,
+        email, password, name, nickname: nick.value.trim(),
         agreedToTerms:        c.terms,
         agreedToPrivacy:      c.privacy,
         agreedToAntiGambling: c.antiGambling,
@@ -346,6 +348,7 @@ function SignupUserForm({ onDone }: { onDone: () => void }) {
     <>
       <form onSubmit={submit} className="space-y-3">
         <Field label="이름"           type="text"     placeholder="홍길동"          required value={name}     onChange={(e) => setName(e.target.value)} />
+        <NicknameField value={nick.value} status={nick.status} onChange={nick.setValue} />
         <Field label="이메일"         type="email"    placeholder="you@example.com" required value={email}    onChange={(e) => setEmail(e.target.value)} />
         <Field label="비밀번호"       type="password" placeholder="8자 이상"        required value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} />
         <Field label="비밀번호 확인"  type="password" placeholder="••••••••"        required value={confirm}  onChange={(e) => setConfirm(e.target.value)} />
@@ -358,7 +361,7 @@ function SignupUserForm({ onDone }: { onDone: () => void }) {
 
         <button
           type="submit"
-          disabled={loading || !allRequired}
+          disabled={loading || !allRequired || nick.status !== 'available'}
           className="btn-primary w-full mt-2 disabled:opacity-60"
         >
           {loading ? '처리 중…' : '가입하기'}
@@ -376,6 +379,7 @@ function SignupOwnerForm({ onDone }: { onDone: () => void }) {
   const toast = useToast();
   const [loading,   setLoading]   = useState(false);
   const [name,      setName]      = useState('');
+  const nick = useNicknameCheck();
   const [email,     setEmail]     = useState('');
   const [password,  setPassword]  = useState('');
   const [venueName, setVenueName] = useState('');
@@ -392,11 +396,12 @@ function SignupOwnerForm({ onDone }: { onDone: () => void }) {
     if (!c.terms)        return toast.show('서비스 이용약관에 동의해 주세요.', 'error');
     if (!c.privacy)      return toast.show('개인정보 수집·이용에 동의해 주세요.', 'error');
     if (!c.antiGambling) return toast.show('불법 환전·사행성 금지 서약에 동의해 주세요.', 'error');
+    if (nick.status !== 'available') return toast.show('사용 가능한 닉네임을 입력해 주세요.', 'error');
 
     setLoading(true);
     try {
       await signUpOwner({
-        name, email, password,
+        name, email, password, nickname: nick.value.trim(),
         agreedToTerms:        c.terms,
         agreedToPrivacy:      c.privacy,
         agreedToAntiGambling: c.antiGambling,
@@ -430,6 +435,7 @@ function SignupOwnerForm({ onDone }: { onDone: () => void }) {
           <p className="text-2xs font-semibold uppercase tracking-wider text-ink-secondary mb-2">계정 정보</p>
           <div className="space-y-3">
             <Field label="대표자명"  type="text"     placeholder="홍길동"          required value={name}     onChange={(e) => setName(e.target.value)} />
+            <NicknameField value={nick.value} status={nick.status} onChange={nick.setValue} />
             <Field label="이메일"    type="email"    placeholder="you@example.com"  required value={email}    onChange={(e) => setEmail(e.target.value)} />
             <Field label="비밀번호"  type="password" placeholder="8자 이상"         required value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} />
           </div>
@@ -456,7 +462,7 @@ function SignupOwnerForm({ onDone }: { onDone: () => void }) {
 
         <button
           type="submit"
-          disabled={loading || !allRequired}
+          disabled={loading || !allRequired || nick.status !== 'available'}
           className="btn-primary w-full mt-3 disabled:opacity-60"
         >
           {loading ? '처리 중…' : '업주 가입 신청'}
@@ -465,6 +471,85 @@ function SignupOwnerForm({ onDone }: { onDone: () => void }) {
 
       <LegalSheet doc={legalDoc} onClose={() => setLegalDoc(null)} />
     </>
+  );
+}
+
+// ── 닉네임 필드 (실시간 중복검사) ─────────────────────────────────────────────
+
+type NickStatus = 'idle' | 'checking' | 'available' | 'taken' | 'invalid';
+
+const NICK_RE = /^[가-힣a-zA-Z0-9_-]{2,16}$/;
+
+/**
+ * 닉네임 입력 + 디바운스(350ms) 중복검사 훅.
+ * 동기 상태(idle/invalid/checking)는 onChange 시점에 즉시 결정하고,
+ * effect 는 'checking' 일 때만 디바운스된 비동기 RPC 를 수행한다.
+ * (effect 내 동기 setState 회피 — 권장 패턴)
+ * status === 'available' 일 때만 가입 허용(상위 폼에서 disabled 처리).
+ */
+function useNicknameCheck() {
+  const [value, setValueRaw] = useState('');
+  const [status, setStatus]  = useState<NickStatus>('idle');
+  const reqIdRef = useRef(0);
+
+  const setValue = (raw: string) => {
+    setValueRaw(raw);
+    const v = raw.trim();
+    if (v.length === 0)      setStatus('idle');
+    else if (!NICK_RE.test(v)) setStatus('invalid');
+    else                     setStatus('checking'); // effect 가 RPC 수행
+  };
+
+  // 'checking' 상태일 때만 디바운스 RPC 실행
+  useEffect(() => {
+    if (status !== 'checking') return;
+    const v = value.trim();
+    const myReq = ++reqIdRef.current;
+    const timer = setTimeout(async () => {
+      try {
+        const ok = await checkNicknameAvailable(v);
+        if (myReq === reqIdRef.current) setStatus(ok ? 'available' : 'taken');
+      } catch {
+        if (myReq === reqIdRef.current) setStatus('idle'); // 검사 실패 시 서버 유니크가 최종 방어
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [status, value]);
+
+  return { value, setValue, status };
+}
+
+function NicknameField({
+  value, status, onChange,
+}: { value: string; status: NickStatus; onChange: (v: string) => void }) {
+  const hint: Record<NickStatus, { text: string; cls: string } | null> = {
+    idle:      null,
+    checking:  { text: '확인 중…',              cls: 'text-ink-muted' },
+    available: { text: '✓ 사용 가능한 닉네임입니다', cls: 'text-emerald-400' },
+    taken:     { text: '✗ 이미 사용 중인 닉네임입니다', cls: 'text-danger' },
+    invalid:   { text: '2~16자 한글·영문·숫자·_- 만 가능', cls: 'text-amber-400' },
+  };
+  const h = hint[status];
+  return (
+    <div>
+      <label className="block text-xs font-medium text-ink-secondary mb-1">
+        닉네임 <span className="text-danger">*</span>
+      </label>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="2~16자 (한글/영문/숫자)"
+        maxLength={16}
+        required
+        className={[
+          'input',
+          status === 'taken' || status === 'invalid' ? 'border-danger/50' :
+          status === 'available' ? 'border-emerald-500/50' : '',
+        ].join(' ')}
+      />
+      {h && <p className={`mt-1 text-2xs ${h.cls}`} aria-live="polite">{h.text}</p>}
+    </div>
   );
 }
 

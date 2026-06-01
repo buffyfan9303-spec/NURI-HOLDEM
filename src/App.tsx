@@ -515,7 +515,8 @@ export default function App() {
       approveOwner(id, patch.approved).catch(() => toast.show('승인 처리에 실패했습니다', 'error'));
     }
     if (patch.status !== undefined) {
-      updateUserStatus(id, patch.status, patch.suspendedUntil).catch(() => toast.show('상태 변경에 실패했습니다', 'error'));
+      updateUserStatus(id, patch.status, patch.suspendedUntil, patch.sanctionReason)
+        .catch(() => toast.show('상태 변경에 실패했습니다', 'error'));
     }
   }, [toast]);
 

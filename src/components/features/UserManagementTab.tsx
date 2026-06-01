@@ -20,6 +20,7 @@ const STATUS_LABEL: Record<UserStatus, { label: string; cls: string }> = {
   pending:   { label: '승인대기',  cls: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
   suspended: { label: '정지중',   cls: 'bg-orange-500/15 text-orange-400 border-orange-500/30' },
   banned:    { label: '영구정지', cls: 'bg-danger/15 text-danger-light border-danger/30' },
+  withdrawn: { label: '강제탈퇴', cls: 'bg-zinc-500/15 text-zinc-400 border-zinc-500/30' },
 };
 
 function relativeTime(iso: string): string {
@@ -114,38 +115,62 @@ export default function UserManagementTab({
 
 // ── 회원 행 ─────────────────────────────────────────────────────────────────
 
+// 제재 종류 — 사유 입력이 필요한 액션
+type SanctionKind =
+  | { type: 'suspend'; days: number }
+  | { type: 'ban' }
+  | { type: 'withdraw' };
+
 function UserRow({ user, onUpdate }: { user: User; onUpdate: (id: string, patch: Partial<User>) => void }) {
   const toast = useToast();
   const [menuOpen, setMenuOpen] = useState(false);
+  // 사유 입력 단계: 선택된 제재 + 사유 텍스트
+  const [pending, setPending] = useState<SanctionKind | null>(null);
+  const [reason, setReason]   = useState('');
   const status = user.status ?? 'active';
   const statusStyle = STATUS_LABEL[status];
+
+  const close = () => { setMenuOpen(false); setPending(null); setReason(''); };
 
   const approve = () => {
     onUpdate(user.id, { status: 'active', approved: true });
     toast.show(`${user.name} 가입 승인`, 'success');
-    setMenuOpen(false);
-  };
-  const suspend = (days: number) => {
-    const until = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
-    onUpdate(user.id, { status: 'suspended', suspendedUntil: until });
-    toast.show(`${user.name} ${days}일 정지`, 'info');
-    setMenuOpen(false);
-  };
-  const ban = () => {
-    onUpdate(user.id, { status: 'banned' });
-    toast.show(`${user.name} 영구 정지`, 'error');
-    setMenuOpen(false);
+    close();
   };
   const restore = () => {
-    onUpdate(user.id, { status: 'active', suspendedUntil: undefined });
+    onUpdate(user.id, { status: 'active', suspendedUntil: undefined, sanctionReason: undefined });
     toast.show(`${user.name} 제재 해제`, 'success');
-    setMenuOpen(false);
+    close();
   };
   const reject = () => {
     onUpdate(user.id, { status: 'banned', approved: false });
     toast.show(`${user.name} 가입 거절`, 'error');
-    setMenuOpen(false);
+    close();
   };
+
+  // 사유 입력 후 제재 확정 — 자동 이메일은 App handleUpdateUser → updateUserStatus 에서 발송
+  const confirmSanction = () => {
+    if (!pending) return;
+    const r = reason.trim();
+    if (!r) { toast.show('제재 사유를 입력해 주세요', 'error'); return; }
+
+    if (pending.type === 'suspend') {
+      const until = new Date(Date.now() + pending.days * 24 * 60 * 60 * 1000).toISOString();
+      onUpdate(user.id, { status: 'suspended', suspendedUntil: until, sanctionReason: r });
+      toast.show(`${user.name} ${pending.days}일 정지 — 안내 메일 발송`, 'info');
+    } else if (pending.type === 'ban') {
+      onUpdate(user.id, { status: 'banned', suspendedUntil: undefined, sanctionReason: r });
+      toast.show(`${user.name} 영구 정지 — 안내 메일 발송`, 'error');
+    } else {
+      onUpdate(user.id, { status: 'withdrawn', suspendedUntil: undefined, sanctionReason: r });
+      toast.show(`${user.name} 강제 탈퇴 — 안내 메일 발송`, 'error');
+    }
+    close();
+  };
+
+  const sanctionTitle = !pending ? '' :
+    pending.type === 'suspend' ? `${pending.days}일 정지` :
+    pending.type === 'ban'     ? '영구 정지' : '강제 탈퇴';
 
   return (
     <li className="rounded-card border border-border-default bg-surface-low overflow-hidden">
@@ -154,11 +179,16 @@ function UserRow({ user, onUpdate }: { user: User; onUpdate: (id: string, patch:
           className="w-9 h-9 shrink-0 rounded-full flex items-center justify-center text-sm font-bold text-white"
           style={{ background: user.avatarColor ?? '#5A6175' }}
         >
-          {user.name[0]}
+          {(user.nickname ?? user.name)[0]}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-sm font-semibold text-ink-primary truncate">{user.name}</span>
+            <span className="text-sm font-semibold text-ink-primary truncate">
+              {user.nickname ?? user.name}
+            </span>
+            {user.nickname && user.nickname !== user.name && (
+              <span className="text-2xs text-ink-muted truncate">({user.name})</span>
+            )}
             <span className={[
               'text-2xs px-1.5 py-0.5 rounded-badge font-semibold',
               user.role === 'admin'       ? 'bg-danger/15 text-danger-light' :
@@ -180,10 +210,13 @@ function UserRow({ user, onUpdate }: { user: User; onUpdate: (id: string, patch:
               정지 해제: {new Date(user.suspendedUntil).toLocaleDateString()}
             </p>
           )}
+          {user.sanctionReason && (status === 'suspended' || status === 'banned' || status === 'withdrawn') && (
+            <p className="text-2xs text-ink-muted truncate">사유: {user.sanctionReason}</p>
+          )}
         </div>
         <button
           type="button"
-          onClick={() => setMenuOpen((v) => !v)}
+          onClick={() => menuOpen ? close() : setMenuOpen(true)}
           className="shrink-0 btn-ghost text-xs px-2 py-1"
         >
           {menuOpen ? '닫기' : '관리'}
@@ -192,23 +225,53 @@ function UserRow({ user, onUpdate }: { user: User; onUpdate: (id: string, patch:
 
       {/* 액션 메뉴 */}
       {menuOpen && (
-        <div className="px-2.5 py-2 border-t border-border-subtle bg-surface-mid flex flex-wrap gap-1.5 animate-slide-up">
-          {status === 'pending' && (
-            <>
-              <ActionBtn onClick={approve} variant="success">가입 승인</ActionBtn>
-              <ActionBtn onClick={reject}  variant="danger">가입 거절</ActionBtn>
-            </>
-          )}
-          {(status === 'active') && (
-            <>
-              <ActionBtn onClick={() => suspend(1)}  variant="warn">1일 정지</ActionBtn>
-              <ActionBtn onClick={() => suspend(7)}  variant="warn">7일 정지</ActionBtn>
-              <ActionBtn onClick={() => suspend(30)} variant="warn">30일 정지</ActionBtn>
-              <ActionBtn onClick={ban}                variant="danger">영구 정지</ActionBtn>
-            </>
-          )}
-          {(status === 'suspended' || status === 'banned') && (
-            <ActionBtn onClick={restore} variant="success">제재 해제</ActionBtn>
+        <div className="px-2.5 py-2 border-t border-border-subtle bg-surface-mid animate-slide-up">
+          {pending ? (
+            // ── 사유 입력 단계 ──
+            <div className="space-y-2">
+              <p className="text-2xs font-semibold text-danger-light">
+                ⚠ {user.nickname ?? user.name} — {sanctionTitle} 사유 입력
+              </p>
+              <textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                rows={2}
+                maxLength={300}
+                autoFocus
+                placeholder="제재 사유 (회원에게 발송되는 안내 메일에 포함됩니다)"
+                className="input resize-none text-xs"
+              />
+              <div className="flex gap-1.5 justify-end">
+                <button type="button" onClick={() => { setPending(null); setReason(''); }}
+                  className="btn-ghost text-2xs px-2.5 py-1">뒤로</button>
+                <button type="button" onClick={confirmSanction}
+                  className="text-2xs font-semibold px-2.5 py-1 rounded-badge border bg-danger/15 text-danger-light hover:bg-danger/25 border-danger/30 transition-colors">
+                  {sanctionTitle} 확정 + 메일 발송
+                </button>
+              </div>
+            </div>
+          ) : (
+            // ── 액션 선택 단계 ──
+            <div className="flex flex-wrap gap-1.5">
+              {status === 'pending' && (
+                <>
+                  <ActionBtn onClick={approve} variant="success">가입 승인</ActionBtn>
+                  <ActionBtn onClick={reject}  variant="danger">가입 거절</ActionBtn>
+                </>
+              )}
+              {status === 'active' && (
+                <>
+                  <ActionBtn onClick={() => setPending({ type: 'suspend', days: 1 })}  variant="warn">1일 정지</ActionBtn>
+                  <ActionBtn onClick={() => setPending({ type: 'suspend', days: 7 })}  variant="warn">7일 정지</ActionBtn>
+                  <ActionBtn onClick={() => setPending({ type: 'suspend', days: 30 })} variant="warn">30일 정지</ActionBtn>
+                  <ActionBtn onClick={() => setPending({ type: 'ban' })}      variant="danger">영구 정지</ActionBtn>
+                  <ActionBtn onClick={() => setPending({ type: 'withdraw' })} variant="danger">강제 탈퇴</ActionBtn>
+                </>
+              )}
+              {(status === 'suspended' || status === 'banned' || status === 'withdrawn') && (
+                <ActionBtn onClick={restore} variant="success">제재 해제</ActionBtn>
+              )}
+            </div>
           )}
         </div>
       )}

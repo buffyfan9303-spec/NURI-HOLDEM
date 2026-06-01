@@ -2,12 +2,14 @@
 import { supabase, IS_MOCK } from '../lib/supabase';
 
 export type UserRole   = 'user' | 'venue_owner' | 'admin';
-export type UserStatus = 'active' | 'suspended' | 'banned' | 'pending';
+// 'withdrawn' = 강제 탈퇴(Stage 3). 정지(suspended)/영구정지(banned)와 구분.
+export type UserStatus = 'active' | 'suspended' | 'banned' | 'pending' | 'withdrawn';
 
 export interface User {
   id: string;
   email: string;
   name: string;
+  nickname?: string;       // 표시용 닉네임 (Stage 3, unique)
   role: UserRole;
   approved?: boolean;
   venueId?: string;
@@ -15,6 +17,7 @@ export interface User {
   avatarUrl?: string;
   status?: UserStatus;
   suspendedUntil?: string;
+  sanctionReason?: string; // 관리자 제재 사유 (Stage 3)
   joinedAt?: string;
 }
 
@@ -28,7 +31,7 @@ export interface ConsentPayload {
   agreedToMarketing: boolean;    // [선택] 마케팅 정보 수신
 }
 
-export interface SignupUserPayload  extends LoginPayload, ConsentPayload { name: string; }
+export interface SignupUserPayload  extends LoginPayload, ConsentPayload { name: string; nickname: string; }
 export interface SignupOwnerPayload extends SignupUserPayload {
   venueName: string; region: string; address: string;
   phone: string; businessNumber: string;
@@ -41,6 +44,7 @@ function rowToUser(row: any): User {
     id:             row.id,
     email:          row.email,
     name:           row.name,
+    nickname:       row.nickname ?? undefined,
     role:           row.role,
     approved:       row.approved,
     venueId:        row.venue_id,
@@ -48,6 +52,7 @@ function rowToUser(row: any): User {
     avatarUrl:      row.avatar_url,
     status:         row.status,
     suspendedUntil: row.suspended_until,
+    sanctionReason: row.sanction_reason ?? undefined,
     joinedAt:       row.joined_at,
   };
 }
@@ -67,6 +72,18 @@ export async function signIn(email: string, password: string): Promise<User> {
   return rowToUser(profile);
 }
 
+// ── 닉네임 중복 검사 ──────────────────────────────────────────────────────────
+// is_nickname_available RPC(security definer)로 대소문자·공백 무시 중복 여부 확인.
+// 반환: true=사용 가능 / false=사용 중 또는 형식 위반(2자 미만 등).
+export async function checkNicknameAvailable(nickname: string): Promise<boolean> {
+  const trimmed = nickname.trim();
+  if (trimmed.length < 2) return false;
+  if (IS_MOCK) return true;
+  const { data, error } = await supabase.rpc('is_nickname_available', { p_nickname: trimmed });
+  if (error) throw error;
+  return data === true;
+}
+
 // ── 일반 회원가입 ─────────────────────────────────────────────────────────────
 // 프로필/동의 이력은 DB 트리거(handle_new_user)가 user_metadata로부터 자동 생성.
 export async function signUpUser(payload: SignupUserPayload): Promise<void> {
@@ -80,6 +97,7 @@ export async function signUpUser(payload: SignupUserPayload): Promise<void> {
     password: payload.password,
     options: { data: {
       name: payload.name,
+      nickname: payload.nickname,
       role: 'user',
       agreed_to_terms:         payload.agreedToTerms,
       agreed_to_privacy:       payload.agreedToPrivacy,
@@ -103,6 +121,7 @@ export async function signUpOwner(payload: SignupOwnerPayload): Promise<void> {
     password: payload.password,
     options: { data: {
       name: payload.name,
+      nickname: payload.nickname,
       role: 'venue_owner',
       agreed_to_terms:         payload.agreedToTerms,
       agreed_to_privacy:       payload.agreedToPrivacy,
@@ -146,18 +165,33 @@ export async function listAllUsers(): Promise<User[]> {
   return (data ?? []).map(rowToUser);
 }
 
-// ── 관리자: 회원 상태 변경 ────────────────────────────────────────────────────
+// ── 관리자: 회원 상태 변경 (+ 사유 기록 + 제재 시 자동 이메일) ────────────────
 export async function updateUserStatus(
   userId: string,
   status: UserStatus,
   suspendedUntil?: string,
+  reason?: string,
 ): Promise<void> {
   if (IS_MOCK) return;
+
   const { error } = await supabase.from('profiles').update({
     status,
     suspended_until: suspendedUntil ?? null,
+    sanction_reason: reason ?? null,
   }).eq('id', userId);
   if (error) throw error;
+
+  // 제재(정지/영구정지/강제탈퇴) 시 사유 포함 공지 메일 자동 발송.
+  // Edge Function(notify-sanction) 미배포 시에도 상태 변경은 성공하도록 실패는 무시.
+  if (status === 'suspended' || status === 'banned' || status === 'withdrawn') {
+    try {
+      await supabase.functions.invoke('notify-sanction', {
+        body: { userId, status, reason: reason ?? '', suspendedUntil: suspendedUntil ?? null },
+      });
+    } catch (e) {
+      console.warn('[sanction] notify email failed (function may be undeployed):', e);
+    }
+  }
 }
 
 // ── 관리자: 업주 승인 ─────────────────────────────────────────────────────────
