@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
 import { useToast } from '../atoms/Toast';
 import type { User, UserStatus } from '../../api/auth';
-import type { PostCategory } from '../../api/community';
+import { getUserActivity, getActivityLog } from '../../api/community';
+import type { PostCategory, UserActivityItem, ActivityLogEntry } from '../../api/community';
 
 // 게시글 관리(모더레이션)용 경량 포스트 타입 — 게시판(카테고리)별 분류 포함
 interface ModPost {
@@ -133,12 +134,36 @@ type SanctionKind =
   | { type: 'ban' }
   | { type: 'withdraw' };
 
+// 활동/로그 표시 라벨
+const ACT_TYPE_LABEL: Record<string, string> = { post: '글', comment: '댓글', listing: '매물' };
+const ACT_TYPE_LABEL2: Record<string, string> = { post: '글', comment: '댓글', listing: '매물', schedule: '포스터', venue: '매장', live: '실시간' };
+const ACT_ACTION_LABEL: Record<string, string> = { delete: '삭제', hide: '숨김', suspend: '정지', inactive: '비활성', deactivate: '비활성', restore: '활성화', ad_on: 'AD ON', ad_off: 'AD OFF' };
+
 function UserRow({ user, onUpdate }: { user: User; onUpdate: (id: string, patch: Partial<User>) => void }) {
   const toast = useToast();
   const [menuOpen, setMenuOpen] = useState(false);
   // 사유 입력 단계: 선택된 제재 + 사유 텍스트
   const [pending, setPending] = useState<SanctionKind | null>(null);
   const [reason, setReason]   = useState('');
+  // 활동 내역 패널
+  const [actOpen, setActOpen]       = useState(false);
+  const [activity, setActivity]     = useState<UserActivityItem[]>([]);
+  const [logs, setLogs]             = useState<ActivityLogEntry[]>([]);
+  const [actLoading, setActLoading] = useState(false);
+  const [actLoaded, setActLoaded]   = useState(false);
+
+  const toggleActivity = async () => {
+    const next = !actOpen;
+    setActOpen(next);
+    if (next && !actLoaded) {
+      setActLoading(true);
+      try {
+        const [a, l] = await Promise.all([getUserActivity(user.id), getActivityLog(user.id)]);
+        setActivity(a); setLogs(l); setActLoaded(true);
+      } catch { toast.show('활동 내역을 불러오지 못했습니다', 'error'); }
+      finally { setActLoading(false); }
+    }
+  };
   const status = user.status ?? 'active';
   const statusStyle = STATUS_LABEL[status];
 
@@ -226,13 +251,22 @@ function UserRow({ user, onUpdate }: { user: User; onUpdate: (id: string, patch:
             <p className="text-2xs text-ink-muted truncate">사유: {user.sanctionReason}</p>
           )}
         </div>
-        <button
-          type="button"
-          onClick={() => menuOpen ? close() : setMenuOpen(true)}
-          className="shrink-0 btn-ghost text-xs px-2 py-1"
-        >
-          {menuOpen ? '닫기' : '관리'}
-        </button>
+        <div className="shrink-0 flex items-center gap-1">
+          <button
+            type="button"
+            onClick={toggleActivity}
+            className="btn-ghost text-xs px-2 py-1"
+          >
+            {actOpen ? '활동닫기' : '활동'}
+          </button>
+          <button
+            type="button"
+            onClick={() => menuOpen ? close() : setMenuOpen(true)}
+            className="btn-ghost text-xs px-2 py-1"
+          >
+            {menuOpen ? '닫기' : '관리'}
+          </button>
+        </div>
       </div>
 
       {/* 액션 메뉴 */}
@@ -284,6 +318,42 @@ function UserRow({ user, onUpdate }: { user: User; onUpdate: (id: string, patch:
                 <ActionBtn onClick={restore} variant="success">제재 해제</ActionBtn>
               )}
             </div>
+          )}
+        </div>
+      )}
+
+      {/* 활동 내역 패널 */}
+      {actOpen && (
+        <div className="px-2.5 py-2 border-t border-border-subtle bg-surface-mid space-y-2 animate-slide-up">
+          <p className="text-2xs font-semibold text-ink-secondary">최근 활동 (글·댓글·매물)</p>
+          {actLoading ? (
+            <p className="text-2xs text-ink-muted text-center py-2">불러오는 중…</p>
+          ) : activity.length === 0 ? (
+            <p className="text-2xs text-ink-muted">활동 내역이 없습니다</p>
+          ) : (
+            <ul className="space-y-1">
+              {activity.map((a) => (
+                <li key={`${a.type}-${a.id}`} className="flex items-center gap-1.5 text-2xs">
+                  <span className="px-1 py-0.5 rounded-badge bg-surface-high border border-border-default text-ink-muted shrink-0">{ACT_TYPE_LABEL[a.type] ?? a.type}</span>
+                  <span className="text-ink-secondary truncate flex-1">{a.summary}</span>
+                  <span className="text-ink-muted shrink-0">{relativeTime(a.createdAt)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="text-2xs font-semibold text-ink-secondary pt-1">삭제·제재 내역</p>
+          {actLoading ? null : logs.length === 0 ? (
+            <p className="text-2xs text-ink-muted">기록이 없습니다</p>
+          ) : (
+            <ul className="space-y-1">
+              {logs.map((l) => (
+                <li key={l.id} className="flex items-center gap-1.5 text-2xs">
+                  <span className="px-1 py-0.5 rounded-badge bg-danger/15 text-danger-light border border-danger/30 shrink-0">{ACT_ACTION_LABEL[l.action] ?? l.action}</span>
+                  <span className="text-ink-secondary truncate flex-1">{ACT_TYPE_LABEL2[l.targetType] ?? l.targetType}: {l.targetSummary ?? ''}</span>
+                  <span className="text-ink-muted shrink-0">{relativeTime(l.createdAt)}{l.actorName ? ` · ${l.actorName}` : ''}</span>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       )}

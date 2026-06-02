@@ -678,6 +678,42 @@ export default function App() {
             </div>
           </div>
 
+          {/* 공지 — 일정탐색 상단 (관리자가 작성, 전 영역 공통 공지) */}
+          {(notices.length > 0 || isAdmin) && (
+            <div className="px-page-x pt-3">
+              <section className="rounded-card border border-gold-400/30 bg-gradient-to-br from-gold-300/[0.05] to-transparent overflow-hidden">
+                <header className="flex items-center justify-between px-3 py-2 border-b border-gold-400/20">
+                  <h2 className="text-xs font-bold text-gold-300">
+                    공지사항 {notices.length > 0 && <span className="text-2xs text-ink-muted font-normal">({notices.length})</span>}
+                  </h2>
+                  {isAdmin && (
+                    <button type="button" onClick={() => setNoticeFormOpen(true)} className="text-2xs text-gold-300 hover:text-gold-200 font-semibold">
+                      + 공지 작성
+                    </button>
+                  )}
+                </header>
+                {notices.length > 0 ? (
+                  <ul>
+                    {notices.slice(0, 3).map((n) => (
+                      <li key={n.id}>
+                        <button
+                          type="button"
+                          onClick={() => setOpenNotice(n)}
+                          className="w-full text-left px-3 py-2 border-b border-border-subtle last:border-b-0 hover:bg-surface-high/50 transition-colors focus:outline-none"
+                        >
+                          <p className="text-xs font-semibold text-ink-primary truncate">{n.title}</p>
+                          {n.body && <p className="text-2xs text-ink-muted line-clamp-1 mt-0.5">{n.body}</p>}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="px-3 py-3 text-center text-2xs text-ink-muted">등록된 공지가 없습니다</p>
+                )}
+              </section>
+            </div>
+          )}
+
           <div className="px-page-x py-section">
             {visibleSchedules.length === 0 ? (
               <EmptyState />
