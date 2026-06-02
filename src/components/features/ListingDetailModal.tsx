@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Modal from '../atoms/Modal';
 import type { MarketplaceListing } from '../../api/marketplace';
 import { CATEGORIES, CONDITION_COLOR, STATUS_MAP, relativeTime } from './MarketplaceTab';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
 import ReportModal from './ReportModal';
+import type { ChatMessage, ChatThread } from '../../api/chat';
+import { getThreadMessages, sendChatMessage, getListingThreads, subscribeThread } from '../../api/chat';
 
 interface ListingDetailModalProps {
   listing: MarketplaceListing | null;
@@ -216,10 +218,46 @@ function SellerChatModal({
   open, onClose, listing,
 }: { open: boolean; onClose: () => void; listing: MarketplaceListing }) {
   const { user } = useAuth();
-  const [messages, setMessages] = useState<{ from: 'me' | 'seller'; text: string; time: string }[]>([
-    { from: 'seller', text: '안녕하세요! 문의 주셔서 감사합니다', time: '방금' },
-  ]);
-  const [draft, setDraft] = useState('');
+  const toast = useToast();
+  const isSeller = !!user && user.id === listing.sellerId;
+  const [buyerId, setBuyerId]   = useState<string | null>(null);
+  const [threads, setThreads]   = useState<ChatThread[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [draft, setDraft]       = useState('');
+  const [loading, setLoading]   = useState(false);
+  const [sending, setSending]   = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // 열릴 때 초기화: 구매자는 본인 스레드, 판매자는 받은 문의 목록
+  useEffect(() => {
+    if (!open || !user) return;
+    if (isSeller) {
+      setBuyerId(null);
+      getListingThreads(listing.id).then(setThreads).catch(() => {});
+    } else {
+      setBuyerId(user.id);
+    }
+  }, [open, user, isSeller, listing.id]);
+
+  // 활성 스레드 메시지 로드 + 실시간 구독
+  useEffect(() => {
+    if (!open || !buyerId) { setMessages([]); return; }
+    let active = true;
+    setLoading(true);
+    getThreadMessages(listing.id, buyerId)
+      .then((ms) => { if (active) setMessages(ms); })
+      .catch(() => {})
+      .finally(() => { if (active) setLoading(false); });
+    const unsub = subscribeThread(listing.id, buyerId, (m) => {
+      setMessages((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]));
+    });
+    return () => { active = false; unsub(); };
+  }, [open, buyerId, listing.id]);
+
+  // 새 메시지 시 맨 아래로
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+  }, [messages]);
 
   if (!user) {
     return (
@@ -232,33 +270,50 @@ function SellerChatModal({
     );
   }
 
-  const send = (e: React.FormEvent) => {
+  const send = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!draft.trim()) return;
-    setMessages((prev) => [...prev, { from: 'me', text: draft.trim(), time: '방금' }]);
+    const text = draft.trim();
+    if (!text || !buyerId || sending) return;
+    setSending(true);
     setDraft('');
-    // 데모: 5초 후 판매자 자동 응답
-    setTimeout(() => {
-      setMessages((prev) => [...prev, {
-        from: 'seller',
-        text: '확인했습니다! 잠시 후 답변 드리겠습니다.',
-        time: '방금',
-      }]);
-    }, 1500);
+    try {
+      const m = await sendChatMessage(listing.id, buyerId, text);
+      setMessages((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]));
+    } catch (err) {
+      setDraft(text);
+      toast.show(err instanceof Error ? err.message : '전송에 실패했습니다', 'error');
+    } finally {
+      setSending(false);
+    }
   };
+
+  const showThreadList = isSeller && !buyerId;
+  const headerName = showThreadList
+    ? '받은 문의'
+    : isSeller
+      ? (threads.find((t) => t.buyerId === buyerId)?.buyerName ?? '구매자')
+      : listing.sellerName;
 
   return (
     <Modal open={open} onClose={onClose} maxWidth="md" variant="sheet">
       {/* 채팅 헤더 */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-border-subtle">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-border-subtle">
+        {isSeller && buyerId && (
+          <button type="button" onClick={() => setBuyerId(null)} aria-label="목록으로"
+            className="w-8 h-8 -ml-1 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high transition-colors">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <polyline points="10,3 5,8 10,13" />
+            </svg>
+          </button>
+        )}
         <div
           className="w-10 h-10 shrink-0 rounded-full flex items-center justify-center text-sm font-bold text-white"
           style={{ background: listing.sellerAvatarColor }}
         >
-          {listing.sellerName[0]}
+          {headerName[0]}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-ink-primary truncate">{listing.sellerName}</p>
+          <p className="text-sm font-semibold text-ink-primary truncate">{headerName}</p>
           <p className="text-2xs text-ink-muted truncate">상품: {listing.title}</p>
         </div>
         <button type="button" onClick={onClose} aria-label="닫기"
@@ -271,54 +326,89 @@ function SellerChatModal({
 
       {/* 상품 미리보기 */}
       <div className="flex items-center gap-2 px-4 py-2 bg-surface-high border-b border-border-subtle">
-        <div
-          className="w-8 h-8 shrink-0 rounded-input flex items-center justify-center bg-surface-float"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="opacity-30" aria-hidden><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/></svg>
+        <div className="w-8 h-8 shrink-0 rounded-input flex items-center justify-center bg-surface-float overflow-hidden">
+          {listing.images.length > 0
+            ? <img src={listing.images[0]} alt="" className="w-full h-full object-cover" />
+            : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="opacity-30" aria-hidden><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/></svg>}
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-xs text-ink-primary truncate">{listing.title}</p>
-          <p className="text-2xs font-bold text-gold-300 tabular-nums">
-            {listing.price.toLocaleString()}
-          </p>
+          <p className="text-2xs font-bold text-gold-300 tabular-nums">{listing.price.toLocaleString()}</p>
         </div>
       </div>
 
-      {/* 메시지 목록 */}
-      <div className="flex flex-col gap-2 px-4 py-3 max-h-[40vh] overflow-y-auto">
-        {messages.map((m, i) => (
-          <div key={i} className={`flex ${m.from === 'me' ? 'justify-end' : 'justify-start'}`}>
-            <div className={[
-              'max-w-[75%] px-3 py-2 rounded-card text-sm leading-snug',
-              m.from === 'me'
-                ? 'bg-gold-300 text-ink-inverse rounded-br-sm'
-                : 'bg-surface-high text-ink-primary rounded-bl-sm',
-            ].join(' ')}>
-              {m.text}
-              <p className={[
-                'mt-1 text-2xs',
-                m.from === 'me' ? 'text-ink-inverse/70 text-right' : 'text-ink-muted',
-              ].join(' ')}>
-                {m.time}
+      {showThreadList ? (
+        /* 판매자: 받은 문의 목록 */
+        <div className="px-2 py-2 max-h-[55vh] min-h-[160px] overflow-y-auto">
+          {threads.length === 0 ? (
+            <p className="text-center py-12 text-sm text-ink-muted">아직 받은 문의가 없습니다</p>
+          ) : (
+            <ul className="space-y-0.5">
+              {threads.map((t) => (
+                <li key={t.buyerId}>
+                  <button type="button" onClick={() => setBuyerId(t.buyerId)}
+                    className="w-full text-left flex items-center gap-3 p-3 rounded-input hover:bg-surface-high active:bg-surface-float transition-colors">
+                    <div className="w-9 h-9 shrink-0 rounded-full bg-sky-500 flex items-center justify-center text-xs font-bold text-white">
+                      {t.buyerName[0]}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-semibold text-ink-primary truncate">{t.buyerName}</span>
+                        <span className="text-2xs text-ink-muted shrink-0">{relativeTime(t.lastAt)}</span>
+                      </div>
+                      <p className="text-xs text-ink-secondary truncate mt-0.5">{t.lastContent}</p>
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ) : (
+        <>
+          {/* 메시지 목록 */}
+          <div ref={scrollRef} className="flex flex-col gap-2 px-4 py-3 max-h-[40vh] min-h-[160px] overflow-y-auto">
+            {loading ? (
+              <p className="text-center py-10 text-2xs text-ink-muted">불러오는 중...</p>
+            ) : messages.length === 0 ? (
+              <p className="text-center py-10 text-2xs text-ink-muted">
+                {isSeller ? '대화를 시작해 보세요' : '판매자에게 첫 메시지를 보내보세요'}
               </p>
-            </div>
+            ) : messages.map((m) => {
+              const mine = m.senderId === user.id;
+              return (
+                <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+                  <div className={[
+                    'max-w-[75%] px-3 py-2 rounded-card text-sm leading-snug whitespace-pre-wrap break-words',
+                    mine ? 'bg-gold-300 text-ink-inverse rounded-br-sm' : 'bg-surface-high text-ink-primary rounded-bl-sm',
+                  ].join(' ')}>
+                    {m.content}
+                    <p className={['mt-1 text-2xs', mine ? 'text-ink-inverse/70 text-right' : 'text-ink-muted'].join(' ')}>
+                      {relativeTime(m.createdAt)}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        ))}
-      </div>
 
-      {/* 입력 */}
-      <form onSubmit={send} className="flex items-center gap-2 px-4 py-3 border-t border-border-subtle bg-surface-mid">
-        <input
-          type="text"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder="메시지를 입력하세요"
-          className="input flex-1 text-sm"
-        />
-        <button type="submit" className="btn-primary px-4" disabled={!draft.trim()}>
-          전송
-        </button>
-      </form>
+          {/* 입력 */}
+          <form onSubmit={send} className="flex items-center gap-2 px-4 py-3 border-t border-border-subtle bg-surface-mid">
+            <input
+              type="text"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder="메시지를 입력하세요"
+              maxLength={1000}
+              disabled={sending}
+              className="input flex-1 text-sm"
+            />
+            <button type="submit" className="btn-primary px-4" disabled={!draft.trim() || sending}>
+              전송
+            </button>
+          </form>
+        </>
+      )}
     </Modal>
   );
 }
