@@ -7,6 +7,7 @@ import { IS_MOCK } from '../../lib/supabase';
 import { resizeImage } from '../../lib/storage';
 import { requestPasswordChangeCode, changeMyPasswordWithCode } from '../../api/auth';
 import { pushSupported, isPushSubscribed, enablePush, disablePush } from '../../api/push';
+import AvatarCropper from './AvatarCropper';
 
 interface ProfileModalProps {
   open: boolean;
@@ -49,6 +50,7 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
   const [avatarPreview, setAvatarPreview] = useState('');
   const [avatarFile,    setAvatarFile]   = useState<File | null>(null);
   const [saving,        setSaving]       = useState(false);
+  const [cropFile,      setCropFile]     = useState<File | null>(null); // 크롭 편집 대상
   const fileRef = useRef<HTMLInputElement>(null);
 
   // ── 보안 상태 (비밀번호 변경 = 이메일 인증 OTP) ──────────────────────────
@@ -129,17 +131,31 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
 
   if (!user) return null;
 
-  // ── 아바타 선택 ────────────────────────────────────────────────────────
-  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // ── 닉네임(name) 30일 변경 제한 (관리자 제외) ────────────────────────────
+  const COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
+  const lastNameChange = user.nameChangedAt ? new Date(user.nameChangedAt).getTime() : 0;
+  const nextNameChange = lastNameChange + COOLDOWN_MS;
+  const nicknameLocked = user.role !== 'admin' && lastNameChange > 0 && Date.now() < nextNameChange;
+  const nextNameDateStr = new Date(nextNameChange).toLocaleDateString('ko-KR');
+
+  // ── 아바타 선택 → 크롭 편집기 ──────────────────────────────────────────
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = ''; // 같은 파일 재선택도 다시 트리거되도록
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) {
       toast.show('이미지는 5MB 이하여야 합니다', 'error');
       return;
     }
-    setAvatarFile(file);
-    const blob = await resizeImage(file, 256, 256, 0.9);
+    setCropFile(file);
+  };
+
+  // 크롭 적용 → 정사각 blob을 아바타로 설정
+  const handleCropApply = (blob: Blob) => {
+    const f = new File([blob], 'avatar.webp', { type: 'image/webp' });
+    setAvatarFile(f);
     setAvatarPreview(URL.createObjectURL(blob));
+    setCropFile(null);
   };
 
   const removeAvatar = () => { setAvatarFile(null); setAvatarPreview(''); };
@@ -148,6 +164,9 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
   const handleProfileSave = async () => {
     if (!name.trim()) return toast.show('닉네임을 입력해 주세요', 'error');
     if (name.trim().length < 2) return toast.show('닉네임은 2자 이상이어야 합니다', 'error');
+    if (nicknameLocked && name.trim() !== user.name) {
+      return toast.show(`닉네임은 ${nextNameDateStr} 이후에 변경할 수 있습니다`, 'error');
+    }
     setSaving(true);
     try {
       let avatarUrl = avatarPreview || undefined;
@@ -286,9 +305,17 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
               onChange={(e) => setName(e.target.value)}
               maxLength={20}
               placeholder="닉네임 입력 (2~20자)"
-              className="input"
+              disabled={nicknameLocked}
+              className="input disabled:opacity-60 disabled:cursor-not-allowed"
             />
-            <p className="mt-1 text-right text-2xs text-ink-muted">{name.length} / 20</p>
+            <div className="mt-1 flex items-start justify-between gap-2">
+              <p className={['text-2xs leading-relaxed', nicknameLocked ? 'text-amber-400' : 'text-ink-muted'].join(' ')}>
+                {nicknameLocked
+                  ? `30일에 한 번만 변경 가능 · 다음 변경 가능일 ${nextNameDateStr}`
+                  : '닉네임은 변경 후 30일간 다시 바꿀 수 없습니다'}
+              </p>
+              <p className="text-2xs text-ink-muted shrink-0">{name.length} / 20</p>
+            </div>
           </div>
 
           {/* 이메일 (읽기 전용) */}
@@ -440,6 +467,14 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
         </form>
         <PushNotificationSetting />
         </>
+      )}
+
+      {cropFile && (
+        <AvatarCropper
+          file={cropFile}
+          onCancel={() => setCropFile(null)}
+          onApply={handleCropApply}
+        />
       )}
     </Modal>
   );

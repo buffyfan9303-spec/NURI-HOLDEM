@@ -20,6 +20,7 @@ export interface User {
   sanctionReason?: string; // 관리자 제재 사유 (Stage 3)
   agreedToTerms?: boolean;  // 법적 동의 여부 — 구글 OAuth 동의 게이트 판별용
   joinedAt?: string;
+  nameChangedAt?: string;   // 닉네임(name) 마지막 변경 시각 — 30일 쿨다운 판별
 }
 
 export interface LoginPayload { email: string; password: string; }
@@ -56,6 +57,7 @@ function rowToUser(row: any): User {
     sanctionReason: row.sanction_reason ?? undefined,
     agreedToTerms:  row.agreed_to_terms ?? undefined,
     joinedAt:       row.joined_at,
+    nameChangedAt:  row.name_changed_at ?? undefined,
   };
 }
 
