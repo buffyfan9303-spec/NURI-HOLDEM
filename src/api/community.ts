@@ -2,12 +2,16 @@
 import { supabase, IS_MOCK } from '../lib/supabase';
 import type { UserRole } from './auth';
 
+// 매장 상태 (관리자 게시물 관리) — active 외에는 공개 목록에서 숨김. 모두 active로 복구 가능.
+export type VenueStatus = 'active' | 'inactive' | 'suspended' | 'hidden';
+
 export interface Venue {
   id: string; name: string; region: string; address: string;
   description?: string; imageUrl?: string; themeColor?: string;
   ownerId?: string; approved: boolean; contactPhone?: string;
   businessHours?: string; followerCount?: number; isPaidAd?: boolean;
   displayOrder?: number; // 관리자 노출 순서 (작을수록 앞)
+  status?: VenueStatus;  // active/inactive/suspended/hidden
 }
 
 export interface Comment {
@@ -38,6 +42,7 @@ const rowToVenue = (r: any): Venue => ({
   ownerId: r.owner_id, approved: r.approved, contactPhone: r.contact_phone,
   businessHours: r.business_hours, followerCount: r.follower_count, isPaidAd: r.is_paid_ad,
   displayOrder: r.display_order,
+  status: r.status ?? 'active',
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -68,6 +73,7 @@ export async function getVenues(): Promise<Venue[]> {
   // 정렬: 유료광고 우선 → 관리자가 지정한 노출 순서(display_order) → 팔로워순
   const { data, error } = await supabase.from('venues').select('*')
     .eq('approved', true)
+    .eq('status', 'active')
     .order('is_paid_ad', { ascending: false })
     .order('display_order', { ascending: true })
     .order('follower_count', { ascending: false });
@@ -259,4 +265,112 @@ export function subscribeLiveWall(onInsert: (msg: LiveMessage) => void): () => v
     )
     .subscribe();
   return () => { supabase.removeChannel(channel); };
+}
+
+// ── 관리자: 매장 상태 관리 (게시물 관리) ───────────────────────────────────────
+// 관리자용 전체 매장 조회(미승인·숨김·정지 포함). RLS가 admin에 전체 SELECT 허용.
+export async function getAllVenues(): Promise<Venue[]> {
+  if (IS_MOCK) {
+    const { MOCK_VENUES } = await import('../mock/data');
+    return MOCK_VENUES;
+  }
+  const { data, error } = await supabase.from('venues').select('*')
+    .order('is_paid_ad', { ascending: false })
+    .order('display_order', { ascending: true })
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map(rowToVenue);
+}
+
+export async function updateVenueStatus(venueId: string, status: VenueStatus): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.from('venues')
+    .update({ status, updated_at: new Date().toISOString() }).eq('id', venueId);
+  if (error) throw error;
+}
+
+export async function setVenueAd(venueId: string, isAd: boolean): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.from('venues')
+    .update({ is_paid_ad: isAd, updated_at: new Date().toISOString() }).eq('id', venueId);
+  if (error) throw error;
+}
+
+export async function deleteVenue(venueId: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.from('venues').delete().eq('id', venueId);
+  if (error) throw error;
+}
+
+// ── 활동/삭제 감사 로그 ────────────────────────────────────────────────────────
+export interface ActivityLogInput {
+  action: string;        // delete | hide | suspend | deactivate | restore | ad_on | ad_off
+  targetType: string;    // post | comment | listing | schedule | venue | live
+  targetId?: string;
+  targetOwnerId?: string;
+  targetSummary?: string;
+  actorName?: string;
+}
+
+// 삭제/제재 등 관리 행위 기록. 실패해도 주 작업엔 영향 없도록 swallow.
+export async function logActivity(input: ActivityLogInput): Promise<void> {
+  if (IS_MOCK) return;
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    await supabase.from('activity_log').insert({
+      actor_id:        user?.id ?? null,
+      actor_name:      input.actorName ?? null,
+      action:          input.action,
+      target_type:     input.targetType,
+      target_id:       input.targetId ?? null,
+      target_owner_id: input.targetOwnerId ?? null,
+      target_summary:  input.targetSummary ?? null,
+    });
+  } catch (e) {
+    console.warn('[activity_log] insert failed:', e);
+  }
+}
+
+export interface ActivityLogEntry {
+  id: string; actorName?: string; action: string;
+  targetType: string; targetSummary?: string; createdAt: string;
+}
+
+// 관리자: 특정 회원(소유자) 콘텐츠에 대한 삭제/제재 이력 조회
+export async function getActivityLog(targetOwnerId: string, limit = 30): Promise<ActivityLogEntry[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.from('activity_log').select('*')
+    .eq('target_owner_id', targetOwnerId)
+    .order('created_at', { ascending: false }).limit(limit);
+  if (error) throw error;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({
+    id: r.id, actorName: r.actor_name ?? undefined, action: r.action,
+    targetType: r.target_type, targetSummary: r.target_summary ?? undefined, createdAt: r.created_at,
+  }));
+}
+
+export interface UserActivityItem {
+  type: 'post' | 'comment' | 'listing';
+  id: string; summary: string; createdAt: string;
+}
+
+// 회원의 현재 활동(글/댓글/매물) 최신순
+export async function getUserActivity(userId: string, limit = 20): Promise<UserActivityItem[]> {
+  if (IS_MOCK) return [];
+  const [posts, comments, listings] = await Promise.all([
+    supabase.from('community_posts').select('id, title, content, created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(limit),
+    supabase.from('comments').select('id, content, created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(limit),
+    supabase.from('marketplace_listings').select('id, title, created_at').eq('seller_id', userId).order('created_at', { ascending: false }).limit(limit),
+  ]);
+  const items: UserActivityItem[] = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (posts.data ?? []).forEach((r: any) => items.push({ type: 'post', id: r.id, summary: r.title || r.content || '(내용 없음)', createdAt: r.created_at }));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (comments.data ?? []).forEach((r: any) => items.push({ type: 'comment', id: r.id, summary: r.content || '', createdAt: r.created_at }));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (listings.data ?? []).forEach((r: any) => items.push({ type: 'listing', id: r.id, summary: r.title || '', createdAt: r.created_at }));
+  return items
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, limit);
 }

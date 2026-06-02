@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import DraggableList from './DraggableList';
-import VenueDraggableList from './VenueDraggableList';
+import VenueManagement from './VenueManagement';
 import UserManagementTab from './UserManagementTab';
 import type { Schedule } from '../../api/schedules';
 import type { User } from '../../api/auth';
@@ -22,7 +22,7 @@ type Section = 'pending' | 'reorder' | 'users';
 type ReorderTarget = 'posters' | 'venues';
 
 export default function AdminTab({
-  schedules, venues, users, posts, onApproveSchedule, onRejectSchedule, onUpdateUser, onDeletePost,
+  schedules, users, posts, onApproveSchedule, onRejectSchedule, onUpdateUser, onDeletePost,
 }: AdminTabProps) {
   const [section, setSection] = useState<Section>('pending');
   const [reorderTarget, setReorderTarget] = useState<ReorderTarget>('posters');
@@ -42,7 +42,7 @@ export default function AdminTab({
           )}
         </Pill>
         <Pill active={section === 'reorder'} onClick={() => setSection('reorder')}>
-          노출 순서
+          게시물 관리
         </Pill>
         <Pill active={section === 'users'} onClick={() => setSection('users')}>
           회원 관리
@@ -70,7 +70,7 @@ export default function AdminTab({
 
           {reorderTarget === 'posters'
             ? <DraggableList initialItems={schedules.filter((s) => s.approved)} />
-            : <VenueDraggableList initialItems={venues} />}
+            : <VenueManagement />}
         </div>
       )}
       {section === 'users' && (
