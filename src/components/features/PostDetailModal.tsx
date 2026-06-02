@@ -5,6 +5,8 @@ import { useToast } from '../atoms/Toast';
 import type { CommunityPost, ReactionType } from '../../api/community';
 import { reactToPost, removeReaction, getMyReaction } from '../../api/community';
 import ReportModal from './ReportModal';
+import { parseHand } from '../../lib/hand';
+import HandCards from '../atoms/HandCards';
 
 interface PostDetailModalProps {
   post: CommunityPost | null;
@@ -138,9 +140,19 @@ export default function PostDetailModal({
         </header>
 
         {/* ── 본문 ───────────────────────────────────────── */}
-        <div className="text-base text-ink-primary leading-relaxed whitespace-pre-wrap break-words py-2">
-          {post.content}
-        </div>
+        {(() => {
+          const { text, hand } = parseHand(post.content);
+          return (
+            <div className="space-y-3 py-2">
+              {text && (
+                <div className="text-base text-ink-primary leading-relaxed whitespace-pre-wrap break-words">
+                  {text}
+                </div>
+              )}
+              {hand && <HandCards hand={hand} />}
+            </div>
+          );
+        })()}
 
         {/* ── 통계 + 액션 ─────────────────────────────────── */}
         <div className="flex items-center justify-between pt-2 border-t border-border-subtle text-xs">

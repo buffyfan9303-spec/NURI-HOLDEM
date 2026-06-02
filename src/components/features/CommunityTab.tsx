@@ -8,6 +8,7 @@ import OwnerCommunity from './OwnerCommunity';
 import TierLeaderboard from './TierLeaderboard';
 import { useToast } from '../atoms/Toast';
 import { filterContent } from '../../lib/content-filter';
+import { parseHand } from '../../lib/hand';
 
 interface CommunityTabProps {
   venues: Venue[];
@@ -332,7 +333,19 @@ function PostCard({ post, onLike, onClick }: { post: CommunityPost; onLike: () =
             <span className="text-ink-muted ml-auto shrink-0">{relativeTime(post.createdAt)}</span>
           </div>
           <p className="text-xs text-ink-primary leading-snug line-clamp-2 mt-0.5 break-words">
-            {post.content}
+            {(() => {
+              const { text, hand } = parseHand(post.content);
+              return (
+                <>
+                  {hand && (
+                    <span className="inline-flex items-center mr-1 px-1 rounded-badge bg-gold-300/15 text-gold-300 font-bold leading-none align-middle">
+                      핸드
+                    </span>
+                  )}
+                  {text || (hand ? '핸드를 공유했습니다' : '')}
+                </>
+              );
+            })()}
           </p>
           <div className="mt-1 flex items-center gap-2.5 text-2xs text-ink-muted">
             <button

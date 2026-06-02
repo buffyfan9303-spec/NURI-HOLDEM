@@ -52,6 +52,22 @@ const REGION_CHIPS = [
   '인천', '부산', '대전', '대구', '광주', '제주',
 ] as const;
 
+// 권역 묶음 — 상위 지역을 선택하면 하위 지역까지 함께 노출.
+//  예) '서울' 선택 시 강남·강서 일정도 함께 보인다.
+const REGION_GROUPS: Record<string, string[]> = {
+  '서울': ['서울', '강남', '강서'],
+};
+
+/** 선택된 지역 칩들을 권역 묶음까지 펼쳐 중복 제거한 매칭 키 목록으로 변환 */
+export function expandRegions(regions: string[]): string[] {
+  const out = new Set<string>();
+  for (const r of regions) {
+    const group = REGION_GROUPS[r] ?? [r];
+    group.forEach((g) => out.add(g));
+  }
+  return [...out];
+}
+
 // 토너먼트 필터 — [전체, MTT, GTD, 대회] 라디오(상호배타)
 //  전체=필터없음 / MTT=format'MTT' / GTD=guaranteed / 대회=is_competition
 type TourFilter = 'all' | 'MTT' | 'GTD' | 'comp';
@@ -334,6 +350,20 @@ export default function IntegratedSearchBar({
           className="flex gap-2 overflow-x-auto scrollbar-none [-webkit-overflow-scrolling:touch]"
           aria-label="지역 필터"
         >
+          {/* 전체 — 지역 필터 해제(모든 지역) */}
+          <button
+            type="button"
+            onClick={() => setSelectedRegions([])}
+            aria-pressed={selectedRegions.length === 0}
+            className={[
+              'shrink-0 px-3 py-1.5 rounded-badge text-2xs font-bold border transition-colors focus:outline-none',
+              selectedRegions.length === 0
+                ? 'bg-gold-300 border-gold-300 text-ink-inverse'
+                : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary hover:border-border-strong',
+            ].join(' ')}
+          >
+            전체
+          </button>
           {REGION_CHIPS.map((r) => {
             const active = selectedRegions.includes(r);
             return (

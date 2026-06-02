@@ -17,6 +17,11 @@ import { useAuth } from '../../contexts/AuthContext';
 import { filterContent } from '../../lib/content-filter';
 import { uploadCommunityImages } from '../../lib/storage';
 import type { PostCategory } from '../../api/community';
+import CardGridPicker from './gto/CardGridPicker';
+import { cardId } from './gto/useDeepGto';
+import type { Card } from './gto/gto.types';
+import { encodeHand, type HandSel } from '../../lib/hand';
+import { MiniCard } from '../atoms/HandCards';
 
 export interface PostFormData {
   category: PostCategory;
@@ -56,13 +61,40 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
   const [previews, setPreviews] = useState<string[]>([]);
   const [saving,   setSaving]   = useState(false);
 
+  // 핸드 첨부 (내 핸드/상대 핸드 — 카드 클릭 선택)
+  const [showHand,   setShowHand]   = useState(false);
+  const [hero,       setHero]       = useState<string[]>([]);
+  const [villain,    setVillain]    = useState<string[]>([]);
+  const [handTarget, setHandTarget] = useState<'hero' | 'villain'>('hero');
+
   // 모달 열릴 때 초기화 + 닫힐 때 objectURL 해제
   useEffect(() => {
     if (open) {
       setCategory(defaultCategory ?? 'free'); setTitle(''); setContent('');
       setFiles([]); setPreviews([]); setSaving(false);
+      setShowHand(false); setHero([]); setVillain([]); setHandTarget('hero');
     }
   }, [open, defaultCategory]);
+
+  const usedIds = new Set<string>([...hero, ...villain]);
+  const handlePickCard = (card: Card) => {
+    const id = cardId(card);
+    if (usedIds.has(id)) return;
+    if (handTarget === 'hero') {
+      if (hero.length >= 2) return;
+      const next = [...hero, id];
+      setHero(next);
+      if (next.length >= 2) setHandTarget('villain'); // 내 핸드 다 채우면 상대로 자동 전환
+    } else {
+      if (villain.length >= 2) return;
+      setVillain([...villain, id]);
+    }
+  };
+  const removeCard = (target: 'hero' | 'villain', idx: number) => {
+    if (target === 'hero') setHero((p) => p.filter((_, i) => i !== idx));
+    else setVillain((p) => p.filter((_, i) => i !== idx));
+    setHandTarget(target);
+  };
 
   useEffect(() => {
     // 언마운트/프리뷰 교체 시 objectURL 정리(메모리릭 방지)
@@ -114,7 +146,8 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
       if (files.length > 0) {
         images = await uploadCommunityImages(user.id, files, MAX_IMAGES);
       }
-      await onSubmit({ category, title: title.trim(), content: body, images });
+      const hand: HandSel | null = (hero.length > 0 || villain.length > 0) ? { hero, villain } : null;
+      await onSubmit({ category, title: title.trim(), content: encodeHand(body, hand), images });
       toast.show('게시글이 등록되었습니다', 'success');
       onClose();
     } catch (err) {
@@ -226,6 +259,70 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
             >
               사진을 첨부하려면 클릭하세요 (최대 {MAX_IMAGES}장 · 5MB)
             </button>
+          )}
+        </div>
+
+        {/* 핸드 첨부 (내 핸드 / 상대 핸드) */}
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-xs font-medium text-ink-secondary">
+              핸드 첨부 <span className="text-ink-muted">(선택)</span>
+            </label>
+            <button
+              type="button"
+              onClick={() => setShowHand((v) => !v)}
+              className="text-2xs font-semibold text-gold-300 hover:text-gold-200"
+            >
+              {showHand ? '닫기' : '+ 핸드 추가'}
+            </button>
+          </div>
+
+          {showHand && (
+            <div className="space-y-2 rounded-input border border-border-default bg-surface-high/40 p-2.5 animate-slide-up">
+              {/* 슬롯 (탭하면 채울 대상 전환, 카드 탭하면 제거) */}
+              <div className="grid grid-cols-2 gap-2">
+                {(['hero', 'villain'] as const).map((t) => {
+                  const cards = t === 'hero' ? hero : villain;
+                  const label = t === 'hero' ? '내 핸드' : '상대 핸드';
+                  return (
+                    <div
+                      key={t}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setHandTarget(t)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setHandTarget(t); }}
+                      className={[
+                        'rounded-input border p-2 cursor-pointer transition-colors focus:outline-none',
+                        handTarget === t ? 'border-gold-300 bg-gold-300/10' : 'border-border-default bg-surface-high',
+                      ].join(' ')}
+                    >
+                      <span className="block text-2xs text-ink-muted mb-1">{label}</span>
+                      <div className="flex gap-1 min-h-[1.75rem] items-center">
+                        {cards.length === 0 ? (
+                          <span className="text-2xs text-ink-muted">카드 선택</span>
+                        ) : (
+                          cards.map((c, i) => (
+                            <button
+                              key={c}
+                              type="button"
+                              aria-label={`${c} 제거`}
+                              onClick={(e) => { e.stopPropagation(); removeCard(t, i); }}
+                            >
+                              <MiniCard id={c} />
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="text-2xs text-ink-muted">
+                <span className="text-gold-300 font-semibold">{handTarget === 'hero' ? '내 핸드' : '상대 핸드'}</span>
+                에 넣을 카드를 아래에서 선택하세요 (카드를 다시 누르면 제거)
+              </p>
+              <CardGridPicker usedIds={usedIds} onPick={handlePickCard} />
+            </div>
           )}
         </div>
 

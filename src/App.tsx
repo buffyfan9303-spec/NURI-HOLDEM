@@ -3,7 +3,7 @@ import { useToast } from './components/atoms/Toast';
 import UnreadBadge from './components/atoms/UnreadBadge';
 import ViewModeToggle from './components/atoms/ViewModeToggle';
 import type { ViewMode } from './components/atoms/ViewModeToggle';
-import IntegratedSearchBar from './components/features/IntegratedSearchBar';
+import IntegratedSearchBar, { expandRegions } from './components/features/IntegratedSearchBar';
 import type { SearchState } from './components/features/IntegratedSearchBar';
 import ScheduleCard from './components/features/ScheduleCard';
 import ScheduleDetailModal from './components/features/ScheduleDetailModal';
@@ -411,11 +411,13 @@ export default function App() {
   const visibleSchedules = useMemo(() => {
     const list = schedules.filter((s) => s.approved);
     const q = searchState.query.trim();
+    // 권역 묶음 펼치기(예: 서울 → 서울/강남/강서) — 매 일정마다 재계산하지 않도록 1회만
+    const regionKeys = expandRegions(searchState.regions);
     return list.filter((s) => {
       const matchQ = !q || [s.title, s.pubName, s.region].some((t) => t.includes(q));
       // 복수 선택: 비어있으면 전체 통과, 아니면 선택된 값 중 하나라도 일치(OR)
       const matchD = searchState.dates.length === 0   || searchState.dates.includes(s.date);
-      const matchR = searchState.regions.length === 0 || searchState.regions.some((r) => s.region.includes(r));
+      const matchR = regionKeys.length === 0 || regionKeys.some((r) => s.region.includes(r));
       const matchF = !searchState.format || s.format === searchState.format;
       const matchG = !searchState.gtdOnly || s.guaranteed === true;
       const matchC = !searchState.competitionOnly || s.isCompetition === true;
