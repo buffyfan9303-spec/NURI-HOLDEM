@@ -4,6 +4,7 @@ import { getLiveMessages, addLiveMessage, subscribeLiveWall } from '../../api/co
 import type { MarketplaceNotice } from '../../api/marketplace';
 import { useAuth } from '../../contexts/AuthContext';
 import GtoStudyWidget from './gto/GtoStudyWidget';
+import GtoDeepWidget from './gto/GtoDeepWidget';
 import { useToast } from '../atoms/Toast';
 import { filterContent } from '../../lib/content-filter';
 
@@ -99,6 +100,7 @@ export default function CommunityTab({
       {section === 'study' && (
         <div className="space-y-3">
           <GtoStudyWidget />
+          <GtoDeepWidget />
           <FeedSection
             posts={studyPosts}
             onOpenWrite={() => onOpenWrite('study')}
