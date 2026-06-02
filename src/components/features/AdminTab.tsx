@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import DraggableList from './DraggableList';
 import VenueManagement from './VenueManagement';
+import ReportQueue from './ReportQueue';
 import UserManagementTab from './UserManagementTab';
 import type { Schedule } from '../../api/schedules';
 import type { User } from '../../api/auth';
@@ -17,7 +18,7 @@ interface AdminTabProps {
   onDeletePost: (id: string) => void;
 }
 
-type Section = 'pending' | 'reorder' | 'users';
+type Section = 'pending' | 'reorder' | 'users' | 'reports';
 // 노출 순서 하위 항목: 포스터(요강) / 매장
 type ReorderTarget = 'posters' | 'venues';
 
@@ -46,6 +47,9 @@ export default function AdminTab({
         </Pill>
         <Pill active={section === 'users'} onClick={() => setSection('users')}>
           회원 관리
+        </Pill>
+        <Pill active={section === 'reports'} onClick={() => setSection('reports')}>
+          신고
         </Pill>
       </div>
 
@@ -85,6 +89,7 @@ export default function AdminTab({
           onDeletePost={onDeletePost}
         />
       )}
+      {section === 'reports' && <ReportQueue />}
     </div>
   );
 }

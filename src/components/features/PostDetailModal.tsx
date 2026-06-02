@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Modal from '../atoms/Modal';
 import { useAuth } from '../../contexts/AuthContext';
 import type { CommunityPost } from '../../api/community';
+import ReportModal from './ReportModal';
 
 interface PostDetailModalProps {
   post: CommunityPost | null;
@@ -33,6 +34,7 @@ export default function PostDetailModal({
   const { user } = useAuth();
   const [replies, setReplies] = useState<PostReply[]>([]);
   const [draft, setDraft] = useState('');
+  const [reportOpen, setReportOpen] = useState(false);
 
   if (!post) return null;
 
@@ -55,6 +57,7 @@ export default function PostDetailModal({
   };
 
   return (
+    <>
     <Modal open={open} onClose={onClose} title="게시글" maxWidth="lg" variant="sheet">
       <article className="p-4 space-y-4">
         {/* ── 작성자 정보 ─────────────────────────────────── */}
@@ -79,6 +82,12 @@ export default function PostDetailModal({
               {formatFullDate(post.createdAt)}
             </p>
           </div>
+          {user && user.id !== post.userId && (
+            <button type="button" onClick={() => setReportOpen(true)}
+              className="shrink-0 text-2xs text-ink-muted hover:text-danger-light transition-colors px-1 py-1">
+              신고
+            </button>
+          )}
           {onDelete && (user?.role === 'admin' || user?.id === post.userId) && (
             <button
               type="button"
@@ -174,5 +183,8 @@ export default function PostDetailModal({
         </section>
       </article>
     </Modal>
+    <ReportModal open={reportOpen} onClose={() => setReportOpen(false)}
+      target={{ type: 'post', id: post.id, ownerId: post.userId, summary: post.title || post.content }} />
+    </>
   );
 }

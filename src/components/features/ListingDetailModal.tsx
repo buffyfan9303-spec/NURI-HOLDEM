@@ -4,6 +4,7 @@ import type { MarketplaceListing } from '../../api/marketplace';
 import { CATEGORIES, CONDITION_COLOR, STATUS_MAP, relativeTime } from './MarketplaceTab';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
+import ReportModal from './ReportModal';
 
 interface ListingDetailModalProps {
   listing: MarketplaceListing | null;
@@ -17,6 +18,7 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete }:
   const { user }                  = useAuth();
   const [liked, setLiked]         = useState(false);
   const [chatOpen, setChatOpen]   = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const toast                     = useToast();
 
   if (!listing) return null;
@@ -31,6 +33,7 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete }:
   };
 
   return (
+    <>
     <Modal open={open} onClose={onClose} maxWidth="lg" variant="sheet">
       {/* ── 헤더 (이미지가 있으면 이미지, 없으면 슬림 헤더) ───────── */}
       {hasImage ? (
@@ -75,6 +78,9 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete }:
           <span className="text-ink-muted">{listing.region}</span>
           <span className="text-border-strong">·</span>
           <span className="text-ink-muted">{relativeTime(listing.createdAt)}</span>
+          {user && user.id !== listing.sellerId && (
+            <button type="button" onClick={() => setReportOpen(true)} className="ml-auto text-ink-muted hover:text-danger-light transition-colors">신고</button>
+          )}
         </div>
 
         {/* 제목 + 가격 */}
@@ -198,6 +204,9 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete }:
         listing={listing}
       />
     </Modal>
+    <ReportModal open={reportOpen} onClose={() => setReportOpen(false)}
+      target={{ type: 'listing', id: listing.id, ownerId: listing.sellerId, summary: listing.title }} />
+    </>
   );
 }
 
