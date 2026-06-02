@@ -38,7 +38,7 @@ import {
 } from './api/schedules';
 import {
   getVenues, getComments, getPosts, addComment, addPost, likePost, deletePost,
-  updateVenueDescription, updateVenueImage, deleteComment, logActivity,
+  updateVenueDescription, updateVenueImage, updateVenueImages, deleteComment, logActivity,
 } from './api/community';
 import { getListings, getNotices, createNotice, createListing, deleteListing } from './api/marketplace';
 import type { NoticeFormData } from './components/features/NoticeFormModal';
@@ -629,6 +629,13 @@ export default function App() {
       .catch(() => toast.show('저장에 실패했습니다', 'error'));
   }, [toast]);
 
+  const handleUpdateVenueImages = useCallback((venueId: string, urls: string[]) => {
+    setVenues((prev) => prev.map((v) => v.id === venueId ? { ...v, images: urls } : v));
+    updateVenueImages(venueId, urls)
+      .then(() => toast.show('매장 사진이 저장되었습니다', 'success'))
+      .catch(() => toast.show('저장에 실패했습니다', 'error'));
+  }, [toast]);
+
   const handleDeletePoster = useCallback((id: string) => {
     const target = schedules.find((s) => s.id === id);
     setSchedules((prev) => prev.filter((s) => s.id !== id));
@@ -921,6 +928,7 @@ export default function App() {
         onDeleteComment={handleDeleteComment}
         onUpdateDescription={handleUpdateVenueDescription}
         onUpdateImage={handleUpdateVenueImage}
+        onUpdateImages={handleUpdateVenueImages}
       />
 
       <ListingDetailModal

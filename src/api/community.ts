@@ -13,6 +13,7 @@ export interface Venue {
   displayOrder?: number; // 관리자 노출 순서 (작을수록 앞)
   status?: VenueStatus;  // active/inactive/suspended/hidden
   verificationStatus?: VenueVerificationStatus; // 인증 등급
+  images?: string[];     // 매장 갤러리(자동 슬라이드)
 }
 
 export type VenueVerificationStatus = 'unverified' | 'pending' | 'verified';
@@ -51,6 +52,7 @@ const rowToVenue = (r: any): Venue => ({
   displayOrder: r.display_order,
   status: r.status ?? 'active',
   verificationStatus: r.verification_status ?? 'unverified',
+  images: r.images ?? [],
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -469,6 +471,12 @@ export async function requestVenueVerification(venueId: string): Promise<void> {
 export async function setVenueVerification(venueId: string, status: VenueVerificationStatus): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.from('venues').update({ verification_status: status }).eq('id', venueId);
+  if (error) throw error;
+}
+// 업주: 매장 갤러리(자동 슬라이드) 이미지 URL 목록 저장
+export async function updateVenueImages(venueId: string, urls: string[]): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.from('venues').update({ images: urls }).eq('id', venueId);
   if (error) throw error;
 }
 

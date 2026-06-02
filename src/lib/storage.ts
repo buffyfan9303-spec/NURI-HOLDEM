@@ -99,6 +99,23 @@ export async function uploadListingImages(
   return urls;
 }
 
+// ── 매장 갤러리 이미지 업로드 (자동 슬라이드용, 최대 8장) ────────────────────
+export async function uploadVenueImages(
+  venueId: string,
+  files: FileList | File[],
+  max = 8,
+): Promise<string[]> {
+  const list = Array.from(files).slice(0, max);
+  const urls = await Promise.all(
+    list.map(async (file, i) => {
+      const blob = await resizeImage(file, 1280, 1280, 0.85);
+      const path = `venues/${venueId}/${Date.now()}-${i}.webp`;
+      return uploadToStorage(BUCKET_COMMUNITY, path, blob);
+    }),
+  );
+  return urls;
+}
+
 // ── 커뮤니티 글쓰기 이미지 업로드 (최대 4장) ────────────────────────────────
 export async function uploadCommunityImages(
   userId: string,

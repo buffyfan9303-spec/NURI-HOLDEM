@@ -9,6 +9,7 @@ import type { MarketplaceNotice } from '../../api/marketplace';
 import { useAuth } from '../../contexts/AuthContext';
 import { followVenue, unfollowVenue, getMyFollowedVenueIds } from '../../api/community';
 import { getVenueRankings, maskRealName, type RankingEntry } from '../../api/rankings';
+import { uploadVenueImages } from '../../lib/storage';
 
 interface VenuePageProps {
   venue: Venue | null;
@@ -22,6 +23,7 @@ interface VenuePageProps {
   onDeleteComment?: (commentId: string) => void;
   onUpdateDescription?: (venueId: string, description: string) => void;
   onUpdateImage?: (venueId: string, dataUrl: string) => void;
+  onUpdateImages?: (venueId: string, urls: string[]) => void;
 }
 
 type Tab = 'about' | 'ranking' | 'posters' | 'schedules' | 'community';
@@ -47,7 +49,7 @@ const TAB_LABEL: Record<Tab, string> = {
  */
 export default function VenuePage({
   venue, open, onClose, schedules, comments, notices = [],
-  onSubmitComment, onDeleteComment, onUpdateDescription, onUpdateImage,
+  onSubmitComment, onDeleteComment, onUpdateDescription, onUpdateImage, onUpdateImages,
 }: VenuePageProps) {
   const [tab, setTab] = useState<Tab>('about');
   const { user, isApprovedOwner } = useAuth();
@@ -140,6 +142,7 @@ export default function VenuePage({
           venue={venue}
           editable={isMyVenue}
           onUpdateImage={onUpdateImage}
+          onUpdateImages={onUpdateImages}
           showRotiMark={isRoti}
         />
 
@@ -235,118 +238,164 @@ export default function VenuePage({
 // ── 히어로 (배경 이미지 업로드 가능) ──────────────────────────────────────
 
 function HeroSection({
-  venue, editable, onUpdateImage, showRotiMark,
+  venue, editable, onUpdateImage, onUpdateImages, showRotiMark,
 }: {
   venue: Venue;
   editable?: boolean;
   onUpdateImage?: (id: string, dataUrl: string) => void;
+  onUpdateImages?: (id: string, urls: string[]) => void;
   showRotiMark?: boolean;
 }) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const bgInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
-
+  const [busy, setBusy] = useState(false);
+  const [idx, setIdx] = useState(0);
   const toast = useToast();
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const gallery = venue.images ?? [];
+  // 갤러리가 있으면 갤러리, 없으면 기존 단일 배경, 그것도 없으면 빈 배열
+  const slides = gallery.length > 0 ? gallery : (venue.imageUrl ? [venue.imageUrl] : []);
+  const usingGallery = gallery.length > 0;
+  const safeIdx = slides.length ? Math.min(idx, slides.length - 1) : 0;
+
+  // 네이버 지도 스타일 자동 슬라이드(이미지 2장 이상일 때)
+  useEffect(() => {
+    if (slides.length <= 1) return;
+    const t = setInterval(() => setIdx((i) => (i + 1) % slides.length), 3500);
+    return () => clearInterval(t);
+  }, [slides.length]);
+
+  // 단일 배경 업로드(레거시 — 갤러리 없을 때만 노출)
+  const handleBgChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      toast.show('5MB 이하의 이미지만 업로드 가능합니다', 'error');
-      return;
-    }
+    if (file.size > 5 * 1024 * 1024) { toast.show('5MB 이하의 이미지만 업로드 가능합니다', 'error'); return; }
     setUploading(true);
     const reader = new FileReader();
-    reader.onload = (ev) => {
-      const dataUrl = ev.target?.result as string;
-      onUpdateImage?.(venue.id, dataUrl);
-      setUploading(false);
-    };
-    reader.onerror = () => {
-      toast.show('이미지 읽기에 실패했습니다', 'error');
-      setUploading(false);
-    };
+    reader.onload = (ev) => { onUpdateImage?.(venue.id, ev.target?.result as string); setUploading(false); };
+    reader.onerror = () => { toast.show('이미지 읽기에 실패했습니다', 'error'); setUploading(false); };
     reader.readAsDataURL(file);
-    // 동일 파일 재선택 가능하도록 value 초기화
+  };
+
+  // 갤러리 다중 업로드 → 스토리지 → images 배열에 추가
+  const handleGalleryChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
     e.target.value = '';
+    if (!files || files.length === 0) return;
+    setBusy(true);
+    try {
+      const urls = await uploadVenueImages(venue.id, files);
+      onUpdateImages?.(venue.id, [...gallery, ...urls]);
+      toast.show('사진을 추가했습니다', 'success');
+    } catch {
+      toast.show('사진 업로드에 실패했습니다', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removeCurrent = () => {
+    if (!usingGallery) return;
+    onUpdateImages?.(venue.id, gallery.filter((_, k) => k !== safeIdx));
+    setIdx(0);
   };
 
   return (
     <div className="relative w-full overflow-hidden h-44 sm:h-52 md:h-60">
-      {/* 배경 — 이미지 있으면 표시, 없으면 그라데이션 + 패턴 */}
-      {venue.imageUrl ? (
-        <img
-          src={venue.imageUrl}
-          alt={`${venue.name} 배경`}
-          className="absolute inset-0 w-full h-full object-cover"
-        />
+      {slides.length > 0 ? (
+        // 자동 슬라이드 트랙
+        <div
+          className="absolute inset-0 flex transition-transform duration-500 ease-out"
+          style={{ transform: `translateX(-${safeIdx * 100}%)` }}
+        >
+          {slides.map((src, i) => (
+            <img
+              key={`${src}-${i}`}
+              src={src}
+              alt={`${venue.name} 사진 ${i + 1}`}
+              className="h-full w-full shrink-0 object-cover"
+            />
+          ))}
+        </div>
       ) : (
         <div
           className="absolute inset-0"
           style={{ background: `linear-gradient(135deg, ${venue.themeColor ?? '#1A1D24'} 0%, #0a0c0f 100%)` }}
         >
-          <div
-            className="absolute inset-0 grid grid-cols-6 gap-2 p-3 opacity-[0.08] select-none pointer-events-none"
-            aria-hidden
-          >
+          <div className="absolute inset-0 grid grid-cols-6 gap-2 p-3 opacity-[0.08] select-none pointer-events-none" aria-hidden>
             {Array.from({ length: 24 }, (_, i) => (
-              <span key={i} className="text-2xl text-white text-center">
-                {['♠','♥','♦','♣'][i % 4]}
-              </span>
+              <span key={i} className="text-2xl text-white text-center">{['♠', '♥', '♦', '♣'][i % 4]}</span>
             ))}
           </div>
-          {/* ROTI ARENA 마크 (중앙) */}
           {showRotiMark && (
             <div className="absolute inset-0 flex items-center justify-center opacity-90">
-              <div className="scale-150">
-                <RotiArenaLogo variant="mark" />
-              </div>
+              <div className="scale-150"><RotiArenaLogo variant="mark" /></div>
             </div>
           )}
         </div>
       )}
 
-      {/* 그라디언트 오버레이 (제목 가독성) */}
+      {/* 그라디언트 오버레이 */}
       <div
         className="absolute inset-0 pointer-events-none"
-        style={{
-          background: 'linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0) 30%, rgba(10,12,15,0.5) 100%)',
-        }}
+        style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0) 30%, rgba(10,12,15,0.5) 100%)' }}
       />
 
-      {/* 업로드 버튼 (편집권 있는 업주만) */}
+      {/* 슬라이드 점 인디케이터 */}
+      {slides.length > 1 && (
+        <div className="absolute bottom-2.5 left-0 right-0 z-10 flex justify-center gap-1.5">
+          {slides.map((_, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => setIdx(i)}
+              aria-label={`${i + 1}번째 사진 보기`}
+              className={['h-1.5 rounded-full transition-all', i === safeIdx ? 'w-5 bg-gold-300' : 'w-1.5 bg-white/50 hover:bg-white/80'].join(' ')}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* 편집 컨트롤 (업주) */}
       {editable && (
-        <>
+        <div className="absolute top-3 right-3 z-10 flex gap-1.5">
+          {!usingGallery && (
+            <button
+              type="button"
+              onClick={() => bgInputRef.current?.click()}
+              disabled={uploading}
+              className="inline-flex h-8 items-center gap-1.5 rounded-input bg-surface-base/85 px-3 text-xs font-semibold text-ink-primary backdrop-blur transition-colors hover:bg-surface-high disabled:opacity-50"
+            >
+              {uploading ? '업로드 중' : (venue.imageUrl ? '배경 변경' : '배경 업로드')}
+            </button>
+          )}
           <button
             type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            className="absolute top-3 right-3 inline-flex items-center gap-1.5 px-3 h-8 rounded-input bg-surface-base/85 backdrop-blur text-xs font-semibold text-ink-primary hover:bg-surface-high transition-colors disabled:opacity-50"
+            onClick={() => galleryInputRef.current?.click()}
+            disabled={busy}
+            className="inline-flex h-8 items-center gap-1.5 rounded-input bg-gold-300/90 px-3 text-xs font-bold text-ink-inverse backdrop-blur transition-colors hover:bg-gold-200 disabled:opacity-50"
           >
-            {uploading ? (
-              <>
-                <span className="w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin" />
-                업로드 중
-              </>
-            ) : (
-              <>
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                  <rect x="1.5" y="2.5" width="11" height="9" rx="1.5" />
-                  <circle cx="5" cy="5.5" r="1" />
-                  <polyline points="2,9 5,7 7,9 9,7 12,11" />
-                </svg>
-                {venue.imageUrl ? '배경 변경' : '배경 업로드'}
-              </>
-            )}
+            {busy ? '추가 중' : '사진 추가'}
           </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleFileChange}
-            className="hidden"
-          />
-        </>
+        </div>
       )}
+      {editable && usingGallery && (
+        <button
+          type="button"
+          onClick={removeCurrent}
+          aria-label="현재 사진 삭제"
+          className="absolute top-3 left-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/55 text-white transition-colors hover:bg-danger/70"
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+            <line x1="2" y1="2" x2="12" y2="12" /><line x1="12" y1="2" x2="2" y2="12" />
+          </svg>
+        </button>
+      )}
+
+      <input ref={bgInputRef} type="file" accept="image/*" onChange={handleBgChange} className="hidden" />
+      <input ref={galleryInputRef} type="file" accept="image/*" multiple onChange={handleGalleryChange} className="hidden" />
     </div>
   );
 }
