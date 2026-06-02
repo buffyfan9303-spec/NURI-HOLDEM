@@ -8,6 +8,7 @@ import type { Schedule } from '../../api/schedules';
 import type { MarketplaceNotice } from '../../api/marketplace';
 import { useAuth } from '../../contexts/AuthContext';
 import { followVenue, unfollowVenue, getMyFollowedVenueIds } from '../../api/community';
+import { getVenueNotices, createVenueNotice, deleteVenueNotice, type VenueNotice } from '../../api/community';
 import { getVenueRankings, maskRealName, type RankingEntry } from '../../api/rankings';
 import { uploadVenueImages } from '../../lib/storage';
 
@@ -226,13 +227,16 @@ export default function VenuePage({
           )}
           {tab === 'schedules' && <SchedulesPanel schedules={venueSchedules} onSelect={onSelectSchedule} />}
           {tab === 'community' && (
-            <CommentThread
-              comments={venueComments}
-              onSubmit={(content, parentId) => onSubmitComment(venue.id, content, parentId)}
-              onDelete={onDeleteComment}
-              moderator={isMyVenue}
-              emptyText="이 매장의 첫 댓글을 남겨보세요."
-            />
+            <div className="space-y-3">
+              <VenueNoticeBoard venueId={venue.id} canManage={isMyVenue || user?.role === 'admin'} />
+              <CommentThread
+                comments={venueComments}
+                onSubmit={(content, parentId) => onSubmitComment(venue.id, content, parentId)}
+                onDelete={onDeleteComment}
+                moderator={isMyVenue}
+                emptyText="이 매장의 첫 댓글을 남겨보세요."
+              />
+            </div>
           )}
         </div>
       </div>
@@ -901,6 +905,83 @@ function PostersPanel({
         )}
       </div>
     </div>
+  );
+}
+
+// 매장 공지 — 업주 + 관리자만 작성/삭제, 누구나 열람
+function VenueNoticeBoard({ venueId, canManage }: { venueId: string; canManage: boolean }) {
+  const toast = useToast();
+  const [notices, setNotices] = useState<VenueNotice[]>([]);
+  const [draft, setDraft] = useState('');
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => { getVenueNotices(venueId).then(setNotices).catch(() => {}); }, [venueId]);
+  const reload = () => getVenueNotices(venueId).then(setNotices).catch(() => {});
+
+  const submit = async () => {
+    if (!draft.trim()) return;
+    setBusy(true);
+    try {
+      await createVenueNotice(venueId, draft);
+      setDraft(''); setOpen(false);
+      toast.show('공지를 등록했습니다', 'success');
+      reload();
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : '등록에 실패했습니다', 'error');
+    } finally { setBusy(false); }
+  };
+  const remove = async (id: string) => {
+    if (!confirm('이 공지를 삭제하시겠습니까?')) return;
+    try { await deleteVenueNotice(id); reload(); } catch { toast.show('삭제에 실패했습니다', 'error'); }
+  };
+
+  if (notices.length === 0 && !canManage) return null;
+
+  return (
+    <section className="rounded-card border border-gold-400/30 bg-gradient-to-br from-gold-300/[0.06] to-transparent overflow-hidden">
+      <header className="flex items-center justify-between px-3 py-2 border-b border-gold-400/20">
+        <h3 className="inline-flex items-center gap-1.5 text-xs font-bold text-gold-300">
+          매장 공지 <span className="text-2xs text-ink-muted font-normal">({notices.length})</span>
+        </h3>
+        {canManage && (
+          <button type="button" onClick={() => setOpen((v) => !v)} className="text-2xs text-gold-300 hover:text-gold-200 font-semibold">
+            {open ? '닫기' : '+ 공지 작성'}
+          </button>
+        )}
+      </header>
+
+      {canManage && open && (
+        <div className="p-2.5 border-b border-border-subtle space-y-2">
+          <textarea
+            value={draft} onChange={(e) => setDraft(e.target.value)} maxLength={1000} rows={2}
+            placeholder="매장 손님에게 전할 공지를 작성하세요"
+            className="input w-full resize-none text-sm"
+          />
+          <div className="flex justify-end">
+            <button type="button" onClick={submit} disabled={busy || !draft.trim()} className="btn-primary px-4 text-xs disabled:opacity-60">등록</button>
+          </div>
+        </div>
+      )}
+
+      {notices.length === 0 ? (
+        <p className="py-3 text-center text-2xs text-ink-muted">등록된 공지가 없습니다</p>
+      ) : (
+        <ul>
+          {notices.map((n) => (
+            <li key={n.id} className="px-3 py-2 border-b border-border-subtle last:border-b-0">
+              <div className="flex items-start gap-2">
+                <p className="flex-1 text-xs text-ink-primary whitespace-pre-wrap break-words leading-relaxed">{n.content}</p>
+                {canManage && (
+                  <button type="button" onClick={() => remove(n.id)} className="shrink-0 text-2xs text-ink-muted hover:text-danger-light">삭제</button>
+                )}
+              </div>
+              <p className="mt-1 text-2xs text-ink-muted">{n.authorName} · {new Date(n.createdAt).toLocaleDateString()}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

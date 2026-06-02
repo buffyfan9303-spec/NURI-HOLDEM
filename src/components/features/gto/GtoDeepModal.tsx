@@ -291,6 +291,33 @@ export default function GtoDeepModal({ open, onClose, initialState }: { open: bo
               <MixBar action={deep.normalizedAction} />
             </div>
 
+            {/* 승 / 무 / 패 (정확한 승률 분해) */}
+            {deep.equity && !deep.calculating && (() => {
+              const tie = deep.equity.tie ?? 0;
+              const win = Math.max(0, deep.equity.hero - tie / 2);
+              const lose = Math.max(0, deep.equity.villain - tie / 2);
+              const cells = [
+                { k: '승', v: win, color: '#22C55E' },
+                { k: '무', v: tie, color: '#94A3B8' },
+                { k: '패', v: lose, color: '#EF4444' },
+              ];
+              return (
+                <div>
+                  <p className="mb-1 text-2xs font-semibold text-ink-secondary">승률 (승 / 무 / 패)</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {cells.map((c) => (
+                      <div key={c.k} className="rounded-input border border-border-subtle bg-surface-high px-2 py-1.5 text-center">
+                        <p className="text-2xs text-ink-muted">{c.k}</p>
+                        <p className="text-base font-extrabold tabular-nums leading-tight" style={{ color: c.color }}>
+                          {(c.v * 100).toFixed(1)}%
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
             {recommended && (
               <div
                 className="flex items-center justify-center gap-2 rounded-input border py-2"

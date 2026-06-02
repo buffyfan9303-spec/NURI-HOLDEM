@@ -171,7 +171,7 @@ export function useDeepGto(init?: DeepGtoInit): UseDeepGto {
     const b = board.filter((c): c is Card => c !== null);
     const id = setTimeout(() => {
       const r = computeEquity([h[0], h[1]], [v[0], v[1]], b, 2500);
-      setEquity({ hero: r.hero, villain: r.villain });
+      setEquity({ hero: r.hero, villain: r.villain, tie: r.tie });
       setCalculating(false);
     }, 0);
     return () => clearTimeout(id);

@@ -504,6 +504,39 @@ export async function deleteDealerPost(id: string): Promise<void> {
   if (error) throw error;
 }
 
+// ── 매장 커뮤니티 공지 (업주 + 관리자) ───────────────────────────────────────
+export interface VenueNotice {
+  id: string; venueId: string; authorId: string; authorName: string;
+  content: string; createdAt: string;
+}
+export async function getVenueNotices(venueId: string): Promise<VenueNotice[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase
+    .from('venue_notices')
+    .select('*')
+    .eq('venue_id', venueId)
+    .order('created_at', { ascending: false })
+    .limit(20);
+  if (error) throw error;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({
+    id: r.id, venueId: r.venue_id, authorId: r.author_id,
+    authorName: r.author_name ?? '운영', content: r.content, createdAt: r.created_at,
+  }));
+}
+export async function createVenueNotice(venueId: string, content: string): Promise<void> {
+  if (IS_MOCK) return;
+  const c = content.trim();
+  if (!c) throw new Error('내용을 입력해 주세요');
+  const { error } = await supabase.from('venue_notices').insert({ venue_id: venueId, content: c.slice(0, 1000) });
+  if (error) throw error;
+}
+export async function deleteVenueNotice(id: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.from('venue_notices').delete().eq('id', id);
+  if (error) throw error;
+}
+
 // ── 배드빗/굿런 반응 (작성자 활동점수 증가) ───────────────────────────────────
 export async function getMyReaction(postId: string): Promise<ReactionType | null> {
   if (IS_MOCK) return null;

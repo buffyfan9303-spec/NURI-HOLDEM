@@ -5,6 +5,8 @@ import type { Card, ActionFrequency, Position, GameType, HandComboId, Street } f
 export interface Equity {
   hero: number;
   villain: number;
+  /** 무승부 확률 (hero/villain 에는 tie/2 가 이미 포함됨) */
+  tie?: number;
 }
 
 /** GTO 결과 한 건 (레인지 기준 또는 빌런 특정 핸드 기준) */
