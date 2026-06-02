@@ -68,7 +68,7 @@ function AppHeader({
   const [userMenuOpen, setUserMenu]  = useState(false);
 
   return (
-    <header className="sticky top-0 z-40 bg-surface-base/95 backdrop-blur-sm border-b border-border-subtle">
+    <header className="sticky top-0 z-40 bg-surface-base border-b border-border-subtle">
       {/* ── 단순화된 헤더: 좌(로고) / 우(알림+유저) ──────────────── */}
       <div className="flex items-center justify-between h-header-h px-page-x">
 
@@ -692,7 +692,7 @@ export default function App() {
       {/* 일정 탐색 */}
       {activeTab === 'browse' && (
         <main>
-          <div className="sticky top-header-h z-30 bg-surface-base/95 backdrop-blur-sm border-b border-border-subtle pt-2 pb-3">
+          <div className="sticky top-header-h z-30 bg-surface-base border-b border-border-subtle pt-2 pb-3">
             <IntegratedSearchBar onChange={setSearchState} />
             {/* 뷰 모드 토글 — 일정 탐색 컨텍스트 안에 배치 */}
             <div className="flex items-center justify-between px-page-x pt-2">

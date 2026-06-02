@@ -108,7 +108,7 @@ export default function VenuePage({
       style={{ animationDuration: '0.25s' }}
     >
       {/* ── 최상단: 뒤로가기 헤더 ──────────────────────────────────────── */}
-      <header className="shrink-0 sticky top-0 z-30 flex items-center h-header-h px-page-x bg-surface-base/95 backdrop-blur-sm border-b border-border-subtle">
+      <header className="shrink-0 sticky top-0 z-30 flex items-center h-header-h px-page-x bg-surface-base border-b border-border-subtle">
         <button
           type="button"
           onClick={onClose}
