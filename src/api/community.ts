@@ -362,6 +362,61 @@ export interface UserActivityItem {
   id: string; summary: string; createdAt: string;
 }
 
+// ── 매장 팔로우(즐겨찾기) ──────────────────────────────────────────────────────
+export async function getMyFollowedVenueIds(): Promise<string[]> {
+  if (IS_MOCK) return [];
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+  const { data, error } = await supabase.from('venue_follows').select('venue_id').eq('user_id', user.id);
+  if (error) throw error;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => r.venue_id);
+}
+export async function followVenue(venueId: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('로그인이 필요합니다');
+  const { error } = await supabase.from('venue_follows').insert({ user_id: user.id, venue_id: venueId });
+  if (error && error.code !== '23505') throw error; // 중복(이미 팔로우)은 무시
+}
+export async function unfollowVenue(venueId: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('로그인이 필요합니다');
+  const { error } = await supabase.from('venue_follows').delete().eq('user_id', user.id).eq('venue_id', venueId);
+  if (error) throw error;
+}
+
+// ── 관리자 통계 ────────────────────────────────────────────────────────────────
+export interface AdminStats {
+  users: number; owners: number; pendingOwners: number; suspended: number;
+  posts: number; listings: number; schedules: number; pendingSchedules: number; signups7d: number;
+}
+export async function getAdminStats(): Promise<AdminStats> {
+  const empty: AdminStats = { users: 0, owners: 0, pendingOwners: 0, suspended: 0, posts: 0, listings: 0, schedules: 0, pendingSchedules: 0, signups7d: 0 };
+  if (IS_MOCK) return empty;
+  const since = new Date(Date.now() - 7 * 86400000).toISOString();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const cnt = async (tbl: string, build?: (q: any) => any): Promise<number> => {
+    let q = supabase.from(tbl).select('*', { count: 'exact', head: true });
+    if (build) q = build(q);
+    const { count } = await q;
+    return count ?? 0;
+  };
+  const [users, owners, pendingOwners, suspended, posts, listings, schedules, pendingSchedules, signups7d] = await Promise.all([
+    cnt('profiles'),
+    cnt('profiles', (q) => q.eq('role', 'venue_owner')),
+    cnt('profiles', (q) => q.eq('role', 'venue_owner').eq('approved', false)),
+    cnt('profiles', (q) => q.in('status', ['suspended', 'banned', 'withdrawn'])),
+    cnt('community_posts'),
+    cnt('marketplace_listings'),
+    cnt('schedules'),
+    cnt('schedules', (q) => q.eq('approved', false)),
+    cnt('profiles', (q) => q.gt('joined_at', since)),
+  ]);
+  return { users, owners, pendingOwners, suspended, posts, listings, schedules, pendingSchedules, signups7d };
+}
+
 // 회원의 현재 활동(글/댓글/매물) 최신순
 export async function getUserActivity(userId: string, limit = 20): Promise<UserActivityItem[]> {
   if (IS_MOCK) return [];

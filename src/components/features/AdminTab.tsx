@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import DraggableList from './DraggableList';
 import VenueManagement from './VenueManagement';
 import ReportQueue from './ReportQueue';
 import UserManagementTab from './UserManagementTab';
 import type { Schedule } from '../../api/schedules';
 import type { User } from '../../api/auth';
-import type { CommunityPost, Venue } from '../../api/community';
+import type { CommunityPost, Venue, AdminStats } from '../../api/community';
+import { getAdminStats } from '../../api/community';
 
 interface AdminTabProps {
   schedules: Schedule[];
@@ -32,6 +33,7 @@ export default function AdminTab({
 
   return (
     <div className="space-y-3">
+      <StatsPanel />
       {/* 섹션 선택 */}
       <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5">
         <Pill active={section === 'pending'} onClick={() => setSection('pending')}>
@@ -90,6 +92,33 @@ export default function AdminTab({
         />
       )}
       {section === 'reports' && <ReportQueue />}
+    </div>
+  );
+}
+
+// ── 관리자 통계 패널 ─────────────────────────────────────────────────────────
+
+function StatsPanel() {
+  const [s, setS] = useState<AdminStats | null>(null);
+  useEffect(() => {
+    let active = true;
+    getAdminStats().then((x) => { if (active) setS(x); }).catch(() => {});
+    return () => { active = false; };
+  }, []);
+  if (!s) return null;
+  const cards = [
+    { label: '전체 회원', v: s.users },        { label: '업주', v: s.owners },            { label: '승인대기 업주', v: s.pendingOwners },
+    { label: '제재 회원', v: s.suspended },     { label: '게시글', v: s.posts },           { label: '매물', v: s.listings },
+    { label: '포스터', v: s.schedules },        { label: '승인대기 포스터', v: s.pendingSchedules }, { label: '7일 신규가입', v: s.signups7d },
+  ];
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      {cards.map((c) => (
+        <div key={c.label} className="rounded-input border border-border-default bg-surface-low py-2 text-center">
+          <p className="text-lg font-bold text-ink-primary tabular-nums leading-none">{c.v.toLocaleString()}</p>
+          <p className="text-2xs text-ink-muted mt-1">{c.label}</p>
+        </div>
+      ))}
     </div>
   );
 }

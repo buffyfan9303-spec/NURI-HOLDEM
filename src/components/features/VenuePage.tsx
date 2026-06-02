@@ -7,6 +7,7 @@ import type { Venue, Comment } from '../../api/community';
 import type { Schedule } from '../../api/schedules';
 import type { MarketplaceNotice } from '../../api/marketplace';
 import { useAuth } from '../../contexts/AuthContext';
+import { followVenue, unfollowVenue, getMyFollowedVenueIds } from '../../api/community';
 
 interface VenuePageProps {
   venue: Venue | null;
@@ -157,7 +158,7 @@ export default function VenuePage({
               <h2 className="text-xl font-bold text-ink-primary">{venue.name}</h2>
               <p className="text-xs text-ink-muted mt-1">{venue.address}</p>
             </div>
-            <FollowButton followerCount={venue.followerCount} />
+            <FollowButton venueId={venue.id} followerCount={venue.followerCount} />
           </div>
         </div>
 
@@ -349,22 +350,47 @@ function HeroSection({
 
 // ── 팔로우 버튼 ────────────────────────────────────────────────────────────
 
-function FollowButton({ followerCount }: { followerCount?: number }) {
+function FollowButton({ venueId, followerCount }: { venueId: string; followerCount?: number }) {
+  const { user } = useAuth();
+  const toast = useToast();
   const [following, setFollowing] = useState(false);
-  const count = (followerCount ?? 0) + (following ? 1 : 0);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    getMyFollowedVenueIds().then((ids) => { if (active) setFollowing(ids.includes(venueId)); }).catch(() => {});
+    return () => { active = false; };
+  }, [user, venueId]);
+
+  const toggle = async () => {
+    if (!user) return toast.show('로그인이 필요합니다', 'error');
+    const next = !following;
+    setFollowing(next); setBusy(true);
+    try {
+      if (next) await followVenue(venueId); else await unfollowVenue(venueId);
+      toast.show(next ? '매장을 팔로우했습니다' : '팔로우를 해제했습니다', 'info');
+    } catch (e) {
+      setFollowing(!next);
+      toast.show(e instanceof Error ? e.message : '처리에 실패했습니다', 'error');
+    } finally { setBusy(false); }
+  };
+
+  const count = followerCount ?? 0;
   return (
     <button
       type="button"
-      onClick={() => setFollowing((v) => !v)}
+      onClick={toggle}
+      disabled={busy}
       aria-pressed={following}
       className={[
-        'shrink-0 inline-flex items-center gap-1 px-3 h-9 rounded-input text-xs font-semibold transition-colors',
+        'shrink-0 inline-flex items-center gap-1 px-3 h-9 rounded-input text-xs font-semibold transition-colors disabled:opacity-60',
         following
           ? 'bg-gold-300 text-ink-inverse'
           : 'bg-surface-high text-ink-secondary border border-border-default hover:text-ink-primary',
       ].join(' ')}
     >
-      {following ? '✓ 팔로잉' : '+ 팔로우'}
+      {following ? '팔로잉' : '팔로우'}
       <span className="text-2xs opacity-80">({count.toLocaleString()})</span>
     </button>
   );
