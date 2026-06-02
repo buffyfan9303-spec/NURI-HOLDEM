@@ -1,6 +1,7 @@
 // src/components/features/gto/GtoDeepModal.tsx
 import { useState } from 'react';
 import Modal from '../../atoms/Modal';
+import { useToast } from '../../atoms/Toast';
 import CardGridPicker, { SUIT_COLOR, SUIT_LABEL } from './CardGridPicker';
 import { useDeepGto, type CardTarget } from './useDeepGto';
 import { canonicalizeHand } from './useGtoCalculator';
@@ -11,6 +12,8 @@ const BOARD_PRESETS: { label: string; cards: { rank: Rank; suit: Suit }[] }[] = 
   { label: '브로드웨이 (KQT)', cards: [{ rank: 'K', suit: 'h' }, { rank: 'Q', suit: 'h' }, { rank: 'T', suit: 's' }] },
   { label: '모노톤 (J83s)', cards: [{ rank: 'J', suit: 's' }, { rank: '8', suit: 's' }, { rank: '3', suit: 's' }] },
   { label: '페어보드 (994)', cards: [{ rank: '9', suit: 'h' }, { rank: '9', suit: 'd' }, { rank: '4', suit: 'c' }] },
+  { label: '턴 (A72-J)', cards: [{ rank: 'A', suit: 's' }, { rank: '7', suit: 'd' }, { rank: '2', suit: 'c' }, { rank: 'J', suit: 'h' }] },
+  { label: '리버 (A72J-Q)', cards: [{ rank: 'A', suit: 's' }, { rank: '7', suit: 'd' }, { rank: '2', suit: 'c' }, { rank: 'J', suit: 'h' }, { rank: 'Q', suit: 's' }] },
 ];
 import type { GtoResult } from './gto.deep.types';
 
@@ -137,11 +140,31 @@ function DeepBlockerSheet({ open, onClose, result }: { open: boolean; onClose: (
 
 export default function GtoDeepModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const deep = useDeepGto();
+  const toast = useToast();
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const heroId = comboIdOf(deep.hero);
   const villainId = deep.villainComboId;
   const showResult = deep.heroComplete && deep.villainComplete && deep.result && deep.normalizedAction;
+
+  // 권장 액션(가장 빈도 높은 것)
+  const na = deep.normalizedAction;
+  const recommended = na
+    ? [{ label: '3-Bet', v: na.raise, color: '#EF4444' }, { label: '콜', v: na.call, color: '#22C55E' }, { label: '폴드', v: na.fold, color: '#3B82F6' }]
+        .reduce((a, b) => (b.v > a.v ? b : a))
+    : null;
+
+  const copySummary = async () => {
+    const boardStr = deep.board.flatMap((c) => (c ? [`${c.rank}${c.suit.toUpperCase()}`] : [])).join(' ');
+    const eq = deep.equity ? ` | 에퀴티 Hero ${Math.round(deep.equity.hero * 100)}%` : '';
+    const rec = recommended ? ` | 권장 ${recommended.label} ${Math.round(recommended.v * 100)}%` : '';
+    const text = `[NHoldem GTO] ${heroId} vs ${villainId}${boardStr ? ` | 보드 ${boardStr}` : ''}${eq}${rec}`;
+    try {
+      if (navigator.share) { await navigator.share({ title: 'NHoldem GTO', text }); return; }
+      await navigator.clipboard.writeText(text);
+      toast.show('결과를 복사했습니다', 'success');
+    } catch { /* 사용자 취소 등은 무시 */ }
+  };
 
   const TARGET_TABS: { t: CardTarget; label: string }[] = [
     { t: 'hero', label: 'Hero' },
@@ -233,10 +256,31 @@ export default function GtoDeepModal({ open, onClose }: { open: boolean; onClose
               </p>
             )}
 
-            <button type="button" onClick={() => setSheetOpen(true)} className="btn-ghost inline-flex w-full items-center justify-center gap-2 py-2.5">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4z" /></svg>
-              AI 액션 해설 보기
-            </button>
+            {recommended && (
+              <div
+                className="flex items-center justify-center gap-2 rounded-input border py-2"
+                style={{ borderColor: `${recommended.color}66`, background: `${recommended.color}14` }}
+              >
+                <span className="text-2xs text-ink-muted">권장 액션</span>
+                <span className="text-sm font-extrabold" style={{ color: recommended.color }}>
+                  {recommended.label} {Math.round(recommended.v * 100)}%
+                </span>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setSheetOpen(true)} className="btn-ghost inline-flex flex-1 items-center justify-center gap-2 py-2.5">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4z" /></svg>
+                AI 해설
+              </button>
+              <button type="button" onClick={copySummary} aria-label="결과 공유/복사" className="btn-ghost inline-flex items-center justify-center gap-1.5 px-4 py-2.5">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
+                  <line x1="8.6" y1="13.5" x2="15.4" y2="17.5" /><line x1="15.4" y1="6.5" x2="8.6" y2="10.5" />
+                </svg>
+                공유
+              </button>
+            </div>
           </div>
         ) : (
           <p className="py-6 text-center text-2xs text-ink-muted">
