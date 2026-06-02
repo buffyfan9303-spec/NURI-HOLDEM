@@ -226,6 +226,7 @@ export default function VenuePage({
               comments={venueComments}
               onSubmit={(content, parentId) => onSubmitComment(venue.id, content, parentId)}
               onDelete={onDeleteComment}
+              moderator={isMyVenue}
               emptyText="이 매장의 첫 댓글을 남겨보세요."
             />
           )}
@@ -259,12 +260,35 @@ function HeroSection({
   const usingGallery = gallery.length > 0;
   const safeIdx = slides.length ? Math.min(idx, slides.length - 1) : 0;
 
-  // 네이버 지도 스타일 자동 슬라이드(이미지 2장 이상일 때)
+  // 네이버 지도 스타일 자동 슬라이드(이미지 2장 이상). 사용자가 조작하면 잠시 멈춤.
+  const pausedUntil = useRef(0);
   useEffect(() => {
     if (slides.length <= 1) return;
-    const t = setInterval(() => setIdx((i) => (i + 1) % slides.length), 3500);
+    const t = setInterval(() => {
+      if (Date.now() < pausedUntil.current) return;
+      setIdx((i) => (i + 1) % slides.length);
+    }, 3500);
     return () => clearInterval(t);
   }, [slides.length]);
+
+  // 수동 넘김(스와이프/버튼) — 조작 후 6초간 자동 슬라이드 일시정지
+  const go = (n: number) => {
+    if (!slides.length) return;
+    pausedUntil.current = Date.now() + 6000;
+    setIdx(((n % slides.length) + slides.length) % slides.length);
+  };
+  const touchRef = useRef<{ x: number; y: number } | null>(null);
+  const onTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    touchRef.current = { x: t.clientX, y: t.clientY };
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    const s = touchRef.current; touchRef.current = null;
+    if (!s) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - s.x, dy = t.clientY - s.y;
+    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) go(safeIdx + (dx < 0 ? 1 : -1));
+  };
 
   // 단일 배경 업로드(레거시 — 갤러리 없을 때만 노출)
   const handleBgChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -303,11 +327,15 @@ function HeroSection({
   };
 
   return (
-    <div className="relative w-full overflow-hidden h-44 sm:h-52 md:h-60">
+    <div
+      className="relative w-full overflow-hidden h-44 sm:h-52 md:h-60"
+      onTouchStart={slides.length > 1 ? onTouchStart : undefined}
+      onTouchEnd={slides.length > 1 ? onTouchEnd : undefined}
+    >
       {slides.length > 0 ? (
-        // 자동 슬라이드 트랙
+        // 슬라이드 트랙(자동 + 스와이프)
         <div
-          className="absolute inset-0 flex transition-transform duration-500 ease-out"
+          className="absolute inset-0 flex transition-transform duration-500 ease-out touch-pan-y select-none"
           style={{ transform: `translateX(-${safeIdx * 100}%)` }}
         >
           {slides.map((src, i) => (
@@ -315,6 +343,7 @@ function HeroSection({
               key={`${src}-${i}`}
               src={src}
               alt={`${venue.name} 사진 ${i + 1}`}
+              draggable={false}
               className="h-full w-full shrink-0 object-cover"
             />
           ))}
@@ -343,6 +372,28 @@ function HeroSection({
         style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0) 30%, rgba(10,12,15,0.5) 100%)' }}
       />
 
+      {/* 좌/우 넘김 버튼 */}
+      {slides.length > 1 && (
+        <>
+          <button
+            type="button"
+            onClick={() => go(safeIdx - 1)}
+            aria-label="이전 사진"
+            className="absolute left-2 top-1/2 z-10 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-surface-base/55 text-white backdrop-blur transition-colors hover:bg-surface-base/80"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M9 2 L4 7 L9 12" /></svg>
+          </button>
+          <button
+            type="button"
+            onClick={() => go(safeIdx + 1)}
+            aria-label="다음 사진"
+            className="absolute right-2 top-1/2 z-10 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-surface-base/55 text-white backdrop-blur transition-colors hover:bg-surface-base/80"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 2 L10 7 L5 12" /></svg>
+          </button>
+        </>
+      )}
+
       {/* 슬라이드 점 인디케이터 */}
       {slides.length > 1 && (
         <div className="absolute bottom-2.5 left-0 right-0 z-10 flex justify-center gap-1.5">
@@ -350,7 +401,7 @@ function HeroSection({
             <button
               key={i}
               type="button"
-              onClick={() => setIdx(i)}
+              onClick={() => go(i)}
               aria-label={`${i + 1}번째 사진 보기`}
               className={['h-1.5 rounded-full transition-all', i === safeIdx ? 'w-5 bg-gold-300' : 'w-1.5 bg-white/50 hover:bg-white/80'].join(' ')}
             />

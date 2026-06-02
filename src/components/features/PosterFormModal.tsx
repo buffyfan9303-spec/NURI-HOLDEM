@@ -26,11 +26,14 @@ export interface PosterFormData {
   region: string;
   isCompetition: boolean; // '대회/이벤트' 분류 (Task 3) — 필터 [대회]에 노출
   paymentMethods: string[];
+  partners: string[];     // 파트너 / 시드권 — 업주 직접 추가
   prizes: string[];
   posterUrl?: string;
 }
 
-const PAYMENT_OPTIONS = ['현금', '카드', '계좌이체', 'Roti GP', '시드권 교환'];
+const PAYMENT_BASE = ['현금', '카드', '매장이용권'];
+const MAX_PAYMENTS = 10;
+const MAX_PARTNERS = 10;
 const MAX_PRIZES = 10;
 const REGION_OPTIONS = [
   '서울', '경기도 남양주', '경기도 성남', '인천', '강남', '홍대', '부산', '대전', '대구', '광주',
@@ -46,7 +49,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit }: P
     startTime: '19:00', regCloseTime: '',
     prizeType: 'GTD', prizeAmount: 0, buyIn: 0, region: '',
     isCompetition: false,
-    paymentMethods: ['현금'], prizes: [],
+    paymentMethods: ['현금'], partners: [], prizes: [],
   };
 
   const [form,       setForm]       = useState<PosterFormData>(empty);
@@ -66,6 +69,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit }: P
         buyIn: schedule.buyIn.amount, region: schedule.region,
         isCompetition: schedule.isCompetition ?? false,
         paymentMethods: schedule.paymentMethods ?? ['현금'],
+        partners: schedule.partners ?? [],
         prizes: schedule.seats?.map((s) => `${s.label} ${s.count}석`) ?? [],
         posterUrl: schedule.posterUrl,
       });
@@ -262,24 +266,46 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit }: P
           </div>
         </FieldWrap>
 
-        {/* 결제 수단 */}
-        <FieldWrap label="결제 수단" required>
-          <div className="flex flex-wrap gap-1.5">
-            {PAYMENT_OPTIONS.map((p) => {
-              const checked = form.paymentMethods.includes(p);
-              return (
-                <button key={p} type="button"
-                  onClick={() => update('paymentMethods', checked
-                    ? form.paymentMethods.filter((m) => m !== p)
-                    : [...form.paymentMethods, p])}
-                  className={['px-2.5 py-1 rounded-badge text-xs font-semibold border transition-colors',
-                    checked ? 'bg-gold-300/15 border-gold-300 text-gold-300'
-                      : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary'].join(' ')}>
-                  {checked ? '✓ ' : ''}{p}
-                </button>
-              );
-            })}
+        {/* 결제 수단 — 기본(현금/카드/매장이용권) + 업주 직접 추가(최대 10) */}
+        <FieldWrap label={`결제 수단 (${form.paymentMethods.length}/${MAX_PAYMENTS})`} required>
+          <div className="space-y-2">
+            <div className="flex flex-wrap gap-1.5">
+              {PAYMENT_BASE.map((p) => {
+                const checked = form.paymentMethods.includes(p);
+                return (
+                  <button key={p} type="button"
+                    onClick={() => update('paymentMethods', checked
+                      ? form.paymentMethods.filter((m) => m !== p)
+                      : (form.paymentMethods.length >= MAX_PAYMENTS ? form.paymentMethods : [...form.paymentMethods, p]))}
+                    className={['px-2.5 py-1 rounded-badge text-xs font-semibold border transition-colors',
+                      checked ? 'bg-gold-300/15 border-gold-300 text-gold-300'
+                        : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary'].join(' ')}>
+                    {checked ? '✓ ' : ''}{p}
+                  </button>
+                );
+              })}
+            </div>
+            <TagAdder
+              items={form.paymentMethods.filter((m) => !PAYMENT_BASE.includes(m))}
+              max={MAX_PAYMENTS}
+              total={form.paymentMethods.length}
+              placeholder="기타 결제수단 직접 입력 (예: 토스, 상품권)"
+              onAdd={(v) => { if (!form.paymentMethods.includes(v)) update('paymentMethods', [...form.paymentMethods, v]); }}
+              onRemove={(v) => update('paymentMethods', form.paymentMethods.filter((m) => m !== v))}
+            />
           </div>
+        </FieldWrap>
+
+        {/* 파트너 / 시드권 — 업주 직접 추가(최대 10) */}
+        <FieldWrap label={`파트너 / 시드권 (${form.partners.length}/${MAX_PARTNERS})`}>
+          <TagAdder
+            items={form.partners}
+            max={MAX_PARTNERS}
+            total={form.partners.length}
+            placeholder="예: KPT, WPT, 시드권 제휴처"
+            onAdd={(v) => { if (!form.partners.includes(v)) update('partners', [...form.partners, v]); }}
+            onRemove={(v) => update('partners', form.partners.filter((p) => p !== v))}
+          />
         </FieldWrap>
 
         {/* 시상품 */}
@@ -325,6 +351,47 @@ function PrizeList({ prizes, onChange }: { prizes: string[]; onChange: (prizes: 
           <input type="text" value={draft} onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
             placeholder="예: KPT 메인 1석" className="input flex-1 text-sm" />
+          <button type="button" onClick={add} disabled={!draft.trim()}
+            className="btn-ghost text-xs px-3 shrink-0 disabled:opacity-40">추가</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 직접 추가형 태그 입력(결제수단/파트너 공통). total = 전체 합(기본칩 포함) 기준 한도 체크.
+function TagAdder({ items, max, total, placeholder, onAdd, onRemove }: {
+  items: string[];
+  max: number;
+  total: number;
+  placeholder: string;
+  onAdd: (v: string) => void;
+  onRemove: (v: string) => void;
+}) {
+  const [draft, setDraft] = useState('');
+  const add = () => {
+    const v = draft.trim();
+    if (!v || total >= max) return;
+    onAdd(v); setDraft('');
+  };
+  return (
+    <div className="space-y-1.5">
+      {items.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {items.map((it) => (
+            <span key={it} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-badge text-xs font-semibold bg-surface-high border border-border-default text-ink-primary">
+              {it}
+              <button type="button" onClick={() => onRemove(it)} aria-label={`${it} 삭제`}
+                className="text-ink-muted hover:text-danger text-2xs">✕</button>
+            </span>
+          ))}
+        </div>
+      )}
+      {total < max && (
+        <div className="flex gap-1.5">
+          <input type="text" value={draft} onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+            placeholder={placeholder} maxLength={20} className="input flex-1 text-sm" />
           <button type="button" onClick={add} disabled={!draft.trim()}
             className="btn-ghost text-xs px-3 shrink-0 disabled:opacity-40">추가</button>
         </div>

@@ -705,6 +705,7 @@ export default function App() {
         buyIn:        { amount: data.buyIn },
         region:       data.region,
         paymentMethods: data.paymentMethods,
+        partners:     data.partners,
         seats,
       };
       if (data.regCloseTime)            patch.duration  = data.regCloseTime;
@@ -735,6 +736,7 @@ export default function App() {
       prizePool:      data.prizeAmount * 10_000,
       buyIn:          { amount: data.buyIn },
       paymentMethods: data.paymentMethods,
+      partners:       data.partners,
       seats,
       posterUrl:      data.posterUrl,
       posterColor:    '#7C2D7E',

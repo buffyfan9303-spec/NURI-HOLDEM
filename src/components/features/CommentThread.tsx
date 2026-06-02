@@ -7,6 +7,8 @@ interface CommentThreadProps {
   onSubmit: (content: string, parentId?: string) => void;
   /** 관리자(또는 본인) 댓글 삭제 콜백 — 전달되지 않으면 삭제 버튼 미노출 */
   onDelete?: (commentId: string) => void;
+  /** 이 영역(예: 본인 매장 커뮤니티)에서 모든 댓글을 관리(삭제)할 수 있는 권한자 — 업주 등 */
+  moderator?: boolean;
   emptyText?: string;
 }
 
@@ -117,12 +119,12 @@ function CommentItem({
   );
 }
 
-export default function CommentThread({ comments, onSubmit, onDelete, emptyText = '아직 댓글이 없습니다.' }: CommentThreadProps) {
+export default function CommentThread({ comments, onSubmit, onDelete, moderator = false, emptyText = '아직 댓글이 없습니다.' }: CommentThreadProps) {
   const { user } = useAuth();
   const [content, setContent] = useState('');
 
-  // 관리자는 모든 댓글, 일반 사용자는 본인 댓글만 삭제 가능 (서버 RLS와 동일 규칙)
-  const canDelete = (c: Comment) => user?.role === 'admin' || user?.id === c.userId;
+  // 관리자/모더레이터(본인 매장 업주)는 모든 댓글, 일반 사용자는 본인 댓글만 삭제 (서버 RLS와 동일)
+  const canDelete = (c: Comment) => moderator || user?.role === 'admin' || user?.id === c.userId;
 
   const roots   = comments.filter((c) => !c.parentId);
   const repliesByParent = comments
