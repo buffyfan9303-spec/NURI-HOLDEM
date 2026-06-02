@@ -4,6 +4,7 @@ import { getLiveMessages, addLiveMessage, subscribeLiveWall } from '../../api/co
 import type { MarketplaceNotice } from '../../api/marketplace';
 import { useAuth } from '../../contexts/AuthContext';
 import GtoDeepWidget from './gto/GtoDeepWidget';
+import OwnerCommunity from './OwnerCommunity';
 import { useToast } from '../atoms/Toast';
 import { filterContent } from '../../lib/content-filter';
 
@@ -25,7 +26,7 @@ interface CommunityTabProps {
 }
 
 // Task 4: [실시간 댓글(라이브월), 게시판, 홀덤 공부, 홀덤펍]
-type Section = 'live' | 'board' | 'study' | 'venues';
+type Section = 'live' | 'board' | 'study' | 'venues' | 'owner';
 
 function relativeTime(iso: string): string {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -41,6 +42,8 @@ export default function CommunityTab({
 }: CommunityTabProps) {
   const [section, setSection] = useState<Section>('board');
   const [query, setQuery] = useState('');
+  const { user } = useAuth();
+  const canOwnerCommunity = isAdmin || user?.role === 'venue_owner' || user?.role === 'venue_staff';
 
   // 매장 정렬: 1) 유료광고(isPaidAd) → 2) 팔로워수 내림차순
   const sortedVenues = useMemo(() => {
@@ -77,6 +80,9 @@ export default function CommunityTab({
         <SectionTab active={section === 'board'}  label="게시판"      onClick={() => setSection('board')} />
         <SectionTab active={section === 'study'}  label="홀덤 공부"   onClick={() => setSection('study')} />
         <SectionTab active={section === 'venues'} label="홀덤펍"      onClick={() => setSection('venues')} />
+        {canOwnerCommunity && (
+          <SectionTab active={section === 'owner'} label="업주" onClick={() => setSection('owner')} />
+        )}
       </div>
 
       {section === 'live' && <LiveWallSection />}
@@ -118,6 +124,8 @@ export default function CommunityTab({
           onSelectVenue={onSelectVenue}
         />
       )}
+
+      {section === 'owner' && canOwnerCommunity && <OwnerCommunity />}
     </div>
   );
 }

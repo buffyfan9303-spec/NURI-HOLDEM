@@ -362,6 +362,57 @@ export interface UserActivityItem {
   id: string; summary: string; createdAt: string;
 }
 
+// ── 업주 커뮤니티 (작성 1일 후 자동 만료 / 삭제·만료글은 관리자만 열람) ──────────
+export interface OwnerPost {
+  id: string;
+  authorId: string;
+  authorName: string;
+  authorColor?: string;
+  content: string;
+  deleted: boolean;
+  createdAt: string;
+}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function rowToOwnerPost(r: any): OwnerPost {
+  return {
+    id: r.id,
+    authorId: r.author_id,
+    authorName: r.author_name ?? '익명',
+    authorColor: r.author_color ?? undefined,
+    content: r.content,
+    deleted: r.deleted,
+    createdAt: r.created_at,
+  };
+}
+export async function getOwnerPosts(opts?: { deleted?: boolean }): Promise<OwnerPost[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase
+    .from('owner_posts')
+    .select('*')
+    .eq('deleted', opts?.deleted ? true : false)
+    .order('created_at', { ascending: false })
+    .limit(100);
+  if (error) throw error;
+  return (data ?? []).map(rowToOwnerPost);
+}
+export async function createOwnerPost(content: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('로그인이 필요합니다');
+  const c = content.trim();
+  if (!c) throw new Error('내용을 입력해 주세요');
+  const { error } = await supabase.from('owner_posts').insert({ author_id: user.id, content: c.slice(0, 2000) });
+  if (error) throw error;
+}
+export async function deleteOwnerPost(id: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase
+    .from('owner_posts')
+    .update({ deleted: true, deleted_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) throw error;
+}
+
 // ── 매장 팔로우(즐겨찾기) ──────────────────────────────────────────────────────
 export async function getMyFollowedVenueIds(): Promise<string[]> {
   if (IS_MOCK) return [];
