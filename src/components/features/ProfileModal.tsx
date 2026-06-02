@@ -6,6 +6,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { IS_MOCK } from '../../lib/supabase';
 import { resizeImage } from '../../lib/storage';
 import { requestPasswordChangeCode, changeMyPasswordWithCode } from '../../api/auth';
+import { pushSupported, isPushSubscribed, enablePush, disablePush } from '../../api/push';
 
 interface ProfileModalProps {
   open: boolean;
@@ -322,6 +323,7 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
 
       {/* ── 보안 탭 ───────────────────────────────────────────────── */}
       {tab === 'security' && (
+        <>
         <form onSubmit={handleConfirmChange} className="p-4 space-y-4">
 
           <div className="flex items-start gap-2 p-3 rounded-card bg-surface-high border border-border-subtle">
@@ -411,8 +413,63 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
             </div>
           )}
         </form>
+        <PushNotificationSetting />
+        </>
       )}
     </Modal>
+  );
+}
+
+// ── 푸시 알림 설정 ─────────────────────────────────────────────────────────────
+
+function PushNotificationSetting() {
+  const toast = useToast();
+  const [supported] = useState(() => pushSupported());
+  const [on, setOn] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => { isPushSubscribed().then(setOn).catch(() => {}); }, []);
+
+  const toggle = async () => {
+    setBusy(true);
+    try {
+      if (on) { await disablePush(); setOn(false); toast.show('푸시 알림을 껐습니다', 'info'); }
+      else { await enablePush(); setOn(true); toast.show('푸시 알림을 켰습니다', 'info'); }
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : '처리에 실패했습니다', 'error');
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="px-4 pb-5 -mt-1">
+      <h3 className="text-xs font-semibold text-ink-secondary mb-2">알림</h3>
+      <div className="flex items-center gap-3 p-3 rounded-card bg-surface-high border border-border-subtle">
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-ink-primary">푸시 알림</p>
+          <p className="text-2xs text-ink-muted mt-0.5 leading-relaxed">
+            {supported
+              ? '댓글·승인·팔로우 매장 새 포스터를 브라우저 알림으로 받습니다'
+              : '이 브라우저는 푸시 알림을 지원하지 않습니다'}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={toggle}
+          disabled={!supported || busy}
+          aria-pressed={on}
+          aria-label="푸시 알림 토글"
+          className={[
+            'relative w-11 h-6 rounded-full transition-colors shrink-0 disabled:opacity-40',
+            on ? 'bg-gold-300' : 'bg-surface-float',
+          ].join(' ')}
+        >
+          <span className={[
+            'absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform',
+            on ? 'translate-x-5' : '',
+          ].join(' ')} />
+        </button>
+      </div>
+    </div>
   );
 }
 
