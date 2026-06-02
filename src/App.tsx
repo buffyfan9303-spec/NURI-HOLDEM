@@ -12,6 +12,9 @@ import AuthModal from './components/features/AuthModal';
 import PostDetailModal from './components/features/PostDetailModal';
 import NotificationPanel from './components/features/NotificationPanel';
 import CommunityTab from './components/features/CommunityTab';
+import GtoDeepModal from './components/features/gto/GtoDeepModal';
+import { decodeSpot, readGtoHash } from './components/features/gto/gtoShare';
+import type { DeepGtoInit } from './components/features/gto/useDeepGto';
 import VenuePage from './components/features/VenuePage';
 import MyPostersTab from './components/features/MyPostersTab';
 import MarketplaceTab from './components/features/MarketplaceTab';
@@ -358,6 +361,26 @@ export default function App() {
   const [postFormOpen, setPostFormOpen]     = useState(false);   // 커뮤니티 글쓰기
   const [postFormCategory, setPostFormCategory] = useState<PostCategory>('free'); // 글쓰기 기본 카테고리(공부 탭=study)
   const [marketFormOpen, setMarketFormOpen] = useState(false);   // 중고장터 글쓰기
+
+  // GTO 공유 링크(#gto=...) 진입 — 받은 사람이 열면 같은 스팟으로 GTO 검색 모달 표시
+  const [gtoInit, setGtoInit] = useState<DeepGtoInit | null>(null);
+  useEffect(() => {
+    const apply = () => {
+      const code = readGtoHash(window.location.hash);
+      if (!code) { setGtoInit(null); return; }
+      const { hero, villain, board } = decodeSpot(code);
+      setGtoInit({ hero, villain, board });
+    };
+    apply();
+    window.addEventListener('hashchange', apply);
+    return () => window.removeEventListener('hashchange', apply);
+  }, []);
+  const closeGto = useCallback(() => {
+    setGtoInit(null);
+    if (window.location.hash.startsWith('#gto=')) {
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+  }, []);
 
   // 서버 재조회 헬퍼
   const reloadSchedules = useCallback(() => { getSchedules().then(setSchedules).catch(() => {}); }, []);
@@ -980,6 +1003,16 @@ export default function App() {
         onSubmit={handleCreatePost}
         defaultCategory={postFormCategory}
       />
+
+      {/* GTO 공유 링크로 진입 시 같은 스팟으로 GTO 검색 모달 표시 */}
+      {gtoInit && (
+        <GtoDeepModal
+          key={typeof window !== 'undefined' ? window.location.hash : 'gto'}
+          open
+          onClose={closeGto}
+          initialState={gtoInit}
+        />
+      )}
 
       {/* 법적 동의 게이트 — 구글 등 미동의 가입자(관리자 제외)에게 1회 필수 동의 */}
       <ConsentGateModal open={!!user && user.agreedToTerms === false && user.role !== 'admin'} />

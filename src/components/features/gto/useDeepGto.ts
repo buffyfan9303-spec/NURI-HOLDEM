@@ -50,15 +50,27 @@ export interface UseDeepGto {
   calculating: boolean;
 }
 
-export function useDeepGto(): UseDeepGto {
+export interface DeepGtoInit { hero?: Card[]; villain?: Card[]; board?: Card[]; }
+
+function padSlots(cards: Card[] | undefined, n: number): (Card | null)[] {
+  const out: (Card | null)[] = (cards ?? []).slice(0, n);
+  while (out.length < n) out.push(null);
+  return out;
+}
+
+export function useDeepGto(init?: DeepGtoInit): UseDeepGto {
   const situations = DEEP_SITUATIONS;
   const [situationId, setSituationId] = useState<string>(situations[0].id);
   const situation = useMemo(() => situations.find((s) => s.id === situationId) ?? situations[0], [situations, situationId]);
 
-  const [hero, setHero] = useState<(Card | null)[]>(() => [situations[0].heroHand[0], situations[0].heroHand[1]]);
-  const [villain, setVillain] = useState<(Card | null)[]>([null, null]);
-  const [board, setBoard] = useState<(Card | null)[]>([null, null, null, null, null]);
-  const [currentTarget, setCurrentTarget] = useState<CardTarget>('villain');
+  const [hero, setHero] = useState<(Card | null)[]>(() => padSlots(init?.hero, 2));
+  const [villain, setVillain] = useState<(Card | null)[]>(() => padSlots(init?.villain, 2));
+  const [board, setBoard] = useState<(Card | null)[]>(() => padSlots(init?.board, 5));
+  const [currentTarget, setCurrentTarget] = useState<CardTarget>(() => {
+    if (!init?.hero || init.hero.length < 2) return 'hero';
+    if (!init?.villain || init.villain.length < 2) return 'villain';
+    return 'board';
+  });
 
   const usedIds = useMemo(() => {
     const s = new Set<CardId>();
@@ -100,11 +112,11 @@ export function useDeepGto(): UseDeepGto {
   }, [hero, villain, board]);
 
   const clearAll = useCallback(() => {
-    setHero([situation.heroHand[0], situation.heroHand[1]]);
+    setHero([null, null]);
     setVillain([null, null]);
     setBoard([null, null, null, null, null]);
-    setCurrentTarget('villain');
-  }, [situation]);
+    setCurrentTarget('hero');
+  }, []);
 
   const selectSituation = useCallback((id: string) => {
     const s = situations.find((x) => x.id === id) ?? situations[0];
@@ -166,29 +178,13 @@ export function useDeepGto(): UseDeepGto {
   }, [hero, villain, board, heroComplete, villainComplete]);
 
   const result = useMemo<GtoResult | null>(() => {
-    if (!villainComplete || !villainComboId) return null;
-    // 1) 정밀 데이터(저자 입력)가 있으면 우선 사용
-    const authored = situation.villainAdjustments[villainComboId];
-    if (authored) return authored;
-    // 2) 없으면 실시간 에퀴티 기반으로 액션을 추정 — 모든 입력에서 결과가 변동
+    // Hero/Villain 카드가 모두 입력되면 실시간 에퀴티 기반으로 액션 믹스를 추정.
+    if (!heroComplete || !villainComplete) return null;
     if (!equity) {
-      return {
-        action: situation.baseline.action,
-        baseline: situation.baseline.action,
-        heuristic_explanation: situation.baseline.heuristic_explanation,
-      };
+      return { action: { raise: 0.34, call: 0.33, fold: 0.33 }, heuristic_explanation: '' };
     }
-    const eqPct = Math.round(equity.hero * 100);
-    return {
-      action: actionFromEquity(equity.hero),
-      baseline: situation.baseline.action,
-      equity,
-      heuristic_explanation:
-        `히어로 에퀴티 ${eqPct}% 를 기준으로 추정한 전략입니다. 에퀴티가 높을수록 3-Bet/콜 비중이 커지고, 낮을수록 폴드가 정석입니다.`,
-      blockerExplanation:
-        `빌런을 ${villainComboId} 로 고정하면 히어로 에퀴티가 ${eqPct}% 가 됩니다. 빌런 카드가 만드는 블로커/언블로커 효과가 에퀴티와 폴드 가능성에 반영되어 기준(레인지) 대비 빈도가 달라집니다.`,
-    };
-  }, [villainComplete, villainComboId, equity, situation]);
+    return { action: actionFromEquity(equity.hero), equity, heuristic_explanation: '' };
+  }, [heroComplete, villainComplete, equity]);
 
   const normalizedAction = useMemo(
     () => (result ? normalizeFrequency(result.action) : null),

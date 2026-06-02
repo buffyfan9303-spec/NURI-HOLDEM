@@ -1,21 +1,13 @@
 // src/components/features/gto/GtoDeepModal.tsx
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Modal from '../../atoms/Modal';
 import { useToast } from '../../atoms/Toast';
 import CardGridPicker, { SUIT_COLOR, SUIT_LABEL } from './CardGridPicker';
-import { useDeepGto, type CardTarget } from './useDeepGto';
+import { useDeepGto, type CardTarget, type DeepGtoInit } from './useDeepGto';
 import { canonicalizeHand } from './useGtoCalculator';
-import type { Card, ActionFrequency, Rank, Suit } from './gto.types';
-
-const BOARD_PRESETS: { label: string; cards: { rank: Rank; suit: Suit }[] }[] = [
-  { label: '드라이 (A72r)', cards: [{ rank: 'A', suit: 's' }, { rank: '7', suit: 'd' }, { rank: '2', suit: 'c' }] },
-  { label: '브로드웨이 (KQT)', cards: [{ rank: 'K', suit: 'h' }, { rank: 'Q', suit: 'h' }, { rank: 'T', suit: 's' }] },
-  { label: '모노톤 (J83s)', cards: [{ rank: 'J', suit: 's' }, { rank: '8', suit: 's' }, { rank: '3', suit: 's' }] },
-  { label: '페어보드 (994)', cards: [{ rank: '9', suit: 'h' }, { rank: '9', suit: 'd' }, { rank: '4', suit: 'c' }] },
-  { label: '턴 (A72-J)', cards: [{ rank: 'A', suit: 's' }, { rank: '7', suit: 'd' }, { rank: '2', suit: 'c' }, { rank: 'J', suit: 'h' }] },
-  { label: '리버 (A72J-Q)', cards: [{ rank: 'A', suit: 's' }, { rank: '7', suit: 'd' }, { rank: '2', suit: 'c' }, { rank: 'J', suit: 'h' }, { rank: 'Q', suit: 's' }] },
-];
-import type { GtoResult } from './gto.deep.types';
+import { computeEquity } from './equityEngine';
+import { encodeSpot } from './gtoShare';
+import type { Card, ActionFrequency } from './gto.types';
 
 function comboIdOf(cards: readonly (Card | null)[]): string | null {
   if (!cards[0] || !cards[1]) return null;
@@ -86,7 +78,7 @@ function Section({
 
 function MixBar({ action }: { action: Required<ActionFrequency> }) {
   const segs = [
-    { key: 'raise', label: '3-Bet', v: action.raise, color: '#EF4444' },
+    { key: 'raise', label: '레이즈', v: action.raise, color: '#EF4444' },
     { key: 'call', label: '콜', v: action.call, color: '#22C55E' },
     { key: 'fold', label: '폴드', v: action.fold, color: '#3B82F6' },
   ];
@@ -110,36 +102,99 @@ function MixBar({ action }: { action: Required<ActionFrequency> }) {
   );
 }
 
-function DeepBlockerSheet({ open, onClose, result }: { open: boolean; onClose: () => void; result: GtoResult | null }) {
-  if (!open || !result) return null;
+// 스트릿별 권장 액션 (에퀴티 기반 휴리스틱)
+interface StreetRec { label: string; color: string; note: string; }
+
+function preflopRec(eq: number): StreetRec {
+  const p = Math.round(eq * 100);
+  if (eq >= 0.60) return { label: '레이즈 (밸류)', color: '#EF4444', note: `에퀴티 ${p}% — 가치 레이즈로 밸류를 키웁니다.` };
+  if (eq >= 0.52) return { label: '레이즈/콜 혼합', color: '#F59E0B', note: `에퀴티 ${p}% — 레이즈와 콜을 섞어 균형을 잡습니다.` };
+  if (eq >= 0.44) return { label: '콜', color: '#22C55E', note: `에퀴티 ${p}% — 콜로 포트에 참여할 만합니다.` };
+  if (eq >= 0.36) return { label: '콜/폴드 경계', color: '#3B82F6', note: `에퀴티 ${p}% — 포지션·오즈가 좋을 때만 콜.` };
+  return { label: '폴드', color: '#3B82F6', note: `에퀴티 ${p}% — 폴드가 정석입니다.` };
+}
+function postRec(eq: number): StreetRec {
+  const p = Math.round(eq * 100);
+  if (eq >= 0.62) return { label: '벳/레이즈 (밸류)', color: '#EF4444', note: `에퀴티 ${p}% — 밸류 벳으로 강하게 압박합니다.` };
+  if (eq >= 0.50) return { label: '벳 또는 체크-콜', color: '#F59E0B', note: `에퀴티 ${p}% — 상황에 따라 벳/체크-콜.` };
+  if (eq >= 0.40) return { label: '체크-콜', color: '#22C55E', note: `에퀴티 ${p}% — 포트 컨트롤 위주로 콜.` };
+  if (eq >= 0.30) return { label: '체크 (회피)', color: '#3B82F6', note: `에퀴티 ${p}% — 큰 베팅엔 폴드를 고려.` };
+  return { label: '체크-폴드', color: '#3B82F6', note: `에퀴티 ${p}% — 공격받으면 포기합니다.` };
+}
+
+/** AI 액션 해설 — 비포/플랍/턴/리버 4개 스트릿 권장 액션 (블로커 설명 제거) */
+function DeepActionSheet({
+  open, onClose, hero, villain, board,
+}: {
+  open: boolean;
+  onClose: () => void;
+  hero: readonly (Card | null)[];
+  villain: readonly (Card | null)[];
+  board: readonly (Card | null)[];
+}) {
+  // 스트릿별 에퀴티 계산 (보드가 모자라면 null)
+  const rows = useMemo(() => {
+    if (!open) return null;
+    const h = hero.filter((c): c is Card => c !== null);
+    const v = villain.filter((c): c is Card => c !== null);
+    if (h.length < 2 || v.length < 2) return null;
+    const b = board.filter((c): c is Card => c !== null);
+    const eqAt = (n: number): number | null => {
+      if (n > 0 && b.length < n) return null;
+      return computeEquity([h[0], h[1]], [v[0], v[1]], b.slice(0, n), 3000).hero;
+    };
+    return [
+      { key: '비포 (프리플랍) 액션', eq: eqAt(0), rec: preflopRec },
+      { key: '플랍 액션',            eq: eqAt(3), rec: postRec },
+      { key: '턴 액션',             eq: eqAt(4), rec: postRec },
+      { key: '리버 액션',           eq: eqAt(5), rec: postRec },
+    ];
+  }, [open, hero, villain, board]);
+
+  if (!open) return null;
   return (
     <div className="fixed inset-0 z-[70] flex items-end justify-center" role="dialog" aria-modal="true" aria-label="AI 액션 해설">
       <button type="button" aria-label="닫기" onClick={onClose} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-      <div className="relative flex max-h-[70vh] w-full max-w-md flex-col rounded-t-dialog bg-surface-mid shadow-dialog animate-slide-up">
+      <div className="relative flex max-h-[75vh] w-full max-w-md flex-col rounded-t-dialog bg-surface-mid shadow-dialog animate-slide-up">
         <div className="flex justify-center pt-2 pb-1"><div className="h-1 w-10 rounded-full bg-border-strong" /></div>
         <header className="flex items-center justify-between border-b border-border-subtle px-4 py-2">
-          <h3 className="text-sm font-bold text-gold-300">AI 액션 해설 (블로커 영향)</h3>
+          <h3 className="text-sm font-bold text-gold-300">AI 액션 해설</h3>
           <button type="button" onClick={onClose} aria-label="닫기" className="flex h-8 w-8 items-center justify-center rounded-input text-ink-secondary hover:bg-surface-high hover:text-ink-primary">
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><line x1="2" y1="2" x2="12" y2="12" /><line x1="12" y1="2" x2="2" y2="12" /></svg>
           </button>
         </header>
-        <div className="flex-1 space-y-3 overflow-y-auto px-4 py-3 text-sm leading-relaxed text-ink-secondary">
-          {result.blockerExplanation && (
-            <div className="rounded-input border border-gold-400/30 bg-gold-300/[0.06] p-3">
-              <p className="mb-1 text-2xs font-bold text-gold-300">블로커 지각변동</p>
-              <p className="whitespace-pre-wrap">{result.blockerExplanation}</p>
-            </div>
+        <div className="flex-1 space-y-2 overflow-y-auto px-4 py-3">
+          {!rows ? (
+            <p className="py-6 text-center text-2xs text-ink-muted">Hero / Villain 카드를 모두 입력하세요.</p>
+          ) : (
+            rows.map(({ key, eq, rec }) => {
+              const r = eq === null ? null : rec(eq);
+              return (
+                <div key={key} className="rounded-input border border-border-default bg-surface-low p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-2xs font-bold text-ink-secondary">{key}</span>
+                    {r ? (
+                      <span className="text-sm font-extrabold" style={{ color: r.color }}>{r.label}</span>
+                    ) : (
+                      <span className="text-2xs text-ink-muted">보드 미입력</span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs leading-relaxed text-ink-secondary">
+                    {r ? r.note : '해당 스트릿 보드 카드를 입력하면 권장 액션이 표시됩니다.'}
+                  </p>
+                </div>
+              );
+            })
           )}
-          <p className="whitespace-pre-wrap">{result.heuristic_explanation}</p>
-          <p className="text-2xs text-ink-muted">학습용 참고 설명입니다. 실제 솔버 값과 차이가 있을 수 있습니다.</p>
+          <p className="pt-1 text-2xs text-ink-muted">학습용 참고 설명입니다. 실제 솔버 값과 차이가 있을 수 있습니다.</p>
         </div>
       </div>
     </div>
   );
 }
 
-export default function GtoDeepModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const deep = useDeepGto();
+export default function GtoDeepModal({ open, onClose, initialState }: { open: boolean; onClose: () => void; initialState?: DeepGtoInit }) {
+  const deep = useDeepGto(initialState);
   const toast = useToast();
   const [sheetOpen, setSheetOpen] = useState(false);
 
@@ -150,19 +205,21 @@ export default function GtoDeepModal({ open, onClose }: { open: boolean; onClose
   // 권장 액션(가장 빈도 높은 것)
   const na = deep.normalizedAction;
   const recommended = na
-    ? [{ label: '3-Bet', v: na.raise, color: '#EF4444' }, { label: '콜', v: na.call, color: '#22C55E' }, { label: '폴드', v: na.fold, color: '#3B82F6' }]
+    ? [{ label: '레이즈', v: na.raise, color: '#EF4444' }, { label: '콜', v: na.call, color: '#22C55E' }, { label: '폴드', v: na.fold, color: '#3B82F6' }]
         .reduce((a, b) => (b.v > a.v ? b : a))
     : null;
 
-  const copySummary = async () => {
-    const boardStr = deep.board.flatMap((c) => (c ? [`${c.rank}${c.suit.toUpperCase()}`] : [])).join(' ');
-    const eq = deep.equity ? ` | 에퀴티 Hero ${Math.round(deep.equity.hero * 100)}%` : '';
-    const rec = recommended ? ` | 권장 ${recommended.label} ${Math.round(recommended.v * 100)}%` : '';
-    const text = `[NHoldem GTO] ${heroId} vs ${villainId}${boardStr ? ` | 보드 ${boardStr}` : ''}${eq}${rec}`;
+  // 공유 — 현재 Hero/Villain/Board 를 링크로 만들어 복사/공유. 받은 사람이 열면 같은 스팟 재현.
+  const shareSpot = async () => {
+    const code = encodeSpot(deep.hero, deep.villain, deep.board);
+    const url = `${window.location.origin}${window.location.pathname}#gto=${code}`;
     try {
-      if (navigator.share) { await navigator.share({ title: 'NHoldem GTO', text }); return; }
-      await navigator.clipboard.writeText(text);
-      toast.show('결과를 복사했습니다', 'success');
+      if (navigator.share) {
+        await navigator.share({ title: 'NURI HOLDEM GTO', text: '내 핸드 분석을 확인해보세요', url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      toast.show('공유 링크를 복사했습니다', 'success');
     } catch { /* 사용자 취소 등은 무시 */ }
   };
 
@@ -175,31 +232,6 @@ export default function GtoDeepModal({ open, onClose }: { open: boolean; onClose
   return (
     <Modal open={open} onClose={onClose} title="GTO 검색" variant="sheet" maxWidth="md" fillHeight>
       <div className="space-y-4 px-4 py-3">
-        {/* 스팟(상황) 선택 */}
-        <div className="space-y-1.5">
-          <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 scrollbar-none">
-            {deep.situations.map((s) => {
-              const active = deep.situation.id === s.id;
-              return (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => deep.selectSituation(s.id)}
-                  className={[
-                    'h-8 shrink-0 rounded-input px-3 text-2xs font-semibold transition-colors',
-                    active ? 'bg-gold-300 text-ink-inverse' : 'border border-border-default bg-surface-high text-ink-secondary',
-                  ].join(' ')}
-                >
-                  {s.label}
-                </button>
-              );
-            })}
-          </div>
-          {deep.situation.description && (
-            <p className="text-center text-2xs text-ink-muted">{deep.situation.description}</p>
-          )}
-        </div>
-
         {/* Hero vs Villain 슬롯 */}
         <div className="flex items-end justify-center gap-3">
           <Section title="Hero" target="hero" cards={deep.hero} current={deep.currentTarget} onSelectTarget={deep.setTarget} onRemove={deep.removeAt} />
@@ -212,28 +244,15 @@ export default function GtoDeepModal({ open, onClose }: { open: boolean; onClose
           <Section title="Board (선택)" target="board" cards={deep.board} current={deep.currentTarget} onSelectTarget={deep.setTarget} onRemove={deep.removeAt} />
         </div>
 
-        {/* 플랍 빠른 입력(보드 텍스처 프리셋) */}
-        <div className="space-y-1.5">
-          <p className="text-2xs font-semibold uppercase tracking-wider text-ink-muted">플랍 예시 (빠른 입력)</p>
-          <div className="flex flex-wrap gap-1.5">
-            {BOARD_PRESETS.map((p) => (
-              <button
-                key={p.label}
-                type="button"
-                onClick={() => deep.applyBoardPreset(p.cards)}
-                className="rounded-input border border-border-default bg-surface-high px-2.5 py-1 text-2xs font-semibold text-ink-secondary transition-colors hover:text-ink-primary active:bg-surface-float"
-              >
-                {p.label}
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => deep.applyBoardPreset([])}
-              className="rounded-input border border-border-default bg-surface-high px-2.5 py-1 text-2xs text-ink-muted transition-colors hover:text-danger-light"
-            >
-              보드 비우기
-            </button>
-          </div>
+        {/* 보드 초기화 */}
+        <div className="flex justify-center">
+          <button
+            type="button"
+            onClick={() => deep.applyBoardPreset([])}
+            className="rounded-input border border-border-default bg-surface-high px-3 py-1.5 text-2xs font-semibold text-ink-muted transition-colors hover:text-danger-light"
+          >
+            보드 초기화
+          </button>
         </div>
 
         {/* 결과 */}
@@ -272,13 +291,6 @@ export default function GtoDeepModal({ open, onClose }: { open: boolean; onClose
               <MixBar action={deep.normalizedAction} />
             </div>
 
-            {deep.result.baseline && (
-              <p className="text-2xs text-ink-muted">
-                기준(레인지) 대비 3-Bet {Math.round(deep.result.baseline.raise * 100)}% to {Math.round(deep.normalizedAction.raise * 100)}%,
-                {' '}폴드 {Math.round(deep.result.baseline.fold * 100)}% to {Math.round(deep.normalizedAction.fold * 100)}%
-              </p>
-            )}
-
             {recommended && (
               <div
                 className="flex items-center justify-center gap-2 rounded-input border py-2"
@@ -296,7 +308,7 @@ export default function GtoDeepModal({ open, onClose }: { open: boolean; onClose
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4z" /></svg>
                 AI 해설
               </button>
-              <button type="button" onClick={copySummary} aria-label="결과 공유/복사" className="btn-ghost inline-flex items-center justify-center gap-1.5 px-4 py-2.5">
+              <button type="button" onClick={shareSpot} aria-label="공유 링크 생성" className="btn-ghost inline-flex items-center justify-center gap-1.5 px-4 py-2.5">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                   <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
                   <line x1="8.6" y1="13.5" x2="15.4" y2="17.5" /><line x1="15.4" y1="6.5" x2="8.6" y2="10.5" />
@@ -307,7 +319,7 @@ export default function GtoDeepModal({ open, onClose }: { open: boolean; onClose
           </div>
         ) : (
           <p className="py-6 text-center text-2xs text-ink-muted">
-            아래 그리드에서 빌런 카드 2장을 입력하면 블로커 효과가 반영된 결과가 표시됩니다.
+            아래 그리드에서 Hero 2장과 Villain 2장을 입력하면 실시간 에퀴티와 GTO 액션이 표시됩니다. (보드는 선택)
           </p>
         )}
       </div>
@@ -335,7 +347,13 @@ export default function GtoDeepModal({ open, onClose }: { open: boolean; onClose
         <CardGridPicker usedIds={deep.usedIds} onPick={deep.placeCard} />
       </div>
 
-      <DeepBlockerSheet open={sheetOpen} onClose={() => setSheetOpen(false)} result={deep.result} />
+      <DeepActionSheet
+        open={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        hero={deep.hero}
+        villain={deep.villain}
+        board={deep.board}
+      />
     </Modal>
   );
 }

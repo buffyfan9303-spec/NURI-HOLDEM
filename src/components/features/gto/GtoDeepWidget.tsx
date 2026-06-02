@@ -32,7 +32,7 @@ export default function GtoDeepWidget() {
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-bold text-ink-primary">GTO 검색</span>
-          <span className="block text-2xs text-ink-muted">Hero / Villain / Board 카드를 직접 지정해 GTO 액션과 블로커 효과 분석</span>
+          <span className="block text-2xs text-ink-muted">Hero / Villain / Board 카드를 직접 지정해 실시간 에퀴티와 GTO 액션 분석</span>
         </span>
         <span className="shrink-0 text-2xs font-bold text-gold-300">{user ? '열기' : '로그인 필요'}</span>
       </button>
