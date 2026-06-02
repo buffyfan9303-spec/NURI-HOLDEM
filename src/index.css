@@ -103,7 +103,7 @@
     @apply inline-flex items-center justify-center gap-2 whitespace-nowrap
            font-semibold text-sm leading-none
            rounded-input px-4 py-2.5
-           transition-all duration-150
+           transition-all duration-150 active:scale-[0.97]
            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-300;
   }
 
@@ -114,6 +114,7 @@
   .btn-ghost {
     @apply btn bg-transparent text-ink-secondary
            hover:bg-surface-high hover:text-ink-primary
+           active:bg-surface-high
            border border-border-default;
   }
 

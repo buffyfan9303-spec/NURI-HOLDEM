@@ -174,7 +174,7 @@ export default function NotificationPanel({
                 className={[
                   'flex items-start gap-3 px-4 py-3',
                   'border-b border-border-subtle last:border-b-0',
-                  'hover:bg-surface-high cursor-pointer transition-colors',
+                  'hover:bg-surface-high active:bg-surface-high cursor-pointer transition-colors',
                   !n.read && 'bg-gold-300/[0.04]',
                 ].filter(Boolean).join(' ')}
               >

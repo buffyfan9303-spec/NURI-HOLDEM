@@ -2,6 +2,8 @@
 export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   darkMode: 'class',
+  // hover: 는 마우스 지원 기기(PC)에서만 적용 → 모바일에서 탭 후 hover 배경이 박히는 현상 제거
+  future: { hoverOnlyWhenSupported: true },
   theme: {
     extend: {
       // ── Brand Palette ─────────────────────────────────────────────────────

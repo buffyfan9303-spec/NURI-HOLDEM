@@ -250,7 +250,7 @@ function PostCard({ post, onLike, onClick }: { post: CommunityPost; onLike: () =
   return (
     <li
       onClick={onClick}
-      className="py-1.5 px-3 hover:bg-surface-high/50 transition-colors cursor-pointer border-b border-border-subtle last:border-b-0"
+      className="py-1.5 px-3 hover:bg-surface-high/50 active:bg-surface-high transition-colors cursor-pointer border-b border-border-subtle last:border-b-0"
     >
       <div className="flex items-start gap-2">
         <div
@@ -352,7 +352,7 @@ function VenuesSection({
                 type="button"
                 onClick={() => onSelectVenue(venue.id)}
                 className={[
-                  'w-full text-left flex gap-3 p-3 rounded-card border transition-all duration-150 cursor-pointer',
+                  'w-full text-left flex gap-3 p-3 rounded-card border transition-all duration-150 cursor-pointer active:bg-surface-high',
                   venue.isPaidAd
                     ? 'bg-surface-low border-gold-400/50 shadow-gold hover:border-gold-400'
                     : 'bg-surface-low border-border-default hover:border-border-strong hover:bg-surface-high',

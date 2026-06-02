@@ -319,7 +319,7 @@ function ListingRow({
           'grid grid-cols-[1fr_auto] sm:grid-cols-[3rem_1fr_5rem_6rem_5rem_5rem]',
           'gap-2 px-3 py-2.5 items-center',
           'border-b border-border-subtle last:border-b-0',
-          'hover:bg-surface-high transition-colors cursor-pointer',
+          'hover:bg-surface-high active:bg-surface-high transition-colors cursor-pointer',
           isSold && 'opacity-50',
         ].filter(Boolean).join(' ')}
       >
@@ -405,7 +405,7 @@ function ListingCard({ listing, onClick }: { listing: MarketplaceListing; onClic
     <button
       type="button"
       onClick={onClick}
-      className="group text-left rounded-card border border-border-default bg-surface-low overflow-hidden hover:border-border-strong transition-colors focus:outline-none"
+      className="group text-left rounded-card border border-border-default bg-surface-low overflow-hidden hover:border-border-strong active:scale-[0.98] transition-all duration-150 focus:outline-none"
     >
       {/* 썸네일 (정사각, 비율 고정) + 상태 뱃지 플로팅 */}
       <div className="relative aspect-square bg-surface-mid overflow-hidden">

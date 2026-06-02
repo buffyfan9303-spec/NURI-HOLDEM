@@ -270,7 +270,7 @@ function TabBar({
             aria-selected={isActive}
             onClick={() => onChange(id)}
             className={[
-              'shrink-0 px-5 py-3 text-sm font-medium whitespace-nowrap transition-colors duration-200 focus:outline-none',
+              'shrink-0 px-5 py-3 text-sm font-medium whitespace-nowrap transition-colors duration-200 focus:outline-none active:bg-surface-high/40 rounded-t-input',
               isActive ? 'text-gold-300 text-gold-glow' : 'text-ink-muted hover:text-ink-secondary',
             ].join(' ')}
           >
