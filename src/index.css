@@ -17,8 +17,8 @@
     --surface-high:  34 38 47;
     --surface-float: 44 49 64;
 
-    --ink-primary:   240 242 245;
-    --ink-secondary: 154 163 178;
+    --ink-primary:   240 244 255; /* #F0F4FF — 순수 흰색의 쨍함 완화 + 미세한 쿨톤 */
+    --ink-secondary: 139 149 168; /* #8B95A8 — 보조 텍스트 명도 하향 */
     --ink-muted:     90 97 117;
     --ink-inverse:   10 12 15;
 
@@ -135,6 +135,11 @@
   .badge {
     @apply inline-flex items-center justify-center
            rounded-badge text-2xs font-bold leading-none;
+  }
+
+  /* 골드 포인트 텍스트 글로우 — 다크 배경에서 묻히지 않고 고급스럽게 (은은하게) */
+  .text-gold-glow {
+    text-shadow: 0 0 10px rgba(255, 209, 0, 0.22);
   }
 
   /* ── 스켈레톤 로더 ──────────────────────────────────── */

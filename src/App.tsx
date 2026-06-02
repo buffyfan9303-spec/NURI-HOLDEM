@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect } from 'react';
 import { useToast } from './components/atoms/Toast';
 import UnreadBadge from './components/atoms/UnreadBadge';
 import ViewModeToggle from './components/atoms/ViewModeToggle';
@@ -233,9 +233,33 @@ function AppHeader({
 function TabBar({
   tabs, active, onChange,
 }: { tabs: TabDef[]; active: TabId; onChange: (t: TabId) => void }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const labelRefs    = useRef<Record<string, HTMLSpanElement | null>>({});
+  const [indicator, setIndicator] = useState<{ left: number; width: number }>({ left: 0, width: 0 });
+
+  // 활성 탭 '라벨'의 위치/너비를 측정 → 단일 밑줄 바를 그 위치로 슬라이드.
+  // (탭 선택 상태/onChange 로직은 일절 변경하지 않고 시각 인디케이터 레이어만 추가)
+  const measure = useCallback(() => {
+    const container = containerRef.current;
+    const labelEl   = labelRefs.current[active];
+    if (!container || !labelEl) return;
+    const c = container.getBoundingClientRect();
+    const l = labelEl.getBoundingClientRect();
+    setIndicator({ left: l.left - c.left + container.scrollLeft, width: l.width });
+  }, [active]);
+
+  useLayoutEffect(() => { measure(); }, [measure, tabs]);
+  useEffect(() => {
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [measure]);
+
   return (
-    <div className="flex border-b border-border-subtle overflow-x-auto scrollbar-none px-page-x
-                    [&>button:first-child]:pl-0 [&>button:last-child]:pr-0">
+    <div
+      ref={containerRef}
+      className="relative flex border-b border-border-subtle overflow-x-auto scrollbar-none px-page-x
+                 [&>button:first-child]:pl-0 [&>button:last-child]:pr-0"
+    >
       {tabs.map(({ id, label }) => {
         const isActive = active === id;
         return (
@@ -246,24 +270,28 @@ function TabBar({
             aria-selected={isActive}
             onClick={() => onChange(id)}
             className={[
-              'shrink-0 px-5 py-3 text-sm font-medium whitespace-nowrap transition-colors duration-150 focus:outline-none',
-              isActive ? 'text-gold-300' : 'text-ink-muted hover:text-ink-secondary',
+              'shrink-0 px-5 py-3 text-sm font-medium whitespace-nowrap transition-colors duration-200 focus:outline-none',
+              isActive ? 'text-gold-300 text-gold-glow' : 'text-ink-muted hover:text-ink-secondary',
             ].join(' ')}
           >
-            {/* 라벨 + 글자 폭에 맞춘 밑줄(정중앙 정렬) */}
-            <span className="relative inline-flex items-center justify-center">
+            <span
+              ref={(el) => { labelRefs.current[id] = el; }}
+              className="relative inline-flex items-center justify-center"
+            >
               {label}
-              <span
-                aria-hidden
-                className={[
-                  'pointer-events-none absolute -bottom-3 inset-x-0 h-0.5 rounded-full transition-colors',
-                  isActive ? 'bg-gold-300' : 'bg-transparent',
-                ].join(' ')}
-              />
             </span>
           </button>
         );
       })}
+
+      {/* 단일 슬라이딩 밑줄 인디케이터 — 활성 탭 라벨 폭/위치로 부드럽게 이동(중앙 정렬) */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute bottom-0 h-0.5 rounded-full bg-gold-300
+                   shadow-[0_0_8px_rgba(255,209,0,0.5)]
+                   transition-[left,width] duration-300 ease-out"
+        style={{ left: indicator.left, width: indicator.width }}
+      />
     </div>
   );
 }
