@@ -1,5 +1,5 @@
 // src/components/features/gto/useDeepGto.ts
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DEEP_SITUATION_9TS_VS_UTG } from './gto.deep.data';
 import { canonicalizeHand, normalizeFrequency } from './useGtoCalculator';
 import { computeEquity } from './equityEngine';
@@ -43,6 +43,8 @@ export interface UseDeepGto {
   normalizedAction: Required<ActionFrequency> | null;
   /** 몬테카를로 실시간 에퀴티 (Hero/Villain 완성 시, 보드 반영) */
   equity: Equity | null;
+  /** 에퀴티 계산 중 여부 */
+  calculating: boolean;
 }
 
 export function useDeepGto(): UseDeepGto {
@@ -108,14 +110,25 @@ export function useDeepGto(): UseDeepGto {
     return canonicalizeHand([villain[0].rank, villain[1].rank], suited)?.id ?? null;
   }, [villain]);
 
-  // 실시간 에퀴티: Hero/Villain 2장 완성 시 보드를 반영해 몬테카를로 계산
-  const equity = useMemo<Equity | null>(() => {
-    if (!heroComplete || !villainComplete) return null;
+  // 실시간 에퀴티: 입력 완성 시 다음 틱에 몬테카를로 계산(탭 반응성 유지) + 계산 중 표시
+  const [equity, setEquity] = useState<Equity | null>(null);
+  const [calculating, setCalculating] = useState(false);
+  useEffect(() => {
+    if (!heroComplete || !villainComplete) {
+      setEquity(null);
+      setCalculating(false);
+      return;
+    }
+    setCalculating(true);
     const h = hero as Card[];
     const v = villain as Card[];
     const b = board.filter((c): c is Card => c !== null);
-    const r = computeEquity([h[0], h[1]], [v[0], v[1]], b, 2500);
-    return { hero: r.hero, villain: r.villain };
+    const id = setTimeout(() => {
+      const r = computeEquity([h[0], h[1]], [v[0], v[1]], b, 2500);
+      setEquity({ hero: r.hero, villain: r.villain });
+      setCalculating(false);
+    }, 0);
+    return () => clearTimeout(id);
   }, [hero, villain, board, heroComplete, villainComplete]);
 
   const result = useMemo<GtoResult | null>(() => {
@@ -165,6 +178,7 @@ export function useDeepGto(): UseDeepGto {
     result,
     normalizedAction,
     equity,
+    calculating,
   };
 }
 

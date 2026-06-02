@@ -161,27 +161,34 @@ export default function GtoDeepModal({ open, onClose }: { open: boolean; onClose
 
         {/* 결과 */}
         {showResult && deep.result && deep.normalizedAction ? (
-          <div className="space-y-3 rounded-card border border-border-default bg-surface-low p-3">
+          <div className="animate-fade-in space-y-3 rounded-card border border-border-default bg-surface-low p-3">
             <p className="text-center text-sm">
               <b className="text-gold-300">{heroId}</b>
               <span className="mx-2 text-ink-muted">vs</span>
               <b className="text-ink-primary">{villainId}</b>
             </p>
 
-            {deep.equity && (
-              <div>
-                <p className="mb-1 text-2xs font-semibold text-ink-secondary">
-                  에퀴티 (Hero vs Villain){deep.board.some((c) => c !== null) ? ' · 보드 반영' : ' · 프리플랍'} · 실시간 계산
-                </p>
-                <div className="flex h-5 overflow-hidden rounded-input bg-surface-float">
-                  <div style={{ width: `${deep.equity.hero * 100}%` }} className="bg-gold-300 transition-[width] duration-500" />
+            <div>
+              <p className="mb-1 text-2xs font-semibold text-ink-secondary">
+                에퀴티 (Hero vs Villain){deep.board.some((c) => c !== null) ? ' · 보드 반영' : ' · 프리플랍'} · 실시간 계산
+              </p>
+              {deep.calculating || !deep.equity ? (
+                <div className="flex h-5 items-center gap-2 text-2xs text-ink-muted">
+                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-gold-300 border-t-transparent" />
+                  에퀴티 계산 중...
                 </div>
-                <div className="mt-1 flex justify-between text-2xs">
-                  <span className="font-bold text-gold-300">Hero {Math.round(deep.equity.hero * 100)}%</span>
-                  <span className="text-ink-secondary">Villain {Math.round(deep.equity.villain * 100)}%</span>
-                </div>
-              </div>
-            )}
+              ) : (
+                <>
+                  <div className="flex h-5 overflow-hidden rounded-input bg-surface-float">
+                    <div style={{ width: `${deep.equity.hero * 100}%` }} className="bg-gold-300 transition-[width] duration-500" />
+                  </div>
+                  <div className="mt-1 flex justify-between text-2xs">
+                    <span className="font-bold text-gold-300">Hero {Math.round(deep.equity.hero * 100)}%</span>
+                    <span className="text-ink-secondary">Villain {Math.round(deep.equity.villain * 100)}%</span>
+                  </div>
+                </>
+              )}
+            </div>
 
             <div>
               <p className="mb-1 text-2xs font-semibold text-ink-secondary">GTO 액션 믹스</p>
