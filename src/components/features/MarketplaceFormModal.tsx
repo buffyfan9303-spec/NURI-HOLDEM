@@ -152,7 +152,7 @@ export default function MarketplaceFormModal({ open, onClose, onSubmit }: Market
               <button
                 key={o.id} type="button" onClick={() => setCategory(o.id)}
                 className={[
-                  'py-2 text-xs font-semibold rounded-input border transition-colors focus:outline-none',
+                  'min-h-[44px] px-1 inline-flex items-center justify-center text-xs font-semibold rounded-input border transition-colors focus:outline-none',
                   category === o.id
                     ? 'bg-gold-300/20 border-gold-300 text-gold-300'
                     : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary',
@@ -198,7 +198,7 @@ export default function MarketplaceFormModal({ open, onClose, onSubmit }: Market
         <div>
           <label className="block text-xs font-medium text-ink-secondary mb-1.5">지역 / 거래방법</label>
           <div className="flex gap-2">
-            <select value={region} onChange={(e) => setRegion(e.target.value)} className="input flex-1">
+            <select value={region} onChange={(e) => setRegion(e.target.value)} className="input flex-1 min-h-[44px]">
               {REGION_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
             <button type="button" onClick={() => setShipping((v) => !v)}
@@ -237,7 +237,7 @@ export default function MarketplaceFormModal({ open, onClose, onSubmit }: Market
           </div>
           <input ref={fileRef} type="file" accept="image/*" multiple onChange={handlePickFiles} className="hidden" />
           {previews.length > 0 ? (
-            <div className="grid grid-cols-5 gap-1.5">
+            <div className="grid grid-cols-4 gap-1.5">
               {previews.map((src, i) => (
                 <div key={src} className="relative aspect-square rounded-input overflow-hidden border border-border-default">
                   <img src={src} alt={`사진 ${i + 1}`} className="w-full h-full object-cover" />

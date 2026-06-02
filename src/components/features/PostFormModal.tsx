@@ -137,7 +137,7 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
                 type="button"
                 onClick={() => setCategory(o.id)}
                 className={[
-                  'py-2 text-2xs font-semibold rounded-input border transition-colors focus:outline-none',
+                  'min-h-[44px] px-1 inline-flex items-center justify-center text-xs font-semibold rounded-input border transition-colors focus:outline-none',
                   category === o.id
                     ? 'bg-gold-300/20 border-gold-300 text-gold-300'
                     : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary',

@@ -250,7 +250,7 @@ function PostCard({ post, onLike, onClick }: { post: CommunityPost; onLike: () =
   return (
     <li
       onClick={onClick}
-      className="py-2 px-3 hover:bg-surface-high/50 transition-colors cursor-pointer border-b border-border-subtle last:border-b-0"
+      className="py-1.5 px-3 hover:bg-surface-high/50 transition-colors cursor-pointer border-b border-border-subtle last:border-b-0"
     >
       <div className="flex items-start gap-2">
         <div
@@ -501,9 +501,9 @@ function LiveWallSection() {
       ) : messages.length === 0 ? (
         <p className="text-center py-12 text-xs text-ink-muted">첫 한 줄을 남겨보세요</p>
       ) : (
-        <ul className="space-y-1.5">
+        <ul className="space-y-1">
           {messages.map((m) => (
-            <li key={m.id} className="flex items-start gap-2 px-3 py-2 rounded-input bg-surface-low border border-border-subtle">
+            <li key={m.id} className="flex items-start gap-2 px-2.5 py-1.5 rounded-input bg-surface-low border border-border-subtle">
               <div
                 className="w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-2xs font-bold text-white mt-0.5"
                 style={{ background: m.userColor ?? '#5A6175' }}
