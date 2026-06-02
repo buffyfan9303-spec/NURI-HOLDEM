@@ -143,7 +143,7 @@ export default function GtoDeepModal({ open, onClose }: { open: boolean; onClose
   ];
 
   return (
-    <Modal open={open} onClose={onClose} title="GTO 심화 블로커 검색기" variant="sheet" maxWidth="md" fillHeight>
+    <Modal open={open} onClose={onClose} title="GTO 검색" variant="sheet" maxWidth="md" fillHeight>
       <div className="space-y-4 px-4 py-3">
         <p className="text-center text-2xs text-ink-muted">{deep.situation.description}</p>
 

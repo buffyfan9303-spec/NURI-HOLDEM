@@ -3,7 +3,6 @@ import type { Venue, Comment, CommunityPost, LiveMessage, PostCategory } from '.
 import { getLiveMessages, addLiveMessage, subscribeLiveWall } from '../../api/community';
 import type { MarketplaceNotice } from '../../api/marketplace';
 import { useAuth } from '../../contexts/AuthContext';
-import GtoStudyWidget from './gto/GtoStudyWidget';
 import GtoDeepWidget from './gto/GtoDeepWidget';
 import { useToast } from '../atoms/Toast';
 import { filterContent } from '../../lib/content-filter';
@@ -99,7 +98,6 @@ export default function CommunityTab({
 
       {section === 'study' && (
         <div className="space-y-3">
-          <GtoStudyWidget />
           <GtoDeepWidget />
           <FeedSection
             posts={studyPosts}
