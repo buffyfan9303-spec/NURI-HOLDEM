@@ -143,7 +143,7 @@ export async function signUpOwner(payload: SignupOwnerPayload): Promise<void> {
 
 // ── 매장 구성원(직원) — 업주 초대 + 수락 모델 ────────────────────────────────
 export interface StaffInvite { id: string; venueId: string; venueName: string; createdAt: string; }
-export interface VenueInvite { id: string; userId: string; nickname?: string; name: string; createdAt: string; }
+export interface VenueInvite { id: string; userId: string; email: string; nickname?: string; name: string; createdAt: string; }
 
 // 업주: 내 매장 구성원(수락 완료) 목록
 export async function getMyVenueStaff(): Promise<User[]> {
@@ -152,10 +152,10 @@ export async function getMyVenueStaff(): Promise<User[]> {
   if (error) throw error;
   return (data ?? []).map(rowToUser);
 }
-// 업주: 닉네임으로 구성원 초대
-export async function inviteStaffByNickname(nickname: string): Promise<void> {
+// 업주: 이메일로 구성원 초대
+export async function inviteStaffByEmail(email: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.rpc('invite_staff_by_nickname', { p_nickname: nickname.trim() });
+  const { error } = await supabase.rpc('invite_staff_by_email', { p_email: email.trim() });
   if (error) throw error;
 }
 // 업주: 우리 매장 대기중 초대 목록
@@ -164,7 +164,7 @@ export async function getMyVenueInvites(): Promise<VenueInvite[]> {
   const { data, error } = await supabase.rpc('get_my_venue_invites');
   if (error) throw error;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((r: any) => ({ id: r.id, userId: r.user_id, nickname: r.nickname ?? undefined, name: r.name, createdAt: r.created_at }));
+  return (data ?? []).map((r: any) => ({ id: r.id, userId: r.user_id, email: r.email, nickname: r.nickname ?? undefined, name: r.name, createdAt: r.created_at }));
 }
 // 업주: 대기중 초대 취소 / 구성원 제거
 export async function cancelStaffInvite(inviteId: string): Promise<void> {

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
 import type { User, VenueInvite } from '../../api/auth';
-import { getMyVenueStaff, getMyVenueInvites, inviteStaffByNickname, cancelStaffInvite, removeStaff } from '../../api/auth';
+import { getMyVenueStaff, getMyVenueInvites, inviteStaffByEmail, cancelStaffInvite, removeStaff } from '../../api/auth';
 import { getVenueRankings, saveVenueRankings, maskRealName } from '../../api/rankings';
 
 /** 업주/직원 전용 "매장 관리" 탭 — 순위 입력 + (업주) 직원 관리 */
@@ -181,7 +181,7 @@ function StaffManager() {
   const [staff, setStaff] = useState<User[]>([]);
   const [invites, setInvites] = useState<VenueInvite[]>([]);
   const [loading, setLoading] = useState(true);
-  const [nickname, setNickname] = useState('');
+  const [email, setEmail] = useState('');
   const [inviting, setInviting] = useState(false);
   const [tick, setTick] = useState(0);
 
@@ -196,13 +196,13 @@ function StaffManager() {
 
   const invite = async (e: React.FormEvent) => {
     e.preventDefault();
-    const nick = nickname.trim();
-    if (!nick) return;
+    const addr = email.trim();
+    if (!addr) return;
     setInviting(true);
     try {
-      await inviteStaffByNickname(nick);
+      await inviteStaffByEmail(addr);
       toast.show('초대를 보냈습니다', 'success');
-      setNickname('');
+      setEmail('');
       reload();
     } catch (err) {
       toast.show(err instanceof Error ? err.message : '초대에 실패했습니다', 'error');
@@ -228,14 +228,16 @@ function StaffManager() {
         <label className="block text-xs font-semibold text-ink-secondary">구성원 초대</label>
         <div className="flex gap-2">
           <input
-            value={nickname}
-            onChange={(e) => setNickname(e.target.value)}
-            placeholder="초대할 회원 닉네임"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="초대할 회원 이메일"
+            autoComplete="off"
             className="input flex-1 text-sm"
           />
-          <button type="submit" disabled={inviting || !nickname.trim()} className="btn-primary px-4 shrink-0 disabled:opacity-60">초대</button>
+          <button type="submit" disabled={inviting || !email.trim()} className="btn-primary px-4 shrink-0 disabled:opacity-60">초대</button>
         </div>
-        <p className="text-2xs text-ink-muted">초대 대상은 먼저 일반 회원으로 가입돼 있어야 합니다. 상대가 알림에서 수락하면 구성원이 됩니다.</p>
+        <p className="text-2xs text-ink-muted">초대 대상은 먼저 일반 회원으로 가입돼 있어야 합니다. 가입한 이메일로 초대하면, 상대가 알림에서 수락 시 구성원이 됩니다.</p>
       </form>
 
       {loading ? (
@@ -249,8 +251,10 @@ function StaffManager() {
               <ul className="space-y-1.5">
                 {invites.map((iv) => (
                   <li key={iv.id} className="flex items-center gap-2 p-2.5 rounded-input bg-surface-low border border-amber-500/30">
-                    <span className="flex-1 min-w-0 text-sm text-ink-primary truncate">
-                      {iv.nickname || iv.name} <span className="text-2xs text-amber-400">· 수락 대기</span>
+                    <span className="flex-1 min-w-0 truncate">
+                      <span className="text-sm text-ink-primary">{iv.name}</span>
+                      <span className="text-2xs text-ink-muted"> · {iv.email}</span>
+                      <span className="text-2xs text-amber-400"> · 수락 대기</span>
                     </span>
                     <button type="button" onClick={() => cancel(iv.id)} className="text-2xs px-2 py-1 rounded-input text-ink-muted hover:text-danger-light transition-colors">취소</button>
                   </li>
