@@ -1,10 +1,22 @@
 import { useState, useMemo } from 'react';
 import { useToast } from '../atoms/Toast';
 import type { User, UserStatus } from '../../api/auth';
+import type { PostCategory } from '../../api/community';
+
+// 게시글 관리(모더레이션)용 경량 포스트 타입 — 게시판(카테고리)별 분류 포함
+interface ModPost {
+  id: string; userName: string; content: string; createdAt: string;
+  category?: PostCategory;
+}
+
+// 게시판(카테고리) 한글 라벨
+const POST_CAT_LABEL: Record<PostCategory, string> = {
+  free: '자유', question: '질문', info: '정보', review: '후기', study: '공부',
+};
 
 interface UserManagementTabProps {
   users: User[];
-  posts: { id: string; userName: string; content: string; createdAt: string }[];
+  posts: ModPost[];
   onUpdateUser: (id: string, patch: Partial<User>) => void;
   onDeletePost: (id: string) => void;
 }
@@ -230,7 +242,7 @@ function UserRow({ user, onUpdate }: { user: User; onUpdate: (id: string, patch:
             // ── 사유 입력 단계 ──
             <div className="space-y-2">
               <p className="text-2xs font-semibold text-danger-light">
-                ⚠ {user.nickname ?? user.name} — {sanctionTitle} 사유 입력
+                {user.nickname ?? user.name} — {sanctionTitle} 사유 입력
               </p>
               <textarea
                 value={reason}
@@ -297,36 +309,66 @@ function ActionBtn({
 
 function PostModeration({
   posts, onDelete,
-}: { posts: { id: string; userName: string; content: string; createdAt: string }[]; onDelete: (id: string) => void }) {
+}: { posts: ModPost[]; onDelete: (id: string) => void }) {
   const toast = useToast();
-  return posts.length === 0 ? (
-    <p className="py-8 text-center text-xs text-ink-muted">관리할 게시글이 없습니다</p>
-  ) : (
-    <ul className="space-y-1.5">
-      {posts.map((p) => (
-        <li key={p.id} className="p-2.5 rounded-card border border-border-default bg-surface-low">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-xs font-semibold text-ink-primary truncate">{p.userName}</span>
-            <span className="text-2xs text-ink-muted shrink-0">{relativeTime(p.createdAt)}</span>
-          </div>
-          <p className="text-xs text-ink-secondary line-clamp-2 mt-1">{p.content}</p>
-          <div className="mt-2 flex justify-end">
-            <button
-              type="button"
-              onClick={() => {
-                if (confirm('이 게시글을 삭제하시겠습니까?')) {
-                  onDelete(p.id);
-                  toast.show('게시글이 삭제되었습니다', 'success');
-                }
-              }}
-              className="text-2xs font-semibold px-2.5 py-1 rounded-badge border bg-danger/15 text-danger-light hover:bg-danger/25 border-danger/30 transition-colors"
-            >
-              삭제
-            </button>
-          </div>
-        </li>
-      ))}
-    </ul>
+  // 게시판(카테고리)별 필터 — 게시판별로 골라 삭제 가능
+  const [cat, setCat] = useState<'all' | PostCategory>('all');
+  const cats: ('all' | PostCategory)[] = ['all', 'free', 'question', 'info', 'review', 'study'];
+  const countOf = (c: 'all' | PostCategory) =>
+    c === 'all' ? posts.length : posts.filter((p) => (p.category ?? 'free') === c).length;
+  const filtered = cat === 'all' ? posts : posts.filter((p) => (p.category ?? 'free') === cat);
+
+  const handleDelete = (id: string) => {
+    if (confirm('이 게시글을 삭제하시겠습니까?')) {
+      onDelete(id);
+      toast.show('게시글이 삭제되었습니다', 'success');
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      {/* 게시판(카테고리)별 필터 */}
+      <div className="grid grid-cols-6 gap-1 text-2xs">
+        {cats.map((c) => (
+          <FilterPill
+            key={c}
+            active={cat === c}
+            onClick={() => setCat(c)}
+            label={`${c === 'all' ? '전체' : POST_CAT_LABEL[c]} ${countOf(c)}`}
+          />
+        ))}
+      </div>
+
+      {filtered.length === 0 ? (
+        <p className="py-8 text-center text-xs text-ink-muted">관리할 게시글이 없습니다</p>
+      ) : (
+        <ul className="space-y-1.5">
+          {filtered.map((p) => (
+            <li key={p.id} className="p-2.5 rounded-card border border-border-default bg-surface-low">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="text-2xs px-1.5 py-0.5 rounded-badge bg-surface-high border border-border-default text-ink-secondary shrink-0">
+                    {POST_CAT_LABEL[p.category ?? 'free']}
+                  </span>
+                  <span className="text-xs font-semibold text-ink-primary truncate">{p.userName}</span>
+                </div>
+                <span className="text-2xs text-ink-muted shrink-0">{relativeTime(p.createdAt)}</span>
+              </div>
+              <p className="text-xs text-ink-secondary line-clamp-2 mt-1">{p.content}</p>
+              <div className="mt-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => handleDelete(p.id)}
+                  className="text-2xs font-semibold px-2.5 py-1 rounded-badge border bg-danger/15 text-danger-light hover:bg-danger/25 border-danger/30 transition-colors"
+                >
+                  삭제
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 

@@ -276,7 +276,7 @@ function PendingApprovalBanner() {
   return (
     <div className="px-page-x py-2 bg-amber-500/10 border-b border-amber-500/30 text-center">
       <p className="text-xs text-amber-400">
-        ⏳ 매장 업주 승인 대기 중 — 승인 완료 후 포스터 업로드가 가능합니다
+        매장 업주 승인 대기 중 — 승인 완료 후 포스터 업로드가 가능합니다
       </p>
     </div>
   );

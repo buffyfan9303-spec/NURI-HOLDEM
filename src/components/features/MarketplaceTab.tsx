@@ -31,9 +31,9 @@ const STATUS_MAP: Record<ListingStatus, { label: string; cls: string }> = {
 };
 
 const NOTICE_STYLE: Record<NoticeType, { icon: string; cls: string; iconBg: string }> = {
-  pinned:  { icon: '📌', cls: 'border-gold-400/40    bg-gold-300/[0.06]',    iconBg: 'bg-gold-300/20 text-gold-300' },
-  event:   { icon: '🎉', cls: 'border-blue-500/40    bg-blue-500/[0.06]',    iconBg: 'bg-blue-500/20 text-blue-400' },
-  caution: { icon: '⚠',  cls: 'border-amber-500/40   bg-amber-500/[0.06]',   iconBg: 'bg-amber-500/20 text-amber-400' },
+  pinned:  { icon: '공', cls: 'border-gold-400/40    bg-gold-300/[0.06]',    iconBg: 'bg-gold-300/20 text-gold-300' },
+  event:   { icon: '이', cls: 'border-blue-500/40    bg-blue-500/[0.06]',    iconBg: 'bg-blue-500/20 text-blue-400' },
+  caution: { icon: '주', cls: 'border-amber-500/40   bg-amber-500/[0.06]',   iconBg: 'bg-amber-500/20 text-amber-400' },
 };
 
 function relativeTime(iso: string): string {
@@ -111,7 +111,7 @@ export default function MarketplaceTab({
           onClick={onCreate}
           className="btn-primary text-xs px-3 shrink-0"
         >
-          ✎ 글쓰기
+          글쓰기
         </button>
       </div>
 
@@ -194,7 +194,6 @@ function NoticeBoard({
     <section className="rounded-card border border-gold-400/30 bg-gradient-to-br from-gold-300/[0.05] to-transparent overflow-hidden">
       <header className="flex items-center justify-between px-3 py-2 border-b border-gold-400/20">
         <h2 className="inline-flex items-center gap-1.5 text-xs font-bold text-gold-300">
-          <span aria-hidden>📢</span>
           공지사항
           <span className="text-2xs text-ink-muted font-normal">({notices.length})</span>
         </h2>
@@ -326,7 +325,7 @@ function ListingRow({
                 {status.label}
               </span>
             )}
-            <span className="text-2xs text-ink-muted">📍 {listing.region}</span>
+            <span className="text-2xs text-ink-muted">{listing.region}</span>
           </div>
           <p className={[
             'mt-0.5 text-sm font-medium leading-snug truncate',

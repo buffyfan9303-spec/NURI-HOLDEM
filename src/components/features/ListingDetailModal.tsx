@@ -69,7 +69,7 @@ export default function ListingDetailModal({ listing, open, onClose }: ListingDe
               {status.label}
             </span>
           )}
-          <span className="text-ink-muted">📍 {listing.region}</span>
+          <span className="text-ink-muted">{listing.region}</span>
           <span className="text-border-strong">·</span>
           <span className="text-ink-muted">{relativeTime(listing.createdAt)}</span>
         </div>
@@ -168,7 +168,7 @@ export default function ListingDetailModal({ listing, open, onClose }: ListingDe
 
           {/* 댓글로 스크롤 */}
           <button type="button" onClick={scrollToComments} className="flex-1 btn-ghost py-2.5">
-            💬 댓글
+            댓글
           </button>
 
           {/* 판매자 채팅 모달 열기 */}
@@ -195,7 +195,7 @@ function SellerChatModal({
 }: { open: boolean; onClose: () => void; listing: MarketplaceListing }) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<{ from: 'me' | 'seller'; text: string; time: string }[]>([
-    { from: 'seller', text: '안녕하세요! 문의 주셔서 감사합니다 😊', time: '방금' },
+    { from: 'seller', text: '안녕하세요! 문의 주셔서 감사합니다', time: '방금' },
   ]);
   const [draft, setDraft] = useState('');
 
@@ -252,7 +252,7 @@ function SellerChatModal({
         <div
           className="w-8 h-8 shrink-0 rounded-input flex items-center justify-center bg-surface-float"
         >
-          <span className="text-base opacity-30">📦</span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="opacity-30" aria-hidden><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/></svg>
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-xs text-ink-primary truncate">{listing.title}</p>

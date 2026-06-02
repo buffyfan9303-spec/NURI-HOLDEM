@@ -155,7 +155,7 @@ export default function VenuePage({
                 )}
               </div>
               <h2 className="text-xl font-bold text-ink-primary">{venue.name}</h2>
-              <p className="text-xs text-ink-muted mt-1">📍 {venue.address}</p>
+              <p className="text-xs text-ink-muted mt-1">{venue.address}</p>
             </div>
             <FollowButton followerCount={venue.followerCount} />
           </div>
@@ -390,7 +390,7 @@ function AboutPanel({
               onClick={() => { setDraft(venue.description ?? ''); setEditing(true); }}
               className="text-2xs text-ink-muted hover:text-gold-300"
             >
-              ✎ 편집
+              편집
             </button>
           )}
         </div>
@@ -432,7 +432,7 @@ function AboutPanel({
         <dl className="space-y-1.5">
           <AddressRow address={venue.address} />
           {venue.contactPhone  && <PhoneRow phone={venue.contactPhone} />}
-          {venue.businessHours && <Row dt="영업시간" dd={venue.businessHours} icon="🕐" />}
+          {venue.businessHours && <Row dt="영업시간" dd={venue.businessHours} />}
         </dl>
       </section>
 
@@ -442,10 +442,9 @@ function AboutPanel({
   );
 }
 
-function Row({ dt, dd, icon }: { dt: string; dd: string; icon: string }) {
+function Row({ dt, dd }: { dt: string; dd: string }) {
   return (
     <div className="flex items-start gap-2 text-xs">
-      <span className="shrink-0" aria-hidden>{icon}</span>
       <dt className="w-14 shrink-0 text-ink-muted">{dt}</dt>
       <dd className="text-ink-secondary flex-1 whitespace-pre-line">{dd}</dd>
     </div>
@@ -466,7 +465,6 @@ function AddressRow({ address }: { address: string }) {
   const mapUrl = `https://map.naver.com/v5/search/${encodeURIComponent(address)}`;
   return (
     <div className="flex items-start gap-2 text-xs">
-      <span className="shrink-0" aria-hidden>📍</span>
       <dt className="w-14 shrink-0 text-ink-muted">주소</dt>
       <dd className="flex-1 flex items-start justify-between gap-2">
         <span className="text-ink-secondary whitespace-pre-line">{address}</span>
@@ -496,7 +494,6 @@ function PhoneRow({ phone }: { phone: string }) {
   const numbers = phone.split('/').map((s) => s.trim()).filter(Boolean);
   return (
     <div className="flex items-start gap-2 text-xs">
-      <span className="shrink-0" aria-hidden>📞</span>
       <dt className="w-14 shrink-0 text-ink-muted">연락처</dt>
       <dd className="flex-1 flex flex-wrap gap-1.5">
         {numbers.map((n) => (
@@ -623,7 +620,7 @@ function PostersPanel({
           className="w-full flex items-center justify-between px-3 py-2.5 bg-gradient-to-br from-gold-300/[0.08] to-transparent hover:from-gold-300/[0.12] transition-colors focus:outline-none"
         >
           <span className="inline-flex items-center gap-1.5 text-sm font-bold text-gold-300">
-            🔥 금일 포스터
+            금일 포스터
             <span className="text-2xs text-ink-muted font-normal">({todayPosters.length})</span>
           </span>
           {/* 펼침/접힘 화살표 */}
@@ -643,11 +640,11 @@ function PostersPanel({
             {/* 공지글 (있을 때만) */}
             {notices.length > 0 && (
               <div className="space-y-1.5">
-                <p className="text-2xs font-bold text-ink-muted">📢 공지</p>
+                <p className="text-2xs font-bold text-ink-muted">공지</p>
                 <ul className="space-y-1.5">
                   {notices.slice(0, 3).map((n) => (
                     <li key={n.id} className="px-2.5 py-2 rounded-input bg-surface-high border-l-2 border-gold-400/50">
-                      <p className="text-xs font-semibold text-ink-primary">📌 {n.title}</p>
+                      <p className="text-xs font-semibold text-ink-primary">{n.title}</p>
                       {n.body && <p className="text-2xs text-ink-muted line-clamp-2 mt-0.5">{n.body}</p>}
                     </li>
                   ))}
@@ -690,7 +687,7 @@ function PostersPanel({
 
       {/* ── 예정 포스터 ─────────────────────────────────────────── */}
       <div className="space-y-2">
-        <p className="text-2xs font-bold text-ink-muted px-0.5">📅 예정 포스터 ({upcoming.length})</p>
+        <p className="text-2xs font-bold text-ink-muted px-0.5">예정 포스터 ({upcoming.length})</p>
         {upcoming.length === 0 ? (
           <p className="text-center py-6 text-xs text-ink-muted">예정된 포스터가 없습니다.</p>
         ) : (

@@ -182,7 +182,7 @@ function FeedSection({
         <section className="rounded-card border border-gold-400/40 bg-gradient-to-br from-gold-300/[0.06] to-transparent overflow-hidden">
           <header className="flex items-center justify-between px-3 py-2 border-b border-gold-400/20">
             <h2 className="inline-flex items-center gap-1.5 text-xs font-bold text-gold-300">
-              📢 공지사항
+              공지사항
               {notices && <span className="text-2xs text-ink-muted font-normal">({notices.length})</span>}
             </h2>
             {isAdmin && (
@@ -216,7 +216,7 @@ function FeedSection({
                       : 'cursor-default',
                   ].join(' ')}
                 >
-                  <p className="text-xs font-semibold text-ink-primary truncate">📌 {n.title}</p>
+                  <p className="text-xs font-semibold text-ink-primary truncate">{n.title}</p>
                   {n.body && (
                     <p className="text-2xs text-ink-muted line-clamp-1 mt-0.5">{n.body}</p>
                   )}
@@ -330,7 +330,7 @@ function VenuesSection({
       </div>
 
       <p className="text-2xs text-ink-muted text-center py-1">
-        💬 매장을 선택해 커뮤니티에서 실시간으로 대화하세요
+        매장을 선택해 커뮤니티에서 실시간으로 대화하세요
       </p>
 
       {/* 정렬 안내 */}
@@ -388,7 +388,7 @@ function VenuesSection({
                     </div>
                     {commentCount > 0 && (
                       <span className="shrink-0 inline-flex items-center gap-1 text-2xs text-gold-300 font-semibold">
-                        💬 {commentCount}
+                        댓글 {commentCount}
                       </span>
                     )}
                   </div>

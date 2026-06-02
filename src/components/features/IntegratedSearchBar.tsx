@@ -390,7 +390,7 @@ export default function IntegratedSearchBar({
           ))}
           {/* 선택된 지역마다 칩 1개 (복수 선택) */}
           {selectedRegions.map((r) => (
-            <FilterChip key={r} label={`📍 ${r}`} onRemove={() => handleRegionToggle(r)} />
+            <FilterChip key={r} label={r} onRemove={() => handleRegionToggle(r)} />
           ))}
           {/* 토너먼트 필터 칩 (단일) */}
           {tour !== 'all' && (

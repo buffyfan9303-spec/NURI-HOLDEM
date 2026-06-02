@@ -275,7 +275,7 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
             </span>
             {user.role === 'venue_owner' && (
               <span className={user.approved ? 'text-emerald-400' : 'text-amber-400'}>
-                {user.approved ? '✓ 승인됨' : '⏳ 승인 대기'}
+                {user.approved ? '승인됨' : '승인 대기'}
               </span>
             )}
             {user.joinedAt && (

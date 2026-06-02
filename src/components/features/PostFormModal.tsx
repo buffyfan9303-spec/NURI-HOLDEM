@@ -34,11 +34,11 @@ interface PostFormModalProps {
 }
 
 const CATEGORY_OPTIONS: { id: PostCategory; label: string }[] = [
-  { id: 'free',     label: '💬 자유' },
-  { id: 'question', label: '❓ 질문' },
-  { id: 'info',     label: '📢 정보' },
-  { id: 'review',   label: '⭐ 후기' },
-  { id: 'study',    label: '📚 공부' },
+  { id: 'free',     label: '자유' },
+  { id: 'question', label: '질문' },
+  { id: 'info',     label: '정보' },
+  { id: 'review',   label: '후기' },
+  { id: 'study',    label: '공부' },
 ];
 
 const MAX_IMAGES = 4;

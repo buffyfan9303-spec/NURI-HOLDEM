@@ -110,7 +110,6 @@ function VenueLink({
       onClick={(e) => { e.stopPropagation(); onClick(e); }}
       className="group inline-flex items-baseline gap-1 text-xs text-ink-muted hover:text-gold-300 transition-colors max-w-full"
     >
-      <span aria-hidden>📍</span>
       <span className="font-medium underline decoration-dotted underline-offset-2 truncate">
         {pubName}
       </span>
@@ -268,10 +267,10 @@ function GridCard({ schedule, onVenueClick, onSelect }: CardProps) {
         <PrizeBanner schedule={schedule} />
 
         <div className="flex items-center gap-2 text-2xs text-ink-secondary">
-          <span className="inline-flex items-center gap-1">⏱{schedule.duration}</span>
+          <span className="inline-flex items-center gap-1">{schedule.duration}</span>
           <span className="text-border-strong">·</span>
           <span className="inline-flex items-center gap-1">
-            💳 {schedule.buyIn.amount.toLocaleString()}
+            {schedule.buyIn.amount.toLocaleString()}
           </span>
         </div>
       </div>

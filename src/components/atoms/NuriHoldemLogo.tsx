@@ -16,7 +16,7 @@ export default function NuriHoldemLogo({ className = '', variant = 'compact' }: 
     return (
       <div className={`flex items-center justify-center ${className}`}>
         <img
-          src="/nuri-logo.webp"
+          src="/nuri-logo.png"
           alt="NURI HOLDEM"
           className="w-64 object-contain"
           draggable={false}
@@ -25,13 +25,15 @@ export default function NuriHoldemLogo({ className = '', variant = 'compact' }: 
     );
   }
 
-  // compact: 헤더에서 사용 — 높이 고정, 가로 자동
+  // compact: 헤더에서 사용 — 남색 로고가 어두운 헤더에 묻히지 않도록 흰 둥근 칩 위에 배치
   return (
-    <img
-      src="/nuri-logo.webp"
-      alt="NURI HOLDEM"
-      className={`h-9 w-auto object-contain select-none ${className}`}
-      draggable={false}
-    />
+    <span className={`inline-flex items-center rounded-lg bg-white px-2 py-1 shadow-sm ${className}`}>
+      <img
+        src="/nuri-logo.png"
+        alt="NURI HOLDEM"
+        className="h-7 w-auto object-contain select-none"
+        draggable={false}
+      />
+    </span>
   );
 }

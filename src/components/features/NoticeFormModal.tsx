@@ -17,9 +17,9 @@ interface NoticeFormModalProps {
 }
 
 const TYPE_OPTIONS: { id: NoticeType; label: string }[] = [
-  { id: 'pinned',  label: '📌 일반 공지' },
-  { id: 'event',   label: '🎉 이벤트' },
-  { id: 'caution', label: '⚠️ 주의' },
+  { id: 'pinned',  label: '일반 공지' },
+  { id: 'event',   label: '이벤트' },
+  { id: 'caution', label: '주의' },
 ];
 
 /**

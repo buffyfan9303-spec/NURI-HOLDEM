@@ -42,7 +42,7 @@ export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete }: 
       {/* 목록 */}
       {myPosters.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 gap-2 text-ink-muted">
-          <span className="text-4xl opacity-30" aria-hidden>📋</span>
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="opacity-30" aria-hidden><rect x="4" y="3" width="16" height="18" rx="2"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="13" y2="16"/></svg>
           <p className="text-xs">등록된 포스터가 없습니다</p>
           <button type="button" onClick={onCreate} className="mt-2 btn-ghost text-xs">
             첫 포스터 등록하기
@@ -152,7 +152,7 @@ function PosterRow({
         ) : (
           <>
             <button type="button" onClick={onEdit} className="btn-ghost text-xs px-2" aria-label="수정">
-              ✎
+              수정
             </button>
             <button
               type="button"
@@ -160,7 +160,7 @@ function PosterRow({
               className="btn-ghost text-xs px-2 hover:text-danger-light"
               aria-label="삭제"
             >
-              🗑
+              삭제
             </button>
           </>
         )}

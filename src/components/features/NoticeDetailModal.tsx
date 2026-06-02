@@ -7,10 +7,10 @@ interface NoticeDetailModalProps {
   onClose: () => void;
 }
 
-const TYPE_STYLE: Record<NoticeType, { icon: string; label: string; cls: string }> = {
-  pinned:  { icon: '📌', label: '공지',     cls: 'bg-gold-300/15 text-gold-300 border-gold-400/40' },
-  event:   { icon: '🎉', label: '이벤트',   cls: 'bg-blue-500/15 text-blue-400 border-blue-500/40' },
-  caution: { icon: '⚠',  label: '주의',     cls: 'bg-amber-500/15 text-amber-400 border-amber-500/40' },
+const TYPE_STYLE: Record<NoticeType, { label: string; cls: string }> = {
+  pinned:  { label: '공지',   cls: 'bg-gold-300/15 text-gold-300 border-gold-400/40' },
+  event:   { label: '이벤트', cls: 'bg-blue-500/15 text-blue-400 border-blue-500/40' },
+  caution: { label: '주의',   cls: 'bg-amber-500/15 text-amber-400 border-amber-500/40' },
 };
 
 function formatDateTime(iso: string): string {
@@ -35,7 +35,6 @@ export default function NoticeDetailModal({ notice, open, onClose }: NoticeDetai
           'inline-flex items-center gap-1 px-2 py-1 rounded-badge border text-xs font-bold',
           style.cls,
         ].join(' ')}>
-          <span aria-hidden>{style.icon}</span>
           {style.label}
         </span>
 

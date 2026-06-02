@@ -97,7 +97,7 @@ export default function PostDetailModal({
               </svg>
               좋아요 {post.likeCount}
             </button>
-            <span>💬 댓글 {post.commentCount + replies.length}</span>
+            <span>댓글 {post.commentCount + replies.length}</span>
           </div>
           <button type="button" className="text-ink-muted hover:text-gold-300">공유</button>
         </div>

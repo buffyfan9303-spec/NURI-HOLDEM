@@ -34,7 +34,7 @@ export default function AdminTab({
       {/* 섹션 선택 */}
       <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5">
         <Pill active={section === 'pending'} onClick={() => setSection('pending')}>
-          🗂 포스터 승인
+          포스터 승인
           {pending.length > 0 && (
             <span className="ml-1 inline-flex items-center justify-center min-w-[1.1rem] h-4 px-1 rounded-full bg-danger text-white text-2xs font-bold tabular-nums">
               {pending.length}
@@ -42,10 +42,10 @@ export default function AdminTab({
           )}
         </Pill>
         <Pill active={section === 'reorder'} onClick={() => setSection('reorder')}>
-          📋 노출 순서
+          노출 순서
         </Pill>
         <Pill active={section === 'users'} onClick={() => setSection('users')}>
-          👥 회원 관리
+          회원 관리
         </Pill>
       </div>
 
@@ -61,10 +61,10 @@ export default function AdminTab({
           {/* 노출 순서 하위 선택: 포스터 / 매장 */}
           <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5">
             <SubPill active={reorderTarget === 'posters'} onClick={() => setReorderTarget('posters')}>
-              🃏 포스터
+              포스터
             </SubPill>
             <SubPill active={reorderTarget === 'venues'} onClick={() => setReorderTarget('venues')}>
-              🏠 매장
+              매장
             </SubPill>
           </div>
 
@@ -79,6 +79,7 @@ export default function AdminTab({
           posts={posts.map((p) => ({
             id: p.id, userName: p.userName,
             content: p.content, createdAt: p.createdAt,
+            category: p.category,
           }))}
           onUpdateUser={onUpdateUser}
           onDeletePost={onDeletePost}
@@ -100,7 +101,7 @@ function PendingApprovalSection({
   if (pending.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-2 text-ink-muted">
-        <span className="text-4xl opacity-30" aria-hidden>✅</span>
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="opacity-30" aria-hidden><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
         <p className="text-sm">승인 대기 중인 포스터가 없습니다</p>
         <p className="text-2xs">업주가 등록한 포스터가 여기에서 검토됩니다</p>
       </div>

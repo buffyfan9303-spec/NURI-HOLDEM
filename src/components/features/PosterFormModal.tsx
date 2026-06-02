@@ -313,7 +313,6 @@ function PrizeList({ prizes, onChange }: { prizes: string[]; onChange: (prizes: 
         <ul className="space-y-1">
           {prizes.map((p, i) => (
             <li key={i} className="flex items-center gap-2 px-2 py-1.5 rounded-input bg-gold-300/5 border border-gold-400/30">
-              <span className="text-gold-300 text-xs shrink-0">🏆</span>
               <span className="text-xs text-ink-primary flex-1 truncate">{p}</span>
               <button type="button" onClick={() => onChange(prizes.filter((_, idx) => idx !== i))}
                 aria-label="삭제" className="text-ink-muted hover:text-danger text-2xs px-1">✕</button>

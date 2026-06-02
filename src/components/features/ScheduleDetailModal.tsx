@@ -116,7 +116,6 @@ export default function ScheduleDetailModal({
             onClick={() => onVenueClick(schedule.venueId)}
             className="mt-1.5 inline-flex items-center gap-1 text-sm text-ink-secondary hover:text-gold-300 transition-colors group"
           >
-            <span aria-hidden>📍</span>
             <span className="font-medium underline decoration-dotted underline-offset-2">
               {schedule.pubName}
             </span>
@@ -210,16 +209,16 @@ export default function ScheduleDetailModal({
           <h3 className="text-sm font-semibold text-ink-primary mb-2">토너먼트 정보</h3>
           <div className="grid grid-cols-2 gap-2">
             <InfoCard
-              icon="📅" label="일정"
+              label="일정"
               value={`${d.getMonth() + 1}/${d.getDate()} (${dow})`}
               sub={schedule.startTime}
             />
             <InfoCard
-              icon="⏱" label="진행 시간"
+              label="진행 시간"
               value={schedule.duration}
             />
             <InfoCard
-              icon="💳" label="바이인"
+              label="바이인"
               value={schedule.buyIn.amount.toLocaleString()}
               sub={schedule.buyIn.rebuy !== undefined ? (
                 <>리바이 {schedule.buyIn.rebuy.toLocaleString()}
@@ -231,7 +230,7 @@ export default function ScheduleDetailModal({
               ) : '리바이 없음'}
             />
             <InfoCard
-              icon="🎯" label="포맷"
+              label="포맷"
               value={schedule.format}
               sub={schedule.guaranteed ? 'GTD 보장' : '예상 상금'}
             />
@@ -244,18 +243,18 @@ export default function ScheduleDetailModal({
             <h3 className="text-sm font-semibold text-ink-primary mb-2">토너먼트 구조</h3>
             <div className="grid grid-cols-3 gap-2">
               <InfoCard
-                icon="🪙" label="시작 칩"
+                label="시작 칩"
                 value={schedule.structure.startingChips.toLocaleString()}
                 compact
               />
               <InfoCard
-                icon="⏳" label="레벨"
+                label="레벨"
                 value={`${schedule.structure.blindLevelMinutes}분`}
                 compact
               />
               {schedule.structure.lateRegLevels !== undefined && (
                 <InfoCard
-                  icon="⏰" label="레이트 레지"
+                  label="레이트 레지"
                   value={`${schedule.structure.lateRegLevels}레벨`}
                   compact
                 />
@@ -267,7 +266,7 @@ export default function ScheduleDetailModal({
         {/* 프로모션 */}
         {schedule.promotions && schedule.promotions.length > 0 && (
           <section>
-            <h3 className="text-sm font-semibold text-ink-primary mb-2">🎁 프로모션 / 얼리칩</h3>
+            <h3 className="text-sm font-semibold text-ink-primary mb-2">프로모션 / 얼리칩</h3>
             <ul className="space-y-1.5">
               {schedule.promotions.map((p, i) => (
                 <li
@@ -292,7 +291,7 @@ export default function ScheduleDetailModal({
         {/* 사이드 이벤트 */}
         {schedule.sideEvents && schedule.sideEvents.length > 0 && (
           <section>
-            <h3 className="text-sm font-semibold text-ink-primary mb-2">🎲 사이드 이벤트</h3>
+            <h3 className="text-sm font-semibold text-ink-primary mb-2">사이드 이벤트</h3>
             <div className="grid grid-cols-2 gap-2">
               {schedule.sideEvents.map((se, i) => (
                 <div key={i} className="rounded-input bg-surface-high border border-border-subtle p-3">
@@ -309,7 +308,7 @@ export default function ScheduleDetailModal({
         {schedule.rankingPrizes && schedule.rankingPrizes.length > 0 && (
           <section>
             <h3 className="text-sm font-semibold text-ink-primary mb-2 flex items-center gap-1.5">
-              🏆 RANKING GTD
+              RANKING GTD
               <span className="text-2xs text-ink-muted font-normal">(단위: 만원)</span>
             </h3>
             <div className="rounded-card border border-border-subtle bg-surface-high overflow-hidden">
@@ -345,7 +344,7 @@ export default function ScheduleDetailModal({
           <section className="space-y-3">
             {schedule.partners && schedule.partners.length > 0 && (
               <div>
-                <h3 className="text-sm font-semibold text-ink-primary mb-2">🤝 파트너 / 시드권 발행</h3>
+                <h3 className="text-sm font-semibold text-ink-primary mb-2">파트너 / 시드권 발행</h3>
                 <div className="flex flex-wrap gap-1.5">
                   {schedule.partners.map((p) => (
                     <span
@@ -361,7 +360,7 @@ export default function ScheduleDetailModal({
             )}
             {schedule.paymentMethods && schedule.paymentMethods.length > 0 && (
               <div>
-                <h3 className="text-sm font-semibold text-ink-primary mb-2">💰 결제 수단</h3>
+                <h3 className="text-sm font-semibold text-ink-primary mb-2">결제 수단</h3>
                 <div className="flex flex-wrap gap-1.5">
                   {schedule.paymentMethods.map((m) => (
                     <span
@@ -380,7 +379,7 @@ export default function ScheduleDetailModal({
         {/* 규정 */}
         {schedule.rules && schedule.rules.length > 0 && (
           <section>
-            <h3 className="text-sm font-semibold text-ink-primary mb-2">📋 운영 규정</h3>
+            <h3 className="text-sm font-semibold text-ink-primary mb-2">운영 규정</h3>
             <ul className="space-y-1 text-xs text-ink-secondary">
               {schedule.rules.map((r, i) => (
                 <li key={i} className="flex items-start gap-1.5">
@@ -412,7 +411,7 @@ export default function ScheduleDetailModal({
 function InfoCard({
   icon, label, value, sub, compact = false,
 }: {
-  icon: string;
+  icon?: string;
   label: string;
   value: React.ReactNode;
   sub?: React.ReactNode;
@@ -424,7 +423,7 @@ function InfoCard({
       compact ? 'px-2.5 py-2' : 'p-3',
     ].join(' ')}>
       <div className="flex items-center gap-1 text-2xs text-ink-muted mb-0.5">
-        <span aria-hidden>{icon}</span>{label}
+        {icon && <span aria-hidden>{icon}</span>}{label}
       </div>
       <p className={[
         'font-bold text-ink-primary tabular-nums leading-tight',
