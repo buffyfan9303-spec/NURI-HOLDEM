@@ -81,6 +81,16 @@ export async function signIn(email: string, password: string): Promise<User> {
   return rowToUser(profile);
 }
 
+// ── 일일 접속 활동 점수(+1) ───────────────────────────────────────────────────
+// claim_daily_login_point RPC(security definer)가 KST 기준 하루 1회만 +1 적립.
+// 반환: 적립 후(또는 이미 적립된) 활동 점수 총합. 비로그인/실패 시 null.
+export async function claimDailyLoginPoint(): Promise<number | null> {
+  if (IS_MOCK) return null;
+  const { data, error } = await supabase.rpc('claim_daily_login_point');
+  if (error) return null;
+  return typeof data === 'number' ? data : null;
+}
+
 // ── 닉네임 중복 검사 ──────────────────────────────────────────────────────────
 // is_nickname_available RPC(security definer)로 대소문자·공백 무시 중복 여부 확인.
 // 반환: true=사용 가능 / false=사용 중 또는 형식 위반(2자 미만 등).

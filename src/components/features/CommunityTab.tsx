@@ -5,6 +5,7 @@ import type { MarketplaceNotice } from '../../api/marketplace';
 import { useAuth } from '../../contexts/AuthContext';
 import GtoDeepWidget from './gto/GtoDeepWidget';
 import OwnerCommunity from './OwnerCommunity';
+import TierLeaderboard from './TierLeaderboard';
 import { useToast } from '../atoms/Toast';
 import { filterContent } from '../../lib/content-filter';
 
@@ -26,7 +27,7 @@ interface CommunityTabProps {
 }
 
 // Task 4: [실시간 댓글(라이브월), 게시판, 홀덤 공부, 홀덤펍]
-type Section = 'live' | 'board' | 'study' | 'venues' | 'owner';
+type Section = 'live' | 'board' | 'study' | 'venues' | 'rank' | 'owner';
 
 function relativeTime(iso: string): string {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -86,6 +87,7 @@ export default function CommunityTab({
           <SectionTab active={section === 'board'}  label="게시판"      onClick={() => setSection('board')} />
           <SectionTab active={section === 'study'}  label="홀덤 공부"   onClick={() => setSection('study')} />
           <SectionTab active={section === 'venues'} label="홀덤펍"      onClick={() => setSection('venues')} />
+          <SectionTab active={section === 'rank'}   label="랭킹"        onClick={() => setSection('rank')} />
           {canOwnerCommunity && (
             <SectionTab active={section === 'owner'} label="업주" onClick={() => setSection('owner')} />
           )}
@@ -131,6 +133,8 @@ export default function CommunityTab({
           onSelectVenue={onSelectVenue}
         />
       )}
+
+      {section === 'rank' && <TierLeaderboard />}
 
       {section === 'owner' && canOwnerCommunity && <OwnerCommunity />}
     </div>

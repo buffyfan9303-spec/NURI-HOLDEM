@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import type { User, ProfilePatch } from '../api/auth';
 import {
   signIn, signOut as apiSignOut, getMyProfile,
-  updateMyProfile, changeMyPassword,
+  updateMyProfile, changeMyPassword, claimDailyLoginPoint,
 } from '../api/auth';
 import { supabase, IS_MOCK } from '../lib/supabase';
 
@@ -31,12 +31,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser]       = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // 프로필을 세팅하고, 하루 1회 접속 활동 점수(+1)를 적립해 점수를 반영한다.
+  const applyProfileWithDailyPoint = useCallback((profile: User | null) => {
+    setUser(profile);
+    if (!profile) return;
+    claimDailyLoginPoint()
+      .then((pts) => {
+        if (typeof pts === 'number') {
+          setUser((prev) => (prev && prev.id === profile.id ? { ...prev, activityPoints: pts } : prev));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   // ── 초기화: 세션 복원 + 변경 구독 ────────────────────────────────────────────
   useEffect(() => {
     if (IS_MOCK) { setLoading(false); return; }
 
     getMyProfile().then((profile) => {
-      setUser(profile);
+      applyProfileWithDailyPoint(profile);
       setLoading(false);
     });
 
@@ -48,19 +61,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
       } else if (session?.user) {
         setTimeout(() => {
-          getMyProfile().then((p) => setUser(p)).catch(() => {});
+          getMyProfile().then((p) => applyProfileWithDailyPoint(p)).catch(() => {});
         }, 0);
       }
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [applyProfileWithDailyPoint]);
 
   // ── 로그인 / 로그아웃 ────────────────────────────────────────────────────────
   const login = useCallback(async (email: string, password: string) => {
     const u = await signIn(email, password);
-    setUser(u);
-  }, []);
+    applyProfileWithDailyPoint(u);
+  }, [applyProfileWithDailyPoint]);
 
   const logout = useCallback(async () => {
     await apiSignOut();

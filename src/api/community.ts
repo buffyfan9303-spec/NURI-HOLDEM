@@ -554,3 +554,27 @@ export async function getUserActivity(userId: string, limit = 20): Promise<UserA
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, limit);
 }
+
+// ── 활동 점수 랭킹(회원 등급) ─────────────────────────────────────────────────
+export interface LeaderboardEntry {
+  id: string;
+  nickname: string;
+  activityPoints: number;
+  avatarColor?: string;
+  role: UserRole;
+}
+
+/** 활동 점수 상위 회원 랭킹. 비민감 필드만 반환하는 RPC 사용(profiles RLS 우회). */
+export async function getActivityLeaderboard(limit = 20): Promise<LeaderboardEntry[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.rpc('get_activity_leaderboard', { p_limit: limit });
+  if (error) throw error;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({
+    id:             r.id,
+    nickname:       r.nickname ?? '익명',
+    activityPoints: r.activity_points ?? 0,
+    avatarColor:    r.avatar_color ?? undefined,
+    role:           r.role,
+  }));
+}
