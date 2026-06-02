@@ -156,9 +156,8 @@ export default function NotificationPanel({
         <ul className="flex-1 overflow-y-auto">
           {visible.length === 0 ? (
             <li className="flex flex-col items-center justify-center py-12 gap-2 text-ink-muted">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
-                <path d="M18 8A7 7 0 0 0 4 8c0 7-3 9-3 9h18s-3-2-3-9" />
-                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              <svg width="34" height="34" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6.29-4.71L18 17V11c0-3.07-1.63-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.64 5.36 6 7.92 6 11v6l-.29.29A1 1 0 0 0 6.41 19h11.18a1 1 0 0 0 .7-1.71z" />
               </svg>
               <p className="text-xs">새 알림이 없습니다</p>
             </li>
