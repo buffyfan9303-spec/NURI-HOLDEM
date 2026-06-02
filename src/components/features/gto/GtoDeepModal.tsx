@@ -134,7 +134,7 @@ export default function GtoDeepModal({ open, onClose }: { open: boolean; onClose
 
   const heroId = comboIdOf(deep.hero);
   const villainId = deep.villainComboId;
-  const showResult = deep.villainComplete && deep.result && deep.normalizedAction;
+  const showResult = deep.heroComplete && deep.villainComplete && deep.result && deep.normalizedAction;
 
   const TARGET_TABS: { t: CardTarget; label: string }[] = [
     { t: 'hero', label: 'Hero' },
@@ -168,15 +168,17 @@ export default function GtoDeepModal({ open, onClose }: { open: boolean; onClose
               <b className="text-ink-primary">{villainId}</b>
             </p>
 
-            {deep.result.equity && (
+            {deep.equity && (
               <div>
-                <p className="mb-1 text-2xs font-semibold text-ink-secondary">에퀴티 (Hero vs Villain)</p>
+                <p className="mb-1 text-2xs font-semibold text-ink-secondary">
+                  에퀴티 (Hero vs Villain){deep.board.some((c) => c !== null) ? ' · 보드 반영' : ' · 프리플랍'} · 실시간 계산
+                </p>
                 <div className="flex h-5 overflow-hidden rounded-input bg-surface-float">
-                  <div style={{ width: `${deep.result.equity.hero * 100}%` }} className="bg-gold-300 transition-[width] duration-500" />
+                  <div style={{ width: `${deep.equity.hero * 100}%` }} className="bg-gold-300 transition-[width] duration-500" />
                 </div>
                 <div className="mt-1 flex justify-between text-2xs">
-                  <span className="font-bold text-gold-300">Hero {Math.round(deep.result.equity.hero * 100)}%</span>
-                  <span className="text-ink-secondary">Villain {Math.round(deep.result.equity.villain * 100)}%</span>
+                  <span className="font-bold text-gold-300">Hero {Math.round(deep.equity.hero * 100)}%</span>
+                  <span className="text-ink-secondary">Villain {Math.round(deep.equity.villain * 100)}%</span>
                 </div>
               </div>
             )}

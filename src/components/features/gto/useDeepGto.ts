@@ -2,8 +2,9 @@
 import { useCallback, useMemo, useState } from 'react';
 import { DEEP_SITUATION_9TS_VS_UTG } from './gto.deep.data';
 import { canonicalizeHand, normalizeFrequency } from './useGtoCalculator';
+import { computeEquity } from './equityEngine';
 import type { ActionFrequency, Card } from './gto.types';
-import type { GtoDeepSituation, GtoResult } from './gto.deep.types';
+import type { GtoDeepSituation, GtoResult, Equity } from './gto.deep.types';
 
 export type CardTarget = 'hero' | 'villain' | 'board';
 export type CardId = string; // 예: 'As'
@@ -31,6 +32,8 @@ export interface UseDeepGto {
   villainComboId: string | null;
   result: GtoResult | null;
   normalizedAction: Required<ActionFrequency> | null;
+  /** 몬테카를로 실시간 에퀴티 (Hero/Villain 완성 시, 보드 반영) */
+  equity: Equity | null;
 }
 
 export function useDeepGto(): UseDeepGto {
@@ -113,6 +116,16 @@ export function useDeepGto(): UseDeepGto {
     [result],
   );
 
+  // 실시간 에퀴티: Hero/Villain 2장 완성 시 보드를 반영해 몬테카를로 계산
+  const equity = useMemo<Equity | null>(() => {
+    if (!heroComplete || !villainComplete) return null;
+    const h = hero as Card[];
+    const v = villain as Card[];
+    const b = board.filter((c): c is Card => c !== null);
+    const r = computeEquity([h[0], h[1]], [v[0], v[1]], b, 2500);
+    return { hero: r.hero, villain: r.villain };
+  }, [hero, villain, board, heroComplete, villainComplete]);
+
   return {
     situation,
     hero,
@@ -129,6 +142,7 @@ export function useDeepGto(): UseDeepGto {
     villainComboId,
     result,
     normalizedAction,
+    equity,
   };
 }
 
