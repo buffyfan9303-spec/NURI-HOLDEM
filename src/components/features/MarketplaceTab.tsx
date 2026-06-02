@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import type {
   ListingCategory, ListingCondition, ListingStatus,
   MarketplaceListing, MarketplaceNotice, NoticeType,
@@ -82,6 +82,10 @@ export default function MarketplaceTab({
         : b.viewCount - a.viewCount,
     );
   }, [listings, category, includeSold, query, sortBy]);
+
+  const [limit, setLimit] = useState(20);
+  useEffect(() => { setLimit(20); }, [category, includeSold, query, sortBy]);
+  const shown = visible.slice(0, limit);
 
   return (
     <div className="space-y-3">
@@ -177,7 +181,7 @@ export default function MarketplaceTab({
         </div>
       ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-2 gap-card-gap animate-fade-in">
-          {visible.map((l) => (
+          {shown.map((l) => (
             <ListingCard key={l.id} listing={l} onClick={() => onSelect(l)} />
           ))}
         </div>
@@ -185,7 +189,7 @@ export default function MarketplaceTab({
         <div className="rounded-card border border-border-default bg-surface-low overflow-hidden animate-fade-in">
           <BoardHeader />
           <ul>
-            {visible.map((l, idx) => (
+            {shown.map((l, idx) => (
               <ListingRow
                 key={l.id}
                 listing={l}
@@ -195,6 +199,16 @@ export default function MarketplaceTab({
             ))}
           </ul>
         </div>
+      )}
+
+      {visible.length > limit && (
+        <button
+          type="button"
+          onClick={() => setLimit((v) => v + 20)}
+          className="w-full py-2.5 rounded-input bg-surface-high text-xs font-semibold text-ink-secondary hover:text-ink-primary active:bg-surface-float transition-colors"
+        >
+          더보기 ({(visible.length - limit).toLocaleString()})
+        </button>
       )}
     </div>
   );

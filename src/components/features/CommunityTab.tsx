@@ -153,6 +153,14 @@ function FeedSection({
   emptyText?: string;
 }) {
   const { user } = useAuth();
+  const [q, setQ] = useState('');
+  const [visible, setVisible] = useState(15);
+  const filtered = useMemo(() => {
+    const kw = q.trim().toLowerCase();
+    if (!kw) return posts;
+    return posts.filter((p) => p.content.toLowerCase().includes(kw) || p.userName.toLowerCase().includes(kw));
+  }, [posts, q]);
+  const shown = filtered.slice(0, visible);
 
   return (
     <div className="space-y-2">
@@ -230,17 +238,47 @@ function FeedSection({
         </section>
       ) : null}
 
+      {/* 검색 */}
+      {posts.length > 0 && (
+        <div className="relative">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" aria-hidden>
+            <circle cx="6" cy="6" r="4.5" /><line x1="9.5" y1="9.5" x2="13" y2="13" />
+          </svg>
+          <input
+            type="search"
+            value={q}
+            onChange={(e) => { setQ(e.target.value); setVisible(15); }}
+            placeholder="게시글 검색 (내용·작성자)"
+            className="input w-full pl-9 text-sm"
+          />
+        </div>
+      )}
+
       {/* 포스트 목록 — 게시판 형태 (조밀하게 많이 보이게) */}
       {posts.length === 0 ? (
         <p className="text-center py-12 text-xs text-ink-muted">{emptyText}</p>
+      ) : filtered.length === 0 ? (
+        <p className="text-center py-12 text-xs text-ink-muted">검색 결과가 없습니다</p>
       ) : (
-        <div className="rounded-card border border-border-default bg-surface-low overflow-hidden">
-          <ul>
-            {posts.map((p) => (
-              <PostCard key={p.id} post={p} onLike={() => onLike(p.id)} onClick={() => onSelectPost(p)} />
-            ))}
-          </ul>
-        </div>
+        <>
+          <div className="rounded-card border border-border-default bg-surface-low overflow-hidden">
+            <ul>
+              {shown.map((p) => (
+                <PostCard key={p.id} post={p} onLike={() => onLike(p.id)} onClick={() => onSelectPost(p)} />
+              ))}
+            </ul>
+          </div>
+          {filtered.length > visible && (
+            <button
+              type="button"
+              onClick={() => setVisible((v) => v + 15)}
+              className="w-full py-2.5 rounded-input bg-surface-high text-xs font-semibold text-ink-secondary hover:text-ink-primary active:bg-surface-float transition-colors"
+            >
+              더보기 ({(filtered.length - visible).toLocaleString()})
+            </button>
+          )}
+        </>
       )}
     </div>
   );
