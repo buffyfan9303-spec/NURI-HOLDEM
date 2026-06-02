@@ -954,6 +954,7 @@ export default function App() {
         onUpdateDescription={handleUpdateVenueDescription}
         onUpdateImage={handleUpdateVenueImage}
         onUpdateImages={handleUpdateVenueImages}
+        onSelectSchedule={handleScheduleSelect}
       />
 
       <ListingDetailModal

@@ -436,7 +436,7 @@ export async function incrementPostView(postId: string): Promise<void> {
 }
 
 // ── 딜러(venue_staff) 전용 게시판 — 구인/구직 ────────────────────────────────
-export type DealerPostKind = 'hiring' | 'seeking'; // 구인 / 구직
+export type DealerPostKind = 'hiring' | 'seeking' | 'general'; // 구인 / 구직 / 일반
 export interface DealerPost {
   id: string;
   authorId: string;

@@ -57,8 +57,6 @@ export default function CommunityTab({
   const [query, setQuery] = useState('');
   const { user } = useAuth();
   const canOwnerCommunity = isAdmin || (user?.role === 'venue_owner' && user?.venueVerified === true);
-  // 딜러(매장 구성원) 전용 게시판 — 딜러 + 관리자에게만 탭 노출
-  const canDealerCommunity = isAdmin || user?.role === 'venue_staff';
 
   // 매장 정렬: 1) 유료광고(isPaidAd) → 2) 팔로워수 내림차순
   const sortedVenues = useMemo(() => {
@@ -102,9 +100,7 @@ export default function CommunityTab({
           <SectionTab active={section === 'study'}  label="홀덤 공부"   onClick={() => setSection('study')} />
           <SectionTab active={section === 'venues'} label="홀덤펍"      onClick={() => setSection('venues')} />
           <SectionTab active={section === 'rank'}   label="랭킹"        onClick={() => setSection('rank')} />
-          {canDealerCommunity && (
-            <SectionTab active={section === 'dealer'} label="딜러" onClick={() => setSection('dealer')} />
-          )}
+          <SectionTab active={section === 'dealer'} label="딜러" onClick={() => setSection('dealer')} />
           {canOwnerCommunity && (
             <SectionTab active={section === 'owner'} label="업주" onClick={() => setSection('owner')} />
           )}
@@ -154,7 +150,7 @@ export default function CommunityTab({
 
       {section === 'rank' && <TierLeaderboard />}
 
-      {section === 'dealer' && canDealerCommunity && <DealerCommunity />}
+      {section === 'dealer' && <DealerCommunity />}
 
       {section === 'owner' && canOwnerCommunity && <OwnerCommunity />}
     </div>

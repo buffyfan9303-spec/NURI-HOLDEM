@@ -7,19 +7,19 @@ import {
 } from '../../api/community';
 import { relativeTime } from './MarketplaceTab';
 
-const KIND_LABEL: Record<DealerPostKind, string> = { hiring: '구인', seeking: '구직' };
+const KIND_LABEL: Record<DealerPostKind, string> = { hiring: '구인', seeking: '구직', general: '일반' };
 const KIND_STYLE: Record<DealerPostKind, string> = {
   hiring:  'bg-gold-300/15 text-gold-300 border-gold-400/40',
   seeking: 'bg-sky-500/15 text-sky-300 border-sky-400/40',
+  general: 'bg-surface-float text-ink-secondary border-border-default',
 };
 
-/** 딜러(매장 구성원) 전용 게시판 — 구인/구직. 딜러+관리자만 열람·작성. */
+/** 딜러 게시판 — 구인/구직/일반. 누구나 열람, 로그인 시 작성. */
 export default function DealerCommunity() {
   const { user } = useAuth();
   const toast = useToast();
   const isAdmin = user?.role === 'admin';
-  const isDealer = user?.role === 'venue_staff';
-  const canPost = isAdmin || isDealer;
+  const canPost = !!user;
 
   const [posts, setPosts]   = useState<DealerPost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,18 +73,10 @@ export default function DealerCommunity() {
     }
   };
 
-  if (!canPost) {
-    return (
-      <p className="py-10 text-center text-xs text-ink-muted">
-        딜러(매장 구성원) 전용 공간입니다.
-      </p>
-    );
-  }
-
   return (
     <div className="space-y-3">
       <div className="rounded-input border border-sky-400/30 bg-sky-500/[0.06] px-3 py-2 text-2xs leading-relaxed text-sky-300">
-        딜러(매장 구성원) 전용 게시판입니다. 딜러 구인·구직과 정보 공유에 활용하세요.
+        딜러 게시판입니다. 딜러 구인·구직과 자유로운 정보 공유에 활용하세요. (누구나 열람 가능)
       </div>
 
       {/* 불법 행위 경고 — 강제 탈퇴 사유 명시 */}
@@ -93,21 +85,25 @@ export default function DealerCommunity() {
       </div>
 
       {/* 글쓰기 토글 */}
-      <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="btn-primary px-4 text-xs"
-        >
-          {open ? '닫기' : '+ 구인 / 구직 글쓰기'}
-        </button>
-      </div>
+      {canPost ? (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="btn-primary px-4 text-xs"
+          >
+            {open ? '닫기' : '+ 글쓰기 (구인/구직/일반)'}
+          </button>
+        </div>
+      ) : (
+        <p className="text-center text-2xs text-ink-muted">로그인하면 글을 작성할 수 있습니다</p>
+      )}
 
-      {open && (
+      {canPost && open && (
         <form onSubmit={submit} className="space-y-2.5 rounded-card border border-border-default bg-surface-low p-3 animate-slide-up">
-          {/* 구인/구직 선택 */}
+          {/* 구인/구직/일반 선택 */}
           <div className="inline-flex items-center gap-0.5 rounded-input bg-surface-high p-0.5 border border-border-default">
-            {(['hiring', 'seeking'] as DealerPostKind[]).map((k) => (
+            {(['hiring', 'seeking', 'general'] as DealerPostKind[]).map((k) => (
               <button
                 key={k}
                 type="button"
@@ -149,7 +145,7 @@ export default function DealerCommunity() {
             onChange={(e) => setContent(e.target.value)}
             maxLength={2000}
             rows={3}
-            placeholder={kind === 'hiring' ? '근무 조건·시간·문의 방법 등을 적어주세요' : '경력·가능 시간·희망 지역 등을 적어주세요'}
+            placeholder={kind === 'hiring' ? '근무 조건·시간·문의 방법 등을 적어주세요' : kind === 'seeking' ? '경력·가능 시간·희망 지역 등을 적어주세요' : '자유롭게 이야기해보세요'}
             className="input w-full resize-none text-sm"
           />
           <div className="flex justify-end gap-2">

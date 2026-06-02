@@ -24,6 +24,8 @@ interface VenuePageProps {
   onUpdateDescription?: (venueId: string, description: string) => void;
   onUpdateImage?: (venueId: string, dataUrl: string) => void;
   onUpdateImages?: (venueId: string, urls: string[]) => void;
+  /** 포스터/진행예정 클릭 시 일정 상세 열기 */
+  onSelectSchedule?: (s: Schedule) => void;
 }
 
 type Tab = 'about' | 'ranking' | 'posters' | 'schedules' | 'community';
@@ -50,6 +52,7 @@ const TAB_LABEL: Record<Tab, string> = {
 export default function VenuePage({
   venue, open, onClose, schedules, comments, notices = [],
   onSubmitComment, onDeleteComment, onUpdateDescription, onUpdateImage, onUpdateImages,
+  onSelectSchedule,
 }: VenuePageProps) {
   const [tab, setTab] = useState<Tab>('about');
   const { user, isApprovedOwner } = useAuth();
@@ -109,7 +112,7 @@ export default function VenuePage({
     <div
       role="dialog"
       aria-label={`${venue.name} 매장 페이지`}
-      className="fixed inset-0 z-50 bg-surface-base flex flex-col animate-slide-up"
+      className="fixed inset-0 z-40 bg-surface-base flex flex-col animate-slide-up"
       style={{ animationDuration: '0.25s' }}
     >
       {/* ── 최상단: 뒤로가기 헤더 ──────────────────────────────────────── */}
@@ -218,9 +221,10 @@ export default function VenuePage({
               todayPosters={todayPosters}
               allPosters={venueSchedules}
               notices={notices}
+              onSelect={onSelectSchedule}
             />
           )}
-          {tab === 'schedules' && <SchedulesPanel schedules={venueSchedules} />}
+          {tab === 'schedules' && <SchedulesPanel schedules={venueSchedules} onSelect={onSelectSchedule} />}
           {tab === 'community' && (
             <CommentThread
               comments={venueComments}
@@ -772,11 +776,12 @@ function KakaoMap({ address, name }: { address: string; name: string }) {
 // (오늘 진행 포스터 + 운영 공지를 함께 묶어 보여줌)
 
 function PostersPanel({
-  todayPosters, allPosters, notices,
+  todayPosters, allPosters, notices, onSelect,
 }: {
   todayPosters: Schedule[];
   allPosters: Schedule[];
   notices: MarketplaceNotice[];
+  onSelect?: (s: Schedule) => void;
 }) {
   // 금일 포스터가 있으면 기본 열림, 없으면 접힘
   const [open, setOpen] = useState(todayPosters.length > 0);
@@ -836,7 +841,9 @@ function PostersPanel({
             ) : (
               <ul className="space-y-2">
                 {todayPosters.map((s) => (
-                  <li key={s.id} className="flex items-center gap-3 p-2.5 rounded-input bg-surface-low border border-border-subtle">
+                  <li key={s.id} onClick={() => onSelect?.(s)} role="button" tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect?.(s); } }}
+                    className="flex items-center gap-3 p-2.5 rounded-input bg-surface-low border border-border-subtle cursor-pointer hover:border-gold-400/40 focus:outline-none focus-visible:border-gold-300 transition-colors">
                     {/* 포스터 썸네일 */}
                     <div
                       className="w-10 h-14 shrink-0 rounded-input overflow-hidden flex items-center justify-center"
@@ -873,7 +880,9 @@ function PostersPanel({
             {upcoming.map((s) => {
               const d = new Date(s.date);
               return (
-                <li key={s.id} className="flex items-center gap-3 p-3 rounded-input bg-surface-high border border-border-subtle">
+                <li key={s.id} onClick={() => onSelect?.(s)} role="button" tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect?.(s); } }}
+                  className="flex items-center gap-3 p-3 rounded-input bg-surface-high border border-border-subtle cursor-pointer hover:border-gold-400/40 focus:outline-none focus-visible:border-gold-300 transition-colors">
                   <div className="text-center shrink-0">
                     <p className="text-2xs text-ink-muted">{dows[d.getDay()]}</p>
                     <p className="text-lg font-bold text-gold-300 tabular-nums leading-none">{d.getDate()}</p>
@@ -895,7 +904,7 @@ function PostersPanel({
   );
 }
 
-function SchedulesPanel({ schedules }: { schedules: Schedule[] }) {
+function SchedulesPanel({ schedules, onSelect }: { schedules: Schedule[]; onSelect?: (s: Schedule) => void }) {
   if (schedules.length === 0) {
     return <p className="text-center py-8 text-xs text-ink-muted">예정된 토너먼트가 없습니다.</p>;
   }
@@ -905,7 +914,9 @@ function SchedulesPanel({ schedules }: { schedules: Schedule[] }) {
       {schedules.map((s) => {
         const d = new Date(s.date);
         return (
-          <li key={s.id} className="flex items-center gap-3 p-3 rounded-input bg-surface-high border border-border-subtle">
+          <li key={s.id} onClick={() => onSelect?.(s)} role="button" tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect?.(s); } }}
+            className="flex items-center gap-3 p-3 rounded-input bg-surface-high border border-border-subtle cursor-pointer hover:border-gold-400/40 focus:outline-none focus-visible:border-gold-300 transition-colors">
             <div className="text-center shrink-0">
               <p className="text-2xs text-ink-muted">{dows[d.getDay()]}</p>
               <p className="text-lg font-bold text-gold-300 tabular-nums leading-none">{d.getDate()}</p>

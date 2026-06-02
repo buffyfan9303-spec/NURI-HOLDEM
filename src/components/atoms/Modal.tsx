@@ -48,7 +48,7 @@ export default function Modal({
         type="button"
         aria-label="닫기"
         onClick={onClose}
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm cursor-default"
+        className="absolute inset-0 bg-black/80 backdrop-blur-md cursor-default"
       />
       {/* 본문 */}
       <div
