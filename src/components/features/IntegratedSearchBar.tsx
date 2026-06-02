@@ -136,10 +136,13 @@ function DateTab({ slot, selected, onClick }: DateTabProps) {
 interface DateSliderProps {
   selectedDates: string[];      // 복수 선택
   onToggle: (iso: string) => void;
+  onPick: (iso: string) => void; // 7일 이후 임의 날짜 직접 선택
 }
 
-function DateSlider({ selectedDates, onToggle }: DateSliderProps) {
-  const slots = useRef(buildDateSlots(14)).current;
+function DateSlider({ selectedDates, onToggle, onPick }: DateSliderProps) {
+  // 가까운 7일치만 직접 노출, 그 외 날짜는 '선택' 캘린더로 지정
+  const slots = useRef(buildDateSlots(7)).current;
+  const todayIso = slots[0].iso;
 
   return (
     <div
@@ -160,6 +163,24 @@ function DateSlider({ selectedDates, onToggle }: DateSliderProps) {
           onClick={() => onToggle(slot.iso)}
         />
       ))}
+
+      {/* 날짜 직접 선택 (7일 이후) — 네이티브 date picker 오버레이 */}
+      <label
+        title="날짜 직접 선택"
+        className="relative shrink-0 flex flex-col items-center justify-center w-12 h-tab-h rounded-input border border-dashed border-border-default text-ink-secondary hover:bg-surface-high hover:border-gold-400/50 cursor-pointer transition-colors focus-within:ring-2 focus-within:ring-gold-300"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+        </svg>
+        <span className="text-2xs font-medium leading-none mt-0.5">선택</span>
+        <input
+          type="date"
+          min={todayIso}
+          onChange={(e) => { if (e.target.value) onPick(e.target.value); }}
+          className="absolute inset-0 opacity-0 cursor-pointer"
+          aria-label="날짜 직접 선택"
+        />
+      </label>
     </div>
   );
 }
@@ -223,6 +244,8 @@ export default function IntegratedSearchBar({
     arr.includes(value) ? arr.filter((v) => v !== value) : [...arr, value];
 
   const handleDateToggle   = useCallback((iso: string) => setSelectedDates((prev) => toggleInArray(prev, iso)), []);
+  // 캘린더로 고른 날짜는 토글이 아니라 '추가'만(이미 있으면 유지)
+  const handlePickDate     = useCallback((iso: string) => setSelectedDates((prev) => prev.includes(iso) ? prev : [...prev, iso]), []);
   const handleRegionToggle = useCallback((r: string) => setSelectedRegions((prev) => toggleInArray(prev, r)), []);
 
   const activeCount =
@@ -302,7 +325,7 @@ export default function IntegratedSearchBar({
       </div>
 
       {/* ── 날짜 슬라이더 탭 (복수 선택) ─────────────────────────────────── */}
-      <DateSlider selectedDates={selectedDates} onToggle={handleDateToggle} />
+      <DateSlider selectedDates={selectedDates} onToggle={handleDateToggle} onPick={handlePickDate} />
 
       {/* ── 지역(복수선택) + 토너먼트(라디오) 필터 ──────────────────────── */}
       <div className="flex flex-col gap-1.5 px-page-x pt-2 pb-1">
