@@ -29,6 +29,8 @@ interface PostFormModalProps {
   open: boolean;
   onClose: () => void;
   onSubmit: (data: PostFormData) => Promise<void> | void;
+  /** 열릴 때 기본 선택 카테고리 ('홀덤 공부' 탭 진입 시 'study') */
+  defaultCategory?: PostCategory;
 }
 
 const CATEGORY_OPTIONS: { id: PostCategory; label: string }[] = [
@@ -36,12 +38,13 @@ const CATEGORY_OPTIONS: { id: PostCategory; label: string }[] = [
   { id: 'question', label: '❓ 질문' },
   { id: 'info',     label: '📢 정보' },
   { id: 'review',   label: '⭐ 후기' },
+  { id: 'study',    label: '📚 공부' },
 ];
 
 const MAX_IMAGES = 4;
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 
-export default function PostFormModal({ open, onClose, onSubmit }: PostFormModalProps) {
+export default function PostFormModal({ open, onClose, onSubmit, defaultCategory }: PostFormModalProps) {
   const { user } = useAuth();
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -56,10 +59,10 @@ export default function PostFormModal({ open, onClose, onSubmit }: PostFormModal
   // 모달 열릴 때 초기화 + 닫힐 때 objectURL 해제
   useEffect(() => {
     if (open) {
-      setCategory('free'); setTitle(''); setContent('');
+      setCategory(defaultCategory ?? 'free'); setTitle(''); setContent('');
       setFiles([]); setPreviews([]); setSaving(false);
     }
-  }, [open]);
+  }, [open, defaultCategory]);
 
   useEffect(() => {
     // 언마운트/프리뷰 교체 시 objectURL 정리(메모리릭 방지)
@@ -127,7 +130,7 @@ export default function PostFormModal({ open, onClose, onSubmit }: PostFormModal
         {/* 카테고리 */}
         <div>
           <label className="block text-xs font-medium text-ink-secondary mb-1.5">카테고리</label>
-          <div className="grid grid-cols-4 gap-1.5">
+          <div className="grid grid-cols-3 gap-1.5">
             {CATEGORY_OPTIONS.map((o) => (
               <button
                 key={o.id}

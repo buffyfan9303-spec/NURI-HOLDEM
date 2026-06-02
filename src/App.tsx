@@ -41,7 +41,7 @@ import type { NoticeFormData } from './components/features/NoticeFormModal';
 import { getMyNotifications, markNotificationsRead } from './api/notifications';
 import type { User } from './api/auth';
 import type { Schedule } from './api/schedules';
-import type { Venue, Comment, CommunityPost } from './api/community';
+import type { Venue, Comment, CommunityPost, PostCategory } from './api/community';
 import type { AppNotification } from './api/notifications';
 import type { MarketplaceListing, MarketplaceNotice } from './api/marketplace';
 
@@ -110,19 +110,26 @@ function AppHeader({
           {/* 로그인 / 유저 메뉴 */}
           {user ? (
             <div className="relative">
-              {/* 아바타 버튼 — 사진 있으면 이미지, 없으면 색상 이니셜 */}
+              {/* 아바타 버튼 — 사진 있으면 이미지, 없으면 색상 이니셜
+                  [모바일 접근성] 보이는 아바타는 36px 유지하되, 터치 영역(버튼)을
+                  44x44px로 확장(WCAG 2.5.5 최소 타깃). -mr-1로 우측 페이지 여백 정렬 보정. */}
               <button
                 type="button"
                 onClick={() => setUserMenu((v) => !v)}
                 aria-label={`${user.name} 메뉴`}
-                className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center
-                           text-xs font-bold select-none transition-transform hover:scale-105
-                           ring-1 ring-border-default hover:ring-gold-300"
-                style={user.avatarUrl ? undefined : { background: user.avatarColor ?? '#FFD100', color: '#fff' }}
+                className="group w-11 h-11 -mr-1 flex items-center justify-center rounded-full focus:outline-none"
               >
-                {user.avatarUrl
-                  ? <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
-                  : user.name[0]}
+                <span
+                  className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center
+                             text-xs font-bold text-white select-none transition-transform
+                             ring-1 ring-border-default group-hover:ring-gold-300
+                             group-hover:scale-105 group-active:scale-95"
+                  style={user.avatarUrl ? undefined : { background: user.avatarColor ?? '#FFD100' }}
+                >
+                  {user.avatarUrl
+                    ? <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
+                    : user.name[0]}
+                </span>
               </button>
 
               {/* 드롭다운 메뉴 */}
@@ -284,7 +291,7 @@ export default function App() {
   // UI 상태
   const [viewMode, setViewMode]       = useState<ViewMode>('list');
   const [activeTab, setActiveTab]     = useState<TabId>('browse');
-  const [searchState, setSearchState] = useState<SearchState>({ query: '', dates: [], regions: [], format: null, gtdOnly: false });
+  const [searchState, setSearchState] = useState<SearchState>({ query: '', dates: [], regions: [], format: null, gtdOnly: false, competitionOnly: false });
   const [authOpen, setAuthOpen]       = useState(false);
   const [openVenueId, setOpenVenueId] = useState<string | null>(null);
   const [openSchedule, setOpenSchedule] = useState<Schedule | null>(null);
@@ -306,6 +313,7 @@ export default function App() {
   const [profileOpen, setProfileOpen]   = useState(false);
   const [noticeFormOpen, setNoticeFormOpen] = useState(false);
   const [postFormOpen, setPostFormOpen]     = useState(false);   // 커뮤니티 글쓰기
+  const [postFormCategory, setPostFormCategory] = useState<PostCategory>('free'); // 글쓰기 기본 카테고리(공부 탭=study)
   const [marketFormOpen, setMarketFormOpen] = useState(false);   // 중고장터 글쓰기
 
   // 서버 재조회 헬퍼
@@ -365,7 +373,8 @@ export default function App() {
       const matchR = searchState.regions.length === 0 || searchState.regions.some((r) => s.region.includes(r));
       const matchF = !searchState.format || s.format === searchState.format;
       const matchG = !searchState.gtdOnly || s.guaranteed === true;
-      return matchQ && matchD && matchR && matchF && matchG;
+      const matchC = !searchState.competitionOnly || s.isCompetition === true;
+      return matchQ && matchD && matchR && matchF && matchG && matchC;
     });
   }, [schedules, searchState]);
 
@@ -389,7 +398,7 @@ export default function App() {
     setOpenNotice(null);
     setOpenPost(null);
     setPosterFormTarget(null);
-    setSearchState({ query: '', dates: [], regions: [], format: null, gtdOnly: false });
+    setSearchState({ query: '', dates: [], regions: [], format: null, gtdOnly: false, competitionOnly: false });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
@@ -591,6 +600,7 @@ export default function App() {
         startTime:    data.startTime,
         regCloseTime: data.regCloseTime,
         guaranteed:   data.prizeType === 'GTD',
+        isCompetition: data.isCompetition,
         prizePool:    data.prizeAmount * 10_000,
         buyIn:        { amount: data.buyIn },
         region:       data.region,
@@ -621,6 +631,7 @@ export default function App() {
       regCloseTime:   data.regCloseTime,
       format:         'MTT',
       guaranteed:     data.prizeType === 'GTD',
+      isCompetition:  data.isCompetition,
       prizePool:      data.prizeAmount * 10_000,
       buyIn:          { amount: data.buyIn },
       paymentMethods: data.paymentMethods,
@@ -705,7 +716,11 @@ export default function App() {
             onSelectNotice={setOpenNotice}
             onSelectVenue={handleVenueClick}
             onSelectPost={setOpenPost}
-            onOpenWrite={() => user ? setPostFormOpen(true) : setAuthOpen(true)}
+            onOpenWrite={(category) => {
+              if (!user) { setAuthOpen(true); return; }
+              setPostFormCategory(category ?? 'free');
+              setPostFormOpen(true);
+            }}
             onLikePost={handleLikePost}
           />
         </main>
@@ -731,7 +746,14 @@ export default function App() {
         <main className="px-page-x py-section animate-fade-in">
           <MyPostersTab
             schedules={schedules}
-            onCreate={() => setPosterFormTarget(undefined)}
+            onCreate={() => {
+              // 승인 전 업주는 포스터 등록 차단(서버 RLS와 이중 방어 + 명확한 안내)
+              if (user?.role === 'venue_owner' && !user.approved) {
+                toast.show('매장 승인 완료 후 포스터를 등록할 수 있습니다', 'error');
+                return;
+              }
+              setPosterFormTarget(undefined);
+            }}
             onEdit={(id) => {
               const s = schedules.find((x) => x.id === id);
               if (s) setPosterFormTarget(s);
@@ -828,6 +850,7 @@ export default function App() {
         open={postFormOpen}
         onClose={() => setPostFormOpen(false)}
         onSubmit={handleCreatePost}
+        defaultCategory={postFormCategory}
       />
 
       {/* 중고장터 글쓰기 모달 (Stage 2) */}

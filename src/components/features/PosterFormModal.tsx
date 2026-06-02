@@ -24,6 +24,7 @@ export interface PosterFormData {
   prizeAmount: number;
   buyIn: number;
   region: string;
+  isCompetition: boolean; // '대회/이벤트' 분류 (Task 3) — 필터 [대회]에 노출
   paymentMethods: string[];
   prizes: string[];
   posterUrl?: string;
@@ -44,6 +45,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit }: P
     title: '', date: new Date().toISOString().slice(0, 10),
     startTime: '19:00', regCloseTime: '',
     prizeType: 'GTD', prizeAmount: 0, buyIn: 0, region: '',
+    isCompetition: false,
     paymentMethods: ['현금'], prizes: [],
   };
 
@@ -62,6 +64,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit }: P
         prizeType: schedule.guaranteed ? 'GTD' : 'ENTRY',
         prizeAmount: schedule.prizePool ? Math.round(schedule.prizePool / 10000) : 0,
         buyIn: schedule.buyIn.amount, region: schedule.region,
+        isCompetition: schedule.isCompetition ?? false,
         paymentMethods: schedule.paymentMethods ?? ['현금'],
         prizes: schedule.seats?.map((s) => `${s.label} ${s.count}석`) ?? [],
         posterUrl: schedule.posterUrl,
@@ -199,6 +202,30 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit }: P
             <RadioCard checked={form.prizeType === 'GTD'} onClick={() => update('prizeType', 'GTD')} title="GTD" desc="보장 상금" />
             <RadioCard checked={form.prizeType === 'ENTRY'} onClick={() => update('prizeType', 'ENTRY')} title="엔트리" desc="참가비 누적" />
           </div>
+        </FieldWrap>
+
+        {/* 대회/이벤트 분류 — 캘린더 '대회' 필터에 노출 (Task 3) */}
+        <FieldWrap label="대회/이벤트 분류">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={form.isCompetition}
+            onClick={() => update('isCompetition', !form.isCompetition)}
+            className={['w-full flex items-center justify-between p-3 rounded-input border-2 text-left transition-all',
+              form.isCompetition ? 'border-gold-300 bg-gold-300/10' : 'border-border-default bg-surface-high hover:border-border-strong'].join(' ')}
+          >
+            <span>
+              <span className={['block text-sm font-bold leading-none', form.isCompetition ? 'text-gold-300' : 'text-ink-primary'].join(' ')}>
+                대회/이벤트로 표시
+              </span>
+              <span className="block text-2xs text-ink-muted mt-1">캘린더의 [대회] 필터에 노출됩니다 (정규 대회·시리즈·이벤트)</span>
+            </span>
+            <span aria-hidden className={['shrink-0 w-9 h-5 rounded-full relative transition-colors',
+              form.isCompetition ? 'bg-gold-300' : 'bg-surface-float'].join(' ')}>
+              <span className={['absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all',
+                form.isCompetition ? 'left-[1.125rem]' : 'left-0.5'].join(' ')} />
+            </span>
+          </button>
         </FieldWrap>
 
         {/* 상금 + 바이인 */}

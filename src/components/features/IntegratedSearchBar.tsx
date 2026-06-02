@@ -52,12 +52,14 @@ const REGION_CHIPS = [
   '인천', '부산', '대전', '대구', '광주', '제주',
 ] as const;
 
-// 토너먼트 필터(요구사항 2) — [전체, MTT, GTD] 라디오(상호배타)
-type TourFilter = 'all' | 'MTT' | 'GTD';
+// 토너먼트 필터 — [전체, MTT, GTD, 대회] 라디오(상호배타)
+//  전체=필터없음 / MTT=format'MTT' / GTD=guaranteed / 대회=is_competition
+type TourFilter = 'all' | 'MTT' | 'GTD' | 'comp';
 const TOUR_OPTIONS: { id: TourFilter; label: string }[] = [
-  { id: 'all', label: '전체' },
-  { id: 'MTT', label: 'MTT' },
-  { id: 'GTD', label: 'GTD' },
+  { id: 'all',  label: '전체' },
+  { id: 'MTT',  label: 'MTT' },
+  { id: 'GTD',  label: 'GTD' },
+  { id: 'comp', label: '대회' },
 ];
 
 // ── 서브컴포넌트: 검색 아이콘 ─────────────────────────────────────────────────
@@ -170,6 +172,7 @@ export interface SearchState {
   regions: string[]; // 복수 선택 (Multi-select) — 비어있으면 전체
   format: string | null;
   gtdOnly: boolean;
+  competitionOnly: boolean; // '대회' 필터 — is_competition=true 만 노출 (Task 3)
 }
 
 interface IntegratedSearchBarProps {
@@ -196,11 +199,12 @@ export default function IntegratedSearchBar({
   const deferredQuery = useDeferredValue(rawQuery);
 
   useEffect(() => {
-    // tour → format/gtdOnly 파생 (SearchState 계약 유지)
-    const format  = tour === 'MTT' ? 'MTT' : null;
-    const gtdOnly = tour === 'GTD';
+    // tour → format/gtdOnly/competitionOnly 파생 (SearchState 계약 유지)
+    const format          = tour === 'MTT' ? 'MTT' : null;
+    const gtdOnly         = tour === 'GTD';
+    const competitionOnly = tour === 'comp';
     startTransition(() => {
-      onChange({ query: deferredQuery, dates: selectedDates, regions: selectedRegions, format, gtdOnly });
+      onChange({ query: deferredQuery, dates: selectedDates, regions: selectedRegions, format, gtdOnly, competitionOnly });
     });
   }, [deferredQuery, selectedDates, selectedRegions, tour, onChange]);
 
@@ -390,7 +394,10 @@ export default function IntegratedSearchBar({
           ))}
           {/* 토너먼트 필터 칩 (단일) */}
           {tour !== 'all' && (
-            <FilterChip label={tour} onRemove={() => setTour('all')} />
+            <FilterChip
+              label={TOUR_OPTIONS.find((o) => o.id === tour)?.label ?? tour}
+              onRemove={() => setTour('all')}
+            />
           )}
         </div>
       )}

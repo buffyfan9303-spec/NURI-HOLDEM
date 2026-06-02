@@ -1,7 +1,10 @@
-import { useState, useMemo } from 'react';
-import type { Venue, Comment, CommunityPost } from '../../api/community';
+import { useState, useMemo, useEffect } from 'react';
+import type { Venue, Comment, CommunityPost, LiveMessage, PostCategory } from '../../api/community';
+import { getLiveMessages, addLiveMessage, subscribeLiveWall } from '../../api/community';
 import type { MarketplaceNotice } from '../../api/marketplace';
 import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../atoms/Toast';
+import { filterContent } from '../../lib/content-filter';
 
 interface CommunityTabProps {
   venues: Venue[];
@@ -15,13 +18,13 @@ interface CommunityTabProps {
   onSelectNotice?: (notice: MarketplaceNotice) => void;
   onSelectVenue: (venueId: string) => void;
   onSelectPost: (post: CommunityPost) => void;
-  /** 글쓰기 버튼 → 글쓰기 모달 열기 (Stage 2) */
-  onOpenWrite: () => void;
+  /** 글쓰기 버튼 → 글쓰기 모달 열기. category로 기본 카테고리 지정('홀덤 공부' 탭=study) */
+  onOpenWrite: (category?: PostCategory) => void;
   onLikePost: (postId: string) => void;
 }
 
-// Stage 2: '실시간' 탭 삭제 → [실시간 댓글(=구 전역 피드), 매장 커뮤니티]
-type Section = 'feed' | 'venues';
+// Task 4: [실시간 댓글(라이브월), 게시판, 홀덤 공부, 홀덤펍]
+type Section = 'live' | 'board' | 'study' | 'venues';
 
 function relativeTime(iso: string): string {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -35,7 +38,7 @@ export default function CommunityTab({
   venues, comments, posts, notices = [], isAdmin = false, onWriteNotice, onSelectNotice,
   onSelectVenue, onSelectPost, onOpenWrite, onLikePost,
 }: CommunityTabProps) {
-  const [section, setSection] = useState<Section>('feed');
+  const [section, setSection] = useState<Section>('board');
   const [query, setQuery] = useState('');
 
   // 매장 정렬: 1) 유료광고(isPaidAd) → 2) 팔로워수 내림차순
@@ -61,24 +64,45 @@ export default function CommunityTab({
     [posts],
   );
 
+  // 게시판 = 'study' 제외 / 홀덤 공부 = 'study'만 (Task 4)
+  const boardPosts = useMemo(() => sortedPosts.filter((p) => p.category !== 'study'), [sortedPosts]);
+  const studyPosts = useMemo(() => sortedPosts.filter((p) => p.category === 'study'), [sortedPosts]);
+
   return (
     <div className="space-y-3">
-      {/* 섹션 토글 — 실시간 댓글 / 매장 커뮤니티 (Stage 2: '실시간' 탭 삭제) */}
+      {/* 섹션 토글 — 실시간 댓글 / 게시판 / 홀덤 공부 / 홀덤펍 (Task 4) */}
       <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5">
-        <SectionTab active={section === 'feed'}   label="실시간 댓글"   onClick={() => setSection('feed')} />
-        <SectionTab active={section === 'venues'} label="매장 커뮤니티" onClick={() => setSection('venues')} />
+        <SectionTab active={section === 'live'}   label="실시간 댓글" onClick={() => setSection('live')} />
+        <SectionTab active={section === 'board'}  label="게시판"      onClick={() => setSection('board')} />
+        <SectionTab active={section === 'study'}  label="홀덤 공부"   onClick={() => setSection('study')} />
+        <SectionTab active={section === 'venues'} label="홀덤펍"      onClick={() => setSection('venues')} />
       </div>
 
-      {section === 'feed' && (
+      {section === 'live' && <LiveWallSection />}
+
+      {section === 'board' && (
         <FeedSection
-          posts={sortedPosts}
+          posts={boardPosts}
           notices={notices}
           isAdmin={isAdmin}
           onWriteNotice={onWriteNotice}
           onSelectNotice={onSelectNotice}
-          onOpenWrite={onOpenWrite}
+          onOpenWrite={() => onOpenWrite('free')}
           onLike={onLikePost}
           onSelectPost={onSelectPost}
+          placeholder="나누고 싶은 이야기를 적어보세요..."
+          emptyText="첫 게시글을 남겨보세요"
+        />
+      )}
+
+      {section === 'study' && (
+        <FeedSection
+          posts={studyPosts}
+          onOpenWrite={() => onOpenWrite('study')}
+          onLike={onLikePost}
+          onSelectPost={onSelectPost}
+          placeholder="홀덤 공부·전략을 공유해보세요..."
+          emptyText="첫 홀덤 공부 글을 남겨보세요"
         />
       )}
 
@@ -115,6 +139,7 @@ function SectionTab({ active, label, onClick }: { active: boolean; label: string
 
 function FeedSection({
   posts, notices, isAdmin, onWriteNotice, onSelectNotice, onOpenWrite, onLike, onSelectPost,
+  placeholder = '나누고 싶은 이야기를 적어보세요...', emptyText = '첫 게시글을 남겨보세요',
 }: {
   posts: CommunityPost[];
   notices?: MarketplaceNotice[];
@@ -124,6 +149,8 @@ function FeedSection({
   onOpenWrite: () => void;
   onLike: (id: string) => void;
   onSelectPost: (p: CommunityPost) => void;
+  placeholder?: string;
+  emptyText?: string;
 }) {
   const { user } = useAuth();
 
@@ -136,7 +163,7 @@ function FeedSection({
           onClick={onOpenWrite}
           className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-input bg-surface-high border border-border-default hover:border-gold-400/50 transition-colors text-left"
         >
-          <span className="text-xs text-ink-muted">나누고 싶은 이야기를 적어보세요...</span>
+          <span className="text-xs text-ink-muted">{placeholder}</span>
           <span className="shrink-0 inline-flex items-center gap-1 text-2xs font-bold text-gold-300">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
@@ -205,7 +232,7 @@ function FeedSection({
 
       {/* 포스트 목록 — 게시판 형태 (조밀하게 많이 보이게) */}
       {posts.length === 0 ? (
-        <p className="text-center py-12 text-xs text-ink-muted">첫 게시글을 남겨보세요</p>
+        <p className="text-center py-12 text-xs text-ink-muted">{emptyText}</p>
       ) : (
         <div className="rounded-card border border-border-default bg-surface-low overflow-hidden">
           <ul>
@@ -386,6 +413,116 @@ function VenuesSection({
                   )}
                 </div>
               </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// ── 실시간 댓글 (한 줄 라이브 월) ──────────────────────────────────────────────
+// 제목 없이 짧게(최대 140자) 올리는 실시간 보드. Supabase Realtime 구독으로 즉시 수신.
+function LiveWallSection() {
+  const { user } = useAuth();
+  const toast = useToast();
+  const [messages, setMessages] = useState<LiveMessage[]>([]);
+  const [draft,    setDraft]    = useState('');
+  const [loading,  setLoading]  = useState(true);
+  const [sending,  setSending]  = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    getLiveMessages(50)
+      .then((m) => { if (active) setMessages(m); })
+      .catch(() => { /* 조회 실패 시 빈 목록 유지 */ })
+      .finally(() => { if (active) setLoading(false); });
+    // 실시간 수신 — 새 메시지 prepend (id 중복 방지)
+    const unsub = subscribeLiveWall((msg) => {
+      setMessages((prev) => (prev.some((x) => x.id === msg.id) ? prev : [msg, ...prev]));
+    });
+    return () => { active = false; unsub(); };
+  }, []);
+
+  const send = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return toast.show('로그인이 필요합니다', 'error');
+    const body = draft.trim();
+    if (!body) return;
+    const check = filterContent(body);
+    if (check.blocked) return toast.show(check.reason!, 'error');
+
+    setSending(true);
+    try {
+      const msg = await addLiveMessage({
+        userId:    user.id,
+        userName:  user.nickname ?? user.name,
+        userRole:  user.role,
+        userColor: user.avatarColor,
+        content:   body,
+      });
+      setMessages((prev) => (prev.some((x) => x.id === msg.id) ? prev : [msg, ...prev]));
+      setDraft('');
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : '전송에 실패했습니다', 'error');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      {user ? (
+        <form onSubmit={send} className="flex items-center gap-2">
+          <input
+            type="text"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            maxLength={140}
+            placeholder="한 줄로 빠르게 남겨보세요 (최대 140자)"
+            className="input flex-1"
+          />
+          <button
+            type="submit"
+            disabled={sending || !draft.trim()}
+            className="btn-primary px-4 shrink-0 disabled:opacity-50"
+          >
+            {sending ? '...' : '전송'}
+          </button>
+        </form>
+      ) : (
+        <div className="p-2 rounded-input bg-surface-high text-center text-2xs text-ink-muted">
+          로그인하면 실시간 댓글을 남길 수 있습니다
+        </div>
+      )}
+
+      {loading ? (
+        <p className="text-center py-12 text-xs text-ink-muted">불러오는 중…</p>
+      ) : messages.length === 0 ? (
+        <p className="text-center py-12 text-xs text-ink-muted">첫 한 줄을 남겨보세요</p>
+      ) : (
+        <ul className="space-y-1.5">
+          {messages.map((m) => (
+            <li key={m.id} className="flex items-start gap-2 px-3 py-2 rounded-input bg-surface-low border border-border-subtle">
+              <div
+                className="w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-2xs font-bold text-white mt-0.5"
+                style={{ background: m.userColor ?? '#5A6175' }}
+              >
+                {m.userName[0]}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1 text-2xs">
+                  <span className="font-semibold text-ink-primary truncate">{m.userName}</span>
+                  {m.userRole === 'venue_owner' && (
+                    <span className="font-bold text-gold-300 bg-gold-300/15 px-1 rounded-badge leading-none">업주</span>
+                  )}
+                  {m.userRole === 'admin' && (
+                    <span className="font-bold text-danger-light bg-danger/15 px-1 rounded-badge leading-none">운영자</span>
+                  )}
+                  <span className="text-ink-muted ml-auto shrink-0">{relativeTime(m.createdAt)}</span>
+                </div>
+                <p className="text-xs text-ink-primary leading-snug mt-0.5 break-words">{m.content}</p>
+              </div>
             </li>
           ))}
         </ul>

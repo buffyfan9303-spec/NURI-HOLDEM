@@ -17,7 +17,8 @@ export interface Comment {
 }
 
 // 커뮤니티 글 카테고리 (Stage 2). DB 미존재 시 'free'로 폴백.
-export type PostCategory = 'free' | 'question' | 'info' | 'review';
+// 'study'(공부) = '홀덤 공부' 탭 글 모음 (Task 4)
+export type PostCategory = 'free' | 'question' | 'info' | 'review' | 'study';
 
 export interface CommunityPost {
   id: string; userId: string; userName: string;
@@ -193,4 +194,69 @@ export async function addPost(
 export async function likePost(postId: string): Promise<void> {
   if (IS_MOCK) return;
   await supabase.rpc('increment_post_likes', { post_id: postId });
+}
+
+// ── Live Wall (실시간 한 줄 보드) ───────────────────────────────────────────────
+// '실시간 댓글' 탭 = 제목 없이 짧게(최대 140자) 올리는 실시간 보드.
+export interface LiveMessage {
+  id: string;
+  userId: string;
+  userName: string;
+  userRole: UserRole;
+  userColor?: string;
+  content: string;
+  createdAt: string;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const rowToLiveMessage = (r: any): LiveMessage => ({
+  id: r.id, userId: r.user_id, userName: r.user_name,
+  userRole: r.user_role, userColor: r.user_color ?? undefined,
+  content: r.content, createdAt: r.created_at,
+});
+
+export async function getLiveMessages(limit = 50): Promise<LiveMessage[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.from('live_wall').select('*')
+    .order('created_at', { ascending: false }).limit(limit);
+  if (error) throw error;
+  return (data ?? []).map(rowToLiveMessage);
+}
+
+export async function addLiveMessage(
+  payload: Pick<LiveMessage, 'userId' | 'userName' | 'userRole' | 'userColor' | 'content'>,
+): Promise<LiveMessage> {
+  if (IS_MOCK) {
+    return { ...payload, id: `lw_${Date.now()}`, createdAt: new Date().toISOString() };
+  }
+  const { data, error } = await supabase.from('live_wall').insert({
+    user_id:    payload.userId,
+    user_name:  payload.userName,
+    user_role:  payload.userRole,
+    user_color: payload.userColor ?? null,
+    content:    payload.content,
+  }).select().single();
+  if (error) throw error;
+  return rowToLiveMessage(data);
+}
+
+export async function deleteLiveMessage(id: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.from('live_wall').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// 실시간 구독 — 새 메시지 INSERT 수신. 반환 함수 호출로 구독 해제.
+export function subscribeLiveWall(onInsert: (msg: LiveMessage) => void): () => void {
+  if (IS_MOCK) return () => {};
+  const channel = supabase
+    .channel('live_wall_inserts')
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'live_wall' },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (payload: any) => onInsert(rowToLiveMessage(payload.new)),
+    )
+    .subscribe();
+  return () => { supabase.removeChannel(channel); };
 }

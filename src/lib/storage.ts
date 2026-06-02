@@ -7,8 +7,8 @@ import { supabase, IS_MOCK } from './supabase';
 const BUCKET_POSTERS  = import.meta.env.VITE_STORAGE_BUCKET_POSTERS  ?? 'posters';
 const BUCKET_LISTINGS = import.meta.env.VITE_STORAGE_BUCKET_LISTINGS ?? 'listings';
 const BUCKET_AVATARS  = 'avatars';
-// 커뮤니티 글쓰기 이미지 — 별도 버킷 미존재 시 listings 버킷을 공용으로 재사용(공개 읽기/로그인 업로드 정책 동일).
-const BUCKET_COMMUNITY = import.meta.env.VITE_STORAGE_BUCKET_COMMUNITY ?? BUCKET_LISTINGS;
+// 커뮤니티 글쓰기 이미지 — 전용 공개 버킷(community_images). 정책: 공개 읽기 / 로그인 업로드 / 본인 삭제.
+const BUCKET_COMMUNITY = import.meta.env.VITE_STORAGE_BUCKET_COMMUNITY ?? 'community_images';
 
 // ── 이미지 리사이징 (Canvas API) ─────────────────────────────────────────────
 export async function resizeImage(
