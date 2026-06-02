@@ -8,6 +8,8 @@ interface PostDetailModalProps {
   open: boolean;
   onClose: () => void;
   onLike: (postId: string) => void;
+  /** 관리자 또는 작성자 삭제 */
+  onDelete?: (postId: string) => void;
 }
 
 interface PostReply {
@@ -26,7 +28,7 @@ function formatFullDate(iso: string): string {
 }
 
 export default function PostDetailModal({
-  post, open, onClose, onLike,
+  post, open, onClose, onLike, onDelete,
 }: PostDetailModalProps) {
   const { user } = useAuth();
   const [replies, setReplies] = useState<PostReply[]>([]);
@@ -77,6 +79,15 @@ export default function PostDetailModal({
               {formatFullDate(post.createdAt)}
             </p>
           </div>
+          {onDelete && (user?.role === 'admin' || user?.id === post.userId) && (
+            <button
+              type="button"
+              onClick={() => { if (confirm('이 게시글을 삭제하시겠습니까?')) onDelete(post.id); }}
+              className="shrink-0 text-2xs font-semibold px-2 py-1 rounded-badge border bg-danger/15 text-danger-light border-danger/30 hover:bg-danger/25 transition-colors"
+            >
+              삭제
+            </button>
+          )}
         </header>
 
         {/* ── 본문 ───────────────────────────────────────── */}

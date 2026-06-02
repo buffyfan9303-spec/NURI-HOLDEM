@@ -33,10 +33,10 @@ import {
   getSchedules, createSchedule, updateSchedule, deleteSchedule,
 } from './api/schedules';
 import {
-  getVenues, getComments, getPosts, addComment, addPost, likePost,
-  updateVenueDescription, updateVenueImage, deleteComment,
+  getVenues, getComments, getPosts, addComment, addPost, likePost, deletePost,
+  updateVenueDescription, updateVenueImage, deleteComment, logActivity,
 } from './api/community';
-import { getListings, getNotices, createNotice, createListing } from './api/marketplace';
+import { getListings, getNotices, createNotice, createListing, deleteListing } from './api/marketplace';
 import type { NoticeFormData } from './components/features/NoticeFormModal';
 import { getMyNotifications, markNotificationsRead } from './api/notifications';
 import type { User } from './api/auth';
@@ -529,10 +529,31 @@ export default function App() {
     }
   }, [toast]);
 
-  // 관리자: 게시글 삭제 (로컬 제거 — 영구 삭제 API는 추후 연동)
+  // 관리자/작성자: 게시글 삭제 — 서버 삭제 + 활동로그 기록(권한은 RLS가 강제)
   const handleDeletePost = useCallback((id: string) => {
+    const target = posts.find((p) => p.id === id);
     setPosts((prev) => prev.filter((p) => p.id !== id));
-  }, []);
+    setOpenPost((cur) => (cur?.id === id ? null : cur));
+    deletePost(id)
+      .then(() => {
+        logActivity({ action: 'delete', targetType: 'post', targetId: id, targetOwnerId: target?.userId, targetSummary: target?.title || target?.content, actorName: user?.name });
+        toast.show('게시글이 삭제되었습니다', 'success');
+      })
+      .catch(() => toast.show('삭제에 실패했습니다', 'error'));
+  }, [posts, user, toast]);
+
+  // 관리자/판매자: 매물 삭제 — 서버 삭제 + 활동로그
+  const handleDeleteListing = useCallback((id: string) => {
+    const target = listings.find((l) => l.id === id);
+    setListings((prev) => prev.filter((l) => l.id !== id));
+    setOpenListing((cur) => (cur?.id === id ? null : cur));
+    deleteListing(id)
+      .then(() => {
+        logActivity({ action: 'delete', targetType: 'listing', targetId: id, targetOwnerId: target?.sellerId, targetSummary: target?.title, actorName: user?.name });
+        toast.show('매물이 삭제되었습니다', 'success');
+      })
+      .catch(() => toast.show('삭제에 실패했습니다', 'error'));
+  }, [listings, user, toast]);
 
   // 관리자: 댓글 삭제 — 낙관적 제거 후 서버 반영(권한은 RLS가 강제)
   const handleDeleteComment = useCallback((commentId: string) => {
@@ -564,9 +585,13 @@ export default function App() {
   }, [toast]);
 
   const handleDeletePoster = useCallback((id: string) => {
+    const target = schedules.find((s) => s.id === id);
     setSchedules((prev) => prev.filter((s) => s.id !== id));
-    deleteSchedule(id).catch(() => { toast.show('삭제에 실패했습니다', 'error'); reloadSchedules(); });
-  }, [toast, reloadSchedules]);
+    setOpenSchedule((cur) => (cur?.id === id ? null : cur));
+    deleteSchedule(id)
+      .then(() => logActivity({ action: 'delete', targetType: 'schedule', targetId: id, targetOwnerId: target?.ownerId, targetSummary: target?.title, actorName: user?.name }))
+      .catch(() => { toast.show('삭제에 실패했습니다', 'error'); reloadSchedules(); });
+  }, [schedules, user, toast, reloadSchedules]);
 
   // 관리자: 포스터 승인 / 반려 — 서버 반영
   const handleApproveSchedule = useCallback((id: string) => {
@@ -828,6 +853,7 @@ export default function App() {
           openSchedule && handleSubmitScheduleComment(openSchedule.id, content, parentId)
         }
         onDeleteComment={handleDeleteComment}
+        onDeletePoster={handleDeletePoster}
       />
 
       <VenuePage
@@ -847,6 +873,7 @@ export default function App() {
         open={openListing !== null}
         listing={openListing}
         onClose={() => setOpenListing(null)}
+        onDelete={handleDeleteListing}
       />
 
       <NoticeDetailModal
@@ -867,6 +894,7 @@ export default function App() {
         post={openPost}
         onClose={() => setOpenPost(null)}
         onLike={handleLikePost}
+        onDelete={handleDeletePost}
       />
 
       <ProfileModal

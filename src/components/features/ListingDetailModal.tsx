@@ -9,9 +9,12 @@ interface ListingDetailModalProps {
   listing: MarketplaceListing | null;
   open: boolean;
   onClose: () => void;
+  /** 관리자 또는 판매자 삭제 */
+  onDelete?: (id: string) => void;
 }
 
-export default function ListingDetailModal({ listing, open, onClose }: ListingDetailModalProps) {
+export default function ListingDetailModal({ listing, open, onClose, onDelete }: ListingDetailModalProps) {
+  const { user }                  = useAuth();
   const [liked, setLiked]         = useState(false);
   const [chatOpen, setChatOpen]   = useState(false);
   const toast                     = useToast();
@@ -165,6 +168,16 @@ export default function ListingDetailModal({ listing, open, onClose }: ListingDe
               <path d="M11 19.5L2.5 11C1 9.5 1 6.5 2.5 5C4 3.5 7 3.5 8.5 5L11 7.5L13.5 5C15 3.5 18 3.5 19.5 5C21 6.5 21 9.5 19.5 11L11 19.5Z" />
             </svg>
           </button>
+
+          {onDelete && (user?.role === 'admin' || user?.id === listing.sellerId) && (
+            <button
+              type="button"
+              onClick={() => { if (confirm('이 매물을 삭제하시겠습니까?')) onDelete(listing.id); }}
+              className="btn-ghost py-2.5 px-3 text-danger-light hover:bg-danger/10"
+            >
+              삭제
+            </button>
+          )}
 
           {/* 댓글로 스크롤 */}
           <button type="button" onClick={scrollToComments} className="flex-1 btn-ghost py-2.5">

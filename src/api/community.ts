@@ -202,6 +202,13 @@ export async function likePost(postId: string): Promise<void> {
   await supabase.rpc('increment_post_likes', { post_id: postId });
 }
 
+// 게시글 삭제 — RLS(posts_delete: 본인 또는 admin)가 권한 강제
+export async function deletePost(postId: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.from('community_posts').delete().eq('id', postId);
+  if (error) throw error;
+}
+
 // ── Live Wall (실시간 한 줄 보드) ───────────────────────────────────────────────
 // '실시간 댓글' 탭 = 제목 없이 짧게(최대 140자) 올리는 실시간 보드.
 export interface LiveMessage {

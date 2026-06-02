@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import Modal from '../atoms/Modal';
 import CommentThread from './CommentThread';
+import { useAuth } from '../../contexts/AuthContext';
 import { formatPrize } from './ScheduleCard';
 import type { Schedule } from '../../api/schedules';
 import type { Comment } from '../../api/community';
@@ -13,6 +14,8 @@ interface ScheduleDetailModalProps {
   comments: Comment[];
   onSubmitComment: (content: string, parentId?: string) => void;
   onDeleteComment?: (commentId: string) => void;
+  /** 관리자 마스터 삭제(포스터) */
+  onDeletePoster?: (id: string) => void;
 }
 
 type Tab = 'info' | 'qna';
@@ -21,9 +24,10 @@ const SUITS = ['♠','♥','♦','♣'];
 const DAYS_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
 export default function ScheduleDetailModal({
-  schedule, open, onClose, onVenueClick, comments, onSubmitComment, onDeleteComment,
+  schedule, open, onClose, onVenueClick, comments, onSubmitComment, onDeleteComment, onDeletePoster,
 }: ScheduleDetailModalProps) {
   const [tab, setTab] = useState<Tab>('info');
+  const { user } = useAuth();
 
   if (!schedule) return null;
 
@@ -111,6 +115,15 @@ export default function ScheduleDetailModal({
           ].join(' ')}>
             {schedule.title}
           </h1>
+          {onDeletePoster && user?.role === 'admin' && (
+            <button
+              type="button"
+              onClick={() => { if (confirm('이 포스터를 삭제하시겠습니까? 되돌릴 수 없습니다.')) onDeletePoster(schedule.id); }}
+              className="mt-1 mb-1 text-2xs font-semibold px-2 py-1 rounded-badge border bg-danger/15 text-danger-light border-danger/30 hover:bg-danger/25 transition-colors"
+            >
+              관리자 삭제
+            </button>
+          )}
           <button
             type="button"
             onClick={() => onVenueClick(schedule.venueId)}
