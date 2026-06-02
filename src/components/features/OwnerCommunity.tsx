@@ -9,7 +9,7 @@ export default function OwnerCommunity() {
   const { user } = useAuth();
   const toast = useToast();
   const isAdmin = user?.role === 'admin';
-  const canPost = user?.role === 'venue_owner' || isAdmin;
+  const canPost = isAdmin || (user?.role === 'venue_owner' && user?.venueVerified === true);
 
   const [posts, setPosts] = useState<OwnerPost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,7 +59,7 @@ export default function OwnerCommunity() {
   return (
     <div className="space-y-3">
       <div className="rounded-input border border-gold-400/30 bg-gold-300/[0.06] px-3 py-2 text-2xs leading-relaxed text-gold-300">
-        업주 전용 라운지입니다. 작성한 글은 24시간이 지나면 자동으로 사라집니다.
+        인증 업주 전용 라운지입니다. 작성한 글은 24시간이 지나면 자동으로 사라집니다.
       </div>
 
       {canPost ? (
@@ -77,7 +77,7 @@ export default function OwnerCommunity() {
           </div>
         </form>
       ) : (
-        <p className="py-1 text-center text-2xs text-ink-muted">읽기 전용입니다. 글 작성은 매장 업주만 가능합니다.</p>
+        <p className="py-1 text-center text-2xs text-ink-muted">읽기 전용입니다. 글 작성은 인증 업주만 가능합니다.</p>
       )}
 
       {isAdmin && (

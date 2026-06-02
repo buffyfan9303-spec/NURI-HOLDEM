@@ -43,7 +43,7 @@ export default function CommunityTab({
   const [section, setSection] = useState<Section>('board');
   const [query, setQuery] = useState('');
   const { user } = useAuth();
-  const canOwnerCommunity = isAdmin || user?.role === 'venue_owner' || user?.role === 'venue_staff';
+  const canOwnerCommunity = isAdmin || (user?.role === 'venue_owner' && user?.venueVerified === true);
 
   // 매장 정렬: 1) 유료광고(isPaidAd) → 2) 팔로워수 내림차순
   const sortedVenues = useMemo(() => {

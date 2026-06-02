@@ -21,6 +21,7 @@ export interface User {
   agreedToTerms?: boolean;  // 법적 동의 여부 — 구글 OAuth 동의 게이트 판별용
   joinedAt?: string;
   nameChangedAt?: string;   // 닉네임(name) 마지막 변경 시각 — 30일 쿨다운 판별
+  venueVerified?: boolean;  // 업주 본인 매장이 인증(verified)인지 — 업주 커뮤니티 게이트
 }
 
 export interface LoginPayload { email: string; password: string; }
@@ -206,7 +207,14 @@ export async function getMyProfile(): Promise<User | null> {
   if (!user) return null;
 
   const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-  return data ? rowToUser(data) : null;
+  if (!data) return null;
+  const u = rowToUser(data);
+  if (u.role === 'venue_owner') {
+    const { data: v } = await supabase
+      .from('venues').select('verification_status').eq('owner_id', user.id).limit(1).maybeSingle();
+    u.venueVerified = (v as { verification_status?: string } | null)?.verification_status === 'verified';
+  }
+  return u;
 }
 
 // ── 관리자: 전체 회원 목록 ────────────────────────────────────────────────────
