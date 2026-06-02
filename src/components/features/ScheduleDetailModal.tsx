@@ -224,11 +224,16 @@ export default function ScheduleDetailModal({
             <InfoCard
               label="일정"
               value={`${d.getMonth() + 1}/${d.getDate()} (${dow})`}
-              sub={schedule.startTime}
+              sub={`시작 ${schedule.startTime}`}
             />
             <InfoCard
-              label="진행 시간"
-              value={schedule.duration}
+              label="레지 마감"
+              value={schedule.regCloseTime ? schedule.regCloseTime : '현장 안내'}
+              sub={schedule.regCloseTime ? '레이트 레지 마감' : undefined}
+            />
+            <InfoCard
+              label="듀레이션"
+              value={schedule.duration || '미정'}
             />
             <InfoCard
               label="바이인"
@@ -246,6 +251,19 @@ export default function ScheduleDetailModal({
               label="포맷"
               value={schedule.format}
               sub={schedule.guaranteed ? 'GTD 보장' : '예상 상금'}
+            />
+            <InfoCard
+              label="이벤트"
+              value={
+                schedule.sideEvents && schedule.sideEvents.length > 0
+                  ? `사이드 ${schedule.sideEvents.length}개`
+                  : '메인 토너먼트'
+              }
+              sub={
+                schedule.sideEvents && schedule.sideEvents.length > 0
+                  ? schedule.sideEvents.map((se) => se.name).slice(0, 2).join(', ')
+                  : undefined
+              }
             />
           </div>
         </section>
