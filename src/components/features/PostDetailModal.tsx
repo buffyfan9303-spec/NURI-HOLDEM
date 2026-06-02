@@ -43,7 +43,6 @@ export default function PostDetailModal({
   const [myReaction, setMyReaction] = useState<ReactionType | null>(null);
   const [bb, setBb] = useState(0);
   const [gr, setGr] = useState(0);
-  const [pop, setPop] = useState<number | null>(null);
 
   useEffect(() => {
     if (!open || !post) return;
@@ -70,7 +69,6 @@ export default function PostDetailModal({
         setMyReaction(type);
         if (type === 'badbeat') { setBb((n) => n + 1); if (prev === 'goodrun') setGr((n) => Math.max(0, n - 1)); }
         else { setGr((n) => n + 1); if (prev === 'badbeat') setBb((n) => Math.max(0, n - 1)); }
-        setPop(Date.now());
         await reactToPost(post.id, type);
       }
     } catch (e) {
@@ -171,37 +169,31 @@ export default function PostDetailModal({
           </div>
         </div>
 
-        {/* ── 배드빗 / 굿런 (작성자 활동 점수 적립) ─────────── */}
+        {/* ── 좋아요 / 싫어요 (등급 점수에는 반영되지 않음) ─────────── */}
         <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => react('badbeat')}
-            className={[
-              'relative flex items-center justify-center gap-1.5 rounded-card border py-3 text-sm font-bold transition-all active:scale-[0.98]',
-              myReaction === 'badbeat'
-                ? 'border-sky-400 bg-sky-500/15 text-sky-300'
-                : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary',
-            ].join(' ')}
-          >
-            억까당함 <span className="tabular-nums">{bb}</span>
-            {pop !== null && myReaction === 'badbeat' && (
-              <span key={pop} onAnimationEnd={() => setPop(null)} className="animate-point-pop absolute -top-1 right-4 text-sm font-extrabold text-sky-300">+1</span>
-            )}
-          </button>
           <button
             type="button"
             onClick={() => react('goodrun')}
             className={[
               'relative flex items-center justify-center gap-1.5 rounded-card border py-3 text-sm font-bold transition-all active:scale-[0.98]',
               myReaction === 'goodrun'
-                ? 'border-gold-300 bg-gold-300/15 text-gold-300'
+                ? 'border-emerald-400 bg-emerald-500/15 text-emerald-300'
                 : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary',
             ].join(' ')}
           >
-            나이스 런 <span className="tabular-nums">{gr}</span>
-            {pop !== null && myReaction === 'goodrun' && (
-              <span key={pop} onAnimationEnd={() => setPop(null)} className="animate-point-pop absolute -top-1 right-4 text-sm font-extrabold text-gold-300">+1</span>
-            )}
+            좋아요 <span className="tabular-nums">{gr}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => react('badbeat')}
+            className={[
+              'relative flex items-center justify-center gap-1.5 rounded-card border py-3 text-sm font-bold transition-all active:scale-[0.98]',
+              myReaction === 'badbeat'
+                ? 'border-ink-muted bg-surface-float text-ink-primary'
+                : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary',
+            ].join(' ')}
+          >
+            싫어요 <span className="tabular-nums">{bb}</span>
           </button>
         </div>
 

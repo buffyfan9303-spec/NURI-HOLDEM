@@ -27,7 +27,7 @@ import ThemeToggle from './components/atoms/ThemeToggle';
 import ProfileModal from './components/features/ProfileModal';
 import VenueManageTab from './components/features/VenueManageTab';
 import StaffInviteBanner from './components/features/StaffInviteBanner';
-import TierBadge, { tierOf } from './components/atoms/TierBadge';
+import TierBadge from './components/atoms/TierBadge';
 import NoticeFormModal from './components/features/NoticeFormModal';
 import PostFormModal from './components/features/PostFormModal';
 import ConsentGateModal from './components/features/ConsentGateModal';
@@ -137,11 +137,9 @@ function AppHeader({
                     ? <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
                     : user.name[0]}
                 </span>
-                {tierOf(user.activityPoints ?? 0).key !== 'none' && (
-                  <span className="absolute -bottom-0.5 -right-0.5 rounded-full bg-surface-base p-[1px] leading-none">
-                    <TierBadge points={user.activityPoints ?? 0} size={12} />
-                  </span>
-                )}
+                <span className="absolute -bottom-0.5 -right-0.5 rounded-full bg-surface-base p-[1px] leading-none">
+                  <TierBadge points={user.activityPoints ?? 0} size={12} admin={user.role === 'admin'} />
+                </span>
               </button>
 
               {/* 드롭다운 메뉴 */}
@@ -282,7 +280,7 @@ function TabBar({
             aria-selected={isActive}
             onClick={() => onChange(id)}
             className={[
-              'shrink-0 px-5 py-3 text-sm font-medium whitespace-nowrap transition-colors duration-200 focus:outline-none active:bg-surface-high/40 rounded-t-input',
+              'shrink-0 px-5 py-2.5 text-sm font-medium whitespace-nowrap transition-colors duration-200 focus:outline-none active:bg-surface-high/40 rounded-t-input',
               isActive ? 'text-gold-300 text-gold-glow' : 'text-ink-muted hover:text-ink-secondary',
             ].join(' ')}
           >

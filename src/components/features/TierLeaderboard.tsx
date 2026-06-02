@@ -3,13 +3,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import TierBadge, { tierOf, tierProgress, allTiers } from '../atoms/TierBadge';
 import { getActivityLeaderboard, type LeaderboardEntry } from '../../api/community';
-import type { UserRole } from '../../api/auth';
-
-const ROLE_LABEL: Partial<Record<UserRole, string>> = {
-  admin: '운영자',
-  venue_owner: '업주',
-  venue_staff: '구성원',
-};
 
 function RankNum({ n }: { n: number }) {
   const top = n <= 3;
@@ -150,7 +143,6 @@ export default function TierLeaderboard() {
             {rows.map((r, i) => {
               const t = tierOf(r.activityPoints);
               const isMe = user?.id === r.id;
-              const roleLabel = ROLE_LABEL[r.role];
               return (
                 <li
                   key={r.id}
@@ -170,11 +162,6 @@ export default function TierLeaderboard() {
                     <div className="flex items-center gap-1.5">
                       <span className="text-sm font-semibold text-ink-primary truncate">{r.nickname}</span>
                       {isMe && <span className="text-2xs font-bold text-gold-300">나</span>}
-                      {roleLabel && (
-                        <span className="text-2xs font-bold text-ink-muted bg-surface-float px-1.5 py-0.5 rounded-badge">
-                          {roleLabel}
-                        </span>
-                      )}
                     </div>
                   </div>
                   <TierBadge points={r.activityPoints} size={16} />

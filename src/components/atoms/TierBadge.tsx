@@ -83,42 +83,50 @@ export function allTiers(): Tier[] {
   return TIER_DEFS.map((d, i) => ({ key: d.pair, label: d.pair, rank: i, min: d.min, color: d.color }));
 }
 
+// 운영자(관리자) 전용 최상위 등급 — 포켓페어 위. 랭킹에는 집계하지 않는다.
+const ADMIN_TIER_COLOR = '#FF4D6D';
+
 interface Props {
   points: number;
   /** 옆에 "AA 등급" 라벨 표시 */
   showLabel?: boolean;
   /** 뱃지 한 변 크기(px) */
   size?: number;
+  /** 운영자(관리자)면 점수와 무관하게 SS 등급으로 표시 */
+  admin?: boolean;
 }
 
-/** 활동 점수 등급 뱃지 — 포켓페어 카드칩 형태(특수기호 없이 텍스트) */
-export default function TierBadge({ points, showLabel = false, size = 14 }: Props) {
+/** 활동 점수 등급 뱃지 — 포켓페어 카드칩 형태(특수기호 없이 텍스트). 운영자는 SS. */
+export default function TierBadge({ points, showLabel = false, size = 14, admin = false }: Props) {
   const t = tierOf(points);
+  const label = admin ? 'SS' : t.label;
+  const color = admin ? ADMIN_TIER_COLOR : t.color;
+  const glow = admin || t.rank >= 11;
   const fontSize = Math.max(8, Math.round(size * 0.62));
   const chip: CSSProperties = {
     height: size,
     minWidth: size,
     padding: '0 2px',
     fontSize,
-    color: t.color,
-    borderColor: `${t.color}66`,
+    color,
+    borderColor: `${color}66`,
     background: 'rgba(10,12,15,0.88)',
-    boxShadow: t.rank >= 11 ? `0 0 6px ${t.color}99` : undefined,
+    boxShadow: glow ? `0 0 6px ${color}99` : undefined,
   };
   return (
     <span
       className="inline-flex items-center gap-1 align-middle"
-      title={`활동 ${points}점 · ${t.label} 등급`}
+      title={admin ? '운영자 · SS 등급' : `활동 ${points}점 · ${t.label} 등급`}
     >
       <span
         className="inline-flex items-center justify-center rounded-[3px] border font-extrabold leading-none tracking-tight tabular-nums"
         style={chip}
       >
-        {t.label}
+        {label}
       </span>
       {showLabel && (
-        <span className="text-2xs font-bold" style={{ color: t.color }}>
-          {t.label} 등급
+        <span className="text-2xs font-bold" style={{ color }}>
+          {label} 등급
         </span>
       )}
     </span>
