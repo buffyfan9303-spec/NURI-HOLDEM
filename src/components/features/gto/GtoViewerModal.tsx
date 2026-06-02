@@ -14,24 +14,34 @@ export default function GtoViewerModal({ open, onClose }: { open: boolean; onClo
   return (
     <Modal open={open} onClose={onClose} title="GTO 프리플랍 뷰어" variant="sheet" maxWidth="md" fillHeight>
       <div className="space-y-4 px-4 py-3">
-        {/* 시나리오 선택 */}
-        <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 scrollbar-none">
-          {gto.scenarios.map((s) => {
-            const active = gto.scenario.id === s.id;
-            return (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => gto.selectScenario(s.id)}
-                className={[
-                  'h-9 shrink-0 rounded-input px-3 text-xs font-semibold transition-colors',
-                  active ? 'bg-gold-300 text-ink-inverse' : 'border border-border-default bg-surface-high text-ink-secondary',
-                ].join(' ')}
-              >
-                {s.label}
-              </button>
-            );
-          })}
+        {/* 시나리오 선택 — 오픈(RFI) / vs 레이즈 그룹 */}
+        <div className="space-y-2">
+          {([
+            { title: '오픈 (RFI)', items: gto.scenarios.filter((s) => !s.villain) },
+            { title: 'vs 레이즈', items: gto.scenarios.filter((s) => s.villain) },
+          ] as const).map((group) => (
+            <div key={group.title}>
+              <p className="mb-1 text-2xs font-semibold uppercase tracking-wider text-ink-muted">{group.title}</p>
+              <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 scrollbar-none">
+                {group.items.map((s) => {
+                  const active = gto.scenario.id === s.id;
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => gto.selectScenario(s.id)}
+                      className={[
+                        'h-9 shrink-0 rounded-input px-3 text-xs font-semibold transition-colors',
+                        active ? 'bg-gold-300 text-ink-inverse' : 'border border-border-default bg-surface-high text-ink-secondary',
+                      ].join(' ')}
+                    >
+                      {s.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
         {gto.scenario.description && (
           <p className="text-center text-2xs text-ink-muted">{gto.scenario.description}</p>
