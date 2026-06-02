@@ -18,6 +18,7 @@ export interface User {
   status?: UserStatus;
   suspendedUntil?: string;
   sanctionReason?: string; // 관리자 제재 사유 (Stage 3)
+  agreedToTerms?: boolean;  // 법적 동의 여부 — 구글 OAuth 동의 게이트 판별용
   joinedAt?: string;
 }
 
@@ -53,6 +54,7 @@ function rowToUser(row: any): User {
     status:         row.status,
     suspendedUntil: row.suspended_until,
     sanctionReason: row.sanction_reason ?? undefined,
+    agreedToTerms:  row.agreed_to_terms ?? undefined,
     joinedAt:       row.joined_at,
   };
 }
@@ -245,5 +247,45 @@ export async function changeMyPassword(
   }
   // Supabase Auth는 이미 로그인된 세션에서 새 비밀번호만 필요
   const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) throw error;
+}
+
+// ── 비밀번호 변경 (이메일 인증 OTP) ───────────────────────────────────────────
+// 1) 로그인한 본인 이메일로 재인증 OTP(6자리) 발송
+export async function requestPasswordChangeCode(): Promise<void> {
+  if (IS_MOCK) { await new Promise((r) => setTimeout(r, 600)); return; }
+  const { error } = await supabase.auth.reauthenticate();
+  if (error) throw error;
+}
+
+// 2) 이메일로 받은 OTP(nonce)와 함께 비밀번호 변경
+export async function changeMyPasswordWithCode(newPassword: string, code: string): Promise<void> {
+  if (IS_MOCK) { await new Promise((r) => setTimeout(r, 800)); return; }
+  const { error } = await supabase.auth.updateUser({ password: newPassword, nonce: code });
+  if (error) throw error;
+}
+
+// ── 구글 OAuth 로그인 ─────────────────────────────────────────────────────────
+export async function signInWithGoogle(): Promise<void> {
+  if (IS_MOCK) throw new Error('데모 모드에서는 구글 로그인을 사용할 수 없습니다');
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: window.location.origin },
+  });
+  if (error) throw error;
+}
+
+// ── 동의 갱신 (구글 가입자 등 동의 미이행 사용자용 게이트) ────────────────────
+export async function updateMyConsent(consent: ConsentPayload): Promise<void> {
+  if (IS_MOCK) return;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('로그인이 필요합니다');
+  const { error } = await supabase.from('profiles').update({
+    agreed_to_terms:         consent.agreedToTerms,
+    agreed_to_privacy:       consent.agreedToPrivacy,
+    agreed_to_anti_gambling: consent.agreedToAntiGambling,
+    agreed_to_marketing:     consent.agreedToMarketing,
+    terms_agreed_at:         consent.agreedToTerms ? new Date().toISOString() : null,
+  }).eq('id', user.id);
   if (error) throw error;
 }

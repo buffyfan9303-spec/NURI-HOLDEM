@@ -24,6 +24,7 @@ import ThemeToggle from './components/atoms/ThemeToggle';
 import ProfileModal from './components/features/ProfileModal';
 import NoticeFormModal from './components/features/NoticeFormModal';
 import PostFormModal from './components/features/PostFormModal';
+import ConsentGateModal from './components/features/ConsentGateModal';
 import type { PostFormData } from './components/features/PostFormModal';
 import MarketplaceFormModal from './components/features/MarketplaceFormModal';
 import type { MarketplaceFormData } from './components/features/MarketplaceFormModal';
@@ -944,6 +945,9 @@ export default function App() {
         onSubmit={handleCreatePost}
         defaultCategory={postFormCategory}
       />
+
+      {/* 법적 동의 게이트 — 구글 등 미동의 가입자(관리자 제외)에게 1회 필수 동의 */}
+      <ConsentGateModal open={!!user && user.agreedToTerms === false && user.role !== 'admin'} />
 
       {/* 중고장터 글쓰기 모달 (Stage 2) */}
       <MarketplaceFormModal

@@ -5,6 +5,7 @@ import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import { IS_MOCK } from '../../lib/supabase';
 import { resizeImage } from '../../lib/storage';
+import { requestPasswordChangeCode, changeMyPasswordWithCode } from '../../api/auth';
 
 interface ProfileModalProps {
   open: boolean;
@@ -36,7 +37,7 @@ function blobToBase64(blob: Blob): Promise<string> {
 }
 
 export default function ProfileModal({ open, onClose }: ProfileModalProps) {
-  const { user, updateProfile, changePassword } = useAuth();
+  const { user, updateProfile } = useAuth();
   const toast = useToast();
 
   const [tab, setTab] = useState<Tab>('profile');
@@ -49,13 +50,14 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
   const [saving,        setSaving]       = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // ── 보안 상태 ──────────────────────────────────────────────────────────
-  const [currentPw,    setCurrentPw]   = useState('');
+  // ── 보안 상태 (비밀번호 변경 = 이메일 인증 OTP) ──────────────────────────
   const [newPw,        setNewPw]       = useState('');
   const [confirmPw,    setConfirmPw]   = useState('');
-  const [showCurrent,  setShowCurrent] = useState(false);
   const [showNew,      setShowNew]     = useState(false);
   const [showConfirm,  setShowConfirm] = useState(false);
+  const [code,         setCode]        = useState('');     // 이메일로 받은 6자리 OTP
+  const [codeSent,     setCodeSent]    = useState(false);  // 코드 발송 단계 여부
+  const [sendingCode,  setSendingCode] = useState(false);
   const [changingPw,   setChangingPw]  = useState(false);
 
   // 모달 열릴 때마다 폼 초기화
@@ -66,27 +68,43 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
     setColor(user.avatarColor ?? '#FFD100');
     setAvatarPreview(user.avatarUrl ?? '');
     setAvatarFile(null);
-    setCurrentPw(''); setNewPw(''); setConfirmPw('');
-    setShowCurrent(false); setShowNew(false); setShowConfirm(false);
+    setNewPw(''); setConfirmPw(''); setCode('');
+    setCodeSent(false); setSendingCode(false);
+    setShowNew(false); setShowConfirm(false);
   }, [open, user]);
 
-  // ── 비밀번호 변경 (useCallback은 반드시 early return 전에 선언해야 함) ──────
-  const handlePasswordChange = useCallback(async (e: React.FormEvent) => {
+  // ── 비밀번호 변경 = 이메일 인증 OTP (useCallback은 early return 전에 선언) ──
+  // 1) 새 비밀번호 입력 후 가입 이메일로 인증코드 발송
+  const handleSendCode = useCallback(async () => {
+    if (newPw.length < 8)    return toast.show('새 비밀번호는 8자 이상이어야 합니다', 'error');
+    if (newPw !== confirmPw) return toast.show('새 비밀번호가 일치하지 않습니다', 'error');
+    setSendingCode(true);
+    try {
+      await requestPasswordChangeCode();
+      setCodeSent(true);
+      toast.show('이메일로 인증코드를 보냈습니다. 받은 편지함을 확인해 주세요.', 'success');
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : '인증코드 발송 실패', 'error');
+    } finally {
+      setSendingCode(false);
+    }
+  }, [newPw, confirmPw, toast]);
+
+  // 2) 이메일 코드 + 새 비밀번호로 변경 확정
+  const handleConfirmChange = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!IS_MOCK && !currentPw) return toast.show('현재 비밀번호를 입력해 주세요', 'error');
-    if (newPw.length < 8)       return toast.show('새 비밀번호는 8자 이상이어야 합니다', 'error');
-    if (newPw !== confirmPw)    return toast.show('새 비밀번호가 일치하지 않습니다', 'error');
+    if (!IS_MOCK && code.trim().length < 6) return toast.show('이메일로 받은 6자리 인증코드를 입력해 주세요', 'error');
     setChangingPw(true);
     try {
-      await changePassword(currentPw, newPw);
+      await changeMyPasswordWithCode(newPw, code.trim());
       toast.show('비밀번호가 변경되었습니다', 'success');
-      setCurrentPw(''); setNewPw(''); setConfirmPw('');
+      setNewPw(''); setConfirmPw(''); setCode(''); setCodeSent(false);
     } catch (err) {
       toast.show(err instanceof Error ? err.message : '비밀번호 변경 실패', 'error');
     } finally {
       setChangingPw(false);
     }
-  }, [currentPw, newPw, confirmPw, changePassword, toast]);
+  }, [newPw, code, toast]);
 
   if (!user) return null;
 
@@ -304,7 +322,7 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
 
       {/* ── 보안 탭 ───────────────────────────────────────────────── */}
       {tab === 'security' && (
-        <form onSubmit={handlePasswordChange} className="p-4 space-y-4">
+        <form onSubmit={handleConfirmChange} className="p-4 space-y-4">
 
           <div className="flex items-start gap-2 p-3 rounded-card bg-surface-high border border-border-subtle">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9AA3B2"
@@ -315,22 +333,9 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
             <p className="text-xs text-ink-muted leading-relaxed">
               {IS_MOCK
                 ? '데모 모드에서는 비밀번호 변경이 시뮬레이션됩니다.'
-                : '비밀번호는 8자 이상, 영문·숫자 조합을 권장합니다. 주기적으로 변경해 보안을 강화하세요.'}
+                : '보안을 위해 새 비밀번호 설정 후, 가입 이메일로 받은 6자리 인증코드를 입력해야 변경됩니다.'}
             </p>
           </div>
-
-          {/* 현재 비밀번호 (실서버 전용) */}
-          {!IS_MOCK && (
-            <PwField
-              label="현재 비밀번호"
-              value={currentPw}
-              onChange={setCurrentPw}
-              show={showCurrent}
-              onToggle={() => setShowCurrent((v) => !v)}
-              placeholder="현재 비밀번호 입력"
-              autoComplete="current-password"
-            />
-          )}
 
           {/* 새 비밀번호 */}
           <PwField
@@ -364,13 +369,47 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
             }
           />
 
-          <button
-            type="submit"
-            disabled={changingPw || !newPw || newPw !== confirmPw || newPw.length < 8}
-            className="btn-primary w-full disabled:opacity-60"
-          >
-            {changingPw ? '변경 중…' : '비밀번호 변경'}
-          </button>
+          {!codeSent ? (
+            <button
+              type="button"
+              onClick={handleSendCode}
+              disabled={sendingCode || !newPw || newPw !== confirmPw || newPw.length < 8}
+              className="btn-primary w-full disabled:opacity-60"
+            >
+              {sendingCode ? '인증코드 발송 중…' : '이메일로 인증코드 받기'}
+            </button>
+          ) : (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-ink-secondary mb-1.5">이메일 인증코드</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
+                  placeholder="6자리 코드"
+                  maxLength={6}
+                  className="input text-center font-bold tracking-[0.4em]"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={handleSendCode}
+                  disabled={sendingCode}
+                  className="mt-1 text-2xs text-ink-muted hover:text-gold-300 transition-colors disabled:opacity-50"
+                >
+                  코드 재전송
+                </button>
+              </div>
+              <button
+                type="submit"
+                disabled={changingPw || (!IS_MOCK && code.length < 6)}
+                className="btn-primary w-full disabled:opacity-60"
+              >
+                {changingPw ? '변경 중…' : '비밀번호 변경'}
+              </button>
+            </div>
+          )}
         </form>
       )}
     </Modal>
