@@ -19,6 +19,7 @@ type Tab = 'profile' | 'security';
 const ROLE_LABELS: Record<string, string> = {
   user:        '일반 회원',
   venue_owner: '매장 업주',
+  venue_staff: '가게 직원',
   admin:       '관리자',
 };
 

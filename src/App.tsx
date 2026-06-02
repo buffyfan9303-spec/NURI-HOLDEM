@@ -22,6 +22,7 @@ import type { PosterFormData } from './components/features/PosterFormModal';
 import NuriHoldemLogo from './components/atoms/NuriHoldemLogo';
 import ThemeToggle from './components/atoms/ThemeToggle';
 import ProfileModal from './components/features/ProfileModal';
+import VenueManageTab from './components/features/VenueManageTab';
 import NoticeFormModal from './components/features/NoticeFormModal';
 import PostFormModal from './components/features/PostFormModal';
 import ConsentGateModal from './components/features/ConsentGateModal';
@@ -48,7 +49,7 @@ import type { MarketplaceListing, MarketplaceNotice } from './api/marketplace';
 
 // ── 탭 정의 ──────────────────────────────────────────────────────────────────
 
-type TabId = 'browse' | 'community' | 'market' | 'my-posters' | 'admin';
+type TabId = 'browse' | 'community' | 'market' | 'my-posters' | 'my-venue' | 'admin';
 interface TabDef { id: TabId; label: string; }
 
 // ── 헤더 ─────────────────────────────────────────────────────────────────────
@@ -381,6 +382,7 @@ export default function App() {
   }, [isAdmin]);
 
   const unreadNotifs = notifications.filter((n) => !n.read).length;
+  const isStaff = user?.role === 'venue_staff';
 
   const tabs: TabDef[] = useMemo(() => {
     const base: TabDef[] = [
@@ -388,10 +390,11 @@ export default function App() {
       { id: 'community', label: '커뮤니티' },
       { id: 'market',    label: '중고장터' },
     ];
-    if (isOwner)  base.push({ id: 'my-posters', label: '내 포스터' });
-    if (isAdmin)  base.push({ id: 'admin',      label: '관리자 설정' });
+    if (isOwner)            base.push({ id: 'my-posters', label: '내 포스터' });
+    if (isOwner || isStaff) base.push({ id: 'my-venue',   label: '매장 관리' });
+    if (isAdmin)            base.push({ id: 'admin',       label: '관리자 설정' });
     return base;
-  }, [isOwner, isAdmin]);
+  }, [isOwner, isStaff, isAdmin]);
 
   // 탭이 사라지면 (로그아웃 등) browse로 돌아감
   useEffect(() => {
@@ -856,6 +859,13 @@ export default function App() {
             }}
             onDelete={(id) => { handleDeletePoster(id); toast.show('포스터가 삭제되었습니다', 'success'); }}
           />
+        </main>
+      )}
+
+      {/* 매장 관리 (업주/직원 전용) */}
+      {activeTab === 'my-venue' && (
+        <main className="px-page-x py-section animate-fade-in">
+          <VenueManageTab />
         </main>
       )}
 

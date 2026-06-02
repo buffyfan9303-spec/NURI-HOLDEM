@@ -8,6 +8,7 @@ import type { Schedule } from '../../api/schedules';
 import type { MarketplaceNotice } from '../../api/marketplace';
 import { useAuth } from '../../contexts/AuthContext';
 import { followVenue, unfollowVenue, getMyFollowedVenueIds } from '../../api/community';
+import { getVenueRankings, maskRealName, type RankingEntry } from '../../api/rankings';
 
 interface VenuePageProps {
   venue: Venue | null;
@@ -23,11 +24,12 @@ interface VenuePageProps {
   onUpdateImage?: (venueId: string, dataUrl: string) => void;
 }
 
-type Tab = 'about' | 'posters' | 'schedules' | 'community';
-const TABS: Tab[] = ['about', 'posters', 'schedules', 'community'];
+type Tab = 'about' | 'ranking' | 'posters' | 'schedules' | 'community';
+const TABS: Tab[] = ['about', 'ranking', 'posters', 'schedules', 'community'];
 
 const TAB_LABEL: Record<Tab, string> = {
   about:     '매장 소개',
+  ranking:   '순위',
   posters:   '포스터',
   schedules: '진행 예정',
   community: '커뮤니티',
@@ -187,7 +189,7 @@ export default function VenuePage({
                   ].join(' ')}
                 >
                   {TAB_LABEL[t]}
-                  {t !== 'about' && (
+                  {t !== 'about' && t !== 'ranking' && (
                     <span className="ml-1 text-2xs text-ink-muted tabular-nums">
                       ({count})
                     </span>
@@ -207,6 +209,7 @@ export default function VenuePage({
               onUpdateDescription={onUpdateDescription}
             />
           )}
+          {tab === 'ranking' && <VenueRankingPanel venueId={venue.id} />}
           {tab === 'posters' && (
             <PostersPanel
               todayPosters={todayPosters}
@@ -349,6 +352,55 @@ function HeroSection({
 }
 
 // ── 팔로우 버튼 ────────────────────────────────────────────────────────────
+
+function VenueRankingPanel({ venueId }: { venueId: string }) {
+  const [data, setData] = useState<{ date: string | null; entries: RankingEntry[] }>({ date: null, entries: [] });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    getVenueRankings(venueId)
+      .then((d) => { if (active) setData(d); })
+      .catch(() => {})
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [venueId]);
+
+  if (loading) return <p className="text-center py-10 text-xs text-ink-muted">불러오는 중...</p>;
+  if (!data.date || data.entries.length === 0) {
+    return (
+      <div className="py-12 text-center text-ink-muted">
+        <p className="text-sm">아직 등록된 순위가 없습니다.</p>
+        <p className="text-2xs mt-1">매장에서 매일 순위를 등록합니다.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-2xs text-ink-muted">{data.date} 기준</p>
+      <ol className="space-y-1.5">
+        {data.entries.map((e) => {
+          const masked = maskRealName(e.realName);
+          const medal = e.position === 1 ? 'bg-gold-300 text-ink-inverse'
+                      : e.position === 2 ? 'bg-slate-300 text-ink-inverse'
+                      : e.position === 3 ? 'bg-amber-700 text-white'
+                      : 'bg-surface-float text-ink-secondary';
+          return (
+            <li key={e.position} className="flex items-center gap-3 p-2.5 rounded-input bg-surface-high border border-border-subtle">
+              <span className={['w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-2xs font-bold tabular-nums', medal].join(' ')}>
+                {e.position}
+              </span>
+              <span className="text-sm font-semibold text-ink-primary truncate">{e.nickname}</span>
+              {masked && <span className="text-2xs text-ink-muted">({masked})</span>}
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+}
 
 function FollowButton({ venueId, followerCount }: { venueId: string; followerCount?: number }) {
   const { user } = useAuth();

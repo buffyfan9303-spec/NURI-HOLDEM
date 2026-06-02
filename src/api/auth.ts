@@ -1,7 +1,7 @@
 ﻿// src/api/auth.ts
 import { supabase, IS_MOCK } from '../lib/supabase';
 
-export type UserRole   = 'user' | 'venue_owner' | 'admin';
+export type UserRole   = 'user' | 'venue_owner' | 'venue_staff' | 'admin';
 // 'withdrawn' = 강제 탈퇴(Stage 3). 정지(suspended)/영구정지(banned)와 구분.
 export type UserStatus = 'active' | 'suspended' | 'banned' | 'pending' | 'withdrawn';
 
@@ -34,6 +34,7 @@ export interface ConsentPayload {
 }
 
 export interface SignupUserPayload  extends LoginPayload, ConsentPayload { name: string; nickname: string; }
+export interface SignupStaffPayload extends SignupUserPayload { venueId: string; }
 export interface SignupOwnerPayload extends SignupUserPayload {
   venueName: string; region: string; address: string;
   phone: string; businessNumber: string;
@@ -138,6 +139,45 @@ export async function signUpOwner(payload: SignupOwnerPayload): Promise<void> {
       business_number: payload.businessNumber,
     } },
   });
+  if (error) throw error;
+}
+
+// ── 가게 직원 가입 신청 ───────────────────────────────────────────────────────
+// 소속 매장 선택 → 업주 승인 후 사용(approved=false로 생성).
+export async function signUpStaff(payload: SignupStaffPayload): Promise<void> {
+  if (IS_MOCK) throw new Error('Mock mode');
+  if (!payload.agreedToTerms)        throw new Error('서비스 이용약관에 동의해 주세요.');
+  if (!payload.agreedToPrivacy)      throw new Error('개인정보 수집·이용에 동의해 주세요.');
+  if (!payload.agreedToAntiGambling) throw new Error('불법 환전·사행성 금지 서약에 동의해 주세요.');
+  if (!payload.venueId)              throw new Error('소속 매장을 선택해 주세요.');
+
+  const { error } = await supabase.auth.signUp({
+    email:    payload.email,
+    password: payload.password,
+    options: { data: {
+      name: payload.name,
+      nickname: payload.nickname,
+      role: 'venue_staff',
+      venue_id: payload.venueId,
+      agreed_to_terms:         payload.agreedToTerms,
+      agreed_to_privacy:       payload.agreedToPrivacy,
+      agreed_to_anti_gambling: payload.agreedToAntiGambling,
+      agreed_to_marketing:     payload.agreedToMarketing,
+    } },
+  });
+  if (error) throw error;
+}
+
+// ── 업주: 내 매장 직원 목록 / 승인·비승인·삭제 ───────────────────────────────
+export async function getMyVenueStaff(): Promise<User[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.rpc('get_my_venue_staff');
+  if (error) throw error;
+  return (data ?? []).map(rowToUser);
+}
+export async function manageStaff(staffId: string, action: 'approve' | 'reject' | 'remove'): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('manage_staff', { p_staff_id: staffId, p_action: action });
   if (error) throw error;
 }
 
