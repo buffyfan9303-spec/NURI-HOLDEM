@@ -32,7 +32,11 @@ export interface CommunityPost {
   category?: PostCategory;  // 카테고리
   title?: string;           // 제목
   images?: string[];        // 첨부 이미지 URL[]
+  badbeatCount?: number;    // 억까(Bad Beat) 수
+  goodrunCount?: number;    // 나이스런(Good Run) 수
 }
+
+export type ReactionType = 'badbeat' | 'goodrun';
 
 // ── DB 변환 ──────────────────────────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -58,6 +62,7 @@ const rowToPost = (r: any): CommunityPost => ({
   userRole: r.user_role, userColor: r.user_color,
   content: r.content, createdAt: r.created_at,
   likeCount: r.like_count, commentCount: r.comment_count,
+  badbeatCount: r.badbeat_count ?? 0, goodrunCount: r.goodrun_count ?? 0,
   // Stage 2 컬럼 (없으면 undefined)
   category: r.category ?? undefined,
   title:    r.title ?? undefined,
@@ -410,6 +415,35 @@ export async function deleteOwnerPost(id: string): Promise<void> {
     .from('owner_posts')
     .update({ deleted: true, deleted_at: new Date().toISOString() })
     .eq('id', id);
+  if (error) throw error;
+}
+
+// ── 배드빗/굿런 반응 (작성자 활동점수 증가) ───────────────────────────────────
+export async function getMyReaction(postId: string): Promise<ReactionType | null> {
+  if (IS_MOCK) return null;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data } = await supabase
+    .from('post_reactions').select('type')
+    .eq('post_id', postId).eq('user_id', user.id).maybeSingle();
+  return (data as { type?: ReactionType } | null)?.type ?? null;
+}
+export async function reactToPost(postId: string, type: ReactionType): Promise<void> {
+  if (IS_MOCK) return;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('로그인이 필요합니다');
+  const { error } = await supabase
+    .from('post_reactions')
+    .upsert({ post_id: postId, user_id: user.id, type }, { onConflict: 'post_id,user_id' });
+  if (error) throw error;
+}
+export async function removeReaction(postId: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+  const { error } = await supabase
+    .from('post_reactions').delete()
+    .eq('post_id', postId).eq('user_id', user.id);
   if (error) throw error;
 }
 

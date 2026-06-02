@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Modal from '../atoms/Modal';
 import { useAuth } from '../../contexts/AuthContext';
-import type { CommunityPost } from '../../api/community';
+import { useToast } from '../atoms/Toast';
+import type { CommunityPost, ReactionType } from '../../api/community';
+import { reactToPost, removeReaction, getMyReaction } from '../../api/community';
 import ReportModal from './ReportModal';
 
 interface PostDetailModalProps {
@@ -35,8 +37,44 @@ export default function PostDetailModal({
   const [replies, setReplies] = useState<PostReply[]>([]);
   const [draft, setDraft] = useState('');
   const [reportOpen, setReportOpen] = useState(false);
+  const toast = useToast();
+  const [myReaction, setMyReaction] = useState<ReactionType | null>(null);
+  const [bb, setBb] = useState(0);
+  const [gr, setGr] = useState(0);
+  const [pop, setPop] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!open || !post) return;
+    setBb(post.badbeatCount ?? 0);
+    setGr(post.goodrunCount ?? 0);
+    setMyReaction(null);
+    let active = true;
+    getMyReaction(post.id).then((r) => { if (active) setMyReaction(r); }).catch(() => {});
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, post?.id]);
 
   if (!post) return null;
+
+  const react = async (type: ReactionType) => {
+    if (!user) { toast.show('로그인이 필요합니다', 'error'); return; }
+    try {
+      if (myReaction === type) {
+        setMyReaction(null);
+        if (type === 'badbeat') setBb((n) => Math.max(0, n - 1)); else setGr((n) => Math.max(0, n - 1));
+        await removeReaction(post.id);
+      } else {
+        const prev = myReaction;
+        setMyReaction(type);
+        if (type === 'badbeat') { setBb((n) => n + 1); if (prev === 'goodrun') setGr((n) => Math.max(0, n - 1)); }
+        else { setGr((n) => n + 1); if (prev === 'badbeat') setBb((n) => Math.max(0, n - 1)); }
+        setPop(Date.now());
+        await reactToPost(post.id, type);
+      }
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : '처리에 실패했습니다', 'error');
+    }
+  };
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,6 +158,40 @@ export default function PostDetailModal({
             <span>댓글 {post.commentCount + replies.length}</span>
           </div>
           <button type="button" className="text-ink-muted hover:text-gold-300">공유</button>
+        </div>
+
+        {/* ── 배드빗 / 굿런 (작성자 활동 점수 적립) ─────────── */}
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => react('badbeat')}
+            className={[
+              'relative flex items-center justify-center gap-1.5 rounded-card border py-3 text-sm font-bold transition-all active:scale-[0.98]',
+              myReaction === 'badbeat'
+                ? 'border-sky-400 bg-sky-500/15 text-sky-300'
+                : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary',
+            ].join(' ')}
+          >
+            억까당함 <span className="tabular-nums">{bb}</span>
+            {pop !== null && myReaction === 'badbeat' && (
+              <span key={pop} onAnimationEnd={() => setPop(null)} className="animate-point-pop absolute -top-1 right-4 text-sm font-extrabold text-sky-300">+1</span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => react('goodrun')}
+            className={[
+              'relative flex items-center justify-center gap-1.5 rounded-card border py-3 text-sm font-bold transition-all active:scale-[0.98]',
+              myReaction === 'goodrun'
+                ? 'border-gold-300 bg-gold-300/15 text-gold-300'
+                : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary',
+            ].join(' ')}
+          >
+            나이스 런 <span className="tabular-nums">{gr}</span>
+            {pop !== null && myReaction === 'goodrun' && (
+              <span key={pop} onAnimationEnd={() => setPop(null)} className="animate-point-pop absolute -top-1 right-4 text-sm font-extrabold text-gold-300">+1</span>
+            )}
+          </button>
         </div>
 
         {/* ── 댓글 입력 ───────────────────────────────────── */}

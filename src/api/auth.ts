@@ -22,6 +22,8 @@ export interface User {
   joinedAt?: string;
   nameChangedAt?: string;   // 닉네임(name) 마지막 변경 시각 — 30일 쿨다운 판별
   venueVerified?: boolean;  // 업주 본인 매장이 인증(verified)인지 — 업주 커뮤니티 게이트
+  activityPoints?: number;  // 활동 점수(배드빗/굿런 받은 수)
+  badges?: string[];        // 획득 뱃지
 }
 
 export interface LoginPayload { email: string; password: string; }
@@ -59,6 +61,8 @@ function rowToUser(row: any): User {
     agreedToTerms:  row.agreed_to_terms ?? undefined,
     joinedAt:       row.joined_at,
     nameChangedAt:  row.name_changed_at ?? undefined,
+    activityPoints: row.activity_points ?? 0,
+    badges:         row.badges ?? [],
   };
 }
 

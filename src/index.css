@@ -154,4 +154,15 @@
     background-size: 200% 100%;
     @apply animate-shimmer rounded;
   }
+
+  /* ── 활동 점수 +N 팝업 ──────────────────────────────── */
+  .animate-point-pop {
+    animation: pointPop 0.9s ease-out forwards;
+  }
+}
+
+@keyframes pointPop {
+  0%   { opacity: 0; transform: translateY(4px) scale(0.8); }
+  20%  { opacity: 1; transform: translateY(0) scale(1.05); }
+  100% { opacity: 0; transform: translateY(-24px) scale(1); }
 }

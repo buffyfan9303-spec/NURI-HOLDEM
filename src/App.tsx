@@ -24,6 +24,7 @@ import ThemeToggle from './components/atoms/ThemeToggle';
 import ProfileModal from './components/features/ProfileModal';
 import VenueManageTab from './components/features/VenueManageTab';
 import StaffInviteBanner from './components/features/StaffInviteBanner';
+import TierBadge, { tierOf } from './components/atoms/TierBadge';
 import NoticeFormModal from './components/features/NoticeFormModal';
 import PostFormModal from './components/features/PostFormModal';
 import ConsentGateModal from './components/features/ConsentGateModal';
@@ -120,7 +121,7 @@ function AppHeader({
                 type="button"
                 onClick={() => setUserMenu((v) => !v)}
                 aria-label={`${user.name} 메뉴`}
-                className="group w-11 h-11 -mr-1 flex items-center justify-center rounded-full focus:outline-none"
+                className="group relative w-11 h-11 -mr-1 flex items-center justify-center rounded-full focus:outline-none"
               >
                 <span
                   className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center
@@ -133,6 +134,11 @@ function AppHeader({
                     ? <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
                     : user.name[0]}
                 </span>
+                {tierOf(user.activityPoints ?? 0).key !== 'none' && (
+                  <span className="absolute -bottom-0.5 -right-0.5 rounded-full bg-surface-base p-[1px] leading-none">
+                    <TierBadge points={user.activityPoints ?? 0} size={12} />
+                  </span>
+                )}
               </button>
 
               {/* 드롭다운 메뉴 */}
