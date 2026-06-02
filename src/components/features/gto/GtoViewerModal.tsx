@@ -59,6 +59,30 @@ export default function GtoViewerModal({ open, onClose }: { open: boolean; onClo
           <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4z" /></svg>
           AI 해설 보기
         </button>
+
+        {/* 최근 조회 핸드 — 원터치 재선택 */}
+        {gto.recent.length > 0 && (
+          <div>
+            <p className="mb-1 text-2xs font-semibold uppercase tracking-wider text-ink-muted">최근 조회</p>
+            <div className="flex flex-wrap gap-1.5">
+              {gto.recent.map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => gto.applyCombo(id)}
+                  className={[
+                    'h-7 rounded-input px-2 text-2xs font-bold tabular-nums transition-colors',
+                    gto.comboId === id
+                      ? 'bg-gold-300 text-ink-inverse'
+                      : 'border border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary',
+                  ].join(' ')}
+                >
+                  {id}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 하단 고정 키패드 */}

@@ -1,5 +1,5 @@
 // src/components/features/gto/useGtoCalculator.ts
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { GTO_SCENARIOS, DEFAULT_SCENARIO_ID } from './gto.data';
 import {
   RANKS, FOLD_FREQUENCY,
@@ -33,6 +33,32 @@ export function canonicalizeHand(ranks: readonly Rank[], suitedness: Suitedness)
   };
 }
 
+/** 콤보 ID(AKs/TT/72o) → 랭크 입력 상태로 역파싱. 잘못된 형식이면 null */
+export function parseComboId(id: HandComboId): { ranks: Rank[]; suitedness: Suitedness } | null {
+  const isRank = (ch: string): ch is Rank => (RANKS as readonly string[]).includes(ch);
+  if (id.length === 2 && isRank(id[0]) && isRank(id[1])) {
+    return { ranks: [id[0], id[1]], suitedness: 'offsuit' };
+  }
+  if (id.length === 3 && isRank(id[0]) && isRank(id[1])) {
+    return { ranks: [id[0], id[1]], suitedness: id[2] === 's' ? 'suited' : 'offsuit' };
+  }
+  return null;
+}
+
+const RECENT_KEY = 'nh_gto_recent';
+const RECENT_MAX = 8;
+function loadRecent(): HandComboId[] {
+  try {
+    const raw = sessionStorage.getItem(RECENT_KEY);
+    return raw ? (JSON.parse(raw) as HandComboId[]).slice(0, RECENT_MAX) : [];
+  } catch {
+    return [];
+  }
+}
+function saveRecent(list: readonly HandComboId[]): void {
+  try { sessionStorage.setItem(RECENT_KEY, JSON.stringify(list)); } catch { /* noop */ }
+}
+
 /** 빈도 합으로 정규화(데이터가 1로 안 맞아도 차트가 안정적이도록) */
 export function normalizeFrequency(f: ActionFrequency): Required<ActionFrequency> {
   const allin = f.allin ?? 0;
@@ -58,6 +84,11 @@ export interface UseGtoCalculator {
   /** 차트용 정규화 빈도 */
   normalized: Required<ActionFrequency> | null;
 
+  /** 최근 조회한 콤보(세션 저장, 최신순) */
+  recent: readonly HandComboId[];
+  /** 콤보 ID 로 입력 상태를 한 번에 설정(최근/즐겨찾기 재선택) */
+  applyCombo: (id: HandComboId) => void;
+
   pushRank: (rank: Rank) => void;
   setSuitedness: (s: Suitedness) => void;
   removeLast: () => void;
@@ -69,6 +100,7 @@ export function useGtoCalculator(initialScenarioId: string = DEFAULT_SCENARIO_ID
   const [scenarioId, setScenarioId] = useState<string>(initialScenarioId);
   const [ranks, setRanks] = useState<readonly Rank[]>([]);
   const [suitedness, setSuitednessState] = useState<Suitedness>('suited');
+  const [recent, setRecent] = useState<readonly HandComboId[]>(() => loadRecent());
 
   const scenario = useMemo<GtoScenario>(
     () => scenarios.find((s) => s.id === scenarioId) ?? scenarios[0],
@@ -77,6 +109,17 @@ export function useGtoCalculator(initialScenarioId: string = DEFAULT_SCENARIO_ID
 
   const combo = useMemo(() => canonicalizeHand(ranks, suitedness), [ranks, suitedness]);
   const isPair = ranks.length === 2 && ranks[0] === ranks[1];
+
+  // 완성된 콤보를 최근 목록 맨 앞에 기록(중복 제거, 최대 RECENT_MAX)
+  useEffect(() => {
+    if (!combo) return;
+    setRecent((prev) => {
+      if (prev[0] === combo.id) return prev;
+      const next = [combo.id, ...prev.filter((x) => x !== combo.id)].slice(0, RECENT_MAX);
+      saveRecent(next);
+      return next;
+    });
+  }, [combo]);
 
   const frequency = useMemo<ActionFrequency | null>(() => {
     if (!combo) return null;
@@ -95,6 +138,12 @@ export function useGtoCalculator(initialScenarioId: string = DEFAULT_SCENARIO_ID
   const removeLast = useCallback(() => setRanks((prev) => prev.slice(0, -1)), []);
   const clear = useCallback(() => setRanks([]), []);
   const setSuitedness = useCallback((s: Suitedness) => setSuitednessState(s), []);
+  const applyCombo = useCallback((id: HandComboId) => {
+    const parsed = parseComboId(id);
+    if (!parsed) return;
+    setRanks(parsed.ranks);
+    setSuitednessState(parsed.suitedness);
+  }, []);
   const selectScenario = useCallback((id: string) => {
     setScenarioId(id);
     setRanks([]); // 시나리오 변경 시 입력 초기화
@@ -112,6 +161,8 @@ export function useGtoCalculator(initialScenarioId: string = DEFAULT_SCENARIO_ID
     isPair,
     frequency,
     normalized,
+    recent,
+    applyCombo,
     pushRank,
     setSuitedness,
     removeLast,
