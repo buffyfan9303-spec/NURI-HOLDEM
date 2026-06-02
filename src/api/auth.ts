@@ -20,6 +20,7 @@ export interface User {
   sanctionReason?: string; // 관리자 제재 사유 (Stage 3)
   agreedToTerms?: boolean;  // 법적 동의 여부 — 구글 OAuth 동의 게이트 판별용
   joinedAt?: string;
+  lastSeenAt?: string;      // 최근 접속 시각 (관리자 회원관리 표시용)
   nameChangedAt?: string;   // 닉네임(name) 마지막 변경 시각 — 30일 쿨다운 판별
   venueVerified?: boolean;  // 업주 본인 매장이 인증(verified)인지 — 업주 커뮤니티 게이트
   activityPoints?: number;  // 활동 점수(배드빗/굿런 받은 수)
@@ -60,6 +61,7 @@ function rowToUser(row: any): User {
     sanctionReason: row.sanction_reason ?? undefined,
     agreedToTerms:  row.agreed_to_terms ?? undefined,
     joinedAt:       row.joined_at,
+    lastSeenAt:     row.last_seen_at ?? undefined,
     nameChangedAt:  row.name_changed_at ?? undefined,
     activityPoints: row.activity_points ?? 0,
     badges:         row.badges ?? [],

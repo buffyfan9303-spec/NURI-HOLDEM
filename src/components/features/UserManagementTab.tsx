@@ -239,9 +239,11 @@ function UserRow({ user, onUpdate }: { user: User; onUpdate: (id: string, patch:
             </span>
           </div>
           <p className="text-2xs text-ink-muted truncate">{user.email}</p>
-          {user.joinedAt && (
-            <p className="text-2xs text-ink-muted">가입 {relativeTime(user.joinedAt)}</p>
-          )}
+          <p className="text-2xs text-ink-muted">
+            {user.joinedAt && <>가입 {relativeTime(user.joinedAt)}</>}
+            {user.joinedAt && <span className="mx-1 text-border-strong">·</span>}
+            최근 접속 {user.lastSeenAt ? relativeTime(user.lastSeenAt) : '기록 없음'}
+          </p>
           {user.suspendedUntil && status === 'suspended' && (
             <p className="text-2xs text-orange-400">
               정지 해제: {new Date(user.suspendedUntil).toLocaleDateString()}

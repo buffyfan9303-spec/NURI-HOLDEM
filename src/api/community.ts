@@ -424,6 +424,75 @@ export async function deleteOwnerPost(id: string): Promise<void> {
   if (error) throw error;
 }
 
+// ── 딜러(venue_staff) 전용 게시판 — 구인/구직 ────────────────────────────────
+export type DealerPostKind = 'hiring' | 'seeking'; // 구인 / 구직
+export interface DealerPost {
+  id: string;
+  authorId: string;
+  authorName: string;
+  authorColor?: string;
+  kind: DealerPostKind;
+  region?: string;     // 구인 시 필수
+  venueName?: string;  // 선택
+  content: string;
+  deleted: boolean;
+  createdAt: string;
+}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function rowToDealerPost(r: any): DealerPost {
+  return {
+    id: r.id,
+    authorId: r.author_id,
+    authorName: r.author_name ?? '익명',
+    authorColor: r.author_color ?? undefined,
+    kind: r.kind,
+    region: r.region ?? undefined,
+    venueName: r.venue_name ?? undefined,
+    content: r.content,
+    deleted: r.deleted,
+    createdAt: r.created_at,
+  };
+}
+export async function getDealerPosts(opts?: { deleted?: boolean }): Promise<DealerPost[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase
+    .from('dealer_posts')
+    .select('*')
+    .eq('deleted', opts?.deleted ? true : false)
+    .order('created_at', { ascending: false })
+    .limit(100);
+  if (error) throw error;
+  return (data ?? []).map(rowToDealerPost);
+}
+export async function createDealerPost(input: {
+  kind: DealerPostKind; content: string; region?: string; venueName?: string;
+}): Promise<void> {
+  if (IS_MOCK) return;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('로그인이 필요합니다');
+  const content = input.content.trim();
+  if (!content) throw new Error('내용을 입력해 주세요');
+  if (input.kind === 'hiring' && !(input.region ?? '').trim()) {
+    throw new Error('구인은 지역을 입력해야 합니다');
+  }
+  const { error } = await supabase.from('dealer_posts').insert({
+    author_id: user.id,
+    kind: input.kind,
+    region: input.region?.trim() || null,
+    venue_name: input.venueName?.trim() || null,
+    content: content.slice(0, 2000),
+  });
+  if (error) throw error;
+}
+export async function deleteDealerPost(id: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase
+    .from('dealer_posts')
+    .update({ deleted: true, deleted_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) throw error;
+}
+
 // ── 배드빗/굿런 반응 (작성자 활동점수 증가) ───────────────────────────────────
 export async function getMyReaction(postId: string): Promise<ReactionType | null> {
   if (IS_MOCK) return null;
