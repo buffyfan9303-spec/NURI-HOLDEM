@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DEEP_SITUATION_9TS_VS_UTG } from './gto.deep.data';
 import { canonicalizeHand, normalizeFrequency } from './useGtoCalculator';
 import { computeEquity } from './equityEngine';
-import type { ActionFrequency, Card } from './gto.types';
+import type { ActionFrequency, Card, Rank, Suit } from './gto.types';
 import type { GtoDeepSituation, GtoResult, Equity } from './gto.deep.types';
 
 export type CardTarget = 'hero' | 'villain' | 'board';
@@ -36,6 +36,7 @@ export interface UseDeepGto {
   placeCard: (c: Card) => void;
   removeAt: (t: CardTarget, index: number) => void;
   clearAll: () => void;
+  applyBoardPreset: (cards: { rank: Rank; suit: Suit }[]) => void;
   heroComplete: boolean;
   villainComplete: boolean;
   villainComboId: string | null;
@@ -100,6 +101,26 @@ export function useDeepGto(): UseDeepGto {
     setBoard([null, null, null, null, null]);
     setCurrentTarget('villain');
   }, [situation]);
+
+  // 보드 텍스처 프리셋 빠른 입력(이미 사용 중인 카드는 다른 무늬로 대체, 없으면 건너뜀)
+  const applyBoardPreset = useCallback((cards: { rank: Rank; suit: Suit }[]) => {
+    const order: Suit[] = ['s', 'h', 'd', 'c'];
+    const used = new Set<CardId>();
+    [...hero, ...villain].forEach((c) => { if (c) used.add(cardId(c)); });
+    const chosen: Card[] = [];
+    for (const p of cards) {
+      const suits = [p.suit, ...order.filter((s) => s !== p.suit)];
+      for (const s of suits) {
+        const cand: Card = { rank: p.rank, suit: s };
+        if (!used.has(cardId(cand))) { used.add(cardId(cand)); chosen.push(cand); break; }
+      }
+    }
+    const next: (Card | null)[] = [null, null, null, null, null];
+    chosen.slice(0, 5).forEach((c, i) => { next[i] = c; });
+    setBoard(next);
+    setCurrentTarget('board');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hero, villain]);
 
   const heroComplete = hero.every((x) => x !== null);
   const villainComplete = villain.every((x) => x !== null);
@@ -172,6 +193,7 @@ export function useDeepGto(): UseDeepGto {
     placeCard,
     removeAt,
     clearAll,
+    applyBoardPreset,
     heroComplete,
     villainComplete,
     villainComboId,

@@ -4,7 +4,14 @@ import Modal from '../../atoms/Modal';
 import CardGridPicker, { SUIT_COLOR, SUIT_LABEL } from './CardGridPicker';
 import { useDeepGto, type CardTarget } from './useDeepGto';
 import { canonicalizeHand } from './useGtoCalculator';
-import type { Card, ActionFrequency } from './gto.types';
+import type { Card, ActionFrequency, Rank, Suit } from './gto.types';
+
+const BOARD_PRESETS: { label: string; cards: { rank: Rank; suit: Suit }[] }[] = [
+  { label: '드라이 (A72r)', cards: [{ rank: 'A', suit: 's' }, { rank: '7', suit: 'd' }, { rank: '2', suit: 'c' }] },
+  { label: '브로드웨이 (KQT)', cards: [{ rank: 'K', suit: 'h' }, { rank: 'Q', suit: 'h' }, { rank: 'T', suit: 's' }] },
+  { label: '모노톤 (J83s)', cards: [{ rank: 'J', suit: 's' }, { rank: '8', suit: 's' }, { rank: '3', suit: 's' }] },
+  { label: '페어보드 (994)', cards: [{ rank: '9', suit: 'h' }, { rank: '9', suit: 'd' }, { rank: '4', suit: 'c' }] },
+];
 import type { GtoResult } from './gto.deep.types';
 
 function comboIdOf(cards: readonly (Card | null)[]): string | null {
@@ -157,6 +164,30 @@ export default function GtoDeepModal({ open, onClose }: { open: boolean; onClose
         {/* Board 슬롯 */}
         <div className="flex justify-center">
           <Section title="Board (선택)" target="board" cards={deep.board} current={deep.currentTarget} onSelectTarget={deep.setTarget} onRemove={deep.removeAt} />
+        </div>
+
+        {/* 플랍 빠른 입력(보드 텍스처 프리셋) */}
+        <div className="space-y-1.5">
+          <p className="text-2xs font-semibold uppercase tracking-wider text-ink-muted">플랍 예시 (빠른 입력)</p>
+          <div className="flex flex-wrap gap-1.5">
+            {BOARD_PRESETS.map((p) => (
+              <button
+                key={p.label}
+                type="button"
+                onClick={() => deep.applyBoardPreset(p.cards)}
+                className="rounded-input border border-border-default bg-surface-high px-2.5 py-1 text-2xs font-semibold text-ink-secondary transition-colors hover:text-ink-primary active:bg-surface-float"
+              >
+                {p.label}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => deep.applyBoardPreset([])}
+              className="rounded-input border border-border-default bg-surface-high px-2.5 py-1 text-2xs text-ink-muted transition-colors hover:text-danger-light"
+            >
+              보드 비우기
+            </button>
+          </div>
         </div>
 
         {/* 결과 */}
