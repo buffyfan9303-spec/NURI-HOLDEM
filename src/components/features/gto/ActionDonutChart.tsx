@@ -5,7 +5,16 @@ type Key = 'raise' | 'call' | 'fold' | 'allin';
 const COLORS: Record<Key, string> = { raise: '#EF4444', call: '#22C55E', fold: '#3B82F6', allin: '#A855F7' };
 const LABELS: Record<Key, string> = { raise: '레이즈', call: '콜', fold: '폴드', allin: '올인' };
 
-export default function ActionDonutChart({ frequency }: { frequency: Required<ActionFrequency> | null }) {
+interface Props {
+  frequency: Required<ActionFrequency> | null;
+  /** 포스트플랍이면 레이즈->벳, 콜->체크로 라벨 전환 */
+  mode?: 'preflop' | 'postflop';
+}
+
+export default function ActionDonutChart({ frequency, mode = 'preflop' }: Props) {
+  const labels: Record<Key, string> = mode === 'postflop'
+    ? { ...LABELS, raise: '벳', call: '체크' }
+    : LABELS;
   const size = 200;
   const stroke = 28;
   const r = (size - stroke) / 2;
@@ -54,7 +63,7 @@ export default function ActionDonutChart({ frequency }: { frequency: Required<Ac
           <span className="text-4xl font-extrabold tabular-nums" style={{ color: COLORS[dominant.key] }}>
             {Math.round(dominant.value * 100)}%
           </span>
-          <span className="text-xs font-semibold text-ink-secondary">{LABELS[dominant.key]}</span>
+          <span className="text-xs font-semibold text-ink-secondary">{labels[dominant.key]}</span>
         </div>
       </div>
 
@@ -62,7 +71,7 @@ export default function ActionDonutChart({ frequency }: { frequency: Required<Ac
         {order.filter((k) => (frequency[k] ?? 0) > 0.0001 || k !== 'allin').map((k) => (
           <div key={k} className="flex items-center gap-1.5">
             <span className="h-3 w-3 rounded-sm" style={{ background: COLORS[k] }} />
-            <span className="text-xs text-ink-secondary">{LABELS[k]}</span>
+            <span className="text-xs text-ink-secondary">{labels[k]}</span>
             <span className="text-xs font-bold tabular-nums text-ink-primary">{Math.round((frequency[k] ?? 0) * 100)}%</span>
           </div>
         ))}

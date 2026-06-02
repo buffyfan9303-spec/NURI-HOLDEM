@@ -225,6 +225,32 @@ export const GTO_SCENARIOS: readonly GtoScenario[] = [
       '72o': { raise: 0, call: 0, fold: 1 },
     },
   },
+  {
+    id: 'btn-cbet-a72r-100',
+    label: 'BTN c-벳 (A72 레인보우)',
+    description: 'BTN 오픈 → BB 콜 → 플랍 A♠ 7♦ 2♣ 에서 BB 체크. 히어로(BTN) 벳/체크. 100bb.',
+    street: 'flop',
+    heroPosition: 'BTN',
+    villain: { position: 'BB', action: 'check' },
+    stackDepthBb: 100,
+    gameType: 'cash',
+    source: 'dummy',
+    board: {
+      cards: [{ rank: 'A', suit: 's' }, { rank: '7', suit: 'd' }, { rank: '2', suit: 'c' }],
+      paired: false, monotone: false, twoTone: false, connected: false,
+    },
+    strategy: {
+      // raise = 벳, call = 체크 (포스트플랍)
+      'AKs': { raise: 0.9, call: 0.1, fold: 0 }, 'AQs': { raise: 0.85, call: 0.15, fold: 0 },
+      'AJs': { raise: 0.8, call: 0.2, fold: 0 }, 'ATs': { raise: 0.8, call: 0.2, fold: 0 },
+      'AKo': { raise: 0.85, call: 0.15, fold: 0 }, 'AQo': { raise: 0.8, call: 0.2, fold: 0 },
+      'KK': { raise: 0.45, call: 0.55, fold: 0 }, 'QQ': { raise: 0.4, call: 0.6, fold: 0 },
+      'JJ': { raise: 0.35, call: 0.65, fold: 0 }, '77': { raise: 0.7, call: 0.3, fold: 0 },
+      '22': { raise: 0.65, call: 0.35, fold: 0 }, 'KQs': { raise: 0.3, call: 0.7, fold: 0 },
+      'T9s': { raise: 0.2, call: 0.8, fold: 0 }, '98s': { raise: 0.25, call: 0.75, fold: 0 },
+      '54s': { raise: 0.4, call: 0.6, fold: 0 },
+    },
+  },
 ] as const;
 
 export const DEFAULT_SCENARIO_ID = GTO_SCENARIOS[0].id;

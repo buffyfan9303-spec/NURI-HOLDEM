@@ -6,6 +6,26 @@ import SelectedHandDisplay from './SelectedHandDisplay';
 import GtoKeypad from './GtoKeypad';
 import ActionDonutChart from './ActionDonutChart';
 import AiExplainSheet from './AiExplainSheet';
+import type { Card } from './gto.types';
+
+const SUIT_GLYPH: Record<Card['suit'], string> = { s: '♠', h: '♥', d: '♦', c: '♣' };
+
+function BoardCards({ cards }: { cards: readonly Card[] }) {
+  return (
+    <div className="flex items-center justify-center gap-1.5">
+      <span className="mr-1 text-2xs font-semibold uppercase tracking-wider text-ink-muted">보드</span>
+      {cards.map((c, i) => {
+        const red = c.suit === 'h' || c.suit === 'd';
+        return (
+          <span key={`${c.rank}${c.suit}${i}`} className="flex h-11 w-8 flex-col items-center justify-center rounded-input border border-border-strong bg-surface-high">
+            <span className="text-sm font-bold leading-none text-ink-primary">{c.rank}</span>
+            <span className={['text-xs leading-none', red ? 'text-red-400' : 'text-ink-secondary'].join(' ')}>{SUIT_GLYPH[c.suit]}</span>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function GtoViewerModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const gto = useGtoCalculator();
@@ -17,9 +37,10 @@ export default function GtoViewerModal({ open, onClose }: { open: boolean; onClo
         {/* 시나리오 선택 — 오픈(RFI) / vs 레이즈 그룹 */}
         <div className="space-y-2">
           {([
-            { title: '오픈 (RFI)', items: gto.scenarios.filter((s) => !s.villain) },
-            { title: 'vs 레이즈', items: gto.scenarios.filter((s) => s.villain) },
-          ] as const).map((group) => (
+            { title: '오픈 (RFI)', items: gto.scenarios.filter((s) => s.street === 'preflop' && !s.villain) },
+            { title: 'vs 레이즈', items: gto.scenarios.filter((s) => s.street === 'preflop' && s.villain) },
+            { title: '포스트플랍', items: gto.scenarios.filter((s) => s.street !== 'preflop') },
+          ] as const).filter((g) => g.items.length > 0).map((group) => (
             <div key={group.title}>
               <p className="mb-1 text-2xs font-semibold uppercase tracking-wider text-ink-muted">{group.title}</p>
               <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 scrollbar-none">
@@ -48,7 +69,11 @@ export default function GtoViewerModal({ open, onClose }: { open: boolean; onClo
         )}
 
         <SelectedHandDisplay ranks={gto.ranks} combo={gto.combo} suitedness={gto.suitedness} />
-        <ActionDonutChart frequency={gto.normalized} />
+        {gto.scenario.board && <BoardCards cards={gto.scenario.board.cards} />}
+        <ActionDonutChart
+          frequency={gto.normalized}
+          mode={gto.scenario.street === 'preflop' ? 'preflop' : 'postflop'}
+        />
 
         <button
           type="button"
