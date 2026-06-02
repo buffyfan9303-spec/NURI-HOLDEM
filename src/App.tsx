@@ -340,6 +340,12 @@ export default function App() {
   const [posterFormTarget, setPosterFormTarget] = useState<Schedule | null | undefined>(null);
   const [openPost, setOpenPost]         = useState<CommunityPost | null>(null);
   const [profileOpen, setProfileOpen]   = useState(false);
+  // 비밀번호 변경 OTP 진행 중 페이지가 리로드되면(모바일에서 메일 앱을 다녀온 경우)
+  // 프로필 모달을 다시 열어 코드 입력 화면으로 복귀시킨다.
+  useEffect(() => {
+    const pending = sessionStorage.getItem('nh_pw_otp');
+    if (pending && Date.now() - Number(pending) < 5 * 60 * 1000) setProfileOpen(true);
+  }, []);
   const [noticeFormOpen, setNoticeFormOpen] = useState(false);
   const [postFormOpen, setPostFormOpen]     = useState(false);   // 커뮤니티 글쓰기
   const [postFormCategory, setPostFormCategory] = useState<PostCategory>('free'); // 글쓰기 기본 카테고리(공부 탭=study)

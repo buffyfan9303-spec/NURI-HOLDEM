@@ -61,17 +61,35 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
   const [sendingCode,  setSendingCode] = useState(false);
   const [changingPw,   setChangingPw]  = useState(false);
 
-  // 모달 열릴 때마다 폼 초기화
+  // 모달이 "열리는 순간"에만 폼 초기화 (이후 user 객체가 새로 들어와도 입력 유지)
+  //  — 탭 복귀/토큰 갱신 시 onAuthStateChange가 setUser를 호출해도
+  //    진행 중이던 비밀번호 변경 OTP 단계가 리셋되지 않도록 함.
+  const initRef = useRef(false);
   useEffect(() => {
-    if (!open || !user) return;
-    setTab('profile');
+    if (!open) { initRef.current = false; return; }
+    if (initRef.current || !user) return;
+    initRef.current = true;
+
     setName(user.name);
     setColor(user.avatarColor ?? '#FFD100');
     setAvatarPreview(user.avatarUrl ?? '');
     setAvatarFile(null);
     setNewPw(''); setConfirmPw(''); setCode('');
-    setCodeSent(false); setSendingCode(false);
     setShowNew(false); setShowConfirm(false);
+    setSendingCode(false);
+
+    // 진행 중이던 비밀번호 변경 OTP 복원
+    //  (메일 앱을 다녀오며 모바일에서 페이지가 리로드돼도 코드 입력 화면으로 복귀)
+    const pending = sessionStorage.getItem('nh_pw_otp');
+    const fresh = pending && Date.now() - Number(pending) < 5 * 60 * 1000;
+    if (fresh) {
+      setTab('security');
+      setCodeSent(true);
+    } else {
+      sessionStorage.removeItem('nh_pw_otp');
+      setTab('profile');
+      setCodeSent(false);
+    }
   }, [open, user]);
 
   // ── 비밀번호 변경 = 이메일 인증 OTP (useCallback은 early return 전에 선언) ──
@@ -83,6 +101,7 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
     try {
       await requestPasswordChangeCode();
       setCodeSent(true);
+      sessionStorage.setItem('nh_pw_otp', String(Date.now()));
       toast.show('이메일로 인증코드를 보냈습니다. 받은 편지함을 확인해 주세요.', 'success');
     } catch (err) {
       toast.show(err instanceof Error ? err.message : '인증코드 발송 실패', 'error');
@@ -99,6 +118,7 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
     try {
       await changeMyPasswordWithCode(newPw, code.trim());
       toast.show('비밀번호가 변경되었습니다', 'success');
+      sessionStorage.removeItem('nh_pw_otp');
       setNewPw(''); setConfirmPw(''); setCode(''); setCodeSent(false);
     } catch (err) {
       toast.show(err instanceof Error ? err.message : '비밀번호 변경 실패', 'error');
@@ -159,7 +179,7 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
   };
 
   return (
-    <Modal open={open} onClose={onClose} title="프로필 관리" maxWidth="sm" variant="sheet">
+    <Modal open={open} onClose={() => { sessionStorage.removeItem('nh_pw_otp'); onClose(); }} title="프로필 관리" maxWidth="sm" variant="sheet">
       {/* ── 탭 바 ─────────────────────────────────────────────────── */}
       <div className="flex border-b border-border-subtle">
         {(['profile', 'security'] as Tab[]).map((t) => (
@@ -382,6 +402,11 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
             </button>
           ) : (
             <div className="space-y-3">
+              {!newPw && (
+                <p className="text-2xs text-amber-400 leading-relaxed bg-amber-500/10 border border-amber-500/30 rounded-input px-3 py-2">
+                  메일 확인 후 돌아오셨네요. 위에 새 비밀번호를 다시 입력한 뒤, 메일로 받은 6자리 코드로 변경을 완료하세요.
+                </p>
+              )}
               <div>
                 <label className="block text-xs font-medium text-ink-secondary mb-1.5">이메일 인증코드</label>
                 <input
