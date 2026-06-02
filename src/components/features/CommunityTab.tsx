@@ -3,6 +3,7 @@ import type { Venue, Comment, CommunityPost, LiveMessage, PostCategory } from '.
 import { getLiveMessages, addLiveMessage, subscribeLiveWall } from '../../api/community';
 import type { MarketplaceNotice } from '../../api/marketplace';
 import { useAuth } from '../../contexts/AuthContext';
+import GtoStudyWidget from './gto/GtoStudyWidget';
 import { useToast } from '../atoms/Toast';
 import { filterContent } from '../../lib/content-filter';
 
@@ -96,14 +97,17 @@ export default function CommunityTab({
       )}
 
       {section === 'study' && (
-        <FeedSection
-          posts={studyPosts}
-          onOpenWrite={() => onOpenWrite('study')}
-          onLike={onLikePost}
-          onSelectPost={onSelectPost}
-          placeholder="홀덤 공부·전략을 공유해보세요..."
-          emptyText="첫 홀덤 공부 글을 남겨보세요"
-        />
+        <div className="space-y-3">
+          <GtoStudyWidget />
+          <FeedSection
+            posts={studyPosts}
+            onOpenWrite={() => onOpenWrite('study')}
+            onLike={onLikePost}
+            onSelectPost={onSelectPost}
+            placeholder="홀덤 공부·전략을 공유해보세요..."
+            emptyText="첫 홀덤 공부 글을 남겨보세요"
+          />
+        </div>
       )}
 
       {section === 'venues' && (
