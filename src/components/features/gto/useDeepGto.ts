@@ -1,6 +1,6 @@
 // src/components/features/gto/useDeepGto.ts
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { DEEP_SITUATION_9TS_VS_UTG } from './gto.deep.data';
+import { DEEP_SITUATIONS } from './gto.deep.data';
 import { canonicalizeHand, normalizeFrequency } from './useGtoCalculator';
 import { computeEquity } from './equityEngine';
 import type { ActionFrequency, Card, Rank, Suit } from './gto.types';
@@ -26,7 +26,9 @@ function actionFromEquity(eq: number): ActionFrequency {
 }
 
 export interface UseDeepGto {
+  situations: readonly GtoDeepSituation[];
   situation: GtoDeepSituation;
+  selectSituation: (id: string) => void;
   hero: readonly (Card | null)[];
   villain: readonly (Card | null)[];
   board: readonly (Card | null)[];
@@ -49,9 +51,11 @@ export interface UseDeepGto {
 }
 
 export function useDeepGto(): UseDeepGto {
-  const situation = DEEP_SITUATION_9TS_VS_UTG;
+  const situations = DEEP_SITUATIONS;
+  const [situationId, setSituationId] = useState<string>(situations[0].id);
+  const situation = useMemo(() => situations.find((s) => s.id === situationId) ?? situations[0], [situations, situationId]);
 
-  const [hero, setHero] = useState<(Card | null)[]>(() => [situation.heroHand[0], situation.heroHand[1]]);
+  const [hero, setHero] = useState<(Card | null)[]>(() => [situations[0].heroHand[0], situations[0].heroHand[1]]);
   const [villain, setVillain] = useState<(Card | null)[]>([null, null]);
   const [board, setBoard] = useState<(Card | null)[]>([null, null, null, null, null]);
   const [currentTarget, setCurrentTarget] = useState<CardTarget>('villain');
@@ -101,6 +105,15 @@ export function useDeepGto(): UseDeepGto {
     setBoard([null, null, null, null, null]);
     setCurrentTarget('villain');
   }, [situation]);
+
+  const selectSituation = useCallback((id: string) => {
+    const s = situations.find((x) => x.id === id) ?? situations[0];
+    setSituationId(id);
+    setHero([s.heroHand[0], s.heroHand[1]]);
+    setVillain([null, null]);
+    setBoard([null, null, null, null, null]);
+    setCurrentTarget('villain');
+  }, [situations]);
 
   // 보드 텍스처 프리셋 빠른 입력(이미 사용 중인 카드는 다른 무늬로 대체, 없으면 건너뜀)
   const applyBoardPreset = useCallback((cards: { rank: Rank; suit: Suit }[]) => {
@@ -183,7 +196,9 @@ export function useDeepGto(): UseDeepGto {
   );
 
   return {
+    situations,
     situation,
+    selectSituation,
     hero,
     villain,
     board,

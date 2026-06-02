@@ -175,7 +175,30 @@ export default function GtoDeepModal({ open, onClose }: { open: boolean; onClose
   return (
     <Modal open={open} onClose={onClose} title="GTO 검색" variant="sheet" maxWidth="md" fillHeight>
       <div className="space-y-4 px-4 py-3">
-        <p className="text-center text-2xs text-ink-muted">{deep.situation.description}</p>
+        {/* 스팟(상황) 선택 */}
+        <div className="space-y-1.5">
+          <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 scrollbar-none">
+            {deep.situations.map((s) => {
+              const active = deep.situation.id === s.id;
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => deep.selectSituation(s.id)}
+                  className={[
+                    'h-8 shrink-0 rounded-input px-3 text-2xs font-semibold transition-colors',
+                    active ? 'bg-gold-300 text-ink-inverse' : 'border border-border-default bg-surface-high text-ink-secondary',
+                  ].join(' ')}
+                >
+                  {s.label}
+                </button>
+              );
+            })}
+          </div>
+          {deep.situation.description && (
+            <p className="text-center text-2xs text-ink-muted">{deep.situation.description}</p>
+          )}
+        </div>
 
         {/* Hero vs Villain 슬롯 */}
         <div className="flex items-end justify-center gap-3">

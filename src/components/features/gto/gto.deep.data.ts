@@ -46,4 +46,46 @@ export const DEEP_SITUATION_9TS_VS_UTG: GtoDeepSituation = {
   },
 };
 
-export const DEEP_SITUATIONS: readonly GtoDeepSituation[] = [DEEP_SITUATION_9TS_VS_UTG] as const;
+// CO 오픈 후 BTN 3벳 직면 — ATs
+export const DEEP_SITUATION_ATS_CO: GtoDeepSituation = {
+  id: 'co-ats-vs-btn-3bet-100',
+  label: 'CO ATs vs BTN 3벳',
+  description: 'CO 오픈 후 BTN 3벳에 직면. ATs로 콜/4벳/폴드 + 블로커 효과. 100bb.',
+  street: 'preflop',
+  heroPosition: 'CO',
+  villainPosition: 'BTN',
+  villainOpenBb: 7.5,
+  stackDepthBb: 100,
+  gameType: 'cash',
+  heroHand: [{ rank: 'A', suit: 's' }, { rank: 'T', suit: 's' }],
+  baseline: {
+    action: { raise: 0.1, call: 0.6, fold: 0.3 },
+    heuristic_explanation: 'CO 오픈에 BTN이 3벳한 상황. ATs는 콜 중심에 일부 4벳/폴드가 섞인 핸드입니다. 빌런 카드를 지정하면 블로커/에퀴티가 반영됩니다.',
+  },
+  villainAdjustments: {},
+};
+
+// BTN 오픈 vs BB 디펜스 — A5s
+export const DEEP_SITUATION_A5S_BTN: GtoDeepSituation = {
+  id: 'btn-a5s-vs-bb-100',
+  label: 'BTN A5s vs BB',
+  description: 'BTN 오픈에 BB가 디펜스. A5s 블로커/에퀴티를 카드로 확인. 100bb.',
+  street: 'preflop',
+  heroPosition: 'BTN',
+  villainPosition: 'BB',
+  heroRaiseBb: 2.5,
+  stackDepthBb: 100,
+  gameType: 'cash',
+  heroHand: [{ rank: 'A', suit: 's' }, { rank: '5', suit: 's' }],
+  baseline: {
+    action: { raise: 0.7, call: 0.2, fold: 0.1 },
+    heuristic_explanation: 'BTN A5s는 오픈 표준 핸드로, 빌런 핸드에 따라 가치가 크게 달라집니다. 빌런 카드를 지정하면 에퀴티 기반으로 액션이 추정됩니다.',
+  },
+  villainAdjustments: {},
+};
+
+export const DEEP_SITUATIONS: readonly GtoDeepSituation[] = [
+  DEEP_SITUATION_9TS_VS_UTG,
+  DEEP_SITUATION_ATS_CO,
+  DEEP_SITUATION_A5S_BTN,
+];
