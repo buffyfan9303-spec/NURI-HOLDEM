@@ -265,6 +265,28 @@ export async function changeMyPasswordWithCode(newPassword: string, code: string
   if (error) throw error;
 }
 
+// ── 비밀번호 찾기 (비로그인, 이메일 OTP) ─────────────────────────────────────
+// 1) 가입 이메일로 재설정 인증번호(OTP) 발송
+export async function requestPasswordReset(email: string): Promise<void> {
+  if (IS_MOCK) { await new Promise((r) => setTimeout(r, 600)); return; }
+  const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
+  if (error) throw error;
+}
+
+// 2) 이메일로 받은 6자리 OTP 검증 → 복구 세션 수립
+export async function verifyPasswordResetOtp(email: string, token: string): Promise<void> {
+  if (IS_MOCK) { await new Promise((r) => setTimeout(r, 600)); return; }
+  const { error } = await supabase.auth.verifyOtp({ email: email.trim(), token: token.trim(), type: 'recovery' });
+  if (error) throw error;
+}
+
+// 3) 복구 세션에서 새 비밀번호 설정
+export async function setNewPassword(newPassword: string): Promise<void> {
+  if (IS_MOCK) { await new Promise((r) => setTimeout(r, 600)); return; }
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) throw error;
+}
+
 // ── 구글 OAuth 로그인 ─────────────────────────────────────────────────────────
 export async function signInWithGoogle(): Promise<void> {
   if (IS_MOCK) throw new Error('데모 모드에서는 구글 로그인을 사용할 수 없습니다');

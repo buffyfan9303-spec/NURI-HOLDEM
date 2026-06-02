@@ -3,12 +3,15 @@ import { useState, useEffect, useRef } from 'react';
 import Modal from '../atoms/Modal';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
-import { signUpUser, signUpOwner, checkNicknameAvailable, signInWithGoogle } from '../../api/auth';
+import {
+  signUpUser, signUpOwner, checkNicknameAvailable, signInWithGoogle,
+  requestPasswordReset, verifyPasswordResetOtp, setNewPassword,
+} from '../../api/auth';
 import TermsOfService   from '../../pages/legal/TermsOfService';
 import PrivacyPolicy    from '../../pages/legal/PrivacyPolicy';
 import LegalNotice      from '../../pages/legal/LegalNotice';
 
-type Mode     = 'login' | 'signup-user' | 'signup-owner';
+type Mode     = 'login' | 'signup-user' | 'signup-owner' | 'forgot';
 type LegalDoc = 'terms' | 'privacy' | 'anti-gambling';
 
 const LEGAL_TITLES: Record<LegalDoc, string> = {
@@ -21,6 +24,7 @@ const MODE_LABEL: Record<Mode, string> = {
   'login':        '로그인',
   'signup-user':  '일반 회원가입',
   'signup-owner': '매장 업주 회원가입',
+  'forgot':       '비밀번호 찾기',
 };
 
 // ── 동의 상태 훅 ──────────────────────────────────────────────────────────────
@@ -250,9 +254,10 @@ export default function AuthModal({ open, onClose, initialMode = 'login' }: Auth
       </div>
 
       <div className="p-4">
-        {mode === 'login'        && <LoginForm onClose={onClose} />}
+        {mode === 'login'        && <LoginForm onClose={onClose} onForgot={() => setMode('forgot')} />}
         {mode === 'signup-user'  && <SignupUserForm  onDone={() => setMode('login')} />}
         {mode === 'signup-owner' && <SignupOwnerForm onDone={() => setMode('login')} />}
+        {mode === 'forgot'       && <ForgotPasswordForm onBack={() => setMode('login')} />}
       </div>
     </Modal>
   );
@@ -260,7 +265,7 @@ export default function AuthModal({ open, onClose, initialMode = 'login' }: Auth
 
 // ── 로그인 폼 ─────────────────────────────────────────────────────────────────
 
-function LoginForm({ onClose }: { onClose: () => void }) {
+function LoginForm({ onClose, onForgot }: { onClose: () => void; onForgot: () => void }) {
   const { login } = useAuth();
   const toast = useToast();
   const [email,    setEmail]    = useState('');
@@ -307,6 +312,12 @@ function LoginForm({ onClose }: { onClose: () => void }) {
       <Field label="비밀번호" type="password" required autoComplete="current-password"
         value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
 
+      <div className="text-right -mt-1">
+        <button type="button" onClick={onForgot} className="text-2xs text-ink-muted hover:text-gold-300 transition-colors">
+          비밀번호를 잊으셨나요?
+        </button>
+      </div>
+
       {error && <p className="text-xs text-danger animate-fade-in" role="alert">{error}</p>}
 
       <button type="submit" disabled={loading} className="btn-primary w-full disabled:opacity-60">
@@ -335,6 +346,90 @@ function LoginForm({ onClose }: { onClose: () => void }) {
         </svg>
         {googleLoading ? '이동 중…' : 'Google로 계속하기'}
       </button>
+    </form>
+  );
+}
+
+// ── 비밀번호 찾기 (비로그인, 이메일 OTP) ──────────────────────────────────────
+function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
+  const toast = useToast();
+  const [step,      setStep]      = useState<'email' | 'reset'>('email');
+  const [email,     setEmail]     = useState('');
+  const [code,      setCode]      = useState('');
+  const [newPw,     setNewPw]     = useState('');
+  const [confirmPw, setConfirmPw] = useState('');
+  const [loading,   setLoading]   = useState(false);
+
+  const sendCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim()) return toast.show('이메일을 입력해 주세요', 'error');
+    setLoading(true);
+    try {
+      await requestPasswordReset(email);
+      setStep('reset');
+      toast.show('인증번호를 이메일로 보냈습니다. 받은 편지함을 확인해 주세요.', 'success');
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : '발송에 실패했습니다', 'error');
+    } finally { setLoading(false); }
+  };
+
+  const reset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (code.trim().length < 6) return toast.show('6자리 인증번호를 입력해 주세요', 'error');
+    if (newPw.length < 8)       return toast.show('새 비밀번호는 8자 이상이어야 합니다', 'error');
+    if (newPw !== confirmPw)    return toast.show('새 비밀번호가 일치하지 않습니다', 'error');
+    setLoading(true);
+    try {
+      await verifyPasswordResetOtp(email, code);
+      await setNewPassword(newPw);
+      toast.show('비밀번호가 재설정되었습니다. 새 비밀번호로 로그인해 주세요.', 'success');
+      onBack();
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : '재설정 실패 — 인증번호를 확인해 주세요', 'error');
+    } finally { setLoading(false); }
+  };
+
+  if (step === 'email') {
+    return (
+      <form onSubmit={sendCode} className="space-y-3">
+        <p className="text-xs text-ink-secondary leading-relaxed">가입하신 이메일로 6자리 인증번호를 보내드립니다.</p>
+        <Field label="이메일" type="email" required autoComplete="email"
+          value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+        <button type="submit" disabled={loading} className="btn-primary w-full disabled:opacity-60">
+          {loading ? '발송 중…' : '인증번호 받기'}
+        </button>
+        <button type="button" onClick={onBack} className="w-full text-2xs text-ink-muted hover:text-gold-300 transition-colors">
+          로그인으로 돌아가기
+        </button>
+      </form>
+    );
+  }
+
+  return (
+    <form onSubmit={reset} className="space-y-3">
+      <p className="text-xs text-ink-secondary leading-relaxed">
+        <b className="text-ink-primary">{email}</b> 로 보낸 6자리 인증번호와 새 비밀번호를 입력해 주세요.
+      </p>
+      <div>
+        <label className="block text-xs font-medium text-ink-secondary mb-1.5">인증번호</label>
+        <input
+          type="text" inputMode="numeric" value={code}
+          onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
+          placeholder="6자리" maxLength={6}
+          className="input text-center font-bold tracking-[0.4em]" autoFocus
+        />
+      </div>
+      <Field label="새 비밀번호" type="password" required autoComplete="new-password"
+        value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="8자 이상" />
+      <Field label="새 비밀번호 확인" type="password" required autoComplete="new-password"
+        value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} placeholder="새 비밀번호 재입력" />
+      <button type="submit" disabled={loading} className="btn-primary w-full disabled:opacity-60">
+        {loading ? '재설정 중…' : '비밀번호 재설정'}
+      </button>
+      <div className="flex justify-between text-2xs">
+        <button type="button" onClick={() => setStep('email')} className="text-ink-muted hover:text-gold-300 transition-colors">코드 재전송</button>
+        <button type="button" onClick={onBack} className="text-ink-muted hover:text-gold-300 transition-colors">로그인으로</button>
+      </div>
     </form>
   );
 }
