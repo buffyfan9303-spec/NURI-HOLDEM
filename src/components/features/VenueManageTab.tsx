@@ -4,6 +4,7 @@ import { useToast } from '../atoms/Toast';
 import type { User, VenueInvite } from '../../api/auth';
 import { getMyVenueStaff, getMyVenueInvites, inviteStaffByEmail, cancelStaffInvite, removeStaff } from '../../api/auth';
 import { getVenueRankings, saveVenueRankings, maskRealName } from '../../api/rankings';
+import VenueVerificationCard from './VenueVerificationCard';
 
 /** 업주/직원 전용 "매장 관리" 탭 — 순위 입력 + (업주) 직원 관리 */
 export default function VenueManageTab() {
@@ -21,6 +22,7 @@ export default function VenueManageTab() {
 
   return (
     <div className="space-y-3">
+      {isOwner && <VenueVerificationCard />}
       {isOwner && (
         <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5">
           <TabBtn active={section === 'ranking'} onClick={() => setSection('ranking')}>순위 입력</TabBtn>

@@ -12,7 +12,10 @@ export interface Venue {
   businessHours?: string; followerCount?: number; isPaidAd?: boolean;
   displayOrder?: number; // 관리자 노출 순서 (작을수록 앞)
   status?: VenueStatus;  // active/inactive/suspended/hidden
+  verificationStatus?: VenueVerificationStatus; // 인증 등급
 }
+
+export type VenueVerificationStatus = 'unverified' | 'pending' | 'verified';
 
 export interface Comment {
   id: string; scheduleId?: string; venueId?: string; parentId?: string;
@@ -47,6 +50,7 @@ const rowToVenue = (r: any): Venue => ({
   businessHours: r.business_hours, followerCount: r.follower_count, isPaidAd: r.is_paid_ad,
   displayOrder: r.display_order,
   status: r.status ?? 'active',
+  verificationStatus: r.verification_status ?? 'unverified',
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -444,6 +448,27 @@ export async function removeReaction(postId: string): Promise<void> {
   const { error } = await supabase
     .from('post_reactions').delete()
     .eq('post_id', postId).eq('user_id', user.id);
+  if (error) throw error;
+}
+
+// ── 매장 인증 등급 ────────────────────────────────────────────────────────────
+export async function getMyVenue(): Promise<Venue | null> {
+  if (IS_MOCK) return null;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data } = await supabase.from('venues').select('*').eq('owner_id', user.id).limit(1).maybeSingle();
+  return data ? rowToVenue(data) : null;
+}
+// 업주: 본인 매장 인증 신청 (unverified -> pending)
+export async function requestVenueVerification(venueId: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.from('venues').update({ verification_status: 'pending' }).eq('id', venueId);
+  if (error) throw error;
+}
+// 관리자: 인증 상태 변경
+export async function setVenueVerification(venueId: string, status: VenueVerificationStatus): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.from('venues').update({ verification_status: status }).eq('id', venueId);
   if (error) throw error;
 }
 

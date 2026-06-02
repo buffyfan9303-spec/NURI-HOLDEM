@@ -56,9 +56,13 @@ export default function CommunityTab({
         return { venue: v, commentCount: venueComments.length, latest: venueComments[0] };
       })
       .sort((a, b) => {
-        // 1순위: isPaidAd (true가 먼저)
+        // 1순위: 인증 매장(verified) 우선
+        const av = a.venue.verificationStatus === 'verified' ? 1 : 0;
+        const bv = b.venue.verificationStatus === 'verified' ? 1 : 0;
+        if (av !== bv) return bv - av;
+        // 2순위: isPaidAd (true가 먼저)
         if (a.venue.isPaidAd !== b.venue.isPaidAd) return a.venue.isPaidAd ? -1 : 1;
-        // 2순위: followerCount 내림차순
+        // 3순위: followerCount 내림차순
         return (b.venue.followerCount ?? 0) - (a.venue.followerCount ?? 0);
       });
   }, [venues, comments, query]);
@@ -425,6 +429,12 @@ function VenuesSection({
                         {venue.isPaidAd && (
                           <span className="rounded-badge bg-gold-300 px-1.5 py-0.5 text-2xs font-bold text-ink-inverse leading-none">
                             AD
+                          </span>
+                        )}
+                        {venue.verificationStatus === 'verified' && (
+                          <span className="inline-flex items-center gap-0.5 rounded-badge border border-gold-400/50 bg-gold-300/15 px-1.5 py-0.5 text-2xs font-bold text-gold-300 leading-none">
+                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden><polyline points="20 6 9 17 4 12" /></svg>
+                            인증
                           </span>
                         )}
                         <p className="text-sm font-semibold text-ink-primary truncate">{venue.name}</p>

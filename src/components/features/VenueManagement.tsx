@@ -6,9 +6,9 @@ import { useEffect, useState } from 'react';
 import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import {
-  getAllVenues, updateVenueStatus, setVenueAd, deleteVenue, logActivity,
+  getAllVenues, updateVenueStatus, setVenueAd, deleteVenue, logActivity, setVenueVerification,
 } from '../../api/community';
-import type { Venue, VenueStatus } from '../../api/community';
+import type { Venue, VenueStatus, VenueVerificationStatus } from '../../api/community';
 
 const STATUS_LABEL: Record<VenueStatus, { label: string; cls: string }> = {
   active:    { label: '활성',   cls: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
@@ -58,6 +58,14 @@ export default function VenueManagement() {
     } catch { toast.show('변경에 실패했습니다', 'error'); }
   };
 
+  const setVerify = async (v: Venue, status: VenueVerificationStatus) => {
+    try {
+      await setVenueVerification(v.id, status);
+      setVenues((prev) => prev.map((x) => (x.id === v.id ? { ...x, verificationStatus: status } : x)));
+      toast.show(`${v.name} 인증 ${status === 'verified' ? '승인' : '해제'}`, 'info');
+    } catch { toast.show('변경에 실패했습니다', 'error'); }
+  };
+
   const remove = async (v: Venue) => {
     if (!confirm(`'${v.name}' 매장을 완전히 삭제할까요? 되돌릴 수 없습니다.`)) return;
     try {
@@ -91,6 +99,8 @@ export default function VenueManagement() {
                   <span className="text-sm font-semibold text-ink-primary truncate">{v.name}</span>
                   <span className={['text-2xs px-1.5 py-0.5 rounded-badge border font-semibold', st.cls].join(' ')}>{st.label}</span>
                   {v.isPaidAd && <span className="text-2xs px-1.5 py-0.5 rounded-badge bg-gold-300 text-ink-inverse font-bold">AD</span>}
+                  {v.verificationStatus === 'verified' && <span className="text-2xs px-1.5 py-0.5 rounded-badge bg-gold-300/15 text-gold-300 border border-gold-400/40 font-bold">인증</span>}
+                  {v.verificationStatus === 'pending' && <span className="text-2xs px-1.5 py-0.5 rounded-badge bg-amber-500/15 text-amber-400 border border-amber-500/30 font-semibold">인증 심사중</span>}
                   {!v.approved && <span className="text-2xs px-1.5 py-0.5 rounded-badge bg-amber-500/15 text-amber-400 border border-amber-500/30 font-semibold">미승인</span>}
                   <span className="text-2xs text-ink-muted ml-auto truncate">{v.region}</span>
                 </div>
@@ -100,6 +110,9 @@ export default function VenueManagement() {
                   {v.status !== 'suspended' && <Btn onClick={() => changeStatus(v, 'suspended', '정지')}   variant="warn">정지</Btn>}
                   {v.status !== 'inactive'  && <Btn onClick={() => changeStatus(v, 'inactive', '비활성')}  variant="muted">비활성</Btn>}
                   <Btn onClick={() => toggleAd(v)} variant={v.isPaidAd ? 'muted' : 'gold'}>{v.isPaidAd ? 'AD 끄기' : 'AD 켜기'}</Btn>
+                  {v.verificationStatus !== 'verified'
+                    ? <Btn onClick={() => setVerify(v, 'verified')} variant="gold">인증 승인</Btn>
+                    : <Btn onClick={() => setVerify(v, 'unverified')} variant="muted">인증 해제</Btn>}
                   <Btn onClick={() => remove(v)} variant="danger">삭제</Btn>
                 </div>
               </li>
