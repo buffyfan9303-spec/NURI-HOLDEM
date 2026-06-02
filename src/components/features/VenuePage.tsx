@@ -169,7 +169,7 @@ export default function VenuePage({
 
         {/* ── Sticky 탭바 ─────────────────────────────────────────── */}
         <div className="sticky top-0 z-20 bg-surface-base border-b border-border-subtle">
-          <div className="grid grid-cols-4">
+          <div className="flex overflow-x-auto scrollbar-none [-webkit-overflow-scrolling:touch]">
             {TABS.map((t) => {
               const count = t === 'posters'   ? venueSchedules.length
                           : t === 'schedules' ? venueSchedules.length
@@ -184,7 +184,7 @@ export default function VenuePage({
                   aria-selected={active}
                   role="tab"
                   className={[
-                    'py-3 text-sm font-medium transition-colors text-center relative',
+                    'flex-1 shrink-0 whitespace-nowrap px-2 py-3 text-sm font-medium transition-colors text-center relative',
                     'border-b-2 -mb-px',
                     active
                       ? 'border-gold-300 text-gold-300'
