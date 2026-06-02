@@ -93,7 +93,6 @@ export default function TierLeaderboard() {
               { k: '접속', v: '+1' },
               { k: '글쓰기', v: '+3' },
               { k: '댓글', v: '+1' },
-              { k: '배드빗·굿런', v: '+1' },
             ].map((it) => (
               <span key={it.k} className="inline-flex items-center gap-1 px-2 py-1 rounded-badge bg-surface-high border border-border-subtle text-2xs">
                 <span className="text-ink-secondary">{it.k}</span>

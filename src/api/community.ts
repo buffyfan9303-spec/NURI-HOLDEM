@@ -21,6 +21,7 @@ export type VenueVerificationStatus = 'unverified' | 'pending' | 'verified';
 export interface Comment {
   id: string; scheduleId?: string; venueId?: string; parentId?: string;
   userId: string; userName: string; userRole: UserRole; isOwner: boolean;
+  userAvatar?: string;
   content: string; createdAt: string; edited?: boolean;
 }
 
@@ -30,8 +31,9 @@ export type PostCategory = 'free' | 'question' | 'info' | 'review' | 'study';
 
 export interface CommunityPost {
   id: string; userId: string; userName: string;
-  userRole: UserRole; userColor?: string;
+  userRole: UserRole; userColor?: string; userAvatar?: string;
   content: string; createdAt: string; likeCount: number; commentCount: number;
+  viewCount?: number;
   // ── Stage 2 확장 (모두 옵셔널 → 구버전 데이터/호출 호환) ──
   category?: PostCategory;  // 카테고리
   title?: string;           // 제목
@@ -59,15 +61,16 @@ const rowToVenue = (r: any): Venue => ({
 const rowToComment = (r: any): Comment => ({
   id: r.id, scheduleId: r.schedule_id, venueId: r.venue_id, parentId: r.parent_id,
   userId: r.user_id, userName: r.user_name, userRole: r.user_role,
-  isOwner: r.is_owner, content: r.content, createdAt: r.created_at, edited: r.edited,
+  isOwner: r.is_owner, userAvatar: r.user_avatar ?? undefined,
+  content: r.content, createdAt: r.created_at, edited: r.edited,
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const rowToPost = (r: any): CommunityPost => ({
   id: r.id, userId: r.user_id, userName: r.user_name,
-  userRole: r.user_role, userColor: r.user_color,
+  userRole: r.user_role, userColor: r.user_color, userAvatar: r.user_avatar ?? undefined,
   content: r.content, createdAt: r.created_at,
-  likeCount: r.like_count, commentCount: r.comment_count,
+  likeCount: r.like_count, commentCount: r.comment_count, viewCount: r.view_count ?? 0,
   badbeatCount: r.badbeat_count ?? 0, goodrunCount: r.goodrun_count ?? 0,
   // Stage 2 컬럼 (없으면 undefined)
   category: r.category ?? undefined,
@@ -228,6 +231,7 @@ export interface LiveMessage {
   userName: string;
   userRole: UserRole;
   userColor?: string;
+  userAvatar?: string;
   content: string;
   createdAt: string;
 }
@@ -236,6 +240,7 @@ export interface LiveMessage {
 const rowToLiveMessage = (r: any): LiveMessage => ({
   id: r.id, userId: r.user_id, userName: r.user_name,
   userRole: r.user_role, userColor: r.user_color ?? undefined,
+  userAvatar: r.user_avatar ?? undefined,
   content: r.content, createdAt: r.created_at,
 });
 
@@ -422,6 +427,12 @@ export async function deleteOwnerPost(id: string): Promise<void> {
     .update({ deleted: true, deleted_at: new Date().toISOString() })
     .eq('id', id);
   if (error) throw error;
+}
+
+// 게시글 조회수 +1 (상세 진입 시)
+export async function incrementPostView(postId: string): Promise<void> {
+  if (IS_MOCK) return;
+  await supabase.rpc('increment_post_view', { p_id: postId });
 }
 
 // ── 딜러(venue_staff) 전용 게시판 — 구인/구직 ────────────────────────────────

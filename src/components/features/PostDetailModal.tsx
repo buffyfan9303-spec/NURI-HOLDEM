@@ -3,10 +3,11 @@ import Modal from '../atoms/Modal';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
 import type { CommunityPost, ReactionType } from '../../api/community';
-import { reactToPost, removeReaction, getMyReaction } from '../../api/community';
+import { reactToPost, removeReaction, getMyReaction, incrementPostView } from '../../api/community';
 import ReportModal from './ReportModal';
 import { parseHand } from '../../lib/hand';
 import HandCards from '../atoms/HandCards';
+import Avatar from '../atoms/Avatar';
 
 interface PostDetailModalProps {
   post: CommunityPost | null;
@@ -21,6 +22,7 @@ interface PostReply {
   id: string;
   author: string;
   authorColor: string;
+  authorAvatar?: string;
   content: string;
   time: string;
   isAdmin?: boolean;
@@ -51,6 +53,7 @@ export default function PostDetailModal({
     setMyReaction(null);
     let active = true;
     getMyReaction(post.id).then((r) => { if (active) setMyReaction(r); }).catch(() => {});
+    incrementPostView(post.id).catch(() => {});
     return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, post?.id]);
@@ -84,6 +87,7 @@ export default function PostDetailModal({
         id: `r${Date.now()}`,
         author: user.name,
         authorColor: user.avatarColor ?? '#5A6175',
+        authorAvatar: user.avatarUrl,
         content: draft.trim(),
         time: '방금 전',
         isAdmin: user.role === 'admin',
@@ -100,12 +104,7 @@ export default function PostDetailModal({
       <article className="p-4 space-y-4">
         {/* ── 작성자 정보 ─────────────────────────────────── */}
         <header className="flex items-center gap-2 pb-3 border-b border-border-subtle">
-          <div
-            className="w-10 h-10 shrink-0 rounded-full flex items-center justify-center text-sm font-bold text-white"
-            style={{ background: post.userColor ?? '#5A6175' }}
-          >
-            {post.userName[0]}
-          </div>
+          <Avatar name={post.userName} src={post.userAvatar} color={post.userColor} size={40} />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
               <span className="text-sm font-semibold text-ink-primary truncate">{post.userName}</span>
@@ -200,12 +199,7 @@ export default function PostDetailModal({
         {/* ── 댓글 입력 ───────────────────────────────────── */}
         {user ? (
           <form onSubmit={submit} className="flex gap-2">
-            <div
-              className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-xs font-bold text-white"
-              style={{ background: user.avatarColor ?? '#5A6175' }}
-            >
-              {user.name[0]}
-            </div>
+            <Avatar name={user.name} src={user.avatarUrl} color={user.avatarColor} size={32} />
             <input
               type="text"
               value={draft}
@@ -232,12 +226,7 @@ export default function PostDetailModal({
             <ul className="space-y-3">
               {replies.map((r) => (
                 <li key={r.id} className="flex gap-2">
-                  <div
-                    className="w-7 h-7 shrink-0 rounded-full flex items-center justify-center text-2xs font-bold text-white"
-                    style={{ background: r.authorColor }}
-                  >
-                    {r.author[0]}
-                  </div>
+                  <Avatar name={r.author} src={r.authorAvatar} color={r.authorColor} size={28} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 mb-0.5">
                       <span className="text-xs font-semibold text-ink-primary">{r.author}</span>

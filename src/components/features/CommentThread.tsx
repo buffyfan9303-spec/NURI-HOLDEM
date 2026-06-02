@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Comment } from '../../api/community';
 import { useAuth } from '../../contexts/AuthContext';
+import Avatar from '../atoms/Avatar';
 
 interface CommentThreadProps {
   comments: Comment[];
@@ -48,12 +49,7 @@ function CommentItem({
   return (
     <div className="space-y-2">
       <div className="flex gap-2">
-        <div
-          className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-xs font-bold text-white"
-          style={{ background: comment.isOwner ? '#FFD100' : '#5A6175', color: comment.isOwner ? '#0A0C0F' : '#fff' }}
-        >
-          {comment.userName[0]}
-        </div>
+        <Avatar name={comment.userName} src={comment.userAvatar} color={comment.isOwner ? '#FFD100' : '#5A6175'} size={32} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-0.5">
             <span className="text-xs font-semibold text-ink-primary">{comment.userName}</span>
@@ -145,15 +141,8 @@ export default function CommentThread({ comments, onSubmit, onDelete, moderator 
     <div className="space-y-4">
       {/* 입력창 */}
       {user ? (
-        <form onSubmit={submit} className="flex gap-2 sticky top-0 z-10 bg-surface-mid py-2">
-          <div
-            className="w-8 h-8 shrink-0 rounded-full overflow-hidden flex items-center justify-center text-xs font-bold text-white"
-            style={user.avatarUrl ? undefined : { background: user.avatarColor ?? '#5A6175' }}
-          >
-            {user.avatarUrl
-              ? <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" />
-              : user.name[0]}
-          </div>
+        <form onSubmit={submit} className="flex gap-2 py-2">
+          <Avatar name={user.name} src={user.avatarUrl} color={user.avatarColor} size={32} />
           <input
             type="text"
             value={content}

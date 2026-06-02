@@ -10,6 +10,7 @@ import TierLeaderboard from './TierLeaderboard';
 import { useToast } from '../atoms/Toast';
 import { filterContent } from '../../lib/content-filter';
 import { parseHand } from '../../lib/hand';
+import Avatar from '../atoms/Avatar';
 
 interface CommunityTabProps {
   venues: Venue[];
@@ -31,6 +32,15 @@ interface CommunityTabProps {
 // Task 4: [실시간 댓글(라이브월), 게시판, 홀덤 공부, 홀덤펍]
 type Section = 'live' | 'board' | 'study' | 'venues' | 'rank' | 'dealer' | 'owner';
 
+// 게시판 카테고리 필터
+const BOARD_CATEGORIES: { id: PostCategory | 'all'; label: string }[] = [
+  { id: 'all',      label: '전체' },
+  { id: 'question', label: '질문' },
+  { id: 'info',     label: '정보' },
+  { id: 'review',   label: '후기' },
+  { id: 'free',     label: '자유' },
+];
+
 function relativeTime(iso: string): string {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
   if (diff < 60)    return '방금 전';
@@ -43,7 +53,7 @@ export default function CommunityTab({
   venues, comments, posts, notices = [], isAdmin = false, onWriteNotice, onSelectNotice,
   onSelectVenue, onSelectPost, onOpenWrite, onLikePost,
 }: CommunityTabProps) {
-  const [section, setSection] = useState<Section>('board');
+  const [section, setSection] = useState<Section>('venues');
   const [query, setQuery] = useState('');
   const { user } = useAuth();
   const canOwnerCommunity = isAdmin || (user?.role === 'venue_owner' && user?.venueVerified === true);
@@ -115,6 +125,7 @@ export default function CommunityTab({
           onSelectPost={onSelectPost}
           placeholder="나누고 싶은 이야기를 적어보세요..."
           emptyText="첫 게시글을 남겨보세요"
+          enableCategory
         />
       )}
 
@@ -172,6 +183,7 @@ function SectionTab({ active, label, onClick }: { active: boolean; label: string
 function FeedSection({
   posts, notices, isAdmin, onWriteNotice, onSelectNotice, onOpenWrite, onLike, onSelectPost,
   placeholder = '나누고 싶은 이야기를 적어보세요...', emptyText = '첫 게시글을 남겨보세요',
+  enableCategory = false,
 }: {
   posts: CommunityPost[];
   notices?: MarketplaceNotice[];
@@ -183,16 +195,37 @@ function FeedSection({
   onSelectPost: (p: CommunityPost) => void;
   placeholder?: string;
   emptyText?: string;
+  /** 게시판: 카테고리 필터 + HOT(최근 6시간 최다 조회) 노출 */
+  enableCategory?: boolean;
 }) {
   const { user } = useAuth();
   const [q, setQ] = useState('');
+  const [cat, setCat] = useState<PostCategory | 'all'>('all');
   const [visible, setVisible] = useState(15);
+
+  // HOT: 최근 6시간 내 조회수 상위 2개 (검색·카테고리 미적용 상태에서만 핀 고정)
+  const hotPosts = useMemo(() => {
+    if (!enableCategory) return [] as CommunityPost[];
+    const since = Date.now() - 6 * 3600 * 1000;
+    return [...posts]
+      .filter((p) => new Date(p.createdAt).getTime() >= since && (p.viewCount ?? 0) > 0)
+      .sort((a, b) => (b.viewCount ?? 0) - (a.viewCount ?? 0))
+      .slice(0, 2);
+  }, [posts, enableCategory]);
+  const hotIds = useMemo(() => new Set(hotPosts.map((p) => p.id)), [hotPosts]);
+
   const filtered = useMemo(() => {
     const kw = q.trim().toLowerCase();
-    if (!kw) return posts;
-    return posts.filter((p) => p.content.toLowerCase().includes(kw) || p.userName.toLowerCase().includes(kw));
-  }, [posts, q]);
-  const shown = filtered.slice(0, visible);
+    return posts.filter((p) => {
+      if (enableCategory && cat !== 'all' && (p.category ?? 'free') !== cat) return false;
+      if (kw && !(p.content.toLowerCase().includes(kw) || (p.title?.toLowerCase().includes(kw) ?? false) || p.userName.toLowerCase().includes(kw))) return false;
+      return true;
+    });
+  }, [posts, q, cat, enableCategory]);
+
+  const pinHot = enableCategory && cat === 'all' && !q.trim() && hotPosts.length > 0;
+  const listSource = pinHot ? filtered.filter((p) => !hotIds.has(p.id)) : filtered;
+  const shown = listSource.slice(0, visible);
 
   return (
     <div className="space-y-2">
@@ -270,28 +303,60 @@ function FeedSection({
         </section>
       ) : null}
 
-      {/* 검색 */}
+      {/* 검색 + 카테고리 필터 */}
       {posts.length > 0 && (
-        <div className="relative">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" aria-hidden>
-            <circle cx="6" cy="6" r="4.5" /><line x1="9.5" y1="9.5" x2="13" y2="13" />
-          </svg>
-          <input
-            type="search"
-            value={q}
-            onChange={(e) => { setQ(e.target.value); setVisible(15); }}
-            placeholder="게시글 검색 (내용·작성자)"
-            className="input w-full pl-9 text-sm"
-          />
+        <div className="space-y-1.5">
+          <div className="relative">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" aria-hidden>
+              <circle cx="6" cy="6" r="4.5" /><line x1="9.5" y1="9.5" x2="13" y2="13" />
+            </svg>
+            <input
+              type="search"
+              value={q}
+              onChange={(e) => { setQ(e.target.value); setVisible(15); }}
+              placeholder="게시글 검색 (제목·내용·작성자)"
+              className="input w-full pl-9 text-sm"
+            />
+          </div>
+          {enableCategory && (
+            <div className="flex gap-1.5 overflow-x-auto scrollbar-none">
+              {BOARD_CATEGORIES.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => { setCat(c.id); setVisible(15); }}
+                  className={[
+                    'shrink-0 inline-flex items-center h-7 px-3 rounded-badge text-2xs font-semibold leading-none border transition-colors',
+                    cat === c.id
+                      ? 'bg-gold-300/20 border-gold-300 text-gold-300'
+                      : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary',
+                  ].join(' ')}
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* HOT — 최근 6시간 최다 조회 글 (게시판 기본 화면) */}
+      {pinHot && (
+        <div className="rounded-card border border-danger/30 bg-danger/[0.04] overflow-hidden">
+          <ul>
+            {hotPosts.map((p) => (
+              <PostCard key={p.id} post={p} hot onLike={() => onLike(p.id)} onClick={() => onSelectPost(p)} />
+            ))}
+          </ul>
         </div>
       )}
 
       {/* 포스트 목록 — 게시판 형태 (조밀하게 많이 보이게) */}
       {posts.length === 0 ? (
         <p className="text-center py-12 text-xs text-ink-muted">{emptyText}</p>
-      ) : filtered.length === 0 ? (
-        <p className="text-center py-12 text-xs text-ink-muted">검색 결과가 없습니다</p>
+      ) : listSource.length === 0 ? (
+        <p className="text-center py-12 text-xs text-ink-muted">{pinHot ? '다른 글이 없습니다' : '검색 결과가 없습니다'}</p>
       ) : (
         <>
           <div className="rounded-card border border-border-default bg-surface-low overflow-hidden">
@@ -301,13 +366,13 @@ function FeedSection({
               ))}
             </ul>
           </div>
-          {filtered.length > visible && (
+          {listSource.length > visible && (
             <button
               type="button"
               onClick={() => setVisible((v) => v + 15)}
               className="w-full py-2.5 rounded-input bg-surface-high text-xs font-semibold text-ink-secondary hover:text-ink-primary active:bg-surface-float transition-colors"
             >
-              더보기 ({(filtered.length - visible).toLocaleString()})
+              더보기 ({(listSource.length - visible).toLocaleString()})
             </button>
           )}
         </>
@@ -316,21 +381,19 @@ function FeedSection({
   );
 }
 
-function PostCard({ post, onLike, onClick }: { post: CommunityPost; onLike: () => void; onClick: () => void }) {
+function PostCard({ post, onLike, onClick, hot = false }: { post: CommunityPost; onLike: () => void; onClick: () => void; hot?: boolean }) {
   return (
     <li
       onClick={onClick}
       className="py-1.5 px-3 hover:bg-surface-high/50 active:bg-surface-high transition-colors cursor-pointer border-b border-border-subtle last:border-b-0"
     >
       <div className="flex items-start gap-2">
-        <div
-          className="w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-2xs font-bold text-white mt-0.5"
-          style={{ background: post.userColor ?? '#5A6175' }}
-        >
-          {post.userName[0]}
-        </div>
+        <Avatar name={post.userName} src={post.userAvatar} color={post.userColor} size={24} className="mt-0.5" />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1 text-2xs flex-wrap">
+            {hot && (
+              <span className="inline-flex items-center font-extrabold text-danger-light bg-danger/15 px-1 rounded-badge leading-none tracking-wide">HOT</span>
+            )}
             <span className="font-semibold text-ink-primary truncate">{post.userName}</span>
             {post.userRole === 'venue_owner' && (
               <span className="font-bold text-gold-300 bg-gold-300/15 px-1 rounded-badge leading-none">업주</span>
@@ -340,6 +403,9 @@ function PostCard({ post, onLike, onClick }: { post: CommunityPost; onLike: () =
             )}
             <span className="text-ink-muted ml-auto shrink-0">{relativeTime(post.createdAt)}</span>
           </div>
+          {post.title && (
+            <p className="text-xs font-bold text-ink-primary mt-0.5 truncate">{post.title}</p>
+          )}
           <p className="text-xs text-ink-primary leading-snug line-clamp-2 mt-0.5 break-words">
             {(() => {
               const { text, hand } = parseHand(post.content);
@@ -372,6 +438,14 @@ function PostCard({ post, onLike, onClick }: { post: CommunityPost; onLike: () =
               </svg>
               {post.commentCount}
             </span>
+            {(post.viewCount ?? 0) > 0 && (
+              <span className="inline-flex items-center gap-1">
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden>
+                  <path d="M1 6.5C2.2 4 4.2 2.7 6.5 2.7S10.8 4 12 6.5C10.8 9 8.8 10.3 6.5 10.3S2.2 9 1 6.5Z" /><circle cx="6.5" cy="6.5" r="1.8" />
+                </svg>
+                {post.viewCount}
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -592,12 +666,7 @@ function LiveWallSection() {
         <ul className="space-y-1">
           {messages.map((m) => (
             <li key={m.id} className="flex items-start gap-2 px-2.5 py-1.5 rounded-input bg-surface-low border border-border-subtle">
-              <div
-                className="w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-2xs font-bold text-white mt-0.5"
-                style={{ background: m.userColor ?? '#5A6175' }}
-              >
-                {m.userName[0]}
-              </div>
+              <Avatar name={m.userName} src={m.userAvatar} color={m.userColor} size={24} className="mt-0.5" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1 text-2xs">
                   <span className="font-semibold text-ink-primary truncate">{m.userName}</span>
