@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
-import type { User } from '../../api/auth';
-import { getMyVenueStaff, manageStaff } from '../../api/auth';
+import type { User, VenueInvite } from '../../api/auth';
+import { getMyVenueStaff, getMyVenueInvites, inviteStaffByNickname, cancelStaffInvite, removeStaff } from '../../api/auth';
 import { getVenueRankings, saveVenueRankings, maskRealName } from '../../api/rankings';
 
 /** 업주/직원 전용 "매장 관리" 탭 — 순위 입력 + (업주) 직원 관리 */
@@ -179,65 +179,111 @@ function RankingEditor({ venueId, canEdit }: { venueId: string; canEdit: boolean
 function StaffManager() {
   const toast = useToast();
   const [staff, setStaff] = useState<User[]>([]);
+  const [invites, setInvites] = useState<VenueInvite[]>([]);
   const [loading, setLoading] = useState(true);
+  const [nickname, setNickname] = useState('');
+  const [inviting, setInviting] = useState(false);
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
     setLoading(true);
-    getMyVenueStaff().then(setStaff).catch(() => {}).finally(() => setLoading(false));
+    Promise.all([getMyVenueStaff(), getMyVenueInvites()])
+      .then(([s, i]) => { setStaff(s); setInvites(i); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, [tick]);
+  const reload = () => setTick((t) => t + 1);
 
-  const act = async (s: User, action: 'approve' | 'reject' | 'remove') => {
-    if (action === 'remove' && !confirm(`${s.name} 직원을 삭제하시겠습니까? (일반 회원으로 전환)`)) return;
+  const invite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const nick = nickname.trim();
+    if (!nick) return;
+    setInviting(true);
     try {
-      await manageStaff(s.id, action);
-      toast.show('처리되었습니다', 'success');
-      setTick((t) => t + 1);
-    } catch (e) {
-      toast.show(e instanceof Error ? e.message : '처리에 실패했습니다', 'error');
+      await inviteStaffByNickname(nick);
+      toast.show('초대를 보냈습니다', 'success');
+      setNickname('');
+      reload();
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : '초대에 실패했습니다', 'error');
+    } finally {
+      setInviting(false);
     }
   };
 
-  if (loading) return <p className="text-center py-10 text-2xs text-ink-muted">불러오는 중...</p>;
-  if (staff.length === 0) {
-    return (
-      <div className="py-12 text-center text-sm text-ink-muted">
-        등록된 직원이 없습니다.
-        <p className="text-2xs mt-1">직원이 "가게 직원"으로 가입하고 우리 매장을 선택하면 여기에 표시됩니다.</p>
-      </div>
-    );
-  }
+  const cancel = async (id: string) => {
+    try { await cancelStaffInvite(id); toast.show('초대를 취소했습니다', 'info'); reload(); }
+    catch (e) { toast.show(e instanceof Error ? e.message : '실패했습니다', 'error'); }
+  };
+  const remove = async (s: User) => {
+    if (!confirm(`${s.name} 구성원을 제거하시겠습니까? (일반 회원으로 전환)`)) return;
+    try { await removeStaff(s.id); toast.show('구성원을 제거했습니다', 'success'); reload(); }
+    catch (e) { toast.show(e instanceof Error ? e.message : '실패했습니다', 'error'); }
+  };
 
   return (
-    <ul className="space-y-2">
-      {staff.map((s) => (
-        <li key={s.id} className="flex items-center gap-3 p-3 rounded-card bg-surface-low border border-border-subtle">
-          <div className="w-9 h-9 shrink-0 rounded-full flex items-center justify-center text-xs font-bold text-white"
-            style={{ background: s.avatarColor ?? '#5A6175' }}>
-            {s.name[0]}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className="text-sm font-semibold text-ink-primary truncate">{s.name}</span>
-              <span className={['text-2xs font-bold px-1 rounded-badge leading-none',
-                s.approved ? 'text-emerald-400 bg-emerald-500/15' : 'text-amber-400 bg-amber-500/15'].join(' ')}>
-                {s.approved ? '승인됨' : '대기중'}
-              </span>
+    <div className="space-y-4">
+      {/* 구성원 초대 */}
+      <form onSubmit={invite} className="space-y-1.5">
+        <label className="block text-xs font-semibold text-ink-secondary">구성원 초대</label>
+        <div className="flex gap-2">
+          <input
+            value={nickname}
+            onChange={(e) => setNickname(e.target.value)}
+            placeholder="초대할 회원 닉네임"
+            className="input flex-1 text-sm"
+          />
+          <button type="submit" disabled={inviting || !nickname.trim()} className="btn-primary px-4 shrink-0 disabled:opacity-60">초대</button>
+        </div>
+        <p className="text-2xs text-ink-muted">초대 대상은 먼저 일반 회원으로 가입돼 있어야 합니다. 상대가 알림에서 수락하면 구성원이 됩니다.</p>
+      </form>
+
+      {loading ? (
+        <p className="text-center py-6 text-2xs text-ink-muted">불러오는 중...</p>
+      ) : (
+        <>
+          {/* 대기중 초대 */}
+          {invites.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-semibold text-ink-secondary">대기중 초대 ({invites.length})</p>
+              <ul className="space-y-1.5">
+                {invites.map((iv) => (
+                  <li key={iv.id} className="flex items-center gap-2 p-2.5 rounded-input bg-surface-low border border-amber-500/30">
+                    <span className="flex-1 min-w-0 text-sm text-ink-primary truncate">
+                      {iv.nickname || iv.name} <span className="text-2xs text-amber-400">· 수락 대기</span>
+                    </span>
+                    <button type="button" onClick={() => cancel(iv.id)} className="text-2xs px-2 py-1 rounded-input text-ink-muted hover:text-danger-light transition-colors">취소</button>
+                  </li>
+                ))}
+              </ul>
             </div>
-            <p className="text-2xs text-ink-muted truncate">{s.email}</p>
-          </div>
-          <div className="flex items-center gap-1 shrink-0">
-            {s.approved ? (
-              <button type="button" onClick={() => act(s, 'reject')} className="btn-ghost text-2xs px-2 py-1">보류</button>
+          )}
+
+          {/* 구성원 목록 */}
+          <div className="space-y-1.5">
+            <p className="text-xs font-semibold text-ink-secondary">구성원 ({staff.length})</p>
+            {staff.length === 0 ? (
+              <p className="py-6 text-center text-2xs text-ink-muted">아직 구성원이 없습니다. 닉네임으로 초대해 보세요.</p>
             ) : (
-              <button type="button" onClick={() => act(s, 'approve')}
-                className="text-2xs font-semibold px-2.5 py-1 rounded-input bg-gold-300 text-ink-inverse hover:bg-gold-200 transition-colors">승인</button>
+              <ul className="space-y-2">
+                {staff.map((s) => (
+                  <li key={s.id} className="flex items-center gap-3 p-3 rounded-card bg-surface-low border border-border-subtle">
+                    <div className="w-9 h-9 shrink-0 rounded-full flex items-center justify-center text-xs font-bold text-white"
+                      style={{ background: s.avatarColor ?? '#5A6175' }}>
+                      {s.name[0]}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="block text-sm font-semibold text-ink-primary truncate">{s.name}</span>
+                      <p className="text-2xs text-ink-muted truncate">{s.nickname ? `@${s.nickname}` : s.email}</p>
+                    </div>
+                    <button type="button" onClick={() => remove(s)} className="text-2xs px-2 py-1 rounded-input text-ink-muted hover:text-danger-light transition-colors">제거</button>
+                  </li>
+                ))}
+              </ul>
             )}
-            <button type="button" onClick={() => act(s, 'remove')}
-              className="text-2xs px-2 py-1 rounded-input text-ink-muted hover:text-danger-light transition-colors">삭제</button>
           </div>
-        </li>
-      ))}
-    </ul>
+        </>
+      )}
+    </div>
   );
 }

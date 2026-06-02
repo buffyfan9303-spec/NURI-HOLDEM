@@ -23,6 +23,7 @@ import NuriHoldemLogo from './components/atoms/NuriHoldemLogo';
 import ThemeToggle from './components/atoms/ThemeToggle';
 import ProfileModal from './components/features/ProfileModal';
 import VenueManageTab from './components/features/VenueManageTab';
+import StaffInviteBanner from './components/features/StaffInviteBanner';
 import NoticeFormModal from './components/features/NoticeFormModal';
 import PostFormModal from './components/features/PostFormModal';
 import ConsentGateModal from './components/features/ConsentGateModal';
@@ -728,6 +729,8 @@ export default function App() {
       <TabBar tabs={tabs} active={activeTab} onChange={setActiveTab} />
 
       {/* 일정 탐색 */}
+      <div className="px-page-x"><StaffInviteBanner /></div>
+
       {activeTab === 'browse' && (
         <main>
           <div className="sticky top-header-h z-30 bg-surface-base border-b border-border-subtle pt-2 pb-3">

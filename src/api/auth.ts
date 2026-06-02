@@ -34,7 +34,6 @@ export interface ConsentPayload {
 }
 
 export interface SignupUserPayload  extends LoginPayload, ConsentPayload { name: string; nickname: string; }
-export interface SignupStaffPayload extends SignupUserPayload { venueId: string; }
 export interface SignupOwnerPayload extends SignupUserPayload {
   venueName: string; region: string; address: string;
   phone: string; businessNumber: string;
@@ -142,42 +141,54 @@ export async function signUpOwner(payload: SignupOwnerPayload): Promise<void> {
   if (error) throw error;
 }
 
-// ── 가게 직원 가입 신청 ───────────────────────────────────────────────────────
-// 소속 매장 선택 → 업주 승인 후 사용(approved=false로 생성).
-export async function signUpStaff(payload: SignupStaffPayload): Promise<void> {
-  if (IS_MOCK) throw new Error('Mock mode');
-  if (!payload.agreedToTerms)        throw new Error('서비스 이용약관에 동의해 주세요.');
-  if (!payload.agreedToPrivacy)      throw new Error('개인정보 수집·이용에 동의해 주세요.');
-  if (!payload.agreedToAntiGambling) throw new Error('불법 환전·사행성 금지 서약에 동의해 주세요.');
-  if (!payload.venueId)              throw new Error('소속 매장을 선택해 주세요.');
+// ── 매장 구성원(직원) — 업주 초대 + 수락 모델 ────────────────────────────────
+export interface StaffInvite { id: string; venueId: string; venueName: string; createdAt: string; }
+export interface VenueInvite { id: string; userId: string; nickname?: string; name: string; createdAt: string; }
 
-  const { error } = await supabase.auth.signUp({
-    email:    payload.email,
-    password: payload.password,
-    options: { data: {
-      name: payload.name,
-      nickname: payload.nickname,
-      role: 'venue_staff',
-      venue_id: payload.venueId,
-      agreed_to_terms:         payload.agreedToTerms,
-      agreed_to_privacy:       payload.agreedToPrivacy,
-      agreed_to_anti_gambling: payload.agreedToAntiGambling,
-      agreed_to_marketing:     payload.agreedToMarketing,
-    } },
-  });
-  if (error) throw error;
-}
-
-// ── 업주: 내 매장 직원 목록 / 승인·비승인·삭제 ───────────────────────────────
+// 업주: 내 매장 구성원(수락 완료) 목록
 export async function getMyVenueStaff(): Promise<User[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase.rpc('get_my_venue_staff');
   if (error) throw error;
   return (data ?? []).map(rowToUser);
 }
-export async function manageStaff(staffId: string, action: 'approve' | 'reject' | 'remove'): Promise<void> {
+// 업주: 닉네임으로 구성원 초대
+export async function inviteStaffByNickname(nickname: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.rpc('manage_staff', { p_staff_id: staffId, p_action: action });
+  const { error } = await supabase.rpc('invite_staff_by_nickname', { p_nickname: nickname.trim() });
+  if (error) throw error;
+}
+// 업주: 우리 매장 대기중 초대 목록
+export async function getMyVenueInvites(): Promise<VenueInvite[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.rpc('get_my_venue_invites');
+  if (error) throw error;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({ id: r.id, userId: r.user_id, nickname: r.nickname ?? undefined, name: r.name, createdAt: r.created_at }));
+}
+// 업주: 대기중 초대 취소 / 구성원 제거
+export async function cancelStaffInvite(inviteId: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('cancel_staff_invite', { p_invite_id: inviteId });
+  if (error) throw error;
+}
+export async function removeStaff(staffId: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('manage_staff', { p_staff_id: staffId, p_action: 'remove' });
+  if (error) throw error;
+}
+
+// 초대받은 회원: 내 대기중 초대 / 수락·거절
+export async function getMyStaffInvites(): Promise<StaffInvite[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.rpc('get_my_staff_invites');
+  if (error) throw error;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({ id: r.id, venueId: r.venue_id, venueName: r.venue_name, createdAt: r.created_at }));
+}
+export async function respondStaffInvite(inviteId: string, accept: boolean): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('respond_staff_invite', { p_invite_id: inviteId, p_accept: accept });
   if (error) throw error;
 }
 

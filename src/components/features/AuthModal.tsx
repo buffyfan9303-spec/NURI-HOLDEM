@@ -4,15 +4,14 @@ import Modal from '../atoms/Modal';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
 import {
-  signUpUser, signUpOwner, signUpStaff, checkNicknameAvailable, signInWithGoogle,
+  signUpUser, signUpOwner, checkNicknameAvailable, signInWithGoogle,
   requestPasswordReset, verifyPasswordResetOtp, setNewPassword,
 } from '../../api/auth';
-import { getVenues } from '../../api/community';
 import TermsOfService   from '../../pages/legal/TermsOfService';
 import PrivacyPolicy    from '../../pages/legal/PrivacyPolicy';
 import LegalNotice      from '../../pages/legal/LegalNotice';
 
-type Mode     = 'login' | 'signup-user' | 'signup-owner' | 'signup-staff' | 'forgot';
+type Mode     = 'login' | 'signup-user' | 'signup-owner' | 'forgot';
 type LegalDoc = 'terms' | 'privacy' | 'anti-gambling';
 
 const LEGAL_TITLES: Record<LegalDoc, string> = {
@@ -25,7 +24,6 @@ const MODE_LABEL: Record<Mode, string> = {
   'login':        '로그인',
   'signup-user':  '일반 회원가입',
   'signup-owner': '매장 업주 회원가입',
-  'signup-staff': '가게 직원 회원가입',
   'forgot':       '비밀번호 찾기',
 };
 
@@ -239,8 +237,8 @@ export default function AuthModal({ open, onClose, initialMode = 'login' }: Auth
   return (
     <Modal open={open} onClose={onClose} title={MODE_LABEL[mode]} maxWidth="md">
       {/* 탭 */}
-      <div className="grid grid-cols-4 border-b border-border-subtle">
-        {(['login', 'signup-user', 'signup-owner', 'signup-staff'] as Mode[]).map((m) => (
+      <div className="grid grid-cols-3 border-b border-border-subtle">
+        {(['login', 'signup-user', 'signup-owner'] as Mode[]).map((m) => (
           <button
             key={m} type="button" onClick={() => setMode(m)}
             className={[
@@ -250,7 +248,7 @@ export default function AuthModal({ open, onClose, initialMode = 'login' }: Auth
                 : 'border-transparent text-ink-muted hover:text-ink-secondary',
             ].join(' ')}
           >
-            {m === 'login' ? '로그인' : m === 'signup-user' ? '일반' : m === 'signup-owner' ? '업주' : '직원'}
+            {m === 'login' ? '로그인' : m === 'signup-user' ? '일반 가입' : '업주 가입'}
           </button>
         ))}
       </div>
@@ -259,7 +257,6 @@ export default function AuthModal({ open, onClose, initialMode = 'login' }: Auth
         {mode === 'login'        && <LoginForm onClose={onClose} onForgot={() => setMode('forgot')} />}
         {mode === 'signup-user'  && <SignupUserForm  onDone={() => setMode('login')} />}
         {mode === 'signup-owner' && <SignupOwnerForm onDone={() => setMode('login')} />}
-        {mode === 'signup-staff' && <SignupStaffForm onDone={() => setMode('login')} />}
         {mode === 'forgot'       && <ForgotPasswordForm onBack={() => setMode('login')} />}
       </div>
     </Modal>
@@ -599,105 +596,6 @@ function SignupOwnerForm({ onDone }: { onDone: () => void }) {
           className="btn-primary w-full mt-3 disabled:opacity-60"
         >
           {loading ? '처리 중…' : '업주 가입 신청'}
-        </button>
-      </form>
-
-      <LegalSheet doc={legalDoc} onClose={() => setLegalDoc(null)} />
-    </>
-  );
-}
-
-// ── 가게 직원 가입 ─────────────────────────────────────────────────────────────
-
-function SignupStaffForm({ onDone }: { onDone: () => void }) {
-  const toast = useToast();
-  const [loading,  setLoading]  = useState(false);
-  const [name,     setName]     = useState('');
-  const nick = useNicknameCheck();
-  const [email,    setEmail]    = useState('');
-  const [password, setPassword] = useState('');
-  const [confirm,  setConfirm]  = useState('');
-  const [venueId,  setVenueId]  = useState('');
-  const [venues,   setVenues]   = useState<{ id: string; name: string; region: string }[]>([]);
-  const [legalDoc, setLegalDoc] = useState<LegalDoc | null>(null);
-  const { c, allRequired, allChecked, set, toggleAll } = useConsent();
-
-  useEffect(() => {
-    getVenues()
-      .then((vs) => setVenues(vs.map((v) => ({ id: v.id, name: v.name, region: v.region }))))
-      .catch(() => {});
-  }, []);
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!c.age19)        return toast.show('만 19세 이상만 가입할 수 있습니다.', 'error');
-    if (!c.terms)        return toast.show('서비스 이용약관에 동의해 주세요.', 'error');
-    if (!c.privacy)      return toast.show('개인정보 수집·이용에 동의해 주세요.', 'error');
-    if (!c.antiGambling) return toast.show('불법 환전·사행성 금지 서약에 동의해 주세요.', 'error');
-    if (nick.status !== 'available') return toast.show('사용 가능한 닉네임을 입력해 주세요.', 'error');
-    if (!venueId)             return toast.show('소속 매장을 선택해 주세요.', 'error');
-    if (password !== confirm) return toast.show('비밀번호가 일치하지 않습니다.', 'error');
-
-    setLoading(true);
-    try {
-      await signUpStaff({
-        name, email, password, nickname: nick.value.trim(), venueId,
-        agreedToTerms:        c.terms,
-        agreedToPrivacy:      c.privacy,
-        agreedToAntiGambling: c.antiGambling,
-        agreedToMarketing:    c.marketing,
-      });
-      toast.show('직원 가입 신청 완료. 이메일 인증 후, 매장 업주의 승인을 받으면 이용할 수 있습니다.', 'success');
-      onDone();
-    } catch (err: unknown) {
-      toast.show(err instanceof Error ? err.message : '가입 중 오류가 발생했습니다.', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <>
-      <form onSubmit={submit} className="space-y-3">
-        <div className="flex items-start gap-2 p-3 rounded-input bg-gold-300/10 border border-gold-400/30">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#FFD100" strokeWidth="1.5" className="shrink-0 mt-0.5" aria-hidden>
-            <circle cx="8" cy="8" r="6.5"/><line x1="8" y1="5" x2="8" y2="9"/><circle cx="8" cy="11.5" r="0.5" fill="#FFD100"/>
-          </svg>
-          <p className="text-xs text-gold-300 leading-relaxed">
-            가게 직원은 소속 매장을 선택해 가입한 뒤 <strong>매장 업주의 승인</strong>을 받아야 이용할 수 있습니다.
-          </p>
-        </div>
-
-        <Field label="이름"          type="text"     placeholder="홍길동"          required value={name}     onChange={(e) => setName(e.target.value)} />
-        <NicknameField value={nick.value} status={nick.status} onChange={nick.setValue} />
-
-        <div>
-          <label className="block text-xs font-medium text-ink-secondary mb-1">소속 매장 <span className="text-danger">*</span></label>
-          <select value={venueId} onChange={(e) => setVenueId(e.target.value)} required className="input">
-            <option value="">매장을 선택하세요</option>
-            {venues.map((v) => (
-              <option key={v.id} value={v.id}>{v.name}{v.region ? ` · ${v.region}` : ''}</option>
-            ))}
-          </select>
-          {venues.length === 0 && <p className="mt-1 text-2xs text-ink-muted">등록된 매장이 없습니다. 업주 승인 완료된 매장만 표시됩니다.</p>}
-        </div>
-
-        <Field label="이메일"        type="email"    placeholder="you@example.com" required value={email}    onChange={(e) => setEmail(e.target.value)} />
-        <Field label="비밀번호"      type="password" placeholder="8자 이상"        required value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} />
-        <Field label="비밀번호 확인" type="password" placeholder="••••••••"        required value={confirm}  onChange={(e) => setConfirm(e.target.value)} />
-
-        <ConsentSection
-          c={c} allRequired={allRequired} allChecked={allChecked}
-          set={set} toggleAll={toggleAll}
-          onView={setLegalDoc}
-        />
-
-        <button
-          type="submit"
-          disabled={loading || !allRequired || nick.status !== 'available' || !venueId}
-          className="btn-primary w-full mt-2 disabled:opacity-60"
-        >
-          {loading ? '처리 중…' : '직원 가입 신청'}
         </button>
       </form>
 
