@@ -328,10 +328,10 @@ export default function IntegratedSearchBar({
       <DateSlider selectedDates={selectedDates} onToggle={handleDateToggle} onPick={handlePickDate} />
 
       {/* ── 지역(복수선택) + 토너먼트(라디오) 필터 ──────────────────────── */}
-      <div className="flex flex-col gap-1.5 px-page-x pt-2 pb-1">
+      <div className="flex flex-col gap-2.5 px-page-x pt-2.5 pb-1.5">
         {/* 지역 칩 */}
         <div
-          className="flex gap-1.5 overflow-x-auto scrollbar-none [-webkit-overflow-scrolling:touch]"
+          className="flex gap-2 overflow-x-auto scrollbar-none [-webkit-overflow-scrolling:touch]"
           aria-label="지역 필터"
         >
           {REGION_CHIPS.map((r) => {
@@ -342,7 +342,7 @@ export default function IntegratedSearchBar({
                 type="button"
                 onClick={() => handleRegionToggle(r)}
                 className={[
-                  'shrink-0 px-2.5 py-1 rounded-badge text-2xs font-semibold border transition-colors focus:outline-none',
+                  'shrink-0 px-3 py-1.5 rounded-badge text-2xs font-semibold border transition-colors focus:outline-none',
                   active
                     ? 'bg-gold-300/20 border-gold-300 text-gold-300'
                     : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary hover:border-border-strong',
@@ -359,7 +359,7 @@ export default function IntegratedSearchBar({
           <div
             role="radiogroup"
             aria-label="토너먼트 필터"
-            className="inline-flex items-center gap-1 rounded-input bg-surface-high p-0.5 border border-border-default"
+            className="inline-flex items-center gap-1 rounded-input bg-surface-high p-1 border border-border-default"
           >
             {TOUR_OPTIONS.map(({ id, label }) => {
               const active = tour === id;
@@ -371,7 +371,7 @@ export default function IntegratedSearchBar({
                   aria-checked={active}
                   onClick={() => setTour(id)}
                   className={[
-                    'px-3 py-1 rounded-[6px] text-2xs font-bold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-300',
+                    'px-3.5 py-1.5 rounded-[6px] text-2xs font-bold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-300',
                     active
                       ? 'bg-gold-300 text-ink-inverse'
                       : 'text-ink-muted hover:text-ink-secondary',

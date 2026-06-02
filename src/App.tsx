@@ -266,7 +266,7 @@ function TabBar({
   return (
     <div
       ref={containerRef}
-      className="relative flex border-b border-border-subtle overflow-x-auto scrollbar-none px-page-x
+      className="sticky top-header-h z-40 bg-surface-base relative flex border-b border-border-subtle overflow-x-auto scrollbar-none px-page-x
                  [&>button:first-child]:pl-0 [&>button:last-child]:pr-0"
     >
       {tabs.map(({ id, label }) => {
@@ -746,7 +746,7 @@ export default function App() {
 
       {activeTab === 'browse' && (
         <main>
-          <div className="sticky top-header-h z-30 bg-surface-base border-b border-border-subtle pt-2 pb-3">
+          <div className="sticky top-[calc(theme(spacing.header-h)+theme(spacing.tab-h))] z-30 bg-surface-base border-b border-border-subtle pt-2 pb-3">
             <IntegratedSearchBar onChange={setSearchState} />
             {/* 뷰 모드 토글 — 일정 탐색 컨텍스트 안에 배치 */}
             <div className="flex items-center justify-between px-page-x pt-2">

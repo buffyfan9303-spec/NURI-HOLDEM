@@ -157,7 +157,6 @@ export default function PostDetailModal({
             </button>
             <span>댓글 {post.commentCount + replies.length}</span>
           </div>
-          <button type="button" className="text-ink-muted hover:text-gold-300">공유</button>
         </div>
 
         {/* ── 배드빗 / 굿런 (작성자 활동 점수 적립) ─────────── */}

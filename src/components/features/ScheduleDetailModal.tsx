@@ -190,7 +190,7 @@ export default function ScheduleDetailModal({
           />
         </div>
       ) : (
-      <div className="px-4 pb-6 space-y-5">
+      <div className="px-4 pt-5 pb-6 space-y-6">
 
         {/* 프라이즈 강조 박스 */}
         {schedule.prizePool && (

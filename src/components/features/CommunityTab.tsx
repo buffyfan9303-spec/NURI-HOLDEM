@@ -79,14 +79,17 @@ export default function CommunityTab({
   return (
     <div className="space-y-3">
       {/* 섹션 토글 — 실시간 댓글 / 게시판 / 홀덤 공부 / 홀덤펍 (Task 4) */}
-      <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5">
-        <SectionTab active={section === 'live'}   label="실시간 댓글" onClick={() => setSection('live')} />
-        <SectionTab active={section === 'board'}  label="게시판"      onClick={() => setSection('board')} />
-        <SectionTab active={section === 'study'}  label="홀덤 공부"   onClick={() => setSection('study')} />
-        <SectionTab active={section === 'venues'} label="홀덤펍"      onClick={() => setSection('venues')} />
-        {canOwnerCommunity && (
-          <SectionTab active={section === 'owner'} label="업주" onClick={() => setSection('owner')} />
-        )}
+      {/* 스크롤해도 항상 보이도록 헤더+메인탭 바로 아래에 고정 */}
+      <div className="sticky top-[calc(theme(spacing.header-h)+theme(spacing.tab-h))] z-30 -mx-page-x px-page-x bg-surface-base pt-2 pb-2 overflow-x-auto scrollbar-none">
+        <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5 w-max min-w-full">
+          <SectionTab active={section === 'live'}   label="실시간 댓글" onClick={() => setSection('live')} />
+          <SectionTab active={section === 'board'}  label="게시판"      onClick={() => setSection('board')} />
+          <SectionTab active={section === 'study'}  label="홀덤 공부"   onClick={() => setSection('study')} />
+          <SectionTab active={section === 'venues'} label="홀덤펍"      onClick={() => setSection('venues')} />
+          {canOwnerCommunity && (
+            <SectionTab active={section === 'owner'} label="업주" onClick={() => setSection('owner')} />
+          )}
+        </div>
       </div>
 
       {section === 'live' && <LiveWallSection />}
@@ -142,7 +145,7 @@ function SectionTab({ active, label, onClick }: { active: boolean; label: string
       type="button"
       onClick={onClick}
       className={[
-        'flex-1 py-2 text-xs font-semibold rounded-[6px] transition-all focus:outline-none',
+        'flex-1 px-2 py-2 text-xs font-semibold rounded-[6px] transition-all focus:outline-none whitespace-nowrap',
         active ? 'bg-gold-300 text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary',
       ].join(' ')}
     >
