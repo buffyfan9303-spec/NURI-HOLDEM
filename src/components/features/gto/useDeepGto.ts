@@ -16,6 +16,15 @@ export function cardId(c: Card): CardId {
 const SLOT_LIMIT: Record<CardTarget, number> = { hero: 2, villain: 2, board: 5 };
 const TARGET_ORDER: CardTarget[] = ['hero', 'villain', 'board'];
 
+/** 히어로 에퀴티(승률) -> 3-Bet/콜/폴드 추정 믹스 (정밀 데이터 없는 입력용) */
+function actionFromEquity(eq: number): ActionFrequency {
+  if (eq >= 0.62) return { raise: 0.85, call: 0.13, fold: 0.02 };
+  if (eq >= 0.52) return { raise: 0.50, call: 0.45, fold: 0.05 };
+  if (eq >= 0.45) return { raise: 0.20, call: 0.50, fold: 0.30 };
+  if (eq >= 0.38) return { raise: 0.10, call: 0.30, fold: 0.60 };
+  return { raise: 0.03, call: 0.05, fold: 0.92 };
+}
+
 export interface UseDeepGto {
   situation: GtoDeepSituation;
   hero: readonly (Card | null)[];
@@ -99,23 +108,6 @@ export function useDeepGto(): UseDeepGto {
     return canonicalizeHand([villain[0].rank, villain[1].rank], suited)?.id ?? null;
   }, [villain]);
 
-  const result = useMemo<GtoResult | null>(() => {
-    if (!villainComboId) return null;
-    const found = situation.villainAdjustments[villainComboId];
-    if (found) return found;
-    return {
-      action: situation.baseline.action,
-      baseline: situation.baseline.action,
-      heuristic_explanation: situation.baseline.heuristic_explanation,
-      blockerExplanation: '이 빌런 핸드의 정밀 블로커 데이터는 준비 중입니다. 기준(레인지) 결과를 표시합니다.',
-    };
-  }, [villainComboId, situation]);
-
-  const normalizedAction = useMemo(
-    () => (result ? normalizeFrequency(result.action) : null),
-    [result],
-  );
-
   // 실시간 에퀴티: Hero/Villain 2장 완성 시 보드를 반영해 몬테카를로 계산
   const equity = useMemo<Equity | null>(() => {
     if (!heroComplete || !villainComplete) return null;
@@ -125,6 +117,36 @@ export function useDeepGto(): UseDeepGto {
     const r = computeEquity([h[0], h[1]], [v[0], v[1]], b, 2500);
     return { hero: r.hero, villain: r.villain };
   }, [hero, villain, board, heroComplete, villainComplete]);
+
+  const result = useMemo<GtoResult | null>(() => {
+    if (!villainComplete || !villainComboId) return null;
+    // 1) 정밀 데이터(저자 입력)가 있으면 우선 사용
+    const authored = situation.villainAdjustments[villainComboId];
+    if (authored) return authored;
+    // 2) 없으면 실시간 에퀴티 기반으로 액션을 추정 — 모든 입력에서 결과가 변동
+    if (!equity) {
+      return {
+        action: situation.baseline.action,
+        baseline: situation.baseline.action,
+        heuristic_explanation: situation.baseline.heuristic_explanation,
+      };
+    }
+    const eqPct = Math.round(equity.hero * 100);
+    return {
+      action: actionFromEquity(equity.hero),
+      baseline: situation.baseline.action,
+      equity,
+      heuristic_explanation:
+        `히어로 에퀴티 ${eqPct}% 를 기준으로 추정한 전략입니다. 에퀴티가 높을수록 3-Bet/콜 비중이 커지고, 낮을수록 폴드가 정석입니다.`,
+      blockerExplanation:
+        `빌런을 ${villainComboId} 로 고정하면 히어로 에퀴티가 ${eqPct}% 가 됩니다. 빌런 카드가 만드는 블로커/언블로커 효과가 에퀴티와 폴드 가능성에 반영되어 기준(레인지) 대비 빈도가 달라집니다.`,
+    };
+  }, [villainComplete, villainComboId, equity, situation]);
+
+  const normalizedAction = useMemo(
+    () => (result ? normalizeFrequency(result.action) : null),
+    [result],
+  );
 
   return {
     situation,
