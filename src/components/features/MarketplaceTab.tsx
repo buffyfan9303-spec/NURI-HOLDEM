@@ -67,6 +67,7 @@ export default function MarketplaceTab({
   const [includeSold, setIncludeSold] = useState(false);
   const [query, setQuery]             = useState('');
   const [sortBy, setSortBy]           = useState<SortBy>('recent');
+  const [viewMode, setViewMode]       = useState<'grid' | 'list'>('grid'); // 번개장터식 바둑판 기본
 
   const visible = useMemo(() => {
     const filtered = listings.filter((l) => {
@@ -115,8 +116,8 @@ export default function MarketplaceTab({
         </button>
       </div>
 
-      {/* ── 카테고리 4분할 (한 줄에 모두 표시) ───────────────────── */}
-      <div className="grid grid-cols-4 gap-1">
+      {/* ── 카테고리 — 가로 스크롤(번개장터식, 줄바꿈 없음) ───────── */}
+      <div className="flex gap-1.5 overflow-x-auto scrollbar-none [-webkit-overflow-scrolling:touch]">
         {CATEGORIES.map((cat) => {
           const active = category === cat.id;
           return (
@@ -125,7 +126,7 @@ export default function MarketplaceTab({
               type="button"
               onClick={() => setCategory(cat.id)}
               className={[
-                'h-9 rounded-input text-xs font-semibold transition-colors',
+                'shrink-0 h-9 px-4 rounded-input text-xs font-semibold transition-colors',
                 active
                   ? 'bg-gold-300 text-ink-inverse'
                   : 'bg-surface-high text-ink-secondary hover:text-ink-primary border border-border-default',
@@ -153,17 +154,36 @@ export default function MarketplaceTab({
             <label htmlFor="includeSold" className="cursor-pointer">거래완료 포함</label>
           </span>
         </div>
-        <span className="text-ink-muted tabular-nums">총 {visible.length}건</span>
+        <div className="flex items-center gap-2">
+          <span className="text-ink-muted tabular-nums">총 {visible.length}건</span>
+          {/* 뷰 토글 — 바둑판 / 목록 */}
+          <div className="flex items-center gap-0.5 bg-surface-high rounded-input p-0.5">
+            <button type="button" onClick={() => setViewMode('grid')} aria-label="바둑판 보기" aria-pressed={viewMode === 'grid'}
+              className={['p-1 rounded-[6px] transition-colors', viewMode === 'grid' ? 'bg-gold-300 text-ink-inverse' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg>
+            </button>
+            <button type="button" onClick={() => setViewMode('list')} aria-label="목록 보기" aria-pressed={viewMode === 'list'}
+              className={['p-1 rounded-[6px] transition-colors', viewMode === 'list' ? 'bg-gold-300 text-ink-inverse' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* ── 게시판 (테이블 헤더 + 행) ──────────────────────────────── */}
-      <div className="rounded-card border border-border-default bg-surface-low overflow-hidden">
-        <BoardHeader />
-        {visible.length === 0 ? (
-          <div className="py-16 text-center text-xs text-ink-muted">
-            조건에 맞는 글이 없습니다
-          </div>
-        ) : (
+      {/* ── 매물 목록: 바둑판(그리드) / 목록(게시판) 토글 ─────────── */}
+      {visible.length === 0 ? (
+        <div className="rounded-card border border-border-default bg-surface-low py-16 text-center text-xs text-ink-muted">
+          조건에 맞는 글이 없습니다
+        </div>
+      ) : viewMode === 'grid' ? (
+        <div className="grid grid-cols-2 gap-card-gap animate-fade-in">
+          {visible.map((l) => (
+            <ListingCard key={l.id} listing={l} onClick={() => onSelect(l)} />
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-card border border-border-default bg-surface-low overflow-hidden animate-fade-in">
+          <BoardHeader />
           <ul>
             {visible.map((l, idx) => (
               <ListingRow
@@ -174,8 +194,8 @@ export default function MarketplaceTab({
               />
             ))}
           </ul>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -371,6 +391,57 @@ function ListingRow({
         </span>
       </button>
     </li>
+  );
+}
+
+// ── 카드(바둑판) 아이템 — 번개장터식 ─────────────────────────────────────────
+
+function ListingCard({ listing, onClick }: { listing: MarketplaceListing; onClick: () => void }) {
+  const status = STATUS_MAP[listing.status];
+  const isSold = listing.status === 'sold';
+  const img    = listing.images[0];
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group text-left rounded-card border border-border-default bg-surface-low overflow-hidden hover:border-border-strong transition-colors focus:outline-none"
+    >
+      {/* 썸네일 (정사각, 비율 고정) + 상태 뱃지 플로팅 */}
+      <div className="relative aspect-square bg-surface-mid overflow-hidden">
+        {img ? (
+          <img
+            src={img} alt={listing.title} loading="lazy"
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-ink-muted">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="opacity-40" aria-hidden>
+              <path d="M21 8l-9-5-9 5 9 5 9-5z" /><path d="M3 8v8l9 5 9-5V8" />
+            </svg>
+          </div>
+        )}
+        <span className={['absolute top-2 left-2 inline-flex items-center rounded-badge border px-1.5 py-0.5 text-2xs font-bold leading-none shadow-sm', status.cls].join(' ')}>
+          {status.label}
+        </span>
+        <span className={['absolute top-2 right-2 inline-flex items-center rounded-badge border px-1 py-0.5 text-2xs font-bold leading-none', CONDITION_COLOR[listing.condition]].join(' ')}>
+          {listing.condition}
+        </span>
+        {isSold && <div className="absolute inset-0 bg-black/45" aria-hidden />}
+      </div>
+
+      {/* 정보 */}
+      <div className="p-2">
+        <p className={['text-xs font-medium leading-snug line-clamp-2 min-h-[2rem]', isSold ? 'text-ink-muted line-through decoration-1' : 'text-ink-primary'].join(' ')}>
+          {listing.title}
+          {listing.commentCount > 0 && (
+            <span className="ml-1 text-2xs text-gold-300 font-bold align-middle">[{listing.commentCount}]</span>
+          )}
+        </p>
+        <p className="mt-1 text-sm font-bold text-ink-primary tabular-nums">{listing.price.toLocaleString()}</p>
+        <p className="mt-0.5 text-2xs text-ink-muted truncate">{listing.region} · {relativeTime(listing.createdAt)}</p>
+      </div>
+    </button>
   );
 }
 
