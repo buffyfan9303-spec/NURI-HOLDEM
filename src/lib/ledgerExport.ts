@@ -37,7 +37,11 @@ export function buildLedgerHtml(input: LedgerExportInput): string {
   let totalBuyins = 0, ticket = 0, revenue = 0, unpaid = 0, support = 0;
   for (const b of buyins) {
     totalBuyins++;
-    if (b.paymentMethod === 'support') support++;
+    if (b.isSplit) {
+      revenue += b.cashAmount + b.cardAmount + b.transferAmount;
+      unpaid  += b.unpaidAmount;
+      ticket  += b.ticketCount;
+    } else if (b.paymentMethod === 'support') support++;
     else if (b.paymentMethod === 'ticket') ticket++;
     else {
       const unit = b.paymentMethod === 'card' ? cardUnit(session) : session.buyinAmount;
@@ -48,7 +52,9 @@ export function buildLedgerHtml(input: LedgerExportInput): string {
   const cellOf = (name: string, e: number): string => {
     const c = byPlayer(name).find((b) => b.entryNo === e);
     if (!c) return '';
-    const tag = c.paymentMethod === 'support' ? '지원' : `${METHOD_KO[c.paymentMethod]}${c.isUnpaid ? '/미수' : '/완납'}`;
+    const tag = c.isSplit ? `분납${c.unpaidAmount > 0 ? '/미수' : ''}${c.discountLevel > 0 ? `(${c.discountLevel}레벨할인)` : ''}`
+      : c.paymentMethod === 'support' ? '지원'
+      : `${METHOD_KO[c.paymentMethod]}${c.isUnpaid ? '/미수' : '/완납'}`;
     return `${tag}<br>${hhmm(c.buyinAt)}`;
   };
 

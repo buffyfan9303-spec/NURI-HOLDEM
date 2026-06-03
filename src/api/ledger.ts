@@ -20,6 +20,14 @@ export interface LedgerBuyin {
   paymentMethod: PaymentMethod;
   isUnpaid: boolean;
   buyinAt: string;
+  // 분납/할인 (is_split=true 일 때 금액 분해)
+  isSplit: boolean;
+  cashAmount: number;
+  cardAmount: number;
+  transferAmount: number;
+  ticketCount: number;
+  unpaidAmount: number;
+  discountLevel: number;
 }
 
 export interface LedgerSession {
@@ -63,6 +71,9 @@ const rowToBuyin = (r: any): LedgerBuyin => ({
   playerName: r.player_name, entryNo: r.entry_no,
   paymentMethod: r.payment_method as PaymentMethod, isUnpaid: !!r.is_unpaid,
   buyinAt: r.buyin_at,
+  isSplit: !!r.is_split,
+  cashAmount: r.cash_amount ?? 0, cardAmount: r.card_amount ?? 0, transferAmount: r.transfer_amount ?? 0,
+  ticketCount: r.ticket_count ?? 0, unpaidAmount: r.unpaid_amount ?? 0, discountLevel: r.discount_level ?? 0,
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -286,6 +297,34 @@ export async function upsertBuyin(input: {
     venue_id: input.venueId, session_date: input.sessionDate,
     player_name: input.playerName, entry_no: input.entryNo,
     payment_method: input.paymentMethod, is_unpaid: unpaid,
+    is_split: false, cash_amount: 0, card_amount: 0, transfer_amount: 0,
+    ticket_count: 0, unpaid_amount: 0, discount_level: 0,
+    buyin_at: new Date().toISOString(), created_by: user?.id ?? null,
+  }, { onConflict: 'venue_id,session_date,player_name,entry_no' });
+  if (error) throw error;
+}
+
+/** 분납/할인 상세 입력 — 현금/카드/이체 금액 + 미수금액 + 티켓장수 + 레벨할인 */
+export async function upsertBuyinSplit(input: {
+  venueId: string; sessionDate: string; playerName: string; entryNo: number;
+  cashAmount: number; cardAmount: number; transferAmount: number;
+  ticketCount: number; unpaidAmount: number; discountLevel: number;
+}): Promise<void> {
+  if (IS_MOCK) return;
+  const { data: { user } } = await supabase.auth.getUser();
+  // 대표 결제수단(셀 표기/정렬용): 금액이 큰 수단. 전부 0이고 티켓만이면 ticket.
+  const primary: PaymentMethod =
+    input.ticketCount > 0 && (input.cashAmount + input.cardAmount + input.transferAmount) === 0 ? 'ticket'
+    : input.cardAmount >= input.cashAmount && input.cardAmount >= input.transferAmount && input.cardAmount > 0 ? 'card'
+    : input.transferAmount > input.cashAmount && input.transferAmount > 0 ? 'transfer'
+    : 'cash';
+  const { error } = await supabase.from('ledger_buyins').upsert({
+    venue_id: input.venueId, session_date: input.sessionDate,
+    player_name: input.playerName, entry_no: input.entryNo,
+    payment_method: primary, is_unpaid: input.unpaidAmount > 0,
+    is_split: true,
+    cash_amount: input.cashAmount, card_amount: input.cardAmount, transfer_amount: input.transferAmount,
+    ticket_count: input.ticketCount, unpaid_amount: input.unpaidAmount, discount_level: input.discountLevel,
     buyin_at: new Date().toISOString(), created_by: user?.id ?? null,
   }, { onConflict: 'venue_id,session_date,player_name,entry_no' });
   if (error) throw error;

@@ -10,7 +10,7 @@ import {
   cardUnit, visitorLabel,
   getLedgerSession, saveLedgerSession, openLedgerSession, closeLedgerSession, reopenLedgerSession,
   setRegistrationClosed, getLastLedgerSettings, getLedgerSessionList,
-  getLedgerBuyins, upsertBuyin, cancelBuyin,
+  getLedgerBuyins, upsertBuyin, upsertBuyinSplit, cancelBuyin,
   getLedgerPlayers, addLedgerPlayer, updateLedgerPlayer, removeLedgerPlayer,
   subscribeLedger, posHasPassword,
 } from '../../api/ledger';
@@ -113,6 +113,12 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     let totalBuyins = 0, ticket = 0, ticketUnpaid = 0, revenue = 0, unpaid = 0, support = 0;
     for (const b of buyins) {
       totalBuyins++;
+      if (b.isSplit) {
+        revenue += b.cashAmount + b.cardAmount + b.transferAmount;
+        unpaid  += b.unpaidAmount;
+        ticket  += b.ticketCount;
+        continue;
+      }
       if (b.paymentMethod === 'support') support++;
       else if (b.paymentMethod === 'ticket') { if (b.isUnpaid) ticketUnpaid++; else ticket++; }
       else {
@@ -344,13 +350,15 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                         const tone = c.paymentMethod === 'support'
                           ? 'border-indigo-400/50 bg-indigo-500/10 text-indigo-300'
                           : c.isUnpaid ? 'border-danger bg-danger/10 text-danger-light'
+                          : c.isSplit ? 'border-gold-400/50 bg-gold-300/10 text-gold-300'
                           : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300';
+                        const topLabel = c.isSplit ? '분납' : `${METHOD_SHORT[c.paymentMethod]}${c.isUnpaid ? '·미' : ''}`;
                         return (
                           <td key={e} className={cls}>
                             <button type="button" disabled={closed}
                               onClick={() => !closed && setSelected({ playerName: r.name, entryNo: e, buyin: c })}
                               className={['w-full h-full rounded-input border-2 flex flex-col items-center justify-center leading-none', tone, closed ? 'cursor-default' : ''].join(' ')}>
-                              <span className="text-[11px] font-extrabold">{METHOD_SHORT[c.paymentMethod]}{c.isUnpaid ? '·미' : ''}</span>
+                              <span className="text-[11px] font-extrabold">{topLabel}{c.isSplit && c.discountLevel > 0 ? '*' : ''}</span>
                               <span className="text-[8px] opacity-80 mt-0.5">{hhmm(c.buyinAt)}</span>
                             </button>
                           </td>
@@ -426,6 +434,12 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
           onPick={async (method, isUnpaid) => {
             try {
               await upsertBuyin({ venueId, sessionDate: date, playerName: selected.playerName, entryNo: selected.entryNo, paymentMethod: method, isUnpaid });
+              setSelected(null); reload();
+            } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
+          }}
+          onPickSplit={async (d) => {
+            try {
+              await upsertBuyinSplit({ venueId, sessionDate: date, playerName: selected.playerName, entryNo: selected.entryNo, ...d });
               setSelected(null); reload();
             } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
           }}
@@ -648,10 +662,13 @@ function Overlay({ title, onClose, children }: { title: string; onClose: () => v
 }
 
 // ── 2-Tap 결제 입력 모달 ──────────────────────────────────────────────────────
-function PaymentModal({ cell, hasPw, onClose, onPick, onCancelBuyin }: {
+interface SplitInput { cashAmount: number; cardAmount: number; transferAmount: number; ticketCount: number; unpaidAmount: number; discountLevel: number; }
+
+function PaymentModal({ cell, hasPw, onClose, onPick, onPickSplit, onCancelBuyin }: {
   cell: SelectedCell; hasPw: boolean;
   onClose: () => void;
   onPick: (m: PaymentMethod, isUnpaid: boolean) => void;
+  onPickSplit: (d: SplitInput) => void;
   onCancelBuyin: (pw: string) => void;
 }) {
   const [cancelMode, setCancelMode] = useState(false);
@@ -659,6 +676,19 @@ function PaymentModal({ cell, hasPw, onClose, onPick, onCancelBuyin }: {
   const dualMethods: { key: PaymentMethod; label: string }[] = [
     { key: 'cash', label: '현금' }, { key: 'transfer', label: '이체' }, { key: 'card', label: '카드' },
   ];
+
+  // 분납/할인 상세
+  const init = cell.buyin?.isSplit ? cell.buyin : null;
+  const [splitMode, setSplitMode] = useState(!!init);
+  const [cash, setCash]         = useState<number>(init?.cashAmount ?? 0);
+  const [card, setCard]         = useState<number>(init?.cardAmount ?? 0);
+  const [transfer, setTransfer] = useState<number>(init?.transferAmount ?? 0);
+  const [tkt, setTkt]           = useState<number>(init?.ticketCount ?? 0);
+  const [unpaidAmt, setUnpaidAmt] = useState<number>(init?.unpaidAmount ?? 0);
+  const [discount, setDiscount] = useState<number>(init?.discountLevel ?? 0);
+  const splitTotal = cash + card + transfer + unpaidAmt;
+  const canSaveSplit = splitTotal > 0 || tkt > 0;
+  const submitSplit = () => onPickSplit({ cashAmount: cash, cardAmount: card, transferAmount: transfer, ticketCount: tkt, unpaidAmount: unpaidAmt, discountLevel: discount });
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -678,37 +708,75 @@ function PaymentModal({ cell, hasPw, onClose, onPick, onCancelBuyin }: {
         </header>
 
         <div className="p-3 space-y-2">
-          {/* 티켓: 완납·미수(가불) */}
-          <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={() => onPick('ticket', false)}
-              className="h-12 rounded-input border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 font-bold text-sm active:scale-95 transition-all hover:bg-emerald-500/20">
-              티켓 완납
-            </button>
-            <button type="button" onClick={() => onPick('ticket', true)}
-              className="h-12 rounded-input border border-danger/50 bg-danger/10 text-danger-light font-bold text-sm active:scale-95 transition-all hover:bg-danger/20">
-              티켓 미수
-            </button>
-          </div>
+          {!splitMode ? (
+            <>
+              {/* 티켓: 완납·미수(가불) */}
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => onPick('ticket', false)}
+                  className="h-12 rounded-input border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 font-bold text-sm active:scale-95 transition-all hover:bg-emerald-500/20">
+                  티켓 완납
+                </button>
+                <button type="button" onClick={() => onPick('ticket', true)}
+                  className="h-12 rounded-input border border-danger/50 bg-danger/10 text-danger-light font-bold text-sm active:scale-95 transition-all hover:bg-danger/20">
+                  티켓 미수
+                </button>
+              </div>
 
-          {/* 현금/이체/카드: 완납·미수 */}
-          {dualMethods.map((m) => (
-            <div key={m.key} className="grid grid-cols-2 gap-2">
-              <button type="button" onClick={() => onPick(m.key, false)}
-                className="h-12 rounded-input border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 font-bold text-sm active:scale-95 transition-all hover:bg-emerald-500/20">
-                {m.label} 완납
+              {/* 현금/이체/카드: 완납·미수 */}
+              {dualMethods.map((m) => (
+                <div key={m.key} className="grid grid-cols-2 gap-2">
+                  <button type="button" onClick={() => onPick(m.key, false)}
+                    className="h-12 rounded-input border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 font-bold text-sm active:scale-95 transition-all hover:bg-emerald-500/20">
+                    {m.label} 완납
+                  </button>
+                  <button type="button" onClick={() => onPick(m.key, true)}
+                    className="h-12 rounded-input border border-danger/50 bg-danger/10 text-danger-light font-bold text-sm active:scale-95 transition-all hover:bg-danger/20">
+                    {m.label} 미수
+                  </button>
+                </div>
+              ))}
+
+              {/* 가게지원 */}
+              <button type="button" onClick={() => onPick('support', false)}
+                className="w-full h-12 rounded-input border border-indigo-400/50 bg-indigo-500/10 text-indigo-300 font-bold text-sm active:scale-95 transition-all hover:bg-indigo-500/20">
+                가게지원
               </button>
-              <button type="button" onClick={() => onPick(m.key, true)}
-                className="h-12 rounded-input border border-danger/50 bg-danger/10 text-danger-light font-bold text-sm active:scale-95 transition-all hover:bg-danger/20">
-                {m.label} 미수
+
+              {/* 분납/할인 상세 */}
+              <button type="button" onClick={() => setSplitMode(true)}
+                className="w-full h-11 rounded-input border border-gold-400/40 text-gold-300 font-semibold text-sm hover:bg-gold-300/10 transition-colors">
+                분납 / 할인 상세 입력
               </button>
+            </>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <button type="button" onClick={() => setSplitMode(false)} className="text-2xs text-ink-muted hover:text-ink-primary">← 빠른 입력</button>
+                <span className="text-2xs font-semibold text-gold-300">분납 / 할인</span>
+              </div>
+              <AmountRow label="현금" value={cash} set={setCash} />
+              <AmountRow label="카드" value={card} set={setCard} />
+              <AmountRow label="이체" value={transfer} set={setTransfer} />
+              <AmountRow label="미수" value={unpaidAmt} set={setUnpaidAmt} danger />
+              <div className="grid grid-cols-2 gap-2">
+                <label className="block">
+                  <span className="block text-2xs text-ink-muted mb-0.5">티켓(장)</span>
+                  <input type="number" inputMode="numeric" min={0} value={tkt || ''} onChange={(e) => setTkt(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                    placeholder="0" className="input w-full text-sm tabular-nums" />
+                </label>
+                <label className="block">
+                  <span className="block text-2xs text-ink-muted mb-0.5">레벨 할인</span>
+                  <div className="relative">
+                    <input type="number" inputMode="numeric" min={0} value={discount || ''} onChange={(e) => setDiscount(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                      placeholder="0" className="input w-full text-sm tabular-nums pr-9" />
+                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">레벨</span>
+                  </div>
+                </label>
+              </div>
+              <p className="text-2xs text-ink-secondary text-right">합계 <b className="tabular-nums">{splitTotal.toLocaleString()}</b>원{discount > 0 ? ` · ${discount}레벨 할인` : ''}</p>
+              <button type="button" onClick={submitSplit} disabled={!canSaveSplit} className="btn-primary w-full text-sm disabled:opacity-50">저장</button>
             </div>
-          ))}
-
-          {/* 가게지원 */}
-          <button type="button" onClick={() => onPick('support', false)}
-            className="w-full h-12 rounded-input border border-indigo-400/50 bg-indigo-500/10 text-indigo-300 font-bold text-sm active:scale-95 transition-all hover:bg-indigo-500/20">
-            가게지원
-          </button>
+          )}
 
           {/* 기존 셀: 취소(삭제) */}
           {cell.buyin && (
@@ -733,6 +801,19 @@ function PaymentModal({ cell, hasPw, onClose, onPick, onCancelBuyin }: {
         </div>
       </div>
     </div>
+  );
+}
+
+function AmountRow({ label, value, set, danger }: { label: string; value: number; set: (n: number) => void; danger?: boolean }) {
+  return (
+    <label className="flex items-center gap-2">
+      <span className={['w-9 shrink-0 text-2xs font-semibold', danger ? 'text-danger-light' : 'text-ink-secondary'].join(' ')}>{label}</span>
+      <div className="relative flex-1">
+        <input type="number" inputMode="numeric" min={0} value={value || ''} onChange={(e) => set(Math.max(0, parseInt(e.target.value, 10) || 0))}
+          placeholder="0" className="input w-full text-sm tabular-nums pr-7" />
+        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">원</span>
+      </div>
+    </label>
   );
 }
 

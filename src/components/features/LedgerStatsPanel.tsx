@@ -58,6 +58,7 @@ function DayStats({ venueId }: { venueId: string }) {
     for (const b of src) {
       byMethod[b.paymentMethod]++;
       byPlayer[b.playerName] = (byPlayer[b.playerName] ?? 0) + 1;
+      if (b.isSplit) { revenue += b.cashAmount + b.cardAmount + b.transferAmount; unpaidAmt += b.unpaidAmount; continue; }
       if (b.paymentMethod === 'support') support++;
       else if (b.paymentMethod !== 'ticket') { if (b.isUnpaid) unpaidAmt += unitOf(b); else revenue += unitOf(b); }
     }
