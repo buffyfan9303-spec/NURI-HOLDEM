@@ -6,6 +6,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { uploadPoster } from '../../lib/storage';
 import { filterContent } from '../../lib/content-filter';
 import type { Schedule } from '../../api/schedules';
+import { REGION_CHIPS } from './IntegratedSearchBar';
 
 interface PosterFormModalProps {
   open: boolean;
@@ -30,6 +31,8 @@ export interface PosterFormData {
   paymentMethods: string[];
   partners: string[];     // 파트너 / 시드권 — 업주 직접 추가
   prizes: string[];
+  rankingPrizes: { rank: string; amount: number }[]; // 순위별 상금(1등~머니인) — 선택
+  events: string[];       // 이벤트/프로모션(신규·할인 등) — 선택
   posterUrl?: string;
   // 관리자 직접 등록용 — 홀덤펍 선택(기존) 또는 직접 입력
   venueId?: string;
@@ -40,9 +43,10 @@ const PAYMENT_BASE = ['현금', '카드', '매장이용권'];
 const MAX_PAYMENTS = 10;
 const MAX_PARTNERS = 10;
 const MAX_PRIZES = 10;
-const REGION_OPTIONS = [
-  '서울', '경기도 남양주', '경기도 성남', '인천', '강남', '홍대', '부산', '대전', '대구', '광주',
-];
+const MAX_RANKS = 20;
+const MAX_EVENTS = 10;
+// 빠른 추가용 이벤트 프리셋
+const EVENT_PRESETS = ['신규 이벤트', '할인 이벤트', '얼리버드', '해피아워', '리바이 1+1'];
 
 export default function PosterFormModal({ open, onClose, schedule, onSubmit, venues = [] }: PosterFormModalProps) {
   const toast  = useToast();
@@ -56,6 +60,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
     prizeType: 'GTD', prizeAmount: 0, buyIn: 0, region: '',
     isCompetition: false,
     paymentMethods: ['현금'], partners: [], prizes: [],
+    rankingPrizes: [], events: [],
     venueId: '', pubName: '',
   };
 
@@ -78,6 +83,8 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
         paymentMethods: schedule.paymentMethods ?? ['현금'],
         partners: schedule.partners ?? [],
         prizes: schedule.seats?.map((s) => `${s.label} ${s.count}석`) ?? [],
+        rankingPrizes: schedule.rankingPrizes?.map((r) => ({ rank: r.rank, amount: r.amount })) ?? [],
+        events: schedule.promotions?.map((p) => p.title) ?? [],
         posterUrl: schedule.posterUrl,
         venueId: schedule.venueId, pubName: schedule.pubName,
       });
@@ -279,26 +286,17 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
           </FieldWrap>
         </div>
 
-        {/* 지역 */}
+        {/* 지역 — 일정탐색 지역에서 선택 (직접입력 없음) */}
         <FieldWrap label="지역" required>
-          <div className="space-y-1.5">
-            <input type="text" required value={form.region}
-              onChange={(e) => update('region', e.target.value)}
-              placeholder="예: 경기도 남양주" className="input" list="region-suggestions" />
-            <datalist id="region-suggestions">
-              {REGION_OPTIONS.map((r) => <option key={r} value={r} />)}
-            </datalist>
-            <div className="flex flex-wrap gap-1">
-              {REGION_OPTIONS.slice(0, 6).map((r) => (
-                <button key={r} type="button" onClick={() => update('region', r)}
-                  className={['text-2xs px-2 py-0.5 rounded-badge border transition-colors',
-                    form.region === r ? 'bg-gold-300/15 border-gold-300 text-gold-300'
-                      : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary'].join(' ')}>
-                  {r}
-                </button>
-              ))}
-            </div>
-          </div>
+          <select
+            value={form.region}
+            onChange={(e) => update('region', e.target.value)}
+            className="input w-full"
+          >
+            <option value="">지역 선택</option>
+            {REGION_CHIPS.map((r) => <option key={r} value={r}>{r}</option>)}
+            <option value="기타">기타</option>
+          </select>
         </FieldWrap>
 
         {/* 결제 수단 — 기본(현금/카드/매장이용권) + 업주 직접 추가(최대 10) */}
@@ -341,6 +339,41 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
             onAdd={(v) => { if (!form.partners.includes(v)) update('partners', [...form.partners, v]); }}
             onRemove={(v) => update('partners', form.partners.filter((p) => p !== v))}
           />
+        </FieldWrap>
+
+        {/* 이벤트 / 프로모션 — 선택 (신규·할인 등) */}
+        <FieldWrap label={`이벤트 / 프로모션 (${form.events.length}/${MAX_EVENTS})`}>
+          <div className="space-y-2">
+            <div className="flex flex-wrap gap-1.5">
+              {EVENT_PRESETS.map((ev) => {
+                const on = form.events.includes(ev);
+                return (
+                  <button key={ev} type="button"
+                    onClick={() => update('events', on
+                      ? form.events.filter((e) => e !== ev)
+                      : (form.events.length >= MAX_EVENTS ? form.events : [...form.events, ev]))}
+                    className={['px-2.5 py-1 rounded-badge text-xs font-semibold border transition-colors',
+                      on ? 'bg-gold-300/15 border-gold-300 text-gold-300'
+                        : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary'].join(' ')}>
+                    {on ? '✓ ' : ''}{ev}
+                  </button>
+                );
+              })}
+            </div>
+            <TagAdder
+              items={form.events.filter((e) => !EVENT_PRESETS.includes(e))}
+              max={MAX_EVENTS}
+              total={form.events.length}
+              placeholder="기타 이벤트 직접 입력 (예: 오픈 기념 이벤트)"
+              onAdd={(v) => { if (!form.events.includes(v)) update('events', [...form.events, v]); }}
+              onRemove={(v) => update('events', form.events.filter((e) => e !== v))}
+            />
+          </div>
+        </FieldWrap>
+
+        {/* 순위별 상금 — 1등부터 머니인 구간까지 (선택) */}
+        <FieldWrap label={`순위별 상금 (${form.rankingPrizes.length}/${MAX_RANKS})`} suffix="만원">
+          <RankingPrizeList prizes={form.rankingPrizes} onChange={(rp) => update('rankingPrizes', rp)} />
         </FieldWrap>
 
         {/* 시상품 */}
@@ -394,6 +427,44 @@ function PrizeList({ prizes, onChange }: { prizes: string[]; onChange: (prizes: 
   );
 }
 
+// 순위별 상금(1등~머니인) — 선택. 금액은 만원 단위.
+function RankingPrizeList({ prizes, onChange }: {
+  prizes: { rank: string; amount: number }[];
+  onChange: (v: { rank: string; amount: number }[]) => void;
+}) {
+  const add = () => {
+    if (prizes.length >= MAX_RANKS) return;
+    onChange([...prizes, { rank: `${prizes.length + 1}위`, amount: 0 }]);
+  };
+  const setAt = (i: number, patch: Partial<{ rank: string; amount: number }>) =>
+    onChange(prizes.map((p, k) => (k === i ? { ...p, ...patch } : p)));
+  return (
+    <div className="space-y-1.5">
+      {prizes.length > 0 && (
+        <ul className="space-y-1">
+          {prizes.map((p, i) => (
+            <li key={i} className="flex items-center gap-1.5">
+              <input value={p.rank} onChange={(e) => setAt(i, { rank: e.target.value })} maxLength={12}
+                placeholder={`${i + 1}위`} className="input w-20 text-sm" />
+              <input type="number" inputMode="numeric" value={p.amount || ''}
+                onChange={(e) => setAt(i, { amount: parseInt(e.target.value, 10) || 0 })}
+                placeholder="상금(만원)" className="input flex-1 text-sm tabular-nums" />
+              <span className="text-2xs text-ink-muted shrink-0">만</span>
+              <button type="button" onClick={() => onChange(prizes.filter((_, k) => k !== i))}
+                aria-label="삭제" className="text-ink-muted hover:text-danger text-2xs px-1">✕</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {prizes.length < MAX_RANKS && (
+        <button type="button" onClick={add} className="btn-ghost text-xs w-full py-1.5">
+          + 순위 추가 {prizes.length === 0 && '(1등부터 머니인까지 선택 입력)'}
+        </button>
+      )}
+    </div>
+  );
+}
+
 // 직접 추가형 태그 입력(결제수단/파트너 공통). total = 전체 합(기본칩 포함) 기준 한도 체크.
 function TagAdder({ items, max, total, placeholder, onAdd, onRemove }: {
   items: string[];
@@ -435,11 +506,12 @@ function TagAdder({ items, max, total, placeholder, onAdd, onRemove }: {
   );
 }
 
+// 주의: label 로 감싸면 빈 영역 클릭이 내부 첫 컨트롤(예: 결제수단 첫 버튼)을 토글하므로 div 사용
 function FieldWrap({ label, required, suffix, children }: {
   label: string; required?: boolean; suffix?: string; children: React.ReactNode;
 }) {
   return (
-    <label className="block">
+    <div className="block">
       <div className="flex items-baseline justify-between mb-1">
         <span className="text-xs font-medium text-ink-secondary">
           {label}{required && <span className="text-danger ml-0.5">*</span>}
@@ -447,7 +519,7 @@ function FieldWrap({ label, required, suffix, children }: {
         {suffix && <span className="text-2xs text-ink-muted">단위: {suffix}</span>}
       </div>
       {children}
-    </label>
+    </div>
   );
 }
 

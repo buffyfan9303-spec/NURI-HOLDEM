@@ -707,6 +707,8 @@ export default function App() {
         region:       data.region,
         paymentMethods: data.paymentMethods,
         partners:     data.partners,
+        rankingPrizes: data.rankingPrizes.filter((r) => r.amount > 0),
+        promotions:   data.events.map((title) => ({ title })),
         seats,
       };
       if (data.regCloseTime)            patch.duration  = data.regCloseTime;
@@ -745,6 +747,8 @@ export default function App() {
       buyIn:          { amount: data.buyIn },
       paymentMethods: data.paymentMethods,
       partners:       data.partners,
+      rankingPrizes:  data.rankingPrizes.filter((r) => r.amount > 0),
+      promotions:     data.events.map((title) => ({ title })),
       seats,
       posterUrl:      data.posterUrl,
       posterColor:    '#7C2D7E',

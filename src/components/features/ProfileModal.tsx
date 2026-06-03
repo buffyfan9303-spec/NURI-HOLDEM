@@ -98,7 +98,7 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
   // ── 비밀번호 변경 = 이메일 인증 OTP (useCallback은 early return 전에 선언) ──
   // 1) 새 비밀번호 입력 후 가입 이메일로 인증코드 발송
   const handleSendCode = useCallback(async () => {
-    if (newPw.length < 8)    return toast.show('새 비밀번호는 8자 이상이어야 합니다', 'error');
+    if (newPw.length < 6)    return toast.show('새 비밀번호는 6자 이상이어야 합니다', 'error');
     if (newPw !== confirmPw) return toast.show('새 비밀번호가 일치하지 않습니다', 'error');
     setSendingCode(true);
     try {
@@ -394,7 +394,7 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
             onChange={setNewPw}
             show={showNew}
             onToggle={() => setShowNew((v) => !v)}
-            placeholder="8자 이상 입력"
+            placeholder="6자 이상 입력"
             autoComplete="new-password"
           />
 
@@ -423,7 +423,7 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
             <button
               type="button"
               onClick={handleSendCode}
-              disabled={sendingCode || !newPw || newPw !== confirmPw || newPw.length < 8}
+              disabled={sendingCode || !newPw || newPw !== confirmPw || newPw.length < 6}
               className="btn-primary w-full disabled:opacity-60"
             >
               {sendingCode ? '인증코드 발송 중…' : '이메일로 인증코드 받기'}
@@ -589,7 +589,7 @@ const STRENGTH_LEVELS = [
 
 function PasswordStrength({ password }: { password: string }) {
   const checks = [
-    { label: '8자 이상',      ok: password.length >= 8 },
+    { label: '6자 이상',      ok: password.length >= 6 },
     { label: '영문 포함',     ok: /[a-zA-Z]/.test(password) },
     { label: '숫자 포함',     ok: /\d/.test(password) },
     { label: '특수문자 포함', ok: /[!@#$%^&*\-_=+]/.test(password) },

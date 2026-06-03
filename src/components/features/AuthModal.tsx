@@ -376,7 +376,7 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
   const reset = async (e: React.FormEvent) => {
     e.preventDefault();
     if (code.trim().length < 6) return toast.show('6자리 인증번호를 입력해 주세요', 'error');
-    if (newPw.length < 8)       return toast.show('새 비밀번호는 8자 이상이어야 합니다', 'error');
+    if (newPw.length < 6)       return toast.show('새 비밀번호는 6자 이상이어야 합니다', 'error');
     if (newPw !== confirmPw)    return toast.show('새 비밀번호가 일치하지 않습니다', 'error');
     setLoading(true);
     try {
@@ -420,7 +420,7 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
         />
       </div>
       <Field label="새 비밀번호" type="password" required autoComplete="new-password"
-        value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="8자 이상" />
+        value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="6자 이상" />
       <Field label="새 비밀번호 확인" type="password" required autoComplete="new-password"
         value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} placeholder="새 비밀번호 재입력" />
       <button type="submit" disabled={loading} className="btn-primary w-full disabled:opacity-60">
@@ -480,7 +480,7 @@ function SignupUserForm({ onDone }: { onDone: () => void }) {
         <Field label="이름"           type="text"     placeholder="홍길동"          required value={name}     onChange={(e) => setName(e.target.value)} />
         <NicknameField value={nick.value} status={nick.status} onChange={nick.setValue} />
         <Field label="이메일"         type="email"    placeholder="you@example.com" required value={email}    onChange={(e) => setEmail(e.target.value)} />
-        <Field label="비밀번호"       type="password" placeholder="8자 이상"        required value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} />
+        <Field label="비밀번호"       type="password" placeholder="6자 이상"        required value={password} onChange={(e) => setPassword(e.target.value)} minLength={6} />
         <Field label="비밀번호 확인"  type="password" placeholder="••••••••"        required value={confirm}  onChange={(e) => setConfirm(e.target.value)} />
 
         <ConsentSection
@@ -567,7 +567,7 @@ function SignupOwnerForm({ onDone }: { onDone: () => void }) {
             <Field label="대표자명"  type="text"     placeholder="홍길동"          required value={name}     onChange={(e) => setName(e.target.value)} />
             <NicknameField value={nick.value} status={nick.status} onChange={nick.setValue} />
             <Field label="이메일"    type="email"    placeholder="you@example.com"  required value={email}    onChange={(e) => setEmail(e.target.value)} />
-            <Field label="비밀번호"  type="password" placeholder="8자 이상"         required value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} />
+            <Field label="비밀번호"  type="password" placeholder="6자 이상"         required value={password} onChange={(e) => setPassword(e.target.value)} minLength={6} />
           </div>
         </section>
 

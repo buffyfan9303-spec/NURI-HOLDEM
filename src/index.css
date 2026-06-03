@@ -61,6 +61,9 @@
   /* 테마 전환 시 색상 트랜지션 (깜빡임 없이 부드럽게) */
   html {
     transition: background-color 0.2s ease, color 0.2s ease;
+    /* 콘텐츠 높이에 따라 세로 스크롤바가 생겼다 사라지며 가로폭이 흔들리는 현상 방지 */
+    scrollbar-gutter: stable;
+    overflow-y: scroll;
   }
 
   body {
