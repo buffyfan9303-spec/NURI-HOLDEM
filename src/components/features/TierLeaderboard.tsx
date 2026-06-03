@@ -38,6 +38,7 @@ export default function TierLeaderboard() {
   }, [user?.activityPoints]);
 
   const myProg = user ? tierProgress(user.activityPoints ?? 0) : null;
+  const isAdmin = user?.role === 'admin';
   const myRank = useMemo(() => {
     if (!user) return null;
     const i = rows.findIndex((r) => r.id === user.id);
@@ -51,11 +52,11 @@ export default function TierLeaderboard() {
         <section className="rounded-card border border-gold-400/40 bg-gradient-to-br from-gold-300/[0.07] to-transparent p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <TierBadge points={user.activityPoints ?? 0} size={30} />
+              <TierBadge points={user.activityPoints ?? 0} size={30} admin={isAdmin} />
               <div>
                 <p className="text-2xs text-ink-muted">내 등급</p>
                 <p className="text-lg font-extrabold text-ink-primary leading-tight">
-                  {myProg.current.label}
+                  {isAdmin ? 'SS' : myProg.current.label}
                   <span className="ml-1.5 text-xs font-semibold text-ink-muted">등급</span>
                 </p>
               </div>
@@ -65,12 +66,14 @@ export default function TierLeaderboard() {
               <p className="text-lg font-extrabold text-gold-300 tabular-nums leading-tight">
                 {(user.activityPoints ?? 0).toLocaleString()}
               </p>
-              {myRank && <p className="text-2xs text-ink-muted">전체 {myRank}위</p>}
+              {!isAdmin && myRank && <p className="text-2xs text-ink-muted">전체 {myRank}위</p>}
             </div>
           </div>
 
-          {/* 다음 등급 진행률 */}
-          {myProg.next ? (
+          {/* 다음 등급 진행률 (운영자는 SS 고정) */}
+          {isAdmin ? (
+            <p className="mt-3 text-2xs font-bold text-danger-light">운영자 전용 SS 등급 · 랭킹 집계 제외</p>
+          ) : myProg.next ? (
             <div className="mt-3">
               <div className="flex items-center justify-between text-2xs text-ink-muted mb-1">
                 <span>다음 등급 <span className="font-bold text-ink-secondary">{myProg.next.label}</span></span>
