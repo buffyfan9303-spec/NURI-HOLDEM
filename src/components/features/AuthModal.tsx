@@ -414,12 +414,17 @@ function SignupUserForm({ onDone }: { onDone: () => void }) {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // 모든 항목 필수 — 하나라도 비면 가입 불가
+    if (!name.trim())      return toast.show('이름을 입력해 주세요.', 'error');
+    if (nick.status !== 'available') return toast.show('사용 가능한 닉네임을 입력해 주세요.', 'error');
+    if (!email.trim())     return toast.show('이메일을 입력해 주세요.', 'error');
+    if (password.length < 8) return toast.show('비밀번호는 8자 이상이어야 합니다.', 'error');
+    if (!confirm.trim())   return toast.show('비밀번호 확인을 입력해 주세요.', 'error');
+    if (password !== confirm) return toast.show('비밀번호가 일치하지 않습니다.', 'error');
     if (!c.age19)          return toast.show('만 19세 이상만 가입할 수 있습니다.', 'error');
     if (!c.terms)          return toast.show('서비스 이용약관에 동의해 주세요.', 'error');
     if (!c.privacy)        return toast.show('개인정보 수집·이용에 동의해 주세요.', 'error');
     if (!c.antiGambling)   return toast.show('불법 환전·사행성 금지 서약에 동의해 주세요.', 'error');
-    if (nick.status !== 'available') return toast.show('사용 가능한 닉네임을 입력해 주세요.', 'error');
-    if (password !== confirm) return toast.show('비밀번호가 일치하지 않습니다.', 'error');
 
     setLoading(true);
     try {
@@ -456,7 +461,10 @@ function SignupUserForm({ onDone }: { onDone: () => void }) {
 
         <button
           type="submit"
-          disabled={loading || !allRequired || nick.status !== 'available'}
+          disabled={
+            loading || !allRequired || nick.status !== 'available'
+            || !name.trim() || !email.trim() || password.length < 8 || password !== confirm
+          }
           className="btn-primary w-full mt-2 disabled:opacity-60"
         >
           {loading ? '처리 중…' : '가입하기'}
@@ -653,7 +661,9 @@ function NicknameField({
 function Field({ label, ...rest }: { label: string } & React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <div>
-      <label className="block text-xs font-medium text-ink-secondary mb-1">{label}</label>
+      <label className="block text-xs font-medium text-ink-secondary mb-1">
+        {label}{rest.required && <span className="text-danger ml-0.5">*</span>}
+      </label>
       <input {...rest} className="input" />
     </div>
   );

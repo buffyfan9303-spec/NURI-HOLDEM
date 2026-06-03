@@ -73,6 +73,19 @@ function AppHeader({
   const { user, logout } = useAuth();
   const [notifOpen,    setNotifOpen] = useState(false);
   const [userMenuOpen, setUserMenu]  = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
+  // 프로필 드롭다운: 바깥(다른 버튼 등)을 클릭/터치하면 자동으로 닫는다.
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenu(false);
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [userMenuOpen]);
 
   return (
     <header className="sticky top-0 z-50 bg-surface-base border-b border-border-subtle">
@@ -116,7 +129,7 @@ function AppHeader({
 
           {/* 로그인 / 유저 메뉴 */}
           {user ? (
-            <div className="relative">
+            <div ref={userMenuRef} className="relative">
               {/* 아바타 버튼 — 사진 있으면 이미지, 없으면 색상 이니셜
                   [모바일 접근성] 보이는 아바타는 36px 유지하되, 터치 영역(버튼)을
                   44x44px로 확장(WCAG 2.5.5 최소 타깃). -mr-1로 우측 페이지 여백 정렬 보정. */}
