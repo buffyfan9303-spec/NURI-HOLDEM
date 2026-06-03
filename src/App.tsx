@@ -899,7 +899,7 @@ export default function App() {
 
       {/* 커뮤니티 */}
       {activeTab === 'community' && (
-        <main className="px-page-x py-section animate-fade-in">
+        <main className="px-page-x pb-section animate-fade-in">
           <CommunityTab
             venues={venues}
             comments={comments}
