@@ -835,7 +835,7 @@ export default function App() {
 
       {activeTab === 'browse' && (
         <main>
-          <div className="sticky top-[calc(theme(spacing.header-h)+theme(spacing.tab-h))] z-30 bg-surface-base border-b border-border-subtle pt-2 pb-3">
+          <div className="sticky top-[calc(theme(spacing.header-h)+theme(spacing.tab-h)-1rem)] z-30 bg-surface-base border-b border-border-subtle pt-6 pb-3">
             <IntegratedSearchBar onChange={setSearchState} />
             {/* 뷰 모드 토글 — 일정 탐색 컨텍스트 안에 배치 */}
             <div className="flex items-center justify-between px-page-x pt-2">

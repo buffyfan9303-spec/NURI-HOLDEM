@@ -99,7 +99,7 @@ export default function CommunityTab({
     <div className="space-y-3">
       {/* 섹션 토글 — 실시간 댓글 / 게시판 / 홀덤 공부 / 홀덤펍 (Task 4) */}
       {/* 스크롤해도 항상 보이도록 헤더+메인탭 바로 아래에 고정 */}
-      <div className="sticky top-[calc(theme(spacing.header-h)+theme(spacing.tab-h))] z-30 -mx-page-x px-page-x bg-surface-base pt-1.5 pb-2 overflow-x-auto scrollbar-none">
+      <div className="sticky top-[calc(theme(spacing.header-h)+theme(spacing.tab-h)-0.5rem)] z-30 -mx-page-x px-page-x bg-surface-base pt-3.5 pb-2 overflow-x-auto scrollbar-none">
         <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5 w-max min-w-full">
           <SectionTab active={section === 'venues'} label="홀덤펍"      onClick={() => setSection('venues')} />
           <SectionTab active={section === 'live'}   label="실시간 댓글" onClick={() => setSection('live')} />
