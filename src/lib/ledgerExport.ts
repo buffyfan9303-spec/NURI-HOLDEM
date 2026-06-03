@@ -1,13 +1,12 @@
 // src/lib/ledgerExport.ts
 // 장부를 Excel(.xls)로 내보내기 — 무의존성(HTML 테이블 → application/vnd.ms-excel).
 // 한글/서식 유지, Excel에서 바로 열림. 기존 새틀빌지(BUY-IN LIST) 양식과 유사한 표 구성.
-import type { LedgerBuyin, LedgerPlayer, LedgerSession, PaymentMethod, VisitorType } from '../api/ledger';
-import { cardUnit } from '../api/ledger';
+import type { LedgerBuyin, LedgerPlayer, LedgerSession, PaymentMethod } from '../api/ledger';
+import { cardUnit, visitorLabel } from '../api/ledger';
 
 const METHOD_KO: Record<PaymentMethod, string> = {
   ticket: '티켓', cash: '현금', transfer: '이체', card: '카드', support: '가게지원',
 };
-const VISITOR_KO: Record<VisitorType, string> = { new: '신규방문', regular: '기존손님', staff: '관계자' };
 
 function esc(s: unknown): string {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -56,7 +55,7 @@ export function buildLedgerHtml(input: LedgerExportInput): string {
   const headCols = Array.from({ length: maxEntry }, (_, i) => `<th>${i + 1}바인</th>`).join('');
   const bodyRows = names.map((name, i) => {
     const p = players.find((x) => x.name === name);
-    const type = p?.visitorType ? VISITOR_KO[p.visitorType] : '';
+    const type = visitorLabel(p?.visitorType);
     const note = p?.note ?? '';
     const cells = Array.from({ length: maxEntry }, (_, k) => {
       const v = cellOf(name, k + 1);

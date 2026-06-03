@@ -8,8 +8,8 @@ interface ModalProps {
   open: boolean;
   onClose: () => void;
   title?: string;
-  /** bottomSheet: 모바일에서 하단 시트, 데스크톱에서 센터 모달 */
-  variant?: 'center' | 'sheet';
+  /** sheet: 하단 시트 / center: 센터 / page: 전체화면 불투명 페이지(뒤 비침 없음) */
+  variant?: 'center' | 'sheet' | 'page';
   children: ReactNode;
   maxWidth?: 'sm' | 'md' | 'lg';
   /** true면 모달 높이를 최대치로 고정 (탭 전환 시 크기 변동 방지) */
@@ -72,6 +72,28 @@ export default function Modal({
   }, [open]);
 
   if (!render) return null;
+
+  // 전체화면 페이지 변형 — 불투명 배경으로 뒤 페이지가 절대 비치지 않음(스크롤 누수 방지)
+  if (variant === 'page') {
+    return (
+      <div className={['fixed inset-0 z-[55] bg-surface-base flex flex-col', closing ? 'animate-fade-out' : 'animate-fade-in'].join(' ')}>
+        {title && (
+          <header className="shrink-0 flex items-center justify-between px-4 h-header-h border-b border-border-subtle bg-surface-base">
+            <h2 id="modal-title" className="text-base font-semibold text-ink-primary">{title}</h2>
+            <button type="button" onClick={onClose} aria-label="닫기"
+              className="w-9 h-9 -mr-1 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high transition-colors">
+              <svg width="16" height="16" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+                <line x1="2" y1="2" x2="12" y2="12" /><line x1="12" y1="2" x2="2" y2="12" />
+              </svg>
+            </button>
+          </header>
+        )}
+        <div className="flex-1 overflow-y-auto overscroll-contain">
+          <div className={['mx-auto w-full', MAX_W[maxWidth]].join(' ')}>{children}</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={['fixed inset-0 z-50 flex', closing ? 'animate-fade-out' : 'animate-fade-in'].join(' ')}

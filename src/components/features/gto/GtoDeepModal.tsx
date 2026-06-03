@@ -230,7 +230,7 @@ export default function GtoDeepModal({ open, onClose, initialState }: { open: bo
   ];
 
   return (
-    <Modal open={open} onClose={onClose} title="GTO 검색" variant="sheet" maxWidth="md" fillHeight>
+    <Modal open={open} onClose={onClose} title="GTO 검색" variant="page" maxWidth="md">
       <div className="space-y-4 px-4 py-3">
         {/* Hero vs Villain 슬롯 */}
         <div className="flex items-end justify-center gap-3">

@@ -7,7 +7,7 @@ import type { Venue, Comment } from '../../api/community';
 import type { Schedule } from '../../api/schedules';
 import type { MarketplaceNotice } from '../../api/marketplace';
 import { useAuth } from '../../contexts/AuthContext';
-import { followVenue, unfollowVenue, getMyFollowedVenueIds } from '../../api/community';
+import { followVenue, unfollowVenue, getMyFollowedVenueIds, updateVenueAddress } from '../../api/community';
 import { getVenueNotices, createVenueNotice, deleteVenueNotice, type VenueNotice } from '../../api/community';
 import { getVenueRankings, maskRealName, type RankingEntry } from '../../api/rankings';
 import { uploadVenueImages } from '../../lib/storage';
@@ -563,7 +563,22 @@ function AboutPanel({
 }: { venue: Venue; editable?: boolean; onUpdateDescription?: (id: string, desc: string) => void }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft]     = useState(venue.description ?? '');
+  const [addr, setAddr]       = useState(venue.address);
+  const [addrEditing, setAddrEditing] = useState(false);
+  const [addrDraft, setAddrDraft]     = useState(venue.address);
+  const [addrSaving, setAddrSaving]   = useState(false);
   const toast = useToast();
+
+  const saveAddr = async () => {
+    setAddrSaving(true);
+    try {
+      await updateVenueAddress(venue.id, addrDraft);
+      setAddr(addrDraft.trim());
+      setAddrEditing(false);
+      toast.show('주소가 저장되었습니다', 'success');
+    } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
+    finally { setAddrSaving(false); }
+  };
 
   return (
     <div className="space-y-4">
@@ -614,16 +629,35 @@ function AboutPanel({
       <div className="border-t border-border-subtle" />
 
       <section className="space-y-2">
-        <h3 className="text-sm font-semibold text-ink-primary">매장 정보</h3>
-        <dl className="space-y-1.5">
-          <AddressRow address={venue.address} />
-          {venue.contactPhone  && <PhoneRow phone={venue.contactPhone} />}
-          {venue.businessHours && <Row dt="영업시간" dd={venue.businessHours} />}
-        </dl>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-ink-primary">매장 정보</h3>
+          {editable && !addrEditing && (
+            <button type="button" onClick={() => { setAddrDraft(addr); setAddrEditing(true); }}
+              className="text-2xs text-ink-muted hover:text-gold-300">주소 편집</button>
+          )}
+        </div>
+        {addrEditing ? (
+          <div className="space-y-2">
+            <input value={addrDraft} onChange={(e) => setAddrDraft(e.target.value)} maxLength={120}
+              placeholder="도로명 주소" className="input w-full text-sm" autoFocus />
+            <div className="flex gap-2 justify-end">
+              <button type="button" className="btn-ghost text-xs" onClick={() => setAddrEditing(false)}>취소</button>
+              <button type="button" className="btn-primary text-xs disabled:opacity-60" disabled={addrSaving} onClick={saveAddr}>
+                {addrSaving ? '저장 중…' : '저장'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <dl className="space-y-1.5">
+            <AddressRow address={addr} />
+            {venue.contactPhone  && <PhoneRow phone={venue.contactPhone} />}
+            {venue.businessHours && <Row dt="영업시간" dd={venue.businessHours} />}
+          </dl>
+        )}
       </section>
 
       {/* 카카오맵 위치 */}
-      <KakaoMap address={venue.address} name={venue.name} />
+      <KakaoMap address={addr} name={venue.name} />
     </div>
   );
 }

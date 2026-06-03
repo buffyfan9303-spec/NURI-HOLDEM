@@ -2,7 +2,14 @@
 import { supabase, IS_MOCK } from '../lib/supabase';
 
 export type PaymentMethod = 'ticket' | 'cash' | 'transfer' | 'card' | 'support';
-export type VisitorType = 'new' | 'regular' | 'staff';
+/** 고정 유형 코드 + 그 외(기타/직접입력)는 자유 텍스트로 저장 */
+export type VisitorType = 'new' | 'regular' | 'staff' | 'other';
+const VISITOR_KNOWN: Record<string, string> = { new: '신규방문', regular: '기존손님', staff: '관계자', other: '기타' };
+/** 저장값(코드 또는 커스텀 텍스트) → 표시 라벨 */
+export function visitorLabel(v: string | null | undefined): string {
+  if (!v) return '';
+  return VISITOR_KNOWN[v] ?? v;
+}
 
 export interface LedgerBuyin {
   id: string;
@@ -26,7 +33,9 @@ export interface LedgerSession {
   dealers?: string;             // 금일 딜러 명단(줄바꿈 구분, 선택)
   openedBy?: string | null;     // 담당직원(프로필 id)
   openedAt?: string | null;
-  closed: boolean;
+  regClosed: boolean;           // 레지(레지스트리) 마감
+  regClosedAt?: string | null;
+  closed: boolean;              // 정산 마감(읽기전용 스냅샷)
   closedAt?: string | null;
   closeMemo?: string | null;
 }
@@ -36,7 +45,7 @@ export interface LedgerPlayer {
   venueId: string;
   sessionDate: string;
   name: string;
-  visitorType: VisitorType | null;
+  visitorType: string | null;   // 코드(new/regular/staff/other) 또는 커스텀 텍스트
   note: string | null;
   sortOrder: number;
 }
@@ -67,6 +76,8 @@ const rowToSession = (venueId: string, date: string, d: any): LedgerSession => (
   dealers: d?.dealers ?? undefined,
   openedBy: d?.opened_by ?? null,
   openedAt: d?.opened_at ?? null,
+  regClosed: !!d?.reg_closed,
+  regClosedAt: d?.reg_closed_at ?? null,
   closed: !!d?.closed,
   closedAt: d?.closed_at ?? null,
   closeMemo: d?.close_memo ?? null,
@@ -80,7 +91,7 @@ const rowToPlayer = (r: any): LedgerPlayer => ({
 });
 
 const emptySession = (venueId: string, date: string): LedgerSession => ({
-  venueId, sessionDate: date, buyinAmount: 0, cardAmount: null, targetEntries: 0, closed: false,
+  venueId, sessionDate: date, buyinAmount: 0, cardAmount: null, targetEntries: 0, regClosed: false, closed: false,
 });
 
 // ── 권한 ──────────────────────────────────────────────────────────────────────
@@ -103,6 +114,24 @@ export async function getLedgerSession(venueId: string, date = today()): Promise
   const { data } = await supabase.from('ledger_sessions')
     .select('*').eq('venue_id', venueId).eq('session_date', date).maybeSingle();
   return data ? rowToSession(venueId, date, data) : emptySession(venueId, date);
+}
+
+/** 직전(가장 최근) 세션 설정 — 다음 게임 열 때 단가/게임명/딜러 등을 바로 이어쓰기 위함 */
+export async function getLastLedgerSettings(venueId: string, beforeDate: string): Promise<Partial<LedgerSession> | null> {
+  if (IS_MOCK) return null;
+  const { data } = await supabase.from('ledger_sessions')
+    .select('buyin_amount, card_amount, target_entries, title, dealers, event_memo')
+    .eq('venue_id', venueId).lt('session_date', beforeDate)
+    .order('session_date', { ascending: false }).limit(1).maybeSingle();
+  if (!data) return null;
+  return {
+    buyinAmount: data.buyin_amount ?? 0,
+    cardAmount: data.card_amount ?? null,
+    targetEntries: data.target_entries ?? 0,
+    title: data.title ?? undefined,
+    dealers: data.dealers ?? undefined,
+    eventMemo: data.event_memo ?? undefined,
+  };
 }
 
 /** 세션 편집 저장(단가/게임내용/이벤트/딜러/기준엔트리). 마감/담당직원 필드는 건드리지 않음. */
@@ -128,13 +157,23 @@ export async function openLedgerSession(s: LedgerSession): Promise<void> {
     target_entries: s.targetEntries, title: s.title ?? null,
     event_memo: s.eventMemo ?? null, dealers: s.dealers ?? null,
     opened_by: user?.id ?? null, opened_at: new Date().toISOString(),
+    reg_closed: false, reg_closed_at: null,
     closed: false, closed_at: null, close_memo: null,
     updated_at: new Date().toISOString(),
   }, { onConflict: 'venue_id,session_date' });
   if (error) throw error;
 }
 
-/** 장부 마감 — 읽기전용 스냅샷 + 마감 메모 */
+/** 레지(레지스트리) 마감 — 신규 등록/엔트리 중단(정산 마감과 별개) */
+export async function setRegistrationClosed(venueId: string, date: string, closed: boolean): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.from('ledger_sessions')
+    .update({ reg_closed: closed, reg_closed_at: closed ? new Date().toISOString() : null, updated_at: new Date().toISOString() })
+    .eq('venue_id', venueId).eq('session_date', date);
+  if (error) throw error;
+}
+
+/** 장부 정산 마감 — 읽기전용 스냅샷 + 마감 메모 */
 export async function closeLedgerSession(venueId: string, date: string, memo: string): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.from('ledger_sessions')
@@ -164,7 +203,7 @@ export async function getLedgerPlayers(venueId: string, date = today()): Promise
 
 export async function addLedgerPlayer(input: {
   venueId: string; sessionDate: string; name: string;
-  visitorType?: VisitorType | null; sortOrder?: number;
+  visitorType?: string | null; sortOrder?: number;
 }): Promise<void> {
   if (IS_MOCK) return;
   const { data: { user } } = await supabase.auth.getUser();
@@ -180,7 +219,7 @@ export async function addLedgerPlayer(input: {
 }
 
 export async function updateLedgerPlayer(id: string, patch: {
-  visitorType?: VisitorType | null; note?: string | null; sortOrder?: number; name?: string;
+  visitorType?: string | null; note?: string | null; sortOrder?: number; name?: string;
 }): Promise<void> {
   if (IS_MOCK) return;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

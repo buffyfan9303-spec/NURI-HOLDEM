@@ -77,13 +77,14 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
 }
 
 // ── 일일 순위 입력 ────────────────────────────────────────────────────────────
-interface Row { nickname: string; realName: string; }
+interface Row { nickname: string; realName: string; prize: string; }
+const emptyRow = (): Row => ({ nickname: '', realName: '', prize: '' });
 
 function RankingEditor({ venueId, canEdit }: { venueId: string; canEdit: boolean }) {
   const toast = useToast();
   const today = new Date().toISOString().slice(0, 10);
   const [date, setDate] = useState(today);
-  const [rows, setRows] = useState<Row[]>([{ nickname: '', realName: '' }]);
+  const [rows, setRows] = useState<Row[]>([emptyRow()]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -92,22 +93,22 @@ function RankingEditor({ venueId, canEdit }: { venueId: string; canEdit: boolean
     getVenueRankings(venueId, date)
       .then(({ entries }) =>
         setRows(entries.length
-          ? entries.map((e) => ({ nickname: e.nickname, realName: e.realName }))
-          : [{ nickname: '', realName: '' }]))
-      .catch(() => setRows([{ nickname: '', realName: '' }]))
+          ? entries.map((e) => ({ nickname: e.nickname, realName: e.realName, prize: e.prize ?? '' }))
+          : [emptyRow()]))
+      .catch(() => setRows([emptyRow()]))
       .finally(() => setLoading(false));
   }, [venueId, date]);
 
   const update = (i: number, k: keyof Row, v: string) =>
     setRows((r) => r.map((row, idx) => (idx === i ? { ...row, [k]: v } : row)));
-  const addRow = () => setRows((r) => [...r, { nickname: '', realName: '' }]);
+  const addRow = () => setRows((r) => [...r, emptyRow()]);
   const removeRow = (i: number) => setRows((r) => (r.length > 1 ? r.filter((_, idx) => idx !== i) : r));
 
   const save = async () => {
-    const clean = rows.filter((r) => r.nickname.trim() || r.realName.trim());
+    const clean = rows.filter((r) => r.nickname.trim() || r.realName.trim() || r.prize.trim());
     if (clean.length === 0) return toast.show('순위를 한 명 이상 입력해 주세요', 'error');
-    if (clean.some((r) => !r.nickname.trim() || !r.realName.trim()))
-      return toast.show('각 줄에 닉네임과 실명을 모두 입력해 주세요', 'error');
+    if (clean.some((r) => !r.nickname.trim()))
+      return toast.show('각 줄에 닉네임을 입력해 주세요 (실명·프라이즈는 선택)', 'error');
     setSaving(true);
     try {
       await saveVenueRankings(venueId, date, clean);
@@ -144,7 +145,7 @@ function RankingEditor({ venueId, canEdit }: { venueId: string; canEdit: boolean
       </div>
 
       <p className="text-2xs text-ink-muted">
-        닉네임과 실명을 입력하면 손님에게는 <span className="text-gold-300 font-semibold">도토리(나*리)</span> 처럼 표시됩니다(실명 가운데 가림).
+        <span className="text-gold-300 font-semibold">닉네임은 필수</span>, 실명·프라이즈는 선택입니다. 실명을 넣으면 손님에게는 <span className="text-gold-300 font-semibold">도토리(나*리)</span> 처럼 가려서 표시됩니다.
       </p>
 
       {loading ? (
@@ -153,19 +154,25 @@ function RankingEditor({ venueId, canEdit }: { venueId: string; canEdit: boolean
         <ul className="space-y-1.5">
           {rows.map((row, i) => (
             <li key={i} className="flex items-center gap-1.5">
-              <span className="w-6 shrink-0 text-center text-sm font-bold text-gold-300 tabular-nums">{i + 1}</span>
+              <span className="w-5 shrink-0 text-center text-sm font-bold text-gold-300 tabular-nums">{i + 1}</span>
               <input
                 type="text" value={row.nickname} maxLength={30}
                 onChange={(e) => update(i, 'nickname', e.target.value)}
-                placeholder="닉네임"
-                className="input flex-1 text-sm py-2"
+                placeholder="닉네임 *"
+                className="input flex-1 min-w-0 text-sm py-2"
               />
               <input
                 type="text" value={row.realName} maxLength={20}
                 onChange={(e) => update(i, 'realName', e.target.value)}
+                placeholder="실명(선택)"
+                className="input w-20 shrink-0 text-sm py-2"
+              />
+              <input
+                type="text" value={row.prize} maxLength={40}
+                onChange={(e) => update(i, 'prize', e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && i === rows.length - 1) addRow(); }}
-                placeholder="실명"
-                className="input w-24 text-sm py-2"
+                placeholder="프라이즈(선택)"
+                className="input w-24 shrink-0 text-sm py-2"
               />
               <button
                 type="button" onClick={() => removeRow(i)} aria-label="줄 삭제"
@@ -186,13 +193,13 @@ function RankingEditor({ venueId, canEdit }: { venueId: string; canEdit: boolean
       </button>
 
       {/* 미리보기 */}
-      {rows.some((r) => r.nickname.trim() || r.realName.trim()) && (
+      {rows.some((r) => r.nickname.trim()) && (
         <div className="rounded-input bg-surface-high border border-border-subtle p-3">
           <p className="text-2xs font-semibold text-ink-muted mb-1.5">미리보기 (손님 화면)</p>
           <div className="flex flex-wrap gap-1.5">
-            {rows.filter((r) => r.nickname.trim() || r.realName.trim()).map((r, i) => (
+            {rows.filter((r) => r.nickname.trim()).map((r, i) => (
               <span key={i} className="text-2xs px-2 py-0.5 rounded-badge bg-surface-float text-ink-primary">
-                {i + 1}. {r.nickname.trim() || '닉네임'}{r.realName.trim() ? `(${maskRealName(r.realName)})` : ''}
+                {i + 1}. {r.nickname.trim()}{r.realName.trim() ? `(${maskRealName(r.realName)})` : ''}{r.prize.trim() ? ` · ${r.prize.trim()}` : ''}
               </span>
             ))}
           </div>

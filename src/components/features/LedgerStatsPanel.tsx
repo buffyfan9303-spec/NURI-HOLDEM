@@ -15,7 +15,7 @@ import {
 
 const today = () => new Date().toISOString().slice(0, 10);
 const METHOD_LABEL: Record<PaymentMethod, string> = { ticket: '티켓', cash: '현금', transfer: '이체', card: '카드', support: '지원' };
-const VISITOR_LABEL: Record<VisitorType, string> = { new: '신규방문', regular: '기존손님', staff: '관계자' };
+const VISITOR_LABEL: Record<VisitorType, string> = { new: '신규방문', regular: '기존손님', staff: '관계자', other: '기타' };
 
 export default function LedgerStatsPanel({ venueId, showSettings = true }: { venueId: string; showSettings?: boolean }) {
   return (
@@ -62,8 +62,12 @@ function DayStats({ venueId }: { venueId: string }) {
       else if (b.paymentMethod !== 'ticket') { if (b.isUnpaid) unpaidAmt += unitOf(b); else revenue += unitOf(b); }
     }
     const target = session?.targetEntries ?? 0;
-    const visitor: Record<VisitorType, number> = { new: 0, regular: 0, staff: 0 };
-    for (const p of players) { if (p.visitorType) visitor[p.visitorType]++; }
+    const visitor: Record<VisitorType, number> = { new: 0, regular: 0, staff: 0, other: 0 };
+    for (const p of players) {
+      if (!p.visitorType) continue;
+      if (p.visitorType === 'new' || p.visitorType === 'regular' || p.visitorType === 'staff') visitor[p.visitorType]++;
+      else visitor.other++;  // 기타 + 직접입력(커스텀)
+    }
     return {
       total, players: playerSet.size, unpaid,
       unpaidRatio: total ? Math.round((unpaid / total) * 100) : 0,
@@ -122,11 +126,11 @@ function DayStats({ venueId }: { venueId: string }) {
           </div>
 
           {/* 방문 유형 */}
-          {(m.visitor.new + m.visitor.regular + m.visitor.staff) > 0 && (
+          {(m.visitor.new + m.visitor.regular + m.visitor.staff + m.visitor.other) > 0 && (
             <div>
               <p className="text-2xs font-semibold text-ink-secondary mb-1">방문 유형 (명단 기준)</p>
-              <div className="grid grid-cols-3 gap-1.5">
-                {(['new', 'regular', 'staff'] as VisitorType[]).map((k) => (
+              <div className="grid grid-cols-4 gap-1.5">
+                {(['new', 'regular', 'staff', 'other'] as VisitorType[]).map((k) => (
                   <div key={k} className="rounded-input bg-surface-high border border-border-subtle py-1.5 text-center">
                     <p className="text-sm font-bold text-ink-primary tabular-nums">{m.visitor[k]}</p>
                     <p className="text-[10px] text-ink-muted">{VISITOR_LABEL[k]}</p>

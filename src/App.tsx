@@ -89,7 +89,7 @@ function AppHeader({
   }, [userMenuOpen]);
 
   return (
-    <header className="sticky top-0 z-50 bg-surface-base/95 backdrop-blur-md border-b border-border-subtle">
+    <header className="sticky top-0 z-50 bg-surface-base border-b border-border-subtle">
       {/* ── 단순화된 헤더: 좌(로고) / 우(알림+유저) ──────────────── */}
       <div className="flex items-center justify-between h-header-h px-page-x">
 
@@ -286,7 +286,7 @@ function TabBar({
   return (
     <div
       ref={containerRef}
-      className="sticky top-header-h z-40 bg-surface-base/95 backdrop-blur-md relative flex border-b border-border-subtle overflow-x-auto scrollbar-none px-page-x
+      className="sticky top-header-h z-40 bg-surface-base relative flex border-b border-border-subtle overflow-x-auto scrollbar-none px-page-x
                  [&>button:first-child]:pl-0 [&>button:last-child]:pr-0"
     >
       {tabs.map(({ id, label }) => {

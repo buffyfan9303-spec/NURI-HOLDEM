@@ -5,6 +5,7 @@ export interface RankingEntry {
   position: number;
   nickname: string;
   realName: string;
+  prize?: string;
 }
 
 // 실명 마스킹: 홍길동 → 홍*동, 나리 → 나*, 남궁민수 → 남**수
@@ -23,7 +24,7 @@ export function rankingLabel(e: RankingEntry): string {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function rowToEntry(r: any): RankingEntry {
-  return { position: r.position, nickname: r.nickname, realName: r.real_name };
+  return { position: r.position, nickname: r.nickname, realName: r.real_name ?? '', prize: r.prize ?? undefined };
 }
 
 export async function getLatestRankingDate(venueId: string): Promise<string | null> {
@@ -53,13 +54,13 @@ export async function getVenueRankings(
 export async function saveVenueRankings(
   venueId: string,
   date: string,
-  entries: { nickname: string; realName: string }[],
+  entries: { nickname: string; realName: string; prize?: string }[],
 ): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.rpc('save_venue_rankings', {
     p_venue_id: venueId,
     p_date: date,
-    p_entries: entries.map((e) => ({ nickname: e.nickname, realName: e.realName })),
+    p_entries: entries.map((e) => ({ nickname: e.nickname, realName: e.realName, prize: e.prize ?? '' })),
   });
   if (error) throw error;
 }

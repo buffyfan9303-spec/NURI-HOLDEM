@@ -41,7 +41,7 @@ export default function ScheduleDetailModal({
   const qnaComments = comments.filter((c) => c.scheduleId === schedule.id);
 
   return (
-    <Modal open={open} onClose={onClose} maxWidth="lg" variant="sheet" fillHeight>
+    <Modal open={open} onClose={onClose} maxWidth="lg" variant="page">
       {/* ── 포스터 헤더 ───────────────────────────────────────────────── */}
       <div className="relative">
         <div

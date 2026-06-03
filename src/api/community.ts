@@ -122,6 +122,13 @@ export async function updateVenueImage(venueId: string, imageUrl: string): Promi
   if (error) throw error;
 }
 
+/** 업주/운영자: 매장 주소 수정 */
+export async function updateVenueAddress(venueId: string, address: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('update_venue_address', { p_venue_id: venueId, p_address: address });
+  if (error) throw error;
+}
+
 // ── Comments ──────────────────────────────────────────────────────────────────
 export async function getComments(filter: { scheduleId?: string; venueId?: string }): Promise<Comment[]> {
   if (IS_MOCK) {

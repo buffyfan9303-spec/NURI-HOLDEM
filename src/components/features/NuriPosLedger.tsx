@@ -6,9 +6,10 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import {
-  type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type VisitorType,
-  cardUnit,
+  type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod,
+  cardUnit, visitorLabel,
   getLedgerSession, saveLedgerSession, openLedgerSession, closeLedgerSession, reopenLedgerSession,
+  setRegistrationClosed, getLastLedgerSettings,
   getLedgerBuyins, upsertBuyin, cancelBuyin,
   getLedgerPlayers, addLedgerPlayer, updateLedgerPlayer, removeLedgerPlayer,
   subscribeLedger, posHasPassword,
@@ -18,8 +19,11 @@ import { exportLedgerXls } from '../../lib/ledgerExport';
 const today = () => new Date().toISOString().slice(0, 10);
 
 const METHOD_SHORT: Record<PaymentMethod, string> = { ticket: 'T', cash: '현', transfer: '이', card: '카', support: '지원' };
-const VISITOR_LABEL: Record<VisitorType, string> = { new: '신규', regular: '기존', staff: '관계자' };
-const VISITOR_CYCLE: (VisitorType | null)[] = [null, 'new', 'regular', 'staff'];
+// 유형 빠른 선택(고정) + 직접입력은 별도
+const VISITOR_OPTS: { code: string; label: string }[] = [
+  { code: 'new', label: '신규방문' }, { code: 'regular', label: '기존손님' },
+  { code: 'staff', label: '관계자' }, { code: 'other', label: '기타' },
+];
 
 function hhmm(iso: string): string {
   try { return new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }); }
@@ -37,7 +41,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const operatorName = user?.name ?? user?.nickname ?? '담당직원';
 
   const [date, setDate]       = useState(today);
-  const [session, setSession] = useState<LedgerSession>({ venueId, sessionDate: today(), buyinAmount: 0, cardAmount: null, targetEntries: 0, closed: false });
+  const [session, setSession] = useState<LedgerSession>({ venueId, sessionDate: today(), buyinAmount: 0, cardAmount: null, targetEntries: 0, regClosed: false, closed: false });
   const [buyins, setBuyins]   = useState<LedgerBuyin[]>([]);
   const [players, setPlayers] = useState<LedgerPlayer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,9 +50,11 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const [query, setQuery]     = useState('');
   const [addOpen, setAddOpen] = useState(false);
   const [newName, setNewName] = useState('');
-  const [newType, setNewType] = useState<VisitorType | null>(null);
+  const [newType, setNewType] = useState<string | null>(null);
   const [closeOpen, setCloseOpen] = useState(false);
   const [editOpen, setEditOpen]   = useState(false);
+  const [editPlayer, setEditPlayer] = useState<LedgerPlayer | null>(null);
+  const [prefill, setPrefill]     = useState<Partial<LedgerSession> | null>(null);
 
   const reload = useCallback(() => {
     Promise.all([getLedgerBuyins(venueId, date), getLedgerPlayers(venueId, date)])
@@ -66,7 +72,14 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   useEffect(() => subscribeLedger(venueId, reload), [venueId, reload]);
 
   const closed = session.closed;
+  const regClosed = session.regClosed;
   const showSetup = !session.openedAt && !closed && buyins.length === 0 && players.length === 0;
+
+  // 다음 게임 바로 작성: 설정 화면일 때 직전 세션 단가/게임명/딜러를 미리 불러옴
+  useEffect(() => {
+    if (!showSetup) { setPrefill(null); return; }
+    getLastLedgerSettings(venueId, date).then(setPrefill).catch(() => {});
+  }, [showSetup, venueId, date]);
 
   const cellAt = (name: string, e: number) => buyins.find((b) => b.playerName === name && b.entryNo === e) ?? null;
   const countOf = (name: string) => buyins.filter((b) => b.playerName === name).length;
@@ -116,6 +129,10 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     try { await reopenLedgerSession(venueId, date); await reloadSession(); toast.show('마감을 해제했습니다', 'info'); }
     catch (e) { toast.show(e instanceof Error ? e.message : '해제 실패', 'error'); }
   };
+  const handleRegClose = async () => {
+    try { await setRegistrationClosed(venueId, date, !regClosed); await reloadSession(); toast.show(!regClosed ? '레지 마감했습니다' : '레지를 다시 열었습니다', 'info'); }
+    catch (e) { toast.show(e instanceof Error ? e.message : '실패했습니다', 'error'); }
+  };
   const addPlayer = async () => {
     const n = newName.trim();
     if (!n) return;
@@ -124,18 +141,13 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       setNewName(''); setNewType(null); setAddOpen(false); reload();
     } catch (e) { toast.show(e instanceof Error ? e.message : '추가 실패', 'error'); }
   };
-  const cycleType = async (p: LedgerPlayer) => {
-    const idx = VISITOR_CYCLE.indexOf(p.visitorType);
-    const next = VISITOR_CYCLE[(idx + 1) % VISITOR_CYCLE.length];
-    try { await updateLedgerPlayer(p.id, { visitorType: next }); reload(); } catch { /* noop */ }
-  };
-  const saveNote = async (p: LedgerPlayer, note: string) => {
-    if ((p.note ?? '') === note) return;
-    try { await updateLedgerPlayer(p.id, { note: note || null }); } catch { /* noop */ }
+  const savePlayer = async (id: string, patch: { visitorType?: string | null; note?: string | null }) => {
+    try { await updateLedgerPlayer(id, patch); reload(); }
+    catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
   };
   const removePlayer = async (p: LedgerPlayer) => {
     if (countOf(p.name) > 0) { toast.show('바인 기록이 있는 플레이어는 삭제할 수 없습니다', 'error'); return; }
-    try { await removeLedgerPlayer(p.id); reload(); } catch (e) { toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'); }
+    try { await removeLedgerPlayer(p.id); setEditPlayer(null); reload(); } catch (e) { toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'); }
   };
 
   if (loading) return <p className="py-10 text-center text-xs text-ink-muted">장부 불러오는 중…</p>;
@@ -152,7 +164,8 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
           </div>
         ) : (
           <SessionForm
-            base={session} mode="open" operatorName={operatorName}
+            base={{ ...session, ...(prefill ?? {}) }} mode="open" operatorName={operatorName}
+            prefilled={!!prefill}
             onSubmit={handleOpen}
           />
         )}
@@ -195,23 +208,31 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                 <circle cx="9" cy="9" r="6" /><line x1="14" y1="14" x2="18" y2="18" strokeLinecap="round" />
               </svg>
             </div>
-            <button type="button" onClick={() => setAddOpen((v) => !v)} className="btn-primary text-xs px-3 shrink-0">+ 유저 추가</button>
+            {regClosed
+              ? <span className="shrink-0 self-center text-2xs font-bold text-danger-light px-2">레지 마감</span>
+              : <button type="button" onClick={() => setAddOpen((v) => !v)} className="btn-primary text-xs px-3 shrink-0">+ 유저 추가</button>}
           </div>
 
-          {addOpen && (
+          {addOpen && !regClosed && (
             <div className="rounded-input border border-border-default bg-surface-low p-2 space-y-2">
               <input value={newName} onChange={(e) => setNewName(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addPlayer(); } }}
                 placeholder="닉네임 또는 이름" maxLength={20} className="input w-full text-sm" autoFocus />
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-2xs text-ink-muted">유형(선택):</span>
-                {(['new', 'regular', 'staff'] as VisitorType[]).map((t) => (
-                  <button key={t} type="button" onClick={() => setNewType((cur) => (cur === t ? null : t))}
+                {VISITOR_OPTS.map((t) => (
+                  <button key={t.code} type="button" onClick={() => setNewType((cur) => (cur === t.code ? null : t.code))}
                     className={['text-2xs font-bold px-2 py-1 rounded-badge border transition-colors',
-                      newType === t ? 'bg-gold-300/15 text-gold-300 border-gold-400/40' : 'bg-surface-float text-ink-muted border-border-default'].join(' ')}>
-                    {VISITOR_LABEL[t]}
+                      newType === t.code ? 'bg-gold-300/15 text-gold-300 border-gold-400/40' : 'bg-surface-float text-ink-muted border-border-default'].join(' ')}>
+                    {t.label}
                   </button>
                 ))}
+                <button type="button"
+                  onClick={() => { const v = window.prompt('유형 직접입력'); if (v && v.trim()) setNewType(v.trim()); }}
+                  className={['text-2xs font-bold px-2 py-1 rounded-badge border transition-colors',
+                    newType && !VISITOR_OPTS.some((o) => o.code === newType) ? 'bg-gold-300/15 text-gold-300 border-gold-400/40' : 'bg-surface-float text-ink-muted border-border-default'].join(' ')}>
+                  {newType && !VISITOR_OPTS.some((o) => o.code === newType) ? newType : '직접입력'}
+                </button>
                 <span className="flex-1" />
                 <button type="button" onClick={addPlayer} disabled={!newName.trim()} className="btn-primary text-xs px-4 disabled:opacity-50">추가</button>
               </div>
@@ -244,24 +265,20 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                   <tr key={r.name} className="even:bg-surface-base/40">
                     <td className="sticky left-0 z-10 bg-surface-low w-9 px-1 py-1 text-[10px] text-ink-muted border-b border-border-subtle tabular-nums">{ri + 1}</td>
                     <td className="sticky left-9 z-10 bg-surface-low min-w-[7.5rem] px-2 py-1 border-b border-l border-border-subtle text-left">
-                      <div className="flex items-center gap-1">
-                        <span className="text-xs font-bold text-ink-primary truncate max-w-[5rem]" title={r.name}>{r.name}</span>
-                        <span className="text-[9px] text-ink-muted shrink-0">{cnt}회</span>
-                      </div>
-                      <div className="flex items-center gap-1 mt-0.5">
-                        {r.player ? (
-                          <button type="button" onClick={() => !closed && cycleType(r.player as LedgerPlayer)} disabled={closed}
-                            title="클릭 시 유형 변경(신규→기존→관계자→없음)"
-                            className={['text-[9px] font-bold px-1.5 py-0.5 rounded-badge border transition-colors',
-                              r.player.visitorType ? 'bg-gold-300/15 text-gold-300 border-gold-400/40' : 'bg-surface-float text-ink-muted border-border-default'].join(' ')}>
-                            {r.player.visitorType ? VISITOR_LABEL[r.player.visitorType] : '유형'}
-                          </button>
-                        ) : <span className="text-[9px] text-ink-muted">—</span>}
-                        {r.player && !closed && cnt === 0 && (
-                          <button type="button" onClick={() => removePlayer(r.player as LedgerPlayer)} title="삭제"
-                            className="text-[9px] text-ink-muted hover:text-danger-light px-1">✕</button>
-                        )}
-                      </div>
+                      <button type="button" disabled={!r.player || closed}
+                        onClick={() => r.player && setEditPlayer(r.player)}
+                        className="w-full text-left disabled:cursor-default">
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs font-bold text-ink-primary truncate max-w-[5rem]" title={r.name}>{r.name}</span>
+                          <span className="text-[9px] text-ink-muted shrink-0">{cnt}회</span>
+                        </div>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          {r.player?.visitorType
+                            ? <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-badge bg-gold-300/15 text-gold-300 border border-gold-400/40">{visitorLabel(r.player.visitorType)}</span>
+                            : r.player ? <span className="text-[9px] text-ink-muted">{closed ? '' : '유형/비고 +'}</span> : <span className="text-[9px] text-ink-muted">—</span>}
+                          {r.player?.note && <span className="text-[9px] text-ink-secondary truncate max-w-[4rem]">· {r.player.note}</span>}
+                        </div>
+                      </button>
                     </td>
 
                     {Array.from({ length: colCount }, (_, i) => {
@@ -295,11 +312,14 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                       return <td key={e} className={cls}><div className="w-full h-full rounded-input bg-surface-base/30" /></td>;
                     })}
 
-                    <td className="min-w-[8rem] px-1 py-1 border-b border-l border-border-subtle">
+                    <td className="min-w-[8rem] px-1 py-1 border-b border-l border-border-subtle text-left">
                       {r.player ? (
-                        <input defaultValue={r.player.note ?? ''} disabled={closed} maxLength={60}
-                          onBlur={(e) => saveNote(r.player as LedgerPlayer, e.target.value.trim())}
-                          placeholder="비고" className="w-full bg-transparent text-2xs text-ink-secondary placeholder:text-ink-muted/60 outline-none disabled:opacity-70" />
+                        <button type="button" disabled={closed} onClick={() => setEditPlayer(r.player as LedgerPlayer)}
+                          className="w-full text-left text-2xs disabled:cursor-default">
+                          {r.player.note
+                            ? <span className="text-ink-secondary line-clamp-2 whitespace-pre-wrap break-words">{r.player.note}</span>
+                            : <span className="text-gold-300 font-semibold">{closed ? '—' : '비고 작성 +'}</span>}
+                        </button>
                       ) : <span className="text-2xs text-ink-muted">—</span>}
                     </td>
                   </tr>
@@ -311,7 +331,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       )}
 
       {/* 정산 바 (고정) */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 mx-auto max-w-6xl bg-surface-mid/95 backdrop-blur-md border-t border-border-default px-page-x py-2">
+      <div className="fixed bottom-0 left-0 right-0 z-30 mx-auto max-w-6xl bg-surface-mid border-t border-border-default px-page-x py-2">
         <div className="flex items-center gap-2">
           <div className="grid grid-cols-4 gap-2 flex-1 text-center">
             <Metric label="총 엔트리" value={`${stats.totalBuyins}`} />
@@ -322,9 +342,16 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
           <div className="flex flex-col gap-1 shrink-0">
             <button type="button" onClick={() => exportLedgerXls({ venueName, session, players, buyins })}
               className="btn-ghost text-2xs px-3 py-1">엑셀</button>
-            {!closed
-              ? <button type="button" onClick={() => setCloseOpen(true)} className="btn-primary text-2xs px-3 py-1">장부 마감</button>
-              : <span className="text-2xs text-gold-300 text-center font-bold px-3 py-1">마감됨</span>}
+            {!closed ? (
+              <div className="flex gap-1">
+                <button type="button" onClick={handleRegClose}
+                  className={['text-2xs px-2 py-1 rounded-input border font-semibold transition-colors',
+                    regClosed ? 'border-danger/40 text-danger-light bg-danger/10' : 'border-border-default text-ink-secondary hover:text-ink-primary'].join(' ')}>
+                  {regClosed ? '레지 열기' : '레지 마감'}
+                </button>
+                <button type="button" onClick={() => setCloseOpen(true)} className="btn-primary text-2xs px-2 py-1">정산 마감</button>
+              </div>
+            ) : <span className="text-2xs text-gold-300 text-center font-bold px-3 py-1">마감됨</span>}
           </div>
         </div>
         {stats.support > 0 && <p className="text-[10px] text-indigo-300 text-center mt-0.5">가게지원 {stats.support}건</p>}
@@ -360,7 +387,80 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       {closeOpen && (
         <CloseModal stats={stats} onClose={() => setCloseOpen(false)} onConfirm={handleClose} />
       )}
+
+      {/* 플레이어 편집(유형/비고/삭제) */}
+      {editPlayer && (
+        <PlayerEditModal
+          player={editPlayer}
+          canDelete={countOf(editPlayer.name) === 0}
+          onClose={() => setEditPlayer(null)}
+          onSave={async (patch) => { await savePlayer(editPlayer.id, patch); setEditPlayer(null); }}
+          onDelete={() => removePlayer(editPlayer)}
+        />
+      )}
     </div>
+  );
+}
+
+// ── 플레이어 편집 모달(유형 + 비고 무제한 + 삭제) ─────────────────────────────
+function PlayerEditModal({ player, canDelete, onClose, onSave, onDelete }: {
+  player: LedgerPlayer; canDelete: boolean;
+  onClose: () => void;
+  onSave: (patch: { visitorType: string | null; note: string | null }) => void;
+  onDelete: () => void;
+}) {
+  const isKnown = VISITOR_OPTS.some((o) => o.code === player.visitorType);
+  const [type, setType]   = useState<string | null>(player.visitorType ?? null);
+  const [custom, setCustom] = useState(player.visitorType && !isKnown ? player.visitorType : '');
+  const [note, setNote]   = useState(player.note ?? '');
+
+  const submit = () => {
+    const finalType = type === '__custom__' ? (custom.trim() || null) : type;
+    onSave({ visitorType: finalType, note: note.trim() || null });
+  };
+
+  return (
+    <Overlay title={`${player.name} · 유형/비고`} onClose={onClose}>
+      <div className="space-y-3">
+        <div>
+          <p className="text-2xs text-ink-muted mb-1">유형(선택)</p>
+          <div className="flex flex-wrap gap-1.5">
+            <Chip active={type === null} onClick={() => setType(null)}>없음</Chip>
+            {VISITOR_OPTS.map((o) => (
+              <Chip key={o.code} active={type === o.code} onClick={() => setType(o.code)}>{o.label}</Chip>
+            ))}
+            <Chip active={type === '__custom__'} onClick={() => setType('__custom__')}>직접입력</Chip>
+          </div>
+          {type === '__custom__' && (
+            <input value={custom} onChange={(e) => setCustom(e.target.value)} maxLength={20}
+              placeholder="유형 직접입력" className="input w-full text-sm mt-2" autoFocus />
+          )}
+        </div>
+        <div>
+          <p className="text-2xs text-ink-muted mb-1">비고 (글자수 제한 없음)</p>
+          <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={4}
+            placeholder="자유롭게 메모하세요" className="input w-full text-sm resize-none" />
+        </div>
+        <div className="flex gap-2 pt-1">
+          {canDelete
+            ? <button type="button" onClick={onDelete} className="btn-danger text-xs px-3">삭제</button>
+            : <span className="text-2xs text-ink-muted self-center">바인 기록이 있어 삭제 불가</span>}
+          <span className="flex-1" />
+          <button type="button" onClick={onClose} className="btn-ghost text-sm px-4">취소</button>
+          <button type="button" onClick={submit} className="btn-primary text-sm px-4">저장</button>
+        </div>
+      </div>
+    </Overlay>
+  );
+}
+
+function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button type="button" onClick={onClick}
+      className={['text-2xs font-bold px-2.5 py-1 rounded-badge border transition-colors',
+        active ? 'bg-gold-300/15 text-gold-300 border-gold-400/40' : 'bg-surface-float text-ink-muted border-border-default'].join(' ')}>
+      {children}
+    </button>
   );
 }
 
@@ -385,9 +485,9 @@ function Metric({ label, value, tone }: { label: string; value: string; tone?: '
 }
 
 // ── 세션 설정 폼 (입장/수정 공용) ─────────────────────────────────────────────
-function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded }: {
+function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, prefilled }: {
   base: LedgerSession; mode: 'open' | 'edit'; operatorName: string;
-  onSubmit: (s: LedgerSession) => void; onCancel?: () => void; embedded?: boolean;
+  onSubmit: (s: LedgerSession) => void; onCancel?: () => void; embedded?: boolean; prefilled?: boolean;
 }) {
   const [title, setTitle]     = useState(base.title ?? '');
   const [cash, setCash]       = useState<number>(base.buyinAmount || 0);
@@ -411,6 +511,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded }:
         <div>
           <h3 className="text-base font-bold text-gold-300">장부 시작 설정</h3>
           <p className="text-2xs text-ink-muted mt-0.5">담당직원: <b className="text-ink-secondary">{operatorName}</b> · 아래 정보를 입력 후 장부에 입장합니다.</p>
+          {prefilled && <p className="text-2xs text-emerald-400 mt-0.5">직전 게임 설정을 불러왔습니다 — 바로 시작하거나 수정하세요.</p>}
         </div>
       )}
 

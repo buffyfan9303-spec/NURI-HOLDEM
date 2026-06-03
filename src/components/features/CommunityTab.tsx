@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import type { Venue, Comment, CommunityPost, LiveMessage, PostCategory } from '../../api/community';
-import { getLiveMessages, addLiveMessage, subscribeLiveWall, createMyVenue } from '../../api/community';
+import { getLiveMessages, addLiveMessage, deleteLiveMessage, subscribeLiveWall, createMyVenue } from '../../api/community';
 import { REGION_CHIPS } from './IntegratedSearchBar';
 import type { MarketplaceNotice } from '../../api/marketplace';
 import { useAuth } from '../../contexts/AuthContext';
@@ -34,6 +34,8 @@ interface CommunityTabProps {
 
 // Task 4: [실시간 댓글(라이브월), 게시판, 홀덤 공부, 홀덤펍]
 type Section = 'live' | 'board' | 'study' | 'venues' | 'rank' | 'dealer' | 'owner';
+// 다른 메인 탭(중고장터 등)으로 갔다 돌아와도 커뮤니티 섹션이 유지되도록 모듈 레벨에 기억
+let lastCommunitySection: Section = 'venues';
 
 // 게시판 카테고리 필터
 const BOARD_CATEGORIES: { id: PostCategory | 'all'; label: string }[] = [
@@ -56,7 +58,8 @@ export default function CommunityTab({
   venues, comments, posts, notices = [], isAdmin = false, onWriteNotice, onSelectNotice,
   onSelectVenue, onSelectPost, onOpenWrite, onLikePost, onReloadVenues,
 }: CommunityTabProps) {
-  const [section, setSection] = useState<Section>('venues');
+  const [section, setSectionState] = useState<Section>(lastCommunitySection);
+  const setSection = (s: Section) => { lastCommunitySection = s; setSectionState(s); };
   const [query, setQuery] = useState('');
   const { user } = useAuth();
   const canOwnerCommunity = isAdmin || (user?.role === 'venue_owner' && user?.venueVerified === true);
@@ -685,6 +688,12 @@ function LiveWallSection() {
     return () => { active = false; unsub(); };
   }, []);
 
+  const canDelete = (m: LiveMessage) => !!user && (user.id === m.userId || user.role === 'admin');
+  const remove = async (m: LiveMessage) => {
+    try { await deleteLiveMessage(m.id); setMessages((prev) => prev.filter((x) => x.id !== m.id)); }
+    catch (err) { toast.show(err instanceof Error ? err.message : '삭제에 실패했습니다', 'error'); }
+  };
+
   const send = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return toast.show('로그인이 필요합니다', 'error');
@@ -756,6 +765,12 @@ function LiveWallSection() {
                     <span className="font-bold text-danger-light bg-danger/15 px-1 rounded-badge leading-none">운영자</span>
                   )}
                   <span className="text-ink-muted ml-auto shrink-0">{relativeTime(m.createdAt)}</span>
+                  {canDelete(m) && (
+                    <button type="button" onClick={() => remove(m)} aria-label="삭제"
+                      className="shrink-0 text-ink-muted hover:text-danger-light leading-none">
+                      <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><line x1="2" y1="2" x2="12" y2="12" /><line x1="12" y1="2" x2="2" y2="12" /></svg>
+                    </button>
+                  )}
                 </div>
                 <p className="text-xs text-ink-primary leading-snug mt-0.5 break-words">{m.content}</p>
               </div>
