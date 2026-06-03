@@ -31,7 +31,7 @@ export default function VenueManageTab() {
   if (ledgerOk) available.push({ id: 'ledger', label: '장부' });
   if (manageOk) available.push({ id: 'stats',  label: '통계' });
   if (isOwner)  available.push({ id: 'ranking', label: '순위 입력' }, { id: 'staff', label: '직원 관리' });
-  if (!isOwner && !ledgerOk) available.push({ id: 'ranking', label: '순위 입력' }); // 권한 없는 직원: 순위만
+  else          available.push({ id: 'ranking', label: '순위 입력' }); // 직원: 순위(+권한 시 장부)
 
   // 현재 섹션이 사용 불가하면 첫 번째로 보정
   useEffect(() => {
