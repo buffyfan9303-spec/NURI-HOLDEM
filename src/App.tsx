@@ -968,7 +968,7 @@ export default function App() {
         onClose={() => setOpenVenueId(null)}
         schedules={schedules}
         comments={comments}
-        notices={notices}
+        notices={browseNotices}
         onSubmitComment={handleSubmitVenueComment}
         onDeleteComment={handleDeleteComment}
         onUpdateDescription={handleUpdateVenueDescription}
