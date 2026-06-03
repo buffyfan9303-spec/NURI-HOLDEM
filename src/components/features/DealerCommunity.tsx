@@ -6,6 +6,7 @@ import {
   type DealerPost, type DealerPostKind,
 } from '../../api/community';
 import { relativeTime } from './MarketplaceTab';
+import ICMCalculator from './ICMCalculator';
 
 const KIND_LABEL: Record<DealerPostKind, string> = { hiring: '구인', seeking: '구직', general: '일반' };
 const KIND_STYLE: Record<DealerPostKind, string> = {
@@ -27,6 +28,7 @@ export default function DealerCommunity() {
 
   // 작성 폼
   const [open, setOpen]       = useState(false);
+  const [showIcm, setShowIcm] = useState(false);
   const [kind, setKind]       = useState<DealerPostKind>('hiring');
   const [region, setRegion]   = useState('');
   const [venueName, setVenue] = useState('');
@@ -82,6 +84,21 @@ export default function DealerCommunity() {
       {/* 불법 행위 경고 — 강제 탈퇴 사유 명시 */}
       <div className="rounded-input border border-danger/40 bg-danger/[0.08] px-3 py-2 text-2xs leading-relaxed text-danger-light">
         불법 사행성 영업, 환전, 도박 알선 등 <b>불법적인 일의 구인·구직은 강제 탈퇴 사유</b>가 되며 관련 법령에 따라 처벌받을 수 있습니다.
+      </div>
+
+      {/* ICM 계산기 (딜러 실무 도구) */}
+      <div>
+        <button
+          type="button"
+          onClick={() => setShowIcm((v) => !v)}
+          className="w-full flex items-center justify-between rounded-input border border-border-default bg-surface-high px-3 py-2 text-xs font-semibold text-ink-secondary hover:text-ink-primary transition-colors"
+        >
+          <span className="inline-flex items-center gap-1.5">
+            <span className="text-gold-300">ICM</span> 계산기
+          </span>
+          <span className="text-2xs text-ink-muted">{showIcm ? '닫기' : '열기'}</span>
+        </button>
+        {showIcm && <div className="mt-2"><ICMCalculator /></div>}
       </div>
 
       {/* 글쓰기 토글 */}
