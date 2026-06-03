@@ -29,8 +29,9 @@ export default function DealerCommunity() {
   const [notices, setNotices] = useState<MarketplaceNotice[]>([]);
 
   useEffect(() => {
+    // 딜러 게시판 전용 공지만 노출(전체 공지는 일정탐색 등 다른 메뉴에서 표시)
     getNotices()
-      .then((all) => setNotices(all.filter((n) => n.board === 'dealer' || n.board === 'all' || !n.board)))
+      .then((all) => setNotices(all.filter((n) => n.board === 'dealer')))
       .catch(() => {});
   }, []);
 
