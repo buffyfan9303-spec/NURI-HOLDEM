@@ -4,15 +4,42 @@ import { useToast } from '../atoms/Toast';
 import type { User, VenueInvite } from '../../api/auth';
 import { getMyVenueStaff, getMyVenueInvites, inviteStaffByEmail, cancelStaffInvite, removeStaff } from '../../api/auth';
 import { getVenueRankings, saveVenueRankings, maskRealName } from '../../api/rankings';
+import { canAccessLedger, canManagePos } from '../../api/ledger';
 import VenueVerificationCard from './VenueVerificationCard';
+import NuriPosLedger from './NuriPosLedger';
+import LedgerStatsPanel from './LedgerStatsPanel';
 
-/** 업주/직원 전용 "매장 관리" 탭 — 순위 입력 + (업주) 직원 관리 */
+type Section = 'ledger' | 'stats' | 'ranking' | 'staff';
+
+/** 업주/직원 전용 "매장 관리" 탭 — 장부(POS) · 통계 · 순위 입력 · (업주) 직원 관리 */
 export default function VenueManageTab() {
   const { user } = useAuth();
   const isOwner = user?.role === 'venue_owner';
-  const [section, setSection] = useState<'ranking' | 'staff'>('ranking');
+  const venueId = user?.venueId;
+  const [section, setSection] = useState<Section>('ledger');
+  const [ledgerOk, setLedgerOk] = useState(false); // 장부 접근(업주/운영자/권한직원)
+  const [manageOk, setManageOk] = useState(false); // 통계·설정(업주/운영자)
 
-  if (!user || !user.venueId) {
+  useEffect(() => {
+    if (!venueId) return;
+    canAccessLedger(venueId).then(setLedgerOk).catch(() => {});
+    canManagePos(venueId).then(setManageOk).catch(() => {});
+  }, [venueId]);
+
+  // 사용 가능한 섹션 목록(권한 기반)
+  const available: { id: Section; label: string }[] = [];
+  if (ledgerOk) available.push({ id: 'ledger', label: '장부' });
+  if (manageOk) available.push({ id: 'stats',  label: '통계' });
+  if (isOwner)  available.push({ id: 'ranking', label: '순위 입력' }, { id: 'staff', label: '직원 관리' });
+  if (!isOwner && !ledgerOk) available.push({ id: 'ranking', label: '순위 입력' }); // 권한 없는 직원: 순위만
+
+  // 현재 섹션이 사용 불가하면 첫 번째로 보정
+  useEffect(() => {
+    if (available.length && !available.find((a) => a.id === section)) setSection(available[0].id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ledgerOk, manageOk, isOwner]);
+
+  if (!user || !venueId) {
     return (
       <div className="py-16 text-center text-sm text-ink-muted">
         소속된 매장이 없습니다. 매장 승인 또는 직원 승인 후 이용할 수 있습니다.
@@ -23,16 +50,18 @@ export default function VenueManageTab() {
   return (
     <div className="space-y-3">
       {isOwner && <VenueVerificationCard />}
-      {isOwner && (
-        <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5">
-          <TabBtn active={section === 'ranking'} onClick={() => setSection('ranking')}>순위 입력</TabBtn>
-          <TabBtn active={section === 'staff'} onClick={() => setSection('staff')}>직원 관리</TabBtn>
+      {available.length > 1 && (
+        <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5 overflow-x-auto scrollbar-none">
+          {available.map((a) => (
+            <TabBtn key={a.id} active={section === a.id} onClick={() => setSection(a.id)}>{a.label}</TabBtn>
+          ))}
         </div>
       )}
 
-      {section === 'ranking' || !isOwner
-        ? <RankingEditor venueId={user.venueId} canEdit={user.approved === true} />
-        : <StaffManager />}
+      {section === 'ledger'  && ledgerOk && <NuriPosLedger venueId={venueId} canManage={manageOk} />}
+      {section === 'stats'   && manageOk && <LedgerStatsPanel venueId={venueId} />}
+      {section === 'ranking' && <RankingEditor venueId={venueId} canEdit={user.approved === true} />}
+      {section === 'staff'   && isOwner && <StaffManager />}
     </div>
   );
 }
