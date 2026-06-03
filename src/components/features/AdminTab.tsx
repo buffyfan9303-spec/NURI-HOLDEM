@@ -5,8 +5,8 @@ import ReportQueue from './ReportQueue';
 import UserManagementTab from './UserManagementTab';
 import type { Schedule } from '../../api/schedules';
 import type { User } from '../../api/auth';
-import type { CommunityPost, Venue, AdminStats } from '../../api/community';
-import { getAdminStats, adminCreateVenue } from '../../api/community';
+import type { CommunityPost, Venue, AdminStats, VenueVerificationStatus } from '../../api/community';
+import { getAdminStats, adminCreateVenue, adminUpdateVenue, setVenueVerification, deleteVenue } from '../../api/community';
 import { useToast } from '../atoms/Toast';
 import { REGION_CHIPS } from './IntegratedSearchBar';
 
@@ -171,25 +171,135 @@ function VenueCreateCard({ venues, users, onCreated }: { venues: Venue[]; users:
       </section>
 
       <section>
-        <h3 className="text-xs font-bold text-ink-secondary mb-1.5">등록된 홀덤펍 ({venues.length})</h3>
-        <ul className="space-y-1.5">
-          {venues.map((v) => {
-            const owner = users.find((u) => u.id === v.ownerId);
-            return (
-              <li key={v.id} className="flex items-center gap-2 px-3 py-2 rounded-input bg-surface-high border border-border-subtle">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-ink-primary truncate">{v.name}</p>
-                  <p className="text-2xs text-ink-muted">{v.region} · 업주: {owner ? (owner.nickname ?? owner.name) : '미지정'}</p>
-                </div>
-                {v.verificationStatus === 'verified' && (
-                  <span className="shrink-0 text-2xs font-bold text-gold-300 bg-gold-300/15 px-1.5 py-0.5 rounded-badge">인증</span>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+        <h3 className="text-xs font-bold text-ink-secondary mb-1.5">등록된 홀덤펍 ({venues.length}) · 매장별 관리</h3>
+        {venues.length === 0 ? (
+          <p className="text-center py-6 text-2xs text-ink-muted">등록된 홀덤펍이 없습니다</p>
+        ) : (
+          <ul className="space-y-1.5">
+            {venues.map((v) => (
+              <VenueAdminRow key={v.id} venue={v} candidates={candidates} onChanged={onCreated} />
+            ))}
+          </ul>
+        )}
       </section>
     </div>
+  );
+}
+
+// ── 매장 1건 관리(수정/업주 변경/인증/삭제) ──────────────────────────────────
+function VenueAdminRow({ venue, candidates, onChanged }: { venue: Venue; candidates: User[]; onChanged: () => void }) {
+  const toast = useToast();
+  const [open, setOpen]       = useState(false);
+  const [name, setName]       = useState(venue.name);
+  const [region, setRegion]   = useState(venue.region);
+  const [address, setAddress] = useState(venue.address ?? '');
+  const [ownerId, setOwnerId] = useState(venue.ownerId ?? '');
+  const [verif, setVerif]     = useState<VenueVerificationStatus>(venue.verificationStatus ?? 'unverified');
+  const [busy, setBusy]       = useState(false);
+
+  const owner = candidates.find((u) => u.id === venue.ownerId);
+
+  const save = async () => {
+    if (!name.trim() || !region.trim()) { toast.show('매장명과 지역은 필수입니다', 'error'); return; }
+    setBusy(true);
+    try {
+      await adminUpdateVenue({ venueId: venue.id, name, region, address, ownerId: ownerId || null });
+      if (verif !== (venue.verificationStatus ?? 'unverified')) {
+        await setVenueVerification(venue.id, verif);
+      }
+      toast.show('매장 정보를 수정했습니다', 'success');
+      setOpen(false);
+      onChanged();
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : '수정에 실패했습니다', 'error');
+    } finally { setBusy(false); }
+  };
+
+  const remove = async () => {
+    if (!confirm(`'${venue.name}' 매장을 삭제하시겠습니까? 되돌릴 수 없습니다.`)) return;
+    setBusy(true);
+    try {
+      await deleteVenue(venue.id);
+      toast.show('매장을 삭제했습니다', 'info');
+      onChanged();
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : '삭제에 실패했습니다', 'error');
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <li className="rounded-input bg-surface-high border border-border-subtle overflow-hidden">
+      <div className="flex items-center gap-2 px-3 py-2">
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-ink-primary truncate">{venue.name}</p>
+          <p className="text-2xs text-ink-muted truncate">{venue.region} · 업주: {owner ? (owner.nickname ?? owner.name) : '미지정'}</p>
+        </div>
+        {venue.verificationStatus === 'verified' && (
+          <span className="shrink-0 text-2xs font-bold text-gold-300 bg-gold-300/15 px-1.5 py-0.5 rounded-badge">인증</span>
+        )}
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="shrink-0 text-2xs font-semibold px-2.5 py-1 rounded-input border border-border-default text-ink-secondary hover:text-ink-primary hover:border-gold-400/50 transition-colors"
+        >
+          {open ? '닫기' : '관리'}
+        </button>
+      </div>
+
+      {open && (
+        <div className="px-3 pb-3 pt-2 space-y-2 border-t border-border-subtle animate-slide-up">
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className="block text-2xs text-ink-secondary mb-1">매장명 <span className="text-danger">*</span></span>
+              <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} className="input w-full text-sm" />
+            </label>
+            <label className="block">
+              <span className="block text-2xs text-ink-secondary mb-1">지역 <span className="text-danger">*</span></span>
+              <select value={region} onChange={(e) => setRegion(e.target.value)} className="input w-full text-sm">
+                {region && !(REGION_CHIPS as readonly string[]).includes(region) && region !== '기타' && <option value={region}>{region}</option>}
+                {REGION_CHIPS.map((r) => <option key={r} value={r}>{r}</option>)}
+                <option value="기타">기타</option>
+              </select>
+            </label>
+          </div>
+          <label className="block">
+            <span className="block text-2xs text-ink-secondary mb-1">주소</span>
+            <input value={address} onChange={(e) => setAddress(e.target.value)} maxLength={80} placeholder="도로명 주소" className="input w-full text-sm" />
+          </label>
+          <label className="block">
+            <span className="block text-2xs text-ink-secondary mb-1">관리 업주</span>
+            <select value={ownerId} onChange={(e) => setOwnerId(e.target.value)} className="input w-full text-sm">
+              <option value="">미지정</option>
+              {candidates.map((u) => (
+                <option key={u.id} value={u.id}>{u.nickname ?? u.name} · {u.email}</option>
+              ))}
+            </select>
+            <span className="block text-[10px] text-ink-muted mt-1">변경 시 새 업주가 인증 업주로 전환되어 이 매장을 관리합니다.</span>
+          </label>
+          <label className="block">
+            <span className="block text-2xs text-ink-secondary mb-1">인증 상태</span>
+            <select value={verif} onChange={(e) => setVerif(e.target.value as VenueVerificationStatus)} className="input w-full text-sm">
+              <option value="unverified">미인증</option>
+              <option value="pending">인증 대기</option>
+              <option value="verified">인증 완료</option>
+            </select>
+          </label>
+          <div className="flex items-center justify-between pt-1">
+            <button
+              type="button"
+              onClick={remove}
+              disabled={busy}
+              className="text-2xs font-semibold px-2.5 py-1.5 rounded-input border bg-danger/10 text-danger-light border-danger/30 hover:bg-danger/20 transition-colors disabled:opacity-50"
+            >
+              매장 삭제
+            </button>
+            <button type="button" onClick={save} disabled={busy} className="btn-primary px-4 text-xs disabled:opacity-60">
+              저장
+            </button>
+          </div>
+        </div>
+      )}
+    </li>
   );
 }
 

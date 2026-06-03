@@ -527,6 +527,18 @@ export async function adminCreateVenue(input: {
   return data as string;
 }
 
+// 관리자: 기존 매장 정보 수정 + 업주 변경/임명/해제
+export async function adminUpdateVenue(input: {
+  venueId: string; name: string; region: string; address?: string; ownerId?: string | null;
+}): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('admin_update_venue', {
+    p_venue_id: input.venueId, p_name: input.name, p_region: input.region,
+    p_address: input.address ?? '', p_owner_id: input.ownerId ?? null,
+  });
+  if (error) throw error;
+}
+
 // ── 매장 커뮤니티 공지 (업주 + 관리자) ───────────────────────────────────────
 export interface VenueNotice {
   id: string; venueId: string; authorId: string; authorName: string;
