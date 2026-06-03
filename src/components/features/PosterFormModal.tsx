@@ -23,7 +23,8 @@ export interface PosterFormData {
   date: string;
   startTime: string;
   regCloseTime: string;
-  duration: string;               // 듀레이션(블라인드/총 진행 시간 등) — 직접 입력
+  duration: string;               // 듀레이션(총 진행 시간 등) — 직접 입력
+  blinds: string;                 // 블라인드 구조 — 직접 입력(선택)
   prizeType: 'GTD' | 'ENTRY';
   prizeAmount: number;            // GTD: 보장 상금(만원)
   prizePercent: number;           // ENTRY: 프라이즈 비율(%)
@@ -56,7 +57,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
 
   const empty: PosterFormData = {
     title: '', date: new Date().toISOString().slice(0, 10),
-    startTime: '19:00', regCloseTime: '', duration: '',
+    startTime: '19:00', regCloseTime: '', duration: '', blinds: '',
     prizeType: 'GTD', prizeAmount: 0, prizePercent: 0, buyIn: 0, region: '',
     isCompetition: false,
     paymentMethods: ['현금'], partners: [], prizes: [],
@@ -80,6 +81,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
         startTime: schedule.startTime,
         regCloseTime: schedule.regCloseTime ?? '',
         duration: schedule.duration ?? '',
+        blinds: schedule.blinds ?? '',
         prizeType: schedule.guaranteed ? 'GTD' : 'ENTRY',
         prizeAmount: schedule.prizePool ? Math.round(schedule.prizePool / 10000) : 0,
         prizePercent: schedule.prizePercent ?? 0,
@@ -274,11 +276,18 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
           )}
         </FieldWrap>
 
-        {/* 듀레이션 — 블라인드/총 진행 시간 등 (포스터 정보) */}
+        {/* 듀레이션 — 총 진행 시간/레벨 등 (포스터 정보) */}
         <FieldWrap label="듀레이션">
           <input type="text" value={form.duration}
             onChange={(e) => update('duration', e.target.value)}
-            placeholder="예: 25/15분 (블라인드) 또는 약 5시간" className="input" />
+            placeholder="예: 25/15분 또는 약 5시간" className="input" />
+        </FieldWrap>
+
+        {/* 블라인드 구조 — 선택(입력 안 해도 됨) */}
+        <FieldWrap label="블라인드 (선택)">
+          <input type="text" value={form.blinds}
+            onChange={(e) => update('blinds', e.target.value)}
+            placeholder="예: 100/200 (25분 레벨) · 비워둬도 됩니다" className="input" />
         </FieldWrap>
 
         {/* 상금 형태 */}

@@ -281,6 +281,16 @@ export default function ScheduleDetailModal({
           </div>
         </section>
 
+        {/* 블라인드 (선택) */}
+        {schedule.blinds && (
+          <section>
+            <h3 className="text-sm font-semibold text-ink-primary mb-2">블라인드</h3>
+            <p className="text-sm text-ink-secondary leading-relaxed whitespace-pre-wrap rounded-input bg-surface-high border border-border-subtle p-3">
+              {schedule.blinds}
+            </p>
+          </section>
+        )}
+
         {/* 토너먼트 구조 (선택) */}
         {schedule.structure && (
           <section>
