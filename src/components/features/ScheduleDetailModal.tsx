@@ -124,24 +124,32 @@ export default function ScheduleDetailModal({
               관리자 삭제
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => onVenueClick(schedule.venueId)}
-            className="mt-1.5 inline-flex items-center gap-1 text-sm text-ink-secondary hover:text-gold-300 transition-colors group"
-          >
-            <span className="font-medium underline decoration-dotted underline-offset-2">
-              {schedule.pubName}
-            </span>
-            <span className="text-border-strong">·</span>
-            <span>{schedule.region}</span>
-            <svg
-              width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.6"
-              className="opacity-50 group-hover:opacity-100 transition-opacity ml-1"
-              aria-hidden
+          {schedule.venueId ? (
+            <button
+              type="button"
+              onClick={() => onVenueClick(schedule.venueId!)}
+              className="mt-1.5 inline-flex items-center gap-1 text-sm text-ink-secondary hover:text-gold-300 transition-colors group"
             >
-              <path d="M2 9 L9 2 M3.5 2 L9 2 L9 7.5" strokeLinecap="round" />
-            </svg>
-          </button>
+              <span className="font-medium underline decoration-dotted underline-offset-2">
+                {schedule.pubName}
+              </span>
+              <span className="text-border-strong">·</span>
+              <span>{schedule.region}</span>
+              <svg
+                width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.6"
+                className="opacity-50 group-hover:opacity-100 transition-opacity ml-1"
+                aria-hidden
+              >
+                <path d="M2 9 L9 2 M3.5 2 L9 2 L9 7.5" strokeLinecap="round" />
+              </svg>
+            </button>
+          ) : (
+            <p className="mt-1.5 inline-flex items-center gap-1 text-sm text-ink-secondary">
+              <span className="font-medium">{schedule.pubName}</span>
+              <span className="text-border-strong">·</span>
+              <span>{schedule.region}</span>
+            </p>
+          )}
           {schedule.address && (
             <p className="mt-0.5 ml-5 text-xs text-ink-muted">{schedule.address}</p>
           )}

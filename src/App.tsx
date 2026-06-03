@@ -449,6 +449,7 @@ export default function App() {
   // ── 핸들러 ─────────────────────────────────────────────────────────────
 
   const handleVenueClick = useCallback((venueId: string) => {
+    if (!venueId) return; // 직접입력 포스터 등 매장 미연결 시 무시
     setOpenSchedule(null);   // 일정 모달이 열려있으면 닫고 매장으로 전환
     setOpenVenueId(venueId);
   }, []);
