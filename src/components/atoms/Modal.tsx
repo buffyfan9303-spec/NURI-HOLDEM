@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
 // 모달마다 고유 토큰을 부여하기 위한 증가 카운터(중첩 모달 구분용)
@@ -61,10 +61,20 @@ export default function Modal({
     };
   }, [open]);
 
-  if (!open) return null;
+  // 열기/닫기 애니메이션: 닫힐 때 잠깐 더 렌더링하여 시트가 아래로 슬라이드되며 사라지게 한다.
+  const [render, setRender] = useState(open);
+  const [closing, setClosing] = useState(false);
+  useEffect(() => {
+    if (open) { setRender(true); setClosing(false); return; }
+    setClosing(true);
+    const t = window.setTimeout(() => setRender(false), 200);
+    return () => window.clearTimeout(t);
+  }, [open]);
+
+  if (!render) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex animate-fade-in"
+    <div className={['fixed inset-0 z-50 flex', closing ? 'animate-fade-out' : 'animate-fade-in'].join(' ')}
       style={{
         alignItems: variant === 'sheet' ? 'flex-end' : 'center',
         justifyContent: 'center',
@@ -84,7 +94,9 @@ export default function Modal({
         aria-labelledby={title ? 'modal-title' : undefined}
         className={[
           'relative w-full bg-surface-mid shadow-dialog',
-          'animate-slide-up',
+          closing
+            ? (variant === 'sheet' ? 'animate-slide-down' : 'animate-fade-out')
+            : 'animate-slide-up',
           variant === 'sheet'
             ? 'rounded-t-dialog sm:rounded-dialog sm:my-auto sm:max-h-[85vh]'
             : 'rounded-dialog my-auto max-h-[85vh]',

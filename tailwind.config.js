@@ -107,9 +107,18 @@ export default {
           from: { transform: 'translateY(8px)', opacity: '0' },
           to:   { transform: 'translateY(0)',   opacity: '1' },
         },
+        // 시트(하단 모달) 닫기: 아래로 슬라이드되며 사라짐
+        'slide-down': {
+          from: { transform: 'translateY(0)',    opacity: '1' },
+          to:   { transform: 'translateY(100%)',  opacity: '0' },
+        },
         'fade-in': {
           from: { opacity: '0' },
           to:   { opacity: '1' },
+        },
+        'fade-out': {
+          from: { opacity: '1' },
+          to:   { opacity: '0' },
         },
         shimmer: {
           '0%':   { backgroundPosition: '-200% center' },
@@ -119,7 +128,9 @@ export default {
       animation: {
         'badge-pulse': 'badge-pulse 2s ease-in-out infinite',
         'slide-up':    'slide-up 0.2s ease-out',
+        'slide-down':  'slide-down 0.2s cubic-bezier(0.4, 0, 1, 1) forwards',
         'fade-in':     'fade-in 0.15s ease-out',
+        'fade-out':    'fade-out 0.18s ease-in forwards',
         shimmer:       'shimmer 1.5s linear infinite',
       },
     },

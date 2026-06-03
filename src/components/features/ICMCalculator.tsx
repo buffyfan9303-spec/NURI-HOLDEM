@@ -55,13 +55,14 @@ export default function ICMCalculator() {
 
       {/* 상금 구조 */}
       <div>
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-2xs font-semibold text-ink-secondary">상금 구조 (단위 자유: % 또는 금액)</span>
-          <div className="flex gap-1">
-            <button type="button" onClick={() => setPrizes((p) => [...p, 0])} disabled={prizes.length >= stacks.length}
-              className="text-2xs font-semibold text-gold-300 disabled:opacity-30">+ 상금</button>
-            <button type="button" onClick={() => setPrizes((p) => p.slice(0, -1))} disabled={prizes.length <= 1}
-              className="text-2xs font-semibold text-ink-muted disabled:opacity-30">− 상금</button>
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="text-2xs font-semibold text-ink-secondary">상금 구조 <span className="text-ink-muted">(단위 자유)</span></span>
+          <div className="inline-flex items-center gap-1.5">
+            <button type="button" aria-label="상금 자리 줄이기" onClick={() => setPrizes((p) => p.slice(0, -1))} disabled={prizes.length <= 1}
+              className="w-6 h-6 inline-flex items-center justify-center rounded-input border border-border-default bg-surface-high text-base font-bold text-ink-secondary leading-none disabled:opacity-30">−</button>
+            <span className="min-w-[2.75rem] text-center text-2xs font-bold text-ink-primary tabular-nums">{prizes.length}자리</span>
+            <button type="button" aria-label="상금 자리 늘리기" onClick={() => setPrizes((p) => [...p, 0])} disabled={prizes.length >= stacks.length}
+              className="w-6 h-6 inline-flex items-center justify-center rounded-input border border-gold-400/50 bg-gold-300/10 text-base font-bold text-gold-300 leading-none disabled:opacity-30">+</button>
           </div>
         </div>
         <div className="grid grid-cols-3 gap-1.5">
@@ -78,13 +79,16 @@ export default function ICMCalculator() {
 
       {/* 스택 + 결과 */}
       <div>
-        <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center justify-between mb-1.5">
           <span className="text-2xs font-semibold text-ink-secondary">플레이어 스택</span>
-          <div className="flex gap-1">
-            <button type="button" onClick={() => setStacks((p) => [...p, 1000])} disabled={stacks.length >= MAX_PLAYERS}
-              className="text-2xs font-semibold text-gold-300 disabled:opacity-30">+ 플레이어</button>
-            <button type="button" onClick={() => setStacks((p) => p.slice(0, -1))} disabled={stacks.length <= 2}
-              className="text-2xs font-semibold text-ink-muted disabled:opacity-30">− 플레이어</button>
+          <div className="inline-flex items-center gap-1.5">
+            <button type="button" aria-label="플레이어 줄이기"
+              onClick={() => { const nextLen = stacks.length - 1; setStacks((p) => p.slice(0, -1)); setPrizes((pr) => (pr.length > nextLen ? pr.slice(0, Math.max(1, nextLen)) : pr)); }}
+              disabled={stacks.length <= 2}
+              className="w-6 h-6 inline-flex items-center justify-center rounded-input border border-border-default bg-surface-high text-base font-bold text-ink-secondary leading-none disabled:opacity-30">−</button>
+            <span className="min-w-[2.75rem] text-center text-2xs font-bold text-ink-primary tabular-nums">{stacks.length}/{MAX_PLAYERS}명</span>
+            <button type="button" aria-label="플레이어 늘리기" onClick={() => setStacks((p) => [...p, 1000])} disabled={stacks.length >= MAX_PLAYERS}
+              className="w-6 h-6 inline-flex items-center justify-center rounded-input border border-gold-400/50 bg-gold-300/10 text-base font-bold text-gold-300 leading-none disabled:opacity-30">+</button>
           </div>
         </div>
         <ul className="space-y-1.5">

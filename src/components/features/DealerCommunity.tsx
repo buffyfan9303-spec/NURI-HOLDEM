@@ -7,6 +7,7 @@ import {
 } from '../../api/community';
 import { relativeTime } from './MarketplaceTab';
 import ICMCalculator from './ICMCalculator';
+import NoticeDetailModal from './NoticeDetailModal';
 import { getNotices, type MarketplaceNotice } from '../../api/marketplace';
 
 const KIND_LABEL: Record<DealerPostKind, string> = { hiring: '구인', seeking: '구직', general: '일반' };
@@ -27,6 +28,7 @@ export default function DealerCommunity() {
   const [loading, setLoading] = useState(true);
   const [tick, setTick]     = useState(0);
   const [notices, setNotices] = useState<MarketplaceNotice[]>([]);
+  const [openNotice, setOpenNotice] = useState<MarketplaceNotice | null>(null);
 
   useEffect(() => {
     // 딜러 게시판 전용 공지만 노출(전체 공지는 일정탐색 등 다른 메뉴에서 표시)
@@ -103,9 +105,15 @@ export default function DealerCommunity() {
           </header>
           <ul>
             {notices.slice(0, 5).map((n) => (
-              <li key={n.id} className="px-3 py-2 border-b border-border-subtle last:border-b-0">
-                <p className="text-xs font-semibold text-ink-primary">{n.title}</p>
-                {n.body && <p className="mt-0.5 text-2xs text-ink-muted line-clamp-2 leading-snug">{n.body}</p>}
+              <li key={n.id} className="border-b border-border-subtle last:border-b-0">
+                <button
+                  type="button"
+                  onClick={() => setOpenNotice(n)}
+                  className="w-full text-left px-3 py-2 hover:bg-gold-300/[0.06] transition-colors"
+                >
+                  <p className="text-xs font-semibold text-ink-primary">{n.title}</p>
+                  {n.body && <p className="mt-0.5 text-2xs text-ink-muted line-clamp-2 leading-snug">{n.body}</p>}
+                </button>
               </li>
             ))}
           </ul>
@@ -232,6 +240,12 @@ export default function DealerCommunity() {
           ))}
         </ul>
       )}
+
+      <NoticeDetailModal
+        notice={openNotice}
+        open={openNotice !== null}
+        onClose={() => setOpenNotice(null)}
+      />
     </div>
   );
 }

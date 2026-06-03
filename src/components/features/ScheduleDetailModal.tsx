@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Modal from '../atoms/Modal';
 import CommentThread from './CommentThread';
 import { useAuth } from '../../contexts/AuthContext';
@@ -24,10 +24,15 @@ const SUITS = ['♠','♥','♦','♣'];
 const DAYS_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
 export default function ScheduleDetailModal({
-  schedule, open, onClose, onVenueClick, comments, onSubmitComment, onDeleteComment, onDeletePoster,
+  schedule: scheduleProp, open, onClose, onVenueClick, comments, onSubmitComment, onDeleteComment, onDeletePoster,
 }: ScheduleDetailModalProps) {
   const [tab, setTab] = useState<Tab>('info');
   const { user } = useAuth();
+
+  // 닫힘 애니메이션이 끝날 때까지 직전 일정을 유지(시트가 아래로 슬라이드되며 닫히도록)
+  const [shown, setShown] = useState<Schedule | null>(scheduleProp);
+  useEffect(() => { if (scheduleProp) setShown(scheduleProp); }, [scheduleProp]);
+  const schedule = scheduleProp ?? shown;
 
   if (!schedule) return null;
 
