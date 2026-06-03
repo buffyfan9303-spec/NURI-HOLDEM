@@ -1,5 +1,8 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
+
+// 모달마다 고유 토큰을 부여하기 위한 증가 카운터(중첩 모달 구분용)
+let modalSeq = 0;
 
 interface ModalProps {
   open: boolean;
@@ -22,6 +25,10 @@ const MAX_W: Record<NonNullable<ModalProps['maxWidth']>, string> = {
 export default function Modal({
   open, onClose, title, children, variant = 'sheet', maxWidth = 'md', fillHeight = false,
 }: ModalProps) {
+  // onClose 최신값을 ref로 유지 (history 이펙트가 매 렌더마다 재실행되지 않도록)
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   // ESC 키로 닫기
   useEffect(() => {
     if (!open) return;
@@ -33,6 +40,26 @@ export default function Modal({
       document.body.style.overflow = '';
     };
   }, [open, onClose]);
+
+  // 뒤로가기(브라우저/모바일 back)로 "페이지 이탈" 대신 "모달만 닫기"
+  //  - 열릴 때 히스토리 항목을 하나 push 하고, popstate(뒤로가기) 시 모달을 닫는다.
+  //  - 중첩 모달도 안전하도록 고유 토큰을 비교해, 내 토큰이 최상단이 아닐 때만 닫는다.
+  //  - 닫기버튼/ESC/배경클릭 등으로 닫힌 경우엔 push 했던 항목을 정리(back)해 히스토리를 균형 있게 유지.
+  useEffect(() => {
+    if (!open) return;
+    const token = ++modalSeq;
+    window.history.pushState({ __modalToken: token }, '');
+    const onPop = () => {
+      const st = window.history.state as { __modalToken?: number } | null;
+      if (!st || st.__modalToken !== token) onCloseRef.current();
+    };
+    window.addEventListener('popstate', onPop);
+    return () => {
+      window.removeEventListener('popstate', onPop);
+      const st = window.history.state as { __modalToken?: number } | null;
+      if (st && st.__modalToken === token) window.history.back();
+    };
+  }, [open]);
 
   if (!open) return null;
 
