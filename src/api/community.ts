@@ -504,6 +504,19 @@ export async function deleteDealerPost(id: string): Promise<void> {
   if (error) throw error;
 }
 
+// 관리자: 홀덤펍(매장) 생성 + 관리 업주 임명
+export async function adminCreateVenue(input: {
+  name: string; region: string; address?: string; ownerId?: string;
+}): Promise<string> {
+  if (IS_MOCK) return 'mock';
+  const { data, error } = await supabase.rpc('admin_create_venue', {
+    p_name: input.name, p_region: input.region,
+    p_address: input.address ?? '', p_owner_id: input.ownerId ?? null,
+  });
+  if (error) throw error;
+  return data as string;
+}
+
 // ── 매장 커뮤니티 공지 (업주 + 관리자) ───────────────────────────────────────
 export interface VenueNotice {
   id: string; venueId: string; authorId: string; authorName: string;

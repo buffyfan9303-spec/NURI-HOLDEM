@@ -74,11 +74,11 @@ export async function getScheduleById(id: string): Promise<Schedule | null> {
 
 // ── 업주: 포스터 등록 ─────────────────────────────────────────────────────────
 export async function createSchedule(
-  payload: Omit<Schedule, 'id' | 'unreadQnaCount' | 'approved'>,
+  payload: Omit<Schedule, 'id' | 'unreadQnaCount' | 'approved'> & { approved?: boolean },
 ): Promise<Schedule> {
   if (IS_MOCK) throw new Error('Mock mode');
   const { data, error } = await supabase.from('schedules').insert({
-    title: payload.title, venue_id: payload.venueId, pub_name: payload.pubName,
+    title: payload.title, venue_id: payload.venueId || null, pub_name: payload.pubName,
     region: payload.region, address: payload.address,
     date: payload.date, start_time: payload.startTime, duration: payload.duration,
     format: payload.format, guaranteed: payload.guaranteed, prize_pool: payload.prizePool,
@@ -89,7 +89,7 @@ export async function createSchedule(
     partners: payload.partners,
     poster_url: payload.posterUrl, poster_color: payload.posterColor,
     display_order: payload.displayOrder, is_premium: payload.isPremium,
-    owner_id: payload.ownerId, approved: false,
+    owner_id: payload.ownerId, approved: payload.approved ?? false,
   }).select().single();
   if (error) throw error;
   return rowToSchedule(data);

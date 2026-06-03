@@ -6,7 +6,8 @@ import UserManagementTab from './UserManagementTab';
 import type { Schedule } from '../../api/schedules';
 import type { User } from '../../api/auth';
 import type { CommunityPost, Venue, AdminStats } from '../../api/community';
-import { getAdminStats } from '../../api/community';
+import { getAdminStats, adminCreateVenue } from '../../api/community';
+import { useToast } from '../atoms/Toast';
 
 interface AdminTabProps {
   schedules: Schedule[];
@@ -17,14 +18,16 @@ interface AdminTabProps {
   onRejectSchedule: (id: string) => void;
   onUpdateUser: (id: string, patch: Partial<User>) => void;
   onDeletePost: (id: string) => void;
+  /** 매장 생성 후 목록 새로고침 */
+  onReloadVenues?: () => void;
 }
 
-type Section = 'pending' | 'reorder' | 'users' | 'reports';
+type Section = 'pending' | 'reorder' | 'users' | 'venues' | 'reports';
 // 노출 순서 하위 항목: 포스터(요강) / 매장
 type ReorderTarget = 'posters' | 'venues';
 
 export default function AdminTab({
-  schedules, users, posts, onApproveSchedule, onRejectSchedule, onUpdateUser, onDeletePost,
+  schedules, venues, users, posts, onApproveSchedule, onRejectSchedule, onUpdateUser, onDeletePost, onReloadVenues,
 }: AdminTabProps) {
   const [section, setSection] = useState<Section>('pending');
   const [reorderTarget, setReorderTarget] = useState<ReorderTarget>('posters');
@@ -50,10 +53,17 @@ export default function AdminTab({
         <Pill active={section === 'users'} onClick={() => setSection('users')}>
           회원 관리
         </Pill>
+        <Pill active={section === 'venues'} onClick={() => setSection('venues')}>
+          매장
+        </Pill>
         <Pill active={section === 'reports'} onClick={() => setSection('reports')}>
           신고
         </Pill>
       </div>
+
+      {section === 'venues' && (
+        <VenueCreateCard venues={venues} users={users} onCreated={() => onReloadVenues?.()} />
+      )}
 
       {section === 'pending' && (
         <PendingApprovalSection
@@ -92,6 +102,88 @@ export default function AdminTab({
         />
       )}
       {section === 'reports' && <ReportQueue />}
+    </div>
+  );
+}
+
+// ── 홀덤펍 생성 + 관리 업주 임명 ─────────────────────────────────────────────
+
+function VenueCreateCard({ venues, users, onCreated }: { venues: Venue[]; users: User[]; onCreated: () => void }) {
+  const toast = useToast();
+  const [name, setName] = useState('');
+  const [region, setRegion] = useState('');
+  const [address, setAddress] = useState('');
+  const [ownerId, setOwnerId] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  // 업주로 임명 가능한 후보 — 관리자 제외
+  const candidates = users.filter((u) => u.role !== 'admin');
+
+  const submit = async () => {
+    if (!name.trim() || !region.trim()) { toast.show('매장명과 지역은 필수입니다', 'error'); return; }
+    setBusy(true);
+    try {
+      await adminCreateVenue({ name, region, address, ownerId: ownerId || undefined });
+      toast.show('홀덤펍을 생성했습니다', 'success');
+      setName(''); setRegion(''); setAddress(''); setOwnerId('');
+      onCreated();
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : '생성에 실패했습니다', 'error');
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="space-y-3">
+      <section className="rounded-card border border-gold-400/30 bg-gradient-to-br from-gold-300/[0.05] to-transparent p-3 space-y-2">
+        <h3 className="text-sm font-bold text-gold-300">홀덤펍 생성 + 관리 업주 임명</h3>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="block">
+            <span className="block text-2xs text-ink-secondary mb-1">매장명 <span className="text-danger">*</span></span>
+            <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} placeholder="예: 강남 로얄 홀덤" className="input w-full text-sm" />
+          </label>
+          <label className="block">
+            <span className="block text-2xs text-ink-secondary mb-1">지역 <span className="text-danger">*</span></span>
+            <input value={region} onChange={(e) => setRegion(e.target.value)} maxLength={20} placeholder="예: 강남" className="input w-full text-sm" />
+          </label>
+        </div>
+        <label className="block">
+          <span className="block text-2xs text-ink-secondary mb-1">주소 (선택)</span>
+          <input value={address} onChange={(e) => setAddress(e.target.value)} maxLength={80} placeholder="도로명 주소" className="input w-full text-sm" />
+        </label>
+        <label className="block">
+          <span className="block text-2xs text-ink-secondary mb-1">관리 업주 임명 (선택)</span>
+          <select value={ownerId} onChange={(e) => setOwnerId(e.target.value)} className="input w-full text-sm">
+            <option value="">미지정 (나중에 임명)</option>
+            {candidates.map((u) => (
+              <option key={u.id} value={u.id}>{u.nickname ?? u.name} · {u.email}</option>
+            ))}
+          </select>
+          <span className="block text-[10px] text-ink-muted mt-1">임명 시 해당 회원이 업주(인증)로 전환되어 이 매장을 관리합니다.</span>
+        </label>
+        <div className="flex justify-end">
+          <button type="button" onClick={submit} disabled={busy} className="btn-primary px-4 text-xs disabled:opacity-60">매장 생성</button>
+        </div>
+      </section>
+
+      <section>
+        <h3 className="text-xs font-bold text-ink-secondary mb-1.5">등록된 홀덤펍 ({venues.length})</h3>
+        <ul className="space-y-1.5">
+          {venues.map((v) => {
+            const owner = users.find((u) => u.id === v.ownerId);
+            return (
+              <li key={v.id} className="flex items-center gap-2 px-3 py-2 rounded-input bg-surface-high border border-border-subtle">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-ink-primary truncate">{v.name}</p>
+                  <p className="text-2xs text-ink-muted">{v.region} · 업주: {owner ? (owner.nickname ?? owner.name) : '미지정'}</p>
+                </div>
+                {v.verificationStatus === 'verified' && (
+                  <span className="shrink-0 text-2xs font-bold text-gold-300 bg-gold-300/15 px-1.5 py-0.5 rounded-badge">인증</span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </section>
     </div>
   );
 }

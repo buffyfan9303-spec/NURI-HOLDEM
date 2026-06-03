@@ -418,7 +418,7 @@ export default function App() {
       { id: 'community', label: '커뮤니티' },
       { id: 'market',    label: '중고장터' },
     ];
-    if (isOwner)            base.push({ id: 'my-posters', label: '내 포스터' });
+    if (isOwner || isAdmin) base.push({ id: 'my-posters', label: isAdmin ? '포스터 등록' : '내 포스터' });
     if (isOwner || isStaff) base.push({ id: 'my-venue',   label: '매장 관리' });
     if (isAdmin)            base.push({ id: 'admin',       label: '관리자 설정' });
     return base;
@@ -719,12 +719,19 @@ export default function App() {
       return;
     }
 
-    // ── 신규 등록 (승인 대기) ──
+    // ── 신규 등록 ──
     if (!user) return;
+    const adminPosting = user.role === 'admin';
+    // 관리자: 선택/직접입력한 홀덤펍 사용, 즉시 승인. 업주: 본인 매장, 승인 대기.
+    const venueIdToUse = adminPosting ? (data.venueId || '') : (user.venueId ?? '');
+    const pubNameToUse = adminPosting
+      ? (venues.find((v) => v.id === data.venueId)?.name ?? data.pubName ?? '미지정')
+      : (venues.find((v) => v.id === user.venueId)?.name ?? user.name);
     createSchedule({
       title:          data.title,
-      venueId:        user.venueId ?? '',
-      pubName:        venues.find((v) => v.id === user.venueId)?.name ?? user.name,
+      venueId:        venueIdToUse,
+      pubName:        pubNameToUse,
+      approved:       adminPosting ? true : false,
       region:         data.region,
       date:           data.date,
       startTime:      data.startTime,
@@ -922,6 +929,7 @@ export default function App() {
             onRejectSchedule={handleRejectSchedule}
             onUpdateUser={handleUpdateUser}
             onDeletePost={handleDeletePost}
+            onReloadVenues={() => { reloadVenues(); if (isAdmin) listAllUsers().then(setUsers).catch(() => {}); }}
           />
         </main>
       )}
@@ -975,6 +983,7 @@ export default function App() {
         schedule={posterFormTarget}
         onClose={() => setPosterFormTarget(null)}
         onSubmit={handleSubmitPoster}
+        venues={venues.map((v) => ({ id: v.id, name: v.name, region: v.region }))}
       />
 
       <PostDetailModal

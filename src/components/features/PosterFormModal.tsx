@@ -12,6 +12,8 @@ interface PosterFormModalProps {
   onClose: () => void;
   schedule?: Schedule | null;
   onSubmit: (data: PosterFormData) => void;
+  /** 관리자 직접 등록 시 선택 가능한 홀덤펍 목록 */
+  venues?: { id: string; name: string; region?: string }[];
 }
 
 export interface PosterFormData {
@@ -29,6 +31,9 @@ export interface PosterFormData {
   partners: string[];     // 파트너 / 시드권 — 업주 직접 추가
   prizes: string[];
   posterUrl?: string;
+  // 관리자 직접 등록용 — 홀덤펍 선택(기존) 또는 직접 입력
+  venueId?: string;
+  pubName?: string;
 }
 
 const PAYMENT_BASE = ['현금', '카드', '매장이용권'];
@@ -39,10 +44,11 @@ const REGION_OPTIONS = [
   '서울', '경기도 남양주', '경기도 성남', '인천', '강남', '홍대', '부산', '대전', '대구', '광주',
 ];
 
-export default function PosterFormModal({ open, onClose, schedule, onSubmit }: PosterFormModalProps) {
+export default function PosterFormModal({ open, onClose, schedule, onSubmit, venues = [] }: PosterFormModalProps) {
   const toast  = useToast();
   const { user } = useAuth();
   const isEdit = !!schedule;
+  const isAdmin = user?.role === 'admin';
 
   const empty: PosterFormData = {
     title: '', date: new Date().toISOString().slice(0, 10),
@@ -50,6 +56,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit }: P
     prizeType: 'GTD', prizeAmount: 0, buyIn: 0, region: '',
     isCompetition: false,
     paymentMethods: ['현금'], partners: [], prizes: [],
+    venueId: '', pubName: '',
   };
 
   const [form,       setForm]       = useState<PosterFormData>(empty);
@@ -72,6 +79,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit }: P
         partners: schedule.partners ?? [],
         prizes: schedule.seats?.map((s) => `${s.label} ${s.count}석`) ?? [],
         posterUrl: schedule.posterUrl,
+        venueId: schedule.venueId, pubName: schedule.pubName,
       });
       setImgPreview(schedule.posterUrl ?? '');
     } else if (open) {
@@ -173,6 +181,33 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit }: P
             </button>
           )}
         </div>
+
+        {/* 관리자: 홀덤펍 선택(기존) 또는 직접 입력 */}
+        {isAdmin && (
+          <FieldWrap label="홀덤펍 (매장)" required>
+            <div className="space-y-1.5">
+              <select
+                value={form.venueId || ''}
+                onChange={(e) => {
+                  const v = venues.find((x) => x.id === e.target.value);
+                  update('venueId', e.target.value);
+                  if (v) { update('pubName', v.name); if (v.region) update('region', v.region); }
+                }}
+                className="input w-full text-sm"
+              >
+                <option value="">직접 입력</option>
+                {venues.map((v) => (
+                  <option key={v.id} value={v.id}>{v.name}{v.region ? ` (${v.region})` : ''}</option>
+                ))}
+              </select>
+              {!form.venueId && (
+                <input type="text" value={form.pubName ?? ''}
+                  onChange={(e) => update('pubName', e.target.value)}
+                  placeholder="홀덤펍 이름 직접 입력" className="input w-full text-sm" />
+              )}
+            </div>
+          </FieldWrap>
+        )}
 
         {/* 게임 이름 */}
         <FieldWrap label="게임 이름" required>
