@@ -16,14 +16,24 @@ export default function VenueManageTab({ onAddPoster }: { onAddPoster?: () => vo
   const { user } = useAuth();
   const isOwner = user?.role === 'venue_owner';
   const venueId = user?.venueId;
-  const [section, setSection] = useState<Section>('ledger');
+  const [section, setSection] = useState<Section | null>(null);
   const [ledgerOk, setLedgerOk] = useState(false); // 장부 접근(업주/운영자/권한직원)
   const [manageOk, setManageOk] = useState(false); // 통계·설정(업주/운영자)
+  const [permsLoaded, setPermsLoaded] = useState(false);
 
+  // 권한 확인 후 첫 화면 결정 — 장부 우선(없으면 통계 → 순위)
   useEffect(() => {
     if (!venueId) return;
-    canAccessLedger(venueId).then(setLedgerOk).catch(() => {});
-    canManagePos(venueId).then(setManageOk).catch(() => {});
+    let alive = true;
+    Promise.all([canAccessLedger(venueId), canManagePos(venueId)])
+      .then(([l, m]) => {
+        if (!alive) return;
+        setLedgerOk(l); setManageOk(m);
+        setSection(l ? 'ledger' : (m ? 'stats' : 'ranking'));
+      })
+      .catch(() => { if (alive) setSection('ranking'); })
+      .finally(() => { if (alive) setPermsLoaded(true); });
+    return () => { alive = false; };
   }, [venueId]);
 
   // 사용 가능한 섹션 목록(권한 기반)
@@ -33,18 +43,15 @@ export default function VenueManageTab({ onAddPoster }: { onAddPoster?: () => vo
   if (isOwner)  available.push({ id: 'ranking', label: '순위 입력' }, { id: 'staff', label: '직원 관리' });
   else          available.push({ id: 'ranking', label: '순위 입력' }); // 직원: 순위(+권한 시 장부)
 
-  // 현재 섹션이 사용 불가하면 첫 번째로 보정
-  useEffect(() => {
-    if (available.length && !available.find((a) => a.id === section)) setSection(available[0].id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ledgerOk, manageOk, isOwner]);
-
   if (!user || !venueId) {
     return (
       <div className="py-16 text-center text-sm text-ink-muted">
         소속된 매장이 없습니다. 매장 승인 또는 직원 승인 후 이용할 수 있습니다.
       </div>
     );
+  }
+  if (!permsLoaded || section === null) {
+    return <p className="py-16 text-center text-sm text-ink-muted">불러오는 중…</p>;
   }
 
   return (
