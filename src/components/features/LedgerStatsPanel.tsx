@@ -17,11 +17,11 @@ const today = () => new Date().toISOString().slice(0, 10);
 const METHOD_LABEL: Record<PaymentMethod, string> = { ticket: '티켓', cash: '현금', transfer: '이체', card: '카드', support: '지원' };
 const VISITOR_LABEL: Record<VisitorType, string> = { new: '신규방문', regular: '기존손님', staff: '관계자' };
 
-export default function LedgerStatsPanel({ venueId }: { venueId: string }) {
+export default function LedgerStatsPanel({ venueId, showSettings = true }: { venueId: string; showSettings?: boolean }) {
   return (
     <div className="space-y-4">
       <DayStats venueId={venueId} />
-      <PosSettings venueId={venueId} />
+      {showSettings && <PosSettings venueId={venueId} />}
     </div>
   );
 }

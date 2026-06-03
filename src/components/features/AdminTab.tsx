@@ -12,6 +12,8 @@ import {
 } from '../../api/community';
 import { useToast } from '../atoms/Toast';
 import { REGION_CHIPS } from './IntegratedSearchBar';
+import NuriPosLedger from './NuriPosLedger';
+import LedgerStatsPanel from './LedgerStatsPanel';
 
 interface AdminTabProps {
   schedules: Schedule[];
@@ -199,6 +201,7 @@ function VenueAdminRow({ venue, candidates, onChanged }: { venue: Venue; candida
   const [ownerId, setOwnerId] = useState(venue.ownerId ?? '');
   const [verif, setVerif]     = useState<VenueVerificationStatus>(venue.verificationStatus ?? 'unverified');
   const [busy, setBusy]       = useState(false);
+  const [posOpen, setPosOpen] = useState(false);
 
   const owner = candidates.find((u) => u.id === venue.ownerId);
 
@@ -242,12 +245,21 @@ function VenueAdminRow({ venue, candidates, onChanged }: { venue: Venue; candida
         )}
         <button
           type="button"
+          onClick={() => setPosOpen(true)}
+          className="shrink-0 text-2xs font-semibold px-2.5 py-1 rounded-input border border-gold-400/40 text-gold-300 hover:bg-gold-300/10 transition-colors"
+        >
+          장부·통계
+        </button>
+        <button
+          type="button"
           onClick={() => setOpen((o) => !o)}
           className="shrink-0 text-2xs font-semibold px-2.5 py-1 rounded-input border border-border-default text-ink-secondary hover:text-ink-primary hover:border-gold-400/50 transition-colors"
         >
           {open ? '닫기' : '관리'}
         </button>
       </div>
+
+      {posOpen && <AdminVenuePos venueId={venue.id} venueName={venue.name} onClose={() => setPosOpen(false)} />}
 
       {open && (
         <div className="px-3 pb-3 pt-2 space-y-2 border-t border-border-subtle animate-slide-up">
@@ -307,6 +319,40 @@ function VenueAdminRow({ venue, candidates, onChanged }: { venue: Venue; candida
         </div>
       )}
     </li>
+  );
+}
+
+// ── 운영자: 임의 매장 장부/통계 전체 열람 (실시간) ────────────────────────────
+function AdminVenuePos({ venueId, venueName, onClose }: { venueId: string; venueName: string; onClose: () => void }) {
+  const [tab, setTab] = useState<'stats' | 'ledger'>('stats');
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', onKey);
+    return () => { document.body.style.overflow = ''; window.removeEventListener('keydown', onKey); };
+  }, [onClose]);
+
+  const tabCls = (active: boolean) =>
+    ['flex-1 py-2 text-xs font-semibold rounded-[6px] transition-all',
+      active ? 'bg-gold-300 text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary'].join(' ');
+
+  return (
+    <div className="fixed inset-0 z-[60] bg-surface-base overflow-y-auto transform-gpu animate-fade-in">
+      <header className="sticky top-0 z-10 h-header-h px-page-x flex items-center gap-2 bg-surface-base/95 backdrop-blur-md border-b border-border-subtle">
+        <button type="button" onClick={onClose} className="text-sm font-semibold text-ink-secondary hover:text-ink-primary">← 닫기</button>
+        <span className="text-sm font-bold text-ink-primary truncate">{venueName} · 장부/통계</span>
+        <span className="ml-auto shrink-0 text-2xs font-bold text-gold-300 bg-gold-300/15 px-2 py-0.5 rounded-badge">운영자 전체 접근</span>
+      </header>
+      <div className="max-w-6xl mx-auto px-page-x py-3">
+        <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5 mb-3">
+          <button type="button" onClick={() => setTab('stats')} className={tabCls(tab === 'stats')}>통계</button>
+          <button type="button" onClick={() => setTab('ledger')} className={tabCls(tab === 'ledger')}>장부 (실시간)</button>
+        </div>
+        {tab === 'stats'
+          ? <LedgerStatsPanel venueId={venueId} showSettings={false} />
+          : <NuriPosLedger venueId={venueId} canManage venueName={venueName} />}
+      </div>
+    </div>
   );
 }
 

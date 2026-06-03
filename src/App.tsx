@@ -46,6 +46,7 @@ import {
 import { getListings, getNotices, createNotice, createListing, deleteListing } from './api/marketplace';
 import type { NoticeFormData } from './components/features/NoticeFormModal';
 import { getMyNotifications, markNotificationsRead } from './api/notifications';
+import { supabase } from './lib/supabase';
 import type { User } from './api/auth';
 import type { Schedule } from './api/schedules';
 import type { Venue, Comment, CommunityPost, PostCategory } from './api/community';
@@ -421,6 +422,21 @@ export default function App() {
     else setNotifications([]);
   }, [user]);
 
+  // 알림 실시간 수신(신규/읽음) + 창 복귀 시 새로고침
+  useEffect(() => {
+    if (!user) return;
+    const reload = () => getMyNotifications().then(setNotifications).catch(() => {});
+    const ch = supabase
+      .channel(`notif:${user.id}`)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
+        reload)
+      .subscribe();
+    const onVis = () => { if (document.visibilityState === 'visible') reload(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { supabase.removeChannel(ch); document.removeEventListener('visibilitychange', onVis); };
+  }, [user]);
+
   // 관리자: 회원 목록 로드
   useEffect(() => {
     if (isAdmin) listAllUsers().then(setUsers).catch(() => {});
@@ -519,6 +535,12 @@ export default function App() {
         if (found) setOpenPost(found);
         return prev;
       });
+      return;
+    }
+    // /invites (매장 구성원 초대) → 상단 초대 배너로 안내
+    if (link === '/invites') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      toast.show('상단의 초대 배너에서 수락/거절할 수 있습니다', 'info');
       return;
     }
     // /admin (포스터 승인 알림)
