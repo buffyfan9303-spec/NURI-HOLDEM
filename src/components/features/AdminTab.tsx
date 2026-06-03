@@ -1,12 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import DraggableList from './DraggableList';
 import VenueManagement from './VenueManagement';
 import ReportQueue from './ReportQueue';
 import UserManagementTab from './UserManagementTab';
 import type { Schedule } from '../../api/schedules';
 import type { User } from '../../api/auth';
-import type { CommunityPost, Venue, AdminStats, VenueVerificationStatus } from '../../api/community';
-import { getAdminStats, adminCreateVenue, adminUpdateVenue, setVenueVerification, deleteVenue } from '../../api/community';
+import type { CommunityPost, Venue, AdminStats, VenueVerificationStatus, VenueStaff } from '../../api/community';
+import {
+  getAdminStats, adminCreateVenue, adminUpdateVenue, setVenueVerification, deleteVenue,
+  getVenueStaff, addVenueStaff, updateVenueStaff, removeVenueStaff,
+} from '../../api/community';
 import { useToast } from '../atoms/Toast';
 import { REGION_CHIPS } from './IntegratedSearchBar';
 
@@ -284,6 +287,10 @@ function VenueAdminRow({ venue, candidates, onChanged }: { venue: Venue; candida
               <option value="verified">인증 완료</option>
             </select>
           </label>
+
+          {/* 매장 직원 관리 */}
+          <VenueStaffManager venueId={venue.id} />
+
           <div className="flex items-center justify-between pt-1">
             <button
               type="button"
@@ -299,6 +306,119 @@ function VenueAdminRow({ venue, candidates, onChanged }: { venue: Venue; candida
           </div>
         </div>
       )}
+    </li>
+  );
+}
+
+// ── 매장 직원(스태프) 관리 ────────────────────────────────────────────────────
+function VenueStaffManager({ venueId }: { venueId: string }) {
+  const toast = useToast();
+  const [staff, setStaff]     = useState<VenueStaff[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [login, setLogin]     = useState('');
+  const [position, setPosition] = useState('');
+  const [busy, setBusy]       = useState(false);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    getVenueStaff(venueId).then(setStaff).catch(() => {}).finally(() => setLoading(false));
+  }, [venueId]);
+  useEffect(() => { load(); }, [load]);
+
+  const add = async () => {
+    if (!login.trim()) { toast.show('직원 아이디(닉네임 또는 이메일)를 입력해 주세요', 'error'); return; }
+    setBusy(true);
+    try {
+      await addVenueStaff({ venueId, login: login.trim(), position: position.trim() || undefined });
+      toast.show('직원을 추가했습니다', 'success');
+      setLogin(''); setPosition('');
+      load();
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : '직원 추가에 실패했습니다', 'error');
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="rounded-input border border-border-default bg-surface-low p-2.5 space-y-2">
+      <p className="text-2xs font-bold text-ink-secondary">직원 관리</p>
+
+      {/* 직원 추가 */}
+      <div className="flex items-end gap-1.5">
+        <label className="flex-1 block min-w-0">
+          <span className="block text-[10px] text-ink-muted mb-0.5">직원 아이디 (닉네임/이메일)</span>
+          <input value={login} onChange={(e) => setLogin(e.target.value)} maxLength={60} placeholder="예: dealer_kim" className="input w-full text-sm" />
+        </label>
+        <label className="w-20 shrink-0 block">
+          <span className="block text-[10px] text-ink-muted mb-0.5">직책</span>
+          <input value={position} onChange={(e) => setPosition(e.target.value)} maxLength={20} placeholder="딜러" className="input w-full text-sm" />
+        </label>
+        <button type="button" onClick={add} disabled={busy} className="btn-primary text-xs px-3 h-9 shrink-0 disabled:opacity-60">추가</button>
+      </div>
+
+      {/* 직원 목록 */}
+      {loading ? (
+        <p className="text-center py-2 text-2xs text-ink-muted">불러오는 중...</p>
+      ) : staff.length === 0 ? (
+        <p className="text-center py-2 text-2xs text-ink-muted">등록된 직원이 없습니다. 위에서 아이디로 추가하세요.</p>
+      ) : (
+        <ul className="space-y-1.5">
+          {staff.map((s) => <StaffRow key={s.id} staff={s} onChanged={load} />)}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function StaffRow({ staff, onChanged }: { staff: VenueStaff; onChanged: () => void }) {
+  const toast = useToast();
+  const [position, setPosition] = useState(staff.position ?? '');
+  const [busy, setBusy] = useState(false);
+  const dirty = position.trim() !== (staff.position ?? '');
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      await updateVenueStaff({ staffId: staff.id, position });
+      toast.show('직원 정보를 수정했습니다', 'success');
+      onChanged();
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : '수정에 실패했습니다', 'error');
+    } finally { setBusy(false); }
+  };
+  const remove = async () => {
+    if (!confirm(`직원 '${staff.name || staff.login}'을(를) 삭제하시겠습니까?`)) return;
+    setBusy(true);
+    try {
+      await removeVenueStaff(staff.id);
+      toast.show('직원을 삭제했습니다', 'info');
+      onChanged();
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : '삭제에 실패했습니다', 'error');
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <li className="flex items-center gap-1.5 px-2 py-1.5 rounded-input bg-surface-high border border-border-subtle">
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-semibold text-ink-primary truncate">
+          {staff.name || staff.login}
+          {staff.userId
+            ? <span className="ml-1 text-[10px] font-normal text-emerald-400">계정연결</span>
+            : <span className="ml-1 text-[10px] font-normal text-ink-muted">미가입</span>}
+        </p>
+        <p className="text-[10px] text-ink-muted truncate">아이디: {staff.login}</p>
+      </div>
+      <input
+        value={position}
+        onChange={(e) => setPosition(e.target.value)}
+        maxLength={20}
+        placeholder="직책"
+        className="input w-16 shrink-0 text-xs !py-1"
+      />
+      {dirty && (
+        <button type="button" onClick={save} disabled={busy} className="shrink-0 text-2xs font-bold text-gold-300 disabled:opacity-50">저장</button>
+      )}
+      <button type="button" onClick={remove} disabled={busy} className="shrink-0 text-2xs text-ink-muted hover:text-danger-light transition-colors">삭제</button>
     </li>
   );
 }

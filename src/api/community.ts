@@ -539,6 +539,45 @@ export async function adminUpdateVenue(input: {
   if (error) throw error;
 }
 
+// ── 매장 직원(스태프) 관리 (관리자 또는 해당 매장 업주) ──────────────────────
+export interface VenueStaff {
+  id: string; venueId: string; userId?: string;
+  login: string; name?: string; position?: string; createdAt: string;
+}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const rowToStaff = (r: any): VenueStaff => ({
+  id: r.id, venueId: r.venue_id, userId: r.user_id ?? undefined,
+  login: r.staff_login, name: r.staff_name ?? undefined,
+  position: r.staff_position ?? undefined, createdAt: r.created_at,
+});
+export async function getVenueStaff(venueId: string): Promise<VenueStaff[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.from('venue_staff').select('*')
+    .eq('venue_id', venueId).order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map(rowToStaff);
+}
+export async function addVenueStaff(input: { venueId: string; login: string; name?: string; position?: string }): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('add_venue_staff', {
+    p_venue_id: input.venueId, p_login: input.login,
+    p_name: input.name ?? '', p_position: input.position ?? '',
+  });
+  if (error) throw error;
+}
+export async function updateVenueStaff(input: { staffId: string; name?: string; position?: string }): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('update_venue_staff', {
+    p_staff_id: input.staffId, p_name: input.name ?? null, p_position: input.position ?? null,
+  });
+  if (error) throw error;
+}
+export async function removeVenueStaff(staffId: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('remove_venue_staff', { p_staff_id: staffId });
+  if (error) throw error;
+}
+
 // ── 매장 커뮤니티 공지 (업주 + 관리자) ───────────────────────────────────────
 export interface VenueNotice {
   id: string; venueId: string; authorId: string; authorName: string;
