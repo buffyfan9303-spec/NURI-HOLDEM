@@ -289,7 +289,7 @@ export default function IntegratedSearchBar({
             'bg-surface-high rounded-input h-11',
             'border transition-all duration-150',
             isFocused
-              ? 'border-gold-300 shadow-gold'
+              ? 'border-gold-300'
               : 'border-border-default',
           ].join(' ')}
         >
