@@ -116,6 +116,30 @@ export async function getLedgerSession(venueId: string, date = today()): Promise
   return data ? rowToSession(venueId, date, data) : emptySession(venueId, date);
 }
 
+export interface LedgerSessionListItem {
+  sessionDate: string;
+  title?: string;
+  openedAt?: string | null;
+  regClosed: boolean;
+  closed: boolean;
+  buyinAmount: number;
+}
+
+/** 매장의 게임(세션) 목록 — 최신 날짜순. 장부 진입 시 리스트업 용. */
+export async function getLedgerSessionList(venueId: string, limit = 90): Promise<LedgerSessionListItem[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.from('ledger_sessions')
+    .select('session_date, title, opened_at, reg_closed, closed, buyin_amount')
+    .eq('venue_id', venueId).order('session_date', { ascending: false }).limit(limit);
+  if (error) throw error;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((d: any) => ({
+    sessionDate: d.session_date, title: d.title ?? undefined,
+    openedAt: d.opened_at ?? null, regClosed: !!d.reg_closed, closed: !!d.closed,
+    buyinAmount: d.buyin_amount ?? 0,
+  }));
+}
+
 /** 직전(가장 최근) 세션 설정 — 다음 게임 열 때 단가/게임명/딜러 등을 바로 이어쓰기 위함 */
 export async function getLastLedgerSettings(venueId: string, beforeDate: string): Promise<Partial<LedgerSession> | null> {
   if (IS_MOCK) return null;
@@ -256,7 +280,8 @@ export async function upsertBuyin(input: {
 }): Promise<void> {
   if (IS_MOCK) return;
   const { data: { user } } = await supabase.auth.getUser();
-  const unpaid = (input.paymentMethod === 'ticket' || input.paymentMethod === 'support') ? false : input.isUnpaid;
+  // 가게지원은 항상 완납. 티켓은 미수(가불) 허용.
+  const unpaid = input.paymentMethod === 'support' ? false : input.isUnpaid;
   const { error } = await supabase.from('ledger_buyins').upsert({
     venue_id: input.venueId, session_date: input.sessionDate,
     player_name: input.playerName, entry_no: input.entryNo,

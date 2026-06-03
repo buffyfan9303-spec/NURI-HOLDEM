@@ -6,10 +6,10 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import {
-  type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod,
+  type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type LedgerSessionListItem,
   cardUnit, visitorLabel,
   getLedgerSession, saveLedgerSession, openLedgerSession, closeLedgerSession, reopenLedgerSession,
-  setRegistrationClosed, getLastLedgerSettings,
+  setRegistrationClosed, getLastLedgerSettings, getLedgerSessionList,
   getLedgerBuyins, upsertBuyin, cancelBuyin,
   getLedgerPlayers, addLedgerPlayer, updateLedgerPlayer, removeLedgerPlayer,
   subscribeLedger, posHasPassword,
@@ -55,6 +55,17 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const [editOpen, setEditOpen]   = useState(false);
   const [editPlayer, setEditPlayer] = useState<LedgerPlayer | null>(null);
   const [prefill, setPrefill]     = useState<Partial<LedgerSession> | null>(null);
+  const [mode, setMode]           = useState<'list' | 'board'>('list');
+  const [sessionList, setSessionList] = useState<LedgerSessionListItem[]>([]);
+  const [listLoading, setListLoading] = useState(true);
+
+  const loadList = useCallback(() => {
+    setListLoading(true);
+    getLedgerSessionList(venueId).then(setSessionList).catch(() => {}).finally(() => setListLoading(false));
+  }, [venueId]);
+  useEffect(() => { if (mode === 'list') loadList(); }, [mode, loadList]);
+
+  const openBoard = (d: string) => { setDate(d); setMode('board'); };
 
   const reload = useCallback(() => {
     Promise.all([getLedgerBuyins(venueId, date), getLedgerPlayers(venueId, date)])
@@ -99,17 +110,17 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   }, [players, buyins, query]);
 
   const stats = useMemo(() => {
-    let totalBuyins = 0, ticket = 0, revenue = 0, unpaid = 0, support = 0;
+    let totalBuyins = 0, ticket = 0, ticketUnpaid = 0, revenue = 0, unpaid = 0, support = 0;
     for (const b of buyins) {
       totalBuyins++;
       if (b.paymentMethod === 'support') support++;
-      else if (b.paymentMethod === 'ticket') ticket++;
+      else if (b.paymentMethod === 'ticket') { if (b.isUnpaid) ticketUnpaid++; else ticket++; }
       else {
         const unit = b.paymentMethod === 'card' ? cardUnit(session) : session.buyinAmount;
         if (b.isUnpaid) unpaid += unit; else revenue += unit;
       }
     }
-    return { totalBuyins, ticket, revenue, unpaid, support };
+    return { totalBuyins, ticket, ticketUnpaid, revenue, unpaid, support };
   }, [buyins, session]);
 
   // ── 액션 ──────────────────────────────────────────────────────────────────
@@ -150,13 +161,57 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     try { await removeLedgerPlayer(p.id); setEditPlayer(null); reload(); } catch (e) { toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'); }
   };
 
+  // ── 게임(세션) 리스트 — 장부 진입 첫 화면 ──────────────────────────────────
+  if (mode === 'list') {
+    const todayStr = today();
+    const hasToday = sessionList.some((s) => s.sessionDate === todayStr);
+    return (
+      <div className="space-y-3 pb-6">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-base font-bold text-ink-primary">장부</h2>
+          <button type="button" onClick={() => openBoard(todayStr)} className="btn-primary text-xs px-3 shrink-0">
+            {hasToday ? '오늘 장부 열기' : '+ 오늘 게임 시작'}
+          </button>
+        </div>
+        {listLoading ? (
+          <p className="py-10 text-center text-xs text-ink-muted">불러오는 중…</p>
+        ) : sessionList.length === 0 ? (
+          <p className="py-10 text-center text-xs text-ink-muted">아직 작성한 장부가 없습니다. "오늘 게임 시작"으로 첫 장부를 여세요.</p>
+        ) : (
+          <ul className="space-y-1.5">
+            {sessionList.map((s, i) => (
+              <li key={s.sessionDate}>
+                <button type="button" onClick={() => openBoard(s.sessionDate)}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-card border border-border-subtle bg-surface-low hover:border-gold-400/40 hover:bg-surface-high transition-colors text-left">
+                  <span className="w-6 shrink-0 text-center text-sm font-bold text-gold-300 tabular-nums">{i + 1}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-ink-primary truncate">
+                      {s.sessionDate}{s.sessionDate === todayStr ? ' (오늘)' : ''}
+                      <span className="font-normal text-ink-secondary"> · {s.title || '게임'}</span>
+                    </p>
+                    <p className="text-2xs text-ink-muted">바인 {s.buyinAmount.toLocaleString()}원</p>
+                  </div>
+                  {s.closed
+                    ? <span className="shrink-0 text-2xs font-bold text-gold-300 bg-gold-300/15 px-2 py-0.5 rounded-badge">마감</span>
+                    : s.regClosed
+                    ? <span className="shrink-0 text-2xs font-bold text-danger-light bg-danger/10 px-2 py-0.5 rounded-badge">레지마감</span>
+                    : <span className="shrink-0 text-2xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-badge">진행중</span>}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    );
+  }
+
   if (loading) return <p className="py-10 text-center text-xs text-ink-muted">장부 불러오는 중…</p>;
 
   // ── 세션 설정(장부 입장 게이트) ────────────────────────────────────────────
   if (showSetup) {
     return (
       <div className="space-y-3">
-        <DateBar date={date} setDate={setDate} />
+        <DateBar date={date} setDate={setDate} onBack={() => setMode('list')} />
         {!operatorOk ? (
           <div className="rounded-card border border-danger/40 bg-danger/10 p-4 text-center">
             <p className="text-sm font-bold text-danger-light">승인된 계정만 장부를 운영할 수 있습니다.</p>
@@ -176,7 +231,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   // ── 보드 ────────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-3 pb-28">
-      <DateBar date={date} setDate={setDate} />
+      <DateBar date={date} setDate={setDate} onBack={() => setMode('list')} />
 
       {/* 세션 요약 */}
       <div className="rounded-card border border-border-default bg-surface-low p-2.5 flex items-center gap-2 flex-wrap">
@@ -354,7 +409,13 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
             ) : <span className="text-2xs text-gold-300 text-center font-bold px-3 py-1">마감됨</span>}
           </div>
         </div>
-        {stats.support > 0 && <p className="text-[10px] text-indigo-300 text-center mt-0.5">가게지원 {stats.support}건</p>}
+        {(stats.support > 0 || stats.ticketUnpaid > 0) && (
+          <p className="text-[10px] text-center mt-0.5">
+            {stats.ticketUnpaid > 0 && <span className="text-danger-light">티켓 미수 {stats.ticketUnpaid}장</span>}
+            {stats.ticketUnpaid > 0 && stats.support > 0 && <span className="text-ink-muted"> · </span>}
+            {stats.support > 0 && <span className="text-indigo-300">가게지원 {stats.support}건</span>}
+          </p>
+        )}
       </div>
 
       {/* 2-Tap 결제 모달 */}
@@ -465,9 +526,12 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
 }
 
 // ── 날짜 바 ───────────────────────────────────────────────────────────────────
-function DateBar({ date, setDate }: { date: string; setDate: (d: string) => void }) {
+function DateBar({ date, setDate, onBack }: { date: string; setDate: (d: string) => void; onBack?: () => void }) {
   return (
     <div className="flex items-center gap-2">
+      {onBack && (
+        <button type="button" onClick={onBack} className="btn-ghost text-xs px-2 shrink-0" aria-label="목록으로">← 목록</button>
+      )}
       <input type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value || today())} className="input flex-1 text-sm" />
       {date !== today() && <button type="button" onClick={() => setDate(today())} className="btn-ghost text-xs px-3 shrink-0">오늘</button>}
     </div>
@@ -614,11 +678,17 @@ function PaymentModal({ cell, hasPw, onClose, onPick, onCancelBuyin }: {
         </header>
 
         <div className="p-3 space-y-2">
-          {/* 티켓: 완납만 */}
-          <button type="button" onClick={() => onPick('ticket', false)}
-            className="w-full h-12 rounded-input border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 font-bold text-sm active:scale-95 transition-all hover:bg-emerald-500/20">
-            티켓 (완납)
-          </button>
+          {/* 티켓: 완납·미수(가불) */}
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" onClick={() => onPick('ticket', false)}
+              className="h-12 rounded-input border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 font-bold text-sm active:scale-95 transition-all hover:bg-emerald-500/20">
+              티켓 완납
+            </button>
+            <button type="button" onClick={() => onPick('ticket', true)}
+              className="h-12 rounded-input border border-danger/50 bg-danger/10 text-danger-light font-bold text-sm active:scale-95 transition-all hover:bg-danger/20">
+              티켓 미수
+            </button>
+          </div>
 
           {/* 현금/이체/카드: 완납·미수 */}
           {dualMethods.map((m) => (
