@@ -983,7 +983,15 @@ export default function App() {
       {/* 매장 관리 (업주/직원 전용) */}
       {activeTab === 'my-venue' && (
         <main className="px-page-x py-section animate-fade-in">
-          <VenueManageTab />
+          <VenueManageTab
+            onAddPoster={() => {
+              if (user?.role === 'venue_owner' && !user.approved) {
+                toast.show('매장 승인 완료 후 포스터를 등록할 수 있습니다', 'error');
+                return;
+              }
+              setPosterFormTarget(undefined);
+            }}
+          />
         </main>
       )}
 

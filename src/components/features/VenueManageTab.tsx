@@ -12,7 +12,7 @@ import LedgerStatsPanel from './LedgerStatsPanel';
 type Section = 'ledger' | 'stats' | 'ranking' | 'staff';
 
 /** 업주/직원 전용 "매장 관리" 탭 — 장부(POS) · 통계 · 순위 입력 · (업주) 직원 관리 */
-export default function VenueManageTab() {
+export default function VenueManageTab({ onAddPoster }: { onAddPoster?: () => void }) {
   const { user } = useAuth();
   const isOwner = user?.role === 'venue_owner';
   const venueId = user?.venueId;
@@ -49,6 +49,13 @@ export default function VenueManageTab() {
 
   return (
     <div className="space-y-3">
+      {isOwner && onAddPoster && (
+        <button type="button" onClick={onAddPoster}
+          className="btn-primary w-full flex items-center justify-center gap-1.5 text-sm">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+          포스터 추가
+        </button>
+      )}
       {isOwner && <VenueVerificationCard />}
       {available.length > 1 && (
         <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5 overflow-x-auto scrollbar-none">
