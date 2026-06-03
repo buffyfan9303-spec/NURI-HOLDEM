@@ -7,6 +7,7 @@ import {
 } from '../../api/community';
 import { relativeTime } from './MarketplaceTab';
 import ICMCalculator from './ICMCalculator';
+import { getNotices, type MarketplaceNotice } from '../../api/marketplace';
 
 const KIND_LABEL: Record<DealerPostKind, string> = { hiring: '구인', seeking: '구직', general: '일반' };
 const KIND_STYLE: Record<DealerPostKind, string> = {
@@ -25,6 +26,13 @@ export default function DealerCommunity() {
   const [posts, setPosts]   = useState<DealerPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [tick, setTick]     = useState(0);
+  const [notices, setNotices] = useState<MarketplaceNotice[]>([]);
+
+  useEffect(() => {
+    getNotices()
+      .then((all) => setNotices(all.filter((n) => n.board === 'dealer' || n.board === 'all' || !n.board)))
+      .catch(() => {});
+  }, []);
 
   // 작성 폼
   const [open, setOpen]       = useState(false);
@@ -85,6 +93,23 @@ export default function DealerCommunity() {
       <div className="rounded-input border border-danger/40 bg-danger/[0.08] px-3 py-2 text-2xs leading-relaxed text-danger-light">
         불법 사행성 영업, 환전, 도박 알선 등 <b>불법적인 일의 구인·구직은 강제 탈퇴 사유</b>가 되며 관련 법령에 따라 처벌받을 수 있습니다.
       </div>
+
+      {/* 딜러 게시판 공지 */}
+      {notices.length > 0 && (
+        <section className="rounded-card border border-gold-400/30 bg-gradient-to-br from-gold-300/[0.05] to-transparent overflow-hidden">
+          <header className="px-3 py-2 border-b border-gold-400/20">
+            <h3 className="text-xs font-bold text-gold-300">공지사항</h3>
+          </header>
+          <ul>
+            {notices.slice(0, 5).map((n) => (
+              <li key={n.id} className="px-3 py-2 border-b border-border-subtle last:border-b-0">
+                <p className="text-xs font-semibold text-ink-primary">{n.title}</p>
+                {n.body && <p className="mt-0.5 text-2xs text-ink-muted line-clamp-2 leading-snug">{n.body}</p>}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* ICM 계산기 (딜러 실무 도구) */}
       <div>

@@ -636,7 +636,7 @@ export default function App() {
   const handleCreateNotice = useCallback(async (data: NoticeFormData) => {
     if (!user) throw new Error('로그인이 필요합니다');
     const saved = await createNotice({
-      type: data.type, title: data.title, body: data.body, authorName: user.name,
+      type: data.type, title: data.title, body: data.body, authorName: user.name, board: data.board,
     });
     setNotices((prev) => [saved, ...prev]);
   }, [user]);
@@ -858,7 +858,7 @@ export default function App() {
             venues={venues}
             comments={comments}
             posts={posts}
-            notices={notices}
+            notices={notices.filter((n) => !n.board || n.board === 'all' || n.board === 'community')}
             isAdmin={isAdmin}
             onWriteNotice={() => setNoticeFormOpen(true)}
             onSelectNotice={setOpenNotice}
@@ -870,6 +870,7 @@ export default function App() {
               setPostFormOpen(true);
             }}
             onLikePost={handleLikePost}
+            onReloadVenues={reloadVenues}
           />
         </main>
       )}
@@ -879,7 +880,7 @@ export default function App() {
         <main className="px-page-x py-section animate-fade-in">
           <MarketplaceTab
             listings={listings}
-            notices={notices}
+            notices={notices.filter((n) => !n.board || n.board === 'all' || n.board === 'market')}
             onSelect={setOpenListing}
             onSelectNotice={setOpenNotice}
             onCreate={() => user ? setMarketFormOpen(true) : setAuthOpen(true)}

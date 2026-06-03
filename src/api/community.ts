@@ -504,6 +504,16 @@ export async function deleteDealerPost(id: string): Promise<void> {
   if (error) throw error;
 }
 
+// 업주: 본인 홀덤펍(매장) 직접 생성 (미보유 시)
+export async function createMyVenue(input: { name: string; region: string; address?: string }): Promise<string> {
+  if (IS_MOCK) return 'mock';
+  const { data, error } = await supabase.rpc('create_my_venue', {
+    p_name: input.name, p_region: input.region, p_address: input.address ?? '',
+  });
+  if (error) throw error;
+  return data as string;
+}
+
 // 관리자: 홀덤펍(매장) 생성 + 관리 업주 임명
 export async function adminCreateVenue(input: {
   name: string; region: string; address?: string; ownerId?: string;

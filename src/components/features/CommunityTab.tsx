@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import type { Venue, Comment, CommunityPost, LiveMessage, PostCategory } from '../../api/community';
-import { getLiveMessages, addLiveMessage, subscribeLiveWall } from '../../api/community';
+import { getLiveMessages, addLiveMessage, subscribeLiveWall, createMyVenue } from '../../api/community';
+import { REGION_CHIPS } from './IntegratedSearchBar';
 import type { MarketplaceNotice } from '../../api/marketplace';
 import { useAuth } from '../../contexts/AuthContext';
 import GtoDeepWidget from './gto/GtoDeepWidget';
@@ -27,6 +28,8 @@ interface CommunityTabProps {
   /** 글쓰기 버튼 → 글쓰기 모달 열기. category로 기본 카테고리 지정('홀덤 공부' 탭=study) */
   onOpenWrite: (category?: PostCategory) => void;
   onLikePost: (postId: string) => void;
+  /** 업주가 본인 홀덤펍 생성 후 목록/프로필 새로고침 */
+  onReloadVenues?: () => void;
 }
 
 // Task 4: [실시간 댓글(라이브월), 게시판, 홀덤 공부, 홀덤펍]
@@ -51,7 +54,7 @@ function relativeTime(iso: string): string {
 
 export default function CommunityTab({
   venues, comments, posts, notices = [], isAdmin = false, onWriteNotice, onSelectNotice,
-  onSelectVenue, onSelectPost, onOpenWrite, onLikePost,
+  onSelectVenue, onSelectPost, onOpenWrite, onLikePost, onReloadVenues,
 }: CommunityTabProps) {
   const [section, setSection] = useState<Section>('venues');
   const [query, setQuery] = useState('');
@@ -95,12 +98,12 @@ export default function CommunityTab({
       {/* 스크롤해도 항상 보이도록 헤더+메인탭 바로 아래에 고정 */}
       <div className="sticky top-[calc(theme(spacing.header-h)+theme(spacing.tab-h))] z-30 -mx-page-x px-page-x bg-surface-base pt-2 pb-2 overflow-x-auto scrollbar-none">
         <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5 w-max min-w-full">
+          <SectionTab active={section === 'venues'} label="홀덤펍"      onClick={() => setSection('venues')} />
+          <SectionTab active={section === 'rank'}   label="랭킹"        onClick={() => setSection('rank')} />
           <SectionTab active={section === 'live'}   label="실시간 댓글" onClick={() => setSection('live')} />
           <SectionTab active={section === 'board'}  label="게시판"      onClick={() => setSection('board')} />
           <SectionTab active={section === 'study'}  label="홀덤 공부"   onClick={() => setSection('study')} />
-          <SectionTab active={section === 'venues'} label="홀덤펍"      onClick={() => setSection('venues')} />
-          <SectionTab active={section === 'rank'}   label="랭킹"        onClick={() => setSection('rank')} />
-          <SectionTab active={section === 'dealer'} label="딜러" onClick={() => setSection('dealer')} />
+          <SectionTab active={section === 'dealer'} label="딜러"        onClick={() => setSection('dealer')} />
           {canOwnerCommunity && (
             <SectionTab active={section === 'owner'} label="업주" onClick={() => setSection('owner')} />
           )}
@@ -140,12 +143,15 @@ export default function CommunityTab({
       )}
 
       {section === 'venues' && (
-        <VenuesSection
-          sortedVenues={sortedVenues}
-          query={query}
-          onQuery={setQuery}
-          onSelectVenue={onSelectVenue}
-        />
+        <div className="space-y-3">
+          <OwnerVenueAction venues={venues} onSelectVenue={onSelectVenue} onCreated={onReloadVenues} />
+          <VenuesSection
+            sortedVenues={sortedVenues}
+            query={query}
+            onQuery={setQuery}
+            onSelectVenue={onSelectVenue}
+          />
+        </div>
       )}
 
       {section === 'rank' && <TierLeaderboard />}
@@ -450,6 +456,80 @@ function PostCard({ post, onLike, onClick, hot = false }: { post: CommunityPost;
 }
 
 // ── 매장 커뮤니티 섹션 ───────────────────────────────────────────────────────
+
+// 업주 전용 — 홀덤펍 보유 시 '관리', 미보유 시 '생성' 버튼
+function OwnerVenueAction({ venues, onSelectVenue, onCreated }: {
+  venues: Venue[];
+  onSelectVenue: (id: string) => void;
+  onCreated?: () => void;
+}) {
+  const { user, refreshProfile } = useAuth();
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [region, setRegion] = useState('');
+  const [address, setAddress] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  if (user?.role !== 'venue_owner') return null;
+  const myVenue = venues.find((v) => v.ownerId === user.id);
+
+  if (myVenue) {
+    return (
+      <button
+        type="button"
+        onClick={() => onSelectVenue(myVenue.id)}
+        className="w-full flex items-center justify-between gap-2 rounded-card border border-gold-400/40 bg-gradient-to-br from-gold-300/[0.08] to-transparent px-3 py-2.5 text-left transition-colors hover:border-gold-300"
+      >
+        <span className="min-w-0 truncate text-sm font-bold text-ink-primary">내 홀덤펍 커뮤니티 · {myVenue.name}</span>
+        <span className="shrink-0 text-2xs font-bold text-gold-300">관리</span>
+      </button>
+    );
+  }
+
+  const submit = async () => {
+    if (!name.trim() || !region.trim()) { toast.show('매장명과 지역은 필수입니다', 'error'); return; }
+    setBusy(true);
+    try {
+      const id = await createMyVenue({ name, region, address });
+      toast.show('홀덤펍 커뮤니티를 생성했습니다', 'success');
+      setOpen(false); setName(''); setRegion(''); setAddress('');
+      await refreshProfile().catch(() => {});
+      onCreated?.();
+      onSelectVenue(id);
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : '생성에 실패했습니다', 'error');
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="rounded-card border border-gold-400/40 bg-gradient-to-br from-gold-300/[0.08] to-transparent p-3">
+      {!open ? (
+        <button type="button" onClick={() => setOpen(true)} className="w-full flex items-center justify-between">
+          <span className="text-sm font-bold text-ink-primary">홀덤펍 커뮤니티 생성</span>
+          <span className="text-2xs font-bold text-gold-300">+ 생성</span>
+        </button>
+      ) : (
+        <div className="space-y-2">
+          <p className="text-sm font-bold text-gold-300">홀덤펍 커뮤니티 생성</p>
+          <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40}
+            placeholder="매장명 (예: 강남 로얄 홀덤)" className="input w-full text-sm" />
+          <select value={region} onChange={(e) => setRegion(e.target.value)} className="input w-full text-sm">
+            <option value="">지역 선택 *</option>
+            {REGION_CHIPS.map((r) => <option key={r} value={r}>{r}</option>)}
+            <option value="기타">기타</option>
+          </select>
+          <input value={address} onChange={(e) => setAddress(e.target.value)} maxLength={80}
+            placeholder="주소 (선택)" className="input w-full text-sm" />
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setOpen(false)} className="btn-ghost text-xs px-3">취소</button>
+            <button type="button" onClick={submit} disabled={busy} className="btn-primary text-xs px-4 disabled:opacity-60">생성</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function VenuesSection({
   sortedVenues, query, onQuery, onSelectVenue,

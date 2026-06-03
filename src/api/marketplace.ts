@@ -18,9 +18,11 @@ export interface MarketplaceListing {
 }
 
 export type NoticeType = 'pinned' | 'event' | 'caution';
+// 공지 노출 대상 게시판: all(전체) / community(게시판) / market(중고장터) / dealer(딜러)
+export type NoticeBoard = 'all' | 'community' | 'market' | 'dealer';
 export interface MarketplaceNotice {
   id: string; type: NoticeType; title: string; body?: string;
-  authorName: string; createdAt: string;
+  authorName: string; createdAt: string; board?: NoticeBoard;
 }
 
 // ── DB 변환 ──────────────────────────────────────────────────────────────────
@@ -41,6 +43,7 @@ const rowToListing = (r: any): MarketplaceListing => ({
 const rowToNotice = (r: any): MarketplaceNotice => ({
   id: r.id, type: r.type, title: r.title, body: r.body,
   authorName: r.author_name, createdAt: r.created_at,
+  board: (r.board ?? 'all') as NoticeBoard,
 });
 
 // ── Listings ──────────────────────────────────────────────────────────────────
@@ -117,7 +120,7 @@ export async function getNotices(): Promise<MarketplaceNotice[]> {
 // 공지 작성 — RLS 정책(notices_admin_all)이 관리자(my_role()='admin')만 CUD 허용.
 // 즉, 비관리자가 호출하면 서버에서 거부되므로 권한은 DB에서 강제된다.
 export async function createNotice(
-  payload: Pick<MarketplaceNotice, 'type' | 'title' | 'body' | 'authorName'>,
+  payload: Pick<MarketplaceNotice, 'type' | 'title' | 'body' | 'authorName' | 'board'>,
 ): Promise<MarketplaceNotice> {
   if (IS_MOCK) {
     return { ...payload, id: `n_${Date.now()}`, createdAt: new Date().toISOString() };
@@ -127,6 +130,7 @@ export async function createNotice(
     title:       payload.title,
     body:        payload.body ?? null,
     author_name: payload.authorName,
+    board:       payload.board ?? 'all',
   }).select().single();
   if (error) throw error;
   return rowToNotice(data);

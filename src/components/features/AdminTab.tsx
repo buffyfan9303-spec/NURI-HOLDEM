@@ -8,6 +8,7 @@ import type { User } from '../../api/auth';
 import type { CommunityPost, Venue, AdminStats } from '../../api/community';
 import { getAdminStats, adminCreateVenue } from '../../api/community';
 import { useToast } from '../atoms/Toast';
+import { REGION_CHIPS } from './IntegratedSearchBar';
 
 interface AdminTabProps {
   schedules: Schedule[];
@@ -143,7 +144,11 @@ function VenueCreateCard({ venues, users, onCreated }: { venues: Venue[]; users:
           </label>
           <label className="block">
             <span className="block text-2xs text-ink-secondary mb-1">지역 <span className="text-danger">*</span></span>
-            <input value={region} onChange={(e) => setRegion(e.target.value)} maxLength={20} placeholder="예: 강남" className="input w-full text-sm" />
+            <select value={region} onChange={(e) => setRegion(e.target.value)} className="input w-full text-sm">
+              <option value="">선택</option>
+              {REGION_CHIPS.map((r) => <option key={r} value={r}>{r}</option>)}
+              <option value="기타">기타</option>
+            </select>
           </label>
         </div>
         <label className="block">
