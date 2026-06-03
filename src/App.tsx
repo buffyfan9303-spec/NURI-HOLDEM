@@ -792,7 +792,8 @@ export default function App() {
   // ── 렌더 ──────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-surface-base">
+    // 모바일: 폭 그대로(full). 데스크톱: 중앙 정렬 + 최대폭으로 무한 확장 방지 + 프레임.
+    <div className="min-h-screen bg-surface-base mx-auto w-full max-w-6xl xl:border-x xl:border-border-subtle">
       <AppHeader
         unreadCount={unreadNotifs}
         notifications={notifications}
@@ -876,8 +877,10 @@ export default function App() {
               <div className={[
                 'animate-fade-in',
                 viewMode === 'grid'
-                  ? 'grid grid-cols-2 gap-card-gap sm:grid-cols-3'
-                  : 'flex flex-col gap-card-gap',
+                  // 그리드 뷰: 모바일 2열 → 데스크톱 4~5열
+                  ? 'grid grid-cols-2 gap-card-gap sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
+                  // 리스트 뷰: 모바일 1열 → 데스크톱 2~3열(가로 카드)
+                  : 'grid grid-cols-1 gap-card-gap md:grid-cols-2 xl:grid-cols-3',
               ].join(' ')}>
                 {visibleSchedules.map((s) => (
                   <ScheduleCard
