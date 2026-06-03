@@ -134,8 +134,8 @@ function ListCard({ schedule, onVenueClick, onSelect }: CardProps) {
     <article
       onClick={() => onSelect(schedule)}
       className={[
-        'flex items-center gap-2.5 overflow-hidden rounded-card border transition-all duration-150',
-        'hover:scale-[1.005] cursor-pointer active:scale-[0.98] p-2',
+        'flex items-center gap-2.5 overflow-hidden rounded-card border transition-all duration-300 ease-out',
+        'hover:-translate-y-1 cursor-pointer active:scale-[0.98] p-2',
         schedule.isPremium
           ? 'border-gold-400 shadow-gold bg-surface-low'
           : 'border-border-default shadow-card bg-surface-low hover:border-border-strong',
@@ -212,8 +212,8 @@ function GridCard({ schedule, onVenueClick, onSelect }: CardProps) {
     <article
       onClick={() => onSelect(schedule)}
       className={[
-        'flex flex-col overflow-hidden rounded-card border transition-all duration-150',
-        'hover:scale-[1.02] cursor-pointer active:scale-[0.98]',
+        'flex flex-col overflow-hidden rounded-card border transition-all duration-300 ease-out',
+        'hover:-translate-y-1 cursor-pointer active:scale-[0.98]',
         schedule.isPremium
           ? 'border-gold-400 shadow-gold bg-surface-low'
           : 'border-border-default shadow-card bg-surface-low hover:border-border-strong',

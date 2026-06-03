@@ -88,7 +88,7 @@ function AppHeader({
   }, [userMenuOpen]);
 
   return (
-    <header className="sticky top-0 z-50 bg-surface-base border-b border-border-subtle">
+    <header className="sticky top-0 z-50 bg-surface-base/80 backdrop-blur-md border-b border-border-subtle">
       {/* ── 단순화된 헤더: 좌(로고) / 우(알림+유저) ──────────────── */}
       <div className="flex items-center justify-between h-header-h px-page-x">
 
@@ -114,17 +114,22 @@ function AppHeader({
             aria-label={`알림 ${unreadCount}개`}
             aria-expanded={notifOpen}
             className={[
-              'relative w-9 h-9 flex items-center justify-center rounded-input transition-colors',
-              'active:scale-95',
+              'relative w-9 h-9 flex items-center justify-center rounded-input',
+              'transition-all duration-300 ease-out active:scale-95',
               notifOpen
                 ? 'bg-surface-high text-gold-300'
-                : 'text-ink-secondary hover:text-ink-primary hover:bg-surface-high',
+                : unreadCount > 0
+                ? 'text-gold-300 hover:bg-surface-high'              // 미읽음: 골드 포인트
+                : 'text-gray-400 hover:text-ink-primary hover:bg-surface-high',
             ].join(' ')}
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-              <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6.29-4.71L18 17V11c0-3.07-1.63-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.64 5.36 6 7.92 6 11v6l-.29.29A1 1 0 0 0 6.41 19h11.18a1 1 0 0 0 .7-1.71z" />
+            {/* 깔끔한 라인형 종(Bell) 아이콘 (lucide 스타일) */}
+            <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+              <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
             </svg>
-            <UnreadBadge count={unreadCount} className="absolute top-0 right-0" />
+            <UnreadBadge count={unreadCount} className="absolute top-0.5 right-0.5" />
           </button>
 
           {/* 로그인 / 유저 메뉴 */}
@@ -280,7 +285,7 @@ function TabBar({
   return (
     <div
       ref={containerRef}
-      className="sticky top-header-h z-40 bg-surface-base relative flex border-b border-border-subtle overflow-x-auto scrollbar-none px-page-x
+      className="sticky top-header-h z-40 bg-surface-base/80 backdrop-blur-md relative flex border-b border-border-subtle overflow-x-auto scrollbar-none px-page-x
                  [&>button:first-child]:pl-0 [&>button:last-child]:pr-0"
     >
       {tabs.map(({ id, label }) => {

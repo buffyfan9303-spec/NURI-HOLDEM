@@ -1,7 +1,7 @@
 // src/components/features/TierLeaderboard.tsx
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import TierBadge, { tierOf, tierProgress, allTiers } from '../atoms/TierBadge';
+import TierBadge, { tierOf, tierProgress, allTiers, isAceRank, ACE_TOP_RANK, ACE_MIN_POINTS } from '../atoms/TierBadge';
 import { getActivityLeaderboard, type LeaderboardEntry } from '../../api/community';
 
 function RankNum({ n }: { n: number }) {
@@ -44,6 +44,8 @@ export default function TierLeaderboard() {
     const i = rows.findIndex((r) => r.id === user.id);
     return i >= 0 ? i + 1 : null;
   }, [rows, user]);
+  // A(에이스) = K(14,000점) 달성 + 전체 상위 10위 이내(상대평가)
+  const myIsAce = !isAdmin && isAceRank(user?.activityPoints ?? 0, myRank);
 
   return (
     <div className="space-y-3 animate-fade-in">
@@ -52,11 +54,11 @@ export default function TierLeaderboard() {
         <section className="rounded-card border border-gold-400/40 bg-gradient-to-br from-gold-300/[0.07] to-transparent p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <TierBadge points={user.activityPoints ?? 0} size={30} admin={isAdmin} />
+              <TierBadge points={user.activityPoints ?? 0} size={30} admin={isAdmin} overallRank={myRank} />
               <div>
                 <p className="text-2xs text-ink-muted">내 등급</p>
                 <p className="text-lg font-extrabold text-ink-primary leading-tight">
-                  {isAdmin ? 'SS' : myProg.current.label}
+                  {isAdmin ? 'SS' : myIsAce ? 'A' : myProg.current.label}
                   <span className="ml-1.5 text-xs font-semibold text-ink-muted">등급</span>
                 </p>
               </div>
@@ -86,8 +88,10 @@ export default function TierLeaderboard() {
                 />
               </div>
             </div>
+          ) : myIsAce ? (
+            <p className="mt-3 text-2xs font-bold text-gold-300">A 등급 달성 · 상위 {ACE_TOP_RANK}위 명예 등급</p>
           ) : (
-            <p className="mt-3 text-2xs font-bold text-gold-300">최고 등급에 도달했습니다</p>
+            <p className="mt-3 text-2xs font-bold text-gold-300">K 등급(최고 점수) · 전체 {ACE_TOP_RANK}위 안에 들면 A 등급</p>
           )}
 
           {/* 점수 적립 안내 */}
@@ -114,6 +118,14 @@ export default function TierLeaderboard() {
 
           {showLadder && (
             <div className="mt-2 grid grid-cols-2 gap-1.5 animate-slide-up">
+              {/* A — 점수가 아닌 상대평가(명예) 등급 */}
+              <div className="col-span-2 flex items-center justify-between px-2 py-1.5 rounded-input border border-gold-400/60 bg-gradient-to-r from-gold-300/15 to-transparent">
+                <span className="inline-flex items-center gap-1.5">
+                  <TierBadge points={ACE_MIN_POINTS} size={16} overallRank={1} />
+                  <span className="text-2xs font-bold text-gold-300">A · 명예 등급</span>
+                </span>
+                <span className="text-2xs text-ink-muted">K 달성 + 전체 상위 {ACE_TOP_RANK}명</span>
+              </div>
               {allTiers().slice().reverse().map((t) => (
                 <div
                   key={t.key}
@@ -144,6 +156,7 @@ export default function TierLeaderboard() {
           <ul className="rounded-card border border-border-subtle bg-surface-high overflow-hidden">
             {rows.map((r, i) => {
               const t = tierOf(r.activityPoints);
+              const rowAce = isAceRank(r.activityPoints, i + 1);
               const isMe = user?.id === r.id;
               return (
                 <li
@@ -166,8 +179,8 @@ export default function TierLeaderboard() {
                       {isMe && <span className="text-2xs font-bold text-gold-300">나</span>}
                     </div>
                   </div>
-                  <TierBadge points={r.activityPoints} size={16} />
-                  <span className="w-14 text-right text-xs font-bold tabular-nums" style={{ color: t.color }}>
+                  <TierBadge points={r.activityPoints} size={16} overallRank={i + 1} />
+                  <span className="w-14 text-right text-xs font-bold tabular-nums" style={{ color: rowAce ? '#FFD700' : t.color }}>
                     {r.activityPoints.toLocaleString()}
                   </span>
                 </li>
@@ -176,7 +189,7 @@ export default function TierLeaderboard() {
           </ul>
         )}
         <p className="mt-2 text-2xs text-ink-muted text-center">
-          접속·글쓰기·댓글 활동으로 점수를 모아 등급을 올려보세요 (2-pocket ~ AA)
+          접속·글쓰기·댓글로 점수를 모아 K(14,000점)까지 올리세요. A는 K 달성자 중 전체 상위 {ACE_TOP_RANK}명만!
         </p>
       </section>
     </div>

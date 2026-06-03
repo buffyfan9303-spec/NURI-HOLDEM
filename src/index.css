@@ -93,7 +93,13 @@
 @layer components {
   /* ── 공통 카드 ──────────────────────────────────────── */
   .card {
-    @apply bg-surface-low rounded-card shadow-card border border-border-subtle;
+    @apply bg-surface-low rounded-card shadow-card border border-border-subtle
+           transition-all duration-300 ease-out;
+  }
+
+  /* 인터랙티브 카드(포스터·매장 등): 호버 시 부드럽게 떠오름 */
+  .card-interactive {
+    @apply card cursor-pointer hover:-translate-y-1 hover:border-border-strong active:scale-[0.99];
   }
 
   /* 프리미엄(상단 고정) 카드: 골드 테두리 + glow */
@@ -106,7 +112,7 @@
     @apply inline-flex items-center justify-center gap-2 whitespace-nowrap
            font-semibold text-sm leading-none
            rounded-input px-4 py-2.5
-           transition-all duration-150 active:scale-[0.97]
+           transition-all duration-300 ease-out active:scale-95
            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-300;
   }
 
