@@ -5,7 +5,7 @@ export type TournamentFormat = 'MTT' | 'SNG' | 'PKO' | 'Bounty' | 'Mix';
 export interface SeatVoucher  { label: string; count: number; }
 export interface BuyInInfo    { amount: number; rebuy?: number; rebuyLimit?: number; addon?: number; }
 export interface SideEvent    { name: string; startBefore: string; buyIn?: number; note?: string; }
-export interface RankingPrize { rank: string; amount: number; }
+export interface RankingPrize { rank: string; amount: number; unit?: string; }
 export interface Promotion    { badge?: string; title: string; detail?: string; }
 
 export interface Schedule {

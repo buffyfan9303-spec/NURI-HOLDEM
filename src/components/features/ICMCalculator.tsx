@@ -30,7 +30,7 @@ function icmEquity(stacks: number[], prizes: number[]): number[] {
   return result;
 }
 
-const MAX_PLAYERS = 9;
+const MAX_PLAYERS = 10;
 
 export default function ICMCalculator() {
   const [stacks, setStacks] = useState<number[]>([5000, 3000, 2000]);

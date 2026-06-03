@@ -98,7 +98,7 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
   // ── 비밀번호 변경 = 이메일 인증 OTP (useCallback은 early return 전에 선언) ──
   // 1) 새 비밀번호 입력 후 가입 이메일로 인증코드 발송
   const handleSendCode = useCallback(async () => {
-    if (newPw.length < 6)    return toast.show('새 비밀번호는 6자 이상이어야 합니다', 'error');
+    if (newPw.length < 8)    return toast.show('새 비밀번호는 8자 이상이어야 합니다', 'error');
     if (newPw !== confirmPw) return toast.show('새 비밀번호가 일치하지 않습니다', 'error');
     setSendingCode(true);
     try {
@@ -116,7 +116,7 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
   // 2) 이메일 코드 + 새 비밀번호로 변경 확정
   const handleConfirmChange = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!IS_MOCK && code.trim().length < 6) return toast.show('이메일로 받은 6자리 인증코드를 입력해 주세요', 'error');
+    if (!IS_MOCK && code.trim().length < 6) return toast.show('이메일로 받은 이메일 인증번호를 입력해 주세요', 'error');
     setChangingPw(true);
     try {
       await changeMyPasswordWithCode(newPw, code.trim());
@@ -383,7 +383,7 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
             <p className="text-xs text-ink-muted leading-relaxed">
               {IS_MOCK
                 ? '데모 모드에서는 비밀번호 변경이 시뮬레이션됩니다.'
-                : '보안을 위해 새 비밀번호 설정 후, 가입 이메일로 받은 6자리 인증코드를 입력해야 변경됩니다.'}
+                : '보안을 위해 새 비밀번호 설정 후, 가입 이메일로 받은 이메일 인증번호를 입력해야 변경됩니다.'}
             </p>
           </div>
 
@@ -394,7 +394,7 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
             onChange={setNewPw}
             show={showNew}
             onToggle={() => setShowNew((v) => !v)}
-            placeholder="6자 이상 입력"
+            placeholder="8자 이상 입력"
             autoComplete="new-password"
           />
 
@@ -423,7 +423,7 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
             <button
               type="button"
               onClick={handleSendCode}
-              disabled={sendingCode || !newPw || newPw !== confirmPw || newPw.length < 6}
+              disabled={sendingCode || !newPw || newPw !== confirmPw || newPw.length < 8}
               className="btn-primary w-full disabled:opacity-60"
             >
               {sendingCode ? '인증코드 발송 중…' : '이메일로 인증코드 받기'}
@@ -432,7 +432,7 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
             <div className="space-y-3">
               {!newPw && (
                 <p className="text-2xs text-amber-400 leading-relaxed bg-amber-500/10 border border-amber-500/30 rounded-input px-3 py-2">
-                  메일 확인 후 돌아오셨네요. 위에 새 비밀번호를 다시 입력한 뒤, 메일로 받은 6자리 코드로 변경을 완료하세요.
+                  메일 확인 후 돌아오셨네요. 위에 새 비밀번호를 다시 입력한 뒤, 메일로 받은 인증번호로 변경을 완료하세요.
                 </p>
               )}
               <div>
@@ -441,10 +441,10 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
                   type="text"
                   inputMode="numeric"
                   value={code}
-                  onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
-                  placeholder="6자리 코드"
-                  maxLength={6}
-                  className="input text-center font-bold tracking-[0.4em]"
+                  onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 8))}
+                  placeholder="이메일로 받은 인증번호"
+                  maxLength={8}
+                  className="input text-center font-bold tracking-[0.3em]"
                   autoFocus
                 />
                 <button
@@ -589,7 +589,7 @@ const STRENGTH_LEVELS = [
 
 function PasswordStrength({ password }: { password: string }) {
   const checks = [
-    { label: '6자 이상',      ok: password.length >= 6 },
+    { label: '8자 이상',      ok: password.length >= 8 },
     { label: '영문 포함',     ok: /[a-zA-Z]/.test(password) },
     { label: '숫자 포함',     ok: /\d/.test(password) },
     { label: '특수문자 포함', ok: /[!@#$%^&*\-_=+]/.test(password) },

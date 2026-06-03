@@ -347,8 +347,7 @@ export default function ScheduleDetailModal({
         {schedule.rankingPrizes && schedule.rankingPrizes.length > 0 && (
           <section>
             <h3 className="text-sm font-semibold text-ink-primary mb-2 flex items-center gap-1.5">
-              RANKING GTD
-              <span className="text-2xs text-ink-muted font-normal">(단위: 만원)</span>
+              순위별 상금
             </h3>
             <div className="rounded-card border border-border-subtle bg-surface-high overflow-hidden">
               <table className="w-full text-xs">
@@ -367,7 +366,7 @@ export default function ScheduleDetailModal({
                           'px-3 py-1.5 text-right tabular-nums',
                           isTop3 ? 'text-gold-300 font-extrabold text-sm' : 'text-ink-primary font-semibold',
                         ].join(' ')}>
-                          {rp.amount}만
+                          {rp.amount.toLocaleString()}{rp.unit ?? ''}
                         </td>
                       </tr>
                     );

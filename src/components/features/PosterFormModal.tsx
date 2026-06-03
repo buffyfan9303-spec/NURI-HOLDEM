@@ -31,7 +31,7 @@ export interface PosterFormData {
   paymentMethods: string[];
   partners: string[];     // 파트너 / 시드권 — 업주 직접 추가
   prizes: string[];
-  rankingPrizes: { rank: string; amount: number }[]; // 순위별 상금(1등~머니인) — 선택
+  rankingPrizes: { rank: string; amount: number; unit: string }[]; // 순위별 상금(값+단위 직접 입력) — 선택
   events: string[];       // 이벤트/프로모션(신규·할인 등) — 선택
   posterUrl?: string;
   // 관리자 직접 등록용 — 홀덤펍 선택(기존) 또는 직접 입력
@@ -45,8 +45,6 @@ const MAX_PARTNERS = 10;
 const MAX_PRIZES = 10;
 const MAX_RANKS = 20;
 const MAX_EVENTS = 10;
-// 빠른 추가용 이벤트 프리셋
-const EVENT_PRESETS = ['신규 이벤트', '할인 이벤트', '얼리버드', '해피아워', '리바이 1+1'];
 
 export default function PosterFormModal({ open, onClose, schedule, onSubmit, venues = [] }: PosterFormModalProps) {
   const toast  = useToast();
@@ -83,7 +81,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
         paymentMethods: schedule.paymentMethods ?? ['현금'],
         partners: schedule.partners ?? [],
         prizes: schedule.seats?.map((s) => `${s.label} ${s.count}석`) ?? [],
-        rankingPrizes: schedule.rankingPrizes?.map((r) => ({ rank: r.rank, amount: r.amount })) ?? [],
+        rankingPrizes: schedule.rankingPrizes?.map((r) => ({ rank: r.rank, amount: r.amount, unit: r.unit ?? '' })) ?? [],
         events: schedule.promotions?.map((p) => p.title) ?? [],
         posterUrl: schedule.posterUrl,
         venueId: schedule.venueId, pubName: schedule.pubName,
@@ -341,38 +339,20 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
           />
         </FieldWrap>
 
-        {/* 이벤트 / 프로모션 — 선택 (신규·할인 등) */}
+        {/* 이벤트 / 프로모션 — 모두 직접 작성 (선택) */}
         <FieldWrap label={`이벤트 / 프로모션 (${form.events.length}/${MAX_EVENTS})`}>
-          <div className="space-y-2">
-            <div className="flex flex-wrap gap-1.5">
-              {EVENT_PRESETS.map((ev) => {
-                const on = form.events.includes(ev);
-                return (
-                  <button key={ev} type="button"
-                    onClick={() => update('events', on
-                      ? form.events.filter((e) => e !== ev)
-                      : (form.events.length >= MAX_EVENTS ? form.events : [...form.events, ev]))}
-                    className={['px-2.5 py-1 rounded-badge text-xs font-semibold border transition-colors',
-                      on ? 'bg-gold-300/15 border-gold-300 text-gold-300'
-                        : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary'].join(' ')}>
-                    {on ? '✓ ' : ''}{ev}
-                  </button>
-                );
-              })}
-            </div>
-            <TagAdder
-              items={form.events.filter((e) => !EVENT_PRESETS.includes(e))}
-              max={MAX_EVENTS}
-              total={form.events.length}
-              placeholder="기타 이벤트 직접 입력 (예: 오픈 기념 이벤트)"
-              onAdd={(v) => { if (!form.events.includes(v)) update('events', [...form.events, v]); }}
-              onRemove={(v) => update('events', form.events.filter((e) => e !== v))}
-            />
-          </div>
+          <TagAdder
+            items={form.events}
+            max={MAX_EVENTS}
+            total={form.events.length}
+            placeholder="이벤트 직접 입력 (예: 신규 이벤트, 할인 이벤트, 오픈 기념)"
+            onAdd={(v) => { if (!form.events.includes(v)) update('events', [...form.events, v]); }}
+            onRemove={(v) => update('events', form.events.filter((e) => e !== v))}
+          />
         </FieldWrap>
 
-        {/* 순위별 상금 — 1등부터 머니인 구간까지 (선택) */}
-        <FieldWrap label={`순위별 상금 (${form.rankingPrizes.length}/${MAX_RANKS})`} suffix="만원">
+        {/* 순위별 상금 — 1등부터 머니인 구간까지 (선택, 단위 직접 입력) */}
+        <FieldWrap label={`순위별 상금 (${form.rankingPrizes.length}/${MAX_RANKS})`}>
           <RankingPrizeList prizes={form.rankingPrizes} onChange={(rp) => update('rankingPrizes', rp)} />
         </FieldWrap>
 
@@ -427,16 +407,16 @@ function PrizeList({ prizes, onChange }: { prizes: string[]; onChange: (prizes: 
   );
 }
 
-// 순위별 상금(1등~머니인) — 선택. 금액은 만원 단위.
+// 순위별 상금(1등~머니인) — 선택. 값 + 단위(직접 입력). 현금 단위 표기 없음.
 function RankingPrizeList({ prizes, onChange }: {
-  prizes: { rank: string; amount: number }[];
-  onChange: (v: { rank: string; amount: number }[]) => void;
+  prizes: { rank: string; amount: number; unit: string }[];
+  onChange: (v: { rank: string; amount: number; unit: string }[]) => void;
 }) {
   const add = () => {
     if (prizes.length >= MAX_RANKS) return;
-    onChange([...prizes, { rank: `${prizes.length + 1}위`, amount: 0 }]);
+    onChange([...prizes, { rank: `${prizes.length + 1}위`, amount: 0, unit: '' }]);
   };
-  const setAt = (i: number, patch: Partial<{ rank: string; amount: number }>) =>
+  const setAt = (i: number, patch: Partial<{ rank: string; amount: number; unit: string }>) =>
     onChange(prizes.map((p, k) => (k === i ? { ...p, ...patch } : p)));
   return (
     <div className="space-y-1.5">
@@ -445,20 +425,21 @@ function RankingPrizeList({ prizes, onChange }: {
           {prizes.map((p, i) => (
             <li key={i} className="flex items-center gap-1.5">
               <input value={p.rank} onChange={(e) => setAt(i, { rank: e.target.value })} maxLength={12}
-                placeholder={`${i + 1}위`} className="input w-20 text-sm" />
+                placeholder={`${i + 1}위`} className="input w-16 text-sm shrink-0" />
               <input type="number" inputMode="numeric" value={p.amount || ''}
                 onChange={(e) => setAt(i, { amount: parseInt(e.target.value, 10) || 0 })}
-                placeholder="상금(만원)" className="input flex-1 text-sm tabular-nums" />
-              <span className="text-2xs text-ink-muted shrink-0">만</span>
+                placeholder="값" className="input flex-1 text-sm tabular-nums min-w-0" />
+              <input value={p.unit} onChange={(e) => setAt(i, { unit: e.target.value })} maxLength={10}
+                placeholder="단위 (예: 석, P, 시드권)" className="input w-28 text-sm shrink-0" />
               <button type="button" onClick={() => onChange(prizes.filter((_, k) => k !== i))}
-                aria-label="삭제" className="text-ink-muted hover:text-danger text-2xs px-1">✕</button>
+                aria-label="삭제" className="text-ink-muted hover:text-danger text-2xs px-1 shrink-0">✕</button>
             </li>
           ))}
         </ul>
       )}
       {prizes.length < MAX_RANKS && (
         <button type="button" onClick={add} className="btn-ghost text-xs w-full py-1.5">
-          + 순위 추가 {prizes.length === 0 && '(1등부터 머니인까지 선택 입력)'}
+          + 순위 추가 {prizes.length === 0 && '(1등부터 머니인까지 · 단위 직접 입력)'}
         </button>
       )}
     </div>

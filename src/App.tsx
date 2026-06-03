@@ -760,6 +760,12 @@ export default function App() {
       .catch(() => toast.show('포스터 등록에 실패했습니다. 매장 승인 상태를 확인해 주세요.', 'error'));
   }, [user, venues, toast, reloadSchedules]);
 
+  // 일정탐색(browse) 상단 공지 — 전체('all') 공지만 노출(게시판/딜러/장터 전용 공지는 제외)
+  const browseNotices = useMemo(
+    () => notices.filter((n) => !n.board || n.board === 'all'),
+    [notices],
+  );
+
   // ── 렌더 ──────────────────────────────────────────────────────────────
 
   return (
@@ -794,13 +800,13 @@ export default function App() {
             </div>
           </div>
 
-          {/* 공지 — 일정탐색 상단 (관리자가 작성, 전 영역 공통 공지) */}
-          {(notices.length > 0 || isAdmin) && (
+          {/* 공지 — 일정탐색 상단 (전체 공통 공지만) */}
+          {(browseNotices.length > 0 || isAdmin) && (
             <div className="px-page-x pt-3">
               <section className="rounded-card border border-gold-400/30 bg-gradient-to-br from-gold-300/[0.05] to-transparent overflow-hidden">
                 <header className="flex items-center justify-between px-3 py-2 border-b border-gold-400/20">
                   <h2 className="text-xs font-bold text-gold-300">
-                    공지사항 {notices.length > 0 && <span className="text-2xs text-ink-muted font-normal">({notices.length})</span>}
+                    공지사항 {browseNotices.length > 0 && <span className="text-2xs text-ink-muted font-normal">({browseNotices.length})</span>}
                   </h2>
                   {isAdmin && (
                     <button type="button" onClick={() => setNoticeFormOpen(true)} className="text-2xs text-gold-300 hover:text-gold-200 font-semibold">
@@ -808,9 +814,9 @@ export default function App() {
                     </button>
                   )}
                 </header>
-                {notices.length > 0 ? (
+                {browseNotices.length > 0 ? (
                   <ul>
-                    {notices.slice(0, 3).map((n) => (
+                    {browseNotices.slice(0, 3).map((n) => (
                       <li key={n.id}>
                         <button
                           type="button"
