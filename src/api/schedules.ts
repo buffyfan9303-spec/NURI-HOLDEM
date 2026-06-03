@@ -137,15 +137,17 @@ export async function deleteSchedule(id: string): Promise<void> {
 // ── 관리자: 노출 순서 일괄 변경 ───────────────────────────────────────────────
 export async function reorderSchedules(payload: ReorderPayload): Promise<void> {
   if (IS_MOCK) return;
-  // Supabase는 bulk upsert 지원
-  const { error } = await supabase.from('schedules').upsert(
-    payload.items.map(({ id, displayOrder }) => ({
-      id,
-      display_order: displayOrder,
-      updated_at: new Date().toISOString(),
-    })),
+  // 행별 UPDATE — upsert 는 INSERT 경로(RLS·NOT NULL)까지 걸려 관리자 순서변경이 막혀
+  // '저장 실패' 가 나므로, 존재하는 행을 개별 update 한다(reorderVenues 와 동일 방식).
+  const results = await Promise.all(
+    payload.items.map(({ id, displayOrder }) =>
+      supabase.from('schedules')
+        .update({ display_order: displayOrder, updated_at: new Date().toISOString() })
+        .eq('id', id),
+    ),
   );
-  if (error) throw error;
+  const failed = results.find((r) => r.error);
+  if (failed?.error) throw failed.error;
 }
 
 // ── 관리자: 프리미엄 토글 ─────────────────────────────────────────────────────
@@ -153,6 +155,15 @@ export async function togglePremium(id: string, isPremium: boolean): Promise<voi
   if (IS_MOCK) return;
   const { error } = await supabase.from('schedules').update({
     is_premium: isPremium, updated_at: new Date().toISOString(),
+  }).eq('id', id);
+  if (error) throw error;
+}
+
+// ── 관리자: 대회 분류 토글 — [대회] 필터 노출 여부 ────────────────────────────
+export async function toggleCompetition(id: string, isCompetition: boolean): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.from('schedules').update({
+    is_competition: isCompetition, updated_at: new Date().toISOString(),
   }).eq('id', id);
   if (error) throw error;
 }

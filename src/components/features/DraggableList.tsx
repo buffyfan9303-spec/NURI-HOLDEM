@@ -20,7 +20,7 @@ import {
 import type { DraggableAttributes } from '@dnd-kit/core';
 import type { SyntheticListenerMap } from '@dnd-kit/core/dist/hooks/utilities';
 import { CSS } from '@dnd-kit/utilities';
-import { reorderSchedules, togglePremium, type Schedule } from '../../api/schedules';
+import { reorderSchedules, togglePremium, toggleCompetition, type Schedule } from '../../api/schedules';
 
 // ── 상태 타입 ────────────────────────────────────────────────────────────────
 
@@ -57,9 +57,10 @@ interface SortableRowProps {
   index: number;
   isDragging: boolean;
   onPremiumToggle: (id: string, current: boolean) => void;
+  onCompetitionToggle: (id: string, current: boolean) => void;
 }
 
-function SortableRow({ item, index, isDragging, onPremiumToggle }: SortableRowProps) {
+function SortableRow({ item, index, isDragging, onPremiumToggle, onCompetitionToggle }: SortableRowProps) {
   const {
     attributes,
     listeners,
@@ -116,6 +117,22 @@ function SortableRow({ item, index, isDragging, onPremiumToggle }: SortableRowPr
             strokeLinejoin="round"
           />
         </svg>
+      </button>
+
+      {/* 대회 분류 토글 — [대회] 필터 노출 */}
+      <button
+        type="button"
+        aria-label={item.isCompetition ? '대회 분류 해제' : '대회로 분류'}
+        title={item.isCompetition ? '대회 분류 해제' : '[대회] 필터에 노출'}
+        onClick={() => onCompetitionToggle(item.id, item.isCompetition ?? false)}
+        className={[
+          'shrink-0 text-2xs font-bold px-1.5 py-1 rounded-badge border transition-colors active:scale-95',
+          item.isCompetition
+            ? 'bg-gold-300/15 text-gold-300 border-gold-400/40'
+            : 'bg-surface-high text-ink-muted border-border-default hover:text-ink-secondary',
+        ].join(' ')}
+      >
+        대회
       </button>
 
       {/* 요강 정보 */}
@@ -271,6 +288,20 @@ export default function DraggableList({ initialItems }: DraggableListProps) {
     }
   }, []);
 
+  // ── 대회 분류 토글 ───────────────────────────────────────────────────────
+  const handleCompetitionToggle = useCallback(async (id: string, current: boolean) => {
+    setItems((prev) =>
+      prev.map((item) => item.id === id ? { ...item, isCompetition: !current } : item),
+    );
+    try {
+      await toggleCompetition(id, !current);
+    } catch {
+      setItems((prev) =>
+        prev.map((item) => item.id === id ? { ...item, isCompetition: current } : item),
+      );
+    }
+  }, []);
+
   // ── 렌더링 ────────────────────────────────────────────────────────────────
 
   return (
@@ -302,6 +333,7 @@ export default function DraggableList({ initialItems }: DraggableListProps) {
                 index={index}
                 isDragging={activeId !== null}
                 onPremiumToggle={handlePremiumToggle}
+                onCompetitionToggle={handleCompetitionToggle}
               />
             ))}
           </ol>

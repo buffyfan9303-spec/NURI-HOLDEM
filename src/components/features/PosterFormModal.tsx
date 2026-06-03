@@ -66,6 +66,9 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
   const [imgFile,    setImgFile]    = useState<File | null>(null);
   const [imgPreview, setImgPreview] = useState<string>('');
   const [uploading,  setUploading]  = useState(false);
+  // 레지마감: 레벨/시간 분리 입력 (둘 중 하나 이상 필수). 저장 시 'NLV HH:MM' 형태로 합쳐 regCloseTime 에 반영
+  const [regLevel,   setRegLevel]   = useState('');
+  const [regTime,    setRegTime]    = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -87,10 +90,18 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
         venueId: schedule.venueId, pubName: schedule.pubName,
       });
       setImgPreview(schedule.posterUrl ?? '');
+      // 기존 레지마감 문자열에서 레벨/시간 분리
+      const rc = schedule.regCloseTime ?? '';
+      const lv = rc.match(/(\d+)\s*LV/i);
+      const tm = rc.match(/(\d{1,2}:\d{2})/);
+      setRegLevel(lv ? lv[1] : '');
+      setRegTime(tm ? tm[1] : '');
     } else if (open) {
       setForm(empty);
       setImgFile(null);
       setImgPreview('');
+      setRegLevel('');
+      setRegTime('');
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schedule, open]);
@@ -117,6 +128,8 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
     if (!form.region.trim())    return toast.show('지역을 선택해 주세요', 'error');
     if (form.buyIn <= 0)        return toast.show('바이인 금액을 입력해 주세요', 'error');
     if (form.prizeAmount <= 0)  return toast.show('상금 금액을 입력해 주세요', 'error');
+    const regClose = [regLevel.trim() ? `${regLevel.trim()}LV` : '', regTime.trim()].filter(Boolean).join(' ');
+    if (!regClose)              return toast.show('레지마감은 레벨 또는 시간 중 하나 이상 입력해 주세요', 'error');
 
     // 법적 필터링
     const check = filterContent(`${form.title} ${form.prizes.join(' ')}`);
@@ -139,7 +152,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
       setUploading(false);
     }
 
-    onSubmit({ ...form, posterUrl });
+    onSubmit({ ...form, regCloseTime: regClose, posterUrl });
     toast.show(isEdit ? '포스터가 수정되었습니다' : '포스터가 등록되었습니다', 'success');
     onClose();
   };
@@ -228,16 +241,32 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
               onChange={(e) => update('date', e.target.value)} className="input" />
           </FieldWrap>
           <FieldWrap label="스타트 시간" required>
-            <input type="time" required value={form.startTime}
-              onChange={(e) => update('startTime', e.target.value)} className="input" />
+            <TimeSelect value={form.startTime} onChange={(v) => update('startTime', v)} />
           </FieldWrap>
         </div>
 
-        {/* 레지마감 */}
-        <FieldWrap label="레지마감 시간">
-          <input type="text" value={form.regCloseTime}
-            onChange={(e) => update('regCloseTime', e.target.value)}
-            placeholder="예: 16LV (00:12) 또는 23:30" className="input" />
+        {/* 레지마감 — 레벨/시간 분리 (둘 중 하나 이상 필수) */}
+        <FieldWrap label="레지마감 (레벨 또는 시간 중 하나 이상)" required>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <span className="block text-2xs text-ink-muted mb-1">레벨</span>
+              <div className="relative">
+                <input type="number" inputMode="numeric" min={1} value={regLevel}
+                  onChange={(e) => setRegLevel(e.target.value.replace(/[^0-9]/g, ''))}
+                  placeholder="예: 16" className="input w-full text-sm pr-9" />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-ink-muted pointer-events-none">LV</span>
+              </div>
+            </div>
+            <div>
+              <span className="block text-2xs text-ink-muted mb-1">시간</span>
+              <input type="time" value={regTime} onChange={(e) => setRegTime(e.target.value)} className="input w-full text-sm" />
+            </div>
+          </div>
+          {(regLevel || regTime) && (
+            <p className="mt-1 text-2xs font-semibold text-gold-300">
+              레지마감: {[regLevel ? `${regLevel}LV` : '', regTime].filter(Boolean).join(' ')}
+            </p>
+          )}
         </FieldWrap>
 
         {/* 상금 형태 */}
@@ -248,29 +277,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
           </div>
         </FieldWrap>
 
-        {/* 대회/이벤트 분류 — 캘린더 '대회' 필터에 노출 (Task 3) */}
-        <FieldWrap label="대회/이벤트 분류">
-          <button
-            type="button"
-            role="switch"
-            aria-checked={form.isCompetition}
-            onClick={() => update('isCompetition', !form.isCompetition)}
-            className={['w-full flex items-center justify-between p-3 rounded-input border-2 text-left transition-all',
-              form.isCompetition ? 'border-gold-300 bg-gold-300/10' : 'border-border-default bg-surface-high hover:border-border-strong'].join(' ')}
-          >
-            <span>
-              <span className={['block text-sm font-bold leading-none', form.isCompetition ? 'text-gold-300' : 'text-ink-primary'].join(' ')}>
-                대회/이벤트로 표시
-              </span>
-              <span className="block text-2xs text-ink-muted mt-1">캘린더의 [대회] 필터에 노출됩니다 (정규 대회·시리즈·이벤트)</span>
-            </span>
-            <span aria-hidden className={['shrink-0 w-9 h-5 rounded-full relative transition-colors',
-              form.isCompetition ? 'bg-gold-300' : 'bg-surface-float'].join(' ')}>
-              <span className={['absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all',
-                form.isCompetition ? 'left-[1.125rem]' : 'left-0.5'].join(' ')} />
-            </span>
-          </button>
-        </FieldWrap>
+        {/* (대회 분류는 관리자 설정 > 게시물 관리 > 포스터에서 지정) */}
 
         {/* 상금 + 바이인 */}
         <div className="grid grid-cols-2 gap-2">
@@ -356,8 +363,8 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
           <RankingPrizeList prizes={form.rankingPrizes} onChange={(rp) => update('rankingPrizes', rp)} />
         </FieldWrap>
 
-        {/* 시상품 */}
-        <FieldWrap label={`시상품 (${form.prizes.length}/${MAX_PRIZES})`}>
+        {/* 시상 */}
+        <FieldWrap label={`시상 (${form.prizes.length}/${MAX_PRIZES})`}>
           <PrizeList prizes={form.prizes} onChange={(prizes) => update('prizes', prizes)} />
         </FieldWrap>
 
@@ -500,6 +507,28 @@ function FieldWrap({ label, required, suffix, children }: {
         {suffix && <span className="text-2xs text-ink-muted">단위: {suffix}</span>}
       </div>
       {children}
+    </div>
+  );
+}
+
+// 시/분 선택형 시간 입력 — 분을 선택하면 드롭다운이 닫히며 즉시 저장(모바일 친화)
+function TimeSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const safe = /^\d{1,2}:\d{2}$/.test(value) ? value : '19:00';
+  const [h, m] = safe.split(':');
+  const hh = h.padStart(2, '0');
+  const mm = m.padStart(2, '0');
+  const hours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
+  const baseMins = ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'];
+  const mins = baseMins.includes(mm) ? baseMins : [mm, ...baseMins].sort();
+  return (
+    <div className="flex items-center gap-1.5">
+      <select value={hh} onChange={(e) => onChange(`${e.target.value}:${mm}`)} className="input flex-1 text-sm tabular-nums">
+        {hours.map((x) => <option key={x} value={x}>{x}시</option>)}
+      </select>
+      <span className="text-ink-muted font-bold">:</span>
+      <select value={mm} onChange={(e) => onChange(`${hh}:${e.target.value}`)} className="input flex-1 text-sm tabular-nums">
+        {mins.map((x) => <option key={x} value={x}>{x}분</option>)}
+      </select>
     </div>
   );
 }

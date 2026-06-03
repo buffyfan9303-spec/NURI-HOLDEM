@@ -69,7 +69,7 @@ export function isAceRank(points: number, overallRank?: number | null): boolean 
  *   else return 점수 매칭 등급;
  */
 export function calculateRank(points: number, overallRank?: number | null): string {
-  if (isAceRank(points, overallRank)) return 'A';
+  if (isAceRank(points, overallRank)) return 'VIP';
   return tierOf(points).label;
 }
 
@@ -126,7 +126,7 @@ interface Props {
 export default function TierBadge({ points, showLabel = false, size = 14, admin = false, overallRank }: Props) {
   const ace = !admin && isAceRank(points, overallRank);
   const t = tierOf(points);
-  const label = admin ? 'SS' : ace ? 'A' : t.label;
+  const label = admin ? 'SS' : ace ? 'VIP' : t.label;
   const color = admin ? ADMIN_TIER_COLOR : ace ? ACE_COLOR : t.color;
   const glow = admin || ace || t.rank >= 11;
   const fontSize = Math.max(8, Math.round(size * 0.62));
@@ -155,7 +155,7 @@ export default function TierBadge({ points, showLabel = false, size = 14, admin 
         admin
           ? '운영자 · SS 등급'
           : ace
-          ? `A 등급 · 상위 ${ACE_TOP_RANK}위 명예 등급 (활동 ${points}점)`
+          ? `VIP 등급 · 전체 상위 ${ACE_TOP_RANK}위 (활동 ${points}점)`
           : `활동 ${points}점 · ${t.label} 등급`
       }
     >
