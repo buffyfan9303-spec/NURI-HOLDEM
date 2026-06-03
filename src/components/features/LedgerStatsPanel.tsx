@@ -1,19 +1,21 @@
 // src/components/features/LedgerStatsPanel.tsx
-// 업주 전용 — POS 설정(취소 비밀번호 / 직원 장부권한) + 당일 기본 통계.
-// (기간별·요일평균 통계는 2단계에서 확장)
+// 업주 전용 — 당일 통계 + POS 설정(취소 비밀번호 / 직원 장부권한).
+// 관계자 바이인 제외 토글, 가게지원 집계, 카드단가 반영 매출. (기간별·요일평균은 추후 확장)
 import { useEffect, useMemo, useState } from 'react';
 import { useToast } from '../atoms/Toast';
 import type { User } from '../../api/auth';
 import { getMyVenueStaff } from '../../api/auth';
 import {
-  type LedgerBuyin, type LedgerSession, type PaymentMethod,
-  getLedgerBuyins, getLedgerSession,
+  type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type VisitorType,
+  cardUnit,
+  getLedgerBuyins, getLedgerSession, getLedgerPlayers,
   posHasPassword, setPosCancelPassword,
   getLedgerAccessUserIds, grantLedgerAccess, revokeLedgerAccess,
 } from '../../api/ledger';
 
 const today = () => new Date().toISOString().slice(0, 10);
-const METHOD_LABEL: Record<PaymentMethod, string> = { ticket: '티켓', cash: '현금', transfer: '이체', card: '카드' };
+const METHOD_LABEL: Record<PaymentMethod, string> = { ticket: '티켓', cash: '현금', transfer: '이체', card: '카드', support: '지원' };
+const VISITOR_LABEL: Record<VisitorType, string> = { new: '신규방문', regular: '기존손님', staff: '관계자' };
 
 export default function LedgerStatsPanel({ venueId }: { venueId: string }) {
   return (
@@ -29,36 +31,48 @@ function DayStats({ venueId }: { venueId: string }) {
   const [date, setDate]       = useState(today);
   const [buyins, setBuyins]   = useState<LedgerBuyin[]>([]);
   const [session, setSession] = useState<LedgerSession | null>(null);
+  const [players, setPlayers] = useState<LedgerPlayer[]>([]);
+  const [excludeStaff, setExcludeStaff] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([getLedgerBuyins(venueId, date), getLedgerSession(venueId, date)])
-      .then(([b, s]) => { setBuyins(b); setSession(s); })
+    Promise.all([getLedgerBuyins(venueId, date), getLedgerSession(venueId, date), getLedgerPlayers(venueId, date)])
+      .then(([b, s, p]) => { setBuyins(b); setSession(s); setPlayers(p); })
       .finally(() => setLoading(false));
   }, [venueId, date]);
 
+  const staffNames = useMemo(() => new Set(players.filter((p) => p.visitorType === 'staff').map((p) => p.name)), [players]);
+
   const m = useMemo(() => {
-    const total = buyins.length;
-    const players = new Set(buyins.map((b) => b.playerName));
-    const unpaid = buyins.filter((b) => b.isUnpaid).length;
-    const byMethod: Record<PaymentMethod, number> = { ticket: 0, cash: 0, transfer: 0, card: 0 };
+    const src = excludeStaff ? buyins.filter((b) => !staffNames.has(b.playerName)) : buyins;
+    const total = src.length;
+    const playerSet = new Set(src.map((b) => b.playerName));
+    const unpaid = src.filter((b) => b.isUnpaid).length;
+    const byMethod: Record<PaymentMethod, number> = { ticket: 0, cash: 0, transfer: 0, card: 0, support: 0 };
     const byPlayer: Record<string, number> = {};
-    for (const b of buyins) {
+    const unitOf = (b: LedgerBuyin) => (b.paymentMethod === 'card'
+      ? cardUnit({ buyinAmount: session?.buyinAmount ?? 0, cardAmount: session?.cardAmount ?? null })
+      : (session?.buyinAmount ?? 0));
+    let revenue = 0, unpaidAmt = 0, support = 0;
+    for (const b of src) {
       byMethod[b.paymentMethod]++;
       byPlayer[b.playerName] = (byPlayer[b.playerName] ?? 0) + 1;
+      if (b.paymentMethod === 'support') support++;
+      else if (b.paymentMethod !== 'ticket') { if (b.isUnpaid) unpaidAmt += unitOf(b); else revenue += unitOf(b); }
     }
     const target = session?.targetEntries ?? 0;
+    const visitor: Record<VisitorType, number> = { new: 0, regular: 0, staff: 0 };
+    for (const p of players) { if (p.visitorType) visitor[p.visitorType]++; }
     return {
-      total, players: players.size, unpaid,
+      total, players: playerSet.size, unpaid,
       unpaidRatio: total ? Math.round((unpaid / total) * 100) : 0,
       fillRatio: target ? Math.round((total / target) * 100) : null,
-      perPlayer: players.size ? (total / players.size) : 0,
-      byMethod,
-      ranking: Object.entries(byPlayer).sort((a, b) => b[1] - a[1]),
-      target,
+      perPlayer: playerSet.size ? (total / playerSet.size) : 0,
+      byMethod, ranking: Object.entries(byPlayer).sort((a, b) => b[1] - a[1]),
+      target, revenue, unpaidAmt, support, visitor,
     };
-  }, [buyins, session]);
+  }, [buyins, session, players, excludeStaff, staffNames]);
 
   return (
     <section className="rounded-card border border-gold-400/30 bg-gradient-to-br from-gold-300/[0.05] to-transparent p-3 space-y-3">
@@ -71,19 +85,34 @@ function DayStats({ venueId }: { venueId: string }) {
         <p className="text-center py-6 text-2xs text-ink-muted">불러오는 중…</p>
       ) : (
         <>
+          {/* 관계자 제외 토글 */}
+          <button type="button" onClick={() => setExcludeStaff((v) => !v)}
+            className={['w-full flex items-center justify-between px-3 py-2 rounded-input border transition-colors',
+              excludeStaff ? 'bg-gold-300/15 text-gold-300 border-gold-400/40' : 'bg-surface-high text-ink-secondary border-border-default'].join(' ')}>
+            <span className="text-2xs font-semibold">관계자 바이인 제외</span>
+            <span className="text-2xs font-bold">{excludeStaff ? 'ON' : 'OFF'}</span>
+          </button>
+
           <div className="grid grid-cols-3 gap-2">
             <Stat label="총 바인 수" value={`${m.total}`} />
             <Stat label="엔트리 비율" value={m.fillRatio !== null ? `${m.fillRatio}%` : '-'} sub={m.target ? `기준 ${m.target}` : '기준 미설정'} />
             <Stat label="미수 비율" value={`${m.unpaidRatio}%`} sub={`${m.unpaid}건`} danger={m.unpaidRatio > 0} />
             <Stat label="플레이어" value={`${m.players}명`} />
             <Stat label="플레이어당 바인" value={m.perPlayer ? m.perPlayer.toFixed(1) : '0'} />
+            <Stat label="가게지원" value={`${m.support}건`} />
+          </div>
+
+          {/* 금액 */}
+          <div className="grid grid-cols-2 gap-2">
+            <Stat label="완납 매출" value={`${m.revenue.toLocaleString()}원`} emerald />
+            <Stat label="당일 미수금" value={`${m.unpaidAmt.toLocaleString()}원`} danger={m.unpaidAmt > 0} />
           </div>
 
           {/* 결제수단별 */}
           <div>
             <p className="text-2xs font-semibold text-ink-secondary mb-1">결제 수단별 바인 수</p>
-            <div className="grid grid-cols-4 gap-1.5">
-              {(['ticket', 'cash', 'transfer', 'card'] as PaymentMethod[]).map((k) => (
+            <div className="grid grid-cols-5 gap-1.5">
+              {(['ticket', 'cash', 'transfer', 'card', 'support'] as PaymentMethod[]).map((k) => (
                 <div key={k} className="rounded-input bg-surface-high border border-border-subtle py-1.5 text-center">
                   <p className="text-sm font-bold text-ink-primary tabular-nums">{m.byMethod[k]}</p>
                   <p className="text-[10px] text-ink-muted">{METHOD_LABEL[k]}</p>
@@ -91,6 +120,21 @@ function DayStats({ venueId }: { venueId: string }) {
               ))}
             </div>
           </div>
+
+          {/* 방문 유형 */}
+          {(m.visitor.new + m.visitor.regular + m.visitor.staff) > 0 && (
+            <div>
+              <p className="text-2xs font-semibold text-ink-secondary mb-1">방문 유형 (명단 기준)</p>
+              <div className="grid grid-cols-3 gap-1.5">
+                {(['new', 'regular', 'staff'] as VisitorType[]).map((k) => (
+                  <div key={k} className="rounded-input bg-surface-high border border-border-subtle py-1.5 text-center">
+                    <p className="text-sm font-bold text-ink-primary tabular-nums">{m.visitor[k]}</p>
+                    <p className="text-[10px] text-ink-muted">{VISITOR_LABEL[k]}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* 바인 횟수 리스트 */}
           <div>
@@ -117,10 +161,11 @@ function DayStats({ venueId }: { venueId: string }) {
   );
 }
 
-function Stat({ label, value, sub, danger }: { label: string; value: string; sub?: string; danger?: boolean }) {
+function Stat({ label, value, sub, danger, emerald }: { label: string; value: string; sub?: string; danger?: boolean; emerald?: boolean }) {
+  const c = danger ? 'text-danger-light' : emerald ? 'text-emerald-400' : 'text-ink-primary';
   return (
     <div className="rounded-input bg-surface-low border border-border-subtle py-2 px-1 text-center">
-      <p className={['text-base font-extrabold tabular-nums leading-none', danger ? 'text-danger-light' : 'text-ink-primary'].join(' ')}>{value}</p>
+      <p className={['text-base font-extrabold tabular-nums leading-none', c].join(' ')}>{value}</p>
       <p className="text-[10px] text-ink-muted mt-1">{label}</p>
       {sub && <p className="text-[9px] text-ink-muted">{sub}</p>}
     </div>

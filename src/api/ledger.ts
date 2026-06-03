@@ -1,7 +1,8 @@
 // src/api/ledger.ts — NURI POS 장부 시스템 API
 import { supabase, IS_MOCK } from '../lib/supabase';
 
-export type PaymentMethod = 'ticket' | 'cash' | 'transfer' | 'card';
+export type PaymentMethod = 'ticket' | 'cash' | 'transfer' | 'card' | 'support';
+export type VisitorType = 'new' | 'regular' | 'staff';
 
 export interface LedgerBuyin {
   id: string;
@@ -17,12 +18,35 @@ export interface LedgerBuyin {
 export interface LedgerSession {
   venueId: string;
   sessionDate: string;
-  buyinAmount: number;
+  buyinAmount: number;          // 현금단가
+  cardAmount: number | null;    // 카드단가(미입력 시 현금단가 적용)
   targetEntries: number;
-  title?: string;
+  title?: string;               // 금일 게임 내용
+  eventMemo?: string;           // 이벤트 등 비고
+  dealers?: string;             // 금일 딜러 명단(줄바꿈 구분, 선택)
+  openedBy?: string | null;     // 담당직원(프로필 id)
+  openedAt?: string | null;
+  closed: boolean;
+  closedAt?: string | null;
+  closeMemo?: string | null;
+}
+
+export interface LedgerPlayer {
+  id: string;
+  venueId: string;
+  sessionDate: string;
+  name: string;
+  visitorType: VisitorType | null;
+  note: string | null;
+  sortOrder: number;
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
+
+/** 카드 결제에 적용할 단가(카드단가 미설정 시 현금단가) */
+export function cardUnit(s: { buyinAmount: number; cardAmount: number | null }): number {
+  return s.cardAmount && s.cardAmount > 0 ? s.cardAmount : s.buyinAmount;
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const rowToBuyin = (r: any): LedgerBuyin => ({
@@ -30,6 +54,33 @@ const rowToBuyin = (r: any): LedgerBuyin => ({
   playerName: r.player_name, entryNo: r.entry_no,
   paymentMethod: r.payment_method as PaymentMethod, isUnpaid: !!r.is_unpaid,
   buyinAt: r.buyin_at,
+});
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const rowToSession = (venueId: string, date: string, d: any): LedgerSession => ({
+  venueId, sessionDate: date,
+  buyinAmount: d?.buyin_amount ?? 0,
+  cardAmount: d?.card_amount ?? null,
+  targetEntries: d?.target_entries ?? 0,
+  title: d?.title ?? undefined,
+  eventMemo: d?.event_memo ?? undefined,
+  dealers: d?.dealers ?? undefined,
+  openedBy: d?.opened_by ?? null,
+  openedAt: d?.opened_at ?? null,
+  closed: !!d?.closed,
+  closedAt: d?.closed_at ?? null,
+  closeMemo: d?.close_memo ?? null,
+});
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const rowToPlayer = (r: any): LedgerPlayer => ({
+  id: r.id, venueId: r.venue_id, sessionDate: r.session_date,
+  name: r.name, visitorType: (r.visitor_type ?? null) as VisitorType | null,
+  note: r.note ?? null, sortOrder: r.sort_order ?? 0,
+});
+
+const emptySession = (venueId: string, date: string): LedgerSession => ({
+  venueId, sessionDate: date, buyinAmount: 0, cardAmount: null, targetEntries: 0, closed: false,
 });
 
 // ── 권한 ──────────────────────────────────────────────────────────────────────
@@ -48,23 +99,103 @@ export async function canManagePos(venueId: string): Promise<boolean> {
 
 // ── 세션(매장+날짜) ───────────────────────────────────────────────────────────
 export async function getLedgerSession(venueId: string, date = today()): Promise<LedgerSession> {
-  if (IS_MOCK) return { venueId, sessionDate: date, buyinAmount: 0, targetEntries: 0 };
+  if (IS_MOCK) return emptySession(venueId, date);
   const { data } = await supabase.from('ledger_sessions')
     .select('*').eq('venue_id', venueId).eq('session_date', date).maybeSingle();
-  return {
-    venueId, sessionDate: date,
-    buyinAmount: data?.buyin_amount ?? 0,
-    targetEntries: data?.target_entries ?? 0,
-    title: data?.title ?? undefined,
-  };
+  return data ? rowToSession(venueId, date, data) : emptySession(venueId, date);
 }
+
+/** 세션 편집 저장(단가/게임내용/이벤트/딜러/기준엔트리). 마감/담당직원 필드는 건드리지 않음. */
 export async function saveLedgerSession(s: LedgerSession): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.from('ledger_sessions').upsert({
     venue_id: s.venueId, session_date: s.sessionDate,
-    buyin_amount: s.buyinAmount, target_entries: s.targetEntries, title: s.title ?? null,
+    buyin_amount: s.buyinAmount, card_amount: s.cardAmount,
+    target_entries: s.targetEntries, title: s.title ?? null,
+    event_memo: s.eventMemo ?? null, dealers: s.dealers ?? null,
     updated_at: new Date().toISOString(),
   }, { onConflict: 'venue_id,session_date' });
+  if (error) throw error;
+}
+
+/** 장부 입장(세션 오픈) — 담당직원/오픈시각 기록 + 편집 필드 저장. closed=false 로 리셋. */
+export async function openLedgerSession(s: LedgerSession): Promise<void> {
+  if (IS_MOCK) return;
+  const { data: { user } } = await supabase.auth.getUser();
+  const { error } = await supabase.from('ledger_sessions').upsert({
+    venue_id: s.venueId, session_date: s.sessionDate,
+    buyin_amount: s.buyinAmount, card_amount: s.cardAmount,
+    target_entries: s.targetEntries, title: s.title ?? null,
+    event_memo: s.eventMemo ?? null, dealers: s.dealers ?? null,
+    opened_by: user?.id ?? null, opened_at: new Date().toISOString(),
+    closed: false, closed_at: null, close_memo: null,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'venue_id,session_date' });
+  if (error) throw error;
+}
+
+/** 장부 마감 — 읽기전용 스냅샷 + 마감 메모 */
+export async function closeLedgerSession(venueId: string, date: string, memo: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.from('ledger_sessions')
+    .update({ closed: true, closed_at: new Date().toISOString(), close_memo: memo || null, updated_at: new Date().toISOString() })
+    .eq('venue_id', venueId).eq('session_date', date);
+  if (error) throw error;
+}
+
+/** 마감 해제(업주 전용 — UI에서 권한 게이트) */
+export async function reopenLedgerSession(venueId: string, date: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.from('ledger_sessions')
+    .update({ closed: false, closed_at: null, updated_at: new Date().toISOString() })
+    .eq('venue_id', venueId).eq('session_date', date);
+  if (error) throw error;
+}
+
+// ── 명단(roster) ──────────────────────────────────────────────────────────────
+export async function getLedgerPlayers(venueId: string, date = today()): Promise<LedgerPlayer[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.from('ledger_players')
+    .select('*').eq('venue_id', venueId).eq('session_date', date)
+    .order('sort_order').order('created_at');
+  if (error) throw error;
+  return (data ?? []).map(rowToPlayer);
+}
+
+export async function addLedgerPlayer(input: {
+  venueId: string; sessionDate: string; name: string;
+  visitorType?: VisitorType | null; sortOrder?: number;
+}): Promise<void> {
+  if (IS_MOCK) return;
+  const { data: { user } } = await supabase.auth.getUser();
+  const { error } = await supabase.from('ledger_players').insert({
+    venue_id: input.venueId, session_date: input.sessionDate, name: input.name,
+    visitor_type: input.visitorType ?? null, sort_order: input.sortOrder ?? 0,
+    created_by: user?.id ?? null,
+  });
+  if (error) {
+    if ((error as { code?: string }).code === '23505') throw new Error('이미 추가된 플레이어입니다');
+    throw error;
+  }
+}
+
+export async function updateLedgerPlayer(id: string, patch: {
+  visitorType?: VisitorType | null; note?: string | null; sortOrder?: number; name?: string;
+}): Promise<void> {
+  if (IS_MOCK) return;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const p: any = {};
+  if (patch.visitorType !== undefined) p.visitor_type = patch.visitorType;
+  if (patch.note !== undefined) p.note = patch.note;
+  if (patch.sortOrder !== undefined) p.sort_order = patch.sortOrder;
+  if (patch.name !== undefined) p.name = patch.name;
+  const { error } = await supabase.from('ledger_players').update(p).eq('id', id);
+  if (error) throw error;
+}
+
+export async function removeLedgerPlayer(id: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.from('ledger_players').delete().eq('id', id);
   if (error) throw error;
 }
 
@@ -78,17 +209,19 @@ export async function getLedgerBuyins(venueId: string, date = today()): Promise<
   return (data ?? []).map(rowToBuyin);
 }
 
-/** 셀 결제 입력/수정 — (매장,날짜,플레이어,회차) 충돌 시 갱신. buyin_at = NOW */
+/** 셀 결제 입력/수정 — (매장,날짜,플레이어,회차) 충돌 시 갱신. buyin_at = NOW.
+ *  티켓/가게지원은 항상 완납 처리(미수 불가). */
 export async function upsertBuyin(input: {
   venueId: string; sessionDate: string; playerName: string; entryNo: number;
   paymentMethod: PaymentMethod; isUnpaid: boolean;
 }): Promise<void> {
   if (IS_MOCK) return;
   const { data: { user } } = await supabase.auth.getUser();
+  const unpaid = (input.paymentMethod === 'ticket' || input.paymentMethod === 'support') ? false : input.isUnpaid;
   const { error } = await supabase.from('ledger_buyins').upsert({
     venue_id: input.venueId, session_date: input.sessionDate,
     player_name: input.playerName, entry_no: input.entryNo,
-    payment_method: input.paymentMethod, is_unpaid: input.isUnpaid,
+    payment_method: input.paymentMethod, is_unpaid: unpaid,
     buyin_at: new Date().toISOString(), created_by: user?.id ?? null,
   }, { onConflict: 'venue_id,session_date,player_name,entry_no' });
   if (error) throw error;
@@ -101,15 +234,17 @@ export async function cancelBuyin(id: string, password: string): Promise<void> {
   if (error) throw error;
 }
 
-// ── 실시간 동기화 ─────────────────────────────────────────────────────────────
+// ── 실시간 동기화 (바이인 + 명단) ─────────────────────────────────────────────
 export function subscribeLedger(venueId: string, onChange: () => void): () => void {
   if (IS_MOCK) return () => {};
   const ch = supabase
     .channel(`ledger:${venueId}`)
     .on('postgres_changes',
       { event: '*', schema: 'public', table: 'ledger_buyins', filter: `venue_id=eq.${venueId}` },
-      () => onChange(),
-    )
+      () => onChange())
+    .on('postgres_changes',
+      { event: '*', schema: 'public', table: 'ledger_players', filter: `venue_id=eq.${venueId}` },
+      () => onChange())
     .subscribe();
   return () => { supabase.removeChannel(ch); };
 }
