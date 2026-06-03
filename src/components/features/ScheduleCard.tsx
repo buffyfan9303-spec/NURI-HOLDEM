@@ -24,6 +24,12 @@ export function formatPrize(n: number): string {
   return n.toLocaleString();
 }
 
+/** 카드/상세에 표시할 메인 상금 텍스트 — GTD: 금액, 엔트리: 프라이즈 % */
+export function prizeMainText(s: { guaranteed: boolean; prizePool?: number; prizePercent?: number }): string {
+  if (!s.guaranteed && s.prizePercent && s.prizePercent > 0) return `${s.prizePercent}%`;
+  return s.prizePool ? formatPrize(s.prizePool) : '-';
+}
+
 const FORMAT_COLOR: Record<TournamentFormat, string> = {
   MTT:     'bg-blue-500/15   text-blue-400   border-blue-500/30',
   SNG:     'bg-purple-500/15 text-purple-400 border-purple-500/30',
@@ -74,7 +80,7 @@ function PosterArea({
 // ── 서브: 프라이즈 배너 (강조 표시) ─────────────────────────────────────────
 
 function PrizeBanner({ schedule, large = false }: { schedule: Schedule; large?: boolean }) {
-  if (!schedule.prizePool) {
+  if (!schedule.prizePool && !schedule.prizePercent) {
     return (
       <span className="text-2xs text-ink-muted">상금 정보 없음</span>
     );
@@ -85,7 +91,7 @@ function PrizeBanner({ schedule, large = false }: { schedule: Schedule; large?: 
       large ? 'text-lg' : 'text-base',
     ].join(' ')}>
       <span className={`font-extrabold text-gold-300 tabular-nums leading-none ${large ? 'text-xl' : 'text-base'}`}>
-        {formatPrize(schedule.prizePool)}
+        {prizeMainText(schedule)}
       </span>
       <span className={[
         'font-bold tracking-wider rounded-badge px-1.5 py-0.5 border text-2xs',
@@ -177,7 +183,7 @@ function ListCard({ schedule, onVenueClick, onSelect }: CardProps) {
           />
           <span className="shrink-0 inline-flex items-baseline gap-1">
             <span className="font-extrabold text-gold-300 tabular-nums text-sm leading-none">
-              {schedule.prizePool ? formatPrize(schedule.prizePool) : '-'}
+              {prizeMainText(schedule)}
             </span>
             <span className={[
               'text-2xs font-bold tracking-wider rounded-badge px-1 py-0.5 border leading-none',

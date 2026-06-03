@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import Modal from '../atoms/Modal';
 import CommentThread from './CommentThread';
 import { useAuth } from '../../contexts/AuthContext';
-import { formatPrize } from './ScheduleCard';
+import { prizeMainText } from './ScheduleCard';
 import type { Schedule } from '../../api/schedules';
 import type { Comment } from '../../api/community';
 
@@ -206,12 +206,12 @@ export default function ScheduleDetailModal({
       <div className="px-4 pt-5 pb-6 space-y-6">
 
         {/* 프라이즈 강조 박스 */}
-        {schedule.prizePool && (
+        {(schedule.prizePool || schedule.prizePercent) && (
           <section className="rounded-card border border-gold-400/50 bg-gradient-to-br from-gold-300/10 to-transparent p-4">
-            <p className="text-2xs uppercase tracking-wider text-gold-500 mb-1">상금 풀</p>
+            <p className="text-2xs uppercase tracking-wider text-gold-500 mb-1">{schedule.guaranteed ? '상금 풀' : '프라이즈'}</p>
             <div className="flex items-baseline gap-2">
               <span className="text-3xl font-extrabold text-gold-300 tabular-nums leading-none">
-                {formatPrize(schedule.prizePool)}
+                {prizeMainText(schedule)}
               </span>
               <span className={[
                 'text-sm font-bold tracking-wider rounded-badge px-2 py-0.5 border',
@@ -219,7 +219,7 @@ export default function ScheduleDetailModal({
                   ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
                   : 'bg-surface-high text-ink-muted border-border-default',
               ].join(' ')}>
-                {schedule.guaranteed ? 'GTD' : '예상'}
+                {schedule.guaranteed ? 'GTD' : '엔트리'}
               </span>
             </div>
             {schedule.guaranteed && (

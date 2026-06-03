@@ -88,7 +88,7 @@ function AppHeader({
   }, [userMenuOpen]);
 
   return (
-    <header className="sticky top-0 z-50 bg-surface-base/80 backdrop-blur-md border-b border-border-subtle">
+    <header className="sticky top-0 z-50 bg-surface-base/95 backdrop-blur-md border-b border-border-subtle">
       {/* ── 단순화된 헤더: 좌(로고) / 우(알림+유저) ──────────────── */}
       <div className="flex items-center justify-between h-header-h px-page-x">
 
@@ -285,7 +285,7 @@ function TabBar({
   return (
     <div
       ref={containerRef}
-      className="sticky top-header-h z-40 bg-surface-base/80 backdrop-blur-md relative flex border-b border-border-subtle overflow-x-auto scrollbar-none px-page-x
+      className="sticky top-header-h z-40 bg-surface-base/95 backdrop-blur-md relative flex border-b border-border-subtle overflow-x-auto scrollbar-none px-page-x
                  [&>button:first-child]:pl-0 [&>button:last-child]:pr-0"
     >
       {tabs.map(({ id, label }) => {
@@ -718,9 +718,11 @@ export default function App() {
         date:         data.date,
         startTime:    data.startTime,
         regCloseTime: data.regCloseTime,
+        duration:     data.duration,
         guaranteed:   data.prizeType === 'GTD',
         isCompetition: data.isCompetition,
-        prizePool:    data.prizeAmount * 10_000,
+        prizePool:    data.prizeType === 'GTD'   ? data.prizeAmount * 10_000 : 0,
+        prizePercent: data.prizeType === 'ENTRY' ? data.prizePercent : 0,
         buyIn:        { amount: data.buyIn },
         region:       data.region,
         paymentMethods: data.paymentMethods,
@@ -729,7 +731,6 @@ export default function App() {
         promotions:   data.events.map((title) => ({ title })),
         seats,
       };
-      if (data.regCloseTime)            patch.duration  = data.regCloseTime;
       if (data.posterUrl !== undefined) patch.posterUrl = data.posterUrl;
 
       setSchedules((prev) => prev.map((s) =>
@@ -756,12 +757,13 @@ export default function App() {
       region:         data.region,
       date:           data.date,
       startTime:      data.startTime,
-      duration:       data.regCloseTime || '',
+      duration:       data.duration,
       regCloseTime:   data.regCloseTime,
       format:         'MTT',
       guaranteed:     data.prizeType === 'GTD',
       isCompetition:  data.isCompetition,
-      prizePool:      data.prizeAmount * 10_000,
+      prizePool:      data.prizeType === 'GTD'   ? data.prizeAmount * 10_000 : 0,
+      prizePercent:   data.prizeType === 'ENTRY' ? data.prizePercent : undefined,
       buyIn:          { amount: data.buyIn },
       paymentMethods: data.paymentMethods,
       partners:       data.partners,
@@ -779,6 +781,7 @@ export default function App() {
   }, [user, venues, toast, reloadSchedules]);
 
   // 일정탐색(browse) 상단 공지 — 전체('all') 공지만 노출(게시판/딜러/장터 전용 공지는 제외)
+  const [noticesOpen, setNoticesOpen] = useState(true);
   const browseNotices = useMemo(
     () => notices.filter((n) => !n.board || n.board === 'all'),
     [notices],
@@ -823,17 +826,27 @@ export default function App() {
             <div className="px-page-x pt-3">
               <section className="rounded-card border border-gold-400/30 bg-gradient-to-br from-gold-300/[0.05] to-transparent overflow-hidden">
                 <header className="flex items-center justify-between px-3 py-2 border-b border-gold-400/20">
-                  <h2 className="text-xs font-bold text-gold-300">
+                  <button
+                    type="button"
+                    onClick={() => setNoticesOpen((v) => !v)}
+                    aria-expanded={noticesOpen}
+                    className="flex items-center gap-1.5 text-xs font-bold text-gold-300 focus:outline-none"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                      strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden
+                      className={['transition-transform duration-200', noticesOpen ? '' : '-rotate-90'].join(' ')}>
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
                     공지사항 {browseNotices.length > 0 && <span className="text-2xs text-ink-muted font-normal">({browseNotices.length})</span>}
-                  </h2>
+                  </button>
                   {isAdmin && (
                     <button type="button" onClick={() => setNoticeFormOpen(true)} className="text-2xs text-gold-300 hover:text-gold-200 font-semibold">
                       + 공지 작성
                     </button>
                   )}
                 </header>
-                {browseNotices.length > 0 ? (
-                  <ul>
+                {noticesOpen && (browseNotices.length > 0 ? (
+                  <ul className="animate-slide-up">
                     {browseNotices.slice(0, 3).map((n) => (
                       <li key={n.id}>
                         <button
@@ -849,7 +862,7 @@ export default function App() {
                   </ul>
                 ) : (
                   <p className="px-3 py-3 text-center text-2xs text-ink-muted">등록된 공지가 없습니다</p>
-                )}
+                ))}
               </section>
             </div>
           )}

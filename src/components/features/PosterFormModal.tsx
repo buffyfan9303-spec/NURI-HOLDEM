@@ -23,8 +23,10 @@ export interface PosterFormData {
   date: string;
   startTime: string;
   regCloseTime: string;
+  duration: string;               // 듀레이션(블라인드/총 진행 시간 등) — 직접 입력
   prizeType: 'GTD' | 'ENTRY';
-  prizeAmount: number;
+  prizeAmount: number;            // GTD: 보장 상금(만원)
+  prizePercent: number;           // ENTRY: 프라이즈 비율(%)
   buyIn: number;
   region: string;
   isCompetition: boolean; // '대회/이벤트' 분류 (Task 3) — 필터 [대회]에 노출
@@ -54,8 +56,8 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
 
   const empty: PosterFormData = {
     title: '', date: new Date().toISOString().slice(0, 10),
-    startTime: '19:00', regCloseTime: '',
-    prizeType: 'GTD', prizeAmount: 0, buyIn: 0, region: '',
+    startTime: '19:00', regCloseTime: '', duration: '',
+    prizeType: 'GTD', prizeAmount: 0, prizePercent: 0, buyIn: 0, region: '',
     isCompetition: false,
     paymentMethods: ['현금'], partners: [], prizes: [],
     rankingPrizes: [], events: [],
@@ -76,9 +78,11 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
       setForm({
         id: schedule.id, title: schedule.title, date: schedule.date,
         startTime: schedule.startTime,
-        regCloseTime: schedule.regCloseTime ?? schedule.duration ?? '',
+        regCloseTime: schedule.regCloseTime ?? '',
+        duration: schedule.duration ?? '',
         prizeType: schedule.guaranteed ? 'GTD' : 'ENTRY',
         prizeAmount: schedule.prizePool ? Math.round(schedule.prizePool / 10000) : 0,
+        prizePercent: schedule.prizePercent ?? 0,
         buyIn: schedule.buyIn.amount, region: schedule.region,
         isCompetition: schedule.isCompetition ?? false,
         paymentMethods: schedule.paymentMethods ?? ['현금'],
@@ -127,7 +131,8 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
     if (!form.title.trim())     return toast.show('게임 이름을 입력해 주세요', 'error');
     if (!form.region.trim())    return toast.show('지역을 선택해 주세요', 'error');
     if (form.buyIn <= 0)        return toast.show('바이인 금액을 입력해 주세요', 'error');
-    if (form.prizeAmount <= 0)  return toast.show('상금 금액을 입력해 주세요', 'error');
+    if (form.prizeType === 'GTD'   && form.prizeAmount <= 0)  return toast.show('보장 상금 금액을 입력해 주세요', 'error');
+    if (form.prizeType === 'ENTRY' && form.prizePercent <= 0) return toast.show('프라이즈 비율(%)을 입력해 주세요', 'error');
     const regClose = [regLevel.trim() ? `${regLevel.trim()}LV` : '', regTime.trim()].filter(Boolean).join(' ');
     if (!regClose)              return toast.show('레지마감은 레벨 또는 시간 중 하나 이상 입력해 주세요', 'error');
 
@@ -269,6 +274,13 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
           )}
         </FieldWrap>
 
+        {/* 듀레이션 — 블라인드/총 진행 시간 등 (포스터 정보) */}
+        <FieldWrap label="듀레이션">
+          <input type="text" value={form.duration}
+            onChange={(e) => update('duration', e.target.value)}
+            placeholder="예: 25/15분 (블라인드) 또는 약 5시간" className="input" />
+        </FieldWrap>
+
         {/* 상금 형태 */}
         <FieldWrap label="상금 형태" required>
           <div className="grid grid-cols-2 gap-2">
@@ -281,10 +293,17 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
 
         {/* 상금 + 바이인 */}
         <div className="grid grid-cols-2 gap-2">
-          <FieldWrap label={form.prizeType === 'GTD' ? '보장 상금' : '예상 상금'} suffix="만원" required>
-            <input type="number" required min={0} value={form.prizeAmount || ''}
-              onChange={(e) => update('prizeAmount', Number(e.target.value))} placeholder="1100" className="input" />
-          </FieldWrap>
+          {form.prizeType === 'GTD' ? (
+            <FieldWrap label="보장 상금" suffix="만원" required>
+              <input type="number" required min={0} value={form.prizeAmount || ''}
+                onChange={(e) => update('prizeAmount', Number(e.target.value))} placeholder="1100" className="input" />
+            </FieldWrap>
+          ) : (
+            <FieldWrap label="프라이즈" suffix="%" required>
+              <input type="number" required min={0} max={100} value={form.prizePercent || ''}
+                onChange={(e) => update('prizePercent', Number(e.target.value))} placeholder="예: 90" className="input" />
+            </FieldWrap>
+          )}
           <FieldWrap label="바이인" suffix="원" required>
             <input type="number" required min={0} value={form.buyIn || ''}
               onChange={(e) => update('buyIn', Number(e.target.value))} placeholder="100000" className="input" />

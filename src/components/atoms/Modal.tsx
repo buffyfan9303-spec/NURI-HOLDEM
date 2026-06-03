@@ -104,9 +104,10 @@ export default function Modal({
           'flex flex-col overflow-hidden',
         ].join(' ')}
         style={{
-          maxHeight: variant === 'sheet' ? '92vh' : '85vh',
+          // 시트는 상단에 여백을 남겨(상단이 눌려 보이지 않도록) 88vh 로 제한
+          maxHeight: variant === 'sheet' ? '88vh' : '85vh',
           // fillHeight: 콘텐츠 양과 무관하게 높이 고정 (탭 전환 시 크기 변동 방지)
-          height: fillHeight ? (variant === 'sheet' ? '92vh' : '85vh') : undefined,
+          height: fillHeight ? (variant === 'sheet' ? '88vh' : '85vh') : undefined,
         }}
       >
         {/* 그립 핸들 (sheet 전용) */}

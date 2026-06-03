@@ -11,7 +11,7 @@ export interface Promotion    { badge?: string; title: string; detail?: string; 
 export interface Schedule {
   id: string; title: string; venueId: string; pubName: string; region: string; address?: string;
   date: string; startTime: string; duration: string; format: TournamentFormat;
-  guaranteed: boolean; prizePool?: number; regCloseTime?: string;
+  guaranteed: boolean; prizePool?: number; prizePercent?: number; regCloseTime?: string;
   isCompetition?: boolean; // '대회/이벤트' 분류 — 필터 [대회]용 (Task 3)
   buyIn: BuyInInfo; seats?: SeatVoucher[];
   structure?: { startingChips: number; blindLevelMinutes: number; lateRegLevels?: number; };
@@ -33,6 +33,7 @@ function rowToSchedule(r: any): Schedule {
     region: r.region, address: r.address,
     date: r.date, startTime: r.start_time, duration: r.duration ?? '',
     format: r.format, guaranteed: r.guaranteed, prizePool: r.prize_pool,
+    prizePercent: r.prize_percent ?? undefined,
     isCompetition: r.is_competition ?? false,
     regCloseTime: r.reg_close_time,
     buyIn: r.buy_in, seats: r.seats, structure: r.structure,
@@ -82,6 +83,7 @@ export async function createSchedule(
     region: payload.region, address: payload.address,
     date: payload.date, start_time: payload.startTime, duration: payload.duration,
     format: payload.format, guaranteed: payload.guaranteed, prize_pool: payload.prizePool,
+    prize_percent: payload.prizePercent ?? null,
     is_competition: payload.isCompetition ?? false,
     reg_close_time: payload.regCloseTime,
     buy_in: payload.buyIn, structure: payload.structure,
@@ -109,6 +111,7 @@ export async function updateSchedule(id: string, patch: Partial<Schedule>): Prom
     ...(patch.guaranteed    !== undefined && { guaranteed:      patch.guaranteed }),
     ...(patch.isCompetition !== undefined && { is_competition:  patch.isCompetition }),
     ...(patch.prizePool     !== undefined && { prize_pool:      patch.prizePool }),
+    ...(patch.prizePercent  !== undefined && { prize_percent:   patch.prizePercent }),
     ...(patch.buyIn         !== undefined && { buy_in:          patch.buyIn }),
     ...(patch.region        !== undefined && { region:          patch.region }),
     ...(patch.seats         !== undefined && { seats:           patch.seats }),
