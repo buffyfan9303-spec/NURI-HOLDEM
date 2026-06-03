@@ -99,11 +99,11 @@ export default function CommunityTab({
       <div className="sticky top-[calc(theme(spacing.header-h)+theme(spacing.tab-h))] z-30 -mx-page-x px-page-x bg-surface-base pt-2 pb-2 overflow-x-auto scrollbar-none">
         <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5 w-max min-w-full">
           <SectionTab active={section === 'venues'} label="홀덤펍"      onClick={() => setSection('venues')} />
-          <SectionTab active={section === 'rank'}   label="랭킹"        onClick={() => setSection('rank')} />
           <SectionTab active={section === 'live'}   label="실시간 댓글" onClick={() => setSection('live')} />
           <SectionTab active={section === 'board'}  label="게시판"      onClick={() => setSection('board')} />
           <SectionTab active={section === 'study'}  label="홀덤 공부"   onClick={() => setSection('study')} />
           <SectionTab active={section === 'dealer'} label="딜러"        onClick={() => setSection('dealer')} />
+          <SectionTab active={section === 'rank'}   label="랭킹"        onClick={() => setSection('rank')} />
           {canOwnerCommunity && (
             <SectionTab active={section === 'owner'} label="업주" onClick={() => setSection('owner')} />
           )}
@@ -169,9 +169,12 @@ function SectionTab({ active, label, onClick }: { active: boolean; label: string
   return (
     <button
       type="button"
-      onClick={onClick}
+      // 탭 시 골드 포커스링이 깜빡이지 않도록 클릭 후 포커스 해제
+      onClick={(e) => { e.currentTarget.blur(); onClick(); }}
       className={[
-        'flex-1 px-2 py-2 text-xs font-semibold rounded-[6px] transition-all focus:outline-none whitespace-nowrap',
+        'flex-1 px-2 py-2 text-xs font-semibold rounded-[6px] whitespace-nowrap',
+        'transition-colors duration-200 ease-out',
+        'focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0',
         active ? 'bg-gold-300 text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary',
       ].join(' ')}
     >

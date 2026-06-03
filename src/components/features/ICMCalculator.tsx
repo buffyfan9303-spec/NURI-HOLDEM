@@ -34,14 +34,15 @@ const MAX_PLAYERS = 10;
 
 export default function ICMCalculator() {
   const [stacks, setStacks] = useState<number[]>([5000, 3000, 2000]);
-  const [prizes, setPrizes] = useState<number[]>([50, 30, 20]);
+  const [prizes, setPrizes] = useState<number[]>([40, 24, 15, 10, 7, 4]);
 
   const equities = useMemo(() => {
     const s = stacks.map((v) => (Number.isFinite(v) && v > 0 ? v : 0));
     if (s.reduce((a, b) => a + b, 0) <= 0) return stacks.map(() => 0);
     return icmEquity(s, prizes.map((v) => (Number.isFinite(v) ? v : 0)));
   }, [stacks, prizes]);
-  const prizeTotal = prizes.reduce((a, b) => a + (Number.isFinite(b) ? b : 0), 0);
+  // 실제 지급되는 상금 합계(= 기대값 합). 상금 자리가 인원보다 많아도 % 가 100%로 합산되도록 분모로 사용.
+  const awarded = equities.reduce((a, b) => a + (Number.isFinite(b) ? b : 0), 0);
 
   const setStack = (i: number, v: number) => setStacks((p) => p.map((x, k) => (k === i ? v : x)));
   const setPrize = (i: number, v: number) => setPrizes((p) => p.map((x, k) => (k === i ? v : x)));
@@ -56,12 +57,12 @@ export default function ICMCalculator() {
       {/* 상금 구조 */}
       <div>
         <div className="flex items-center justify-between mb-1.5">
-          <span className="text-2xs font-semibold text-ink-secondary">상금 구조 <span className="text-ink-muted">(단위 자유)</span></span>
+          <span className="text-2xs font-semibold text-ink-secondary">상금 구조</span>
           <div className="inline-flex items-center gap-1.5">
-            <button type="button" aria-label="상금 자리 줄이기" onClick={() => setPrizes((p) => p.slice(0, -1))} disabled={prizes.length <= 1}
+            <button type="button" aria-label="상금 자리 줄이기" onClick={() => setPrizes((p) => p.slice(0, -1))} disabled={prizes.length <= 2}
               className="w-6 h-6 inline-flex items-center justify-center rounded-input border border-border-default bg-surface-high text-base font-bold text-ink-secondary leading-none disabled:opacity-30">−</button>
-            <span className="min-w-[2.75rem] text-center text-2xs font-bold text-ink-primary tabular-nums">{prizes.length}자리</span>
-            <button type="button" aria-label="상금 자리 늘리기" onClick={() => setPrizes((p) => [...p, 0])} disabled={prizes.length >= stacks.length}
+            <span className="min-w-[2.75rem] text-center text-2xs font-bold text-ink-primary tabular-nums">{prizes.length}명</span>
+            <button type="button" aria-label="상금 자리 늘리기" onClick={() => setPrizes((p) => [...p, 0])} disabled={prizes.length >= 20}
               className="w-6 h-6 inline-flex items-center justify-center rounded-input border border-gold-400/50 bg-gold-300/10 text-base font-bold text-gold-300 leading-none disabled:opacity-30">+</button>
           </div>
         </div>
@@ -69,8 +70,8 @@ export default function ICMCalculator() {
           {prizes.map((v, i) => (
             <label key={i} className="block">
               <span className="block text-[10px] text-ink-muted mb-0.5">{i + 1}위</span>
-              <input type="number" inputMode="decimal" value={v}
-                onChange={(e) => setPrize(i, parseFloat(e.target.value) || 0)}
+              <input type="number" inputMode="decimal" value={v === 0 ? '' : v}
+                onChange={(e) => setPrize(i, e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))}
                 className="input w-full text-sm tabular-nums" />
             </label>
           ))}
@@ -83,7 +84,7 @@ export default function ICMCalculator() {
           <span className="text-2xs font-semibold text-ink-secondary">플레이어 스택</span>
           <div className="inline-flex items-center gap-1.5">
             <button type="button" aria-label="플레이어 줄이기"
-              onClick={() => { const nextLen = stacks.length - 1; setStacks((p) => p.slice(0, -1)); setPrizes((pr) => (pr.length > nextLen ? pr.slice(0, Math.max(1, nextLen)) : pr)); }}
+              onClick={() => setStacks((p) => p.slice(0, -1))}
               disabled={stacks.length <= 2}
               className="w-6 h-6 inline-flex items-center justify-center rounded-input border border-border-default bg-surface-high text-base font-bold text-ink-secondary leading-none disabled:opacity-30">−</button>
             <span className="min-w-[2.75rem] text-center text-2xs font-bold text-ink-primary tabular-nums">{stacks.length}/{MAX_PLAYERS}명</span>
@@ -95,14 +96,14 @@ export default function ICMCalculator() {
           {stacks.map((v, i) => (
             <li key={i} className="flex items-center gap-2">
               <span className="w-6 shrink-0 text-2xs font-bold text-ink-muted tabular-nums">P{i + 1}</span>
-              <input type="number" inputMode="numeric" value={v}
-                onChange={(e) => setStack(i, parseInt(e.target.value, 10) || 0)}
+              <input type="number" inputMode="numeric" value={v === 0 ? '' : v}
+                onChange={(e) => setStack(i, e.target.value === '' ? 0 : (parseInt(e.target.value, 10) || 0))}
                 className="input flex-1 text-sm tabular-nums" placeholder="스택" />
               <span className="w-24 shrink-0 text-right text-sm font-extrabold text-gold-300 tabular-nums">
                 {equities[i] !== undefined ? equities[i].toFixed(2) : '0'}
-                {prizeTotal > 0 && (
+                {awarded > 0 && (
                   <span className="ml-1 text-2xs font-normal text-ink-muted">
-                    ({((equities[i] / prizeTotal) * 100 || 0).toFixed(1)}%)
+                    ({((equities[i] / awarded) * 100 || 0).toFixed(1)}%)
                   </span>
                 )}
               </span>
