@@ -255,6 +255,12 @@ export default function IntegratedSearchBar({
     inputRef.current?.focus();
   }, []);
 
+  // 모바일: 엔터/검색키를 누르면 입력 포커스를 해제해 키보드를 내린다(결과/포스터가 보이게).
+  const handleSubmit = useCallback((e: React.FormEvent) => {
+    e.preventDefault();
+    inputRef.current?.blur();
+  }, []);
+
   // 배열 토글 헬퍼 — 이미 있으면 제거, 없으면 추가 (복수 선택)
   const toggleInArray = (arr: string[], value: string) =>
     arr.includes(value) ? arr.filter((v) => v !== value) : [...arr, value];
@@ -283,7 +289,8 @@ export default function IntegratedSearchBar({
     <div className={['w-full', className].join(' ')}>
       {/* ── 검색창 ─────────────────────────────────────────────────────── */}
       <div className="px-page-x pt-2 pb-2">
-        <div
+        <form
+          onSubmit={handleSubmit}
           className={[
             'flex items-center gap-2 px-3',
             'bg-surface-high rounded-input h-11',
@@ -299,6 +306,7 @@ export default function IntegratedSearchBar({
             ref={inputRef}
             type="search"
             inputMode="search"
+            enterKeyHint="search"
             autoComplete="off"
             autoCorrect="off"
             spellCheck={false}
@@ -337,7 +345,7 @@ export default function IntegratedSearchBar({
               {activeCount}
             </span>
           )}
-        </div>
+        </form>
       </div>
 
       {/* ── 날짜 슬라이더 탭 (복수 선택) ─────────────────────────────────── */}
