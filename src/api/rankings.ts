@@ -51,6 +51,59 @@ export async function getVenueRankings(
   return { date: d, entries: (data ?? []).map(rowToEntry) };
 }
 
+// ── 매장 커뮤니티 누적 순위 ────────────────────────────────────────────────────
+// 머니인 순위 = 순위(등수) 점수 누적, 프라이즈 순위 = 누적 프라이즈 금액(만원)
+export interface RankingTotal {
+  nickname: string;
+  realName: string;
+  moneyPoints: number; // 머니인(순위점수) 누적
+  prizeMan: number;    // 프라이즈 누적(만원)
+  appearances: number; // 등록 횟수
+  bestPosition: number;
+}
+
+// 등수별 순위점수 — save_venue_rankings(회원 활동점수)와 동일 차등
+export function placementPoints(position: number): number {
+  switch (position) {
+    case 1: return 10; case 2: return 7; case 3: return 5;
+    case 4: return 3;  case 5: return 2; default: return 1;
+  }
+}
+
+// 프라이즈 텍스트 → 만원 숫자(만원 단위 입력 기준, 콤마/단위 제거 후 첫 숫자)
+export function parsePrizeMan(prize?: string | null): number {
+  if (!prize) return 0;
+  const m = String(prize).replace(/,/g, '').match(/\d+(?:\.\d+)?/);
+  return m ? Math.round(parseFloat(m[0])) : 0;
+}
+
+export async function getVenueRankingTotals(venueId: string): Promise<RankingTotal[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase
+    .from('venue_rankings').select('nickname, real_name, position, prize, ranking_date')
+    .eq('venue_id', venueId);
+  if (error) throw error;
+  const map = new Map<string, RankingTotal & { _lastDate: string }>();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const r of (data ?? []) as any[]) {
+    const nick = String(r.nickname ?? '').trim();
+    if (!nick) continue;
+    const key = nick.toLowerCase();
+    const cur = map.get(key) ?? {
+      nickname: nick, realName: '', moneyPoints: 0, prizeMan: 0, appearances: 0, bestPosition: 9999, _lastDate: '',
+    };
+    cur.moneyPoints += placementPoints(r.position);
+    cur.prizeMan += parsePrizeMan(r.prize);
+    cur.appearances += 1;
+    cur.bestPosition = Math.min(cur.bestPosition, r.position);
+    const d = String(r.ranking_date ?? '');
+    if (r.real_name && d >= cur._lastDate) { cur.realName = r.real_name; cur._lastDate = d; }
+    map.set(key, cur);
+  }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  return [...map.values()].map(({ _lastDate, ...rest }) => rest);
+}
+
 export async function saveVenueRankings(
   venueId: string,
   date: string,

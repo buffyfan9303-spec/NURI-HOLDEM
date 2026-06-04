@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
 import type { User, VenueInvite } from '../../api/auth';
-import { getMyVenueStaff, getMyVenueInvites, inviteStaffByEmail, cancelStaffInvite, removeStaff } from '../../api/auth';
+import { getMyVenueStaff, getMyVenueInvites, inviteStaffByEmail, cancelStaffInvite, removeStaff, setStaffTitle } from '../../api/auth';
 import { getVenueRankings, saveVenueRankings, maskRealName } from '../../api/rankings';
-import { canAccessLedger, canManagePos } from '../../api/ledger';
+import { canAccessLedger, canManagePos, getLedgerAccessUserIds, grantLedgerAccess, revokeLedgerAccess } from '../../api/ledger';
 import VenueVerificationCard from './VenueVerificationCard';
 import NuriPosLedger from './NuriPosLedger';
 import LedgerStatsPanel, { PosSettingsPanel } from './LedgerStatsPanel';
@@ -83,7 +83,7 @@ export default function VenueManageTab({ onAddPoster }: { onAddPoster?: () => vo
       )}
       {section === 'stats'    && manageOk && <LedgerStatsPanel venueId={venueId} />}
       {section === 'ranking'  && <RankingEditor venueId={venueId} canEdit={user.approved === true} draft={rankingDraft} />}
-      {section === 'staff'    && isOwner && <StaffManager />}
+      {section === 'staff'    && isOwner && <StaffManager venueId={venueId} />}
       {section === 'settings' && isOwner && <PosSettingsPanel venueId={venueId} />}
     </div>
   );
@@ -178,7 +178,7 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
       </div>
 
       <p className="text-2xs text-ink-muted">
-        <span className="text-gold-300 font-semibold">닉네임은 필수</span>, 실명·프라이즈는 선택입니다. 실명을 넣으면 손님에게는 <span className="text-gold-300 font-semibold">도토리(나*리)</span> 처럼 가려서 표시됩니다.
+        <span className="text-gold-300 font-semibold">닉네임은 필수</span>, 실명·프라이즈는 선택입니다. 프라이즈는 <span className="text-gold-300 font-semibold">만원 단위 숫자</span>로 입력하세요 — 순위는 머니인 점수, 프라이즈는 누적 금액으로 매장 커뮤니티 순위에 자동 반영됩니다. 실명을 넣으면 손님에게는 <span className="text-gold-300 font-semibold">도토리(나*리)</span> 처럼 가려서 표시됩니다.
       </p>
 
       {loading ? (
@@ -192,20 +192,20 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
                 type="text" value={row.nickname} maxLength={30}
                 onChange={(e) => update(i, 'nickname', e.target.value)}
                 placeholder="닉네임 *"
-                className="input flex-1 min-w-0 text-sm py-2"
+                className="input flex-[1.2] min-w-0 text-sm py-2"
               />
               <input
                 type="text" value={row.realName} maxLength={20}
                 onChange={(e) => update(i, 'realName', e.target.value)}
                 placeholder="실명(선택)"
-                className="input w-20 shrink-0 text-sm py-2"
+                className="input flex-1 min-w-0 text-sm py-2"
               />
               <input
-                type="text" value={row.prize} maxLength={40}
-                onChange={(e) => update(i, 'prize', e.target.value)}
+                type="text" inputMode="numeric" value={row.prize} maxLength={12}
+                onChange={(e) => update(i, 'prize', e.target.value.replace(/[^\d.]/g, ''))}
                 onKeyDown={(e) => { if (e.key === 'Enter' && i === rows.length - 1) addRow(); }}
-                placeholder="프라이즈(선택)"
-                className="input w-24 shrink-0 text-sm py-2"
+                placeholder="프라이즈(만원)"
+                className="input flex-1 min-w-0 text-sm py-2"
               />
               <button
                 type="button" onClick={() => removeRow(i)} aria-label="줄 삭제"
@@ -232,7 +232,7 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
           <div className="flex flex-wrap gap-1.5">
             {rows.filter((r) => r.nickname.trim()).map((r, i) => (
               <span key={i} className="text-2xs px-2 py-0.5 rounded-badge bg-surface-float text-ink-primary">
-                {i + 1}. {r.nickname.trim()}{r.realName.trim() ? `(${maskRealName(r.realName)})` : ''}{r.prize.trim() ? ` · ${r.prize.trim()}` : ''}
+                {i + 1}. {r.nickname.trim()}{r.realName.trim() ? `(${maskRealName(r.realName)})` : ''}{r.prize.trim() ? ` · ${r.prize.trim()}만` : ''}
               </span>
             ))}
           </div>
@@ -247,10 +247,13 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
 }
 
 // ── 직원 관리(업주) ───────────────────────────────────────────────────────────
-function StaffManager() {
+const TITLE_SUGGEST = ['매니저', '플로어', '딜러', '칩러너', '매장장', '직원'];
+
+function StaffManager({ venueId }: { venueId: string }) {
   const toast = useToast();
   const [staff, setStaff] = useState<User[]>([]);
   const [invites, setInvites] = useState<VenueInvite[]>([]);
+  const [access, setAccess] = useState<string[]>([]); // 장부·순위 권한 보유 직원 id
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState('');
   const [inviting, setInviting] = useState(false);
@@ -258,12 +261,26 @@ function StaffManager() {
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([getMyVenueStaff(), getMyVenueInvites()])
-      .then(([s, i]) => { setStaff(s); setInvites(i); })
+    Promise.all([getMyVenueStaff(), getMyVenueInvites(), getLedgerAccessUserIds(venueId)])
+      .then(([s, i, a]) => { setStaff(s); setInvites(i); setAccess(a); })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [tick]);
+  }, [tick, venueId]);
   const reload = () => setTick((t) => t + 1);
+
+  const saveTitle = async (id: string, title: string) => {
+    const prev = staff.find((s) => s.id === id)?.staffTitle ?? '';
+    if (title.trim() === prev.trim()) return;
+    setStaff((arr) => arr.map((s) => (s.id === id ? { ...s, staffTitle: title.trim() || undefined } : s)));
+    try { await setStaffTitle(id, title.trim()); }
+    catch (e) { toast.show(e instanceof Error ? e.message : '직책 저장 실패', 'error'); reload(); }
+  };
+  const toggleAccess = async (id: string) => {
+    const has = access.includes(id);
+    setAccess((a) => has ? a.filter((x) => x !== id) : [...a, id]);
+    try { if (has) await revokeLedgerAccess(venueId, id); else await grantLedgerAccess(venueId, id); }
+    catch (e) { toast.show(e instanceof Error ? e.message : '권한 변경 실패', 'error'); reload(); }
+  };
 
   const invite = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -337,23 +354,48 @@ function StaffManager() {
           {/* 구성원 목록 */}
           <div className="space-y-1.5">
             <p className="text-xs font-semibold text-ink-secondary">구성원 ({staff.length})</p>
+            <p className="text-[10px] text-ink-muted">직책은 표시용 라벨이고, <span className="text-gold-300 font-semibold">장부·순위 권한</span>은 별도로 켜야 적용됩니다. 권한 받은 직원만 장부 담당자로 지정·운영할 수 있습니다.</p>
+            <datalist id="staff-title-suggest">
+              {TITLE_SUGGEST.map((t) => <option key={t} value={t} />)}
+            </datalist>
             {staff.length === 0 ? (
               <p className="py-6 text-center text-2xs text-ink-muted">아직 구성원이 없습니다. 닉네임으로 초대해 보세요.</p>
             ) : (
               <ul className="space-y-2">
-                {staff.map((s) => (
-                  <li key={s.id} className="flex items-center gap-3 p-3 rounded-card bg-surface-low border border-border-subtle">
-                    <div className="w-9 h-9 shrink-0 rounded-full flex items-center justify-center text-xs font-bold text-white"
-                      style={{ background: s.avatarColor ?? '#5A6175' }}>
-                      {s.name[0]}
+                {staff.map((s) => {
+                  const hasAccess = access.includes(s.id);
+                  return (
+                  <li key={s.id} className="p-3 rounded-card bg-surface-low border border-border-subtle space-y-2">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 shrink-0 rounded-full flex items-center justify-center text-xs font-bold text-white"
+                        style={{ background: s.avatarColor ?? '#5A6175' }}>
+                        {s.name[0]}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="block text-sm font-semibold text-ink-primary truncate">
+                          {s.name}{s.staffTitle ? <span className="ml-1.5 text-2xs font-bold text-gold-300">· {s.staffTitle}</span> : null}
+                        </span>
+                        <p className="text-2xs text-ink-muted truncate">{s.nickname ? `@${s.nickname}` : s.email}</p>
+                      </div>
+                      <button type="button" onClick={() => remove(s)} className="text-2xs px-2 py-1 rounded-input text-ink-muted hover:text-danger-light transition-colors">제거</button>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <span className="block text-sm font-semibold text-ink-primary truncate">{s.name}</span>
-                      <p className="text-2xs text-ink-muted truncate">{s.nickname ? `@${s.nickname}` : s.email}</p>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text" defaultValue={s.staffTitle ?? ''} list="staff-title-suggest" maxLength={20}
+                        onBlur={(e) => saveTitle(s.id, e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                        placeholder="직책 (매니저·딜러 등)"
+                        className="input flex-1 min-w-0 text-xs py-1.5"
+                      />
+                      <button type="button" onClick={() => toggleAccess(s.id)}
+                        className={['shrink-0 text-2xs font-bold px-2.5 py-1.5 rounded-badge border transition-colors',
+                          hasAccess ? 'bg-gold-300/15 text-gold-300 border-gold-400/40' : 'bg-surface-float text-ink-muted border-border-default'].join(' ')}>
+                        장부·순위 {hasAccess ? '권한 ✓' : '권한 없음'}
+                      </button>
                     </div>
-                    <button type="button" onClick={() => remove(s)} className="text-2xs px-2 py-1 rounded-input text-ink-muted hover:text-danger-light transition-colors">제거</button>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             )}
           </div>

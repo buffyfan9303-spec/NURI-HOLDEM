@@ -25,6 +25,7 @@ export interface User {
   venueVerified?: boolean;  // 업주 본인 매장이 인증(verified)인지 — 업주 커뮤니티 게이트
   activityPoints?: number;  // 활동 점수(배드빗/굿런 받은 수)
   badges?: string[];        // 획득 뱃지
+  staffTitle?: string;      // 직원 직책(매니저·딜러·플로어 등) — 권한과 분리, 업주가 지정
 }
 
 export interface LoginPayload { email: string; password: string; }
@@ -65,6 +66,7 @@ function rowToUser(row: any): User {
     nameChangedAt:  row.name_changed_at ?? undefined,
     activityPoints: row.activity_points ?? 0,
     badges:         row.badges ?? [],
+    staffTitle:     row.staff_title ?? undefined,
   };
 }
 
@@ -192,6 +194,12 @@ export async function cancelStaffInvite(inviteId: string): Promise<void> {
 export async function removeStaff(staffId: string): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.rpc('manage_staff', { p_staff_id: staffId, p_action: 'remove' });
+  if (error) throw error;
+}
+// 업주: 직원 직책(라벨) 지정 — 권한과 별개
+export async function setStaffTitle(staffId: string, title: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('set_staff_title', { p_staff_id: staffId, p_title: title });
   if (error) throw error;
 }
 

@@ -9,7 +9,7 @@ import type { MarketplaceNotice } from '../../api/marketplace';
 import { useAuth } from '../../contexts/AuthContext';
 import { followVenue, unfollowVenue, getMyFollowedVenueIds, updateVenueAddress } from '../../api/community';
 import { getVenueNotices, createVenueNotice, deleteVenueNotice, type VenueNotice } from '../../api/community';
-import { getVenueRankings, maskRealName, type RankingEntry } from '../../api/rankings';
+import { getVenueRankings, getVenueRankingTotals, maskRealName, type RankingEntry, type RankingTotal } from '../../api/rankings';
 import { uploadVenueImages } from '../../lib/storage';
 
 interface VenuePageProps {
@@ -462,50 +462,96 @@ function HeroSection({
 // ── 팔로우 버튼 ────────────────────────────────────────────────────────────
 
 function VenueRankingPanel({ venueId }: { venueId: string }) {
-  const [data, setData] = useState<{ date: string | null; entries: RankingEntry[] }>({ date: null, entries: [] });
+  const [metric, setMetric] = useState<'money' | 'prize'>('money');
+  const [totals, setTotals] = useState<RankingTotal[]>([]);
+  const [latest, setLatest] = useState<{ date: string | null; entries: RankingEntry[] }>({ date: null, entries: [] });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
-    getVenueRankings(venueId)
-      .then((d) => { if (active) setData(d); })
+    Promise.all([getVenueRankingTotals(venueId), getVenueRankings(venueId)])
+      .then(([t, d]) => { if (active) { setTotals(t); setLatest(d); } })
       .catch(() => {})
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [venueId]);
 
+  const sorted = useMemo(() => {
+    const arr = [...totals];
+    arr.sort((a, b) => metric === 'money'
+      ? (b.moneyPoints - a.moneyPoints) || (b.prizeMan - a.prizeMan)
+      : (b.prizeMan - a.prizeMan) || (b.moneyPoints - a.moneyPoints));
+    return arr;
+  }, [totals, metric]);
+
   if (loading) return <p className="text-center py-10 text-xs text-ink-muted">불러오는 중...</p>;
-  if (!data.date || data.entries.length === 0) {
+  if (totals.length === 0) {
     return (
       <div className="py-12 text-center text-ink-muted">
         <p className="text-sm">아직 등록된 순위가 없습니다.</p>
-        <p className="text-2xs mt-1">매장에서 매일 순위를 등록합니다.</p>
+        <p className="text-2xs mt-1">매장에서 순위를 등록하면 누적 랭킹이 자동 집계됩니다.</p>
       </div>
     );
   }
 
+  const medalCls = (i: number) => i === 0 ? 'bg-gold-300 text-ink-inverse'
+    : i === 1 ? 'bg-slate-300 text-ink-inverse'
+    : i === 2 ? 'bg-amber-700 text-white' : 'bg-surface-float text-ink-secondary';
+
   return (
     <div className="space-y-3">
-      <p className="text-2xs text-ink-muted">{data.date} 기준</p>
+      {/* 누적 랭킹 종류 토글 */}
+      <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5">
+        {([['money', '머니인 순위'], ['prize', '프라이즈 순위']] as const).map(([id, label]) => (
+          <button key={id} type="button" onClick={() => setMetric(id)}
+            className={['flex-1 py-1.5 text-xs font-bold rounded-[6px] transition-colors',
+              metric === id ? 'bg-gold-300 text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
+            {label}
+          </button>
+        ))}
+      </div>
+      <p className="text-2xs text-ink-muted">
+        {metric === 'money'
+          ? '등수 점수 누적 (1등 10 · 2등 7 · 3등 5 · 4등 3 · 5등 2 · 그 외 1점)'
+          : '누적 프라이즈 금액(만원) 순'}
+      </p>
+
       <ol className="space-y-1.5">
-        {data.entries.map((e) => {
+        {sorted.slice(0, 50).map((e, i) => {
           const masked = maskRealName(e.realName);
-          const medal = e.position === 1 ? 'bg-gold-300 text-ink-inverse'
-                      : e.position === 2 ? 'bg-slate-300 text-ink-inverse'
-                      : e.position === 3 ? 'bg-amber-700 text-white'
-                      : 'bg-surface-float text-ink-secondary';
+          const val = metric === 'money' ? `${e.moneyPoints.toLocaleString()}점` : `${e.prizeMan.toLocaleString()}만`;
           return (
-            <li key={e.position} className="flex items-center gap-3 p-2.5 rounded-input bg-surface-high border border-border-subtle">
-              <span className={['w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-2xs font-bold tabular-nums', medal].join(' ')}>
-                {e.position}
+            <li key={e.nickname} className="flex items-center gap-3 p-2.5 rounded-input bg-surface-high border border-border-subtle">
+              <span className={['w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-2xs font-bold tabular-nums', medalCls(i)].join(' ')}>
+                {i + 1}
               </span>
               <span className="text-sm font-semibold text-ink-primary truncate">{e.nickname}</span>
               {masked && <span className="text-2xs text-ink-muted">({masked})</span>}
+              <span className="ml-auto shrink-0 text-right">
+                <span className={['text-sm font-bold tabular-nums', metric === 'prize' ? 'text-emerald-400' : 'text-gold-300'].join(' ')}>{val}</span>
+                <span className="block text-[10px] text-ink-muted">{e.appearances}회 · 최고 {e.bestPosition}등</span>
+              </span>
             </li>
           );
         })}
       </ol>
+
+      {latest.date && latest.entries.length > 0 && (
+        <div className="pt-2 border-t border-border-subtle">
+          <p className="text-2xs font-semibold text-ink-secondary mb-1.5">최근 등록 · {latest.date}</p>
+          <div className="flex flex-wrap gap-1.5">
+            {latest.entries.map((e) => {
+              const masked = maskRealName(e.realName);
+              return (
+                <span key={e.position} className="text-2xs px-2 py-0.5 rounded-badge bg-surface-float text-ink-primary">
+                  {e.position}. {e.nickname}{masked ? `(${masked})` : ''}{e.prize ? ` · ${e.prize}만` : ''}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

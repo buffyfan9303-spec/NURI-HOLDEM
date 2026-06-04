@@ -65,6 +65,8 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const [mode, setMode]           = useState<'list' | 'board'>('list');
   const [sessionList, setSessionList] = useState<LedgerSessionListItem[]>([]);
   const [listLoading, setListLoading] = useState(true);
+  const [listQuery, setListQuery] = useState('');
+  const [listDate, setListDate] = useState(today);
   const [venueSchedules, setVenueSchedules] = useState<Schedule[]>([]);
 
   useEffect(() => {
@@ -77,7 +79,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const operatorOptions = useMemo(() => {
     const opts: { id: string; label: string }[] = [];
     if (user) opts.push({ id: user.id, label: `${user.name}${isAdmin ? ' (운영자)' : ' (업주/나)'}` });
-    for (const s of staff) if (s.id !== user?.id) opts.push({ id: s.id, label: `${s.name}${s.nickname ? ` · @${s.nickname}` : ''}` });
+    for (const s of staff) if (s.id !== user?.id) opts.push({ id: s.id, label: `${s.name}${s.staffTitle ? ` · ${s.staffTitle}` : ''}${s.nickname ? ` · @${s.nickname}` : ''}` });
     return opts;
   }, [user, staff, isAdmin]);
   const operatorName2 = (id?: string | null) => operatorOptions.find((o) => o.id === id)?.label ?? operatorName;
@@ -190,6 +192,10 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   if (mode === 'list') {
     const todayStr = today();
     const hasToday = sessionList.some((s) => s.sessionDate === todayStr);
+    const lq = listQuery.trim().toLowerCase();
+    const filtered = lq
+      ? sessionList.filter((s) => `${s.sessionDate} ${s.title ?? ''}`.toLowerCase().includes(lq))
+      : sessionList;
     return (
       <div className="space-y-3 pb-6">
         <div className="flex items-center justify-between gap-2">
@@ -198,13 +204,28 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
             {hasToday ? '오늘 장부 열기' : '+ 오늘 게임 시작'}
           </button>
         </div>
+
+        {/* 장부 검색 */}
+        <div className="relative">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+          <input value={listQuery} onChange={(e) => setListQuery(e.target.value)} placeholder="장부 검색 (날짜·게임명)" className="input w-full text-sm pl-9" />
+        </div>
+
+        {/* 다른 날짜로 장부 추가/열기 */}
+        <div className="flex items-center gap-2">
+          <input type="date" value={listDate} max={todayStr} onChange={(e) => setListDate(e.target.value || todayStr)} className="input flex-1 text-sm" />
+          <button type="button" onClick={() => openBoard(listDate)} className="btn-ghost text-xs px-3 shrink-0 whitespace-nowrap">＋ 해당 날짜 장부</button>
+        </div>
+
         {listLoading ? (
           <p className="py-10 text-center text-xs text-ink-muted">불러오는 중…</p>
         ) : sessionList.length === 0 ? (
           <p className="py-10 text-center text-xs text-ink-muted">아직 작성한 장부가 없습니다. "오늘 게임 시작"으로 첫 장부를 여세요.</p>
+        ) : filtered.length === 0 ? (
+          <p className="py-10 text-center text-xs text-ink-muted">"{listQuery.trim()}" 검색 결과가 없습니다.</p>
         ) : (
           <ul className="space-y-1.5">
-            {sessionList.map((s, i) => (
+            {filtered.map((s, i) => (
               <li key={s.sessionDate}>
                 <button type="button" onClick={() => openBoard(s.sessionDate)}
                   className="w-full flex items-center gap-3 px-3 py-2.5 rounded-card border border-border-subtle bg-surface-low hover:border-gold-400/40 hover:bg-surface-high transition-colors text-left">

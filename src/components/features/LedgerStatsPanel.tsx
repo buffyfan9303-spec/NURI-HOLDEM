@@ -2,13 +2,10 @@
 // 업주 전용 — 기간 통계(오늘/주/월/전체/요일평균, 할인 반영) + POS 설정.
 import { useEffect, useMemo, useState } from 'react';
 import { useToast } from '../atoms/Toast';
-import type { User } from '../../api/auth';
-import { getMyVenueStaff } from '../../api/auth';
 import {
   type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type VisitorType,
   wonToMan, buyinFinance, getLedgerRange, getLedgerPlayers,
   posHasPassword, setPosCancelPassword,
-  getLedgerAccessUserIds, grantLedgerAccess, revokeLedgerAccess,
 } from '../../api/ledger';
 
 const todayStr = () => new Date().toLocaleDateString('en-CA');
@@ -270,15 +267,9 @@ export function PosSettingsPanel({ venueId }: { venueId: string }) {
   const [pw, setPw]       = useState('');
   const [pw2, setPw2]     = useState('');
   const [saving, setSaving] = useState(false);
-  const [staff, setStaff]   = useState<User[]>([]);
-  const [access, setAccess] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([posHasPassword(venueId), getMyVenueStaff(), getLedgerAccessUserIds(venueId)])
-      .then(([h, s, a]) => { setHasPw(h); setStaff(s); setAccess(a); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    posHasPassword(venueId).then(setHasPw).catch(() => {});
   }, [venueId]);
 
   const savePw = async () => {
@@ -288,14 +279,6 @@ export function PosSettingsPanel({ venueId }: { venueId: string }) {
     try { await setPosCancelPassword(venueId, pw); setHasPw(true); setPw(''); setPw2(''); toast.show('취소 비밀번호를 설정했습니다', 'success'); }
     catch (e) { toast.show(e instanceof Error ? e.message : '실패했습니다', 'error'); }
     finally { setSaving(false); }
-  };
-
-  const toggleAccess = async (u: User) => {
-    const has = access.includes(u.id);
-    try {
-      if (has) { await revokeLedgerAccess(venueId, u.id); setAccess((a) => a.filter((x) => x !== u.id)); }
-      else     { await grantLedgerAccess(venueId, u.id); setAccess((a) => [...a, u.id]); }
-    } catch (e) { toast.show(e instanceof Error ? e.message : '실패했습니다', 'error'); }
   };
 
   return (
@@ -309,31 +292,7 @@ export function PosSettingsPanel({ venueId }: { venueId: string }) {
         </div>
         <button type="button" onClick={savePw} disabled={saving || !pw} className="btn-primary text-xs w-full disabled:opacity-50">{hasPw ? '비밀번호 변경' : '비밀번호 설정'}</button>
       </div>
-      <div className="space-y-1.5 pt-1 border-t border-border-subtle">
-        <p className="text-2xs font-semibold text-ink-secondary">직원 장부·순위 접근 권한 (선별 부여)</p>
-        {loading ? (
-          <p className="text-center py-2 text-2xs text-ink-muted">불러오는 중…</p>
-        ) : staff.length === 0 ? (
-          <p className="text-2xs text-ink-muted">등록된 직원(구성원)이 없습니다. "직원 관리"에서 먼저 초대하세요.</p>
-        ) : (
-          <ul className="space-y-1">
-            {staff.map((u) => {
-              const on = access.includes(u.id);
-              return (
-                <li key={u.id} className="flex items-center gap-2 px-2 py-1.5 rounded-input bg-surface-high border border-border-subtle">
-                  <span className="flex-1 text-xs font-semibold text-ink-primary truncate">{u.name}{u.nickname ? ` · @${u.nickname}` : ''}</span>
-                  <button type="button" onClick={() => toggleAccess(u)}
-                    className={['text-2xs font-bold px-2.5 py-1 rounded-badge border transition-colors',
-                      on ? 'bg-gold-300/15 text-gold-300 border-gold-400/40' : 'bg-surface-float text-ink-muted border-border-default'].join(' ')}>
-                    {on ? '권한 있음' : '권한 없음'}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-        <p className="text-[10px] text-ink-muted">통계는 업주만, 장부·순위 입력은 권한을 받은 직원만 가능합니다.</p>
-      </div>
+      <p className="text-[10px] text-ink-muted pt-1 border-t border-border-subtle">통계는 업주만 볼 수 있습니다. 직원의 <span className="text-gold-300 font-semibold">장부·순위 권한과 직책</span>은 「직원 관리」 탭에서 설정하세요.</p>
     </section>
   );
 }
