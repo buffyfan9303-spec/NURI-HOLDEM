@@ -56,7 +56,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
   const isAdmin = user?.role === 'admin';
 
   const empty: PosterFormData = {
-    title: '', date: new Date().toISOString().slice(0, 10),
+    title: '', date: new Date().toLocaleDateString('en-CA'),
     startTime: '19:00', regCloseTime: '', duration: '', blinds: '',
     prizeType: 'GTD', prizeAmount: 0, prizePercent: 0, buyIn: 0, region: '',
     isCompetition: false,

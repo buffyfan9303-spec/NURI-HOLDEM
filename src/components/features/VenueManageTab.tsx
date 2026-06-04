@@ -96,7 +96,7 @@ const emptyRow = (): Row => ({ nickname: '', realName: '', prize: '' });
 
 function RankingEditor({ venueId, canEdit }: { venueId: string; canEdit: boolean }) {
   const toast = useToast();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Date().toLocaleDateString('en-CA'); // 로컬 날짜 — UTC 자정 넘김 방지
   const [date, setDate] = useState(today);
   const [rows, setRows] = useState<Row[]>([emptyRow()]);
   const [loading, setLoading] = useState(true);

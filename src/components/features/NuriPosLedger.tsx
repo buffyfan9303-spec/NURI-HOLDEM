@@ -16,7 +16,7 @@ import {
 } from '../../api/ledger';
 import { exportLedgerXls } from '../../lib/ledgerExport';
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => new Date().toLocaleDateString('en-CA'); // 로컬 날짜 — UTC 자정 넘김 방지
 
 const METHOD_SHORT: Record<PaymentMethod, string> = { ticket: 'T', cash: '현', transfer: '이', card: '카', support: '지원' };
 // 유형 빠른 선택(고정) + 직접입력은 별도

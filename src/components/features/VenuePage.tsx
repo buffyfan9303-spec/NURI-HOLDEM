@@ -100,7 +100,7 @@ export default function VenuePage({
   );
   // 금일 포스터 — 오늘 날짜(YYYY-MM-DD)와 일치하는 매장 포스터
   const todayPosters = useMemo(() => {
-    const todayIso = new Date().toISOString().slice(0, 10);
+    const todayIso = new Date().toLocaleDateString('en-CA');
     return venueSchedules.filter((s) => s.date === todayIso);
   }, [venueSchedules]);
 

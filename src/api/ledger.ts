@@ -58,7 +58,7 @@ export interface LedgerPlayer {
   sortOrder: number;
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => new Date().toLocaleDateString('en-CA'); // 로컬 날짜(YYYY-MM-DD) — UTC 자정 넘김 방지
 
 /** 카드 결제에 적용할 단가(카드단가 미설정 시 현금단가) */
 export function cardUnit(s: { buyinAmount: number; cardAmount: number | null }): number {

@@ -31,7 +31,7 @@ function buildDateSlots(count = 14) {
     const d = new Date(today);
     d.setDate(today.getDate() + i);
     return {
-      iso:   d.toISOString().slice(0, 10),
+      iso:   d.toLocaleDateString('en-CA'),
       month: d.getMonth() + 1,
       day:   d.getDate(),
       dow:   DAYS_KO[d.getDay()],
