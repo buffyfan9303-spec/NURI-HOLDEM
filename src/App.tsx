@@ -286,6 +286,7 @@ function TabBar({
   return (
     <div
       ref={containerRef}
+      data-stack-tabbar=""
       className="sticky top-header-h z-40 bg-surface-base relative flex border-b border-border-subtle overflow-x-auto scrollbar-none px-page-x
                  [&>button:first-child]:pl-0 [&>button:last-child]:pr-0"
     >
@@ -415,6 +416,21 @@ export default function App() {
     reloadNotices();
     getListings().then(setListings).catch(() => {});
   }, [reloadSchedules, reloadVenues, reloadPosts, reloadComments, reloadNotices]);
+
+  // 헤더+탭바 실제 높이를 측정 → 일정탐색 sticky 필터가 정확히 그 아래에 붙도록 --stack-top 노출.
+  // (토큰 추정/-1rem 보정 대신 실측값을 사용해 모바일 sticky 겹침을 방지)
+  useEffect(() => {
+    const update = () => {
+      const header = document.querySelector('header');
+      const tabbar = document.querySelector('[data-stack-tabbar]');
+      const h = (header?.getBoundingClientRect().height ?? 56) + (tabbar?.getBoundingClientRect().height ?? 44);
+      document.documentElement.style.setProperty('--stack-top', `${Math.round(h)}px`);
+    };
+    update();
+    window.addEventListener('resize', update);
+    const t = setTimeout(update, 300); // 폰트/레이아웃 안정화 후 재측정
+    return () => { window.removeEventListener('resize', update); clearTimeout(t); };
+  }, [activeTab]);
 
   // 로그인 사용자: 내 알림 로드
   useEffect(() => {
@@ -835,7 +851,10 @@ export default function App() {
 
       {activeTab === 'browse' && (
         <main>
-          <div className="sticky top-[calc(theme(spacing.header-h)+theme(spacing.tab-h)-1rem)] z-30 bg-surface-base border-b border-border-subtle pt-6 pb-3">
+          <div
+            className="sticky z-30 bg-surface-base border-b border-border-subtle pt-3 pb-3"
+            style={{ top: 'var(--stack-top, calc(3.5rem + 2.5625rem))' }}
+          >
             <IntegratedSearchBar onChange={setSearchState} />
             {/* 뷰 모드 토글 — 일정 탐색 컨텍스트 안에 배치 */}
             <div className="flex items-center justify-between px-page-x pt-2">
