@@ -12,7 +12,7 @@ import {
   setRegistrationClosed, getLastLedgerSettings, getLedgerSessionList,
   getLedgerBuyins, upsertBuyin, upsertBuyinSplit, cancelBuyin,
   getLedgerPlayers, addLedgerPlayer, updateLedgerPlayer, removeLedgerPlayer,
-  subscribeLedger, posHasPassword,
+  subscribeLedger, posHasPassword, getLedgerPresets, type LedgerPreset,
 } from '../../api/ledger';
 import { exportLedgerXls } from '../../lib/ledgerExport';
 import { getSchedules, type Schedule } from '../../api/schedules';
@@ -66,11 +66,13 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const [sessionList, setSessionList] = useState<LedgerSessionListItem[]>([]);
   const [listLoading, setListLoading] = useState(true);
   const [listQuery, setListQuery] = useState('');
-  const [listDate, setListDate] = useState(today);
+  const [filterDate, setFilterDate] = useState(''); // 날짜 필터(선택 시 그 날짜 장부만 표시)
+  const [presets, setPresets] = useState<LedgerPreset[]>([]);
   const [venueSchedules, setVenueSchedules] = useState<Schedule[]>([]);
 
   useEffect(() => {
     getSchedules().then((all) => setVenueSchedules(all.filter((s) => s.venueId === venueId))).catch(() => {});
+    getLedgerPresets(venueId).then(setPresets).catch(() => {});
   }, [venueId]);
   const scheduleTitle = (id?: string | null) => venueSchedules.find((s) => s.id === id)?.title ?? null;
 
@@ -191,18 +193,17 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   // ── 게임(세션) 리스트 — 장부 진입 첫 화면 ──────────────────────────────────
   if (mode === 'list') {
     const todayStr = today();
-    const hasToday = sessionList.some((s) => s.sessionDate === todayStr);
     const lq = listQuery.trim().toLowerCase();
-    const filtered = lq
-      ? sessionList.filter((s) => `${s.sessionDate} ${s.title ?? ''}`.toLowerCase().includes(lq))
-      : sessionList;
+    const filtered = sessionList.filter((s) => {
+      if (filterDate && s.sessionDate !== filterDate) return false;
+      if (lq && !`${s.sessionDate} ${s.title ?? ''}`.toLowerCase().includes(lq)) return false;
+      return true;
+    });
     return (
       <div className="space-y-3 pb-6">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-base font-bold text-ink-primary">장부</h2>
-          <button type="button" onClick={() => openBoard(todayStr)} className="btn-primary text-xs px-3 shrink-0">
-            {hasToday ? '오늘 장부 열기' : '+ 오늘 게임 시작'}
-          </button>
+          <button type="button" onClick={() => openBoard(todayStr)} className="btn-primary text-xs px-3 shrink-0">+ 장부 추가</button>
         </div>
 
         {/* 장부 검색 */}
@@ -211,18 +212,20 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
           <input value={listQuery} onChange={(e) => setListQuery(e.target.value)} placeholder="장부 검색 (날짜·게임명)" className="input w-full text-sm pl-9" />
         </div>
 
-        {/* 다른 날짜로 장부 추가/열기 */}
+        {/* 날짜로 보기 — 선택한 날짜의 장부만 표시(필터) */}
         <div className="flex items-center gap-2">
-          <input type="date" value={listDate} max={todayStr} onChange={(e) => setListDate(e.target.value || todayStr)} className="input flex-1 text-sm" />
-          <button type="button" onClick={() => openBoard(listDate)} className="btn-ghost text-xs px-3 shrink-0 whitespace-nowrap">＋ 해당 날짜 장부</button>
+          <input type="date" value={filterDate} max={todayStr} onChange={(e) => setFilterDate(e.target.value)} className="input flex-1 text-sm" aria-label="날짜로 장부 보기" />
+          {filterDate
+            ? <button type="button" onClick={() => setFilterDate('')} className="btn-ghost text-xs px-3 shrink-0 whitespace-nowrap">전체 보기</button>
+            : <span className="text-2xs text-ink-muted shrink-0 px-1 whitespace-nowrap">날짜 선택 시 그 날만</span>}
         </div>
 
         {listLoading ? (
           <p className="py-10 text-center text-xs text-ink-muted">불러오는 중…</p>
         ) : sessionList.length === 0 ? (
-          <p className="py-10 text-center text-xs text-ink-muted">아직 작성한 장부가 없습니다. "오늘 게임 시작"으로 첫 장부를 여세요.</p>
+          <p className="py-10 text-center text-xs text-ink-muted">아직 작성한 장부가 없습니다. "+ 장부 추가"로 첫 장부를 여세요.</p>
         ) : filtered.length === 0 ? (
-          <p className="py-10 text-center text-xs text-ink-muted">"{listQuery.trim()}" 검색 결과가 없습니다.</p>
+          <p className="py-10 text-center text-xs text-ink-muted">{filterDate ? `${filterDate} 에 작성된 장부가 없습니다.` : `"${listQuery.trim()}" 검색 결과가 없습니다.`}</p>
         ) : (
           <ul className="space-y-1.5">
             {filtered.map((s, i) => (
@@ -267,6 +270,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
           <SessionForm
             base={{ ...session, ...(prefill ?? {}) }} mode="open" operatorName={operatorName}
             prefilled={!!prefill} schedules={venueSchedules} operatorOptions={operatorOptions}
+            presets={presets}
             onSubmit={handleOpen}
           />
         )}
@@ -631,10 +635,10 @@ function Metric({ label, value, tone }: { label: string; value: string; tone?: '
 }
 
 // ── 세션 설정 폼 (입장/수정 공용) ─────────────────────────────────────────────
-function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, prefilled, schedules = [], operatorOptions = [] }: {
+function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, prefilled, schedules = [], operatorOptions = [], presets = [] }: {
   base: LedgerSession; mode: 'open' | 'edit'; operatorName: string;
   onSubmit: (s: LedgerSession) => void; onCancel?: () => void; embedded?: boolean; prefilled?: boolean;
-  schedules?: Schedule[]; operatorOptions?: { id: string; label: string }[];
+  schedules?: Schedule[]; operatorOptions?: { id: string; label: string }[]; presets?: LedgerPreset[];
 }) {
   const [title, setTitle]     = useState(base.title ?? '');
   const [cash, setCash]       = useState<number>(base.buyinAmount || 0);
@@ -650,6 +654,17 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
     setDiscs((arr) => arr.map((d, idx) => (idx === i ? { ...d, ...patch } : d)));
   const addDisc = () => setDiscs((arr) => (arr.length < 5 ? [...arr, { label: '', amount: 0 }] : arr));
   const removeDisc = (i: number) => setDiscs((arr) => arr.filter((_, idx) => idx !== i));
+
+  // 프리셋 게임 클릭 → 아래 내용 자동입력(수정 가능). 담당직원(operId)은 프리셋과 무관 → 그대로 유지.
+  const applyPreset = (p: LedgerPreset) => {
+    setTitle(p.title);
+    setCash(p.buyinAmount || 0);
+    setCard(p.cardAmount ?? 0);
+    setTarget(p.targetEntries || 0);
+    setDealers(p.dealers ?? '');
+    setEvent(p.eventMemo ?? '');
+    setDiscs(p.discounts ?? []);
+  };
 
   const submit = () => {
     if (cash <= 0) return;
@@ -670,6 +685,21 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
           <p className="text-2xs text-ink-muted mt-0.5">담당직원: <b className="text-ink-secondary">{operatorName}</b> · 아래 정보를 입력 후 장부에 입장합니다.</p>
           {prefilled && <p className="text-2xs text-emerald-400 mt-0.5">직전 게임 설정을 불러왔습니다 — 바로 시작하거나 수정하세요.</p>}
         </div>
+      )}
+
+      {mode === 'open' && presets.length > 0 && (
+        <Field label="프리셋 게임 · 클릭하면 아래 내용 자동입력(수정 가능)">
+          <div className="flex flex-wrap gap-1.5">
+            {presets.map((p, i) => (
+              <button key={i} type="button" onClick={() => applyPreset(p)}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-badge bg-surface-high border border-border-default text-2xs font-semibold text-ink-secondary hover:text-gold-300 hover:border-gold-400/50 transition-colors">
+                {p.title}
+                <span className="text-ink-muted font-normal">{wonToMan(p.buyinAmount)}만</span>
+              </button>
+            ))}
+          </div>
+          <p className="text-[10px] text-ink-muted mt-1">담당 직원은 프리셋과 무관하게 아래에서 선택하세요.</p>
+        </Field>
       )}
 
       <Field label="금일 게임 내용">

@@ -208,6 +208,45 @@ export async function getLastLedgerSettings(venueId: string, beforeDate: string)
   };
 }
 
+/** 게임 프리셋 — 과거 세션에서 게임명 기준으로 중복 제거한 최근 설정 묶음(클릭 시 자동입력용). */
+export interface LedgerPreset {
+  title: string;
+  buyinAmount: number;
+  cardAmount: number | null;
+  targetEntries: number;
+  dealers?: string;
+  eventMemo?: string;
+  discounts: DiscountPreset[];
+}
+export async function getLedgerPresets(venueId: string, limit = 8): Promise<LedgerPreset[]> {
+  if (IS_MOCK) return [];
+  const { data } = await supabase.from('ledger_sessions')
+    .select('session_date, title, buyin_amount, card_amount, target_entries, dealers, event_memo, discounts')
+    .eq('venue_id', venueId).not('title', 'is', null)
+    .order('session_date', { ascending: false }).limit(50);
+  const seen = new Set<string>();
+  const out: LedgerPreset[] = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const d of (data ?? []) as any[]) {
+    const t = String(d.title ?? '').trim();
+    if (!t || (d.buyin_amount ?? 0) <= 0) continue;
+    const key = t.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      title: t,
+      buyinAmount: d.buyin_amount ?? 0,
+      cardAmount: d.card_amount ?? null,
+      targetEntries: d.target_entries ?? 0,
+      dealers: d.dealers ?? undefined,
+      eventMemo: d.event_memo ?? undefined,
+      discounts: Array.isArray(d.discounts) ? (d.discounts as DiscountPreset[]) : [],
+    });
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
 /** 세션 편집 저장(단가/게임내용/이벤트/딜러/기준엔트리). 마감/담당직원 필드는 건드리지 않음. */
 export async function saveLedgerSession(s: LedgerSession): Promise<void> {
   if (IS_MOCK) return;

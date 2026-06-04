@@ -316,15 +316,26 @@ interface StatsAgg {
   dow: Record<number, { entries: number; revenue: number; dates: Set<string> }>;
 }
 
-function buildAiReport(m: StatsAgg): { empty: boolean; sales: string; risk: string; actions: string[] } {
-  if (m.total === 0) return { empty: true, sales: '', risk: '', actions: [] };
+function buildAiReport(m: StatsAgg): { empty: boolean; sales: string; risk: string; weekday: string; actions: string[] } {
+  if (m.total === 0) return { empty: true, sales: '', risk: '', weekday: '', actions: [] };
   const man = (won: number) => wonToMan(won);
-  const dows = Object.entries(m.dow).map(([w, d]) => ({ w: Number(w), avg: d.dates.size ? d.entries / d.dates.size : 0 }));
+  const dows = Object.entries(m.dow).map(([w, d]) => ({ w: Number(w), avg: d.dates.size ? d.entries / d.dates.size : 0, rev: d.dates.size ? d.revenue / d.dates.size : 0 }));
   dows.sort((a, b) => b.avg - a.avg);
   const best = dows[0];
+  const worst = dows.length ? dows[dows.length - 1] : null;
   const meanAvg = dows.length ? dows.reduce((s, d) => s + d.avg, 0) / dows.length : 0;
   const weak = dows.filter((d) => d.avg < meanAvg).sort((a, b) => a.avg - b.avg).slice(0, 2).map((d) => DOW[d.w]);
   const top = m.ranking.slice(0, 2).map(([n]) => n);
+
+  // 요일별 진단(안좋은 날)
+  let weekday: string;
+  if (dows.length <= 1) {
+    weekday = '아직 요일별 비교에 충분한 데이터가 없습니다. 며칠 더 운영되면 요일 패턴(약한 요일)을 진단해 드립니다.';
+  } else {
+    weekday = `${DOW[worst!.w]}요일이 가장 부진합니다 — 평균 ${worst!.avg.toFixed(1)} 엔트리 · 매출 ${man(worst!.rev)}만 원. ` +
+      `반대로 ${DOW[best.w]}요일이 가장 활발(평균 ${best.avg.toFixed(1)} 엔트리)합니다. ` +
+      `${weak.length ? weak.join('·') + '요일' : DOW[worst!.w] + '요일'}에 집객 이벤트(얼리버드 칩업·신규 할인·보장 토너먼트)를 배치해 약한 요일을 끌어올리세요.`;
+  }
 
   const sales =
     `${best ? `이번 주 ${DOW[best.w]}요일(${best.avg.toFixed(1)} 엔트리)의 성과가 가장 두드러집니다. ` : ''}` +
@@ -344,7 +355,7 @@ function buildAiReport(m: StatsAgg): { empty: boolean; sales: string; risk: stri
   if (m.unpaidRatio >= 25) actions.push(`미수금 ${man(m.unpaid)}만 원 회수를 위해 다음 방문 시 정산을 유도하세요.`);
   if (!actions.length) actions.push('현재 운영 지표가 안정적입니다. 단골 고객 대상 리워드로 재방문을 유도해보세요.');
 
-  return { empty: false, sales, risk, actions };
+  return { empty: false, sales, risk, weekday, actions };
 }
 
 function AiReport({ m, onRefresh }: { m: StatsAgg; onRefresh: () => void }) {
@@ -364,9 +375,10 @@ function AiReport({ m, onRefresh }: { m: StatsAgg; onRefresh: () => void }) {
       {rpt.empty ? (
         <p className="text-center py-8 text-2xs text-ink-muted">최근 7일간 데이터가 부족합니다.<br />장부를 작성하면 인사이트가 표시됩니다.</p>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <ReportCard tone="emerald" title="매출 및 엔트리 분석" body={rpt.sales} />
           <ReportCard tone="rose" title="리스크 & 누수 체크" body={rpt.risk} />
+          <ReportCard tone="sky" title="요일별 진단 (안좋은 날)" body={rpt.weekday} />
           <ReportCard tone="amber" title="AI 운영 액션 플랜" bullets={rpt.actions} />
         </div>
       )}
@@ -374,9 +386,9 @@ function AiReport({ m, onRefresh }: { m: StatsAgg; onRefresh: () => void }) {
   );
 }
 
-function ReportCard({ tone, title, body, bullets }: { tone: 'emerald' | 'rose' | 'amber'; title: string; body?: string; bullets?: string[] }) {
-  const head = tone === 'emerald' ? 'text-emerald-300' : tone === 'rose' ? 'text-rose-300' : 'text-amber-300';
-  const mark = tone === 'emerald' ? '📈' : tone === 'rose' ? '⚠️' : '💡';
+function ReportCard({ tone, title, body, bullets }: { tone: 'emerald' | 'rose' | 'amber' | 'sky'; title: string; body?: string; bullets?: string[] }) {
+  const head = tone === 'emerald' ? 'text-emerald-300' : tone === 'rose' ? 'text-rose-300' : tone === 'sky' ? 'text-sky-300' : 'text-amber-300';
+  const mark = tone === 'emerald' ? '📈' : tone === 'rose' ? '⚠️' : tone === 'sky' ? '📅' : '💡';
   return (
     <div className="rounded-input bg-surface-low/80 border border-border-subtle p-3">
       <p className={['flex items-center gap-1 text-xs font-bold mb-1.5', head].join(' ')}><span>{mark}</span>{title}</p>
