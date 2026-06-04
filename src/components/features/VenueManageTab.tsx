@@ -140,7 +140,7 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
     setSaving(true);
     try {
       await saveVenueRankings(venueId, date, clean);
-      toast.show('순위를 저장했습니다', 'success');
+      toast.show('순위 저장 완료 — 닉네임이 일치하는 회원에게 포인트가 반영됩니다', 'success');
     } catch (e) {
       toast.show(e instanceof Error ? e.message : '저장에 실패했습니다', 'error');
     } finally {

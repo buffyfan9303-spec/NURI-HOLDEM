@@ -12,6 +12,7 @@ import { useToast } from '../atoms/Toast';
 import { filterContent } from '../../lib/content-filter';
 import { parseHand } from '../../lib/hand';
 import Avatar from '../atoms/Avatar';
+import { renderMentions } from '../../lib/mentions';
 
 interface CommunityTabProps {
   venues: Venue[];
@@ -113,7 +114,7 @@ export default function CommunityTab({
         </div>
       </div>
 
-      {section === 'live' && <LiveWallSection />}
+      {section === 'live' && <LiveWallSection venues={venues} onSelectVenue={onSelectVenue} />}
 
       {section === 'board' && (
         <FeedSection
@@ -667,7 +668,7 @@ function VenuesSection({
 
 // ── 실시간 댓글 (한 줄 라이브 월) ──────────────────────────────────────────────
 // 제목 없이 짧게(최대 140자) 올리는 실시간 보드. Supabase Realtime 구독으로 즉시 수신.
-function LiveWallSection() {
+function LiveWallSection({ venues, onSelectVenue }: { venues: Venue[]; onSelectVenue: (id: string) => void }) {
   const { user } = useAuth();
   const toast = useToast();
   const [messages, setMessages] = useState<LiveMessage[]>([]);
@@ -729,7 +730,7 @@ function LiveWallSection() {
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             maxLength={140}
-            placeholder="한 줄로 빠르게 남겨보세요 (최대 140자)"
+            placeholder="한 줄로 빠르게 — @매장명으로 매장 언급 가능 (최대 140자)"
             className="input flex-1"
           />
           <button
@@ -772,7 +773,7 @@ function LiveWallSection() {
                     </button>
                   )}
                 </div>
-                <p className="text-xs text-ink-primary leading-snug mt-0.5 break-words">{m.content}</p>
+                <p className="text-xs text-ink-primary leading-snug mt-0.5 break-words">{renderMentions(m.content, venues, onSelectVenue)}</p>
               </div>
             </li>
           ))}
