@@ -427,9 +427,11 @@ export default function App() {
   // (토큰 추정/-1rem 보정 대신 실측값을 사용해 모바일 sticky 겹침을 방지)
   useEffect(() => {
     const update = () => {
-      const header = document.querySelector('header');
       const tabbar = document.querySelector('[data-stack-tabbar]');
-      const h = (header?.getBoundingClientRect().height ?? 56) + (tabbar?.getBoundingClientRect().height ?? 44);
+      if (!tabbar) { document.documentElement.style.setProperty('--stack-top', '97px'); return; }
+      // 탭바가 고정될 위치(top: header-h) + 탭바 실제 높이 = 탭바 고정 시 하단 = 필터가 붙을 지점
+      const stickyTop = parseFloat(getComputedStyle(tabbar).top) || 56;
+      const h = stickyTop + tabbar.getBoundingClientRect().height;
       document.documentElement.style.setProperty('--stack-top', `${Math.round(h)}px`);
     };
     update();
@@ -859,7 +861,7 @@ export default function App() {
         <main>
           <div
             className="sticky z-30 bg-surface-base border-b border-border-subtle pt-3 pb-3"
-            style={{ top: 'var(--stack-top, calc(3.5rem + 2.5625rem))' }}
+            style={{ top: 'calc(var(--stack-top, 6.0625rem) - 1px)' }}
           >
             <IntegratedSearchBar onChange={setSearchState} />
             {/* 뷰 모드 토글 — 일정 탐색 컨텍스트 안에 배치 */}
