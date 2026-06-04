@@ -103,8 +103,8 @@ function AppHeader({
           <NuriHoldemLogo />
         </button>
 
-        {/* RIGHT: 테마 토글 + 알림 + 로그인/아바타 */}
-        <div className="flex items-center gap-1.5">
+        {/* RIGHT: 테마 토글 + 알림 + 로그인/아바타 — 동일 36px 원형 버튼 클러스터 */}
+        <div className="flex items-center gap-0.5">
           {/* 라이트/다크 모드 전환 */}
           <ThemeToggle />
 
@@ -115,22 +115,22 @@ function AppHeader({
             aria-label={`알림 ${unreadCount}개`}
             aria-expanded={notifOpen}
             className={[
-              'relative w-9 h-9 flex items-center justify-center rounded-input',
-              'transition-all duration-300 ease-out active:scale-95',
+              'relative w-9 h-9 flex items-center justify-center rounded-full',
+              'transition-colors duration-200 ease-out active:scale-90',
               notifOpen
                 ? 'bg-surface-high text-gold-300'
                 : unreadCount > 0
                 ? 'text-gold-300 hover:bg-surface-high'              // 미읽음: 골드 포인트
-                : 'text-gray-400 hover:text-ink-primary hover:bg-surface-high',
+                : 'text-ink-secondary hover:text-ink-primary hover:bg-surface-high',
             ].join(' ')}
           >
             {/* 깔끔한 라인형 종(Bell) 아이콘 (lucide 스타일) */}
-            <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
               <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
             </svg>
-            <UnreadBadge count={unreadCount} className="absolute top-0.5 right-0.5" />
+            <UnreadBadge count={unreadCount} className="absolute -top-0.5 -right-0.5 ring-2 ring-surface-base" />
           </button>
 
           {/* 로그인 / 유저 메뉴 */}
@@ -145,19 +145,22 @@ function AppHeader({
                 aria-label={`${user.name} 메뉴`}
                 className="group relative w-11 h-11 -mr-1 flex items-center justify-center rounded-full focus:outline-none"
               >
+                {/* 보이는 아바타 32px(이미지/이니셜) — 터치영역은 44px 유지(WCAG) */}
                 <span
-                  className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center
-                             text-xs font-bold text-white select-none transition-transform
-                             ring-1 ring-border-default group-hover:ring-gold-300
-                             group-hover:scale-105 group-active:scale-95"
-                  style={user.avatarUrl ? undefined : { background: user.avatarColor ?? '#FFD100' }}
+                  className="relative w-8 h-8 rounded-full overflow-hidden flex items-center justify-center
+                             select-none transition-transform ring-1 ring-border-default
+                             group-hover:ring-gold-300 group-hover:scale-105 group-active:scale-90"
+                  style={{ background: user.avatarColor ?? '#5A6175' }}
                 >
-                  {user.avatarUrl
-                    ? <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
-                    : user.name[0]}
+                  <span className="text-xs font-bold text-white">{user.name[0]}</span>
+                  {user.avatarUrl && (
+                    <img src={user.avatarUrl} alt={user.name}
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                      className="absolute inset-0 w-full h-full object-cover" />
+                  )}
                 </span>
-                <span className="absolute -bottom-0.5 -right-0.5 rounded-full bg-surface-base p-[1px] leading-none">
-                  <TierBadge points={user.activityPoints ?? 0} size={12} admin={user.role === 'admin'} />
+                <span className="absolute -bottom-1 -right-1 rounded-full bg-surface-base p-[1.5px] leading-none">
+                  <TierBadge points={user.activityPoints ?? 0} size={11} admin={user.role === 'admin'} />
                 </span>
               </button>
 
@@ -176,12 +179,15 @@ function AppHeader({
                                hover:bg-surface-high transition-colors focus:outline-none"
                   >
                     <div
-                      className="w-8 h-8 rounded-full overflow-hidden shrink-0 flex items-center justify-center text-xs font-bold text-white"
-                      style={user.avatarUrl ? undefined : { background: user.avatarColor ?? '#FFD100' }}
+                      className="relative w-8 h-8 rounded-full overflow-hidden shrink-0 flex items-center justify-center text-xs font-bold text-white"
+                      style={{ background: user.avatarColor ?? '#5A6175' }}
                     >
-                      {user.avatarUrl
-                        ? <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" />
-                        : user.name[0]}
+                      <span>{user.name[0]}</span>
+                      {user.avatarUrl && (
+                        <img src={user.avatarUrl} alt=""
+                          onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                          className="absolute inset-0 w-full h-full object-cover" />
+                      )}
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-ink-primary truncate">{user.name}</p>
