@@ -8,8 +8,9 @@ import { canAccessLedger, canManagePos, getLedgerAccessUserIds, grantLedgerAcces
 import VenueVerificationCard from './VenueVerificationCard';
 import NuriPosLedger from './NuriPosLedger';
 import LedgerStatsPanel, { PosSettingsPanel } from './LedgerStatsPanel';
+import TournamentClock from './clock/TournamentClock';
 
-type Section = 'ledger' | 'stats' | 'ranking' | 'staff' | 'settings';
+type Section = 'ledger' | 'stats' | 'ranking' | 'staff' | 'settings' | 'clock';
 
 /** 업주/직원 전용 "매장 관리" 탭 — 장부(POS) · 통계 · 순위 입력 · (업주) 직원 관리 */
 export default function VenueManageTab({ onAddPoster }: { onAddPoster?: () => void }) {
@@ -21,6 +22,7 @@ export default function VenueManageTab({ onAddPoster }: { onAddPoster?: () => vo
   const [manageOk, setManageOk] = useState(false); // 통계·설정(업주/운영자)
   const [permsLoaded, setPermsLoaded] = useState(false);
   const [rankingDraft, setRankingDraft] = useState<{ date: string; names: string[] } | null>(null);
+  const [clockSeed, setClockSeed] = useState<string | null>(null); // 장부→클락 연동 날짜
 
   // 권한 확인 후 첫 화면 결정 — 장부 우선(없으면 통계 → 순위)
   useEffect(() => {
@@ -42,6 +44,7 @@ export default function VenueManageTab({ onAddPoster }: { onAddPoster?: () => vo
   if (ledgerOk) available.push({ id: 'ledger', label: '장부' });
   if (manageOk) available.push({ id: 'stats',  label: '통계' });
   if (ledgerOk) available.push({ id: 'ranking', label: '순위 입력' });
+  if (ledgerOk) available.push({ id: 'clock', label: '클락' });
   if (isOwner)  available.push({ id: 'staff', label: '직원 관리' });
   if (isOwner)  available.push({ id: 'settings', label: 'POS 설정' });
 
@@ -79,10 +82,12 @@ export default function VenueManageTab({ onAddPoster }: { onAddPoster?: () => vo
 
       {section === 'ledger'  && ledgerOk && (
         <NuriPosLedger venueId={venueId} canManage={manageOk}
-          onMakeRankingDraft={(d, names) => { setRankingDraft({ date: d, names }); setSection('ranking'); }} />
+          onMakeRankingDraft={(d, names) => { setRankingDraft({ date: d, names }); setSection('ranking'); }}
+          onOpenClock={(d) => { setClockSeed(d); setSection('clock'); }} />
       )}
       {section === 'stats'    && manageOk && <LedgerStatsPanel venueId={venueId} />}
       {section === 'ranking'  && <RankingEditor venueId={venueId} canEdit={user.approved === true} draft={rankingDraft} />}
+      {section === 'clock'    && ledgerOk && <TournamentClock venueId={venueId} canManage={ledgerOk} seedSessionDate={clockSeed} />}
       {section === 'staff'    && isOwner && <StaffManager venueId={venueId} />}
       {section === 'settings' && isOwner && <PosSettingsPanel venueId={venueId} />}
     </div>

@@ -38,9 +38,10 @@ function hhmm(iso: string): string {
 
 interface SelectedCell { playerName: string; entryNo: number; buyin: LedgerBuyin | null; }
 
-export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI POS', onMakeRankingDraft }: {
+export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI POS', onMakeRankingDraft, onOpenClock }: {
   venueId: string; canManage: boolean; venueName?: string;
   onMakeRankingDraft?: (date: string, names: string[]) => void;
+  onOpenClock?: (date: string) => void;
 }) {
   const toast = useToast();
   const { user, isAdmin } = useAuth();
@@ -291,6 +292,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
         {session.openedAt && <span className="text-2xs text-ink-muted">· 담당 {operatorName2(session.openedBy)}</span>}
         {scheduleTitle(session.scheduleId) && <span className="text-2xs text-gold-300 font-semibold">· 대회 {scheduleTitle(session.scheduleId)}</span>}
         <span className="flex-1" />
+        {onOpenClock && <button type="button" onClick={() => onOpenClock(date)} className="btn-ghost text-2xs px-2.5 py-1">⏱ 클락</button>}
         {!closed && <button type="button" onClick={() => setEditOpen(true)} className="btn-ghost text-2xs px-2.5 py-1">세션 정보 수정</button>}
       </div>
 
