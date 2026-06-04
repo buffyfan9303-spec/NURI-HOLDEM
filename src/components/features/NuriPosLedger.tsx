@@ -32,8 +32,9 @@ function hhmm(iso: string): string {
 
 interface SelectedCell { playerName: string; entryNo: number; buyin: LedgerBuyin | null; }
 
-export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI POS' }: {
+export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI POS', onMakeRankingDraft }: {
   venueId: string; canManage: boolean; venueName?: string;
+  onMakeRankingDraft?: (date: string, names: string[]) => void;
 }) {
   const toast = useToast();
   const { user, isAdmin } = useAuth();
@@ -254,6 +255,17 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
           <span className="text-xs font-bold text-gold-300">마감됨 (읽기전용){session.closedAt ? ` · ${hhmm(session.closedAt)}` : ''}</span>
           {session.closeMemo && <span className="text-2xs text-ink-secondary truncate">메모: {session.closeMemo}</span>}
           <span className="flex-1" />
+          {onMakeRankingDraft && (
+            <button type="button"
+              onClick={() => {
+                const rosterNames = players.map((p) => p.name);
+                const extra = [...new Set(buyins.map((b) => b.playerName))].filter((n) => !rosterNames.includes(n));
+                const names = [...rosterNames, ...extra];
+                if (names.length === 0) { toast.show('참가자가 없습니다', 'error'); return; }
+                onMakeRankingDraft(date, names);
+              }}
+              className="btn-ghost text-2xs px-2.5 py-1 text-gold-300">참가자로 순위 초안</button>
+          )}
           {canManage && <button type="button" onClick={handleReopen} className="btn-ghost text-2xs px-2.5 py-1">마감 해제</button>}
         </div>
       )}

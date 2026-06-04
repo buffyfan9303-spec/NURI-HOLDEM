@@ -20,6 +20,7 @@ export default function VenueManageTab({ onAddPoster }: { onAddPoster?: () => vo
   const [ledgerOk, setLedgerOk] = useState(false); // 장부 접근(업주/운영자/권한직원)
   const [manageOk, setManageOk] = useState(false); // 통계·설정(업주/운영자)
   const [permsLoaded, setPermsLoaded] = useState(false);
+  const [rankingDraft, setRankingDraft] = useState<{ date: string; names: string[] } | null>(null);
 
   // 권한 확인 후 첫 화면 결정 — 장부 우선(없으면 통계 → 순위)
   useEffect(() => {
@@ -72,9 +73,12 @@ export default function VenueManageTab({ onAddPoster }: { onAddPoster?: () => vo
         </div>
       )}
 
-      {section === 'ledger'  && ledgerOk && <NuriPosLedger venueId={venueId} canManage={manageOk} />}
+      {section === 'ledger'  && ledgerOk && (
+        <NuriPosLedger venueId={venueId} canManage={manageOk}
+          onMakeRankingDraft={(d, names) => { setRankingDraft({ date: d, names }); setSection('ranking'); }} />
+      )}
       {section === 'stats'   && manageOk && <LedgerStatsPanel venueId={venueId} />}
-      {section === 'ranking' && <RankingEditor venueId={venueId} canEdit={user.approved === true} />}
+      {section === 'ranking' && <RankingEditor venueId={venueId} canEdit={user.approved === true} draft={rankingDraft} />}
       {section === 'staff'   && isOwner && <StaffManager />}
     </div>
   );
@@ -94,23 +98,33 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
 interface Row { nickname: string; realName: string; prize: string; }
 const emptyRow = (): Row => ({ nickname: '', realName: '', prize: '' });
 
-function RankingEditor({ venueId, canEdit }: { venueId: string; canEdit: boolean }) {
+function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: boolean; draft?: { date: string; names: string[] } | null }) {
   const toast = useToast();
   const today = new Date().toLocaleDateString('en-CA'); // 로컬 날짜 — UTC 자정 넘김 방지
-  const [date, setDate] = useState(today);
+  const [date, setDate] = useState(draft?.date ?? today);
   const [rows, setRows] = useState<Row[]>([emptyRow()]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  // 장부에서 넘어온 초안: 해당 날짜로 이동
+  useEffect(() => { if (draft?.date) setDate(draft.date); }, [draft]);
+
   useEffect(() => {
     setLoading(true);
     getVenueRankings(venueId, date)
-      .then(({ entries }) =>
-        setRows(entries.length
-          ? entries.map((e) => ({ nickname: e.nickname, realName: e.realName, prize: e.prize ?? '' }))
-          : [emptyRow()]))
+      .then(({ entries }) => {
+        if (entries.length) {
+          setRows(entries.map((e) => ({ nickname: e.nickname, realName: e.realName, prize: e.prize ?? '' })));
+        } else if (draft && draft.date === date && draft.names.length) {
+          // 정산 마감 참가자 명단을 닉네임으로 미리 채움(순서는 업주가 정리)
+          setRows(draft.names.map((n) => ({ nickname: n, realName: '', prize: '' })));
+        } else {
+          setRows([emptyRow()]);
+        }
+      })
       .catch(() => setRows([emptyRow()]))
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [venueId, date]);
 
   const update = (i: number, k: keyof Row, v: string) =>
