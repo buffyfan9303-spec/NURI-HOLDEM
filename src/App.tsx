@@ -1070,6 +1070,8 @@ export default function App() {
         onClose={() => setOpenPost(null)}
         onLike={handleLikePost}
         onDelete={handleDeletePost}
+        venues={venues}
+        onVenueClick={(vid) => { setOpenPost(null); handleVenueClick(vid); }}
       />
 
       <ProfileModal

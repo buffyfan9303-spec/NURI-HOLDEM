@@ -39,6 +39,7 @@ export interface LedgerSession {
   title?: string;               // 금일 게임 내용
   eventMemo?: string;           // 이벤트 등 비고
   dealers?: string;             // 금일 딜러 명단(줄바꿈 구분, 선택)
+  scheduleId?: string | null;   // 연결된 포스터(대회) 일정
   openedBy?: string | null;     // 담당직원(프로필 id)
   openedAt?: string | null;
   regClosed: boolean;           // 레지(레지스트리) 마감
@@ -85,6 +86,7 @@ const rowToSession = (venueId: string, date: string, d: any): LedgerSession => (
   title: d?.title ?? undefined,
   eventMemo: d?.event_memo ?? undefined,
   dealers: d?.dealers ?? undefined,
+  scheduleId: d?.schedule_id ?? null,
   openedBy: d?.opened_by ?? null,
   openedAt: d?.opened_at ?? null,
   regClosed: !!d?.reg_closed,
@@ -176,7 +178,7 @@ export async function saveLedgerSession(s: LedgerSession): Promise<void> {
     venue_id: s.venueId, session_date: s.sessionDate,
     buyin_amount: s.buyinAmount, card_amount: s.cardAmount,
     target_entries: s.targetEntries, title: s.title ?? null,
-    event_memo: s.eventMemo ?? null, dealers: s.dealers ?? null,
+    event_memo: s.eventMemo ?? null, dealers: s.dealers ?? null, schedule_id: s.scheduleId ?? null,
     updated_at: new Date().toISOString(),
   }, { onConflict: 'venue_id,session_date' });
   if (error) throw error;
@@ -190,7 +192,7 @@ export async function openLedgerSession(s: LedgerSession): Promise<void> {
     venue_id: s.venueId, session_date: s.sessionDate,
     buyin_amount: s.buyinAmount, card_amount: s.cardAmount,
     target_entries: s.targetEntries, title: s.title ?? null,
-    event_memo: s.eventMemo ?? null, dealers: s.dealers ?? null,
+    event_memo: s.eventMemo ?? null, dealers: s.dealers ?? null, schedule_id: s.scheduleId ?? null,
     opened_by: user?.id ?? null, opened_at: new Date().toISOString(),
     reg_closed: false, reg_closed_at: null,
     closed: false, closed_at: null, close_memo: null,

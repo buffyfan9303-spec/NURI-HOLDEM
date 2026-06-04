@@ -15,6 +15,7 @@ import {
   subscribeLedger, posHasPassword,
 } from '../../api/ledger';
 import { exportLedgerXls } from '../../lib/ledgerExport';
+import { getSchedules, type Schedule } from '../../api/schedules';
 
 const today = () => new Date().toLocaleDateString('en-CA'); // 로컬 날짜 — UTC 자정 넘김 방지
 
@@ -59,6 +60,12 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const [mode, setMode]           = useState<'list' | 'board'>('list');
   const [sessionList, setSessionList] = useState<LedgerSessionListItem[]>([]);
   const [listLoading, setListLoading] = useState(true);
+  const [venueSchedules, setVenueSchedules] = useState<Schedule[]>([]);
+
+  useEffect(() => {
+    getSchedules().then((all) => setVenueSchedules(all.filter((s) => s.venueId === venueId))).catch(() => {});
+  }, [venueId]);
+  const scheduleTitle = (id?: string | null) => venueSchedules.find((s) => s.id === id)?.title ?? null;
 
   const loadList = useCallback(() => {
     setListLoading(true);
@@ -227,7 +234,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
         ) : (
           <SessionForm
             base={{ ...session, ...(prefill ?? {}) }} mode="open" operatorName={operatorName}
-            prefilled={!!prefill}
+            prefilled={!!prefill} schedules={venueSchedules}
             onSubmit={handleOpen}
           />
         )}
@@ -246,6 +253,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
         <span className="text-2xs text-ink-muted">현금 {session.buyinAmount.toLocaleString()}원
           {session.cardAmount && session.cardAmount > 0 ? ` · 카드 ${session.cardAmount.toLocaleString()}원` : ' · 카드=현금'}</span>
         {session.openedAt && <span className="text-2xs text-ink-muted">· 담당 {operatorName}</span>}
+        {scheduleTitle(session.scheduleId) && <span className="text-2xs text-gold-300 font-semibold">· 대회 {scheduleTitle(session.scheduleId)}</span>}
         <span className="flex-1" />
         {!closed && <button type="button" onClick={() => setEditOpen(true)} className="btn-ghost text-2xs px-2.5 py-1">세션 정보 수정</button>}
       </div>
@@ -466,7 +474,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       {/* 세션 정보 수정 */}
       {editOpen && (
         <Overlay onClose={() => setEditOpen(false)} title="세션 정보 수정">
-          <SessionForm base={session} mode="edit" operatorName={operatorName} onSubmit={handleEditSave} onCancel={() => setEditOpen(false)} embedded />
+          <SessionForm base={session} mode="edit" operatorName={operatorName} schedules={venueSchedules} onSubmit={handleEditSave} onCancel={() => setEditOpen(false)} embedded />
         </Overlay>
       )}
 
@@ -575,9 +583,10 @@ function Metric({ label, value, tone }: { label: string; value: string; tone?: '
 }
 
 // ── 세션 설정 폼 (입장/수정 공용) ─────────────────────────────────────────────
-function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, prefilled }: {
+function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, prefilled, schedules = [] }: {
   base: LedgerSession; mode: 'open' | 'edit'; operatorName: string;
   onSubmit: (s: LedgerSession) => void; onCancel?: () => void; embedded?: boolean; prefilled?: boolean;
+  schedules?: Schedule[];
 }) {
   const [title, setTitle]     = useState(base.title ?? '');
   const [cash, setCash]       = useState<number>(base.buyinAmount || 0);
@@ -585,6 +594,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   const [target, setTarget]   = useState<number>(base.targetEntries || 0);
   const [event, setEvent]     = useState(base.eventMemo ?? '');
   const [dealers, setDealers] = useState(base.dealers ?? '');
+  const [schedId, setSchedId] = useState<string>(base.scheduleId ?? '');
 
   const submit = () => {
     if (cash <= 0) return;
@@ -592,6 +602,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       ...base, title: title.trim() || undefined,
       buyinAmount: cash, cardAmount: card > 0 ? card : null,
       targetEntries: target, eventMemo: event.trim() || undefined, dealers: dealers.trim() || undefined,
+      scheduleId: schedId || null,
     });
   };
 
@@ -608,6 +619,17 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       <Field label="금일 게임 내용">
         <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="예) 데일리 딥스택" maxLength={40} className="input w-full text-sm" />
       </Field>
+
+      {schedules.length > 0 && (
+        <Field label="연결 포스터(대회) · 선택">
+          <select value={schedId}
+            onChange={(e) => { const id = e.target.value; setSchedId(id); const sc = schedules.find((s) => s.id === id); if (sc && !title.trim()) setTitle(sc.title); }}
+            className="input w-full text-sm">
+            <option value="">연결 안 함</option>
+            {schedules.map((s) => <option key={s.id} value={s.id}>{s.date} · {s.title}</option>)}
+          </select>
+        </Field>
+      )}
 
       <div className="grid grid-cols-2 gap-2">
         <Field label="현금단가(원) *">

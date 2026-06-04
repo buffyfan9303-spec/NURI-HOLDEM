@@ -6,6 +6,7 @@ import type { CommunityPost, ReactionType } from '../../api/community';
 import { reactToPost, removeReaction, getMyReaction, incrementPostView } from '../../api/community';
 import ReportModal from './ReportModal';
 import { parseHand } from '../../lib/hand';
+import { renderMentions } from '../../lib/mentions';
 import HandCards from '../atoms/HandCards';
 import Avatar from '../atoms/Avatar';
 
@@ -16,6 +17,9 @@ interface PostDetailModalProps {
   onLike: (postId: string) => void;
   /** 관리자 또는 작성자 삭제 */
   onDelete?: (postId: string) => void;
+  /** @매장 멘션 링크용 */
+  venues?: { id: string; name: string }[];
+  onVenueClick?: (venueId: string) => void;
 }
 
 interface PostReply {
@@ -35,7 +39,7 @@ function formatFullDate(iso: string): string {
 }
 
 export default function PostDetailModal({
-  post, open, onClose, onLike, onDelete,
+  post, open, onClose, onLike, onDelete, venues = [], onVenueClick,
 }: PostDetailModalProps) {
   const { user } = useAuth();
   const [replies, setReplies] = useState<PostReply[]>([]);
@@ -143,7 +147,7 @@ export default function PostDetailModal({
             <div className="space-y-3 py-2">
               {text && (
                 <div className="text-base text-ink-primary leading-relaxed whitespace-pre-wrap break-words">
-                  {text}
+                  {onVenueClick ? renderMentions(text, venues, onVenueClick) : text}
                 </div>
               )}
               {hand && <HandCards hand={hand} />}
