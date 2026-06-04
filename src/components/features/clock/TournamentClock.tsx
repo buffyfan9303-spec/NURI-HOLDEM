@@ -9,7 +9,7 @@ import {
   getClockPresets, saveClockPreset, deleteClockPreset,
   getClockState, saveClockState, clearClockState, subscribeClock,
 } from '../../../api/clock';
-import { getLedgerBuyins, subscribeLedger, type LedgerBuyin } from '../../../api/ledger';
+import { getLedgerBuyins, getLedgerSession, subscribeLedger, type LedgerBuyin, type LedgerSession } from '../../../api/ledger';
 
 const now = () => Date.now();
 const pad = (n: number) => String(Math.floor(n)).padStart(2, '0');
@@ -127,15 +127,20 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd }: {
   const toast = useToast();
   const [, setTick] = useState(0);
   const [buyins, setBuyins] = useState<LedgerBuyin[]>([]);
+  const [linkedSession, setLinkedSession] = useState<LedgerSession | null>(null);
   const [volume, setVolume] = useState(50);
   const [fs, setFs] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const advancingRef = useRef(false);
 
-  // 장부 연동: 연결된 세션의 바인 집계 자동 반영
+  // 장부 연동: 연결된 세션의 바인/얼리설정 자동 반영
   useEffect(() => {
-    if (!state.sessionDate) { setBuyins([]); return; }
-    const load = () => getLedgerBuyins(state.venueId, state.sessionDate!).then(setBuyins).catch(() => {});
+    if (!state.sessionDate) { setBuyins([]); setLinkedSession(null); return; }
+    const d = state.sessionDate;
+    const load = () => {
+      getLedgerBuyins(state.venueId, d).then(setBuyins).catch(() => {});
+      getLedgerSession(state.venueId, d).then(setLinkedSession).catch(() => {});
+    };
     load();
     return subscribeLedger(state.venueId, load);
   }, [state.venueId, state.sessionDate]);
@@ -212,13 +217,22 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd }: {
 
   // 집계
   const cfg = state.config;
-  const derived = useMemo(() => deriveClockCounts(buyins, cfg, state.sessionDate ? null : null), [buyins, cfg, state.sessionDate]);
+  const derived = useMemo(() => deriveClockCounts(buyins, {
+    earlyDoubleMin: linkedSession?.earlyDoubleMin ?? cfg.earlyDoubleMin,
+    earlySingleMin: linkedSession?.earlySingleMin ?? cfg.earlySingleMin,
+    tournamentStart: linkedSession?.tournamentStart ?? null,
+    openedAt: linkedSession?.openedAt ?? null,
+  }), [buyins, linkedSession, cfg.earlyDoubleMin, cfg.earlySingleMin]);
   const entries = derived.entries + state.adjEntries;
   const rebuys = derived.rebuys + state.adjRebuys;
   const earlies = derived.earlies + state.adjEarlies;
   const addons = state.adjAddons;
   const alive = Math.max(0, entries - state.eliminations);
-  const totalStack = (entries + rebuys) * cfg.startStack + addons * cfg.addonStack;
+  // 총 스택 = 엔트리×스타팅 + 리바인×리바인스택 + 애드온×애드온스택 + 얼리 보너스 칩
+  const dEarly = derived.doubleEarlies;
+  const sEarly = Math.max(0, (derived.earlies - derived.doubleEarlies) + state.adjEarlies);
+  const totalStack = entries * cfg.startStack + rebuys * cfg.rebuyStack + addons * cfg.addonStack
+    + dEarly * cfg.doubleEarlyBonus + sEarly * cfg.earlyBonus;
   const avgStack = alive > 0 ? Math.round(totalStack / alive) : 0;
   const nextBreak = msToNextBreak(state, remaining);
   const regClose = msToRegClose(state, remaining);

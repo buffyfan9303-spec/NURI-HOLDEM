@@ -2,6 +2,7 @@
 import { supabase, IS_MOCK } from '../lib/supabase';
 
 export type PaymentMethod = 'ticket' | 'cash' | 'transfer' | 'card' | 'support';
+export type EarlyType = 'double' | 'single' | 'none'; // 더블얼리 / 1얼리 / 없음
 export interface DiscountPreset { label: string; amount: number } // amount: 원
 /** 고정 유형 코드 + 그 외(기타/직접입력)는 자유 텍스트로 저장 */
 export type VisitorType = 'new' | 'regular' | 'staff' | 'other';
@@ -30,6 +31,7 @@ export interface LedgerBuyin {
   unpaidAmount: number;
   discountLevel: number;
   discountIndex: number;        // 적용 할인 프리셋(0=없음, 1~5)
+  earlyOverride: EarlyType | null; // 얼리 수기지정(null=시각 기준 자동판정)
 }
 
 export interface LedgerSession {
@@ -43,6 +45,9 @@ export interface LedgerSession {
   dealers?: string;             // 금일 딜러 명단(줄바꿈 구분, 선택)
   scheduleId?: string | null;   // 연결된 포스터(대회) 일정
   discounts: DiscountPreset[];  // 할인 프리셋(최대 5)
+  earlyDoubleMin: number;       // 스타트 후 ~분까지 더블얼리
+  earlySingleMin: number;       // 스타트 후 ~분까지 1얼리
+  tournamentStart?: string | null; // 토너먼트 스타트 시각(ISO, 없으면 openedAt 기준)
   openedBy?: string | null;     // 담당직원(프로필 id)
   openedAt?: string | null;
   regClosed: boolean;           // 레지(레지스트리) 마감
@@ -110,7 +115,24 @@ const rowToBuyin = (r: any): LedgerBuyin => ({
   cashAmount: r.cash_amount ?? 0, cardAmount: r.card_amount ?? 0, transferAmount: r.transfer_amount ?? 0,
   ticketCount: r.ticket_count ?? 0, unpaidAmount: r.unpaid_amount ?? 0, discountLevel: r.discount_level ?? 0,
   discountIndex: r.discount_index ?? 0,
+  earlyOverride: (r.early_override ?? null) as EarlyType | null,
 });
+
+/** 바인 1건의 얼리 유형 — 수기지정 우선, 없으면 (바인시각 − 스타트) 경과분으로 자동판정 */
+export function earlyTypeOf(
+  b: LedgerBuyin,
+  s: { earlyDoubleMin?: number; earlySingleMin?: number; tournamentStart?: string | null; openedAt?: string | null },
+): EarlyType {
+  if (b.earlyOverride === 'double' || b.earlyOverride === 'single' || b.earlyOverride === 'none') return b.earlyOverride;
+  const dMin = s.earlyDoubleMin ?? 0, sMin = s.earlySingleMin ?? 0;
+  const start = s.tournamentStart || s.openedAt;
+  if (!start || (dMin <= 0 && sMin <= 0)) return 'none';
+  const mins = (new Date(b.buyinAt).getTime() - new Date(start).getTime()) / 60_000;
+  if (mins < 0) return 'none';
+  if (dMin > 0 && mins <= dMin) return 'double';
+  if (sMin > 0 && mins <= sMin) return 'single';
+  return 'none';
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const rowToSession = (venueId: string, date: string, d: any): LedgerSession => ({
@@ -130,6 +152,9 @@ const rowToSession = (venueId: string, date: string, d: any): LedgerSession => (
   closedAt: d?.closed_at ?? null,
   closeMemo: d?.close_memo ?? null,
   discounts: Array.isArray(d?.discounts) ? d.discounts : [],
+  earlyDoubleMin: d?.early_double_min ?? 0,
+  earlySingleMin: d?.early_single_min ?? 0,
+  tournamentStart: d?.tournament_start ?? null,
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -141,6 +166,7 @@ const rowToPlayer = (r: any): LedgerPlayer => ({
 
 const emptySession = (venueId: string, date: string): LedgerSession => ({
   venueId, sessionDate: date, buyinAmount: 0, cardAmount: null, targetEntries: 0, regClosed: false, closed: false, discounts: [],
+  earlyDoubleMin: 0, earlySingleMin: 0, tournamentStart: null,
 });
 
 // ── 권한 ──────────────────────────────────────────────────────────────────────
@@ -256,6 +282,7 @@ export async function saveLedgerSession(s: LedgerSession): Promise<void> {
     target_entries: s.targetEntries, title: s.title ?? null,
     event_memo: s.eventMemo ?? null, dealers: s.dealers ?? null, schedule_id: s.scheduleId ?? null,
     discounts: (s.discounts ?? []) as unknown as object,
+    early_double_min: s.earlyDoubleMin ?? 0, early_single_min: s.earlySingleMin ?? 0, tournament_start: s.tournamentStart ?? null,
     updated_at: new Date().toISOString(),
   }, { onConflict: 'venue_id,session_date' });
   if (error) throw error;
@@ -271,6 +298,7 @@ export async function openLedgerSession(s: LedgerSession, operatorId?: string | 
     target_entries: s.targetEntries, title: s.title ?? null,
     event_memo: s.eventMemo ?? null, dealers: s.dealers ?? null, schedule_id: s.scheduleId ?? null,
     discounts: (s.discounts ?? []) as unknown as object,
+    early_double_min: s.earlyDoubleMin ?? 0, early_single_min: s.earlySingleMin ?? 0, tournament_start: s.tournamentStart ?? null,
     opened_by: operatorId ?? user?.id ?? null, opened_at: new Date().toISOString(),
     reg_closed: false, reg_closed_at: null,
     closed: false, closed_at: null, close_memo: null,
@@ -380,7 +408,7 @@ export async function getLedgerRange(venueId: string, from: string, to: string):
  *  티켓/가게지원은 항상 완납 처리(미수 불가). */
 export async function upsertBuyin(input: {
   venueId: string; sessionDate: string; playerName: string; entryNo: number;
-  paymentMethod: PaymentMethod; isUnpaid: boolean; discountIndex?: number;
+  paymentMethod: PaymentMethod; isUnpaid: boolean; discountIndex?: number; earlyOverride?: EarlyType | null;
 }): Promise<void> {
   if (IS_MOCK) return;
   const { data: { user } } = await supabase.auth.getUser();
@@ -392,8 +420,16 @@ export async function upsertBuyin(input: {
     payment_method: input.paymentMethod, is_unpaid: unpaid,
     is_split: false, cash_amount: 0, card_amount: 0, transfer_amount: 0,
     ticket_count: 0, unpaid_amount: 0, discount_level: 0, discount_index: input.discountIndex ?? 0,
+    early_override: input.earlyOverride ?? null,
     buyin_at: new Date().toISOString(), created_by: user?.id ?? null,
   }, { onConflict: 'venue_id,session_date,player_name,entry_no' });
+  if (error) throw error;
+}
+
+/** 기존 바인의 얼리 유형만 수기 변경(자동=null) */
+export async function setBuyinEarly(buyinId: string, override: EarlyType | null): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.from('ledger_buyins').update({ early_override: override }).eq('id', buyinId);
   if (error) throw error;
 }
 

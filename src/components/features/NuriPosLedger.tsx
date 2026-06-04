@@ -6,8 +6,8 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import {
-  type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type LedgerSessionListItem, type DiscountPreset,
-  visitorLabel, wonToMan, WON_PER_MAN, buyinFinance,
+  type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type LedgerSessionListItem, type DiscountPreset, type EarlyType,
+  visitorLabel, wonToMan, WON_PER_MAN, buyinFinance, earlyTypeOf, setBuyinEarly,
   getLedgerSession, saveLedgerSession, openLedgerSession, closeLedgerSession, reopenLedgerSession,
   setRegistrationClosed, getLastLedgerSettings, getLedgerSessionList,
   getLedgerBuyins, upsertBuyin, upsertBuyinSplit, cancelBuyin,
@@ -49,7 +49,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const operatorName = user?.name ?? user?.nickname ?? '담당직원';
 
   const [date, setDate]       = useState(today);
-  const [session, setSession] = useState<LedgerSession>({ venueId, sessionDate: today(), buyinAmount: 0, cardAmount: null, targetEntries: 0, regClosed: false, closed: false, discounts: [] });
+  const [session, setSession] = useState<LedgerSession>({ venueId, sessionDate: today(), buyinAmount: 0, cardAmount: null, targetEntries: 0, regClosed: false, closed: false, discounts: [], earlyDoubleMin: 0, earlySingleMin: 0, tournamentStart: null });
   const [buyins, setBuyins]   = useState<LedgerBuyin[]>([]);
   const [players, setPlayers] = useState<LedgerPlayer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -418,13 +418,16 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                             : (c.isSplit || c.discountIndex > 0) ? 'border-gold-400/50 bg-gold-300/10 text-gold-300'
                             : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300';
                           const topLabel = c.isSplit ? '분납' : `${METHOD_SHORT[c.paymentMethod]}${c.isUnpaid ? '·미' : ''}`;
+                          const et = earlyTypeOf(c, session);
                           return (
                             <td key={e} className={cls}>
                               <button type="button" disabled={closed}
                                 onClick={() => !closed && setSelected({ playerName: r.name, entryNo: e, buyin: c })}
                                 className={['w-full h-full rounded-input border-2 flex flex-col items-center justify-center leading-none', tone, closed ? 'cursor-default' : ''].join(' ')}>
                                 <span className="text-[11px] font-extrabold">{topLabel}{(c.discountIndex > 0 || (c.isSplit && c.discountLevel > 0)) ? '*' : ''}</span>
-                                <span className="text-[8px] opacity-80 mt-0.5">{hhmm(c.buyinAt)}</span>
+                                {et !== 'none'
+                                  ? <span className="text-[7px] font-bold text-amber-300 leading-none">{et === 'double' ? '더블얼리' : '얼리'}</span>
+                                  : <span className="text-[8px] opacity-80 mt-0.5">{hhmm(c.buyinAt)}</span>}
                               </button>
                             </td>
                           );
@@ -521,6 +524,11 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
             if (!selected.buyin) return;
             try { await cancelBuyin(selected.buyin.id, pw); toast.show('바인을 취소했습니다', 'info'); setSelected(null); reload(); }
             catch (e) { toast.show(e instanceof Error ? e.message : '취소 실패', 'error'); }
+          }}
+          onSetEarly={async (override) => {
+            if (!selected.buyin) return;
+            try { await setBuyinEarly(selected.buyin.id, override); toast.show('얼리 유형을 변경했습니다', 'success'); setSelected(null); reload(); }
+            catch (e) { toast.show(e instanceof Error ? e.message : '변경 실패', 'error'); }
           }}
         />
       )}
@@ -651,6 +659,9 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   const [schedId, setSchedId] = useState<string>(base.scheduleId ?? '');
   const [operId, setOperId]   = useState<string>(base.openedBy ?? operatorOptions[0]?.id ?? '');
   const [discs, setDiscs]     = useState<DiscountPreset[]>(base.discounts ?? []);
+  const [earlyD, setEarlyD]   = useState<number>(base.earlyDoubleMin || 0);
+  const [earlyS, setEarlyS]   = useState<number>(base.earlySingleMin || 0);
+  const [startHM, setStartHM] = useState<string>(base.tournamentStart ? new Date(base.tournamentStart).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '');
 
   const setDisc = (i: number, patch: Partial<DiscountPreset>) =>
     setDiscs((arr) => arr.map((d, idx) => (idx === i ? { ...d, ...patch } : d)));
@@ -670,12 +681,14 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
 
   const submit = () => {
     if (cash <= 0) return;
+    const tStart = startHM ? new Date(`${base.sessionDate}T${startHM}:00`).toISOString() : null;
     onSubmit({
       ...base, title: title.trim() || undefined,
       buyinAmount: cash, cardAmount: card > 0 ? card : null,
       targetEntries: target, eventMemo: event.trim() || undefined, dealers: dealers.trim() || undefined,
       scheduleId: schedId || null, openedBy: operId || null,
       discounts: discs.filter((d) => d.amount > 0),
+      earlyDoubleMin: earlyD, earlySingleMin: earlyS, tournamentStart: tStart,
     });
   };
 
@@ -756,6 +769,26 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
         </div>
       </Field>
 
+      <Field label="얼리 구간 · 선택 (클락 연동 — 바인 시각으로 자동 분류)">
+        <div className="grid grid-cols-3 gap-2">
+          <div className="relative">
+            <input type="time" value={startHM} onChange={(e) => setStartHM(e.target.value)} className="input w-full text-sm" aria-label="스타트 시각" />
+            <span className="block text-[9px] text-ink-muted mt-0.5">스타트 시각</span>
+          </div>
+          <div className="relative">
+            <input type="number" inputMode="numeric" value={earlyD || ''} onChange={(e) => setEarlyD(parseInt(e.target.value, 10) || 0)} placeholder="20" className="input w-full text-sm tabular-nums pr-6" />
+            <span className="absolute right-2 top-2.5 text-[10px] text-ink-muted">분</span>
+            <span className="block text-[9px] text-gold-300 mt-0.5">더블얼리 ~까지</span>
+          </div>
+          <div className="relative">
+            <input type="number" inputMode="numeric" value={earlyS || ''} onChange={(e) => setEarlyS(parseInt(e.target.value, 10) || 0)} placeholder="80" className="input w-full text-sm tabular-nums pr-6" />
+            <span className="absolute right-2 top-2.5 text-[10px] text-ink-muted">분</span>
+            <span className="block text-[9px] text-gold-300 mt-0.5">1얼리 ~까지</span>
+          </div>
+        </div>
+        <p className="text-[10px] text-ink-muted mt-1">예) 스타트 19:00·더블 20분·1얼리 80분 → 19:20까지 바인=더블얼리, 20:20까지=1얼리. 대기 등으로 못 받으면 바인 칸에서 '없음'으로 수기 변경.</p>
+      </Field>
+
       <Field label="기준 엔트리(통계용) · 선택">
         <input type="number" inputMode="numeric" value={target || ''} onChange={(e) => setTarget(parseInt(e.target.value, 10) || 0)} placeholder="100" className="input w-full text-sm tabular-nums" />
       </Field>
@@ -814,12 +847,13 @@ function Overlay({ title, onClose, children }: { title: string; onClose: () => v
 // ── 2-Tap 결제 입력 모달 ──────────────────────────────────────────────────────
 interface SplitInput { cashAmount: number; cardAmount: number; transferAmount: number; ticketCount: number; unpaidAmount: number; discountLevel: number; }
 
-function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCancelBuyin }: {
+function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCancelBuyin, onSetEarly }: {
   cell: SelectedCell; hasPw: boolean; session: LedgerSession;
   onClose: () => void;
   onPick: (m: PaymentMethod, isUnpaid: boolean, discountIndex: number) => void;
   onPickSplit: (d: SplitInput) => void;
   onCancelBuyin: (pw: string) => void;
+  onSetEarly: (override: EarlyType | null) => void;
 }) {
   const [cancelMode, setCancelMode] = useState(false);
   const [pw, setPw] = useState('');
@@ -860,6 +894,22 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
         </header>
 
         <div className="p-3 space-y-2">
+          {cell.buyin && (
+            <div className="flex items-center gap-1.5 flex-wrap pb-2 mb-1 border-b border-border-subtle">
+              <span className="text-2xs text-ink-muted">얼리</span>
+              {([[null, '자동'], ['double', '더블얼리'], ['single', '1얼리'], ['none', '없음']] as const).map(([v, label]) => {
+                const active = (cell.buyin!.earlyOverride ?? null) === v;
+                return (
+                  <button key={String(v)} type="button" onClick={() => onSetEarly(v)}
+                    className={['text-2xs font-bold px-2 py-1 rounded-badge border transition-colors',
+                      active ? 'bg-amber-400/20 text-amber-300 border-amber-400/50' : 'bg-surface-high text-ink-muted border-border-default hover:text-ink-secondary'].join(' ')}>{label}</button>
+                );
+              })}
+              <span className="text-[9px] text-ink-muted w-full">
+                현재 {(() => { const t = earlyTypeOf(cell.buyin, session); return t === 'double' ? '더블얼리' : t === 'single' ? '1얼리' : '없음'; })()} · {cell.buyin.earlyOverride ? '수기지정' : '시각 자동'}
+              </span>
+            </div>
+          )}
           {!splitMode ? (
             <>
               {/* 할인 선택 (세션 프리셋) */}

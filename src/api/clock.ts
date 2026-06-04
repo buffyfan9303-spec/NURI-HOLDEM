@@ -1,6 +1,9 @@
 // src/api/clock.ts — 토너먼트 클락(블라인드 타이머) API
 import { supabase, IS_MOCK } from '../lib/supabase';
-import type { LedgerBuyin } from './ledger';
+import { earlyTypeOf, type LedgerBuyin } from './ledger';
+
+/** 얼리 판정에 필요한 세션 정보 */
+export interface EarlyWindow { earlyDoubleMin?: number; earlySingleMin?: number; tournamentStart?: string | null; openedAt?: string | null }
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 export interface ClockLevel {
@@ -167,19 +170,16 @@ export function subscribeClock(venueId: string, onChange: () => void): () => voi
 // ── 장부 → 클락 카운트 자동 산출 ────────────────────────────────────────────────
 export interface DerivedCounts { entries: number; rebuys: number; earlies: number; doubleEarlies: number; totalBuyins: number; }
 
-/** 장부 바인 기록에서 엔트리/리바인/얼리 자동 집계. startISO = 토너먼트 시작 시각(얼리 판정 기준, 없으면 얼리 0). */
-export function deriveClockCounts(buyins: LedgerBuyin[], config: ClockConfig, startISO?: string | null): DerivedCounts {
+/** 장부 바인 기록에서 엔트리/리바인/얼리 자동 집계. 얼리는 세션 스타트·구간(또는 바인 수기지정)으로 판정. */
+export function deriveClockCounts(buyins: LedgerBuyin[], early: EarlyWindow): DerivedCounts {
   const players = new Set<string>();
   let rebuys = 0, earlies = 0, doubleEarlies = 0;
-  const startMs = startISO ? new Date(startISO).getTime() : NaN;
   for (const b of buyins) {
     players.add(b.playerName);
     if (b.entryNo > 1) rebuys++;
-    if (!Number.isNaN(startMs)) {
-      const mins = (new Date(b.buyinAt).getTime() - startMs) / 60_000;
-      if (mins >= 0 && mins <= config.earlyDoubleMin) { earlies++; doubleEarlies++; }
-      else if (mins > config.earlyDoubleMin && mins <= config.earlySingleMin) { earlies++; }
-    }
+    const et = earlyTypeOf(b, early);
+    if (et === 'double') { earlies++; doubleEarlies++; }
+    else if (et === 'single') earlies++;
   }
   return { entries: players.size, rebuys, earlies, doubleEarlies, totalBuyins: buyins.length };
 }
