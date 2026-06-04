@@ -61,6 +61,12 @@ export interface LedgerPlayer {
 
 const today = () => new Date().toLocaleDateString('en-CA'); // 로컬 날짜(YYYY-MM-DD) — UTC 자정 넘김 방지
 
+export const WON_PER_MAN = 10000;
+/** 원 → 만원 표시 문자열 (예: 310000 → "31", 77000 → "7.7") */
+export function wonToMan(won: number): string {
+  return (won / WON_PER_MAN).toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
 /** 카드 결제에 적용할 단가(카드단가 미설정 시 현금단가) */
 export function cardUnit(s: { buyinAmount: number; cardAmount: number | null }): number {
   return s.cardAmount && s.cardAmount > 0 ? s.cardAmount : s.buyinAmount;

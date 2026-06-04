@@ -7,7 +7,7 @@ import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type LedgerSessionListItem,
-  cardUnit, visitorLabel,
+  cardUnit, visitorLabel, wonToMan, WON_PER_MAN,
   getLedgerSession, saveLedgerSession, openLedgerSession, closeLedgerSession, reopenLedgerSession,
   setRegistrationClosed, getLastLedgerSettings, getLedgerSessionList,
   getLedgerBuyins, upsertBuyin, upsertBuyinSplit, cancelBuyin,
@@ -18,6 +18,10 @@ import { exportLedgerXls } from '../../lib/ledgerExport';
 import { getSchedules, type Schedule } from '../../api/schedules';
 
 const today = () => new Date().toLocaleDateString('en-CA'); // 로컬 날짜 — UTC 자정 넘김 방지
+
+// 금액은 만원 단위 입력/표시 (천원=0.1만 까지 허용)
+const manVal   = (won: number): number | '' => (won ? won / WON_PER_MAN : '');
+const parseMan = (v: string): number => Math.max(0, Math.round((parseFloat(v) || 0) * WON_PER_MAN));
 
 const METHOD_SHORT: Record<PaymentMethod, string> = { ticket: 'T', cash: '현', transfer: '이', card: '카', support: '지원' };
 // 유형 빠른 선택(고정) + 직접입력은 별도
@@ -250,8 +254,8 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       {/* 세션 요약 */}
       <div className="rounded-card border border-border-default bg-surface-low p-2.5 flex items-center gap-2 flex-wrap">
         <span className="text-sm font-bold text-ink-primary">{session.title || '세션'}</span>
-        <span className="text-2xs text-ink-muted">현금 {session.buyinAmount.toLocaleString()}원
-          {session.cardAmount && session.cardAmount > 0 ? ` · 카드 ${session.cardAmount.toLocaleString()}원` : ' · 카드=현금'}</span>
+        <span className="text-2xs text-ink-muted">현금 {wonToMan(session.buyinAmount)}만원
+          {session.cardAmount && session.cardAmount > 0 ? ` · 카드 ${wonToMan(session.cardAmount)}만원` : ' · 카드=현금'}</span>
         {session.openedAt && <span className="text-2xs text-ink-muted">· 담당 {operatorName}</span>}
         {scheduleTitle(session.scheduleId) && <span className="text-2xs text-gold-300 font-semibold">· 대회 {scheduleTitle(session.scheduleId)}</span>}
         <span className="flex-1" />
@@ -419,8 +423,8 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
           <div className="grid grid-cols-4 gap-2 flex-1 text-center">
             <Metric label="총 엔트리" value={`${stats.totalBuyins}`} />
             <Metric label="회수 티켓" value={`${stats.ticket}장`} />
-            <Metric label="완납 매출" value={stats.revenue.toLocaleString()} tone="emerald" />
-            <Metric label="미수금" value={stats.unpaid.toLocaleString()} tone="danger" />
+            <Metric label="완납 매출" value={`${wonToMan(stats.revenue)}만`} tone="emerald" />
+            <Metric label="미수금" value={`${wonToMan(stats.unpaid)}만`} tone="danger" />
           </div>
           <div className="flex flex-col gap-1 shrink-0">
             <button type="button" onClick={() => exportLedgerXls({ venueName, session, players, buyins })}
@@ -632,11 +636,11 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       )}
 
       <div className="grid grid-cols-2 gap-2">
-        <Field label="현금단가(원) *">
-          <input type="number" inputMode="numeric" value={cash || ''} onChange={(e) => setCash(parseInt(e.target.value, 10) || 0)} placeholder="100000" className="input w-full text-sm tabular-nums" />
+        <Field label="현금단가(만원) *">
+          <input type="number" inputMode="decimal" step="0.1" min="0" value={manVal(cash)} onChange={(e) => setCash(parseMan(e.target.value))} placeholder="10" className="input w-full text-sm tabular-nums" />
         </Field>
-        <Field label="카드단가(원) · 선택">
-          <input type="number" inputMode="numeric" value={card || ''} onChange={(e) => setCard(parseInt(e.target.value, 10) || 0)} placeholder="미입력=현금단가" className="input w-full text-sm tabular-nums" />
+        <Field label="카드단가(만원) · 선택">
+          <input type="number" inputMode="decimal" step="0.1" min="0" value={manVal(card)} onChange={(e) => setCard(parseMan(e.target.value))} placeholder="미입력=현금단가" className="input w-full text-sm tabular-nums" />
         </Field>
       </div>
 
@@ -807,7 +811,7 @@ function PaymentModal({ cell, hasPw, onClose, onPick, onPickSplit, onCancelBuyin
                   </div>
                 </label>
               </div>
-              <p className="text-2xs text-ink-secondary text-right">합계 <b className="tabular-nums">{splitTotal.toLocaleString()}</b>원{discount > 0 ? ` · ${discount}레벨 할인` : ''}</p>
+              <p className="text-2xs text-ink-secondary text-right">합계 <b className="tabular-nums">{wonToMan(splitTotal)}</b>만원{discount > 0 ? ` · ${discount}레벨 할인` : ''}</p>
               <button type="button" onClick={submitSplit} disabled={!canSaveSplit} className="btn-primary w-full text-sm disabled:opacity-50">저장</button>
             </div>
           )}
@@ -843,9 +847,9 @@ function AmountRow({ label, value, set, danger }: { label: string; value: number
     <label className="flex items-center gap-2">
       <span className={['w-9 shrink-0 text-2xs font-semibold', danger ? 'text-danger-light' : 'text-ink-secondary'].join(' ')}>{label}</span>
       <div className="relative flex-1">
-        <input type="number" inputMode="numeric" min={0} value={value || ''} onChange={(e) => set(Math.max(0, parseInt(e.target.value, 10) || 0))}
+        <input type="number" inputMode="decimal" step="0.1" min={0} value={manVal(value)} onChange={(e) => set(parseMan(e.target.value))}
           placeholder="0" className="input w-full text-sm tabular-nums pr-7" />
-        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">원</span>
+        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">만</span>
       </div>
     </label>
   );
@@ -863,8 +867,8 @@ function CloseModal({ stats, onClose, onConfirm }: {
         <div className="grid grid-cols-2 gap-2">
           <SummaryStat label="총 엔트리" value={`${stats.totalBuyins}`} />
           <SummaryStat label="회수 티켓" value={`${stats.ticket}장`} />
-          <SummaryStat label="완납 매출" value={`${stats.revenue.toLocaleString()}원`} tone="emerald" />
-          <SummaryStat label="당일 미수금" value={`${stats.unpaid.toLocaleString()}원`} tone="danger" />
+          <SummaryStat label="완납 매출" value={`${wonToMan(stats.revenue)}만원`} tone="emerald" />
+          <SummaryStat label="당일 미수금" value={`${wonToMan(stats.unpaid)}만원`} tone="danger" />
           <SummaryStat label="가게지원" value={`${stats.support}건`} />
         </div>
         <label className="block">

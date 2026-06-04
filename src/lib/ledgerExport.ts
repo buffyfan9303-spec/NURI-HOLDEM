@@ -2,7 +2,7 @@
 // 장부를 Excel(.xls)로 내보내기 — 무의존성(HTML 테이블 → application/vnd.ms-excel).
 // 한글/서식 유지, Excel에서 바로 열림. 기존 새틀빌지(BUY-IN LIST) 양식과 유사한 표 구성.
 import type { LedgerBuyin, LedgerPlayer, LedgerSession, PaymentMethod } from '../api/ledger';
-import { cardUnit, visitorLabel } from '../api/ledger';
+import { cardUnit, visitorLabel, wonToMan } from '../api/ledger';
 
 const METHOD_KO: Record<PaymentMethod, string> = {
   ticket: '티켓', cash: '현금', transfer: '이체', card: '카드', support: '가게지원',
@@ -72,20 +72,20 @@ export function buildLedgerHtml(input: LedgerExportInput): string {
   }).join('');
 
   const cardLine = session.cardAmount && session.cardAmount > 0
-    ? `카드단가 ${session.cardAmount.toLocaleString()}원` : '카드단가 = 현금단가';
+    ? `카드단가 ${wonToMan(session.cardAmount)}만원` : '카드단가 = 현금단가';
 
   const meta = [
     `매장: ${esc(venueName)}`,
     `일자: ${esc(session.sessionDate)}`,
     `게임: ${esc(session.title ?? '-')}`,
-    `현금단가 ${session.buyinAmount.toLocaleString()}원 / ${cardLine}`,
+    `현금단가 ${wonToMan(session.buyinAmount)}만원 / ${cardLine}`,
     session.eventMemo ? `이벤트: ${esc(session.eventMemo)}` : '',
     session.dealers ? `딜러: ${esc(session.dealers.replace(/\n/g, ', '))}` : '',
     session.closed && session.closeMemo ? `마감메모: ${esc(session.closeMemo)}` : '',
   ].filter(Boolean).join('<br>');
 
   const totalColspan = maxEntry + 5;
-  const summary = `총 엔트리 ${totalBuyins} · 회수 티켓 ${ticket}장 · 완납 매출 ${revenue.toLocaleString()}원 · 당일 미수금 ${unpaid.toLocaleString()}원 · 가게지원 ${support}건`;
+  const summary = `총 엔트리 ${totalBuyins} · 회수 티켓 ${ticket}장 · 완납 매출 ${wonToMan(revenue)}만원 · 당일 미수금 ${wonToMan(unpaid)}만원 · 가게지원 ${support}건`;
 
   return `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
 <head><meta charset="utf-8"><style>

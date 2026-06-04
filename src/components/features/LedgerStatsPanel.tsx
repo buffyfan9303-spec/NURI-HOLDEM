@@ -7,7 +7,7 @@ import type { User } from '../../api/auth';
 import { getMyVenueStaff } from '../../api/auth';
 import {
   type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type VisitorType,
-  cardUnit,
+  cardUnit, wonToMan,
   getLedgerBuyins, getLedgerSession, getLedgerPlayers,
   posHasPassword, setPosCancelPassword,
   getLedgerAccessUserIds, grantLedgerAccess, revokeLedgerAccess,
@@ -109,8 +109,8 @@ function DayStats({ venueId }: { venueId: string }) {
 
           {/* 금액 */}
           <div className="grid grid-cols-2 gap-2">
-            <Stat label="완납 매출" value={`${m.revenue.toLocaleString()}원`} emerald />
-            <Stat label="당일 미수금" value={`${m.unpaidAmt.toLocaleString()}원`} danger={m.unpaidAmt > 0} />
+            <Stat label="완납 매출" value={`${wonToMan(m.revenue)}만원`} emerald />
+            <Stat label="당일 미수금" value={`${wonToMan(m.unpaidAmt)}만원`} danger={m.unpaidAmt > 0} />
           </div>
 
           {/* 결제수단별 */}
