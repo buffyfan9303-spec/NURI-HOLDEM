@@ -22,19 +22,20 @@ const PERIODS: { id: Period; label: string }[] = [
   { id: 'day', label: '하루' }, { id: 'week', label: '일주일' }, { id: 'month', label: '한 달' }, { id: 'all', label: '총괄' }, { id: 'dow', label: '요일별' },
 ];
 
-export default function LedgerStatsPanel({ venueId, showSettings = true }: { venueId: string; showSettings?: boolean }) {
-  return (
-    <div className="space-y-4">
-      <StatsView venueId={venueId} />
-      {showSettings && <PosSettings venueId={venueId} />}
-    </div>
-  );
+export default function LedgerStatsPanel({ venueId }: { venueId: string }) {
+  return <StatsView venueId={venueId} />;
 }
 
 // ── 통계 ──────────────────────────────────────────────────────────────────────
+type DowRange = 'week' | 'month' | 'all';
+const DOW_RANGE_OPTS: { id: DowRange; label: string }[] = [
+  { id: 'week', label: '최근 7일' }, { id: 'month', label: '이번 달' }, { id: 'all', label: '전체' },
+];
+
 function StatsView({ venueId }: { venueId: string }) {
   const [period, setPeriod] = useState<Period>('day');
   const [date, setDate] = useState(todayStr);
+  const [dowRange, setDowRange] = useState<DowRange>('all'); // 요일별 분석 기간
   const [sessions, setSessions] = useState<LedgerSession[]>([]);
   const [buyins, setBuyins] = useState<LedgerBuyin[]>([]);
   const [players, setPlayers] = useState<LedgerPlayer[]>([]);
@@ -46,8 +47,13 @@ function StatsView({ venueId }: { venueId: string }) {
     if (period === 'day')   return { from: date, to: date };
     if (period === 'week')  return { from: shift(t, -6), to: t };
     if (period === 'month') return { from: t.slice(0, 7) + '-01', to: t };
-    return { from: '2000-01-01', to: t }; // all / dow
-  }, [period, date]);
+    if (period === 'dow') {
+      if (dowRange === 'week')  return { from: shift(t, -6), to: t };
+      if (dowRange === 'month') return { from: t.slice(0, 7) + '-01', to: t };
+      return { from: '2000-01-01', to: t };
+    }
+    return { from: '2000-01-01', to: t }; // all
+  }, [period, date, dowRange]);
 
   useEffect(() => {
     setLoading(true);
@@ -68,7 +74,7 @@ function StatsView({ venueId }: { venueId: string }) {
   const m = useMemo(() => {
     const src = (excludeStaff && period === 'day') ? buyins.filter((b) => !staffNames.has(b.playerName)) : buyins;
     const fin = (b: LedgerBuyin) => buyinFinance(b, sessionByDate.get(b.sessionDate) ?? { buyinAmount: 0, cardAmount: null, discounts: [] });
-    let revenue = 0, unpaid = 0, support = 0, ticket = 0, ticketUnpaid = 0, entries = 0;
+    let revenue = 0, unpaid = 0, support = 0, ticket = 0, ticketUnpaid = 0, entries = 0, underEntries = 0;
     const byMethod: Record<PaymentMethod, number> = { ticket: 0, cash: 0, transfer: 0, card: 0, support: 0 };
     const byPlayer: Record<string, number> = {};
     const playerSet = new Set<string>();
@@ -77,6 +83,7 @@ function StatsView({ venueId }: { venueId: string }) {
     for (const b of src) {
       const f = fin(b);
       revenue += f.paid; unpaid += f.unpaid; support += f.support; entries += f.entry;
+      if (f.entry > 0 && f.entry < 1) underEntries++; // 할인으로 1개 미달인 엔트리
       ticket += f.ticketPaid + (b.isSplit ? b.ticketCount : 0); ticketUnpaid += f.ticketUnpaid;
       byMethod[b.paymentMethod]++;
       byPlayer[b.playerName] = (byPlayer[b.playerName] ?? 0) + 1;
@@ -92,13 +99,16 @@ function StatsView({ venueId }: { venueId: string }) {
       if (p.visitorType === 'new' || p.visitorType === 'regular' || p.visitorType === 'staff') visitor[p.visitorType]++;
       else visitor.other++;
     }
+    const dayCount = dates.size;
     return {
-      total: src.length, entries, players: playerSet.size, revenue, unpaid, support, ticket, ticketUnpaid,
+      total: src.length, entries, underEntries, players: playerSet.size, revenue, unpaid, support, ticket, ticketUnpaid,
       unpaid_cnt: src.filter((b) => fin(b).unpaid > 0).length,
       byMethod, ranking: Object.entries(byPlayer).sort((a, b) => b[1] - a[1]),
       target, fillRatio: target ? Math.round((entries / target) * 100) : null,
       perPlayer: playerSet.size ? entries / playerSet.size : 0,
-      dayCount: dates.size, visitor, dow,
+      dayCount, visitor, dow,
+      avgEntryPerDay: dayCount ? entries / dayCount : 0,
+      avgRevenuePerDay: dayCount ? revenue / dayCount : 0,
     };
   }, [buyins, sessionByDate, players, excludeStaff, staffNames, period, date]);
 
@@ -120,7 +130,16 @@ function StatsView({ venueId }: { venueId: string }) {
       {loading ? (
         <p className="text-center py-6 text-2xs text-ink-muted">불러오는 중…</p>
       ) : period === 'dow' ? (
-        <DowTable dow={m.dow} />
+        <div className="space-y-2">
+          <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5">
+            {DOW_RANGE_OPTS.map((o) => (
+              <button key={o.id} type="button" onClick={() => setDowRange(o.id)}
+                className={['flex-1 py-1.5 text-2xs font-bold rounded-[6px] transition-colors',
+                  dowRange === o.id ? 'bg-gold-300 text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>{o.label}</button>
+            ))}
+          </div>
+          <DowTable dow={m.dow} rangeLabel={DOW_RANGE_OPTS.find((o) => o.id === dowRange)!.label} />
+        </div>
       ) : (
         <>
           {period === 'day' && (
@@ -134,10 +153,16 @@ function StatsView({ venueId }: { venueId: string }) {
 
           <div className="grid grid-cols-3 gap-2">
             <Stat label="총 엔트리" value={m.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} />
+            <Stat label="미달 엔트리" value={`${m.underEntries}개`} sub="할인(1개 미만)" />
             <Stat label="총 바인 수" value={`${m.total}`} />
-            {period === 'day'
-              ? <Stat label="엔트리 비율" value={m.fillRatio !== null ? `${m.fillRatio}%` : '-'} sub={m.target ? `기준 ${m.target}` : '기준 미설정'} />
-              : <Stat label="영업일수" value={`${m.dayCount}일`} />}
+            {period === 'day' ? (
+              <Stat label="엔트리 비율" value={m.fillRatio !== null ? `${m.fillRatio}%` : '-'} sub={m.target ? `기준 ${m.target}` : '기준 미설정'} />
+            ) : (
+              <>
+                <Stat label="영업일수" value={`${m.dayCount}일`} />
+                <Stat label="일평균 엔트리" value={m.avgEntryPerDay.toFixed(1)} emerald />
+              </>
+            )}
             <Stat label="플레이어" value={`${m.players}명`} />
             <Stat label="엔트리/인" value={m.perPlayer ? m.perPlayer.toFixed(1) : '0'} />
             <Stat label="가게지원" value={`${m.support}건`} />
@@ -147,6 +172,7 @@ function StatsView({ venueId }: { venueId: string }) {
             <Stat label="완납 매출" value={`${wonToMan(m.revenue)}만`} emerald />
             <Stat label="미수금" value={`${wonToMan(m.unpaid)}만`} danger={m.unpaid > 0} />
             <Stat label="회수 티켓" value={`${m.ticket}장`} sub={m.ticketUnpaid > 0 ? `미수 ${m.ticketUnpaid}` : undefined} />
+            {period !== 'day' && <Stat label="일평균 매출" value={`${wonToMan(m.avgRevenuePerDay)}만`} emerald />}
           </div>
 
           <div>
@@ -197,7 +223,7 @@ function StatsView({ venueId }: { venueId: string }) {
   );
 }
 
-function DowTable({ dow }: { dow: Record<number, { entries: number; revenue: number; dates: Set<string> }> }) {
+function DowTable({ dow, rangeLabel = '전체' }: { dow: Record<number, { entries: number; revenue: number; dates: Set<string> }>; rangeLabel?: string }) {
   const rows = [1, 2, 3, 4, 5, 6, 0].map((w) => {
     const d = dow[w];
     const days = d ? d.dates.size : 0;
@@ -205,7 +231,7 @@ function DowTable({ dow }: { dow: Record<number, { entries: number; revenue: num
   });
   return (
     <div>
-      <p className="text-2xs text-ink-muted mb-1">요일별 평균(전체 기간 기준)</p>
+      <p className="text-2xs text-ink-muted mb-1">요일별 평균 · {rangeLabel} 기준</p>
       <table className="w-full text-center border-separate border-spacing-0">
         <thead><tr className="text-[10px] text-ink-muted">
           <th className="py-1">요일</th><th>영업일</th><th>총 엔트리</th><th>일평균 엔트리</th><th>매출</th>
@@ -237,8 +263,8 @@ function Stat({ label, value, sub, danger, emerald }: { label: string; value: st
   );
 }
 
-// ── POS 설정(업주) ────────────────────────────────────────────────────────────
-function PosSettings({ venueId }: { venueId: string }) {
+// ── POS 설정(업주) ── 직원관리 옆 별도 탭에서 렌더 ─────────────────────────────
+export function PosSettingsPanel({ venueId }: { venueId: string }) {
   const toast = useToast();
   const [hasPw, setHasPw] = useState(false);
   const [pw, setPw]       = useState('');

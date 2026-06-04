@@ -349,7 +349,7 @@ function AdminVenuePos({ venueId, venueName, onClose }: { venueId: string; venue
           <button type="button" onClick={() => setTab('ledger')} className={tabCls(tab === 'ledger')}>장부 (실시간)</button>
         </div>
         {tab === 'stats'
-          ? <LedgerStatsPanel venueId={venueId} showSettings={false} />
+          ? <LedgerStatsPanel venueId={venueId} />
           : <NuriPosLedger venueId={venueId} canManage venueName={venueName} />}
       </div>
     </div>

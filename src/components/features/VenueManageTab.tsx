@@ -7,9 +7,9 @@ import { getVenueRankings, saveVenueRankings, maskRealName } from '../../api/ran
 import { canAccessLedger, canManagePos } from '../../api/ledger';
 import VenueVerificationCard from './VenueVerificationCard';
 import NuriPosLedger from './NuriPosLedger';
-import LedgerStatsPanel from './LedgerStatsPanel';
+import LedgerStatsPanel, { PosSettingsPanel } from './LedgerStatsPanel';
 
-type Section = 'ledger' | 'stats' | 'ranking' | 'staff';
+type Section = 'ledger' | 'stats' | 'ranking' | 'staff' | 'settings';
 
 /** 업주/직원 전용 "매장 관리" 탭 — 장부(POS) · 통계 · 순위 입력 · (업주) 직원 관리 */
 export default function VenueManageTab({ onAddPoster }: { onAddPoster?: () => void }) {
@@ -43,6 +43,7 @@ export default function VenueManageTab({ onAddPoster }: { onAddPoster?: () => vo
   if (manageOk) available.push({ id: 'stats',  label: '통계' });
   if (ledgerOk) available.push({ id: 'ranking', label: '순위 입력' });
   if (isOwner)  available.push({ id: 'staff', label: '직원 관리' });
+  if (isOwner)  available.push({ id: 'settings', label: 'POS 설정' });
 
   if (!user || !venueId) {
     return (
@@ -80,9 +81,10 @@ export default function VenueManageTab({ onAddPoster }: { onAddPoster?: () => vo
         <NuriPosLedger venueId={venueId} canManage={manageOk}
           onMakeRankingDraft={(d, names) => { setRankingDraft({ date: d, names }); setSection('ranking'); }} />
       )}
-      {section === 'stats'   && manageOk && <LedgerStatsPanel venueId={venueId} />}
-      {section === 'ranking' && <RankingEditor venueId={venueId} canEdit={user.approved === true} draft={rankingDraft} />}
-      {section === 'staff'   && isOwner && <StaffManager />}
+      {section === 'stats'    && manageOk && <LedgerStatsPanel venueId={venueId} />}
+      {section === 'ranking'  && <RankingEditor venueId={venueId} canEdit={user.approved === true} draft={rankingDraft} />}
+      {section === 'staff'    && isOwner && <StaffManager />}
+      {section === 'settings' && isOwner && <PosSettingsPanel venueId={venueId} />}
     </div>
   );
 }

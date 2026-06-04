@@ -422,7 +422,14 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                           </button>
                         ) : first ? <span className="text-2xs text-ink-muted">—</span> : null}
                       </td>
-                      <td className="w-[4.5rem] px-1 py-1 border-b border-l border-border-subtle text-2xs tabular-nums text-ink-secondary">{first ? `${wonToMan(tot.paid)}만` : ''}</td>
+                      <td className="w-[4.5rem] px-1 py-1 border-b border-l border-border-subtle text-2xs tabular-nums">
+                        {first ? (
+                          <span className="leading-tight block">
+                            <b className="text-gold-300">{cnt}회</b>
+                            <span className="block text-ink-secondary">{wonToMan(tot.paid + tot.unpaid)}만</span>
+                          </span>
+                        ) : ''}
+                      </td>
                       <td className="w-[4.5rem] px-1 py-1 border-b border-l border-border-subtle text-2xs tabular-nums text-danger-light">{first && tot.unpaid > 0 ? `${wonToMan(tot.unpaid)}만` : ''}</td>
                     </tr>
                   );
