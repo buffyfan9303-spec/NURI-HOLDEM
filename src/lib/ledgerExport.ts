@@ -2,7 +2,7 @@
 // 장부를 Excel(.xls)로 내보내기 — 무의존성(HTML 테이블 → application/vnd.ms-excel).
 // 한글/서식 유지, Excel에서 바로 열림. 기존 새틀빌지(BUY-IN LIST) 양식과 유사한 표 구성.
 import type { LedgerBuyin, LedgerPlayer, LedgerSession, PaymentMethod } from '../api/ledger';
-import { cardUnit, visitorLabel, wonToMan } from '../api/ledger';
+import { visitorLabel, wonToMan, buyinFinance } from '../api/ledger';
 
 const METHOD_KO: Record<PaymentMethod, string> = {
   ticket: '티켓', cash: '현금', transfer: '이체', card: '카드', support: '가게지원',
@@ -34,19 +34,12 @@ export function buildLedgerHtml(input: LedgerExportInput): string {
   const maxEntry = Math.max(1, ...buyins.map((b) => b.entryNo), ...names.map((n) => byPlayer(n).length));
 
   // 집계
-  let totalBuyins = 0, ticket = 0, revenue = 0, unpaid = 0, support = 0;
+  let totalBuyins = 0, ticket = 0, revenue = 0, unpaid = 0, support = 0, entries = 0;
   for (const b of buyins) {
     totalBuyins++;
-    if (b.isSplit) {
-      revenue += b.cashAmount + b.cardAmount + b.transferAmount;
-      unpaid  += b.unpaidAmount;
-      ticket  += b.ticketCount;
-    } else if (b.paymentMethod === 'support') support++;
-    else if (b.paymentMethod === 'ticket') ticket++;
-    else {
-      const unit = b.paymentMethod === 'card' ? cardUnit(session) : session.buyinAmount;
-      if (b.isUnpaid) unpaid += unit; else revenue += unit;
-    }
+    const f = buyinFinance(b, session);
+    revenue += f.paid; unpaid += f.unpaid; support += f.support; entries += f.entry;
+    ticket += f.ticketPaid + (b.isSplit ? b.ticketCount : 0);
   }
 
   const cellOf = (name: string, e: number): string => {
@@ -85,7 +78,7 @@ export function buildLedgerHtml(input: LedgerExportInput): string {
   ].filter(Boolean).join('<br>');
 
   const totalColspan = maxEntry + 5;
-  const summary = `총 엔트리 ${totalBuyins} · 회수 티켓 ${ticket}장 · 완납 매출 ${wonToMan(revenue)}만원 · 당일 미수금 ${wonToMan(unpaid)}만원 · 가게지원 ${support}건`;
+  const summary = `총 엔트리 ${entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} · 총 바인 ${totalBuyins} · 회수 티켓 ${ticket}장 · 완납 매출 ${wonToMan(revenue)}만원 · 당일 미수금 ${wonToMan(unpaid)}만원 · 가게지원 ${support}건`;
 
   return `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
 <head><meta charset="utf-8"><style>

@@ -2,6 +2,7 @@
 import { supabase, IS_MOCK } from '../lib/supabase';
 
 export type PaymentMethod = 'ticket' | 'cash' | 'transfer' | 'card' | 'support';
+export interface DiscountPreset { label: string; amount: number } // amount: 원
 /** 고정 유형 코드 + 그 외(기타/직접입력)는 자유 텍스트로 저장 */
 export type VisitorType = 'new' | 'regular' | 'staff' | 'other';
 const VISITOR_KNOWN: Record<string, string> = { new: '신규방문', regular: '기존손님', staff: '관계자', other: '기타' };
@@ -28,6 +29,7 @@ export interface LedgerBuyin {
   ticketCount: number;
   unpaidAmount: number;
   discountLevel: number;
+  discountIndex: number;        // 적용 할인 프리셋(0=없음, 1~5)
 }
 
 export interface LedgerSession {
@@ -40,6 +42,7 @@ export interface LedgerSession {
   eventMemo?: string;           // 이벤트 등 비고
   dealers?: string;             // 금일 딜러 명단(줄바꿈 구분, 선택)
   scheduleId?: string | null;   // 연결된 포스터(대회) 일정
+  discounts: DiscountPreset[];  // 할인 프리셋(최대 5)
   openedBy?: string | null;     // 담당직원(프로필 id)
   openedAt?: string | null;
   regClosed: boolean;           // 레지(레지스트리) 마감
@@ -72,6 +75,31 @@ export function cardUnit(s: { buyinAmount: number; cardAmount: number | null }):
   return s.cardAmount && s.cardAmount > 0 ? s.cardAmount : s.buyinAmount;
 }
 
+export interface BuyinFinance { paid: number; unpaid: number; entry: number; ticketPaid: number; ticketUnpaid: number; support: number }
+
+/** 바인 1건의 매출/미수/엔트리(할인 반영). 엔트리 = (단가 - 할인)/단가. */
+export function buyinFinance(b: LedgerBuyin, s: { buyinAmount: number; cardAmount: number | null; discounts?: DiscountPreset[] }): BuyinFinance {
+  const entryUnit = s.buyinAmount;
+  const z: BuyinFinance = { paid: 0, unpaid: 0, entry: 0, ticketPaid: 0, ticketUnpaid: 0, support: 0 };
+  if (b.isSplit) {
+    const paid = b.cashAmount + b.cardAmount + b.transferAmount;
+    const total = paid + b.unpaidAmount;
+    return { ...z, paid, unpaid: b.unpaidAmount, entry: entryUnit > 0 ? total / entryUnit : (total > 0 ? 1 : 0) };
+  }
+  const disc = (s.discounts && b.discountIndex > 0 && s.discounts[b.discountIndex - 1]) ? s.discounts[b.discountIndex - 1].amount : 0;
+  const entry = entryUnit > 0 ? Math.max(0, entryUnit - disc) / entryUnit : 1;
+  if (b.paymentMethod === 'support') return { ...z, entry, support: 1 };
+  if (b.paymentMethod === 'ticket') return { ...z, entry, ticketPaid: b.isUnpaid ? 0 : 1, ticketUnpaid: b.isUnpaid ? 1 : 0 };
+  const payUnit = b.paymentMethod === 'card' ? cardUnit(s) : s.buyinAmount;
+  const effPay = Math.max(0, payUnit - disc);
+  return b.isUnpaid ? { ...z, entry, unpaid: effPay } : { ...z, entry, paid: effPay };
+}
+
+/** 할인 적용 후 표시용 금액(원). */
+export function discountAmountOf(s: { discounts?: DiscountPreset[] }, idx: number): number {
+  return (s.discounts && idx > 0 && s.discounts[idx - 1]) ? s.discounts[idx - 1].amount : 0;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const rowToBuyin = (r: any): LedgerBuyin => ({
   id: r.id, venueId: r.venue_id, sessionDate: r.session_date,
@@ -81,6 +109,7 @@ const rowToBuyin = (r: any): LedgerBuyin => ({
   isSplit: !!r.is_split,
   cashAmount: r.cash_amount ?? 0, cardAmount: r.card_amount ?? 0, transferAmount: r.transfer_amount ?? 0,
   ticketCount: r.ticket_count ?? 0, unpaidAmount: r.unpaid_amount ?? 0, discountLevel: r.discount_level ?? 0,
+  discountIndex: r.discount_index ?? 0,
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -100,6 +129,7 @@ const rowToSession = (venueId: string, date: string, d: any): LedgerSession => (
   closed: !!d?.closed,
   closedAt: d?.closed_at ?? null,
   closeMemo: d?.close_memo ?? null,
+  discounts: Array.isArray(d?.discounts) ? d.discounts : [],
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -110,7 +140,7 @@ const rowToPlayer = (r: any): LedgerPlayer => ({
 });
 
 const emptySession = (venueId: string, date: string): LedgerSession => ({
-  venueId, sessionDate: date, buyinAmount: 0, cardAmount: null, targetEntries: 0, regClosed: false, closed: false,
+  venueId, sessionDate: date, buyinAmount: 0, cardAmount: null, targetEntries: 0, regClosed: false, closed: false, discounts: [],
 });
 
 // ── 권한 ──────────────────────────────────────────────────────────────────────
@@ -163,7 +193,7 @@ export async function getLedgerSessionList(venueId: string, limit = 90): Promise
 export async function getLastLedgerSettings(venueId: string, beforeDate: string): Promise<Partial<LedgerSession> | null> {
   if (IS_MOCK) return null;
   const { data } = await supabase.from('ledger_sessions')
-    .select('buyin_amount, card_amount, target_entries, title, dealers, event_memo')
+    .select('buyin_amount, card_amount, target_entries, title, dealers, event_memo, discounts')
     .eq('venue_id', venueId).lt('session_date', beforeDate)
     .order('session_date', { ascending: false }).limit(1).maybeSingle();
   if (!data) return null;
@@ -174,6 +204,7 @@ export async function getLastLedgerSettings(venueId: string, beforeDate: string)
     title: data.title ?? undefined,
     dealers: data.dealers ?? undefined,
     eventMemo: data.event_memo ?? undefined,
+    discounts: Array.isArray(data.discounts) ? data.discounts as DiscountPreset[] : [],
   };
 }
 
@@ -185,13 +216,14 @@ export async function saveLedgerSession(s: LedgerSession): Promise<void> {
     buyin_amount: s.buyinAmount, card_amount: s.cardAmount,
     target_entries: s.targetEntries, title: s.title ?? null,
     event_memo: s.eventMemo ?? null, dealers: s.dealers ?? null, schedule_id: s.scheduleId ?? null,
+    discounts: (s.discounts ?? []) as unknown as object,
     updated_at: new Date().toISOString(),
   }, { onConflict: 'venue_id,session_date' });
   if (error) throw error;
 }
 
 /** 장부 입장(세션 오픈) — 담당직원/오픈시각 기록 + 편집 필드 저장. closed=false 로 리셋. */
-export async function openLedgerSession(s: LedgerSession): Promise<void> {
+export async function openLedgerSession(s: LedgerSession, operatorId?: string | null): Promise<void> {
   if (IS_MOCK) return;
   const { data: { user } } = await supabase.auth.getUser();
   const { error } = await supabase.from('ledger_sessions').upsert({
@@ -199,7 +231,8 @@ export async function openLedgerSession(s: LedgerSession): Promise<void> {
     buyin_amount: s.buyinAmount, card_amount: s.cardAmount,
     target_entries: s.targetEntries, title: s.title ?? null,
     event_memo: s.eventMemo ?? null, dealers: s.dealers ?? null, schedule_id: s.scheduleId ?? null,
-    opened_by: user?.id ?? null, opened_at: new Date().toISOString(),
+    discounts: (s.discounts ?? []) as unknown as object,
+    opened_by: operatorId ?? user?.id ?? null, opened_at: new Date().toISOString(),
     reg_closed: false, reg_closed_at: null,
     closed: false, closed_at: null, close_memo: null,
     updated_at: new Date().toISOString(),
@@ -291,11 +324,24 @@ export async function getLedgerBuyins(venueId: string, date = today()): Promise<
   return (data ?? []).map(rowToBuyin);
 }
 
+/** 기간 통계용 — 날짜 범위의 세션 + 바인 일괄 조회 */
+export async function getLedgerRange(venueId: string, from: string, to: string): Promise<{ sessions: LedgerSession[]; buyins: LedgerBuyin[] }> {
+  if (IS_MOCK) return { sessions: [], buyins: [] };
+  const [sRes, bRes] = await Promise.all([
+    supabase.from('ledger_sessions').select('*').eq('venue_id', venueId).gte('session_date', from).lte('session_date', to),
+    supabase.from('ledger_buyins').select('*').eq('venue_id', venueId).gte('session_date', from).lte('session_date', to),
+  ]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sessions = (sRes.data ?? []).map((d: any) => rowToSession(venueId, d.session_date, d));
+  const buyins = (bRes.data ?? []).map(rowToBuyin);
+  return { sessions, buyins };
+}
+
 /** 셀 결제 입력/수정 — (매장,날짜,플레이어,회차) 충돌 시 갱신. buyin_at = NOW.
  *  티켓/가게지원은 항상 완납 처리(미수 불가). */
 export async function upsertBuyin(input: {
   venueId: string; sessionDate: string; playerName: string; entryNo: number;
-  paymentMethod: PaymentMethod; isUnpaid: boolean;
+  paymentMethod: PaymentMethod; isUnpaid: boolean; discountIndex?: number;
 }): Promise<void> {
   if (IS_MOCK) return;
   const { data: { user } } = await supabase.auth.getUser();
@@ -306,7 +352,7 @@ export async function upsertBuyin(input: {
     player_name: input.playerName, entry_no: input.entryNo,
     payment_method: input.paymentMethod, is_unpaid: unpaid,
     is_split: false, cash_amount: 0, card_amount: 0, transfer_amount: 0,
-    ticket_count: 0, unpaid_amount: 0, discount_level: 0,
+    ticket_count: 0, unpaid_amount: 0, discount_level: 0, discount_index: input.discountIndex ?? 0,
     buyin_at: new Date().toISOString(), created_by: user?.id ?? null,
   }, { onConflict: 'venue_id,session_date,player_name,entry_no' });
   if (error) throw error;
@@ -332,7 +378,7 @@ export async function upsertBuyinSplit(input: {
     payment_method: primary, is_unpaid: input.unpaidAmount > 0,
     is_split: true,
     cash_amount: input.cashAmount, card_amount: input.cardAmount, transfer_amount: input.transferAmount,
-    ticket_count: input.ticketCount, unpaid_amount: input.unpaidAmount, discount_level: input.discountLevel,
+    ticket_count: input.ticketCount, unpaid_amount: input.unpaidAmount, discount_level: input.discountLevel, discount_index: 0,
     buyin_at: new Date().toISOString(), created_by: user?.id ?? null,
   }, { onConflict: 'venue_id,session_date,player_name,entry_no' });
   if (error) throw error;

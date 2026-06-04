@@ -6,8 +6,8 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import {
-  type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type LedgerSessionListItem,
-  cardUnit, visitorLabel, wonToMan, WON_PER_MAN,
+  type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type LedgerSessionListItem, type DiscountPreset,
+  visitorLabel, wonToMan, WON_PER_MAN, buyinFinance,
   getLedgerSession, saveLedgerSession, openLedgerSession, closeLedgerSession, reopenLedgerSession,
   setRegistrationClosed, getLastLedgerSettings, getLedgerSessionList,
   getLedgerBuyins, upsertBuyin, upsertBuyinSplit, cancelBuyin,
@@ -16,6 +16,7 @@ import {
 } from '../../api/ledger';
 import { exportLedgerXls } from '../../lib/ledgerExport';
 import { getSchedules, type Schedule } from '../../api/schedules';
+import { getMyVenueStaff, type User } from '../../api/auth';
 
 const today = () => new Date().toLocaleDateString('en-CA'); // 로컬 날짜 — UTC 자정 넘김 방지
 
@@ -47,7 +48,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const operatorName = user?.name ?? user?.nickname ?? '담당직원';
 
   const [date, setDate]       = useState(today);
-  const [session, setSession] = useState<LedgerSession>({ venueId, sessionDate: today(), buyinAmount: 0, cardAmount: null, targetEntries: 0, regClosed: false, closed: false });
+  const [session, setSession] = useState<LedgerSession>({ venueId, sessionDate: today(), buyinAmount: 0, cardAmount: null, targetEntries: 0, regClosed: false, closed: false, discounts: [] });
   const [buyins, setBuyins]   = useState<LedgerBuyin[]>([]);
   const [players, setPlayers] = useState<LedgerPlayer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,6 +71,16 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     getSchedules().then((all) => setVenueSchedules(all.filter((s) => s.venueId === venueId))).catch(() => {});
   }, [venueId]);
   const scheduleTitle = (id?: string | null) => venueSchedules.find((s) => s.id === id)?.title ?? null;
+
+  const [staff, setStaff] = useState<User[]>([]);
+  useEffect(() => { getMyVenueStaff().then(setStaff).catch(() => {}); }, []);
+  const operatorOptions = useMemo(() => {
+    const opts: { id: string; label: string }[] = [];
+    if (user) opts.push({ id: user.id, label: `${user.name}${isAdmin ? ' (운영자)' : ' (업주/나)'}` });
+    for (const s of staff) if (s.id !== user?.id) opts.push({ id: s.id, label: `${s.name}${s.nickname ? ` · @${s.nickname}` : ''}` });
+    return opts;
+  }, [user, staff, isAdmin]);
+  const operatorName2 = (id?: string | null) => operatorOptions.find((o) => o.id === id)?.label ?? operatorName;
 
   const loadList = useCallback(() => {
     setListLoading(true);
@@ -107,8 +118,6 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const cellAt = (name: string, e: number) => buyins.find((b) => b.playerName === name && b.entryNo === e) ?? null;
   const countOf = (name: string) => buyins.filter((b) => b.playerName === name).length;
   const maxEntryOf = (name: string) => buyins.reduce((m, b) => (b.playerName === name && b.entryNo > m ? b.entryNo : m), 0);
-  const globalMax = buyins.reduce((m, b) => Math.max(m, b.entryNo), 0);
-  const colCount = Math.max(8, globalMax + 1);
 
   const rows = useMemo(() => {
     const rosterNames = players.map((p) => p.name);
@@ -122,28 +131,26 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   }, [players, buyins, query]);
 
   const stats = useMemo(() => {
-    let totalBuyins = 0, ticket = 0, ticketUnpaid = 0, revenue = 0, unpaid = 0, support = 0;
+    let totalBuyins = 0, ticket = 0, ticketUnpaid = 0, revenue = 0, unpaid = 0, support = 0, entries = 0;
     for (const b of buyins) {
       totalBuyins++;
-      if (b.isSplit) {
-        revenue += b.cashAmount + b.cardAmount + b.transferAmount;
-        unpaid  += b.unpaidAmount;
-        ticket  += b.ticketCount;
-        continue;
-      }
-      if (b.paymentMethod === 'support') support++;
-      else if (b.paymentMethod === 'ticket') { if (b.isUnpaid) ticketUnpaid++; else ticket++; }
-      else {
-        const unit = b.paymentMethod === 'card' ? cardUnit(session) : session.buyinAmount;
-        if (b.isUnpaid) unpaid += unit; else revenue += unit;
-      }
+      const f = buyinFinance(b, session);
+      revenue += f.paid; unpaid += f.unpaid; entries += f.entry;
+      ticket += f.ticketPaid + (b.isSplit ? b.ticketCount : 0); ticketUnpaid += f.ticketUnpaid; support += f.support;
     }
-    return { totalBuyins, ticket, ticketUnpaid, revenue, unpaid, support };
+    return { totalBuyins, entries, ticket, ticketUnpaid, revenue, unpaid, support };
   }, [buyins, session]);
+
+  // 플레이어별 총 바이인/미수(금액)
+  const playerTotals = (name: string) => {
+    let paid = 0, unpaid = 0;
+    for (const b of buyins) if (b.playerName === name) { const f = buyinFinance(b, session); paid += f.paid; unpaid += f.unpaid; }
+    return { paid, unpaid };
+  };
 
   // ── 액션 ──────────────────────────────────────────────────────────────────
   const handleOpen = async (s: LedgerSession) => {
-    try { await openLedgerSession(s); await reloadSession(); toast.show('장부를 시작했습니다', 'success'); }
+    try { await openLedgerSession(s, s.openedBy ?? null); await reloadSession(); toast.show('장부를 시작했습니다', 'success'); }
     catch (e) { toast.show(e instanceof Error ? e.message : '시작 실패', 'error'); }
   };
   const handleEditSave = async (s: LedgerSession) => {
@@ -238,7 +245,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
         ) : (
           <SessionForm
             base={{ ...session, ...(prefill ?? {}) }} mode="open" operatorName={operatorName}
-            prefilled={!!prefill} schedules={venueSchedules}
+            prefilled={!!prefill} schedules={venueSchedules} operatorOptions={operatorOptions}
             onSubmit={handleOpen}
           />
         )}
@@ -256,7 +263,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
         <span className="text-sm font-bold text-ink-primary">{session.title || '세션'}</span>
         <span className="text-2xs text-ink-muted">현금 {wonToMan(session.buyinAmount)}만원
           {session.cardAmount && session.cardAmount > 0 ? ` · 카드 ${wonToMan(session.cardAmount)}만원` : ' · 카드=현금'}</span>
-        {session.openedAt && <span className="text-2xs text-ink-muted">· 담당 {operatorName}</span>}
+        {session.openedAt && <span className="text-2xs text-ink-muted">· 담당 {operatorName2(session.openedBy)}</span>}
         {scheduleTitle(session.scheduleId) && <span className="text-2xs text-gold-300 font-semibold">· 대회 {scheduleTitle(session.scheduleId)}</span>}
         <span className="flex-1" />
         {!closed && <button type="button" onClick={() => setEditOpen(true)} className="btn-ghost text-2xs px-2.5 py-1">세션 정보 수정</button>}
@@ -331,86 +338,95 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
         <p className="py-10 text-center text-xs text-ink-muted">{query ? '검색 결과가 없습니다.' : '유저를 추가하면 바인을 입력할 수 있습니다.'}</p>
       ) : (
         <div className="overflow-x-auto rounded-card border border-border-subtle">
-          <table className="border-separate border-spacing-0 text-center">
+          <table className="border-separate border-spacing-0 text-center w-full">
             <thead>
               <tr className="bg-surface-high">
                 <th className="sticky left-0 z-20 bg-surface-high w-9 px-1 py-1.5 text-[10px] text-ink-muted border-b border-border-subtle">No</th>
                 <th className="sticky left-9 z-20 bg-surface-high min-w-[7.5rem] px-2 py-1.5 text-[10px] text-ink-muted border-b border-l border-border-subtle text-left">플레이어</th>
-                {Array.from({ length: colCount }, (_, i) => (
-                  <th key={i} className="w-[3.9rem] px-0.5 py-1.5 text-[10px] text-ink-muted border-b border-l border-border-subtle">{i + 1}바인</th>
+                {Array.from({ length: 10 }, (_, i) => (
+                  <th key={i} className="w-[3.6rem] px-0.5 py-1.5 text-[10px] text-ink-muted border-b border-l border-border-subtle">{i + 1}바인</th>
                 ))}
-                <th className="min-w-[8rem] px-2 py-1.5 text-[10px] text-ink-muted border-b border-l border-border-subtle text-left">비고</th>
+                <th className="min-w-[6rem] px-2 py-1.5 text-[10px] text-ink-muted border-b border-l border-border-subtle text-left">비고</th>
+                <th className="w-[4.5rem] px-1 py-1.5 text-[10px] text-ink-muted border-b border-l border-border-subtle">총바인</th>
+                <th className="w-[4.5rem] px-1 py-1.5 text-[10px] text-ink-muted border-b border-l border-border-subtle">미수</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r, ri) => {
                 const cnt = countOf(r.name);
                 const mx = maxEntryOf(r.name);
-                return (
-                  <tr key={r.name} className="even:bg-surface-base/40">
-                    <td className="sticky left-0 z-10 bg-surface-low w-9 px-1 py-1 text-[10px] text-ink-muted border-b border-border-subtle tabular-nums">{ri + 1}</td>
-                    <td className="sticky left-9 z-10 bg-surface-low min-w-[7.5rem] px-2 py-1 border-b border-l border-border-subtle text-left">
-                      <button type="button" disabled={!r.player || closed}
-                        onClick={() => r.player && setEditPlayer(r.player)}
-                        className="w-full text-left disabled:cursor-default">
-                        <div className="flex items-center gap-1">
-                          <span className="text-xs font-bold text-ink-primary truncate max-w-[5rem]" title={r.name}>{r.name}</span>
-                          <span className="text-[9px] text-ink-muted shrink-0">{cnt}회</span>
-                        </div>
-                        <div className="flex items-center gap-1 mt-0.5">
-                          {r.player?.visitorType
-                            ? <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-badge bg-gold-300/15 text-gold-300 border border-gold-400/40">{visitorLabel(r.player.visitorType)}</span>
-                            : r.player ? <span className="text-[9px] text-ink-muted">{closed ? '' : '유형/비고 +'}</span> : <span className="text-[9px] text-ink-muted">—</span>}
-                          {r.player?.note && <span className="text-[9px] text-ink-secondary truncate max-w-[4rem]">· {r.player.note}</span>}
-                        </div>
-                      </button>
-                    </td>
+                const tot = playerTotals(r.name);
+                const rowChunks = Math.min(10, Math.max(1, Math.ceil((mx + 1) / 10)));
+                return Array.from({ length: rowChunks }, (_, chunk) => {
+                  const first = chunk === 0;
+                  return (
+                    <tr key={`${r.name}-${chunk}`} className={first ? 'border-t-2 border-border-default' : ''}>
+                      <td className="sticky left-0 z-10 bg-surface-low w-9 px-1 py-1 text-[10px] text-ink-muted border-b border-border-subtle tabular-nums">{first ? ri + 1 : <span className="opacity-40">↳</span>}</td>
+                      <td className="sticky left-9 z-10 bg-surface-low min-w-[7.5rem] px-2 py-1 border-b border-l border-border-subtle text-left">
+                        {first ? (
+                          <button type="button" disabled={!r.player || closed} onClick={() => r.player && setEditPlayer(r.player)} className="w-full text-left disabled:cursor-default">
+                            <div className="flex items-center gap-1">
+                              <span className="text-xs font-bold text-ink-primary truncate max-w-[5rem]" title={r.name}>{r.name}</span>
+                              <span className="text-[9px] text-ink-muted shrink-0">{cnt}회</span>
+                            </div>
+                            <div className="flex items-center gap-1 mt-0.5">
+                              {r.player?.visitorType
+                                ? <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-badge bg-gold-300/15 text-gold-300 border border-gold-400/40">{visitorLabel(r.player.visitorType)}</span>
+                                : r.player ? <span className="text-[9px] text-ink-muted">{closed ? '' : '유형/비고 +'}</span> : <span className="text-[9px] text-ink-muted">—</span>}
+                              {r.player?.note && <span className="text-[9px] text-ink-secondary truncate max-w-[4rem]">· {r.player.note}</span>}
+                            </div>
+                          </button>
+                        ) : <span className="text-[10px] text-ink-muted/50 truncate">{r.name}</span>}
+                      </td>
 
-                    {Array.from({ length: colCount }, (_, i) => {
-                      const e = i + 1;
-                      const c = cellAt(r.name, e);
-                      const cls = 'w-[3.9rem] h-[2.6rem] px-0.5 py-0.5 border-b border-l border-border-subtle align-middle';
-                      if (c) {
-                        const tone = c.paymentMethod === 'support'
-                          ? 'border-indigo-400/50 bg-indigo-500/10 text-indigo-300'
-                          : c.isUnpaid ? 'border-danger bg-danger/10 text-danger-light'
-                          : c.isSplit ? 'border-gold-400/50 bg-gold-300/10 text-gold-300'
-                          : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300';
-                        const topLabel = c.isSplit ? '분납' : `${METHOD_SHORT[c.paymentMethod]}${c.isUnpaid ? '·미' : ''}`;
-                        return (
-                          <td key={e} className={cls}>
-                            <button type="button" disabled={closed}
-                              onClick={() => !closed && setSelected({ playerName: r.name, entryNo: e, buyin: c })}
-                              className={['w-full h-full rounded-input border-2 flex flex-col items-center justify-center leading-none', tone, closed ? 'cursor-default' : ''].join(' ')}>
-                              <span className="text-[11px] font-extrabold">{topLabel}{c.isSplit && c.discountLevel > 0 ? '*' : ''}</span>
-                              <span className="text-[8px] opacity-80 mt-0.5">{hhmm(c.buyinAt)}</span>
-                            </button>
-                          </td>
-                        );
-                      }
-                      if (!closed && e <= mx + 1) {
-                        return (
-                          <td key={e} className={cls}>
-                            <button type="button" onClick={() => setSelected({ playerName: r.name, entryNo: e, buyin: null })}
-                              className="w-full h-full rounded-input border-2 border-dashed border-border-default text-ink-muted hover:border-gold-400 hover:text-gold-300 transition-colors flex items-center justify-center text-base font-bold">+</button>
-                          </td>
-                        );
-                      }
-                      return <td key={e} className={cls}><div className="w-full h-full rounded-input bg-surface-base/30" /></td>;
-                    })}
+                      {Array.from({ length: 10 }, (_, i) => {
+                        const e = chunk * 10 + i + 1;
+                        const c = cellAt(r.name, e);
+                        const cls = 'w-[3.6rem] h-[2.6rem] px-0.5 py-0.5 border-b border-l border-border-subtle align-middle';
+                        if (e > 100) return <td key={e} className={cls} />;
+                        if (c) {
+                          const tone = c.paymentMethod === 'support'
+                            ? 'border-indigo-400/50 bg-indigo-500/10 text-indigo-300'
+                            : c.isUnpaid ? 'border-danger bg-danger/10 text-danger-light'
+                            : (c.isSplit || c.discountIndex > 0) ? 'border-gold-400/50 bg-gold-300/10 text-gold-300'
+                            : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300';
+                          const topLabel = c.isSplit ? '분납' : `${METHOD_SHORT[c.paymentMethod]}${c.isUnpaid ? '·미' : ''}`;
+                          return (
+                            <td key={e} className={cls}>
+                              <button type="button" disabled={closed}
+                                onClick={() => !closed && setSelected({ playerName: r.name, entryNo: e, buyin: c })}
+                                className={['w-full h-full rounded-input border-2 flex flex-col items-center justify-center leading-none', tone, closed ? 'cursor-default' : ''].join(' ')}>
+                                <span className="text-[11px] font-extrabold">{topLabel}{(c.discountIndex > 0 || (c.isSplit && c.discountLevel > 0)) ? '*' : ''}</span>
+                                <span className="text-[8px] opacity-80 mt-0.5">{hhmm(c.buyinAt)}</span>
+                              </button>
+                            </td>
+                          );
+                        }
+                        if (!closed && e <= mx + 1 && e <= 100) {
+                          return (
+                            <td key={e} className={cls}>
+                              <button type="button" onClick={() => setSelected({ playerName: r.name, entryNo: e, buyin: null })}
+                                className="w-full h-full rounded-input border-2 border-dashed border-border-default text-ink-muted hover:border-gold-400 hover:text-gold-300 transition-colors flex items-center justify-center text-base font-bold">+</button>
+                            </td>
+                          );
+                        }
+                        return <td key={e} className={cls}><div className="w-full h-full rounded-input bg-surface-base/30" /></td>;
+                      })}
 
-                    <td className="min-w-[8rem] px-1 py-1 border-b border-l border-border-subtle text-left">
-                      {r.player ? (
-                        <button type="button" disabled={closed} onClick={() => setEditPlayer(r.player as LedgerPlayer)}
-                          className="w-full text-left text-2xs disabled:cursor-default">
-                          {r.player.note
-                            ? <span className="text-ink-secondary line-clamp-2 whitespace-pre-wrap break-words">{r.player.note}</span>
-                            : <span className="text-gold-300 font-semibold">{closed ? '—' : '비고 작성 +'}</span>}
-                        </button>
-                      ) : <span className="text-2xs text-ink-muted">—</span>}
-                    </td>
-                  </tr>
-                );
+                      <td className="min-w-[6rem] px-1 py-1 border-b border-l border-border-subtle text-left">
+                        {first && r.player ? (
+                          <button type="button" disabled={closed} onClick={() => setEditPlayer(r.player as LedgerPlayer)} className="w-full text-left text-2xs disabled:cursor-default">
+                            {r.player.note
+                              ? <span className="text-ink-secondary line-clamp-2 whitespace-pre-wrap break-words">{r.player.note}</span>
+                              : <span className="text-gold-300 font-semibold">{closed ? '—' : '비고 +'}</span>}
+                          </button>
+                        ) : first ? <span className="text-2xs text-ink-muted">—</span> : null}
+                      </td>
+                      <td className="w-[4.5rem] px-1 py-1 border-b border-l border-border-subtle text-2xs tabular-nums text-ink-secondary">{first ? `${wonToMan(tot.paid)}만` : ''}</td>
+                      <td className="w-[4.5rem] px-1 py-1 border-b border-l border-border-subtle text-2xs tabular-nums text-danger-light">{first && tot.unpaid > 0 ? `${wonToMan(tot.unpaid)}만` : ''}</td>
+                    </tr>
+                  );
+                });
               })}
             </tbody>
           </table>
@@ -421,7 +437,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       <div className="fixed bottom-0 left-0 right-0 z-30 mx-auto max-w-6xl bg-surface-mid border-t border-border-default px-page-x py-2">
         <div className="flex items-center gap-2">
           <div className="grid grid-cols-4 gap-2 flex-1 text-center">
-            <Metric label="총 엔트리" value={`${stats.totalBuyins}`} />
+            <Metric label="총 엔트리" value={stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} />
             <Metric label="회수 티켓" value={`${stats.ticket}장`} />
             <Metric label="완납 매출" value={`${wonToMan(stats.revenue)}만`} tone="emerald" />
             <Metric label="미수금" value={`${wonToMan(stats.unpaid)}만`} tone="danger" />
@@ -453,11 +469,11 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       {/* 2-Tap 결제 모달 */}
       {selected && (
         <PaymentModal
-          cell={selected} hasPw={hasPw}
+          cell={selected} hasPw={hasPw} session={session}
           onClose={() => setSelected(null)}
-          onPick={async (method, isUnpaid) => {
+          onPick={async (method, isUnpaid, discountIndex) => {
             try {
-              await upsertBuyin({ venueId, sessionDate: date, playerName: selected.playerName, entryNo: selected.entryNo, paymentMethod: method, isUnpaid });
+              await upsertBuyin({ venueId, sessionDate: date, playerName: selected.playerName, entryNo: selected.entryNo, paymentMethod: method, isUnpaid, discountIndex });
               setSelected(null); reload();
             } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
           }}
@@ -478,7 +494,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       {/* 세션 정보 수정 */}
       {editOpen && (
         <Overlay onClose={() => setEditOpen(false)} title="세션 정보 수정">
-          <SessionForm base={session} mode="edit" operatorName={operatorName} schedules={venueSchedules} onSubmit={handleEditSave} onCancel={() => setEditOpen(false)} embedded />
+          <SessionForm base={session} mode="edit" operatorName={operatorName} schedules={venueSchedules} operatorOptions={operatorOptions} onSubmit={handleEditSave} onCancel={() => setEditOpen(false)} embedded />
         </Overlay>
       )}
 
@@ -587,10 +603,10 @@ function Metric({ label, value, tone }: { label: string; value: string; tone?: '
 }
 
 // ── 세션 설정 폼 (입장/수정 공용) ─────────────────────────────────────────────
-function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, prefilled, schedules = [] }: {
+function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, prefilled, schedules = [], operatorOptions = [] }: {
   base: LedgerSession; mode: 'open' | 'edit'; operatorName: string;
   onSubmit: (s: LedgerSession) => void; onCancel?: () => void; embedded?: boolean; prefilled?: boolean;
-  schedules?: Schedule[];
+  schedules?: Schedule[]; operatorOptions?: { id: string; label: string }[];
 }) {
   const [title, setTitle]     = useState(base.title ?? '');
   const [cash, setCash]       = useState<number>(base.buyinAmount || 0);
@@ -599,6 +615,13 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   const [event, setEvent]     = useState(base.eventMemo ?? '');
   const [dealers, setDealers] = useState(base.dealers ?? '');
   const [schedId, setSchedId] = useState<string>(base.scheduleId ?? '');
+  const [operId, setOperId]   = useState<string>(base.openedBy ?? operatorOptions[0]?.id ?? '');
+  const [discs, setDiscs]     = useState<DiscountPreset[]>(base.discounts ?? []);
+
+  const setDisc = (i: number, patch: Partial<DiscountPreset>) =>
+    setDiscs((arr) => arr.map((d, idx) => (idx === i ? { ...d, ...patch } : d)));
+  const addDisc = () => setDiscs((arr) => (arr.length < 5 ? [...arr, { label: '', amount: 0 }] : arr));
+  const removeDisc = (i: number) => setDiscs((arr) => arr.filter((_, idx) => idx !== i));
 
   const submit = () => {
     if (cash <= 0) return;
@@ -606,7 +629,8 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       ...base, title: title.trim() || undefined,
       buyinAmount: cash, cardAmount: card > 0 ? card : null,
       targetEntries: target, eventMemo: event.trim() || undefined, dealers: dealers.trim() || undefined,
-      scheduleId: schedId || null,
+      scheduleId: schedId || null, openedBy: operId || null,
+      discounts: discs.filter((d) => d.amount > 0),
     });
   };
 
@@ -635,6 +659,14 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
         </Field>
       )}
 
+      {operatorOptions.length > 0 && (
+        <Field label="담당 직원">
+          <select value={operId} onChange={(e) => setOperId(e.target.value)} className="input w-full text-sm">
+            {operatorOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+          </select>
+        </Field>
+      )}
+
       <div className="grid grid-cols-2 gap-2">
         <Field label="현금단가(만원) *">
           <input type="number" inputMode="decimal" step="0.1" min="0" value={manVal(cash)} onChange={(e) => setCash(parseMan(e.target.value))} placeholder="10" className="input w-full text-sm tabular-nums" />
@@ -643,6 +675,26 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
           <input type="number" inputMode="decimal" step="0.1" min="0" value={manVal(card)} onChange={(e) => setCard(parseMan(e.target.value))} placeholder="미입력=현금단가" className="input w-full text-sm tabular-nums" />
         </Field>
       </div>
+
+      <Field label="할인 이벤트 (최대 5) · 선택">
+        <div className="space-y-1.5">
+          {discs.map((d, i) => (
+            <div key={i} className="flex items-center gap-1.5">
+              <span className="text-2xs text-gold-300 font-bold w-9 shrink-0">할인{i + 1}</span>
+              <input value={d.label} onChange={(e) => setDisc(i, { label: e.target.value })} maxLength={20} placeholder="예) 1레벨" className="input flex-1 min-w-0 text-sm" />
+              <div className="relative w-24 shrink-0">
+                <input type="number" inputMode="decimal" step="0.1" min="0" value={manVal(d.amount)} onChange={(e) => setDisc(i, { amount: parseMan(e.target.value) })} placeholder="할인액" className="input w-full text-sm pr-6 tabular-nums" />
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">만</span>
+              </div>
+              <button type="button" onClick={() => removeDisc(i)} className="text-ink-muted hover:text-danger-light text-xs px-1 shrink-0">✕</button>
+            </div>
+          ))}
+          {discs.length < 5 && (
+            <button type="button" onClick={addDisc} className="w-full py-1.5 rounded-input border border-dashed border-border-default text-2xs text-ink-secondary hover:text-gold-300 hover:border-gold-400/50 transition-colors">+ 할인 추가</button>
+          )}
+          <p className="text-[10px] text-ink-muted">예) 1레벨 2만원 할인 → 10만 게임에서 8만 받으면 엔트리 0.8개로 계산됩니다.</p>
+        </div>
+      </Field>
 
       <Field label="기준 엔트리(통계용) · 선택">
         <input type="number" inputMode="numeric" value={target || ''} onChange={(e) => setTarget(parseInt(e.target.value, 10) || 0)} placeholder="100" className="input w-full text-sm tabular-nums" />
@@ -702,15 +754,17 @@ function Overlay({ title, onClose, children }: { title: string; onClose: () => v
 // ── 2-Tap 결제 입력 모달 ──────────────────────────────────────────────────────
 interface SplitInput { cashAmount: number; cardAmount: number; transferAmount: number; ticketCount: number; unpaidAmount: number; discountLevel: number; }
 
-function PaymentModal({ cell, hasPw, onClose, onPick, onPickSplit, onCancelBuyin }: {
-  cell: SelectedCell; hasPw: boolean;
+function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCancelBuyin }: {
+  cell: SelectedCell; hasPw: boolean; session: LedgerSession;
   onClose: () => void;
-  onPick: (m: PaymentMethod, isUnpaid: boolean) => void;
+  onPick: (m: PaymentMethod, isUnpaid: boolean, discountIndex: number) => void;
   onPickSplit: (d: SplitInput) => void;
   onCancelBuyin: (pw: string) => void;
 }) {
   const [cancelMode, setCancelMode] = useState(false);
   const [pw, setPw] = useState('');
+  const [discIdx, setDiscIdx] = useState<number>(cell.buyin && !cell.buyin.isSplit ? cell.buyin.discountIndex : 0);
+  const discs = session.discounts ?? [];
   const dualMethods: { key: PaymentMethod; label: string }[] = [
     { key: 'cash', label: '현금' }, { key: 'transfer', label: '이체' }, { key: 'card', label: '카드' },
   ];
@@ -748,34 +802,49 @@ function PaymentModal({ cell, hasPw, onClose, onPick, onPickSplit, onCancelBuyin
         <div className="p-3 space-y-2">
           {!splitMode ? (
             <>
+              {/* 할인 선택 (세션 프리셋) */}
+              {discs.length > 0 && (
+                <div className="flex items-center gap-1.5 flex-wrap pb-2 mb-1 border-b border-border-subtle">
+                  <span className="text-2xs text-ink-muted">할인:</span>
+                  <button type="button" onClick={() => setDiscIdx(0)}
+                    className={['text-2xs font-bold px-2 py-1 rounded-badge border', discIdx === 0 ? 'bg-surface-float text-ink-primary border-border-strong' : 'text-ink-muted border-border-default'].join(' ')}>없음</button>
+                  {discs.map((d, i) => (
+                    <button key={i} type="button" onClick={() => setDiscIdx(i + 1)}
+                      className={['text-2xs font-bold px-2 py-1 rounded-badge border', discIdx === i + 1 ? 'bg-gold-300/15 text-gold-300 border-gold-400/40' : 'text-ink-muted border-border-default'].join(' ')}>
+                      {d.label || `할인${i + 1}`} ({wonToMan(d.amount)}만)
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {/* 티켓: 완납·미수(가불) */}
               <div className="grid grid-cols-2 gap-2">
-                <button type="button" onClick={() => onPick('ticket', false)}
+                <button type="button" onClick={() => onPick('ticket', false, discIdx)}
                   className="h-12 rounded-input border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 font-bold text-sm active:scale-95 transition-all hover:bg-emerald-500/20">
-                  티켓 완납
+                  티켓 완납{discIdx > 0 ? ' ·할인' : ''}
                 </button>
-                <button type="button" onClick={() => onPick('ticket', true)}
+                <button type="button" onClick={() => onPick('ticket', true, discIdx)}
                   className="h-12 rounded-input border border-danger/50 bg-danger/10 text-danger-light font-bold text-sm active:scale-95 transition-all hover:bg-danger/20">
-                  티켓 미수
+                  티켓 미수{discIdx > 0 ? ' ·할인' : ''}
                 </button>
               </div>
 
               {/* 현금/이체/카드: 완납·미수 */}
               {dualMethods.map((m) => (
                 <div key={m.key} className="grid grid-cols-2 gap-2">
-                  <button type="button" onClick={() => onPick(m.key, false)}
+                  <button type="button" onClick={() => onPick(m.key, false, discIdx)}
                     className="h-12 rounded-input border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 font-bold text-sm active:scale-95 transition-all hover:bg-emerald-500/20">
-                    {m.label} 완납
+                    {m.label} 완납{discIdx > 0 ? ' ·할인' : ''}
                   </button>
-                  <button type="button" onClick={() => onPick(m.key, true)}
+                  <button type="button" onClick={() => onPick(m.key, true, discIdx)}
                     className="h-12 rounded-input border border-danger/50 bg-danger/10 text-danger-light font-bold text-sm active:scale-95 transition-all hover:bg-danger/20">
-                    {m.label} 미수
+                    {m.label} 미수{discIdx > 0 ? ' ·할인' : ''}
                   </button>
                 </div>
               ))}
 
               {/* 가게지원 */}
-              <button type="button" onClick={() => onPick('support', false)}
+              <button type="button" onClick={() => onPick('support', false, 0)}
                 className="w-full h-12 rounded-input border border-indigo-400/50 bg-indigo-500/10 text-indigo-300 font-bold text-sm active:scale-95 transition-all hover:bg-indigo-500/20">
                 가게지원
               </button>
@@ -857,7 +926,7 @@ function AmountRow({ label, value, set, danger }: { label: string; value: number
 
 // ── 장부 마감 모달 ────────────────────────────────────────────────────────────
 function CloseModal({ stats, onClose, onConfirm }: {
-  stats: { totalBuyins: number; ticket: number; revenue: number; unpaid: number; support: number };
+  stats: { totalBuyins: number; entries: number; ticket: number; revenue: number; unpaid: number; support: number };
   onClose: () => void; onConfirm: (memo: string) => void;
 }) {
   const [memo, setMemo] = useState('');
@@ -865,7 +934,7 @@ function CloseModal({ stats, onClose, onConfirm }: {
     <Overlay title="장부 마감" onClose={onClose}>
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-2">
-          <SummaryStat label="총 엔트리" value={`${stats.totalBuyins}`} />
+          <SummaryStat label="총 엔트리" value={stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} />
           <SummaryStat label="회수 티켓" value={`${stats.ticket}장`} />
           <SummaryStat label="완납 매출" value={`${wonToMan(stats.revenue)}만원`} tone="emerald" />
           <SummaryStat label="당일 미수금" value={`${wonToMan(stats.unpaid)}만원`} tone="danger" />

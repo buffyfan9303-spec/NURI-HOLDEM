@@ -30,19 +30,19 @@ export default function VenueManageTab({ onAddPoster }: { onAddPoster?: () => vo
       .then(([l, m]) => {
         if (!alive) return;
         setLedgerOk(l); setManageOk(m);
-        setSection(l ? 'ledger' : (m ? 'stats' : 'ranking'));
+        setSection(l ? 'ledger' : (m ? 'stats' : null));
       })
-      .catch(() => { if (alive) setSection('ranking'); })
+      .catch(() => { if (alive) setSection(null); })
       .finally(() => { if (alive) setPermsLoaded(true); });
     return () => { alive = false; };
   }, [venueId]);
 
-  // 사용 가능한 섹션 목록(권한 기반)
+  // 사용 가능한 섹션(권한): 장부·순위 = 업주 또는 승인된(장부권한) 직원 / 통계·직원관리 = 업주만
   const available: { id: Section; label: string }[] = [];
   if (ledgerOk) available.push({ id: 'ledger', label: '장부' });
   if (manageOk) available.push({ id: 'stats',  label: '통계' });
-  if (isOwner)  available.push({ id: 'ranking', label: '순위 입력' }, { id: 'staff', label: '직원 관리' });
-  else          available.push({ id: 'ranking', label: '순위 입력' }); // 직원: 순위(+권한 시 장부)
+  if (ledgerOk) available.push({ id: 'ranking', label: '순위 입력' });
+  if (isOwner)  available.push({ id: 'staff', label: '직원 관리' });
 
   if (!user || !venueId) {
     return (
@@ -51,8 +51,11 @@ export default function VenueManageTab({ onAddPoster }: { onAddPoster?: () => vo
       </div>
     );
   }
-  if (!permsLoaded || section === null) {
+  if (!permsLoaded) {
     return <p className="py-16 text-center text-sm text-ink-muted">불러오는 중…</p>;
+  }
+  if (section === null) {
+    return <p className="py-16 text-center text-sm text-ink-muted">이 매장에서 사용 가능한 메뉴가 없습니다.<br />업주에게 장부 권한을 요청하세요.</p>;
   }
 
   return (
