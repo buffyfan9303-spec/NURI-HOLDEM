@@ -359,16 +359,33 @@ function HeroSection({
       ) : (
         <div
           className="absolute inset-0"
-          style={{ background: `linear-gradient(135deg, ${venue.themeColor ?? '#1A1D24'} 0%, #0a0c0f 100%)` }}
+          style={{ background: 'linear-gradient(180deg, #161922 0%, #0a0c0f 100%)' }}
         >
-          <div className="absolute inset-0 grid grid-cols-6 gap-2 p-3 opacity-[0.08] select-none pointer-events-none" aria-hidden>
+          {/* 테마 글로우 — 상단 중앙(좌우 대칭) */}
+          <div
+            aria-hidden
+            className="absolute left-1/2 -top-1/4 h-2/3 w-2/3 -translate-x-1/2 rounded-full blur-3xl opacity-25 pointer-events-none"
+            style={{ background: venue.themeColor ?? '#3A4253' }}
+          />
+          {/* 카드 무늬 패턴 */}
+          <div className="absolute inset-0 grid grid-cols-6 gap-2 p-3 opacity-[0.06] select-none pointer-events-none" aria-hidden>
             {Array.from({ length: 24 }, (_, i) => (
               <span key={i} className="text-2xl text-white text-center">{['♠', '♥', '♦', '♣'][i % 4]}</span>
             ))}
           </div>
-          {showRotiMark && (
+          {showRotiMark ? (
             <div className="absolute inset-0 flex items-center justify-center opacity-90">
               <div className="scale-150"><RotiArenaLogo variant="mark" /></div>
+            </div>
+          ) : (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 select-none pointer-events-none">
+              <div
+                className="flex h-14 w-14 items-center justify-center rounded-2xl text-2xl font-extrabold text-white shadow-lg ring-1 ring-white/10"
+                style={{ background: venue.themeColor ?? '#3A4253' }}
+              >
+                {venue.name[0]}
+              </div>
+              {editable && <p className="text-2xs text-white/55">사진을 추가하면 매장이 더 돋보입니다</p>}
             </div>
           )}
         </div>
