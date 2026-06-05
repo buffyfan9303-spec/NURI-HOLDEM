@@ -66,6 +66,7 @@ export default function TournamentClock({ venueId, canManage, seedSessionDate }:
   const toast = useToast();
   const [state, setState] = useState<ClockState | null>(null);
   const [presets, setPresets] = useState<ClockPreset[]>([]);
+  const [seedSession, setSeedSession] = useState<LedgerSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'settings' | 'live'>('live');
 
@@ -75,11 +76,29 @@ export default function TournamentClock({ venueId, canManage, seedSessionDate }:
   useEffect(() => {
     setLoading(true);
     Promise.all([getClockState(venueId), getClockPresets(venueId)])
-      .then(([s, p]) => { setState(s); setPresets(p); setView(s ? 'live' : 'settings'); })
+      .then(([s, p]) => { setState(s); setPresets(p); setView(seedSessionDate ? 'settings' : (s ? 'live' : 'settings')); })
       .finally(() => setLoading(false));
-  }, [venueId]);
+  }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 장부에서 넘어옴: 해당 세션을 불러와 게임명·얼리 구간을 클락 설정에 시드
+  useEffect(() => {
+    if (!seedSessionDate) { setSeedSession(null); return; }
+    getLedgerSession(venueId, seedSessionDate).then(setSeedSession).catch(() => {});
+    setView('settings');
+  }, [venueId, seedSessionDate]);
 
   useEffect(() => subscribeClock(venueId, reloadState), [venueId, reloadState]);
+
+  const seededInitial = useMemo<ClockConfig>(() => {
+    const base = state?.config ?? defaultClockConfig();
+    if (!seedSession) return base;
+    return {
+      ...base,
+      title: seedSession.title || base.title,
+      earlyDoubleMin: seedSession.earlyDoubleMin || base.earlyDoubleMin,
+      earlySingleMin: seedSession.earlySingleMin || base.earlySingleMin,
+    };
+  }, [state, seedSession]);
 
   const startClock = async (config: ClockConfig, link: boolean) => {
     const base = emptyClockState(venueId, config);
@@ -100,8 +119,9 @@ export default function TournamentClock({ venueId, canManage, seedSessionDate }:
   if (view === 'settings' || !state) {
     return (
       <ClockSettings
-        venueId={venueId} canManage={canManage} presets={presets} initial={state?.config ?? defaultClockConfig()}
-        hasLive={!!state} seedSessionDate={seedSessionDate}
+        key={`${state?.venueId ?? 'new'}-${seedSession?.title ?? ''}-${seedSession?.earlyDoubleMin ?? 0}`}
+        venueId={venueId} canManage={canManage} presets={presets} initial={seededInitial}
+        hasLive={!!state} seedSessionDate={seedSessionDate} seededFromLedger={!!seedSession}
         onReloadPresets={reloadPresets}
         onStart={startClock}
         onBackToLive={state ? () => setView('live') : undefined}
@@ -253,9 +273,9 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd }: {
 
       {/* 디스플레이 */}
       <div className="rounded-card overflow-hidden border border-border-default bg-surface-base">
-        {/* 헤더 */}
+        {/* 헤더 — 장부 연동 시 게임명 즉시 반영 */}
         <div className="bg-surface-high border-b border-border-subtle px-4 py-2 text-center">
-          <p className="text-sm sm:text-lg font-bold text-ink-primary truncate">{cfg.title || '토너먼트'}</p>
+          <p className="text-sm sm:text-lg font-bold text-ink-primary truncate">{(linkedSession?.title || cfg.title) || '토너먼트'}</p>
         </div>
 
         <div className="grid grid-cols-[minmax(72px,1fr)_2.4fr_minmax(86px,1.1fr)]">
@@ -372,9 +392,9 @@ function VolCtl({ value, onChange }: { value: number; onChange: (v: number) => v
 }
 
 // ── 설정/프리셋 ─────────────────────────────────────────────────────────────────
-function ClockSettings({ venueId, canManage, presets, initial, hasLive, seedSessionDate, onReloadPresets, onStart, onBackToLive }: {
+function ClockSettings({ venueId, canManage, presets, initial, hasLive, seedSessionDate, seededFromLedger, onReloadPresets, onStart, onBackToLive }: {
   venueId: string; canManage: boolean; presets: ClockPreset[]; initial: ClockConfig; hasLive: boolean;
-  seedSessionDate?: string | null;
+  seedSessionDate?: string | null; seededFromLedger?: boolean;
   onReloadPresets: () => void; onStart: (c: ClockConfig, link: boolean) => void; onBackToLive?: () => void;
 }) {
   const toast = useToast();
@@ -434,6 +454,13 @@ function ClockSettings({ venueId, canManage, presets, initial, hasLive, seedSess
         <h2 className="text-base font-bold text-ink-primary">클락 설정</h2>
         {onBackToLive && <button type="button" onClick={onBackToLive} className="btn-ghost text-xs px-3">← 라이브로</button>}
       </div>
+
+      {seededFromLedger && (
+        <div className="rounded-input border border-emerald-500/40 bg-emerald-500/[0.08] px-3 py-2">
+          <p className="text-2xs font-semibold text-emerald-300">📒 장부({seedSessionDate}) 연동됨</p>
+          <p className="text-[10px] text-ink-secondary mt-0.5">게임명·얼리 구간을 장부에서 불러왔습니다. 아래에서 블라인드 구조·프라이즈·스택 등 클락 전용 항목을 추가로 설정하세요. 장부에서 게임명·얼리를 수정하면 라이브 클락에 즉시 반영됩니다.</p>
+        </div>
+      )}
 
       {/* 프리셋 */}
       <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">

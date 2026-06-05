@@ -477,6 +477,9 @@ export function subscribeLedger(venueId: string, onChange: () => void): () => vo
     .on('postgres_changes',
       { event: '*', schema: 'public', table: 'ledger_players', filter: `venue_id=eq.${venueId}` },
       () => onChange())
+    .on('postgres_changes',
+      { event: '*', schema: 'public', table: 'ledger_sessions', filter: `venue_id=eq.${venueId}` },
+      () => onChange())
     .subscribe();
   return () => { supabase.removeChannel(ch); };
 }
