@@ -90,8 +90,9 @@ export default function VenuePage({
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
+  // 승인(approved)된 포스터만 매장 페이지에 노출 — 미승인은 「내 포스터」에서만 관리.
   const venueSchedules = useMemo(
-    () => (venue ? schedules.filter((s) => s.venueId === venue.id) : []),
+    () => (venue ? schedules.filter((s) => s.venueId === venue.id && s.approved) : []),
     [venue, schedules],
   );
   const venueComments = useMemo(

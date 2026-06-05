@@ -24,6 +24,7 @@ export interface ClockConfig {
   earlyBonus: number;     // 1얼리 보너스 칩
   doubleEarlyBonus: number; // 더블얼리 보너스 칩
   regCloseLevel: number;  // 등록 마감 레벨(이 레벨 시작 시 마감)
+  maxLevel: number;       // 최대 레벨(블라인드 자동 생성 기준)
   earlyDoubleLevel: number; // ~레벨 N까지 도착 = 더블얼리
   earlySingleLevel: number; // ~레벨 M까지 도착 = 1얼리
   earlyDoubleMin: number; // (파생) 레벨→누적분 환산값 = 더블얼리 마지노 분
@@ -66,7 +67,7 @@ export function defaultClockConfig(): ClockConfig {
     title: '데일리 토너먼트',
     startStack: 30000, rebuyStack: 30000, addonStack: 30000,
     earlyBonus: 10000, doubleEarlyBonus: 20000,
-    regCloseLevel: 9,
+    regCloseLevel: 9, maxLevel: 15,
     earlyDoubleLevel: 1, earlySingleLevel: 4, earlyDoubleMin: 20, earlySingleMin: 80,
     mysteryBounty: 0,
     prizes: [
@@ -112,6 +113,26 @@ export function withDerivedEarly(cfg: ClockConfig): ClockConfig {
     earlyDoubleMin: dLv > 0 ? cumulativeMinutesThroughLevel(cfg.levels, dLv) : 0,
     earlySingleMin: sLv > 0 ? cumulativeMinutesThroughLevel(cfg.levels, sLv) : 0,
   };
+}
+
+/** 등록마감·최대레벨 기준 블라인드 구조 자동 생성. 마감 후엔 더 가파르게(1.6x)·길게(postDur) 상승. */
+export function generateBlinds(regCloseLevel: number, maxLevel: number, preDur = 20, postDur = 30): ClockLevel[] {
+  const round = (v: number) =>
+    v < 500 ? Math.round(v / 50) * 50
+    : v < 2000 ? Math.round(v / 100) * 100
+    : v < 10000 ? Math.round(v / 500) * 500
+    : Math.round(v / 1000) * 1000;
+  const out: ClockLevel[] = [];
+  const max = Math.max(1, Math.min(60, maxLevel || 15));
+  let sb = 100;
+  for (let n = 1; n <= max; n++) {
+    const post = regCloseLevel > 0 && n > regCloseLevel;
+    const bb = sb * 2;
+    out.push({ kind: 'level', sb, bb, ante: bb, minutes: post ? postDur : preDur });
+    if (n % 5 === 0 && n < max) out.push({ kind: 'break', sb: 0, bb: 0, ante: 0, minutes: 8, label: 'BREAK 8Min.' });
+    sb = round(sb * (post ? 1.6 : 1.4));
+  }
+  return out;
 }
 
 export function emptyClockState(venueId: string, config = defaultClockConfig()): ClockState {

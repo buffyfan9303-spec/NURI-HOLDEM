@@ -16,7 +16,7 @@ const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 
 type Period = 'day' | 'week' | 'month' | 'all' | 'dow' | 'ai';
 const PERIODS: { id: Period; label: string; ai?: boolean }[] = [
-  { id: 'day', label: '하루' }, { id: 'week', label: '일주일' }, { id: 'month', label: '한 달' }, { id: 'all', label: '총괄' }, { id: 'dow', label: '요일별' },
+  { id: 'day', label: '당일' }, { id: 'week', label: '일주일' }, { id: 'month', label: '한 달' }, { id: 'all', label: '총괄' }, { id: 'dow', label: '요일별' },
   { id: 'ai', label: '✨ AI 분석', ai: true },
 ];
 
@@ -37,7 +37,8 @@ function StatsView({ venueId }: { venueId: string }) {
   const [sessions, setSessions] = useState<LedgerSession[]>([]);
   const [buyins, setBuyins] = useState<LedgerBuyin[]>([]);
   const [players, setPlayers] = useState<LedgerPlayer[]>([]);
-  const [excludeStaff, setExcludeStaff] = useState(false);
+  const [excludeTypes, setExcludeTypes] = useState<Set<string>>(new Set()); // 제외할 손님유형 코드(new/regular/staff/other/none)
+  const toggleExclude = (code: string) => setExcludeTypes((prev) => { const n = new Set(prev); n.has(code) ? n.delete(code) : n.add(code); return n; });
   const [loading, setLoading] = useState(true);
   const [aiTick, setAiTick] = useState(0); // AI 리포트 새로고침
 
@@ -68,10 +69,19 @@ function StatsView({ venueId }: { venueId: string }) {
     for (const s of sessions) m.set(s.sessionDate, s);
     return m;
   }, [sessions]);
-  const staffNames = useMemo(() => new Set(players.filter((p) => p.visitorType === 'staff').map((p) => p.name)), [players]);
+  // 플레이어명 → 손님유형 코드(new/regular/staff/other/none). 커스텀 텍스트 유형은 '기타', 무유형은 'none'.
+  const playerType = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const p of players) {
+      const vt = p.visitorType;
+      const code = (vt === 'new' || vt === 'regular' || vt === 'staff' || vt === 'other') ? vt : (vt && vt.trim() ? 'other' : 'none');
+      m.set(p.name, code);
+    }
+    return m;
+  }, [players]);
 
   const m = useMemo(() => {
-    const src = (excludeStaff && period === 'day') ? buyins.filter((b) => !staffNames.has(b.playerName)) : buyins;
+    const src = (period === 'day' && excludeTypes.size > 0) ? buyins.filter((b) => !excludeTypes.has(playerType.get(b.playerName) ?? 'none')) : buyins;
     const fin = (b: LedgerBuyin) => buyinFinance(b, sessionByDate.get(b.sessionDate) ?? { buyinAmount: 0, cardAmount: null, discounts: [] });
     let revenue = 0, unpaid = 0, support = 0, ticket = 0, ticketUnpaid = 0, entries = 0, underEntries = 0;
     const byMethod: Record<PaymentMethod, number> = { ticket: 0, cash: 0, transfer: 0, card: 0, support: 0 };
@@ -114,7 +124,7 @@ function StatsView({ venueId }: { venueId: string }) {
       cardRatio: cashLike > 0 ? (byMethod.card / cashLike) * 100 : 0,   // 현금성 결제 중 카드 비중
       unpaidRatio: revenue > 0 ? (unpaid / revenue) * 100 : 0,
     };
-  }, [buyins, sessionByDate, players, excludeStaff, staffNames, period, date]);
+  }, [buyins, sessionByDate, players, excludeTypes, playerType, period, date]);
 
   return (
     <section className="rounded-card border border-gold-400/30 bg-gradient-to-br from-gold-300/[0.05] to-transparent p-3 space-y-3">
@@ -126,7 +136,7 @@ function StatsView({ venueId }: { venueId: string }) {
       <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5 overflow-x-auto scrollbar-none">
         {PERIODS.map((p) => (
           <button key={p.id} type="button" onClick={() => setPeriod(p.id)}
-            className={['flex-1 min-w-[3.4rem] py-1.5 text-2xs font-bold rounded-[6px] transition-colors whitespace-nowrap',
+            className={['flex-1 min-w-[3.6rem] py-1.5 text-xs font-bold rounded-[6px] transition-colors whitespace-nowrap',
               period === p.id
                 ? (p.ai ? 'bg-gradient-to-r from-violet-500 to-indigo-500 text-white shadow' : 'bg-gold-300 text-ink-inverse')
                 : (p.ai ? 'text-violet-300 hover:text-violet-200' : 'text-ink-secondary hover:text-ink-primary')].join(' ')}>{p.label}</button>
@@ -151,12 +161,21 @@ function StatsView({ venueId }: { venueId: string }) {
       ) : (
         <>
           {period === 'day' && (
-            <button type="button" onClick={() => setExcludeStaff((v) => !v)}
-              className={['w-full flex items-center justify-between px-3 py-2 rounded-input border transition-colors',
-                excludeStaff ? 'bg-gold-300/15 text-gold-300 border-gold-400/40' : 'bg-surface-high text-ink-secondary border-border-default'].join(' ')}>
-              <span className="text-2xs font-semibold">관계자 바이인 제외</span>
-              <span className="text-2xs font-bold">{excludeStaff ? 'ON' : 'OFF'}</span>
-            </button>
+            <div className="rounded-input border border-border-default bg-surface-high px-2.5 py-2">
+              <p className="text-xs font-semibold text-ink-secondary mb-1.5">바이인 제외 · 손님 유형별 {excludeTypes.size > 0 && <span className="text-danger-light">({excludeTypes.size}개 제외 중)</span>}</p>
+              <div className="grid grid-cols-5 gap-1">
+                {([['new', '신규'], ['regular', '기존'], ['staff', '관계자'], ['other', '기타'], ['none', '미지정']] as const).map(([code, label]) => {
+                  const on = excludeTypes.has(code);
+                  return (
+                    <button key={code} type="button" onClick={() => toggleExclude(code)}
+                      className={['py-1.5 text-xs font-bold rounded-[6px] border transition-colors',
+                        on ? 'bg-danger/15 text-danger-light border-danger/40' : 'bg-surface-base text-ink-secondary border-border-subtle hover:text-ink-primary'].join(' ')}>
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           )}
 
           {/* 주요 지표 — 아이콘 카드 */}
@@ -188,8 +207,8 @@ function StatsView({ venueId }: { venueId: string }) {
             <div className="grid grid-cols-5 gap-1.5">
               {(['ticket', 'cash', 'transfer', 'card', 'support'] as PaymentMethod[]).map((k) => (
                 <div key={k} className="rounded-input bg-surface-high border border-border-subtle py-1.5 text-center">
-                  <p className="text-sm font-bold text-ink-primary tabular-nums">{m.byMethod[k]}</p>
-                  <p className="text-[10px] text-ink-muted">{METHOD_LABEL[k]}</p>
+                  <p className="text-base font-bold text-ink-primary tabular-nums">{m.byMethod[k]}</p>
+                  <p className="text-[11px] text-ink-muted">{METHOD_LABEL[k]}</p>
                 </div>
               ))}
             </div>
@@ -200,8 +219,8 @@ function StatsView({ venueId }: { venueId: string }) {
               <div className="grid grid-cols-4 gap-1.5">
                 {(['new', 'regular', 'staff', 'other'] as VisitorType[]).map((k) => (
                   <div key={k} className="rounded-input bg-surface-high border border-border-subtle py-1.5 text-center">
-                    <p className="text-sm font-bold text-ink-primary tabular-nums">{m.visitor[k]}</p>
-                    <p className="text-[10px] text-ink-muted">{VISITOR_LABEL[k]}</p>
+                    <p className="text-base font-bold text-ink-primary tabular-nums">{m.visitor[k]}</p>
+                    <p className="text-[11px] text-ink-muted">{VISITOR_LABEL[k]}</p>
                   </div>
                 ))}
               </div>
@@ -379,20 +398,20 @@ function StatCard({ label, value, sub, icon, danger, emerald, gold }: { label: s
   return (
     <div className="rounded-card bg-surface-low border border-border-subtle p-2.5 flex flex-col min-h-[5.25rem]">
       <div className="flex items-start justify-between gap-1">
-        <p className="text-[11px] text-ink-secondary leading-tight">{label}</p>
+        <p className="text-[13px] font-medium text-ink-secondary leading-tight">{label}</p>
         <StatIcon name={icon} className="text-ink-muted shrink-0" />
       </div>
       <p className={['mt-auto pt-2 text-lg font-extrabold tabular-nums leading-none', c].join(' ')}>{value}</p>
-      {sub && <p className="text-[9px] text-ink-muted mt-1 leading-tight">{sub}</p>}
+      {sub && <p className="text-[11px] text-ink-muted mt-1 leading-tight">{sub}</p>}
     </div>
   );
 }
 
 function Mini({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-input bg-surface-high border border-border-subtle py-1.5 px-1 text-center">
-      <p className="text-sm font-bold text-ink-primary tabular-nums leading-none">{value}</p>
-      <p className="text-[9px] text-ink-muted mt-1">{label}</p>
+    <div className="rounded-input bg-surface-high border border-border-subtle py-2 px-1 text-center">
+      <p className="text-base font-bold text-ink-primary tabular-nums leading-none">{value}</p>
+      <p className="text-[11px] text-ink-muted mt-1 leading-tight">{label}</p>
     </div>
   );
 }
@@ -400,7 +419,7 @@ function Mini({ label, value }: { label: string; value: string }) {
 function Section({ icon, title, suffix, children }: { icon: IconName; title: string; suffix?: string; children: ReactNode }) {
   return (
     <div>
-      <p className="flex items-center gap-1.5 text-2xs font-semibold text-ink-secondary mb-1.5">
+      <p className="flex items-center gap-1.5 text-xs font-semibold text-ink-secondary mb-1.5">
         <StatIcon name={icon} className="text-ink-muted" />
         {title}{suffix && <span className="text-ink-muted font-normal"> {suffix}</span>}
       </p>

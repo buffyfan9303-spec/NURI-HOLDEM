@@ -59,7 +59,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const [query, setQuery]     = useState('');
   const [addOpen, setAddOpen] = useState(false);
   const [newName, setNewName] = useState('');
-  const [newType, setNewType] = useState<string | null>(null);
+  const [newType, setNewType] = useState<string | null>('regular'); // 기본 선택: 기존손님
   const [closeOpen, setCloseOpen] = useState(false);
   const [editOpen, setEditOpen]   = useState(false);
   const [editPlayer, setEditPlayer] = useState<LedgerPlayer | null>(null);
@@ -186,7 +186,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     if (!n) return;
     try {
       await addLedgerPlayer({ venueId, sessionDate: date, name: n, visitorType: newType, sortOrder: players.length });
-      setNewName(''); setNewType(null); setAddOpen(false); reload();
+      setNewName(''); setNewType('regular'); setAddOpen(false); reload();
     } catch (e) { toast.show(e instanceof Error ? e.message : '추가 실패', 'error'); }
   };
   const savePlayer = async (id: string, patch: { visitorType?: string | null; note?: string | null }) => {
@@ -314,8 +314,8 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
         {session.openedAt && <span className="text-2xs text-ink-muted">· 담당 {operatorName2(session.openedBy)}</span>}
         {scheduleTitle(session.scheduleId) && <span className="text-2xs text-gold-300 font-semibold">· 대회 {scheduleTitle(session.scheduleId)}</span>}
         <span className="flex-1" />
-        {onOpenClock && <button type="button" onClick={() => onOpenClock(date)} className="btn-ghost text-2xs px-2.5 py-1">⏱ 클락</button>}
-        {!closed && <button type="button" onClick={() => setEditOpen(true)} className="btn-ghost text-2xs px-2.5 py-1">세션 정보 수정</button>}
+        {onOpenClock && <button type="button" onClick={() => onOpenClock(date)} className="btn-ghost text-sm px-3.5 py-2 font-semibold">⏱ 클락</button>}
+        {!closed && <button type="button" onClick={() => setEditOpen(true)} className="btn-ghost text-sm px-3.5 py-2 font-semibold">세션 정보 수정</button>}
       </div>
 
       {closed && (
@@ -923,12 +923,12 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
               {/* 할인 선택 (세션 프리셋) */}
               {discs.length > 0 && (
                 <div className="flex items-center gap-1.5 flex-wrap pb-2 mb-1 border-b border-border-subtle">
-                  <span className="text-2xs text-ink-muted">할인:</span>
+                  <span className="text-xs text-ink-muted">할인:</span>
                   <button type="button" onClick={() => setDiscIdx(0)}
-                    className={['text-2xs font-bold px-2 py-1 rounded-badge border', discIdx === 0 ? 'bg-surface-float text-ink-primary border-border-strong' : 'text-ink-muted border-border-default'].join(' ')}>없음</button>
+                    className={['text-xs font-bold px-2.5 py-1.5 rounded-badge border', discIdx === 0 ? 'bg-surface-float text-ink-primary border-border-strong' : 'text-ink-muted border-border-default'].join(' ')}>없음</button>
                   {discs.map((d, i) => (
                     <button key={i} type="button" onClick={() => setDiscIdx(i + 1)}
-                      className={['text-2xs font-bold px-2 py-1 rounded-badge border', discIdx === i + 1 ? 'bg-gold-300/15 text-gold-300 border-gold-400/40' : 'text-ink-muted border-border-default'].join(' ')}>
+                      className={['text-xs font-bold px-2.5 py-1.5 rounded-badge border', discIdx === i + 1 ? 'bg-gold-300/15 text-gold-300 border-gold-400/40' : 'text-ink-muted border-border-default'].join(' ')}>
                       {d.label || `할인${i + 1}`} ({wonToMan(d.amount)}만)
                     </button>
                   ))}

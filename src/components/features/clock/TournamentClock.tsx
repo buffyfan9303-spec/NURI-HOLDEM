@@ -6,7 +6,7 @@ import { useToast } from '../../atoms/Toast';
 import {
   type ClockConfig, type ClockLevel, type ClockPreset, type ClockState, type ClockPrizeRow,
   defaultClockConfig, emptyClockState, deriveClockCounts, PRESET_LIMIT,
-  countLevels, withDerivedEarly,
+  countLevels, withDerivedEarly, generateBlinds,
   getClockPresets, saveClockPreset, deleteClockPreset,
   getClockState, saveClockState, clearClockState, subscribeClock,
 } from '../../../api/clock';
@@ -460,7 +460,9 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
   const [cfg, setCfg] = useState<ClockConfig>(initial);
   const [linkDate, setLinkDate] = useState<string | null>(seedSessionDate ?? null); // 연동할 장부(null=단독)
   const [sessQuery, setSessQuery] = useState(''); // 장부 목록 검색(날짜·게임명)
+  const [presetQuery, setPresetQuery] = useState(''); // 프리셋 검색
   const [presetName, setPresetName] = useState('');
+  const [bldOpen, setBldOpen] = useState(false);    // 블라인드 구조 접기/펴기
   const [bulkAll, setBulkAll] = useState(20);       // 전체 일괄 듀레이션(분)
   const [bulkFrom, setBulkFrom] = useState(initial.regCloseLevel || 9); // 구간 시작 레벨
   const [bulkFromMin, setBulkFromMin] = useState(25); // 구간 듀레이션(분)
@@ -471,6 +473,16 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
     const q = sessQuery.trim().toLowerCase();
     return !q || `${s.sessionDate} ${s.title ?? ''}`.toLowerCase().includes(q);
   });
+  const filteredPresets = presets.filter((p) => {
+    const q = presetQuery.trim().toLowerCase();
+    return !q || p.name.toLowerCase().includes(q);
+  });
+  const autoGenerate = () => {
+    if (!confirm(`등록마감(${cfg.regCloseLevel || '-'})·최대 레벨(${cfg.maxLevel || 15}) 기준으로 블라인드 구조를 자동 생성합니다.\n현재 블라인드 구조를 덮어쓸까요?`)) return;
+    set({ levels: generateBlinds(cfg.regCloseLevel, cfg.maxLevel) });
+    setBldOpen(true);
+    toast.show('블라인드 구조를 자동 생성했습니다', 'success');
+  };
 
   // 듀레이션 일괄 적용(레벨만, 브레이크 제외)
   const applyBulkAll = (min: number) => {
@@ -545,7 +557,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
             <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
             <input value={sessQuery} onChange={(e) => setSessQuery(e.target.value)} placeholder="검색 (예: 2026-06 · 게임명)" className="input w-full text-xs pl-8 py-1.5" />
           </div>
-          <div className="max-h-52 overflow-y-auto rounded-input border border-border-subtle bg-surface-base divide-y divide-border-subtle">
+          <div className="max-h-[11.5rem] overflow-y-auto rounded-input border border-border-subtle bg-surface-base divide-y divide-border-subtle">
             {sessions.length === 0 ? (
               <p className="text-center py-4 text-[10px] text-ink-muted">저장된 장부가 없습니다. 「장부」 탭에서 게임을 먼저 만들어 주세요.</p>
             ) : filteredSessions.length === 0 ? (
@@ -569,12 +581,25 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
         )}
       </section>
 
-      {/* 프리셋 — 리스트에서 클릭 */}
+      {/* 프리셋 — 장부 연동과 동일 포맷(검색 + 스크롤 클릭) */}
       <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
-        <p className="text-2xs font-semibold text-ink-secondary">프리셋 ({presets.length}/{PRESET_LIMIT}) · 클릭해 불러오기</p>
-        {presets.length > 0 ? (
-          <div className="max-h-44 overflow-y-auto rounded-input border border-border-subtle bg-surface-base divide-y divide-border-subtle">
-            {presets.map((p) => (
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-2xs font-semibold text-ink-secondary">프리셋 · 클릭해 불러오기</p>
+          <span className="text-[10px] text-ink-muted tabular-nums shrink-0">{filteredPresets.length}/{presets.length} · 최대 {PRESET_LIMIT}</span>
+        </div>
+        {presets.length > 0 && (
+          <div className="relative">
+            <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+            <input value={presetQuery} onChange={(e) => setPresetQuery(e.target.value)} placeholder="프리셋 검색" className="input w-full text-xs pl-8 py-1.5" />
+          </div>
+        )}
+        {presets.length === 0 ? (
+          <p className="text-center py-2 text-[10px] text-ink-muted">저장된 프리셋이 없습니다. 아래에서 구성 후 저장하세요.</p>
+        ) : filteredPresets.length === 0 ? (
+          <p className="text-center py-2 text-[10px] text-ink-muted">"{presetQuery.trim()}" 검색 결과가 없습니다.</p>
+        ) : (
+          <div className="max-h-[11.5rem] overflow-y-auto rounded-input border border-border-subtle bg-surface-base divide-y divide-border-subtle">
+            {filteredPresets.map((p) => (
               <div key={p.id} className="flex items-center gap-2 px-2.5 py-2 hover:bg-surface-high">
                 <button type="button" onClick={() => loadPreset(p)} className="flex-1 text-left text-xs font-semibold text-ink-primary truncate hover:text-gold-300">{p.name}</button>
                 <span className="text-[10px] text-ink-muted tabular-nums shrink-0">{countLevels(p.config.levels)}레벨</span>
@@ -582,8 +607,6 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
               </div>
             ))}
           </div>
-        ) : (
-          <p className="text-center py-2 text-[10px] text-ink-muted">저장된 프리셋이 없습니다. 아래에서 구성 후 저장하세요.</p>
         )}
         <div className="flex gap-2">
           <input value={presetName} onChange={(e) => setPresetName(e.target.value)} placeholder="현재 설정을 프리셋으로 저장(이름)" maxLength={30} className="input flex-1 text-sm" />
@@ -602,10 +625,13 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
           <Field label="애드온 스택"><input type="number" value={cfg.addonStack || ''} onChange={(e) => set({ addonStack: +e.target.value || 0 })} className={numInput} /></Field>
         </div>
         <div className="grid grid-cols-3 gap-2">
-          <Field label={`등록마감 레벨 (전체 ${totalLevels})`}><input type="number" min="0" max={totalLevels} value={cfg.regCloseLevel || ''} onChange={(e) => set({ regCloseLevel: Math.min(totalLevels, Math.max(0, +e.target.value || 0)) })} className={numInput} /></Field>
+          <Field label={`등록마감 레벨 (전체 ${totalLevels})`}><input type="number" min="0" max="60" value={cfg.regCloseLevel || ''} onChange={(e) => set({ regCloseLevel: Math.max(0, +e.target.value || 0) })} className={numInput} /></Field>
+          <Field label="최대 레벨 (자동생성용)"><input type="number" min="1" max="60" value={cfg.maxLevel || ''} onChange={(e) => set({ maxLevel: Math.max(0, +e.target.value || 0) })} className={numInput} /></Field>
           <Field label="미스터리 바운티"><input type="number" value={cfg.mysteryBounty || ''} onChange={(e) => set({ mysteryBounty: +e.target.value || 0 })} className={numInput} /></Field>
-          <div />
         </div>
+        <button type="button" onClick={autoGenerate} className="w-full py-2 rounded-input bg-gold-300/12 text-gold-300 border border-gold-400/40 text-xs font-bold hover:bg-gold-300/20">
+          ⚙ 블라인드 자동 생성 — 등록마감({cfg.regCloseLevel || '-'})·최대({cfg.maxLevel || 15})레벨 기준 (마감 후 가파르게)
+        </button>
       </section>
 
       {/* 얼리 구간 — 레벨 기준 */}
@@ -622,10 +648,14 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
         </p>
       </section>
 
-      {/* 블라인드 구조 */}
+      {/* 블라인드 구조 — 접기/펴기 */}
       <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
-        <p className="text-2xs font-semibold text-ink-secondary">블라인드 구조</p>
+        <button type="button" onClick={() => setBldOpen((v) => !v)} className="w-full flex items-center justify-between py-0.5">
+          <span className="text-2xs font-semibold text-ink-secondary">블라인드 구조 · {totalLevels}레벨</span>
+          <span className="text-2xs font-bold text-gold-300">{bldOpen ? '접기 ▲' : '펼치기 ▼'}</span>
+        </button>
 
+        {bldOpen && (<>
         {/* 듀레이션 일괄 설정 */}
         <div className="rounded-input bg-surface-high border border-border-subtle p-2 space-y-1.5">
           <p className="text-[10px] text-ink-muted">듀레이션 일괄 설정 · 레벨 길이(브레이크 제외)</p>
@@ -675,6 +705,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
           <button type="button" onClick={addLevel} className="flex-1 py-1.5 rounded-input border border-dashed border-border-default text-2xs text-ink-secondary hover:text-gold-300">+ 레벨</button>
           <button type="button" onClick={addBreak} className="flex-1 py-1.5 rounded-input border border-dashed border-border-default text-2xs text-ink-secondary hover:text-gold-300">+ 브레이크</button>
         </div>
+        </>)}
       </section>
 
       {/* 프라이즈 */}

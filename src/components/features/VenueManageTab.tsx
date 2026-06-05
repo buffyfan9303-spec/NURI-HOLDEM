@@ -9,6 +9,7 @@ import VenueVerificationCard from './VenueVerificationCard';
 import NuriPosLedger from './NuriPosLedger';
 import LedgerStatsPanel, { PosSettingsPanel } from './LedgerStatsPanel';
 import TournamentClock from './clock/TournamentClock';
+import StaffSchedule from './StaffSchedule';
 
 type Section = 'ledger' | 'stats' | 'ranking' | 'staff' | 'settings' | 'clock';
 
@@ -88,7 +89,12 @@ export default function VenueManageTab({ onAddPoster }: { onAddPoster?: () => vo
       {section === 'stats'    && manageOk && <LedgerStatsPanel venueId={venueId} />}
       {section === 'ranking'  && <RankingEditor venueId={venueId} canEdit={user.approved === true} draft={rankingDraft} />}
       {section === 'clock'    && ledgerOk && <TournamentClock venueId={venueId} canManage={ledgerOk} seedSessionDate={clockSeed} />}
-      {section === 'staff'    && isOwner && <StaffManager venueId={venueId} />}
+      {section === 'staff'    && isOwner && (
+        <div className="space-y-4">
+          <StaffManager venueId={venueId} />
+          <StaffSchedule venueId={venueId} />
+        </div>
+      )}
       {section === 'settings' && isOwner && <PosSettingsPanel venueId={venueId} />}
     </div>
   );
