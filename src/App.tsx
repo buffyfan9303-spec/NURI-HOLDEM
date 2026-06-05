@@ -62,6 +62,7 @@ interface TabDef { id: TabId; label: string; }
 
 function AppHeader({
   unreadCount, notifications, onMarkRead, onOpenLogin, onNavigateNotification, onHome, onOpenProfile,
+  suppressed = false,
 }: {
   unreadCount: number;
   notifications: AppNotification[];
@@ -70,6 +71,8 @@ function AppHeader({
   onNavigateNotification: (n: AppNotification) => void;
   onHome: () => void;
   onOpenProfile: () => void;
+  /** 매장 페이지 등 풀스크린 오버레이가 열렸을 때 메인 헤더를 가린다(레이아웃 유지, 페인트만 숨김). */
+  suppressed?: boolean;
 }) {
   const { user, logout } = useAuth();
   const [notifOpen,    setNotifOpen] = useState(false);
@@ -89,7 +92,13 @@ function AppHeader({
   }, [userMenuOpen]);
 
   return (
-    <header className="sticky top-0 z-50 bg-surface-base border-b border-border-subtle">
+    <header
+      aria-hidden={suppressed || undefined}
+      className={[
+        'sticky top-0 z-50 bg-surface-base border-b border-border-subtle',
+        suppressed ? 'invisible pointer-events-none' : '',
+      ].join(' ')}
+    >
       {/* ── 단순화된 헤더: 좌(로고) / 우(알림+유저) ──────────────── */}
       <div className="flex items-center justify-between h-header-h px-page-x">
 
@@ -293,8 +302,7 @@ function TabBar({
     <div
       ref={containerRef}
       data-stack-tabbar=""
-      className="sticky top-header-h z-40 bg-surface-base relative flex border-b border-border-subtle overflow-x-auto scrollbar-none px-page-x
-                 [&>button:first-child]:pl-0 [&>button:last-child]:pr-0"
+      className="sticky top-header-h z-40 bg-surface-base relative flex border-b border-border-subtle overflow-x-auto scrollbar-none px-page-x sm:justify-center"
     >
       {tabs.map(({ id, label }) => {
         const isActive = active === id;
@@ -306,7 +314,10 @@ function TabBar({
             aria-selected={isActive}
             onClick={() => onChange(id)}
             className={[
-              'shrink-0 px-5 py-2.5 text-sm font-medium whitespace-nowrap transition-colors duration-200 focus:outline-none active:bg-surface-high/40 rounded-t-input',
+              // 모바일: flex-1로 컨테이너 폭을 균등 분배(좌측 쏠림 제거) → 라벨은 셀 정중앙.
+              //   min-width:auto(기본) 유지 → 탭이 많아 좁아지면 라벨 폭 이하로 줄지 않고 가로 스크롤(겹침 방지).
+              // 데스크톱(sm+): 자연폭 + 컨테이너 sm:justify-center로 중앙 정렬 그룹(과도한 벌어짐 방지).
+              'flex-1 px-2 sm:flex-none sm:px-5 py-2.5 text-sm font-medium whitespace-nowrap transition-colors duration-200 focus:outline-none active:bg-surface-high/40 rounded-t-input',
               isActive ? 'text-gold-300 text-gold-glow' : 'text-ink-muted hover:text-ink-secondary',
             ].join(' ')}
           >
@@ -848,6 +859,7 @@ export default function App() {
         onNavigateNotification={handleNavigateNotification}
         onHome={handleHome}
         onOpenProfile={() => setProfileOpen(true)}
+        suppressed={openVenueId !== null}
       />
 
       <PendingApprovalBanner />
