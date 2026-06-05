@@ -363,18 +363,28 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd }: {
                 </div>
               </div>
             )}
-            <p className={['mt-3 font-semibold text-gold-300/90', fs ? 'text-[min(2.3vw,2.7vh)]' : 'text-[11px] sm:text-base'].join(' ')}>{nextPlayableLabel(cfg, state.currentIndex)}</p>
+            <p className={['mt-3 font-bold text-gold-300', fs ? 'text-[min(3.3vw,3.9vh)]' : 'text-sm sm:text-2xl'].join(' ')}>{nextPlayableLabel(cfg, state.currentIndex)}</p>
             {!state.running && <span className={['absolute font-bold text-rose-200 bg-rose-950/60 rounded-badge', fs ? 'top-3 right-3 text-[min(2vw,2.4vh)] px-3 py-1' : 'top-2 right-2 text-[9px] sm:text-2xs px-2 py-0.5'].join(' ')}>일시정지</span>}
           </div>
 
           {/* 우: 스탯 */}
-          <div className="flex flex-col justify-center gap-1.5 sm:gap-2 p-2 sm:p-3 border-l border-white/5 bg-black/20">
+          <div className="flex flex-col justify-center gap-2 sm:gap-3 p-2 sm:p-3 border-l border-white/5 bg-black/20">
             <Stat fs={fs} label="PLAYERS" value={`${alive} / ${entries}`} />
             <Stat fs={fs} label="RE-BUY / EARLY" value={`${rebuys} / ${earlies}`} />
             <Stat fs={fs} label="REG CLOSE" value={regClose !== null ? hms(regClose) : '마감'} tone={regClose !== null ? 'muted' : 'rose'} />
-            <Stat fs={fs} label="TOTAL STACK" value={totalStack.toLocaleString()} />
-            <Stat fs={fs} label="AVG STACK" value={avgStack.toLocaleString()} />
             <Stat fs={fs} label="NEXT BREAK" value={nextBreak !== null ? hms(nextBreak) : '—'} tone="rose" />
+          </div>
+        </div>
+
+        {/* 칩 스탯 — TOTAL / AVG STACK 강조(전체 폭) */}
+        <div className="shrink-0 grid grid-cols-2 border-t border-gold-400/25 bg-gradient-to-r from-gold-400/[0.07] via-transparent to-gold-400/[0.07]">
+          <div className="text-center border-r border-white/5 py-2 sm:py-2.5">
+            <p className={['text-gold-300/70 font-bold tracking-[0.18em]', fs ? 'text-[min(1.9vw,2.2vh)]' : 'text-[10px] sm:text-xs'].join(' ')}>TOTAL STACK</p>
+            <p className={['font-extrabold text-gold-200 tabular-nums leading-tight', fs ? 'text-[min(4.6vw,5.6vh)]' : 'text-xl sm:text-3xl'].join(' ')}>{totalStack.toLocaleString()}</p>
+          </div>
+          <div className="text-center py-2 sm:py-2.5">
+            <p className={['text-ink-secondary font-bold tracking-[0.18em]', fs ? 'text-[min(1.9vw,2.2vh)]' : 'text-[10px] sm:text-xs'].join(' ')}>AVG STACK</p>
+            <p className={['font-extrabold text-white tabular-nums leading-tight', fs ? 'text-[min(4.6vw,5.6vh)]' : 'text-xl sm:text-3xl'].join(' ')}>{avgStack.toLocaleString()}</p>
           </div>
         </div>
 
@@ -449,6 +459,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
   const toast = useToast();
   const [cfg, setCfg] = useState<ClockConfig>(initial);
   const [linkDate, setLinkDate] = useState<string | null>(seedSessionDate ?? null); // 연동할 장부(null=단독)
+  const [sessQuery, setSessQuery] = useState(''); // 장부 목록 검색(날짜·게임명)
   const [presetName, setPresetName] = useState('');
   const [bulkAll, setBulkAll] = useState(20);       // 전체 일괄 듀레이션(분)
   const [bulkFrom, setBulkFrom] = useState(initial.regCloseLevel || 9); // 구간 시작 레벨
@@ -456,6 +467,10 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
   // 모든 변경 시 얼리(레벨)→분 파생값 재계산 — 블라인드 길이가 바뀌어도 얼리 분이 항상 동기화됨.
   const set = (patch: Partial<ClockConfig>) => setCfg((c) => withDerivedEarly({ ...c, ...patch }));
   const totalLevels = countLevels(cfg.levels);
+  const filteredSessions = sessions.filter((s) => {
+    const q = sessQuery.trim().toLowerCase();
+    return !q || `${s.sessionDate} ${s.title ?? ''}`.toLowerCase().includes(q);
+  });
 
   // 듀레이션 일괄 적용(레벨만, 브레이크 제외)
   const applyBulkAll = (min: number) => {
@@ -522,15 +537,24 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
           </div>
         </div>
         <div>
-          <p className="text-[10px] text-ink-muted mb-1">장부(게임) 목록 — 연동하면 게임명·엔트리·리바인·얼리가 자동 반영됩니다</p>
-          <div className="max-h-44 overflow-y-auto rounded-input border border-border-subtle bg-surface-base divide-y divide-border-subtle">
+          <div className="flex items-center justify-between mb-1 gap-2">
+            <p className="text-[10px] text-ink-muted min-w-0 truncate">장부(게임) 목록 — 연동하면 게임명·엔트리·얼리 자동 반영</p>
+            <span className="text-[10px] text-ink-muted tabular-nums shrink-0">{filteredSessions.length}/{sessions.length}</span>
+          </div>
+          <div className="relative mb-1">
+            <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+            <input value={sessQuery} onChange={(e) => setSessQuery(e.target.value)} placeholder="검색 (예: 2026-06 · 게임명)" className="input w-full text-xs pl-8 py-1.5" />
+          </div>
+          <div className="max-h-52 overflow-y-auto rounded-input border border-border-subtle bg-surface-base divide-y divide-border-subtle">
             {sessions.length === 0 ? (
               <p className="text-center py-4 text-[10px] text-ink-muted">저장된 장부가 없습니다. 「장부」 탭에서 게임을 먼저 만들어 주세요.</p>
-            ) : sessions.map((s) => (
+            ) : filteredSessions.length === 0 ? (
+              <p className="text-center py-4 text-[10px] text-ink-muted">"{sessQuery.trim()}" 검색 결과가 없습니다.</p>
+            ) : filteredSessions.map((s) => (
               <button key={s.sessionDate} type="button"
                 onClick={() => { setLinkDate(s.sessionDate); if (s.title) set({ title: s.title }); }}
                 className={['w-full flex items-center gap-2 px-2.5 py-2 text-left transition-colors', linkDate === s.sessionDate ? 'bg-gold-300/15' : 'hover:bg-surface-high'].join(' ')}>
-                <span className="text-2xs font-bold text-gold-300 tabular-nums shrink-0">{s.sessionDate.slice(5)}</span>
+                <span className="text-2xs font-bold text-gold-300 tabular-nums shrink-0">{s.sessionDate}</span>
                 <span className="flex-1 text-xs text-ink-primary truncate">{s.title || '제목 없음'}</span>
                 {s.closed && <span className="text-[9px] text-ink-muted shrink-0">마감</span>}
                 {linkDate === s.sessionDate && <span className="text-gold-300 text-xs shrink-0">✓</span>}
