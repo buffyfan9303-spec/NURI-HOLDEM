@@ -1,12 +1,13 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import Modal from '../atoms/Modal';
 import type { MarketplaceListing } from '../../api/marketplace';
 import { CATEGORIES, CONDITION_COLOR, STATUS_MAP, relativeTime } from './MarketplaceTab';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
 import ReportModal from './ReportModal';
-import type { ChatMessage, ChatThread } from '../../api/chat';
-import { getThreadMessages, sendChatMessage, getListingThreads, subscribeThread } from '../../api/chat';
+import type { ChatThread } from '../../api/chat';
+import { getListingThreads } from '../../api/chat';
+import ChatPane from './chat/ChatPane';
 
 interface ListingDetailModalProps {
   listing: MarketplaceListing | null;
@@ -218,15 +219,9 @@ function SellerChatModal({
   open, onClose, listing,
 }: { open: boolean; onClose: () => void; listing: MarketplaceListing }) {
   const { user } = useAuth();
-  const toast = useToast();
   const isSeller = !!user && user.id === listing.sellerId;
   const [buyerId, setBuyerId]   = useState<string | null>(null);
   const [threads, setThreads]   = useState<ChatThread[]>([]);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [draft, setDraft]       = useState('');
-  const [loading, setLoading]   = useState(false);
-  const [sending, setSending]   = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
 
   // 열릴 때 초기화: 구매자는 본인 스레드, 판매자는 받은 문의 목록
   useEffect(() => {
@@ -239,26 +234,6 @@ function SellerChatModal({
     }
   }, [open, user, isSeller, listing.id]);
 
-  // 활성 스레드 메시지 로드 + 실시간 구독
-  useEffect(() => {
-    if (!open || !buyerId) { setMessages([]); return; }
-    let active = true;
-    setLoading(true);
-    getThreadMessages(listing.id, buyerId)
-      .then((ms) => { if (active) setMessages(ms); })
-      .catch(() => {})
-      .finally(() => { if (active) setLoading(false); });
-    const unsub = subscribeThread(listing.id, buyerId, (m) => {
-      setMessages((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]));
-    });
-    return () => { active = false; unsub(); };
-  }, [open, buyerId, listing.id]);
-
-  // 새 메시지 시 맨 아래로
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-  }, [messages]);
-
   if (!user) {
     return (
       <Modal open={open} onClose={onClose} title="로그인 필요" maxWidth="sm" variant="center">
@@ -269,23 +244,6 @@ function SellerChatModal({
       </Modal>
     );
   }
-
-  const send = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const text = draft.trim();
-    if (!text || !buyerId || sending) return;
-    setSending(true);
-    setDraft('');
-    try {
-      const m = await sendChatMessage(listing.id, buyerId, text);
-      setMessages((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]));
-    } catch (err) {
-      setDraft(text);
-      toast.show(err instanceof Error ? err.message : '전송에 실패했습니다', 'error');
-    } finally {
-      setSending(false);
-    }
-  };
 
   const showThreadList = isSeller && !buyerId;
   const headerName = showThreadList
@@ -364,51 +322,12 @@ function SellerChatModal({
             </ul>
           )}
         </div>
-      ) : (
-        <>
-          {/* 메시지 목록 */}
-          <div ref={scrollRef} className="flex flex-col gap-2 px-4 py-3 max-h-[40vh] min-h-[160px] overflow-y-auto">
-            {loading ? (
-              <p className="text-center py-10 text-2xs text-ink-muted">불러오는 중...</p>
-            ) : messages.length === 0 ? (
-              <p className="text-center py-10 text-2xs text-ink-muted">
-                {isSeller ? '대화를 시작해 보세요' : '판매자에게 첫 메시지를 보내보세요'}
-              </p>
-            ) : messages.map((m) => {
-              const mine = m.senderId === user.id;
-              return (
-                <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-                  <div className={[
-                    'max-w-[75%] px-3 py-2 rounded-card text-sm leading-snug whitespace-pre-wrap break-words',
-                    mine ? 'bg-gold-300 text-ink-inverse rounded-br-sm' : 'bg-surface-high text-ink-primary rounded-bl-sm',
-                  ].join(' ')}>
-                    {m.content}
-                    <p className={['mt-1 text-2xs', mine ? 'text-ink-inverse/70 text-right' : 'text-ink-muted'].join(' ')}>
-                      {relativeTime(m.createdAt)}
-                    </p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* 입력 */}
-          <form onSubmit={send} className="flex items-center gap-2 px-4 py-3 border-t border-border-subtle bg-surface-mid">
-            <input
-              type="text"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder="메시지를 입력하세요"
-              maxLength={1000}
-              disabled={sending}
-              className="input flex-1 text-sm"
-            />
-            <button type="submit" className="btn-primary px-4" disabled={!draft.trim() || sending}>
-              전송
-            </button>
-          </form>
-        </>
-      )}
+      ) : buyerId ? (
+        <div className="flex flex-col h-[52vh]">
+          <ChatPane listingId={listing.id} buyerId={buyerId} meId={user.id}
+            emptyHint={isSeller ? '구매자에게 답장을 보내보세요' : '판매자에게 첫 메시지를 보내보세요'} />
+        </div>
+      ) : null}
     </Modal>
   );
 }

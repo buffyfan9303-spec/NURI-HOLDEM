@@ -86,6 +86,72 @@ export async function getListingThreads(listingId: string): Promise<ChatThread[]
   return threads;
 }
 
+// ── 통합 메시지함 ────────────────────────────────────────────────────────────
+export interface InboxThread {
+  listingId: string;
+  buyerId: string;
+  role: 'buyer' | 'seller';      // 내 역할
+  counterpartyName: string;       // 상대방(판매자 또는 구매자)
+  counterpartyColor: string;
+  listingTitle: string;
+  listingImage: string | null;
+  listingPrice: number;
+  listingStatus: string;
+  lastContent: string;
+  lastAt: string;
+}
+
+/** 내가 참여한 모든 대화(구매자=나 OR 판매자=나) — listing+buyer 단위로 묶어 최신순 */
+export async function getMyChatThreads(): Promise<InboxThread[]> {
+  if (IS_MOCK) return [];
+  const me = await getMyId();
+  if (!me) return [];
+  // RLS(lm_select)로 내 대화만 반환됨
+  const { data, error } = await supabase
+    .from('listing_messages')
+    .select('listing_id, buyer_id, content, created_at')
+    .order('created_at', { ascending: false })
+    .limit(500);
+  if (error) throw error;
+  const rows = (data ?? []) as { listing_id: string; buyer_id: string; content: string; created_at: string }[];
+  const map = new Map<string, { listingId: string; buyerId: string; lastContent: string; lastAt: string }>();
+  for (const r of rows) {
+    const key = `${r.listing_id}|${r.buyer_id}`;
+    if (!map.has(key)) map.set(key, { listingId: r.listing_id, buyerId: r.buyer_id, lastContent: r.content, lastAt: r.created_at });
+  }
+  const convs = [...map.values()];
+  if (!convs.length) return [];
+
+  const listingIds = [...new Set(convs.map((c) => c.listingId))];
+  const buyerIds = [...new Set(convs.map((c) => c.buyerId))];
+  const [{ data: ls }, { data: profs }] = await Promise.all([
+    supabase.from('marketplace_listings').select('id, title, images, price, status, seller_id, seller_name, seller_avatar_color').in('id', listingIds),
+    supabase.from('profiles').select('id, nickname, name, avatar_color').in('id', buyerIds),
+  ]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const lById = new Map<string, any>(); (ls ?? []).forEach((l: any) => lById.set(l.id, l));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const pById = new Map<string, any>(); (profs ?? []).forEach((p: any) => pById.set(p.id, p));
+
+  const out: InboxThread[] = [];
+  for (const c of convs) {
+    const l = lById.get(c.listingId);
+    if (!l) continue;
+    const iAmBuyer = c.buyerId === me;
+    let name: string, color: string;
+    if (iAmBuyer) { name = l.seller_name || '판매자'; color = l.seller_avatar_color || '#5A6175'; }
+    else { const p = pById.get(c.buyerId); name = p?.nickname || p?.name || '구매자'; color = p?.avatar_color || '#0EA5E9'; }
+    out.push({
+      listingId: c.listingId, buyerId: c.buyerId, role: iAmBuyer ? 'buyer' : 'seller',
+      counterpartyName: name, counterpartyColor: color,
+      listingTitle: l.title, listingImage: (l.images && l.images[0]) || null, listingPrice: l.price, listingStatus: l.status,
+      lastContent: c.lastContent, lastAt: c.lastAt,
+    });
+  }
+  out.sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime());
+  return out;
+}
+
 // 실시간 구독 — 해당 스레드에 새 메시지가 도착하면 콜백 (RLS로 권한 제한)
 export function subscribeThread(
   listingId: string,

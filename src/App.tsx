@@ -981,6 +981,7 @@ export default function App() {
             onCreate={() => user ? setMarketFormOpen(true) : setAuthOpen(true)}
             canWriteNotice={isAdmin}
             onWriteNotice={() => setNoticeFormOpen(true)}
+            onListingsChanged={() => getListings().then(setListings).catch(() => {})}
           />
         </main>
       )}

@@ -3,6 +3,9 @@ import type {
   ListingCategory, ListingCondition, ListingStatus,
   MarketplaceListing, MarketplaceNotice, NoticeType,
 } from '../../api/marketplace';
+import { useAuth } from '../../contexts/AuthContext';
+import { getMyChatThreads } from '../../api/chat';
+import { MessagesModal, MyListingsModal } from './MyMarketModal';
 
 // ── 상수 ─────────────────────────────────────────────────────────────────────
 
@@ -55,18 +58,30 @@ interface MarketplaceTabProps {
   /** 관리자만 공지 작성 가능 */
   canWriteNotice?: boolean;
   onWriteNotice?: () => void;
+  /** 내 판매목록에서 상태/삭제 변경 시 목록 새로고침 */
+  onListingsChanged?: () => void;
 }
 
 type SortBy = 'recent' | 'popular';
 
 export default function MarketplaceTab({
   listings, notices, onSelect, onSelectNotice, onCreate,
-  canWriteNotice = false, onWriteNotice,
+  canWriteNotice = false, onWriteNotice, onListingsChanged,
 }: MarketplaceTabProps) {
+  const { user } = useAuth();
   const [category, setCategory]       = useState<ListingCategory | 'all'>('all');
   const [includeSold, setIncludeSold] = useState(false);
   const [query, setQuery]             = useState('');
   const [sortBy, setSortBy]           = useState<SortBy>('recent');
+  const [myListOpen, setMyListOpen]   = useState(false);
+  const [msgOpen, setMsgOpen]         = useState(false);
+  const [msgCount, setMsgCount]       = useState(0);
+
+  // 메시지함 대화 수(배지)
+  useEffect(() => {
+    if (!user) { setMsgCount(0); return; }
+    getMyChatThreads().then((t) => setMsgCount(t.length)).catch(() => {});
+  }, [user, msgOpen]);
 
   const visible = useMemo(() => {
     const filtered = listings.filter((l) => {
@@ -96,6 +111,21 @@ export default function MarketplaceTab({
           onWrite={onWriteNotice}
           onSelect={onSelectNotice}
         />
+      )}
+
+      {/* ── 내 거래(판매목록 · 메시지함) ─────────────────────────── */}
+      {user && (
+        <div className="flex gap-2">
+          <button type="button" onClick={() => setMyListOpen(true)}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-input bg-surface-high border border-border-default text-xs font-semibold text-ink-secondary hover:text-ink-primary transition-colors">
+            <span aria-hidden>📦</span> 내 판매목록
+          </button>
+          <button type="button" onClick={() => setMsgOpen(true)}
+            className="flex-1 relative flex items-center justify-center gap-1.5 py-2 rounded-input bg-surface-high border border-border-default text-xs font-semibold text-ink-secondary hover:text-ink-primary transition-colors">
+            <span aria-hidden>💬</span> 메시지함
+            {msgCount > 0 && <span className="ml-0.5 inline-flex items-center justify-center min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-gold-300 text-ink-inverse text-[10px] font-bold tabular-nums">{msgCount}</span>}
+          </button>
+        </div>
       )}
 
       {/* ── 액션 바 (검색 + 글쓰기) ────────────────────────────────── */}
@@ -190,6 +220,11 @@ export default function MarketplaceTab({
           더보기 ({(visible.length - limit).toLocaleString()})
         </button>
       )}
+
+      <MyListingsModal open={myListOpen} onClose={() => setMyListOpen(false)}
+        onOpenListing={(l) => { setMyListOpen(false); onSelect(l); }}
+        onChanged={onListingsChanged} />
+      <MessagesModal open={msgOpen} onClose={() => setMsgOpen(false)} />
     </div>
   );
 }

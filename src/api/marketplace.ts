@@ -67,6 +67,17 @@ export async function getListings(opts?: {
   return (data ?? []).map(rowToListing);
 }
 
+/** 내가 등록한 판매글 (최신순) */
+export async function getMyListings(): Promise<MarketplaceListing[]> {
+  if (IS_MOCK) return [];
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+  const { data, error } = await supabase.from('marketplace_listings')
+    .select('*').eq('seller_id', user.id).order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map(rowToListing);
+}
+
 export async function createListing(
   payload: Omit<MarketplaceListing, 'id' | 'createdAt' | 'viewCount' | 'likeCount' | 'commentCount'>,
 ): Promise<MarketplaceListing> {
