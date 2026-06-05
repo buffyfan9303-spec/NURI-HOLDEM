@@ -380,7 +380,22 @@ function ClockSettings({ venueId, canManage, presets, initial, hasLive, seedSess
   const toast = useToast();
   const [cfg, setCfg] = useState<ClockConfig>(initial);
   const [presetName, setPresetName] = useState('');
+  const [bulkAll, setBulkAll] = useState(20);       // 전체 일괄 듀레이션(분)
+  const [bulkFrom, setBulkFrom] = useState(initial.regCloseLevel || 9); // 구간 시작 레벨
+  const [bulkFromMin, setBulkFromMin] = useState(25); // 구간 듀레이션(분)
   const set = (patch: Partial<ClockConfig>) => setCfg((c) => ({ ...c, ...patch }));
+
+  // 듀레이션 일괄 적용(레벨만, 브레이크 제외)
+  const applyBulkAll = (min: number) => {
+    if (min <= 0) return;
+    set({ levels: cfg.levels.map((l) => l.kind === 'level' ? { ...l, minutes: min } : l) });
+    toast.show(`전체 레벨 듀레이션을 ${min}분으로 변경했습니다`, 'success');
+  };
+  const applyBulkFrom = (fromNo: number, min: number) => {
+    if (min <= 0) return;
+    set({ levels: cfg.levels.map((l, i) => (l.kind === 'level' && levelNumberAt(cfg, i) >= fromNo) ? { ...l, minutes: min } : l) });
+    toast.show(`레벨 ${fromNo}부터 듀레이션을 ${min}분으로 변경했습니다`, 'success');
+  };
 
   const setLevel = (i: number, patch: Partial<ClockLevel>) => set({ levels: cfg.levels.map((l, idx) => idx === i ? { ...l, ...patch } : l) });
   const addLevel = () => {
@@ -469,6 +484,31 @@ function ClockSettings({ venueId, canManage, presets, initial, hasLive, seedSess
       {/* 블라인드 구조 */}
       <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
         <p className="text-2xs font-semibold text-ink-secondary">블라인드 구조</p>
+
+        {/* 듀레이션 일괄 설정 */}
+        <div className="rounded-input bg-surface-high border border-border-subtle p-2 space-y-1.5">
+          <p className="text-[10px] text-ink-muted">듀레이션 일괄 설정 · 레벨 길이(브레이크 제외)</p>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-2xs text-ink-secondary w-8 shrink-0">전체</span>
+            <div className="relative w-16">
+              <input type="number" min="1" value={bulkAll || ''} onChange={(e) => setBulkAll(+e.target.value || 0)} className="input w-full text-xs tabular-nums pr-5" />
+              <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-ink-muted">분</span>
+            </div>
+            <button type="button" onClick={() => applyBulkAll(bulkAll)} className="text-2xs font-bold px-2.5 py-1.5 rounded-input bg-gold-300/15 text-gold-300 border border-gold-400/40 hover:bg-gold-300/25">전체 적용</button>
+          </div>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-2xs text-ink-secondary w-8 shrink-0">레벨</span>
+            <input type="number" min="1" value={bulkFrom || ''} onChange={(e) => setBulkFrom(+e.target.value || 0)} className="input w-12 text-xs tabular-nums" />
+            <span className="text-2xs text-ink-muted">부터</span>
+            <div className="relative w-16">
+              <input type="number" min="1" value={bulkFromMin || ''} onChange={(e) => setBulkFromMin(+e.target.value || 0)} className="input w-full text-xs tabular-nums pr-5" />
+              <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-ink-muted">분</span>
+            </div>
+            <button type="button" onClick={() => applyBulkFrom(bulkFrom, bulkFromMin)} className="text-2xs font-bold px-2.5 py-1.5 rounded-input bg-gold-300/15 text-gold-300 border border-gold-400/40 hover:bg-gold-300/25">적용</button>
+          </div>
+          <button type="button" onClick={() => setBulkFrom(cfg.regCloseLevel || 9)} className="text-[10px] text-gold-300/90 hover:text-gold-300">↩ 레지 마감 레벨({cfg.regCloseLevel || 9})부터로 설정</button>
+          <p className="text-[10px] text-ink-muted">레지 마감 후 블라인드가 길어지면, 마감 레벨부터 다른 듀레이션을 일괄 적용하세요.</p>
+        </div>
         <div className="space-y-1">
           {cfg.levels.map((l, i) => (
             <div key={i} className="flex items-center gap-1.5">
