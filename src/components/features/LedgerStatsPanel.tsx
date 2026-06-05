@@ -78,7 +78,7 @@ function StatsView({ venueId }: { venueId: string }) {
     const byPlayer: Record<string, number> = {};
     const playerSet = new Set<string>();
     const dates = new Set<string>();
-    const dow: Record<number, { entries: number; revenue: number; dates: Set<string> }> = {};
+    const dow: Record<number, { entries: number; revenue: number; unpaid: number; buyins: number; dates: Set<string>; players: Set<string> }> = {};
     for (const b of src) {
       const f = fin(b);
       revenue += f.paid; unpaid += f.unpaid; support += f.support; entries += f.entry;
@@ -88,8 +88,9 @@ function StatsView({ venueId }: { venueId: string }) {
       byPlayer[b.playerName] = (byPlayer[b.playerName] ?? 0) + 1;
       playerSet.add(b.playerName); dates.add(b.sessionDate);
       const w = new Date(b.sessionDate + 'T00:00:00').getDay();
-      if (!dow[w]) dow[w] = { entries: 0, revenue: 0, dates: new Set() };
-      dow[w].entries += f.entry; dow[w].revenue += f.paid; dow[w].dates.add(b.sessionDate);
+      if (!dow[w]) dow[w] = { entries: 0, revenue: 0, unpaid: 0, buyins: 0, dates: new Set(), players: new Set() };
+      dow[w].entries += f.entry; dow[w].revenue += f.paid; dow[w].unpaid += f.unpaid;
+      dow[w].buyins++; dow[w].dates.add(b.sessionDate); dow[w].players.add(b.playerName);
     }
     const target = (period === 'day' ? sessionByDate.get(date)?.targetEntries : 0) ?? 0;
     const visitor: Record<VisitorType, number> = { new: 0, regular: 0, staff: 0, other: 0 };
@@ -145,7 +146,7 @@ function StatsView({ venueId }: { venueId: string }) {
                   dowRange === o.id ? 'bg-gold-300 text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>{o.label}</button>
             ))}
           </div>
-          <DowTable dow={m.dow} rangeLabel={DOW_RANGE_OPTS.find((o) => o.id === dowRange)!.label} />
+          <DowStats dow={m.dow} rangeLabel={DOW_RANGE_OPTS.find((o) => o.id === dowRange)!.label} />
         </div>
       ) : (
         <>
@@ -228,31 +229,131 @@ function StatsView({ venueId }: { venueId: string }) {
   );
 }
 
-function DowTable({ dow, rangeLabel = '전체' }: { dow: Record<number, { entries: number; revenue: number; dates: Set<string> }>; rangeLabel?: string }) {
-  const rows = [1, 2, 3, 4, 5, 6, 0].map((w) => {
+type DowRow = {
+  w: number; days: number; entries: number; revenue: number; unpaid: number; buyins: number; players: number;
+  avgEntry: number; avgRevenue: number; perEntry: number;
+};
+function DowStats({ dow, rangeLabel = '전체' }: { dow: Record<number, { entries: number; revenue: number; unpaid: number; buyins: number; dates: Set<string>; players: Set<string> }>; rangeLabel?: string }) {
+  const [metric, setMetric] = useState<'entry' | 'revenue'>('entry');
+  const rows: DowRow[] = [1, 2, 3, 4, 5, 6, 0].map((w) => {
     const d = dow[w];
     const days = d ? d.dates.size : 0;
-    return { w, days, entries: d?.entries ?? 0, revenue: d?.revenue ?? 0, avgEntry: days ? (d!.entries / days) : 0 };
+    const entries = d?.entries ?? 0;
+    const revenue = d?.revenue ?? 0;
+    return {
+      w, days, entries, revenue, unpaid: d?.unpaid ?? 0, buyins: d?.buyins ?? 0, players: d ? d.players.size : 0,
+      avgEntry: days ? entries / days : 0,
+      avgRevenue: days ? revenue / days : 0,
+      perEntry: entries ? revenue / entries : 0,
+    };
   });
+  const active = rows.filter((r) => r.days > 0);
+  if (active.length === 0) {
+    return <p className="text-center py-6 text-2xs text-ink-muted">해당 기간에 장부 데이터가 없습니다.</p>;
+  }
+  const best  = active.reduce((a, b) => (b.avgEntry > a.avgEntry ? b : a));
+  const worst = active.reduce((a, b) => (b.avgEntry < a.avgEntry ? b : a));
+  const meanAvg = active.reduce((s, r) => s + r.avgEntry, 0) / active.length;
+  const maxAvgEntry = Math.max(...rows.map((r) => r.avgEntry), 0.1);
+  const maxAvgRev   = Math.max(...rows.map((r) => r.avgRevenue), 1);
+  const totalDays    = rows.reduce((s, r) => s + r.days, 0);
+  const totalEntries = rows.reduce((s, r) => s + r.entries, 0);
+  const totalRevenue = rows.reduce((s, r) => s + r.revenue, 0);
+  const multi = active.length > 1;
+
   return (
-    <div>
-      <p className="text-2xs text-ink-muted mb-1">요일별 평균 · {rangeLabel} 기준</p>
-      <table className="w-full text-center border-separate border-spacing-0">
-        <thead><tr className="text-[10px] text-ink-muted">
-          <th className="py-1">요일</th><th>영업일</th><th>총 엔트리</th><th>일평균 엔트리</th><th>매출</th>
-        </tr></thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.w} className="text-xs">
-              <td className="py-1 font-bold text-gold-300">{DOW[r.w]}</td>
-              <td className="text-ink-secondary tabular-nums">{r.days}</td>
-              <td className="text-ink-primary tabular-nums">{r.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })}</td>
-              <td className="text-emerald-400 tabular-nums font-bold">{r.avgEntry.toFixed(1)}</td>
-              <td className="text-ink-secondary tabular-nums">{wonToMan(r.revenue)}만</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="space-y-3">
+      <p className="text-2xs text-ink-muted">요일별 통계 · {rangeLabel} 기준 · 영업 {totalDays}일</p>
+
+      {/* 요약 */}
+      <div className="grid grid-cols-3 gap-2">
+        <Mini label="영업일" value={`${totalDays}일`} />
+        <Mini label="총 엔트리" value={totalEntries.toLocaleString(undefined, { maximumFractionDigits: 0 })} />
+        <Mini label="총 매출(만)" value={wonToMan(totalRevenue)} />
+      </div>
+
+      {/* 최고 / 최저 요일 하이라이트 */}
+      <div className="grid grid-cols-2 gap-2">
+        <DowHilite tone="emerald" cap="가장 활발한 요일" w={best.w}
+          a={`일평균 ${best.avgEntry.toFixed(1)} 엔트리`} b={`${wonToMan(best.avgRevenue)}만/일 · 객단가 ${wonToMan(best.perEntry)}만`} />
+        <DowHilite tone="rose" cap="가장 부진한 요일" w={worst.w}
+          a={`일평균 ${worst.avgEntry.toFixed(1)} 엔트리`} b={multi ? `${wonToMan(worst.avgRevenue)}만/일 · 객단가 ${wonToMan(worst.perEntry)}만` : '비교할 다른 요일 데이터 필요'} />
+      </div>
+
+      {/* 막대 차트 — 엔트리/매출 토글 */}
+      <div>
+        <div className="flex items-center justify-between mb-1.5">
+          <p className="text-2xs font-semibold text-ink-secondary">요일별 {metric === 'entry' ? '일평균 엔트리' : '일평균 매출'}</p>
+          <div className="flex gap-0.5 bg-surface-high rounded-input p-0.5">
+            {([['entry', '엔트리'], ['revenue', '매출']] as const).map(([k, lbl]) => (
+              <button key={k} type="button" onClick={() => setMetric(k)}
+                className={['px-2 py-0.5 text-[10px] font-bold rounded-[5px] transition-colors',
+                  metric === k ? 'bg-gold-300 text-ink-inverse' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>{lbl}</button>
+            ))}
+          </div>
+        </div>
+        <ul className="space-y-1">
+          {rows.map((r) => {
+            const val = metric === 'entry' ? r.avgEntry : r.avgRevenue;
+            const max = metric === 'entry' ? maxAvgEntry : maxAvgRev;
+            const pct = max > 0 ? (val / max) * 100 : 0;
+            const isBest = multi && r.w === best.w;
+            const isWorst = multi && r.w === worst.w && r.days > 0;
+            const barColor = r.days === 0 ? 'bg-surface-high' : isBest ? 'bg-emerald-500/75' : isWorst ? 'bg-rose-500/65' : 'bg-gold-300/55';
+            return (
+              <li key={r.w} className="flex items-center gap-2">
+                <span className={['w-4 text-center text-xs font-bold', isBest ? 'text-emerald-400' : isWorst ? 'text-rose-400' : 'text-gold-300'].join(' ')}>{DOW[r.w]}</span>
+                <div className="flex-1 h-5 rounded bg-surface-high overflow-hidden">
+                  <div className={['h-full rounded-r transition-all duration-300', barColor].join(' ')} style={{ width: `${r.days ? Math.max(pct, 3) : 0}%` }} />
+                </div>
+                <span className="w-16 text-right text-2xs tabular-nums text-ink-secondary">
+                  {r.days ? (metric === 'entry' ? val.toFixed(1) : `${wonToMan(val)}만`) : '휴무'}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+
+      {/* 상세 표 */}
+      <div className="overflow-x-auto scrollbar-none">
+        <table className="w-full text-center border-separate border-spacing-0 min-w-[19rem]">
+          <thead><tr className="text-[10px] text-ink-muted">
+            <th className="py-1 text-left pl-1">요일</th><th>영업일</th><th>일평균<br/>엔트리</th><th>일평균<br/>매출(만)</th><th>객단가<br/>(만)</th>
+          </tr></thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.w} className={['text-xs', r.days === 0 ? 'opacity-40' : ''].join(' ')}>
+                <td className="py-1.5 text-left pl-1 font-bold text-gold-300">{DOW[r.w]}</td>
+                <td className="text-ink-secondary tabular-nums">{r.days || '-'}</td>
+                <td className={['tabular-nums font-bold', r.w === best.w && multi ? 'text-emerald-400' : r.w === worst.w && multi ? 'text-rose-400' : 'text-ink-primary'].join(' ')}>{r.days ? r.avgEntry.toFixed(1) : '-'}</td>
+                <td className="text-ink-secondary tabular-nums">{r.days ? wonToMan(r.avgRevenue) : '-'}</td>
+                <td className="text-ink-secondary tabular-nums">{r.entries ? wonToMan(r.perEntry) : '-'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* 인사이트 */}
+      <p className="text-[11px] text-ink-secondary bg-surface-low/70 border border-border-subtle rounded-input p-2.5 leading-relaxed">
+        💡 {multi
+          ? <>{DOW[worst.w]}요일이 일평균 <b className="text-rose-300">{worst.avgEntry.toFixed(1)}</b> 엔트리로 가장 저조합니다(전체 평균 {meanAvg.toFixed(1)}). 반대로 <b className="text-emerald-300">{DOW[best.w]}</b>요일이 {best.avgEntry.toFixed(1)}로 가장 활발합니다. {DOW[worst.w]}요일에 집객 이벤트(얼리버드 칩업·신규 할인·보장 토너먼트)를 배치해 보세요.</>
+          : <>아직 한 요일({DOW[best.w]})만 집계됐습니다. 다른 요일도 운영되면 요일 간 비교·약한 요일 진단을 표시합니다.</>}
+      </p>
+    </div>
+  );
+}
+
+function DowHilite({ tone, cap, w, a, b }: { tone: 'emerald' | 'rose'; cap: string; w: number; a: string; b: string }) {
+  const ring = tone === 'emerald' ? 'border-emerald-500/40 bg-emerald-500/[0.07]' : 'border-rose-500/40 bg-rose-500/[0.07]';
+  const head = tone === 'emerald' ? 'text-emerald-300' : 'text-rose-300';
+  return (
+    <div className={['rounded-card border p-2.5', ring].join(' ')}>
+      <p className="text-[10px] text-ink-muted">{cap}</p>
+      <p className={['text-lg font-extrabold leading-tight', head].join(' ')}>{DOW[w]}요일</p>
+      <p className="text-[11px] text-ink-primary mt-0.5 leading-tight">{a}</p>
+      <p className="text-[10px] text-ink-muted mt-0.5 leading-tight">{b}</p>
     </div>
   );
 }
@@ -313,7 +414,7 @@ interface StatsAgg {
   total: number; entries: number; revenue: number; unpaid: number; players: number; ticket: number;
   cardRatio: number; unpaidRatio: number; discountRatio: number;
   ranking: [string, number][];
-  dow: Record<number, { entries: number; revenue: number; dates: Set<string> }>;
+  dow: Record<number, { entries: number; revenue: number; unpaid: number; buyins: number; dates: Set<string>; players: Set<string> }>;
 }
 
 function buildAiReport(m: StatsAgg): { empty: boolean; sales: string; risk: string; weekday: string; actions: string[] } {

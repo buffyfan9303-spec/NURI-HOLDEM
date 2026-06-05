@@ -334,6 +334,13 @@ export async function reopenLedgerSession(venueId: string, date: string): Promis
   if (error) throw error;
 }
 
+/** 장부(세션) 통째 삭제 — 바인·명단·세션 일괄 제거. POS 관리 권한 필요(SECURITY DEFINER RPC). */
+export async function deleteLedgerSession(venueId: string, date: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('delete_ledger_session', { p_venue_id: venueId, p_date: date });
+  if (error) throw error;
+}
+
 // ── 명단(roster) ──────────────────────────────────────────────────────────────
 export async function getLedgerPlayers(venueId: string, date = today()): Promise<LedgerPlayer[]> {
   if (IS_MOCK) return [];

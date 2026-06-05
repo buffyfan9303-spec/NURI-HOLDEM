@@ -24,8 +24,10 @@ export interface ClockConfig {
   earlyBonus: number;     // 1얼리 보너스 칩
   doubleEarlyBonus: number; // 더블얼리 보너스 칩
   regCloseLevel: number;  // 등록 마감 레벨(이 레벨 시작 시 마감)
-  earlyDoubleMin: number; // 스타트 후 ~N분 = 더블얼리
-  earlySingleMin: number; // 스타트 후 ~M분 = 1얼리
+  earlyDoubleLevel: number; // ~레벨 N까지 도착 = 더블얼리
+  earlySingleLevel: number; // ~레벨 M까지 도착 = 1얼리
+  earlyDoubleMin: number; // (파생) 레벨→누적분 환산값 = 더블얼리 마지노 분
+  earlySingleMin: number; // (파생) 레벨→누적분 환산값 = 1얼리 마지노 분
   mysteryBounty: number;  // 미스터리 바운티 금액(표시용)
   prizes: ClockPrizeRow[];
   levels: ClockLevel[];
@@ -64,7 +66,8 @@ export function defaultClockConfig(): ClockConfig {
     title: '데일리 토너먼트',
     startStack: 30000, rebuyStack: 30000, addonStack: 30000,
     earlyBonus: 10000, doubleEarlyBonus: 20000,
-    regCloseLevel: 9, earlyDoubleMin: 20, earlySingleMin: 80,
+    regCloseLevel: 9,
+    earlyDoubleLevel: 1, earlySingleLevel: 4, earlyDoubleMin: 20, earlySingleMin: 80,
     mysteryBounty: 0,
     prizes: [
       { place: '1st', amount: 400 }, { place: '2nd', amount: 150 }, { place: '3rd', amount: 100 },
@@ -77,6 +80,37 @@ export function defaultClockConfig(): ClockConfig {
       L(1000, 2000, 2000), B(8),
       L(1500, 3000, 3000), L(2000, 4000, 4000), L(3000, 6000, 6000),
     ],
+  };
+}
+
+/** 전체 '레벨'(브레이크 제외) 개수 */
+export function countLevels(levels: ClockLevel[]): number {
+  return levels.reduce((n, l) => n + (l.kind === 'level' ? 1 : 0), 0);
+}
+
+/** 블라인드 구조에서 '레벨 N 종료'까지의 누적 경과분(브레이크 포함 — 실제 경과 시각 기준). */
+export function cumulativeMinutesThroughLevel(levels: ClockLevel[], levelNo: number): number {
+  if (levelNo <= 0) return 0;
+  let mins = 0, count = 0;
+  for (const l of levels) {
+    mins += l.minutes || 0;
+    if (l.kind === 'level') { count++; if (count >= levelNo) return mins; }
+  }
+  return mins;
+}
+
+/** earlyDoubleLevel/earlySingleLevel(레벨) → earlyDoubleMin/earlySingleMin(분, 파생) 재계산.
+ *  블라인드 길이가 바뀌면 이 함수로 다시 환산해 저장한다. */
+export function withDerivedEarly(cfg: ClockConfig): ClockConfig {
+  const total = countLevels(cfg.levels);
+  const dLv = Math.max(0, Math.min(cfg.earlyDoubleLevel ?? 0, total));
+  const sLv = Math.max(0, Math.min(cfg.earlySingleLevel ?? 0, total));
+  return {
+    ...cfg,
+    earlyDoubleLevel: dLv,
+    earlySingleLevel: sLv,
+    earlyDoubleMin: dLv > 0 ? cumulativeMinutesThroughLevel(cfg.levels, dLv) : 0,
+    earlySingleMin: sLv > 0 ? cumulativeMinutesThroughLevel(cfg.levels, sLv) : 0,
   };
 }
 

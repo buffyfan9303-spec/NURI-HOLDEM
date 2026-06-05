@@ -8,7 +8,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import {
   type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type LedgerSessionListItem, type DiscountPreset, type EarlyType,
   visitorLabel, wonToMan, WON_PER_MAN, buyinFinance, earlyTypeOf, setBuyinEarly,
-  getLedgerSession, saveLedgerSession, openLedgerSession, closeLedgerSession, reopenLedgerSession,
+  getLedgerSession, saveLedgerSession, openLedgerSession, closeLedgerSession, reopenLedgerSession, deleteLedgerSession,
   setRegistrationClosed, getLastLedgerSettings, getLedgerSessionList,
   getLedgerBuyins, upsertBuyin, upsertBuyinSplit, cancelBuyin,
   getLedgerPlayers, addLedgerPlayer, updateLedgerPlayer, removeLedgerPlayer,
@@ -19,6 +19,7 @@ import { getSchedules, type Schedule } from '../../api/schedules';
 import { getMyVenueStaff, type User } from '../../api/auth';
 
 const today = () => new Date().toLocaleDateString('en-CA'); // 로컬 날짜 — UTC 자정 넘김 방지
+const shiftDays = (d: string, n: number) => { const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate() + n); return x.toLocaleDateString('en-CA'); };
 
 // 금액은 만원 단위 입력/표시 (천원=0.1만 까지 허용)
 const manVal   = (won: number): number | '' => (won ? won / WON_PER_MAN : '');
@@ -67,7 +68,8 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const [sessionList, setSessionList] = useState<LedgerSessionListItem[]>([]);
   const [listLoading, setListLoading] = useState(true);
   const [listQuery, setListQuery] = useState('');
-  const [filterDate, setFilterDate] = useState(''); // 날짜 필터(선택 시 그 날짜 장부만 표시)
+  const [filterFrom, setFilterFrom] = useState(''); // 기간 필터 시작일
+  const [filterTo, setFilterTo]     = useState(''); // 기간 필터 종료일
   const [presets, setPresets] = useState<LedgerPreset[]>([]);
   const [venueSchedules, setVenueSchedules] = useState<Schedule[]>([]);
 
@@ -94,6 +96,11 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   useEffect(() => { if (mode === 'list') loadList(); }, [mode, loadList]);
 
   const openBoard = (d: string) => { setDate(d); setMode('board'); };
+  const handleDeleteSession = useCallback(async (d: string) => {
+    if (!confirm(`${d} 장부를 삭제할까요?\n바인·명단·세션 기록이 모두 삭제되며 되돌릴 수 없습니다.`)) return;
+    try { await deleteLedgerSession(venueId, d); toast.show('장부를 삭제했습니다', 'info'); loadList(); }
+    catch (e) { toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'); }
+  }, [venueId, toast, loadList]);
 
   const reload = useCallback(() => {
     Promise.all([getLedgerBuyins(venueId, date), getLedgerPlayers(venueId, date)])
@@ -196,10 +203,12 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     const todayStr = today();
     const lq = listQuery.trim().toLowerCase();
     const filtered = sessionList.filter((s) => {
-      if (filterDate && s.sessionDate !== filterDate) return false;
+      if (filterFrom && s.sessionDate < filterFrom) return false;
+      if (filterTo && s.sessionDate > filterTo) return false;
       if (lq && !`${s.sessionDate} ${s.title ?? ''}`.toLowerCase().includes(lq)) return false;
       return true;
     });
+    const hasRange = !!(filterFrom || filterTo);
     return (
       <div className="space-y-3 pb-6">
         <div className="flex items-center justify-between gap-2">
@@ -213,12 +222,19 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
           <input value={listQuery} onChange={(e) => setListQuery(e.target.value)} placeholder="장부 검색 (날짜·게임명)" className="input w-full text-sm pl-9" />
         </div>
 
-        {/* 날짜로 보기 — 선택한 날짜의 장부만 표시(필터) */}
-        <div className="flex items-center gap-2">
-          <input type="date" value={filterDate} max={todayStr} onChange={(e) => setFilterDate(e.target.value)} className="input flex-1 text-sm" aria-label="날짜로 장부 보기" />
-          {filterDate
-            ? <button type="button" onClick={() => setFilterDate('')} className="btn-ghost text-xs px-3 shrink-0 whitespace-nowrap">전체 보기</button>
-            : <span className="text-2xs text-ink-muted shrink-0 px-1 whitespace-nowrap">날짜 선택 시 그 날만</span>}
+        {/* 기간으로 보기 — 시작~종료 범위의 장부만 표시(필터) */}
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-1.5">
+            <input type="date" value={filterFrom} max={filterTo || todayStr} onChange={(e) => setFilterFrom(e.target.value)} className="input flex-1 text-sm" aria-label="시작일" />
+            <span className="text-2xs text-ink-muted shrink-0">~</span>
+            <input type="date" value={filterTo} min={filterFrom || undefined} max={todayStr} onChange={(e) => setFilterTo(e.target.value)} className="input flex-1 text-sm" aria-label="종료일" />
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-2xs text-ink-muted">{hasRange ? `${filterFrom || '처음'} ~ ${filterTo || '오늘'}` : '기간 설정 시 그 범위만'}</span>
+            <button type="button" onClick={() => { setFilterFrom(shiftDays(todayStr, -6)); setFilterTo(todayStr); }} className="text-2xs font-semibold text-gold-300/90 hover:text-gold-300">최근 7일</button>
+            <button type="button" onClick={() => { setFilterFrom(todayStr.slice(0, 7) + '-01'); setFilterTo(todayStr); }} className="text-2xs font-semibold text-gold-300/90 hover:text-gold-300">이번 달</button>
+            {hasRange && <button type="button" onClick={() => { setFilterFrom(''); setFilterTo(''); }} className="text-2xs text-ink-muted hover:text-ink-secondary ml-auto">전체 보기</button>}
+          </div>
         </div>
 
         {listLoading ? (
@@ -226,20 +242,20 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
         ) : sessionList.length === 0 ? (
           <p className="py-10 text-center text-xs text-ink-muted">아직 작성한 장부가 없습니다. "+ 장부 추가"로 첫 장부를 여세요.</p>
         ) : filtered.length === 0 ? (
-          <p className="py-10 text-center text-xs text-ink-muted">{filterDate ? `${filterDate} 에 작성된 장부가 없습니다.` : `"${listQuery.trim()}" 검색 결과가 없습니다.`}</p>
+          <p className="py-10 text-center text-xs text-ink-muted">{hasRange ? '선택한 기간에 작성된 장부가 없습니다.' : `"${listQuery.trim()}" 검색 결과가 없습니다.`}</p>
         ) : (
           <ul className="space-y-1.5">
             {filtered.map((s, i) => (
-              <li key={s.sessionDate}>
+              <li key={s.sessionDate} className="flex items-center rounded-card border border-border-subtle bg-surface-low hover:border-gold-400/40 transition-colors">
                 <button type="button" onClick={() => openBoard(s.sessionDate)}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-card border border-border-subtle bg-surface-low hover:border-gold-400/40 hover:bg-surface-high transition-colors text-left">
+                  className="flex-1 min-w-0 flex items-center gap-3 px-3 py-2.5 text-left">
                   <span className="w-6 shrink-0 text-center text-sm font-bold text-gold-300 tabular-nums">{i + 1}</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold text-ink-primary truncate">
                       {s.sessionDate}{s.sessionDate === todayStr ? ' (오늘)' : ''}
                       <span className="font-normal text-ink-secondary"> · {s.title || '게임'}</span>
                     </p>
-                    <p className="text-2xs text-ink-muted">바인 {s.buyinAmount.toLocaleString()}원</p>
+                    <p className="text-2xs text-ink-muted">바인 {s.buyinAmount.toLocaleString()}원 · 탭하여 보기·수정</p>
                   </div>
                   {s.closed
                     ? <span className="shrink-0 text-2xs font-bold text-gold-300 bg-gold-300/15 px-2 py-0.5 rounded-badge">마감</span>
@@ -247,6 +263,12 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                     ? <span className="shrink-0 text-2xs font-bold text-danger-light bg-danger/10 px-2 py-0.5 rounded-badge">레지마감</span>
                     : <span className="shrink-0 text-2xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-badge">진행중</span>}
                 </button>
+                {canManage && (
+                  <button type="button" onClick={() => handleDeleteSession(s.sessionDate)} aria-label={`${s.sessionDate} 장부 삭제`}
+                    className="shrink-0 mr-1.5 w-8 h-8 flex items-center justify-center rounded-input text-ink-muted hover:text-danger-light hover:bg-danger/10 transition-colors">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
+                  </button>
+                )}
               </li>
             ))}
           </ul>
@@ -659,8 +681,6 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   const [schedId, setSchedId] = useState<string>(base.scheduleId ?? '');
   const [operId, setOperId]   = useState<string>(base.openedBy ?? operatorOptions[0]?.id ?? '');
   const [discs, setDiscs]     = useState<DiscountPreset[]>(base.discounts ?? []);
-  const [earlyD, setEarlyD]   = useState<number>(base.earlyDoubleMin || 0);
-  const [earlyS, setEarlyS]   = useState<number>(base.earlySingleMin || 0);
   const [startHM, setStartHM] = useState<string>(base.tournamentStart ? new Date(base.tournamentStart).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '');
 
   const setDisc = (i: number, patch: Partial<DiscountPreset>) =>
@@ -688,7 +708,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       targetEntries: target, eventMemo: event.trim() || undefined, dealers: dealers.trim() || undefined,
       scheduleId: schedId || null, openedBy: operId || null,
       discounts: discs.filter((d) => d.amount > 0),
-      earlyDoubleMin: earlyD, earlySingleMin: earlyS, tournamentStart: tStart,
+      earlyDoubleMin: base.earlyDoubleMin ?? 0, earlySingleMin: base.earlySingleMin ?? 0, tournamentStart: tStart,
     });
   };
 
@@ -769,24 +789,12 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
         </div>
       </Field>
 
-      <Field label="얼리 구간 · 선택 (클락 연동 — 바인 시각으로 자동 분류)">
-        <div className="grid grid-cols-3 gap-2">
-          <div className="relative">
-            <input type="time" value={startHM} onChange={(e) => setStartHM(e.target.value)} className="input w-full text-sm" aria-label="스타트 시각" />
-            <span className="block text-[9px] text-ink-muted mt-0.5">스타트 시각</span>
-          </div>
-          <div className="relative">
-            <input type="number" inputMode="numeric" value={earlyD || ''} onChange={(e) => setEarlyD(parseInt(e.target.value, 10) || 0)} placeholder="20" className="input w-full text-sm tabular-nums pr-6" />
-            <span className="absolute right-2 top-2.5 text-[10px] text-ink-muted">분</span>
-            <span className="block text-[9px] text-gold-300 mt-0.5">더블얼리 ~까지</span>
-          </div>
-          <div className="relative">
-            <input type="number" inputMode="numeric" value={earlyS || ''} onChange={(e) => setEarlyS(parseInt(e.target.value, 10) || 0)} placeholder="80" className="input w-full text-sm tabular-nums pr-6" />
-            <span className="absolute right-2 top-2.5 text-[10px] text-ink-muted">분</span>
-            <span className="block text-[9px] text-gold-300 mt-0.5">1얼리 ~까지</span>
-          </div>
-        </div>
-        <p className="text-[10px] text-ink-muted mt-1">예) 스타트 19:00·더블 20분·1얼리 80분 → 19:20까지 바인=더블얼리, 20:20까지=1얼리. 대기 등으로 못 받으면 바인 칸에서 '없음'으로 수기 변경.</p>
+      <Field label="토너먼트 스타트 시각 · 선택 (클락 연동·얼리 판정 기준)">
+        <input type="time" value={startHM} onChange={(e) => setStartHM(e.target.value)} className="input w-full text-sm" aria-label="스타트 시각" />
+        <p className="text-[10px] text-ink-muted mt-1 leading-relaxed">
+          얼리 구간(더블/1얼리)은 이제 <b className="text-gold-300">「클락」 설정에서 레벨 기준</b>으로 지정합니다(예: 1레벨=더블얼리, 2~4레벨=1얼리). 이 장부를 클락과 연동해 시작하면 위 스타트 시각을 기준으로 바인이 레벨→얼리로 자동 분류되며, 바인 칸에서 '없음'으로 수기 변경도 가능합니다.
+          {(base.earlyDoubleMin || base.earlySingleMin) ? <span className="text-gold-300/90"> 현재 적용: 더블 ~{base.earlyDoubleMin}분 · 1얼리 ~{base.earlySingleMin}분.</span> : null}
+        </p>
       </Field>
 
       <Field label="기준 엔트리(통계용) · 선택">
