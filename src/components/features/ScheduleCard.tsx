@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { Schedule, TournamentFormat } from '../../api/schedules';
 import type { ViewMode } from '../atoms/ViewModeToggle';
 
@@ -290,6 +291,9 @@ export interface ScheduleCardProps extends CardProps {
   mode: ViewMode;
 }
 
-export default function ScheduleCard({ mode, ...rest }: ScheduleCardProps) {
+function ScheduleCard({ mode, ...rest }: ScheduleCardProps) {
   return mode === 'grid' ? <GridCard {...rest} /> : <ListCard {...rest} />;
 }
+
+// 메모이즈 — 일정 목록(첫 화면) 대량 렌더 시 App 리렌더로 인한 불필요한 재렌더 방지
+export default memo(ScheduleCard);

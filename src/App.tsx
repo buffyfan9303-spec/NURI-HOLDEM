@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, lazy, Suspense } from 'react';
 import { useToast } from './components/atoms/Toast';
 import UnreadBadge from './components/atoms/UnreadBadge';
 import ViewModeToggle from './components/atoms/ViewModeToggle';
@@ -7,17 +7,11 @@ import IntegratedSearchBar, { expandRegions } from './components/features/Integr
 import type { SearchState } from './components/features/IntegratedSearchBar';
 import ScheduleCard from './components/features/ScheduleCard';
 import ScheduleDetailModal from './components/features/ScheduleDetailModal';
-import AdminTab from './components/features/AdminTab';
 import AuthModal from './components/features/AuthModal';
 import PostDetailModal from './components/features/PostDetailModal';
 import NotificationPanel from './components/features/NotificationPanel';
-import CommunityTab from './components/features/CommunityTab';
-import GtoDeepModal from './components/features/gto/GtoDeepModal';
 import { decodeSpot, readGtoHash } from './components/features/gto/gtoShare';
 import type { DeepGtoInit } from './components/features/gto/useDeepGto';
-import VenuePage from './components/features/VenuePage';
-import MyPostersTab from './components/features/MyPostersTab';
-import MarketplaceTab from './components/features/MarketplaceTab';
 import ListingDetailModal from './components/features/ListingDetailModal';
 import NoticeDetailModal from './components/features/NoticeDetailModal';
 import PosterFormModal from './components/features/PosterFormModal';
@@ -25,7 +19,6 @@ import type { PosterFormData } from './components/features/PosterFormModal';
 import NuriHoldemLogo from './components/atoms/NuriHoldemLogo';
 import ThemeToggle from './components/atoms/ThemeToggle';
 import ProfileModal from './components/features/ProfileModal';
-import VenueManageTab from './components/features/VenueManageTab';
 import StaffInviteBanner from './components/features/StaffInviteBanner';
 import TierBadge from './components/atoms/TierBadge';
 import NoticeFormModal from './components/features/NoticeFormModal';
@@ -53,6 +46,33 @@ import type { Schedule } from './api/schedules';
 import type { Venue, Comment, CommunityPost, PostCategory } from './api/community';
 import type { AppNotification } from './api/notifications';
 import type { MarketplaceListing, MarketplaceNotice } from './api/marketplace';
+
+// ── 코드 스플리팅: 무거운 탭/오버레이는 지연 로딩(첫 화면 번들에서 분리) ──────────
+// 장부·클락·인건비(VenueManageTab/AdminTab), 카카오맵(VenuePage), GTO 엔진(GtoDeepModal)
+// 등 첫 화면(일정 탐색)에 불필요한 코드를 별도 청크로 떼어내 초기 로딩을 가볍게 한다.
+const AdminTab       = lazy(() => import('./components/features/AdminTab'));
+const CommunityTab   = lazy(() => import('./components/features/CommunityTab'));
+const GtoDeepModal   = lazy(() => import('./components/features/gto/GtoDeepModal'));
+const VenuePage      = lazy(() => import('./components/features/VenuePage'));
+const MyPostersTab   = lazy(() => import('./components/features/MyPostersTab'));
+const MarketplaceTab = lazy(() => import('./components/features/MarketplaceTab'));
+const VenueManageTab = lazy(() => import('./components/features/VenueManageTab'));
+
+// 지연 로딩 폴백 — 청크 받아오는 짧은 순간의 로더(레이아웃 점프 최소화)
+function LazyFallback() {
+  return (
+    <div className="flex items-center justify-center py-24" aria-busy="true" aria-label="불러오는 중">
+      <div className="h-6 w-6 animate-spin rounded-full border-2 border-border-strong border-t-gold-300" />
+    </div>
+  );
+}
+function OverlayFallback() {
+  return (
+    <div className="fixed inset-0 z-[45] flex items-center justify-center bg-surface-base" aria-busy="true">
+      <div className="h-7 w-7 animate-spin rounded-full border-2 border-border-strong border-t-gold-300" />
+    </div>
+  );
+}
 
 // ── 탭 정의 ──────────────────────────────────────────────────────────────────
 
@@ -438,6 +458,25 @@ export default function App() {
     reloadNotices();
     getListings().then(setListings).catch(() => {});
   }, [reloadSchedules, reloadVenues, reloadPosts, reloadComments, reloadNotices]);
+
+  // 유휴 시간에 다음에 열 가능성이 큰 청크를 미리 받아둔다 → 탭 전환/매장 진입 시 로더 깜빡임 제거.
+  useEffect(() => {
+    const prefetch = () => {
+      import('./components/features/CommunityTab');
+      import('./components/features/MarketplaceTab');
+      import('./components/features/VenuePage');
+      if (isOwner) import('./components/features/VenueManageTab');
+      if (isAdmin) import('./components/features/AdminTab');
+    };
+    const w = window as Window & {
+      requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number;
+      cancelIdleCallback?: (h: number) => void;
+    };
+    const id = w.requestIdleCallback
+      ? w.requestIdleCallback(prefetch, { timeout: 3000 })
+      : window.setTimeout(prefetch, 1500);
+    return () => { if (w.cancelIdleCallback) w.cancelIdleCallback(id as number); else window.clearTimeout(id as number); };
+  }, [isOwner, isAdmin]);
 
   // 헤더+탭바 실제 높이를 측정 → 일정탐색 sticky 필터가 정확히 그 아래에 붙도록 --stack-top 노출.
   // (토큰 추정/-1rem 보정 대신 실측값을 사용해 모바일 sticky 겹침을 방지)
@@ -971,6 +1010,8 @@ export default function App() {
         </main>
       )}
 
+      {/* 탭 컨텐츠(지연 로딩) — 일정 탐색 이후 탭들은 청크 분리, 전환 시 짧은 로더 표시 */}
+      <Suspense fallback={<LazyFallback />}>
       {/* 커뮤니티 */}
       {activeTab === 'community' && (
         <main className="px-page-x pb-section animate-fade-in">
@@ -1064,6 +1105,7 @@ export default function App() {
           />
         </main>
       )}
+      </Suspense>
 
       {/* ── 모달 ─────────────────────────────────────────────────────── */}
       <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
@@ -1081,20 +1123,24 @@ export default function App() {
         onDeletePoster={handleDeletePoster}
       />
 
-      <VenuePage
-        open={openVenueId !== null}
-        venue={openVenueId ? venues.find((v) => v.id === openVenueId) ?? null : null}
-        onClose={() => setOpenVenueId(null)}
-        schedules={schedules}
-        comments={comments}
-        notices={browseNotices}
-        onSubmitComment={handleSubmitVenueComment}
-        onDeleteComment={handleDeleteComment}
-        onUpdateDescription={handleUpdateVenueDescription}
-        onUpdateImage={handleUpdateVenueImage}
-        onUpdateImages={handleUpdateVenueImages}
-        onSelectSchedule={handleScheduleSelect}
-      />
+      {openVenueId !== null && (
+        <Suspense fallback={<OverlayFallback />}>
+          <VenuePage
+            open
+            venue={venues.find((v) => v.id === openVenueId) ?? null}
+            onClose={() => setOpenVenueId(null)}
+            schedules={schedules}
+            comments={comments}
+            notices={browseNotices}
+            onSubmitComment={handleSubmitVenueComment}
+            onDeleteComment={handleDeleteComment}
+            onUpdateDescription={handleUpdateVenueDescription}
+            onUpdateImage={handleUpdateVenueImage}
+            onUpdateImages={handleUpdateVenueImages}
+            onSelectSchedule={handleScheduleSelect}
+          />
+        </Suspense>
+      )}
 
       <ListingDetailModal
         open={openListing !== null}
@@ -1149,12 +1195,14 @@ export default function App() {
 
       {/* GTO 공유 링크로 진입 시 같은 스팟으로 GTO 검색 모달 표시 */}
       {gtoInit && (
-        <GtoDeepModal
-          key={typeof window !== 'undefined' ? window.location.hash : 'gto'}
-          open
-          onClose={closeGto}
-          initialState={gtoInit}
-        />
+        <Suspense fallback={<OverlayFallback />}>
+          <GtoDeepModal
+            key={typeof window !== 'undefined' ? window.location.hash : 'gto'}
+            open
+            onClose={closeGto}
+            initialState={gtoInit}
+          />
+        </Suspense>
       )}
 
       {/* 법적 동의 게이트 — 구글 등 미동의 가입자(관리자 제외)에게 1회 필수 동의 */}
