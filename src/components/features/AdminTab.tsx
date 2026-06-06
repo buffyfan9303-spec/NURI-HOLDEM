@@ -9,6 +9,7 @@ import type { CommunityPost, Venue, AdminStats, VenueVerificationStatus, VenueSt
 import {
   getAdminStats, adminCreateVenue, adminUpdateVenue, setVenueVerification, deleteVenue,
   getVenueStaff, addVenueStaff, updateVenueStaff, removeVenueStaff,
+  getPendingGroups, approveGroup, GROUP_KIND_LABEL,
 } from '../../api/community';
 import { useToast } from '../atoms/Toast';
 import { useBackClose } from '../../lib/backstack';
@@ -32,6 +33,50 @@ interface AdminTabProps {
 type Section = 'pending' | 'reorder' | 'users' | 'venues' | 'reports';
 // 노출 순서 하위 항목: 포스터(요강) / 매장
 type ReorderTarget = 'posters' | 'venues';
+
+// ── 그룹 개설 승인(운영자) ────────────────────────────────────────────────────
+function PendingGroupsPanel({ onChanged }: { onChanged: () => void }) {
+  const toast = useToast();
+  const [groups, setGroups] = useState<Venue[]>([]);
+  const [loading, setLoading] = useState(true);
+  const reload = () => { setLoading(true); getPendingGroups().then(setGroups).catch(() => {}).finally(() => setLoading(false)); };
+  useEffect(() => { reload(); }, []);
+  const approve = async (g: Venue) => {
+    try { await approveGroup(g.id); toast.show(`'${g.name}' 그룹을 승인했습니다`, 'success'); reload(); onChanged(); }
+    catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
+  };
+  const reject = async (g: Venue) => {
+    if (!confirm(`'${g.name}' 개설 신청을 거절(삭제)하시겠습니까?`)) return;
+    try { await deleteVenue(g.id); toast.show('거절했습니다', 'info'); reload(); }
+    catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
+  };
+  if (loading) return <p className="py-3 text-center text-2xs text-ink-muted">불러오는 중…</p>;
+  return (
+    <section className="rounded-card border border-gold-400/30 bg-surface-low p-3 space-y-2">
+      <h3 className="text-sm font-bold text-gold-300">그룹 개설 승인 ({groups.length})</h3>
+      {groups.length === 0 ? (
+        <p className="text-2xs text-ink-muted py-1">대기 중인 그룹 개설 신청이 없습니다</p>
+      ) : (
+        <ul className="space-y-2">
+          {groups.map((g) => (
+            <li key={g.id} className="rounded-input border border-border-default bg-surface-high p-2.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="rounded-badge bg-gold-300/15 px-1.5 py-0.5 text-2xs font-bold text-gold-300">{GROUP_KIND_LABEL[g.kind ?? 'other']}</span>
+                <span className="text-sm font-semibold text-ink-primary">{g.name}</span>
+                {g.region && <span className="text-2xs text-ink-muted">{g.region}</span>}
+              </div>
+              {g.description && <p className="mt-1 text-2xs text-ink-secondary line-clamp-2">{g.description}</p>}
+              <div className="mt-1.5 flex gap-1.5">
+                <button type="button" onClick={() => approve(g)} className="btn-primary text-2xs px-3 py-1">승인</button>
+                <button type="button" onClick={() => reject(g)} className="rounded-input border border-border-default px-3 py-1 text-2xs text-ink-muted hover:text-danger-light">거절</button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
 
 export default function AdminTab({
   schedules, venues, users, posts, onApproveSchedule, onRejectSchedule, onUpdateUser, onDeletePost, onReloadVenues,
@@ -69,7 +114,10 @@ export default function AdminTab({
       </div>
 
       {section === 'venues' && (
-        <VenueCreateCard venues={venues} users={users} onCreated={() => onReloadVenues?.()} />
+        <div className="space-y-3">
+          <PendingGroupsPanel onChanged={() => onReloadVenues?.()} />
+          <VenueCreateCard venues={venues} users={users} onCreated={() => onReloadVenues?.()} />
+        </div>
       )}
 
       {section === 'pending' && (

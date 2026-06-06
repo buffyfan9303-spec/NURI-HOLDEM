@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
-import type { Venue, Comment, CommunityPost, LiveMessage, PostCategory } from '../../api/community';
-import { getLiveMessages, addLiveMessage, deleteLiveMessage, subscribeLiveWall, createMyVenue } from '../../api/community';
+import type { Venue, Comment, CommunityPost, LiveMessage, PostCategory, GroupKind } from '../../api/community';
+import { getLiveMessages, addLiveMessage, deleteLiveMessage, subscribeLiveWall, createMyVenue, createGroup, GROUP_KIND_LABEL } from '../../api/community';
 import { REGION_CHIPS } from './IntegratedSearchBar';
 import type { MarketplaceNotice } from '../../api/marketplace';
 import { useAuth } from '../../contexts/AuthContext';
@@ -12,6 +12,7 @@ import { useToast } from '../atoms/Toast';
 import { filterContent } from '../../lib/content-filter';
 import { parseHand } from '../../lib/hand';
 import Avatar from '../atoms/Avatar';
+import Modal from '../atoms/Modal';
 
 interface CommunityTabProps {
   venues: Venue[];
@@ -153,6 +154,7 @@ export default function CommunityTab({
             query={query}
             onQuery={setQuery}
             onSelectVenue={onSelectVenue}
+            onReloadVenues={onReloadVenues}
           />
         </div>
       )}
@@ -537,14 +539,23 @@ function OwnerVenueAction({ venues, onSelectVenue, onCreated }: {
   );
 }
 
+const VENUE_FILTERS: { key: string; label: string }[] = [
+  { key: 'all', label: '전체' }, { key: 'venue', label: '홀덤펍' },
+  { key: 'dealer_team', label: '딜러팀' }, { key: 'club', label: '동호회' }, { key: 'youtuber', label: '유튜버' },
+];
 function VenuesSection({
-  sortedVenues, query, onQuery, onSelectVenue,
+  sortedVenues, query, onQuery, onSelectVenue, onReloadVenues,
 }: {
   sortedVenues: { venue: Venue; commentCount: number; latest?: Comment }[];
   query: string;
   onQuery: (q: string) => void;
   onSelectVenue: (id: string) => void;
+  onReloadVenues?: () => void;
 }) {
+  const { user } = useAuth();
+  const [kindFilter, setKindFilter] = useState('all');
+  const [createOpen, setCreateOpen] = useState(false);
+  const filtered = kindFilter === 'all' ? sortedVenues : sortedVenues.filter((x) => (x.venue.kind ?? 'venue') === kindFilter);
   return (
     <div className="space-y-3">
       {/* 검색 */}
@@ -567,8 +578,22 @@ function VenuesSection({
         </svg>
       </div>
 
+      {/* 종류 필터 + 그룹 만들기 */}
+      <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+        {VENUE_FILTERS.map((f) => (
+          <button key={f.key} type="button" onClick={() => setKindFilter(f.key)}
+            className={['shrink-0 rounded-badge px-2.5 py-1 text-2xs font-bold border transition-colors',
+              kindFilter === f.key ? 'bg-gold-300 text-ink-inverse border-gold-300' : 'bg-surface-high text-ink-secondary border-border-default hover:text-ink-primary'].join(' ')}>
+            {f.label}
+          </button>
+        ))}
+        {user && (
+          <button type="button" onClick={() => setCreateOpen(true)} className="ml-auto shrink-0 rounded-badge px-2.5 py-1 text-2xs font-bold border border-gold-400/50 text-gold-300 hover:bg-gold-300/10">+ 그룹 만들기</button>
+        )}
+      </div>
+
       <p className="text-2xs text-ink-muted text-center py-1">
-        매장을 선택해 커뮤니티에서 실시간으로 대화하세요
+        홀덤펍·딜러팀·동호회·유튜버 그룹을 선택해 커뮤니티를 이용하세요
       </p>
 
       {/* 정렬 안내 */}
@@ -579,12 +604,12 @@ function VenuesSection({
         <span className="text-ink-secondary">팔로워순</span>
       </div>
 
-      {/* 매장 리스트 */}
-      {sortedVenues.length === 0 ? (
-        <p className="text-center py-12 text-xs text-ink-muted">검색 결과가 없습니다</p>
+      {/* 리스트 */}
+      {filtered.length === 0 ? (
+        <p className="text-center py-12 text-xs text-ink-muted">결과가 없습니다</p>
       ) : (
         <ul className="space-y-2">
-          {sortedVenues.map(({ venue, commentCount, latest }) => (
+          {filtered.map(({ venue, commentCount, latest }) => (
             <li key={venue.id}>
               <button
                 type="button"
@@ -661,7 +686,69 @@ function VenuesSection({
           ))}
         </ul>
       )}
+      {createOpen && <CreateGroupModal onClose={() => setCreateOpen(false)} onCreated={() => { setCreateOpen(false); onReloadVenues?.(); }} />}
     </div>
+  );
+}
+
+// ── 그룹 만들기 모달(운영자 승인 후 공개) ─────────────────────────────────────
+function CreateGroupModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const toast = useToast();
+  const [name, setName] = useState('');
+  const [kind, setKind] = useState<GroupKind>('dealer_team');
+  const [region, setRegion] = useState('');
+  const [description, setDescription] = useState('');
+  const [joinApproval, setJoinApproval] = useState(true);
+  const [sending, setSending] = useState(false);
+  const KINDS: GroupKind[] = ['dealer_team', 'club', 'youtuber', 'other'];
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) { toast.show('그룹 이름을 입력해 주세요', 'error'); return; }
+    setSending(true);
+    try {
+      await createGroup({ name, kind, region, description, joinApproval });
+      toast.show('그룹 개설을 신청했습니다. 운영자 승인 후 공개됩니다.', 'success');
+      onCreated();
+    } catch (err) { toast.show(err instanceof Error ? err.message : '개설 실패', 'error'); }
+    finally { setSending(false); }
+  };
+
+  return (
+    <Modal open onClose={onClose} title="그룹 만들기" maxWidth="sm">
+      <form onSubmit={submit} className="p-4 space-y-3">
+        <div>
+          <span className="block text-2xs text-ink-secondary mb-1">종류</span>
+          <div className="flex flex-wrap gap-1.5">
+            {KINDS.map((k) => (
+              <button key={k} type="button" onClick={() => setKind(k)}
+                className={['rounded-badge border px-3 py-1.5 text-xs font-semibold transition-colors',
+                  kind === k ? 'bg-gold-300 text-ink-inverse border-gold-300' : 'bg-surface-high text-ink-secondary border-border-default'].join(' ')}>
+                {GROUP_KIND_LABEL[k]}
+              </button>
+            ))}
+          </div>
+        </div>
+        <label className="block">
+          <span className="block text-2xs text-ink-secondary mb-1">그룹 이름 <span className="text-danger">*</span></span>
+          <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} placeholder="예: 강남 딜러팀" className="input w-full text-sm" />
+        </label>
+        <label className="block">
+          <span className="block text-2xs text-ink-secondary mb-1">지역 (선택)</span>
+          <input value={region} onChange={(e) => setRegion(e.target.value)} maxLength={20} placeholder="예: 서울" className="input w-full text-sm" />
+        </label>
+        <label className="block">
+          <span className="block text-2xs text-ink-secondary mb-1">소개 (선택)</span>
+          <textarea value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} rows={3} placeholder="그룹 소개를 적어주세요" className="input w-full resize-none text-sm" />
+        </label>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" checked={joinApproval} onChange={(e) => setJoinApproval(e.target.checked)} className="accent-gold-300" />
+          <span className="text-xs text-ink-secondary">가입 시 내 승인 필요 (해제 시 누구나 즉시 가입)</span>
+        </label>
+        <p className="text-2xs text-ink-muted">개설하면 내가 매니저가 되며, 운영자 승인 후 목록에 공개됩니다.</p>
+        <button type="submit" disabled={sending || !name.trim()} className="btn-primary w-full disabled:opacity-60">{sending ? '신청 중…' : '개설 신청'}</button>
+      </form>
+    </Modal>
   );
 }
 

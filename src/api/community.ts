@@ -15,7 +15,15 @@ export interface Venue {
   status?: VenueStatus;  // active/inactive/suspended/hidden
   verificationStatus?: VenueVerificationStatus; // 인증 등급
   images?: string[];     // 매장 갤러리(자동 슬라이드)
+  kind?: GroupKind;      // venue(홀덤펍) | dealer_team | club | youtuber | other
+  joinApproval?: boolean;// 비-매장 그룹: 가입 시 개설자 승인 필요 여부
 }
+
+// 커뮤니티 그룹 종류. venue=홀덤펍(기존), 그 외는 가입제 비공개 그룹.
+export type GroupKind = 'venue' | 'dealer_team' | 'club' | 'youtuber' | 'other';
+export const GROUP_KIND_LABEL: Record<GroupKind, string> = {
+  venue: '홀덤펍', dealer_team: '딜러팀', club: '동호회', youtuber: '유튜버', other: '기타',
+};
 
 export type VenueVerificationStatus = 'unverified' | 'pending' | 'verified';
 
@@ -57,6 +65,8 @@ const rowToVenue = (r: any): Venue => ({
   status: r.status ?? 'active',
   verificationStatus: r.verification_status ?? 'unverified',
   images: r.images ?? [],
+  kind: r.kind ?? 'venue',
+  joinApproval: r.join_approval ?? true,
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -577,6 +587,137 @@ export async function getDealerApplications(postId: string): Promise<DealerAppli
     id: r.id, postId: r.post_id, applicantId: r.applicant_id ?? null,
     applicantName: r.applicant_name, phone: r.phone, message: r.message ?? undefined, createdAt: r.created_at,
   }));
+}
+
+// ── 커뮤니티 그룹(가입제: 딜러팀·동호회·유튜버) ────────────────────────────────
+export type MemberStatus = 'pending' | 'approved';
+export interface GroupMember {
+  id: string; groupId: string; userId: string;
+  role: 'manager' | 'member'; status: MemberStatus;
+  name: string; color?: string; createdAt: string;
+}
+export interface GroupMessage { id: string; groupId: string; userId: string; userName: string; userColor?: string; content: string; createdAt: string; }
+export interface GroupPost { id: string; groupId: string; authorId: string; authorName: string; authorColor?: string; title?: string; content: string; createdAt: string; }
+
+/** 그룹 생성 요청(운영자 승인 전 approved=false). 생성자=매니저. 반환: 그룹 id */
+export async function createGroup(input: { name: string; kind: GroupKind; region?: string; description?: string; joinApproval: boolean }): Promise<string> {
+  if (IS_MOCK) return '';
+  const { data, error } = await supabase.rpc('create_group', {
+    p_name: input.name, p_kind: input.kind, p_region: input.region ?? '', p_description: input.description ?? '', p_join_approval: input.joinApproval,
+  });
+  if (error) throw error;
+  return data as string;
+}
+
+/** 내 멤버십(없으면 null) */
+export async function getMyMembership(groupId: string): Promise<GroupMember | null> {
+  if (IS_MOCK) return null;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data } = await supabase.from('group_members').select('*').eq('group_id', groupId).eq('user_id', user.id).maybeSingle();
+  if (!data) return null;
+  return { id: data.id, groupId: data.group_id, userId: data.user_id, role: data.role, status: data.status, name: data.member_name ?? '회원', color: data.member_color ?? undefined, createdAt: data.created_at };
+}
+
+/** 그룹 멤버 목록(매니저/멤버만 RLS 노출) */
+export async function getGroupMembers(groupId: string): Promise<GroupMember[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.from('group_members').select('*').eq('group_id', groupId).order('created_at', { ascending: true });
+  if (error) throw error;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({
+    id: r.id, groupId: r.group_id, userId: r.user_id, role: r.role, status: r.status,
+    name: r.member_name ?? '회원', color: r.member_color ?? undefined, createdAt: r.created_at,
+  }));
+}
+
+/** 가입 신청 — join_approval 에 따라 'pending'(승인대기) 또는 'approved'(즉시가입) 반환 */
+export async function joinGroup(groupId: string): Promise<MemberStatus> {
+  if (IS_MOCK) return 'pending';
+  const { data, error } = await supabase.rpc('join_group', { p_group: groupId });
+  if (error) throw error;
+  return (data as MemberStatus) ?? 'pending';
+}
+/** 가입 승인(매니저) */
+export async function approveMember(memberId: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.from('group_members').update({ status: 'approved' }).eq('id', memberId);
+  if (error) throw error;
+}
+/** 멤버 추방/거절(매니저) 또는 탈퇴(본인) */
+export async function removeMember(memberId: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.from('group_members').delete().eq('id', memberId);
+  if (error) throw error;
+}
+
+// ── 그룹 채팅(멤버 전용, 실시간) ──────────────────────────────────────────────
+export async function getGroupMessages(groupId: string, limit = 50): Promise<GroupMessage[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.from('group_messages').select('*').eq('group_id', groupId).order('created_at', { ascending: false }).limit(limit);
+  if (error) throw error;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({ id: r.id, groupId: r.group_id, userId: r.user_id, userName: r.user_name, userColor: r.user_color ?? undefined, content: r.content, createdAt: r.created_at }));
+}
+export async function sendGroupMessage(groupId: string, input: { userName: string; userColor?: string; content: string }): Promise<GroupMessage> {
+  if (IS_MOCK) throw new Error('mock');
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('로그인이 필요합니다');
+  const body = input.content.trim();
+  if (!body) throw new Error('내용을 입력해 주세요');
+  const { data, error } = await supabase.from('group_messages').insert({ group_id: groupId, user_id: user.id, user_name: input.userName, user_color: input.userColor ?? null, content: body.slice(0, 500) }).select('*').single();
+  if (error) throw error;
+  return { id: data.id, groupId: data.group_id, userId: data.user_id, userName: data.user_name, userColor: data.user_color ?? undefined, content: data.content, createdAt: data.created_at };
+}
+export async function deleteGroupMessage(id: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.from('group_messages').delete().eq('id', id);
+  if (error) throw error;
+}
+export function subscribeGroupMessages(groupId: string, onInsert: (m: GroupMessage) => void): () => void {
+  if (IS_MOCK) return () => {};
+  const ch = supabase.channel(`gmsg:${groupId}`)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'group_messages', filter: `group_id=eq.${groupId}` },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (payload: any) => { const r = payload.new; onInsert({ id: r.id, groupId: r.group_id, userId: r.user_id, userName: r.user_name, userColor: r.user_color ?? undefined, content: r.content, createdAt: r.created_at }); })
+    .subscribe();
+  return () => { supabase.removeChannel(ch); };
+}
+
+// ── 그룹 게시판(멤버 전용) ────────────────────────────────────────────────────
+export async function getGroupPosts(groupId: string): Promise<GroupPost[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.from('group_posts').select('*').eq('group_id', groupId).eq('deleted', false).order('created_at', { ascending: false }).limit(100);
+  if (error) throw error;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({ id: r.id, groupId: r.group_id, authorId: r.author_id, authorName: r.author_name, authorColor: r.author_color ?? undefined, title: r.title ?? undefined, content: r.content, createdAt: r.created_at }));
+}
+export async function createGroupPost(groupId: string, input: { authorName: string; authorColor?: string; title?: string; content: string }): Promise<void> {
+  if (IS_MOCK) return;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('로그인이 필요합니다');
+  const body = input.content.trim();
+  if (!body) throw new Error('내용을 입력해 주세요');
+  const { error } = await supabase.from('group_posts').insert({ group_id: groupId, author_id: user.id, author_name: input.authorName, author_color: input.authorColor ?? null, title: input.title?.trim().slice(0, 80) || null, content: body.slice(0, 4000) });
+  if (error) throw error;
+}
+export async function deleteGroupPost(id: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.from('group_posts').update({ deleted: true }).eq('id', id);
+  if (error) throw error;
+}
+
+// ── 운영자: 그룹 개설 승인 ────────────────────────────────────────────────────
+export async function getPendingGroups(): Promise<Venue[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.from('venues').select('*').neq('kind', 'venue').eq('approved', false).order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map(rowToVenue);
+}
+export async function approveGroup(groupId: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.from('venues').update({ approved: true }).eq('id', groupId);
+  if (error) throw error;
 }
 
 // 업주: 본인 홀덤펍(매장) 직접 생성 (미보유 시)

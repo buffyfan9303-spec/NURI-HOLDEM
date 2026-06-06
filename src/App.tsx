@@ -56,6 +56,7 @@ const AdminTab       = lazyWithReload(() => import('./components/features/AdminT
 const CommunityTab   = lazyWithReload(() => import('./components/features/CommunityTab'));
 const GtoDeepModal   = lazyWithReload(() => import('./components/features/gto/GtoDeepModal'));
 const VenuePage      = lazyWithReload(() => import('./components/features/VenuePage'));
+const GroupPage      = lazyWithReload(() => import('./components/features/GroupPage'));
 const MyPostersTab   = lazyWithReload(() => import('./components/features/MyPostersTab'));
 const MarketplaceTab = lazyWithReload(() => import('./components/features/MarketplaceTab'));
 const VenueManageTab = lazyWithReload(() => import('./components/features/VenueManageTab'));
@@ -1157,24 +1158,32 @@ export default function App() {
         onDeletePoster={handleDeletePoster}
       />
 
-      {openVenueId !== null && (
-        <Suspense fallback={<OverlayFallback />}>
-          <VenuePage
-            open
-            venue={venues.find((v) => v.id === openVenueId) ?? null}
-            onClose={() => setOpenVenueId(null)}
-            schedules={schedules}
-            comments={comments}
-            notices={browseNotices}
-            onSubmitComment={handleSubmitVenueComment}
-            onDeleteComment={handleDeleteComment}
-            onUpdateDescription={handleUpdateVenueDescription}
-            onUpdateImage={handleUpdateVenueImage}
-            onUpdateImages={handleUpdateVenueImages}
-            onSelectSchedule={handleScheduleSelect}
-          />
-        </Suspense>
-      )}
+      {openVenueId !== null && (() => {
+        const ov = venues.find((v) => v.id === openVenueId) ?? null;
+        const isGroup = !!ov?.kind && ov.kind !== 'venue';
+        return (
+          <Suspense fallback={<OverlayFallback />}>
+            {isGroup ? (
+              <GroupPage open group={ov} onClose={() => setOpenVenueId(null)} />
+            ) : (
+              <VenuePage
+                open
+                venue={ov}
+                onClose={() => setOpenVenueId(null)}
+                schedules={schedules}
+                comments={comments}
+                notices={browseNotices}
+                onSubmitComment={handleSubmitVenueComment}
+                onDeleteComment={handleDeleteComment}
+                onUpdateDescription={handleUpdateVenueDescription}
+                onUpdateImage={handleUpdateVenueImage}
+                onUpdateImages={handleUpdateVenueImages}
+                onSelectSchedule={handleScheduleSelect}
+              />
+            )}
+          </Suspense>
+        );
+      })()}
 
       <ListingDetailModal
         open={openListing !== null}
