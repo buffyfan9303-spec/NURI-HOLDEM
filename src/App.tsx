@@ -582,12 +582,19 @@ export default function App() {
     setOpenVenueId(venueId);
   }, []);
 
-  // 딥링크: ?venue=<id> 로 진입 시 해당 매장 페이지 자동 오픈(링크 공유)
+  // 딥링크: ?v=<8자리코드>(단축) 또는 ?venue=<전체id>(구버전 호환) 진입 시 매장 페이지 자동 오픈
   const deepLinked = useRef(false);
   useEffect(() => {
     if (deepLinked.current || venues.length === 0) return;
-    const vid = new URLSearchParams(window.location.search).get('venue');
-    if (vid && venues.some((v) => v.id === vid)) { setOpenVenueId(vid); deepLinked.current = true; }
+    const params = new URLSearchParams(window.location.search);
+    const full = params.get('venue');
+    const short = params.get('v');
+    const target = full
+      ? venues.find((v) => v.id === full)
+      : short
+        ? venues.find((v) => v.id.startsWith(short))
+        : null;
+    if (target) { setOpenVenueId(target.id); deepLinked.current = true; }
   }, [venues]);
 
   const handleScheduleSelect = useCallback((s: Schedule) => {
