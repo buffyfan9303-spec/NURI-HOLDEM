@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useToast } from '../atoms/Toast';
 import {
-  getStaffSchedule, addStaffShift, removeStaffShift, setShiftTimes, confirmSchedule, notifyVenueStaff, type StaffShift,
+  getStaffSchedule, addStaffShift, removeStaffShift, setShiftTimes, confirmSchedule, notifyVenueStaff, subscribeStaffSchedule, type StaffShift,
 } from '../../api/staffSchedule';
 import { getMyVenueStaff } from '../../api/auth';
 
@@ -44,6 +44,8 @@ export default function StaffSchedule({ venueId }: { venueId: string }) {
 
   const reload = () => { getStaffSchedule(venueId, from, to).then(setShifts).catch(() => {}).finally(() => setLoading(false)); };
   useEffect(() => { setLoading(true); reload(); setSelDay(null); /* eslint-disable-next-line */ }, [venueId, from, to]);
+  // 실시간: 직원 셀프 출퇴근/배정 변경 자동 반영
+  useEffect(() => subscribeStaffSchedule(venueId, reload), [venueId, from, to]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { getMyVenueStaff().then((s) => setVenueStaff(s.map((x) => x.name))).catch(() => {}); }, []);
 
   const roster = useMemo(() => {

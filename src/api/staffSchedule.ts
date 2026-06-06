@@ -1,6 +1,16 @@
 // src/api/staffSchedule.ts — 딜러/직원 월별 출근 스케줄
 import { supabase, IS_MOCK } from '../lib/supabase';
 
+/** 직원 출근 스케줄 변경 실시간 구독(매장별) — 셀프 출퇴근·배정 변경을 자동 반영 */
+export function subscribeStaffSchedule(venueId: string, onChange: () => void): () => void {
+  if (IS_MOCK) return () => {};
+  const ch = supabase
+    .channel(`staff_sched:${venueId}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'staff_schedule', filter: `venue_id=eq.${venueId}` }, () => onChange())
+    .subscribe();
+  return () => { supabase.removeChannel(ch); };
+}
+
 export interface StaffShift {
   date: string; name: string;
   startHm?: string | null;   // 계획 출근(HH:mm)

@@ -1,6 +1,16 @@
 // src/api/reservations.ts — 포스터(게임) 예약 + 단골 고객 활동내역 CRM
 import { supabase, IS_MOCK } from '../lib/supabase';
 
+/** 예약 변경 실시간 구독 — 신규/취소 예약을 게임관리에 자동 반영 */
+export function subscribeReservations(onChange: () => void): () => void {
+  if (IS_MOCK) return () => {};
+  const ch = supabase
+    .channel('schedule_reservations_all')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'schedule_reservations' }, () => onChange())
+    .subscribe();
+  return () => { supabase.removeChannel(ch); };
+}
+
 export interface Reservation { id: string; scheduleId: string; userId: string; displayName: string; createdAt: string; }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const rowToRes = (r: any): Reservation => ({ id: r.id, scheduleId: r.schedule_id, userId: r.user_id, displayName: r.display_name, createdAt: r.created_at });

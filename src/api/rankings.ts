@@ -1,6 +1,16 @@
 // src/api/rankings.ts — 매장 일일 손님 순위
 import { supabase, IS_MOCK } from '../lib/supabase';
 
+/** 매장 순위 변경 실시간 구독 — 순위 입력/수정 시 공개 표시에 자동 반영 */
+export function subscribeRankings(venueId: string, onChange: () => void): () => void {
+  if (IS_MOCK) return () => {};
+  const ch = supabase
+    .channel(`rankings:${venueId}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'venue_rankings', filter: `venue_id=eq.${venueId}` }, () => onChange())
+    .subscribe();
+  return () => { supabase.removeChannel(ch); };
+}
+
 export interface RankingEntry {
   position: number;
   nickname: string;

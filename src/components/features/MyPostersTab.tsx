@@ -3,7 +3,7 @@ import type { Schedule } from '../../api/schedules';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
 import {
-  getReservations, deleteReservation, updateReservationName, getVenueReserverCounts,
+  getReservations, deleteReservation, updateReservationName, getVenueReserverCounts, subscribeReservations,
   getCustomerActivity, type Reservation, type CustomerActivity,
 } from '../../api/reservations';
 
@@ -23,7 +23,10 @@ export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete }: 
   const venueId = user?.venueId || myPosters[0]?.venueId;
 
   useEffect(() => {
-    if (venueId) getVenueReserverCounts(venueId).then(setReserverCounts).catch(() => {});
+    if (!venueId) return;
+    const reload = () => getVenueReserverCounts(venueId).then(setReserverCounts).catch(() => {});
+    reload();
+    return subscribeReservations(reload); // 실시간: 신규/취소 예약 자동 반영
   }, [venueId]);
 
   if (user?.role === 'venue_owner' && !isApprovedOwner) return <PendingApprovalView />;

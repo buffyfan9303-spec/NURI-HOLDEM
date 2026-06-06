@@ -9,7 +9,7 @@ import type { MarketplaceNotice } from '../../api/marketplace';
 import { useAuth } from '../../contexts/AuthContext';
 import { followVenue, unfollowVenue, getMyFollowedVenueIds, updateVenueAddress, updateVenueKakao } from '../../api/community';
 import { getVenueNotices, createVenueNotice, deleteVenueNotice, type VenueNotice } from '../../api/community';
-import { getVenueRankings, getVenueRankingTotals, maskRealName, type RankingEntry, type RankingTotal } from '../../api/rankings';
+import { getVenueRankings, getVenueRankingTotals, subscribeRankings, maskRealName, type RankingEntry, type RankingTotal } from '../../api/rankings';
 import { uploadVenueImages } from '../../lib/storage';
 import { useBackClose } from '../../lib/backstack';
 
@@ -509,12 +509,16 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
 
   useEffect(() => {
     let active = true;
+    const load = () => {
+      Promise.all([getVenueRankingTotals(venueId), getVenueRankings(venueId)])
+        .then(([t, d]) => { if (active) { setTotals(t); setLatest(d); } })
+        .catch(() => {})
+        .finally(() => { if (active) setLoading(false); });
+    };
     setLoading(true);
-    Promise.all([getVenueRankingTotals(venueId), getVenueRankings(venueId)])
-      .then(([t, d]) => { if (active) { setTotals(t); setLatest(d); } })
-      .catch(() => {})
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+    load();
+    const unsub = subscribeRankings(venueId, load); // 실시간: 순위 입력 시 자동 반영
+    return () => { active = false; unsub(); };
   }, [venueId]);
 
   const sorted = useMemo(() => {

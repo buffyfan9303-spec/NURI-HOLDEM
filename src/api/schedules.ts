@@ -1,6 +1,16 @@
 ﻿// src/api/schedules.ts
 import { supabase, IS_MOCK } from '../lib/supabase';
 
+/** 일정(포스터/게임) 변경 실시간 구독 — 다른 기기/사용자의 등록·수정·삭제를 자동 반영 */
+export function subscribeSchedules(onChange: () => void): () => void {
+  if (IS_MOCK) return () => {};
+  const ch = supabase
+    .channel('schedules_all')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'schedules' }, () => onChange())
+    .subscribe();
+  return () => { supabase.removeChannel(ch); };
+}
+
 export type TournamentFormat = 'MTT' | 'SNG' | 'PKO' | 'Bounty' | 'Mix';
 export interface SeatVoucher  { label: string; count: number; }
 export interface BuyInInfo    { amount: number; rebuy?: number; rebuyLimit?: number; addon?: number; }

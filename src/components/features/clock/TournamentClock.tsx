@@ -747,11 +747,13 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
   );
 }
 
+// <label> 로 감싸면 라벨 영역 클릭 시 내부 첫 번째 버튼/입력이 활성화되는 hit-area 버그가
+// 생기므로 컨테이너는 <div> 로 둔다(버튼 그룹을 감싸도 안전).
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <label className="block">
+    <div className="block">
       <span className="block text-[11px] text-ink-secondary mb-1">{label}</span>
       {children}
-    </label>
+    </div>
   );
 }

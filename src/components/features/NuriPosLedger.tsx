@@ -907,12 +907,15 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   );
 }
 
+// 주의: <label> 로 감싸면 라벨 영역 클릭 시 내부 "첫 번째" labelable 요소(button 포함)가
+// 활성화되어, 버튼 그룹(담당직원 등)에서 "줄 아무 곳이나 눌러도 첫 번째가 선택"되는 버그가 난다.
+// → 컨테이너는 <div> 로, 라벨 텍스트는 <span> 로 둔다.
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <label className="block">
+    <div className="block">
       <span className="block text-2xs text-ink-muted mb-0.5">{label}</span>
       {children}
-    </label>
+    </div>
   );
 }
 

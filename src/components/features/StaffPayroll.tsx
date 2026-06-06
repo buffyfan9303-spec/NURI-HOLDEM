@@ -2,7 +2,7 @@
 // 인건비 관리(시급/급여일/휴무) · 인건비 정산(월 급여·평균출퇴근·총인건비) · 출근일지(일별 출퇴근).
 import { useEffect, useMemo, useState } from 'react';
 import { useToast } from '../atoms/Toast';
-import { getStaffSchedule, getStaffWages, saveStaffWage, setShiftTimes, type StaffShift, type StaffWage } from '../../api/staffSchedule';
+import { getStaffSchedule, getStaffWages, saveStaffWage, setShiftTimes, subscribeStaffSchedule, type StaffShift, type StaffWage } from '../../api/staffSchedule';
 import { getMyVenueStaff } from '../../api/auth';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -193,7 +193,12 @@ export function StaffSelfAttendance({ venueId }: { venueId: string }) {
   const myNames = [user?.name, user?.nickname].filter(Boolean) as string[];
   const today = new Date().toLocaleDateString('en-CA');
   const nowHm = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
-  useEffect(() => { getStaffSchedule(venueId, from, to).then((ss) => setShifts(ss.filter((s) => myNames.includes(s.name)))).catch(() => {}); /* eslint-disable-next-line */ }, [venueId, from, to, user]);
+  useEffect(() => {
+    const reload = () => getStaffSchedule(venueId, from, to).then((ss) => setShifts(ss.filter((s) => myNames.includes(s.name)))).catch(() => {});
+    reload();
+    return subscribeStaffSchedule(venueId, reload); // 실시간 동기화
+    /* eslint-disable-next-line */
+  }, [venueId, from, to, user]);
   const setT = async (s: StaffShift, field: 'checkIn' | 'checkOut', val: string) => {
     setShifts((arr) => arr.map((x) => (x.date === s.date && x.name === s.name ? { ...x, [field]: val || null } : x)));
     try { await setShiftTimes(venueId, s.date, s.name, { [field]: val || null }); } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }

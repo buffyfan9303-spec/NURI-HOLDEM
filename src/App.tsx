@@ -28,10 +28,11 @@ import type { PostFormData } from './components/features/PostFormModal';
 import MarketplaceFormModal from './components/features/MarketplaceFormModal';
 import type { MarketplaceFormData } from './components/features/MarketplaceFormModal';
 import { useBackClose } from './lib/backstack';
+import { useVisibilityRefresh } from './lib/useVisibilityRefresh';
 import { useAuth } from './contexts/AuthContext';
 import { listAllUsers, updateUserStatus, approveOwner } from './api/auth';
 import {
-  getSchedules, createSchedule, updateSchedule, deleteSchedule,
+  getSchedules, createSchedule, updateSchedule, deleteSchedule, subscribeSchedules,
 } from './api/schedules';
 import {
   getVenues, getComments, getPosts, addComment, addPost, likePost, deletePost,
@@ -501,7 +502,20 @@ export default function App() {
     else setNotifications([]);
   }, [user]);
 
-  // 알림 실시간 수신(신규/읽음) + 창 복귀 시 새로고침
+  // 창/탭 복귀(focus·visibility) 시 모든 주요 데이터 자동 동기화
+  //  → 다른 기기·다른 사용자가 바꾼 일정·매장·게시글·댓글·장터·공지·알림이 즉시 최신화
+  useVisibilityRefresh(() => {
+    reloadSchedules();
+    reloadVenues();
+    reloadPosts();
+    reloadComments();
+    reloadNotices();
+    getListings().then(setListings).catch(() => {});
+    if (user) getMyNotifications().then(setNotifications).catch(() => {});
+    if (isAdmin) listAllUsers().then(setUsers).catch(() => {});
+  }, [user, isAdmin, reloadSchedules, reloadVenues, reloadPosts, reloadComments, reloadNotices]);
+
+  // 알림 실시간 수신(신규/읽음)
   useEffect(() => {
     if (!user) return;
     const reload = () => getMyNotifications().then(setNotifications).catch(() => {});
@@ -511,10 +525,11 @@ export default function App() {
         { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
         reload)
       .subscribe();
-    const onVis = () => { if (document.visibilityState === 'visible') reload(); };
-    document.addEventListener('visibilitychange', onVis);
-    return () => { supabase.removeChannel(ch); document.removeEventListener('visibilitychange', onVis); };
+    return () => { supabase.removeChannel(ch); };
   }, [user]);
+
+  // 일정(포스터/게임) 실시간 동기화 — 다른 기기/사용자의 등록·수정·삭제 즉시 반영
+  useEffect(() => subscribeSchedules(reloadSchedules), [reloadSchedules]);
 
   // 관리자: 회원 목록 로드
   useEffect(() => {
