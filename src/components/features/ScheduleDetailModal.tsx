@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import Modal from '../atoms/Modal';
 import CommentThread from './CommentThread';
 import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../atoms/Toast';
+import { getMyReservation, createReservation, cancelMyReservation, type Reservation } from '../../api/reservations';
 import { prizeMainText } from './ScheduleCard';
 import type { Schedule } from '../../api/schedules';
 import type { Comment } from '../../api/community';
@@ -204,6 +206,9 @@ export default function ScheduleDetailModal({
         </div>
       ) : (
       <div className="px-4 pt-5 pb-6 space-y-6">
+
+        {/* 예약하기 (첫 페이지) */}
+        <ReserveBox scheduleId={schedule.id} />
 
         {/* 프라이즈 강조 박스 */}
         {(schedule.prizePool || schedule.prizePercent) && (
@@ -456,6 +461,62 @@ export default function ScheduleDetailModal({
       </div>
       )}
     </Modal>
+  );
+}
+
+// ── 예약하기 박스 (1분 1회 제한) ──────────────────────────────────────────────
+function ReserveBox({ scheduleId }: { scheduleId: string }) {
+  const { user } = useAuth();
+  const toast = useToast();
+  const [mine, setMine] = useState<Reservation | null>(null);
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    setName(user?.nickname || user?.name || '');
+    if (user) getMyReservation(scheduleId).then(setMine).catch(() => {});
+    else setMine(null);
+  }, [scheduleId, user]);
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const id = setInterval(() => setCooldown((c) => Math.max(0, c - 1)), 1000);
+    return () => clearInterval(id);
+  }, [cooldown]);
+
+  const act = async () => {
+    if (!user) { toast.show('로그인 후 예약할 수 있습니다', 'error'); return; }
+    if (busy || cooldown > 0) return;
+    setBusy(true);
+    try {
+      if (mine) { await cancelMyReservation(scheduleId); setMine(null); toast.show('예약을 취소했습니다', 'info'); }
+      else {
+        const n = (name.trim() || user.name || '예약자');
+        await createReservation(scheduleId, n);
+        setMine({ id: '', scheduleId, userId: user.id, displayName: n, createdAt: new Date().toISOString() });
+        toast.show('예약되었습니다', 'success');
+      }
+      setCooldown(60); // 반복 클릭 방지: 1분 1회
+    } catch (e) { toast.show(e instanceof Error ? e.message : '처리 실패', 'error'); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <section className="rounded-card border border-gold-400/40 bg-gradient-to-br from-gold-300/[0.08] to-transparent p-4 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-bold text-gold-300">참가 예약</p>
+        {mine && <span className="text-2xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-badge">예약 완료</span>}
+      </div>
+      {!mine && (
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="닉네임 또는 실명" maxLength={30} className="input w-full text-sm" />
+      )}
+      <button type="button" onClick={act} disabled={busy || cooldown > 0}
+        className={['w-full py-3 rounded-input text-sm font-bold transition-colors disabled:opacity-60',
+          mine ? 'bg-surface-high text-danger-light border border-danger/40 hover:bg-danger/10' : 'btn-primary'].join(' ')}>
+        {cooldown > 0 ? `${cooldown}초 후 가능` : mine ? '예약 취소' : '예약하기'}
+      </button>
+      <p className="text-[10px] text-ink-muted">{mine ? `예약자: ${mine.displayName} · 반복 클릭 방지를 위해 변경 후 1분간 잠깁니다.` : '예약 후 1분간 다시 클릭할 수 없습니다.'}</p>
+    </section>
   );
 }
 
