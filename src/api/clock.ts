@@ -21,6 +21,7 @@ export interface ClockConfig {
   startStack: number;     // 스타팅 스택(칩)
   rebuyStack: number;     // 리바인 스택
   addonStack: number;     // 애드온 스택
+  isAddon: boolean;       // 애드온 게임 여부(라이브에 ADD-ON 표시)
   earlyBonus: number;     // 1얼리 보너스 칩
   doubleEarlyBonus: number; // 더블얼리 보너스 칩
   regCloseLevel: number;  // 등록 마감 레벨(이 레벨 시작 시 마감)
@@ -65,7 +66,7 @@ export function defaultClockConfig(): ClockConfig {
   const B = (minutes = 8): ClockLevel => ({ kind: 'break', sb: 0, bb: 0, ante: 0, minutes, label: `BREAK ${minutes}Min.` });
   return {
     title: '데일리 토너먼트',
-    startStack: 30000, rebuyStack: 30000, addonStack: 30000,
+    startStack: 30000, rebuyStack: 30000, addonStack: 30000, isAddon: false,
     earlyBonus: 10000, doubleEarlyBonus: 20000,
     regCloseLevel: 9, maxLevel: 15,
     earlyDoubleLevel: 1, earlySingleLevel: 4, earlyDoubleMin: 20, earlySingleMin: 80,

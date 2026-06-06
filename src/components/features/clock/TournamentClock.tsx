@@ -97,7 +97,12 @@ export default function TournamentClock({ venueId, canManage, seedSessionDate }:
   const seededInitial = useMemo<ClockConfig>(() => {
     const base = state?.config ?? defaultClockConfig();
     if (!seedSession) return withDerivedEarly(base);
-    return withDerivedEarly({ ...base, title: seedSession.title || base.title });
+    return withDerivedEarly({
+      ...base,
+      title: seedSession.title || base.title,
+      isAddon: seedSession.isAddon ?? base.isAddon,
+      addonStack: (seedSession.isAddon && seedSession.addonStack) ? seedSession.addonStack : base.addonStack,
+    });
   }, [state, seedSession]);
 
   const startClock = async (config: ClockConfig, linkDate: string | null) => {
@@ -371,6 +376,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd }: {
           <div className="flex flex-col justify-center gap-2 sm:gap-3 p-2 sm:p-3 border-l border-white/5 bg-black/20">
             <Stat fs={fs} label="PLAYERS" value={`${alive} / ${entries}`} />
             <Stat fs={fs} label="RE-BUY / EARLY" value={`${rebuys} / ${earlies}`} />
+            {cfg.isAddon && <Stat fs={fs} label="ADD-ON" value={`${addons}`} />}
             <Stat fs={fs} label="REG CLOSE" value={regClose !== null ? hms(regClose) : '마감'} tone={regClose !== null ? 'muted' : 'rose'} />
             <Stat fs={fs} label="NEXT BREAK" value={nextBreak !== null ? hms(nextBreak) : '—'} tone="rose" />
           </div>
@@ -622,8 +628,12 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
         <div className="grid grid-cols-3 gap-2">
           <Field label="스타팅 스택"><input type="number" value={cfg.startStack || ''} onChange={(e) => set({ startStack: +e.target.value || 0 })} className={numInput} /></Field>
           <Field label="리바인 스택"><input type="number" value={cfg.rebuyStack || ''} onChange={(e) => set({ rebuyStack: +e.target.value || 0 })} className={numInput} /></Field>
-          <Field label="애드온 스택"><input type="number" value={cfg.addonStack || ''} onChange={(e) => set({ addonStack: +e.target.value || 0 })} className={numInput} /></Field>
+          <Field label="애드온 스택"><input type="number" disabled={!cfg.isAddon} value={cfg.isAddon ? (cfg.addonStack || '') : ''} onChange={(e) => set({ addonStack: +e.target.value || 0 })} className={`${numInput} disabled:opacity-50`} /></Field>
         </div>
+        <label className="flex items-center gap-2 text-xs text-ink-secondary">
+          <input type="checkbox" checked={cfg.isAddon} onChange={(e) => set({ isAddon: e.target.checked })} className="accent-gold-300 w-4 h-4" />
+          애드온 게임 (라이브에 ADD-ON 표시 · 켜야 애드온 스택 입력 가능)
+        </label>
         <div className="grid grid-cols-3 gap-2">
           <Field label={`등록마감 레벨 (전체 ${totalLevels})`}><input type="number" min="0" max="60" value={cfg.regCloseLevel || ''} onChange={(e) => set({ regCloseLevel: Math.max(0, +e.target.value || 0) })} className={numInput} /></Field>
           <Field label="최대 레벨 (자동생성용)"><input type="number" min="1" max="60" value={cfg.maxLevel || ''} onChange={(e) => set({ maxLevel: Math.max(0, +e.target.value || 0) })} className={numInput} /></Field>

@@ -39,7 +39,11 @@ export interface LedgerSession {
   sessionDate: string;
   buyinAmount: number;          // 현금단가
   cardAmount: number | null;    // 카드단가(미입력 시 현금단가 적용)
-  targetEntries: number;
+  gameType: 'gtd' | 'entry';    // GTD(보장) / 엔트리 게임
+  targetEntries: number;        // 기준 엔트리(GTD용 통계 기준)
+  maxEntries: number;           // 맥스 엔트리(엔트리 게임용, 0=무제한/미설정)
+  isAddon: boolean;             // 애드온 게임 여부
+  addonStack: number;           // 애드온 스택(애드온 게임일 때만)
   title?: string;               // 금일 게임 내용
   eventMemo?: string;           // 이벤트 등 비고
   dealers?: string;             // 금일 딜러 명단(줄바꿈 구분, 선택)
@@ -48,7 +52,8 @@ export interface LedgerSession {
   earlyDoubleMin: number;       // 스타트 후 ~분까지 더블얼리
   earlySingleMin: number;       // 스타트 후 ~분까지 1얼리
   tournamentStart?: string | null; // 토너먼트 스타트 시각(ISO, 없으면 openedAt 기준)
-  openedBy?: string | null;     // 담당직원(프로필 id)
+  openedBy?: string | null;     // 담당직원 대표(프로필 id, 하위호환)
+  operators?: string[];         // 담당직원 목록(최대 10) — 직원 장부 접근 권한 기준
   openedAt?: string | null;
   regClosed: boolean;           // 레지(레지스트리) 마감
   regClosedAt?: string | null;
@@ -139,12 +144,17 @@ const rowToSession = (venueId: string, date: string, d: any): LedgerSession => (
   venueId, sessionDate: date,
   buyinAmount: d?.buyin_amount ?? 0,
   cardAmount: d?.card_amount ?? null,
+  gameType: (d?.game_type === 'entry' ? 'entry' : 'gtd'),
   targetEntries: d?.target_entries ?? 0,
+  maxEntries: d?.max_entries ?? 0,
+  isAddon: !!d?.is_addon,
+  addonStack: d?.addon_stack ?? 0,
   title: d?.title ?? undefined,
   eventMemo: d?.event_memo ?? undefined,
   dealers: d?.dealers ?? undefined,
   scheduleId: d?.schedule_id ?? null,
   openedBy: d?.opened_by ?? null,
+  operators: Array.isArray(d?.operators) ? d.operators : [],
   openedAt: d?.opened_at ?? null,
   regClosed: !!d?.reg_closed,
   regClosedAt: d?.reg_closed_at ?? null,
@@ -165,7 +175,10 @@ const rowToPlayer = (r: any): LedgerPlayer => ({
 });
 
 const emptySession = (venueId: string, date: string): LedgerSession => ({
-  venueId, sessionDate: date, buyinAmount: 0, cardAmount: null, targetEntries: 0, regClosed: false, closed: false, discounts: [],
+  venueId, sessionDate: date, buyinAmount: 0, cardAmount: null,
+  gameType: 'gtd', targetEntries: 0, maxEntries: 0, isAddon: false, addonStack: 0,
+  operators: [],
+  regClosed: false, closed: false, discounts: [],
   earlyDoubleMin: 0, earlySingleMin: 0, tournamentStart: null,
 });
 
@@ -198,13 +211,14 @@ export interface LedgerSessionListItem {
   regClosed: boolean;
   closed: boolean;
   buyinAmount: number;
+  operators: string[];
 }
 
 /** 매장의 게임(세션) 목록 — 최신 날짜순. 장부 진입 시 리스트업 용. */
 export async function getLedgerSessionList(venueId: string, limit = 90): Promise<LedgerSessionListItem[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase.from('ledger_sessions')
-    .select('session_date, title, opened_at, reg_closed, closed, buyin_amount')
+    .select('session_date, title, opened_at, reg_closed, closed, buyin_amount, operators')
     .eq('venue_id', venueId).order('session_date', { ascending: false }).limit(limit);
   if (error) throw error;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -212,6 +226,7 @@ export async function getLedgerSessionList(venueId: string, limit = 90): Promise
     sessionDate: d.session_date, title: d.title ?? undefined,
     openedAt: d.opened_at ?? null, regClosed: !!d.reg_closed, closed: !!d.closed,
     buyinAmount: d.buyin_amount ?? 0,
+    operators: Array.isArray(d.operators) ? d.operators : [],
   }));
 }
 
@@ -280,6 +295,8 @@ export async function saveLedgerSession(s: LedgerSession): Promise<void> {
     venue_id: s.venueId, session_date: s.sessionDate,
     buyin_amount: s.buyinAmount, card_amount: s.cardAmount,
     target_entries: s.targetEntries, title: s.title ?? null,
+    game_type: s.gameType ?? 'gtd', max_entries: s.maxEntries ?? 0, is_addon: !!s.isAddon, addon_stack: s.addonStack ?? 0,
+    operators: (s.operators ?? []) as unknown as object,
     event_memo: s.eventMemo ?? null, dealers: s.dealers ?? null, schedule_id: s.scheduleId ?? null,
     discounts: (s.discounts ?? []) as unknown as object,
     early_double_min: s.earlyDoubleMin ?? 0, early_single_min: s.earlySingleMin ?? 0, tournament_start: s.tournamentStart ?? null,
@@ -296,6 +313,8 @@ export async function openLedgerSession(s: LedgerSession, operatorId?: string | 
     venue_id: s.venueId, session_date: s.sessionDate,
     buyin_amount: s.buyinAmount, card_amount: s.cardAmount,
     target_entries: s.targetEntries, title: s.title ?? null,
+    game_type: s.gameType ?? 'gtd', max_entries: s.maxEntries ?? 0, is_addon: !!s.isAddon, addon_stack: s.addonStack ?? 0,
+    operators: (s.operators ?? []) as unknown as object,
     event_memo: s.eventMemo ?? null, dealers: s.dealers ?? null, schedule_id: s.scheduleId ?? null,
     discounts: (s.discounts ?? []) as unknown as object,
     early_double_min: s.earlyDoubleMin ?? 0, early_single_min: s.earlySingleMin ?? 0, tournament_start: s.tournamentStart ?? null,

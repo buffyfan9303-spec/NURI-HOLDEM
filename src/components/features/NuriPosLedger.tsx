@@ -4,12 +4,13 @@
 // 8바인 초과 시 가로 스크롤. 비고 컬럼 수기 입력. 장부 마감=읽기전용 스냅샷+메모. 엑셀 내보내기.
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useToast } from '../atoms/Toast';
+import DateTimePicker from '../atoms/DateTimePicker';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type LedgerSessionListItem, type DiscountPreset, type EarlyType,
   visitorLabel, wonToMan, WON_PER_MAN, buyinFinance, earlyTypeOf, setBuyinEarly,
   getLedgerSession, saveLedgerSession, openLedgerSession, closeLedgerSession, reopenLedgerSession, deleteLedgerSession,
-  setRegistrationClosed, getLastLedgerSettings, getLedgerSessionList,
+  setRegistrationClosed, getLastLedgerSettings, getLedgerSessionList, getLedgerAccessUserIds,
   getLedgerBuyins, upsertBuyin, upsertBuyinSplit, cancelBuyin,
   getLedgerPlayers, addLedgerPlayer, updateLedgerPlayer, removeLedgerPlayer,
   subscribeLedger, posHasPassword, getLedgerPresets, type LedgerPreset,
@@ -50,7 +51,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const operatorName = user?.name ?? user?.nickname ?? '담당직원';
 
   const [date, setDate]       = useState(today);
-  const [session, setSession] = useState<LedgerSession>({ venueId, sessionDate: today(), buyinAmount: 0, cardAmount: null, targetEntries: 0, regClosed: false, closed: false, discounts: [], earlyDoubleMin: 0, earlySingleMin: 0, tournamentStart: null });
+  const [session, setSession] = useState<LedgerSession>({ venueId, sessionDate: today(), buyinAmount: 0, cardAmount: null, gameType: 'gtd', targetEntries: 0, maxEntries: 0, isAddon: false, addonStack: 0, regClosed: false, closed: false, discounts: [], earlyDoubleMin: 0, earlySingleMin: 0, tournamentStart: null });
   const [buyins, setBuyins]   = useState<LedgerBuyin[]>([]);
   const [players, setPlayers] = useState<LedgerPlayer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,13 +81,18 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const scheduleTitle = (id?: string | null) => venueSchedules.find((s) => s.id === id)?.title ?? null;
 
   const [staff, setStaff] = useState<User[]>([]);
+  const [accessIds, setAccessIds] = useState<string[]>([]); // 장부 접근 권한 보유 직원
   useEffect(() => { getMyVenueStaff().then(setStaff).catch(() => {}); }, []);
+  useEffect(() => { getLedgerAccessUserIds(venueId).then(setAccessIds).catch(() => {}); }, [venueId]);
+  // 현재 사용자가 이 매장 업주/운영자인지(전체 접근). 아니면 장부권한 직원(담당 지정 장부만).
+  const fullAccess = isAdmin || (user?.role === 'venue_owner' && user?.venueId === venueId);
+  // 담당직원 후보 = 업주/운영자(나) + 장부 접근 권한 직원만(최대 10은 폼에서 제한)
   const operatorOptions = useMemo(() => {
     const opts: { id: string; label: string }[] = [];
     if (user) opts.push({ id: user.id, label: `${user.name}${isAdmin ? ' (운영자)' : ' (업주/나)'}` });
-    for (const s of staff) if (s.id !== user?.id) opts.push({ id: s.id, label: `${s.name}${s.staffTitle ? ` · ${s.staffTitle}` : ''}${s.nickname ? ` · @${s.nickname}` : ''}` });
+    for (const s of staff) if (s.id !== user?.id && accessIds.includes(s.id)) opts.push({ id: s.id, label: `${s.name}${s.staffTitle ? ` · ${s.staffTitle}` : ''}${s.nickname ? ` · @${s.nickname}` : ''}` });
     return opts;
-  }, [user, staff, isAdmin]);
+  }, [user, staff, isAdmin, accessIds]);
   const operatorName2 = (id?: string | null) => operatorOptions.find((o) => o.id === id)?.label ?? operatorName;
 
   const loadList = useCallback(() => {
@@ -245,32 +251,36 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
           <p className="py-10 text-center text-xs text-ink-muted">{hasRange ? '선택한 기간에 작성된 장부가 없습니다.' : `"${listQuery.trim()}" 검색 결과가 없습니다.`}</p>
         ) : (
           <ul className="space-y-1.5">
-            {filtered.map((s, i) => (
+            {filtered.map((s, i) => {
+              const canOpen = fullAccess || s.operators.length === 0 || (!!user && s.operators.includes(user.id));
+              return (
               <li key={s.sessionDate} className="flex items-center rounded-card border border-border-subtle bg-surface-low hover:border-gold-400/40 transition-colors">
-                <button type="button" onClick={() => openBoard(s.sessionDate)}
-                  className="flex-1 min-w-0 flex items-center gap-3 px-3 py-2.5 text-left">
+                <button type="button" disabled={!canOpen} onClick={() => canOpen && openBoard(s.sessionDate)}
+                  className={['flex-1 min-w-0 flex items-center gap-3 px-3 py-2.5 text-left', canOpen ? '' : 'opacity-50 cursor-not-allowed'].join(' ')}>
                   <span className="w-6 shrink-0 text-center text-sm font-bold text-gold-300 tabular-nums">{i + 1}</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold text-ink-primary truncate">
                       {s.sessionDate}{s.sessionDate === todayStr ? ' (오늘)' : ''}
                       <span className="font-normal text-ink-secondary"> · {s.title || '게임'}</span>
                     </p>
-                    <p className="text-2xs text-ink-muted">바인 {s.buyinAmount.toLocaleString()}원 · 탭하여 보기·수정</p>
+                    <p className="text-2xs text-ink-muted">바인 {s.buyinAmount.toLocaleString()}원 · {canOpen ? '탭하여 보기·수정' : '담당 미지정 — 접근 권한 없음'}</p>
                   </div>
-                  {s.closed
+                  {!canOpen
+                    ? <span className="shrink-0 text-sm" aria-label="잠김">🔒</span>
+                    : s.closed
                     ? <span className="shrink-0 text-2xs font-bold text-gold-300 bg-gold-300/15 px-2 py-0.5 rounded-badge">마감</span>
                     : s.regClosed
                     ? <span className="shrink-0 text-2xs font-bold text-danger-light bg-danger/10 px-2 py-0.5 rounded-badge">레지마감</span>
                     : <span className="shrink-0 text-2xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-badge">진행중</span>}
                 </button>
-                {canManage && (
+                {fullAccess && (
                   <button type="button" onClick={() => handleDeleteSession(s.sessionDate)} aria-label={`${s.sessionDate} 장부 삭제`}
                     className="shrink-0 mr-1.5 w-8 h-8 flex items-center justify-center rounded-input text-ink-muted hover:text-danger-light hover:bg-danger/10 transition-colors">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
                   </button>
                 )}
               </li>
-            ))}
+            );})}
           </ul>
         )}
       </div>
@@ -680,12 +690,21 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   const [cash, setCash]       = useState<number>(base.buyinAmount || 0);
   const [card, setCard]       = useState<number>(base.cardAmount ?? 0);
   const [target, setTarget]   = useState<number>(base.targetEntries || 0);
+  const [gameType, setGameType] = useState<'gtd' | 'entry'>(base.gameType ?? 'gtd');
+  const [maxEntries, setMaxEntries] = useState<number>(base.maxEntries || 0);
+  const [isAddon, setIsAddon] = useState<boolean>(!!base.isAddon);
+  const [addonStack, setAddonStack] = useState<number>(base.addonStack || 0);
   const [event, setEvent]     = useState(base.eventMemo ?? '');
   const [dealers, setDealers] = useState(base.dealers ?? '');
   const [schedId, setSchedId] = useState<string>(base.scheduleId ?? '');
-  const [operId, setOperId]   = useState<string>(base.openedBy ?? operatorOptions[0]?.id ?? '');
+  const [operIds, setOperIds] = useState<string[]>(
+    base.operators && base.operators.length ? base.operators
+    : base.openedBy ? [base.openedBy]
+    : operatorOptions[0] ? [operatorOptions[0].id] : [],
+  );
+  const toggleOper = (id: string) => setOperIds((arr) => arr.includes(id) ? arr.filter((x) => x !== id) : (arr.length >= 10 ? arr : [...arr, id]));
   const [discs, setDiscs]     = useState<DiscountPreset[]>(base.discounts ?? []);
-  const [startHM, setStartHM] = useState<string>(base.tournamentStart ? new Date(base.tournamentStart).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '');
+  const [startISO, setStartISO] = useState<string | null>(base.tournamentStart ?? null);
   const [presetOpen, setPresetOpen] = useState(false); // 프리셋 리스트 펼침
 
   const setDisc = (i: number, patch: Partial<DiscountPreset>) =>
@@ -706,12 +725,14 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
 
   const submit = () => {
     if (cash <= 0) return;
-    const tStart = startHM ? new Date(`${base.sessionDate}T${startHM}:00`).toISOString() : null;
+    const tStart = startISO;
     onSubmit({
       ...base, title: title.trim() || undefined,
       buyinAmount: cash, cardAmount: card > 0 ? card : null,
-      targetEntries: target, eventMemo: event.trim() || undefined, dealers: dealers.trim() || undefined,
-      scheduleId: schedId || null, openedBy: operId || null,
+      gameType, targetEntries: gameType === 'gtd' ? target : 0, maxEntries: gameType === 'entry' ? maxEntries : 0,
+      isAddon, addonStack: isAddon ? addonStack : 0,
+      eventMemo: event.trim() || undefined, dealers: dealers.trim() || undefined,
+      scheduleId: schedId || null, openedBy: operIds[0] ?? null, operators: operIds,
       discounts: discs.filter((d) => d.amount > 0),
       earlyDoubleMin: base.earlyDoubleMin ?? 0, earlySingleMin: base.earlySingleMin ?? 0, tournamentStart: tStart,
     });
@@ -766,10 +787,20 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       )}
 
       {operatorOptions.length > 0 && (
-        <Field label="담당 직원">
-          <select value={operId} onChange={(e) => setOperId(e.target.value)} className="input w-full text-sm">
-            {operatorOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-          </select>
+        <Field label={`담당 직원 · 최대 10명 (${operIds.length} 선택)`}>
+          <div className="flex flex-wrap gap-1.5">
+            {operatorOptions.map((o) => {
+              const on = operIds.includes(o.id);
+              return (
+                <button key={o.id} type="button" onClick={() => toggleOper(o.id)}
+                  className={['text-xs font-semibold px-2.5 py-1.5 rounded-badge border transition-colors',
+                    on ? 'bg-gold-300 text-ink-inverse border-gold-300' : 'bg-surface-high text-ink-secondary border-border-default hover:text-ink-primary'].join(' ')}>
+                  {on ? '✓ ' : ''}{o.label}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-[10px] text-ink-muted mt-1">선택한 담당 직원만 이 장부를 열람·운영할 수 있습니다(업주·운영자는 전체 접근). 후보는 장부 접근 권한 직원입니다.</p>
         </Field>
       )}
 
@@ -803,15 +834,46 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       </Field>
 
       <Field label="토너먼트 스타트 시각 · 선택 (클락 연동·얼리 판정 기준)">
-        <input type="time" value={startHM} onChange={(e) => setStartHM(e.target.value)} className="input w-full text-sm" aria-label="스타트 시각" />
+        <DateTimePicker value={startISO} onChange={setStartISO} defaultDate={base.sessionDate} placeholder="스타트 날짜·시각 선택" />
         <p className="text-[10px] text-ink-muted mt-1 leading-relaxed">
           얼리 구간(더블/1얼리)은 이제 <b className="text-gold-300">「클락」 설정에서 레벨 기준</b>으로 지정합니다(예: 1레벨=더블얼리, 2~4레벨=1얼리). 이 장부를 클락과 연동해 시작하면 위 스타트 시각을 기준으로 바인이 레벨→얼리로 자동 분류되며, 바인 칸에서 '없음'으로 수기 변경도 가능합니다.
           {(base.earlyDoubleMin || base.earlySingleMin) ? <span className="text-gold-300/90"> 현재 적용: 더블 ~{base.earlyDoubleMin}분 · 1얼리 ~{base.earlySingleMin}분.</span> : null}
         </p>
       </Field>
 
-      <Field label="기준 엔트리(통계용) · 선택">
-        <input type="number" inputMode="numeric" value={target || ''} onChange={(e) => setTarget(parseInt(e.target.value, 10) || 0)} placeholder="100" className="input w-full text-sm tabular-nums" />
+      <Field label="게임 유형">
+        <div className="grid grid-cols-2 gap-2">
+          {([['gtd', 'GTD (보장)'], ['entry', '엔트리 게임']] as const).map(([k, lbl]) => (
+            <button key={k} type="button" onClick={() => setGameType(k)}
+              className={['py-2 rounded-input border text-sm font-bold transition-colors',
+                gameType === k ? 'bg-gold-300/15 text-gold-300 border-gold-400/50' : 'bg-surface-high text-ink-secondary border-border-default'].join(' ')}>{lbl}</button>
+          ))}
+        </div>
+      </Field>
+
+      {gameType === 'gtd' ? (
+        <Field label="기준 엔트리(통계용) · 선택">
+          <input type="number" inputMode="numeric" value={target || ''} onChange={(e) => setTarget(parseInt(e.target.value, 10) || 0)} placeholder="100" className="input w-full text-sm tabular-nums" />
+        </Field>
+      ) : (
+        <Field label="맥스 엔트리 · 선택 (없으면 비움)">
+          <input type="number" inputMode="numeric" value={maxEntries || ''} onChange={(e) => setMaxEntries(parseInt(e.target.value, 10) || 0)} placeholder="예) 200 (무제한이면 비움)" className="input w-full text-sm tabular-nums" />
+        </Field>
+      )}
+
+      <Field label="애드온 게임 여부">
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => setIsAddon((v) => !v)}
+            className={['px-3 py-2 rounded-input border text-sm font-bold transition-colors shrink-0',
+              isAddon ? 'bg-gold-300/15 text-gold-300 border-gold-400/50' : 'bg-surface-high text-ink-secondary border-border-default'].join(' ')}>
+            {isAddon ? '✓ 애드온 게임' : '애드온 없음'}
+          </button>
+          <div className="relative flex-1">
+            <input type="number" inputMode="numeric" disabled={!isAddon} value={isAddon ? (addonStack || '') : ''} onChange={(e) => setAddonStack(parseInt(e.target.value, 10) || 0)}
+              placeholder={isAddon ? '애드온 스택(칩)' : '애드온 게임만 입력 가능'} className="input w-full text-sm tabular-nums disabled:opacity-50" />
+          </div>
+        </div>
+        <p className="text-[10px] text-ink-muted mt-1">애드온 게임을 켜야 애드온 스택 입력이 가능합니다(오류 방지). 클락에 애드온이 표시됩니다.</p>
       </Field>
 
       <Field label="이벤트 · 비고 · 선택">
