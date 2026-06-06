@@ -5,7 +5,7 @@ import { useToast } from '../atoms/Toast';
 import {
   type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type VisitorType,
   wonToMan, buyinFinance, getLedgerRange, getLedgerPlayers,
-  posHasPassword, setPosCancelPassword,
+  posHasPassword, setPosCancelPassword, subscribeLedger,
 } from '../../api/ledger';
 
 const todayStr = () => new Date().toLocaleDateString('en-CA');
@@ -41,6 +41,7 @@ function StatsView({ venueId }: { venueId: string }) {
   const toggleExclude = (code: string) => setExcludeTypes((prev) => { const n = new Set(prev); n.has(code) ? n.delete(code) : n.add(code); return n; });
   const [loading, setLoading] = useState(true);
   const [aiTick, setAiTick] = useState(0); // AI 리포트 새로고침
+  const [liveTick, setLiveTick] = useState(0); // 장부 실시간 변경 반영(당일 통계)
 
   const range = useMemo<{ from: string; to: string }>(() => {
     const t = todayStr();
@@ -62,7 +63,13 @@ function StatsView({ venueId }: { venueId: string }) {
       period === 'day' ? getLedgerPlayers(venueId, date) : Promise.resolve([] as LedgerPlayer[]),
     ]).then(([r, p]) => { setSessions(r.sessions); setBuyins(r.buyins); setPlayers(p); })
       .finally(() => setLoading(false));
-  }, [venueId, range.from, range.to, period, date, aiTick]);
+  }, [venueId, range.from, range.to, period, date, aiTick, liveTick]);
+
+  // '당일' 통계를 보는 중 장부(바이인 등) 변경 시 실시간 갱신
+  useEffect(() => {
+    if (period !== 'day') return;
+    return subscribeLedger(venueId, () => setLiveTick((t) => t + 1));
+  }, [venueId, period]);
 
   const sessionByDate = useMemo(() => {
     const m = new Map<string, LedgerSession>();

@@ -91,7 +91,11 @@ export function StaffSettlement({ venueId }: { venueId: string }) {
   const [shifts, setShifts] = useState<StaffShift[]>([]);
   const [wages, setWages] = useState<Record<string, number>>({});
   const [from, to] = monthRange(month);
-  useEffect(() => { getStaffSchedule(venueId, from, to).then(setShifts).catch(() => {}); }, [venueId, from, to]);
+  useEffect(() => {
+    const reload = () => getStaffSchedule(venueId, from, to).then(setShifts).catch(() => {});
+    reload();
+    return subscribeStaffSchedule(venueId, reload); // 실시간: 직원 출퇴근/배정 변경 반영
+  }, [venueId, from, to]);
   useEffect(() => { getStaffWages(venueId).then((ws) => { const m: Record<string, number> = {}; ws.forEach((w) => (m[w.name] = w.hourlyWage)); setWages(m); }).catch(() => {}); }, [venueId]);
 
   const rows = useMemo(() => {
@@ -158,7 +162,11 @@ export function StaffWorkLog({ venueId }: { venueId: string }) {
   const [month, setMonth] = useState(thisMonth);
   const [shifts, setShifts] = useState<StaffShift[]>([]);
   const [from, to] = monthRange(month);
-  useEffect(() => { getStaffSchedule(venueId, from, to).then(setShifts).catch(() => {}); }, [venueId, from, to]);
+  useEffect(() => {
+    const reload = () => getStaffSchedule(venueId, from, to).then(setShifts).catch(() => {});
+    reload();
+    return subscribeStaffSchedule(venueId, reload); // 실시간: 직원 출퇴근/배정 변경 반영
+  }, [venueId, from, to]);
   const sorted = useMemo(() => [...shifts].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.name.localeCompare(b.name))), [shifts]);
   return (
     <div className="space-y-2">
