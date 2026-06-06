@@ -150,6 +150,8 @@ export default function VenuePage({
 
       {/* ── 스크롤 컨테이너 ────────────────────────────────────────────── */}
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
+        {/* PC 에서 전체 폭으로 퍼져 공백이 과해지지 않도록 중앙 컬럼(최대 768px)으로 제한 */}
+        <div className="mx-auto w-full max-w-3xl">
 
         {/* 히어로 (배경 이미지) */}
         <HeroSection
@@ -262,6 +264,7 @@ export default function VenuePage({
               />
             </div>
           )}
+        </div>
         </div>
       </div>
     </div>

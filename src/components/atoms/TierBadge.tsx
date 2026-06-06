@@ -26,18 +26,18 @@ interface TierDef { rank: string; min: number; color: string; }
 // 점수로 도달 가능한 최대 등급은 K. A 는 상대평가(별도)로만 부여.
 // 색상은 등급군별로 구분(회색→블루→그린→퍼플→오렌지→레드→골드)
 const RANK_THRESHOLDS: readonly TierDef[] = [
-  { rank: '2',  min: 0,     color: '#7C8696' },
-  { rank: '3',  min: 20,    color: '#7C8696' },
-  { rank: '4',  min: 60,    color: '#94A0B5' },
-  { rank: '5',  min: 150,   color: '#5FA8FF' },
-  { rank: '6',  min: 300,   color: '#5FA8FF' },
-  { rank: '7',  min: 600,   color: '#4FCB98' },
-  { rank: '8',  min: 1200,  color: '#4FCB98' },
-  { rank: '9',  min: 2500,  color: '#B388FF' },
-  { rank: '10', min: 4000,  color: '#B388FF' },
-  { rank: 'J',  min: 7000,  color: '#FF9F45' },
-  { rank: 'Q',  min: 10000, color: '#FF7A8A' },
-  { rank: 'K',  min: 14000, color: '#FFD100' },
+  { rank: '22',   min: 0,     color: '#7C8696' },
+  { rank: '33',   min: 20,    color: '#7C8696' },
+  { rank: '44',   min: 60,    color: '#94A0B5' },
+  { rank: '55',   min: 150,   color: '#5FA8FF' },
+  { rank: '66',   min: 300,   color: '#5FA8FF' },
+  { rank: '77',   min: 600,   color: '#4FCB98' },
+  { rank: '88',   min: 1200,  color: '#4FCB98' },
+  { rank: '99',   min: 2500,  color: '#B388FF' },
+  { rank: '1010', min: 4000,  color: '#B388FF' },
+  { rank: 'JJ',   min: 7000,  color: '#FF9F45' },
+  { rank: 'QQ',   min: 10000, color: '#FF7A8A' },
+  { rank: 'KK',   min: 14000, color: '#FFD100' },
 ] as const;
 
 // A(Ace) 부여 조건 — 상대평가
@@ -69,7 +69,7 @@ export function isAceRank(points: number, overallRank?: number | null): boolean 
  *   else return 점수 매칭 등급;
  */
 export function calculateRank(points: number, overallRank?: number | null): string {
-  if (isAceRank(points, overallRank)) return 'VIP';
+  if (isAceRank(points, overallRank)) return 'AA';
   return tierOf(points).label;
 }
 
@@ -126,7 +126,7 @@ interface Props {
 export default function TierBadge({ points, showLabel = false, size = 14, admin = false, overallRank }: Props) {
   const ace = !admin && isAceRank(points, overallRank);
   const t = tierOf(points);
-  const label = admin ? 'SS' : ace ? 'VIP' : t.label;
+  const label = admin ? 'SS' : ace ? 'AA' : t.label;
   const color = admin ? ADMIN_TIER_COLOR : ace ? ACE_COLOR : t.color;
   const glow = admin || ace || t.rank >= 11;
   const fontSize = Math.max(8, Math.round(size * 0.62));
@@ -155,7 +155,7 @@ export default function TierBadge({ points, showLabel = false, size = 14, admin 
         admin
           ? '운영자 · SS 등급'
           : ace
-          ? `VIP 등급 · 전체 상위 ${ACE_TOP_RANK}위 (활동 ${points}점)`
+          ? `AA 등급 · 전체 상위 ${ACE_TOP_RANK}위 (활동 ${points}점)`
           : `활동 ${points}점 · ${t.label} 등급`
       }
     >

@@ -462,6 +462,9 @@ export interface DealerPost {
   kind: DealerPostKind;
   region?: string;     // 구인 시 필수
   venueName?: string;  // 선택
+  wage?: string;       // 시급(구인)
+  workHours?: string;  // 근무시간(구인)
+  workPeriod?: string; // 필요 기간(구인)
   content: string;
   deleted: boolean;
   createdAt: string;
@@ -476,6 +479,9 @@ function rowToDealerPost(r: any): DealerPost {
     kind: r.kind,
     region: r.region ?? undefined,
     venueName: r.venue_name ?? undefined,
+    wage: r.wage ?? undefined,
+    workHours: r.work_hours ?? undefined,
+    workPeriod: r.work_period ?? undefined,
     content: r.content,
     deleted: r.deleted,
     createdAt: r.created_at,
@@ -494,6 +500,7 @@ export async function getDealerPosts(opts?: { deleted?: boolean }): Promise<Deal
 }
 export async function createDealerPost(input: {
   kind: DealerPostKind; content: string; region?: string; venueName?: string;
+  wage?: string; workHours?: string; workPeriod?: string;
 }): Promise<void> {
   if (IS_MOCK) return;
   const { data: { user } } = await supabase.auth.getUser();
@@ -503,11 +510,15 @@ export async function createDealerPost(input: {
   if (input.kind === 'hiring' && !(input.region ?? '').trim()) {
     throw new Error('구인은 지역을 입력해야 합니다');
   }
+  const hiring = input.kind === 'hiring';
   const { error } = await supabase.from('dealer_posts').insert({
     author_id: user.id,
     kind: input.kind,
     region: input.region?.trim() || null,
     venue_name: input.venueName?.trim() || null,
+    wage: hiring ? (input.wage?.trim() || null) : null,
+    work_hours: hiring ? (input.workHours?.trim() || null) : null,
+    work_period: hiring ? (input.workPeriod?.trim() || null) : null,
     content: content.slice(0, 2000),
   });
   if (error) throw error;
@@ -519,6 +530,53 @@ export async function deleteDealerPost(id: string): Promise<void> {
     .update({ deleted: true, deleted_at: new Date().toISOString() })
     .eq('id', id);
   if (error) throw error;
+}
+
+// ── 구인 지원서 ───────────────────────────────────────────────────────────────
+export interface DealerApplication {
+  id: string;
+  postId: string;
+  applicantId: string | null;
+  applicantName: string;
+  phone: string;
+  message?: string;
+  createdAt: string;
+}
+/** 구인글에 지원(로그인 필수, 번호 필수). 지원서는 글 작성자/운영자만 열람 가능(RLS). */
+export async function createDealerApplication(
+  postId: string,
+  input: { name: string; phone: string; message?: string },
+): Promise<void> {
+  if (IS_MOCK) return;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('로그인이 필요합니다');
+  const name = input.name.trim();
+  const phone = input.phone.trim();
+  if (!name) throw new Error('이름을 입력해 주세요');
+  if (!phone) throw new Error('연락처(번호)는 필수입니다');
+  const { error } = await supabase.from('dealer_applications').insert({
+    post_id: postId,
+    applicant_id: user.id,
+    applicant_name: name.slice(0, 40),
+    phone: phone.slice(0, 30),
+    message: input.message?.trim().slice(0, 1000) || null,
+  });
+  if (error) throw error;
+}
+/** 특정 구인글의 지원서 목록(작성자/운영자/본인 것만 RLS 로 노출) */
+export async function getDealerApplications(postId: string): Promise<DealerApplication[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase
+    .from('dealer_applications')
+    .select('*')
+    .eq('post_id', postId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({
+    id: r.id, postId: r.post_id, applicantId: r.applicant_id ?? null,
+    applicantName: r.applicant_name, phone: r.phone, message: r.message ?? undefined, createdAt: r.created_at,
+  }));
 }
 
 // 업주: 본인 홀덤펍(매장) 직접 생성 (미보유 시)

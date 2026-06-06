@@ -58,7 +58,7 @@ export default function TierLeaderboard() {
               <div>
                 <p className="text-2xs text-ink-muted">내 등급</p>
                 <p className="text-lg font-extrabold text-ink-primary leading-tight">
-                  {isAdmin ? 'SS' : myIsAce ? 'VIP' : myProg.current.label}
+                  {isAdmin ? 'SS' : myIsAce ? 'AA' : myProg.current.label}
                   <span className="ml-1.5 text-xs font-semibold text-ink-muted">등급</span>
                 </p>
               </div>
@@ -89,9 +89,9 @@ export default function TierLeaderboard() {
               </div>
             </div>
           ) : myIsAce ? (
-            <p className="mt-3 text-2xs font-bold text-gold-300">VIP 등급 달성 · 전체 상위 {ACE_TOP_RANK}위</p>
+            <p className="mt-3 text-2xs font-bold text-gold-300">AA 등급 달성 · 전체 상위 {ACE_TOP_RANK}위</p>
           ) : (
-            <p className="mt-3 text-2xs font-bold text-gold-300">K 등급(최고 점수) · 전체 {ACE_TOP_RANK}위 안에 들면 VIP 등급</p>
+            <p className="mt-3 text-2xs font-bold text-gold-300">KK 등급(최고 점수) · 전체 {ACE_TOP_RANK}위 안에 들면 AA 등급</p>
           )}
 
           {/* 점수 적립 안내 */}
@@ -122,9 +122,9 @@ export default function TierLeaderboard() {
               <div className="col-span-2 flex items-center justify-between px-2 py-1.5 rounded-input border border-gold-400/60 bg-gradient-to-r from-gold-300/15 to-transparent">
                 <span className="inline-flex items-center gap-1.5">
                   <TierBadge points={ACE_MIN_POINTS} size={16} overallRank={1} />
-                  <span className="text-2xs font-bold text-gold-300">VIP 등급</span>
+                  <span className="text-2xs font-bold text-gold-300">AA 등급</span>
                 </span>
-                <span className="text-2xs text-ink-muted">K 달성 + 전체 상위 {ACE_TOP_RANK}명</span>
+                <span className="text-2xs text-ink-muted">KK 달성 + 전체 상위 {ACE_TOP_RANK}명</span>
               </div>
               {allTiers().slice().reverse().map((t) => (
                 <div
@@ -189,7 +189,7 @@ export default function TierLeaderboard() {
           </ul>
         )}
         <p className="mt-2 text-2xs text-ink-muted text-center">
-          접속·글쓰기·댓글로 점수를 모아 K(14,000점)까지 올리세요. VIP는 K 달성자 중 전체 상위 {ACE_TOP_RANK}명만!
+          접속·글쓰기·댓글로 점수를 모아 KK(14,000점)까지 올리세요. AA는 KK 달성자 중 전체 상위 {ACE_TOP_RANK}명만!
         </p>
       </section>
     </div>
