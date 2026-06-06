@@ -3,6 +3,7 @@
 // 와홀덤/Roti 클락 구조를 따르되 NURI 테마로. 장부 연동 카운트 자동 산출 + 수기 보정.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useToast } from '../../atoms/Toast';
+import { useBackClose } from '../../../lib/backstack';
 import {
   type ClockConfig, type ClockLevel, type ClockPreset, type ClockState, type ClockPrizeRow,
   defaultClockConfig, emptyClockState, deriveClockCounts, PRESET_LIMIT,
@@ -265,6 +266,8 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd }: {
     const prev = document.body.style.overflow; document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = prev; };
   }, [fs]);
+  // 뒤로가기 → 전체화면만 해제(앱 이탈 방지)
+  useBackClose(fs, () => { setFs(false); if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {}); });
 
   // 집계
   const cfg = state.config;

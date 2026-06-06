@@ -11,6 +11,7 @@ import {
   getVenueStaff, addVenueStaff, updateVenueStaff, removeVenueStaff,
 } from '../../api/community';
 import { useToast } from '../atoms/Toast';
+import { useBackClose } from '../../lib/backstack';
 import { REGION_CHIPS } from './IntegratedSearchBar';
 import NuriPosLedger from './NuriPosLedger';
 import LedgerStatsPanel from './LedgerStatsPanel';
@@ -331,6 +332,8 @@ function AdminVenuePos({ venueId, venueName, onClose }: { venueId: string; venue
     window.addEventListener('keydown', onKey);
     return () => { document.body.style.overflow = ''; window.removeEventListener('keydown', onKey); };
   }, [onClose]);
+  // 뒤로가기 → 운영자 장부 뷰 닫기
+  useBackClose(true, onClose);
 
   const tabCls = (active: boolean) =>
     ['flex-1 py-2 text-xs font-semibold rounded-[6px] transition-all',

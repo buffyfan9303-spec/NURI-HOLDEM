@@ -1,6 +1,7 @@
 // src/components/features/AuthModal.tsx
 import { useState, useEffect, useRef } from 'react';
 import Modal from '../atoms/Modal';
+import { useBackClose } from '../../lib/backstack';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
 import {
@@ -54,6 +55,7 @@ function useConsent() {
 // ── 약관 시트 오버레이 (z-[60] > 모달 z-50) ──────────────────────────────────
 
 function LegalSheet({ doc, onClose }: { doc: LegalDoc | null; onClose: () => void }) {
+  useBackClose(!!doc, onClose);
   if (!doc) return null;
   return (
     <div

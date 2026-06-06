@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useBackClose } from '../../lib/backstack';
 import type { AppNotification, NotificationType } from '../../api/notifications';
 
 interface NotificationPanelProps {
@@ -98,6 +99,9 @@ export default function NotificationPanel({
     const t = setTimeout(() => document.addEventListener('mousedown', onClick), 0);
     return () => { clearTimeout(t); document.removeEventListener('mousedown', onClick); };
   }, [open, handleClose]);
+
+  // 뒤로가기 → 알림 패널 닫기(읽음 처리 포함)
+  useBackClose(open, handleClose);
 
   if (!open) return null;
 

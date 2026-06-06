@@ -19,6 +19,7 @@ import { getStaffSchedule, addStaffShift } from '../../api/staffSchedule';
 import { exportLedgerXls } from '../../lib/ledgerExport';
 import { getSchedules, type Schedule } from '../../api/schedules';
 import { getMyVenueStaff, type User } from '../../api/auth';
+import { useBackClose } from '../../lib/backstack';
 
 const today = () => new Date().toLocaleDateString('en-CA'); // 로컬 날짜 — UTC 자정 넘김 방지
 const shiftDays = (d: string, n: number) => { const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate() + n); return x.toLocaleDateString('en-CA'); };
@@ -922,6 +923,8 @@ function Overlay({ title, onClose, children }: { title: string; onClose: () => v
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
+  // 뒤로가기 → 이 오버레이만 닫기 (중앙 back-stack)
+  useBackClose(true, onClose);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in">
       <button type="button" aria-label="닫기" onClick={onClose} className="absolute inset-0 bg-black/80 backdrop-blur-md cursor-default" />
@@ -975,6 +978,9 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
+
+  // 뒤로가기 → 결제 모달만 닫기 (중앙 back-stack)
+  useBackClose(true, onClose);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in">

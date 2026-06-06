@@ -1,6 +1,7 @@
 // src/components/features/gto/GtoDeepModal.tsx
 import { useMemo, useState } from 'react';
 import Modal from '../../atoms/Modal';
+import { useBackClose } from '../../../lib/backstack';
 import { useToast } from '../../atoms/Toast';
 import CardGridPicker, { SUIT_COLOR, SUIT_LABEL } from './CardGridPicker';
 import { useDeepGto, type CardTarget, type DeepGtoInit } from './useDeepGto';
@@ -150,6 +151,9 @@ function DeepActionSheet({
       { key: '리버 액션',           eq: eqAt(5), rec: postRec },
     ];
   }, [open, hero, villain, board]);
+
+  // 뒤로가기 → 이 해설 시트만 닫기
+  useBackClose(open, onClose);
 
   if (!open) return null;
   return (

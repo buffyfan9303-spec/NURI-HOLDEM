@@ -11,6 +11,7 @@ import { followVenue, unfollowVenue, getMyFollowedVenueIds, updateVenueAddress, 
 import { getVenueNotices, createVenueNotice, deleteVenueNotice, type VenueNotice } from '../../api/community';
 import { getVenueRankings, getVenueRankingTotals, maskRealName, type RankingEntry, type RankingTotal } from '../../api/rankings';
 import { uploadVenueImages } from '../../lib/storage';
+import { useBackClose } from '../../lib/backstack';
 
 interface VenuePageProps {
   venue: Venue | null;
@@ -62,26 +63,15 @@ export default function VenuePage({
   const [kakaoOverride, setKakaoOverride] = useState<string | null>(null);
   useEffect(() => { setKakaoOverride(null); }, [venue?.id]);
 
-  // 브라우저 뒤로가기 지원
+  // 바디 스크롤 잠금 (페이지가 열려있는 동안)
   useEffect(() => {
     if (!open || !venue) return;
-    const stateKey = `venue-${venue.id}`;
-    history.pushState({ venuePage: stateKey }, '');
     document.body.style.overflow = 'hidden';
-
-    const onPopState = () => onClose();
-    window.addEventListener('popstate', onPopState);
-
-    return () => {
-      window.removeEventListener('popstate', onPopState);
-      document.body.style.overflow = '';
-      // 페이지를 정상 닫을 때 history 정리
-      if (history.state?.venuePage === stateKey) {
-        history.back();
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => { document.body.style.overflow = ''; };
   }, [open, venue?.id]);
+
+  // 브라우저/모바일 뒤로가기 → 매장 페이지만 닫기 (중앙 back-stack 매니저가 중첩/충돌 처리)
+  useBackClose(!!open && !!venue, onClose);
 
   // ESC 닫기
   useEffect(() => {

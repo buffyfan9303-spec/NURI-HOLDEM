@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useBackClose } from '../../lib/backstack';
 
 const BOX = 256; // 편집 뷰포트(px, 정사각)
 const OUT = 256; // 출력 크기(px)
@@ -24,6 +25,9 @@ export default function AvatarCropper({
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [ready, setReady] = useState(false);
   const drag = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
+
+  // 뒤로가기 → 크롭 편집기 닫기
+  useBackClose(true, onCancel);
 
   useEffect(() => {
     const url = URL.createObjectURL(file);
