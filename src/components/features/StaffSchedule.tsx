@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useToast } from '../atoms/Toast';
 import {
-  getStaffSchedule, addStaffShift, removeStaffShift, setShiftTimes, confirmSchedule, type StaffShift,
+  getStaffSchedule, addStaffShift, removeStaffShift, setShiftTimes, confirmSchedule, notifyVenueStaff, type StaffShift,
 } from '../../api/staffSchedule';
 import { getMyVenueStaff } from '../../api/auth';
 
@@ -83,7 +83,12 @@ export default function StaffSchedule({ venueId }: { venueId: string }) {
   };
   const confirm = async () => {
     setSaving(true);
-    try { await confirmSchedule(venueId, from, to); setShifts((s) => s.map((x) => ({ ...x, confirmed: true }))); toast.show(`${month} 스케줄을 확정했습니다 — 등록 직원에게 공유됩니다`, 'success'); }
+    try {
+      await confirmSchedule(venueId, from, to);
+      setShifts((s) => s.map((x) => ({ ...x, confirmed: true })));
+      const n = await notifyVenueStaff(venueId, '출근 스케줄 확정', `${month} 출근 스케줄이 확정되었습니다. 본인 일정을 확인하세요.`, '/staff-schedule').catch(() => 0);
+      toast.show(`${month} 스케줄을 확정했습니다 — 직원 ${n}명에게 알림 발송`, 'success');
+    }
     catch (e) { toast.show(e instanceof Error ? e.message : '확정 실패', 'error'); }
     finally { setSaving(false); }
   };

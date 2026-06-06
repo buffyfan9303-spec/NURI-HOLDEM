@@ -45,6 +45,14 @@ export async function confirmSchedule(venueId: string, from: string, to: string)
   if (error) throw error;
 }
 
+/** 매장 소속 전 직원에게 알림 발송(업주/POS관리자만) */
+export async function notifyVenueStaff(venueId: string, title: string, message: string, link?: string): Promise<number> {
+  if (IS_MOCK) return 0;
+  const { data, error } = await supabase.rpc('notify_venue_staff', { p_venue_id: venueId, p_title: title, p_message: message, p_link: link ?? null });
+  if (error) throw error;
+  return (data as number) ?? 0;
+}
+
 // ── 인건비 설정 ──────────────────────────────────────────────────────────────
 export interface StaffWage { name: string; hourlyWage: number; payday: number; weeklyOff: string; memo?: string }
 

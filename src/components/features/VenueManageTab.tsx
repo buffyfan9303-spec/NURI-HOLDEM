@@ -10,9 +10,9 @@ import NuriPosLedger from './NuriPosLedger';
 import LedgerStatsPanel, { PosSettingsPanel } from './LedgerStatsPanel';
 import TournamentClock from './clock/TournamentClock';
 import StaffSchedule from './StaffSchedule';
-import { StaffWageManager, StaffSettlement, StaffWorkLog } from './StaffPayroll';
+import { StaffWageManager, StaffSettlement, StaffWorkLog, StaffSelfAttendance } from './StaffPayroll';
 
-type Section = 'ledger' | 'stats' | 'ranking' | 'staff' | 'settings' | 'clock';
+type Section = 'ledger' | 'stats' | 'ranking' | 'staff' | 'settings' | 'clock' | 'attendance';
 
 /** 업주/직원 전용 "매장 관리" 탭 — 장부(POS) · 통계 · 순위 입력 · (업주) 직원 관리 */
 export default function VenueManageTab({ onAddPoster }: { onAddPoster?: () => void }) {
@@ -47,6 +47,7 @@ export default function VenueManageTab({ onAddPoster }: { onAddPoster?: () => vo
   if (manageOk) available.push({ id: 'stats',  label: '통계' });
   if (ledgerOk) available.push({ id: 'ranking', label: '순위 입력' });
   if (ledgerOk) available.push({ id: 'clock', label: '클락' });
+  if (ledgerOk) available.push({ id: 'attendance', label: '출근 관리' });
   if (isOwner)  available.push({ id: 'staff', label: '직원 관리' });
   if (isOwner)  available.push({ id: 'settings', label: 'POS 설정' });
 
@@ -90,6 +91,7 @@ export default function VenueManageTab({ onAddPoster }: { onAddPoster?: () => vo
       {section === 'stats'    && manageOk && <LedgerStatsPanel venueId={venueId} />}
       {section === 'ranking'  && <RankingEditor venueId={venueId} canEdit={user.approved === true} draft={rankingDraft} />}
       {section === 'clock'    && ledgerOk && <TournamentClock venueId={venueId} canManage={ledgerOk} seedSessionDate={clockSeed} />}
+      {section === 'attendance' && ledgerOk && <StaffSelfAttendance venueId={venueId} />}
       {section === 'staff'    && isOwner && <StaffHub venueId={venueId} />}
       {section === 'settings' && isOwner && <PosSettingsPanel venueId={venueId} />}
     </div>

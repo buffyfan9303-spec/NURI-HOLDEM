@@ -2,8 +2,9 @@
 // 인건비 관리(시급/급여일/휴무) · 인건비 정산(월 급여·평균출퇴근·총인건비) · 출근일지(일별 출퇴근).
 import { useEffect, useMemo, useState } from 'react';
 import { useToast } from '../atoms/Toast';
-import { getStaffSchedule, getStaffWages, saveStaffWage, type StaffShift, type StaffWage } from '../../api/staffSchedule';
+import { getStaffSchedule, getStaffWages, saveStaffWage, setShiftTimes, type StaffShift, type StaffWage } from '../../api/staffSchedule';
 import { getMyVenueStaff } from '../../api/auth';
+import { useAuth } from '../../contexts/AuthContext';
 
 const ymOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 const thisMonth = () => ymOf(new Date());
@@ -179,5 +180,62 @@ export function StaffWorkLog({ venueId }: { venueId: string }) {
         </div>
       )}
     </div>
+  );
+}
+
+// ── 직원 본인 출퇴근 입력(셀프) ───────────────────────────────────────────────
+export function StaffSelfAttendance({ venueId }: { venueId: string }) {
+  const { user } = useAuth();
+  const toast = useToast();
+  const [month, setMonth] = useState(thisMonth);
+  const [shifts, setShifts] = useState<StaffShift[]>([]);
+  const [from, to] = monthRange(month);
+  const myNames = [user?.name, user?.nickname].filter(Boolean) as string[];
+  const today = new Date().toLocaleDateString('en-CA');
+  const nowHm = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+  useEffect(() => { getStaffSchedule(venueId, from, to).then((ss) => setShifts(ss.filter((s) => myNames.includes(s.name)))).catch(() => {}); /* eslint-disable-next-line */ }, [venueId, from, to, user]);
+  const setT = async (s: StaffShift, field: 'checkIn' | 'checkOut', val: string) => {
+    setShifts((arr) => arr.map((x) => (x.date === s.date && x.name === s.name ? { ...x, [field]: val || null } : x)));
+    try { await setShiftTimes(venueId, s.date, s.name, { [field]: val || null }); } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
+  };
+  const sorted = [...shifts].sort((a, b) => (a.date < b.date ? 1 : -1));
+  return (
+    <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-bold text-ink-primary">내 출근 관리 (출퇴근 기록)</h3>
+        <div className="flex items-center gap-1">
+          <button type="button" onClick={() => setMonth((m) => shiftMonth(m, -1))} className="w-7 h-7 rounded-input bg-surface-high text-ink-secondary hover:text-gold-300">‹</button>
+          <span className="text-xs font-bold text-gold-300 tabular-nums w-[4.5rem] text-center">{month}</span>
+          <button type="button" onClick={() => setMonth((m) => shiftMonth(m, 1))} className="w-7 h-7 rounded-input bg-surface-high text-ink-secondary hover:text-gold-300">›</button>
+        </div>
+      </div>
+      {!user ? <p className="text-2xs text-ink-muted">로그인이 필요합니다.</p> : sorted.length === 0 ? (
+        <p className="text-2xs text-ink-muted text-center py-4">배정된 출근 일정이 없습니다 (내 이름: {myNames.join(' / ') || '-'}).<br />업주가 스케줄에 본인 이름으로 배정하면 여기서 출퇴근을 기록할 수 있습니다.</p>
+      ) : (
+        <div className="space-y-1.5">
+          {sorted.map((s) => {
+            const isToday = s.date === today;
+            return (
+              <div key={s.date} className={['rounded-input border p-2.5', isToday ? 'border-gold-400/50 bg-gold-300/[0.06]' : 'border-border-subtle bg-surface-base'].join(' ')}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-bold text-ink-primary">{s.date.slice(5)}{isToday ? ' (오늘)' : ''}{s.confirmed && <span className="ml-1.5 text-2xs text-emerald-400">확정</span>}</span>
+                  {isToday && (
+                    <div className="flex gap-1">
+                      <button type="button" onClick={() => setT(s, 'checkIn', nowHm())} className="text-2xs font-bold px-2 py-1 rounded-input bg-emerald-500/15 text-emerald-300 border border-emerald-500/40">지금 출근</button>
+                      <button type="button" onClick={() => setT(s, 'checkOut', nowHm())} className="text-2xs font-bold px-2 py-1 rounded-input bg-rose-500/15 text-rose-300 border border-rose-500/40">지금 퇴근</button>
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                  <label className="flex items-center gap-1 text-[10px] text-ink-muted">출근<input type="time" value={s.checkIn ?? s.startHm ?? ''} onChange={(e) => setT(s, 'checkIn', e.target.value)} className="input text-xs py-1 w-[6rem]" /></label>
+                  <label className="flex items-center gap-1 text-[10px] text-ink-muted">퇴근<input type="time" value={s.checkOut ?? ''} onChange={(e) => setT(s, 'checkOut', e.target.value)} className="input text-xs py-1 w-[6rem]" /></label>
+                  {s.checkIn && s.checkOut && <span className="text-2xs text-gold-300 tabular-nums font-bold">{hours(s.checkIn, s.checkOut).toFixed(1)}h</span>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
   );
 }

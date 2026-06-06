@@ -15,6 +15,7 @@ import {
   getLedgerPlayers, addLedgerPlayer, updateLedgerPlayer, removeLedgerPlayer,
   subscribeLedger, posHasPassword, getLedgerPresets, type LedgerPreset,
 } from '../../api/ledger';
+import { getStaffSchedule, addStaffShift } from '../../api/staffSchedule';
 import { exportLedgerXls } from '../../lib/ledgerExport';
 import { getSchedules, type Schedule } from '../../api/schedules';
 import { getMyVenueStaff, type User } from '../../api/auth';
@@ -77,6 +78,16 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   useEffect(() => {
     getSchedules().then((all) => setVenueSchedules(all.filter((s) => s.venueId === venueId))).catch(() => {});
     getLedgerPresets(venueId, 50).then(setPresets).catch(() => {});
+  }, [venueId]);
+
+  // 금일(세션 날짜) 출근자 — 세션 딜러 명단 자동 채움용
+  const [scheduledNames, setScheduledNames] = useState<string[]>([]);
+  useEffect(() => { getStaffSchedule(venueId, date, date).then((ss) => setScheduledNames([...new Set(ss.map((s) => s.name))])).catch(() => {}); }, [venueId, date]);
+  // 세션 딜러 명단 → 출근 스케줄에 등록(추가형)
+  const syncDealersToSchedule = useCallback(async (d: string, dealersText?: string) => {
+    if (!dealersText) return;
+    const names = dealersText.split(/[\n,]/).map((x) => x.trim()).filter(Boolean);
+    for (const n of names) { try { await addStaffShift(venueId, d, n); } catch { /* noop */ } }
   }, [venueId]);
   const scheduleTitle = (id?: string | null) => venueSchedules.find((s) => s.id === id)?.title ?? null;
 
@@ -168,11 +179,11 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
 
   // ── 액션 ──────────────────────────────────────────────────────────────────
   const handleOpen = async (s: LedgerSession) => {
-    try { await openLedgerSession(s, s.openedBy ?? null); await reloadSession(); toast.show('장부를 시작했습니다', 'success'); }
+    try { await openLedgerSession(s, s.openedBy ?? null); await syncDealersToSchedule(s.sessionDate, s.dealers); await reloadSession(); toast.show('장부를 시작했습니다', 'success'); }
     catch (e) { toast.show(e instanceof Error ? e.message : '시작 실패', 'error'); }
   };
   const handleEditSave = async (s: LedgerSession) => {
-    try { await saveLedgerSession(s); setSession((prev) => ({ ...prev, ...s })); setEditOpen(false); toast.show('세션 정보를 저장했습니다', 'success'); }
+    try { await saveLedgerSession(s); await syncDealersToSchedule(s.sessionDate, s.dealers); setSession((prev) => ({ ...prev, ...s })); setEditOpen(false); toast.show('세션 정보를 저장했습니다', 'success'); }
     catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
   };
   const handleClose = async (memo: string) => {
@@ -303,7 +314,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
           <SessionForm
             base={{ ...session, ...(prefill ?? {}) }} mode="open" operatorName={operatorName}
             prefilled={!!prefill} schedules={venueSchedules} operatorOptions={operatorOptions}
-            presets={presets}
+            presets={presets} scheduledDealers={scheduledNames}
             onSubmit={handleOpen}
           />
         )}
@@ -572,7 +583,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       {/* 세션 정보 수정 */}
       {editOpen && (
         <Overlay onClose={() => setEditOpen(false)} title="세션 정보 수정">
-          <SessionForm base={session} mode="edit" operatorName={operatorName} schedules={venueSchedules} operatorOptions={operatorOptions} onSubmit={handleEditSave} onCancel={() => setEditOpen(false)} embedded />
+          <SessionForm base={session} mode="edit" operatorName={operatorName} schedules={venueSchedules} operatorOptions={operatorOptions} scheduledDealers={scheduledNames} onSubmit={handleEditSave} onCancel={() => setEditOpen(false)} embedded />
         </Overlay>
       )}
 
@@ -681,10 +692,10 @@ function Metric({ label, value, tone }: { label: string; value: string; tone?: '
 }
 
 // ── 세션 설정 폼 (입장/수정 공용) ─────────────────────────────────────────────
-function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, prefilled, schedules = [], operatorOptions = [], presets = [] }: {
+function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, prefilled, schedules = [], operatorOptions = [], presets = [], scheduledDealers = [] }: {
   base: LedgerSession; mode: 'open' | 'edit'; operatorName: string;
   onSubmit: (s: LedgerSession) => void; onCancel?: () => void; embedded?: boolean; prefilled?: boolean;
-  schedules?: Schedule[]; operatorOptions?: { id: string; label: string }[]; presets?: LedgerPreset[];
+  schedules?: Schedule[]; operatorOptions?: { id: string; label: string }[]; presets?: LedgerPreset[]; scheduledDealers?: string[];
 }) {
   const [title, setTitle]     = useState(base.title ?? '');
   const [cash, setCash]       = useState<number>(base.buyinAmount || 0);
@@ -695,7 +706,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   const [isAddon, setIsAddon] = useState<boolean>(!!base.isAddon);
   const [addonStack, setAddonStack] = useState<number>(base.addonStack || 0);
   const [event, setEvent]     = useState(base.eventMemo ?? '');
-  const [dealers, setDealers] = useState(base.dealers ?? '');
+  const [dealers, setDealers] = useState(base.dealers ?? (scheduledDealers.length ? scheduledDealers.join('\n') : ''));
   const [schedId, setSchedId] = useState<string>(base.scheduleId ?? '');
   const [operIds, setOperIds] = useState<string[]>(
     base.operators && base.operators.length ? base.operators
