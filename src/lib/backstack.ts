@@ -25,18 +25,21 @@ interface Layer {
 const layers: Layer[] = [];
 let seq = 0;
 let initialized = false;
-// 프로그램적으로 history.back() 을 호출할 때, 그로 인해 발생하는 popstate 가
-// 또 다른 닫기를 유발하지 않도록 한 번만 무시하기 위한 플래그.
-let suppress = false;
+// 현재 history 위치의 레이어 토큰(없으면 0 = 앱 루트).
+function currentLayerId(): number {
+  const st = window.history.state as { __layer?: number } | null;
+  return st && typeof st.__layer === 'number' ? st.__layer : 0;
+}
 
 function handlePop() {
-  if (suppress) {
-    suppress = false;
-    return;
-  }
-  const top = layers.pop();
-  if (top) {
-    top.close();
+  // 현재 history 위치(__layer)보다 "위에" 쌓여 있는 레이어를 전부 닫는다.
+  //  - 한 번 뒤로가기 → 최상단 한 겹만 닫힘(다음 레이어 id ≤ 현재이므로 멈춤)
+  //  - 여러 번 빠르게 뒤로가기 → 각 popstate 마다 해당 위치까지 정리
+  // history.state 토큰만 보고 판단하므로 프로그램적 back 과의 경쟁(suppress 플래그)이 없다.
+  const cur = currentLayerId();
+  while (layers.length && layers[layers.length - 1].id > cur) {
+    const top = layers.pop()!;
+    try { top.close(); } catch { /* 닫기 콜백 오류는 무시하고 스택 정리 계속 */ }
   }
   // 스택이 비어 있으면(열린 오버레이 없음) 진짜 앱-레벨 뒤로가기이므로 그대로 둔다.
 }
@@ -67,14 +70,11 @@ export function pushLayer(close: CloseFn): () => void {
     const idx = layers.findIndex((l) => l.id === id);
     if (idx === -1) return; // 이미 Back 으로 제거됨 → 추가 정리 불필요
     layers.splice(idx, 1);
-    // 최상단(자기 자신이 마지막)일 때만 history 항목을 되돌려 균형을 맞춘다.
-    if (idx === layers.length) {
-      suppress = true;
-      try {
-        window.history.back();
-      } catch {
-        suppress = false;
-      }
+    // 현재 history 위치가 바로 이 레이어라면(최상단을 X/ESC/배경클릭으로 닫음)
+    // history 항목을 하나 되돌려 균형을 맞춘다. 레이어를 먼저 제거했으므로,
+    // 그로 인해 발생하는 popstate→handlePop 은 이 레이어를 중복으로 닫지 않는다.
+    if (currentLayerId() === id) {
+      try { window.history.back(); } catch { /* pushState 불가 환경 — 무시 */ }
     }
     // 중간 겹을 순서 어긋나게 닫은 경우: 해당 history 항목은 그대로 두되(다음 Back 때
     // 무해하게 소비됨) 스택에서만 제거한다. 실사용에서 오버레이는 LIFO 로 닫히므로 드묾.
