@@ -110,8 +110,8 @@ export default function VenuePage({
     catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
   };
   const shareVenue = async () => {
-    // 링크 단축: UUID 전체(36자) 대신 앞 8자리 코드만 사용(`?v=`). 충분히 고유.
-    const url = `${location.origin}/?v=${venue.id.slice(0, 8)}`;
+    // 단축 + 카톡 미리보기: /s/<8자리> → 봇은 매장 OG 카드, 사람은 /?v= 앱으로 리다이렉트.
+    const url = `${location.origin}/s/${venue.id.slice(0, 8)}`;
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if ((navigator as any).share) await (navigator as any).share({ title: venue.name, text: `${venue.name} · 홀덤펍`, url });
