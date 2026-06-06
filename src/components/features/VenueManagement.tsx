@@ -18,7 +18,7 @@ import type { Venue, VenueStatus, VenueVerificationStatus } from '../../api/comm
 
 const STATUS_LABEL: Record<VenueStatus, { label: string; cls: string }> = {
   active:    { label: '활성',   cls: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
-  inactive:  { label: '비활성', cls: 'bg-zinc-500/15 text-zinc-400 border-zinc-500/30' },
+  inactive:  { label: '비활성', cls: 'bg-zinc-500/20 text-zinc-300 border-zinc-500/40' },
   suspended: { label: '정지',   cls: 'bg-orange-500/15 text-orange-400 border-orange-500/30' },
   hidden:    { label: '숨김',   cls: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
 };

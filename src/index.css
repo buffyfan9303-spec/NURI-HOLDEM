@@ -18,13 +18,13 @@
     --surface-float: 44 49 64;
 
     --ink-primary:   240 244 255; /* #F0F4FF — 순수 흰색의 쨍함 완화 + 미세한 쿨톤 */
-    --ink-secondary: 139 149 168; /* #8B95A8 — 보조 텍스트 명도 하향 */
-    --ink-muted:     90 97 117;
+    --ink-secondary: 178 187 205; /* #B2BBCD — 보조 텍스트(대비 상향: 어두운 배경에서 또렷하게) */
+    --ink-muted:     140 149 167; /* #8C95A7 — 힌트/라벨(대비 대폭 상향, 기존 #5A6175는 너무 어두웠음) */
     --ink-inverse:   10 12 15;
 
-    --border-subtle:  30 34 48;
-    --border-default: 44 49 64;
-    --border-strong:  64 71 96;
+    --border-subtle:  38 43 58;
+    --border-default: 56 62 82;
+    --border-strong:  78 86 112;
 
     /* 카드 헤어라인/그림자 — 다크에서는 미세한 흰색 링 */
     --card-ring:   rgba(255, 255, 255, 0.04);

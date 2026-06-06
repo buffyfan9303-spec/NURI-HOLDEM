@@ -547,7 +547,7 @@ export default function App() {
       { id: 'market',    label: '중고장터' },
     ];
     if (isOwner || isAdmin) base.push({ id: 'my-posters', label: isAdmin ? '포스터 등록' : '게임 관리' });
-    if (isOwner || isStaff) base.push({ id: 'my-venue',   label: '매장 관리' });
+    if (isOwner || isStaff || isAdmin) base.push({ id: 'my-venue',   label: '매장 관리' });
     if (isAdmin)            base.push({ id: 'admin',       label: '관리자 설정' });
     return base;
   }, [isOwner, isStaff, isAdmin]);

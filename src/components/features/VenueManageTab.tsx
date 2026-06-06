@@ -5,6 +5,7 @@ import type { User, VenueInvite } from '../../api/auth';
 import { getMyVenueStaff, getMyVenueInvites, inviteStaffByEmail, cancelStaffInvite, removeStaff, setStaffTitle } from '../../api/auth';
 import { getVenueRankings, saveVenueRankings, maskRealName } from '../../api/rankings';
 import { canAccessLedger, canManagePos, getLedgerAccessUserIds, grantLedgerAccess, revokeLedgerAccess } from '../../api/ledger';
+import { getAllVenues, type Venue } from '../../api/community';
 import VenueVerificationCard from './VenueVerificationCard';
 import NuriPosLedger from './NuriPosLedger';
 import LedgerStatsPanel, { PosSettingsPanel } from './LedgerStatsPanel';
@@ -18,7 +19,12 @@ type Section = 'ledger' | 'stats' | 'ranking' | 'staff' | 'settings' | 'clock' |
 export default function VenueManageTab({ onAddPoster }: { onAddPoster?: () => void }) {
   const { user } = useAuth();
   const isOwner = user?.role === 'venue_owner';
-  const venueId = user?.venueId;
+  const isAdmin = user?.role === 'admin';
+  const canStaff = isOwner || isAdmin; // 직원 관리·POS 설정 접근
+  const [adminVenues, setAdminVenues] = useState<Venue[]>([]);
+  const [adminVenueId, setAdminVenueId] = useState<string | null>(null);
+  // 운영자는 선택한 매장, 그 외는 본인 소속 매장
+  const venueId: string | null = isAdmin ? adminVenueId : (user?.venueId ?? null);
   const [section, setSection] = useState<Section | null>(null);
   const [ledgerOk, setLedgerOk] = useState(false); // 장부 접근(업주/운영자/권한직원)
   const [manageOk, setManageOk] = useState(false); // 통계·설정(업주/운영자)
@@ -26,20 +32,37 @@ export default function VenueManageTab({ onAddPoster }: { onAddPoster?: () => vo
   const [rankingDraft, setRankingDraft] = useState<{ date: string; names: string[] } | null>(null);
   const [clockSeed, setClockSeed] = useState<string | null>(null); // 장부→클락 연동 날짜
 
-  // 권한 확인 후 첫 화면 결정 — 장부 우선(없으면 통계 → 순위)
+  // 운영자: 전체 매장 목록 로드(선택용)
   useEffect(() => {
-    if (!venueId) return;
+    if (!isAdmin) return;
     let alive = true;
+    getAllVenues()
+      .then((vs) => { if (alive) { setAdminVenues(vs); setAdminVenueId((cur) => cur ?? vs[0]?.id ?? null); } })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [isAdmin]);
+
+  // 권한 확인 후 첫 화면 결정 — 장부 우선(없으면 통계 → 순위). 운영자는 전권이라 조회 생략.
+  useEffect(() => {
+    if (!venueId) { setPermsLoaded(false); return; }
+    let alive = true;
+    if (isAdmin) {
+      setLedgerOk(true); setManageOk(true);
+      setSection((s) => s ?? 'ledger');
+      setPermsLoaded(true);
+      return () => { alive = false; };
+    }
+    setPermsLoaded(false);
     Promise.all([canAccessLedger(venueId), canManagePos(venueId)])
       .then(([l, m]) => {
         if (!alive) return;
         setLedgerOk(l); setManageOk(m);
-        setSection(l ? 'ledger' : (m ? 'stats' : null));
+        setSection((s) => s ?? (l ? 'ledger' : (m ? 'stats' : null)));
       })
       .catch(() => { if (alive) setSection(null); })
       .finally(() => { if (alive) setPermsLoaded(true); });
     return () => { alive = false; };
-  }, [venueId]);
+  }, [venueId, isAdmin]);
 
   // 사용 가능한 섹션(권한): 장부·순위 = 업주 또는 승인된(장부권한) 직원 / 통계·직원관리 = 업주만
   const available: { id: Section; label: string }[] = [];
@@ -48,25 +71,34 @@ export default function VenueManageTab({ onAddPoster }: { onAddPoster?: () => vo
   if (ledgerOk) available.push({ id: 'ranking', label: '순위 입력' });
   if (ledgerOk) available.push({ id: 'clock', label: '클락' });
   if (ledgerOk) available.push({ id: 'attendance', label: '출근 관리' });
-  if (isOwner)  available.push({ id: 'staff', label: '직원 관리' });
-  if (isOwner)  available.push({ id: 'settings', label: 'POS 설정' });
+  if (canStaff) available.push({ id: 'staff', label: '직원 관리' });
+  if (canStaff) available.push({ id: 'settings', label: 'POS 설정' });
 
-  if (!user || !venueId) {
+  if (!user) return null;
+  // 업주·직원: 소속 매장이 없으면 안내 (운영자는 매장 선택기로 진행)
+  if (!isAdmin && !venueId) {
     return (
       <div className="py-16 text-center text-sm text-ink-muted">
         소속된 매장이 없습니다. 매장 승인 또는 직원 승인 후 이용할 수 있습니다.
       </div>
     );
   }
-  if (!permsLoaded) {
-    return <p className="py-16 text-center text-sm text-ink-muted">불러오는 중…</p>;
-  }
-  if (section === null) {
-    return <p className="py-16 text-center text-sm text-ink-muted">이 매장에서 사용 가능한 메뉴가 없습니다.<br />업주에게 장부 권한을 요청하세요.</p>;
-  }
 
   return (
     <div className="space-y-3">
+      {/* 운영자: 전 매장 접근 — 관리할 매장 선택 */}
+      {isAdmin && (
+        <div className="rounded-card border border-gold-400/40 bg-gold-300/[0.06] p-2.5 space-y-1.5">
+          <p className="text-2xs font-bold text-gold-300">운영자 전체 접근 · 관리할 매장 선택</p>
+          <select value={venueId ?? ''} onChange={(e) => setAdminVenueId(e.target.value || null)} className="input text-sm">
+            {adminVenues.length === 0 && <option value="">불러오는 중…</option>}
+            {adminVenues.map((v) => (
+              <option key={v.id} value={v.id}>{v.name} · {v.region}{v.approved ? '' : ' (미승인)'}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {isOwner && onAddPoster && (
         <button type="button" onClick={onAddPoster}
           className="btn-primary w-full flex items-center justify-center gap-1.5 text-sm">
@@ -75,25 +107,36 @@ export default function VenueManageTab({ onAddPoster }: { onAddPoster?: () => vo
         </button>
       )}
       {isOwner && <VenueVerificationCard />}
-      {available.length > 1 && (
-        <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5 overflow-x-auto scrollbar-none">
-          {available.map((a) => (
-            <TabBtn key={a.id} active={section === a.id} onClick={() => setSection(a.id)}>{a.label}</TabBtn>
-          ))}
-        </div>
-      )}
 
-      {section === 'ledger'  && ledgerOk && (
-        <NuriPosLedger venueId={venueId} canManage={manageOk}
-          onMakeRankingDraft={(d, names) => { setRankingDraft({ date: d, names }); setSection('ranking'); }}
-          onOpenClock={(d) => { setClockSeed(d); setSection('clock'); }} />
+      {!venueId ? (
+        <p className="py-16 text-center text-sm text-ink-muted">관리할 매장을 선택하세요.</p>
+      ) : !permsLoaded ? (
+        <p className="py-16 text-center text-sm text-ink-muted">불러오는 중…</p>
+      ) : section === null ? (
+        <p className="py-16 text-center text-sm text-ink-muted">이 매장에서 사용 가능한 메뉴가 없습니다.<br />업주에게 장부 권한을 요청하세요.</p>
+      ) : (
+        <>
+          {available.length > 1 && (
+            <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5 overflow-x-auto scrollbar-none">
+              {available.map((a) => (
+                <TabBtn key={a.id} active={section === a.id} onClick={() => setSection(a.id)}>{a.label}</TabBtn>
+              ))}
+            </div>
+          )}
+
+          {section === 'ledger'  && ledgerOk && (
+            <NuriPosLedger venueId={venueId} canManage={manageOk}
+              onMakeRankingDraft={(d, names) => { setRankingDraft({ date: d, names }); setSection('ranking'); }}
+              onOpenClock={(d) => { setClockSeed(d); setSection('clock'); }} />
+          )}
+          {section === 'stats'    && manageOk && <LedgerStatsPanel venueId={venueId} />}
+          {section === 'ranking'  && <RankingEditor venueId={venueId} canEdit={isAdmin || user.approved === true} draft={rankingDraft} />}
+          {section === 'clock'    && ledgerOk && <TournamentClock venueId={venueId} canManage={ledgerOk} seedSessionDate={clockSeed} />}
+          {section === 'attendance' && ledgerOk && <StaffSelfAttendance venueId={venueId} />}
+          {section === 'staff'    && canStaff && <StaffHub venueId={venueId} />}
+          {section === 'settings' && canStaff && <PosSettingsPanel venueId={venueId} />}
+        </>
       )}
-      {section === 'stats'    && manageOk && <LedgerStatsPanel venueId={venueId} />}
-      {section === 'ranking'  && <RankingEditor venueId={venueId} canEdit={user.approved === true} draft={rankingDraft} />}
-      {section === 'clock'    && ledgerOk && <TournamentClock venueId={venueId} canManage={ledgerOk} seedSessionDate={clockSeed} />}
-      {section === 'attendance' && ledgerOk && <StaffSelfAttendance venueId={venueId} />}
-      {section === 'staff'    && isOwner && <StaffHub venueId={venueId} />}
-      {section === 'settings' && isOwner && <PosSettingsPanel venueId={venueId} />}
     </div>
   );
 }

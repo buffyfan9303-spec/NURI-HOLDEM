@@ -33,7 +33,7 @@ const STATUS_LABEL: Record<UserStatus, { label: string; cls: string }> = {
   pending:   { label: '승인대기',  cls: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
   suspended: { label: '정지중',   cls: 'bg-orange-500/15 text-orange-400 border-orange-500/30' },
   banned:    { label: '영구정지', cls: 'bg-danger/15 text-danger-light border-danger/30' },
-  withdrawn: { label: '강제탈퇴', cls: 'bg-zinc-500/15 text-zinc-400 border-zinc-500/30' },
+  withdrawn: { label: '강제탈퇴', cls: 'bg-zinc-500/20 text-zinc-300 border-zinc-500/40' },
 };
 
 function relativeTime(iso: string): string {
