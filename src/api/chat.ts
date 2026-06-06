@@ -99,6 +99,29 @@ export interface InboxThread {
   listingStatus: string;
   lastContent: string;
   lastAt: string;
+  unread: number;                 // 내가 아직 안 읽은(상대가 보낸) 메시지 수
+}
+
+export interface ThreadRead { readerId: string; lastReadAt: string }
+
+/** 이 스레드를 내가 읽음 처리(마지막 읽은 시각 갱신) */
+export async function markThreadRead(listingId: string, buyerId: string): Promise<void> {
+  if (IS_MOCK) return;
+  const me = await getMyId();
+  if (!me) return;
+  await supabase.from('listing_message_reads').upsert(
+    { listing_id: listingId, buyer_id: buyerId, reader_id: me, last_read_at: new Date().toISOString() },
+    { onConflict: 'listing_id,buyer_id,reader_id' },
+  );
+}
+
+/** 스레드 참여자들의 마지막 읽은 시각(상대 '읽음' 표시용) */
+export async function getThreadReads(listingId: string, buyerId: string): Promise<ThreadRead[]> {
+  if (IS_MOCK) return [];
+  const { data } = await supabase.from('listing_message_reads')
+    .select('reader_id, last_read_at').eq('listing_id', listingId).eq('buyer_id', buyerId);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({ readerId: r.reader_id, lastReadAt: r.last_read_at }));
 }
 
 /** 내가 참여한 모든 대화(구매자=나 OR 판매자=나) — listing+buyer 단위로 묶어 최신순 */
@@ -109,11 +132,11 @@ export async function getMyChatThreads(): Promise<InboxThread[]> {
   // RLS(lm_select)로 내 대화만 반환됨
   const { data, error } = await supabase
     .from('listing_messages')
-    .select('listing_id, buyer_id, content, created_at')
+    .select('listing_id, buyer_id, sender_id, content, created_at')
     .order('created_at', { ascending: false })
     .limit(500);
   if (error) throw error;
-  const rows = (data ?? []) as { listing_id: string; buyer_id: string; content: string; created_at: string }[];
+  const rows = (data ?? []) as { listing_id: string; buyer_id: string; sender_id: string; content: string; created_at: string }[];
   const map = new Map<string, { listingId: string; buyerId: string; lastContent: string; lastAt: string }>();
   for (const r of rows) {
     const key = `${r.listing_id}|${r.buyer_id}`;
@@ -121,6 +144,19 @@ export async function getMyChatThreads(): Promise<InboxThread[]> {
   }
   const convs = [...map.values()];
   if (!convs.length) return [];
+
+  // 내 읽음 시각 → 스레드별 안읽음(상대가 내 마지막 읽음 이후 보낸) 수
+  const { data: reads } = await supabase.from('listing_message_reads')
+    .select('listing_id, buyer_id, last_read_at').eq('reader_id', me);
+  const readAt = new Map<string, number>();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (reads ?? []).forEach((r: any) => readAt.set(`${r.listing_id}|${r.buyer_id}`, new Date(r.last_read_at).getTime()));
+  const unreadByKey = new Map<string, number>();
+  for (const r of rows) {
+    if (r.sender_id === me) continue;
+    const key = `${r.listing_id}|${r.buyer_id}`;
+    if (new Date(r.created_at).getTime() > (readAt.get(key) ?? 0)) unreadByKey.set(key, (unreadByKey.get(key) ?? 0) + 1);
+  }
 
   const listingIds = [...new Set(convs.map((c) => c.listingId))];
   const buyerIds = [...new Set(convs.map((c) => c.buyerId))];
@@ -146,6 +182,7 @@ export async function getMyChatThreads(): Promise<InboxThread[]> {
       counterpartyName: name, counterpartyColor: color,
       listingTitle: l.title, listingImage: (l.images && l.images[0]) || null, listingPrice: l.price, listingStatus: l.status,
       lastContent: c.lastContent, lastAt: c.lastAt,
+      unread: unreadByKey.get(`${c.listingId}|${c.buyerId}`) ?? 0,
     });
   }
   out.sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime());

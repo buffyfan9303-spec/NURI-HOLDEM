@@ -78,7 +78,8 @@ export function MessagesModal({ open, onClose }: { open: boolean; onClose: () =>
             </div>
           </div>
           <ChatPane listingId={active.listingId} buyerId={active.buyerId} meId={user.id}
-            emptyHint={active.role === 'seller' ? '구매자에게 답장을 보내보세요' : '판매자에게 메시지를 보내보세요'} />
+            emptyHint={active.role === 'seller' ? '구매자에게 답장을 보내보세요' : '판매자에게 메시지를 보내보세요'}
+            onRead={() => getMyChatThreads().then(setThreads).catch(() => {})} />
         </div>
       ) : (
         <div className="max-h-[62vh] min-h-[200px] overflow-y-auto p-2">
@@ -103,9 +104,12 @@ export function MessagesModal({ open, onClose }: { open: boolean; onClose: () =>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-sm font-semibold text-ink-primary truncate">{t.counterpartyName}</span>
-                        <span className="text-2xs text-ink-muted shrink-0">{relativeTime(t.lastAt)}</span>
+                        <span className="flex items-center gap-1 shrink-0">
+                          {t.unread > 0 && <span className="inline-flex items-center justify-center min-w-[1.05rem] h-[1.05rem] px-1 rounded-full bg-gold-300 text-ink-inverse text-[10px] font-bold tabular-nums">{t.unread}</span>}
+                          <span className="text-2xs text-ink-muted">{relativeTime(t.lastAt)}</span>
+                        </span>
                       </div>
-                      <p className="text-xs text-ink-secondary truncate mt-0.5">{t.lastContent}</p>
+                      <p className={['text-xs truncate mt-0.5', t.unread > 0 ? 'text-ink-primary font-semibold' : 'text-ink-secondary'].join(' ')}>{t.lastContent}</p>
                       <p className="text-2xs text-ink-muted truncate mt-0.5">📦 {t.listingTitle}</p>
                     </div>
                     <Thumb src={t.listingImage} size="w-10 h-10" />

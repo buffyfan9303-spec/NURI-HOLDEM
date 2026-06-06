@@ -80,7 +80,7 @@ export default function MarketplaceTab({
   // 메시지함 대화 수(배지)
   useEffect(() => {
     if (!user) { setMsgCount(0); return; }
-    getMyChatThreads().then((t) => setMsgCount(t.length)).catch(() => {});
+    getMyChatThreads().then((t) => setMsgCount(t.reduce((s, x) => s + (x.unread || 0), 0))).catch(() => {});
   }, [user, msgOpen]);
 
   const visible = useMemo(() => {

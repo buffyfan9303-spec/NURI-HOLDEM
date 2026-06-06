@@ -1,20 +1,39 @@
 // src/components/features/chat/ChatPane.tsx
 // 1:1 대화 패널(메시지 목록 + 입력) — 중고장터 채팅/메시지함 공용.
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useToast } from '../../atoms/Toast';
 import type { ChatMessage } from '../../../api/chat';
-import { getThreadMessages, sendChatMessage, subscribeThread } from '../../../api/chat';
+import { getThreadMessages, sendChatMessage, subscribeThread, markThreadRead, getThreadReads } from '../../../api/chat';
 import { relativeTime } from '../MarketplaceTab';
 
-export default function ChatPane({ listingId, buyerId, meId, emptyHint }: {
-  listingId: string; buyerId: string; meId: string; emptyHint?: string;
+export default function ChatPane({ listingId, buyerId, meId, emptyHint, onRead }: {
+  listingId: string; buyerId: string; meId: string; emptyHint?: string; onRead?: () => void;
 }) {
   const toast = useToast();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
+  const [coReadAt, setCoReadAt] = useState(0); // 상대가 마지막으로 읽은 시각(ms)
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // 상대 '읽음' 시각 새로고침
+  const refreshReads = useCallback(() => {
+    if (!buyerId) return;
+    getThreadReads(listingId, buyerId).then((rs) => {
+      const co = rs.find((r) => r.readerId !== meId);
+      setCoReadAt(co ? new Date(co.lastReadAt).getTime() : 0);
+    }).catch(() => {});
+  }, [listingId, buyerId, meId]);
+
+  // 이 스레드를 내가 읽음 처리(열람 시 + 새 메시지 도착 시) + 상대 읽음 폴링
+  useEffect(() => {
+    if (!buyerId) return;
+    markThreadRead(listingId, buyerId).then(() => onRead?.()).catch(() => {});
+    refreshReads();
+    const id = setInterval(refreshReads, 5000);
+    return () => clearInterval(id);
+  }, [listingId, buyerId, refreshReads, onRead]);
 
   useEffect(() => {
     if (!buyerId) { setMessages([]); return; }
@@ -26,9 +45,10 @@ export default function ChatPane({ listingId, buyerId, meId, emptyHint }: {
       .finally(() => { if (active) setLoading(false); });
     const unsub = subscribeThread(listingId, buyerId, (m) => {
       setMessages((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]));
+      if (m.senderId !== meId) markThreadRead(listingId, buyerId).catch(() => {}); // 보는 중이면 읽음
     });
     return () => { active = false; unsub(); };
-  }, [listingId, buyerId]);
+  }, [listingId, buyerId, meId]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -42,11 +62,14 @@ export default function ChatPane({ listingId, buyerId, meId, emptyHint }: {
     try {
       const m = await sendChatMessage(listingId, buyerId, text);
       setMessages((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]));
+      refreshReads();
     } catch (err) {
       setDraft(text);
       toast.show(err instanceof Error ? err.message : '전송에 실패했습니다', 'error');
     } finally { setSending(false); }
   };
+
+  const lastMineIdx = messages.reduce((acc, m, i) => (m.senderId === meId ? i : acc), -1);
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
@@ -59,13 +82,15 @@ export default function ChatPane({ listingId, buyerId, meId, emptyHint }: {
           const mine = m.senderId === meId;
           const prev = messages[i - 1];
           const grouped = prev && prev.senderId === m.senderId && (new Date(m.createdAt).getTime() - new Date(prev.createdAt).getTime() < 60_000);
+          const readByCo = mine && i === lastMineIdx && coReadAt >= new Date(m.createdAt).getTime();
           return (
-            <div key={m.id} className={['flex', mine ? 'justify-end' : 'justify-start', grouped ? 'mt-0' : 'mt-1.5'].join(' ')}>
+            <div key={m.id} className={['flex flex-col', mine ? 'items-end' : 'items-start', grouped ? 'mt-0' : 'mt-1.5'].join(' ')}>
               <div className={['group max-w-[78%] px-3 py-2 text-sm leading-snug whitespace-pre-wrap break-words shadow-sm',
                 mine ? 'bg-gold-300 text-ink-inverse rounded-2xl rounded-br-md' : 'bg-surface-high text-ink-primary rounded-2xl rounded-bl-md'].join(' ')}>
                 {m.content}
                 <span className={['ml-2 align-bottom text-[9px] tabular-nums', mine ? 'text-ink-inverse/60' : 'text-ink-muted'].join(' ')}>{relativeTime(m.createdAt)}</span>
               </div>
+              {readByCo && <span className="text-[9px] text-gold-300/80 mt-0.5 mr-1">읽음</span>}
             </div>
           );
         })}

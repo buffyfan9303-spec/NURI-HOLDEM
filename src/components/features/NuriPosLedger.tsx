@@ -75,7 +75,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
 
   useEffect(() => {
     getSchedules().then((all) => setVenueSchedules(all.filter((s) => s.venueId === venueId))).catch(() => {});
-    getLedgerPresets(venueId).then(setPresets).catch(() => {});
+    getLedgerPresets(venueId, 50).then(setPresets).catch(() => {});
   }, [venueId]);
   const scheduleTitle = (id?: string | null) => venueSchedules.find((s) => s.id === id)?.title ?? null;
 
@@ -386,8 +386,9 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       {rows.length === 0 ? (
         <p className="py-10 text-center text-xs text-ink-muted">{query ? '검색 결과가 없습니다.' : '유저를 추가하면 바인을 입력할 수 있습니다.'}</p>
       ) : (
-        <div className="overflow-x-auto rounded-card border border-border-subtle">
-          <table className="border-separate border-spacing-0 text-center w-full">
+        <div className="overflow-x-auto [-webkit-overflow-scrolling:touch] rounded-card border border-border-subtle">
+          {/* w-max: 칸을 압축하지 않고 고정폭 유지 → 모바일에서 가로 스크롤. min-w-full: 데스크톱은 꽉 채움 */}
+          <table className="border-separate border-spacing-0 text-center w-max min-w-full">
             <thead>
               <tr className="bg-surface-high">
                 <th className="sticky left-0 z-20 bg-surface-high w-9 px-1 py-1.5 text-[10px] text-ink-muted border-b border-border-subtle">No</th>
@@ -685,6 +686,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   const [operId, setOperId]   = useState<string>(base.openedBy ?? operatorOptions[0]?.id ?? '');
   const [discs, setDiscs]     = useState<DiscountPreset[]>(base.discounts ?? []);
   const [startHM, setStartHM] = useState<string>(base.tournamentStart ? new Date(base.tournamentStart).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '');
+  const [presetOpen, setPresetOpen] = useState(false); // 프리셋 리스트 펼침
 
   const setDisc = (i: number, patch: Partial<DiscountPreset>) =>
     setDiscs((arr) => arr.map((d, idx) => (idx === i ? { ...d, ...patch } : d)));
@@ -727,16 +729,24 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
 
       {mode === 'open' && presets.length > 0 && (
         <Field label="프리셋 게임 · 클릭하면 아래 내용 자동입력(수정 가능)">
-          <div className="flex flex-wrap gap-1.5">
-            {presets.map((p, i) => (
-              <button key={i} type="button" onClick={() => applyPreset(p)}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-badge bg-surface-high border border-border-default text-2xs font-semibold text-ink-secondary hover:text-gold-300 hover:border-gold-400/50 transition-colors">
-                {p.title}
-                <span className="text-ink-muted font-normal">{wonToMan(p.buyinAmount)}만</span>
-              </button>
-            ))}
-          </div>
-          <p className="text-[10px] text-ink-muted mt-1">담당 직원은 프리셋과 무관하게 아래에서 선택하세요.</p>
+          <button type="button" onClick={() => setPresetOpen((v) => !v)}
+            className="w-full flex items-center justify-between px-3 py-2 rounded-input border border-border-default bg-surface-high text-sm font-semibold text-ink-secondary hover:text-gold-300 transition-colors">
+            <span>{presetOpen ? '프리셋 닫기' : `프리셋에서 게임 불러오기 (${presets.length})`}</span>
+            <span className="text-2xs text-gold-300">{presetOpen ? '▲' : '▼'}</span>
+          </button>
+          {presetOpen && (
+            <div className="mt-1 max-h-[11.5rem] overflow-y-auto rounded-input border border-border-subtle bg-surface-base divide-y divide-border-subtle">
+              {presets.map((p, i) => (
+                <button key={i} type="button" onClick={() => { applyPreset(p); setPresetOpen(false); }}
+                  className="w-full flex items-center gap-2 px-2.5 py-2 text-left hover:bg-surface-high transition-colors">
+                  {i < 3 && <span className="shrink-0 text-[9px] font-bold text-gold-300 bg-gold-300/15 px-1 py-0.5 rounded-badge">최근</span>}
+                  <span className="flex-1 min-w-0 text-xs font-semibold text-ink-primary truncate">{p.title}</span>
+                  <span className="shrink-0 text-2xs text-ink-muted tabular-nums">{wonToMan(p.buyinAmount)}만</span>
+                </button>
+              ))}
+            </div>
+          )}
+          <p className="text-[10px] text-ink-muted mt-1">최근 게임 3개가 상단에 표시됩니다. 담당 직원은 프리셋과 무관하게 아래에서 선택하세요.</p>
         </Field>
       )}
 

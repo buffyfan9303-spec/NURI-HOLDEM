@@ -7,7 +7,7 @@ import type { Venue, Comment } from '../../api/community';
 import type { Schedule } from '../../api/schedules';
 import type { MarketplaceNotice } from '../../api/marketplace';
 import { useAuth } from '../../contexts/AuthContext';
-import { followVenue, unfollowVenue, getMyFollowedVenueIds, updateVenueAddress } from '../../api/community';
+import { followVenue, unfollowVenue, getMyFollowedVenueIds, updateVenueAddress, updateVenueKakao } from '../../api/community';
 import { getVenueNotices, createVenueNotice, deleteVenueNotice, type VenueNotice } from '../../api/community';
 import { getVenueRankings, getVenueRankingTotals, maskRealName, type RankingEntry, type RankingTotal } from '../../api/rankings';
 import { uploadVenueImages } from '../../lib/storage';
@@ -57,7 +57,10 @@ export default function VenuePage({
 }: VenuePageProps) {
   const [tab, setTab] = useState<Tab>('about');
   const { user, isApprovedOwner } = useAuth();
+  const toast = useToast();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [kakaoOverride, setKakaoOverride] = useState<string | null>(null);
+  useEffect(() => { setKakaoOverride(null); }, [venue?.id]);
 
   // 브라우저 뒤로가기 지원
   useEffect(() => {
@@ -109,6 +112,13 @@ export default function VenuePage({
 
   const isMyVenue = isApprovedOwner && user?.venueId === venue.id;
   const isRoti    = venue.id === 'v_roti';
+  const kakao     = (kakaoOverride ?? venue.kakaoUrl ?? '').trim();
+  const editKakao = async () => {
+    const url = window.prompt('카카오톡 오픈채팅/단톡방 링크 (비우면 삭제)', kakao);
+    if (url === null) return;
+    try { await updateVenueKakao(venue.id, url); setKakaoOverride(url.trim()); toast.show(url.trim() ? '카카오톡 링크를 저장했습니다' : '링크를 삭제했습니다', 'success'); }
+    catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
+  };
 
   return (
     <div
@@ -167,6 +177,19 @@ export default function VenuePage({
               </div>
               <h2 className="text-xl font-bold text-ink-primary">{venue.name}</h2>
               <p className="text-xs text-ink-muted mt-1">{venue.address}</p>
+              {(kakao || isMyVenue) && (
+                <div className="flex items-center gap-2 mt-2 flex-wrap">
+                  {kakao && (
+                    <a href={kakao} target="_blank" rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input bg-[#FEE500] text-[#3A1D1D] text-xs font-bold hover:brightness-95 transition-all active:scale-95">
+                      <span aria-hidden>💬</span> 카카오톡 오픈채팅
+                    </a>
+                  )}
+                  {isMyVenue && (
+                    <button type="button" onClick={editKakao} className="text-2xs text-ink-muted hover:text-gold-300">{kakao ? '카톡링크 수정' : '+ 카톡링크 등록'}</button>
+                  )}
+                </div>
+              )}
             </div>
             <FollowButton venueId={venue.id} followerCount={venue.followerCount} />
           </div>

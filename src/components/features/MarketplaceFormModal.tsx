@@ -202,12 +202,12 @@ export default function MarketplaceFormModal({ open, onClose, onSubmit }: Market
               {REGION_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
             <button type="button" onClick={() => setShipping((v) => !v)}
-              className={['px-3 rounded-input text-xs font-semibold border transition-colors',
+              className={['px-3 rounded-input text-xs font-semibold border transition-colors whitespace-nowrap',
                 shipping ? 'bg-gold-300/20 border-gold-300 text-gold-300' : 'bg-surface-high border-border-default text-ink-muted'].join(' ')}>
-              택배
+              비대면(택배)
             </button>
             <button type="button" onClick={() => setPickup((v) => !v)}
-              className={['px-3 rounded-input text-xs font-semibold border transition-colors',
+              className={['px-3 rounded-input text-xs font-semibold border transition-colors whitespace-nowrap',
                 pickup ? 'bg-gold-300/20 border-gold-300 text-gold-300' : 'bg-surface-high border-border-default text-ink-muted'].join(' ')}>
               직거래
             </button>

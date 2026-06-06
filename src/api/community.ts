@@ -8,6 +8,7 @@ export type VenueStatus = 'active' | 'inactive' | 'suspended' | 'hidden';
 export interface Venue {
   id: string; name: string; region: string; address: string;
   description?: string; imageUrl?: string; themeColor?: string;
+  kakaoUrl?: string; // 카카오톡 오픈채팅/단톡방 링크
   ownerId?: string; approved: boolean; contactPhone?: string;
   businessHours?: string; followerCount?: number; isPaidAd?: boolean;
   displayOrder?: number; // 관리자 노출 순서 (작을수록 앞)
@@ -49,6 +50,7 @@ export type ReactionType = 'badbeat' | 'goodrun';
 const rowToVenue = (r: any): Venue => ({
   id: r.id, name: r.name, region: r.region, address: r.address,
   description: r.description, imageUrl: r.image_url, themeColor: r.theme_color,
+  kakaoUrl: r.kakao_url ?? undefined,
   ownerId: r.owner_id, approved: r.approved, contactPhone: r.contact_phone,
   businessHours: r.business_hours, followerCount: r.follower_count, isPaidAd: r.is_paid_ad,
   displayOrder: r.display_order,
@@ -113,6 +115,14 @@ export async function reorderVenues(payload: { items: { id: string; displayOrder
 export async function updateVenueDescription(venueId: string, description: string): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.from('venues').update({ description, updated_at: new Date().toISOString() }).eq('id', venueId);
+  if (error) throw error;
+}
+
+/** 카카오톡 오픈채팅/단톡방 링크 설정(업주) — RLS로 본인 매장만 허용 */
+export async function updateVenueKakao(venueId: string, kakaoUrl: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.from('venues')
+    .update({ kakao_url: kakaoUrl.trim() || null, updated_at: new Date().toISOString() }).eq('id', venueId);
   if (error) throw error;
 }
 
