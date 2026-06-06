@@ -64,6 +64,10 @@
     /* 콘텐츠 높이에 따라 세로 스크롤바가 생겼다 사라지며 가로폭이 흔들리는 현상 방지 */
     scrollbar-gutter: stable;
     overflow-y: scroll;
+    /* 어떤 요소가 화면 밖으로 "튀어나와" 가로 스크롤이 생기는 것을 문서 레벨에서 차단.
+       (내부 가로 스크롤 영역은 각자 overflow-x-auto 라 영향 없음. html 은 이미
+        overflow-y:scroll 이라 overflow-x 명시가 sticky 헤더/탭을 깨지 않는다.) */
+    overflow-x: hidden;
   }
 
   body {
@@ -174,4 +178,14 @@
   0%   { opacity: 0; transform: translateY(4px) scale(0.8); }
   20%  { opacity: 1; transform: translateY(0) scale(1.05); }
   100% { opacity: 0; transform: translateY(-24px) scale(1); }
+}
+
+/* 모션 민감 사용자 배려 — OS '동작 줄이기' 설정 시 애니메이션/전환을 즉시화해 멀미·끊김 방지 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
