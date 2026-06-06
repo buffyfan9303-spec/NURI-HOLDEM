@@ -441,6 +441,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                             : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300';
                           const topLabel = c.isSplit ? '분납' : `${METHOD_SHORT[c.paymentMethod]}${c.isUnpaid ? '·미' : ''}`;
                           const et = earlyTypeOf(c, session);
+                          const frac = buyinFinance(c, session).entry; // 할인 반영 엔트리(예: 10만 게임 5만 할인 = 0.5)
                           return (
                             <td key={e} className={cls}>
                               <button type="button" disabled={closed}
@@ -449,6 +450,8 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                                 <span className="text-[11px] font-extrabold">{topLabel}{(c.discountIndex > 0 || (c.isSplit && c.discountLevel > 0)) ? '*' : ''}</span>
                                 {et !== 'none'
                                   ? <span className="text-[7px] font-bold text-amber-300 leading-none">{et === 'double' ? '더블얼리' : '얼리'}</span>
+                                  : frac < 0.999
+                                  ? <span className="text-[8px] font-bold text-gold-200 leading-none mt-0.5">{frac.toLocaleString(undefined, { maximumFractionDigits: 2 })}엔트리</span>
                                   : <span className="text-[8px] opacity-80 mt-0.5">{hhmm(c.buyinAt)}</span>}
                               </button>
                             </td>
@@ -785,7 +788,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
           {discs.length < 5 && (
             <button type="button" onClick={addDisc} className="w-full py-1.5 rounded-input border border-dashed border-border-default text-2xs text-ink-secondary hover:text-gold-300 hover:border-gold-400/50 transition-colors">+ 할인 추가</button>
           )}
-          <p className="text-[10px] text-ink-muted">예) 1레벨 2만원 할인 → 10만 게임에서 8만 받으면 엔트리 0.8개로 계산됩니다.</p>
+          <p className="text-[10px] text-ink-muted">할인액(만원)만큼 차감해 엔트리를 비례 계산합니다. 예) 10만 게임에 5만 할인 = <b className="text-gold-300">0.5 엔트리</b>, 2만 할인 = 0.8 엔트리.</p>
         </div>
       </Field>
 
@@ -922,16 +925,28 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
             <>
               {/* 할인 선택 (세션 프리셋) */}
               {discs.length > 0 && (
-                <div className="flex items-center gap-1.5 flex-wrap pb-2 mb-1 border-b border-border-subtle">
-                  <span className="text-xs text-ink-muted">할인:</span>
-                  <button type="button" onClick={() => setDiscIdx(0)}
-                    className={['text-xs font-bold px-2.5 py-1.5 rounded-badge border', discIdx === 0 ? 'bg-surface-float text-ink-primary border-border-strong' : 'text-ink-muted border-border-default'].join(' ')}>없음</button>
-                  {discs.map((d, i) => (
-                    <button key={i} type="button" onClick={() => setDiscIdx(i + 1)}
-                      className={['text-xs font-bold px-2.5 py-1.5 rounded-badge border', discIdx === i + 1 ? 'bg-gold-300/15 text-gold-300 border-gold-400/40' : 'text-ink-muted border-border-default'].join(' ')}>
-                      {d.label || `할인${i + 1}`} ({wonToMan(d.amount)}만)
-                    </button>
-                  ))}
+                <div className="pb-2 mb-1 border-b border-border-subtle space-y-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-xs text-ink-muted">할인:</span>
+                    <button type="button" onClick={() => setDiscIdx(0)}
+                      className={['text-xs font-bold px-2.5 py-1.5 rounded-badge border', discIdx === 0 ? 'bg-surface-float text-ink-primary border-border-strong' : 'text-ink-muted border-border-default'].join(' ')}>없음</button>
+                    {discs.map((d, i) => (
+                      <button key={i} type="button" onClick={() => setDiscIdx(i + 1)}
+                        className={['text-xs font-bold px-2.5 py-1.5 rounded-badge border', discIdx === i + 1 ? 'bg-gold-300/15 text-gold-300 border-gold-400/40' : 'text-ink-muted border-border-default'].join(' ')}>
+                        {d.label || `할인${i + 1}`} ({wonToMan(d.amount)}만)
+                      </button>
+                    ))}
+                  </div>
+                  {discIdx > 0 && session.buyinAmount > 0 && (() => {
+                    const da = discs[discIdx - 1]?.amount ?? 0;
+                    const ent = Math.max(0, session.buyinAmount - da) / session.buyinAmount;
+                    return (
+                      <p className="text-2xs text-gold-300">
+                        할인 적용 → 이 바인 <b className="text-sm">{ent.toLocaleString(undefined, { maximumFractionDigits: 2 })} 엔트리</b>
+                        <span className="text-ink-muted"> = ({wonToMan(session.buyinAmount)}만 − {wonToMan(da)}만) / {wonToMan(session.buyinAmount)}만</span>
+                      </p>
+                    );
+                  })()}
                 </div>
               )}
 
