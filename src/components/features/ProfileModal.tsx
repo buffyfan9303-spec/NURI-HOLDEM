@@ -20,7 +20,7 @@ const ROLE_LABELS: Record<string, string> = {
   user:        '일반 회원',
   venue_owner: '매장 업주',
   venue_staff: '가게 직원',
-  admin:       '관리자',
+  admin:       '운영자',
 };
 
 const COLOR_PALETTE = [
@@ -116,7 +116,7 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
   // 2) 이메일 코드 + 새 비밀번호로 변경 확정
   const handleConfirmChange = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!IS_MOCK && code.trim().length < 6) return toast.show('이메일로 받은 이메일 인증번호를 입력해 주세요', 'error');
+    if (!IS_MOCK && code.trim().length < 6) return toast.show('이메일로 받은 인증번호를 입력해 주세요', 'error');
     setChangingPw(true);
     try {
       await changeMyPasswordWithCode(newPw, code.trim());

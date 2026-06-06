@@ -66,7 +66,7 @@ function PendingApprovalView() {
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#FBBF24" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
       </div>
       <div>
-        <h2 className="text-base font-semibold text-amber-400">관리자 승인 대기 중</h2>
+        <h2 className="text-base font-semibold text-amber-400">운영자 승인 대기 중</h2>
         <p className="text-xs text-ink-muted mt-1 leading-relaxed">매장 업주 가입 신청이 접수되었습니다.<br />영업일 기준 1~2일 내 승인 결과를 알려드립니다.</p>
       </div>
       <div className="text-2xs text-ink-muted px-4 py-2 rounded-input bg-surface-high">승인 후 게임 업로드 권한이 활성화됩니다</div>

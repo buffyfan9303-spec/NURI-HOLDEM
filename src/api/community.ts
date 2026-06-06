@@ -563,7 +563,7 @@ export async function createDealerApplication(
   const name = input.name.trim();
   const phone = input.phone.trim();
   if (!name) throw new Error('이름을 입력해 주세요');
-  if (!phone) throw new Error('연락처(번호)는 필수입니다');
+  if (!phone) throw new Error('연락처는 필수입니다');
   const { error } = await supabase.from('dealer_applications').insert({
     post_id: postId,
     applicant_id: user.id,

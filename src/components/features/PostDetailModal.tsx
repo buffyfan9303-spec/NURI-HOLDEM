@@ -172,7 +172,7 @@ export default function PostDetailModal({
           </div>
         </div>
 
-        {/* ── 좋아요 / 싫어요 (등급 점수에는 반영되지 않음) ─────────── */}
+        {/* ── 추천 / 비추천 (등급 점수에는 반영되지 않음) ─────────── */}
         <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
@@ -184,7 +184,7 @@ export default function PostDetailModal({
                 : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary',
             ].join(' ')}
           >
-            좋아요 <span className="tabular-nums">{gr}</span>
+            추천 <span className="tabular-nums">{gr}</span>
           </button>
           <button
             type="button"
@@ -196,7 +196,7 @@ export default function PostDetailModal({
                 : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary',
             ].join(' ')}
           >
-            싫어요 <span className="tabular-nums">{bb}</span>
+            비추천 <span className="tabular-nums">{bb}</span>
           </button>
         </div>
 
@@ -208,7 +208,7 @@ export default function PostDetailModal({
               type="text"
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              placeholder="댓글을 입력하세요..."
+              placeholder="댓글을 입력하세요…"
               className="input flex-1 text-sm"
             />
             <button type="submit" className="btn-primary text-xs" disabled={!draft.trim()}>

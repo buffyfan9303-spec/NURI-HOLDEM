@@ -513,7 +513,7 @@ function SignupOwnerForm({ onDone }: { onDone: () => void }) {
         agreedToMarketing:    c.marketing,
         venueName, region, address, phone, businessNumber: bizNum,
       });
-      toast.show('업주 가입 신청 완료. 이메일 인증 후 로그인하면 관리자 승인을 거쳐 포스터 업로드가 활성화됩니다.', 'success');
+      toast.show('업주 가입 신청 완료. 이메일 인증 후 로그인하면 운영자 승인을 거쳐 포스터 업로드가 활성화됩니다.', 'success');
       onDone();
     } catch (err: unknown) {
       toast.show(err instanceof Error ? err.message : '가입 중 오류가 발생했습니다.', 'error');
@@ -531,7 +531,7 @@ function SignupOwnerForm({ onDone }: { onDone: () => void }) {
             <circle cx="8" cy="8" r="6.5"/><line x1="8" y1="5" x2="8" y2="9"/><circle cx="8" cy="11.5" r="0.5" fill="#FFD100"/>
           </svg>
           <p className="text-xs text-gold-300 leading-relaxed">
-            매장 업주는 <strong>관리자 승인</strong> 후 포스터 업로드 권한이 활성화됩니다.<br/>
+            매장 업주는 <strong>운영자 승인</strong> 후 포스터 업로드 권한이 활성화됩니다.<br/>
             승인 처리는 영업일 기준 1~2일 소요됩니다.
           </p>
         </div>
@@ -554,7 +554,7 @@ function SignupOwnerForm({ onDone }: { onDone: () => void }) {
               <Field label="지역"   type="text" placeholder="강남"          required value={region} onChange={(e) => setRegion(e.target.value)} />
               <Field label="연락처" type="tel"  placeholder="010-0000-0000" required value={phone}  onChange={(e) => setPhone(e.target.value)} />
             </div>
-            <Field label="상세 주소"      type="text" placeholder="서울시 강남구 ..." required value={address} onChange={(e) => setAddress(e.target.value)} />
+            <Field label="상세 주소"      type="text" placeholder="서울시 강남구 …" required value={address} onChange={(e) => setAddress(e.target.value)} />
             <Field label="사업자등록번호" type="text" placeholder="000-00-00000"       required value={bizNum}  onChange={(e) => setBizNum(e.target.value)} />
           </div>
         </section>

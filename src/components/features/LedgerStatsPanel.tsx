@@ -169,7 +169,7 @@ function StatsView({ venueId }: { venueId: string }) {
         <>
           {period === 'day' && (
             <div className="rounded-input border border-border-default bg-surface-high px-2.5 py-2">
-              <p className="text-xs font-semibold text-ink-secondary mb-1.5">바이인 제외 · 손님 유형별 {excludeTypes.size > 0 && <span className="text-danger-light">({excludeTypes.size}개 제외 중)</span>}</p>
+              <p className="text-xs font-semibold text-ink-secondary mb-1.5">바인 제외 · 손님 유형별 {excludeTypes.size > 0 && <span className="text-danger-light">({excludeTypes.size}개 제외 중)</span>}</p>
               <div className="grid grid-cols-5 gap-1">
                 {([['new', '신규'], ['regular', '기존'], ['staff', '관계자'], ['other', '기타'], ['none', '미지정']] as const).map(([code, label]) => {
                   const on = excludeTypes.has(code);
@@ -558,7 +558,7 @@ export function PosSettingsPanel({ venueId }: { venueId: string }) {
     <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-3">
       <h3 className="text-sm font-bold text-ink-primary">POS 설정</h3>
       <div className="space-y-1.5">
-        <p className="text-2xs font-semibold text-ink-secondary">바이인 취소 비밀번호 {hasPw && <span className="text-emerald-400">· 설정됨</span>}</p>
+        <p className="text-2xs font-semibold text-ink-secondary">바인 취소 비밀번호{hasPw && <span className="text-emerald-400">· 설정됨</span>}</p>
         <div className="grid grid-cols-2 gap-2">
           <input type="password" inputMode="numeric" value={pw} onChange={(e) => setPw(e.target.value)} placeholder={hasPw ? '새 비밀번호' : '비밀번호'} className="input text-sm" />
           <input type="password" inputMode="numeric" value={pw2} onChange={(e) => setPw2(e.target.value)} placeholder="비밀번호 확인" className="input text-sm" />

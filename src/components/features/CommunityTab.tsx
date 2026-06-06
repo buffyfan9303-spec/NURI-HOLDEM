@@ -126,7 +126,7 @@ export default function CommunityTab({
           onOpenWrite={() => onOpenWrite('free')}
           onLike={onLikePost}
           onSelectPost={onSelectPost}
-          placeholder="나누고 싶은 이야기를 적어보세요..."
+          placeholder="나누고 싶은 이야기를 적어보세요…"
           emptyText="첫 게시글을 남겨보세요"
           enableCategory
         />
@@ -140,7 +140,7 @@ export default function CommunityTab({
             onOpenWrite={() => onOpenWrite('study')}
             onLike={onLikePost}
             onSelectPost={onSelectPost}
-            placeholder="홀덤 공부·전략을 공유해보세요..."
+            placeholder="홀덤 공부·전략을 공유해보세요…"
             emptyText="첫 홀덤 공부 글을 남겨보세요"
           />
         </div>
@@ -192,7 +192,7 @@ function SectionTab({ active, label, onClick }: { active: boolean; label: string
 
 function FeedSection({
   posts, notices, isAdmin, onWriteNotice, onSelectNotice, onOpenWrite, onLike, onSelectPost,
-  placeholder = '나누고 싶은 이야기를 적어보세요...', emptyText = '첫 게시글을 남겨보세요',
+  placeholder = '나누고 싶은 이야기를 적어보세요…', emptyText = '첫 게시글을 남겨보세요',
   enableCategory = false,
 }: {
   posts: CommunityPost[];
@@ -604,7 +604,7 @@ function VenuesSection({
           type="search"
           value={query}
           onChange={(e) => onQuery(e.target.value)}
-          placeholder="매장명, 지역으로 검색..."
+          placeholder="매장명, 지역으로 검색…"
           className="input pl-9"
         />
         <svg
@@ -864,7 +864,7 @@ function LiveWallSection() {
             disabled={sending || !draft.trim()}
             className="btn-primary px-4 shrink-0 disabled:opacity-50"
           >
-            {sending ? '...' : '전송'}
+            {sending ? '…' : '전송'}
           </button>
         </form>
       ) : (

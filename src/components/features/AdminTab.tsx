@@ -454,7 +454,7 @@ function VenueStaffManager({ venueId }: { venueId: string }) {
 
       {/* 직원 목록 */}
       {loading ? (
-        <p className="text-center py-2 text-2xs text-ink-muted">불러오는 중...</p>
+        <p className="text-center py-2 text-2xs text-ink-muted">불러오는 중…</p>
       ) : staff.length === 0 ? (
         <p className="text-center py-2 text-2xs text-ink-muted">등록된 직원이 없습니다. 위에서 아이디로 추가하세요.</p>
       ) : (

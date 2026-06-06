@@ -199,7 +199,7 @@ export default function DealerCommunity() {
       )}
 
       {loading ? (
-        <p className="py-8 text-center text-2xs text-ink-muted">불러오는 중...</p>
+        <p className="py-8 text-center text-2xs text-ink-muted">불러오는 중…</p>
       ) : posts.length === 0 ? (
         <p className="py-10 text-center text-xs text-ink-muted">아직 글이 없습니다. 첫 구인·구직 글을 남겨보세요.</p>
       ) : (
@@ -285,7 +285,7 @@ function DealerPostBody({ post, isAdmin, userId, userName }: {
   const apply = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) { toast.show('이름을 입력해 주세요', 'error'); return; }
-    if (!phone.trim()) { toast.show('연락처(번호)는 필수입니다', 'error'); return; }
+    if (!phone.trim()) { toast.show('연락처는 필수입니다', 'error'); return; }
     setSending(true);
     try {
       await createDealerApplication(post.id, { name, phone, message: msg });

@@ -135,7 +135,7 @@ export default function MarketplaceTab({
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="제목으로 검색..."
+            placeholder="제목으로 검색…"
             className="input pl-9"
           />
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" />

@@ -90,13 +90,13 @@ export default function OwnerCommunity() {
               showDeleted ? 'bg-gold-300 text-ink-inverse' : 'border border-border-default text-ink-muted',
             ].join(' ')}
           >
-            {showDeleted ? '삭제/만료 글 보는 중' : '삭제/만료 글 보기(관리자)'}
+            {showDeleted ? '삭제/만료 글 보는 중' : '삭제/만료 글 보기(운영자)'}
           </button>
         </div>
       )}
 
       {loading ? (
-        <p className="py-8 text-center text-2xs text-ink-muted">불러오는 중...</p>
+        <p className="py-8 text-center text-2xs text-ink-muted">불러오는 중…</p>
       ) : posts.length === 0 ? (
         <p className="py-10 text-center text-xs text-ink-muted">{showDeleted ? '삭제/만료된 글이 없습니다' : '아직 글이 없습니다'}</p>
       ) : (

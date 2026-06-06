@@ -96,7 +96,7 @@ function CommentItem({
             autoFocus
             value={replyContent}
             onChange={(e) => setReplyContent(e.target.value)}
-            placeholder={`@${comment.userName} 에게 답글...`}
+            placeholder={`@${comment.userName} 에게 답글…`}
             className="input flex-1"
           />
           <button type="submit" className="btn-primary px-3 shrink-0">등록</button>
@@ -147,7 +147,7 @@ export default function CommentThread({ comments, onSubmit, onDelete, moderator 
             type="text"
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            placeholder="댓글을 입력하세요..."
+            placeholder="댓글을 입력하세요…"
             className="input flex-1"
           />
           <button type="submit" className="btn-primary px-4 shrink-0" disabled={!content.trim()}>

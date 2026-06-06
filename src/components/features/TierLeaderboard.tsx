@@ -149,7 +149,7 @@ export default function TierLeaderboard() {
       <section>
         <h3 className="text-sm font-semibold text-ink-primary mb-2">활동 점수 랭킹</h3>
         {loading ? (
-          <p className="text-center py-6 text-2xs text-ink-muted">불러오는 중...</p>
+          <p className="text-center py-6 text-2xs text-ink-muted">불러오는 중…</p>
         ) : rows.length === 0 ? (
           <p className="text-center py-6 text-2xs text-ink-muted">랭킹 정보가 없습니다</p>
         ) : (

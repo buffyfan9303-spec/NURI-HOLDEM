@@ -538,7 +538,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
     return arr;
   }, [totals, metric]);
 
-  if (loading) return <p className="text-center py-10 text-xs text-ink-muted">불러오는 중...</p>;
+  if (loading) return <p className="text-center py-10 text-xs text-ink-muted">불러오는 중…</p>;
   if (totals.length === 0) {
     return (
       <div className="py-12 text-center text-ink-muted">
@@ -701,7 +701,7 @@ function AboutPanel({
               onChange={(e) => setDraft(e.target.value)}
               rows={8}
               className="input resize-none w-full"
-              placeholder="매장 소개를 입력하세요..."
+              placeholder="매장 소개를 입력하세요…"
             />
             <div className="flex gap-2 justify-end">
               <button type="button" className="btn-ghost text-xs" onClick={() => setEditing(false)}>취소</button>

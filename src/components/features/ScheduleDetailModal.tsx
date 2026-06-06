@@ -128,7 +128,7 @@ export default function ScheduleDetailModal({
               onClick={() => { if (confirm('이 포스터를 삭제하시겠습니까? 되돌릴 수 없습니다.')) onDeletePoster(schedule.id); }}
               className="mt-1 mb-1 text-2xs font-semibold px-2 py-1 rounded-badge border bg-danger/15 text-danger-light border-danger/30 hover:bg-danger/25 transition-colors"
             >
-              관리자 삭제
+              운영자 삭제
             </button>
           )}
           {schedule.venueId ? (

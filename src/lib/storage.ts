@@ -36,12 +36,12 @@ export async function resizeImage(
       canvas.height = height;
       canvas.getContext('2d')!.drawImage(img, 0, 0, width, height);
       canvas.toBlob(
-        (blob) => blob ? resolve(blob) : reject(new Error('Canvas toBlob failed')),
+        (blob) => blob ? resolve(blob) : reject(new Error('이미지 처리에 실패했습니다')),
         'image/webp',
         quality,
       );
     };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Image load failed')); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('이미지를 불러오지 못했습니다')); };
     img.src = url;
   });
 }

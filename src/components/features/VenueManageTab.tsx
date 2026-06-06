@@ -187,11 +187,11 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
       </div>
 
       <p className="text-2xs text-ink-muted">
-        <span className="text-gold-300 font-semibold">닉네임은 필수</span>, 실명·프라이즈는 선택입니다. 프라이즈는 <span className="text-gold-300 font-semibold">만원 단위 숫자</span>로 입력하세요 — 순위는 머니인 점수, 프라이즈는 누적 금액으로 매장 커뮤니티 순위에 자동 반영됩니다. 실명을 넣으면 손님에게는 <span className="text-gold-300 font-semibold">도토리(나*리)</span> 처럼 가려서 표시됩니다.
+        <span className="text-gold-300 font-semibold">닉네임은 필수</span>, 실명·프라이즈는 선택입니다. 프라이즈는 <span className="text-gold-300 font-semibold">만원 단위 숫자</span>로 입력하세요 — 순위는 머니인 점수, 프라이즈는 누적 금액으로 매장 커뮤니티 순위에 자동 반영됩니다. 실명을 넣으면 손님에게는 <span className="text-gold-300 font-semibold">이름 일부를 가려(예: 나*리)</span> 표시됩니다.
       </p>
 
       {loading ? (
-        <p className="text-center py-8 text-2xs text-ink-muted">불러오는 중...</p>
+        <p className="text-center py-8 text-2xs text-ink-muted">불러오는 중…</p>
       ) : (
         <ul className="space-y-1.5">
           {rows.map((row, i) => (
@@ -367,7 +367,7 @@ function StaffManager({ venueId }: { venueId: string }) {
       </form>
 
       {loading ? (
-        <p className="text-center py-6 text-2xs text-ink-muted">불러오는 중...</p>
+        <p className="text-center py-6 text-2xs text-ink-muted">불러오는 중…</p>
       ) : (
         <>
           {/* 대기중 초대 */}

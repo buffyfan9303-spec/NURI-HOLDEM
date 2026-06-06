@@ -21,7 +21,7 @@ export default function VenueVerificationCard() {
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold text-gold-300">인증 매장</p>
-          <p className="text-2xs text-ink-muted">포스터(요강)가 관리자 승인 없이 즉시 게시됩니다.</p>
+          <p className="text-2xs text-ink-muted">포스터(요강)가 운영자 승인 없이 즉시 게시됩니다.</p>
         </div>
       </div>
     );
@@ -31,7 +31,7 @@ export default function VenueVerificationCard() {
     return (
       <div className="rounded-card border border-amber-500/40 bg-amber-500/[0.08] px-3 py-2.5">
         <p className="text-sm font-bold text-amber-400">인증 심사 중</p>
-        <p className="mt-0.5 text-2xs text-ink-muted">관리자가 인증을 검토하고 있습니다.</p>
+        <p className="mt-0.5 text-2xs text-ink-muted">운영자가 인증을 검토하고 있습니다.</p>
       </div>
     );
   }
@@ -40,7 +40,7 @@ export default function VenueVerificationCard() {
     <div className="space-y-1 rounded-card border border-border-default bg-surface-low p-3">
       <span className="inline-block rounded-badge bg-surface-float px-2 py-0.5 text-2xs font-bold text-ink-secondary">비인증 매장</span>
       <p className="text-xs leading-relaxed text-ink-secondary">
-        관리자 인증을 받으면 포스터가 승인 없이 즉시 게시되고, 매장 목록 상단에 인증 뱃지와 함께 우선 노출됩니다. 인증은 관리자가 검토 후 부여합니다.
+        운영자 인증을 받으면 포스터가 승인 없이 즉시 게시되고, 매장 목록 상단에 인증 배지와 함께 우선 노출됩니다. 인증은 운영자가 검토 후 부여합니다.
       </p>
     </div>
   );

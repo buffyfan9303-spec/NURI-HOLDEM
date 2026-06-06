@@ -26,7 +26,7 @@ type RoleFilter   = 'all' | 'user' | 'venue_owner' | 'admin';
 type StatusFilter = 'all' | UserStatus;
 
 const ROLE_LABEL: Record<string, string> = {
-  user: '일반', venue_owner: '업주', admin: '관리자',
+  user: '일반', venue_owner: '업주', admin: '운영자',
 };
 const STATUS_LABEL: Record<UserStatus, { label: string; cls: string }> = {
   active:    { label: '활성',     cls: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
@@ -98,7 +98,7 @@ export default function UserManagementTab({
             <FilterPill active={roleFilter === 'all'}         onClick={() => setRoleFilter('all')}         label="전체" />
             <FilterPill active={roleFilter === 'user'}        onClick={() => setRoleFilter('user')}        label="일반" />
             <FilterPill active={roleFilter === 'venue_owner'} onClick={() => setRoleFilter('venue_owner')} label="업주" />
-            <FilterPill active={roleFilter === 'admin'}       onClick={() => setRoleFilter('admin')}       label="관리자" />
+            <FilterPill active={roleFilter === 'admin'}       onClick={() => setRoleFilter('admin')}       label="운영자" />
           </div>
 
           {/* 상태 필터 */}

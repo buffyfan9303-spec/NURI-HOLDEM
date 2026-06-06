@@ -38,7 +38,7 @@ export default function ReportModal({ open, onClose, target }: ReportModalProps)
         targetSummary: target.summary, reporterName: user.nickname ?? user.name,
         reason: detail.trim() ? `${reason} — ${detail.trim()}` : reason,
       });
-      toast.show('신고가 접수되었습니다. 운영팀이 검토합니다.', 'success');
+      toast.show('신고가 접수되었습니다. 운영자가 검토합니다.', 'success');
       setReason(''); setDetail('');
       onClose();
     } catch (err) {

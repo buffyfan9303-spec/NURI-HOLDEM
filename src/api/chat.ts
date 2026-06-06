@@ -49,7 +49,7 @@ export async function sendChatMessage(listingId: string, buyerId: string, conten
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('로그인이 필요합니다');
   const trimmed = content.trim();
-  if (!trimmed) throw new Error('내용을 입력하세요');
+  if (!trimmed) throw new Error('내용을 입력해 주세요');
   const { data, error } = await supabase
     .from('listing_messages')
     .insert({ listing_id: listingId, buyer_id: buyerId, sender_id: user.id, content: trimmed.slice(0, 1000) })

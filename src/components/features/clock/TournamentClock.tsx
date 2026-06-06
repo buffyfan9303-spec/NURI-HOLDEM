@@ -511,11 +511,11 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
     const sb = last ? Math.round(last.bb) : 100, bb = sb * 2;
     set({ levels: [...cfg.levels, { kind: 'level', sb, bb, ante: bb, minutes: last?.minutes ?? 20 }] });
   };
-  const addBreak = () => set({ levels: [...cfg.levels, { kind: 'break', sb: 0, bb: 0, ante: 0, minutes: 8, label: 'BREAK 8Min.' }] });
+  const addBreak = () => set({ levels: [...cfg.levels, { kind: 'break', sb: 0, bb: 0, ante: 0, minutes: 8, label: 'BREAK' }] });
   const removeLevel = (i: number) => set({ levels: cfg.levels.filter((_, idx) => idx !== i) });
 
   const setPrize = (i: number, patch: Partial<ClockPrizeRow>) => set({ prizes: cfg.prizes.map((p, idx) => idx === i ? { ...p, ...patch } : p) });
-  const addPrize = () => set({ prizes: [...cfg.prizes, { place: `${cfg.prizes.length + 1}th`, amount: 0 }] });
+  const addPrize = () => set({ prizes: [...cfg.prizes, { place: `${cfg.prizes.length + 1}위`, amount: 0 }] });
   const removePrize = (i: number) => set({ prizes: cfg.prizes.filter((_, idx) => idx !== i) });
 
   const loadPreset = (p: ClockPreset) => { setCfg(p.config); toast.show(`"${p.name}" 프리셋을 불러왔습니다`, 'info'); };
