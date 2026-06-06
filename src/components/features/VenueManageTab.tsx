@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
 import type { User, VenueInvite } from '../../api/auth';
@@ -10,6 +10,7 @@ import NuriPosLedger from './NuriPosLedger';
 import LedgerStatsPanel, { PosSettingsPanel } from './LedgerStatsPanel';
 import TournamentClock from './clock/TournamentClock';
 import StaffSchedule from './StaffSchedule';
+import { StaffWageManager, StaffSettlement, StaffWorkLog } from './StaffPayroll';
 
 type Section = 'ledger' | 'stats' | 'ranking' | 'staff' | 'settings' | 'clock';
 
@@ -89,12 +90,7 @@ export default function VenueManageTab({ onAddPoster }: { onAddPoster?: () => vo
       {section === 'stats'    && manageOk && <LedgerStatsPanel venueId={venueId} />}
       {section === 'ranking'  && <RankingEditor venueId={venueId} canEdit={user.approved === true} draft={rankingDraft} />}
       {section === 'clock'    && ledgerOk && <TournamentClock venueId={venueId} canManage={ledgerOk} seedSessionDate={clockSeed} />}
-      {section === 'staff'    && isOwner && (
-        <div className="space-y-4">
-          <StaffManager venueId={venueId} />
-          <StaffSchedule venueId={venueId} />
-        </div>
-      )}
+      {section === 'staff'    && isOwner && <StaffHub venueId={venueId} />}
       {section === 'settings' && isOwner && <PosSettingsPanel venueId={venueId} />}
     </div>
   );
@@ -259,6 +255,35 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
 
 // ── 직원 관리(업주) ───────────────────────────────────────────────────────────
 const TITLE_SUGGEST = ['매니저', '플로어', '딜러', '칩러너', '매장장', '직원'];
+
+// ── 직원 관리 허브(아코디언) ──────────────────────────────────────────────────
+function StaffHub({ venueId }: { venueId: string }) {
+  const [open, setOpen] = useState<string>('members'); // 한 번에 하나(스크롤 절약)
+  const items: { id: string; label: string; node: ReactNode }[] = [
+    { id: 'members',  label: '구성원 목록',                 node: <StaffManager venueId={venueId} /> },
+    { id: 'schedule', label: '딜러 출근 스케줄',            node: <StaffSchedule venueId={venueId} /> },
+    { id: 'wage',     label: '인건비 관리 (시급·급여일·휴무)', node: <StaffWageManager venueId={venueId} /> },
+    { id: 'settle',   label: '인건비 정산 (월 급여·총 인건비)', node: <StaffSettlement venueId={venueId} /> },
+    { id: 'log',      label: '직원 출근일지',                node: <StaffWorkLog venueId={venueId} /> },
+  ];
+  return (
+    <div className="space-y-2">
+      {items.map((it) => {
+        const isOpen = open === it.id;
+        return (
+          <div key={it.id} className="rounded-card border border-border-default bg-surface-low overflow-hidden">
+            <button type="button" onClick={() => setOpen(isOpen ? '' : it.id)}
+              className="w-full flex items-center justify-between px-3 py-3 text-left hover:bg-surface-high transition-colors">
+              <span className="text-sm font-bold text-ink-primary">{it.label}</span>
+              <span className="text-gold-300 text-xs">{isOpen ? '▲ 접기' : '▼ 펼치기'}</span>
+            </button>
+            {isOpen && <div className="px-3 pb-3 border-t border-border-subtle pt-3">{it.node}</div>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function StaffManager({ venueId }: { venueId: string }) {
   const toast = useToast();
