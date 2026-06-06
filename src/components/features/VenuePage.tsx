@@ -376,6 +376,8 @@ function HeroSection({
               src={src}
               alt={`${venue.name} 사진 ${i + 1}`}
               draggable={false}
+              loading="lazy"
+              decoding="async"
               className="h-full w-full shrink-0 object-cover"
             />
           ))}

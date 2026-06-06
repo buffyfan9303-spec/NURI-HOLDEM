@@ -286,7 +286,7 @@ function SellerChatModal({
       <div className="flex items-center gap-2 px-4 py-2 bg-surface-high border-b border-border-subtle">
         <div className="w-8 h-8 shrink-0 rounded-input flex items-center justify-center bg-surface-float overflow-hidden">
           {listing.images.length > 0
-            ? <img src={listing.images[0]} alt="" className="w-full h-full object-cover" />
+            ? <img src={listing.images[0]} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
             : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="opacity-30" aria-hidden><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/></svg>}
         </div>
         <div className="flex-1 min-w-0">

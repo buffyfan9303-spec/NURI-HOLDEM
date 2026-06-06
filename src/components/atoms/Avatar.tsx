@@ -21,6 +21,8 @@ export default function Avatar({ name, src, color, size = 28, className = '' }: 
         src={src}
         alt={name}
         style={box}
+        loading="lazy"
+        decoding="async"
         className={['shrink-0 rounded-full object-cover bg-surface-high', className].join(' ')}
       />
     );

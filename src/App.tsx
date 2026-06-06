@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, lazy, Suspense } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, Suspense } from 'react';
 import { useToast } from './components/atoms/Toast';
 import UnreadBadge from './components/atoms/UnreadBadge';
 import ViewModeToggle from './components/atoms/ViewModeToggle';
@@ -29,6 +29,7 @@ import MarketplaceFormModal from './components/features/MarketplaceFormModal';
 import type { MarketplaceFormData } from './components/features/MarketplaceFormModal';
 import { useBackClose } from './lib/backstack';
 import { useVisibilityRefresh } from './lib/useVisibilityRefresh';
+import { lazyWithReload } from './lib/lazyWithReload';
 import { useAuth } from './contexts/AuthContext';
 import { listAllUsers, updateUserStatus, approveOwner } from './api/auth';
 import {
@@ -51,13 +52,13 @@ import type { MarketplaceListing, MarketplaceNotice } from './api/marketplace';
 // ── 코드 스플리팅: 무거운 탭/오버레이는 지연 로딩(첫 화면 번들에서 분리) ──────────
 // 장부·클락·인건비(VenueManageTab/AdminTab), 카카오맵(VenuePage), GTO 엔진(GtoDeepModal)
 // 등 첫 화면(일정 탐색)에 불필요한 코드를 별도 청크로 떼어내 초기 로딩을 가볍게 한다.
-const AdminTab       = lazy(() => import('./components/features/AdminTab'));
-const CommunityTab   = lazy(() => import('./components/features/CommunityTab'));
-const GtoDeepModal   = lazy(() => import('./components/features/gto/GtoDeepModal'));
-const VenuePage      = lazy(() => import('./components/features/VenuePage'));
-const MyPostersTab   = lazy(() => import('./components/features/MyPostersTab'));
-const MarketplaceTab = lazy(() => import('./components/features/MarketplaceTab'));
-const VenueManageTab = lazy(() => import('./components/features/VenueManageTab'));
+const AdminTab       = lazyWithReload(() => import('./components/features/AdminTab'));
+const CommunityTab   = lazyWithReload(() => import('./components/features/CommunityTab'));
+const GtoDeepModal   = lazyWithReload(() => import('./components/features/gto/GtoDeepModal'));
+const VenuePage      = lazyWithReload(() => import('./components/features/VenuePage'));
+const MyPostersTab   = lazyWithReload(() => import('./components/features/MyPostersTab'));
+const MarketplaceTab = lazyWithReload(() => import('./components/features/MarketplaceTab'));
+const VenueManageTab = lazyWithReload(() => import('./components/features/VenueManageTab'));
 
 // 지연 로딩 폴백 — 청크 받아오는 짧은 순간의 로더(레이아웃 점프 최소화)
 function LazyFallback() {
