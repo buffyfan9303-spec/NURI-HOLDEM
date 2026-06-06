@@ -595,7 +595,18 @@ export default function App() {
       : short
         ? venues.find((v) => v.id.startsWith(short))
         : null;
-    if (target) { setOpenVenueId(target.id); deepLinked.current = true; }
+    if (target) {
+      setOpenVenueId(target.id);
+      deepLinked.current = true;
+      // URL 에서 v/venue 파라미터 제거 → 매장을 닫고 앱을 둘러보다 새로고침해도
+      // 다시 그 매장 페이지로 돌아가지 않도록 한다(공유 링크 1회성 진입).
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('v');
+        url.searchParams.delete('venue');
+        window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+      } catch { /* ignore */ }
+    }
   }, [venues]);
 
   const handleScheduleSelect = useCallback((s: Schedule) => {
