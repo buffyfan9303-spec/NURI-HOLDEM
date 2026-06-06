@@ -720,6 +720,33 @@ export async function approveGroup(groupId: string): Promise<void> {
   if (error) throw error;
 }
 
+// ── 내 커뮤니티 관리 ──────────────────────────────────────────────────────────
+/** 내가 운영(소유)하는 커뮤니티 — 매장+그룹(미승인 그룹 포함, RLS: owner 본인) */
+export async function getMyOwnedCommunities(): Promise<Venue[]> {
+  if (IS_MOCK) return [];
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+  const { data, error } = await supabase.from('venues').select('*').eq('owner_id', user.id).order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map(rowToVenue);
+}
+/** 내가 가입한 그룹(매니저 제외) — 그룹 정보 + 멤버십 id(탈퇴용) */
+export interface JoinedGroup { membershipId: string; status: MemberStatus; group: Venue }
+export async function getMyJoinedGroups(): Promise<JoinedGroup[]> {
+  if (IS_MOCK) return [];
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+  const { data: mems } = await supabase.from('group_members').select('id, group_id, role, status').eq('user_id', user.id).neq('role', 'manager');
+  if (!mems || mems.length === 0) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ids = (mems as any[]).map((m) => m.group_id);
+  const { data: vs } = await supabase.from('venues').select('*').in('id', ids);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const byId = new Map<string, Venue>((vs ?? []).map((v: any) => [v.id as string, rowToVenue(v)]));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (mems as any[]).filter((m) => byId.has(m.group_id)).map((m) => ({ membershipId: m.id, status: m.status, group: byId.get(m.group_id)! }));
+}
+
 // 업주: 본인 홀덤펍(매장) 직접 생성 (미보유 시)
 export async function createMyVenue(input: { name: string; region: string; address?: string }): Promise<string> {
   if (IS_MOCK) return 'mock';

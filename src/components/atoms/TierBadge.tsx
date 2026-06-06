@@ -56,6 +56,11 @@ export function tierOf(points: number): Tier {
   return { key: d.rank, label: d.rank, rank: idx, min: d.min, color: d.color };
 }
 
+/** 등급 강조색 — 아바타 테두리 등에 사용. 운영자=빨강, 그 외 점수 등급색. */
+export function tierColor(points: number, admin = false): string {
+  return admin ? '#FF4D6D' : tierOf(points).color;
+}
+
 /** A 등급 자격 여부(상대평가): K(14,000점) 달성 + 전체 순위 10위 이내 */
 export function isAceRank(points: number, overallRank?: number | null): boolean {
   return points >= ACE_MIN_POINTS && overallRank != null && overallRank <= ACE_TOP_RANK;

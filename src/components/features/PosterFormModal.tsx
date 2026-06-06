@@ -384,6 +384,17 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
             onAdd={(v) => { if (!form.events.includes(v)) update('events', [...form.events, v]); }}
             onRemove={(v) => update('events', form.events.filter((e) => e !== v))}
           />
+          {/* 빠른 추가 프리셋 — 자주 쓰는 이벤트 배지 */}
+          <div className="mt-1.5 flex flex-wrap gap-1">
+            {['신규 이벤트', '할인 이벤트', '오픈 기념', '마감 임박', '프리롤', '적립 이벤트', '연말 이벤트'].map((p) => (
+              <button key={p} type="button"
+                disabled={form.events.includes(p) || form.events.length >= MAX_EVENTS}
+                onClick={() => { if (!form.events.includes(p) && form.events.length < MAX_EVENTS) update('events', [...form.events, p]); }}
+                className="rounded-badge border border-border-default bg-surface-high px-2 py-0.5 text-2xs text-ink-secondary hover:text-gold-300 disabled:opacity-40">
+                + {p}
+              </button>
+            ))}
+          </div>
         </FieldWrap>
 
         {/* 순위별 상금 — 1등부터 머니인 구간까지 (선택, 단위 직접 입력) */}

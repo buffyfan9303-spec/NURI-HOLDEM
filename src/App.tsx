@@ -20,7 +20,7 @@ import NuriHoldemLogo from './components/atoms/NuriHoldemLogo';
 import ThemeToggle from './components/atoms/ThemeToggle';
 import ProfileModal from './components/features/ProfileModal';
 import StaffInviteBanner from './components/features/StaffInviteBanner';
-import TierBadge from './components/atoms/TierBadge';
+import { tierColor } from './components/atoms/TierBadge';
 import NoticeFormModal from './components/features/NoticeFormModal';
 import PostFormModal from './components/features/PostFormModal';
 import ConsentGateModal from './components/features/ConsentGateModal';
@@ -179,11 +179,12 @@ function AppHeader({
                 className="group relative w-11 h-11 -mr-1 flex items-center justify-center rounded-full focus:outline-none"
               >
                 {/* 보이는 아바타 32px(이미지/이니셜) — 터치영역은 44px 유지(WCAG) */}
+                {/* 아바타 테두리 = 활동 등급색(운영자=빨강). 별도 22 배지 대신 테두리로 표현 */}
                 <span
                   className="relative w-8 h-8 rounded-full overflow-hidden flex items-center justify-center
-                             select-none transition-transform ring-1 ring-border-default
-                             group-hover:ring-gold-300 group-hover:scale-105 group-active:scale-90"
-                  style={{ background: user.avatarColor ?? '#5A6175' }}
+                             select-none transition-transform group-hover:scale-105 group-active:scale-90"
+                  style={{ background: user.avatarColor ?? '#5A6175', boxShadow: `0 0 0 2px ${tierColor(user.activityPoints ?? 0, user.role === 'admin')}` }}
+                  title="내 등급"
                 >
                   <span className="text-xs font-bold text-white">{user.name[0]}</span>
                   {user.avatarUrl && (
@@ -191,9 +192,6 @@ function AppHeader({
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
                       className="absolute inset-0 w-full h-full object-cover" />
                   )}
-                </span>
-                <span className="absolute -bottom-1 -right-1 rounded-full bg-surface-base p-[1.5px] leading-none">
-                  <TierBadge points={user.activityPoints ?? 0} size={11} admin={user.role === 'admin'} />
                 </span>
               </button>
 

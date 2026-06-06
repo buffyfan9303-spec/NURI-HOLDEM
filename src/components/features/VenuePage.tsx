@@ -179,9 +179,6 @@ export default function VenuePage({
               <h2 className="text-xl font-bold text-ink-primary">{venue.name}</h2>
               <p className="text-xs text-ink-muted mt-1">{venue.address}</p>
               <div className="flex items-center gap-2 mt-2 flex-wrap">
-                <button type="button" onClick={shareVenue} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input bg-surface-high border border-border-default text-xs font-semibold text-ink-secondary hover:text-gold-300 transition-colors">
-                  <span aria-hidden>🔗</span> 링크 공유
-                </button>
                 {kakao && (
                   <a href={kakao} target="_blank" rel="noopener noreferrer"
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input bg-[#FEE500] text-[#3A1D1D] text-xs font-bold hover:brightness-95 transition-all active:scale-95">
@@ -193,7 +190,13 @@ export default function VenuePage({
                 )}
               </div>
             </div>
-            <FollowButton venueId={venue.id} followerCount={venue.followerCount} />
+            {/* 팔로우 + 링크공유 한 묶음 */}
+            <div className="flex shrink-0 flex-col items-end gap-1.5">
+              <FollowButton venueId={venue.id} followerCount={venue.followerCount} />
+              <button type="button" onClick={shareVenue} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-input bg-surface-high border border-border-default text-2xs font-semibold text-ink-secondary hover:text-gold-300 transition-colors">
+                <span aria-hidden>🔗</span> 링크 공유
+              </button>
+            </div>
           </div>
         </div>
 

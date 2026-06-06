@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
-import type { Venue, Comment, CommunityPost, LiveMessage, PostCategory, GroupKind } from '../../api/community';
-import { getLiveMessages, addLiveMessage, deleteLiveMessage, subscribeLiveWall, createMyVenue, createGroup, GROUP_KIND_LABEL } from '../../api/community';
+import type { Venue, Comment, CommunityPost, LiveMessage, PostCategory, GroupKind, JoinedGroup } from '../../api/community';
+import { getLiveMessages, addLiveMessage, deleteLiveMessage, subscribeLiveWall, createMyVenue, createGroup, GROUP_KIND_LABEL, getMyOwnedCommunities, getMyJoinedGroups, removeMember } from '../../api/community';
 import { REGION_CHIPS } from './IntegratedSearchBar';
 import type { MarketplaceNotice } from '../../api/marketplace';
 import { useAuth } from '../../contexts/AuthContext';
@@ -148,7 +148,7 @@ export default function CommunityTab({
 
       {section === 'venues' && (
         <div className="space-y-3">
-          <OwnerVenueAction venues={venues} onSelectVenue={onSelectVenue} onCreated={onReloadVenues} />
+          <MyCommunitiesAction onSelectVenue={onSelectVenue} onCreated={onReloadVenues} />
           <VenuesSection
             sortedVenues={sortedVenues}
             query={query}
@@ -465,74 +465,114 @@ function PostCard({ post, onLike, onClick, hot = false }: { post: CommunityPost;
 
 // ── 매장 커뮤니티 섹션 ───────────────────────────────────────────────────────
 
-// 업주 전용 — 홀덤펍 보유 시 '관리', 미보유 시 '생성' 버튼
-function OwnerVenueAction({ venues, onSelectVenue, onCreated }: {
-  venues: Venue[];
+// 내 커뮤니티 관리 — 내가 운영(매장+그룹) + 가입한 그룹(탈퇴). 업주는 홀덤펍 생성도.
+function MyCommunitiesAction({ onSelectVenue, onCreated }: {
   onSelectVenue: (id: string) => void;
   onCreated?: () => void;
 }) {
   const { user, refreshProfile } = useAuth();
   const toast = useToast();
   const [open, setOpen] = useState(false);
+  const [owned, setOwned] = useState<Venue[]>([]);
+  const [joined, setJoined] = useState<JoinedGroup[]>([]);
+  const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState('');
   const [region, setRegion] = useState('');
   const [address, setAddress] = useState('');
   const [busy, setBusy] = useState(false);
 
-  if (user?.role !== 'venue_owner') return null;
-  const myVenue = venues.find((v) => v.ownerId === user.id);
+  const reload = () => {
+    getMyOwnedCommunities().then(setOwned).catch(() => {});
+    getMyJoinedGroups().then(setJoined).catch(() => {});
+  };
+  useEffect(() => { if (open) reload(); /* eslint-disable-next-line */ }, [open]);
 
-  if (myVenue) {
-    return (
-      <button
-        type="button"
-        onClick={() => onSelectVenue(myVenue.id)}
-        className="w-full flex items-center justify-between gap-2 rounded-card border border-gold-400/40 bg-gradient-to-br from-gold-300/[0.08] to-transparent px-3 py-2.5 text-left transition-colors hover:border-gold-300"
-      >
-        <span className="min-w-0 truncate text-sm font-bold text-ink-primary">내 홀덤펍 커뮤니티 · {myVenue.name}</span>
-        <span className="shrink-0 text-2xs font-bold text-gold-300">관리</span>
-      </button>
-    );
-  }
+  if (!user) return null;
+  const isOwner = user.role === 'venue_owner';
+  const hasVenue = owned.some((v) => (v.kind ?? 'venue') === 'venue');
 
-  const submit = async () => {
+  const createVenue = async () => {
     if (!name.trim() || !region.trim()) { toast.show('매장명과 지역은 필수입니다', 'error'); return; }
     setBusy(true);
     try {
       const id = await createMyVenue({ name, region, address });
       toast.show('홀덤펍 커뮤니티를 생성했습니다', 'success');
-      setOpen(false); setName(''); setRegion(''); setAddress('');
+      setCreateOpen(false); setName(''); setRegion(''); setAddress('');
       await refreshProfile().catch(() => {});
-      onCreated?.();
-      onSelectVenue(id);
-    } catch (e) {
-      toast.show(e instanceof Error ? e.message : '생성에 실패했습니다', 'error');
-    } finally { setBusy(false); }
+      onCreated?.(); reload(); onSelectVenue(id);
+    } catch (e) { toast.show(e instanceof Error ? e.message : '생성 실패', 'error'); }
+    finally { setBusy(false); }
+  };
+  const leave = async (j: JoinedGroup) => {
+    if (!confirm(`'${j.group.name}' 커뮤니티에서 탈퇴하시겠습니까?`)) return;
+    try { await removeMember(j.membershipId); toast.show('탈퇴했습니다', 'info'); reload(); }
+    catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
   };
 
   return (
-    <div className="rounded-card border border-gold-400/40 bg-gradient-to-br from-gold-300/[0.08] to-transparent p-3">
-      {!open ? (
-        <button type="button" onClick={() => setOpen(true)} className="w-full flex items-center justify-between">
-          <span className="text-sm font-bold text-ink-primary">홀덤펍 커뮤니티 생성</span>
-          <span className="text-2xs font-bold text-gold-300">+ 생성</span>
-        </button>
-      ) : (
-        <div className="space-y-2">
-          <p className="text-sm font-bold text-gold-300">홀덤펍 커뮤니티 생성</p>
-          <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40}
-            placeholder="매장명 (예: 강남 로얄 홀덤)" className="input w-full text-sm" />
-          <select value={region} onChange={(e) => setRegion(e.target.value)} className="input w-full text-sm">
-            <option value="">지역 선택 *</option>
-            {REGION_CHIPS.map((r) => <option key={r} value={r}>{r}</option>)}
-            <option value="기타">기타</option>
-          </select>
-          <input value={address} onChange={(e) => setAddress(e.target.value)} maxLength={80}
-            placeholder="주소 (선택)" className="input w-full text-sm" />
-          <div className="flex justify-end gap-2">
-            <button type="button" onClick={() => setOpen(false)} className="btn-ghost text-xs px-3">취소</button>
-            <button type="button" onClick={submit} disabled={busy} className="btn-primary text-xs px-4 disabled:opacity-60">생성</button>
+    <div className="rounded-card border border-gold-400/40 bg-gradient-to-br from-gold-300/[0.08] to-transparent">
+      <button type="button" onClick={() => setOpen((v) => !v)} className="w-full flex items-center justify-between px-3 py-2.5">
+        <span className="text-sm font-bold text-ink-primary">내 커뮤니티 관리</span>
+        <span className="text-2xs font-bold text-gold-300">{open ? '닫기' : '열기'}</span>
+      </button>
+      {open && (
+        <div className="px-3 pb-3 space-y-3 animate-slide-up">
+          <div>
+            <p className="text-2xs font-bold text-ink-secondary mb-1">내가 운영 ({owned.length})</p>
+            {owned.length === 0 ? (
+              <p className="text-2xs text-ink-muted">운영 중인 커뮤니티가 없습니다</p>
+            ) : (
+              <ul className="space-y-1">
+                {owned.map((v) => (
+                  <li key={v.id}>
+                    <button type="button" onClick={() => onSelectVenue(v.id)} className="w-full flex items-center gap-1.5 rounded-input bg-surface-high px-2.5 py-1.5 text-left hover:bg-surface-float">
+                      <span className="shrink-0 rounded-badge bg-gold-300/15 px-1.5 py-0.5 text-2xs font-bold text-gold-300">{GROUP_KIND_LABEL[v.kind ?? 'venue']}</span>
+                      <span className="text-xs font-semibold text-ink-primary truncate">{v.name}</span>
+                      {!v.approved && <span className="ml-auto shrink-0 text-2xs text-ink-muted">승인 대기</span>}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
+          <div>
+            <p className="text-2xs font-bold text-ink-secondary mb-1">가입한 그룹 ({joined.length})</p>
+            {joined.length === 0 ? (
+              <p className="text-2xs text-ink-muted">가입한 그룹이 없습니다</p>
+            ) : (
+              <ul className="space-y-1">
+                {joined.map((j) => (
+                  <li key={j.membershipId} className="flex items-center gap-1.5 rounded-input bg-surface-high px-2.5 py-1.5">
+                    <button type="button" onClick={() => onSelectVenue(j.group.id)} className="flex items-center gap-1.5 min-w-0 flex-1 text-left">
+                      <span className="shrink-0 rounded-badge bg-surface-float px-1.5 py-0.5 text-2xs font-bold text-ink-secondary">{GROUP_KIND_LABEL[j.group.kind ?? 'other']}</span>
+                      <span className="text-xs font-semibold text-ink-primary truncate">{j.group.name}</span>
+                      {j.status === 'pending' && <span className="text-2xs text-ink-muted">대기</span>}
+                    </button>
+                    <button type="button" onClick={() => leave(j)} className="shrink-0 text-2xs text-ink-muted hover:text-danger-light">탈퇴</button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          {isOwner && !hasVenue && (
+            !createOpen ? (
+              <button type="button" onClick={() => setCreateOpen(true)} className="w-full rounded-input border border-gold-400/40 py-1.5 text-2xs font-bold text-gold-300">+ 홀덤펍 커뮤니티 생성</button>
+            ) : (
+              <div className="space-y-2 rounded-input border border-border-default p-2.5">
+                <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} placeholder="매장명 (예: 강남 로얄 홀덤)" className="input w-full text-sm" />
+                <select value={region} onChange={(e) => setRegion(e.target.value)} className="input w-full text-sm">
+                  <option value="">지역 선택 *</option>
+                  {REGION_CHIPS.map((r) => <option key={r} value={r}>{r}</option>)}
+                  <option value="기타">기타</option>
+                </select>
+                <input value={address} onChange={(e) => setAddress(e.target.value)} maxLength={80} placeholder="주소 (선택)" className="input w-full text-sm" />
+                <div className="flex justify-end gap-2">
+                  <button type="button" onClick={() => setCreateOpen(false)} className="btn-ghost text-xs px-3">취소</button>
+                  <button type="button" onClick={createVenue} disabled={busy} className="btn-primary text-xs px-4 disabled:opacity-60">생성</button>
+                </div>
+              </div>
+            )
+          )}
         </div>
       )}
     </div>
