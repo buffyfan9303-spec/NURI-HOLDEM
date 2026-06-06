@@ -119,6 +119,14 @@ export default function VenuePage({
     try { await updateVenueKakao(venue.id, url); setKakaoOverride(url.trim()); toast.show(url.trim() ? '카카오톡 링크를 저장했습니다' : '링크를 삭제했습니다', 'success'); }
     catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
   };
+  const shareVenue = async () => {
+    const url = `${location.origin}/?venue=${venue.id}`;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if ((navigator as any).share) await (navigator as any).share({ title: venue.name, text: `${venue.name} · 홀덤펍`, url });
+      else { await navigator.clipboard.writeText(url); toast.show('매장 링크를 복사했습니다', 'success'); }
+    } catch { /* 사용자 취소 */ }
+  };
 
   return (
     <div
@@ -177,19 +185,20 @@ export default function VenuePage({
               </div>
               <h2 className="text-xl font-bold text-ink-primary">{venue.name}</h2>
               <p className="text-xs text-ink-muted mt-1">{venue.address}</p>
-              {(kakao || isMyVenue) && (
-                <div className="flex items-center gap-2 mt-2 flex-wrap">
-                  {kakao && (
-                    <a href={kakao} target="_blank" rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input bg-[#FEE500] text-[#3A1D1D] text-xs font-bold hover:brightness-95 transition-all active:scale-95">
-                      <span aria-hidden>💬</span> 카카오톡 오픈채팅
-                    </a>
-                  )}
-                  {isMyVenue && (
-                    <button type="button" onClick={editKakao} className="text-2xs text-ink-muted hover:text-gold-300">{kakao ? '카톡링크 수정' : '+ 카톡링크 등록'}</button>
-                  )}
-                </div>
-              )}
+              <div className="flex items-center gap-2 mt-2 flex-wrap">
+                <button type="button" onClick={shareVenue} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input bg-surface-high border border-border-default text-xs font-semibold text-ink-secondary hover:text-gold-300 transition-colors">
+                  <span aria-hidden>🔗</span> 링크 공유
+                </button>
+                {kakao && (
+                  <a href={kakao} target="_blank" rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input bg-[#FEE500] text-[#3A1D1D] text-xs font-bold hover:brightness-95 transition-all active:scale-95">
+                    <span aria-hidden>💬</span> 카카오톡 오픈채팅
+                  </a>
+                )}
+                {isMyVenue && (
+                  <button type="button" onClick={editKakao} className="text-2xs text-ink-muted hover:text-gold-300">{kakao ? '카톡링크 수정' : '+ 카톡링크 등록'}</button>
+                )}
+              </div>
             </div>
             <FollowButton venueId={venue.id} followerCount={venue.followerCount} />
           </div>
@@ -559,7 +568,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
       </p>
 
       <ol className="space-y-1.5">
-        {sorted.slice(0, 50).map((e, i) => {
+        {sorted.slice(0, 20).map((e, i) => {
           const masked = maskRealName(e.realName);
           const val = metric === 'money' ? `${e.moneyPoints.toLocaleString()}점` : `${e.prizeMan.toLocaleString()}만`;
           return (

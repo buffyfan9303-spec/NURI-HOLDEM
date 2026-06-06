@@ -523,6 +523,14 @@ export default function App() {
     setOpenVenueId(venueId);
   }, []);
 
+  // 딥링크: ?venue=<id> 로 진입 시 해당 매장 페이지 자동 오픈(링크 공유)
+  const deepLinked = useRef(false);
+  useEffect(() => {
+    if (deepLinked.current || venues.length === 0) return;
+    const vid = new URLSearchParams(window.location.search).get('venue');
+    if (vid && venues.some((v) => v.id === vid)) { setOpenVenueId(vid); deepLinked.current = true; }
+  }, [venues]);
+
   const handleScheduleSelect = useCallback((s: Schedule) => {
     setOpenSchedule(s);
   }, []);
