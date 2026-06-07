@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useBackClose } from '../../lib/backstack';
 
@@ -49,12 +49,34 @@ export default function Modal({
     return () => window.clearTimeout(t);
   }, [open]);
 
+  // 접근성: 모달 내부 포커스 트랩 + 열릴 때 첫 포커스(키보드 내비)
+  const contentRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const el = contentRef.current;
+    if (!el) return;
+    const focusables = () => Array.from(
+      el.querySelectorAll<HTMLElement>('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'),
+    ).filter((n) => n.offsetParent !== null);
+    const t = window.setTimeout(() => { (focusables()[0] ?? el).focus(); }, 50);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+      const f = focusables();
+      if (!f.length) return;
+      const first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    };
+    el.addEventListener('keydown', onKey);
+    return () => { window.clearTimeout(t); el.removeEventListener('keydown', onKey); };
+  }, [open]);
+
   if (!render) return null;
 
   // 전체화면 페이지 변형 — 불투명 배경으로 뒤 페이지가 절대 비치지 않음(스크롤 누수 방지)
   if (variant === 'page') {
     return (
-      <div className={['fixed inset-0 z-[55] bg-surface-base flex flex-col', closing ? 'animate-fade-out' : 'animate-fade-in'].join(' ')}>
+      <div ref={contentRef} className={['fixed inset-0 z-[55] bg-surface-base flex flex-col', closing ? 'animate-fade-out' : 'animate-fade-in'].join(' ')}>
         {title && (
           <header className="shrink-0 flex items-center justify-between px-4 h-header-h border-b border-border-subtle bg-surface-base">
             <h2 id="modal-title" className="text-base font-semibold text-ink-primary">{title}</h2>
@@ -89,6 +111,7 @@ export default function Modal({
       />
       {/* 본문 */}
       <div
+        ref={contentRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={title ? 'modal-title' : undefined}
