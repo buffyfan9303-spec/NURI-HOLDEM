@@ -45,6 +45,7 @@ const BOARD_CATEGORIES: { id: PostCategory | 'all'; label: string }[] = [
   { id: 'info',     label: '정보' },
   { id: 'review',   label: '후기' },
   { id: 'free',     label: '자유' },
+  { id: 'study',    label: '공부' },
 ];
 
 function relativeTime(iso: string): string {
@@ -711,6 +712,7 @@ function VenuesSection({
                     </div>
                   )}
                 </div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="self-center shrink-0 text-ink-muted" aria-hidden><polyline points="9 18 15 12 9 6" /></svg>
               </button>
             </li>
           ))}
