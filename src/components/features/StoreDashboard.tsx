@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import type { Schedule } from '../../api/schedules';
 import {
-  getLedgerSession, getLedgerBuyins, buyinFinance, wonToMan, subscribeLedger,
+  getLedgerSession, getLedgerBuyins, getLedgerRange, buyinFinance, wonToMan, subscribeLedger,
   type LedgerSession, type LedgerBuyin,
 } from '../../api/ledger';
 import { getClockState, subscribeClock, type ClockState } from '../../api/clock';
@@ -9,6 +9,11 @@ import { getReservationCounts, subscribeReservations } from '../../api/reservati
 import { getStaffSchedule, subscribeStaffSchedule, type StaffShift } from '../../api/staffSchedule';
 
 const localToday = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD (로컬)
+const DOW = ['일', '월', '화', '수', '목', '금', '토'];
+const last7 = () => Array.from({ length: 7 }, (_, i) => {
+  const dt = new Date(); dt.setDate(dt.getDate() - (6 - i));
+  return dt.toLocaleDateString('en-CA');
+});
 
 interface Props {
   venueId: string;
@@ -18,30 +23,37 @@ interface Props {
 }
 
 /**
- * 매장 대시보드 — 오늘의 장부·클락·예약·출근 현황을 실시간으로 한눈에.
+ * 매장 대시보드 — 오늘 장부·클락·예약·출근 + 최근 7일 추세 + 미수 알림을 실시간 요약.
  * 모든 카드는 해당 운영 화면으로 바로가기. (실시간: 장부·클락·예약·출근 구독)
  */
 export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePoster }: Props) {
   const d = localToday();
+  const days = last7();
   const [session, setSession] = useState<LedgerSession | null>(null);
   const [buyins, setBuyins] = useState<LedgerBuyin[]>([]);
   const [clock, setClock] = useState<ClockState | null>(null);
   const [resCounts, setResCounts] = useState<Record<string, number>>({});
   const [shifts, setShifts] = useState<StaffShift[]>([]);
+  const [range, setRange] = useState<{ sessions: LedgerSession[]; buyins: LedgerBuyin[] }>({ sessions: [], buyins: [] });
   const [loading, setLoading] = useState(true);
 
-  const todayGames = schedules.filter((s) => s.venueId === venueId && s.date === d);
+  const upcoming = schedules
+    .filter((s) => s.venueId === venueId && s.date >= d)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(0, 5);
 
   const reload = useCallback(() => {
     getLedgerSession(venueId, d).then(setSession).catch(() => {});
     getLedgerBuyins(venueId, d).then(setBuyins).catch(() => {});
     getClockState(venueId).then(setClock).catch(() => {});
     getStaffSchedule(venueId, d, d).then(setShifts).catch(() => {});
-    const ids = schedules.filter((s) => s.venueId === venueId && s.date === d).map((s) => s.id);
+    getLedgerRange(venueId, days[0], days[6]).then(setRange).catch(() => {});
+    const ids = schedules.filter((s) => s.venueId === venueId && s.date >= d).map((s) => s.id);
     if (ids.length) getReservationCounts(ids).then(setResCounts).catch(() => {});
     else setResCounts({});
     setLoading(false);
-  }, [venueId, d, schedules]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [venueId, d]);
 
   useEffect(() => { setLoading(true); reload(); }, [reload]);
   useEffect(() => subscribeLedger(venueId, reload), [venueId, reload]);
@@ -73,11 +85,38 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const levelNo = clock ? clock.config.levels.slice(0, clock.currentIndex + 1).filter((l) => l.kind === 'level').length : 0;
 
   // ── 예약 / 출근 ──
-  const totalRes = Object.values(resCounts).reduce((a, b) => a + b, 0);
+  const totalRes = upcoming.reduce((a, g) => a + (resCounts[g.id] ?? 0), 0);
   const workedStaff = shifts.filter((s) => s.checkIn);
+
+  // ── 최근 7일 추세 ──
+  const sessByDate: Record<string, LedgerSession> = {};
+  range.sessions.forEach((s) => { sessByDate[s.sessionDate] = s; });
+  const perDay = days.map((day) => {
+    const s = sessByDate[day];
+    let entry = 0, paid = 0;
+    if (s) for (const b of range.buyins) {
+      if (b.sessionDate !== day) continue;
+      const f = buyinFinance(b, s);
+      entry += f.entry; paid += f.paid;
+    }
+    return { day, dow: DOW[new Date(day + 'T00:00:00').getDay()], entry: Math.round(entry), paid };
+  });
+  const weekEntry = perDay.reduce((a, x) => a + x.entry, 0);
+  const weekPaid = perDay.reduce((a, x) => a + x.paid, 0);
+  const maxEntry = Math.max(1, ...perDay.map((x) => x.entry));
+  const bestDay = perDay.reduce((a, x) => (x.entry > a.entry ? x : a), perDay[0]);
 
   return (
     <div className="space-y-3">
+      {/* 미수·리스크 알림 */}
+      {started && fin.unpaid > 0 && (
+        <button type="button" onClick={() => onGoto('ledger')}
+          className="flex w-full items-center gap-2 rounded-card border border-danger/40 bg-danger/[0.08] px-3 py-2.5 text-left hover:bg-danger/[0.12] transition-colors">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-danger-light" aria-hidden><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+          <span className="text-xs text-danger-light">오늘 <b className="tabular-nums">{wonToMan(fin.unpaid)}만원</b> 미수금이 있습니다 — 장부에서 확인하세요.</span>
+        </button>
+      )}
+
       {/* 빠른 작업 */}
       <div className="grid grid-cols-3 gap-2">
         <QuickAction label="새 게임" onClick={onCreatePoster}
@@ -85,10 +124,9 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         <QuickAction label="장부" onClick={() => onGoto('ledger')}
           icon={<><path d="M4 4h12a2 2 0 0 1 2 2v14l-3-2-3 2-3-2-3 2V6a2 2 0 0 1 2-2Z" /></>} />
         <QuickAction label="클락" onClick={() => onGoto('clock')}
-          icon={<><circle cx="12" cy="13" r="7" /><path d="M12 10v3l2 2M12 2h0" /><line x1="9" y1="2" x2="15" y2="2" /></>} />
+          icon={<><circle cx="12" cy="13" r="7" /><path d="M12 10v3l2 2" /><line x1="9" y1="2" x2="15" y2="2" /></>} />
       </div>
 
-      {/* 요약 카드 그리드 — 모바일 1열, 데스크톱 2열 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {/* 오늘 장부 */}
         <DashCard title="오늘 장부" onClick={() => onGoto('ledger')}
@@ -132,20 +170,43 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           )}
         </DashCard>
 
-        {/* 오늘 게임·예약 */}
-        <DashCard title="오늘 게임 · 예약" onClick={() => onGoto('posters')}
+        {/* 최근 7일 추세 */}
+        <DashCard title="최근 7일 추세" onClick={() => onGoto('stats')}
+          badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-violet-500/15 text-violet-300">통계·AI →</span>}>
+          {loading ? <Skeleton /> : weekEntry === 0 ? (
+            <p className="py-3 text-center text-2xs text-ink-muted">최근 7일 장부 데이터가 없습니다.</p>
+          ) : (
+            <>
+              <div className="flex items-end justify-between gap-1 h-14 mb-1.5">
+                {perDay.map((x) => (
+                  <div key={x.day} className="flex flex-1 flex-col items-center justify-end gap-0.5 h-full">
+                    <div className="w-full max-w-[18px] rounded-sm bg-gold-300/80" style={{ height: `${Math.max(4, (x.entry / maxEntry) * 100)}%` }} title={`${x.dow} ${x.entry}엔트리`} />
+                    <span className={`text-[9px] ${x.day === d ? 'text-gold-300 font-bold' : 'text-ink-muted'}`}>{x.dow}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center justify-between text-2xs border-t border-border-subtle pt-1.5">
+                <span className="text-ink-muted">7일 합계</span>
+                <span className="text-ink-secondary tabular-nums"><b className="text-gold-300">{weekEntry}</b>엔트리 · <b className="text-ink-primary">{wonToMan(weekPaid)}</b>만</span>
+              </div>
+              {bestDay.entry > 0 && <p className="text-[10px] text-ink-muted mt-1">가장 활발: <b className="text-gold-300">{bestDay.dow}요일</b> ({bestDay.entry}엔트리)</p>}
+            </>
+          )}
+        </DashCard>
+
+        {/* 다가오는 예약 */}
+        <DashCard title="다가오는 예약" onClick={() => onGoto('posters')}
           badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-gold-300/15 text-gold-300">예약 {totalRes}</span>}>
-          {loading ? <Skeleton /> : todayGames.length === 0 ? (
-            <p className="py-3 text-center text-2xs text-ink-muted">오늘 예정된 게임이 없습니다.</p>
+          {loading ? <Skeleton /> : upcoming.length === 0 ? (
+            <p className="py-3 text-center text-2xs text-ink-muted">예정된 게임이 없습니다.</p>
           ) : (
             <ul className="space-y-1.5">
-              {todayGames.slice(0, 3).map((g) => (
+              {upcoming.map((g) => (
                 <li key={g.id} className="flex items-center justify-between gap-2 text-xs">
-                  <span className="truncate text-ink-secondary">{g.title}</span>
+                  <span className="truncate text-ink-secondary"><span className="text-2xs text-ink-muted tabular-nums mr-1">{g.date.slice(5).replace('-', '/')}</span>{g.title}</span>
                   <span className="shrink-0 tabular-nums text-ink-muted">예약 {resCounts[g.id] ?? 0}명</span>
                 </li>
               ))}
-              {todayGames.length > 3 && <li className="text-2xs text-ink-muted">+{todayGames.length - 3}개 더</li>}
             </ul>
           )}
         </DashCard>
