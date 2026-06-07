@@ -228,15 +228,18 @@ export default function NotificationPanel({
           )}
         </ul>
 
-        {/* 푸터 */}
-        {notifications.length > 0 && (
+        {/* 푸터 — 모두 읽음 */}
+        {notifications.some((n) => !n.read) && (
           <footer className="px-4 py-2.5 border-t border-border-subtle text-center">
             <button
               type="button"
-              onClick={() => setFilter('all')}
-              className="text-xs text-ink-secondary hover:text-gold-300 transition-colors focus:outline-none"
+              onClick={() => {
+                const ids = notifications.filter((n) => !n.read).map((n) => n.id);
+                if (ids.length) { onMarkRead(ids); unreadOnOpenRef.current = []; }
+              }}
+              className="text-xs font-semibold text-gold-300 hover:text-gold-200 transition-colors focus:outline-none"
             >
-              모든 알림 보기
+              모두 읽음으로 표시
             </button>
           </footer>
         )}
