@@ -22,7 +22,6 @@ import ProfileModal from './components/features/ProfileModal';
 import StaffInviteBanner from './components/features/StaffInviteBanner';
 import ErrorBoundary from './components/atoms/ErrorBoundary';
 import InstallBanner from './components/atoms/InstallBanner';
-import OnboardingTour from './components/features/OnboardingTour';
 import GlobalSearchModal from './components/features/GlobalSearchModal';
 import { tierColor } from './components/atoms/TierBadge';
 import NoticeFormModal from './components/features/NoticeFormModal';
@@ -982,7 +981,6 @@ export default function App() {
 
       <PendingApprovalBanner />
       <InstallBanner />
-      <OnboardingTour />
 
       <TabBar tabs={tabs} active={activeTab} onChange={setActiveTab} />
 
@@ -1060,8 +1058,8 @@ export default function App() {
                 viewMode === 'grid'
                   // 그리드 뷰: 모바일 2열 → 데스크톱 4~5열
                   ? 'grid grid-cols-2 gap-card-gap sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
-                  // 리스트 뷰: 모바일 1열 → 데스크톱 2~3열(가로 카드)
-                  : 'grid grid-cols-1 gap-card-gap md:grid-cols-2 xl:grid-cols-3',
+                  // 리스트 뷰: 항상 1열(가로 카드) — 본문 폭 안에서 카드가 반토막/잘리지 않게
+                  : 'grid grid-cols-1 gap-card-gap',
               ].join(' ')}>
                 {visibleSchedules.map((s) => (
                   <ScheduleCard
