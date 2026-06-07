@@ -8,6 +8,7 @@ import GtoDeepWidget from './gto/GtoDeepWidget';
 import OwnerCommunity from './OwnerCommunity';
 import DealerCommunity from './DealerCommunity';
 import TierLeaderboard from './TierLeaderboard';
+import ToolsPanel from './ToolsPanel';
 import { useToast } from '../atoms/Toast';
 import { filterContent } from '../../lib/content-filter';
 import { parseHand } from '../../lib/hand';
@@ -34,7 +35,7 @@ interface CommunityTabProps {
 }
 
 // Task 4: [실시간 댓글(라이브월), 게시판, 홀덤 공부, 홀덤펍]
-type Section = 'live' | 'board' | 'study' | 'venues' | 'rank' | 'dealer' | 'owner';
+type Section = 'live' | 'board' | 'study' | 'tools' | 'venues' | 'rank' | 'dealer' | 'owner';
 // 다른 메인 탭(중고장터 등)으로 갔다 돌아와도 커뮤니티 섹션이 유지되도록 모듈 레벨에 기억
 let lastCommunitySection: Section = 'venues';
 
@@ -106,6 +107,7 @@ export default function CommunityTab({
           <SectionTab active={section === 'live'}   label="실시간 댓글" onClick={() => setSection('live')} />
           <SectionTab active={section === 'board'}  label="게시판"      onClick={() => setSection('board')} />
           <SectionTab active={section === 'study'}  label="홀덤 공부"   onClick={() => setSection('study')} />
+          <SectionTab active={section === 'tools'}  label="도구"        onClick={() => setSection('tools')} />
           <SectionTab active={section === 'dealer'} label="딜러"        onClick={() => setSection('dealer')} />
           <SectionTab active={section === 'rank'}   label="랭킹"        onClick={() => setSection('rank')} />
           {canOwnerCommunity && (
@@ -145,6 +147,8 @@ export default function CommunityTab({
           />
         </div>
       )}
+
+      {section === 'tools' && <ToolsPanel />}
 
       {section === 'venues' && (
         <div className="space-y-3">
