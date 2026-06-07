@@ -20,7 +20,6 @@ import type { PosterFormData } from './components/features/PosterFormModal';
 import NuriHoldemLogo from './components/atoms/NuriHoldemLogo';
 import ThemeToggle from './components/atoms/ThemeToggle';
 import ProfileModal from './components/features/ProfileModal';
-import VoucherWalletModal from './components/features/VoucherWalletModal';
 import { PORTONE_CONFIGURED } from './components/features/IdentityVerificationButton';
 import StaffInviteBanner from './components/features/StaffInviteBanner';
 import ErrorBoundary from './components/atoms/ErrorBoundary';
@@ -67,6 +66,7 @@ const MarketplaceTab = lazyWithReload(() => import('./components/features/Market
 const VenueManageTab = lazyWithReload(() => import('./components/features/VenueManageTab'));
 const ToolsPanel     = lazyWithReload(() => import('./components/features/ToolsPanel'));
 const LiveGamesTab   = lazyWithReload(() => import('./components/features/LiveGamesTab'));
+const CustomerDashboardPage = lazyWithReload(() => import('./components/features/CustomerDashboardPage'));
 
 // 지연 로딩 폴백 — 청크 받아오는 짧은 순간의 로더(레이아웃 점프 최소화)
 function LazyFallback() {
@@ -1026,7 +1026,11 @@ export default function App() {
         </button>
       )}
 
-      <VoucherWalletModal open={voucherWalletOpen} onClose={() => setVoucherWalletOpen(false)} />
+      {voucherWalletOpen && (
+        <Suspense fallback={<OverlayFallback />}>
+          <CustomerDashboardPage open={voucherWalletOpen} onClose={() => setVoucherWalletOpen(false)} />
+        </Suspense>
+      )}
 
       <PendingApprovalBanner />
       <InstallBanner />

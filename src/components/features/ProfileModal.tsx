@@ -9,7 +9,6 @@ import { requestPasswordChangeCode, changeMyPasswordWithCode } from '../../api/a
 import { pushSupported, isPushSubscribed, enablePush, disablePush } from '../../api/push';
 import AvatarCropper from './AvatarCropper';
 import ActivityBadges from '../atoms/ActivityBadges';
-import CustomerDashboardModal from './CustomerDashboardModal';
 import IdentityVerificationButton from './IdentityVerificationButton';
 import { getMyVisitStats } from '../../api/reservations';
 
@@ -47,7 +46,6 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
   const { user, updateProfile, refreshProfile } = useAuth();
   const toast = useToast();
   const [visitStats, setVisitStats] = useState({ visits: 0, upcoming: 0, total: 0 });
-  const [dashOpen, setDashOpen] = useState(false);
   useEffect(() => { if (open) getMyVisitStats().then(setVisitStats).catch(() => {}); }, [open]);
 
   const [tab, setTab] = useState<Tab>('profile');
@@ -304,14 +302,6 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
 
           {/* 내 활동 · 뱃지 진열장 */}
           <ActivityBadges points={user?.activityPoints ?? 0} visits={visitStats.visits} upcoming={visitStats.upcoming} />
-
-          {/* 내 대시보드 · 매장이용권 지갑 */}
-          <button type="button" onClick={() => setDashOpen(true)}
-            className="flex w-full items-center justify-between rounded-card border border-gold-400/30 bg-gold-300/[0.06] px-3 py-2.5 text-left transition-colors hover:bg-gold-300/[0.1]">
-            <span className="text-sm font-semibold text-gold-300">내 대시보드 · 매장이용권</span>
-            <span className="text-xs text-gold-300">→</span>
-          </button>
-          <CustomerDashboardModal open={dashOpen} onClose={() => setDashOpen(false)} />
 
           {/* 본인인증 (1인 1계정) */}
           {user?.verified ? (
