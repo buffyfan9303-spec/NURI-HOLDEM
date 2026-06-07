@@ -12,6 +12,7 @@ import RegularsModal from './RegularsModal';
 import WaitlistModal from './WaitlistModal';
 import DealerShiftsModal from './DealerShiftsModal';
 import VoucherManageModal from './VoucherManageModal';
+import CheckinModal from './CheckinModal';
 import { getStaffSchedule, getStaffWages, subscribeStaffSchedule, type StaffShift, type StaffWage } from '../../api/staffSchedule';
 
 const localToday = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD (로컬)
@@ -67,6 +68,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const [waitOpen, setWaitOpen] = useState(false);
   const [dealerOpen, setDealerOpen] = useState(false);
   const [voucherOpen, setVoucherOpen] = useState(false);
+  const [checkinOpen, setCheckinOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const upcoming = schedules
@@ -219,6 +221,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       <WaitlistModal open={waitOpen} onClose={() => setWaitOpen(false)} venueId={venueId} />
       <DealerShiftsModal open={dealerOpen} onClose={() => setDealerOpen(false)} venueId={venueId} monthKey={mr.start.slice(0, 7)} />
       <VoucherManageModal open={voucherOpen} onClose={() => setVoucherOpen(false)} venueId={venueId} />
+      <CheckinModal open={checkinOpen} onClose={() => setCheckinOpen(false)} venueId={venueId} />
       {/* 미수·리스크 알림 */}
       {started && fin.unpaid > 0 && (
         <button type="button" onClick={() => onGoto('ledger')}
@@ -419,6 +422,12 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         <DashCard title="딜러 관리" onClick={() => setDealerOpen(true)}
           badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-gold-300/15 text-gold-300">로테이션·급여 →</span>}>
           <p className="py-3 text-center text-2xs text-ink-muted">딜러 시프트 등록 + 월 급여 명세를 관리합니다.</p>
+        </DashCard>
+
+        {/* QR 체크인 */}
+        <DashCard title="QR 체크인" onClick={() => setCheckinOpen(true)}
+          badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-gold-300/15 text-gold-300">QR·명단 →</span>}>
+          <p className="py-3 text-center text-2xs text-ink-muted">손님 체크인 QR 표시 + 오늘 체크인 명단(실시간).</p>
         </DashCard>
 
         {/* 손님 유형 비중(오늘) */}

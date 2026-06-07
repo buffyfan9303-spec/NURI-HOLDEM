@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, Suspense } from 'react';
 import { useToast } from './components/atoms/Toast';
+import { checkIn } from './api/checkins';
 import UnreadBadge from './components/atoms/UnreadBadge';
 import ViewModeToggle from './components/atoms/ViewModeToggle';
 import type { ViewMode } from './components/atoms/ViewModeToggle';
@@ -416,6 +417,23 @@ export default function App() {
   const [authOpen, setAuthOpen]       = useState(false);
   const [openVenueId, setOpenVenueId] = useState<string | null>(null);
   const [openSchedule, setOpenSchedule] = useState<Schedule | null>(null);
+
+  // ── QR 체크인 (?checkin=<venueId>) ─────────────────────────────────────
+  // QR엔 venue_id만(비민감). 로그인 회원만 기록(check_in RPC, 4시간 중복 방지). 미로그인 시 로그인 후 재진입에서 처리.
+  useEffect(() => {
+    const cv = new URLSearchParams(window.location.search).get('checkin');
+    if (!cv) return;
+    if (!user) { setAuthOpen(true); return; }
+    checkIn(cv)
+      .then((name) => toast.show(`${name || '매장'} 체크인 완료! 🎉`, 'success'))
+      .catch((e) => toast.show(e instanceof Error ? e.message : '체크인 실패', 'error'))
+      .finally(() => {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('checkin');
+        window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   // 홈(browse) 외 탭에서 브라우저/모바일 뒤로가기 → 홈 탭으로 복귀(앱 종료 방지).
   // 오버레이가 열려 있으면 중앙 back-stack 이 LIFO 로 그 오버레이부터 닫는다.
