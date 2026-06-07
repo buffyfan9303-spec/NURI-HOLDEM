@@ -12,15 +12,19 @@ import LedgerStatsPanel, { PosSettingsPanel } from './LedgerStatsPanel';
 import TournamentClock from './clock/TournamentClock';
 import StaffSchedule from './StaffSchedule';
 import { StaffWageManager, StaffSettlement, StaffWorkLog, StaffSelfAttendance } from './StaffPayroll';
+import StoreDashboard from './StoreDashboard';
+import MyPostersTab from './MyPostersTab';
+import type { Schedule } from '../../api/schedules';
 
-type Section = 'ledger' | 'stats' | 'ranking' | 'staff' | 'settings' | 'clock' | 'attendance';
+type Section = 'dashboard' | 'posters' | 'ledger' | 'stats' | 'ranking' | 'staff' | 'settings' | 'clock' | 'attendance';
 
 /** 업주/직원 전용 "매장 관리" 탭 — 장부(POS) · 통계 · 순위 입력 · (업주) 직원 관리 */
-export default function VenueManageTab({ onAddPoster }: { onAddPoster?: () => void }) {
+export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster, onDeletePoster }: { schedules: Schedule[]; onCreatePoster: () => void; onEditPoster: (id: string) => void; onDeletePoster: (id: string) => void }) {
   const { user } = useAuth();
   const isOwner = user?.role === 'venue_owner';
   const isAdmin = user?.role === 'admin';
   const canStaff = isOwner || isAdmin; // 직원 관리·POS 설정 접근
+  const canPosters = isOwner || isAdmin; // 포스터·예약 관리
   const [adminVenues, setAdminVenues] = useState<Venue[]>([]);
   const [adminVenueId, setAdminVenueId] = useState<string | null>(null);
   // 운영자는 선택한 매장, 그 외는 본인 소속 매장
@@ -48,7 +52,7 @@ export default function VenueManageTab({ onAddPoster }: { onAddPoster?: () => vo
     let alive = true;
     if (isAdmin) {
       setLedgerOk(true); setManageOk(true);
-      setSection((s) => s ?? 'ledger');
+      setSection((s) => s ?? 'dashboard');
       setPermsLoaded(true);
       return () => { alive = false; };
     }
@@ -57,7 +61,7 @@ export default function VenueManageTab({ onAddPoster }: { onAddPoster?: () => vo
       .then(([l, m]) => {
         if (!alive) return;
         setLedgerOk(l); setManageOk(m);
-        setSection((s) => s ?? (l ? 'ledger' : (m ? 'stats' : null)));
+        setSection((s) => s ?? 'dashboard');
       })
       .catch(() => { if (alive) setSection(null); })
       .finally(() => { if (alive) setPermsLoaded(true); });
@@ -65,7 +69,8 @@ export default function VenueManageTab({ onAddPoster }: { onAddPoster?: () => vo
   }, [venueId, isAdmin]);
 
   // 사용 가능한 섹션(권한): 장부·순위 = 업주 또는 승인된(장부권한) 직원 / 통계·직원관리 = 업주만
-  const available: { id: Section; label: string }[] = [];
+  const available: { id: Section; label: string }[] = [{ id: 'dashboard', label: '대시보드' }];
+  if (canPosters) available.push({ id: 'posters', label: '포스터·예약' });
   if (ledgerOk) available.push({ id: 'ledger', label: '장부' });
   if (manageOk) available.push({ id: 'stats',  label: '통계' });
   if (ledgerOk) available.push({ id: 'ranking', label: '순위 입력' });
@@ -99,13 +104,6 @@ export default function VenueManageTab({ onAddPoster }: { onAddPoster?: () => vo
         </div>
       )}
 
-      {isOwner && onAddPoster && (
-        <button type="button" onClick={onAddPoster}
-          className="btn-primary w-full flex items-center justify-center gap-1.5 text-sm">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-          포스터 추가
-        </button>
-      )}
       {isOwner && <VenueVerificationCard />}
 
       {!venueId ? (
@@ -124,6 +122,8 @@ export default function VenueManageTab({ onAddPoster }: { onAddPoster?: () => vo
             </div>
           )}
 
+          {section === 'dashboard' && <StoreDashboard venueId={venueId} schedules={schedules} onGoto={(s) => setSection(s as Section)} onCreatePoster={onCreatePoster} />}
+          {section === 'posters' && canPosters && <MyPostersTab schedules={schedules} onCreate={onCreatePoster} onEdit={onEditPoster} onDelete={onDeletePoster} />}
           {section === 'ledger'  && ledgerOk && (
             <NuriPosLedger venueId={venueId} canManage={manageOk}
               onMakeRankingDraft={(d, names) => { setRankingDraft({ date: d, names }); setSection('ranking'); }}

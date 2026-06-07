@@ -57,7 +57,6 @@ const CommunityTab   = lazyWithReload(() => import('./components/features/Commun
 const GtoDeepModal   = lazyWithReload(() => import('./components/features/gto/GtoDeepModal'));
 const VenuePage      = lazyWithReload(() => import('./components/features/VenuePage'));
 const GroupPage      = lazyWithReload(() => import('./components/features/GroupPage'));
-const MyPostersTab   = lazyWithReload(() => import('./components/features/MyPostersTab'));
 const MarketplaceTab = lazyWithReload(() => import('./components/features/MarketplaceTab'));
 const VenueManageTab = lazyWithReload(() => import('./components/features/VenueManageTab'));
 
@@ -79,7 +78,7 @@ function OverlayFallback() {
 
 // ── 탭 정의 ──────────────────────────────────────────────────────────────────
 
-type TabId = 'browse' | 'community' | 'market' | 'my-posters' | 'my-venue' | 'admin';
+type TabId = 'browse' | 'community' | 'market' | 'my-store' | 'admin';
 interface TabDef { id: TabId; label: string; }
 
 // ── 헤더 ─────────────────────────────────────────────────────────────────────
@@ -546,8 +545,7 @@ export default function App() {
       { id: 'community', label: '커뮤니티' },
       { id: 'market',    label: '중고장터' },
     ];
-    if (isOwner || isAdmin) base.push({ id: 'my-posters', label: isAdmin ? '포스터 등록' : '게임 관리' });
-    if (isOwner || isStaff || isAdmin) base.push({ id: 'my-venue',   label: '매장 관리' });
+    if (isOwner || isStaff || isAdmin) base.push({ id: 'my-store', label: '내 매장' });
     if (isAdmin)            base.push({ id: 'admin',       label: '관리자 설정' });
     return base;
   }, [isOwner, isStaff, isAdmin]);
@@ -665,7 +663,7 @@ export default function App() {
     }
     // /admin (포스터 승인 알림)
     if (link === '/admin' || n.type === 'approval') {
-      setActiveTab(isAdmin ? 'admin' : 'my-posters');
+      setActiveTab(isAdmin ? 'admin' : 'my-store');
       return;
     }
     toast.show(n.title, 'info');
@@ -1085,12 +1083,12 @@ export default function App() {
         </main>
       )}
 
-      {/* 내 포스터 (매장업주 전용 — tabs 배열에서 isOwner 시에만 추가됨) */}
-      {activeTab === 'my-posters' && (
+      {/* 내 매장 — 게임관리 + 매장운영 통합 허브 (업주/직원/운영자) */}
+      {activeTab === 'my-store' && (
         <main className="px-page-x py-section animate-fade-in">
-          <MyPostersTab
+          <VenueManageTab
             schedules={schedules}
-            onCreate={() => {
+            onCreatePoster={() => {
               // 승인 전 업주는 포스터 등록 차단(서버 RLS와 이중 방어 + 명확한 안내)
               if (user?.role === 'venue_owner' && !user.approved) {
                 toast.show('매장 승인 완료 후 포스터를 등록할 수 있습니다', 'error');
@@ -1098,26 +1096,11 @@ export default function App() {
               }
               setPosterFormTarget(undefined);
             }}
-            onEdit={(id) => {
+            onEditPoster={(id) => {
               const s = schedules.find((x) => x.id === id);
               if (s) setPosterFormTarget(s);
             }}
-            onDelete={(id) => { handleDeletePoster(id); toast.show('포스터가 삭제되었습니다', 'success'); }}
-          />
-        </main>
-      )}
-
-      {/* 매장 관리 (업주/직원 전용) */}
-      {activeTab === 'my-venue' && (
-        <main className="px-page-x py-section animate-fade-in">
-          <VenueManageTab
-            onAddPoster={() => {
-              if (user?.role === 'venue_owner' && !user.approved) {
-                toast.show('매장 승인 완료 후 포스터를 등록할 수 있습니다', 'error');
-                return;
-              }
-              setPosterFormTarget(undefined);
-            }}
+            onDeletePoster={(id) => { handleDeletePoster(id); toast.show('포스터가 삭제되었습니다', 'success'); }}
           />
         </main>
       )}
