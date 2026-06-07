@@ -96,22 +96,22 @@ function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete }: {
   return (
     <li className="rounded-card bg-surface-low border border-border-default overflow-hidden">
       <div className="flex items-center gap-3 p-3">
-        <button type="button" onClick={toggle} className="w-12 h-16 shrink-0 rounded-input overflow-hidden flex items-center justify-center"
+        <button type="button" onClick={onEdit} aria-label="포스터 수정" className="w-12 h-16 shrink-0 rounded-input overflow-hidden flex items-center justify-center"
           style={schedule.posterUrl ? undefined : { background: `linear-gradient(135deg, ${schedule.posterColor ?? '#1a1d24'}ee, #0a0c0f)` }}>
           {schedule.posterUrl ? <img src={schedule.posterUrl} alt="" className="w-full h-full object-cover" loading="lazy" /> : <span className="text-2xl opacity-30">♠</span>}
         </button>
-        <button type="button" onClick={toggle} className="flex-1 min-w-0 text-left">
+        <button type="button" onClick={onEdit} className="flex-1 min-w-0 text-left">
           <div className="flex items-center gap-1 mb-0.5">
             {schedule.isPremium && <span className="rounded-badge bg-gold-300 px-1 py-0.5 text-2xs font-bold text-ink-inverse leading-none">TOP</span>}
             {!schedule.approved && <span className="rounded-badge bg-amber-500/15 text-amber-400 border border-amber-500/30 px-1 py-0.5 text-2xs font-semibold leading-none">승인대기</span>}
             <span className="rounded-badge bg-surface-high text-ink-secondary border border-border-default px-1 py-0.5 text-2xs font-semibold leading-none">{schedule.format}</span>
           </div>
           <p className="text-sm font-medium text-ink-primary truncate">{schedule.title}</p>
-          <p className="text-2xs text-ink-muted mt-0.5">{d.getMonth() + 1}/{d.getDate()} {schedule.startTime} · 바이인 {schedule.buyIn.amount.toLocaleString()} · {open ? '▲ 예약 닫기' : '▼ 예약 보기'}</p>
+          <p className="text-2xs text-ink-muted mt-0.5">{d.getMonth() + 1}/{d.getDate()} {schedule.startTime} · 바이인 {schedule.buyIn.amount.toLocaleString()} · 탭하여 수정</p>
         </button>
         <div className="flex items-center gap-1 shrink-0">
           {/* 예약관리(왼쪽) */}
-          <button type="button" onClick={toggle} className="btn-ghost text-xs px-2 text-gold-300">예약관리{reservations ? `(${reservations.length})` : ''}</button>
+          <button type="button" onClick={toggle} className="btn-ghost text-xs px-2 text-gold-300">예약관리{reservations ? `(${reservations.length})` : ''} {open ? '▲' : '▼'}</button>
           {confirming ? (
             <>
               <button type="button" onClick={() => setConfirming(false)} className="btn-ghost text-xs px-2">취소</button>

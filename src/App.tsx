@@ -182,7 +182,7 @@ function AppHeader({
                 <span
                   className="relative w-8 h-8 rounded-full overflow-hidden flex items-center justify-center
                              select-none transition-transform group-hover:scale-105 group-active:scale-90"
-                  style={{ background: user.avatarColor ?? '#5A6175', boxShadow: `0 0 0 2px ${tierColor(user.activityPoints ?? 0, user.role === 'admin')}` }}
+                  style={{ background: user.avatarColor ?? '#5A6175', boxShadow: `0 0 0 2px ${tierColor(user.activityPoints ?? 0, user.role === 'admin')}, 0 0 10px ${tierColor(user.activityPoints ?? 0, user.role === 'admin')}aa` }}
                   title="내 등급"
                 >
                   <span className="text-xs font-bold text-white">{user.name[0]}</span>
@@ -869,7 +869,7 @@ export default function App() {
         paymentMethods: data.paymentMethods,
         partners:     data.partners,
         rankingPrizes: data.rankingPrizes.filter((r) => r.amount > 0),
-        promotions:   data.events.map((title) => ({ title })),
+        promotions:   data.events,
         seats,
       };
       if (data.posterUrl !== undefined) patch.posterUrl = data.posterUrl;
@@ -910,7 +910,7 @@ export default function App() {
       paymentMethods: data.paymentMethods,
       partners:       data.partners,
       rankingPrizes:  data.rankingPrizes.filter((r) => r.amount > 0),
-      promotions:     data.events.map((title) => ({ title })),
+      promotions:     data.events,
       seats,
       posterUrl:      data.posterUrl,
       posterColor:    '#7C2D7E',

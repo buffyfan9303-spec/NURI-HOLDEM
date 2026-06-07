@@ -35,7 +35,7 @@ export interface PosterFormData {
   partners: string[];     // 파트너 / 시드권 — 업주 직접 추가
   prizes: string[];
   rankingPrizes: { rank: string; amount: number; unit: string }[]; // 순위별 상금(값+단위 직접 입력) — 선택
-  events: string[];       // 이벤트/프로모션(신규·할인 등) — 선택
+  events: { badge?: string; title: string }[]; // 이벤트/프로모션(배지 + 내용) — 선택
   posterUrl?: string;
   // 관리자 직접 등록용 — 홀덤펍 선택(기존) 또는 직접 입력
   venueId?: string;
@@ -91,7 +91,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
         partners: schedule.partners ?? [],
         prizes: schedule.seats?.map((s) => `${s.label} ${s.count}석`) ?? [],
         rankingPrizes: schedule.rankingPrizes?.map((r) => ({ rank: r.rank, amount: r.amount, unit: r.unit ?? '' })) ?? [],
-        events: schedule.promotions?.map((p) => p.title) ?? [],
+        events: schedule.promotions?.map((p) => ({ badge: p.badge, title: p.title })) ?? [],
         posterUrl: schedule.posterUrl,
         venueId: schedule.venueId, pubName: schedule.pubName,
       });
@@ -374,27 +374,9 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
           />
         </FieldWrap>
 
-        {/* 이벤트 / 프로모션 — 모두 직접 작성 (선택) */}
-        <FieldWrap label={`이벤트 / 프로모션 (${form.events.length}/${MAX_EVENTS})`}>
-          <TagAdder
-            items={form.events}
-            max={MAX_EVENTS}
-            total={form.events.length}
-            placeholder="이벤트 직접 입력 (예: 신규 이벤트, 할인 이벤트, 오픈 기념)"
-            onAdd={(v) => { if (!form.events.includes(v)) update('events', [...form.events, v]); }}
-            onRemove={(v) => update('events', form.events.filter((e) => e !== v))}
-          />
-          {/* 빠른 추가 프리셋 — 자주 쓰는 이벤트 배지 */}
-          <div className="mt-1.5 flex flex-wrap gap-1">
-            {['신규 이벤트', '할인 이벤트', '오픈 기념', '마감 임박', '프리롤', '적립 이벤트', '연말 이벤트'].map((p) => (
-              <button key={p} type="button"
-                disabled={form.events.includes(p) || form.events.length >= MAX_EVENTS}
-                onClick={() => { if (!form.events.includes(p) && form.events.length < MAX_EVENTS) update('events', [...form.events, p]); }}
-                className="rounded-badge border border-border-default bg-surface-high px-2 py-0.5 text-2xs text-ink-secondary hover:text-gold-300 disabled:opacity-40">
-                + {p}
-              </button>
-            ))}
-          </div>
+        {/* 이벤트 · 프로모션 — 배지 + 내용 (포스터에 50%·5만 등 배지로 표시) */}
+        <FieldWrap label={`이벤트 · 프로모션 (${form.events.length}/${MAX_EVENTS}) · 50%·5만 등 배지`}>
+          <PromotionEditor items={form.events} onChange={(v) => update('events', v)} />
         </FieldWrap>
 
         {/* 순위별 상금 — 1등부터 머니인 구간까지 (선택, 단위 직접 입력) */}
@@ -488,6 +470,58 @@ function RankingPrizeList({ prizes, onChange }: {
           + 순위 추가 {prizes.length === 0 && '(1등부터 머니인까지 · 단위 직접 입력)'}
         </button>
       )}
+    </div>
+  );
+}
+
+// 이벤트·프로모션 — 배지(50%·5만 등) + 내용. 포스터 상세에 배지로 노출.
+function PromotionEditor({ items, onChange }: {
+  items: { badge?: string; title: string }[];
+  onChange: (v: { badge?: string; title: string }[]) => void;
+}) {
+  const PRESETS: { badge: string; title: string }[] = [
+    { badge: '50%', title: '첫 방문 50% 할인' },
+    { badge: '5만', title: '1LV 바인 5만' },
+    { badge: '7만', title: '첫 바인 7만' },
+    { badge: '얼리칩', title: '사전예약 얼리칩' },
+    { badge: 'NEW', title: '신규 이벤트' },
+    { badge: '할인', title: '할인 이벤트' },
+  ];
+  const setAt = (i: number, patch: Partial<{ badge?: string; title: string }>) =>
+    onChange(items.map((x, k) => (k === i ? { ...x, ...patch } : x)));
+  const add = (p?: { badge: string; title: string }) => {
+    if (items.length >= MAX_EVENTS) return;
+    onChange([...items, p ?? { badge: '', title: '' }]);
+  };
+  return (
+    <div className="space-y-1.5">
+      {items.length > 0 && (
+        <ul className="space-y-1">
+          {items.map((p, i) => (
+            <li key={i} className="flex items-center gap-1.5">
+              <input value={p.badge ?? ''} onChange={(e) => setAt(i, { badge: e.target.value })} maxLength={6}
+                placeholder="배지" className="input w-16 shrink-0 text-center text-sm font-bold text-gold-300" />
+              <input value={p.title} onChange={(e) => setAt(i, { title: e.target.value })} maxLength={40}
+                placeholder="내용 (예: 첫 방문 50% 할인)" className="input flex-1 min-w-0 text-sm" />
+              <button type="button" onClick={() => onChange(items.filter((_, k) => k !== i))}
+                aria-label="삭제" className="text-ink-muted hover:text-danger text-2xs px-1 shrink-0">✕</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {items.length < MAX_EVENTS && (
+        <button type="button" onClick={() => add()} className="btn-ghost text-xs w-full py-1.5">+ 프로모션 추가</button>
+      )}
+      <div className="flex flex-wrap gap-1">
+        {PRESETS.map((p) => (
+          <button key={p.badge + p.title} type="button"
+            disabled={items.length >= MAX_EVENTS || items.some((x) => x.title === p.title)}
+            onClick={() => add(p)}
+            className="rounded-badge border border-border-default bg-surface-high px-2 py-0.5 text-2xs text-ink-secondary hover:text-gold-300 disabled:opacity-40">
+            + <b className="text-gold-300">{p.badge}</b> {p.title}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

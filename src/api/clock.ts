@@ -61,27 +61,27 @@ export interface ClockState {
 export const PRESET_LIMIT = 50;
 
 // ── 기본 구조(프리셋 없을 때) ───────────────────────────────────────────────────
+// 로티아레나 파이널롤백 기반 기본 블라인드 템플릿(SB/BB) — 자동 생성 기준
+const BASE_BLINDS: [number, number][] = [
+  [100, 200], [200, 300], [200, 400], [300, 500], [300, 600], [400, 800], [500, 1000], [600, 1200],
+  [1000, 1500], [1000, 2000], [1500, 2500], [1500, 3000], [2000, 3000], [2000, 4000], [2500, 5000], [3000, 6000],
+  [4000, 8000], [5000, 10000], [6000, 12000], [10000, 15000], [10000, 20000],
+  [15000, 30000], [20000, 40000], [30000, 60000], [40000, 80000], [50000, 100000],
+];
+
 export function defaultClockConfig(): ClockConfig {
-  const L = (sb: number, bb: number, ante: number, minutes = 20): ClockLevel => ({ kind: 'level', sb, bb, ante, minutes });
-  const B = (minutes = 8): ClockLevel => ({ kind: 'break', sb: 0, bb: 0, ante: 0, minutes, label: `BREAK ${minutes}Min.` });
   return {
     title: '데일리 토너먼트',
-    startStack: 30000, rebuyStack: 30000, addonStack: 30000, isAddon: false,
-    earlyBonus: 10000, doubleEarlyBonus: 20000,
-    regCloseLevel: 9, maxLevel: 15,
+    startStack: 50000, rebuyStack: 70000, addonStack: 0, isAddon: false,
+    earlyBonus: 5000, doubleEarlyBonus: 10000,
+    regCloseLevel: 12, maxLevel: 18,
     earlyDoubleLevel: 1, earlySingleLevel: 4, earlyDoubleMin: 20, earlySingleMin: 80,
     mysteryBounty: 0,
     prizes: [
-      { place: '1st', amount: 400 }, { place: '2nd', amount: 150 }, { place: '3rd', amount: 100 },
-      { place: '4th', amount: 70 }, { place: '5th', amount: 60 }, { place: '6th', amount: 50 },
+      { place: '1위', amount: 400 }, { place: '2위', amount: 200 }, { place: '3위', amount: 100 },
+      { place: '4위', amount: 80 }, { place: '5위', amount: 60 }, { place: '6위', amount: 50 },
     ],
-    levels: [
-      L(100, 200, 200), L(200, 300, 300), L(200, 400, 400), L(300, 500, 500),
-      L(300, 600, 600), B(8),
-      L(400, 800, 800), L(500, 1000, 1000), L(600, 1200, 1200), L(800, 1600, 1600),
-      L(1000, 2000, 2000), B(8),
-      L(1500, 3000, 3000), L(2000, 4000, 4000), L(3000, 6000, 6000),
-    ],
+    levels: generateBlinds(12, 18, 20, 20),
   };
 }
 
@@ -117,21 +117,17 @@ export function withDerivedEarly(cfg: ClockConfig): ClockConfig {
 }
 
 /** 등록마감·최대레벨 기준 블라인드 구조 자동 생성. 마감 후엔 더 가파르게(1.6x)·길게(postDur) 상승. */
-export function generateBlinds(regCloseLevel: number, maxLevel: number, preDur = 20, postDur = 30): ClockLevel[] {
-  const round = (v: number) =>
-    v < 500 ? Math.round(v / 50) * 50
-    : v < 2000 ? Math.round(v / 100) * 100
-    : v < 10000 ? Math.round(v / 500) * 500
-    : Math.round(v / 1000) * 1000;
+export function generateBlinds(regCloseLevel: number, maxLevel: number, preDur = 20, postDur = 20): ClockLevel[] {
+  const round1k = (v: number) => (v < 2000 ? Math.round(v / 100) * 100 : v < 10000 ? Math.round(v / 500) * 500 : Math.round(v / 1000) * 1000);
   const out: ClockLevel[] = [];
-  const max = Math.max(1, Math.min(60, maxLevel || 15));
-  let sb = 100;
+  const max = Math.max(1, Math.min(60, maxLevel || 18));
+  let prev: [number, number] = BASE_BLINDS[BASE_BLINDS.length - 1];
   for (let n = 1; n <= max; n++) {
+    const b: [number, number] = BASE_BLINDS[n - 1] ?? [round1k(prev[0] * 1.4), round1k(prev[1] * 1.4)];
+    prev = b;
     const post = regCloseLevel > 0 && n > regCloseLevel;
-    const bb = sb * 2;
-    out.push({ kind: 'level', sb, bb, ante: bb, minutes: post ? postDur : preDur });
+    out.push({ kind: 'level', sb: b[0], bb: b[1], ante: b[1], minutes: post ? postDur : preDur });
     if (n % 5 === 0 && n < max) out.push({ kind: 'break', sb: 0, bb: 0, ante: 0, minutes: 8, label: 'BREAK 8Min.' });
-    sb = round(sb * (post ? 1.6 : 1.4));
   }
   return out;
 }
