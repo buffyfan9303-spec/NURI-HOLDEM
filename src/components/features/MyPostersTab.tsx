@@ -6,6 +6,17 @@ import {
   getReservations, deleteReservation, updateReservationName, getVenueReserverCounts, subscribeReservations,
   getCustomerActivity, type Reservation, type CustomerActivity,
 } from '../../api/reservations';
+import { toCsv, downloadCsv } from '../../lib/csv';
+
+// 예약 명단 CSV 내보내기 (엑셀 한글 호환)
+function exportReservationsCsv(schedule: Schedule, reservations: Reservation[]) {
+  const csv = toCsv(
+    ['번호', '예약자', '예약시각'],
+    reservations.map((r, i) => [i + 1, r.displayName, new Date(r.createdAt).toLocaleString('ko-KR')]),
+  );
+  const d = new Date(schedule.date);
+  downloadCsv(`${schedule.title}_${d.getMonth() + 1}월${d.getDate()}일_예약명단`, csv);
+}
 
 interface MyPostersTabProps {
   schedules: Schedule[];
@@ -135,7 +146,10 @@ function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete }: {
             <p className="text-2xs text-ink-muted text-center py-2">아직 예약자가 없습니다.</p>
           ) : (
             <>
-              <p className="text-2xs text-ink-muted">예약 {reservations.length}명</p>
+              <div className="flex items-center justify-between">
+                <p className="text-2xs text-ink-muted">예약 {reservations.length}명</p>
+                <button type="button" onClick={() => exportReservationsCsv(schedule, reservations)} className="btn-ghost text-2xs px-2 text-gold-300">CSV 내보내기</button>
+              </div>
               {reservations.map((r, i) => (
                 <ReservationItem key={r.id || i} idx={i + 1} res={r} venueId={venueId}
                   regular={(reserverCounts[r.displayName] ?? 0) >= 5}
