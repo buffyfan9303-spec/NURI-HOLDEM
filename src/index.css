@@ -184,6 +184,18 @@
   100% { opacity: 0; transform: translateY(-24px) scale(1); }
 }
 
+/* 최상위 등급 아바타 테두리 — 은은한 명예 글로우(운영자 SS=레드 / AA·최상위=골드) */
+@keyframes tierPulseAdmin {
+  0%, 100% { box-shadow: 0 0 0 2px #FF4D6D, 0 0 7px 0 rgba(255, 77, 109, 0.55); }
+  50%      { box-shadow: 0 0 0 2px #FF6B85, 0 0 16px 4px rgba(255, 77, 109, 0.95); }
+}
+@keyframes tierPulseAce {
+  0%, 100% { box-shadow: 0 0 0 2px #FFD700, 0 0 8px 0 rgba(255, 215, 0, 0.6); }
+  50%      { box-shadow: 0 0 0 2px #FFE680, 0 0 18px 5px rgba(255, 215, 0, 1); }
+}
+.tier-glow-admin { animation: tierPulseAdmin 2.6s ease-in-out infinite; }
+.tier-glow-ace   { animation: tierPulseAce 2.3s ease-in-out infinite; }
+
 /* 모션 민감 사용자 배려 — OS '동작 줄이기' 설정 시 애니메이션/전환을 즉시화해 멀미·끊김 방지 */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

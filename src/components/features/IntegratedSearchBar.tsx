@@ -73,8 +73,8 @@ export function expandRegions(regions: string[]): string[] {
 type TourFilter = 'all' | 'MTT' | 'GTD' | 'comp';
 const TOUR_OPTIONS: { id: TourFilter; label: string }[] = [
   { id: 'all',  label: '전체' },
-  { id: 'MTT',  label: 'MTT' },
   { id: 'GTD',  label: 'GTD' },
+  { id: 'MTT',  label: 'MTT' },
   { id: 'comp', label: '대회' },
 ];
 
@@ -353,47 +353,8 @@ export default function IntegratedSearchBar({
 
       {/* ── 지역(복수선택) + 토너먼트(라디오) 필터 ──────────────────────── */}
       <div className="flex flex-col gap-2 px-page-x pt-2 pb-1">
-        {/* 지역 칩 */}
-        <div
-          className="flex gap-1.5 overflow-x-auto scrollbar-none [-webkit-overflow-scrolling:touch]"
-          aria-label="지역 필터"
-        >
-          {/* 전체 — 지역 필터 해제(모든 지역) */}
-          <button
-            type="button"
-            onClick={() => setSelectedRegions([])}
-            aria-pressed={selectedRegions.length === 0}
-            className={[
-              'shrink-0 inline-flex items-center h-7 px-3 rounded-badge text-2xs font-bold leading-none border transition-colors focus:outline-none',
-              selectedRegions.length === 0
-                ? 'bg-gold-300 border-gold-300 text-ink-inverse'
-                : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary hover:border-border-strong',
-            ].join(' ')}
-          >
-            전체
-          </button>
-          {REGION_CHIPS.map((r) => {
-            const active = selectedRegions.includes(r);
-            return (
-              <button
-                key={r}
-                type="button"
-                onClick={() => handleRegionToggle(r)}
-                className={[
-                  'shrink-0 inline-flex items-center h-7 px-2.5 rounded-badge text-2xs font-semibold leading-none border transition-colors focus:outline-none',
-                  active
-                    ? 'bg-gold-300/20 border-gold-300 text-gold-300'
-                    : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary hover:border-border-strong',
-                ].join(' ')}
-              >
-                {r}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* 토너먼트 필터 — [전체, MTT, GTD, 대회] 라디오(상호배타) */}
-        <div className="flex items-center gap-1.5">
+        {/* 토너먼트 + 지역 필터 — 한 줄(라디오 + 지역 드롭다운) */}
+        <div className="flex items-center gap-1.5 flex-wrap">
           <div
             role="radiogroup"
             aria-label="토너먼트 필터"
@@ -419,6 +380,33 @@ export default function IntegratedSearchBar({
                 </button>
               );
             })}
+          </div>
+
+          {/* 지역 선택 드롭다운 (단일 선택) — 칩 대신 콤팩트한 select */}
+          <div className="relative">
+            <select
+              aria-label="지역 선택"
+              value={selectedRegions[0] ?? ''}
+              onChange={(e) => setSelectedRegions(e.target.value ? [e.target.value] : [])}
+              className={[
+                'appearance-none h-7 pl-3 pr-7 rounded-input border text-2xs font-bold leading-none cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-300',
+                selectedRegions.length > 0
+                  ? 'bg-gold-300/15 border-gold-300 text-gold-300'
+                  : 'bg-surface-high border-border-default text-ink-secondary hover:border-border-strong',
+              ].join(' ')}
+            >
+              <option value="">전체 지역</option>
+              {REGION_CHIPS.map((r) => (
+                <option key={r} value={r}>{r}</option>
+              ))}
+            </select>
+            <svg
+              width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor"
+              strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden
+              className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-ink-muted"
+            >
+              <path d="M2 4l3 3 3-3" />
+            </svg>
           </div>
 
           {/* 전체 초기화 (필터 있을 때만) */}

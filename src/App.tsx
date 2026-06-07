@@ -180,8 +180,10 @@ function AppHeader({
                 {/* 보이는 아바타 32px(이미지/이니셜) — 터치영역은 44px 유지(WCAG) */}
                 {/* 아바타 테두리 = 활동 등급색(운영자=빨강). 별도 22 배지 대신 테두리로 표현 */}
                 <span
-                  className="relative w-8 h-8 rounded-full overflow-hidden flex items-center justify-center
-                             select-none transition-transform group-hover:scale-105 group-active:scale-90"
+                  className={`relative w-8 h-8 rounded-full overflow-hidden flex items-center justify-center
+                             select-none transition-transform group-hover:scale-105 group-active:scale-90 ${
+                               user.role === 'admin' ? 'tier-glow-admin' : (user.activityPoints ?? 0) >= 14000 ? 'tier-glow-ace' : ''
+                             }`}
                   style={{ background: user.avatarColor ?? '#5A6175', boxShadow: `0 0 0 2px ${tierColor(user.activityPoints ?? 0, user.role === 'admin')}, 0 0 10px ${tierColor(user.activityPoints ?? 0, user.role === 'admin')}aa` }}
                   title="내 등급"
                 >

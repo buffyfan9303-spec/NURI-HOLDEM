@@ -36,13 +36,19 @@ export interface Schedule {
 
 export interface ReorderPayload { items: { id: string; displayOrder: number }[]; }
 
+// 'HH:MM:SS' / 'HH:MM' → 'HH:MM' — DB time 컬럼의 초를 떼어 화면 표기 정리
+function hhmm(t?: string | null): string {
+  const m = String(t ?? '').match(/^(\d{1,2}):(\d{2})/);
+  return m ? `${m[1].padStart(2, '0')}:${m[2]}` : (t ?? '');
+}
+
 // ── DB row → Schedule ────────────────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function rowToSchedule(r: any): Schedule {
   return {
     id: r.id, title: r.title, venueId: r.venue_id, pubName: r.pub_name,
     region: r.region, address: r.address,
-    date: r.date, startTime: r.start_time, duration: r.duration ?? '',
+    date: r.date, startTime: hhmm(r.start_time), duration: r.duration ?? '',
     format: r.format, guaranteed: r.guaranteed, prizePool: r.prize_pool,
     prizePercent: r.prize_percent ?? undefined,
     isCompetition: r.is_competition ?? false,
