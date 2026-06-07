@@ -6,7 +6,8 @@ import ChipDistributor from './tools/ChipDistributor';
 import StructureSim from './tools/StructureSim';
 import RangeGuide from './tools/RangeGuide';
 
-const GtoDeepModal = lazyWithReload(() => import('./gto/GtoDeepModal'));
+// GTO 패널은 에퀴티 엔진을 포함해 무거우므로 지연 로드(다른 도구와 동일하게 인라인 표시)
+const GtoDeepPanel = lazyWithReload(() => import('./gto/GtoDeepPanel'));
 
 type ToolKey = 'gto' | 'pot' | 'icm' | 'range' | 'chip' | 'sim';
 type ToolGroup = 'ops' | 'player';
@@ -35,20 +36,20 @@ const GROUPS: { id: ToolGroup; title: string; desc: string }[] = [
 
 function renderTool(k: ToolKey): ReactNode {
   switch (k) {
+    case 'gto': return <GtoDeepPanel />;
     case 'pot': return <PotOddsCalc />;
     case 'icm': return <ICMCalculator />;
     case 'range': return <RangeGuide />;
     case 'chip': return <ChipDistributor />;
     case 'sim': return <StructureSim />;
-    default: return null; // gto = 모달
+    default: return null;
   }
 }
 
-/** 도구 모음 — 카드형 런처. 매장 운영 / 플레이어 두 그룹. GTO=모달, 나머지=인라인 펼침. */
+/** 도구 모음 — 카드형 런처. 매장 운영 / 플레이어 두 그룹. 카드를 누르면 인라인으로 펼쳐진다. */
 export default function ToolsPanel() {
   const [active, setActive] = useState<ToolKey | null>(null);
-  const [gtoOpen, setGtoOpen] = useState(false);
-  const select = (k: ToolKey) => { if (k === 'gto') { setGtoOpen(true); return; } setActive((a) => (a === k ? null : k)); };
+  const select = (k: ToolKey) => setActive((a) => (a === k ? null : k));
 
   return (
     <div className="space-y-4">
@@ -68,14 +69,14 @@ export default function ToolsPanel() {
                 <ToolCard key={t.key} name={t.name} desc={t.desc} icon={t.icon} active={active === t.key} onClick={() => select(t.key)} />
               ))}
             </div>
-            {activeInGroup && <div className="animate-fade-in pt-1">{renderTool(activeInGroup)}</div>}
+            {activeInGroup && (
+              <Suspense fallback={<div className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</div>}>
+                <div className="animate-fade-in pt-1">{renderTool(activeInGroup)}</div>
+              </Suspense>
+            )}
           </section>
         );
       })}
-
-      <Suspense fallback={null}>
-        {gtoOpen && <GtoDeepModal open={gtoOpen} onClose={() => setGtoOpen(false)} />}
-      </Suspense>
     </div>
   );
 }
