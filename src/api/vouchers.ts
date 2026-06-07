@@ -44,12 +44,24 @@ export async function listMyVouchers(): Promise<Voucher[]> {
   return (data ?? []).map(mapRow);
 }
 
-export async function issueVoucher(venueId: string, input: { title: string; holderName?: string; holderUserId?: string; note?: string }): Promise<void> {
+export async function issueVoucher(venueId: string, input: { title: string; count?: number; holderName?: string; holderUserId?: string; note?: string }): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.rpc('issue_voucher', {
-    p_venue_id: venueId, p_title: input.title,
+    p_venue_id: venueId, p_title: input.title, p_count: input.count ?? 1,
     p_holder_name: input.holderName ?? null, p_holder_user_id: input.holderUserId ?? null, p_note: input.note ?? null,
   });
+  if (error) throw new Error(error.message);
+}
+
+// 발급 승인(운영자) 여부 / 토글
+export async function isVoucherIssueApproved(venueId: string): Promise<boolean> {
+  if (IS_MOCK) return false;
+  const { data } = await supabase.rpc('voucher_issue_approved', { p_venue_id: venueId });
+  return data === true;
+}
+export async function setVoucherIssueApproval(venueId: string, approved: boolean): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('set_voucher_issue_approval', { p_venue_id: venueId, p_approved: approved });
   if (error) throw new Error(error.message);
 }
 

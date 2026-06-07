@@ -12,6 +12,7 @@ import {
   getPendingGroups, approveGroup, GROUP_KIND_LABEL,
 } from '../../api/community';
 import { useToast } from '../atoms/Toast';
+import { isVoucherIssueApproved, setVoucherIssueApproval } from '../../api/vouchers';
 import { useBackClose } from '../../lib/backstack';
 import { REGION_CHIPS } from './IntegratedSearchBar';
 import NuriPosLedger from './NuriPosLedger';
@@ -251,8 +252,17 @@ function VenueAdminRow({ venue, candidates, onChanged }: { venue: Venue; candida
   const [verif, setVerif]     = useState<VenueVerificationStatus>(venue.verificationStatus ?? 'unverified');
   const [busy, setBusy]       = useState(false);
   const [posOpen, setPosOpen] = useState(false);
+  const [vIssue, setVIssue]   = useState<boolean | null>(null); // 매장이용권 발급 승인
 
   const owner = candidates.find((u) => u.id === venue.ownerId);
+
+  useEffect(() => { isVoucherIssueApproved(venue.id).then(setVIssue).catch(() => {}); }, [venue.id]);
+  const toggleVIssue = async () => {
+    const next = !vIssue;
+    setVIssue(next);
+    try { await setVoucherIssueApproval(venue.id, next); toast.show(next ? '매장이용권 발급을 승인했습니다' : '발급 승인을 해제했습니다', 'success'); }
+    catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); setVIssue(!next); }
+  };
 
   const save = async () => {
     if (!name.trim() || !region.trim()) { toast.show('매장명과 지역은 필수입니다', 'error'); return; }
@@ -298,6 +308,15 @@ function VenueAdminRow({ venue, candidates, onChanged }: { venue: Venue; candida
           className="shrink-0 text-2xs font-semibold px-2.5 py-1 rounded-input border border-gold-400/40 text-gold-300 hover:bg-gold-300/10 transition-colors"
         >
           장부·통계
+        </button>
+        <button
+          type="button"
+          onClick={toggleVIssue}
+          title="매장이용권 발급 승인"
+          className={['shrink-0 text-2xs font-semibold px-2.5 py-1 rounded-input border transition-colors',
+            vIssue ? 'border-gold-400/40 text-gold-300 bg-gold-300/10' : 'border-border-default text-ink-muted hover:text-ink-primary'].join(' ')}
+        >
+          이용권발급 {vIssue == null ? '…' : vIssue ? '✓' : '✗'}
         </button>
         <button
           type="button"

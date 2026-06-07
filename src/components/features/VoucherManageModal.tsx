@@ -6,7 +6,7 @@ import Modal from '../atoms/Modal';
 import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import QRCode from 'qrcode';
-import { listVenueVouchers, issueVoucher, redeemVoucher, revokeVoucher, deleteVoucher, findUserForTransfer, voucherUsageByVenue, voucherHolderStats, type Voucher, type VoucherUsage, type VoucherHolderStats } from '../../api/vouchers';
+import { listVenueVouchers, issueVoucher, redeemVoucher, revokeVoucher, deleteVoucher, findUserForTransfer, voucherUsageByVenue, voucherHolderStats, isVoucherIssueApproved, type Voucher, type VoucherUsage, type VoucherHolderStats } from '../../api/vouchers';
 
 const STATUS: Record<string, { label: string; cls: string }> = {
   active: { label: '배포됨', cls: 'bg-gold-300/15 text-gold-300' },
@@ -18,22 +18,26 @@ const STATUS: Record<string, { label: string; cls: string }> = {
 export function VoucherManagePanel({ venueId }: { venueId: string }) {
   const toast = useToast();
   const { user } = useAuth();
-  const canIssue = user?.role === 'admin' || (user?.role === 'venue_owner' && user?.venueId === venueId);
+  const isAdmin = user?.role === 'admin';
+  const canIssue = isAdmin || (user?.role === 'venue_owner' && user?.venueId === venueId);
 
   const [list, setList] = useState<Voucher[]>([]);
   const [usage, setUsage] = useState<VoucherUsage[]>([]);
   const [loading, setLoading] = useState(false);
   const [title, setTitle] = useState('매장이용권');
+  const [count, setCount] = useState(1);
   const [nick, setNick] = useState('');
   const [recvName, setRecvName] = useState('');
   const [busy, setBusy] = useState(false);
   const [stats, setStats] = useState<VoucherHolderStats | null>(null);
   const [qr, setQr] = useState('');
+  const [approved, setApproved] = useState(true);
 
   const reload = () => {
     setLoading(true);
     listVenueVouchers(venueId).then(setList).catch(() => {}).finally(() => setLoading(false));
     voucherHolderStats(venueId).then(setStats).catch(() => {});
+    isVoucherIssueApproved(venueId).then(setApproved).catch(() => {});
     if (canIssue) voucherUsageByVenue(venueId).then(setUsage).catch(() => {});
   };
   useEffect(() => { reload(); /* eslint-disable-next-line */ }, [venueId]);
@@ -49,9 +53,9 @@ export function VoucherManagePanel({ venueId }: { venueId: string }) {
         if (!found.length) { toast.show('해당 닉네임의 회원을 찾을 수 없습니다', 'error'); setBusy(false); return; }
         holderUserId = found[0].id; holderName = found[0].display;
       }
-      await issueVoucher(venueId, { title, holderName, holderUserId });
-      toast.show('매장이용권을 배포했습니다', 'success');
-      setTitle('매장이용권'); setNick(''); setRecvName('');
+      await issueVoucher(venueId, { title, count, holderName, holderUserId });
+      toast.show(`매장이용권 ${count}개를 배포했습니다`, 'success');
+      setTitle('매장이용권'); setCount(1); setNick(''); setRecvName('');
       reload();
     } catch (e) { toast.show(e instanceof Error ? e.message : '배포 실패', 'error'); }
     setBusy(false);
@@ -68,13 +72,22 @@ export function VoucherManagePanel({ venueId }: { venueId: string }) {
       {canIssue ? (
         <div className="space-y-1.5 rounded-input border border-gold-400/30 bg-gold-300/[0.05] p-2.5">
           <p className="text-2xs font-bold text-gold-300">매장이용권 배포 <span className="font-normal text-ink-muted">· 업주 전용</span></p>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="이용권 이름 (예: 데일리 1회 참가권)" className="input w-full text-sm" />
+          {!isAdmin && !approved && (
+            <p className="rounded-input border border-amber-500/40 bg-amber-500/[0.08] px-2 py-1.5 text-[10px] text-amber-300">⚠️ 운영자 승인 후 매장이용권을 발급할 수 있습니다. 운영자에게 발급 승인을 요청하세요.</p>
+          )}
+          <div className="flex gap-1.5">
+            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="이용권 이름 (예: 데일리 1회 참가권)" className="input min-w-0 flex-1 text-sm" />
+            <div className="relative w-24 shrink-0">
+              <input type="number" inputMode="numeric" min={1} max={1000} value={count || ''} onChange={(e) => setCount(Math.min(1000, Math.max(1, parseInt(e.target.value, 10) || 1)))} className="input w-full pr-6 text-sm tabular-nums" />
+              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">개</span>
+            </div>
+          </div>
           <div className="flex gap-1.5">
             <input value={nick} onChange={(e) => setNick(e.target.value)} placeholder="받는 회원 닉네임(연결, 선택)" className="input min-w-0 flex-1 text-sm" />
             <input value={recvName} onChange={(e) => setRecvName(e.target.value)} placeholder="이름만 기록(선택)" className="input w-32 shrink-0 text-sm" />
           </div>
-          <button type="button" disabled={busy} onClick={issue} className="btn-primary w-full text-sm disabled:opacity-50">{busy ? '배포 중…' : '+ 배포'}</button>
-          <p className="text-[10px] text-ink-muted">닉네임 입력 시 그 회원 지갑으로 전송. 비우면 매장 내 사용용으로 기록. <b className="text-ink-secondary">매장이용권은 금전적 가치가 없습니다.</b></p>
+          <button type="button" disabled={busy || (!isAdmin && !approved)} onClick={issue} className="btn-primary w-full text-sm disabled:opacity-50">{busy ? '배포 중…' : `+ ${count}개 배포`}</button>
+          <p className="text-[10px] text-ink-muted">1회 최대 1000개 · 닉네임 입력 시 그 회원 지갑으로 전송(여러 개면 모두 그 회원에게). 비우면 매장 보관용. <b className="text-ink-secondary">매장이용권은 금전적 가치가 없습니다.</b></p>
         </div>
       ) : (
         <p className="rounded-input border border-border-subtle bg-surface-low p-2.5 text-2xs text-ink-muted">배포·회수·삭제는 <b className="text-ink-secondary">업주</b>만 가능합니다. 인증 직원은 열람·사용 처리만 할 수 있습니다.</p>
