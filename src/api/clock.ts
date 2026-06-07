@@ -192,6 +192,14 @@ export async function getClockState(venueId: string): Promise<ClockState | null>
   return data ? rowToState(data) : null;
 }
 
+/** 진행 중(running) 클락 전체 — 라이브 게임 현황 보드용. (공개 읽기 정책 필요, 없으면 접근 가능한 것만) */
+export async function getRunningClocks(): Promise<ClockState[]> {
+  if (IS_MOCK) return [];
+  const { data } = await supabase.from('clock_states').select('*').eq('running', true).order('updated_at', { ascending: false });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => rowToState(r));
+}
+
 export async function saveClockState(s: ClockState): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.from('clock_states').upsert({

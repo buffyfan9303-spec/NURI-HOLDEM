@@ -63,6 +63,7 @@ const GroupPage      = lazyWithReload(() => import('./components/features/GroupP
 const MarketplaceTab = lazyWithReload(() => import('./components/features/MarketplaceTab'));
 const VenueManageTab = lazyWithReload(() => import('./components/features/VenueManageTab'));
 const ToolsPanel     = lazyWithReload(() => import('./components/features/ToolsPanel'));
+const LiveGamesTab   = lazyWithReload(() => import('./components/features/LiveGamesTab'));
 
 // 지연 로딩 폴백 — 청크 받아오는 짧은 순간의 로더(레이아웃 점프 최소화)
 function LazyFallback() {
@@ -82,7 +83,7 @@ function OverlayFallback() {
 
 // ── 탭 정의 ──────────────────────────────────────────────────────────────────
 
-type TabId = 'browse' | 'community' | 'market' | 'tools' | 'my-store' | 'admin';
+type TabId = 'browse' | 'live' | 'community' | 'market' | 'tools' | 'my-store' | 'admin';
 interface TabDef { id: TabId; label: string; }
 
 // ── 헤더 ─────────────────────────────────────────────────────────────────────
@@ -566,6 +567,7 @@ export default function App() {
   const tabs: TabDef[] = useMemo(() => {
     const base: TabDef[] = [
       { id: 'browse',    label: '일정 탐색' },
+      { id: 'live',      label: '라이브' },
       { id: 'community', label: '커뮤니티' },
       { id: 'market',    label: '중고장터' },
       { id: 'tools',     label: '도구' },
@@ -1078,6 +1080,13 @@ export default function App() {
 
       {/* 탭 컨텐츠(지연 로딩) — 일정 탐색 이후 탭들은 청크 분리, 전환 시 짧은 로더 표시 */}
       <Suspense fallback={<LazyFallback />}>
+      {/* 라이브 — 진행 중 게임 현황 */}
+      {activeTab === 'live' && (
+        <ErrorBoundary inline resetKey="live">
+          <LiveGamesTab venues={venues} onVenue={handleVenueClick} />
+        </ErrorBoundary>
+      )}
+
       {/* 커뮤니티 */}
       {activeTab === 'community' && (
         <main className="px-page-x pb-section animate-fade-in">
