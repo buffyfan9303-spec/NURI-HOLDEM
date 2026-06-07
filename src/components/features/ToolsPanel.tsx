@@ -1,4 +1,4 @@
-import { useState, Suspense, type ReactNode } from 'react';
+import { useState, Suspense, Fragment, type ReactNode } from 'react';
 import { lazyWithReload } from '../../lib/lazyWithReload';
 import ICMCalculator from './ICMCalculator';
 import PotOddsCalc from './tools/PotOddsCalc';
@@ -85,7 +85,9 @@ export default function ToolsPanel() {
 
       {GROUPS.map((g) => {
         const items = TOOLS.filter((t) => t.group === g.id);
-        const activeInGroup = items.some((t) => t.key === active) ? active : null;
+        const activeIdx = items.findIndex((t) => t.key === active);
+        // 2열 그리드: 활성 카드가 속한 '행' 바로 아래에 패널을 끼워, 클릭한 카드 밑에서 펼쳐지게 한다.
+        const rowEndIdx = activeIdx < 0 ? -1 : (activeIdx % 2 === 1 ? activeIdx : Math.min(activeIdx + 1, items.length - 1));
         return (
           <section key={g.id} className="space-y-2">
             <div className="flex items-baseline gap-2">
@@ -93,15 +95,19 @@ export default function ToolsPanel() {
               <span className="text-2xs text-ink-muted">{g.desc}</span>
             </div>
             <div className="grid grid-cols-2 gap-2.5">
-              {items.map((t) => (
-                <ToolCard key={t.key} name={t.name} desc={t.desc} icon={t.icon} active={active === t.key} onClick={() => select(t.key)} />
+              {items.map((t, idx) => (
+                <Fragment key={t.key}>
+                  <ToolCard name={t.name} desc={t.desc} icon={t.icon} active={active === t.key} onClick={() => select(t.key)} />
+                  {active && idx === rowEndIdx && (
+                    <div className="col-span-2 animate-fade-in pt-1">
+                      <Suspense fallback={<div className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</div>}>
+                        {renderTool(active)}
+                      </Suspense>
+                    </div>
+                  )}
+                </Fragment>
               ))}
             </div>
-            {activeInGroup && (
-              <Suspense fallback={<div className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</div>}>
-                <div className="animate-fade-in pt-1">{renderTool(activeInGroup)}</div>
-              </Suspense>
-            )}
           </section>
         );
       })}
