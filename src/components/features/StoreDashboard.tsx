@@ -11,6 +11,7 @@ import { Skeleton } from '../atoms/Skeleton';
 import RegularsModal from './RegularsModal';
 import WaitlistModal from './WaitlistModal';
 import DealerShiftsModal from './DealerShiftsModal';
+import VoucherManageModal from './VoucherManageModal';
 import { getStaffSchedule, getStaffWages, subscribeStaffSchedule, type StaffShift, type StaffWage } from '../../api/staffSchedule';
 
 const localToday = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD (로컬)
@@ -65,6 +66,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const [regOpen, setRegOpen] = useState(false);
   const [waitOpen, setWaitOpen] = useState(false);
   const [dealerOpen, setDealerOpen] = useState(false);
+  const [voucherOpen, setVoucherOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const upcoming = schedules
@@ -216,6 +218,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       <RegularsModal open={regOpen} onClose={() => setRegOpen(false)} venueId={venueId} exclude={[...staffNames]} />
       <WaitlistModal open={waitOpen} onClose={() => setWaitOpen(false)} venueId={venueId} />
       <DealerShiftsModal open={dealerOpen} onClose={() => setDealerOpen(false)} venueId={venueId} monthKey={mr.start.slice(0, 7)} />
+      <VoucherManageModal open={voucherOpen} onClose={() => setVoucherOpen(false)} venueId={venueId} />
       {/* 미수·리스크 알림 */}
       {started && fin.unpaid > 0 && (
         <button type="button" onClick={() => onGoto('ledger')}
@@ -397,8 +400,8 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         </DashCard>
 
         {/* 매장이용권(회수 티켓) */}
-        <DashCard title="매장이용권" onClick={() => onGoto('ledger')}
-          badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-gold-300/15 text-gold-300">최근 7일</span>}>
+        <DashCard title="매장이용권" onClick={() => setVoucherOpen(true)}
+          badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-gold-300/15 text-gold-300">발급·관리 →</span>}>
           {loading ? <Skeleton /> : (
             <>
               <div className="grid grid-cols-2 gap-x-3 gap-y-2">
