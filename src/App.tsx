@@ -23,6 +23,7 @@ import StaffInviteBanner from './components/features/StaffInviteBanner';
 import ErrorBoundary from './components/atoms/ErrorBoundary';
 import InstallBanner from './components/atoms/InstallBanner';
 import OnboardingTour from './components/features/OnboardingTour';
+import GlobalSearchModal from './components/features/GlobalSearchModal';
 import { tierColor } from './components/atoms/TierBadge';
 import NoticeFormModal from './components/features/NoticeFormModal';
 import PostFormModal from './components/features/PostFormModal';
@@ -88,7 +89,7 @@ interface TabDef { id: TabId; label: string; }
 // ── 헤더 ─────────────────────────────────────────────────────────────────────
 
 function AppHeader({
-  unreadCount, notifications, onMarkRead, onOpenLogin, onNavigateNotification, onHome, onOpenProfile,
+  unreadCount, notifications, onMarkRead, onOpenLogin, onNavigateNotification, onHome, onOpenProfile, onOpenSearch,
   suppressed = false,
 }: {
   unreadCount: number;
@@ -98,6 +99,7 @@ function AppHeader({
   onNavigateNotification: (n: AppNotification) => void;
   onHome: () => void;
   onOpenProfile: () => void;
+  onOpenSearch: () => void;
   /** 매장 페이지 등 풀스크린 오버레이가 열렸을 때 메인 헤더를 가린다(레이아웃 유지, 페인트만 숨김). */
   suppressed?: boolean;
 }) {
@@ -141,6 +143,15 @@ function AppHeader({
 
         {/* RIGHT: 테마 토글 + 알림 + 로그인/아바타 — 동일 36px 원형 버튼 클러스터 */}
         <div className="flex items-center gap-0.5">
+          {/* 통합 검색 */}
+          <button
+            type="button"
+            onClick={onOpenSearch}
+            aria-label="통합 검색"
+            className="w-9 h-9 flex items-center justify-center rounded-full text-ink-secondary hover:text-ink-primary hover:bg-surface-high transition-colors"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+          </button>
           {/* 라이트/다크 모드 전환 */}
           <ThemeToggle />
 
@@ -393,6 +404,14 @@ export default function App() {
   // UI 상태
   const [viewMode, setViewMode]       = useState<ViewMode>('list');
   const [activeTab, setActiveTab]     = useState<TabId>('browse');
+  const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); setGlobalSearchOpen(true); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   const [searchState, setSearchState] = useState<SearchState>({ query: '', dates: [], regions: [], format: null, gtdOnly: false, competitionOnly: false });
   const [authOpen, setAuthOpen]       = useState(false);
   const [openVenueId, setOpenVenueId] = useState<string | null>(null);
@@ -955,6 +974,7 @@ export default function App() {
         onNavigateNotification={handleNavigateNotification}
         onHome={handleHome}
         onOpenProfile={() => setProfileOpen(true)}
+        onOpenSearch={() => setGlobalSearchOpen(true)}
         suppressed={openVenueId !== null}
       />
 
@@ -1224,6 +1244,17 @@ export default function App() {
       <ProfileModal
         open={profileOpen}
         onClose={() => setProfileOpen(false)}
+      />
+
+      <GlobalSearchModal
+        open={globalSearchOpen}
+        onClose={() => setGlobalSearchOpen(false)}
+        venues={venues}
+        schedules={schedules}
+        posts={posts}
+        onVenue={handleVenueClick}
+        onSchedule={handleScheduleSelect}
+        onPost={setOpenPost}
       />
 
       {/* 관리자 전용 공지 작성 모달 (커뮤니티/장터 '공지 작성' 버튼에서 진입) */}
