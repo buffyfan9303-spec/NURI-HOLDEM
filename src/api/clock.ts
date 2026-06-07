@@ -42,6 +42,11 @@ export interface ClockPreset {
   config: ClockConfig;
 }
 
+export interface ClockLiveStats {
+  entries: number; rebuys: number; earlies: number; addons: number;
+  alive: number; eliminations: number; totalStack: number; avgStack: number;
+}
+
 export interface ClockState {
   venueId: string;
   sessionDate: string | null; // 연결된 장부(없으면 standalone)
@@ -56,6 +61,7 @@ export interface ClockState {
   adjEarlies: number;
   adjAddons: number;
   eliminations: number;       // 아웃된 인원
+  liveStats?: ClockLiveStats | null; // 라이브 보드용 통계 스냅샷(파생값 저장 → 보드에서 ledger 없이 표시)
 }
 
 export const PRESET_LIMIT = 50;
@@ -153,6 +159,7 @@ function rowToState(r: any): ClockState {
     adjEntries: r.adj_entries ?? 0, adjRebuys: r.adj_rebuys ?? 0,
     adjEarlies: r.adj_earlies ?? 0, adjAddons: r.adj_addons ?? 0,
     eliminations: r.eliminations ?? 0,
+    liveStats: (r.live_stats ?? null) as ClockLiveStats | null,
   };
 }
 
@@ -209,6 +216,7 @@ export async function saveClockState(s: ClockState): Promise<void> {
     ends_at: s.endsAt, remaining_ms: s.remainingMs,
     adj_entries: s.adjEntries, adj_rebuys: s.adjRebuys, adj_earlies: s.adjEarlies,
     adj_addons: s.adjAddons, eliminations: s.eliminations,
+    live_stats: (s.liveStats ?? null) as unknown as object,
     updated_at: new Date().toISOString(),
   }, { onConflict: 'venue_id' });
   if (error) throw error;
@@ -242,4 +250,19 @@ export function deriveClockCounts(buyins: LedgerBuyin[], early: EarlyWindow): De
     else if (et === 'single') earlies++;
   }
   return { entries: players.size, rebuys, earlies, doubleEarlies, totalBuyins: buyins.length };
+}
+
+/** 라이브 통계 스냅샷 계산(클락 디스플레이 + 라이브 보드 공통). */
+export function computeLiveStats(st: ClockState, derived: DerivedCounts, cfg: ClockConfig): ClockLiveStats {
+  const entries = derived.entries + st.adjEntries;
+  const rebuys = derived.rebuys + st.adjRebuys;
+  const earlies = derived.earlies + st.adjEarlies;
+  const addons = st.adjAddons;
+  const alive = Math.max(0, entries - st.eliminations);
+  const dEarly = derived.doubleEarlies;
+  const sEarly = Math.max(0, (derived.earlies - derived.doubleEarlies) + st.adjEarlies);
+  const totalStack = entries * cfg.startStack + rebuys * cfg.rebuyStack + addons * cfg.addonStack
+    + dEarly * cfg.doubleEarlyBonus + sEarly * cfg.earlyBonus;
+  const avgStack = alive > 0 ? Math.round(totalStack / alive) : 0;
+  return { entries, rebuys, earlies, addons, alive, eliminations: st.eliminations, totalStack, avgStack };
 }

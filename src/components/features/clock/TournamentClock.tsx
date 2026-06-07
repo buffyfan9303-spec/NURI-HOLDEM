@@ -6,7 +6,7 @@ import { useToast } from '../../atoms/Toast';
 import { useBackClose } from '../../../lib/backstack';
 import {
   type ClockConfig, type ClockLevel, type ClockPreset, type ClockState, type ClockPrizeRow,
-  defaultClockConfig, emptyClockState, deriveClockCounts, PRESET_LIMIT,
+  defaultClockConfig, emptyClockState, deriveClockCounts, computeLiveStats, PRESET_LIMIT,
   countLevels, withDerivedEarly, generateBlinds,
   getClockPresets, saveClockPreset, deleteClockPreset,
   getClockState, saveClockState, clearClockState, subscribeClock,
@@ -184,11 +184,31 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd }: {
   // 250ms 틱(부드러운 카운트다운)
   useEffect(() => { const id = setInterval(() => setTick((t) => t + 1), 250); return () => clearInterval(id); }, []);
 
+  // 집계(파생) — persist보다 위에서 계산해 liveStats를 저장에 첨부(라이브 보드 반영).
+  const cfg = state.config;
+  const derived = useMemo(() => deriveClockCounts(buyins, {
+    // 클락(레벨→분 파생)이 우선, 없으면 장부 세션값으로 폴백. 스타트 시각은 장부 기준.
+    earlyDoubleMin: cfg.earlyDoubleMin || linkedSession?.earlyDoubleMin || 0,
+    earlySingleMin: cfg.earlySingleMin || linkedSession?.earlySingleMin || 0,
+    tournamentStart: linkedSession?.tournamentStart ?? null,
+    openedAt: linkedSession?.openedAt ?? null,
+  }), [buyins, linkedSession, cfg.earlyDoubleMin, cfg.earlySingleMin]);
+  const liveStats = useMemo(() => computeLiveStats(state, derived, cfg), [state, derived, cfg]);
+  const { entries, rebuys, earlies, addons, alive, totalStack, avgStack } = liveStats;
+
   const persist = useCallback((patch: Partial<ClockState>) => {
     const next = { ...state, ...patch };
     onChange(next);
-    if (canManage) saveClockState(next).catch((e) => toast.show(e instanceof Error ? e.message : '저장 실패', 'error'));
-  }, [state, canManage, onChange, toast]);
+    if (canManage) saveClockState({ ...next, liveStats: computeLiveStats(next, derived, cfg) }).catch((e) => toast.show(e instanceof Error ? e.message : '저장 실패', 'error'));
+  }, [state, canManage, onChange, toast, derived, cfg]);
+
+  // 장부 변동(엔트리/리바인/얼리) 시 라이브 통계 스냅샷 최신화 → 보드 반영.
+  const derivedKey = `${derived.entries}/${derived.rebuys}/${derived.earlies}/${derived.doubleEarlies}`;
+  useEffect(() => {
+    if (!canManage || !state.sessionDate) return;
+    saveClockState({ ...state, liveStats: computeLiveStats(state, derived, cfg) }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [derivedKey]);
 
   const remaining = computeRemaining(state);
   const cur: ClockLevel = state.config.levels[state.currentIndex] ?? { kind: 'level', sb: 0, bb: 0, ante: 0, minutes: 0 };
@@ -269,26 +289,6 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd }: {
   // 뒤로가기 → 전체화면만 해제(앱 이탈 방지)
   useBackClose(fs, () => { setFs(false); if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {}); });
 
-  // 집계
-  const cfg = state.config;
-  const derived = useMemo(() => deriveClockCounts(buyins, {
-    // 클락(레벨→분 파생)이 우선, 없으면 장부 세션값으로 폴백. 스타트 시각은 장부 기준.
-    earlyDoubleMin: cfg.earlyDoubleMin || linkedSession?.earlyDoubleMin || 0,
-    earlySingleMin: cfg.earlySingleMin || linkedSession?.earlySingleMin || 0,
-    tournamentStart: linkedSession?.tournamentStart ?? null,
-    openedAt: linkedSession?.openedAt ?? null,
-  }), [buyins, linkedSession, cfg.earlyDoubleMin, cfg.earlySingleMin]);
-  const entries = derived.entries + state.adjEntries;
-  const rebuys = derived.rebuys + state.adjRebuys;
-  const earlies = derived.earlies + state.adjEarlies;
-  const addons = state.adjAddons;
-  const alive = Math.max(0, entries - state.eliminations);
-  // 총 스택 = 엔트리×스타팅 + 리바인×리바인스택 + 애드온×애드온스택 + 얼리 보너스 칩
-  const dEarly = derived.doubleEarlies;
-  const sEarly = Math.max(0, (derived.earlies - derived.doubleEarlies) + state.adjEarlies);
-  const totalStack = entries * cfg.startStack + rebuys * cfg.rebuyStack + addons * cfg.addonStack
-    + dEarly * cfg.doubleEarlyBonus + sEarly * cfg.earlyBonus;
-  const avgStack = alive > 0 ? Math.round(totalStack / alive) : 0;
   const nextBreak = msToNextBreak(state, remaining);
   const regClose = msToRegClose(state, remaining);
   const totalPrize = cfg.prizes.reduce((s, p) => s + (p.amount || 0), 0);
