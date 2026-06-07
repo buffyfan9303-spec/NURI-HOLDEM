@@ -865,11 +865,17 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
 
       {gameType === 'gtd' ? (
         <Field label="기준 엔트리(통계용) · 선택">
-          <input type="number" inputMode="numeric" value={target || ''} onChange={(e) => setTarget(parseInt(e.target.value, 10) || 0)} placeholder="100" className="input w-full text-sm tabular-nums" />
+          <div className="flex items-center gap-2">
+            <input type="number" inputMode="numeric" value={target || ''} onChange={(e) => setTarget(parseInt(e.target.value, 10) || 0)} placeholder="100" className="input w-32 shrink-0 text-sm tabular-nums" />
+            <span className="text-2xs text-ink-muted leading-snug">통계에서 목표 대비 달성률 비교에 사용</span>
+          </div>
         </Field>
       ) : (
-        <Field label="맥스 엔트리 · 선택 (없으면 비움)">
-          <input type="number" inputMode="numeric" value={maxEntries || ''} onChange={(e) => setMaxEntries(parseInt(e.target.value, 10) || 0)} placeholder="예) 200 (무제한이면 비움)" className="input w-full text-sm tabular-nums" />
+        <Field label="맥스 엔트리 · 선택">
+          <div className="flex items-center gap-2">
+            <input type="number" inputMode="numeric" value={maxEntries || ''} onChange={(e) => setMaxEntries(parseInt(e.target.value, 10) || 0)} placeholder="200" className="input w-32 shrink-0 text-sm tabular-nums" />
+            <span className="text-2xs text-ink-muted leading-snug">최대 참가 인원 · 무제한이면 비움</span>
+          </div>
         </Field>
       )}
 
@@ -880,12 +886,17 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
               isAddon ? 'bg-gold-300/15 text-gold-300 border-gold-400/50' : 'bg-surface-high text-ink-secondary border-border-default'].join(' ')}>
             {isAddon ? '✓ 애드온 게임' : '애드온 없음'}
           </button>
-          <div className="relative flex-1">
-            <input type="number" inputMode="numeric" disabled={!isAddon} value={isAddon ? (addonStack || '') : ''} onChange={(e) => setAddonStack(parseInt(e.target.value, 10) || 0)}
-              placeholder={isAddon ? '애드온 스택(칩)' : '애드온 게임만 입력 가능'} className="input w-full text-sm tabular-nums disabled:opacity-50" />
-          </div>
+          {isAddon ? (
+            <div className="relative w-40 shrink-0">
+              <input type="number" inputMode="numeric" value={addonStack || ''} onChange={(e) => setAddonStack(parseInt(e.target.value, 10) || 0)}
+                placeholder="스택" className="input w-full text-sm pr-7 tabular-nums" />
+              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">칩</span>
+            </div>
+          ) : (
+            <span className="text-2xs text-ink-muted leading-snug">애드온이 있으면 켜서 스택을 입력하세요.</span>
+          )}
         </div>
-        <p className="text-[10px] text-ink-muted mt-1">애드온 게임을 켜야 애드온 스택 입력이 가능합니다(오류 방지). 클락에 애드온이 표시됩니다.</p>
+        {isAddon && <p className="text-[10px] text-ink-muted mt-1">애드온 스택은 클락에 표시됩니다.</p>}
       </Field>
 
       <Field label="이벤트 · 비고 · 선택">
