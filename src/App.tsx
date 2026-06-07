@@ -22,6 +22,7 @@ import ProfileModal from './components/features/ProfileModal';
 import StaffInviteBanner from './components/features/StaffInviteBanner';
 import ErrorBoundary from './components/atoms/ErrorBoundary';
 import InstallBanner from './components/atoms/InstallBanner';
+import OnboardingTour from './components/features/OnboardingTour';
 import { tierColor } from './components/atoms/TierBadge';
 import NoticeFormModal from './components/features/NoticeFormModal';
 import PostFormModal from './components/features/PostFormModal';
@@ -959,6 +960,7 @@ export default function App() {
 
       <PendingApprovalBanner />
       <InstallBanner />
+      <OnboardingTour />
 
       <TabBar tabs={tabs} active={activeTab} onChange={setActiveTab} />
 
