@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Modal from '../atoms/Modal';
 import { getVenueRegulars, getCustomerActivity, type VenueRegular, type CustomerActivity } from '../../api/reservations';
 import { wonToMan } from '../../api/ledger';
+import { getCustomerProfile, saveCustomerProfile, getCoupons, issueCoupon, setCouponStatus, type Coupon } from '../../api/crm';
 
 export default function RegularsModal({ open, onClose, venueId, exclude = [] }: { open: boolean; onClose: () => void; venueId: string; exclude?: string[] }) {
   const [list, setList] = useState<VenueRegular[] | null>(null);
@@ -40,10 +41,21 @@ export default function RegularsModal({ open, onClose, venueId, exclude = [] }: 
 function RegularRow({ idx, r, venueId }: { idx: number; r: VenueRegular; venueId: string }) {
   const [open, setOpen] = useState(false);
   const [act, setAct] = useState<CustomerActivity | null>(null);
+  const [bday, setBday] = useState('');
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
+  const [crmLoaded, setCrmLoaded] = useState(false);
   const toggle = () => {
     const n = !open; setOpen(n);
     if (n && !act) getCustomerActivity(venueId, r.name).then(setAct).catch(() => {});
+    if (n && !crmLoaded) {
+      getCustomerProfile(venueId, r.name).then((p) => setBday(p?.birthday ?? '')).catch(() => {});
+      getCoupons(venueId, r.name).then(setCoupons).catch(() => {});
+      setCrmLoaded(true);
+    }
   };
+  const saveBday = async () => { try { await saveCustomerProfile(venueId, r.name, { birthday: bday || null }); } catch { /* noop */ } };
+  const addCoupon = async () => { const t = window.prompt('쿠폰 내용 (예: 5만 바인권 / 첫방문 50%)'); if (!t) return; try { await issueCoupon(venueId, r.name, t); getCoupons(venueId, r.name).then(setCoupons); } catch { /* noop */ } };
+  const useCoupon = async (id: string) => { await setCouponStatus(id, 'used'); getCoupons(venueId, r.name).then(setCoupons); };
   return (
     <li className="rounded-input border border-border-subtle bg-surface-low">
       <button type="button" onClick={toggle} className="flex w-full items-center gap-2 px-3 py-2 text-left">
@@ -68,6 +80,23 @@ function RegularRow({ idx, r, venueId }: { idx: number; r: VenueRegular; venueId
               <Cell label="객단가" v={act.buyins ? `${wonToMan(Math.round(act.amount / act.buyins))}만` : '-'} />
             </div>
           )}
+          <div className="mt-2 space-y-1.5 border-t border-border-subtle pt-2">
+            <div className="flex items-center gap-1.5">
+              <span className="shrink-0 text-2xs text-ink-muted">생일</span>
+              <input type="date" value={bday} onChange={(e) => setBday(e.target.value)} className="input flex-1 text-2xs" />
+              <button type="button" onClick={saveBday} className="btn-ghost shrink-0 px-2 text-2xs text-gold-300">저장</button>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-2xs text-ink-muted">활성 쿠폰 {coupons.filter((c) => c.status === 'active').length}장</span>
+              <button type="button" onClick={addCoupon} className="btn-ghost px-2 text-2xs text-gold-300">+ 쿠폰 발급</button>
+            </div>
+            {coupons.filter((c) => c.status === 'active').map((c) => (
+              <div key={c.id} className="flex items-center justify-between gap-2 rounded bg-surface-high px-2 py-1">
+                <span className="min-w-0 flex-1 truncate text-2xs text-ink-secondary">🎟 {c.title}</span>
+                <button type="button" onClick={() => useCoupon(c.id)} className="shrink-0 text-2xs font-bold text-gold-300">사용</button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </li>
