@@ -196,6 +196,9 @@
 .tier-glow-admin { animation: tierPulseAdmin 2.6s ease-in-out infinite; }
 .tier-glow-ace   { animation: tierPulseAce 2.3s ease-in-out infinite; }
 
+/* PC에서 본문이 좌측으로 쏠리지 않도록 — 콘텐츠 최대 폭 제한 + 가운데 정렬(모바일은 100%) */
+main { max-width: 48rem; margin-inline: auto; }
+
 /* 모션 민감 사용자 배려 — OS '동작 줄이기' 설정 시 애니메이션/전환을 즉시화해 멀미·끊김 방지 */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

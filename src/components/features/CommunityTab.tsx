@@ -4,11 +4,9 @@ import { getLiveMessages, addLiveMessage, deleteLiveMessage, subscribeLiveWall, 
 import { REGION_CHIPS } from './IntegratedSearchBar';
 import type { MarketplaceNotice } from '../../api/marketplace';
 import { useAuth } from '../../contexts/AuthContext';
-import GtoDeepWidget from './gto/GtoDeepWidget';
 import OwnerCommunity from './OwnerCommunity';
 import DealerCommunity from './DealerCommunity';
 import TierLeaderboard from './TierLeaderboard';
-import ToolsPanel from './ToolsPanel';
 import { useToast } from '../atoms/Toast';
 import { filterContent } from '../../lib/content-filter';
 import { parseHand } from '../../lib/hand';
@@ -34,8 +32,9 @@ interface CommunityTabProps {
   onReloadVenues?: () => void;
 }
 
-// Task 4: [실시간 댓글(라이브월), 게시판, 홀덤 공부, 홀덤펍]
-type Section = 'live' | 'board' | 'study' | 'tools' | 'venues' | 'rank' | 'dealer' | 'owner';
+// 커뮤니티 섹션 — 홀덤펍 / 실시간 댓글 / 게시판 / 딜러 / 랭킹 / 업주
+// (홀덤 공부는 게시판으로 통합, 도구는 메인 탭으로 분리)
+type Section = 'live' | 'board' | 'venues' | 'rank' | 'dealer' | 'owner';
 // 다른 메인 탭(중고장터 등)으로 갔다 돌아와도 커뮤니티 섹션이 유지되도록 모듈 레벨에 기억
 let lastCommunitySection: Section = 'venues';
 
@@ -93,9 +92,8 @@ export default function CommunityTab({
     [posts],
   );
 
-  // 게시판 = 'study' 제외 / 홀덤 공부 = 'study'만 (Task 4)
-  const boardPosts = useMemo(() => sortedPosts.filter((p) => p.category !== 'study'), [sortedPosts]);
-  const studyPosts = useMemo(() => sortedPosts.filter((p) => p.category === 'study'), [sortedPosts]);
+  // 게시판 = 전체 글(홀덤 공부 탭을 게시판으로 통합)
+  const boardPosts = sortedPosts;
 
   return (
     <div className="space-y-3">
@@ -106,9 +104,7 @@ export default function CommunityTab({
           <SectionTab active={section === 'venues'} label="홀덤펍"      onClick={() => setSection('venues')} />
           <SectionTab active={section === 'live'}   label="실시간 댓글" onClick={() => setSection('live')} />
           <SectionTab active={section === 'board'}  label="게시판"      onClick={() => setSection('board')} />
-          <SectionTab active={section === 'study'}  label="홀덤 공부"   onClick={() => setSection('study')} />
           <SectionTab active={section === 'dealer'} label="딜러"        onClick={() => setSection('dealer')} />
-          <SectionTab active={section === 'tools'}  label="도구"        onClick={() => setSection('tools')} />
           <SectionTab active={section === 'rank'}   label="랭킹"        onClick={() => setSection('rank')} />
           {canOwnerCommunity && (
             <SectionTab active={section === 'owner'} label="업주" onClick={() => setSection('owner')} />
@@ -133,22 +129,6 @@ export default function CommunityTab({
           enableCategory
         />
       )}
-
-      {section === 'study' && (
-        <div className="space-y-3">
-          <GtoDeepWidget />
-          <FeedSection
-            posts={studyPosts}
-            onOpenWrite={() => onOpenWrite('study')}
-            onLike={onLikePost}
-            onSelectPost={onSelectPost}
-            placeholder="홀덤 공부·전략을 공유해보세요…"
-            emptyText="첫 홀덤 공부 글을 남겨보세요"
-          />
-        </div>
-      )}
-
-      {section === 'tools' && <ToolsPanel />}
 
       {section === 'venues' && (
         <div className="space-y-3">

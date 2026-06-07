@@ -20,6 +20,8 @@ import NuriHoldemLogo from './components/atoms/NuriHoldemLogo';
 import ThemeToggle from './components/atoms/ThemeToggle';
 import ProfileModal from './components/features/ProfileModal';
 import StaffInviteBanner from './components/features/StaffInviteBanner';
+import ToolsPanel from './components/features/ToolsPanel';
+import ErrorBoundary from './components/atoms/ErrorBoundary';
 import { tierColor } from './components/atoms/TierBadge';
 import NoticeFormModal from './components/features/NoticeFormModal';
 import PostFormModal from './components/features/PostFormModal';
@@ -78,7 +80,7 @@ function OverlayFallback() {
 
 // ── 탭 정의 ──────────────────────────────────────────────────────────────────
 
-type TabId = 'browse' | 'community' | 'market' | 'my-store' | 'admin';
+type TabId = 'browse' | 'community' | 'market' | 'tools' | 'my-store' | 'admin';
 interface TabDef { id: TabId; label: string; }
 
 // ── 헤더 ─────────────────────────────────────────────────────────────────────
@@ -546,6 +548,7 @@ export default function App() {
       { id: 'browse',    label: '일정 탐색' },
       { id: 'community', label: '커뮤니티' },
       { id: 'market',    label: '중고장터' },
+      { id: 'tools',     label: '도구' },
     ];
     if (isOwner || isStaff || isAdmin) base.push({ id: 'my-store', label: '내 매장' });
     if (isAdmin)            base.push({ id: 'admin',       label: '관리자 설정' });
@@ -1082,6 +1085,15 @@ export default function App() {
             onWriteNotice={() => setNoticeFormOpen(true)}
             onListingsChanged={() => getListings().then(setListings).catch(() => {})}
           />
+        </main>
+      )}
+
+      {/* 도구 — 매장 운영·플레이어 도구 모음 (메인 탭) */}
+      {activeTab === 'tools' && (
+        <main className="px-page-x py-section animate-fade-in">
+          <ErrorBoundary inline resetKey="tools">
+            <ToolsPanel />
+          </ErrorBoundary>
         </main>
       )}
 

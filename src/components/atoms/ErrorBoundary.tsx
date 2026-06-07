@@ -1,15 +1,30 @@
 // src/components/atoms/ErrorBoundary.tsx
 // 런타임 예외 시 흰 화면 대신 안전한 안내 화면을 노출(앱 크래시 복원력).
-// CSS가 로드되지 않아도 보이도록 인라인 스타일 사용.
+// - 전역(기본): 풀스크린 폴백. CSS 미로드 대비 인라인 스타일.
+// - inline: 섹션/탭 단위 폴백(카드형). resetKey 변경 시(예: 탭 전환) 자동 복구.
 import { Component, type ReactNode } from 'react';
 
-interface State { hasError: boolean }
+interface Props {
+  children: ReactNode;
+  /** 섹션/탭 단위 컴팩트 폴백 */
+  inline?: boolean;
+  /** 값이 바뀌면 에러 상태를 초기화(예: 활성 탭 키) */
+  resetKey?: unknown;
+  /** inline 폴백 제목 */
+  label?: string;
+}
+interface State { hasError: boolean; prevKey: unknown }
 
-export default class ErrorBoundary extends Component<{ children: ReactNode }, State> {
-  state: State = { hasError: false };
+export default class ErrorBoundary extends Component<Props, State> {
+  state: State = { hasError: false, prevKey: this.props.resetKey };
 
-  static getDerivedStateFromError(): State {
+  static getDerivedStateFromError(): Partial<State> {
     return { hasError: true };
+  }
+
+  static getDerivedStateFromProps(props: Props, state: State): Partial<State> | null {
+    if (props.resetKey !== state.prevKey) return { hasError: false, prevKey: props.resetKey };
+    return null;
   }
 
   componentDidCatch(error: unknown, info: unknown) {
@@ -17,8 +32,26 @@ export default class ErrorBoundary extends Component<{ children: ReactNode }, St
     console.error('[ErrorBoundary]', error, info);
   }
 
+  reset = () => this.setState({ hasError: false });
+
   render() {
     if (!this.state.hasError) return this.props.children;
+
+    // ── 섹션/탭 단위 컴팩트 폴백 ──
+    if (this.props.inline) {
+      return (
+        <div className="rounded-card border border-danger/40 bg-danger/[0.06] p-5 text-center space-y-2 my-4 animate-fade-in">
+          <p className="text-sm font-bold text-ink-primary">{this.props.label ?? '이 영역을 불러오지 못했습니다'}</p>
+          <p className="text-2xs text-ink-muted">잠시 후 다시 시도해 주세요.</p>
+          <div className="flex items-center justify-center gap-2 pt-1">
+            <button type="button" onClick={this.reset} className="btn-ghost text-xs px-3">다시 시도</button>
+            <button type="button" onClick={() => window.location.reload()} className="btn-primary text-xs px-3">새로고침</button>
+          </div>
+        </div>
+      );
+    }
+
+    // ── 전역 풀스크린 폴백 ──
     return (
       <div style={{
         minHeight: '100vh', display: 'flex', flexDirection: 'column',
