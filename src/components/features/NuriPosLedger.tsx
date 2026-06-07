@@ -722,6 +722,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   const [maxEntries, setMaxEntries] = useState<number>(base.maxEntries || 0);
   const [isAddon, setIsAddon] = useState<boolean>(!!base.isAddon);
   const [addonStack, setAddonStack] = useState<number>(base.addonStack || 0);
+  const [voucherIssued, setVoucherIssued] = useState<number>(base.voucherIssued ?? 0);
   const [event, setEvent]     = useState(base.eventMemo ?? '');
   const [dealers, setDealers] = useState(base.dealers ?? (scheduledDealers.length ? scheduledDealers.join('\n') : ''));
   const [schedId, setSchedId] = useState<string>(base.scheduleId ?? '');
@@ -787,7 +788,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       ...base, title: title.trim() || undefined,
       buyinAmount: cash, cardAmount: card > 0 ? card : null,
       gameType, targetEntries: gameType === 'gtd' ? target : 0, maxEntries: gameType === 'entry' ? maxEntries : 0,
-      isAddon, addonStack: isAddon ? addonStack : 0,
+      isAddon, addonStack: isAddon ? addonStack : 0, voucherIssued,
       eventMemo: event.trim() || undefined, dealers: dealers.trim() || undefined,
       scheduleId: schedId || null, openedBy: operIds[0] ?? null, operators: operIds,
       discounts: discs.filter((d) => d.amount > 0),
@@ -956,6 +957,15 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
           )}
         </div>
         {isAddon && <p className="text-[10px] text-ink-muted mt-1">애드온 스택은 클락에 표시됩니다.</p>}
+      </Field>
+
+      <Field label="매장이용권 발행/시상 · 선택 (당일 발급 장수)">
+        <div className="relative w-40">
+          <input type="number" inputMode="numeric" value={voucherIssued || ''} onChange={(e) => setVoucherIssued(parseInt(e.target.value, 10) || 0)}
+            placeholder="0" className="input w-full text-sm pr-7 tabular-nums" />
+          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted pointer-events-none">장</span>
+        </div>
+        <p className="text-[10px] text-ink-muted mt-1">오늘 발행·시상한 매장이용권 수 — 대시보드 '매장이용권' 카드에 합산됩니다.</p>
       </Field>
 
       <Field label="이벤트 · 비고 · 선택">

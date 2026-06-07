@@ -60,6 +60,7 @@ export interface LedgerSession {
   closed: boolean;              // 정산 마감(읽기전용 스냅샷)
   closedAt?: string | null;
   closeMemo?: string | null;
+  voucherIssued?: number;       // 매장이용권 발행/시상 장수(당일)
 }
 
 export interface LedgerPlayer {
@@ -165,6 +166,7 @@ const rowToSession = (venueId: string, date: string, d: any): LedgerSession => (
   earlyDoubleMin: d?.early_double_min ?? 0,
   earlySingleMin: d?.early_single_min ?? 0,
   tournamentStart: d?.tournament_start ?? null,
+  voucherIssued: d?.voucher_issued ?? 0,
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -180,6 +182,7 @@ const emptySession = (venueId: string, date: string): LedgerSession => ({
   operators: [],
   regClosed: false, closed: false, discounts: [],
   earlyDoubleMin: 0, earlySingleMin: 0, tournamentStart: null,
+  voucherIssued: 0,
 });
 
 // ── 권한 ──────────────────────────────────────────────────────────────────────
@@ -300,6 +303,7 @@ export async function saveLedgerSession(s: LedgerSession): Promise<void> {
     event_memo: s.eventMemo ?? null, dealers: s.dealers ?? null, schedule_id: s.scheduleId ?? null,
     discounts: (s.discounts ?? []) as unknown as object,
     early_double_min: s.earlyDoubleMin ?? 0, early_single_min: s.earlySingleMin ?? 0, tournament_start: s.tournamentStart ?? null,
+    voucher_issued: s.voucherIssued ?? 0,
     updated_at: new Date().toISOString(),
   }, { onConflict: 'venue_id,session_date' });
   if (error) throw error;
@@ -318,6 +322,7 @@ export async function openLedgerSession(s: LedgerSession, operatorId?: string | 
     event_memo: s.eventMemo ?? null, dealers: s.dealers ?? null, schedule_id: s.scheduleId ?? null,
     discounts: (s.discounts ?? []) as unknown as object,
     early_double_min: s.earlyDoubleMin ?? 0, early_single_min: s.earlySingleMin ?? 0, tournament_start: s.tournamentStart ?? null,
+    voucher_issued: s.voucherIssued ?? 0,
     opened_by: operatorId ?? user?.id ?? null, opened_at: new Date().toISOString(),
     reg_closed: false, reg_closed_at: null,
     closed: false, closed_at: null, close_memo: null,

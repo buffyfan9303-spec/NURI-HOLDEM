@@ -156,6 +156,10 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
     const s = sessByDate[b.sessionDate];
     if (s) weekTicket += buyinFinance(b, s).ticketPaid;
   }
+  // 매장이용권 발행/시상(세션 입력값) — 7일 / 오늘
+  let weekVoucher = 0;
+  for (const s of range.sessions) { if (days.includes(s.sessionDate)) weekVoucher += s.voucherIssued ?? 0; }
+  const todayVoucher = session?.voucherIssued ?? 0;
 
   // ── 단골 TOP(바인·방문 횟수 기준, 관계자[직원] 제외) ──
   const staffNames = new Set(wages.map((w) => w.name.trim()));
@@ -386,10 +390,12 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           {loading ? <Skeleton /> : (
             <>
               <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-                <Stat label="7일 회수" value={`${weekTicket}`} unit="장" accent />
+                <Stat label="7일 발행" value={`${weekVoucher}`} unit="장" accent />
+                <Stat label="오늘 발행" value={`${todayVoucher}`} unit="장" />
+                <Stat label="7일 회수" value={`${weekTicket}`} unit="장" />
                 <Stat label="오늘 회수" value={`${fin.ticket}`} unit="장" />
               </div>
-              <p className="mt-1.5 text-[10px] text-ink-muted">매장이용권(티켓)으로 바이인한 합계입니다.</p>
+              <p className="mt-1.5 text-[10px] text-ink-muted">발행=장부에서 입력한 발급/시상 · 회수=티켓으로 바인한 합계.</p>
             </>
           )}
         </DashCard>
