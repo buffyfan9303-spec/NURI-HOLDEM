@@ -14,6 +14,7 @@ import StaffSchedule from './StaffSchedule';
 import { StaffWageManager, StaffSettlement, StaffWorkLog, StaffSelfAttendance } from './StaffPayroll';
 import StoreDashboard from './StoreDashboard';
 import { VoucherManagePanel } from './VoucherManageModal';
+import { iCanViewVouchers, getVoucherAccessUserIds, grantVoucherAccess, revokeVoucherAccess } from '../../api/vouchers';
 import MyPostersTab from './MyPostersTab';
 import type { Schedule } from '../../api/schedules';
 
@@ -33,6 +34,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   const [section, setSection] = useState<Section | null>(null);
   const [ledgerOk, setLedgerOk] = useState(false); // 장부 접근(업주/운영자/권한직원)
   const [manageOk, setManageOk] = useState(false); // 통계·설정(업주/운영자)
+  const [voucherView, setVoucherView] = useState(false); // 매장이용권 내역 열람(업주/권한직원)
   const [permsLoaded, setPermsLoaded] = useState(false);
   const [rankingDraft, setRankingDraft] = useState<{ date: string; names: string[] } | null>(null);
   const [clockSeed, setClockSeed] = useState<string | null>(null); // 장부→클락 연동 날짜
@@ -52,16 +54,16 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     if (!venueId) { setPermsLoaded(false); return; }
     let alive = true;
     if (isAdmin) {
-      setLedgerOk(true); setManageOk(true);
+      setLedgerOk(true); setManageOk(true); setVoucherView(true);
       setSection((s) => s ?? 'dashboard');
       setPermsLoaded(true);
       return () => { alive = false; };
     }
     setPermsLoaded(false);
-    Promise.all([canAccessLedger(venueId), canManagePos(venueId)])
-      .then(([l, m]) => {
+    Promise.all([canAccessLedger(venueId), canManagePos(venueId), iCanViewVouchers(venueId)])
+      .then(([l, m, vv]) => {
         if (!alive) return;
-        setLedgerOk(l); setManageOk(m);
+        setLedgerOk(l); setManageOk(m); setVoucherView(vv);
         setSection((s) => s ?? 'dashboard');
       })
       .catch(() => { if (alive) setSection(null); })
@@ -77,7 +79,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   if (ledgerOk) available.push({ id: 'ranking', label: '순위 입력' });
   if (ledgerOk) available.push({ id: 'clock', label: '클락' });
   if (ledgerOk) available.push({ id: 'attendance', label: '출근 관리' });
-  if (manageOk) available.push({ id: 'voucher', label: '매장이용권' });
+  if (manageOk || voucherView) available.push({ id: 'voucher', label: '매장이용권' });
   if (canStaff) available.push({ id: 'staff', label: '직원 관리' });
   if (canStaff) available.push({ id: 'settings', label: 'POS 설정' });
 
@@ -137,7 +139,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
           {section === 'attendance' && ledgerOk && <StaffSelfAttendance venueId={venueId} />}
           {section === 'staff'    && canStaff && <StaffHub venueId={venueId} />}
           {section === 'settings' && canStaff && <PosSettingsPanel venueId={venueId} />}
-          {section === 'voucher'  && manageOk && <VoucherManagePanel venueId={venueId} />}
+          {section === 'voucher'  && (manageOk || voucherView) && <VoucherManagePanel venueId={venueId} />}
         </>
       )}
     </div>
@@ -338,6 +340,7 @@ function StaffManager({ venueId }: { venueId: string }) {
   const [staff, setStaff] = useState<User[]>([]);
   const [invites, setInvites] = useState<VenueInvite[]>([]);
   const [access, setAccess] = useState<string[]>([]); // 장부·순위 권한 보유 직원 id
+  const [vouch, setVouch] = useState<string[]>([]); // 이용권 내역 열람 권한 보유 직원 id
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState('');
   const [inviting, setInviting] = useState(false);
@@ -345,8 +348,8 @@ function StaffManager({ venueId }: { venueId: string }) {
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([getMyVenueStaff(), getMyVenueInvites(), getLedgerAccessUserIds(venueId)])
-      .then(([s, i, a]) => { setStaff(s); setInvites(i); setAccess(a); })
+    Promise.all([getMyVenueStaff(), getMyVenueInvites(), getLedgerAccessUserIds(venueId), getVoucherAccessUserIds(venueId)])
+      .then(([s, i, a, va]) => { setStaff(s); setInvites(i); setAccess(a); setVouch(va); })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [tick, venueId]);
@@ -363,6 +366,12 @@ function StaffManager({ venueId }: { venueId: string }) {
     const has = access.includes(id);
     setAccess((a) => has ? a.filter((x) => x !== id) : [...a, id]);
     try { if (has) await revokeLedgerAccess(venueId, id); else await grantLedgerAccess(venueId, id); }
+    catch (e) { toast.show(e instanceof Error ? e.message : '권한 변경 실패', 'error'); reload(); }
+  };
+  const toggleVoucher = async (id: string) => {
+    const has = vouch.includes(id);
+    setVouch((a) => has ? a.filter((x) => x !== id) : [...a, id]);
+    try { if (has) await revokeVoucherAccess(venueId, id); else await grantVoucherAccess(venueId, id); }
     catch (e) { toast.show(e instanceof Error ? e.message : '권한 변경 실패', 'error'); reload(); }
   };
 
@@ -463,7 +472,7 @@ function StaffManager({ venueId }: { venueId: string }) {
                       </div>
                       <button type="button" onClick={() => remove(s)} className="text-2xs px-2 py-1 rounded-input text-ink-muted hover:text-danger-light transition-colors">제거</button>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <input
                         type="text" defaultValue={s.staffTitle ?? ''} list="staff-title-suggest" maxLength={20}
                         onBlur={(e) => saveTitle(s.id, e.target.value)}
@@ -475,6 +484,11 @@ function StaffManager({ venueId }: { venueId: string }) {
                         className={['shrink-0 text-2xs font-bold px-2.5 py-1.5 rounded-badge border transition-colors',
                           hasAccess ? 'bg-gold-300/15 text-gold-300 border-gold-400/40' : 'bg-surface-float text-ink-muted border-border-default'].join(' ')}>
                         장부·순위 {hasAccess ? '권한 ✓' : '권한 없음'}
+                      </button>
+                      <button type="button" onClick={() => toggleVoucher(s.id)}
+                        className={['shrink-0 text-2xs font-bold px-2.5 py-1.5 rounded-badge border transition-colors',
+                          vouch.includes(s.id) ? 'bg-gold-300/15 text-gold-300 border-gold-400/40' : 'bg-surface-float text-ink-muted border-border-default'].join(' ')}>
+                        이용권내역 {vouch.includes(s.id) ? '✓' : '✗'}
                       </button>
                     </div>
                   </li>

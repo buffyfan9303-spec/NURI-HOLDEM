@@ -151,6 +151,13 @@ export async function voucherHistory(venueId: string): Promise<VoucherHistoryRow
   return (data ?? []).map((r: any) => ({ id: r.id, title: r.title, holderName: r.holder_name ?? null, usedAt: r.used_at ?? null }));
 }
 
+// 현재 사용자가 이 매장 이용권 내역을 볼 수 있는지(업주 또는 권한 부여 직원)
+export async function iCanViewVouchers(venueId: string): Promise<boolean> {
+  if (IS_MOCK) return false;
+  const { data } = await supabase.rpc('can_view_vouchers', { p_venue_id: venueId });
+  return data === true;
+}
+
 /** 내 매장 이용내역(머니인 횟수·금액) — 장부 바인을 실명/닉네임 일치로 집계. */
 export async function myPlayHistory(): Promise<PlayHistory[]> {
   if (IS_MOCK) return [];

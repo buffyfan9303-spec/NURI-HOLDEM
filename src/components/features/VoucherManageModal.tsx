@@ -5,7 +5,8 @@ import { useEffect, useState } from 'react';
 import Modal from '../atoms/Modal';
 import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
-import { listVenueVouchers, issueVoucher, redeemVoucher, revokeVoucher, deleteVoucher, findUserForTransfer, voucherUsageByVenue, type Voucher, type VoucherUsage } from '../../api/vouchers';
+import QRCode from 'qrcode';
+import { listVenueVouchers, issueVoucher, redeemVoucher, revokeVoucher, deleteVoucher, findUserForTransfer, voucherUsageByVenue, voucherHolderStats, type Voucher, type VoucherUsage, type VoucherHolderStats } from '../../api/vouchers';
 
 const STATUS: Record<string, { label: string; cls: string }> = {
   active: { label: '배포됨', cls: 'bg-gold-300/15 text-gold-300' },
@@ -26,13 +27,17 @@ export function VoucherManagePanel({ venueId }: { venueId: string }) {
   const [nick, setNick] = useState('');
   const [recvName, setRecvName] = useState('');
   const [busy, setBusy] = useState(false);
+  const [stats, setStats] = useState<VoucherHolderStats | null>(null);
+  const [qr, setQr] = useState('');
 
   const reload = () => {
     setLoading(true);
     listVenueVouchers(venueId).then(setList).catch(() => {}).finally(() => setLoading(false));
+    voucherHolderStats(venueId).then(setStats).catch(() => {});
     if (canIssue) voucherUsageByVenue(venueId).then(setUsage).catch(() => {});
   };
   useEffect(() => { reload(); /* eslint-disable-next-line */ }, [venueId]);
+  useEffect(() => { QRCode.toDataURL(`NURIV-VENUE:${venueId}`, { width: 240, margin: 1 }).then(setQr).catch(() => {}); }, [venueId]);
 
   const issue = async () => {
     setBusy(true);
@@ -73,6 +78,21 @@ export function VoucherManagePanel({ venueId }: { venueId: string }) {
         </div>
       ) : (
         <p className="rounded-input border border-border-subtle bg-surface-low p-2.5 text-2xs text-ink-muted">배포·회수·삭제는 <b className="text-ink-secondary">업주</b>만 가능합니다. 인증 직원은 열람·사용 처리만 할 수 있습니다.</p>
+      )}
+
+      {stats && (
+        <div className="grid grid-cols-3 gap-2">
+          <div className="rounded-input border border-border-subtle bg-surface-low p-2 text-center"><p className="text-lg font-extrabold tabular-nums text-gold-300">{stats.holderCount}</p><p className="text-[10px] text-ink-muted">보유 회원</p></div>
+          <div className="rounded-input border border-border-subtle bg-surface-low p-2 text-center"><p className="text-lg font-extrabold tabular-nums text-ink-primary">{stats.activeCount}</p><p className="text-[10px] text-ink-muted">활성 이용권</p></div>
+          <div className="rounded-input border border-border-subtle bg-surface-low p-2 text-center"><p className="text-lg font-extrabold tabular-nums text-ink-secondary">{stats.usedCount}</p><p className="text-[10px] text-ink-muted">사용 완료</p></div>
+        </div>
+      )}
+      {canIssue && qr && (
+        <div className="flex flex-col items-center gap-1.5 rounded-input border border-gold-400/30 bg-gold-300/[0.05] p-3">
+          <p className="text-2xs font-bold text-gold-300">매장 이용권 QR — 손님이 스캔해 사용</p>
+          <img src={qr} alt="매장 이용권 QR" width={160} height={160} className="rounded bg-white p-1.5" />
+          <p className="text-center text-[10px] text-ink-muted">손님: 대시보드 → 이용권 → 사용하기 → ‘매장 QR 스캔’</p>
+        </div>
       )}
 
       {canIssue && usage.length > 0 && (
