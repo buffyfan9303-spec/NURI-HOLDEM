@@ -26,6 +26,10 @@ export interface User {
   activityPoints?: number;  // 활동 점수(배드빗/굿런 받은 수)
   badges?: string[];        // 획득 뱃지
   staffTitle?: string;      // 직원 직책(매니저·딜러·플로어 등) — 권한과 분리, 업주가 지정
+  verified?: boolean;       // 본인인증(CI) 완료 여부 — 1인 1계정
+  verifiedAt?: string;      // 본인인증 시각
+  realName?: string;        // 인증된 실명(표시명/닉네임과 분리 저장)
+  phone?: string;           // 인증된 전화번호
 }
 
 export interface LoginPayload { email: string; password: string; }
@@ -67,6 +71,10 @@ function rowToUser(row: any): User {
     activityPoints: row.activity_points ?? 0,
     badges:         row.badges ?? [],
     staffTitle:     row.staff_title ?? undefined,
+    verified:       !!row.ci,
+    verifiedAt:     row.verified_at ?? undefined,
+    realName:       row.real_name ?? undefined,
+    phone:          row.phone ?? undefined,
   };
 }
 

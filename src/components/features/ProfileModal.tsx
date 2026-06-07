@@ -10,6 +10,7 @@ import { pushSupported, isPushSubscribed, enablePush, disablePush } from '../../
 import AvatarCropper from './AvatarCropper';
 import ActivityBadges from '../atoms/ActivityBadges';
 import CustomerDashboardModal from './CustomerDashboardModal';
+import IdentityVerificationButton from './IdentityVerificationButton';
 import { getMyVisitStats } from '../../api/reservations';
 
 interface ProfileModalProps {
@@ -43,7 +44,7 @@ function blobToBase64(blob: Blob): Promise<string> {
 }
 
 export default function ProfileModal({ open, onClose }: ProfileModalProps) {
-  const { user, updateProfile } = useAuth();
+  const { user, updateProfile, refreshProfile } = useAuth();
   const toast = useToast();
   const [visitStats, setVisitStats] = useState({ visits: 0, upcoming: 0, total: 0 });
   const [dashOpen, setDashOpen] = useState(false);
@@ -311,6 +312,23 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
             <span className="text-xs text-gold-300">→</span>
           </button>
           <CustomerDashboardModal open={dashOpen} onClose={() => setDashOpen(false)} />
+
+          {/* 본인인증 (1인 1계정) */}
+          {user?.verified ? (
+            <div className="flex items-center gap-2 rounded-card border border-emerald-500/30 bg-emerald-500/[0.06] px-3 py-2.5">
+              <span className="text-base" aria-hidden>✅</span>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-emerald-300">본인인증 완료</p>
+                <p className="text-2xs text-ink-muted">{user.realName ? `실명 ${user.realName} · ` : ''}1인 1계정 인증됨</p>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-1.5 rounded-card border border-gold-400/30 bg-gold-300/[0.06] p-3">
+              <p className="text-sm font-semibold text-gold-300">휴대폰 본인인증</p>
+              <p className="text-2xs text-ink-muted leading-relaxed">안전한 거래와 1인 1계정을 위해 휴대폰 실명인증이 필요합니다. 매장이용권 등 일부 기능에 사용됩니다.</p>
+              <IdentityVerificationButton onVerified={() => { refreshProfile().catch(() => {}); }} />
+            </div>
+          )}
 
           {/* 닉네임 */}
           <div>

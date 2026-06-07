@@ -455,6 +455,10 @@ function SignupUserForm({ onDone }: { onDone: () => void }) {
         <Field label="비밀번호"       type="password" placeholder="8자 이상"        required value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} />
         <Field label="비밀번호 확인"  type="password" placeholder="••••••••"        required value={confirm}  onChange={(e) => setConfirm(e.target.value)} />
 
+        <p className="rounded-input border border-border-subtle bg-surface-high px-2.5 py-2 text-2xs leading-relaxed text-ink-muted">
+          🔒 가입 후 첫 로그인 시 <b className="text-ink-secondary">휴대폰 본인인증</b>이 필요합니다 (1인 1계정·안전거래).
+        </p>
+
         <ConsentSection
           c={c} allRequired={allRequired} allChecked={allChecked}
           set={set} toggleAll={toggleAll}
@@ -556,6 +560,9 @@ function SignupOwnerForm({ onDone }: { onDone: () => void }) {
             </div>
             <Field label="상세 주소"      type="text" placeholder="서울시 강남구 …" required value={address} onChange={(e) => setAddress(e.target.value)} />
             <Field label="사업자등록번호" type="text" placeholder="000-00-00000"       required value={bizNum}  onChange={(e) => setBizNum(e.target.value)} />
+            <p className="rounded-input border border-border-subtle bg-surface-high px-2.5 py-2 text-2xs leading-relaxed text-ink-muted">
+              🔒 가입·승인 후 첫 로그인 시 <b className="text-ink-secondary">대표자 휴대폰 본인인증</b>이 필요합니다 (1인 1계정).
+            </p>
           </div>
         </section>
 
