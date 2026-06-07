@@ -7,6 +7,7 @@ import { uploadPoster } from '../../lib/storage';
 import { filterContent } from '../../lib/content-filter';
 import type { Schedule } from '../../api/schedules';
 import { REGION_CHIPS } from './IntegratedSearchBar';
+import { generateBlinds } from '../../api/clock';
 
 interface PosterFormModalProps {
   open: boolean;
@@ -38,6 +39,8 @@ export interface PosterFormData {
   events: { badge?: string; title: string }[]; // 이벤트/프로모션(배지 + 내용) — 선택
   /** 주간 반복 등록 횟수(생성 시에만 사용, 1=반복 없음) */
   repeatWeeks?: number;
+  /** 포스터별 커스텀 블라인드 표(비우면 기본 자동 생성 표시) */
+  blindLevels?: { sb: number; bb: number; ante: number; minutes: number; isBreak?: boolean }[];
   posterUrl?: string;
   // 관리자 직접 등록용 — 홀덤펍 선택(기존) 또는 직접 입력
   venueId?: string;
@@ -63,7 +66,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
     prizeType: 'GTD', prizeAmount: 0, prizePercent: 0, buyIn: 0, region: '',
     isCompetition: false,
     paymentMethods: ['현금'], partners: [], prizes: [],
-    rankingPrizes: [], events: [], repeatWeeks: 1,
+    rankingPrizes: [], events: [], repeatWeeks: 1, blindLevels: [],
     venueId: '', pubName: '',
   };
 
@@ -74,6 +77,19 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
   // 레지마감: 레벨/시간 분리 입력 (둘 중 하나 이상 필수). 저장 시 'NLV HH:MM' 형태로 합쳐 regCloseTime 에 반영
   const [regLevel,   setRegLevel]   = useState('');
   const [regTime,    setRegTime]    = useState('');
+  // 블라인드 표 직접 편집(선택)
+  const [blindOpen, setBlindOpen] = useState(false);
+  const setBlinds = (fn: (arr: NonNullable<PosterFormData['blindLevels']>) => NonNullable<PosterFormData['blindLevels']>) =>
+    setForm((f) => ({ ...f, blindLevels: fn(f.blindLevels ?? []) }));
+  const fillBlinds = () => {
+    const rc = Math.min(Math.max(parseInt(regLevel, 10) || 16, 1), 25);
+    setBlinds(() => generateBlinds(rc, 25, 20, 20).map((l) => ({ sb: l.sb, bb: l.bb, ante: l.ante, minutes: l.minutes, isBreak: l.kind === 'break' })));
+  };
+  const setBlindRow = (i: number, patch: Partial<{ sb: number; bb: number; ante: number; minutes: number; isBreak: boolean }>) =>
+    setBlinds((arr) => arr.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
+  const addBlindRow = (isBreak: boolean) =>
+    setBlinds((arr) => [...arr, isBreak ? { sb: 0, bb: 0, ante: 0, minutes: 8, isBreak: true } : { sb: 0, bb: 0, ante: 0, minutes: 20 }]);
+  const removeBlindRow = (i: number) => setBlinds((arr) => arr.filter((_, idx) => idx !== i));
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -94,6 +110,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
         prizes: schedule.seats?.map((s) => `${s.label} ${s.count}석`) ?? [],
         rankingPrizes: schedule.rankingPrizes?.map((r) => ({ rank: r.rank, amount: r.amount, unit: r.unit ?? '' })) ?? [],
         events: schedule.promotions?.map((p) => ({ badge: p.badge, title: p.title })) ?? [],
+        blindLevels: schedule.structure?.levels ?? [],
         posterUrl: schedule.posterUrl,
         venueId: schedule.venueId, pubName: schedule.pubName,
       });
@@ -271,6 +288,49 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
         )}
 
         {/* 레지마감 — 레벨/시간 분리 (둘 중 하나 이상 필수) */}
+        {/* 블라인드 표 직접 편집(선택) — 저장 시 포스터 상세 '블라인드 구조'에 그대로 표시 */}
+        <FieldWrap label="블라인드 표 직접 편집 (선택)">
+          <button type="button" onClick={() => setBlindOpen((v) => !v)}
+            className="w-full flex items-center justify-between px-3 py-2 rounded-input border border-border-default bg-surface-high text-sm font-semibold text-ink-secondary hover:text-gold-300 transition-colors">
+            <span>{(form.blindLevels?.length ?? 0) > 0 ? `맞춤 ${form.blindLevels!.filter((l) => !l.isBreak).length}레벨 저장됨` : '블라인드 표 편집 열기 (비우면 기본 표)'}</span>
+            <span className="text-2xs text-gold-300">{blindOpen ? '▲' : '▼'}</span>
+          </button>
+          {blindOpen && (
+            <div className="mt-2 space-y-2 rounded-input border border-border-subtle bg-surface-base p-2.5">
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={fillBlinds} className="btn-ghost text-2xs px-2 text-gold-300">자동 생성(레지 {regLevel || '16'}LV·20분·25레벨)</button>
+                {(form.blindLevels?.length ?? 0) > 0 && <button type="button" onClick={() => setBlinds(() => [])} className="btn-ghost text-2xs px-2 hover:text-danger-light">전체 비우기</button>}
+              </div>
+              {(form.blindLevels?.length ?? 0) === 0 ? (
+                <p className="text-2xs text-ink-muted text-center py-3">자동 생성 후 값을 수정하거나 행을 추가하세요. 비워두면 기본(파이널롤백) 표가 표시됩니다.</p>
+              ) : (
+                <div className="max-h-64 overflow-y-auto space-y-1">
+                  {(form.blindLevels ?? []).map((l, i) => (
+                    <div key={i} className="flex items-center gap-1">
+                      <span className="w-5 shrink-0 text-center text-2xs text-ink-muted">{l.isBreak ? '–' : (form.blindLevels!.slice(0, i + 1).filter((x) => !x.isBreak).length)}</span>
+                      {l.isBreak ? (
+                        <span className="flex-1 text-2xs font-bold text-gold-300">BREAK</span>
+                      ) : (
+                        <>
+                          <input type="number" inputMode="numeric" value={l.sb || ''} onChange={(e) => setBlindRow(i, { sb: parseInt(e.target.value, 10) || 0 })} placeholder="SB" className="input min-w-0 flex-1 px-1.5 py-1 text-2xs tabular-nums" />
+                          <input type="number" inputMode="numeric" value={l.bb || ''} onChange={(e) => setBlindRow(i, { bb: parseInt(e.target.value, 10) || 0 })} placeholder="BB" className="input min-w-0 flex-1 px-1.5 py-1 text-2xs tabular-nums" />
+                          <input type="number" inputMode="numeric" value={l.ante || ''} onChange={(e) => setBlindRow(i, { ante: parseInt(e.target.value, 10) || 0 })} placeholder="앤티" className="input min-w-0 flex-1 px-1.5 py-1 text-2xs tabular-nums" />
+                        </>
+                      )}
+                      <input type="number" inputMode="numeric" value={l.minutes || ''} onChange={(e) => setBlindRow(i, { minutes: parseInt(e.target.value, 10) || 0 })} placeholder="분" className="input w-11 shrink-0 px-1.5 py-1 text-2xs tabular-nums" />
+                      <button type="button" onClick={() => removeBlindRow(i)} aria-label="행 삭제" className="shrink-0 px-1 text-xs text-ink-muted hover:text-danger-light">✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <button type="button" onClick={() => addBlindRow(false)} className="btn-ghost flex-1 text-2xs px-2">+ 레벨 추가</button>
+                <button type="button" onClick={() => addBlindRow(true)} className="btn-ghost flex-1 text-2xs px-2">+ 브레이크</button>
+              </div>
+            </div>
+          )}
+        </FieldWrap>
+
         <FieldWrap label="레지마감 (레벨 또는 시간 중 하나 이상)" required>
           <div className="grid grid-cols-2 gap-2">
             <div>

@@ -25,7 +25,7 @@ export interface Schedule {
   isCompetition?: boolean; // '대회/이벤트' 분류 — 필터 [대회]용 (Task 3)
   blinds?: string;         // 블라인드 구조(선택) — 직접 입력
   buyIn: BuyInInfo; seats?: SeatVoucher[];
-  structure?: { startingChips: number; blindLevelMinutes: number; lateRegLevels?: number; };
+  structure?: { startingChips?: number; blindLevelMinutes?: number; lateRegLevels?: number; levels?: { sb: number; bb: number; ante: number; minutes: number; isBreak?: boolean }[] };
   description?: string;
   sideEvents?: SideEvent[]; rankingPrizes?: RankingPrize[];
   partners?: string[]; promotions?: Promotion[]; paymentMethods?: string[]; rules?: string[];
@@ -132,6 +132,7 @@ export async function updateSchedule(id: string, patch: Partial<Schedule>): Prom
     ...(patch.prizePool     !== undefined && { prize_pool:      patch.prizePool }),
     ...(patch.prizePercent  !== undefined && { prize_percent:   patch.prizePercent }),
     ...(patch.blinds        !== undefined && { blinds:          patch.blinds }),
+    ...(patch.structure     !== undefined && { structure:       patch.structure }),
     ...(patch.buyIn         !== undefined && { buy_in:          patch.buyIn }),
     ...(patch.region        !== undefined && { region:          patch.region }),
     ...(patch.seats         !== undefined && { seats:           patch.seats }),

@@ -298,20 +298,24 @@ export default function ScheduleDetailModal({
         )}
 
         {/* 토너먼트 구조 (선택) */}
-        {schedule.structure && (
+        {schedule.structure && (schedule.structure.startingChips != null || schedule.structure.blindLevelMinutes != null) && (
           <section>
             <h3 className="text-sm font-semibold text-ink-primary mb-2">토너먼트 구조</h3>
             <div className="grid grid-cols-3 gap-2">
-              <InfoCard
-                label="시작 칩"
-                value={schedule.structure.startingChips.toLocaleString()}
-                compact
-              />
-              <InfoCard
-                label="레벨"
-                value={`${schedule.structure.blindLevelMinutes}분`}
-                compact
-              />
+              {schedule.structure.startingChips != null && (
+                <InfoCard
+                  label="시작 칩"
+                  value={schedule.structure.startingChips.toLocaleString()}
+                  compact
+                />
+              )}
+              {schedule.structure.blindLevelMinutes != null && (
+                <InfoCard
+                  label="레벨"
+                  value={`${schedule.structure.blindLevelMinutes}분`}
+                  compact
+                />
+              )}
               {schedule.structure.lateRegLevels !== undefined && (
                 <InfoCard
                   label="레이트 레지"
@@ -535,7 +539,11 @@ function BlindStructure({ schedule }: { schedule: Schedule }) {
     return Math.min(Math.max(n, 1), 25);
   })();
   const dur = schedule.structure?.blindLevelMinutes || 20;
-  const levels = generateBlinds(regClose, 25, dur, dur);
+  const custom = schedule.structure?.levels;
+  // 포스터별 저장된 커스텀 레벨이 있으면 그걸, 없으면 파이널롤백 기반 자동 생성
+  const levels: { kind: 'level' | 'break'; sb: number; bb: number; ante: number; minutes: number }[] = custom && custom.length
+    ? custom.map((l) => ({ kind: l.isBreak ? 'break' : 'level', sb: l.sb, bb: l.bb, ante: l.ante, minutes: l.minutes }))
+    : generateBlinds(regClose, 25, dur, dur).map((l) => ({ kind: l.kind, sb: l.sb, bb: l.bb, ante: l.ante, minutes: l.minutes }));
 
   let levelNo = 0;
   return (
@@ -544,7 +552,7 @@ function BlindStructure({ schedule }: { schedule: Schedule }) {
         className="flex w-full items-center justify-between gap-2 rounded-input border border-border-subtle bg-surface-high px-3 py-2.5 text-left transition-colors hover:border-border-default">
         <span className="flex items-center gap-2 min-w-0">
           <span className="text-sm font-semibold text-ink-primary shrink-0">블라인드 구조</span>
-          <span className="text-2xs text-ink-muted truncate">레지 {regClose}LV 마감 · {dur}분 · ~25LV</span>
+          <span className="text-2xs text-ink-muted truncate">{custom && custom.length ? `맞춤 ${custom.filter((l) => !l.isBreak).length}레벨` : `레지 ${regClose}LV 마감 · ${dur}분 · ~25LV`}</span>
         </span>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
           className={`shrink-0 text-ink-muted transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden><polyline points="6 9 12 15 18 9" /></svg>
