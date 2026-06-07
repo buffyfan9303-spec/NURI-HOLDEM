@@ -106,6 +106,26 @@ export async function getVenueReserverCounts(venueId: string): Promise<Record<st
   return m;
 }
 
+/** 단골 TOP — 장부 바이인 기준 이름별 바인 횟수 + 방문(고유 일자) 횟수 집계. (관계자 제외는 호출부에서) */
+export interface VenueRegular { name: string; buyins: number; visits: number }
+export async function getVenueRegulars(venueId: string): Promise<VenueRegular[]> {
+  if (IS_MOCK) return [];
+  const { data } = await supabase.from('ledger_buyins').select('player_name, session_date').eq('venue_id', venueId);
+  const map = new Map<string, { buyins: number; dates: Set<string> }>();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (data ?? []).forEach((b: any) => {
+    const n = (b.player_name ?? '').trim();
+    if (!n) return;
+    const e = map.get(n) ?? { buyins: 0, dates: new Set<string>() };
+    e.buyins += 1;
+    if (b.session_date) e.dates.add(b.session_date);
+    map.set(n, e);
+  });
+  return [...map.entries()]
+    .map(([name, e]) => ({ name, buyins: e.buyins, visits: e.dates.size }))
+    .sort((a, b) => (b.buyins - a.buyins) || (b.visits - a.visits));
+}
+
 /** 단골 고객 활동내역 — 이름 매칭. 바이인/방문/금액(장부) + 머니인(랭킹) + 예약. */
 export interface CustomerActivity { name: string; buyins: number; visits: number; amount: number; moneyIn: number; reservations: number; }
 export async function getCustomerActivity(venueId: string, name: string): Promise<CustomerActivity> {

@@ -5,7 +5,7 @@ import {
   type LedgerSession, type LedgerBuyin, type LedgerPlayer,
 } from '../../api/ledger';
 import { getClockState, subscribeClock, type ClockState } from '../../api/clock';
-import { getReservationCounts, getVenueReserverCounts, subscribeReservations } from '../../api/reservations';
+import { getReservationCounts, getVenueRegulars, subscribeReservations, type VenueRegular } from '../../api/reservations';
 import { getStaffSchedule, getStaffWages, subscribeStaffSchedule, type StaffShift, type StaffWage } from '../../api/staffSchedule';
 
 const localToday = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD (로컬)
@@ -53,7 +53,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const [wages, setWages] = useState<StaffWage[]>([]);
   const [players, setPlayers] = useState<LedgerPlayer[]>([]);
   const [range, setRange] = useState<{ sessions: LedgerSession[]; buyins: LedgerBuyin[] }>({ sessions: [], buyins: [] });
-  const [reserverCounts, setReserverCounts] = useState<Record<string, number>>({});
+  const [regulars, setRegulars] = useState<VenueRegular[]>([]);
   const [loading, setLoading] = useState(true);
 
   const upcoming = schedules
@@ -70,7 +70,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
     getStaffSchedule(venueId, mr.start, mr.end).then(setMonthShifts).catch(() => {});
     getStaffWages(venueId).then(setWages).catch(() => {});
     getLedgerRange(venueId, d14[0], d14[13]).then(setRange).catch(() => {});
-    getVenueReserverCounts(venueId).then(setReserverCounts).catch(() => {});
+    getVenueRegulars(venueId).then(setRegulars).catch(() => {});
     const ids = schedules.filter((s) => s.venueId === venueId && s.date >= d).map((s) => s.id);
     if (ids.length) getReservationCounts(ids).then(setResCounts).catch(() => {});
     else setResCounts({});
@@ -153,8 +153,9 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
     if (s) weekTicket += buyinFinance(b, s).ticketPaid;
   }
 
-  // ── 단골 TOP(예약 횟수 기준) ──
-  const topRegulars = Object.entries(reserverCounts).filter(([, n]) => n >= 2).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  // ── 단골 TOP(바인·방문 횟수 기준, 관계자[직원] 제외) ──
+  const staffNames = new Set(wages.map((w) => w.name.trim()));
+  const topRegulars = regulars.filter((r) => !staffNames.has(r.name.trim())).slice(0, 5);
 
   // ── 직원 인건비(이번 달) ──
   const wageMap: Record<string, number> = Object.fromEntries(wages.map((w) => [w.name, w.hourlyWage]));
@@ -298,18 +299,18 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           )}
         </DashCard>
 
-        {/* 단골 TOP(예약 횟수) */}
-        <DashCard title="단골 TOP" onClick={() => onGoto('posters')}
-          badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-gold-300/15 text-gold-300">예약 기준</span>}>
+        {/* 단골 TOP(바인·방문 횟수 · 직원 제외) */}
+        <DashCard title="단골 TOP" onClick={() => onGoto('ledger')}
+          badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-gold-300/15 text-gold-300">바인·방문</span>}>
           {loading ? <Skeleton /> : topRegulars.length === 0 ? (
-            <p className="py-3 text-center text-2xs text-ink-muted">단골 데이터가 아직 없습니다.</p>
+            <p className="py-3 text-center text-2xs text-ink-muted">장부 바인 데이터가 아직 없습니다.</p>
           ) : (
             <ul className="space-y-1.5">
-              {topRegulars.map(([name, n], i) => (
-                <li key={name} className="flex items-center gap-2 text-xs">
+              {topRegulars.map((r, i) => (
+                <li key={r.name} className="flex items-center gap-2 text-xs">
                   <span className={`w-4 shrink-0 text-center text-2xs font-bold tabular-nums ${i === 0 ? 'text-gold-300' : 'text-ink-muted'}`}>{i + 1}</span>
-                  <span className="flex-1 min-w-0 truncate text-ink-secondary">{name}</span>
-                  <span className="shrink-0 tabular-nums text-ink-muted">{n}회{n >= 5 && <span className="ml-1 text-gold-300 font-bold">단골</span>}</span>
+                  <span className="flex-1 min-w-0 truncate text-ink-secondary">{r.name}</span>
+                  <span className="shrink-0 tabular-nums text-ink-muted">바인 <b className="text-ink-secondary">{r.buyins}</b> · 방문 <b className="text-ink-secondary">{r.visits}</b>{r.buyins >= 5 && <span className="ml-1 text-gold-300 font-bold">단골</span>}</span>
                 </li>
               ))}
             </ul>
