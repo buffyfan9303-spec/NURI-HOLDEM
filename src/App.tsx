@@ -20,7 +20,6 @@ import NuriHoldemLogo from './components/atoms/NuriHoldemLogo';
 import ThemeToggle from './components/atoms/ThemeToggle';
 import ProfileModal from './components/features/ProfileModal';
 import StaffInviteBanner from './components/features/StaffInviteBanner';
-import ToolsPanel from './components/features/ToolsPanel';
 import ErrorBoundary from './components/atoms/ErrorBoundary';
 import InstallBanner from './components/atoms/InstallBanner';
 import { tierColor } from './components/atoms/TierBadge';
@@ -62,6 +61,7 @@ const VenuePage      = lazyWithReload(() => import('./components/features/VenueP
 const GroupPage      = lazyWithReload(() => import('./components/features/GroupPage'));
 const MarketplaceTab = lazyWithReload(() => import('./components/features/MarketplaceTab'));
 const VenueManageTab = lazyWithReload(() => import('./components/features/VenueManageTab'));
+const ToolsPanel     = lazyWithReload(() => import('./components/features/ToolsPanel'));
 
 // 지연 로딩 폴백 — 청크 받아오는 짧은 순간의 로더(레이아웃 점프 최소화)
 function LazyFallback() {
