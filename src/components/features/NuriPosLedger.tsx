@@ -18,11 +18,27 @@ import {
 import { getStaffSchedule, addStaffShift } from '../../api/staffSchedule';
 import { exportLedgerXls } from '../../lib/ledgerExport';
 import { getSchedules, type Schedule } from '../../api/schedules';
+import { getClockState, saveClockState, defaultClockConfig, type ClockState } from '../../api/clock';
 import { getMyVenueStaff, type User } from '../../api/auth';
 import { useBackClose } from '../../lib/backstack';
 
 const today = () => new Date().toLocaleDateString('en-CA'); // 로컬 날짜 — UTC 자정 넘김 방지
 const shiftDays = (d: string, n: number) => { const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate() + n); return x.toLocaleDateString('en-CA'); };
+
+// 얼리 설정용 숫자 입력(라벨 + 접미사)
+function EarlyNum({ label, value, onChange, suffix, disabled }: { label: string; value: number; onChange: (n: number) => void; suffix: string; disabled?: boolean }) {
+  return (
+    <div>
+      <span className="block text-2xs text-ink-muted mb-0.5">{label}</span>
+      <div className="relative">
+        <input type="number" inputMode="numeric" value={value || ''} disabled={disabled}
+          onChange={(e) => onChange(parseInt(e.target.value, 10) || 0)}
+          className="input w-full text-sm pr-8 tabular-nums disabled:opacity-50" />
+        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted pointer-events-none">{suffix}</span>
+      </div>
+    </div>
+  );
+}
 
 // 금액은 만원 단위 입력/표시 (천원=0.1만 까지 허용)
 const manVal   = (won: number): number | '' => (won ? won / WON_PER_MAN : '');
@@ -719,6 +735,26 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   const [startISO, setStartISO] = useState<string | null>(base.tournamentStart ?? null);
   const [presetOpen, setPresetOpen] = useState(false); // 프리셋 리스트 펼침
 
+  // 연동 클락 얼리 설정(추가스택·레벨) — 장부 시작에서 바로 편집(옵션 1)
+  const [clockState, setClockState] = useState<ClockState | null>(null);
+  const [earlyBonus, setEarlyBonus] = useState<number>(0);
+  const [doubleEarlyBonus, setDoubleEarlyBonus] = useState<number>(0);
+  const [earlyDoubleLevel, setEarlyDoubleLevel] = useState<number>(1);
+  const [earlySingleLevel, setEarlySingleLevel] = useState<number>(4);
+  useEffect(() => {
+    let alive = true;
+    getClockState(base.venueId).then((st) => {
+      if (!alive) return;
+      const c = st?.config ?? defaultClockConfig();
+      setClockState(st);
+      setEarlyBonus(c.earlyBonus ?? 0);
+      setDoubleEarlyBonus(c.doubleEarlyBonus ?? 0);
+      setEarlyDoubleLevel(c.earlyDoubleLevel ?? 1);
+      setEarlySingleLevel(c.earlySingleLevel ?? 4);
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [base.venueId]);
+
   const setDisc = (i: number, patch: Partial<DiscountPreset>) =>
     setDiscs((arr) => arr.map((d, idx) => (idx === i ? { ...d, ...patch } : d)));
   const addDisc = () => setDiscs((arr) => (arr.length < 5 ? [...arr, { label: '', amount: 0 }] : arr));
@@ -738,6 +774,15 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   const submit = () => {
     if (cash <= 0) return;
     const tStart = startISO;
+    // 연동 클락 얼리 설정 저장 — 진행 중 클락은 건드리지 않음(비파괴 병합)
+    if (!clockState?.running) {
+      const baseCfg = clockState?.config ?? defaultClockConfig();
+      const cfg = { ...baseCfg, earlyBonus, doubleEarlyBonus, earlyDoubleLevel, earlySingleLevel };
+      const next: ClockState = clockState
+        ? { ...clockState, config: cfg }
+        : { venueId: base.venueId, sessionDate: null, title: base.title ?? '', config: cfg, currentIndex: 0, running: false, endsAt: null, remainingMs: 0, adjEntries: 0, adjRebuys: 0, adjEarlies: 0, adjAddons: 0, eliminations: 0 };
+      saveClockState(next).catch(() => {});
+    }
     onSubmit({
       ...base, title: title.trim() || undefined,
       buyinAmount: cash, cardAmount: card > 0 ? card : null,
@@ -850,6 +895,20 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
         <p className="text-[10px] text-ink-muted mt-1 leading-relaxed">
           얼리 구간(더블/1얼리)은 이제 <b className="text-gold-300">「클락」 설정에서 레벨 기준</b>으로 지정합니다(예: 1레벨=더블얼리, 2~4레벨=1얼리). 이 장부를 클락과 연동해 시작하면 위 스타트 시각을 기준으로 바인이 레벨→얼리로 자동 분류되며, 바인 칸에서 '없음'으로 수기 변경도 가능합니다.
           {(base.earlyDoubleMin || base.earlySingleMin) ? <span className="text-gold-300/90"> 현재 적용: 더블 ~{base.earlyDoubleMin}분 · 1얼리 ~{base.earlySingleMin}분.</span> : null}
+        </p>
+      </Field>
+
+      <Field label="얼리 설정 · 연동 클락 (추가 스택 · 레벨)">
+        <div className="grid grid-cols-2 gap-2">
+          <EarlyNum label="더블얼리 추가스택" value={doubleEarlyBonus} onChange={setDoubleEarlyBonus} suffix="칩" disabled={!!clockState?.running} />
+          <EarlyNum label="1얼리 추가스택" value={earlyBonus} onChange={setEarlyBonus} suffix="칩" disabled={!!clockState?.running} />
+          <EarlyNum label="더블얼리 마감레벨" value={earlyDoubleLevel} onChange={setEarlyDoubleLevel} suffix="LV" disabled={!!clockState?.running} />
+          <EarlyNum label="1얼리 마감레벨" value={earlySingleLevel} onChange={setEarlySingleLevel} suffix="LV" disabled={!!clockState?.running} />
+        </div>
+        <p className="text-[10px] text-ink-muted mt-1 leading-relaxed">
+          {clockState?.running
+            ? '클락이 진행 중이라 얼리 설정은 클락 화면에서만 변경할 수 있습니다.'
+            : '여기서 변경하면 연동 클락 설정에 반영됩니다(장부 시작 시 저장). 예) 더블얼리 1LV · 1얼리 4LV.'}
         </p>
       </Field>
 
