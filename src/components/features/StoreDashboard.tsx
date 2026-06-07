@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import type { Schedule } from '../../api/schedules';
 import {
-  getLedgerSession, getLedgerBuyins, getLedgerRange, buyinFinance, wonToMan, subscribeLedger,
-  type LedgerSession, type LedgerBuyin,
+  getLedgerSession, getLedgerBuyins, getLedgerPlayers, getLedgerRange, buyinFinance, wonToMan, visitorLabel, subscribeLedger,
+  type LedgerSession, type LedgerBuyin, type LedgerPlayer,
 } from '../../api/ledger';
 import { getClockState, subscribeClock, type ClockState } from '../../api/clock';
 import { getReservationCounts, subscribeReservations } from '../../api/reservations';
-import { getStaffSchedule, subscribeStaffSchedule, type StaffShift } from '../../api/staffSchedule';
+import { getStaffSchedule, getStaffWages, subscribeStaffSchedule, type StaffShift, type StaffWage } from '../../api/staffSchedule';
 
 const localToday = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD (로컬)
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
@@ -14,6 +14,15 @@ const last7 = () => Array.from({ length: 7 }, (_, i) => {
   const dt = new Date(); dt.setDate(dt.getDate() - (6 - i));
   return dt.toLocaleDateString('en-CA');
 });
+const monthRange = () => {
+  const n = new Date();
+  return {
+    start: new Date(n.getFullYear(), n.getMonth(), 1).toLocaleDateString('en-CA'),
+    end: new Date(n.getFullYear(), n.getMonth() + 1, 0).toLocaleDateString('en-CA'),
+    label: `${n.getMonth() + 1}월`,
+  };
+};
+const hhmm = (s?: string | null) => { if (!s) return null; const [h, m] = s.split(':').map(Number); return h * 60 + (m || 0); };
 
 interface Props {
   venueId: string;
@@ -23,17 +32,21 @@ interface Props {
 }
 
 /**
- * 매장 대시보드 — 오늘 장부·클락·예약·출근 + 최근 7일 추세 + 미수 알림을 실시간 요약.
- * 모든 카드는 해당 운영 화면으로 바로가기. (실시간: 장부·클락·예약·출근 구독)
+ * 매장 대시보드 — 오늘 장부·클락·예약·출근 + 최근 7일 추세·객단가 + 미수 알림 + 인건비·손님유형을 실시간 요약.
+ * 모든 카드는 해당 운영 화면으로 바로가기.
  */
 export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePoster }: Props) {
   const d = localToday();
   const days = last7();
+  const mr = monthRange();
   const [session, setSession] = useState<LedgerSession | null>(null);
   const [buyins, setBuyins] = useState<LedgerBuyin[]>([]);
   const [clock, setClock] = useState<ClockState | null>(null);
   const [resCounts, setResCounts] = useState<Record<string, number>>({});
   const [shifts, setShifts] = useState<StaffShift[]>([]);
+  const [monthShifts, setMonthShifts] = useState<StaffShift[]>([]);
+  const [wages, setWages] = useState<StaffWage[]>([]);
+  const [players, setPlayers] = useState<LedgerPlayer[]>([]);
   const [range, setRange] = useState<{ sessions: LedgerSession[]; buyins: LedgerBuyin[] }>({ sessions: [], buyins: [] });
   const [loading, setLoading] = useState(true);
 
@@ -45,8 +58,11 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const reload = useCallback(() => {
     getLedgerSession(venueId, d).then(setSession).catch(() => {});
     getLedgerBuyins(venueId, d).then(setBuyins).catch(() => {});
+    getLedgerPlayers(venueId, d).then(setPlayers).catch(() => {});
     getClockState(venueId).then(setClock).catch(() => {});
     getStaffSchedule(venueId, d, d).then(setShifts).catch(() => {});
+    getStaffSchedule(venueId, mr.start, mr.end).then(setMonthShifts).catch(() => {});
+    getStaffWages(venueId).then(setWages).catch(() => {});
     getLedgerRange(venueId, days[0], days[6]).then(setRange).catch(() => {});
     const ids = schedules.filter((s) => s.venueId === venueId && s.date >= d).map((s) => s.id);
     if (ids.length) getReservationCounts(ids).then(setResCounts).catch(() => {});
@@ -88,7 +104,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const totalRes = upcoming.reduce((a, g) => a + (resCounts[g.id] ?? 0), 0);
   const workedStaff = shifts.filter((s) => s.checkIn);
 
-  // ── 최근 7일 추세 ──
+  // ── 최근 7일 추세 + 객단가 ──
   const sessByDate: Record<string, LedgerSession> = {};
   range.sessions.forEach((s) => { sessByDate[s.sessionDate] = s; });
   const perDay = days.map((day) => {
@@ -105,6 +121,28 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const weekPaid = perDay.reduce((a, x) => a + x.paid, 0);
   const maxEntry = Math.max(1, ...perDay.map((x) => x.entry));
   const bestDay = perDay.reduce((a, x) => (x.entry > a.entry ? x : a), perDay[0]);
+  const avgSpend = weekEntry > 0 ? Math.round(weekPaid / weekEntry) : 0; // 객단가(원/엔트리)
+
+  // ── 직원 인건비(이번 달) ──
+  const wageMap: Record<string, number> = Object.fromEntries(wages.map((w) => [w.name, w.hourlyWage]));
+  let laborTotal = 0, laborHours = 0;
+  for (const s of monthShifts) {
+    const ci = hhmm(s.checkIn), co = hhmm(s.checkOut);
+    if (ci == null || co == null) continue;
+    let mins = co - ci; if (mins < 0) mins += 1440;
+    const hrs = mins / 60;
+    laborHours += hrs;
+    laborTotal += hrs * (wageMap[s.name] ?? 0);
+  }
+
+  // ── 손님 유형 비중(오늘 명단) ──
+  const typeCount: Record<string, number> = {};
+  for (const p of players) {
+    const key = visitorLabel(p.visitorType) || '기타';
+    typeCount[key] = (typeCount[key] ?? 0) + 1;
+  }
+  const typeEntries = Object.entries(typeCount).sort((a, b) => b[1] - a[1]);
+  const playerTotal = players.length;
 
   return (
     <div className="space-y-3">
@@ -170,7 +208,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           )}
         </DashCard>
 
-        {/* 최근 7일 추세 */}
+        {/* 최근 7일 추세 + 객단가 */}
         <DashCard title="최근 7일 추세" onClick={() => onGoto('stats')}
           badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-violet-500/15 text-violet-300">통계·AI →</span>}>
           {loading ? <Skeleton /> : weekEntry === 0 ? (
@@ -189,7 +227,10 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                 <span className="text-ink-muted">7일 합계</span>
                 <span className="text-ink-secondary tabular-nums"><b className="text-gold-300">{weekEntry}</b>엔트리 · <b className="text-ink-primary">{wonToMan(weekPaid)}</b>만</span>
               </div>
-              {bestDay.entry > 0 && <p className="text-[10px] text-ink-muted mt-1">가장 활발: <b className="text-gold-300">{bestDay.dow}요일</b> ({bestDay.entry}엔트리)</p>}
+              <div className="flex items-center justify-between text-2xs mt-1">
+                <span className="text-ink-muted">평균 객단가</span>
+                <span className="text-ink-secondary tabular-nums"><b className="text-ink-primary">{wonToMan(avgSpend)}</b>만 / 엔트리{bestDay.entry > 0 && <> · 활발 <b className="text-gold-300">{bestDay.dow}</b></>}</span>
+              </div>
             </>
           )}
         </DashCard>
@@ -221,6 +262,39 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
               {shifts.map((s) => (
                 <li key={s.name} className={`rounded-badge px-2 py-0.5 text-2xs font-semibold ${s.checkIn ? 'bg-emerald-500/15 text-emerald-400' : 'bg-surface-float text-ink-secondary'}`}>
                   {s.checkIn ? '✓ ' : ''}{s.name}
+                </li>
+              ))}
+            </ul>
+          )}
+        </DashCard>
+
+        {/* 인건비 요약(이번 달) */}
+        <DashCard title="인건비 요약" onClick={() => onGoto('staff')}
+          badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-surface-float text-ink-secondary">{mr.label}</span>}>
+          {loading ? <Skeleton /> : laborHours === 0 ? (
+            <p className="py-3 text-center text-2xs text-ink-muted">이번 달 출퇴근 기록이 없습니다.</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+              <Stat label="총 인건비" value={wonToMan(laborTotal)} unit="만원" accent />
+              <Stat label="총 근무" value={`${Math.round(laborHours)}`} unit="시간" />
+            </div>
+          )}
+        </DashCard>
+
+        {/* 손님 유형 비중(오늘) */}
+        <DashCard title="손님 유형" onClick={() => onGoto('stats')}
+          badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-gold-300/15 text-gold-300">{playerTotal}명</span>}>
+          {loading ? <Skeleton /> : playerTotal === 0 ? (
+            <p className="py-3 text-center text-2xs text-ink-muted">오늘 명단이 없습니다.</p>
+          ) : (
+            <ul className="space-y-1.5">
+              {typeEntries.map(([k, n]) => (
+                <li key={k} className="flex items-center gap-2 text-2xs">
+                  <span className="w-14 shrink-0 text-ink-secondary">{k}</span>
+                  <span className="h-1.5 flex-1 rounded-full bg-surface-high overflow-hidden">
+                    <span className="block h-full rounded-full bg-gold-300/80" style={{ width: `${Math.round((n / playerTotal) * 100)}%` }} />
+                  </span>
+                  <span className="w-12 shrink-0 text-right tabular-nums text-ink-muted">{n}명 {Math.round((n / playerTotal) * 100)}%</span>
                 </li>
               ))}
             </ul>
