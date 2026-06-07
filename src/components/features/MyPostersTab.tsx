@@ -32,7 +32,7 @@ export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete }: 
   if (user?.role === 'venue_owner' && !isApprovedOwner) return <PendingApprovalView />;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 mx-auto w-full max-w-3xl">
       <div className="flex items-center justify-between gap-2">
         <div>
           <h2 className="text-base font-semibold text-ink-primary">게임 관리</h2>

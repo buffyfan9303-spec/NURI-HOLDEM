@@ -85,7 +85,7 @@ export default function VenueManageTab({ onAddPoster }: { onAddPoster?: () => vo
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 mx-auto w-full max-w-3xl">
       {/* 운영자: 전 매장 접근 — 관리할 매장 선택 */}
       {isAdmin && (
         <div className="rounded-card border border-gold-400/40 bg-gold-300/[0.06] p-2.5 space-y-1.5">
