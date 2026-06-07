@@ -10,6 +10,7 @@ import { aiGenerate } from '../../api/ai';
 import { Skeleton } from '../atoms/Skeleton';
 import RegularsModal from './RegularsModal';
 import WaitlistModal from './WaitlistModal';
+import DealerShiftsModal from './DealerShiftsModal';
 import { getStaffSchedule, getStaffWages, subscribeStaffSchedule, type StaffShift, type StaffWage } from '../../api/staffSchedule';
 
 const localToday = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD (로컬)
@@ -63,6 +64,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const [aiErr, setAiErr] = useState('');
   const [regOpen, setRegOpen] = useState(false);
   const [waitOpen, setWaitOpen] = useState(false);
+  const [dealerOpen, setDealerOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const upcoming = schedules
@@ -213,6 +215,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
     <div className="space-y-3">
       <RegularsModal open={regOpen} onClose={() => setRegOpen(false)} venueId={venueId} exclude={[...staffNames]} />
       <WaitlistModal open={waitOpen} onClose={() => setWaitOpen(false)} venueId={venueId} />
+      <DealerShiftsModal open={dealerOpen} onClose={() => setDealerOpen(false)} venueId={venueId} monthKey={mr.start.slice(0, 7)} />
       {/* 미수·리스크 알림 */}
       {started && fin.unpaid > 0 && (
         <button type="button" onClick={() => onGoto('ledger')}
@@ -407,6 +410,12 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
               <p className="mt-1.5 text-[10px] text-ink-muted">발행=장부에서 입력한 발급/시상 · 회수=티켓으로 바인한 합계.</p>
             </>
           )}
+        </DashCard>
+
+        {/* 딜러 관리(로테이션·급여) */}
+        <DashCard title="딜러 관리" onClick={() => setDealerOpen(true)}
+          badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-gold-300/15 text-gold-300">로테이션·급여 →</span>}>
+          <p className="py-3 text-center text-2xs text-ink-muted">딜러 시프트 등록 + 월 급여 명세를 관리합니다.</p>
         </DashCard>
 
         {/* 손님 유형 비중(오늘) */}
