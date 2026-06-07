@@ -8,6 +8,8 @@ import { resizeImage } from '../../lib/storage';
 import { requestPasswordChangeCode, changeMyPasswordWithCode } from '../../api/auth';
 import { pushSupported, isPushSubscribed, enablePush, disablePush } from '../../api/push';
 import AvatarCropper from './AvatarCropper';
+import ActivityBadges from '../atoms/ActivityBadges';
+import { getMyVisitStats } from '../../api/reservations';
 
 interface ProfileModalProps {
   open: boolean;
@@ -42,6 +44,8 @@ function blobToBase64(blob: Blob): Promise<string> {
 export default function ProfileModal({ open, onClose }: ProfileModalProps) {
   const { user, updateProfile } = useAuth();
   const toast = useToast();
+  const [visitStats, setVisitStats] = useState({ visits: 0, upcoming: 0, total: 0 });
+  useEffect(() => { if (open) getMyVisitStats().then(setVisitStats).catch(() => {}); }, [open]);
 
   const [tab, setTab] = useState<Tab>('profile');
 
@@ -294,6 +298,9 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
               </div>
             )}
           </div>
+
+          {/* 내 활동 · 뱃지 진열장 */}
+          <ActivityBadges points={user?.activityPoints ?? 0} visits={visitStats.visits} upcoming={visitStats.upcoming} />
 
           {/* 닉네임 */}
           <div>

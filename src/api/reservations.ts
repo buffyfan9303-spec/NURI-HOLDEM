@@ -70,6 +70,28 @@ export async function updateReservationName(id: string, name: string): Promise<v
   if (error) throw error;
 }
 
+/** 내 활동 통계 — 예약 후 매장 방문(지난 일정) / 예정 / 전체 횟수. 프로필 뱃지·점수용. */
+export async function getMyVisitStats(): Promise<{ visits: number; upcoming: number; total: number }> {
+  const empty = { visits: 0, upcoming: 0, total: 0 };
+  if (IS_MOCK) return empty;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return empty;
+  // schedule_reservations → schedules(date) 조인. 지난 날짜 예약 = 방문으로 집계.
+  const { data, error } = await supabase
+    .from('schedule_reservations')
+    .select('schedule_id, schedules!inner(date)')
+    .eq('user_id', user.id);
+  if (error || !data) return empty;
+  const today = new Date().toLocaleDateString('en-CA');
+  let visits = 0, upcoming = 0;
+  for (const r of data as unknown as { schedules?: { date?: string } }[]) {
+    const d = r.schedules?.date;
+    if (!d) continue;
+    if (d < today) visits++; else upcoming++;
+  }
+  return { visits, upcoming, total: data.length };
+}
+
 /** 이 매장의 예약자 이름별 누적 예약 횟수(단골 판별: 5회+) */
 export async function getVenueReserverCounts(venueId: string): Promise<Record<string, number>> {
   if (IS_MOCK) return {};
