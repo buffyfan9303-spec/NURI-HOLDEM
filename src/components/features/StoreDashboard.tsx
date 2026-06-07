@@ -8,6 +8,7 @@ import { getClockState, subscribeClock, type ClockState } from '../../api/clock'
 import { getReservationCounts, getVenueRegulars, subscribeReservations, type VenueRegular } from '../../api/reservations';
 import { aiGenerate } from '../../api/ai';
 import { Skeleton } from '../atoms/Skeleton';
+import RegularsModal from './RegularsModal';
 import { getStaffSchedule, getStaffWages, subscribeStaffSchedule, type StaffShift, type StaffWage } from '../../api/staffSchedule';
 
 const localToday = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD (로컬)
@@ -59,6 +60,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const [aiSummary, setAiSummary] = useState('');
   const [aiBusy, setAiBusy] = useState(false);
   const [aiErr, setAiErr] = useState('');
+  const [regOpen, setRegOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const upcoming = schedules
@@ -207,6 +209,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
 
   return (
     <div className="space-y-3">
+      <RegularsModal open={regOpen} onClose={() => setRegOpen(false)} venueId={venueId} exclude={[...staffNames]} />
       {/* 미수·리스크 알림 */}
       {started && fin.unpaid > 0 && (
         <button type="button" onClick={() => onGoto('ledger')}
@@ -339,8 +342,8 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         </DashCard>
 
         {/* 단골 TOP(바인·방문 횟수 · 직원 제외) */}
-        <DashCard title="단골 TOP" onClick={() => onGoto('ledger')}
-          badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-gold-300/15 text-gold-300">바인·방문</span>}>
+        <DashCard title="단골 TOP" onClick={() => setRegOpen(true)}
+          badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-gold-300/15 text-gold-300">전체 보기 →</span>}>
           {loading ? <Skeleton /> : topRegulars.length === 0 ? (
             <p className="py-3 text-center text-2xs text-ink-muted">장부 바인 데이터가 아직 없습니다.</p>
           ) : (
