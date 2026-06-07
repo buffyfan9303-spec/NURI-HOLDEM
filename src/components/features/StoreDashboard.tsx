@@ -6,6 +6,7 @@ import {
 } from '../../api/ledger';
 import { getClockState, subscribeClock, type ClockState } from '../../api/clock';
 import { getReservationCounts, getVenueRegulars, subscribeReservations, type VenueRegular } from '../../api/reservations';
+import { aiGenerate } from '../../api/ai';
 import { getStaffSchedule, getStaffWages, subscribeStaffSchedule, type StaffShift, type StaffWage } from '../../api/staffSchedule';
 
 const localToday = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD (로컬)
@@ -54,6 +55,9 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const [players, setPlayers] = useState<LedgerPlayer[]>([]);
   const [range, setRange] = useState<{ sessions: LedgerSession[]; buyins: LedgerBuyin[] }>({ sessions: [], buyins: [] });
   const [regulars, setRegulars] = useState<VenueRegular[]>([]);
+  const [aiSummary, setAiSummary] = useState('');
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiErr, setAiErr] = useState('');
   const [loading, setLoading] = useState(true);
 
   const upcoming = schedules
@@ -156,6 +160,24 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   // ── 단골 TOP(바인·방문 횟수 기준, 관계자[직원] 제외) ──
   const staffNames = new Set(wages.map((w) => w.name.trim()));
   const topRegulars = regulars.filter((r) => !staffNames.has(r.name.trim())).slice(0, 5);
+
+  // ── AI 운영 요약 (Gemini 엣지 함수) ──
+  const runAi = async () => {
+    setAiBusy(true); setAiErr(''); setAiSummary('');
+    try {
+      const days7 = perDay.map((x) => `${x.dow} ${x.entry}엔트리/${wonToMan(x.paid)}만`).join(', ');
+      const prompt = [
+        `다음은 홀덤펍 운영 데이터다. 사장이 보기 좋게 한국어로 3~4문장 운영 요약과 1~2개 실천 제안을 해줘. 과장·이모지 금지, 숫자 근거 포함.`,
+        `오늘(${mr.label}): 엔트리 ${Math.round(fin.entry)}, 완납 ${wonToMan(fin.paid)}만, 미수 ${wonToMan(fin.unpaid)}만.`,
+        `최근7일: 합계 ${weekEntry}엔트리/${wonToMan(weekPaid)}만, 평균객단가 ${wonToMan(avgSpend)}만, 일별[${days7}].`,
+        `전주대비: 엔트리 ${entryDelta == null ? 'N/A' : entryDelta + '%'}, 매출 ${paidDelta == null ? 'N/A' : paidDelta + '%'}.`,
+        topRegulars.length ? `단골TOP: ${topRegulars.map((r) => `${r.name}(바인${r.buyins}/방문${r.visits})`).join(', ')}.` : '',
+      ].filter(Boolean).join('\n');
+      setAiSummary(await aiGenerate(prompt, '너는 홀덤펍 운영 컨설턴트다. 간결하고 실용적으로 답한다.'));
+    } catch (e) {
+      setAiErr(e instanceof Error ? e.message : 'AI 요약 실패');
+    } finally { setAiBusy(false); }
+  };
 
   // ── 직원 인건비(이번 달) ──
   const wageMap: Record<string, number> = Object.fromEntries(wages.map((w) => [w.name, w.hourlyWage]));
@@ -264,6 +286,18 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
               <div className="flex items-center justify-between text-2xs mt-1">
                 <span className="text-ink-muted">평균 객단가</span>
                 <span className="text-ink-secondary tabular-nums"><b className="text-ink-primary">{wonToMan(avgSpend)}</b>만 / 엔트리{bestDay.entry > 0 && <> · 활발 <b className="text-gold-300">{bestDay.dow}</b></>}</span>
+              </div>
+              <div className="mt-2 border-t border-border-subtle pt-2">
+                {aiSummary ? (
+                  <p className="text-2xs leading-relaxed text-ink-secondary whitespace-pre-wrap">{aiSummary}</p>
+                ) : aiErr ? (
+                  <p className="text-2xs text-danger-light leading-relaxed">{aiErr}</p>
+                ) : null}
+                <button type="button" onClick={runAi} disabled={aiBusy}
+                  className="mt-1.5 inline-flex items-center gap-1 text-2xs font-bold text-violet-300 hover:text-violet-200 disabled:opacity-50">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4z" /></svg>
+                  {aiBusy ? 'AI 분석 중…' : aiSummary ? 'AI 다시 요약' : 'AI 운영 요약 생성'}
+                </button>
               </div>
             </>
           )}
