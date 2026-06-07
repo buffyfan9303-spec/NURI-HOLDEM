@@ -895,18 +895,19 @@ export default function App() {
     const pubNameToUse = adminPosting
       ? (venues.find((v) => v.id === data.venueId)?.name ?? data.pubName ?? '미지정')
       : (venues.find((v) => v.id === user.venueId)?.name ?? user.name);
-    createSchedule({
+    const addDays = (iso: string, n: number) => { const dd = new Date(iso + 'T00:00:00'); dd.setDate(dd.getDate() + n); return dd.toLocaleDateString('en-CA'); };
+    const mkPayload = (dateStr: string) => ({
       title:          data.title,
       venueId:        venueIdToUse,
       pubName:        pubNameToUse,
       approved:       adminPosting ? true : false,
       region:         data.region,
-      date:           data.date,
+      date:           dateStr,
       startTime:      data.startTime,
       duration:       data.duration,
       blinds:         data.blinds,
       regCloseTime:   data.regCloseTime,
-      format:         'MTT',
+      format:         'MTT' as const,
       guaranteed:     data.prizeType === 'GTD',
       isCompetition:  data.isCompetition,
       prizePool:      data.prizeType === 'GTD'   ? data.prizeAmount * 10_000 : 0,
@@ -922,8 +923,13 @@ export default function App() {
       displayOrder:   999,
       isPremium:      false,
       ownerId:        user.id,
-    })
+    });
+    // 반복 등록: 매주 같은 요일/시간으로 N주 생성(1=반복 없음, 최대 12)
+    const weeks = Math.max(1, Math.min(data.repeatWeeks ?? 1, 12));
+    const dates = Array.from({ length: weeks }, (_, i) => addDays(data.date, i * 7));
+    Promise.all(dates.map((dt) => createSchedule(mkPayload(dt))))
       .then(reloadSchedules)
+      .then(() => { if (weeks > 1) toast.show(`${weeks}주 반복 일정이 등록되었습니다`, 'success'); })
       .catch(() => toast.show('포스터 등록에 실패했습니다. 매장 승인 상태를 확인해 주세요.', 'error'));
   }, [user, venues, toast, reloadSchedules]);
 

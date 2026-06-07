@@ -36,6 +36,8 @@ export interface PosterFormData {
   prizes: string[];
   rankingPrizes: { rank: string; amount: number; unit: string }[]; // 순위별 상금(값+단위 직접 입력) — 선택
   events: { badge?: string; title: string }[]; // 이벤트/프로모션(배지 + 내용) — 선택
+  /** 주간 반복 등록 횟수(생성 시에만 사용, 1=반복 없음) */
+  repeatWeeks?: number;
   posterUrl?: string;
   // 관리자 직접 등록용 — 홀덤펍 선택(기존) 또는 직접 입력
   venueId?: string;
@@ -61,7 +63,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
     prizeType: 'GTD', prizeAmount: 0, prizePercent: 0, buyIn: 0, region: '',
     isCompetition: false,
     paymentMethods: ['현금'], partners: [], prizes: [],
-    rankingPrizes: [], events: [],
+    rankingPrizes: [], events: [], repeatWeeks: 1,
     venueId: '', pubName: '',
   };
 
@@ -251,6 +253,22 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
             <TimeSelect value={form.startTime} onChange={(v) => update('startTime', v)} />
           </FieldWrap>
         </div>
+
+        {/* 반복 등록 (생성 시에만) — 매주 같은 요일/시간으로 N주 자동 생성 */}
+        {!isEdit && (
+          <FieldWrap label="반복 등록 (매주 같은 요일)">
+            <select
+              value={form.repeatWeeks ?? 1}
+              onChange={(e) => update('repeatWeeks', Number(e.target.value))}
+              className="input"
+            >
+              <option value={1}>반복 없음 (1회)</option>
+              <option value={4}>매주 · 4주</option>
+              <option value={8}>매주 · 8주</option>
+              <option value={12}>매주 · 12주</option>
+            </select>
+          </FieldWrap>
+        )}
 
         {/* 레지마감 — 레벨/시간 분리 (둘 중 하나 이상 필수) */}
         <FieldWrap label="레지마감 (레벨 또는 시간 중 하나 이상)" required>
