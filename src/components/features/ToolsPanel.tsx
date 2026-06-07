@@ -8,11 +8,12 @@ import RangeGuide from './tools/RangeGuide';
 import OutsCalc from './tools/OutsCalc';
 import PushFoldChart from './tools/PushFoldChart';
 import { SprCalc, MzoneCalc, EvCalc, BankrollCalc, VarianceCalc } from './tools/StackCalcs';
+import BlindBuilder from './tools/BlindBuilder';
 
 // GTO 패널은 에퀴티 엔진을 포함해 무거우므로 지연 로드(다른 도구와 동일하게 인라인 표시)
 const GtoDeepPanel = lazyWithReload(() => import('./gto/GtoDeepPanel'));
 
-type ToolKey = 'gto' | 'pot' | 'icm' | 'range' | 'outs' | 'pushfold' | 'spr' | 'mzone' | 'ev' | 'bankroll' | 'variance' | 'chip' | 'sim';
+type ToolKey = 'gto' | 'pot' | 'icm' | 'range' | 'outs' | 'pushfold' | 'spr' | 'mzone' | 'ev' | 'bankroll' | 'variance' | 'blindgen' | 'chip' | 'sim';
 type ToolGroup = 'ops' | 'player';
 
 const TOOLS: { key: ToolKey; group: ToolGroup; name: string; desc: string; icon: ReactNode }[] = [
@@ -21,6 +22,8 @@ const TOOLS: { key: ToolKey; group: ToolGroup; name: string; desc: string; icon:
     icon: <><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="3" /></> },
   { key: 'sim', group: 'ops', name: '구조 시뮬', desc: '총 칩·평균 스택 깊이',
     icon: <><line x1="4" y1="20" x2="4" y2="11" /><line x1="10" y1="20" x2="10" y2="4" /><line x1="16" y1="20" x2="16" y2="14" /><line x1="20" y1="20" x2="20" y2="8" /></> },
+  { key: 'blindgen', group: 'ops', name: '블라인드 생성기', desc: '구조 자동 생성·표',
+    icon: <><line x1="4" y1="20" x2="4" y2="14" /><line x1="9" y1="20" x2="9" y2="9" /><line x1="14" y1="20" x2="14" y2="12" /><line x1="19" y1="20" x2="19" y2="5" /></> },
   // ── 플레이어 도구 ──
   { key: 'gto', group: 'player', name: 'GTO 핸드 분석', desc: '프리/포스트플랍 승률·전략',
     icon: <><rect x="3" y="4" width="7" height="16" rx="1.5" /><rect x="14" y="4" width="7" height="16" rx="1.5" /></> },
@@ -66,6 +69,7 @@ function renderTool(k: ToolKey): ReactNode {
     case 'variance': return <VarianceCalc />;
     case 'chip': return <ChipDistributor />;
     case 'sim': return <StructureSim />;
+    case 'blindgen': return <BlindBuilder />;
     default: return null;
   }
 }

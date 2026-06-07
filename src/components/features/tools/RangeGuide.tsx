@@ -66,11 +66,15 @@ function action(label: string, pct: number): 'raise' | 'mix' | 'fold' {
 
 export default function RangeGuide() {
   const [pos, setPos] = useState<Pos>('BTN');
-  const pct = POSITIONS.find((p) => p.id === pos)!.pct;
+  const [size, setSize] = useState<'6' | '9'>('6');
+  const [act, setAct] = useState<'open' | '3bet'>('open');
+  const basePct = POSITIONS.find((p) => p.id === pos)!.pct;
+  const pct = Math.max(0.01, basePct * (size === '9' ? 0.78 : 1) * (act === '3bet' ? 0.42 : 1));
+  const actionLabel = act === '3bet' ? '3벳' : '오픈';
   const openCount = GRID.flat().filter((h) => action(h.label, pct) !== 'fold').length;
 
   return (
-    <CalcCard title="스타팅핸드 가이드" desc="포지션별 프리플랍 오픈레이즈 참고 레인지 (6맥스 기준)">
+    <CalcCard title="스타팅핸드 가이드" desc="포지션·테이블·액션별 프리플랍 참고 레인지">
       {/* 포지션 선택 */}
       <div className="flex flex-wrap gap-1">
         {POSITIONS.map((p) => {
@@ -89,6 +93,26 @@ export default function RangeGuide() {
             </button>
           );
         })}
+      </div>
+
+      {/* 테이블 크기 · 액션 토글 */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <div className="inline-flex rounded-input border border-border-default bg-surface-high p-0.5">
+          {(['6', '9'] as const).map((s) => (
+            <button key={s} type="button" onClick={() => setSize(s)}
+              className={['h-6 px-2.5 rounded-[6px] text-2xs font-bold leading-none transition-colors', size === s ? 'bg-gold-300 text-ink-inverse' : 'text-ink-muted'].join(' ')}>
+              {s}맥스
+            </button>
+          ))}
+        </div>
+        <div className="inline-flex rounded-input border border-border-default bg-surface-high p-0.5">
+          {([{ id: 'open', label: '오픈레이즈' }, { id: '3bet', label: '3벳' }] as const).map((a) => (
+            <button key={a.id} type="button" onClick={() => setAct(a.id)}
+              className={['h-6 px-2.5 rounded-[6px] text-2xs font-bold leading-none transition-colors', act === a.id ? 'bg-gold-300 text-ink-inverse' : 'text-ink-muted'].join(' ')}>
+              {a.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* 13x13 핸드 매트릭스 */}
@@ -116,12 +140,12 @@ export default function RangeGuide() {
 
       {/* 범례 + 요약 */}
       <div className="flex items-center justify-center gap-3">
-        <Legend cls="bg-gold-300" label="레이즈" />
+        <Legend cls="bg-gold-300" label={actionLabel} />
         <Legend cls="bg-gold-300/25" label="혼합" />
         <Legend cls="bg-surface-high border border-border-default" label="폴드" />
-        <span className="text-2xs text-ink-muted">오픈 {openCount}콤보 (~{Math.round((openCount / 169) * 100)}%)</span>
+        <span className="text-2xs text-ink-muted">{actionLabel} {openCount}콤보 (~{Math.round((openCount / 169) * 100)}%)</span>
       </div>
-      <p className="text-[10px] text-ink-muted text-center leading-relaxed">※ 참고용 기본 레인지입니다. 상대 성향·스택·테이블 상황에 따라 조정하세요.</p>
+      <p className="text-[10px] text-ink-muted text-center leading-relaxed">※ 참고용 근사 레인지입니다(6·9맥스 / 오픈·3벳). 상대 성향·스택에 따라 조정하세요.</p>
     </CalcCard>
   );
 }
