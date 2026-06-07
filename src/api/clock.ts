@@ -235,6 +235,15 @@ export function subscribeClock(venueId: string, onChange: () => void): () => voi
   return () => { supabase.removeChannel(ch); };
 }
 
+/** 라이브 보드용 — 전 매장 clock_states 변경 실시간 구독(레벨 전환·통계 즉시 반영). */
+export function subscribeRunningClocks(onChange: () => void): () => void {
+  if (IS_MOCK) return () => {};
+  const ch = supabase.channel('clock:all-live')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'clock_states' }, () => onChange())
+    .subscribe();
+  return () => { supabase.removeChannel(ch); };
+}
+
 // ── 장부 → 클락 카운트 자동 산출 ────────────────────────────────────────────────
 export interface DerivedCounts { entries: number; rebuys: number; earlies: number; doubleEarlies: number; totalBuyins: number; }
 

@@ -2,7 +2,7 @@
 // 라이브 — 진행 중(클락 running) 게임 현황 보드. 클락에서 보이는 정보 전부 공개:
 // 레벨/블라인드/앤티·남은시간·생존/엔트리·리바인·얼리·애드온·탈락·총스택·평균스택·등록마감·다음브레이크.
 import { useEffect, useState } from 'react';
-import { getRunningClocks, type ClockState, type ClockLevel } from '../../api/clock';
+import { getRunningClocks, subscribeRunningClocks, type ClockState, type ClockLevel } from '../../api/clock';
 import { EmptyState } from '../atoms/Skeleton';
 import type { Venue } from '../../api/community';
 
@@ -36,6 +36,7 @@ export default function LiveGamesTab({ venues, onVenue }: { venues: Venue[]; onV
   const [, setTick] = useState(0);
   const load = () => getRunningClocks().then(setGames).catch(() => setGames([]));
   useEffect(() => { load(); const t = setInterval(load, 30000); return () => clearInterval(t); }, []);
+  useEffect(() => subscribeRunningClocks(load), []); // 실시간: 레벨 전환·통계 즉시 반영
   useEffect(() => { const t = setInterval(() => setTick((x) => x + 1), 1000); return () => clearInterval(t); }, []);
 
   const nameOf = (id: string) => venues.find((v) => v.id === id)?.name ?? '홀덤펍';
