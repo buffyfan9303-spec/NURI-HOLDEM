@@ -20,6 +20,8 @@ import type { PosterFormData } from './components/features/PosterFormModal';
 import NuriHoldemLogo from './components/atoms/NuriHoldemLogo';
 import ThemeToggle from './components/atoms/ThemeToggle';
 import ProfileModal from './components/features/ProfileModal';
+import VoucherWalletModal from './components/features/VoucherWalletModal';
+import { PORTONE_CONFIGURED } from './components/features/IdentityVerificationButton';
 import StaffInviteBanner from './components/features/StaffInviteBanner';
 import ErrorBoundary from './components/atoms/ErrorBoundary';
 import InstallBanner from './components/atoms/InstallBanner';
@@ -90,7 +92,7 @@ interface TabDef { id: TabId; label: string; }
 // ── 헤더 ─────────────────────────────────────────────────────────────────────
 
 function AppHeader({
-  unreadCount, notifications, onMarkRead, onOpenLogin, onNavigateNotification, onHome, onOpenProfile, onOpenSearch,
+  unreadCount, notifications, onMarkRead, onOpenLogin, onNavigateNotification, onHome, onOpenProfile, onOpenSearch, onOpenVouchers,
   suppressed = false,
 }: {
   unreadCount: number;
@@ -101,6 +103,7 @@ function AppHeader({
   onHome: () => void;
   onOpenProfile: () => void;
   onOpenSearch: () => void;
+  onOpenVouchers: () => void;
   /** 매장 페이지 등 풀스크린 오버레이가 열렸을 때 메인 헤더를 가린다(레이아웃 유지, 페인트만 숨김). */
   suppressed?: boolean;
 }) {
@@ -180,6 +183,18 @@ function AppHeader({
             </svg>
             <UnreadBadge count={unreadCount} className="absolute -top-0.5 -right-0.5 ring-2 ring-surface-base" />
           </button>
+
+          {/* 내 매장이용권 지갑 */}
+          {user && (
+            <button
+              type="button"
+              onClick={onOpenVouchers}
+              aria-label="내 매장이용권"
+              className="w-9 h-9 flex items-center justify-center rounded-full text-ink-secondary hover:text-gold-300 hover:bg-surface-high transition-colors"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" /><path d="M13 5v14" /></svg>
+            </button>
+          )}
 
           {/* 로그인 / 유저 메뉴 */}
           {user ? (
@@ -454,6 +469,7 @@ export default function App() {
   const [posterFormTarget, setPosterFormTarget] = useState<Schedule | null | undefined>(null);
   const [openPost, setOpenPost]         = useState<CommunityPost | null>(null);
   const [profileOpen, setProfileOpen]   = useState(false);
+  const [voucherWalletOpen, setVoucherWalletOpen] = useState(false);
   // 비밀번호 변경 OTP 진행 중 페이지가 리로드되면(모바일에서 메일 앱을 다녀온 경우)
   // 프로필 모달을 다시 열어 코드 입력 화면으로 복귀시킨다.
   useEffect(() => {
@@ -996,8 +1012,21 @@ export default function App() {
         onHome={handleHome}
         onOpenProfile={() => setProfileOpen(true)}
         onOpenSearch={() => setGlobalSearchOpen(true)}
+        onOpenVouchers={() => setVoucherWalletOpen(true)}
         suppressed={openVenueId !== null}
       />
+
+      {/* 본인인증 유도 배너 (미인증·PortOne 설정 시) */}
+      {user && !user.verified && PORTONE_CONFIGURED && (
+        <button type="button" onClick={() => setProfileOpen(true)}
+          className="w-full flex items-center gap-2 bg-gold-300/[0.08] border-b border-gold-400/30 px-page-x py-2 text-left hover:bg-gold-300/[0.12] transition-colors">
+          <span className="text-sm" aria-hidden>🔒</span>
+          <span className="flex-1 text-2xs text-gold-300">휴대폰 본인인증이 필요합니다 — 안전한 이용을 위해 인증해 주세요.</span>
+          <span className="shrink-0 text-2xs font-bold text-gold-300">인증하기 →</span>
+        </button>
+      )}
+
+      <VoucherWalletModal open={voucherWalletOpen} onClose={() => setVoucherWalletOpen(false)} />
 
       <PendingApprovalBanner />
       <InstallBanner />

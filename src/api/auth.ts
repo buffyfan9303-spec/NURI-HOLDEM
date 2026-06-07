@@ -71,7 +71,8 @@ function rowToUser(row: any): User {
     activityPoints: row.activity_points ?? 0,
     badges:         row.badges ?? [],
     staffTitle:     row.staff_title ?? undefined,
-    verified:       !!row.ci,
+    // 재인증 만료: CI가 있어도 최근 인증(3년) 이내라야 verified=true. 만료 시 재인증 유도.
+    verified:       !!row.ci && (!row.verified_at || (Date.now() - new Date(row.verified_at).getTime()) < 94_672_800_000),
     verifiedAt:     row.verified_at ?? undefined,
     realName:       row.real_name ?? undefined,
     phone:          row.phone ?? undefined,

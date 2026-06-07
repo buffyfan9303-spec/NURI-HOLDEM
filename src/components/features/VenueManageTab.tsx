@@ -13,10 +13,11 @@ import TournamentClock from './clock/TournamentClock';
 import StaffSchedule from './StaffSchedule';
 import { StaffWageManager, StaffSettlement, StaffWorkLog, StaffSelfAttendance } from './StaffPayroll';
 import StoreDashboard from './StoreDashboard';
+import { VoucherManagePanel } from './VoucherManageModal';
 import MyPostersTab from './MyPostersTab';
 import type { Schedule } from '../../api/schedules';
 
-type Section = 'dashboard' | 'posters' | 'ledger' | 'stats' | 'ranking' | 'staff' | 'settings' | 'clock' | 'attendance';
+type Section = 'dashboard' | 'posters' | 'ledger' | 'stats' | 'ranking' | 'staff' | 'settings' | 'clock' | 'attendance' | 'voucher';
 
 /** 업주/직원 전용 "매장 관리" 탭 — 장부(POS) · 통계 · 순위 입력 · (업주) 직원 관리 */
 export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster, onDeletePoster }: { schedules: Schedule[]; onCreatePoster: () => void; onEditPoster: (id: string) => void; onDeletePoster: (id: string) => void }) {
@@ -76,6 +77,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   if (ledgerOk) available.push({ id: 'ranking', label: '순위 입력' });
   if (ledgerOk) available.push({ id: 'clock', label: '클락' });
   if (ledgerOk) available.push({ id: 'attendance', label: '출근 관리' });
+  if (manageOk) available.push({ id: 'voucher', label: '매장이용권' });
   if (canStaff) available.push({ id: 'staff', label: '직원 관리' });
   if (canStaff) available.push({ id: 'settings', label: 'POS 설정' });
 
@@ -135,6 +137,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
           {section === 'attendance' && ledgerOk && <StaffSelfAttendance venueId={venueId} />}
           {section === 'staff'    && canStaff && <StaffHub venueId={venueId} />}
           {section === 'settings' && canStaff && <PosSettingsPanel venueId={venueId} />}
+          {section === 'voucher'  && manageOk && <VoucherManagePanel venueId={venueId} />}
         </>
       )}
     </div>

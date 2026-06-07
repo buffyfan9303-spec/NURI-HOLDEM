@@ -437,7 +437,7 @@ function SignupUserForm({ onDone }: { onDone: () => void }) {
         agreedToAntiGambling: c.antiGambling,
         agreedToMarketing:    c.marketing,
       });
-      toast.show('가입 완료! 이메일 인증 메일을 확인한 뒤 로그인해 주세요.', 'success');
+      toast.show('가입 완료! 로그인 후 휴대폰 본인인증을 진행해 주세요.', 'success');
       onDone();
     } catch (err: unknown) {
       toast.show(err instanceof Error ? err.message : '가입 중 오류가 발생했습니다.', 'error');
@@ -517,7 +517,7 @@ function SignupOwnerForm({ onDone }: { onDone: () => void }) {
         agreedToMarketing:    c.marketing,
         venueName, region, address, phone, businessNumber: bizNum,
       });
-      toast.show('업주 가입 신청 완료. 이메일 인증 후 로그인하면 운영자 승인을 거쳐 포스터 업로드가 활성화됩니다.', 'success');
+      toast.show('업주 가입 신청 완료. 로그인 후 휴대폰 본인인증·운영자 승인을 거쳐 포스터 업로드가 활성화됩니다.', 'success');
       onDone();
     } catch (err: unknown) {
       toast.show(err instanceof Error ? err.message : '가입 중 오류가 발생했습니다.', 'error');
