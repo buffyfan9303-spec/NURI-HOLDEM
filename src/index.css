@@ -75,6 +75,10 @@
     font-family: 'Pretendard Variable', 'Pretendard', system-ui, sans-serif;
     /* iOS 탭 하이라이트 제거 */
     -webkit-tap-highlight-color: transparent;
+    /* 한글 줄바꿈: 어절(단어) 단위로 끊어 "글자 하나만 다음 줄로 내려가는" 어색함 방지.
+       긴 영문/URL/숫자는 칸을 넘칠 때만 강제로 끊어 레이아웃이 깨지지 않게 한다. */
+    word-break: keep-all;
+    overflow-wrap: break-word;
   }
 
   /* 스크롤바 스타일 (WebKit) */
