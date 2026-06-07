@@ -107,8 +107,8 @@ export default function CommunityTab({
           <SectionTab active={section === 'live'}   label="실시간 댓글" onClick={() => setSection('live')} />
           <SectionTab active={section === 'board'}  label="게시판"      onClick={() => setSection('board')} />
           <SectionTab active={section === 'study'}  label="홀덤 공부"   onClick={() => setSection('study')} />
-          <SectionTab active={section === 'tools'}  label="도구"        onClick={() => setSection('tools')} />
           <SectionTab active={section === 'dealer'} label="딜러"        onClick={() => setSection('dealer')} />
+          <SectionTab active={section === 'tools'}  label="도구"        onClick={() => setSection('tools')} />
           <SectionTab active={section === 'rank'}   label="랭킹"        onClick={() => setSection('rank')} />
           {canOwnerCommunity && (
             <SectionTab active={section === 'owner'} label="업주" onClick={() => setSection('owner')} />
@@ -489,7 +489,7 @@ function MyCommunitiesAction({ onSelectVenue, onCreated }: {
     getMyOwnedCommunities().then(setOwned).catch(() => {});
     getMyJoinedGroups().then(setJoined).catch(() => {});
   };
-  useEffect(() => { if (open) reload(); /* eslint-disable-next-line */ }, [open]);
+  useEffect(() => { reload(); /* eslint-disable-next-line */ }, []);
 
   if (!user) return null;
   const isOwner = user.role === 'venue_owner';
@@ -515,9 +515,15 @@ function MyCommunitiesAction({ onSelectVenue, onCreated }: {
 
   return (
     <div className="rounded-card border border-gold-400/40 bg-gradient-to-br from-gold-300/[0.08] to-transparent">
-      <button type="button" onClick={() => setOpen((v) => !v)} className="w-full flex items-center justify-between px-3 py-2.5">
-        <span className="text-sm font-bold text-ink-primary">내 커뮤니티 관리</span>
-        <span className="text-2xs font-bold text-gold-300">{open ? '닫기' : '열기'}</span>
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-input bg-gold-300/15 text-gold-300">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" /></svg>
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-bold text-ink-primary leading-tight">내 커뮤니티 관리</span>
+          <span className="block text-2xs text-ink-muted">내가 운영 {owned.length} · 가입한 그룹 {joined.length}</span>
+        </span>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={['shrink-0 text-gold-300 transition-transform duration-200', open ? 'rotate-180' : ''].join(' ')} aria-hidden><polyline points="6 9 12 15 18 9" /></svg>
       </button>
       {open && (
         <div className="px-3 pb-3 space-y-3 animate-slide-up">
