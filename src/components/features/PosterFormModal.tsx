@@ -586,7 +586,8 @@ function FieldWrap({ label, required, suffix, children }: {
 
 // 시/분 선택형 시간 입력 — 분을 선택하면 드롭다운이 닫히며 즉시 저장(모바일 친화)
 function TimeSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const safe = /^\d{1,2}:\d{2}$/.test(value) ? value : '19:00';
+  const m0 = value?.match(/^(\d{1,2}):(\d{2})/); // 'HH:MM' 또는 'HH:MM:SS'(초 포함) 모두 허용
+  const safe = m0 ? `${m0[1]}:${m0[2]}` : '19:00';
   const [h, m] = safe.split(':');
   const hh = h.padStart(2, '0');
   const mm = m.padStart(2, '0');
