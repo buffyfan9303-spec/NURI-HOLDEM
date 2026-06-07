@@ -7,6 +7,7 @@ import {
 import { getClockState, subscribeClock, type ClockState } from '../../api/clock';
 import { getReservationCounts, getVenueRegulars, subscribeReservations, type VenueRegular } from '../../api/reservations';
 import { aiGenerate } from '../../api/ai';
+import { Skeleton } from '../atoms/Skeleton';
 import { getStaffSchedule, getStaffWages, subscribeStaffSchedule, type StaffShift, type StaffWage } from '../../api/staffSchedule';
 
 const localToday = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD (로컬)
@@ -480,6 +481,4 @@ function QuickAction({ label, icon, onClick }: { label: string; icon: ReactNode;
   );
 }
 
-function Skeleton() {
-  return <div className="h-12 rounded-input bg-surface-high/60 animate-pulse" />;
-}
+// Skeleton은 공용 atom(../atoms/Skeleton) 사용
