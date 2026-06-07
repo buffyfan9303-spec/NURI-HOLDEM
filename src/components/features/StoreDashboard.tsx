@@ -9,6 +9,7 @@ import { getReservationCounts, getVenueRegulars, subscribeReservations, type Ven
 import { aiGenerate } from '../../api/ai';
 import { Skeleton } from '../atoms/Skeleton';
 import RegularsModal from './RegularsModal';
+import WaitlistModal from './WaitlistModal';
 import { getStaffSchedule, getStaffWages, subscribeStaffSchedule, type StaffShift, type StaffWage } from '../../api/staffSchedule';
 
 const localToday = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD (로컬)
@@ -61,6 +62,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const [aiBusy, setAiBusy] = useState(false);
   const [aiErr, setAiErr] = useState('');
   const [regOpen, setRegOpen] = useState(false);
+  const [waitOpen, setWaitOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const upcoming = schedules
@@ -210,6 +212,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   return (
     <div className="space-y-3">
       <RegularsModal open={regOpen} onClose={() => setRegOpen(false)} venueId={venueId} exclude={[...staffNames]} />
+      <WaitlistModal open={waitOpen} onClose={() => setWaitOpen(false)} venueId={venueId} />
       {/* 미수·리스크 알림 */}
       {started && fin.unpaid > 0 && (
         <button type="button" onClick={() => onGoto('ledger')}
@@ -220,13 +223,15 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       )}
 
       {/* 빠른 작업 */}
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-4 gap-2">
         <QuickAction label="새 게임" onClick={onCreatePoster}
           icon={<><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></>} />
         <QuickAction label="장부" onClick={() => onGoto('ledger')}
           icon={<><path d="M4 4h12a2 2 0 0 1 2 2v14l-3-2-3 2-3-2-3 2V6a2 2 0 0 1 2-2Z" /></>} />
         <QuickAction label="클락" onClick={() => onGoto('clock')}
           icon={<><circle cx="12" cy="13" r="7" /><path d="M12 10v3l2 2" /><line x1="9" y1="2" x2="15" y2="2" /></>} />
+        <QuickAction label="웨이팅" onClick={() => setWaitOpen(true)}
+          icon={<><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M19 8v6" /><path d="M22 11h-6" /></>} />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
