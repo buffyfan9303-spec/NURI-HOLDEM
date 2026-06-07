@@ -7,6 +7,7 @@ import { getMyReservation, createReservation, cancelMyReservation, type Reservat
 import { prizeMainText } from './ScheduleCard';
 import type { Schedule } from '../../api/schedules';
 import type { Comment } from '../../api/community';
+import { generateBlinds } from '../../api/clock';
 
 interface ScheduleDetailModalProps {
   schedule: Schedule | null;
@@ -322,6 +323,9 @@ export default function ScheduleDetailModal({
           </section>
         )}
 
+        {/* 블라인드 구조 (접이식, 기본 접힘) */}
+        <BlindStructure schedule={schedule} />
+
         {/* 프로모션 */}
         {schedule.promotions && schedule.promotions.length > 0 && (
           <section>
@@ -521,6 +525,72 @@ function ReserveBox({ scheduleId }: { scheduleId: string }) {
 }
 
 // ── 정보 카드 ────────────────────────────────────────────────────────────────
+
+// 포스터 기본 블라인드 구조 — 로티 파이널롤백 기반 템플릿. 기본 접힘, 클릭 시 펼침. 레지 마감(기본 16LV) 이후 25LV까지 표시.
+function BlindStructure({ schedule }: { schedule: Schedule }) {
+  const [open, setOpen] = useState(false);
+  const regClose = (() => {
+    const m = String(schedule.regCloseTime ?? '').match(/\d+/);
+    const n = m ? parseInt(m[0], 10) : 16;
+    return Math.min(Math.max(n, 1), 25);
+  })();
+  const dur = schedule.structure?.blindLevelMinutes || 20;
+  const levels = generateBlinds(regClose, 25, dur, dur);
+
+  let levelNo = 0;
+  return (
+    <section>
+      <button type="button" onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-2 rounded-input border border-border-subtle bg-surface-high px-3 py-2.5 text-left transition-colors hover:border-border-default">
+        <span className="flex items-center gap-2 min-w-0">
+          <span className="text-sm font-semibold text-ink-primary shrink-0">블라인드 구조</span>
+          <span className="text-2xs text-ink-muted truncate">레지 {regClose}LV 마감 · {dur}분 · ~25LV</span>
+        </span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
+          className={`shrink-0 text-ink-muted transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden><polyline points="6 9 12 15 18 9" /></svg>
+      </button>
+
+      {open && (
+        <div className="mt-2 overflow-hidden rounded-input border border-border-subtle animate-fade-in">
+          <table className="w-full text-2xs tabular-nums">
+            <thead>
+              <tr className="bg-surface-high text-ink-muted">
+                <th className="py-1.5 px-2 text-left font-semibold">LV</th>
+                <th className="py-1.5 px-2 text-right font-semibold">SB / BB</th>
+                <th className="py-1.5 px-2 text-right font-semibold">앤티</th>
+                <th className="py-1.5 px-2 text-right font-semibold">시간</th>
+              </tr>
+            </thead>
+            <tbody>
+              {levels.map((l, i) => {
+                if (l.kind === 'break') {
+                  return (
+                    <tr key={i} className="bg-gold-300/[0.06] border-t border-border-subtle">
+                      <td colSpan={4} className="py-1.5 px-2 text-center font-bold text-gold-300">BREAK · {l.minutes}분</td>
+                    </tr>
+                  );
+                }
+                levelNo += 1;
+                const isRegClose = levelNo === regClose;
+                return (
+                  <tr key={i} className={`border-t border-border-subtle ${isRegClose ? 'bg-amber-500/[0.08]' : ''}`}>
+                    <td className="py-1.5 px-2 text-left font-bold text-ink-secondary">
+                      {levelNo}{isRegClose && <span className="ml-1 text-[9px] font-bold text-amber-400">레지마감</span>}
+                    </td>
+                    <td className="py-1.5 px-2 text-right font-semibold text-ink-primary">{l.sb.toLocaleString()} / {l.bb.toLocaleString()}</td>
+                    <td className="py-1.5 px-2 text-right text-ink-muted">{l.ante ? l.ante.toLocaleString() : '-'}</td>
+                    <td className="py-1.5 px-2 text-right text-ink-muted">{l.minutes}분</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <p className="bg-surface-base px-2 py-1.5 text-[10px] text-ink-muted">※ 매장 기본 구조 예시입니다. 실제 운영 시 변동될 수 있습니다.</p>
+        </div>
+      )}
+    </section>
+  );
+}
 
 function InfoCard({
   icon, label, value, sub, compact = false,

@@ -5,13 +5,17 @@ import {
   type LedgerSession, type LedgerBuyin, type LedgerPlayer,
 } from '../../api/ledger';
 import { getClockState, subscribeClock, type ClockState } from '../../api/clock';
-import { getReservationCounts, subscribeReservations } from '../../api/reservations';
+import { getReservationCounts, getVenueReserverCounts, subscribeReservations } from '../../api/reservations';
 import { getStaffSchedule, getStaffWages, subscribeStaffSchedule, type StaffShift, type StaffWage } from '../../api/staffSchedule';
 
 const localToday = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD (로컬)
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 const last7 = () => Array.from({ length: 7 }, (_, i) => {
   const dt = new Date(); dt.setDate(dt.getDate() - (6 - i));
+  return dt.toLocaleDateString('en-CA');
+});
+const last14 = () => Array.from({ length: 14 }, (_, i) => {
+  const dt = new Date(); dt.setDate(dt.getDate() - (13 - i));
   return dt.toLocaleDateString('en-CA');
 });
 const monthRange = () => {
@@ -38,6 +42,7 @@ interface Props {
 export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePoster }: Props) {
   const d = localToday();
   const days = last7();
+  const d14 = last14();
   const mr = monthRange();
   const [session, setSession] = useState<LedgerSession | null>(null);
   const [buyins, setBuyins] = useState<LedgerBuyin[]>([]);
@@ -48,6 +53,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const [wages, setWages] = useState<StaffWage[]>([]);
   const [players, setPlayers] = useState<LedgerPlayer[]>([]);
   const [range, setRange] = useState<{ sessions: LedgerSession[]; buyins: LedgerBuyin[] }>({ sessions: [], buyins: [] });
+  const [reserverCounts, setReserverCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
 
   const upcoming = schedules
@@ -63,7 +69,8 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
     getStaffSchedule(venueId, d, d).then(setShifts).catch(() => {});
     getStaffSchedule(venueId, mr.start, mr.end).then(setMonthShifts).catch(() => {});
     getStaffWages(venueId).then(setWages).catch(() => {});
-    getLedgerRange(venueId, days[0], days[6]).then(setRange).catch(() => {});
+    getLedgerRange(venueId, d14[0], d14[13]).then(setRange).catch(() => {});
+    getVenueReserverCounts(venueId).then(setReserverCounts).catch(() => {});
     const ids = schedules.filter((s) => s.venueId === venueId && s.date >= d).map((s) => s.id);
     if (ids.length) getReservationCounts(ids).then(setResCounts).catch(() => {});
     else setResCounts({});
@@ -122,6 +129,32 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const maxEntry = Math.max(1, ...perDay.map((x) => x.entry));
   const bestDay = perDay.reduce((a, x) => (x.entry > a.entry ? x : a), perDay[0]);
   const avgSpend = weekEntry > 0 ? Math.round(weekPaid / weekEntry) : 0; // 객단가(원/엔트리)
+
+  // ── 전주 대비(직전 7일) ──
+  const prevDays = d14.slice(0, 7);
+  const prevSet = new Set(prevDays);
+  let prevEntry = 0, prevPaid = 0;
+  for (const b of range.buyins) {
+    if (!prevSet.has(b.sessionDate)) continue;
+    const s = sessByDate[b.sessionDate];
+    if (!s) continue;
+    const f = buyinFinance(b, s);
+    prevEntry += f.entry; prevPaid += f.paid;
+  }
+  prevEntry = Math.round(prevEntry);
+  const entryDelta = prevEntry > 0 ? Math.round(((weekEntry - prevEntry) / prevEntry) * 100) : null;
+  const paidDelta = prevPaid > 0 ? Math.round(((weekPaid - prevPaid) / prevPaid) * 100) : null;
+
+  // ── 매장이용권(회수 티켓) 최근 7일 ──
+  let weekTicket = 0;
+  for (const b of range.buyins) {
+    if (!days.includes(b.sessionDate)) continue;
+    const s = sessByDate[b.sessionDate];
+    if (s) weekTicket += buyinFinance(b, s).ticketPaid;
+  }
+
+  // ── 단골 TOP(예약 횟수 기준) ──
+  const topRegulars = Object.entries(reserverCounts).filter(([, n]) => n >= 2).sort((a, b) => b[1] - a[1]).slice(0, 5);
 
   // ── 직원 인건비(이번 달) ──
   const wageMap: Record<string, number> = Object.fromEntries(wages.map((w) => [w.name, w.hourlyWage]));
@@ -235,6 +268,19 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           )}
         </DashCard>
 
+        {/* 전주 대비(주간 비교) */}
+        <DashCard title="전주 대비" onClick={() => onGoto('stats')}
+          badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-violet-500/15 text-violet-300">주간 비교</span>}>
+          {loading ? <Skeleton /> : (weekEntry === 0 && prevEntry === 0) ? (
+            <p className="py-3 text-center text-2xs text-ink-muted">비교할 장부 데이터가 없습니다.</p>
+          ) : (
+            <div className="space-y-2 py-0.5">
+              <CompareRow label="엔트리" now={weekEntry} prev={prevEntry} delta={entryDelta} />
+              <CompareRow label="매출" now={weekPaid} prev={prevPaid} delta={paidDelta} won />
+            </div>
+          )}
+        </DashCard>
+
         {/* 다가오는 예약 */}
         <DashCard title="다가오는 예약" onClick={() => onGoto('posters')}
           badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-gold-300/15 text-gold-300">예약 {totalRes}</span>}>
@@ -246,6 +292,24 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                 <li key={g.id} className="flex items-center justify-between gap-2 text-xs">
                   <span className="truncate text-ink-secondary"><span className="text-2xs text-ink-muted tabular-nums mr-1">{g.date.slice(5).replace('-', '/')}</span>{g.title}</span>
                   <span className="shrink-0 tabular-nums text-ink-muted">예약 {resCounts[g.id] ?? 0}명</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </DashCard>
+
+        {/* 단골 TOP(예약 횟수) */}
+        <DashCard title="단골 TOP" onClick={() => onGoto('posters')}
+          badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-gold-300/15 text-gold-300">예약 기준</span>}>
+          {loading ? <Skeleton /> : topRegulars.length === 0 ? (
+            <p className="py-3 text-center text-2xs text-ink-muted">단골 데이터가 아직 없습니다.</p>
+          ) : (
+            <ul className="space-y-1.5">
+              {topRegulars.map(([name, n], i) => (
+                <li key={name} className="flex items-center gap-2 text-xs">
+                  <span className={`w-4 shrink-0 text-center text-2xs font-bold tabular-nums ${i === 0 ? 'text-gold-300' : 'text-ink-muted'}`}>{i + 1}</span>
+                  <span className="flex-1 min-w-0 truncate text-ink-secondary">{name}</span>
+                  <span className="shrink-0 tabular-nums text-ink-muted">{n}회{n >= 5 && <span className="ml-1 text-gold-300 font-bold">단골</span>}</span>
                 </li>
               ))}
             </ul>
@@ -278,6 +342,20 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
               <Stat label="총 인건비" value={wonToMan(laborTotal)} unit="만원" accent />
               <Stat label="총 근무" value={`${Math.round(laborHours)}`} unit="시간" />
             </div>
+          )}
+        </DashCard>
+
+        {/* 매장이용권(회수 티켓) */}
+        <DashCard title="매장이용권" onClick={() => onGoto('ledger')}
+          badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-gold-300/15 text-gold-300">최근 7일</span>}>
+          {loading ? <Skeleton /> : (
+            <>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+                <Stat label="7일 회수" value={`${weekTicket}`} unit="장" accent />
+                <Stat label="오늘 회수" value={`${fin.ticket}`} unit="장" />
+              </div>
+              <p className="mt-1.5 text-[10px] text-ink-muted">매장이용권(티켓)으로 바이인한 합계입니다.</p>
+            </>
           )}
         </DashCard>
 
@@ -327,6 +405,26 @@ function Stat({ label, value, unit, accent, danger }: { label: string; value: st
       <p className={`font-extrabold tabular-nums leading-tight ${danger ? 'text-danger-light' : accent ? 'text-gold-300' : 'text-ink-primary'}`}>
         <span className="text-lg">{value}</span>{unit && <span className="ml-0.5 text-2xs font-semibold text-ink-muted">{unit}</span>}
       </p>
+    </div>
+  );
+}
+
+function CompareRow({ label, now, prev, delta, won }: { label: string; now: number; prev: number; delta: number | null; won?: boolean }) {
+  const up = delta != null && delta > 0;
+  const down = delta != null && delta < 0;
+  const fmt = (n: number) => (won ? `${wonToMan(n)}만` : `${n}`);
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="shrink-0 text-2xs text-ink-muted">{label}</span>
+      <span className="flex items-baseline gap-1.5 tabular-nums">
+        <span className="text-sm font-bold text-ink-primary">{fmt(now)}</span>
+        <span className="text-[10px] text-ink-muted">전주 {fmt(prev)}</span>
+        {delta != null && (
+          <span className={`text-2xs font-bold ${up ? 'text-emerald-400' : down ? 'text-danger-light' : 'text-ink-muted'}`}>
+            {up ? '▲' : down ? '▼' : '–'}{Math.abs(delta)}%
+          </span>
+        )}
+      </span>
     </div>
   );
 }
