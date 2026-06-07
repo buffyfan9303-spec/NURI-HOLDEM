@@ -457,7 +457,7 @@ function MyCommunitiesAction({ onSelectVenue, onCreated }: {
 }) {
   const { user, refreshProfile } = useAuth();
   const toast = useToast();
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const [owned, setOwned] = useState<Venue[]>([]);
   const [joined, setJoined] = useState<JoinedGroup[]>([]);
   const [createOpen, setCreateOpen] = useState(false);

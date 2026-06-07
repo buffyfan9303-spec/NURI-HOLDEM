@@ -67,14 +67,14 @@ const ToolsPanel     = lazyWithReload(() => import('./components/features/ToolsP
 function LazyFallback() {
   return (
     <div className="flex items-center justify-center py-24" aria-busy="true" aria-label="불러오는 중">
-      <div className="h-6 w-6 animate-spin rounded-full border-2 border-border-strong border-t-gold-300" />
+      <div className="h-6 w-6 animate-spin rounded-full border-2 border-border-strong border-t-ink-secondary" />
     </div>
   );
 }
 function OverlayFallback() {
   return (
     <div className="fixed inset-0 z-[45] flex items-center justify-center bg-surface-base" aria-busy="true">
-      <div className="h-7 w-7 animate-spin rounded-full border-2 border-border-strong border-t-gold-300" />
+      <div className="h-7 w-7 animate-spin rounded-full border-2 border-border-strong border-t-ink-secondary" />
     </div>
   );
 }
@@ -343,7 +343,7 @@ function TabBar({
               // 모바일: flex-1로 컨테이너 폭을 균등 분배(좌측 쏠림 제거) → 라벨은 셀 정중앙.
               //   min-width:auto(기본) 유지 → 탭이 많아 좁아지면 라벨 폭 이하로 줄지 않고 가로 스크롤(겹침 방지).
               // 데스크톱(sm+): 자연폭 + 컨테이너 sm:justify-center로 중앙 정렬 그룹(과도한 벌어짐 방지).
-              'flex-1 px-2 sm:flex-none sm:px-5 py-2.5 text-sm font-medium whitespace-nowrap transition-colors duration-200 focus:outline-none active:bg-surface-high/40 rounded-t-input',
+              'flex-1 px-2 sm:flex-none sm:px-5 py-2.5 text-sm font-medium whitespace-nowrap transition-colors duration-200 focus:outline-none touch-manipulation rounded-t-input',
               isActive ? 'text-gold-300 text-gold-glow' : 'text-ink-muted hover:text-ink-secondary',
             ].join(' ')}
           >

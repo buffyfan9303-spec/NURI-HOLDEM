@@ -50,8 +50,8 @@ const TOOLS: { key: ToolKey; group: ToolGroup; name: string; desc: string; icon:
 ];
 
 const GROUPS: { id: ToolGroup; title: string; desc: string }[] = [
-  { id: 'ops', title: '매장 운영 도구', desc: '토너먼트 운영·세팅용' },
   { id: 'player', title: '플레이어 도구', desc: '실전 플레이·전략용' },
+  { id: 'ops', title: '매장 운영 도구', desc: '토너먼트 운영·세팅용' },
 ];
 
 function renderTool(k: ToolKey): ReactNode {
