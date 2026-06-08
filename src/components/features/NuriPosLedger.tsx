@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { useToast } from '../atoms/Toast';
 import DateTimePicker from '../atoms/DateTimePicker';
 import { useAuth } from '../../contexts/AuthContext';
+import Icon from '../atoms/Icon';
 import {
   type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type LedgerSessionListItem, type DiscountPreset, type EarlyType,
   visitorLabel, wonToMan, WON_PER_MAN, buyinFinance, earlyTypeOf, setBuyinEarly,
@@ -328,7 +329,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                 {fullAccess && (
                   <button type="button" onClick={() => handleDeleteSession(s.sessionDate)} aria-label={`${s.sessionDate} 장부 삭제`}
                     className="shrink-0 mr-1.5 w-8 h-8 flex items-center justify-center rounded-input text-ink-muted hover:text-danger-light hover:bg-danger/10 transition-colors">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
+                    <Icon name="trash" size={15} />
                   </button>
                 )}
               </li>
@@ -1100,7 +1101,7 @@ function Overlay({ title, onClose, children }: { title: string; onClose: () => v
         <header className="sticky top-0 px-4 py-3 border-b border-border-subtle bg-surface-mid flex items-center justify-between">
           <h2 className="text-sm font-bold text-ink-primary">{title}</h2>
           <button type="button" onClick={onClose} aria-label="닫기" className="w-8 h-8 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><line x1="2" y1="2" x2="12" y2="12" /><line x1="12" y1="2" x2="2" y2="12" /></svg>
+            <Icon name="close" size={14} />
           </button>
         </header>
         <div className="p-4">{children}</div>
@@ -1157,7 +1158,7 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
         <header className="px-4 py-3 border-b border-border-subtle flex items-center justify-between">
           <h2 className="text-sm font-bold text-ink-primary">{cell.playerName} · {cell.entryNo}바인</h2>
           <button type="button" onClick={onClose} aria-label="닫기" className="w-8 h-8 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><line x1="2" y1="2" x2="12" y2="12" /><line x1="12" y1="2" x2="2" y2="12" /></svg>
+            <Icon name="close" size={14} />
           </button>
         </header>
 

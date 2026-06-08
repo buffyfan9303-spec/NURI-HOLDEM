@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { Map, MapMarker, useKakaoLoader } from 'react-kakao-maps-sdk';
 import CommentThread from './CommentThread';
 import RotiArenaLogo from '../atoms/RotiArenaLogo';
+import Icon from '../atoms/Icon';
 import { useToast } from '../atoms/Toast';
 import type { Venue, Comment } from '../../api/community';
 import type { Schedule } from '../../api/schedules';
@@ -134,9 +135,7 @@ export default function VenuePage({
           aria-label="뒤로 가기"
           className="w-9 h-9 -ml-2 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high transition-colors"
         >
-          <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <polyline points="14,5 7,11 14,17" />
-          </svg>
+          <Icon name="back" size={22} />
         </button>
         <h1 className="ml-1 text-sm font-semibold text-ink-primary truncate flex-1">
           {venue.name}
@@ -438,7 +437,7 @@ function HeroSection({
             aria-label="이전 사진"
             className="absolute left-2 top-1/2 z-10 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-surface-base/55 text-white backdrop-blur transition-colors hover:bg-surface-base/80"
           >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M9 2 L4 7 L9 12" /></svg>
+            <Icon name="chevron-left" size={14} />
           </button>
           <button
             type="button"
@@ -446,7 +445,7 @@ function HeroSection({
             aria-label="다음 사진"
             className="absolute right-2 top-1/2 z-10 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-surface-base/55 text-white backdrop-blur transition-colors hover:bg-surface-base/80"
           >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 2 L10 7 L5 12" /></svg>
+            <Icon name="chevron-right" size={14} />
           </button>
         </>
       )}
@@ -496,9 +495,7 @@ function HeroSection({
           aria-label="현재 사진 삭제"
           className="absolute top-3 left-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/55 text-white transition-colors hover:bg-danger/70"
         >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
-            <line x1="2" y1="2" x2="12" y2="12" /><line x1="12" y1="2" x2="2" y2="12" />
-          </svg>
+          <Icon name="close" size={14} />
         </button>
       )}
 
