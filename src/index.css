@@ -203,7 +203,10 @@
 .tier-glow-ace   { animation: tierPulseAce 2.3s ease-in-out infinite; }
 
 /* PC에서 본문이 좌측으로 쏠리지 않도록 — 콘텐츠 최대 폭 제한 + 가운데 정렬(모바일은 100%) */
+/* 기본(모바일·태블릿): 48rem 읽기폭. 데스크탑(lg≥1024): 2-pane·그리드가 화면을 활용하도록 72rem까지 확장.
+   업주/관리자 탭은 내부 max-w-5xl(1024) 래퍼로 자체 제한되고, 단일 컬럼 탭은 내부 래퍼로 좁힌다. */
 main { max-width: 48rem; margin-inline: auto; }
+@media (min-width: 1024px) { main { max-width: 72rem; } }
 
 /* 모션 민감 사용자 배려 — OS '동작 줄이기' 설정 시 애니메이션/전환을 즉시화해 멀미·끊김 방지 */
 @media (prefers-reduced-motion: reduce) {

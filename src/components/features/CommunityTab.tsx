@@ -141,7 +141,7 @@ export default function CommunityTab({
             />
           </div>
           {/* 데스크탑 2-pane 우측 상세 */}
-          <aside className="hidden lg:sticky lg:top-[8.5rem] lg:block lg:w-[26rem] lg:shrink-0">
+          <aside className="hidden lg:sticky lg:top-[8.5rem] lg:block lg:w-[24rem] lg:shrink-0">
             {boardSelected ? (
               <PostDetailModal
                 inline open
