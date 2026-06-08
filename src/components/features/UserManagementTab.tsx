@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useToast } from '../atoms/Toast';
 import type { User, UserStatus } from '../../api/auth';
+import { adminSetNickname } from '../../api/auth';
 import { getUserActivity, getActivityLog } from '../../api/community';
 import type { PostCategory, UserActivityItem, ActivityLogEntry } from '../../api/community';
 
@@ -184,6 +185,15 @@ function UserRow({ user, onUpdate }: { user: User; onUpdate: (id: string, patch:
     toast.show(`${user.name} 가입 거절`, 'error');
     close();
   };
+  // 운영자: 회원 아이디(닉네임) 변경 — 잠금 무시(admin_set_nickname RPC)
+  const changeNick = async () => {
+    const v = window.prompt('새 아이디(닉네임) 입력', user.nickname ?? '');
+    if (v == null) return;
+    const t = v.trim();
+    if (t.length < 2) { toast.show('닉네임은 2자 이상이어야 합니다', 'error'); return; }
+    try { await adminSetNickname(user.id, t); toast.show('닉네임을 변경했습니다 (목록 새로고침 시 반영)', 'success'); close(); }
+    catch (e) { toast.show(e instanceof Error ? e.message : '변경 실패', 'error'); }
+  };
 
   // 사유 입력 후 제재 확정 — 자동 이메일은 App handleUpdateUser → updateUserStatus 에서 발송
   const confirmSanction = () => {
@@ -301,6 +311,7 @@ function UserRow({ user, onUpdate }: { user: User; onUpdate: (id: string, patch:
           ) : (
             // ── 액션 선택 단계 ──
             <div className="flex flex-wrap gap-1.5">
+              <button type="button" onClick={changeNick} className="text-2xs font-semibold px-2.5 py-1 rounded-badge border border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary transition-colors">아이디 변경</button>
               {status === 'pending' && (
                 <>
                   <ActionBtn onClick={approve} variant="success">가입 승인</ActionBtn>
