@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import DraggableList from './DraggableList';
 import VenueManagement from './VenueManagement';
 import ReportQueue from './ReportQueue';
@@ -79,6 +79,29 @@ function PendingGroupsPanel({ onChanged }: { onChanged: () => void }) {
   );
 }
 
+const aic = (children: ReactNode) => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{children}</svg>
+);
+const ADMIN_SECTIONS: { id: Section; label: string; icon: ReactNode }[] = [
+  { id: 'pending', label: '포스터 승인', icon: aic(<><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><path d="m9 11 3 3L22 4" /></>) },
+  { id: 'reorder', label: '게시물 관리', icon: aic(<><path d="m12 2 9 5-9 5-9-5 9-5Z" /><path d="m3 12 9 5 9-5" /><path d="m3 17 9 5 9-5" /></>) },
+  { id: 'users', label: '회원 관리', icon: aic(<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>) },
+  { id: 'venues', label: '매장', icon: aic(<><path d="M3 9.5 5 4h14l2 5.5" /><path d="M4 9.5V20a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9.5" /><path d="M9 21v-6h6v6" /></>) },
+  { id: 'reports', label: '신고', icon: aic(<><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></>) },
+];
+
+function AdminNavBtn({ active, onClick, icon, badge, children }: { active: boolean; onClick: () => void; icon: ReactNode; badge?: number; children: ReactNode }) {
+  return (
+    <button type="button" onClick={onClick}
+      className={['flex shrink-0 items-center gap-2 whitespace-nowrap rounded-[6px] px-3 py-2 text-xs font-semibold transition-colors focus:outline-none touch-manipulation lg:w-full lg:justify-start',
+        active ? 'bg-gold-300 text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary lg:hover:bg-surface-high'].join(' ')}>
+      <span className="shrink-0" aria-hidden>{icon}</span>
+      <span className="flex-1 lg:text-left">{children}</span>
+      {badge ? <span className="inline-flex h-4 min-w-[1.1rem] items-center justify-center rounded-full bg-danger px-1 text-2xs font-bold tabular-nums text-white">{badge}</span> : null}
+    </button>
+  );
+}
+
 export default function AdminTab({
   schedules, venues, users, posts, onApproveSchedule, onRejectSchedule, onUpdateUser, onDeletePost, onReloadVenues,
 }: AdminTabProps) {
@@ -88,76 +111,48 @@ export default function AdminTab({
   const pending = schedules.filter((s) => !s.approved);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 mx-auto w-full max-w-5xl">
       <StatsPanel />
-      {/* 섹션 선택 */}
-      <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5">
-        <Pill active={section === 'pending'} onClick={() => setSection('pending')}>
-          포스터 승인
-          {pending.length > 0 && (
-            <span className="ml-1 inline-flex items-center justify-center min-w-[1.1rem] h-4 px-1 rounded-full bg-danger text-white text-2xs font-bold tabular-nums">
-              {pending.length}
-            </span>
+      <div className="lg:flex lg:gap-4">
+        <nav className="flex gap-1 overflow-x-auto scrollbar-none rounded-input bg-surface-high p-0.5 lg:sticky lg:top-16 lg:w-44 lg:shrink-0 lg:flex-col lg:self-start lg:overflow-visible lg:bg-transparent lg:p-0">
+          {ADMIN_SECTIONS.map((a) => (
+            <AdminNavBtn key={a.id} icon={a.icon} active={section === a.id} onClick={() => setSection(a.id)} badge={a.id === 'pending' && pending.length > 0 ? pending.length : undefined}>{a.label}</AdminNavBtn>
+          ))}
+        </nav>
+
+        <div className="mt-3 min-w-0 flex-1 space-y-3 lg:mt-0">
+          {section === 'venues' && (
+            <div className="space-y-3">
+              <PendingGroupsPanel onChanged={() => onReloadVenues?.()} />
+              <VenueCreateCard venues={venues} users={users} onCreated={() => onReloadVenues?.()} />
+            </div>
           )}
-        </Pill>
-        <Pill active={section === 'reorder'} onClick={() => setSection('reorder')}>
-          게시물 관리
-        </Pill>
-        <Pill active={section === 'users'} onClick={() => setSection('users')}>
-          회원 관리
-        </Pill>
-        <Pill active={section === 'venues'} onClick={() => setSection('venues')}>
-          매장
-        </Pill>
-        <Pill active={section === 'reports'} onClick={() => setSection('reports')}>
-          신고
-        </Pill>
+
+          {section === 'pending' && (
+            <PendingApprovalSection pending={pending} onApprove={onApproveSchedule} onReject={onRejectSchedule} />
+          )}
+          {section === 'reorder' && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5">
+                <SubPill active={reorderTarget === 'posters'} onClick={() => setReorderTarget('posters')}>포스터</SubPill>
+                <SubPill active={reorderTarget === 'venues'} onClick={() => setReorderTarget('venues')}>매장</SubPill>
+              </div>
+              {reorderTarget === 'posters'
+                ? <DraggableList initialItems={schedules.filter((s) => s.approved)} />
+                : <VenueManagement />}
+            </div>
+          )}
+          {section === 'users' && (
+            <UserManagementTab
+              users={users}
+              posts={posts.map((p) => ({ id: p.id, userName: p.userName, content: p.content, createdAt: p.createdAt, category: p.category }))}
+              onUpdateUser={onUpdateUser}
+              onDeletePost={onDeletePost}
+            />
+          )}
+          {section === 'reports' && <ReportQueue />}
+        </div>
       </div>
-
-      {section === 'venues' && (
-        <div className="space-y-3">
-          <PendingGroupsPanel onChanged={() => onReloadVenues?.()} />
-          <VenueCreateCard venues={venues} users={users} onCreated={() => onReloadVenues?.()} />
-        </div>
-      )}
-
-      {section === 'pending' && (
-        <PendingApprovalSection
-          pending={pending}
-          onApprove={onApproveSchedule}
-          onReject={onRejectSchedule}
-        />
-      )}
-      {section === 'reorder' && (
-        <div className="space-y-3">
-          {/* 노출 순서 하위 선택: 포스터 / 매장 */}
-          <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5">
-            <SubPill active={reorderTarget === 'posters'} onClick={() => setReorderTarget('posters')}>
-              포스터
-            </SubPill>
-            <SubPill active={reorderTarget === 'venues'} onClick={() => setReorderTarget('venues')}>
-              매장
-            </SubPill>
-          </div>
-
-          {reorderTarget === 'posters'
-            ? <DraggableList initialItems={schedules.filter((s) => s.approved)} />
-            : <VenueManagement />}
-        </div>
-      )}
-      {section === 'users' && (
-        <UserManagementTab
-          users={users}
-          posts={posts.map((p) => ({
-            id: p.id, userName: p.userName,
-            content: p.content, createdAt: p.createdAt,
-            category: p.category,
-          }))}
-          onUpdateUser={onUpdateUser}
-          onDeletePost={onDeletePost}
-        />
-      )}
-      {section === 'reports' && <ReportQueue />}
     </div>
   );
 }
@@ -679,17 +674,3 @@ function SubPill({ active, onClick, children }: { active: boolean; onClick: () =
   );
 }
 
-function Pill({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={[
-        'flex-1 inline-flex items-center justify-center gap-0.5 py-2 text-xs font-semibold rounded-[6px] transition-all focus:outline-none',
-        active ? 'bg-gold-300 text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary',
-      ].join(' ')}
-    >
-      {children}
-    </button>
-  );
-}
