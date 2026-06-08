@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react';
 import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
+import Icon from '../atoms/Icon';
 import { Html5Qrcode } from 'html5-qrcode';
 import {
   listMyVouchers, myVisitedVenues, myPlayHistory,
@@ -72,7 +73,7 @@ export default function CustomerDashboardPage({ open, onClose }: { open: boolean
     <div className="fixed inset-0 z-[60] flex flex-col bg-surface-base">
       <header className="flex h-header-h shrink-0 items-center gap-2 border-b border-border-subtle px-page-x">
         <button type="button" onClick={onClose} aria-label="닫기" className="flex h-9 w-9 items-center justify-center rounded-full text-ink-secondary hover:bg-surface-high">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M15 18l-6-6 6-6" /></svg>
+          <Icon name="back" size={20} />
         </button>
         <h1 className="text-base font-bold text-ink-primary">내 대시보드</h1>
       </header>

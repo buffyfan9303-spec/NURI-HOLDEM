@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useBackClose } from '../../lib/backstack';
+import Icon from './Icon';
 
 interface ModalProps {
   open: boolean;
@@ -86,7 +87,7 @@ export default function Modal({
           <header className="flex shrink-0 items-center justify-between border-b border-border-subtle px-4 py-3">
             <h2 className="text-base font-semibold text-ink-primary">{title}</h2>
             <button type="button" onClick={onClose} aria-label="닫기" className="flex h-8 w-8 items-center justify-center rounded-input text-ink-secondary hover:bg-surface-high hover:text-ink-primary">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><line x1="2" y1="2" x2="12" y2="12" /><line x1="12" y1="2" x2="2" y2="12" /></svg>
+              <Icon name="close" size={14} />
             </button>
           </header>
         )}
@@ -106,9 +107,7 @@ export default function Modal({
             <h2 id="modal-title" className="text-base font-semibold text-ink-primary">{title}</h2>
             <button type="button" onClick={onClose} aria-label="닫기"
               className="w-9 h-9 -mr-1 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high transition-colors">
-              <svg width="16" height="16" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
-                <line x1="2" y1="2" x2="12" y2="12" /><line x1="12" y1="2" x2="2" y2="12" />
-              </svg>
+              <Icon name="close" size={16} />
             </button>
           </header>
         )}
@@ -176,10 +175,7 @@ export default function Modal({
               aria-label="닫기"
               className="w-8 h-8 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high transition-colors"
             >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
-                <line x1="2" y1="2" x2="12" y2="12" />
-                <line x1="12" y1="2" x2="2" y2="12" />
-              </svg>
+              <Icon name="close" size={14} />
             </button>
           </header>
         )}
