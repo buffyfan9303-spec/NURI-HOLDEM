@@ -4,6 +4,7 @@
 // 사용(회수) = 발급 매장 QR 스캔 또는 그 매장 업주 전화번호로만. 유저 간 전송 불가.
 import { useEffect, useState } from 'react';
 import { useToast } from '../atoms/Toast';
+import { useAuth } from '../../contexts/AuthContext';
 import { Html5Qrcode } from 'html5-qrcode';
 import {
   listMyVouchers, myVisitedVenues, myPlayHistory,
@@ -23,6 +24,7 @@ function parseVenueId(text: string): string | null {
 interface Stack { venueId: string; venueName: string; title: string; ids: string[] }
 
 export default function CustomerDashboardPage({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { user } = useAuth();
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
   const [visits, setVisits] = useState<VisitedVenue[]>([]);
   const [plays, setPlays] = useState<PlayHistory[]>([]);
@@ -77,6 +79,38 @@ export default function CustomerDashboardPage({ open, onClose }: { open: boolean
 
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-2xl space-y-4 px-page-x py-section">
+          {/* 내 계정 — 받는 아이디 · 본인인증(매장이용권 수령 조건) */}
+          <section className="rounded-card border border-border-default bg-surface-low p-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gold-400/15 text-base font-bold text-gold-300">
+                {(user?.nickname ?? user?.name ?? '?').slice(0, 1)}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-bold text-ink-primary">{user?.nickname ?? user?.name ?? '회원'}</p>
+                <p className="truncate text-2xs text-ink-muted">{user?.verified && user?.realName ? user.realName : '플레이어'}</p>
+              </div>
+              {user?.verified
+                ? <span className="shrink-0 rounded-full bg-emerald-500/15 px-2 py-0.5 text-2xs font-bold text-emerald-300">본인인증 완료</span>
+                : <span className="shrink-0 rounded-full bg-danger/15 px-2 py-0.5 text-2xs font-bold text-danger">미인증</span>}
+            </div>
+            <div className="mt-2.5 grid grid-cols-2 gap-2">
+              <div className="rounded-input border border-border-subtle bg-surface-base px-2.5 py-1.5">
+                <p className="text-[10px] text-ink-muted">받는 아이디</p>
+                <p className="truncate text-xs font-bold text-ink-primary">{user?.nickname ? '@' + user.nickname : <span className="text-amber-300">미설정</span>}</p>
+              </div>
+              <div className="rounded-input border border-border-subtle bg-surface-base px-2.5 py-1.5">
+                <p className="text-[10px] text-ink-muted">이용권 수령</p>
+                <p className={`truncate text-xs font-bold ${user?.verified ? 'text-emerald-300' : 'text-danger'}`}>{user?.verified ? '가능' : '인증 필요'}</p>
+              </div>
+            </div>
+            {!user?.verified && (
+              <p className="mt-2 text-2xs leading-relaxed text-amber-300/90">⚠ 본인인증을 완료해야 매장이용권을 받을 수 있어요. 프로필에서 인증을 진행하세요.</p>
+            )}
+            {user?.verified && !user?.nickname && (
+              <p className="mt-2 text-2xs leading-relaxed text-amber-300/90">⚠ 받는 아이디(닉네임)를 설정하면 업주가 더 쉽게 이용권을 보낼 수 있어요. 프로필에서 설정하세요.</p>
+            )}
+          </section>
+
           <div className="rounded-card border border-amber-500/40 bg-amber-500/[0.08] p-3">
             <p className="text-sm font-bold text-amber-300">⚠️ 매장이용권은 금전적 가치가 없습니다</p>
             <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">현금·포인트가 아니며 환불·현금화·유저 간 거래가 불가합니다. 발급한 매장에서 사용(회수)만 가능합니다.</p>
