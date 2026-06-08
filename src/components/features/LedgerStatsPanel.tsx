@@ -95,7 +95,8 @@ function StatsView({ venueId }: { venueId: string }) {
     const byPlayer: Record<string, number> = {};
     const playerSet = new Set<string>();
     const dates = new Set<string>();
-    const dow: Record<number, { entries: number; revenue: number; unpaid: number; buyins: number; dates: Set<string>; players: Set<string> }> = {};
+    const dow: Record<number, { entries: number; revenue: number; unpaid: number; buyins: number; target: number; dates: Set<string>; players: Set<string> }> = {};
+    const unpaidByPlayer: Record<string, number> = {};
     for (const b of src) {
       const f = fin(b);
       revenue += f.paid; unpaid += f.unpaid; support += f.support; entries += f.entry;
@@ -103,9 +104,11 @@ function StatsView({ venueId }: { venueId: string }) {
       ticket += f.ticketPaid + (b.isSplit ? b.ticketCount : 0); ticketUnpaid += f.ticketUnpaid;
       byMethod[b.paymentMethod]++;
       byPlayer[b.playerName] = (byPlayer[b.playerName] ?? 0) + 1;
+      if (f.unpaid > 0) unpaidByPlayer[b.playerName] = (unpaidByPlayer[b.playerName] ?? 0) + f.unpaid;
       playerSet.add(b.playerName); dates.add(b.sessionDate);
       const w = new Date(b.sessionDate + 'T00:00:00').getDay();
-      if (!dow[w]) dow[w] = { entries: 0, revenue: 0, unpaid: 0, buyins: 0, dates: new Set(), players: new Set() };
+      if (!dow[w]) dow[w] = { entries: 0, revenue: 0, unpaid: 0, buyins: 0, target: 0, dates: new Set(), players: new Set() };
+      if (!dow[w].dates.has(b.sessionDate)) dow[w].target += (sessionByDate.get(b.sessionDate)?.targetEntries ?? 0); // 날짜별 기준엔트리 1회만 합산
       dow[w].entries += f.entry; dow[w].revenue += f.paid; dow[w].unpaid += f.unpaid;
       dow[w].buyins++; dow[w].dates.add(b.sessionDate); dow[w].players.add(b.playerName);
     }
@@ -122,6 +125,7 @@ function StatsView({ venueId }: { venueId: string }) {
       total: src.length, entries, underEntries, players: playerSet.size, revenue, unpaid, support, ticket, ticketUnpaid,
       unpaid_cnt: src.filter((b) => fin(b).unpaid > 0).length,
       byMethod, ranking: Object.entries(byPlayer).sort((a, b) => b[1] - a[1]),
+      unpaidRanking: Object.entries(unpaidByPlayer).sort((a, b) => b[1] - a[1]),
       target, fillRatio: target ? Math.round((entries / target) * 100) : null,
       perPlayer: playerSet.size ? entries / playerSet.size : 0,
       dayCount, visitor, dow,
@@ -249,6 +253,25 @@ function StatsView({ venueId }: { venueId: string }) {
               </ul>
             )}
           </Section>
+
+          <Section icon="alert" title="미수 내역">
+            {m.unpaidRanking.length === 0 ? (
+              <p className="text-2xs text-ink-muted text-center py-2">미수 없음</p>
+            ) : (
+              <ul className="space-y-1">
+                {m.unpaidRanking.map(([name, amt]) => (
+                  <li key={name} className="flex items-center gap-2 px-2 py-2 rounded-input bg-danger/[0.06] border border-danger/30">
+                    <span className="flex-1 text-xs font-semibold text-ink-primary truncate">{name}</span>
+                    <span className="text-xs font-bold text-danger-light tabular-nums">{amt.toLocaleString()}원</span>
+                  </li>
+                ))}
+                <li className="flex items-center justify-between px-2 pt-1 text-2xs">
+                  <span className="text-ink-muted">미수 합계</span>
+                  <span className="font-extrabold text-danger-light tabular-nums">{m.unpaid.toLocaleString()}원</span>
+                </li>
+              </ul>
+            )}
+          </Section>
         </>
       )}
     </section>
@@ -257,17 +280,20 @@ function StatsView({ venueId }: { venueId: string }) {
 
 type DowRow = {
   w: number; days: number; entries: number; revenue: number; unpaid: number; buyins: number; players: number;
+  target: number; fill: number | null;
   avgEntry: number; avgRevenue: number; perEntry: number;
 };
-function DowStats({ dow, rangeLabel = '전체' }: { dow: Record<number, { entries: number; revenue: number; unpaid: number; buyins: number; dates: Set<string>; players: Set<string> }>; rangeLabel?: string }) {
-  const [metric, setMetric] = useState<'entry' | 'revenue'>('entry');
+function DowStats({ dow, rangeLabel = '전체' }: { dow: Record<number, { entries: number; revenue: number; unpaid: number; buyins: number; target: number; dates: Set<string>; players: Set<string> }>; rangeLabel?: string }) {
+  const [metric, setMetric] = useState<'fill' | 'entry' | 'revenue'>('fill');
   const rows: DowRow[] = [1, 2, 3, 4, 5, 6, 0].map((w) => {
     const d = dow[w];
     const days = d ? d.dates.size : 0;
     const entries = d?.entries ?? 0;
     const revenue = d?.revenue ?? 0;
+    const target = d?.target ?? 0;
     return {
       w, days, entries, revenue, unpaid: d?.unpaid ?? 0, buyins: d?.buyins ?? 0, players: d ? d.players.size : 0,
+      target, fill: target > 0 ? (entries / target) * 100 : null,
       avgEntry: days ? entries / days : 0,
       avgRevenue: days ? revenue / days : 0,
       perEntry: entries ? revenue / entries : 0,
@@ -285,14 +311,17 @@ function DowStats({ dow, rangeLabel = '전체' }: { dow: Record<number, { entrie
   const totalDays    = rows.reduce((s, r) => s + r.days, 0);
   const totalEntries = rows.reduce((s, r) => s + r.entries, 0);
   const totalRevenue = rows.reduce((s, r) => s + r.revenue, 0);
+  const totalTarget  = rows.reduce((s, r) => s + r.target, 0);
+  const overallFill  = totalTarget > 0 ? Math.round((totalEntries / totalTarget) * 100) : null;
   const multi = active.length > 1;
 
   return (
     <div className="space-y-3">
-      <p className="text-2xs text-ink-muted">요일별 통계 · {rangeLabel} 기준 · 영업 {totalDays}일</p>
+      <p className="text-2xs text-ink-muted">요일별 통계 · {rangeLabel} 기준 · 영업 {totalDays}일 · <b className="text-ink-secondary">핵심: 기준 엔트리 달성률</b></p>
 
-      {/* 요약 */}
-      <div className="grid grid-cols-3 gap-2">
+      {/* 요약 — 기준 달성률 핵심 */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <Mini label="기준 달성률" value={overallFill !== null ? `${overallFill}%` : '기준 미설정'} />
         <Mini label="영업일" value={`${totalDays}일`} />
         <Mini label="총 엔트리" value={totalEntries.toLocaleString(undefined, { maximumFractionDigits: 0 })} />
         <Mini label="총 매출(만)" value={wonToMan(totalRevenue)} />
@@ -309,9 +338,9 @@ function DowStats({ dow, rangeLabel = '전체' }: { dow: Record<number, { entrie
       {/* 막대 차트 — 엔트리/매출 토글 */}
       <div>
         <div className="flex items-center justify-between mb-1.5">
-          <p className="text-2xs font-semibold text-ink-secondary">요일별 {metric === 'entry' ? '일평균 엔트리' : '일평균 매출'}</p>
+          <p className="text-2xs font-semibold text-ink-secondary">요일별 {metric === 'fill' ? '기준 엔트리 달성률' : metric === 'entry' ? '일평균 엔트리' : '일평균 매출'}</p>
           <div className="flex gap-0.5 bg-surface-high rounded-input p-0.5">
-            {([['entry', '엔트리'], ['revenue', '매출']] as const).map(([k, lbl]) => (
+            {([['fill', '달성률'], ['entry', '엔트리'], ['revenue', '매출']] as const).map(([k, lbl]) => (
               <button key={k} type="button" onClick={() => setMetric(k)}
                 className={['px-2 py-0.5 text-[10px] font-bold rounded-[5px] transition-colors',
                   metric === k ? 'bg-gold-300 text-ink-inverse' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>{lbl}</button>
@@ -320,9 +349,9 @@ function DowStats({ dow, rangeLabel = '전체' }: { dow: Record<number, { entrie
         </div>
         <ul className="space-y-1">
           {rows.map((r) => {
-            const val = metric === 'entry' ? r.avgEntry : r.avgRevenue;
-            const max = metric === 'entry' ? maxAvgEntry : maxAvgRev;
-            const pct = max > 0 ? (val / max) * 100 : 0;
+            const val = metric === 'fill' ? (r.fill ?? 0) : metric === 'entry' ? r.avgEntry : r.avgRevenue;
+            const max = metric === 'fill' ? 100 : metric === 'entry' ? maxAvgEntry : maxAvgRev;
+            const pct = max > 0 ? Math.min(100, (val / max) * 100) : 0;
             const isBest = multi && r.w === best.w;
             const isWorst = multi && r.w === worst.w && r.days > 0;
             const barColor = r.days === 0 ? 'bg-surface-high' : isBest ? 'bg-emerald-500/75' : isWorst ? 'bg-rose-500/65' : 'bg-gold-300/55';
@@ -333,7 +362,7 @@ function DowStats({ dow, rangeLabel = '전체' }: { dow: Record<number, { entrie
                   <div className={['h-full rounded-r transition-all duration-300', barColor].join(' ')} style={{ width: `${r.days ? Math.max(pct, 3) : 0}%` }} />
                 </div>
                 <span className="w-16 text-right text-2xs tabular-nums text-ink-secondary">
-                  {r.days ? (metric === 'entry' ? val.toFixed(1) : `${wonToMan(val)}만`) : '휴무'}
+                  {r.days ? (metric === 'fill' ? (r.fill !== null ? `${Math.round(r.fill)}%` : '기준없음') : metric === 'entry' ? val.toFixed(1) : `${wonToMan(val)}만`) : '휴무'}
                 </span>
               </li>
             );
