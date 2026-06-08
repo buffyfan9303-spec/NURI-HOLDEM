@@ -5,6 +5,7 @@ import PotOddsCalc from './tools/PotOddsCalc';
 import ChipDistributor from './tools/ChipDistributor';
 import StructureSim from './tools/StructureSim';
 import RangeGuide from './tools/RangeGuide';
+import PreflopTrainer from './tools/PreflopTrainer';
 import OutsCalc from './tools/OutsCalc';
 import PushFoldChart from './tools/PushFoldChart';
 import { SprCalc, EvCalc } from './tools/StackCalcs';
@@ -14,7 +15,7 @@ import BlindBuilder from './tools/BlindBuilder';
 // GTO 패널은 에퀴티 엔진을 포함해 무거우므로 지연 로드(다른 도구와 동일하게 인라인 표시)
 const GtoDeepPanel = lazyWithReload(() => import('./gto/GtoDeepPanel'));
 
-type ToolKey = 'gto' | 'pot' | 'icm' | 'range' | 'outs' | 'pushfold' | 'spr' | 'ev' | 'blindgen' | 'chip' | 'sim' | 'payout' | 'endtime' | 'combo';
+type ToolKey = 'gto' | 'pot' | 'icm' | 'range' | 'trainer' | 'outs' | 'pushfold' | 'spr' | 'ev' | 'blindgen' | 'chip' | 'sim' | 'payout' | 'endtime' | 'combo';
 type ToolGroup = 'ops' | 'player';
 
 const TOOLS: { key: ToolKey; group: ToolGroup; name: string; desc: string; icon: ReactNode }[] = [
@@ -34,6 +35,8 @@ const TOOLS: { key: ToolKey; group: ToolGroup; name: string; desc: string; icon:
     icon: <><rect x="3" y="4" width="7" height="16" rx="1.5" /><rect x="14" y="4" width="7" height="16" rx="1.5" /></> },
   { key: 'range', group: 'player', name: '스타팅핸드 가이드', desc: '포지션별 프리플랍 레인지',
     icon: <><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="9" y1="3" x2="9" y2="21" /></> },
+  { key: 'trainer', group: 'player', name: '프리플랍 트레이너', desc: '오픈/폴드 맞히기·정답률',
+    icon: <><path d="M12 2v4M12 18v4M2 12h4M18 12h4" /><circle cx="12" cy="12" r="4" /></> },
   { key: 'pot', group: 'player', name: '팟 오즈 계산기', desc: '콜에 필요한 승률 계산',
     icon: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></> },
   { key: 'icm', group: 'player', name: 'ICM 계산기', desc: '토너먼트 기대 상금',
@@ -61,6 +64,7 @@ function renderTool(k: ToolKey): ReactNode {
     case 'pot': return <PotOddsCalc />;
     case 'icm': return <ICMCalculator />;
     case 'range': return <RangeGuide />;
+    case 'trainer': return <PreflopTrainer />;
     case 'outs': return <OutsCalc />;
     case 'pushfold': return <PushFoldChart />;
     case 'spr': return <SprCalc />;
