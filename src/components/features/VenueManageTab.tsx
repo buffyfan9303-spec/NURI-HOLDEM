@@ -14,7 +14,7 @@ import StaffSchedule from './StaffSchedule';
 import { StaffWageManager, StaffSettlement, StaffWorkLog, StaffSelfAttendance } from './StaffPayroll';
 import StoreDashboard from './StoreDashboard';
 import { VoucherManagePanel } from './VoucherManageModal';
-import { iCanViewVouchers, getVoucherAccessUserIds, grantVoucherAccess, revokeVoucherAccess } from '../../api/vouchers';
+import { iCanViewVouchers, getVoucherAccessUserIds, grantVoucherAccess, revokeVoucherAccess, findUserForTransfer, issueVoucher } from '../../api/vouchers';
 import MyPostersTab from './MyPostersTab';
 import type { Schedule } from '../../api/schedules';
 
@@ -177,8 +177,8 @@ function SectionBtn({ active, onClick, icon, children }: { active: boolean; onCl
 }
 
 // ── 일일 순위 입력 ────────────────────────────────────────────────────────────
-interface Row { nickname: string; realName: string; prize: string; }
-const emptyRow = (): Row => ({ nickname: '', realName: '', prize: '' });
+interface Row { nickname: string; realName: string; prize: string; voucher: string; note: string; }
+const emptyRow = (): Row => ({ nickname: '', realName: '', prize: '', voucher: '', note: '' });
 
 function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: boolean; draft?: { date: string; names: string[] } | null }) {
   const toast = useToast();
@@ -196,10 +196,10 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
     getVenueRankings(venueId, date)
       .then(({ entries }) => {
         if (entries.length) {
-          setRows(entries.map((e) => ({ nickname: e.nickname, realName: e.realName, prize: e.prize ?? '' })));
+          setRows(entries.map((e) => ({ nickname: e.nickname, realName: e.realName, prize: e.prize ?? '', voucher: '', note: '' })));
         } else if (draft && draft.date === date && draft.names.length) {
           // 정산 마감 참가자 명단을 닉네임으로 미리 채움(순서는 업주가 정리)
-          setRows(draft.names.map((n) => ({ nickname: n, realName: '', prize: '' })));
+          setRows(draft.names.map((n) => ({ nickname: n, realName: '', prize: '', voucher: '', note: '' })));
         } else {
           setRows([emptyRow()]);
         }
@@ -221,8 +221,25 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
       return toast.show('각 줄에 닉네임을 입력해 주세요 (실명·프라이즈는 선택)', 'error');
     setSaving(true);
     try {
-      await saveVenueRankings(venueId, date, clean);
-      toast.show('순위 저장 완료 — 닉네임이 일치하는 회원에게 포인트가 반영됩니다', 'success');
+      await saveVenueRankings(venueId, date, clean.map(({ nickname, realName, prize }) => ({ nickname, realName, prize })));
+      // 매장이용권 지급 — 갯수>0 줄: 닉네임으로 가입자 조회 후 발급(본인인증 회원만, 서버 강제)
+      let issued = 0, failed = 0;
+      for (const r of clean) {
+        const cnt = parseInt(r.voucher, 10);
+        if (!cnt || cnt < 1) continue;
+        try {
+          const found = await findUserForTransfer(r.nickname.trim());
+          if (!found.length) { failed++; continue; }
+          await issueVoucher(venueId, { title: '순위 시상', count: Math.min(1000, cnt), holderUserId: found[0].id, holderName: found[0].display, note: r.note.trim() || '순위 시상' });
+          issued += Math.min(1000, cnt);
+        } catch { failed++; }
+      }
+      toast.show(
+        issued > 0
+          ? `순위 저장 + 이용권 ${issued}개 지급${failed ? ` · 미지급 ${failed}명(미가입/미인증)` : ''}`
+          : '순위 저장 완료 — 닉네임이 일치하는 회원에게 포인트가 반영됩니다',
+        'success',
+      );
     } catch (e) {
       toast.show(e instanceof Error ? e.message : '저장에 실패했습니다', 'error');
     } finally {
@@ -263,7 +280,8 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
       ) : (
         <ul className="space-y-1.5">
           {rows.map((row, i) => (
-            <li key={i} className="flex items-center gap-1.5">
+            <li key={i} className="space-y-1 rounded-input border border-border-subtle bg-surface-low/40 p-1.5">
+              <div className="flex items-center gap-1.5">
               <span className="w-5 shrink-0 text-center text-sm font-bold text-gold-300 tabular-nums">{i + 1}</span>
               <input
                 type="text" value={row.nickname} maxLength={30}
@@ -292,6 +310,15 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
                   <line x1="2" y1="2" x2="12" y2="12" /><line x1="12" y1="2" x2="2" y2="12" />
                 </svg>
               </button>
+              </div>
+              {/* 매장이용권 지급(갯수) + 비고 */}
+              <div className="flex items-center gap-1.5 pl-6">
+                <div className="relative w-24 shrink-0">
+                  <input type="number" inputMode="numeric" value={row.voucher} onChange={(e) => update(i, 'voucher', e.target.value.replace(/[^\d]/g, ''))} placeholder="이용권" className="input w-full text-sm py-1.5 pr-7 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" />
+                  <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">개</span>
+                </div>
+                <input type="text" value={row.note} onChange={(e) => update(i, 'note', e.target.value)} maxLength={50} placeholder="비고(선택)" className="input min-w-0 flex-1 text-sm py-1.5" />
+              </div>
             </li>
           ))}
         </ul>

@@ -651,7 +651,12 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
 
       {/* 장부 마감 */}
       {closeOpen && (
-        <CloseModal stats={stats} onClose={() => setCloseOpen(false)} onConfirm={handleClose} />
+        <CloseModal
+          stats={stats}
+          unpaidPlayers={rows.map((r) => ({ name: r.name, unpaid: playerTotals(r.name).unpaid })).filter((x) => x.unpaid > 0).sort((a, b) => b.unpaid - a.unpaid)}
+          onClose={() => setCloseOpen(false)}
+          onConfirm={handleClose}
+        />
       )}
 
       {/* 플레이어 편집(유형/비고/삭제) */}
@@ -1310,20 +1315,39 @@ function AmountRow({ label, value, set, danger }: { label: string; value: number
 }
 
 // ── 장부 마감 모달 ────────────────────────────────────────────────────────────
-function CloseModal({ stats, onClose, onConfirm }: {
+function CloseModal({ stats, unpaidPlayers, onClose, onConfirm }: {
   stats: { totalBuyins: number; entries: number; ticket: number; revenue: number; unpaid: number; support: number };
+  unpaidPlayers: { name: string; unpaid: number }[];
   onClose: () => void; onConfirm: (memo: string) => void;
 }) {
   const [memo, setMemo] = useState('');
   return (
-    <Overlay title="장부 마감" onClose={onClose}>
+    <Overlay title="정산 마감 — 금일 통계" onClose={onClose}>
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-2">
+          <SummaryStat label="총 바인" value={`${stats.totalBuyins}회`} />
           <SummaryStat label="총 엔트리" value={stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} />
-          <SummaryStat label="회수 티켓" value={`${stats.ticket}장`} />
           <SummaryStat label="완납 매출" value={`${wonToMan(stats.revenue)}만원`} tone="emerald" />
           <SummaryStat label="당일 미수금" value={`${wonToMan(stats.unpaid)}만원`} tone="danger" />
+          <SummaryStat label="회수 티켓" value={`${stats.ticket}장`} />
           <SummaryStat label="가게지원" value={`${stats.support}건`} />
+        </div>
+
+        {/* 미수자 리스트 */}
+        <div className="rounded-input border border-danger/30 bg-danger/[0.05] p-2.5">
+          <p className="mb-1 text-2xs font-bold text-danger-light">미수자 {unpaidPlayers.length}명</p>
+          {unpaidPlayers.length === 0 ? (
+            <p className="py-1 text-center text-2xs text-ink-muted">미수자가 없습니다 👍</p>
+          ) : (
+            <ul className="max-h-44 space-y-1 overflow-y-auto">
+              {unpaidPlayers.map((p, i) => (
+                <li key={i} className="flex items-center justify-between gap-2 text-xs">
+                  <span className="min-w-0 flex-1 truncate font-semibold text-ink-primary">{p.name}</span>
+                  <span className="shrink-0 font-bold text-danger-light tabular-nums">{p.unpaid.toLocaleString()}원</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
         <label className="block">
           <span className="block text-2xs text-ink-muted mb-0.5">마감 메모(수기 비고) · 선택</span>
