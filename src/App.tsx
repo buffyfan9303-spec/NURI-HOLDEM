@@ -43,6 +43,7 @@ import {
 import {
   getVenues, getComments, getPosts, addComment, addPost, likePost, deletePost,
   updateVenueDescription, updateVenueImage, updateVenueImages, deleteComment, logActivity,
+  getMyFollowedVenueIds,
 } from './api/community';
 import { getListings, getNotices, createNotice, createListing, deleteListing } from './api/marketplace';
 import type { NoticeFormData } from './components/features/NoticeFormModal';
@@ -448,6 +449,8 @@ export default function App() {
   const [authOpen, setAuthOpen]       = useState(false);
   const [openVenueId, setOpenVenueId] = useState<string | null>(null);
   const [openSchedule, setOpenSchedule] = useState<Schedule | null>(null);
+  const [followedIds, setFollowedIds] = useState<Set<string>>(new Set()); // 팔로우한 매장 id
+  const [followedOnly, setFollowedOnly] = useState(false); // 일정탐색: 팔로우 매장 포스터만
 
   // ── QR 체크인 (?checkin=<venueId>) ─────────────────────────────────────
   // QR엔 venue_id만(비민감). 로그인 회원만 기록(check_in RPC, 4시간 중복 방지). 미로그인 시 로그인 후 재진입에서 처리.
@@ -632,6 +635,12 @@ export default function App() {
     if (!tabs.find((t) => t.id === activeTab)) setActiveTab('browse');
   }, [tabs, activeTab]);
 
+  // 팔로우한 매장 id 로드(로그인 시)
+  useEffect(() => {
+    if (!user) { setFollowedIds(new Set()); setFollowedOnly(false); return; }
+    getMyFollowedVenueIds().then((ids) => setFollowedIds(new Set(ids))).catch(() => {});
+  }, [user]);
+
   const visibleSchedules = useMemo(() => {
     const list = schedules.filter((s) => s.approved);
     const q = searchState.query.trim();
@@ -645,9 +654,10 @@ export default function App() {
       const matchF = !searchState.format || s.format === searchState.format;
       const matchG = !searchState.gtdOnly || s.guaranteed === true;
       const matchC = !searchState.competitionOnly || s.isCompetition === true;
-      return matchQ && matchD && matchR && matchF && matchG && matchC;
+      const matchFollow = !followedOnly || (!!s.venueId && followedIds.has(s.venueId));
+      return matchQ && matchD && matchR && matchF && matchG && matchC && matchFollow;
     });
-  }, [schedules, searchState]);
+  }, [schedules, searchState, followedOnly, followedIds]);
 
   // ── 핸들러 ─────────────────────────────────────────────────────────────
 
@@ -1064,12 +1074,29 @@ export default function App() {
             style={{ top: 'calc(var(--stack-top, 6.0625rem) - 1px)' }}
           >
             <IntegratedSearchBar onChange={setSearchState} />
-            {/* 뷰 모드 토글 — 일정 탐색 컨텍스트 안에 배치 */}
-            <div className="flex items-center justify-between px-page-x pt-2">
+            {/* 뷰 모드 토글 + 팔로우 매장만 보기 — 일정 탐색 컨텍스트 안에 배치 */}
+            <div className="flex items-center justify-between gap-2 px-page-x pt-2">
               <span className="text-2xs text-ink-muted">
                 총 <span className="text-ink-secondary tabular-nums font-semibold">{visibleSchedules.length}</span>개
+                {followedOnly && <span className="ml-1 text-gold-300">· 팔로우 매장</span>}
               </span>
-              <ViewModeToggle value={viewMode} onChange={setViewMode} />
+              <div className="flex items-center gap-1.5">
+                {user && (
+                  <button
+                    type="button"
+                    onClick={() => setFollowedOnly((v) => !v)}
+                    aria-pressed={followedOnly}
+                    className={[
+                      'inline-flex h-7 items-center gap-1 rounded-badge border px-2.5 text-2xs font-bold leading-none transition-colors',
+                      followedOnly ? 'border-gold-300 bg-gold-300 text-ink-inverse' : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary',
+                    ].join(' ')}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill={followedOnly ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 17.3l-5.4 3 1-6L3 9.8l6-.9L12 3.5l3 5.4 6 .9-4.6 4.5 1 6z" /></svg>
+                    팔로우{followedIds.size > 0 ? ` ${followedIds.size}` : ''}
+                  </button>
+                )}
+                <ViewModeToggle value={viewMode} onChange={setViewMode} />
+              </div>
             </div>
           </div>
 

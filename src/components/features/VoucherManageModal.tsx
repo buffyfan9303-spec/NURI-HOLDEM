@@ -8,12 +8,12 @@ import { useAuth } from '../../contexts/AuthContext';
 import QRCode from 'qrcode';
 import { listVenueVouchers, issueVoucher, revokeVoucher, deleteVoucher, findUserForTransfer, voucherUsageByVenue, voucherHolderStats, isVoucherIssueApproved, type Voucher, type VoucherUsage, type VoucherHolderStats, type TransferTarget } from '../../api/vouchers';
 
-const STATUS: Record<string, { label: string; cls: string }> = {
-  active: { label: '배포됨', cls: 'bg-gold-300/15 text-gold-300' },
-  used: { label: '사용완료', cls: 'bg-surface-float text-ink-muted' },
-  revoked: { label: '회수됨', cls: 'bg-danger/15 text-danger-light' },
-  expired: { label: '만료', cls: 'bg-surface-float text-ink-muted' },
-};
+function fmtDateTime(iso: string | null): string {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
 
 export function VoucherManagePanel({ venueId }: { venueId: string }) {
   const toast = useToast();
@@ -35,6 +35,8 @@ export function VoucherManagePanel({ venueId }: { venueId: string }) {
   const [stats, setStats] = useState<VoucherHolderStats | null>(null);
   const [qr, setQr] = useState('');
   const [approved, setApproved] = useState(true);
+  const [holderQuery, setHolderQuery] = useState('');
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   const reload = () => {
     setLoading(true);
@@ -77,21 +79,23 @@ export function VoucherManagePanel({ venueId }: { venueId: string }) {
     } catch (e) { toast.show(e instanceof Error ? e.message : '배포 실패', 'error'); }
     setBusy(false);
   };
-  const del = async (id: string) => { if (!window.confirm('이 이용권을 완전히 삭제할까요? 되돌릴 수 없습니다.')) return; try { await deleteVoucher(id); toast.show('삭제했습니다', 'info'); reload(); } catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); } };
-
   const active = list.filter((v) => v.status === 'active');
-  const others = list.filter((v) => v.status !== 'active');
-  // 보유자별 집계 — 개별 나열 대신 인원/갯수
-  const groups = useMemo(() => {
-    const m = new Map<string, { key: string; name: string; isStore: boolean; ids: string[] }>();
-    for (const v of active) {
+  // 보유자별 상세 — 활성/사용 분리(개별 나열 대신). 사용내역은 날짜·시간 포함.
+  const holders = useMemo(() => {
+    const m = new Map<string, { key: string; name: string; isStore: boolean; active: Voucher[]; used: Voucher[] }>();
+    for (const v of list) {
+      if (v.status === 'revoked' || v.status === 'expired') continue;
       const key = v.holderUserId ?? (v.holderName ? `n:${v.holderName}` : '__store__');
-      const g = m.get(key) ?? { key, name: v.holderName ?? '매장 보관', isStore: !v.holderUserId && !v.holderName, ids: [] };
-      g.ids.push(v.id); m.set(key, g);
+      const g = m.get(key) ?? { key, name: v.holderName ?? '매장 보관', isStore: !v.holderUserId && !v.holderName, active: [], used: [] };
+      if (v.status === 'used') g.used.push(v); else g.active.push(v);
+      m.set(key, g);
     }
-    return [...m.values()].sort((a, b) => b.ids.length - a.ids.length);
-  }, [active]);
-  const holderCount = groups.filter((g) => !g.isStore).length;
+    return [...m.values()].filter((g) => g.active.length + g.used.length > 0)
+      .sort((a, b) => (b.active.length - a.active.length) || (b.used.length - a.used.length));
+  }, [list]);
+  const holderCount = holders.filter((g) => !g.isStore && g.active.length > 0).length;
+  const hq = holderQuery.trim().toLowerCase();
+  const shownHolders = hq ? holders.filter((g) => g.name.toLowerCase().includes(hq)) : holders;
   const revokeGroup = async (g: { name: string; ids: string[] }) => {
     if (!window.confirm(`${g.name}의 이용권 ${g.ids.length}개를 회수할까요?`)) return;
     setBusy(true);
@@ -183,32 +187,50 @@ export function VoucherManagePanel({ venueId }: { venueId: string }) {
 
       <div>
         <div className="mb-1 flex items-center justify-between gap-2">
-          <p className="text-2xs font-bold text-ink-secondary">보유 현황</p>
+          <p className="text-2xs font-bold text-ink-secondary">보유자 현황</p>
           <p className="text-2xs text-ink-muted">보유 인원 <b className="text-gold-300 tabular-nums">{holderCount}</b>명 · 보유 갯수 <b className="text-ink-primary tabular-nums">{active.length}</b>개</p>
         </div>
+        {holders.length > 0 && (
+          <input value={holderQuery} onChange={(e) => setHolderQuery(e.target.value)} placeholder="보유자 검색 (닉네임)" className="input mb-1.5 w-full text-sm" />
+        )}
         {loading ? <p className="py-3 text-center text-2xs text-ink-muted">불러오는 중…</p>
-          : groups.length === 0 ? <p className="py-3 text-center text-2xs text-ink-muted">배포된 이용권이 없습니다.</p>
-            : <ul className="space-y-1.5">
-                {groups.map((g) => (
-                  <li key={g.key} className="flex items-center gap-2 rounded-input border border-border-subtle bg-surface-low px-3 py-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-ink-primary">{g.isStore ? '🏪 매장 보관' : g.name}</p>
-                      <p className="text-[10px] text-ink-muted">보유 {g.ids.length}개</p>
+          : holders.length === 0 ? <p className="py-3 text-center text-2xs text-ink-muted">배포된 이용권이 없습니다.</p>
+          : shownHolders.length === 0 ? <p className="py-3 text-center text-2xs text-ink-muted">검색 결과가 없습니다.</p>
+          : <ul className="space-y-1.5">
+              {shownHolders.map((g) => {
+                const open = expanded === g.key;
+                return (
+                  <li key={g.key} className="rounded-input border border-border-subtle bg-surface-low">
+                    <div className="flex items-center gap-2 px-3 py-2">
+                      <button type="button" onClick={() => setExpanded(open ? null : g.key)} className="min-w-0 flex-1 text-left">
+                        <p className="truncate text-sm font-semibold text-ink-primary">{g.isStore ? '🏪 매장 보관' : g.name}</p>
+                        <p className="text-[10px] text-ink-muted">보유 {g.active.length}개{g.used.length > 0 && <> · 사용 {g.used.length}회 (내역 보기)</>}</p>
+                      </button>
+                      <span className="shrink-0 rounded-badge bg-gold-300/15 px-2 py-0.5 text-xs font-bold text-gold-300 tabular-nums">{g.active.length}</span>
+                      {g.used.length > 0 && (
+                        <button type="button" onClick={() => setExpanded(open ? null : g.key)} aria-label="사용내역" className="shrink-0 text-ink-muted">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className={['transition-transform', open ? 'rotate-180' : ''].join(' ')} aria-hidden><polyline points="6 9 12 15 18 9" /></svg>
+                        </button>
+                      )}
+                      {canIssue && g.active.length > 0 && <button type="button" disabled={busy} onClick={() => revokeGroup({ name: g.name, ids: g.active.map((v) => v.id) })} className="btn-ghost shrink-0 px-2 text-2xs text-ink-secondary disabled:opacity-50">회수</button>}
+                      {canIssue && <button type="button" disabled={busy} onClick={() => deleteGroup({ name: g.name, ids: [...g.active, ...g.used].map((v) => v.id) })} aria-label="삭제" className="shrink-0 px-1 text-xs text-ink-muted hover:text-danger-light disabled:opacity-50">✕</button>}
                     </div>
-                    <span className="shrink-0 rounded-badge bg-gold-300/15 px-2 py-0.5 text-xs font-bold text-gold-300 tabular-nums">{g.ids.length}</span>
-                    {canIssue && <button type="button" disabled={busy} onClick={() => revokeGroup(g)} className="btn-ghost shrink-0 px-2 text-2xs text-ink-secondary disabled:opacity-50">회수</button>}
-                    {canIssue && <button type="button" disabled={busy} onClick={() => deleteGroup(g)} aria-label="삭제" className="shrink-0 px-1 text-xs text-ink-muted hover:text-danger-light disabled:opacity-50">✕</button>}
+                    {open && g.used.length > 0 && (
+                      <ul className="space-y-0.5 border-t border-border-subtle px-3 py-1.5">
+                        <li className="text-[10px] font-bold text-ink-muted">사용 내역 (최근순)</li>
+                        {g.used.slice().sort((a, b) => (b.usedAt ?? '').localeCompare(a.usedAt ?? '')).map((v) => (
+                          <li key={v.id} className="flex items-center justify-between gap-2 text-[11px]">
+                            <span className="min-w-0 flex-1 truncate text-ink-secondary">{v.title}</span>
+                            <span className="shrink-0 tabular-nums text-ink-muted">{fmtDateTime(v.usedAt)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </li>
-                ))}
-              </ul>}
+                );
+              })}
+            </ul>}
       </div>
-
-      {others.length > 0 && (
-        <div>
-          <p className="mb-1 text-2xs font-bold text-ink-muted">이력 {others.length}건</p>
-          <ul className="space-y-1.5">{others.slice(0, 40).map((v) => <Row key={v.id} v={v} onDelete={canIssue ? () => del(v.id) : undefined} />)}</ul>
-        </div>
-      )}
     </div>
   );
 }
@@ -218,24 +240,5 @@ export default function VoucherManageModal({ open, onClose, venueId }: { open: b
     <Modal open={open} onClose={onClose} title="매장이용권 관리" maxWidth="md" variant="sheet">
       <div className="p-4"><VoucherManagePanel venueId={venueId} /></div>
     </Modal>
-  );
-}
-
-function Row({ v, onRedeem, onRevoke, onDelete }: { v: Voucher; onRedeem?: () => void; onRevoke?: () => void; onDelete?: () => void }) {
-  const st = STATUS[v.status] ?? STATUS.active;
-  return (
-    <li className="flex items-center gap-2 rounded-input border border-border-subtle bg-surface-low px-3 py-2">
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-ink-primary">{v.title}</p>
-        <p className="truncate text-[10px] text-ink-muted">
-          {v.holderName ? `보유: ${v.holderName}` : '미지정'}
-          {v.status === 'used' && v.usedVenueName ? ` · 사용처: ${v.usedVenueName}` : ''}
-        </p>
-      </div>
-      <span className={`shrink-0 rounded-badge px-1.5 py-0.5 text-[10px] font-bold ${st.cls}`}>{st.label}</span>
-      {onRedeem && <button type="button" onClick={onRedeem} className="btn-ghost shrink-0 px-2 text-2xs text-gold-300">사용</button>}
-      {onRevoke && <button type="button" onClick={onRevoke} className="btn-ghost shrink-0 px-2 text-2xs text-ink-secondary">회수</button>}
-      {onDelete && <button type="button" onClick={onDelete} aria-label="삭제" className="shrink-0 px-1 text-xs text-ink-muted hover:text-danger-light">✕</button>}
-    </li>
   );
 }
