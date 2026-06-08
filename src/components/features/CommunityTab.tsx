@@ -120,6 +120,8 @@ export default function CommunityTab({
         </div>
       </div>
 
+      {/* 섹션 콘텐츠 — 게시판은 2-pane 전체폭, 그 외 단일 컬럼은 읽기폭(max-w-3xl)으로 제한 */}
+      <div className={section === 'board' ? '' : 'mx-auto w-full max-w-3xl'}>
       {section === 'live' && <LiveWallSection />}
 
       {section === 'board' && (
@@ -179,6 +181,7 @@ export default function CommunityTab({
       {section === 'dealer' && <DealerCommunity />}
 
       {section === 'owner' && canOwnerCommunity && <OwnerCommunity />}
+      </div>
     </div>
   );
 }
