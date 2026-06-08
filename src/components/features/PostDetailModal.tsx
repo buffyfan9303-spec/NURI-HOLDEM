@@ -20,6 +20,8 @@ interface PostDetailModalProps {
   /** @매장 멘션 링크용 */
   venues?: { id: string; name: string }[];
   onVenueClick?: (venueId: string) => void;
+  /** true면 오버레이가 아닌 인라인 패널로 렌더(데스크탑 커뮤니티 2-pane 우측). */
+  inline?: boolean;
 }
 
 interface PostReply {
@@ -39,7 +41,7 @@ function formatFullDate(iso: string): string {
 }
 
 export default function PostDetailModal({
-  post, open, onClose, onLike, onDelete, venues = [], onVenueClick,
+  post, open, onClose, onLike, onDelete, venues = [], onVenueClick, inline = false,
 }: PostDetailModalProps) {
   const { user } = useAuth();
   const [replies, setReplies] = useState<PostReply[]>([]);
@@ -104,7 +106,7 @@ export default function PostDetailModal({
 
   return (
     <>
-    <Modal open={open} onClose={onClose} title="게시글" maxWidth="lg" variant="sheet">
+    <Modal open={open} onClose={onClose} title="게시글" maxWidth="lg" variant="sheet" inline={inline}>
       <article className="p-4 space-y-4">
         {/* ── 작성자 정보 ─────────────────────────────────── */}
         <header className="flex items-center gap-2 pb-3 border-b border-border-subtle">

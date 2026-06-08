@@ -12,6 +12,8 @@ import { filterContent } from '../../lib/content-filter';
 import { parseHand } from '../../lib/hand';
 import Avatar from '../atoms/Avatar';
 import Modal from '../atoms/Modal';
+import PostDetailModal from './PostDetailModal';
+import { useIsDesktop } from '../../lib/responsive';
 
 interface CommunityTabProps {
   venues: Venue[];
@@ -28,6 +30,8 @@ interface CommunityTabProps {
   /** 글쓰기 버튼 → 글쓰기 모달 열기. category로 기본 카테고리 지정('홀덤 공부' 탭=study) */
   onOpenWrite: (category?: PostCategory) => void;
   onLikePost: (postId: string) => void;
+  /** 데스크탑 2-pane 인라인 상세에서 게시글 삭제(관리자/작성자) */
+  onDeletePost?: (postId: string) => void;
   /** 업주가 본인 홀덤펍 생성 후 목록/프로필 새로고침 */
   onReloadVenues?: () => void;
 }
@@ -58,12 +62,15 @@ function relativeTime(iso: string): string {
 
 export default function CommunityTab({
   venues, comments, posts, notices = [], isAdmin = false, onWriteNotice, onSelectNotice,
-  onSelectVenue, onSelectPost, onOpenWrite, onLikePost, onReloadVenues,
+  onSelectVenue, onSelectPost, onOpenWrite, onLikePost, onDeletePost, onReloadVenues,
 }: CommunityTabProps) {
   const [section, setSectionState] = useState<Section>(lastCommunitySection);
   const setSection = (s: Section) => { lastCommunitySection = s; setSectionState(s); };
   const [query, setQuery] = useState('');
   const { user } = useAuth();
+  // 데스크탑 게시판 2-pane: 좌측 목록 + 우측 인라인 상세. 모바일은 기존 오버레이 모달(onSelectPost) 사용.
+  const isDesktop = useIsDesktop();
+  const [boardSelected, setBoardSelected] = useState<CommunityPost | null>(null);
   const canOwnerCommunity = isAdmin || (user?.role === 'venue_owner' && user?.venueVerified === true);
 
   // 매장 정렬: 1) 유료광고(isPaidAd) → 2) 팔로워수 내림차순
@@ -116,19 +123,42 @@ export default function CommunityTab({
       {section === 'live' && <LiveWallSection />}
 
       {section === 'board' && (
-        <FeedSection
-          posts={boardPosts}
-          notices={notices}
-          isAdmin={isAdmin}
-          onWriteNotice={onWriteNotice}
-          onSelectNotice={onSelectNotice}
-          onOpenWrite={() => onOpenWrite('free')}
-          onLike={onLikePost}
-          onSelectPost={onSelectPost}
-          placeholder="나누고 싶은 이야기를 적어보세요…"
-          emptyText="첫 게시글을 남겨보세요"
-          enableCategory
-        />
+        <div className="lg:flex lg:items-start lg:gap-4">
+          <div className="min-w-0 lg:flex-1">
+            <FeedSection
+              posts={boardPosts}
+              notices={notices}
+              isAdmin={isAdmin}
+              onWriteNotice={onWriteNotice}
+              onSelectNotice={onSelectNotice}
+              onOpenWrite={() => onOpenWrite('free')}
+              onLike={onLikePost}
+              onSelectPost={isDesktop ? setBoardSelected : onSelectPost}
+              selectedId={isDesktop ? boardSelected?.id : undefined}
+              placeholder="나누고 싶은 이야기를 적어보세요…"
+              emptyText="첫 게시글을 남겨보세요"
+              enableCategory
+            />
+          </div>
+          {/* 데스크탑 2-pane 우측 상세 */}
+          <aside className="hidden lg:sticky lg:top-[8.5rem] lg:block lg:w-[26rem] lg:shrink-0">
+            {boardSelected ? (
+              <PostDetailModal
+                inline open
+                post={boardSelected}
+                onClose={() => setBoardSelected(null)}
+                onLike={onLikePost}
+                onDelete={onDeletePost ? (id) => { onDeletePost(id); setBoardSelected(null); } : undefined}
+                venues={venues}
+                onVenueClick={(vid) => { setBoardSelected(null); onSelectVenue(vid); }}
+              />
+            ) : (
+              <div className="flex h-72 items-center justify-center rounded-card border border-dashed border-border-default px-4 text-center text-2xs text-ink-muted">
+                왼쪽에서 게시글을 선택하면<br />여기에 상세가 표시됩니다.
+              </div>
+            )}
+          </aside>
+        </div>
       )}
 
       {section === 'venues' && (
@@ -177,6 +207,7 @@ function SectionTab({ active, label, onClick }: { active: boolean; label: string
 
 function FeedSection({
   posts, notices, isAdmin, onWriteNotice, onSelectNotice, onOpenWrite, onLike, onSelectPost,
+  selectedId,
   placeholder = '나누고 싶은 이야기를 적어보세요…', emptyText = '첫 게시글을 남겨보세요',
   enableCategory = false,
 }: {
@@ -188,6 +219,8 @@ function FeedSection({
   onOpenWrite: () => void;
   onLike: (id: string) => void;
   onSelectPost: (p: CommunityPost) => void;
+  /** 데스크탑 2-pane: 현재 열린 게시글 id(목록 하이라이트용) */
+  selectedId?: string;
   placeholder?: string;
   emptyText?: string;
   /** 게시판: 카테고리 필터 + HOT(최근 6시간 최다 조회) 노출 */
@@ -341,7 +374,7 @@ function FeedSection({
         <div className="rounded-card border border-danger/30 bg-danger/[0.04] overflow-hidden">
           <ul>
             {hotPosts.map((p) => (
-              <PostCard key={p.id} post={p} hot onLike={() => onLike(p.id)} onClick={() => onSelectPost(p)} />
+              <PostCard key={p.id} post={p} hot selected={p.id === selectedId} onLike={() => onLike(p.id)} onClick={() => onSelectPost(p)} />
             ))}
           </ul>
         </div>
@@ -357,7 +390,7 @@ function FeedSection({
           <div className="rounded-card border border-border-default bg-surface-low overflow-hidden">
             <ul>
               {shown.map((p) => (
-                <PostCard key={p.id} post={p} onLike={() => onLike(p.id)} onClick={() => onSelectPost(p)} />
+                <PostCard key={p.id} post={p} selected={p.id === selectedId} onLike={() => onLike(p.id)} onClick={() => onSelectPost(p)} />
               ))}
             </ul>
           </div>
@@ -376,11 +409,17 @@ function FeedSection({
   );
 }
 
-function PostCard({ post, onLike, onClick, hot = false }: { post: CommunityPost; onLike: () => void; onClick: () => void; hot?: boolean }) {
+function PostCard({ post, onLike, onClick, hot = false, selected = false }: { post: CommunityPost; onLike: () => void; onClick: () => void; hot?: boolean; selected?: boolean }) {
   return (
     <li
       onClick={onClick}
-      className="py-1.5 px-3 hover:bg-surface-high/50 active:bg-surface-high transition-colors cursor-pointer border-b border-border-subtle last:border-b-0"
+      aria-current={selected || undefined}
+      className={[
+        'py-1.5 px-3 transition-colors cursor-pointer border-b border-border-subtle last:border-b-0',
+        selected
+          ? 'bg-gold-300/10 border-l-2 border-l-gold-300 -ml-px pl-[calc(0.75rem-1px)]'
+          : 'hover:bg-surface-high/50 active:bg-surface-high',
+      ].join(' ')}
     >
       <div className="flex items-start gap-2">
         <Avatar name={post.userName} src={post.userAvatar} color={post.userColor} size={24} className="mt-0.5" />

@@ -35,6 +35,7 @@ import type { MarketplaceFormData } from './components/features/MarketplaceFormM
 import { useBackClose } from './lib/backstack';
 import { useVisibilityRefresh } from './lib/useVisibilityRefresh';
 import { lazyWithReload } from './lib/lazyWithReload';
+import { useIsDesktop } from './lib/responsive';
 import { useAuth } from './contexts/AuthContext';
 import { listAllUsers, updateUserStatus, approveOwner } from './api/auth';
 import {
@@ -429,17 +430,6 @@ function PendingApprovalBanner() {
 // ── App ─────────────────────────────────────────────────────────────────────
 
 // 데스크탑(lg+) 여부 — 일정탐색 2-pane 분기용
-function useIsDesktop() {
-  const [d, setD] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches);
-  useEffect(() => {
-    const mq = window.matchMedia('(min-width: 1024px)');
-    const on = () => setD(mq.matches);
-    mq.addEventListener('change', on);
-    return () => mq.removeEventListener('change', on);
-  }, []);
-  return d;
-}
-
 export default function App() {
   const { user, isAdmin, isOwner } = useAuth();
   const toast = useToast();
@@ -1211,6 +1201,7 @@ export default function App() {
               setPostFormOpen(true);
             }}
             onLikePost={handleLikePost}
+            onDeletePost={handleDeletePost}
             onReloadVenues={reloadVenues}
           />
         </main>
