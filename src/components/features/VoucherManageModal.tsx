@@ -6,7 +6,8 @@ import Modal from '../atoms/Modal';
 import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import QRCode from 'qrcode';
-import { listVenueVouchers, issueVoucher, redeemVoucher, revokeVoucher, deleteVoucher, findUserForTransfer, voucherUsageByVenue, voucherHolderStats, isVoucherIssueApproved, type Voucher, type VoucherUsage, type VoucherHolderStats } from '../../api/vouchers';
+import { Html5Qrcode } from 'html5-qrcode';
+import { listVenueVouchers, issueVoucher, redeemVoucher, revokeVoucher, deleteVoucher, findUserByPhone, voucherUsageByVenue, voucherHolderStats, isVoucherIssueApproved, type Voucher, type VoucherUsage, type VoucherHolderStats } from '../../api/vouchers';
 
 const STATUS: Record<string, { label: string; cls: string }> = {
   active: { label: '배포됨', cls: 'bg-gold-300/15 text-gold-300' },
@@ -26,8 +27,10 @@ export function VoucherManagePanel({ venueId }: { venueId: string }) {
   const [loading, setLoading] = useState(false);
   const [title, setTitle] = useState('매장이용권');
   const [count, setCount] = useState(1);
-  const [nick, setNick] = useState('');
-  const [recvName, setRecvName] = useState('');
+  const [recvUserId, setRecvUserId] = useState<string | null>(null);
+  const [recvDisplay, setRecvDisplay] = useState('');
+  const [recvMode, setRecvMode] = useState<'none' | 'qr' | 'phone'>('none');
+  const [phoneInput, setPhoneInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [stats, setStats] = useState<VoucherHolderStats | null>(null);
   const [qr, setQr] = useState('');
@@ -43,19 +46,26 @@ export function VoucherManagePanel({ venueId }: { venueId: string }) {
   useEffect(() => { reload(); /* eslint-disable-next-line */ }, [venueId]);
   useEffect(() => { QRCode.toDataURL(`NURIV-VENUE:${venueId}`, { width: 240, margin: 1 }).then(setQr).catch(() => {}); }, [venueId]);
 
+  const onScan = (text: string) => {
+    const t = text.trim();
+    const rest = t.startsWith('NURIU:') ? t.slice('NURIU:'.length) : '';
+    const [id, name] = rest.split('|');
+    if (!/^[0-9a-fA-F-]{36}$/.test(id || '')) { toast.show('회원 받기 QR이 아닙니다', 'error'); setRecvMode('none'); return; }
+    setRecvUserId(id); setRecvDisplay(name || '회원'); setRecvMode('none');
+  };
+  const resolvePhone = async () => {
+    try {
+      const f = await findUserByPhone(phoneInput);
+      if (!f.length) { toast.show('해당 전화번호의 회원이 없습니다', 'error'); return; }
+      setRecvUserId(f[0].id); setRecvDisplay(f[0].display); setRecvMode('none'); setPhoneInput('');
+    } catch (e) { toast.show(e instanceof Error ? e.message : '조회 실패', 'error'); }
+  };
   const issue = async () => {
     setBusy(true);
     try {
-      let holderUserId: string | undefined;
-      let holderName: string | undefined = recvName.trim() || undefined;
-      if (nick.trim()) {
-        const found = await findUserForTransfer(nick.trim());
-        if (!found.length) { toast.show('해당 닉네임의 회원을 찾을 수 없습니다', 'error'); setBusy(false); return; }
-        holderUserId = found[0].id; holderName = found[0].display;
-      }
-      await issueVoucher(venueId, { title, count, holderName, holderUserId });
-      toast.show(`매장이용권 ${count}개를 배포했습니다`, 'success');
-      setTitle('매장이용권'); setCount(1); setNick(''); setRecvName('');
+      await issueVoucher(venueId, { title, count, holderUserId: recvUserId ?? undefined, holderName: recvDisplay || undefined });
+      toast.show(`매장이용권 ${count}개를 ${recvDisplay ? recvDisplay + '님께 ' : ''}배포했습니다`, 'success');
+      setTitle('매장이용권'); setCount(1); setRecvUserId(null); setRecvDisplay(''); setRecvMode('none');
       reload();
     } catch (e) { toast.show(e instanceof Error ? e.message : '배포 실패', 'error'); }
     setBusy(false);
@@ -82,12 +92,32 @@ export function VoucherManagePanel({ venueId }: { venueId: string }) {
               <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">개</span>
             </div>
           </div>
-          <div className="flex gap-1.5">
-            <input value={nick} onChange={(e) => setNick(e.target.value)} placeholder="받는 회원 닉네임(연결, 선택)" className="input min-w-0 flex-1 text-sm" />
-            <input value={recvName} onChange={(e) => setRecvName(e.target.value)} placeholder="이름만 기록(선택)" className="input w-32 shrink-0 text-sm" />
-          </div>
-          <button type="button" disabled={busy || (!isAdmin && !approved)} onClick={issue} className="btn-primary w-full text-sm disabled:opacity-50">{busy ? '배포 중…' : `+ ${count}개 배포`}</button>
-          <p className="text-[10px] text-ink-muted">1회 최대 1000개 · 닉네임 입력 시 그 회원 지갑으로 전송(여러 개면 모두 그 회원에게). 비우면 매장 보관용. <b className="text-ink-secondary">매장이용권은 금전적 가치가 없습니다.</b></p>
+          {/* 받는 손님 지정 — QR 스캔 / 전화번호 (닉네임은 바뀌므로 미사용) */}
+          {recvUserId ? (
+            <div className="flex items-center gap-2 rounded-input border border-gold-400/40 bg-gold-300/[0.06] px-2.5 py-1.5">
+              <span className="min-w-0 flex-1 truncate text-xs text-ink-primary">받는 손님: <b className="text-gold-300">{recvDisplay}</b></span>
+              <button type="button" onClick={() => { setRecvUserId(null); setRecvDisplay(''); }} className="shrink-0 text-2xs text-ink-muted">변경</button>
+            </div>
+          ) : recvMode === 'qr' ? (
+            <div className="space-y-1.5">
+              <p className="text-[10px] text-ink-muted">손님의 ‘받기 QR’(손님 대시보드)을 비춰 주세요. (카메라 권한 필요)</p>
+              <IssueScanner onResult={onScan} onError={(m) => { toast.show(m, 'error'); setRecvMode('none'); }} />
+              <button type="button" onClick={() => setRecvMode('none')} className="btn-ghost w-full text-2xs">취소</button>
+            </div>
+          ) : recvMode === 'phone' ? (
+            <div className="flex gap-1.5">
+              <input value={phoneInput} onChange={(e) => setPhoneInput(e.target.value)} inputMode="tel" placeholder="손님 전화번호" className="input min-w-0 flex-1 text-sm" />
+              <button type="button" onClick={resolvePhone} className="btn-ghost shrink-0 px-2 text-2xs">조회</button>
+              <button type="button" onClick={() => setRecvMode('none')} className="btn-ghost shrink-0 px-2 text-2xs text-ink-muted">취소</button>
+            </div>
+          ) : (
+            <div className="flex gap-1.5">
+              <button type="button" onClick={() => setRecvMode('qr')} className="btn-ghost flex-1 text-2xs">📷 손님 QR 스캔</button>
+              <button type="button" onClick={() => setRecvMode('phone')} className="btn-ghost flex-1 text-2xs">📞 전화번호로 지정</button>
+            </div>
+          )}
+          <button type="button" disabled={busy || (!isAdmin && !approved)} onClick={issue} className="btn-primary w-full text-sm disabled:opacity-50">{busy ? '배포 중…' : `+ ${count}개 배포${recvDisplay ? ` → ${recvDisplay}` : ''}`}</button>
+          <p className="text-[10px] text-ink-muted">1회 최대 1000개 · QR/전화로 손님 지정 시 그 회원 지갑으로(닉네임 변경과 무관하게 정확). 미지정이면 매장 보관용. <b className="text-ink-secondary">매장이용권은 금전적 가치가 없습니다.</b></p>
         </div>
       ) : (
         <p className="rounded-input border border-border-subtle bg-surface-low p-2.5 text-2xs text-ink-muted">배포·회수·삭제는 <b className="text-ink-secondary">업주</b>만 가능합니다. 인증 직원은 열람·사용 처리만 할 수 있습니다.</p>
@@ -145,6 +175,20 @@ export default function VoucherManageModal({ open, onClose, venueId }: { open: b
       <div className="p-4"><VoucherManagePanel venueId={venueId} /></div>
     </Modal>
   );
+}
+
+function IssueScanner({ onResult, onError }: { onResult: (t: string) => void; onError: (m: string) => void }) {
+  useEffect(() => {
+    let s: Html5Qrcode | null = null; let done = false;
+    const stop = () => { const x = s; s = null; if (x) { x.stop().then(() => x.clear()).catch(() => {}); } };
+    (async () => {
+      try { s = new Html5Qrcode('nuri-issue-reader'); await s.start({ facingMode: 'environment' }, { fps: 10, qrbox: 200 }, (t) => { if (!done) { done = true; const r = t; stop(); onResult(r); } }, () => {}); }
+      catch (e) { onError(e instanceof Error ? e.message : '카메라를 열 수 없습니다.'); }
+    })();
+    return () => { done = true; stop(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return <div id="nuri-issue-reader" className="mx-auto w-full max-w-[260px] overflow-hidden rounded-input bg-black" style={{ minHeight: 200 }} />;
 }
 
 function Row({ v, onRedeem, onRevoke, onDelete }: { v: Voucher; onRedeem?: () => void; onRevoke?: () => void; onDelete?: () => void }) {

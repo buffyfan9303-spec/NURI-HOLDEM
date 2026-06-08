@@ -3,7 +3,9 @@
 // 내 매장이용권(매장별) + 매장 이용내역(방문·머니인·금액). 매장이용권은 금전적 가치 없음.
 // 사용(회수) = 발급 매장 QR 스캔 또는 그 매장 업주 전화번호로만. 유저 간 전송 불가.
 import { useEffect, useState } from 'react';
+import QRCode from 'qrcode';
 import { useToast } from '../atoms/Toast';
+import { useAuth } from '../../contexts/AuthContext';
 import { Html5Qrcode } from 'html5-qrcode';
 import {
   listMyVouchers, myVisitedVenues, myPlayHistory,
@@ -23,11 +25,14 @@ function parseVenueId(text: string): string | null {
 interface Stack { venueId: string; venueName: string; title: string; ids: string[] }
 
 export default function CustomerDashboardPage({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { user } = useAuth();
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
   const [visits, setVisits] = useState<VisitedVenue[]>([]);
   const [plays, setPlays] = useState<PlayHistory[]>([]);
   const [loading, setLoading] = useState(false);
   const [redeem, setRedeem] = useState<Stack | null>(null);
+  const [myQr, setMyQr] = useState('');
+  useEffect(() => { if (open && user) QRCode.toDataURL(`NURIU:${user.id}|${user.nickname ?? user.name ?? ''}`, { width: 220, margin: 1 }).then(setMyQr).catch(() => {}); }, [open, user]);
 
   const reload = () => {
     setLoading(true);
@@ -75,6 +80,16 @@ export default function CustomerDashboardPage({ open, onClose }: { open: boolean
             <p className="text-sm font-bold text-amber-300">⚠️ 매장이용권은 금전적 가치가 없습니다</p>
             <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">현금·포인트가 아니며 환불·현금화·유저 간 거래가 불가합니다. 발급한 매장에서 사용(회수)만 가능합니다.</p>
           </div>
+
+          {myQr && (
+            <details className="rounded-card border border-gold-400/30 bg-gold-300/[0.05] p-3">
+              <summary className="cursor-pointer text-sm font-bold text-gold-300">📷 내 받기 QR — 매장에 보여주고 이용권 받기</summary>
+              <div className="mt-2 flex flex-col items-center gap-1.5">
+                <img src={myQr} alt="내 받기 QR" width={180} height={180} className="rounded bg-white p-2" />
+                <p className="text-center text-[10px] text-ink-muted">매장 직원이 이 QR을 스캔하거나 내 전화번호로 보내면 이용권이 내 지갑으로 들어옵니다.</p>
+              </div>
+            </details>
+          )}
 
           <section>
             <p className="mb-1.5 text-sm font-bold text-ink-primary">내 매장이용권 <span className="text-gold-300">{active.length}</span></p>

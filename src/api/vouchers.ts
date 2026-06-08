@@ -121,6 +121,15 @@ export async function findUserForTransfer(nickname: string): Promise<TransferTar
   return (data ?? []).map((r: any) => ({ id: r.id, display: r.display }));
 }
 
+// 전화번호로 회원 조회(발급 대상 지정용)
+export async function findUserByPhone(phone: string): Promise<TransferTarget[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.rpc('find_user_by_phone', { p_phone: phone });
+  if (error) throw new Error(error.message);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({ id: r.id, display: r.display }));
+}
+
 export async function voucherUsageByVenue(venueId: string): Promise<VoucherUsage[]> {
   if (IS_MOCK) return [];
   const { data } = await supabase.rpc('voucher_usage_by_venue', { p_venue_id: venueId });
