@@ -6,8 +6,9 @@ type Row = { denom: number; per: number };
 /** 칩 분배기 — 1인 스택 구성 + 매장이 준비할 총 칩 수 계산 */
 export default function ChipDistributor() {
   const [players, setPlayers] = useState(50);
+  // 기본 칩 액면 100·500·1000·5000·25000 (직접 추가/수정 가능)
   const [rows, setRows] = useState<Row[]>([
-    { denom: 25, per: 8 }, { denom: 100, per: 6 }, { denom: 500, per: 4 }, { denom: 1000, per: 6 }, { denom: 5000, per: 5 },
+    { denom: 100, per: 10 }, { denom: 500, per: 6 }, { denom: 1000, per: 4 }, { denom: 5000, per: 3 }, { denom: 25000, per: 1 },
   ]);
   const perStack = useMemo(() => rows.reduce((a, r) => a + (r.denom || 0) * (r.per || 0), 0), [rows]);
   const setRow = (i: number, patch: Partial<Row>) => setRows((rs) => rs.map((r, k) => (k === i ? { ...r, ...patch } : r)));

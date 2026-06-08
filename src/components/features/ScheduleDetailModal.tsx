@@ -273,14 +273,13 @@ export default function ScheduleDetailModal({
             <InfoCard
               label="바이인"
               value={schedule.buyIn.amount.toLocaleString()}
-              sub={schedule.buyIn.rebuy !== undefined ? (
-                <>리바이 {schedule.buyIn.rebuy.toLocaleString()}
-                  {schedule.buyIn.rebuyLimit ? `×${schedule.buyIn.rebuyLimit}` : ' 무제한'}
-                  {schedule.buyIn.addon !== undefined && (
-                    <> · 애드온 {schedule.buyIn.addon.toLocaleString()}</>
-                  )}
-                </>
-              ) : '리바이 없음'}
+              sub={(() => {
+                const b = schedule.buyIn; const parts: string[] = [];
+                if (b.gameType) parts.push(b.gameType);
+                if (b.rebuy !== undefined) parts.push(`리바이 ${b.rebuy.toLocaleString()}${b.rebuyLimit ? `×${b.rebuyLimit}` : ' 무제한'}`);
+                if (b.addon || b.addonStack) parts.push(`애드온${b.addon ? ` ${b.addon.toLocaleString()}원` : ''}${b.addonStack ? ` (${b.addonStack.toLocaleString()}칩)` : ''}`);
+                return parts.length ? parts.join(' · ') : '프리즈아웃';
+              })()}
             />
             <InfoCard
               label="포맷"

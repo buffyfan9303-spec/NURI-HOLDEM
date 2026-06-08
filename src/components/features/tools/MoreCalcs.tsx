@@ -5,24 +5,53 @@ import { CalcCard, Field, NumIn, Result } from './calcUi';
 
 // ── 상금 분배 계산기 ────────────────────────────────────────────────────────
 // 총 상금과 참가 인원으로 시상 인원(~상위 12%)과 표준 분배표(참고용)를 자동 산출.
+type PayoutStyle = 'topheavy' | 'flat' | 'satellite';
+const PAYOUT_STYLES: { id: PayoutStyle; label: string; desc: string }[] = [
+  { id: 'topheavy', label: '탑헤비', desc: '상위에 집중(가파른 곡선)' },
+  { id: 'flat', label: '뱅크롤 관리', desc: '완만·다수 시상(플레이어 친화)' },
+  { id: 'satellite', label: '세틀라이트', desc: '상위 동일 금액(시트)' },
+];
+
 export function PayoutCalc() {
   const [pool, setPool] = useState(11000000);
   const [entries, setEntries] = useState(80);
   const [placesIn, setPlacesIn] = useState(0); // 0 = 자동
+  const [style, setStyle] = useState<PayoutStyle>('topheavy');
 
-  const places = Math.max(1, placesIn > 0 ? placesIn : Math.round(entries * 0.12));
-  // 가중치 1/rank^0.85 → 1위에 무게가 실리되 하위도 의미 있는 곡선
-  const weights = Array.from({ length: places }, (_, i) => 1 / Math.pow(i + 1, 0.85));
-  const wSum = weights.reduce((a, b) => a + b, 0);
-  const amounts = weights.map((w) => Math.max(0, Math.round((w / wSum) * pool / 1000) * 1000));
-  const used = amounts.reduce((a, b) => a + b, 0);
-  if (amounts.length) amounts[0] += pool - used; // 반올림 잔액은 1위에 보정
+  const autoPct = style === 'flat' ? 0.18 : style === 'satellite' ? 0.15 : 0.10;
+  const places = Math.max(1, placesIn > 0 ? placesIn : Math.round(entries * autoPct));
+
+  let amounts: number[];
+  if (style === 'satellite') {
+    // 세틀라이트: 상위 시상자 동일 금액(시트). 반올림 잔액은 1위에 보정.
+    const each = Math.max(0, Math.floor(pool / places / 1000) * 1000);
+    amounts = Array.from({ length: places }, () => each);
+    if (amounts.length) amounts[0] += pool - each * places;
+  } else {
+    // 탑헤비(가파름)=1.15 / 뱅크롤(완만)=0.55 지수 곡선.
+    const exp = style === 'flat' ? 0.55 : 1.15;
+    const weights = Array.from({ length: places }, (_, i) => 1 / Math.pow(i + 1, exp));
+    const wSum = weights.reduce((a, b) => a + b, 0);
+    amounts = weights.map((w) => Math.max(0, Math.round((w / wSum) * pool / 1000) * 1000));
+    const used = amounts.reduce((a, b) => a + b, 0);
+    if (amounts.length) amounts[0] += pool - used;
+  }
 
   return (
     <CalcCard title="상금 분배 계산기" desc="총 상금·참가 인원 → 시상 인원과 분배표(참고용)">
       <div className="grid grid-cols-2 gap-2">
         <Field label="총 상금"><NumIn value={pool} onChange={setPool} /></Field>
         <Field label="참가 인원"><NumIn value={entries} onChange={setEntries} suffix="명" /></Field>
+      </div>
+      <div>
+        <p className="mb-1 text-2xs font-semibold text-ink-secondary">분배 방식</p>
+        <div className="grid grid-cols-3 gap-1">
+          {PAYOUT_STYLES.map((s) => (
+            <button key={s.id} type="button" onClick={() => setStyle(s.id)} title={s.desc}
+              className={['rounded-input py-1.5 text-2xs font-bold leading-tight transition-colors', style === s.id ? 'bg-gold-300 text-ink-inverse' : 'bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>{s.label}</button>
+          ))}
+        </div>
+        <p className="mt-1 text-[10px] text-ink-muted">{PAYOUT_STYLES.find((s) => s.id === style)!.desc}</p>
       </div>
       <Field label="시상 인원 (0=자동)"><NumIn value={placesIn} onChange={setPlacesIn} suffix="명" /></Field>
       <Result label={`시상 인원 ${places}명 · 1위`} value={(amounts[0] ?? 0).toLocaleString()} accent />

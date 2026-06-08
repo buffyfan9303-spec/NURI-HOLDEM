@@ -102,6 +102,11 @@ function PrizeBanner({ schedule, large = false }: { schedule: Schedule; large?: 
       ].join(' ')}>
         {schedule.guaranteed ? 'GTD' : '예상'}
       </span>
+      {schedule.buyIn?.gameType && (
+        <span className={`font-bold tracking-wider rounded-badge px-1.5 py-0.5 border bg-violet-500/15 text-violet-300 border-violet-500/30 ${large ? 'text-2xs' : 'text-[10px]'}`}>
+          {schedule.buyIn.gameType}
+        </span>
+      )}
     </div>
   );
 }
@@ -194,6 +199,11 @@ function ListCard({ schedule, onVenueClick, onSelect }: CardProps) {
             ].join(' ')}>
               {schedule.guaranteed ? 'GTD' : '엔트리'}
             </span>
+            {schedule.buyIn?.gameType && (
+              <span className="text-[10px] font-bold tracking-wider rounded-badge px-1 py-0.5 border leading-none bg-violet-500/15 text-violet-300 border-violet-500/30">
+                {schedule.buyIn.gameType}
+              </span>
+            )}
           </span>
         </div>
 

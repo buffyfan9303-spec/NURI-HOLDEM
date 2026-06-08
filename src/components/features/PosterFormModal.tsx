@@ -30,6 +30,9 @@ export interface PosterFormData {
   prizeAmount: number;            // GTD: 보장 상금(만원)
   prizePercent: number;           // ENTRY: 프라이즈 비율(%)
   buyIn: number;
+  gameType: string;               // 게임 종류 자유 입력(프리즈아웃·바운티·애드온 등) — 선택
+  addonStack: number;             // 애드온 스택(애드온 게임) — 선택
+  addonCost: number;              // 애드온 비용 — 선택
   region: string;
   isCompetition: boolean; // '대회/이벤트' 분류 (Task 3) — 필터 [대회]에 노출
   paymentMethods: string[];
@@ -63,7 +66,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
   const empty: PosterFormData = {
     title: '', date: new Date().toLocaleDateString('en-CA'),
     startTime: '19:00', regCloseTime: '', duration: '', blinds: '',
-    prizeType: 'GTD', prizeAmount: 0, prizePercent: 0, buyIn: 0, region: '',
+    prizeType: 'GTD', prizeAmount: 0, prizePercent: 0, buyIn: 0, gameType: '', addonStack: 0, addonCost: 0, region: '',
     isCompetition: false,
     paymentMethods: ['현금'], partners: [], prizes: [],
     rankingPrizes: [], events: [], repeatWeeks: 1, blindLevels: [],
@@ -103,7 +106,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
         prizeType: schedule.guaranteed ? 'GTD' : 'ENTRY',
         prizeAmount: schedule.prizePool ? Math.round(schedule.prizePool / 10000) : 0,
         prizePercent: schedule.prizePercent ?? 0,
-        buyIn: schedule.buyIn.amount, region: schedule.region,
+        buyIn: schedule.buyIn.amount, gameType: schedule.buyIn.gameType ?? '', addonStack: schedule.buyIn.addonStack ?? 0, addonCost: schedule.buyIn.addon ?? 0, region: schedule.region,
         isCompetition: schedule.isCompetition ?? false,
         paymentMethods: schedule.paymentMethods ?? ['현금'],
         partners: schedule.partners ?? [],
@@ -394,6 +397,23 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
           <FieldWrap label="바이인" suffix="원" required>
             <input type="number" required min={0} value={form.buyIn || ''}
               onChange={(e) => update('buyIn', Number(e.target.value))} placeholder="100000" className="input" />
+          </FieldWrap>
+        </div>
+
+        {/* 게임 종류(자유 입력) — 포스터 상금 옆 뱃지로 표시. 애드온 게임이면 스택·비용 입력 */}
+        <FieldWrap label="게임 종류">
+          <input type="text" value={form.gameType} maxLength={20}
+            onChange={(e) => update('gameType', e.target.value)}
+            placeholder="예: 프리즈아웃, 바운티, 애드온, 딥스택…" className="input" />
+        </FieldWrap>
+        <div className="grid grid-cols-2 gap-2">
+          <FieldWrap label="애드온 스택" suffix="칩">
+            <input type="number" min={0} value={form.addonStack || ''}
+              onChange={(e) => update('addonStack', Number(e.target.value))} placeholder="예: 20000" className="input" />
+          </FieldWrap>
+          <FieldWrap label="애드온 비용" suffix="원">
+            <input type="number" min={0} value={form.addonCost || ''}
+              onChange={(e) => update('addonCost', Number(e.target.value))} placeholder="예: 50000" className="input" />
           </FieldWrap>
         </div>
 
