@@ -34,6 +34,7 @@ export function VoucherManagePanel({ venueId }: { venueId: string }) {
   const [busy, setBusy] = useState(false);
   const [stats, setStats] = useState<VoucherHolderStats | null>(null);
   const [qr, setQr] = useState('');
+  const [signupQr, setSignupQr] = useState('');
   const [approved, setApproved] = useState(true);
   const [holderQuery, setHolderQuery] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -49,6 +50,7 @@ export function VoucherManagePanel({ venueId }: { venueId: string }) {
   };
   useEffect(() => { reload(); /* eslint-disable-next-line */ }, [venueId]);
   useEffect(() => { QRCode.toDataURL(`NURIV-VENUE:${venueId}`, { width: 240, margin: 1 }).then(setQr).catch(() => {}); }, [venueId]);
+  useEffect(() => { QRCode.toDataURL('https://nuriholdem.com/?signup=1', { width: 240, margin: 1 }).then(setSignupQr).catch(() => {}); }, []);
 
   const pickRecv = (t: TransferTarget) => { setRecvUserId(t.id); setRecvDisplay(t.display); setRecvMode('none'); setIdInput(''); setCands([]); };
   const resolveId = async () => {
@@ -166,11 +168,22 @@ export function VoucherManagePanel({ venueId }: { venueId: string }) {
         </div>
       )}
       {canIssue && qr && (
-        <div className="flex flex-col items-center gap-1.5 rounded-input border border-gold-400/30 bg-gold-300/[0.05] p-3">
-          <p className="text-2xs font-bold text-gold-300">매장 이용권 QR — 손님이 스캔해 사용 (고정 QR)</p>
-          <img src={qr} alt="매장 이용권 QR" width={160} height={160} className="rounded bg-white p-1.5" />
-          <p className="text-center text-[10px] text-ink-muted">손님: 대시보드 → 이용권 → 사용하기 → ‘매장 QR 스캔’</p>
-          <button type="button" onClick={printQr} className="btn-ghost mt-0.5 px-3 text-2xs">🖨 인쇄용 QR 열기 — 출력해 매장에 비치</button>
+        <div className="rounded-input border border-gold-400/30 bg-gold-300/[0.05] p-3">
+          <div className="grid grid-cols-2 gap-3">
+            {/* 매장 이용권 사용 QR */}
+            <div className="flex flex-col items-center gap-1">
+              <p className="text-center text-2xs font-bold text-gold-300">이용권 사용 QR</p>
+              <img src={qr} alt="매장 이용권 QR" width={130} height={130} className="rounded bg-white p-1.5" />
+              <p className="text-center text-[10px] leading-tight text-ink-muted">손님이 스캔해 사용 (고정)</p>
+            </div>
+            {/* 회원가입 바로가기 QR */}
+            <div className="flex flex-col items-center gap-1">
+              <p className="text-center text-2xs font-bold text-emerald-300">회원가입 QR</p>
+              {signupQr && <img src={signupQr} alt="회원가입 QR" width={130} height={130} className="rounded bg-white p-1.5" />}
+              <p className="text-center text-[10px] leading-tight text-ink-muted">스캔 시 회원가입 페이지로 이동</p>
+            </div>
+          </div>
+          <button type="button" onClick={printQr} className="btn-ghost mt-2 w-full px-3 text-2xs">🖨 이용권 QR 인쇄 — 출력해 매장에 비치</button>
         </div>
       )}
 

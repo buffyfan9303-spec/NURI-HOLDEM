@@ -447,6 +447,7 @@ export default function App() {
   }, []);
   const [searchState, setSearchState] = useState<SearchState>({ query: '', dates: [], regions: [], format: null, gtdOnly: false, competitionOnly: false });
   const [authOpen, setAuthOpen]       = useState(false);
+  const [authMode, setAuthMode]       = useState<'login' | 'signup-user'>('login'); // QR 회원가입 진입용
   const [openVenueId, setOpenVenueId] = useState<string | null>(null);
   const [openSchedule, setOpenSchedule] = useState<Schedule | null>(null);
   const [followedIds, setFollowedIds] = useState<Set<string>>(new Set()); // 팔로우한 매장 id
@@ -468,6 +469,17 @@ export default function App() {
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+
+  // ── QR 회원가입 (?signup=1) — 매장 QR 옆 가입 QR 스캔 시 회원가입 모달 바로 열기 ──
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get('signup') !== '1') return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete('signup');
+    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+    if (!user) { setAuthMode('signup-user'); setAuthOpen(true); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // 홈(browse) 외 탭에서 브라우저/모바일 뒤로가기 → 홈 탭으로 복귀(앱 종료 방지).
   // 오버레이가 열려 있으면 중앙 back-stack 이 LIFO 로 그 오버레이부터 닫는다.
@@ -1275,7 +1287,7 @@ export default function App() {
       </Suspense>
 
       {/* ── 모달 ─────────────────────────────────────────────────────── */}
-      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
+      <AuthModal key={authMode} open={authOpen} onClose={() => { setAuthOpen(false); setAuthMode('login'); }} initialMode={authMode} />
 
       <ScheduleDetailModal
         open={openSchedule !== null}

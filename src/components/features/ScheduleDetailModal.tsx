@@ -303,31 +303,22 @@ export default function ScheduleDetailModal({
           </section>
         )}
 
-        {/* 토너먼트 구조 (선택) */}
-        {schedule.structure && (schedule.structure.startingChips != null || schedule.structure.blindLevelMinutes != null) && (
+        {/* 토너먼트 구조 (선택) — 한 줄(가로 스크롤), 리바인칩 포함 */}
+        {schedule.structure && (schedule.structure.startingChips != null || schedule.structure.rebuyStack != null || schedule.structure.blindLevelMinutes != null) && (
           <section>
             <h3 className="text-sm font-semibold text-ink-primary mb-2">토너먼트 구조</h3>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="flex gap-2 overflow-x-auto scrollbar-none">
               {schedule.structure.startingChips != null && (
-                <InfoCard
-                  label="시작 칩"
-                  value={schedule.structure.startingChips.toLocaleString()}
-                  compact
-                />
+                <div className="shrink-0 w-[5.5rem]"><InfoCard label="시작 칩" value={schedule.structure.startingChips.toLocaleString()} compact /></div>
+              )}
+              {schedule.structure.rebuyStack != null && (
+                <div className="shrink-0 w-[5.5rem]"><InfoCard label="리바인 칩" value={schedule.structure.rebuyStack.toLocaleString()} compact /></div>
               )}
               {schedule.structure.blindLevelMinutes != null && (
-                <InfoCard
-                  label="레벨"
-                  value={`${schedule.structure.blindLevelMinutes}분`}
-                  compact
-                />
+                <div className="shrink-0 w-[5.5rem]"><InfoCard label="레벨" value={`${schedule.structure.blindLevelMinutes}분`} compact /></div>
               )}
               {schedule.structure.lateRegLevels !== undefined && (
-                <InfoCard
-                  label="레이트 레지"
-                  value={`${schedule.structure.lateRegLevels}레벨`}
-                  compact
-                />
+                <div className="shrink-0 w-[5.5rem]"><InfoCard label="레이트 레지" value={`${schedule.structure.lateRegLevels}레벨`} compact /></div>
               )}
             </div>
           </section>
@@ -559,7 +550,7 @@ function BlindStructure({ schedule }: { schedule: Schedule }) {
       <button type="button" onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center justify-between gap-2 rounded-input border border-border-subtle bg-surface-high px-3 py-2.5 text-left transition-colors hover:border-border-default">
         <span className="flex items-center gap-2 min-w-0">
-          <span className="text-sm font-semibold text-ink-primary shrink-0">블라인드 구조</span>
+          <span className="text-sm font-semibold text-ink-primary shrink-0">블라인드</span>
           <span className="text-2xs text-ink-muted truncate">{custom && custom.length ? `맞춤 ${custom.filter((l) => !l.isBreak).length}레벨` : `레지 ${regClose}LV 마감 · ${dur}분 · ~25LV`}</span>
         </span>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"

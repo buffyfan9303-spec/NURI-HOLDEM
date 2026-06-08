@@ -25,7 +25,7 @@ export interface Schedule {
   isCompetition?: boolean; // '대회/이벤트' 분류 — 필터 [대회]용 (Task 3)
   blinds?: string;         // 블라인드 구조(선택) — 직접 입력
   buyIn: BuyInInfo; seats?: SeatVoucher[];
-  structure?: { startingChips?: number; blindLevelMinutes?: number; lateRegLevels?: number; levels?: { sb: number; bb: number; ante: number; minutes: number; isBreak?: boolean }[] };
+  structure?: { startingChips?: number; rebuyStack?: number; blindLevelMinutes?: number; lateRegLevels?: number; levels?: { sb: number; bb: number; ante: number; minutes: number; isBreak?: boolean }[] };
   description?: string;
   sideEvents?: SideEvent[]; rankingPrizes?: RankingPrize[];
   partners?: string[]; promotions?: Promotion[]; paymentMethods?: string[]; rules?: string[];
