@@ -15,10 +15,15 @@ import LuckyDrawModal from './LuckyDrawModal';
 // GTO 패널은 에퀴티 엔진을 포함해 무거우므로 지연 로드(다른 도구와 동일하게 인라인 표시)
 const GtoDeepPanel = lazyWithReload(() => import('./gto/GtoDeepPanel'));
 
-type ToolKey = 'gto' | 'pot' | 'icm' | 'range' | 'outs' | 'pushfold' | 'spr' | 'ev' | 'blindgen' | 'chip' | 'sim' | 'payout' | 'endtime' | 'combo' | 'draw';
-type ToolGroup = 'ops' | 'player';
+type ToolKey = 'gto' | 'pot' | 'icm' | 'range' | 'outs' | 'pushfold' | 'spr' | 'ev' | 'blindgen' | 'chip' | 'sim' | 'payout' | 'endtime' | 'combo' | 'draw' | 'marble';
+type ToolGroup = 'game' | 'ops' | 'player';
 
 const TOOLS: { key: ToolKey; group: ToolGroup; name: string; desc: string; icon: ReactNode }[] = [
+  // ── 랜덤 게임 ──
+  { key: 'draw', group: 'game', name: '행운 추첨 🎲', desc: '대량 탈락+막판 역전·전체순위',
+    icon: <><circle cx="12" cy="12" r="9" /><path d="M9 9h.01M15 9h.01M9 15h.01M15 15h.01M12 12h.01" /></> },
+  { key: 'marble', group: 'game', name: '마블 레이스 🪀', desc: '구슬 레이스·추월 역전·전체순위',
+    icon: <><circle cx="7" cy="8" r="2.5" /><circle cx="16" cy="14" r="2.5" /><path d="M4 20c2-4 6-3 8-7s5-5 8-4" /></> },
   // ── 매장 운영 도구 ──
   { key: 'chip', group: 'ops', name: '칩 분배기', desc: '스택 구성·총 칩 수',
     icon: <><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="3" /></> },
@@ -30,8 +35,6 @@ const TOOLS: { key: ToolKey; group: ToolGroup; name: string; desc: string; icon:
     icon: <><path d="M8 4h8v3a4 4 0 0 1-8 0V4z" /><path d="M12 11v4" /><path d="M9 20h6" /><path d="M10 17h4" /></> },
   { key: 'endtime', group: 'ops', name: '종료시간 예측', desc: '레벨·브레이크 → 종료 시각',
     icon: <><circle cx="12" cy="12" r="9" /><path d="M12 8v4l3 2" /></> },
-  { key: 'draw', group: 'ops', name: '행운 추첨 🎲', desc: '경품·이용권 라이브 추첨(역전)',
-    icon: <><circle cx="12" cy="12" r="9" /><path d="M9 9h.01M15 9h.01M9 15h.01M15 15h.01M12 12h.01" /></> },
   // ── 플레이어 도구 ──
   { key: 'gto', group: 'player', name: 'GTO 핸드 분석', desc: '프리/포스트플랍 승률·전략',
     icon: <><rect x="3" y="4" width="7" height="16" rx="1.5" /><rect x="14" y="4" width="7" height="16" rx="1.5" /></> },
@@ -54,6 +57,7 @@ const TOOLS: { key: ToolKey; group: ToolGroup; name: string; desc: string; icon:
 ];
 
 const GROUPS: { id: ToolGroup; title: string; desc: string }[] = [
+  { id: 'game', title: '랜덤 게임', desc: '추첨·경쟁 · 끝까지 역전' },
   { id: 'player', title: '플레이어 도구', desc: '실전 플레이·전략용' },
   { id: 'ops', title: '매장 운영 도구', desc: '토너먼트 운영·세팅용' },
 ];
@@ -81,12 +85,12 @@ function renderTool(k: ToolKey): ReactNode {
 /** 도구 모음 — 카드형 런처. 매장 운영 / 플레이어 두 그룹. 카드를 누르면 인라인으로 펼쳐진다. */
 export default function ToolsPanel() {
   const [active, setActive] = useState<ToolKey | null>(null);
-  const [drawOpen, setDrawOpen] = useState(false);
+  const [gameMode, setGameMode] = useState<'arena' | 'marble' | null>(null);
   const select = (k: ToolKey) => setActive((a) => (a === k ? null : k));
 
   return (
     <div className="space-y-4">
-      <LuckyDrawModal open={drawOpen} onClose={() => setDrawOpen(false)} />
+      <LuckyDrawModal open={gameMode !== null} mode={gameMode ?? 'arena'} onClose={() => setGameMode(null)} />
       <p className="text-2xs text-ink-muted">홀덤 운영·플레이에 쓰는 도구 모음입니다. 카드를 눌러 실행하세요.</p>
 
       {GROUPS.map((g) => {
@@ -101,7 +105,7 @@ export default function ToolsPanel() {
             {/* 촘촘한 반응형 그리드 — 모바일 2열 → PC 4~5열(카드 작게) */}
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {items.map((t) => (
-                <ToolCard key={t.key} name={t.name} desc={t.desc} icon={t.icon} active={active === t.key} onClick={() => t.key === 'draw' ? setDrawOpen(true) : select(t.key)} />
+                <ToolCard key={t.key} name={t.name} desc={t.desc} icon={t.icon} active={active === t.key} onClick={() => t.key === 'draw' ? setGameMode('arena') : t.key === 'marble' ? setGameMode('marble') : select(t.key)} />
               ))}
             </div>
             {/* 선택한 도구는 그리드 아래에 펼침(읽기 좋은 폭으로 제한) */}
