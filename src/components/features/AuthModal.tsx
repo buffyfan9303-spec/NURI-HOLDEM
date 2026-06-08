@@ -1,6 +1,7 @@
 // src/components/features/AuthModal.tsx
 import { useState, useEffect, useRef } from 'react';
 import Modal from '../atoms/Modal';
+import Icon from '../atoms/Icon';
 import { useBackClose } from '../../lib/backstack';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
@@ -94,9 +95,7 @@ function LegalSheet({ doc, onClose }: { doc: LegalDoc | null; onClose: () => voi
             aria-label="닫기"
             className="w-8 h-8 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high transition-colors"
           >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
-              <line x1="2" y1="2" x2="12" y2="12" /><line x1="12" y1="2" x2="2" y2="12" />
-            </svg>
+            <Icon name="close" size={14} />
           </button>
         </header>
 
