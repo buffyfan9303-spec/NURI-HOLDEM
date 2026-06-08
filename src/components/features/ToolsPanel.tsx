@@ -1,4 +1,4 @@
-import { useState, Suspense, Fragment, type ReactNode } from 'react';
+import { useState, Suspense, type ReactNode } from 'react';
 import { lazyWithReload } from '../../lib/lazyWithReload';
 import ICMCalculator from './ICMCalculator';
 import PotOddsCalc from './tools/PotOddsCalc';
@@ -7,13 +7,14 @@ import StructureSim from './tools/StructureSim';
 import RangeGuide from './tools/RangeGuide';
 import OutsCalc from './tools/OutsCalc';
 import PushFoldChart from './tools/PushFoldChart';
-import { SprCalc, MzoneCalc, EvCalc, BankrollCalc, VarianceCalc } from './tools/StackCalcs';
+import { SprCalc, EvCalc } from './tools/StackCalcs';
+import { PayoutCalc, EndTimeCalc, ComboCalc } from './tools/MoreCalcs';
 import BlindBuilder from './tools/BlindBuilder';
 
 // GTO 패널은 에퀴티 엔진을 포함해 무거우므로 지연 로드(다른 도구와 동일하게 인라인 표시)
 const GtoDeepPanel = lazyWithReload(() => import('./gto/GtoDeepPanel'));
 
-type ToolKey = 'gto' | 'pot' | 'icm' | 'range' | 'outs' | 'pushfold' | 'spr' | 'mzone' | 'ev' | 'bankroll' | 'variance' | 'blindgen' | 'chip' | 'sim';
+type ToolKey = 'gto' | 'pot' | 'icm' | 'range' | 'outs' | 'pushfold' | 'spr' | 'ev' | 'blindgen' | 'chip' | 'sim' | 'payout' | 'endtime' | 'combo';
 type ToolGroup = 'ops' | 'player';
 
 const TOOLS: { key: ToolKey; group: ToolGroup; name: string; desc: string; icon: ReactNode }[] = [
@@ -24,6 +25,10 @@ const TOOLS: { key: ToolKey; group: ToolGroup; name: string; desc: string; icon:
     icon: <><line x1="4" y1="20" x2="4" y2="11" /><line x1="10" y1="20" x2="10" y2="4" /><line x1="16" y1="20" x2="16" y2="14" /><line x1="20" y1="20" x2="20" y2="8" /></> },
   { key: 'blindgen', group: 'ops', name: '블라인드 생성기', desc: '구조 자동 생성·표',
     icon: <><line x1="4" y1="20" x2="4" y2="14" /><line x1="9" y1="20" x2="9" y2="9" /><line x1="14" y1="20" x2="14" y2="12" /><line x1="19" y1="20" x2="19" y2="5" /></> },
+  { key: 'payout', group: 'ops', name: '상금 분배', desc: '총 상금·인원 → 분배표',
+    icon: <><path d="M8 4h8v3a4 4 0 0 1-8 0V4z" /><path d="M12 11v4" /><path d="M9 20h6" /><path d="M10 17h4" /></> },
+  { key: 'endtime', group: 'ops', name: '종료시간 예측', desc: '레벨·브레이크 → 종료 시각',
+    icon: <><circle cx="12" cy="12" r="9" /><path d="M12 8v4l3 2" /></> },
   // ── 플레이어 도구 ──
   { key: 'gto', group: 'player', name: 'GTO 핸드 분석', desc: '프리/포스트플랍 승률·전략',
     icon: <><rect x="3" y="4" width="7" height="16" rx="1.5" /><rect x="14" y="4" width="7" height="16" rx="1.5" /></> },
@@ -39,14 +44,10 @@ const TOOLS: { key: ToolKey; group: ToolGroup; name: string; desc: string; icon:
     icon: <><path d="M12 21V4" /><path d="M5 11l7-7 7 7" /></> },
   { key: 'spr', group: 'player', name: 'SPR 계산기', desc: '스택 대 팟 비율',
     icon: <><rect x="3" y="11" width="7" height="9" rx="1" /><rect x="14" y="4" width="7" height="16" rx="1" /></> },
-  { key: 'mzone', group: 'player', name: 'M-zone 코치', desc: '스택 압박 존 판단',
-    icon: <><path d="M3 17l5-5 4 4 8-8" /><path d="M16 8h5v5" /></> },
   { key: 'ev', group: 'player', name: 'EV 계산기', desc: '기대값 손익 판단',
     icon: <><line x1="12" y1="3" x2="12" y2="21" /><path d="M8 7h6a3 3 0 0 1 0 6H8" /></> },
-  { key: 'bankroll', group: 'player', name: '뱅크롤 관리', desc: '권장 자금 규모',
-    icon: <><rect x="3" y="6" width="18" height="13" rx="2" /><circle cx="12" cy="12.5" r="2.5" /></> },
-  { key: 'variance', group: 'player', name: '변동성 시뮬', desc: '수익 범위·손실 확률',
-    icon: <><path d="M3 12c3-7 6 7 9 0s6-7 9 0" /></> },
+  { key: 'combo', group: 'player', name: '콤보 계산기', desc: '핸드·레인지 콤보 수',
+    icon: <><rect x="4" y="4" width="9" height="13" rx="1.5" /><rect x="11" y="7" width="9" height="13" rx="1.5" /></> },
 ];
 
 const GROUPS: { id: ToolGroup; title: string; desc: string }[] = [
@@ -63,10 +64,10 @@ function renderTool(k: ToolKey): ReactNode {
     case 'outs': return <OutsCalc />;
     case 'pushfold': return <PushFoldChart />;
     case 'spr': return <SprCalc />;
-    case 'mzone': return <MzoneCalc />;
     case 'ev': return <EvCalc />;
-    case 'bankroll': return <BankrollCalc />;
-    case 'variance': return <VarianceCalc />;
+    case 'payout': return <PayoutCalc />;
+    case 'endtime': return <EndTimeCalc />;
+    case 'combo': return <ComboCalc />;
     case 'chip': return <ChipDistributor />;
     case 'sim': return <StructureSim />;
     case 'blindgen': return <BlindBuilder />;
@@ -85,29 +86,27 @@ export default function ToolsPanel() {
 
       {GROUPS.map((g) => {
         const items = TOOLS.filter((t) => t.group === g.id);
-        const activeIdx = items.findIndex((t) => t.key === active);
-        // 2열 그리드: 활성 카드가 속한 '행' 바로 아래에 패널을 끼워, 클릭한 카드 밑에서 펼쳐지게 한다.
-        const rowEndIdx = activeIdx < 0 ? -1 : (activeIdx % 2 === 1 ? activeIdx : Math.min(activeIdx + 1, items.length - 1));
+        const activeInGroup = active != null && items.some((t) => t.key === active);
         return (
           <section key={g.id} className="space-y-2">
             <div className="flex items-baseline gap-2">
               <h3 className="text-sm font-bold text-ink-primary">{g.title}</h3>
               <span className="text-2xs text-ink-muted">{g.desc}</span>
             </div>
-            <div className="grid grid-cols-2 gap-2.5">
-              {items.map((t, idx) => (
-                <Fragment key={t.key}>
-                  <ToolCard name={t.name} desc={t.desc} icon={t.icon} active={active === t.key} onClick={() => select(t.key)} />
-                  {active && idx === rowEndIdx && (
-                    <div className="col-span-2 animate-fade-in pt-1">
-                      <Suspense fallback={<div className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</div>}>
-                        {renderTool(active)}
-                      </Suspense>
-                    </div>
-                  )}
-                </Fragment>
+            {/* 촘촘한 반응형 그리드 — 모바일 2열 → PC 4~5열(카드 작게) */}
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+              {items.map((t) => (
+                <ToolCard key={t.key} name={t.name} desc={t.desc} icon={t.icon} active={active === t.key} onClick={() => select(t.key)} />
               ))}
             </div>
+            {/* 선택한 도구는 그리드 아래에 펼침(읽기 좋은 폭으로 제한) */}
+            {activeInGroup && (
+              <div className="animate-fade-in pt-1 lg:max-w-3xl">
+                <Suspense fallback={<div className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</div>}>
+                  {renderTool(active!)}
+                </Suspense>
+              </div>
+            )}
           </section>
         );
       })}
@@ -118,14 +117,14 @@ export default function ToolsPanel() {
 function ToolCard({ name, desc, icon, onClick, active }: { name: string; desc: string; icon: ReactNode; onClick: () => void; active?: boolean }) {
   return (
     <button type="button" onClick={onClick}
-      className={['flex flex-col items-start gap-2 rounded-card border p-3 text-left transition-colors active:scale-[0.98]',
+      className={['flex flex-col items-start gap-1.5 rounded-card border p-2.5 text-left transition-colors active:scale-[0.98]',
         active ? 'border-gold-400/60 bg-gold-300/[0.08]' : 'border-border-default bg-surface-low hover:border-gold-400/40 hover:bg-surface-high'].join(' ')}>
-      <span className="flex h-9 w-9 items-center justify-center rounded-input bg-gold-300/15 text-gold-300">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{icon}</svg>
+      <span className="flex h-8 w-8 items-center justify-center rounded-input bg-gold-300/15 text-gold-300">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{icon}</svg>
       </span>
       <span className="min-w-0">
-        <span className="block text-sm font-bold text-ink-primary">{name}</span>
-        <span className="block text-2xs text-ink-muted leading-snug">{desc}</span>
+        <span className="block text-xs font-bold text-ink-primary leading-tight">{name}</span>
+        <span className="block text-[10px] text-ink-muted leading-snug mt-0.5">{desc}</span>
       </span>
     </button>
   );
