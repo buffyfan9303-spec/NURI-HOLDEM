@@ -4,6 +4,7 @@ import type { MarketplaceListing } from '../../api/marketplace';
 import { CATEGORIES, CONDITION_COLOR, STATUS_MAP, relativeTime } from './MarketplaceTab';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
+import { promptLogin } from '../../lib/requireLogin';
 import ReportModal from './ReportModal';
 import type { ChatThread } from '../../api/chat';
 import { getListingThreads } from '../../api/chat';
@@ -407,11 +408,13 @@ interface DemoComment {
 }
 
 function CommentSection({ initialCount }: { initialCount: number }) {
+  const { user } = useAuth();
   const [comments, setComments] = useState<DemoComment[]>([]);
   const [draft, setDraft]       = useState('');
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user) { promptLogin(); return; }
     if (!draft.trim()) return;
     setComments((prev) => [
       { id: `dc${Date.now()}`, author: '나', authorColor: '#0EA5E9', content: draft.trim(), time: '방금' },
@@ -425,18 +428,24 @@ function CommentSection({ initialCount }: { initialCount: number }) {
       <h3 className="text-sm font-semibold text-ink-primary mb-2">
         댓글 <span className="text-ink-muted">({initialCount + comments.length})</span>
       </h3>
-      <form onSubmit={submit} className="flex gap-2 mb-3">
-        <input
-          type="text"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder="댓글로 가격 협상·문의를 남겨보세요"
-          className="input flex-1 text-sm"
-        />
-        <button type="submit" className="btn-primary text-xs px-3 shrink-0" disabled={!draft.trim()}>
-          등록
+      {user ? (
+        <form onSubmit={submit} className="flex gap-2 mb-3">
+          <input
+            type="text"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="댓글로 가격 협상·문의를 남겨보세요"
+            className="input flex-1 text-sm"
+          />
+          <button type="submit" className="btn-primary text-xs px-3 shrink-0" disabled={!draft.trim()}>
+            등록
+          </button>
+        </form>
+      ) : (
+        <button type="button" onClick={promptLogin} className="mb-3 w-full rounded-input bg-surface-high py-2.5 text-center text-2xs text-ink-muted hover:text-ink-secondary transition-colors">
+          로그인하면 댓글을 작성할 수 있습니다
         </button>
-      </form>
+      )}
       {comments.length === 0 ? (
         <p className="text-center py-4 text-2xs text-ink-muted">첫 댓글을 남겨보세요</p>
       ) : (

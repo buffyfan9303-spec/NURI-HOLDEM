@@ -7,8 +7,10 @@ import { reactToPost, removeReaction, getMyReaction, incrementPostView } from '.
 import ReportModal from './ReportModal';
 import { parseHand } from '../../lib/hand';
 import { renderMentions } from '../../lib/mentions';
+import { promptLogin } from '../../lib/requireLogin';
 import HandCards from '../atoms/HandCards';
 import Avatar from '../atoms/Avatar';
+import Icon from '../atoms/Icon';
 
 interface PostDetailModalProps {
   post: CommunityPost | null;
@@ -66,8 +68,19 @@ export default function PostDetailModal({
 
   if (!post) return null;
 
+  const copyLink = async () => {
+    const url = `${window.location.origin}/?post=${post.id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.show('게시물 링크를 복사했습니다', 'success');
+    } catch {
+      // 클립보드 권한 거부 등 — 프롬프트로 폴백
+      window.prompt('아래 링크를 복사해 공유하세요', url);
+    }
+  };
+
   const react = async (type: ReactionType) => {
-    if (!user) { toast.show('로그인이 필요합니다', 'error'); return; }
+    if (!user) { toast.show('로그인 후 이용할 수 있습니다', 'error'); promptLogin(); return; }
     try {
       if (myReaction === type) {
         setMyReaction(null);
@@ -125,6 +138,10 @@ export default function PostDetailModal({
               {formatFullDate(post.createdAt)}
             </p>
           </div>
+          <button type="button" onClick={copyLink} aria-label="링크 복사"
+            className="shrink-0 inline-flex items-center gap-1 text-2xs text-ink-muted hover:text-gold-300 transition-colors px-1.5 py-1">
+            <Icon name="share" size={13} /> 공유
+          </button>
           {user && user.id !== post.userId && (
             <button type="button" onClick={() => setReportOpen(true)}
               className="shrink-0 text-2xs text-ink-muted hover:text-danger-light transition-colors px-1 py-1">
@@ -162,7 +179,7 @@ export default function PostDetailModal({
           <div className="flex items-center gap-3 text-ink-muted">
             <button
               type="button"
-              onClick={() => onLike(post.id)}
+              onClick={() => { if (!user) { toast.show('로그인 후 이용할 수 있습니다', 'error'); promptLogin(); return; } onLike(post.id); }}
               className="inline-flex items-center gap-1 hover:text-danger transition-colors"
             >
               <svg width="14" height="14" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden>

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Comment } from '../../api/community';
 import { useAuth } from '../../contexts/AuthContext';
+import { promptLogin } from '../../lib/requireLogin';
 import Avatar from '../atoms/Avatar';
 
 interface CommentThreadProps {
@@ -27,6 +28,7 @@ function CommentItem({
   onReply,
   onDelete,
   canDelete,
+  loggedIn,
 }: {
   comment: Comment;
   replies: Comment[];
@@ -34,6 +36,7 @@ function CommentItem({
   onDelete?: (commentId: string) => void;
   /** (commentId) => 이 댓글을 삭제할 권한이 있는지 */
   canDelete: (comment: Comment) => boolean;
+  loggedIn: boolean;
 }) {
   const [showReplyBox, setShowReplyBox] = useState(false);
   const [replyContent, setReplyContent] = useState('');
@@ -67,7 +70,7 @@ function CommentItem({
           <div className="mt-1 flex items-center gap-3">
             <button
               type="button"
-              onClick={() => setShowReplyBox((v) => !v)}
+              onClick={() => { if (!loggedIn) { promptLogin(); return; } setShowReplyBox((v) => !v); }}
               className="text-2xs text-ink-muted hover:text-gold-300 transition-colors"
             >
               {showReplyBox ? '취소' : '답글'}
@@ -107,7 +110,7 @@ function CommentItem({
       {replies.length > 0 && (
         <div className="ml-10 space-y-3 border-l-2 border-border-subtle pl-3">
           {replies.map((r) => (
-            <CommentItem key={r.id} comment={r} replies={[]} onReply={onReply} onDelete={onDelete} canDelete={canDelete} />
+            <CommentItem key={r.id} comment={r} replies={[]} onReply={onReply} onDelete={onDelete} canDelete={canDelete} loggedIn={loggedIn} />
           ))}
         </div>
       )}
@@ -173,6 +176,7 @@ export default function CommentThread({ comments, onSubmit, onDelete, moderator 
               onReply={(parentId, content) => onSubmit(content, parentId)}
               onDelete={onDelete}
               canDelete={canDelete}
+              loggedIn={!!user}
             />
           ))}
         </div>

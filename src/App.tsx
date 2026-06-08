@@ -25,6 +25,7 @@ import StaffInviteBanner from './components/features/StaffInviteBanner';
 import ErrorBoundary from './components/atoms/ErrorBoundary';
 import InstallBanner from './components/atoms/InstallBanner';
 import OnboardingTour from './components/features/OnboardingTour';
+import { REQUIRE_LOGIN_EVENT } from './lib/requireLogin';
 import GlobalSearchModal from './components/features/GlobalSearchModal';
 import { tierColor } from './components/atoms/TierBadge';
 import NoticeFormModal from './components/features/NoticeFormModal';
@@ -482,6 +483,24 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 비로그인 사용자가 쓰기(글·댓글·반응·채팅·예약)를 시도하면 로그인 모달을 띄운다.
+  useEffect(() => {
+    const h = () => { setAuthMode('login'); setAuthOpen(true); };
+    window.addEventListener(REQUIRE_LOGIN_EVENT, h);
+    return () => window.removeEventListener(REQUIRE_LOGIN_EVENT, h);
+  }, []);
+
+  // ── 게시물 공유 딥링크 (?post=<id>) — 링크로 들어오면 비로그인도 해당 글 열람 ──
+  const [pendingPostId, setPendingPostId] = useState<string | null>(() => {
+    try { return new URLSearchParams(window.location.search).get('post'); } catch { return null; }
+  });
+  useEffect(() => {
+    if (!pendingPostId) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete('post');
+    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+  }, [pendingPostId]);
+
   // 홈(browse) 외 탭에서 브라우저/모바일 뒤로가기 → 홈 탭으로 복귀(앱 종료 방지).
   // 오버레이가 열려 있으면 중앙 back-stack 이 LIFO 로 그 오버레이부터 닫는다.
   useBackClose(activeTab !== 'browse', () => setActiveTab('browse'));
@@ -500,6 +519,13 @@ export default function App() {
   /** 포스터 폼 — null: 닫힘 / undefined: 신규 / Schedule: 수정 */
   const [posterFormTarget, setPosterFormTarget] = useState<Schedule | null | undefined>(null);
   const [openPost, setOpenPost]         = useState<CommunityPost | null>(null);
+  // 공유 딥링크로 받은 글이 로드되면 상세를 연다(비로그인 열람 허용).
+  useEffect(() => {
+    if (!pendingPostId || posts.length === 0) return;
+    const found = posts.find((p) => p.id === pendingPostId);
+    if (found) setOpenPost(found);
+    setPendingPostId(null);
+  }, [pendingPostId, posts]);
   const [profileOpen, setProfileOpen]   = useState(false);
   const [voucherWalletOpen, setVoucherWalletOpen] = useState(false);
   // 비밀번호 변경 OTP 진행 중 페이지가 리로드되면(모바일에서 메일 앱을 다녀온 경우)

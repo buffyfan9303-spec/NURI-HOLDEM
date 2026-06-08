@@ -9,6 +9,7 @@ import { prizeMainText } from './ScheduleCard';
 import type { Schedule } from '../../api/schedules';
 import type { Comment } from '../../api/community';
 import { generateBlinds } from '../../api/clock';
+import { promptLogin } from '../../lib/requireLogin';
 
 interface ScheduleDetailModalProps {
   schedule: Schedule | null;
@@ -500,7 +501,7 @@ function ReserveBox({ scheduleId }: { scheduleId: string }) {
   useEffect(() => { if (isManager) getOwnerReservations(scheduleId).then(setResList).catch(() => {}); else setResList([]); }, [scheduleId, isManager]);
 
   const act = async () => {
-    if (!user) { toast.show('로그인 후 예약할 수 있습니다', 'error'); return; }
+    if (!user) { toast.show('로그인 후 예약할 수 있습니다', 'error'); promptLogin(); return; }
     if (busy) return;
     setBusy(true);
     try {
