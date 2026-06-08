@@ -1,7 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import Icon from '../atoms/Icon';
-import LuckyDrawModal from './LuckyDrawModal';
-import { getDrawCandidates, type DrawSource } from '../../api/draw';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
 import type { User, VenueInvite } from '../../api/auth';
@@ -21,7 +19,7 @@ import { iCanViewVouchers, getVoucherAccessUserIds, grantVoucherAccess, revokeVo
 import MyPostersTab from './MyPostersTab';
 import type { Schedule } from '../../api/schedules';
 
-type Section = 'dashboard' | 'posters' | 'ledger' | 'stats' | 'ranking' | 'staff' | 'settings' | 'clock' | 'attendance' | 'voucher' | 'event';
+type Section = 'dashboard' | 'posters' | 'ledger' | 'stats' | 'ranking' | 'staff' | 'settings' | 'clock' | 'attendance' | 'voucher';
 
 /** 업주/직원 전용 "매장 관리" 탭 — 장부(POS) · 통계 · 순위 입력 · (업주) 직원 관리 */
 export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster, onDeletePoster }: { schedules: Schedule[]; onCreatePoster: () => void; onEditPoster: (id: string) => void; onDeletePoster: (id: string) => void }) {
@@ -79,7 +77,6 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   //  · 장부에 종속된 순위·클락·출근은 장부 권한이 있을 때만 노출(중복 잠금 방지).
   //  · 업주만 가능한 섹션(포스터·통계·직원·POS)은 직원에게 아예 숨김.
   const available: { id: Section; label: string; locked?: boolean }[] = [{ id: 'dashboard', label: '대시보드' }];
-  available.push({ id: 'event', label: '이벤트 추첨' });
   if (canPosters) available.push({ id: 'posters', label: '포스터·예약' });
   available.push({ id: 'ledger', label: '장부', locked: !ledgerOk });
   if (manageOk) available.push({ id: 'stats',  label: '통계' });
@@ -144,7 +141,6 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
             ) : (<>
             {section === 'dashboard' && <StoreDashboard venueId={venueId} schedules={schedules} onGoto={(s) => setSection(s as Section)} onCreatePoster={onCreatePoster}
               caps={{ ledger: ledgerOk, manage: manageOk, voucher: manageOk || voucherView, posters: canPosters, staff: canStaff }} />}
-            {section === 'event' && <EventDrawPanel venueId={venueId} canLedger={ledgerOk} />}
             {section === 'posters' && canPosters && <MyPostersTab schedules={schedules} onCreate={onCreatePoster} onEdit={onEditPoster} onDelete={onDeletePoster} />}
             {section === 'ledger'  && ledgerOk && (
               <NuriPosLedger venueId={venueId} canManage={manageOk}
@@ -179,7 +175,6 @@ const SECTION_ICON: Record<Section, ReactNode> = {
   clock: ic(<><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>),
   attendance: ic(<><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="m9 16 2 2 4-4" /></>),
   voucher: ic(<><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" /><path d="M13 5v14" /></>),
-  event: ic(<><circle cx="12" cy="12" r="9" /><path d="M9 9h.01M15 9h.01M9 15h.01M15 15h.01M12 12h.01" /></>),
   staff: ic(<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>),
   settings: ic(<><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" /></>),
 };
@@ -196,76 +191,6 @@ function SectionBtn({ active, onClick, icon, children, locked }: { active: boole
   );
 }
 
-// ── 이벤트 추첨/레이스 — 오늘 명단 불러오기 + 게임 실행 ──────────────────────────
-function EventDrawPanel({ venueId, canLedger }: { venueId: string; canLedger: boolean }) {
-  const toast = useToast();
-  const [mode, setMode] = useState<'arena' | 'marble'>('arena');
-  const [names, setNames] = useState<string[]>([]);
-  const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState<DrawSource | null>(null);
-
-  const load = async (src: DrawSource) => {
-    setLoading(src);
-    try {
-      const list = await getDrawCandidates(venueId, src);
-      if (list.length < 2) { toast.show(`불러올 명단이 2명 미만입니다 (${list.length}명)`, 'info'); return; }
-      setNames(list); setOpen(true);
-      toast.show(`${list.length}명 불러왔습니다`, 'success');
-    } catch (e) { toast.show(e instanceof Error ? e.message : '불러오기 실패', 'error'); }
-    finally { setLoading(null); }
-  };
-
-  return (
-    <div className="space-y-3">
-      <LuckyDrawModal open={open} onClose={() => setOpen(false)} mode={mode} initialNames={names}
-        title={mode === 'marble' ? '이벤트 마블 레이스' : '이벤트 추첨'} />
-      <div className="rounded-card border border-gold-400/30 bg-gradient-to-br from-gold-300/[0.06] to-transparent p-3 space-y-1">
-        <p className="text-sm font-bold text-gold-300">🎉 이벤트 추첨 / 레이스</p>
-        <p className="text-2xs leading-relaxed text-ink-secondary">오늘 명단을 불러와 경품을 라이브로 추첨하세요. 150명도 30~60초에 끝나고 끝까지 역전이 있습니다. 매장 TV에 띄우기 좋아요.</p>
-      </div>
-
-      <div>
-        <p className="mb-1 text-xs font-bold text-ink-secondary">게임 종류</p>
-        <div className="flex gap-1 rounded-input bg-surface-high p-0.5">
-          {([['arena', '행운 추첨 🎲'], ['marble', '마블 레이스 🪀']] as const).map(([k, label]) => (
-            <button key={k} type="button" onClick={() => setMode(k)} className={['flex-1 rounded-[6px] py-2 text-xs font-bold transition-colors', mode === k ? 'bg-gold-300 text-ink-inverse' : 'text-ink-secondary'].join(' ')}>{label}</button>
-          ))}
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <div>
-          <p className="mb-1 text-xs font-bold text-ink-secondary">오늘 명단</p>
-          <div className="grid grid-cols-2 gap-2">
-            <SrcBtn label="오늘 체크인" loading={loading === 'checkin'} onClick={() => load('checkin')} />
-            <SrcBtn label="오늘 예약" loading={loading === 'reservation'} onClick={() => load('reservation')} />
-          </div>
-        </div>
-        <div>
-          <p className="mb-1 text-xs font-bold text-ink-secondary">전체 명단 <span className="font-normal text-ink-muted">(전량)</span></p>
-          <div className="grid grid-cols-2 gap-2">
-            <SrcBtn label="회원 전체" loading={loading === 'members'} onClick={() => load('members')} />
-            <SrcBtn label="장부 전체" loading={loading === 'ledger'} disabled={!canLedger} onClick={() => load('ledger')} />
-          </div>
-          {!canLedger && <p className="mt-1 text-[10px] text-ink-muted">장부 전체는 장부 권한이 필요합니다.</p>}
-        </div>
-      </div>
-
-      <button type="button" onClick={() => { setNames([]); setOpen(true); }}
-        className="w-full rounded-input border border-border-default bg-surface-high py-2.5 text-sm font-bold text-ink-secondary hover:text-ink-primary transition-colors">
-        직접 입력으로 시작
-      </button>
-    </div>
-  );
-}
-function SrcBtn({ label, loading, disabled, onClick }: { label: string; loading?: boolean; disabled?: boolean; onClick: () => void }) {
-  return (
-    <button type="button" onClick={onClick} disabled={disabled || loading}
-      className="rounded-input border border-border-default bg-surface-high py-2.5 text-xs font-bold text-ink-secondary hover:text-gold-300 hover:border-gold-400/40 disabled:opacity-40 transition-colors">
-      {loading ? '…' : label}
-    </button>
-  );
-}
 
 // ── 일일 순위 입력 ────────────────────────────────────────────────────────────
 interface Row { nickname: string; realName: string; prize: string; voucher: string; note: string; }
