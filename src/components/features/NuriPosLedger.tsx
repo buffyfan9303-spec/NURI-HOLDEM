@@ -228,9 +228,16 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     try { await updateLedgerPlayer(id, patch); reload(); }
     catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
   };
-  const removePlayer = async (p: LedgerPlayer) => {
-    if (countOf(p.name) > 0) { toast.show('바인 기록이 있는 플레이어는 삭제할 수 없습니다', 'error'); return; }
-    try { await removeLedgerPlayer(p.id); setEditPlayer(null); reload(); } catch (e) { toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'); }
+  const removePlayer = async (p: LedgerPlayer, password?: string) => {
+    const ids = buyins.filter((b) => b.playerName === p.name).map((b) => b.id);
+    try {
+      if (ids.length > 0) {
+        if (!password) { toast.show('바인 기록 삭제에는 취소 비밀번호가 필요합니다', 'error'); return; }
+        for (const id of ids) await cancelBuyin(id, password); // 서버에서 비밀번호 검증
+      }
+      await removeLedgerPlayer(p.id);
+      toast.show('플레이어를 삭제했습니다', 'info'); setEditPlayer(null); reload();
+    } catch (e) { toast.show(e instanceof Error ? e.message : '삭제 실패(비밀번호 확인)', 'error'); }
   };
 
   // ── 게임(세션) 리스트 — 장부 진입 첫 화면 ──────────────────────────────────
@@ -436,8 +443,8 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                   <th key={i} className="w-[3.6rem] px-0.5 py-1.5 text-[10px] text-ink-muted border-b border-l border-border-subtle">{i + 1}바인</th>
                 ))}
                 <th className="min-w-[6rem] px-2 py-1.5 text-[10px] text-ink-muted border-b border-l border-border-subtle text-left">비고</th>
-                <th className="w-[4.5rem] px-1 py-1.5 text-[10px] text-ink-muted border-b border-l border-border-subtle">총바인</th>
-                <th className="w-[4.5rem] px-1 py-1.5 text-[10px] text-ink-muted border-b border-l border-border-subtle">미수</th>
+                <th className="sticky right-[4.5rem] z-20 bg-surface-high w-[4.5rem] px-1 py-1.5 text-[10px] text-ink-muted border-b border-l border-border-strong">총바인</th>
+                <th className="sticky right-0 z-20 bg-surface-high w-[4.5rem] px-1 py-1.5 text-[10px] text-ink-muted border-b border-l border-border-subtle">미수</th>
               </tr>
             </thead>
             <tbody>
@@ -517,7 +524,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                           </button>
                         ) : first ? <span className="text-2xs text-ink-muted">—</span> : null}
                       </td>
-                      <td className="w-[4.5rem] px-1 py-1 border-b border-l border-border-subtle text-2xs tabular-nums">
+                      <td className="sticky right-[4.5rem] z-10 bg-surface-low w-[4.5rem] px-1 py-1 border-b border-l border-border-strong text-2xs tabular-nums">
                         {first ? (
                           <span className="leading-tight block">
                             <b className="text-gold-300">{cnt}회</b>
@@ -525,7 +532,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                           </span>
                         ) : ''}
                       </td>
-                      <td className="w-[4.5rem] px-1 py-1 border-b border-l border-border-subtle text-2xs tabular-nums text-danger-light">{first && tot.unpaid > 0 ? `${wonToMan(tot.unpaid)}만` : ''}</td>
+                      <td className="sticky right-0 z-10 bg-surface-low w-[4.5rem] px-1 py-1 border-b border-l border-border-subtle text-2xs tabular-nums text-danger-light">{first && tot.unpaid > 0 ? `${wonToMan(tot.unpaid)}만` : ''}</td>
                     </tr>
                   );
                 });
@@ -622,10 +629,11 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       {editPlayer && (
         <PlayerEditModal
           player={editPlayer}
-          canDelete={countOf(editPlayer.name) === 0}
+          recordCount={countOf(editPlayer.name)}
+          hasPw={hasPw}
           onClose={() => setEditPlayer(null)}
           onSave={async (patch) => { await savePlayer(editPlayer.id, patch); setEditPlayer(null); }}
-          onDelete={() => removePlayer(editPlayer)}
+          onDelete={(pw) => removePlayer(editPlayer, pw)}
         />
       )}
     </div>
@@ -633,16 +641,18 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
 }
 
 // ── 플레이어 편집 모달(유형 + 비고 무제한 + 삭제) ─────────────────────────────
-function PlayerEditModal({ player, canDelete, onClose, onSave, onDelete }: {
-  player: LedgerPlayer; canDelete: boolean;
+function PlayerEditModal({ player, recordCount, hasPw, onClose, onSave, onDelete }: {
+  player: LedgerPlayer; recordCount: number; hasPw: boolean;
   onClose: () => void;
   onSave: (patch: { visitorType: string | null; note: string | null }) => void;
-  onDelete: () => void;
+  onDelete: (password?: string) => void;
 }) {
   const isKnown = VISITOR_OPTS.some((o) => o.code === player.visitorType);
   const [type, setType]   = useState<string | null>(player.visitorType ?? null);
   const [custom, setCustom] = useState(player.visitorType && !isKnown ? player.visitorType : '');
   const [note, setNote]   = useState(player.note ?? '');
+  const [delMode, setDelMode] = useState(false);
+  const [delPw, setDelPw] = useState('');
 
   const submit = () => {
     const finalType = type === '__custom__' ? (custom.trim() || null) : type;
@@ -671,12 +681,24 @@ function PlayerEditModal({ player, canDelete, onClose, onSave, onDelete }: {
           <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={4}
             placeholder="자유롭게 메모하세요" className="input w-full text-sm resize-none" />
         </div>
+        {/* 삭제 — 바인 기록이 없으면 즉시, 있으면 취소 비밀번호로 바인까지 함께 삭제 */}
+        {recordCount === 0 ? (
+          <button type="button" onClick={() => onDelete()} className="w-full btn-danger text-xs py-2">플레이어 삭제</button>
+        ) : !delMode ? (
+          <button type="button" onClick={() => setDelMode(true)} className="w-full rounded-input border border-danger/40 py-2 text-xs font-semibold text-danger-light transition-colors hover:bg-danger/10">플레이어 삭제 (바인 {recordCount}건 포함)</button>
+        ) : (
+          <div className="space-y-1.5 rounded-input border border-danger/40 bg-danger/[0.06] p-2">
+            <p className="text-[10px] text-danger-light">바인 {recordCount}건이 함께 삭제됩니다. 취소 비밀번호를 입력하세요.</p>
+            <div className="flex gap-1.5">
+              <input type="password" inputMode="numeric" value={delPw} onChange={(e) => setDelPw(e.target.value)} placeholder={hasPw ? '취소 비밀번호' : '비밀번호 미설정'} disabled={!hasPw} className="input min-w-0 flex-1 text-sm" autoFocus />
+              <button type="button" onClick={() => onDelete(delPw)} disabled={!hasPw || !delPw} className="btn-danger shrink-0 px-3 text-xs disabled:opacity-50">삭제 확정</button>
+              <button type="button" onClick={() => { setDelMode(false); setDelPw(''); }} className="btn-ghost shrink-0 px-2 text-xs">취소</button>
+            </div>
+          </div>
+        )}
         <div className="flex gap-2 pt-1">
-          {canDelete
-            ? <button type="button" onClick={onDelete} className="btn-danger text-xs px-3">삭제</button>
-            : <span className="text-2xs text-ink-muted self-center">바인 기록이 있어 삭제 불가</span>}
           <span className="flex-1" />
-          <button type="button" onClick={onClose} className="btn-ghost text-sm px-4">취소</button>
+          <button type="button" onClick={onClose} className="btn-ghost text-sm px-4">닫기</button>
           <button type="button" onClick={submit} className="btn-primary text-sm px-4">저장</button>
         </div>
       </div>
