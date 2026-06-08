@@ -3,7 +3,7 @@ import Modal from '../atoms/Modal';
 import CommentThread from './CommentThread';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
-import { getMyReservation, createReservation, cancelMyReservation, type Reservation } from '../../api/reservations';
+import { getMyReservation, createReservation, cancelMyReservation, getOwnerReservations, type Reservation, type OwnerReservation } from '../../api/reservations';
 import { prizeMainText } from './ScheduleCard';
 import type { Schedule } from '../../api/schedules';
 import type { Comment } from '../../api/community';
@@ -480,11 +480,16 @@ function ReserveBox({ scheduleId }: { scheduleId: string }) {
   const [busy, setBusy] = useState(false);
   const [cooldown, setCooldown] = useState(0);
 
+  const isManager = user?.role === 'admin' || user?.role === 'venue_owner';
+  const [resList, setResList] = useState<OwnerReservation[]>([]);
+  const [resOpen, setResOpen] = useState(false);
+  const loadRes = () => { if (isManager) getOwnerReservations(scheduleId).then(setResList).catch(() => {}); };
   useEffect(() => {
     setName(user?.nickname || user?.name || '');
     if (user) getMyReservation(scheduleId).then(setMine).catch(() => {});
     else setMine(null);
   }, [scheduleId, user]);
+  useEffect(() => { if (isManager) getOwnerReservations(scheduleId).then(setResList).catch(() => {}); else setResList([]); }, [scheduleId, isManager]);
   useEffect(() => {
     if (cooldown <= 0) return;
     const id = setInterval(() => setCooldown((c) => Math.max(0, c - 1)), 1000);
@@ -504,9 +509,11 @@ function ReserveBox({ scheduleId }: { scheduleId: string }) {
         toast.show('예약되었습니다', 'success');
       }
       setCooldown(60); // 반복 클릭 방지: 1분 1회
+      loadRes();
     } catch (e) { toast.show(e instanceof Error ? e.message : '처리 실패', 'error'); }
     finally { setBusy(false); }
   };
+  const fmtRes = (iso: string) => { const d = new Date(iso); const p = (n: number) => String(n).padStart(2, '0'); return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`; };
 
   return (
     <section className="rounded-card border border-gold-400/40 bg-gradient-to-br from-gold-300/[0.08] to-transparent p-4 space-y-2">
@@ -523,6 +530,31 @@ function ReserveBox({ scheduleId }: { scheduleId: string }) {
         {cooldown > 0 ? `${cooldown}초 후 가능` : mine ? '예약 취소' : '예약하기'}
       </button>
       <p className="text-[10px] text-ink-muted">{mine ? `예약자: ${mine.displayName} · 반복 클릭 방지를 위해 변경 후 1분간 잠깁니다.` : '예약 후 1분간 다시 클릭할 수 없습니다.'}</p>
+
+      {/* 업주/운영자: 예약 내역(실제 아이디·닉네임) — 접이식 */}
+      {isManager && (
+        <div className="mt-1 border-t border-gold-400/20 pt-2">
+          <button type="button" onClick={() => setResOpen((v) => !v)} className="flex w-full items-center justify-between gap-2 text-left">
+            <span className="text-2xs font-bold text-gold-300">예약 내역 <span className="font-normal text-ink-muted">({resList.length})</span></span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className={['text-ink-muted transition-transform', resOpen ? 'rotate-180' : ''].join(' ')} aria-hidden><polyline points="6 9 12 15 18 9" /></svg>
+          </button>
+          {resOpen && (
+            resList.length === 0
+              ? <p className="py-2 text-center text-2xs text-ink-muted">예약이 없습니다.</p>
+              : <ul className="mt-1.5 max-h-60 space-y-1 overflow-y-auto">
+                  {resList.map((r) => (
+                    <li key={r.id} className="flex items-center justify-between gap-2 rounded-input bg-surface-base/50 px-2.5 py-1.5">
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-semibold text-ink-primary">{r.realName ? `${r.realName}(${r.nickname ?? '-'})` : (r.nickname ?? '비회원')}</p>
+                        <p className="truncate text-[10px] text-ink-muted">예약명: {r.displayName}</p>
+                      </div>
+                      <span className="shrink-0 text-[10px] tabular-nums text-ink-muted">{fmtRes(r.createdAt)}</span>
+                    </li>
+                  ))}
+                </ul>
+          )}
+        </div>
+      )}
     </section>
   );
 }

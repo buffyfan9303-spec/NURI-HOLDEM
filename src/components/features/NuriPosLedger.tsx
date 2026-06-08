@@ -866,13 +866,23 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       </Field>
 
       {schedules.length > 0 && (
-        <Field label="연결 포스터(대회) · 선택">
+        <Field label="기존 포스터 불러오기 · 선택">
           <select value={schedId}
-            onChange={(e) => { const id = e.target.value; setSchedId(id); const sc = schedules.find((s) => s.id === id); if (sc && !title.trim()) setTitle(sc.title); }}
+            onChange={(e) => {
+              const id = e.target.value; setSchedId(id);
+              const sc = schedules.find((s) => s.id === id);
+              if (sc) {
+                // 포스터 정보 불러오기 — 게임명·바인 단가·게임유형 프리필
+                setTitle(sc.title);
+                if (sc.buyIn?.amount) setCash(sc.buyIn.amount);
+                setGameType(sc.guaranteed ? 'gtd' : 'entry');
+              }
+            }}
             className="input w-full text-sm">
-            <option value="">연결 안 함</option>
-            {schedules.map((s) => <option key={s.id} value={s.id}>{s.date} · {s.title}</option>)}
+            <option value="">연결 안 함 / 직접 입력</option>
+            {schedules.map((s) => <option key={s.id} value={s.id}>{s.date} · {s.title} · 바인 {(s.buyIn?.amount ?? 0).toLocaleString()}</option>)}
           </select>
+          <p className="mt-1 text-2xs text-ink-muted">선택하면 게임명·바인 단가·유형을 자동으로 불러옵니다(수정 가능).</p>
         </Field>
       )}
 

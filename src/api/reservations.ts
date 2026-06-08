@@ -30,6 +30,16 @@ export async function getReservations(scheduleId: string): Promise<Reservation[]
   return (data ?? []).map(rowToRes);
 }
 
+// 업주/운영자용 — 예약자 실제 계정(닉네임·실명)까지. 해당 매장 권한자만(RPC 게이트).
+export interface OwnerReservation { id: string; displayName: string; nickname: string | null; realName: string | null; createdAt: string; }
+export async function getOwnerReservations(scheduleId: string): Promise<OwnerReservation[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.rpc('schedule_reservations_for_owner', { p_schedule_id: scheduleId });
+  if (error) throw new Error(error.message);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({ id: r.id, displayName: r.display_name, nickname: r.nickname ?? null, realName: r.real_name ?? null, createdAt: r.created_at }));
+}
+
 export async function getReservationCounts(scheduleIds: string[]): Promise<Record<string, number>> {
   if (IS_MOCK || scheduleIds.length === 0) return {};
   const { data } = await supabase.from('schedule_reservations').select('schedule_id').in('schedule_id', scheduleIds);
