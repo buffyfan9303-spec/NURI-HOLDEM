@@ -10,11 +10,12 @@ import PushFoldChart from './tools/PushFoldChart';
 import { SprCalc, EvCalc } from './tools/StackCalcs';
 import { PayoutCalc, EndTimeCalc, ComboCalc } from './tools/MoreCalcs';
 import BlindBuilder from './tools/BlindBuilder';
+import LuckyDrawModal from './LuckyDrawModal';
 
 // GTO 패널은 에퀴티 엔진을 포함해 무거우므로 지연 로드(다른 도구와 동일하게 인라인 표시)
 const GtoDeepPanel = lazyWithReload(() => import('./gto/GtoDeepPanel'));
 
-type ToolKey = 'gto' | 'pot' | 'icm' | 'range' | 'outs' | 'pushfold' | 'spr' | 'ev' | 'blindgen' | 'chip' | 'sim' | 'payout' | 'endtime' | 'combo';
+type ToolKey = 'gto' | 'pot' | 'icm' | 'range' | 'outs' | 'pushfold' | 'spr' | 'ev' | 'blindgen' | 'chip' | 'sim' | 'payout' | 'endtime' | 'combo' | 'draw';
 type ToolGroup = 'ops' | 'player';
 
 const TOOLS: { key: ToolKey; group: ToolGroup; name: string; desc: string; icon: ReactNode }[] = [
@@ -29,6 +30,8 @@ const TOOLS: { key: ToolKey; group: ToolGroup; name: string; desc: string; icon:
     icon: <><path d="M8 4h8v3a4 4 0 0 1-8 0V4z" /><path d="M12 11v4" /><path d="M9 20h6" /><path d="M10 17h4" /></> },
   { key: 'endtime', group: 'ops', name: '종료시간 예측', desc: '레벨·브레이크 → 종료 시각',
     icon: <><circle cx="12" cy="12" r="9" /><path d="M12 8v4l3 2" /></> },
+  { key: 'draw', group: 'ops', name: '행운 추첨 🎲', desc: '경품·이용권 라이브 추첨(역전)',
+    icon: <><circle cx="12" cy="12" r="9" /><path d="M9 9h.01M15 9h.01M9 15h.01M15 15h.01M12 12h.01" /></> },
   // ── 플레이어 도구 ──
   { key: 'gto', group: 'player', name: 'GTO 핸드 분석', desc: '프리/포스트플랍 승률·전략',
     icon: <><rect x="3" y="4" width="7" height="16" rx="1.5" /><rect x="14" y="4" width="7" height="16" rx="1.5" /></> },
@@ -78,10 +81,12 @@ function renderTool(k: ToolKey): ReactNode {
 /** 도구 모음 — 카드형 런처. 매장 운영 / 플레이어 두 그룹. 카드를 누르면 인라인으로 펼쳐진다. */
 export default function ToolsPanel() {
   const [active, setActive] = useState<ToolKey | null>(null);
+  const [drawOpen, setDrawOpen] = useState(false);
   const select = (k: ToolKey) => setActive((a) => (a === k ? null : k));
 
   return (
     <div className="space-y-4">
+      <LuckyDrawModal open={drawOpen} onClose={() => setDrawOpen(false)} />
       <p className="text-2xs text-ink-muted">홀덤 운영·플레이에 쓰는 도구 모음입니다. 카드를 눌러 실행하세요.</p>
 
       {GROUPS.map((g) => {
@@ -96,7 +101,7 @@ export default function ToolsPanel() {
             {/* 촘촘한 반응형 그리드 — 모바일 2열 → PC 4~5열(카드 작게) */}
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {items.map((t) => (
-                <ToolCard key={t.key} name={t.name} desc={t.desc} icon={t.icon} active={active === t.key} onClick={() => select(t.key)} />
+                <ToolCard key={t.key} name={t.name} desc={t.desc} icon={t.icon} active={active === t.key} onClick={() => t.key === 'draw' ? setDrawOpen(true) : select(t.key)} />
               ))}
             </div>
             {/* 선택한 도구는 그리드 아래에 펼침(읽기 좋은 폭으로 제한) */}
