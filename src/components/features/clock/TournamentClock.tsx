@@ -4,6 +4,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useToast } from '../../atoms/Toast';
 import { useBackClose } from '../../../lib/backstack';
+import { useAuth } from '../../../contexts/AuthContext';
+import { getAppSetting, setAppSetting, CLOCK_AD_KEY } from '../../../api/settings';
+import { uploadPoster } from '../../../lib/storage';
 import {
   type ClockConfig, type ClockLevel, type ClockPreset, type ClockState, type ClockPrizeRow,
   defaultClockConfig, emptyClockState, deriveClockCounts, computeLiveStats, PRESET_LIMIT,
@@ -161,11 +164,29 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd }: {
   onChange: (s: ClockState) => void; onOpenSettings: () => void; onEnd: () => void;
 }) {
   const toast = useToast();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [, setTick] = useState(0);
   const [buyins, setBuyins] = useState<LedgerBuyin[]>([]);
   const [linkedSession, setLinkedSession] = useState<LedgerSession | null>(null);
   const [volume, setVolume] = useState(50);
   const [fs, setFs] = useState(false);
+  // 전체 클락 공통 광고 이미지(운영자 설정) — 모든 클락 상단에 표시
+  const [adImg, setAdImg] = useState<string | null>(null);
+  const [adBusy, setAdBusy] = useState(false);
+  useEffect(() => { getAppSetting(CLOCK_AD_KEY).then(setAdImg).catch(() => {}); }, []);
+  const uploadAd = async (file: File | null) => {
+    if (!file || !user) return;
+    setAdBusy(true);
+    try { const url = await uploadPoster(user.id, file); await setAppSetting(CLOCK_AD_KEY, url); setAdImg(url); toast.show('클락 광고를 등록했습니다(전체 클락 적용)', 'success'); }
+    catch (e) { toast.show(e instanceof Error ? e.message : '업로드 실패', 'error'); }
+    finally { setAdBusy(false); }
+  };
+  const removeAd = async () => {
+    if (!confirm('클락 광고를 삭제할까요?')) return;
+    try { await setAppSetting(CLOCK_AD_KEY, ''); setAdImg(null); toast.show('광고를 삭제했습니다', 'info'); }
+    catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
+  };
   const wrapRef = useRef<HTMLDivElement>(null);
   const advancingRef = useRef(false);
 
@@ -298,6 +319,13 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd }: {
   const title = (linkedSession?.title || cfg.title) || '토너먼트';
   const urgent = remaining <= 60_000 && state.running && !isBreak;
 
+  // 초기화 — 종료(END)와 달리 설정은 유지하고 레벨·시간·인원만 처음으로 되돌림
+  const resetClock = () => {
+    if (!confirm('클락을 처음으로 초기화할까요? 레벨·시간·인원이 모두 초기화됩니다(설정은 유지).')) return;
+    const firstMin = (cfg.levels[0]?.minutes ?? 20) * 60_000;
+    persist({ currentIndex: 0, remainingMs: firstMin, endsAt: null, running: false, eliminations: 0, adjEntries: 0, adjRebuys: 0, adjEarlies: 0, adjAddons: 0 });
+  };
+
   return (
     <div ref={wrapRef} className={fs ? 'fixed inset-0 z-[70] bg-[#06080c] flex flex-col overflow-hidden' : 'space-y-2'}>
       {/* 상단 바 */}
@@ -306,6 +334,15 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd }: {
           ? <span className="text-2xs font-semibold text-ink-muted">{state.sessionDate ? `📒 장부 ${state.sessionDate} 연동` : '단독 클락'}</span>
           : <h2 className="text-base font-bold text-ink-primary">클락</h2>}
         <div className="flex items-center gap-1.5 ml-auto">
+          {isAdmin && !fs && (
+            <>
+              <label className="btn-ghost cursor-pointer text-2xs px-2.5 py-1">
+                {adBusy ? '업로드…' : adImg ? '광고 변경' : '광고 등록'}
+                <input type="file" accept="image/*" className="hidden" onChange={(e) => { uploadAd(e.target.files?.[0] ?? null); e.currentTarget.value = ''; }} />
+              </label>
+              {adImg && <button type="button" onClick={removeAd} className="btn-ghost text-2xs px-2 py-1 text-ink-muted">광고 삭제</button>}
+            </>
+          )}
           <button type="button" onClick={toggleFs} className="btn-ghost text-2xs px-2.5 py-1">{fs ? '⤡ 전체화면 해제' : '⤢ 전체화면'}</button>
           {canManage && !fs && <button type="button" onClick={onOpenSettings} className="btn-ghost text-2xs px-2.5 py-1">설정</button>}
         </div>
@@ -316,6 +353,13 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd }: {
         fs ? 'flex-1 flex flex-col min-h-0 rounded-none border-x-0 border-t-0' : 'rounded-card'].join(' ')}>
 
         {/* 타이틀 바 */}
+        {/* 전체 클락 공통 광고(운영자 등록) — 최상단 */}
+        {adImg && (
+          <div className="shrink-0 border-b border-gold-400/20 bg-black">
+            <img src={adImg} alt="광고" className={['mx-auto w-full object-contain', fs ? 'max-h-[15vh]' : 'max-h-28'].join(' ')} />
+          </div>
+        )}
+
         <div className="shrink-0 bg-gradient-to-r from-gold-400/15 via-gold-300/[0.06] to-gold-400/15 border-b border-gold-400/25 px-4 py-2 text-center">
           <p className={['font-extrabold tracking-wide text-gold-200 truncate', fs ? 'text-[min(3.4vw,4vh)]' : 'text-sm sm:text-lg'].join(' ')}>{title}</p>
         </div>
@@ -349,7 +393,9 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd }: {
             fs ? 'py-2' : 'py-6 sm:py-10',
             isBreak ? 'bg-[radial-gradient(ellipse_at_center,rgba(56,120,200,0.16),transparent_72%)]'
                     : 'bg-[radial-gradient(ellipse_at_center,rgba(201,169,97,0.10),transparent_72%)]'].join(' ')}>
-            <p className={['font-bold tracking-[0.16em] uppercase',
+            {/* 누리홀덤 로고 워터마크(투명) — 트레이드마크. 클락은 항상 다크라 흰 워드마크 사용 */}
+            <img src="/2.png" alt="" aria-hidden className="pointer-events-none absolute inset-0 m-auto h-auto w-[58%] max-w-[62vh] select-none object-contain opacity-[0.05]" />
+            <p className={['relative font-bold tracking-[0.16em] uppercase',
               isBreak ? 'text-sky-300/90' : 'text-gold-200/80',
               fs ? 'text-[min(4vw,5vh)]' : 'text-base sm:text-2xl'].join(' ')}>
               {isBreak ? (cur.label || 'BREAK') : `LEVEL ${levelNo}`}
@@ -415,6 +461,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd }: {
                   state.running ? 'bg-amber-500/90 text-ink-inverse hover:bg-amber-500' : 'bg-emerald-500/90 text-ink-inverse hover:bg-emerald-500'].join(' ')}>
                 {state.running ? '⏸ STOP' : '▶ START'}
               </button>
+              <button type="button" onClick={resetClock} className="px-3 py-2 rounded-input text-xs font-bold bg-surface-float text-ink-secondary border border-border-default hover:text-amber-300">↺ 초기화</button>
               {fs
                 ? <button type="button" onClick={toggleFs} className="px-4 py-2 rounded-input text-xs font-bold bg-surface-float text-ink-secondary border border-border-default">⤡ 해제</button>
                 : <button type="button" onClick={onEnd} className="px-4 py-2 rounded-input text-xs font-bold bg-surface-float text-ink-secondary border border-border-default hover:text-danger-light">END</button>}
@@ -706,9 +753,9 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
                   <input type="number" value={l.ante || ''} onChange={(e) => setLevel(i, { ante: +e.target.value || 0 })} placeholder="ANTE" className="input w-full text-xs tabular-nums min-w-0" />
                 </>
               )}
-              <div className="relative w-16 shrink-0">
-                <input type="number" value={l.minutes || ''} onChange={(e) => setLevel(i, { minutes: +e.target.value || 0 })} className="input w-full text-xs tabular-nums pr-6" />
-                <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-ink-muted">분</span>
+              <div className="relative w-[4.75rem] shrink-0">
+                <input type="number" value={l.minutes || ''} onChange={(e) => setLevel(i, { minutes: +e.target.value || 0 })} className="input w-full text-xs tabular-nums pr-7 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-ink-muted pointer-events-none">분</span>
               </div>
               <button type="button" onClick={() => removeLevel(i)} className="text-ink-muted hover:text-danger-light text-xs px-1 shrink-0">✕</button>
             </div>
