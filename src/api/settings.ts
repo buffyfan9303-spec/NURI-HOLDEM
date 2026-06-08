@@ -16,3 +16,4 @@ export async function setAppSetting(key: string, value: string): Promise<void> {
 }
 
 export const CLOCK_AD_KEY = 'clock_ad_image';
+export const CLOCK_AD_SIZE_KEY = 'clock_ad_size'; // 'sm' | 'md' | 'lg'

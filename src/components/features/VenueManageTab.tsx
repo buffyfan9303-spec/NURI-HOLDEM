@@ -296,44 +296,45 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
       ) : (
         <ul className="space-y-1.5">
           {rows.map((row, i) => (
-            <li key={i} className="space-y-1 rounded-input border border-border-subtle bg-surface-low/40 p-1.5">
-              <div className="flex items-center gap-1.5">
-              <span className="w-5 shrink-0 text-center text-sm font-bold text-gold-300 tabular-nums">{i + 1}</span>
-              <input
-                type="text" value={row.nickname} maxLength={30}
-                onChange={(e) => update(i, 'nickname', e.target.value)}
-                placeholder="닉네임 *"
-                className="input flex-[1.2] min-w-0 text-sm py-2"
-              />
-              <input
-                type="text" value={row.realName} maxLength={20}
-                onChange={(e) => update(i, 'realName', e.target.value)}
-                placeholder="실명(선택)"
-                className="input flex-1 min-w-0 text-sm py-2"
-              />
-              <input
-                type="text" inputMode="numeric" value={row.prize} maxLength={12}
-                onChange={(e) => update(i, 'prize', e.target.value.replace(/[^\d.]/g, ''))}
-                onKeyDown={(e) => { if (e.key === 'Enter' && i === rows.length - 1) addRow(); }}
-                placeholder="프라이즈(만원)"
-                className="input flex-1 min-w-0 text-sm py-2"
-              />
-              <button
-                type="button" onClick={() => removeRow(i)} aria-label="줄 삭제"
-                className="w-8 h-8 shrink-0 flex items-center justify-center rounded-input text-ink-muted hover:text-danger-light transition-colors"
-              >
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
-                  <line x1="2" y1="2" x2="12" y2="12" /><line x1="12" y1="2" x2="2" y2="12" />
-                </svg>
-              </button>
-              </div>
-              {/* 매장이용권 지급(갯수) + 비고 */}
-              <div className="flex items-center gap-1.5 pl-6">
-                <div className="relative w-24 shrink-0">
-                  <input type="number" inputMode="numeric" value={row.voucher} onChange={(e) => update(i, 'voucher', e.target.value.replace(/[^\d]/g, ''))} placeholder="이용권" className="input w-full text-sm py-1.5 pr-7 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" />
-                  <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">개</span>
+            <li key={i} className="flex items-start gap-1.5 rounded-input border border-border-subtle bg-surface-low/40 p-1.5">
+              <span className="w-5 shrink-0 pt-2 text-center text-sm font-bold text-gold-300 tabular-nums">{i + 1}</span>
+              <div className="min-w-0 flex-1 space-y-1">
+                {/* 1줄: 닉네임 · 실명 · 프라이즈 + 삭제 */}
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="text" value={row.nickname} maxLength={30}
+                    onChange={(e) => update(i, 'nickname', e.target.value)}
+                    placeholder="닉네임 *"
+                    className="input flex-[1.3] min-w-0 text-sm py-2"
+                  />
+                  <input
+                    type="text" value={row.realName} maxLength={20}
+                    onChange={(e) => update(i, 'realName', e.target.value)}
+                    placeholder="실명(선택)"
+                    className="input flex-1 min-w-0 text-sm py-2"
+                  />
+                  <input
+                    type="text" inputMode="numeric" value={row.prize} maxLength={12}
+                    onChange={(e) => update(i, 'prize', e.target.value.replace(/[^\d.]/g, ''))}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && i === rows.length - 1) addRow(); }}
+                    placeholder="프라이즈(만원)"
+                    className="input flex-1 min-w-0 text-sm py-2"
+                  />
+                  <button
+                    type="button" onClick={() => removeRow(i)} aria-label="줄 삭제"
+                    className="w-8 h-8 shrink-0 flex items-center justify-center rounded-input text-ink-muted hover:text-danger-light transition-colors"
+                  >
+                    <Icon name="close" size={14} />
+                  </button>
                 </div>
-                <input type="text" value={row.note} onChange={(e) => update(i, 'note', e.target.value)} maxLength={50} placeholder="비고(선택)" className="input min-w-0 flex-1 text-sm py-1.5" />
+                {/* 2줄: 이용권 갯수 · 비고 (1줄과 동일 시작점에 정렬) */}
+                <div className="flex items-center gap-1.5">
+                  <div className="relative w-28 shrink-0">
+                    <input type="number" inputMode="numeric" value={row.voucher} onChange={(e) => update(i, 'voucher', e.target.value.replace(/[^\d]/g, ''))} placeholder="이용권" className="input w-full text-sm py-1.5 pr-7 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" />
+                    <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">개</span>
+                  </div>
+                  <input type="text" value={row.note} onChange={(e) => update(i, 'note', e.target.value)} maxLength={50} placeholder="비고(선택)" className="input min-w-0 flex-1 text-sm py-1.5" />
+                </div>
               </div>
             </li>
           ))}

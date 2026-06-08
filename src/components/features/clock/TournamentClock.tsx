@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useToast } from '../../atoms/Toast';
 import { useBackClose } from '../../../lib/backstack';
 import { useAuth } from '../../../contexts/AuthContext';
-import { getAppSetting, setAppSetting, CLOCK_AD_KEY } from '../../../api/settings';
+import { getAppSetting, setAppSetting, CLOCK_AD_KEY, CLOCK_AD_SIZE_KEY } from '../../../api/settings';
 import { uploadPoster } from '../../../lib/storage';
 import {
   type ClockConfig, type ClockLevel, type ClockPreset, type ClockState, type ClockPrizeRow,
@@ -173,8 +173,16 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd }: {
   const [fs, setFs] = useState(false);
   // 전체 클락 공통 광고 이미지(운영자 설정) — 모든 클락 상단에 표시
   const [adImg, setAdImg] = useState<string | null>(null);
+  const [adSize, setAdSize] = useState<'sm' | 'md' | 'lg'>('sm'); // 운영자 조절(기본 작게)
   const [adBusy, setAdBusy] = useState(false);
-  useEffect(() => { getAppSetting(CLOCK_AD_KEY).then(setAdImg).catch(() => {}); }, []);
+  useEffect(() => {
+    getAppSetting(CLOCK_AD_KEY).then(setAdImg).catch(() => {});
+    getAppSetting(CLOCK_AD_SIZE_KEY).then((v) => { if (v === 'sm' || v === 'md' || v === 'lg') setAdSize(v); }).catch(() => {});
+  }, []);
+  const changeAdSize = async (s: 'sm' | 'md' | 'lg') => {
+    setAdSize(s);
+    try { await setAppSetting(CLOCK_AD_SIZE_KEY, s); } catch { /* noop */ }
+  };
   const uploadAd = async (file: File | null) => {
     if (!file || !user) return;
     setAdBusy(true);
@@ -340,6 +348,14 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd }: {
                 {adBusy ? '업로드…' : adImg ? '광고 변경' : '광고 등록'}
                 <input type="file" accept="image/*" className="hidden" onChange={(e) => { uploadAd(e.target.files?.[0] ?? null); e.currentTarget.value = ''; }} />
               </label>
+              {adImg && (
+                <div className="flex items-center gap-0.5 rounded-input bg-surface-high p-0.5">
+                  {([['sm', '작게'], ['md', '중간'], ['lg', '크게']] as const).map(([s, l]) => (
+                    <button key={s} type="button" onClick={() => changeAdSize(s)}
+                      className={['rounded-[5px] px-1.5 py-0.5 text-2xs font-bold transition-colors', adSize === s ? 'bg-gold-300 text-ink-inverse' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>{l}</button>
+                  ))}
+                </div>
+              )}
               {adImg && <button type="button" onClick={removeAd} className="btn-ghost text-2xs px-2 py-1 text-ink-muted">광고 삭제</button>}
             </>
           )}
@@ -356,7 +372,8 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd }: {
         {/* 전체 클락 공통 광고(운영자 등록) — 최상단 */}
         {adImg && (
           <div className="shrink-0 border-b border-gold-400/20 bg-black">
-            <img src={adImg} alt="광고" className={['mx-auto w-full object-contain', fs ? 'max-h-[15vh]' : 'max-h-28'].join(' ')} />
+            <img src={adImg} alt="광고" className={['mx-auto w-full object-contain',
+              adSize === 'sm' ? (fs ? 'max-h-[8vh]' : 'max-h-16') : adSize === 'lg' ? (fs ? 'max-h-[24vh]' : 'max-h-48') : (fs ? 'max-h-[15vh]' : 'max-h-28')].join(' ')} />
           </div>
         )}
 
