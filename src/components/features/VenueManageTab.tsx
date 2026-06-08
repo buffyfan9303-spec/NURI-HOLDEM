@@ -94,7 +94,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   }
 
   return (
-    <div className="space-y-3 mx-auto w-full max-w-3xl">
+    <div className="space-y-3 mx-auto w-full max-w-5xl">
       {/* 운영자: 전 매장 접근 — 관리할 매장 선택 */}
       {isAdmin && (
         <div className="rounded-card border border-gold-400/40 bg-gold-300/[0.06] p-2.5 space-y-1.5">
@@ -117,41 +117,61 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
       ) : section === null ? (
         <p className="py-16 text-center text-sm text-ink-muted">이 매장에서 사용 가능한 메뉴가 없습니다.<br />업주에게 장부 권한을 요청하세요.</p>
       ) : (
-        <>
+        <div className="lg:flex lg:gap-4">
           {available.length > 1 && (
-            <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5 overflow-x-auto scrollbar-none">
+            <nav className="flex gap-1 overflow-x-auto scrollbar-none rounded-input bg-surface-high p-0.5 lg:sticky lg:top-16 lg:w-44 lg:shrink-0 lg:flex-col lg:self-start lg:overflow-visible lg:bg-transparent lg:p-0">
               {available.map((a) => (
-                <TabBtn key={a.id} active={section === a.id} onClick={() => setSection(a.id)}>{a.label}</TabBtn>
+                <SectionBtn key={a.id} icon={SECTION_ICON[a.id]} active={section === a.id} onClick={() => setSection(a.id)}>{a.label}</SectionBtn>
               ))}
-            </div>
+            </nav>
           )}
 
-          {section === 'dashboard' && <StoreDashboard venueId={venueId} schedules={schedules} onGoto={(s) => setSection(s as Section)} onCreatePoster={onCreatePoster} />}
-          {section === 'posters' && canPosters && <MyPostersTab schedules={schedules} onCreate={onCreatePoster} onEdit={onEditPoster} onDelete={onDeletePoster} />}
-          {section === 'ledger'  && ledgerOk && (
-            <NuriPosLedger venueId={venueId} canManage={manageOk}
-              onMakeRankingDraft={(d, names) => { setRankingDraft({ date: d, names }); setSection('ranking'); }}
-              onOpenClock={(d) => { setClockSeed(d); setSection('clock'); }} />
-          )}
-          {section === 'stats'    && manageOk && <LedgerStatsPanel venueId={venueId} />}
-          {section === 'ranking'  && <RankingEditor venueId={venueId} canEdit={isAdmin || user.approved === true} draft={rankingDraft} />}
-          {section === 'clock'    && ledgerOk && <TournamentClock venueId={venueId} canManage={ledgerOk} seedSessionDate={clockSeed} />}
-          {section === 'attendance' && ledgerOk && <StaffSelfAttendance venueId={venueId} />}
-          {section === 'staff'    && canStaff && <StaffHub venueId={venueId} />}
-          {section === 'settings' && canStaff && <PosSettingsPanel venueId={venueId} />}
-          {section === 'voucher'  && (manageOk || voucherView) && <VoucherManagePanel venueId={venueId} />}
-        </>
+          <div className="mt-3 min-w-0 flex-1 space-y-3 lg:mt-0">
+            {section === 'dashboard' && <StoreDashboard venueId={venueId} schedules={schedules} onGoto={(s) => setSection(s as Section)} onCreatePoster={onCreatePoster} />}
+            {section === 'posters' && canPosters && <MyPostersTab schedules={schedules} onCreate={onCreatePoster} onEdit={onEditPoster} onDelete={onDeletePoster} />}
+            {section === 'ledger'  && ledgerOk && (
+              <NuriPosLedger venueId={venueId} canManage={manageOk}
+                onMakeRankingDraft={(d, names) => { setRankingDraft({ date: d, names }); setSection('ranking'); }}
+                onOpenClock={(d) => { setClockSeed(d); setSection('clock'); }} />
+            )}
+            {section === 'stats'    && manageOk && <LedgerStatsPanel venueId={venueId} />}
+            {section === 'ranking'  && <RankingEditor venueId={venueId} canEdit={isAdmin || user.approved === true} draft={rankingDraft} />}
+            {section === 'clock'    && ledgerOk && <TournamentClock venueId={venueId} canManage={ledgerOk} seedSessionDate={clockSeed} />}
+            {section === 'attendance' && ledgerOk && <StaffSelfAttendance venueId={venueId} />}
+            {section === 'staff'    && canStaff && <StaffHub venueId={venueId} />}
+            {section === 'settings' && canStaff && <PosSettingsPanel venueId={venueId} />}
+            {section === 'voucher'  && (manageOk || voucherView) && <VoucherManagePanel venueId={venueId} />}
+          </div>
+        </div>
       )}
     </div>
   );
 }
 
-function TabBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+// 섹션 아이콘(라인 스타일 통일: 16px, stroke 1.8)
+const ic = (children: ReactNode) => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{children}</svg>
+);
+const SECTION_ICON: Record<Section, ReactNode> = {
+  dashboard: ic(<><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /></>),
+  posters: ic(<><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-4.5-4.5L6 21" /></>),
+  ledger: ic(<><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" /></>),
+  stats: ic(<><line x1="6" y1="20" x2="6" y2="14" /><line x1="12" y1="20" x2="12" y2="9" /><line x1="18" y1="20" x2="18" y2="4" /></>),
+  ranking: ic(<><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" /><path d="M4 22h16" /><path d="M10 14.7V18M14 14.7V18" /><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" /></>),
+  clock: ic(<><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>),
+  attendance: ic(<><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="m9 16 2 2 4-4" /></>),
+  voucher: ic(<><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" /><path d="M13 5v14" /></>),
+  staff: ic(<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>),
+  settings: ic(<><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" /></>),
+};
+
+function SectionBtn({ active, onClick, icon, children }: { active: boolean; onClick: () => void; icon?: ReactNode; children: ReactNode }) {
   return (
     <button type="button" onClick={onClick}
-      className={['flex-1 py-2 text-xs font-semibold rounded-[6px] transition-all focus:outline-none',
-        active ? 'bg-gold-300 text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
-      {children}
+      className={['flex shrink-0 items-center gap-2 whitespace-nowrap rounded-[6px] px-3 py-2 text-xs font-semibold transition-colors focus:outline-none touch-manipulation lg:w-full lg:justify-start',
+        active ? 'bg-gold-300 text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary lg:hover:bg-surface-high'].join(' ')}>
+      <span className="shrink-0" aria-hidden>{icon}</span>
+      <span>{children}</span>
     </button>
   );
 }
