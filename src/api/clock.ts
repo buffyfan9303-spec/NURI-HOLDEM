@@ -45,6 +45,7 @@ export interface ClockPreset {
 export interface ClockLiveStats {
   entries: number; rebuys: number; earlies: number; addons: number;
   alive: number; eliminations: number; totalStack: number; avgStack: number;
+  buyInAmount?: number | null; // 바인 금액(원) — 연동 장부 세션값. 라이브 보드 표시용(공개).
 }
 
 export interface ClockState {

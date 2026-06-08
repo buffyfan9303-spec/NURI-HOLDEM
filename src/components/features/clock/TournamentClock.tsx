@@ -199,14 +199,14 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd }: {
   const persist = useCallback((patch: Partial<ClockState>) => {
     const next = { ...state, ...patch };
     onChange(next);
-    if (canManage) saveClockState({ ...next, liveStats: computeLiveStats(next, derived, cfg) }).catch((e) => toast.show(e instanceof Error ? e.message : '저장 실패', 'error'));
-  }, [state, canManage, onChange, toast, derived, cfg]);
+    if (canManage) saveClockState({ ...next, liveStats: { ...computeLiveStats(next, derived, cfg), buyInAmount: linkedSession?.buyinAmount ?? null } }).catch((e) => toast.show(e instanceof Error ? e.message : '저장 실패', 'error'));
+  }, [state, canManage, onChange, toast, derived, cfg, linkedSession]);
 
   // 장부 변동(엔트리/리바인/얼리) 시 라이브 통계 스냅샷 최신화 → 보드 반영.
   const derivedKey = `${derived.entries}/${derived.rebuys}/${derived.earlies}/${derived.doubleEarlies}`;
   useEffect(() => {
     if (!canManage || !state.sessionDate) return;
-    saveClockState({ ...state, liveStats: computeLiveStats(state, derived, cfg) }).catch(() => {});
+    saveClockState({ ...state, liveStats: { ...computeLiveStats(state, derived, cfg), buyInAmount: linkedSession?.buyinAmount ?? null } }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [derivedKey]);
 

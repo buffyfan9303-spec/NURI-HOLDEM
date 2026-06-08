@@ -51,14 +51,20 @@ export default function CustomerDashboardPage({ open, onClose }: { open: boolean
   const venueGroups = [...venueMap.entries()].map(([vid, g]) => ({ vid, name: g.name, stacks: [...g.stacks.values()] }))
     .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
 
-  const usageMap = new Map<string, { name: string; visits: number; moneyin: number; amount: number }>();
-  for (const x of visits) usageMap.set(x.venueId, { name: x.venueName ?? '매장', visits: x.visits, moneyin: 0, amount: 0 });
+  const usageMap = new Map<string, { name: string; visits: number; moneyin: number; amount: number; lastAt: string | null }>();
+  for (const x of visits) usageMap.set(x.venueId, { name: x.venueName ?? '매장', visits: x.visits, moneyin: 0, amount: 0, lastAt: null });
   for (const p of plays) {
-    const e = usageMap.get(p.venueId) ?? { name: p.venueName ?? '매장', visits: 0, moneyin: 0, amount: 0 };
-    e.moneyin = p.moneyinCount; e.amount = p.totalAmount;
+    const e = usageMap.get(p.venueId) ?? { name: p.venueName ?? '매장', visits: 0, moneyin: 0, amount: 0, lastAt: null };
+    e.moneyin = p.moneyinCount; e.amount = p.totalAmount; e.lastAt = p.lastAt;
     usageMap.set(p.venueId, e);
   }
   const usage = [...usageMap.values()].sort((a, b) => (b.moneyin + b.visits) - (a.moneyin + a.visits));
+  // 하이라이트 — 총 머니인/누적액 + 최다 머니인(횟수) 매장 + 최다 머니인(금액) 매장
+  const totalMoneyin = plays.reduce((s, p) => s + p.moneyinCount, 0);
+  const totalSpent = plays.reduce((s, p) => s + p.totalAmount, 0);
+  const topMoneyin = [...usage].filter((u) => u.moneyin > 0).sort((a, b) => b.moneyin - a.moneyin)[0] ?? null;
+  const topAmount = [...usage].filter((u) => u.amount > 0).sort((a, b) => b.amount - a.amount)[0] ?? null;
+  const fmtDate = (iso: string | null) => { if (!iso) return ''; const d = new Date(iso); return `${d.getMonth() + 1}/${d.getDate()}`; };
 
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-surface-base">
@@ -76,6 +82,23 @@ export default function CustomerDashboardPage({ open, onClose }: { open: boolean
             <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">현금·포인트가 아니며 환불·현금화·유저 간 거래가 불가합니다. 발급한 매장에서 사용(회수)만 가능합니다.</p>
           </div>
 
+          {/* 하이라이트 요약 — 보유 이용권·방문·머니인·최다 머니인 매장/금액 */}
+          {!loading && (usage.length > 0 || active.length > 0) && (
+            <section className="space-y-2">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <Stat label="보유 이용권" value={`${active.length}장`} accent />
+                <Stat label="방문 매장" value={`${usage.length}곳`} />
+                <Stat label="총 머니인" value={`${totalMoneyin}회`} />
+                <Stat label="누적 머니인액" value={totalSpent ? wonToMan(totalSpent) + '만' : '-'} accent />
+              </div>
+              {(topMoneyin || topAmount) && (
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {topMoneyin && <HiCard title="최다 머니인 매장" name={topMoneyin.name} detail={`머니인 ${topMoneyin.moneyin}회 · 누적 ${topMoneyin.amount ? wonToMan(topMoneyin.amount) + '만' : '-'}`} />}
+                  {topAmount && <HiCard title="최다 머니인 금액" name={topAmount.name} detail={`${wonToMan(topAmount.amount)}만 · ${topAmount.moneyin}회`} />}
+                </div>
+              )}
+            </section>
+          )}
 
           <section>
             <p className="mb-1.5 text-sm font-bold text-ink-primary">내 매장이용권 <span className="text-gold-300">{active.length}</span></p>
@@ -98,12 +121,15 @@ export default function CustomerDashboardPage({ open, onClose }: { open: boolean
           </section>
 
           <section>
-            <p className="mb-1.5 text-sm font-bold text-ink-primary">매장 이용내역</p>
+            <p className="mb-1.5 text-sm font-bold text-ink-primary">매장 이용·참가 내역</p>
             {loading ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
               : usage.length === 0 ? <p className="py-6 text-center text-2xs text-ink-muted">방문·머니인 기록이 아직 없습니다.</p>
                 : <ul className="space-y-1.5">{usage.map((u, i) => (
                   <li key={i} className="rounded-input border border-border-subtle bg-surface-low px-3 py-2">
-                    <p className="truncate text-sm font-semibold text-ink-primary">{u.name}</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="min-w-0 truncate text-sm font-semibold text-ink-primary">{u.name}</p>
+                      {u.lastAt && <span className="shrink-0 text-[10px] text-ink-muted">최근 {fmtDate(u.lastAt)}</span>}
+                    </div>
                     <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-2xs text-ink-muted">
                       <span>방문 <b className="text-ink-secondary tabular-nums">{u.visits}</b>회</span>
                       <span>머니인 <b className="text-ink-secondary tabular-nums">{u.moneyin}</b>회</span>
@@ -199,4 +225,23 @@ function QrScanner({ onResult, onError }: { onResult: (text: string) => void; on
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return <div id="nuri-qr-reader" className="mx-auto w-full max-w-[280px] overflow-hidden rounded-input bg-black" style={{ minHeight: 220 }} />;
+}
+
+function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+  return (
+    <div className="rounded-input border border-border-subtle bg-surface-low p-2 text-center">
+      <p className={`text-base font-extrabold leading-none tabular-nums ${accent ? 'text-gold-300' : 'text-ink-primary'}`}>{value}</p>
+      <p className="mt-1 text-[10px] text-ink-muted">{label}</p>
+    </div>
+  );
+}
+
+function HiCard({ title, name, detail }: { title: string; name: string; detail: string }) {
+  return (
+    <div className="rounded-card border border-gold-400/30 bg-gold-300/[0.05] p-3">
+      <p className="text-2xs font-bold text-gold-300">{title}</p>
+      <p className="mt-0.5 truncate text-sm font-bold text-ink-primary">{name}</p>
+      <p className="text-2xs text-ink-muted">{detail}</p>
+    </div>
+  );
 }

@@ -3,6 +3,7 @@
 // 레벨/블라인드/앤티·남은시간·생존/엔트리·리바인·얼리·애드온·탈락·총스택·평균스택·등록마감·다음브레이크.
 import { useEffect, useState } from 'react';
 import { getRunningClocks, subscribeRunningClocks, type ClockState, type ClockLevel } from '../../api/clock';
+import { wonToMan } from '../../api/ledger';
 import { EmptyState } from '../atoms/Skeleton';
 import type { Venue } from '../../api/community';
 
@@ -83,6 +84,7 @@ function LiveCard({ g, name, onClick }: { g: ClockState; name: string; onClick: 
   const ls = g.liveStats ?? {
     entries: g.adjEntries, rebuys: g.adjRebuys, earlies: g.adjEarlies, addons: g.adjAddons,
     alive: Math.max(0, g.adjEntries - g.eliminations), eliminations: g.eliminations, totalStack: 0, avgStack: 0,
+    buyInAmount: null,
   };
   const urgent = g.running && remaining <= 60_000 && !isBreak;
 
@@ -117,6 +119,13 @@ function LiveCard({ g, name, onClick }: { g: ClockState; name: string; onClick: 
             <p className={`text-2xl font-extrabold leading-none tabular-nums ${urgent ? 'text-rose-400' : 'text-gold-300'}`}>{mmss(Math.max(0, remaining))}</p>
           </div>
         </div>
+
+        {/* 바인 · 리바인 금액(연동 장부 기준) */}
+        {ls.buyInAmount ? (
+          <p className="mt-2 rounded-input bg-surface-base/60 px-3 py-1.5 text-2xs text-ink-secondary">
+            바인 <b className="text-gold-300">{wonToMan(ls.buyInAmount)}만</b> · 리바인 <b className="text-gold-300">{wonToMan(ls.buyInAmount)}만</b>
+          </p>
+        ) : null}
 
         {/* 인원·리바인·얼리·애드온/탈락 */}
         <div className="mt-2 grid grid-cols-4 gap-1.5">
