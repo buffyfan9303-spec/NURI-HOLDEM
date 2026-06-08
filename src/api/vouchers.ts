@@ -32,6 +32,16 @@ export async function listVenueVouchers(venueId: string): Promise<Voucher[]> {
   return (data ?? []).map(mapRow);
 }
 
+/** 발행 매장 이용권 실시간 구독 — 사용/발급/회수 시 즉시 반영(RLS로 권한 자동 게이트). */
+export function subscribeVenueVouchers(venueId: string, onChange: () => void): () => void {
+  if (IS_MOCK) return () => {};
+  const ch = supabase
+    .channel(`store_vouchers_${venueId}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'store_vouchers', filter: `venue_id=eq.${venueId}` }, () => onChange())
+    .subscribe();
+  return () => { supabase.removeChannel(ch); };
+}
+
 /** 내가 보유한 이용권 (손님) */
 export async function listMyVouchers(): Promise<Voucher[]> {
   if (IS_MOCK) return [];
