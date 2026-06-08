@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, Suspense } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, Suspense, type ReactNode } from 'react';
 import { useToast } from './components/atoms/Toast';
 import { checkIn } from './api/checkins';
 import UnreadBadge from './components/atoms/UnreadBadge';
@@ -328,6 +328,20 @@ function AppHeader({
  *  - 비활성도 transparent 밑줄을 유지 → 활성 전환 시 색만 바뀌어 레이아웃 흔들림 0.
  *  - 예외: 탭이 화면보다 넓어지면 overflow-x-auto로 가로 스크롤(레이아웃 안전).
  */
+// 메인 탭 아이콘(라인 스타일 통일: 15px, stroke 1.8)
+const tabIcon = (children: ReactNode) => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{children}</svg>
+);
+const TAB_ICON: Record<TabId, ReactNode> = {
+  browse: tabIcon(<><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></>),
+  live: tabIcon(<><circle cx="12" cy="12" r="2" /><path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14" /></>),
+  community: tabIcon(<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5Z" />),
+  market: tabIcon(<><path d="M3 6h18l-1.6 11.2A2 2 0 0 1 17.4 19H6.6a2 2 0 0 1-2-1.8L3 6Z" /><path d="M8.5 6V5a3.5 3.5 0 0 1 7 0v1" /></>),
+  tools: tabIcon(<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.8-.7-.7-2.8 2.5-2.5Z" />),
+  'my-store': tabIcon(<><path d="M3 9.5 5 4h14l2 5.5" /><path d="M4 9.5V20a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9.5" /><path d="M9 21v-6h6v6" /></>),
+  admin: tabIcon(<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />),
+};
+
 function TabBar({
   tabs, active, onChange,
 }: { tabs: TabDef[]; active: TabId; onChange: (t: TabId) => void }) {
@@ -377,8 +391,9 @@ function TabBar({
           >
             <span
               ref={(el) => { labelRefs.current[id] = el; }}
-              className="relative inline-flex items-center justify-center"
+              className="relative inline-flex items-center justify-center gap-1.5"
             >
+              <span className="shrink-0" aria-hidden>{TAB_ICON[id]}</span>
               {label}
             </span>
           </button>
