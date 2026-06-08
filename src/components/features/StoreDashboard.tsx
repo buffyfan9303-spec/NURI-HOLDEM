@@ -35,18 +35,22 @@ const monthRange = () => {
 };
 const hhmm = (s?: string | null) => { if (!s) return null; const [h, m] = s.split(':').map(Number); return h * 60 + (m || 0); };
 
+export interface DashCaps { ledger: boolean; manage: boolean; voucher: boolean; posters: boolean; staff: boolean }
+
 interface Props {
   venueId: string;
   schedules: Schedule[];
   onGoto: (section: string) => void;
   onCreatePoster: () => void;
+  /** 직원 권한에 따라 카드/바로가기 노출 게이팅(업주·운영자는 전부 true). */
+  caps: DashCaps;
 }
 
 /**
  * 매장 대시보드 — 오늘 장부·클락·예약·출근 + 최근 7일 추세·객단가 + 미수 알림 + 인건비·손님유형을 실시간 요약.
- * 모든 카드는 해당 운영 화면으로 바로가기.
+ * 모든 카드는 해당 운영 화면으로 바로가기. 직원은 부여된 권한(caps)의 카드만 노출 — 권한 없는 화면으로의 dead-end 방지.
  */
-export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePoster }: Props) {
+export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePoster, caps }: Props) {
   const d = localToday();
   const days = last7();
   const d14 = last14();
@@ -215,6 +219,17 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const typeEntries = Object.entries(typeCount).sort((a, b) => b[1] - a[1]);
   const playerTotal = players.length;
 
+  // 직원 권한에 따른 노출 — 권한 0이면 안내(권한 없는 화면으로의 진입 차단)
+  const anyCap = caps.ledger || caps.manage || caps.voucher || caps.posters || caps.staff;
+  if (!anyCap) {
+    return (
+      <div className="rounded-card border border-border-default bg-surface-low p-6 text-center space-y-2">
+        <p className="text-sm font-bold text-ink-primary">아직 부여된 권한이 없습니다</p>
+        <p className="text-2xs leading-relaxed text-ink-muted">업주에게 <span className="font-semibold text-gold-300">장부·순위</span> 또는 <span className="font-semibold text-gold-300">이용권 내역</span> 권한을 요청하면<br />이 매장의 운영 화면을 이용할 수 있습니다.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3">
       <RegularsModal open={regOpen} onClose={() => setRegOpen(false)} venueId={venueId} exclude={[...staffNames]} />
@@ -222,8 +237,8 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       <DealerShiftsModal open={dealerOpen} onClose={() => setDealerOpen(false)} venueId={venueId} monthKey={mr.start.slice(0, 7)} />
       <VoucherManageModal open={voucherOpen} onClose={() => setVoucherOpen(false)} venueId={venueId} />
       <CheckinModal open={checkinOpen} onClose={() => setCheckinOpen(false)} venueId={venueId} />
-      {/* 미수·리스크 알림 */}
-      {started && fin.unpaid > 0 && (
+      {/* 미수·리스크 알림 (장부 권한) */}
+      {caps.ledger && started && fin.unpaid > 0 && (
         <button type="button" onClick={() => onGoto('ledger')}
           className="flex w-full items-center gap-2 rounded-card border border-danger/40 bg-danger/[0.08] px-3 py-2.5 text-left hover:bg-danger/[0.12] transition-colors">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-danger-light" aria-hidden><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
@@ -231,21 +246,23 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         </button>
       )}
 
-      {/* 빠른 작업 */}
-      <div className="grid grid-cols-4 gap-2">
-        <QuickAction label="새 게임" onClick={onCreatePoster}
-          icon={<><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></>} />
-        <QuickAction label="장부" onClick={() => onGoto('ledger')}
-          icon={<><path d="M4 4h12a2 2 0 0 1 2 2v14l-3-2-3 2-3-2-3 2V6a2 2 0 0 1 2-2Z" /></>} />
-        <QuickAction label="클락" onClick={() => onGoto('clock')}
-          icon={<><circle cx="12" cy="13" r="7" /><path d="M12 10v3l2 2" /><line x1="9" y1="2" x2="15" y2="2" /></>} />
-        <QuickAction label="웨이팅" onClick={() => setWaitOpen(true)}
-          icon={<><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M19 8v6" /><path d="M22 11h-6" /></>} />
-      </div>
+      {/* 빠른 작업 — 권한 있는 항목만 */}
+      {(caps.posters || caps.ledger) && (
+        <div className="grid grid-cols-4 gap-2">
+          {caps.posters && <QuickAction label="새 게임" onClick={onCreatePoster}
+            icon={<><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></>} />}
+          {caps.ledger && <QuickAction label="장부" onClick={() => onGoto('ledger')}
+            icon={<><path d="M4 4h12a2 2 0 0 1 2 2v14l-3-2-3 2-3-2-3 2V6a2 2 0 0 1 2-2Z" /></>} />}
+          {caps.ledger && <QuickAction label="클락" onClick={() => onGoto('clock')}
+            icon={<><circle cx="12" cy="13" r="7" /><path d="M12 10v3l2 2" /><line x1="9" y1="2" x2="15" y2="2" /></>} />}
+          {caps.ledger && <QuickAction label="웨이팅" onClick={() => setWaitOpen(true)}
+            icon={<><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M19 8v6" /><path d="M22 11h-6" /></>} />}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {/* 오늘 장부 */}
-        <DashCard title="오늘 장부" onClick={() => onGoto('ledger')}
+        <DashCard show={caps.ledger} title="오늘 장부" onClick={() => onGoto('ledger')}
           badge={<span className={`rounded-badge px-1.5 py-0.5 text-2xs font-bold ${ledgerStatusCls}`}>{ledgerStatus}</span>}>
           {loading ? <Skeleton /> : !started ? (
             <p className="py-3 text-center text-2xs text-ink-muted">오늘 장부가 아직 시작되지 않았습니다.</p>
@@ -260,7 +277,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         </DashCard>
 
         {/* 클락 */}
-        <DashCard title="토너먼트 클락" onClick={() => onGoto('clock')}
+        <DashCard show={caps.ledger} title="토너먼트 클락" onClick={() => onGoto('clock')}
           badge={clockActive
             ? <span className={`rounded-badge px-1.5 py-0.5 text-2xs font-bold ${clock?.running ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-500/15 text-amber-400'}`}>{clock?.running ? '진행중' : '일시정지'}</span>
             : <span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-surface-float text-ink-muted">미실행</span>}>
@@ -287,7 +304,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         </DashCard>
 
         {/* 최근 7일 추세 + 객단가 */}
-        <DashCard title="최근 7일 추세" onClick={() => onGoto('stats')}
+        <DashCard show={caps.manage} title="최근 7일 추세" onClick={() => onGoto('stats')}
           badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-violet-500/15 text-violet-300">통계·AI →</span>}>
           {loading ? <Skeleton /> : weekEntry === 0 ? (
             <p className="py-3 text-center text-2xs text-ink-muted">최근 7일 장부 데이터가 없습니다.</p>
@@ -326,7 +343,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         </DashCard>
 
         {/* 전주 대비(주간 비교) */}
-        <DashCard title="전주 대비" onClick={() => onGoto('stats')}
+        <DashCard show={caps.manage} title="전주 대비" onClick={() => onGoto('stats')}
           badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-violet-500/15 text-violet-300">주간 비교</span>}>
           {loading ? <Skeleton /> : (weekEntry === 0 && prevEntry === 0) ? (
             <p className="py-3 text-center text-2xs text-ink-muted">비교할 장부 데이터가 없습니다.</p>
@@ -339,7 +356,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         </DashCard>
 
         {/* 다가오는 예약 */}
-        <DashCard title="다가오는 예약" onClick={() => onGoto('posters')}
+        <DashCard show={caps.posters} title="다가오는 예약" onClick={() => onGoto('posters')}
           badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-gold-300/15 text-gold-300">예약 {totalRes}</span>}>
           {loading ? <Skeleton /> : upcoming.length === 0 ? (
             <p className="py-3 text-center text-2xs text-ink-muted">예정된 게임이 없습니다.</p>
@@ -356,7 +373,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         </DashCard>
 
         {/* 단골 TOP(바인·방문 횟수 · 직원 제외) */}
-        <DashCard title="단골 TOP" onClick={() => setRegOpen(true)}
+        <DashCard show={caps.ledger} title="단골 TOP" onClick={() => setRegOpen(true)}
           badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-gold-300/15 text-gold-300">전체 보기 →</span>}>
           {loading ? <Skeleton /> : topRegulars.length === 0 ? (
             <p className="py-3 text-center text-2xs text-ink-muted">장부 바인 데이터가 아직 없습니다.</p>
@@ -374,7 +391,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         </DashCard>
 
         {/* 오늘 출근 */}
-        <DashCard title="오늘 출근" onClick={() => onGoto('staff')}
+        <DashCard show={caps.staff} title="오늘 출근" onClick={() => onGoto('staff')}
           badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-gold-300/15 text-gold-300">{workedStaff.length}/{shifts.length} 출근</span>}>
           {loading ? <Skeleton /> : shifts.length === 0 ? (
             <p className="py-3 text-center text-2xs text-ink-muted">오늘 배정된 직원이 없습니다.</p>
@@ -390,7 +407,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         </DashCard>
 
         {/* 인건비 요약(이번 달) */}
-        <DashCard title="인건비 요약" onClick={() => onGoto('staff')}
+        <DashCard show={caps.staff} title="인건비 요약" onClick={() => onGoto('staff')}
           badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-surface-float text-ink-secondary">{mr.label}</span>}>
           {loading ? <Skeleton /> : laborHours === 0 ? (
             <p className="py-3 text-center text-2xs text-ink-muted">이번 달 출퇴근 기록이 없습니다.</p>
@@ -403,7 +420,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         </DashCard>
 
         {/* 매장이용권(회수 티켓) */}
-        <DashCard title="매장이용권" onClick={() => setVoucherOpen(true)}
+        <DashCard show={caps.voucher} title="매장이용권" onClick={() => setVoucherOpen(true)}
           badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-gold-300/15 text-gold-300">발급·관리 →</span>}>
           {loading ? <Skeleton /> : (
             <>
@@ -419,19 +436,19 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         </DashCard>
 
         {/* 딜러 관리(로테이션·급여) */}
-        <DashCard title="딜러 관리" onClick={() => setDealerOpen(true)}
+        <DashCard show={caps.manage} title="딜러 관리" onClick={() => setDealerOpen(true)}
           badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-gold-300/15 text-gold-300">로테이션·급여 →</span>}>
           <p className="py-3 text-center text-2xs text-ink-muted">딜러 시프트 등록 + 월 급여 명세를 관리합니다.</p>
         </DashCard>
 
         {/* QR 체크인 */}
-        <DashCard title="QR 체크인" onClick={() => setCheckinOpen(true)}
+        <DashCard show={caps.ledger || caps.manage} title="QR 체크인" onClick={() => setCheckinOpen(true)}
           badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-gold-300/15 text-gold-300">QR·명단 →</span>}>
           <p className="py-3 text-center text-2xs text-ink-muted">손님 체크인 QR 표시 + 오늘 체크인 명단(실시간).</p>
         </DashCard>
 
         {/* 손님 유형 비중(오늘) */}
-        <DashCard title="손님 유형" onClick={() => onGoto('stats')}
+        <DashCard show={caps.manage} title="손님 유형" onClick={() => onGoto('stats')}
           badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-gold-300/15 text-gold-300">{playerTotal}명</span>}>
           {loading ? <Skeleton /> : playerTotal === 0 ? (
             <p className="py-3 text-center text-2xs text-ink-muted">오늘 명단이 없습니다.</p>
@@ -454,7 +471,8 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   );
 }
 
-function DashCard({ title, badge, onClick, children }: { title: string; badge?: ReactNode; onClick: () => void; children: ReactNode }) {
+function DashCard({ title, badge, onClick, children, show = true }: { title: string; badge?: ReactNode; onClick: () => void; children: ReactNode; show?: boolean }) {
+  if (!show) return null;
   return (
     <section className="rounded-card border border-border-subtle bg-surface-low p-3">
       <button type="button" onClick={onClick} className="flex w-full items-center justify-between gap-2 mb-2 group">

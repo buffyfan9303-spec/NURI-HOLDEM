@@ -127,7 +127,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
           )}
 
           <div className="mt-3 min-w-0 flex-1 space-y-3 lg:mt-0">
-            {section === 'dashboard' && <StoreDashboard venueId={venueId} schedules={schedules} onGoto={(s) => setSection(s as Section)} onCreatePoster={onCreatePoster} />}
+            {section === 'dashboard' && <StoreDashboard venueId={venueId} schedules={schedules} onGoto={(s) => setSection(s as Section)} onCreatePoster={onCreatePoster}
+              caps={{ ledger: ledgerOk, manage: manageOk, voucher: manageOk || voucherView, posters: canPosters, staff: canStaff }} />}
             {section === 'posters' && canPosters && <MyPostersTab schedules={schedules} onCreate={onCreatePoster} onEdit={onEditPoster} onDelete={onDeletePoster} />}
             {section === 'ledger'  && ledgerOk && (
               <NuriPosLedger venueId={venueId} canManage={manageOk}
