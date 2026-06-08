@@ -396,7 +396,7 @@ function StaffManager({ venueId }: { venueId: string }) {
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([getMyVenueStaff(), getMyVenueInvites(), getLedgerAccessUserIds(venueId), getVoucherAccessUserIds(venueId)])
+    Promise.all([getMyVenueStaff(venueId), getMyVenueInvites(venueId), getLedgerAccessUserIds(venueId), getVoucherAccessUserIds(venueId)])
       .then(([s, i, a, va]) => { setStaff(s); setInvites(i); setAccess(a); setVouch(va); })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -429,7 +429,7 @@ function StaffManager({ venueId }: { venueId: string }) {
     if (!addr) return;
     setInviting(true);
     try {
-      await inviteStaffByEmail(addr);
+      await inviteStaffByEmail(addr, venueId);
       toast.show('초대를 보냈습니다', 'success');
       setEmail('');
       reload();

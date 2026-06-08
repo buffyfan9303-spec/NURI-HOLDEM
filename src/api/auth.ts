@@ -184,23 +184,23 @@ export async function signUpOwner(payload: SignupOwnerPayload): Promise<void> {
 export interface StaffInvite { id: string; venueId: string; venueName: string; createdAt: string; }
 export interface VenueInvite { id: string; userId: string; email: string; nickname?: string; name: string; createdAt: string; }
 
-// 업주: 내 매장 구성원(수락 완료) 목록
-export async function getMyVenueStaff(): Promise<User[]> {
+// 업주/운영자: 매장 구성원(수락 완료) 목록. venueId 생략 시 본인 소유 매장(업주), 지정 시 해당 매장(운영자).
+export async function getMyVenueStaff(venueId?: string): Promise<User[]> {
   if (IS_MOCK) return [];
-  const { data, error } = await supabase.rpc('get_my_venue_staff');
+  const { data, error } = await supabase.rpc('get_my_venue_staff', { p_venue_id: venueId ?? null });
   if (error) throw error;
   return (data ?? []).map(rowToUser);
 }
-// 업주: 이메일로 구성원 초대
-export async function inviteStaffByEmail(email: string): Promise<void> {
+// 업주/운영자: 이메일로 구성원 초대(매장 기준 권한 체크)
+export async function inviteStaffByEmail(email: string, venueId?: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.rpc('invite_staff_by_email', { p_email: email.trim() });
+  const { error } = await supabase.rpc('invite_staff_by_email', { p_email: email.trim(), p_venue_id: venueId ?? null });
   if (error) throw error;
 }
-// 업주: 우리 매장 대기중 초대 목록
-export async function getMyVenueInvites(): Promise<VenueInvite[]> {
+// 업주/운영자: 매장 대기중 초대 목록
+export async function getMyVenueInvites(venueId?: string): Promise<VenueInvite[]> {
   if (IS_MOCK) return [];
-  const { data, error } = await supabase.rpc('get_my_venue_invites');
+  const { data, error } = await supabase.rpc('get_my_venue_invites', { p_venue_id: venueId ?? null });
   if (error) throw error;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({ id: r.id, userId: r.user_id, email: r.email, nickname: r.nickname ?? undefined, name: r.name, createdAt: r.created_at }));
