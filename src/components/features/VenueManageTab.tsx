@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import Icon from '../atoms/Icon';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
 import type { User, VenueInvite } from '../../api/auth';
@@ -71,17 +72,21 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     return () => { alive = false; };
   }, [venueId, isAdmin]);
 
-  // 사용 가능한 섹션(권한): 장부·순위 = 업주 또는 승인된(장부권한) 직원 / 통계·직원관리 = 업주만
-  const available: { id: Section; label: string }[] = [{ id: 'dashboard', label: '대시보드' }];
+  // 섹션 노출 규칙:
+  //  · 직원이 부여받을 수 있는 권한(장부·이용권)은 권한 없어도 '잠금' 탭으로 노출 → 클릭 시 "권한 없음" 안내(휑한 화면 방지).
+  //  · 장부에 종속된 순위·클락·출근은 장부 권한이 있을 때만 노출(중복 잠금 방지).
+  //  · 업주만 가능한 섹션(포스터·통계·직원·POS)은 직원에게 아예 숨김.
+  const available: { id: Section; label: string; locked?: boolean }[] = [{ id: 'dashboard', label: '대시보드' }];
   if (canPosters) available.push({ id: 'posters', label: '포스터·예약' });
-  if (ledgerOk) available.push({ id: 'ledger', label: '장부' });
+  available.push({ id: 'ledger', label: '장부', locked: !ledgerOk });
   if (manageOk) available.push({ id: 'stats',  label: '통계' });
   if (ledgerOk) available.push({ id: 'ranking', label: '순위 입력' });
   if (ledgerOk) available.push({ id: 'clock', label: '클락' });
   if (ledgerOk) available.push({ id: 'attendance', label: '출근 관리' });
-  if (manageOk || voucherView) available.push({ id: 'voucher', label: '매장이용권' });
+  available.push({ id: 'voucher', label: '매장이용권', locked: !(manageOk || voucherView) });
   if (canStaff) available.push({ id: 'staff', label: '직원 관리' });
   if (canStaff) available.push({ id: 'settings', label: 'POS 설정' });
+  const curItem = available.find((a) => a.id === section);
 
   if (!user) return null;
   // 업주·직원: 소속 매장이 없으면 안내 (운영자는 매장 선택기로 진행)
@@ -121,12 +126,19 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
           {available.length > 1 && (
             <nav className="flex gap-1 overflow-x-auto scrollbar-none rounded-input bg-surface-high p-0.5 lg:sticky lg:top-16 lg:w-44 lg:shrink-0 lg:flex-col lg:self-start lg:overflow-visible lg:bg-transparent lg:p-0">
               {available.map((a) => (
-                <SectionBtn key={a.id} icon={SECTION_ICON[a.id]} active={section === a.id} onClick={() => setSection(a.id)}>{a.label}</SectionBtn>
+                <SectionBtn key={a.id} icon={SECTION_ICON[a.id]} active={section === a.id} locked={a.locked} onClick={() => setSection(a.id)}>{a.label}</SectionBtn>
               ))}
             </nav>
           )}
 
           <div className="mt-3 min-w-0 flex-1 space-y-3 lg:mt-0">
+            {curItem?.locked ? (
+              <div className="rounded-card border border-border-default bg-surface-low p-6 text-center space-y-2.5">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-surface-high text-ink-muted"><Icon name="lock" size={22} /></div>
+                <p className="text-sm font-bold text-ink-primary">{curItem.label} · 접근 권한이 없습니다</p>
+                <p className="text-2xs leading-relaxed text-ink-muted">이 기능은 업주가 권한을 부여해야 사용할 수 있어요.<br />매장 업주에게 <span className="font-semibold text-gold-300">{curItem.id === 'voucher' ? '이용권 내역' : '장부·순위'} 권한</span>을 요청하세요.</p>
+              </div>
+            ) : (<>
             {section === 'dashboard' && <StoreDashboard venueId={venueId} schedules={schedules} onGoto={(s) => setSection(s as Section)} onCreatePoster={onCreatePoster}
               caps={{ ledger: ledgerOk, manage: manageOk, voucher: manageOk || voucherView, posters: canPosters, staff: canStaff }} />}
             {section === 'posters' && canPosters && <MyPostersTab schedules={schedules} onCreate={onCreatePoster} onEdit={onEditPoster} onDelete={onDeletePoster} />}
@@ -142,6 +154,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
             {section === 'staff'    && canStaff && <StaffHub venueId={venueId} />}
             {section === 'settings' && canStaff && <PosSettingsPanel venueId={venueId} />}
             {section === 'voucher'  && (manageOk || voucherView) && <VoucherManagePanel venueId={venueId} />}
+            </>)}
           </div>
         </div>
       )}
@@ -166,13 +179,14 @@ const SECTION_ICON: Record<Section, ReactNode> = {
   settings: ic(<><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" /></>),
 };
 
-function SectionBtn({ active, onClick, icon, children }: { active: boolean; onClick: () => void; icon?: ReactNode; children: ReactNode }) {
+function SectionBtn({ active, onClick, icon, children, locked }: { active: boolean; onClick: () => void; icon?: ReactNode; children: ReactNode; locked?: boolean }) {
   return (
     <button type="button" onClick={onClick}
       className={['flex shrink-0 items-center gap-2 whitespace-nowrap rounded-[6px] px-3 py-2 text-xs font-semibold transition-colors focus:outline-none touch-manipulation lg:w-full lg:justify-start',
-        active ? 'bg-gold-300 text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary lg:hover:bg-surface-high'].join(' ')}>
+        active ? 'bg-gold-300 text-ink-inverse' : locked ? 'text-ink-muted/60 hover:text-ink-secondary lg:hover:bg-surface-high' : 'text-ink-secondary hover:text-ink-primary lg:hover:bg-surface-high'].join(' ')}>
       <span className="shrink-0" aria-hidden>{icon}</span>
       <span>{children}</span>
+      {locked && <Icon name="lock" size={11} className={['ml-auto shrink-0', active ? 'text-ink-inverse/70' : 'text-ink-muted'].join(' ')} />}
     </button>
   );
 }
