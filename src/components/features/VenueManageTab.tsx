@@ -135,7 +135,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 onOpenClock={(d) => { setClockSeed(d); setSection('clock'); }} />
             )}
             {section === 'stats'    && manageOk && <LedgerStatsPanel venueId={venueId} />}
-            {section === 'ranking'  && <RankingEditor venueId={venueId} canEdit={isAdmin || user.approved === true} draft={rankingDraft} />}
+            {section === 'ranking'  && ledgerOk && <RankingEditor venueId={venueId} canEdit={isAdmin || user.approved === true} draft={rankingDraft} />}
             {section === 'clock'    && ledgerOk && <TournamentClock venueId={venueId} canManage={ledgerOk} seedSessionDate={clockSeed} />}
             {section === 'attendance' && ledgerOk && <StaffSelfAttendance venueId={venueId} />}
             {section === 'staff'    && canStaff && <StaffHub venueId={venueId} />}
