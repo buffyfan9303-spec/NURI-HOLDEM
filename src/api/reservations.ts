@@ -49,15 +49,11 @@ export async function getReservationCounts(scheduleIds: string[]): Promise<Recor
   return m;
 }
 
+// 예약: 동일 예약명(닉네임) 다른 회원 사용 시 '이미 등록된 닉네임입니다' 차단(RPC). 본인 갱신 허용.
 export async function createReservation(scheduleId: string, displayName: string): Promise<void> {
   if (IS_MOCK) return;
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('로그인이 필요합니다');
-  const { error } = await supabase.from('schedule_reservations').upsert(
-    { schedule_id: scheduleId, user_id: user.id, display_name: (displayName.trim() || '예약자').slice(0, 30) },
-    { onConflict: 'schedule_id,user_id' },
-  );
-  if (error) throw error;
+  const { error } = await supabase.rpc('reserve_schedule', { p_schedule_id: scheduleId, p_name: displayName });
+  if (error) throw new Error(error.message);
 }
 
 export async function cancelMyReservation(scheduleId: string): Promise<void> {

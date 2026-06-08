@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import Modal from '../atoms/Modal';
+import Icon from '../atoms/Icon';
 import CommentThread from './CommentThread';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
@@ -47,16 +48,14 @@ export default function ScheduleDetailModal({
 
   return (
     <Modal open={open} onClose={onClose} maxWidth="6xl" variant="page" inline={inline}>
-      {/* 닫기 — 전체 화면 우상단 고정(2열 레이아웃에서 항상 접근 가능) */}
+      {/* 닫기(모바일) — 한 화면이라 우상단 고정이 편함. PC는 아래 sticky 탭바에 통합 */}
       <button
         type="button"
         onClick={onClose}
         aria-label="닫기"
-        className="fixed top-3 right-3 z-[60] w-9 h-9 flex items-center justify-center rounded-full bg-surface-base/80 backdrop-blur text-ink-primary hover:bg-surface-high transition-colors"
+        className="lg:hidden fixed top-3 right-3 z-[60] w-9 h-9 flex items-center justify-center rounded-full bg-surface-base/80 backdrop-blur text-ink-primary hover:bg-surface-high transition-colors"
       >
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
-          <line x1="2" y1="2" x2="12" y2="12" /><line x1="12" y1="2" x2="2" y2="12" />
-        </svg>
+        <Icon name="close" size={15} />
       </button>
 
       {/* PC: 포스터(좌, 고정) + 정보(우, 스크롤) 2열 / 모바일: 세로 스택 */}
@@ -170,8 +169,18 @@ export default function ScheduleDetailModal({
             )}
           </div>
 
-      {/* ── 탭바 (정보 / Q&A) — sticky 상단 고정 ────────────────── */}
-      <div className="grid grid-cols-2 border-b border-border-subtle sticky top-0 bg-surface-mid z-10">
+      {/* ── 탭바 (정보 / Q&A) — sticky 상단 고정. PC는 우측에 닫기 통합 ──────── */}
+      <div className="relative grid grid-cols-2 border-b border-border-subtle sticky top-0 bg-surface-mid z-10 lg:pr-[4.25rem]">
+        {/* PC 닫기 — 정보 영역 우상단(항상 보이는 sticky 탭바, 손 닿는 위치) */}
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="닫기"
+          className="hidden lg:flex absolute right-2 top-1/2 -translate-y-1/2 items-center gap-1 rounded-full border border-border-default bg-surface-high/90 px-2.5 py-1.5 text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors"
+        >
+          <Icon name="close" size={14} />
+          <span className="text-xs font-bold">닫기</span>
+        </button>
         {(['info', 'qna'] as Tab[]).map((t) => {
           const active = tab === t;
           return (
@@ -471,14 +480,13 @@ export default function ScheduleDetailModal({
   );
 }
 
-// ── 예약하기 박스 (1분 1회 제한) ──────────────────────────────────────────────
+// ── 예약하기 박스 ─────────────────────────────────────────────────────────────
 function ReserveBox({ scheduleId }: { scheduleId: string }) {
   const { user } = useAuth();
   const toast = useToast();
   const [mine, setMine] = useState<Reservation | null>(null);
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
-  const [cooldown, setCooldown] = useState(0);
 
   const isManager = user?.role === 'admin' || user?.role === 'venue_owner';
   const [resList, setResList] = useState<OwnerReservation[]>([]);
@@ -490,27 +498,24 @@ function ReserveBox({ scheduleId }: { scheduleId: string }) {
     else setMine(null);
   }, [scheduleId, user]);
   useEffect(() => { if (isManager) getOwnerReservations(scheduleId).then(setResList).catch(() => {}); else setResList([]); }, [scheduleId, isManager]);
-  useEffect(() => {
-    if (cooldown <= 0) return;
-    const id = setInterval(() => setCooldown((c) => Math.max(0, c - 1)), 1000);
-    return () => clearInterval(id);
-  }, [cooldown]);
 
   const act = async () => {
     if (!user) { toast.show('로그인 후 예약할 수 있습니다', 'error'); return; }
-    if (busy || cooldown > 0) return;
+    if (busy) return;
     setBusy(true);
     try {
       if (mine) { await cancelMyReservation(scheduleId); setMine(null); toast.show('예약을 취소했습니다', 'info'); }
       else {
         const n = (name.trim() || user.name || '예약자');
-        await createReservation(scheduleId, n);
+        await createReservation(scheduleId, n); // 중복 닉네임이면 '이미 등록된 닉네임입니다' throw
         setMine({ id: '', scheduleId, userId: user.id, displayName: n, createdAt: new Date().toISOString() });
         toast.show('예약되었습니다', 'success');
       }
-      setCooldown(60); // 반복 클릭 방지: 1분 1회
       loadRes();
-    } catch (e) { toast.show(e instanceof Error ? e.message : '처리 실패', 'error'); }
+    } catch (e) {
+      // 중복 닉네임 등 — 입력은 유지되어 닉네임만 바꿔 바로 다시 예약 가능
+      toast.show(e instanceof Error ? e.message : '처리 실패', 'error');
+    }
     finally { setBusy(false); }
   };
   const fmtRes = (iso: string) => { const d = new Date(iso); const p = (n: number) => String(n).padStart(2, '0'); return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`; };
@@ -524,12 +529,12 @@ function ReserveBox({ scheduleId }: { scheduleId: string }) {
       {!mine && (
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="닉네임 또는 실명" maxLength={30} className="input w-full text-sm" />
       )}
-      <button type="button" onClick={act} disabled={busy || cooldown > 0}
+      <button type="button" onClick={act} disabled={busy}
         className={['w-full py-3 rounded-input text-sm font-bold transition-colors disabled:opacity-60',
           mine ? 'bg-surface-high text-danger-light border border-danger/40 hover:bg-danger/10' : 'btn-primary'].join(' ')}>
-        {cooldown > 0 ? `${cooldown}초 후 가능` : mine ? '예약 취소' : '예약하기'}
+        {mine ? '예약 취소' : '예약하기'}
       </button>
-      <p className="text-[10px] text-ink-muted">{mine ? `예약자: ${mine.displayName} · 반복 클릭 방지를 위해 변경 후 1분간 잠깁니다.` : '예약 후 1분간 다시 클릭할 수 없습니다.'}</p>
+      <p className="text-[10px] text-ink-muted">{mine ? `예약자: ${mine.displayName}` : '같은 닉네임이 이미 있으면 예약할 수 없어요. 닉네임을 바꿔 다시 시도하세요.'}</p>
 
       {/* 업주/운영자: 예약 내역(실제 아이디·닉네임) — 접이식 */}
       {isManager && (

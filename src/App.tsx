@@ -1168,8 +1168,8 @@ export default function App() {
                   viewMode === 'grid'
                     // 그리드 뷰: 모바일 2열 → 데스크톱 4~5열
                     ? 'grid grid-cols-2 gap-card-gap sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
-                    // 리스트 뷰: 항상 1열(가로 카드) — 본문 폭 안에서 카드가 반토막/잘리지 않게
-                    : 'grid grid-cols-1 gap-card-gap',
+                    // 리스트 뷰: 모바일 1열(가로 카드) → PC 2열(공간 활용·광고 여백 확보)
+                    : 'grid grid-cols-1 lg:grid-cols-2 gap-card-gap',
                 ].join(' ')}>
                   {visibleSchedules.map((s) => (
                     <ScheduleCard
