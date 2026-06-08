@@ -7,6 +7,8 @@ import {
   wonToMan, buyinFinance, getLedgerRange, getLedgerPlayers,
   posHasPassword, setPosCancelPassword, subscribeLedger,
 } from '../../api/ledger';
+import { toCsv, downloadCsv } from '../../lib/csv';
+import Icon from '../atoms/Icon';
 
 const todayStr = () => new Date().toLocaleDateString('en-CA');
 const shift = (d: string, n: number) => { const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate() + n); return x.toLocaleDateString('en-CA'); };
@@ -31,6 +33,7 @@ const DOW_RANGE_OPTS: { id: DowRange; label: string }[] = [
 ];
 
 function StatsView({ venueId }: { venueId: string }) {
+  const toast = useToast();
   const [period, setPeriod] = useState<Period>('day');
   const [date, setDate] = useState(todayStr);
   const [dowRange, setDowRange] = useState<DowRange>('all'); // 요일별 분석 기간
@@ -137,11 +140,49 @@ function StatsView({ venueId }: { venueId: string }) {
     };
   }, [buyins, sessionByDate, players, excludeTypes, playerType, period, date]);
 
+  // CSV 내보내기 — 요일별이면 요일 요약, 그 외 기간은 일별 요약(엑셀 한글 호환).
+  const exportCsv = () => {
+    if (period === 'dow') {
+      const rows = [0, 1, 2, 3, 4, 5, 6].map((w) => {
+        const e = m.dow[w];
+        if (!e) return [DOW[w], 0, 0, 0, 0, 0, 0];
+        const fill = e.target ? Math.round((e.entries / e.target) * 100) : '';
+        return [DOW[w], e.dates.size, Math.round(e.entries * 10) / 10, e.target, fill === '' ? '' : `${fill}%`, Math.round(e.revenue), Math.round(e.unpaid)];
+      });
+      downloadCsv(`요일별통계_${range.from}_${range.to}`, toCsv(['요일', '영업일수', '엔트리', '기준엔트리', '달성률', '완납매출(원)', '미수(원)'], rows));
+      toast.show('요일별 통계 CSV를 내보냈습니다', 'success');
+      return;
+    }
+    const dates = [...sessionByDate.keys()].sort();
+    if (!dates.length) { toast.show('내보낼 데이터가 없습니다', 'info'); return; }
+    const rows = dates.map((dt) => {
+      const s = sessionByDate.get(dt)!;
+      let entry = 0, paid = 0, unpaid = 0, ticket = 0; const ps = new Set<string>();
+      for (const b of buyins) {
+        if (b.sessionDate !== dt) continue;
+        const f = buyinFinance(b, s);
+        entry += f.entry; paid += f.paid; unpaid += f.unpaid; ticket += f.ticketPaid + (b.isSplit ? b.ticketCount : 0);
+        ps.add(b.playerName);
+      }
+      return [dt, DOW[new Date(dt + 'T00:00:00').getDay()], s.targetEntries ?? '', Math.round(entry * 10) / 10, Math.round(paid), Math.round(unpaid), ticket, s.voucherIssued ?? 0, ps.size];
+    });
+    downloadCsv(`장부통계_${range.from}_${range.to}`, toCsv(['날짜', '요일', '기준엔트리', '엔트리', '완납매출(원)', '미수(원)', '회수티켓', '발행이용권', '플레이어수'], rows));
+    toast.show('통계 CSV를 내보냈습니다', 'success');
+  };
+
   return (
     <section className="rounded-card border border-gold-400/30 bg-gradient-to-br from-gold-300/[0.05] to-transparent p-3 space-y-3">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h3 className="text-sm font-bold text-gold-300">통계</h3>
-        {period === 'day' && <input type="date" value={date} max={todayStr()} onChange={(e) => setDate(e.target.value || todayStr())} className="input text-xs py-1 w-auto" />}
+        <div className="flex items-center gap-1.5">
+          {period === 'day' && <input type="date" value={date} max={todayStr()} onChange={(e) => setDate(e.target.value || todayStr())} className="input text-xs py-1 w-auto" />}
+          {period !== 'ai' && (
+            <button type="button" onClick={exportCsv}
+              className="inline-flex items-center gap-1 rounded-input border border-border-default bg-surface-high px-2.5 py-1.5 text-2xs font-bold text-ink-secondary hover:text-gold-300 hover:border-gold-400/40 transition-colors">
+              <Icon name="download" size={13} /> CSV
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5 overflow-x-auto scrollbar-none">
