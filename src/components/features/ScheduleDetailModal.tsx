@@ -19,6 +19,8 @@ interface ScheduleDetailModalProps {
   onDeleteComment?: (commentId: string) => void;
   /** 관리자 마스터 삭제(포스터) */
   onDeletePoster?: (id: string) => void;
+  /** 데스크탑 2-pane 우측 패널로 인라인 렌더 */
+  inline?: boolean;
 }
 
 type Tab = 'info' | 'qna';
@@ -27,7 +29,7 @@ const SUITS = ['♠','♥','♦','♣'];
 const DAYS_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
 export default function ScheduleDetailModal({
-  schedule: scheduleProp, open, onClose, onVenueClick, comments, onSubmitComment, onDeleteComment, onDeletePoster,
+  schedule: scheduleProp, open, onClose, onVenueClick, comments, onSubmitComment, onDeleteComment, onDeletePoster, inline,
 }: ScheduleDetailModalProps) {
   const [tab, setTab] = useState<Tab>('info');
   const { user } = useAuth();
@@ -44,7 +46,7 @@ export default function ScheduleDetailModal({
   const qnaComments = comments.filter((c) => c.scheduleId === schedule.id);
 
   return (
-    <Modal open={open} onClose={onClose} maxWidth="lg" variant="page">
+    <Modal open={open} onClose={onClose} maxWidth="lg" variant="page" inline={inline}>
       {/* ── 포스터 헤더 ───────────────────────────────────────────────── */}
       <div className="relative">
         <div

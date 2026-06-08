@@ -12,6 +12,8 @@ interface ModalProps {
   maxWidth?: 'sm' | 'md' | 'lg';
   /** true면 모달 높이를 최대치로 고정 (탭 전환 시 크기 변동 방지) */
   fillHeight?: boolean;
+  /** true면 오버레이가 아닌 인라인 패널로 렌더(데스크탑 2-pane 우측 패널용). */
+  inline?: boolean;
 }
 
 const MAX_W: Record<NonNullable<ModalProps['maxWidth']>, string> = {
@@ -21,11 +23,11 @@ const MAX_W: Record<NonNullable<ModalProps['maxWidth']>, string> = {
 };
 
 export default function Modal({
-  open, onClose, title, children, variant = 'sheet', maxWidth = 'md', fillHeight = false,
+  open, onClose, title, children, variant = 'sheet', maxWidth = 'md', fillHeight = false, inline = false,
 }: ModalProps) {
   // ESC 키로 닫기 + 바디 스크롤 잠금
   useEffect(() => {
-    if (!open) return;
+    if (!open || inline) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
     document.body.style.overflow = 'hidden';
@@ -37,7 +39,7 @@ export default function Modal({
 
   // 뒤로가기(브라우저/모바일 back) → 페이지 이탈 대신 "이 모달만" 닫기.
   // 중앙 back-stack 매니저가 중첩/충돌/이중 pop 을 모두 처리한다.
-  useBackClose(open, onClose);
+  useBackClose(open && !inline, onClose);
 
   // 열기/닫기 애니메이션: 닫힐 때 잠깐 더 렌더링하여 시트가 아래로 슬라이드되며 사라지게 한다.
   const [render, setRender] = useState(open);
@@ -52,7 +54,7 @@ export default function Modal({
   // 접근성: 모달 내부 포커스 트랩 + 열릴 때 첫 포커스(키보드 내비)
   const contentRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!open) return;
+    if (!open || inline) return;
     const el = contentRef.current;
     if (!el) return;
     const focusables = () => Array.from(
@@ -70,6 +72,24 @@ export default function Modal({
     el.addEventListener('keydown', onKey);
     return () => { window.clearTimeout(t); el.removeEventListener('keydown', onKey); };
   }, [open]);
+
+  // 인라인 패널(2-pane 우측) — 오버레이/딤/백버튼 없이 콘텐츠만 카드로.
+  if (inline) {
+    if (!open) return null;
+    return (
+      <div className="flex max-h-[calc(100vh-5rem)] flex-col overflow-hidden rounded-card border border-border-default bg-surface-mid">
+        {title && (
+          <header className="flex shrink-0 items-center justify-between border-b border-border-subtle px-4 py-3">
+            <h2 className="text-base font-semibold text-ink-primary">{title}</h2>
+            <button type="button" onClick={onClose} aria-label="닫기" className="flex h-8 w-8 items-center justify-center rounded-input text-ink-secondary hover:bg-surface-high hover:text-ink-primary">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><line x1="2" y1="2" x2="12" y2="12" /><line x1="12" y1="2" x2="2" y2="12" /></svg>
+            </button>
+          </header>
+        )}
+        <div className="flex-1 overflow-y-auto"><div className={['mx-auto w-full', MAX_W[maxWidth]].join(' ')}>{children}</div></div>
+      </div>
+    );
+  }
 
   if (!render) return null;
 
