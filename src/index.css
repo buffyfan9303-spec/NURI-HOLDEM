@@ -81,6 +81,12 @@
     overflow-wrap: break-word;
   }
 
+  /* 터치 시 기본 하이라이트(탭 이동 등에서 보이는 깜빡임) 완전 제거 — body 상속이 안 먹는
+     일부 안드로이드/크롬 케이스 대비해 인터랙티브 요소에 명시. */
+  button, a, [role="button"], [role="tab"], label, summary, input, select, textarea {
+    -webkit-tap-highlight-color: transparent;
+  }
+
   /* 스크롤바 스타일 (WebKit) */
   ::-webkit-scrollbar {
     @apply w-1 h-1;
