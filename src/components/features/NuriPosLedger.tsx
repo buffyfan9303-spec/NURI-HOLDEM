@@ -13,6 +13,7 @@ import {
   setRegistrationClosed, getLastLedgerSettings, getLedgerSessionList, getLedgerAccessUserIds,
   getLedgerBuyins, upsertBuyin, upsertBuyinSplit, cancelBuyin,
   getLedgerPlayers, addLedgerPlayer, updateLedgerPlayer, removeLedgerPlayer,
+  searchRegisteredPlayers, type RegisteredPlayer,
   subscribeLedger, posHasPassword, getLedgerPresets, type LedgerPreset,
 } from '../../api/ledger';
 import { getStaffSchedule, addStaffShift } from '../../api/staffSchedule';
@@ -80,6 +81,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const [addOpen, setAddOpen] = useState(false);
   const [newName, setNewName] = useState('');
   const [newType, setNewType] = useState<string | null>('regular'); // 기본 선택: 기존손님
+  const [suggest, setSuggest] = useState<RegisteredPlayer[]>([]); // 가입자 검색 결과(바인 계정 연동)
   const [closeOpen, setCloseOpen] = useState(false);
   const [editOpen, setEditOpen]   = useState(false);
   const [editPlayer, setEditPlayer] = useState<LedgerPlayer | null>(null);
@@ -221,7 +223,21 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     if (!n) return;
     try {
       await addLedgerPlayer({ venueId, sessionDate: date, name: n, visitorType: newType, sortOrder: players.length });
-      setNewName(''); setNewType('regular'); setAddOpen(false); reload();
+      setNewName(''); setNewType('regular'); setAddOpen(false); setSuggest([]); reload();
+    } catch (e) { toast.show(e instanceof Error ? e.message : '추가 실패', 'error'); }
+  };
+  // 가입자 검색(디바운스) — 바인 추가 입력에 누리홀덤 가입자 자동완성
+  useEffect(() => {
+    if (!addOpen || newName.trim().length < 1) { setSuggest([]); return; }
+    const t = window.setTimeout(() => { searchRegisteredPlayers(venueId, newName).then(setSuggest).catch(() => setSuggest([])); }, 250);
+    return () => window.clearTimeout(t);
+  }, [newName, addOpen, venueId]);
+  // 가입자 선택 → 실명(닉네임)으로 장부 기록(강제 아님, 그냥 추가하면 입력값 그대로)
+  const pickRegistered = async (rp: RegisteredPlayer) => {
+    const label = rp.realName ? `${rp.realName}(${rp.nickname ?? ''})` : (rp.nickname ?? newName.trim());
+    try {
+      await addLedgerPlayer({ venueId, sessionDate: date, name: label, visitorType: newType, sortOrder: players.length });
+      setNewName(''); setSuggest([]); setNewType('regular'); setAddOpen(false); reload();
     } catch (e) { toast.show(e instanceof Error ? e.message : '추가 실패', 'error'); }
   };
   const savePlayer = async (id: string, patch: { visitorType?: string | null; note?: string | null }) => {
@@ -404,7 +420,20 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
             <div className="rounded-input border border-border-default bg-surface-low p-2 space-y-2">
               <input value={newName} onChange={(e) => setNewName(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addPlayer(); } }}
-                placeholder="닉네임 또는 이름" maxLength={20} className="input w-full text-sm" autoFocus />
+                placeholder="닉네임/이름 (입력 시 가입자 자동완성)" maxLength={20} className="input w-full text-sm" autoFocus />
+              {suggest.length > 0 && (
+                <ul className="max-h-44 space-y-1 overflow-y-auto rounded-input border border-gold-400/30 bg-surface-base/60 p-1">
+                  <li className="px-1 text-[10px] text-ink-muted">누리홀덤 가입자 — 선택 시 실명(닉네임)으로 기록(선택 안 하고 추가하면 입력값 그대로)</li>
+                  {suggest.map((rp) => (
+                    <li key={rp.userId}>
+                      <button type="button" onClick={() => pickRegistered(rp)} className="flex w-full items-center justify-between gap-2 rounded-input px-2 py-1.5 text-left hover:bg-surface-high">
+                        <span className="min-w-0 truncate text-xs font-semibold text-ink-primary">{rp.realName ? `${rp.realName}(${rp.nickname ?? '-'})` : (rp.nickname ?? '-')}</span>
+                        <span className="shrink-0 text-[10px] text-ink-muted">방문 {rp.visits}회</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-2xs text-ink-muted">유형(선택):</span>
                 {VISITOR_OPTS.map((t) => (
