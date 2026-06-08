@@ -233,14 +233,22 @@ function EventDrawPanel({ venueId, canLedger }: { venueId: string; canLedger: bo
         </div>
       </div>
 
-      <div>
-        <p className="mb-1 text-xs font-bold text-ink-secondary">오늘 명단 불러오기</p>
-        <div className="grid grid-cols-3 gap-2">
-          <SrcBtn label="체크인" loading={loading === 'checkin'} onClick={() => load('checkin')} />
-          <SrcBtn label="예약자" loading={loading === 'reservation'} onClick={() => load('reservation')} />
-          <SrcBtn label="장부" loading={loading === 'ledger'} disabled={!canLedger} onClick={() => load('ledger')} />
+      <div className="space-y-2">
+        <div>
+          <p className="mb-1 text-xs font-bold text-ink-secondary">오늘 명단</p>
+          <div className="grid grid-cols-2 gap-2">
+            <SrcBtn label="오늘 체크인" loading={loading === 'checkin'} onClick={() => load('checkin')} />
+            <SrcBtn label="오늘 예약" loading={loading === 'reservation'} onClick={() => load('reservation')} />
+          </div>
         </div>
-        {!canLedger && <p className="mt-1 text-[10px] text-ink-muted">장부 명단은 장부 권한이 필요합니다.</p>}
+        <div>
+          <p className="mb-1 text-xs font-bold text-ink-secondary">전체 명단 <span className="font-normal text-ink-muted">(전량)</span></p>
+          <div className="grid grid-cols-2 gap-2">
+            <SrcBtn label="회원 전체" loading={loading === 'members'} onClick={() => load('members')} />
+            <SrcBtn label="장부 전체" loading={loading === 'ledger'} disabled={!canLedger} onClick={() => load('ledger')} />
+          </div>
+          {!canLedger && <p className="mt-1 text-[10px] text-ink-muted">장부 전체는 장부 권한이 필요합니다.</p>}
+        </div>
       </div>
 
       <button type="button" onClick={() => { setNames([]); setOpen(true); }}
