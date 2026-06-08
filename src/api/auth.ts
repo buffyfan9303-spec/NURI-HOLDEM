@@ -116,6 +116,17 @@ export async function checkNicknameAvailable(nickname: string): Promise<boolean>
   return data === true;
 }
 
+// 본인 닉네임(받는 아이디) 최초 설정 — 설정 후 잠김(변경은 운영자). 중복 시 에러.
+export async function setMyNickname(nickname: string): Promise<void> {
+  const { error } = await supabase.rpc('set_my_nickname', { p_nickname: nickname.trim() });
+  if (error) throw new Error(error.message);
+}
+// 운영자 전용: 회원 닉네임 변경(잠금 무시).
+export async function adminSetNickname(userId: string, nickname: string): Promise<void> {
+  const { error } = await supabase.rpc('admin_set_nickname', { p_user_id: userId, p_nickname: nickname.trim() });
+  if (error) throw new Error(error.message);
+}
+
 // ── 일반 회원가입 ─────────────────────────────────────────────────────────────
 // 프로필/동의 이력은 DB 트리거(handle_new_user)가 user_metadata로부터 자동 생성.
 export async function signUpUser(payload: SignupUserPayload): Promise<void> {

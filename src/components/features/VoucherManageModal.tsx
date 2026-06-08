@@ -6,7 +6,7 @@ import Modal from '../atoms/Modal';
 import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import QRCode from 'qrcode';
-import { listVenueVouchers, issueVoucher, revokeVoucher, deleteVoucher, findUserForTransfer, voucherUsageByVenue, voucherHolderStats, isVoucherIssueApproved, type Voucher, type VoucherUsage, type VoucherHolderStats, type TransferTarget } from '../../api/vouchers';
+import { listVenueVouchers, issueVoucher, deleteVoucher, findUserForTransfer, voucherUsageByVenue, voucherHolderStats, isVoucherIssueApproved, voucherHolderProfiles, type Voucher, type VoucherUsage, type VoucherHolderStats, type TransferTarget, type VoucherHolderProfile } from '../../api/vouchers';
 
 function fmtDateTime(iso: string | null): string {
   if (!iso) return '-';
@@ -37,11 +37,13 @@ export function VoucherManagePanel({ venueId }: { venueId: string }) {
   const [approved, setApproved] = useState(true);
   const [holderQuery, setHolderQuery] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [profileMap, setProfileMap] = useState<Map<string, VoucherHolderProfile>>(new Map());
 
   const reload = () => {
     setLoading(true);
     listVenueVouchers(venueId).then(setList).catch(() => {}).finally(() => setLoading(false));
     voucherHolderStats(venueId).then(setStats).catch(() => {});
+    voucherHolderProfiles(venueId).then((ps) => setProfileMap(new Map(ps.map((p) => [p.userId, p])))).catch(() => {});
     isVoucherIssueApproved(venueId).then(setApproved).catch(() => {});
     if (canIssue) voucherUsageByVenue(venueId).then(setUsage).catch(() => {});
   };
@@ -94,14 +96,15 @@ export function VoucherManagePanel({ venueId }: { venueId: string }) {
       .sort((a, b) => (b.active.length - a.active.length) || (b.used.length - a.used.length));
   }, [list]);
   const holderCount = holders.filter((g) => !g.isStore && g.active.length > 0).length;
-  const hq = holderQuery.trim().toLowerCase();
-  const shownHolders = hq ? holders.filter((g) => g.name.toLowerCase().includes(hq)) : holders;
-  const revokeGroup = async (g: { name: string; ids: string[] }) => {
-    if (!window.confirm(`${g.name}의 이용권 ${g.ids.length}개를 회수할까요?`)) return;
-    setBusy(true);
-    await Promise.all(g.ids.map((id) => revokeVoucher(id).catch(() => {})));
-    toast.show('회수했습니다', 'info'); setBusy(false); reload();
+  // 표기: 실명(닉네임). 실명이 없으면 닉네임만.
+  const holderLabel = (g: { key: string; name: string; isStore: boolean }) => {
+    if (g.isStore) return '🏪 매장 보관';
+    const p = profileMap.get(g.key);
+    if (p?.realName) return `${p.realName}(${p.nickname ?? g.name})`;
+    return p?.nickname ?? g.name;
   };
+  const hq = holderQuery.trim().toLowerCase();
+  const shownHolders = hq ? holders.filter((g) => holderLabel(g).toLowerCase().includes(hq)) : holders;
   const deleteGroup = async (g: { name: string; ids: string[] }) => {
     if (!window.confirm(`${g.name}의 이용권 ${g.ids.length}개를 완전히 삭제할까요? 되돌릴 수 없습니다.`)) return;
     setBusy(true);
@@ -191,7 +194,7 @@ export function VoucherManagePanel({ venueId }: { venueId: string }) {
           <p className="text-2xs text-ink-muted">보유 인원 <b className="text-gold-300 tabular-nums">{holderCount}</b>명 · 보유 갯수 <b className="text-ink-primary tabular-nums">{active.length}</b>개</p>
         </div>
         {holders.length > 0 && (
-          <input value={holderQuery} onChange={(e) => setHolderQuery(e.target.value)} placeholder="보유자 검색 (닉네임)" className="input mb-1.5 w-full text-sm" />
+          <input value={holderQuery} onChange={(e) => setHolderQuery(e.target.value)} placeholder="보유자 검색 (실명·닉네임)" className="input mb-1.5 w-full text-sm" />
         )}
         {loading ? <p className="py-3 text-center text-2xs text-ink-muted">불러오는 중…</p>
           : holders.length === 0 ? <p className="py-3 text-center text-2xs text-ink-muted">배포된 이용권이 없습니다.</p>
@@ -203,28 +206,26 @@ export function VoucherManagePanel({ venueId }: { venueId: string }) {
                   <li key={g.key} className="rounded-input border border-border-subtle bg-surface-low">
                     <div className="flex items-center gap-2 px-3 py-2">
                       <button type="button" onClick={() => setExpanded(open ? null : g.key)} className="min-w-0 flex-1 text-left">
-                        <p className="truncate text-sm font-semibold text-ink-primary">{g.isStore ? '🏪 매장 보관' : g.name}</p>
-                        <p className="text-[10px] text-ink-muted">보유 {g.active.length}개{g.used.length > 0 && <> · 사용 {g.used.length}회 (내역 보기)</>}</p>
+                        <p className="truncate text-sm font-semibold text-ink-primary">{holderLabel(g)}</p>
+                        <p className="text-[10px] text-ink-muted">보유 {g.active.length}개{g.used.length > 0 && <> · 사용 {g.used.length}회</>}</p>
                       </button>
                       <span className="shrink-0 rounded-badge bg-gold-300/15 px-2 py-0.5 text-xs font-bold text-gold-300 tabular-nums">{g.active.length}</span>
-                      {g.used.length > 0 && (
-                        <button type="button" onClick={() => setExpanded(open ? null : g.key)} aria-label="사용내역" className="shrink-0 text-ink-muted">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className={['transition-transform', open ? 'rotate-180' : ''].join(' ')} aria-hidden><polyline points="6 9 12 15 18 9" /></svg>
-                        </button>
-                      )}
-                      {canIssue && g.active.length > 0 && <button type="button" disabled={busy} onClick={() => revokeGroup({ name: g.name, ids: g.active.map((v) => v.id) })} className="btn-ghost shrink-0 px-2 text-2xs text-ink-secondary disabled:opacity-50">회수</button>}
-                      {canIssue && <button type="button" disabled={busy} onClick={() => deleteGroup({ name: g.name, ids: [...g.active, ...g.used].map((v) => v.id) })} aria-label="삭제" className="shrink-0 px-1 text-xs text-ink-muted hover:text-danger-light disabled:opacity-50">✕</button>}
+                      {!g.isStore && <button type="button" onClick={() => setExpanded(open ? null : g.key)} className="btn-ghost shrink-0 px-2 text-2xs text-ink-secondary">{open ? '닫기' : '관리'}</button>}
+                      {(isAdmin || g.isStore) && canIssue && <button type="button" disabled={busy} onClick={() => deleteGroup({ name: holderLabel(g), ids: [...g.active, ...g.used].map((v) => v.id) })} aria-label="삭제" className="shrink-0 px-1 text-xs text-ink-muted hover:text-danger-light disabled:opacity-50">✕</button>}
                     </div>
-                    {open && g.used.length > 0 && (
-                      <ul className="space-y-0.5 border-t border-border-subtle px-3 py-1.5">
-                        <li className="text-[10px] font-bold text-ink-muted">사용 내역 (최근순)</li>
-                        {g.used.slice().sort((a, b) => (b.usedAt ?? '').localeCompare(a.usedAt ?? '')).map((v) => (
-                          <li key={v.id} className="flex items-center justify-between gap-2 text-[11px]">
-                            <span className="min-w-0 flex-1 truncate text-ink-secondary">{v.title}</span>
-                            <span className="shrink-0 tabular-nums text-ink-muted">{fmtDateTime(v.usedAt)}</span>
-                          </li>
-                        ))}
-                      </ul>
+                    {open && !g.isStore && (
+                      <div className="border-t border-border-subtle px-3 py-1.5">
+                        <p className="mb-0.5 text-[10px] font-bold text-ink-muted">이 매장 이용내역{g.used.length > 0 ? ' (최근순)' : ''}</p>
+                        {g.used.length === 0 ? <p className="py-1 text-[11px] text-ink-muted">사용 내역이 없습니다.</p>
+                          : <ul className="space-y-0.5">
+                              {g.used.slice().sort((a, b) => (b.usedAt ?? '').localeCompare(a.usedAt ?? '')).map((v) => (
+                                <li key={v.id} className="flex items-center justify-between gap-2 text-[11px]">
+                                  <span className="min-w-0 flex-1 truncate text-ink-secondary">{v.title}</span>
+                                  <span className="shrink-0 tabular-nums text-ink-muted">{fmtDateTime(v.usedAt)}</span>
+                                </li>
+                              ))}
+                            </ul>}
+                      </div>
                     )}
                   </li>
                 );

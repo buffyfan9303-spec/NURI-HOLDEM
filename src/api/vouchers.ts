@@ -172,6 +172,15 @@ export async function voucherHolderStats(venueId: string): Promise<VoucherHolder
   return { holderCount: Number(r.holder_count) || 0, activeCount: Number(r.active_count) || 0, usedCount: Number(r.used_count) || 0 };
 }
 
+// 보유자 실명+닉네임(해당 매장 권한자만) — 관리 화면에 "실명(닉네임)" 표기용
+export interface VoucherHolderProfile { userId: string; realName: string | null; nickname: string | null }
+export async function voucherHolderProfiles(venueId: string): Promise<VoucherHolderProfile[]> {
+  if (IS_MOCK) return [];
+  const { data } = await supabase.rpc('voucher_holder_profiles', { p_venue_id: venueId });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({ userId: r.user_id, realName: r.real_name ?? null, nickname: r.nickname ?? null }));
+}
+
 export interface VoucherHistoryRow { id: string; title: string; holderName: string | null; usedAt: string | null }
 export async function voucherHistory(venueId: string): Promise<VoucherHistoryRow[]> {
   if (IS_MOCK) return [];

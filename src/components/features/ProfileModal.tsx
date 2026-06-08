@@ -5,7 +5,7 @@ import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import { IS_MOCK } from '../../lib/supabase';
 import { resizeImage } from '../../lib/storage';
-import { requestPasswordChangeCode, changeMyPasswordWithCode } from '../../api/auth';
+import { requestPasswordChangeCode, changeMyPasswordWithCode, setMyNickname } from '../../api/auth';
 import { pushSupported, isPushSubscribed, enablePush, disablePush } from '../../api/push';
 import AvatarCropper from './AvatarCropper';
 import ActivityBadges from '../atoms/ActivityBadges';
@@ -52,6 +52,8 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
 
   // ── 기본 정보 상태 ─────────────────────────────────────────────────────
   const [name,          setName]         = useState('');
+  const [recvId,        setRecvId]       = useState(''); // 받는 아이디(닉네임) 최초 설정용
+  const [recvBusy,      setRecvBusy]     = useState(false);
   const [selectedColor, setColor]        = useState('#FFD100');
   const [avatarPreview, setAvatarPreview] = useState('');
   const [avatarFile,    setAvatarFile]   = useState<File | null>(null);
@@ -134,6 +136,21 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
       setChangingPw(false);
     }
   }, [newPw, code, toast]);
+
+  // 받는 아이디(닉네임) 최초 설정 — 설정 후 잠김(변경은 운영자)
+  const saveRecvId = useCallback(async () => {
+    const v = recvId.trim();
+    if (v.length < 2) { toast.show('아이디(닉네임)는 2자 이상이어야 합니다', 'error'); return; }
+    setRecvBusy(true);
+    try {
+      await setMyNickname(v);
+      toast.show('받는 아이디(닉네임)를 설정했습니다', 'success');
+      await refreshProfile().catch(() => {});
+      setRecvId('');
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : '설정 실패', 'error');
+    } finally { setRecvBusy(false); }
+  }, [recvId, toast, refreshProfile]);
 
   if (!user) return null;
 
@@ -342,6 +359,28 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
               </p>
               <p className="text-2xs text-ink-muted shrink-0">{name.length} / 20</p>
             </div>
+          </div>
+
+          {/* 받는 아이디(닉네임) — 매장이용권 수령용. 최초 1회 설정, 변경은 운영자 */}
+          <div>
+            <label className="block text-xs font-medium text-ink-secondary mb-1.5">받는 아이디 <span className="text-2xs font-normal text-ink-muted">(매장이용권 수령용)</span></label>
+            {user.nickname ? (
+              <>
+                <div className="flex items-center justify-between gap-2 rounded-input border border-border-default bg-surface-high/60 px-3 py-2">
+                  <span className="min-w-0 truncate text-sm font-semibold text-ink-primary">{user.nickname}</span>
+                  <span className="shrink-0 text-2xs text-ink-muted">🔒 설정 완료</span>
+                </div>
+                <p className="mt-1 text-2xs leading-relaxed text-amber-400">초기 설정이 완료되었습니다. <b>변경은 운영자에게 문의</b>하세요.</p>
+              </>
+            ) : (
+              <>
+                <div className="flex gap-1.5">
+                  <input type="text" value={recvId} onChange={(e) => setRecvId(e.target.value)} maxLength={20} placeholder="받을 아이디 (2~20자, 중복 불가)" className="input min-w-0 flex-1" />
+                  <button type="button" onClick={saveRecvId} disabled={recvBusy} className="btn-primary shrink-0 px-4 text-sm disabled:opacity-60">{recvBusy ? '설정 중…' : '설정'}</button>
+                </div>
+                <p className="mt-1 text-2xs leading-relaxed text-ink-muted">매장이용권을 받을 때 쓰는 고유 아이디입니다. <b className="text-amber-400">최초 1회만 설정</b>되며, 이후 변경은 운영자를 통해서만 가능합니다.</p>
+              </>
+            )}
           </div>
 
           {/* 이메일 (읽기 전용) */}
