@@ -126,7 +126,8 @@ export default function CommunityTab({
 
       {section === 'board' && (
         <div className="lg:flex lg:items-start lg:gap-4">
-          <div className="min-w-0 lg:flex-1">
+          {/* 좌측: 목록(압축) */}
+          <div className="min-w-0 lg:w-[19rem] lg:shrink-0">
             <FeedSection
               posts={boardPosts}
               notices={notices}
@@ -142,8 +143,8 @@ export default function CommunityTab({
               enableCategory
             />
           </div>
-          {/* 데스크탑 2-pane 우측 상세 */}
-          <aside className="hidden lg:sticky lg:top-[8.5rem] lg:block lg:w-[24rem] lg:shrink-0">
+          {/* 우측: 게시글 상세(크게) */}
+          <aside className="hidden lg:sticky lg:top-[8.5rem] lg:block lg:min-w-0 lg:flex-1">
             {boardSelected ? (
               <PostDetailModal
                 inline open

@@ -35,7 +35,6 @@ import type { MarketplaceFormData } from './components/features/MarketplaceFormM
 import { useBackClose } from './lib/backstack';
 import { useVisibilityRefresh } from './lib/useVisibilityRefresh';
 import { lazyWithReload } from './lib/lazyWithReload';
-import { useIsDesktop } from './lib/responsive';
 import { useAuth } from './contexts/AuthContext';
 import { listAllUsers, updateUserStatus, approveOwner } from './api/auth';
 import {
@@ -449,8 +448,6 @@ export default function App() {
   const [authOpen, setAuthOpen]       = useState(false);
   const [openVenueId, setOpenVenueId] = useState<string | null>(null);
   const [openSchedule, setOpenSchedule] = useState<Schedule | null>(null);
-  const [browseSelected, setBrowseSelected] = useState<Schedule | null>(null); // 데스크탑 일정탐색 2-pane 우측 상세
-  const isDesktop = useIsDesktop();
 
   // ── QR 체크인 (?checkin=<venueId>) ─────────────────────────────────────
   // QR엔 venue_id만(비민감). 로그인 회원만 기록(check_in RPC, 4시간 중복 방지). 미로그인 시 로그인 후 재진입에서 처리.
@@ -687,10 +684,9 @@ export default function App() {
   }, [venues]);
 
   const handleScheduleSelect = useCallback((s: Schedule) => {
-    // 데스크탑 + 리스트 뷰: 우측 패널(2-pane). 그 외(모바일·그리드·타 진입점): 모달.
-    if (isDesktop && viewMode === 'list') setBrowseSelected(s);
-    else setOpenSchedule(s);
-  }, [isDesktop, viewMode]);
+    // 포스터 상세는 전체화면 2열 모달(PC: 포스터 좌+정보 우)로 표시 — 좁은 패널보다 가독성↑
+    setOpenSchedule(s);
+  }, []);
 
   // 로고 클릭 → 메인(일정 탐색)으로 + 모든 모달/패널 닫기
   const handleHome = useCallback(() => {
@@ -1123,8 +1119,8 @@ export default function App() {
             </div>
           )}
 
-          <div className={['px-page-x py-section', viewMode === 'list' ? 'lg:flex lg:items-start lg:gap-4' : ''].join(' ')}>
-            <div className={viewMode === 'list' ? 'min-w-0 lg:flex-1' : ''}>
+          <div className="px-page-x py-section">
+            <div className="min-w-0">
               {visibleSchedules.length === 0 ? (
                 <EmptyState />
               ) : (
@@ -1148,27 +1144,6 @@ export default function App() {
                 </div>
               )}
             </div>
-
-            {/* 데스크탑 2-pane 우측 상세(리스트 뷰 전용) */}
-            {viewMode === 'list' && (
-              <aside className="hidden lg:sticky lg:top-28 lg:block lg:w-[24rem] lg:shrink-0">
-                {browseSelected ? (
-                  <ScheduleDetailModal
-                    inline open schedule={browseSelected}
-                    onClose={() => setBrowseSelected(null)}
-                    onVenueClick={handleVenueClick}
-                    comments={comments}
-                    onSubmitComment={(content, parentId) => browseSelected && handleSubmitScheduleComment(browseSelected.id, content, parentId)}
-                    onDeleteComment={handleDeleteComment}
-                    onDeletePoster={handleDeletePoster}
-                  />
-                ) : (
-                  <div className="flex h-72 items-center justify-center rounded-card border border-dashed border-border-default px-4 text-center text-2xs text-ink-muted">
-                    왼쪽에서 포스터를 선택하면<br />여기에 상세가 표시됩니다.
-                  </div>
-                )}
-              </aside>
-            )}
           </div>
         </main>
       )}

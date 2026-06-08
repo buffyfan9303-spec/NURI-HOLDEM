@@ -46,125 +46,129 @@ export default function ScheduleDetailModal({
   const qnaComments = comments.filter((c) => c.scheduleId === schedule.id);
 
   return (
-    <Modal open={open} onClose={onClose} maxWidth="lg" variant="page" inline={inline}>
-      {/* ── 포스터 헤더 ───────────────────────────────────────────────── */}
-      <div className="relative">
-        <div
-          className={[
-            'relative flex items-center justify-center overflow-hidden',
-            // 실제 포스터 이미지가 있으면 전체를 보여주고(잘리지 않게),
-            // 없으면 16:9 장식 배너로 표시
-            schedule.posterUrl ? 'bg-surface-base' : 'aspect-[16/9] sm:aspect-[2/1]',
-          ].join(' ')}
-          style={schedule.posterUrl
-            ? undefined
-            : { background: `linear-gradient(135deg, ${schedule.posterColor ?? '#1a1d24'}ee 0%, #0a0c0f 100%)` }}
-        >
-          {schedule.posterUrl ? (
-            <img
-              src={schedule.posterUrl}
-              alt={`${schedule.title} 포스터`}
-              className="block w-full h-auto max-h-[82vh] object-contain"
-            />
-          ) : (
-            <>
-              <div className="absolute inset-0 grid grid-cols-6 gap-2 p-3 opacity-[0.08] select-none pointer-events-none" aria-hidden>
-                {Array.from({ length: 24 }, (_, i) => (
-                  <span key={i} className="text-2xl text-white text-center">{SUITS[i % 4]}</span>
-                ))}
-              </div>
-              <span className="relative text-6xl opacity-30 select-none" aria-hidden>♠</span>
-            </>
-          )}
+    <Modal open={open} onClose={onClose} maxWidth="6xl" variant="page" inline={inline}>
+      {/* 닫기 — 전체 화면 우상단 고정(2열 레이아웃에서 항상 접근 가능) */}
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="닫기"
+        className="fixed top-3 right-3 z-[60] w-9 h-9 flex items-center justify-center rounded-full bg-surface-base/80 backdrop-blur text-ink-primary hover:bg-surface-high transition-colors"
+      >
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+          <line x1="2" y1="2" x2="12" y2="12" /><line x1="12" y1="2" x2="2" y2="12" />
+        </svg>
+      </button>
 
-          {/* 상단 그라데이션 + 닫기 */}
-          <div className="absolute top-0 left-0 right-0 h-20 pointer-events-none"
-            style={{ background: 'linear-gradient(to bottom, rgba(10,12,15,0.7), transparent)' }}
-          />
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="닫기"
-            className="absolute top-3 right-3 w-9 h-9 flex items-center justify-center rounded-full bg-surface-base/80 backdrop-blur text-ink-primary hover:bg-surface-high transition-colors z-10"
+      {/* PC: 포스터(좌, 고정) + 정보(우, 스크롤) 2열 / 모바일: 세로 스택 */}
+      <div className="lg:grid lg:grid-cols-[minmax(0,460px)_minmax(0,1fr)] lg:items-start">
+        {/* ── 포스터 ───────────────────────────────────────────────── */}
+        <div className="relative lg:sticky lg:top-0 lg:self-start lg:flex lg:h-screen lg:items-center lg:justify-center lg:border-r lg:border-border-subtle lg:bg-surface-base">
+          <div
+            className={[
+              'relative flex w-full items-center justify-center overflow-hidden',
+              schedule.posterUrl ? 'bg-surface-base' : 'aspect-[16/9] sm:aspect-[2/1]',
+            ].join(' ')}
+            style={schedule.posterUrl
+              ? undefined
+              : { background: `linear-gradient(135deg, ${schedule.posterColor ?? '#1a1d24'}ee 0%, #0a0c0f 100%)` }}
           >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
-              <line x1="2" y1="2" x2="12" y2="12" /><line x1="12" y1="2" x2="2" y2="12" />
-            </svg>
-          </button>
+            {schedule.posterUrl ? (
+              <img
+                src={schedule.posterUrl}
+                alt={`${schedule.title} 포스터`}
+                className="block h-auto w-full max-h-[65vh] object-contain lg:max-h-screen"
+              />
+            ) : (
+              <>
+                <div className="absolute inset-0 grid grid-cols-6 gap-2 p-3 opacity-[0.08] select-none pointer-events-none" aria-hidden>
+                  {Array.from({ length: 24 }, (_, i) => (
+                    <span key={i} className="text-2xl text-white text-center">{SUITS[i % 4]}</span>
+                  ))}
+                </div>
+                <span className="relative text-6xl opacity-30 select-none" aria-hidden>♠</span>
+              </>
+            )}
 
-          {/* 상단 배지 */}
-          <div className="absolute top-3 left-3 flex items-center gap-1 z-10">
-            {schedule.isPremium && (
-              <span className="rounded-badge bg-gold-300 px-2 py-0.5 text-xs font-bold text-ink-inverse leading-none">
-                TOP
+            {/* 상단 그라데이션 */}
+            <div className="absolute top-0 left-0 right-0 h-20 pointer-events-none"
+              style={{ background: 'linear-gradient(to bottom, rgba(10,12,15,0.7), transparent)' }}
+            />
+
+            {/* 상단 배지 */}
+            <div className="absolute top-3 left-3 flex items-center gap-1 z-10">
+              {schedule.isPremium && (
+                <span className="rounded-badge bg-gold-300 px-2 py-0.5 text-xs font-bold text-ink-inverse leading-none">
+                  TOP
+                </span>
+              )}
+              <span className={[
+                'rounded-badge border px-2 py-0.5 text-xs font-bold tracking-wider leading-none',
+                schedule.format === 'MTT'    && 'bg-blue-500/30 text-blue-300 border-blue-400',
+                schedule.format === 'SNG'    && 'bg-purple-500/30 text-purple-300 border-purple-400',
+                schedule.format === 'PKO'    && 'bg-teal-500/30 text-teal-300 border-teal-400',
+                schedule.format === 'Bounty' && 'bg-amber-500/30 text-amber-300 border-amber-400',
+                schedule.format === 'Mix'    && 'bg-pink-500/30 text-pink-300 border-pink-400',
+              ].filter(Boolean).join(' ')}>
+                {schedule.format}
               </span>
-            )}
-            <span className={[
-              'rounded-badge border px-2 py-0.5 text-xs font-bold tracking-wider leading-none',
-              schedule.format === 'MTT'    && 'bg-blue-500/30 text-blue-300 border-blue-400',
-              schedule.format === 'SNG'    && 'bg-purple-500/30 text-purple-300 border-purple-400',
-              schedule.format === 'PKO'    && 'bg-teal-500/30 text-teal-300 border-teal-400',
-              schedule.format === 'Bounty' && 'bg-amber-500/30 text-amber-300 border-amber-400',
-              schedule.format === 'Mix'    && 'bg-pink-500/30 text-pink-300 border-pink-400',
-            ].filter(Boolean).join(' ')}>
-              {schedule.format}
-            </span>
-            {schedule.guaranteed && (
-              <span className="rounded-badge bg-emerald-500/30 text-emerald-300 border border-emerald-400 px-2 py-0.5 text-xs font-bold tracking-wider leading-none">
-                GTD
-              </span>
-            )}
+              {schedule.guaranteed && (
+                <span className="rounded-badge bg-emerald-500/30 text-emerald-300 border border-emerald-400 px-2 py-0.5 text-xs font-bold tracking-wider leading-none">
+                  GTD
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* 제목 영역 (포스터 아래) */}
-        <div className="px-4 pt-4 pb-2">
-          <h1 className={[
-            'text-xl font-bold leading-tight',
-            schedule.isPremium ? 'text-gold-300' : 'text-ink-primary',
-          ].join(' ')}>
-            {schedule.title}
-          </h1>
-          {onDeletePoster && user?.role === 'admin' && (
-            <button
-              type="button"
-              onClick={() => { if (confirm('이 포스터를 삭제하시겠습니까? 되돌릴 수 없습니다.')) onDeletePoster(schedule.id); }}
-              className="mt-1 mb-1 text-2xs font-semibold px-2 py-1 rounded-badge border bg-danger/15 text-danger-light border-danger/30 hover:bg-danger/25 transition-colors"
-            >
-              운영자 삭제
-            </button>
-          )}
-          {schedule.venueId ? (
-            <button
-              type="button"
-              onClick={() => onVenueClick(schedule.venueId!)}
-              className="mt-1.5 inline-flex items-center gap-1 text-sm text-ink-secondary hover:text-gold-300 transition-colors group"
-            >
-              <span className="font-medium underline decoration-dotted underline-offset-2">
-                {schedule.pubName}
-              </span>
-              <span className="text-border-strong">·</span>
-              <span>{schedule.region}</span>
-              <svg
-                width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.6"
-                className="opacity-50 group-hover:opacity-100 transition-opacity ml-1"
-                aria-hidden
+        {/* ── 정보 (우측, 스크롤) ──────────────────────────────────── */}
+        <div className="flex min-w-0 flex-col">
+          {/* 제목 영역 */}
+          <div className="px-4 pt-4 pb-2">
+            <h1 className={[
+              'text-xl font-bold leading-tight',
+              schedule.isPremium ? 'text-gold-300' : 'text-ink-primary',
+            ].join(' ')}>
+              {schedule.title}
+            </h1>
+            {onDeletePoster && user?.role === 'admin' && (
+              <button
+                type="button"
+                onClick={() => { if (confirm('이 포스터를 삭제하시겠습니까? 되돌릴 수 없습니다.')) onDeletePoster(schedule.id); }}
+                className="mt-1 mb-1 text-2xs font-semibold px-2 py-1 rounded-badge border bg-danger/15 text-danger-light border-danger/30 hover:bg-danger/25 transition-colors"
               >
-                <path d="M2 9 L9 2 M3.5 2 L9 2 L9 7.5" strokeLinecap="round" />
-              </svg>
-            </button>
-          ) : (
-            <p className="mt-1.5 inline-flex items-center gap-1 text-sm text-ink-secondary">
-              <span className="font-medium">{schedule.pubName}</span>
-              <span className="text-border-strong">·</span>
-              <span>{schedule.region}</span>
-            </p>
-          )}
-          {schedule.address && (
-            <p className="mt-0.5 ml-5 text-xs text-ink-muted">{schedule.address}</p>
-          )}
-        </div>
-      </div>
+                운영자 삭제
+              </button>
+            )}
+            {schedule.venueId ? (
+              <button
+                type="button"
+                onClick={() => onVenueClick(schedule.venueId!)}
+                className="mt-1.5 inline-flex items-center gap-1 text-sm text-ink-secondary hover:text-gold-300 transition-colors group"
+              >
+                <span className="font-medium underline decoration-dotted underline-offset-2">
+                  {schedule.pubName}
+                </span>
+                <span className="text-border-strong">·</span>
+                <span>{schedule.region}</span>
+                <svg
+                  width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.6"
+                  className="opacity-50 group-hover:opacity-100 transition-opacity ml-1"
+                  aria-hidden
+                >
+                  <path d="M2 9 L9 2 M3.5 2 L9 2 L9 7.5" strokeLinecap="round" />
+                </svg>
+              </button>
+            ) : (
+              <p className="mt-1.5 inline-flex items-center gap-1 text-sm text-ink-secondary">
+                <span className="font-medium">{schedule.pubName}</span>
+                <span className="text-border-strong">·</span>
+                <span>{schedule.region}</span>
+              </p>
+            )}
+            {schedule.address && (
+              <p className="mt-0.5 ml-5 text-xs text-ink-muted">{schedule.address}</p>
+            )}
+          </div>
 
       {/* ── 탭바 (정보 / Q&A) — sticky 상단 고정 ────────────────── */}
       <div className="grid grid-cols-2 border-b border-border-subtle sticky top-0 bg-surface-mid z-10">
@@ -470,6 +474,8 @@ export default function ScheduleDetailModal({
         )}
       </div>
       )}
+        </div>
+      </div>
     </Modal>
   );
 }

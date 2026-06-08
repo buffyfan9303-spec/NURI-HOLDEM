@@ -422,8 +422,8 @@ export default function IntegratedSearchBar({
         </div>
       </div>
 
-      {/* ── 활성 필터 요약 칩 ────────────────────────────────────────────── */}
-      {hasActiveFilter && (
+      {/* ── 활성 필터 요약 칩 (토너먼트 선택은 칩 하이라이트로 충분 → 요약 제외) ── */}
+      {(rawQuery || selectedDates.length > 0 || selectedRegions.length > 0) && (
         <div
           className="flex flex-wrap gap-1.5 px-page-x pt-1 pb-2 animate-slide-up"
           role="status"
@@ -441,13 +441,6 @@ export default function IntegratedSearchBar({
           {selectedRegions.map((r) => (
             <FilterChip key={r} label={r} onRemove={() => handleRegionToggle(r)} />
           ))}
-          {/* 토너먼트 필터 칩 (단일) */}
-          {tour !== 'all' && (
-            <FilterChip
-              label={TOUR_OPTIONS.find((o) => o.id === tour)?.label ?? tour}
-              onRemove={() => setTour('all')}
-            />
-          )}
         </div>
       )}
     </div>

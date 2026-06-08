@@ -9,7 +9,7 @@ interface ModalProps {
   /** sheet: 하단 시트 / center: 센터 / page: 전체화면 불투명 페이지(뒤 비침 없음) */
   variant?: 'center' | 'sheet' | 'page';
   children: ReactNode;
-  maxWidth?: 'sm' | 'md' | 'lg';
+  maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '4xl' | '6xl';
   /** true면 모달 높이를 최대치로 고정 (탭 전환 시 크기 변동 방지) */
   fillHeight?: boolean;
   /** true면 오버레이가 아닌 인라인 패널로 렌더(데스크탑 2-pane 우측 패널용). */
@@ -20,6 +20,10 @@ const MAX_W: Record<NonNullable<ModalProps['maxWidth']>, string> = {
   sm: 'max-w-sm',
   md: 'max-w-md',
   lg: 'max-w-lg',
+  xl: 'max-w-xl',
+  '2xl': 'max-w-2xl',
+  '4xl': 'max-w-4xl',
+  '6xl': 'max-w-6xl',
 };
 
 export default function Modal({
