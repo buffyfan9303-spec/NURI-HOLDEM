@@ -20,6 +20,7 @@ import { exportLedgerXls } from '../../lib/ledgerExport';
 import { getSchedules, type Schedule } from '../../api/schedules';
 import { getClockState, saveClockState, defaultClockConfig, type ClockState } from '../../api/clock';
 import { getMyVenueStaff, type User } from '../../api/auth';
+import { accrueVoucher } from '../../api/vouchers';
 import { useBackClose } from '../../lib/backstack';
 
 const today = () => new Date().toLocaleDateString('en-CA'); // 로컬 날짜 — UTC 자정 넘김 방지
@@ -573,15 +574,23 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
           cell={selected} hasPw={hasPw} session={session}
           onClose={() => setSelected(null)}
           onPick={async (method, isUnpaid, discountIndex) => {
+            const pn = selected.playerName; const isNew = !selected.buyin;
             try {
-              await upsertBuyin({ venueId, sessionDate: date, playerName: selected.playerName, entryNo: selected.entryNo, paymentMethod: method, isUnpaid, discountIndex });
+              await upsertBuyin({ venueId, sessionDate: date, playerName: pn, entryNo: selected.entryNo, paymentMethod: method, isUnpaid, discountIndex });
               setSelected(null); reload();
+              if (isNew && (session.voucherAccrualPerBin ?? 0) > 0) {
+                accrueVoucher(venueId, pn, session.voucherAccrualPerBin as number).then((n) => { if (n > 0) toast.show(`${pn}님 이용권 ${n}개 적립`, 'success'); }).catch(() => {});
+              }
             } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
           }}
           onPickSplit={async (d) => {
+            const pn = selected.playerName; const isNew = !selected.buyin;
             try {
-              await upsertBuyinSplit({ venueId, sessionDate: date, playerName: selected.playerName, entryNo: selected.entryNo, ...d });
+              await upsertBuyinSplit({ venueId, sessionDate: date, playerName: pn, entryNo: selected.entryNo, ...d });
               setSelected(null); reload();
+              if (isNew && (session.voucherAccrualPerBin ?? 0) > 0) {
+                accrueVoucher(venueId, pn, session.voucherAccrualPerBin as number).then((n) => { if (n > 0) toast.show(`${pn}님 이용권 ${n}개 적립`, 'success'); }).catch(() => {});
+              }
             } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
           }}
           onCancelBuyin={async (pw) => {
@@ -723,6 +732,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   const [isAddon, setIsAddon] = useState<boolean>(!!base.isAddon);
   const [addonStack, setAddonStack] = useState<number>(base.addonStack || 0);
   const [voucherIssued, setVoucherIssued] = useState<number>(base.voucherIssued ?? 0);
+  const [accrualPerBin, setAccrualPerBin] = useState<number>(base.voucherAccrualPerBin ?? 0);
   const [event, setEvent]     = useState(base.eventMemo ?? '');
   const [dealers, setDealers] = useState(base.dealers ?? (scheduledDealers.length ? scheduledDealers.join('\n') : ''));
   const [schedId, setSchedId] = useState<string>(base.scheduleId ?? '');
@@ -788,7 +798,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       ...base, title: title.trim() || undefined,
       buyinAmount: cash, cardAmount: card > 0 ? card : null,
       gameType, targetEntries: gameType === 'gtd' ? target : 0, maxEntries: gameType === 'entry' ? maxEntries : 0,
-      isAddon, addonStack: isAddon ? addonStack : 0, voucherIssued,
+      isAddon, addonStack: isAddon ? addonStack : 0, voucherIssued, voucherAccrualPerBin: accrualPerBin,
       eventMemo: event.trim() || undefined, dealers: dealers.trim() || undefined,
       scheduleId: schedId || null, openedBy: operIds[0] ?? null, operators: operIds,
       discounts: discs.filter((d) => d.amount > 0),
@@ -966,6 +976,15 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
           <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted pointer-events-none">장</span>
         </div>
         <p className="text-[10px] text-ink-muted mt-1">오늘 발행·시상한 매장이용권 수 — 대시보드 '매장이용권' 카드에 합산됩니다.</p>
+      </Field>
+
+      <Field label="바인 1회당 매장이용권 적립 · 선택 (0=사용 안 함)">
+        <div className="relative w-40">
+          <input type="number" inputMode="numeric" value={accrualPerBin || ''} onChange={(e) => setAccrualPerBin(Math.min(1000, Math.max(0, parseInt(e.target.value, 10) || 0)))}
+            placeholder="0" className="input w-full text-sm pr-7 tabular-nums" />
+          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted pointer-events-none">개</span>
+        </div>
+        <p className="text-[10px] text-ink-muted mt-1">바인할 때마다 그 손님에게 매장이용권을 자동 적립합니다. 닉네임/실명이 회원과 일치하면 손님 지갑으로, 아니면 매장 기록으로 들어가 매장관리에서 동기화됩니다. (운영자 발급 승인 필요)</p>
       </Field>
 
       <Field label="이벤트 · 비고 · 선택">

@@ -61,6 +61,7 @@ export interface LedgerSession {
   closedAt?: string | null;
   closeMemo?: string | null;
   voucherIssued?: number;       // 매장이용권 발행/시상 장수(당일)
+  voucherAccrualPerBin?: number; // 바인 1회당 매장이용권 적립 수(0=off)
 }
 
 export interface LedgerPlayer {
@@ -167,6 +168,7 @@ const rowToSession = (venueId: string, date: string, d: any): LedgerSession => (
   earlySingleMin: d?.early_single_min ?? 0,
   tournamentStart: d?.tournament_start ?? null,
   voucherIssued: d?.voucher_issued ?? 0,
+  voucherAccrualPerBin: d?.voucher_accrual_per_bin ?? 0,
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -183,6 +185,7 @@ const emptySession = (venueId: string, date: string): LedgerSession => ({
   regClosed: false, closed: false, discounts: [],
   earlyDoubleMin: 0, earlySingleMin: 0, tournamentStart: null,
   voucherIssued: 0,
+  voucherAccrualPerBin: 0,
 });
 
 // ── 권한 ──────────────────────────────────────────────────────────────────────
@@ -304,6 +307,7 @@ export async function saveLedgerSession(s: LedgerSession): Promise<void> {
     discounts: (s.discounts ?? []) as unknown as object,
     early_double_min: s.earlyDoubleMin ?? 0, early_single_min: s.earlySingleMin ?? 0, tournament_start: s.tournamentStart ?? null,
     voucher_issued: s.voucherIssued ?? 0,
+    voucher_accrual_per_bin: s.voucherAccrualPerBin ?? 0,
     updated_at: new Date().toISOString(),
   }, { onConflict: 'venue_id,session_date' });
   if (error) throw error;
@@ -323,6 +327,7 @@ export async function openLedgerSession(s: LedgerSession, operatorId?: string | 
     discounts: (s.discounts ?? []) as unknown as object,
     early_double_min: s.earlyDoubleMin ?? 0, early_single_min: s.earlySingleMin ?? 0, tournament_start: s.tournamentStart ?? null,
     voucher_issued: s.voucherIssued ?? 0,
+    voucher_accrual_per_bin: s.voucherAccrualPerBin ?? 0,
     opened_by: operatorId ?? user?.id ?? null, opened_at: new Date().toISOString(),
     reg_closed: false, reg_closed_at: null,
     closed: false, closed_at: null, close_memo: null,

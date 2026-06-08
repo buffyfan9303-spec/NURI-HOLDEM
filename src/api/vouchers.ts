@@ -65,6 +65,14 @@ export async function setVoucherIssueApproval(venueId: string, approved: boolean
   if (error) throw new Error(error.message);
 }
 
+// 적립: 장부 바인 시 손님에게 이용권 발급(닉네임>실명>이름 매칭). 발급 수 반환.
+export async function accrueVoucher(venueId: string, playerName: string, count: number): Promise<number> {
+  if (IS_MOCK) return 0;
+  const { data, error } = await supabase.rpc('accrue_voucher', { p_venue_id: venueId, p_player_name: playerName, p_count: count });
+  if (error) throw new Error(error.message);
+  return Number(data) || 0;
+}
+
 export async function redeemVoucher(voucherId: string, usedVenueId: string): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.rpc('redeem_voucher', { p_voucher_id: voucherId, p_used_venue_id: usedVenueId });
