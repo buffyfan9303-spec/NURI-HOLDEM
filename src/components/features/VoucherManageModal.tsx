@@ -224,12 +224,34 @@ export function VoucherManagePanel({ venueId }: { venueId: string }) {
         </div>
       )}
 
-      {/* 3) 통계 — 보유회원 · 활성 · 잔여 */}
+      {/* 3) 통계 — 보유회원 · 활성 · 잔여 + 사용률 진행바 */}
       {stats && (
-        <div className="grid grid-cols-3 gap-2">
-          <div className="rounded-input border border-border-subtle bg-surface-low p-2 text-center"><p className="text-lg font-extrabold tabular-nums text-gold-300">{stats.holderCount}</p><p className="text-[10px] text-ink-muted">보유 회원</p></div>
-          <div className="rounded-input border border-border-subtle bg-surface-low p-2 text-center"><p className="text-lg font-extrabold tabular-nums text-ink-primary">{stats.activeCount + stats.usedCount}</p><p className="text-[10px] text-ink-muted">활성 이용권</p></div>
-          <div className="rounded-input border border-border-subtle bg-surface-low p-2 text-center"><p className="text-lg font-extrabold tabular-nums text-emerald-300">{stats.activeCount}</p><p className="text-[10px] text-ink-muted">잔여 이용권</p></div>
+        <div className="rounded-card border border-gold-400/30 bg-gradient-to-br from-gold-300/[0.07] via-surface-low to-surface-low p-3 space-y-2.5">
+          <div className="grid grid-cols-3 gap-2">
+            {([
+              ['👥', stats.holderCount, '보유 회원', 'text-gold-300'],
+              ['🎟', stats.activeCount + stats.usedCount, '활성 이용권', 'text-ink-primary'],
+              ['✨', stats.activeCount, '잔여 이용권', 'text-emerald-300'],
+            ] as const).map(([emoji, val, label, cls]) => (
+              <div key={label} className="rounded-input border border-border-subtle/60 bg-surface-base/60 p-2.5 text-center">
+                <p className="text-sm leading-none" aria-hidden>{emoji}</p>
+                <p className={['mt-1 text-xl font-extrabold tabular-nums leading-none', cls].join(' ')}>{val}</p>
+                <p className="mt-1 text-[10px] text-ink-muted">{label}</p>
+              </div>
+            ))}
+          </div>
+          {(stats.activeCount + stats.usedCount) > 0 && (
+            <div>
+              <div className="flex items-baseline justify-between text-[10px] text-ink-muted">
+                <span>사용률</span>
+                <span className="font-bold tabular-nums text-gold-300">{Math.round((stats.usedCount / (stats.activeCount + stats.usedCount)) * 100)}%</span>
+              </div>
+              <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-high">
+                <div className="h-full rounded-full bg-gradient-to-r from-gold-400 to-gold-300 transition-[width] duration-500"
+                  style={{ width: `${Math.round((stats.usedCount / (stats.activeCount + stats.usedCount)) * 100)}%` }} />
+              </div>
+            </div>
+          )}
         </div>
       )}
 
