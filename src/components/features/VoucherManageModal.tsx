@@ -65,13 +65,35 @@ export function VoucherManagePanel({ venueId }: { venueId: string }) {
     } catch (e) { toast.show(e instanceof Error ? e.message : '조회 실패', 'error'); }
   };
 
-  // 매장 QR 인쇄 — 고정값(venueId 기반)이라 한 번 출력해 매장에 비치 가능.
+  // 매장 비치용 인쇄 — 누리홀덤 브랜딩 + 이용권·회원가입 QR 세로 배치(고정값이라 한 번 출력해 비치).
   const printQr = async () => {
     try {
-      const big = await QRCode.toDataURL(`NURIV-VENUE:${venueId}`, { width: 1024, margin: 2 });
-      const w = window.open('', '_blank', 'width=480,height=640');
+      const [bigVoucher, bigSignup] = await Promise.all([
+        QRCode.toDataURL(`NURIV-VENUE:${venueId}`, { width: 1024, margin: 2 }),
+        QRCode.toDataURL('https://nuriholdem.com/?signup=1', { width: 1024, margin: 2 }),
+      ]);
+      const w = window.open('', '_blank', 'width=480,height=860');
       if (!w) { toast.show('팝업이 차단되었습니다. 팝업을 허용한 뒤 다시 시도하세요.', 'error'); return; }
-      w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>매장이용권 QR</title><style>body{font-family:system-ui,sans-serif;text-align:center;padding:32px;color:#111}h1{font-size:20px;margin:0 0 4px}p{color:#555;font-size:13px;margin:4px 0 16px}img{width:320px;height:320px}small{display:block;margin-top:16px;color:#888;font-size:11px}</style></head><body><h1>매장이용권 사용 QR</h1><p>손님: 대시보드 → 이용권 → 사용하기 → ‘매장 QR 스캔’</p><img src="${big}" alt="매장 QR"/><small>NURI HOLDEM · 이 QR은 고정값입니다. 출력해 매장에 비치하세요.</small><script>window.onload=function(){setTimeout(function(){window.print();},300);};</script></body></html>`);
+      w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>NURI HOLDEM · 매장 비치 QR</title><style>
+*{box-sizing:border-box;margin:0}body{font-family:system-ui,'Apple SD Gothic Neo',sans-serif;text-align:center;padding:28px 22px;color:#111}
+.brandlogo{height:56px;width:auto;margin:0 auto 8px;display:block}
+.logo{font-size:30px;font-weight:900;letter-spacing:.5px}.logo .h{color:#c9a43c}
+.tag{font-size:14px;color:#444;font-weight:700;margin-top:8px}.url{font-size:14px;color:#c9a43c;font-weight:800;margin-top:2px}
+.qrs{display:flex;flex-direction:column;align-items:center;gap:20px;margin-top:22px}
+.card{border:2px solid #ececec;border-radius:16px;padding:16px 16px 12px;width:320px}
+.card h2{font-size:17px;font-weight:800}.card img{width:236px;height:236px;margin-top:10px}.card p{font-size:12px;color:#666;margin-top:8px;line-height:1.4}
+@media print{body{padding:10px}}
+</style></head><body>
+<img class="brandlogo" src="${window.location.origin}/nuri-logo.png" alt="" onerror="this.style.display='none'"/>
+<div class="logo">NURI <span class="h">HOLDEM</span></div>
+<div class="tag">국내 최고의 홀덤 커뮤니티</div>
+<div class="url">nuriholdem.com</div>
+<div class="qrs">
+  <div class="card"><h2>🎟 매장이용권 사용</h2><img src="${bigVoucher}" alt="매장이용권 QR"/><p>대시보드 → 이용권 → 사용하기 → ‘매장 QR 스캔’</p></div>
+  <div class="card"><h2>📱 회원가입</h2><img src="${bigSignup}" alt="회원가입 QR"/><p>QR 스캔 → 바로 회원가입</p></div>
+</div>
+<script>window.onload=function(){setTimeout(function(){window.print();},350);};</script>
+</body></html>`);
       w.document.close();
     } catch (e) { toast.show(e instanceof Error ? e.message : '인쇄 준비 실패', 'error'); }
   };
@@ -185,7 +207,7 @@ export function VoucherManagePanel({ venueId }: { venueId: string }) {
               <p className="text-center text-[10px] leading-tight text-ink-muted">스캔 시 회원가입 페이지로 이동</p>
             </div>
           </div>
-          <button type="button" onClick={printQr} className="btn-ghost mt-2 w-full px-3 text-2xs">🖨 이용권 QR 인쇄 — 출력해 매장에 비치</button>
+          <button type="button" onClick={printQr} className="btn-ghost mt-2 w-full px-3 text-2xs">🖨 출력해 매장에 비치 (이용권 + 회원가입 QR)</button>
         </div>
       )}
 
