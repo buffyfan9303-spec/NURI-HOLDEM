@@ -1,4 +1,4 @@
-import { useState, Suspense, type ReactNode } from 'react';
+import { useState, Suspense, Fragment, type ReactNode } from 'react';
 import { lazyWithReload } from '../../lib/lazyWithReload';
 import ICMCalculator from './ICMCalculator';
 import PotOddsCalc from './tools/PotOddsCalc';
@@ -90,27 +90,27 @@ export default function ToolsPanel() {
 
       {GROUPS.map((g) => {
         const items = TOOLS.filter((t) => t.group === g.id);
-        const activeInGroup = active != null && items.some((t) => t.key === active);
         return (
           <section key={g.id} className="space-y-2">
             <div className="flex items-baseline gap-2">
               <h3 className="text-sm font-bold text-ink-primary">{g.title}</h3>
               <span className="text-2xs text-ink-muted">{g.desc}</span>
             </div>
-            {/* 촘촘한 반응형 그리드 — 모바일 2열 → PC 4~5열(카드 작게) */}
+            {/* 촘촘한 반응형 그리드 — 모바일 2열 → PC 4~5열. 선택 카드 바로 아래에 펼침(아래 카드 밀어냄) */}
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {items.map((t) => (
-                <ToolCard key={t.key} name={t.name} desc={t.desc} icon={t.icon} active={active === t.key} onClick={() => select(t.key)} />
+                <Fragment key={t.key}>
+                  <ToolCard name={t.name} desc={t.desc} icon={t.icon} active={active === t.key} onClick={() => select(t.key)} />
+                  {active === t.key && (
+                    <div className="col-span-full animate-fade-in pt-1 lg:max-w-3xl">
+                      <Suspense fallback={<div className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</div>}>
+                        {renderTool(active)}
+                      </Suspense>
+                    </div>
+                  )}
+                </Fragment>
               ))}
             </div>
-            {/* 선택한 도구는 그리드 아래에 펼침(읽기 좋은 폭으로 제한) */}
-            {activeInGroup && (
-              <div className="animate-fade-in pt-1 lg:max-w-3xl">
-                <Suspense fallback={<div className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</div>}>
-                  {renderTool(active!)}
-                </Suspense>
-              </div>
-            )}
           </section>
         );
       })}

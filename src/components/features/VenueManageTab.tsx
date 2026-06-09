@@ -288,7 +288,7 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
       </div>
 
       <p className="text-2xs text-ink-muted">
-        <span className="text-gold-300 font-semibold">닉네임은 필수</span>, 실명·프라이즈는 선택입니다. 프라이즈는 <span className="text-gold-300 font-semibold">만원 단위 숫자</span>로 입력하세요 — 순위는 머니인 점수, 프라이즈는 누적 금액으로 매장 커뮤니티 순위에 자동 반영됩니다. 실명을 넣으면 손님에게는 <span className="text-gold-300 font-semibold">이름 일부를 가려(예: 나*리)</span> 표시됩니다.
+        <span className="text-gold-300 font-semibold">닉네임은 필수</span>, 실명·프라이즈는 선택입니다. 프라이즈는 <span className="text-gold-300 font-semibold">매장 커뮤니티 순위 점수</span>로만 쓰입니다(금전적 가치 없음). 실명을 넣으면 손님에게는 <span className="text-gold-300 font-semibold">이름 일부를 가려(예: 나*리)</span> 표시됩니다.
       </p>
 
       {loading ? (
@@ -317,7 +317,7 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
                     type="text" inputMode="numeric" value={row.prize} maxLength={12}
                     onChange={(e) => update(i, 'prize', e.target.value.replace(/[^\d.]/g, ''))}
                     onKeyDown={(e) => { if (e.key === 'Enter' && i === rows.length - 1) addRow(); }}
-                    placeholder="프라이즈(만원)"
+                    placeholder="프라이즈(점수)"
                     className="input flex-1 min-w-0 text-sm py-2"
                   />
                   <button

@@ -564,13 +564,13 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
       <p className="text-2xs text-ink-muted">
         {metric === 'money'
           ? '등수 점수 누적 (1등 10 · 2등 7 · 3등 5 · 4등 3 · 5등 2 · 그 외 1점)'
-          : '누적 프라이즈 금액(만원) 순'}
+          : '누적 프라이즈 점수 순 (매장 커뮤니티 순위용 · 금전적 가치 없음)'}
       </p>
 
       <ol className="space-y-1.5">
         {sorted.slice(0, 20).map((e, i) => {
           const masked = maskRealName(e.realName);
-          const val = metric === 'money' ? `${e.moneyPoints.toLocaleString()}점` : `${e.prizeMan.toLocaleString()}만`;
+          const val = metric === 'money' ? `${e.moneyPoints.toLocaleString()}점` : `${e.prizeMan.toLocaleString()}점`;
           return (
             <li key={e.nickname} className="flex items-center gap-3 p-2.5 rounded-input bg-surface-high border border-border-subtle">
               <span className={['w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-2xs font-bold tabular-nums', medalCls(i)].join(' ')}>
