@@ -9,6 +9,7 @@ import {
 } from '../../api/ledger';
 import { toCsv, downloadCsv } from '../../lib/csv';
 import Icon from '../atoms/Icon';
+import { getMyVenueNotifyMute, setMyVenueNotifyMute } from '../../api/auth';
 
 const todayStr = () => new Date().toLocaleDateString('en-CA');
 const shift = (d: string, n: number) => { const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate() + n); return x.toLocaleDateString('en-CA'); };
@@ -603,17 +604,26 @@ function ReportCard({ tone, title, body, bullets }: { tone: 'emerald' | 'rose' |
   );
 }
 
-// ── POS 설정(업주) ── 직원관리 옆 별도 탭에서 렌더 ─────────────────────────────
+// ── 설정(업주) ── 포스 비밀번호 · 알림 수신 ───────────────────────────────────
 export function PosSettingsPanel({ venueId }: { venueId: string }) {
   const toast = useToast();
   const [hasPw, setHasPw] = useState(false);
   const [pw, setPw]       = useState('');
   const [pw2, setPw2]     = useState('');
   const [saving, setSaving] = useState(false);
+  const [mute, setMute] = useState(false); // 매장 알림 수신 거부(본인)
 
   useEffect(() => {
     posHasPassword(venueId).then(setHasPw).catch(() => {});
+    getMyVenueNotifyMute().then(setMute).catch(() => {});
   }, [venueId]);
+
+  const toggleMute = async () => {
+    const next = !mute;
+    setMute(next);
+    try { await setMyVenueNotifyMute(next); toast.show(next ? '매장 알림을 받지 않습니다' : '매장 알림을 받습니다', 'success'); }
+    catch (e) { setMute(!next); toast.show(e instanceof Error ? e.message : '변경 실패', 'error'); }
+  };
 
   const savePw = async () => {
     if (pw.length < 4) return toast.show('비밀번호는 4자리 이상이어야 합니다', 'error');
@@ -626,16 +636,29 @@ export function PosSettingsPanel({ venueId }: { venueId: string }) {
 
   return (
     <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-3">
-      <h3 className="text-sm font-bold text-ink-primary">POS 설정</h3>
+      <h3 className="text-sm font-bold text-ink-primary">설정</h3>
       <div className="space-y-1.5">
-        <p className="text-2xs font-semibold text-ink-secondary">바인 취소 비밀번호{hasPw && <span className="text-emerald-400">· 설정됨</span>}</p>
+        <p className="text-2xs font-semibold text-ink-secondary">포스(바인 취소) 비밀번호{hasPw && <span className="text-emerald-400"> · 설정됨</span>}</p>
         <div className="grid grid-cols-2 gap-2">
           <input type="password" inputMode="numeric" value={pw} onChange={(e) => setPw(e.target.value)} placeholder={hasPw ? '새 비밀번호' : '비밀번호'} className="input text-sm" />
           <input type="password" inputMode="numeric" value={pw2} onChange={(e) => setPw2(e.target.value)} placeholder="비밀번호 확인" className="input text-sm" />
         </div>
         <button type="button" onClick={savePw} disabled={saving || !pw} className="btn-primary text-xs w-full disabled:opacity-50">{hasPw ? '비밀번호 변경' : '비밀번호 설정'}</button>
       </div>
-      <p className="text-[10px] text-ink-muted pt-1 border-t border-border-subtle">통계는 업주만 볼 수 있습니다. 직원의 <span className="text-gold-300 font-semibold">장부·순위 권한과 직책</span>은 「직원 관리」 탭에서 설정하세요.</p>
+
+      {/* 알림 수신 — 매장 공지/호출 알림을 본인이 받을지 */}
+      <div className="flex items-center gap-2 border-t border-border-subtle pt-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-2xs font-semibold text-ink-secondary">매장 알림 수신</p>
+          <p className="text-[10px] text-ink-muted">매장 공지·직원 호출 알림을 내 알림센터로 받습니다.</p>
+        </div>
+        <button type="button" role="switch" aria-checked={!mute} onClick={toggleMute}
+          className={['relative h-6 w-11 shrink-0 rounded-full transition-colors', !mute ? 'bg-gold-300' : 'bg-surface-float'].join(' ')}>
+          <span className={['absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-[left]', !mute ? 'left-[1.4rem]' : 'left-0.5'].join(' ')} />
+        </button>
+      </div>
+
+      <p className="text-[10px] text-ink-muted pt-1 border-t border-border-subtle">통계는 업주만 볼 수 있습니다. 직원의 <span className="text-gold-300 font-semibold">장부·순위 권한과 직책</span>은 「직원 관리」 탭, 매장 페이지 탭 순서·순위 구성은 <span className="text-gold-300 font-semibold">「매장 꾸미기」</span>에서 설정하세요.</p>
     </section>
   );
 }

@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
 import type { User, VenueInvite } from '../../api/auth';
 import { getMyVenueStaff, getMyVenueInvites, inviteStaffByEmail, cancelStaffInvite, removeStaff, setStaffTitle } from '../../api/auth';
-import { getVenueRankings, saveVenueRankings, maskRealName } from '../../api/rankings';
+import { getVenueRankings, saveVenueRankings, maskRealName, getVenuePageConfig, placementPointsOf, type VenuePageConfig } from '../../api/rankings';
 import { canAccessLedger, canManagePos, getLedgerAccessUserIds, grantLedgerAccess, revokeLedgerAccess } from '../../api/ledger';
 import { getAllVenues, type Venue } from '../../api/community';
 import VenueVerificationCard from './VenueVerificationCard';
@@ -17,9 +17,10 @@ import StoreDashboard from './StoreDashboard';
 import { VoucherManagePanel } from './VoucherManageModal';
 import { iCanViewVouchers, getVoucherAccessUserIds, grantVoucherAccess, revokeVoucherAccess, findUserForTransfer, issueVoucher } from '../../api/vouchers';
 import MyPostersTab from './MyPostersTab';
+import VenueCustomizePanel, { ScorePointsPanel } from './VenueCustomizePanel';
 import type { Schedule } from '../../api/schedules';
 
-type Section = 'dashboard' | 'posters' | 'ledger' | 'stats' | 'ranking' | 'staff' | 'settings' | 'clock' | 'attendance' | 'voucher';
+type Section = 'dashboard' | 'posters' | 'ledger' | 'stats' | 'ranking' | 'staff' | 'settings' | 'clock' | 'attendance' | 'voucher' | 'page';
 
 /** 업주/직원 전용 "매장 관리" 탭 — 장부(POS) · 통계 · 순위 입력 · (업주) 직원 관리 */
 export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster, onDeletePoster }: { schedules: Schedule[]; onCreatePoster: () => void; onEditPoster: (id: string) => void; onDeletePoster: (id: string) => void }) {
@@ -84,6 +85,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   if (ledgerOk) available.push({ id: 'clock', label: '클락' });
   if (ledgerOk) available.push({ id: 'attendance', label: '출근 관리' });
   available.push({ id: 'voucher', label: '매장이용권', locked: !(manageOk || voucherView) });
+  if (canStaff) available.push({ id: 'page', label: '매장 꾸미기' });
   if (canStaff) available.push({ id: 'staff', label: '직원 관리' });
   if (canStaff) available.push({ id: 'settings', label: '설정' });
   const curItem = available.find((a) => a.id === section);
@@ -148,7 +150,11 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 onOpenClock={(d) => { setClockSeed(d); setSection('clock'); }} />
             )}
             {section === 'stats'    && manageOk && <LedgerStatsPanel venueId={venueId} />}
-            {section === 'ranking'  && ledgerOk && <RankingEditor venueId={venueId} canEdit={isAdmin || user.approved === true} draft={rankingDraft} />}
+            {section === 'ranking'  && ledgerOk && (<>
+              <RankingEditor venueId={venueId} canEdit={isAdmin || user.approved === true} draft={rankingDraft} />
+              <ScorePointsPanel venueId={venueId} />
+            </>)}
+            {section === 'page'     && canStaff && <VenueCustomizePanel venueId={venueId} />}
             {section === 'clock'    && ledgerOk && <TournamentClock venueId={venueId} canManage={ledgerOk} seedSessionDate={clockSeed} />}
             {section === 'attendance' && ledgerOk && <StaffSelfAttendance venueId={venueId} />}
             {section === 'staff'    && canStaff && <StaffHub venueId={venueId} />}
@@ -176,6 +182,7 @@ const SECTION_ICON: Record<Section, ReactNode> = {
   attendance: ic(<><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="m9 16 2 2 4-4" /></>),
   voucher: ic(<><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" /><path d="M13 5v14" /></>),
   staff: ic(<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>),
+  page: ic(<><path d="m12 19 7-7 3 3-7 7-3-3z" /><path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" /><path d="m2 2 7.586 7.586" /><circle cx="11" cy="11" r="2" /></>),
   settings: ic(<><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" /></>),
 };
 
@@ -203,6 +210,9 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
   const [rows, setRows] = useState<Row[]>([emptyRow()]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // 등수→점수 매핑(매장 꾸미기에서 설정) — 입력 시 점수 미리보기에 사용
+  const [cfg, setCfg] = useState<VenuePageConfig | null>(null);
+  useEffect(() => { getVenuePageConfig(venueId).then(setCfg).catch(() => {}); }, [venueId]);
 
   // 장부에서 넘어온 초안: 해당 날짜로 이동
   useEffect(() => { if (draft?.date) setDate(draft.date); }, [draft]);
@@ -297,7 +307,11 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
         <ul className="space-y-1.5">
           {rows.map((row, i) => (
             <li key={i} className="flex items-start gap-1.5 rounded-input border border-border-subtle bg-surface-low/40 p-1.5">
-              <span className="w-5 shrink-0 pt-2 text-center text-sm font-bold text-gold-300 tabular-nums">{i + 1}</span>
+              <span className="w-7 shrink-0 pt-1.5 text-center">
+                <span className="block text-sm font-bold text-gold-300 tabular-nums">{i + 1}</span>
+                {/* 등수→점수 미리보기(매장 꾸미기 '기준 점수' 반영) */}
+                <span className="block text-[9px] font-semibold text-ink-muted tabular-nums">+{placementPointsOf(i + 1, cfg)}점</span>
+              </span>
               <div className="min-w-0 flex-1 space-y-1">
                 {/* 1줄: 닉네임 · 실명 · 프라이즈 + 삭제 */}
                 <div className="flex items-center gap-1.5">

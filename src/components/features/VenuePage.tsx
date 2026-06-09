@@ -10,7 +10,12 @@ import type { MarketplaceNotice } from '../../api/marketplace';
 import { useAuth } from '../../contexts/AuthContext';
 import { followVenue, unfollowVenue, getMyFollowedVenueIds, updateVenueAddress, updateVenueKakao } from '../../api/community';
 import { getVenueNotices, createVenueNotice, deleteVenueNotice, type VenueNotice } from '../../api/community';
-import { getVenueRankings, getVenueRankingTotals, subscribeRankings, maskRealName, type RankingEntry, type RankingTotal } from '../../api/rankings';
+import {
+  getVenueRankings, getVenueRankingTotals, subscribeRankings, maskRealName,
+  getVenuePageConfig, getScoreEntries, getVenueBuyinCounts,
+  RANK_METRIC_LABEL, RANK_METRIC_DESC,
+  type RankingEntry, type RankingTotal, type VenuePageConfig, type RankMetric, type ScoreEntry,
+} from '../../api/rankings';
 import { uploadVenueImages } from '../../lib/storage';
 import { useBackClose } from '../../lib/backstack';
 
@@ -63,6 +68,21 @@ export default function VenuePage({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [kakaoOverride, setKakaoOverride] = useState<string | null>(null);
   useEffect(() => { setKakaoOverride(null); }, [venue?.id]);
+
+  // 업주가 설정한 탭 순서(page_config.tabOrder) — 미설정 시 기본 순서
+  const [tabOrder, setTabOrder] = useState<Tab[] | null>(null);
+  useEffect(() => {
+    setTabOrder(null);
+    if (!venue?.id) return;
+    let alive = true;
+    getVenuePageConfig(venue.id).then((c) => {
+      if (!alive || !c?.tabOrder?.length) return;
+      const valid = c.tabOrder.filter((t): t is Tab => (TABS as string[]).includes(t));
+      if (valid.length) setTabOrder([...valid, ...TABS.filter((t) => !valid.includes(t))]);
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [venue?.id]);
+  const orderedTabs = tabOrder ?? TABS;
 
   // 바디 스크롤 잠금 (페이지가 열려있는 동안)
   useEffect(() => {
@@ -202,7 +222,7 @@ export default function VenuePage({
         {/* ── Sticky 탭바 ─────────────────────────────────────────── */}
         <div className="sticky top-0 z-20 bg-surface-base border-b border-border-subtle">
           <div className="flex overflow-x-auto scrollbar-none [-webkit-overflow-scrolling:touch]">
-            {TABS.map((t) => {
+            {orderedTabs.map((t) => {
               const count = t === 'posters'   ? venueSchedules.length
                           : t === 'schedules' ? venueSchedules.length
                           : t === 'community' ? venueComments.length
@@ -508,18 +528,33 @@ function HeroSection({
 // ── 팔로우 버튼 ────────────────────────────────────────────────────────────
 
 function VenueRankingPanel({ venueId }: { venueId: string }) {
-  const [metric, setMetric] = useState<'money' | 'prize'>('money');
+  const [cfg, setCfg] = useState<VenuePageConfig | null>(null);
+  const [metric, setMetric] = useState<RankMetric | null>(null);
   const [totals, setTotals] = useState<RankingTotal[]>([]);
+  const [manual, setManual] = useState<ScoreEntry[]>([]);
+  // 주의: 이 파일에 지도용 Map 컴포넌트가 있어 내장 Map 생성이 가려짐 → Record 사용
+  const [buyinCounts, setBuyinCounts] = useState<Record<string, number>>({});
   const [latest, setLatest] = useState<{ date: string | null; entries: RankingEntry[] }>({ date: null, entries: [] });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
-    const load = () => {
-      Promise.all([getVenueRankingTotals(venueId), getVenueRankings(venueId)])
-        .then(([t, d]) => { if (active) { setTotals(t); setLatest(d); } })
-        .catch(() => {})
-        .finally(() => { if (active) setLoading(false); });
+    const load = async () => {
+      try {
+        const c = await getVenuePageConfig(venueId).catch(() => null);
+        const wantsRate = (c?.rankMetrics ?? []).includes('moneyin_rate');
+        const [t, d, m] = await Promise.all([
+          getVenueRankingTotals(venueId, c),
+          getVenueRankings(venueId),
+          getScoreEntries(venueId).catch(() => [] as ScoreEntry[]),
+        ]);
+        const bc: Record<string, number> = wantsRate
+          ? Object.fromEntries(await getVenueBuyinCounts(venueId)) : {};
+        if (!active) return;
+        setCfg(c); setTotals(t); setLatest(d); setManual(m); setBuyinCounts(bc);
+        setMetric((cur) => cur ?? (c?.rankMetrics?.[0] ?? 'score'));
+      } catch { /* noop */ }
+      finally { if (active) setLoading(false); }
     };
     setLoading(true);
     load();
@@ -527,16 +562,47 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
     return () => { active = false; unsub(); };
   }, [venueId]);
 
-  const sorted = useMemo(() => {
-    const arr = [...totals];
-    arr.sort((a, b) => metric === 'money'
-      ? (b.moneyPoints - a.moneyPoints) || (b.prizeMan - a.prizeMan)
-      : (b.prizeMan - a.prizeMan) || (b.moneyPoints - a.moneyPoints));
-    return arr;
-  }, [totals, metric]);
+  // 업주가 고른 메트릭(1~2개). 미설정 시 기본 2종.
+  const metrics: RankMetric[] = (cfg?.rankMetrics && cfg.rankMetrics.length > 0 ? cfg.rankMetrics : (['score', 'prize'] as RankMetric[])).slice(0, 2);
+  const cur: RankMetric = metric && metrics.includes(metric) ? metric : metrics[0];
+
+  // 수동 포인트 합산(이름=닉네임 매칭, 소문자 무시)
+  const manualByName = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const e of manual) {
+      const k = e.name.trim().toLowerCase();
+      m[k] = (m[k] ?? 0) + e.points;
+    }
+    return m;
+  }, [manual]);
+
+  // 메트릭별 값 계산 + 정렬
+  const rows = useMemo(() => {
+    const base = totals.map((t) => {
+      const k = t.nickname.toLowerCase();
+      const buyins = buyinCounts[k] ?? 0;
+      const value =
+        cur === 'score'         ? t.moneyPoints + (manualByName[k] ?? 0)
+        : cur === 'prize'         ? t.prizeMan
+        : cur === 'moneyin_count' ? t.appearances
+        : buyins >= 5 ? Math.round((t.appearances / buyins) * 100) : -1; // rate: 표본 5바인 미만 제외
+      return { ...t, value };
+    });
+    // 수동 포인트만 있고 순위 등록이 없는 사람도 score 보드에 포함
+    if (cur === 'score') {
+      for (const [k, pts] of Object.entries(manualByName)) {
+        if (!base.some((b) => b.nickname.toLowerCase() === k)) {
+          const src = manual.find((e) => e.name.trim().toLowerCase() === k);
+          base.push({ nickname: src?.name ?? k, realName: '', moneyPoints: 0, prizeMan: 0, appearances: 0, bestPosition: 0, value: pts });
+        }
+      }
+    }
+    return base.filter((b) => b.value >= 0)
+      .sort((a, b) => (b.value - a.value) || (b.prizeMan - a.prizeMan) || (b.moneyPoints - a.moneyPoints));
+  }, [totals, cur, manualByName, buyinCounts, manual]);
 
   if (loading) return <p className="text-center py-10 text-xs text-ink-muted">불러오는 중…</p>;
-  if (totals.length === 0) {
+  if (totals.length === 0 && manual.length === 0) {
     return (
       <div className="py-12 text-center text-ink-muted">
         <p className="text-sm">아직 등록된 순위가 없습니다.</p>
@@ -545,42 +611,72 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
     );
   }
 
-  const medalCls = (i: number) => i === 0 ? 'bg-gold-300 text-ink-inverse'
-    : i === 1 ? 'bg-slate-300 text-ink-inverse'
-    : i === 2 ? 'bg-amber-700 text-white' : 'bg-surface-float text-ink-secondary';
+  const unit = cur === 'moneyin_count' ? '회' : cur === 'moneyin_rate' ? '%' : '점';
+  const fmtVal = (v: number) => `${v.toLocaleString()}${unit}`;
+  const podium = rows.slice(0, 3);
+  const rest = rows.slice(3, 20);
+  // 1~3등 칭호 — 업주 설정(예: 로티아레나 포식자), 미설정 시 기본
+  const titleOf = (rank: number) => cfg?.rankTitles?.[String(rank)]?.trim()
+    || (rank === 1 ? '챔피언' : rank === 2 ? '준우승' : '3위');
 
   return (
     <div className="space-y-3">
-      {/* 누적 랭킹 종류 토글 */}
-      <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5">
-        {([['money', '머니인 순위'], ['prize', '프라이즈 순위']] as const).map(([id, label]) => (
-          <button key={id} type="button" onClick={() => setMetric(id)}
-            className={['flex-1 py-1.5 text-xs font-bold rounded-[6px] transition-colors',
-              metric === id ? 'bg-gold-300 text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
-            {label}
-          </button>
-        ))}
-      </div>
-      <p className="text-2xs text-ink-muted">
-        {metric === 'money'
-          ? '등수 점수 누적 (1등 10 · 2등 7 · 3등 5 · 4등 3 · 5등 2 · 그 외 1점)'
-          : '누적 프라이즈 점수 순 (매장 커뮤니티 순위용 · 금전적 가치 없음)'}
-      </p>
+      {/* 메트릭 토글 — 업주가 1개만 골랐으면 라벨 헤더로 표시 */}
+      {metrics.length > 1 ? (
+        <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5">
+          {metrics.map((id) => (
+            <button key={id} type="button" onClick={() => setMetric(id)}
+              className={['flex-1 py-1.5 text-xs font-bold rounded-[6px] transition-colors',
+                cur === id ? 'bg-gold-300 text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
+              {RANK_METRIC_LABEL[id]}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm font-bold text-gold-300">{RANK_METRIC_LABEL[cur]} 순위</p>
+      )}
+      <p className="text-2xs text-ink-muted">{RANK_METRIC_DESC[cur]} · 매장 커뮤니티 순위용 점수(금전적 가치 없음)</p>
 
+      {/* ── 포디움(1~3등 명예 표기) ── */}
+      {podium.length > 0 && (
+        <div className="flex items-end justify-center gap-2 pt-2">
+          {[podium[1], podium[0], podium[2]].map((e, slot) => {
+            if (!e) return <div key={slot} className="flex-1" />;
+            const rank = slot === 1 ? 1 : slot === 0 ? 2 : 3;
+            const masked = maskRealName(e.realName);
+            const big = rank === 1;
+            const ring = rank === 1 ? 'border-gold-300/80 bg-gradient-to-b from-gold-300/[0.14] to-transparent'
+              : rank === 2 ? 'border-slate-300/50 bg-gradient-to-b from-slate-300/[0.08] to-transparent'
+              : 'border-amber-700/50 bg-gradient-to-b from-amber-700/[0.10] to-transparent';
+            const medal = rank === 1 ? 'bg-gold-300 text-ink-inverse' : rank === 2 ? 'bg-slate-300 text-ink-inverse' : 'bg-amber-700 text-white';
+            return (
+              <div key={e.nickname} className={['flex-1 max-w-[9.5rem] rounded-card border p-2.5 text-center', ring, big ? 'pb-4 -translate-y-2 shadow-[0_0_18px_rgba(255,209,0,0.12)]' : ''].join(' ')}>
+                {big && <div aria-hidden className="text-base leading-none mb-1">👑</div>}
+                <span className={['mx-auto flex items-center justify-center rounded-full font-extrabold tabular-nums', medal, big ? 'w-8 h-8 text-sm' : 'w-6 h-6 text-2xs'].join(' ')}>{rank}</span>
+                <p className={['mt-1 font-bold uppercase tracking-wide', rank === 1 ? 'text-gold-300' : 'text-ink-secondary', 'text-[10px]'].join(' ')}>{titleOf(rank)}</p>
+                <p className={['font-extrabold text-ink-primary truncate', big ? 'text-base' : 'text-sm'].join(' ')}>{e.nickname}</p>
+                {masked && <p className="text-[10px] text-ink-muted">({masked})</p>}
+                <p className={['font-bold tabular-nums', big ? 'text-sm text-gold-300' : 'text-xs text-ink-secondary'].join(' ')}>{fmtVal(e.value)}</p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* 4등~ 리스트 */}
       <ol className="space-y-1.5">
-        {sorted.slice(0, 20).map((e, i) => {
+        {rest.map((e, i) => {
           const masked = maskRealName(e.realName);
-          const val = metric === 'money' ? `${e.moneyPoints.toLocaleString()}점` : `${e.prizeMan.toLocaleString()}점`;
           return (
             <li key={e.nickname} className="flex items-center gap-3 p-2.5 rounded-input bg-surface-high border border-border-subtle">
-              <span className={['w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-2xs font-bold tabular-nums', medalCls(i)].join(' ')}>
-                {i + 1}
+              <span className="w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-2xs font-bold tabular-nums bg-surface-float text-ink-secondary">
+                {i + 4}
               </span>
               <span className="text-sm font-semibold text-ink-primary truncate">{e.nickname}</span>
               {masked && <span className="text-2xs text-ink-muted">({masked})</span>}
               <span className="ml-auto shrink-0 text-right">
-                <span className={['text-sm font-bold tabular-nums', metric === 'prize' ? 'text-emerald-400' : 'text-gold-300'].join(' ')}>{val}</span>
-                <span className="block text-[10px] text-ink-muted">{e.appearances}회 · 최고 {e.bestPosition}등</span>
+                <span className="text-sm font-bold tabular-nums text-gold-300">{fmtVal(e.value)}</span>
+                {e.appearances > 0 && <span className="block text-[10px] text-ink-muted">{e.appearances}회{e.bestPosition > 0 && e.bestPosition < 9999 ? ` · 최고 ${e.bestPosition}등` : ''}</span>}
               </span>
             </li>
           );
@@ -595,7 +691,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
               const masked = maskRealName(e.realName);
               return (
                 <span key={e.position} className="text-2xs px-2 py-0.5 rounded-badge bg-surface-float text-ink-primary">
-                  {e.position}. {e.nickname}{masked ? `(${masked})` : ''}{e.prize ? ` · ${e.prize}만` : ''}
+                  {e.position}. {e.nickname}{masked ? `(${masked})` : ''}{e.prize ? ` · ${e.prize}점` : ''}
                 </span>
               );
             })}

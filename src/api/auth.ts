@@ -127,6 +127,18 @@ export async function adminSetNickname(userId: string, nickname: string): Promis
   if (error) throw new Error(error.message);
 }
 
+// 매장 알림 수신 설정(본인) — true=수신 거부
+export async function getMyVenueNotifyMute(): Promise<boolean> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+  const { data } = await supabase.from('profiles').select('mute_venue_notify').eq('id', user.id).single();
+  return data?.mute_venue_notify === true;
+}
+export async function setMyVenueNotifyMute(mute: boolean): Promise<void> {
+  const { error } = await supabase.rpc('set_my_venue_notify', { p_mute: mute });
+  if (error) throw new Error(error.message);
+}
+
 // ── 일반 회원가입 ─────────────────────────────────────────────────────────────
 // 프로필/동의 이력은 DB 트리거(handle_new_user)가 user_metadata로부터 자동 생성.
 export async function signUpUser(payload: SignupUserPayload): Promise<void> {

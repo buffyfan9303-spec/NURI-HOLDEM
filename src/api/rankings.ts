@@ -87,7 +87,7 @@ export function parsePrizeMan(prize?: string | null): number {
   return m ? Math.round(parseFloat(m[0])) : 0;
 }
 
-export async function getVenueRankingTotals(venueId: string): Promise<RankingTotal[]> {
+export async function getVenueRankingTotals(venueId: string, cfg?: VenuePageConfig | null): Promise<RankingTotal[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase
     .from('venue_rankings').select('nickname, real_name, position, prize, ranking_date')
@@ -102,7 +102,7 @@ export async function getVenueRankingTotals(venueId: string): Promise<RankingTot
     const cur = map.get(key) ?? {
       nickname: nick, realName: '', moneyPoints: 0, prizeMan: 0, appearances: 0, bestPosition: 9999, _lastDate: '',
     };
-    cur.moneyPoints += placementPoints(r.position);
+    cur.moneyPoints += cfg ? placementPointsOf(r.position, cfg) : placementPoints(r.position);
     cur.prizeMan += parsePrizeMan(r.prize);
     cur.appearances += 1;
     cur.bestPosition = Math.min(cur.bestPosition, r.position);
@@ -112,6 +112,89 @@ export async function getVenueRankingTotals(venueId: string): Promise<RankingTot
   }
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   return [...map.values()].map(({ _lastDate, ...rest }) => rest);
+}
+
+// ── 매장 페이지 구성(업주 설정) — venues.page_config jsonb ─────────────────────
+export type RankMetric = 'score' | 'prize' | 'moneyin_count' | 'moneyin_rate';
+export const RANK_METRIC_LABEL: Record<RankMetric, string> = {
+  score: '매장 포인트', prize: '프라이즈 점수', moneyin_count: '머니인 횟수', moneyin_rate: '머니인 비율',
+};
+export const RANK_METRIC_DESC: Record<RankMetric, string> = {
+  score: '등수 점수(설정 가능) + 수동 지급 포인트 합산',
+  prize: '순위 등록 시 입력한 프라이즈 점수 누적',
+  moneyin_count: '순위(입상) 등록 횟수',
+  moneyin_rate: '머니인 횟수 ÷ 바인 횟수 (장부 기준, 5바인 이상만 표시)',
+};
+
+export interface VenuePageConfig {
+  tabOrder?: string[];                    // 매장 페이지 탭 순서(키 배열)
+  rankMetrics?: RankMetric[];             // 순위 탭 메트릭(1~2개), 미설정 시 ['score','prize']
+  rankTitles?: Record<string, string>;    // '1'|'2'|'3' → 커스텀 칭호 (예: 로티아레나 포식자)
+  placementPoints?: number[];             // 1등부터의 점수 매핑(그 외 등수 = 마지막 값 또는 1)
+  notifyStaff?: boolean;                  // 직원 호출/공지 알림 수신
+}
+
+export const DEFAULT_PLACEMENT_POINTS = [10, 7, 5, 3, 2];
+
+/** 설정 기반 등수 점수 — config 미설정 시 기존 placementPoints와 동일 */
+export function placementPointsOf(position: number, cfg?: VenuePageConfig | null): number {
+  const arr = cfg?.placementPoints && cfg.placementPoints.length > 0 ? cfg.placementPoints : DEFAULT_PLACEMENT_POINTS;
+  if (position >= 1 && position <= arr.length) return arr[position - 1] ?? 1;
+  return 1;
+}
+
+export async function getVenuePageConfig(venueId: string): Promise<VenuePageConfig | null> {
+  if (IS_MOCK) return null;
+  const { data, error } = await supabase.from('venues').select('page_config').eq('id', venueId).single();
+  if (error) return null;
+  return (data?.page_config as VenuePageConfig) ?? null;
+}
+
+export async function setVenuePageConfig(venueId: string, config: VenuePageConfig): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('set_venue_page_config', { p_venue_id: venueId, p_config: config });
+  if (error) throw error;
+}
+
+// ── 수동 포인트(지급/차감) — venue_score_entries ───────────────────────────────
+export interface ScoreEntry { id: string; name: string; points: number; reason: string | null; entryDate: string; }
+
+export async function getScoreEntries(venueId: string, limit = 200): Promise<ScoreEntry[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.from('venue_score_entries')
+    .select('id, name, points, reason, entry_date')
+    .eq('venue_id', venueId).order('entry_date', { ascending: false }).order('created_at', { ascending: false }).limit(limit);
+  if (error) throw error;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({ id: r.id, name: r.name, points: r.points, reason: r.reason ?? null, entryDate: r.entry_date }));
+}
+
+export async function addScoreEntry(venueId: string, input: { name: string; points: number; reason?: string; entryDate?: string }): Promise<void> {
+  if (IS_MOCK) return;
+  const { data: { user } } = await supabase.auth.getUser();
+  const { error } = await supabase.from('venue_score_entries').insert({
+    venue_id: venueId, name: input.name.trim(), points: input.points,
+    reason: input.reason?.trim() || null, ...(input.entryDate ? { entry_date: input.entryDate } : {}),
+    created_by: user?.id ?? null,
+  });
+  if (error) throw error;
+}
+
+export async function deleteScoreEntry(id: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.from('venue_score_entries').delete().eq('id', id);
+  if (error) throw error;
+}
+
+/** 머니인 비율용 — 이름별 바인 횟수(장부 집계, 금액 없음) */
+export async function getVenueBuyinCounts(venueId: string): Promise<Map<string, number>> {
+  if (IS_MOCK) return new Map();
+  const { data, error } = await supabase.rpc('venue_buyin_counts', { p_venue_id: venueId });
+  if (error) return new Map();
+  const m = new Map<string, number>();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const r of (data ?? []) as any[]) m.set(String(r.name).toLowerCase(), Number(r.buyin_count) || 0);
+  return m;
 }
 
 export async function saveVenueRankings(
