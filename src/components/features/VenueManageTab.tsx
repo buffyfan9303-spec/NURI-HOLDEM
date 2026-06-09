@@ -85,7 +85,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   if (ledgerOk) available.push({ id: 'attendance', label: '출근 관리' });
   available.push({ id: 'voucher', label: '매장이용권', locked: !(manageOk || voucherView) });
   if (canStaff) available.push({ id: 'staff', label: '직원 관리' });
-  if (canStaff) available.push({ id: 'settings', label: 'POS 설정' });
+  if (canStaff) available.push({ id: 'settings', label: '설정' });
   const curItem = available.find((a) => a.id === section);
 
   if (!user) return null;

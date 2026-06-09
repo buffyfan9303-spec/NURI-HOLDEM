@@ -411,6 +411,25 @@ export async function updateLedgerPlayer(id: string, patch: {
   if (error) throw error;
 }
 
+/** 플레이어 이름 변경 — 로스터와 해당 세션 바인 기록(player_name 키)을 함께 갱신(오기 수정용) */
+export async function renameLedgerPlayer(input: {
+  id: string; venueId: string; sessionDate: string; oldName: string; newName: string;
+}): Promise<void> {
+  if (IS_MOCK) return;
+  const newName = input.newName.trim();
+  if (!newName || newName === input.oldName) return;
+  // 같은 세션에 동일 이름이 이미 있으면 바인 키 충돌 → 차단
+  const { data: dup } = await supabase.from('ledger_players')
+    .select('id').eq('venue_id', input.venueId).eq('session_date', input.sessionDate)
+    .eq('name', newName).neq('id', input.id).limit(1);
+  if (dup && dup.length > 0) throw new Error('같은 이름의 플레이어가 이미 있습니다');
+  const { error: e1 } = await supabase.from('ledger_players').update({ name: newName }).eq('id', input.id);
+  if (e1) throw e1;
+  const { error: e2 } = await supabase.from('ledger_buyins').update({ player_name: newName })
+    .eq('venue_id', input.venueId).eq('session_date', input.sessionDate).eq('player_name', input.oldName);
+  if (e2) throw e2;
+}
+
 export async function removeLedgerPlayer(id: string): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.from('ledger_players').delete().eq('id', id);

@@ -183,6 +183,10 @@ function ReservationItem({ idx, res, venueId, regular, reserveCount, onDelete, o
           <p className="text-sm font-semibold text-ink-primary truncate">{res.displayName}
             {regular && <span className="ml-1.5 text-2xs font-bold text-gold-300 bg-gold-300/15 px-1.5 py-0.5 rounded-badge">단골 {reserveCount}회</span>}
           </p>
+          {/* 예약 접수 일시 — 업주 전용 화면이라 노출 OK */}
+          <p className="text-[10px] text-ink-muted tabular-nums mt-0.5">
+            {new Date(res.createdAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 예약
+          </p>
         </div>
         {regular && <button type="button" onClick={openCustomer} className="btn-ghost text-2xs px-2 text-sky-300">{showCustomer ? '닫기' : '고객정보'}</button>}
         <button type="button" onClick={onRename} className="text-ink-muted hover:text-gold-300 text-2xs px-1">수정</button>

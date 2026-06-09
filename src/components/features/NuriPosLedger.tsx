@@ -13,7 +13,7 @@ import {
   getLedgerSession, saveLedgerSession, openLedgerSession, closeLedgerSession, reopenLedgerSession, deleteLedgerSession,
   setRegistrationClosed, getLastLedgerSettings, getLedgerSessionList, getLedgerAccessUserIds,
   getLedgerBuyins, upsertBuyin, upsertBuyinSplit, cancelBuyin,
-  getLedgerPlayers, addLedgerPlayer, updateLedgerPlayer, removeLedgerPlayer,
+  getLedgerPlayers, addLedgerPlayer, updateLedgerPlayer, renameLedgerPlayer, removeLedgerPlayer,
   searchRegisteredPlayers, type RegisteredPlayer,
   subscribeLedger, posHasPassword, getLedgerPresets, type LedgerPreset,
 } from '../../api/ledger';
@@ -241,8 +241,17 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       setNewName(''); setSuggest([]); setNewType('regular'); setAddOpen(false); reload();
     } catch (e) { toast.show(e instanceof Error ? e.message : '추가 실패', 'error'); }
   };
-  const savePlayer = async (id: string, patch: { visitorType?: string | null; note?: string | null }) => {
-    try { await updateLedgerPlayer(id, patch); reload(); }
+  const savePlayer = async (id: string, patch: { visitorType?: string | null; note?: string | null; name?: string }) => {
+    try {
+      const { name: newName, ...rest } = patch;
+      // 이름 변경은 로스터+해당 세션 바인 기록(player_name 키)을 함께 갱신
+      if (newName) {
+        const cur = players.find((p) => p.id === id);
+        if (cur) await renameLedgerPlayer({ id, venueId, sessionDate: date, oldName: cur.name, newName });
+      }
+      await updateLedgerPlayer(id, rest);
+      reload();
+    }
     catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
   };
   const removePlayer = async (p: LedgerPlayer, password?: string) => {
@@ -675,14 +684,15 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   );
 }
 
-// ── 플레이어 편집 모달(유형 + 비고 무제한 + 삭제) ─────────────────────────────
+// ── 플레이어 편집 모달(이름 수정 + 유형 + 비고 무제한 + 삭제) ─────────────────
 function PlayerEditModal({ player, recordCount, hasPw, onClose, onSave, onDelete }: {
   player: LedgerPlayer; recordCount: number; hasPw: boolean;
   onClose: () => void;
-  onSave: (patch: { visitorType: string | null; note: string | null }) => void;
+  onSave: (patch: { visitorType: string | null; note: string | null; name?: string }) => void;
   onDelete: (password?: string) => void;
 }) {
   const isKnown = VISITOR_OPTS.some((o) => o.code === player.visitorType);
+  const [name, setName]   = useState(player.name);
   const [type, setType]   = useState<string | null>(player.visitorType ?? null);
   const [custom, setCustom] = useState(player.visitorType && !isKnown ? player.visitorType : '');
   const [note, setNote]   = useState(player.note ?? '');
@@ -691,12 +701,18 @@ function PlayerEditModal({ player, recordCount, hasPw, onClose, onSave, onDelete
 
   const submit = () => {
     const finalType = type === '__custom__' ? (custom.trim() || null) : type;
-    onSave({ visitorType: finalType, note: note.trim() || null });
+    const newName = name.trim();
+    onSave({ visitorType: finalType, note: note.trim() || null, name: newName && newName !== player.name ? newName : undefined });
   };
 
   return (
-    <Overlay title={`${player.name} · 유형/비고`} onClose={onClose}>
+    <Overlay title={`${player.name} · 플레이어 수정`} onClose={onClose}>
       <div className="space-y-3">
+        <div>
+          <p className="text-2xs text-ink-muted mb-1">이름 (오기 수정 — 바인 기록도 함께 변경됩니다)</p>
+          <input value={name} onChange={(e) => setName(e.target.value)} maxLength={30}
+            placeholder="플레이어 이름" className="input w-full text-sm" />
+        </div>
         <div>
           <p className="text-2xs text-ink-muted mb-1">유형(선택)</p>
           <div className="flex flex-wrap gap-1.5">

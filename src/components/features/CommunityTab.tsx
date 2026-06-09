@@ -109,7 +109,7 @@ export default function CommunityTab({
       {/* 스크롤해도 항상 보이도록 헤더+메인탭 바로 아래에 고정 */}
       <div className="sticky top-[calc(theme(spacing.header-h)+theme(spacing.tab-h)-0.5rem)] z-30 -mx-page-x px-page-x bg-surface-base pt-3.5 pb-2 overflow-x-auto scrollbar-none">
         <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5 w-max min-w-full">
-          <SectionTab active={section === 'venues'} label="홀덤펍"      onClick={() => setSection('venues')} />
+          <SectionTab active={section === 'venues'} label="커뮤니티"    onClick={() => setSection('venues')} />
           <SectionTab active={section === 'live'}   label="실시간 댓글" onClick={() => setSection('live')} />
           <SectionTab active={section === 'board'}  label="게시판"      onClick={() => setSection('board')} />
           <SectionTab active={section === 'dealer'} label="딜러"        onClick={() => setSection('dealer')} />

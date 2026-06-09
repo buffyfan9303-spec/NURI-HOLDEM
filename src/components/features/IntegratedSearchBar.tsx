@@ -126,7 +126,8 @@ function DateTab({ slot, selected, onClick }: DateTabProps) {
       aria-label={`${slot.month}월 ${slot.day}일 ${slot.dow}요일${slot.isToday ? ' (오늘)' : ''}`}
       className={[
         'relative flex flex-col items-center justify-center',
-        'w-full h-tab-h rounded-input',
+        // 모바일: 8칸 그리드 균등 분배(한 페이지) / PC: 콤팩트 고정폭(띄엄띄엄 방지)
+        'w-full sm:w-14 sm:shrink-0 h-tab-h rounded-input',
         'transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-300',
         selected
           ? 'bg-gold-300 text-ink-inverse'
@@ -164,7 +165,7 @@ function DateSlider({ selectedDates, onToggle, onPick }: DateSliderProps) {
     <div
       role="group"
       aria-label="날짜 빠른 선택 (복수 선택 가능)"
-      className="grid grid-cols-8 gap-1 px-page-x pb-1"
+      className="grid grid-cols-8 gap-1 px-page-x pb-1 sm:flex sm:justify-center sm:gap-1.5"
     >
       {slots.map((slot) => (
         <DateTab
@@ -178,7 +179,7 @@ function DateSlider({ selectedDates, onToggle, onPick }: DateSliderProps) {
       {/* 날짜 직접 선택 (7일 이후) — 네이티브 date picker 오버레이 */}
       <label
         title="날짜 직접 선택"
-        className="relative flex flex-col items-center justify-center w-full h-tab-h rounded-input border border-dashed border-border-default text-ink-secondary hover:bg-surface-high hover:border-gold-400/50 cursor-pointer transition-colors focus-within:ring-2 focus-within:ring-gold-300"
+        className="relative flex flex-col items-center justify-center w-full sm:w-14 sm:shrink-0 h-tab-h rounded-input border border-dashed border-border-default text-ink-secondary hover:bg-surface-high hover:border-gold-400/50 cursor-pointer transition-colors focus-within:ring-2 focus-within:ring-gold-300"
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />

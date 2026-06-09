@@ -225,7 +225,7 @@ export default function ScheduleDetailModal({
       <div className="px-4 pt-5 pb-6 space-y-6">
 
         {/* 예약하기 (첫 페이지) */}
-        <ReserveBox scheduleId={schedule.id} />
+        <ReserveBox scheduleId={schedule.id} ownerId={schedule.ownerId} venueId={schedule.venueId} />
 
         {/* 프라이즈 강조 박스 */}
         {(schedule.prizePool || schedule.prizePercent) && (
@@ -481,14 +481,16 @@ export default function ScheduleDetailModal({
 }
 
 // ── 예약하기 박스 ─────────────────────────────────────────────────────────────
-function ReserveBox({ scheduleId }: { scheduleId: string }) {
+function ReserveBox({ scheduleId, ownerId, venueId }: { scheduleId: string; ownerId?: string | null; venueId?: string | null }) {
   const { user } = useAuth();
   const toast = useToast();
   const [mine, setMine] = useState<Reservation | null>(null);
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const isManager = user?.role === 'admin' || user?.role === 'venue_owner';
+  // 예약 내역(예약명·날짜·시간)은 '이 포스터의 매장' 업주/운영자만 — 타 매장 업주·일반 노출 차단
+  const isManager = user?.role === 'admin'
+    || (user?.role === 'venue_owner' && ((!!ownerId && user.id === ownerId) || (!!venueId && user.venueId === venueId)));
   const [resList, setResList] = useState<OwnerReservation[]>([]);
   const [resOpen, setResOpen] = useState(false);
   const loadRes = () => { if (isManager) getOwnerReservations(scheduleId).then(setResList).catch(() => {}); };
