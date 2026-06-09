@@ -3,6 +3,7 @@
 // VoucherManagePanel(인라인, 매장관리 메뉴) + VoucherManageModal(대시보드 카드용 모달).
 import { useEffect, useMemo, useState } from 'react';
 import Modal from '../atoms/Modal';
+import Icon from '../atoms/Icon';
 import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import QRCode from 'qrcode';
@@ -39,6 +40,8 @@ export function VoucherManagePanel({ venueId }: { venueId: string }) {
   const [holderQuery, setHolderQuery] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [profileMap, setProfileMap] = useState<Map<string, VoucherHolderProfile>>(new Map());
+  const [issueOpen, setIssueOpen] = useState(true); // 배포 섹션 접기
+  const [qrOpen, setQrOpen] = useState(true);       // QR 섹션 접기
 
   const reload = () => {
     setLoading(true);
@@ -140,74 +143,93 @@ export function VoucherManagePanel({ venueId }: { venueId: string }) {
 
   return (
     <div className="space-y-3">
+      {/* 1) 매장이용권 배포 — 접기 */}
       {canIssue ? (
-        <div className="space-y-1.5 rounded-input border border-gold-400/30 bg-gold-300/[0.05] p-2.5">
-          <p className="text-2xs font-bold text-gold-300">매장이용권 배포 <span className="font-normal text-ink-muted">· 업주 전용</span></p>
-          {!isAdmin && !approved && (
-            <p className="rounded-input border border-amber-500/40 bg-amber-500/[0.08] px-2 py-1.5 text-[10px] text-amber-300">⚠️ 운영자 승인 후 매장이용권을 발급할 수 있습니다. 운영자에게 발급 승인을 요청하세요.</p>
-          )}
-          <div className="flex gap-1.5">
-            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="이용권 이름 (예: 데일리 1회 참가권)" className="input min-w-0 flex-1 text-sm" />
-            <div className="relative w-24 shrink-0">
-              <input type="number" inputMode="numeric" min={1} max={1000} value={count || ''} onChange={(e) => setCount(Math.min(1000, Math.max(1, parseInt(e.target.value, 10) || 1)))} className="input w-full pr-6 text-sm tabular-nums" />
-              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">개</span>
-            </div>
-          </div>
-          {/* 받는 손님 지정 — 아이디(닉네임)로 지정 */}
-          {recvUserId ? (
-            <div className="flex items-center gap-2 rounded-input border border-gold-400/40 bg-gold-300/[0.06] px-2.5 py-1.5">
-              <span className="min-w-0 flex-1 truncate text-xs text-ink-primary">받는 손님: <b className="text-gold-300">{recvDisplay}</b></span>
-              <button type="button" onClick={() => { setRecvUserId(null); setRecvDisplay(''); }} className="shrink-0 text-2xs text-ink-muted">변경</button>
-            </div>
-          ) : recvMode === 'id' ? (
-            <div className="space-y-1.5">
-              <div className="flex gap-1.5">
-                <input value={idInput} onChange={(e) => setIdInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); resolveId(); } }} placeholder="받는 사람 아이디(닉네임)" className="input min-w-0 flex-1 text-sm" />
-                <button type="button" onClick={resolveId} className="btn-ghost shrink-0 px-2 text-2xs">조회</button>
-                <button type="button" onClick={() => { setRecvMode('none'); setCands([]); }} className="btn-ghost shrink-0 px-2 text-2xs text-ink-muted">취소</button>
-              </div>
-              {cands.length > 0 && (
-                <ul className="max-h-32 space-y-1 overflow-y-auto rounded-input border border-border-subtle bg-surface-low p-1">
-                  {cands.map((c) => (
-                    <li key={c.id}><button type="button" onClick={() => pickRecv(c)} className="w-full truncate rounded-input px-2 py-1 text-left text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary">{c.display}</button></li>
-                  ))}
-                </ul>
+        <div className="rounded-input border border-gold-400/30 bg-gold-300/[0.05]">
+          <button type="button" onClick={() => setIssueOpen((v) => !v)} className="flex w-full items-center justify-between gap-2 px-2.5 py-2">
+            <span className="text-2xs font-bold text-gold-300">매장이용권 배포 <span className="font-normal text-ink-muted">· 업주 전용</span></span>
+            <Icon name="chevron-down" size={14} className={['shrink-0 text-ink-muted transition-transform', issueOpen ? 'rotate-180' : ''].join(' ')} />
+          </button>
+          {issueOpen && (
+            <div className="space-y-1.5 px-2.5 pb-2.5">
+              {!isAdmin && !approved && (
+                <p className="rounded-input border border-amber-500/40 bg-amber-500/[0.08] px-2 py-1.5 text-[10px] text-amber-300">⚠️ 운영자 승인 후 매장이용권을 발급할 수 있습니다. 운영자에게 발급 승인을 요청하세요.</p>
               )}
+              <div className="flex gap-1.5">
+                <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="이용권 이름 (예: 데일리 1회 참가권)" className="input min-w-0 flex-1 text-sm" />
+                <div className="relative w-24 shrink-0">
+                  <input type="number" inputMode="numeric" min={1} max={1000} value={count || ''} onChange={(e) => setCount(Math.min(1000, Math.max(1, parseInt(e.target.value, 10) || 1)))} className="input w-full pr-6 text-sm tabular-nums" />
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">개</span>
+                </div>
+              </div>
+              {/* 받는 손님 지정 — 아이디(닉네임)로 지정 */}
+              {recvUserId ? (
+                <div className="flex items-center gap-2 rounded-input border border-gold-400/40 bg-gold-300/[0.06] px-2.5 py-1.5">
+                  <span className="min-w-0 flex-1 truncate text-xs text-ink-primary">받는 손님: <b className="text-gold-300">{recvDisplay}</b></span>
+                  <button type="button" onClick={() => { setRecvUserId(null); setRecvDisplay(''); }} className="shrink-0 text-2xs text-ink-muted">변경</button>
+                </div>
+              ) : recvMode === 'id' ? (
+                <div className="space-y-1.5">
+                  <div className="flex gap-1.5">
+                    <input value={idInput} onChange={(e) => setIdInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); resolveId(); } }} placeholder="받는 사람 아이디(닉네임)" className="input min-w-0 flex-1 text-sm" />
+                    <div className="flex w-24 shrink-0 gap-1">
+                      <button type="button" onClick={resolveId} className="flex-1 rounded-input border border-border-default bg-surface-high text-2xs font-bold text-ink-secondary hover:text-ink-primary">조회</button>
+                      <button type="button" onClick={() => { setRecvMode('none'); setCands([]); }} className="flex-1 rounded-input border border-border-default bg-surface-high text-2xs font-bold text-ink-muted hover:text-ink-secondary">취소</button>
+                    </div>
+                  </div>
+                  {cands.length > 0 && (
+                    <ul className="max-h-32 space-y-1 overflow-y-auto rounded-input border border-border-subtle bg-surface-low p-1">
+                      {cands.map((c) => (
+                        <li key={c.id}><button type="button" onClick={() => pickRecv(c)} className="w-full truncate rounded-input px-2 py-1 text-left text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary">{c.display}</button></li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ) : (
+                <button type="button" onClick={() => setRecvMode('id')} className="btn-ghost w-full text-2xs">👤 아이디(닉네임)로 받는 사람 지정 (선택)</button>
+              )}
+              <button type="button" disabled={busy || (!isAdmin && !approved)} onClick={issue} className="btn-primary w-full text-sm disabled:opacity-50">{busy ? '배포 중…' : `+ ${count}개 배포${recvDisplay ? ` → ${recvDisplay}` : ''}`}</button>
+              <p className="text-[10px] text-ink-muted">1회 최대 1000개 · 아이디(닉네임)로 손님 지정 시 그 회원 지갑으로. 미지정이면 매장 보관용. 손님은 ‘사용하기 → 매장 QR 스캔’으로 사용합니다. <b className="text-ink-secondary">매장이용권은 금전적 가치가 없습니다.</b></p>
             </div>
-          ) : (
-            <button type="button" onClick={() => setRecvMode('id')} className="btn-ghost w-full text-2xs">👤 아이디(닉네임)로 받는 사람 지정 (선택)</button>
           )}
-          <button type="button" disabled={busy || (!isAdmin && !approved)} onClick={issue} className="btn-primary w-full text-sm disabled:opacity-50">{busy ? '배포 중…' : `+ ${count}개 배포${recvDisplay ? ` → ${recvDisplay}` : ''}`}</button>
-          <p className="text-[10px] text-ink-muted">1회 최대 1000개 · 아이디(닉네임)로 손님 지정 시 그 회원 지갑으로. 미지정이면 매장 보관용. 손님은 ‘사용하기 → 매장 QR 스캔’으로 사용합니다. <b className="text-ink-secondary">매장이용권은 금전적 가치가 없습니다.</b></p>
         </div>
       ) : (
         <p className="rounded-input border border-border-subtle bg-surface-low p-2.5 text-2xs text-ink-muted">배포·회수·삭제는 <b className="text-ink-secondary">업주</b>만 가능합니다. 인증 직원은 열람·사용 처리만 할 수 있습니다.</p>
       )}
 
+      {/* 2) QR 코드 — 접기 */}
+      {canIssue && qr && (
+        <div className="rounded-input border border-gold-400/30 bg-gold-300/[0.05]">
+          <button type="button" onClick={() => setQrOpen((v) => !v)} className="flex w-full items-center justify-between gap-2 px-2.5 py-2">
+            <span className="text-2xs font-bold text-gold-300">QR 코드 <span className="font-normal text-ink-muted">· 이용권 사용 · 회원가입</span></span>
+            <Icon name="chevron-down" size={14} className={['shrink-0 text-ink-muted transition-transform', qrOpen ? 'rotate-180' : ''].join(' ')} />
+          </button>
+          {qrOpen && (
+            <div className="px-3 pb-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col items-center gap-1">
+                  <p className="text-center text-2xs font-bold text-gold-300">이용권 사용 QR</p>
+                  <img src={qr} alt="매장 이용권 QR" width={130} height={130} className="rounded bg-white p-1.5" />
+                  <p className="text-center text-[10px] leading-tight text-ink-muted">손님이 스캔해 사용 (고정)</p>
+                </div>
+                <div className="flex flex-col items-center gap-1">
+                  <p className="text-center text-2xs font-bold text-emerald-300">회원가입 QR</p>
+                  {signupQr && <img src={signupQr} alt="회원가입 QR" width={130} height={130} className="rounded bg-white p-1.5" />}
+                  <p className="text-center text-[10px] leading-tight text-ink-muted">스캔 시 회원가입 페이지로 이동</p>
+                </div>
+              </div>
+              <button type="button" onClick={printQr} className="btn-ghost mt-2 w-full px-3 text-2xs">🖨 출력해 매장에 비치 (이용권 + 회원가입 QR)</button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 3) 통계 — 보유회원 · 활성 · 잔여 */}
       {stats && (
         <div className="grid grid-cols-3 gap-2">
           <div className="rounded-input border border-border-subtle bg-surface-low p-2 text-center"><p className="text-lg font-extrabold tabular-nums text-gold-300">{stats.holderCount}</p><p className="text-[10px] text-ink-muted">보유 회원</p></div>
-          <div className="rounded-input border border-border-subtle bg-surface-low p-2 text-center"><p className="text-lg font-extrabold tabular-nums text-ink-primary">{stats.activeCount}</p><p className="text-[10px] text-ink-muted">활성 이용권</p></div>
-          <div className="rounded-input border border-border-subtle bg-surface-low p-2 text-center"><p className="text-lg font-extrabold tabular-nums text-ink-secondary">{stats.usedCount}</p><p className="text-[10px] text-ink-muted">사용 완료</p></div>
-        </div>
-      )}
-      {canIssue && qr && (
-        <div className="rounded-input border border-gold-400/30 bg-gold-300/[0.05] p-3">
-          <div className="grid grid-cols-2 gap-3">
-            {/* 매장 이용권 사용 QR */}
-            <div className="flex flex-col items-center gap-1">
-              <p className="text-center text-2xs font-bold text-gold-300">이용권 사용 QR</p>
-              <img src={qr} alt="매장 이용권 QR" width={130} height={130} className="rounded bg-white p-1.5" />
-              <p className="text-center text-[10px] leading-tight text-ink-muted">손님이 스캔해 사용 (고정)</p>
-            </div>
-            {/* 회원가입 바로가기 QR */}
-            <div className="flex flex-col items-center gap-1">
-              <p className="text-center text-2xs font-bold text-emerald-300">회원가입 QR</p>
-              {signupQr && <img src={signupQr} alt="회원가입 QR" width={130} height={130} className="rounded bg-white p-1.5" />}
-              <p className="text-center text-[10px] leading-tight text-ink-muted">스캔 시 회원가입 페이지로 이동</p>
-            </div>
-          </div>
-          <button type="button" onClick={printQr} className="btn-ghost mt-2 w-full px-3 text-2xs">🖨 출력해 매장에 비치 (이용권 + 회원가입 QR)</button>
+          <div className="rounded-input border border-border-subtle bg-surface-low p-2 text-center"><p className="text-lg font-extrabold tabular-nums text-ink-primary">{stats.activeCount + stats.usedCount}</p><p className="text-[10px] text-ink-muted">활성 이용권</p></div>
+          <div className="rounded-input border border-border-subtle bg-surface-low p-2 text-center"><p className="text-lg font-extrabold tabular-nums text-emerald-300">{stats.activeCount}</p><p className="text-[10px] text-ink-muted">잔여 이용권</p></div>
         </div>
       )}
 
