@@ -140,9 +140,15 @@ export async function getCustomerActivity(venueId: string, name: string): Promis
   const [{ data: bs }, { data: sess }, { data: rk }, resCounts] = await Promise.all([
     supabase.from('ledger_buyins').select('session_date, payment_method, is_unpaid, is_split, cash_amount, card_amount, transfer_amount, unpaid_amount, discount_index').eq('venue_id', venueId).eq('player_name', name),
     supabase.from('ledger_sessions').select('session_date, buyin_amount').eq('venue_id', venueId),
-    supabase.from('venue_rankings').select('id').eq('venue_id', venueId).eq('name', name),
+    // 머니인(입상) — venue_rankings에는 name 컬럼이 없음: 닉네임/실명 둘 다 매칭
+    supabase.from('venue_rankings').select('id, nickname, real_name').eq('venue_id', venueId),
     getVenueReserverCounts(venueId),
   ]);
+  const nameKey = name.trim().toLowerCase();
+  const moneyInCnt = (rk ?? []).filter(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (r: any) => String(r.nickname ?? '').trim().toLowerCase() === nameKey || String(r.real_name ?? '').trim().toLowerCase() === nameKey,
+  ).length;
   const unit = new Map<string, number>();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (sess ?? []).forEach((s: any) => unit.set(s.session_date, s.buyin_amount ?? 0));
@@ -159,7 +165,87 @@ export async function getCustomerActivity(venueId: string, name: string): Promis
     buyins: (bs ?? []).length,
     visits: dates.size,
     amount,
-    moneyIn: (rk ?? []).length,
+    moneyIn: moneyInCnt,
     reservations: resCounts[name] ?? 0,
   };
+}
+
+// ── 고객 분석(업주/통계) — 방문 손님 전체 리스트 + 행동 통계 ─────────────────────
+// 바인 횟수 · 방문 · 머니인(입상) · 머니인 비율 · 미수 횟수 · 최다 결제수단 · 주 방문 시간대 · 최근 방문
+export interface CustomerStat {
+  name: string;
+  buyins: number;
+  visits: number;
+  moneyIn: number;
+  rate: number | null;       // 머니인 ÷ 바인 (%) — 바인 0이면 null
+  unpaidCount: number;
+  topPayment: string | null; // 'cash' | 'card' | ...
+  peakHour: number | null;   // 가장 잦은 바인 시각(0~23)
+  lastVisit: string | null;  // YYYY-MM-DD
+}
+
+const PAY_LABEL: Record<string, string> = { cash: '현금', card: '카드', transfer: '이체', ticket: '이용권', support: '서포트' };
+export function paymentLabel(code: string | null): string { return code ? (PAY_LABEL[code] ?? code) : '-'; }
+
+export async function getVenueCustomerStats(venueId: string, from?: string, to?: string): Promise<CustomerStat[]> {
+  if (IS_MOCK) return [];
+  let q = supabase.from('ledger_buyins')
+    .select('player_name, session_date, payment_method, is_unpaid, is_split, buyin_at')
+    .eq('venue_id', venueId);
+  if (from) q = q.gte('session_date', from);
+  if (to) q = q.lte('session_date', to);
+  const [{ data: bs }, { data: rk }] = await Promise.all([
+    q,
+    supabase.from('venue_rankings').select('nickname, real_name, ranking_date').eq('venue_id', venueId),
+  ]);
+  // 랭킹(머니인) 카운트 — 닉네임/실명 어느 쪽이든 매칭되도록 둘 다 키로 적재
+  const moneyIn = new Map<string, number>();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const r of (rk ?? []) as any[]) {
+    if (from && String(r.ranking_date) < from) continue;
+    if (to && String(r.ranking_date) > to) continue;
+    for (const key of [r.nickname, r.real_name]) {
+      const k = String(key ?? '').trim().toLowerCase();
+      if (k) moneyIn.set(k, (moneyIn.get(k) ?? 0) + 1);
+    }
+  }
+  interface Acc { buyins: number; dates: Set<string>; unpaid: number; pay: Record<string, number>; hours: Record<number, number>; last: string }
+  const map = new Map<string, Acc & { display: string }>();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const b of (bs ?? []) as any[]) {
+    const display = String(b.player_name ?? '').trim();
+    if (!display) continue;
+    const k = display.toLowerCase();
+    const a = map.get(k) ?? { display, buyins: 0, dates: new Set<string>(), unpaid: 0, pay: {}, hours: {}, last: '' };
+    a.buyins += 1;
+    if (b.session_date) { a.dates.add(b.session_date); if (b.session_date > a.last) a.last = b.session_date; }
+    if (b.is_unpaid) a.unpaid += 1;
+    const pm = b.is_split ? 'split' : String(b.payment_method ?? '');
+    if (pm && pm !== 'split') a.pay[pm] = (a.pay[pm] ?? 0) + 1;
+    if (b.buyin_at) {
+      const h = new Date(b.buyin_at).getHours();
+      if (!Number.isNaN(h)) a.hours[h] = (a.hours[h] ?? 0) + 1;
+    }
+    map.set(k, a);
+  }
+  const top = (rec: Record<string, number>): string | null => {
+    let best: string | null = null, n = 0;
+    for (const [k, v] of Object.entries(rec)) if (v > n) { best = k; n = v; }
+    return best;
+  };
+  return [...map.entries()].map(([k, a]) => {
+    const mi = moneyIn.get(k) ?? 0;
+    const peak = top(Object.fromEntries(Object.entries(a.hours).map(([h, v]) => [h, v])));
+    return {
+      name: a.display,
+      buyins: a.buyins,
+      visits: a.dates.size,
+      moneyIn: mi,
+      rate: a.buyins > 0 ? Math.round((mi / a.buyins) * 100) : null,
+      unpaidCount: a.unpaid,
+      topPayment: top(a.pay),
+      peakHour: peak !== null ? Number(peak) : null,
+      lastVisit: a.last || null,
+    };
+  }).sort((x, y) => (y.buyins - x.buyins) || (y.visits - x.visits));
 }

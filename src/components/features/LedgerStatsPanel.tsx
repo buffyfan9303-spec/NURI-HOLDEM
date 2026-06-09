@@ -10,6 +10,7 @@ import {
 import { toCsv, downloadCsv } from '../../lib/csv';
 import Icon from '../atoms/Icon';
 import { getMyVenueNotifyMute, setMyVenueNotifyMute } from '../../api/auth';
+import CustomerAnalytics from './CustomerAnalytics';
 
 const todayStr = () => new Date().toLocaleDateString('en-CA');
 const shift = (d: string, n: number) => { const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate() + n); return x.toLocaleDateString('en-CA'); };
@@ -24,7 +25,13 @@ const PERIODS: { id: Period; label: string; ai?: boolean }[] = [
 ];
 
 export default function LedgerStatsPanel({ venueId }: { venueId: string }) {
-  return <StatsView venueId={venueId} />;
+  return (
+    <div className="space-y-3">
+      <StatsView venueId={venueId} />
+      {/* 손님 관리 — 방문 고객 전체 행동 통계(바인·머니인·비율·미수·결제·시간대) */}
+      <CustomerAnalytics venueId={venueId} />
+    </div>
+  );
 }
 
 // ── 통계 ──────────────────────────────────────────────────────────────────────

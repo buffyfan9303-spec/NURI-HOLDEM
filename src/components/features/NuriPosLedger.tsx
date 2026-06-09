@@ -818,6 +818,23 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   const [discs, setDiscs]     = useState<DiscountPreset[]>(base.discounts ?? []);
   const [startISO, setStartISO] = useState<string | null>(base.tournamentStart ?? null);
   const [presetOpen, setPresetOpen] = useState(false); // 프리셋 리스트 펼침
+  const [autoLinked, setAutoLinked] = useState(false); // 당일 포스터 자동 연동 표시
+
+  // 당일 포스터 자동 연동 — 새 장부 시작 시 그 날짜 포스터가 1개면 즉시 프리필(수정 가능).
+  // 포스터→장부→클락 재입력 반복을 제거(사장님 요청: 더 간단하게).
+  useEffect(() => {
+    if (mode !== 'open' || prefilled || autoLinked || schedId || title.trim()) return;
+    const todays = schedules.filter((s) => s.date === base.sessionDate);
+    if (todays.length === 1) {
+      const sc = todays[0];
+      setAutoLinked(true);
+      setSchedId(sc.id);
+      setTitle(sc.title);
+      if (sc.buyIn?.amount) setCash(sc.buyIn.amount);
+      setGameType(sc.guaranteed ? 'gtd' : 'entry');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, prefilled, schedules, base.sessionDate]);
 
   // 연동 클락 얼리 설정(추가스택·레벨) — 장부 시작에서 바로 편집(옵션 1)
   const [clockState, setClockState] = useState<ClockState | null>(null);
@@ -886,6 +903,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
           <h3 className="text-base font-bold text-gold-300">장부 시작 설정</h3>
           <p className="text-2xs text-ink-muted mt-0.5">담당직원: <b className="text-ink-secondary">{operatorName}</b> · 아래 정보를 입력 후 장부에 입장합니다.</p>
           {prefilled && <p className="text-2xs text-emerald-400 mt-0.5">직전 게임 설정을 불러왔습니다 — 바로 시작하거나 수정하세요.</p>}
+          {autoLinked && <p className="text-2xs text-emerald-400 mt-0.5">오늘 포스터를 자동으로 연동했습니다 — 게임명·바인·유형이 채워졌어요(수정 가능).</p>}
         </div>
       )}
 

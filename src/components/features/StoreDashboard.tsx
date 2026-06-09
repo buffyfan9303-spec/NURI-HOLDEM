@@ -9,10 +9,8 @@ import { getReservationCounts, getVenueRegulars, subscribeReservations, type Ven
 import { aiGenerate } from '../../api/ai';
 import { Skeleton } from '../atoms/Skeleton';
 import RegularsModal from './RegularsModal';
-import WaitlistModal from './WaitlistModal';
 import DealerShiftsModal from './DealerShiftsModal';
 import VoucherManageModal from './VoucherManageModal';
-import CheckinModal from './CheckinModal';
 import { getStaffSchedule, getStaffWages, subscribeStaffSchedule, type StaffShift, type StaffWage } from '../../api/staffSchedule';
 
 const localToday = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD (로컬)
@@ -69,10 +67,8 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const [aiBusy, setAiBusy] = useState(false);
   const [aiErr, setAiErr] = useState('');
   const [regOpen, setRegOpen] = useState(false);
-  const [waitOpen, setWaitOpen] = useState(false);
   const [dealerOpen, setDealerOpen] = useState(false);
   const [voucherOpen, setVoucherOpen] = useState(false);
-  const [checkinOpen, setCheckinOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const upcoming = schedules
@@ -233,10 +229,8 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   return (
     <div className="space-y-3">
       <RegularsModal open={regOpen} onClose={() => setRegOpen(false)} venueId={venueId} exclude={[...staffNames]} />
-      <WaitlistModal open={waitOpen} onClose={() => setWaitOpen(false)} venueId={venueId} />
       <DealerShiftsModal open={dealerOpen} onClose={() => setDealerOpen(false)} venueId={venueId} monthKey={mr.start.slice(0, 7)} />
       <VoucherManageModal open={voucherOpen} onClose={() => setVoucherOpen(false)} venueId={venueId} />
-      <CheckinModal open={checkinOpen} onClose={() => setCheckinOpen(false)} venueId={venueId} />
       {/* 미수·리스크 알림 (장부 권한) */}
       {caps.ledger && started && fin.unpaid > 0 && (
         <button type="button" onClick={() => onGoto('ledger')}
@@ -255,8 +249,8 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
             icon={<><path d="M4 4h12a2 2 0 0 1 2 2v14l-3-2-3 2-3-2-3 2V6a2 2 0 0 1 2-2Z" /></>} />}
           {caps.ledger && <QuickAction label="클락" onClick={() => onGoto('clock')}
             icon={<><circle cx="12" cy="13" r="7" /><path d="M12 10v3l2 2" /><line x1="9" y1="2" x2="15" y2="2" /></>} />}
-          {caps.ledger && <QuickAction label="웨이팅" onClick={() => setWaitOpen(true)}
-            icon={<><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M19 8v6" /><path d="M22 11h-6" /></>} />}
+          {caps.ledger && <QuickAction label="순위·포인트" onClick={() => onGoto('ranking')}
+            icon={<><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" /><path d="M4 22h16" /><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" /></>} />}
         </div>
       )}
 
@@ -441,10 +435,16 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           <p className="py-3 text-center text-2xs text-ink-muted">딜러 시프트 등록 + 월 급여 명세를 관리합니다.</p>
         </DashCard>
 
-        {/* QR 체크인 */}
-        <DashCard show={caps.ledger || caps.manage} title="QR 체크인" onClick={() => setCheckinOpen(true)}
-          badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-gold-300/15 text-gold-300">QR·명단 →</span>}>
-          <p className="py-3 text-center text-2xs text-ink-muted">손님 체크인 QR 표시 + 오늘 체크인 명단(실시간).</p>
+        {/* 고객 분석 — 방문 손님 전체 행동 통계 */}
+        <DashCard show={caps.manage} title="고객 분석" onClick={() => onGoto('stats')}
+          badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-gold-300/15 text-gold-300">바인·머니인·미수 →</span>}>
+          <p className="py-3 text-center text-2xs text-ink-muted">방문 손님 리스트 — 바인·머니인 비율·결제수단·방문 시간대·미수까지 한눈에.</p>
+        </DashCard>
+
+        {/* 매장 꾸미기 — 매장 페이지 탭 순서·순위 탭·칭호 */}
+        <DashCard show={caps.manage} title="매장 꾸미기" onClick={() => onGoto('page')}
+          badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-gold-300/15 text-gold-300">탭·순위·칭호 →</span>}>
+          <p className="py-3 text-center text-2xs text-ink-muted">매장 페이지 탭 순서, 순위 탭 구성(1~2개), 1~3등 칭호·기준 점수를 설정합니다.</p>
         </DashCard>
 
         {/* 손님 유형 비중(오늘) */}
