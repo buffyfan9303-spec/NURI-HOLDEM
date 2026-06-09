@@ -387,8 +387,9 @@ function TabBar({
               // 모바일: flex-1로 컨테이너 폭을 균등 분배(좌측 쏠림 제거) → 라벨은 셀 정중앙.
               //   min-width:auto(기본) 유지 → 탭이 많아 좁아지면 라벨 폭 이하로 줄지 않고 가로 스크롤(겹침 방지).
               // 데스크톱(sm+): 자연폭 + 컨테이너 sm:justify-center로 중앙 정렬 그룹(과도한 벌어짐 방지).
-              'flex-1 px-2 sm:flex-none sm:px-5 py-2.5 text-sm font-medium whitespace-nowrap transition-colors duration-200 focus:outline-none touch-manipulation rounded-t-input',
-              isActive ? 'text-gold-300 text-gold-glow' : 'text-ink-muted hover:text-ink-secondary',
+              // transition에 text-shadow 포함 → 활성 전환 시 글로우가 '톡' 튀지 않고 은은히 이징(터치 시 노란색 깜빡임 제거)
+              'flex-1 px-2 sm:flex-none sm:px-5 py-2.5 text-sm font-medium whitespace-nowrap transition-[color,text-shadow] duration-200 focus:outline-none touch-manipulation rounded-t-input',
+              isActive ? 'text-gold-300 text-gold-glow' : 'text-ink-muted [text-shadow:0_0_0_rgba(255,209,0,0)] hover:text-ink-secondary',
             ].join(' ')}
           >
             <span
