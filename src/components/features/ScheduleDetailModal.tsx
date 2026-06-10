@@ -9,7 +9,7 @@ import { prizeMainText } from './ScheduleCard';
 import type { Schedule } from '../../api/schedules';
 import type { Comment } from '../../api/community';
 import { generateBlinds } from '../../api/clock';
-import { promptLogin } from '../../lib/requireLogin';
+import { promptLogin, openPostForm } from '../../lib/requireLogin';
 
 interface ScheduleDetailModalProps {
   schedule: Schedule | null;
@@ -213,7 +213,18 @@ export default function ScheduleDetailModal({
 
       {/* ── 본문 ─────────────────────────────────────────────────────── */}
       {tab === 'qna' ? (
-        <div className="px-4 py-4">
+        <div className="px-4 py-4 space-y-3">
+          {/* 대회 후기 쓰기 — 커뮤니티 게시판(대회 후기 카테고리)으로 바로 작성 */}
+          <button type="button"
+            onClick={() => { if (!user) { promptLogin(); return; } openPostForm('tourney'); }}
+            className="flex w-full items-center gap-2 rounded-input border border-gold-400/40 bg-gold-300/[0.06] px-3 py-2.5 text-left transition-colors hover:bg-gold-300/[0.1]">
+            <span aria-hidden>📝</span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-xs font-bold text-gold-300">이 대회 후기 쓰기</span>
+              <span className="block text-[10px] text-ink-muted">참가 후기를 커뮤니티 게시판(대회 후기)에 남겨보세요 — 다른 플레이어에게 큰 도움이 됩니다.</span>
+            </span>
+            <span className="shrink-0 text-gold-300" aria-hidden>→</span>
+          </button>
           <CommentThread
             comments={qnaComments}
             onSubmit={onSubmitComment}

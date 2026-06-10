@@ -17,3 +17,9 @@ export function ensureLogin(user: unknown): boolean {
   promptLogin();
   return false;
 }
+
+// 커뮤니티 글쓰기 모달을 어디서든 열기 — 예: 포스터 상세 '대회 후기 쓰기'(defaultCategory='tourney').
+export const OPEN_POST_FORM_EVENT = 'nuri:open-post-form';
+export function openPostForm(category?: string): void {
+  try { window.dispatchEvent(new CustomEvent(OPEN_POST_FORM_EVENT, { detail: { category } })); } catch { /* noop */ }
+}

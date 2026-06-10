@@ -24,7 +24,7 @@ import { PORTONE_CONFIGURED } from './components/features/IdentityVerificationBu
 import StaffInviteBanner from './components/features/StaffInviteBanner';
 import ErrorBoundary from './components/atoms/ErrorBoundary';
 import InstallBanner from './components/atoms/InstallBanner';
-import { REQUIRE_LOGIN_EVENT } from './lib/requireLogin';
+import { REQUIRE_LOGIN_EVENT, OPEN_POST_FORM_EVENT } from './lib/requireLogin';
 import GlobalSearchModal from './components/features/GlobalSearchModal';
 import { tierColor } from './components/atoms/TierBadge';
 import NoticeFormModal from './components/features/NoticeFormModal';
@@ -488,6 +488,17 @@ export default function App() {
     const h = () => { setAuthMode('login'); setAuthOpen(true); };
     window.addEventListener(REQUIRE_LOGIN_EVENT, h);
     return () => window.removeEventListener(REQUIRE_LOGIN_EVENT, h);
+  }, []);
+
+  // 어디서든 글쓰기 모달 열기 — 포스터 상세 '대회 후기 쓰기' 등(카테고리 프리셋)
+  useEffect(() => {
+    const h = (e: Event) => {
+      const cat = (e as CustomEvent).detail?.category as PostCategory | undefined;
+      setPostFormCategory(cat ?? 'free');
+      setPostFormOpen(true);
+    };
+    window.addEventListener(OPEN_POST_FORM_EVENT, h);
+    return () => window.removeEventListener(OPEN_POST_FORM_EVENT, h);
   }, []);
 
   // ── 게시물 공유 딥링크 (?post=<id>) — 링크로 들어오면 비로그인도 해당 글 열람 ──
