@@ -3,6 +3,16 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import TierBadge, { tierOf, tierProgress, allTiers, isAceRank, ACE_TOP_RANK, ACE_MIN_POINTS } from '../atoms/TierBadge';
 import { getActivityLeaderboard, type LeaderboardEntry } from '../../api/community';
+import { getGlobalRankingTotals, type GlobalRankingTotal } from '../../api/rankings';
+
+// 통합 랭킹 보드 종류 — 활동(기존 등급 연동) + 전 매장 머니인/프라이즈(고도화)
+type Board = 'activity' | 'moneyin' | 'prize';
+const BOARD_LABEL: Record<Board, string> = { activity: '활동 점수', moneyin: '머니인 랭킹', prize: '프라이즈 랭킹' };
+const BOARD_DESC: Record<Board, string> = {
+  activity: '접속·글쓰기·댓글 활동 점수 — 등급(2·3~AA)과 연동됩니다.',
+  moneyin: '전국 매장 순위 등록(입상) 횟수 합산 — 가장 많이 머니인한 플레이어.',
+  prize: '전국 매장 프라이즈 점수 합산(금전적 가치 없음).',
+};
 
 function RankNum({ n }: { n: number }) {
   const top = n <= 3;
@@ -26,6 +36,9 @@ export default function TierLeaderboard() {
   const [rows, setRows] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [showLadder, setShowLadder] = useState(false);
+  const [board, setBoard] = useState<Board>('activity');
+  const [global, setGlobal] = useState<GlobalRankingTotal[]>([]);
+  const [globalLoaded, setGlobalLoaded] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -36,6 +49,24 @@ export default function TierLeaderboard() {
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [user?.activityPoints]);
+
+  // 머니인/프라이즈 보드 — 전 매장 통합 집계(최초 진입 시 1회 로드)
+  useEffect(() => {
+    if (board === 'activity' || globalLoaded) return;
+    let active = true;
+    getGlobalRankingTotals()
+      .then((r) => { if (active) { setGlobal(r); setGlobalLoaded(true); } })
+      .catch(() => { if (active) setGlobalLoaded(true); });
+    return () => { active = false; };
+  }, [board, globalLoaded]);
+
+  const globalRows = useMemo(() => {
+    const arr = [...global];
+    arr.sort((a, b) => board === 'prize'
+      ? (b.prizePoints - a.prizePoints) || (b.moneyinCount - a.moneyinCount)
+      : (b.moneyinCount - a.moneyinCount) || (b.prizePoints - a.prizePoints));
+    return arr.slice(0, 30);
+  }, [global, board]);
 
   const myProg = user ? tierProgress(user.activityPoints ?? 0) : null;
   const isAdmin = user?.role === 'admin';
@@ -145,10 +176,46 @@ export default function TierLeaderboard() {
         </section>
       )}
 
-      {/* 랭킹 리스트 */}
+      {/* 랭킹 리스트 — 다중 보드(활동/머니인/프라이즈) */}
       <section>
-        <h3 className="text-sm font-semibold text-ink-primary mb-2">활동 점수 랭킹</h3>
-        {loading ? (
+        <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5 mb-1.5">
+          {(['activity', 'moneyin', 'prize'] as Board[]).map((b) => (
+            <button key={b} type="button" onClick={() => setBoard(b)}
+              className={['flex-1 py-1.5 text-xs font-bold rounded-[6px] transition-colors',
+                board === b ? 'bg-gold-300 text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
+              {BOARD_LABEL[b]}
+            </button>
+          ))}
+        </div>
+        <p className="mb-2 text-2xs text-ink-muted">{BOARD_DESC[board]}</p>
+
+        {board !== 'activity' ? (
+          !globalLoaded ? (
+            <p className="text-center py-6 text-2xs text-ink-muted">불러오는 중…</p>
+          ) : globalRows.length === 0 ? (
+            <p className="text-center py-6 text-2xs text-ink-muted">아직 집계된 매장 순위 기록이 없습니다</p>
+          ) : (
+            <ul className="rounded-card border border-border-subtle bg-surface-high overflow-hidden">
+              {globalRows.map((r, i) => (
+                <li key={r.nickname} className="flex items-center gap-2.5 px-3 py-2 border-b border-border-subtle last:border-b-0">
+                  <RankNum n={i + 1} />
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-semibold text-ink-primary truncate">{r.nickname}</span>
+                    <span className="block text-[10px] text-ink-muted">매장 {r.venues}곳 · 최고 {r.bestPosition}등</span>
+                  </div>
+                  <span className="text-right">
+                    <span className="block text-sm font-bold tabular-nums text-gold-300">
+                      {board === 'prize' ? `${r.prizePoints.toLocaleString()}점` : `${r.moneyinCount.toLocaleString()}회`}
+                    </span>
+                    <span className="block text-[10px] text-ink-muted tabular-nums">
+                      {board === 'prize' ? `머니인 ${r.moneyinCount}회` : `프라이즈 ${r.prizePoints.toLocaleString()}점`}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )
+        ) : loading ? (
           <p className="text-center py-6 text-2xs text-ink-muted">불러오는 중…</p>
         ) : rows.length === 0 ? (
           <p className="text-center py-6 text-2xs text-ink-muted">랭킹 정보가 없습니다</p>
@@ -188,9 +255,11 @@ export default function TierLeaderboard() {
             })}
           </ul>
         )}
-        <p className="mt-2 text-2xs text-ink-muted text-center">
-          접속·글쓰기·댓글로 점수를 모아 KK(14,000점)까지 올리세요. AA는 KK 달성자 중 전체 상위 {ACE_TOP_RANK}명만!
-        </p>
+        {board === 'activity' && (
+          <p className="mt-2 text-2xs text-ink-muted text-center">
+            접속·글쓰기·댓글로 점수를 모아 KK(14,000점)까지 올리세요. AA는 KK 달성자 중 전체 상위 {ACE_TOP_RANK}명만!
+          </p>
+        )}
       </section>
     </div>
   );

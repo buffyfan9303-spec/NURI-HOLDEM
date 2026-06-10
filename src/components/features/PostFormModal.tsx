@@ -40,6 +40,8 @@ interface PostFormModalProps {
 
 const CATEGORY_OPTIONS: { id: PostCategory; label: string }[] = [
   { id: 'free',     label: '자유' },
+  { id: 'hand',     label: '핸드 분석' },
+  { id: 'tourney',  label: '대회 후기' },
   { id: 'question', label: '질문' },
   { id: 'info',     label: '정보' },
   { id: 'review',   label: '후기' },

@@ -36,7 +36,8 @@ export interface Comment {
 
 // 커뮤니티 글 카테고리 (Stage 2). DB 미존재 시 'free'로 폴백.
 // 'study'(공부) = '홀덤 공부' 탭 글 모음 (Task 4)
-export type PostCategory = 'free' | 'question' | 'info' | 'review' | 'study';
+// 'hand'(핸드 분석)·'tourney'(대회 후기) — 국내 홀덤 커뮤니티 핵심 콘텐츠 카테고리
+export type PostCategory = 'free' | 'question' | 'info' | 'review' | 'study' | 'hand' | 'tourney';
 
 export interface CommunityPost {
   id: string; userId: string; userName: string;

@@ -13,7 +13,7 @@ interface ModPost {
 
 // 게시판(카테고리) 한글 라벨
 const POST_CAT_LABEL: Record<PostCategory, string> = {
-  free: '자유', question: '질문', info: '정보', review: '후기', study: '공부',
+  free: '자유', question: '질문', info: '정보', review: '후기', study: '공부', hand: '핸드 분석', tourney: '대회 후기',
 };
 
 interface UserManagementTabProps {

@@ -45,6 +45,8 @@ let lastCommunitySection: Section = 'venues';
 // 게시판 카테고리 필터
 const BOARD_CATEGORIES: { id: PostCategory | 'all'; label: string }[] = [
   { id: 'all',      label: '전체' },
+  { id: 'hand',     label: '핸드 분석' },
+  { id: 'tourney',  label: '대회 후기' },
   { id: 'question', label: '질문' },
   { id: 'info',     label: '정보' },
   { id: 'review',   label: '후기' },

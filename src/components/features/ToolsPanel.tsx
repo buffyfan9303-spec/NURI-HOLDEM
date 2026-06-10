@@ -10,12 +10,14 @@ import OutsCalc from './tools/OutsCalc';
 import PushFoldChart from './tools/PushFoldChart';
 import { SprCalc, EvCalc } from './tools/StackCalcs';
 import { PayoutCalc, EndTimeCalc, ComboCalc } from './tools/MoreCalcs';
+import { MdfCalc, AggroChart, RangeMatrix } from './tools/AdvancedCalcs';
+import PostflopTrainer from './tools/PostflopTrainer';
 import BlindBuilder from './tools/BlindBuilder';
 
 // GTO 패널은 에퀴티 엔진을 포함해 무거우므로 지연 로드(다른 도구와 동일하게 인라인 표시)
 const GtoDeepPanel = lazyWithReload(() => import('./gto/GtoDeepPanel'));
 
-type ToolKey = 'gto' | 'pot' | 'icm' | 'range' | 'trainer' | 'outs' | 'pushfold' | 'spr' | 'ev' | 'blindgen' | 'chip' | 'sim' | 'payout' | 'endtime' | 'combo';
+type ToolKey = 'gto' | 'pot' | 'icm' | 'range' | 'trainer' | 'postflop' | 'mdf' | 'aggro' | 'rvr' | 'outs' | 'pushfold' | 'spr' | 'ev' | 'blindgen' | 'chip' | 'sim' | 'payout' | 'endtime' | 'combo';
 type ToolGroup = 'ops' | 'player';
 
 const TOOLS: { key: ToolKey; group: ToolGroup; name: string; desc: string; icon: ReactNode }[] = [
@@ -37,6 +39,14 @@ const TOOLS: { key: ToolKey; group: ToolGroup; name: string; desc: string; icon:
     icon: <><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="9" y1="3" x2="9" y2="21" /></> },
   { key: 'trainer', group: 'player', name: '프리플랍 트레이너', desc: '오픈/폴드 맞히기·정답률',
     icon: <><path d="M12 2v4M12 18v4M2 12h4M18 12h4" /><circle cx="12" cy="12" r="4" /></> },
+  { key: 'postflop', group: 'player', name: '포스트플랍 트레이너', desc: '실전 상황 퀴즈·해설',
+    icon: <><rect x="3" y="6" width="5" height="7" rx="1" /><rect x="9.5" y="6" width="5" height="7" rx="1" /><rect x="16" y="6" width="5" height="7" rx="1" /><path d="M7 17h10" /><path d="M9 21h6" /></> },
+  { key: 'mdf', group: 'player', name: 'MDF · 블러프 계산기', desc: '수비 빈도·블러프 비율',
+    icon: <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" /><path d="M9 12l2 2 4-4" /></> },
+  { key: 'rvr', group: 'player', name: '레인지 vs 레인지', desc: '레인지 간 에퀴티 매트릭스',
+    icon: <><rect x="3" y="3" width="8" height="8" rx="1" /><rect x="13" y="13" width="8" height="8" rx="1" /><path d="M13 7h8M7 13v8" /></> },
+  { key: 'aggro', group: 'player', name: '어그레션 차트', desc: '포지션별 권장 빈도',
+    icon: <><path d="M3 17l6-6 4 4 8-8" /><path d="M14 7h7v7" /></> },
   { key: 'pot', group: 'player', name: '팟 오즈 계산기', desc: '콜에 필요한 승률 계산',
     icon: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></> },
   { key: 'icm', group: 'player', name: 'ICM 계산기', desc: '토너먼트 기대 상금',
@@ -65,6 +75,10 @@ function renderTool(k: ToolKey): ReactNode {
     case 'icm': return <ICMCalculator />;
     case 'range': return <RangeGuide />;
     case 'trainer': return <PreflopTrainer />;
+    case 'postflop': return <PostflopTrainer />;
+    case 'mdf': return <MdfCalc />;
+    case 'aggro': return <AggroChart />;
+    case 'rvr': return <RangeMatrix />;
     case 'outs': return <OutsCalc />;
     case 'pushfold': return <PushFoldChart />;
     case 'spr': return <SprCalc />;
