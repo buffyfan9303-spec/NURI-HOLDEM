@@ -50,3 +50,6 @@ language sql security definer set search_path = public stable as $$
 $$;
 revoke execute on function public.global_ranking_totals() from public;
 grant execute on function public.global_ranking_totals() to anon, authenticated;
+
+-- 커스텀 랭킹 보드 — 포인트 항목을 보드별로 구분(null = 기본 '매장 포인트' 보드)
+alter table public.venue_score_entries add column if not exists board_key text;

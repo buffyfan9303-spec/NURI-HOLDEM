@@ -129,12 +129,40 @@ export const RANK_METRIC_DESC: Record<RankMetric, string> = {
   visit_count: '장부 방문일 수 누적 — 가장 자주 방문한 플레이어',
 };
 
+// 업주가 직접 만드는 커스텀 랭킹 보드(웹 데이터에 없는 랭킹 — 명단·점수 직접 입력)
+export interface CustomBoard { key: string; name: string; unit?: string }
+/** 보드 id — 기본 6종(RankMetric) 또는 'custom:<key>' */
+export type RankBoardId = RankMetric | string;
+
 export interface VenuePageConfig {
   tabOrder?: string[];                    // 매장 페이지 탭 순서(키 배열)
-  rankMetrics?: RankMetric[];             // 순위 탭 메트릭(1~2개), 미설정 시 ['score','prize']
+  rankMetrics?: RankBoardId[];            // 순위 탭 보드(1~2개), 미설정 시 ['score','prize']
   rankTitles?: Record<string, string>;    // '1'|'2'|'3' → 커스텀 칭호 (예: 로티아레나 포식자)
   placementPoints?: number[];             // 1등부터의 점수 매핑(그 외 등수 = 마지막 값 또는 1)
+  customBoards?: CustomBoard[];           // 커스텀 보드 정의(최대 3)
   notifyStaff?: boolean;                  // 직원 호출/공지 알림 수신
+}
+
+export const isCustomBoard = (id: string): boolean => id.startsWith('custom:');
+export const customKeyOf = (id: string): string => id.slice('custom:'.length);
+
+/** 보드 라벨 — 기본 6종은 고정 라벨, 커스텀은 업주가 정한 이름 */
+export function boardLabel(id: RankBoardId, cfg?: VenuePageConfig | null): string {
+  if (isCustomBoard(id)) return cfg?.customBoards?.find((b) => b.key === customKeyOf(id))?.name ?? '커스텀 랭킹';
+  return RANK_METRIC_LABEL[id as RankMetric] ?? id;
+}
+export function boardDesc(id: RankBoardId, cfg?: VenuePageConfig | null): string {
+  if (isCustomBoard(id)) {
+    const b = cfg?.customBoards?.find((x) => x.key === customKeyOf(id));
+    return `업주가 직접 입력하는 랭킹${b?.unit ? ` (단위: ${b.unit})` : ''}`;
+  }
+  return RANK_METRIC_DESC[id as RankMetric] ?? '';
+}
+export function boardUnit(id: RankBoardId, cfg?: VenuePageConfig | null): string {
+  if (isCustomBoard(id)) return cfg?.customBoards?.find((b) => b.key === customKeyOf(id))?.unit?.trim() || '점';
+  if (id === 'moneyin_count' || id === 'buyin_count' || id === 'visit_count') return '회';
+  if (id === 'moneyin_rate') return '%';
+  return '점';
 }
 
 export const DEFAULT_PLACEMENT_POINTS = [10, 7, 5, 3, 2];
@@ -160,24 +188,26 @@ export async function setVenuePageConfig(venueId: string, config: VenuePageConfi
 }
 
 // ── 수동 포인트(지급/차감) — venue_score_entries ───────────────────────────────
-export interface ScoreEntry { id: string; name: string; points: number; reason: string | null; entryDate: string; }
+// boardKey: null = 기본 '매장 포인트' 보드 합산 / 'c…' = 커스텀 보드 전용 항목
+export interface ScoreEntry { id: string; name: string; points: number; reason: string | null; entryDate: string; boardKey: string | null; }
 
-export async function getScoreEntries(venueId: string, limit = 200): Promise<ScoreEntry[]> {
+export async function getScoreEntries(venueId: string, limit = 300): Promise<ScoreEntry[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase.from('venue_score_entries')
-    .select('id, name, points, reason, entry_date')
+    .select('id, name, points, reason, entry_date, board_key')
     .eq('venue_id', venueId).order('entry_date', { ascending: false }).order('created_at', { ascending: false }).limit(limit);
   if (error) throw error;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((r: any) => ({ id: r.id, name: r.name, points: r.points, reason: r.reason ?? null, entryDate: r.entry_date }));
+  return (data ?? []).map((r: any) => ({ id: r.id, name: r.name, points: r.points, reason: r.reason ?? null, entryDate: r.entry_date, boardKey: r.board_key ?? null }));
 }
 
-export async function addScoreEntry(venueId: string, input: { name: string; points: number; reason?: string; entryDate?: string }): Promise<void> {
+export async function addScoreEntry(venueId: string, input: { name: string; points: number; reason?: string; entryDate?: string; boardKey?: string | null }): Promise<void> {
   if (IS_MOCK) return;
   const { data: { user } } = await supabase.auth.getUser();
   const { error } = await supabase.from('venue_score_entries').insert({
     venue_id: venueId, name: input.name.trim(), points: input.points,
     reason: input.reason?.trim() || null, ...(input.entryDate ? { entry_date: input.entryDate } : {}),
+    board_key: input.boardKey ?? null,
     created_by: user?.id ?? null,
   });
   if (error) throw error;

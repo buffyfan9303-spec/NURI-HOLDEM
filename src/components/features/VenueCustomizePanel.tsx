@@ -3,8 +3,9 @@ import { useToast } from '../atoms/Toast';
 import Icon from '../atoms/Icon';
 import {
   getVenuePageConfig, setVenuePageConfig, getScoreEntries, addScoreEntry, deleteScoreEntry,
-  getVenueRankingTotals, getVenuePlayerCounts, DEFAULT_PLACEMENT_POINTS, RANK_METRIC_LABEL, RANK_METRIC_DESC,
-  type VenuePageConfig, type RankMetric, type ScoreEntry, type PlayerCounts,
+  getVenueRankingTotals, getVenuePlayerCounts, DEFAULT_PLACEMENT_POINTS,
+  boardLabel, boardDesc, boardUnit, isCustomBoard, customKeyOf,
+  type VenuePageConfig, type RankBoardId, type CustomBoard, type ScoreEntry, type PlayerCounts,
 } from '../../api/rankings';
 
 // 매장 페이지 탭(VenuePage와 동일 키)
@@ -15,7 +16,9 @@ const PAGE_TABS: { key: string; label: string }[] = [
   { key: 'schedules', label: '진행 예정' },
   { key: 'community', label: '커뮤니티' },
 ];
-const ALL_METRICS: RankMetric[] = ['score', 'prize', 'moneyin_count', 'moneyin_rate', 'buyin_count', 'visit_count'];
+// 웹 데이터로 자동 산출되는 기본 보드 6종
+const BUILTIN_METRICS: RankBoardId[] = ['score', 'prize', 'moneyin_count', 'moneyin_rate', 'buyin_count', 'visit_count'];
+const MAX_CUSTOM_BOARDS = 3;
 
 /** 매장 꾸미기 — 매장 페이지 탭 순서. (순위 보드·칭호·점수는 「매장 랭킹」 탭) */
 export default function VenueCustomizePanel({ venueId }: { venueId: string }) {
@@ -92,15 +95,17 @@ export default function VenueCustomizePanel({ venueId }: { venueId: string }) {
 
 /**
  * 매장 랭킹 — 매장 커뮤니티 순위 탭에 적용되는 랭킹 시스템 허브.
- *  ① 보드 종류(6종 중 1~2개): 매장 포인트 / 프라이즈 / 머니인 횟수 / 머니인 비율 / 바인왕 / 출석왕
- *  ② 1~3등 칭호  ③ 기준 점수(등수→점수)  ④ 포인트 지급/차감  ⑤ 보드 미리보기
- *  설정(①~③)은 업주/운영자, 포인트(④)는 장부 권한.
+ *  ① 보드 종류: 웹 데이터 자동 산출 6종 + 직접 만든 커스텀 보드 중 1~2개 노출
+ *  ② 커스텀 보드 만들기(최대 3 — 이름·단위, 명단은 ④에서 직접 입력)
+ *  ③ 1~3등 칭호 · 기준 점수  ④ 포인트 지급/차감(보드 선택)  ⑤ 보드 미리보기
  */
 export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canConfigure: boolean }) {
   const toast = useToast();
   const [cfg, setCfg] = useState<VenuePageConfig>({});
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [nbName, setNbName] = useState('');
+  const [nbUnit, setNbUnit] = useState('');
 
   useEffect(() => {
     let alive = true;
@@ -112,10 +117,13 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
     return () => { alive = false; };
   }, [venueId]);
 
-  const metrics = (cfg.rankMetrics ?? ['score', 'prize']).slice(0, 2);
-  const toggleMetric = (m: RankMetric) => {
+  const customBoards = cfg.customBoards ?? [];
+  const allBoards: RankBoardId[] = [...BUILTIN_METRICS, ...customBoards.map((b) => `custom:${b.key}`)];
+  const metrics = (cfg.rankMetrics ?? ['score', 'prize']).filter((m) => allBoards.includes(m)).slice(0, 2);
+
+  const toggleMetric = (m: RankBoardId) => {
     setCfg((c) => {
-      const cur = (c.rankMetrics ?? ['score', 'prize']).slice(0, 2);
+      const cur = ((c.rankMetrics ?? ['score', 'prize']) as RankBoardId[]).filter((x) => allBoards.includes(x)).slice(0, 2);
       if (cur.includes(m)) {
         if (cur.length === 1) return c; // 최소 1개
         return { ...c, rankMetrics: cur.filter((x) => x !== m) };
@@ -123,6 +131,23 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
       if (cur.length >= 2) return { ...c, rankMetrics: [cur[1], m] }; // 오래된 것 교체
       return { ...c, rankMetrics: [...cur, m] };
     });
+  };
+
+  const addBoard = () => {
+    const name = nbName.trim();
+    if (!name) return toast.show('보드 이름을 입력하세요', 'error');
+    if (customBoards.length >= MAX_CUSTOM_BOARDS) return toast.show(`커스텀 보드는 최대 ${MAX_CUSTOM_BOARDS}개입니다`, 'error');
+    const key = `c${Math.random().toString(36).slice(2, 8)}`;
+    setCfg((c) => ({ ...c, customBoards: [...(c.customBoards ?? []), { key, name, unit: nbUnit.trim() || undefined }] }));
+    setNbName(''); setNbUnit('');
+    toast.show('커스텀 보드를 추가했습니다 — 저장을 눌러 반영하세요', 'info');
+  };
+  const removeBoard = (key: string) => {
+    setCfg((c) => ({
+      ...c,
+      customBoards: (c.customBoards ?? []).filter((b) => b.key !== key),
+      rankMetrics: (c.rankMetrics ?? []).filter((m) => m !== `custom:${key}`),
+    }));
   };
 
   const points = cfg.placementPoints?.length ? cfg.placementPoints : DEFAULT_PLACEMENT_POINTS;
@@ -151,11 +176,11 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
       </div>
 
       {canConfigure && (<>
-        {/* ① 보드 종류 */}
+        {/* ① 보드 종류 — 자동 산출 6종 + 커스텀 */}
         <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
-          <h3 className="text-sm font-bold text-ink-primary">랭킹 보드 종류 <span className="text-2xs font-normal text-ink-muted">(1~2개 선택)</span></h3>
+          <h3 className="text-sm font-bold text-ink-primary">랭킹 보드 종류 <span className="text-2xs font-normal text-ink-muted">(1~2개 선택 · 웹 데이터 자동 산출)</span></h3>
           <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-            {ALL_METRICS.map((m) => {
+            {allBoards.map((m) => {
               const on = metrics.includes(m);
               return (
                 <button key={m} type="button" onClick={() => toggleMetric(m)}
@@ -165,9 +190,10 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
                     <span className={['h-3.5 w-3.5 rounded-full border flex items-center justify-center', on ? 'border-gold-300 bg-gold-300' : 'border-ink-muted'].join(' ')}>
                       {on && <Icon name="check" size={10} className="text-ink-inverse" />}
                     </span>
-                    <span className={['text-xs font-bold', on ? 'text-gold-300' : 'text-ink-primary'].join(' ')}>{RANK_METRIC_LABEL[m]}</span>
+                    <span className={['text-xs font-bold', on ? 'text-gold-300' : 'text-ink-primary'].join(' ')}>{boardLabel(m, cfg)}</span>
+                    {isCustomBoard(m) && <span className="rounded-badge bg-violet-500/15 px-1 py-0.5 text-[9px] font-bold text-violet-300">커스텀</span>}
                   </span>
-                  <span className="mt-1 block text-[10px] leading-snug text-ink-muted">{RANK_METRIC_DESC[m]}</span>
+                  <span className="mt-1 block text-[10px] leading-snug text-ink-muted">{boardDesc(m, cfg)}</span>
                 </button>
               );
             })}
@@ -175,7 +201,30 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
           <p className="text-[10px] text-ink-muted">1개만 선택하면 토글 없이 해당 순위만 크게 보여줍니다.</p>
         </section>
 
-        {/* ② 1~3등 칭호 */}
+        {/* ② 커스텀 보드 만들기 — 목록에 없는 랭킹을 직접 */}
+        <section className="rounded-card border border-violet-500/30 bg-violet-500/[0.04] p-3 space-y-2">
+          <h3 className="text-sm font-bold text-ink-primary">커스텀 보드 만들기 <span className="text-2xs font-normal text-ink-muted">(최대 {MAX_CUSTOM_BOARDS}개)</span></h3>
+          <p className="text-2xs text-ink-muted">위 목록에 없는 랭킹(예: 월요 토너 킹, 6월 이벤트 랭킹)을 직접 만들고, 명단·점수는 아래 「포인트 지급 · 차감」에서 보드를 골라 입력하세요.</p>
+          {customBoards.length > 0 && (
+            <ul className="space-y-1">
+              {customBoards.map((b) => (
+                <li key={b.key} className="flex items-center gap-2 rounded-input border border-border-subtle bg-surface-high px-2.5 py-1.5">
+                  <span className="min-w-0 flex-1 truncate text-xs font-bold text-ink-primary">{b.name} <span className="font-normal text-ink-muted">(단위: {b.unit || '점'})</span></span>
+                  <button type="button" onClick={() => removeBoard(b.key)} aria-label="보드 삭제" className="shrink-0 text-ink-muted hover:text-danger-light"><Icon name="close" size={13} /></button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {customBoards.length < MAX_CUSTOM_BOARDS && (
+            <div className="flex flex-wrap gap-1.5">
+              <input value={nbName} onChange={(e) => setNbName(e.target.value)} maxLength={16} placeholder="보드 이름 (예: 월요 토너 킹)" className="input min-w-0 flex-1 text-sm" />
+              <input value={nbUnit} onChange={(e) => setNbUnit(e.target.value)} maxLength={4} placeholder="단위(점)" className="input w-20 text-sm" />
+              <button type="button" onClick={addBoard} className="btn-primary shrink-0 px-3 text-xs">+ 추가</button>
+            </div>
+          )}
+        </section>
+
+        {/* ③ 1~3등 칭호 */}
         <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
           <h3 className="text-sm font-bold text-ink-primary">1~3등 칭호 <span className="text-2xs font-normal text-ink-muted">(예: 로티아레나 포식자)</span></h3>
           <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
@@ -190,7 +239,7 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
           </div>
         </section>
 
-        {/* ③ 기준 점수 */}
+        {/* ④ 기준 점수 */}
         <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
           <h3 className="text-sm font-bold text-ink-primary">기준 점수 <span className="text-2xs font-normal text-ink-muted">(순위 등록 시 등수별 부여 점수 · 그 외 등수는 1점)</span></h3>
           <div className="grid grid-cols-5 gap-1.5">
@@ -211,99 +260,20 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
         </button>
       </>)}
 
-      {/* ④ 포인트 지급/차감 — 장부 권한 직원도 가능 */}
-      <ScorePointsPanel venueId={venueId} />
+      {/* ⑤ 포인트 지급/차감 — 보드 선택(기본/커스텀), 장부 권한 직원도 가능 */}
+      <ScorePointsPanel venueId={venueId} customBoards={customBoards} />
 
-      {/* ⑤ 보드 미리보기 — 6종 전체 */}
-      <RankBoardPreview venueId={venueId} />
+      {/* ⑥ 보드 미리보기 — 전체 보드 */}
+      <RankBoardPreview venueId={venueId} cfg={cfg} />
     </div>
   );
 }
 
-/** 보드 미리보기 — 메트릭 선택해 TOP 10 즉시 확인(매장 커뮤니티 순위 탭과 동일 계산) */
-function RankBoardPreview({ venueId }: { venueId: string }) {
-  const [metric, setMetric] = useState<RankMetric>('score');
-  const [rows, setRows] = useState<{ name: string; value: number }[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    let alive = true;
-    setLoading(true);
-    (async () => {
-      try {
-        const cfg = await getVenuePageConfig(venueId).catch(() => null);
-        if (metric === 'buyin_count' || metric === 'visit_count') {
-          const pc: PlayerCounts[] = await getVenuePlayerCounts(venueId);
-          const r = pc.map((p) => ({ name: p.name, value: metric === 'buyin_count' ? p.buyins : p.visits }))
-            .filter((x) => x.value > 0).sort((a, b) => b.value - a.value).slice(0, 10);
-          if (alive) setRows(r);
-          return;
-        }
-        const [totals, manual, pc] = await Promise.all([
-          getVenueRankingTotals(venueId, cfg),
-          getScoreEntries(venueId).catch(() => [] as ScoreEntry[]),
-          metric === 'moneyin_rate' ? getVenuePlayerCounts(venueId) : Promise.resolve([] as PlayerCounts[]),
-        ]);
-        const manualBy: Record<string, number> = {};
-        for (const e of manual) { const k = e.name.trim().toLowerCase(); manualBy[k] = (manualBy[k] ?? 0) + e.points; }
-        const buyinBy: Record<string, number> = {};
-        for (const p of pc) buyinBy[p.name.toLowerCase()] = p.buyins;
-        const base = totals.map((t) => {
-          const k = t.nickname.toLowerCase();
-          const buyins = buyinBy[k] ?? 0;
-          const value = metric === 'score' ? t.moneyPoints + (manualBy[k] ?? 0)
-            : metric === 'prize' ? t.prizeMan
-            : metric === 'moneyin_count' ? t.appearances
-            : buyins >= 5 ? Math.round((t.appearances / buyins) * 100) : -1;
-          return { name: t.nickname, value };
-        });
-        if (metric === 'score') {
-          for (const [k, pts] of Object.entries(manualBy)) {
-            if (!base.some((b) => b.name.toLowerCase() === k)) {
-              const src = manual.find((e) => e.name.trim().toLowerCase() === k);
-              base.push({ name: src?.name ?? k, value: pts });
-            }
-          }
-        }
-        const r = base.filter((b) => b.value >= 0).sort((a, b) => b.value - a.value).slice(0, 10);
-        if (alive) setRows(r);
-      } catch { if (alive) setRows([]); }
-      finally { if (alive) setLoading(false); }
-    })();
-    return () => { alive = false; };
-  }, [venueId, metric]);
-
-  const unit = metric === 'moneyin_count' || metric === 'buyin_count' || metric === 'visit_count' ? '회' : metric === 'moneyin_rate' ? '%' : '점';
-
-  return (
-    <section className="rounded-card border border-gold-400/25 bg-gold-300/[0.04] p-3 space-y-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <h3 className="min-w-0 flex-1 text-sm font-bold text-gold-300">보드 미리보기 (TOP 10)</h3>
-        <select value={metric} onChange={(e) => setMetric(e.target.value as RankMetric)} className="input w-auto shrink-0 text-2xs py-1.5">
-          {ALL_METRICS.map((m) => <option key={m} value={m}>{RANK_METRIC_LABEL[m]}</option>)}
-        </select>
-      </div>
-      {loading ? <p className="py-4 text-center text-2xs text-ink-muted">불러오는 중…</p>
-        : rows.length === 0 ? <p className="py-4 text-center text-2xs text-ink-muted">데이터가 없습니다 — 순위 입력·장부 기록이 쌓이면 표시됩니다.</p>
-        : (
-          <ol className="grid grid-cols-1 gap-x-4 gap-y-0.5 sm:grid-cols-2">
-            {rows.map((b, i) => (
-              <li key={b.name} className="flex items-baseline gap-2 text-xs">
-                <span className={['w-4 text-right font-bold tabular-nums', i < 3 ? 'text-gold-300' : 'text-ink-muted'].join(' ')}>{i + 1}</span>
-                <span className="min-w-0 flex-1 truncate font-semibold text-ink-primary">{b.name}</span>
-                <span className="font-bold tabular-nums text-gold-300">{b.value.toLocaleString()}{unit}</span>
-              </li>
-            ))}
-          </ol>
-        )}
-    </section>
-  );
-}
-
-/** 포인트 지급/차감 — 이벤트·미션 보상 등 자유 점수. 매장 포인트 보드에 합산(금전적 가치 없음). */
-export function ScorePointsPanel({ venueId }: { venueId: string }) {
+/** 포인트 지급/차감 — 보드별 자유 점수 입력(기본=매장 포인트 합산, 커스텀=해당 보드 전용). */
+export function ScorePointsPanel({ venueId, customBoards = [] }: { venueId: string; customBoards?: CustomBoard[] }) {
   const toast = useToast();
   const [rows, setRows] = useState<ScoreEntry[]>([]);
+  const [board, setBoard] = useState('');   // '' = 기본(매장 포인트)
   const [name, setName] = useState('');
   const [points, setPoints] = useState('');
   const [reason, setReason] = useState('');
@@ -312,15 +282,17 @@ export function ScorePointsPanel({ venueId }: { venueId: string }) {
   const reload = () => { getScoreEntries(venueId).then(setRows).catch(() => {}); };
   useEffect(reload, [venueId]);
 
+  const boardName = (key: string | null) => key ? (customBoards.find((b) => b.key === key)?.name ?? '커스텀') : '매장 포인트';
+
   const add = async (sign: 1 | -1) => {
     const p = Math.abs(Math.round(Number(points)));
     if (!name.trim()) return toast.show('이름(닉네임)을 입력하세요', 'error');
     if (!p) return toast.show('포인트를 입력하세요', 'error');
     setBusy(true);
     try {
-      await addScoreEntry(venueId, { name, points: sign * p, reason });
+      await addScoreEntry(venueId, { name, points: sign * p, reason, boardKey: board || null });
       setName(''); setPoints(''); setReason('');
-      toast.show(sign > 0 ? '포인트를 지급했습니다' : '포인트를 차감했습니다', 'success');
+      toast.show(sign > 0 ? `「${boardName(board || null)}」에 지급했습니다` : `「${boardName(board || null)}」에서 차감했습니다`, 'success');
       reload();
     } catch (e) { toast.show(e instanceof Error ? e.message : '실패했습니다', 'error'); }
     finally { setBusy(false); }
@@ -335,9 +307,13 @@ export function ScorePointsPanel({ venueId }: { venueId: string }) {
     <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-3">
       <div>
         <h3 className="text-sm font-bold text-ink-primary">포인트 지급 · 차감</h3>
-        <p className="text-2xs text-ink-muted mt-0.5">이벤트·미션 보상 등 순위 입력 외의 점수를 자유롭게 더하거나 뺍니다. 매장 포인트 보드에 바로 합산됩니다.</p>
+        <p className="text-2xs text-ink-muted mt-0.5">이벤트·미션 보상 등 자유 점수를 보드별로 입력합니다. 커스텀 보드는 여기서 입력한 명단으로만 순위가 만들어집니다.</p>
       </div>
       <div className="flex flex-wrap gap-1.5">
+        <select value={board} onChange={(e) => setBoard(e.target.value)} className="input w-full text-sm sm:w-auto sm:min-w-[10rem]">
+          <option value="">매장 포인트(기본)</option>
+          {customBoards.map((b) => <option key={b.key} value={b.key}>{b.name} (커스텀)</option>)}
+        </select>
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="이름(닉네임)" maxLength={30} className="input min-w-0 flex-1 text-sm" />
         <input value={points} onChange={(e) => setPoints(e.target.value)} type="number" inputMode="numeric" placeholder="포인트" className="input w-24 text-sm tabular-nums" />
         <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="사유(선택)" maxLength={60} className="input min-w-0 flex-1 text-sm" />
@@ -352,10 +328,11 @@ export function ScorePointsPanel({ venueId }: { venueId: string }) {
             {rows.map((r) => (
               <li key={r.id} className="flex items-center gap-2 rounded-input border border-border-subtle bg-surface-high px-2.5 py-1.5">
                 <span className="shrink-0 text-[10px] tabular-nums text-ink-muted">{r.entryDate.slice(5)}</span>
+                <span className={['shrink-0 rounded-badge px-1.5 py-0.5 text-[9px] font-bold', r.boardKey ? 'bg-violet-500/15 text-violet-300' : 'bg-gold-300/15 text-gold-300'].join(' ')}>{boardName(r.boardKey)}</span>
                 <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{r.name}</span>
-                {r.reason && <span className="min-w-0 max-w-[10rem] truncate text-[10px] text-ink-muted">{r.reason}</span>}
+                {r.reason && <span className="hidden min-w-0 max-w-[9rem] truncate text-[10px] text-ink-muted sm:block">{r.reason}</span>}
                 <span className={['shrink-0 text-xs font-bold tabular-nums', r.points >= 0 ? 'text-gold-300' : 'text-danger-light'].join(' ')}>
-                  {r.points >= 0 ? '+' : ''}{r.points.toLocaleString()}점
+                  {r.points >= 0 ? '+' : ''}{r.points.toLocaleString()}
                 </span>
                 <button type="button" onClick={() => del(r.id)} aria-label="삭제" className="shrink-0 text-ink-muted hover:text-danger-light"><Icon name="close" size={12} /></button>
               </li>
@@ -363,6 +340,101 @@ export function ScorePointsPanel({ venueId }: { venueId: string }) {
           </ul>
         </div>
       )}
+    </section>
+  );
+}
+
+/** 보드 미리보기 — 보드 선택해 TOP 10 즉시 확인(매장 커뮤니티 순위 탭과 동일 계산) */
+function RankBoardPreview({ venueId, cfg }: { venueId: string; cfg: VenuePageConfig }) {
+  const [metric, setMetric] = useState<RankBoardId>('score');
+  const [rows, setRows] = useState<{ name: string; value: number }[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const options: RankBoardId[] = [...BUILTIN_METRICS, ...(cfg.customBoards ?? []).map((b) => `custom:${b.key}`)];
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    (async () => {
+      try {
+        if (isCustomBoard(metric)) {
+          const key = customKeyOf(metric);
+          const entries = await getScoreEntries(venueId).catch(() => [] as ScoreEntry[]);
+          const agg: Record<string, { name: string; value: number }> = {};
+          for (const e of entries) {
+            if (e.boardKey !== key) continue;
+            const k = e.name.trim().toLowerCase();
+            agg[k] = { name: agg[k]?.name ?? e.name, value: (agg[k]?.value ?? 0) + e.points };
+          }
+          const r = Object.values(agg).filter((x) => x.value > 0).sort((a, b) => b.value - a.value).slice(0, 10);
+          if (alive) setRows(r);
+          return;
+        }
+        if (metric === 'buyin_count' || metric === 'visit_count') {
+          const pc: PlayerCounts[] = await getVenuePlayerCounts(venueId);
+          const r = pc.map((p) => ({ name: p.name, value: metric === 'buyin_count' ? p.buyins : p.visits }))
+            .filter((x) => x.value > 0).sort((a, b) => b.value - a.value).slice(0, 10);
+          if (alive) setRows(r);
+          return;
+        }
+        const [totals, manual, pc] = await Promise.all([
+          getVenueRankingTotals(venueId, cfg),
+          getScoreEntries(venueId).catch(() => [] as ScoreEntry[]),
+          metric === 'moneyin_rate' ? getVenuePlayerCounts(venueId) : Promise.resolve([] as PlayerCounts[]),
+        ]);
+        const manualBy: Record<string, number> = {};
+        for (const e of manual) { if (e.boardKey) continue; const k = e.name.trim().toLowerCase(); manualBy[k] = (manualBy[k] ?? 0) + e.points; }
+        const buyinBy: Record<string, number> = {};
+        for (const p of pc) buyinBy[p.name.toLowerCase()] = p.buyins;
+        const base = totals.map((t) => {
+          const k = t.nickname.toLowerCase();
+          const buyins = buyinBy[k] ?? 0;
+          const value = metric === 'score' ? t.moneyPoints + (manualBy[k] ?? 0)
+            : metric === 'prize' ? t.prizeMan
+            : metric === 'moneyin_count' ? t.appearances
+            : buyins >= 5 ? Math.round((t.appearances / buyins) * 100) : -1;
+          return { name: t.nickname, value };
+        });
+        if (metric === 'score') {
+          for (const [k, pts] of Object.entries(manualBy)) {
+            if (!base.some((b) => b.name.toLowerCase() === k)) {
+              const src = manual.find((e) => !e.boardKey && e.name.trim().toLowerCase() === k);
+              base.push({ name: src?.name ?? k, value: pts });
+            }
+          }
+        }
+        const r = base.filter((b) => b.value >= 0).sort((a, b) => b.value - a.value).slice(0, 10);
+        if (alive) setRows(r);
+      } catch { if (alive) setRows([]); }
+      finally { if (alive) setLoading(false); }
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [venueId, metric, cfg.customBoards, cfg.placementPoints]);
+
+  const unit = boardUnit(metric, cfg);
+
+  return (
+    <section className="rounded-card border border-gold-400/25 bg-gold-300/[0.04] p-3 space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className="min-w-0 flex-1 text-sm font-bold text-gold-300">보드 미리보기 (TOP 10)</h3>
+        <select value={metric} onChange={(e) => setMetric(e.target.value)} className="input w-auto shrink-0 text-2xs py-1.5">
+          {options.map((m) => <option key={m} value={m}>{boardLabel(m, cfg)}</option>)}
+        </select>
+      </div>
+      {loading ? <p className="py-4 text-center text-2xs text-ink-muted">불러오는 중…</p>
+        : rows.length === 0 ? <p className="py-4 text-center text-2xs text-ink-muted">데이터가 없습니다 — 순위 입력·장부 기록·포인트 입력이 쌓이면 표시됩니다.</p>
+        : (
+          <ol className="grid grid-cols-1 gap-x-4 gap-y-0.5 sm:grid-cols-2">
+            {rows.map((b, i) => (
+              <li key={b.name} className="flex items-baseline gap-2 text-xs">
+                <span className={['w-4 text-right font-bold tabular-nums', i < 3 ? 'text-gold-300' : 'text-ink-muted'].join(' ')}>{i + 1}</span>
+                <span className="min-w-0 flex-1 truncate font-semibold text-ink-primary">{b.name}</span>
+                <span className="font-bold tabular-nums text-gold-300">{b.value.toLocaleString()}{unit}</span>
+              </li>
+            ))}
+          </ol>
+        )}
     </section>
   );
 }

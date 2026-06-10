@@ -17,8 +17,8 @@ import { promptLogin } from '../../lib/requireLogin';
 import {
   getVenueRankings, getVenueRankingTotals, subscribeRankings, maskRealName,
   getVenuePageConfig, getScoreEntries, getVenuePlayerCounts,
-  RANK_METRIC_LABEL, RANK_METRIC_DESC,
-  type RankingEntry, type RankingTotal, type VenuePageConfig, type RankMetric, type ScoreEntry, type PlayerCounts,
+  boardLabel, boardDesc, boardUnit, isCustomBoard, customKeyOf,
+  type RankingEntry, type RankingTotal, type VenuePageConfig, type RankBoardId, type ScoreEntry, type PlayerCounts,
 } from '../../api/rankings';
 import { uploadVenueImages } from '../../lib/storage';
 import { useBackClose } from '../../lib/backstack';
@@ -619,7 +619,7 @@ function VenueChat({ venueId, canManage }: { venueId: string; canManage: boolean
 
 function VenueRankingPanel({ venueId }: { venueId: string }) {
   const [cfg, setCfg] = useState<VenuePageConfig | null>(null);
-  const [metric, setMetric] = useState<RankMetric | null>(null);
+  const [metric, setMetric] = useState<RankBoardId | null>(null);
   const [totals, setTotals] = useState<RankingTotal[]>([]);
   const [manual, setManual] = useState<ScoreEntry[]>([]);
   // 주의: 이 파일에 지도용 Map 컴포넌트가 있어 내장 Map 생성이 가려짐 → Record 사용
@@ -655,14 +655,15 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
     return () => { active = false; unsub(); };
   }, [venueId]);
 
-  // 업주가 고른 메트릭(1~2개). 미설정 시 기본 2종.
-  const metrics: RankMetric[] = (cfg?.rankMetrics && cfg.rankMetrics.length > 0 ? cfg.rankMetrics : (['score', 'prize'] as RankMetric[])).slice(0, 2);
-  const cur: RankMetric = metric && metrics.includes(metric) ? metric : metrics[0];
+  // 업주가 고른 보드(1~2개). 미설정 시 기본 2종.
+  const metrics: RankBoardId[] = (cfg?.rankMetrics && cfg.rankMetrics.length > 0 ? cfg.rankMetrics : (['score', 'prize'] as RankBoardId[])).slice(0, 2);
+  const cur: RankBoardId = metric && metrics.includes(metric) ? metric : metrics[0];
 
-  // 수동 포인트 합산(이름=닉네임 매칭, 소문자 무시)
+  // 수동 포인트 합산(기본 매장 포인트 보드 — 커스텀 보드 항목 제외)
   const manualByName = useMemo(() => {
     const m: Record<string, number> = {};
     for (const e of manual) {
+      if (e.boardKey) continue;
       const k = e.name.trim().toLowerCase();
       m[k] = (m[k] ?? 0) + e.points;
     }
@@ -671,6 +672,22 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
 
   // 메트릭별 값 계산 + 정렬
   const rows = useMemo(() => {
+    // 커스텀 보드: 업주가 직접 입력한 항목 합산(이름별)
+    if (isCustomBoard(cur)) {
+      const key = customKeyOf(cur);
+      const m = new globalThis.Map<string, { name: string; value: number }>();
+      for (const e of manual) {
+        if (e.boardKey !== key) continue;
+        const k = e.name.trim().toLowerCase();
+        const c = m.get(k) ?? { name: e.name, value: 0 };
+        c.value += e.points;
+        m.set(k, c);
+      }
+      return [...m.values()]
+        .map((x) => ({ nickname: x.name, realName: '', moneyPoints: 0, prizeMan: 0, appearances: 0, bestPosition: 0, value: x.value }))
+        .filter((b) => b.value > 0)
+        .sort((a, b) => b.value - a.value);
+    }
     // 바인왕/출석왕: 장부 집계(전 플레이어) 기반 — 랭킹 등록 여부와 무관
     if (cur === 'buyin_count' || cur === 'visit_count') {
       return playerCounts
@@ -711,7 +728,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
     );
   }
 
-  const unit = cur === 'moneyin_count' || cur === 'buyin_count' || cur === 'visit_count' ? '회' : cur === 'moneyin_rate' ? '%' : '점';
+  const unit = boardUnit(cur, cfg);
   const fmtVal = (v: number) => `${v.toLocaleString()}${unit}`;
   const podium = rows.slice(0, 3);
   const rest = rows.slice(3, 20);
@@ -721,21 +738,21 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
 
   return (
     <div className="space-y-3">
-      {/* 메트릭 토글 — 업주가 1개만 골랐으면 라벨 헤더로 표시 */}
+      {/* 보드 토글 — 업주가 1개만 골랐으면 라벨 헤더로 표시 */}
       {metrics.length > 1 ? (
         <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5">
           {metrics.map((id) => (
             <button key={id} type="button" onClick={() => setMetric(id)}
               className={['flex-1 py-1.5 text-xs font-bold rounded-[6px] transition-colors',
                 cur === id ? 'bg-gold-300 text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
-              {RANK_METRIC_LABEL[id]}
+              {boardLabel(id, cfg)}
             </button>
           ))}
         </div>
       ) : (
-        <p className="text-sm font-bold text-gold-300">{RANK_METRIC_LABEL[cur]} 순위</p>
+        <p className="text-sm font-bold text-gold-300">{boardLabel(cur, cfg)} 순위</p>
       )}
-      <p className="text-2xs text-ink-muted">{RANK_METRIC_DESC[cur]} · 매장 커뮤니티 순위용 점수(금전적 가치 없음)</p>
+      <p className="text-2xs text-ink-muted">{boardDesc(cur, cfg)} · 매장 커뮤니티 순위용 점수(금전적 가치 없음)</p>
 
       {/* ── 포디움(1~3등 명예 표기) ── */}
       {podium.length > 0 && (
