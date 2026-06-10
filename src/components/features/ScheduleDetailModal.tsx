@@ -10,6 +10,7 @@ import type { Schedule } from '../../api/schedules';
 import type { Comment } from '../../api/community';
 import { generateBlinds } from '../../api/clock';
 import { promptLogin, openPostForm } from '../../lib/requireLogin';
+import { downloadIcs, shareOrCopy } from '../../lib/calendar';
 
 interface ScheduleDetailModalProps {
   schedule: Schedule | null;
@@ -237,6 +238,9 @@ export default function ScheduleDetailModal({
 
         {/* 예약하기 (첫 페이지) */}
         <ReserveBox scheduleId={schedule.id} ownerId={schedule.ownerId} venueId={schedule.venueId} />
+
+        {/* 캘린더 등록 · 공유 — 참가 결심 직후 동선 */}
+        <CalendarShareRow schedule={schedule} />
 
         {/* 프라이즈 강조 박스 */}
         {(schedule.prizePool || schedule.prizePercent) && (
@@ -488,6 +492,37 @@ export default function ScheduleDetailModal({
         </div>
       </div>
     </Modal>
+  );
+}
+
+// ── 캘린더 등록 · 공유 줄 ─────────────────────────────────────────────────────
+function CalendarShareRow({ schedule }: { schedule: Schedule }) {
+  const toast = useToast();
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      <button type="button"
+        onClick={() => {
+          downloadIcs({ title: schedule.title, date: schedule.date, startTime: schedule.startTime, venueName: schedule.pubName, address: schedule.address });
+          toast.show('캘린더 파일을 받았습니다 — 열면 내 캘린더에 등록돼요', 'success');
+        }}
+        className="flex items-center justify-center gap-1.5 rounded-input border border-border-default bg-surface-high py-2.5 text-xs font-bold text-ink-secondary transition-colors hover:border-gold-400/50 hover:text-gold-300">
+        <span aria-hidden>📅</span> 내 캘린더에 추가
+      </button>
+      <button type="button"
+        onClick={async () => {
+          try {
+            const how = await shareOrCopy({
+              title: `♠ ${schedule.title}`,
+              text: `♠ ${schedule.title}\n${schedule.date} ${schedule.startTime ?? ''}${schedule.pubName ? ` · ${schedule.pubName}` : ''}`,
+              url: 'https://nuriholdem.com',
+            });
+            if (how === 'copy') toast.show('대회 정보를 복사했습니다 — 단톡방에 붙여넣으세요', 'success');
+          } catch { /* 공유 시트 취소 */ }
+        }}
+        className="flex items-center justify-center gap-1.5 rounded-input border border-border-default bg-surface-high py-2.5 text-xs font-bold text-ink-secondary transition-colors hover:border-gold-400/50 hover:text-gold-300">
+        <span aria-hidden>📤</span> 공유 (카톡·문자)
+      </button>
+    </div>
   );
 }
 

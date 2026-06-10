@@ -189,7 +189,8 @@ const SECTION_ICON: Record<Section, ReactNode> = {
 function SectionBtn({ active, onClick, icon, children, locked }: { active: boolean; onClick: () => void; icon?: ReactNode; children: ReactNode; locked?: boolean }) {
   return (
     <button type="button" onClick={onClick}
-      className={['flex shrink-0 items-center gap-2 whitespace-nowrap rounded-[6px] px-3 py-2 text-xs font-semibold transition-colors focus:outline-none touch-manipulation lg:w-full lg:justify-start',
+      // 글씨 13px·세로 패딩 확대 — 매일 쓰는 운영 메뉴라 가독·터치 우선
+      className={['flex shrink-0 items-center gap-2 whitespace-nowrap rounded-[7px] px-3 py-2.5 text-[13px] font-semibold transition-colors focus:outline-none touch-manipulation lg:w-full lg:justify-start',
         active ? 'bg-gold-300 text-ink-inverse' : locked ? 'text-ink-muted/60 hover:text-ink-secondary lg:hover:bg-surface-high' : 'text-ink-secondary hover:text-ink-primary lg:hover:bg-surface-high'].join(' ')}>
       <span className="shrink-0" aria-hidden>{icon}</span>
       <span>{children}</span>

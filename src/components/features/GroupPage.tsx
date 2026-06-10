@@ -103,7 +103,7 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
     <div className="fixed inset-0 z-40 bg-surface-base flex flex-col animate-slide-up" style={{ animationDuration: '0.25s' }}>
       {/* 헤더 */}
       <header className="shrink-0 sticky top-0 z-30 flex items-center h-header-h px-page-x bg-surface-base border-b border-border-subtle">
-        <button type="button" onClick={onClose} aria-label="뒤로 가기" className="w-9 h-9 -ml-2 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high transition-colors">
+        <button type="button" onClick={onClose} aria-label="뒤로 가기" className="w-11 h-11 -ml-2 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high transition-colors">
           <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><polyline points="14,5 7,11 14,17" /></svg>
         </button>
         <span className="ml-1 inline-flex items-center gap-1.5 min-w-0">

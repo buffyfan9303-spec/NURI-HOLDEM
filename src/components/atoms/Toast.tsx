@@ -37,6 +37,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const show = useCallback((message: string, variant: ToastVariant = 'info') => {
     const id = Date.now() + Math.random();
     setToasts((prev) => [...prev, { id, message, variant }]);
+    // 햅틱 피드백(모바일) — 성공 10ms 한 번, 에러는 짧게 두 번(네이티브 앱 감각)
+    try {
+      if (variant === 'success') navigator.vibrate?.(10);
+      else if (variant === 'error') navigator.vibrate?.([18, 40, 18]);
+    } catch { /* 미지원 무시 */ }
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 2400);

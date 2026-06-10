@@ -152,6 +152,8 @@ function ListCard({ schedule, onVenueClick, onSelect }: CardProps) {
           ? 'border-gold-400 shadow-gold bg-surface-low'
           : 'border-border-default shadow-card bg-surface-low hover:border-border-strong',
       ].join(' ')}
+      // 포스터 색 글로우 — 카드 뒤로 은은하게 번지는 포스터 고유색(글라스 감성)
+      style={!schedule.isPremium && schedule.posterColor ? { boxShadow: `0 4px 26px -10px ${schedule.posterColor}59` } : undefined}
     >
       {/* 정사각 썸네일 (64x64) */}
       <PosterArea

@@ -12,6 +12,7 @@ import { followVenue, unfollowVenue, getMyFollowedVenueIds, updateVenueAddress, 
 import { getVenueNotices, createVenueNotice, deleteVenueNotice, type VenueNotice } from '../../api/community';
 import { getVenueMessages, sendVenueMessage, deleteVenueMessage, subscribeVenueMessages, type VenueMessage } from '../../api/community';
 import Avatar from '../atoms/Avatar';
+import EmptyState from '../atoms/EmptyState';
 import { relativeTime } from './MarketplaceTab';
 import { promptLogin } from '../../lib/requireLogin';
 import {
@@ -157,7 +158,7 @@ export default function VenuePage({
           type="button"
           onClick={onClose}
           aria-label="뒤로 가기"
-          className="w-9 h-9 -ml-2 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high transition-colors"
+          className="w-11 h-11 -ml-2 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high transition-colors"
         >
           <Icon name="back" size={22} />
         </button>
@@ -722,12 +723,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
 
   if (loading) return <p className="text-center py-10 text-xs text-ink-muted">불러오는 중…</p>;
   if (totals.length === 0 && manual.length === 0 && playerCounts.length === 0) {
-    return (
-      <div className="py-12 text-center text-ink-muted">
-        <p className="text-sm">아직 등록된 순위가 없습니다.</p>
-        <p className="text-2xs mt-1">매장에서 순위를 등록하면 누적 랭킹이 자동 집계됩니다.</p>
-      </div>
-    );
+    return <EmptyState title="아직 등록된 순위가 없어요" hint="매장에서 순위를 등록하면 누적 랭킹이 자동으로 집계됩니다." />;
   }
 
   const unit = boardUnit(cur, cfg);
@@ -993,26 +989,27 @@ function AddressRow({ address }: { address: string }) {
       toast.show('복사에 실패했습니다', 'error');
     }
   };
-  const mapUrl = `https://map.naver.com/v5/search/${encodeURIComponent(address)}`;
+  // 길찾기 딥링크 — 모바일은 앱으로, PC는 웹 지도로 연결
+  const naverUrl = `https://map.naver.com/v5/search/${encodeURIComponent(address)}`;
+  const kakaoUrl = `https://map.kakao.com/link/search/${encodeURIComponent(address)}`;
   return (
     <div className="flex items-start gap-2 text-xs">
       <dt className="w-14 shrink-0 text-ink-muted">주소</dt>
-      <dd className="flex-1 flex items-start justify-between gap-2">
-        <span className="text-ink-secondary whitespace-pre-line">{address}</span>
-        <div className="flex items-center gap-1 shrink-0">
-          <button
-            type="button" onClick={copy}
-            className="px-1.5 py-0.5 rounded-badge text-2xs text-ink-muted hover:text-gold-300 hover:bg-surface-high transition-colors"
-            aria-label="주소 복사"
-          >
+      <dd className="flex-1 space-y-1.5">
+        <span className="block text-ink-secondary whitespace-pre-line">{address}</span>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <a href={kakaoUrl} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 rounded-badge bg-[#FEE500] px-2 py-1 text-2xs font-bold text-[#191919] transition-transform active:scale-95">
+            카카오맵 길찾기
+          </a>
+          <a href={naverUrl} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 rounded-badge bg-[#03C75A] px-2 py-1 text-2xs font-bold text-white transition-transform active:scale-95">
+            네이버지도
+          </a>
+          <button type="button" onClick={copy} aria-label="주소 복사"
+            className="rounded-badge border border-border-default px-2 py-1 text-2xs font-semibold text-ink-muted transition-colors hover:text-gold-300 hover:bg-surface-high">
             복사
           </button>
-          <a
-            href={mapUrl} target="_blank" rel="noopener noreferrer"
-            className="px-1.5 py-0.5 rounded-badge text-2xs text-ink-muted hover:text-gold-300 hover:bg-surface-high transition-colors"
-          >
-            지도 ↗
-          </a>
         </div>
       </dd>
     </div>

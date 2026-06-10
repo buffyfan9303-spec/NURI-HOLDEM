@@ -106,8 +106,8 @@ export default function Modal({
           <header className="shrink-0 flex items-center justify-between px-4 h-header-h border-b border-border-subtle bg-surface-base">
             <h2 id="modal-title" className="text-base font-semibold text-ink-primary">{title}</h2>
             <button type="button" onClick={onClose} aria-label="닫기"
-              className="w-9 h-9 -mr-1 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high transition-colors">
-              <Icon name="close" size={16} />
+              className="w-11 h-11 -mr-2 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high transition-colors">
+              <Icon name="close" size={18} />
             </button>
           </header>
         )}
@@ -174,9 +174,10 @@ export default function Modal({
               type="button"
               onClick={onClose}
               aria-label="닫기"
-              className="w-8 h-8 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high transition-colors"
+              // 44px 터치 표준 — 작아서 빗나가던 닫기 버튼 전역 교정
+              className="w-11 h-11 -mr-2 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high transition-colors"
             >
-              <Icon name="close" size={14} />
+              <Icon name="close" size={18} />
             </button>
           </header>
         )}
