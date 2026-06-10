@@ -7,33 +7,22 @@ import type { ViewMode } from './components/atoms/ViewModeToggle';
 import IntegratedSearchBar, { expandRegions } from './components/features/IntegratedSearchBar';
 import type { SearchState } from './components/features/IntegratedSearchBar';
 import ScheduleCard from './components/features/ScheduleCard';
-import ScheduleDetailModal from './components/features/ScheduleDetailModal';
 import WeeklyBestStrip from './components/features/WeeklyBestStrip';
-import AuthModal from './components/features/AuthModal';
-import PostDetailModal from './components/features/PostDetailModal';
 import NotificationPanel from './components/features/NotificationPanel';
 import { decodeSpot, readGtoHash } from './components/features/gto/gtoShare';
 import type { DeepGtoInit } from './components/features/gto/useDeepGto';
-import ListingDetailModal from './components/features/ListingDetailModal';
-import NoticeDetailModal from './components/features/NoticeDetailModal';
-import PosterFormModal from './components/features/PosterFormModal';
 import type { PosterFormData } from './components/features/PosterFormModal';
 import NuriHoldemLogo from './components/atoms/NuriHoldemLogo';
 import ThemeToggle from './components/atoms/ThemeToggle';
-import ProfileModal from './components/features/ProfileModal';
 import { PORTONE_CONFIGURED } from './components/features/IdentityVerificationButton';
 import StaffInviteBanner from './components/features/StaffInviteBanner';
 import TierCelebration from './components/features/TierCelebration';
 import ErrorBoundary from './components/atoms/ErrorBoundary';
 import InstallBanner from './components/atoms/InstallBanner';
 import { REQUIRE_LOGIN_EVENT, OPEN_POST_FORM_EVENT } from './lib/requireLogin';
-import GlobalSearchModal from './components/features/GlobalSearchModal';
 import { tierColor } from './components/atoms/TierBadge';
-import NoticeFormModal from './components/features/NoticeFormModal';
-import PostFormModal from './components/features/PostFormModal';
 import ConsentGateModal from './components/features/ConsentGateModal';
 import type { PostFormData } from './components/features/PostFormModal';
-import MarketplaceFormModal from './components/features/MarketplaceFormModal';
 import type { MarketplaceFormData } from './components/features/MarketplaceFormModal';
 import { useBackClose } from './lib/backstack';
 import { useVisibilityRefresh } from './lib/useVisibilityRefresh';
@@ -61,6 +50,18 @@ import type { MarketplaceListing, MarketplaceNotice } from './api/marketplace';
 // ── 코드 스플리팅: 무거운 탭/오버레이는 지연 로딩(첫 화면 번들에서 분리) ──────────
 // 장부·클락·인건비(VenueManageTab/AdminTab), 카카오맵(VenuePage), GTO 엔진(GtoDeepModal)
 // 등 첫 화면(일정 탐색)에 불필요한 코드를 별도 청크로 떼어내 초기 로딩을 가볍게 한다.
+// 모달류 — 첫 화면에 필요 없으므로 열 때만 로드(메인 번들 축소)
+const AuthModal            = lazyWithReload(() => import('./components/features/AuthModal'));
+const ScheduleDetailModal  = lazyWithReload(() => import('./components/features/ScheduleDetailModal'));
+const PostDetailModal      = lazyWithReload(() => import('./components/features/PostDetailModal'));
+const ListingDetailModal   = lazyWithReload(() => import('./components/features/ListingDetailModal'));
+const NoticeDetailModal    = lazyWithReload(() => import('./components/features/NoticeDetailModal'));
+const PosterFormModal      = lazyWithReload(() => import('./components/features/PosterFormModal'));
+const ProfileModal         = lazyWithReload(() => import('./components/features/ProfileModal'));
+const GlobalSearchModal    = lazyWithReload(() => import('./components/features/GlobalSearchModal'));
+const NoticeFormModal      = lazyWithReload(() => import('./components/features/NoticeFormModal'));
+const PostFormModal        = lazyWithReload(() => import('./components/features/PostFormModal'));
+const MarketplaceFormModal = lazyWithReload(() => import('./components/features/MarketplaceFormModal'));
 const AdminTab       = lazyWithReload(() => import('./components/features/AdminTab'));
 const CommunityTab   = lazyWithReload(() => import('./components/features/CommunityTab'));
 const GtoDeepModal   = lazyWithReload(() => import('./components/features/gto/GtoDeepModal'));
@@ -1352,11 +1353,15 @@ export default function App() {
       )}
       </Suspense>
 
-      {/* ── 모달 ─────────────────────────────────────────────────────── */}
-      <AuthModal key={authMode} open={authOpen} onClose={() => { setAuthOpen(false); setAuthMode('login'); }} initialMode={authMode} />
+      {/* ── 모달 — 전부 lazy: 여는 순간에만 해당 청크 로드(첫 화면 가볍게) ── */}
+      <Suspense fallback={<OverlayFallback />}>
+      {authOpen && (
+        <AuthModal key={authMode} open onClose={() => { setAuthOpen(false); setAuthMode('login'); }} initialMode={authMode} />
+      )}
 
+      {openSchedule !== null && (
       <ScheduleDetailModal
-        open={openSchedule !== null}
+        open
         schedule={openSchedule}
         onClose={() => setOpenSchedule(null)}
         onVenueClick={handleVenueClick}
@@ -1367,6 +1372,7 @@ export default function App() {
         onDeleteComment={handleDeleteComment}
         onDeletePoster={handleDeletePoster}
       />
+      )}
 
       {openVenueId !== null && (() => {
         const ov = venues.find((v) => v.id === openVenueId) ?? null;
@@ -1395,30 +1401,37 @@ export default function App() {
         );
       })()}
 
+      {openListing !== null && (
       <ListingDetailModal
-        open={openListing !== null}
+        open
         listing={openListing}
         onClose={() => setOpenListing(null)}
         onDelete={handleDeleteListing}
       />
+      )}
 
+      {openNotice !== null && (
       <NoticeDetailModal
-        open={openNotice !== null}
+        open
         notice={openNotice}
         onClose={() => setOpenNotice(null)}
       />
+      )}
 
+      {posterFormTarget !== null && (
       <PosterFormModal
-        open={posterFormTarget !== null}
+        open
         schedule={posterFormTarget}
         onClose={() => setPosterFormTarget(null)}
         onSubmit={handleSubmitPoster}
         venues={venues.map((v) => ({ id: v.id, name: v.name, region: v.region }))}
         pastPosters={schedules}
       />
+      )}
 
+      {openPost !== null && (
       <PostDetailModal
-        open={openPost !== null}
+        open
         post={openPost}
         onClose={() => setOpenPost(null)}
         onLike={handleLikePost}
@@ -1426,14 +1439,18 @@ export default function App() {
         venues={venues}
         onVenueClick={(vid) => { setOpenPost(null); handleVenueClick(vid); }}
       />
+      )}
 
+      {profileOpen && (
       <ProfileModal
-        open={profileOpen}
+        open
         onClose={() => setProfileOpen(false)}
       />
+      )}
 
+      {globalSearchOpen && (
       <GlobalSearchModal
-        open={globalSearchOpen}
+        open
         onClose={() => setGlobalSearchOpen(false)}
         venues={venues}
         schedules={schedules}
@@ -1442,21 +1459,26 @@ export default function App() {
         onSchedule={handleScheduleSelect}
         onPost={setOpenPost}
       />
+      )}
 
       {/* 관리자 전용 공지 작성 모달 (커뮤니티/장터 '공지 작성' 버튼에서 진입) */}
+      {noticeFormOpen && (
       <NoticeFormModal
-        open={noticeFormOpen}
+        open
         onClose={() => setNoticeFormOpen(false)}
         onSubmit={handleCreateNotice}
       />
+      )}
 
       {/* 커뮤니티 글쓰기 모달 (Stage 2) */}
+      {postFormOpen && (
       <PostFormModal
-        open={postFormOpen}
+        open
         onClose={() => setPostFormOpen(false)}
         onSubmit={handleCreatePost}
         defaultCategory={postFormCategory}
       />
+      )}
 
       {/* GTO 공유 링크로 진입 시 같은 스팟으로 GTO 검색 모달 표시 */}
       {gtoInit && (
@@ -1474,11 +1496,14 @@ export default function App() {
       <ConsentGateModal open={!!user && user.agreedToTerms === false && user.role !== 'admin'} />
 
       {/* 중고장터 글쓰기 모달 (Stage 2) */}
+      {marketFormOpen && (
       <MarketplaceFormModal
-        open={marketFormOpen}
+        open
         onClose={() => setMarketFormOpen(false)}
         onSubmit={handleCreateListing}
       />
+      )}
+      </Suspense>
     </div>
   );
 }
