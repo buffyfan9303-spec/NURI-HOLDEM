@@ -684,6 +684,41 @@ export function subscribeGroupMessages(groupId: string, onInsert: (m: GroupMessa
   return () => { supabase.removeChannel(ch); };
 }
 
+// ── 매장 실시간 채팅(공개 열람 · 로그인 시 작성, 그룹 채팅과 동일 UX) ─────────
+export interface VenueMessage { id: string; venueId: string; userId: string; userName: string; userColor?: string; content: string; createdAt: string; }
+
+export async function getVenueMessages(venueId: string, limit = 80): Promise<VenueMessage[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.from('venue_messages').select('*').eq('venue_id', venueId).order('created_at', { ascending: false }).limit(limit);
+  if (error) throw error;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({ id: r.id, venueId: r.venue_id, userId: r.user_id, userName: r.user_name, userColor: r.user_color ?? undefined, content: r.content, createdAt: r.created_at }));
+}
+export async function sendVenueMessage(venueId: string, input: { userName: string; userColor?: string; content: string }): Promise<VenueMessage> {
+  if (IS_MOCK) throw new Error('mock');
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('로그인이 필요합니다');
+  const body = input.content.trim();
+  if (!body) throw new Error('내용을 입력해 주세요');
+  const { data, error } = await supabase.from('venue_messages').insert({ venue_id: venueId, user_id: user.id, user_name: input.userName, user_color: input.userColor ?? null, content: body.slice(0, 500) }).select('*').single();
+  if (error) throw error;
+  return { id: data.id, venueId: data.venue_id, userId: data.user_id, userName: data.user_name, userColor: data.user_color ?? undefined, content: data.content, createdAt: data.created_at };
+}
+export async function deleteVenueMessage(id: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.from('venue_messages').delete().eq('id', id);
+  if (error) throw error;
+}
+export function subscribeVenueMessages(venueId: string, onInsert: (m: VenueMessage) => void): () => void {
+  if (IS_MOCK) return () => {};
+  const ch = supabase.channel(`vmsg:${venueId}`)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'venue_messages', filter: `venue_id=eq.${venueId}` },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (payload: any) => { const r = payload.new; onInsert({ id: r.id, venueId: r.venue_id, userId: r.user_id, userName: r.user_name, userColor: r.user_color ?? undefined, content: r.content, createdAt: r.created_at }); })
+    .subscribe();
+  return () => { supabase.removeChannel(ch); };
+}
+
 // ── 그룹 게시판(멤버 전용) ────────────────────────────────────────────────────
 export async function getGroupPosts(groupId: string): Promise<GroupPost[]> {
   if (IS_MOCK) return [];

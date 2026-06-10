@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, type ReactNode } from 'react';
 import { Map, MapMarker, useKakaoLoader } from 'react-kakao-maps-sdk';
 import CommentThread from './CommentThread';
 import RotiArenaLogo from '../atoms/RotiArenaLogo';
@@ -10,11 +10,15 @@ import type { MarketplaceNotice } from '../../api/marketplace';
 import { useAuth } from '../../contexts/AuthContext';
 import { followVenue, unfollowVenue, getMyFollowedVenueIds, updateVenueAddress, updateVenueKakao } from '../../api/community';
 import { getVenueNotices, createVenueNotice, deleteVenueNotice, type VenueNotice } from '../../api/community';
+import { getVenueMessages, sendVenueMessage, deleteVenueMessage, subscribeVenueMessages, type VenueMessage } from '../../api/community';
+import Avatar from '../atoms/Avatar';
+import { relativeTime } from './MarketplaceTab';
+import { promptLogin } from '../../lib/requireLogin';
 import {
   getVenueRankings, getVenueRankingTotals, subscribeRankings, maskRealName,
-  getVenuePageConfig, getScoreEntries, getVenueBuyinCounts,
+  getVenuePageConfig, getScoreEntries, getVenuePlayerCounts,
   RANK_METRIC_LABEL, RANK_METRIC_DESC,
-  type RankingEntry, type RankingTotal, type VenuePageConfig, type RankMetric, type ScoreEntry,
+  type RankingEntry, type RankingTotal, type VenuePageConfig, type RankMetric, type ScoreEntry, type PlayerCounts,
 } from '../../api/rankings';
 import { uploadVenueImages } from '../../lib/storage';
 import { useBackClose } from '../../lib/backstack';
@@ -277,12 +281,19 @@ export default function VenuePage({
           {tab === 'community' && (
             <div className="space-y-3">
               <VenueNoticeBoard venueId={venue.id} canManage={isMyVenue || user?.role === 'admin'} />
-              <CommentThread
-                comments={venueComments}
-                onSubmit={(content, parentId) => onSubmitComment(venue.id, content, parentId)}
-                onDelete={onDeleteComment}
-                moderator={isMyVenue}
-                emptyText="이 매장의 첫 댓글을 남겨보세요."
+              {/* 모든 커뮤니티 공통 구성(그룹과 동일): 실시간 채팅 | 게시판 */}
+              <VenueCommunitySection
+                venueId={venue.id}
+                canManage={isMyVenue || user?.role === 'admin'}
+                board={
+                  <CommentThread
+                    comments={venueComments}
+                    onSubmit={(content, parentId) => onSubmitComment(venue.id, content, parentId)}
+                    onDelete={onDeleteComment}
+                    moderator={isMyVenue}
+                    emptyText="이 매장의 첫 게시글(댓글)을 남겨보세요."
+                  />
+                }
               />
             </div>
           )}
@@ -525,6 +536,85 @@ function HeroSection({
   );
 }
 
+// ── 매장 커뮤니티(그룹과 동일 구성: 실시간 채팅 | 게시판) ─────────────────────
+function VenueCommunitySection({ venueId, canManage, board }: { venueId: string; canManage: boolean; board: ReactNode }) {
+  const [sub, setSub] = useState<'chat' | 'board'>('chat');
+  return (
+    <div className="space-y-2.5">
+      <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5">
+        {(['chat', 'board'] as const).map((t) => (
+          <button key={t} type="button" onClick={() => setSub(t)}
+            className={['flex-1 py-1.5 text-xs font-bold rounded-[6px] transition-colors',
+              sub === t ? 'bg-gold-300 text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
+            {t === 'chat' ? '실시간 채팅' : '게시판'}
+          </button>
+        ))}
+      </div>
+      {sub === 'chat' ? <VenueChat venueId={venueId} canManage={canManage} /> : board}
+    </div>
+  );
+}
+
+// 매장 실시간 채팅 — 공개 열람, 로그인 시 작성(그룹 채팅과 동일 UX)
+function VenueChat({ venueId, canManage }: { venueId: string; canManage: boolean }) {
+  const { user } = useAuth();
+  const toast = useToast();
+  const [messages, setMessages] = useState<VenueMessage[]>([]);
+  const [draft, setDraft] = useState('');
+  const [sending, setSending] = useState(false);
+  const endRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let active = true;
+    getVenueMessages(venueId, 80).then((m) => { if (active) setMessages(m.reverse()); }).catch(() => {});
+    const unsub = subscribeVenueMessages(venueId, (m) => setMessages((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m])));
+    return () => { active = false; unsub(); };
+  }, [venueId]);
+  useEffect(() => { endRef.current?.scrollIntoView({ block: 'end' }); }, [messages.length]);
+
+  const send = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) { toast.show('로그인 후 채팅할 수 있습니다', 'error'); promptLogin(); return; }
+    const body = draft.trim();
+    if (!body) return;
+    setSending(true);
+    try {
+      const m = await sendVenueMessage(venueId, { userName: user.nickname ?? user.name, userColor: user.avatarColor, content: body });
+      setMessages((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]));
+      setDraft('');
+    } catch (err) { toast.show(err instanceof Error ? err.message : '전송 실패', 'error'); }
+    finally { setSending(false); }
+  };
+
+  return (
+    <div className="space-y-2">
+      <ul className="space-y-1.5 max-h-[55vh] overflow-y-auto">
+        {messages.length === 0 ? <p className="py-8 text-center text-2xs text-ink-muted">이 매장의 첫 메시지를 남겨보세요</p> : messages.map((m) => (
+          <li key={m.id} className="flex items-start gap-2">
+            <Avatar name={m.userName} color={m.userColor} size={24} className="mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1 text-2xs">
+                <span className="font-semibold text-ink-primary truncate">{m.userName}</span>
+                <span className="text-ink-muted ml-auto shrink-0">{relativeTime(m.createdAt)}</span>
+                {(canManage || m.userId === user?.id) && (
+                  <button type="button" onClick={() => deleteVenueMessage(m.id).then(() => setMessages((p) => p.filter((x) => x.id !== m.id))).catch(() => {})} aria-label="삭제" className="shrink-0 text-ink-muted hover:text-danger-light">×</button>
+                )}
+              </div>
+              <p className="text-xs text-ink-primary leading-snug mt-0.5 break-words whitespace-pre-wrap">{m.content}</p>
+            </div>
+          </li>
+        ))}
+        <div ref={endRef} />
+      </ul>
+      <form onSubmit={send} className="flex items-center gap-2">
+        <input type="text" value={draft} onChange={(e) => setDraft(e.target.value)} maxLength={500}
+          placeholder={user ? '메시지 입력…' : '로그인 후 채팅할 수 있어요'} className="input flex-1" />
+        <button type="submit" disabled={sending || !draft.trim()} className="btn-primary px-4 shrink-0 disabled:opacity-50">전송</button>
+      </form>
+    </div>
+  );
+}
+
 // ── 팔로우 버튼 ────────────────────────────────────────────────────────────
 
 function VenueRankingPanel({ venueId }: { venueId: string }) {
@@ -537,21 +627,24 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
   const [latest, setLatest] = useState<{ date: string | null; entries: RankingEntry[] }>({ date: null, entries: [] });
   const [loading, setLoading] = useState(true);
 
+  const [playerCounts, setPlayerCounts] = useState<PlayerCounts[]>([]);
   useEffect(() => {
     let active = true;
     const load = async () => {
       try {
         const c = await getVenuePageConfig(venueId).catch(() => null);
-        const wantsRate = (c?.rankMetrics ?? []).includes('moneyin_rate');
+        const ms = c?.rankMetrics ?? [];
+        const wantsCounts = ms.includes('moneyin_rate') || ms.includes('buyin_count') || ms.includes('visit_count');
         const [t, d, m] = await Promise.all([
           getVenueRankingTotals(venueId, c),
           getVenueRankings(venueId),
           getScoreEntries(venueId).catch(() => [] as ScoreEntry[]),
         ]);
-        const bc: Record<string, number> = wantsRate
-          ? Object.fromEntries(await getVenueBuyinCounts(venueId)) : {};
+        const pc: PlayerCounts[] = wantsCounts ? await getVenuePlayerCounts(venueId).catch(() => []) : [];
+        const bc: Record<string, number> = {};
+        for (const p of pc) bc[p.name.toLowerCase()] = p.buyins;
         if (!active) return;
-        setCfg(c); setTotals(t); setLatest(d); setManual(m); setBuyinCounts(bc);
+        setCfg(c); setTotals(t); setLatest(d); setManual(m); setBuyinCounts(bc); setPlayerCounts(pc);
         setMetric((cur) => cur ?? (c?.rankMetrics?.[0] ?? 'score'));
       } catch { /* noop */ }
       finally { if (active) setLoading(false); }
@@ -578,6 +671,13 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
 
   // 메트릭별 값 계산 + 정렬
   const rows = useMemo(() => {
+    // 바인왕/출석왕: 장부 집계(전 플레이어) 기반 — 랭킹 등록 여부와 무관
+    if (cur === 'buyin_count' || cur === 'visit_count') {
+      return playerCounts
+        .map((p) => ({ nickname: p.name, realName: '', moneyPoints: 0, prizeMan: 0, appearances: 0, bestPosition: 0, value: cur === 'buyin_count' ? p.buyins : p.visits }))
+        .filter((b) => b.value > 0)
+        .sort((a, b) => b.value - a.value);
+    }
     const base = totals.map((t) => {
       const k = t.nickname.toLowerCase();
       const buyins = buyinCounts[k] ?? 0;
@@ -599,10 +699,10 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
     }
     return base.filter((b) => b.value >= 0)
       .sort((a, b) => (b.value - a.value) || (b.prizeMan - a.prizeMan) || (b.moneyPoints - a.moneyPoints));
-  }, [totals, cur, manualByName, buyinCounts, manual]);
+  }, [totals, cur, manualByName, buyinCounts, manual, playerCounts]);
 
   if (loading) return <p className="text-center py-10 text-xs text-ink-muted">불러오는 중…</p>;
-  if (totals.length === 0 && manual.length === 0) {
+  if (totals.length === 0 && manual.length === 0 && playerCounts.length === 0) {
     return (
       <div className="py-12 text-center text-ink-muted">
         <p className="text-sm">아직 등록된 순위가 없습니다.</p>
@@ -611,7 +711,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
     );
   }
 
-  const unit = cur === 'moneyin_count' ? '회' : cur === 'moneyin_rate' ? '%' : '점';
+  const unit = cur === 'moneyin_count' || cur === 'buyin_count' || cur === 'visit_count' ? '회' : cur === 'moneyin_rate' ? '%' : '점';
   const fmtVal = (v: number) => `${v.toLocaleString()}${unit}`;
   const podium = rows.slice(0, 3);
   const rest = rows.slice(3, 20);

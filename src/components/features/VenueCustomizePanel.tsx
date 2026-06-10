@@ -3,8 +3,8 @@ import { useToast } from '../atoms/Toast';
 import Icon from '../atoms/Icon';
 import {
   getVenuePageConfig, setVenuePageConfig, getScoreEntries, addScoreEntry, deleteScoreEntry,
-  getVenueRankingTotals, DEFAULT_PLACEMENT_POINTS, RANK_METRIC_LABEL, RANK_METRIC_DESC,
-  type VenuePageConfig, type RankMetric, type ScoreEntry,
+  getVenueRankingTotals, getVenuePlayerCounts, DEFAULT_PLACEMENT_POINTS, RANK_METRIC_LABEL, RANK_METRIC_DESC,
+  type VenuePageConfig, type RankMetric, type ScoreEntry, type PlayerCounts,
 } from '../../api/rankings';
 
 // 매장 페이지 탭(VenuePage와 동일 키)
@@ -15,12 +15,9 @@ const PAGE_TABS: { key: string; label: string }[] = [
   { key: 'schedules', label: '진행 예정' },
   { key: 'community', label: '커뮤니티' },
 ];
-const ALL_METRICS: RankMetric[] = ['score', 'prize', 'moneyin_count', 'moneyin_rate'];
+const ALL_METRICS: RankMetric[] = ['score', 'prize', 'moneyin_count', 'moneyin_rate', 'buyin_count', 'visit_count'];
 
-/**
- * 매장 꾸미기 — 업주가 매장 페이지를 직접 구성.
- *  ① 탭 순서(위/아래 이동) ② 순위 탭 메트릭(1~2개) ③ 1~3등 칭호 ④ 등수→점수 매핑
- */
+/** 매장 꾸미기 — 매장 페이지 탭 순서. (순위 보드·칭호·점수는 「매장 랭킹」 탭) */
 export default function VenueCustomizePanel({ venueId }: { venueId: string }) {
   const toast = useToast();
   const [cfg, setCfg] = useState<VenuePageConfig>({});
@@ -51,6 +48,70 @@ export default function VenueCustomizePanel({ venueId }: { venueId: string }) {
     setCfg((c) => ({ ...c, tabOrder: next }));
   };
 
+  const save = async () => {
+    setSaving(true);
+    try {
+      await setVenuePageConfig(venueId, { ...cfg, tabOrder: order });
+      toast.show('매장 페이지 설정을 저장했습니다', 'success');
+    } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
+    finally { setSaving(false); }
+  };
+
+  if (!loaded) return <p className="py-10 text-center text-2xs text-ink-muted">불러오는 중…</p>;
+
+  return (
+    <div className="space-y-3">
+      <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
+        <h3 className="text-sm font-bold text-ink-primary">매장 페이지 탭 순서</h3>
+        <p className="text-2xs text-ink-muted">손님이 매장을 열었을 때 보이는 탭 순서를 정하세요. 가장 위가 가장 왼쪽에 노출됩니다.</p>
+        <ul className="space-y-1">
+          {order.map((k, i) => {
+            const t = PAGE_TABS.find((x) => x.key === k)!;
+            return (
+              <li key={k} className="flex items-center gap-2 rounded-input border border-border-subtle bg-surface-high px-2.5 py-1.5">
+                <span className="w-5 text-center text-2xs font-bold text-gold-300 tabular-nums">{i + 1}</span>
+                <span className="flex-1 text-sm font-semibold text-ink-primary">{t.label}</span>
+                <button type="button" aria-label="위로" disabled={i === 0} onClick={() => move(k, -1)}
+                  className="h-7 w-7 rounded-input border border-border-default text-ink-secondary disabled:opacity-30 hover:border-gold-400/50">↑</button>
+                <button type="button" aria-label="아래로" disabled={i === order.length - 1} onClick={() => move(k, 1)}
+                  className="h-7 w-7 rounded-input border border-border-default text-ink-secondary disabled:opacity-30 hover:border-gold-400/50">↓</button>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+
+      <p className="text-2xs text-ink-muted">순위 탭에 보일 <span className="font-semibold text-gold-300">랭킹 보드 종류·1~3등 칭호·기준 점수·포인트 지급</span>은 「매장 랭킹」 탭에서 설정합니다.</p>
+
+      <button type="button" onClick={save} disabled={saving} className="btn-primary w-full text-sm py-2.5 disabled:opacity-50">
+        {saving ? '저장 중…' : '탭 순서 저장'}
+      </button>
+    </div>
+  );
+}
+
+/**
+ * 매장 랭킹 — 매장 커뮤니티 순위 탭에 적용되는 랭킹 시스템 허브.
+ *  ① 보드 종류(6종 중 1~2개): 매장 포인트 / 프라이즈 / 머니인 횟수 / 머니인 비율 / 바인왕 / 출석왕
+ *  ② 1~3등 칭호  ③ 기준 점수(등수→점수)  ④ 포인트 지급/차감  ⑤ 보드 미리보기
+ *  설정(①~③)은 업주/운영자, 포인트(④)는 장부 권한.
+ */
+export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canConfigure: boolean }) {
+  const toast = useToast();
+  const [cfg, setCfg] = useState<VenuePageConfig>({});
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    setLoaded(false);
+    getVenuePageConfig(venueId)
+      .then((c) => { if (alive) setCfg(c ?? {}); })
+      .catch(() => {})
+      .finally(() => { if (alive) setLoaded(true); });
+    return () => { alive = false; };
+  }, [venueId]);
+
   const metrics = (cfg.rankMetrics ?? ['score', 'prize']).slice(0, 2);
   const toggleMetric = (m: RankMetric) => {
     setCfg((c) => {
@@ -74,8 +135,8 @@ export default function VenueCustomizePanel({ venueId }: { venueId: string }) {
   const save = async () => {
     setSaving(true);
     try {
-      await setVenuePageConfig(venueId, { ...cfg, tabOrder: order, rankMetrics: metrics });
-      toast.show('매장 페이지 설정을 저장했습니다', 'success');
+      await setVenuePageConfig(venueId, { ...cfg, rankMetrics: metrics });
+      toast.show('매장 랭킹 설정을 저장했습니다 — 매장 커뮤니티 순위 탭에 바로 반영됩니다', 'success');
     } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
     finally { setSaving(false); }
   };
@@ -84,93 +145,162 @@ export default function VenueCustomizePanel({ venueId }: { venueId: string }) {
 
   return (
     <div className="space-y-3">
-      {/* ① 탭 순서 */}
-      <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
-        <h3 className="text-sm font-bold text-ink-primary">매장 페이지 탭 순서</h3>
-        <p className="text-2xs text-ink-muted">손님이 매장을 열었을 때 보이는 탭 순서를 정하세요. 첫 번째 탭이 기본 화면이 아니라도, 가장 왼쪽에 노출됩니다.</p>
-        <ul className="space-y-1">
-          {order.map((k, i) => {
-            const t = PAGE_TABS.find((x) => x.key === k)!;
-            return (
-              <li key={k} className="flex items-center gap-2 rounded-input border border-border-subtle bg-surface-high px-2.5 py-1.5">
-                <span className="w-5 text-center text-2xs font-bold text-gold-300 tabular-nums">{i + 1}</span>
-                <span className="flex-1 text-sm font-semibold text-ink-primary">{t.label}</span>
-                <button type="button" aria-label="위로" disabled={i === 0} onClick={() => move(k, -1)}
-                  className="h-7 w-7 rounded-input border border-border-default text-ink-secondary disabled:opacity-30 hover:border-gold-400/50">↑</button>
-                <button type="button" aria-label="아래로" disabled={i === order.length - 1} onClick={() => move(k, 1)}
-                  className="h-7 w-7 rounded-input border border-border-default text-ink-secondary disabled:opacity-30 hover:border-gold-400/50">↓</button>
-              </li>
-            );
-          })}
-        </ul>
-      </section>
+      <div>
+        <h2 className="text-base font-semibold text-ink-primary">매장 랭킹</h2>
+        <p className="mt-0.5 text-2xs text-ink-muted">여기서 정한 랭킹이 <span className="font-semibold text-gold-300">매장 커뮤니티 → 순위 탭</span>에 그대로 노출됩니다(금전적 가치 없음).</p>
+      </div>
 
-      {/* ② 순위 탭 메트릭(1~2개) */}
-      <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
-        <h3 className="text-sm font-bold text-ink-primary">순위 탭 구성 <span className="text-2xs font-normal text-ink-muted">(1~2개 선택)</span></h3>
-        <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-          {ALL_METRICS.map((m) => {
-            const on = metrics.includes(m);
-            return (
-              <button key={m} type="button" onClick={() => toggleMetric(m)}
-                className={['rounded-input border p-2.5 text-left transition-colors',
-                  on ? 'border-gold-400/60 bg-gold-300/[0.08]' : 'border-border-default bg-surface-high hover:border-gold-400/40'].join(' ')}>
-                <span className="flex items-center gap-1.5">
-                  <span className={['h-3.5 w-3.5 rounded-full border flex items-center justify-center', on ? 'border-gold-300 bg-gold-300' : 'border-ink-muted'].join(' ')}>
-                    {on && <Icon name="check" size={10} className="text-ink-inverse" />}
+      {canConfigure && (<>
+        {/* ① 보드 종류 */}
+        <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
+          <h3 className="text-sm font-bold text-ink-primary">랭킹 보드 종류 <span className="text-2xs font-normal text-ink-muted">(1~2개 선택)</span></h3>
+          <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+            {ALL_METRICS.map((m) => {
+              const on = metrics.includes(m);
+              return (
+                <button key={m} type="button" onClick={() => toggleMetric(m)}
+                  className={['rounded-input border p-2.5 text-left transition-colors',
+                    on ? 'border-gold-400/60 bg-gold-300/[0.08]' : 'border-border-default bg-surface-high hover:border-gold-400/40'].join(' ')}>
+                  <span className="flex items-center gap-1.5">
+                    <span className={['h-3.5 w-3.5 rounded-full border flex items-center justify-center', on ? 'border-gold-300 bg-gold-300' : 'border-ink-muted'].join(' ')}>
+                      {on && <Icon name="check" size={10} className="text-ink-inverse" />}
+                    </span>
+                    <span className={['text-xs font-bold', on ? 'text-gold-300' : 'text-ink-primary'].join(' ')}>{RANK_METRIC_LABEL[m]}</span>
                   </span>
-                  <span className={['text-xs font-bold', on ? 'text-gold-300' : 'text-ink-primary'].join(' ')}>{RANK_METRIC_LABEL[m]}</span>
-                </span>
-                <span className="mt-1 block text-[10px] leading-snug text-ink-muted">{RANK_METRIC_DESC[m]}</span>
-              </button>
-            );
-          })}
-        </div>
-        <p className="text-[10px] text-ink-muted">1개만 선택하면 토글 없이 해당 순위만 크게 보여줍니다.</p>
-      </section>
+                  <span className="mt-1 block text-[10px] leading-snug text-ink-muted">{RANK_METRIC_DESC[m]}</span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-[10px] text-ink-muted">1개만 선택하면 토글 없이 해당 순위만 크게 보여줍니다.</p>
+        </section>
 
-      {/* ③ 1~3등 칭호 */}
-      <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
-        <h3 className="text-sm font-bold text-ink-primary">1~3등 칭호 <span className="text-2xs font-normal text-ink-muted">(예: 로티아레나 포식자)</span></h3>
-        <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
-          {[1, 2, 3].map((r) => (
-            <label key={r} className="space-y-1">
-              <span className="text-2xs font-semibold text-ink-secondary">{r}등 칭호</span>
-              <input value={cfg.rankTitles?.[String(r)] ?? ''} maxLength={16}
-                onChange={(e) => setCfg((c) => ({ ...c, rankTitles: { ...(c.rankTitles ?? {}), [String(r)]: e.target.value } }))}
-                placeholder={r === 1 ? '챔피언' : r === 2 ? '준우승' : '3위'} className="input w-full text-sm" />
-            </label>
-          ))}
-        </div>
-      </section>
+        {/* ② 1~3등 칭호 */}
+        <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
+          <h3 className="text-sm font-bold text-ink-primary">1~3등 칭호 <span className="text-2xs font-normal text-ink-muted">(예: 로티아레나 포식자)</span></h3>
+          <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
+            {[1, 2, 3].map((r) => (
+              <label key={r} className="space-y-1">
+                <span className="text-2xs font-semibold text-ink-secondary">{r}등 칭호</span>
+                <input value={cfg.rankTitles?.[String(r)] ?? ''} maxLength={16}
+                  onChange={(e) => setCfg((c) => ({ ...c, rankTitles: { ...(c.rankTitles ?? {}), [String(r)]: e.target.value } }))}
+                  placeholder={r === 1 ? '챔피언' : r === 2 ? '준우승' : '3위'} className="input w-full text-sm" />
+              </label>
+            ))}
+          </div>
+        </section>
 
-      {/* ④ 등수→점수 매핑 */}
-      <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
-        <h3 className="text-sm font-bold text-ink-primary">기준 점수 <span className="text-2xs font-normal text-ink-muted">(순위 등록 시 등수별 부여 점수 · 그 외 등수는 1점)</span></h3>
-        <div className="grid grid-cols-5 gap-1.5">
-          {points.map((p, i) => (
-            <label key={i} className="space-y-0.5 text-center">
-              <span className="text-[10px] font-semibold text-ink-muted">{i + 1}등</span>
-              <input type="number" inputMode="numeric" value={p}
-                onChange={(e) => setPoint(i, Number(e.target.value))}
-                className="input w-full text-center text-sm tabular-nums" />
-            </label>
-          ))}
-        </div>
-        <button type="button" onClick={() => setCfg((c) => ({ ...c, placementPoints: [...DEFAULT_PLACEMENT_POINTS] }))} className="btn-ghost text-2xs px-2">기본값(10·7·5·3·2)으로</button>
-      </section>
+        {/* ③ 기준 점수 */}
+        <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
+          <h3 className="text-sm font-bold text-ink-primary">기준 점수 <span className="text-2xs font-normal text-ink-muted">(순위 등록 시 등수별 부여 점수 · 그 외 등수는 1점)</span></h3>
+          <div className="grid grid-cols-5 gap-1.5">
+            {points.map((p, i) => (
+              <label key={i} className="space-y-0.5 text-center">
+                <span className="text-[10px] font-semibold text-ink-muted">{i + 1}등</span>
+                <input type="number" inputMode="numeric" value={p}
+                  onChange={(e) => setPoint(i, Number(e.target.value))}
+                  className="input w-full text-center text-sm tabular-nums" />
+              </label>
+            ))}
+          </div>
+          <button type="button" onClick={() => setCfg((c) => ({ ...c, placementPoints: [...DEFAULT_PLACEMENT_POINTS] }))} className="btn-ghost text-2xs px-2">기본값(10·7·5·3·2)으로</button>
+        </section>
 
-      <button type="button" onClick={save} disabled={saving} className="btn-primary w-full text-sm py-2.5 disabled:opacity-50">
-        {saving ? '저장 중…' : '매장 페이지 설정 저장'}
-      </button>
+        <button type="button" onClick={save} disabled={saving} className="btn-primary w-full text-sm py-2.5 disabled:opacity-50">
+          {saving ? '저장 중…' : '매장 랭킹 설정 저장'}
+        </button>
+      </>)}
+
+      {/* ④ 포인트 지급/차감 — 장부 권한 직원도 가능 */}
+      <ScorePointsPanel venueId={venueId} />
+
+      {/* ⑤ 보드 미리보기 — 6종 전체 */}
+      <RankBoardPreview venueId={venueId} />
     </div>
   );
 }
 
-/**
- * 포인트 관리 — 임의 포인트 지급/차감(이벤트·미션 보상 등 스코어링 운영용).
- *  순위 입력과 별개로 자유 점수를 더해 매장 포인트 보드에 합산된다.
- */
+/** 보드 미리보기 — 메트릭 선택해 TOP 10 즉시 확인(매장 커뮤니티 순위 탭과 동일 계산) */
+function RankBoardPreview({ venueId }: { venueId: string }) {
+  const [metric, setMetric] = useState<RankMetric>('score');
+  const [rows, setRows] = useState<{ name: string; value: number }[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    (async () => {
+      try {
+        const cfg = await getVenuePageConfig(venueId).catch(() => null);
+        if (metric === 'buyin_count' || metric === 'visit_count') {
+          const pc: PlayerCounts[] = await getVenuePlayerCounts(venueId);
+          const r = pc.map((p) => ({ name: p.name, value: metric === 'buyin_count' ? p.buyins : p.visits }))
+            .filter((x) => x.value > 0).sort((a, b) => b.value - a.value).slice(0, 10);
+          if (alive) setRows(r);
+          return;
+        }
+        const [totals, manual, pc] = await Promise.all([
+          getVenueRankingTotals(venueId, cfg),
+          getScoreEntries(venueId).catch(() => [] as ScoreEntry[]),
+          metric === 'moneyin_rate' ? getVenuePlayerCounts(venueId) : Promise.resolve([] as PlayerCounts[]),
+        ]);
+        const manualBy: Record<string, number> = {};
+        for (const e of manual) { const k = e.name.trim().toLowerCase(); manualBy[k] = (manualBy[k] ?? 0) + e.points; }
+        const buyinBy: Record<string, number> = {};
+        for (const p of pc) buyinBy[p.name.toLowerCase()] = p.buyins;
+        const base = totals.map((t) => {
+          const k = t.nickname.toLowerCase();
+          const buyins = buyinBy[k] ?? 0;
+          const value = metric === 'score' ? t.moneyPoints + (manualBy[k] ?? 0)
+            : metric === 'prize' ? t.prizeMan
+            : metric === 'moneyin_count' ? t.appearances
+            : buyins >= 5 ? Math.round((t.appearances / buyins) * 100) : -1;
+          return { name: t.nickname, value };
+        });
+        if (metric === 'score') {
+          for (const [k, pts] of Object.entries(manualBy)) {
+            if (!base.some((b) => b.name.toLowerCase() === k)) {
+              const src = manual.find((e) => e.name.trim().toLowerCase() === k);
+              base.push({ name: src?.name ?? k, value: pts });
+            }
+          }
+        }
+        const r = base.filter((b) => b.value >= 0).sort((a, b) => b.value - a.value).slice(0, 10);
+        if (alive) setRows(r);
+      } catch { if (alive) setRows([]); }
+      finally { if (alive) setLoading(false); }
+    })();
+    return () => { alive = false; };
+  }, [venueId, metric]);
+
+  const unit = metric === 'moneyin_count' || metric === 'buyin_count' || metric === 'visit_count' ? '회' : metric === 'moneyin_rate' ? '%' : '점';
+
+  return (
+    <section className="rounded-card border border-gold-400/25 bg-gold-300/[0.04] p-3 space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className="min-w-0 flex-1 text-sm font-bold text-gold-300">보드 미리보기 (TOP 10)</h3>
+        <select value={metric} onChange={(e) => setMetric(e.target.value as RankMetric)} className="input w-auto shrink-0 text-2xs py-1.5">
+          {ALL_METRICS.map((m) => <option key={m} value={m}>{RANK_METRIC_LABEL[m]}</option>)}
+        </select>
+      </div>
+      {loading ? <p className="py-4 text-center text-2xs text-ink-muted">불러오는 중…</p>
+        : rows.length === 0 ? <p className="py-4 text-center text-2xs text-ink-muted">데이터가 없습니다 — 순위 입력·장부 기록이 쌓이면 표시됩니다.</p>
+        : (
+          <ol className="grid grid-cols-1 gap-x-4 gap-y-0.5 sm:grid-cols-2">
+            {rows.map((b, i) => (
+              <li key={b.name} className="flex items-baseline gap-2 text-xs">
+                <span className={['w-4 text-right font-bold tabular-nums', i < 3 ? 'text-gold-300' : 'text-ink-muted'].join(' ')}>{i + 1}</span>
+                <span className="min-w-0 flex-1 truncate font-semibold text-ink-primary">{b.name}</span>
+                <span className="font-bold tabular-nums text-gold-300">{b.value.toLocaleString()}{unit}</span>
+              </li>
+            ))}
+          </ol>
+        )}
+    </section>
+  );
+}
+
+/** 포인트 지급/차감 — 이벤트·미션 보상 등 자유 점수. 매장 포인트 보드에 합산(금전적 가치 없음). */
 export function ScorePointsPanel({ venueId }: { venueId: string }) {
   const toast = useToast();
   const [rows, setRows] = useState<ScoreEntry[]>([]);
@@ -178,26 +308,8 @@ export function ScorePointsPanel({ venueId }: { venueId: string }) {
   const [points, setPoints] = useState('');
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
-  const [board, setBoard] = useState<{ nickname: string; pts: number }[]>([]);
 
-  const reload = () => {
-    getScoreEntries(venueId).then(setRows).catch(() => {});
-    // 보드 미리보기: 등수점수(기본/커스텀) + 수동 포인트 합산 상위 10
-    Promise.all([getVenuePageConfig(venueId).catch(() => null), getScoreEntries(venueId).catch(() => [] as ScoreEntry[])])
-      .then(async ([cfg, manual]) => {
-        const totals = await getVenueRankingTotals(venueId, cfg).catch(() => []);
-        const m = new Map<string, { nickname: string; pts: number }>();
-        for (const t of totals) m.set(t.nickname.toLowerCase(), { nickname: t.nickname, pts: t.moneyPoints });
-        for (const e of manual) {
-          const k = e.name.trim().toLowerCase();
-          const cur = m.get(k) ?? { nickname: e.name, pts: 0 };
-          cur.pts += e.points;
-          m.set(k, cur);
-        }
-        setBoard([...m.values()].sort((a, b) => b.pts - a.pts).slice(0, 10));
-      })
-      .catch(() => {});
-  };
+  const reload = () => { getScoreEntries(venueId).then(setRows).catch(() => {}); };
   useEffect(reload, [venueId]);
 
   const add = async (sign: 1 | -1) => {
@@ -223,7 +335,7 @@ export function ScorePointsPanel({ venueId }: { venueId: string }) {
     <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-3">
       <div>
         <h3 className="text-sm font-bold text-ink-primary">포인트 지급 · 차감</h3>
-        <p className="text-2xs text-ink-muted mt-0.5">이벤트·미션 보상 등 순위 입력 외의 점수를 자유롭게 더하거나 뺍니다. 매장 포인트 순위에 바로 합산됩니다(금전적 가치 없음).</p>
+        <p className="text-2xs text-ink-muted mt-0.5">이벤트·미션 보상 등 순위 입력 외의 점수를 자유롭게 더하거나 뺍니다. 매장 포인트 보드에 바로 합산됩니다.</p>
       </div>
       <div className="flex flex-wrap gap-1.5">
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="이름(닉네임)" maxLength={30} className="input min-w-0 flex-1 text-sm" />
@@ -232,21 +344,6 @@ export function ScorePointsPanel({ venueId }: { venueId: string }) {
         <button type="button" disabled={busy} onClick={() => add(1)} className="btn-primary shrink-0 px-3 text-xs disabled:opacity-50">지급</button>
         <button type="button" disabled={busy} onClick={() => add(-1)} className="shrink-0 rounded-input border border-danger/40 px-3 text-xs font-semibold text-danger-light hover:bg-danger/10 disabled:opacity-50">차감</button>
       </div>
-
-      {board.length > 0 && (
-        <div className="rounded-input border border-gold-400/25 bg-gold-300/[0.04] p-2.5">
-          <p className="mb-1.5 text-2xs font-bold text-gold-300">매장 포인트 보드 미리보기 (TOP 10)</p>
-          <ol className="grid grid-cols-1 gap-x-4 gap-y-0.5 sm:grid-cols-2">
-            {board.map((b, i) => (
-              <li key={b.nickname} className="flex items-baseline gap-2 text-xs">
-                <span className="w-4 text-right font-bold tabular-nums text-ink-muted">{i + 1}</span>
-                <span className="min-w-0 flex-1 truncate font-semibold text-ink-primary">{b.nickname}</span>
-                <span className="font-bold tabular-nums text-gold-300">{b.pts.toLocaleString()}점</span>
-              </li>
-            ))}
-          </ol>
-        </div>
-      )}
 
       {rows.length > 0 && (
         <div>

@@ -115,15 +115,18 @@ export async function getVenueRankingTotals(venueId: string, cfg?: VenuePageConf
 }
 
 // ── 매장 페이지 구성(업주 설정) — venues.page_config jsonb ─────────────────────
-export type RankMetric = 'score' | 'prize' | 'moneyin_count' | 'moneyin_rate';
+export type RankMetric = 'score' | 'prize' | 'moneyin_count' | 'moneyin_rate' | 'buyin_count' | 'visit_count';
 export const RANK_METRIC_LABEL: Record<RankMetric, string> = {
   score: '매장 포인트', prize: '프라이즈 점수', moneyin_count: '머니인 횟수', moneyin_rate: '머니인 비율',
+  buyin_count: '바인왕(참여)', visit_count: '출석왕(방문)',
 };
 export const RANK_METRIC_DESC: Record<RankMetric, string> = {
   score: '등수 점수(설정 가능) + 수동 지급 포인트 합산',
   prize: '순위 등록 시 입력한 프라이즈 점수 누적',
   moneyin_count: '순위(입상) 등록 횟수',
   moneyin_rate: '머니인 횟수 ÷ 바인 횟수 (장부 기준, 5바인 이상만 표시)',
+  buyin_count: '장부 바인 횟수 누적 — 가장 많이 참여한 플레이어',
+  visit_count: '장부 방문일 수 누적 — 가장 자주 방문한 플레이어',
 };
 
 export interface VenuePageConfig {
@@ -195,6 +198,29 @@ export async function getVenueBuyinCounts(venueId: string): Promise<Map<string, 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const r of (data ?? []) as any[]) m.set(String(r.name).toLowerCase(), Number(r.buyin_count) || 0);
   return m;
+}
+
+/** 바인왕/출석왕 보드용 — 이름별 바인·방문(고유 일자) 횟수(장부 집계, 금액 없음) */
+export interface PlayerCounts { name: string; buyins: number; visits: number }
+export async function getVenuePlayerCounts(venueId: string): Promise<PlayerCounts[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.rpc('venue_player_counts', { p_venue_id: venueId });
+  if (error) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({ name: String(r.name), buyins: Number(r.buyin_count) || 0, visits: Number(r.visit_count) || 0 }));
+}
+
+/** 전 매장 통합 랭킹(커뮤니티 랭킹) — 닉네임별 머니인 횟수·프라이즈 점수 */
+export interface GlobalRankingTotal { nickname: string; moneyinCount: number; prizePoints: number; bestPosition: number; venues: number }
+export async function getGlobalRankingTotals(): Promise<GlobalRankingTotal[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.rpc('global_ranking_totals');
+  if (error) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({
+    nickname: String(r.nickname), moneyinCount: Number(r.moneyin_count) || 0,
+    prizePoints: Number(r.prize_points) || 0, bestPosition: Number(r.best_position) || 0, venues: Number(r.venues) || 0,
+  }));
 }
 
 export async function saveVenueRankings(

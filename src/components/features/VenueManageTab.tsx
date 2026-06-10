@@ -17,10 +17,10 @@ import StoreDashboard from './StoreDashboard';
 import { VoucherManagePanel } from './VoucherManageModal';
 import { iCanViewVouchers, getVoucherAccessUserIds, grantVoucherAccess, revokeVoucherAccess, findUserForTransfer, issueVoucher } from '../../api/vouchers';
 import MyPostersTab from './MyPostersTab';
-import VenueCustomizePanel, { ScorePointsPanel } from './VenueCustomizePanel';
+import VenueCustomizePanel, { VenueRankHub } from './VenueCustomizePanel';
 import type { Schedule } from '../../api/schedules';
 
-type Section = 'dashboard' | 'posters' | 'ledger' | 'stats' | 'ranking' | 'staff' | 'settings' | 'clock' | 'attendance' | 'voucher' | 'page';
+type Section = 'dashboard' | 'posters' | 'ledger' | 'stats' | 'ranking' | 'venueRank' | 'staff' | 'settings' | 'clock' | 'attendance' | 'voucher' | 'page';
 
 /** 업주/직원 전용 "매장 관리" 탭 — 장부(POS) · 통계 · 순위 입력 · (업주) 직원 관리 */
 export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster, onDeletePoster }: { schedules: Schedule[]; onCreatePoster: () => void; onEditPoster: (id: string) => void; onDeletePoster: (id: string) => void }) {
@@ -82,6 +82,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   available.push({ id: 'ledger', label: '장부', locked: !ledgerOk });
   if (manageOk) available.push({ id: 'stats',  label: '통계' });
   if (ledgerOk) available.push({ id: 'ranking', label: '순위 입력' });
+  if (ledgerOk) available.push({ id: 'venueRank', label: '매장 랭킹' });
   if (ledgerOk) available.push({ id: 'clock', label: '클락' });
   if (ledgerOk) available.push({ id: 'attendance', label: '출근 관리' });
   available.push({ id: 'voucher', label: '매장이용권', locked: !(manageOk || voucherView) });
@@ -150,10 +151,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 onOpenClock={(d) => { setClockSeed(d); setSection('clock'); }} />
             )}
             {section === 'stats'    && manageOk && <LedgerStatsPanel venueId={venueId} />}
-            {section === 'ranking'  && ledgerOk && (<>
-              <RankingEditor venueId={venueId} canEdit={isAdmin || user.approved === true} draft={rankingDraft} />
-              <ScorePointsPanel venueId={venueId} />
-            </>)}
+            {section === 'ranking'  && ledgerOk && <RankingEditor venueId={venueId} canEdit={isAdmin || user.approved === true} draft={rankingDraft} />}
+            {section === 'venueRank' && ledgerOk && <VenueRankHub venueId={venueId} canConfigure={manageOk} />}
             {section === 'page'     && canStaff && <VenueCustomizePanel venueId={venueId} />}
             {section === 'clock'    && ledgerOk && <TournamentClock venueId={venueId} canManage={ledgerOk} seedSessionDate={clockSeed} />}
             {section === 'attendance' && ledgerOk && <StaffSelfAttendance venueId={venueId} />}
@@ -183,6 +182,7 @@ const SECTION_ICON: Record<Section, ReactNode> = {
   voucher: ic(<><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" /><path d="M13 5v14" /></>),
   staff: ic(<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>),
   page: ic(<><path d="m12 19 7-7 3 3-7 7-3-3z" /><path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" /><path d="m2 2 7.586 7.586" /><circle cx="11" cy="11" r="2" /></>),
+  venueRank: ic(<><path d="M12 2l2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.5-4.8 2.5.9-5.4L4.2 7.7l5.4-.8L12 2z" /><path d="M4 22h16" /></>),
   settings: ic(<><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" /></>),
 };
 
