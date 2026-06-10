@@ -18,9 +18,10 @@ import { VoucherManagePanel } from './VoucherManageModal';
 import { iCanViewVouchers, getVoucherAccessUserIds, grantVoucherAccess, revokeVoucherAccess, findUserForTransfer, issueVoucher } from '../../api/vouchers';
 import MyPostersTab from './MyPostersTab';
 import VenueCustomizePanel, { VenueRankHub } from './VenueCustomizePanel';
+import LeaguePanel from './LeaguePanel';
 import type { Schedule } from '../../api/schedules';
 
-type Section = 'dashboard' | 'posters' | 'ledger' | 'stats' | 'ranking' | 'venueRank' | 'staff' | 'settings' | 'clock' | 'attendance' | 'voucher' | 'page';
+type Section = 'dashboard' | 'posters' | 'ledger' | 'stats' | 'ranking' | 'venueRank' | 'league' | 'staff' | 'settings' | 'clock' | 'attendance' | 'voucher' | 'page';
 
 /** 업주/직원 전용 "매장 관리" 탭 — 장부(POS) · 통계 · 순위 입력 · (업주) 직원 관리 */
 export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster, onDeletePoster }: { schedules: Schedule[]; onCreatePoster: () => void; onEditPoster: (id: string) => void; onDeletePoster: (id: string) => void }) {
@@ -83,6 +84,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   if (manageOk) available.push({ id: 'stats',  label: '통계' });
   if (ledgerOk) available.push({ id: 'ranking', label: '순위 입력' });
   if (ledgerOk) available.push({ id: 'venueRank', label: '매장 랭킹' });
+  if (ledgerOk) available.push({ id: 'league', label: '연합 리그' });
   if (ledgerOk) available.push({ id: 'clock', label: '클락' });
   if (ledgerOk) available.push({ id: 'attendance', label: '출근 관리' });
   available.push({ id: 'voucher', label: '매장이용권', locked: !(manageOk || voucherView) });
@@ -153,6 +155,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
             {section === 'stats'    && manageOk && <LedgerStatsPanel venueId={venueId} />}
             {section === 'ranking'  && ledgerOk && <RankingEditor venueId={venueId} canEdit={isAdmin || user.approved === true} draft={rankingDraft} />}
             {section === 'venueRank' && ledgerOk && <VenueRankHub venueId={venueId} canConfigure={manageOk} />}
+            {section === 'league'   && ledgerOk && <LeaguePanel venueId={venueId} canConfigure={manageOk} />}
             {section === 'page'     && canStaff && <VenueCustomizePanel venueId={venueId} />}
             {section === 'clock'    && ledgerOk && <TournamentClock venueId={venueId} canManage={ledgerOk} seedSessionDate={clockSeed} />}
             {section === 'attendance' && ledgerOk && <StaffSelfAttendance venueId={venueId} />}
@@ -183,6 +186,7 @@ const SECTION_ICON: Record<Section, ReactNode> = {
   staff: ic(<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>),
   page: ic(<><path d="m12 19 7-7 3 3-7 7-3-3z" /><path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" /><path d="m2 2 7.586 7.586" /><circle cx="11" cy="11" r="2" /></>),
   venueRank: ic(<><path d="M12 2l2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.5-4.8 2.5.9-5.4L4.2 7.7l5.4-.8L12 2z" /><path d="M4 22h16" /></>),
+  league: ic(<><circle cx="6" cy="8" r="3" /><circle cx="18" cy="8" r="3" /><path d="M3 20v-1a3 3 0 0 1 3-3h0a3 3 0 0 1 3 3v1" /><path d="M15 20v-1a3 3 0 0 1 3-3h0a3 3 0 0 1 3 3v1" /><path d="M9 8h6" /></>),
   settings: ic(<><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" /></>),
 };
 

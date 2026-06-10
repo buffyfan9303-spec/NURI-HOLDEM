@@ -222,6 +222,13 @@ body { overscroll-behavior-y: contain; }
 /* 카드/리스트 행 등 클릭 가능한 요소의 공통 탭 피드백(버튼 외 영역) */
 [role='tab']:active, [role='radio']:active { transform: scale(0.97); transition: transform 0.12s ease-out; }
 
+/* 승급 축하 컨페티 — 위에서 흩날리며 떨어지는 골드 조각 */
+.confetti { top: -3%; animation-name: confettiFall; animation-timing-function: linear; animation-iteration-count: infinite; }
+@keyframes confettiFall {
+  0%   { transform: translateY(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(108vh) rotate(540deg); opacity: 0.6; }
+}
+
 /* 모션 민감 사용자 배려 — OS '동작 줄이기' 설정 시 애니메이션/전환을 즉시화해 멀미·끊김 방지 */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

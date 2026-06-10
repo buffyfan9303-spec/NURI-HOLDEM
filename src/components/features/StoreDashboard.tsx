@@ -12,6 +12,7 @@ import RegularsModal from './RegularsModal';
 import DealerShiftsModal from './DealerShiftsModal';
 import VoucherManageModal from './VoucherManageModal';
 import { getStaffSchedule, getStaffWages, subscribeStaffSchedule, type StaffShift, type StaffWage } from '../../api/staffSchedule';
+import { getUpcomingBirthdays } from '../../api/crm';
 
 const localToday = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD (로컬)
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
@@ -69,6 +70,12 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const [regOpen, setRegOpen] = useState(false);
   const [dealerOpen, setDealerOpen] = useState(false);
   const [voucherOpen, setVoucherOpen] = useState(false);
+  // 다가오는 생일 단골(7일 내) — CRM 생일 필드 기반
+  const [bdays, setBdays] = useState<{ name: string; birthday: string; dday: number }[]>([]);
+  useEffect(() => {
+    if (!caps.manage) return;
+    getUpcomingBirthdays(venueId).then(setBdays).catch(() => {});
+  }, [venueId, caps.manage]);
   const [loading, setLoading] = useState(true);
 
   const upcoming = schedules
@@ -433,6 +440,27 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         <DashCard show={caps.manage} title="딜러 관리" onClick={() => setDealerOpen(true)}
           badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-gold-300/15 text-gold-300">로테이션·급여 →</span>}>
           <p className="py-3 text-center text-2xs text-ink-muted">딜러 시프트 등록 + 월 급여 명세를 관리합니다.</p>
+        </DashCard>
+
+        {/* 🎂 생일 단골(7일 내) — 단골 TOP의 고객정보에서 생일 등록 시 자동 표시 */}
+        <DashCard show={caps.manage} title="🎂 생일 단골" onClick={() => setRegOpen(true)}
+          badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-pink-500/15 text-pink-300">7일 내 {bdays.length}명</span>}>
+          {bdays.length === 0 ? (
+            <p className="py-3 text-center text-2xs text-ink-muted">7일 내 생일인 단골이 없습니다.<br />생일은 단골 TOP → 고객정보에서 등록해요.</p>
+          ) : (
+            <ul className="space-y-1.5">
+              {bdays.slice(0, 5).map((b) => (
+                <li key={b.name} className="flex items-center gap-2 text-2xs">
+                  <span className="min-w-0 flex-1 truncate font-semibold text-ink-primary">{b.name}</span>
+                  <span className="shrink-0 tabular-nums text-ink-muted">{b.birthday}</span>
+                  <span className={['shrink-0 rounded-badge px-1.5 py-0.5 text-[10px] font-bold', b.dday === 0 ? 'bg-pink-500/20 text-pink-300' : 'bg-surface-float text-ink-secondary'].join(' ')}>
+                    {b.dday === 0 ? '오늘 🎉' : `D-${b.dday}`}
+                  </span>
+                </li>
+              ))}
+              <li className="pt-0.5 text-[10px] text-ink-muted">축하 쿠폰은 단골 TOP → 고객정보 → 쿠폰 발급으로 보내세요.</li>
+            </ul>
+          )}
         </DashCard>
 
         {/* 고객 분석 — 방문 손님 전체 행동 통계 */}

@@ -19,6 +19,26 @@ export async function saveCustomerProfile(venueId: string, name: string, p: { bi
   if (error) throw error;
 }
 
+/** 다가오는 생일 단골(7일 내) — 월·일 비교, 연도 무시 */
+export async function getUpcomingBirthdays(venueId: string): Promise<{ name: string; birthday: string; dday: number }[]> {
+  if (IS_MOCK) return [];
+  const { data } = await supabase.from('customer_profiles')
+    .select('name, birthday').eq('venue_id', venueId).not('birthday', 'is', null);
+  const today = new Date();
+  const out: { name: string; birthday: string; dday: number }[] = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const r of (data ?? []) as any[]) {
+    const b = String(r.birthday ?? '');
+    const m = b.match(/(\d{2})-(\d{2})$/) ?? b.match(/^(\d{1,2})[/-](\d{1,2})$/);
+    if (!m) continue;
+    const next = new Date(today.getFullYear(), Number(m[1]) - 1, Number(m[2]));
+    if (next < new Date(today.getFullYear(), today.getMonth(), today.getDate())) next.setFullYear(next.getFullYear() + 1);
+    const dday = Math.round((next.getTime() - new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()) / 86400000);
+    if (dday <= 7) out.push({ name: r.name, birthday: b.slice(5) || b, dday });
+  }
+  return out.sort((a, b) => a.dday - b.dday);
+}
+
 export async function getCoupons(venueId: string, customerName: string): Promise<Coupon[]> {
   if (IS_MOCK) return [];
   const { data } = await supabase.from('coupons').select('*').eq('venue_id', venueId).eq('customer_name', customerName).order('created_at', { ascending: false });

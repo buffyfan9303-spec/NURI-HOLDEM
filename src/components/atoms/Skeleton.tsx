@@ -7,6 +7,17 @@ export function Skeleton({ className = 'h-12' }: { className?: string }) {
   return <div className={`skeleton rounded-input ${className}`} aria-hidden />;
 }
 
+/** 리스트 행 스켈레톤 — "불러오는 중…" 텍스트 대신 뼈대→내용 페이드 통일용. */
+export function SkeletonList({ rows = 4, rowClassName = 'h-12' }: { rows?: number; rowClassName?: string }) {
+  return (
+    <div className="space-y-1.5 animate-fade-in" aria-hidden aria-busy="true">
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} className={`skeleton rounded-input ${rowClassName}`} style={{ animationDelay: `${i * 70}ms` }} />
+      ))}
+    </div>
+  );
+}
+
 /** 여러 줄 텍스트 스켈레톤. 마지막 줄은 짧게. */
 export function SkeletonText({ lines = 3, className = '' }: { lines?: number; className?: string }) {
   return (

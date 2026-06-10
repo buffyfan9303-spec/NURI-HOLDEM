@@ -13,6 +13,7 @@ import { getVenueNotices, createVenueNotice, deleteVenueNotice, type VenueNotice
 import { getVenueMessages, sendVenueMessage, deleteVenueMessage, subscribeVenueMessages, type VenueMessage } from '../../api/community';
 import Avatar from '../atoms/Avatar';
 import EmptyState from '../atoms/EmptyState';
+import { SkeletonList } from '../atoms/Skeleton';
 import { relativeTime } from './MarketplaceTab';
 import { promptLogin } from '../../lib/requireLogin';
 import {
@@ -721,7 +722,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
       .sort((a, b) => (b.value - a.value) || (b.prizeMan - a.prizeMan) || (b.moneyPoints - a.moneyPoints));
   }, [totals, cur, manualByName, buyinCounts, manual, playerCounts, cfg]);
 
-  if (loading) return <p className="text-center py-10 text-xs text-ink-muted">불러오는 중…</p>;
+  if (loading) return <SkeletonList rows={6} rowClassName="h-14" />;
   if (totals.length === 0 && manual.length === 0 && playerCounts.length === 0) {
     return <EmptyState title="아직 등록된 순위가 없어요" hint="매장에서 순위를 등록하면 누적 랭킹이 자동으로 집계됩니다." />;
   }

@@ -22,6 +22,7 @@ import ThemeToggle from './components/atoms/ThemeToggle';
 import ProfileModal from './components/features/ProfileModal';
 import { PORTONE_CONFIGURED } from './components/features/IdentityVerificationButton';
 import StaffInviteBanner from './components/features/StaffInviteBanner';
+import TierCelebration from './components/features/TierCelebration';
 import ErrorBoundary from './components/atoms/ErrorBoundary';
 import InstallBanner from './components/atoms/InstallBanner';
 import { REQUIRE_LOGIN_EVENT, OPEN_POST_FORM_EVENT } from './lib/requireLogin';
@@ -1111,6 +1112,7 @@ export default function App() {
 
       <PendingApprovalBanner />
       <InstallBanner />
+      <TierCelebration />
 
       <TabBar tabs={tabs} active={activeTab} onChange={setActiveTab} />
 
