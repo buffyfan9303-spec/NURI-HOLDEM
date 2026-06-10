@@ -270,16 +270,14 @@ export async function getGlobalRankingTotals(): Promise<GlobalRankingTotal[]> {
 }
 
 // ── 주간 베스트(이번 주 머니인 킹 TOP3) — 메인 상단 롤링 위젯용 ─────────────────
+// 주초라 이번 주 기록이 아직 없으면 지난주 킹으로 폴백(라벨용 isLastWeek 플래그).
 export interface WeeklyKing { nickname: string; moneyinCount: number; bestPosition: number }
-export async function getWeeklyMoneyinKings(limit = 3): Promise<WeeklyKing[]> {
-  if (IS_MOCK) return [];
-  const now = new Date();
-  const mon = new Date(now);
-  mon.setDate(now.getDate() - ((now.getDay() + 6) % 7)); // 이번 주 월요일
-  const monStr = mon.toLocaleDateString('en-CA');
-  const { data, error } = await supabase
-    .from('venue_rankings').select('nickname, position')
-    .gte('ranking_date', monStr);
+export interface WeeklyKings { kings: WeeklyKing[]; isLastWeek: boolean }
+
+async function moneyinKingsBetween(fromStr: string, toStr: string | null, limit: number): Promise<WeeklyKing[]> {
+  let q = supabase.from('venue_rankings').select('nickname, position').gte('ranking_date', fromStr);
+  if (toStr) q = q.lt('ranking_date', toStr);
+  const { data, error } = await q;
   if (error) return [];
   const map = new Map<string, WeeklyKing>();
   for (const r of (data ?? []) as { nickname: string | null; position: number | null }[]) {
@@ -294,6 +292,20 @@ export async function getWeeklyMoneyinKings(limit = 3): Promise<WeeklyKing[]> {
   return [...map.values()]
     .sort((a, b) => b.moneyinCount - a.moneyinCount || a.bestPosition - b.bestPosition)
     .slice(0, limit);
+}
+
+export async function getWeeklyMoneyinKings(limit = 3): Promise<WeeklyKings> {
+  if (IS_MOCK) return { kings: [], isLastWeek: false };
+  const now = new Date();
+  const mon = new Date(now);
+  mon.setDate(now.getDate() - ((now.getDay() + 6) % 7)); // 이번 주 월요일
+  const monStr = mon.toLocaleDateString('en-CA');
+  const thisWeek = await moneyinKingsBetween(monStr, null, limit);
+  if (thisWeek.length > 0) return { kings: thisWeek, isLastWeek: false };
+  const lastMon = new Date(mon);
+  lastMon.setDate(mon.getDate() - 7);
+  const lastWeek = await moneyinKingsBetween(lastMon.toLocaleDateString('en-CA'), monStr, limit);
+  return { kings: lastWeek, isLastWeek: true };
 }
 
 // ── 내 입상 기록(개인 대시보드) — 닉네임 기준 전 매장 순위 등록 이력 ────────────

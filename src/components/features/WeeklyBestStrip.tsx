@@ -7,9 +7,12 @@ const MEDAL = ['👑', '🥈', '🥉'];
 
 export default function WeeklyBestStrip() {
   const [kings, setKings] = useState<WeeklyKing[]>([]);
+  const [isLastWeek, setIsLastWeek] = useState(false);
   const [idx, setIdx] = useState(0);
 
-  useEffect(() => { getWeeklyMoneyinKings(3).then(setKings).catch(() => {}); }, []);
+  useEffect(() => {
+    getWeeklyMoneyinKings(3).then((r) => { setKings(r.kings); setIsLastWeek(r.isLastWeek); }).catch(() => {});
+  }, []);
   useEffect(() => {
     if (kings.length <= 1) return;
     const t = setInterval(() => setIdx((i) => (i + 1) % kings.length), 3500);
@@ -21,7 +24,7 @@ export default function WeeklyBestStrip() {
 
   return (
     <div className="flex items-center gap-2 overflow-hidden rounded-card border border-gold-400/25 bg-gradient-to-r from-gold-300/10 via-surface-low to-surface-low px-3 py-2">
-      <span className="shrink-0 text-2xs font-extrabold tracking-wide text-gold-300">이번 주 머니인 킹</span>
+      <span className="shrink-0 text-xs font-extrabold tracking-wide text-gold-300">{isLastWeek ? '지난주' : '이번 주'} 머니인 킹</span>
       <div key={idx} className="flex min-w-0 flex-1 animate-fade-in items-center gap-1.5">
         <span aria-hidden className="shrink-0 text-sm leading-none">{MEDAL[idx] ?? '🏅'}</span>
         <span className="min-w-0 truncate text-sm font-bold text-ink-primary">{k.nickname}</span>
