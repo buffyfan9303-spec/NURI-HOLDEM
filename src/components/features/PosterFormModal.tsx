@@ -16,6 +16,8 @@ interface PosterFormModalProps {
   onSubmit: (data: PosterFormData) => void;
   /** 관리자 직접 등록 시 선택 가능한 홀덤펍 목록 */
   venues?: { id: string; name: string; region?: string }[];
+  /** 신규 작성 시 "지난 포스터 불러오기" 후보(전체 일정 — 내부에서 내 것만 필터) */
+  pastPosters?: Schedule[];
 }
 
 export interface PosterFormData {
@@ -57,7 +59,7 @@ const MAX_PRIZES = 10;
 const MAX_RANKS = 20;
 const MAX_EVENTS = 10;
 
-export default function PosterFormModal({ open, onClose, schedule, onSubmit, venues = [] }: PosterFormModalProps) {
+export default function PosterFormModal({ open, onClose, schedule, onSubmit, venues = [], pastPosters = [] }: PosterFormModalProps) {
   const toast  = useToast();
   const { user } = useAuth();
   const isEdit = !!schedule;
@@ -137,6 +139,43 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
   const update = <K extends keyof PosterFormData>(key: K, value: PosterFormData[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
 
+  // ── 지난 포스터 불러오기(신규 작성 전용) — 전 필드 복사, 날짜만 오늘로 ─────────
+  const loadCandidates = pastPosters
+    .filter((s) => isAdmin || s.ownerId === user?.id)
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 12);
+  const applyPast = (s: Schedule) => {
+    setForm({
+      title: s.title, date: new Date().toLocaleDateString('en-CA'),
+      startTime: s.startTime,
+      regCloseTime: s.regCloseTime ?? '',
+      duration: s.duration ?? '',
+      blinds: s.blinds ?? '',
+      prizeType: s.guaranteed ? 'GTD' : 'ENTRY',
+      prizeAmount: s.prizePool ? Math.round(s.prizePool / 10000) : 0,
+      prizePercent: s.prizePercent ?? 0,
+      buyIn: s.buyIn.amount, gameType: s.buyIn.gameType ?? '', addonStack: s.buyIn.addonStack ?? 0, addonCost: s.buyIn.addon ?? 0, region: s.region,
+      isCompetition: s.isCompetition ?? false,
+      paymentMethods: s.paymentMethods ?? ['현금'],
+      partners: s.partners ?? [],
+      prizes: s.seats?.map((x) => `${x.label} ${x.count}석`) ?? [],
+      rankingPrizes: s.rankingPrizes?.map((r) => ({ rank: r.rank, amount: r.amount, unit: r.unit ?? '' })) ?? [],
+      events: s.promotions?.map((p) => ({ badge: p.badge, title: p.title })) ?? [],
+      repeatWeeks: 1,
+      blindLevels: s.structure?.levels ?? [],
+      posterUrl: s.posterUrl, // 포스터 이미지도 그대로 재사용
+      venueId: s.venueId, pubName: s.pubName,
+    });
+    setImgFile(null);
+    setImgPreview(s.posterUrl ?? '');
+    const rc = s.regCloseTime ?? '';
+    const lv = rc.match(/(\d+)\s*LV/i);
+    const tm = rc.match(/(\d{1,2}:\d{2})/);
+    setRegLevel(lv ? lv[1] : '');
+    setRegTime(tm ? tm[1] : '');
+    toast.show('지난 포스터를 불러왔습니다 — 날짜만 확인하고 등록하세요', 'success');
+  };
+
   // ── 이미지 선택 ──────────────────────────────────────────────────────────
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -189,6 +228,26 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
   return (
     <Modal open={open} onClose={onClose} title={isEdit ? '포스터 수정' : '새 포스터 등록'} maxWidth="md" variant="sheet">
       <form onSubmit={submit} className="p-4 space-y-3">
+
+        {/* ── 지난 포스터 불러오기(신규 전용) — 전 필드 자동 채움, 날짜만 새로 ── */}
+        {!isEdit && loadCandidates.length > 0 && (
+          <div className="rounded-card border border-gold-400/30 bg-gold-300/[0.06] p-3">
+            <label className="mb-1.5 block text-sm font-bold text-gold-300">📋 지난 포스터 불러오기</label>
+            <select
+              value=""
+              onChange={(e) => {
+                const found = loadCandidates.find((s) => s.id === e.target.value);
+                if (found) applyPast(found);
+              }}
+              className="input w-full text-sm"
+            >
+              <option value="">선택하면 모든 항목이 자동으로 채워집니다 (날짜만 새로)</option>
+              {loadCandidates.map((s) => (
+                <option key={s.id} value={s.id}>{s.date.slice(5)} · {s.title}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* ── 포스터 이미지 업로드 ── */}
         <div>

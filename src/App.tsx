@@ -1414,6 +1414,7 @@ export default function App() {
         onClose={() => setPosterFormTarget(null)}
         onSubmit={handleSubmitPoster}
         venues={venues.map((v) => ({ id: v.id, name: v.name, region: v.region }))}
+        pastPosters={schedules}
       />
 
       <PostDetailModal

@@ -902,31 +902,31 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
         <div>
           <h3 className="text-base font-bold text-gold-300">장부 시작 설정</h3>
           <p className="text-2xs text-ink-muted mt-0.5">담당직원: <b className="text-ink-secondary">{operatorName}</b> · 아래 정보를 입력 후 장부에 입장합니다.</p>
-          {prefilled && <p className="text-2xs text-emerald-400 mt-0.5">직전 게임 설정을 불러왔습니다 — 바로 시작하거나 수정하세요.</p>}
-          {autoLinked && <p className="text-2xs text-emerald-400 mt-0.5">오늘 포스터를 자동으로 연동했습니다 — 게임명·바인·유형이 채워졌어요(수정 가능).</p>}
+          {prefilled && <p className="text-xs font-semibold text-emerald-400 mt-0.5">✅ 직전 게임 설정을 불러왔습니다 — 바로 시작하거나 수정하세요.</p>}
+          {autoLinked && <p className="text-xs font-semibold text-emerald-400 mt-0.5">✅ 오늘 포스터를 자동으로 연동했습니다 — 게임명·바인·유형이 채워졌어요(수정 가능).</p>}
         </div>
       )}
 
       {mode === 'open' && presets.length > 0 && (
         <Field label="프리셋 게임 · 클릭하면 아래 내용 자동입력(수정 가능)">
           <button type="button" onClick={() => setPresetOpen((v) => !v)}
-            className="w-full flex items-center justify-between px-3 py-2 rounded-input border border-border-default bg-surface-high text-sm font-semibold text-ink-secondary hover:text-gold-300 transition-colors">
-            <span>{presetOpen ? '프리셋 닫기' : `프리셋에서 게임 불러오기 (${presets.length})`}</span>
-            <span className="text-2xs text-gold-300">{presetOpen ? '▲' : '▼'}</span>
+            className="w-full flex items-center justify-between px-3.5 py-3 rounded-input border border-gold-400/40 bg-gold-300/10 text-base font-bold text-gold-300 hover:bg-gold-300/15 transition-colors">
+            <span>📋 {presetOpen ? '프리셋 닫기' : `프리셋에서 게임 불러오기 (${presets.length})`}</span>
+            <span className="text-sm">{presetOpen ? '▲' : '▼'}</span>
           </button>
           {presetOpen && (
-            <div className="mt-1 max-h-[11.5rem] overflow-y-auto rounded-input border border-border-subtle bg-surface-base divide-y divide-border-subtle">
+            <div className="mt-1 max-h-[13rem] overflow-y-auto rounded-input border border-border-subtle bg-surface-base divide-y divide-border-subtle">
               {presets.map((p, i) => (
                 <button key={i} type="button" onClick={() => { applyPreset(p); setPresetOpen(false); }}
-                  className="w-full flex items-center gap-2 px-2.5 py-2 text-left hover:bg-surface-high transition-colors">
-                  {i < 3 && <span className="shrink-0 text-[9px] font-bold text-gold-300 bg-gold-300/15 px-1 py-0.5 rounded-badge">최근</span>}
-                  <span className="flex-1 min-w-0 text-xs font-semibold text-ink-primary truncate">{p.title}</span>
-                  <span className="shrink-0 text-2xs text-ink-muted tabular-nums">{wonToMan(p.buyinAmount)}만</span>
+                  className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-surface-high transition-colors">
+                  {i < 3 && <span className="shrink-0 text-2xs font-bold text-gold-300 bg-gold-300/15 px-1.5 py-0.5 rounded-badge">최근</span>}
+                  <span className="flex-1 min-w-0 text-sm font-semibold text-ink-primary truncate">{p.title}</span>
+                  <span className="shrink-0 text-sm text-ink-muted tabular-nums">{wonToMan(p.buyinAmount)}만</span>
                 </button>
               ))}
             </div>
           )}
-          <p className="text-[10px] text-ink-muted mt-1">최근 게임 3개가 상단에 표시됩니다. 담당 직원은 프리셋과 무관하게 아래에서 선택하세요.</p>
+          <p className="text-xs text-ink-muted mt-1">최근 게임 3개가 상단에 표시됩니다. 담당 직원은 프리셋과 무관하게 아래에서 선택하세요.</p>
         </Field>
       )}
 
@@ -951,7 +951,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
             <option value="">연결 안 함 / 직접 입력</option>
             {schedules.map((s) => <option key={s.id} value={s.id}>{s.date} · {s.title} · 바인 {(s.buyIn?.amount ?? 0).toLocaleString()}</option>)}
           </select>
-          <p className="mt-1 text-2xs text-ink-muted">선택하면 게임명·바인 단가·유형을 자동으로 불러옵니다(수정 가능).</p>
+          <p className="mt-1 text-xs text-ink-muted">선택하면 게임명·바인 단가·유형을 자동으로 불러옵니다(수정 가능).</p>
         </Field>
       )}
 
@@ -1113,7 +1113,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="block">
-      <span className="block text-2xs text-ink-muted mb-0.5">{label}</span>
+      <span className="block text-sm font-semibold text-ink-secondary mb-1">{label}</span>
       {children}
     </div>
   );

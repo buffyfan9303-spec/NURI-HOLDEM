@@ -654,29 +654,29 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
         )}
       </section>
 
-      {/* 프리셋 — 장부 연동과 동일 포맷(검색 + 스크롤 클릭) */}
-      <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
+      {/* 프리셋 — 장부 연동과 동일 포맷(검색 + 스크롤 클릭). 잘 보이도록 골드 강조 */}
+      <section className="rounded-card border border-gold-400/30 bg-gold-300/[0.05] p-3 space-y-2">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-2xs font-semibold text-ink-secondary">프리셋 · 클릭해 불러오기</p>
-          <span className="text-[10px] text-ink-muted tabular-nums shrink-0">{filteredPresets.length}/{presets.length} · 최대 {PRESET_LIMIT}</span>
+          <p className="text-base font-bold text-gold-300">📋 프리셋 · 클릭해 불러오기</p>
+          <span className="text-xs text-ink-muted tabular-nums shrink-0">{filteredPresets.length}/{presets.length} · 최대 {PRESET_LIMIT}</span>
         </div>
         {presets.length > 0 && (
           <div className="relative">
-            <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
-            <input value={presetQuery} onChange={(e) => setPresetQuery(e.target.value)} placeholder="프리셋 검색" className="input w-full text-xs pl-8 py-1.5" />
+            <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+            <input value={presetQuery} onChange={(e) => setPresetQuery(e.target.value)} placeholder="프리셋 검색" className="input w-full text-sm pl-8 py-2" />
           </div>
         )}
         {presets.length === 0 ? (
-          <p className="text-center py-2 text-[10px] text-ink-muted">저장된 프리셋이 없습니다. 아래에서 구성 후 저장하세요.</p>
+          <p className="text-center py-2 text-xs text-ink-muted">저장된 프리셋이 없습니다. 아래에서 구성 후 저장하세요.</p>
         ) : filteredPresets.length === 0 ? (
-          <p className="text-center py-2 text-[10px] text-ink-muted">"{presetQuery.trim()}" 검색 결과가 없습니다.</p>
+          <p className="text-center py-2 text-xs text-ink-muted">"{presetQuery.trim()}" 검색 결과가 없습니다.</p>
         ) : (
-          <div className="max-h-[11.5rem] overflow-y-auto rounded-input border border-border-subtle bg-surface-base divide-y divide-border-subtle">
+          <div className="max-h-[13rem] overflow-y-auto rounded-input border border-border-subtle bg-surface-base divide-y divide-border-subtle">
             {filteredPresets.map((p) => (
-              <div key={p.id} className="flex items-center gap-2 px-2.5 py-2 hover:bg-surface-high">
-                <button type="button" onClick={() => loadPreset(p)} className="flex-1 text-left text-xs font-semibold text-ink-primary truncate hover:text-gold-300">{p.name}</button>
-                <span className="text-[10px] text-ink-muted tabular-nums shrink-0">{countLevels(p.config.levels)}레벨</span>
-                <button type="button" onClick={() => delPreset(p)} className="text-ink-muted hover:text-danger-light text-2xs px-1 shrink-0" aria-label="삭제">✕</button>
+              <div key={p.id} className="flex items-center gap-2 px-3 py-2.5 hover:bg-surface-high">
+                <button type="button" onClick={() => loadPreset(p)} className="flex-1 text-left text-sm font-semibold text-ink-primary truncate hover:text-gold-300">{p.name}</button>
+                <span className="text-xs text-ink-muted tabular-nums shrink-0">{countLevels(p.config.levels)}레벨</span>
+                <button type="button" onClick={() => delPreset(p)} className="text-ink-muted hover:text-danger-light text-sm px-1.5 shrink-0" aria-label="삭제">✕</button>
               </div>
             ))}
           </div>
