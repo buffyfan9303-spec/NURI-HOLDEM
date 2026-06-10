@@ -17,6 +17,29 @@ export interface Venue {
   images?: string[];     // 매장 갤러리(자동 슬라이드)
   kind?: GroupKind;      // venue(홀덤펍) | dealer_team | club | youtuber | other
   joinApproval?: boolean;// 비-매장 그룹: 가입 시 개설자 승인 필요 여부
+  slug?: string | null;  // 커스텀 공유 링크(/s/<slug>) — 업주 설정, 전역 유니크
+}
+
+// 현재 설정된 매장 슬러그 조회
+export async function getVenueSlug(venueId: string): Promise<string | null> {
+  if (IS_MOCK) return null;
+  const { data } = await supabase.from('venues').select('slug').eq('id', venueId).single();
+  return data?.slug ?? null;
+}
+
+// 커스텀 슬러그 사용 가능 여부(형식·예약어·중복)
+export async function isSlugAvailable(slug: string): Promise<boolean> {
+  if (IS_MOCK) return true;
+  const { data, error } = await supabase.rpc('is_slug_available', { p_slug: slug.trim().toLowerCase() });
+  if (error) return false;
+  return data === true;
+}
+
+// 매장 커스텀 링크 설정(빈 문자열 = 해제) — 서버에서 형식/예약어/중복 강제
+export async function setVenueSlug(venueId: string, slug: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('set_venue_slug', { p_venue_id: venueId, p_slug: slug.trim() });
+  if (error) throw new Error(error.message);
 }
 
 // 커뮤니티 그룹 종류. venue=홀덤펍(기존), 그 외는 가입제 비공개 그룹.
@@ -68,6 +91,7 @@ const rowToVenue = (r: any): Venue => ({
   images: r.images ?? [],
   kind: r.kind ?? 'venue',
   joinApproval: r.join_approval ?? true,
+  slug: r.slug ?? null,
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

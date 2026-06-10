@@ -8,6 +8,7 @@ import {
   type VenuePageConfig, type RankBoardId, type CustomBoard, type ScoreEntry, type PlayerCounts,
 } from '../../api/rankings';
 import { searchRegisteredPlayers, type RegisteredPlayer } from '../../api/ledger';
+import { getVenueSlug, isSlugAvailable, setVenueSlug } from '../../api/community';
 
 // 매장 페이지 탭(VenuePage와 동일 키)
 const PAGE_TABS: { key: string; label: string }[] = [
@@ -85,12 +86,75 @@ export default function VenueCustomizePanel({ venueId }: { venueId: string }) {
         </ul>
       </section>
 
+      {/* 내 매장 링크(커스텀 슬러그) — nuriholdem.com/s/<원하는이름> */}
+      <SlugEditor venueId={venueId} />
+
       <p className="text-2xs text-ink-muted">순위 탭에 보일 <span className="font-semibold text-gold-300">랭킹 보드 종류·1~3등 칭호·기준 점수·포인트 지급</span>은 「매장 랭킹」 탭에서 설정합니다.</p>
 
       <button type="button" onClick={save} disabled={saving} className="btn-primary w-full text-sm py-2.5 disabled:opacity-50">
         {saving ? '저장 중…' : '탭 순서 저장'}
       </button>
     </div>
+  );
+}
+
+/** 내 매장 링크 — nuriholdem.com/s/<슬러그>. 중복·형식은 서버에서도 강제(set_venue_slug). */
+function SlugEditor({ venueId }: { venueId: string }) {
+  const toast = useToast();
+  const [slug, setSlug] = useState('');
+  const [saved, setSaved] = useState<string | null>(null);
+  const [check, setCheck] = useState<'idle' | 'ok' | 'taken' | 'invalid'>('idle');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    getVenueSlug(venueId).then((s) => { if (alive) { setSaved(s); setSlug(s ?? ''); } }).catch(() => {});
+    return () => { alive = false; };
+  }, [venueId]);
+
+  const normalize = (v: string) => v.toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 20);
+  const valid = /^[a-z0-9][a-z0-9-]{1,19}$/.test(slug);
+
+  const doCheck = async () => {
+    if (!valid) { setCheck('invalid'); return; }
+    if (slug === saved) { setCheck('ok'); return; }
+    const ok = await isSlugAvailable(slug);
+    setCheck(ok ? 'ok' : 'taken');
+  };
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      await setVenueSlug(venueId, slug);
+      setSaved(slug || null);
+      setCheck('idle');
+      toast.show(slug ? `내 매장 링크가 nuriholdem.com/s/${slug} 로 설정됐습니다` : '커스텀 링크를 해제했습니다', 'success');
+    } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
+      <h3 className="text-sm font-bold text-ink-primary">내 매장 링크 <span className="text-2xs font-normal text-ink-muted">(공유 주소를 원하는 이름으로)</span></h3>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="shrink-0 text-xs font-semibold tabular-nums text-ink-muted">nuriholdem.com/s/</span>
+        <input value={slug}
+          onChange={(e) => { setSlug(normalize(e.target.value)); setCheck('idle'); }}
+          placeholder="예: roti-arena" maxLength={20}
+          className="input min-w-0 flex-1 text-sm lowercase" />
+        <button type="button" onClick={doCheck} disabled={!slug}
+          className="btn-ghost shrink-0 px-3 text-xs disabled:opacity-50">중복 확인</button>
+        <button type="button" onClick={save} disabled={busy || (slug !== '' && check !== 'ok') || slug === (saved ?? '')}
+          className="btn-primary shrink-0 px-3 text-xs disabled:opacity-50">저장</button>
+      </div>
+      {check === 'ok' && <p className="text-2xs font-semibold text-emerald-400">✓ 사용할 수 있는 링크입니다 — 저장을 누르세요.</p>}
+      {check === 'taken' && <p className="text-2xs font-semibold text-danger-light">✕ 이미 사용 중인 링크입니다 — 다른 이름을 시도하세요.</p>}
+      {check === 'invalid' && <p className="text-2xs font-semibold text-danger-light">✕ 영문 소문자·숫자·하이픈(-)으로 2~20자여야 합니다.</p>}
+      <p className="text-[10px] text-ink-muted">
+        {saved ? <>현재 링크: <span className="font-bold text-gold-300">nuriholdem.com/s/{saved}</span> · 비우고 저장하면 기본 링크로 돌아갑니다.</>
+          : '설정하면 매장 페이지 「링크 공유」가 이 주소로 나갑니다. 기존 기본 링크도 계속 작동해요.'}
+      </p>
+    </section>
   );
 }
 

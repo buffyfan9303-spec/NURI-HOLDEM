@@ -728,7 +728,9 @@ export default function App() {
     const target = full
       ? venues.find((v) => v.id === full)
       : short
-        ? venues.find((v) => v.id.startsWith(short))
+        // 커스텀 슬러그 정확 일치 우선 → 구형 8자리 id 프리픽스 폴백
+        ? venues.find((v) => v.slug && v.slug.toLowerCase() === short.toLowerCase())
+          ?? venues.find((v) => v.id.startsWith(short))
         : null;
     if (target) {
       setOpenVenueId(target.id);

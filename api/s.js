@@ -34,12 +34,17 @@ export default async function handler(req, res) {
     const SB = process.env.VITE_SUPABASE_URL;
     const KEY = process.env.VITE_SUPABASE_ANON_KEY;
     if (SB && KEY && code) {
-      const r = await fetch(`${SB}/rest/v1/venues?select=id,name,region,description,image_url&limit=2000`, {
+      const r = await fetch(`${SB}/rest/v1/venues?select=id,name,region,description,image_url,slug&limit=2000`, {
         headers: { apikey: KEY, authorization: `Bearer ${KEY}` },
       });
       if (r.ok) {
         const rows = await r.json();
-        const v = Array.isArray(rows) ? rows.find((x) => typeof x.id === 'string' && x.id.startsWith(code)) : null;
+        const lc = code.toLowerCase();
+        // 커스텀 슬러그 정확 일치 우선 → 구형 8자리 id 프리픽스 폴백
+        const v = Array.isArray(rows)
+          ? (rows.find((x) => typeof x.slug === 'string' && x.slug.toLowerCase() === lc)
+            ?? rows.find((x) => typeof x.id === 'string' && x.id.startsWith(code)))
+          : null;
         if (v) {
           title = `${v.name}${v.region ? ` · ${v.region}` : ''} | 홀덤펍`;
           desc = (v.description && String(v.description).slice(0, 120)) || `${v.name} — 일정·예약·순위를 확인하세요`;

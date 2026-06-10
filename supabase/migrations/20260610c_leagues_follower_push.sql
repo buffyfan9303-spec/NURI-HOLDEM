@@ -68,3 +68,30 @@ create policy le_insert on public.league_entries for insert
   ) or exists (select 1 from public.leagues l where l.id = league_entries.league_id and l.owner_venue_id = league_entries.venue_id and public.can_access_ledger(league_entries.venue_id)));
 create policy le_delete on public.league_entries for delete
   using (public.can_access_ledger(venue_id) or exists (select 1 from public.leagues l where l.id = league_id and public.can_manage_pos(l.owner_venue_id)));
+
+-- ── 커스텀 매장 링크 슬러그(/s/<slug>) — 형식·예약어·중복 서버 강제 ─────────────
+alter table public.venues add column if not exists slug text;
+create unique index if not exists venues_slug_unique on public.venues (lower(slug)) where slug is not null;
+create or replace function public.is_slug_available(p_slug text)
+returns boolean language sql security definer set search_path = public stable as $$
+  select case
+    when p_slug !~ '^[a-z0-9][a-z0-9-]{1,19}$' then false
+    when p_slug in ('s','api','admin','login','signup','app','www','assets','venue','post','help') then false
+    when exists (select 1 from public.venues where lower(slug) = lower(p_slug)) then false
+    else true end;
+$$;
+revoke execute on function public.is_slug_available(text) from public;
+grant execute on function public.is_slug_available(text) to anon, authenticated;
+create or replace function public.set_venue_slug(p_venue_id uuid, p_slug text)
+returns void language plpgsql security definer set search_path = public as $$
+declare s text := lower(trim(p_slug));
+begin
+  if not public.can_manage_pos(p_venue_id) then raise exception '권한이 없습니다'; end if;
+  if s = '' then update public.venues set slug = null where id = p_venue_id; return; end if;
+  if s !~ '^[a-z0-9][a-z0-9-]{1,19}$' then raise exception '링크는 영문 소문자·숫자·하이픈(-)으로 2~20자여야 합니다'; end if;
+  if s in ('s','api','admin','login','signup','app','www','assets','venue','post','help') then raise exception '사용할 수 없는 예약어입니다'; end if;
+  if exists (select 1 from public.venues where lower(slug) = s and id <> p_venue_id) then raise exception '이미 사용 중인 링크입니다 — 다른 이름을 선택하세요'; end if;
+  update public.venues set slug = s, updated_at = now() where id = p_venue_id;
+end $$;
+revoke execute on function public.set_venue_slug(uuid, text) from public;
+grant execute on function public.set_venue_slug(uuid, text) to authenticated;
