@@ -4,9 +4,10 @@ import Icon from '../atoms/Icon';
 import {
   getVenuePageConfig, setVenuePageConfig, getScoreEntries, addScoreEntry, deleteScoreEntry,
   getVenueRankingTotals, getVenuePlayerCounts, DEFAULT_PLACEMENT_POINTS,
-  boardLabel, boardDesc, boardUnit, isCustomBoard, customKeyOf,
+  boardLabel, boardDesc, boardUnit, isCustomBoard, customKeyOf, boardPeriodStart, BOARD_PERIOD_LABEL,
   type VenuePageConfig, type RankBoardId, type CustomBoard, type ScoreEntry, type PlayerCounts,
 } from '../../api/rankings';
+import { searchRegisteredPlayers, type RegisteredPlayer } from '../../api/ledger';
 
 // 매장 페이지 탭(VenuePage와 동일 키)
 const PAGE_TABS: { key: string; label: string }[] = [
@@ -106,6 +107,7 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
   const [saving, setSaving] = useState(false);
   const [nbName, setNbName] = useState('');
   const [nbUnit, setNbUnit] = useState('');
+  const [nbPeriod, setNbPeriod] = useState<'all' | 'month' | 'season'>('all');
 
   useEffect(() => {
     let alive = true;
@@ -138,8 +140,9 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
     if (!name) return toast.show('보드 이름을 입력하세요', 'error');
     if (customBoards.length >= MAX_CUSTOM_BOARDS) return toast.show(`커스텀 보드는 최대 ${MAX_CUSTOM_BOARDS}개입니다`, 'error');
     const key = `c${Math.random().toString(36).slice(2, 8)}`;
-    setCfg((c) => ({ ...c, customBoards: [...(c.customBoards ?? []), { key, name, unit: nbUnit.trim() || undefined }] }));
-    setNbName(''); setNbUnit('');
+    const seasonStart = nbPeriod === 'season' ? new Date().toLocaleDateString('en-CA') : undefined;
+    setCfg((c) => ({ ...c, customBoards: [...(c.customBoards ?? []), { key, name, unit: nbUnit.trim() || undefined, period: nbPeriod, seasonStart }] }));
+    setNbName(''); setNbUnit(''); setNbPeriod('all');
     toast.show('커스텀 보드를 추가했습니다 — 저장을 눌러 반영하세요', 'info');
   };
   const removeBoard = (key: string) => {
@@ -148,6 +151,15 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
       customBoards: (c.customBoards ?? []).filter((b) => b.key !== key),
       rankMetrics: (c.rankMetrics ?? []).filter((m) => m !== `custom:${key}`),
     }));
+  };
+  // 시즌 보드 리셋 — 시즌 시작일을 오늘로(이전 기록은 보존되지만 집계에서 제외)
+  const resetSeason = (key: string) => {
+    const today = new Date().toLocaleDateString('en-CA');
+    setCfg((c) => ({
+      ...c,
+      customBoards: (c.customBoards ?? []).map((b) => (b.key === key ? { ...b, seasonStart: today } : b)),
+    }));
+    toast.show('시즌 시작일을 오늘로 리셋했습니다 — 저장을 눌러 반영하세요', 'info');
   };
 
   const points = cfg.placementPoints?.length ? cfg.placementPoints : DEFAULT_PLACEMENT_POINTS;
@@ -208,8 +220,16 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
           {customBoards.length > 0 && (
             <ul className="space-y-1">
               {customBoards.map((b) => (
-                <li key={b.key} className="flex items-center gap-2 rounded-input border border-border-subtle bg-surface-high px-2.5 py-1.5">
-                  <span className="min-w-0 flex-1 truncate text-xs font-bold text-ink-primary">{b.name} <span className="font-normal text-ink-muted">(단위: {b.unit || '점'})</span></span>
+                <li key={b.key} className="flex flex-wrap items-center gap-2 rounded-input border border-border-subtle bg-surface-high px-2.5 py-1.5">
+                  <span className="min-w-0 flex-1 truncate text-xs font-bold text-ink-primary">
+                    {b.name} <span className="font-normal text-ink-muted">(단위: {b.unit || '점'})</span>
+                  </span>
+                  <span className="shrink-0 rounded-badge bg-surface-float px-1.5 py-0.5 text-[9px] font-bold text-ink-secondary">
+                    {BOARD_PERIOD_LABEL[b.period ?? 'all']}{b.period === 'season' && b.seasonStart ? ` · ${b.seasonStart.slice(5)}~` : ''}
+                  </span>
+                  {b.period === 'season' && (
+                    <button type="button" onClick={() => resetSeason(b.key)} className="shrink-0 rounded-badge border border-gold-400/40 px-1.5 py-0.5 text-[9px] font-bold text-gold-300 hover:bg-gold-300/10">시즌 리셋</button>
+                  )}
                   <button type="button" onClick={() => removeBoard(b.key)} aria-label="보드 삭제" className="shrink-0 text-ink-muted hover:text-danger-light"><Icon name="close" size={13} /></button>
                 </li>
               ))}
@@ -219,6 +239,11 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
             <div className="flex flex-wrap gap-1.5">
               <input value={nbName} onChange={(e) => setNbName(e.target.value)} maxLength={16} placeholder="보드 이름 (예: 월요 토너 킹)" className="input min-w-0 flex-1 text-sm" />
               <input value={nbUnit} onChange={(e) => setNbUnit(e.target.value)} maxLength={4} placeholder="단위(점)" className="input w-20 text-sm" />
+              <select value={nbPeriod} onChange={(e) => setNbPeriod(e.target.value as 'all' | 'month' | 'season')} className="input w-auto shrink-0 text-sm" aria-label="집계 기간">
+                <option value="all">누적</option>
+                <option value="month">월간(매월 리셋)</option>
+                <option value="season">시즌(오늘부터)</option>
+              </select>
               <button type="button" onClick={addBoard} className="btn-primary shrink-0 px-3 text-xs">+ 추가</button>
             </div>
           )}
@@ -272,15 +297,30 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
 /** 포인트 지급/차감 — 보드별 자유 점수 입력(기본=매장 포인트 합산, 커스텀=해당 보드 전용). */
 export function ScorePointsPanel({ venueId, customBoards = [] }: { venueId: string; customBoards?: CustomBoard[] }) {
   const toast = useToast();
+  const today = new Date().toLocaleDateString('en-CA');
   const [rows, setRows] = useState<ScoreEntry[]>([]);
   const [board, setBoard] = useState('');   // '' = 기본(매장 포인트)
   const [name, setName] = useState('');
+  const [date, setDate] = useState(today);  // 매일매일 기록 — 지난 날짜 소급 입력 가능
   const [points, setPoints] = useState('');
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
+  // 닉네임 자동완성(가입 회원 연동) — 오타로 명단이 갈라지는 것 방지
+  const [suggest, setSuggest] = useState<RegisteredPlayer[]>([]);
+  const [suggestOpen, setSuggestOpen] = useState(false);
 
   const reload = () => { getScoreEntries(venueId).then(setRows).catch(() => {}); };
   useEffect(reload, [venueId]);
+
+  // 입력 디바운스 검색(300ms) — 실명·닉네임·이 매장 방문횟수
+  useEffect(() => {
+    const q = name.trim();
+    if (!suggestOpen || q.length < 1) { setSuggest([]); return; }
+    const t = setTimeout(() => {
+      searchRegisteredPlayers(venueId, q).then((r) => setSuggest(r.slice(0, 6))).catch(() => setSuggest([]));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [name, venueId, suggestOpen]);
 
   const boardName = (key: string | null) => key ? (customBoards.find((b) => b.key === key)?.name ?? '커스텀') : '매장 포인트';
 
@@ -290,9 +330,9 @@ export function ScorePointsPanel({ venueId, customBoards = [] }: { venueId: stri
     if (!p) return toast.show('포인트를 입력하세요', 'error');
     setBusy(true);
     try {
-      await addScoreEntry(venueId, { name, points: sign * p, reason, boardKey: board || null });
-      setName(''); setPoints(''); setReason('');
-      toast.show(sign > 0 ? `「${boardName(board || null)}」에 지급했습니다` : `「${boardName(board || null)}」에서 차감했습니다`, 'success');
+      await addScoreEntry(venueId, { name, points: sign * p, reason, boardKey: board || null, entryDate: date || undefined });
+      setName(''); setPoints(''); setReason(''); setSuggest([]);
+      toast.show(sign > 0 ? `「${boardName(board || null)}」에 지급했습니다 (${date})` : `「${boardName(board || null)}」에서 차감했습니다 (${date})`, 'success');
       reload();
     } catch (e) { toast.show(e instanceof Error ? e.message : '실패했습니다', 'error'); }
     finally { setBusy(false); }
@@ -307,14 +347,41 @@ export function ScorePointsPanel({ venueId, customBoards = [] }: { venueId: stri
     <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-3">
       <div>
         <h3 className="text-sm font-bold text-ink-primary">포인트 지급 · 차감</h3>
-        <p className="text-2xs text-ink-muted mt-0.5">이벤트·미션 보상 등 자유 점수를 보드별로 입력합니다. 커스텀 보드는 여기서 입력한 명단으로만 순위가 만들어집니다.</p>
+        <p className="text-2xs text-ink-muted mt-0.5">이벤트·미션 보상 등 자유 점수를 <span className="font-semibold text-gold-300">날짜·보드별</span>로 매일 기록합니다. 커스텀 보드는 여기서 입력한 명단으로만 순위가 만들어집니다.</p>
       </div>
       <div className="flex flex-wrap gap-1.5">
         <select value={board} onChange={(e) => setBoard(e.target.value)} className="input w-full text-sm sm:w-auto sm:min-w-[10rem]">
           <option value="">매장 포인트(기본)</option>
           {customBoards.map((b) => <option key={b.key} value={b.key}>{b.name} (커스텀)</option>)}
         </select>
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="이름(닉네임)" maxLength={30} className="input min-w-0 flex-1 text-sm" />
+        <input type="date" value={date} max={today} onChange={(e) => setDate(e.target.value || today)}
+          className="input w-auto shrink-0 text-sm tabular-nums" aria-label="기록 날짜" />
+        <div className="relative min-w-0 flex-1">
+          <input value={name}
+            onChange={(e) => { setName(e.target.value); setSuggestOpen(true); }}
+            onFocus={() => setSuggestOpen(true)}
+            onBlur={() => setTimeout(() => setSuggestOpen(false), 150)}
+            placeholder="이름(닉네임)" maxLength={30} className="input w-full text-sm" />
+          {/* 가입 회원 자동완성 — 클릭 시 닉네임으로 채움 */}
+          {suggestOpen && suggest.length > 0 && (
+            <ul className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-input border border-gold-400/40 bg-surface-base shadow-lg">
+              {suggest.map((s) => {
+                const fill = s.nickname || s.realName || '';
+                return (
+                  <li key={s.userId}>
+                    <button type="button" onMouseDown={(e) => { e.preventDefault(); setName(fill); setSuggestOpen(false); }}
+                      className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left hover:bg-surface-high transition-colors">
+                      <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">
+                        {s.nickname ?? '(닉네임 없음)'}{s.realName ? <span className="ml-1 text-[10px] text-ink-muted">{s.realName}</span> : null}
+                      </span>
+                      <span className="shrink-0 text-[10px] tabular-nums text-ink-muted">방문 {s.visits}회</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
         <input value={points} onChange={(e) => setPoints(e.target.value)} type="number" inputMode="numeric" placeholder="포인트" className="input w-24 text-sm tabular-nums" />
         <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="사유(선택)" maxLength={60} className="input min-w-0 flex-1 text-sm" />
         <button type="button" disabled={busy} onClick={() => add(1)} className="btn-primary shrink-0 px-3 text-xs disabled:opacity-50">지급</button>
@@ -359,10 +426,12 @@ function RankBoardPreview({ venueId, cfg }: { venueId: string; cfg: VenuePageCon
       try {
         if (isCustomBoard(metric)) {
           const key = customKeyOf(metric);
+          const start = boardPeriodStart((cfg.customBoards ?? []).find((b) => b.key === key));
           const entries = await getScoreEntries(venueId).catch(() => [] as ScoreEntry[]);
           const agg: Record<string, { name: string; value: number }> = {};
           for (const e of entries) {
             if (e.boardKey !== key) continue;
+            if (start && e.entryDate < start) continue; // 월간/시즌 — 기간 밖 기록 제외
             const k = e.name.trim().toLowerCase();
             agg[k] = { name: agg[k]?.name ?? e.name, value: (agg[k]?.value ?? 0) + e.points };
           }

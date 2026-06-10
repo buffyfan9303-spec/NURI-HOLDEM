@@ -17,7 +17,7 @@ import { promptLogin } from '../../lib/requireLogin';
 import {
   getVenueRankings, getVenueRankingTotals, subscribeRankings, maskRealName,
   getVenuePageConfig, getScoreEntries, getVenuePlayerCounts,
-  boardLabel, boardDesc, boardUnit, isCustomBoard, customKeyOf,
+  boardLabel, boardDesc, boardUnit, isCustomBoard, customKeyOf, boardPeriodStart,
   type RankingEntry, type RankingTotal, type VenuePageConfig, type RankBoardId, type ScoreEntry, type PlayerCounts,
 } from '../../api/rankings';
 import { uploadVenueImages } from '../../lib/storage';
@@ -672,12 +672,14 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
 
   // 메트릭별 값 계산 + 정렬
   const rows = useMemo(() => {
-    // 커스텀 보드: 업주가 직접 입력한 항목 합산(이름별)
+    // 커스텀 보드: 업주가 직접 입력한 항목 합산(이름별) — 월간/시즌 기간 필터 반영
     if (isCustomBoard(cur)) {
       const key = customKeyOf(cur);
+      const start = boardPeriodStart((cfg?.customBoards ?? []).find((b) => b.key === key));
       const m = new globalThis.Map<string, { name: string; value: number }>();
       for (const e of manual) {
         if (e.boardKey !== key) continue;
+        if (start && e.entryDate < start) continue;
         const k = e.name.trim().toLowerCase();
         const c = m.get(k) ?? { name: e.name, value: 0 };
         c.value += e.points;
@@ -716,7 +718,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
     }
     return base.filter((b) => b.value >= 0)
       .sort((a, b) => (b.value - a.value) || (b.prizeMan - a.prizeMan) || (b.moneyPoints - a.moneyPoints));
-  }, [totals, cur, manualByName, buyinCounts, manual, playerCounts]);
+  }, [totals, cur, manualByName, buyinCounts, manual, playerCounts, cfg]);
 
   if (loading) return <p className="text-center py-10 text-xs text-ink-muted">불러오는 중…</p>;
   if (totals.length === 0 && manual.length === 0 && playerCounts.length === 0) {

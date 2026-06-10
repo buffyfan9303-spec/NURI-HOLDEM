@@ -170,6 +170,27 @@ export async function getCustomerActivity(venueId: string, name: string): Promis
   };
 }
 
+// ── 내 대회 참가(예약) 이력 — 개인 대시보드 ───────────────────────────────────
+export interface MyReservationRow { scheduleId: string; title: string; date: string; startTime: string | null; venueName: string | null; displayName: string; reservedAt: string }
+export async function getMyReservations(limit = 30): Promise<MyReservationRow[]> {
+  if (IS_MOCK) return [];
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+  const { data, error } = await supabase
+    .from('schedule_reservations')
+    .select('schedule_id, display_name, created_at, schedules(title, date, start_time, venues(name))')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({
+    scheduleId: r.schedule_id, displayName: r.display_name, reservedAt: r.created_at,
+    title: r.schedules?.title ?? '(대회)', date: r.schedules?.date ?? '',
+    startTime: r.schedules?.start_time ?? null, venueName: r.schedules?.venues?.name ?? null,
+  }));
+}
+
 // ── 고객 분석(업주/통계) — 방문 손님 전체 리스트 + 행동 통계 ─────────────────────
 // 바인 횟수 · 방문 · 머니인(입상) · 머니인 비율 · 미수 횟수 · 최다 결제수단 · 주 방문 시간대 · 최근 방문
 export interface CustomerStat {

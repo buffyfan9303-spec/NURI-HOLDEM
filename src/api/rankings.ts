@@ -130,7 +130,23 @@ export const RANK_METRIC_DESC: Record<RankMetric, string> = {
 };
 
 // 업주가 직접 만드는 커스텀 랭킹 보드(웹 데이터에 없는 랭킹 — 명단·점수 직접 입력)
-export interface CustomBoard { key: string; name: string; unit?: string }
+// period: 'all'=누적(기본) / 'month'=매월 1일 자동 리셋 / 'season'=시즌 시작일부터(리셋 버튼으로 갱신)
+export interface CustomBoard { key: string; name: string; unit?: string; period?: 'all' | 'month' | 'season'; seasonStart?: string }
+
+export const BOARD_PERIOD_LABEL: Record<NonNullable<CustomBoard['period']>, string> = {
+  all: '누적', month: '월간(매월 리셋)', season: '시즌',
+};
+
+/** 보드 집계 시작일(YYYY-MM-DD) — null이면 전체 누적 */
+export function boardPeriodStart(board?: CustomBoard | null): string | null {
+  if (!board) return null;
+  if (board.period === 'month') {
+    const n = new Date();
+    return new Date(n.getFullYear(), n.getMonth(), 1).toLocaleDateString('en-CA');
+  }
+  if (board.period === 'season') return board.seasonStart ?? null;
+  return null;
+}
 /** 보드 id — 기본 6종(RankMetric) 또는 'custom:<key>' */
 export type RankBoardId = RankMetric | string;
 
@@ -250,6 +266,24 @@ export async function getGlobalRankingTotals(): Promise<GlobalRankingTotal[]> {
   return (data ?? []).map((r: any) => ({
     nickname: String(r.nickname), moneyinCount: Number(r.moneyin_count) || 0,
     prizePoints: Number(r.prize_points) || 0, bestPosition: Number(r.best_position) || 0, venues: Number(r.venues) || 0,
+  }));
+}
+
+// ── 내 입상 기록(개인 대시보드) — 닉네임 기준 전 매장 순위 등록 이력 ────────────
+export interface MyRankingRow { date: string; venueName: string; position: number; prize: string | null }
+export async function getMyRankingHistory(nickname: string, limit = 30): Promise<MyRankingRow[]> {
+  if (IS_MOCK || !nickname.trim()) return [];
+  const { data, error } = await supabase
+    .from('venue_rankings')
+    .select('ranking_date, position, prize, venues(name)')
+    .ilike('nickname', nickname.trim())
+    .order('ranking_date', { ascending: false })
+    .limit(limit);
+  if (error) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({
+    date: r.ranking_date, position: r.position, prize: r.prize ?? null,
+    venueName: r.venues?.name ?? '(매장)',
   }));
 }
 

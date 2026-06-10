@@ -126,7 +126,7 @@
     @apply inline-flex items-center justify-center gap-2 whitespace-nowrap
            font-semibold text-sm leading-none
            rounded-input px-4 py-2.5 min-h-[2.75rem]
-           transition-all duration-300 ease-out active:scale-95
+           transition-all duration-150 ease-out active:scale-[0.97]
            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-300;
   }
 
@@ -207,6 +207,20 @@
    업주/관리자 탭은 내부 max-w-5xl(1024) 래퍼로 자체 제한되고, 단일 컬럼 탭은 내부 래퍼로 좁힌다. */
 main { max-width: 48rem; margin-inline: auto; }
 @media (min-width: 1024px) { main { max-width: 72rem; } }
+
+/* ── 앱(iOS) 감성 모션 ──────────────────────────────────────────────────────
+   네이티브처럼 '빠르게 시작해 부드럽게 정착'하는 곡선으로 통일.
+   cubic-bezier(0.32, 0.72, 0, 1) = iOS 시트/내비 전환과 동일 계열. */
+.animate-fade-in  { animation-duration: 0.22s; animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1); }
+.animate-fade-out { animation-duration: 0.18s; animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1); }
+.animate-slide-up { animation-duration: 0.32s; animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1); }
+
+/* 네이티브 스크롤 감각 — 부드러운 앵커 이동 + 바운스가 새로고침으로 새지 않게 */
+html { scroll-behavior: smooth; }
+body { overscroll-behavior-y: contain; }
+
+/* 카드/리스트 행 등 클릭 가능한 요소의 공통 탭 피드백(버튼 외 영역) */
+[role='tab']:active, [role='radio']:active { transform: scale(0.97); transition: transform 0.12s ease-out; }
 
 /* 모션 민감 사용자 배려 — OS '동작 줄이기' 설정 시 애니메이션/전환을 즉시화해 멀미·끊김 방지 */
 @media (prefers-reduced-motion: reduce) {

@@ -13,6 +13,8 @@ import {
   type Voucher, type VisitedVenue, type PlayHistory,
 } from '../../api/vouchers';
 import { wonToMan } from '../../api/ledger';
+import { getMyReservations, type MyReservationRow } from '../../api/reservations';
+import { getMyRankingHistory, type MyRankingRow } from '../../api/rankings';
 
 function parseVenueId(text: string): string | null {
   const t = text.trim();
@@ -29,15 +31,22 @@ export default function CustomerDashboardPage({ open, onClose }: { open: boolean
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
   const [visits, setVisits] = useState<VisitedVenue[]>([]);
   const [plays, setPlays] = useState<PlayHistory[]>([]);
+  const [resv, setResv] = useState<MyReservationRow[]>([]);   // 대회 참가(예약) 이력
+  const [ranks, setRanks] = useState<MyRankingRow[]>([]);     // 내 입상 기록(닉네임 기준)
   const [loading, setLoading] = useState(false);
   const [redeem, setRedeem] = useState<Stack | null>(null);
 
   const reload = () => {
     setLoading(true);
-    Promise.all([listMyVouchers(), myVisitedVenues(), myPlayHistory()])
-      .then(([vs, vi, pl]) => { setVouchers(vs); setVisits(vi); setPlays(pl); })
+    Promise.all([
+      listMyVouchers(), myVisitedVenues(), myPlayHistory(),
+      getMyReservations().catch(() => [] as MyReservationRow[]),
+      user?.nickname ? getMyRankingHistory(user.nickname).catch(() => [] as MyRankingRow[]) : Promise.resolve([] as MyRankingRow[]),
+    ])
+      .then(([vs, vi, pl, rv, rk]) => { setVouchers(vs); setVisits(vi); setPlays(pl); setResv(rv); setRanks(rk); })
       .catch(() => {}).finally(() => setLoading(false));
   };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (open) reload(); }, [open]);
 
   if (!open) return null;
@@ -170,6 +179,46 @@ export default function CustomerDashboardPage({ open, onClose }: { open: boolean
                       <span>머니인 <b className="text-ink-secondary tabular-nums">{u.moneyin}</b>회</span>
                       <span>누적 <b className="text-gold-300 tabular-nums">{u.amount ? wonToMan(u.amount) + '만' : '-'}</b></span>
                     </div>
+                  </li>
+                ))}</ul>}
+          </section>
+
+          {/* 대회 참가(예약) 내역 — 내가 예약했던 대회들 */}
+          <section>
+            <p className="mb-1.5 text-sm font-bold text-ink-primary">대회 참가 내역 <span className="text-2xs font-normal text-ink-muted">(참가 예약 기준)</span></p>
+            {loading ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
+              : resv.length === 0 ? <p className="py-6 text-center text-2xs text-ink-muted">아직 참가 예약한 대회가 없습니다.</p>
+                : <ul className="space-y-1.5">{resv.slice(0, 15).map((r) => (
+                  <li key={`${r.scheduleId}-${r.reservedAt}`} className="rounded-input border border-border-subtle bg-surface-low px-3 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="min-w-0 truncate text-sm font-semibold text-ink-primary">{r.title}</p>
+                      <span className="shrink-0 text-[10px] tabular-nums text-ink-muted">{r.date}{r.startTime ? ` ${r.startTime.slice(0, 5)}` : ''}</span>
+                    </div>
+                    <p className="mt-0.5 flex flex-wrap gap-x-3 text-2xs text-ink-muted">
+                      {r.venueName && <span>{r.venueName}</span>}
+                      <span>예약명 <b className="text-ink-secondary">{r.displayName}</b></span>
+                    </p>
+                  </li>
+                ))}</ul>}
+          </section>
+
+          {/* 내 입상 기록 — 매장 순위 등록에서 내 닉네임이 잡힌 이력 */}
+          <section>
+            <p className="mb-1.5 text-sm font-bold text-ink-primary">내 입상 기록 <span className="text-2xs font-normal text-ink-muted">(매장 순위 등록 기준)</span></p>
+            {loading ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
+              : !user?.nickname ? <p className="py-6 text-center text-2xs text-ink-muted">프로필에서 아이디(닉네임)를 설정하면 입상 기록이 자동 연결됩니다.</p>
+              : ranks.length === 0 ? <p className="py-6 text-center text-2xs text-ink-muted">아직 입상 기록이 없습니다 — 매장에서 순위가 등록되면 자동으로 표시됩니다.</p>
+                : <ul className="space-y-1.5">{ranks.slice(0, 15).map((r, i) => (
+                  <li key={i} className="flex items-center gap-2.5 rounded-input border border-border-subtle bg-surface-low px-3 py-2">
+                    <span className={['flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-2xs font-extrabold tabular-nums',
+                      r.position === 1 ? 'bg-gold-300 text-ink-inverse' : r.position === 2 ? 'bg-slate-300 text-ink-inverse' : r.position === 3 ? 'bg-amber-700 text-white' : 'bg-surface-float text-ink-secondary'].join(' ')}>
+                      {r.position}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-ink-primary">{r.venueName}</p>
+                      <p className="text-[10px] tabular-nums text-ink-muted">{r.date}</p>
+                    </div>
+                    {r.prize && <span className="shrink-0 text-xs font-bold tabular-nums text-gold-300">{r.prize}점</span>}
                   </li>
                 ))}</ul>}
           </section>

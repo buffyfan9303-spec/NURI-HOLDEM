@@ -119,7 +119,8 @@ export default function Modal({
   }
 
   return (
-    <div className={['fixed inset-0 z-50 flex', closing ? 'animate-fade-out' : 'animate-fade-in'].join(' ')}
+    // z-[60]: 전체화면 page 변형(z-[55]) 위에도 항상 뜨도록 — 예: 포스터 상세에서 '대회 후기 쓰기' 글쓰기 모달
+    <div className={['fixed inset-0 z-[60] flex', closing ? 'animate-fade-out' : 'animate-fade-in'].join(' ')}
       style={{
         alignItems: variant === 'sheet' ? 'flex-end' : 'center',
         justifyContent: 'center',
