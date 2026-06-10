@@ -12,6 +12,7 @@ import {
   getPendingGroups, approveGroup, GROUP_KIND_LABEL,
 } from '../../api/community';
 import { useToast } from '../atoms/Toast';
+import { supabase } from '../../lib/supabase';
 import { isVoucherIssueApproved, setVoucherIssueApproval } from '../../api/vouchers';
 import { useBackClose } from '../../lib/backstack';
 import { REGION_CHIPS } from './IntegratedSearchBar';
@@ -31,9 +32,73 @@ interface AdminTabProps {
   onReloadVenues?: () => void;
 }
 
-type Section = 'pending' | 'reorder' | 'users' | 'venues' | 'reports';
+type Section = 'pending' | 'reorder' | 'users' | 'venues' | 'reports' | 'errors';
 // 노출 순서 하위 항목: 포스터(요강) / 매장
 type ReorderTarget = 'posters' | 'venues';
+
+// ── 오류 로그(운영자) — 전역 에러 감시망 수집분 열람·정리 ───────────────────────
+interface ClientErrorRow { id: string; message: string; stack: string | null; url: string | null; user_agent: string | null; created_at: string }
+function ErrorLogPanel() {
+  const toast = useToast();
+  const [rows, setRows] = useState<ClientErrorRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [openId, setOpenId] = useState<string | null>(null);
+
+  const reload = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase.from('client_errors')
+      .select('*').order('created_at', { ascending: false }).limit(50);
+    setRows((data ?? []) as ClientErrorRow[]);
+    setLoading(false);
+  }, []);
+  useEffect(() => { reload(); }, [reload]);
+
+  const clearAll = async () => {
+    if (!confirm('오류 로그를 전부 비울까요?')) return;
+    const { error } = await supabase.from('client_errors').delete().gte('created_at', '1970-01-01');
+    if (error) toast.show(error.message, 'error');
+    else { toast.show('오류 로그를 비웠습니다', 'success'); reload(); }
+  };
+  const fmt = (iso: string) => {
+    const d = new Date(iso);
+    return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  };
+
+  return (
+    <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <h3 className="text-base font-bold text-ink-primary">오류 로그 <span className="text-sm font-normal text-ink-muted">(최근 {rows.length}건)</span></h3>
+        <div className="flex gap-1.5">
+          <button type="button" onClick={reload} className="btn-ghost px-2.5 text-xs">새로고침</button>
+          {rows.length > 0 && <button type="button" onClick={clearAll} className="btn-ghost px-2.5 text-xs text-danger">전부 비우기</button>}
+        </div>
+      </div>
+      {loading ? (
+        <p className="py-6 text-center text-sm text-ink-muted">불러오는 중…</p>
+      ) : rows.length === 0 ? (
+        <p className="py-6 text-center text-sm text-ink-muted">수집된 오류가 없습니다 — 깨끗합니다 ✨</p>
+      ) : (
+        <ul className="divide-y divide-border-subtle">
+          {rows.map((r) => (
+            <li key={r.id} className="py-2">
+              <button type="button" onClick={() => setOpenId(openId === r.id ? null : r.id)} className="flex w-full items-start gap-2 text-left">
+                <span className="shrink-0 rounded-badge bg-danger/10 px-1.5 py-0.5 text-2xs font-bold tabular-nums text-danger">{fmt(r.created_at)}</span>
+                <span className="min-w-0 flex-1 truncate text-sm text-ink-primary">{r.message}</span>
+              </button>
+              {openId === r.id && (
+                <div className="mt-1.5 space-y-1 rounded-input bg-surface-high p-2 text-xs text-ink-secondary">
+                  {r.url && <p className="break-all"><b>URL</b> {r.url}</p>}
+                  {r.user_agent && <p className="break-all text-ink-muted">{r.user_agent}</p>}
+                  {r.stack && <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all text-2xs text-ink-muted">{r.stack}</pre>}
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
 
 // ── 그룹 개설 승인(운영자) ────────────────────────────────────────────────────
 function PendingGroupsPanel({ onChanged }: { onChanged: () => void }) {
@@ -88,6 +153,7 @@ const ADMIN_SECTIONS: { id: Section; label: string; icon: ReactNode }[] = [
   { id: 'users', label: '회원 관리', icon: aic(<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>) },
   { id: 'venues', label: '매장', icon: aic(<><path d="M3 9.5 5 4h14l2 5.5" /><path d="M4 9.5V20a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9.5" /><path d="M9 21v-6h6v6" /></>) },
   { id: 'reports', label: '신고', icon: aic(<><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></>) },
+  { id: 'errors', label: '오류 로그', icon: aic(<><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></>) },
 ];
 
 function AdminNavBtn({ active, onClick, icon, badge, children }: { active: boolean; onClick: () => void; icon: ReactNode; badge?: number; children: ReactNode }) {
@@ -151,6 +217,7 @@ export default function AdminTab({
             />
           )}
           {section === 'reports' && <ReportQueue />}
+          {section === 'errors' && <ErrorLogPanel />}
         </div>
       </div>
     </div>

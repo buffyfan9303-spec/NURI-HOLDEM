@@ -3,6 +3,7 @@
 // - 전역(기본): 풀스크린 폴백. CSS 미로드 대비 인라인 스타일.
 // - inline: 섹션/탭 단위 폴백(카드형). resetKey 변경 시(예: 탭 전환) 자동 복구.
 import { Component, type ReactNode } from 'react';
+import { logClientError } from '../../lib/errorLog';
 
 interface Props {
   children: ReactNode;
@@ -28,8 +29,10 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: unknown, info: unknown) {
-    // 운영에서는 외부 로깅(Sentry 등) 연동 지점
     console.error('[ErrorBoundary]', error, info);
+    // 관리자 '오류 로그' 화면으로 수집
+    const e = error instanceof Error ? error : new Error(String(error));
+    logClientError(`[boundary${this.props.label ? `:${this.props.label}` : ''}] ${e.message}`, e.stack);
   }
 
   reset = () => this.setState({ hasError: false });

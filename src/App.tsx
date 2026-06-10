@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, Suspense, type ReactNode } from 'react';
 import { useToast } from './components/atoms/Toast';
-import { checkIn } from './api/checkins';
+import { checkIn, getMyCheckinStreak } from './api/checkins';
 import UnreadBadge from './components/atoms/UnreadBadge';
 import ViewModeToggle from './components/atoms/ViewModeToggle';
 import type { ViewMode } from './components/atoms/ViewModeToggle';
@@ -465,7 +465,12 @@ export default function App() {
     if (!cv) return;
     if (!user) { setAuthOpen(true); return; }
     checkIn(cv)
-      .then((name) => toast.show(`${name || '매장'} 체크인 완료! 출석 도장 +3점 🎉`, 'success'))
+      .then(async (name) => {
+        const streak = await getMyCheckinStreak().catch(() => 0);
+        const bonus = streak > 0 && streak % 7 === 0 ? ` · 7일 연속 보너스 +10점!` : '';
+        const fire = streak >= 2 ? ` 🔥 ${streak}일 연속` : '';
+        toast.show(`${name || '매장'} 체크인 완료! 출석 도장 +3점${fire}${bonus} 🎉`, 'success');
+      })
       .catch((e) => toast.show(e instanceof Error ? e.message : '체크인 실패', 'error'))
       .finally(() => {
         const url = new URL(window.location.href);

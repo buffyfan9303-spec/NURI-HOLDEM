@@ -19,6 +19,19 @@ export async function listVenueCheckins(venueId: string, sinceIso: string): Prom
   return (data ?? []).map((r: any) => ({ id: r.id, venueId: r.venue_id, userId: r.user_id, displayName: r.display_name ?? null, createdAt: r.created_at }));
 }
 
+/** 내 출석 스트릭(연속 체크인 일수). 오늘/어제 외 마지막 체크인이면 화면용으로 0 처리. */
+export async function getMyCheckinStreak(): Promise<number> {
+  if (IS_MOCK) return 0;
+  const { data: u } = await supabase.auth.getUser();
+  if (!u.user) return 0;
+  const { data } = await supabase.from('profiles')
+    .select('checkin_streak, last_checkin_date').eq('id', u.user.id).single();
+  if (!data?.last_checkin_date) return 0;
+  const last = new Date(`${data.last_checkin_date}T00:00:00`);
+  const diff = Math.round((Date.now() - last.getTime()) / 86400000);
+  return diff <= 1 ? (data.checkin_streak ?? 0) : 0; // 이틀 이상 끊겼으면 0으로 표시
+}
+
 export function checkinUrl(venueId: string): string {
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://nuriholdem.com';
   return `${origin}/?checkin=${venueId}`;
