@@ -8,6 +8,7 @@ import IntegratedSearchBar, { expandRegions } from './components/features/Integr
 import type { SearchState } from './components/features/IntegratedSearchBar';
 import ScheduleCard from './components/features/ScheduleCard';
 import ScheduleDetailModal from './components/features/ScheduleDetailModal';
+import WeeklyBestStrip from './components/features/WeeklyBestStrip';
 import AuthModal from './components/features/AuthModal';
 import PostDetailModal from './components/features/PostDetailModal';
 import NotificationPanel from './components/features/NotificationPanel';
@@ -463,7 +464,7 @@ export default function App() {
     if (!cv) return;
     if (!user) { setAuthOpen(true); return; }
     checkIn(cv)
-      .then((name) => toast.show(`${name || '매장'} 체크인 완료! 🎉`, 'success'))
+      .then((name) => toast.show(`${name || '매장'} 체크인 완료! 출석 도장 +3점 🎉`, 'success'))
       .catch((e) => toast.show(e instanceof Error ? e.message : '체크인 실패', 'error'))
       .finally(() => {
         const url = new URL(window.location.href);
@@ -717,6 +718,24 @@ export default function App() {
     setOpenSchedule(null);   // 일정 모달이 열려있으면 닫고 매장으로 전환
     setOpenVenueId(venueId);
   }, []);
+
+  // 딥링크: ?s=<scheduleId> — 대회 공유 링크로 들어오면 해당 포스터 상세 자동 오픈
+  const schedDeepLinked = useRef(false);
+  useEffect(() => {
+    if (schedDeepLinked.current || schedules.length === 0) return;
+    const sid = new URLSearchParams(window.location.search).get('s');
+    if (!sid) { schedDeepLinked.current = true; return; }
+    const target = schedules.find((x) => x.id === sid);
+    if (target) {
+      setOpenSchedule(target);
+      schedDeepLinked.current = true;
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('s');
+        window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+      } catch { /* ignore */ }
+    }
+  }, [schedules]);
 
   // 딥링크: ?v=<8자리코드>(단축) 또는 ?venue=<전체id>(구버전 호환) 진입 시 매장 페이지 자동 오픈
   const deepLinked = useRef(false);
@@ -1152,6 +1171,11 @@ export default function App() {
                 <ViewModeToggle value={viewMode} onChange={setViewMode} />
               </div>
             </div>
+          </div>
+
+          {/* 주간 베스트 — 이번 주 머니인 킹 TOP3 롤링 */}
+          <div className="px-page-x pt-3">
+            <WeeklyBestStrip />
           </div>
 
           {/* 공지 — 일정탐색 상단 (전체 공통 공지만) */}

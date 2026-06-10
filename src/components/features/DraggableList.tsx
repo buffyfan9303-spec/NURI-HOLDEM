@@ -20,7 +20,7 @@ import {
 import type { DraggableAttributes } from '@dnd-kit/core';
 import type { SyntheticListenerMap } from '@dnd-kit/core/dist/hooks/utilities';
 import { CSS } from '@dnd-kit/utilities';
-import { reorderSchedules, togglePremium, toggleCompetition, type Schedule } from '../../api/schedules';
+import { reorderSchedules, togglePremium, toggleCompetition, boostSchedule, type Schedule } from '../../api/schedules';
 
 // ── 상태 타입 ────────────────────────────────────────────────────────────────
 
@@ -58,9 +58,15 @@ interface SortableRowProps {
   isDragging: boolean;
   onPremiumToggle: (id: string, current: boolean) => void;
   onCompetitionToggle: (id: string, current: boolean) => void;
+  onBoost: (id: string, days: number) => void;
 }
 
-function SortableRow({ item, index, isDragging, onPremiumToggle, onCompetitionToggle }: SortableRowProps) {
+function SortableRow({ item, index, isDragging, onPremiumToggle, onCompetitionToggle, onBoost }: SortableRowProps) {
+  const [boostOpen, setBoostOpen] = useState(false);
+  // 부스트 잔여일 — premium_until이 미래일 때만
+  const boostLeft = item.premiumUntil
+    ? Math.max(0, Math.ceil((new Date(item.premiumUntil).getTime() - Date.now()) / 86400000))
+    : 0;
   const {
     attributes,
     listeners,
@@ -134,6 +140,40 @@ function SortableRow({ item, index, isDragging, onPremiumToggle, onCompetitionTo
       >
         대회
       </button>
+
+      {/* 부스트 — N일 동안 상단 고정(기간 만료형). 결제 입금 확인 후 운영자가 지정 */}
+      <span className="relative shrink-0">
+        <button
+          type="button"
+          aria-label="부스트 설정"
+          title={boostLeft > 0 ? `부스트 ${boostLeft}일 남음 — 클릭해 변경` : '부스트(N일 상단 고정)'}
+          onClick={() => setBoostOpen((v) => !v)}
+          className={[
+            'text-2xs font-bold px-1.5 py-1 rounded-badge border transition-colors active:scale-95',
+            boostLeft > 0
+              ? 'bg-gold-300/15 text-gold-300 border-gold-400/40'
+              : 'bg-surface-high text-ink-muted border-border-default hover:text-ink-secondary',
+          ].join(' ')}
+        >
+          ⚡{boostLeft > 0 ? `${boostLeft}일` : ''}
+        </button>
+        {boostOpen && (
+          <span className="absolute left-0 top-full z-20 mt-1 flex items-center gap-1 rounded-card border border-border-default bg-surface-float p-1.5 shadow-card">
+            {[3, 7, 14, 30].map((d) => (
+              <button key={d} type="button"
+                onClick={() => { onBoost(item.id, d); setBoostOpen(false); }}
+                className="rounded-badge bg-surface-high px-2 py-1 text-2xs font-bold text-ink-secondary transition-colors hover:bg-gold-300/15 hover:text-gold-300">
+                {d}일
+              </button>
+            ))}
+            <button type="button"
+              onClick={() => { onBoost(item.id, 0); setBoostOpen(false); }}
+              className="rounded-badge bg-surface-high px-2 py-1 text-2xs font-bold text-danger transition-colors hover:bg-danger/10">
+              해제
+            </button>
+          </span>
+        )}
+      </span>
 
       {/* 요강 정보 */}
       <div className="flex-1 min-w-0">
@@ -288,6 +328,21 @@ export default function DraggableList({ initialItems }: DraggableListProps) {
     }
   }, []);
 
+  // ── 부스트(N일 상단 고정 / 0 = 해제) ─────────────────────────────────────
+  const handleBoost = useCallback(async (id: string, days: number) => {
+    const until = days > 0 ? new Date(Date.now() + days * 86400000).toISOString() : null;
+    setItems((prev) =>
+      prev.map((item) => item.id === id ? { ...item, premiumUntil: until, isPremium: item.isPremium || days > 0 } : item),
+    );
+    try {
+      await boostSchedule(id, days);
+    } catch {
+      setItems((prev) =>
+        prev.map((item) => item.id === id ? { ...item, premiumUntil: null } : item),
+      );
+    }
+  }, []);
+
   // ── 대회 분류 토글 ───────────────────────────────────────────────────────
   const handleCompetitionToggle = useCallback(async (id: string, current: boolean) => {
     setItems((prev) =>
@@ -334,6 +389,7 @@ export default function DraggableList({ initialItems }: DraggableListProps) {
                 isDragging={activeId !== null}
                 onPremiumToggle={handlePremiumToggle}
                 onCompetitionToggle={handleCompetitionToggle}
+                onBoost={handleBoost}
               />
             ))}
           </ol>

@@ -32,6 +32,8 @@ export interface Schedule {
   posterUrl?: string; posterColor?: string;
   displayOrder: number; isPremium: boolean; ownerId: string;
   unreadQnaCount: number; approved: boolean;
+  /** 부스트 만료 시각 — 있고 미래면 isPremium과 동일하게 상단 고정 */
+  premiumUntil?: string | null;
 }
 
 export interface ReorderPayload { items: { id: string; displayOrder: number }[]; }
@@ -60,7 +62,10 @@ function rowToSchedule(r: any): Schedule {
     partners: r.partners, promotions: r.promotions,
     paymentMethods: r.payment_methods, rules: r.rules,
     posterUrl: r.poster_url, posterColor: r.poster_color,
-    displayOrder: r.display_order, isPremium: r.is_premium,
+    displayOrder: r.display_order,
+    // 부스트(기간제)가 살아있으면 무기한 프리미엄과 동일 취급 — 뱃지·상단 고정 모두 그대로 작동
+    isPremium: r.is_premium || (r.premium_until != null && new Date(r.premium_until) > new Date()),
+    premiumUntil: r.premium_until ?? null,
     ownerId: r.owner_id, unreadQnaCount: r.unread_qna_count, approved: r.approved,
   };
 }
@@ -77,7 +82,9 @@ export async function getSchedules(): Promise<Schedule[]> {
     .order('is_premium', { ascending: false })
     .order('display_order');
   if (error) throw error;
-  return (data ?? []).map(rowToSchedule);
+  // 부스트(premium_until)는 DB 정렬에 안 잡히므로 매핑 후 한 번 더 정렬
+  return (data ?? []).map(rowToSchedule)
+    .sort((a, b) => Number(b.isPremium) - Number(a.isPremium) || a.displayOrder - b.displayOrder);
 }
 
 // ── 단건 조회 ─────────────────────────────────────────────────────────────────
@@ -172,6 +179,16 @@ export async function reorderSchedules(payload: ReorderPayload): Promise<void> {
   );
   const failed = results.find((r) => r.error);
   if (failed?.error) throw failed.error;
+}
+
+// ── 관리자: 포스터 부스트(N일 상단 고정 / 0 = 해제) ──────────────────────────────
+export async function boostSchedule(id: string, days: number): Promise<void> {
+  if (IS_MOCK) return;
+  const until = days > 0 ? new Date(Date.now() + days * 86400000).toISOString() : null;
+  const { error } = await supabase.from('schedules').update({
+    premium_until: until, updated_at: new Date().toISOString(),
+  }).eq('id', id);
+  if (error) throw error;
 }
 
 // ── 관리자: 프리미엄 토글 ─────────────────────────────────────────────────────

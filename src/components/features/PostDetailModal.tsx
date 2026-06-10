@@ -5,7 +5,8 @@ import { useToast } from '../atoms/Toast';
 import type { CommunityPost, ReactionType } from '../../api/community';
 import { reactToPost, removeReaction, getMyReaction, incrementPostView } from '../../api/community';
 import ReportModal from './ReportModal';
-import { parseHand } from '../../lib/hand';
+import { parseAttachments } from '../../lib/hand';
+import HandReplayer from './HandReplayer';
 import { renderMentions } from '../../lib/mentions';
 import { promptLogin } from '../../lib/requireLogin';
 import HandCards from '../atoms/HandCards';
@@ -161,7 +162,7 @@ export default function PostDetailModal({
 
         {/* ── 본문 ───────────────────────────────────────── */}
         {(() => {
-          const { text, hand } = parseHand(post.content);
+          const { text, hand, replay } = parseAttachments(post.content);
           return (
             <div className="space-y-3 py-2">
               {text && (
@@ -170,6 +171,7 @@ export default function PostDetailModal({
                 </div>
               )}
               {hand && <HandCards hand={hand} />}
+              {replay && <HandReplayer replay={replay} />}
             </div>
           );
         })()}

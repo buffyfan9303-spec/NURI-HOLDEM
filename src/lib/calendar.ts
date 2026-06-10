@@ -67,6 +67,28 @@ export function downloadIcs(input: {
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
+/** 구글 캘린더 바로 등록 URL — 클릭 즉시 캘린더 앱/웹이 열리고 '저장'만 누르면 끝(다운로드 없음) */
+export function googleCalendarUrl(input: {
+  title: string; date: string; startTime?: string | null;
+  venueName?: string | null; address?: string | null; durationHours?: number;
+}): string {
+  const start = (input.startTime ?? '19:00').slice(0, 5).replace(':', '');
+  const d = input.date.replace(/-/g, '');
+  const dur = input.durationHours ?? 5;
+  const sh = Number(start.slice(0, 2));
+  const endDate = sh + dur >= 24 ? (() => { const t = new Date(`${input.date}T00:00:00`); t.setDate(t.getDate() + 1); return t.toLocaleDateString('en-CA').replace(/-/g, ''); })() : d;
+  const end = `${String((sh + dur) % 24).padStart(2, '0')}${start.slice(2)}`;
+  const p = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: `♠ ${input.title}`,
+    dates: `${d}T${start}00/${endDate}T${end}00`,
+    ctz: 'Asia/Seoul',
+    details: '누리홀덤에서 확인: https://nuriholdem.com',
+    location: [input.venueName, input.address].filter(Boolean).join(' · '),
+  });
+  return `https://calendar.google.com/calendar/render?${p.toString()}`;
+}
+
 /** 시스템 공유(모바일: 카톡 등 공유 시트 / PC: 클립보드 복사 폴백). 성공 방식 반환 */
 export async function shareOrCopy(input: { title: string; text: string; url: string }): Promise<'share' | 'copy'> {
   try {

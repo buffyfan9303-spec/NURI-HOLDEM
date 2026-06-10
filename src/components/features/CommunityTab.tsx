@@ -9,7 +9,7 @@ import DealerCommunity from './DealerCommunity';
 import TierLeaderboard from './TierLeaderboard';
 import { useToast } from '../atoms/Toast';
 import { filterContent } from '../../lib/content-filter';
-import { parseHand } from '../../lib/hand';
+import { parseAttachments } from '../../lib/hand';
 import Avatar from '../atoms/Avatar';
 import Modal from '../atoms/Modal';
 import PostDetailModal from './PostDetailModal';
@@ -448,15 +448,15 @@ function PostCard({ post, onLike, onClick, hot = false, selected = false }: { po
           )}
           <p className="text-xs text-ink-primary leading-snug line-clamp-2 mt-0.5 break-words">
             {(() => {
-              const { text, hand } = parseHand(post.content);
+              const { text, hand, replay } = parseAttachments(post.content);
               return (
                 <>
-                  {hand && (
+                  {(hand || replay) && (
                     <span className="inline-flex items-center mr-1 px-1 rounded-badge bg-gold-300/15 text-gold-300 font-bold leading-none align-middle">
-                      핸드
+                      {replay ? '🎬 리플레이' : '핸드'}
                     </span>
                   )}
-                  {text || (hand ? '핸드를 공유했습니다' : '')}
+                  {text || (replay ? '핸드 리플레이를 공유했습니다' : hand ? '핸드를 공유했습니다' : '')}
                 </>
               );
             })()}

@@ -11,6 +11,7 @@ import { Skeleton } from '../atoms/Skeleton';
 import RegularsModal from './RegularsModal';
 import DealerShiftsModal from './DealerShiftsModal';
 import VoucherManageModal from './VoucherManageModal';
+import CheckinModal from './CheckinModal';
 import { getStaffSchedule, getStaffWages, subscribeStaffSchedule, type StaffShift, type StaffWage } from '../../api/staffSchedule';
 import { getUpcomingBirthdays } from '../../api/crm';
 
@@ -69,6 +70,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const [aiErr, setAiErr] = useState('');
   const [regOpen, setRegOpen] = useState(false);
   const [dealerOpen, setDealerOpen] = useState(false);
+  const [checkinOpen, setCheckinOpen] = useState(false);
   const [voucherOpen, setVoucherOpen] = useState(false);
   // 다가오는 생일 단골(7일 내) — CRM 생일 필드 기반
   const [bdays, setBdays] = useState<{ name: string; birthday: string; dday: number }[]>([]);
@@ -238,6 +240,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       <RegularsModal open={regOpen} onClose={() => setRegOpen(false)} venueId={venueId} exclude={[...staffNames]} />
       <DealerShiftsModal open={dealerOpen} onClose={() => setDealerOpen(false)} venueId={venueId} monthKey={mr.start.slice(0, 7)} />
       <VoucherManageModal open={voucherOpen} onClose={() => setVoucherOpen(false)} venueId={venueId} />
+      <CheckinModal open={checkinOpen} onClose={() => setCheckinOpen(false)} venueId={venueId} />
       {/* 미수·리스크 알림 (장부 권한) */}
       {caps.ledger && started && fin.unpaid > 0 && (
         <button type="button" onClick={() => onGoto('ledger')}
@@ -467,6 +470,12 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         <DashCard show={caps.manage} title="고객 분석" onClick={() => onGoto('stats')}
           badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-gold-300/15 text-gold-300">바인·머니인·미수 →</span>}>
           <p className="py-3 text-center text-2xs text-ink-muted">방문 손님 리스트 — 바인·머니인 비율·결제수단·방문 시간대·미수까지 한눈에.</p>
+        </DashCard>
+
+        {/* 입장 QR 체크인 — 손님 스캔→출석 도장(활동점수) */}
+        <DashCard show={caps.manage} title="입장 QR 체크인" onClick={() => setCheckinOpen(true)}
+          badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-gold-300/15 text-gold-300">출석 도장 →</span>}>
+          <p className="py-3 text-center text-2xs text-ink-muted">매장 QR을 손님이 스캔하면 체크인 + 출석 도장(활동점수)이 찍힙니다. 오늘 명단도 실시간으로.</p>
         </DashCard>
 
         {/* 매장 꾸미기 — 매장 페이지 탭 순서·순위 탭·칭호 */}

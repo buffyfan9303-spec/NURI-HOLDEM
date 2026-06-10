@@ -269,6 +269,33 @@ export async function getGlobalRankingTotals(): Promise<GlobalRankingTotal[]> {
   }));
 }
 
+// ── 주간 베스트(이번 주 머니인 킹 TOP3) — 메인 상단 롤링 위젯용 ─────────────────
+export interface WeeklyKing { nickname: string; moneyinCount: number; bestPosition: number }
+export async function getWeeklyMoneyinKings(limit = 3): Promise<WeeklyKing[]> {
+  if (IS_MOCK) return [];
+  const now = new Date();
+  const mon = new Date(now);
+  mon.setDate(now.getDate() - ((now.getDay() + 6) % 7)); // 이번 주 월요일
+  const monStr = mon.toLocaleDateString('en-CA');
+  const { data, error } = await supabase
+    .from('venue_rankings').select('nickname, position')
+    .gte('ranking_date', monStr);
+  if (error) return [];
+  const map = new Map<string, WeeklyKing>();
+  for (const r of (data ?? []) as { nickname: string | null; position: number | null }[]) {
+    const nick = (r.nickname ?? '').trim();
+    if (!nick) continue;
+    const key = nick.toLowerCase();
+    const cur = map.get(key) ?? { nickname: nick, moneyinCount: 0, bestPosition: 999 };
+    cur.moneyinCount += 1;
+    if (r.position && r.position < cur.bestPosition) cur.bestPosition = r.position;
+    map.set(key, cur);
+  }
+  return [...map.values()]
+    .sort((a, b) => b.moneyinCount - a.moneyinCount || a.bestPosition - b.bestPosition)
+    .slice(0, limit);
+}
+
 // ── 내 입상 기록(개인 대시보드) — 닉네임 기준 전 매장 순위 등록 이력 ────────────
 export interface MyRankingRow { date: string; venueName: string; position: number; prize: string | null }
 export async function getMyRankingHistory(nickname: string, limit = 30): Promise<MyRankingRow[]> {
