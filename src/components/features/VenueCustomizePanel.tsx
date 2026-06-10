@@ -288,7 +288,10 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
       {/* ⑤ 포인트 지급/차감 — 보드 선택(기본/커스텀), 장부 권한 직원도 가능 */}
       <ScorePointsPanel venueId={venueId} customBoards={customBoards} />
 
-      {/* ⑥ 보드 미리보기 — 전체 보드 */}
+      {/* ⑥ 일별 기록 달력 — 날짜별로 누가 몇 점 받았는지 한눈에 */}
+      <ScoreCalendar venueId={venueId} customBoards={customBoards} />
+
+      {/* ⑦ 보드 미리보기 — 전체 보드 */}
       <RankBoardPreview venueId={venueId} cfg={cfg} />
     </div>
   );
@@ -405,6 +408,112 @@ export function ScorePointsPanel({ venueId, customBoards = [] }: { venueId: stri
               </li>
             ))}
           </ul>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** 일별 기록 달력 — 날짜별 포인트 입력 내역을 월 달력으로 한눈에(클릭 시 그날 상세) */
+export function ScoreCalendar({ venueId, customBoards = [] }: { venueId: string; customBoards?: CustomBoard[] }) {
+  const toast = useToast();
+  const today = new Date();
+  const [ym, setYm] = useState<{ y: number; m: number }>({ y: today.getFullYear(), m: today.getMonth() }); // m: 0-based
+  const [entries, setEntries] = useState<ScoreEntry[]>([]);
+  const [sel, setSel] = useState<string | null>(new Date().toLocaleDateString('en-CA'));
+
+  const reload = () => { getScoreEntries(venueId, 500).then(setEntries).catch(() => {}); };
+  useEffect(reload, [venueId]);
+
+  const boardName = (key: string | null) => key ? (customBoards.find((b) => b.key === key)?.name ?? '커스텀') : '매장 포인트';
+
+  // 해당 월의 날짜별 그룹
+  const monthKey = `${ym.y}-${String(ym.m + 1).padStart(2, '0')}`;
+  const byDay = useMemo(() => {
+    const m: Record<string, ScoreEntry[]> = {};
+    for (const e of entries) {
+      if (!e.entryDate.startsWith(monthKey)) continue;
+      (m[e.entryDate] ??= []).push(e);
+    }
+    return m;
+  }, [entries, monthKey]);
+
+  const firstDow = new Date(ym.y, ym.m, 1).getDay();
+  const daysInMonth = new Date(ym.y, ym.m + 1, 0).getDate();
+  const todayIso = today.toLocaleDateString('en-CA');
+  const move = (d: -1 | 1) => {
+    setYm(({ y, m }) => {
+      const nm = m + d;
+      return nm < 0 ? { y: y - 1, m: 11 } : nm > 11 ? { y: y + 1, m: 0 } : { y, m: nm };
+    });
+    setSel(null);
+  };
+
+  const selEntries = sel ? (byDay[sel] ?? []) : [];
+  const del = async (id: string) => {
+    try { await deleteScoreEntry(id); reload(); }
+    catch (e) { toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'); }
+  };
+
+  return (
+    <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2.5">
+      <div className="flex items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <h3 className="text-sm font-bold text-ink-primary">일별 기록 달력</h3>
+          <p className="text-2xs text-ink-muted">날짜를 누르면 그날 누가 몇 점 받았는지 보입니다.</p>
+        </div>
+        <button type="button" onClick={() => move(-1)} aria-label="이전 달" className="h-8 w-8 shrink-0 rounded-input border border-border-default text-ink-secondary hover:border-gold-400/50">‹</button>
+        <span className="shrink-0 text-sm font-bold tabular-nums text-gold-300">{ym.y}.{String(ym.m + 1).padStart(2, '0')}</span>
+        <button type="button" onClick={() => move(1)} aria-label="다음 달" className="h-8 w-8 shrink-0 rounded-input border border-border-default text-ink-secondary hover:border-gold-400/50">›</button>
+      </div>
+
+      {/* 요일 헤더 + 날짜 그리드 */}
+      <div className="grid grid-cols-7 gap-1 text-center">
+        {['일', '월', '화', '수', '목', '금', '토'].map((d, i) => (
+          <span key={d} className={['text-[10px] font-semibold', i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-ink-muted'].join(' ')}>{d}</span>
+        ))}
+        {Array.from({ length: firstDow }, (_, i) => <span key={`e${i}`} />)}
+        {Array.from({ length: daysInMonth }, (_, i) => {
+          const day = i + 1;
+          const iso = `${monthKey}-${String(day).padStart(2, '0')}`;
+          const list = byDay[iso] ?? [];
+          const sum = list.reduce((a, e) => a + e.points, 0);
+          const isSel = sel === iso;
+          return (
+            <button key={iso} type="button" onClick={() => setSel(iso)}
+              className={['flex min-h-[3rem] flex-col items-center justify-start rounded-input border px-0.5 pt-1 transition-colors',
+                isSel ? 'border-gold-300 bg-gold-300/[0.1]'
+                : list.length ? 'border-gold-400/35 bg-gold-300/[0.04] hover:bg-gold-300/[0.08]'
+                : 'border-border-subtle bg-surface-high/40 hover:bg-surface-high'].join(' ')}>
+              <span className={['text-2xs font-bold tabular-nums leading-none', iso === todayIso ? 'text-gold-300' : 'text-ink-secondary'].join(' ')}>{day}</span>
+              {list.length > 0 && (<>
+                <span className="mt-0.5 rounded-badge bg-gold-300/20 px-1 text-[9px] font-bold leading-tight text-gold-300 tabular-nums">{list.length}건</span>
+                <span className={['text-[9px] font-semibold tabular-nums leading-tight', sum >= 0 ? 'text-ink-muted' : 'text-danger-light'].join(' ')}>{sum > 0 ? '+' : ''}{sum}</span>
+              </>)}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 선택일 상세 */}
+      {sel && (
+        <div className="rounded-input border border-border-subtle bg-surface-high p-2.5">
+          <p className="mb-1.5 text-2xs font-bold text-ink-secondary">{sel} 기록 {selEntries.length ? `(${selEntries.length}건)` : ''}</p>
+          {selEntries.length === 0 ? (
+            <p className="py-2 text-center text-2xs text-ink-muted">이 날짜의 기록이 없습니다 — 위 「포인트 지급 · 차감」에서 날짜를 골라 입력하세요.</p>
+          ) : (
+            <ul className="max-h-48 space-y-1 overflow-y-auto pr-1">
+              {selEntries.map((r) => (
+                <li key={r.id} className="flex items-center gap-2 rounded-input bg-surface-base/60 px-2 py-1.5">
+                  <span className={['shrink-0 rounded-badge px-1.5 py-0.5 text-[9px] font-bold', r.boardKey ? 'bg-violet-500/15 text-violet-300' : 'bg-gold-300/15 text-gold-300'].join(' ')}>{boardName(r.boardKey)}</span>
+                  <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{r.name}</span>
+                  {r.reason && <span className="hidden max-w-[8rem] truncate text-[10px] text-ink-muted sm:block">{r.reason}</span>}
+                  <span className={['shrink-0 text-xs font-bold tabular-nums', r.points >= 0 ? 'text-gold-300' : 'text-danger-light'].join(' ')}>{r.points >= 0 ? '+' : ''}{r.points.toLocaleString()}</span>
+                  <button type="button" onClick={() => del(r.id)} aria-label="삭제" className="shrink-0 text-ink-muted hover:text-danger-light"><Icon name="close" size={12} /></button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
     </section>
