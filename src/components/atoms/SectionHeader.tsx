@@ -18,8 +18,9 @@ export default function SectionHeader({ title, desc, action }: Props) {
         {desc && <p className="mt-1 text-xs leading-snug text-ink-muted">{desc}</p>}
       </div>
       {action && (
-        // 자식 버튼 규격 강제: 높이 36px·글자 12px·패딩 통일 — 섹션마다 버튼 크기가 달라지는 것 방지
-        <div className="flex shrink-0 items-center gap-1.5 [&_button]:h-9 [&_button]:px-3.5 [&_button]:text-xs [&_button]:font-semibold [&_button]:whitespace-nowrap">
+        // 자식 버튼 규격 강제: 높이 38px·글자 12px·패딩 통일 — 섹션마다 버튼 크기가 달라지는 것 방지
+        // (min-h-0: .btn-primary 기본 min-h 40.8px가 h-9를 이기는 것 차단)
+        <div className="flex shrink-0 items-center gap-1.5 [&_button]:h-9 [&_button]:min-h-0 [&_button]:px-3.5 [&_button]:text-xs [&_button]:font-semibold [&_button]:whitespace-nowrap">
           {action}
         </div>
       )}
