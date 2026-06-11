@@ -4,9 +4,9 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
 import {
   getReservations, deleteReservation, updateReservationName, getVenueReserverCounts, subscribeReservations,
-  getCustomerActivity, type Reservation, type CustomerActivity,
+  getReservationCounts, getCustomerActivity, type Reservation, type CustomerActivity,
 } from '../../api/reservations';
-import { getLedgerScheduleLinks } from '../../api/ledger';
+import { getPosterOpsSummaries, type PosterOpsSummary } from '../../api/ledger';
 import { toCsv, downloadCsv } from '../../lib/csv';
 
 // 예약 명단 CSV 내보내기 (엑셀 한글 호환)
@@ -26,28 +26,36 @@ interface MyPostersTabProps {
   onDelete: (id: string) => void;
   /** '장부' 버튼 — 연결 장부가 있으면 그 날짜(existingDate)로, 없으면 새 등록(프리필) */
   onOpenLedger?: (s: Schedule, existingDate: string | null) => void;
+  /** '순위 미입력' 뱃지 클릭 — 해당 날짜의 순위 입력 화면으로 */
+  onGotoRanking?: (date: string) => void;
 }
 
 /** 게임 관리 — 승인 업주가 본인 포스터(게임)와 예약을 관리. */
-export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete, onOpenLedger }: MyPostersTabProps) {
+export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete, onOpenLedger, onGotoRanking }: MyPostersTabProps) {
   const { user, isApprovedOwner } = useAuth();
   const [reserverCounts, setReserverCounts] = useState<Record<string, number>>({});
-  const [ledgerLinks, setLedgerLinks] = useState<Record<string, string>>({}); // scheduleId → 연결 장부 날짜
+  const [ops, setOps] = useState<Record<string, PosterOpsSummary>>({}); // scheduleId → 연결 장부 운영 요약
 
   const myPosters = schedules.filter((s) => s.ownerId === user?.id);
   const venueId = user?.venueId || myPosters[0]?.venueId;
 
+  const [resCounts, setResCounts] = useState<Record<string, number>>({}); // scheduleId → 예약 수
   useEffect(() => {
     if (!venueId) return;
-    const reload = () => getVenueReserverCounts(venueId).then(setReserverCounts).catch(() => {});
+    const ids = myPosters.map((p) => p.id);
+    const reload = () => {
+      getVenueReserverCounts(venueId).then(setReserverCounts).catch(() => {});
+      getReservationCounts(ids).then(setResCounts).catch(() => {});
+    };
     reload();
     return subscribeReservations(reload); // 실시간: 신규/취소 예약 자동 반영
-  }, [venueId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [venueId, myPosters.length]);
 
-  // 포스터 ↔ 장부 연결 매핑 — '장부' 버튼 라벨(열기/등록) 분기용
+  // 포스터 ↔ 장부 운영 요약 — '장부' 버튼 분기 + 바인·매출 미니칩 + 순위 미입력 뱃지
   useEffect(() => {
     if (!venueId || !onOpenLedger) return;
-    getLedgerScheduleLinks(venueId).then(setLedgerLinks).catch(() => {});
+    getPosterOpsSummaries(venueId).then(setOps).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [venueId]);
 
@@ -74,8 +82,10 @@ export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete, on
           {myPosters.map((p) => (
             <PosterRow key={p.id} schedule={p} venueId={venueId} reserverCounts={reserverCounts}
               onEdit={() => onEdit(p.id)} onDelete={() => onDelete(p.id)}
-              ledgerDate={ledgerLinks[p.id] ?? null}
-              onLedger={onOpenLedger ? () => onOpenLedger(p, ledgerLinks[p.id] ?? null) : undefined} />
+              ops={ops[p.id] ?? null}
+              resCount={resCounts[p.id] ?? 0}
+              onLedger={onOpenLedger ? () => onOpenLedger(p, ops[p.id]?.date ?? null) : undefined}
+              onRanking={onGotoRanking} />
           ))}
         </ul>
       )}
@@ -99,11 +109,12 @@ function PendingApprovalView() {
 }
 
 // ── 단일 게임 행 + 예약 관리 패널 ─────────────────────────────────────────────
-function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ledgerDate, onLedger }: {
+function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, resCount, onLedger, onRanking }: {
   schedule: Schedule; venueId?: string; reserverCounts: Record<string, number>;
   onEdit: () => void; onDelete: () => void;
-  ledgerDate?: string | null; onLedger?: () => void;
+  ops?: PosterOpsSummary | null; resCount?: number; onLedger?: () => void; onRanking?: (date: string) => void;
 }) {
+  const ledgerDate = ops?.date ?? null;
   const toast = useToast();
   const [confirming, setConfirming] = useState(false);
   const [open, setOpen] = useState(false);
@@ -133,6 +144,23 @@ function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ledger
           </div>
           <p className="text-sm font-medium text-ink-primary truncate">{schedule.title}</p>
           <p className="text-2xs text-ink-muted mt-0.5">{d.getMonth() + 1}/{d.getDate()} {schedule.startTime} · 바이인 {schedule.buyIn.amount.toLocaleString()} · 탭하여 수정</p>
+          {/* 운영 현황 미니칩 — 예약·바인·매출(연결 장부 기준). 게임관리가 곧 운영 현황판 */}
+          {(ops || (resCount ?? 0) > 0) && (
+            <span className="mt-1 flex flex-wrap items-center gap-1 text-2xs font-semibold tabular-nums">
+              {(resCount ?? 0) > 0 && (
+                <span className="rounded-badge bg-surface-high px-1.5 py-0.5 text-ink-secondary">예약 {resCount}</span>
+              )}
+              {ops && (
+                <>
+                  <span className="rounded-badge bg-surface-high px-1.5 py-0.5 text-ink-secondary">바인 {ops.buyinCount}</span>
+                  <span className="rounded-badge bg-gold-300/15 px-1.5 py-0.5 text-gold-300">매출 {ops.revenueMan.toLocaleString()}만</span>
+                  {ops.closed && ops.hasRankings && (
+                    <span className="rounded-badge bg-surface-high px-1.5 py-0.5 text-ink-muted">마감 · 순위 ✓</span>
+                  )}
+                </>
+              )}
+            </span>
+          )}
         </button>
         <div className="flex items-center gap-1 shrink-0">
           {/* 예약관리(왼쪽) */}
@@ -143,6 +171,14 @@ function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ledger
               title={ledgerDate ? `연결된 장부(${ledgerDate}) 열기` : '이 게임으로 장부 등록'}
               className={['btn-ghost text-xs px-2', ledgerDate ? 'text-emerald-400' : 'text-ink-secondary'].join(' ')}>
               장부{ledgerDate ? ' ✓' : ' +'}
+            </button>
+          )}
+          {/* 마감했는데 순위가 비어 있으면 — 입력 유도(누르면 그 날짜 순위 입력으로) */}
+          {ops?.closed && !ops.hasRankings && onRanking && (
+            <button type="button" onClick={() => onRanking(ops.date)}
+              title="장부는 마감됐는데 순위가 아직 없어요 — 입력하면 랭킹·아카이브에 바로 반영됩니다"
+              className="rounded-badge border border-amber-500/40 bg-amber-500/15 px-2 py-1 text-2xs font-bold text-amber-400 active:opacity-80">
+              순위 미입력
             </button>
           )}
           {confirming ? (

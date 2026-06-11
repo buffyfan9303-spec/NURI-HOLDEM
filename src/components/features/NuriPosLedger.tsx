@@ -12,7 +12,7 @@ import {
   type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type LedgerSessionListItem, type DiscountPreset, type EarlyType,
   visitorLabel, wonToMan, WON_PER_MAN, buyinFinance, earlyTypeOf, setBuyinEarly,
   getLedgerSession, saveLedgerSession, openLedgerSession, closeLedgerSession, reopenLedgerSession, deleteLedgerSession,
-  setRegistrationClosed, getLastLedgerSettings, getLedgerSessionList, getLedgerAccessUserIds,
+  setRegistrationClosed, getLastLedgerSettings, getLedgerSessionList, getLedgerAccessUserIds, notifyLedgerOpen,
   getLedgerBuyins, upsertBuyin, upsertBuyinSplit, cancelBuyin,
   getLedgerPlayers, addLedgerPlayer, updateLedgerPlayer, renameLedgerPlayer, removeLedgerPlayer,
   searchRegisteredPlayers, type RegisteredPlayer,
@@ -255,7 +255,19 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
 
   // ── 액션 ──────────────────────────────────────────────────────────────────
   const handleOpen = async (s: LedgerSession) => {
-    try { await openLedgerSession(s, s.openedBy ?? null); await syncDealersToSchedule(s.sessionDate, s.dealers); await reloadSession(); toast.show('장부를 시작했습니다', 'success'); }
+    try {
+      await openLedgerSession(s, s.openedBy ?? null);
+      await syncDealersToSchedule(s.sessionDate, s.dealers);
+      await reloadSession();
+      toast.show('장부를 시작했습니다', 'success');
+      // 담당 직원(본인 제외)에게 장부 시작 알림 — 실패해도 장부 흐름엔 영향 없음
+      const others = (s.operators ?? []).filter((id) => id && id !== user?.id);
+      if (others.length) notifyLedgerOpen(venueId, s.title ?? '', others).catch(() => {});
+      // 포스터→장부→클락 원클릭 체인: 시작 직후 클락도 이어서 켤지 한 번만 묻는다
+      if (onOpenClock && window.confirm('장부를 시작했습니다.\n클락(토너먼트 타이머)도 같이 켤까요?')) {
+        onOpenClock(s.sessionDate);
+      }
+    }
     catch (e) { toast.show(e instanceof Error ? e.message : '시작 실패', 'error'); }
   };
   const handleEditSave = async (s: LedgerSession) => {

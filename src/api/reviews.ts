@@ -57,6 +57,22 @@ export async function saveVenueReview(venueId: string, rating: number, content: 
   }
 }
 
+/** 전 매장 별점 집계 — venueId → {avg, count}. 매장 카드·일정탐색 ⭐표시용(읽기 공개라 1쿼리). */
+export interface VenueRating { avg: number; count: number }
+export async function getVenueRatings(): Promise<Record<string, VenueRating>> {
+  if (IS_MOCK) return {};
+  const { data } = await supabase.from('venue_reviews').select('venue_id, rating').limit(5000);
+  const agg = new Map<string, { sum: number; n: number }>();
+  for (const r of (data ?? []) as { venue_id: string; rating: number }[]) {
+    const cur = agg.get(r.venue_id) ?? { sum: 0, n: 0 };
+    cur.sum += r.rating; cur.n += 1;
+    agg.set(r.venue_id, cur);
+  }
+  const out: Record<string, VenueRating> = {};
+  for (const [k, v] of agg) out[k] = { avg: Math.round((v.sum / v.n) * 10) / 10, count: v.n };
+  return out;
+}
+
 /** 후기 삭제(본인 또는 운영자). */
 export async function deleteVenueReview(id: string): Promise<void> {
   const { error } = await supabase.from('venue_reviews').delete().eq('id', id);

@@ -154,6 +154,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
             {section === 'dashboard' && <StoreDashboard venueId={venueId} schedules={schedules} onGoto={(s) => gotoSection(s as Section)} onCreatePoster={onCreatePoster}
               caps={{ ledger: ledgerOk, manage: manageOk, voucher: manageOk || voucherView, posters: canPosters, staff: canStaff }} />}
             {section === 'posters' && canPosters && <MyPostersTab schedules={schedules} onCreate={onCreatePoster} onEdit={onEditPoster} onDelete={onDeletePoster}
+              onGotoRanking={ledgerOk ? (date) => { setRankingDraft({ date, names: [] }); setSection('ranking'); } : undefined}
               onOpenLedger={ledgerOk ? (s, existingDate) => {
                 const schedDate = new Date(s.date).toLocaleDateString('en-CA');
                 setLedgerSeed(existingDate

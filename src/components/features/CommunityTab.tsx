@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef, Fragment } from 'react';
 import { getActiveCommunityAds, type CommunityAd } from '../../api/ads';
+import { getVenueRatings, type VenueRating } from '../../api/reviews';
 import type { Venue, Comment, CommunityPost, LiveMessage, PostCategory, GroupKind, JoinedGroup } from '../../api/community';
 import { getLiveMessages, addLiveMessage, deleteLiveMessage, subscribeLiveWall, createMyVenue, createGroup, GROUP_KIND_LABEL, getMyOwnedCommunities, getMyJoinedGroups, removeMember } from '../../api/community';
 import { REGION_CHIPS } from './IntegratedSearchBar';
@@ -729,6 +730,9 @@ function VenuesSection({
   const { user } = useAuth();
   const [kindFilter, setKindFilter] = useState('all');
   const [createOpen, setCreateOpen] = useState(false);
+  // 방문 후기 별점 — 매장 카드에 ⭐4.8(12) 표시(체크인 인증 후기라 신뢰 신호)
+  const [ratings, setRatings] = useState<Record<string, VenueRating>>({});
+  useEffect(() => { getVenueRatings().then(setRatings).catch(() => {}); }, []);
   const filtered = kindFilter === 'all' ? sortedVenues : sortedVenues.filter((x) => (x.venue.kind ?? 'venue') === kindFilter);
   return (
     <div className="space-y-3">
@@ -826,6 +830,9 @@ function VenuesSection({
                         {venue.region}
                         {venue.followerCount !== undefined && (
                           <> · 팔로워 {venue.followerCount.toLocaleString()}</>
+                        )}
+                        {ratings[venue.id] && (
+                          <span className="font-bold text-gold-300"> · ⭐{ratings[venue.id].avg.toFixed(1)}<span className="font-normal text-ink-muted">({ratings[venue.id].count})</span></span>
                         )}
                       </p>
                     </div>

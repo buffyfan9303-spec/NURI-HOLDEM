@@ -250,6 +250,62 @@ export async function getLedgerScheduleLinks(venueId: string): Promise<Record<st
   return map;
 }
 
+/** 장부 시작 알림 — 담당 직원(본인 제외)에게 "장부가 시작됐어요" 알림(서버 RPC, 권한 검증). */
+export async function notifyLedgerOpen(venueId: string, title: string, operatorIds: string[]): Promise<void> {
+  if (IS_MOCK || operatorIds.length === 0) return;
+  await supabase.rpc('notify_ledger_open', { p_venue_id: venueId, p_title: title, p_operator_ids: operatorIds });
+}
+
+/** 게임관리 운영 현황판 — 연결 장부의 바인 수·매출(만)·마감·순위입력 여부(scheduleId 키). */
+export interface PosterOpsSummary {
+  date: string;
+  closed: boolean;
+  buyinCount: number;
+  revenueMan: number;   // 실수금 합(만원) — 통계와 동일한 buyinFinance 규칙
+  hasRankings: boolean; // 그 날짜에 순위 입력이 1건이라도 있는지
+}
+export async function getPosterOpsSummaries(venueId: string): Promise<Record<string, PosterOpsSummary>> {
+  if (IS_MOCK) return {};
+  const { data: ss } = await supabase.from('ledger_sessions')
+    .select('schedule_id, session_date, closed, buyin_amount, card_amount, discounts')
+    .eq('venue_id', venueId).not('schedule_id', 'is', null)
+    .order('session_date', { ascending: false }).limit(100);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sessions = (ss ?? []) as any[];
+  if (!sessions.length) return {};
+  const byDate = new Map(sessions.map((s) => [s.session_date as string, s]));
+  const dates = [...byDate.keys()];
+  const [bRes, rRes] = await Promise.all([
+    supabase.from('ledger_buyins').select('*').eq('venue_id', venueId).in('session_date', dates),
+    supabase.from('venue_rankings').select('ranking_date').eq('venue_id', venueId).in('ranking_date', dates),
+  ]);
+  const rankedDates = new Set(((rRes.data ?? []) as { ranking_date: string }[]).map((r) => r.ranking_date));
+  // 날짜별 바인 집계(매출은 세션 단가 기준 buyinFinance)
+  const agg = new Map<string, { cnt: number; rev: number }>();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const row of (bRes.data ?? []) as any[]) {
+    const b = rowToBuyin(row);
+    const s = byDate.get(row.session_date as string);
+    if (!s) continue;
+    const fin = buyinFinance(b, { buyinAmount: s.buyin_amount ?? 0, cardAmount: s.card_amount ?? null, discounts: s.discounts ?? [] });
+    const cur = agg.get(row.session_date) ?? { cnt: 0, rev: 0 };
+    cur.cnt += 1;
+    cur.rev += fin.paid;
+    agg.set(row.session_date, cur);
+  }
+  const out: Record<string, PosterOpsSummary> = {};
+  for (const s of sessions) {
+    if (out[s.schedule_id]) continue; // 최신 장부 우선
+    const a = agg.get(s.session_date) ?? { cnt: 0, rev: 0 };
+    out[s.schedule_id] = {
+      date: s.session_date, closed: !!s.closed,
+      buyinCount: a.cnt, revenueMan: Math.round(a.rev),
+      hasRankings: rankedDates.has(s.session_date),
+    };
+  }
+  return out;
+}
+
 /** 직전(가장 최근) 세션 설정 — 다음 게임 열 때 단가/게임명/딜러 등을 바로 이어쓰기 위함 */
 export async function getLastLedgerSettings(venueId: string, beforeDate: string): Promise<Partial<LedgerSession> | null> {
   if (IS_MOCK) return null;

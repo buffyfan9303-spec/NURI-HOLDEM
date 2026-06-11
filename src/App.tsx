@@ -11,6 +11,7 @@ import WeeklyBestStrip from './components/features/WeeklyBestStrip';
 import ScheduleTable from './components/features/ScheduleTable';
 import { getWeeklyMoneyinKings, getVenueRankings, type WeeklyKing, type RankingEntry } from './api/rankings';
 import { getReservationCounts } from './api/reservations';
+import { getVenueRatings } from './api/reviews';
 import NotificationPanel from './components/features/NotificationPanel';
 import { decodeSpot, readGtoHash } from './components/features/gto/gtoShare';
 import type { DeepGtoInit } from './components/features/gto/useDeepGto';
@@ -462,6 +463,9 @@ export default function App() {
   const [viewMode, setViewMode]       = useState<ViewMode>('list');
   // 일정탐색 FOMO — 예약자 수(예약 N명 · 마감 임박 뱃지)
   const [browseResCounts, setBrowseResCounts] = useState<Record<string, number>>({});
+  // 매장 후기 별점(체크인 인증) — 카드 매장명 옆 ⭐4.8(12)
+  const [venueRatings, setVenueRatings] = useState<Record<string, { avg: number; count: number }>>({});
+  useEffect(() => { getVenueRatings().then(setVenueRatings).catch(() => {}); }, []);
   const [activeTab, setActiveTab]     = useState<TabId>('browse');
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   useEffect(() => {
@@ -1284,6 +1288,7 @@ export default function App() {
                         mode={viewMode}
                         schedule={s}
                         reserveCount={browseResCounts[s.id]}
+                        rating={venueRatings[s.venueId]}
                         onVenueClick={handleVenueClick}
                         onSelect={handleScheduleSelect}
                       />
@@ -1294,7 +1299,7 @@ export default function App() {
                 {viewMode === 'table' && visibleSchedules.length > 0 && (
                   <div className="grid grid-cols-1 gap-card-gap animate-fade-in md:hidden">
                     {visibleSchedules.map((s) => (
-                      <ScheduleCard key={s.id} mode="list" schedule={s} reserveCount={browseResCounts[s.id]} onVenueClick={handleVenueClick} onSelect={handleScheduleSelect} />
+                      <ScheduleCard key={s.id} mode="list" schedule={s} reserveCount={browseResCounts[s.id]} rating={venueRatings[s.venueId]} onVenueClick={handleVenueClick} onSelect={handleScheduleSelect} />
                     ))}
                   </div>
                 )}

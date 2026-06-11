@@ -139,9 +139,11 @@ interface CardProps {
   onSelect: (schedule: Schedule) => void;
   /** 예약자 수(있으면 FOMO 뱃지 — 10명 이상이면 '마감 임박') */
   reserveCount?: number;
+  /** 매장 후기 별점(체크인 인증 후기 평균) — 있으면 매장명 옆 ⭐4.8(12) */
+  rating?: { avg: number; count: number };
 }
 
-function ListCard({ schedule, onVenueClick, onSelect, reserveCount }: CardProps) {
+function ListCard({ schedule, onVenueClick, onSelect, reserveCount, rating }: CardProps) {
   const d = formatDate(schedule.date, schedule.startTime);
 
   return (
@@ -184,13 +186,20 @@ function ListCard({ schedule, onVenueClick, onSelect, reserveCount }: CardProps)
           </h3>
         </div>
 
-        {/* 2행: 매장 + 프라이즈 */}
+        {/* 2행: 매장(+별점) + 프라이즈 */}
         <div className="flex items-center justify-between gap-2 min-w-0">
-          <VenueLink
-            pubName={schedule.pubName}
-            region={schedule.region}
-            onClick={() => onVenueClick(schedule.venueId)}
-          />
+          <span className="flex min-w-0 items-center gap-1">
+            <VenueLink
+              pubName={schedule.pubName}
+              region={schedule.region}
+              onClick={() => onVenueClick(schedule.venueId)}
+            />
+            {rating && rating.count > 0 && (
+              <span className="shrink-0 text-2xs font-bold tabular-nums text-gold-300" title={`방문 후기 ${rating.count}건 평균`}>
+                ⭐{rating.avg.toFixed(1)}<span className="font-normal text-ink-muted">({rating.count})</span>
+              </span>
+            )}
+          </span>
           <span className="shrink-0 inline-flex items-baseline gap-1">
             <span className="font-extrabold text-gold-300 tabular-nums text-sm leading-none">
               {prizeMainText(schedule)}
