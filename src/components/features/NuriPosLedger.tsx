@@ -3,7 +3,7 @@ import { useIsDesktop } from '../../lib/responsive';
 // NURI POS 장부 — 표(table) 형태. 장부 입장 시 세션 설정(담당직원·게임·단가·이벤트·딜러) → 보드.
 // 셀 2-Tap 입력(결제수단 + 완납/미수/가게지원). 티켓·지원은 미수 불가. 미수=붉은색.
 // 8바인 초과 시 가로 스크롤. 비고 컬럼 수기 입력. 장부 마감=읽기전용 스냅샷+메모. 엑셀 내보내기.
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useToast } from '../atoms/Toast';
 import DateTimePicker from '../atoms/DateTimePicker';
 import { useAuth } from '../../contexts/AuthContext';
@@ -62,10 +62,22 @@ function hhmm(iso: string): string {
 
 interface SelectedCell { playerName: string; entryNo: number; buyin: LedgerBuyin | null; }
 
-export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI POS', onMakeRankingDraft, onOpenClock }: {
+/** 게임관리 '장부' 바로가기 시드 — 연결 장부가 있으면 그 날짜로 바로, 없으면 포스터 정보 프리필로 새 등록 */
+export interface LedgerSeed {
+  date: string;          // 열 장부 날짜(연결 장부 날짜 or 포스터 날짜)
+  scheduleId: string;
+  isNew: boolean;        // true=연결 장부 없음 → 시작 설정에 포스터 프리필
+  title?: string;
+  buyinAmount?: number;
+  gtd?: boolean;
+}
+
+export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI POS', onMakeRankingDraft, onOpenClock, seed }: {
   venueId: string; canManage: boolean; venueName?: string;
   onMakeRankingDraft?: (date: string, names: string[]) => void;
   onOpenClock?: (date: string) => void;
+  /** 게임관리에서 '장부' 버튼으로 진입 시 — 해당 포스터의 장부로 바로 이동/등록 */
+  seed?: LedgerSeed | null;
 }) {
   const toast = useToast();
   const { user, isAdmin } = useAuth();
@@ -135,6 +147,24 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   useEffect(() => { if (mode === 'list') loadList(); }, [mode, loadList]);
 
   const openBoard = (d: string) => { setDate(d); setMode('board'); };
+
+  // 게임관리 '장부' 바로가기: 연결 장부로 즉시 이동, 없으면 포스터 정보를 시작 설정에 프리필
+  // (ref에 대상 날짜를 묶어 — 세션 fetch 타이밍에 이전 날짜 화면이 잠깐 보여도 오적용/유실 없음)
+  const seedFillRef = useRef<{ date: string; fill: Partial<LedgerSession> } | null>(null);
+  useEffect(() => {
+    if (!seed) return;
+    if (seed.isNew) {
+      seedFillRef.current = {
+        date: seed.date,
+        fill: {
+          title: seed.title, buyinAmount: seed.buyinAmount ?? 0,
+          gameType: seed.gtd ? 'gtd' : 'entry', scheduleId: seed.scheduleId,
+        },
+      };
+    }
+    setDate(seed.date);
+    setMode('board');
+  }, [seed]);
   const handleDeleteSession = useCallback(async (d: string) => {
     if (!confirm(`${d} 장부를 삭제할까요?\n바인·명단·세션 기록이 모두 삭제되며 되돌릴 수 없습니다.`)) return;
     try { await deleteLedgerSession(venueId, d); toast.show('장부를 삭제했습니다', 'info'); loadList(); }
@@ -161,10 +191,22 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const showSetup = !session.openedAt && !closed && buyins.length === 0 && players.length === 0;
 
   // 다음 게임 바로 작성: 설정 화면일 때 직전 세션 단가/게임명/딜러를 미리 불러옴
+  // 게임관리에서 포스터 프리필(seedFill)로 들어왔으면 그게 우선(해당 날짜에서 1회 소비)
   useEffect(() => {
-    if (!showSetup) { setPrefill(null); return; }
+    if (loading) return; // 세션 fetch 중엔 이전 날짜 잔상 기준 판단 금지
+    if (!showSetup) {
+      setPrefill(null);
+      // 그 날짜에 이미 장부가 있으면 포스터 프리필은 폐기(기존 장부 = 그날의 게임)
+      if (seedFillRef.current?.date === date) seedFillRef.current = null;
+      return;
+    }
+    if (seedFillRef.current?.date === date) {
+      setPrefill(seedFillRef.current.fill);
+      seedFillRef.current = null;
+      return;
+    }
     getLastLedgerSettings(venueId, date).then(setPrefill).catch(() => {});
-  }, [showSetup, venueId, date]);
+  }, [loading, showSetup, venueId, date]);
 
   const cellAt = (name: string, e: number) => buyins.find((b) => b.playerName === name && b.entryNo === e) ?? null;
   const countOf = (name: string) => buyins.filter((b) => b.playerName === name).length;

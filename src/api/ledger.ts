@@ -236,6 +236,20 @@ export async function getLedgerSessionList(venueId: string, limit = 90): Promise
   }));
 }
 
+/** 포스터(스케줄)와 연결된 장부 매핑 — scheduleId → sessionDate. 게임관리 '장부' 바로가기용. */
+export async function getLedgerScheduleLinks(venueId: string): Promise<Record<string, string>> {
+  if (IS_MOCK) return {};
+  const { data } = await supabase.from('ledger_sessions')
+    .select('schedule_id, session_date')
+    .eq('venue_id', venueId).not('schedule_id', 'is', null)
+    .order('session_date', { ascending: false }).limit(200);
+  const map: Record<string, string> = {};
+  for (const d of (data ?? []) as { schedule_id: string; session_date: string }[]) {
+    if (!map[d.schedule_id]) map[d.schedule_id] = d.session_date; // 같은 포스터에 여럿이면 최신 장부
+  }
+  return map;
+}
+
 /** 직전(가장 최근) 세션 설정 — 다음 게임 열 때 단가/게임명/딜러 등을 바로 이어쓰기 위함 */
 export async function getLastLedgerSettings(venueId: string, beforeDate: string): Promise<Partial<LedgerSession> | null> {
   if (IS_MOCK) return null;

@@ -6,6 +6,7 @@ import {
   getReservations, deleteReservation, updateReservationName, getVenueReserverCounts, subscribeReservations,
   getCustomerActivity, type Reservation, type CustomerActivity,
 } from '../../api/reservations';
+import { getLedgerScheduleLinks } from '../../api/ledger';
 import { toCsv, downloadCsv } from '../../lib/csv';
 
 // 예약 명단 CSV 내보내기 (엑셀 한글 호환)
@@ -23,12 +24,15 @@ interface MyPostersTabProps {
   onCreate: () => void;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
+  /** '장부' 버튼 — 연결 장부가 있으면 그 날짜(existingDate)로, 없으면 새 등록(프리필) */
+  onOpenLedger?: (s: Schedule, existingDate: string | null) => void;
 }
 
 /** 게임 관리 — 승인 업주가 본인 포스터(게임)와 예약을 관리. */
-export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete }: MyPostersTabProps) {
+export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete, onOpenLedger }: MyPostersTabProps) {
   const { user, isApprovedOwner } = useAuth();
   const [reserverCounts, setReserverCounts] = useState<Record<string, number>>({});
+  const [ledgerLinks, setLedgerLinks] = useState<Record<string, string>>({}); // scheduleId → 연결 장부 날짜
 
   const myPosters = schedules.filter((s) => s.ownerId === user?.id);
   const venueId = user?.venueId || myPosters[0]?.venueId;
@@ -38,6 +42,13 @@ export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete }: 
     const reload = () => getVenueReserverCounts(venueId).then(setReserverCounts).catch(() => {});
     reload();
     return subscribeReservations(reload); // 실시간: 신규/취소 예약 자동 반영
+  }, [venueId]);
+
+  // 포스터 ↔ 장부 연결 매핑 — '장부' 버튼 라벨(열기/등록) 분기용
+  useEffect(() => {
+    if (!venueId || !onOpenLedger) return;
+    getLedgerScheduleLinks(venueId).then(setLedgerLinks).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [venueId]);
 
   if (user?.role === 'venue_owner' && !isApprovedOwner) return <PendingApprovalView />;
@@ -62,7 +73,9 @@ export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete }: 
         <ul className="space-y-2">
           {myPosters.map((p) => (
             <PosterRow key={p.id} schedule={p} venueId={venueId} reserverCounts={reserverCounts}
-              onEdit={() => onEdit(p.id)} onDelete={() => onDelete(p.id)} />
+              onEdit={() => onEdit(p.id)} onDelete={() => onDelete(p.id)}
+              ledgerDate={ledgerLinks[p.id] ?? null}
+              onLedger={onOpenLedger ? () => onOpenLedger(p, ledgerLinks[p.id] ?? null) : undefined} />
           ))}
         </ul>
       )}
@@ -86,9 +99,10 @@ function PendingApprovalView() {
 }
 
 // ── 단일 게임 행 + 예약 관리 패널 ─────────────────────────────────────────────
-function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete }: {
+function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ledgerDate, onLedger }: {
   schedule: Schedule; venueId?: string; reserverCounts: Record<string, number>;
   onEdit: () => void; onDelete: () => void;
+  ledgerDate?: string | null; onLedger?: () => void;
 }) {
   const toast = useToast();
   const [confirming, setConfirming] = useState(false);
@@ -123,6 +137,14 @@ function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete }: {
         <div className="flex items-center gap-1 shrink-0">
           {/* 예약관리(왼쪽) */}
           <button type="button" onClick={toggle} className="btn-ghost text-xs px-2 text-gold-300">예약관리{reservations ? `(${reservations.length})` : ''} {open ? '▲' : '▼'}</button>
+          {/* 장부 — 연결 장부 있으면 바로 열기, 없으면 포스터 정보로 새 등록 */}
+          {onLedger && (
+            <button type="button" onClick={onLedger}
+              title={ledgerDate ? `연결된 장부(${ledgerDate}) 열기` : '이 게임으로 장부 등록'}
+              className={['btn-ghost text-xs px-2', ledgerDate ? 'text-emerald-400' : 'text-ink-secondary'].join(' ')}>
+              장부{ledgerDate ? ' ✓' : ' +'}
+            </button>
+          )}
           {confirming ? (
             <>
               <button type="button" onClick={() => setConfirming(false)} className="btn-ghost text-xs px-2">취소</button>

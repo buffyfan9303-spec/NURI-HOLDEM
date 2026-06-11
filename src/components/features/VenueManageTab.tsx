@@ -8,7 +8,7 @@ import { getVenueRankings, saveVenueRankings, maskRealName, getVenuePageConfig, 
 import { canAccessLedger, canManagePos, getLedgerAccessUserIds, grantLedgerAccess, revokeLedgerAccess } from '../../api/ledger';
 import { getAllVenues, type Venue } from '../../api/community';
 import VenueVerificationCard from './VenueVerificationCard';
-import NuriPosLedger from './NuriPosLedger';
+import NuriPosLedger, { type LedgerSeed } from './NuriPosLedger';
 import LedgerStatsPanel, { PosSettingsPanel } from './LedgerStatsPanel';
 import TournamentClock from './clock/TournamentClock';
 import StaffSchedule from './StaffSchedule';
@@ -41,6 +41,13 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   const [permsLoaded, setPermsLoaded] = useState(false);
   const [rankingDraft, setRankingDraft] = useState<{ date: string; names: string[] } | null>(null);
   const [clockSeed, setClockSeed] = useState<string | null>(null); // 장부→클락 연동 날짜
+  const [ledgerSeed, setLedgerSeed] = useState<LedgerSeed | null>(null); // 게임관리→장부 바로가기
+
+  // 섹션 이동 공통 — 장부를 메뉴로 직접 열 땐 게임관리 시드를 지워 일반 진입으로
+  const gotoSection = (s: Section) => {
+    if (s === 'ledger') setLedgerSeed(null);
+    setSection(s);
+  };
 
   // 운영자: 전체 매장 목록 로드(선택용)
   useEffect(() => {
@@ -131,7 +138,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
           {available.length > 1 && (
             <nav className="flex gap-1 overflow-x-auto scrollbar-none rounded-input bg-surface-high p-0.5 lg:sticky lg:top-16 lg:w-44 lg:shrink-0 lg:flex-col lg:self-start lg:overflow-visible lg:bg-transparent lg:p-0">
               {available.map((a) => (
-                <SectionBtn key={a.id} icon={SECTION_ICON[a.id]} active={section === a.id} locked={a.locked} onClick={() => setSection(a.id)}>{a.label}</SectionBtn>
+                <SectionBtn key={a.id} icon={SECTION_ICON[a.id]} active={section === a.id} locked={a.locked} onClick={() => gotoSection(a.id)}>{a.label}</SectionBtn>
               ))}
             </nav>
           )}
@@ -144,11 +151,18 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 <p className="text-2xs leading-relaxed text-ink-muted">이 기능은 업주가 권한을 부여해야 사용할 수 있어요.<br />매장 업주에게 <span className="font-semibold text-gold-300">{curItem.id === 'voucher' ? '이용권 내역' : '장부·순위'} 권한</span>을 요청하세요.</p>
               </div>
             ) : (<>
-            {section === 'dashboard' && <StoreDashboard venueId={venueId} schedules={schedules} onGoto={(s) => setSection(s as Section)} onCreatePoster={onCreatePoster}
+            {section === 'dashboard' && <StoreDashboard venueId={venueId} schedules={schedules} onGoto={(s) => gotoSection(s as Section)} onCreatePoster={onCreatePoster}
               caps={{ ledger: ledgerOk, manage: manageOk, voucher: manageOk || voucherView, posters: canPosters, staff: canStaff }} />}
-            {section === 'posters' && canPosters && <MyPostersTab schedules={schedules} onCreate={onCreatePoster} onEdit={onEditPoster} onDelete={onDeletePoster} />}
+            {section === 'posters' && canPosters && <MyPostersTab schedules={schedules} onCreate={onCreatePoster} onEdit={onEditPoster} onDelete={onDeletePoster}
+              onOpenLedger={ledgerOk ? (s, existingDate) => {
+                const schedDate = new Date(s.date).toLocaleDateString('en-CA');
+                setLedgerSeed(existingDate
+                  ? { date: existingDate, scheduleId: s.id, isNew: false }
+                  : { date: schedDate, scheduleId: s.id, isNew: true, title: s.title, buyinAmount: s.buyIn?.amount ?? 0, gtd: !!s.guaranteed });
+                setSection('ledger');
+              } : undefined} />}
             {section === 'ledger'  && ledgerOk && (
-              <NuriPosLedger venueId={venueId} canManage={manageOk}
+              <NuriPosLedger venueId={venueId} canManage={manageOk} seed={ledgerSeed}
                 onMakeRankingDraft={(d, names) => { setRankingDraft({ date: d, names }); setSection('ranking'); }}
                 onOpenClock={(d) => { setClockSeed(d); setSection('clock'); }} />
             )}
