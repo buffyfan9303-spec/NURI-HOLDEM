@@ -305,6 +305,24 @@ export default function TierLeaderboard() {
                     아직 이번 주 리그 점수가 없어요 — 체크인(+3)·입상으로 리그에 입장하세요!
                   </p>
                 )}
+                {/* 티어 메달 진열장 — 브론즈~다이아(레퍼런스 하단 메달 행). 내 티어 하이라이트, 미달성은 흐림 */}
+                <div className="grid grid-cols-5 gap-1.5">
+                  {[...LEAGUE_TIERS].reverse().map((t) => {
+                    const mine = me ? leagueTierOf(me.score)?.key === t.key : false;
+                    const reached = me ? me.score >= t.min : false;
+                    return (
+                      <div key={t.key}
+                        className={['rounded-card border px-1 py-2 text-center transition-colors',
+                          mine ? 'border-gold-400/60 bg-gold-300/10'
+                            : reached ? 'border-border-subtle bg-surface-high'
+                            : 'border-border-subtle bg-surface-high opacity-40'].join(' ')}>
+                        <p className="text-xl leading-none">{t.emoji}</p>
+                        <p className={['mt-1 text-2xs font-bold', mine ? 'text-gold-300' : 'text-ink-secondary'].join(' ')}>{t.label}</p>
+                        <p className="text-[10px] tabular-nums text-ink-muted">{t.min}점~</p>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             );
           })()
@@ -434,13 +452,30 @@ export default function TierLeaderboard() {
               const t = tierOf(r.activityPoints);
               const rowAce = isAceRank(r.activityPoints, i + 1);
               const isMe = user?.id === r.id;
+              if (isMe && !isAdmin) {
+                // 내 순위 빅 카드 — 리그 보드와 동일 패턴(리스트 흐름 속 인라인 강조)
+                return (
+                  <li key={r.id} className="border-y border-gold-400/40 bg-gold-300/[0.08] px-3 py-3 last:border-b-0">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-base font-extrabold text-white"
+                        style={{ background: r.avatarColor ?? '#5A6175' }}>
+                        {r.nickname[0]}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-bold text-gold-300">{i + 1}위 · {r.nickname} <span className="font-semibold text-ink-muted">(나)</span></p>
+                        <p className="text-2xl font-extrabold leading-tight tabular-nums" style={{ color: rowAce ? '#FFD700' : t.color }}>
+                          {r.activityPoints.toLocaleString()}<span className="ml-0.5 text-xs font-bold text-ink-muted">점</span>
+                        </p>
+                      </div>
+                      <TierBadge points={r.activityPoints} size={26} overallRank={i + 1} />
+                    </div>
+                  </li>
+                );
+              }
               return (
                 <li
                   key={r.id}
-                  className={[
-                    'flex items-center gap-2.5 px-3 py-2 border-b border-border-subtle last:border-b-0',
-                    isMe ? 'bg-gold-300/[0.06]' : '',
-                  ].join(' ')}
+                  className="flex items-center gap-2.5 px-3 py-2 border-b border-border-subtle last:border-b-0"
                 >
                   <RankNum n={i + 1} />
                   <span
@@ -463,12 +498,19 @@ export default function TierLeaderboard() {
               );
             })}
           </ul>
-          {/* 내 순위 고정 바 — Duolingo 문법(내가 4위 밖이면 하단에 항상 표시) */}
-          {user && !isAdmin && myRank && myRank > 3 && (
-            <div className="sticky bottom-2 mt-2 flex items-center gap-2.5 rounded-card border border-gold-400/50 bg-surface-mid/95 px-3 py-2 shadow-dialog backdrop-blur">
-              <RankNum n={myRank} />
-              <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink-primary">{user.nickname ?? '나'} <span className="text-2xs font-bold text-gold-300">나</span></span>
-              <span className="text-xs font-bold tabular-nums text-gold-300">{(user.activityPoints ?? 0).toLocaleString()}점</span>
+          {/* TOP30 밖 — 리스트 아래 내 점수 카드(순위 미표기) */}
+          {user && !isAdmin && !myRank && (
+            <div className="mt-2 flex items-center gap-3 rounded-card border border-gold-400/40 bg-gold-300/[0.08] px-3 py-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gold-300 text-base font-extrabold text-ink-inverse">
+                {(user.nickname ?? '나')[0]}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold text-gold-300">{user.nickname ?? '나'} <span className="font-semibold text-ink-muted">(나)</span></p>
+                <p className="text-2xl font-extrabold leading-tight tabular-nums text-ink-primary">
+                  {(user.activityPoints ?? 0).toLocaleString()}<span className="ml-0.5 text-xs font-bold text-ink-muted">점</span>
+                </p>
+                <p className="text-2xs text-ink-muted">TOP 30 진입까지 활동 점수를 모아보세요</p>
+              </div>
             </div>
           )}
           </>
