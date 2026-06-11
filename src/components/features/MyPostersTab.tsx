@@ -62,7 +62,8 @@ export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete, on
   if (user?.role === 'venue_owner' && !isApprovedOwner) return <PendingApprovalView />;
 
   return (
-    <div className="space-y-3 mx-auto w-full max-w-3xl">
+    {/* 다른 섹션(장부·통계 등)과 동일하게 본문 좌측에서 시작 — mx-auto 가운데 정렬 제거(제목 위치 통일) */}
+    <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         <div>
           <h2 className="text-base font-semibold text-ink-primary">게임 관리</h2>
