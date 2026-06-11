@@ -208,7 +208,8 @@ export default function CustomerDashboardPage({ open, onClose }: { open: boolean
             {loading ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
               : !user?.nickname ? <p className="py-6 text-center text-2xs text-ink-muted">프로필에서 아이디(닉네임)를 설정하면 입상 기록이 자동 연결됩니다.</p>
               : ranks.length === 0 ? <p className="py-6 text-center text-2xs text-ink-muted">아직 입상 기록이 없습니다 — 매장에서 순위가 등록되면 자동으로 표시됩니다.</p>
-                : <ul className="space-y-1.5">{ranks.slice(0, 15).map((r, i) => (
+                : <><RankTrendChart rows={ranks} />
+                <ul className="space-y-1.5">{ranks.slice(0, 15).map((r, i) => (
                   <li key={i} className="flex items-center gap-2.5 rounded-input border border-border-subtle bg-surface-low px-3 py-2">
                     <span className={['flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-2xs font-extrabold tabular-nums',
                       r.position === 1 ? 'bg-gold-300 text-ink-inverse' : r.position === 2 ? 'bg-slate-300 text-ink-inverse' : r.position === 3 ? 'bg-amber-700 text-white' : 'bg-surface-float text-ink-secondary'].join(' ')}>
@@ -220,12 +221,56 @@ export default function CustomerDashboardPage({ open, onClose }: { open: boolean
                     </div>
                     {r.prize && <span className="shrink-0 text-xs font-bold tabular-nums text-gold-300">{r.prize}점</span>}
                   </li>
-                ))}</ul>}
+                ))}</ul></>}
           </section>
         </div>
       </div>
 
       {redeem && <RedeemSheet stack={redeem} onClose={() => setRedeem(null)} onDone={() => { setRedeem(null); reload(); }} />}
+    </div>
+  );
+}
+
+/** 내 전적 그래프 — 순위 추이(시간순, 1위가 위). 최근 15개. */
+function RankTrendChart({ rows }: { rows: MyRankingRow[] }) {
+  // rows는 최신순 → 시간순으로 뒤집고 최근 15개만
+  const pts = [...rows].slice(0, 15).reverse();
+  if (pts.length < 2) return null; // 1개뿐이면 추세가 없어 리스트만 보여준다
+  const W = 560, H = 130, PAD_X = 26, PAD_T = 14, PAD_B = 22;
+  const maxPos = Math.max(4, ...pts.map((p) => p.position));
+  const x = (i: number) => PAD_X + (i * (W - PAD_X * 2)) / (pts.length - 1);
+  const y = (pos: number) => PAD_T + ((pos - 1) * (H - PAD_T - PAD_B)) / (maxPos - 1 || 1);
+  const path = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(p.position).toFixed(1)}`).join(' ');
+  const avg = Math.round((pts.reduce((s, p) => s + p.position, 0) / pts.length) * 10) / 10;
+  const best = Math.min(...pts.map((p) => p.position));
+  const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
+  return (
+    <div className="mb-2 rounded-card border border-border-subtle bg-surface-low p-3">
+      <div className="flex items-baseline justify-between">
+        <p className="text-xs font-bold text-ink-secondary">순위 추이 <span className="font-normal text-ink-muted">(최근 {pts.length}회 · 위로 갈수록 높은 순위)</span></p>
+        <p className="text-2xs text-ink-muted">최고 <b className="text-gold-300">{best}위</b> · 평균 <b className="text-ink-secondary">{avg}위</b></p>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="mt-1 w-full" role="img" aria-label="내 순위 추이 그래프">
+        {/* 가이드선: 1위/중간/하단 */}
+        {[1, Math.ceil(maxPos / 2), maxPos].map((g) => (
+          <g key={g}>
+            <line x1={PAD_X} y1={y(g)} x2={W - PAD_X} y2={y(g)} stroke="#2B3139" strokeWidth="1" strokeDasharray={g === 1 ? '' : '3 4'} />
+            <text x={PAD_X - 5} y={y(g) + 3.5} textAnchor="end" fontSize="10" fill="#848E9C">{g}위</text>
+          </g>
+        ))}
+        <path d={path} fill="none" stroke="#FCD535" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+        {pts.map((p, i) => (
+          <g key={i}>
+            <circle cx={x(i)} cy={y(p.position)} r={p.position <= 3 ? 4.5 : 3.5}
+              fill={p.position === 1 ? '#FCD535' : p.position <= 3 ? '#B7BDC6' : '#474D57'}
+              stroke="#181A20" strokeWidth="1.5" />
+            {/* 라벨은 표본이 적을 때만 전부, 많으면 듬성듬성(겹침 방지) */}
+            {(pts.length <= 8 || i % 2 === 0 || i === pts.length - 1) && (
+              <text x={x(i)} y={H - 6} textAnchor="middle" fontSize="9.5" fill="#848E9C">{md(p.date)}</text>
+            )}
+          </g>
+        ))}
+      </svg>
     </div>
   );
 }
