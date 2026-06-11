@@ -261,7 +261,7 @@ export interface PosterOpsSummary {
   date: string;
   closed: boolean;
   buyinCount: number;
-  revenueMan: number;   // 실수금 합(만원) — 통계와 동일한 buyinFinance 규칙
+  revenueMan: number;   // 실수금 합(만원 환산) — 통계와 동일한 buyinFinance 규칙(DB 금액은 원 단위)
   hasRankings: boolean; // 그 날짜에 순위 입력이 1건이라도 있는지
 }
 export async function getPosterOpsSummaries(venueId: string): Promise<Record<string, PosterOpsSummary>> {
@@ -299,7 +299,7 @@ export async function getPosterOpsSummaries(venueId: string): Promise<Record<str
     const a = agg.get(s.session_date) ?? { cnt: 0, rev: 0 };
     out[s.schedule_id] = {
       date: s.session_date, closed: !!s.closed,
-      buyinCount: a.cnt, revenueMan: Math.round(a.rev),
+      buyinCount: a.cnt, revenueMan: Math.round(a.rev / WON_PER_MAN),
       hasRankings: rankedDates.has(s.session_date),
     };
   }
