@@ -1,6 +1,6 @@
 import { useId } from 'react';
 
-export type ViewMode = 'list' | 'grid';
+export type ViewMode = 'list' | 'grid' | 'table';
 
 interface ViewModeToggleProps {
   value: ViewMode;
@@ -39,6 +39,21 @@ function GridIcon({ className = '' }: { className?: string }) {
   );
 }
 
+function TableIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg
+      width="18" height="18" viewBox="0 0 18 18" fill="none"
+      stroke="currentColor" strokeWidth="1.6"
+      className={className} aria-hidden
+    >
+      <rect x="2.5" y="3" width="13" height="12" rx="1" />
+      <line x1="2.5" y1="7" x2="15.5" y2="7" />
+      <line x1="2.5" y1="11" x2="15.5" y2="11" />
+      <line x1="7" y1="7" x2="7" y2="15" />
+    </svg>
+  );
+}
+
 /**
  * ViewModeToggle — segmented control
  *
@@ -50,9 +65,11 @@ export default function ViewModeToggle({
 }: ViewModeToggleProps) {
   const id = useId();
 
-  const options: { mode: ViewMode; label: string; Icon: typeof ListIcon }[] = [
+  const options: { mode: ViewMode; label: string; Icon: typeof ListIcon; desktopOnly?: boolean }[] = [
     { mode: 'list', label: '목록 보기', Icon: ListIcon },
     { mode: 'grid', label: '카드 보기', Icon: GridIcon },
+    // 토너 로비식 고밀도 표 — 화면이 넓은 PC에서만 노출
+    { mode: 'table', label: '표 보기', Icon: TableIcon, desktopOnly: true },
   ];
 
   return (
@@ -65,7 +82,7 @@ export default function ViewModeToggle({
         className,
       ].join(' ')}
     >
-      {options.map(({ mode, label, Icon }) => {
+      {options.map(({ mode, label, Icon, desktopOnly }) => {
         const active = value === mode;
         return (
           <button
@@ -77,7 +94,8 @@ export default function ViewModeToggle({
             aria-label={label}
             onClick={() => onChange(mode)}
             className={[
-              'w-8 h-full flex items-center justify-center rounded-[5px]',
+              'w-8 h-full items-center justify-center rounded-[5px]',
+              desktopOnly ? 'hidden md:flex' : 'flex',
               'transition-all duration-150',
               active
                 ? 'bg-gold-300 text-ink-inverse shadow-sm'

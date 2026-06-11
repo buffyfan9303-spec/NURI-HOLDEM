@@ -8,6 +8,8 @@ import IntegratedSearchBar, { expandRegions } from './components/features/Integr
 import type { SearchState } from './components/features/IntegratedSearchBar';
 import ScheduleCard from './components/features/ScheduleCard';
 import WeeklyBestStrip from './components/features/WeeklyBestStrip';
+import ScheduleTable from './components/features/ScheduleTable';
+import { getWeeklyMoneyinKings, type WeeklyKing } from './api/rankings';
 import NotificationPanel from './components/features/NotificationPanel';
 import { decodeSpot, readGtoHash } from './components/features/gto/gtoShare';
 import type { DeepGtoInit } from './components/features/gto/useDeepGto';
@@ -1231,29 +1233,51 @@ export default function App() {
           )}
 
           <div className="px-page-x py-section">
-            <div className="min-w-0">
-              {visibleSchedules.length === 0 ? (
-                <EmptyState />
-              ) : (
-                <div className={[
-                  'animate-fade-in',
-                  viewMode === 'grid'
-                    // 그리드 뷰: 모바일 2열 → 데스크톱 4~5열
-                    ? 'grid grid-cols-2 gap-card-gap sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
-                    // 리스트 뷰: 모바일 1열(가로 카드) → PC 2열(공간 활용·광고 여백 확보)
-                    : 'grid grid-cols-1 lg:grid-cols-2 gap-card-gap',
-                ].join(' ')}>
-                  {visibleSchedules.map((s) => (
-                    <ScheduleCard
-                      key={s.id}
-                      mode={viewMode}
-                      schedule={s}
-                      onVenueClick={handleVenueClick}
-                      onSelect={handleScheduleSelect}
-                    />
-                  ))}
-                </div>
-              )}
+            {/* PC 3컬럼: 중앙 콘텐츠 + 우측 위젯 레일(xl 이상) — 바이낸스식 정보 밀도 */}
+            <div className="flex items-start gap-4">
+              <div className="min-w-0 flex-1">
+                {visibleSchedules.length === 0 ? (
+                  <EmptyState />
+                ) : viewMode === 'table' ? (
+                  <div className="animate-fade-in hidden md:block">
+                    <ScheduleTable schedules={visibleSchedules} onSelect={handleScheduleSelect} onVenueClick={handleVenueClick} />
+                  </div>
+                ) : (
+                  <div className={[
+                    'animate-fade-in',
+                    viewMode === 'grid'
+                      // 그리드 뷰: 모바일 2열 → 데스크톱 4~5열
+                      ? 'grid grid-cols-2 gap-card-gap sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
+                      // 리스트 뷰: 모바일 1열(가로 카드) → PC 2열(공간 활용·광고 여백 확보)
+                      : 'grid grid-cols-1 lg:grid-cols-2 gap-card-gap',
+                  ].join(' ')}>
+                    {visibleSchedules.map((s) => (
+                      <ScheduleCard
+                        key={s.id}
+                        mode={viewMode}
+                        schedule={s}
+                        onVenueClick={handleVenueClick}
+                        onSelect={handleScheduleSelect}
+                      />
+                    ))}
+                  </div>
+                )}
+                {/* 표 모드는 PC 전용 — 모바일 폭에선 리스트로 자동 표시 */}
+                {viewMode === 'table' && visibleSchedules.length > 0 && (
+                  <div className="grid grid-cols-1 gap-card-gap animate-fade-in md:hidden">
+                    {visibleSchedules.map((s) => (
+                      <ScheduleCard key={s.id} mode="list" schedule={s} onVenueClick={handleVenueClick} onSelect={handleScheduleSelect} />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 우측 위젯 레일 — 주간 머니인 킹·HOT 게시글·오늘 요약 */}
+              <BrowseSideRail
+                posts={posts}
+                schedules={schedules}
+                onSelectPost={setOpenPost}
+              />
             </div>
           </div>
         </main>
@@ -1510,6 +1534,69 @@ export default function App() {
       )}
       </Suspense>
     </div>
+  );
+}
+
+// ── PC 우측 위젯 레일(일정탐색) — 오늘 요약·주간 머니인 킹·HOT 게시글 ──────────
+function BrowseSideRail({ posts, schedules, onSelectPost }: {
+  posts: CommunityPost[];
+  schedules: Schedule[];
+  onSelectPost: (p: CommunityPost) => void;
+}) {
+  const [kings, setKings] = useState<WeeklyKing[]>([]);
+  useEffect(() => {
+    getWeeklyMoneyinKings(3).then((r) => setKings(r.kings)).catch(() => {});
+  }, []);
+  const today = new Date().toLocaleDateString('en-CA');
+  const todayCount = schedules.filter((s) => s.approved && s.date === today).length;
+  const hot = [...posts]
+    .filter((p) => (p.viewCount ?? 0) > 0 && Date.now() - new Date(p.createdAt).getTime() < 6 * 3600 * 1000)
+    .sort((a, b) => (b.viewCount ?? 0) - (a.viewCount ?? 0))
+    .slice(0, 3);
+  const medal = ['👑', '🥈', '🥉'];
+
+  return (
+    <aside className="sticky top-16 hidden w-72 shrink-0 space-y-3 xl:block">
+      {/* 오늘 요약 */}
+      <section className="rounded-card border border-border-default bg-surface-low px-3 py-2.5">
+        <p className="text-xs text-ink-muted">오늘 대회</p>
+        <p className="mt-0.5 text-xl font-extrabold tabular-nums text-ink-primary">{todayCount}<span className="ml-1 text-sm font-semibold text-ink-secondary">개</span></p>
+      </section>
+
+      {/* 주간 머니인 킹 */}
+      {kings.length > 0 && (
+        <section className="rounded-card border border-gold-400/25 bg-surface-low overflow-hidden">
+          <header className="border-b border-border-subtle px-3 py-2 text-xs font-bold text-gold-300">이번 주 머니인 킹</header>
+          <ul>
+            {kings.map((k, i) => (
+              <li key={k.nickname} className="flex items-center gap-2 border-b border-border-subtle px-3 py-2 last:border-b-0">
+                <span aria-hidden className="shrink-0 text-sm leading-none">{medal[i] ?? '🏅'}</span>
+                <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink-primary">{k.nickname}</span>
+                <span className="shrink-0 text-xs tabular-nums text-ink-muted">{k.moneyinCount}회</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* HOT 게시글 */}
+      {hot.length > 0 && (
+        <section className="rounded-card border border-danger/25 bg-surface-low overflow-hidden">
+          <header className="border-b border-border-subtle px-3 py-2 text-xs font-bold text-danger-light">🔥 지금 HOT</header>
+          <ul>
+            {hot.map((p) => (
+              <li key={p.id}>
+                <button type="button" onClick={() => onSelectPost(p)}
+                  className="flex w-full items-center gap-2 border-b border-border-subtle px-3 py-2 text-left transition-colors last:border-b-0 hover:bg-surface-high/60">
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{p.title || p.content.slice(0, 30)}</span>
+                  <span className="shrink-0 text-xs tabular-nums text-ink-muted">👁{p.viewCount}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </aside>
   );
 }
 

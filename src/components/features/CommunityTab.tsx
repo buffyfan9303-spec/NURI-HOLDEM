@@ -236,6 +236,10 @@ function FeedSection({
   const [q, setQ] = useState('');
   const [cat, setCat] = useState<PostCategory | 'all'>('all');
   const [visible, setVisible] = useState(15);
+  // 보기 모드: compact(에펨코리아식 한 줄, 기본) / feed(미리보기 포함)
+  const [view, setView] = useState<'compact' | 'feed'>(() =>
+    (typeof localStorage !== 'undefined' && localStorage.getItem('nuri:board-view') === 'feed') ? 'feed' : 'compact');
+  const switchView = (v: 'compact' | 'feed') => { setView(v); try { localStorage.setItem('nuri:board-view', v); } catch { /* noop */ } };
 
   // HOT: 최근 6시간 내 조회수 상위 2개 (검색·카테고리 미적용 상태에서만 핀 고정)
   const hotPosts = useMemo(() => {
@@ -340,18 +344,37 @@ function FeedSection({
       {/* 검색 + 카테고리 필터 */}
       {posts.length > 0 && (
         <div className="space-y-1.5">
-          <div className="relative">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" aria-hidden>
-              <circle cx="6" cy="6" r="4.5" /><line x1="9.5" y1="9.5" x2="13" y2="13" />
-            </svg>
-            <input
-              type="search"
-              value={q}
-              onChange={(e) => { setQ(e.target.value); setVisible(15); }}
-              placeholder="게시글 검색 (제목·내용·작성자)"
-              className="input w-full pl-9 text-sm"
-            />
+          <div className="flex items-center gap-1.5">
+            <div className="relative flex-1">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" aria-hidden>
+                <circle cx="6" cy="6" r="4.5" /><line x1="9.5" y1="9.5" x2="13" y2="13" />
+              </svg>
+              <input
+                type="search"
+                value={q}
+                onChange={(e) => { setQ(e.target.value); setVisible(15); }}
+                placeholder="게시글 검색 (제목·내용·작성자)"
+                className="input w-full pl-9 text-sm"
+              />
+            </div>
+            {/* 보기 모드 토글 — 한 줄 목록 / 미리보기 피드 */}
+            <div className="flex shrink-0 rounded-input border border-border-default bg-surface-high p-0.5">
+              <button type="button" aria-label="한 줄 목록" title="한 줄 목록"
+                onClick={() => switchView('compact')}
+                className={['rounded-[6px] px-2 py-1.5 transition-colors', view === 'compact' ? 'bg-surface-float text-gold-300' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
+                  <line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="18" x2="20" y2="18" />
+                </svg>
+              </button>
+              <button type="button" aria-label="미리보기 피드" title="미리보기 피드"
+                onClick={() => switchView('feed')}
+                className={['rounded-[6px] px-2 py-1.5 transition-colors', view === 'feed' ? 'bg-surface-float text-gold-300' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                  <rect x="3" y="4" width="18" height="7" rx="1.5" /><rect x="3" y="13" width="18" height="7" rx="1.5" />
+                </svg>
+              </button>
+            </div>
           </div>
           {enableCategory && (
             <div className="flex gap-1.5 overflow-x-auto scrollbar-none">
@@ -379,9 +402,9 @@ function FeedSection({
       {pinHot && (
         <div className="rounded-card border border-danger/30 bg-danger/[0.04] overflow-hidden">
           <ul>
-            {hotPosts.map((p) => (
-              <PostCard key={p.id} post={p} hot selected={p.id === selectedId} onLike={() => onLike(p.id)} onClick={() => onSelectPost(p)} />
-            ))}
+            {hotPosts.map((p) => view === 'compact'
+              ? <PostRow key={p.id} post={p} hot selected={p.id === selectedId} onClick={() => onSelectPost(p)} />
+              : <PostCard key={p.id} post={p} hot selected={p.id === selectedId} onLike={() => onLike(p.id)} onClick={() => onSelectPost(p)} />)}
           </ul>
         </div>
       )}
@@ -395,9 +418,9 @@ function FeedSection({
         <>
           <div className="rounded-card border border-border-default bg-surface-low overflow-hidden">
             <ul>
-              {shown.map((p) => (
-                <PostCard key={p.id} post={p} selected={p.id === selectedId} onLike={() => onLike(p.id)} onClick={() => onSelectPost(p)} />
-              ))}
+              {shown.map((p) => view === 'compact'
+                ? <PostRow key={p.id} post={p} selected={p.id === selectedId} onClick={() => onSelectPost(p)} />
+                : <PostCard key={p.id} post={p} selected={p.id === selectedId} onLike={() => onLike(p.id)} onClick={() => onSelectPost(p)} />)}
             </ul>
           </div>
           {listSource.length > visible && (
@@ -412,6 +435,34 @@ function FeedSection({
         </>
       )}
     </div>
+  );
+}
+
+// 에펨코리아식 한 줄 행 — 제목 크게(타이포 위계), 메타는 작고 연하게. 바이낸스 표 밀도(py-2).
+function PostRow({ post, onClick, hot = false, selected = false }: { post: CommunityPost; onClick: () => void; hot?: boolean; selected?: boolean }) {
+  const catLabel = BOARD_CATEGORIES.find((c) => c.id === (post.category ?? 'free'))?.label ?? '자유';
+  const { replay, hand } = parseAttachments(post.content);
+  return (
+    <li
+      onClick={onClick}
+      aria-current={selected || undefined}
+      className={[
+        'flex items-center gap-2 px-3 py-2 cursor-pointer border-b border-border-subtle last:border-b-0 transition-colors',
+        selected ? 'bg-gold-300/10' : 'hover:bg-surface-high/60 active:bg-surface-high',
+      ].join(' ')}
+    >
+      {hot
+        ? <span className="shrink-0 rounded-badge bg-danger/15 px-1 text-2xs font-extrabold leading-none tracking-wide text-danger-light">HOT</span>
+        : <span className="shrink-0 rounded-badge bg-surface-high px-1 py-0.5 text-2xs font-semibold leading-none text-ink-muted">{catLabel}</span>}
+      <span className="min-w-0 flex-1 truncate">
+        <span className="text-[15px] font-bold leading-tight text-ink-primary">{post.title || post.content.slice(0, 40)}</span>
+        {(replay || hand) && <span className="ml-1 align-middle text-2xs text-gold-300">{replay ? '🎬' : '♠'}</span>}
+        {post.commentCount > 0 && <span className="ml-1 align-middle text-xs font-bold text-gold-300">[{post.commentCount}]</span>}
+      </span>
+      <span className="shrink-0 text-xs text-ink-muted">{post.userName}</span>
+      <span className="hidden shrink-0 text-xs tabular-nums text-ink-muted sm:inline">{relativeTime(post.createdAt)}</span>
+      {(post.viewCount ?? 0) > 0 && <span className="shrink-0 w-10 text-right text-xs tabular-nums text-ink-muted">👁{post.viewCount}</span>}
+    </li>
   );
 }
 

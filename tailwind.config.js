@@ -78,7 +78,7 @@ export default {
 
       // ── Border Radius ─────────────────────────────────────────────────────
       borderRadius: {
-        card:   '0.75rem',
+        card:   '0.625rem', // 바이낸스 밀도: 12px → 10px대
         badge:  '9999px',
         input:  '0.5rem',
         dialog: '1rem',
@@ -87,7 +87,8 @@ export default {
       // ── Box Shadow ────────────────────────────────────────────────────────
       boxShadow: {
         // 헤어라인 링/그림자를 CSS 변수로 → 라이트 모드에서 흰색 테두리 선이 보이던 버그 해결
-        card:   '0 0 0 1px var(--card-ring), 0 4px 16px var(--card-shadow)',
+        card:   '0 0 0 1px var(--card-ring)', // 바이낸스식 플랫 — 떠있는 그림자 제거, 헤어라인만
+
         gold:   '0 0 12px rgba(255,209,0,0.35)',
         dialog: '0 -4px 32px var(--card-shadow)',
         badge:  '0 0 6px rgba(229,62,62,0.6)',
