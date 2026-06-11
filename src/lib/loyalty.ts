@@ -27,12 +27,48 @@ export async function getWeeklyLeague(limit = 20): Promise<LeagueRow[]> {
 }
 
 // ── 주간 미션 ────────────────────────────────────────────────────────────────
-export interface Mission { key: string; title: string; goal: number; reward: number; desc: string }
+export type MissionGoalType = 'checkin' | 'post' | 'moneyin';
+export interface Mission { key: string; title: string; goal: number; reward: number; desc: string; type: MissionGoalType }
 export const MISSIONS: Mission[] = [
-  { key: 'checkin2', title: '매장 체크인 2회', goal: 2, reward: 20, desc: '이번 주에 매장 QR 체크인을 2번 하세요' },
-  { key: 'post1', title: '게시글 1개 쓰기', goal: 1, reward: 10, desc: '이번 주에 커뮤니티 글을 1개 쓰세요' },
-  { key: 'moneyin1', title: '머니인 1회', goal: 1, reward: 30, desc: '이번 주에 대회 순위(머니인)에 들어보세요' },
+  { key: 'checkin2', title: '매장 체크인 2회', goal: 2, reward: 20, desc: '이번 주에 매장 QR 체크인을 2번 하세요', type: 'checkin' },
+  { key: 'post1', title: '게시글 1개 쓰기', goal: 1, reward: 10, desc: '이번 주에 커뮤니티 글을 1개 쓰세요', type: 'post' },
+  { key: 'moneyin1', title: '머니인 1회', goal: 1, reward: 30, desc: '이번 주에 대회 순위(머니인)에 들어보세요', type: 'moneyin' },
 ];
+
+// 운영자 커스텀 미션(custom_missions) — 활성만 미션 보드에 병합. key는 'c<id>'.
+const GOAL_TYPE_LABEL: Record<MissionGoalType, (n: number) => string> = {
+  checkin: (n) => `이번 주에 매장 QR 체크인을 ${n}번 하세요`,
+  post: (n) => `이번 주에 커뮤니티 글을 ${n}개 쓰세요`,
+  moneyin: (n) => `이번 주에 대회 순위(머니인)에 ${n}번 들어보세요`,
+};
+export interface CustomMissionRow { id: number; title: string; goal_type: MissionGoalType; goal: number; reward: number; active: boolean }
+export async function getActiveMissions(): Promise<Mission[]> {
+  if (IS_MOCK) return MISSIONS;
+  const { data } = await supabase.from('custom_missions').select('*').eq('active', true).order('id');
+  const customs: Mission[] = ((data ?? []) as CustomMissionRow[]).map((r) => ({
+    key: `c${r.id}`, title: r.title, goal: r.goal, reward: r.reward,
+    desc: GOAL_TYPE_LABEL[r.goal_type]?.(r.goal) ?? '', type: r.goal_type,
+  }));
+  return [...MISSIONS, ...customs];
+}
+// 관리자용 CRUD(전체 조회·저장·삭제) — RLS가 admin만 쓰기 허용
+export async function adminListCustomMissions(): Promise<CustomMissionRow[]> {
+  const { data, error } = await supabase.from('custom_missions').select('*').order('id');
+  if (error) throw new Error(error.message);
+  return (data ?? []) as CustomMissionRow[];
+}
+export async function adminSaveCustomMission(m: Partial<CustomMissionRow> & Pick<CustomMissionRow, 'title' | 'goal_type' | 'goal' | 'reward'>): Promise<void> {
+  const row = { title: m.title.trim(), goal_type: m.goal_type, goal: m.goal, reward: m.reward, active: m.active ?? true };
+  const q = m.id
+    ? supabase.from('custom_missions').update(row).eq('id', m.id)
+    : supabase.from('custom_missions').insert(row);
+  const { error } = await q;
+  if (error) throw new Error(error.message);
+}
+export async function adminDeleteCustomMission(id: number): Promise<void> {
+  const { error } = await supabase.from('custom_missions').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+}
 function weekStartStr(): string {
   const now = new Date();
   const mon = new Date(now);
@@ -40,12 +76,12 @@ function weekStartStr(): string {
   return mon.toLocaleDateString('en-CA');
 }
 export interface MissionProgress { key: string; current: number; claimed: boolean }
-export async function getMissionProgress(nickname: string | null): Promise<MissionProgress[]> {
-  if (IS_MOCK) return MISSIONS.map((m) => ({ key: m.key, current: 0, claimed: false }));
+export async function getMissionProgress(nickname: string | null, missions: Mission[] = MISSIONS): Promise<MissionProgress[]> {
+  if (IS_MOCK) return missions.map((m) => ({ key: m.key, current: 0, claimed: false }));
   const ws = weekStartStr();
   const { data: u } = await supabase.auth.getUser();
   const uid = u.user?.id;
-  if (!uid) return MISSIONS.map((m) => ({ key: m.key, current: 0, claimed: false }));
+  if (!uid) return missions.map((m) => ({ key: m.key, current: 0, claimed: false }));
   const wsIso = new Date(`${ws}T00:00:00`).toISOString();
   const [ck, po, mo, cl] = await Promise.all([
     supabase.from('checkins').select('id', { count: 'exact', head: true }).eq('user_id', uid).gte('created_at', wsIso),
@@ -56,12 +92,13 @@ export async function getMissionProgress(nickname: string | null): Promise<Missi
     supabase.from('mission_claims').select('mission_key').eq('user_id', uid).eq('week_start', ws),
   ]);
   const claimed = new Set(((cl as { data?: { mission_key: string }[] }).data ?? []).map((r) => r.mission_key));
-  const counts: Record<string, number> = {
-    checkin2: (ck as { count: number | null }).count ?? 0,
-    post1: (po as { count: number | null }).count ?? 0,
-    moneyin1: (mo as { count: number | null }).count ?? 0,
+  // 유형별 주간 카운트 — 고정·커스텀 미션이 같은 카운트를 공유(목표만 다름)
+  const byType: Record<MissionGoalType, number> = {
+    checkin: (ck as { count: number | null }).count ?? 0,
+    post: (po as { count: number | null }).count ?? 0,
+    moneyin: (mo as { count: number | null }).count ?? 0,
   };
-  return MISSIONS.map((m) => ({ key: m.key, current: counts[m.key] ?? 0, claimed: claimed.has(m.key) }));
+  return missions.map((m) => ({ key: m.key, current: byType[m.type] ?? 0, claimed: claimed.has(m.key) }));
 }
 export async function claimMission(key: string): Promise<string> {
   const { data, error } = await supabase.rpc('claim_mission', { p_key: key });

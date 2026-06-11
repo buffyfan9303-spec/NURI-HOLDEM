@@ -8,7 +8,7 @@ import { useToast } from '../atoms/Toast';
 import CountUp from '../atoms/CountUp';
 import {
   getWeeklyLeague, leagueTierOf, type LeagueRow,
-  MISSIONS, getMissionProgress, claimMission, type MissionProgress,
+  MISSIONS, getActiveMissions, getMissionProgress, claimMission, type Mission, type MissionProgress,
   BADGES, getMyBadgeStats, type BadgeStats,
   getMonthlyHall, type HallRow,
 } from '../../lib/loyalty';
@@ -59,6 +59,7 @@ export default function TierLeaderboard() {
   const [league, setLeague] = useState<LeagueRow[] | null>(null);
   const [badgeStats, setBadgeStats] = useState<BadgeStats | null>(null);
   const [missions, setMissions] = useState<MissionProgress[] | null>(null);
+  const [missionDefs, setMissionDefs] = useState<Mission[]>(MISSIONS);
   const [hall, setHall] = useState<{ label: string; rows: HallRow[] } | null>(null);
   const [claiming, setClaiming] = useState<string | null>(null);
   useEffect(() => {
@@ -67,7 +68,11 @@ export default function TierLeaderboard() {
       getMyBadgeStats(user.nickname ?? null, user.activityPoints ?? 0).then(setBadgeStats).catch(() => {});
     }
     if (board === 'missions' && missions === null && user) {
-      getMissionProgress(user.nickname ?? null).then(setMissions).catch(() => setMissions([]));
+      // 고정 3종 + 운영자 커스텀 미션 병합 → 병합 목록 기준으로 진행도 조회
+      getActiveMissions()
+        .then((defs) => { setMissionDefs(defs); return getMissionProgress(user.nickname ?? null, defs); })
+        .then(setMissions)
+        .catch(() => setMissions([]));
     }
     if (board === 'hall' && hall === null) getMonthlyHall().then(setHall).catch(() => setHall({ label: '', rows: [] }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -262,7 +267,7 @@ export default function TierLeaderboard() {
           : missions === null ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
           : (
             <ul className="space-y-1.5">
-              {MISSIONS.map((m) => {
+              {missionDefs.map((m) => {
                 const p = missions.find((x) => x.key === m.key);
                 const cur = Math.min(p?.current ?? 0, m.goal);
                 const done = (p?.current ?? 0) >= m.goal;

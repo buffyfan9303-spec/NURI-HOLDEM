@@ -15,6 +15,10 @@ import { useToast } from '../atoms/Toast';
 import { supabase } from '../../lib/supabase';
 import { getAppSetting, setAppSetting, BOOST_CONTACT_EMAIL_KEY, BOOST_CONTACT_PHONE_KEY } from '../../api/settings';
 import { getAllCommunityAds, saveCommunityAd, type CommunityAd } from '../../api/ads';
+import {
+  MISSIONS, adminListCustomMissions, adminSaveCustomMission, adminDeleteCustomMission,
+  type CustomMissionRow, type MissionGoalType,
+} from '../../lib/loyalty';
 import { isVoucherIssueApproved, setVoucherIssueApproval } from '../../api/vouchers';
 import { useBackClose } from '../../lib/backstack';
 import { REGION_CHIPS } from './IntegratedSearchBar';
@@ -121,6 +125,106 @@ function CommunityAdsCard() {
         })}
       </ul>
       <p className="text-xs text-ink-muted">가격 운영 예: 3일 10만 / 7일 20만 — 만료일만 맞춰 입력하면 끝나는 날 자동으로 내려갑니다.</p>
+    </section>
+  );
+}
+
+// ── 주간 미션 관리(운영자) — 고정 3종 외 커스텀 미션 추가·수정·중단 ─────────────
+const GOAL_TYPE_OPTIONS: { value: MissionGoalType; label: string }[] = [
+  { value: 'checkin', label: '매장 체크인 N회' },
+  { value: 'post', label: '게시글 N개 쓰기' },
+  { value: 'moneyin', label: '머니인 N회' },
+];
+function MissionsAdminCard() {
+  const toast = useToast();
+  const [rows, setRows] = useState<CustomMissionRow[]>([]);
+  const [busy, setBusy] = useState(false);
+  // 새 미션 입력
+  const [title, setTitle] = useState('');
+  const [goalType, setGoalType] = useState<MissionGoalType>('checkin');
+  const [goal, setGoal] = useState(3);
+  const [reward, setReward] = useState(30);
+  const reload = useCallback(() => { adminListCustomMissions().then(setRows).catch(() => {}); }, []);
+  useEffect(() => { reload(); }, [reload]);
+
+  const add = async () => {
+    if (!title.trim()) { toast.show('미션 이름을 입력해 주세요', 'error'); return; }
+    setBusy(true);
+    try {
+      await adminSaveCustomMission({ title, goal_type: goalType, goal, reward });
+      toast.show('미션을 추가했습니다 — 랭킹 > 미션 보드에 바로 노출됩니다', 'success');
+      setTitle(''); reload();
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : '추가 실패', 'error');
+    } finally { setBusy(false); }
+  };
+  const toggle = async (m: CustomMissionRow) => {
+    setBusy(true);
+    try {
+      await adminSaveCustomMission({ ...m, active: !m.active });
+      toast.show(m.active ? '미션을 중단했습니다(보상 수령도 차단)' : '미션을 다시 켰습니다', 'success');
+      reload();
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : '변경 실패', 'error');
+    } finally { setBusy(false); }
+  };
+  const remove = async (m: CustomMissionRow) => {
+    if (!window.confirm(`'${m.title}' 미션을 삭제할까요? (이미 받은 점수는 유지됩니다)`)) return;
+    setBusy(true);
+    try {
+      await adminDeleteCustomMission(m.id);
+      toast.show('미션을 삭제했습니다', 'success');
+      reload();
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : '삭제 실패', 'error');
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
+      <p className="text-sm font-bold text-ink-primary">🎯 주간 미션 관리 <span className="text-xs font-normal text-ink-muted">— 랭킹 &gt; 미션 보드에 노출. 매주 월요일 진행도 리셋</span></p>
+      {/* 고정 미션 안내 */}
+      <ul className="space-y-1">
+        {MISSIONS.map((m) => (
+          <li key={m.key} className="flex items-center gap-1.5 rounded-input bg-surface-high/40 px-2 py-1.5 text-xs">
+            <span className="rounded-badge bg-surface-float px-1.5 py-0.5 text-2xs font-bold text-ink-muted">기본</span>
+            <span className="font-bold text-ink-secondary">{m.title}</span>
+            <span className="ml-auto font-bold text-emerald-400">+{m.reward}점</span>
+          </li>
+        ))}
+        {rows.map((m) => (
+          <li key={m.id} className="flex flex-wrap items-center gap-1.5 rounded-input border border-border-subtle bg-surface-high/40 px-2 py-1.5 text-xs">
+            <span className={['rounded-badge px-1.5 py-0.5 text-2xs font-bold', m.active ? 'bg-gold-300 text-ink-inverse' : 'bg-surface-float text-ink-muted'].join(' ')}>
+              {m.active ? '진행중' : '중단'}
+            </span>
+            <span className="font-bold text-ink-primary">{m.title}</span>
+            <span className="text-ink-muted">{GOAL_TYPE_OPTIONS.find((o) => o.value === m.goal_type)?.label.replace('N', String(m.goal))}</span>
+            <span className="font-bold text-emerald-400">+{m.reward}점</span>
+            <span className="ml-auto flex gap-1">
+              <button type="button" onClick={() => toggle(m)} disabled={busy} className="btn-ghost px-2 py-1 text-2xs disabled:opacity-60">
+                {m.active ? '중단' : '재개'}
+              </button>
+              <button type="button" onClick={() => remove(m)} disabled={busy} className="btn-ghost px-2 py-1 text-2xs text-danger-light disabled:opacity-60">삭제</button>
+            </span>
+          </li>
+        ))}
+      </ul>
+      {/* 새 미션 추가 */}
+      <div className="flex flex-wrap items-center gap-1.5 rounded-input border border-dashed border-border-strong p-2">
+        <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={30}
+          placeholder="미션 이름 (예: 이번 주 3회 출석 도전)" className="input min-w-[11rem] flex-1 text-sm" />
+        <select value={goalType} onChange={(e) => setGoalType(e.target.value as MissionGoalType)} className="input w-auto text-sm">
+          {GOAL_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+        <label className="flex items-center gap-1 text-xs text-ink-muted">목표
+          <input type="number" min={1} max={50} value={goal} onChange={(e) => setGoal(Math.max(1, Math.min(50, Number(e.target.value) || 1)))} className="input w-16 text-sm" />회
+        </label>
+        <label className="flex items-center gap-1 text-xs text-ink-muted">보상
+          <input type="number" min={1} max={500} value={reward} onChange={(e) => setReward(Math.max(1, Math.min(500, Number(e.target.value) || 1)))} className="input w-20 text-sm" />점
+        </label>
+        <button type="button" onClick={add} disabled={busy} className="btn-primary px-3 py-1.5 text-xs disabled:opacity-60">+ 추가</button>
+      </div>
+      <p className="text-xs text-ink-muted">유형은 체크인·게시글·머니인 3가지 — 달성 검증은 서버(claim_mission RPC)가 자동으로 합니다.</p>
     </section>
   );
 }
@@ -297,6 +401,7 @@ export default function AdminTab({
                   <>
                     <BoostContactCard />
                     <CommunityAdsCard />
+                    <MissionsAdminCard />
                     <DraggableList initialItems={schedules.filter((s) => s.approved)} />
                   </>
                 )
