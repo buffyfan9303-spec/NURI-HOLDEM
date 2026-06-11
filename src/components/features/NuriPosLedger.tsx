@@ -174,6 +174,8 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const globalMaxEntry = buyins.reduce((m, b) => Math.max(m, b.entryNo), 0);
   const binCols = (isDesktopLedger || globalMaxEntry >= 10) ? 10 : Math.min(10, Math.max(globalMaxEntry + 1, 3));
 
+  // 정렬 — 100명+ 명단에서 빨리 찾기: 등록순(기본)/이름순/바인 많은 순
+  const [sortBy, setSortBy] = useState<'recent' | 'name' | 'bins'>('recent');
   const rows = useMemo(() => {
     const rosterNames = players.map((p) => p.name);
     const buyinOnly = [...new Set(buyins.map((b) => b.playerName))].filter((n) => !rosterNames.includes(n));
@@ -182,8 +184,14 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       ...buyinOnly.map((n) => ({ name: n, player: null as LedgerPlayer | null })),
     ];
     const q = query.trim().toLowerCase();
-    return q ? base.filter((r) => r.name.toLowerCase().includes(q)) : base;
-  }, [players, buyins, query]);
+    const filtered = q ? base.filter((r) => r.name.toLowerCase().includes(q)) : base;
+    if (sortBy === 'name') return [...filtered].sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+    if (sortBy === 'bins') {
+      const cnt = (n: string) => buyins.filter((b) => b.playerName === n).length;
+      return [...filtered].sort((a, b) => cnt(b.name) - cnt(a.name));
+    }
+    return filtered;
+  }, [players, buyins, query, sortBy]);
 
   const stats = useMemo(() => {
     let totalBuyins = 0, ticket = 0, ticketUnpaid = 0, revenue = 0, unpaid = 0, support = 0, entries = 0;
@@ -426,6 +434,16 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                 <circle cx="9" cy="9" r="6" /><line x1="14" y1="14" x2="18" y2="18" strokeLinecap="round" />
               </svg>
             </div>
+            {/* 정렬 — 100명+ 명단 빨리 찾기: 등록순/이름순/바인순 */}
+            <div className="flex shrink-0 items-center rounded-input border border-border-default bg-surface-high p-0.5">
+              {([['recent', '등록순'], ['name', '가나다'], ['bins', '바인순']] as const).map(([k, label]) => (
+                <button key={k} type="button" onClick={() => setSortBy(k)}
+                  className={['rounded-[6px] px-2 py-1.5 text-xs font-bold transition-colors',
+                    sortBy === k ? 'bg-gold-300 text-ink-inverse' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
+                  {label}
+                </button>
+              ))}
+            </div>
             {regClosed
               ? <span className="shrink-0 self-center text-2xs font-bold text-danger-light px-2">레지 마감</span>
               : <button type="button" onClick={() => setAddOpen((v) => !v)} className="btn-primary text-xs px-3 shrink-0">+ 유저 추가</button>}
@@ -477,7 +495,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
         <p className="py-10 text-center text-xs text-ink-muted">{query ? '검색 결과가 없습니다.' : '유저를 추가하면 바인을 입력할 수 있습니다.'}</p>
       ) : (
         <div
-          className="overflow-x-auto [-webkit-overflow-scrolling:touch] rounded-card border border-border-subtle"
+          className="overflow-auto max-h-[70vh] [-webkit-overflow-scrolling:touch] rounded-card border border-border-subtle"
           onWheel={(ev) => {
             // PC: 마우스 휠만으로 표 좌우 이동(좁은 스크롤바 클릭 불필요)
             const el = ev.currentTarget;
@@ -489,15 +507,16 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
           {/* w-max: 칸을 압축하지 않고 고정폭 유지 → 모바일에서 가로 스크롤. min-w-full: 데스크톱은 꽉 채움 */}
           <table className="border-separate border-spacing-0 text-center w-max min-w-full">
             <thead>
+              {/* 헤더는 세로 스크롤에도 고정(sticky top) — 100명 명단에서도 바인 번호가 항상 보임 */}
               <tr className="bg-surface-high">
-                <th className="sticky left-0 z-20 bg-surface-high w-9 px-1 py-2 text-xs text-ink-muted border-b border-border-subtle">No</th>
-                <th className="sticky left-9 z-20 bg-surface-high min-w-[7.5rem] px-2 py-2 text-xs text-ink-muted border-b border-l border-border-subtle text-left">플레이어</th>
+                <th className="sticky left-0 top-0 z-40 bg-surface-high w-9 px-1 py-2 text-xs text-ink-muted border-b border-border-subtle">No</th>
+                <th className="sticky left-9 top-0 z-40 bg-surface-high min-w-[7.5rem] px-2 py-2 text-xs text-ink-muted border-b border-l border-border-subtle text-left">플레이어</th>
                 {Array.from({ length: binCols }, (_, i) => (
-                  <th key={i} className="w-12 px-0.5 py-2 text-xs text-ink-muted border-b border-l border-border-subtle">{i + 1}바인</th>
+                  <th key={i} className="sticky top-0 z-30 bg-surface-high w-12 px-0.5 py-2 text-xs text-ink-muted border-b border-l border-border-subtle">{i + 1}바인</th>
                 ))}
-                <th className="min-w-[6rem] px-2 py-2 text-xs text-ink-muted border-b border-l border-border-subtle text-left">비고</th>
-                <th className="sticky right-[4.5rem] z-20 bg-surface-high w-[4.5rem] px-1 py-2 text-xs text-ink-muted border-b border-l border-border-strong">총바인</th>
-                <th className="sticky right-0 z-20 bg-surface-high w-[4.5rem] px-1 py-2 text-xs text-ink-muted border-b border-l border-border-subtle">미수</th>
+                <th className="sticky top-0 z-30 bg-surface-high min-w-[6rem] px-2 py-2 text-xs text-ink-muted border-b border-l border-border-subtle text-left">비고</th>
+                <th className="sticky right-[4.5rem] top-0 z-40 bg-surface-high w-[4.5rem] px-1 py-2 text-xs text-ink-muted border-b border-l border-border-strong">총바인</th>
+                <th className="sticky right-0 top-0 z-40 bg-surface-high w-[4.5rem] px-1 py-2 text-xs text-ink-muted border-b border-l border-border-subtle">미수</th>
               </tr>
             </thead>
             <tbody>
