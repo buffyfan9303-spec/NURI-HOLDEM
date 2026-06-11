@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, Fragment } from 'react';
+import { useState, useMemo, useEffect, useRef, Fragment } from 'react';
 import { getActiveCommunityAds, type CommunityAd } from '../../api/ads';
 import type { Venue, Comment, CommunityPost, LiveMessage, PostCategory, GroupKind, JoinedGroup } from '../../api/community';
 import { getLiveMessages, addLiveMessage, deleteLiveMessage, subscribeLiveWall, createMyVenue, createGroup, GROUP_KIND_LABEL, getMyOwnedCommunities, getMyJoinedGroups, removeMember } from '../../api/community';
@@ -439,17 +439,29 @@ function FeedSection({
             </ul>
           </div>
           {listSource.length > visible && (
-            <button
-              type="button"
-              onClick={() => setVisible((v) => v + 15)}
-              className="w-full py-2.5 rounded-input bg-surface-high text-xs font-semibold text-ink-secondary hover:text-ink-primary active:bg-surface-float transition-colors"
-            >
-              더보기 ({(listSource.length - visible).toLocaleString()})
-            </button>
+            <InfiniteSentinel onMore={() => setVisible((v) => v + 15)} remain={listSource.length - visible} />
           )}
         </>
       )}
     </div>
+  );
+}
+
+// 무한 스크롤 센티넬 — 화면에 보이면 자동으로 다음 15개 로드(버튼 클릭도 가능)
+function InfiniteSentinel({ onMore, remain }: { onMore: () => void; remain: number }) {
+  const ref = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const ob = new IntersectionObserver((es) => { if (es[0]?.isIntersecting) onMore(); }, { rootMargin: '200px' });
+    ob.observe(el);
+    return () => ob.disconnect();
+  }, [onMore]);
+  return (
+    <button ref={ref} type="button" onClick={onMore}
+      className="w-full rounded-input bg-surface-high py-2.5 text-xs font-semibold text-ink-muted transition-colors hover:text-ink-primary">
+      불러오는 중… ({remain.toLocaleString()}개 남음)
+    </button>
   );
 }
 

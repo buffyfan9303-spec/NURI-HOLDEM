@@ -137,9 +137,11 @@ interface CardProps {
   schedule: Schedule;
   onVenueClick: (venueId: string) => void;
   onSelect: (schedule: Schedule) => void;
+  /** 예약자 수(있으면 FOMO 뱃지 — 10명 이상이면 '마감 임박') */
+  reserveCount?: number;
 }
 
-function ListCard({ schedule, onVenueClick, onSelect }: CardProps) {
+function ListCard({ schedule, onVenueClick, onSelect, reserveCount }: CardProps) {
   const d = formatDate(schedule.date, schedule.startTime);
 
   return (
@@ -209,13 +211,19 @@ function ListCard({ schedule, onVenueClick, onSelect }: CardProps) {
           </span>
         </div>
 
-        {/* 3행: 날짜 · 시간 · 바이인 */}
+        {/* 3행: 날짜 · 시간 · 바이인 (+예약 FOMO 뱃지) */}
         <div className="flex items-center gap-1.5 text-2xs text-ink-muted">
           <span className="text-ink-secondary tabular-nums font-medium">
             {d.monthDay}({d.dow}) {d.time}
           </span>
           <span className="text-border-strong">·</span>
           <span className="tabular-nums">바이인 {schedule.buyIn.amount.toLocaleString()}</span>
+          {(reserveCount ?? 0) > 0 && (
+            <span className={['ml-auto shrink-0 rounded-badge px-1.5 py-0.5 font-bold tabular-nums',
+              (reserveCount ?? 0) >= 10 ? 'bg-danger/15 text-danger-light' : 'bg-emerald-400/10 text-emerald-400'].join(' ')}>
+              {(reserveCount ?? 0) >= 10 ? `🔥 예약 ${reserveCount}명 · 마감 임박` : `예약 ${reserveCount}명`}
+            </span>
+          )}
         </div>
       </div>
     </article>

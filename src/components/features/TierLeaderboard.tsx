@@ -5,6 +5,7 @@ import TierBadge, { tierOf, tierProgress, allTiers, isAceRank, ACE_TOP_RANK, ACE
 import { getActivityLeaderboard, type LeaderboardEntry } from '../../api/community';
 import { getGlobalRankingTotals, type GlobalRankingTotal } from '../../api/rankings';
 import { useToast } from '../atoms/Toast';
+import CountUp from '../atoms/CountUp';
 import {
   getWeeklyLeague, leagueTierOf, type LeagueRow,
   MISSIONS, getMissionProgress, claimMission, type MissionProgress,
@@ -142,7 +143,7 @@ export default function TierLeaderboard() {
             <div className="text-right">
               <p className="text-2xs text-ink-muted">활동 점수</p>
               <p className="text-lg font-extrabold text-gold-300 tabular-nums leading-tight">
-                {(user.activityPoints ?? 0).toLocaleString()}
+                <CountUp value={user.activityPoints ?? 0} />
               </p>
               {!isAdmin && myRank && <p className="text-2xs text-ink-muted">전체 {myRank}위</p>}
             </div>

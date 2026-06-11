@@ -10,6 +10,7 @@ import ScheduleCard from './components/features/ScheduleCard';
 import WeeklyBestStrip from './components/features/WeeklyBestStrip';
 import ScheduleTable from './components/features/ScheduleTable';
 import { getWeeklyMoneyinKings, getVenueRankings, type WeeklyKing, type RankingEntry } from './api/rankings';
+import { getReservationCounts } from './api/reservations';
 import NotificationPanel from './components/features/NotificationPanel';
 import { decodeSpot, readGtoHash } from './components/features/gto/gtoShare';
 import type { DeepGtoInit } from './components/features/gto/useDeepGto';
@@ -443,6 +444,8 @@ export default function App() {
 
   // UI 상태
   const [viewMode, setViewMode]       = useState<ViewMode>('list');
+  // 일정탐색 FOMO — 예약자 수(예약 N명 · 마감 임박 뱃지)
+  const [browseResCounts, setBrowseResCounts] = useState<Record<string, number>>({});
   const [activeTab, setActiveTab]     = useState<TabId>('browse');
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   useEffect(() => {
@@ -528,6 +531,14 @@ export default function App() {
 
   // ── 데이터 (Supabase에서 로드) ──────────────────────────────────────────────
   const [schedules,     setSchedules]     = useState<Schedule[]>([]);
+  // FOMO 뱃지용 예약자 수 — 다가오는 대회만 1회 조회
+  useEffect(() => {
+    const today = new Date().toLocaleDateString('en-CA');
+    const ids = schedules.filter((s) => s.approved && s.date >= today).map((s) => s.id);
+    if (ids.length === 0) { setBrowseResCounts({}); return; }
+    getReservationCounts(ids).then(setBrowseResCounts).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [schedules]);
   const [venues,        setVenues]        = useState<Venue[]>([]);
   const [comments,      setComments]      = useState<Comment[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -1256,6 +1267,7 @@ export default function App() {
                         key={s.id}
                         mode={viewMode}
                         schedule={s}
+                        reserveCount={browseResCounts[s.id]}
                         onVenueClick={handleVenueClick}
                         onSelect={handleScheduleSelect}
                       />
@@ -1266,7 +1278,7 @@ export default function App() {
                 {viewMode === 'table' && visibleSchedules.length > 0 && (
                   <div className="grid grid-cols-1 gap-card-gap animate-fade-in md:hidden">
                     {visibleSchedules.map((s) => (
-                      <ScheduleCard key={s.id} mode="list" schedule={s} onVenueClick={handleVenueClick} onSelect={handleScheduleSelect} />
+                      <ScheduleCard key={s.id} mode="list" schedule={s} reserveCount={browseResCounts[s.id]} onVenueClick={handleVenueClick} onSelect={handleScheduleSelect} />
                     ))}
                   </div>
                 )}
@@ -1528,6 +1540,9 @@ export default function App() {
       {/* 법적 동의 게이트 — 구글 등 미동의 가입자(관리자 제외)에게 1회 필수 동의 */}
       <ConsentGateModal open={!!user && user.agreedToTerms === false && user.role !== 'admin'} />
 
+      {/* ↑ 맨 위로 — 600px 이상 스크롤 시 표시(우하단 플로팅) */}
+      <ScrollTopButton />
+
       {/* 중고장터 글쓰기 모달 (Stage 2) */}
       {marketFormOpen && (
       <MarketplaceFormModal
@@ -1538,6 +1553,29 @@ export default function App() {
       )}
       </Suspense>
     </div>
+  );
+}
+
+// ── ↑ 맨 위로 플로팅 버튼 — 무한 스크롤 보조(Reddit 문법) ───────────────────────
+function ScrollTopButton() {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setShow(window.scrollY > 600);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+  if (!show) return null;
+  return (
+    <button
+      type="button"
+      aria-label="맨 위로"
+      onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+      className="fixed bottom-5 right-4 z-40 flex h-10 w-10 items-center justify-center rounded-full border border-border-default bg-surface-mid/95 text-ink-secondary shadow-dialog backdrop-blur transition-colors hover:text-gold-300 animate-fade-in"
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <polyline points="18 15 12 9 6 15" />
+      </svg>
+    </button>
   );
 }
 
