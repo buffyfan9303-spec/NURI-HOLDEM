@@ -39,13 +39,9 @@ export default function LeaguePanel({ venueId, canConfigure }: { venueId: string
   const invites = rows.filter((r) => r.myStatus === 'pending');
   const active = rows.filter((r) => r.myStatus !== 'pending' && r.myStatus !== 'declined');
 
+  // 제목·설명은 VenueManageTab 공용 SectionHeader가 렌더(섹션 간 규격 통일)
   return (
     <div className="space-y-3">
-      <div>
-        <h2 className="text-base font-semibold text-ink-primary">연합 리그</h2>
-        <p className="mt-0.5 text-2xs text-ink-muted">여러 매장이 함께 운영하는 공동 랭킹입니다. 초대 → 상대 매장 수락 → 각 매장이 포인트를 입력하면 통합 순위가 만들어집니다.</p>
-      </div>
-
       {/* 받은 초대 */}
       {invites.length > 0 && (
         <section className="rounded-card border border-gold-400/50 bg-gold-300/[0.07] p-3 space-y-2">

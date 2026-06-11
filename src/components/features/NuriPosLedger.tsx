@@ -373,15 +373,13 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     const hasRange = !!(filterFrom || filterTo);
     return (
       <div className="space-y-3 pb-6">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-base font-bold text-ink-primary">장부</h2>
-          <button type="button" onClick={() => openBoard(todayStr)} className="btn-primary text-xs px-3 shrink-0">+ 장부 추가</button>
-        </div>
-
-        {/* 장부 검색 */}
-        <div className="relative">
+        {/* 제목은 VenueManageTab 공용 SectionHeader가 렌더 — 여기는 검색+추가 한 행 */}
+        <div className="flex items-center gap-1.5">
+        <div className="relative flex-1">
           <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
           <input value={listQuery} onChange={(e) => setListQuery(e.target.value)} placeholder="장부 검색 (날짜·게임명)" className="input w-full text-sm pl-9" />
+        </div>
+        <button type="button" onClick={() => openBoard(todayStr)} className="btn-primary text-xs px-3 shrink-0">+ 장부 추가</button>
         </div>
 
         {/* 기간으로 보기 — 시작~종료 범위의 장부만 표시(필터) */}

@@ -244,13 +244,9 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
 
   if (!loaded) return <p className="py-10 text-center text-2xs text-ink-muted">불러오는 중…</p>;
 
+  // 제목·설명은 VenueManageTab 공용 SectionHeader가 렌더(섹션 간 규격 통일)
   return (
     <div className="space-y-3">
-      <div>
-        <h2 className="text-base font-semibold text-ink-primary">매장 랭킹</h2>
-        <p className="mt-0.5 text-2xs text-ink-muted">여기서 정한 랭킹이 <span className="font-semibold text-gold-300">매장 커뮤니티 → 순위 탭</span>에 그대로 노출됩니다(금전적 가치 없음).</p>
-      </div>
-
       {canConfigure && (<>
         {/* ① 보드 종류 — 자동 산출 6종 + 커스텀 */}
         <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">

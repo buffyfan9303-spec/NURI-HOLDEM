@@ -19,6 +19,7 @@ import { iCanViewVouchers, getVoucherAccessUserIds, grantVoucherAccess, revokeVo
 import MyPostersTab from './MyPostersTab';
 import VenueCustomizePanel, { VenueRankHub } from './VenueCustomizePanel';
 import LeaguePanel from './LeaguePanel';
+import SectionHeader from '../atoms/SectionHeader';
 import type { Schedule } from '../../api/schedules';
 
 type Section = 'dashboard' | 'posters' | 'ledger' | 'stats' | 'ranking' | 'venueRank' | 'league' | 'staff' | 'settings' | 'clock' | 'attendance' | 'voucher' | 'page';
@@ -164,6 +165,14 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 <p className="text-2xs leading-relaxed text-ink-muted">이 기능은 업주가 권한을 부여해야 사용할 수 있어요.<br />매장 업주에게 <span className="font-semibold text-gold-300">{curItem.id === 'voucher' ? '이용권 내역' : '장부·순위'} 권한</span>을 요청하세요.</p>
               </div>
             ) : (<>
+            {/* 공용 섹션 헤더 — 모든 섹션의 제목·설명·주 액션 위치/크기를 한 규격으로 */}
+            <SectionHeader
+              title={curItem?.label ?? ''}
+              desc={SECTION_DESC[section]}
+              action={section === 'posters' && canPosters
+                ? <button type="button" onClick={onCreatePoster} className="btn-primary">+ 새 게임</button>
+                : undefined}
+            />
             {section === 'dashboard' && <StoreDashboard venueId={venueId} schedules={schedules} onGoto={(s) => gotoSection(s as Section)} onCreatePoster={onCreatePoster}
               caps={{ ledger: ledgerOk, manage: manageOk, voucher: manageOk || voucherView, posters: canPosters, staff: canStaff }} />}
             {section === 'posters' && canPosters && <MyPostersTab schedules={schedules} onCreate={onCreatePoster} onEdit={onEditPoster} onDelete={onDeletePoster}
@@ -198,6 +207,23 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     </div>
   );
 }
+
+// 섹션 설명 — 공용 SectionHeader에 표시(제목·설명·액션 규격 통일)
+const SECTION_DESC: Record<Section, string> = {
+  dashboard: '매장 운영 현황을 한눈에 — 오늘 장부·클락·추세·단골',
+  posters: '게임(포스터)별 예약 관리 — 게임을 누르면 예약 리스트가 펼쳐집니다',
+  ledger: '게임(세션)별 장부 — 날짜·게임명으로 검색해 열람·수정하세요',
+  stats: '기간별 매출·엔트리·요일 분석',
+  ranking: '대회 순위 등록 — 닉네임이 일치하는 회원에게 점수가 자동 반영됩니다',
+  venueRank: '매장 커뮤니티 순위 탭에 노출될 랭킹 보드 설정(금전적 가치 없음)',
+  league: '여러 매장이 함께 운영하는 공동 랭킹 — 초대 → 수락 → 통합 순위',
+  clock: '토너먼트 타이머 — 장부 연동 시 엔트리·생존이 자동 반영됩니다',
+  attendance: '내 출퇴근 기록',
+  voucher: '매장이용권 발행·회수·사용 내역(금전적 가치 없음)',
+  page: '매장 페이지 꾸미기 — 탭 순서·링크·소개',
+  staff: '구성원·권한·출근 스케줄·인건비',
+  settings: 'POS 비밀번호·결제수단·할인 프리셋',
+};
 
 // 섹션 아이콘(라인 스타일 통일: 16px, stroke 1.8)
 const ic = (children: ReactNode) => (

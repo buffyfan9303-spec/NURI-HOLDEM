@@ -61,17 +61,9 @@ export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete, on
 
   if (user?.role === 'venue_owner' && !isApprovedOwner) return <PendingApprovalView />;
 
-  // 다른 섹션(장부·통계 등)과 동일하게 본문 좌측에서 시작 — mx-auto 가운데 정렬 제거(제목 위치 통일)
+  // 제목·"+ 새 게임" 액션은 VenueManageTab의 공용 SectionHeader가 렌더(섹션 간 규격 통일)
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <div>
-          <h2 className="text-base font-semibold text-ink-primary">게임 관리</h2>
-          <p className="text-2xs text-ink-muted mt-0.5">게임(포스터)별 예약을 관리하세요. 게임을 누르면 예약 리스트가 펼쳐집니다 ({myPosters.length}개)</p>
-        </div>
-        <button type="button" onClick={onCreate} className="btn-primary text-xs whitespace-nowrap shrink-0">+ 새 게임</button>
-      </div>
-
       {myPosters.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 gap-2 text-ink-muted">
           <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="opacity-30" aria-hidden><rect x="4" y="3" width="16" height="18" rx="2"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="13" y2="16"/></svg>
