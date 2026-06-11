@@ -85,7 +85,7 @@ export default function Modal({
       <div className="flex max-h-[calc(100vh-5rem)] flex-col overflow-hidden rounded-card border border-border-default bg-surface-mid">
         {title && (
           <header className="flex shrink-0 items-center justify-between border-b border-border-subtle px-4 py-3">
-            <h2 className="text-base font-semibold text-ink-primary">{title}</h2>
+            <h2 className="text-[17px] font-bold tracking-tight text-ink-primary">{title}</h2>
             <button type="button" onClick={onClose} aria-label="닫기" className="flex h-8 w-8 items-center justify-center rounded-input text-ink-secondary hover:bg-surface-high hover:text-ink-primary">
               <Icon name="close" size={14} />
             </button>
@@ -104,7 +104,7 @@ export default function Modal({
       <div ref={contentRef} className={['fixed inset-0 z-[55] bg-surface-base flex flex-col', closing ? 'animate-fade-out' : 'animate-fade-in'].join(' ')}>
         {title && (
           <header className="shrink-0 flex items-center justify-between px-4 h-header-h border-b border-border-subtle bg-surface-base">
-            <h2 id="modal-title" className="text-base font-semibold text-ink-primary">{title}</h2>
+            <h2 id="modal-title" className="text-[17px] font-bold tracking-tight text-ink-primary">{title}</h2>
             <button type="button" onClick={onClose} aria-label="닫기"
               className="w-11 h-11 -mr-2 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high transition-colors">
               <Icon name="close" size={18} />
@@ -167,7 +167,7 @@ export default function Modal({
         {/* 헤더 */}
         {title && (
           <header className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
-            <h2 id="modal-title" className="text-base font-semibold text-ink-primary">
+            <h2 id="modal-title" className="text-[17px] font-bold tracking-tight text-ink-primary">
               {title}
             </h2>
             <button

@@ -10,6 +10,7 @@ import OwnerCommunity from './OwnerCommunity';
 import DealerCommunity from './DealerCommunity';
 import TierLeaderboard from './TierLeaderboard';
 import { useToast } from '../atoms/Toast';
+import EmptyState from '../atoms/EmptyState';
 import { filterContent } from '../../lib/content-filter';
 import { parseAttachments } from '../../lib/hand';
 import Avatar from '../atoms/Avatar';
@@ -784,7 +785,7 @@ function VenuesSection({
 
       {/* 리스트 */}
       {filtered.length === 0 ? (
-        <p className="text-center py-12 text-xs text-ink-muted">결과가 없습니다</p>
+        <EmptyState title="결과가 없습니다" hint="다른 검색어나 카테고리로 시도해 보세요" />
       ) : (
         <ul className="space-y-2">
           {filtered.map(({ venue, commentCount, latest }) => (

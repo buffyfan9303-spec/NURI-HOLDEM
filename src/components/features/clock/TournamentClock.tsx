@@ -412,15 +412,14 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd }: {
                     : 'bg-[radial-gradient(ellipse_at_center,rgba(201,169,97,0.10),transparent_72%)]'].join(' ')}>
             {/* 누리홀덤 로고 워터마크(투명) — 트레이드마크. 클락은 항상 다크라 흰 워드마크 사용 */}
             <img src="/2.png" alt="" aria-hidden className="pointer-events-none absolute inset-0 m-auto h-auto w-[58%] max-w-[62vh] select-none object-contain opacity-[0.05]" />
-            {/* 장부 연동 실시간 — 엔트리/생존을 클락 상단에서 한눈에(화면 전환 제로) */}
-            <p className={['relative font-semibold tabular-nums text-ink-secondary',
-              fs ? 'text-[min(2.4vw,2.9vh)]' : 'text-xs sm:text-base'].join(' ')}>
-              엔트리 <b className="text-gold-300">{entries}</b>
-              <span className="opacity-50 mx-1">·</span>
-              생존 <b className="text-emerald-300">{alive}</b>
-              {state.sessionDate && <span className="opacity-60"> · 장부 연동</span>}
-            </p>
-            <p className={['relative font-bold tracking-[0.16em] uppercase',
+            {/* 엔트리/생존 — 클락 상단 헤어라인 칩(화면 전환 없이 한눈에) */}
+            <div className={['relative inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] backdrop-blur-[2px] tabular-nums',
+              fs ? 'gap-[1.2vw] px-[1.6vw] py-[0.5vh] text-[min(2.2vw,2.7vh)]' : 'gap-2.5 px-3 py-1 text-xs sm:text-sm'].join(' ')}>
+              <span className="text-ink-secondary">엔트리 <b className="font-extrabold text-gold-300">{entries}</b></span>
+              <span className="h-[1em] w-px bg-white/15" aria-hidden />
+              <span className="text-ink-secondary">생존 <b className="font-extrabold text-emerald-300">{alive}</b></span>
+            </div>
+            <p className={['relative mt-1 font-bold tracking-[0.16em] uppercase',
               isBreak ? 'text-sky-300/90' : 'text-gold-200/80',
               fs ? 'text-[min(4vw,5vh)]' : 'text-base sm:text-2xl'].join(' ')}>
               {isBreak ? (cur.label || 'BREAK') : `LEVEL ${levelNo}`}
@@ -505,9 +504,10 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd }: {
 function Stat({ label, value, tone, fs }: { label: string; value: string; tone?: 'muted' | 'rose'; fs?: boolean }) {
   const c = tone === 'rose' ? 'text-rose-300' : tone === 'muted' ? 'text-ink-secondary' : 'text-ink-primary';
   return (
-    <div className="text-center">
-      <p className={['text-ink-muted tracking-wide leading-tight', fs ? 'text-[min(1.5vw,1.8vh)]' : 'text-[9px] sm:text-2xs'].join(' ')}>{label}</p>
-      <p className={['font-bold tabular-nums leading-tight', fs ? 'text-[min(2.7vw,3.3vh)]' : 'text-sm sm:text-xl', c].join(' ')}>{value}</p>
+    // 헤어라인 구분 — 첫 항목 제외하고 위쪽 미세 보더(스탯 패널 리듬 정리)
+    <div className="text-center [&:not(:first-child)]:border-t [&:not(:first-child)]:border-white/[0.06] [&:not(:first-child)]:pt-2 sm:[&:not(:first-child)]:pt-3">
+      <p className={['text-ink-muted tracking-[0.14em] uppercase leading-tight', fs ? 'text-[min(1.5vw,1.8vh)]' : 'text-[9px] sm:text-2xs'].join(' ')}>{label}</p>
+      <p className={['font-bold tabular-nums leading-tight mt-0.5', fs ? 'text-[min(2.7vw,3.3vh)]' : 'text-sm sm:text-xl', c].join(' ')}>{value}</p>
     </div>
   );
 }

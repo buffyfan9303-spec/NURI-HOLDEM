@@ -7,7 +7,7 @@ import { getGlobalRankingTotals, type GlobalRankingTotal } from '../../api/ranki
 import { useToast } from '../atoms/Toast';
 import CountUp from '../atoms/CountUp';
 import {
-  getWeeklyLeague, leagueTierOf, type LeagueRow,
+  getWeeklyLeague, leagueTierOf, LEAGUE_TIERS, type LeagueRow,
   MISSIONS, getActiveMissions, getMissionProgress, claimMission, type Mission, type MissionProgress,
   BADGES, getMyBadgeStats, type BadgeStats,
   getMonthlyHall, type HallRow,
@@ -243,25 +243,71 @@ export default function TierLeaderboard() {
         {board === 'league' ? (
           league === null ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
           : league.length === 0 ? <p className="py-6 text-center text-2xs text-ink-muted">이번 주 활동 기록이 아직 없습니다 — 체크인·입상으로 리그에 입장하세요!</p>
-          : (
-            <ul className="overflow-hidden rounded-card border border-border-subtle bg-surface-high">
-              {league.map((r, i) => {
-                const t = leagueTierOf(r.score);
-                const isMe = user?.id === r.userId;
-                return (
-                  <li key={r.userId} className={['flex items-center gap-2.5 border-b border-border-subtle px-3 py-2 last:border-b-0', isMe ? 'bg-gold-300/[0.06]' : ''].join(' ')}>
-                    <RankNum n={i + 1} />
-                    <div className="min-w-0 flex-1">
-                      <span className="text-sm font-semibold text-ink-primary truncate">{r.nickname}{isMe && <span className="ml-1 text-2xs font-bold text-gold-300">나</span>}</span>
-                      <span className="block text-2xs text-ink-muted">체크인 {r.checkins}회 · 입상 {r.placements}회</span>
-                    </div>
-                    {t && <span className="shrink-0 rounded-badge bg-surface-float px-1.5 py-0.5 text-2xs font-bold text-ink-secondary">{t.emoji} {t.label}</span>}
-                    <span className="w-12 shrink-0 text-right text-sm font-bold tabular-nums text-gold-300">{r.score}</span>
-                  </li>
-                );
-              })}
-            </ul>
-          )
+          : (() => {
+            // 리그 UI(레퍼런스: 리스트 사이 "내 카드" 빅 강조 + 상단 승급 안내 배너)
+            const me = user ? league.find((r) => r.userId === user.id) ?? null : null;
+            const myRank = me ? league.indexOf(me) + 1 : null;
+            const nextTier = me ? [...LEAGUE_TIERS].reverse().find((t) => t.min > me.score) ?? null : null;
+            return (
+              <div className="space-y-2">
+                {/* 승급 안내 배너 — 다음 티어까지 남은 점수 */}
+                {me && (
+                  <div className="rounded-card border border-gold-400/30 bg-gold-300/10 px-3 py-2 text-center text-xs font-semibold text-gold-300">
+                    {nextTier
+                      ? `${nextTier.min - me.score}점만 더 모으면 ${nextTier.emoji} ${nextTier.label} 티어로 승급해요`
+                      : '💎 최고 티어 — 이번 주 왕좌를 지키세요!'}
+                  </div>
+                )}
+                <ul className="overflow-hidden rounded-card border border-border-subtle bg-surface-high">
+                  {league.map((r, i) => {
+                    const t = leagueTierOf(r.score);
+                    const isMe = user?.id === r.userId;
+                    if (isMe) {
+                      // 내 순위 빅 카드 — 리스트 흐름 속 인라인 강조(이미지 패턴)
+                      return (
+                        <li key={r.userId} className="border-b border-y border-gold-400/40 bg-gold-300/[0.08] px-3 py-3 last:border-b-0">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gold-300 text-base font-extrabold text-ink-inverse">
+                              {r.nickname.slice(0, 1)}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-bold text-gold-300">{myRank}위 · {r.nickname} <span className="text-ink-muted font-semibold">(나)</span></p>
+                              <p className="text-2xl font-extrabold leading-tight tabular-nums text-ink-primary">
+                                {r.score}<span className="ml-0.5 text-xs font-bold text-ink-muted">점</span>
+                              </p>
+                              <p className="text-2xs text-ink-muted">체크인 {r.checkins}회 · 입상 {r.placements}회</p>
+                            </div>
+                            {t && (
+                              <span className="shrink-0 rounded-badge border border-gold-400/40 bg-surface-float px-2 py-1 text-xs font-bold text-gold-300">
+                                {t.emoji} {t.label}
+                              </span>
+                            )}
+                          </div>
+                        </li>
+                      );
+                    }
+                    return (
+                      <li key={r.userId} className="flex items-center gap-2.5 border-b border-border-subtle px-3 py-2 last:border-b-0">
+                        <RankNum n={i + 1} />
+                        <div className="min-w-0 flex-1">
+                          <span className="text-sm font-semibold text-ink-primary truncate">{r.nickname}</span>
+                          <span className="block text-2xs text-ink-muted">체크인 {r.checkins}회 · 입상 {r.placements}회</span>
+                        </div>
+                        {t && <span className="shrink-0 rounded-badge bg-surface-float px-1.5 py-0.5 text-2xs font-bold text-ink-secondary">{t.emoji} {t.label}</span>}
+                        <span className="w-12 shrink-0 text-right text-sm font-bold tabular-nums text-gold-300">{r.score}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+                {/* TOP20 밖이거나 이번 주 무활동 — 입장 안내 */}
+                {user && !me && !isAdmin && (
+                  <p className="rounded-card border border-border-subtle bg-surface-high px-3 py-2 text-center text-2xs text-ink-muted">
+                    아직 이번 주 리그 점수가 없어요 — 체크인(+3)·입상으로 리그에 입장하세요!
+                  </p>
+                )}
+              </div>
+            );
+          })()
         ) : board === 'missions' ? (
           !user ? <p className="py-6 text-center text-2xs text-ink-muted">로그인하면 주간 미션에 참여할 수 있습니다</p>
           : missions === null ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>

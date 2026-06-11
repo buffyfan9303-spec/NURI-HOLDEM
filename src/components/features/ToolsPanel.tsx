@@ -1,4 +1,4 @@
-import { useState, Suspense, type ReactNode } from 'react';
+import { useEffect, useState, Suspense, Fragment, type ReactNode } from 'react';
 import { lazyWithReload } from '../../lib/lazyWithReload';
 import ICMCalculator from './ICMCalculator';
 import PotOddsCalc from './tools/PotOddsCalc';
@@ -93,10 +93,30 @@ function renderTool(k: ToolKey): ReactNode {
   }
 }
 
-/** 도구 모음 — 카드형 런처. 매장 운영 / 플레이어 두 그룹. 카드를 누르면 인라인으로 펼쳐진다. */
+// 화면 폭별 그리드 열 수 — 카드 그리드 클래스(2/sm:3/lg:4/xl:5)와 동일 기준.
+// 행 단위 렌더에 필요(패널을 "누른 카드 행 바로 아래"에 끼우기 위함).
+function useGridCols(): number {
+  const calc = () => {
+    if (typeof window === 'undefined') return 2;
+    const w = window.innerWidth;
+    return w >= 1280 ? 5 : w >= 1024 ? 4 : w >= 640 ? 3 : 2;
+  };
+  const [cols, setCols] = useState(calc);
+  useEffect(() => {
+    const on = () => setCols(calc());
+    window.addEventListener('resize', on);
+    return () => window.removeEventListener('resize', on);
+  }, []);
+  return cols;
+}
+
+/** 도구 모음 — 카드형 런처. 매장 운영 / 플레이어 두 그룹.
+ *  카드를 누르면 패널이 "그 카드가 속한 행 바로 아래"에 전체폭으로 열린다.
+ *  (행 단위 렌더 — 같은 행의 옆 카드는 밀리지 않고, 패널이 그룹 맨 아래로 떨어지지도 않음) */
 export default function ToolsPanel() {
   const [active, setActive] = useState<ToolKey | null>(null);
   const select = (k: ToolKey) => setActive((a) => (a === k ? null : k));
+  const cols = useGridCols();
 
   return (
     <div className="space-y-4">
@@ -104,27 +124,31 @@ export default function ToolsPanel() {
 
       {GROUPS.map((g) => {
         const items = TOOLS.filter((t) => t.group === g.id);
+        // 열 수 단위로 행 분할 — 활성 카드가 있는 행 바로 뒤에 패널 삽입
+        const rows: typeof items[] = [];
+        for (let i = 0; i < items.length; i += cols) rows.push(items.slice(i, i + cols));
         return (
           <section key={g.id} className="space-y-2">
             <div className="flex items-baseline gap-2">
               <h3 className="text-sm font-bold text-ink-primary">{g.title}</h3>
               <span className="text-2xs text-ink-muted">{g.desc}</span>
             </div>
-            {/* 촘촘한 반응형 그리드 — 모바일 2열 → PC 4~5열.
-               패널은 그리드 "밖" 그룹 아래 전체폭으로 — 그리드 중간에 끼우면
-               선택 카드 옆자리가 아래 행으로 밀려 한 칸만 남는 깨짐(모바일 2열)이 생긴다. */}
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-              {items.map((t) => (
-                <ToolCard key={t.key} name={t.name} desc={t.desc} icon={t.icon} active={active === t.key} onClick={() => select(t.key)} />
-              ))}
-            </div>
-            {items.some((t) => t.key === active) && (
-              <div className="animate-fade-in pt-1 lg:max-w-3xl">
-                <Suspense fallback={<div className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</div>}>
-                  {renderTool(active!)}
-                </Suspense>
-              </div>
-            )}
+            {rows.map((row, ri) => (
+              <Fragment key={ri}>
+                <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+                  {row.map((t) => (
+                    <ToolCard key={t.key} name={t.name} desc={t.desc} icon={t.icon} active={active === t.key} onClick={() => select(t.key)} />
+                  ))}
+                </div>
+                {row.some((t) => t.key === active) && (
+                  <div className="animate-fade-in pt-1 lg:max-w-3xl">
+                    <Suspense fallback={<div className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</div>}>
+                      {renderTool(active!)}
+                    </Suspense>
+                  </div>
+                )}
+              </Fragment>
+            ))}
           </section>
         );
       })}
