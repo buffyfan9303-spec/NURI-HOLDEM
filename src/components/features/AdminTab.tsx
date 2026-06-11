@@ -13,6 +13,7 @@ import {
 } from '../../api/community';
 import { useToast } from '../atoms/Toast';
 import { supabase } from '../../lib/supabase';
+import { getAppSetting, setAppSetting, BOOST_CONTACT_EMAIL_KEY, BOOST_CONTACT_PHONE_KEY } from '../../api/settings';
 import { isVoucherIssueApproved, setVoucherIssueApproval } from '../../api/vouchers';
 import { useBackClose } from '../../lib/backstack';
 import { REGION_CHIPS } from './IntegratedSearchBar';
@@ -35,6 +36,45 @@ interface AdminTabProps {
 type Section = 'pending' | 'reorder' | 'users' | 'venues' | 'reports' | 'errors';
 // 노출 순서 하위 항목: 포스터(요강) / 매장
 type ReorderTarget = 'posters' | 'venues';
+
+// ── ⚡ 부스트 문의 연락처(운영자) — 업주 '포스터 상단 고정' 카드에 표시될 메일·전화 ──
+function BoostContactCard() {
+  const toast = useToast();
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    getAppSetting(BOOST_CONTACT_EMAIL_KEY).then((v) => setEmail(v ?? '')).catch(() => {});
+    getAppSetting(BOOST_CONTACT_PHONE_KEY).then((v) => setPhone(v ?? '')).catch(() => {});
+  }, []);
+  const save = async () => {
+    setSaving(true);
+    try {
+      await setAppSetting(BOOST_CONTACT_EMAIL_KEY, email.trim());
+      await setAppSetting(BOOST_CONTACT_PHONE_KEY, phone.trim());
+      toast.show('부스트 문의 연락처를 저장했습니다', 'success');
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : '저장에 실패했습니다', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <section className="rounded-card border border-gold-400/30 bg-gold-300/[0.05] p-3 space-y-2">
+      <p className="text-sm font-bold text-gold-300">⚡ 부스트 문의 연락처</p>
+      <p className="text-xs text-ink-muted">업주가 내 매장 → '포스터 상단 고정' 카드에서 보게 될 메일·전화입니다. 비워두면 "준비 중"으로 표시됩니다.</p>
+      <div className="grid gap-1.5 sm:grid-cols-2">
+        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={80}
+          placeholder="문의 이메일 (예: boost@nuriholdem.com)" className="input w-full text-sm" />
+        <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} maxLength={20}
+          placeholder="문의 전화번호 (예: 010-1234-5678)" className="input w-full text-sm" />
+      </div>
+      <button type="button" onClick={save} disabled={saving} className="btn-primary px-4 py-2 text-sm disabled:opacity-60">
+        {saving ? '저장 중…' : '저장'}
+      </button>
+    </section>
+  );
+}
 
 // ── 오류 로그(운영자) — 전역 에러 감시망 수집분 열람·정리 ───────────────────────
 interface ClientErrorRow { id: string; message: string; stack: string | null; url: string | null; user_agent: string | null; created_at: string }
@@ -204,7 +244,12 @@ export default function AdminTab({
                 <SubPill active={reorderTarget === 'venues'} onClick={() => setReorderTarget('venues')}>매장</SubPill>
               </div>
               {reorderTarget === 'posters'
-                ? <DraggableList initialItems={schedules.filter((s) => s.approved)} />
+                ? (
+                  <>
+                    <BoostContactCard />
+                    <DraggableList initialItems={schedules.filter((s) => s.approved)} />
+                  </>
+                )
                 : <VenueManagement />}
             </div>
           )}

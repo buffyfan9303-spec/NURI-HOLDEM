@@ -12,6 +12,8 @@ import RegularsModal from './RegularsModal';
 import DealerShiftsModal from './DealerShiftsModal';
 import VoucherManageModal from './VoucherManageModal';
 import CheckinModal from './CheckinModal';
+import Modal from '../atoms/Modal';
+import { getAppSetting, BOOST_CONTACT_EMAIL_KEY, BOOST_CONTACT_PHONE_KEY } from '../../api/settings';
 import { getStaffSchedule, getStaffWages, subscribeStaffSchedule, type StaffShift, type StaffWage } from '../../api/staffSchedule';
 import { getUpcomingBirthdays } from '../../api/crm';
 
@@ -71,6 +73,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const [regOpen, setRegOpen] = useState(false);
   const [dealerOpen, setDealerOpen] = useState(false);
   const [checkinOpen, setCheckinOpen] = useState(false);
+  const [boostOpen, setBoostOpen] = useState(false);
   const [voucherOpen, setVoucherOpen] = useState(false);
   // 다가오는 생일 단골(7일 내) — CRM 생일 필드 기반
   const [bdays, setBdays] = useState<{ name: string; birthday: string; dday: number }[]>([]);
@@ -241,6 +244,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       <DealerShiftsModal open={dealerOpen} onClose={() => setDealerOpen(false)} venueId={venueId} monthKey={mr.start.slice(0, 7)} />
       <VoucherManageModal open={voucherOpen} onClose={() => setVoucherOpen(false)} venueId={venueId} />
       <CheckinModal open={checkinOpen} onClose={() => setCheckinOpen(false)} venueId={venueId} />
+      <BoostContactModal open={boostOpen} onClose={() => setBoostOpen(false)} />
       {/* 미수·리스크 알림 (장부 권한) */}
       {caps.ledger && started && fin.unpaid > 0 && (
         <button type="button" onClick={() => onGoto('ledger')}
@@ -478,6 +482,12 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           <p className="py-3 text-center text-2xs text-ink-muted">매장 QR을 손님이 스캔하면 체크인 + 출석 도장(활동점수)이 찍힙니다. 오늘 명단도 실시간으로.</p>
         </DashCard>
 
+        {/* ⚡ 포스터 부스트 안내 — 상단 고정 광고 문의 */}
+        <DashCard show={caps.manage} title="⚡ 포스터 상단 고정" onClick={() => setBoostOpen(true)}
+          badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-gold-300/15 text-gold-300">부스트 문의 →</span>}>
+          <p className="py-3 text-center text-2xs text-ink-muted">내 포스터를 일정탐색 맨 위에 N일 동안 고정하고 TOP 뱃지를 답니다. 눌러서 문의 방법을 확인하세요.</p>
+        </DashCard>
+
         {/* 매장 꾸미기 — 매장 페이지 탭 순서·순위 탭·칭호 */}
         <DashCard show={caps.manage} title="매장 꾸미기" onClick={() => onGoto('page')}
           badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-gold-300/15 text-gold-300">탭·순위·칭호 →</span>}>
@@ -562,6 +572,55 @@ function QuickAction({ label, icon, onClick }: { label: string; icon: ReactNode;
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{icon}</svg>
       <span className="text-2xs font-bold">{label}</span>
     </button>
+  );
+}
+
+// ── ⚡ 부스트(포스터 상단 고정) 문의 모달 ─────────────────────────────────────
+// 연락처는 운영자가 관리자 설정 → 게시물 관리에서 입력(app_settings) — 미입력 시 준비 중 안내.
+function BoostContactModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  useEffect(() => {
+    if (!open) return;
+    getAppSetting(BOOST_CONTACT_EMAIL_KEY).then((v) => setEmail(v ?? '')).catch(() => {});
+    getAppSetting(BOOST_CONTACT_PHONE_KEY).then((v) => setPhone(v ?? '')).catch(() => {});
+  }, [open]);
+  const hasContact = !!(email.trim() || phone.trim());
+  return (
+    <Modal open={open} onClose={onClose} title="⚡ 포스터 상단 고정(부스트)" maxWidth="sm" variant="sheet">
+      <div className="space-y-3 p-4">
+        <div className="rounded-card border border-gold-400/30 bg-gold-300/[0.06] p-3 space-y-1.5">
+          <p className="text-sm font-bold text-gold-300">이런 효과가 있어요</p>
+          <ul className="space-y-1 text-sm leading-relaxed text-ink-secondary">
+            <li>· 내 포스터가 일정탐색 <b className="text-ink-primary">맨 위에 고정</b>됩니다</li>
+            <li>· 제목에 <b className="text-gold-300">TOP 뱃지</b>가 붙어 눈에 띕니다</li>
+            <li>· 기간은 <b className="text-ink-primary">3 / 7 / 14 / 30일</b> 중 선택, 끝나면 자동 해제</li>
+          </ul>
+        </div>
+        <div className="rounded-card border border-border-subtle bg-surface-low p-3 space-y-2">
+          <p className="text-sm font-bold text-ink-primary">문의 방법</p>
+          {hasContact ? (
+            <div className="space-y-1.5">
+              {email.trim() && (
+                <a href={`mailto:${email.trim()}`} className="btn flex items-center gap-2 rounded-input border border-border-default bg-surface-high px-3 py-2.5 text-sm font-semibold text-ink-primary">
+                  ✉️ <span className="min-w-0 flex-1 truncate">{email.trim()}</span>
+                  <span className="shrink-0 text-2xs text-gold-300">메일 보내기 →</span>
+                </a>
+              )}
+              {phone.trim() && (
+                <a href={`tel:${phone.replace(/[^0-9+]/g, '')}`} className="btn flex items-center gap-2 rounded-input border border-border-default bg-surface-high px-3 py-2.5 text-sm font-semibold text-ink-primary">
+                  📞 <span className="min-w-0 flex-1 truncate">{phone.trim()}</span>
+                  <span className="shrink-0 text-2xs text-gold-300">전화 걸기 →</span>
+                </a>
+              )}
+            </div>
+          ) : (
+            <p className="py-2 text-center text-sm text-ink-muted">문의 연락처를 준비하고 있습니다.<br />곧 이 자리에서 바로 연락하실 수 있어요.</p>
+          )}
+          <p className="text-xs text-ink-muted">문의 주시면 기간·비용 안내 후, 확인되는 대로 포스터를 상단에 올려드립니다.</p>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
