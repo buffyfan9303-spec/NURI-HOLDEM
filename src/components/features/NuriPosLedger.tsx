@@ -589,9 +589,9 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       ) : (
         <div
           // 휠 = 순수 세로 스크롤(가로 변환 제거 — 대각선 이동 방지). PC는 10바인 한 화면이라 가로 휠 불필요.
-          // overscroll-contain: 표 끝에서 페이지까지 같이 내려가는 이중 스크롤 차단.
-          // 가로가 필요한 좁은 화면용: 스크롤바를 굵게(잡기 쉬움) + Shift+휠은 브라우저 기본 가로 동작.
-          className="overflow-auto max-h-[70vh] overscroll-contain [-webkit-overflow-scrolling:touch] rounded-card border border-border-subtle [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar]:w-2.5"
+          // overscroll-contain 금지: 표에 스크롤할 내용이 없을 때 표 위에서 페이지 스크롤까지 막아버린다.
+          // 표 안 스크롤이 끝나면 페이지로 이어지는 건 브라우저 표준 동작으로 둔다.
+          className="overflow-auto max-h-[70vh] [-webkit-overflow-scrolling:touch] rounded-card border border-border-subtle [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar]:w-2.5"
         >
           {/* w-max: 칸을 압축하지 않고 고정폭 유지 → 모바일에서 가로 스크롤. min-w-full: 데스크톱은 꽉 채움 */}
           <table className="border-separate border-spacing-0 text-center w-max min-w-full">
