@@ -1,4 +1,4 @@
-import { useState, Suspense, Fragment, type ReactNode } from 'react';
+import { useState, Suspense, type ReactNode } from 'react';
 import { lazyWithReload } from '../../lib/lazyWithReload';
 import ICMCalculator from './ICMCalculator';
 import PotOddsCalc from './tools/PotOddsCalc';
@@ -110,21 +110,21 @@ export default function ToolsPanel() {
               <h3 className="text-sm font-bold text-ink-primary">{g.title}</h3>
               <span className="text-2xs text-ink-muted">{g.desc}</span>
             </div>
-            {/* 촘촘한 반응형 그리드 — 모바일 2열 → PC 4~5열. 선택 카드 바로 아래에 펼침(아래 카드 밀어냄) */}
+            {/* 촘촘한 반응형 그리드 — 모바일 2열 → PC 4~5열.
+               패널은 그리드 "밖" 그룹 아래 전체폭으로 — 그리드 중간에 끼우면
+               선택 카드 옆자리가 아래 행으로 밀려 한 칸만 남는 깨짐(모바일 2열)이 생긴다. */}
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {items.map((t) => (
-                <Fragment key={t.key}>
-                  <ToolCard name={t.name} desc={t.desc} icon={t.icon} active={active === t.key} onClick={() => select(t.key)} />
-                  {active === t.key && (
-                    <div className="col-span-full animate-fade-in pt-1 lg:max-w-3xl">
-                      <Suspense fallback={<div className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</div>}>
-                        {renderTool(active)}
-                      </Suspense>
-                    </div>
-                  )}
-                </Fragment>
+                <ToolCard key={t.key} name={t.name} desc={t.desc} icon={t.icon} active={active === t.key} onClick={() => select(t.key)} />
               ))}
             </div>
+            {items.some((t) => t.key === active) && (
+              <div className="animate-fade-in pt-1 lg:max-w-3xl">
+                <Suspense fallback={<div className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</div>}>
+                  {renderTool(active!)}
+                </Suspense>
+              </div>
+            )}
           </section>
         );
       })}

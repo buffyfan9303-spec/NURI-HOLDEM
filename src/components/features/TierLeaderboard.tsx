@@ -356,8 +356,30 @@ export default function TierLeaderboard() {
         ) : rows.length === 0 ? (
           <p className="text-center py-6 text-2xs text-ink-muted">랭킹 정보가 없습니다</p>
         ) : (
+          <>
+          {/* TOP3 포디움 — Chess.com 리더보드 문법(2-1-3 배치) */}
+          {rows.length >= 3 && (
+            <div className="mb-2 grid grid-cols-3 items-end gap-1.5">
+              {[rows[1], rows[0], rows[2]].map((r, idx) => {
+                const place = idx === 1 ? 1 : idx === 0 ? 2 : 3;
+                const big = place === 1;
+                return (
+                  <div key={r.id} className={['rounded-card border p-2.5 text-center', big ? 'border-gold-400/60 bg-gold-300/[0.08]' : 'border-border-subtle bg-surface-high'].join(' ')}>
+                    <p className={big ? 'text-xl leading-none' : 'text-base leading-none'}>{['🥈', '👑', '🥉'][idx]}</p>
+                    <span className={['mx-auto mt-1 flex items-center justify-center rounded-full font-bold text-white', big ? 'h-9 w-9 text-sm' : 'h-7 w-7 text-2xs'].join(' ')}
+                      style={{ background: r.avatarColor ?? '#5A6175' }}>
+                      {r.nickname[0]}
+                    </span>
+                    <p className={['mt-1 truncate font-bold', big ? 'text-sm text-gold-300' : 'text-xs text-ink-primary'].join(' ')}>{r.nickname}</p>
+                    <p className="text-2xs tabular-nums text-ink-muted">{r.activityPoints.toLocaleString()}점</p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
           <ul className="rounded-card border border-border-subtle bg-surface-high overflow-hidden">
-            {rows.map((r, i) => {
+            {(rows.length >= 3 ? rows.slice(3) : rows).map((r, i0) => {
+              const i = rows.length >= 3 ? i0 + 3 : i0;
               const t = tierOf(r.activityPoints);
               const rowAce = isAceRank(r.activityPoints, i + 1);
               const isMe = user?.id === r.id;
@@ -390,6 +412,15 @@ export default function TierLeaderboard() {
               );
             })}
           </ul>
+          {/* 내 순위 고정 바 — Duolingo 문법(내가 4위 밖이면 하단에 항상 표시) */}
+          {user && !isAdmin && myRank && myRank > 3 && (
+            <div className="sticky bottom-2 mt-2 flex items-center gap-2.5 rounded-card border border-gold-400/50 bg-surface-mid/95 px-3 py-2 shadow-dialog backdrop-blur">
+              <RankNum n={myRank} />
+              <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink-primary">{user.nickname ?? '나'} <span className="text-2xs font-bold text-gold-300">나</span></span>
+              <span className="text-xs font-bold tabular-nums text-gold-300">{(user.activityPoints ?? 0).toLocaleString()}점</span>
+            </div>
+          )}
+          </>
         )}
         {board === 'activity' && (
           <p className="mt-2 text-2xs text-ink-muted text-center">
