@@ -1,0 +1,3 @@
+-- 랭킹 허브: 주간 리그 집계 RPC + 주간 미션 클레임 (적용본과 동일 — 상세는 DB 함수 참조)
+-- weekly_league(p_limit): 이번 주(KST 월~) 체크인×3 + 입상 순위점수(1위10/2위7/3위5/그외3) 합산, admin 제외
+-- mission_claims(user_id, mission_key, week_start PK) + claim_mission(p_key): checkin2(+20)/post1(+10)/moneyin1(+30) 서버 검증 지급

@@ -4,14 +4,28 @@ import { useAuth } from '../../contexts/AuthContext';
 import TierBadge, { tierOf, tierProgress, allTiers, isAceRank, ACE_TOP_RANK, ACE_MIN_POINTS } from '../atoms/TierBadge';
 import { getActivityLeaderboard, type LeaderboardEntry } from '../../api/community';
 import { getGlobalRankingTotals, type GlobalRankingTotal } from '../../api/rankings';
+import { useToast } from '../atoms/Toast';
+import {
+  getWeeklyLeague, leagueTierOf, type LeagueRow,
+  MISSIONS, getMissionProgress, claimMission, type MissionProgress,
+  BADGES, getMyBadgeStats, type BadgeStats,
+  getMonthlyHall, type HallRow,
+} from '../../lib/loyalty';
 
-// 통합 랭킹 보드 종류 — 활동(기존 등급 연동) + 전 매장 머니인/프라이즈(고도화)
-type Board = 'activity' | 'moneyin' | 'prize';
-const BOARD_LABEL: Record<Board, string> = { activity: '활동 점수', moneyin: '머니인 랭킹', prize: '프라이즈 랭킹' };
+// 통합 랭킹 허브 — 활동/머니인/프라이즈 + 주간 리그·업적·미션·명예의 전당(충성도)
+type Board = 'activity' | 'moneyin' | 'prize' | 'league' | 'badges' | 'missions' | 'hall';
+const BOARD_LABEL: Record<Board, string> = {
+  activity: '활동 점수', moneyin: '머니인', prize: '프라이즈',
+  league: '주간 리그', badges: '업적', missions: '미션', hall: '명예의 전당',
+};
 const BOARD_DESC: Record<Board, string> = {
   activity: '접속·글쓰기·댓글 활동 점수 — 등급(2·3~AA)과 연동됩니다.',
   moneyin: '전국 매장 순위 등록(입상) 횟수 합산 — 가장 많이 머니인한 플레이어.',
   prize: '전국 매장 프라이즈 점수 합산(금전적 가치 없음).',
+  league: '이번 주 활약(체크인 ×3 + 입상 점수) — 월요일마다 새로 시작! 티어를 지켜내세요.',
+  badges: '조건을 달성하면 자동으로 열리는 업적 뱃지 — 모아서 프로필을 채우세요.',
+  missions: '이번 주 미션 — 달성하면 활동점수 보상을 바로 받아요. 월요일 리셋.',
+  hall: '지난달 가장 빛난 플레이어 TOP3 — 매월 1일 갱신되는 명예의 전당.',
 };
 
 function RankNum({ n }: { n: number }) {
@@ -32,13 +46,44 @@ function RankNum({ n }: { n: number }) {
 }
 
 export default function TierLeaderboard() {
-  const { user } = useAuth();
+  const { user, refreshProfile } = useAuth();
   const [rows, setRows] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [showLadder, setShowLadder] = useState(false);
   const [board, setBoard] = useState<Board>('activity');
   const [global, setGlobal] = useState<GlobalRankingTotal[]>([]);
   const [globalLoaded, setGlobalLoaded] = useState(false);
+  // 충성도 허브 — 주간 리그/업적/미션/명예의 전당(보드 진입 시 1회 로드)
+  const toast = useToast();
+  const [league, setLeague] = useState<LeagueRow[] | null>(null);
+  const [badgeStats, setBadgeStats] = useState<BadgeStats | null>(null);
+  const [missions, setMissions] = useState<MissionProgress[] | null>(null);
+  const [hall, setHall] = useState<{ label: string; rows: HallRow[] } | null>(null);
+  const [claiming, setClaiming] = useState<string | null>(null);
+  useEffect(() => {
+    if (board === 'league' && league === null) getWeeklyLeague(20).then(setLeague).catch(() => setLeague([]));
+    if (board === 'badges' && badgeStats === null && user) {
+      getMyBadgeStats(user.nickname ?? null, user.activityPoints ?? 0).then(setBadgeStats).catch(() => {});
+    }
+    if (board === 'missions' && missions === null && user) {
+      getMissionProgress(user.nickname ?? null).then(setMissions).catch(() => setMissions([]));
+    }
+    if (board === 'hall' && hall === null) getMonthlyHall().then(setHall).catch(() => setHall({ label: '', rows: [] }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [board, user?.id]);
+  const handleClaim = async (key: string) => {
+    setClaiming(key);
+    try {
+      const msg = await claimMission(key);
+      toast.show(`🎁 ${msg}`, 'success');
+      setMissions((prev) => prev ? prev.map((m) => (m.key === key ? { ...m, claimed: true } : m)) : prev);
+      await refreshProfile?.();
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : '보상 받기 실패', 'error');
+    } finally {
+      setClaiming(null);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -178,10 +223,10 @@ export default function TierLeaderboard() {
 
       {/* 랭킹 리스트 — 다중 보드(활동/머니인/프라이즈) */}
       <section>
-        <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5 mb-1.5">
-          {(['activity', 'moneyin', 'prize'] as Board[]).map((b) => (
+        <div className="flex items-center gap-1 overflow-x-auto scrollbar-none bg-surface-high rounded-input p-0.5 mb-1.5">
+          {(['activity', 'league', 'missions', 'badges', 'hall', 'moneyin', 'prize'] as Board[]).map((b) => (
             <button key={b} type="button" onClick={() => setBoard(b)}
-              className={['flex-1 py-1.5 text-xs font-bold rounded-[6px] transition-colors',
+              className={['shrink-0 px-3 py-1.5 text-xs font-bold rounded-[6px] transition-colors',
                 board === b ? 'bg-gold-300 text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
               {BOARD_LABEL[b]}
             </button>
@@ -189,7 +234,97 @@ export default function TierLeaderboard() {
         </div>
         <p className="mb-2 text-2xs text-ink-muted">{BOARD_DESC[board]}</p>
 
-        {board !== 'activity' ? (
+        {board === 'league' ? (
+          league === null ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
+          : league.length === 0 ? <p className="py-6 text-center text-2xs text-ink-muted">이번 주 활동 기록이 아직 없습니다 — 체크인·입상으로 리그에 입장하세요!</p>
+          : (
+            <ul className="overflow-hidden rounded-card border border-border-subtle bg-surface-high">
+              {league.map((r, i) => {
+                const t = leagueTierOf(r.score);
+                const isMe = user?.id === r.userId;
+                return (
+                  <li key={r.userId} className={['flex items-center gap-2.5 border-b border-border-subtle px-3 py-2 last:border-b-0', isMe ? 'bg-gold-300/[0.06]' : ''].join(' ')}>
+                    <RankNum n={i + 1} />
+                    <div className="min-w-0 flex-1">
+                      <span className="text-sm font-semibold text-ink-primary truncate">{r.nickname}{isMe && <span className="ml-1 text-2xs font-bold text-gold-300">나</span>}</span>
+                      <span className="block text-2xs text-ink-muted">체크인 {r.checkins}회 · 입상 {r.placements}회</span>
+                    </div>
+                    {t && <span className="shrink-0 rounded-badge bg-surface-float px-1.5 py-0.5 text-2xs font-bold text-ink-secondary">{t.emoji} {t.label}</span>}
+                    <span className="w-12 shrink-0 text-right text-sm font-bold tabular-nums text-gold-300">{r.score}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          )
+        ) : board === 'missions' ? (
+          !user ? <p className="py-6 text-center text-2xs text-ink-muted">로그인하면 주간 미션에 참여할 수 있습니다</p>
+          : missions === null ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
+          : (
+            <ul className="space-y-1.5">
+              {MISSIONS.map((m) => {
+                const p = missions.find((x) => x.key === m.key);
+                const cur = Math.min(p?.current ?? 0, m.goal);
+                const done = (p?.current ?? 0) >= m.goal;
+                const claimed = p?.claimed ?? false;
+                return (
+                  <li key={m.key} className="rounded-card border border-border-subtle bg-surface-high p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-ink-primary">{m.title} <span className="font-extrabold text-emerald-400">+{m.reward}점</span></p>
+                        <p className="text-2xs text-ink-muted">{m.desc}</p>
+                      </div>
+                      {claimed ? (
+                        <span className="shrink-0 rounded-badge bg-surface-float px-2 py-1 text-2xs font-bold text-ink-muted">✅ 받음</span>
+                      ) : done ? (
+                        <button type="button" disabled={claiming === m.key} onClick={() => handleClaim(m.key)}
+                          className="btn-primary shrink-0 px-3 py-1.5 text-xs disabled:opacity-60">🎁 받기</button>
+                      ) : (
+                        <span className="shrink-0 text-xs font-bold tabular-nums text-ink-secondary">{cur}/{m.goal}</span>
+                      )}
+                    </div>
+                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-float">
+                      <div className={['h-full rounded-full transition-all', done ? 'bg-emerald-400' : 'bg-gold-300'].join(' ')} style={{ width: `${Math.round((cur / m.goal) * 100)}%` }} />
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )
+        ) : board === 'badges' ? (
+          !user ? <p className="py-6 text-center text-2xs text-ink-muted">로그인하면 업적을 모을 수 있습니다</p>
+          : badgeStats === null ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
+          : (
+            <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4">
+              {BADGES.map((b) => {
+                const got = b.check(badgeStats);
+                return (
+                  <div key={b.key} title={b.desc}
+                    className={['rounded-card border p-2.5 text-center transition-colors', got ? 'border-gold-400/50 bg-gold-300/[0.08]' : 'border-border-subtle bg-surface-high opacity-55'].join(' ')}>
+                    <p className={['text-xl leading-none', got ? '' : 'grayscale'].join(' ')}>{b.emoji}</p>
+                    <p className={['mt-1 text-xs font-bold', got ? 'text-gold-300' : 'text-ink-secondary'].join(' ')}>{b.label}</p>
+                    <p className="mt-0.5 text-2xs leading-tight text-ink-muted">{b.desc}</p>
+                  </div>
+                );
+              })}
+            </div>
+          )
+        ) : board === 'hall' ? (
+          hall === null ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
+          : hall.rows.length === 0 ? <p className="py-6 text-center text-2xs text-ink-muted">지난달 입상 기록이 없습니다 — 이번 달의 주인공이 되어보세요!</p>
+          : (
+            <div className="space-y-1.5">
+              {hall.rows.map((r, i) => (
+                <div key={r.nickname} className={['flex items-center gap-3 rounded-card border p-3', i === 0 ? 'border-gold-400/60 bg-gold-300/[0.08]' : 'border-border-subtle bg-surface-high'].join(' ')}>
+                  <span className="text-2xl leading-none">{['👑', '🥈', '🥉'][i]}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className={['truncate font-extrabold', i === 0 ? 'text-lg text-gold-300' : 'text-sm text-ink-primary'].join(' ')}>{r.nickname}</p>
+                    <p className="text-2xs text-ink-muted">{hall.label} 입상 점수 {r.pts}점{r.wins > 0 ? ` · 우승 ${r.wins}회` : ''}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        ) : board !== 'activity' ? (
           !globalLoaded ? (
             <p className="text-center py-6 text-2xs text-ink-muted">불러오는 중…</p>
           ) : globalRows.length === 0 ? (
