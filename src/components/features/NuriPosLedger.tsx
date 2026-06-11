@@ -181,10 +181,14 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const reloadSession = useCallback(() => { getLedgerSession(venueId, date).then(setSession).catch(() => {}); }, [venueId, date]);
 
   useEffect(() => {
+    // stale 응답 가드 — 날짜를 빠르게 바꾸면(예: 게임관리 '장부' 바로가기) 이전 날짜의
+    // 응답이 늦게 도착해 현재 세션을 빈 값으로 덮어쓰는 race가 난다. cleanup으로 무시.
+    let alive = true;
     setLoading(true);
     Promise.all([getLedgerSession(venueId, date), getLedgerBuyins(venueId, date), getLedgerPlayers(venueId, date), posHasPassword(venueId)])
-      .then(([s, b, p, pw]) => { setSession(s); setBuyins(b); setPlayers(p); setHasPw(pw); })
-      .finally(() => setLoading(false));
+      .then(([s, b, p, pw]) => { if (!alive) return; setSession(s); setBuyins(b); setPlayers(p); setHasPw(pw); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
   }, [venueId, date]);
 
   useEffect(() => subscribeLedger(venueId, reload), [venueId, reload]);
