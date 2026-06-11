@@ -24,6 +24,7 @@ import {
 } from '../../api/rankings';
 import { uploadVenueImages } from '../../lib/storage';
 import { useBackClose } from '../../lib/backstack';
+import VenueReviews from './VenueReviews';
 
 interface VenuePageProps {
   venue: Venue | null;
@@ -264,11 +265,19 @@ export default function VenuePage({
         {/* ── 탭 컨텐츠 ──────────────────────────────────────────── */}
         <div className="px-page-x py-4 min-h-[50vh]">
           {tab === 'about' && (
-            <AboutPanel
-              venue={venue}
-              editable={isMyVenue}
-              onUpdateDescription={onUpdateDescription}
-            />
+            <div className="space-y-4">
+              <AboutPanel
+                venue={venue}
+                editable={isMyVenue}
+                onUpdateDescription={onUpdateDescription}
+              />
+              <VenueReviews
+                venueId={venue.id}
+                userId={user?.id ?? null}
+                nickname={user?.nickname ?? null}
+                isAdmin={user?.role === 'admin'}
+              />
+            </div>
           )}
           {tab === 'ranking' && <VenueRankingPanel venueId={venue.id} />}
           {tab === 'posters' && (
