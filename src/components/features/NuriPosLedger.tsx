@@ -549,14 +549,10 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
         <p className="py-10 text-center text-xs text-ink-muted">{query ? '검색 결과가 없습니다.' : '유저를 추가하면 바인을 입력할 수 있습니다.'}</p>
       ) : (
         <div
-          className="overflow-auto max-h-[70vh] [-webkit-overflow-scrolling:touch] rounded-card border border-border-subtle"
-          onWheel={(ev) => {
-            // PC: 마우스 휠만으로 표 좌우 이동(좁은 스크롤바 클릭 불필요)
-            const el = ev.currentTarget;
-            if (el.scrollWidth > el.clientWidth && Math.abs(ev.deltaY) > Math.abs(ev.deltaX)) {
-              el.scrollLeft += ev.deltaY;
-            }
-          }}
+          // 휠 = 순수 세로 스크롤(가로 변환 제거 — 대각선 이동 방지). PC는 10바인 한 화면이라 가로 휠 불필요.
+          // overscroll-contain: 표 끝에서 페이지까지 같이 내려가는 이중 스크롤 차단.
+          // 가로가 필요한 좁은 화면용: 스크롤바를 굵게(잡기 쉬움) + Shift+휠은 브라우저 기본 가로 동작.
+          className="overflow-auto max-h-[70vh] overscroll-contain [-webkit-overflow-scrolling:touch] rounded-card border border-border-subtle [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar]:w-2.5"
         >
           {/* w-max: 칸을 압축하지 않고 고정폭 유지 → 모바일에서 가로 스크롤. min-w-full: 데스크톱은 꽉 채움 */}
           <table className="border-separate border-spacing-0 text-center w-max min-w-full">
