@@ -9,7 +9,7 @@ import type { SearchState } from './components/features/IntegratedSearchBar';
 import ScheduleCard from './components/features/ScheduleCard';
 import WeeklyBestStrip from './components/features/WeeklyBestStrip';
 import ScheduleTable from './components/features/ScheduleTable';
-import { getWeeklyMoneyinKings, type WeeklyKing } from './api/rankings';
+import { getWeeklyMoneyinKings, getVenueRankings, type WeeklyKing, type RankingEntry } from './api/rankings';
 import NotificationPanel from './components/features/NotificationPanel';
 import { decodeSpot, readGtoHash } from './components/features/gto/gtoShare';
 import type { DeepGtoInit } from './components/features/gto/useDeepGto';
@@ -1542,14 +1542,27 @@ export default function App() {
 }
 
 // ── 🏁 지난 대회 아카이브 — 일정탐색 하단(완료 대회, 최근 5개) ─────────────────
+// 순위가 입력된 대회면 행에 👑 우승자 표시 + 클릭 시 입상 순위 펼침(미입력이면 바로 상세).
 function PastTournaments({ schedules, onSelect }: { schedules: Schedule[]; onSelect: (s: Schedule) => void }) {
   const today = new Date().toLocaleDateString('en-CA');
   const past = [...schedules]
     .filter((s) => s.approved && s.date < today)
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, 5);
+  const [results, setResults] = useState<Record<string, RankingEntry[]>>({});
+  const [openId, setOpenId] = useState<string | null>(null);
+  useEffect(() => {
+    past.forEach((s) => {
+      if (!s.venueId) return;
+      getVenueRankings(s.venueId, s.date)
+        .then((r) => { if (r.entries.length > 0) setResults((prev) => ({ ...prev, [s.id]: r.entries })); })
+        .catch(() => {});
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [schedules]);
   if (past.length === 0) return null;
   const day = (d: string) => ['일', '월', '화', '수', '목', '금', '토'][new Date(`${d}T00:00:00`).getDay()];
+  const medal = (p: number) => (p === 1 ? '👑' : p === 2 ? '🥈' : p === 3 ? '🥉' : null);
   return (
     <section className="mt-4 overflow-hidden rounded-card border border-border-subtle bg-surface-low">
       <header className="flex items-center justify-between border-b border-border-subtle px-3 py-2">
@@ -1557,18 +1570,44 @@ function PastTournaments({ schedules, onSelect }: { schedules: Schedule[]; onSel
         <span className="text-2xs text-ink-muted">눌러서 결과·정보 보기</span>
       </header>
       <ul>
-        {past.map((s) => (
-          <li key={s.id} className="border-b border-border-subtle last:border-b-0">
-            <button type="button" onClick={() => onSelect(s)}
-              className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-surface-high/70">
-              <span className="shrink-0 rounded-badge bg-surface-high px-1.5 py-0.5 text-2xs font-semibold tabular-nums text-ink-muted">
-                {s.date.slice(5).replace('-', '/')}({day(s.date)})
-              </span>
-              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{s.title}</span>
-              <span className="shrink-0 text-xs text-ink-muted">{s.pubName}</span>
-            </button>
-          </li>
-        ))}
+        {past.map((s) => {
+          const entries = results[s.id];
+          const champ = entries?.find((e) => e.position === 1);
+          const opened = openId === s.id;
+          return (
+            <li key={s.id} className="border-b border-border-subtle last:border-b-0">
+              <button type="button"
+                onClick={() => (entries ? setOpenId(opened ? null : s.id) : onSelect(s))}
+                className={['flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-surface-high/70', opened ? 'bg-surface-high/50' : ''].join(' ')}>
+                <span className="shrink-0 rounded-badge bg-surface-high px-1.5 py-0.5 text-2xs font-semibold tabular-nums text-ink-muted">
+                  {s.date.slice(5).replace('-', '/')}({day(s.date)})
+                </span>
+                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{s.title}</span>
+                {champ && <span className="shrink-0 text-xs font-bold text-gold-300">👑 {champ.nickname}</span>}
+                <span className="hidden shrink-0 text-xs text-ink-muted sm:inline">{s.pubName}</span>
+              </button>
+              {opened && entries && (
+                <div className="border-t border-border-subtle bg-surface-base/40 px-3 py-2 animate-fade-in">
+                  <ul className="space-y-1">
+                    {[...entries].sort((a, b) => a.position - b.position).slice(0, 5).map((e) => (
+                      <li key={`${e.position}-${e.nickname}`} className="flex items-center gap-2 text-sm">
+                        <span className="w-8 shrink-0 text-center text-xs font-bold tabular-nums text-ink-muted">
+                          {medal(e.position) ?? `${e.position}위`}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate font-semibold text-ink-primary">{e.nickname}</span>
+                        {e.prize && <span className="shrink-0 text-xs tabular-nums text-gold-300">{e.prize}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                  <button type="button" onClick={() => onSelect(s)}
+                    className="mt-1.5 text-xs font-semibold text-ink-muted transition-colors hover:text-gold-300">
+                    대회 정보 전체 보기 →
+                  </button>
+                </div>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </section>
   );
