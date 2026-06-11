@@ -14,6 +14,7 @@ import {
 import { useToast } from '../atoms/Toast';
 import { supabase } from '../../lib/supabase';
 import { getAppSetting, setAppSetting, BOOST_CONTACT_EMAIL_KEY, BOOST_CONTACT_PHONE_KEY } from '../../api/settings';
+import { getAllCommunityAds, saveCommunityAd, type CommunityAd } from '../../api/ads';
 import { isVoucherIssueApproved, setVoucherIssueApproval } from '../../api/vouchers';
 import { useBackClose } from '../../lib/backstack';
 import { REGION_CHIPS } from './IntegratedSearchBar';
@@ -72,6 +73,54 @@ function BoostContactCard() {
       <button type="button" onClick={save} disabled={saving} className="btn-primary px-4 py-2 text-sm disabled:opacity-60">
         {saving ? '저장 중…' : '저장'}
       </button>
+    </section>
+  );
+}
+
+// ── 커뮤니티 광고 5칸(운영자) — 게시판 한 줄 리스트 사이 [AD] 행 게재 관리 ───────
+function CommunityAdsCard() {
+  const toast = useToast();
+  const [ads, setAds] = useState<CommunityAd[]>([]);
+  const [savingSlot, setSavingSlot] = useState<number | null>(null);
+  useEffect(() => { getAllCommunityAds().then(setAds).catch(() => {}); }, []);
+  const patch = (slot: number, p: Partial<CommunityAd>) =>
+    setAds((arr) => arr.map((a) => (a.slot === slot ? { ...a, ...p } : a)));
+  const save = async (ad: CommunityAd) => {
+    setSavingSlot(ad.slot);
+    try {
+      await saveCommunityAd(ad);
+      toast.show(`광고 ${ad.slot}번 칸을 저장했습니다${ad.title.trim() ? '' : ' (비워서 게재 중단)'}`, 'success');
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : '저장 실패', 'error');
+    } finally {
+      setSavingSlot(null);
+    }
+  };
+  const today = new Date().toLocaleDateString('en-CA');
+  return (
+    <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
+      <p className="text-sm font-bold text-ink-primary">📢 커뮤니티 광고 5칸 <span className="text-xs font-normal text-ink-muted">— 게시판 글 4개마다 [AD] 한 줄. 제목 비우면 게재 중단</span></p>
+      <ul className="space-y-1.5">
+        {ads.map((ad) => {
+          const live = !!ad.title.trim() && (!ad.expiresAt || ad.expiresAt >= today);
+          return (
+            <li key={ad.slot} className="flex flex-wrap items-center gap-1.5 rounded-input border border-border-subtle bg-surface-high/40 p-1.5">
+              <span className={['shrink-0 rounded-badge px-1.5 py-0.5 text-2xs font-bold', live ? 'bg-gold-300 text-ink-inverse' : 'bg-surface-float text-ink-muted'].join(' ')}>{ad.slot}번 {live ? '게재중' : '비어있음'}</span>
+              <input value={ad.title} onChange={(e) => patch(ad.slot, { title: e.target.value })} maxLength={40}
+                placeholder="광고 문구" className="input min-w-[10rem] flex-1 text-sm" />
+              <input value={ad.linkUrl} onChange={(e) => patch(ad.slot, { linkUrl: e.target.value })} maxLength={200}
+                placeholder="링크(선택)" className="input w-40 text-sm" />
+              <input value={ad.advertiser} onChange={(e) => patch(ad.slot, { advertiser: e.target.value })} maxLength={20}
+                placeholder="광고주" className="input w-28 text-sm" />
+              <input type="date" value={ad.expiresAt ?? ''} onChange={(e) => patch(ad.slot, { expiresAt: e.target.value || null })}
+                className="input w-36 text-sm" title="만료일(지나면 자동 내림)" />
+              <button type="button" onClick={() => save(ad)} disabled={savingSlot === ad.slot}
+                className="btn-primary px-3 py-1.5 text-xs disabled:opacity-60">저장</button>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="text-xs text-ink-muted">가격 운영 예: 3일 10만 / 7일 20만 — 만료일만 맞춰 입력하면 끝나는 날 자동으로 내려갑니다.</p>
     </section>
   );
 }
@@ -247,6 +296,7 @@ export default function AdminTab({
                 ? (
                   <>
                     <BoostContactCard />
+                    <CommunityAdsCard />
                     <DraggableList initialItems={schedules.filter((s) => s.approved)} />
                   </>
                 )

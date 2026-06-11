@@ -476,14 +476,14 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
           <table className="border-separate border-spacing-0 text-center w-max min-w-full">
             <thead>
               <tr className="bg-surface-high">
-                <th className="sticky left-0 z-20 bg-surface-high w-9 px-1 py-1.5 text-[10px] text-ink-muted border-b border-border-subtle">No</th>
-                <th className="sticky left-9 z-20 bg-surface-high min-w-[7.5rem] px-2 py-1.5 text-[10px] text-ink-muted border-b border-l border-border-subtle text-left">플레이어</th>
+                <th className="sticky left-0 z-20 bg-surface-high w-9 px-1 py-2 text-xs text-ink-muted border-b border-border-subtle">No</th>
+                <th className="sticky left-9 z-20 bg-surface-high min-w-[7.5rem] px-2 py-2 text-xs text-ink-muted border-b border-l border-border-subtle text-left">플레이어</th>
                 {Array.from({ length: 10 }, (_, i) => (
-                  <th key={i} className="w-[3.6rem] px-0.5 py-1.5 text-[10px] text-ink-muted border-b border-l border-border-subtle">{i + 1}바인</th>
+                  <th key={i} className="w-[3.6rem] px-0.5 py-2 text-xs text-ink-muted border-b border-l border-border-subtle">{i + 1}바인</th>
                 ))}
-                <th className="min-w-[6rem] px-2 py-1.5 text-[10px] text-ink-muted border-b border-l border-border-subtle text-left">비고</th>
-                <th className="sticky right-[4.5rem] z-20 bg-surface-high w-[4.5rem] px-1 py-1.5 text-[10px] text-ink-muted border-b border-l border-border-strong">총바인</th>
-                <th className="sticky right-0 z-20 bg-surface-high w-[4.5rem] px-1 py-1.5 text-[10px] text-ink-muted border-b border-l border-border-subtle">미수</th>
+                <th className="min-w-[6rem] px-2 py-2 text-xs text-ink-muted border-b border-l border-border-subtle text-left">비고</th>
+                <th className="sticky right-[4.5rem] z-20 bg-surface-high w-[4.5rem] px-1 py-2 text-xs text-ink-muted border-b border-l border-border-strong">총바인</th>
+                <th className="sticky right-0 z-20 bg-surface-high w-[4.5rem] px-1 py-2 text-xs text-ink-muted border-b border-l border-border-subtle">미수</th>
               </tr>
             </thead>
             <tbody>

@@ -268,7 +268,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {/* 오늘 장부 */}
         <DashCard show={caps.ledger} title="오늘 장부" onClick={() => onGoto('ledger')}
           badge={<span className={`rounded-badge px-1.5 py-0.5 text-2xs font-bold ${ledgerStatusCls}`}>{ledgerStatus}</span>}>

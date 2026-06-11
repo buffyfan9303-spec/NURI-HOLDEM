@@ -124,7 +124,7 @@ export default function ScheduleDetailModal({
         {/* ── 정보 (우측, 스크롤) ──────────────────────────────────── */}
         <div className="flex min-w-0 flex-col">
           {/* 제목 영역 */}
-          <div className="px-4 pt-4 pb-2">
+          <div className="px-3.5 pt-3.5 pb-2">
             <h1 className={[
               'text-xl font-bold leading-tight',
               schedule.isPremium ? 'text-gold-300' : 'text-ink-primary',
@@ -214,7 +214,7 @@ export default function ScheduleDetailModal({
 
       {/* ── 본문 ─────────────────────────────────────────────────────── */}
       {tab === 'qna' ? (
-        <div className="px-4 py-4 space-y-3">
+        <div className="px-3.5 py-3 space-y-2.5">
           {/* 대회 후기 쓰기 — 커뮤니티 게시판(대회 후기 카테고리)으로 바로 작성 */}
           <button type="button"
             onClick={() => { if (!user) { promptLogin(); return; } openPostForm('tourney'); }}
@@ -234,7 +234,7 @@ export default function ScheduleDetailModal({
           />
         </div>
       ) : (
-      <div className="px-4 pt-5 pb-6 space-y-6">
+      <div className="px-3.5 pt-3.5 pb-5 space-y-4">
 
         {/* 예약하기 (첫 페이지) */}
         <ReserveBox scheduleId={schedule.id} ownerId={schedule.ownerId} venueId={schedule.venueId} />

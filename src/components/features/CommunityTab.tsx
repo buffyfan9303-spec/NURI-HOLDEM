@@ -1,4 +1,5 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, Fragment } from 'react';
+import { getActiveCommunityAds, type CommunityAd } from '../../api/ads';
 import type { Venue, Comment, CommunityPost, LiveMessage, PostCategory, GroupKind, JoinedGroup } from '../../api/community';
 import { getLiveMessages, addLiveMessage, deleteLiveMessage, subscribeLiveWall, createMyVenue, createGroup, GROUP_KIND_LABEL, getMyOwnedCommunities, getMyJoinedGroups, removeMember } from '../../api/community';
 import { REGION_CHIPS } from './IntegratedSearchBar';
@@ -240,6 +241,11 @@ function FeedSection({
   const [view, setView] = useState<'compact' | 'feed'>(() =>
     (typeof localStorage !== 'undefined' && localStorage.getItem('nuri:board-view') === 'feed') ? 'feed' : 'compact');
   const switchView = (v: 'compact' | 'feed') => { setView(v); try { localStorage.setItem('nuri:board-view', v); } catch { /* noop */ } };
+  // 커뮤니티 광고 5칸 — 게시판(enableCategory)에서만, 글 4개마다 한 칸씩 삽입
+  const [ads, setAds] = useState<CommunityAd[]>([]);
+  useEffect(() => {
+    if (enableCategory) getActiveCommunityAds().then(setAds).catch(() => {});
+  }, [enableCategory]);
 
   // HOT: 최근 6시간 내 조회수 상위 2개 (검색·카테고리 미적용 상태에서만 핀 고정)
   const hotPosts = useMemo(() => {
@@ -418,9 +424,18 @@ function FeedSection({
         <>
           <div className="rounded-card border border-border-default bg-surface-low overflow-hidden">
             <ul>
-              {shown.map((p) => view === 'compact'
-                ? <PostRow key={p.id} post={p} selected={p.id === selectedId} onClick={() => onSelectPost(p)} />
-                : <PostCard key={p.id} post={p} selected={p.id === selectedId} onLike={() => onLike(p.id)} onClick={() => onSelectPost(p)} />)}
+              {shown.map((p, i) => {
+                const ad = ads[Math.floor(i / 4)];
+                const showAd = i % 4 === 3 && !!ad; // 글 4개마다 광고 한 칸
+                return (
+                  <Fragment key={p.id}>
+                    {view === 'compact'
+                      ? <PostRow post={p} selected={p.id === selectedId} onClick={() => onSelectPost(p)} />
+                      : <PostCard post={p} selected={p.id === selectedId} onLike={() => onLike(p.id)} onClick={() => onSelectPost(p)} />}
+                    {showAd && <AdRow ad={ad} />}
+                  </Fragment>
+                );
+              })}
             </ul>
           </div>
           {listSource.length > visible && (
@@ -435,6 +450,26 @@ function FeedSection({
         </>
       )}
     </div>
+  );
+}
+
+// 커뮤니티 광고 행 — 한 줄 리스트 사이 [AD] 행(운영자가 관리자 설정 → 게시물 관리에서 게재)
+function AdRow({ ad }: { ad: CommunityAd }) {
+  const href = ad.linkUrl && /^https?:\/\//.test(ad.linkUrl) ? ad.linkUrl : ad.linkUrl ? `https://${ad.linkUrl}` : '';
+  const inner = (
+    <>
+      <span className="shrink-0 rounded-badge bg-gold-300 px-1 py-0.5 text-2xs font-extrabold leading-none text-ink-inverse">AD</span>
+      <span className="min-w-0 flex-1 truncate text-[15px] font-bold text-ink-primary">{ad.title}</span>
+      {ad.advertiser && <span className="shrink-0 text-xs text-ink-muted">{ad.advertiser}</span>}
+    </>
+  );
+  const cls = 'flex items-center gap-2 border-b border-border-subtle bg-gold-300/[0.04] px-3 py-2 transition-colors last:border-b-0 hover:bg-gold-300/10';
+  return (
+    <li>
+      {href
+        ? <a href={href} target="_blank" rel="noopener noreferrer" className={cls}>{inner}</a>
+        : <div className={cls}>{inner}</div>}
+    </li>
   );
 }
 

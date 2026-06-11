@@ -779,20 +779,18 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
         </div>
       )}
 
-      {/* 4등~ 리스트 */}
-      <ol className="space-y-1.5">
+      {/* 4등~ 리스트 — 바이낸스 표 문법(구분선·행 40px대·숫자 우측 tabular) */}
+      <ol className="overflow-hidden rounded-input border border-border-subtle bg-surface-high divide-y divide-border-subtle">
         {rest.map((e, i) => {
           const masked = maskRealName(e.realName);
           return (
-            <li key={e.nickname} className="flex items-center gap-3 p-2.5 rounded-input bg-surface-high border border-border-subtle">
-              <span className="w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-2xs font-bold tabular-nums bg-surface-float text-ink-secondary">
-                {i + 4}
-              </span>
-              <span className="text-sm font-semibold text-ink-primary truncate">{e.nickname}</span>
-              {masked && <span className="text-2xs text-ink-muted">({masked})</span>}
+            <li key={e.nickname} className="flex items-center gap-2.5 px-2.5 py-2 transition-colors hover:bg-surface-float/50">
+              <span className="w-6 shrink-0 text-center text-xs font-bold tabular-nums text-ink-muted">{i + 4}</span>
+              <span className="min-w-0 truncate text-sm font-semibold text-ink-primary">{e.nickname}</span>
+              {masked && <span className="shrink-0 text-2xs text-ink-muted">({masked})</span>}
               <span className="ml-auto shrink-0 text-right">
                 <span className="text-sm font-bold tabular-nums text-gold-300">{fmtVal(e.value)}</span>
-                {e.appearances > 0 && <span className="block text-[10px] text-ink-muted">{e.appearances}회{e.bestPosition > 0 && e.bestPosition < 9999 ? ` · 최고 ${e.bestPosition}등` : ''}</span>}
+                {e.appearances > 0 && <span className="block text-xs leading-tight text-ink-muted">{e.appearances}회{e.bestPosition > 0 && e.bestPosition < 9999 ? ` · 최고 ${e.bestPosition}등` : ''}</span>}
               </span>
             </li>
           );
