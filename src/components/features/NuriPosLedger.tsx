@@ -26,6 +26,7 @@ import { getClockState, saveClockState, defaultClockConfig, type ClockState } fr
 import { getMyVenueStaff, type User } from '../../api/auth';
 import { accrueVoucher } from '../../api/vouchers';
 import { useBackClose } from '../../lib/backstack';
+import EmptyState from '../atoms/EmptyState';
 
 const today = () => new Date().toLocaleDateString('en-CA'); // 로컬 날짜 — UTC 자정 넘김 방지
 const shiftDays = (d: string, n: number) => { const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate() + n); return x.toLocaleDateString('en-CA'); };
@@ -400,7 +401,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
         {listLoading ? (
           <p className="py-10 text-center text-xs text-ink-muted">불러오는 중…</p>
         ) : sessionList.length === 0 ? (
-          <p className="py-10 text-center text-xs text-ink-muted">아직 작성한 장부가 없습니다. "+ 장부 추가"로 첫 장부를 여세요.</p>
+          <EmptyState title="아직 작성한 장부가 없습니다" hint='"+ 장부 추가"를 누르면 오늘 장부가 열립니다' />
         ) : filtered.length === 0 ? (
           <p className="py-10 text-center text-xs text-ink-muted">{hasRange ? '선택한 기간에 작성된 장부가 없습니다.' : `"${listQuery.trim()}" 검색 결과가 없습니다.`}</p>
         ) : (
@@ -1020,7 +1021,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
     <div className={embedded ? 'space-y-3' : 'rounded-card border border-gold-400/30 bg-gradient-to-br from-gold-300/[0.05] to-transparent p-3 space-y-2.5'}>
       {mode === 'open' && (
         <div>
-          <h3 className="text-base font-bold text-gold-300">장부 시작 설정</h3>
+          <h3 className="text-sm font-bold text-gold-300">장부 시작 설정</h3>
           <p className="text-2xs text-ink-muted mt-0.5">담당직원: <b className="text-ink-secondary">{operatorName}</b> · 아래 정보를 입력 후 장부에 입장합니다.</p>
           {prefilled && <p className="text-xs font-semibold text-emerald-400 mt-0.5">✅ 직전 게임 설정을 불러왔습니다 — 바로 시작하거나 수정하세요.</p>}
           {autoLinked && <p className="text-xs font-semibold text-emerald-400 mt-0.5">✅ 오늘 포스터를 자동으로 연동했습니다 — 게임명·바인·유형이 채워졌어요(수정 가능).</p>}

@@ -8,6 +8,7 @@ import {
 } from '../../api/reservations';
 import { getPosterOpsSummaries, type PosterOpsSummary } from '../../api/ledger';
 import { toCsv, downloadCsv } from '../../lib/csv';
+import EmptyState from '../atoms/EmptyState';
 
 // 예약 명단 CSV 내보내기 (엑셀 한글 호환)
 function exportReservationsCsv(schedule: Schedule, reservations: Reservation[]) {
@@ -65,11 +66,11 @@ export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete, on
   return (
     <div className="space-y-3">
       {myPosters.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 gap-2 text-ink-muted">
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="opacity-30" aria-hidden><rect x="4" y="3" width="16" height="18" rx="2"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="13" y2="16"/></svg>
-          <p className="text-xs">등록된 게임이 없습니다</p>
-          <button type="button" onClick={onCreate} className="mt-2 btn-ghost text-xs">첫 게임 등록하기</button>
-        </div>
+        <EmptyState
+          title="등록된 게임이 없습니다"
+          hint="포스터를 올리면 일정 탐색에 노출되고 예약을 받을 수 있어요"
+          action={<button type="button" onClick={onCreate} className="btn-primary px-4 py-2 text-xs">+ 첫 게임 등록하기</button>}
+        />
       ) : (
         <ul className="space-y-2">
           {myPosters.map((p) => (

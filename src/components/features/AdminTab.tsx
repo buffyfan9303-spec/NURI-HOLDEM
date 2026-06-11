@@ -22,6 +22,7 @@ import {
 import { isVoucherIssueApproved, setVoucherIssueApproval } from '../../api/vouchers';
 import { useBackClose } from '../../lib/backstack';
 import { REGION_CHIPS } from './IntegratedSearchBar';
+import SectionHeader from '../atoms/SectionHeader';
 import NuriPosLedger from './NuriPosLedger';
 import LedgerStatsPanel from './LedgerStatsPanel';
 
@@ -260,7 +261,7 @@ function ErrorLogPanel() {
   return (
     <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
       <div className="flex items-center justify-between">
-        <h3 className="text-base font-bold text-ink-primary">오류 로그 <span className="text-sm font-normal text-ink-muted">(최근 {rows.length}건)</span></h3>
+        <h3 className="text-sm font-bold text-ink-primary">수집 내역 <span className="text-xs font-normal text-ink-muted">(최근 {rows.length}건)</span></h3>
         <div className="flex gap-1.5">
           <button type="button" onClick={reload} className="btn-ghost px-2.5 text-xs">새로고침</button>
           {rows.length > 0 && <button type="button" onClick={clearAll} className="btn-ghost px-2.5 text-xs text-danger">전부 비우기</button>}
@@ -340,6 +341,16 @@ function PendingGroupsPanel({ onChanged }: { onChanged: () => void }) {
 const aic = (children: ReactNode) => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{children}</svg>
 );
+// 섹션 설명 — 공용 SectionHeader(내 매장과 동일 규격)
+const ADMIN_DESC: Record<Section, string> = {
+  pending: '업주가 등록한 포스터 검수 — 승인하면 일정 탐색에 노출됩니다',
+  reorder: '노출 순서 · 부스트 · 커뮤니티 광고 · 주간 미션 관리',
+  users: '회원 검색 · 등급 · 제재',
+  venues: '매장 생성 · 인증 · 그룹 승인',
+  reports: '신고 접수 처리',
+  errors: '실유저 화면에서 자동 수집된 오류',
+};
+
 const ADMIN_SECTIONS: { id: Section; label: string; icon: ReactNode }[] = [
   { id: 'pending', label: '포스터 승인', icon: aic(<><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><path d="m9 11 3 3L22 4" /></>) },
   { id: 'reorder', label: '게시물 관리', icon: aic(<><path d="m12 2 9 5-9 5-9-5 9-5Z" /><path d="m3 12 9 5 9-5" /><path d="m3 17 9 5 9-5" /></>) },
@@ -380,6 +391,11 @@ export default function AdminTab({
         </nav>
 
         <div className="mt-3 min-w-0 flex-1 space-y-3 lg:mt-0">
+          {/* 공용 섹션 헤더 — 내 매장과 동일 규격(17px 제목+12px 설명+헤어라인) */}
+          <SectionHeader
+            title={ADMIN_SECTIONS.find((a) => a.id === section)?.label ?? ''}
+            desc={ADMIN_DESC[section]}
+          />
           {section === 'venues' && (
             <div className="space-y-3">
               <PendingGroupsPanel onChanged={() => onReloadVenues?.()} />
@@ -488,7 +504,7 @@ function VenueCreateCard({ venues, users, onCreated }: { venues: Venue[]; users:
       </section>
 
       <section>
-        <h3 className="text-xs font-bold text-ink-secondary mb-1.5">등록된 홀덤펍 ({venues.length}) · 매장별 관리</h3>
+        <h3 className="text-sm font-bold text-ink-primary mb-1.5">등록된 홀덤펍 ({venues.length}) · 매장별 관리</h3>
         {venues.length === 0 ? (
           <p className="text-center py-6 text-2xs text-ink-muted">등록된 홀덤펍이 없습니다</p>
         ) : (
