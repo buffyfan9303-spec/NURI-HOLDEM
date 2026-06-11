@@ -1,4 +1,5 @@
 // src/components/features/NuriPosLedger.tsx
+import { useIsDesktop } from '../../lib/responsive';
 // NURI POS 장부 — 표(table) 형태. 장부 입장 시 세션 설정(담당직원·게임·단가·이벤트·딜러) → 보드.
 // 셀 2-Tap 입력(결제수단 + 완납/미수/가게지원). 티켓·지원은 미수 불가. 미수=붉은색.
 // 8바인 초과 시 가로 스크롤. 비고 컬럼 수기 입력. 장부 마감=읽기전용 스냅샷+메모. 엑셀 내보내기.
@@ -168,6 +169,10 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const cellAt = (name: string, e: number) => buyins.find((b) => b.playerName === name && b.entryNo === e) ?? null;
   const countOf = (name: string) => buyins.filter((b) => b.playerName === name).length;
   const maxEntryOf = (name: string) => buyins.reduce((m, b) => (b.playerName === name && b.entryNo > m ? b.entryNo : m), 0);
+  // 바인 컬럼 수 — PC는 10 고정(폭 축소로 한 화면에), 모바일은 "쓰인 최대 바인+1"만 렌더(가로 스크롤 최소화)
+  const isDesktopLedger = useIsDesktop();
+  const globalMaxEntry = buyins.reduce((m, b) => Math.max(m, b.entryNo), 0);
+  const binCols = (isDesktopLedger || globalMaxEntry >= 10) ? 10 : Math.min(10, Math.max(globalMaxEntry + 1, 3));
 
   const rows = useMemo(() => {
     const rosterNames = players.map((p) => p.name);
@@ -471,15 +476,24 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       {rows.length === 0 ? (
         <p className="py-10 text-center text-xs text-ink-muted">{query ? '검색 결과가 없습니다.' : '유저를 추가하면 바인을 입력할 수 있습니다.'}</p>
       ) : (
-        <div className="overflow-x-auto [-webkit-overflow-scrolling:touch] rounded-card border border-border-subtle">
+        <div
+          className="overflow-x-auto [-webkit-overflow-scrolling:touch] rounded-card border border-border-subtle"
+          onWheel={(ev) => {
+            // PC: 마우스 휠만으로 표 좌우 이동(좁은 스크롤바 클릭 불필요)
+            const el = ev.currentTarget;
+            if (el.scrollWidth > el.clientWidth && Math.abs(ev.deltaY) > Math.abs(ev.deltaX)) {
+              el.scrollLeft += ev.deltaY;
+            }
+          }}
+        >
           {/* w-max: 칸을 압축하지 않고 고정폭 유지 → 모바일에서 가로 스크롤. min-w-full: 데스크톱은 꽉 채움 */}
           <table className="border-separate border-spacing-0 text-center w-max min-w-full">
             <thead>
               <tr className="bg-surface-high">
                 <th className="sticky left-0 z-20 bg-surface-high w-9 px-1 py-2 text-xs text-ink-muted border-b border-border-subtle">No</th>
                 <th className="sticky left-9 z-20 bg-surface-high min-w-[7.5rem] px-2 py-2 text-xs text-ink-muted border-b border-l border-border-subtle text-left">플레이어</th>
-                {Array.from({ length: 10 }, (_, i) => (
-                  <th key={i} className="w-[3.6rem] px-0.5 py-2 text-xs text-ink-muted border-b border-l border-border-subtle">{i + 1}바인</th>
+                {Array.from({ length: binCols }, (_, i) => (
+                  <th key={i} className="w-12 px-0.5 py-2 text-xs text-ink-muted border-b border-l border-border-subtle">{i + 1}바인</th>
                 ))}
                 <th className="min-w-[6rem] px-2 py-2 text-xs text-ink-muted border-b border-l border-border-subtle text-left">비고</th>
                 <th className="sticky right-[4.5rem] z-20 bg-surface-high w-[4.5rem] px-1 py-2 text-xs text-ink-muted border-b border-l border-border-strong">총바인</th>
@@ -514,10 +528,10 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                         ) : <span className="text-[10px] text-ink-muted/50 truncate">{r.name}</span>}
                       </td>
 
-                      {Array.from({ length: 10 }, (_, i) => {
+                      {Array.from({ length: binCols }, (_, i) => {
                         const e = chunk * 10 + i + 1;
                         const c = cellAt(r.name, e);
-                        const cls = 'w-[3.6rem] h-[2.6rem] px-0.5 py-0.5 border-b border-l border-border-subtle align-middle';
+                        const cls = 'w-12 h-[2.6rem] px-0.5 py-0.5 border-b border-l border-border-subtle align-middle';
                         if (e > 100) return <td key={e} className={cls} />;
                         if (c) {
                           const tone = c.paymentMethod === 'support'
