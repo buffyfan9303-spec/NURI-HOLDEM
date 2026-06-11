@@ -412,6 +412,14 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd }: {
                     : 'bg-[radial-gradient(ellipse_at_center,rgba(201,169,97,0.10),transparent_72%)]'].join(' ')}>
             {/* 누리홀덤 로고 워터마크(투명) — 트레이드마크. 클락은 항상 다크라 흰 워드마크 사용 */}
             <img src="/2.png" alt="" aria-hidden className="pointer-events-none absolute inset-0 m-auto h-auto w-[58%] max-w-[62vh] select-none object-contain opacity-[0.05]" />
+            {/* 장부 연동 실시간 — 엔트리/생존을 클락 상단에서 한눈에(화면 전환 제로) */}
+            <p className={['relative font-semibold tabular-nums text-ink-secondary',
+              fs ? 'text-[min(2.4vw,2.9vh)]' : 'text-xs sm:text-base'].join(' ')}>
+              엔트리 <b className="text-gold-300">{entries}</b>
+              <span className="opacity-50 mx-1">·</span>
+              생존 <b className="text-emerald-300">{alive}</b>
+              {state.sessionDate && <span className="opacity-60"> · 장부 연동</span>}
+            </p>
             <p className={['relative font-bold tracking-[0.16em] uppercase',
               isBreak ? 'text-sky-300/90' : 'text-gold-200/80',
               fs ? 'text-[min(4vw,5vh)]' : 'text-base sm:text-2xl'].join(' ')}>

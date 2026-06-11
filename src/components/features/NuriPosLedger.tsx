@@ -293,7 +293,16 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
   };
   const handleClose = async (memo: string) => {
-    try { await closeLedgerSession(venueId, date, memo); await reloadSession(); setCloseOpen(false); toast.show('장부를 마감했습니다', 'success'); }
+    try {
+      await closeLedgerSession(venueId, date, memo);
+      await reloadSession();
+      setCloseOpen(false);
+      // 마감 요약 한 줄 — 바인·매출(실수금)·미수 건수(통계와 동일한 buyinFinance 규칙)
+      const fins = buyins.map((b) => buyinFinance(b, session));
+      const rev = fins.reduce((s, f) => s + f.paid, 0);
+      const unpaidCnt = fins.filter((f) => f.unpaid > 0 || f.ticketUnpaid > 0).length;
+      toast.show(`마감 완료 — 오늘 바인 ${buyins.length} · 매출 ${wonToMan(rev)}만${unpaidCnt ? ` · 미수 ${unpaidCnt}건` : ' · 미수 없음'}`, 'success');
+    }
     catch (e) { toast.show(e instanceof Error ? e.message : '마감 실패', 'error'); }
   };
   const handleReopen = async () => {
@@ -590,13 +599,13 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
               {/* 헤더는 세로 스크롤에도 고정(sticky top) — 100명 명단에서도 바인 번호가 항상 보임 */}
               <tr className="bg-surface-high">
                 <th className="sticky left-0 top-0 z-40 bg-surface-high w-9 px-1 py-2 text-xs text-ink-muted border-b border-border-subtle">No</th>
-                <th className="sticky left-9 top-0 z-40 bg-surface-high min-w-[7.5rem] px-2 py-2 text-xs text-ink-muted border-b border-l border-border-subtle text-left">플레이어</th>
+                <th className="sticky left-9 top-0 z-40 bg-surface-high min-w-[6rem] max-w-[9rem] px-2 py-2 text-xs text-ink-muted border-b border-l border-border-subtle text-left">플레이어</th>
                 {Array.from({ length: binCols }, (_, i) => (
                   <th key={i} className="sticky top-0 z-30 bg-surface-high w-12 px-0.5 py-2 text-xs text-ink-muted border-b border-l border-border-subtle">{i + 1}바인</th>
                 ))}
-                <th className="sticky top-0 z-30 bg-surface-high min-w-[6rem] px-2 py-2 text-xs text-ink-muted border-b border-l border-border-subtle text-left">비고</th>
-                <th className="sticky right-[4.5rem] top-0 z-40 bg-surface-high w-[4.5rem] px-1 py-2 text-xs text-ink-muted border-b border-l border-border-strong">총바인</th>
-                <th className="sticky right-0 top-0 z-40 bg-surface-high w-[4.5rem] px-1 py-2 text-xs text-ink-muted border-b border-l border-border-subtle">미수</th>
+                <th className="sticky top-0 z-30 bg-surface-high min-w-[4rem] px-2 py-2 text-xs text-ink-muted border-b border-l border-border-subtle text-left">비고</th>
+                <th className="sticky right-[4rem] top-0 z-40 bg-surface-high w-[4rem] px-1 py-2 text-xs text-ink-muted border-b border-l border-border-strong">총바인</th>
+                <th className="sticky right-0 top-0 z-40 bg-surface-high w-[4rem] px-1 py-2 text-xs text-ink-muted border-b border-l border-border-subtle">미수</th>
               </tr>
             </thead>
             <tbody>
@@ -610,7 +619,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                   return (
                     <tr key={`${r.name}-${chunk}`} className={first ? 'border-t-2 border-border-default' : ''}>
                       <td className="sticky left-0 z-10 bg-surface-low w-9 px-1 py-1 text-[10px] text-ink-muted border-b border-border-subtle tabular-nums">{first ? ri + 1 : <span className="opacity-40">↳</span>}</td>
-                      <td className="sticky left-9 z-10 bg-surface-low min-w-[7.5rem] px-2 py-1 border-b border-l border-border-subtle text-left">
+                      <td className="sticky left-9 z-10 bg-surface-low min-w-[6rem] max-w-[9rem] px-2 py-1 border-b border-l border-border-subtle text-left">
                         {first ? (
                           <button type="button" disabled={!r.player || closed} onClick={() => r.player && setEditPlayer(r.player)} className="w-full text-left disabled:cursor-default">
                             <div className="flex items-center gap-1">
@@ -667,7 +676,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                         return <td key={e} className={cls}><div className="w-full h-full rounded-input bg-surface-base/30" /></td>;
                       })}
 
-                      <td className="min-w-[6rem] px-1 py-1 border-b border-l border-border-subtle text-left">
+                      <td className="min-w-[4rem] px-1 py-1 border-b border-l border-border-subtle text-left">
                         {first && r.player ? (
                           <button type="button" disabled={closed} onClick={() => setEditPlayer(r.player as LedgerPlayer)} className="w-full text-left text-2xs disabled:cursor-default">
                             {r.player.note
@@ -676,7 +685,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                           </button>
                         ) : first ? <span className="text-2xs text-ink-muted">—</span> : null}
                       </td>
-                      <td className="sticky right-[4.5rem] z-10 bg-surface-low w-[4.5rem] px-1 py-1 border-b border-l border-border-strong text-2xs tabular-nums">
+                      <td className="sticky right-[4rem] z-10 bg-surface-low w-[4rem] px-1 py-1 border-b border-l border-border-strong text-2xs tabular-nums">
                         {first ? (
                           <span className="leading-tight block">
                             <b className="text-gold-300">{cnt}회</b>
@@ -684,7 +693,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                           </span>
                         ) : ''}
                       </td>
-                      <td className="sticky right-0 z-10 bg-surface-low w-[4.5rem] px-1 py-1 border-b border-l border-border-subtle text-2xs tabular-nums text-danger-light">{first && tot.unpaid > 0 ? `${wonToMan(tot.unpaid)}만` : ''}</td>
+                      <td className="sticky right-0 z-10 bg-surface-low w-[4rem] px-1 py-1 border-b border-l border-border-subtle text-2xs tabular-nums text-danger-light">{first && tot.unpaid > 0 ? `${wonToMan(tot.unpaid)}만` : ''}</td>
                     </tr>
                   );
                 });
