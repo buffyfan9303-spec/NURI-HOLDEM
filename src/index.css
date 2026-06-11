@@ -37,27 +37,35 @@
 
   /* 라이트 테마 — 바이낸스 라이트(화이트 패널·옅은 회색 보더) */
   html.light {
-    --surface-base:  250 250 250; /* #FAFAFA */
+    /* 가시성 보강: 배경↔흰 카드 단차 확대(#FAFAFA→#F2F3F5), 보더 한 단계 진하게 */
+    --surface-base:  242 243 245; /* #F2F3F5 — 흰 카드 경계가 또렷해짐 */
     --surface-low:   255 255 255;
     --surface-mid:   255 255 255;
-    --surface-high:  245 245 245; /* #F5F5F5 인풋/호버 */
-    --surface-float: 234 236 239; /* #EAECEF */
+    --surface-high:  243 244 246; /* 인풋/호버 */
+    --surface-float: 232 234 238;
 
-    --ink-primary:   30 35 41;    /* #1E2329 */
-    --ink-secondary: 71 77 87;    /* #474D57 */
-    --ink-muted:     132 142 156; /* #848E9C */
+    --ink-primary:   24 28 35;    /* #181C23 — 본문 대비 ↑ */
+    --ink-secondary: 62 69 80;    /* #3E4550 */
+    --ink-muted:     107 116 131; /* #6B7483 — 메타/라벨 대비 ↑ (기존 #848E9C는 흰 배경에서 흐릿) */
     --ink-inverse:   24 26 32;    /* 골드 버튼 위 텍스트는 라이트/다크 모두 어둡게 유지 */
 
-    --border-subtle:  234 236 239; /* #EAECEF */
-    --border-default: 216 220 225;
-    --border-strong:  183 189 198;
+    --border-subtle:  226 229 234; /* #E2E5EA */
+    --border-default: 206 211 219; /* #CED3DB */
+    --border-strong:  158 167 180; /* #9EA7B4 */
 
     /* 라이트에서는 흰색 헤어라인이 보이면 안 됨 → 어두운 톤으로 교체 */
-    --card-ring:   rgba(0, 0, 0, 0.05);
-    --card-shadow: rgba(0, 0, 0, 0.08);
+    --card-ring:   rgba(0, 0, 0, 0.06);
+    --card-shadow: rgba(15, 23, 42, 0.10);
 
     color-scheme: light;
   }
+
+  /* 라이트 모드 가독 오버라이드 — 고정 브랜드색 중 흰 배경에서 대비가 무너지는 텍스트만 교정.
+     (배경·버튼의 골드/그린은 그대로 — "텍스트로 쓰일 때"만 딥 톤으로) */
+  html.light .text-gold-300, html.light .text-gold-200 { color: #A06D00; }
+  html.light .text-gold-400 { color: #8F6200; }
+  html.light .text-emerald-400, html.light .text-emerald-300 { color: #0A8F5C; }
+  html.light .text-danger-light { color: #D63A4E; }
 
   /* 테마 전환 시 색상 트랜지션 (깜빡임 없이 부드럽게) */
   html {
