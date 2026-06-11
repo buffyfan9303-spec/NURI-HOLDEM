@@ -81,7 +81,7 @@ export default {
         card:   '0.625rem', // 바이낸스 밀도: 12px → 10px대
         badge:  '9999px',
         input:  '0.5rem',
-        dialog: '1rem',
+        dialog: '0.75rem', // 바이낸스 모달 라운드
       },
 
       // ── Box Shadow ────────────────────────────────────────────────────────

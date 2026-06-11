@@ -92,13 +92,13 @@
 
   /* 스크롤바 스타일 (WebKit) */
   ::-webkit-scrollbar {
-    @apply w-1 h-1;
+    @apply w-1.5 h-1.5;
   }
   ::-webkit-scrollbar-track {
     @apply bg-surface-base;
   }
   ::-webkit-scrollbar-thumb {
-    @apply bg-border-default rounded-badge;
+    @apply bg-border-strong rounded-badge;
   }
 
   /* 포커스 링 — 키보드 탐색 접근성 */

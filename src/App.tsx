@@ -1277,6 +1277,7 @@ export default function App() {
                 posts={posts}
                 schedules={schedules}
                 onSelectPost={setOpenPost}
+                onSelectSchedule={handleScheduleSelect}
               />
             </div>
           </div>
@@ -1538,30 +1539,54 @@ export default function App() {
 }
 
 // ── PC 우측 위젯 레일(일정탐색) — 오늘 요약·주간 머니인 킹·HOT 게시글 ──────────
-function BrowseSideRail({ posts, schedules, onSelectPost }: {
+function BrowseSideRail({ posts, schedules, onSelectPost, onSelectSchedule }: {
   posts: CommunityPost[];
   schedules: Schedule[];
   onSelectPost: (p: CommunityPost) => void;
+  onSelectSchedule: (s: Schedule) => void;
 }) {
   const [kings, setKings] = useState<WeeklyKing[]>([]);
   useEffect(() => {
     getWeeklyMoneyinKings(3).then((r) => setKings(r.kings)).catch(() => {});
   }, []);
   const today = new Date().toLocaleDateString('en-CA');
-  const todayCount = schedules.filter((s) => s.approved && s.date === today).length;
   const hot = [...posts]
     .filter((p) => (p.viewCount ?? 0) > 0 && Date.now() - new Date(p.createdAt).getTime() < 6 * 3600 * 1000)
     .sort((a, b) => (b.viewCount ?? 0) - (a.viewCount ?? 0))
     .slice(0, 3);
   const medal = ['👑', '🥈', '🥉'];
+  // 곧 시작 — 오늘 이후 가장 가까운 대회 3개(날짜→시간 순)
+  const upcoming = [...schedules]
+    .filter((s) => s.approved && s.date >= today)
+    .sort((a, b) => a.date.localeCompare(b.date) || (a.startTime ?? '').localeCompare(b.startTime ?? ''))
+    .slice(0, 3);
+  const dday = (date: string) => {
+    const diff = Math.round((new Date(`${date}T00:00:00`).getTime() - new Date(`${today}T00:00:00`).getTime()) / 86400000);
+    return diff === 0 ? '오늘' : diff === 1 ? '내일' : `D-${diff}`;
+  };
 
   return (
     <aside className="sticky top-16 hidden w-72 shrink-0 space-y-3 xl:block">
-      {/* 오늘 요약 */}
-      <section className="rounded-card border border-border-default bg-surface-low px-3 py-2.5">
-        <p className="text-xs text-ink-muted">오늘 대회</p>
-        <p className="mt-0.5 text-xl font-extrabold tabular-nums text-ink-primary">{todayCount}<span className="ml-1 text-sm font-semibold text-ink-secondary">개</span></p>
-      </section>
+      {/* 곧 시작하는 대회 — 시간 임박 순 3개 */}
+      {upcoming.length > 0 && (
+        <section className="overflow-hidden rounded-card border border-border-subtle bg-surface-low">
+          <header className="border-b border-border-subtle px-3 py-2 text-xs font-bold text-ink-secondary">⏰ 곧 시작</header>
+          <ul>
+            {upcoming.map((s) => (
+              <li key={s.id} className="border-b border-border-subtle last:border-b-0">
+                <button type="button" onClick={() => onSelectSchedule(s)}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-surface-high/70">
+                  <span className={['shrink-0 rounded-badge px-1.5 py-0.5 text-2xs font-bold tabular-nums', s.date === today ? 'bg-gold-300/15 text-gold-300' : 'bg-surface-high text-ink-muted'].join(' ')}>{dday(s.date)}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-ink-primary">{s.title}</span>
+                    <span className="block truncate text-xs text-ink-muted">{s.pubName} · {s.startTime}</span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* 주간 머니인 킹 */}
       {kings.length > 0 && (
@@ -1596,6 +1621,12 @@ function BrowseSideRail({ posts, schedules, onSelectPost }: {
           </ul>
         </section>
       )}
+
+      {/* 광고 자리 — 비어 있을 땐 문의 안내(수익 슬롯) */}
+      <section className="rounded-card border border-dashed border-border-default bg-surface-low/60 px-3 py-3 text-center">
+        <p className="text-xs font-bold text-ink-secondary">📢 광고 자리</p>
+        <p className="mt-0.5 text-2xs leading-relaxed text-ink-muted">이 자리에 매장·브랜드 광고를 게재할 수 있습니다.<br />내 매장 → 포스터 상단 고정 카드에서 문의하세요.</p>
+      </section>
     </aside>
   );
 }
