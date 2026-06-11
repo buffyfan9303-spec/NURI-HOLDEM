@@ -2,7 +2,7 @@
 // 손님 대시보드 — 전체 페이지(모바일 포함). 헤더 🎟 버튼으로 진입.
 // 내 매장이용권(매장별) + 매장 이용내역(방문·머니인·금액). 매장이용권은 금전적 가치 없음.
 // 사용(회수) = 발급 매장 QR 스캔 또는 그 매장 업주 전화번호로만. 유저 간 전송 불가.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import Icon from '../atoms/Icon';
@@ -13,7 +13,7 @@ import {
   type Voucher, type VisitedVenue, type PlayHistory,
 } from '../../api/vouchers';
 import { wonToMan } from '../../api/ledger';
-import { getMyReservations, type MyReservationRow } from '../../api/reservations';
+import { getMyReservations, cancelMyReservation, type MyReservationRow } from '../../api/reservations';
 import { getMyRankingHistory, type MyRankingRow } from '../../api/rankings';
 
 function parseVenueId(text: string): string | null {
@@ -28,6 +28,7 @@ interface Stack { venueId: string; venueName: string; title: string; ids: string
 
 export default function CustomerDashboardPage({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { user } = useAuth();
+  const toast = useToast();
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
   const [visits, setVisits] = useState<VisitedVenue[]>([]);
   const [plays, setPlays] = useState<PlayHistory[]>([]);
@@ -188,18 +189,38 @@ export default function CustomerDashboardPage({ open, onClose }: { open: boolean
             <p className="mb-1.5 text-sm font-bold text-ink-primary">대회 참가 내역 <span className="text-2xs font-normal text-ink-muted">(참가 예약 기준)</span></p>
             {loading ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
               : resv.length === 0 ? <p className="py-6 text-center text-2xs text-ink-muted">아직 참가 예약한 대회가 없습니다.</p>
-                : <ul className="space-y-1.5">{resv.slice(0, 15).map((r) => (
-                  <li key={`${r.scheduleId}-${r.reservedAt}`} className="rounded-input border border-border-subtle bg-surface-low px-3 py-2">
+                : <ul className="space-y-1.5">{resv.slice(0, 15).map((r) => {
+                  const upcoming = r.date >= new Date().toLocaleDateString('en-CA');
+                  return (
+                  <SwipeCancelRow
+                    key={`${r.scheduleId}-${r.reservedAt}`}
+                    cancelable={upcoming}
+                    onCancel={async () => {
+                      try {
+                        await cancelMyReservation(r.scheduleId);
+                        toast.show('예약을 취소했습니다', 'success');
+                        setResv((prev) => prev.filter((x) => x.scheduleId !== r.scheduleId));
+                      } catch (e) {
+                        toast.show(e instanceof Error ? e.message : '예약 취소 실패', 'error');
+                      }
+                    }}
+                  >
                     <div className="flex items-center justify-between gap-2">
-                      <p className="min-w-0 truncate text-sm font-semibold text-ink-primary">{r.title}</p>
+                      <p className="min-w-0 truncate text-sm font-semibold text-ink-primary">{r.title}
+                        {upcoming && <span className="ml-1.5 rounded-badge bg-emerald-400/15 px-1.5 py-0.5 text-2xs font-bold text-emerald-400 align-middle">예정</span>}
+                      </p>
                       <span className="shrink-0 text-[10px] tabular-nums text-ink-muted">{r.date}{r.startTime ? ` ${r.startTime.slice(0, 5)}` : ''}</span>
                     </div>
                     <p className="mt-0.5 flex flex-wrap gap-x-3 text-2xs text-ink-muted">
                       {r.venueName && <span>{r.venueName}</span>}
                       <span>예약명 <b className="text-ink-secondary">{r.displayName}</b></span>
                     </p>
-                  </li>
-                ))}</ul>}
+                  </SwipeCancelRow>
+                  );
+                })}</ul>}
+            {resv.some((r) => r.date >= new Date().toLocaleDateString('en-CA')) && (
+              <p className="mt-1 text-2xs text-ink-muted">예정 예약은 왼쪽으로 밀면(PC는 마우스 올리면) 취소할 수 있어요.</p>
+            )}
           </section>
 
           {/* 내 입상 기록 — 매장 순위 등록에서 내 닉네임이 잡힌 이력 */}
@@ -228,6 +249,60 @@ export default function CustomerDashboardPage({ open, onClose }: { open: boolean
 
       {redeem && <RedeemSheet stack={redeem} onClose={() => setRedeem(null)} onDone={() => { setRedeem(null); reload(); }} />}
     </div>
+  );
+}
+
+/** 예약 행 스와이프 취소 — 모바일은 왼쪽으로 밀고, PC는 호버로 취소 버튼 노출. */
+function SwipeCancelRow({ cancelable, onCancel, children }: { cancelable: boolean; onCancel: () => void; children: React.ReactNode }) {
+  const [dx, setDx] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const start = useRef<{ x: number; y: number; dx: number } | null>(null);
+  const REVEAL = 76; // 취소 버튼 폭
+  const onTouchStart = (e: React.TouchEvent) => {
+    if (!cancelable) return;
+    start.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, dx };
+  };
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (!cancelable || !start.current) return;
+    const mx = e.touches[0].clientX - start.current.x;
+    const my = e.touches[0].clientY - start.current.y;
+    if (Math.abs(my) > Math.abs(mx)) return; // 세로 스크롤 우선
+    setDx(Math.min(0, Math.max(-REVEAL - 14, start.current.dx + mx)));
+  };
+  const onTouchEnd = () => {
+    if (!cancelable) return;
+    start.current = null;
+    setDx((v) => (v <= -REVEAL / 2 ? -REVEAL : 0)); // 절반 넘게 밀면 열림 고정
+  };
+  const fire = async () => {
+    if (busy) return;
+    setBusy(true);
+    try { await onCancel(); } finally { setBusy(false); setDx(0); }
+  };
+  return (
+    <li className="group relative overflow-hidden rounded-input border border-border-subtle bg-surface-low">
+      {cancelable && (
+        <button
+          type="button" onClick={fire} disabled={busy}
+          className="absolute inset-y-0 right-0 flex w-[76px] items-center justify-center bg-danger text-xs font-bold text-white active:opacity-80 disabled:opacity-60"
+        >
+          {busy ? '취소 중…' : '예약 취소'}
+        </button>
+      )}
+      <div
+        className={[
+          'relative bg-surface-low px-3 py-2 transition-transform duration-150 ease-out',
+          // PC: 호버 시 살짝 밀려 취소 버튼이 보인다(터치 불가 환경 대응)
+          cancelable ? 'md:group-hover:-translate-x-[76px]' : '',
+        ].join(' ')}
+        style={{ transform: dx ? `translateX(${dx}px)` : undefined }}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+      >
+        {children}
+      </div>
+    </li>
   );
 }
 

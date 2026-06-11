@@ -120,6 +120,19 @@ function AppHeader({
   const [userMenuOpen, setUserMenu]  = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
+  // 모바일 스크롤 축소 — 내리면 헤더가 낮아져 포스터 화면이 넓어진다(rAF 스로틀)
+  const [shrunk, setShrunk] = useState(false);
+  useEffect(() => {
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => { setShrunk(window.scrollY > 48); raf = 0; });
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    return () => { window.removeEventListener('scroll', onScroll); if (raf) cancelAnimationFrame(raf); };
+  }, []);
+
   // 프로필 드롭다운: 바깥(다른 버튼 등)을 클릭/터치하면 자동으로 닫는다.
   useEffect(() => {
     if (!userMenuOpen) return;
@@ -140,15 +153,18 @@ function AppHeader({
         suppressed ? 'invisible pointer-events-none' : '',
       ].join(' ')}
     >
-      {/* ── 단순화된 헤더: 좌(로고) / 우(알림+유저) ──────────────── */}
-      <div className="flex items-center justify-between h-header-h px-page-x">
+      {/* ── 단순화된 헤더: 좌(로고) / 우(알림+유저) — 모바일은 스크롤 시 축소 ── */}
+      <div className={[
+        'flex items-center justify-between px-page-x transition-[height] duration-200 ease-out',
+        shrunk ? 'h-11 md:h-header-h' : 'h-header-h',
+      ].join(' ')}>
 
         {/* LEFT: NURI HOLDEM 로고 — 클릭 시 메인으로 */}
         <button
           type="button"
           onClick={onHome}
           aria-label="메인으로 이동"
-          className="active:scale-95 transition-transform"
+          className={['active:scale-95 transition-transform origin-left', shrunk ? 'max-md:scale-[0.85]' : ''].join(' ')}
         >
           <NuriHoldemLogo />
         </button>

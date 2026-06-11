@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import Modal from '../atoms/Modal';
 import Icon from '../atoms/Icon';
+import ImageLightbox from '../atoms/ImageLightbox';
 import CommentThread from './CommentThread';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
@@ -35,6 +36,7 @@ export default function ScheduleDetailModal({
   schedule: scheduleProp, open, onClose, onVenueClick, comments, onSubmitComment, onDeleteComment, onDeletePoster, inline,
 }: ScheduleDetailModalProps) {
   const [tab, setTab] = useState<Tab>('info');
+  const [lightbox, setLightbox] = useState(false);
   const { user } = useAuth();
 
   // 닫힘 애니메이션이 끝날 때까지 직전 일정을 유지(시트가 아래로 슬라이드되며 닫히도록)
@@ -74,11 +76,18 @@ export default function ScheduleDetailModal({
               : { background: `linear-gradient(135deg, ${schedule.posterColor ?? '#1a1d24'}ee 0%, #0a0c0f 100%)` }}
           >
             {schedule.posterUrl ? (
-              <img
-                src={schedule.posterUrl}
-                alt={`${schedule.title} 포스터`}
-                className="block h-auto w-full max-h-[65vh] object-contain lg:max-h-screen"
-              />
+              <button
+                type="button"
+                onClick={() => setLightbox(true)}
+                aria-label="포스터 확대 보기"
+                className="block w-full cursor-zoom-in"
+              >
+                <img
+                  src={schedule.posterUrl}
+                  alt={`${schedule.title} 포스터`}
+                  className="block h-auto w-full max-h-[65vh] object-contain lg:max-h-screen"
+                />
+              </button>
             ) : (
               <>
                 <div className="absolute inset-0 grid grid-cols-6 gap-2 p-3 opacity-[0.08] select-none pointer-events-none" aria-hidden>
@@ -491,6 +500,10 @@ export default function ScheduleDetailModal({
       )}
         </div>
       </div>
+      {/* 포스터 풀스크린 라이트박스 — 핀치줌·더블탭·팬 */}
+      {lightbox && schedule.posterUrl && (
+        <ImageLightbox src={schedule.posterUrl} alt={`${schedule.title} 포스터`} onClose={() => setLightbox(false)} />
+      )}
     </Modal>
   );
 }
