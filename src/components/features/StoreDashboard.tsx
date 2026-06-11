@@ -7,6 +7,7 @@ import {
 import { getClockState, subscribeClock, type ClockState } from '../../api/clock';
 import { getReservationCounts, getVenueRegulars, subscribeReservations, type VenueRegular } from '../../api/reservations';
 import { aiGenerate } from '../../api/ai';
+import { getVenueRankings } from '../../api/rankings';
 import { Skeleton } from '../atoms/Skeleton';
 import RegularsModal from './RegularsModal';
 import DealerShiftsModal from './DealerShiftsModal';
@@ -75,6 +76,8 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const [checkinOpen, setCheckinOpen] = useState(false);
   const [boostOpen, setBoostOpen] = useState(false);
   const [voucherOpen, setVoucherOpen] = useState(false);
+  const [voucherPrefill, setVoucherPrefill] = useState(''); // 단골 행 '이용권 보내기' 프리필
+  const [hasRankToday, setHasRankToday] = useState<boolean | null>(null); // 지금 할 일 카드(순위 입력 유도)
   // 다가오는 생일 단골(7일 내) — CRM 생일 필드 기반
   const [bdays, setBdays] = useState<{ name: string; birthday: string; dday: number }[]>([]);
   useEffect(() => {
@@ -98,6 +101,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
     getStaffWages(venueId).then(setWages).catch(() => {});
     getLedgerRange(venueId, d14[0], d14[13]).then(setRange).catch(() => {});
     getVenueRegulars(venueId).then(setRegulars).catch(() => {});
+    getVenueRankings(venueId, d).then(({ entries }) => setHasRankToday(entries.length > 0)).catch(() => {});
     const ids = schedules.filter((s) => s.venueId === venueId && s.date >= d).map((s) => s.id);
     if (ids.length) getReservationCounts(ids).then(setResCounts).catch(() => {});
     else setResCounts({});
@@ -242,9 +246,48 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
     <div className="space-y-3">
       <RegularsModal open={regOpen} onClose={() => setRegOpen(false)} venueId={venueId} exclude={[...staffNames]} />
       <DealerShiftsModal open={dealerOpen} onClose={() => setDealerOpen(false)} venueId={venueId} monthKey={mr.start.slice(0, 7)} />
-      <VoucherManageModal open={voucherOpen} onClose={() => setVoucherOpen(false)} venueId={venueId} />
+      <VoucherManageModal open={voucherOpen} onClose={() => { setVoucherOpen(false); setVoucherPrefill(''); }} venueId={venueId} prefillReceiver={voucherPrefill} />
       <CheckinModal open={checkinOpen} onClose={() => setCheckinOpen(false)} venueId={venueId} />
       <BoostContactModal open={boostOpen} onClose={() => setBoostOpen(false)} />
+
+      {/* 지금 할 일 — 시간대·운영 상태 인지형 다음 행동 카드(대시보드 = 행동 안내판) */}
+      {(() => {
+        if (loading) return null;
+        const todayPoster = schedules.some((s) => s.venueId === venueId && s.date === d && s.approved);
+        const hour = new Date().getHours();
+        let todo: { emoji: string; title: string; desc: string; cta: string; onClick: () => void; tone: 'warn' | 'gold' | 'ok' } | null = null;
+        if (caps.ledger && session?.closed && hasRankToday === false) {
+          todo = { emoji: '🏆', title: '순위 입력이 비어 있어요', desc: '마감한 장부의 참가자 명단으로 바로 채울 수 있어요 — 입상 점수·아카이브에 반영됩니다.', cta: '순위 입력하기', onClick: () => onGoto('ranking'), tone: 'warn' };
+        } else if (caps.ledger && started && !session?.closed) {
+          todo = clockActive
+            ? { emoji: '📒', title: `게임 진행 중 — 엔트리 ${Math.round(fin.entry)}`, desc: '바인 입력은 장부에서, 타이머·블라인드는 클락에서.', cta: '장부 보기', onClick: () => onGoto('ledger'), tone: 'gold' }
+            : { emoji: '⏱', title: '게임 진행 중인데 클락이 꺼져 있어요', desc: `엔트리 ${Math.round(fin.entry)} · 클락을 켜면 라이브 탭에도 실시간 송출됩니다.`, cta: '클락 켜기', onClick: () => onGoto('clock'), tone: 'gold' };
+        } else if (caps.ledger && !started && todayPoster) {
+          todo = { emoji: '📒', title: '오늘 게임이 있어요', desc: '포스터 정보 그대로 장부를 시작할 수 있어요(게임명·바인 자동 입력).', cta: '장부 시작하기', onClick: () => onGoto('ledger'), tone: 'gold' };
+        } else if (caps.posters && !started && !todayPoster && hour >= 12) {
+          todo = { emoji: '➕', title: '오늘 등록된 게임이 없어요', desc: '포스터를 올리면 일정 탐색에 노출되고 예약을 받을 수 있어요.', cta: '게임 등록하기', onClick: onCreatePoster, tone: 'gold' };
+        } else if (caps.manage && session?.closed) {
+          todo = { emoji: '✅', title: '오늘 운영 완료', desc: '수고하셨습니다 — 주간 추세와 요일 분석을 확인해 보세요.', cta: '주간 리포트', onClick: () => onGoto('stats'), tone: 'ok' };
+        }
+        if (!todo) return null;
+        const toneCls = todo.tone === 'warn'
+          ? 'border-amber-500/50 bg-amber-500/[0.08]'
+          : todo.tone === 'ok' ? 'border-emerald-500/40 bg-emerald-500/[0.06]' : 'border-gold-400/40 bg-gold-300/[0.06]';
+        return (
+          <div className={`flex items-center gap-3 rounded-card border px-3 py-3 ${toneCls}`}>
+            <span className="text-2xl" aria-hidden>{todo.emoji}</span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-ink-primary">{todo.title}</p>
+              <p className="mt-0.5 text-2xs leading-snug text-ink-muted">{todo.desc}</p>
+            </div>
+            <button type="button" onClick={todo.onClick}
+              className={todo.tone === 'warn' ? 'btn-primary shrink-0 px-3.5 py-2 text-xs !bg-amber-400 hover:!bg-amber-500' : 'btn-primary shrink-0 px-3.5 py-2 text-xs'}>
+              {todo.cta}
+            </button>
+          </div>
+        );
+      })()}
+
       {/* 미수·리스크 알림 (장부 권한) */}
       {caps.ledger && started && fin.unpaid > 0 && (
         <button type="button" onClick={() => onGoto('ledger')}
@@ -392,6 +435,15 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                   <span className={`w-4 shrink-0 text-center text-2xs font-bold tabular-nums ${i === 0 ? 'text-gold-300' : 'text-ink-muted'}`}>{i + 1}</span>
                   <span className="flex-1 min-w-0 truncate text-ink-secondary">{r.name}</span>
                   <span className="shrink-0 tabular-nums text-ink-muted">바인 <b className="text-ink-secondary">{r.buyins}</b> · 방문 <b className="text-ink-secondary">{r.visits}</b>{r.buyins >= 5 && <span className="ml-1 text-gold-300 font-bold">단골</span>}</span>
+                  {/* CRM 행동 버튼 — 단골에게 바로 이용권 발급(받는 사람 자동 입력) */}
+                  {caps.voucher && (
+                    <span
+                      role="button" tabIndex={0} title={`${r.name}님에게 이용권 보내기`}
+                      onClick={(e) => { e.stopPropagation(); setVoucherPrefill(r.name); setVoucherOpen(true); }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); setVoucherPrefill(r.name); setVoucherOpen(true); } }}
+                      className="shrink-0 cursor-pointer rounded-badge border border-gold-400/40 bg-gold-300/10 px-1.5 py-0.5 text-2xs font-bold text-gold-300 hover:bg-gold-300/20 active:opacity-80"
+                    >🎟 보내기</span>
+                  )}
                 </li>
               ))}
             </ul>

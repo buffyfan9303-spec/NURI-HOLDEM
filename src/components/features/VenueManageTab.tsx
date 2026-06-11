@@ -63,6 +63,23 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deepSection, permsLoaded]);
 
+  // 메뉴 즐겨찾기 — 매장별 최대 5개를 상단 고정(★ 토글, localStorage)
+  const [favs, setFavs] = useState<Section[]>([]);
+  useEffect(() => {
+    if (!venueId) return;
+    try { setFavs(JSON.parse(localStorage.getItem(`nuri:fav-sections:${venueId}`) ?? '[]')); }
+    catch { setFavs([]); }
+  }, [venueId]);
+  const toggleFav = (id: Section) => {
+    setFavs((f) => {
+      const has = f.includes(id);
+      if (!has && f.length >= 5) return f; // 최대 5개
+      const next = has ? f.filter((x) => x !== id) : [...f, id];
+      if (venueId) localStorage.setItem(`nuri:fav-sections:${venueId}`, JSON.stringify(next));
+      return next;
+    });
+  };
+
   // 운영자: 전체 매장 목록 로드(선택용)
   useEffect(() => {
     if (!isAdmin) return;
@@ -151,9 +168,17 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
         <div className="lg:flex lg:gap-4">
           {available.length > 1 && (
             <nav className="flex gap-1 overflow-x-auto scrollbar-none rounded-input bg-surface-high p-0.5 lg:sticky lg:top-16 lg:w-44 lg:shrink-0 lg:flex-col lg:self-start lg:overflow-visible lg:bg-transparent lg:p-0">
-              {available.map((a) => (
-                <SectionBtn key={a.id} icon={SECTION_ICON[a.id]} active={section === a.id} locked={a.locked} onClick={() => gotoSection(a.id)}>{a.label}</SectionBtn>
-              ))}
+              {[...available]
+                // 즐겨찾기 우선 정렬(★ 누른 순서 유지) — 나머지는 기존 순서
+                .sort((a, b) => {
+                  const fi = (id: Section) => { const i = favs.indexOf(id); return i < 0 ? 999 : i; };
+                  return fi(a.id) - fi(b.id);
+                })
+                .map((a) => (
+                  <SectionBtn key={a.id} icon={SECTION_ICON[a.id]} active={section === a.id} locked={a.locked}
+                    fav={favs.includes(a.id)} onToggleFav={() => toggleFav(a.id)}
+                    onClick={() => gotoSection(a.id)}>{a.label}</SectionBtn>
+                ))}
             </nav>
           )}
 
@@ -245,15 +270,28 @@ const SECTION_ICON: Record<Section, ReactNode> = {
   settings: ic(<><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" /></>),
 };
 
-function SectionBtn({ active, onClick, icon, children, locked }: { active: boolean; onClick: () => void; icon?: ReactNode; children: ReactNode; locked?: boolean }) {
+function SectionBtn({ active, onClick, icon, children, locked, fav, onToggleFav }: {
+  active: boolean; onClick: () => void; icon?: ReactNode; children: ReactNode; locked?: boolean;
+  fav?: boolean; onToggleFav?: () => void;
+}) {
   return (
     <button type="button" onClick={onClick}
       // 글씨 13px·세로 패딩 확대 — 매일 쓰는 운영 메뉴라 가독·터치 우선
-      className={['flex shrink-0 items-center gap-2 whitespace-nowrap rounded-[7px] px-3 py-2.5 text-[13px] font-semibold transition-colors focus:outline-none touch-manipulation lg:w-full lg:justify-start',
+      className={['group/nav flex shrink-0 items-center gap-2 whitespace-nowrap rounded-[7px] px-3 py-2.5 text-[13px] font-semibold transition-colors focus:outline-none touch-manipulation lg:w-full lg:justify-start',
         active ? 'bg-gold-300 text-ink-inverse' : locked ? 'text-ink-muted/60 hover:text-ink-secondary lg:hover:bg-surface-high' : 'text-ink-secondary hover:text-ink-primary lg:hover:bg-surface-high'].join(' ')}>
       <span className="shrink-0" aria-hidden>{icon}</span>
       <span>{children}</span>
       {locked && <Icon name="lock" size={11} className={['ml-auto shrink-0', active ? 'text-ink-inverse/70' : 'text-ink-muted'].join(' ')} />}
+      {/* ★ 즐겨찾기 토글 — 즐겨찾기는 상시, 나머지는 PC 호버 시 표시(최대 5개 상단 고정) */}
+      {onToggleFav && !locked && (
+        <span
+          role="button" tabIndex={-1} aria-label={fav ? '즐겨찾기 해제' : '즐겨찾기 추가'}
+          onClick={(e) => { e.stopPropagation(); onToggleFav(); }}
+          className={[locked ? '' : 'ml-auto', 'shrink-0 px-0.5 text-sm leading-none transition-opacity',
+            fav ? (active ? 'text-ink-inverse' : 'text-gold-300') + ' opacity-100'
+                : 'opacity-0 group-hover/nav:opacity-60 ' + (active ? 'text-ink-inverse' : 'text-ink-muted')].join(' ')}
+        >{fav ? '★' : '☆'}</span>
+      )}
     </button>
   );
 }

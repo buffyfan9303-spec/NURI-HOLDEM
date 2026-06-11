@@ -16,7 +16,7 @@ function fmtDateTime(iso: string | null): string {
   return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-export function VoucherManagePanel({ venueId }: { venueId: string }) {
+export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: string; prefillReceiver?: string }) {
   const toast = useToast();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
@@ -58,6 +58,18 @@ export function VoucherManagePanel({ venueId }: { venueId: string }) {
   useEffect(() => { QRCode.toDataURL('https://nuriholdem.com/?signup=1', { width: 240, margin: 1 }).then(setSignupQr).catch(() => {}); }, []);
 
   const pickRecv = (t: TransferTarget) => { setRecvUserId(t.id); setRecvDisplay(t.display); setRecvMode('none'); setIdInput(''); setCands([]); };
+  // 단골 TOP '이용권 보내기' 진입 — 받는 사람을 자동 입력·검색(1명 매치면 즉시 선택)
+  useEffect(() => {
+    const q = (prefillReceiver ?? '').trim();
+    if (!q) return;
+    setIssueOpen(true);
+    setRecvMode('id');
+    setIdInput(q);
+    findUserForTransfer(q)
+      .then((f) => { if (f.length === 1) pickRecv(f[0]); else setCands(f); })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefillReceiver]);
   const resolveId = async () => {
     const q = idInput.trim();
     if (!q) return;
@@ -317,10 +329,10 @@ export function VoucherManagePanel({ venueId }: { venueId: string }) {
   );
 }
 
-export default function VoucherManageModal({ open, onClose, venueId }: { open: boolean; onClose: () => void; venueId: string }) {
+export default function VoucherManageModal({ open, onClose, venueId, prefillReceiver }: { open: boolean; onClose: () => void; venueId: string; prefillReceiver?: string }) {
   return (
     <Modal open={open} onClose={onClose} title="매장이용권 관리" maxWidth="md" variant="sheet">
-      <div className="p-4"><VoucherManagePanel venueId={venueId} /></div>
+      <div className="p-4"><VoucherManagePanel venueId={venueId} prefillReceiver={prefillReceiver} /></div>
     </Modal>
   );
 }
