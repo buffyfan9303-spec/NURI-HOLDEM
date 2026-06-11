@@ -897,7 +897,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   };
 
   return (
-    <div className={embedded ? 'space-y-3' : 'rounded-card border border-gold-400/30 bg-gradient-to-br from-gold-300/[0.05] to-transparent p-4 space-y-3'}>
+    <div className={embedded ? 'space-y-3' : 'rounded-card border border-gold-400/30 bg-gradient-to-br from-gold-300/[0.05] to-transparent p-3 space-y-2.5'}>
       {mode === 'open' && (
         <div>
           <h3 className="text-base font-bold text-gold-300">장부 시작 설정</h3>

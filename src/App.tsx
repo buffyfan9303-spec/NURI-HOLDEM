@@ -1270,6 +1270,9 @@ export default function App() {
                     ))}
                   </div>
                 )}
+
+                {/* 🏁 지난 대회 — 완료된 대회 아카이브(결과는 상세에서) */}
+                <PastTournaments schedules={schedules} onSelect={handleScheduleSelect} />
               </div>
 
               {/* 우측 위젯 레일 — 주간 머니인 킹·HOT 게시글·오늘 요약 */}
@@ -1535,6 +1538,39 @@ export default function App() {
       )}
       </Suspense>
     </div>
+  );
+}
+
+// ── 🏁 지난 대회 아카이브 — 일정탐색 하단(완료 대회, 최근 5개) ─────────────────
+function PastTournaments({ schedules, onSelect }: { schedules: Schedule[]; onSelect: (s: Schedule) => void }) {
+  const today = new Date().toLocaleDateString('en-CA');
+  const past = [...schedules]
+    .filter((s) => s.approved && s.date < today)
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 5);
+  if (past.length === 0) return null;
+  const day = (d: string) => ['일', '월', '화', '수', '목', '금', '토'][new Date(`${d}T00:00:00`).getDay()];
+  return (
+    <section className="mt-4 overflow-hidden rounded-card border border-border-subtle bg-surface-low">
+      <header className="flex items-center justify-between border-b border-border-subtle px-3 py-2">
+        <h2 className="text-xs font-bold text-ink-secondary">🏁 지난 대회</h2>
+        <span className="text-2xs text-ink-muted">눌러서 결과·정보 보기</span>
+      </header>
+      <ul>
+        {past.map((s) => (
+          <li key={s.id} className="border-b border-border-subtle last:border-b-0">
+            <button type="button" onClick={() => onSelect(s)}
+              className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-surface-high/70">
+              <span className="shrink-0 rounded-badge bg-surface-high px-1.5 py-0.5 text-2xs font-semibold tabular-nums text-ink-muted">
+                {s.date.slice(5).replace('-', '/')}({day(s.date)})
+              </span>
+              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{s.title}</span>
+              <span className="shrink-0 text-xs text-ink-muted">{s.pubName}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

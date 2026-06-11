@@ -35,6 +35,13 @@ export default {
           light:   '#FF8AA1',
           dark:    '#CF304A',
         },
+        // Green: 바이낸스 업 그린 — 매출·양수·진행중(기존 emerald 사용처 일괄 전환)
+        emerald: {
+          300: '#32D993',
+          400: '#0ECB81',
+          500: '#0BB873',
+          600: '#09A266',
+        },
         // Text scale — CSS 변수 기반 (테마 전환)
         ink: {
           primary:   'rgb(var(--ink-primary) / <alpha-value>)',

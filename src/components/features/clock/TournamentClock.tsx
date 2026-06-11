@@ -601,7 +601,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
   const numInput = 'input w-full text-sm tabular-nums';
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-base font-bold text-ink-primary">클락 설정</h2>
         {onBackToLive && <button type="button" onClick={onBackToLive} className="btn-ghost text-xs px-3">← 라이브로</button>}
