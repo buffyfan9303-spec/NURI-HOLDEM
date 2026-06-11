@@ -19,21 +19,21 @@ export default {
           high:  'rgb(var(--surface-high) / <alpha-value>)',  // 호버 영역, 입력 필드
           float: 'rgb(var(--surface-float) / <alpha-value>)', // 드롭다운, 툴팁
         },
-        // Gold: 프리미엄·상단 고정 아이템 전용 (브랜드 색 — 테마 고정)
+        // Gold: 바이낸스 옐로 계열 — 프리미엄·주요 액션 (브랜드 색 — 테마 고정)
         gold: {
-          50:  '#FFF9E6',
-          100: '#FFF0B3',
-          200: '#FFE066',
-          300: '#FFD100', // primary action
-          400: '#E6BB00',
-          500: '#B39200', // pressed state
-          600: '#806800',
+          50:  '#FEF6D8',
+          100: '#FCEBA8',
+          200: '#FCE45C',
+          300: '#FCD535', // primary action — 바이낸스 옐로
+          400: '#F0B90B', // 바이낸스 브랜드 옐로(hover)
+          500: '#C99400', // pressed state
+          600: '#8D6A00',
         },
-        // Red: 언리드 뱃지, 경고 전용 (브랜드 색 — 테마 고정)
+        // Red: 바이낸스 레드 — 언리드 뱃지, 경고 전용 (브랜드 색 — 테마 고정)
         danger: {
-          DEFAULT: '#E53E3E',
-          light:   '#FEB2B2',
-          dark:    '#C53030',
+          DEFAULT: '#F6465D',
+          light:   '#FF8AA1',
+          dark:    '#CF304A',
         },
         // Text scale — CSS 변수 기반 (테마 전환)
         ink: {
@@ -89,7 +89,7 @@ export default {
         // 헤어라인 링/그림자를 CSS 변수로 → 라이트 모드에서 흰색 테두리 선이 보이던 버그 해결
         card:   '0 0 0 1px var(--card-ring)', // 바이낸스식 플랫 — 떠있는 그림자 제거, 헤어라인만
 
-        gold:   '0 0 12px rgba(255,209,0,0.35)',
+        gold:   '0 0 10px rgba(252,213,53,0.30)',
         dialog: '0 -4px 32px var(--card-shadow)',
         badge:  '0 0 6px rgba(229,62,62,0.6)',
       },

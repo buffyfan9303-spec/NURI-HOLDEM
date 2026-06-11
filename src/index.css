@@ -9,50 +9,51 @@
    * - 기본값(:root)은 다크 테마. html.light 클래스가 붙으면 라이트 테마로 전환된다.
    * - 값은 "R G B" 공백 구분(알파 합성을 위해). gold/danger 등 브랜드 색은 고정.
    * ────────────────────────────────────────────────────────────────────────── */
+  /* ── 바이낸스 다크 팔레트 — 차콜 배경·플랫 패널·회색 위계 (B17-3) ── */
   :root,
   html.dark {
-    --surface-base:  10 12 15;
-    --surface-low:   17 19 24;
-    --surface-mid:   26 29 36;
-    --surface-high:  34 38 47;
-    --surface-float: 44 49 64;
+    --surface-base:  24 26 32;   /* #181A20 바이낸스 bg */
+    --surface-low:   30 35 41;   /* #1E2329 패널/카드 */
+    --surface-mid:   37 42 50;   /* #252A32 모달/사이드 */
+    --surface-high:  43 49 57;   /* #2B3139 인풋/호버 */
+    --surface-float: 51 59 71;   /* #333B47 드롭다운/툴팁 */
 
-    --ink-primary:   240 244 255; /* #F0F4FF — 순수 흰색의 쨍함 완화 + 미세한 쿨톤 */
-    --ink-secondary: 178 187 205; /* #B2BBCD — 보조 텍스트(대비 상향: 어두운 배경에서 또렷하게) */
-    --ink-muted:     140 149 167; /* #8C95A7 — 힌트/라벨(대비 대폭 상향, 기존 #5A6175는 너무 어두웠음) */
-    --ink-inverse:   10 12 15;
+    --ink-primary:   234 236 239; /* #EAECEF 본문 */
+    --ink-secondary: 183 189 198; /* #B7BDC6 보조 */
+    --ink-muted:     132 142 156; /* #848E9C 메타/라벨 */
+    --ink-inverse:   24 26 32;    /* 옐로 버튼 위 검정 */
 
-    --border-subtle:  38 43 58;
-    --border-default: 56 62 82;
-    --border-strong:  78 86 112;
+    --border-subtle:  43 49 57;   /* #2B3139 — 구분선 위주, 보더 존재감 최소 */
+    --border-default: 51 59 71;   /* #333B47 */
+    --border-strong:  71 77 87;   /* #474D57 */
 
     /* 카드 헤어라인/그림자 — 다크에서는 미세한 흰색 링 */
-    --card-ring:   rgba(255, 255, 255, 0.04);
+    --card-ring:   rgba(255, 255, 255, 0.03);
     --card-shadow: rgba(0, 0, 0, 0.5);
 
     /* 다크 모드 네이티브 렌더(스크롤바·폼·포커스) 정합 → 클릭 시 플래시 방지 */
     color-scheme: dark;
   }
 
-  /* 라이트 테마 오버라이드 */
+  /* 라이트 테마 — 바이낸스 라이트(화이트 패널·옅은 회색 보더) */
   html.light {
-    --surface-base:  245 246 248;
+    --surface-base:  250 250 250; /* #FAFAFA */
     --surface-low:   255 255 255;
     --surface-mid:   255 255 255;
-    --surface-high:  238 240 243;
-    --surface-float: 226 229 234;
+    --surface-high:  245 245 245; /* #F5F5F5 인풋/호버 */
+    --surface-float: 234 236 239; /* #EAECEF */
 
-    --ink-primary:   20 23 31;
-    --ink-secondary: 74 81 96;
-    --ink-muted:     130 138 156;
-    --ink-inverse:   10 12 15; /* 골드 버튼 위 텍스트는 라이트/다크 모두 어둡게 유지 */
+    --ink-primary:   30 35 41;    /* #1E2329 */
+    --ink-secondary: 71 77 87;    /* #474D57 */
+    --ink-muted:     132 142 156; /* #848E9C */
+    --ink-inverse:   24 26 32;    /* 골드 버튼 위 텍스트는 라이트/다크 모두 어둡게 유지 */
 
-    --border-subtle:  227 230 235;
-    --border-default: 210 214 221;
-    --border-strong:  180 186 198;
+    --border-subtle:  234 236 239; /* #EAECEF */
+    --border-default: 216 220 225;
+    --border-strong:  183 189 198;
 
     /* 라이트에서는 흰색 헤어라인이 보이면 안 됨 → 어두운 톤으로 교체 */
-    --card-ring:   rgba(0, 0, 0, 0.06);
+    --card-ring:   rgba(0, 0, 0, 0.05);
     --card-shadow: rgba(0, 0, 0, 0.08);
 
     color-scheme: light;
@@ -115,7 +116,7 @@
 
   /* 인터랙티브 카드(포스터·매장 등): 호버 시 배경 강조(플랫 — 떠오름 제거) */
   .card-interactive {
-    @apply card cursor-pointer hover:bg-surface-high hover:border-border-strong active:scale-[0.995];
+    @apply card cursor-pointer hover:bg-surface-high hover:border-border-strong ;
   }
 
   /* 프리미엄(상단 고정) 카드: 골드 테두리 + glow */
@@ -128,7 +129,7 @@
     @apply inline-flex items-center justify-center gap-1.5 whitespace-nowrap
            font-semibold text-sm leading-none
            rounded-input px-3 py-2 min-h-[2.4rem]
-           transition-all duration-150 ease-out active:scale-[0.97]
+           transition-all duration-150 ease-out active:opacity-80
            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-300;
   }
 
@@ -165,7 +166,7 @@
 
   /* 골드 포인트 텍스트 글로우 — 다크 배경에서 묻히지 않고 고급스럽게 (은은하게) */
   .text-gold-glow {
-    text-shadow: 0 0 10px rgba(255, 209, 0, 0.22);
+    text-shadow: none;
   }
 
   /* ── 스켈레톤 로더 ──────────────────────────────────── */
@@ -222,7 +223,7 @@ html { scroll-behavior: smooth; }
 body { overscroll-behavior-y: contain; }
 
 /* 카드/리스트 행 등 클릭 가능한 요소의 공통 탭 피드백(버튼 외 영역) */
-[role='tab']:active, [role='radio']:active { transform: scale(0.97); transition: transform 0.12s ease-out; }
+/* 바이낸스식 절제: 탭/라디오 스케일 모션 제거 — 색 전환만 */
 
 /* 승급 축하 컨페티 — 위에서 흩날리며 떨어지는 골드 조각 */
 .confetti { top: -3%; animation-name: confettiFall; animation-timing-function: linear; animation-iteration-count: infinite; }
