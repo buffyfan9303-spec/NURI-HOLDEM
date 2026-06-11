@@ -24,7 +24,12 @@ import type { Schedule } from '../../api/schedules';
 type Section = 'dashboard' | 'posters' | 'ledger' | 'stats' | 'ranking' | 'venueRank' | 'league' | 'staff' | 'settings' | 'clock' | 'attendance' | 'voucher' | 'page';
 
 /** 업주/직원 전용 "매장 관리" 탭 — 장부(POS) · 통계 · 순위 입력 · (업주) 직원 관리 */
-export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster, onDeletePoster }: { schedules: Schedule[]; onCreatePoster: () => void; onEditPoster: (id: string) => void; onDeletePoster: (id: string) => void }) {
+export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster, onDeletePoster, deepSection, onConsumeDeepSection }: {
+  schedules: Schedule[]; onCreatePoster: () => void; onEditPoster: (id: string) => void; onDeletePoster: (id: string) => void;
+  /** 알림 딥링크 등 외부 진입 — 지정 섹션으로 바로 이동(1회 소비) */
+  deepSection?: Section | null;
+  onConsumeDeepSection?: () => void;
+}) {
   const { user } = useAuth();
   const isOwner = user?.role === 'venue_owner';
   const isAdmin = user?.role === 'admin';
@@ -48,6 +53,14 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     if (s === 'ledger') setLedgerSeed(null);
     setSection(s);
   };
+
+  // 알림 딥링크("📒 장부 시작" 클릭 등) — 권한 확인이 끝나면 지정 섹션으로 1회 이동
+  useEffect(() => {
+    if (!deepSection || !permsLoaded) return;
+    gotoSection(deepSection);
+    onConsumeDeepSection?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepSection, permsLoaded]);
 
   // 운영자: 전체 매장 목록 로드(선택용)
   useEffect(() => {
@@ -165,7 +178,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
             {section === 'ledger'  && ledgerOk && (
               <NuriPosLedger venueId={venueId} canManage={manageOk} seed={ledgerSeed}
                 onMakeRankingDraft={(d, names) => { setRankingDraft({ date: d, names }); setSection('ranking'); }}
-                onOpenClock={(d) => { setClockSeed(d); setSection('clock'); }} />
+                onOpenClock={(d) => { setClockSeed(d); setSection('clock'); }}
+                onOpenStats={manageOk ? () => setSection('stats') : undefined} />
             )}
             {section === 'stats'    && manageOk && <LedgerStatsPanel venueId={venueId} />}
             {section === 'ranking'  && ledgerOk && <RankingEditor venueId={venueId} canEdit={isAdmin || user.approved === true} draft={rankingDraft} />}

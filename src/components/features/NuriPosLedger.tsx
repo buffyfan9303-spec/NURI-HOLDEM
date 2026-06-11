@@ -19,6 +19,7 @@ import {
   subscribeLedger, posHasPassword, getLedgerPresets, type LedgerPreset,
 } from '../../api/ledger';
 import { getStaffSchedule, addStaffShift } from '../../api/staffSchedule';
+import { getVenueRankings } from '../../api/rankings';
 import { exportLedgerXls } from '../../lib/ledgerExport';
 import { getSchedules, type Schedule } from '../../api/schedules';
 import { getClockState, saveClockState, defaultClockConfig, type ClockState } from '../../api/clock';
@@ -72,10 +73,12 @@ export interface LedgerSeed {
   gtd?: boolean;
 }
 
-export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI POS', onMakeRankingDraft, onOpenClock, seed }: {
+export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI POS', onMakeRankingDraft, onOpenClock, onOpenStats, seed }: {
   venueId: string; canManage: boolean; venueName?: string;
   onMakeRankingDraft?: (date: string, names: string[]) => void;
   onOpenClock?: (date: string) => void;
+  /** 마감 후 '주간 리포트 보기' — 통계 섹션으로 이동(업주/운영자만 전달) */
+  onOpenStats?: () => void;
   /** 게임관리에서 '장부' 버튼으로 진입 시 — 해당 포스터의 장부로 바로 이동/등록 */
   seed?: LedgerSeed | null;
 }) {
@@ -189,6 +192,17 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const closed = session.closed;
   const regClosed = session.regClosed;
   const showSetup = !session.openedAt && !closed && buyins.length === 0 && players.length === 0;
+
+  // 마감 후 다음 액션 바 — 그날 순위가 이미 입력됐는지(미입력이면 입력 유도 강조)
+  const [hasRank, setHasRank] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!closed) { setHasRank(null); return; }
+    let on = true;
+    getVenueRankings(venueId, date)
+      .then(({ entries }) => { if (on) setHasRank(entries.length > 0); })
+      .catch(() => { if (on) setHasRank(null); });
+    return () => { on = false; };
+  }, [closed, venueId, date]);
 
   // 다음 게임 바로 작성: 설정 화면일 때 직전 세션 단가/게임명/딜러를 미리 불러옴
   // 게임관리에서 포스터 프리필(seedFill)로 들어왔으면 그게 우선(해당 날짜에서 1회 소비)
@@ -462,18 +476,30 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
           <span className="text-xs font-bold text-gold-300">마감됨 (읽기전용){session.closedAt ? ` · ${hhmm(session.closedAt)}` : ''}</span>
           {session.closeMemo && <span className="text-2xs text-ink-secondary truncate">메모: {session.closeMemo}</span>}
           <span className="flex-1" />
+          {canManage && <button type="button" onClick={handleReopen} className="btn-ghost text-2xs px-2.5 py-1">마감 해제</button>}
+        </div>
+      )}
+
+      {/* 마감 직후 다음 단계 — 순위 입력(참가자 명단 프리필) → 주간 리포트. 마감→정산 동선을 클릭 1번으로 */}
+      {closed && (onMakeRankingDraft || onOpenStats) && (
+        <div className="flex flex-wrap items-center gap-1.5 rounded-card border border-border-subtle bg-surface-low p-2">
+          <span className="px-1 text-2xs font-bold text-ink-muted">다음 단계</span>
           {onMakeRankingDraft && (
             <button type="button"
               onClick={() => {
                 const rosterNames = players.map((p) => p.name);
                 const extra = [...new Set(buyins.map((b) => b.playerName))].filter((n) => !rosterNames.includes(n));
-                const names = [...rosterNames, ...extra];
-                if (names.length === 0) { toast.show('참가자가 없습니다', 'error'); return; }
-                onMakeRankingDraft(date, names);
+                onMakeRankingDraft(date, [...rosterNames, ...extra]); // 명단 없어도 날짜는 맞춰 이동
               }}
-              className="btn-ghost text-2xs px-2.5 py-1 text-gold-300">참가자로 순위 초안</button>
+              className={hasRank === false
+                ? 'btn-primary px-3 py-1.5 text-xs'
+                : 'btn-ghost px-3 py-1.5 text-xs text-gold-300'}>
+              🏆 순위 입력하기{hasRank === false ? ' (미입력)' : hasRank ? ' · 입력됨 ✓' : ''}
+            </button>
           )}
-          {canManage && <button type="button" onClick={handleReopen} className="btn-ghost text-2xs px-2.5 py-1">마감 해제</button>}
+          {onOpenStats && (
+            <button type="button" onClick={onOpenStats} className="btn-ghost px-3 py-1.5 text-xs">📊 주간 리포트 보기</button>
+          )}
         </div>
       )}
 

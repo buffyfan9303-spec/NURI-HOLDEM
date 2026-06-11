@@ -466,6 +466,8 @@ export default function App() {
   // 매장 후기 별점(체크인 인증) — 카드 매장명 옆 ⭐4.8(12)
   const [venueRatings, setVenueRatings] = useState<Record<string, { avg: number; count: number }>>({});
   useEffect(() => { getVenueRatings().then(setVenueRatings).catch(() => {}); }, []);
+  // 알림 딥링크 → 내 매장 탭의 특정 섹션(예: 📒 장부 시작 → 장부)
+  const [myStoreDeep, setMyStoreDeep] = useState<'ledger' | null>(null);
   const [activeTab, setActiveTab]     = useState<TabId>('browse');
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   useEffect(() => {
@@ -858,6 +860,12 @@ export default function App() {
     if (link === '/invites') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
       toast.show('상단의 초대 배너에서 수락/거절할 수 있습니다', 'info');
+      return;
+    }
+    // /my-store/ledger (📒 장부 시작 알림) → 내 매장 탭 장부 섹션으로 바로
+    if (link === '/my-store/ledger') {
+      setActiveTab('my-store');
+      setMyStoreDeep('ledger');
       return;
     }
     // /admin (포스터 승인 알림)
@@ -1384,6 +1392,8 @@ export default function App() {
         <main className="px-page-x py-section animate-fade-in">
           <VenueManageTab
             schedules={schedules}
+            deepSection={myStoreDeep}
+            onConsumeDeepSection={() => setMyStoreDeep(null)}
             onCreatePoster={() => {
               // 승인 전 업주는 포스터 등록 차단(서버 RLS와 이중 방어 + 명확한 안내)
               if (user?.role === 'venue_owner' && !user.approved) {
