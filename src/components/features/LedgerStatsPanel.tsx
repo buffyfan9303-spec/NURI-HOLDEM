@@ -11,6 +11,7 @@ import { toCsv, downloadCsv } from '../../lib/csv';
 import Icon from '../atoms/Icon';
 import { getMyVenueNotifyMute, setMyVenueNotifyMute } from '../../api/auth';
 import CustomerAnalytics from './CustomerAnalytics';
+import SegmentedTabs from '../atoms/SegmentedTabs';
 
 const todayStr = () => new Date().toLocaleDateString('en-CA');
 const shift = (d: string, n: number) => { const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate() + n); return x.toLocaleDateString('en-CA'); };
@@ -209,13 +210,9 @@ function StatsView({ venueId }: { venueId: string }) {
         <AiReport m={m} onRefresh={() => setAiTick((t) => t + 1)} />
       ) : period === 'dow' ? (
         <div className="space-y-2">
-          <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5">
-            {DOW_RANGE_OPTS.map((o) => (
-              <button key={o.id} type="button" onClick={() => setDowRange(o.id)}
-                className={['flex-1 py-1.5 text-2xs font-bold rounded-[6px] transition-colors',
-                  dowRange === o.id ? 'bg-gold-300 text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>{o.label}</button>
-            ))}
-          </div>
+          <SegmentedTabs grow className="flex w-full"
+            items={DOW_RANGE_OPTS.map((o) => ({ key: o.id, label: o.label }))}
+            value={dowRange} onChange={setDowRange} />
           <DowStats dow={m.dow} rangeLabel={DOW_RANGE_OPTS.find((o) => o.id === dowRange)!.label} />
         </div>
       ) : (

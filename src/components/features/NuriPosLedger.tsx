@@ -28,6 +28,7 @@ import { getMyVenueStaff, type User } from '../../api/auth';
 import { accrueVoucher } from '../../api/vouchers';
 import { useBackClose } from '../../lib/backstack';
 import EmptyState from '../atoms/EmptyState';
+import SegmentedTabs from '../atoms/SegmentedTabs';
 
 const today = () => new Date().toLocaleDateString('en-CA'); // 로컬 날짜 — UTC 자정 넘김 방지
 const shiftDays = (d: string, n: number) => { const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate() + n); return x.toLocaleDateString('en-CA'); };
@@ -528,15 +529,9 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
               </svg>
             </div>
             {/* 정렬 — 100명+ 명단 빨리 찾기: 등록순/이름순/바인순 */}
-            <div className="flex shrink-0 items-center rounded-input border border-border-default bg-surface-high p-0.5">
-              {([['recent', '등록순'], ['name', '가나다'], ['bins', '바인순']] as const).map(([k, label]) => (
-                <button key={k} type="button" onClick={() => setSortBy(k)}
-                  className={['rounded-[6px] px-2 py-1.5 text-xs font-bold transition-colors',
-                    sortBy === k ? 'bg-gold-300 text-ink-inverse' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
-                  {label}
-                </button>
-              ))}
-            </div>
+            <SegmentedTabs className="shrink-0"
+              items={[{ key: 'recent', label: '등록순' }, { key: 'name', label: '가나다' }, { key: 'bins', label: '바인순' }]}
+              value={sortBy} onChange={setSortBy} />
             {regClosed
               ? <span className="shrink-0 self-center text-2xs font-bold text-danger-light px-2">레지 마감</span>
               : <button type="button" onClick={() => setAddOpen((v) => !v)} className="btn-primary text-xs px-3 shrink-0">+ 유저 추가</button>}

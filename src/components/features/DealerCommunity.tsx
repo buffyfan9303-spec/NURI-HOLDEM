@@ -11,6 +11,7 @@ import { relativeTime } from './MarketplaceTab';
 import ICMCalculator from './ICMCalculator';
 import NoticeDetailModal from './NoticeDetailModal';
 import { getNotices, type MarketplaceNotice } from '../../api/marketplace';
+import SegmentedTabs from '../atoms/SegmentedTabs';
 
 const KIND_LABEL: Record<DealerPostKind, string> = { hiring: '구인', seeking: '구직', general: '일반' };
 const KIND_STYLE: Record<DealerPostKind, string> = {
@@ -148,15 +149,9 @@ export default function DealerCommunity() {
 
       {canPost && open && (
         <form onSubmit={submit} className="space-y-2.5 rounded-card border border-border-default bg-surface-low p-3 animate-slide-up">
-          <div className="inline-flex items-center gap-0.5 rounded-input bg-surface-high p-0.5 border border-border-default">
-            {(['hiring', 'seeking', 'general'] as DealerPostKind[]).map((k) => (
-              <button key={k} type="button" onClick={() => setKind(k)}
-                className={['inline-flex items-center h-7 px-4 rounded-[6px] text-xs font-bold transition-colors',
-                  kind === k ? 'bg-gold-300 text-ink-inverse' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
-                {KIND_LABEL[k]}
-              </button>
-            ))}
-          </div>
+          <SegmentedTabs
+            items={(['hiring', 'seeking', 'general'] as DealerPostKind[]).map((k) => ({ key: k, label: KIND_LABEL[k] }))}
+            value={kind} onChange={setKind} />
 
           {/* 구인일 때만: 지역/홀덤펍 + 시급/근무시간/필요기간 */}
           {kind === 'hiring' && (

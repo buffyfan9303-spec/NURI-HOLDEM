@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useBackClose } from '../../lib/backstack';
 import type { AppNotification, NotificationType } from '../../api/notifications';
+import SegmentedTabs from '../atoms/SegmentedTabs';
 
 interface NotificationPanelProps {
   open: boolean;
@@ -138,21 +139,7 @@ export default function NotificationPanel({
         <header className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
           <h2 className="text-sm font-semibold text-ink-primary">알림</h2>
           <div className="flex items-center gap-1 text-2xs">
-            {(['all', 'unread'] as const).map((f) => (
-              <button
-                key={f}
-                type="button"
-                onClick={() => setFilter(f)}
-                className={[
-                  'px-2 py-1 rounded-input transition-colors focus:outline-none',
-                  filter === f
-                    ? 'bg-gold-300 text-ink-inverse font-semibold'
-                    : 'text-ink-muted hover:text-ink-secondary',
-                ].join(' ')}
-              >
-                {f === 'all' ? '전체' : '안읽음'}
-              </button>
-            ))}
+            <SegmentedTabs items={[{ key: 'all', label: '전체' }, { key: 'unread', label: '안읽음' }]} value={filter} onChange={setFilter} />
           </div>
         </header>
 
