@@ -18,6 +18,7 @@ import type { DeepGtoInit } from './components/features/gto/useDeepGto';
 import type { PosterFormData } from './components/features/PosterFormModal';
 import NuriHoldemLogo from './components/atoms/NuriHoldemLogo';
 import ThemeToggle from './components/atoms/ThemeToggle';
+import { useTheme } from './contexts/ThemeContext';
 import { PORTONE_CONFIGURED } from './components/features/IdentityVerificationButton';
 import StaffInviteBanner from './components/features/StaffInviteBanner';
 import TierCelebration from './components/features/TierCelebration';
@@ -102,8 +103,10 @@ interface TabDef { id: TabId; label: string; }
 
 function AppHeader({
   unreadCount, notifications, onMarkRead, onOpenLogin, onNavigateNotification, onHome, onOpenProfile, onOpenSearch, onOpenVouchers,
-  suppressed = false,
+  title, suppressed = false,
 }: {
+  /** 모바일 헤더 좌측 큰 타이틀(Riot Mobile 스타일) — 현재 탭 라벨 */
+  title?: string;
   unreadCount: number;
   notifications: AppNotification[];
   onMarkRead: (ids: string[]) => void;
@@ -117,6 +120,7 @@ function AppHeader({
   suppressed?: boolean;
 }) {
   const { user, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [notifOpen,    setNotifOpen] = useState(false);
   const [userMenuOpen, setUserMenu]  = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -162,15 +166,18 @@ function AppHeader({
         shrunk ? 'h-11 md:h-header-h' : 'h-header-h',
       ].join(' ')}>
 
-        {/* LEFT: NURI HOLDEM 로고 — 클릭 시 메인으로 */}
+        {/* LEFT: PC=로고 / 모바일=현재 탭 큰 타이틀(Riot Mobile 스타일) */}
         <button
           type="button"
           onClick={onHome}
           aria-label="메인으로 이동"
-          className={['active:scale-95 transition-transform origin-left', shrunk ? 'max-md:scale-[0.85]' : ''].join(' ')}
+          className="hidden lg:block active:scale-95 transition-transform origin-left"
         >
           <NuriHoldemLogo />
         </button>
+        <h1 className={['lg:hidden min-w-0 truncate text-xl font-extrabold tracking-tight text-ink-primary transition-transform origin-left', shrunk ? 'scale-[0.85]' : ''].join(' ')}>
+          {title ?? 'NURI HOLDEM'}
+        </h1>
 
         {/* RIGHT: 테마 토글 + 알림 + 로그인/아바타 — 동일 36px 원형 버튼 클러스터 */}
         <div className="flex items-center gap-0.5">
@@ -184,7 +191,7 @@ function AppHeader({
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
           </button>
           {/* 라이트/다크 모드 전환 */}
-          <ThemeToggle />
+          <ThemeToggle className="hidden lg:flex" />
 
           {/* 알림 벨 — 솔리드 디자인 + 명확한 클릭 영역 */}
           <button
@@ -193,7 +200,7 @@ function AppHeader({
             aria-label={`알림 ${unreadCount}개`}
             aria-expanded={notifOpen}
             className={[
-              'relative w-9 h-9 flex items-center justify-center rounded-full',
+              'relative w-9 h-9 hidden lg:flex items-center justify-center rounded-full',
               'transition-colors duration-200 ease-out active:scale-90',
               notifOpen
                 ? 'bg-surface-high text-gold-300'
@@ -217,7 +224,7 @@ function AppHeader({
               type="button"
               onClick={onOpenVouchers}
               aria-label="내 매장이용권"
-              className="w-9 h-9 flex items-center justify-center rounded-full text-ink-secondary hover:text-gold-300 hover:bg-surface-high transition-colors"
+              className="w-9 h-9 hidden lg:flex items-center justify-center rounded-full text-ink-secondary hover:text-gold-300 hover:bg-surface-high transition-colors"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" /><path d="M13 5v14" /></svg>
             </button>
@@ -235,6 +242,8 @@ function AppHeader({
                 aria-label={`${user.name} 메뉴`}
                 className="group relative w-11 h-11 -mr-1 flex items-center justify-center rounded-full focus:outline-none"
               >
+                {/* 모바일: 알림 벨이 숨겨지므로 미읽음을 아바타 점으로 */}
+                {unreadCount > 0 && <span className="lg:hidden absolute top-1 right-0.5 z-10 h-2.5 w-2.5 rounded-full bg-gold-300 ring-2 ring-surface-base" aria-hidden />}
                 {/* 보이는 아바타 32px(이미지/이니셜) — 터치영역은 44px 유지(WCAG) */}
                 {/* 아바타 테두리 = 활동 등급색(운영자=빨강). 별도 22 배지 대신 테두리로 표현 */}
                 <span
@@ -284,6 +293,25 @@ function AppHeader({
                       <p className="text-2xs text-ink-muted truncate">{user.email}</p>
                     </div>
                   </button>
+
+                  {/* 모바일 전용 — 헤더에서 빠진 알림/이용권/테마를 메뉴로 제공 */}
+                  <div className="lg:hidden border-b border-border-subtle">
+                    <button type="button" onClick={() => { setNotifOpen(true); setUserMenu(false); }}
+                      className="w-full text-left flex items-center gap-2 px-3 py-2.5 text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></svg>
+                      알림{unreadCount > 0 && <span className="ml-auto rounded-badge bg-gold-300 px-1.5 py-0.5 text-2xs font-bold text-ink-inverse tabular-nums">{unreadCount}</span>}
+                    </button>
+                    <button type="button" onClick={() => { onOpenVouchers(); setUserMenu(false); }}
+                      className="w-full text-left flex items-center gap-2 px-3 py-2.5 text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" /><path d="M13 5v14" /></svg>
+                      내 매장이용권
+                    </button>
+                    <button type="button" onClick={() => { toggleTheme(); }}
+                      className="w-full text-left flex items-center gap-2 px-3 py-2.5 text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" /></svg>
+                      {theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환'}
+                    </button>
+                  </div>
 
                   {/* 프로필 관리 */}
                   <button
@@ -442,7 +470,7 @@ function TabBar({
 }
 
 // ── 모바일 하단 탭바(Riot Mobile 스타일) — 플로팅 알약 + 아이콘/라벨 + 프레스 스프링 ──
-function MobileTabBar({ tabs, active, onChange }: { tabs: TabDef[]; active: TabId; onChange: (t: TabId) => void }) {
+function MobileTabBar({ tabs, active, onChange, dot }: { tabs: TabDef[]; active: TabId; onChange: (t: TabId) => void; dot?: Partial<Record<TabId, boolean>> }) {
   // 엄지 거리 우선순위로 최대 5칸 — 업주/관리자는 내 매장·관리자가 장터/도구보다 앞선다
   const order: TabId[] = ['browse', 'live', 'community', 'my-store', 'admin', 'market', 'tools'];
   const visible = order.filter((id) => tabs.some((t) => t.id === id)).slice(0, 5);
@@ -465,9 +493,11 @@ function MobileTabBar({ tabs, active, onChange }: { tabs: TabDef[]; active: TabI
               aria-current={on ? 'page' : undefined}
               className="press-spring flex min-w-0 flex-1 flex-col items-center gap-0.5 pb-1.5 pt-2 touch-manipulation focus:outline-none"
             >
-              <span className={['flex h-7 w-12 items-center justify-center rounded-full transition-colors duration-200',
+              <span className={['relative flex h-7 w-12 items-center justify-center rounded-full transition-colors duration-200',
                 on ? 'bg-gold-300/15 text-gold-300' : 'text-ink-muted'].join(' ')}>
                 {TAB_ICON[id]}
+                {/* 새 소식 골드 점(예: 커뮤니티 새 글) */}
+                {dot?.[id] && !on && <span className="absolute right-1.5 top-0 h-1.5 w-1.5 rounded-full bg-gold-300" aria-hidden />}
               </span>
               <span className={['text-[10px] font-bold leading-none transition-colors duration-200',
                 on ? 'text-gold-300' : 'text-ink-muted'].join(' ')}>
@@ -765,6 +795,19 @@ export default function App() {
     if (isAdmin)            base.push({ id: 'admin',       label: '관리자 설정' });
     return base;
   }, [isOwner, isStaff, isAdmin]);
+
+  // 커뮤니티 탭 새 글 점(모바일 탭바) — 마지막 방문 이후 새 글이 있으면 골드 점
+  const [commSeenAt, setCommSeenAt] = useState(() => localStorage.getItem('nuri:comm-seen') ?? '');
+  useEffect(() => {
+    if (activeTab !== 'community') return;
+    const now = new Date().toISOString();
+    localStorage.setItem('nuri:comm-seen', now);
+    setCommSeenAt(now);
+  }, [activeTab]);
+  const commHasNew = useMemo(
+    () => activeTab !== 'community' && posts.some((p) => !commSeenAt || p.createdAt > commSeenAt),
+    [posts, commSeenAt, activeTab],
+  );
 
   // 탭이 사라지면 (로그아웃 등) browse로 돌아감
   useEffect(() => {
@@ -1193,6 +1236,7 @@ export default function App() {
     // 모바일: 폭 그대로(full). 데스크톱: 중앙 정렬 + 최대폭으로 무한 확장 방지 + 프레임.
     <div className="min-h-screen bg-surface-base mx-auto w-full max-w-6xl xl:border-x xl:border-border-subtle">
       <AppHeader
+        title={tabs.find((t) => t.id === activeTab)?.label ?? 'NURI HOLDEM'}
         unreadCount={unreadNotifs}
         notifications={notifications}
         onMarkRead={handleMarkRead}
@@ -1227,7 +1271,7 @@ export default function App() {
 
       <TabBar tabs={tabs} active={activeTab} onChange={setActiveTab} />
       {/* 모바일 하단 탭바(Riot Mobile 스타일) — 상단 GNB 대체 */}
-      <MobileTabBar tabs={tabs} active={activeTab} onChange={setActiveTab} />
+      <MobileTabBar tabs={tabs} active={activeTab} onChange={setActiveTab} dot={{ community: commHasNew }} />
 
       {/* 일정 탐색 */}
       <div className="px-page-x"><StaffInviteBanner /></div>

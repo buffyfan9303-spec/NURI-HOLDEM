@@ -167,7 +167,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
       ) : (
         <div className="lg:flex lg:gap-4">
           {available.length > 1 && (
-            <nav className="flex gap-1 overflow-x-auto scrollbar-none rounded-input bg-surface-high p-0.5 lg:sticky lg:top-16 lg:w-44 lg:shrink-0 lg:flex-col lg:self-start lg:overflow-visible lg:bg-transparent lg:p-0">
+            <nav className="flex flex-wrap gap-1 rounded-input bg-surface-high p-0.5 lg:sticky lg:top-16 lg:w-44 lg:shrink-0 lg:flex-col lg:flex-nowrap lg:self-start lg:bg-transparent lg:p-0">
               {[...available]
                 // 즐겨찾기 우선 정렬(★ 누른 순서 유지) — 나머지는 기존 순서
                 .sort((a, b) => {
