@@ -1334,9 +1334,9 @@ export default function App() {
       <InstallBanner />
       <TierCelebration />
 
-      <TabBar tabs={tabs} active={activeTab} onChange={setActiveTab} />
+      <TabBar tabs={tabs} active={activeTab} onChange={changeTab} />
       {/* 모바일 하단 탭바(Riot Mobile 스타일) — 상단 GNB 대체 */}
-      <MobileTabBar tabs={tabs} active={activeTab} onChange={setActiveTab} dot={{ community: commHasNew }}
+      <MobileTabBar tabs={tabs} active={activeTab} onChange={changeTab} dot={{ community: commHasNew }}
         onOpenMe={() => { if (user) setVoucherWalletOpen(true); else setAuthOpen(true); }} />
 
       {/* 일정 탐색 */}
