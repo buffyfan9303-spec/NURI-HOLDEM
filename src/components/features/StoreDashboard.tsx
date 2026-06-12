@@ -203,7 +203,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
     try {
       const days7 = perDay.map((x) => `${x.dow} ${x.entry}엔트리/${wonToMan(x.paid)}만`).join(', ');
       const prompt = [
-        `다음은 홀덤펍 운영 데이터다. 사장이 보기 좋게 한국어로 3~4문장 운영 요약과, 다음 주에 바로 실천할 조언 1~2개(약한 요일에 이벤트 제안 등 구체적으로)를 해줘. 과장·이모지 금지, 숫자 근거 포함.`,
+        `다음은 홀덤펍 운영 데이터다. 사장이 보기 좋게 한국어로 3~4문장 운영 요약과, 다음 주에 바로 실천할 조언 1~2개(약한 요일에 이벤트 제안 등 구체적으로)를 해줘. 과장·이모지 금지, 마크다운(별표·제목) 없이 평문으로, 숫자 근거 포함.`,
         `오늘(${mr.label}): 엔트리 ${Math.round(fin.entry)}, 완납 ${wonToMan(fin.paid)}만, 미수 ${wonToMan(fin.unpaid)}만.`,
         `최근7일: 합계 ${weekEntry}엔트리/${wonToMan(weekPaid)}만, 평균객단가 ${wonToMan(avgSpend)}만, 일별[${days7}].`,
         `전주대비: 엔트리 ${entryDelta == null ? 'N/A' : entryDelta + '%'}, 매출 ${paidDelta == null ? 'N/A' : paidDelta + '%'}.`,
