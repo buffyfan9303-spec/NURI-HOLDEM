@@ -30,7 +30,7 @@ const StatefulActionButton = forwardRef<HTMLButtonElement, {
   const [phase, setPhase] = useState<Phase>('idle');
   // w-full은 Idle에서만 — Loading/Success는 컨텐츠 폭으로 줄어 캡슐 모핑(layout이 보간)
   const wantsFull = className.includes('w-full');
-  const restClass = className.replace(/w-full/, '').trim();
+  const restClass = className.split(/\s+/).filter((c) => c !== 'w-full').join(' ');
 
   const run = async () => {
     if (phase !== 'idle' || disabled) return;
