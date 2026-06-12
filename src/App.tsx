@@ -32,6 +32,7 @@ import type { MarketplaceFormData } from './components/features/MarketplaceFormM
 import { useBackClose } from './lib/backstack';
 import { useVisibilityRefresh } from './lib/useVisibilityRefresh';
 import { lazyWithReload } from './lib/lazyWithReload';
+import { SpringButton } from './components/atoms/StatefulActionButton';
 import { useAuth } from './contexts/AuthContext';
 import { listAllUsers, updateUserStatus, approveOwner } from './api/auth';
 import {
@@ -371,13 +372,10 @@ function AppHeader({
 
             </div>
           ) : (
-            <button
-              type="button"
-              onClick={onOpenLogin}
-              className="btn-primary text-xs h-9 px-3"
-            >
+            <SpringButton onClick={onOpenLogin} ariaLabel="로그인"
+              className="btn-primary h-7 px-2.5 text-2xs shadow-none">
               로그인
-            </button>
+            </SpringButton>
           )}
         </div>
       </div>

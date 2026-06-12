@@ -5,6 +5,7 @@ import Icon from '../atoms/Icon';
 import { useBackClose } from '../../lib/backstack';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
+import StatefulActionButton from '../atoms/StatefulActionButton';
 import {
   signUpUser, signUpOwner, checkNicknameAvailable,
   requestPasswordReset, verifyPasswordResetOtp, setNewPassword,
@@ -271,17 +272,16 @@ function LoginForm({ onClose, onForgot }: { onClose: () => void; onForgot: () =>
   const toast = useToast();
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
-  const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState('');
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const btnRef = useRef<HTMLButtonElement>(null);
+  // 엔터 제출은 상태 버튼 클릭으로 위임 — Idle→Loading→Success 모핑이 항상 한 곳에서 일어난다
+  const submit = (e: React.FormEvent) => { e.preventDefault(); btnRef.current?.click(); };
+  const doLogin = async () => {
     setError('');
-    setLoading(true);
     try {
       await login(email.trim(), password);
       toast.show('로그인되었습니다', 'success');
-      onClose();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : '';
       setError(
@@ -289,8 +289,7 @@ function LoginForm({ onClose, onForgot }: { onClose: () => void; onForgot: () =>
           ? '이메일 인증이 필요합니다. 받은 편지함의 인증 메일을 확인해 주세요.'
           : '이메일 또는 비밀번호를 확인해 주세요.',
       );
-    } finally {
-      setLoading(false);
+      throw err; // 버튼을 idle로 복귀시켜 재시도 가능하게
     }
   };
 
@@ -309,9 +308,10 @@ function LoginForm({ onClose, onForgot }: { onClose: () => void; onForgot: () =>
 
       {error && <p className="text-xs text-danger animate-fade-in" role="alert">{error}</p>}
 
-      <button type="submit" disabled={loading} className="btn-primary w-full disabled:opacity-60">
-        {loading ? '로그인 중…' : '로그인'}
-      </button>
+      <StatefulActionButton ref={btnRef} label="로그인" successLabel="환영합니다!"
+        onAction={doLogin} onDone={onClose} className="w-full" />
+      {/* 폼 엔터 제출용(화면 비표시) */}
+      <button type="submit" className="hidden" aria-hidden tabIndex={-1} />
     </form>
   );
 }
