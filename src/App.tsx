@@ -151,6 +151,8 @@ function AppHeader({
       aria-hidden={suppressed || undefined}
       className={[
         'sticky top-0 z-50 bg-surface-base border-b border-border-subtle',
+        // PWA(노치 기기): 상태바 영역까지 헤더 배경으로 덮음 — 스크롤 시 위로 컨텐츠 비침 방지
+        'pt-[env(safe-area-inset-top)]',
         suppressed ? 'invisible pointer-events-none' : '',
       ].join(' ')}
     >
@@ -395,7 +397,8 @@ function TabBar({
     <div
       ref={containerRef}
       data-stack-tabbar=""
-      className="sticky top-header-h z-40 bg-surface-base relative flex border-b border-border-subtle overflow-x-auto scrollbar-none px-page-x sm:justify-center"
+      // 모바일은 하단 탭바(MobileTabBar)가 내비 담당 — 상단 GNB는 PC(lg+) 전용
+      className="sticky top-header-h z-40 bg-surface-base relative hidden lg:flex border-b border-border-subtle overflow-x-auto scrollbar-none px-page-x sm:justify-center"
     >
       {tabs.map(({ id, label }) => {
         const isActive = active === id;
@@ -435,6 +438,46 @@ function TabBar({
         style={{ left: indicator.left, width: indicator.width }}
       />
     </div>
+  );
+}
+
+// ── 모바일 하단 탭바(Riot Mobile 스타일) — 플로팅 알약 + 아이콘/라벨 + 프레스 스프링 ──
+function MobileTabBar({ tabs, active, onChange }: { tabs: TabDef[]; active: TabId; onChange: (t: TabId) => void }) {
+  // 엄지 거리 우선순위로 최대 5칸 — 업주/관리자는 내 매장·관리자가 장터/도구보다 앞선다
+  const order: TabId[] = ['browse', 'live', 'community', 'my-store', 'admin', 'market', 'tools'];
+  const visible = order.filter((id) => tabs.some((t) => t.id === id)).slice(0, 5);
+  const shortLabel: Record<TabId, string> = {
+    browse: '일정', live: '라이브', community: '커뮤니티', market: '장터', tools: '도구',
+    'my-store': '내 매장', admin: '관리자',
+  };
+  return (
+    <nav
+      className="fixed inset-x-0 bottom-0 z-50 lg:hidden pointer-events-none"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      aria-label="하단 내비게이션"
+    >
+      <div className="pointer-events-auto mx-3 mb-2 flex rounded-2xl border border-border-default bg-surface-mid/95 shadow-dialog backdrop-blur-md">
+        {visible.map((id) => {
+          const on = active === id;
+          return (
+            <button
+              key={id} type="button" onClick={() => { onChange(id); window.scrollTo({ top: 0 }); }}
+              aria-current={on ? 'page' : undefined}
+              className="press-spring flex min-w-0 flex-1 flex-col items-center gap-0.5 pb-1.5 pt-2 touch-manipulation focus:outline-none"
+            >
+              <span className={['flex h-7 w-12 items-center justify-center rounded-full transition-colors duration-200',
+                on ? 'bg-gold-300/15 text-gold-300' : 'text-ink-muted'].join(' ')}>
+                {TAB_ICON[id]}
+              </span>
+              <span className={['text-[10px] font-bold leading-none transition-colors duration-200',
+                on ? 'text-gold-300' : 'text-ink-muted'].join(' ')}>
+                {shortLabel[id]}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </nav>
   );
 }
 
@@ -1183,6 +1226,8 @@ export default function App() {
       <TierCelebration />
 
       <TabBar tabs={tabs} active={activeTab} onChange={setActiveTab} />
+      {/* 모바일 하단 탭바(Riot Mobile 스타일) — 상단 GNB 대체 */}
+      <MobileTabBar tabs={tabs} active={activeTab} onChange={setActiveTab} />
 
       {/* 일정 탐색 */}
       <div className="px-page-x"><StaffInviteBanner /></div>
@@ -1601,7 +1646,8 @@ function ScrollTopButton() {
       type="button"
       aria-label="맨 위로"
       onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-      className="fixed bottom-5 right-4 z-40 flex h-10 w-10 items-center justify-center rounded-full border border-border-default bg-surface-mid/95 text-ink-secondary shadow-dialog backdrop-blur transition-colors hover:text-gold-300 animate-fade-in"
+      // 모바일: 하단 탭바(≈4.5rem+safe-area) 위로 띄움 / PC: 기존 위치
+      className="fixed bottom-[5.75rem] lg:bottom-5 right-4 z-40 flex h-10 w-10 items-center justify-center rounded-full border border-border-default bg-surface-mid/95 text-ink-secondary shadow-dialog backdrop-blur transition-colors hover:text-gold-300 animate-fade-in"
     >
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         <polyline points="18 15 12 9 6 15" />

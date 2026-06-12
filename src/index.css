@@ -72,11 +72,13 @@
     /* 어떤 요소가 화면 밖으로 "튀어나와" 가로 스크롤이 생기는 것을 문서 레벨에서 차단.
        (내부 가로 스크롤 영역은 각자 overflow-x-auto 라 영향 없음. html 은 이미
         overflow-y:scroll 이라 overflow-x 명시가 sticky 헤더/탭을 깨지 않는다.) */
-    overflow-x: hidden;
+    overflow-x: clip;
   }
 
   body {
     @apply bg-surface-base text-ink-primary antialiased;
+    overflow-x: clip;
+    max-width: 100%;
     font-family: 'Pretendard Variable', 'Pretendard', system-ui, sans-serif;
     /* iOS 탭 하이라이트 제거 */
     -webkit-tap-highlight-color: transparent;
@@ -251,3 +253,18 @@ html.light .text-gold-200, html.light .text-gold-300 { color: #A06D00; }
 html.light .text-gold-400 { color: #8F6200; }
 html.light .text-emerald-300, html.light .text-emerald-400 { color: #0A8F5C; }
 html.light .text-danger-light { color: #D63A4E; }
+
+/* ── 모바일 하단 탭바(Riot Mobile 스타일) 공간 확보 — 컨텐츠가 탭바에 가리지 않게 */
+@media (max-width: 1023.5px) {
+  main { padding-bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
+}
+
+/* ── 프레스 스프링(버튼 이펙트) — 누르면 깊게 눌리고, 떼면 통통 튀며 복귀 */
+.press-spring {
+  transition: transform 0.45s cubic-bezier(0.18, 2, 0.32, 1);
+  will-change: transform;
+}
+.press-spring:active {
+  transform: scale(0.88);
+  transition-duration: 0.06s;
+}
