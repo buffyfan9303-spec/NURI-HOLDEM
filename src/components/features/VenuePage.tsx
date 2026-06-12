@@ -1003,6 +1003,9 @@ function Row({ dt, dd }: { dt: string; dd: string }) {
   );
 }
 
+// 매장 정보 액션 칩 공통 규격 — 높이·글자·여백 통일(조잡함 방지)
+const MAP_CHIP = 'inline-flex h-8 items-center gap-1.5 rounded-input border border-border-default bg-surface-high px-3 text-2xs font-semibold text-ink-secondary transition-colors hover:border-border-strong hover:text-ink-primary active:scale-95';
+
 // 주소 — 클릭하면 클립보드 복사 + 외부 지도 링크
 function AddressRow({ address }: { address: string }) {
   const toast = useToast();
@@ -1023,17 +1026,18 @@ function AddressRow({ address }: { address: string }) {
       <dd className="flex-1 space-y-1.5">
         <span className="block text-ink-secondary whitespace-pre-line">{address}</span>
         <div className="flex flex-wrap items-center gap-1.5">
-          <a href={kakaoUrl} target="_blank" rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 rounded-badge bg-[#FEE500] px-2 py-1 text-2xs font-bold text-[#191919] transition-transform active:scale-95">
-            카카오맵 길찾기
+          {/* 동일 규격 칩 — 브랜드 원색 배경 대신 색점만(차분함 유지) */}
+          <a href={kakaoUrl} target="_blank" rel="noopener noreferrer" className={MAP_CHIP}>
+            <span aria-hidden className="h-2 w-2 rounded-full bg-[#FEE500]" /> 카카오맵
           </a>
-          <a href={naverUrl} target="_blank" rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 rounded-badge bg-[#03C75A] px-2 py-1 text-2xs font-bold text-white transition-transform active:scale-95">
-            네이버지도
+          <a href={naverUrl} target="_blank" rel="noopener noreferrer" className={MAP_CHIP}>
+            <span aria-hidden className="h-2 w-2 rounded-full bg-[#03C75A]" /> 네이버지도
           </a>
-          <button type="button" onClick={copy} aria-label="주소 복사"
-            className="rounded-badge border border-border-default px-2 py-1 text-2xs font-semibold text-ink-muted transition-colors hover:text-gold-300 hover:bg-surface-high">
-            복사
+          <button type="button" onClick={copy} aria-label="주소 복사" className={MAP_CHIP}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
+            주소 복사
           </button>
         </div>
       </dd>
@@ -1062,7 +1066,7 @@ function PhoneRow({ phone }: { phone: string }) {
                 toast.show(`${n} 복사됨`, 'success');
               } catch { /* 복사 실패 → tel: 링크 그대로 실행 */ }
             }}
-            className="px-2 py-0.5 rounded-badge bg-surface-high border border-border-default text-ink-secondary hover:text-gold-300 hover:border-gold-400/40 transition-colors tabular-nums"
+            className="inline-flex h-8 items-center rounded-input border border-border-default bg-surface-high px-3 text-2xs font-semibold text-ink-secondary transition-colors hover:border-border-strong hover:text-ink-primary tabular-nums"
           >
             {n}
           </a>
