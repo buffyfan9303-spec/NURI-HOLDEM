@@ -1521,7 +1521,18 @@ export default function App() {
       {activeTab === 'community' && (
         <main className={`px-page-x pb-section ${tabAnim || 'animate-fade-in'}`}>
           <CommunityTab
-            onOpenMarket={() => changeTab('market')}
+            marketSlot={
+              <MarketplaceTab
+                listings={listings}
+                notices={notices.filter((n) => !n.board || n.board === 'all' || n.board === 'market')}
+                onSelect={setOpenListing}
+                onSelectNotice={setOpenNotice}
+                onCreate={() => user ? setMarketFormOpen(true) : setAuthOpen(true)}
+                canWriteNotice={isAdmin}
+                onWriteNotice={() => setNoticeFormOpen(true)}
+                onListingsChanged={() => getListings().then(setListings).catch(() => {})}
+              />
+            }
             venues={venues}
             comments={comments}
             posts={posts}

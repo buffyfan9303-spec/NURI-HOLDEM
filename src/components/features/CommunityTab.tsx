@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, Fragment } from 'react';
+import { useState, useMemo, useEffect, useRef, Fragment, type ReactNode } from 'react';
 import { getActiveCommunityAds, type CommunityAd } from '../../api/ads';
 import { getVenueRatings, type VenueRating } from '../../api/reviews';
 import type { Venue, Comment, CommunityPost, LiveMessage, PostCategory, GroupKind, JoinedGroup } from '../../api/community';
@@ -20,8 +20,8 @@ import PostDetailModal from './PostDetailModal';
 import { useIsDesktop } from '../../lib/responsive';
 
 interface CommunityTabProps {
-  /** 모바일: 장터 서브탭 — 메인 장터 화면으로 이동 */
-  onOpenMarket?: () => void;
+  /** 장터 화면 임베드 슬롯 — 서브탭을 유지한 채 커뮤니티 안에서 장터를 보여준다 */
+  marketSlot?: ReactNode;
   venues: Venue[];
   comments: Comment[];
   posts: CommunityPost[];
@@ -44,7 +44,7 @@ interface CommunityTabProps {
 
 // 커뮤니티 섹션 — 홀덤펍 / 실시간 댓글 / 게시판 / 딜러 / 랭킹 / 업주
 // (홀덤 공부는 게시판으로 통합, 도구는 메인 탭으로 분리)
-type Section = 'live' | 'board' | 'venues' | 'rank' | 'dealer' | 'owner';
+type Section = 'live' | 'board' | 'venues' | 'rank' | 'dealer' | 'owner' | 'market';
 // 다른 메인 탭(중고장터 등)으로 갔다 돌아와도 커뮤니티 섹션이 유지되도록 모듈 레벨에 기억
 let lastCommunitySection: Section = 'venues';
 
@@ -70,7 +70,7 @@ function relativeTime(iso: string): string {
 
 export default function CommunityTab({
   venues, comments, posts, notices = [], isAdmin = false, onWriteNotice, onSelectNotice,
-  onSelectVenue, onSelectPost, onOpenWrite, onLikePost, onDeletePost, onReloadVenues, onOpenMarket,
+  onSelectVenue, onSelectPost, onOpenWrite, onLikePost, onDeletePost, onReloadVenues, marketSlot,
 }: CommunityTabProps) {
   const [section, setSectionState] = useState<Section>(lastCommunitySection);
   const setSection = (s: Section) => { lastCommunitySection = s; setSectionState(s); };
@@ -123,7 +123,7 @@ export default function CommunityTab({
           <SectionTab active={section === 'board'}  label="게시판"      onClick={() => setSection('board')} />
           <SectionTab active={section === 'dealer'} label="딜러"        onClick={() => setSection('dealer')} />
           <SectionTab active={section === 'rank'}   label="랭킹"        onClick={() => setSection('rank')} />
-          {onOpenMarket && <SectionTab active={false} label="장터" onClick={onOpenMarket} />}
+          {marketSlot && <SectionTab active={section === 'market'} label="장터" onClick={() => setSection('market')} />}
           {canOwnerCommunity && (
             <SectionTab active={section === 'owner'} label="업주" onClick={() => setSection('owner')} />
           )}
@@ -131,7 +131,7 @@ export default function CommunityTab({
       </div>
 
       {/* 섹션 콘텐츠 — 게시판은 2-pane 전체폭, 그 외 단일 컬럼은 읽기폭(max-w-3xl)으로 제한 */}
-      <div className={section === 'board' ? '' : 'mx-auto w-full max-w-3xl'}>
+      <div className={(section === 'board' || section === 'market') ? '' : 'mx-auto w-full max-w-3xl'}>
       {section === 'live' && <LiveWallSection />}
 
       {section === 'board' && (
@@ -192,6 +192,7 @@ export default function CommunityTab({
       {section === 'dealer' && <DealerCommunity />}
 
       {section === 'owner' && canOwnerCommunity && <OwnerCommunity />}
+      {section === 'market' && marketSlot}
       </div>
     </div>
   );
