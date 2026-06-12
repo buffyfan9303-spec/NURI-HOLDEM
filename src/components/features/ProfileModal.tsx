@@ -1,5 +1,6 @@
 // src/components/features/ProfileModal.tsx
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { motion } from 'framer-motion';
 import Modal from '../atoms/Modal';
 import { useToast } from '../atoms/Toast';
 import { tierOf } from '../atoms/TierBadge';
@@ -610,9 +611,12 @@ function PushNotificationSetting() {
             on ? 'bg-gold-300' : 'bg-surface-float',
           ].join(' ')}
         >
-          <span className={[
-            'absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform',
-            on ? 'translate-x-5' : '',
+          <motion.span
+            initial={false}
+            animate={{ x: on ? 20 : 0 }}
+            transition={{ type: 'spring', stiffness: 600, damping: 32 }}
+            className={[
+            'absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white',
           ].join(' ')} />
         </button>
       </div>

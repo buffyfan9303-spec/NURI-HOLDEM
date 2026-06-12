@@ -1,5 +1,6 @@
 // src/components/features/NuriPosLedger.tsx
 import { useIsDesktop } from '../../lib/responsive';
+import HoldToConfirmButton from '../atoms/HoldToConfirmButton';
 // NURI POS 장부 — 표(table) 형태. 장부 입장 시 세션 설정(담당직원·게임·단가·이벤트·딜러) → 보드.
 // 셀 2-Tap 입력(결제수단 + 완납/미수/가게지원). 티켓·지원은 미수 불가. 미수=붉은색.
 // 8바인 초과 시 가로 스크롤. 비고 컬럼 수기 입력. 장부 마감=읽기전용 스냅샷+메모. 엑셀 내보내기.
@@ -1513,7 +1514,9 @@ function CloseModal({ stats, unpaidPlayers, onClose, onConfirm }: {
         <p className="text-2xs text-danger-light">마감하면 해당 날짜 장부는 읽기전용으로 잠깁니다. (업주만 해제 가능)</p>
         <div className="flex gap-2">
           <button type="button" onClick={onClose} className="btn-ghost text-sm flex-1">취소</button>
-          <button type="button" onClick={() => onConfirm(memo)} className="btn-primary text-sm flex-1">마감 확정</button>
+          <HoldToConfirmButton onConfirm={() => onConfirm(memo)} className="btn-primary text-sm flex-1">
+            꾹 눌러 마감 확정
+          </HoldToConfirmButton>
         </div>
       </div>
     </Overlay>

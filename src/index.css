@@ -309,3 +309,10 @@ button:active:not(:disabled), [role='button']:active {
   80% { transform: translateX(4px); }
 }
 .anim-shake { animation: shake-x 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97); }
+
+/* ── PC 키보드 포커스 링(Linear) — Tab 키 순회 시에만 골드 링, 마우스 클릭엔 안 뜸 ── */
+:focus-visible {
+  outline: 2px solid rgba(252, 213, 53, 0.9) !important;
+  outline-offset: 2px;
+  border-radius: 6px;
+}

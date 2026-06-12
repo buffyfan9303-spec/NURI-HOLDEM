@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import CountUp from '../atoms/CountUp';
 import type { Schedule } from '../../api/schedules';
 import {
   getLedgerSession, getLedgerBuyins, getLedgerPlayers, getLedgerRange, buyinFinance, wonToMan, visitorLabel, subscribeLedger,
@@ -607,7 +608,7 @@ function Stat({ label, value, unit, accent, danger }: { label: string; value: st
     <div>
       <p className="text-2xs text-ink-muted">{label}</p>
       <p className={`font-extrabold tabular-nums leading-tight ${danger ? 'text-danger-light' : accent ? 'text-gold-300' : 'text-ink-primary'}`}>
-        <span className="text-lg">{value}</span>{unit && <span className="ml-0.5 text-2xs font-semibold text-ink-muted">{unit}</span>}
+        <span className="text-lg">{/^[\d,]+$/.test(value) ? <CountUp value={Number(value.replace(/,/g, ''))} /> : value}</span>{unit && <span className="ml-0.5 text-2xs font-semibold text-ink-muted">{unit}</span>}
       </p>
     </div>
   );

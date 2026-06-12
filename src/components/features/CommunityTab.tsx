@@ -76,6 +76,20 @@ export default function CommunityTab({
   const [section, setSectionState] = useState<Section>(lastCommunitySection);
   const setSection = (s: Section) => { lastCommunitySection = s; setSectionState(s); };
   const [query, setQuery] = useState('');
+  // 스와이프 탭 전환(인스타 DM 문법) — 컨텐츠를 좌우로 쓸면 이웃 섹션으로
+  const touchRef = useRef<{ x: number; y: number } | null>(null);
+  const onSwipeStart = (e: React.TouchEvent) => { const t = e.touches[0]; touchRef.current = { x: t.clientX, y: t.clientY }; };
+  const onSwipeEnd = (e: React.TouchEvent) => {
+    const s0 = touchRef.current; touchRef.current = null;
+    if (!s0) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - s0.x, dy = t.clientY - s0.y;
+    if (Math.abs(dx) < 64 || Math.abs(dx) < Math.abs(dy) * 1.5) return; // 세로 스크롤과 구분
+    const order: Section[] = ['venues', 'live', 'board', 'dealer', 'rank', ...(marketSlot ? (['market'] as Section[]) : []), ...(canOwnerCommunity ? (['owner'] as Section[]) : [])];
+    const i = order.indexOf(section);
+    const next = dx < 0 ? order[i + 1] : order[i - 1];
+    if (next) setSection(next);
+  };
   const { user } = useAuth();
   // 데스크탑 게시판 2-pane: 좌측 목록 + 우측 인라인 상세. 모바일은 기존 오버레이 모달(onSelectPost) 사용.
   const isDesktop = useIsDesktop();
@@ -132,7 +146,8 @@ export default function CommunityTab({
       </div>
 
       {/* 섹션 콘텐츠 — 게시판은 2-pane 전체폭, 그 외 단일 컬럼은 읽기폭(max-w-3xl)으로 제한 */}
-      <div className={(section === 'board' || section === 'market') ? '' : 'mx-auto w-full max-w-3xl'}>
+      <div onTouchStart={onSwipeStart} onTouchEnd={onSwipeEnd}
+        className={(section === 'board' || section === 'market') ? '' : 'mx-auto w-full max-w-3xl'}>
       {section === 'live' && <LiveWallSection />}
 
       {section === 'board' && (

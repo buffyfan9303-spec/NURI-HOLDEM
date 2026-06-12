@@ -6,6 +6,7 @@ import CommentThread from './CommentThread';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
 import StatefulActionButton from '../atoms/StatefulActionButton';
+import HoldToConfirmButton from '../atoms/HoldToConfirmButton';
 import { getMyReservation, createReservation, cancelMyReservation, getOwnerReservations, type Reservation, type OwnerReservation } from '../../api/reservations';
 import { prizeMainText } from './ScheduleCard';
 import type { Schedule } from '../../api/schedules';
@@ -616,10 +617,10 @@ function ReserveBox({ scheduleId, ownerId, venueId }: { scheduleId: string; owne
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="닉네임 또는 실명" maxLength={30} className="input w-full text-sm" />
       )}
       {mine ? (
-        <button type="button" onClick={act} disabled={busy}
-          className="w-full py-3 rounded-input text-sm font-bold transition-colors disabled:opacity-60 bg-surface-high text-danger-light border border-danger/40 hover:bg-danger/10">
-          예약 취소
-        </button>
+        <HoldToConfirmButton onConfirm={act} disabled={busy} holdingLabel="취소하는 중…"
+          className="w-full py-3 rounded-input text-sm font-bold transition-colors disabled:opacity-60 bg-surface-high text-danger-light border border-danger/40">
+          꾹 눌러 예약 취소
+        </HoldToConfirmButton>
       ) : (
         <div className="flex justify-center">
           <StatefulActionButton label="예약하기" successLabel="예약 완료!"
