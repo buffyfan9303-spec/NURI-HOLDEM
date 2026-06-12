@@ -169,3 +169,32 @@ export async function getMonthlyHall(): Promise<{ label: string; rows: HallRow[]
   }
   return { label, rows: [...map.values()].sort((a, b) => b.pts - a.pts || b.wins - a.wins).slice(0, 3) };
 }
+
+// ── 포인트 상점(코스메틱 마크) — 활동점수 '도달'로 해금(차감 없음 → 등급 영향 없음) ──
+export interface ShopMark { key: string; emoji: string; name: string; need: number; desc: string }
+export const SHOP_MARKS: ShopMark[] = [
+  { key: 'spade_white', emoji: '♤', name: '화이트 스페이드', need: 100,   desc: '첫 걸음 — 100점 도달' },
+  { key: 'club_green',  emoji: '♧', name: '그린 클로버',     need: 500,   desc: '단골의 증표 — 500점' },
+  { key: 'heart_red',   emoji: '♥', name: '레드 하트',       need: 1500,  desc: '열정의 증표 — 1,500점' },
+  { key: 'diamond_blue',emoji: '♦', name: '블루 다이아',     need: 4000,  desc: '상위권 — 4,000점' },
+  { key: 'spade_gold',  emoji: '♠', name: '골든 스페이드',   need: 8000,  desc: '고수의 상징 — 8,000점' },
+  { key: 'crown',       emoji: '👑', name: '크라운',          need: 14000, desc: 'KK 등극 — 14,000점' },
+];
+
+/** 내가 장착한 마크 키 조회 */
+export async function getMyEquippedMark(): Promise<string | null> {
+  const { data: u } = await supabase.auth.getUser();
+  const uid = u.user?.id;
+  if (!uid) return null;
+  const { data } = await supabase.from('profiles').select('equipped_mark').eq('id', uid).single();
+  return (data?.equipped_mark as string | null) ?? null;
+}
+
+/** 마크 장착/해제(null) — 본인 프로필만(RLS) */
+export async function setEquippedMark(key: string | null): Promise<void> {
+  const { data: u } = await supabase.auth.getUser();
+  const uid = u.user?.id;
+  if (!uid) throw new Error('로그인이 필요합니다');
+  const { error } = await supabase.from('profiles').update({ equipped_mark: key }).eq('id', uid);
+  if (error) throw new Error(error.message);
+}

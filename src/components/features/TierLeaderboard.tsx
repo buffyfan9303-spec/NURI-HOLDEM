@@ -11,16 +11,18 @@ import {
   getWeeklyLeague, leagueTierOf, LEAGUE_TIERS, type LeagueRow,
   MISSIONS, getActiveMissions, getMissionProgress, claimMission, type Mission, type MissionProgress,
   BADGES, getMyBadgeStats, type BadgeStats,
+  SHOP_MARKS, getMyEquippedMark, setEquippedMark as saveEquippedMark,
   getMonthlyHall, type HallRow,
 } from '../../lib/loyalty';
 
 // 통합 랭킹 허브 — 활동/머니인/프라이즈 + 주간 리그·업적·미션·명예의 전당(충성도)
-type Board = 'activity' | 'moneyin' | 'prize' | 'league' | 'badges' | 'missions' | 'hall';
+type Board = 'activity' | 'moneyin' | 'prize' | 'league' | 'badges' | 'missions' | 'hall' | 'shop';
 const BOARD_LABEL: Record<Board, string> = {
-  activity: '활동 순위', moneyin: '머니인', prize: '프라이즈',
+  activity: '활동 순위', moneyin: '머니인', prize: '프라이즈', shop: '상점',
   league: '주간 리그', badges: '업적', missions: '미션', hall: '명예의 전당',
 };
 const BOARD_DESC: Record<Board, string> = {
+  shop: '활동점수 도달로 해금되는 마크 — 장착하면 닉네임 옆에 표시됩니다(점수 차감·금전 가치 없음).',
   activity: '접속·글쓰기·댓글 활동 점수 — 등급(2·3~AA)과 연동. 아래 주간 미션을 달성하면 점수를 바로 받아요.',
   moneyin: '전국 매장 순위 등록(입상) 횟수 합산 — 가장 많이 머니인한 플레이어.',
   prize: '전국 매장 프라이즈 점수 합산(금전적 가치 없음).',
@@ -59,6 +61,17 @@ export default function TierLeaderboard() {
   const toast = useToast();
   const [league, setLeague] = useState<LeagueRow[] | null>(null);
   const [badgeStats, setBadgeStats] = useState<BadgeStats | null>(null);
+  const [equippedMark, setEquippedMark] = useState<string | null | undefined>(undefined); // 상점: 장착 마크(undefined=미로드)
+  const [equipBusy, setEquipBusy] = useState<string | null>(null);
+  const handleEquip = async (key: string | null) => {
+    if (equipBusy !== null) return;
+    setEquipBusy(key ?? '');
+    try {
+      await saveEquippedMark(key);
+      setEquippedMark(key);
+    } catch { /* 실패 시 기존 유지 */ }
+    finally { setEquipBusy(null); }
+  };
   const [missions, setMissions] = useState<MissionProgress[] | null>(null);
   const [missionDefs, setMissionDefs] = useState<Mission[]>(MISSIONS);
   const [hall, setHall] = useState<{ label: string; rows: HallRow[] } | null>(null);
@@ -76,6 +89,9 @@ export default function TierLeaderboard() {
         .catch(() => setMissions([]));
     }
     if (board === 'hall' && hall === null) getMonthlyHall().then(setHall).catch(() => setHall({ label: '', rows: [] }));
+    if (board === 'shop' && equippedMark === undefined && user) {
+      getMyEquippedMark().then((k) => setEquippedMark(k)).catch(() => setEquippedMark(null));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [board, user?.id]);
   const handleClaim = async (key: string) => {
@@ -268,7 +284,7 @@ export default function TierLeaderboard() {
       {/* 랭킹 리스트 — 다중 보드(활동/머니인/프라이즈) */}
       <section>
         <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5 mb-1.5 overflow-x-auto scrollbar-none lg:flex-wrap lg:overflow-visible">
-          {(['activity', 'league', 'hall', 'moneyin'] as Board[]).map((b) => (
+          {(['activity', 'league', 'hall', 'moneyin', 'shop'] as Board[]).map((b) => (
             <button key={b} type="button" onClick={() => setBoard(b)}
               className={['relative shrink-0 px-3 py-1.5 text-xs font-bold rounded-[6px] transition-colors duration-300',
                 board === b ? 'text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
@@ -387,6 +403,45 @@ export default function TierLeaderboard() {
                   </div>
                 );
               })}
+            </div>
+          )
+        ) : board === 'shop' ? (
+          !user ? <p className="py-6 text-center text-2xs text-ink-muted">로그인하면 마크를 모을 수 있습니다</p>
+          : (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between rounded-card border border-border-subtle bg-surface-high px-3 py-2">
+                <span className="text-xs text-ink-secondary">내 활동점수</span>
+                <span className="text-sm font-extrabold tabular-nums text-gold-300">{(user.activityPoints ?? 0).toLocaleString()}점</span>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+                {SHOP_MARKS.map((mk) => {
+                  const pts = user.activityPoints ?? 0;
+                  const unlocked = pts >= mk.need;
+                  const on = equippedMark === mk.key;
+                  return (
+                    <div key={mk.key}
+                      className={['rounded-card border p-2.5 text-center transition-colors',
+                        on ? 'border-gold-300 bg-gold-300/[0.1]' : unlocked ? 'border-border-default bg-surface-high' : 'border-border-subtle bg-surface-high opacity-50'].join(' ')}>
+                      <p className={['text-2xl leading-none', unlocked ? '' : 'grayscale'].join(' ')}>{mk.emoji}</p>
+                      <p className="mt-1 text-xs font-bold text-ink-primary">{mk.name}</p>
+                      <p className="mt-0.5 text-2xs leading-tight text-ink-muted">{mk.desc}</p>
+                      {unlocked ? (
+                        <button type="button" disabled={equipBusy !== null}
+                          onClick={() => handleEquip(on ? null : mk.key)}
+                          className={['mt-1.5 w-full rounded-input px-2 py-1.5 text-2xs font-bold transition-colors disabled:opacity-50',
+                            on ? 'bg-gold-300 text-ink-inverse' : 'border border-gold-400/40 text-gold-300 hover:bg-gold-300/10'].join(' ')}>
+                          {on ? '✓ 장착 중 — 해제' : '장착하기'}
+                        </button>
+                      ) : (
+                        <p className="mt-1.5 rounded-input bg-surface-float px-2 py-1.5 text-2xs font-bold text-ink-muted">🔒 {mk.need.toLocaleString()}점</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {equippedMark && (
+                <p className="text-center text-2xs text-ink-muted">미리보기: <span className="font-bold text-ink-primary">{SHOP_MARKS.find((m2) => m2.key === equippedMark)?.emoji} {user.nickname ?? '닉네임'}</span></p>
+              )}
             </div>
           )
         ) : board === 'hall' ? (
