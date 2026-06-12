@@ -16,11 +16,11 @@ import {
 // 통합 랭킹 허브 — 활동/머니인/프라이즈 + 주간 리그·업적·미션·명예의 전당(충성도)
 type Board = 'activity' | 'moneyin' | 'prize' | 'league' | 'badges' | 'missions' | 'hall';
 const BOARD_LABEL: Record<Board, string> = {
-  activity: '활동 점수', moneyin: '머니인', prize: '프라이즈',
+  activity: '활동 순위', moneyin: '머니인', prize: '프라이즈',
   league: '주간 리그', badges: '업적', missions: '미션', hall: '명예의 전당',
 };
 const BOARD_DESC: Record<Board, string> = {
-  activity: '접속·글쓰기·댓글 활동 점수 — 등급(2·3~AA)과 연동됩니다.',
+  activity: '접속·글쓰기·댓글 활동 점수 — 등급(2·3~AA)과 연동. 아래 주간 미션을 달성하면 점수를 바로 받아요.',
   moneyin: '전국 매장 순위 등록(입상) 횟수 합산 — 가장 많이 머니인한 플레이어.',
   prize: '전국 매장 프라이즈 점수 합산(금전적 가치 없음).',
   league: '이번 주 활약(체크인 ×3 + 입상 점수) — 월요일마다 새로 시작! 티어를 지켜내세요.',
@@ -67,7 +67,7 @@ export default function TierLeaderboard() {
     if (board === 'badges' && badgeStats === null && user) {
       getMyBadgeStats(user.nickname ?? null, user.activityPoints ?? 0).then(setBadgeStats).catch(() => {});
     }
-    if (board === 'missions' && missions === null && user) {
+    if ((board === 'missions' || board === 'activity') && missions === null && user) {
       // 고정 3종 + 운영자 커스텀 미션 병합 → 병합 목록 기준으로 진행도 조회
       getActiveMissions()
         .then((defs) => { setMissionDefs(defs); return getMissionProgress(user.nickname ?? null, defs); })
@@ -128,6 +128,43 @@ export default function TierLeaderboard() {
   }, [rows, user]);
   // A(에이스) = K(14,000점) 달성 + 전체 상위 10위 이내(상대평가)
   const myIsAce = !isAdmin && isAceRank(user?.activityPoints ?? 0, myRank);
+
+  // 주간 미션 블록 — '활동 순위' 보드 하단에 함께 표시(미션 보드 병합)
+  const missionsBlock = (
+          !user ? <p className="py-6 text-center text-2xs text-ink-muted">로그인하면 주간 미션에 참여할 수 있습니다</p>
+          : missions === null ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
+          : (
+            <ul className="space-y-1.5">
+              {missionDefs.map((m) => {
+                const p = missions.find((x) => x.key === m.key);
+                const cur = Math.min(p?.current ?? 0, m.goal);
+                const done = (p?.current ?? 0) >= m.goal;
+                const claimed = p?.claimed ?? false;
+                return (
+                  <li key={m.key} className="rounded-card border border-border-subtle bg-surface-high p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-ink-primary">{m.title} <span className="font-extrabold text-emerald-400">+{m.reward}점</span></p>
+                        <p className="text-2xs text-ink-muted">{m.desc}</p>
+                      </div>
+                      {claimed ? (
+                        <span className="shrink-0 rounded-badge bg-surface-float px-2 py-1 text-2xs font-bold text-ink-muted">✅ 받음</span>
+                      ) : done ? (
+                        <button type="button" disabled={claiming === m.key} onClick={() => handleClaim(m.key)}
+                          className="btn-primary shrink-0 px-3 py-1.5 text-xs disabled:opacity-60">🎁 받기</button>
+                      ) : (
+                        <span className="shrink-0 text-xs font-bold tabular-nums text-ink-secondary">{cur}/{m.goal}</span>
+                      )}
+                    </div>
+                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-float">
+                      <div className={['h-full rounded-full transition-all', done ? 'bg-emerald-400' : 'bg-gold-300'].join(' ')} style={{ width: `${Math.round((cur / m.goal) * 100)}%` }} />
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )
+  );
 
   return (
     <div className="space-y-3 animate-fade-in">
@@ -230,7 +267,7 @@ export default function TierLeaderboard() {
       {/* 랭킹 리스트 — 다중 보드(활동/머니인/프라이즈) */}
       <section>
         <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5 mb-1.5 overflow-x-auto scrollbar-none lg:flex-wrap lg:overflow-visible">
-          {(['activity', 'league', 'missions', 'badges', 'hall', 'moneyin', 'prize'] as Board[]).map((b) => (
+          {(['activity', 'league', 'hall', 'moneyin'] as Board[]).map((b) => (
             <button key={b} type="button" onClick={() => setBoard(b)}
               className={['shrink-0 px-3 py-1.5 text-xs font-bold rounded-[6px] transition-colors',
                 board === b ? 'bg-gold-300 text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
@@ -327,39 +364,7 @@ export default function TierLeaderboard() {
             );
           })()
         ) : board === 'missions' ? (
-          !user ? <p className="py-6 text-center text-2xs text-ink-muted">로그인하면 주간 미션에 참여할 수 있습니다</p>
-          : missions === null ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
-          : (
-            <ul className="space-y-1.5">
-              {missionDefs.map((m) => {
-                const p = missions.find((x) => x.key === m.key);
-                const cur = Math.min(p?.current ?? 0, m.goal);
-                const done = (p?.current ?? 0) >= m.goal;
-                const claimed = p?.claimed ?? false;
-                return (
-                  <li key={m.key} className="rounded-card border border-border-subtle bg-surface-high p-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="text-sm font-bold text-ink-primary">{m.title} <span className="font-extrabold text-emerald-400">+{m.reward}점</span></p>
-                        <p className="text-2xs text-ink-muted">{m.desc}</p>
-                      </div>
-                      {claimed ? (
-                        <span className="shrink-0 rounded-badge bg-surface-float px-2 py-1 text-2xs font-bold text-ink-muted">✅ 받음</span>
-                      ) : done ? (
-                        <button type="button" disabled={claiming === m.key} onClick={() => handleClaim(m.key)}
-                          className="btn-primary shrink-0 px-3 py-1.5 text-xs disabled:opacity-60">🎁 받기</button>
-                      ) : (
-                        <span className="shrink-0 text-xs font-bold tabular-nums text-ink-secondary">{cur}/{m.goal}</span>
-                      )}
-                    </div>
-                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-float">
-                      <div className={['h-full rounded-full transition-all', done ? 'bg-emerald-400' : 'bg-gold-300'].join(' ')} style={{ width: `${Math.round((cur / m.goal) * 100)}%` }} />
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )
+          missionsBlock
         ) : board === 'badges' ? (
           !user ? <p className="py-6 text-center text-2xs text-ink-muted">로그인하면 업적을 모을 수 있습니다</p>
           : badgeStats === null ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
@@ -516,9 +521,15 @@ export default function TierLeaderboard() {
           </>
         )}
         {board === 'activity' && (
-          <p className="mt-2 text-2xs text-ink-muted text-center">
-            접속·글쓰기·댓글로 점수를 모아 KK(14,000점)까지 올리세요. AA는 KK 달성자 중 전체 상위 {ACE_TOP_RANK}명만!
-          </p>
+          <>
+            <p className="mt-2 text-2xs text-ink-muted text-center">
+              접속·글쓰기·댓글로 점수를 모아 KK(14,000점)까지 올리세요. AA는 KK 달성자 중 전체 상위 {ACE_TOP_RANK}명만!
+            </p>
+            <div className="mt-4 border-t border-border-subtle pt-3">
+              <p className="mb-2 text-sm font-bold text-ink-primary">🎯 이번 주 미션 <span className="text-2xs font-normal text-ink-muted">달성하면 활동점수 즉시 지급 · 월요일 리셋</span></p>
+              {missionsBlock}
+            </div>
+          </>
         )}
       </section>
     </div>

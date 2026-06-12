@@ -15,6 +15,7 @@ import {
 import { wonToMan } from '../../api/ledger';
 import { getMyReservations, cancelMyReservation, type MyReservationRow } from '../../api/reservations';
 import { getMyRankingHistory, type MyRankingRow } from '../../api/rankings';
+import { BADGES, getMyBadgeStats, type BadgeStats } from '../../lib/loyalty';
 
 function parseVenueId(text: string): string | null {
   const t = text.trim();
@@ -41,6 +42,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
   const [ranks, setRanks] = useState<MyRankingRow[]>([]);     // 내 입상 기록(닉네임 기준)
   const [loading, setLoading] = useState(false);
   const [redeem, setRedeem] = useState<Stack | null>(null);
+  const [badgeStats, setBadgeStats] = useState<BadgeStats | null>(null); // 내 업적(랭킹 탭에서 이전)
 
   const reload = () => {
     setLoading(true);
@@ -54,6 +56,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (open) reload(); }, [open]);
+  useEffect(() => { if (open && user) getMyBadgeStats(user.nickname ?? null, user.activityPoints ?? 0).then(setBadgeStats).catch(() => {}); }, [open, user]);
 
   if (!open) return null;
 
@@ -110,6 +113,25 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
                   </li>
                 ))}
               </ul>
+            </section>
+          )}
+          {/* 업적 — 조건 달성 시 자동으로 열리는 뱃지(커뮤니티 랭킹에서 이전) */}
+          {badgeStats && (
+            <section className="rounded-card border border-border-default bg-surface-low p-3">
+              <p className="mb-2 text-sm font-bold text-ink-primary">🏅 내 업적 <span className="text-2xs font-normal text-ink-muted">{BADGES.filter((b) => b.check(badgeStats)).length}/{BADGES.length} 달성</span></p>
+              <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4">
+                {BADGES.map((b) => {
+                  const got = b.check(badgeStats);
+                  return (
+                    <div key={b.key} title={b.desc}
+                      className={['rounded-card border p-2.5 text-center transition-colors', got ? 'border-gold-400/50 bg-gold-300/[0.08]' : 'border-border-subtle bg-surface-high opacity-55'].join(' ')}>
+                      <p className={['text-xl leading-none', got ? '' : 'grayscale'].join(' ')}>{b.emoji}</p>
+                      <p className={['mt-1 text-xs font-bold', got ? 'text-gold-300' : 'text-ink-secondary'].join(' ')}>{b.label}</p>
+                      <p className="mt-0.5 text-2xs leading-tight text-ink-muted">{b.desc}</p>
+                    </div>
+                  );
+                })}
+              </div>
             </section>
           )}
           {/* 내 계정 — 받는 아이디 · 본인인증(매장이용권 수령 조건) */}
