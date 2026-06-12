@@ -234,9 +234,9 @@ export default function VenuePage({
               </div>
             </div>
             {/* 팔로우 + 링크공유 한 묶음 */}
-            <div className="flex shrink-0 flex-col items-end gap-1.5">
+            <div className="inline-grid shrink-0 grid-cols-1 content-start gap-1.5">
               <FollowButton venueId={venue.id} followerCount={venue.followerCount} />
-              <button type="button" onClick={shareVenue} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-input bg-surface-high border border-border-default text-2xs font-semibold text-ink-secondary hover:text-gold-300 transition-colors">
+              <button type="button" onClick={shareVenue} className="inline-flex items-center justify-center gap-1 px-3 h-9 rounded-input bg-surface-high border border-border-default text-xs font-semibold text-ink-secondary hover:text-gold-300 transition-colors">
                 <span aria-hidden>🔗</span> 링크 공유
               </button>
             </div>
@@ -876,7 +876,7 @@ function FollowButton({ venueId, followerCount }: { venueId: string; followerCou
       disabled={busy}
       aria-pressed={following}
       className={[
-        'shrink-0 inline-flex items-center gap-1 px-3 h-9 rounded-input text-xs font-semibold transition-colors disabled:opacity-60',
+        'shrink-0 inline-flex items-center justify-center gap-1 px-3 h-9 rounded-input text-xs font-semibold transition-colors disabled:opacity-60',
         following
           ? 'bg-gold-300 text-ink-inverse'
           : 'bg-surface-high text-ink-secondary border border-border-default hover:text-ink-primary',
