@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, Fragment, type ReactNode } from 'react';
+import { motion } from 'framer-motion';
 import { getActiveCommunityAds, type CommunityAd } from '../../api/ads';
 import { getVenueRatings, type VenueRating } from '../../api/reviews';
 import type { Venue, Comment, CommunityPost, LiveMessage, PostCategory, GroupKind, JoinedGroup } from '../../api/community';
@@ -207,13 +208,18 @@ function SectionTab({ active, label, onClick }: { active: boolean; label: string
       // 탭 시 골드 포커스링이 깜빡이지 않도록 클릭 후 포커스 해제
       onClick={(e) => { e.currentTarget.blur(); onClick(); }}
       className={[
-        'flex-1 px-1 lg:px-2 py-2 text-xs font-semibold rounded-[6px] whitespace-nowrap',
+        'relative flex-1 px-1 lg:px-2 py-2 text-xs font-semibold rounded-[6px] whitespace-nowrap',
         'transition-colors duration-200 ease-out',
         'focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0',
-        active ? 'bg-gold-300 text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary',
+        active ? 'text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary',
       ].join(' ')}
     >
-      {label}
+      {active && (
+        <motion.span layoutId="comm-section-pill" aria-hidden
+          className="absolute inset-0 rounded-[6px] bg-gold-300"
+          transition={{ type: 'spring', stiffness: 480, damping: 38 }} />
+      )}
+      <span className="relative">{label}</span>
     </button>
   );
 }

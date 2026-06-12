@@ -33,6 +33,7 @@ import { useBackClose } from './lib/backstack';
 import { useVisibilityRefresh } from './lib/useVisibilityRefresh';
 import { lazyWithReload } from './lib/lazyWithReload';
 import { SpringButton } from './components/atoms/StatefulActionButton';
+import { motion } from 'framer-motion';
 import { useAuth } from './contexts/AuthContext';
 import { listAllUsers, updateUserStatus, approveOwner } from './api/auth';
 import {
@@ -509,6 +510,10 @@ function MobileTabBar({ tabs, active, onChange, dot, onOpenMe }: {
   ];
   // 장터 화면에선 '커뮤니티' 칸을 활성으로(장터 진입 경로가 커뮤니티)
   const mappedActive: TabId = active === 'market' ? 'community' : active;
+  // 낙관적 활성 — 클릭 즉시 인디케이터가 미끄러지고, 실제 탭 커밋(transition) 후 동기화
+  const [optimistic, setOptimistic] = useState<TabId | null>(null);
+  useEffect(() => { setOptimistic(null); }, [active]);
+  const shown: TabId = optimistic ?? mappedActive;
   const ME_ICON = (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
@@ -520,19 +525,26 @@ function MobileTabBar({ tabs, active, onChange, dot, onOpenMe }: {
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       aria-label="하단 내비게이션"
     >
+      {/* 탭바 밖(좌우·아래) 틈으로 스크롤 컨텐츠가 비치지 않게 — 베이스색 그라데이션 커튼 */}
+      <div aria-hidden className="absolute inset-x-0 -top-3 bottom-0 bg-gradient-to-t from-surface-base via-surface-base/90 to-transparent" />
       <div className="pointer-events-auto mx-2.5 mb-2 flex rounded-2xl border border-border-default bg-surface-mid/95 shadow-dialog backdrop-blur-md">
         {items.map(({ key, tab, label }) => {
-          const on = tab ? mappedActive === tab : false;
+          const on = tab ? shown === tab : false;
           return (
             <button
               key={key} type="button"
-              onClick={() => { if (tab) { onChange(tab); window.scrollTo({ top: 0 }); } else onOpenMe(); }}
+              onClick={() => { if (tab) { setOptimistic(tab); onChange(tab); window.scrollTo({ top: 0 }); } else onOpenMe(); }}
               aria-current={on ? 'page' : undefined}
               className="press-spring flex min-w-0 flex-1 flex-col items-center gap-1 pb-2 pt-2.5 touch-manipulation focus:outline-none"
             >
               {/* 아이콘 22px · 라벨 11px — 공백 줄이고 또렷하게 */}
-              <span className={['relative flex h-8 w-14 items-center justify-center rounded-full transition-colors duration-200 [&_svg]:h-[22px] [&_svg]:w-[22px]',
-                on ? 'bg-gold-300/15 text-gold-300' : 'text-ink-secondary'].join(' ')}>
+              <span className={['relative flex h-8 w-14 items-center justify-center rounded-full [&_svg]:h-[22px] [&_svg]:w-[22px] transition-colors duration-200',
+                on ? 'text-gold-300' : 'text-ink-secondary'].join(' ')}>
+                {on && (
+                  <motion.span layoutId="mobile-tab-pill" aria-hidden
+                    className="absolute inset-0 rounded-full bg-gold-300/15"
+                    transition={{ type: 'spring', stiffness: 480, damping: 36 }} />
+                )}
                 {tab ? TAB_ICON[tab] : ME_ICON}
                 {tab && dot?.[tab] && !on && <span className="absolute right-2 top-0.5 h-1.5 w-1.5 rounded-full bg-gold-300" aria-hidden />}
               </span>
@@ -605,12 +617,15 @@ export default function App() {
   // 탭 전환을 트랜지션으로 — lazy 청크/무거운 렌더 동안 이전 화면을 유지해
   // '이전 메뉴 → 스피너 깜빡 → 새 메뉴' 3단 플래시를 없앤다(React 공식 패턴).
   const [, startTabTransition] = useTransition();
+  const closeOverlaysRef = useRef<(() => void) | null>(null);
   const changeTab = useCallback((t: TabId) => {
     const from = activeTabRef.current;
     if (from !== t) {
       const ORDER: TabId[] = ['browse', 'live', 'community', 'market', 'tools', 'my-store', 'admin'];
       setTabAnim(ORDER.indexOf(t) >= ORDER.indexOf(from) ? 'tab-anim-r' : 'tab-anim-l');
     }
+    // 탭 이동은 '화면 전환' — 떠 있는 매장 페이지 오버레이는 닫는다(탭을 눌렀는데 그대로 보이는 혼란 방지)
+    closeOverlaysRef.current?.();
     startTabTransition(() => setActiveTab(t));
   }, []);
   // 탭 순서 기반 방향 슬라이드(모바일 전용) — 오른쪽 탭으로 가면 오른쪽에서 8px 스르륵.
@@ -635,6 +650,8 @@ export default function App() {
   const [authOpen, setAuthOpen]       = useState(false);
   const [authMode, setAuthMode]       = useState<'login' | 'signup-user'>('login'); // QR 회원가입 진입용
   const [openVenueId, setOpenVenueId] = useState<string | null>(null);
+  // changeTab(상단 선언)에서 TDZ 없이 오버레이를 닫기 위한 ref 바인딩
+  closeOverlaysRef.current = () => setOpenVenueId(null);
   const [openSchedule, setOpenSchedule] = useState<Schedule | null>(null);
   const [followedIds, setFollowedIds] = useState<Set<string>>(new Set()); // 팔로우한 매장 id
   const [followedOnly, setFollowedOnly] = useState(false); // 일정탐색: 팔로우 매장 포스터만

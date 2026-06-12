@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo, type ReactNode } from 'react';
 import { Map, MapMarker, useKakaoLoader } from 'react-kakao-maps-sdk';
+import { motion } from 'framer-motion';
 import CommentThread from './CommentThread';
 import RotiArenaLogo from '../atoms/RotiArenaLogo';
 import Icon from '../atoms/Icon';
@@ -257,13 +258,15 @@ export default function VenuePage({
                   role="tab"
                   className={[
                     'lg:flex-1 whitespace-nowrap px-0.5 lg:px-2 py-3 text-[13px] lg:text-sm font-medium transition-colors text-center relative',
-                    'border-b-2 -mb-px',
-                    active
-                      ? 'border-gold-300 text-gold-300'
-                      : 'border-transparent text-ink-muted hover:text-ink-secondary',
+                    active ? 'text-gold-300' : 'text-ink-muted hover:text-ink-secondary',
                   ].join(' ')}
                 >
                   {TAB_LABEL[t]}
+                  {active && (
+                    <motion.span layoutId="venue-tab-underline" aria-hidden
+                      className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-gold-300"
+                      transition={{ type: 'spring', stiffness: 480, damping: 38 }} />
+                  )}
                 </button>
               );
             })}
