@@ -587,6 +587,11 @@ export default function App() {
         import('./components/features/VenuePage'),
         import('./components/features/ScheduleDetailModal'),
         import('./components/features/CustomerDashboardPage'),
+        import('./components/features/AuthModal'),
+        import('./components/features/ProfileModal'),
+        import('./components/features/GlobalSearchModal'),
+        import('./components/features/PostDetailModal'),
+        import('./components/features/ListingDetailModal'),
       ]);
     };
     const w = window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number };
@@ -600,6 +605,12 @@ export default function App() {
   // '이전 메뉴 → 스피너 깜빡 → 새 메뉴' 3단 플래시를 없앤다(React 공식 패턴).
   const [, startTabTransition] = useTransition();
   const changeTab = useCallback((t: TabId) => { startTabTransition(() => setActiveTab(t)); }, []);
+  // 탭 순서 기반 방향 슬라이드(모바일 전용) — 오른쪽 탭으로 가면 오른쪽에서 8px 스르륵
+  const prevTabRef = useRef<TabId>('browse');
+  const TAB_ORDER: TabId[] = ['browse', 'live', 'community', 'market', 'tools', 'my-store', 'admin'];
+  const tabAnim = prevTabRef.current === activeTab ? ''
+    : TAB_ORDER.indexOf(activeTab) >= TAB_ORDER.indexOf(prevTabRef.current) ? 'tab-anim-r' : 'tab-anim-l';
+  useEffect(() => { prevTabRef.current = activeTab; }, [activeTab]);
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -952,7 +963,7 @@ export default function App() {
 
   const handleScheduleSelect = useCallback((s: Schedule) => {
     // 포스터 상세는 전체화면 2열 모달(PC: 포스터 좌+정보 우)로 표시 — 좁은 패널보다 가독성↑
-    setOpenSchedule(s);
+    startTabTransition(() => setOpenSchedule(s));
   }, []);
 
   // 로고 클릭 → 메인(일정 탐색)으로 + 모든 모달/패널 닫기
@@ -1343,7 +1354,7 @@ export default function App() {
       <div className="px-page-x"><StaffInviteBanner /></div>
 
       {activeTab === 'browse' && (
-        <main>
+        <main className={tabAnim}>
           <div
             className="sticky z-30 bg-surface-base border-b border-border-subtle pt-3 pb-3"
             style={{ top: 'calc(var(--stack-top, 6.0625rem) - 1px)' }}
@@ -1362,7 +1373,7 @@ export default function App() {
                     onClick={() => setFollowedOnly((v) => !v)}
                     aria-pressed={followedOnly}
                     className={[
-                      'inline-flex h-7 items-center gap-1 rounded-badge border px-2.5 text-2xs font-bold leading-none transition-colors',
+                      'inline-flex h-9 items-center gap-1 rounded-input border px-2.5 text-2xs font-bold leading-none transition-colors',
                       followedOnly ? 'border-gold-300 bg-gold-300 text-ink-inverse' : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary',
                     ].join(' ')}
                   >
@@ -1426,7 +1437,7 @@ export default function App() {
             </div>
           )}
 
-          <div className="px-page-x py-section">
+          <div className="px-page-x pt-3 pb-section lg:pt-4">
             {/* PC 3컬럼: 중앙 콘텐츠 + 우측 위젯 레일(xl 이상) — 바이낸스식 정보 밀도 */}
             <div className="flex items-start gap-4">
               <div className="min-w-0 flex-1">
@@ -1494,7 +1505,7 @@ export default function App() {
 
       {/* 커뮤니티 */}
       {activeTab === 'community' && (
-        <main className="px-page-x pb-section animate-fade-in">
+        <main className={`px-page-x pb-section ${tabAnim || 'animate-fade-in'}`}>
           <CommunityTab
             venues={venues}
             comments={comments}
@@ -1519,7 +1530,7 @@ export default function App() {
 
       {/* 중고장터 */}
       {activeTab === 'market' && (
-        <main className="px-page-x py-section animate-fade-in">
+        <main className={`px-page-x py-section ${tabAnim || 'animate-fade-in'}`}>
           <MarketplaceTab
             listings={listings}
             notices={notices.filter((n) => !n.board || n.board === 'all' || n.board === 'market')}
@@ -1535,7 +1546,7 @@ export default function App() {
 
       {/* 도구 — 매장 운영·플레이어 도구 모음 (메인 탭) */}
       {activeTab === 'tools' && (
-        <main className="px-page-x py-section animate-fade-in">
+        <main className={`px-page-x py-section ${tabAnim || 'animate-fade-in'}`}>
           <ErrorBoundary inline resetKey="tools">
             <ToolsPanel />
           </ErrorBoundary>
@@ -1544,7 +1555,7 @@ export default function App() {
 
       {/* 내 매장 — 게임관리 + 매장운영 통합 허브 (업주/직원/운영자) */}
       {activeTab === 'my-store' && (
-        <main className="px-page-x py-section animate-fade-in">
+        <main className={`px-page-x py-section ${tabAnim || 'animate-fade-in'}`}>
           <VenueManageTab
             schedules={schedules}
             deepSection={myStoreDeep}
@@ -1568,7 +1579,7 @@ export default function App() {
 
       {/* 관리자 */}
       {activeTab === 'admin' && (
-        <main className="px-page-x py-section animate-fade-in">
+        <main className={`px-page-x py-section ${tabAnim || 'animate-fade-in'}`}>
           <AdminTab
             schedules={schedules}
             venues={venues}

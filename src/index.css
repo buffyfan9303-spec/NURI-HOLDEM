@@ -282,3 +282,13 @@ button:active:not(:disabled), [role='button']:active {
   opacity: 0.72;
   transition-duration: 0.06s;
 }
+
+/* ── 탭 방향 슬라이드(모바일 전용) — 탭 순서상 오른쪽이면 오른쪽에서 8px 진입 ── */
+@keyframes tab-in-r { from { opacity: 0.55; transform: translateX(8px); }  to { opacity: 1; transform: translateX(0); } }
+@keyframes tab-in-l { from { opacity: 0.55; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
+.tab-anim-r { animation: tab-in-r 0.18s cubic-bezier(0.32, 0.72, 0, 1); }
+.tab-anim-l { animation: tab-in-l 0.18s cubic-bezier(0.32, 0.72, 0, 1); }
+@media (min-width: 1024px) {
+  /* PC는 기존 페이드 감각 유지 — 가로 슬라이드는 모바일 제스처 문법 */
+  .tab-anim-r, .tab-anim-l { animation: fade-in 0.16s cubic-bezier(0.32, 0.72, 0, 1); }
+}

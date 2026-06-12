@@ -36,7 +36,7 @@ export default function OwnerCommunity() {
       await createOwnerPost(c);
       setDraft('');
       setShowDeleted(false);
-      toast.show('등록되었습니다', 'success');
+      toast.show('게시되었습니다', 'success');
       reload();
     } catch (err) {
       toast.show(err instanceof Error ? err.message : '등록에 실패했습니다', 'error');
@@ -63,18 +63,16 @@ export default function OwnerCommunity() {
       </div>
 
       {canPost ? (
-        <form onSubmit={submit} className="space-y-2">
+        <form onSubmit={submit} className="flex items-end gap-2">
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             maxLength={2000}
             rows={2}
             placeholder="업주끼리 자유롭게 이야기해보세요 (24시간 후 자동 삭제)"
-            className="input w-full resize-none text-sm"
+            className="input w-full flex-1 resize-none text-sm"
           />
-          <div className="flex justify-end">
-            <button type="submit" disabled={sending || !draft.trim()} className="btn-primary px-4 disabled:opacity-60">등록</button>
-          </div>
+          <button type="submit" disabled={sending || !draft.trim()} className="btn-primary shrink-0 px-4 disabled:opacity-60">게시</button>
         </form>
       ) : (
         <p className="py-1 text-center text-2xs text-ink-muted">읽기 전용입니다. 글 작성은 인증 업주만 가능합니다.</p>

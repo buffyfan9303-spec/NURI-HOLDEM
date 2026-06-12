@@ -229,7 +229,7 @@ export default function TierLeaderboard() {
 
       {/* 랭킹 리스트 — 다중 보드(활동/머니인/프라이즈) */}
       <section>
-        <div className="flex flex-wrap items-center gap-1 bg-surface-high rounded-input p-0.5 mb-1.5">
+        <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5 mb-1.5 overflow-x-auto scrollbar-none lg:flex-wrap lg:overflow-visible">
           {(['activity', 'league', 'missions', 'badges', 'hall', 'moneyin', 'prize'] as Board[]).map((b) => (
             <button key={b} type="button" onClick={() => setBoard(b)}
               className={['shrink-0 px-3 py-1.5 text-xs font-bold rounded-[6px] transition-colors',

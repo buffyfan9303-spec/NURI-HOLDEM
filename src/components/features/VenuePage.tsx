@@ -202,12 +202,12 @@ export default function VenuePage({
         <div className="px-page-x py-4 border-b border-border-subtle">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                <span className="inline-block px-1.5 py-0.5 text-2xs font-semibold rounded-badge bg-surface-high text-ink-secondary">
+              <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                <span className="inline-flex items-center px-2 py-[3px] leading-none text-2xs font-semibold rounded-badge bg-surface-high text-ink-secondary">
                   {venue.region}
                 </span>
                 {venue.isPaidAd && (
-                  <span className="inline-block px-1.5 py-0.5 text-2xs font-bold rounded-badge bg-gold-300 text-ink-inverse">
+                  <span className="inline-flex items-center px-2 py-[3px] leading-none text-2xs font-bold rounded-badge bg-gold-300 text-ink-inverse">
                     프리미엄
                   </span>
                 )}
@@ -245,12 +245,8 @@ export default function VenuePage({
 
         {/* ── Sticky 탭바 ─────────────────────────────────────────── */}
         <div className="sticky top-0 z-20 bg-surface-base border-b border-border-subtle">
-          <div className="flex overflow-x-auto scrollbar-none [-webkit-overflow-scrolling:touch]">
+          <div className="grid grid-cols-5 lg:flex">
             {orderedTabs.map((t) => {
-              const count = t === 'posters'   ? venueSchedules.length
-                          : t === 'schedules' ? venueSchedules.length
-                          : t === 'community' ? venueComments.length
-                          : 0;
               const active = tab === t;
               return (
                 <button
@@ -260,7 +256,7 @@ export default function VenuePage({
                   aria-selected={active}
                   role="tab"
                   className={[
-                    'flex-1 shrink-0 whitespace-nowrap px-2 py-3 text-sm font-medium transition-colors text-center relative',
+                    'lg:flex-1 whitespace-nowrap px-0.5 lg:px-2 py-3 text-[13px] lg:text-sm font-medium transition-colors text-center relative',
                     'border-b-2 -mb-px',
                     active
                       ? 'border-gold-300 text-gold-300'
@@ -268,11 +264,6 @@ export default function VenuePage({
                   ].join(' ')}
                 >
                   {TAB_LABEL[t]}
-                  {t !== 'about' && t !== 'ranking' && (
-                    <span className="ml-1 text-2xs text-ink-muted tabular-nums">
-                      ({count})
-                    </span>
-                  )}
                 </button>
               );
             })}
@@ -1004,7 +995,7 @@ function Row({ dt, dd }: { dt: string; dd: string }) {
 }
 
 // 매장 정보 액션 칩 공통 규격 — 높이·글자·여백 통일(조잡함 방지)
-const MAP_CHIP = 'inline-flex h-8 items-center gap-1.5 rounded-input border border-border-default bg-surface-high px-3 text-2xs font-semibold text-ink-secondary transition-colors hover:border-border-strong hover:text-ink-primary active:scale-95';
+const MAP_CHIP = 'inline-flex h-8 items-center justify-center gap-1.5 rounded-input border border-border-default bg-surface-high px-2 text-2xs font-semibold text-ink-secondary transition-colors hover:border-border-strong hover:text-ink-primary active:scale-95';
 
 // 주소 — 클릭하면 클립보드 복사 + 외부 지도 링크
 function AddressRow({ address }: { address: string }) {
@@ -1025,8 +1016,8 @@ function AddressRow({ address }: { address: string }) {
       <dt className="w-14 shrink-0 text-ink-muted">주소</dt>
       <dd className="flex-1 space-y-1.5">
         <span className="block text-ink-secondary whitespace-pre-line">{address}</span>
-        <div className="flex flex-wrap items-center gap-1.5">
-          {/* 동일 규격 칩 — 브랜드 원색 배경 대신 색점만(차분함 유지) */}
+        <div className="grid grid-cols-3 gap-1.5 lg:flex lg:flex-wrap lg:items-center">
+          {/* 동일 규격 칩 — 브랜드 원색 배경 대신 색점만. 모바일은 3등분 그리드로 항상 한 줄 */}
           <a href={kakaoUrl} target="_blank" rel="noopener noreferrer" className={MAP_CHIP}>
             <span aria-hidden className="h-2 w-2 rounded-full bg-[#FEE500]" /> 카카오맵
           </a>
