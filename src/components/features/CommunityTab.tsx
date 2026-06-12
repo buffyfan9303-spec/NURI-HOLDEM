@@ -455,7 +455,11 @@ function FeedSection({
       {posts.length === 0 ? (
         <p className="text-center py-12 text-xs text-ink-muted">{emptyText}</p>
       ) : listSource.length === 0 ? (
-        <p className="text-center py-12 text-xs text-ink-muted">{pinHot ? '다른 글이 없습니다' : '검색 결과가 없습니다'}</p>
+        <>
+          <p className="text-center py-12 text-xs text-ink-muted">{pinHot ? '다른 글이 없습니다' : '검색 결과가 없습니다'}</p>
+          {/* 글이 없어도 광고 칸은 산다 — 게재 미리보기 겸 */}
+          {ads[0] && <div className="rounded-card border border-border-default bg-surface-low overflow-hidden"><AdRow ad={ads[0]} /></div>}
+        </>
       ) : (
         <>
           <div className="rounded-card border border-border-default bg-surface-low overflow-hidden">
