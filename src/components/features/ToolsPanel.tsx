@@ -129,6 +129,16 @@ export default function ToolsPanel() {
   });
   const ql = q.trim().toLowerCase();
   const hits = ql ? TOOLS.filter((t) => t.name.toLowerCase().includes(ql) || t.desc.toLowerCase().includes(ql)) : null;
+  // 즐겨찾기 — 접힌 그룹 위에 상시 노출(최대 6개)
+  const [favs, setFavs] = useState<ToolKey[]>(() => {
+    try { return JSON.parse(localStorage.getItem('nuri:fav-tools') || '[]'); } catch { return []; }
+  });
+  const toggleFav = (k: ToolKey) => setFavs((prev) => {
+    const next = prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k].slice(-6);
+    try { localStorage.setItem('nuri:fav-tools', JSON.stringify(next)); } catch { /* quota */ }
+    return next;
+  });
+  const favTools = favs.map((k) => TOOLS.find((t) => t.key === k)).filter(Boolean) as typeof TOOLS;
 
   // 열 수 단위 행 분할 — 활성 카드가 있는 행 바로 뒤에 실행 패널 삽입(옆 카드 안 밀림)
   const renderRows = (items: typeof TOOLS) => {
@@ -138,7 +148,8 @@ export default function ToolsPanel() {
       <Fragment key={ri}>
         <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
           {row.map((t) => (
-            <ToolCard key={t.key} name={t.name} desc={t.desc} icon={t.icon} active={active === t.key} onClick={() => select(t.key)} />
+            <ToolCard key={t.key} name={t.name} desc={t.desc} icon={t.icon} active={active === t.key} onClick={() => select(t.key)}
+              fav={favs.includes(t.key)} onToggleFav={() => toggleFav(t.key)} />
           ))}
         </div>
         {row.some((t) => t.key === active) && (
@@ -163,6 +174,14 @@ export default function ToolsPanel() {
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="도구 검색 — 이름·기능"
           className="input w-full pl-9 text-sm" aria-label="도구 검색" />
       </div>
+
+      {/* ★ 즐겨찾기 — 그룹이 접혀 있어도 항상 보이는 내 도구 */}
+      {!hits && favTools.length > 0 && (
+        <section className="space-y-2">
+          <p className="text-2xs font-bold text-gold-300">★ 즐겨찾기</p>
+          {renderRows(favTools)}
+        </section>
+      )}
 
       {hits ? (
         hits.length === 0
@@ -195,18 +214,30 @@ export default function ToolsPanel() {
   );
 }
 
-function ToolCard({ name, desc, icon, onClick, active }: { name: string; desc: string; icon: ReactNode; onClick: () => void; active?: boolean }) {
+function ToolCard({ name, desc, icon, onClick, active, fav, onToggleFav }: {
+  name: string; desc: string; icon: ReactNode; onClick: () => void; active?: boolean;
+  fav?: boolean; onToggleFav?: () => void;
+}) {
   return (
     <button type="button" onClick={onClick}
-      className={['flex flex-col items-start gap-1.5 rounded-card border p-2.5 text-left transition-colors active:scale-[0.98]',
+      // 가로형 컴팩트 — 아이콘 좌·텍스트 우(칸 높이 절반)
+      className={['group/tool flex items-center gap-2.5 rounded-card border px-2.5 py-2 text-left transition-colors active:scale-[0.98]',
         active ? 'border-gold-400/60 bg-gold-300/[0.08]' : 'border-border-default bg-surface-low hover:border-gold-400/40 hover:bg-surface-high'].join(' ')}>
-      <span className="flex h-8 w-8 items-center justify-center rounded-input bg-gold-300/15 text-gold-300">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-input bg-gold-300/15 text-gold-300">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{icon}</svg>
       </span>
-      <span className="min-w-0">
-        <span className="block text-xs font-bold text-ink-primary leading-tight">{name}</span>
-        <span className="block text-[10px] text-ink-muted leading-snug mt-0.5">{desc}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-xs font-bold text-ink-primary leading-tight">{name}</span>
+        <span className="block truncate text-[10px] text-ink-muted leading-snug mt-0.5">{desc}</span>
       </span>
+      {onToggleFav && (
+        <span role="button" tabIndex={-1} aria-label={fav ? '즐겨찾기 해제' : '즐겨찾기 추가'}
+          onClick={(e) => { e.stopPropagation(); onToggleFav(); }}
+          className={['shrink-0 px-0.5 text-sm leading-none transition-opacity',
+            fav ? 'text-gold-300 opacity-100' : 'text-ink-muted opacity-30 hover:opacity-70'].join(' ')}>
+          {fav ? '★' : '☆'}
+        </span>
+      )}
     </button>
   );
 }
