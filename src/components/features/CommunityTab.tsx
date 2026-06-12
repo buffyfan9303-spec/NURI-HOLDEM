@@ -14,6 +14,7 @@ import EmptyState from '../atoms/EmptyState';
 import { filterContent } from '../../lib/content-filter';
 import { parseAttachments } from '../../lib/hand';
 import Avatar from '../atoms/Avatar';
+import VenueThumb from '../atoms/VenueThumb';
 import Modal from '../atoms/Modal';
 import PostDetailModal from './PostDetailModal';
 import { useIsDesktop } from '../../lib/responsive';
@@ -801,15 +802,8 @@ function VenuesSection({
                     : 'bg-surface-low border-border-default hover:border-border-strong hover:bg-surface-high',
                 ].join(' ')}
               >
-                {/* 매장 아이콘 */}
-                <div
-                  className="w-12 h-12 shrink-0 rounded-card flex items-center justify-center text-lg font-bold text-white relative overflow-hidden"
-                  style={{ background: `linear-gradient(135deg, ${venue.themeColor ?? '#5A6175'}, #0a0c0f)` }}
-                  aria-hidden
-                >
-                  <span className="opacity-30 text-2xl absolute -top-1 -left-1">♠</span>
-                  <span className="relative text-base">{venue.name[0]}</span>
-                </div>
+                {/* 매장 썸네일 — 사진 우선, 없으면 딥톤 이니셜 타일 */}
+                <VenueThumb name={venue.name} imageUrl={venue.imageUrl ?? venue.images?.[0]} />
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
