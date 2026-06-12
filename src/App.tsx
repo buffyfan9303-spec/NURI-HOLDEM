@@ -604,13 +604,24 @@ export default function App() {
   // 탭 전환을 트랜지션으로 — lazy 청크/무거운 렌더 동안 이전 화면을 유지해
   // '이전 메뉴 → 스피너 깜빡 → 새 메뉴' 3단 플래시를 없앤다(React 공식 패턴).
   const [, startTabTransition] = useTransition();
-  const changeTab = useCallback((t: TabId) => { startTabTransition(() => setActiveTab(t)); }, []);
-  // 탭 순서 기반 방향 슬라이드(모바일 전용) — 오른쪽 탭으로 가면 오른쪽에서 8px 스르륵
-  const prevTabRef = useRef<TabId>('browse');
-  const TAB_ORDER: TabId[] = ['browse', 'live', 'community', 'market', 'tools', 'my-store', 'admin'];
-  const tabAnim = prevTabRef.current === activeTab ? ''
-    : TAB_ORDER.indexOf(activeTab) >= TAB_ORDER.indexOf(prevTabRef.current) ? 'tab-anim-r' : 'tab-anim-l';
-  useEffect(() => { prevTabRef.current = activeTab; }, [activeTab]);
+  const changeTab = useCallback((t: TabId) => {
+    const from = activeTabRef.current;
+    if (from !== t) {
+      const ORDER: TabId[] = ['browse', 'live', 'community', 'market', 'tools', 'my-store', 'admin'];
+      setTabAnim(ORDER.indexOf(t) >= ORDER.indexOf(from) ? 'tab-anim-r' : 'tab-anim-l');
+    }
+    startTabTransition(() => setActiveTab(t));
+  }, []);
+  // 탭 순서 기반 방향 슬라이드(모바일 전용) — 오른쪽 탭으로 가면 오른쪽에서 8px 스르륵.
+  // 파생값이 아니라 state로 들고 있어야 데이터 로딩 재렌더에 애니메이션이 끊기지 않는다.
+  const [tabAnim, setTabAnim] = useState('');
+  const activeTabRef = useRef<TabId>(activeTab);
+  useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
+  useEffect(() => {
+    if (!tabAnim) return;
+    const id = setTimeout(() => setTabAnim(''), 260);
+    return () => clearTimeout(id);
+  }, [tabAnim]);
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
