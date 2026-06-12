@@ -802,6 +802,24 @@ export default function App() {
 
   // 서버 재조회 헬퍼
   const reloadSchedules = useCallback(() => { getSchedules().then(setSchedules).catch(() => {}); }, []);
+  // 당겨서 새로고침(유튜브·당근) — 최상단에서 아래로 80px+ 당기면 갱신
+  const [ptr, setPtr] = useState(0); // 0=대기, 양수=당김(px), -1=갱신 중
+  const ptrStart = useRef<number | null>(null);
+  const onPtrStart = (e: React.TouchEvent) => { if (window.scrollY <= 0) ptrStart.current = e.touches[0].clientY; };
+  const onPtrMove = (e: React.TouchEvent) => {
+    if (ptrStart.current == null || ptr === -1) return;
+    const dy = e.touches[0].clientY - ptrStart.current;
+    setPtr(dy > 8 && window.scrollY <= 0 ? Math.min(110, dy * 0.5) : 0);
+  };
+  const onPtrEnd = () => {
+    const pulled = ptr;
+    ptrStart.current = null;
+    if (pulled >= 56) {
+      setPtr(-1);
+      reloadSchedules();
+      setTimeout(() => setPtr(0), 900);
+    } else setPtr(0);
+  };
   const reloadVenues    = useCallback(() => { getVenues().then(setVenues).catch(() => {}); }, []);
   const reloadPosts     = useCallback(() => { getPosts().then(setPosts).catch(() => {}); }, []);
   const reloadComments  = useCallback(() => { getComments({}).then(setComments).catch(() => {}); }, []);
@@ -1399,7 +1417,15 @@ export default function App() {
       <div className="px-page-x"><StaffInviteBanner /></div>
 
       {activeTab === 'browse' && (
-        <main className={tabAnim}>
+        <main className={tabAnim} onTouchStart={onPtrStart} onTouchMove={onPtrMove} onTouchEnd={onPtrEnd}>
+          {/* 당겨서 새로고침 인디케이터 — ♠ 회전 */}
+          {ptr !== 0 && (
+            <div className="flex items-center justify-center overflow-hidden transition-[height] lg:hidden"
+              style={{ height: ptr === -1 ? 52 : ptr }} aria-hidden>
+              <span className={['text-2xl text-gold-300', ptr === -1 ? 'animate-spin' : ''].join(' ')}
+                style={ptr !== -1 ? { transform: `rotate(${ptr * 3}deg)`, opacity: Math.min(1, ptr / 56) } : undefined}>♠</span>
+            </div>
+          )}
           <div
             className="sticky z-30 bg-surface-base border-b border-border-subtle pt-3 pb-3"
             style={{ top: 'calc(var(--stack-top, 6.0625rem) - 1px)' }}

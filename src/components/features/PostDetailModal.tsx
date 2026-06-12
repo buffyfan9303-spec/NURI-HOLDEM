@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import Modal from '../atoms/Modal';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
@@ -47,6 +48,13 @@ export default function PostDetailModal({
   post, open, onClose, onLike, onDelete, venues = [], onVenueClick, inline = false,
 }: PostDetailModalProps) {
   const { user } = useAuth();
+  // 더블탭 좋아요(인스타) — 본문을 빠르게 두 번 탭하면 좋아요 + 하트 팝
+  const [heartKey, setHeartKey] = useState(0);
+  const doubleLike = () => {
+    if (!user || !post) return;
+    onLike(post.id);
+    setHeartKey((k) => k + 1);
+  };
   const [replies, setReplies] = useState<PostReply[]>([]);
   const [draft, setDraft] = useState('');
   const [reportOpen, setReportOpen] = useState(false);
@@ -166,7 +174,21 @@ export default function PostDetailModal({
           return (
             <div className="space-y-3 py-2">
               {text && (
-                <div className="text-base text-ink-primary leading-relaxed whitespace-pre-wrap break-words">
+                <div onDoubleClick={doubleLike}
+                  className="relative text-base text-ink-primary leading-relaxed whitespace-pre-wrap break-words">
+                  <AnimatePresence>
+                    {heartKey > 0 && (
+                      <motion.span key={heartKey} aria-hidden
+                        className="pointer-events-none absolute inset-0 flex items-center justify-center text-6xl"
+                        initial={{ scale: 0.3, opacity: 0 }}
+                        animate={{ scale: [0.3, 1.15, 1], opacity: [0, 1, 1] }}
+                        exit={{ scale: 1.3, opacity: 0 }}
+                        transition={{ duration: 0.45 }}
+                        onAnimationComplete={() => setTimeout(() => setHeartKey(0), 250)}>
+                        ❤️
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
                   {onVenueClick ? renderMentions(text, venues, onVenueClick) : text}
                 </div>
               )}

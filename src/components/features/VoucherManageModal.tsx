@@ -1,7 +1,7 @@
 // src/components/features/VoucherManageModal.tsx
 // 매장이용권 관리 — 업주: 배포/회수/삭제, 인증직원: 사용 처리. 금전적 가치(금액) 없음.
 // VoucherManagePanel(인라인, 매장관리 메뉴) + VoucherManageModal(대시보드 카드용 모달).
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import Modal from '../atoms/Modal';
 import Icon from '../atoms/Icon';
 import { useToast } from '../atoms/Toast';
@@ -170,7 +170,11 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
               <div className="flex gap-1.5">
                 <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="이용권 이름 (예: 데일리 1회 참가권)" className="input min-w-0 flex-1 text-sm" />
                 <div className="relative w-24 shrink-0">
-                  <input type="number" inputMode="numeric" min={1} max={1000} value={count || ''} onChange={(e) => setCount(Math.min(1000, Math.max(1, parseInt(e.target.value, 10) || 1)))} className="input w-full pr-6 text-sm tabular-nums" />
+                  <div className="flex items-stretch gap-1">
+                    <StepBtn label="−" onStep={() => setCount((c) => Math.max(1, c - 1))} />
+                    <input type="number" inputMode="numeric" min={1} max={1000} value={count || ''} onChange={(e) => setCount(Math.min(1000, Math.max(1, parseInt(e.target.value, 10) || 1)))} className="input w-full pr-6 text-sm tabular-nums text-center" />
+                    <StepBtn label="+" onStep={() => setCount((c) => Math.min(1000, c + 1))} />
+                  </div>
                   <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">개</span>
                 </div>
               </div>
@@ -334,5 +338,24 @@ export default function VoucherManageModal({ open, onClose, venueId, prefillRece
     <Modal open={open} onClose={onClose} title="매장이용권 관리" maxWidth="md" variant="sheet">
       <div className="p-4"><VoucherManagePanel venueId={venueId} prefillReceiver={prefillReceiver} /></div>
     </Modal>
+  );
+}
+
+/** 가속 스테퍼 버튼 — 꾹 누르면 350ms→점점 빨라져 40ms 간격(iOS 타이머 패턴). 연타 불필요 */
+function StepBtn({ label, onStep }: { label: string; onStep: () => void }) {
+  // 리렌더에도 타이머가 살아있도록 ref — pointerup을 놓쳐도 leave에서 정지
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stop = () => { if (timer.current) { clearTimeout(timer.current); timer.current = null; } };
+  const run = (delay: number) => {
+    onStep();
+    timer.current = setTimeout(() => run(Math.max(40, delay * 0.82)), delay);
+  };
+  return (
+    <button type="button" aria-label={label === '+' ? '증가' : '감소'}
+      onPointerDown={() => { stop(); run(350); }}
+      onPointerUp={stop} onPointerLeave={stop} onContextMenu={(e) => e.preventDefault()}
+      className="w-9 shrink-0 rounded-input border border-border-default bg-surface-high text-base font-bold text-ink-secondary hover:text-ink-primary active:bg-surface-float select-none touch-none">
+      {label}
+    </button>
   );
 }
