@@ -70,7 +70,7 @@ const StatefulActionButton = forwardRef<HTMLButtonElement, {
       aria-live="polite"
       aria-busy={phase === 'loading'}
     >
-      <AnimatePresence mode="wait" initial={false}>
+      <AnimatePresence mode="popLayout" initial={false}>
         {phase === 'idle' && (
           <motion.span
             key="idle"
