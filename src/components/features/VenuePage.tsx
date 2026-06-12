@@ -265,7 +265,7 @@ export default function VenuePage({
                   {active && (
                     <motion.span layoutId="venue-tab-underline" aria-hidden
                       className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-gold-300"
-                      transition={{ type: 'spring', stiffness: 480, damping: 38 }} />
+                      transition={{ type: 'spring', stiffness: 700, damping: 42 }} />
                   )}
                 </button>
               );

@@ -500,6 +500,21 @@ function MobileTabBar({ tabs, active, onChange, dot, onOpenMe }: {
   // 5칸 고정: 일정/라이브/커뮤니티/장터 + (업주·직원·관리자=내 매장 | 일반=내 정보)
   // 관리자 설정·도구는 프로필 메뉴에서 진입(탭바는 핵심 동선만)
   const hasStore = tabs.some((t) => t.id === 'my-store');
+  // 유튜브식 자동 숨김 — 아래로 스크롤하면 숨고(몰입), 위로 살짝 올리면 즉시 복귀
+  const [hidden, setHidden] = useState(false);
+  useEffect(() => {
+    let lastY = window.scrollY;
+    const onScroll = () => {
+      const y = window.scrollY;
+      const dy = y - lastY;
+      if (y < 80) setHidden(false);            // 최상단 근처에선 항상 표시
+      else if (dy > 14) setHidden(true);       // 아래로 — 숨김
+      else if (dy < -8) setHidden(false);      // 위로 — 즉시 복귀
+      lastY = y;
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
   // 장터는 커뮤니티 서브탭으로 이동(사용 빈도 기준) — 탭바 4번째 칸은 도구
   const items: { key: string; tab?: TabId; label: string }[] = [
     { key: 'browse', tab: 'browse', label: '일정' },
@@ -521,8 +536,9 @@ function MobileTabBar({ tabs, active, onChange, dot, onOpenMe }: {
   );
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-50 lg:hidden pointer-events-none"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      className={['fixed inset-x-0 bottom-0 z-50 lg:hidden pointer-events-none transition-transform duration-300',
+        hidden ? 'translate-y-[120%]' : 'translate-y-0'].join(' ')}
+      style={{ paddingBottom: 'env(safe-area-inset-bottom)', transitionTimingFunction: 'cubic-bezier(0.32, 0.72, 0, 1)' }}
       aria-label="하단 내비게이션"
     >
       {/* 탭바 밖(좌우·아래) 틈으로 스크롤 컨텐츠가 비치지 않게 — 베이스색 그라데이션 커튼 */}
@@ -543,7 +559,7 @@ function MobileTabBar({ tabs, active, onChange, dot, onOpenMe }: {
                 {on && (
                   <motion.span layoutId="mobile-tab-pill" aria-hidden
                     className="absolute inset-0 rounded-full bg-gold-300/15"
-                    transition={{ type: 'spring', stiffness: 480, damping: 36 }} />
+                    transition={{ type: 'spring', stiffness: 700, damping: 42 }} />
                 )}
                 {tab ? TAB_ICON[tab] : ME_ICON}
                 {tab && dot?.[tab] && !on && <span className="absolute right-2 top-0.5 h-1.5 w-1.5 rounded-full bg-gold-300" aria-hidden />}

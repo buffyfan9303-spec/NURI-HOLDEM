@@ -209,7 +209,7 @@ function SectionTab({ active, label, onClick }: { active: boolean; label: string
       onClick={(e) => { e.currentTarget.blur(); onClick(); }}
       className={[
         'relative flex-1 px-1 lg:px-2 py-2 text-xs font-semibold rounded-[6px] whitespace-nowrap',
-        'transition-colors duration-200 ease-out',
+        'transition-colors duration-300 ease-out',
         'focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0',
         active ? 'text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary',
       ].join(' ')}
@@ -217,7 +217,7 @@ function SectionTab({ active, label, onClick }: { active: boolean; label: string
       {active && (
         <motion.span layoutId="comm-section-pill" aria-hidden
           className="absolute inset-0 rounded-[6px] bg-gold-300"
-          transition={{ type: 'spring', stiffness: 480, damping: 38 }} />
+          transition={{ type: 'spring', stiffness: 700, damping: 42 }} />
       )}
       <span className="relative">{label}</span>
     </button>
@@ -806,14 +806,14 @@ function VenuesSection({
                 type="button"
                 onClick={() => onSelectVenue(venue.id)}
                 className={[
-                  'w-full text-left flex gap-3 p-3 rounded-card border transition-all duration-150 cursor-pointer active:bg-surface-high',
+                  'w-full text-left flex items-center gap-2.5 px-2.5 py-2 rounded-card border transition-all duration-150 cursor-pointer active:bg-surface-high',
                   venue.isPaidAd
                     ? 'bg-surface-low border-gold-400/50 shadow-gold hover:border-gold-400'
                     : 'bg-surface-low border-border-default hover:border-border-strong hover:bg-surface-high',
                 ].join(' ')}
               >
                 {/* 매장 썸네일 — 사진 우선, 없으면 딥톤 이니셜 타일 */}
-                <VenueThumb name={venue.name} imageUrl={venue.imageUrl ?? venue.images?.[0]} />
+                <VenueThumb name={venue.name} imageUrl={venue.imageUrl ?? venue.images?.[0]} size="sm" />
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">

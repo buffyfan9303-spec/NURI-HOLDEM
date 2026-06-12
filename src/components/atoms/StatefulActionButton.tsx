@@ -28,6 +28,7 @@ const StatefulActionButton = forwardRef<HTMLButtonElement, {
   onDone,
 }, ref) {
   const [phase, setPhase] = useState<Phase>('idle');
+  const [shakeKey, setShakeKey] = useState(0); // 실패 복귀 시 좌우 흔들기 트리거
   // w-full은 Idle에서만 — Loading/Success는 컨텐츠 폭으로 줄어 캡슐 모핑(layout이 보간)
   const wantsFull = className.includes('w-full');
   const restClass = className.split(/\s+/).filter((c) => c !== 'w-full').join(' ');
@@ -41,6 +42,7 @@ const StatefulActionButton = forwardRef<HTMLButtonElement, {
       if (onDone) setTimeout(onDone, 900);
     } catch {
       setPhase('idle'); // 실패 토스트는 onAction 쪽 책임 — 버튼은 재시도 가능 상태로
+      setShakeKey((k) => k + 1); // '아니야'를 몸짓으로 — 좌우 6px 흔들기
     }
   };
 
@@ -56,12 +58,17 @@ const StatefulActionButton = forwardRef<HTMLButtonElement, {
       transition={SPRING}
       animate={{
         backgroundColor:
-          phase === 'success' ? '#19b8e6' : phase === 'loading' ? '#3a4253' : '#FCD535',
+          phase === 'success' ? '#19b8e6'
+          : phase === 'loading' ? '#3a4253'
+          : disabled ? '#3a4253' /* 미완성: 회색 — 입력이 완성되는 순간 골드로 살아난다(토스 패턴) */
+          : '#FCD535',
       }}
       style={{ borderRadius: 999 }}
+      key={shakeKey > 0 ? `shake-${shakeKey}` : undefined}
       className={[
+        shakeKey > 0 ? 'anim-shake' : '',
         'inline-flex h-10 items-center justify-center gap-1.5 overflow-hidden font-bold',
-        phase === 'idle' ? 'px-5 text-ink-inverse' : 'px-4',
+        phase === 'idle' ? (disabled ? 'px-5 text-ink-muted' : 'px-5 text-ink-inverse') : 'px-4',
         phase === 'success' ? 'text-white' : phase === 'loading' ? 'text-ink-secondary' : '',
         'disabled:cursor-default focus:outline-none',
         phase === 'idle' && wantsFull ? 'w-full' : '',

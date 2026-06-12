@@ -310,7 +310,7 @@ function LoginForm({ onClose, onForgot }: { onClose: () => void; onForgot: () =>
 
       <div className="flex justify-center">
         <StatefulActionButton ref={btnRef} label="로그인" successLabel="환영합니다!"
-          onAction={doLogin} onDone={onClose} className="w-full" />
+          disabled={!email.trim() || !password} onAction={doLogin} onDone={onClose} className="w-full" />
       </div>
       {/* 폼 엔터 제출용(화면 비표시) */}
       <button type="submit" className="hidden" aria-hidden tabIndex={-1} />

@@ -20,11 +20,11 @@ function hashOf(name: string): number {
 export default function VenueThumb({ name, imageUrl, size = 'md', className = '' }: {
   name: string;
   imageUrl?: string | null;
-  /** md=48px(목록 카드) lg=56px */
-  size?: 'md' | 'lg';
+  /** sm=40px(밀도 높은 목록) md=48px lg=56px */
+  size?: 'sm' | 'md' | 'lg';
   className?: string;
 }) {
-  const sz = size === 'lg' ? 'h-14 w-14' : 'h-12 w-12';
+  const sz = size === 'lg' ? 'h-14 w-14' : size === 'sm' ? 'h-10 w-10' : 'h-12 w-12';
   const base = `${sz} shrink-0 rounded-xl overflow-hidden ring-1 ring-white/10 select-none ${className}`;
 
   if (imageUrl) {
@@ -48,7 +48,7 @@ export default function VenueThumb({ name, imageUrl, size = 'md', className = ''
       style={{ background: `radial-gradient(circle at 30% 25%, color-mix(in srgb, ${c} 82%, white) 0%, ${c} 52%, color-mix(in srgb, ${c} 55%, black) 100%)` }}
     >
       <span className="absolute -bottom-1.5 -right-1 text-3xl text-white/10 rotate-[-14deg] leading-none">{suit}</span>
-      <span className={`relative font-extrabold text-white/95 ${size === 'lg' ? 'text-xl' : 'text-base'}`}>
+      <span className={`relative font-extrabold text-white/95 ${size === 'lg' ? 'text-xl' : size === 'sm' ? 'text-sm' : 'text-base'}`}>
         {(name || '?').slice(0, 1)}
       </span>
     </div>
