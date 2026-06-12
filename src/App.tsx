@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, Suspense, type ReactNode } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, useTransition, Suspense, type ReactNode } from 'react';
 import { useToast } from './components/atoms/Toast';
 import { checkIn, getMyCheckinStreak } from './api/checkins';
 import UnreadBadge from './components/atoms/UnreadBadge';
@@ -575,9 +575,31 @@ export default function App() {
   // 매장 후기 별점(체크인 인증) — 카드 매장명 옆 ⭐4.8(12)
   const [venueRatings, setVenueRatings] = useState<Record<string, { avg: number; count: number }>>({});
   useEffect(() => { getVenueRatings().then(setVenueRatings).catch(() => {}); }, []);
+  // 탭 청크 idle 프리로드 — 동일 동적 import는 Vite가 같은 청크로 캐시한다
+  useEffect(() => {
+    const warm = () => {
+      void Promise.allSettled([
+        import('./components/features/CommunityTab'),
+        import('./components/features/MarketplaceTab'),
+        import('./components/features/LiveGamesTab'),
+        import('./components/features/VenueManageTab'),
+        import('./components/features/ToolsPanel'),
+        import('./components/features/VenuePage'),
+        import('./components/features/ScheduleDetailModal'),
+        import('./components/features/CustomerDashboardPage'),
+      ]);
+    };
+    const w = window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number };
+    if (w.requestIdleCallback) w.requestIdleCallback(warm, { timeout: 4000 });
+    else setTimeout(warm, 2500);
+  }, []);
   // 알림 딥링크 → 내 매장 탭의 특정 섹션(예: 📒 장부 시작 → 장부)
   const [myStoreDeep, setMyStoreDeep] = useState<'ledger' | null>(null);
   const [activeTab, setActiveTab]     = useState<TabId>('browse');
+  // 탭 전환을 트랜지션으로 — lazy 청크/무거운 렌더 동안 이전 화면을 유지해
+  // '이전 메뉴 → 스피너 깜빡 → 새 메뉴' 3단 플래시를 없앤다(React 공식 패턴).
+  const [, startTabTransition] = useTransition();
+  const changeTab = useCallback((t: TabId) => { startTabTransition(() => setActiveTab(t)); }, []);
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -658,7 +680,7 @@ export default function App() {
 
   // 홈(browse) 외 탭에서 브라우저/모바일 뒤로가기 → 홈 탭으로 복귀(앱 종료 방지).
   // 오버레이가 열려 있으면 중앙 back-stack 이 LIFO 로 그 오버레이부터 닫는다.
-  useBackClose(activeTab !== 'browse', () => setActiveTab('browse'));
+  useBackClose(activeTab !== 'browse', () => changeTab('browse'));
 
   // ── 데이터 (Supabase에서 로드) ──────────────────────────────────────────────
   const [schedules,     setSchedules]     = useState<Schedule[]>([]);
@@ -847,7 +869,7 @@ export default function App() {
 
   // 탭이 사라지면 (로그아웃 등) browse로 돌아감
   useEffect(() => {
-    if (!tabs.find((t) => t.id === activeTab)) setActiveTab('browse');
+    if (!tabs.find((t) => t.id === activeTab)) changeTab('browse');
   }, [tabs, activeTab]);
 
   // 팔로우한 매장 id 로드(로그인 시)
@@ -935,7 +957,7 @@ export default function App() {
 
   // 로고 클릭 → 메인(일정 탐색)으로 + 모든 모달/패널 닫기
   const handleHome = useCallback(() => {
-    setActiveTab('browse');
+    changeTab('browse');
     setOpenSchedule(null);
     setOpenVenueId(null);
     setOpenListing(null);
@@ -970,7 +992,7 @@ export default function App() {
     // /posts/:id → 커뮤니티 탭 이동 + 해당 게시글 열기
     const pm = link.match(/^\/posts\/(.+)$/);
     if (pm) {
-      setActiveTab('community');
+      changeTab('community');
       setPosts((prev) => {
         const found = prev.find((p) => p.id === pm[1]);
         if (found) setOpenPost(found);
@@ -986,13 +1008,13 @@ export default function App() {
     }
     // /my-store/ledger (📒 장부 시작 알림) → 내 매장 탭 장부 섹션으로 바로
     if (link === '/my-store/ledger') {
-      setActiveTab('my-store');
+      changeTab('my-store');
       setMyStoreDeep('ledger');
       return;
     }
     // /admin (포스터 승인 알림)
     if (link === '/admin' || n.type === 'approval') {
-      setActiveTab(isAdmin ? 'admin' : 'my-store');
+      changeTab(isAdmin ? 'admin' : 'my-store');
       return;
     }
     toast.show(n.title, 'info');
@@ -1273,7 +1295,7 @@ export default function App() {
     <div className="min-h-screen bg-surface-base mx-auto w-full max-w-6xl xl:border-x xl:border-border-subtle">
       <AppHeader
         title={activeTab === 'browse' ? undefined : tabs.find((t) => t.id === activeTab)?.label}
-        onGotoTab={(t) => setActiveTab(t)}
+        onGotoTab={(t) => changeTab(t)}
         unreadCount={unreadNotifs}
         notifications={notifications}
         onMarkRead={handleMarkRead}

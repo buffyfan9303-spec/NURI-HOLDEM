@@ -120,8 +120,10 @@ export default {
           from: { transform: 'translateY(0)',    opacity: '1' },
           to:   { transform: 'translateY(100%)',  opacity: '0' },
         },
+        // 0에서 시작하면 컨텐츠가 '꺼졌다 켜지는' 깜빡임으로 인지된다.
+        // 0.45에서 시작해 짧게 정착 — iOS 컨텐츠 전환과 같은 '스르륵' 감각.
         'fade-in': {
-          from: { opacity: '0' },
+          from: { opacity: '0.45' },
           to:   { opacity: '1' },
         },
         'fade-out': {

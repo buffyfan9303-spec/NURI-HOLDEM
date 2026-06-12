@@ -218,7 +218,7 @@ main { max-width: 48rem; margin-inline: auto; }
 /* ── 앱(iOS) 감성 모션 ──────────────────────────────────────────────────────
    네이티브처럼 '빠르게 시작해 부드럽게 정착'하는 곡선으로 통일.
    cubic-bezier(0.32, 0.72, 0, 1) = iOS 시트/내비 전환과 동일 계열. */
-.animate-fade-in  { animation-duration: 0.22s; animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1); }
+.animate-fade-in  { animation-duration: 0.16s; animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1); }
 .animate-fade-out { animation-duration: 0.18s; animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1); }
 .animate-slide-up { animation-duration: 0.32s; animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1); }
 
@@ -266,5 +266,19 @@ html.light .text-danger-light { color: #D63A4E; }
 }
 .press-spring:active {
   transform: scale(0.88);
+  transition-duration: 0.06s;
+}
+
+/* ── 전역 클릭 피드백 — iOS 터치 하이라이트 방식 ──────────────────────────────
+   누르는 '순간' 즉각 반응(60ms), 떼면 부드럽게 복귀(200ms).
+   opacity만 쓰므로 레이아웃·기존 scale 효과와 충돌하지 않는다. */
+button, [role='button'] {
+  transition-property: opacity, transform, color, background-color, border-color;
+  transition-duration: 0.2s;
+  transition-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+  -webkit-tap-highlight-color: transparent;
+}
+button:active:not(:disabled), [role='button']:active {
+  opacity: 0.72;
   transition-duration: 0.06s;
 }
