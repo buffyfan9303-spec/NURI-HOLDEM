@@ -241,7 +241,7 @@ function ListCard({ schedule, onVenueClick, onSelect, reserveCount, rating }: Ca
 
 // ── 메인: 그리드 뷰 카드 ────────────────────────────────────────────────────
 
-function GridCard({ schedule, onVenueClick, onSelect }: CardProps) {
+function GridCard({ schedule, onVenueClick, onSelect, rating }: CardProps) {
   const d = formatDate(schedule.date, schedule.startTime);
 
   return (
@@ -292,11 +292,18 @@ function GridCard({ schedule, onVenueClick, onSelect }: CardProps) {
         ].join(' ')}>
           {schedule.title}
         </h3>
-        <VenueLink
-          pubName={schedule.pubName}
-          region={schedule.region}
-          onClick={() => onVenueClick(schedule.venueId)}
-        />
+        <div className="flex items-center justify-between gap-1.5 min-w-0">
+          <VenueLink
+            pubName={schedule.pubName}
+            region={schedule.region}
+            onClick={() => onVenueClick(schedule.venueId)}
+          />
+          {rating && rating.count > 0 && (
+            <span className="shrink-0 text-2xs font-bold tabular-nums text-gold-300" title={`방문 후기 ${rating.count}건 평균`}>
+              ⭐{rating.avg.toFixed(1)}<span className="font-normal text-ink-muted">({rating.count})</span>
+            </span>
+          )}
+        </div>
 
         <div className="border-t border-border-subtle my-0.5" />
 

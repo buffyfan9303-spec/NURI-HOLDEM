@@ -1574,6 +1574,7 @@ export default function App() {
         schedule={openSchedule}
         onClose={() => setOpenSchedule(null)}
         onVenueClick={handleVenueClick}
+        rating={openSchedule ? venueRatings[openSchedule.venueId] : undefined}
         comments={comments}
         onSubmitComment={(content, parentId) =>
           openSchedule && handleSubmitScheduleComment(openSchedule.id, content, parentId)

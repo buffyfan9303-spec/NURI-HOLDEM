@@ -10,6 +10,7 @@ import type { MarketplaceNotice } from '../../api/marketplace';
 import { useAuth } from '../../contexts/AuthContext';
 import { followVenue, unfollowVenue, getMyFollowedVenueIds, updateVenueAddress, updateVenueKakao } from '../../api/community';
 import { getVenueNotices, createVenueNotice, deleteVenueNotice, type VenueNotice } from '../../api/community';
+import { getVenueRatings } from '../../api/reviews';
 import { getVenueMessages, sendVenueMessage, deleteVenueMessage, subscribeVenueMessages, type VenueMessage } from '../../api/community';
 import Avatar from '../atoms/Avatar';
 import EmptyState from '../atoms/EmptyState';
@@ -75,6 +76,15 @@ export default function VenuePage({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [kakaoOverride, setKakaoOverride] = useState<string | null>(null);
   useEffect(() => { setKakaoOverride(null); }, [venue?.id]);
+  // 매장 별점(방문 후기 평균) — 매장명 옆 ⭐
+  const [rating, setRating] = useState<{ avg: number; count: number } | null>(null);
+  useEffect(() => {
+    setRating(null);
+    if (!venue?.id) return;
+    let alive = true;
+    getVenueRatings().then((m) => { if (alive) setRating(m[venue.id] ?? null); }).catch(() => {});
+    return () => { alive = false; };
+  }, [venue?.id]);
 
   // 업주가 설정한 탭 순서(page_config.tabOrder) — 미설정 시 기본 순서
   const [tabOrder, setTabOrder] = useState<Tab[] | null>(null);
@@ -202,7 +212,14 @@ export default function VenuePage({
                   </span>
                 )}
               </div>
-              <h2 className="text-xl font-bold text-ink-primary">{venue.name}</h2>
+              <h2 className="text-xl font-bold text-ink-primary">
+                {venue.name}
+                {rating && rating.count > 0 && (
+                  <span className="ml-2 align-middle text-sm font-bold tabular-nums text-gold-300" title={`방문 후기 ${rating.count}건 평균`}>
+                    ⭐{rating.avg.toFixed(1)}<span className="font-normal text-ink-muted">({rating.count})</span>
+                  </span>
+                )}
+              </h2>
               <p className="text-xs text-ink-muted mt-1">{venue.address}</p>
               <div className="flex items-center gap-2 mt-2 flex-wrap">
                 {kakao && (

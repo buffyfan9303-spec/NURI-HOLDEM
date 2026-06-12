@@ -18,6 +18,8 @@ interface ScheduleDetailModalProps {
   open: boolean;
   onClose: () => void;
   onVenueClick: (venueId: string) => void;
+  /** 매장 별점 집계(방문 후기) — 매장명 옆 ⭐ 표시 */
+  rating?: { avg: number; count: number };
   comments: Comment[];
   onSubmitComment: (content: string, parentId?: string) => void;
   onDeleteComment?: (commentId: string) => void;
@@ -33,7 +35,7 @@ const SUITS = ['♠','♥','♦','♣'];
 const DAYS_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
 export default function ScheduleDetailModal({
-  schedule: scheduleProp, open, onClose, onVenueClick, comments, onSubmitComment, onDeleteComment, onDeletePoster, inline,
+  schedule: scheduleProp, open, onClose, onVenueClick, rating, comments, onSubmitComment, onDeleteComment, onDeletePoster, inline,
 }: ScheduleDetailModalProps) {
   const [tab, setTab] = useState<Tab>('info');
   const [lightbox, setLightbox] = useState(false);
@@ -160,6 +162,11 @@ export default function ScheduleDetailModal({
                 </span>
                 <span className="text-border-strong">·</span>
                 <span>{schedule.region}</span>
+                {rating && rating.count > 0 && (
+                  <span className="shrink-0 font-bold tabular-nums text-gold-300" title={`방문 후기 ${rating.count}건 평균`}>
+                    ⭐{rating.avg.toFixed(1)}<span className="font-normal text-ink-muted">({rating.count})</span>
+                  </span>
+                )}
                 <svg
                   width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.6"
                   className="opacity-50 group-hover:opacity-100 transition-opacity ml-1"
@@ -173,6 +180,11 @@ export default function ScheduleDetailModal({
                 <span className="font-medium">{schedule.pubName}</span>
                 <span className="text-border-strong">·</span>
                 <span>{schedule.region}</span>
+                {rating && rating.count > 0 && (
+                  <span className="shrink-0 font-bold tabular-nums text-gold-300" title={`방문 후기 ${rating.count}건 평균`}>
+                    ⭐{rating.avg.toFixed(1)}<span className="font-normal text-ink-muted">({rating.count})</span>
+                  </span>
+                )}
               </p>
             )}
             {schedule.address && (
