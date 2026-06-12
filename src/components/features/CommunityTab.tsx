@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef, Fragment, useTransition, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { getActiveCommunityAds, type CommunityAd } from '../../api/ads';
+import { getEquippedMarks } from '../../api/community';
 import { getVenueRatings, type VenueRating } from '../../api/reviews';
 import type { Venue, Comment, CommunityPost, LiveMessage, PostCategory, GroupKind, JoinedGroup } from '../../api/community';
 import { getLiveMessages, addLiveMessage, deleteLiveMessage, subscribeLiveWall, createMyVenue, createGroup, GROUP_KIND_LABEL, getMyOwnedCommunities, getMyJoinedGroups, removeMember } from '../../api/community';
@@ -83,6 +84,7 @@ export default function CommunityTab({
     startSecTransition(() => setSectionState(s));
   };
   const [query, setQuery] = useState('');
+
   // 스와이프 탭 전환(인스타 DM 문법) — 컨텐츠를 좌우로 쓸면 이웃 섹션으로
   const touchRef = useRef<{ x: number; y: number } | null>(null);
   const onSwipeStart = (e: React.TouchEvent) => { const t = e.touches[0]; touchRef.current = { x: t.clientX, y: t.clientY }; };
@@ -153,7 +155,7 @@ export default function CommunityTab({
       </div>
 
       {/* 섹션 콘텐츠 — 게시판은 2-pane 전체폭, 그 외 단일 컬럼은 읽기폭(max-w-3xl)으로 제한 */}
-      <div onTouchStart={onSwipeStart} onTouchEnd={onSwipeEnd}
+      <div onTouchStartCapture={onSwipeStart} onTouchEndCapture={onSwipeEnd}
         className={(section === 'board' || section === 'market') ? '' : 'mx-auto w-full max-w-3xl'}>
       {section === 'live' && <LiveWallSection />}
 
@@ -279,6 +281,13 @@ function FeedSection({
   const switchView = (v: 'compact' | 'feed') => { setView(v); try { localStorage.setItem('nuri:board-view', v); } catch { /* noop */ } };
   // 커뮤니티 광고 5칸 — 게시판(enableCategory)에서만, 글 4개마다 한 칸씩 삽입
   const [ads, setAds] = useState<CommunityAd[]>([]);
+  // 작성자 장착 마크(상점) — posts의 userId 일괄 조회(닉네임 옆 이모지)
+  const [authorMarks, setAuthorMarks] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const ids = [...new Set(posts.map((p) => p.userId).filter(Boolean))];
+    if (ids.length === 0) { setAuthorMarks({}); return; }
+    getEquippedMarks(ids).then(setAuthorMarks).catch(() => {});
+  }, [posts]);
   useEffect(() => {
     if (enableCategory) getActiveCommunityAds().then(setAds).catch(() => {});
   }, [enableCategory]);
@@ -474,8 +483,8 @@ function FeedSection({
                 return (
                   <Fragment key={p.id}>
                     {view === 'compact'
-                      ? <PostRow post={p} selected={p.id === selectedId} onClick={() => onSelectPost(p)} />
-                      : <PostCard post={p} selected={p.id === selectedId} onLike={() => onLike(p.id)} onClick={() => onSelectPost(p)} />}
+                      ? <PostRow post={p} mark={authorMarks[p.userId] ?? ''} selected={p.id === selectedId} onClick={() => onSelectPost(p)} />
+                      : <PostCard post={p} mark={authorMarks[p.userId] ?? ''} selected={p.id === selectedId} onLike={() => onLike(p.id)} onClick={() => onSelectPost(p)} />}
                     {showAd && <AdRow ad={ad} />}
                   </Fragment>
                 );
@@ -532,7 +541,7 @@ function AdRow({ ad }: { ad: CommunityAd }) {
 }
 
 // 에펨코리아식 한 줄 행 — 제목 크게(타이포 위계), 메타는 작고 연하게. 바이낸스 표 밀도(py-2).
-function PostRow({ post, onClick, hot = false, selected = false }: { post: CommunityPost; onClick: () => void; hot?: boolean; selected?: boolean }) {
+function PostRow({ post, onClick, hot = false, selected = false, mark = '' }: { post: CommunityPost; onClick: () => void; hot?: boolean; selected?: boolean; mark?: string }) {
   const catLabel = BOARD_CATEGORIES.find((c) => c.id === (post.category ?? 'free'))?.label ?? '자유';
   const { replay, hand } = parseAttachments(post.content);
   return (
@@ -552,14 +561,14 @@ function PostRow({ post, onClick, hot = false, selected = false }: { post: Commu
         {(replay || hand) && <span className="ml-1 align-middle text-2xs text-gold-300">{replay ? '🎬' : '♠'}</span>}
         {post.commentCount > 0 && <span className="ml-1 align-middle text-xs font-bold text-gold-300">[{post.commentCount}]</span>}
       </span>
-      <span className="shrink-0 text-xs text-ink-muted">{post.userName}</span>
+      <span className="shrink-0 text-xs text-ink-muted">{mark}{post.userName}</span>
       <span className="hidden shrink-0 text-xs tabular-nums text-ink-muted sm:inline">{relativeTime(post.createdAt)}</span>
       {(post.viewCount ?? 0) > 0 && <span className="shrink-0 w-10 text-right text-xs tabular-nums text-ink-muted">👁{post.viewCount}</span>}
     </li>
   );
 }
 
-function PostCard({ post, onLike, onClick, hot = false, selected = false }: { post: CommunityPost; onLike: () => void; onClick: () => void; hot?: boolean; selected?: boolean }) {
+function PostCard({ post, onLike, onClick, hot = false, selected = false, mark = '' }: { post: CommunityPost; onLike: () => void; onClick: () => void; hot?: boolean; selected?: boolean; mark?: string }) {
   return (
     <li
       onClick={onClick}
@@ -578,7 +587,7 @@ function PostCard({ post, onLike, onClick, hot = false, selected = false }: { po
             {hot && (
               <span className="inline-flex items-center font-extrabold text-danger-light bg-danger/15 px-1 rounded-badge leading-none tracking-wide">HOT</span>
             )}
-            <span className="font-semibold text-ink-primary truncate">{post.userName}</span>
+            <span className="font-semibold text-ink-primary truncate">{mark}{post.userName}</span>
             {post.userRole === 'venue_owner' && (
               <span className="font-bold text-gold-300 bg-gold-300/15 px-1 rounded-badge leading-none">업주</span>
             )}

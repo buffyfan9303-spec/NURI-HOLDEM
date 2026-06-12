@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getEquippedMarks } from '../../api/community';
 import Modal from '../atoms/Modal';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
@@ -50,6 +51,11 @@ export default function PostDetailModal({
   const { user } = useAuth();
   // 더블탭 좋아요(인스타) — 본문을 빠르게 두 번 탭하면 좋아요 + 하트 팝
   const [heartKey, setHeartKey] = useState(0);
+  const [authorMark, setAuthorMark] = useState('');
+  useEffect(() => {
+    setAuthorMark('');
+    if (post?.userId) getEquippedMarks([post.userId]).then((m) => setAuthorMark(m[post.userId] ?? '')).catch(() => {});
+  }, [post?.userId]);
   const doubleLike = () => {
     if (!user || !post) return;
     onLike(post.id);
@@ -135,7 +141,7 @@ export default function PostDetailModal({
           <Avatar name={post.userName} src={post.userAvatar} color={post.userColor} size={40} />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
-              <span className="text-sm font-semibold text-ink-primary truncate">{post.userName}</span>
+              <span className="text-sm font-semibold text-ink-primary truncate">{authorMark}{post.userName}</span>
               {post.userRole === 'venue_owner' && (
                 <span className="text-2xs font-bold text-gold-300 bg-gold-300/15 px-1.5 py-0.5 rounded-badge">업주</span>
               )}

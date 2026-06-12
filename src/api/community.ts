@@ -1071,3 +1071,18 @@ export async function getActivityLeaderboard(limit = 20): Promise<LeaderboardEnt
     equippedMark:   r.equipped_mark ?? null,
   }));
 }
+
+/** 작성자 장착 마크 일괄 조회 — userId → 마크 이모지(상점 코스메틱) */
+export async function getEquippedMarks(userIds: string[]): Promise<Record<string, string>> {
+  if (IS_MOCK || userIds.length === 0) return {};
+  const { data, error } = await supabase.rpc('get_equipped_marks', { p_ids: userIds });
+  if (error) return {};
+  const { SHOP_MARKS } = await import('../lib/loyalty');
+  const out: Record<string, string> = {};
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const r of (data ?? []) as any[]) {
+    const emoji = SHOP_MARKS.find((m) => m.key === r.equipped_mark)?.emoji;
+    if (emoji) out[r.id] = emoji + ' ';
+  }
+  return out;
+}

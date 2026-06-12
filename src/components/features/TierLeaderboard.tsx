@@ -291,7 +291,7 @@ export default function TierLeaderboard() {
         <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5 mb-1.5 overflow-x-auto scrollbar-none lg:flex-wrap lg:overflow-visible">
           {(['activity', 'league', 'hall', 'moneyin', 'shop'] as Board[]).map((b) => (
             <button key={b} type="button" onClick={() => setBoard(b)}
-              className={['relative shrink-0 px-3 py-1.5 text-xs font-bold rounded-[6px] transition-colors duration-300',
+              className={['relative shrink-0 px-2 lg:px-3 py-1.5 text-[11px] lg:text-xs font-bold rounded-[6px] transition-colors duration-300',
                 board === b ? 'text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
               {board === b && (
                 <motion.span layoutId="rank-board-pill" aria-hidden

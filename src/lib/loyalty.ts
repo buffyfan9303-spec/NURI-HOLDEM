@@ -198,3 +198,7 @@ export async function setEquippedMark(key: string | null): Promise<void> {
   const { error } = await supabase.from('profiles').update({ equipped_mark: key }).eq('id', uid);
   if (error) throw new Error(error.message);
 }
+
+/** 마크 키 → 이모지(없으면 빈 문자열) */
+export const markEmojiOf = (key?: string | null): string =>
+  key ? (SHOP_MARKS.find((m) => m.key === key)?.emoji ?? '') : '';
