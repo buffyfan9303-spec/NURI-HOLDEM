@@ -1,4 +1,5 @@
 import { useId } from 'react';
+import { motion } from 'framer-motion';
 
 export type ViewMode = 'list' | 'grid' | 'table';
 
@@ -94,15 +95,18 @@ export default function ViewModeToggle({
             aria-label={label}
             onClick={() => onChange(mode)}
             className={[
-              'w-8 h-full items-center justify-center rounded-[5px]',
+              'relative w-8 h-full items-center justify-center rounded-[5px]',
               desktopOnly ? 'hidden md:flex' : 'flex',
               'transition-all duration-150',
-              active
-                ? 'bg-gold-300 text-ink-inverse shadow-sm'
-                : 'text-ink-muted hover:text-ink-secondary',
+              active ? 'text-ink-inverse' : 'text-ink-muted hover:text-ink-secondary',
             ].join(' ')}
           >
-            <Icon />
+            {active && (
+              <motion.span layoutId="viewmode-pill" aria-hidden
+                className="absolute inset-0 rounded-[5px] bg-gold-300 shadow-sm"
+                transition={{ type: 'spring', stiffness: 700, damping: 42 }} />
+            )}
+            <span className="relative inline-flex"><Icon /></span>
           </button>
         );
       })}

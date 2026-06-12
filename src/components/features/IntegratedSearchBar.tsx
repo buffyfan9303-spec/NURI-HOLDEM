@@ -20,6 +20,7 @@ import {
   useDeferredValue,
   useTransition,
 } from 'react';
+import { motion } from 'framer-motion';
 
 // ── 날짜 유틸 ─────────────────────────────────────────────────────────────────
 
@@ -266,11 +267,11 @@ export default function IntegratedSearchBar({
   const handlePickDate     = useCallback((iso: string) => setSelectedDates((prev) => prev.includes(iso) ? prev : [...prev, iso]), []);
   const handleRegionToggle = useCallback((r: string) => setSelectedRegions((prev) => toggleInArray(prev, r)), []);
 
+  // 토너먼트 필터는 칩 자체가 하이라이트라 카운트 뱃지에서 제외(중복 표시 제거)
   const activeCount =
     (rawQuery.length > 0 ? 1 : 0) +
     selectedDates.length +
-    selectedRegions.length +
-    (tour !== 'all' ? 1 : 0);
+    selectedRegions.length;
 
   const hasActiveFilter = activeCount > 0;
 
@@ -366,13 +367,16 @@ export default function IntegratedSearchBar({
                   aria-checked={active}
                   onClick={() => setTour(id)}
                   className={[
-                    'inline-flex items-center h-6 px-3 rounded-[6px] text-2xs font-bold leading-none transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-300',
-                    active
-                      ? 'bg-gold-300 text-ink-inverse'
-                      : 'text-ink-muted hover:text-ink-secondary',
+                    'relative inline-flex items-center h-6 px-3 rounded-[6px] text-2xs font-bold leading-none transition-colors duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-300',
+                    active ? 'text-ink-inverse' : 'text-ink-muted hover:text-ink-secondary',
                   ].join(' ')}
                 >
-                  {label}
+                  {active && (
+                    <motion.span layoutId="tour-filter-pill" aria-hidden
+                      className="absolute inset-0 rounded-[6px] bg-gold-300"
+                      transition={{ type: 'spring', stiffness: 700, damping: 42 }} />
+                  )}
+                  <span className="relative">{label}</span>
                 </button>
               );
             })}

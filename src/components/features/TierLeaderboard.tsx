@@ -1,5 +1,6 @@
 // src/components/features/TierLeaderboard.tsx
 import { useEffect, useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
 import { useAuth } from '../../contexts/AuthContext';
 import TierBadge, { tierOf, tierProgress, allTiers, isAceRank, ACE_TOP_RANK, ACE_MIN_POINTS } from '../atoms/TierBadge';
 import { getActivityLeaderboard, type LeaderboardEntry } from '../../api/community';
@@ -269,9 +270,14 @@ export default function TierLeaderboard() {
         <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5 mb-1.5 overflow-x-auto scrollbar-none lg:flex-wrap lg:overflow-visible">
           {(['activity', 'league', 'hall', 'moneyin'] as Board[]).map((b) => (
             <button key={b} type="button" onClick={() => setBoard(b)}
-              className={['shrink-0 px-3 py-1.5 text-xs font-bold rounded-[6px] transition-colors',
-                board === b ? 'bg-gold-300 text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
-              {BOARD_LABEL[b]}
+              className={['relative shrink-0 px-3 py-1.5 text-xs font-bold rounded-[6px] transition-colors duration-300',
+                board === b ? 'text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
+              {board === b && (
+                <motion.span layoutId="rank-board-pill" aria-hidden
+                  className="absolute inset-0 rounded-[6px] bg-gold-300"
+                  transition={{ type: 'spring', stiffness: 700, damping: 42 }} />
+              )}
+              <span className="relative">{BOARD_LABEL[b]}</span>
             </button>
           ))}
         </div>
