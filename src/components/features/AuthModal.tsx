@@ -308,8 +308,10 @@ function LoginForm({ onClose, onForgot }: { onClose: () => void; onForgot: () =>
 
       {error && <p className="text-xs text-danger animate-fade-in" role="alert">{error}</p>}
 
-      <StatefulActionButton ref={btnRef} label="로그인" successLabel="환영합니다!"
-        onAction={doLogin} onDone={onClose} className="w-full" />
+      <div className="flex justify-center">
+        <StatefulActionButton ref={btnRef} label="로그인" successLabel="환영합니다!"
+          onAction={doLogin} onDone={onClose} className="w-full" />
+      </div>
       {/* 폼 엔터 제출용(화면 비표시) */}
       <button type="submit" className="hidden" aria-hidden tabIndex={-1} />
     </form>

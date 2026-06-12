@@ -28,6 +28,9 @@ const StatefulActionButton = forwardRef<HTMLButtonElement, {
   onDone,
 }, ref) {
   const [phase, setPhase] = useState<Phase>('idle');
+  // w-full은 Idle에서만 — Loading/Success는 컨텐츠 폭으로 줄어 캡슐 모핑(layout이 보간)
+  const wantsFull = className.includes('w-full');
+  const restClass = className.replace(/w-full/, '').trim();
 
   const run = async () => {
     if (phase !== 'idle' || disabled) return;
@@ -61,7 +64,8 @@ const StatefulActionButton = forwardRef<HTMLButtonElement, {
         phase === 'idle' ? 'px-5 text-ink-inverse' : 'px-4',
         phase === 'success' ? 'text-white' : phase === 'loading' ? 'text-ink-secondary' : '',
         'disabled:cursor-default focus:outline-none',
-        className,
+        phase === 'idle' && wantsFull ? 'w-full' : '',
+        restClass,
       ].join(' ')}
       aria-live="polite"
       aria-busy={phase === 'loading'}
