@@ -472,6 +472,8 @@ function FeedSection({
                   </Fragment>
                 );
               })}
+              {/* 글이 적어도 광고 1칸은 보이게 — 4개 미만이면 리스트 끝에 첫 광고 */}
+              {shown.length < 4 && ads[0] && <AdRow ad={ads[0]} />}
             </ul>
           </div>
           {listSource.length > visible && (
