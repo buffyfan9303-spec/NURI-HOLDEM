@@ -58,6 +58,26 @@ export default function Modal({
 
   // 접근성: 모달 내부 포커스 트랩 + 열릴 때 첫 포커스(키보드 내비)
   const contentRef = useRef<HTMLDivElement>(null);
+  // 드래그 시트(page·모바일) — 컨텐츠가 맨 위일 때 아래로 끌면 시트가 따라오고, 120px 넘으면 닫힌다(애플 지도 문법)
+  const pageScrollRef = useRef<HTMLDivElement>(null);
+  const [dragY, setDragY] = useState(0);
+  const sheetStart = useRef<number | null>(null);
+  const onSheetStart = (e: React.TouchEvent) => {
+    if (window.innerWidth >= 1024) return;
+    if ((pageScrollRef.current?.scrollTop ?? 1) <= 0) sheetStart.current = e.touches[0].clientY;
+  };
+  const onSheetMove = (e: React.TouchEvent) => {
+    if (sheetStart.current == null) return;
+    const dy = e.touches[0].clientY - sheetStart.current;
+    if ((pageScrollRef.current?.scrollTop ?? 1) > 0) { sheetStart.current = null; setDragY(0); return; }
+    setDragY(dy > 0 ? dy * 0.55 : 0);
+  };
+  const onSheetEnd = () => {
+    const pulled = dragY;
+    sheetStart.current = null;
+    setDragY(0);
+    if (pulled > 120) onClose();
+  };
   useEffect(() => {
     if (!open || inline) return;
     const el = contentRef.current;
@@ -101,7 +121,12 @@ export default function Modal({
   // 전체화면 페이지 변형 — 불투명 배경으로 뒤 페이지가 절대 비치지 않음(스크롤 누수 방지)
   if (variant === 'page') {
     return (
-      <div ref={contentRef} className={['fixed inset-0 z-[55] bg-surface-base flex flex-col', closing ? 'animate-fade-out' : 'animate-fade-in'].join(' ')}>
+      <div ref={contentRef}
+        onTouchStart={onSheetStart} onTouchMove={onSheetMove} onTouchEnd={onSheetEnd}
+        style={dragY > 0 ? { transform: `translateY(${dragY}px)`, transition: 'none' } : { transition: 'transform 0.28s cubic-bezier(0.32, 0.72, 0, 1)' }}
+        className={['fixed inset-0 z-[55] bg-surface-base flex flex-col', closing ? 'animate-fade-out' : 'animate-fade-in'].join(' ')}>
+        {/* 드래그 핸들(모바일) — 시트를 끌어내려 닫기 */}
+        <div aria-hidden className="lg:hidden absolute top-1.5 left-1/2 z-10 h-1 w-10 -translate-x-1/2 rounded-full bg-white/20" />
         {title && (
           <header className="shrink-0 flex items-center justify-between px-4 h-header-h border-b border-border-subtle bg-surface-base">
             <h2 id="modal-title" className="text-[17px] font-bold tracking-tight text-ink-primary">{title}</h2>
@@ -111,7 +136,7 @@ export default function Modal({
             </button>
           </header>
         )}
-        <div className="flex-1 overflow-y-auto overscroll-contain">
+        <div ref={pageScrollRef} className="flex-1 overflow-y-auto overscroll-contain">
           <div className={['mx-auto w-full', MAX_W[maxWidth]].join(' ')}>{children}</div>
         </div>
       </div>

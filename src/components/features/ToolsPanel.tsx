@@ -117,41 +117,80 @@ export default function ToolsPanel() {
   const [active, setActive] = useState<ToolKey | null>(null);
   const select = (k: ToolKey) => setActive((a) => (a === k ? null : k));
   const cols = useGridCols();
+  // 검색 + 그룹 접기(기본 접힘 — 한 화면 간략 보기). 열림 상태는 기억.
+  const [q, setQ] = useState('');
+  const [openG, setOpenG] = useState<Record<string, boolean>>(() => {
+    try { return JSON.parse(localStorage.getItem('nuri:tools-open') || '{}'); } catch { return {}; }
+  });
+  const toggleG = (id: string) => setOpenG((prev) => {
+    const next = { ...prev, [id]: !prev[id] };
+    try { localStorage.setItem('nuri:tools-open', JSON.stringify(next)); } catch { /* quota */ }
+    return next;
+  });
+  const ql = q.trim().toLowerCase();
+  const hits = ql ? TOOLS.filter((t) => t.name.toLowerCase().includes(ql) || t.desc.toLowerCase().includes(ql)) : null;
+
+  // 열 수 단위 행 분할 — 활성 카드가 있는 행 바로 뒤에 실행 패널 삽입(옆 카드 안 밀림)
+  const renderRows = (items: typeof TOOLS) => {
+    const rows: typeof TOOLS[] = [];
+    for (let i = 0; i < items.length; i += cols) rows.push(items.slice(i, i + cols));
+    return rows.map((row, ri) => (
+      <Fragment key={ri}>
+        <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+          {row.map((t) => (
+            <ToolCard key={t.key} name={t.name} desc={t.desc} icon={t.icon} active={active === t.key} onClick={() => select(t.key)} />
+          ))}
+        </div>
+        {row.some((t) => t.key === active) && (
+          <div className="animate-fade-in pt-1 lg:max-w-3xl">
+            <Suspense fallback={<div className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</div>}>
+              {renderTool(active!)}
+            </Suspense>
+          </div>
+        )}
+      </Fragment>
+    ));
+  };
 
   return (
-    <div className="space-y-4">
-      <p className="text-2xs text-ink-muted">홀덤 운영·플레이에 쓰는 도구 모음입니다. 카드를 눌러 실행하세요.</p>
+    <div className="space-y-3">
+      {/* 도구 검색 */}
+      <div className="relative">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" aria-hidden>
+          <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.5" y2="16.5" />
+        </svg>
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="도구 검색 — 이름·기능"
+          className="input w-full pl-9 text-sm" aria-label="도구 검색" />
+      </div>
 
-      {GROUPS.map((g) => {
-        const items = TOOLS.filter((t) => t.group === g.id);
-        // 열 수 단위로 행 분할 — 활성 카드가 있는 행 바로 뒤에 패널 삽입
-        const rows: typeof items[] = [];
-        for (let i = 0; i < items.length; i += cols) rows.push(items.slice(i, i + cols));
-        return (
-          <section key={g.id} className="space-y-2">
-            <div className="flex items-baseline gap-2">
-              <h3 className="text-sm font-bold text-ink-primary">{g.title}</h3>
-              <span className="text-2xs text-ink-muted">{g.desc}</span>
-            </div>
-            {rows.map((row, ri) => (
-              <Fragment key={ri}>
-                <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
-                  {row.map((t) => (
-                    <ToolCard key={t.key} name={t.name} desc={t.desc} icon={t.icon} active={active === t.key} onClick={() => select(t.key)} />
-                  ))}
+      {hits ? (
+        hits.length === 0
+          ? <p className="py-8 text-center text-2xs text-ink-muted">'{q.trim()}' 에 맞는 도구가 없습니다</p>
+          : <div className="space-y-2">{renderRows(hits)}</div>
+      ) : (
+        GROUPS.map((g) => {
+          const items = TOOLS.filter((t) => t.group === g.id);
+          const opened = !!openG[g.id];
+          const preview = items.slice(0, 3).map((t) => t.name).join(' · ');
+          return (
+            <section key={g.id} className="rounded-card border border-border-default bg-surface-low overflow-hidden">
+              <button type="button" onClick={() => toggleG(g.id)} aria-expanded={opened}
+                className="flex w-full items-center justify-between gap-2 px-3.5 py-3 text-left hover:bg-surface-high/50 transition-colors">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-ink-primary">{g.title} <span className="ml-1 text-2xs font-semibold text-ink-muted">{items.length}개</span></p>
+                  <p className="mt-0.5 truncate text-2xs text-ink-muted">{opened ? g.desc : `${preview} 외 ${Math.max(0, items.length - 3)}개`}</p>
                 </div>
-                {row.some((t) => t.key === active) && (
-                  <div className="animate-fade-in pt-1 lg:max-w-3xl">
-                    <Suspense fallback={<div className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</div>}>
-                      {renderTool(active!)}
-                    </Suspense>
-                  </div>
-                )}
-              </Fragment>
-            ))}
-          </section>
-        );
-      })}
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
+                  className={['shrink-0 text-ink-muted transition-transform duration-200', opened ? 'rotate-180' : ''].join(' ')} aria-hidden>
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+              {opened && <div className="space-y-2 border-t border-border-subtle p-2.5 animate-fade-in">{renderRows(items)}</div>}
+            </section>
+          );
+        })
+      )}
     </div>
   );
 }
