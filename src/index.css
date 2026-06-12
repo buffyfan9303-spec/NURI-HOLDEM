@@ -256,7 +256,8 @@ html.light .text-danger-light { color: #D63A4E; }
 
 /* ── 모바일 하단 탭바(Riot Mobile 스타일) 공간 확보 — 컨텐츠가 탭바에 가리지 않게 */
 @media (max-width: 1023.5px) {
-  main { padding-bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
+  /* py-* 유틸 클래스가 태그 셀렉터를 이겨 패딩이 무효되던 버그 — 하단 탭바 가림의 원인 */
+  main { padding-bottom: calc(5.5rem + env(safe-area-inset-bottom)) !important; }
 }
 
 /* ── 프레스 스프링(버튼 이펙트) — 누르면 깊게 눌리고, 떼면 통통 튀며 복귀 */
@@ -272,6 +273,12 @@ html.light .text-danger-light { color: #D63A4E; }
 /* ── 전역 클릭 피드백 — iOS 터치 하이라이트 방식 ──────────────────────────────
    누르는 '순간' 즉각 반응(60ms), 떼면 부드럽게 복귀(200ms).
    opacity만 쓰므로 레이아웃·기존 scale 효과와 충돌하지 않는다. */
+button, [role='button'], a, [role='tab'] {
+  /* 모바일 더블탭 줌 300ms 지연 제거 + 길게 눌렀을 때 텍스트 선택 깜빡 방지 */
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
 button, [role='button'] {
   transition-property: opacity, transform, color, background-color, border-color;
   transition-duration: 0.2s;

@@ -501,13 +501,16 @@ function MobileTabBar({ tabs, active, onChange, dot, onOpenMe }: {
   // 5칸 고정: 일정/라이브/커뮤니티/장터 + (업주·직원·관리자=내 매장 | 일반=내 정보)
   // 관리자 설정·도구는 프로필 메뉴에서 진입(탭바는 핵심 동선만)
   const hasStore = tabs.some((t) => t.id === 'my-store');
+  // 장터는 커뮤니티 서브탭으로 이동(사용 빈도 기준) — 탭바 4번째 칸은 도구
   const items: { key: string; tab?: TabId; label: string }[] = [
     { key: 'browse', tab: 'browse', label: '일정' },
     { key: 'live', tab: 'live', label: '라이브' },
     { key: 'community', tab: 'community', label: '커뮤니티' },
-    { key: 'market', tab: 'market', label: '장터' },
+    { key: 'tools', tab: 'tools', label: '도구' },
     hasStore ? { key: 'my-store', tab: 'my-store', label: '내 매장' } : { key: 'me', label: '내 정보' },
   ];
+  // 장터 화면에선 '커뮤니티' 칸을 활성으로(장터 진입 경로가 커뮤니티)
+  const mappedActive: TabId = active === 'market' ? 'community' : active;
   const ME_ICON = (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
@@ -521,7 +524,7 @@ function MobileTabBar({ tabs, active, onChange, dot, onOpenMe }: {
     >
       <div className="pointer-events-auto mx-2.5 mb-2 flex rounded-2xl border border-border-default bg-surface-mid/95 shadow-dialog backdrop-blur-md">
         {items.map(({ key, tab, label }) => {
-          const on = tab ? active === tab : false;
+          const on = tab ? mappedActive === tab : false;
           return (
             <button
               key={key} type="button"
@@ -1304,7 +1307,7 @@ export default function App() {
   }, [user, venues, toast, reloadSchedules]);
 
   // 일정탐색(browse) 상단 공지 — 전체('all') 공지만 노출(게시판/딜러/장터 전용 공지는 제외)
-  const [noticesOpen, setNoticesOpen] = useState(true);
+  const [noticesOpen, setNoticesOpen] = useState(false); // 공지는 기본 접힘 — 첫 화면 밀도 우선
   const browseNotices = useMemo(
     () => notices.filter((n) => !n.board || n.board === 'all'),
     [notices],
@@ -1385,7 +1388,7 @@ export default function App() {
                     aria-pressed={followedOnly}
                     className={[
                       'inline-flex h-9 items-center gap-1 rounded-input border px-2.5 text-2xs font-bold leading-none transition-colors',
-                      followedOnly ? 'border-gold-300 bg-gold-300 text-ink-inverse' : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary',
+                      followedOnly ? 'border-gold-300 bg-gold-300 text-ink-inverse' : 'border-border-subtle bg-surface-high/60 text-ink-secondary hover:text-ink-primary',
                     ].join(' ')}
                   >
                     <svg width="11" height="11" viewBox="0 0 24 24" fill={followedOnly ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 17.3l-5.4 3 1-6L3 9.8l6-.9L12 3.5l3 5.4 6 .9-4.6 4.5 1 6z" /></svg>
@@ -1518,6 +1521,7 @@ export default function App() {
       {activeTab === 'community' && (
         <main className={`px-page-x pb-section ${tabAnim || 'animate-fade-in'}`}>
           <CommunityTab
+            onOpenMarket={() => changeTab('market')}
             venues={venues}
             comments={comments}
             posts={posts}

@@ -20,6 +20,8 @@ import PostDetailModal from './PostDetailModal';
 import { useIsDesktop } from '../../lib/responsive';
 
 interface CommunityTabProps {
+  /** 모바일: 장터 서브탭 — 메인 장터 화면으로 이동 */
+  onOpenMarket?: () => void;
   venues: Venue[];
   comments: Comment[];
   posts: CommunityPost[];
@@ -68,7 +70,7 @@ function relativeTime(iso: string): string {
 
 export default function CommunityTab({
   venues, comments, posts, notices = [], isAdmin = false, onWriteNotice, onSelectNotice,
-  onSelectVenue, onSelectPost, onOpenWrite, onLikePost, onDeletePost, onReloadVenues,
+  onSelectVenue, onSelectPost, onOpenWrite, onLikePost, onDeletePost, onReloadVenues, onOpenMarket,
 }: CommunityTabProps) {
   const [section, setSectionState] = useState<Section>(lastCommunitySection);
   const setSection = (s: Section) => { lastCommunitySection = s; setSectionState(s); };
@@ -117,10 +119,11 @@ export default function CommunityTab({
         {/* 모바일: 줄바꿈으로 전부 표시(가로 스크롤 제거) */}
         <div className="flex flex-wrap items-center gap-1 bg-surface-high rounded-input p-0.5 lg:flex-nowrap">
           <SectionTab active={section === 'venues'} label="커뮤니티"    onClick={() => setSection('venues')} />
-          <SectionTab active={section === 'live'}   label="실시간 댓글" onClick={() => setSection('live')} />
+          <SectionTab active={section === 'live'}   label="실시간" onClick={() => setSection('live')} />
           <SectionTab active={section === 'board'}  label="게시판"      onClick={() => setSection('board')} />
           <SectionTab active={section === 'dealer'} label="딜러"        onClick={() => setSection('dealer')} />
           <SectionTab active={section === 'rank'}   label="랭킹"        onClick={() => setSection('rank')} />
+          {onOpenMarket && <SectionTab active={false} label="장터" onClick={onOpenMarket} />}
           {canOwnerCommunity && (
             <SectionTab active={section === 'owner'} label="업주" onClick={() => setSection('owner')} />
           )}
@@ -203,7 +206,7 @@ function SectionTab({ active, label, onClick }: { active: boolean; label: string
       // 탭 시 골드 포커스링이 깜빡이지 않도록 클릭 후 포커스 해제
       onClick={(e) => { e.currentTarget.blur(); onClick(); }}
       className={[
-        'flex-1 px-2 py-2 text-xs font-semibold rounded-[6px] whitespace-nowrap',
+        'flex-1 px-1 lg:px-2 py-2 text-xs font-semibold rounded-[6px] whitespace-nowrap',
         'transition-colors duration-200 ease-out',
         'focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0',
         active ? 'bg-gold-300 text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary',
