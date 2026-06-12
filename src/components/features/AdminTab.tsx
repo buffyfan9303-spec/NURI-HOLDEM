@@ -121,6 +121,9 @@ function CommunityAdsCard() {
                 className="input w-36 text-sm" title="만료일(지나면 자동 내림)" />
               <button type="button" onClick={() => save(ad)} disabled={savingSlot === ad.slot}
                 className="btn-primary px-3 py-1.5 text-xs disabled:opacity-60">저장</button>
+              <button type="button" disabled={savingSlot === ad.slot || !live && !ad.title}
+                onClick={() => { const empty = { ...ad, title: '', linkUrl: '', advertiser: '', expiresAt: null }; patch(ad.slot, empty); void save(empty); }}
+                className="px-2.5 py-1.5 rounded-input border border-danger/40 text-xs font-bold text-danger-light hover:bg-danger/10 transition-colors disabled:opacity-40">삭제</button>
             </li>
           );
         })}

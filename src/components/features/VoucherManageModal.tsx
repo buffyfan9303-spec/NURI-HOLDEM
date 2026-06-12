@@ -169,13 +169,12 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
               )}
               <div className="flex gap-1.5">
                 <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="이용권 이름 (예: 데일리 1회 참가권)" className="input min-w-0 flex-1 text-sm" />
-                <div className="relative w-24 shrink-0">
-                  <div className="flex items-stretch gap-1">
-                    <StepBtn label="−" onStep={() => setCount((c) => Math.max(1, c - 1))} />
-                    <input type="number" inputMode="numeric" min={1} max={1000} value={count || ''} onChange={(e) => setCount(Math.min(1000, Math.max(1, parseInt(e.target.value, 10) || 1)))} className="input w-full pr-6 text-sm tabular-nums text-center" />
-                    <StepBtn label="+" onStep={() => setCount((c) => Math.min(1000, c + 1))} />
-                  </div>
-                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">개</span>
+                <div className="flex items-stretch gap-1 shrink-0">
+                  <StepBtn label="−" onStep={() => setCount((c) => Math.max(1, c - 1))} />
+                  <input type="number" inputMode="numeric" min={1} max={1000} value={count || ''} onChange={(e) => setCount(Math.min(1000, Math.max(1, parseInt(e.target.value, 10) || 1)))}
+                    className="input w-16 text-sm tabular-nums text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" aria-label="발급 갯수" />
+                  <StepBtn label="+" onStep={() => setCount((c) => Math.min(1000, c + 1))} />
+                  <span className="self-center pl-0.5 text-2xs text-ink-muted">개</span>
                 </div>
               </div>
               {/* 받는 손님 지정 — 아이디(닉네임)로 지정 */}

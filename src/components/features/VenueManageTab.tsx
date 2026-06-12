@@ -422,14 +422,14 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
                   <input
                     type="text" value={row.realName} maxLength={20}
                     onChange={(e) => update(i, 'realName', e.target.value)}
-                    placeholder="실명(선택)"
+                    placeholder="실명"
                     className="input flex-1 min-w-0 text-sm py-2"
                   />
                   <input
                     type="text" inputMode="numeric" value={row.prize} maxLength={12}
                     onChange={(e) => update(i, 'prize', e.target.value.replace(/[^\d.]/g, ''))}
                     onKeyDown={(e) => { if (e.key === 'Enter' && i === rows.length - 1) addRow(); }}
-                    placeholder="프라이즈(점수)"
+                    placeholder="프라이즈"
                     className="input flex-1 min-w-0 text-sm py-2"
                   />
                   <button
@@ -442,10 +442,10 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
                 {/* 2줄: 이용권 갯수 · 비고 (1줄과 동일 시작점에 정렬) */}
                 <div className="flex items-center gap-1.5">
                   <div className="relative w-28 shrink-0">
-                    <input type="number" inputMode="numeric" value={row.voucher} onChange={(e) => update(i, 'voucher', e.target.value.replace(/[^\d]/g, ''))} placeholder="이용권" className="input w-full text-sm py-1.5 pr-7 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" />
+                    <input type="number" inputMode="numeric" value={row.voucher} onChange={(e) => update(i, 'voucher', e.target.value.replace(/[^\d]/g, ''))} placeholder="이용권" className="input w-full text-sm py-2 pr-7 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" />
                     <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">개</span>
                   </div>
-                  <input type="text" value={row.note} onChange={(e) => update(i, 'note', e.target.value)} maxLength={50} placeholder="비고(선택)" className="input min-w-0 flex-1 text-sm py-1.5" />
+                  <input type="text" value={row.note} onChange={(e) => update(i, 'note', e.target.value)} maxLength={50} placeholder="비고" className="input min-w-0 flex-1 text-sm py-2" />
                 </div>
               </div>
             </li>

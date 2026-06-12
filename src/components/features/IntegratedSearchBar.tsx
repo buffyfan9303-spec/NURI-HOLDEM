@@ -355,7 +355,7 @@ export default function IntegratedSearchBar({
           <div
             role="radiogroup"
             aria-label="토너먼트 필터"
-            className="inline-flex items-center gap-0.5 rounded-input bg-surface-high p-0.5 border border-border-default"
+            className="inline-flex items-center gap-0.5 rounded-input bg-surface-high/60 p-0.5 border border-border-subtle"
           >
             {TOUR_OPTIONS.map(({ id, label }) => {
               const active = tour === id;
@@ -392,7 +392,7 @@ export default function IntegratedSearchBar({
                 'appearance-none h-7 pl-3 pr-7 rounded-input border text-2xs font-bold leading-none cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-300',
                 selectedRegions.length > 0
                   ? 'bg-gold-300/15 border-gold-300 text-gold-300'
-                  : 'bg-surface-high border-border-default text-ink-secondary hover:border-border-strong',
+                  : 'bg-surface-high/60 border-border-subtle text-ink-secondary hover:border-border-strong',
               ].join(' ')}
             >
               <option value="">전체 지역</option>
