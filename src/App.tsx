@@ -373,7 +373,7 @@ function AppHeader({
             </div>
           ) : (
             <SpringButton onClick={onOpenLogin} ariaLabel="로그인"
-              className="btn-primary h-7 px-2.5 text-2xs shadow-none">
+              className="btn-primary !h-7 !min-h-0 !px-2.5 !py-0 text-2xs shadow-none">
               로그인
             </SpringButton>
           )}
