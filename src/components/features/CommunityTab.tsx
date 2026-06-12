@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, Fragment, type ReactNode } from 'react';
+import { useState, useMemo, useEffect, useRef, Fragment, useTransition, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { getActiveCommunityAds, type CommunityAd } from '../../api/ads';
 import { getVenueRatings, type VenueRating } from '../../api/reviews';
@@ -74,7 +74,14 @@ export default function CommunityTab({
   onSelectVenue, onSelectPost, onOpenWrite, onLikePost, onDeletePost, onReloadVenues, marketSlot,
 }: CommunityTabProps) {
   const [section, setSectionState] = useState<Section>(lastCommunitySection);
-  const setSection = (s: Section) => { lastCommunitySection = s; setSectionState(s); };
+  // 칩 하이라이트(알약)는 즉시, 컨텐츠 교체는 트랜지션 — 장터(lazy) 첫 진입에도 이전 화면이 유지돼 끊김이 없다
+  const [shownSec, setShownSec] = useState<Section>(lastCommunitySection);
+  const [, startSecTransition] = useTransition();
+  const setSection = (s: Section) => {
+    lastCommunitySection = s;
+    setShownSec(s);
+    startSecTransition(() => setSectionState(s));
+  };
   const [query, setQuery] = useState('');
   // 스와이프 탭 전환(인스타 DM 문법) — 컨텐츠를 좌우로 쓸면 이웃 섹션으로
   const touchRef = useRef<{ x: number; y: number } | null>(null);
@@ -86,7 +93,7 @@ export default function CommunityTab({
     const dx = t.clientX - s0.x, dy = t.clientY - s0.y;
     if (Math.abs(dx) < 64 || Math.abs(dx) < Math.abs(dy) * 1.5) return; // 세로 스크롤과 구분
     const order: Section[] = ['venues', 'live', 'board', 'dealer', 'rank', ...(marketSlot ? (['market'] as Section[]) : []), ...(canOwnerCommunity ? (['owner'] as Section[]) : [])];
-    const i = order.indexOf(section);
+    const i = order.indexOf(shownSec);
     const next = dx < 0 ? order[i + 1] : order[i - 1];
     if (next) setSection(next);
   };
@@ -133,14 +140,14 @@ export default function CommunityTab({
       <div className="sticky top-[calc(theme(spacing.header-h)+env(safe-area-inset-top))] lg:top-[calc(theme(spacing.header-h)+theme(spacing.tab-h)-0.5rem)] z-30 -mx-page-x px-page-x bg-surface-base pt-2 pb-2 lg:pt-3.5">
         {/* 모바일: 줄바꿈으로 전부 표시(가로 스크롤 제거) */}
         <div className="flex flex-wrap items-center gap-1 bg-surface-high rounded-input p-0.5 lg:flex-nowrap">
-          <SectionTab active={section === 'venues'} label="커뮤니티"    onClick={() => setSection('venues')} />
-          <SectionTab active={section === 'live'}   label="실시간" onClick={() => setSection('live')} />
-          <SectionTab active={section === 'board'}  label="게시판"      onClick={() => setSection('board')} />
-          <SectionTab active={section === 'dealer'} label="딜러"        onClick={() => setSection('dealer')} />
-          <SectionTab active={section === 'rank'}   label="랭킹"        onClick={() => setSection('rank')} />
-          {marketSlot && <SectionTab active={section === 'market'} label="장터" onClick={() => setSection('market')} />}
+          <SectionTab active={shownSec === 'venues'} label="커뮤니티"    onClick={() => setSection('venues')} />
+          <SectionTab active={shownSec === 'live'}   label="실시간" onClick={() => setSection('live')} />
+          <SectionTab active={shownSec === 'board'}  label="게시판"      onClick={() => setSection('board')} />
+          <SectionTab active={shownSec === 'dealer'} label="딜러"        onClick={() => setSection('dealer')} />
+          <SectionTab active={shownSec === 'rank'}   label="랭킹"        onClick={() => setSection('rank')} />
+          {marketSlot && <SectionTab active={shownSec === 'market'} label="장터" onClick={() => setSection('market')} />}
           {canOwnerCommunity && (
-            <SectionTab active={section === 'owner'} label="업주" onClick={() => setSection('owner')} />
+            <SectionTab active={shownSec === 'owner'} label="업주" onClick={() => setSection('owner')} />
           )}
         </div>
       </div>
