@@ -103,10 +103,12 @@ interface TabDef { id: TabId; label: string; }
 
 function AppHeader({
   unreadCount, notifications, onMarkRead, onOpenLogin, onNavigateNotification, onHome, onOpenProfile, onOpenSearch, onOpenVouchers,
-  title, suppressed = false,
+  title, onGotoTab, suppressed = false,
 }: {
   /** 모바일 헤더 좌측 큰 타이틀(Riot Mobile 스타일) — 현재 탭 라벨 */
   title?: string;
+  /** 프로필 메뉴에서 탭 직접 이동(모바일 탭바에 없는 도구·관리자 설정) */
+  onGotoTab?: (t: TabId) => void;
   unreadCount: number;
   notifications: AppNotification[];
   onMarkRead: (ids: string[]) => void;
@@ -175,9 +177,15 @@ function AppHeader({
         >
           <NuriHoldemLogo />
         </button>
-        <h1 className={['lg:hidden min-w-0 truncate text-xl font-extrabold tracking-tight text-ink-primary transition-transform origin-left', shrunk ? 'scale-[0.85]' : ''].join(' ')}>
-          {title ?? 'NURI HOLDEM'}
-        </h1>
+        <div className="lg:hidden flex min-w-0 items-center gap-2">
+          {/* 로고(작게) — 누르면 일정 탐색으로 */}
+          <button type="button" onClick={onHome} aria-label="일정 탐색으로 이동" className="press-spring shrink-0">
+            <NuriHoldemLogo className="!h-6" />
+          </button>
+          <h1 className={['min-w-0 truncate text-lg font-extrabold tracking-tight text-ink-primary transition-transform origin-left', shrunk ? 'scale-[0.9]' : ''].join(' ')}>
+            {title ?? ''}
+          </h1>
+        </div>
 
         {/* RIGHT: 테마 토글 + 알림 + 로그인/아바타 — 동일 36px 원형 버튼 클러스터 */}
         <div className="flex items-center gap-0.5">
@@ -306,6 +314,18 @@ function AppHeader({
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" /><path d="M13 5v14" /></svg>
                       내 매장이용권
                     </button>
+                    <button type="button" onClick={() => { onGotoTab?.('tools'); setUserMenu(false); }}
+                      className="w-full text-left flex items-center gap-2 px-3 py-2.5 text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.8-.7-.7-2.8 2.5-2.5Z" /></svg>
+                      도구
+                    </button>
+                    {user.role === 'admin' && (
+                      <button type="button" onClick={() => { onGotoTab?.('admin'); setUserMenu(false); }}
+                        className="w-full text-left flex items-center gap-2 px-3 py-2.5 text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" /></svg>
+                        관리자 설정
+                      </button>
+                    )}
                     <button type="button" onClick={() => { toggleTheme(); }}
                       className="w-full text-left flex items-center gap-2 px-3 py-2.5 text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" /></svg>
@@ -470,38 +490,52 @@ function TabBar({
 }
 
 // ── 모바일 하단 탭바(Riot Mobile 스타일) — 플로팅 알약 + 아이콘/라벨 + 프레스 스프링 ──
-function MobileTabBar({ tabs, active, onChange, dot }: { tabs: TabDef[]; active: TabId; onChange: (t: TabId) => void; dot?: Partial<Record<TabId, boolean>> }) {
-  // 엄지 거리 우선순위로 최대 5칸 — 업주/관리자는 내 매장·관리자가 장터/도구보다 앞선다
-  const order: TabId[] = ['browse', 'live', 'community', 'my-store', 'admin', 'market', 'tools'];
-  const visible = order.filter((id) => tabs.some((t) => t.id === id)).slice(0, 5);
-  const shortLabel: Record<TabId, string> = {
-    browse: '일정', live: '라이브', community: '커뮤니티', market: '장터', tools: '도구',
-    'my-store': '내 매장', admin: '관리자',
-  };
+function MobileTabBar({ tabs, active, onChange, dot, onOpenMe }: {
+  tabs: TabDef[]; active: TabId; onChange: (t: TabId) => void;
+  dot?: Partial<Record<TabId, boolean>>;
+  /** 일반 유저 5번째 칸 '내 정보'(개인 대시보드 — 비로그인이면 로그인 유도) */
+  onOpenMe: () => void;
+}) {
+  // 5칸 고정: 일정/라이브/커뮤니티/장터 + (업주·직원·관리자=내 매장 | 일반=내 정보)
+  // 관리자 설정·도구는 프로필 메뉴에서 진입(탭바는 핵심 동선만)
+  const hasStore = tabs.some((t) => t.id === 'my-store');
+  const items: { key: string; tab?: TabId; label: string }[] = [
+    { key: 'browse', tab: 'browse', label: '일정' },
+    { key: 'live', tab: 'live', label: '라이브' },
+    { key: 'community', tab: 'community', label: '커뮤니티' },
+    { key: 'market', tab: 'market', label: '장터' },
+    hasStore ? { key: 'my-store', tab: 'my-store', label: '내 매장' } : { key: 'me', label: '내 정보' },
+  ];
+  const ME_ICON = (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
+    </svg>
+  );
   return (
     <nav
       className="fixed inset-x-0 bottom-0 z-50 lg:hidden pointer-events-none"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       aria-label="하단 내비게이션"
     >
-      <div className="pointer-events-auto mx-3 mb-2 flex rounded-2xl border border-border-default bg-surface-mid/95 shadow-dialog backdrop-blur-md">
-        {visible.map((id) => {
-          const on = active === id;
+      <div className="pointer-events-auto mx-2.5 mb-2 flex rounded-2xl border border-border-default bg-surface-mid/95 shadow-dialog backdrop-blur-md">
+        {items.map(({ key, tab, label }) => {
+          const on = tab ? active === tab : false;
           return (
             <button
-              key={id} type="button" onClick={() => { onChange(id); window.scrollTo({ top: 0 }); }}
+              key={key} type="button"
+              onClick={() => { if (tab) { onChange(tab); window.scrollTo({ top: 0 }); } else onOpenMe(); }}
               aria-current={on ? 'page' : undefined}
-              className="press-spring flex min-w-0 flex-1 flex-col items-center gap-0.5 pb-1.5 pt-2 touch-manipulation focus:outline-none"
+              className="press-spring flex min-w-0 flex-1 flex-col items-center gap-1 pb-2 pt-2.5 touch-manipulation focus:outline-none"
             >
-              <span className={['relative flex h-7 w-12 items-center justify-center rounded-full transition-colors duration-200',
-                on ? 'bg-gold-300/15 text-gold-300' : 'text-ink-muted'].join(' ')}>
-                {TAB_ICON[id]}
-                {/* 새 소식 골드 점(예: 커뮤니티 새 글) */}
-                {dot?.[id] && !on && <span className="absolute right-1.5 top-0 h-1.5 w-1.5 rounded-full bg-gold-300" aria-hidden />}
+              {/* 아이콘 22px · 라벨 11px — 공백 줄이고 또렷하게 */}
+              <span className={['relative flex h-8 w-14 items-center justify-center rounded-full transition-colors duration-200 [&_svg]:h-[22px] [&_svg]:w-[22px]',
+                on ? 'bg-gold-300/15 text-gold-300' : 'text-ink-secondary'].join(' ')}>
+                {tab ? TAB_ICON[tab] : ME_ICON}
+                {tab && dot?.[tab] && !on && <span className="absolute right-2 top-0.5 h-1.5 w-1.5 rounded-full bg-gold-300" aria-hidden />}
               </span>
-              <span className={['text-[10px] font-bold leading-none transition-colors duration-200',
-                on ? 'text-gold-300' : 'text-ink-muted'].join(' ')}>
-                {shortLabel[id]}
+              <span className={['text-[11px] font-bold leading-none transition-colors duration-200',
+                on ? 'text-gold-300' : 'text-ink-secondary'].join(' ')}>
+                {label}
               </span>
             </button>
           );
@@ -1237,6 +1271,7 @@ export default function App() {
     <div className="min-h-screen bg-surface-base mx-auto w-full max-w-6xl xl:border-x xl:border-border-subtle">
       <AppHeader
         title={tabs.find((t) => t.id === activeTab)?.label ?? 'NURI HOLDEM'}
+        onGotoTab={(t) => setActiveTab(t)}
         unreadCount={unreadNotifs}
         notifications={notifications}
         onMarkRead={handleMarkRead}
@@ -1271,7 +1306,8 @@ export default function App() {
 
       <TabBar tabs={tabs} active={activeTab} onChange={setActiveTab} />
       {/* 모바일 하단 탭바(Riot Mobile 스타일) — 상단 GNB 대체 */}
-      <MobileTabBar tabs={tabs} active={activeTab} onChange={setActiveTab} dot={{ community: commHasNew }} />
+      <MobileTabBar tabs={tabs} active={activeTab} onChange={setActiveTab} dot={{ community: commHasNew }}
+        onOpenMe={() => { if (user) setVoucherWalletOpen(true); else setAuthOpen(true); }} />
 
       {/* 일정 탐색 */}
       <div className="px-page-x"><StaffInviteBanner /></div>
