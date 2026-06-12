@@ -177,14 +177,16 @@ function AppHeader({
         >
           <NuriHoldemLogo />
         </button>
-        <div className="lg:hidden flex min-w-0 items-center gap-2">
-          {/* 로고(작게) — 누르면 일정 탐색으로 */}
-          <button type="button" onClick={onHome} aria-label="일정 탐색으로 이동" className="press-spring shrink-0">
-            <NuriHoldemLogo className="!h-6" />
-          </button>
-          <h1 className={['min-w-0 truncate text-lg font-extrabold tracking-tight text-ink-primary transition-transform origin-left', shrunk ? 'scale-[0.9]' : ''].join(' ')}>
-            {title ?? ''}
-          </h1>
+        {/* 모바일: 로고와 타이틀을 병치하지 않음(조잡함 방지) — 홈(일정)=로고만 / 그 외 탭=타이틀만.
+            scale 트랜지션 제거(한글 서브픽셀 번짐 원인) — 헤더 높이 축소만 동작. */}
+        <div className="lg:hidden flex min-w-0 items-center">
+          {title ? (
+            <h1 className="min-w-0 truncate text-lg font-extrabold tracking-tight text-ink-primary">{title}</h1>
+          ) : (
+            <button type="button" onClick={onHome} aria-label="일정 탐색" className="press-spring shrink-0">
+              <NuriHoldemLogo className="!h-7" />
+            </button>
+          )}
         </div>
 
         {/* RIGHT: 테마 토글 + 알림 + 로그인/아바타 — 동일 36px 원형 버튼 클러스터 */}
@@ -1270,7 +1272,7 @@ export default function App() {
     // 모바일: 폭 그대로(full). 데스크톱: 중앙 정렬 + 최대폭으로 무한 확장 방지 + 프레임.
     <div className="min-h-screen bg-surface-base mx-auto w-full max-w-6xl xl:border-x xl:border-border-subtle">
       <AppHeader
-        title={tabs.find((t) => t.id === activeTab)?.label ?? 'NURI HOLDEM'}
+        title={activeTab === 'browse' ? undefined : tabs.find((t) => t.id === activeTab)?.label}
         onGotoTab={(t) => setActiveTab(t)}
         unreadCount={unreadNotifs}
         notifications={notifications}
@@ -1296,7 +1298,13 @@ export default function App() {
 
       {voucherWalletOpen && (
         <Suspense fallback={<OverlayFallback />}>
-          <CustomerDashboardPage open={voucherWalletOpen} onClose={() => setVoucherWalletOpen(false)} />
+          <CustomerDashboardPage open={voucherWalletOpen} onClose={() => setVoucherWalletOpen(false)}
+            unread={notifications.filter((n) => !n.read)}
+            onOpenNotification={(id) => {
+              const n = notifications.find((x) => x.id === id);
+              setVoucherWalletOpen(false);
+              if (n) { handleMarkRead([n.id]); handleNavigateNotification(n); }
+            }} />
         </Suspense>
       )}
 

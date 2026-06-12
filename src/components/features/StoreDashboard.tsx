@@ -192,23 +192,39 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const staffNames = new Set(wages.map((w) => w.name.trim()));
   const topRegulars = regulars.filter((r) => !staffNames.has(r.name.trim())).slice(0, 5);
 
+  // ── AI 주간 조언 — 주 단위 캐시. 월요 리포트(규칙 조언)와 짝: AI 실패 시 알림의 규칙 조언이 폴백 ──
+  const aiWeekKey = (() => {
+    const d = new Date(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+    return `nuri:ai-weekly:${venueId}:${d.toLocaleDateString('en-CA')}`;
+  })();
   // ── AI 운영 요약 (Gemini 엣지 함수) ──
   const runAi = async () => {
     setAiBusy(true); setAiErr(''); setAiSummary('');
     try {
       const days7 = perDay.map((x) => `${x.dow} ${x.entry}엔트리/${wonToMan(x.paid)}만`).join(', ');
       const prompt = [
-        `다음은 홀덤펍 운영 데이터다. 사장이 보기 좋게 한국어로 3~4문장 운영 요약과 1~2개 실천 제안을 해줘. 과장·이모지 금지, 숫자 근거 포함.`,
+        `다음은 홀덤펍 운영 데이터다. 사장이 보기 좋게 한국어로 3~4문장 운영 요약과, 다음 주에 바로 실천할 조언 1~2개(약한 요일에 이벤트 제안 등 구체적으로)를 해줘. 과장·이모지 금지, 숫자 근거 포함.`,
         `오늘(${mr.label}): 엔트리 ${Math.round(fin.entry)}, 완납 ${wonToMan(fin.paid)}만, 미수 ${wonToMan(fin.unpaid)}만.`,
         `최근7일: 합계 ${weekEntry}엔트리/${wonToMan(weekPaid)}만, 평균객단가 ${wonToMan(avgSpend)}만, 일별[${days7}].`,
         `전주대비: 엔트리 ${entryDelta == null ? 'N/A' : entryDelta + '%'}, 매출 ${paidDelta == null ? 'N/A' : paidDelta + '%'}.`,
         topRegulars.length ? `단골TOP: ${topRegulars.map((r) => `${r.name}(바인${r.buyins}/방문${r.visits})`).join(', ')}.` : '',
       ].filter(Boolean).join('\n');
-      setAiSummary(await aiGenerate(prompt, '너는 홀덤펍 운영 컨설턴트다. 간결하고 실용적으로 답한다.'));
+      const text = await aiGenerate(prompt, '너는 홀덤펍 운영 컨설턴트다. 간결하고 실용적으로 답한다.');
+      setAiSummary(text);
+      try { localStorage.setItem(aiWeekKey, text); } catch { /* quota */ }
     } catch (e) {
       setAiErr(e instanceof Error ? e.message : 'AI 요약 실패');
     } finally { setAiBusy(false); }
   };
+  // 이번 주 캐시 복원, 없으면 월·화 첫 진입 시 자동 생성(주 1회)
+  useEffect(() => {
+    if (!caps.manage || loading) return;
+    const cached = (() => { try { return localStorage.getItem(aiWeekKey); } catch { return null; } })();
+    if (cached) { setAiSummary(cached); return; }
+    const dow = new Date().getDay();
+    if ((dow === 1 || dow === 2) && weekEntry > 0) void runAi();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [caps.manage, loading, aiWeekKey]);
 
   // ── 직원 인건비(이번 달) ──
   const wageMap: Record<string, number> = Object.fromEntries(wages.map((w) => [w.name, w.hourlyWage]));

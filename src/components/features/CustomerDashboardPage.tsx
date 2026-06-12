@@ -26,7 +26,12 @@ function parseVenueId(text: string): string | null {
 
 interface Stack { venueId: string; venueName: string; title: string; ids: string[] }
 
-export default function CustomerDashboardPage({ open, onClose }: { open: boolean; onClose: () => void }) {
+export default function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification }: {
+  open: boolean; onClose: () => void;
+  /** 미읽음 알림 미리보기(상위 3개) — 프로필 메뉴까지 안 가도 되게 */
+  unread?: { id: string; title: string; message: string; createdAt: string }[];
+  onOpenNotification?: (id: string) => void;
+}) {
   const { user } = useAuth();
   const toast = useToast();
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
@@ -90,6 +95,23 @@ export default function CustomerDashboardPage({ open, onClose }: { open: boolean
 
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-2xl space-y-4 px-page-x py-section">
+          {/* 미읽음 알림 미리보기 — 상위 3개(탭하면 해당 화면으로) */}
+          {unread.length > 0 && (
+            <section className="rounded-card border border-gold-400/30 bg-gold-300/[0.05] p-3">
+              <p className="mb-1.5 text-sm font-bold text-gold-300">🔔 안 읽은 알림 {unread.length > 3 ? '(' + unread.length + ')' : ''}</p>
+              <ul className="space-y-1">
+                {unread.slice(0, 3).map((n) => (
+                  <li key={n.id}>
+                    <button type="button" onClick={() => onOpenNotification?.(n.id)}
+                      className="w-full rounded-input bg-surface-high/50 px-2.5 py-2 text-left hover:bg-surface-high transition-colors">
+                      <p className="truncate text-xs font-bold text-ink-primary">{n.title}</p>
+                      <p className="truncate text-2xs text-ink-muted">{n.message}</p>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
           {/* 내 계정 — 받는 아이디 · 본인인증(매장이용권 수령 조건) */}
           <section className="rounded-card border border-border-default bg-surface-low p-3">
             <div className="flex items-center gap-3">
