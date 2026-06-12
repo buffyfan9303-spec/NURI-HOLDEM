@@ -69,10 +69,10 @@ export default function OwnerCommunity() {
             onChange={(e) => setDraft(e.target.value)}
             maxLength={2000}
             rows={2}
-            placeholder="업주끼리 자유롭게 이야기해보세요 (24시간 후 자동 삭제)"
+            placeholder="업주끼리 자유롭게 이야기해보세요"
             className="input w-full flex-1 resize-none text-sm"
           />
-          <button type="submit" disabled={sending || !draft.trim()} className="btn-primary shrink-0 px-4 disabled:opacity-60">게시</button>
+          <button type="submit" disabled={sending || !draft.trim()} className="btn-primary shrink-0 self-stretch px-4 disabled:opacity-60">게시</button>
         </form>
       ) : (
         <p className="py-1 text-center text-2xs text-ink-muted">읽기 전용입니다. 글 작성은 인증 업주만 가능합니다.</p>

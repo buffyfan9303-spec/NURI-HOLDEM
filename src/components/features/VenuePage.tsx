@@ -943,9 +943,16 @@ function AboutPanel({
             </div>
           </div>
         ) : (
-          <p className="text-sm text-ink-secondary leading-relaxed whitespace-pre-wrap">
-            {venue.description ?? '아직 등록된 소개가 없습니다.'}
-          </p>
+          venue.description ? (
+            <p className="text-sm text-ink-secondary leading-relaxed whitespace-pre-wrap">{venue.description}</p>
+          ) : editable ? (
+            <button type="button" onClick={() => { setDraft(venue.description ?? ''); setEditing(true); }}
+              className="inline-flex h-9 items-center gap-1.5 rounded-input border border-dashed border-gold-400/40 bg-gold-300/[0.06] px-3.5 text-xs font-bold text-gold-300 hover:bg-gold-300/10 transition-colors">
+              + 소개 쓰기
+            </button>
+          ) : (
+            <p className="text-sm text-ink-muted">아직 등록된 소개가 없습니다.</p>
+          )
         )}
       </section>
 

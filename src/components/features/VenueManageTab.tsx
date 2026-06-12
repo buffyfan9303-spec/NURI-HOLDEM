@@ -167,7 +167,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
       ) : (
         <div className="lg:flex lg:gap-4">
           {available.length > 1 && (
-            <nav className="flex flex-wrap gap-1 rounded-input bg-surface-high p-0.5 lg:sticky lg:top-16 lg:w-44 lg:shrink-0 lg:flex-col lg:flex-nowrap lg:self-start lg:bg-transparent lg:p-0">
+            <nav className="grid grid-cols-3 gap-1 rounded-card bg-surface-high p-1 lg:sticky lg:top-16 lg:flex lg:w-44 lg:shrink-0 lg:flex-col lg:self-start lg:bg-transparent lg:p-0">
               {[...available]
                 // 즐겨찾기 우선 정렬(★ 누른 순서 유지) — 나머지는 기존 순서
                 .sort((a, b) => {
@@ -277,17 +277,17 @@ function SectionBtn({ active, onClick, icon, children, locked, fav, onToggleFav 
   return (
     <button type="button" onClick={onClick}
       // 글씨 13px·세로 패딩 확대 — 매일 쓰는 운영 메뉴라 가독·터치 우선
-      className={['group/nav flex shrink-0 items-center gap-2 whitespace-nowrap rounded-[7px] px-3 py-2.5 text-[13px] font-semibold transition-colors focus:outline-none touch-manipulation lg:w-full lg:justify-start',
+      className={['group/nav flex flex-col items-center justify-center gap-1 whitespace-nowrap rounded-[7px] px-1 py-2.5 text-xs font-semibold transition-colors focus:outline-none touch-manipulation lg:w-full lg:flex-row lg:justify-start lg:gap-2 lg:px-3 lg:text-[13px]',
         active ? 'bg-gold-300 text-ink-inverse' : locked ? 'text-ink-muted/60 hover:text-ink-secondary lg:hover:bg-surface-high' : 'text-ink-secondary hover:text-ink-primary lg:hover:bg-surface-high'].join(' ')}>
       <span className="shrink-0" aria-hidden>{icon}</span>
       <span>{children}</span>
-      {locked && <Icon name="lock" size={11} className={['ml-auto shrink-0', active ? 'text-ink-inverse/70' : 'text-ink-muted'].join(' ')} />}
+      {locked && <Icon name="lock" size={11} className={['hidden lg:block ml-auto shrink-0', active ? 'text-ink-inverse/70' : 'text-ink-muted'].join(' ')} />}
       {/* ★ 즐겨찾기 토글 — 즐겨찾기는 상시, 나머지는 PC 호버 시 표시(최대 5개 상단 고정) */}
       {onToggleFav && !locked && (
         <span
           role="button" tabIndex={-1} aria-label={fav ? '즐겨찾기 해제' : '즐겨찾기 추가'}
           onClick={(e) => { e.stopPropagation(); onToggleFav(); }}
-          className={[locked ? '' : 'ml-auto', 'shrink-0 px-0.5 text-sm leading-none transition-opacity',
+          className={[locked ? '' : 'lg:ml-auto', 'hidden lg:inline shrink-0 px-0.5 text-sm leading-none transition-opacity',
             fav ? (active ? 'text-ink-inverse' : 'text-gold-300') + ' opacity-100'
                 : 'opacity-0 group-hover/nav:opacity-60 ' + (active ? 'text-ink-inverse' : 'text-ink-muted')].join(' ')}
         >{fav ? '★' : '☆'}</span>
