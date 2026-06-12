@@ -10,7 +10,7 @@
  *    프리뷰는 grid-cols-4 정사각 썸네일 → 줄바꿈/넘침 없음.
  *  - 로그인 필요: 비로그인 시 호출부에서 진입을 막지만, 방어적으로 user 없으면 제출 차단.
  * ========================================================================== */
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Fragment } from 'react';
 import Modal from '../atoms/Modal';
 import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
@@ -352,19 +352,20 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
               {/* 보드를 채우면 리플레이 상세(팟·스트리트별 액션) 입력 노출 */}
               {board.length >= 3 && (
                 <div className="space-y-1.5 border-t border-border-subtle pt-2 animate-fade-in">
-                  <input
-                    type="text" value={pot} onChange={(e) => setPot(e.target.value)} maxLength={20}
-                    placeholder="팟 (예: 12.5bb, 34만) — 선택"
-                    className="input w-full text-sm"
-                  />
-                  {([['pre', '프리플랍'], ['flop', '플랍'], ['turn', '턴'], ['river', '리버']] as const).map(([k, lab]) => (
-                    <input
-                      key={k} type="text" value={acts[k]} maxLength={80}
-                      onChange={(e) => setActs((p) => ({ ...p, [k]: e.target.value }))}
-                      placeholder={`${lab} 액션 (예: 내가 2.5bb 오픈, 상대 콜) — 선택`}
-                      className="input w-full text-sm"
-                    />
-                  ))}
+                  {/* 라벨 + 짧은 placeholder — 좁은 화면에서 안 잘린다(전부 선택 입력) */}
+                  <div className="grid grid-cols-[3.75rem_1fr] items-center gap-x-2 gap-y-1.5">
+                    <span className="text-2xs font-bold text-ink-secondary">팟</span>
+                    <input type="text" value={pot} onChange={(e) => setPot(e.target.value)} maxLength={20}
+                      placeholder="예: 12.5bb, 34만" className="input w-full text-sm" />
+                    {([['pre', '프리플랍'], ['flop', '플랍'], ['turn', '턴'], ['river', '리버']] as const).map(([k, lab]) => (
+                      <Fragment key={k}>
+                        <span className="text-2xs font-bold text-ink-secondary">{lab}</span>
+                        <input type="text" value={acts[k]} maxLength={80}
+                          onChange={(e) => setActs((p) => ({ ...p, [k]: e.target.value }))}
+                          placeholder="예: 내가 2.5bb 오픈, 상대 콜" className="input w-full text-sm" />
+                      </Fragment>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

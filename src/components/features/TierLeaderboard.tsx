@@ -63,6 +63,11 @@ export default function TierLeaderboard() {
   const [badgeStats, setBadgeStats] = useState<BadgeStats | null>(null);
   const [equippedMark, setEquippedMark] = useState<string | null | undefined>(undefined); // 상점: 장착 마크(undefined=미로드)
   const [equipBusy, setEquipBusy] = useState<string | null>(null);
+  // 행 닉네임 앞 장착 마크 — equippedMark 없는 행 타입(주간 리그 등)도 안전
+  const markPrefix = (r: unknown): string => {
+    const k = (r as { equippedMark?: string | null }).equippedMark;
+    return k ? ((SHOP_MARKS.find((m) => m.key === k)?.emoji ?? '') + ' ') : '';
+  };
   const handleEquip = async (key: string | null) => {
     if (equipBusy !== null) return;
     setEquipBusy(key ?? '');
@@ -330,7 +335,7 @@ export default function TierLeaderboard() {
                               {r.nickname.slice(0, 1)}
                             </div>
                             <div className="min-w-0 flex-1">
-                              <p className="text-xs font-bold text-gold-300">{myRank}위 · {r.nickname} <span className="text-ink-muted font-semibold">(나)</span></p>
+                              <p className="text-xs font-bold text-gold-300">{myRank}위 · {markPrefix(r)}{r.nickname} <span className="text-ink-muted font-semibold">(나)</span></p>
                               <p className="text-2xl font-extrabold leading-tight tabular-nums text-ink-primary">
                                 {r.score}<span className="ml-0.5 text-xs font-bold text-ink-muted">점</span>
                               </p>
@@ -349,7 +354,7 @@ export default function TierLeaderboard() {
                       <li key={r.userId} className="flex items-center gap-2.5 border-b border-border-subtle px-3 py-2 last:border-b-0">
                         <RankNum n={i + 1} />
                         <div className="min-w-0 flex-1">
-                          <span className="text-sm font-semibold text-ink-primary truncate">{r.nickname}</span>
+                          <span className="text-sm font-semibold text-ink-primary truncate">{markPrefix(r)}{r.nickname}</span>
                           <span className="block text-2xs text-ink-muted">체크인 {r.checkins}회 · 입상 {r.placements}회</span>
                         </div>
                         {t && <span className="shrink-0 rounded-badge bg-surface-float px-1.5 py-0.5 text-2xs font-bold text-ink-secondary">{t.emoji} {t.label}</span>}
@@ -453,7 +458,7 @@ export default function TierLeaderboard() {
                 <div key={r.nickname} className={['flex items-center gap-3 rounded-card border p-3', i === 0 ? 'border-gold-400/60 bg-gold-300/[0.08]' : 'border-border-subtle bg-surface-high'].join(' ')}>
                   <span className="text-2xl leading-none">{['👑', '🥈', '🥉'][i]}</span>
                   <div className="min-w-0 flex-1">
-                    <p className={['truncate font-extrabold', i === 0 ? 'text-lg text-gold-300' : 'text-sm text-ink-primary'].join(' ')}>{r.nickname}</p>
+                    <p className={['truncate font-extrabold', i === 0 ? 'text-lg text-gold-300' : 'text-sm text-ink-primary'].join(' ')}>{markPrefix(r)}{r.nickname}</p>
                     <p className="text-2xs text-ink-muted">{hall.label} 입상 점수 {r.pts}점{r.wins > 0 ? ` · 우승 ${r.wins}회` : ''}</p>
                   </div>
                 </div>
@@ -471,7 +476,7 @@ export default function TierLeaderboard() {
                 <li key={r.nickname} className="flex items-center gap-2.5 px-3 py-2 border-b border-border-subtle last:border-b-0">
                   <RankNum n={i + 1} />
                   <div className="flex-1 min-w-0">
-                    <span className="text-sm font-semibold text-ink-primary truncate">{r.nickname}</span>
+                    <span className="text-sm font-semibold text-ink-primary truncate">{markPrefix(r)}{r.nickname}</span>
                     <span className="block text-[10px] text-ink-muted">매장 {r.venues}곳 · 최고 {r.bestPosition}등</span>
                   </div>
                   <span className="text-right">
@@ -505,7 +510,7 @@ export default function TierLeaderboard() {
                       style={{ background: r.avatarColor ?? '#5A6175' }}>
                       {r.nickname[0]}
                     </span>
-                    <p className={['mt-1 truncate font-bold', big ? 'text-sm text-gold-300' : 'text-xs text-ink-primary'].join(' ')}>{r.nickname}</p>
+                    <p className={['mt-1 truncate font-bold', big ? 'text-sm text-gold-300' : 'text-xs text-ink-primary'].join(' ')}>{markPrefix(r)}{r.nickname}</p>
                     <p className="text-2xs tabular-nums text-ink-muted">{r.activityPoints.toLocaleString()}점</p>
                   </div>
                 );
@@ -552,7 +557,7 @@ export default function TierLeaderboard() {
                   </span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-sm font-semibold text-ink-primary truncate">{r.nickname}</span>
+                      <span className="text-sm font-semibold text-ink-primary truncate">{markPrefix(r)}{r.nickname}</span>
                       {isMe && <span className="text-2xs font-bold text-gold-300">나</span>}
                     </div>
                   </div>

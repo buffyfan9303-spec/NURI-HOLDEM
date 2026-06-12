@@ -1052,6 +1052,8 @@ export interface LeaderboardEntry {
   activityPoints: number;
   avatarColor?: string;
   role: UserRole;
+  /** 랭킹 상점 장착 마크 키(코스메틱 — 금전 가치 없음) */
+  equippedMark?: string | null;
 }
 
 /** 활동 점수 상위 회원 랭킹. 비민감 필드만 반환하는 RPC 사용(profiles RLS 우회). */
@@ -1066,5 +1068,6 @@ export async function getActivityLeaderboard(limit = 20): Promise<LeaderboardEnt
     activityPoints: r.activity_points ?? 0,
     avatarColor:    r.avatar_color ?? undefined,
     role:           r.role,
+    equippedMark:   r.equipped_mark ?? null,
   }));
 }

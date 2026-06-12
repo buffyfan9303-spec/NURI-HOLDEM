@@ -647,6 +647,9 @@ export default function App() {
   // 탭 순서 기반 방향 슬라이드(모바일 전용) — 오른쪽 탭으로 가면 오른쪽에서 8px 스르륵.
   // 파생값이 아니라 state로 들고 있어야 데이터 로딩 재렌더에 애니메이션이 끊기지 않는다.
   const [tabAnim, setTabAnim] = useState('');
+  // keep-alive: 한 번 방문한 핵심 탭은 언마운트하지 않고 display만 끈다 — 재방문 시 로드·마운트 비용 0(끊김 제거)
+  const [visitedTabs] = useState(() => new Set<TabId>(['browse']));
+  useEffect(() => { visitedTabs.add(activeTab); }, [activeTab, visitedTabs]);
   const activeTabRef = useRef<TabId>(activeTab);
   useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
   useEffect(() => {
@@ -1416,8 +1419,9 @@ export default function App() {
       {/* 일정 탐색 */}
       <div className="px-page-x"><StaffInviteBanner /></div>
 
-      {activeTab === 'browse' && (
-        <main className={tabAnim} onTouchStart={onPtrStart} onTouchMove={onPtrMove} onTouchEnd={onPtrEnd}>
+      {(activeTab === 'browse' || visitedTabs.has('browse')) && (
+        <main className={activeTab === 'browse' ? tabAnim : ''} style={activeTab !== 'browse' ? { display: 'none' } : undefined}
+          onTouchStart={onPtrStart} onTouchMove={onPtrMove} onTouchEnd={onPtrEnd}>
           {/* 당겨서 새로고침 인디케이터 — ♠ 회전 */}
           {ptr !== 0 && (
             <div className="flex items-center justify-center overflow-hidden transition-[height] lg:hidden"
@@ -1568,15 +1572,17 @@ export default function App() {
       {/* 탭 컨텐츠(지연 로딩) — 일정 탐색 이후 탭들은 청크 분리, 전환 시 짧은 로더 표시 */}
       <Suspense fallback={<LazyFallback />}>
       {/* 라이브 — 진행 중 게임 현황 */}
-      {activeTab === 'live' && (
-        <ErrorBoundary inline resetKey="live">
-          <LiveGamesTab venues={venues} onVenue={handleVenueClick} />
-        </ErrorBoundary>
+      {(activeTab === 'live' || visitedTabs.has('live')) && (
+        <div className={activeTab === 'live' ? tabAnim : ''} style={activeTab !== 'live' ? { display: 'none' } : undefined}>
+          <ErrorBoundary inline resetKey="live">
+            <LiveGamesTab venues={venues} onVenue={handleVenueClick} />
+          </ErrorBoundary>
+        </div>
       )}
 
       {/* 커뮤니티 */}
-      {activeTab === 'community' && (
-        <main className={`px-page-x pb-section ${tabAnim || 'animate-fade-in'}`}>
+      {(activeTab === 'community' || visitedTabs.has('community')) && (
+        <main className={`px-page-x pb-section ${activeTab === 'community' ? (tabAnim || 'animate-fade-in') : ''}`} style={activeTab !== 'community' ? { display: 'none' } : undefined}>
           <CommunityTab
             marketSlot={
               <MarketplaceTab
@@ -1612,8 +1618,8 @@ export default function App() {
       )}
 
       {/* 중고장터 */}
-      {activeTab === 'market' && (
-        <main className={`px-page-x py-section ${tabAnim || 'animate-fade-in'}`}>
+      {(activeTab === 'market' || visitedTabs.has('market')) && (
+        <main className={`px-page-x py-section ${activeTab === 'market' ? (tabAnim || 'animate-fade-in') : ''}`} style={activeTab !== 'market' ? { display: 'none' } : undefined}>
           <MarketplaceTab
             listings={listings}
             notices={notices.filter((n) => !n.board || n.board === 'all' || n.board === 'market')}
@@ -1628,8 +1634,8 @@ export default function App() {
       )}
 
       {/* 도구 — 매장 운영·플레이어 도구 모음 (메인 탭) */}
-      {activeTab === 'tools' && (
-        <main className={`px-page-x py-section ${tabAnim || 'animate-fade-in'}`}>
+      {(activeTab === 'tools' || visitedTabs.has('tools')) && (
+        <main className={`px-page-x py-section ${activeTab === 'tools' ? (tabAnim || 'animate-fade-in') : ''}`} style={activeTab !== 'tools' ? { display: 'none' } : undefined}>
           <ErrorBoundary inline resetKey="tools">
             <ToolsPanel />
           </ErrorBoundary>
