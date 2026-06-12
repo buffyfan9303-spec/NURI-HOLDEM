@@ -5,6 +5,7 @@ import ImageLightbox from '../atoms/ImageLightbox';
 import CommentThread from './CommentThread';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
+import StatefulActionButton from '../atoms/StatefulActionButton';
 import { getMyReservation, createReservation, cancelMyReservation, getOwnerReservations, type Reservation, type OwnerReservation } from '../../api/reservations';
 import { prizeMainText } from './ScheduleCard';
 import type { Schedule } from '../../api/schedules';
@@ -574,22 +575,34 @@ function ReserveBox({ scheduleId, ownerId, venueId }: { scheduleId: string; owne
 
   const act = async () => {
     if (!user) { toast.show('로그인 후 예약할 수 있습니다', 'error'); promptLogin(); return; }
-    if (busy) return;
+    if (busy || !mine) return;
     setBusy(true);
     try {
-      if (mine) { await cancelMyReservation(scheduleId); setMine(null); toast.show('예약을 취소했습니다', 'info'); }
-      else {
-        const n = (name.trim() || user.name || '예약자');
-        await createReservation(scheduleId, n); // 중복 닉네임이면 '이미 등록된 닉네임입니다' throw
-        setMine({ id: '', scheduleId, userId: user.id, displayName: n, createdAt: new Date().toISOString() });
-        toast.show('예약되었습니다', 'success');
-      }
+      await cancelMyReservation(scheduleId); setMine(null); toast.show('예약을 취소했습니다', 'info');
       loadRes();
     } catch (e) {
-      // 중복 닉네임 등 — 입력은 유지되어 닉네임만 바꿔 바로 다시 예약 가능
       toast.show(e instanceof Error ? e.message : '처리 실패', 'error');
     }
     finally { setBusy(false); }
+  };
+  // 예약(생성)은 상태 버튼이 모핑으로 보여준다 — 체크 애니메이션이 끝난 onDone에서 '예약 완료' 카드로 전환
+  const doReserve = async () => {
+    if (!user) { toast.show('로그인 후 예약할 수 있습니다', 'error'); promptLogin(); throw new Error('login'); }
+    const n = (name.trim() || user.name || '예약자');
+    try {
+      await createReservation(scheduleId, n); // 중복 닉네임이면 '이미 등록된 닉네임입니다' throw
+    } catch (e) {
+      // 중복 닉네임 등 — 입력은 유지되어 닉네임만 바꿔 바로 다시 예약 가능
+      toast.show(e instanceof Error ? e.message : '처리 실패', 'error');
+      throw e;
+    }
+  };
+  const afterReserve = () => {
+    if (!user) return;
+    const n = (name.trim() || user.name || '예약자');
+    setMine({ id: '', scheduleId, userId: user.id, displayName: n, createdAt: new Date().toISOString() });
+    toast.show('예약되었습니다', 'success');
+    loadRes();
   };
   const fmtRes = (iso: string) => { const d = new Date(iso); const p = (n: number) => String(n).padStart(2, '0'); return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`; };
 
@@ -602,11 +615,17 @@ function ReserveBox({ scheduleId, ownerId, venueId }: { scheduleId: string; owne
       {!mine && (
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="닉네임 또는 실명" maxLength={30} className="input w-full text-sm" />
       )}
-      <button type="button" onClick={act} disabled={busy}
-        className={['w-full py-3 rounded-input text-sm font-bold transition-colors disabled:opacity-60',
-          mine ? 'bg-surface-high text-danger-light border border-danger/40 hover:bg-danger/10' : 'btn-primary'].join(' ')}>
-        {mine ? '예약 취소' : '예약하기'}
-      </button>
+      {mine ? (
+        <button type="button" onClick={act} disabled={busy}
+          className="w-full py-3 rounded-input text-sm font-bold transition-colors disabled:opacity-60 bg-surface-high text-danger-light border border-danger/40 hover:bg-danger/10">
+          예약 취소
+        </button>
+      ) : (
+        <div className="flex justify-center">
+          <StatefulActionButton label="예약하기" successLabel="예약 완료!"
+            onAction={doReserve} onDone={afterReserve} className="w-full" />
+        </div>
+      )}
       <p className="text-[10px] text-ink-muted">{mine ? `예약자: ${mine.displayName}` : '같은 닉네임이 이미 있으면 예약할 수 없어요. 닉네임을 바꿔 다시 시도하세요.'}</p>
 
       {/* 업주/운영자: 예약 내역(실제 아이디·닉네임) — 접이식 */}
