@@ -545,10 +545,10 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           <p className="py-3 text-center text-2xs text-ink-muted">방문 손님 리스트 — 바인·머니인 비율·결제수단·방문 시간대·미수까지 한눈에.</p>
         </DashCard>
 
-        {/* 입장 QR 체크인 — 손님 스캔→출석 도장(활동점수) */}
-        <DashCard show={caps.manage} title="입장 QR 체크인" onClick={() => setCheckinOpen(true)}
-          badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-gold-300/15 text-gold-300">출석 도장 →</span>}>
-          <p className="py-3 text-center text-2xs text-ink-muted">매장 QR을 손님이 스캔하면 체크인 + 출석 도장(활동점수)이 찍힙니다. 오늘 명단도 실시간으로.</p>
+        {/* 예약·방문 체크 — 고정 QR 스캔(출석 도장) + 오늘 방문 명단(체크인·이용권) */}
+        <DashCard show={caps.manage} title="예약·방문 체크" onClick={() => setCheckinOpen(true)}
+          badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-gold-300/15 text-gold-300">방문 명단 →</span>}>
+          <p className="py-3 text-center text-2xs text-ink-muted">손님이 <b className="text-ink-secondary">고정 QR을 스캔</b>하거나 매장이용권을 결제하면 <b className="text-gold-300">방문</b>으로 표시됩니다. 오늘 방문 명단·출석 도장 실시간.</p>
         </DashCard>
 
         {/* ⚡ 포스터 부스트 안내 — 상단 고정 광고 문의 */}

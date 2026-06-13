@@ -7,6 +7,7 @@ import {
   getReservationCounts, getCustomerActivity, type Reservation, type CustomerActivity,
 } from '../../api/reservations';
 import { getPosterOpsSummaries, getScheduleLedgers, type PosterOpsSummary, type ScheduleLedgerItem } from '../../api/ledger';
+import { listVenueCheckins } from '../../api/checkins';
 import { toCsv, downloadCsv } from '../../lib/csv';
 import EmptyState from '../atoms/EmptyState';
 
@@ -35,6 +36,7 @@ interface MyPostersTabProps {
 export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete, onOpenLedger, onGotoRanking }: MyPostersTabProps) {
   const { user, isApprovedOwner } = useAuth();
   const [reserverCounts, setReserverCounts] = useState<Record<string, number>>({});
+  const [visitedNames, setVisitedNames] = useState<Set<string>>(new Set());
   const [ops, setOps] = useState<Record<string, PosterOpsSummary>>({}); // scheduleId → 연결 장부 운영 요약
 
   const myPosters = schedules.filter((s) => s.ownerId === user?.id);
@@ -46,6 +48,8 @@ export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete, on
     const ids = myPosters.map((p) => p.id);
     const reload = () => {
       getVenueReserverCounts(venueId).then(setReserverCounts).catch(() => {});
+      const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+      listVenueCheckins(venueId, t0.toISOString()).then((cs) => setVisitedNames(new Set(cs.map((c) => (c.displayName ?? '').trim().toLowerCase()).filter(Boolean)))).catch(() => {});
       getReservationCounts(ids).then(setResCounts).catch(() => {});
     };
     reload();
@@ -74,7 +78,7 @@ export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete, on
       ) : (
         <ul className="space-y-2">
           {myPosters.map((p) => (
-            <PosterRow key={p.id} schedule={p} venueId={venueId} reserverCounts={reserverCounts}
+            <PosterRow key={p.id} schedule={p} venueId={venueId} reserverCounts={reserverCounts} visitedNames={visitedNames}
               onEdit={() => onEdit(p.id)} onDelete={() => onDelete(p.id)}
               ops={ops[p.id] ?? null}
               resCount={resCounts[p.id] ?? 0}
@@ -103,8 +107,8 @@ function PendingApprovalView() {
 }
 
 // ── 단일 게임 행 + 예약 관리 패널 ─────────────────────────────────────────────
-function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, resCount, onLedgerAt, onRanking }: {
-  schedule: Schedule; venueId?: string; reserverCounts: Record<string, number>;
+function PosterRow({ schedule, venueId, reserverCounts, visitedNames, onEdit, onDelete, ops, resCount, onLedgerAt, onRanking }: {
+  schedule: Schedule; venueId?: string; reserverCounts: Record<string, number>; visitedNames?: Set<string>;
   onEdit: () => void; onDelete: () => void;
   ops?: PosterOpsSummary | null; resCount?: number; onLedgerAt?: (date: string | null) => void; onRanking?: (date: string) => void;
 }) {
@@ -264,6 +268,7 @@ function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, r
               </div>
               {reservations.map((r, i) => (
                 <ReservationItem key={r.id || i} idx={i + 1} res={r} venueId={venueId}
+                  visited={visitedNames?.has((r.displayName ?? '').trim().toLowerCase()) ?? false}
                   regular={(reserverCounts[r.displayName] ?? 0) >= 5}
                   reserveCount={reserverCounts[r.displayName] ?? 0}
                   onDelete={() => onDel(r)} onRename={() => onRename(r)} />
@@ -277,7 +282,8 @@ function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, r
 }
 
 // ── 예약자 1명 + (단골 5회+) 고객 활동내역 ────────────────────────────────────
-function ReservationItem({ idx, res, venueId, regular, reserveCount, onDelete, onRename }: {
+function ReservationItem({ idx, res, venueId, visited, regular, reserveCount, onDelete, onRename }: {
+  visited?: boolean;
   idx: number; res: Reservation; venueId?: string; regular: boolean; reserveCount: number;
   onDelete: () => void; onRename: () => void;
 }) {
@@ -292,8 +298,10 @@ function ReservationItem({ idx, res, venueId, regular, reserveCount, onDelete, o
       <div className="flex items-center gap-2 px-2.5 py-2">
         <span className="w-5 text-center text-2xs font-bold text-gold-300 tabular-nums">{idx}</span>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-ink-primary truncate">{res.displayName}
-            {regular && <span className="ml-1.5 text-2xs font-bold text-gold-300 bg-gold-300/15 px-1.5 py-0.5 rounded-badge">단골 {reserveCount}회</span>}
+          <p className="flex flex-wrap items-center gap-1.5 text-sm font-semibold text-ink-primary">
+            <span className="min-w-0 truncate">{res.displayName}</span>
+            {visited && <span className="shrink-0 rounded-badge bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-bold text-emerald-300">✓ 방문</span>}
+            {regular && <span className="shrink-0 text-2xs font-bold text-gold-300 bg-gold-300/15 px-1.5 py-0.5 rounded-badge">단골 {reserveCount}회</span>}
           </p>
           {/* 예약 접수 일시 — 업주 전용 화면이라 노출 OK */}
           <p className="text-[10px] text-ink-muted tabular-nums mt-0.5">
