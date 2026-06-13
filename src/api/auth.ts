@@ -428,3 +428,13 @@ export async function updateMyConsent(consent: ConsentPayload): Promise<void> {
   }).eq('id', user.id);
   if (error) throw error;
 }
+
+/** 순위 입력 자동완성 — 닉네임/실명 부분 일치(업주·운영자만 실명 반환, RPC 내부 게이트) */
+export async function searchMembersForRanking(q: string): Promise<{ nickname: string; realName: string }[]> {
+  const t = q.trim();
+  if (!t) return [];
+  const { data, error } = await supabase.rpc('search_members_for_ranking', { p_q: t });
+  if (error) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({ nickname: r.nickname ?? '', realName: r.real_name ?? '' }));
+}

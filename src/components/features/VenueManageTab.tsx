@@ -1,9 +1,9 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode, useRef } from 'react';
 import Icon from '../atoms/Icon';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
 import type { User, VenueInvite } from '../../api/auth';
-import { getMyVenueStaff, getMyVenueInvites, inviteStaffByEmail, cancelStaffInvite, removeStaff, setStaffTitle, checkNicknameAvailable } from '../../api/auth';
+import { getMyVenueStaff, getMyVenueInvites, inviteStaffByEmail, cancelStaffInvite, removeStaff, setStaffTitle, checkNicknameAvailable, searchMembersForRanking } from '../../api/auth';
 import { getVenueRankings, saveVenueRankings, maskRealName, getVenuePageConfig, placementPointsOf, type VenuePageConfig } from '../../api/rankings';
 import { canAccessLedger, canManagePos, getLedgerAccessUserIds, grantLedgerAccess, revokeLedgerAccess } from '../../api/ledger';
 import { getAllVenues, type Venue } from '../../api/community';
@@ -22,6 +22,7 @@ import LeaguePanel from './LeaguePanel';
 import SectionHeader from '../atoms/SectionHeader';
 import type { Schedule } from '../../api/schedules';
 import { motion } from 'framer-motion';
+import { getLedgerBuyins } from '../../api/ledger';
 
 type Section = 'dashboard' | 'posters' | 'ledger' | 'stats' | 'ranking' | 'venueRank' | 'league' | 'staff' | 'settings' | 'clock' | 'attendance' | 'voucher' | 'page';
 
@@ -344,6 +345,32 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
       ? { ...row, [k]: v, ...(k === 'nickname' ? { member: null } : {}) } // 닉네임 바뀌면 매칭 재확인
       : row)));
   // 닉네임 blur 시 회원 여부 표시 — 미가입 닉네임도 순위 기록은 되지만 점수·이용권은 안 가는 걸 입력 단계에서 미리 보여준다
+  // 자동완성: ①그날 장부 명단 ②비회원 등록 ③회원 검색(닉네임/실명 — 동명이인은 실명으로 구분)
+  const [ledgerNames, setLedgerNames] = useState<string[]>([]);
+  useEffect(() => {
+    getLedgerBuyins(venueId, date)
+      .then((bs) => setLedgerNames([...new Set(bs.map((b) => b.playerName).filter(Boolean))]))
+      .catch(() => setLedgerNames([]));
+  }, [venueId, date]);
+  const [sugRow, setSugRow] = useState<number | null>(null);     // 드롭다운 열린 행
+  const [memCands, setMemCands] = useState<{ nickname: string; realName: string }[]>([]);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onNickInput = (i: number, v: string) => {
+    update(i, 'nickname', v);
+    setSugRow(v.trim() ? i : null);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    if (!v.trim()) { setMemCands([]); return; }
+    searchTimer.current = setTimeout(() => {
+      searchMembersForRanking(v).then(setMemCands).catch(() => setMemCands([]));
+    }, 280);
+  };
+  const pickSuggestion = (i: number, kind: 'ledger' | 'guest' | 'member', nickname: string, realName?: string) => {
+    setRows((r) => r.map((row, idx) => (idx === i
+      ? { ...row, nickname, realName: realName ?? row.realName, member: kind === 'member' ? true : kind === 'guest' ? false : row.member ?? null }
+      : row)));
+    setSugRow(null); setMemCands([]);
+    if (kind === 'ledger') void checkMember(i, nickname); // 장부명이 회원인지 보조 확인
+  };
   const checkMember = async (i: number, nickname: string) => {
     const n = nickname.trim();
     if (!n) return;
@@ -431,11 +458,42 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
               <div className="relative min-w-0">
                 <input
                   type="text" value={row.nickname} maxLength={30}
-                  onChange={(e) => update(i, 'nickname', e.target.value)}
-                  onBlur={() => checkMember(i, row.nickname)}
+                  onChange={(e) => onNickInput(i, e.target.value)}
+                  onFocus={() => { if (row.nickname.trim()) setSugRow(i); }}
+                  onBlur={() => { setTimeout(() => setSugRow((r) => (r === i ? null : r)), 180); checkMember(i, row.nickname); }}
                   placeholder="닉네임 *"
                   className="input w-full min-w-0 text-sm py-2"
                 />
+                {/* 자동완성 — 장부 명단 → 비회원 등록 → 회원(닉네임 · 실명) 순. 번호 없이 탭해서 선택 */}
+                {sugRow === i && row.nickname.trim() !== '' && (
+                  <ul className="absolute left-0 right-0 top-full z-30 mt-1 max-h-52 overflow-y-auto rounded-input border border-border-default bg-surface-float shadow-dialog">
+                    {ledgerNames.filter((n) => n.includes(row.nickname.trim())).slice(0, 4).map((n) => (
+                      <li key={'l' + n}>
+                        <button type="button" onMouseDown={(e) => { e.preventDefault(); pickSuggestion(i, 'ledger', n); }}
+                          className="flex w-full items-center gap-2 px-2.5 py-2 text-left text-xs hover:bg-surface-high">
+                          <span className="shrink-0 rounded-badge bg-gold-300/15 px-1.5 py-0.5 text-[9px] font-bold text-gold-300">장부</span>
+                          <span className="truncate font-semibold text-ink-primary">{n}</span>
+                        </button>
+                      </li>
+                    ))}
+                    <li>
+                      <button type="button" onMouseDown={(e) => { e.preventDefault(); pickSuggestion(i, 'guest', row.nickname.trim()); }}
+                        className="flex w-full items-center gap-2 px-2.5 py-2 text-left text-xs hover:bg-surface-high">
+                        <span className="shrink-0 rounded-badge bg-surface-high px-1.5 py-0.5 text-[9px] font-bold text-ink-muted">비회원</span>
+                        <span className="truncate text-ink-secondary">'{row.nickname.trim()}' 비회원으로 등록</span>
+                      </button>
+                    </li>
+                    {memCands.map((c, ci) => (
+                      <li key={'m' + ci}>
+                        <button type="button" onMouseDown={(e) => { e.preventDefault(); pickSuggestion(i, 'member', c.nickname, c.realName); }}
+                          className="flex w-full items-center gap-2 px-2.5 py-2 text-left text-xs hover:bg-surface-high">
+                          <span className="shrink-0 rounded-badge bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-bold text-emerald-300">회원</span>
+                          <span className="truncate font-semibold text-ink-primary">{c.nickname}{c.realName ? <span className="font-normal text-ink-muted"> · {c.realName}</span> : null}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 {/* 회원 매칭 뱃지 — 미가입이면 기록만 되고 점수·이용권은 안 간다 */}
                 {row.member != null && row.nickname.trim() !== '' && (
                   <span className={['pointer-events-none absolute -top-1.5 right-1 rounded-badge px-1 py-0.5 text-[9px] font-bold leading-none',
