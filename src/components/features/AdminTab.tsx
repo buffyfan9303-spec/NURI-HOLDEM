@@ -278,18 +278,23 @@ function MissionsAdminCard() {
   const [goalType, setGoalType] = useState<MissionGoalType>('checkin');
   const [goal, setGoal] = useState(3);
   const [reward, setReward] = useState(30);
+  const [editRow, setEditRow] = useState<CustomMissionRow | null>(null);
   const reload = useCallback(() => { adminListCustomMissions().then(setRows).catch(() => {}); }, []);
   useEffect(() => { reload(); }, [reload]);
 
-  const add = async () => {
+  const resetForm = () => { setEditRow(null); setTitle(''); setGoalType('checkin'); setGoal(3); setReward(30); };
+  const startEdit = (m: CustomMissionRow) => { setEditRow(m); setTitle(m.title); setGoalType(m.goal_type); setGoal(m.goal); setReward(m.reward); };
+  const save = async () => {
     if (!title.trim()) { toast.show('미션 이름을 입력해 주세요', 'error'); return; }
     setBusy(true);
     try {
-      await adminSaveCustomMission({ title, goal_type: goalType, goal, reward });
-      toast.show('미션을 추가했습니다 — 랭킹 > 미션 보드에 바로 노출됩니다', 'success');
-      setTitle(''); reload();
+      await adminSaveCustomMission(editRow
+        ? { ...editRow, title, goal_type: goalType, goal, reward }
+        : { title, goal_type: goalType, goal, reward });
+      toast.show(editRow ? '미션을 수정했습니다 — 랭킹 보드에 바로 반영됩니다' : '미션을 추가했습니다 — 랭킹 > 미션 보드에 바로 노출됩니다', 'success');
+      resetForm(); reload();
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '추가 실패', 'error');
+      toast.show(e instanceof Error ? e.message : (editRow ? '수정 실패' : '추가 실패'), 'error');
     } finally { setBusy(false); }
   };
   const toggle = async (m: CustomMissionRow) => {
@@ -335,6 +340,7 @@ function MissionsAdminCard() {
             <span className="text-ink-muted">{GOAL_TYPE_OPTIONS.find((o) => o.value === m.goal_type)?.label.replace('N', String(m.goal))}</span>
             <span className="font-bold text-emerald-400">+{m.reward}점</span>
             <span className="ml-auto flex gap-1">
+              <button type="button" onClick={() => startEdit(m)} disabled={busy} className="btn-ghost px-2 py-1 text-2xs text-gold-300 disabled:opacity-60">수정</button>
               <button type="button" onClick={() => toggle(m)} disabled={busy} className="btn-ghost px-2 py-1 text-2xs disabled:opacity-60">
                 {m.active ? '중단' : '재개'}
               </button>
@@ -344,7 +350,8 @@ function MissionsAdminCard() {
         ))}
       </ul>
       {/* 새 미션 추가 */}
-      <div className="flex flex-wrap items-center gap-1.5 rounded-input border border-dashed border-border-strong p-2">
+      <div className={['flex flex-wrap items-center gap-1.5 rounded-input border border-dashed p-2', editRow ? 'border-gold-400/60 bg-gold-300/[0.05]' : 'border-border-strong'].join(' ')}>
+        {editRow && <span className="w-full text-2xs font-bold text-gold-300">✏️ ‘{editRow.title}’ 수정 중 — 저장하면 덮어씁니다</span>}
         <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={30}
           placeholder="미션 이름 (예: 이번 주 3회 출석 도전)" className="input min-w-[11rem] flex-1 text-sm" />
         <select value={goalType} onChange={(e) => setGoalType(e.target.value as MissionGoalType)} className="input w-auto text-sm">
@@ -356,7 +363,8 @@ function MissionsAdminCard() {
         <label className="flex items-center gap-1 text-xs text-ink-muted">보상
           <input type="number" min={1} max={500} value={reward} onChange={(e) => setReward(Math.max(1, Math.min(500, Number(e.target.value) || 1)))} className="input w-20 text-sm" />점
         </label>
-        <button type="button" onClick={add} disabled={busy} className="btn-primary px-3 py-1.5 text-xs disabled:opacity-60">+ 추가</button>
+        <button type="button" onClick={save} disabled={busy} className="btn-primary px-3 py-1.5 text-xs disabled:opacity-60">{editRow ? '수정 저장' : '+ 추가'}</button>
+        {editRow && <button type="button" onClick={resetForm} disabled={busy} className="btn-ghost px-3 py-1.5 text-xs disabled:opacity-60">취소</button>}
       </div>
       <p className="text-xs text-ink-muted">유형은 체크인·게시글·머니인 3가지 — 달성 검증은 서버(claim_mission RPC)가 자동으로 합니다.</p>
     </section>

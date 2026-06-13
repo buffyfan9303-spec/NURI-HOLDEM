@@ -39,6 +39,7 @@ function buildDateSlots(count = 14) {
       isToday: i === 0,
       isSat: d.getDay() === 6,
       isSun: d.getDay() === 0,
+      showMonth: i === 0 || d.getDate() === 1, // 첫 칸·월 바뀌는 칸에 'N월' 컨텍스트
     };
   });
 }
@@ -112,40 +113,46 @@ function DateTab({ slot, selected, onClick }: DateTabProps) {
     }
   }, [selected]);
 
-  const dowColor = slot.isSun
-    ? 'text-red-400'
-    : slot.isSat
-    ? 'text-blue-400'
-    : 'text-ink-muted';
+  const dowColor = slot.isSun ? 'text-red-400' : slot.isSat ? 'text-blue-400' : 'text-ink-muted';
+  // 상단 컨텍스트: 오늘 우선, 다음으로 월 경계('N월'). 칸 높이는 항상 고정(빈 줄로 정렬 유지)
+  const topLabel = slot.isToday ? '오늘' : slot.showMonth ? `${slot.month}월` : '';
 
   return (
-    <button
+    <motion.button
       ref={tabRef}
       type="button"
-      onClick={onClick}
+      onClick={() => { navigator.vibrate?.(8); onClick(); }}
       aria-pressed={selected}
       aria-label={`${slot.month}월 ${slot.day}일 ${slot.dow}요일${slot.isToday ? ' (오늘)' : ''}`}
+      whileTap={{ scale: 0.9 }}
+      transition={{ type: 'spring', stiffness: 700, damping: 30 }}
       className={[
-        'relative flex flex-col items-center justify-center',
-        // 모바일: 8칸 그리드 균등 분배(한 페이지) / PC: 콤팩트 고정폭(띄엄띄엄 방지)
-        'w-full sm:w-14 sm:shrink-0 h-tab-h rounded-input',
-        'transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-300',
-        selected
-          ? 'bg-gold-300 text-ink-inverse'
-          : 'text-ink-secondary hover:bg-surface-high',
+        'relative flex shrink-0 snap-center flex-col items-center justify-center',
+        'w-[3.25rem] h-16 rounded-2xl select-none',
+        'focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-300',
+        selected ? 'text-ink-inverse' : 'text-ink-secondary hover:bg-surface-high active:bg-surface-high/70',
       ].join(' ')}
     >
-      {slot.isToday && !selected && (
-        <span aria-hidden className="absolute top-1 w-1 h-1 rounded-full bg-gold-300" />
+      {/* 선택 시 골드 알약이 스프링으로 차오름(복수 선택이라 칸마다 독립) */}
+      {selected && (
+        <motion.span
+          aria-hidden
+          initial={{ scale: 0.55, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: 'spring', stiffness: 620, damping: 26 }}
+          className="absolute inset-0 rounded-2xl bg-gold-300 shadow-[0_5px_16px_-5px_rgba(252,213,53,0.65)]"
+        />
       )}
       <span className={[
-        'text-2xs font-medium leading-none mb-0.5',
-        selected ? 'text-ink-inverse' : dowColor,
-      ].join(' ')}>
-        {slot.dow}
-      </span>
-      <span className="text-sm font-semibold leading-none">{slot.day}</span>
-    </button>
+        'relative h-3 text-[9px] font-bold leading-none',
+        selected ? 'text-ink-inverse/70' : slot.isToday ? 'text-gold-300' : 'text-ink-muted/70',
+      ].join(' ')}>{topLabel}</span>
+      <span className={[
+        'relative my-0.5 text-2xs font-bold leading-none',
+        selected ? 'text-ink-inverse/85' : dowColor,
+      ].join(' ')}>{slot.dow}</span>
+      <span className="relative text-base font-extrabold leading-none tabular-nums">{slot.day}</span>
+    </motion.button>
   );
 }
 
@@ -158,15 +165,15 @@ interface DateSliderProps {
 }
 
 function DateSlider({ selectedDates, onToggle, onPick }: DateSliderProps) {
-  // 가까운 7일치만 직접 노출, 그 외 날짜는 '선택' 캘린더로 지정
-  const slots = useRef(buildDateSlots(7)).current;
+  // 3주치를 가로 모멘텀 레일로 노출(스냅·관성 스크롤), 그 외는 '달력'으로 지정
+  const slots = useRef(buildDateSlots(21)).current;
   const todayIso = slots[0].iso;
 
   return (
     <div
       role="group"
       aria-label="날짜 빠른 선택 (복수 선택 가능)"
-      className="grid grid-cols-8 gap-1 px-page-x pb-1 sm:flex sm:justify-center sm:gap-1.5"
+      className="flex gap-1.5 overflow-x-auto scrollbar-none snap-x scroll-px-page-x px-page-x pb-1.5 [-webkit-overflow-scrolling:touch] sm:gap-2"
     >
       {slots.map((slot) => (
         <DateTab
@@ -177,15 +184,15 @@ function DateSlider({ selectedDates, onToggle, onPick }: DateSliderProps) {
         />
       ))}
 
-      {/* 날짜 직접 선택 (7일 이후) — 네이티브 date picker 오버레이 */}
+      {/* 날짜 직접 선택 (3주 이후) — 네이티브 date picker 오버레이 */}
       <label
         title="날짜 직접 선택"
-        className="relative flex flex-col items-center justify-center w-full sm:w-14 sm:shrink-0 h-tab-h rounded-input border border-dashed border-border-default text-ink-secondary hover:bg-surface-high hover:border-gold-400/50 cursor-pointer transition-colors focus-within:ring-2 focus-within:ring-gold-300"
+        className="relative flex shrink-0 snap-center flex-col items-center justify-center w-[3.25rem] h-16 rounded-2xl border border-dashed border-border-default text-ink-secondary hover:bg-surface-high hover:border-gold-400/50 cursor-pointer transition-colors focus-within:ring-2 focus-within:ring-gold-300"
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
         </svg>
-        <span className="text-2xs font-medium leading-none mt-0.5">선택</span>
+        <span className="text-[10px] font-semibold leading-none mt-1">달력</span>
         <input
           type="date"
           min={todayIso}
