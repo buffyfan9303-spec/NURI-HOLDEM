@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { CalcCard } from './calcUi';
-import { GRID, POSITIONS, action, openPct, type Pos } from '../../../lib/preflop';
+import { GRID, POSITIONS, STACKS, action, openPct, type Pos, type StackBB } from '../../../lib/preflop';
 
 // 스타팅핸드(프리플랍) 레인지 가이드 — 공용 lib/preflop(Chen 점수 기반 참고 레인지) 사용.
 
@@ -8,12 +8,29 @@ export default function RangeGuide() {
   const [pos, setPos] = useState<Pos>('BTN');
   const [size, setSize] = useState<'6' | '9'>('6');
   const [act, setAct] = useState<'open' | '3bet'>('open');
-  const pct = openPct(pos, size, act);
-  const actionLabel = act === '3bet' ? '3벳' : '오픈';
+  const [bb, setBb] = useState<StackBB>(100);
+  const stack = STACKS.find((x) => x.bb === bb)!;
+  const pct = openPct(pos, size, act, bb);
+  const actionLabel = act === '3bet' ? stack.threeBetLabel : stack.openLabel;
   const openCount = GRID.flat().filter((h) => action(h.label, pct) !== 'fold').length;
 
   return (
-    <CalcCard title="스타팅핸드 가이드" desc="포지션·테이블·액션별 프리플랍 참고 레인지">
+    <CalcCard title="스타팅핸드 가이드" desc="스택·포지션·테이블·액션별 프리플랍 참고 레인지">
+      {/* 스택 깊이(bb) — 토너 4구간 */}
+      <div className="flex items-center gap-1">
+        {STACKS.map((st) => {
+          const on = st.bb === bb;
+          return (
+            <button key={st.bb} type="button" onClick={() => setBb(st.bb)}
+              className={['flex-1 h-8 rounded-input text-xs font-bold leading-none border transition-colors focus:outline-none',
+                on ? 'bg-gold-300 border-gold-300 text-ink-inverse' : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary'].join(' ')}>
+              {st.label}
+            </button>
+          );
+        })}
+      </div>
+      <p className="text-[10px] leading-relaxed text-ink-secondary rounded-input bg-surface-high/60 border border-border-subtle px-2 py-1.5">💡 {stack.hint}</p>
+
       {/* 포지션 선택 */}
       <div className="flex flex-wrap gap-1">
         {POSITIONS.map((p) => {
@@ -84,7 +101,7 @@ export default function RangeGuide() {
         <Legend cls="bg-surface-high border border-border-default" label="폴드" />
         <span className="text-2xs text-ink-muted">{actionLabel} {openCount}콤보 (~{Math.round((openCount / 169) * 100)}%)</span>
       </div>
-      <p className="text-[10px] text-ink-muted text-center leading-relaxed">※ 참고용 근사 레인지입니다(6·9맥스 / 오픈·3벳). 상대 성향·스택에 따라 조정하세요.</p>
+      <p className="text-[10px] text-ink-muted text-center leading-relaxed">※ 참고용 근사 레인지입니다(스택 4구간 × 6·9맥스 × 오픈·3벳). 12bb 오픈은 사실상 올인 레인지로 보세요.</p>
     </CalcCard>
   );
 }

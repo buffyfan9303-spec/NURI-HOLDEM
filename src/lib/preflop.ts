@@ -57,10 +57,28 @@ export const POSITIONS: { id: Pos; label: string; pct: number }[] = [
 export type TableSize = '6' | '9';
 export type PreAction = 'open' | '3bet';
 
-/** 포지션·테이블·액션별 오픈/3벳 상위 % 임계값. */
-export function openPct(pos: Pos, size: TableSize, act: PreAction): number {
+// ── 스택 깊이(bb)별 보정 — 토너먼트 핵심 4구간. (Chen 근사 위 참고 보정, 솔버 아님)
+export type StackBB = 12 | 20 | 40 | 100;
+export const STACKS: { bb: StackBB; label: string; hint: string; openLabel: string; threeBetLabel: string }[] = [
+  { bb: 12, label: '12bb', openLabel: '오픈(≈올인)', threeBetLabel: '3벳(올인)',
+    hint: '푸시/폴드 구간 — 오픈은 사실상 올인. 레이트 포지션은 과감하게 넓히고, 콜은 프리미엄만.' },
+  { bb: 20, label: '20bb', openLabel: '오픈(미니레이즈)', threeBetLabel: '3벳(올인)',
+    hint: '숏스택 — 레이즈/폴드 단순화. 3벳은 대부분 올인이라 한 단계 타이트하게.' },
+  { bb: 40, label: '40bb', openLabel: '오픈', threeBetLabel: '3벳',
+    hint: '미들스택 — 표준에 가깝지만 스택오프 기준이 낮아 도미네이트 당하는 콜 주의.' },
+  { bb: 100, label: '100bb', openLabel: '오픈', threeBetLabel: '3벳',
+    hint: '딥스택 — 표준 레인지. 수딧 커넥터·작은 페어의 임플라이드 가치가 올라간다.' },
+];
+function stackMul(bb: StackBB, act: PreAction): number {
+  // 오픈: 12bb 푸시 레인지는 넓게, 100bb는 스펙 핸드 소폭 추가. 3벳: 올인 구간은 타이트.
+  if (act === 'open') return bb === 12 ? 1.3 : bb === 20 ? 1.0 : bb === 40 ? 1.0 : 1.06;
+  return bb === 12 ? 0.72 : bb === 20 ? 0.85 : bb === 40 ? 1.0 : 1.12;
+}
+
+/** 포지션·테이블·액션·스택별 오픈/3벳 상위 % 임계값. */
+export function openPct(pos: Pos, size: TableSize, act: PreAction, bb: StackBB = 100): number {
   const base = POSITIONS.find((p) => p.id === pos)!.pct;
-  return Math.max(0.01, base * (size === '9' ? 0.78 : 1) * (act === '3bet' ? 0.42 : 1));
+  return Math.max(0.01, Math.min(0.85, base * (size === '9' ? 0.78 : 1) * (act === '3bet' ? 0.42 : 1) * stackMul(bb, act)));
 }
 
 export function action(label: string, pct: number): 'raise' | 'mix' | 'fold' {
