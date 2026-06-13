@@ -120,16 +120,17 @@ function LiveCard({ g, name, onClick }: { g: ClockState; name: string; onClick: 
           </div>
         </div>
 
-        {/* 바인 · 리바인 금액(연동 장부 기준) */}
-        {ls.buyInAmount ? (
+        {/* 바인 금액 · 스타팅/리바인 스택 */}
+        {(ls.buyInAmount || g.config?.startStack || g.config?.rebuyStack) ? (
           <p className="mt-2 rounded-input bg-surface-base/60 px-3 py-1.5 text-2xs text-ink-secondary">
-            바인 <b className="text-gold-300">{wonToMan(ls.buyInAmount)}만</b> · 리바인 <b className="text-gold-300">{wonToMan(ls.buyInAmount)}만</b>
+            {ls.buyInAmount ? <>바인 <b className="text-gold-300">{wonToMan(ls.buyInAmount)}만</b> · </> : null}
+            스타팅 <b className="text-gold-300 tabular-nums">{(g.config?.startStack ?? 0).toLocaleString()}</b> · 리바인 <b className="text-gold-300 tabular-nums">{(g.config?.rebuyStack ?? 0).toLocaleString()}</b>
           </p>
         ) : null}
 
-        {/* 인원·리바인·얼리·애드온/탈락 */}
+        {/* 엔트리(생존 부가)·리바인·얼리·애드온/탈락 */}
         <div className="mt-2 grid grid-cols-4 gap-1.5">
-          <Cell label="생존" value={`${ls.alive}`} sub={`/${ls.entries}`} accent />
+          <Cell label="엔트리" value={`${ls.entries}`} sub={`생존 ${ls.alive}`} accent />
           <Cell label="리바인" value={`${ls.rebuys}`} />
           <Cell label="얼리" value={`${ls.earlies}`} />
           <Cell label={isAddon ? '애드온' : '탈락'} value={`${isAddon ? ls.addons : ls.eliminations}`} />

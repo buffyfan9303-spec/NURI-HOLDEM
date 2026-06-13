@@ -35,6 +35,8 @@ export interface PosterFormData {
   gameType: string;               // 게임 종류 자유 입력(프리즈아웃·바운티·애드온 등) — 선택
   addonStack: number;             // 애드온 스택(애드온 게임) — 선택
   addonCost: number;              // 애드온 비용 — 선택
+  startStack: number;             // 스타팅 스택(칩) — 선택
+  rebuyStack: number;             // 리바인 스택(칩) — 선택
   region: string;
   isCompetition: boolean; // '대회/이벤트' 분류 (Task 3) — 필터 [대회]에 노출
   paymentMethods: string[];
@@ -68,7 +70,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
   const empty: PosterFormData = {
     title: '', date: new Date().toLocaleDateString('en-CA'),
     startTime: '19:00', regCloseTime: '', duration: '', blinds: '',
-    prizeType: 'GTD', prizeAmount: 0, prizePercent: 0, buyIn: 0, gameType: '', addonStack: 0, addonCost: 0, region: '',
+    prizeType: 'GTD', prizeAmount: 0, prizePercent: 0, buyIn: 0, gameType: '', addonStack: 0, addonCost: 0, startStack: 0, rebuyStack: 0, region: '',
     isCompetition: false,
     paymentMethods: ['현금'], partners: [], prizes: [],
     rankingPrizes: [], events: [], repeatWeeks: 1, blindLevels: [],
@@ -108,7 +110,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
         prizeType: schedule.guaranteed ? 'GTD' : 'ENTRY',
         prizeAmount: schedule.prizePool ? Math.round(schedule.prizePool / 10000) : 0,
         prizePercent: schedule.prizePercent ?? 0,
-        buyIn: schedule.buyIn.amount, gameType: schedule.buyIn.gameType ?? '', addonStack: schedule.buyIn.addonStack ?? 0, addonCost: schedule.buyIn.addon ?? 0, region: schedule.region,
+        buyIn: schedule.buyIn.amount, gameType: schedule.buyIn.gameType ?? '', addonStack: schedule.buyIn.addonStack ?? 0, addonCost: schedule.buyIn.addon ?? 0, startStack: schedule.buyIn.startStack ?? 0, rebuyStack: schedule.buyIn.rebuyStack ?? 0, region: schedule.region,
         isCompetition: schedule.isCompetition ?? false,
         paymentMethods: schedule.paymentMethods ?? ['현금'],
         partners: schedule.partners ?? [],
@@ -154,7 +156,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
       prizeType: s.guaranteed ? 'GTD' : 'ENTRY',
       prizeAmount: s.prizePool ? Math.round(s.prizePool / 10000) : 0,
       prizePercent: s.prizePercent ?? 0,
-      buyIn: s.buyIn.amount, gameType: s.buyIn.gameType ?? '', addonStack: s.buyIn.addonStack ?? 0, addonCost: s.buyIn.addon ?? 0, region: s.region,
+      buyIn: s.buyIn.amount, gameType: s.buyIn.gameType ?? '', addonStack: s.buyIn.addonStack ?? 0, addonCost: s.buyIn.addon ?? 0, startStack: s.buyIn.startStack ?? 0, rebuyStack: s.buyIn.rebuyStack ?? 0, region: s.region,
       isCompetition: s.isCompetition ?? false,
       paymentMethods: s.paymentMethods ?? ['현금'],
       partners: s.partners ?? [],
@@ -473,6 +475,14 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
           <FieldWrap label="애드온 비용" suffix="원">
             <input type="number" min={0} value={form.addonCost || ''}
               onChange={(e) => update('addonCost', Number(e.target.value))} placeholder="예: 50000" className="input" />
+          </FieldWrap>
+          <FieldWrap label="스타팅 스택" suffix="칩">
+            <input type="number" min={0} value={form.startStack || ''}
+              onChange={(e) => update('startStack', Number(e.target.value))} placeholder="예: 50000" className="input" />
+          </FieldWrap>
+          <FieldWrap label="리바인 스택" suffix="칩">
+            <input type="number" min={0} value={form.rebuyStack || ''}
+              onChange={(e) => update('rebuyStack', Number(e.target.value))} placeholder="예: 70000" className="input" />
           </FieldWrap>
         </div>
 

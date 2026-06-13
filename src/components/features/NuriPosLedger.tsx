@@ -1135,6 +1135,8 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   const [doubleEarlyBonus, setDoubleEarlyBonus] = useState<number>(0);
   const [earlyDoubleLevel, setEarlyDoubleLevel] = useState<number>(1);
   const [earlySingleLevel, setEarlySingleLevel] = useState<number>(4);
+  const [startStack, setStartStack] = useState<number>(50000);
+  const [rebuyStack, setRebuyStack] = useState<number>(70000);
   useEffect(() => {
     let alive = true;
     getClockState(base.venueId).then((st) => {
@@ -1145,6 +1147,8 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       setDoubleEarlyBonus(c.doubleEarlyBonus ?? 0);
       setEarlyDoubleLevel(c.earlyDoubleLevel ?? 1);
       setEarlySingleLevel(c.earlySingleLevel ?? 4);
+      setStartStack(c.startStack ?? 50000);
+      setRebuyStack(c.rebuyStack ?? 70000);
     }).catch(() => {});
     return () => { alive = false; };
   }, [base.venueId]);
@@ -1171,7 +1175,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
     // 연동 클락 얼리 설정 저장 — 진행 중 클락은 건드리지 않음(비파괴 병합)
     if (!clockState?.running) {
       const baseCfg = clockState?.config ?? defaultClockConfig();
-      const cfg = { ...baseCfg, earlyBonus, doubleEarlyBonus, earlyDoubleLevel, earlySingleLevel };
+      const cfg = { ...baseCfg, earlyBonus, doubleEarlyBonus, earlyDoubleLevel, earlySingleLevel, startStack, rebuyStack };
       const next: ClockState = clockState
         ? { ...clockState, config: cfg }
         : { venueId: base.venueId, sessionDate: null, title: base.title ?? '', config: cfg, currentIndex: 0, running: false, endsAt: null, remainingMs: 0, adjEntries: 0, adjRebuys: 0, adjEarlies: 0, adjAddons: 0, eliminations: 0 };
@@ -1301,6 +1305,14 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
           얼리 구간(더블/1얼리)은 이제 <b className="text-gold-300">「클락」 설정에서 레벨 기준</b>으로 지정합니다(예: 1레벨=더블얼리, 2~4레벨=1얼리). 이 장부를 클락과 연동해 시작하면 위 스타트 시각을 기준으로 바인이 레벨→얼리로 자동 분류되며, 바인 칸에서 '없음'으로 수기 변경도 가능합니다.
           {(base.earlyDoubleMin || base.earlySingleMin) ? <span className="text-gold-300/90"> 현재 적용: 더블 ~{base.earlyDoubleMin}분 · 1얼리 ~{base.earlySingleMin}분.</span> : null}
         </p>
+      </Field>
+
+      <Field label="스택 · 연동 클락 (스타팅 · 리바인)">
+        <div className="grid grid-cols-2 gap-2">
+          <EarlyNum label="스타팅 스택" value={startStack} onChange={setStartStack} suffix="칩" disabled={!!clockState?.running} />
+          <EarlyNum label="리바인 스택" value={rebuyStack} onChange={setRebuyStack} suffix="칩" disabled={!!clockState?.running} />
+        </div>
+        <p className="text-[10px] text-ink-muted mt-1 leading-relaxed">첫 바인은 스타팅 스택(+얼리 추가스택), 2번째부터는 리바인 스택을 받습니다 — 평균 스택·라이브 보드에 반영됩니다.</p>
       </Field>
 
       <Field label="얼리 설정 · 연동 클락 (추가 스택 · 레벨)">

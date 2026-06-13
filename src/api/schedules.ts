@@ -13,7 +13,7 @@ export function subscribeSchedules(onChange: () => void): () => void {
 
 export type TournamentFormat = 'MTT' | 'SNG' | 'PKO' | 'Bounty' | 'Mix';
 export interface SeatVoucher  { label: string; count: number; }
-export interface BuyInInfo    { amount: number; rebuy?: number; rebuyLimit?: number; addon?: number; addonStack?: number; gameType?: string; }
+export interface BuyInInfo    { amount: number; rebuy?: number; rebuyLimit?: number; addon?: number; addonStack?: number; startStack?: number; rebuyStack?: number; gameType?: string; }
 export interface SideEvent    { name: string; startBefore: string; buyIn?: number; note?: string; }
 export interface RankingPrize { rank: string; amount: number; unit?: string; }
 export interface Promotion    { badge?: string; title: string; detail?: string; }
