@@ -169,7 +169,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
       ) : (
         <div className="lg:flex lg:gap-4">
           {available.length > 1 && (
-            <nav className="grid grid-cols-3 gap-1 rounded-card bg-surface-high p-1 lg:sticky lg:top-16 lg:flex lg:w-44 lg:shrink-0 lg:flex-col lg:self-start lg:bg-transparent lg:p-0">
+            <nav className="flex gap-1 overflow-x-auto scrollbar-none rounded-card bg-surface-high p-1 snap-x lg:sticky lg:top-16 lg:w-44 lg:shrink-0 lg:flex-col lg:self-start lg:overflow-visible lg:bg-transparent lg:p-0">
               {[...available]
                 // 즐겨찾기 우선 정렬(★ 누른 순서 유지) — 나머지는 기존 순서
                 .sort((a, b) => {
@@ -276,10 +276,17 @@ function SectionBtn({ active, onClick, icon, children, locked, fav, onToggleFav 
   active: boolean; onClick: () => void; icon?: ReactNode; children: ReactNode; locked?: boolean;
   fav?: boolean; onToggleFav?: () => void;
 }) {
+  // 모바일: 가로 스크롤 칩 바 — 선택된 칩이 항상 화면 안에 오도록 부드럽게 센터링
+  const ref = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (active && ref.current && window.innerWidth < 1024) {
+      ref.current.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    }
+  }, [active]);
   return (
-    <button type="button" onClick={onClick}
-      // 글씨 13px·세로 패딩 확대 — 매일 쓰는 운영 메뉴라 가독·터치 우선
-      className={['group/nav relative flex flex-col items-center justify-center gap-1 whitespace-nowrap rounded-[7px] px-1 py-2.5 text-xs font-semibold transition-colors duration-300 focus:outline-none touch-manipulation lg:w-full lg:flex-row lg:justify-start lg:gap-2 lg:px-3 lg:text-[13px]',
+    <button type="button" onClick={onClick} ref={ref}
+      // 모바일=인라인 칩(아이콘+라벨 한 줄, 1행 가로 스크롤) / PC=세로 리스트. 글씨 13px 가독 유지
+      className={['group/nav relative flex shrink-0 snap-start flex-row items-center justify-center gap-1.5 whitespace-nowrap rounded-[7px] px-3 py-2 text-xs font-semibold transition-colors duration-300 focus:outline-none touch-manipulation lg:w-full lg:shrink lg:justify-start lg:gap-2 lg:py-2.5 lg:text-[13px]',
         active ? 'text-ink-inverse' : locked ? 'text-ink-muted/60 hover:text-ink-secondary lg:hover:bg-surface-high' : 'text-ink-secondary hover:text-ink-primary lg:hover:bg-surface-high'].join(' ')}>
       {active && (
         <motion.span layoutId="manage-nav-pill" aria-hidden

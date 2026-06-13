@@ -105,10 +105,12 @@ interface TabDef { id: TabId; label: string; }
 
 function AppHeader({
   unreadCount, notifications, onMarkRead, onOpenLogin, onNavigateNotification, onHome, onOpenProfile, onOpenSearch, onOpenVouchers,
-  title, onGotoTab, suppressed = false,
+  onGotoTab, activeTab, suppressed = false,
 }: {
-  /** 모바일 헤더 좌측 큰 타이틀(Riot Mobile 스타일) — 현재 탭 라벨 */
+  /** (미사용 — 텍스트 내비로 대체) 모바일 헤더 좌측 큰 타이틀 */
   title?: string;
+  /** 모바일 헤더 텍스트 내비 강조용 현재 탭 */
+  activeTab?: TabId;
   /** 프로필 메뉴에서 탭 직접 이동(모바일 탭바에 없는 도구·관리자 설정) */
   onGotoTab?: (t: TabId) => void;
   unreadCount: number;
@@ -179,16 +181,24 @@ function AppHeader({
         >
           <NuriHoldemLogo />
         </button>
-        {/* 모바일: 로고와 타이틀을 병치하지 않음(조잡함 방지) — 홈(일정)=로고만 / 그 외 탭=타이틀만.
-            scale 트랜지션 제거(한글 서브픽셀 번짐 원인) — 헤더 높이 축소만 동작. */}
-        <div className="lg:hidden flex min-w-0 items-center">
-          {title ? (
-            <h1 className="min-w-0 truncate text-lg font-extrabold tracking-tight text-ink-primary">{title}</h1>
-          ) : (
-            <button type="button" onClick={onHome} aria-label="일정 탐색" className="press-spring shrink-0">
-              <NuriHoldemLogo className="!h-7" />
-            </button>
-          )}
+        {/* 모바일: 로고 | 일정·라이브·커뮤니티 텍스트 내비 — 로고 클릭=일정 복귀(사장님 지정 UX) */}
+        <div className="lg:hidden flex min-w-0 items-center gap-2">
+          <button type="button" onClick={onHome} aria-label="일정 탐색으로" className="press-spring shrink-0">
+            <NuriHoldemLogo className="!h-7" />
+          </button>
+          <span className="h-4 w-px shrink-0 bg-border-default" aria-hidden />
+          <nav className="flex min-w-0 items-center" aria-label="주요 탭">
+            {([['browse', '일정'], ['live', '라이브'], ['community', '커뮤니티']] as [TabId, string][]).map(([id, label]) => {
+              const on = activeTab === id;
+              return (
+                <button key={id} type="button" onClick={() => (id === 'browse' ? onHome() : onGotoTab?.(id))}
+                  className={['shrink-0 rounded-input px-1.5 py-1 text-[13px] font-bold leading-none transition-colors duration-300',
+                    on ? 'text-gold-300' : 'text-ink-secondary active:text-ink-primary'].join(' ')}>
+                  {label}
+                </button>
+              );
+            })}
+          </nav>
         </div>
 
         {/* RIGHT: 테마 토글 + 알림 + 로그인/아바타 — 동일 36px 원형 버튼 클러스터 */}
@@ -1360,6 +1370,7 @@ export default function App() {
     <div className="min-h-screen bg-surface-base mx-auto w-full max-w-6xl xl:border-x xl:border-border-subtle">
       <AppHeader
         title={activeTab === 'browse' ? undefined : tabs.find((t) => t.id === activeTab)?.label}
+        activeTab={activeTab}
         onGotoTab={(t) => changeTab(t)}
         unreadCount={unreadNotifs}
         notifications={notifications}
