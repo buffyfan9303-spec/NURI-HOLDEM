@@ -128,7 +128,7 @@ function DateTab({ slot, selected, onClick }: DateTabProps) {
       transition={{ type: 'spring', stiffness: 700, damping: 30 }}
       className={[
         'relative flex shrink-0 snap-center flex-col items-center justify-center',
-        'w-[3.25rem] h-16 rounded-2xl select-none',
+        'w-[3.1rem] h-[3.25rem] rounded-xl select-none',
         'focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-300',
         selected ? 'text-ink-inverse' : 'text-ink-secondary hover:bg-surface-high active:bg-surface-high/70',
       ].join(' ')}
@@ -144,14 +144,14 @@ function DateTab({ slot, selected, onClick }: DateTabProps) {
         />
       )}
       <span className={[
-        'relative h-3 text-[9px] font-bold leading-none',
+        'relative h-2.5 text-[9px] font-bold leading-none',
         selected ? 'text-ink-inverse/70' : slot.isToday ? 'text-gold-300' : 'text-ink-muted/70',
       ].join(' ')}>{topLabel}</span>
       <span className={[
-        'relative my-0.5 text-2xs font-bold leading-none',
+        'relative mt-0.5 text-2xs font-bold leading-none',
         selected ? 'text-ink-inverse/85' : dowColor,
       ].join(' ')}>{slot.dow}</span>
-      <span className="relative text-base font-extrabold leading-none tabular-nums">{slot.day}</span>
+      <span className="relative mt-0.5 text-sm font-extrabold leading-none tabular-nums">{slot.day}</span>
     </motion.button>
   );
 }
@@ -187,12 +187,12 @@ function DateSlider({ selectedDates, onToggle, onPick }: DateSliderProps) {
       {/* 날짜 직접 선택 (3주 이후) — 네이티브 date picker 오버레이 */}
       <label
         title="날짜 직접 선택"
-        className="relative flex shrink-0 snap-center flex-col items-center justify-center w-[3.25rem] h-16 rounded-2xl border border-dashed border-border-default text-ink-secondary hover:bg-surface-high hover:border-gold-400/50 cursor-pointer transition-colors focus-within:ring-2 focus-within:ring-gold-300"
+        className="relative flex shrink-0 snap-center flex-col items-center justify-center w-[3.1rem] h-[3.25rem] rounded-xl border border-dashed border-border-default text-ink-secondary hover:bg-surface-high hover:border-gold-400/50 cursor-pointer transition-colors focus-within:ring-2 focus-within:ring-gold-300"
       >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
         </svg>
-        <span className="text-[10px] font-semibold leading-none mt-1">달력</span>
+        <span className="text-[10px] font-semibold leading-none mt-0.5">달력</span>
         <input
           type="date"
           min={todayIso}
