@@ -118,6 +118,7 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, onEdit, on
   const [open, setOpen] = useState(false);
   // 연결 장부 펼침 — 한 포스터에 여러 장부(멀티데이·사이드) 최신순
   const [ledgersOpen, setLedgersOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false); // ⋯ 더보기(수정·삭제) 숨김 메뉴
   const [ledgers, setLedgers] = useState<ScheduleLedgerItem[] | null>(null);
   const toggleLedgers = () => {
     if (!ledgerDate) { onLedgerAt?.(null); return; } // 연결 장부 없음 -> 바로 새 등록
@@ -138,18 +139,18 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, onEdit, on
   return (
     <li className="rounded-card bg-surface-low border border-border-default overflow-hidden">
       <div className="flex items-start sm:items-center gap-3 p-3">
-        <button type="button" onClick={onEdit} aria-label="포스터 수정" className="w-12 h-16 shrink-0 rounded-input overflow-hidden flex items-center justify-center"
+        <div aria-hidden className="w-12 h-16 shrink-0 rounded-input overflow-hidden flex items-center justify-center"
           style={schedule.posterUrl ? undefined : { background: `linear-gradient(135deg, ${schedule.posterColor ?? '#1a1d24'}ee, #0a0c0f)` }}>
           {schedule.posterUrl ? <img src={schedule.posterUrl} alt="" className="w-full h-full object-cover" loading="lazy" /> : <span className="text-2xl opacity-30">♠</span>}
-        </button>
-        <button type="button" onClick={onEdit} className="flex-1 min-w-0 text-left">
+        </div>
+        <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1 mb-0.5">
             {schedule.isPremium && <span className="rounded-badge bg-gold-300 px-1 py-0.5 text-2xs font-bold text-ink-inverse leading-none">TOP</span>}
             {!schedule.approved && <span className="rounded-badge bg-amber-500/15 text-amber-400 border border-amber-500/30 px-1 py-0.5 text-2xs font-semibold leading-none">승인대기</span>}
             <span className="rounded-badge bg-surface-high text-ink-secondary border border-border-default px-1 py-0.5 text-2xs font-semibold leading-none">{schedule.format}</span>
           </div>
           <p className="text-sm font-medium text-ink-primary truncate">{schedule.title}</p>
-          <p className="text-2xs text-ink-muted mt-0.5">{d.getMonth() + 1}/{d.getDate()} {schedule.startTime} · 바이인 {schedule.buyIn.amount.toLocaleString()} · 탭하여 수정</p>
+          <p className="text-2xs text-ink-muted mt-0.5">{d.getMonth() + 1}/{d.getDate()} {schedule.startTime} · 바이인 {schedule.buyIn.amount.toLocaleString()}</p>
           {/* 운영 현황 미니칩 — 예약·바인·매출(연결 장부 기준). 게임관리가 곧 운영 현황판 */}
           {(ops || (resCount ?? 0) > 0) && (
             <span className="mt-1 flex flex-wrap items-center gap-1 text-2xs font-semibold tabular-nums">
@@ -167,7 +168,7 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, onEdit, on
               )}
             </span>
           )}
-        </button>
+        </div>
         {/* PC: 우측 인라인 액션(기존). 모바일은 아래 하단 바로 분리 — 줄바꿈/세로 쌓임 방지 */}
         <div className="hidden sm:flex items-center gap-1 shrink-0">
           <button type="button" onClick={toggle} className="btn-ghost text-xs px-2 text-gold-300">예약관리{reservations ? `(${reservations.length})` : ''} {open ? '▲' : '▼'}</button>
@@ -190,11 +191,14 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, onEdit, on
               <button type="button" onClick={() => setConfirming(false)} className="btn-ghost text-xs px-2">취소</button>
               <button type="button" onClick={() => { onDelete(); setConfirming(false); }} className="btn-danger text-xs px-2">삭제</button>
             </>
-          ) : (
+          ) : menuOpen ? (
             <>
-              <button type="button" onClick={onEdit} className="btn-ghost text-xs px-2">수정</button>
+              <button type="button" onClick={() => { onEdit(); setMenuOpen(false); }} className="btn-ghost text-xs px-2 text-gold-300">수정</button>
               <button type="button" onClick={() => setConfirming(true)} className="btn-ghost text-xs px-2 hover:text-danger-light">삭제</button>
+              <button type="button" onClick={() => setMenuOpen(false)} aria-label="메뉴 닫기" className="btn-ghost text-xs px-1.5">✕</button>
             </>
+          ) : (
+            <button type="button" onClick={() => setMenuOpen(true)} aria-label="더보기(수정·삭제)" title="수정·삭제" className="btn-ghost text-base leading-none px-2">⋯</button>
           )}
         </div>
       </div>
@@ -220,11 +224,14 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, onEdit, on
               <button type="button" onClick={() => setConfirming(false)} className="flex-1 py-2.5 text-xs font-semibold text-ink-secondary active:bg-surface-high/60">취소</button>
               <button type="button" onClick={() => { onDelete(); setConfirming(false); }} className="flex-1 py-2.5 text-xs font-bold text-danger-light active:bg-danger/10">삭제 확인</button>
             </>
-          ) : (
+          ) : menuOpen ? (
             <>
-              <button type="button" onClick={onEdit} className="flex-1 py-2.5 text-xs font-semibold text-ink-secondary active:bg-surface-high/60">수정</button>
+              <button type="button" onClick={() => { onEdit(); setMenuOpen(false); }} className="flex-1 py-2.5 text-xs font-semibold text-gold-300 active:bg-surface-high/60">수정</button>
               <button type="button" onClick={() => setConfirming(true)} className="flex-1 py-2.5 text-xs font-semibold text-ink-muted active:bg-surface-high/60 hover:text-danger-light">삭제</button>
+              <button type="button" onClick={() => setMenuOpen(false)} className="flex-1 py-2.5 text-xs font-semibold text-ink-secondary active:bg-surface-high/60">닫기</button>
             </>
+          ) : (
+            <button type="button" onClick={() => setMenuOpen(true)} className="flex-1 py-2.5 text-sm font-semibold leading-none text-ink-secondary active:bg-surface-high/60">⋯ 더보기</button>
           )}
         </div>
       </div>
