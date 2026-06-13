@@ -491,10 +491,18 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
   // 닉네임 blur 시 회원 여부 표시 — 미가입 닉네임도 순위 기록은 되지만 점수·이용권은 안 가는 걸 입력 단계에서 미리 보여준다
   // 자동완성: ①그날 장부 명단 ②비회원 등록 ③회원 검색(닉네임/실명 — 동명이인은 실명으로 구분)
   const [ledgerNames, setLedgerNames] = useState<string[]>([]);
+  // 그날 장부 명단(인원·바인 수) — 순위입력에서 '장부 보기'로 펼쳐 참고/추가
+  const [ledgerPlayers, setLedgerPlayers] = useState<{ name: string; buyins: number }[]>([]);
+  const [ledgerPanelOpen, setLedgerPanelOpen] = useState(false);
   useEffect(() => {
     getLedgerBuyins(venueId, date)
-      .then((bs) => setLedgerNames([...new Set(bs.map((b) => b.playerName).filter(Boolean))]))
-      .catch(() => setLedgerNames([]));
+      .then((bs) => {
+        setLedgerNames([...new Set(bs.map((b) => b.playerName).filter(Boolean))]);
+        const counts = new Map<string, number>();
+        for (const b of bs) { const n = (b.playerName ?? '').trim(); if (n) counts.set(n, (counts.get(n) ?? 0) + 1); }
+        setLedgerPlayers([...counts.entries()].map(([name, buyins]) => ({ name, buyins })));
+      })
+      .catch(() => { setLedgerNames([]); setLedgerPlayers([]); });
   }, [venueId, date]);
   const [sugRow, setSugRow] = useState<number | null>(null);     // 드롭다운 열린 행
   const [memCands, setMemCands] = useState<{ nickname: string; realName: string }[]>([]);
@@ -524,6 +532,22 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
     } catch { /* 조회 실패 시 표시 생략 */ }
   };
   const addRow = () => setRows((r) => [...r, emptyRow()]);
+  // 장부 명단 → 순위에 추가: 빈 칸 있으면 채우고, 없으면 새 줄. 이미 있으면 무시
+  const checkMemberByName = async (n0: string) => {
+    const n = n0.trim(); if (!n) return;
+    try { const available = await checkNicknameAvailable(n); setRows((r) => r.map((row) => (row.nickname.trim() === n ? { ...row, member: !available } : row))); } catch { /* skip */ }
+  };
+  const addFromLedger = (name: string) => {
+    const n = name.trim(); if (!n) return;
+    setRows((r) => {
+      if (r.some((row) => row.nickname.trim() === n)) return r;
+      const emptyIdx = r.findIndex((row) => !row.nickname.trim() && !row.realName.trim() && !row.prize.trim());
+      if (emptyIdx >= 0) return r.map((row, idx) => (idx === emptyIdx ? { ...row, nickname: n, member: null } : row));
+      return [...r, { ...emptyRow(), nickname: n }];
+    });
+    void checkMemberByName(n);
+  };
+  const addAllFromLedger = () => { for (const p of ledgerPlayers) addFromLedger(p.name); };
   const removeRow = (i: number) => setRows((r) => (r.length > 1 ? r.filter((_, idx) => idx !== i) : r));
 
   const save = async () => {
@@ -655,6 +679,45 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
           </div>
         );
       })()}
+
+      {/* 그날 장부 명단 — 펼쳐서 참고하며 순위 입력(장부↔순위 직접 연동) */}
+      <div className="rounded-card border border-emerald-500/25 bg-emerald-500/[0.04] overflow-hidden">
+        <button type="button" onClick={() => setLedgerPanelOpen((v) => !v)}
+          className="flex w-full items-center justify-between gap-2 px-2.5 py-2 text-left">
+          <span className="text-2xs font-bold text-emerald-300">📒 그날 장부 명단 {ledgerPlayers.length > 0 ? <span className="text-ink-secondary">({ledgerPlayers.length}명)</span> : <span className="font-normal text-ink-muted">— 연결된 장부 없음</span>}</span>
+          <span className="text-2xs text-ink-muted">{ledgerPanelOpen ? '접기 ▲' : '펼치기 ▼'}</span>
+        </button>
+        {ledgerPanelOpen && (
+          <div className="space-y-1.5 border-t border-emerald-500/20 p-2">
+            {ledgerPlayers.length === 0 ? (
+              <p className="py-1.5 text-center text-2xs text-ink-muted">이 날짜에 연결된 장부 바인 명단이 없습니다. 장부에서 바인을 먼저 기록하면 여기에 손님 명단이 뜹니다.</p>
+            ) : (
+              <>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[10px] text-ink-muted">장부에 바인한 손님 — <b className="text-emerald-300">＋</b>로 순위에 추가</p>
+                  <button type="button" onClick={addAllFromLedger} className="rounded-input border border-emerald-500/40 px-2 py-1 text-2xs font-bold text-emerald-300 hover:bg-emerald-500/10">전체 추가</button>
+                </div>
+                <ul className="flex flex-wrap gap-1.5">
+                  {ledgerPlayers.map((p) => {
+                    const added = rows.some((row) => row.nickname.trim() === p.name);
+                    return (
+                      <li key={p.name}>
+                        <button type="button" onClick={() => addFromLedger(p.name)} disabled={added}
+                          className={['flex items-center gap-1 rounded-input border px-2 py-1 text-2xs font-semibold transition-colors',
+                            added ? 'border-border-subtle bg-surface-high/40 text-ink-muted' : 'border-emerald-500/40 text-ink-secondary hover:bg-emerald-500/10 hover:text-ink-primary'].join(' ')}>
+                          <span>{p.name}</span>
+                          <span className="tabular-nums text-ink-muted">{p.buyins}바인</span>
+                          <span className={added ? 'text-emerald-400' : 'text-emerald-300'}>{added ? '✓' : '＋'}</span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </>
+            )}
+          </div>
+        )}
+      </div>
 
       <p className="text-2xs text-ink-muted">
         <span className="text-gold-300 font-semibold">닉네임은 필수</span>, 실명·프라이즈는 선택입니다. 등수마다 <span className="text-gold-300 font-semibold">기준 점수(+N점)</span>가 자동 부여되고, 프라이즈는 <span className="text-gold-300 font-semibold">매장 커뮤니티 순위 점수</span>로만 쓰입니다(금전적 가치 없음). 손님 화면엔 <span className="text-gold-300 font-semibold">실명(닉네임) 형식</span>으로 닉네임 일부를 가려 표시됩니다(예: 누리홀덤(나*리)).
