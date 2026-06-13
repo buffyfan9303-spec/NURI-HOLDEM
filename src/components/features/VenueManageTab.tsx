@@ -360,6 +360,8 @@ function SectionBtn({ active, onClick, icon, children, locked, fav, onToggleFav 
 // ── 일일 순위 입력 ────────────────────────────────────────────────────────────
 interface Row { nickname: string; realName: string; prize: string; voucher: string; note: string; member?: boolean | null; }
 const emptyRow = (): Row => ({ nickname: '', realName: '', prize: '', voucher: '', note: '' });
+// 그날 열린 게임 후보 — 메인(포스터 제목) · 사이드(포스터 sideEvents) · 장부(장부만 있는 게임)
+type GameOpt = { name: string; kind: 'main' | 'side' | 'ledger' };
 
 function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: boolean; draft?: { date: string; names: string[]; event?: string } | null }) {
   const toast = useToast();
@@ -370,12 +372,28 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
   const [eventName, setEventName] = useState('');
   const [allEntries, setAllEntries] = useState<RankingEntry[]>([]);
   // 그날 열린 게임 후보 = 그날 포스터 제목 + 그날 장부 제목(둘 다 '어떤 게임인지' 선택지)
-  const [dayGames, setDayGames] = useState<string[]>([]);
+  const [dayGames, setDayGames] = useState<GameOpt[]>([]);
   useEffect(() => {
     Promise.all([
-      getSchedules().then((all: Schedule[]) => all.filter((sc) => sc.venueId === venueId && new Date(sc.date).toLocaleDateString('en-CA') === date).map((sc) => sc.title.trim())).catch(() => [] as string[]),
-      getLedgerSession(venueId, date).then((ls) => (ls.title ? [ls.title.trim()] : [])).catch(() => [] as string[]),
-    ]).then(([posters, ledgers]) => setDayGames([...new Set([...posters, ...ledgers].filter(Boolean))]));
+      getSchedules().then((all: Schedule[]) => all.filter((sc) => sc.venueId === venueId && new Date(sc.date).toLocaleDateString('en-CA') === date)).catch(() => [] as Schedule[]),
+      getLedgerSession(venueId, date).then((ls) => (ls.title ? ls.title.trim() : '')).catch(() => ''),
+    ]).then(([posters, ledgerTitle]) => {
+      const opts: GameOpt[] = [];
+      // 포스터 1장 = 메인 게임(제목) + 사이드 게임 여러 개(sideEvents[])
+      for (const sc of posters) {
+        const t = sc.title.trim();
+        if (t) opts.push({ name: t, kind: 'main' });
+        for (const se of sc.sideEvents ?? []) {
+          const n = (se.name ?? '').trim();
+          if (n) opts.push({ name: n, kind: 'side' });
+        }
+      }
+      // 포스터엔 없고 장부만 있는 게임
+      if (ledgerTitle && !opts.some((o) => o.name === ledgerTitle)) opts.push({ name: ledgerTitle, kind: 'ledger' });
+      // 이름 중복 제거(먼저 등록된 분류 우선: main > side > ledger)
+      const seen = new Set<string>();
+      setDayGames(opts.filter((o) => (seen.has(o.name) ? false : (seen.add(o.name), true))));
+    });
   }, [venueId, date]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -567,34 +585,73 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
           className="btn-ghost text-xs px-3 shrink-0 text-gold-300">🖨 지류 양식</button>
       </div>
 
-      {/* 어떤 게임의 순위인지 — 그날 포스터·장부에서 선택(같은 날 메인+사이드 따로 저장) */}
+      {/* 어떤 게임의 순위인지 — 메인(포스터)·사이드(사이드 포스터)·장부·기타로 구분해 선택 */}
       {(() => {
-        const saved = [...new Set(allEntries.map((e) => e.eventName ?? ''))];
-        const opts = [...new Set(['', ...saved, ...dayGames, ...(eventName ? [eventName] : [])])];
+        const saved = new Set(allEntries.map((e) => e.eventName ?? ''));
+        const mains = [...new Set(dayGames.filter((g) => g.kind === 'main').map((g) => g.name))];
+        const sides = [...new Set(dayGames.filter((g) => g.kind === 'side').map((g) => g.name))];
+        const ledgers = [...new Set(dayGames.filter((g) => g.kind === 'ledger').map((g) => g.name))];
+        const known = new Set<string>(['', ...mains, ...sides, ...ledgers]);
+        // 포스터·장부엔 없지만 이미 저장됐거나(과거 직접추가) 지금 입력 중인 커스텀 게임
+        const extras = [...new Set([
+          ...[...saved].filter((s) => s && !known.has(s)),
+          ...(eventName && !known.has(eventName) ? [eventName] : []),
+        ])];
+
+        const chip = (ev: string, k: string, label?: string) => {
+          const on = eventName === ev;
+          const has = saved.has(ev);
+          return (
+            <button key={k} type="button" onClick={() => setEventName(ev)}
+              className={['text-xs font-bold px-2.5 py-1.5 rounded-input border transition-colors',
+                on ? 'bg-gold-300 text-ink-inverse border-gold-300' : 'bg-surface-float text-ink-secondary border-border-default hover:text-ink-primary'].join(' ')}>
+              {label ?? ev}{has ? ' ✓' : ''}
+            </button>
+          );
+        };
+        const Section = ({ icon, label, hint, children }: { icon: string; label: string; hint: string; children: ReactNode }) => (
+          <div className="space-y-1">
+            <p className="text-[10px] font-bold text-ink-muted">{icon} {label}<span className="font-normal text-ink-muted/70"> · {hint}</span></p>
+            <div className="flex items-center gap-1.5 flex-wrap">{children}</div>
+          </div>
+        );
+
         return (
-          <div className="rounded-card border border-gold-400/30 bg-gold-300/[0.05] p-2.5 space-y-2">
+          <div className="rounded-card border border-gold-400/30 bg-gold-300/[0.05] p-2.5 space-y-2.5">
             <div className="flex items-center gap-2">
               <span className="text-2xs font-bold text-ink-muted shrink-0">🎯 입력 중인 게임</span>
-              <span className="min-w-0 flex-1 truncate text-sm font-extrabold text-gold-300">{eventName || '기본(메인 게임)'}</span>
+              <span className="min-w-0 flex-1 truncate text-sm font-extrabold text-gold-300">{eventName || '메인 게임(기본)'}</span>
             </div>
-            {/* 게임 선택 칩 — 항상 표시(메인 + 그날 포스터·장부 + 직접 추가). 하루 여러 게임이면 게임마다 따로 */}
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {opts.map((ev) => {
-                const on = eventName === ev;
-                const has = saved.includes(ev);
-                return (
-                  <button key={ev || '_main'} type="button" onClick={() => setEventName(ev)}
-                    className={['text-xs font-bold px-2.5 py-1.5 rounded-input border transition-colors',
-                      on ? 'bg-gold-300 text-ink-inverse border-gold-300' : 'bg-surface-float text-ink-secondary border-border-default hover:text-ink-primary'].join(' ')}>
-                    {ev || '메인'}{has ? ' ✓' : ''}
-                  </button>
-                );
-              })}
+
+            {/* 메인 게임 — 기본 + 그날 포스터 제목 */}
+            <Section icon="🏆" label="메인 게임" hint="포스터 메인">
+              {chip('', 'g-main-base', '메인(기본)')}
+              {mains.map((n) => chip(n, 'g-m-' + n))}
+            </Section>
+
+            {/* 사이드 게임 — 사이드 포스터에서 등록된 이벤트(여러 개) */}
+            {sides.length > 0 && (
+              <Section icon="🎲" label="사이드 게임" hint="사이드 포스터">
+                {sides.map((n) => chip(n, 'g-s-' + n))}
+              </Section>
+            )}
+
+            {/* 장부 게임 — 포스터 없이 장부만 있는 게임 */}
+            {ledgers.length > 0 && (
+              <Section icon="📒" label="장부 게임" hint="장부에서">
+                {ledgers.map((n) => chip(n, 'g-l-' + n))}
+              </Section>
+            )}
+
+            {/* 기타 — 포스터·장부 없는 게임(직접 추가) */}
+            <Section icon="✏️" label="기타 게임" hint="포스터·장부 없음">
+              {extras.map((n) => chip(n, 'g-x-' + n))}
               <button type="button"
-                onClick={() => { const v = window.prompt('게임 이름 직접 입력 (예: 사이드 1, 새틀라이트)'); if (v && v.trim()) setEventName(v.trim().slice(0, 40)); }}
-                className="text-xs font-bold px-2.5 py-1.5 rounded-input border bg-surface-float text-gold-300 border-dashed border-gold-400/40 hover:bg-gold-300/10">+ 게임 직접 추가</button>
-            </div>
-            <p className="text-[10px] leading-relaxed text-ink-muted">하루에 게임이 여러 개면 <b className="text-ink-secondary">게임마다 따로</b> 입력하세요 — 위에서 게임을 고르거나 <b className="text-gold-300">+ 게임 직접 추가</b>로 만든 뒤 순위를 넣으면, 그 게임의 순위만 따로 저장·표시됩니다.</p>
+                onClick={() => { const v = window.prompt('게임 이름 직접 입력 (예: 사이드 2, 새틀라이트, 하이롤러)'); if (v && v.trim()) setEventName(v.trim().slice(0, 40)); }}
+                className="text-xs font-bold px-2.5 py-1.5 rounded-input border bg-surface-float text-gold-300 border-dashed border-gold-400/40 hover:bg-gold-300/10">+ 직접 추가</button>
+            </Section>
+
+            <p className="text-[10px] leading-relaxed text-ink-muted">하루에 게임이 여러 개면 <b className="text-ink-secondary">게임마다 따로</b> 골라 입력하세요. 메인·사이드·기타를 선택해 순위를 넣으면 그 게임 순위만 따로 저장·표시됩니다. <b className="text-gold-300">✓</b> 표시는 이미 입력된 게임입니다.</p>
           </div>
         );
       })()}
