@@ -323,7 +323,7 @@ export default function ProfileModal({ open, onClose, onOpenLegal }: ProfileModa
               });
               toast.show('프로필 카드를 저장했습니다 — SNS에 공유해 보세요!', 'success');
             }}
-            className="flex w-full items-center gap-2 rounded-card border border-gold-400/40 bg-gold-300/[0.06] px-3 py-2.5 text-left transition-colors hover:bg-gold-300/[0.1]">
+            className="hidden w-full items-center gap-2 rounded-card border border-gold-400/40 bg-gold-300/[0.06] px-3 py-2.5 text-left transition-colors hover:bg-gold-300/[0.1] sm:flex">
             <span aria-hidden>🖼</span>
             <span className="min-w-0 flex-1">
               <span className="block text-sm font-bold text-gold-300">프로필 카드 이미지 저장</span>
