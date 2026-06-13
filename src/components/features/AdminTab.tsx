@@ -3,6 +3,7 @@ import DraggableList from './DraggableList';
 import VenueManagement from './VenueManagement';
 import ReportQueue from './ReportQueue';
 import UserManagementTab from './UserManagementTab';
+import SegmentedTabs from '../atoms/SegmentedTabs';
 import type { Schedule } from '../../api/schedules';
 import type { User } from '../../api/auth';
 import type { CommunityPost, Venue, AdminStats, VenueVerificationStatus, VenueStaff } from '../../api/community';
@@ -815,10 +816,6 @@ function AdminVenuePos({ venueId, venueName, onClose }: { venueId: string; venue
   // 뒤로가기 → 운영자 장부 뷰 닫기
   useBackClose(true, onClose);
 
-  const tabCls = (active: boolean) =>
-    ['flex-1 py-2 text-xs font-semibold rounded-[6px] transition-all',
-      active ? 'bg-gold-300 text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary'].join(' ');
-
   return (
     <div className="fixed inset-0 z-[60] bg-surface-base overflow-y-auto transform-gpu animate-fade-in">
       <header className="sticky top-0 z-10 h-header-h px-page-x flex items-center gap-2 bg-surface-base/95 backdrop-blur-md border-b border-border-subtle">
@@ -827,10 +824,9 @@ function AdminVenuePos({ venueId, venueName, onClose }: { venueId: string; venue
         <span className="ml-auto shrink-0 text-2xs font-bold text-gold-300 bg-gold-300/15 px-2 py-0.5 rounded-badge">운영자 전체 접근</span>
       </header>
       <div className="max-w-6xl mx-auto px-page-x py-3">
-        <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5 mb-3">
-          <button type="button" onClick={() => setTab('stats')} className={tabCls(tab === 'stats')}>통계</button>
-          <button type="button" onClick={() => setTab('ledger')} className={tabCls(tab === 'ledger')}>장부 (실시간)</button>
-        </div>
+        <SegmentedTabs grow size="md" className="w-full mb-3"
+          items={[{ key: 'stats', label: '통계' }, { key: 'ledger', label: '장부 (실시간)' }]}
+          value={tab} onChange={setTab} />
         {tab === 'stats'
           ? <LedgerStatsPanel venueId={venueId} />
           : <NuriPosLedger venueId={venueId} canManage venueName={venueName} />}

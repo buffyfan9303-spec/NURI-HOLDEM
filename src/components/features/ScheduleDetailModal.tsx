@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import Modal from '../atoms/Modal';
 import Icon from '../atoms/Icon';
 import ImageLightbox from '../atoms/ImageLightbox';
@@ -216,11 +217,8 @@ export default function ScheduleDetailModal({
               aria-selected={active}
               onClick={() => setTab(t)}
               className={[
-                'py-3 text-sm font-medium transition-colors text-center',
-                'border-b-2 -mb-px',
-                active
-                  ? 'border-gold-300 text-gold-300'
-                  : 'border-transparent text-ink-muted hover:text-ink-secondary',
+                'relative py-3 text-sm font-medium transition-colors text-center',
+                active ? 'text-gold-300' : 'text-ink-muted hover:text-ink-secondary',
               ].join(' ')}
             >
               {t === 'info' ? '대회 정보' : 'Q&A'}
@@ -229,6 +227,11 @@ export default function ScheduleDetailModal({
               )}
               {t === 'qna' && schedule.unreadQnaCount > 0 && (
                 <span className="ml-1.5 text-2xs text-danger font-bold">새 {schedule.unreadQnaCount}</span>
+              )}
+              {active && (
+                <motion.span layoutId="schedule-detail-tab" aria-hidden
+                  className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-gold-300"
+                  transition={{ type: 'spring', stiffness: 700, damping: 42 }} />
               )}
             </button>
           );

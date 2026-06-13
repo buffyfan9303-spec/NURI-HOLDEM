@@ -8,6 +8,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
 import { useBackClose } from '../../lib/backstack';
 import Avatar from '../atoms/Avatar';
+import UnderlineTabs from '../atoms/UnderlineTabs';
 import { relativeTime } from './MarketplaceTab';
 import {
   GROUP_KIND_LABEL, type Venue, type GroupMember, type GroupMessage, type GroupPost,
@@ -235,15 +236,10 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
             </div>
           ) : (
             <>
-              {/* 2탭 */}
-              <div className="sticky top-0 z-20 flex bg-surface-base border-b border-border-subtle">
-                {(['chat', 'board'] as const).map((t) => (
-                  <button key={t} type="button" onClick={() => setTab(t)}
-                    className={['flex-1 py-3 text-sm font-medium border-b-2 -mb-px transition-colors', tab === t ? 'border-gold-300 text-gold-300' : 'border-transparent text-ink-muted hover:text-ink-secondary'].join(' ')}>
-                    {t === 'chat' ? '실시간 채팅' : '게시판'}
-                  </button>
-                ))}
-              </div>
+              {/* 2탭 — 골드 밑줄 스프링 슬라이드 */}
+              <UnderlineTabs className="sticky top-0 z-20 bg-surface-base"
+                items={[{ key: 'chat', label: '실시간 채팅' }, { key: 'board', label: '게시판' }]}
+                value={tab} onChange={setTab} />
               <div className="px-page-x py-3 min-h-[40vh]">
                 {tab === 'chat' ? <GroupChat groupId={group.id} canManage={isManager} /> : <GroupBoard groupId={group.id} canManage={isManager} />}
               </div>

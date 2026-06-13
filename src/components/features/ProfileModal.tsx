@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import Modal from '../atoms/Modal';
+import UnderlineTabs from '../atoms/UnderlineTabs';
 import { useToast } from '../atoms/Toast';
 import { tierOf } from '../atoms/TierBadge';
 import { downloadProfileCard } from '../../lib/profileCard';
@@ -225,24 +226,10 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
 
   return (
     <Modal open={open} onClose={() => { sessionStorage.removeItem('nh_pw_otp'); onClose(); }} title="프로필 관리" maxWidth="sm" variant="sheet">
-      {/* ── 탭 바 ─────────────────────────────────────────────────── */}
-      <div className="flex border-b border-border-subtle">
-        {(['profile', 'security'] as Tab[]).map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => setTab(t)}
-            className={[
-              'flex-1 py-3 text-sm font-medium border-b-2 -mb-px transition-colors focus:outline-none',
-              tab === t
-                ? 'border-gold-300 text-gold-300'
-                : 'border-transparent text-ink-muted hover:text-ink-secondary',
-            ].join(' ')}
-          >
-            {t === 'profile' ? '기본 정보' : '보안'}
-          </button>
-        ))}
-      </div>
+      {/* ── 탭 바 (골드 밑줄 스프링 슬라이드) ─────────────────────────── */}
+      <UnderlineTabs
+        items={[{ key: 'profile', label: '기본 정보' }, { key: 'security', label: '보안' }]}
+        value={tab} onChange={setTab} />
 
       {/* ── 기본 정보 탭 ──────────────────────────────────────────── */}
       {tab === 'profile' && (

@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import type {
   ListingCategory, ListingCondition, ListingStatus,
   MarketplaceListing, MarketplaceNotice, NoticeType,
@@ -159,13 +160,18 @@ export default function MarketplaceTab({
               type="button"
               onClick={() => setCategory(cat.id)}
               className={[
-                'shrink-0 h-9 px-4 rounded-input text-xs font-semibold transition-colors',
+                'relative shrink-0 h-9 px-4 rounded-input text-xs font-semibold transition-colors',
                 active
-                  ? 'bg-gold-300 text-ink-inverse'
+                  ? 'text-ink-inverse'
                   : 'bg-surface-high text-ink-secondary hover:text-ink-primary border border-border-default',
               ].join(' ')}
             >
-              {cat.label}
+              {active && (
+                <motion.span layoutId="market-cat-pill" aria-hidden
+                  className="absolute inset-0 rounded-input bg-gold-300"
+                  transition={{ type: 'spring', stiffness: 700, damping: 42 }} />
+              )}
+              <span className="relative">{cat.label}</span>
             </button>
           );
         })}
