@@ -133,6 +133,15 @@ function StatsView({ venueId }: { venueId: string }) {
     }
     const dayCount = dates.size;
     const cashLike = byMethod.cash + byMethod.transfer + byMethod.card;
+    // 객단가(정밀) — 미수 제외(완납만) + 관계자 바인 제외: ①실손님 1인당 ②엔트리당
+    let guestRevenue = 0, guestEntries = 0;
+    const guestSet = new Set<string>();
+    for (const b of src) {
+      if ((playerType.get(b.playerName) ?? 'none') === 'staff') continue;
+      const f = fin(b);
+      guestRevenue += f.paid; guestEntries += f.entry;
+      guestSet.add(b.playerName);
+    }
     return {
       total: src.length, entries, underEntries, players: playerSet.size, revenue, unpaid, support, ticket, ticketUnpaid,
       unpaid_cnt: src.filter((b) => fin(b).unpaid > 0).length,
@@ -140,6 +149,9 @@ function StatsView({ venueId }: { venueId: string }) {
       unpaidRanking: Object.entries(unpaidByPlayer).sort((a, b) => b[1] - a[1]),
       target, fillRatio: target ? Math.round((entries / target) * 100) : null,
       perPlayer: playerSet.size ? entries / playerSet.size : 0,
+      arpGuest: guestSet.size ? guestRevenue / guestSet.size : 0,    // 실손님 1인당 완납 매출
+      arpEntry: guestEntries > 0 ? guestRevenue / guestEntries : 0,  // 엔트리당 완납 매출
+      guestCount: guestSet.size,
       dayCount, visitor, dow,
       avgEntryPerDay: dayCount ? entries / dayCount : 0,
       avgRevenuePerDay: dayCount ? revenue / dayCount : 0,
@@ -255,6 +267,8 @@ function StatsView({ venueId }: { venueId: string }) {
             {period !== 'day' && <Mini label="일평균 엔트리" value={m.avgEntryPerDay.toFixed(1)} />}
             <Mini label="플레이어" value={`${m.players}명`} />
             <Mini label="엔트리/인" value={m.perPlayer ? m.perPlayer.toFixed(1) : '0'} />
+            <Mini label="객단가/실손님" value={`${wonToMan(Math.round(m.arpGuest))}만`} hint="미수·관계자 제외" />
+            <Mini label="객단가/엔트리" value={`${wonToMan(Math.round(m.arpEntry))}만`} hint="미수·관계자 제외" />
             {period === 'day'
               ? <Mini label="가게지원" value={`${m.support}건`} />
               : <Mini label="일평균 매출" value={`${m.avgRevenuePerDay.toLocaleString(undefined, { maximumFractionDigits: 0 })}원`} />}
@@ -489,11 +503,11 @@ function StatCard({ label, value, sub, icon, danger, emerald, gold }: { label: s
   );
 }
 
-function Mini({ label, value }: { label: string; value: string }) {
+function Mini({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="rounded-input bg-surface-high border border-border-subtle py-2 px-1 text-center">
+    <div className="rounded-input bg-surface-high border border-border-subtle py-2 px-1 text-center" title={hint}>
       <p className="text-base font-bold text-ink-primary tabular-nums leading-none">{value}</p>
-      <p className="text-[11px] text-ink-muted mt-1 leading-tight">{label}</p>
+      <p className="text-[11px] text-ink-muted mt-1 leading-tight">{label}{hint ? <span className="block text-[9px] text-ink-muted/70">{hint}</span> : null}</p>
     </div>
   );
 }

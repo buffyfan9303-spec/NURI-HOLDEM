@@ -24,7 +24,7 @@ import { getVenueRankings } from '../../api/rankings';
 import { exportLedgerXls } from '../../lib/ledgerExport';
 import { getSchedules, type Schedule } from '../../api/schedules';
 import { getClockState, saveClockState, subscribeClock, defaultClockConfig, type ClockState } from '../../api/clock';
-import { getMyVenueStaff, type User } from '../../api/auth';
+import { getMyVenueStaff, searchMembersForRanking, type User } from '../../api/auth';
 import { accrueVoucher } from '../../api/vouchers';
 import { useBackClose } from '../../lib/backstack';
 import EmptyState from '../atoms/EmptyState';
@@ -359,12 +359,25 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       setNewName(''); setNewType('regular'); setAddOpen(false); setSuggest([]); reload();
     } catch (e) { toast.show(e instanceof Error ? e.message : '추가 실패', 'error'); }
   };
-  // 가입자 검색(디바운스) — 바인 추가 입력에 누리홀덤 가입자 자동완성
+  // 가입자 검색(디바운스) — 순위입력과 동일 메커니즘: 매장 방문 가입자 + 전체 회원(닉네임/실명) 병합
+  const [memSuggest, setMemSuggest] = useState<{ nickname: string; realName: string }[]>([]);
   useEffect(() => {
-    if (!addOpen || newName.trim().length < 1) { setSuggest([]); return; }
-    const t = window.setTimeout(() => { searchRegisteredPlayers(venueId, newName).then(setSuggest).catch(() => setSuggest([])); }, 250);
+    if (!addOpen || newName.trim().length < 1) { setSuggest([]); setMemSuggest([]); return; }
+    const t = window.setTimeout(() => {
+      searchRegisteredPlayers(venueId, newName).then(setSuggest).catch(() => setSuggest([]));
+      searchMembersForRanking(newName).then(setMemSuggest).catch(() => setMemSuggest([]));
+    }, 250);
     return () => window.clearTimeout(t);
   }, [newName, addOpen, venueId]);
+  // 전 회원 후보 — 방문 가입자에 이미 있는 닉네임은 제외(중복 표시 방지)
+  const memOnly = memSuggest.filter((m2) => !suggest.some((rp) => (rp.nickname ?? '').toLowerCase() === m2.nickname.toLowerCase())).slice(0, 6);
+  const pickMember = async (m2: { nickname: string; realName: string }) => {
+    const label = m2.realName ? `${m2.realName}(${m2.nickname})` : m2.nickname;
+    try {
+      await addLedgerPlayer({ venueId, sessionDate: date, name: label, visitorType: newType, sortOrder: players.length });
+      setNewName(''); setSuggest([]); setMemSuggest([]); setNewType('regular'); setAddOpen(false); reload();
+    } catch (e) { toast.show(e instanceof Error ? e.message : '추가 실패', 'error'); }
+  };
   // 가입자 선택 → 실명(닉네임)으로 장부 기록(강제 아님, 그냥 추가하면 입력값 그대로)
   const pickRegistered = async (rp: RegisteredPlayer) => {
     const label = rp.realName ? `${rp.realName}(${rp.nickname ?? ''})` : (rp.nickname ?? newName.trim());
@@ -582,14 +595,31 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
               <input value={newName} onChange={(e) => setNewName(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addPlayer(); } }}
                 placeholder="닉네임/이름 (입력 시 가입자 자동완성)" maxLength={20} className="input w-full text-sm" autoFocus />
-              {suggest.length > 0 && (
-                <ul className="max-h-44 space-y-1 overflow-y-auto rounded-input border border-gold-400/30 bg-surface-base/60 p-1">
-                  <li className="px-1 text-[10px] text-ink-muted">누리홀덤 가입자 — 선택 시 실명(닉네임)으로 기록(선택 안 하고 추가하면 입력값 그대로)</li>
+              {(suggest.length > 0 || memOnly.length > 0 || newName.trim()) && (
+                <ul className="max-h-52 space-y-1 overflow-y-auto rounded-input border border-gold-400/30 bg-surface-base/60 p-1">
+                  {newName.trim() && (
+                    <li>
+                      <button type="button" onClick={addPlayer} className="flex w-full items-center gap-2 rounded-input px-2 py-1.5 text-left hover:bg-surface-high">
+                        <span className="shrink-0 rounded-badge border border-border-default bg-surface-float px-1.5 py-0.5 text-[9px] font-bold text-ink-muted">비회원</span>
+                        <span className="min-w-0 truncate text-xs font-semibold text-ink-primary">‘{newName.trim()}’ 입력값 그대로 등록</span>
+                      </button>
+                    </li>
+                  )}
                   {suggest.map((rp) => (
                     <li key={rp.userId}>
-                      <button type="button" onClick={() => pickRegistered(rp)} className="flex w-full items-center justify-between gap-2 rounded-input px-2 py-1.5 text-left hover:bg-surface-high">
-                        <span className="min-w-0 truncate text-xs font-semibold text-ink-primary">{rp.realName ? `${rp.realName}(${rp.nickname ?? '-'})` : (rp.nickname ?? '-')}</span>
+                      <button type="button" onClick={() => pickRegistered(rp)} className="flex w-full items-center gap-2 rounded-input px-2 py-1.5 text-left hover:bg-surface-high">
+                        <span className="shrink-0 rounded-badge border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-bold text-emerald-300">✓회원</span>
+                        <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{rp.realName ? `${rp.realName}(${rp.nickname ?? '-'})` : (rp.nickname ?? '-')}</span>
                         <span className="shrink-0 text-[10px] text-ink-muted">방문 {rp.visits}회</span>
+                      </button>
+                    </li>
+                  ))}
+                  {memOnly.map((m2) => (
+                    <li key={`m-${m2.nickname}`}>
+                      <button type="button" onClick={() => pickMember(m2)} className="flex w-full items-center gap-2 rounded-input px-2 py-1.5 text-left hover:bg-surface-high">
+                        <span className="shrink-0 rounded-badge border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-bold text-emerald-300">✓회원</span>
+                        <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{m2.realName ? `${m2.realName}(${m2.nickname})` : m2.nickname}</span>
+                        <span className="shrink-0 text-[10px] text-ink-muted">첫 방문</span>
                       </button>
                     </li>
                   ))}
