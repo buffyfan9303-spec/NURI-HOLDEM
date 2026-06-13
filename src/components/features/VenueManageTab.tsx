@@ -127,7 +127,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   if (ledgerOk) available.push({ id: 'league', label: '연합 리그' });
   if (ledgerOk) available.push({ id: 'clock', label: '클락' });
   if (ledgerOk) available.push({ id: 'attendance', label: '출근 관리' });
-  available.push({ id: 'voucher', label: '매장이용권', locked: !(manageOk || voucherView) });
+  available.push({ id: 'voucher', label: '매장이용권/QR', locked: !(manageOk || voucherView) });
   if (canStaff) available.push({ id: 'page', label: '매장 꾸미기' });
   if (canStaff) available.push({ id: 'staff', label: '직원 관리' });
   if (canStaff) available.push({ id: 'settings', label: '설정' });
@@ -246,7 +246,7 @@ const SECTION_DESC: Record<Section, string> = {
   league: '여러 매장이 함께 운영하는 공동 랭킹 — 초대 → 수락 → 통합 순위',
   clock: '토너먼트 타이머 — 장부 연동 시 엔트리·생존이 자동 반영됩니다',
   attendance: '내 출퇴근 기록',
-  voucher: '매장이용권 발행·회수·사용 내역(금전적 가치 없음)',
+  voucher: '매장이용권 발행·사용 내역 + 매장 QR(이용권·출석 체크인·가입) 인쇄',
   page: '매장 페이지 꾸미기 — 탭 순서·링크·소개',
   staff: '구성원·권한·출근 스케줄·인건비',
   settings: 'POS 비밀번호·결제수단·할인 프리셋',

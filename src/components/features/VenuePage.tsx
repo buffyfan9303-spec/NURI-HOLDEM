@@ -24,6 +24,7 @@ import {
   boardLabel, boardDesc, boardUnit, isCustomBoard, customKeyOf, boardPeriodStart,
   type RankingEntry, type RankingTotal, type VenuePageConfig, type RankBoardId, type ScoreEntry, type PlayerCounts,
 } from '../../api/rankings';
+import { listVenueCheckins } from '../../api/checkins';
 import { uploadVenueImages } from '../../lib/storage';
 import { useBackClose } from '../../lib/backstack';
 import VenueReviews from './VenueReviews';
@@ -650,6 +651,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
   const [loading, setLoading] = useState(true);
 
   const [playerCounts, setPlayerCounts] = useState<PlayerCounts[]>([]);
+  const [checkinRows, setCheckinRows] = useState<{ name: string; count: number }[]>([]); // QR 출석 집계
   useEffect(() => {
     let active = true;
     const load = async () => {
@@ -665,8 +667,23 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
         const pc: PlayerCounts[] = wantsCounts ? await getVenuePlayerCounts(venueId).catch(() => []) : [];
         const bc: Record<string, number> = {};
         for (const p of pc) bc[p.name.toLowerCase()] = p.buyins;
+        // 출석왕 = QR 체크인 누적(유저별) — 체크인 기록이 있으면 장부 방문 대신 이걸 쓴다
+        let ck: { name: string; count: number }[] = [];
+        if (ms.includes('visit_count')) {
+          const list = await listVenueCheckins(venueId, '2020-01-01T00:00:00Z').catch(() => []);
+          const agg = new globalThis.Map<string, { name: string; count: number }>();
+          for (const e of list) {
+            const nm = (e.displayName ?? '').trim();
+            if (!nm) continue;
+            const k = nm.toLowerCase();
+            const cAgg = agg.get(k) ?? { name: nm, count: 0 };
+            cAgg.count += 1;
+            agg.set(k, cAgg);
+          }
+          ck = [...agg.values()];
+        }
         if (!active) return;
-        setCfg(c); setTotals(t); setLatest(d); setManual(m); setBuyinCounts(bc); setPlayerCounts(pc);
+        setCfg(c); setTotals(t); setLatest(d); setManual(m); setBuyinCounts(bc); setPlayerCounts(pc); setCheckinRows(ck);
         setMetric((cur) => cur ?? (c?.rankMetrics?.[0] ?? 'score'));
       } catch { /* noop */ }
       finally { if (active) setLoading(false); }
@@ -712,7 +729,14 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
         .filter((b) => b.value > 0)
         .sort((a, b) => b.value - a.value);
     }
-    // 바인왕/출석왕: 장부 집계(전 플레이어) 기반 — 랭킹 등록 여부와 무관
+    // 출석왕: QR 체크인 누적 — 체크인 기록이 1건이라도 있으면 그 기준(없으면 장부 방문 폴백)
+    if (cur === 'visit_count' && checkinRows.length > 0) {
+      return checkinRows
+        .map((p) => ({ nickname: p.name, realName: '', moneyPoints: 0, prizeMan: 0, appearances: 0, bestPosition: 0, value: p.count }))
+        .filter((b) => b.value > 0)
+        .sort((a, b) => b.value - a.value);
+    }
+    // 바인왕/출석왕(폴백): 장부 집계(전 플레이어) 기반 — 랭킹 등록 여부와 무관
     if (cur === 'buyin_count' || cur === 'visit_count') {
       return playerCounts
         .map((p) => ({ nickname: p.name, realName: '', moneyPoints: 0, prizeMan: 0, appearances: 0, bestPosition: 0, value: cur === 'buyin_count' ? p.buyins : p.visits }))
@@ -740,7 +764,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
     }
     return base.filter((b) => b.value >= 0)
       .sort((a, b) => (b.value - a.value) || (b.prizeMan - a.prizeMan) || (b.moneyPoints - a.moneyPoints));
-  }, [totals, cur, manualByName, buyinCounts, manual, playerCounts, cfg]);
+  }, [totals, cur, manualByName, buyinCounts, manual, playerCounts, checkinRows, cfg]);
 
   if (loading) return <SkeletonList rows={6} rowClassName="h-14" />;
   if (totals.length === 0 && manual.length === 0 && playerCounts.length === 0) {

@@ -126,7 +126,7 @@ export const RANK_METRIC_DESC: Record<RankMetric, string> = {
   moneyin_count: '순위(입상) 등록 횟수',
   moneyin_rate: '머니인 횟수 ÷ 바인 횟수 (장부 기준, 5바인 이상만 표시)',
   buyin_count: '장부 바인 횟수 누적 — 가장 많이 참여한 플레이어',
-  visit_count: '장부 방문일 수 누적 — 가장 자주 방문한 플레이어',
+  visit_count: 'QR 출석 체크인 누적 — 가장 자주 출석한 플레이어(체크인 기록 없으면 장부 방문일 기준)',
 };
 
 // 업주가 직접 만드는 커스텀 랭킹 보드(웹 데이터에 없는 랭킹 — 명단·점수 직접 입력)

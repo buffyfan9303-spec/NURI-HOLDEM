@@ -7,6 +7,7 @@ import Icon from '../atoms/Icon';
 import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import QRCode from 'qrcode';
+import { checkinUrl } from '../../api/checkins';
 import { listVenueVouchers, issueVoucher, deleteVoucher, findUserForTransfer, voucherUsageByVenue, voucherHolderStats, isVoucherIssueApproved, voucherHolderProfiles, subscribeVenueVouchers, type Voucher, type VoucherUsage, type VoucherHolderStats, type TransferTarget, type VoucherHolderProfile } from '../../api/vouchers';
 
 function fmtDateTime(iso: string | null): string {
@@ -36,6 +37,7 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
   const [stats, setStats] = useState<VoucherHolderStats | null>(null);
   const [qr, setQr] = useState('');
   const [signupQr, setSignupQr] = useState('');
+  const [checkinQr, setCheckinQr] = useState('');
   const [approved, setApproved] = useState(true);
   const [holderQuery, setHolderQuery] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -57,6 +59,7 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
   useEffect(() => subscribeVenueVouchers(venueId, () => reload()), [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { QRCode.toDataURL(`NURIV-VENUE:${venueId}`, { width: 240, margin: 1 }).then(setQr).catch(() => {}); }, [venueId]);
   useEffect(() => { QRCode.toDataURL('https://nuriholdem.com/?signup=1', { width: 240, margin: 1 }).then(setSignupQr).catch(() => {}); }, []);
+  useEffect(() => { QRCode.toDataURL(checkinUrl(venueId), { width: 240, margin: 1 }).then(setCheckinQr).catch(() => {}); }, [venueId]);
 
   // 이용 내역 피드 — 발급(보낸 것)·사용(들어온 것)을 한 줄씩, 최신순. 실시간 구독이 reload를 부르므로 자동 갱신.
   const feed = useMemo(() => {
@@ -103,8 +106,9 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
   // 매장 비치용 인쇄 — 누리홀덤 브랜딩 + 이용권·회원가입 QR 세로 배치(고정값이라 한 번 출력해 비치).
   const printQr = async () => {
     try {
-      const [bigVoucher, bigSignup] = await Promise.all([
+      const [bigVoucher, bigCheckin, bigSignup] = await Promise.all([
         QRCode.toDataURL(`NURIV-VENUE:${venueId}`, { width: 1024, margin: 2 }),
+        QRCode.toDataURL(checkinUrl(venueId), { width: 1024, margin: 2 }),
         QRCode.toDataURL('https://nuriholdem.com/?signup=1', { width: 1024, margin: 2 }),
       ]);
       const w = window.open('', '_blank', 'width=480,height=860');
@@ -125,6 +129,7 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
 <div class="url">nuriholdem.com</div>
 <div class="qrs">
   <div class="card"><h2>🎟 매장이용권 사용</h2><img src="${bigVoucher}" alt="매장이용권 QR"/><p>대시보드 → 이용권 → 사용하기 → ‘매장 QR 스캔’</p></div>
+  <div class="card"><h2>📍 출석 체크인</h2><img src="${bigCheckin}" alt="출석 체크인 QR"/><p>QR 스캔 → 오늘 출석 도장(매장 점수 적립 · 출석왕 집계)</p></div>
   <div class="card"><h2>📱 회원가입</h2><img src="${bigSignup}" alt="회원가입 QR"/><p>QR 스캔 → 바로 회원가입</p></div>
 </div>
 <script>window.onload=function(){setTimeout(function(){window.print();},350);};</script>
@@ -266,7 +271,7 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
       {canIssue && qr && (
         <div className="rounded-input border border-gold-400/30 bg-gold-300/[0.05]">
           <button type="button" onClick={() => setQrOpen((v) => !v)} className="flex w-full items-center justify-between gap-2 px-2.5 py-2">
-            <span className="text-2xs font-bold text-gold-300">QR 코드 <span className="font-normal text-ink-muted">· 이용권 사용 · 회원가입</span></span>
+            <span className="text-2xs font-bold text-gold-300">매장 QR <span className="font-normal text-ink-muted">· 이용권 · 출석 체크인 · 회원가입</span></span>
             <Icon name="chevron-down" size={14} className={['shrink-0 text-ink-muted transition-transform', qrOpen ? 'rotate-180' : ''].join(' ')} />
           </button>
           {qrOpen && (
@@ -278,12 +283,17 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
                   <p className="text-center text-[10px] leading-tight text-ink-muted">손님이 스캔해 사용 (고정)</p>
                 </div>
                 <div className="flex flex-col items-center gap-1">
+                  <p className="text-center text-2xs font-bold text-sky-300">출석 체크인 QR</p>
+                  {checkinQr && <img src={checkinQr} alt="출석 체크인 QR" width={130} height={130} className="rounded bg-white p-1.5" />}
+                  <p className="text-center text-[10px] leading-tight text-ink-muted">손님 스캔 → 출석 도장 · 출석왕 집계 (고정)</p>
+                </div>
+                <div className="flex flex-col items-center gap-1">
                   <p className="text-center text-2xs font-bold text-emerald-300">회원가입 QR</p>
                   {signupQr && <img src={signupQr} alt="회원가입 QR" width={130} height={130} className="rounded bg-white p-1.5" />}
                   <p className="text-center text-[10px] leading-tight text-ink-muted">스캔 시 회원가입 페이지로 이동</p>
                 </div>
               </div>
-              <button type="button" onClick={printQr} className="btn-ghost mt-2 w-full px-3 text-2xs">🖨 출력해 매장에 비치 (이용권 + 회원가입 QR)</button>
+              <button type="button" onClick={printQr} className="btn-ghost mt-2 w-full px-3 text-2xs">🖨 출력해 매장에 비치 (이용권 + 출석 + 회원가입 QR)</button>
             </div>
           )}
         </div>
