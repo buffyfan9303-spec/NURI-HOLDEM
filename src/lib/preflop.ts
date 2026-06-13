@@ -116,6 +116,17 @@ export function action(label: string, pct: number): 'raise' | 'mix' | 'fold' {
 const SUITS = ['♠', '♥', '♦', '♣'] as const;
 export type Card = { rank: string; red: boolean; suit: string };
 
+/** 카드 2장(예: 'As','Kh') → 169핸드 라벨(AA/AKs/AKo). 인식 불가 시 null. */
+export function cardsToLabel(c1: string, c2: string): string | null {
+  const r1 = (c1?.[0] || '').toUpperCase(), r2 = (c2?.[0] || '').toUpperCase();
+  const su1 = (c1?.slice(-1) || '').toLowerCase(), su2 = (c2?.slice(-1) || '').toLowerCase();
+  if (!VAL[r1] || !VAL[r2]) return null;
+  if (r1 === r2) return r1 + r2;
+  const hi = VAL[r1] >= VAL[r2] ? r1 : r2;
+  const lo = VAL[r1] >= VAL[r2] ? r2 : r1;
+  return hi + lo + (su1 && su2 && su1 === su2 ? 's' : 'o');
+}
+
 /** 169핸드 라벨에서 무작위 한 개 추출. */
 export function randomHandLabel(): string {
   const flat = GRID.flat();

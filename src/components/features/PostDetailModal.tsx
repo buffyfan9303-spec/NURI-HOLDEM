@@ -12,6 +12,7 @@ import HandReplayer from './HandReplayer';
 import { renderMentions } from '../../lib/mentions';
 import { promptLogin } from '../../lib/requireLogin';
 import HandCards from '../atoms/HandCards';
+import HandGtoModal from './HandGtoModal';
 import Avatar from '../atoms/Avatar';
 import Icon from '../atoms/Icon';
 
@@ -48,6 +49,7 @@ function formatFullDate(iso: string): string {
 export default function PostDetailModal({
   post, open, onClose, onLike, onDelete, venues = [], onVenueClick, inline = false,
 }: PostDetailModalProps) {
+  const [gtoHero, setGtoHero] = useState<string[] | null>(null);
   const { user } = useAuth();
   // 더블탭 좋아요(인스타) — 본문을 빠르게 두 번 탭하면 좋아요 + 하트 팝
   const [heartKey, setHeartKey] = useState(0);
@@ -200,6 +202,17 @@ export default function PostDetailModal({
               )}
               {hand && <HandCards hand={hand} />}
               {replay && <HandReplayer replay={replay} />}
+              {(() => {
+                const heroCards = (replay?.hero?.length ? replay.hero : hand?.hero) ?? [];
+                if (heroCards.length < 2) return null;
+                return (
+                  <button type="button" onClick={() => setGtoHero(heroCards)}
+                    className="inline-flex items-center gap-1.5 rounded-input border border-gold-400/40 bg-gold-300/10 px-3 py-2 text-xs font-bold text-gold-300 active:opacity-80">
+                    🎯 이 핸드 GTO 분석
+                  </button>
+                );
+              })()}
+              {gtoHero && <HandGtoModal hero={gtoHero} onClose={() => setGtoHero(null)} />}
             </div>
           );
         })()}
