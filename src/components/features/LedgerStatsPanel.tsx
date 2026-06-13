@@ -1,6 +1,7 @@
 // src/components/features/LedgerStatsPanel.tsx
 // 업주 전용 — 기간 통계(오늘/주/월/전체/요일평균, 할인 반영) + POS 설정.
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { motion } from 'framer-motion';
 import { useToast } from '../atoms/Toast';
 import {
   type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type VisitorType,
@@ -70,13 +71,15 @@ function StatsView({ venueId }: { venueId: string }) {
     return { from: '2000-01-01', to: t }; // all
   }, [period, date, dowRange]);
 
+  const hasLoaded = useRef(false);
   useEffect(() => {
-    setLoading(true);
+    // 첫 진입만 로딩 표시 — period 전환 시엔 이전 데이터를 유지하며 부드럽게 갱신(스크롤 점프 방지)
+    if (!hasLoaded.current) setLoading(true);
     Promise.all([
       getLedgerRange(venueId, range.from, range.to),
       period === 'day' ? getLedgerPlayers(venueId, date) : Promise.resolve([] as LedgerPlayer[]),
     ]).then(([r, p]) => { setSessions(r.sessions); setBuyins(r.buyins); setPlayers(p); })
-      .finally(() => setLoading(false));
+      .finally(() => { setLoading(false); hasLoaded.current = true; });
   }, [venueId, range.from, range.to, period, date, aiTick, liveTick]);
 
   // '당일' 통계를 보는 중 장부(바이인 등) 변경 시 실시간 갱신
@@ -104,7 +107,7 @@ function StatsView({ venueId }: { venueId: string }) {
   const m = useMemo(() => {
     const src = (period === 'day' && excludeTypes.size > 0) ? buyins.filter((b) => !excludeTypes.has(playerType.get(b.playerName) ?? 'none')) : buyins;
     const fin = (b: LedgerBuyin) => buyinFinance(b, sessionByDate.get(b.sessionDate) ?? { buyinAmount: 0, cardAmount: null, discounts: [] });
-    let revenue = 0, unpaid = 0, support = 0, ticket = 0, ticketUnpaid = 0, entries = 0, underEntries = 0;
+    let revenue = 0, unpaid = 0, support = 0, ticket = 0, ticketUnpaid = 0, entries = 0, underEntries = 0, discountCnt = 0;
     const byMethod: Record<PaymentMethod, number> = { ticket: 0, cash: 0, transfer: 0, card: 0, support: 0 };
     const byPlayer: Record<string, number> = {};
     const playerSet = new Set<string>();
@@ -114,7 +117,8 @@ function StatsView({ venueId }: { venueId: string }) {
     for (const b of src) {
       const f = fin(b);
       revenue += f.paid; unpaid += f.unpaid; support += f.support; entries += f.entry;
-      if (f.entry > 0 && f.entry < 1) underEntries++; // 할인으로 1개 미달인 엔트리
+      if (f.entry > 0 && f.entry < 1) underEntries++; // 참고용
+      if (b.discountIndex > 0 || (b.isSplit && b.discountLevel > 0)) discountCnt++; // 할인 적용된 바인
       ticket += f.ticketPaid + (b.isSplit ? b.ticketCount : 0); ticketUnpaid += f.ticketUnpaid;
       byMethod[b.paymentMethod]++;
       byPlayer[b.playerName] = (byPlayer[b.playerName] ?? 0) + 1;
@@ -150,7 +154,7 @@ function StatsView({ venueId }: { venueId: string }) {
       dayCount, visitor, dow,
       avgEntryPerDay: dayCount ? entries / dayCount : 0,
       avgRevenuePerDay: dayCount ? revenue / dayCount : 0,
-      discountRatio: entries > 0 ? (underEntries / entries) * 100 : 0, // 총 엔트리 대비 미달(할인) 비율
+      discountCnt, discountRatio: src.length > 0 ? (discountCnt / src.length) * 100 : 0, // 전체 바인 중 할인 적용 비율
       cardRatio: cashLike > 0 ? (byMethod.card / cashLike) * 100 : 0,   // 현금성 결제 중 카드 비중
       unpaidRatio: revenue > 0 ? (unpaid / revenue) * 100 : 0,
     };
@@ -202,13 +206,19 @@ function StatsView({ venueId }: { venueId: string }) {
       </div>
 
       <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5 overflow-x-auto scrollbar-none">
-        {PERIODS.map((p) => (
-          <button key={p.id} type="button" onClick={() => setPeriod(p.id)}
-            className={['flex-1 min-w-[3.6rem] py-1.5 text-xs font-bold rounded-[6px] transition-colors whitespace-nowrap',
-              period === p.id
-                ? (p.ai ? 'bg-gradient-to-r from-violet-500 to-indigo-500 text-white shadow' : 'bg-gold-300 text-ink-inverse')
-                : (p.ai ? 'text-violet-300 hover:text-violet-200' : 'text-ink-secondary hover:text-ink-primary')].join(' ')}>{p.label}</button>
-        ))}
+        {PERIODS.map((p) => {
+          const on = period === p.id;
+          return (
+            <button key={p.id} type="button" onClick={() => setPeriod(p.id)}
+              className={['relative flex-1 min-w-[3.6rem] py-1.5 text-xs font-bold rounded-[6px] whitespace-nowrap transition-colors duration-300 focus:outline-none',
+                on ? (p.ai ? 'text-white' : 'text-ink-inverse') : (p.ai ? 'text-violet-300' : 'text-ink-secondary hover:text-ink-primary')].join(' ')}>
+              {on && <motion.span layoutId="stat-period-pill" aria-hidden
+                className={['absolute inset-0 rounded-[6px]', p.ai ? 'bg-gradient-to-r from-violet-500 to-indigo-500 shadow' : 'bg-gold-300'].join(' ')}
+                transition={{ type: 'spring', stiffness: 700, damping: 42 }} />}
+              <span className="relative">{p.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {loading ? (
@@ -245,8 +255,8 @@ function StatsView({ venueId }: { venueId: string }) {
           {/* 주요 지표 — 아이콘 카드 */}
           <div className="grid grid-cols-3 gap-2">
             <StatCard label="총 엔트리" value={m.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} icon="users" />
-            <StatCard label="미달 엔트리" value={`${m.underEntries}개`} sub="할인(1개 미만)" icon="down" />
-            <StatCard label="할인 비율" value={`${m.discountRatio.toFixed(1)}%`} sub="총 엔트리 대비 미달 비율" icon="percent" gold />
+            <StatCard label="할인 바인" value={`${m.discountCnt}건`} sub="할인 적용 바인" icon="down" />
+            <StatCard label="할인 비율" value={`${m.discountRatio.toFixed(1)}%`} sub="전체 바인 중 할인" icon="percent" gold />
           </div>
           <div className="grid grid-cols-3 gap-2">
             <StatCard label="완납 매출액" value={`${m.revenue.toLocaleString()} 원`} icon="wallet" emerald />
@@ -522,7 +532,7 @@ function Section({ icon, title, suffix, children }: { icon: IconName; title: str
 // ── AI 주간 리포트(데이터 기반 인사이트) ───────────────────────────────────────
 interface StatsAgg {
   total: number; entries: number; revenue: number; unpaid: number; players: number; ticket: number;
-  cardRatio: number; unpaidRatio: number; discountRatio: number;
+  cardRatio: number; unpaidRatio: number; discountRatio: number; discountCnt: number;
   ranking: [string, number][];
   dow: Record<number, { entries: number; revenue: number; unpaid: number; buyins: number; dates: Set<string>; players: Set<string> }>;
 }
@@ -557,7 +567,7 @@ function buildAiReport(m: StatsAgg): { empty: boolean; sales: string; risk: stri
   const risk =
     `현재 미수금이 ${man(m.unpaid)}만 원(완납 매출 대비 약 ${Math.round(m.unpaidRatio)}%)으로 ` +
     `${m.unpaidRatio >= 25 ? '주의가 필요한 수치입니다' : '비교적 안정적입니다'}. ` +
-    `또한 미달 엔트리 할인이 ${m.discountRatio.toFixed(1)}% 발생하여 ` +
+    `또한 할인 바인이 전체의 ${m.discountRatio.toFixed(1)}%(${m.discountCnt}건) 발생하여 ` +
     `${m.discountRatio >= 10 ? '마진 하락의 원인이 되고 있으니 참가자 확보 전략이 필요합니다' : '마진에 큰 영향은 없습니다'}.`;
 
   const actions: string[] = [];

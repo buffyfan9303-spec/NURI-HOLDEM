@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { motion } from 'framer-motion';
 import { getVenueCustomerStats, paymentLabel, type CustomerStat } from '../../api/reservations';
 import { toCsv, downloadCsv } from '../../lib/csv';
 
@@ -14,17 +15,18 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
   const [rows, setRows] = useState<CustomerStat[]>([]);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const hasLoaded = useRef(false);
   const [sort, setSort] = useState<'buyins' | 'visits' | 'rate' | 'unpaid' | 'recent'>('buyins');
 
   useEffect(() => {
     let alive = true;
-    setLoading(true);
+    if (!hasLoaded.current) setLoading(true);
     const from = range === 'all' ? undefined
       : new Date(Date.now() - Number(range) * 86400000).toLocaleDateString('en-CA');
     getVenueCustomerStats(venueId, from)
       .then((r) => { if (alive) setRows(r); })
       .catch(() => { if (alive) setRows([]); })
-      .finally(() => { if (alive) setLoading(false); });
+      .finally(() => { if (alive) { setLoading(false); hasLoaded.current = true; } });
     return () => { alive = false; };
   }, [venueId, range]);
 
@@ -61,13 +63,17 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
       {/* 기간 + 검색 + 정렬 */}
       <div className="flex flex-wrap items-center gap-1.5">
         <div className="flex items-center gap-0.5 rounded-input bg-surface-high p-0.5">
-          {([['all', '전체'], ['7', '7일'], ['30', '30일'], ['90', '90일']] as const).map(([id, label]) => (
-            <button key={id} type="button" onClick={() => setRange(id)}
-              className={['rounded-[6px] px-2.5 py-1 text-2xs font-bold transition-colors',
-                range === id ? 'bg-gold-300 text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
-              {label}
-            </button>
-          ))}
+          {([['all', '전체'], ['7', '7일'], ['30', '30일'], ['90', '90일']] as const).map(([id, label]) => {
+            const on = range === id;
+            return (
+              <button key={id} type="button" onClick={() => setRange(id)}
+                className={['relative rounded-[6px] px-2.5 py-1 text-2xs font-bold transition-colors duration-300 focus:outline-none',
+                  on ? 'text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
+                {on && <motion.span layoutId="cust-range-pill" aria-hidden className="absolute inset-0 rounded-[6px] bg-gold-300" transition={{ type: 'spring', stiffness: 700, damping: 42 }} />}
+                <span className="relative">{label}</span>
+              </button>
+            );
+          })}
         </div>
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="이름 검색"
           className="input min-w-0 flex-1 text-sm py-1.5" />
