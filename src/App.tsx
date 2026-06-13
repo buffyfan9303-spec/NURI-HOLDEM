@@ -181,24 +181,15 @@ function AppHeader({
         >
           <NuriHoldemLogo />
         </button>
-        {/* 모바일: 로고 | 일정·라이브·커뮤니티 텍스트 내비 — 로고 클릭=일정 복귀(사장님 지정 UX) */}
+        {/* 모바일: 로고 │ 현재 위치(지금 보고 있는 탭) — 로고 클릭=일정 복귀 */}
         <div className="lg:hidden flex min-w-0 items-center gap-2">
           <button type="button" onClick={onHome} aria-label="일정 탐색으로" className="press-spring shrink-0">
             <NuriHoldemLogo className="!h-7" />
           </button>
           <span className="h-4 w-px shrink-0 bg-border-default" aria-hidden />
-          <nav className="flex min-w-0 items-center" aria-label="주요 탭">
-            {([['browse', '일정'], ['live', '라이브'], ['community', '커뮤니티']] as [TabId, string][]).map(([id, label]) => {
-              const on = activeTab === id;
-              return (
-                <button key={id} type="button" onClick={() => (id === 'browse' ? onHome() : onGotoTab?.(id))}
-                  className={['shrink-0 rounded-input px-1.5 py-1 text-[13px] font-bold leading-none transition-colors duration-300',
-                    on ? 'text-gold-300' : 'text-ink-secondary active:text-ink-primary'].join(' ')}>
-                  {label}
-                </button>
-              );
-            })}
-          </nav>
+          <span className="min-w-0 truncate text-base font-extrabold tracking-tight text-ink-primary" aria-current="page">
+            {({ browse: '일정 탐색', live: '라이브', community: '커뮤니티', market: '중고장터', tools: '도구', 'my-store': '내 매장', admin: '관리자 설정' } as Record<string, string>)[activeTab ?? 'browse'] ?? '일정 탐색'}
+          </span>
         </div>
 
         {/* RIGHT: 테마 토글 + 알림 + 로그인/아바타 — 동일 36px 원형 버튼 클러스터 */}
@@ -1410,7 +1401,7 @@ export default function App() {
       <InstallBanner />
       <TierCelebration />
 
-      <TabBar tabs={tabs} active={activeTab} onChange={changeTab} />
+      <TabBar tabs={tabs.filter((t) => t.id !== 'market')} active={activeTab} onChange={changeTab} />
       {/* 모바일 하단 탭바(Riot Mobile 스타일) — 상단 GNB 대체 */}
       <MobileTabBar tabs={tabs} active={activeTab} onChange={changeTab} dot={{ community: commHasNew }}
         onOpenMe={() => { if (user) setVoucherWalletOpen(true); else setAuthOpen(true); }} />

@@ -22,7 +22,7 @@ import LeaguePanel from './LeaguePanel';
 import SectionHeader from '../atoms/SectionHeader';
 import { getSchedules, type Schedule } from '../../api/schedules';
 import { motion } from 'framer-motion';
-import { getLedgerBuyins } from '../../api/ledger';
+import { getLedgerBuyins, getLedgerSession } from '../../api/ledger';
 
 type Section = 'dashboard' | 'posters' | 'ledger' | 'stats' | 'ranking' | 'venueRank' | 'league' | 'staff' | 'settings' | 'clock' | 'attendance' | 'voucher' | 'page';
 
@@ -323,23 +323,32 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
   // 같은 날 여러 게임(메인+사이드) — 게임(이벤트)별로 순위를 따로 저장. ''=기본 게임
   const [eventName, setEventName] = useState('');
   const [allEntries, setAllEntries] = useState<RankingEntry[]>([]);
-  const [daySchedTitles, setDaySchedTitles] = useState<string[]>([]);
+  // 그날 열린 게임 후보 = 그날 포스터 제목 + 그날 장부 제목(둘 다 '어떤 게임인지' 선택지)
+  const [dayGames, setDayGames] = useState<string[]>([]);
   useEffect(() => {
-    getSchedules().then((all: Schedule[]) => {
-      const titles = all.filter((sc) => sc.venueId === venueId && new Date(sc.date).toLocaleDateString('en-CA') === date)
-        .map((sc) => sc.title.trim()).filter(Boolean);
-      setDaySchedTitles([...new Set(titles)]);
-    }).catch(() => setDaySchedTitles([]));
+    Promise.all([
+      getSchedules().then((all: Schedule[]) => all.filter((sc) => sc.venueId === venueId && new Date(sc.date).toLocaleDateString('en-CA') === date).map((sc) => sc.title.trim())).catch(() => [] as string[]),
+      getLedgerSession(venueId, date).then((ls) => (ls.title ? [ls.title.trim()] : [])).catch(() => [] as string[]),
+    ]).then(([posters, ledgers]) => setDayGames([...new Set([...posters, ...ledgers].filter(Boolean))]));
   }, [venueId, date]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  // 지류 양식 출력용 매장명
+  // 지류 양식 출력용 매장명 + 인증 여부(인증 펍만 지류 발급)
   const [venueName, setVenueName] = useState('');
+  const [venueVerified, setVenueVerified] = useState(false);
   useEffect(() => {
-    getAllVenues().then((vs) => setVenueName(vs.find((v) => v.id === venueId)?.name ?? '')).catch(() => {});
+    getAllVenues().then((vs) => {
+      const v = vs.find((x) => x.id === venueId);
+      setVenueName(v?.name ?? '');
+      setVenueVerified(v?.verificationStatus === 'verified');
+    }).catch(() => {});
   }, [venueId]);
   // 지류(공식 결과 기록지) 출력 — 인증 펍 전용. 수기 기입형(NAME/COUNTRY/EVENT/PLACE/PRIZE/TD SIGN)
   const printPaperForm = () => {
+    if (!venueVerified) {
+      window.alert('공식 결과 기록지(지류 양식)는 NURI HOLDEM 인증 매장만 사용할 수 있습니다.\n\n비인증 매장은 발급이 불가하니 운영자(관리자)에게 인증을 문의해 주세요.');
+      return;
+    }
     const w = window.open('', '_blank', 'width=560,height=900');
     if (!w) { toast.show('팝업이 차단되었습니다. 팝업을 허용한 뒤 다시 시도하세요.', 'error'); return; }
     const field = (label: string, sub: string) => `<div class="f"><div class="lb">${label} <span>${sub}</span></div><div class="ln"></div></div>`;
@@ -512,34 +521,42 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
           className="btn-ghost text-xs px-3 shrink-0 text-gold-300">🖨 지류 양식</button>
       </div>
 
-      {/* 게임(이벤트) 선택 — 같은 날 메인+사이드를 따로 저장 */}
+      {/* 어떤 게임의 순위인지 — 그날 포스터·장부에서 선택(같은 날 메인+사이드 따로 저장) */}
       {(() => {
         const saved = [...new Set(allEntries.map((e) => e.eventName ?? ''))];
-        const opts = [...new Set(['', ...saved, ...daySchedTitles, ...(eventName ? [eventName] : [])])];
-        if (opts.length <= 1 && daySchedTitles.length === 0) return null;
+        const opts = [...new Set(['', ...saved, ...dayGames, ...(eventName ? [eventName] : [])])];
+        const multi = opts.length > 1 || dayGames.length > 0;
         return (
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-2xs font-bold text-ink-muted shrink-0">게임</span>
-            {opts.map((ev) => {
-              const on = eventName === ev;
-              const has = saved.includes(ev);
-              return (
-                <button key={ev || '_main'} type="button" onClick={() => setEventName(ev)}
-                  className={['text-2xs font-bold px-2 py-1 rounded-badge border transition-colors',
-                    on ? 'bg-gold-300/15 text-gold-300 border-gold-400/40' : 'bg-surface-float text-ink-muted border-border-default'].join(' ')}>
-                  {ev || '기본(메인)'}{has ? ' ✓' : ''}
-                </button>
-              );
-            })}
-            <button type="button"
-              onClick={() => { const v = window.prompt('게임 이름 직접 입력 (예: 사이드 1)'); if (v && v.trim()) setEventName(v.trim().slice(0, 40)); }}
-              className="text-2xs font-bold px-2 py-1 rounded-badge border bg-surface-float text-ink-muted border-border-default">+ 직접</button>
+          <div className="rounded-card border border-gold-400/30 bg-gold-300/[0.05] p-2.5 space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-2xs font-bold text-ink-muted shrink-0">🎯 입력 중인 게임</span>
+              <span className="min-w-0 flex-1 truncate text-sm font-extrabold text-gold-300">{eventName || '기본(메인 게임)'}</span>
+            </div>
+            {multi && (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {opts.map((ev) => {
+                  const on = eventName === ev;
+                  const has = saved.includes(ev);
+                  return (
+                    <button key={ev || '_main'} type="button" onClick={() => setEventName(ev)}
+                      className={['text-xs font-bold px-2.5 py-1.5 rounded-input border transition-colors',
+                        on ? 'bg-gold-300 text-ink-inverse border-gold-300' : 'bg-surface-float text-ink-secondary border-border-default hover:text-ink-primary'].join(' ')}>
+                      {ev || '메인'}{has ? ' ✓' : ''}
+                    </button>
+                  );
+                })}
+                <button type="button"
+                  onClick={() => { const v = window.prompt('게임 이름 직접 입력 (예: 사이드 1, 새틀라이트)'); if (v && v.trim()) setEventName(v.trim().slice(0, 40)); }}
+                  className="text-xs font-bold px-2.5 py-1.5 rounded-input border bg-surface-float text-ink-muted border-dashed border-border-default hover:text-ink-secondary">+ 직접</button>
+              </div>
+            )}
+            <p className="text-[10px] leading-relaxed text-ink-muted">하루에 게임이 여러 개면 <b className="text-ink-secondary">게임마다 따로</b> 입력하세요. 위에서 게임을 고르면 그 게임의 순위만 저장·표시됩니다.</p>
           </div>
         );
       })()}
 
       <p className="text-2xs text-ink-muted">
-        <span className="text-gold-300 font-semibold">닉네임은 필수</span>, 실명·프라이즈는 선택입니다. 프라이즈는 <span className="text-gold-300 font-semibold">매장 커뮤니티 순위 점수</span>로만 쓰입니다(금전적 가치 없음). 실명을 넣으면 손님에게는 <span className="text-gold-300 font-semibold">이름 일부를 가려(예: 나*리)</span> 표시됩니다.
+        <span className="text-gold-300 font-semibold">닉네임은 필수</span>, 실명·프라이즈는 선택입니다. 등수마다 <span className="text-gold-300 font-semibold">기준 점수(+N점)</span>가 자동 부여되고, 프라이즈는 <span className="text-gold-300 font-semibold">매장 커뮤니티 순위 점수</span>로만 쓰입니다(금전적 가치 없음). 실명을 넣으면 손님에게는 <span className="text-gold-300 font-semibold">이름 일부를 가려(예: 나*리)</span> 표시됩니다.
       </p>
 
       {loading ? (
@@ -651,7 +668,7 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
       )}
 
       <button type="button" onClick={save} disabled={saving} className="btn-primary w-full disabled:opacity-60">
-        {saving ? '저장 중…' : `${date === today ? '오늘' : date} 순위 저장`}
+        {saving ? '저장 중…' : `${date === today ? '오늘' : date} · ${eventName || '메인'} 순위 저장`}
       </button>
     </div>
   );
