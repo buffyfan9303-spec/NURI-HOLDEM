@@ -294,7 +294,7 @@ function SectionBtn({ active, onClick, icon, children, locked, fav, onToggleFav 
         <span
           role="button" tabIndex={-1} aria-label={fav ? '즐겨찾기 해제' : '즐겨찾기 추가'}
           onClick={(e) => { e.stopPropagation(); onToggleFav(); }}
-          className={[locked ? '' : 'lg:ml-auto', 'hidden lg:inline shrink-0 px-0.5 text-sm leading-none transition-opacity',
+          className={[locked ? '' : 'lg:ml-auto', 'relative hidden lg:inline shrink-0 px-0.5 text-sm leading-none transition-opacity',
             fav ? (active ? 'text-ink-inverse' : 'text-gold-300') + ' opacity-100'
                 : 'opacity-0 group-hover/nav:opacity-60 ' + (active ? 'text-ink-inverse' : 'text-ink-muted')].join(' ')}
         >{fav ? '★' : '☆'}</span>
