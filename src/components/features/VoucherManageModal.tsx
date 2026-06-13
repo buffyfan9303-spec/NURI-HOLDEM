@@ -40,7 +40,7 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
   const [holderQuery, setHolderQuery] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [profileMap, setProfileMap] = useState<Map<string, VoucherHolderProfile>>(new Map());
-  const [issueOpen, setIssueOpen] = useState(false); // 배포 섹션 — 기본 접힘
+  const [issueOpen, setIssueOpen] = useState(false); // 발급 섹션 — 기본 접힘
   const [qrOpen, setQrOpen] = useState(false);       // QR 섹션 — 기본 접힘(PC 포함)
   const [ownerOpen, setOwnerOpen] = useState(false); // 보유자 현황·통계(업주 전용) — 기본 접힘
 
@@ -65,7 +65,15 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
       if (v.createdAt) ev.push({ t: 'issued', at: v.createdAt, title: v.title, who: v.holderName ?? '매장 보관' });
       if (v.usedAt) ev.push({ t: 'used', at: v.usedAt, title: v.title, who: v.holderName ?? '' });
     }
-    return ev.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 30);
+    ev.sort((a, b) => b.at.localeCompare(a.at));
+    // 같은 분(分)·종류·대상·제목은 한 줄로 묶고 ×N — 10장 발급이 10줄로 도배되지 않게
+    const grouped: { t: 'issued' | 'used'; at: string; title: string; who: string; n: number }[] = [];
+    for (const e of ev) {
+      const last = grouped[grouped.length - 1];
+      if (last && last.t === e.t && last.title === e.title && last.who === e.who && last.at.slice(0, 16) === e.at.slice(0, 16)) last.n += 1;
+      else grouped.push({ ...e, n: 1 });
+    }
+    return grouped.slice(0, 30);
   }, [list]);
   const fmtFeed = (iso: string) => { const d = new Date(iso); const p2 = (n: number) => String(n).padStart(2, '0'); return `${d.getMonth() + 1}/${d.getDate()} ${p2(d.getHours())}:${p2(d.getMinutes())}`; };
 
@@ -184,9 +192,12 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
               <li key={i} className="flex items-center gap-2 rounded-input bg-surface-base/50 px-2 py-1.5 text-2xs">
                 <span className={['shrink-0 rounded-badge px-1.5 py-0.5 font-bold leading-none',
                   e.t === 'used' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-gold-300/15 text-gold-300'].join(' ')}>
-                  {e.t === 'used' ? '사용' : '발급'}
+                  {e.t === 'used' ? '↘ 사용(받음)' : '↗ 발급(보냄)'}
                 </span>
-                <span className="min-w-0 flex-1 truncate text-ink-secondary">{e.title}{e.who ? ` · ${e.who}` : ''}</span>
+                <span className="min-w-0 flex-1 truncate text-ink-secondary">
+                  <b className="text-ink-primary">{e.who || '회원'}</b> · {e.title}
+                  {e.n > 1 && <b className="ml-1 text-gold-300">×{e.n}</b>}
+                </span>
                 <span className="shrink-0 tabular-nums text-ink-muted">{fmtFeed(e.at)}</span>
               </li>
             ))}
@@ -194,11 +205,11 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
         )}
       </div>
 
-      {/* 1) 매장이용권 배포 — 접기 */}
+      {/* 1) 매장이용권 발급 — 접기 */}
       {canIssue ? (
         <div className="rounded-input border border-gold-400/30 bg-gold-300/[0.05]">
           <button type="button" onClick={() => setIssueOpen((v) => !v)} className="flex w-full items-center justify-between gap-2 px-2.5 py-2">
-            <span className="text-2xs font-bold text-gold-300">매장이용권 배포 <span className="font-normal text-ink-muted">· 업주 전용</span></span>
+            <span className="text-2xs font-bold text-gold-300">매장이용권 발급 <span className="font-normal text-ink-muted">· 업주 전용</span></span>
             <Icon name="chevron-down" size={14} className={['shrink-0 text-ink-muted transition-transform', issueOpen ? 'rotate-180' : ''].join(' ')} />
           </button>
           {issueOpen && (
@@ -242,7 +253,7 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
               ) : (
                 <button type="button" onClick={() => setRecvMode('id')} className="btn-ghost w-full text-2xs">👤 아이디(닉네임)로 받는 사람 지정 (선택)</button>
               )}
-              <button type="button" disabled={busy || (!isAdmin && !approved)} onClick={issue} className="btn-primary w-full text-sm disabled:opacity-50">{busy ? '배포 중…' : `+ ${count}개 배포${recvDisplay ? ` → ${recvDisplay}` : ''}`}</button>
+              <button type="button" disabled={busy || (!isAdmin && !approved)} onClick={issue} className="btn-primary w-full text-sm disabled:opacity-50">{busy ? '배포 중…' : `+ ${count}개 발급${recvDisplay ? ` → ${recvDisplay}` : ''}`}</button>
               <p className="text-[10px] text-ink-muted">1회 최대 1000개 · 아이디(닉네임)로 손님 지정 시 그 회원 지갑으로. 미지정이면 매장 보관용. 손님은 ‘사용하기 → 매장 QR 스캔’으로 사용합니다. <b className="text-ink-secondary">매장이용권은 금전적 가치가 없습니다.</b></p>
             </div>
           )}
