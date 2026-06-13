@@ -102,11 +102,8 @@ export default function DealerCommunity() {
   return (
     <div className="space-y-3">
       <div className="rounded-input border border-sky-400/30 bg-sky-500/[0.06] px-3 py-2 text-2xs leading-relaxed text-sky-300">
-        딜러 게시판입니다. 딜러 구인·구직과 자유로운 정보 공유에 활용하세요. (누구나 열람 가능)
-      </div>
-
-      <div className="rounded-input border border-danger/40 bg-danger/[0.08] px-3 py-2 text-2xs leading-relaxed text-danger-light">
-        불법 사행성 영업, 환전, 도박 알선 등 <b>불법적인 일의 구인·구직은 강제 탈퇴 사유</b>가 되며 관련 법령에 따라 처벌받을 수 있습니다.
+        딜러 구인·구직과 자유로운 정보 공유 공간입니다 <span className="text-ink-muted">(누구나 열람 가능)</span>.{' '}
+        <span className="font-semibold text-danger-light">⚠ 불법 사행성·환전·도박 알선 관련 구인·구직은 강제 탈퇴 및 처벌 대상</span>{notices.length > 0 ? ' — 자세한 규정은 아래 공지를 확인하세요.' : '입니다.'}
       </div>
 
       {notices.length > 0 && (
