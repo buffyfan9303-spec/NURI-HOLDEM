@@ -37,6 +37,7 @@ export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete, on
   const { user, isApprovedOwner } = useAuth();
   const [reserverCounts, setReserverCounts] = useState<Record<string, number>>({});
   const [visitedNames, setVisitedNames] = useState<Set<string>>(new Set());
+  const [visitedUserIds, setVisitedUserIds] = useState<Set<string>>(new Set()); // 방문 판정 1순위(계정 ID)
   const [ops, setOps] = useState<Record<string, PosterOpsSummary>>({}); // scheduleId → 연결 장부 운영 요약
   const [dateFilter, setDateFilter] = useState<string>(''); // ''=전체 / iso=그 날짜 예약만 관리
 
@@ -50,7 +51,10 @@ export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete, on
     const reload = () => {
       getVenueReserverCounts(venueId).then(setReserverCounts).catch(() => {});
       const t0 = new Date(); t0.setHours(0, 0, 0, 0);
-      listVenueCheckins(venueId, t0.toISOString()).then((cs) => setVisitedNames(new Set(cs.map((c) => (c.displayName ?? '').trim().toLowerCase()).filter(Boolean)))).catch(() => {});
+      listVenueCheckins(venueId, t0.toISOString()).then((cs) => {
+        setVisitedNames(new Set(cs.map((c) => (c.displayName ?? '').trim().toLowerCase()).filter(Boolean)));
+        setVisitedUserIds(new Set(cs.map((c) => c.userId).filter(Boolean)));
+      }).catch(() => {});
       getReservationCounts(ids).then(setResCounts).catch(() => {});
     };
     reload();
@@ -98,7 +102,7 @@ export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete, on
             </div>
             <ul className="space-y-2">
               {shown.map((p) => (
-                <PosterRow key={p.id} schedule={p} venueId={venueId} reserverCounts={reserverCounts} visitedNames={visitedNames}
+                <PosterRow key={p.id} schedule={p} venueId={venueId} reserverCounts={reserverCounts} visitedNames={visitedNames} visitedUserIds={visitedUserIds}
                   onEdit={() => onEdit(p.id)} onDelete={() => onDelete(p.id)}
                   ops={ops[p.id] ?? null}
                   resCount={resCounts[p.id] ?? 0}
@@ -131,8 +135,8 @@ function PendingApprovalView() {
 }
 
 // ── 단일 게임 행 + 예약 관리 패널 ─────────────────────────────────────────────
-function PosterRow({ schedule, venueId, reserverCounts, visitedNames, onEdit, onDelete, ops, resCount, onLedgerAt, onRanking, gameDates }: {
-  schedule: Schedule; venueId?: string; reserverCounts: Record<string, number>; visitedNames?: Set<string>;
+function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUserIds, onEdit, onDelete, ops, resCount, onLedgerAt, onRanking, gameDates }: {
+  schedule: Schedule; venueId?: string; reserverCounts: Record<string, number>; visitedNames?: Set<string>; visitedUserIds?: Set<string>;
   onEdit: () => void; onDelete: () => void;
   ops?: PosterOpsSummary | null; resCount?: number; onLedgerAt?: (date: string | null) => void; onRanking?: (date: string) => void;
   gameDates?: { id: string; date: string }[]; // 같은 제목(같은 게임)의 날짜별 스케줄 — 예약을 날짜별로 전환
@@ -311,7 +315,7 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, onEdit, on
               </div>
               {reservations.map((r, i) => (
                 <ReservationItem key={r.id || i} idx={i + 1} res={r} venueId={venueId}
-                  visited={visitedNames?.has((r.displayName ?? '').trim().toLowerCase()) ?? false}
+                  visited={((!!r.userId && visitedUserIds?.has(r.userId)) || visitedNames?.has((r.displayName ?? '').trim().toLowerCase())) ?? false}
                   regular={(reserverCounts[r.displayName] ?? 0) >= 5}
                   reserveCount={reserverCounts[r.displayName] ?? 0}
                   onDelete={() => onDel(r)} onRename={() => onRename(r)} />
