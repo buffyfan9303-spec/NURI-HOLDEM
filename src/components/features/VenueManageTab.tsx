@@ -43,6 +43,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   // 운영자는 선택한 매장, 그 외는 본인 소속 매장
   const venueId: string | null = isAdmin ? adminVenueId : (user?.venueId ?? null);
   const [section, setSection] = useState<Section | null>(null);
+  const [navOpen, setNavOpen] = useState(false); // 모바일 메뉴 아코디언 펼침
   const [ledgerOk, setLedgerOk] = useState(false); // 장부 접근(업주/운영자/권한직원)
   const [manageOk, setManageOk] = useState(false); // 통계·설정(업주/운영자)
   const [voucherView, setVoucherView] = useState(false); // 매장이용권 내역 열람(업주/권한직원)
@@ -168,21 +169,49 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
         <p className="py-16 text-center text-sm text-ink-muted">이 매장에서 사용 가능한 메뉴가 없습니다.<br />업주에게 장부 권한을 요청하세요.</p>
       ) : (
         <div className="lg:flex lg:gap-4">
-          {available.length > 1 && (
-            <nav className="flex gap-1 overflow-x-auto scrollbar-none rounded-card bg-surface-high p-1 snap-x lg:sticky lg:top-16 lg:w-44 lg:shrink-0 lg:flex-col lg:self-start lg:overflow-visible lg:bg-transparent lg:p-0">
-              {[...available]
-                // 즐겨찾기 우선 정렬(★ 누른 순서 유지) — 나머지는 기존 순서
-                .sort((a, b) => {
-                  const fi = (id: Section) => { const i = favs.indexOf(id); return i < 0 ? 999 : i; };
-                  return fi(a.id) - fi(b.id);
-                })
-                .map((a) => (
+          {available.length > 1 && (() => {
+            const sorted = [...available].sort((a, b) => {
+              const fi = (id: Section) => { const i = favs.indexOf(id); return i < 0 ? 999 : i; };
+              return fi(a.id) - fi(b.id);
+            });
+            return (<>
+              {/* 모바일: 아코디언 — 현재 메뉴만 보이고, 탭하면 전체 펼침(위로 다 몰지 않게) */}
+              <div className="lg:hidden">
+                <button type="button" onClick={() => setNavOpen((v) => !v)} aria-expanded={navOpen}
+                  className="flex w-full items-center gap-2 rounded-card border border-gold-400/30 bg-surface-high px-3 py-2.5">
+                  <span className="shrink-0 text-gold-300" aria-hidden>{SECTION_ICON[section as Section]}</span>
+                  <span className="min-w-0 flex-1 text-left text-sm font-bold text-ink-primary truncate">{curItem?.label ?? '메뉴'}</span>
+                  <span className="text-2xs text-ink-muted">{navOpen ? '닫기' : '메뉴'}</span>
+                  <Icon name="chevron-down" size={16} className={['shrink-0 text-ink-muted transition-transform', navOpen ? 'rotate-180' : ''].join(' ')} />
+                </button>
+                {navOpen && (
+                  <div className="mt-1 grid grid-cols-2 gap-1 rounded-card border border-border-subtle bg-surface-high p-1 animate-slide-up">
+                    {sorted.map((a) => {
+                      const on = section === a.id;
+                      return (
+                        <button key={a.id} type="button" onClick={() => { gotoSection(a.id); setNavOpen(false); }}
+                          className={['relative flex items-center gap-2 rounded-input px-2.5 py-2.5 text-xs font-bold transition-colors',
+                            on ? 'bg-gold-300 text-ink-inverse' : a.locked ? 'text-ink-muted/60' : 'text-ink-secondary hover:bg-surface-float'].join(' ')}>
+                          <span className="shrink-0" aria-hidden>{SECTION_ICON[a.id]}</span>
+                          <span className="min-w-0 flex-1 text-left truncate">{a.label}</span>
+                          {a.locked && <Icon name="lock" size={11} className="shrink-0 opacity-70" />}
+                          {favs.includes(a.id) && !a.locked && <span className={['shrink-0 text-xs', on ? 'text-ink-inverse' : 'text-gold-300'].join(' ')}>★</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              {/* PC: 세로 사이드바(기존) */}
+              <nav className="hidden lg:flex lg:sticky lg:top-16 lg:w-44 lg:shrink-0 lg:flex-col lg:self-start lg:gap-1">
+                {sorted.map((a) => (
                   <SectionBtn key={a.id} icon={SECTION_ICON[a.id]} active={section === a.id} locked={a.locked}
                     fav={favs.includes(a.id)} onToggleFav={() => toggleFav(a.id)}
                     onClick={() => gotoSection(a.id)}>{a.label}</SectionBtn>
                 ))}
-            </nav>
-          )}
+              </nav>
+            </>);
+          })()}
 
           <div className="mt-3 min-w-0 flex-1 space-y-3 lg:mt-0">
             {curItem?.locked ? (
