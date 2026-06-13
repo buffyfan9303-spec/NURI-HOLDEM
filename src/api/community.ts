@@ -807,13 +807,19 @@ export async function getMyJoinedGroups(): Promise<JoinedGroup[]> {
   return (mems as any[]).filter((m) => byId.has(m.group_id)).map((m) => ({ membershipId: m.id, status: m.status, group: byId.get(m.group_id)! }));
 }
 
-// 업주: 본인 홀덤펍(매장) 직접 생성 (미보유 시)
-export async function createMyVenue(input: { name: string; region: string; address?: string }): Promise<string> {
+// 업주: 본인 홀덤펍(매장) 직접 생성 — 이름 필수, 주소·전화는 폼에서 필수 검증. 반환: 새 매장 id.
+export interface CreateVenueInput {
+  name: string; region?: string; address?: string; phone?: string;
+  imageUrl?: string; kakaoUrl?: string; description?: string; businessHours?: string;
+}
+export async function createMyVenue(input: CreateVenueInput): Promise<string> {
   if (IS_MOCK) return 'mock';
   const { data, error } = await supabase.rpc('create_my_venue', {
-    p_name: input.name, p_region: input.region, p_address: input.address ?? '',
+    p_name: input.name, p_region: input.region ?? '', p_address: input.address ?? '', p_phone: input.phone ?? '',
+    p_image_url: input.imageUrl ?? null, p_kakao_url: input.kakaoUrl ?? null,
+    p_description: input.description ?? null, p_business_hours: input.businessHours ?? null,
   });
-  if (error) throw error;
+  if (error) throw new Error(error.message);
   return data as string;
 }
 
@@ -1085,4 +1091,23 @@ export async function getEquippedMarks(userIds: string[]): Promise<Record<string
     if (emoji) out[r.id] = emoji + ' ';
   }
   return out;
+}
+
+// ── 공동 사장(여러 업주) ─────────────────────────────────────
+export interface VenueOwner { userId: string; nickname: string; name: string; isPrimary: boolean }
+export async function listVenueOwners(venueId: string): Promise<VenueOwner[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.rpc('list_venue_owners', { p_venue_id: venueId });
+  if (error) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({ userId: r.user_id, nickname: r.nickname, name: r.name ?? '', isPrimary: !!r.is_primary }));
+}
+/** 공동 사장 추가 — 닉네임(아이디)으로 회원 지정. 본인 매장 업주만. */
+export async function addVenueOwner(venueId: string, nickname: string): Promise<void> {
+  const { error } = await supabase.rpc('add_venue_owner', { p_venue_id: venueId, p_nickname: nickname });
+  if (error) throw new Error(error.message);
+}
+export async function removeVenueOwner(venueId: string, userId: string): Promise<void> {
+  const { error } = await supabase.rpc('remove_venue_owner', { p_venue_id: venueId, p_user_id: userId });
+  if (error) throw new Error(error.message);
 }

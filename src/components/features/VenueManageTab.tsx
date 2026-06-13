@@ -6,7 +6,8 @@ import type { User, VenueInvite } from '../../api/auth';
 import { getMyVenueStaff, getMyVenueInvites, inviteStaffByEmail, cancelStaffInvite, removeStaff, setStaffTitle, checkNicknameAvailable, searchMembersForRanking } from '../../api/auth';
 import { getVenueRankings, saveVenueRankings, maskRealName, getVenuePageConfig, placementPointsOf, type VenuePageConfig, type RankingEntry } from '../../api/rankings';
 import { canAccessLedger, canManagePos, getLedgerAccessUserIds, grantLedgerAccess, revokeLedgerAccess } from '../../api/ledger';
-import { getAllVenues, type Venue } from '../../api/community';
+import { getAllVenues, createMyVenue, type Venue } from '../../api/community';
+import { uploadPoster } from '../../lib/storage';
 import VenueVerificationCard from './VenueVerificationCard';
 import NuriPosLedger, { type LedgerSeed } from './NuriPosLedger';
 import LedgerStatsPanel, { PosSettingsPanel } from './LedgerStatsPanel';
@@ -33,7 +34,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   deepSection?: Section | null;
   onConsumeDeepSection?: () => void;
 }) {
-  const { user } = useAuth();
+  const { user, refreshProfile } = useAuth();
   const isOwner = user?.role === 'venue_owner';
   const isAdmin = user?.role === 'admin';
   const canStaff = isOwner || isAdmin; // 직원 관리·POS 설정 접근
@@ -135,11 +136,12 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   const curItem = available.find((a) => a.id === section);
 
   if (!user) return null;
-  // 업주·직원: 소속 매장이 없으면 안내 (운영자는 매장 선택기로 진행)
+  // 업주: 소속 매장이 없으면 '매장 생성' 화면. 직원: 매장/직원 승인 대기 안내.
   if (!isAdmin && !venueId) {
+    if (isOwner) return <VenueCreateForm onCreated={refreshProfile} />;
     return (
       <div className="py-16 text-center text-sm text-ink-muted">
-        소속된 매장이 없습니다. 매장 승인 또는 직원 승인 후 이용할 수 있습니다.
+        소속된 매장이 없습니다. 직원 승인 후 이용할 수 있습니다.
       </div>
     );
   }
@@ -712,6 +714,84 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
       <button type="button" onClick={save} disabled={saving} className="btn-primary w-full disabled:opacity-60">
         {saving ? '저장 중…' : `${date === today ? '오늘' : date} · ${eventName || '메인'} 순위 저장`}
       </button>
+    </div>
+  );
+}
+
+function Lbl({ t, children }: { t: string; children: ReactNode }) {
+  return (<label className="block"><span className="mb-1 block text-2xs font-bold text-ink-secondary">{t}</span>{children}</label>);
+}
+
+// ── 업주 셀프 매장 생성 폼 — 소속 매장이 없는 업주 진입 화면 ────────────────────
+function VenueCreateForm({ onCreated }: { onCreated: () => Promise<void> }) {
+  const { user } = useAuth();
+  const toast = useToast();
+  const [name, setName] = useState('');
+  const [region, setRegion] = useState('');
+  const [address, setAddress] = useState('');
+  const [phone, setPhone] = useState('');
+  const [kakao, setKakao] = useState('');
+  const [desc, setDesc] = useState('');
+  const [hours, setHours] = useState('');
+  const [imgFile, setImgFile] = useState<File | null>(null);
+  const [imgPreview, setImgPreview] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const pickImage = (f: File | null) => {
+    setImgFile(f);
+    setImgPreview((prev) => { if (prev) URL.revokeObjectURL(prev); return f ? URL.createObjectURL(f) : ''; });
+  };
+  const ready = !!(name.trim() && address.trim() && phone.trim());
+  const submit = async () => {
+    if (!ready) { toast.show('매장 이름·주소·전화번호는 필수입니다', 'error'); return; }
+    setBusy(true);
+    try {
+      let imageUrl: string | undefined;
+      if (imgFile && user) imageUrl = await uploadPoster(user.id, imgFile);
+      await createMyVenue({
+        name: name.trim(), region: region.trim(), address: address.trim(), phone: phone.trim(),
+        imageUrl, kakaoUrl: kakao.trim() || undefined, description: desc.trim() || undefined, businessHours: hours.trim() || undefined,
+      });
+      toast.show('매장이 생성되었습니다 — 운영자 승인 후 일정탐색·커뮤니티에 공개됩니다', 'success');
+      await onCreated();
+    } catch (e) { toast.show(e instanceof Error ? e.message : '매장 생성 실패', 'error'); }
+    setBusy(false);
+  };
+
+  return (
+    <div className="mx-auto w-full max-w-xl space-y-4 py-6">
+      <div className="text-center space-y-1">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-gold-300/15 text-2xl">🏪</div>
+        <h2 className="text-base font-extrabold text-ink-primary">내 매장 만들기</h2>
+        <p className="text-2xs leading-relaxed text-ink-muted">매장 정보를 입력하면 NURI HOLDEM 커뮤니티에 매장이 등록됩니다.<br />운영자 승인 후 일정탐색·커뮤니티에 공개돼요.</p>
+      </div>
+
+      <div className="space-y-3 rounded-card border border-border-default bg-surface-low p-4">
+        {/* 대표 이미지(선택) */}
+        <div>
+          <p className="mb-1 text-2xs font-bold text-ink-secondary">대표 이미지 <span className="font-normal text-ink-muted">(선택)</span></p>
+          <label className="flex h-32 cursor-pointer items-center justify-center overflow-hidden rounded-input border border-dashed border-border-default bg-surface-base hover:border-gold-400/50">
+            {imgPreview
+              ? <img src={imgPreview} alt="미리보기" className="h-full w-full object-cover" />
+              : <span className="text-2xs text-ink-muted">탭하여 매장 사진 업로드</span>}
+            <input type="file" accept="image/*" className="hidden" onChange={(e) => pickImage(e.target.files?.[0] ?? null)} />
+          </label>
+        </div>
+        <Lbl t="매장 이름 *"><input value={name} onChange={(e) => setName(e.target.value)} maxLength={60} placeholder="예) 로티아레나" className="input w-full text-sm" /></Lbl>
+        <Lbl t="주소 *"><input value={address} onChange={(e) => setAddress(e.target.value)} maxLength={120} placeholder="예) 서울 강남구 …" className="input w-full text-sm" /></Lbl>
+        <div className="grid grid-cols-2 gap-2">
+          <Lbl t="전화번호 *"><input value={phone} onChange={(e) => setPhone(e.target.value)} maxLength={20} inputMode="tel" placeholder="02-000-0000" className="input w-full text-sm" /></Lbl>
+          <Lbl t="지역 (선택)"><input value={region} onChange={(e) => setRegion(e.target.value)} maxLength={40} placeholder="예) 경기북부" className="input w-full text-sm" /></Lbl>
+        </div>
+        <Lbl t="카카오톡 채팅방 링크 (선택)"><input value={kakao} onChange={(e) => setKakao(e.target.value)} maxLength={200} placeholder="https://open.kakao.com/…" className="input w-full text-sm" /></Lbl>
+        <Lbl t="영업시간 (선택)"><input value={hours} onChange={(e) => setHours(e.target.value)} maxLength={60} placeholder="예) 매일 18:00~익일 04:00" className="input w-full text-sm" /></Lbl>
+        <Lbl t="매장 소개 (선택)"><textarea value={desc} onChange={(e) => setDesc(e.target.value)} maxLength={500} rows={3} placeholder="매장 분위기·특징·이벤트 등을 자유롭게" className="input w-full resize-none text-sm" /></Lbl>
+
+        <button type="button" disabled={!ready || busy} onClick={submit} className="btn-primary w-full py-3 text-sm font-bold disabled:opacity-50">
+          {busy ? '생성 중…' : '+ 매장 생성하기'}
+        </button>
+        <p className="text-[10px] text-ink-muted">* 표시는 필수입니다. 생성 후 ‘매장 꾸미기·설정’에서 추가 정보(갤러리·테마·블라인드 등)를 채울 수 있어요.</p>
+      </div>
     </div>
   );
 }

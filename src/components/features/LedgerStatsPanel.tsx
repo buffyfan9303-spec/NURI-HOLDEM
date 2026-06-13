@@ -10,6 +10,8 @@ import {
 import { toCsv, downloadCsv } from '../../lib/csv';
 import Icon from '../atoms/Icon';
 import { getMyVenueNotifyMute, setMyVenueNotifyMute } from '../../api/auth';
+import { useAuth } from '../../contexts/AuthContext';
+import { listVenueOwners, addVenueOwner, removeVenueOwner, type VenueOwner } from '../../api/community';
 import CustomerAnalytics from './CustomerAnalytics';
 import SegmentedTabs from '../atoms/SegmentedTabs';
 
@@ -625,6 +627,8 @@ function ReportCard({ tone, title, body, bullets }: { tone: 'emerald' | 'rose' |
 // ── 설정(업주) ── 포스 비밀번호 · 알림 수신 ───────────────────────────────────
 export function PosSettingsPanel({ venueId }: { venueId: string }) {
   const toast = useToast();
+  const { user } = useAuth();
+  const canOwner = user?.role === 'admin' || user?.role === 'venue_owner';
   const [hasPw, setHasPw] = useState(false);
   const [pw, setPw]       = useState('');
   const [pw2, setPw2]     = useState('');
@@ -676,7 +680,58 @@ export function PosSettingsPanel({ venueId }: { venueId: string }) {
         </button>
       </div>
 
+      {/* 사장님(공동 업주) 관리 — 업주/운영자만 */}
+      {canOwner && <OwnerManageCard venueId={venueId} />}
+
       <p className="text-[10px] text-ink-muted pt-1 border-t border-border-subtle">통계는 업주만 볼 수 있습니다. 직원의 <span className="text-gold-300 font-semibold">장부·순위 권한과 직책</span>은 「직원 관리」 탭, 매장 페이지 탭 순서·순위 구성은 <span className="text-gold-300 font-semibold">「매장 꾸미기」</span>에서 설정하세요.</p>
     </section>
+  );
+}
+
+// ── 사장님(공동 업주) 관리 — 한 매장에 여러 사장 ──────────────────────────────
+function OwnerManageCard({ venueId }: { venueId: string }) {
+  const { user } = useAuth();
+  const toast = useToast();
+  const [owners, setOwners] = useState<VenueOwner[]>([]);
+  const [nick, setNick] = useState('');
+  const [busy, setBusy] = useState(false);
+  const load = () => { listVenueOwners(venueId).then(setOwners).catch(() => {}); };
+  useEffect(load, [venueId]);
+  const add = async () => {
+    if (!nick.trim()) return;
+    setBusy(true);
+    try { await addVenueOwner(venueId, nick.trim()); toast.show('공동 사장님을 추가했습니다', 'success'); setNick(''); load(); }
+    catch (e) { toast.show(e instanceof Error ? e.message : '추가 실패', 'error'); }
+    setBusy(false);
+  };
+  const remove = async (o: VenueOwner) => {
+    if (!window.confirm(`${o.nickname} 사장님을 이 매장에서 제외할까요?`)) return;
+    try { await removeVenueOwner(venueId, o.userId); toast.show('제외했습니다', 'info'); load(); }
+    catch (e) { toast.show(e instanceof Error ? e.message : '제외 실패', 'error'); }
+  };
+  return (
+    <div className="border-t border-border-subtle pt-3 space-y-2">
+      <p className="text-2xs font-semibold text-ink-secondary">사장님(공동 업주) 관리</p>
+      {owners.length > 0 && (
+        <ul className="space-y-1">
+          {owners.map((o) => (
+            <li key={o.userId} className="flex items-center gap-2 rounded-input border border-border-subtle bg-surface-base px-2.5 py-1.5">
+              <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{o.name ? `${o.name}(${o.nickname})` : o.nickname}</span>
+              {o.isPrimary
+                ? <span className="shrink-0 rounded-badge bg-gold-300/15 px-1.5 py-0.5 text-[9px] font-bold text-gold-300">대표</span>
+                : o.userId !== user?.id
+                ? <button type="button" onClick={() => remove(o)} className="shrink-0 text-2xs font-semibold text-ink-muted hover:text-danger-light">제외</button>
+                : <span className="shrink-0 text-[9px] text-ink-muted">나</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex gap-1.5">
+        <input value={nick} onChange={(e) => setNick(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') add(); }}
+          placeholder="추가할 사장님 아이디(닉네임)" className="input min-w-0 flex-1 text-sm" />
+        <button type="button" disabled={busy || !nick.trim()} onClick={add} className="btn-primary shrink-0 px-3 text-xs disabled:opacity-50">+ 사장님 추가</button>
+      </div>
+      <p className="text-[10px] text-ink-muted">추가한 회원은 이 매장의 <b className="text-ink-secondary">공동 업주</b>가 되어 장부·포스터·이용권을 함께 관리할 수 있습니다.</p>
+    </div>
   );
 }
