@@ -3,6 +3,7 @@ import CountUp from '../atoms/CountUp';
 import type { Schedule } from '../../api/schedules';
 import {
   getLedgerSession, getLedgerBuyins, getLedgerPlayers, getLedgerRange, buyinFinance, wonToMan, visitorLabel, subscribeLedger,
+  getPosterOpsSummaries,
   type LedgerSession, type LedgerBuyin, type LedgerPlayer,
 } from '../../api/ledger';
 import { getClockState, subscribeClock, type ClockState } from '../../api/clock';
@@ -79,6 +80,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const [voucherOpen, setVoucherOpen] = useState(false);
   const [voucherPrefill, setVoucherPrefill] = useState(''); // 단골 행 '이용권 보내기' 프리필
   const [hasRankToday, setHasRankToday] = useState<boolean | null>(null); // 지금 할 일 카드(순위 입력 유도)
+  const [pendingRanks, setPendingRanks] = useState<{ date: string }[]>([]); // 마감됐는데 순위 미입력인 지난 대회(밀린 것)
   // 다가오는 생일 단골(7일 내) — CRM 생일 필드 기반
   const [bdays, setBdays] = useState<{ name: string; birthday: string; dday: number }[]>([]);
   useEffect(() => {
@@ -103,6 +105,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
     getLedgerRange(venueId, d14[0], d14[13]).then(setRange).catch(() => {});
     getVenueRegulars(venueId).then(setRegulars).catch(() => {});
     getVenueRankings(venueId, d).then(({ entries }) => setHasRankToday(entries.length > 0)).catch(() => {});
+    getPosterOpsSummaries(venueId).then((sums) => setPendingRanks(Object.values(sums).filter((s) => s.closed && !s.hasRankings && s.date < d).sort((a, b) => b.date.localeCompare(a.date)))).catch(() => {});
     const ids = schedules.filter((s) => s.venueId === venueId && s.date >= d).map((s) => s.id);
     if (ids.length) getReservationCounts(ids).then(setResCounts).catch(() => {});
     else setResCounts({});
@@ -304,6 +307,19 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           </div>
         );
       })()}
+
+      {/* 밀린 순위 미입력 대회 — 마감했지만 순위가 비어 있는 지난 대회(오늘 외) */}
+      {caps.ledger && pendingRanks.length > 0 && (
+        <button type="button" onClick={() => onGoto('ranking')}
+          className="flex w-full items-center gap-3 rounded-card border border-amber-500/40 bg-amber-500/[0.06] px-3 py-2.5 text-left transition-colors hover:bg-amber-500/[0.1]">
+          <span className="text-xl" aria-hidden>🏆</span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold text-ink-primary">순위 미입력 대회 {pendingRanks.length}개</p>
+            <p className="mt-0.5 truncate text-2xs text-ink-muted">{pendingRanks.slice(0, 4).map((p) => p.date.slice(5).replace('-', '/')).join(', ')}{pendingRanks.length > 4 ? ' 외' : ''} — 마감했지만 순위가 비어 있어요. 입력하면 랭킹·아카이브에 반영됩니다.</p>
+          </div>
+          <span className="shrink-0 rounded-input bg-amber-400 px-3 py-1.5 text-xs font-bold text-ink-inverse">순위 입력</span>
+        </button>
+      )}
 
       {/* 미수·리스크 알림 (장부 권한) */}
       {caps.ledger && started && fin.unpaid > 0 && (
