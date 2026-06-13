@@ -78,7 +78,7 @@ export interface LedgerSeed {
 
 export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI POS', onMakeRankingDraft, onOpenClock, onOpenStats, seed }: {
   venueId: string; canManage: boolean; venueName?: string;
-  onMakeRankingDraft?: (date: string, names: string[]) => void;
+  onMakeRankingDraft?: (date: string, names: string[], eventName?: string) => void;
   onOpenClock?: (date: string) => void;
   /** 마감 후 '주간 리포트 보기' — 통계 섹션으로 이동(업주/운영자만 전달) */
   onOpenStats?: () => void;
@@ -543,7 +543,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
               onClick={() => {
                 const rosterNames = players.map((p) => p.name);
                 const extra = [...new Set(buyins.map((b) => b.playerName))].filter((n) => !rosterNames.includes(n));
-                onMakeRankingDraft(date, [...rosterNames, ...extra]); // 명단 없어도 날짜는 맞춰 이동
+                onMakeRankingDraft(date, [...rosterNames, ...extra], session.title || ''); // 명단 없어도 날짜는 맞춰 이동
               }}
               className={hasRank === false
                 ? 'btn-primary px-3 py-1.5 text-xs'

@@ -250,6 +250,18 @@ export async function getLedgerScheduleLinks(venueId: string): Promise<Record<st
   return map;
 }
 
+/** 포스터(스케줄) 하나에 연결된 장부 전체 — 멀티데이/사이드 운영 대응(최신순). */
+export interface ScheduleLedgerItem { date: string; title: string | null; closed: boolean }
+export async function getScheduleLedgers(venueId: string, scheduleId: string): Promise<ScheduleLedgerItem[]> {
+  if (IS_MOCK) return [];
+  const { data } = await supabase.from('ledger_sessions')
+    .select('session_date, title, closed')
+    .eq('venue_id', venueId).eq('schedule_id', scheduleId)
+    .order('session_date', { ascending: false }).limit(30);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((d: any) => ({ date: d.session_date, title: d.title ?? null, closed: !!d.closed }));
+}
+
 /** 장부 시작 알림 — 담당 직원(본인 제외)에게 "장부가 시작됐어요" 알림(서버 RPC, 권한 검증). */
 export async function notifyLedgerOpen(venueId: string, title: string, operatorIds: string[]): Promise<void> {
   if (IS_MOCK || operatorIds.length === 0) return;

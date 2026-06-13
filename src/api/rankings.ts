@@ -16,6 +16,8 @@ export interface RankingEntry {
   nickname: string;
   realName: string;
   prize?: string;
+  /** 같은 날 여러 게임(메인/사이드) 구분 — ''=기본. DB 마이그레이션 전 데이터는 항상 '' */
+  eventName?: string;
 }
 
 // 실명 마스킹: 홍길동 → 홍*동, 나리 → 나*, 남궁민수 → 남**수
@@ -34,7 +36,7 @@ export function rankingLabel(e: RankingEntry): string {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function rowToEntry(r: any): RankingEntry {
-  return { position: r.position, nickname: r.nickname, realName: r.real_name ?? '', prize: r.prize ?? undefined };
+  return { position: r.position, nickname: r.nickname, realName: r.real_name ?? '', prize: r.prize ?? undefined, eventName: r.event_name ?? '' };
 }
 
 export async function getLatestRankingDate(venueId: string): Promise<string | null> {
@@ -330,12 +332,20 @@ export async function saveVenueRankings(
   venueId: string,
   date: string,
   entries: { nickname: string; realName: string; prize?: string }[],
+  eventName = '',
 ): Promise<void> {
   if (IS_MOCK) return;
+  const payload = entries.map((e) => ({ nickname: e.nickname, realName: e.realName, prize: e.prize ?? '' }));
   const { error } = await supabase.rpc('save_venue_rankings', {
-    p_venue_id: venueId,
-    p_date: date,
-    p_entries: entries.map((e) => ({ nickname: e.nickname, realName: e.realName, prize: e.prize ?? '' })),
+    p_venue_id: venueId, p_date: date, p_entries: payload, p_event: eventName,
   });
-  if (error) throw error;
+  if (!error) return;
+  // 구버전 RPC(3-인자) — 이벤트 차원 마이그레이션 전: 기본 게임('')은 기존 방식으로 저장
+  if ((error.code === 'PGRST202' || /p_event/.test(error.message ?? '')) && !eventName) {
+    const { error: e2 } = await supabase.rpc('save_venue_rankings', { p_venue_id: venueId, p_date: date, p_entries: payload });
+    if (e2) throw e2;
+    return;
+  }
+  if (error.code === 'PGRST202') throw new Error('게임(이벤트)별 저장은 DB 업데이트 후 가능합니다 — 운영자에게 문의하세요');
+  throw error;
 }

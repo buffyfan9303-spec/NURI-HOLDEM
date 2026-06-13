@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
 import type { User, VenueInvite } from '../../api/auth';
 import { getMyVenueStaff, getMyVenueInvites, inviteStaffByEmail, cancelStaffInvite, removeStaff, setStaffTitle, checkNicknameAvailable, searchMembersForRanking } from '../../api/auth';
-import { getVenueRankings, saveVenueRankings, maskRealName, getVenuePageConfig, placementPointsOf, type VenuePageConfig } from '../../api/rankings';
+import { getVenueRankings, saveVenueRankings, maskRealName, getVenuePageConfig, placementPointsOf, type VenuePageConfig, type RankingEntry } from '../../api/rankings';
 import { canAccessLedger, canManagePos, getLedgerAccessUserIds, grantLedgerAccess, revokeLedgerAccess } from '../../api/ledger';
 import { getAllVenues, type Venue } from '../../api/community';
 import VenueVerificationCard from './VenueVerificationCard';
@@ -20,7 +20,7 @@ import MyPostersTab from './MyPostersTab';
 import VenueCustomizePanel, { VenueRankHub } from './VenueCustomizePanel';
 import LeaguePanel from './LeaguePanel';
 import SectionHeader from '../atoms/SectionHeader';
-import type { Schedule } from '../../api/schedules';
+import { getSchedules, type Schedule } from '../../api/schedules';
 import { motion } from 'framer-motion';
 import { getLedgerBuyins } from '../../api/ledger';
 
@@ -47,7 +47,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   const [manageOk, setManageOk] = useState(false); // 통계·설정(업주/운영자)
   const [voucherView, setVoucherView] = useState(false); // 매장이용권 내역 열람(업주/권한직원)
   const [permsLoaded, setPermsLoaded] = useState(false);
-  const [rankingDraft, setRankingDraft] = useState<{ date: string; names: string[] } | null>(null);
+  const [rankingDraft, setRankingDraft] = useState<{ date: string; names: string[]; event?: string } | null>(null);
   const [clockSeed, setClockSeed] = useState<string | null>(null); // 장부→클락 연동 날짜
   const [ledgerSeed, setLedgerSeed] = useState<LedgerSeed | null>(null); // 게임관리→장부 바로가기
 
@@ -213,7 +213,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
               } : undefined} />}
             {section === 'ledger'  && ledgerOk && (
               <NuriPosLedger venueId={venueId} canManage={manageOk} seed={ledgerSeed}
-                onMakeRankingDraft={(d, names) => { setRankingDraft({ date: d, names }); setSection('ranking'); }}
+                onMakeRankingDraft={(d, names, ev) => { setRankingDraft({ date: d, names, event: ev ?? '' }); setSection('ranking'); }}
                 onOpenClock={(d) => { setClockSeed(d); setSection('clock'); }}
                 onOpenStats={manageOk ? () => setSection('stats') : undefined} />
             )}
@@ -308,37 +308,58 @@ function SectionBtn({ active, onClick, icon, children, locked, fav, onToggleFav 
 interface Row { nickname: string; realName: string; prize: string; voucher: string; note: string; member?: boolean | null; }
 const emptyRow = (): Row => ({ nickname: '', realName: '', prize: '', voucher: '', note: '' });
 
-function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: boolean; draft?: { date: string; names: string[] } | null }) {
+function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: boolean; draft?: { date: string; names: string[]; event?: string } | null }) {
   const toast = useToast();
   const today = new Date().toLocaleDateString('en-CA'); // 로컬 날짜 — UTC 자정 넘김 방지
   const [date, setDate] = useState(draft?.date ?? today);
   const [rows, setRows] = useState<Row[]>([emptyRow()]);
+  // 같은 날 여러 게임(메인+사이드) — 게임(이벤트)별로 순위를 따로 저장. ''=기본 게임
+  const [eventName, setEventName] = useState('');
+  const [allEntries, setAllEntries] = useState<RankingEntry[]>([]);
+  const [daySchedTitles, setDaySchedTitles] = useState<string[]>([]);
+  useEffect(() => {
+    getSchedules().then((all: Schedule[]) => {
+      const titles = all.filter((sc) => sc.venueId === venueId && new Date(sc.date).toLocaleDateString('en-CA') === date)
+        .map((sc) => sc.title.trim()).filter(Boolean);
+      setDaySchedTitles([...new Set(titles)]);
+    }).catch(() => setDaySchedTitles([]));
+  }, [venueId, date]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   // 등수→점수 매핑(매장 꾸미기에서 설정) — 입력 시 점수 미리보기에 사용
   const [cfg, setCfg] = useState<VenuePageConfig | null>(null);
   useEffect(() => { getVenuePageConfig(venueId).then(setCfg).catch(() => {}); }, [venueId]);
 
-  // 장부에서 넘어온 초안: 해당 날짜로 이동
-  useEffect(() => { if (draft?.date) setDate(draft.date); }, [draft]);
+  // 장부에서 넘어온 초안: 해당 날짜로 이동(게임 선택은 기본부터 — 이미 입력된 게임은 ✓로 표시)
+  useEffect(() => {
+    if (draft?.date) setDate(draft.date);
+    setEventName('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft]);
 
   useEffect(() => {
     setLoading(true);
     getVenueRankings(venueId, date)
-      .then(({ entries }) => {
-        if (entries.length) {
-          setRows(entries.map((e) => ({ nickname: e.nickname, realName: e.realName, prize: e.prize ?? '', voucher: '', note: '' })));
-        } else if (draft && draft.date === date && draft.names.length) {
-          // 정산 마감 참가자 명단을 닉네임으로 미리 채움(순서는 업주가 정리)
-          setRows(draft.names.map((n) => ({ nickname: n, realName: '', prize: '', voucher: '', note: '' })));
-        } else {
-          setRows([emptyRow()]);
-        }
-      })
-      .catch(() => setRows([emptyRow()]))
+      .then(({ entries }) => { setAllEntries(entries); })
+      .catch(() => setAllEntries([]))
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [venueId, date]);
+
+  // 선택한 게임(이벤트)의 줄만 편집 — 게임 전환 시 해당 저장본/장부 초안 로드
+  useEffect(() => {
+    if (loading) return;
+    const mine = allEntries.filter((e) => (e.eventName ?? '') === eventName);
+    if (mine.length) {
+      setRows(mine.map((e) => ({ nickname: e.nickname, realName: e.realName, prize: e.prize ?? '', voucher: '', note: '' })));
+    } else if (draft && draft.date === date && draft.names.length && (allEntries.length === 0 || (draft.event ?? '') === eventName)) {
+      // 정산 마감 참가자 명단을 닉네임으로 미리 채움(순서는 업주가 정리)
+      setRows(draft.names.map((n) => ({ nickname: n, realName: '', prize: '', voucher: '', note: '' })));
+    } else {
+      setRows([emptyRow()]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, allEntries, eventName]);
 
   const update = (i: number, k: keyof Row, v: string) =>
     setRows((r) => r.map((row, idx) => (idx === i
@@ -389,7 +410,7 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
       return toast.show('각 줄에 닉네임을 입력해 주세요 (실명·프라이즈는 선택)', 'error');
     setSaving(true);
     try {
-      await saveVenueRankings(venueId, date, clean.map(({ nickname, realName, prize }) => ({ nickname, realName, prize })));
+      await saveVenueRankings(venueId, date, clean.map(({ nickname, realName, prize }) => ({ nickname, realName, prize })), eventName);
       // 매장이용권 지급 — 갯수>0 줄: 닉네임으로 가입자 조회 후 발급(본인인증 회원만, 서버 강제)
       let issued = 0, failed = 0;
       for (const r of clean) {
@@ -438,6 +459,32 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
           <button type="button" onClick={() => setDate(today)} className="btn-ghost text-xs px-3 shrink-0">오늘</button>
         )}
       </div>
+
+      {/* 게임(이벤트) 선택 — 같은 날 메인+사이드를 따로 저장 */}
+      {(() => {
+        const saved = [...new Set(allEntries.map((e) => e.eventName ?? ''))];
+        const opts = [...new Set(['', ...saved, ...daySchedTitles, ...(eventName ? [eventName] : [])])];
+        if (opts.length <= 1 && daySchedTitles.length === 0) return null;
+        return (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-2xs font-bold text-ink-muted shrink-0">게임</span>
+            {opts.map((ev) => {
+              const on = eventName === ev;
+              const has = saved.includes(ev);
+              return (
+                <button key={ev || '_main'} type="button" onClick={() => setEventName(ev)}
+                  className={['text-2xs font-bold px-2 py-1 rounded-badge border transition-colors',
+                    on ? 'bg-gold-300/15 text-gold-300 border-gold-400/40' : 'bg-surface-float text-ink-muted border-border-default'].join(' ')}>
+                  {ev || '기본(메인)'}{has ? ' ✓' : ''}
+                </button>
+              );
+            })}
+            <button type="button"
+              onClick={() => { const v = window.prompt('게임 이름 직접 입력 (예: 사이드 1)'); if (v && v.trim()) setEventName(v.trim().slice(0, 40)); }}
+              className="text-2xs font-bold px-2 py-1 rounded-badge border bg-surface-float text-ink-muted border-border-default">+ 직접</button>
+          </div>
+        );
+      })()}
 
       <p className="text-2xs text-ink-muted">
         <span className="text-gold-300 font-semibold">닉네임은 필수</span>, 실명·프라이즈는 선택입니다. 프라이즈는 <span className="text-gold-300 font-semibold">매장 커뮤니티 순위 점수</span>로만 쓰입니다(금전적 가치 없음). 실명을 넣으면 손님에게는 <span className="text-gold-300 font-semibold">이름 일부를 가려(예: 나*리)</span> 표시됩니다.

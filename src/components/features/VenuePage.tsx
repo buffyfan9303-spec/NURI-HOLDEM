@@ -844,16 +844,26 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
       {latest.date && latest.entries.length > 0 && (
         <div className="pt-2 border-t border-border-subtle">
           <p className="text-2xs font-semibold text-ink-secondary mb-1.5">최근 등록 · {latest.date}</p>
-          <div className="flex flex-wrap gap-1.5">
-            {latest.entries.map((e) => {
-              const masked = maskRealName(e.realName);
-              return (
-                <span key={e.position} className="text-2xs px-2 py-0.5 rounded-badge bg-surface-float text-ink-primary">
-                  {e.position}. {e.nickname}{masked ? `(${masked})` : ''}{e.prize ? ` · ${e.prize}점` : ''}
-                </span>
-              );
-            })}
-          </div>
+          {/* 같은 날 여러 게임(메인+사이드)이면 게임별로 묶어 표시 */}
+          {[...new Set(latest.entries.map((e) => e.eventName ?? ''))].map((ev, _i, evs) => {
+            const group = latest.entries.filter((e) => (e.eventName ?? '') === ev);
+            const multi = evs.length > 1;
+            return (
+              <div key={ev || '_main'} className={multi ? 'mb-1.5' : ''}>
+                {multi && <p className="text-2xs font-bold text-gold-300 mb-1">{ev || '메인'}</p>}
+                <div className="flex flex-wrap gap-1.5">
+                  {group.map((e) => {
+                    const masked = maskRealName(e.realName);
+                    return (
+                      <span key={`${ev}-${e.position}`} className="text-2xs px-2 py-0.5 rounded-badge bg-surface-float text-ink-primary">
+                        {e.position}. {e.nickname}{masked ? `(${masked})` : ''}{e.prize ? ` · ${e.prize}점` : ''}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

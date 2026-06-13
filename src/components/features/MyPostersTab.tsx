@@ -6,7 +6,7 @@ import {
   getReservations, deleteReservation, updateReservationName, getVenueReserverCounts, subscribeReservations,
   getReservationCounts, getCustomerActivity, type Reservation, type CustomerActivity,
 } from '../../api/reservations';
-import { getPosterOpsSummaries, type PosterOpsSummary } from '../../api/ledger';
+import { getPosterOpsSummaries, getScheduleLedgers, type PosterOpsSummary, type ScheduleLedgerItem } from '../../api/ledger';
 import { toCsv, downloadCsv } from '../../lib/csv';
 import EmptyState from '../atoms/EmptyState';
 
@@ -78,7 +78,7 @@ export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete, on
               onEdit={() => onEdit(p.id)} onDelete={() => onDelete(p.id)}
               ops={ops[p.id] ?? null}
               resCount={resCounts[p.id] ?? 0}
-              onLedger={onOpenLedger ? () => onOpenLedger(p, ops[p.id]?.date ?? null) : undefined}
+              onLedgerAt={onOpenLedger ? (d) => onOpenLedger(p, d) : undefined}
               onRanking={onGotoRanking} />
           ))}
         </ul>
@@ -103,15 +103,23 @@ function PendingApprovalView() {
 }
 
 // ── 단일 게임 행 + 예약 관리 패널 ─────────────────────────────────────────────
-function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, resCount, onLedger, onRanking }: {
+function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, resCount, onLedgerAt, onRanking }: {
   schedule: Schedule; venueId?: string; reserverCounts: Record<string, number>;
   onEdit: () => void; onDelete: () => void;
-  ops?: PosterOpsSummary | null; resCount?: number; onLedger?: () => void; onRanking?: (date: string) => void;
+  ops?: PosterOpsSummary | null; resCount?: number; onLedgerAt?: (date: string | null) => void; onRanking?: (date: string) => void;
 }) {
   const ledgerDate = ops?.date ?? null;
   const toast = useToast();
   const [confirming, setConfirming] = useState(false);
   const [open, setOpen] = useState(false);
+  // 연결 장부 펼침 — 한 포스터에 여러 장부(멀티데이·사이드) 최신순
+  const [ledgersOpen, setLedgersOpen] = useState(false);
+  const [ledgers, setLedgers] = useState<ScheduleLedgerItem[] | null>(null);
+  const toggleLedgers = () => {
+    if (!ledgerDate) { onLedgerAt?.(null); return; } // 연결 장부 없음 -> 바로 새 등록
+    const next = !ledgersOpen; setLedgersOpen(next);
+    if (next && ledgers === null && venueId) getScheduleLedgers(venueId, schedule.id).then(setLedgers).catch(() => setLedgers([]));
+  };
   const [reservations, setReservations] = useState<Reservation[] | null>(null);
   const d = new Date(schedule.date);
 
@@ -159,12 +167,12 @@ function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, r
         <div className="flex items-center gap-1 shrink-0">
           {/* 예약관리(왼쪽) */}
           <button type="button" onClick={toggle} className="btn-ghost text-xs px-2 text-gold-300">예약관리{reservations ? `(${reservations.length})` : ''} {open ? '▲' : '▼'}</button>
-          {/* 장부 — 연결 장부 있으면 바로 열기, 없으면 포스터 정보로 새 등록 */}
-          {onLedger && (
-            <button type="button" onClick={onLedger}
-              title={ledgerDate ? `연결된 장부(${ledgerDate}) 열기` : '이 게임으로 장부 등록'}
+          {/* 장부 — 연결 장부 있으면 목록 펼침(여러 개 지원), 없으면 포스터 정보로 새 등록 */}
+          {onLedgerAt && (
+            <button type="button" onClick={toggleLedgers}
+              title={ledgerDate ? '연결된 장부 목록 보기' : '이 게임으로 장부 등록'}
               className={['btn-ghost text-xs px-2', ledgerDate ? 'text-emerald-400' : 'text-ink-secondary'].join(' ')}>
-              장부{ledgerDate ? ' ✓' : ' +'}
+              장부{ledgerDate ? (ledgersOpen ? ' ▲' : ' ▼') : ' +'}
             </button>
           )}
           {/* 마감했는데 순위가 비어 있으면 — 입력 유도(누르면 그 날짜 순위 입력으로) */}
@@ -188,6 +196,30 @@ function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, r
           )}
         </div>
       </div>
+
+      {/* 연결 장부 리스트(펼침) — 최신순, 클릭=그 날짜 장부 열기 */}
+      {ledgersOpen && onLedgerAt && (
+        <div className="border-t border-border-subtle bg-surface-base/40 p-2 space-y-1">
+          {ledgers === null ? (
+            <p className="text-2xs text-ink-muted text-center py-1.5">불러오는 중…</p>
+          ) : (
+            <>
+              {ledgers.map((l) => (
+                <button key={l.date} type="button" onClick={() => onLedgerAt(l.date)}
+                  className="w-full flex items-center gap-2 rounded-input border border-border-subtle bg-surface-low px-2.5 py-2 text-left active:opacity-80">
+                  <span className="text-xs font-bold text-ink-primary tabular-nums">{l.date}</span>
+                  <span className="flex-1 min-w-0 text-2xs text-ink-secondary truncate">{l.title || schedule.title}</span>
+                  <span className={['text-2xs font-bold shrink-0', l.closed ? 'text-ink-muted' : 'text-emerald-400'].join(' ')}>{l.closed ? '마감' : '진행중'}</span>
+                </button>
+              ))}
+              <button type="button" onClick={() => onLedgerAt(null)}
+                className="w-full rounded-input border border-dashed border-border-default px-2.5 py-2 text-2xs font-semibold text-gold-300 active:opacity-80">
+                + 이 포스터로 새 장부 (다른 날짜는 장부에서 날짜 변경)
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       {/* 예약 리스트(펼침) */}
       {open && (
