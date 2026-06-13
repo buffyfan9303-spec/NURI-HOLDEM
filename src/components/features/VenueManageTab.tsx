@@ -225,7 +225,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
             {section === 'attendance' && ledgerOk && <StaffSelfAttendance venueId={venueId} />}
             {section === 'staff'    && canStaff && <StaffHub venueId={venueId} />}
             {section === 'settings' && canStaff && <PosSettingsPanel venueId={venueId} />}
-            {section === 'voucher'  && (manageOk || voucherView) && <VoucherManagePanel venueId={venueId} />}
+            {section === 'voucher'  && (manageOk || voucherView || ledgerOk) && <VoucherManagePanel venueId={venueId} />}
             </>)}
           </div>
         </div>

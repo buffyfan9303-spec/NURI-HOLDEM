@@ -40,14 +40,15 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
   const [holderQuery, setHolderQuery] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [profileMap, setProfileMap] = useState<Map<string, VoucherHolderProfile>>(new Map());
-  const [issueOpen, setIssueOpen] = useState(true); // 배포 섹션 접기
-  const [qrOpen, setQrOpen] = useState(true);       // QR 섹션 접기
+  const [issueOpen, setIssueOpen] = useState(false); // 배포 섹션 — 기본 접힘
+  const [qrOpen, setQrOpen] = useState(false);       // QR 섹션 — 기본 접힘(PC 포함)
+  const [ownerOpen, setOwnerOpen] = useState(false); // 보유자 현황·통계(업주 전용) — 기본 접힘
 
   const reload = () => {
     setLoading(true);
     listVenueVouchers(venueId).then(setList).catch(() => {}).finally(() => setLoading(false));
-    voucherHolderStats(venueId).then(setStats).catch(() => {});
-    voucherHolderProfiles(venueId).then((ps) => setProfileMap(new Map(ps.map((p) => [p.userId, p])))).catch(() => {});
+    if (canIssue) voucherHolderStats(venueId).then(setStats).catch(() => {});
+    if (canIssue) voucherHolderProfiles(venueId).then((ps) => setProfileMap(new Map(ps.map((p) => [p.userId, p])))).catch(() => {});
     isVoucherIssueApproved(venueId).then(setApproved).catch(() => {});
     if (canIssue) voucherUsageByVenue(venueId).then(setUsage).catch(() => {});
   };
@@ -56,6 +57,17 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
   useEffect(() => subscribeVenueVouchers(venueId, () => reload()), [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { QRCode.toDataURL(`NURIV-VENUE:${venueId}`, { width: 240, margin: 1 }).then(setQr).catch(() => {}); }, [venueId]);
   useEffect(() => { QRCode.toDataURL('https://nuriholdem.com/?signup=1', { width: 240, margin: 1 }).then(setSignupQr).catch(() => {}); }, []);
+
+  // 이용 내역 피드 — 발급(보낸 것)·사용(들어온 것)을 한 줄씩, 최신순. 실시간 구독이 reload를 부르므로 자동 갱신.
+  const feed = useMemo(() => {
+    const ev: { t: 'issued' | 'used'; at: string; title: string; who: string }[] = [];
+    for (const v of list) {
+      if (v.createdAt) ev.push({ t: 'issued', at: v.createdAt, title: v.title, who: v.holderName ?? '매장 보관' });
+      if (v.usedAt) ev.push({ t: 'used', at: v.usedAt, title: v.title, who: v.holderName ?? '' });
+    }
+    return ev.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 30);
+  }, [list]);
+  const fmtFeed = (iso: string) => { const d = new Date(iso); const p2 = (n: number) => String(n).padStart(2, '0'); return `${d.getMonth() + 1}/${d.getDate()} ${p2(d.getHours())}:${p2(d.getMinutes())}`; };
 
   const pickRecv = (t: TransferTarget) => { setRecvUserId(t.id); setRecvDisplay(t.display); setRecvMode('none'); setIdInput(''); setCands([]); };
   // 단골 TOP '이용권 보내기' 진입 — 받는 사람을 자동 입력·검색(1명 매치면 즉시 선택)
@@ -155,6 +167,33 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
 
   return (
     <div className="space-y-3">
+      {/* 0) 이용 내역 — 실시간(발급·사용). 장부/이용권 권한 직원도 열람 — 기본 열림 */}
+      <div className="rounded-card border border-border-default bg-surface-low p-2.5">
+        <div className="mb-1.5 flex items-center justify-between gap-2">
+          <p className="text-2xs font-bold text-gold-300">🎟 이용 내역 <span className="font-normal text-ink-muted">· 실시간</span></p>
+          <button type="button" onClick={reload} disabled={loading}
+            className="inline-flex h-7 items-center gap-1 rounded-input border border-border-subtle bg-surface-high/60 px-2 text-2xs font-bold text-ink-secondary hover:text-ink-primary disabled:opacity-50">
+            <span className={loading ? 'inline-block animate-spin' : ''} aria-hidden>↻</span> 새로고침
+          </button>
+        </div>
+        {feed.length === 0 ? (
+          <p className="py-3 text-center text-2xs text-ink-muted">아직 내역이 없습니다 — 발급·사용되면 즉시 표시됩니다.</p>
+        ) : (
+          <ul className="max-h-56 space-y-1 overflow-y-auto">
+            {feed.map((e, i) => (
+              <li key={i} className="flex items-center gap-2 rounded-input bg-surface-base/50 px-2 py-1.5 text-2xs">
+                <span className={['shrink-0 rounded-badge px-1.5 py-0.5 font-bold leading-none',
+                  e.t === 'used' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-gold-300/15 text-gold-300'].join(' ')}>
+                  {e.t === 'used' ? '사용' : '발급'}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-ink-secondary">{e.title}{e.who ? ` · ${e.who}` : ''}</span>
+                <span className="shrink-0 tabular-nums text-ink-muted">{fmtFeed(e.at)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
       {/* 1) 매장이용권 배포 — 접기 */}
       {canIssue ? (
         <div className="rounded-input border border-gold-400/30 bg-gold-300/[0.05]">
@@ -239,8 +278,16 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
         </div>
       )}
 
-      {/* 3) 통계 — 보유회원 · 활성 · 잔여 + 사용률 진행바 */}
-      {stats && (
+      {/* 3) 보유자 현황·통계 — 업주 전용, 기본 접힘 */}
+      {canIssue && (
+        <button type="button" onClick={() => setOwnerOpen((v) => !v)} aria-expanded={ownerOpen}
+          className="flex w-full items-center justify-between gap-2 rounded-input border border-border-subtle bg-surface-low px-2.5 py-2">
+          <span className="text-2xs font-bold text-ink-secondary">📊 보유자 현황·통계 <span className="font-normal text-ink-muted">· 업주 전용</span></span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
+            className={['text-ink-muted transition-transform', ownerOpen ? 'rotate-180' : ''].join(' ')} aria-hidden><polyline points="6 9 12 15 18 9" /></svg>
+        </button>
+      )}
+      {canIssue && ownerOpen && stats && (
         <div className="rounded-card border border-gold-400/30 bg-gradient-to-br from-gold-300/[0.07] via-surface-low to-surface-low p-3 space-y-2.5">
           <div className="grid grid-cols-3 gap-2">
             {([
@@ -270,7 +317,7 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
         </div>
       )}
 
-      {canIssue && usage.length > 0 && (
+      {canIssue && ownerOpen && usage.length > 0 && (
         <div className="rounded-input border border-border-subtle bg-surface-low p-2.5">
           <p className="mb-1 text-2xs font-bold text-ink-secondary">사용처 TOP — 배포분이 실제 사용된 매장</p>
           <ul className="space-y-1">
@@ -284,7 +331,7 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
         </div>
       )}
 
-      <div>
+      <div className={canIssue && ownerOpen ? '' : 'hidden'}>
         <div className="mb-1 flex items-center justify-between gap-2">
           <p className="text-2xs font-bold text-ink-secondary">보유자 현황</p>
           <p className="text-2xs text-ink-muted">보유 인원 <b className="text-gold-300 tabular-nums">{holderCount}</b>명 · 보유 갯수 <b className="text-ink-primary tabular-nums">{active.length}</b>개</p>
