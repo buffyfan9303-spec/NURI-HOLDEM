@@ -120,12 +120,19 @@ function LiveCard({ g, name, onClick }: { g: ClockState; name: string; onClick: 
           </div>
         </div>
 
-        {/* 바인 금액 · 스타팅/리바인 스택 */}
+        {/* 바인 금액 · 스타팅/리바인 스택 · 얼리 추가 스택 */}
         {(ls.buyInAmount || g.config?.startStack || g.config?.rebuyStack) ? (
-          <p className="mt-2 rounded-input bg-surface-base/60 px-3 py-1.5 text-2xs text-ink-secondary">
-            {ls.buyInAmount ? <>바인 <b className="text-gold-300">{wonToMan(ls.buyInAmount)}만</b> · </> : null}
-            스타팅 <b className="text-gold-300 tabular-nums">{(g.config?.startStack ?? 0).toLocaleString()}</b> · 리바인 <b className="text-gold-300 tabular-nums">{(g.config?.rebuyStack ?? 0).toLocaleString()}</b>
-          </p>
+          <div className="mt-2 rounded-input bg-surface-base/60 px-3 py-1.5 text-2xs text-ink-secondary space-y-0.5">
+            <p>
+              {ls.buyInAmount ? <>바인 <b className="text-gold-300">{wonToMan(ls.buyInAmount)}만</b> · </> : null}
+              스타팅 <b className="text-gold-300 tabular-nums">{(g.config?.startStack ?? 0).toLocaleString()}</b> · 리바인 <b className="text-gold-300 tabular-nums">{(g.config?.rebuyStack ?? 0).toLocaleString()}</b>
+            </p>
+            {((g.config?.earlyBonus ?? 0) > 0 || (g.config?.doubleEarlyBonus ?? 0) > 0) && (
+              <p className="text-amber-300">
+                얼리 추가{(g.config?.doubleEarlyBonus ?? 0) > 0 && <> · 더블 <b className="tabular-nums">+{(g.config!.doubleEarlyBonus).toLocaleString()}</b></>}{(g.config?.earlyBonus ?? 0) > 0 && <> · 1얼리 <b className="tabular-nums">+{(g.config!.earlyBonus).toLocaleString()}</b></>}
+              </p>
+            )}
+          </div>
         ) : null}
 
         {/* 엔트리(생존 부가)·리바인·얼리·애드온/탈락 */}
