@@ -103,7 +103,8 @@ export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete, on
                   ops={ops[p.id] ?? null}
                   resCount={resCounts[p.id] ?? 0}
                   onLedgerAt={onOpenLedger ? (d) => onOpenLedger(p, d) : undefined}
-                  onRanking={onGotoRanking} />
+                  onRanking={onGotoRanking}
+                  gameDates={myPosters.filter((q) => q.title.trim() === p.title.trim()).map((q) => ({ id: q.id, date: isoOf(q) })).sort((a, b) => a.date.localeCompare(b.date))} />
               ))}
               {shown.length === 0 && <li className="py-6 text-center text-2xs text-ink-muted">그 날짜에 등록된 게임이 없습니다 — 다른 날짜를 선택하세요</li>}
             </ul>
@@ -130,10 +131,11 @@ function PendingApprovalView() {
 }
 
 // ── 단일 게임 행 + 예약 관리 패널 ─────────────────────────────────────────────
-function PosterRow({ schedule, venueId, reserverCounts, visitedNames, onEdit, onDelete, ops, resCount, onLedgerAt, onRanking }: {
+function PosterRow({ schedule, venueId, reserverCounts, visitedNames, onEdit, onDelete, ops, resCount, onLedgerAt, onRanking, gameDates }: {
   schedule: Schedule; venueId?: string; reserverCounts: Record<string, number>; visitedNames?: Set<string>;
   onEdit: () => void; onDelete: () => void;
   ops?: PosterOpsSummary | null; resCount?: number; onLedgerAt?: (date: string | null) => void; onRanking?: (date: string) => void;
+  gameDates?: { id: string; date: string }[]; // 같은 제목(같은 게임)의 날짜별 스케줄 — 예약을 날짜별로 전환
 }) {
   const ledgerDate = ops?.date ?? null;
   const toast = useToast();
@@ -141,8 +143,9 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, onEdit, on
   const [open, setOpen] = useState(false);
   // 연결 장부 펼침 — 한 포스터에 여러 장부(멀티데이·사이드) 최신순
   const [ledgersOpen, setLedgersOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false); // ⋯ 더보기(수정·삭제) 숨김 메뉴
   const [ledgers, setLedgers] = useState<ScheduleLedgerItem[] | null>(null);
+  // 예약관리 날짜 — 같은 게임(같은 제목)의 다른 날짜로 전환해 예약을 본다(기본=이 포스터 날짜)
+  const [resSchedId, setResSchedId] = useState(schedule.id);
   const toggleLedgers = () => {
     if (!ledgerDate) { onLedgerAt?.(null); return; } // 연결 장부 없음 -> 바로 새 등록
     const next = !ledgersOpen; setLedgersOpen(next);
@@ -151,7 +154,7 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, onEdit, on
   const [reservations, setReservations] = useState<Reservation[] | null>(null);
   const d = new Date(schedule.date);
 
-  const loadRes = () => { getReservations(schedule.id).then(setReservations).catch(() => setReservations([])); };
+  const loadRes = (sid: string = resSchedId) => { getReservations(sid).then(setReservations).catch(() => setReservations([])); };
   const toggle = () => { const next = !open; setOpen(next); if (next && reservations === null) loadRes(); };
   const onDel = async (r: Reservation) => { try { await deleteReservation(r.id); setReservations((arr) => (arr ?? []).filter((x) => x.id !== r.id)); } catch (e) { toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'); } };
   const onRename = async (r: Reservation) => {
@@ -214,14 +217,11 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, onEdit, on
               <button type="button" onClick={() => setConfirming(false)} className="btn-ghost text-xs px-2">취소</button>
               <button type="button" onClick={() => { onDelete(); setConfirming(false); }} className="btn-danger text-xs px-2">삭제</button>
             </>
-          ) : menuOpen ? (
-            <>
-              <button type="button" onClick={() => { onEdit(); setMenuOpen(false); }} className="btn-ghost text-xs px-2 text-gold-300">수정</button>
-              <button type="button" onClick={() => setConfirming(true)} className="btn-ghost text-xs px-2 hover:text-danger-light">삭제</button>
-              <button type="button" onClick={() => setMenuOpen(false)} aria-label="메뉴 닫기" className="btn-ghost text-xs px-1.5">✕</button>
-            </>
           ) : (
-            <button type="button" onClick={() => setMenuOpen(true)} aria-label="더보기(수정·삭제)" title="수정·삭제" className="btn-ghost text-base leading-none px-2">⋯</button>
+            <>
+              <button type="button" onClick={onEdit} className="btn-ghost text-xs px-2 text-gold-300">수정</button>
+              <button type="button" onClick={() => setConfirming(true)} className="btn-ghost text-xs px-2 hover:text-danger-light">삭제</button>
+            </>
           )}
         </div>
       </div>
@@ -247,14 +247,11 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, onEdit, on
               <button type="button" onClick={() => setConfirming(false)} className="flex-1 py-2.5 text-xs font-semibold text-ink-secondary active:bg-surface-high/60">취소</button>
               <button type="button" onClick={() => { onDelete(); setConfirming(false); }} className="flex-1 py-2.5 text-xs font-bold text-danger-light active:bg-danger/10">삭제 확인</button>
             </>
-          ) : menuOpen ? (
-            <>
-              <button type="button" onClick={() => { onEdit(); setMenuOpen(false); }} className="flex-1 py-2.5 text-xs font-semibold text-gold-300 active:bg-surface-high/60">수정</button>
-              <button type="button" onClick={() => setConfirming(true)} className="flex-1 py-2.5 text-xs font-semibold text-ink-muted active:bg-surface-high/60 hover:text-danger-light">삭제</button>
-              <button type="button" onClick={() => setMenuOpen(false)} className="flex-1 py-2.5 text-xs font-semibold text-ink-secondary active:bg-surface-high/60">닫기</button>
-            </>
           ) : (
-            <button type="button" onClick={() => setMenuOpen(true)} className="flex-1 py-2.5 text-sm font-semibold leading-none text-ink-secondary active:bg-surface-high/60">⋯ 더보기</button>
+            <>
+              <button type="button" onClick={onEdit} className="flex-1 py-2.5 text-xs font-semibold text-gold-300 active:bg-surface-high/60">수정</button>
+              <button type="button" onClick={() => setConfirming(true)} className="flex-1 py-2.5 text-xs font-semibold text-ink-muted active:bg-surface-high/60 hover:text-danger-light">삭제</button>
+            </>
           )}
         </div>
       </div>
@@ -286,6 +283,22 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, onEdit, on
       {/* 예약 리스트(펼침) */}
       {open && (
         <div className="border-t border-border-subtle bg-surface-base/40 p-3 space-y-1.5">
+          {gameDates && gameDates.length > 1 && (
+            <div className="mb-1 flex flex-wrap gap-1 border-b border-border-subtle pb-1.5">
+              <span className="mb-0.5 w-full text-[10px] text-ink-muted">같은 게임 · 날짜별 예약</span>
+              {gameDates.map((g) => {
+                const [, mm, dd] = g.date.split('-');
+                const on = g.id === resSchedId;
+                return (
+                  <button key={g.id} type="button"
+                    onClick={() => { setResSchedId(g.id); setReservations(null); loadRes(g.id); }}
+                    className={['rounded-input px-2 py-1 text-2xs font-bold transition-colors', on ? 'bg-gold-300 text-ink-inverse' : 'bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
+                    {+mm}/{+dd}
+                  </button>
+                );
+              })}
+            </div>
+          )}
           {reservations === null ? (
             <p className="text-2xs text-ink-muted text-center py-2">불러오는 중…</p>
           ) : reservations.length === 0 ? (
