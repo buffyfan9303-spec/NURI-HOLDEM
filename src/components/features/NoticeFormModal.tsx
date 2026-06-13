@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import Modal from '../atoms/Modal';
 import { useToast } from '../atoms/Toast';
-import type { NoticeType, NoticeBoard } from '../../api/marketplace';
+import type { NoticeType, NoticeBoard, MarketplaceNotice } from '../../api/marketplace';
 
 export interface NoticeFormData {
   type: NoticeType;
@@ -22,6 +22,7 @@ interface NoticeFormModalProps {
   open: boolean;
   onClose: () => void;
   onSubmit: (data: NoticeFormData) => Promise<void> | void;
+  editing?: MarketplaceNotice | null; // 있으면 수정 모드(기존 값 프리필 + 수정 저장)
 }
 
 const TYPE_OPTIONS: { id: NoticeType; label: string }[] = [
@@ -34,7 +35,7 @@ const TYPE_OPTIONS: { id: NoticeType; label: string }[] = [
  * NoticeFormModal — 관리자 전용 공지사항 작성 모달
  * 실제 권한 제어는 서버 RLS(notices_admin_all)가 강제한다.
  */
-export default function NoticeFormModal({ open, onClose, onSubmit }: NoticeFormModalProps) {
+export default function NoticeFormModal({ open, onClose, onSubmit, editing }: NoticeFormModalProps) {
   const toast = useToast();
   const [type,  setType]  = useState<NoticeType>('pinned');
   const [title, setTitle] = useState('');
@@ -42,10 +43,13 @@ export default function NoticeFormModal({ open, onClose, onSubmit }: NoticeFormM
   const [board, setBoard] = useState<NoticeBoard>('all');
   const [saving, setSaving] = useState(false);
 
-  // 모달 열릴 때마다 폼 초기화
+  // 모달 열릴 때: 수정 모드면 기존 값으로 프리필, 아니면 초기화
   useEffect(() => {
-    if (open) { setType('pinned'); setTitle(''); setBody(''); setBoard('all'); setSaving(false); }
-  }, [open]);
+    if (!open) return;
+    setSaving(false);
+    if (editing) { setType(editing.type); setTitle(editing.title); setBody(editing.body ?? ''); setBoard(editing.board ?? 'all'); }
+    else { setType('pinned'); setTitle(''); setBody(''); setBoard('all'); }
+  }, [open, editing]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,7 +57,7 @@ export default function NoticeFormModal({ open, onClose, onSubmit }: NoticeFormM
     setSaving(true);
     try {
       await onSubmit({ type, title: title.trim(), body: body.trim(), board });
-      toast.show('공지사항이 등록되었습니다', 'success');
+      toast.show(editing ? '공지사항이 수정되었습니다' : '공지사항이 등록되었습니다', 'success');
       onClose();
     } catch (err) {
       toast.show(err instanceof Error ? err.message : '공지 등록에 실패했습니다', 'error');
@@ -63,7 +67,7 @@ export default function NoticeFormModal({ open, onClose, onSubmit }: NoticeFormM
   };
 
   return (
-    <Modal open={open} onClose={onClose} title="공지사항 작성" maxWidth="sm" variant="sheet">
+    <Modal open={open} onClose={onClose} title={editing ? '공지사항 수정' : '공지사항 작성'} maxWidth="sm" variant="sheet">
       <form onSubmit={handleSubmit} className="p-4 space-y-4">
         {/* 유형 선택 */}
         <div>
@@ -142,7 +146,7 @@ export default function NoticeFormModal({ open, onClose, onSubmit }: NoticeFormM
         <div className="flex gap-2 pt-1">
           <button type="button" onClick={onClose} className="btn-ghost flex-1">취소</button>
           <button type="submit" disabled={saving} className="btn-primary flex-1 disabled:opacity-60">
-            {saving ? '등록 중…' : '공지 등록'}
+            {saving ? '저장 중…' : editing ? '수정 저장' : '공지 등록'}
           </button>
         </div>
       </form>

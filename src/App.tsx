@@ -44,7 +44,7 @@ import {
   updateVenueDescription, updateVenueImage, updateVenueImages, deleteComment, logActivity,
   getMyFollowedVenueIds,
 } from './api/community';
-import { getListings, getNotices, createNotice, createListing, deleteListing } from './api/marketplace';
+import { getListings, getNotices, createNotice, updateNotice, deleteNotice, createListing, deleteListing } from './api/marketplace';
 import type { NoticeFormData } from './components/features/NoticeFormModal';
 import { getMyNotifications, markNotificationsRead } from './api/notifications';
 import { supabase } from './lib/supabase';
@@ -768,6 +768,7 @@ export default function App() {
     if (pending && Date.now() - Number(pending) < 5 * 60 * 1000) setProfileOpen(true);
   }, []);
   const [noticeFormOpen, setNoticeFormOpen] = useState(false);
+  const [editingNotice, setEditingNotice] = useState<MarketplaceNotice | null>(null); // 있으면 공지 수정 모드
   const [postFormOpen, setPostFormOpen]     = useState(false);   // 커뮤니티 글쓰기
   const [postFormCategory, setPostFormCategory] = useState<PostCategory>('free'); // 글쓰기 기본 카테고리(공부 탭=study)
   const [marketFormOpen, setMarketFormOpen] = useState(false);   // 중고장터 글쓰기
@@ -1207,14 +1208,28 @@ export default function App() {
       .catch(() => { toast.show('댓글 삭제에 실패했습니다', 'error'); reloadComments(); });
   }, [toast, reloadComments]);
 
-  // 관리자: 공지사항 작성 — 등록 후 목록 갱신 (권한은 RLS가 강제)
-  const handleCreateNotice = useCallback(async (data: NoticeFormData) => {
+  // 관리자: 공지 작성/수정 — 등록·수정 후 목록 갱신 (권한은 RLS가 강제)
+  const handleSubmitNotice = useCallback(async (data: NoticeFormData) => {
     if (!user) throw new Error('로그인이 필요합니다');
-    const saved = await createNotice({
-      type: data.type, title: data.title, body: data.body, authorName: user.name, board: data.board,
-    });
-    setNotices((prev) => [saved, ...prev]);
-  }, [user]);
+    if (editingNotice) {
+      await updateNotice(editingNotice.id, { type: data.type, title: data.title, body: data.body, board: data.board });
+      setNotices((prev) => prev.map((n) => (n.id === editingNotice.id ? { ...n, type: data.type, title: data.title, body: data.body, board: data.board } : n)));
+      setEditingNotice(null);
+    } else {
+      const saved = await createNotice({
+        type: data.type, title: data.title, body: data.body, authorName: user.name, board: data.board,
+      });
+      setNotices((prev) => [saved, ...prev]);
+    }
+  }, [user, editingNotice]);
+  const handleDeleteNotice = useCallback(async (id: string) => {
+    try {
+      await deleteNotice(id);
+      setNotices((prev) => prev.filter((n) => n.id !== id));
+      setOpenNotice(null);
+      toast.show('공지사항이 삭제되었습니다', 'success');
+    } catch (e) { toast.show(e instanceof Error ? e.message : '삭제에 실패했습니다', 'error'); }
+  }, [toast]);
 
   const handleUpdateVenueDescription = useCallback((venueId: string, description: string) => {
     setVenues((prev) => prev.map((v) => v.id === venueId ? { ...v, description } : v));
@@ -1737,6 +1752,9 @@ export default function App() {
         open
         notice={openNotice}
         onClose={() => setOpenNotice(null)}
+        isAdmin={user?.role === 'admin'}
+        onEdit={() => { setEditingNotice(openNotice); setOpenNotice(null); setNoticeFormOpen(true); }}
+        onDelete={() => { if (openNotice) handleDeleteNotice(openNotice.id); }}
       />
       )}
 
@@ -1787,8 +1805,9 @@ export default function App() {
       {noticeFormOpen && (
       <NoticeFormModal
         open
-        onClose={() => setNoticeFormOpen(false)}
-        onSubmit={handleCreateNotice}
+        onClose={() => { setNoticeFormOpen(false); setEditingNotice(null); }}
+        onSubmit={handleSubmitNotice}
+        editing={editingNotice}
       />
       )}
 

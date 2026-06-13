@@ -152,3 +152,17 @@ export async function deleteNotice(id: string): Promise<void> {
   const { error } = await supabase.from('marketplace_notices').delete().eq('id', id);
   if (error) throw error;
 }
+
+export async function updateNotice(
+  id: string,
+  payload: Pick<MarketplaceNotice, 'type' | 'title' | 'body' | 'board'>,
+): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.from('marketplace_notices').update({
+    type:  payload.type,
+    title: payload.title,
+    body:  payload.body ?? null,
+    board: payload.board ?? 'all',
+  }).eq('id', id);
+  if (error) throw error;
+}

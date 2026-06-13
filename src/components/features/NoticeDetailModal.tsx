@@ -5,6 +5,9 @@ interface NoticeDetailModalProps {
   notice: MarketplaceNotice | null;
   open: boolean;
   onClose: () => void;
+  isAdmin?: boolean;       // 운영자면 수정·삭제 노출(서버 RLS가 최종 강제)
+  onEdit?: () => void;
+  onDelete?: () => void;
 }
 
 const TYPE_STYLE: Record<NoticeType, { label: string; cls: string }> = {
@@ -22,7 +25,7 @@ function formatDateTime(iso: string): string {
   return `${d.getFullYear()}-${month}-${day} ${hour}:${min}`;
 }
 
-export default function NoticeDetailModal({ notice, open, onClose }: NoticeDetailModalProps) {
+export default function NoticeDetailModal({ notice, open, onClose, isAdmin, onEdit, onDelete }: NoticeDetailModalProps) {
   if (!notice) return null;
 
   const style = TYPE_STYLE[notice.type];
@@ -62,7 +65,13 @@ export default function NoticeDetailModal({ notice, open, onClose }: NoticeDetai
         )}
 
         {/* 액션 */}
-        <div className="pt-2">
+        <div className="pt-2 space-y-2">
+          {isAdmin && (onEdit || onDelete) && (
+            <div className="flex gap-2">
+              {onEdit && <button type="button" onClick={onEdit} className="btn-ghost flex-1 text-gold-300">✏️ 수정</button>}
+              {onDelete && <button type="button" onClick={() => { if (window.confirm('이 공지사항을 삭제할까요?')) onDelete(); }} className="btn-ghost flex-1 hover:text-danger-light">🗑 삭제</button>}
+            </div>
+          )}
           <button type="button" onClick={onClose} className="btn-primary w-full">
             확인
           </button>
