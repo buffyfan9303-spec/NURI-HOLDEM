@@ -213,3 +213,51 @@ export async function myPlayHistory(): Promise<PlayHistory[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({ venueId: r.venue_id, venueName: r.venue_name ?? null, moneyinCount: Number(r.moneyin_count) || 0, totalAmount: Number(r.total_amount) || 0, lastAt: r.last_at ?? null }));
 }
+
+// ── 발급 한도(쿼터) — 운영진 승인 충전 + 충전(구매) 요청 ─────────────────────
+export interface VoucherCreditRequest { id: string; amount: number; note: string | null; status: 'pending' | 'approved' | 'rejected'; adminNote: string | null; createdAt: string }
+export interface AdminCreditRequest { id: string; venueId: string; venueName: string; amount: number; note: string | null; requester: string; createdAt: string }
+
+/** 잔여 발급 한도 — 쿼터 RPC 미배포(구 DB)면 null(무제한 표시 안 함) */
+export async function getVoucherQuota(venueId: string): Promise<number | null> {
+  if (IS_MOCK) return null;
+  const { data, error } = await supabase.rpc('get_voucher_quota', { p_venue_id: venueId });
+  if (error) return null;
+  return typeof data === 'number' ? data : Number(data ?? 0);
+}
+
+/** 충전(구매) 요청 — 업주. 대기 중 요청이 있으면 서버가 거부 */
+export async function requestVoucherCredit(venueId: string, amount: number, note?: string): Promise<void> {
+  const { error } = await supabase.rpc('request_voucher_credit', { p_venue_id: venueId, p_amount: amount, p_note: note ?? null });
+  if (error) throw new Error(error.message);
+}
+
+export async function myVoucherCreditRequests(venueId: string): Promise<VoucherCreditRequest[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.rpc('my_voucher_credit_requests', { p_venue_id: venueId });
+  if (error) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({ id: r.id, amount: r.amount, note: r.note ?? null, status: r.status, adminNote: r.admin_note ?? null, createdAt: r.created_at }));
+}
+
+/** (운영자) 대기 중 충전 요청 */
+export async function adminListVoucherCreditRequests(): Promise<AdminCreditRequest[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.rpc('admin_list_voucher_credit_requests');
+  if (error) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({ id: r.id, venueId: r.venue_id, venueName: r.venue_name ?? '(매장)', amount: r.amount, note: r.note ?? null, requester: r.requester ?? '', createdAt: r.created_at }));
+}
+
+/** (운영자) 충전 요청 승인/거절 — 승인 시 매장 한도 자동 충전 */
+export async function adminDecideVoucherCredit(requestId: string, approve: boolean, adminNote?: string): Promise<void> {
+  const { error } = await supabase.rpc('admin_decide_voucher_credit', { p_request_id: requestId, p_approve: approve, p_admin_note: adminNote ?? null });
+  if (error) throw new Error(error.message);
+}
+
+/** (운영자) 수동 충전(±) — 반환: 충전 후 잔여 한도 */
+export async function adminGrantVoucherQuota(venueId: string, amount: number): Promise<number> {
+  const { data, error } = await supabase.rpc('admin_grant_voucher_quota', { p_venue_id: venueId, p_amount: amount });
+  if (error) throw new Error(error.message);
+  return Number(data ?? 0);
+}

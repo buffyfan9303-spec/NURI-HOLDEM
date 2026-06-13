@@ -19,7 +19,7 @@ import {
   MISSIONS, adminListCustomMissions, adminSaveCustomMission, adminDeleteCustomMission,
   type CustomMissionRow, type MissionGoalType,
 } from '../../lib/loyalty';
-import { isVoucherIssueApproved, setVoucherIssueApproval } from '../../api/vouchers';
+import { isVoucherIssueApproved, setVoucherIssueApproval, adminListVoucherCreditRequests, adminDecideVoucherCredit, type AdminCreditRequest } from '../../api/vouchers';
 import { useBackClose } from '../../lib/backstack';
 import { REGION_CHIPS } from './IntegratedSearchBar';
 import SectionHeader from '../atoms/SectionHeader';
@@ -84,6 +84,41 @@ function BoostContactCard() {
 }
 
 // ── 순위 인증 승인(운영자) — 외부 대회 입상 증빙 검토. 승인/거절 시 신분증 즉시 삭제 ──
+function VoucherQuotaAdminCard() {
+  const toast = useToast();
+  const [reqs, setReqs] = useState<AdminCreditRequest[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+  const load = () => { adminListVoucherCreditRequests().then(setReqs).catch(() => {}); };
+  useEffect(load, []);
+  const decide = async (r: AdminCreditRequest, approve: boolean) => {
+    setBusy(r.id);
+    try {
+      await adminDecideVoucherCredit(r.id, approve);
+      toast.show(approve ? `${r.venueName} 한도 ${r.amount.toLocaleString()}개 충전 완료` : '요청을 거절했습니다', approve ? 'success' : 'info');
+      load();
+    } catch (e) { toast.show(e instanceof Error ? e.message : '처리 실패', 'error'); }
+    setBusy(null);
+  };
+  if (reqs.length === 0) return null;
+  return (
+    <section className="rounded-card border border-gold-400/30 bg-gold-300/[0.04] p-3 space-y-2">
+      <h3 className="text-sm font-bold text-gold-300">🛒 이용권 충전 요청 <span className="text-2xs font-normal text-ink-muted">· 승인 시 즉시 충전</span></h3>
+      <ul className="space-y-1.5">
+        {reqs.map((r) => (
+          <li key={r.id} className="flex items-center gap-2 rounded-input border border-border-subtle bg-surface-low px-2.5 py-2">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-bold text-ink-primary truncate">{r.venueName} <span className="text-gold-300">+{r.amount.toLocaleString()}개</span></p>
+              <p className="text-2xs text-ink-muted truncate">{r.requester}{r.note ? ` · ${r.note}` : ''} · {new Date(r.createdAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+            </div>
+            <button type="button" disabled={busy === r.id} onClick={() => decide(r, true)} className="btn-primary shrink-0 px-3 py-1.5 text-2xs disabled:opacity-50">승인</button>
+            <button type="button" disabled={busy === r.id} onClick={() => decide(r, false)} className="btn-ghost shrink-0 px-2 py-1.5 text-2xs hover:text-danger-light">거절</button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function RankVerifyAdminCard() {
   const toast = useToast();
   const [list, setList] = useState<RankVerification[]>([]);
@@ -460,6 +495,7 @@ export default function AdminTab({
                   <>
                     <BoostContactCard />
                     <CommunityAdsCard />
+          <VoucherQuotaAdminCard />
           <RankVerifyAdminCard />
                     <MissionsAdminCard />
                     <DraggableList initialItems={schedules.filter((s) => s.approved)} />
