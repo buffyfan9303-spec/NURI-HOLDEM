@@ -116,6 +116,18 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     return () => { alive = false; };
   }, [venueId, isAdmin]);
 
+  // L4: 권한을 부여받은 직후 창에 다시 포커스되면 권한 재조회 → 재진입/새로고침 없이 탭 갱신
+  useEffect(() => {
+    if (!venueId || isAdmin) return;
+    const recheck = () => {
+      Promise.all([canAccessLedger(venueId), canManagePos(venueId), iCanViewVouchers(venueId)])
+        .then(([l, m, vv]) => { setLedgerOk(l); setManageOk(m); setVoucherView(vv); })
+        .catch(() => { /* keep current */ });
+    };
+    window.addEventListener('focus', recheck);
+    return () => window.removeEventListener('focus', recheck);
+  }, [venueId, isAdmin]);
+
   // 섹션 노출 규칙:
   //  · 직원이 부여받을 수 있는 권한(장부·이용권)은 권한 없어도 '잠금' 탭으로 노출 → 클릭 시 "권한 없음" 안내(휑한 화면 방지).
   //  · 장부에 종속된 순위·클락·출근은 장부 권한이 있을 때만 노출(중복 잠금 방지).
@@ -264,7 +276,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 onOpenStats={manageOk ? () => setSection('stats') : undefined} />
             )}
             {section === 'stats'    && manageOk && <LedgerStatsPanel venueId={venueId} />}
-            {section === 'ranking'  && ledgerOk && <RankingEditor venueId={venueId} canEdit={isAdmin || user.approved === true} draft={rankingDraft} />}
+            {section === 'ranking'  && ledgerOk && <RankingEditor venueId={venueId} canEdit={isAdmin || user.approved === true || ledgerOk} draft={rankingDraft} />}
             {section === 'venueRank' && ledgerOk && <VenueRankHub venueId={venueId} canConfigure={manageOk} />}
             {section === 'league'   && ledgerOk && <LeaguePanel venueId={venueId} canConfigure={manageOk} />}
             {section === 'page'     && canStaff && <VenueCustomizePanel venueId={venueId} />}
@@ -272,7 +284,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
             {section === 'attendance' && ledgerOk && <StaffSelfAttendance venueId={venueId} />}
             {section === 'staff'    && canStaff && <StaffHub venueId={venueId} />}
             {section === 'settings' && canStaff && <PosSettingsPanel venueId={venueId} />}
-            {section === 'voucher'  && (manageOk || voucherView || ledgerOk) && <VoucherManagePanel venueId={venueId} />}
+            {section === 'voucher'  && (manageOk || voucherView) && <VoucherManagePanel venueId={venueId} />}
             </>)}
           </div>
         </div>
