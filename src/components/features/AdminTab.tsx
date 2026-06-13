@@ -231,15 +231,39 @@ function CommunityAdsCard() {
       setSavingSlot(null);
     }
   };
+  // 순서 변경 — 인접 슬롯과 '내용'을 교환(슬롯 자리 1~5는 고정, 안에 든 광고만 위/아래로)
+  const move = async (slot: number, dir: -1 | 1) => {
+    const sorted = [...ads].sort((a, b) => a.slot - b.slot);
+    const i = sorted.findIndex((a) => a.slot === slot);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= sorted.length) return;
+    const a = sorted[i], b = sorted[j];
+    const aNew: CommunityAd = { slot: a.slot, title: b.title, linkUrl: b.linkUrl, advertiser: b.advertiser, expiresAt: b.expiresAt };
+    const bNew: CommunityAd = { slot: b.slot, title: a.title, linkUrl: a.linkUrl, advertiser: a.advertiser, expiresAt: a.expiresAt };
+    setSavingSlot(a.slot);
+    try {
+      await Promise.all([saveCommunityAd(aNew), saveCommunityAd(bNew)]);
+      setAds((arr) => arr.map((x) => (x.slot === aNew.slot ? aNew : x.slot === bNew.slot ? bNew : x)));
+      toast.show('광고 순서를 바꿨습니다', 'success');
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : '순서 변경 실패', 'error');
+    } finally { setSavingSlot(null); }
+  };
   const today = new Date().toLocaleDateString('en-CA');
   return (
     <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
-      <p className="text-sm font-bold text-ink-primary">📢 커뮤니티 광고 5칸 <span className="text-xs font-normal text-ink-muted">— 게시판 글 4개마다 [AD] 한 줄. 제목 비우면 게재 중단</span></p>
+      <p className="text-sm font-bold text-ink-primary">📢 커뮤니티 광고 5칸 <span className="text-xs font-normal text-ink-muted">— 게시판 글 4개마다 [AD] 한 줄. ▲▼로 순서 변경 · 제목 비우면 게재 중단</span></p>
       <ul className="space-y-1.5">
-        {ads.map((ad) => {
+        {ads.map((ad, i) => {
           const live = !!ad.title.trim() && (!ad.expiresAt || ad.expiresAt >= today);
           return (
             <li key={ad.slot} className="flex flex-wrap items-center gap-1.5 rounded-input border border-border-subtle bg-surface-high/40 p-1.5">
+              <span className="flex shrink-0 flex-col gap-0.5">
+                <button type="button" onClick={() => move(ad.slot, -1)} disabled={i === 0 || savingSlot !== null} aria-label="위로 이동"
+                  className="leading-none px-1 rounded border border-border-default text-2xs text-ink-secondary hover:text-gold-300 hover:border-gold-400/50 disabled:opacity-25 transition-colors">▲</button>
+                <button type="button" onClick={() => move(ad.slot, 1)} disabled={i === ads.length - 1 || savingSlot !== null} aria-label="아래로 이동"
+                  className="leading-none px-1 rounded border border-border-default text-2xs text-ink-secondary hover:text-gold-300 hover:border-gold-400/50 disabled:opacity-25 transition-colors">▼</button>
+              </span>
               <span className={['shrink-0 rounded-badge px-1.5 py-0.5 text-2xs font-bold', live ? 'bg-gold-300 text-ink-inverse' : 'bg-surface-float text-ink-muted'].join(' ')}>{ad.slot}번 {live ? '게재중' : '비어있음'}</span>
               <input value={ad.title} onChange={(e) => patch(ad.slot, { title: e.target.value })} maxLength={40}
                 placeholder="광고 문구" className="input min-w-[10rem] flex-1 text-sm" />
