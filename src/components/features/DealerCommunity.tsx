@@ -127,26 +127,22 @@ export default function DealerCommunity() {
         </section>
       )}
 
-      {/* ICM 계산기 */}
-      <div>
+      {/* ICM 계산기 + 글쓰기 — 모바일에서 반반(두 칸 동일 너비). ICM 펼치면 아래 풀폭 */}
+      <div className="grid grid-cols-2 gap-2">
         <button type="button" onClick={() => setShowIcm((v) => !v)}
-          className="w-full flex items-center justify-between rounded-input border border-border-default bg-surface-high px-3 py-2 text-xs font-semibold text-ink-secondary hover:text-ink-primary transition-colors">
-          <span className="inline-flex items-center gap-1.5"><span className="text-gold-300">ICM</span> 계산기</span>
-          <span className="text-2xs text-ink-muted">{showIcm ? '닫기' : '열기'}</span>
+          className="flex items-center justify-center gap-1.5 rounded-input border border-border-default bg-surface-high px-3 py-2.5 text-xs font-semibold text-ink-secondary hover:text-ink-primary transition-colors">
+          <span className="inline-flex items-center gap-1"><span className="text-gold-300">ICM</span> 계산기</span>
+          <span className="text-2xs text-ink-muted">{showIcm ? '▲' : '▼'}</span>
         </button>
-        {showIcm && <div className="mt-2"><ICMCalculator /></div>}
-      </div>
-
-      {/* 글쓰기 토글 */}
-      {canPost ? (
-        <div className="flex justify-end">
-          <button type="button" onClick={() => setOpen((v) => !v)} className="btn-primary px-4 text-xs">
-            {open ? '닫기' : '+ 글쓰기 (구인/구직/일반)'}
+        {canPost ? (
+          <button type="button" onClick={() => setOpen((v) => !v)} className="btn-primary text-xs">
+            {open ? '글쓰기 닫기' : '+ 글쓰기'}
           </button>
-        </div>
-      ) : (
-        <p className="text-center text-2xs text-ink-muted">로그인하면 글을 작성할 수 있습니다</p>
-      )}
+        ) : (
+          <div className="flex items-center justify-center rounded-input border border-border-default bg-surface-high px-3 py-2.5 text-2xs text-ink-muted">로그인 후 작성</div>
+        )}
+      </div>
+      {showIcm && <div><ICMCalculator /></div>}
 
       {canPost && open && (
         <form onSubmit={submit} className="space-y-2.5 rounded-card border border-border-default bg-surface-low p-3 animate-slide-up">

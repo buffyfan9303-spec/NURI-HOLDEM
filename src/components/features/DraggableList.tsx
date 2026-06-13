@@ -63,10 +63,10 @@ interface SortableRowProps {
 
 function SortableRow({ item, index, isDragging, onPremiumToggle, onCompetitionToggle, onBoost }: SortableRowProps) {
   const [boostOpen, setBoostOpen] = useState(false);
-  // 부스트 잔여일 — premium_until이 미래일 때만
-  const boostLeft = item.premiumUntil
-    ? Math.max(0, Math.ceil((new Date(item.premiumUntil).getTime() - Date.now()) / 86400000))
-    : 0;
+  // 부스트 잔여 — premium_until이 미래일 때. 24시간 부스트 대응으로 시간 단위까지 정밀 표시.
+  const msLeft = item.premiumUntil ? new Date(item.premiumUntil).getTime() - Date.now() : 0;
+  const boostLeft = Math.max(0, Math.ceil(msLeft / 3600000)); // 잔여 시간(h)
+  const boostLabel = boostLeft <= 0 ? '' : boostLeft < 24 ? `${boostLeft}시간` : `${Math.ceil(boostLeft / 24)}일`;
   const {
     attributes,
     listeners,
@@ -146,7 +146,7 @@ function SortableRow({ item, index, isDragging, onPremiumToggle, onCompetitionTo
         <button
           type="button"
           aria-label="부스트 설정"
-          title={boostLeft > 0 ? `부스트 ${boostLeft}일 남음 — 클릭해 변경` : '부스트(N일 상단 고정)'}
+          title={boostLeft > 0 ? `부스트 ${boostLabel} 남음 — 클릭해 변경` : '부스트(기간 상단 고정)'}
           onClick={() => setBoostOpen((v) => !v)}
           className={[
             'text-2xs font-bold px-1.5 py-1 rounded-badge border transition-colors active:scale-95',
@@ -155,15 +155,15 @@ function SortableRow({ item, index, isDragging, onPremiumToggle, onCompetitionTo
               : 'bg-surface-high text-ink-muted border-border-default hover:text-ink-secondary',
           ].join(' ')}
         >
-          ⚡{boostLeft > 0 ? `${boostLeft}일` : ''}
+          ⚡{boostLabel}
         </button>
         {boostOpen && (
           <span className="absolute left-0 top-full z-20 mt-1 flex items-center gap-1 rounded-card border border-border-default bg-surface-float p-1.5 shadow-card">
-            {[3, 7, 14, 30].map((d) => (
+            {[{ d: 1, l: '24시간' }, { d: 3, l: '3일' }, { d: 7, l: '7일' }, { d: 14, l: '14일' }, { d: 30, l: '30일' }].map(({ d, l }) => (
               <button key={d} type="button"
                 onClick={() => { onBoost(item.id, d); setBoostOpen(false); }}
-                className="rounded-badge bg-surface-high px-2 py-1 text-2xs font-bold text-ink-secondary transition-colors hover:bg-gold-300/15 hover:text-gold-300">
-                {d}일
+                className="rounded-badge bg-surface-high px-2 py-1 text-2xs font-bold text-ink-secondary transition-colors hover:bg-gold-300/15 hover:text-gold-300 whitespace-nowrap">
+                {l}
               </button>
             ))}
             <button type="button"

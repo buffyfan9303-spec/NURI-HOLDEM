@@ -569,32 +569,30 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
       {(() => {
         const saved = [...new Set(allEntries.map((e) => e.eventName ?? ''))];
         const opts = [...new Set(['', ...saved, ...dayGames, ...(eventName ? [eventName] : [])])];
-        const multi = opts.length > 1 || dayGames.length > 0;
         return (
           <div className="rounded-card border border-gold-400/30 bg-gold-300/[0.05] p-2.5 space-y-2">
             <div className="flex items-center gap-2">
               <span className="text-2xs font-bold text-ink-muted shrink-0">🎯 입력 중인 게임</span>
               <span className="min-w-0 flex-1 truncate text-sm font-extrabold text-gold-300">{eventName || '기본(메인 게임)'}</span>
             </div>
-            {multi && (
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {opts.map((ev) => {
-                  const on = eventName === ev;
-                  const has = saved.includes(ev);
-                  return (
-                    <button key={ev || '_main'} type="button" onClick={() => setEventName(ev)}
-                      className={['text-xs font-bold px-2.5 py-1.5 rounded-input border transition-colors',
-                        on ? 'bg-gold-300 text-ink-inverse border-gold-300' : 'bg-surface-float text-ink-secondary border-border-default hover:text-ink-primary'].join(' ')}>
-                      {ev || '메인'}{has ? ' ✓' : ''}
-                    </button>
-                  );
-                })}
-                <button type="button"
-                  onClick={() => { const v = window.prompt('게임 이름 직접 입력 (예: 사이드 1, 새틀라이트)'); if (v && v.trim()) setEventName(v.trim().slice(0, 40)); }}
-                  className="text-xs font-bold px-2.5 py-1.5 rounded-input border bg-surface-float text-ink-muted border-dashed border-border-default hover:text-ink-secondary">+ 직접</button>
-              </div>
-            )}
-            <p className="text-[10px] leading-relaxed text-ink-muted">하루에 게임이 여러 개면 <b className="text-ink-secondary">게임마다 따로</b> 입력하세요. 위에서 게임을 고르면 그 게임의 순위만 저장·표시됩니다.</p>
+            {/* 게임 선택 칩 — 항상 표시(메인 + 그날 포스터·장부 + 직접 추가). 하루 여러 게임이면 게임마다 따로 */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {opts.map((ev) => {
+                const on = eventName === ev;
+                const has = saved.includes(ev);
+                return (
+                  <button key={ev || '_main'} type="button" onClick={() => setEventName(ev)}
+                    className={['text-xs font-bold px-2.5 py-1.5 rounded-input border transition-colors',
+                      on ? 'bg-gold-300 text-ink-inverse border-gold-300' : 'bg-surface-float text-ink-secondary border-border-default hover:text-ink-primary'].join(' ')}>
+                    {ev || '메인'}{has ? ' ✓' : ''}
+                  </button>
+                );
+              })}
+              <button type="button"
+                onClick={() => { const v = window.prompt('게임 이름 직접 입력 (예: 사이드 1, 새틀라이트)'); if (v && v.trim()) setEventName(v.trim().slice(0, 40)); }}
+                className="text-xs font-bold px-2.5 py-1.5 rounded-input border bg-surface-float text-gold-300 border-dashed border-gold-400/40 hover:bg-gold-300/10">+ 게임 직접 추가</button>
+            </div>
+            <p className="text-[10px] leading-relaxed text-ink-muted">하루에 게임이 여러 개면 <b className="text-ink-secondary">게임마다 따로</b> 입력하세요 — 위에서 게임을 고르거나 <b className="text-gold-300">+ 게임 직접 추가</b>로 만든 뒤 순위를 넣으면, 그 게임의 순위만 따로 저장·표시됩니다.</p>
           </div>
         );
       })()}
