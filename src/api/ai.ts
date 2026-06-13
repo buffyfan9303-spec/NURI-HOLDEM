@@ -12,3 +12,14 @@ export async function aiGenerate(prompt: string, system?: string): Promise<strin
   if (!text) throw new Error('AI 응답이 비어 있습니다.');
   return text;
 }
+
+/** AI 이미지 검사(비전) — 운영자용 진위 소견 등. dataURL/base64 배열(최대 2장), 낮은 temperature. */
+export async function aiInspectImages(prompt: string, images: string[], system?: string): Promise<string> {
+  if (IS_MOCK) throw new Error('데모 모드에서는 AI를 사용할 수 없습니다.');
+  const { data, error } = await supabase.functions.invoke('gemini', { body: { prompt, system, images, temperature: 0.2 } });
+  if (error) throw new Error(error.message || 'AI 요청에 실패했습니다.');
+  if (data?.error) throw new Error(String(data.error));
+  const text = (data?.text ?? '').trim();
+  if (!text) throw new Error('AI 응답이 비어 있습니다.');
+  return text;
+}

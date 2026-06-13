@@ -25,7 +25,7 @@ import { REGION_CHIPS } from './IntegratedSearchBar';
 import SectionHeader from '../atoms/SectionHeader';
 import NuriPosLedger from './NuriPosLedger';
 import LedgerStatsPanel from './LedgerStatsPanel';
-import { adminListRankVerifications, adminDecideRankVerification, signedVerifyUrl, type RankVerification } from '../../api/rankverify';
+import { adminListRankVerifications, adminDecideRankVerification, signedVerifyUrl, type RankVerification, aiInspectVerification } from '../../api/rankverify';
 
 interface AdminTabProps {
   schedules: Schedule[];
@@ -123,6 +123,17 @@ function RankVerifyAdminCard() {
   const toast = useToast();
   const [list, setList] = useState<RankVerification[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
+  // AI 검사 소견(신청 id별) — 참고용, 최종 판단은 운영자
+  const [aiNotes, setAiNotes] = useState<Record<string, string>>({});
+  const [aiBusy, setAiBusy] = useState<string | null>(null);
+  const inspect = async (v: RankVerification) => {
+    setAiBusy(v.id);
+    try {
+      const note = await aiInspectVerification(v);
+      setAiNotes((m) => ({ ...m, [v.id]: note }));
+    } catch (e) { toast.show(e instanceof Error ? e.message : 'AI 검사 실패', 'error'); }
+    setAiBusy(null);
+  };
   const reload = () => { adminListRankVerifications().then(setList).catch(() => {}); };
   useEffect(() => { reload(); }, []);
   const view = async (path?: string | null) => {
@@ -146,9 +157,18 @@ function RankVerifyAdminCard() {
               <span className="font-bold text-ink-primary">{v.nickname}</span>
               <span className="min-w-0 flex-1 truncate text-ink-secondary">{v.eventName} · <b className="text-emerald-300 tabular-nums">{(v.amountWon / 10000).toLocaleString()}만</b></span>
               <button type="button" onClick={() => view(v.proofPath)} className="rounded-input border border-border-default px-2 py-1 font-bold text-ink-secondary hover:text-ink-primary">증빙</button>
+              <button type="button" disabled={aiBusy === v.id} onClick={() => inspect(v)} className="rounded-input border border-sky-500/40 bg-sky-500/10 px-2 py-1 font-bold text-sky-300 disabled:opacity-50">{aiBusy === v.id ? '검사 중…' : '🤖 AI 검사'}</button>
               <button type="button" onClick={() => view(v.idCardPath)} className="rounded-input border border-border-default px-2 py-1 font-bold text-ink-secondary hover:text-ink-primary">신분증</button>
               <button type="button" disabled={busy === v.id} onClick={() => decide(v, true)} className="btn-primary px-2.5 py-1 text-2xs disabled:opacity-50">승인</button>
               <button type="button" disabled={busy === v.id} onClick={() => decide(v, false)} className="rounded-input border border-danger/40 px-2.5 py-1 font-bold text-danger-light hover:bg-danger/10 disabled:opacity-50">반려</button>
+              {aiNotes[v.id] && (
+                <div className={['w-full rounded-input border p-2 text-[11px] leading-relaxed whitespace-pre-wrap',
+                  aiNotes[v.id].includes('[위조 의심]') ? 'border-danger/40 bg-danger/[0.06] text-danger-light'
+                  : aiNotes[v.id].includes('[주의 필요]') ? 'border-amber-500/40 bg-amber-500/[0.06] text-amber-200'
+                  : 'border-emerald-500/30 bg-emerald-500/[0.05] text-ink-secondary'].join(' ')}>
+                  <b className="text-ink-primary">AI 소견(참고)</b> · 최종 판단은 운영자{'\n'}{aiNotes[v.id]}
+                </div>
+              )}
             </li>
           ))}
         </ul>

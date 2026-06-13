@@ -326,6 +326,49 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
   }, [venueId, date]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // 지류 양식 출력용 매장명
+  const [venueName, setVenueName] = useState('');
+  useEffect(() => {
+    getAllVenues().then((vs) => setVenueName(vs.find((v) => v.id === venueId)?.name ?? '')).catch(() => {});
+  }, [venueId]);
+  // 지류(공식 결과 기록지) 출력 — 인증 펍 전용. 수기 기입형(NAME/COUNTRY/EVENT/PLACE/PRIZE/TD SIGN)
+  const printPaperForm = () => {
+    const w = window.open('', '_blank', 'width=560,height=900');
+    if (!w) { toast.show('팝업이 차단되었습니다. 팝업을 허용한 뒤 다시 시도하세요.', 'error'); return; }
+    const field = (label: string, sub: string) => `<div class="f"><div class="lb">${label} <span>${sub}</span></div><div class="ln"></div></div>`;
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>NURI HOLDEM · 공식 결과 기록지</title><style>
+*{box-sizing:border-box;margin:0}body{font-family:Georgia,'Apple SD Gothic Neo',serif;color:#111;padding:34px 38px}
+.top{text-align:center;border-bottom:3px double #1a1a1a;padding-bottom:14px}
+.logo{font-size:34px;font-weight:900;letter-spacing:2px}.logo .h{color:#b8932f}
+.sub{font-size:12px;letter-spacing:4px;color:#555;margin-top:4px}
+.venue{font-size:19px;font-weight:800;margin-top:10px}
+.note{font-size:10px;color:#888;margin-top:4px}
+.fs{margin-top:26px;display:flex;flex-direction:column;gap:24px}
+.f .lb{font-size:13px;font-weight:800;letter-spacing:1px}.f .lb span{font-weight:400;color:#888;font-size:10px;margin-left:6px}
+.f .ln{border-bottom:1.6px solid #222;height:34px}
+.foot{margin-top:30px;display:flex;justify-content:space-between;align-items:flex-end;font-size:10px;color:#777}
+.foot b{color:#b8932f}
+@media print{body{padding:18px 24px}}
+</style></head><body>
+<div class="top">
+  <div class="logo">NURI <span class="h">HOLDEM</span></div>
+  <div class="sub">OFFICIAL RESULT SLIP</div>
+  <div class="venue">${venueName || '매장명'}</div>
+  <div class="note">NURI HOLDEM 인증 펍 전용 양식 — 인증 펍 외 사용·발급은 무효입니다.</div>
+</div>
+<div class="fs">
+  ${field('NAME', '성명')}
+  ${field('COUNTRY', '국가')}
+  ${field('EVENT', '대회명')}
+  ${field('PLACE', '순위')}
+  ${field('PRIZE', '프라이즈')}
+  ${field('TD SIGN', '토너먼트 디렉터 서명')}
+</div>
+<div class="foot"><span>DATE: ________________</span><span><b>nuriholdem.com</b> · 본 기록지는 금전적 가치가 없습니다</span></div>
+<script>window.onload=function(){setTimeout(function(){window.print();},300);};</script>
+</body></html>`);
+    w.document.close();
+  };
   // 등수→점수 매핑(매장 꾸미기에서 설정) — 입력 시 점수 미리보기에 사용
   const [cfg, setCfg] = useState<VenuePageConfig | null>(null);
   useEffect(() => { getVenuePageConfig(venueId).then(setCfg).catch(() => {}); }, [venueId]);
@@ -458,6 +501,8 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
         {date !== today && (
           <button type="button" onClick={() => setDate(today)} className="btn-ghost text-xs px-3 shrink-0">오늘</button>
         )}
+        <button type="button" onClick={printPaperForm} title="공식 결과 기록지(수기 양식) 인쇄 — 인증 펍 전용"
+          className="btn-ghost text-xs px-3 shrink-0 text-gold-300">🖨 지류 양식</button>
       </div>
 
       {/* 게임(이벤트) 선택 — 같은 날 메인+사이드를 따로 저장 */}

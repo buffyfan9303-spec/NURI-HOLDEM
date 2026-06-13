@@ -2,6 +2,7 @@
 // 이미지 2장(머니인 증빙 + 신분증)은 비공개 버킷 'verifications'에 저장 — 승인/거절 즉시 신분증 삭제.
 import { supabase, IS_MOCK } from '../lib/supabase';
 import { resizeImage } from '../lib/storage';
+import { aiInspectImages } from './ai';
 
 export interface RankVerification {
   id: string; nickname: string; eventName: string; amountWon: number;
@@ -83,4 +84,29 @@ export async function adminDecideRankVerification(v: RankVerification, approve: 
   }).eq('id', v.id);
   if (error) throw new Error(error.message);
   if (v.idCardPath) await supabase.storage.from('verifications').remove([v.idCardPath]).catch(() => {});
+}
+
+/** (운영자) 증빙 이미지 AI 진위 검사 — 참고 소견(최종 판단은 운영자). 신분증은 개인정보라 검사에서 제외. */
+export async function aiInspectVerification(v: RankVerification): Promise<string> {
+  if (!v.proofPath) throw new Error('증빙 이미지가 없습니다');
+  const url = await signedVerifyUrl(v.proofPath);
+  const blob = await (await fetch(url)).blob();
+  const dataUrl: string = await new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result));
+    fr.onerror = () => reject(new Error('이미지 읽기 실패'));
+    fr.readAsDataURL(blob);
+  });
+  const prompt = [
+    `포커 토너먼트 입상(머니인) 증빙 이미지를 검사해 주세요.`,
+    `신청 내용 — 닉네임: ${v.nickname} / 대회: ${v.eventName} / 신고 상금: ${(v.amountWon / 10000).toLocaleString()}만원`,
+    '',
+    '다음을 분석:',
+    '1) 이미지에 보이는 대회명·금액·이름이 신청 내용과 일치하는지',
+    '2) 합성/편집 흔적(글꼴 불일치, 경계 부자연, 해상도 차이, 그림자/조명 모순)',
+    '3) 일반적인 입상 증빙(트로피·시상 화면·정산표·공식 포스팅)으로 보이는지',
+    '',
+    '형식: 첫 줄에 결론 — [의심 신호 없음] / [주의 필요] / [위조 의심] 중 하나. 이어서 근거 3~5줄(각 줄 "- "로 시작). 한국어, 평문.',
+  ].join('\n');
+  return aiInspectImages(prompt, [dataUrl], '너는 이미지 포렌식 보조 분석가다. 과신하지 말고 보이는 근거만 말한다. 최종 판단은 운영자가 한다.');
 }
