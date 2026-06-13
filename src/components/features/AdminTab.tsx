@@ -25,6 +25,7 @@ import { REGION_CHIPS } from './IntegratedSearchBar';
 import SectionHeader from '../atoms/SectionHeader';
 import NuriPosLedger from './NuriPosLedger';
 import LedgerStatsPanel from './LedgerStatsPanel';
+import { adminListRankVerifications, adminDecideRankVerification, signedVerifyUrl, type RankVerification } from '../../api/rankverify';
 
 interface AdminTabProps {
   schedules: Schedule[];
@@ -78,6 +79,45 @@ function BoostContactCard() {
       <button type="button" onClick={save} disabled={saving} className="btn-primary px-4 py-2 text-sm disabled:opacity-60">
         {saving ? '저장 중…' : '저장'}
       </button>
+    </section>
+  );
+}
+
+// ── 순위 인증 승인(운영자) — 외부 대회 입상 증빙 검토. 승인/거절 시 신분증 즉시 삭제 ──
+function RankVerifyAdminCard() {
+  const toast = useToast();
+  const [list, setList] = useState<RankVerification[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+  const reload = () => { adminListRankVerifications().then(setList).catch(() => {}); };
+  useEffect(() => { reload(); }, []);
+  const view = async (path?: string | null) => {
+    if (!path) return;
+    try { window.open(await signedVerifyUrl(path), '_blank', 'noopener'); }
+    catch { toast.show('이미지 열람 실패', 'error'); }
+  };
+  const decide = async (v: RankVerification, ok: boolean) => {
+    setBusy(v.id);
+    try { await adminDecideRankVerification(v, ok); toast.show(ok ? '승인 — 국내 순위에 합산됩니다' : '반려했습니다', 'success'); reload(); }
+    catch (e) { toast.show(e instanceof Error ? e.message : '처리 실패', 'error'); }
+    finally { setBusy(null); }
+  };
+  return (
+    <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
+      <p className="text-sm font-bold text-ink-primary">🏆 순위 인증 승인 <span className="text-xs font-normal text-ink-muted">— 승인/거절 시 신분증 즉시 삭제</span></p>
+      {list.length === 0 ? <p className="py-2 text-center text-2xs text-ink-muted">대기 중인 신청이 없습니다.</p> : (
+        <ul className="space-y-1.5">
+          {list.map((v) => (
+            <li key={v.id} className="flex flex-wrap items-center gap-1.5 rounded-input border border-border-subtle bg-surface-high/40 p-2 text-2xs">
+              <span className="font-bold text-ink-primary">{v.nickname}</span>
+              <span className="min-w-0 flex-1 truncate text-ink-secondary">{v.eventName} · <b className="text-emerald-300 tabular-nums">{(v.amountWon / 10000).toLocaleString()}만</b></span>
+              <button type="button" onClick={() => view(v.proofPath)} className="rounded-input border border-border-default px-2 py-1 font-bold text-ink-secondary hover:text-ink-primary">증빙</button>
+              <button type="button" onClick={() => view(v.idCardPath)} className="rounded-input border border-border-default px-2 py-1 font-bold text-ink-secondary hover:text-ink-primary">신분증</button>
+              <button type="button" disabled={busy === v.id} onClick={() => decide(v, true)} className="btn-primary px-2.5 py-1 text-2xs disabled:opacity-50">승인</button>
+              <button type="button" disabled={busy === v.id} onClick={() => decide(v, false)} className="rounded-input border border-danger/40 px-2.5 py-1 font-bold text-danger-light hover:bg-danger/10 disabled:opacity-50">반려</button>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }
@@ -420,6 +460,7 @@ export default function AdminTab({
                   <>
                     <BoostContactCard />
                     <CommunityAdsCard />
+          <RankVerifyAdminCard />
                     <MissionsAdminCard />
                     <DraggableList initialItems={schedules.filter((s) => s.approved)} />
                   </>

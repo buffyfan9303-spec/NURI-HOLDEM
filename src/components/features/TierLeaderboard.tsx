@@ -1,6 +1,7 @@
 // src/components/features/TierLeaderboard.tsx
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
+import { getDomesticRankings, myRankVerifications, submitRankVerification, type RankVerification } from '../../api/rankverify';
 import { useAuth } from '../../contexts/AuthContext';
 import TierBadge, { tierOf, tierProgress, allTiers, isAceRank, ACE_TOP_RANK, ACE_MIN_POINTS } from '../atoms/TierBadge';
 import { getActivityLeaderboard, type LeaderboardEntry } from '../../api/community';
@@ -16,12 +17,14 @@ import {
 } from '../../lib/loyalty';
 
 // 통합 랭킹 허브 — 활동/머니인/프라이즈 + 주간 리그·업적·미션·명예의 전당(충성도)
-type Board = 'activity' | 'moneyin' | 'prize' | 'league' | 'badges' | 'missions' | 'hall' | 'shop';
+type Board = 'activity' | 'moneyin' | 'prize' | 'league' | 'badges' | 'missions' | 'hall' | 'shop' | 'domestic' | 'verify';
 const BOARD_LABEL: Record<Board, string> = {
-  activity: '활동 순위', moneyin: '머니인', prize: '프라이즈', shop: '상점',
+  activity: '활동 순위', moneyin: '머니인', prize: '프라이즈', shop: '상점', domestic: '국내 순위', verify: '순위 인증',
   league: '주간 리그', badges: '업적', missions: '미션', hall: '명예의 전당',
 };
 const BOARD_DESC: Record<Board, string> = {
+  domestic: '외부 대회 입상을 인증한 회원들의 누적 머니인 랭킹 — 순위 인증 탭에서 신청하세요.',
+  verify: '대회 입상 증빙 2장(머니인·신분증)을 올려 운영자 승인을 받으면 국내 순위에 합산됩니다.',
   shop: '활동점수 도달로 해금되는 마크 — 장착하면 닉네임 옆에 표시됩니다(점수 차감·금전 가치 없음).',
   activity: '접속·글쓰기·댓글 활동 점수 — 등급(2·3~AA)과 연동. 아래 주간 미션을 달성하면 점수를 바로 받아요.',
   moneyin: '전국 매장 순위 등록(입상) 횟수 합산 — 가장 많이 머니인한 플레이어.',
@@ -63,10 +66,31 @@ export default function TierLeaderboard() {
   const [badgeStats, setBadgeStats] = useState<BadgeStats | null>(null);
   const [equippedMark, setEquippedMark] = useState<string | null | undefined>(undefined); // 상점: 장착 마크(undefined=미로드)
   const [equipBusy, setEquipBusy] = useState<string | null>(null);
+  const [domestic, setDomestic] = useState<{ nickname: string; totalWon: number; wins: number }[] | null>(null);
+  const [myVerifs, setMyVerifs] = useState<RankVerification[] | null>(null);
+  const [vForm, setVForm] = useState({ event: '', amount: '' });
+  const [vProof, setVProof] = useState<File | null>(null);
+  const [vIdCard, setVIdCard] = useState<File | null>(null);
+  const [vBusy, setVBusy] = useState(false);
   // 행 닉네임 앞 장착 마크 — equippedMark 없는 행 타입(주간 리그 등)도 안전
   const markPrefix = (r: unknown): string => {
     const k = (r as { equippedMark?: string | null }).equippedMark;
     return k ? ((SHOP_MARKS.find((m) => m.key === k)?.emoji ?? '') + ' ') : '';
+  };
+  const submitVerify = async () => {
+    if (!user || vBusy) return;
+    if (!vForm.event.trim() || !vForm.amount || !vProof || !vIdCard) return;
+    setVBusy(true);
+    try {
+      await submitRankVerification({
+        nickname: user.nickname ?? user.name ?? '회원',
+        eventName: vForm.event, amountWon: Number(vForm.amount.replace(/[^\d]/g, '')) || 0,
+        proof: vProof, idCard: vIdCard,
+      });
+      setVForm({ event: '', amount: '' }); setVProof(null); setVIdCard(null);
+      setMyVerifs(null); myRankVerifications().then(setMyVerifs).catch(() => {});
+    } catch { /* 실패 시 입력 유지 */ }
+    finally { setVBusy(false); }
   };
   const handleEquip = async (key: string | null) => {
     if (equipBusy !== null) return;
@@ -94,6 +118,8 @@ export default function TierLeaderboard() {
         .catch(() => setMissions([]));
     }
     if (board === 'hall' && hall === null) getMonthlyHall().then(setHall).catch(() => setHall({ label: '', rows: [] }));
+    if (board === 'domestic' && domestic === null) getDomesticRankings(30).then(setDomestic).catch(() => setDomestic([]));
+    if (board === 'verify' && myVerifs === null && user) myRankVerifications().then(setMyVerifs).catch(() => setMyVerifs([]));
     if (board === 'shop' && equippedMark === undefined && user) {
       getMyEquippedMark().then((k) => setEquippedMark(k)).catch(() => setEquippedMark(null));
     }
@@ -289,7 +315,7 @@ export default function TierLeaderboard() {
       {/* 랭킹 리스트 — 다중 보드(활동/머니인/프라이즈) */}
       <section>
         <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5 mb-1.5 overflow-x-auto scrollbar-none lg:flex-wrap lg:overflow-visible">
-          {(['activity', 'league', 'hall', 'moneyin', 'shop'] as Board[]).map((b) => (
+          {(['activity', 'league', 'hall', 'moneyin', 'domestic', 'verify', 'shop'] as Board[]).map((b) => (
             <button key={b} type="button" onClick={() => setBoard(b)}
               className={['relative shrink-0 px-2 lg:px-3 py-1.5 text-[11px] lg:text-xs font-bold rounded-[6px] transition-colors duration-300',
                 board === b ? 'text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
@@ -410,6 +436,66 @@ export default function TierLeaderboard() {
               })}
             </div>
           )
+        ) : board === 'domestic' ? (
+          domestic === null ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
+          : domestic.length === 0 ? <p className="py-6 text-center text-2xs text-ink-muted">아직 인증된 입상이 없습니다 — '순위 인증' 탭에서 첫 주인공이 되어보세요!</p>
+          : (
+            <ul className="space-y-1">
+              {domestic.map((r, i) => (
+                <li key={r.nickname} className="flex items-center gap-2.5 rounded-input bg-surface-high px-3 py-2">
+                  <span className="w-6 shrink-0 text-center text-sm font-extrabold tabular-nums text-gold-300">{i + 1}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{r.nickname}</span>
+                  <span className="shrink-0 text-2xs text-ink-muted">{r.wins}회</span>
+                  <span className="shrink-0 text-sm font-extrabold tabular-nums text-emerald-300">{(r.totalWon / 10000).toLocaleString()}만</span>
+                </li>
+              ))}
+            </ul>
+          )
+        ) : board === 'verify' ? (
+          !user ? <p className="py-6 text-center text-2xs text-ink-muted">로그인하면 입상 인증을 신청할 수 있습니다</p>
+          : (
+            <div className="space-y-2.5">
+              <div className="space-y-1.5 rounded-card border border-border-default bg-surface-high p-3">
+                <input value={vForm.event} onChange={(e) => setVForm((f) => ({ ...f, event: e.target.value }))} maxLength={60}
+                  placeholder="대회명 (예: ○○ 인비테이셔널)" className="input w-full text-sm" />
+                <div className="relative">
+                  <input value={vForm.amount} inputMode="numeric" onChange={(e) => setVForm((f) => ({ ...f, amount: e.target.value.replace(/[^\d]/g, '') }))}
+                    placeholder="머니인 금액(원)" className="input w-full text-sm pr-8 tabular-nums" />
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">원</span>
+                </div>
+                <label className="flex items-center justify-between gap-2 rounded-input border border-dashed border-border-default px-3 py-2 text-2xs">
+                  <span className={vProof ? 'text-emerald-300 font-bold' : 'text-ink-secondary'}>1. 머니인 증빙 {vProof ? '✓ 첨부됨' : '— 이름·순위·금액이 보여야 해요'}</span>
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => setVProof(e.target.files?.[0] ?? null)} />
+                  <span className="shrink-0 rounded-input bg-surface-float px-2 py-1 font-bold text-ink-secondary">선택</span>
+                </label>
+                <label className="flex items-center justify-between gap-2 rounded-input border border-dashed border-border-default px-3 py-2 text-2xs">
+                  <span className={vIdCard ? 'text-emerald-300 font-bold' : 'text-ink-secondary'}>2. 신분증 {vIdCard ? '✓ 첨부됨' : '— 이름·주민번호 앞자리만 보이게 가리고 촬영'}</span>
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => setVIdCard(e.target.files?.[0] ?? null)} />
+                  <span className="shrink-0 rounded-input bg-surface-float px-2 py-1 font-bold text-ink-secondary">선택</span>
+                </label>
+                <button type="button" disabled={vBusy || !vForm.event.trim() || !vForm.amount || !vProof || !vIdCard}
+                  onClick={submitVerify}
+                  className="btn-primary w-full disabled:opacity-50">{vBusy ? '제출 중…' : '인증 요청'}</button>
+                <p className="text-[10px] leading-relaxed text-ink-muted">
+                  운영자 검토 후 승인되면 국내 순위에 합산됩니다. <b className="text-ink-secondary">신분증 이미지는 승인·거절 즉시 삭제</b>되며 다른 용도로 사용되지 않습니다. AI 생성·조작 이미지는 반려됩니다.
+                </p>
+              </div>
+              {myVerifs && myVerifs.length > 0 && (
+                <ul className="space-y-1">
+                  {myVerifs.map((v) => (
+                    <li key={v.id} className="flex items-center gap-2 rounded-input bg-surface-high px-3 py-2 text-2xs">
+                      <span className={['shrink-0 rounded-badge px-1.5 py-0.5 font-bold leading-none',
+                        v.status === 'approved' ? 'bg-emerald-500/15 text-emerald-300' : v.status === 'rejected' ? 'bg-danger/15 text-danger-light' : 'bg-gold-300/15 text-gold-300'].join(' ')}>
+                        {v.status === 'approved' ? '승인' : v.status === 'rejected' ? '반려' : '검토 중'}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-ink-secondary">{v.eventName}</span>
+                      <span className="shrink-0 tabular-nums text-ink-primary">{(v.amountWon / 10000).toLocaleString()}만</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )
         ) : board === 'shop' ? (
           !user ? <p className="py-6 text-center text-2xs text-ink-muted">로그인하면 마크를 모을 수 있습니다</p>
           : (
@@ -433,9 +519,9 @@ export default function TierLeaderboard() {
                       {unlocked ? (
                         <button type="button" disabled={equipBusy !== null}
                           onClick={() => handleEquip(on ? null : mk.key)}
-                          className={['mt-1.5 w-full rounded-input px-2 py-1.5 text-2xs font-bold transition-colors disabled:opacity-50',
+                          className={['mt-1.5 w-full rounded-input px-2 py-1.5 text-2xs font-bold transition-colors',
                             on ? 'bg-gold-300 text-ink-inverse' : 'border border-gold-400/40 text-gold-300 hover:bg-gold-300/10'].join(' ')}>
-                          {on ? '✓ 장착 중 — 해제' : '장착하기'}
+                          {equipBusy === (on ? null : mk.key) || (equipBusy === '' && on) ? '적용 중…' : on ? '✓ 장착 중 — 해제' : '장착하기'}
                         </button>
                       ) : (
                         <p className="mt-1.5 rounded-input bg-surface-float px-2 py-1.5 text-2xs font-bold text-ink-muted">🔒 {mk.need.toLocaleString()}점</p>
