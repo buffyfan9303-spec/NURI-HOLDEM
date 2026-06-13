@@ -15,10 +15,12 @@ import AvatarCropper from './AvatarCropper';
 import ActivityBadges from '../atoms/ActivityBadges';
 import IdentityVerificationButton from './IdentityVerificationButton';
 import { getMyVisitStats } from '../../api/reservations';
+import type { LegalDoc } from './LegalDocsModal';
 
 interface ProfileModalProps {
   open: boolean;
   onClose: () => void;
+  onOpenLegal?: (d: LegalDoc) => void;
 }
 
 type Tab = 'profile' | 'security';
@@ -46,7 +48,7 @@ function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
-export default function ProfileModal({ open, onClose }: ProfileModalProps) {
+export default function ProfileModal({ open, onClose, onOpenLegal }: ProfileModalProps) {
   const { user, updateProfile, refreshProfile } = useAuth();
   const toast = useToast();
   const [visitStats, setVisitStats] = useState({ visits: 0, upcoming: 0, total: 0 });
@@ -440,6 +442,17 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
               {saving ? '저장 중…' : '저장하기'}
             </button>
           </div>
+
+          {/* 약관 및 정책 */}
+          {onOpenLegal && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border-subtle pt-3 text-2xs text-ink-muted">
+              <button type="button" onClick={() => onOpenLegal('terms')} className="transition-colors hover:text-gold-300">이용약관</button>
+              <span className="text-border-strong">·</span>
+              <button type="button" onClick={() => onOpenLegal('privacy')} className="transition-colors hover:text-gold-300">개인정보처리방침</button>
+              <span className="text-border-strong">·</span>
+              <button type="button" onClick={() => onOpenLegal('location')} className="transition-colors hover:text-gold-300">위치기반서비스 이용약관</button>
+            </div>
+          )}
         </div>
       )}
 

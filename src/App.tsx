@@ -46,6 +46,7 @@ import {
 } from './api/community';
 import { getListings, getNotices, createNotice, updateNotice, deleteNotice, createListing, deleteListing } from './api/marketplace';
 import type { NoticeFormData } from './components/features/NoticeFormModal';
+import type { LegalDoc } from './components/features/LegalDocsModal';
 import { getMyNotifications, markNotificationsRead } from './api/notifications';
 import { supabase } from './lib/supabase';
 import type { User } from './api/auth';
@@ -67,6 +68,7 @@ const PosterFormModal      = lazyWithReload(() => import('./components/features/
 const ProfileModal         = lazyWithReload(() => import('./components/features/ProfileModal'));
 const GlobalSearchModal    = lazyWithReload(() => import('./components/features/GlobalSearchModal'));
 const NoticeFormModal      = lazyWithReload(() => import('./components/features/NoticeFormModal'));
+const LegalDocsModal       = lazyWithReload(() => import('./components/features/LegalDocsModal'));
 const PostFormModal        = lazyWithReload(() => import('./components/features/PostFormModal'));
 const MarketplaceFormModal = lazyWithReload(() => import('./components/features/MarketplaceFormModal'));
 const AdminTab       = lazyWithReload(() => import('./components/features/AdminTab'));
@@ -760,6 +762,7 @@ export default function App() {
     setPendingPostId(null);
   }, [pendingPostId, posts]);
   const [profileOpen, setProfileOpen]   = useState(false);
+  const [legalDoc, setLegalDoc] = useState<LegalDoc | null>(null); // 약관·정책 모달
   const [voucherWalletOpen, setVoucherWalletOpen] = useState(false);
   // 비밀번호 변경 OTP 진행 중 페이지가 리로드되면(모바일에서 메일 앱을 다녀온 경우)
   // 프로필 모달을 다시 열어 코드 입력 화면으로 복귀시킨다.
@@ -1785,7 +1788,12 @@ export default function App() {
       <ProfileModal
         open
         onClose={() => setProfileOpen(false)}
+        onOpenLegal={(d) => setLegalDoc(d)}
       />
+      )}
+
+      {legalDoc !== null && (
+      <LegalDocsModal open initial={legalDoc} onClose={() => setLegalDoc(null)} />
       )}
 
       {globalSearchOpen && (
