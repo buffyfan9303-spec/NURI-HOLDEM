@@ -133,7 +133,7 @@ function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, r
 
   return (
     <li className="rounded-card bg-surface-low border border-border-default overflow-hidden">
-      <div className="flex items-center gap-3 p-3">
+      <div className="flex items-start sm:items-center gap-3 p-3">
         <button type="button" onClick={onEdit} aria-label="포스터 수정" className="w-12 h-16 shrink-0 rounded-input overflow-hidden flex items-center justify-center"
           style={schedule.posterUrl ? undefined : { background: `linear-gradient(135deg, ${schedule.posterColor ?? '#1a1d24'}ee, #0a0c0f)` }}>
           {schedule.posterUrl ? <img src={schedule.posterUrl} alt="" className="w-full h-full object-cover" loading="lazy" /> : <span className="text-2xl opacity-30">♠</span>}
@@ -164,10 +164,9 @@ function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, r
             </span>
           )}
         </button>
-        <div className="flex items-center gap-1 shrink-0">
-          {/* 예약관리(왼쪽) */}
+        {/* PC: 우측 인라인 액션(기존). 모바일은 아래 하단 바로 분리 — 줄바꿈/세로 쌓임 방지 */}
+        <div className="hidden sm:flex items-center gap-1 shrink-0">
           <button type="button" onClick={toggle} className="btn-ghost text-xs px-2 text-gold-300">예약관리{reservations ? `(${reservations.length})` : ''} {open ? '▲' : '▼'}</button>
-          {/* 장부 — 연결 장부 있으면 목록 펼침(여러 개 지원), 없으면 포스터 정보로 새 등록 */}
           {onLedgerAt && (
             <button type="button" onClick={toggleLedgers}
               title={ledgerDate ? '연결된 장부 목록 보기' : '이 게임으로 장부 등록'}
@@ -175,7 +174,6 @@ function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, r
               장부{ledgerDate ? (ledgersOpen ? ' ▲' : ' ▼') : ' +'}
             </button>
           )}
-          {/* 마감했는데 순위가 비어 있으면 — 입력 유도(누르면 그 날짜 순위 입력으로) */}
           {ops?.closed && !ops.hasRankings && onRanking && (
             <button type="button" onClick={() => onRanking(ops.date)}
               title="장부는 마감됐는데 순위가 아직 없어요 — 입력하면 랭킹·아카이브에 바로 반영됩니다"
@@ -192,6 +190,36 @@ function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, r
             <>
               <button type="button" onClick={onEdit} className="btn-ghost text-xs px-2">수정</button>
               <button type="button" onClick={() => setConfirming(true)} className="btn-ghost text-xs px-2 hover:text-danger-light">삭제</button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* 모바일 전용 하단 액션 바 — 가로 균등(아래로 쌓이지 않게). 순위 미입력은 풀폭 경고로 위에 */}
+      <div className="sm:hidden border-t border-border-subtle">
+        {ops?.closed && !ops.hasRankings && onRanking && (
+          <button type="button" onClick={() => onRanking(ops.date)}
+            className="flex w-full items-center justify-center gap-1 border-b border-border-subtle bg-amber-500/10 py-2 text-2xs font-bold text-amber-400 active:opacity-80">
+            ⚠ 순위 미입력 — 지금 입력하기
+          </button>
+        )}
+        <div className="flex items-stretch divide-x divide-border-subtle">
+          <button type="button" onClick={toggle} className="flex-1 py-2.5 text-xs font-semibold text-gold-300 active:bg-surface-high/60">예약 {reservations ? reservations.length : (resCount ?? 0) || ''}{open ? ' ▲' : ' ▼'}</button>
+          {onLedgerAt && (
+            <button type="button" onClick={toggleLedgers}
+              className={['flex-1 py-2.5 text-xs font-semibold active:bg-surface-high/60', ledgerDate ? 'text-emerald-400' : 'text-ink-secondary'].join(' ')}>
+              장부{ledgerDate ? (ledgersOpen ? ' ▲' : ' ▼') : ' +'}
+            </button>
+          )}
+          {confirming ? (
+            <>
+              <button type="button" onClick={() => setConfirming(false)} className="flex-1 py-2.5 text-xs font-semibold text-ink-secondary active:bg-surface-high/60">취소</button>
+              <button type="button" onClick={() => { onDelete(); setConfirming(false); }} className="flex-1 py-2.5 text-xs font-bold text-danger-light active:bg-danger/10">삭제 확인</button>
+            </>
+          ) : (
+            <>
+              <button type="button" onClick={onEdit} className="flex-1 py-2.5 text-xs font-semibold text-ink-secondary active:bg-surface-high/60">수정</button>
+              <button type="button" onClick={() => setConfirming(true)} className="flex-1 py-2.5 text-xs font-semibold text-ink-muted active:bg-surface-high/60 hover:text-danger-light">삭제</button>
             </>
           )}
         </div>

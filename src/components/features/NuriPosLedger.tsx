@@ -919,7 +919,7 @@ function ClockRemoteBar({ clock, onPatch, onOpenClock }: {
   const alive = ls?.alive != null ? ls.alive : Math.max(0, entries - clock.eliminations);
   const out = (d: number) => onPatch({ eliminations: Math.max(0, clock.eliminations + d) });
   const adjEarly = (d: number) => onPatch({ adjEarlies: Math.max(-9999, (clock.adjEarlies ?? 0) + d) });
-  const mini = 'h-9 px-2.5 shrink-0 rounded-input border text-xs font-bold flex items-center justify-center gap-1 transition-colors';
+  const stepBtn = 'h-8 w-8 shrink-0 rounded-input border border-border-default text-ink-secondary text-base font-bold flex items-center justify-center active:bg-surface-high disabled:opacity-35';
 
   return (
     <div className="rounded-card border border-gold-400/30 bg-gradient-to-r from-gold-300/[0.07] to-transparent px-2.5 py-2 space-y-2">
@@ -949,23 +949,29 @@ function ClockRemoteBar({ clock, onPatch, onOpenClock }: {
           className={`${ctl} border-border-default text-ink-secondary hover:text-ink-primary disabled:opacity-35`}>›</button>
       </div>
 
-      {/* 2행: 아웃 처리(최우선) + 얼리 보정 — 클락 안 열어도 장부에서 바로 */}
+      {/* 2행: 아웃 처리(최우선) — 생존 카운트 + 큰 아웃 버튼 + 되돌리기 아이콘 */}
       <div className="flex items-center gap-2 border-t border-gold-400/15 pt-2">
-        <span className="text-2xs text-ink-secondary shrink-0">생존 <b className="text-emerald-300 tabular-nums">{alive}</b>{clock.eliminations > 0 && <span className="text-ink-muted"> · 아웃 {clock.eliminations}</span>}</span>
-        <span className="flex-1" />
+        <div className="min-w-0 flex-1 leading-none">
+          <span className="text-2xs text-ink-muted">생존</span>
+          <span className="ml-1.5 text-lg font-extrabold text-emerald-300 tabular-nums">{alive}</span>
+          {clock.eliminations > 0 && <span className="ml-2 text-2xs text-ink-muted">아웃 <b className="text-ink-secondary tabular-nums">{clock.eliminations}</b></span>}
+        </div>
+        <button type="button" onClick={() => out(-1)} disabled={clock.eliminations <= 0} aria-label="아웃 1명 되돌리기"
+          className="h-10 w-10 shrink-0 rounded-input border border-border-default text-ink-secondary text-lg font-bold flex items-center justify-center active:bg-surface-high disabled:opacity-30">↺</button>
         <button type="button" onClick={() => out(1)}
-          className={`${mini} border-danger/50 bg-danger/10 text-danger-light hover:bg-danger/15`}>
-          <span className="text-sm">✕</span> 아웃 처리
+          className="h-10 shrink-0 rounded-input border border-danger/50 bg-danger/12 px-4 text-sm font-extrabold text-danger-light flex items-center gap-1.5 active:bg-danger/20">
+          <span className="text-base leading-none">✕</span> 아웃 처리
         </button>
-        <button type="button" onClick={() => out(-1)} disabled={clock.eliminations <= 0} aria-label="아웃 되돌리기"
-          className={`${mini} border-border-default text-ink-secondary hover:text-ink-primary disabled:opacity-35`}>되돌리기</button>
-        {/* 얼리 보정 — 수기 가감(±) */}
-        <span className="ml-1 inline-flex items-center gap-0.5 shrink-0">
-          <span className="text-2xs text-ink-muted">얼리</span>
-          <button type="button" onClick={() => adjEarly(-1)} className="h-9 w-7 rounded-input border border-border-default text-ink-secondary text-sm font-bold">−</button>
-          <span className="w-5 text-center text-xs font-bold text-gold-300 tabular-nums">{(ls?.earlies ?? 0) + (clock.adjEarlies ?? 0)}</span>
-          <button type="button" onClick={() => adjEarly(1)} className="h-9 w-7 rounded-input border border-border-default text-ink-secondary text-sm font-bold">+</button>
-        </span>
+      </div>
+
+      {/* 3행: 보정 스테퍼 — 얼리(수기 가감). 클락이 자동 집계한 값에 ± */}
+      <div className="flex items-center gap-2 rounded-input bg-surface-base/40 px-2.5 py-1.5">
+        <span className="text-2xs font-semibold text-ink-muted shrink-0">얼리 보정</span>
+        <span className="text-2xs text-ink-muted/70">자동 {ls?.earlies ?? 0}{(clock.adjEarlies ?? 0) !== 0 ? ` ${(clock.adjEarlies ?? 0) > 0 ? '+' : ''}${clock.adjEarlies}` : ''}</span>
+        <span className="flex-1" />
+        <button type="button" onClick={() => adjEarly(-1)} aria-label="얼리 −1" className={stepBtn}>−</button>
+        <span className="w-7 text-center text-sm font-extrabold text-gold-300 tabular-nums">{(ls?.earlies ?? 0) + (clock.adjEarlies ?? 0)}</span>
+        <button type="button" onClick={() => adjEarly(1)} aria-label="얼리 +1" className={stepBtn}>+</button>
       </div>
     </div>
   );

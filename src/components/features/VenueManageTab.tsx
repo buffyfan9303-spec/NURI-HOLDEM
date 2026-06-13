@@ -185,21 +185,36 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   <Icon name="chevron-down" size={16} className={['shrink-0 text-ink-muted transition-transform', navOpen ? 'rotate-180' : ''].join(' ')} />
                 </button>
                 {navOpen && (
-                  <div className="mt-1 grid grid-cols-2 gap-1 rounded-card border border-border-subtle bg-surface-high p-1 animate-slide-up">
-                    {sorted.map((a) => {
-                      const on = section === a.id;
-                      return (
-                        <button key={a.id} type="button" onClick={() => { gotoSection(a.id); setNavOpen(false); }}
-                          className={['relative flex items-center gap-2 rounded-input px-2.5 py-2.5 text-xs font-bold transition-colors',
-                            on ? 'bg-gold-300 text-ink-inverse' : a.locked ? 'text-ink-muted/60' : 'text-ink-secondary hover:bg-surface-float'].join(' ')}>
-                          <span className="shrink-0" aria-hidden>{SECTION_ICON[a.id]}</span>
-                          <span className="min-w-0 flex-1 text-left truncate">{a.label}</span>
-                          {a.locked && <Icon name="lock" size={11} className="shrink-0 opacity-70" />}
-                          {favs.includes(a.id) && !a.locked && <span className={['shrink-0 text-xs', on ? 'text-ink-inverse' : 'text-gold-300'].join(' ')}>★</span>}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <>
+                    <div className="mt-1 grid grid-cols-2 gap-1 rounded-card border border-border-subtle bg-surface-high p-1 animate-slide-up">
+                      {sorted.map((a) => {
+                        const on = section === a.id;
+                        const fav = favs.includes(a.id);
+                        return (
+                          // 메뉴 이동(좌)과 즐겨찾기 토글(우 ★)을 분리된 탭 타겟으로 — 별이 항상 보여 토글 가능함이 명확
+                          <div key={a.id} className={['flex items-center rounded-input transition-colors',
+                            on ? 'bg-gold-300' : a.locked ? '' : 'hover:bg-surface-float'].join(' ')}>
+                            <button type="button" onClick={() => { gotoSection(a.id); setNavOpen(false); }}
+                              className={['flex min-w-0 flex-1 items-center gap-2 py-2.5 pl-2.5 text-xs font-bold',
+                                on ? 'text-ink-inverse' : a.locked ? 'text-ink-muted/60' : 'text-ink-secondary'].join(' ')}>
+                              <span className="shrink-0" aria-hidden>{SECTION_ICON[a.id]}</span>
+                              <span className="min-w-0 flex-1 text-left truncate">{a.label}</span>
+                              {a.locked && <Icon name="lock" size={11} className="shrink-0 opacity-70" />}
+                            </button>
+                            {!a.locked && (
+                              <button type="button" onClick={(e) => { e.stopPropagation(); toggleFav(a.id); }}
+                                aria-label={fav ? '즐겨찾기 해제' : '즐겨찾기 추가'} aria-pressed={fav}
+                                className={['shrink-0 px-2.5 py-2.5 text-base leading-none transition-colors active:scale-90',
+                                  fav ? (on ? 'text-ink-inverse' : 'text-gold-300') : (on ? 'text-ink-inverse/45' : 'text-ink-muted/40')].join(' ')}>
+                                {fav ? '★' : '☆'}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <p className="mt-1 px-1 text-[10px] text-ink-muted">★ 별을 누르면 즐겨찾기로 상단에 고정돼요</p>
+                  </>
                 )}
               </div>
               {/* PC: 세로 사이드바(기존) */}
