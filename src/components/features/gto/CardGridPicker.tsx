@@ -9,7 +9,7 @@ export const SUIT_COLOR: Record<Suit, string> = {
   d: 'text-sky-400',
   c: 'text-emerald-400',
 };
-export const SUIT_LABEL: Record<Suit, string> = { s: 'S', h: 'H', d: 'D', c: 'C' };
+export const SUIT_LABEL: Record<Suit, string> = { s: '♠', h: '♥', d: '♦', c: '♣' };
 
 interface Props {
   usedIds: ReadonlySet<CardId>;

@@ -15,7 +15,7 @@ export function MiniCard({ id }: { id: string }) {
       ].join(' ')}
     >
       <span className="text-sm tabular-nums">{rank}</span>
-      <span className="text-2xs opacity-80">{SUIT_LABEL[suit] ?? ''}</span>
+      <span className="text-sm leading-none">{SUIT_LABEL[suit] ?? ''}</span>
     </span>
   );
 }
