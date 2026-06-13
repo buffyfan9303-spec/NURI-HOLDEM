@@ -1,5 +1,5 @@
 // src/components/features/VenueManagement.tsx
-// 관리자 '게시물 관리' > 매장 관리: 노출 순서(드래그) + 활성/비활성/정지/숨김 + AD + 인증 + 삭제.
+// 관리자 '게시물 관리' > 매장 관리: 노출 순서(드래그) + 활성/비활성/정지/숨김 + 프리미엄(AD) + 인증(비인증/인증) + 삭제.
 import { useEffect, useState, useCallback } from 'react';
 import {
   DndContext, closestCenter, PointerSensor, TouchSensor, KeyboardSensor, useSensor, useSensors,
@@ -73,7 +73,7 @@ export default function VenueManagement() {
     try {
       await setVenueAd(v.id, next);
       setVenues((prev) => prev.map((x) => (x.id === v.id ? { ...x, isPaidAd: next } : x)));
-      toast.show(`${v.name} AD ${next ? 'ON' : 'OFF'}`, 'info');
+      toast.show(`${v.name} 프리미엄 ${next ? 'ON' : 'OFF'}`, 'info');
     } catch { toast.show('변경에 실패했습니다', 'error'); }
   };
 
@@ -218,7 +218,7 @@ function RowContent({ venue: v, order, handlers, dragHandle }: {
         <span className="shrink-0 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-badge bg-surface-high border border-border-default text-2xs font-bold text-ink-secondary tabular-nums">{order}</span>
         <span className="text-sm font-semibold text-ink-primary truncate">{v.name}</span>
         <span className={['text-2xs px-1.5 py-0.5 rounded-badge border font-semibold', st.cls].join(' ')}>{st.label}</span>
-        {v.isPaidAd && <span className="text-2xs px-1.5 py-0.5 rounded-badge bg-gold-300 text-ink-inverse font-bold">AD</span>}
+        {v.isPaidAd && <span className="text-2xs px-1.5 py-0.5 rounded-badge bg-gold-300 text-ink-inverse font-bold">⭐ 프리미엄</span>}
         {v.verificationStatus === 'verified' && <span className="text-2xs px-1.5 py-0.5 rounded-badge bg-gold-300/15 text-gold-300 border border-gold-400/40 font-bold">인증</span>}
         {v.verificationStatus === 'pending' && <span className="text-2xs px-1.5 py-0.5 rounded-badge bg-amber-500/15 text-amber-400 border border-amber-500/30 font-semibold">인증 심사중</span>}
         {!v.approved && <span className="text-2xs px-1.5 py-0.5 rounded-badge bg-amber-500/15 text-amber-400 border border-amber-500/30 font-semibold">미승인</span>}
@@ -229,7 +229,7 @@ function RowContent({ venue: v, order, handlers, dragHandle }: {
         {v.status !== 'hidden'    && <Btn onClick={() => handlers.onStatus(v, 'hidden', '숨김')}      variant="warn">숨김</Btn>}
         {v.status !== 'suspended' && <Btn onClick={() => handlers.onStatus(v, 'suspended', '정지')}   variant="warn">정지</Btn>}
         {v.status !== 'inactive'  && <Btn onClick={() => handlers.onStatus(v, 'inactive', '비활성')}  variant="muted">비활성</Btn>}
-        <Btn onClick={() => handlers.onToggleAd(v)} variant={v.isPaidAd ? 'muted' : 'gold'}>{v.isPaidAd ? 'AD 끄기' : 'AD 켜기'}</Btn>
+        <Btn onClick={() => handlers.onToggleAd(v)} variant={v.isPaidAd ? 'muted' : 'gold'}>{v.isPaidAd ? '프리미엄 해제' : '프리미엄 지정'}</Btn>
         {v.verificationStatus !== 'verified'
           ? <Btn onClick={() => handlers.onVerify(v, 'verified')} variant="gold">인증 승인</Btn>
           : <Btn onClick={() => handlers.onVerify(v, 'unverified')} variant="muted">인증 해제</Btn>}
