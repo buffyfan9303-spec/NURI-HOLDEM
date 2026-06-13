@@ -19,7 +19,7 @@ import { SkeletonList } from '../atoms/Skeleton';
 import { relativeTime } from './MarketplaceTab';
 import { promptLogin } from '../../lib/requireLogin';
 import {
-  getVenueRankings, getVenueRankingTotals, subscribeRankings, maskRealName,
+  getVenueRankings, getVenueRankingTotals, subscribeRankings, rankDisplay,
   getVenuePageConfig, getScoreEntries, getVenuePlayerCounts,
   boardLabel, boardDesc, boardUnit, isCustomBoard, customKeyOf, boardPeriodStart,
   type RankingEntry, type RankingTotal, type VenuePageConfig, type RankBoardId, type ScoreEntry, type PlayerCounts,
@@ -803,7 +803,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
           {[podium[1], podium[0], podium[2]].map((e, slot) => {
             if (!e) return <div key={slot} className="flex-1" />;
             const rank = slot === 1 ? 1 : slot === 0 ? 2 : 3;
-            const masked = maskRealName(e.realName);
+            const { main: rMain, sub: rSub } = rankDisplay(e);
             const big = rank === 1;
             const ring = rank === 1 ? 'border-gold-300/80 bg-gradient-to-b from-gold-300/[0.14] to-transparent'
               : rank === 2 ? 'border-slate-300/50 bg-gradient-to-b from-slate-300/[0.08] to-transparent'
@@ -814,8 +814,8 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
                 {big && <div aria-hidden className="text-base leading-none mb-1">👑</div>}
                 <span className={['mx-auto flex items-center justify-center rounded-full font-extrabold tabular-nums', medal, big ? 'w-8 h-8 text-sm' : 'w-6 h-6 text-2xs'].join(' ')}>{rank}</span>
                 <p className={['mt-1 font-bold uppercase tracking-wide', rank === 1 ? 'text-gold-300' : 'text-ink-secondary', 'text-[10px]'].join(' ')}>{titleOf(rank)}</p>
-                <p className={['font-extrabold text-ink-primary truncate', big ? 'text-base' : 'text-sm'].join(' ')}>{e.nickname}</p>
-                {masked && <p className="text-[10px] text-ink-muted">({masked})</p>}
+                <p className={['font-extrabold text-ink-primary truncate', big ? 'text-base' : 'text-sm'].join(' ')}>{rMain}</p>
+                {rSub && <p className="text-[10px] text-ink-muted">({rSub})</p>}
                 <p className={['font-bold tabular-nums', big ? 'text-sm text-gold-300' : 'text-xs text-ink-secondary'].join(' ')}>{fmtVal(e.value)}</p>
               </div>
             );
@@ -826,12 +826,12 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
       {/* 4등~ 리스트 — 바이낸스 표 문법(구분선·행 40px대·숫자 우측 tabular) */}
       <ol className="overflow-hidden rounded-input border border-border-subtle bg-surface-high divide-y divide-border-subtle">
         {rest.map((e, i) => {
-          const masked = maskRealName(e.realName);
+          const { main: rMain, sub: rSub } = rankDisplay(e);
           return (
             <li key={e.nickname} className="flex items-center gap-2.5 px-2.5 py-2 transition-colors hover:bg-surface-float/50">
               <span className="w-6 shrink-0 text-center text-xs font-bold tabular-nums text-ink-muted">{i + 4}</span>
-              <span className="min-w-0 truncate text-sm font-semibold text-ink-primary">{e.nickname}</span>
-              {masked && <span className="shrink-0 text-2xs text-ink-muted">({masked})</span>}
+              <span className="min-w-0 truncate text-sm font-semibold text-ink-primary">{rMain}</span>
+              {rSub && <span className="shrink-0 text-2xs text-ink-muted">({rSub})</span>}
               <span className="ml-auto shrink-0 text-right">
                 <span className="text-sm font-bold tabular-nums text-gold-300">{fmtVal(e.value)}</span>
                 {e.appearances > 0 && <span className="block text-xs leading-tight text-ink-muted">{e.appearances}회{e.bestPosition > 0 && e.bestPosition < 9999 ? ` · 최고 ${e.bestPosition}등` : ''}</span>}
@@ -853,10 +853,10 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
                 {multi && <p className="text-2xs font-bold text-gold-300 mb-1">{ev || '메인'}</p>}
                 <div className="flex flex-wrap gap-1.5">
                   {group.map((e) => {
-                    const masked = maskRealName(e.realName);
+                    const { main: rMain, sub: rSub } = rankDisplay(e);
                     return (
                       <span key={`${ev}-${e.position}`} className="text-2xs px-2 py-0.5 rounded-badge bg-surface-float text-ink-primary">
-                        {e.position}. {e.nickname}{masked ? `(${masked})` : ''}{e.prize ? ` · ${e.prize}점` : ''}
+                        {e.position}. {rMain}{rSub ? `(${rSub})` : ''}{e.prize ? ` · ${e.prize}점` : ''}
                       </span>
                     );
                   })}

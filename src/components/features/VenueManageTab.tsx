@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
 import type { User, VenueInvite } from '../../api/auth';
 import { getMyVenueStaff, getMyVenueInvites, inviteStaffByEmail, cancelStaffInvite, removeStaff, setStaffTitle, checkNicknameAvailable, searchMembersForRanking } from '../../api/auth';
-import { getVenueRankings, saveVenueRankings, maskRealName, getVenuePageConfig, placementPointsOf, type VenuePageConfig, type RankingEntry } from '../../api/rankings';
+import { getVenueRankings, saveVenueRankings, getVenuePageConfig, placementPointsOf, type VenuePageConfig, type RankingEntry } from '../../api/rankings';
 import { canAccessLedger, canManagePos, getLedgerAccessUserIds, grantLedgerAccess, revokeLedgerAccess } from '../../api/ledger';
 import { getAllVenues, createMyVenue, type Venue } from '../../api/community';
 import { uploadPoster } from '../../lib/storage';
@@ -600,7 +600,7 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
       })()}
 
       <p className="text-2xs text-ink-muted">
-        <span className="text-gold-300 font-semibold">닉네임은 필수</span>, 실명·프라이즈는 선택입니다. 등수마다 <span className="text-gold-300 font-semibold">기준 점수(+N점)</span>가 자동 부여되고, 프라이즈는 <span className="text-gold-300 font-semibold">매장 커뮤니티 순위 점수</span>로만 쓰입니다(금전적 가치 없음). 실명을 넣으면 손님에게는 <span className="text-gold-300 font-semibold">이름 일부를 가려(예: 나*리)</span> 표시됩니다.
+        <span className="text-gold-300 font-semibold">닉네임은 필수</span>, 실명·프라이즈는 선택입니다. 등수마다 <span className="text-gold-300 font-semibold">기준 점수(+N점)</span>가 자동 부여되고, 프라이즈는 <span className="text-gold-300 font-semibold">매장 커뮤니티 순위 점수</span>로만 쓰입니다(금전적 가치 없음). 손님 화면엔 <span className="text-gold-300 font-semibold">실명(닉네임) 형식</span>으로 닉네임 일부를 가려 표시됩니다(예: 누리홀덤(나*리)).
       </p>
 
       {loading ? (
@@ -622,7 +622,7 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
                   onFocus={() => { if (row.nickname.trim()) setSugRow(i); }}
                   onBlur={() => { setTimeout(() => setSugRow((r) => (r === i ? null : r)), 180); checkMember(i, row.nickname); }}
                   placeholder="닉네임 *"
-                  className="input w-full min-w-0 text-sm py-2"
+                  className="input w-full min-w-0 text-sm py-2 pr-7"
                 />
                 {/* 자동완성 — 장부 명단 → 비회원 등록 → 회원(닉네임 · 실명) 순. 번호 없이 탭해서 선택 */}
                 {sugRow === i && row.nickname.trim() !== '' && (
@@ -654,11 +654,11 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
                     ))}
                   </ul>
                 )}
-                {/* 회원 매칭 뱃지 — 미가입이면 기록만 되고 점수·이용권은 안 간다 */}
+                {/* 회원 여부 — 체크=회원, 회색 원=비회원(미가입이면 점수·이용권 안 감). 칸 안 작은 아이콘 */}
                 {row.member != null && row.nickname.trim() !== '' && (
-                  <span className={['pointer-events-none absolute -top-1.5 right-1 rounded-badge px-1 py-0.5 text-[9px] font-bold leading-none',
-                    row.member ? 'bg-emerald-500/20 text-emerald-300' : 'bg-surface-float text-ink-muted'].join(' ')}>
-                    {row.member ? '✓ 회원' : '비회원'}
+                  <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-sm leading-none"
+                    title={row.member ? '회원' : '비회원'}>
+                    {row.member ? '✅' : '⚪'}
                   </span>
                 )}
               </div>
@@ -697,19 +697,6 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
         + 줄 추가
       </button>
 
-      {/* 미리보기 */}
-      {rows.some((r) => r.nickname.trim()) && (
-        <div className="rounded-input bg-surface-high border border-border-subtle p-3">
-          <p className="text-2xs font-semibold text-ink-muted mb-1.5">미리보기 (손님 화면)</p>
-          <div className="flex flex-wrap gap-1.5">
-            {rows.filter((r) => r.nickname.trim()).map((r, i) => (
-              <span key={i} className="text-2xs px-2 py-0.5 rounded-badge bg-surface-float text-ink-primary">
-                {i + 1}. {r.nickname.trim()}{r.realName.trim() ? `(${maskRealName(r.realName)})` : ''}{r.prize.trim() ? ` · ${r.prize.trim()}만` : ''}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
 
       <button type="button" onClick={save} disabled={saving} className="btn-primary w-full disabled:opacity-60">
         {saving ? '저장 중…' : `${date === today ? '오늘' : date} · ${eventName || '메인'} 순위 저장`}

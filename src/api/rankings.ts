@@ -28,10 +28,17 @@ export function maskRealName(name: string): string {
   return `${n[0]}${'*'.repeat(n.length - 2)}${n[n.length - 1]}`;
 }
 
-// 공개 표시 문자열: 닉네임(마스킹실명) — 예: 도토리(나*리)
+// 공개 표시 문자열: 실명(마스킹닉네임) — 실명 앞 전체, 닉네임 뒤 마스킹. 예: 누리홀덤(나*리). 실명 없으면 닉네임만.
 export function rankingLabel(e: RankingEntry): string {
-  const masked = maskRealName(e.realName);
-  return masked ? `${e.nickname}(${masked})` : e.nickname;
+  const rn = (e.realName ?? '').trim();
+  if (!rn) return e.nickname;
+  return `${rn}(${maskRealName(e.nickname)})`;
+}
+
+// 표시 분리: 메인(실명 또는 닉네임) + 서브(마스킹닉네임 — 실명 있을 때만). 실명 앞·닉네임 뒤 구조.
+export function rankDisplay(e: { nickname: string; realName?: string }): { main: string; sub: string } {
+  const rn = (e.realName ?? '').trim();
+  return rn ? { main: rn, sub: maskRealName(e.nickname) } : { main: e.nickname, sub: '' };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
