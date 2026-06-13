@@ -573,6 +573,8 @@ export async function upsertBuyinSplit(input: {
   venueId: string; sessionDate: string; playerName: string; entryNo: number;
   cashAmount: number; cardAmount: number; transferAmount: number;
   ticketCount: number; unpaidAmount: number; discountLevel: number;
+  /** undefined=기존 값 보존(수정), 값/null=바인 시점 확정 기록(신규) */
+  earlyOverride?: EarlyType | null;
 }): Promise<void> {
   if (IS_MOCK) return;
   const { data: { user } } = await supabase.auth.getUser();
@@ -589,6 +591,7 @@ export async function upsertBuyinSplit(input: {
     is_split: true,
     cash_amount: input.cashAmount, card_amount: input.cardAmount, transfer_amount: input.transferAmount,
     ticket_count: input.ticketCount, unpaid_amount: input.unpaidAmount, discount_level: input.discountLevel, discount_index: 0,
+    ...(input.earlyOverride !== undefined ? { early_override: input.earlyOverride } : {}),
     buyin_at: new Date().toISOString(), created_by: user?.id ?? null,
   }, { onConflict: 'venue_id,session_date,player_name,entry_no' });
   if (error) throw error;

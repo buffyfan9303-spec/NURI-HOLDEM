@@ -4,7 +4,7 @@ import HoldToConfirmButton from '../atoms/HoldToConfirmButton';
 // NURI POS 장부 — 표(table) 형태. 장부 입장 시 세션 설정(담당직원·게임·단가·이벤트·딜러) → 보드.
 // 셀 2-Tap 입력(결제수단 + 완납/미수/가게지원). 티켓·지원은 미수 불가. 미수=붉은색.
 // 8바인 초과 시 가로 스크롤. 비고 컬럼 수기 입력. 장부 마감=읽기전용 스냅샷+메모. 엑셀 내보내기.
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import { useToast } from '../atoms/Toast';
 import DateTimePicker from '../atoms/DateTimePicker';
 import { useAuth } from '../../contexts/AuthContext';
@@ -23,7 +23,7 @@ import { getStaffSchedule, addStaffShift } from '../../api/staffSchedule';
 import { getVenueRankings } from '../../api/rankings';
 import { exportLedgerXls } from '../../lib/ledgerExport';
 import { getSchedules, type Schedule } from '../../api/schedules';
-import { getClockState, saveClockState, defaultClockConfig, type ClockState } from '../../api/clock';
+import { getClockState, saveClockState, subscribeClock, defaultClockConfig, type ClockState } from '../../api/clock';
 import { getMyVenueStaff, type User } from '../../api/auth';
 import { accrueVoucher } from '../../api/vouchers';
 import { useBackClose } from '../../lib/backstack';
@@ -195,6 +195,41 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   }, [venueId, date]);
 
   useEffect(() => subscribeLedger(venueId, reload), [venueId, reload]);
+
+  // ── 연동 클락 — 리모컨 제어 + 바인 시점 얼리 확정(스타트 시각 미입력 버그 근본 해결) ──
+  const [clock, setClock] = useState<ClockState | null>(null);
+  const reloadClock = useCallback(() => { getClockState(venueId).then(setClock).catch(() => {}); }, [venueId]);
+  useEffect(() => { reloadClock(); }, [reloadClock]);
+  useEffect(() => subscribeClock(venueId, reloadClock), [venueId, reloadClock]);
+  const clockLinked = !!clock && clock.sessionDate === date;
+  // 바인 추가 시점의 얼리 유형 — 클락의 "현재 레벨"을 earlyDouble/SingleLevel과 직접 비교해 확정 기록.
+  // 클락 화면이 닫혀 전진 못 한 경우(endsAt 경과)는 경과분만큼 레벨을 전진시켜 판정.
+  const clockEarlyNow = useCallback((): EarlyType | null => {
+    if (!clock || clock.sessionDate !== date) return null;
+    const cfg = clock.config;
+    const dLv = cfg.earlyDoubleLevel ?? 0, sLv = cfg.earlySingleLevel ?? 0;
+    if (dLv <= 0 && sLv <= 0) return null;
+    const lv = cfg.levels;
+    let idx = Math.max(0, Math.min(clock.currentIndex, lv.length - 1));
+    if (clock.running && clock.endsAt) {
+      let over = Date.now() - new Date(clock.endsAt).getTime();
+      while (over > 0 && idx < lv.length - 1) { idx++; over -= (lv[idx].minutes || 0) * 60_000; }
+    }
+    let no = 0;
+    for (let i = 0; i <= idx && i < lv.length; i++) if (lv[i].kind === 'level') no++;
+    if (dLv > 0 && no <= dLv) return 'double';
+    if (sLv > 0 && no <= sLv) return 'single';
+    return 'none';
+  }, [clock, date]);
+  // 리모컨 → 클락 상태 직접 저장(클락 화면은 realtime 구독으로 즉시 동기)
+  const patchClock = useCallback((patch: Partial<ClockState>) => {
+    setClock((cur) => {
+      if (!cur) return cur;
+      const next = { ...cur, ...patch };
+      saveClockState(next).catch(() => toast.show('클락 제어 실패 — 네트워크를 확인하세요', 'error'));
+      return next;
+    });
+  }, [toast]);
 
   const closed = session.closed;
   const regClosed = session.regClosed;
@@ -485,6 +520,11 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
         {!closed && <button type="button" onClick={() => setEditOpen(true)} className="btn-ghost text-sm px-3.5 py-2 font-semibold">세션 정보 수정</button>}
       </div>
 
+      {/* 클락 리모컨 — 이 장부에 연결된 클락을 장부에서 바로 제어(레벨± · 일시정지/재개) */}
+      {clockLinked && clock && !closed && (
+        <ClockRemoteBar clock={clock} onPatch={patchClock} onOpenClock={onOpenClock ? () => onOpenClock(date) : undefined} />
+      )}
+
       {closed && (
         <div className="rounded-card border border-gold-400/40 bg-gold-300/10 p-2.5 flex items-center gap-2">
           <span className="text-xs font-bold text-gold-300">마감됨 (읽기전용){session.closedAt ? ` · ${hhmm(session.closedAt)}` : ''}</span>
@@ -739,7 +779,9 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
           onPick={async (method, isUnpaid, discountIndex) => {
             const pn = selected.playerName; const isNew = !selected.buyin;
             try {
-              await upsertBuyin({ venueId, sessionDate: date, playerName: pn, entryNo: selected.entryNo, paymentMethod: method, isUnpaid, discountIndex });
+              // 신규 바인은 클락 현재 레벨로 얼리 확정 기록, 기존 셀 수정은 기존 판정 보존
+              const eo = isNew ? clockEarlyNow() : (selected.buyin?.earlyOverride ?? null);
+              await upsertBuyin({ venueId, sessionDate: date, playerName: pn, entryNo: selected.entryNo, paymentMethod: method, isUnpaid, discountIndex, earlyOverride: eo });
               setSelected(null); reload();
               if (isNew && (session.voucherAccrualPerBin ?? 0) > 0) {
                 accrueVoucher(venueId, pn, session.voucherAccrualPerBin as number).then((n) => { if (n > 0) toast.show(`${pn}님 이용권 ${n}개 적립`, 'success'); }).catch(() => {});
@@ -749,7 +791,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
           onPickSplit={async (d) => {
             const pn = selected.playerName; const isNew = !selected.buyin;
             try {
-              await upsertBuyinSplit({ venueId, sessionDate: date, playerName: pn, entryNo: selected.entryNo, ...d });
+              await upsertBuyinSplit({ venueId, sessionDate: date, playerName: pn, entryNo: selected.entryNo, ...d, earlyOverride: isNew ? clockEarlyNow() : undefined });
               setSelected(null); reload();
               if (isNew && (session.voucherAccrualPerBin ?? 0) > 0) {
                 accrueVoucher(venueId, pn, session.voucherAccrualPerBin as number).then((n) => { if (n > 0) toast.show(`${pn}님 이용권 ${n}개 적립`, 'success'); }).catch(() => {});
@@ -797,6 +839,74 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
           onDelete={(pw) => removePlayer(editPlayer, pw)}
         />
       )}
+    </div>
+  );
+}
+
+// ── 클락 리모컨 바 — 장부 화면에서 레벨±·일시정지/재개. 클락 화면이 닫혀 있어도 제어 가능 ──
+// (저장 → clock_states upsert → 열려 있는 클락/라이브 보드는 realtime 구독으로 즉시 반영)
+function ClockRemoteBar({ clock, onPatch, onOpenClock }: {
+  clock: ClockState; onPatch: (p: Partial<ClockState>) => void; onOpenClock?: () => void;
+}) {
+  const [, tick] = useReducer((x: number) => x + 1, 0);
+  useEffect(() => {
+    if (!clock.running) return;
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, [clock.running]);
+
+  const lv = clock.config.levels;
+  // 실효 레벨 — running인데 endsAt이 지났으면(클락 화면 미오픈으로 전진 못 함) 경과분만큼 전진해 표시/제어
+  let idx = Math.max(0, Math.min(clock.currentIndex, Math.max(0, lv.length - 1)));
+  let rem = clock.running && clock.endsAt ? new Date(clock.endsAt).getTime() - Date.now() : clock.remainingMs;
+  while (clock.running && rem < 0 && idx < lv.length - 1) { idx++; rem += (lv[idx].minutes || 0) * 60_000; }
+  rem = Math.max(0, rem);
+  const cur = lv[idx];
+  let no = 0;
+  for (let i = 0; i <= idx && i < lv.length; i++) if (lv[i].kind === 'level') no++;
+  const mm = Math.floor(rem / 60_000), ss = Math.floor((rem % 60_000) / 1000);
+  if (!cur) return null;
+
+  const go = (delta: number) => {
+    const n = Math.max(0, Math.min(lv.length - 1, idx + delta));
+    if (n === idx && delta > 0) return;
+    const ms = (lv[n].minutes || 0) * 60_000;
+    onPatch({ currentIndex: n, remainingMs: ms, endsAt: clock.running ? new Date(Date.now() + ms).toISOString() : null });
+  };
+  const toggle = () => {
+    if (clock.running) {
+      onPatch({ currentIndex: idx, running: false, remainingMs: rem, endsAt: null });
+    } else {
+      const ms = rem > 0 ? rem : (lv[idx].minutes || 0) * 60_000;
+      onPatch({ currentIndex: idx, running: true, remainingMs: ms, endsAt: new Date(Date.now() + ms).toISOString() });
+    }
+  };
+  const ctl = 'w-10 h-10 shrink-0 rounded-input border text-base font-extrabold flex items-center justify-center transition-colors';
+
+  return (
+    <div className="rounded-card border border-gold-400/30 bg-gradient-to-r from-gold-300/[0.07] to-transparent px-2.5 py-2 flex items-center gap-2">
+      <button type="button" onClick={onOpenClock} disabled={!onOpenClock} className="min-w-0 flex-1 text-left disabled:cursor-default">
+        <p className="text-2xs text-ink-muted leading-none flex items-center gap-1">
+          <span>⏱ {cur.kind === 'break' ? '브레이크' : `레벨 ${no}`}</span>
+          {clock.running
+            ? <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" aria-label="진행 중" />
+            : <span className="text-gold-300 font-bold">일시정지</span>}
+        </p>
+        <p className="text-base font-extrabold text-ink-primary tabular-nums leading-tight mt-0.5 truncate">
+          {cur.kind === 'break'
+            ? (cur.label || 'BREAK')
+            : <>{cur.sb.toLocaleString()}/{cur.bb.toLocaleString()}{cur.ante > 0 ? <span className="text-xs text-ink-secondary"> ({cur.ante.toLocaleString()})</span> : null}</>}
+          <span className={clock.running ? 'ml-2 text-emerald-300' : 'ml-2 text-gold-300'}>{mm}:{String(ss).padStart(2, '0')}</span>
+        </p>
+      </button>
+      <button type="button" onClick={() => go(-1)} disabled={idx <= 0} aria-label="이전 레벨"
+        className={`${ctl} border-border-default text-ink-secondary hover:text-ink-primary disabled:opacity-35`}>‹</button>
+      <button type="button" onClick={toggle} aria-label={clock.running ? '일시정지' : '재개'}
+        className={`${ctl} ${clock.running ? 'border-gold-400/50 bg-gold-300/15 text-gold-300' : 'border-emerald-500/50 bg-emerald-500/15 text-emerald-300'}`}>
+        {clock.running ? '⏸' : '▶'}
+      </button>
+      <button type="button" onClick={() => go(1)} disabled={idx >= lv.length - 1} aria-label="다음 레벨"
+        className={`${ctl} border-border-default text-ink-secondary hover:text-ink-primary disabled:opacity-35`}>›</button>
     </div>
   );
 }
@@ -1326,7 +1436,7 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
                 );
               })}
               <span className="text-[9px] text-ink-muted w-full">
-                현재 {(() => { const t = earlyTypeOf(cell.buyin, session); return t === 'double' ? '더블얼리' : t === 'single' ? '1얼리' : '없음'; })()} · {cell.buyin.earlyOverride ? '수기지정' : '시각 자동'}
+                현재 {(() => { const t = earlyTypeOf(cell.buyin, session); return t === 'double' ? '더블얼리' : t === 'single' ? '1얼리' : '없음'; })()} · {cell.buyin.earlyOverride ? '확정(클락/수기)' : '시각 자동'}
               </span>
             </div>
           )}
