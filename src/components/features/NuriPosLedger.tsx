@@ -913,30 +913,60 @@ function ClockRemoteBar({ clock, onPatch, onOpenClock }: {
   };
   const ctl = 'w-10 h-10 shrink-0 rounded-input border text-base font-extrabold flex items-center justify-center transition-colors';
 
+  // 아웃 처리(가장 자주 쓰는 운영) — eliminations 증감. 생존 = liveStats.alive(있으면) 또는 엔트리−아웃
+  const ls = clock.liveStats;
+  const entries = ls ? (ls.entries ?? 0) : 0;
+  const alive = ls?.alive != null ? ls.alive : Math.max(0, entries - clock.eliminations);
+  const out = (d: number) => onPatch({ eliminations: Math.max(0, clock.eliminations + d) });
+  const adjEarly = (d: number) => onPatch({ adjEarlies: Math.max(-9999, (clock.adjEarlies ?? 0) + d) });
+  const mini = 'h-9 px-2.5 shrink-0 rounded-input border text-xs font-bold flex items-center justify-center gap-1 transition-colors';
+
   return (
-    <div className="rounded-card border border-gold-400/30 bg-gradient-to-r from-gold-300/[0.07] to-transparent px-2.5 py-2 flex items-center gap-2">
-      <button type="button" onClick={onOpenClock} disabled={!onOpenClock} className="min-w-0 flex-1 text-left disabled:cursor-default">
-        <p className="text-2xs text-ink-muted leading-none flex items-center gap-1">
-          <span>⏱ {cur.kind === 'break' ? '브레이크' : `레벨 ${no}`}</span>
-          {clock.running
-            ? <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" aria-label="진행 중" />
-            : <span className="text-gold-300 font-bold">일시정지</span>}
-        </p>
-        <p className="text-base font-extrabold text-ink-primary tabular-nums leading-tight mt-0.5 truncate">
-          {cur.kind === 'break'
-            ? (cur.label || 'BREAK')
-            : <>{cur.sb.toLocaleString()}/{cur.bb.toLocaleString()}{cur.ante > 0 ? <span className="text-xs text-ink-secondary"> ({cur.ante.toLocaleString()})</span> : null}</>}
-          <span className={clock.running ? 'ml-2 text-emerald-300' : 'ml-2 text-gold-300'}>{mm}:{String(ss).padStart(2, '0')}</span>
-        </p>
-      </button>
-      <button type="button" onClick={() => go(-1)} disabled={idx <= 0} aria-label="이전 레벨"
-        className={`${ctl} border-border-default text-ink-secondary hover:text-ink-primary disabled:opacity-35`}>‹</button>
-      <button type="button" onClick={toggle} aria-label={clock.running ? '일시정지' : '재개'}
-        className={`${ctl} ${clock.running ? 'border-gold-400/50 bg-gold-300/15 text-gold-300' : 'border-emerald-500/50 bg-emerald-500/15 text-emerald-300'}`}>
-        {clock.running ? '⏸' : '▶'}
-      </button>
-      <button type="button" onClick={() => go(1)} disabled={idx >= lv.length - 1} aria-label="다음 레벨"
-        className={`${ctl} border-border-default text-ink-secondary hover:text-ink-primary disabled:opacity-35`}>›</button>
+    <div className="rounded-card border border-gold-400/30 bg-gradient-to-r from-gold-300/[0.07] to-transparent px-2.5 py-2 space-y-2">
+      {/* 1행: 레벨/시간 제어 */}
+      <div className="flex items-center gap-2">
+        <button type="button" onClick={onOpenClock} disabled={!onOpenClock} className="min-w-0 flex-1 text-left disabled:cursor-default">
+          <p className="text-2xs text-ink-muted leading-none flex items-center gap-1">
+            <span>⏱ {cur.kind === 'break' ? '브레이크' : `레벨 ${no}`}</span>
+            {clock.running
+              ? <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" aria-label="진행 중" />
+              : <span className="text-gold-300 font-bold">일시정지</span>}
+          </p>
+          <p className="text-base font-extrabold text-ink-primary tabular-nums leading-tight mt-0.5 truncate">
+            {cur.kind === 'break'
+              ? (cur.label || 'BREAK')
+              : <>{cur.sb.toLocaleString()}/{cur.bb.toLocaleString()}{cur.ante > 0 ? <span className="text-xs text-ink-secondary"> ({cur.ante.toLocaleString()})</span> : null}</>}
+            <span className={clock.running ? 'ml-2 text-emerald-300' : 'ml-2 text-gold-300'}>{mm}:{String(ss).padStart(2, '0')}</span>
+          </p>
+        </button>
+        <button type="button" onClick={() => go(-1)} disabled={idx <= 0} aria-label="이전 레벨"
+          className={`${ctl} border-border-default text-ink-secondary hover:text-ink-primary disabled:opacity-35`}>‹</button>
+        <button type="button" onClick={toggle} aria-label={clock.running ? '일시정지' : '재개'}
+          className={`${ctl} ${clock.running ? 'border-gold-400/50 bg-gold-300/15 text-gold-300' : 'border-emerald-500/50 bg-emerald-500/15 text-emerald-300'}`}>
+          {clock.running ? '⏸' : '▶'}
+        </button>
+        <button type="button" onClick={() => go(1)} disabled={idx >= lv.length - 1} aria-label="다음 레벨"
+          className={`${ctl} border-border-default text-ink-secondary hover:text-ink-primary disabled:opacity-35`}>›</button>
+      </div>
+
+      {/* 2행: 아웃 처리(최우선) + 얼리 보정 — 클락 안 열어도 장부에서 바로 */}
+      <div className="flex items-center gap-2 border-t border-gold-400/15 pt-2">
+        <span className="text-2xs text-ink-secondary shrink-0">생존 <b className="text-emerald-300 tabular-nums">{alive}</b>{clock.eliminations > 0 && <span className="text-ink-muted"> · 아웃 {clock.eliminations}</span>}</span>
+        <span className="flex-1" />
+        <button type="button" onClick={() => out(1)}
+          className={`${mini} border-danger/50 bg-danger/10 text-danger-light hover:bg-danger/15`}>
+          <span className="text-sm">✕</span> 아웃 처리
+        </button>
+        <button type="button" onClick={() => out(-1)} disabled={clock.eliminations <= 0} aria-label="아웃 되돌리기"
+          className={`${mini} border-border-default text-ink-secondary hover:text-ink-primary disabled:opacity-35`}>되돌리기</button>
+        {/* 얼리 보정 — 수기 가감(±) */}
+        <span className="ml-1 inline-flex items-center gap-0.5 shrink-0">
+          <span className="text-2xs text-ink-muted">얼리</span>
+          <button type="button" onClick={() => adjEarly(-1)} className="h-9 w-7 rounded-input border border-border-default text-ink-secondary text-sm font-bold">−</button>
+          <span className="w-5 text-center text-xs font-bold text-gold-300 tabular-nums">{(ls?.earlies ?? 0) + (clock.adjEarlies ?? 0)}</span>
+          <button type="button" onClick={() => adjEarly(1)} className="h-9 w-7 rounded-input border border-border-default text-ink-secondary text-sm font-bold">+</button>
+        </span>
+      </div>
     </div>
   );
 }
