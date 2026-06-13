@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { Comment } from '../../api/community';
 import { useAuth } from '../../contexts/AuthContext';
 import { promptLogin } from '../../lib/requireLogin';
 import Avatar from '../atoms/Avatar';
+import { getEquippedMarks } from '../../api/community';
 
 interface CommentThreadProps {
   comments: Comment[];
@@ -22,7 +23,7 @@ function relativeTime(iso: string): string {
   return `${Math.floor(diff / 86400)}일 전`;
 }
 
-function CommentItem({
+function CommentItem({ marks = {},
   comment,
   replies,
   onReply,
@@ -30,6 +31,7 @@ function CommentItem({
   canDelete,
   loggedIn,
 }: {
+  marks?: Record<string, string>;
   comment: Comment;
   replies: Comment[];
   onReply: (parentId: string, content: string) => void;
@@ -55,7 +57,7 @@ function CommentItem({
         <Avatar name={comment.userName} src={comment.userAvatar} color={comment.isOwner ? '#FFD100' : '#5A6175'} size={32} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-0.5">
-            <span className="text-xs font-semibold text-ink-primary">{comment.userName}</span>
+            <span className="text-xs font-semibold text-ink-primary">{marks[comment.userId] ?? ''}{comment.userName}</span>
             {comment.isOwner && (
               <span className="text-2xs font-bold text-gold-300 bg-gold-300/15 px-1.5 py-0.5 rounded-badge">매장 답글</span>
             )}
@@ -110,7 +112,7 @@ function CommentItem({
       {replies.length > 0 && (
         <div className="ml-10 space-y-3 border-l-2 border-border-subtle pl-3">
           {replies.map((r) => (
-            <CommentItem key={r.id} comment={r} replies={[]} onReply={onReply} onDelete={onDelete} canDelete={canDelete} loggedIn={loggedIn} />
+            <CommentItem key={r.id} marks={marks} comment={r} replies={[]} onReply={onReply} onDelete={onDelete} canDelete={canDelete} loggedIn={loggedIn} />
           ))}
         </div>
       )}
@@ -121,6 +123,13 @@ function CommentItem({
 export default function CommentThread({ comments, onSubmit, onDelete, moderator = false, emptyText = '아직 댓글이 없습니다.' }: CommentThreadProps) {
   const { user } = useAuth();
   const [content, setContent] = useState('');
+  // 작성자 장착 마크(상점) — 댓글 userId 일괄 조회
+  const [marks, setMarks] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const ids = [...new Set(comments.map((c) => c.userId).filter(Boolean))];
+    if (ids.length === 0) { setMarks({}); return; }
+    getEquippedMarks(ids).then(setMarks).catch(() => {});
+  }, [comments]);
 
   // 관리자/모더레이터(본인 매장 업주)는 모든 댓글, 일반 사용자는 본인 댓글만 삭제 (서버 RLS와 동일)
   const canDelete = (c: Comment) => moderator || user?.role === 'admin' || user?.id === c.userId;
@@ -171,6 +180,7 @@ export default function CommentThread({ comments, onSubmit, onDelete, moderator 
           {roots.map((c) => (
             <CommentItem
               key={c.id}
+              marks={marks}
               comment={c}
               replies={repliesByParent[c.id] ?? []}
               onReply={(parentId, content) => onSubmit(content, parentId)}
