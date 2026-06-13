@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { CalcCard } from './calcUi';
-import { GRID, POSITIONS, STACKS, action, openPct, type Pos, type StackBB } from '../../../lib/preflop';
+import { GRID, POSITIONS, STACKS, SCENARIOS, action, openPct, type Pos, type StackBB, type Scenario } from '../../../lib/preflop';
 
 // 스타팅핸드(프리플랍) 레인지 가이드 — 공용 lib/preflop(Chen 점수 기반 참고 레인지) 사용.
 
@@ -9,8 +9,10 @@ export default function RangeGuide() {
   const [size, setSize] = useState<'6' | '9'>('6');
   const [act, setAct] = useState<'open' | '3bet'>('open');
   const [bb, setBb] = useState<StackBB>(100);
+  const [scenario, setScenario] = useState<Scenario>('std');
   const stack = STACKS.find((x) => x.bb === bb)!;
-  const pct = openPct(pos, size, act, bb);
+  const scen = SCENARIOS.find((x) => x.id === scenario)!;
+  const pct = openPct(pos, size, act, bb, scenario);
   const actionLabel = act === '3bet' ? stack.threeBetLabel : stack.openLabel;
   const openCount = GRID.flat().filter((h) => action(h.label, pct) !== 'fold').length;
 
@@ -30,6 +32,21 @@ export default function RangeGuide() {
         })}
       </div>
       <p className="text-[10px] leading-relaxed text-ink-secondary rounded-input bg-surface-high/60 border border-border-subtle px-2 py-1.5">💡 {stack.hint}</p>
+
+      {/* 시나리오 — 멀티웨이 / vs 림프 / PKO */}
+      <div className="flex items-center gap-1">
+        {SCENARIOS.map((sc) => {
+          const on = sc.id === scenario;
+          return (
+            <button key={sc.id} type="button" onClick={() => setScenario(sc.id)}
+              className={['flex-1 h-7 rounded-input text-2xs font-bold leading-none border transition-colors focus:outline-none',
+                on ? 'bg-gold-300 border-gold-300 text-ink-inverse' : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary'].join(' ')}>
+              {sc.label}
+            </button>
+          );
+        })}
+      </div>
+      {scenario !== 'std' && <p className="text-[10px] leading-relaxed text-gold-200 rounded-input bg-gold-300/[0.06] border border-gold-400/20 px-2 py-1.5">🎯 {scen.hint}</p>}
 
       {/* 포지션 선택 */}
       <div className="flex flex-wrap gap-1">

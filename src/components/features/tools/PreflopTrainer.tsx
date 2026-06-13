@@ -3,7 +3,7 @@
 // 정답은 스타팅핸드 가이드와 동일한 참고 레인지(lib/preflop)로 채점. 혼합(borderline)은 둘 다 정답.
 import { useState } from 'react';
 import { CalcCard } from './calcUi';
-import { POSITIONS, action, openPct, randomHandLabel, labelToCards, RANK_PCT, type Pos, type TableSize, type Card } from '../../../lib/preflop';
+import { POSITIONS, action, openPct, evLossBb, randomHandLabel, labelToCards, RANK_PCT, type Pos, type TableSize, type Card } from '../../../lib/preflop';
 
 interface Quiz { pos: Pos; label: string; cards: [Card, Card] }
 function makeQuiz(): Quiz {
@@ -15,14 +15,15 @@ function makeQuiz(): Quiz {
 export default function PreflopTrainer() {
   const [size, setSize] = useState<TableSize>('6');
   const [quiz, setQuiz] = useState<Quiz>(makeQuiz);
-  const [result, setResult] = useState<null | { correct: boolean; act: 'raise' | 'mix' | 'fold'; chose: 'open' | 'fold' }>(null);
+  const [result, setResult] = useState<null | { correct: boolean; act: 'raise' | 'mix' | 'fold'; chose: 'open' | 'fold'; evLoss: number }>(null);
   const [stats, setStats] = useState({ correct: 0, total: 0, streak: 0, best: 0 });
 
   const answer = (chose: 'open' | 'fold') => {
     if (result) return;
-    const act = action(quiz.label, openPct(quiz.pos, size, 'open'));
+    const pctOpen = openPct(quiz.pos, size, 'open');
+    const act = action(quiz.label, pctOpen);
     const correct = act === 'mix' ? true : chose === 'open' ? act === 'raise' : act === 'fold';
-    setResult({ correct, act, chose });
+    setResult({ correct, act, chose, evLoss: correct ? 0 : evLossBb(quiz.label, pctOpen, chose) });
     setStats((s) => {
       const streak = correct ? s.streak + 1 : 0;
       return { correct: s.correct + (correct ? 1 : 0), total: s.total + 1, streak, best: Math.max(s.best, streak) };
@@ -86,6 +87,9 @@ export default function PreflopTrainer() {
               </b>
               <span className="text-ink-muted"> · 상위 {pctRank}%</span>
             </p>
+            {!result.correct && result.evLoss > 0 && (
+              <p className="mt-1.5 text-2xs font-semibold text-danger-light">약 −{result.evLoss} bb/100 손실 추정 <span className="font-normal text-ink-muted">(이 선택을 반복하면)</span></p>
+            )}
           </div>
           <button type="button" onClick={next} className="btn-primary w-full py-3 text-sm font-bold">다음 문제 →</button>
         </div>

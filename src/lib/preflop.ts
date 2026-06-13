@@ -75,10 +75,34 @@ function stackMul(bb: StackBB, act: PreAction): number {
   return bb === 12 ? 0.72 : bb === 20 ? 0.85 : bb === 40 ? 1.0 : 1.12;
 }
 
-/** 포지션·테이블·액션·스택별 오픈/3벳 상위 % 임계값. */
-export function openPct(pos: Pos, size: TableSize, act: PreAction, bb: StackBB = 100): number {
+// ── 시나리오 보정 — 멀티웨이 / vs 림프 / PKO(프로그레시브 KO) ──
+export type Scenario = 'std' | 'multiway' | 'limp' | 'pko';
+export const SCENARIOS: { id: Scenario; label: string; hint: string }[] = [
+  { id: 'std', label: '표준', hint: '오픈 폴드 한 바퀴 — 기본 오픈/3벳 레인지.' },
+  { id: 'multiway', label: '멀티웨이', hint: '이미 여러 명이 들어온 팟 — 블러프성 핸드(약한 브로드웨이·약한 Ax)는 줄이고 수딧 커넥터·포켓 페어·수딧 Ax처럼 넛 잠재력 있는 핸드 위주로. 도미네이트 위험이 커 레인지를 한 단계 타이트하게.' },
+  { id: 'limp', label: 'vs 림프', hint: '앞에 림퍼가 있으면 아이솔 레이즈로 압박 — 가치 핸드를 평소보다 넓게 레이즈해 헤즈업을 유도(특히 포지션 있을 때). 림퍼 뒤 약한 핸드 오버콜은 피한다.' },
+  { id: 'pko', label: 'PKO', hint: '바운티($EV)가 칩 EV에 더해져 공격성을 높임 — 숏스택을 커버할 땐 콜·올인 레인지를 넓혀 바운티를 노린다. 반대로 내가 숏이면 무리한 콜은 자제.' },
+];
+function scenarioMul(s: Scenario): number {
+  return s === 'multiway' ? 0.82 : s === 'limp' ? 1.15 : s === 'pko' ? 1.18 : 1;
+}
+
+/** 포지션·테이블·액션·스택·시나리오별 오픈/3벳 상위 % 임계값. */
+export function openPct(pos: Pos, size: TableSize, act: PreAction, bb: StackBB = 100, scenario: Scenario = 'std'): number {
   const base = POSITIONS.find((p) => p.id === pos)!.pct;
-  return Math.max(0.01, Math.min(0.85, base * (size === '9' ? 0.78 : 1) * (act === '3bet' ? 0.42 : 1) * stackMul(bb, act)));
+  return Math.max(0.01, Math.min(0.9, base * (size === '9' ? 0.78 : 1) * (act === '3bet' ? 0.42 : 1) * stackMul(bb, act) * scenarioMul(scenario)));
+}
+
+/** 잘못된 프리플랍 결정의 근사 EV 손실(bb/100, 참고용). 경계에서 멀수록 명백한 실수 → 손실 큼. */
+export function evLossBb(label: string, pct: number, chose: 'open' | 'fold'): number {
+  const p = RANK_PCT.get(label) ?? 1;
+  const a = action(label, pct);
+  if (a === 'mix') return 0;
+  // raise가 정답인데 fold = (pct−p)에 비례 / fold가 정답인데 raise = (p−pct)에 비례
+  const wrong = (a === 'raise' && chose === 'fold') || (a === 'fold' && chose === 'open');
+  if (!wrong) return 0;
+  const dist = a === 'raise' ? (pct - p) : (p - pct); // 0~1
+  return Math.max(0.3, Math.round(dist * 60 * 10) / 10); // ~최대 수십 bb/100, 소수 1자리
 }
 
 export function action(label: string, pct: number): 'raise' | 'mix' | 'fold' {
