@@ -87,10 +87,18 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
 
   // 이용 내역 피드 — 발급(보낸 것)·사용(들어온 것)을 한 줄씩, 최신순. 실시간 구독이 reload를 부르므로 자동 갱신.
   const feed = useMemo(() => {
+    // 보유자 표기: 실명(닉네임) 둘 다 — 닉네임만으론 동명이인 구분 불가
+    const whoOf = (v: Voucher) => {
+      const p = v.holderUserId ? profileMap.get(v.holderUserId) : undefined;
+      if (p?.realName && p?.nickname) return `${p.realName}(${p.nickname})`;
+      if (p?.realName) return p.realName;
+      if (p?.nickname) return p.nickname;
+      return v.holderName ?? '';
+    };
     const ev: { t: 'issued' | 'used'; at: string; title: string; who: string }[] = [];
     for (const v of list) {
-      if (v.createdAt) ev.push({ t: 'issued', at: v.createdAt, title: v.title, who: v.holderName ?? '매장 보관' });
-      if (v.usedAt) ev.push({ t: 'used', at: v.usedAt, title: v.title, who: v.holderName ?? '' });
+      if (v.createdAt) ev.push({ t: 'issued', at: v.createdAt, title: v.title, who: whoOf(v) || '매장 보관' });
+      if (v.usedAt) ev.push({ t: 'used', at: v.usedAt, title: v.title, who: whoOf(v) });
     }
     ev.sort((a, b) => b.at.localeCompare(a.at));
     // 같은 분(分)·종류·대상·제목은 한 줄로 묶고 ×N — 10장 발급이 10줄로 도배되지 않게
@@ -101,7 +109,7 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
       else grouped.push({ ...e, n: 1 });
     }
     return grouped.slice(0, 30);
-  }, [list]);
+  }, [list, profileMap]);
   const fmtFeed = (iso: string) => { const d = new Date(iso); const p2 = (n: number) => String(n).padStart(2, '0'); return `${d.getMonth() + 1}/${d.getDate()} ${p2(d.getHours())}:${p2(d.getMinutes())}`; };
 
   const pickRecv = (t: TransferTarget) => { setRecvUserId(t.id); setRecvDisplay(t.display); setRecvMode('none'); setIdInput(''); setCands([]); };
@@ -127,16 +135,22 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
     } catch (e) { toast.show(e instanceof Error ? e.message : '조회 실패', 'error'); }
   };
 
-  // 매장 비치용 인쇄 — 누리홀덤 브랜딩 + 이용권·회원가입 QR 세로 배치(고정값이라 한 번 출력해 비치).
+  // 매장 비치용 인쇄 — 선택한 QR만 출력(종이가 작아 한꺼번에 불가). 3개 중 1~3개 선택.
+  const QR_DEFS = [
+    { id: 'voucher', icon: '🎟', title: '매장이용권 사용', data: () => QRCode.toDataURL(`NURIV-VENUE:${venueId}`, { width: 1024, margin: 2 }), desc: '대시보드 → 이용권 → 사용하기 → ‘매장 QR 스캔’' },
+    { id: 'checkin', icon: '📍', title: '출석 체크인', data: () => QRCode.toDataURL(checkinUrl(venueId), { width: 1024, margin: 2 }), desc: 'QR 스캔 → 오늘 출석 도장(매장 점수 적립 · 출석왕 집계)' },
+    { id: 'signup', icon: '📱', title: '회원가입', data: () => QRCode.toDataURL('https://nuriholdem.com/?signup=1', { width: 1024, margin: 2 }), desc: 'QR 스캔 → 바로 회원가입' },
+  ] as const;
+  const [printSel, setPrintSel] = useState<Record<string, boolean>>({ voucher: true, checkin: false, signup: false });
+  const togglePrint = (id: string) => setPrintSel((m) => ({ ...m, [id]: !m[id] }));
   const printQr = async () => {
+    const chosen = QR_DEFS.filter((q) => printSel[q.id]);
+    if (chosen.length === 0) { toast.show('인쇄할 QR을 1개 이상 선택하세요', 'error'); return; }
     try {
-      const [bigVoucher, bigCheckin, bigSignup] = await Promise.all([
-        QRCode.toDataURL(`NURIV-VENUE:${venueId}`, { width: 1024, margin: 2 }),
-        QRCode.toDataURL(checkinUrl(venueId), { width: 1024, margin: 2 }),
-        QRCode.toDataURL('https://nuriholdem.com/?signup=1', { width: 1024, margin: 2 }),
-      ]);
+      const imgs = await Promise.all(chosen.map((q) => q.data()));
       const w = window.open('', '_blank', 'width=480,height=860');
       if (!w) { toast.show('팝업이 차단되었습니다. 팝업을 허용한 뒤 다시 시도하세요.', 'error'); return; }
+      const cards = chosen.map((q, i) => `  <div class="card"><h2>${q.icon} ${q.title}</h2><img src="${imgs[i]}" alt="${q.title} QR"/><p>${q.desc}</p></div>`).join('\n');
       w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>NURI HOLDEM · 매장 비치 QR</title><style>
 *{box-sizing:border-box;margin:0}body{font-family:system-ui,'Apple SD Gothic Neo',sans-serif;text-align:center;padding:28px 22px;color:#111}
 .brandlogo{height:56px;width:auto;margin:0 auto 8px;display:block}
@@ -152,9 +166,7 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
 <div class="tag">국내 최고의 홀덤 커뮤니티</div>
 <div class="url">nuriholdem.com</div>
 <div class="qrs">
-  <div class="card"><h2>🎟 매장이용권 사용</h2><img src="${bigVoucher}" alt="매장이용권 QR"/><p>대시보드 → 이용권 → 사용하기 → ‘매장 QR 스캔’</p></div>
-  <div class="card"><h2>📍 출석 체크인</h2><img src="${bigCheckin}" alt="출석 체크인 QR"/><p>QR 스캔 → 오늘 출석 도장(매장 점수 적립 · 출석왕 집계)</p></div>
-  <div class="card"><h2>📱 회원가입</h2><img src="${bigSignup}" alt="회원가입 QR"/><p>QR 스캔 → 바로 회원가입</p></div>
+${cards}
 </div>
 <script>window.onload=function(){setTimeout(function(){window.print();},350);};</script>
 </body></html>`);
@@ -358,7 +370,23 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
                   <p className="text-center text-[10px] leading-tight text-ink-muted">스캔 시 회원가입 페이지로 이동</p>
                 </div>
               </div>
-              <button type="button" onClick={printQr} className="btn-ghost mt-2 w-full px-3 text-2xs">🖨 출력해 매장에 비치 (이용권 + 출석 + 회원가입 QR)</button>
+              {/* 인쇄할 QR 선택 — 종이가 작아 한꺼번에 안 됨. 1~3개 선택 */}
+              <div className="mt-3 rounded-input border border-border-subtle bg-surface-low p-2">
+                <p className="mb-1.5 text-[10px] font-bold text-ink-secondary">인쇄할 QR 선택 (1~3개)</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {QR_DEFS.map((q) => {
+                    const on = printSel[q.id];
+                    return (
+                      <button key={q.id} type="button" onClick={() => togglePrint(q.id)}
+                        className={['inline-flex items-center gap-1 rounded-badge border px-2 py-1 text-2xs font-bold transition-colors',
+                          on ? 'border-gold-400/50 bg-gold-300/15 text-gold-300' : 'border-border-default bg-surface-high text-ink-muted'].join(' ')}>
+                        <span>{on ? '☑' : '☐'}</span> {q.icon} {q.title}
+                      </button>
+                    );
+                  })}
+                </div>
+                <button type="button" onClick={printQr} className="btn-ghost mt-2 w-full px-3 text-2xs">🖨 선택한 QR 출력해 매장에 비치</button>
+              </div>
             </div>
           )}
         </div>

@@ -28,6 +28,7 @@ export default function DealerCommunity() {
   const canPost = !!user;
 
   const [posts, setPosts]   = useState<DealerPost[]>([]);
+  const [filterKind, setFilterKind] = useState<DealerPostKind | 'all'>('all'); // 구인/구직/일반 분리 보기
   const [loading, setLoading] = useState(true);
   const [tick, setTick]     = useState(0);
   const [notices, setNotices] = useState<MarketplaceNotice[]>([]);
@@ -193,13 +194,29 @@ export default function DealerCommunity() {
         </form>
       )}
 
-      {loading ? (
+      {/* 카테고리 분리 탭 — 구인/구직/일반 각각 따로 보기 */}
+      <div className="flex items-center gap-1 rounded-input bg-surface-high p-0.5">
+        {([['all', '전체'], ['hiring', '구인'], ['seeking', '구직'], ['general', '일반']] as [DealerPostKind | 'all', string][]).map(([k, label]) => {
+          const on = filterKind === k;
+          const cnt = k === 'all' ? posts.length : posts.filter((x) => x.kind === k).length;
+          return (
+            <button key={k} type="button" onClick={() => setFilterKind(k)}
+              className={['flex-1 rounded-[6px] py-1.5 text-xs font-bold leading-none transition-colors',
+                on ? 'bg-gold-300 text-ink-inverse' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
+              {label}{cnt > 0 ? ` ${cnt}` : ''}
+            </button>
+          );
+        })}
+      </div>
+
+      {(() => { const shown = filterKind === 'all' ? posts : posts.filter((x) => x.kind === filterKind); return (
+      loading ? (
         <p className="py-8 text-center text-2xs text-ink-muted">불러오는 중…</p>
-      ) : posts.length === 0 ? (
-        <p className="py-10 text-center text-xs text-ink-muted">아직 글이 없습니다. 첫 구인·구직 글을 남겨보세요.</p>
+      ) : shown.length === 0 ? (
+        <p className="py-10 text-center text-xs text-ink-muted">{filterKind === 'all' ? '아직 글이 없습니다. 첫 구인·구직 글을 남겨보세요.' : `${filterKind === 'hiring' ? '구인' : filterKind === 'seeking' ? '구직' : '일반'} 글이 아직 없습니다.`}</p>
       ) : (
         <ul className="space-y-2">
-          {posts.map((p) => (
+          {shown.map((p) => (
             <li key={p.id} className="rounded-card border border-border-subtle bg-surface-low overflow-hidden">
               {/* 본문 클릭 → 상세/지원 */}
               <button type="button" onClick={() => setOpenPost(p)} className="w-full text-left p-3 hover:bg-surface-high/40 transition-colors">
@@ -238,7 +255,7 @@ export default function DealerCommunity() {
             </li>
           ))}
         </ul>
-      )}
+      )); })()}
 
       <NoticeDetailModal notice={openNotice} open={openNotice !== null} onClose={() => setOpenNotice(null)} />
 
