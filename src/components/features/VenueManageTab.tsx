@@ -3,7 +3,7 @@ import Icon from '../atoms/Icon';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
 import type { User, VenueInvite } from '../../api/auth';
-import { getMyVenueStaff, getMyVenueInvites, inviteStaffByEmail, cancelStaffInvite, removeStaff, setStaffTitle } from '../../api/auth';
+import { getMyVenueStaff, getMyVenueInvites, inviteStaffByEmail, cancelStaffInvite, removeStaff, setStaffTitle, checkNicknameAvailable } from '../../api/auth';
 import { getVenueRankings, saveVenueRankings, maskRealName, getVenuePageConfig, placementPointsOf, type VenuePageConfig } from '../../api/rankings';
 import { canAccessLedger, canManagePos, getLedgerAccessUserIds, grantLedgerAccess, revokeLedgerAccess } from '../../api/ledger';
 import { getAllVenues, type Venue } from '../../api/community';
@@ -21,6 +21,7 @@ import VenueCustomizePanel, { VenueRankHub } from './VenueCustomizePanel';
 import LeaguePanel from './LeaguePanel';
 import SectionHeader from '../atoms/SectionHeader';
 import type { Schedule } from '../../api/schedules';
+import { motion } from 'framer-motion';
 
 type Section = 'dashboard' | 'posters' | 'ledger' | 'stats' | 'ranking' | 'venueRank' | 'league' | 'staff' | 'settings' | 'clock' | 'attendance' | 'voucher' | 'page';
 
@@ -277,10 +278,15 @@ function SectionBtn({ active, onClick, icon, children, locked, fav, onToggleFav 
   return (
     <button type="button" onClick={onClick}
       // 글씨 13px·세로 패딩 확대 — 매일 쓰는 운영 메뉴라 가독·터치 우선
-      className={['group/nav flex flex-col items-center justify-center gap-1 whitespace-nowrap rounded-[7px] px-1 py-2.5 text-xs font-semibold transition-colors focus:outline-none touch-manipulation lg:w-full lg:flex-row lg:justify-start lg:gap-2 lg:px-3 lg:text-[13px]',
-        active ? 'bg-gold-300 text-ink-inverse' : locked ? 'text-ink-muted/60 hover:text-ink-secondary lg:hover:bg-surface-high' : 'text-ink-secondary hover:text-ink-primary lg:hover:bg-surface-high'].join(' ')}>
-      <span className="shrink-0" aria-hidden>{icon}</span>
-      <span>{children}</span>
+      className={['group/nav relative flex flex-col items-center justify-center gap-1 whitespace-nowrap rounded-[7px] px-1 py-2.5 text-xs font-semibold transition-colors duration-300 focus:outline-none touch-manipulation lg:w-full lg:flex-row lg:justify-start lg:gap-2 lg:px-3 lg:text-[13px]',
+        active ? 'text-ink-inverse' : locked ? 'text-ink-muted/60 hover:text-ink-secondary lg:hover:bg-surface-high' : 'text-ink-secondary hover:text-ink-primary lg:hover:bg-surface-high'].join(' ')}>
+      {active && (
+        <motion.span layoutId="manage-nav-pill" aria-hidden
+          className="absolute inset-0 rounded-[7px] bg-gold-300"
+          transition={{ type: 'spring', stiffness: 700, damping: 42 }} />
+      )}
+      <span className="relative shrink-0" aria-hidden>{icon}</span>
+      <span className="relative">{children}</span>
       {locked && <Icon name="lock" size={11} className={['hidden lg:block ml-auto shrink-0', active ? 'text-ink-inverse/70' : 'text-ink-muted'].join(' ')} />}
       {/* ★ 즐겨찾기 토글 — 즐겨찾기는 상시, 나머지는 PC 호버 시 표시(최대 5개 상단 고정) */}
       {onToggleFav && !locked && (
@@ -298,7 +304,7 @@ function SectionBtn({ active, onClick, icon, children, locked, fav, onToggleFav 
 
 
 // ── 일일 순위 입력 ────────────────────────────────────────────────────────────
-interface Row { nickname: string; realName: string; prize: string; voucher: string; note: string; }
+interface Row { nickname: string; realName: string; prize: string; voucher: string; note: string; member?: boolean | null; }
 const emptyRow = (): Row => ({ nickname: '', realName: '', prize: '', voucher: '', note: '' });
 
 function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: boolean; draft?: { date: string; names: string[] } | null }) {
@@ -334,7 +340,18 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
   }, [venueId, date]);
 
   const update = (i: number, k: keyof Row, v: string) =>
-    setRows((r) => r.map((row, idx) => (idx === i ? { ...row, [k]: v } : row)));
+    setRows((r) => r.map((row, idx) => (idx === i
+      ? { ...row, [k]: v, ...(k === 'nickname' ? { member: null } : {}) } // 닉네임 바뀌면 매칭 재확인
+      : row)));
+  // 닉네임 blur 시 회원 여부 표시 — 미가입 닉네임도 순위 기록은 되지만 점수·이용권은 안 가는 걸 입력 단계에서 미리 보여준다
+  const checkMember = async (i: number, nickname: string) => {
+    const n = nickname.trim();
+    if (!n) return;
+    try {
+      const available = await checkNicknameAvailable(n); // available=true → 그 닉네임의 회원이 없음
+      setRows((r) => r.map((row, idx) => (idx === i && row.nickname.trim() === n ? { ...row, member: !available } : row)));
+    } catch { /* 조회 실패 시 표시 생략 */ }
+  };
   const addRow = () => setRows((r) => [...r, emptyRow()]);
   const removeRow = (i: number) => setRows((r) => (r.length > 1 ? r.filter((_, idx) => idx !== i) : r));
 
@@ -404,50 +421,54 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
       ) : (
         <ul className="space-y-1.5">
           {rows.map((row, i) => (
-            <li key={i} className="flex items-start gap-1.5 rounded-input border border-border-subtle bg-surface-low/40 p-1.5">
-              <span className="w-7 shrink-0 pt-1.5 text-center">
+            <li key={i}
+              className="grid grid-cols-[2rem_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_2rem] lg:grid-cols-[2.25rem_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_6rem_minmax(0,1.4fr)_2rem] items-center gap-1.5 rounded-input border border-border-subtle bg-surface-low/40 p-1.5">
+              <span className="text-center">
                 <span className="block text-sm font-bold text-gold-300 tabular-nums">{i + 1}</span>
                 {/* 등수→점수 미리보기(매장 꾸미기 '기준 점수' 반영) */}
                 <span className="block text-[9px] font-semibold text-ink-muted tabular-nums">+{placementPointsOf(i + 1, cfg)}점</span>
               </span>
-              <div className="min-w-0 flex-1 space-y-1">
-                {/* 1줄: 닉네임 · 실명 · 프라이즈 + 삭제 */}
-                <div className="flex items-center gap-1.5">
-                  <input
-                    type="text" value={row.nickname} maxLength={30}
-                    onChange={(e) => update(i, 'nickname', e.target.value)}
-                    placeholder="닉네임 *"
-                    className="input flex-[1.3] min-w-0 text-sm py-2"
-                  />
-                  <input
-                    type="text" value={row.realName} maxLength={20}
-                    onChange={(e) => update(i, 'realName', e.target.value)}
-                    placeholder="실명"
-                    className="input flex-1 min-w-0 text-sm py-2"
-                  />
-                  <input
-                    type="text" inputMode="numeric" value={row.prize} maxLength={12}
-                    onChange={(e) => update(i, 'prize', e.target.value.replace(/[^\d.]/g, ''))}
-                    onKeyDown={(e) => { if (e.key === 'Enter' && i === rows.length - 1) addRow(); }}
-                    placeholder="프라이즈"
-                    className="input flex-1 min-w-0 text-sm py-2"
-                  />
-                  <button
-                    type="button" onClick={() => removeRow(i)} aria-label="줄 삭제"
-                    className="w-8 h-8 shrink-0 flex items-center justify-center rounded-input text-ink-muted hover:text-danger-light transition-colors"
-                  >
-                    <Icon name="close" size={14} />
-                  </button>
-                </div>
-                {/* 2줄: 이용권 갯수 · 비고 (1줄과 동일 시작점에 정렬) */}
-                <div className="flex items-center gap-1.5">
-                  <div className="relative w-28 shrink-0">
-                    <input type="number" inputMode="numeric" value={row.voucher} onChange={(e) => update(i, 'voucher', e.target.value.replace(/[^\d]/g, ''))} placeholder="이용권" className="input w-full text-sm py-2 pr-7 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" />
-                    <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">개</span>
-                  </div>
-                  <input type="text" value={row.note} onChange={(e) => update(i, 'note', e.target.value)} maxLength={50} placeholder="비고" className="input min-w-0 flex-1 text-sm py-2" />
-                </div>
+              <div className="relative min-w-0">
+                <input
+                  type="text" value={row.nickname} maxLength={30}
+                  onChange={(e) => update(i, 'nickname', e.target.value)}
+                  onBlur={() => checkMember(i, row.nickname)}
+                  placeholder="닉네임 *"
+                  className="input w-full min-w-0 text-sm py-2"
+                />
+                {/* 회원 매칭 뱃지 — 미가입이면 기록만 되고 점수·이용권은 안 간다 */}
+                {row.member != null && row.nickname.trim() !== '' && (
+                  <span className={['pointer-events-none absolute -top-1.5 right-1 rounded-badge px-1 py-0.5 text-[9px] font-bold leading-none',
+                    row.member ? 'bg-emerald-500/20 text-emerald-300' : 'bg-surface-float text-ink-muted'].join(' ')}>
+                    {row.member ? '✓ 회원' : '비회원'}
+                  </span>
+                )}
               </div>
+              <input
+                type="text" value={row.realName} maxLength={20}
+                onChange={(e) => update(i, 'realName', e.target.value)}
+                placeholder="실명"
+                className="input w-full min-w-0 text-sm py-2"
+              />
+              <input
+                type="text" inputMode="numeric" value={row.prize} maxLength={12}
+                onChange={(e) => update(i, 'prize', e.target.value.replace(/[^\d.]/g, ''))}
+                onKeyDown={(e) => { if (e.key === 'Enter' && i === rows.length - 1) addRow(); }}
+                placeholder="프라이즈"
+                className="input w-full min-w-0 text-sm py-2"
+              />
+              <button
+                type="button" onClick={() => removeRow(i)} aria-label="줄 삭제"
+                className="h-8 w-8 justify-self-center flex items-center justify-center rounded-input text-ink-muted hover:text-danger-light transition-colors lg:order-last"
+              >
+                <Icon name="close" size={14} />
+              </button>
+              {/* 모바일 2줄(고정 그리드로 칸 경계 정렬) · PC는 같은 행에 이어짐 */}
+              <div className="relative col-start-2 lg:col-start-5 lg:col-auto min-w-0 lg:w-auto">
+                <input type="number" inputMode="numeric" value={row.voucher} onChange={(e) => update(i, 'voucher', e.target.value.replace(/[^\d]/g, ''))} placeholder="이용권" className="input w-full text-sm py-2 pr-7 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" />
+                <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">개</span>
+              </div>
+              <input type="text" value={row.note} onChange={(e) => update(i, 'note', e.target.value)} maxLength={50} placeholder="비고" className="input col-span-2 lg:col-span-1 w-full min-w-0 text-sm py-2" />
             </li>
           ))}
         </ul>
