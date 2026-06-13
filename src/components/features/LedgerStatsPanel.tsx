@@ -135,15 +135,9 @@ function StatsView({ venueId }: { venueId: string }) {
     }
     const dayCount = dates.size;
     const cashLike = byMethod.cash + byMethod.transfer + byMethod.card;
-    // 객단가(정밀) — 미수 제외(완납만) + 관계자 바인 제외: ①실손님 1인당 ②엔트리당
-    let guestRevenue = 0, guestEntries = 0;
-    const guestSet = new Set<string>();
-    for (const b of src) {
-      if ((playerType.get(b.playerName) ?? 'none') === 'staff') continue;
-      const f = fin(b);
-      guestRevenue += f.paid; guestEntries += f.entry;
-      guestSet.add(b.playerName);
-    }
+    // 객단가 — 미수 포함(받을 돈까지). 관계자 제외는 자동으로 하지 않음(필요하면 위 '바인 제외 관계자' 필터로).
+    const grossPerPlayer = playerSet.size ? (revenue + unpaid) / playerSet.size : 0;
+    const grossPerEntry = entries > 0 ? (revenue + unpaid) / entries : 0;
     return {
       total: src.length, entries, underEntries, players: playerSet.size, revenue, unpaid, support, ticket, ticketUnpaid,
       unpaid_cnt: src.filter((b) => fin(b).unpaid > 0).length,
@@ -151,9 +145,8 @@ function StatsView({ venueId }: { venueId: string }) {
       unpaidRanking: Object.entries(unpaidByPlayer).sort((a, b) => b[1] - a[1]),
       target, fillRatio: target ? Math.round((entries / target) * 100) : null,
       perPlayer: playerSet.size ? entries / playerSet.size : 0,
-      arpGuest: guestSet.size ? guestRevenue / guestSet.size : 0,    // 실손님 1인당 완납 매출
-      arpEntry: guestEntries > 0 ? guestRevenue / guestEntries : 0,  // 엔트리당 완납 매출
-      guestCount: guestSet.size,
+      arpGuest: grossPerPlayer, // 1인당 (완납+미수)
+      arpEntry: grossPerEntry,  // 엔트리당 (완납+미수)
       dayCount, visitor, dow,
       avgEntryPerDay: dayCount ? entries / dayCount : 0,
       avgRevenuePerDay: dayCount ? revenue / dayCount : 0,
@@ -269,8 +262,8 @@ function StatsView({ venueId }: { venueId: string }) {
             {period !== 'day' && <Mini label="일평균 엔트리" value={m.avgEntryPerDay.toFixed(1)} />}
             <Mini label="플레이어" value={`${m.players}명`} />
             <Mini label="엔트리/인" value={m.perPlayer ? m.perPlayer.toFixed(1) : '0'} />
-            <Mini label="객단가/실손님" value={`${wonToMan(Math.round(m.arpGuest))}만`} hint="미수·관계자 제외" />
-            <Mini label="객단가/엔트리" value={`${wonToMan(Math.round(m.arpEntry))}만`} hint="미수·관계자 제외" />
+            <Mini label="객단가/인" value={`${wonToMan(Math.round(m.arpGuest))}만`} hint="미수 포함" />
+            <Mini label="객단가/엔트리" value={`${wonToMan(Math.round(m.arpEntry))}만`} hint="미수 포함" />
             {period === 'day'
               ? <Mini label="가게지원" value={`${m.support}건`} />
               : <Mini label="일평균 매출" value={`${m.avgRevenuePerDay.toLocaleString(undefined, { maximumFractionDigits: 0 })}원`} />}

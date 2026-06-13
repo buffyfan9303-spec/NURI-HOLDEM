@@ -809,8 +809,8 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
           onPick={async (method, isUnpaid, discountIndex) => {
             const pn = selected.playerName; const isNew = !selected.buyin;
             try {
-              // 신규 바인은 클락 현재 레벨로 얼리 확정 기록, 기존 셀 수정은 기존 판정 보존
-              const eo = isNew ? clockEarlyNow() : (selected.buyin?.earlyOverride ?? null);
+              // 신규 첫 바인(entryNo=1)만 클락 현재 레벨로 얼리 확정. 2번째+는 리바인이라 얼리 없음.
+              const eo = (isNew && selected.entryNo === 1) ? clockEarlyNow() : (selected.buyin?.earlyOverride ?? null);
               await upsertBuyin({ venueId, sessionDate: date, playerName: pn, entryNo: selected.entryNo, paymentMethod: method, isUnpaid, discountIndex, earlyOverride: eo });
               setSelected(null); reload();
               if (isNew && (session.voucherAccrualPerBin ?? 0) > 0) {
@@ -821,7 +821,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
           onPickSplit={async (d) => {
             const pn = selected.playerName; const isNew = !selected.buyin;
             try {
-              await upsertBuyinSplit({ venueId, sessionDate: date, playerName: pn, entryNo: selected.entryNo, ...d, earlyOverride: isNew ? clockEarlyNow() : undefined });
+              await upsertBuyinSplit({ venueId, sessionDate: date, playerName: pn, entryNo: selected.entryNo, ...d, earlyOverride: (isNew && selected.entryNo === 1) ? clockEarlyNow() : undefined });
               setSelected(null); reload();
               if (isNew && (session.voucherAccrualPerBin ?? 0) > 0) {
                 accrueVoucher(venueId, pn, session.voucherAccrualPerBin as number).then((n) => { if (n > 0) toast.show(`${pn}님 이용권 ${n}개 적립`, 'success'); }).catch(() => {});

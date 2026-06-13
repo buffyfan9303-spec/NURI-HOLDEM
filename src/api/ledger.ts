@@ -130,6 +130,8 @@ export function earlyTypeOf(
   b: LedgerBuyin,
   s: { earlyDoubleMin?: number; earlySingleMin?: number; tournamentStart?: string | null; openedAt?: string | null },
 ): EarlyType {
+  // 얼리는 첫 바이인(entryNo=1)에만. 2번째부터는 리바인 — 얼리 아님(리바인 스택).
+  if (b.entryNo !== 1) return 'none';
   if (b.earlyOverride === 'double' || b.earlyOverride === 'single' || b.earlyOverride === 'none') return b.earlyOverride;
   const dMin = s.earlyDoubleMin ?? 0, sMin = s.earlySingleMin ?? 0;
   const start = s.tournamentStart || s.openedAt;
