@@ -38,6 +38,7 @@ export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete, on
   const [reserverCounts, setReserverCounts] = useState<Record<string, number>>({});
   const [visitedNames, setVisitedNames] = useState<Set<string>>(new Set());
   const [ops, setOps] = useState<Record<string, PosterOpsSummary>>({}); // scheduleId → 연결 장부 운영 요약
+  const [dateFilter, setDateFilter] = useState<string>(''); // ''=전체 / iso=그 날짜 예약만 관리
 
   const myPosters = schedules.filter((s) => s.ownerId === user?.id);
   const venueId = user?.venueId || myPosters[0]?.venueId;
@@ -75,18 +76,40 @@ export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete, on
           hint="포스터를 올리면 일정 탐색에 노출되고 예약을 받을 수 있어요"
           action={<button type="button" onClick={onCreate} className="btn-primary px-4 py-2 text-xs">+ 첫 게임 등록하기</button>}
         />
-      ) : (
-        <ul className="space-y-2">
-          {myPosters.map((p) => (
-            <PosterRow key={p.id} schedule={p} venueId={venueId} reserverCounts={reserverCounts} visitedNames={visitedNames}
-              onEdit={() => onEdit(p.id)} onDelete={() => onDelete(p.id)}
-              ops={ops[p.id] ?? null}
-              resCount={resCounts[p.id] ?? 0}
-              onLedgerAt={onOpenLedger ? (d) => onOpenLedger(p, d) : undefined}
-              onRanking={onGotoRanking} />
-          ))}
-        </ul>
-      )}
+      ) : (() => {
+        const isoOf = (s: Schedule) => new Date(s.date).toLocaleDateString('en-CA');
+        const dk = [...new Set(myPosters.map(isoOf))].sort();
+        const cntOf = (k: string) => myPosters.filter((p) => isoOf(p) === k).length;
+        const shown = dateFilter ? myPosters.filter((p) => isoOf(p) === dateFilter) : myPosters;
+        const dow = ['일', '월', '화', '수', '목', '금', '토'];
+        const chip = (on: boolean) => ['shrink-0 rounded-input px-2.5 py-1.5 text-2xs font-bold transition-colors', on ? 'bg-gold-300 text-ink-inverse' : 'bg-surface-high text-ink-secondary hover:text-ink-primary border border-border-default'].join(' ');
+        return (
+          <>
+            {/* 날짜 선택 — 예약을 날짜별로 관리(장부 날짜 선택과 동일한 방식) */}
+            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-1 [-webkit-overflow-scrolling:touch]">
+              <button type="button" onClick={() => setDateFilter('')} className={chip(dateFilter === '')}>전체 {myPosters.length}</button>
+              {dk.map((k) => { const d = new Date(k + 'T00:00:00'); return (
+                <button key={k} type="button" onClick={() => setDateFilter(k)} className={chip(dateFilter === k)}>{d.getMonth() + 1}/{d.getDate()}({dow[d.getDay()]}) {cntOf(k)}</button>
+              ); })}
+              <label className="relative shrink-0 cursor-pointer rounded-input border border-dashed border-border-default px-2.5 py-1.5 text-2xs font-bold text-ink-secondary hover:border-gold-400/50">
+                📅 날짜
+                <input type="date" value={dateFilter || ''} onChange={(e) => setDateFilter(e.target.value)} className="absolute inset-0 cursor-pointer opacity-0" aria-label="날짜 직접 선택" />
+              </label>
+            </div>
+            <ul className="space-y-2">
+              {shown.map((p) => (
+                <PosterRow key={p.id} schedule={p} venueId={venueId} reserverCounts={reserverCounts} visitedNames={visitedNames}
+                  onEdit={() => onEdit(p.id)} onDelete={() => onDelete(p.id)}
+                  ops={ops[p.id] ?? null}
+                  resCount={resCounts[p.id] ?? 0}
+                  onLedgerAt={onOpenLedger ? (d) => onOpenLedger(p, d) : undefined}
+                  onRanking={onGotoRanking} />
+              ))}
+              {shown.length === 0 && <li className="py-6 text-center text-2xs text-ink-muted">그 날짜에 등록된 게임이 없습니다 — 다른 날짜를 선택하세요</li>}
+            </ul>
+          </>
+        );
+      })()}
     </div>
   );
 }
