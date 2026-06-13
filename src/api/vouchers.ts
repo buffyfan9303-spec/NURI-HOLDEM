@@ -191,12 +191,18 @@ export async function voucherHolderProfiles(venueId: string): Promise<VoucherHol
   return (data ?? []).map((r: any) => ({ userId: r.user_id, realName: r.real_name ?? null, nickname: r.nickname ?? null }));
 }
 
-export interface VoucherHistoryRow { id: string; title: string; holderName: string | null; usedAt: string | null }
+export interface VoucherHistoryRow { id: string; title: string; holderName: string | null; realName: string | null; nickname: string | null; usedAt: string | null }
 export async function voucherHistory(venueId: string): Promise<VoucherHistoryRow[]> {
   if (IS_MOCK) return [];
   const { data } = await supabase.rpc('voucher_history', { p_venue_id: venueId });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((r: any) => ({ id: r.id, title: r.title, holderName: r.holder_name ?? null, usedAt: r.used_at ?? null }));
+  return (data ?? []).map((r: any) => ({ id: r.id, title: r.title, holderName: r.holder_name ?? null, realName: r.real_name ?? null, nickname: r.nickname ?? null, usedAt: r.used_at ?? null }));
+}
+/** 이용내역 표시명 — 실명/닉네임(실명 있으면), 없으면 닉네임(또는 발급 당시 이름) */
+export function voucherHolderLabel(row: { realName?: string | null; nickname?: string | null; holderName?: string | null }): string {
+  const real = (row.realName ?? '').trim();
+  const nick = (row.nickname ?? row.holderName ?? '').trim();
+  return real && nick ? `${real}/${nick}` : (nick || real || '-');
 }
 
 // 현재 사용자가 이 매장 이용권 내역을 볼 수 있는지(업주 또는 권한 부여 직원)

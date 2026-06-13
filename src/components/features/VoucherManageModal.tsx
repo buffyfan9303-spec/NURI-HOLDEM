@@ -90,7 +90,7 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
     // 보유자 표기: 실명(닉네임) 둘 다 — 닉네임만으론 동명이인 구분 불가
     const whoOf = (v: Voucher) => {
       const p = v.holderUserId ? profileMap.get(v.holderUserId) : undefined;
-      if (p?.realName && p?.nickname) return `${p.realName}(${p.nickname})`;
+      if (p?.realName && p?.nickname) return `${p.realName}/${p.nickname}`;
       if (p?.realName) return p.realName;
       if (p?.nickname) return p.nickname;
       return v.holderName ?? '';
@@ -203,11 +203,11 @@ ${cards}
       .sort((a, b) => (b.active.length - a.active.length) || (b.used.length - a.used.length));
   }, [list]);
   const holderCount = holders.filter((g) => !g.isStore && g.active.length > 0).length;
-  // 표기: 실명(닉네임). 실명이 없으면 닉네임만.
+  // 표기: 실명/닉네임. 실명이 없으면 닉네임만.
   const holderLabel = (g: { key: string; name: string; isStore: boolean }) => {
     if (g.isStore) return '🏪 매장 보관';
     const p = profileMap.get(g.key);
-    if (p?.realName) return `${p.realName}(${p.nickname ?? g.name})`;
+    if (p?.realName) return `${p.realName}/${p.nickname ?? g.name}`;
     return p?.nickname ?? g.name;
   };
   const hq = holderQuery.trim().toLowerCase();
