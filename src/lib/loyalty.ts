@@ -29,11 +29,9 @@ export async function getWeeklyLeague(limit = 20): Promise<LeagueRow[]> {
 // ── 주간 미션 ────────────────────────────────────────────────────────────────
 export type MissionGoalType = 'checkin' | 'post' | 'moneyin';
 export interface Mission { key: string; title: string; goal: number; reward: number; desc: string; type: MissionGoalType }
-export const MISSIONS: Mission[] = [
-  { key: 'checkin2', title: '매장 체크인 2회', goal: 2, reward: 20, desc: '이번 주에 매장 QR 체크인을 2번 하세요', type: 'checkin' },
-  { key: 'post1', title: '게시글 1개 쓰기', goal: 1, reward: 10, desc: '이번 주에 커뮤니티 글을 1개 쓰세요', type: 'post' },
-  { key: 'moneyin1', title: '머니인 1회', goal: 1, reward: 30, desc: '이번 주에 대회 순위(머니인)에 들어보세요', type: 'moneyin' },
-];
+// 고정 미션은 custom_missions(DB)로 이관됨 — 운영자가 기본 미션까지 전부 수정/중단/삭제 가능.
+// (claim_mission RPC의 옛 하드코딩 키 checkin2/post1/moneyin1 분기는 그대로 남아있어도 무해)
+export const MISSIONS: Mission[] = [];
 
 // 운영자 커스텀 미션(custom_missions) — 활성만 미션 보드에 병합. key는 'c<id>'.
 const GOAL_TYPE_LABEL: Record<MissionGoalType, (n: number) => string> = {
