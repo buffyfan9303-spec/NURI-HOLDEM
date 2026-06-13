@@ -9,8 +9,7 @@ import type { CommunityPost, Venue, AdminStats, VenueVerificationStatus, VenueSt
 import {
   getAdminStats, adminCreateVenue, adminUpdateVenue, setVenueVerification, deleteVenue,
   getVenueStaff, addVenueStaff, updateVenueStaff, removeVenueStaff,
-  getPendingGroups, approveGroup, GROUP_KIND_LABEL,
-} from '../../api/community';
+  getPendingGroups, approveGroup, GROUP_KIND_LABEL, adminListVenueOwnerRequests, adminDecideVenueOwner, type OwnerRequest } from '../../api/community';
 import { useToast } from '../atoms/Toast';
 import { supabase } from '../../lib/supabase';
 import { getAppSetting, setAppSetting, BOOST_CONTACT_EMAIL_KEY, BOOST_CONTACT_PHONE_KEY } from '../../api/settings';
@@ -84,6 +83,41 @@ function BoostContactCard() {
 }
 
 // ── 순위 인증 승인(운영자) — 외부 대회 입상 증빙 검토. 승인/거절 시 신분증 즉시 삭제 ──
+function VenueOwnerRequestsCard() {
+  const toast = useToast();
+  const [reqs, setReqs] = useState<OwnerRequest[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+  const load = () => { adminListVenueOwnerRequests().then(setReqs).catch(() => {}); };
+  useEffect(load, []);
+  const decide = async (r: OwnerRequest, approve: boolean) => {
+    setBusy(r.venueId + r.userId);
+    try {
+      await adminDecideVenueOwner(r.venueId, r.userId, approve);
+      toast.show(approve ? `${r.nickname} 사장님을 ${r.venueName} 공동 업주로 승인했습니다` : '요청을 거절했습니다', approve ? 'success' : 'info');
+      load();
+    } catch (e) { toast.show(e instanceof Error ? e.message : '처리 실패', 'error'); }
+    setBusy(null);
+  };
+  if (reqs.length === 0) return null;
+  return (
+    <section className="rounded-card border border-gold-400/30 bg-gold-300/[0.04] p-3 space-y-2">
+      <h3 className="text-sm font-bold text-gold-300">👔 공동 업주(사장님) 초대 승인 <span className="text-2xs font-normal text-ink-muted">· 승인 시 공동 업주 활성</span></h3>
+      <ul className="space-y-1.5">
+        {reqs.map((r) => (
+          <li key={r.venueId + r.userId} className="flex items-center gap-2 rounded-input border border-border-subtle bg-surface-low px-2.5 py-2">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-bold text-ink-primary truncate">{r.name ? `${r.name}(${r.nickname})` : r.nickname} <span className="text-gold-300">→ {r.venueName}</span></p>
+              <p className="text-2xs text-ink-muted truncate">초대: {r.invitedBy || '업주'} · {new Date(r.createdAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+            </div>
+            <button type="button" disabled={busy === r.venueId + r.userId} onClick={() => decide(r, true)} className="btn-primary shrink-0 px-3 py-1.5 text-2xs disabled:opacity-50">승인</button>
+            <button type="button" disabled={busy === r.venueId + r.userId} onClick={() => decide(r, false)} className="btn-ghost shrink-0 px-2 py-1.5 text-2xs hover:text-danger-light">거절</button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function VoucherQuotaAdminCard() {
   const toast = useToast();
   const [reqs, setReqs] = useState<AdminCreditRequest[]>([]);
@@ -515,6 +549,7 @@ export default function AdminTab({
                   <>
                     <BoostContactCard />
                     <CommunityAdsCard />
+          <VenueOwnerRequestsCard />
           <VoucherQuotaAdminCard />
           <RankVerifyAdminCard />
                     <MissionsAdminCard />

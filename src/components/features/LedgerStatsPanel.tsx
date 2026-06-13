@@ -11,7 +11,7 @@ import { toCsv, downloadCsv } from '../../lib/csv';
 import Icon from '../atoms/Icon';
 import { getMyVenueNotifyMute, setMyVenueNotifyMute } from '../../api/auth';
 import { useAuth } from '../../contexts/AuthContext';
-import { listVenueOwners, addVenueOwner, removeVenueOwner, type VenueOwner } from '../../api/community';
+import { listVenueOwners, addVenueOwner, removeVenueOwner, transferVenuePrimary, type VenueOwner } from '../../api/community';
 import CustomerAnalytics from './CustomerAnalytics';
 import SegmentedTabs from '../atoms/SegmentedTabs';
 
@@ -683,7 +683,6 @@ export function PosSettingsPanel({ venueId }: { venueId: string }) {
 
 // ── 사장님(공동 업주) 관리 — 한 매장에 여러 사장 ──────────────────────────────
 function OwnerManageCard({ venueId }: { venueId: string }) {
-  const { user } = useAuth();
   const toast = useToast();
   const [owners, setOwners] = useState<VenueOwner[]>([]);
   const [nick, setNick] = useState('');
@@ -693,14 +692,20 @@ function OwnerManageCard({ venueId }: { venueId: string }) {
   const add = async () => {
     if (!nick.trim()) return;
     setBusy(true);
-    try { await addVenueOwner(venueId, nick.trim()); toast.show('공동 사장님을 추가했습니다', 'success'); setNick(''); load(); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '추가 실패', 'error'); }
+    try { await addVenueOwner(venueId, nick.trim()); toast.show('공동 사장님을 초대했습니다 — 운영자 승인 후 활성화됩니다', 'success'); setNick(''); load(); }
+    catch (e) { toast.show(e instanceof Error ? e.message : '초대 실패', 'error'); }
     setBusy(false);
   };
   const remove = async (o: VenueOwner) => {
     if (!window.confirm(`${o.nickname} 사장님을 이 매장에서 제외할까요?`)) return;
     try { await removeVenueOwner(venueId, o.userId); toast.show('제외했습니다', 'info'); load(); }
     catch (e) { toast.show(e instanceof Error ? e.message : '제외 실패', 'error'); }
+  };
+  const makePrimary = async (o: VenueOwner) => {
+    if (!window.confirm(`대표 업주를 ${o.nickname} 사장님으로 교체할까요?
+교체 후에는 새 대표만 다시 변경할 수 있습니다.`)) return;
+    try { await transferVenuePrimary(venueId, o.userId); toast.show('대표 업주를 교체했습니다', 'success'); load(); }
+    catch (e) { toast.show(e instanceof Error ? e.message : '교체 실패', 'error'); }
   };
   return (
     <div className="border-t border-border-subtle pt-3 space-y-2">
@@ -710,11 +715,15 @@ function OwnerManageCard({ venueId }: { venueId: string }) {
           {owners.map((o) => (
             <li key={o.userId} className="flex items-center gap-2 rounded-input border border-border-subtle bg-surface-base px-2.5 py-1.5">
               <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{o.name ? `${o.name}(${o.nickname})` : o.nickname}</span>
+              {o.status === 'pending' && <span className="shrink-0 rounded-badge bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold text-amber-400">승인 대기</span>}
               {o.isPrimary
                 ? <span className="shrink-0 rounded-badge bg-gold-300/15 px-1.5 py-0.5 text-[9px] font-bold text-gold-300">대표</span>
-                : o.userId !== user?.id
-                ? <button type="button" onClick={() => remove(o)} className="shrink-0 text-2xs font-semibold text-ink-muted hover:text-danger-light">제외</button>
-                : <span className="shrink-0 text-[9px] text-ink-muted">나</span>}
+                : (
+                  <>
+                    {o.status === 'approved' && <button type="button" onClick={() => makePrimary(o)} className="shrink-0 text-2xs font-semibold text-gold-300 hover:text-gold-200">대표로</button>}
+                    <button type="button" onClick={() => remove(o)} className="shrink-0 text-2xs font-semibold text-ink-muted hover:text-danger-light">제외</button>
+                  </>
+                )}
             </li>
           ))}
         </ul>
@@ -724,7 +733,7 @@ function OwnerManageCard({ venueId }: { venueId: string }) {
           placeholder="추가할 사장님 아이디(닉네임)" className="input min-w-0 flex-1 text-sm" />
         <button type="button" disabled={busy || !nick.trim()} onClick={add} className="btn-primary shrink-0 px-3 text-xs disabled:opacity-50">+ 사장님 추가</button>
       </div>
-      <p className="text-[10px] text-ink-muted">추가한 회원은 이 매장의 <b className="text-ink-secondary">공동 업주</b>가 되어 장부·포스터·이용권을 함께 관리할 수 있습니다.</p>
+      <p className="text-[10px] text-ink-muted">초대한 회원은 <b className="text-amber-400">운영자 승인 후</b> 이 매장의 <b className="text-ink-secondary">공동 업주</b>가 되어 장부·포스터·이용권을 함께 관리합니다. 승인된 공동 사장은 <b className="text-gold-300">대표</b>로 교체할 수 있어요.</p>
     </div>
   );
 }

@@ -1094,13 +1094,30 @@ export async function getEquippedMarks(userIds: string[]): Promise<Record<string
 }
 
 // ── 공동 사장(여러 업주) ─────────────────────────────────────
-export interface VenueOwner { userId: string; nickname: string; name: string; isPrimary: boolean }
+export interface VenueOwner { userId: string; nickname: string; name: string; isPrimary: boolean; status: string }
 export async function listVenueOwners(venueId: string): Promise<VenueOwner[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase.rpc('list_venue_owners', { p_venue_id: venueId });
   if (error) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((r: any) => ({ userId: r.user_id, nickname: r.nickname, name: r.name ?? '', isPrimary: !!r.is_primary }));
+  return (data ?? []).map((r: any) => ({ userId: r.user_id, nickname: r.nickname, name: r.name ?? '', isPrimary: !!r.is_primary, status: r.status ?? 'approved' }));
+}
+/** 대표 업주 교체 — 현 대표/운영자만, 새 대표는 승인된 공동 사장이어야 */
+export async function transferVenuePrimary(venueId: string, userId: string): Promise<void> {
+  const { error } = await supabase.rpc('transfer_venue_primary', { p_venue_id: venueId, p_new_owner_id: userId });
+  if (error) throw new Error(error.message);
+}
+export interface OwnerRequest { venueId: string; venueName: string; userId: string; nickname: string; name: string; invitedBy: string; createdAt: string }
+export async function adminListVenueOwnerRequests(): Promise<OwnerRequest[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.rpc('admin_list_venue_owner_requests');
+  if (error) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({ venueId: r.venue_id, venueName: r.venue_name ?? '(매장)', userId: r.user_id, nickname: r.nickname ?? '', name: r.name ?? '', invitedBy: r.invited_by ?? '', createdAt: r.created_at }));
+}
+export async function adminDecideVenueOwner(venueId: string, userId: string, approve: boolean): Promise<void> {
+  const { error } = await supabase.rpc('admin_decide_venue_owner', { p_venue_id: venueId, p_user_id: userId, p_approve: approve });
+  if (error) throw new Error(error.message);
 }
 /** 공동 사장 추가 — 닉네임(아이디)으로 회원 지정. 본인 매장 업주만. */
 export async function addVenueOwner(venueId: string, nickname: string): Promise<void> {
