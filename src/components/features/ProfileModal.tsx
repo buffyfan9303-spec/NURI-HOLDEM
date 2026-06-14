@@ -4,8 +4,7 @@ import { motion } from 'framer-motion';
 import Modal from '../atoms/Modal';
 import UnderlineTabs from '../atoms/UnderlineTabs';
 import { useToast } from '../atoms/Toast';
-import { tierOf } from '../atoms/TierBadge';
-import { downloadProfileCard } from '../../lib/profileCard';
+// (프로필 카드 이미지 저장 기능 제거 — 2026-06-15 사장님 요청)
 import { useAuth } from '../../contexts/AuthContext';
 import { IS_MOCK } from '../../lib/supabase';
 import { resizeImage } from '../../lib/storage';
@@ -312,25 +311,6 @@ export default function ProfileModal({ open, onClose, onOpenLegal }: ProfileModa
           {/* 내 활동 · 뱃지 진열장 */}
           <ActivityBadges points={user?.activityPoints ?? 0} visits={visitStats.visits} upcoming={visitStats.upcoming} />
 
-          {/* 프로필 공유 카드 — 전적·등급 이미지를 만들어 인스타/카톡 프로필에 */}
-          <button type="button"
-            onClick={() => {
-              const t = tierOf(user?.activityPoints ?? 0);
-              downloadProfileCard({
-                nickname: user?.nickname ?? user?.name ?? '플레이어',
-                tierLabel: t.label, tierColor: t.color,
-                points: user?.activityPoints ?? 0,
-              });
-              toast.show('프로필 카드를 저장했습니다 — SNS에 공유해 보세요!', 'success');
-            }}
-            className="hidden w-full items-center gap-2 rounded-card border border-gold-400/40 bg-gold-300/[0.06] px-3 py-2.5 text-left transition-colors hover:bg-gold-300/[0.1] sm:flex">
-            <span aria-hidden>🖼</span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-bold text-gold-300">프로필 카드 이미지 저장</span>
-              <span className="block text-[10px] text-ink-muted">닉네임·등급·활동 점수가 담긴 카드 — 인스타·카톡 프로필에 올려보세요.</span>
-            </span>
-            <span className="shrink-0 text-gold-300" aria-hidden>→</span>
-          </button>
 
           {/* 본인인증 (1인 1계정) */}
           {user?.verified ? (
