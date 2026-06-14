@@ -231,7 +231,7 @@ export async function clearClockState(venueId: string, gameSeq = 1): Promise<voi
 
 export function subscribeClock(venueId: string, onChange: () => void): () => void {
   if (IS_MOCK) return () => {};
-  const ch = supabase.channel(`clock:${venueId}`)
+  const ch = supabase.channel(`clock:${venueId}:${Math.random().toString(36).slice(2)}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'clock_states', filter: `venue_id=eq.${venueId}` }, () => onChange())
     .subscribe();
   return () => { supabase.removeChannel(ch); };
@@ -240,7 +240,7 @@ export function subscribeClock(venueId: string, onChange: () => void): () => voi
 /** 라이브 보드용 — 전 매장 clock_states 변경 실시간 구독(레벨 전환·통계 즉시 반영). */
 export function subscribeRunningClocks(onChange: () => void): () => void {
   if (IS_MOCK) return () => {};
-  const ch = supabase.channel('clock:all-live')
+  const ch = supabase.channel(`clock:all-live:${Math.random().toString(36).slice(2)}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'clock_states' }, () => onChange())
     .subscribe();
   return () => { supabase.removeChannel(ch); };

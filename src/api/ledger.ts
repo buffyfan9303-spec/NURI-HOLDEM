@@ -671,7 +671,7 @@ export async function cancelBuyin(id: string, password: string): Promise<void> {
 export function subscribeLedger(venueId: string, onChange: () => void): () => void {
   if (IS_MOCK) return () => {};
   const ch = supabase
-    .channel(`ledger:${venueId}`)
+    .channel(`ledger:${venueId}:${Math.random().toString(36).slice(2)}`)
     .on('postgres_changes',
       { event: '*', schema: 'public', table: 'ledger_buyins', filter: `venue_id=eq.${venueId}` },
       () => onChange())
