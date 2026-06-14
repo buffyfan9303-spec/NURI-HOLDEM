@@ -73,13 +73,40 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule }:
             desc="대회 클락이 시작되면 여기에 실시간으로 표시됩니다."
           />
         ) : (
-          <ul className="grid grid-cols-1 gap-card-gap">
-            {games.map((g) => {
-              const sched = matchSchedule(g, schedules);
-              return <LiveCard key={`${g.venueId}#${g.gameSeq}`} g={g} name={g.gameSeq > 1 ? `${nameOf(g.venueId)} · 사이드${g.gameSeq - 1}` : nameOf(g.venueId)} sched={sched}
-                onPoster={() => sched && onSchedule(sched)} onVenue={() => onVenue(g.venueId)} />;
-            })}
-          </ul>
+          <div className="space-y-card-gap">
+            {(() => {
+              // 같은 매장의 여러 게임(메인+사이드)을 한 묶음으로
+              const groups: { venueId: string; games: ClockState[] }[] = [];
+              for (const g of games) {
+                const grp = groups.find((x) => x.venueId === g.venueId);
+                if (grp) grp.games.push(g); else groups.push({ venueId: g.venueId, games: [g] });
+              }
+              const gl = (g: ClockState) => (g.gameSeq > 1 ? `사이드${g.gameSeq - 1}` : '메인');
+              return groups.map((grp) => {
+                if (grp.games.length === 1) {
+                  const g = grp.games[0]; const sched = matchSchedule(g, schedules);
+                  return (
+                    <ul key={grp.venueId} className="grid grid-cols-1 gap-card-gap">
+                      <LiveCard g={g} name={g.gameSeq > 1 ? `${nameOf(g.venueId)} · ${gl(g)}` : nameOf(g.venueId)} sched={sched}
+                        onPoster={() => sched && onSchedule(sched)} onVenue={() => onVenue(g.venueId)} />
+                    </ul>
+                  );
+                }
+                return (
+                  <div key={grp.venueId} className="rounded-card border border-gold-400/25 bg-gold-300/[0.03] p-2 space-y-2">
+                    <p className="px-1 text-sm font-bold text-ink-primary">🏠 {nameOf(grp.venueId)} <span className="text-2xs font-normal text-gold-300">· {grp.games.length}게임 동시 진행</span></p>
+                    <ul className="grid grid-cols-1 gap-card-gap">
+                      {grp.games.map((g) => {
+                        const sched = matchSchedule(g, schedules);
+                        return <LiveCard key={`${g.venueId}#${g.gameSeq}`} g={g} name={gl(g)} sched={sched}
+                          onPoster={() => sched && onSchedule(sched)} onVenue={() => onVenue(g.venueId)} />;
+                      })}
+                    </ul>
+                  </div>
+                );
+              });
+            })()}
+          </div>
         )}
         <p className="text-center text-[10px] text-ink-muted">운영 중 클락의 공개 정보입니다 · 30초 자동 갱신.</p>
       </div>

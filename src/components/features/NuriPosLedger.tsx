@@ -110,6 +110,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const [prefill, setPrefill]     = useState<Partial<LedgerSession> | null>(null);
   const [mode, setMode]           = useState<'list' | 'board'>('list');
   const [sessionList, setSessionList] = useState<LedgerSessionListItem[]>([]);
+  const [collapsedDates, setCollapsedDates] = useState<Set<string>>(new Set()); // 장부 목록 날짜별 접기(사이드 늘면 단축)
   const [listLoading, setListLoading] = useState(true);
   const [listQuery, setListQuery] = useState('');
   const [filterFrom, setFilterFrom] = useState(''); // 기간 필터 시작일
@@ -150,7 +151,11 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
 
   const loadList = useCallback(() => {
     setListLoading(true);
-    getLedgerSessionList(venueId).then(setSessionList).catch(() => {}).finally(() => setListLoading(false));
+    getLedgerSessionList(venueId).then((list) => {
+      setSessionList(list);
+      const ds = [...new Set(list.map((s) => s.sessionDate))]; // 최신순(날짜 desc)
+      setCollapsedDates(new Set(ds.slice(1))); // 최신 날짜만 펼침, 과거 날짜는 접어 목록 단축
+    }).catch(() => {}).finally(() => setListLoading(false));
   }, [venueId]);
   useEffect(() => { if (mode === 'list') loadList(); }, [mode, loadList]);
 
@@ -476,39 +481,70 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
         ) : filtered.length === 0 ? (
           <p className="py-10 text-center text-xs text-ink-muted">{hasRange ? '선택한 기간에 작성된 장부가 없습니다.' : `"${listQuery.trim()}" 검색 결과가 없습니다.`}</p>
         ) : (
-          <ul className="space-y-1.5">
-            {filtered.map((s, i) => {
-              const canOpen = fullAccess || s.operators.length === 0 || (!!user && s.operators.includes(user.id));
-              return (
-              <li key={`${s.sessionDate}#${s.gameSeq}`} className="flex items-center rounded-card border border-border-subtle bg-surface-low hover:border-gold-400/40 transition-colors">
-                <button type="button" disabled={!canOpen} onClick={() => canOpen && openBoard(s.sessionDate, s.gameSeq)}
-                  className={['flex-1 min-w-0 flex items-center gap-3 px-3 py-2.5 text-left', canOpen ? '' : 'opacity-50 cursor-not-allowed'].join(' ')}>
-                  <span className="w-6 shrink-0 text-center text-sm font-bold text-gold-300 tabular-nums">{i + 1}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-ink-primary truncate">
-                      {s.sessionDate}{s.sessionDate === todayStr ? ' (오늘)' : ''}
-                      <span className={['ml-1 text-2xs font-bold px-1.5 py-0.5 rounded-badge border align-middle', s.gameSeq === MAIN_GAME_SEQ ? 'bg-surface-float text-ink-muted border-border-default' : 'bg-gold-300/15 text-gold-300 border-gold-400/40'].join(' ')}>{s.gameSeq === MAIN_GAME_SEQ ? '메인' : `사이드${s.gameSeq - 1}`}</span>
-                      <span className="font-normal text-ink-secondary"> · {s.title || '게임'}</span>
-                    </p>
-                    <p className="text-2xs text-ink-muted">바인 {s.buyinAmount.toLocaleString()}원 · {canOpen ? '탭하여 보기·수정' : '담당 미지정 — 접근 권한 없음'}</p>
+          <div className="space-y-2">
+            {(() => {
+              // 날짜별 그룹(최신순) — filtered는 날짜 desc·game asc 정렬됨
+              const groups: { date: string; items: typeof filtered }[] = [];
+              for (const s of filtered) {
+                const g = groups.find((x) => x.date === s.sessionDate);
+                if (g) g.items.push(s); else groups.push({ date: s.sessionDate, items: [s] });
+              }
+              const gl = (seq: number) => (seq === MAIN_GAME_SEQ ? '메인' : `사이드${seq - 1}`);
+              return groups.map(({ date, items }) => {
+                const open = !collapsedDates.has(date);
+                const liveN = items.filter((x) => !x.closed && !x.regClosed).length;
+                const closedN = items.filter((x) => x.closed).length;
+                return (
+                  <div key={date} className="rounded-card border border-border-subtle bg-surface-low overflow-hidden">
+                    {/* 날짜 헤더 — 접기/펼치기(그날 게임 묶음) */}
+                    <button type="button"
+                      onClick={() => setCollapsedDates((prev) => { const n = new Set(prev); n.has(date) ? n.delete(date) : n.add(date); return n; })}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-surface-high transition-colors">
+                      <span className="text-sm font-bold text-ink-primary">{date}{date === todayStr ? ' (오늘)' : ''}</span>
+                      <span className="text-2xs font-semibold text-gold-300/90">게임 {items.length}</span>
+                      {liveN > 0 && <span className="text-2xs font-bold text-emerald-400">진행 {liveN}</span>}
+                      {closedN > 0 && <span className="text-2xs text-ink-muted">마감 {closedN}</span>}
+                      <span className="flex-1" />
+                      <span className="text-2xs font-bold text-ink-muted">{open ? '접기 ▲' : '펼치기 ▼'}</span>
+                    </button>
+                    {open ? (
+                      <ul className="border-t border-border-subtle divide-y divide-border-subtle">
+                        {items.map((s) => {
+                          const canOpen = fullAccess || s.operators.length === 0 || (!!user && s.operators.includes(user.id));
+                          return (
+                          <li key={`${s.sessionDate}#${s.gameSeq}`} className="flex items-center hover:bg-surface-high/40 transition-colors">
+                            <button type="button" disabled={!canOpen} onClick={() => canOpen && openBoard(s.sessionDate, s.gameSeq)}
+                              className={['flex-1 min-w-0 flex items-center gap-2.5 px-3 py-2.5 text-left', canOpen ? '' : 'opacity-50 cursor-not-allowed'].join(' ')}>
+                              <span className={['shrink-0 text-2xs font-bold px-1.5 py-0.5 rounded-badge border', s.gameSeq === MAIN_GAME_SEQ ? 'bg-surface-float text-ink-muted border-border-default' : 'bg-gold-300/15 text-gold-300 border-gold-400/40'].join(' ')}>{gl(s.gameSeq)}</span>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-bold text-ink-primary truncate">{s.title || '게임'}</p>
+                                <p className="text-2xs text-ink-muted">바인 {s.buyinAmount.toLocaleString()}원 · {canOpen ? '탭하여 보기·수정' : '담당 미지정 — 접근 권한 없음'}</p>
+                              </div>
+                              {!canOpen
+                                ? <span className="shrink-0 text-sm" aria-label="잠김">🔒</span>
+                                : s.closed
+                                ? <span className="shrink-0 text-2xs font-bold text-gold-300 bg-gold-300/15 px-2 py-0.5 rounded-badge">마감</span>
+                                : s.regClosed
+                                ? <span className="shrink-0 text-2xs font-bold text-danger-light bg-danger/10 px-2 py-0.5 rounded-badge">레지마감</span>
+                                : <span className="shrink-0 text-2xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-badge">진행중</span>}
+                            </button>
+                            {fullAccess && (
+                              <button type="button" onClick={() => handleDeleteSession(s.sessionDate, s.gameSeq)} aria-label={`${s.sessionDate} ${gl(s.gameSeq)} 장부 삭제`}
+                                className="shrink-0 mr-1.5 w-8 h-8 flex items-center justify-center rounded-input text-ink-muted hover:text-danger-light hover:bg-danger/10 transition-colors">
+                                <Icon name="trash" size={15} />
+                              </button>
+                            )}
+                          </li>
+                        );})}
+                      </ul>
+                    ) : (
+                      <div className="border-t border-border-subtle px-3 py-1.5 text-2xs text-ink-muted truncate">{items.map((x) => gl(x.gameSeq)).join(' · ')}</div>
+                    )}
                   </div>
-                  {!canOpen
-                    ? <span className="shrink-0 text-sm" aria-label="잠김">🔒</span>
-                    : s.closed
-                    ? <span className="shrink-0 text-2xs font-bold text-gold-300 bg-gold-300/15 px-2 py-0.5 rounded-badge">마감</span>
-                    : s.regClosed
-                    ? <span className="shrink-0 text-2xs font-bold text-danger-light bg-danger/10 px-2 py-0.5 rounded-badge">레지마감</span>
-                    : <span className="shrink-0 text-2xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-badge">진행중</span>}
-                </button>
-                {fullAccess && (
-                  <button type="button" onClick={() => handleDeleteSession(s.sessionDate, s.gameSeq)} aria-label={`${s.sessionDate} 장부 삭제`}
-                    className="shrink-0 mr-1.5 w-8 h-8 flex items-center justify-center rounded-input text-ink-muted hover:text-danger-light hover:bg-danger/10 transition-colors">
-                    <Icon name="trash" size={15} />
-                  </button>
-                )}
-              </li>
-            );})}
-          </ul>
+                );
+              });
+            })()}
+          </div>
         )}
       </div>
     );
