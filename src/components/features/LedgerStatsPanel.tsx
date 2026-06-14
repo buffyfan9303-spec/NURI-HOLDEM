@@ -88,11 +88,18 @@ function StatsView({ venueId }: { venueId: string }) {
     return subscribeLedger(venueId, () => setLiveTick((t) => t + 1));
   }, [venueId, period]);
 
-  const sessionByDate = useMemo(() => {
+  // 멀티게임: 바인↔세션 페어링은 (날짜+게임) 키로(사이드 단가 정확). 날짜 합산은 sessionsByDate.
+  const sessionByKey = useMemo(() => {
     const m = new Map<string, LedgerSession>();
-    for (const s of sessions) m.set(s.sessionDate, s);
+    for (const s of sessions) m.set(`${s.sessionDate}#${s.gameSeq}`, s);
     return m;
   }, [sessions]);
+  const sessionsByDate = useMemo(() => {
+    const m = new Map<string, LedgerSession[]>();
+    for (const s of sessions) { const a = m.get(s.sessionDate) ?? []; a.push(s); m.set(s.sessionDate, a); }
+    return m;
+  }, [sessions]);
+  const bkey = (b: { sessionDate: string; gameSeq: number }) => `${b.sessionDate}#${b.gameSeq}`;
   // 플레이어명 → 손님유형 코드(new/regular/staff/other/none). 커스텀 텍스트 유형은 '기타', 무유형은 'none'.
   const playerType = useMemo(() => {
     const m = new Map<string, string>();
@@ -106,8 +113,9 @@ function StatsView({ venueId }: { venueId: string }) {
 
   const m = useMemo(() => {
     const src = (period === 'day' && excludeTypes.size > 0) ? buyins.filter((b) => !excludeTypes.has(playerType.get(b.playerName) ?? 'none')) : buyins;
-    const fin = (b: LedgerBuyin) => buyinFinance(b, sessionByDate.get(b.sessionDate) ?? { buyinAmount: 0, cardAmount: null, discounts: [] });
+    const fin = (b: LedgerBuyin) => buyinFinance(b, sessionByKey.get(bkey(b)) ?? { buyinAmount: 0, cardAmount: null, discounts: [] });
     let revenue = 0, unpaid = 0, support = 0, ticket = 0, ticketUnpaid = 0, entries = 0, underEntries = 0, discountCnt = 0;
+    let mainEntries = 0, mainRev = 0, sideEntries = 0, sideRev = 0; const sideGames = new Set<string>();
     const byMethod: Record<PaymentMethod, number> = { ticket: 0, cash: 0, transfer: 0, card: 0, support: 0 };
     const byPlayer: Record<string, number> = {};
     const playerSet = new Set<string>();
@@ -117,6 +125,8 @@ function StatsView({ venueId }: { venueId: string }) {
     for (const b of src) {
       const f = fin(b);
       revenue += f.paid; unpaid += f.unpaid; support += f.support; entries += f.entry;
+      if (b.gameSeq > 1) { sideEntries += f.entry; sideRev += f.paid; sideGames.add(bkey(b)); }
+      else { mainEntries += f.entry; mainRev += f.paid; }
       if (f.entry > 0 && f.entry < 1) underEntries++; // 참고용
       if (b.discountIndex > 0 || (b.isSplit && b.discountLevel > 0)) discountCnt++; // 할인 적용된 바인
       ticket += f.ticketPaid + (b.isSplit ? b.ticketCount : 0); ticketUnpaid += f.ticketUnpaid;
@@ -126,11 +136,11 @@ function StatsView({ venueId }: { venueId: string }) {
       playerSet.add(b.playerName); dates.add(b.sessionDate);
       const w = new Date(b.sessionDate + 'T00:00:00').getDay();
       if (!dow[w]) dow[w] = { entries: 0, revenue: 0, unpaid: 0, buyins: 0, target: 0, dates: new Set(), players: new Set() };
-      if (!dow[w].dates.has(b.sessionDate)) dow[w].target += (sessionByDate.get(b.sessionDate)?.targetEntries ?? 0); // 날짜별 기준엔트리 1회만 합산
+      if (!dow[w].dates.has(b.sessionDate)) dow[w].target += (sessionsByDate.get(b.sessionDate) ?? []).reduce((a, s) => a + (s.targetEntries ?? 0), 0); // 날짜별(전 게임) 기준엔트리 1회만 합산
       dow[w].entries += f.entry; dow[w].revenue += f.paid; dow[w].unpaid += f.unpaid;
       dow[w].buyins++; dow[w].dates.add(b.sessionDate); dow[w].players.add(b.playerName);
     }
-    const target = (period === 'day' ? sessionByDate.get(date)?.targetEntries : 0) ?? 0;
+    const target = period === 'day' ? (sessionsByDate.get(date) ?? []).reduce((a, s) => a + (s.targetEntries ?? 0), 0) : 0;
     const visitor: Record<VisitorType, number> = { new: 0, regular: 0, staff: 0, other: 0 };
     for (const p of players) {
       if (!p.visitorType) continue;
@@ -151,6 +161,7 @@ function StatsView({ venueId }: { venueId: string }) {
       perPlayer: playerSet.size ? entries / playerSet.size : 0,
       arpGuest: grossPerPlayer, // 1인당 (완납+미수)
       arpEntry: grossPerEntry,  // 엔트리당 (완납+미수)
+      mainEntries, mainRev, sideEntries, sideRev, sideGameCount: sideGames.size,
       dayCount, visitor, dow,
       avgEntryPerDay: dayCount ? entries / dayCount : 0,
       avgRevenuePerDay: dayCount ? revenue / dayCount : 0,
@@ -158,7 +169,7 @@ function StatsView({ venueId }: { venueId: string }) {
       cardRatio: cashLike > 0 ? (byMethod.card / cashLike) * 100 : 0,   // 현금성 결제 중 카드 비중
       unpaidRatio: revenue > 0 ? (unpaid / revenue) * 100 : 0,
     };
-  }, [buyins, sessionByDate, players, excludeTypes, playerType, period, date]);
+  }, [buyins, sessionByKey, sessionsByDate, players, excludeTypes, playerType, period, date]);
 
   // C2: 마감 시 저장된 클락 최종 보정치 합산(통계 보조 — 장부 바인과 별개 기준)
   const clockAgg = useMemo(() => {
@@ -186,20 +197,20 @@ function StatsView({ venueId }: { venueId: string }) {
       toast.show('요일별 통계 CSV를 내보냈습니다', 'success');
       return;
     }
-    const dates = [...sessionByDate.keys()].sort();
-    if (!dates.length) { toast.show('내보낼 데이터가 없습니다', 'info'); return; }
-    const rows = dates.map((dt) => {
-      const s = sessionByDate.get(dt)!;
+    const sorted = [...sessions].sort((a, b) => (a.sessionDate === b.sessionDate ? a.gameSeq - b.gameSeq : a.sessionDate < b.sessionDate ? -1 : 1));
+    if (!sorted.length) { toast.show('내보낼 데이터가 없습니다', 'info'); return; }
+    const rows = sorted.map((s) => {
       let entry = 0, paid = 0, unpaid = 0, ticket = 0; const ps = new Set<string>();
       for (const b of buyins) {
-        if (b.sessionDate !== dt) continue;
+        if (b.sessionDate !== s.sessionDate || b.gameSeq !== s.gameSeq) continue;
         const f = buyinFinance(b, s);
         entry += f.entry; paid += f.paid; unpaid += f.unpaid; ticket += f.ticketPaid + (b.isSplit ? b.ticketCount : 0);
         ps.add(b.playerName);
       }
-      return [dt, DOW[new Date(dt + 'T00:00:00').getDay()], s.targetEntries ?? '', Math.round(entry * 10) / 10, Math.round(paid), Math.round(unpaid), ticket, s.voucherIssued ?? 0, ps.size];
+      const gl = s.gameSeq > 1 ? `사이드${s.gameSeq - 1}` : '메인';
+      return [s.sessionDate, DOW[new Date(s.sessionDate + 'T00:00:00').getDay()], gl, s.targetEntries ?? '', Math.round(entry * 10) / 10, Math.round(paid), Math.round(unpaid), ticket, s.voucherIssued ?? 0, ps.size];
     });
-    downloadCsv(`장부통계_${range.from}_${range.to}`, toCsv(['날짜', '요일', '기준엔트리', '엔트리', '완납매출(원)', '미수(원)', '회수티켓', '발행이용권', '플레이어수'], rows));
+    downloadCsv(`장부통계_${range.from}_${range.to}`, toCsv(['날짜', '요일', '게임', '기준엔트리', '엔트리', '완납매출(원)', '미수(원)', '회수티켓', '발행이용권', '플레이어수'], rows));
     toast.show('통계 CSV를 내보냈습니다', 'success');
   };
 
@@ -291,6 +302,23 @@ function StatsView({ venueId }: { venueId: string }) {
               ? <Mini label="가게지원" value={`${m.support}건`} />
               : <Mini label="일평균 매출" value={`${m.avgRevenuePerDay.toLocaleString(undefined, { maximumFractionDigits: 0 })}원`} />}
           </div>
+
+          {m.sideGameCount > 0 && (
+            <Section icon="users" title="게임별 구분" suffix="· 메인 / 사이드">
+              <div className="grid grid-cols-2 gap-1.5">
+                <div className="rounded-input bg-surface-high border border-border-subtle py-2 text-center">
+                  <p className="text-2xs text-ink-muted">메인</p>
+                  <p className="text-sm font-bold text-ink-primary tabular-nums">{m.mainEntries.toLocaleString(undefined, { maximumFractionDigits: 1 })} 엔트리</p>
+                  <p className="text-2xs text-emerald-400 tabular-nums">{wonToMan(m.mainRev)}만</p>
+                </div>
+                <div className="rounded-input bg-gold-300/[0.06] border border-gold-400/30 py-2 text-center">
+                  <p className="text-2xs text-gold-300">사이드 · {m.sideGameCount}게임</p>
+                  <p className="text-sm font-bold text-ink-primary tabular-nums">{m.sideEntries.toLocaleString(undefined, { maximumFractionDigits: 1 })} 엔트리</p>
+                  <p className="text-2xs text-emerald-400 tabular-nums">{wonToMan(m.sideRev)}만</p>
+                </div>
+              </div>
+            </Section>
+          )}
 
           {clockAgg && (
             <Section icon="clock" title="클락 최종 (보정 포함)" suffix="· 운영자 클락 집계">
