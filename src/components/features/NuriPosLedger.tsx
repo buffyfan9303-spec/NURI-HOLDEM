@@ -79,7 +79,7 @@ export interface LedgerSeed {
 export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI POS', onMakeRankingDraft, onOpenClock, onOpenStats, seed }: {
   venueId: string; canManage: boolean; venueName?: string;
   onMakeRankingDraft?: (date: string, names: string[], eventName?: string) => void;
-  onOpenClock?: (date: string) => void;
+  onOpenClock?: (date: string, gameSeq: number) => void;
   /** 마감 후 '주간 리포트 보기' — 통계 섹션으로 이동(업주/운영자만 전달) */
   onOpenStats?: () => void;
   /** 게임관리에서 '장부' 버튼으로 진입 시 — 해당 포스터의 장부로 바로 이동/등록 */
@@ -205,7 +205,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
 
   // ── 연동 클락 — 리모컨 제어 + 바인 시점 얼리 확정(스타트 시각 미입력 버그 근본 해결) ──
   const [clock, setClock] = useState<ClockState | null>(null);
-  const reloadClock = useCallback(() => { getClockState(venueId).then(setClock).catch(() => {}); }, [venueId]);
+  const reloadClock = useCallback(() => { getClockState(venueId, gameSeq).then(setClock).catch(() => {}); }, [venueId, gameSeq]);
   useEffect(() => { reloadClock(); }, [reloadClock]);
   useEffect(() => subscribeClock(venueId, reloadClock), [venueId, reloadClock]);
   const clockLinked = !!clock && clock.sessionDate === date;
@@ -328,7 +328,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       if (others.length) notifyLedgerOpen(venueId, s.title ?? '', others).catch(() => {});
       // 포스터→장부→클락 원클릭 체인: 시작 직후 클락도 이어서 켤지 한 번만 묻는다
       if (onOpenClock && window.confirm('장부를 시작했습니다.\n클락(토너먼트 타이머)도 같이 켤까요?')) {
-        onOpenClock(s.sessionDate);
+        onOpenClock(s.sessionDate, s.gameSeq ?? MAIN_GAME_SEQ);
       }
     }
     catch (e) { toast.show(e instanceof Error ? e.message : '시작 실패', 'error'); }
@@ -550,13 +550,13 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
         {session.openedAt && <span className="text-2xs text-ink-muted">· 담당 {operatorName2(session.openedBy)}</span>}
         {scheduleTitle(session.scheduleId) && <span className="text-2xs text-gold-300 font-semibold">· 대회 {scheduleTitle(session.scheduleId)}</span>}
         <span className="flex-1" />
-        {onOpenClock && <button type="button" onClick={() => onOpenClock(date)} className="btn-ghost text-sm px-3.5 py-2 font-semibold">⏱ 클락</button>}
+        {onOpenClock && <button type="button" onClick={() => onOpenClock(date, gameSeq)} className="btn-ghost text-sm px-3.5 py-2 font-semibold">⏱ 클락</button>}
         {!closed && <button type="button" onClick={() => setEditOpen(true)} className="btn-ghost text-sm px-3.5 py-2 font-semibold">세션 정보 수정</button>}
       </div>
 
       {/* 클락 리모컨 — 이 장부에 연결된 클락을 장부에서 바로 제어(레벨± · 일시정지/재개) */}
       {clockLinked && clock && !closed && (
-        <ClockRemoteBar clock={clock} onPatch={patchClock} onOpenClock={onOpenClock ? () => onOpenClock(date) : undefined} />
+        <ClockRemoteBar clock={clock} onPatch={patchClock} onOpenClock={onOpenClock ? () => onOpenClock(date, gameSeq) : undefined} />
       )}
 
       {closed && (
@@ -1187,7 +1187,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   const [rebuyStack, setRebuyStack] = useState<number>(70000);
   useEffect(() => {
     let alive = true;
-    getClockState(base.venueId).then((st) => {
+    getClockState(base.venueId, base.gameSeq).then((st: ClockState | null) => {
       if (!alive) return;
       const c = st?.config ?? defaultClockConfig();
       setClockState(st);
@@ -1226,7 +1226,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       const cfg = { ...baseCfg, earlyBonus, doubleEarlyBonus, earlyDoubleLevel, earlySingleLevel, startStack, rebuyStack };
       const next: ClockState = clockState
         ? { ...clockState, config: cfg }
-        : { venueId: base.venueId, sessionDate: null, title: base.title ?? '', config: cfg, currentIndex: 0, running: false, endsAt: null, remainingMs: 0, adjEntries: 0, adjRebuys: 0, adjEarlies: 0, adjAddons: 0, eliminations: 0 };
+        : { venueId: base.venueId, gameSeq: base.gameSeq, sessionDate: null, title: base.title ?? '', config: cfg, currentIndex: 0, running: false, endsAt: null, remainingMs: 0, adjEntries: 0, adjRebuys: 0, adjEarlies: 0, adjAddons: 0, eliminations: 0 };
       saveClockState(next).catch(() => {});
     }
     onSubmit({

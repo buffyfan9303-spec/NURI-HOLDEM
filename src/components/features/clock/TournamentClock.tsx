@@ -70,7 +70,7 @@ function nextPlayableLabel(cfg: ClockConfig, index: number): string {
 }
 
 // ── 메인: 설정 ↔ 라이브 ─────────────────────────────────────────────────────────
-export default function TournamentClock({ venueId, canManage, seedSessionDate }: { venueId: string; canManage: boolean; seedSessionDate?: string | null }) {
+export default function TournamentClock({ venueId, canManage, seedSessionDate, seedGameSeq = 1 }: { venueId: string; canManage: boolean; seedSessionDate?: string | null; seedGameSeq?: number }) {
   const toast = useToast();
   const [state, setState] = useState<ClockState | null>(null);
   const [presets, setPresets] = useState<ClockPreset[]>([]);
@@ -79,24 +79,27 @@ export default function TournamentClock({ venueId, canManage, seedSessionDate }:
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'settings' | 'live'>('live');
 
-  const reloadState = useCallback(() => getClockState(venueId).then((s) => setState(s)).catch(() => {}), [venueId]);
+  // 이 화면이 다루는 게임(클락). 연동 시작 시 그 게임으로 바뀜 — subscribe 콜백에서 최신값 참조용 ref.
+  const curGameSeqRef = useRef(seedGameSeq);
+  const reloadState = useCallback(() => getClockState(venueId, curGameSeqRef.current).then((s) => setState(s)).catch(() => {}), [venueId]);
   const reloadPresets = useCallback(() => getClockPresets(venueId).then(setPresets).catch(() => {}), [venueId]);
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([getClockState(venueId), getClockPresets(venueId), getLedgerSessionList(venueId, 60).catch(() => [])])
+    Promise.all([getClockState(venueId, seedGameSeq), getClockPresets(venueId), getLedgerSessionList(venueId, 60).catch(() => [])])
       .then(([s, p, ls]) => { setState(s); setPresets(p); setSessions(ls); setView(seedSessionDate ? 'settings' : (s ? 'live' : 'settings')); })
       .finally(() => setLoading(false));
-  }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [venueId, seedGameSeq]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 장부에서 넘어옴: 해당 세션을 불러와 게임명·얼리 구간을 클락 설정에 시드
   useEffect(() => {
     if (!seedSessionDate) { setSeedSession(null); return; }
-    getLedgerSession(venueId, seedSessionDate).then(setSeedSession).catch(() => {});
+    getLedgerSession(venueId, seedSessionDate, seedGameSeq).then(setSeedSession).catch(() => {});
     setView('settings');
-  }, [venueId, seedSessionDate]);
+  }, [venueId, seedSessionDate, seedGameSeq]);
 
   useEffect(() => subscribeClock(venueId, reloadState), [venueId, reloadState]);
+  useEffect(() => { if (state) curGameSeqRef.current = state.gameSeq; }, [state]);
 
   const seededInitial = useMemo<ClockConfig>(() => {
     const base = state?.config ?? defaultClockConfig();
@@ -109,8 +112,9 @@ export default function TournamentClock({ venueId, canManage, seedSessionDate }:
     });
   }, [state, seedSession]);
 
-  const startClock = async (config: ClockConfig, linkDate: string | null) => {
-    const base = emptyClockState(venueId, withDerivedEarly(config));
+  const startClock = async (config: ClockConfig, linkDate: string | null, linkGameSeq: number = seedGameSeq) => {
+    const gseq = linkDate ? linkGameSeq : seedGameSeq; // 단독은 진입 슬롯(seed), 연동은 고른 게임
+    const base = emptyClockState(venueId, withDerivedEarly(config), gseq);
     base.sessionDate = linkDate;
     base.title = base.config.title;
     try {
@@ -118,10 +122,11 @@ export default function TournamentClock({ venueId, canManage, seedSessionDate }:
       // 장부 연동 시: 클락의 얼리(레벨→분 환산)를 장부 세션에 기록 → 장부 셀 얼리 태그가 동일 기준으로 표시됨.
       if (linkDate) {
         try {
-          const sess = await getLedgerSession(venueId, linkDate);
+          const sess = await getLedgerSession(venueId, linkDate, gseq);
           await saveLedgerSession({ ...sess, earlyDoubleMin: base.config.earlyDoubleMin, earlySingleMin: base.config.earlySingleMin });
         } catch { /* noop */ }
       }
+      curGameSeqRef.current = gseq;
       setState(base); setView('live'); toast.show('클락을 시작 준비했습니다', 'success');
     }
     catch (e) { toast.show(e instanceof Error ? e.message : '시작 실패', 'error'); }
@@ -129,7 +134,7 @@ export default function TournamentClock({ venueId, canManage, seedSessionDate }:
 
   const endClock = async () => {
     if (!confirm('클락을 종료하고 초기화할까요?')) return;
-    try { await clearClockState(venueId); setState(null); setView('settings'); toast.show('클락을 종료했습니다', 'info'); }
+    try { await clearClockState(venueId, state?.gameSeq ?? curGameSeqRef.current); setState(null); setView('settings'); toast.show('클락을 종료했습니다', 'info'); }
     catch (e) { toast.show(e instanceof Error ? e.message : '종료 실패', 'error'); }
   };
 
@@ -140,7 +145,7 @@ export default function TournamentClock({ venueId, canManage, seedSessionDate }:
       <ClockSettings
         key={`${state?.venueId ?? 'new'}-${seedSession?.title ?? ''}-${seedSessionDate ?? ''}`}
         venueId={venueId} canManage={canManage} presets={presets} sessions={sessions} initial={seededInitial}
-        hasLive={!!state} seedSessionDate={seedSessionDate} seededFromLedger={!!seedSession}
+        hasLive={!!state} seedSessionDate={seedSessionDate} seedGameSeq={seedGameSeq} seededFromLedger={!!seedSession}
         onReloadPresets={reloadPresets}
         onStart={startClock}
         onBackToLive={state ? () => setView('live') : undefined}
@@ -201,14 +206,14 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd }: {
   // 장부 연동: 연결된 세션의 바인/얼리설정 자동 반영
   useEffect(() => {
     if (!state.sessionDate) { setBuyins([]); setLinkedSession(null); return; }
-    const d = state.sessionDate;
+    const d = state.sessionDate; const g = state.gameSeq;
     const load = () => {
-      getLedgerBuyins(state.venueId, d).then(setBuyins).catch(() => {});
-      getLedgerSession(state.venueId, d).then(setLinkedSession).catch(() => {});
+      getLedgerBuyins(state.venueId, d, g).then(setBuyins).catch(() => {});
+      getLedgerSession(state.venueId, d, g).then(setLinkedSession).catch(() => {});
     };
     load();
     return subscribeLedger(state.venueId, load);
-  }, [state.venueId, state.sessionDate]);
+  }, [state.venueId, state.sessionDate, state.gameSeq]);
 
   // 250ms 틱(부드러운 카운트다운)
   useEffect(() => { const id = setInterval(() => setTick((t) => t + 1), 250); return () => clearInterval(id); }, []);
@@ -532,14 +537,15 @@ function VolCtl({ value, onChange }: { value: number; onChange: (v: number) => v
 }
 
 // ── 설정/프리셋 ─────────────────────────────────────────────────────────────────
-function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive, seedSessionDate, seededFromLedger, onReloadPresets, onStart, onBackToLive }: {
+function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive, seedSessionDate, seedGameSeq = 1, seededFromLedger, onReloadPresets, onStart, onBackToLive }: {
   venueId: string; canManage: boolean; presets: ClockPreset[]; sessions: LedgerSessionListItem[]; initial: ClockConfig; hasLive: boolean;
-  seedSessionDate?: string | null; seededFromLedger?: boolean;
-  onReloadPresets: () => void; onStart: (c: ClockConfig, linkDate: string | null) => void; onBackToLive?: () => void;
+  seedSessionDate?: string | null; seedGameSeq?: number; seededFromLedger?: boolean;
+  onReloadPresets: () => void; onStart: (c: ClockConfig, linkDate: string | null, linkGameSeq?: number) => void; onBackToLive?: () => void;
 }) {
   const toast = useToast();
   const [cfg, setCfg] = useState<ClockConfig>(initial);
   const [linkDate, setLinkDate] = useState<string | null>(seedSessionDate ?? null); // 연동할 장부(null=단독)
+  const [linkGameSeq, setLinkGameSeq] = useState<number>(seedGameSeq ?? 1); // 연동할 게임(game_seq)
   const [sessQuery, setSessQuery] = useState(''); // 장부 목록 검색(날짜·게임명)
   const [presetQuery, setPresetQuery] = useState(''); // 프리셋 검색
   const [presetName, setPresetName] = useState('');
@@ -643,16 +649,19 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
               <p className="text-center py-4 text-[10px] text-ink-muted">저장된 장부가 없습니다. 「장부」 탭에서 게임을 먼저 만들어 주세요.</p>
             ) : filteredSessions.length === 0 ? (
               <p className="text-center py-4 text-[10px] text-ink-muted">"{sessQuery.trim()}" 검색 결과가 없습니다.</p>
-            ) : filteredSessions.map((s) => (
-              <button key={s.sessionDate} type="button"
-                onClick={() => { setLinkDate(s.sessionDate); if (s.title) set({ title: s.title }); }}
-                className={['w-full flex items-center gap-2 px-2.5 py-2 text-left transition-colors', linkDate === s.sessionDate ? 'bg-gold-300/15' : 'hover:bg-surface-high'].join(' ')}>
+            ) : filteredSessions.map((s) => {
+              const sel = linkDate === s.sessionDate && linkGameSeq === s.gameSeq;
+              return (
+              <button key={`${s.sessionDate}#${s.gameSeq}`} type="button"
+                onClick={() => { setLinkDate(s.sessionDate); setLinkGameSeq(s.gameSeq); if (s.title) set({ title: s.title }); }}
+                className={['w-full flex items-center gap-2 px-2.5 py-2 text-left transition-colors', sel ? 'bg-gold-300/15' : 'hover:bg-surface-high'].join(' ')}>
                 <span className="text-2xs font-bold text-gold-300 tabular-nums shrink-0">{s.sessionDate}</span>
+                {s.gameSeq > 1 && <span className="shrink-0 rounded-badge bg-gold-300/15 border border-gold-400/40 px-1 text-[9px] font-bold text-gold-300">사이드{s.gameSeq - 1}</span>}
                 <span className="flex-1 text-xs text-ink-primary truncate">{s.title || '제목 없음'}</span>
                 {s.closed && <span className="text-[9px] text-ink-muted shrink-0">마감</span>}
-                {linkDate === s.sessionDate && <span className="text-gold-300 text-xs shrink-0">✓</span>}
+                {sel && <span className="text-gold-300 text-xs shrink-0">✓</span>}
               </button>
-            ))}
+            );})}
           </div>
         </div>
         {seededFromLedger && linkDate && (
@@ -811,7 +820,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
       {/* 시작 — 위에서 고른 방식(단독/장부)으로 */}
       <div className="flex gap-2 pb-2">
         {linkDate
-          ? <button type="button" onClick={() => onStart(cfg, linkDate)} className="btn-primary flex-1 text-sm">📒 장부({linkDate.slice(5)}) 연동해 시작</button>
+          ? <button type="button" onClick={() => onStart(cfg, linkDate, linkGameSeq)} className="btn-primary flex-1 text-sm">📒 장부({linkDate.slice(5)}{linkGameSeq > 1 ? ` 사이드${linkGameSeq - 1}` : ''}) 연동해 시작</button>
           : <button type="button" onClick={() => onStart(cfg, null)} className="btn-primary flex-1 text-sm">🎰 {hasLive ? '이 설정으로 다시 시작' : '단독 클락 시작'}</button>}
         {linkDate && <button type="button" onClick={() => onStart(cfg, null)} className="btn-ghost flex-1 text-sm">단독으로 시작</button>}
       </div>

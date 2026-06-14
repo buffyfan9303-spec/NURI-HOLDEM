@@ -51,6 +51,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   const [permsLoaded, setPermsLoaded] = useState(false);
   const [rankingDraft, setRankingDraft] = useState<{ date: string; names: string[]; event?: string } | null>(null);
   const [clockSeed, setClockSeed] = useState<string | null>(null); // 장부→클락 연동 날짜
+  const [clockSeedGame, setClockSeedGame] = useState(1); // 장부→클락 연동 게임(game_seq)
   const [ledgerSeed, setLedgerSeed] = useState<LedgerSeed | null>(null); // 게임관리→장부 바로가기
 
   // 섹션 이동 공통 — 장부를 메뉴로 직접 열 땐 게임관리 시드를 지워 일반 진입으로
@@ -272,7 +273,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
             {section === 'ledger'  && ledgerOk && (
               <NuriPosLedger venueId={venueId} canManage={manageOk} seed={ledgerSeed}
                 onMakeRankingDraft={(d, names, ev) => { setRankingDraft({ date: d, names, event: ev ?? '' }); setSection('ranking'); }}
-                onOpenClock={(d) => { setClockSeed(d); setSection('clock'); }}
+                onOpenClock={(d, g) => { setClockSeed(d); setClockSeedGame(g); setSection('clock'); }}
                 onOpenStats={manageOk ? () => setSection('stats') : undefined} />
             )}
             {section === 'stats'    && manageOk && <LedgerStatsPanel venueId={venueId} />}
@@ -280,7 +281,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
             {section === 'venueRank' && ledgerOk && <VenueRankHub venueId={venueId} canConfigure={manageOk} />}
             {section === 'league'   && ledgerOk && <LeaguePanel venueId={venueId} canConfigure={manageOk} />}
             {section === 'page'     && canStaff && <VenueCustomizePanel venueId={venueId} />}
-            {section === 'clock'    && ledgerOk && <TournamentClock venueId={venueId} canManage={ledgerOk} seedSessionDate={clockSeed} />}
+            {section === 'clock'    && ledgerOk && <TournamentClock venueId={venueId} canManage={ledgerOk} seedSessionDate={clockSeed} seedGameSeq={clockSeedGame} />}
             {section === 'attendance' && ledgerOk && <StaffSelfAttendance venueId={venueId} />}
             {section === 'staff'    && canStaff && <StaffHub venueId={venueId} />}
             {section === 'settings' && canStaff && <PosSettingsPanel venueId={venueId} />}

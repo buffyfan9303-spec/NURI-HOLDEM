@@ -50,6 +50,7 @@ export interface ClockLiveStats {
 
 export interface ClockState {
   venueId: string;
+  gameSeq: number;            // 게임 구분(1=메인, 2+=사이드) — (venue,game_seq)=클락 1개
   sessionDate: string | null; // 연결된 장부(없으면 standalone)
   title: string;
   config: ClockConfig;
@@ -139,10 +140,10 @@ export function generateBlinds(regCloseLevel: number, maxLevel: number, preDur =
   return out;
 }
 
-export function emptyClockState(venueId: string, config = defaultClockConfig()): ClockState {
+export function emptyClockState(venueId: string, config = defaultClockConfig(), gameSeq = 1): ClockState {
   const first = config.levels[0];
   return {
-    venueId, sessionDate: null, title: config.title, config,
+    venueId, gameSeq, sessionDate: null, title: config.title, config,
     currentIndex: 0, running: false, endsAt: null,
     remainingMs: (first?.minutes ?? 20) * 60_000,
     adjEntries: 0, adjRebuys: 0, adjEarlies: 0, adjAddons: 0, eliminations: 0,
@@ -153,7 +154,7 @@ export function emptyClockState(venueId: string, config = defaultClockConfig()):
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function rowToState(r: any): ClockState {
   return {
-    venueId: r.venue_id, sessionDate: r.session_date ?? null,
+    venueId: r.venue_id, gameSeq: r.game_seq ?? 1, sessionDate: r.session_date ?? null,
     title: r.title ?? '', config: (r.config ?? {}) as ClockConfig,
     currentIndex: r.current_index ?? 0, running: !!r.running,
     endsAt: r.ends_at ?? null, remainingMs: Number(r.remaining_ms ?? 0),
@@ -194,9 +195,9 @@ export async function deleteClockPreset(id: string): Promise<void> {
 }
 
 // ── 라이브 상태 ───────────────────────────────────────────────────────────────
-export async function getClockState(venueId: string): Promise<ClockState | null> {
+export async function getClockState(venueId: string, gameSeq = 1): Promise<ClockState | null> {
   if (IS_MOCK) return null;
-  const { data } = await supabase.from('clock_states').select('*').eq('venue_id', venueId).maybeSingle();
+  const { data } = await supabase.from('clock_states').select('*').eq('venue_id', venueId).eq('game_seq', gameSeq).maybeSingle();
   return data ? rowToState(data) : null;
 }
 
@@ -211,7 +212,7 @@ export async function getRunningClocks(): Promise<ClockState[]> {
 export async function saveClockState(s: ClockState): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.from('clock_states').upsert({
-    venue_id: s.venueId, session_date: s.sessionDate, title: s.title,
+    venue_id: s.venueId, game_seq: s.gameSeq ?? 1, session_date: s.sessionDate, title: s.title,
     config: s.config as unknown as object,
     current_index: s.currentIndex, running: s.running,
     ends_at: s.endsAt, remaining_ms: s.remainingMs,
@@ -219,13 +220,13 @@ export async function saveClockState(s: ClockState): Promise<void> {
     adj_addons: s.adjAddons, eliminations: s.eliminations,
     live_stats: (s.liveStats ?? null) as unknown as object,
     updated_at: new Date().toISOString(),
-  }, { onConflict: 'venue_id' });
+  }, { onConflict: 'venue_id,game_seq' });
   if (error) throw error;
 }
 
-export async function clearClockState(venueId: string): Promise<void> {
+export async function clearClockState(venueId: string, gameSeq = 1): Promise<void> {
   if (IS_MOCK) return;
-  await supabase.from('clock_states').delete().eq('venue_id', venueId);
+  await supabase.from('clock_states').delete().eq('venue_id', venueId).eq('game_seq', gameSeq);
 }
 
 export function subscribeClock(venueId: string, onChange: () => void): () => void {

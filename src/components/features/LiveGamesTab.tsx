@@ -76,7 +76,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule }:
           <ul className="grid grid-cols-1 gap-card-gap">
             {games.map((g) => {
               const sched = matchSchedule(g, schedules);
-              return <LiveCard key={g.venueId} g={g} name={nameOf(g.venueId)} sched={sched}
+              return <LiveCard key={`${g.venueId}#${g.gameSeq}`} g={g} name={g.gameSeq > 1 ? `${nameOf(g.venueId)} · 사이드${g.gameSeq - 1}` : nameOf(g.venueId)} sched={sched}
                 onPoster={() => sched && onSchedule(sched)} onVenue={() => onVenue(g.venueId)} />;
             })}
           </ul>
