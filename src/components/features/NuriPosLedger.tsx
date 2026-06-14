@@ -10,9 +10,9 @@ import DateTimePicker from '../atoms/DateTimePicker';
 import { useAuth } from '../../contexts/AuthContext';
 import Icon from '../atoms/Icon';
 import {
-  type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type LedgerSessionListItem, type DiscountPreset, type EarlyType,
-  visitorLabel, wonToMan, WON_PER_MAN, buyinFinance, earlyTypeOf, setBuyinEarly,
-  getLedgerSession, saveLedgerSession, openLedgerSession, closeLedgerSession, reopenLedgerSession, deleteLedgerSession,
+  type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type LedgerSessionListItem, type DiscountPreset, type EarlyType, type LedgerGame,
+  visitorLabel, wonToMan, WON_PER_MAN, buyinFinance, earlyTypeOf, setBuyinEarly, MAIN_GAME_SEQ,
+  getLedgerSession, getLedgerGames, saveLedgerSession, openLedgerSession, closeLedgerSession, reopenLedgerSession, deleteLedgerSession,
   setRegistrationClosed, getLastLedgerSettings, getLedgerSessionList, getLedgerAccessUserIds, notifyLedgerOpen,
   getLedgerBuyins, upsertBuyin, upsertBuyinSplit, cancelBuyin,
   getLedgerPlayers, addLedgerPlayer, updateLedgerPlayer, renameLedgerPlayer, removeLedgerPlayer,
@@ -94,6 +94,8 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const [session, setSession] = useState<LedgerSession>({ venueId, sessionDate: today(), gameSeq: 1, buyinAmount: 0, cardAmount: null, gameType: 'gtd', targetEntries: 0, maxEntries: 0, isAddon: false, addonStack: 0, regClosed: false, closed: false, discounts: [], earlyDoubleMin: 0, earlySingleMin: 0, tournamentStart: null });
   const [buyins, setBuyins]   = useState<LedgerBuyin[]>([]);
   const [players, setPlayers] = useState<LedgerPlayer[]>([]);
+  const [gameSeq, setGameSeq] = useState(MAIN_GAME_SEQ);   // 현재 보고있는 게임(1=메인, 2+=사이드)
+  const [games, setGames]     = useState<LedgerGame[]>([]); // 그 날짜의 게임 목록(스위처용)
   const [loading, setLoading] = useState(true);
   const [hasPw, setHasPw]     = useState(false);
   const [selected, setSelected] = useState<SelectedCell | null>(null);
@@ -152,7 +154,9 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   }, [venueId]);
   useEffect(() => { if (mode === 'list') loadList(); }, [mode, loadList]);
 
-  const openBoard = (d: string) => { setDate(d); setMode('board'); };
+  const openBoard = (d: string, g = MAIN_GAME_SEQ) => { setDate(d); setGameSeq(g); setSelected(null); setMode('board'); };
+  // 사이드 게임 추가 — 그 날짜의 다음 game_seq로 전환(새 게임이면 설정 폼이 뜸)
+  const addSide = () => { const maxSeq = games.reduce((m, g) => Math.max(m, g.gameSeq), 0); setGameSeq(Math.max(MAIN_GAME_SEQ + 1, maxSeq + 1)); setSelected(null); };
 
   // 게임관리 '장부' 바로가기: 연결 장부로 즉시 이동, 없으면 포스터 정보를 시작 설정에 프리필
   // (ref에 대상 날짜를 묶어 — 세션 fetch 타이밍에 이전 날짜 화면이 잠깐 보여도 오적용/유실 없음)
@@ -169,32 +173,35 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       };
     }
     setDate(seed.date);
+    setGameSeq(MAIN_GAME_SEQ); // 포스터→장부 진입은 메인 게임
     setMode('board');
   }, [seed]);
-  const handleDeleteSession = useCallback(async (d: string) => {
-    if (!confirm(`${d} 장부를 삭제할까요?\n바인·명단·세션 기록이 모두 삭제되며 되돌릴 수 없습니다.`)) return;
-    try { await deleteLedgerSession(venueId, d); toast.show('장부를 삭제했습니다', 'info'); loadList(); }
+  const handleDeleteSession = useCallback(async (d: string, g = MAIN_GAME_SEQ) => {
+    const gl = g === MAIN_GAME_SEQ ? '메인' : `사이드${g - 1}`;
+    if (!confirm(`${d} ${gl} 장부를 삭제할까요?\n바인·명단·세션 기록이 모두 삭제되며 되돌릴 수 없습니다.`)) return;
+    try { await deleteLedgerSession(venueId, d, g); toast.show('장부를 삭제했습니다', 'info'); loadList(); }
     catch (e) { toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'); }
   }, [venueId, toast, loadList]);
 
   const reload = useCallback(() => {
-    Promise.all([getLedgerBuyins(venueId, date), getLedgerPlayers(venueId, date)])
+    Promise.all([getLedgerBuyins(venueId, date, gameSeq), getLedgerPlayers(venueId, date, gameSeq)])
       .then(([b, p]) => { setBuyins(b); setPlayers(p); }).catch(() => {});
-  }, [venueId, date]);
-  const reloadSession = useCallback(() => { getLedgerSession(venueId, date).then(setSession).catch(() => {}); }, [venueId, date]);
+  }, [venueId, date, gameSeq]);
+  const loadGames = useCallback(() => { getLedgerGames(venueId, date).then(setGames).catch(() => {}); }, [venueId, date]);
+  const reloadSession = useCallback(() => { getLedgerSession(venueId, date, gameSeq).then(setSession).catch(() => {}); loadGames(); }, [venueId, date, gameSeq, loadGames]);
 
   useEffect(() => {
     // stale 응답 가드 — 날짜를 빠르게 바꾸면(예: 게임관리 '장부' 바로가기) 이전 날짜의
     // 응답이 늦게 도착해 현재 세션을 빈 값으로 덮어쓰는 race가 난다. cleanup으로 무시.
     let alive = true;
     setLoading(true);
-    Promise.all([getLedgerSession(venueId, date), getLedgerBuyins(venueId, date), getLedgerPlayers(venueId, date), posHasPassword(venueId)])
-      .then(([s, b, p, pw]) => { if (!alive) return; setSession(s); setBuyins(b); setPlayers(p); setHasPw(pw); })
+    Promise.all([getLedgerSession(venueId, date, gameSeq), getLedgerBuyins(venueId, date, gameSeq), getLedgerPlayers(venueId, date, gameSeq), posHasPassword(venueId), getLedgerGames(venueId, date)])
+      .then(([s, b, p, pw, gs]) => { if (!alive) return; setSession(s); setBuyins(b); setPlayers(p); setHasPw(pw); setGames(gs); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [venueId, date]);
+  }, [venueId, date, gameSeq]);
 
-  useEffect(() => subscribeLedger(venueId, reload), [venueId, reload]);
+  useEffect(() => subscribeLedger(venueId, () => { reload(); loadGames(); }), [venueId, reload, loadGames]);
 
   // ── 연동 클락 — 리모컨 제어 + 바인 시점 얼리 확정(스타트 시각 미입력 버그 근본 해결) ──
   const [clock, setClock] = useState<ClockState | null>(null);
@@ -262,7 +269,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       return;
     }
     getLastLedgerSettings(venueId, date).then(setPrefill).catch(() => {});
-  }, [loading, showSetup, venueId, date]);
+  }, [loading, showSetup, venueId, date, gameSeq]);
 
   const cellAt = (name: string, e: number) => buyins.find((b) => b.playerName === name && b.entryNo === e) ?? null;
   const countOf = (name: string) => buyins.filter((b) => b.playerName === name).length;
@@ -332,7 +339,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   };
   const handleClose = async (memo: string) => {
     try {
-      await closeLedgerSession(venueId, date, memo);
+      await closeLedgerSession(venueId, date, memo, gameSeq);
       await reloadSession();
       setCloseOpen(false);
       // 마감 요약 한 줄 — 바인·매출(실수금)·미수 건수(통계와 동일한 buyinFinance 규칙)
@@ -344,18 +351,18 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     catch (e) { toast.show(e instanceof Error ? e.message : '마감 실패', 'error'); }
   };
   const handleReopen = async () => {
-    try { await reopenLedgerSession(venueId, date); await reloadSession(); toast.show('마감을 해제했습니다', 'info'); }
+    try { await reopenLedgerSession(venueId, date, gameSeq); await reloadSession(); toast.show('마감을 해제했습니다', 'info'); }
     catch (e) { toast.show(e instanceof Error ? e.message : '해제 실패', 'error'); }
   };
   const handleRegClose = async () => {
-    try { await setRegistrationClosed(venueId, date, !regClosed); await reloadSession(); toast.show(!regClosed ? '레지 마감했습니다' : '레지를 다시 열었습니다', 'info'); }
+    try { await setRegistrationClosed(venueId, date, !regClosed, gameSeq); await reloadSession(); toast.show(!regClosed ? '레지 마감했습니다' : '레지를 다시 열었습니다', 'info'); }
     catch (e) { toast.show(e instanceof Error ? e.message : '실패했습니다', 'error'); }
   };
   const addPlayer = async () => {
     const n = newName.trim();
     if (!n) return;
     try {
-      await addLedgerPlayer({ venueId, sessionDate: date, name: n, visitorType: newType, sortOrder: players.length });
+      await addLedgerPlayer({ venueId, sessionDate: date, gameSeq, name: n, visitorType: newType, sortOrder: players.length });
       setNewName(''); setNewType('regular'); setAddOpen(false); setSuggest([]); reload();
     } catch (e) { toast.show(e instanceof Error ? e.message : '추가 실패', 'error'); }
   };
@@ -374,7 +381,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const pickMember = async (m2: { nickname: string; realName: string }) => {
     const label = m2.realName ? `${m2.realName}(${m2.nickname})` : m2.nickname;
     try {
-      await addLedgerPlayer({ venueId, sessionDate: date, name: label, visitorType: newType, sortOrder: players.length });
+      await addLedgerPlayer({ venueId, sessionDate: date, gameSeq, name: label, visitorType: newType, sortOrder: players.length });
       setNewName(''); setSuggest([]); setMemSuggest([]); setNewType('regular'); setAddOpen(false); reload();
     } catch (e) { toast.show(e instanceof Error ? e.message : '추가 실패', 'error'); }
   };
@@ -382,7 +389,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const pickRegistered = async (rp: RegisteredPlayer) => {
     const label = rp.realName ? `${rp.realName}(${rp.nickname ?? ''})` : (rp.nickname ?? newName.trim());
     try {
-      await addLedgerPlayer({ venueId, sessionDate: date, name: label, visitorType: newType, sortOrder: players.length });
+      await addLedgerPlayer({ venueId, sessionDate: date, gameSeq, name: label, visitorType: newType, sortOrder: players.length });
       setNewName(''); setSuggest([]); setNewType('regular'); setAddOpen(false); reload();
     } catch (e) { toast.show(e instanceof Error ? e.message : '추가 실패', 'error'); }
   };
@@ -392,7 +399,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       // 이름 변경은 로스터+해당 세션 바인 기록(player_name 키)을 함께 갱신
       if (newName) {
         const cur = players.find((p) => p.id === id);
-        if (cur) await renameLedgerPlayer({ id, venueId, sessionDate: date, oldName: cur.name, newName });
+        if (cur) await renameLedgerPlayer({ id, venueId, sessionDate: date, gameSeq, oldName: cur.name, newName });
       }
       await updateLedgerPlayer(id, rest);
       reload();
@@ -459,13 +466,14 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
             {filtered.map((s, i) => {
               const canOpen = fullAccess || s.operators.length === 0 || (!!user && s.operators.includes(user.id));
               return (
-              <li key={s.sessionDate} className="flex items-center rounded-card border border-border-subtle bg-surface-low hover:border-gold-400/40 transition-colors">
-                <button type="button" disabled={!canOpen} onClick={() => canOpen && openBoard(s.sessionDate)}
+              <li key={`${s.sessionDate}#${s.gameSeq}`} className="flex items-center rounded-card border border-border-subtle bg-surface-low hover:border-gold-400/40 transition-colors">
+                <button type="button" disabled={!canOpen} onClick={() => canOpen && openBoard(s.sessionDate, s.gameSeq)}
                   className={['flex-1 min-w-0 flex items-center gap-3 px-3 py-2.5 text-left', canOpen ? '' : 'opacity-50 cursor-not-allowed'].join(' ')}>
                   <span className="w-6 shrink-0 text-center text-sm font-bold text-gold-300 tabular-nums">{i + 1}</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold text-ink-primary truncate">
                       {s.sessionDate}{s.sessionDate === todayStr ? ' (오늘)' : ''}
+                      <span className={['ml-1 text-2xs font-bold px-1.5 py-0.5 rounded-badge border align-middle', s.gameSeq === MAIN_GAME_SEQ ? 'bg-surface-float text-ink-muted border-border-default' : 'bg-gold-300/15 text-gold-300 border-gold-400/40'].join(' ')}>{s.gameSeq === MAIN_GAME_SEQ ? '메인' : `사이드${s.gameSeq - 1}`}</span>
                       <span className="font-normal text-ink-secondary"> · {s.title || '게임'}</span>
                     </p>
                     <p className="text-2xs text-ink-muted">바인 {s.buyinAmount.toLocaleString()}원 · {canOpen ? '탭하여 보기·수정' : '담당 미지정 — 접근 권한 없음'}</p>
@@ -479,7 +487,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                     : <span className="shrink-0 text-2xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-badge">진행중</span>}
                 </button>
                 {fullAccess && (
-                  <button type="button" onClick={() => handleDeleteSession(s.sessionDate)} aria-label={`${s.sessionDate} 장부 삭제`}
+                  <button type="button" onClick={() => handleDeleteSession(s.sessionDate, s.gameSeq)} aria-label={`${s.sessionDate} 장부 삭제`}
                     className="shrink-0 mr-1.5 w-8 h-8 flex items-center justify-center rounded-input text-ink-muted hover:text-danger-light hover:bg-danger/10 transition-colors">
                     <Icon name="trash" size={15} />
                   </button>
@@ -499,6 +507,9 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     return (
       <div className="space-y-3">
         <DateBar date={date} setDate={setDate} onBack={() => setMode('list')} />
+        {(games.length > 0 || gameSeq > MAIN_GAME_SEQ) && (
+          <GameSwitcher games={games} gameSeq={gameSeq} onSelect={(g) => { setGameSeq(g); setSelected(null); }} onAddSide={addSide} canAdd={operatorOk} />
+        )}
         {!operatorOk ? (
           <div className="rounded-card border border-danger/40 bg-danger/10 p-4 text-center">
             <p className="text-sm font-bold text-danger-light">승인된 계정만 장부를 운영할 수 있습니다.</p>
@@ -520,6 +531,9 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   return (
     <div className="space-y-3 pb-28">
       <DateBar date={date} setDate={setDate} onBack={() => setMode('list')} />
+      {(games.length > 0 || gameSeq > MAIN_GAME_SEQ) && (
+        <GameSwitcher games={games} gameSeq={gameSeq} onSelect={(g) => { setGameSeq(g); setSelected(null); }} onAddSide={addSide} canAdd={operatorOk} />
+      )}
 
       {/* 세션 요약 */}
       <div className="rounded-card border border-border-default bg-surface-low p-2.5 flex items-center gap-2 flex-wrap">
@@ -811,7 +825,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
             try {
               // 신규 첫 바인(entryNo=1)만 클락 현재 레벨로 얼리 확정. 2번째+는 리바인이라 얼리 없음.
               const eo = (isNew && selected.entryNo === 1) ? clockEarlyNow() : (selected.buyin?.earlyOverride ?? null);
-              await upsertBuyin({ venueId, sessionDate: date, playerName: pn, entryNo: selected.entryNo, paymentMethod: method, isUnpaid, discountIndex, earlyOverride: eo });
+              await upsertBuyin({ venueId, sessionDate: date, gameSeq, playerName: pn, entryNo: selected.entryNo, paymentMethod: method, isUnpaid, discountIndex, earlyOverride: eo });
               setSelected(null); reload();
               if (isNew && (session.voucherAccrualPerBin ?? 0) > 0) {
                 accrueVoucher(venueId, pn, session.voucherAccrualPerBin as number).then((n) => { if (n > 0) toast.show(`${pn}님 이용권 ${n}개 적립`, 'success'); }).catch(() => {});
@@ -821,7 +835,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
           onPickSplit={async (d) => {
             const pn = selected.playerName; const isNew = !selected.buyin;
             try {
-              await upsertBuyinSplit({ venueId, sessionDate: date, playerName: pn, entryNo: selected.entryNo, ...d, earlyOverride: (isNew && selected.entryNo === 1) ? clockEarlyNow() : undefined });
+              await upsertBuyinSplit({ venueId, sessionDate: date, gameSeq, playerName: pn, entryNo: selected.entryNo, ...d, earlyOverride: (isNew && selected.entryNo === 1) ? clockEarlyNow() : undefined });
               setSelected(null); reload();
               if (isNew && (session.voucherAccrualPerBin ?? 0) > 0) {
                 accrueVoucher(venueId, pn, session.voucherAccrualPerBin as number).then((n) => { if (n > 0) toast.show(`${pn}님 이용권 ${n}개 적립`, 'success'); }).catch(() => {});
@@ -1069,6 +1083,33 @@ function DateBar({ date, setDate, onBack }: { date: string; setDate: (d: string)
       )}
       <input type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value || today())} className="input flex-1 text-sm" />
       {date !== today() && <button type="button" onClick={() => setDate(today())} className="btn-ghost text-xs px-3 shrink-0">오늘</button>}
+    </div>
+  );
+}
+
+// ── 게임 스위처 — 그 날짜의 메인/사이드 전환 + 사이드 추가 ─────────────────────
+function GameSwitcher({ games, gameSeq, onSelect, onAddSide, canAdd }: {
+  games: LedgerGame[]; gameSeq: number; onSelect: (s: number) => void; onAddSide: () => void; canAdd: boolean;
+}) {
+  const label = (seq: number) => (seq === MAIN_GAME_SEQ ? '메인' : `사이드${seq - 1}`);
+  const showPending = !games.some((g) => g.gameSeq === gameSeq); // 작성중인 새 사이드
+  return (
+    <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 [&::-webkit-scrollbar]:h-1.5">
+      <span className="shrink-0 text-2xs font-bold text-ink-muted pr-0.5">게임</span>
+      {games.map((g) => (
+        <button key={g.gameSeq} type="button" onClick={() => onSelect(g.gameSeq)}
+          className={['shrink-0 text-xs font-bold px-2.5 py-1.5 rounded-badge border transition-colors whitespace-nowrap',
+            g.gameSeq === gameSeq ? 'bg-gold-300 text-ink-inverse border-gold-300' : 'bg-surface-high text-ink-secondary border-border-default hover:text-ink-primary'].join(' ')}>
+          {label(g.gameSeq)}{g.title ? ` · ${g.title}` : ''}{g.closed ? ' ·마감' : ''}
+        </button>
+      ))}
+      {showPending && (
+        <span className="shrink-0 text-xs font-bold px-2.5 py-1.5 rounded-badge border bg-gold-300 text-ink-inverse border-gold-300 whitespace-nowrap">{label(gameSeq)} (작성중)</span>
+      )}
+      {canAdd && !showPending && (
+        <button type="button" onClick={onAddSide}
+          className="shrink-0 text-xs font-bold px-2.5 py-1.5 rounded-badge border border-dashed border-gold-400/50 text-gold-300 hover:bg-gold-300/10 transition-colors whitespace-nowrap">+ 사이드</button>
+      )}
     </div>
   );
 }
