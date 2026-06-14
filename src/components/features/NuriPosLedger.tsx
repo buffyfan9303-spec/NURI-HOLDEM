@@ -91,7 +91,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const operatorName = user?.name ?? user?.nickname ?? '담당직원';
 
   const [date, setDate]       = useState(today);
-  const [session, setSession] = useState<LedgerSession>({ venueId, sessionDate: today(), buyinAmount: 0, cardAmount: null, gameType: 'gtd', targetEntries: 0, maxEntries: 0, isAddon: false, addonStack: 0, regClosed: false, closed: false, discounts: [], earlyDoubleMin: 0, earlySingleMin: 0, tournamentStart: null });
+  const [session, setSession] = useState<LedgerSession>({ venueId, sessionDate: today(), gameSeq: 1, buyinAmount: 0, cardAmount: null, gameType: 'gtd', targetEntries: 0, maxEntries: 0, isAddon: false, addonStack: 0, regClosed: false, closed: false, discounts: [], earlyDoubleMin: 0, earlySingleMin: 0, tournamentStart: null });
   const [buyins, setBuyins]   = useState<LedgerBuyin[]>([]);
   const [players, setPlayers] = useState<LedgerPlayer[]>([]);
   const [loading, setLoading] = useState(true);

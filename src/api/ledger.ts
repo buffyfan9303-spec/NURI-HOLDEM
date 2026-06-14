@@ -13,10 +13,14 @@ export function visitorLabel(v: string | null | undefined): string {
   return VISITOR_KNOWN[v] ?? v;
 }
 
+/** 하루 안에서 메인(1)/사이드(2,3…) 게임을 구분하는 시퀀스. 기존 데이터는 전부 1(메인). */
+export const MAIN_GAME_SEQ = 1;
+
 export interface LedgerBuyin {
   id: string;
   venueId: string;
   sessionDate: string;
+  gameSeq: number;              // 게임 구분(1=메인, 2+=사이드)
   playerName: string;
   entryNo: number;
   paymentMethod: PaymentMethod;
@@ -37,6 +41,7 @@ export interface LedgerBuyin {
 export interface LedgerSession {
   venueId: string;
   sessionDate: string;
+  gameSeq: number;              // 게임 구분(1=메인, 2+=사이드) — (venue,date,game_seq) = 장부 1개
   buyinAmount: number;          // 현금단가
   cardAmount: number | null;    // 카드단가(미입력 시 현금단가 적용)
   gameType: 'gtd' | 'entry';    // GTD(보장) / 엔트리 게임
@@ -68,6 +73,7 @@ export interface LedgerPlayer {
   id: string;
   venueId: string;
   sessionDate: string;
+  gameSeq: number;              // 게임 구분(1=메인, 2+=사이드)
   name: string;
   visitorType: string | null;   // 코드(new/regular/staff/other) 또는 커스텀 텍스트
   note: string | null;
@@ -114,7 +120,7 @@ export function discountAmountOf(s: { discounts?: DiscountPreset[] }, idx: numbe
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const rowToBuyin = (r: any): LedgerBuyin => ({
-  id: r.id, venueId: r.venue_id, sessionDate: r.session_date,
+  id: r.id, venueId: r.venue_id, sessionDate: r.session_date, gameSeq: r.game_seq ?? MAIN_GAME_SEQ,
   playerName: r.player_name, entryNo: r.entry_no,
   paymentMethod: r.payment_method as PaymentMethod, isUnpaid: !!r.is_unpaid,
   buyinAt: r.buyin_at,
@@ -145,7 +151,7 @@ export function earlyTypeOf(
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const rowToSession = (venueId: string, date: string, d: any): LedgerSession => ({
-  venueId, sessionDate: date,
+  venueId, sessionDate: date, gameSeq: d?.game_seq ?? MAIN_GAME_SEQ,
   buyinAmount: d?.buyin_amount ?? 0,
   cardAmount: d?.card_amount ?? null,
   gameType: (d?.game_type === 'entry' ? 'entry' : 'gtd'),
@@ -175,13 +181,13 @@ const rowToSession = (venueId: string, date: string, d: any): LedgerSession => (
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const rowToPlayer = (r: any): LedgerPlayer => ({
-  id: r.id, venueId: r.venue_id, sessionDate: r.session_date,
+  id: r.id, venueId: r.venue_id, sessionDate: r.session_date, gameSeq: r.game_seq ?? MAIN_GAME_SEQ,
   name: r.name, visitorType: (r.visitor_type ?? null) as VisitorType | null,
   note: r.note ?? null, sortOrder: r.sort_order ?? 0,
 });
 
-const emptySession = (venueId: string, date: string): LedgerSession => ({
-  venueId, sessionDate: date, buyinAmount: 0, cardAmount: null,
+const emptySession = (venueId: string, date: string, gameSeq = MAIN_GAME_SEQ): LedgerSession => ({
+  venueId, sessionDate: date, gameSeq, buyinAmount: 0, cardAmount: null,
   gameType: 'gtd', targetEntries: 0, maxEntries: 0, isAddon: false, addonStack: 0,
   operators: [],
   regClosed: false, closed: false, discounts: [],
@@ -204,16 +210,51 @@ export async function canManagePos(venueId: string): Promise<boolean> {
   return !!data;
 }
 
-// ── 세션(매장+날짜) ───────────────────────────────────────────────────────────
-export async function getLedgerSession(venueId: string, date = today()): Promise<LedgerSession> {
-  if (IS_MOCK) return emptySession(venueId, date);
+// ── 세션(매장+날짜+게임) ───────────────────────────────────────────────────────
+export async function getLedgerSession(venueId: string, date = today(), gameSeq = MAIN_GAME_SEQ): Promise<LedgerSession> {
+  if (IS_MOCK) return emptySession(venueId, date, gameSeq);
   const { data } = await supabase.from('ledger_sessions')
-    .select('*').eq('venue_id', venueId).eq('session_date', date).maybeSingle();
-  return data ? rowToSession(venueId, date, data) : emptySession(venueId, date);
+    .select('*').eq('venue_id', venueId).eq('session_date', date).eq('game_seq', gameSeq).maybeSingle();
+  return data ? rowToSession(venueId, date, data) : emptySession(venueId, date, gameSeq);
+}
+
+/** 특정 날짜의 게임(메인+사이드) 목록 — game_seq 오름차순(1=메인). 게임 선택기/생성용. */
+export interface LedgerGame {
+  gameSeq: number;
+  title?: string;
+  buyinAmount: number;
+  openedAt?: string | null;
+  regClosed: boolean;
+  closed: boolean;
+  scheduleId?: string | null;
+}
+export async function getLedgerGames(venueId: string, date = today()): Promise<LedgerGame[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.from('ledger_sessions')
+    .select('game_seq, title, buyin_amount, opened_at, reg_closed, closed, schedule_id')
+    .eq('venue_id', venueId).eq('session_date', date)
+    .order('game_seq', { ascending: true });
+  if (error) throw error;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((d: any) => ({
+    gameSeq: d.game_seq ?? MAIN_GAME_SEQ, title: d.title ?? undefined, buyinAmount: d.buyin_amount ?? 0,
+    openedAt: d.opened_at ?? null, regClosed: !!d.reg_closed, closed: !!d.closed, scheduleId: d.schedule_id ?? null,
+  }));
+}
+
+/** 다음 사이드 게임 번호 — 그 날짜의 max(game_seq)+1 (없으면 메인=1). */
+export async function nextGameSeq(venueId: string, date: string): Promise<number> {
+  if (IS_MOCK) return MAIN_GAME_SEQ;
+  const { data } = await supabase.from('ledger_sessions')
+    .select('game_seq').eq('venue_id', venueId).eq('session_date', date)
+    .order('game_seq', { ascending: false }).limit(1).maybeSingle();
+  const max = (data as { game_seq?: number } | null)?.game_seq ?? 0;
+  return Math.max(MAIN_GAME_SEQ, max + 1);
 }
 
 export interface LedgerSessionListItem {
   sessionDate: string;
+  gameSeq: number;
   title?: string;
   openedAt?: string | null;
   regClosed: boolean;
@@ -222,16 +263,16 @@ export interface LedgerSessionListItem {
   operators: string[];
 }
 
-/** 매장의 게임(세션) 목록 — 최신 날짜순. 장부 진입 시 리스트업 용. */
+/** 매장의 게임(세션) 목록 — 최신 날짜순(같은 날은 game_seq 오름차순). 장부 진입 시 리스트업 용. */
 export async function getLedgerSessionList(venueId: string, limit = 90): Promise<LedgerSessionListItem[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase.from('ledger_sessions')
-    .select('session_date, title, opened_at, reg_closed, closed, buyin_amount, operators')
-    .eq('venue_id', venueId).order('session_date', { ascending: false }).limit(limit);
+    .select('session_date, game_seq, title, opened_at, reg_closed, closed, buyin_amount, operators')
+    .eq('venue_id', venueId).order('session_date', { ascending: false }).order('game_seq', { ascending: true }).limit(limit);
   if (error) throw error;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((d: any) => ({
-    sessionDate: d.session_date, title: d.title ?? undefined,
+    sessionDate: d.session_date, gameSeq: d.game_seq ?? MAIN_GAME_SEQ, title: d.title ?? undefined,
     openedAt: d.opened_at ?? null, regClosed: !!d.reg_closed, closed: !!d.closed,
     buyinAmount: d.buyin_amount ?? 0,
     operators: Array.isArray(d.operators) ? d.operators : [],
@@ -253,15 +294,15 @@ export async function getLedgerScheduleLinks(venueId: string): Promise<Record<st
 }
 
 /** 포스터(스케줄) 하나에 연결된 장부 전체 — 멀티데이/사이드 운영 대응(최신순). */
-export interface ScheduleLedgerItem { date: string; title: string | null; closed: boolean }
+export interface ScheduleLedgerItem { date: string; gameSeq: number; title: string | null; closed: boolean }
 export async function getScheduleLedgers(venueId: string, scheduleId: string): Promise<ScheduleLedgerItem[]> {
   if (IS_MOCK) return [];
   const { data } = await supabase.from('ledger_sessions')
-    .select('session_date, title, closed')
+    .select('session_date, game_seq, title, closed')
     .eq('venue_id', venueId).eq('schedule_id', scheduleId)
-    .order('session_date', { ascending: false }).limit(30);
+    .order('session_date', { ascending: false }).order('game_seq', { ascending: true }).limit(30);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((d: any) => ({ date: d.session_date, title: d.title ?? null, closed: !!d.closed }));
+  return (data ?? []).map((d: any) => ({ date: d.session_date, gameSeq: d.game_seq ?? MAIN_GAME_SEQ, title: d.title ?? null, closed: !!d.closed }));
 }
 
 /** 장부 시작 알림 — 담당 직원(본인 제외)에게 "장부가 시작됐어요" 알림(서버 RPC, 권한 검증). */
@@ -281,36 +322,38 @@ export interface PosterOpsSummary {
 export async function getPosterOpsSummaries(venueId: string): Promise<Record<string, PosterOpsSummary>> {
   if (IS_MOCK) return {};
   const { data: ss } = await supabase.from('ledger_sessions')
-    .select('schedule_id, session_date, closed, buyin_amount, card_amount, discounts')
+    .select('schedule_id, session_date, game_seq, closed, buyin_amount, card_amount, discounts')
     .eq('venue_id', venueId).not('schedule_id', 'is', null)
     .order('session_date', { ascending: false }).limit(100);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sessions = (ss ?? []) as any[];
   if (!sessions.length) return {};
-  const byDate = new Map(sessions.map((s) => [s.session_date as string, s]));
-  const dates = [...byDate.keys()];
+  const gkey = (d: string, g: number) => `${d}#${g}`;
+  const byKey = new Map(sessions.map((s) => [gkey(s.session_date as string, s.game_seq ?? MAIN_GAME_SEQ), s]));
+  const dates = [...new Set(sessions.map((s) => s.session_date as string))];
   const [bRes, rRes] = await Promise.all([
     supabase.from('ledger_buyins').select('*').eq('venue_id', venueId).in('session_date', dates),
     supabase.from('venue_rankings').select('ranking_date').eq('venue_id', venueId).in('ranking_date', dates),
   ]);
   const rankedDates = new Set(((rRes.data ?? []) as { ranking_date: string }[]).map((r) => r.ranking_date));
-  // 날짜별 바인 집계(매출은 세션 단가 기준 buyinFinance)
+  // (날짜,게임)별 바인 집계(매출은 그 게임 단가 기준 buyinFinance)
   const agg = new Map<string, { cnt: number; rev: number }>();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const row of (bRes.data ?? []) as any[]) {
     const b = rowToBuyin(row);
-    const s = byDate.get(row.session_date as string);
+    const k = gkey(row.session_date as string, row.game_seq ?? MAIN_GAME_SEQ);
+    const s = byKey.get(k);
     if (!s) continue;
     const fin = buyinFinance(b, { buyinAmount: s.buyin_amount ?? 0, cardAmount: s.card_amount ?? null, discounts: s.discounts ?? [] });
-    const cur = agg.get(row.session_date) ?? { cnt: 0, rev: 0 };
+    const cur = agg.get(k) ?? { cnt: 0, rev: 0 };
     cur.cnt += 1;
     cur.rev += fin.paid;
-    agg.set(row.session_date, cur);
+    agg.set(k, cur);
   }
   const out: Record<string, PosterOpsSummary> = {};
   for (const s of sessions) {
     if (out[s.schedule_id]) continue; // 최신 장부 우선
-    const a = agg.get(s.session_date) ?? { cnt: 0, rev: 0 };
+    const a = agg.get(gkey(s.session_date as string, s.game_seq ?? MAIN_GAME_SEQ)) ?? { cnt: 0, rev: 0 };
     out[s.schedule_id] = {
       date: s.session_date, closed: !!s.closed,
       buyinCount: a.cnt, revenueMan: Math.round(a.rev / WON_PER_MAN),
@@ -382,7 +425,7 @@ export async function getLedgerPresets(venueId: string, limit = 8): Promise<Ledg
 export async function saveLedgerSession(s: LedgerSession): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.from('ledger_sessions').upsert({
-    venue_id: s.venueId, session_date: s.sessionDate,
+    venue_id: s.venueId, session_date: s.sessionDate, game_seq: s.gameSeq ?? MAIN_GAME_SEQ,
     buyin_amount: s.buyinAmount, card_amount: s.cardAmount,
     target_entries: s.targetEntries, title: s.title ?? null,
     game_type: s.gameType ?? 'gtd', max_entries: s.maxEntries ?? 0, is_addon: !!s.isAddon, addon_stack: s.addonStack ?? 0,
@@ -393,7 +436,7 @@ export async function saveLedgerSession(s: LedgerSession): Promise<void> {
     voucher_issued: s.voucherIssued ?? 0,
     voucher_accrual_per_bin: s.voucherAccrualPerBin ?? 0,
     updated_at: new Date().toISOString(),
-  }, { onConflict: 'venue_id,session_date' });
+  }, { onConflict: 'venue_id,session_date,game_seq' });
   if (error) throw error;
 }
 
@@ -402,7 +445,7 @@ export async function openLedgerSession(s: LedgerSession, operatorId?: string | 
   if (IS_MOCK) return;
   const { data: { user } } = await supabase.auth.getUser();
   const { error } = await supabase.from('ledger_sessions').upsert({
-    venue_id: s.venueId, session_date: s.sessionDate,
+    venue_id: s.venueId, session_date: s.sessionDate, game_seq: s.gameSeq ?? MAIN_GAME_SEQ,
     buyin_amount: s.buyinAmount, card_amount: s.cardAmount,
     target_entries: s.targetEntries, title: s.title ?? null,
     game_type: s.gameType ?? 'gtd', max_entries: s.maxEntries ?? 0, is_addon: !!s.isAddon, addon_stack: s.addonStack ?? 0,
@@ -416,62 +459,62 @@ export async function openLedgerSession(s: LedgerSession, operatorId?: string | 
     reg_closed: false, reg_closed_at: null,
     closed: false, closed_at: null, close_memo: null,
     updated_at: new Date().toISOString(),
-  }, { onConflict: 'venue_id,session_date' });
+  }, { onConflict: 'venue_id,session_date,game_seq' });
   if (error) throw error;
 }
 
 /** 레지(레지스트리) 마감 — 신규 등록/엔트리 중단(정산 마감과 별개) */
-export async function setRegistrationClosed(venueId: string, date: string, closed: boolean): Promise<void> {
+export async function setRegistrationClosed(venueId: string, date: string, closed: boolean, gameSeq = MAIN_GAME_SEQ): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.from('ledger_sessions')
     .update({ reg_closed: closed, reg_closed_at: closed ? new Date().toISOString() : null, updated_at: new Date().toISOString() })
-    .eq('venue_id', venueId).eq('session_date', date);
+    .eq('venue_id', venueId).eq('session_date', date).eq('game_seq', gameSeq);
   if (error) throw error;
 }
 
 /** 장부 정산 마감 — 읽기전용 스냅샷 + 마감 메모 */
-export async function closeLedgerSession(venueId: string, date: string, memo: string): Promise<void> {
+export async function closeLedgerSession(venueId: string, date: string, memo: string, gameSeq = MAIN_GAME_SEQ): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.from('ledger_sessions')
     .update({ closed: true, closed_at: new Date().toISOString(), close_memo: memo || null, updated_at: new Date().toISOString() })
-    .eq('venue_id', venueId).eq('session_date', date);
+    .eq('venue_id', venueId).eq('session_date', date).eq('game_seq', gameSeq);
   if (error) throw error;
 }
 
 /** 마감 해제(업주 전용 — UI에서 권한 게이트) */
-export async function reopenLedgerSession(venueId: string, date: string): Promise<void> {
+export async function reopenLedgerSession(venueId: string, date: string, gameSeq = MAIN_GAME_SEQ): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.from('ledger_sessions')
     .update({ closed: false, closed_at: null, updated_at: new Date().toISOString() })
-    .eq('venue_id', venueId).eq('session_date', date);
+    .eq('venue_id', venueId).eq('session_date', date).eq('game_seq', gameSeq);
   if (error) throw error;
 }
 
 /** 장부(세션) 통째 삭제 — 바인·명단·세션 일괄 제거. POS 관리 권한 필요(SECURITY DEFINER RPC). */
-export async function deleteLedgerSession(venueId: string, date: string): Promise<void> {
+export async function deleteLedgerSession(venueId: string, date: string, gameSeq = MAIN_GAME_SEQ): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.rpc('delete_ledger_session', { p_venue_id: venueId, p_date: date });
+  const { error } = await supabase.rpc('delete_ledger_session', { p_venue_id: venueId, p_date: date, p_game_seq: gameSeq });
   if (error) throw error;
 }
 
 // ── 명단(roster) ──────────────────────────────────────────────────────────────
-export async function getLedgerPlayers(venueId: string, date = today()): Promise<LedgerPlayer[]> {
+export async function getLedgerPlayers(venueId: string, date = today(), gameSeq = MAIN_GAME_SEQ): Promise<LedgerPlayer[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase.from('ledger_players')
-    .select('*').eq('venue_id', venueId).eq('session_date', date)
+    .select('*').eq('venue_id', venueId).eq('session_date', date).eq('game_seq', gameSeq)
     .order('sort_order').order('created_at');
   if (error) throw error;
   return (data ?? []).map(rowToPlayer);
 }
 
 export async function addLedgerPlayer(input: {
-  venueId: string; sessionDate: string; name: string;
+  venueId: string; sessionDate: string; gameSeq?: number; name: string;
   visitorType?: string | null; sortOrder?: number;
 }): Promise<void> {
   if (IS_MOCK) return;
   const { data: { user } } = await supabase.auth.getUser();
   const { error } = await supabase.from('ledger_players').insert({
-    venue_id: input.venueId, session_date: input.sessionDate, name: input.name,
+    venue_id: input.venueId, session_date: input.sessionDate, game_seq: input.gameSeq ?? MAIN_GAME_SEQ, name: input.name,
     visitor_type: input.visitorType ?? null, sort_order: input.sortOrder ?? 0,
     created_by: user?.id ?? null,
   });
@@ -497,20 +540,21 @@ export async function updateLedgerPlayer(id: string, patch: {
 
 /** 플레이어 이름 변경 — 로스터와 해당 세션 바인 기록(player_name 키)을 함께 갱신(오기 수정용) */
 export async function renameLedgerPlayer(input: {
-  id: string; venueId: string; sessionDate: string; oldName: string; newName: string;
+  id: string; venueId: string; sessionDate: string; gameSeq?: number; oldName: string; newName: string;
 }): Promise<void> {
   if (IS_MOCK) return;
   const newName = input.newName.trim();
   if (!newName || newName === input.oldName) return;
-  // 같은 세션에 동일 이름이 이미 있으면 바인 키 충돌 → 차단
+  const gameSeq = input.gameSeq ?? MAIN_GAME_SEQ;
+  // 같은 게임에 동일 이름이 이미 있으면 바인 키 충돌 → 차단
   const { data: dup } = await supabase.from('ledger_players')
-    .select('id').eq('venue_id', input.venueId).eq('session_date', input.sessionDate)
+    .select('id').eq('venue_id', input.venueId).eq('session_date', input.sessionDate).eq('game_seq', gameSeq)
     .eq('name', newName).neq('id', input.id).limit(1);
   if (dup && dup.length > 0) throw new Error('같은 이름의 플레이어가 이미 있습니다');
   const { error: e1 } = await supabase.from('ledger_players').update({ name: newName }).eq('id', input.id);
   if (e1) throw e1;
   const { error: e2 } = await supabase.from('ledger_buyins').update({ player_name: newName })
-    .eq('venue_id', input.venueId).eq('session_date', input.sessionDate).eq('player_name', input.oldName);
+    .eq('venue_id', input.venueId).eq('session_date', input.sessionDate).eq('game_seq', gameSeq).eq('player_name', input.oldName);
   if (e2) throw e2;
 }
 
@@ -531,10 +575,10 @@ export async function searchRegisteredPlayers(venueId: string, query: string): P
 }
 
 // ── 바이인(셀) ────────────────────────────────────────────────────────────────
-export async function getLedgerBuyins(venueId: string, date = today()): Promise<LedgerBuyin[]> {
+export async function getLedgerBuyins(venueId: string, date = today(), gameSeq = MAIN_GAME_SEQ): Promise<LedgerBuyin[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase.from('ledger_buyins')
-    .select('*').eq('venue_id', venueId).eq('session_date', date)
+    .select('*').eq('venue_id', venueId).eq('session_date', date).eq('game_seq', gameSeq)
     .order('player_name').order('entry_no');
   if (error) throw error;
   return (data ?? []).map(rowToBuyin);
@@ -553,10 +597,10 @@ export async function getLedgerRange(venueId: string, from: string, to: string):
   return { sessions, buyins };
 }
 
-/** 셀 결제 입력/수정 — (매장,날짜,플레이어,회차) 충돌 시 갱신. buyin_at = NOW.
+/** 셀 결제 입력/수정 — (매장,날짜,게임,플레이어,회차) 충돌 시 갱신. buyin_at = NOW.
  *  티켓/가게지원은 항상 완납 처리(미수 불가). */
 export async function upsertBuyin(input: {
-  venueId: string; sessionDate: string; playerName: string; entryNo: number;
+  venueId: string; sessionDate: string; gameSeq?: number; playerName: string; entryNo: number;
   paymentMethod: PaymentMethod; isUnpaid: boolean; discountIndex?: number; earlyOverride?: EarlyType | null;
 }): Promise<void> {
   if (IS_MOCK) return;
@@ -564,14 +608,14 @@ export async function upsertBuyin(input: {
   // 가게지원은 항상 완납. 티켓은 미수(가불) 허용.
   const unpaid = input.paymentMethod === 'support' ? false : input.isUnpaid;
   const { error } = await supabase.from('ledger_buyins').upsert({
-    venue_id: input.venueId, session_date: input.sessionDate,
+    venue_id: input.venueId, session_date: input.sessionDate, game_seq: input.gameSeq ?? MAIN_GAME_SEQ,
     player_name: input.playerName, entry_no: input.entryNo,
     payment_method: input.paymentMethod, is_unpaid: unpaid,
     is_split: false, cash_amount: 0, card_amount: 0, transfer_amount: 0,
     ticket_count: 0, unpaid_amount: 0, discount_level: 0, discount_index: input.discountIndex ?? 0,
     early_override: input.earlyOverride ?? null,
     buyin_at: new Date().toISOString(), created_by: user?.id ?? null,
-  }, { onConflict: 'venue_id,session_date,player_name,entry_no' });
+  }, { onConflict: 'venue_id,session_date,game_seq,player_name,entry_no' });
   if (error) throw error;
 }
 
@@ -584,7 +628,7 @@ export async function setBuyinEarly(buyinId: string, override: EarlyType | null)
 
 /** 분납/할인 상세 입력 — 현금/카드/이체 금액 + 미수금액 + 티켓장수 + 레벨할인 */
 export async function upsertBuyinSplit(input: {
-  venueId: string; sessionDate: string; playerName: string; entryNo: number;
+  venueId: string; sessionDate: string; gameSeq?: number; playerName: string; entryNo: number;
   cashAmount: number; cardAmount: number; transferAmount: number;
   ticketCount: number; unpaidAmount: number; discountLevel: number;
   /** undefined=기존 값 보존(수정), 값/null=바인 시점 확정 기록(신규) */
@@ -599,7 +643,7 @@ export async function upsertBuyinSplit(input: {
     : input.transferAmount > input.cashAmount && input.transferAmount > 0 ? 'transfer'
     : 'cash';
   const { error } = await supabase.from('ledger_buyins').upsert({
-    venue_id: input.venueId, session_date: input.sessionDate,
+    venue_id: input.venueId, session_date: input.sessionDate, game_seq: input.gameSeq ?? MAIN_GAME_SEQ,
     player_name: input.playerName, entry_no: input.entryNo,
     payment_method: primary, is_unpaid: input.unpaidAmount > 0,
     is_split: true,
@@ -607,7 +651,7 @@ export async function upsertBuyinSplit(input: {
     ticket_count: input.ticketCount, unpaid_amount: input.unpaidAmount, discount_level: input.discountLevel, discount_index: 0,
     ...(input.earlyOverride !== undefined ? { early_override: input.earlyOverride } : {}),
     buyin_at: new Date().toISOString(), created_by: user?.id ?? null,
-  }, { onConflict: 'venue_id,session_date,player_name,entry_no' });
+  }, { onConflict: 'venue_id,session_date,game_seq,player_name,entry_no' });
   if (error) throw error;
 }
 
