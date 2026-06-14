@@ -160,6 +160,19 @@ function StatsView({ venueId }: { venueId: string }) {
     };
   }, [buyins, sessionByDate, players, excludeTypes, playerType, period, date]);
 
+  // C2: 마감 시 저장된 클락 최종 보정치 합산(통계 보조 — 장부 바인과 별개 기준)
+  const clockAgg = useMemo(() => {
+    let games = 0, entries = 0, alive = 0, eliminations = 0, rebuys = 0, earlies = 0, addons = 0;
+    for (const s of sessions) {
+      const snap = s.clockSnapshot;
+      if (!snap) continue;
+      games++;
+      entries += snap.entries || 0; alive += snap.alive || 0; eliminations += snap.eliminations || 0;
+      rebuys += snap.rebuys || 0; earlies += snap.earlies || 0; addons += snap.addons || 0;
+    }
+    return games > 0 ? { games, entries, alive, eliminations, rebuys, earlies, addons } : null;
+  }, [sessions]);
+
   // CSV 내보내기 — 요일별이면 요일 요약, 그 외 기간은 일별 요약(엑셀 한글 호환).
   const exportCsv = () => {
     if (period === 'dow') {
@@ -278,6 +291,32 @@ function StatsView({ venueId }: { venueId: string }) {
               ? <Mini label="가게지원" value={`${m.support}건`} />
               : <Mini label="일평균 매출" value={`${m.avgRevenuePerDay.toLocaleString(undefined, { maximumFractionDigits: 0 })}원`} />}
           </div>
+
+          {clockAgg && (
+            <Section icon="clock" title="클락 최종 (보정 포함)" suffix="· 운영자 클락 집계">
+              <div className="grid grid-cols-4 gap-1.5">
+                <div className="rounded-input bg-surface-high border border-border-subtle py-1.5 text-center">
+                  <p className="text-base font-bold text-gold-300 tabular-nums">{clockAgg.entries}</p>
+                  <p className="text-[11px] text-ink-muted">엔트리</p>
+                </div>
+                <div className="rounded-input bg-surface-high border border-border-subtle py-1.5 text-center">
+                  <p className="text-base font-bold text-emerald-400 tabular-nums">{clockAgg.alive}</p>
+                  <p className="text-[11px] text-ink-muted">생존</p>
+                </div>
+                <div className="rounded-input bg-surface-high border border-border-subtle py-1.5 text-center">
+                  <p className="text-base font-bold text-ink-primary tabular-nums">{clockAgg.eliminations}</p>
+                  <p className="text-[11px] text-ink-muted">아웃</p>
+                </div>
+                <div className="rounded-input bg-surface-high border border-border-subtle py-1.5 text-center">
+                  <p className="text-base font-bold text-amber-300 tabular-nums">{clockAgg.earlies}</p>
+                  <p className="text-[11px] text-ink-muted">얼리</p>
+                </div>
+              </div>
+              <p className="text-[10px] text-ink-muted mt-1.5 leading-relaxed">
+                마감 시 클락에서 손보정된 최종 수치(생존·아웃 포함)입니다. <b className="text-ink-secondary">장부 총 엔트리({m.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })})는 바인 기록 기준</b>이라 다를 수 있어요 — 통계·정산은 장부 기준, 이 값은 운영 참고용입니다.{clockAgg.games > 1 ? ` (게임 ${clockAgg.games}개 합산)` : ''}
+              </p>
+            </Section>
+          )}
 
           <Section icon="card" title="결제 수단별 바인 수">
             <div className="grid grid-cols-5 gap-1.5">
@@ -478,7 +517,7 @@ function DowHilite({ tone, cap, w, a, b }: { tone: 'emerald' | 'rose'; cap: stri
   );
 }
 
-type IconName = 'users' | 'down' | 'percent' | 'wallet' | 'alert' | 'ticket' | 'card' | 'usercheck' | 'trophy';
+type IconName = 'users' | 'down' | 'percent' | 'wallet' | 'alert' | 'ticket' | 'card' | 'usercheck' | 'trophy' | 'clock';
 const ICON_PATHS: Record<IconName, ReactNode> = {
   users: <><circle cx="9" cy="7" r="3" /><path d="M2 20a7 7 0 0 1 14 0" /><path d="M17 7.5a3 3 0 0 1 0 5" /><path d="M22 20a6 6 0 0 0-4-5.7" /></>,
   down: <><polyline points="3 7 9 13 13 9 21 17" /><polyline points="15 17 21 17 21 11" /></>,
@@ -489,6 +528,7 @@ const ICON_PATHS: Record<IconName, ReactNode> = {
   card: <><rect x="2" y="5" width="20" height="14" rx="2" /><line x1="2" y1="10" x2="22" y2="10" /></>,
   usercheck: <><circle cx="9" cy="7" r="3" /><path d="M2 20a7 7 0 0 1 12-5" /><polyline points="15.5 13.5 17.5 15.5 21.5 11.5" /></>,
   trophy: <><path d="M7 4h10v5a5 5 0 0 1-10 0Z" /><path d="M7 6H4v1.5a3 3 0 0 0 3 3" /><path d="M17 6h3v1.5a3 3 0 0 1-3 3" /><line x1="12" y1="14" x2="12" y2="17" /><line x1="8.5" y1="20" x2="15.5" y2="20" /><line x1="10" y1="17" x2="14" y2="17" /></>,
+  clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7.5V12l3 2" /></>,
 };
 function StatIcon({ name, className = '' }: { name: IconName; className?: string }) {
   return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>{ICON_PATHS[name]}</svg>;

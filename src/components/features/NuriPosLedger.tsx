@@ -10,7 +10,7 @@ import DateTimePicker from '../atoms/DateTimePicker';
 import { useAuth } from '../../contexts/AuthContext';
 import Icon from '../atoms/Icon';
 import {
-  type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type LedgerSessionListItem, type DiscountPreset, type EarlyType, type LedgerGame,
+  type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type LedgerSessionListItem, type DiscountPreset, type EarlyType, type LedgerGame, type ClockSnapshot,
   visitorLabel, wonToMan, WON_PER_MAN, buyinFinance, earlyTypeOf, setBuyinEarly, MAIN_GAME_SEQ,
   getLedgerSession, getLedgerGames, saveLedgerSession, openLedgerSession, closeLedgerSession, reopenLedgerSession, deleteLedgerSession,
   setRegistrationClosed, getLastLedgerSettings, getLedgerSessionList, getLedgerAccessUserIds, notifyLedgerOpen,
@@ -23,7 +23,7 @@ import { getStaffSchedule, addStaffShift } from '../../api/staffSchedule';
 import { getVenueRankings } from '../../api/rankings';
 import { exportLedgerXls } from '../../lib/ledgerExport';
 import { getSchedules, type Schedule } from '../../api/schedules';
-import { getClockState, saveClockState, subscribeClock, defaultClockConfig, type ClockState } from '../../api/clock';
+import { getClockState, saveClockState, subscribeClock, defaultClockConfig, deriveClockCounts, computeLiveStats, type ClockState } from '../../api/clock';
 import { getMyVenueStaff, searchMembersForRanking, type User } from '../../api/auth';
 import { accrueVoucher } from '../../api/vouchers';
 import { useBackClose } from '../../lib/backstack';
@@ -339,7 +339,14 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   };
   const handleClose = async (memo: string) => {
     try {
-      await closeLedgerSession(venueId, date, memo, gameSeq);
+      // C2: 클락이 이 장부에 연동돼 있으면 최종 보정 수치(엔트리/생존/아웃/얼리)를 스냅샷으로 함께 저장 → 통계 보조 표기
+      let snap: ClockSnapshot | null = null;
+      if (clock && clock.sessionDate === date) {
+        const derived = deriveClockCounts(buyins, { earlyDoubleMin: session.earlyDoubleMin, earlySingleMin: session.earlySingleMin, tournamentStart: session.tournamentStart, openedAt: session.openedAt });
+        const ls = computeLiveStats(clock, derived, clock.config);
+        snap = { entries: ls.entries, alive: ls.alive, eliminations: ls.eliminations, rebuys: ls.rebuys, earlies: ls.earlies, addons: ls.addons };
+      }
+      await closeLedgerSession(venueId, date, memo, gameSeq, snap);
       await reloadSession();
       setCloseOpen(false);
       // 마감 요약 한 줄 — 바인·매출(실수금)·미수 건수(통계와 동일한 buyinFinance 규칙)

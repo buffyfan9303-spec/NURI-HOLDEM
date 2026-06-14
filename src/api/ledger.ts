@@ -38,6 +38,9 @@ export interface LedgerBuyin {
   earlyOverride: EarlyType | null; // 얼리 수기지정(null=시각 기준 자동판정)
 }
 
+/** C2: 마감 시 저장하는 클락 최종 보정 수치(통계 보조 표기용). 장부 바인과 별개 기준. */
+export interface ClockSnapshot { entries: number; alive: number; eliminations: number; rebuys: number; earlies: number; addons: number }
+
 export interface LedgerSession {
   venueId: string;
   sessionDate: string;
@@ -67,6 +70,7 @@ export interface LedgerSession {
   closeMemo?: string | null;
   voucherIssued?: number;       // 매장이용권 발행/시상 장수(당일)
   voucherAccrualPerBin?: number; // 바인 1회당 매장이용권 적립 수(0=off)
+  clockSnapshot?: ClockSnapshot | null; // C2: 마감 시 클락 최종 스냅샷(통계 보조)
 }
 
 export interface LedgerPlayer {
@@ -177,6 +181,7 @@ const rowToSession = (venueId: string, date: string, d: any): LedgerSession => (
   tournamentStart: d?.tournament_start ?? null,
   voucherIssued: d?.voucher_issued ?? 0,
   voucherAccrualPerBin: d?.voucher_accrual_per_bin ?? 0,
+  clockSnapshot: (d?.clock_snapshot ?? null) as ClockSnapshot | null,
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -473,10 +478,10 @@ export async function setRegistrationClosed(venueId: string, date: string, close
 }
 
 /** 장부 정산 마감 — 읽기전용 스냅샷 + 마감 메모 */
-export async function closeLedgerSession(venueId: string, date: string, memo: string, gameSeq = MAIN_GAME_SEQ): Promise<void> {
+export async function closeLedgerSession(venueId: string, date: string, memo: string, gameSeq = MAIN_GAME_SEQ, clockSnapshot?: ClockSnapshot | null): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.from('ledger_sessions')
-    .update({ closed: true, closed_at: new Date().toISOString(), close_memo: memo || null, updated_at: new Date().toISOString() })
+    .update({ closed: true, closed_at: new Date().toISOString(), close_memo: memo || null, clock_snapshot: clockSnapshot ?? null, updated_at: new Date().toISOString() })
     .eq('venue_id', venueId).eq('session_date', date).eq('game_seq', gameSeq);
   if (error) throw error;
 }
