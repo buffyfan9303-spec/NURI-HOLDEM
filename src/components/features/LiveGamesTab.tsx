@@ -6,12 +6,23 @@ import { getRunningClocks, subscribeRunningClocks, type ClockState, type ClockLe
 import { wonToMan } from '../../api/ledger';
 import { EmptyState } from '../atoms/Skeleton';
 import type { Venue } from '../../api/community';
+import type { Schedule } from '../../api/schedules';
 
 const now = () => Date.now();
 const pad = (n: number) => String(Math.floor(n)).padStart(2, '0');
 const mmss = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return `${pad(s / 60)}:${pad(s % 60)}`; };
 const hms = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return `${pad(s / 3600)}:${pad((s % 3600) / 60)}:${pad(s % 60)}`; };
 const remainingOf = (s: ClockState) => (s.running && s.endsAt ? new Date(s.endsAt).getTime() - now() : s.remainingMs);
+
+/** 라이브 클락 → 연결 포스터 매칭(공개 데이터만): 같은 매장·같은 날짜의 스케줄(여럿이면 제목 일치 우선). 없으면 null → 매장 폴백. */
+function matchSchedule(g: ClockState, schedules: Schedule[]): Schedule | null {
+  if (!g.sessionDate) return null;
+  const sameDay = schedules.filter((s) => s.venueId === g.venueId && s.date === g.sessionDate);
+  if (sameDay.length === 0) return null;
+  if (sameDay.length === 1) return sameDay[0];
+  const t = (g.title || g.config?.title || '').trim();
+  return sameDay.find((s) => (s.title ?? '').trim() === t) ?? sameDay[0];
+}
 
 function levelNumberAt(levels: ClockLevel[], index: number): number {
   let n = 0;
@@ -32,7 +43,7 @@ function msToRegClose(s: ClockState, remaining: number): number | null {
   return null;
 }
 
-export default function LiveGamesTab({ venues, onVenue }: { venues: Venue[]; onVenue: (id: string) => void }) {
+export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule }: { venues: Venue[]; schedules: Schedule[]; onVenue: (id: string) => void; onSchedule: (s: Schedule) => void }) {
   const [games, setGames] = useState<ClockState[] | null>(null);
   const [, setTick] = useState(0);
   const load = () => getRunningClocks().then(setGames).catch(() => setGames([]));
@@ -63,7 +74,11 @@ export default function LiveGamesTab({ venues, onVenue }: { venues: Venue[]; onV
           />
         ) : (
           <ul className="grid grid-cols-1 gap-card-gap">
-            {games.map((g) => <LiveCard key={g.venueId} g={g} name={nameOf(g.venueId)} onClick={() => onVenue(g.venueId)} />)}
+            {games.map((g) => {
+              const sched = matchSchedule(g, schedules);
+              return <LiveCard key={g.venueId} g={g} name={nameOf(g.venueId)} sched={sched}
+                onPoster={() => sched && onSchedule(sched)} onVenue={() => onVenue(g.venueId)} />;
+            })}
           </ul>
         )}
         <p className="text-center text-[10px] text-ink-muted">운영 중 클락의 공개 정보입니다 · 30초 자동 갱신.</p>
@@ -72,7 +87,7 @@ export default function LiveGamesTab({ venues, onVenue }: { venues: Venue[]; onV
   );
 }
 
-function LiveCard({ g, name, onClick }: { g: ClockState; name: string; onClick: () => void }) {
+function LiveCard({ g, name, sched, onPoster, onVenue }: { g: ClockState; name: string; sched: Schedule | null; onPoster: () => void; onVenue: () => void }) {
   const lvls = g.config?.levels ?? [];
   const lv = lvls[g.currentIndex];
   const levelNo = levelNumberAt(lvls, g.currentIndex);
@@ -90,12 +105,13 @@ function LiveCard({ g, name, onClick }: { g: ClockState; name: string; onClick: 
 
   return (
     <li>
-      <button type="button" onClick={onClick}
+      <button type="button" onClick={sched ? onPoster : onVenue}
         className="w-full rounded-card border border-gold-400/30 bg-surface-low p-3 text-left transition-colors hover:border-gold-400/60 active:scale-[0.99]">
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
             <p className="truncate text-sm font-bold text-ink-primary">{name}</p>
             <p className="truncate text-2xs text-ink-muted">{g.title || g.config?.title || '토너먼트'}</p>
+            {sched && <p className="truncate text-2xs font-semibold text-gold-300/90 mt-0.5">📋 탭하면 대회 포스터로 이동</p>}
           </div>
           <span className={`inline-flex shrink-0 items-center gap-1 rounded-badge px-2 py-0.5 text-2xs font-bold ${g.running ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-500/15 text-amber-400'}`}>
             <span className={`h-1.5 w-1.5 rounded-full ${g.running ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />{g.running ? 'LIVE' : '일시정지'}
@@ -155,6 +171,10 @@ function LiveCard({ g, name, onClick }: { g: ClockState; name: string; onClick: 
           <span className="text-ink-muted">다음 브레이크 <b className="text-ink-secondary">{nextBreak === null ? '—' : hms(nextBreak)}</b></span>
         </div>
       </button>
+      {sched && (
+        <button type="button" onClick={onVenue}
+          className="mt-1 w-full rounded-input border border-border-subtle py-1.5 text-2xs font-semibold text-ink-muted transition-colors hover:border-gold-400/40 hover:text-gold-300">🏪 매장 페이지 보기</button>
+      )}
     </li>
   );
 }
