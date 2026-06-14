@@ -609,7 +609,9 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
 
       {/* 게임 요약 띠 — 현재 게임 핵심 지표 상단 고정(스크롤해도 보임, 모바일 라이브 운영용) */}
       {!closed && (
-        <div className="sticky top-header-h z-10 grid grid-cols-4 gap-2 rounded-card border border-gold-400/30 bg-surface-mid/95 px-3 py-1.5 text-center shadow-sm backdrop-blur">
+        <div role="button" tabIndex={0} title="탭하면 하단 정산/마감으로 이동"
+          onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}
+          className="sticky top-header-h z-10 grid grid-cols-4 gap-2 rounded-card border border-gold-400/30 bg-surface-mid/95 px-3 py-1.5 text-center shadow-sm backdrop-blur cursor-pointer">
           <Metric label="엔트리" value={stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} />
           <Metric label="완납 매출" value={`${wonToMan(stats.revenue)}만`} tone="emerald" />
           <Metric label={clockLinked && clock?.liveStats ? '생존' : '총바인'} value={clockLinked && clock?.liveStats ? `${clock.liveStats.alive}` : `${stats.totalBuyins}`} />
@@ -1283,7 +1285,8 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   // 메인 게임 설정 그대로 복사(사이드 빠른 생성) — 단가·할인·딜러·게임유형·애드온
   const applyCopyMain = () => {
     if (!copyMain) return;
-    setTitle(copyMain.title ?? '');
+    // 제목은 충돌 방지 위해 "(사이드N)" 접미사 자동(메인은 그대로)
+    setTitle(copyMain.title ? `${copyMain.title} (사이드${(base.gameSeq ?? MAIN_GAME_SEQ) - 1})` : '');
     setCash(copyMain.buyinAmount || 0);
     setCard(copyMain.cardAmount ?? 0);
     setTarget(copyMain.targetEntries || 0);
