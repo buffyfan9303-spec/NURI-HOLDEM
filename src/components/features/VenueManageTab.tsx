@@ -466,10 +466,10 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
   const [cfg, setCfg] = useState<VenuePageConfig | null>(null);
   useEffect(() => { getVenuePageConfig(venueId).then(setCfg).catch(() => {}); }, [venueId]);
 
-  // 장부에서 넘어온 초안: 해당 날짜로 이동(게임 선택은 기본부터 — 이미 입력된 게임은 ✓로 표시)
+  // 장부에서 넘어온 초안: 해당 날짜로 이동 + 그 게임(메인/사이드) 제목으로 게임칩 자동 선택
   useEffect(() => {
     if (draft?.date) setDate(draft.date);
-    setEventName('');
+    setEventName(draft?.event ?? ''); // 사이드 마감→순위입력 시 그 사이드 title로 바로(메인은 '')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft]);
 
