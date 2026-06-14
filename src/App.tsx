@@ -1582,7 +1582,7 @@ export default function App() {
       {(activeTab === 'live' || visitedTabs.has('live')) && (
         <div style={activeTab !== 'live' ? { display: 'none' } : undefined}>
           <ErrorBoundary inline resetKey="live">
-            <LiveGamesTab venues={venues} schedules={schedules} onVenue={handleVenueClick} onSchedule={handleScheduleSelect} />
+            <LiveGamesTab venues={venues} schedules={schedules} onVenue={handleVenueClick} onSchedule={handleScheduleSelect} active={activeTab === 'live'} />
           </ErrorBoundary>
         </div>
       )}

@@ -70,7 +70,7 @@ function nextPlayableLabel(cfg: ClockConfig, index: number): string {
 }
 
 // ── 메인: 설정 ↔ 라이브 ─────────────────────────────────────────────────────────
-export default function TournamentClock({ venueId, canManage, seedSessionDate, seedGameSeq = 1 }: { venueId: string; canManage: boolean; seedSessionDate?: string | null; seedGameSeq?: number }) {
+export default function TournamentClock({ venueId, canManage, seedSessionDate, seedGameSeq = 1, active = true }: { venueId: string; canManage: boolean; seedSessionDate?: string | null; seedGameSeq?: number; active?: boolean }) {
   const toast = useToast();
   const [state, setState] = useState<ClockState | null>(null);
   const [presets, setPresets] = useState<ClockPreset[]>([]);
@@ -155,7 +155,7 @@ export default function TournamentClock({ venueId, canManage, seedSessionDate, s
 
   return (
     <ClockLive
-      state={state} canManage={canManage}
+      state={state} canManage={canManage} active={active}
       onChange={(s) => setState(s)}
       onOpenSettings={() => setView('settings')}
       onEnd={endClock}
@@ -164,9 +164,9 @@ export default function TournamentClock({ venueId, canManage, seedSessionDate, s
 }
 
 // ── 라이브 디스플레이 + 컨트롤 ──────────────────────────────────────────────────
-function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd }: {
+function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active = true }: {
   state: ClockState; canManage: boolean;
-  onChange: (s: ClockState) => void; onOpenSettings: () => void; onEnd: () => void;
+  onChange: (s: ClockState) => void; onOpenSettings: () => void; onEnd: () => void; active?: boolean;
 }) {
   const toast = useToast();
   const { user } = useAuth();
@@ -215,8 +215,8 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd }: {
     return subscribeLedger(state.venueId, load);
   }, [state.venueId, state.sessionDate, state.gameSeq]);
 
-  // 250ms 틱(부드러운 카운트다운)
-  useEffect(() => { const id = setInterval(() => setTick((t) => t + 1), 250); return () => clearInterval(id); }, []);
+  // 250ms 틱(부드러운 카운트다운) — 화면에 보일 때만. 숨김(다른 섹션) 시 멈춰 백그라운드 끊김 방지(재진입 시 endsAt로 즉시 복원)
+  useEffect(() => { if (!active) return; const id = setInterval(() => setTick((t) => t + 1), 250); return () => clearInterval(id); }, [active]);
 
   // 집계(파생) — persist보다 위에서 계산해 liveStats를 저장에 첨부(라이브 보드 반영).
   const cfg = state.config;

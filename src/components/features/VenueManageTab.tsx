@@ -290,7 +290,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 {visited.has('venueRank') && ledgerOk && box('venueRank', <VenueRankHub venueId={venueId} canConfigure={manageOk} />)}
                 {visited.has('league') && ledgerOk && box('league', <LeaguePanel venueId={venueId} canConfigure={manageOk} />)}
                 {visited.has('page') && canStaff && box('page', <VenueCustomizePanel venueId={venueId} />)}
-                {visited.has('clock') && ledgerOk && box('clock', <TournamentClock venueId={venueId} canManage={ledgerOk} seedSessionDate={clockSeed} seedGameSeq={clockSeedGame} />)}
+                {visited.has('clock') && ledgerOk && box('clock', <TournamentClock venueId={venueId} canManage={ledgerOk} seedSessionDate={clockSeed} seedGameSeq={clockSeedGame} active={section === 'clock'} />)}
                 {visited.has('attendance') && ledgerOk && box('attendance', <StaffSelfAttendance venueId={venueId} />)}
                 {visited.has('staff') && canStaff && box('staff', <StaffHub venueId={venueId} />)}
                 {visited.has('settings') && canStaff && box('settings', <PosSettingsPanel venueId={venueId} />)}
