@@ -44,7 +44,7 @@ export function checkinQrUrl(venueId: string): string {
 
 export function subscribeCheckins(venueId: string, cb: () => void): () => void {
   if (IS_MOCK) return () => {};
-  const ch = supabase.channel(`checkins:${venueId}`)
+  const ch = supabase.channel(`checkins:${venueId}:${Math.random().toString(36).slice(2)}`)
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'checkins', filter: `venue_id=eq.${venueId}` }, () => cb())
     .subscribe();
   return () => { supabase.removeChannel(ch); };

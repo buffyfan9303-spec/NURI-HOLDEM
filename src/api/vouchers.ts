@@ -36,7 +36,7 @@ export async function listVenueVouchers(venueId: string): Promise<Voucher[]> {
 export function subscribeVenueVouchers(venueId: string, onChange: () => void): () => void {
   if (IS_MOCK) return () => {};
   const ch = supabase
-    .channel(`store_vouchers_${venueId}`)
+    .channel(`store_vouchers_${venueId}_${Math.random().toString(36).slice(2)}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'store_vouchers', filter: `venue_id=eq.${venueId}` }, () => onChange())
     .subscribe();
   return () => { supabase.removeChannel(ch); };

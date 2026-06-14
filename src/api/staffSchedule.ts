@@ -5,7 +5,7 @@ import { supabase, IS_MOCK } from '../lib/supabase';
 export function subscribeStaffSchedule(venueId: string, onChange: () => void): () => void {
   if (IS_MOCK) return () => {};
   const ch = supabase
-    .channel(`staff_sched:${venueId}`)
+    .channel(`staff_sched:${venueId}:${Math.random().toString(36).slice(2)}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'staff_schedule', filter: `venue_id=eq.${venueId}` }, () => onChange())
     .subscribe();
   return () => { supabase.removeChannel(ch); };
