@@ -378,7 +378,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd }: {
         {adImg && (
           <div className="shrink-0 border-b border-gold-400/20 bg-black">
             <img src={adImg} alt="광고" className={['mx-auto w-full object-contain',
-              adSize === 'sm' ? (fs ? 'max-h-[8vh]' : 'max-h-16') : adSize === 'lg' ? (fs ? 'max-h-[24vh]' : 'max-h-48') : (fs ? 'max-h-[15vh]' : 'max-h-28')].join(' ')} />
+              adSize === 'sm' ? (fs ? 'max-h-[7vh]' : 'max-h-16') : adSize === 'lg' ? (fs ? 'max-h-[13vh]' : 'max-h-48') : (fs ? 'max-h-[10vh]' : 'max-h-28')].join(' ')} />
           </div>
         )}
 
@@ -387,7 +387,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd }: {
         </div>
 
         {/* 본문 3열 */}
-        <div className={['grid grid-cols-[minmax(76px,0.85fr)_2.6fr_minmax(90px,1fr)]', fs ? 'flex-1 min-h-0' : ''].join(' ')}>
+        <div className={['grid grid-cols-[minmax(76px,0.85fr)_2.6fr_minmax(90px,1fr)]', fs ? 'flex-1 min-h-0 overflow-hidden' : ''].join(' ')}>
           {/* 좌: 프라이즈 */}
           <div className="flex flex-col p-2 sm:p-3 border-r border-white/5 bg-black/20">
             <p className={['text-gold-300/70 font-bold tracking-[0.18em] mb-1', fs ? 'text-[min(1.5vw,1.8vh)]' : 'text-[9px] sm:text-2xs'].join(' ')}>PRIZE</p>
@@ -430,7 +430,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd }: {
               {isBreak ? (cur.label || 'BREAK') : `LEVEL ${levelNo}`}
             </p>
             <p className={['font-extrabold tabular-nums leading-none my-1 sm:my-2 drop-shadow-[0_3px_24px_rgba(0,0,0,0.5)]',
-              fs ? 'text-[min(26vw,40vh)]' : 'text-6xl sm:text-8xl',
+              fs ? 'text-[min(22vw,32vh)]' : 'text-6xl sm:text-8xl',
               urgent ? 'text-rose-400 animate-pulse' : isBreak ? 'text-sky-200' : 'text-white'].join(' ')}>
               {mmss(Math.max(0, remaining))}
             </p>
