@@ -108,6 +108,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const [editOpen, setEditOpen]   = useState(false);
   const [editPlayer, setEditPlayer] = useState<LedgerPlayer | null>(null);
   const [prefill, setPrefill]     = useState<Partial<LedgerSession> | null>(null);
+  const [copyMain, setCopyMain]   = useState<LedgerSession | null>(null); // 사이드 생성 시 '메인 설정 복사'용
   const [mode, setMode]           = useState<'list' | 'board'>('list');
   const [sessionList, setSessionList] = useState<LedgerSessionListItem[]>([]);
   const [collapsedDates, setCollapsedDates] = useState<Set<string>>(new Set()); // 장부 목록 날짜별 접기(사이드 늘면 단축)
@@ -275,6 +276,15 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     }
     getLastLedgerSettings(venueId, date).then(setPrefill).catch(() => {});
   }, [loading, showSetup, venueId, date, gameSeq]);
+
+  // 사이드 시작 설정일 때 — 그날 메인 게임 설정을 '복사' 버튼으로 제공(반복 입력 제거)
+  useEffect(() => {
+    if (showSetup && gameSeq !== MAIN_GAME_SEQ) {
+      getLedgerSession(venueId, date, MAIN_GAME_SEQ)
+        .then((s) => setCopyMain((s.buyinAmount > 0 || s.openedAt) ? s : null))
+        .catch(() => setCopyMain(null));
+    } else setCopyMain(null);
+  }, [showSetup, gameSeq, venueId, date]);
 
   const cellAt = (name: string, e: number) => buyins.find((b) => b.playerName === name && b.entryNo === e) ?? null;
   const countOf = (name: string) => buyins.filter((b) => b.playerName === name).length;
@@ -569,7 +579,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
           <SessionForm
             base={{ ...session, ...(prefill ?? {}) }} mode="open" operatorName={operatorName}
             prefilled={!!prefill} schedules={venueSchedules} operatorOptions={operatorOptions}
-            presets={presets} scheduledDealers={scheduledNames}
+            presets={presets} scheduledDealers={scheduledNames} copyMain={copyMain}
             onSubmit={handleOpen}
           />
         )}
@@ -596,6 +606,16 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
         {onOpenClock && <button type="button" onClick={() => onOpenClock(date, gameSeq)} className="btn-ghost text-sm px-3.5 py-2 font-semibold">⏱ 클락</button>}
         {!closed && <button type="button" onClick={() => setEditOpen(true)} className="btn-ghost text-sm px-3.5 py-2 font-semibold">세션 정보 수정</button>}
       </div>
+
+      {/* 게임 요약 띠 — 현재 게임 핵심 지표 상단 고정(스크롤해도 보임, 모바일 라이브 운영용) */}
+      {!closed && (
+        <div className="sticky top-header-h z-10 grid grid-cols-4 gap-2 rounded-card border border-gold-400/30 bg-surface-mid/95 px-3 py-1.5 text-center shadow-sm backdrop-blur">
+          <Metric label="엔트리" value={stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} />
+          <Metric label="완납 매출" value={`${wonToMan(stats.revenue)}만`} tone="emerald" />
+          <Metric label={clockLinked && clock?.liveStats ? '생존' : '총바인'} value={clockLinked && clock?.liveStats ? `${clock.liveStats.alive}` : `${stats.totalBuyins}`} />
+          <Metric label="미수" value={`${wonToMan(stats.unpaid)}만`} tone={stats.unpaid > 0 ? 'danger' : undefined} />
+        </div>
+      )}
 
       {/* 클락 리모컨 — 이 장부에 연결된 클락을 장부에서 바로 제어(레벨± · 일시정지/재개) */}
       {clockLinked && clock && !closed && (
@@ -1175,10 +1195,10 @@ function Metric({ label, value, tone }: { label: string; value: string; tone?: '
 }
 
 // ── 세션 설정 폼 (입장/수정 공용) ─────────────────────────────────────────────
-function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, prefilled, schedules = [], operatorOptions = [], presets = [], scheduledDealers = [] }: {
+function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, prefilled, schedules = [], operatorOptions = [], presets = [], scheduledDealers = [], copyMain = null }: {
   base: LedgerSession; mode: 'open' | 'edit'; operatorName: string;
   onSubmit: (s: LedgerSession) => void; onCancel?: () => void; embedded?: boolean; prefilled?: boolean;
-  schedules?: Schedule[]; operatorOptions?: { id: string; label: string }[]; presets?: LedgerPreset[]; scheduledDealers?: string[];
+  schedules?: Schedule[]; operatorOptions?: { id: string; label: string }[]; presets?: LedgerPreset[]; scheduledDealers?: string[]; copyMain?: LedgerSession | null;
 }) {
   const [title, setTitle]     = useState(base.title ?? '');
   const [cash, setCash]       = useState<number>(base.buyinAmount || 0);
@@ -1260,6 +1280,22 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
     setDiscs(p.discounts ?? []);
   };
 
+  // 메인 게임 설정 그대로 복사(사이드 빠른 생성) — 단가·할인·딜러·게임유형·애드온
+  const applyCopyMain = () => {
+    if (!copyMain) return;
+    setTitle(copyMain.title ?? '');
+    setCash(copyMain.buyinAmount || 0);
+    setCard(copyMain.cardAmount ?? 0);
+    setTarget(copyMain.targetEntries || 0);
+    setGameType(copyMain.gameType ?? 'gtd');
+    setMaxEntries(copyMain.maxEntries || 0);
+    setIsAddon(!!copyMain.isAddon);
+    setAddonStack(copyMain.addonStack || 0);
+    setDealers(copyMain.dealers ?? '');
+    setEvent(copyMain.eventMemo ?? '');
+    setDiscs(copyMain.discounts ?? []);
+  };
+
   const submit = () => {
     if (cash <= 0) return;
     const tStart = startISO;
@@ -1295,6 +1331,12 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
         </div>
       )}
 
+      {mode === 'open' && copyMain && (base.gameSeq ?? 1) > 1 && (
+        <button type="button" onClick={applyCopyMain}
+          className="w-full flex items-center justify-center gap-1.5 rounded-input border border-gold-400/50 bg-gold-300/12 px-3 py-2.5 text-sm font-bold text-gold-300 transition-colors hover:bg-gold-300/20">
+          📋 메인 게임 설정 그대로 복사 (단가·할인·딜러·유형)
+        </button>
+      )}
       {mode === 'open' && presets.length > 0 && (
         <Field label="프리셋 게임 · 클릭하면 아래 내용 자동입력(수정 가능)">
           <button type="button" onClick={() => setPresetOpen((v) => !v)}
