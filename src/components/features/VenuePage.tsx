@@ -640,18 +640,27 @@ function VenueChat({ venueId, canManage }: { venueId: string; canManage: boolean
 
 // ── 팔로우 버튼 ────────────────────────────────────────────────────────────
 
-function VenueRankingPanel({ venueId }: { venueId: string }) {
-  const [cfg, setCfg] = useState<VenuePageConfig | null>(null);
-  const [metric, setMetric] = useState<RankBoardId | null>(null);
-  const [totals, setTotals] = useState<RankingTotal[]>([]);
-  const [manual, setManual] = useState<ScoreEntry[]>([]);
-  // 주의: 이 파일에 지도용 Map 컴포넌트가 있어 내장 Map 생성이 가려짐 → Record 사용
-  const [buyinCounts, setBuyinCounts] = useState<Record<string, number>>({});
-  const [latest, setLatest] = useState<{ date: string | null; entries: RankingEntry[] }>({ date: null, entries: [] });
-  const [loading, setLoading] = useState(true);
+// 탭 전환 시 깜빡임 방지 — 매장별 마지막 로드 결과 캐시(원격 변경은 백그라운드 갱신, 스켈레톤 미표시).
+interface RankPanelCache {
+  cfg: VenuePageConfig | null; totals: RankingTotal[]; manual: ScoreEntry[];
+  buyinCounts: Record<string, number>; latest: { date: string | null; entries: RankingEntry[] };
+  playerCounts: PlayerCounts[]; checkinRows: { name: string; count: number }[]; metric: RankBoardId | null;
+}
+const rankPanelCache = new globalThis.Map<string, RankPanelCache>();
 
-  const [playerCounts, setPlayerCounts] = useState<PlayerCounts[]>([]);
-  const [checkinRows, setCheckinRows] = useState<{ name: string; count: number }[]>([]); // QR 출석 집계
+function VenueRankingPanel({ venueId }: { venueId: string }) {
+  const cached0 = rankPanelCache.get(venueId);
+  const [cfg, setCfg] = useState<VenuePageConfig | null>(cached0?.cfg ?? null);
+  const [metric, setMetric] = useState<RankBoardId | null>(cached0?.metric ?? null);
+  const [totals, setTotals] = useState<RankingTotal[]>(cached0?.totals ?? []);
+  const [manual, setManual] = useState<ScoreEntry[]>(cached0?.manual ?? []);
+  // 주의: 이 파일에 지도용 Map 컴포넌트가 있어 내장 Map 생성이 가려짐 → Record 사용
+  const [buyinCounts, setBuyinCounts] = useState<Record<string, number>>(cached0?.buyinCounts ?? {});
+  const [latest, setLatest] = useState<{ date: string | null; entries: RankingEntry[] }>(cached0?.latest ?? { date: null, entries: [] });
+  const [loading, setLoading] = useState(!cached0); // 캐시 있으면 스켈레톤 없이 바로 표시(깜빡임 제거)
+
+  const [playerCounts, setPlayerCounts] = useState<PlayerCounts[]>(cached0?.playerCounts ?? []);
+  const [checkinRows, setCheckinRows] = useState<{ name: string; count: number }[]>(cached0?.checkinRows ?? []); // QR 출석 집계
   useEffect(() => {
     let active = true;
     const load = async () => {
@@ -685,14 +694,18 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
         if (!active) return;
         setCfg(c); setTotals(t); setLatest(d); setManual(m); setBuyinCounts(bc); setPlayerCounts(pc); setCheckinRows(ck);
         setMetric((cur) => cur ?? (c?.rankMetrics?.[0] ?? 'score'));
+        rankPanelCache.set(venueId, { cfg: c, totals: t, manual: m, buyinCounts: bc, latest: d, playerCounts: pc, checkinRows: ck, metric: rankPanelCache.get(venueId)?.metric ?? (c?.rankMetrics?.[0] ?? 'score') });
       } catch { /* noop */ }
       finally { if (active) setLoading(false); }
     };
-    setLoading(true);
+    if (!rankPanelCache.has(venueId)) setLoading(true); // 캐시 있으면 스켈레톤 생략(깜빡임 제거), 백그라운드 갱신
     load();
     const unsub = subscribeRankings(venueId, load); // 실시간: 순위 입력 시 자동 반영
     return () => { active = false; unsub(); };
   }, [venueId]);
+
+  // 보드 선택을 캐시에 유지(탭 떠났다 복귀해도 같은 보드)
+  useEffect(() => { const e = rankPanelCache.get(venueId); if (e && metric) e.metric = metric; }, [metric, venueId]);
 
   // 업주가 고른 보드(1~2개). 미설정 시 기본 2종.
   const metrics: RankBoardId[] = (cfg?.rankMetrics && cfg.rankMetrics.length > 0 ? cfg.rankMetrics : (['score', 'prize'] as RankBoardId[])).slice(0, 2);
