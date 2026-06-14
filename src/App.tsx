@@ -215,7 +215,7 @@ function AppHeader({
             aria-label={`알림 ${unreadCount}개`}
             aria-expanded={notifOpen}
             className={[
-              'relative w-9 h-9 hidden lg:flex items-center justify-center rounded-full',
+              'relative w-9 h-9 flex items-center justify-center rounded-full',
               'transition-colors duration-200 ease-out active:scale-90',
               notifOpen
                 ? 'bg-surface-high text-gold-300'
@@ -257,8 +257,7 @@ function AppHeader({
                 aria-label={`${user.name} 메뉴`}
                 className="group relative w-11 h-11 -mr-1 flex items-center justify-center rounded-full focus:outline-none"
               >
-                {/* 모바일: 알림 벨이 숨겨지므로 미읽음을 아바타 점으로 */}
-                {unreadCount > 0 && <span className="lg:hidden absolute top-1 right-0.5 z-10 h-2.5 w-2.5 rounded-full bg-gold-300 ring-2 ring-surface-base" aria-hidden />}
+                {/* 알림 벨이 모바일에서도 보이므로(숫자 배지 포함) 아바타 점은 제거 */}
                 {/* 보이는 아바타 32px(이미지/이니셜) — 터치영역은 44px 유지(WCAG) */}
                 {/* 아바타 테두리 = 활동 등급색(운영자=빨강). 별도 22 배지 대신 테두리로 표현 */}
                 <span

@@ -647,9 +647,21 @@ interface RankPanelCache {
   playerCounts: PlayerCounts[]; checkinRows: { name: string; count: number }[]; metric: RankBoardId | null;
 }
 const rankPanelCache = new globalThis.Map<string, RankPanelCache>();
+// 새로고침 후에도 깜빡임 없도록 localStorage에 영속(메모리 우선, 없으면 LS 폴백 → 즉시 표시 후 백그라운드 갱신)
+const RANK_LS = (venueId: string) => `nuri:rankcache:${venueId}`;
+function readRankCache(venueId: string): RankPanelCache | undefined {
+  const mem = rankPanelCache.get(venueId);
+  if (mem) return mem;
+  try { const s = localStorage.getItem(RANK_LS(venueId)); if (s) { const p = JSON.parse(s) as RankPanelCache; rankPanelCache.set(venueId, p); return p; } } catch { /* noop */ }
+  return undefined;
+}
+function writeRankCache(venueId: string, e: RankPanelCache) {
+  rankPanelCache.set(venueId, e);
+  try { localStorage.setItem(RANK_LS(venueId), JSON.stringify(e)); } catch { /* noop */ }
+}
 
 function VenueRankingPanel({ venueId }: { venueId: string }) {
-  const cached0 = rankPanelCache.get(venueId);
+  const cached0 = readRankCache(venueId);
   const [cfg, setCfg] = useState<VenuePageConfig | null>(cached0?.cfg ?? null);
   const [metric, setMetric] = useState<RankBoardId | null>(cached0?.metric ?? null);
   const [totals, setTotals] = useState<RankingTotal[]>(cached0?.totals ?? []);
@@ -694,7 +706,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
         if (!active) return;
         setCfg(c); setTotals(t); setLatest(d); setManual(m); setBuyinCounts(bc); setPlayerCounts(pc); setCheckinRows(ck);
         setMetric((cur) => cur ?? (c?.rankMetrics?.[0] ?? 'score'));
-        rankPanelCache.set(venueId, { cfg: c, totals: t, manual: m, buyinCounts: bc, latest: d, playerCounts: pc, checkinRows: ck, metric: rankPanelCache.get(venueId)?.metric ?? (c?.rankMetrics?.[0] ?? 'score') });
+        writeRankCache(venueId, { cfg: c, totals: t, manual: m, buyinCounts: bc, latest: d, playerCounts: pc, checkinRows: ck, metric: rankPanelCache.get(venueId)?.metric ?? (c?.rankMetrics?.[0] ?? 'score') });
       } catch { /* noop */ }
       finally { if (active) setLoading(false); }
     };
@@ -705,7 +717,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
   }, [venueId]);
 
   // 보드 선택을 캐시에 유지(탭 떠났다 복귀해도 같은 보드)
-  useEffect(() => { const e = rankPanelCache.get(venueId); if (e && metric) e.metric = metric; }, [metric, venueId]);
+  useEffect(() => { const e = rankPanelCache.get(venueId); if (e && metric) writeRankCache(venueId, { ...e, metric }); }, [metric, venueId]);
 
   // 업주가 고른 보드(1~2개). 미설정 시 기본 2종.
   const metrics: RankBoardId[] = (cfg?.rankMetrics && cfg.rankMetrics.length > 0 ? cfg.rankMetrics : (['score', 'prize'] as RankBoardId[])).slice(0, 2);
