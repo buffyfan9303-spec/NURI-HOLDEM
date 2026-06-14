@@ -353,7 +353,14 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       const fins = buyins.map((b) => buyinFinance(b, session));
       const rev = fins.reduce((s, f) => s + f.paid, 0);
       const unpaidCnt = fins.filter((f) => f.unpaid > 0 || f.ticketUnpaid > 0).length;
-      toast.show(`마감 완료 — 오늘 바인 ${buyins.length} · 매출 ${wonToMan(rev)}만${unpaidCnt ? ` · 미수 ${unpaidCnt}건` : ' · 미수 없음'}`, 'success');
+      let closeMsg = `마감 완료 — 오늘 바인 ${buyins.length} · 매출 ${wonToMan(rev)}만${unpaidCnt ? ` · 미수 ${unpaidCnt}건` : ' · 미수 없음'}`;
+      // 클락 연동 마감 시: 클락 최종 인원 vs 장부 인원 차이(정산 누수 조기 경보)
+      if (snap) {
+        const ledgerPlayers = new Set(buyins.map((b) => b.playerName)).size;
+        const diff = snap.entries - ledgerPlayers;
+        if (Math.abs(diff) >= 1) closeMsg += ` · ⚠ 클락 ${snap.entries}명 vs 장부 ${ledgerPlayers}명(${diff > 0 ? '+' : ''}${diff})`;
+      }
+      toast.show(closeMsg, 'success');
     }
     catch (e) { toast.show(e instanceof Error ? e.message : '마감 실패', 'error'); }
   };
