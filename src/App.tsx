@@ -782,6 +782,7 @@ export default function App() {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [posts,         setPosts]         = useState<CommunityPost[]>([]);
   const [listings,      setListings]      = useState<MarketplaceListing[]>([]);
+  const [marketLoaded,  setMarketLoaded]  = useState(false); // 장터 최초 로딩 완료 여부(스켈레톤 게이팅)
   const [notices,       setNotices]       = useState<MarketplaceNotice[]>([]);
   const [users,         setUsers]         = useState<User[]>([]);
   const [openListing, setOpenListing]      = useState<MarketplaceListing | null>(null);
@@ -863,7 +864,7 @@ export default function App() {
     reloadPosts();
     reloadComments();
     reloadNotices();
-    getListings().then(setListings).catch(() => {});
+    getListings().then((l) => { setListings(l); setMarketLoaded(true); }).catch(() => setMarketLoaded(true));
   }, [reloadSchedules, reloadVenues, reloadPosts, reloadComments, reloadNotices]);
 
   // 유휴 시간에 다음에 열 가능성이 큰 청크를 미리 받아둔다 → 탭 전환/매장 진입 시 로더 깜빡임 제거.
@@ -916,7 +917,7 @@ export default function App() {
     reloadPosts();
     reloadComments();
     reloadNotices();
-    getListings().then(setListings).catch(() => {});
+    getListings().then((l) => { setListings(l); setMarketLoaded(true); }).catch(() => setMarketLoaded(true));
     if (user) getMyNotifications().then(setNotifications).catch(() => {});
     if (isAdmin) listAllUsers().then(setUsers).catch(() => {});
   }, [user, isAdmin, reloadSchedules, reloadVenues, reloadPosts, reloadComments, reloadNotices]);
@@ -1645,6 +1646,7 @@ export default function App() {
             marketSlot={
               <MarketplaceTab
                 listings={listings}
+                loading={!marketLoaded}
                 notices={notices.filter((n) => !n.board || n.board === 'all' || n.board === 'market')}
                 onSelect={setOpenListing}
                 onSelectNotice={setOpenNotice}
@@ -1680,6 +1682,7 @@ export default function App() {
         <main className="px-page-x py-section" style={activeTab !== 'market' ? { display: 'none' } : undefined}>
           <MarketplaceTab
             listings={listings}
+            loading={!marketLoaded}
             notices={notices.filter((n) => !n.board || n.board === 'all' || n.board === 'market')}
             onSelect={setOpenListing}
             onSelectNotice={setOpenNotice}

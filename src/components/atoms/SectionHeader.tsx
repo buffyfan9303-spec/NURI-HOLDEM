@@ -14,7 +14,7 @@ export default function SectionHeader({ title, desc, action }: Props) {
   return (
     <header className="flex items-end justify-between gap-3 border-b border-border-subtle pb-3">
       <div className="min-w-0">
-        <h2 className="text-[17px] font-bold leading-tight tracking-tight text-ink-primary">{title}</h2>
+        <h2 className="text-fluid-lg font-bold leading-tight tracking-tight text-ink-primary">{title}</h2>
         {desc && <p className="mt-1 text-xs leading-snug text-ink-muted">{desc}</p>}
       </div>
       {action && (

@@ -179,7 +179,7 @@ function ListCard({ schedule, onVenueClick, onSelect, reserveCount, rating }: Ca
           )}
           <FormatBadge format={schedule.format} />
           <h3 className={[
-            'text-sm font-semibold leading-tight truncate flex-1 min-w-0',
+            'text-sm font-bold tracking-tight leading-tight truncate flex-1 min-w-0',
             schedule.isPremium ? 'text-gold-300' : 'text-ink-primary',
           ].join(' ')}>
             {schedule.title}
@@ -287,7 +287,7 @@ function GridCard({ schedule, onVenueClick, onSelect, rating }: CardProps) {
       {/* 본문 */}
       <div className="flex flex-col gap-1.5 p-2.5">
         <h3 className={[
-          'text-sm font-semibold leading-tight line-clamp-2',
+          'text-sm font-bold tracking-tight leading-tight line-clamp-2',
           schedule.isPremium ? 'text-gold-300' : 'text-ink-primary',
         ].join(' ')}>
           {schedule.title}

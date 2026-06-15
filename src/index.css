@@ -20,7 +20,7 @@
 
     --ink-primary:   234 236 239; /* #EAECEF 본문 */
     --ink-secondary: 183 189 198; /* #B7BDC6 보조 */
-    --ink-muted:     132 142 156; /* #848E9C 메타/라벨 */
+    --ink-muted:     139 149 164; /* #8B95A4 메타/라벨 — WCAG AA 보강(카드·모달 배경서 ≥4.5:1, 위계 유지) */
     --ink-inverse:   24 26 32;    /* 옐로 버튼 위 검정 */
 
     --border-subtle:  43 49 57;   /* #2B3139 — 구분선 위주, 보더 존재감 최소 */
@@ -46,7 +46,7 @@
 
     --ink-primary:   24 28 35;    /* #181C23 — 본문 대비 ↑ */
     --ink-secondary: 62 69 80;    /* #3E4550 */
-    --ink-muted:     107 116 131; /* #6B7483 — 메타/라벨 대비 ↑ (기존 #848E9C는 흰 배경에서 흐릿) */
+    --ink-muted:     99 108 123;  /* #636C7B — WCAG AA 보강(흰/회색 배경서 ≥4.5:1, 기존 #6B7483는 #F2F3F5 위 4.3:1로 미달) */
     --ink-inverse:   24 26 32;    /* 골드 버튼 위 텍스트는 라이트/다크 모두 어둡게 유지 */
 
     --border-subtle:  226 229 234; /* #E2E5EA */
@@ -172,8 +172,17 @@
   /* ── 뱃지 ───────────────────────────────────────────── */
   .badge {
     @apply inline-flex items-center justify-center
-           rounded-badge text-2xs font-bold leading-none;
+           rounded-badge text-2xs font-bold leading-none tabular-nums;
   }
+
+  /* ── 반응형 유동 타이포(clamp) — 큰 제목이 모바일에서 자동 축소(Apple·Stripe식 유동 스케일) ──
+     모바일(min)~데스크톱(max)을 뷰포트 폭에 따라 매끄럽게 보간. 1rem=17px(html 기준). */
+  .text-fluid-lg  { font-size: clamp(1rem, 0.86rem + 0.7vw, 1.25rem);  line-height: 1.3; }
+  .text-fluid-xl  { font-size: clamp(1.2rem, 0.95rem + 1.3vw, 1.875rem); line-height: 1.2;  letter-spacing: -0.01em; }
+  .text-fluid-2xl { font-size: clamp(1.6rem, 1.05rem + 2.6vw, 3rem);     line-height: 1.12; letter-spacing: -0.02em; }
+
+  /* 숫자 정렬 일관화 — 숫자 입력 필드도 고정폭 숫자로(자릿수 흔들림 방지). 통계/금액/시간은 컴포넌트에서 tabular-nums 사용 */
+  input[type="number"], input[type="date"], input[type="time"] { font-variant-numeric: tabular-nums; }
 
   /* 골드 포인트 텍스트 글로우 — 다크 배경에서 묻히지 않고 고급스럽게 (은은하게) */
   .text-gold-glow {

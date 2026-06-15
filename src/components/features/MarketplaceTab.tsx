@@ -61,13 +61,15 @@ interface MarketplaceTabProps {
   onWriteNotice?: () => void;
   /** 내 판매목록에서 상태/삭제 변경 시 목록 새로고침 */
   onListingsChanged?: () => void;
+  /** 최초 목록 로딩 중 — 빈 화면 깜빡임 대신 스켈레톤 표시 */
+  loading?: boolean;
 }
 
 type SortBy = 'recent' | 'popular';
 
 export default function MarketplaceTab({
   listings, notices, onSelect, onSelectNotice, onCreate,
-  canWriteNotice = false, onWriteNotice, onListingsChanged,
+  canWriteNotice = false, onWriteNotice, onListingsChanged, loading = false,
 }: MarketplaceTabProps) {
   const { user } = useAuth();
   const [category, setCategory]       = useState<ListingCategory | 'all'>('all');
@@ -197,7 +199,21 @@ export default function MarketplaceTab({
       </div>
 
       {/* ── 매물 목록: 게시판(리스트) 전용 ───────────────────────── */}
-      {visible.length === 0 ? (
+      {loading && listings.length === 0 ? (
+        // 스켈레톤 — 최초 로딩 시 빈 화면/깜빡임 대신 게시판 행 형태의 시머 로더
+        <div className="rounded-card border border-border-default bg-surface-low overflow-hidden" aria-hidden>
+          {Array.from({ length: 7 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-3 border-b border-border-subtle px-3 py-2.5 last:border-b-0">
+              <div className="skeleton h-10 w-10 shrink-0 rounded-input" />
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <div className="skeleton h-3 rounded" style={{ width: `${[70, 55, 64, 48, 60, 52, 68][i]}%` }} />
+                <div className="skeleton h-2.5 rounded" style={{ width: `${[35, 42, 30, 38, 33, 40, 36][i]}%` }} />
+              </div>
+              <div className="skeleton h-3.5 w-12 shrink-0 rounded" />
+            </div>
+          ))}
+        </div>
+      ) : visible.length === 0 ? (
         <div className="rounded-card border border-border-default bg-surface-low py-16 text-center text-xs text-ink-muted">
           조건에 맞는 글이 없습니다
         </div>

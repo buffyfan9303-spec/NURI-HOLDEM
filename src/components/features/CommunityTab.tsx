@@ -1063,7 +1063,18 @@ function LiveWallSection() {
       )}
 
       {loading ? (
-        <p className="text-center py-12 text-xs text-ink-muted">불러오는 중…</p>
+        // 스켈레톤 — 텍스트 깜빡임 대신 피드 행 형태의 시머 로더
+        <ul className="space-y-1" aria-hidden>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <li key={i} className="flex items-start gap-2 px-2.5 py-1.5 rounded-input bg-surface-low border border-border-subtle">
+              <div className="skeleton h-6 w-6 shrink-0 rounded-full" />
+              <div className="min-w-0 flex-1 space-y-1.5 py-0.5">
+                <div className="skeleton h-2.5 rounded" style={{ width: `${[42, 55, 48, 60, 44, 52][i]}%` }} />
+                <div className="skeleton h-2.5 rounded" style={{ width: `${[88, 72, 92, 66, 80, 76][i]}%` }} />
+              </div>
+            </li>
+          ))}
+        </ul>
       ) : messages.length === 0 ? (
         <p className="text-center py-12 text-xs text-ink-muted">첫 한 줄을 남겨보세요</p>
       ) : (
