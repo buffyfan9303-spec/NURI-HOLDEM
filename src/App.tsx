@@ -1487,7 +1487,7 @@ export default function App() {
 
           {/* 주간 베스트 — 이번 주 머니인 킹 TOP3 롤링 */}
           <div className="px-page-x pt-3">
-            <WeeklyBestStrip />
+            <WeeklyBestStrip active={activeTab === 'browse'} />
           </div>
 
           {/* 공지 — 일정탐색 상단 (전체 공통 공지만) */}

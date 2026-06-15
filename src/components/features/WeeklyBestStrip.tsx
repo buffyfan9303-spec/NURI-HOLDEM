@@ -5,7 +5,7 @@ import { getWeeklyMoneyinKings, type WeeklyKing } from '../../api/rankings';
 
 const MEDAL = ['👑', '🥈', '🥉'];
 
-export default function WeeklyBestStrip() {
+export default function WeeklyBestStrip({ active = true }: { active?: boolean }) {
   const [kings, setKings] = useState<WeeklyKing[]>([]);
   const [isLastWeek, setIsLastWeek] = useState(false);
   const [idx, setIdx] = useState(0);
@@ -14,10 +14,10 @@ export default function WeeklyBestStrip() {
     getWeeklyMoneyinKings(3).then((r) => { setKings(r.kings); setIsLastWeek(r.isLastWeek); }).catch(() => {});
   }, []);
   useEffect(() => {
-    if (kings.length <= 1) return;
+    if (kings.length <= 1 || !active) return; // 홈 숨김 시 회전 정지(백그라운드 타이머 제거)
     const t = setInterval(() => setIdx((i) => (i + 1) % kings.length), 3500);
     return () => clearInterval(t);
-  }, [kings.length]);
+  }, [kings.length, active]);
 
   if (kings.length === 0) return null;
   const k = kings[idx];

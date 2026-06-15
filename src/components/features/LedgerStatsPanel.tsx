@@ -57,6 +57,7 @@ function StatsView({ venueId }: { venueId: string }) {
   const [loading, setLoading] = useState(true);
   const [aiTick, setAiTick] = useState(0); // AI 리포트 새로고침
   const [aiDays, setAiDays] = useState(7); // AI 리포트 분석 기간(일) — 7/30/90
+  const [trendMetric, setTrendMetric] = useState<'revenue' | 'entries' | 'players'>('revenue'); // 추세 그래프 지표
   const [liveTick, setLiveTick] = useState(0); // 장부 실시간 변경 반영(당일 통계)
 
   const range = useMemo<{ from: string; to: string }>(() => {
@@ -118,7 +119,7 @@ function StatsView({ venueId }: { venueId: string }) {
     const fin = (b: LedgerBuyin) => buyinFinance(b, sessionByKey.get(bkey(b)) ?? { buyinAmount: 0, cardAmount: null, discounts: [] });
     let revenue = 0, unpaid = 0, support = 0, ticket = 0, ticketUnpaid = 0, entries = 0, underEntries = 0, discountCnt = 0;
     let mainEntries = 0, mainRev = 0, sideEntries = 0, sideRev = 0; const sideGames = new Set<string>();
-    const revByDate: Record<string, { main: number; side: number }> = {}; // 일자별 메인/사이드 매출(추세 그래프)
+    const revByDate: Record<string, { mainRev: number; sideRev: number; mainE: number; sideE: number; players: Set<string> }> = {}; // 일자별 추세(매출·엔트리·인원)
     const byMethod: Record<PaymentMethod, number> = { ticket: 0, cash: 0, transfer: 0, card: 0, support: 0 };
     const byPlayer: Record<string, number> = {};
     const playerSet = new Set<string>();
@@ -130,8 +131,9 @@ function StatsView({ venueId }: { venueId: string }) {
       revenue += f.paid; unpaid += f.unpaid; support += f.support; entries += f.entry;
       if (b.gameSeq > 1) { sideEntries += f.entry; sideRev += f.paid; sideGames.add(bkey(b)); }
       else { mainEntries += f.entry; mainRev += f.paid; }
-      const rd = revByDate[b.sessionDate] ?? (revByDate[b.sessionDate] = { main: 0, side: 0 });
-      if (b.gameSeq > 1) rd.side += f.paid; else rd.main += f.paid;
+      const rd = revByDate[b.sessionDate] ?? (revByDate[b.sessionDate] = { mainRev: 0, sideRev: 0, mainE: 0, sideE: 0, players: new Set<string>() });
+      if (b.gameSeq > 1) { rd.sideRev += f.paid; rd.sideE += f.entry; } else { rd.mainRev += f.paid; rd.mainE += f.entry; }
+      rd.players.add(b.playerName);
       if (f.entry > 0 && f.entry < 1) underEntries++; // 참고용
       if (b.discountIndex > 0 || (b.isSplit && b.discountLevel > 0)) discountCnt++; // 할인 적용된 바인
       ticket += f.ticketPaid + (b.isSplit ? b.ticketCount : 0); ticketUnpaid += f.ticketUnpaid;
@@ -167,7 +169,7 @@ function StatsView({ venueId }: { venueId: string }) {
       arpGuest: grossPerPlayer, // 1인당 (완납+미수)
       arpEntry: grossPerEntry,  // 엔트리당 (완납+미수)
       mainEntries, mainRev, sideEntries, sideRev, sideGameCount: sideGames.size,
-      trend: Object.entries(revByDate).map(([d, v]) => ({ date: d, main: v.main, side: v.side })).sort((a, b) => (a.date < b.date ? -1 : 1)),
+      trend: Object.entries(revByDate).map(([d, v]) => ({ date: d, mainRev: v.mainRev, sideRev: v.sideRev, mainE: v.mainE, sideE: v.sideE, players: v.players.size })).sort((a, b) => (a.date < b.date ? -1 : 1)),
       dayCount, visitor, dow,
       avgEntryPerDay: dayCount ? entries / dayCount : 0,
       avgRevenuePerDay: dayCount ? revenue / dayCount : 0,
@@ -332,30 +334,39 @@ function StatsView({ venueId }: { venueId: string }) {
           )}
 
           {period !== 'day' && m.trend.length >= 2 && (() => {
-            const max = Math.max(1, ...m.trend.map((d) => d.main + d.side));
+            const stacked = trendMetric !== 'players';
+            const totals = m.trend.map((d) => trendMetric === 'revenue' ? d.mainRev + d.sideRev : trendMetric === 'entries' ? d.mainE + d.sideE : d.players);
+            const max = Math.max(1, ...totals);
+            const fmt = (n: number) => trendMetric === 'revenue' ? `${wonToMan(n)}만` : trendMetric === 'entries' ? n.toFixed(n % 1 ? 1 : 0) : `${n}명`;
             return (
-              <Section icon="wallet" title="일자별 매출 추세" suffix="· 메인/사이드">
+              <Section icon="wallet" title="일자별 추세" suffix={trendMetric === 'revenue' ? '· 매출' : trendMetric === 'entries' ? '· 엔트리' : '· 인원'}>
+                <SegmentedTabs grow className="flex w-full mb-2"
+                  items={[{ key: 'revenue', label: '매출' }, { key: 'entries', label: '엔트리' }, { key: 'players', label: '인원' }]}
+                  value={trendMetric} onChange={(k) => setTrendMetric(k as 'revenue' | 'entries' | 'players')} />
                 <div className="flex items-end gap-1 overflow-x-auto pb-1">
-                  {m.trend.map((d) => {
-                    const total = d.main + d.side;
+                  {m.trend.map((d, i) => {
+                    const total = totals[i];
+                    const side = trendMetric === 'revenue' ? d.sideRev : trendMetric === 'entries' ? d.sideE : 0;
                     const barPx = total > 0 ? Math.round((total / max) * 88) + 4 : 2;
-                    const mainPx = total > 0 ? Math.round((d.main / total) * barPx) : 0;
+                    const sidePx = stacked && total > 0 ? Math.round((side / total) * barPx) : 0;
                     return (
                       <div key={d.date} className="flex flex-col items-center gap-1 shrink-0 w-8"
-                        title={`${d.date} · 메인 ${wonToMan(d.main)}만 / 사이드 ${wonToMan(d.side)}만 / 합계 ${wonToMan(total)}만`}>
+                        title={`${d.date} · ${fmt(total)}${stacked && side > 0 ? ` (사이드 ${fmt(side)})` : ''}`}>
                         <div className="w-5 rounded-t-sm overflow-hidden flex flex-col-reverse bg-surface-high" style={{ height: barPx }}>
-                          <div className="bg-emerald-500" style={{ height: mainPx }} />
-                          <div className="bg-gold-300 flex-1" />
+                          <div className="bg-emerald-500 flex-1" />
+                          {stacked && <div className="bg-gold-300" style={{ height: sidePx }} />}
                         </div>
                         <span className="text-[8px] text-ink-muted tabular-nums leading-none">{d.date.slice(5).replace('-', '/')}</span>
                       </div>
                     );
                   })}
                 </div>
-                <div className="flex items-center gap-3 mt-1.5 text-[10px] text-ink-muted">
-                  <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-sm bg-emerald-500" /> 메인</span>
-                  <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-sm bg-gold-300" /> 사이드</span>
-                </div>
+                {stacked && (
+                  <div className="flex items-center gap-3 mt-1.5 text-[10px] text-ink-muted">
+                    <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-sm bg-emerald-500" /> 메인</span>
+                    <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-sm bg-gold-300" /> 사이드</span>
+                  </div>
+                )}
               </Section>
             );
           })()}
@@ -646,9 +657,10 @@ interface StatsAgg {
   dow: Record<number, { entries: number; revenue: number; unpaid: number; buyins: number; dates: Set<string>; players: Set<string> }>;
 }
 
-function buildAiReport(m: StatsAgg): { empty: boolean; sales: string; risk: string; weekday: string; actions: string[] } {
+function buildAiReport(m: StatsAgg, days = 7): { empty: boolean; sales: string; risk: string; weekday: string; actions: string[] } {
   if (m.total === 0) return { empty: true, sales: '', risk: '', weekday: '', actions: [] };
   const man = (won: number) => wonToMan(won);
+  const periodLabel = days <= 7 ? '이번 주' : `최근 ${days}일`;
   const dows = Object.entries(m.dow).map(([w, d]) => ({ w: Number(w), avg: d.dates.size ? d.entries / d.dates.size : 0, rev: d.dates.size ? d.revenue / d.dates.size : 0 }));
   dows.sort((a, b) => b.avg - a.avg);
   const best = dows[0];
@@ -675,7 +687,7 @@ function buildAiReport(m: StatsAgg): { empty: boolean; sales: string; risk: stri
   }
 
   const sales =
-    `${best ? `이번 주 ${DOW[best.w]}요일(${best.avg.toFixed(1)} 엔트리)의 성과가 가장 두드러집니다. ` : ''}` +
+    `${best ? `${periodLabel} ${DOW[best.w]}요일(${best.avg.toFixed(1)} 엔트리)의 성과가 가장 두드러집니다. ` : ''}` +
     `전체 매출 ${man(m.revenue)}만 원 중 카드 결제 비율이 ${Math.round(m.cardRatio)}%로 ` +
     `${m.cardRatio >= 60 ? '높아 결제 편의성이 잘 확보되어' : '적정 수준으로 유지되어'} 있습니다. ` +
     `${m.players}명의 플레이어가 참여했습니다.` + sideLine;
@@ -698,7 +710,7 @@ function buildAiReport(m: StatsAgg): { empty: boolean; sales: string; risk: stri
 }
 
 function AiReport({ m, days = 7, onRefresh }: { m: StatsAgg; days?: number; onRefresh: () => void }) {
-  const rpt = useMemo(() => buildAiReport(m), [m]);
+  const rpt = useMemo(() => buildAiReport(m, days), [m, days]);
   return (
     <div className="rounded-card border border-violet-500/40 bg-gradient-to-br from-violet-500/[0.12] to-indigo-500/[0.04] p-3 space-y-3">
       <div className="flex items-start justify-between gap-2">
