@@ -88,6 +88,13 @@
     overflow-wrap: break-word;
   }
 
+  /* ── 줄배열 최적화(세계적 표준: Vercel·Apple·Toss) ──────────────────────────
+     제목은 여러 줄의 길이를 고르게(balance) — "한 단어만 둘째 줄" 같은 들쭉날쭉 방지.
+     본문은 마지막 줄에 단어 하나만 남는 고아(orphan)를 방지(pretty).
+     미지원 브라우저는 속성을 자동 무시 → 안전. word-break:keep-all(어절)와 함께 한글 가독성 극대화. */
+  h1, h2, h3, h4, .text-balance { text-wrap: balance; }
+  p, li, .text-pretty { text-wrap: pretty; }
+
   /* 터치 시 기본 하이라이트(탭 이동 등에서 보이는 깜빡임) 완전 제거 — body 상속이 안 먹는
      일부 안드로이드/크롬 케이스 대비해 인터랙티브 요소에 명시. */
   button, a, [role="button"], [role="tab"], label, summary, input, select, textarea {
