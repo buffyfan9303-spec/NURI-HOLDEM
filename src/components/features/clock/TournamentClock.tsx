@@ -15,7 +15,7 @@ import {
   getClockState, saveClockState, clearClockState, subscribeClock, subscribeRunningClocks, getVenueClocks,
 } from '../../../api/clock';
 import {
-  getLedgerBuyins, getLedgerSession, getLedgerSessionList, saveLedgerSession, subscribeLedger, getLedgerGames,
+  getLedgerBuyins, getLedgerSession, getLedgerSessionList, saveLedgerSession, subscribeLedger, getLedgerGames, openLedgerSession,
   type LedgerBuyin, type LedgerSession, type LedgerSessionListItem,
 } from '../../../api/ledger';
 
@@ -143,13 +143,25 @@ export default function TournamentClock({ venueId, canManage, seedSessionDate, s
     curGameSeqRef.current = g;
     getClockState(venueId, g).then((s) => { setState(s); setView(s ? 'live' : 'settings'); }).catch(() => {});
   }, [venueId]);
+  // ＋ 사이드 클락 — 옵션으로 장부 사이드 게임도 자동 생성(메인 설정 복사) 후 그 게임 클락 설정으로 전환
+  const addSide = useCallback(async (nextSeq: number) => {
+    const linkDate = new Date().toLocaleDateString('en-CA');
+    if (window.confirm(`사이드${nextSeq - 1} 게임을 장부에도 만들고 클락을 시작할까요?\n\n확인 = 장부 사이드 게임 생성 + 클락 / 취소 = 클락만`)) {
+      try {
+        const main = await getLedgerSession(venueId, linkDate, 1);
+        await openLedgerSession({ ...main, gameSeq: nextSeq, sessionDate: linkDate, title: `${(main.title || '게임').trim()} 사이드${nextSeq - 1}` });
+        toast.show(`사이드${nextSeq - 1} 게임을 장부에 생성했어요`, 'success');
+      } catch (e) { toast.show(e instanceof Error ? e.message : '사이드 게임 생성 실패', 'error'); }
+    }
+    switchGame(nextSeq);
+  }, [venueId, switchGame, toast]);
 
   if (loading) return <p className="py-10 text-center text-sm text-ink-muted">클락 불러오는 중…</p>;
 
   if (view === 'settings' || !state) {
     return (
       <div className="space-y-2">
-        <MultiClockOverview venueId={venueId} sessionDate={seedSessionDate} currentGameSeq={curGameSeqRef.current} active={active} onSwitch={switchGame} />
+        <MultiClockOverview venueId={venueId} sessionDate={seedSessionDate} currentGameSeq={curGameSeqRef.current} active={active} onSwitch={switchGame} onAddSide={addSide} />
         <ClockSettings
           key={`${state?.venueId ?? 'new'}-${seedSession?.title ?? ''}-${seedSessionDate ?? ''}`}
           venueId={venueId} canManage={canManage} presets={presets} sessions={sessions} initial={seededInitial}
@@ -164,7 +176,7 @@ export default function TournamentClock({ venueId, canManage, seedSessionDate, s
 
   return (
     <div className="space-y-2">
-      <MultiClockOverview venueId={venueId} sessionDate={state.sessionDate} currentGameSeq={state.gameSeq} active={active} onSwitch={switchGame} />
+      <MultiClockOverview venueId={venueId} sessionDate={state.sessionDate} currentGameSeq={state.gameSeq} active={active} onSwitch={switchGame} onAddSide={addSide} />
       <ClockLive
         state={state} canManage={canManage} active={active}
         onChange={(s) => setState(s)}
@@ -176,7 +188,7 @@ export default function TournamentClock({ venueId, canManage, seedSessionDate, s
 }
 
 // ── 멀티 클락 오버뷰 — 매장 게임별 클락(메인+사이드N) 한눈에 + 탭 전환 + 사이드 클락 추가 ──
-function MultiClockOverview({ venueId, sessionDate, currentGameSeq, active = true, onSwitch }: { venueId: string; sessionDate?: string | null; currentGameSeq: number; active?: boolean; onSwitch: (g: number) => void }) {
+function MultiClockOverview({ venueId, sessionDate, currentGameSeq, active = true, onSwitch, onAddSide }: { venueId: string; sessionDate?: string | null; currentGameSeq: number; active?: boolean; onSwitch: (g: number) => void; onAddSide: (g: number) => void }) {
   const [clocks, setClocks] = useState<ClockState[]>([]);
   const [games, setGames] = useState<{ gameSeq: number; title?: string }[]>([]);
   const [, setTick] = useState(0);
@@ -206,7 +218,7 @@ function MultiClockOverview({ venueId, sessionDate, currentGameSeq, active = tru
             return (
               <button key={g} type="button" onClick={() => onSwitch(g)} className={base}>
                 <div className="flex items-center justify-between gap-1"><span className="truncate text-2xs font-bold text-ink-primary">{label(g)}{on ? ' ●' : ''}</span><span className="text-[9px] font-bold text-ink-muted">시작 전</span></div>
-                <p className="mt-0.5 text-[10px] text-ink-muted">탭하여 클락 시작</p>
+                <p className="mt-0.5 text-[10px] text-ink-muted truncate">{games.find((x) => x.gameSeq === g)?.title || '탭하여 클락 시작'}</p>
               </button>
             );
           }
@@ -228,7 +240,7 @@ function MultiClockOverview({ venueId, sessionDate, currentGameSeq, active = tru
             </button>
           );
         })}
-        <button type="button" onClick={() => onSwitch(nextSide)}
+        <button type="button" onClick={() => onAddSide(nextSide)}
           className="flex flex-col items-center justify-center rounded-input border border-dashed border-gold-400/50 p-1.5 text-center text-2xs font-bold text-gold-300 hover:bg-gold-300/10">＋ 사이드<br />클락</button>
       </div>
     </div>
