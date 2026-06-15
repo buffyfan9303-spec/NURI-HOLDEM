@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode, useRef } from 'react';
+import { useEffect, useState, useDeferredValue, type ReactNode, useRef } from 'react';
 import Icon from '../atoms/Icon';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
@@ -157,6 +157,10 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   if (canStaff) available.push({ id: 'staff', label: '직원 관리' });
   if (canStaff) available.push({ id: 'settings', label: '설정' });
   const curItem = available.find((a) => a.id === section);
+  // 콘텐츠 전환은 deferred — 내비(탭 하이라이트)는 즉시 반응하고, 무거운 섹션 렌더는 메인스레드를 막지 않고 양보.
+  // 폰(저사양 CPU)에서 메뉴 이동 시 동기 렌더가 프레임을 막아 생기던 "치직임/끊김"을 제거.
+  const renderSection = useDeferredValue(section);
+  const dItem = available.find((a) => a.id === renderSection); // deferred 기준 — 헤더·잠금화면·콘텐츠가 한 번에 원자적으로 전환
 
   if (!user) return null;
   // 업주: 소속 매장이 없으면 '매장 생성' 화면. 직원: 매장/직원 승인 대기 안내.
@@ -254,30 +258,31 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
           })()}
 
           <div className="mt-3 min-w-0 flex-1 space-y-3 lg:mt-0">
-            {curItem?.locked && (
+            {dItem?.locked && (
               <div className="rounded-card border border-border-default bg-surface-low p-6 text-center space-y-2.5">
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-surface-high text-ink-muted"><Icon name="lock" size={22} /></div>
-                <p className="text-sm font-bold text-ink-primary">{curItem.label} · 접근 권한이 없습니다</p>
-                <p className="text-2xs leading-relaxed text-ink-muted">이 기능은 업주가 권한을 부여해야 사용할 수 있어요.<br />매장 업주에게 <span className="font-semibold text-gold-300">{curItem.id === 'voucher' ? '이용권 내역' : '장부·순위'} 권한</span>을 요청하세요.</p>
+                <p className="text-sm font-bold text-ink-primary">{dItem.label} · 접근 권한이 없습니다</p>
+                <p className="text-2xs leading-relaxed text-ink-muted">이 기능은 업주가 권한을 부여해야 사용할 수 있어요.<br />매장 업주에게 <span className="font-semibold text-gold-300">{dItem.id === 'voucher' ? '이용권 내역' : '장부·순위'} 권한</span>을 요청하세요.</p>
               </div>
             )}
-            {/* 공용 섹션 헤더 — 모든 섹션의 제목·설명·주 액션 위치/크기를 한 규격으로 */}
-            {!curItem?.locked && (
+            {/* 공용 섹션 헤더 — 모든 섹션의 제목·설명·주 액션 위치/크기를 한 규격으로(콘텐츠와 함께 deferred 전환) */}
+            {!dItem?.locked && (
               <SectionHeader
-                title={curItem?.label ?? ''}
-                desc={section ? SECTION_DESC[section] : ''}
-                action={section === 'posters' && canPosters
+                title={dItem?.label ?? ''}
+                desc={renderSection ? SECTION_DESC[renderSection] : ''}
+                action={renderSection === 'posters' && canPosters
                   ? <button type="button" onClick={onCreatePoster} className="btn-primary">+ 새 게임</button>
                   : undefined}
               />
             )}
-            {/* 방문한 섹션은 마운트 유지 — display 토글만(전환 시 unmount/remount·재fetch·깜빡임 제거) */}
+            {/* 방문한 섹션은 마운트 유지 — display 토글만(전환 시 unmount/remount·재fetch·깜빡임 제거). 토글 기준은 deferred 섹션 */}
             {(() => {
               const box = (s: Section, node: ReactNode) => (
-                <div key={s} style={section === s && !curItem?.locked ? undefined : { display: 'none' }}>{node}</div>
+                <div key={s} style={renderSection === s && !dItem?.locked ? undefined : { display: 'none' }}>{node}</div>
               );
               return (<>
                 {visited.includes('dashboard') && box('dashboard', <StoreDashboard venueId={venueId} schedules={schedules} onGoto={(s) => gotoSection(s as Section)} onCreatePoster={onCreatePoster}
+                  active={renderSection === 'dashboard'}
                   caps={{ ledger: ledgerOk, manage: manageOk, voucher: manageOk || voucherView, posters: canPosters, staff: canStaff }} />)}
                 {visited.includes('posters') && canPosters && box('posters', <MyPostersTab schedules={schedules} onCreate={onCreatePoster} onEdit={onEditPoster} onDelete={onDeletePoster}
                   onGotoRanking={ledgerOk ? (date) => { setRankingDraft({ date, names: [] }); setSection('ranking'); } : undefined}
@@ -288,7 +293,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                       : { date: schedDate, scheduleId: s.id, isNew: true, title: s.title, buyinAmount: s.buyIn?.amount ?? 0, gtd: !!s.guaranteed });
                     setSection('ledger');
                   } : undefined} />)}
-                {visited.includes('ledger') && ledgerOk && box('ledger', <NuriPosLedger venueId={venueId} canManage={manageOk} active={section === 'ledger'} seed={ledgerSeed}
+                {visited.includes('ledger') && ledgerOk && box('ledger', <NuriPosLedger venueId={venueId} canManage={manageOk} active={renderSection === 'ledger'} seed={ledgerSeed}
                   onMakeRankingDraft={(d, names, ev) => { setRankingDraft({ date: d, names, event: ev ?? '' }); setSection('ranking'); }}
                   onOpenClock={(d, g) => { setClockSeed(d); setClockSeedGame(g); setSection('clock'); }}
                   onOpenStats={manageOk ? () => setSection('stats') : undefined} />)}
@@ -297,7 +302,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 {visited.includes('venueRank') && ledgerOk && box('venueRank', <VenueRankHub venueId={venueId} canConfigure={manageOk} />)}
                 {visited.includes('league') && ledgerOk && box('league', <LeaguePanel venueId={venueId} canConfigure={manageOk} />)}
                 {visited.includes('page') && canStaff && box('page', <VenueCustomizePanel venueId={venueId} />)}
-                {visited.includes('clock') && ledgerOk && box('clock', <TournamentClock venueId={venueId} canManage={ledgerOk} seedSessionDate={clockSeed} seedGameSeq={clockSeedGame} active={section === 'clock'} />)}
+                {visited.includes('clock') && ledgerOk && box('clock', <TournamentClock venueId={venueId} canManage={ledgerOk} seedSessionDate={clockSeed} seedGameSeq={clockSeedGame} active={renderSection === 'clock'} />)}
                 {visited.includes('attendance') && ledgerOk && box('attendance', <StaffSelfAttendance venueId={venueId} />)}
                 {visited.includes('staff') && canStaff && box('staff', <StaffHub venueId={venueId} />)}
                 {visited.includes('settings') && canStaff && box('settings', <PosSettingsPanel venueId={venueId} />)}

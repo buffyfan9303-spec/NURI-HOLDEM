@@ -49,13 +49,15 @@ interface Props {
   onCreatePoster: () => void;
   /** 직원 권한에 따라 카드/바로가기 노출 게이팅(업주·운영자는 전부 true). */
   caps: DashCaps;
+  /** 현재 보이는 탭일 때만 true — 숨김 상태에서 라이브 1초 틱을 멈춰 백그라운드 리렌더 방지. */
+  active?: boolean;
 }
 
 /**
  * 매장 대시보드 — 오늘 장부·클락·예약·출근 + 최근 7일 추세·객단가 + 미수 알림 + 인건비·손님유형을 실시간 요약.
  * 모든 카드는 해당 운영 화면으로 바로가기. 직원은 부여된 권한(caps)의 카드만 노출 — 권한 없는 화면으로의 dead-end 방지.
  */
-export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePoster, caps }: Props) {
+export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePoster, caps, active = true }: Props) {
   const d = localToday();
   const days = last7();
   const d14 = last14();
@@ -151,12 +153,12 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
     : 0;
   const survivors = clock ? Math.max(0, Math.round(fin.entry) + clock.adjEntries + clock.adjRebuys - clock.eliminations) : 0;
   const liveWidget = caps.ledger && (clockActive || pendingReqs.length > 0); // 진행 클락 또는 대기 요청이 있을 때만 노출
-  // 라이브일 때만 1초 갱신(카운트다운·"분 전") — 평상시엔 멈춰 불필요 리렌더 방지
+  // 라이브 + 보이는 탭일 때만 1초 갱신(카운트다운·"분 전") — 숨김/평상시엔 멈춰 백그라운드 리렌더 방지
   useEffect(() => {
-    if (!liveWidget) return;
+    if (!liveWidget || !active) return;
     const id = setInterval(() => setNowTick((t) => t + 1), 1000);
     return () => clearInterval(id);
-  }, [liveWidget]);
+  }, [liveWidget, active]);
   const fmtClock = (ms: number) => { const t = Math.floor(ms / 1000); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
   const gameLabel = (g: number | null) => g == null ? '미지정' : g <= 1 ? '메인' : `사이드${g - 1}`;
   const timeAgo = (iso: string) => { const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); return s < 60 ? '방금' : s < 3600 ? `${Math.floor(s / 60)}분 전` : `${Math.floor(s / 3600)}시간 전`; };

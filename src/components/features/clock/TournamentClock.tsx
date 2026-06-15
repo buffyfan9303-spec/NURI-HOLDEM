@@ -250,8 +250,11 @@ function MultiClockOverview({ venueId, sessionDate, currentGameSeq, active = tru
             </button>
           );
         })}
-        <button type="button" onClick={() => onAddSide(nextSide)}
-          className="flex flex-col items-center justify-center rounded-input border border-dashed border-gold-400/50 p-1.5 text-center text-2xs font-bold text-gold-300 hover:bg-gold-300/10">＋ 사이드<br />클락</button>
+        <button type="button" onClick={() => onAddSide(nextSide)} title="사이드 게임 클락 추가(메인 설정 복사)"
+          className="flex flex-col items-center justify-center gap-1 rounded-input border border-dashed border-gold-400/50 p-1.5 text-center font-bold text-gold-300 hover:bg-gold-300/10">
+          <span className="text-lg leading-none" aria-hidden>＋</span>
+          <span className="text-2xs leading-tight">사이드 클락</span>
+        </button>
       </div>
     </div>
   );
