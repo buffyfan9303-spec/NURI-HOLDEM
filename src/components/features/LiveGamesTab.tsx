@@ -54,6 +54,14 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, a
 
   const nameOf = (id: string) => venues.find((v) => v.id === id)?.name ?? '홀덤펍';
 
+  // 오늘 곧 시작 — 오늘 예정(승인)인데 아직 클락이 안 돌아가는 게임(손님에게 미리 노출)
+  const today = new Date().toLocaleDateString('en-CA');
+  const liveSchedIds = new Set<string>();
+  for (const g of games ?? []) { const s = matchSchedule(g, schedules); if (s) liveSchedIds.add(s.id); }
+  const upcoming = schedules
+    .filter((s) => s.approved && s.date === today && !liveSchedIds.has(s.id))
+    .sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
+
   return (
     <main className="px-page-x py-section animate-fade-in">
       <div className="mx-auto w-full max-w-3xl space-y-3">
@@ -107,6 +115,23 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, a
                 );
               });
             })()}
+          </div>
+        )}
+        {upcoming.length > 0 && (
+          <div className="space-y-1.5 pt-1">
+            <p className="px-1 text-2xs font-bold text-ink-muted">⏳ 오늘 곧 시작 <span className="text-gold-300">{upcoming.length}</span> <span className="font-normal">— 아직 클락 전</span></p>
+            <ul className="grid grid-cols-1 gap-1.5">
+              {upcoming.map((s) => (
+                <li key={s.id}>
+                  <button type="button" onClick={() => onSchedule(s)}
+                    className="flex w-full items-center gap-2 rounded-card border border-border-subtle bg-surface-low px-3 py-2 text-left transition-colors hover:border-gold-400/40 active:scale-[0.99]">
+                    <span className="shrink-0 rounded-badge bg-surface-high px-1.5 py-0.5 text-2xs font-bold tabular-nums text-gold-300">{s.startTime || '예정'}</span>
+                    <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{s.title}</span>
+                    <span className="shrink-0 max-w-[40%] truncate text-2xs text-ink-muted">{nameOf(s.venueId)}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
         <p className="text-center text-[10px] text-ink-muted">운영 중 클락의 공개 정보입니다 · 30초 자동 갱신.</p>
