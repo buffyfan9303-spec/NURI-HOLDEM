@@ -79,6 +79,10 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const [pendingReqs, setPendingReqs] = useState<BuyinRequest[]>([]); // 라이브 위젯: 대기중 바인 요청
   const [reqBusy, setReqBusy] = useState<string | null>(null); // 인라인 승인/거절 진행 중 요청 id
   const [payFor, setPayFor] = useState<string | null>(null); // 인라인 승인 결제수단 팝오버(✓ 길게 누르기)
+  const [payAmt, setPayAmt] = useState(0); // 팝오버 바인 금액(수정 가능)
+  const [splitOpen, setSplitOpen] = useState(false); // 분할 결제 입력 모드
+  const [splitVals, setSplitVals] = useState({ cash: 0, card: 0, transfer: 0 }); // 분할 금액
+  const [payOrder, setPayOrder] = useState<('cash' | 'card' | 'transfer')[]>(['cash', 'card', 'transfer']); // 결제수단 순서(자주 쓰는 것 먼저 — 학습)
   const [, setNowTick] = useState(0); // 라이브 카운트다운/경과시간 1초 갱신
   const [resCounts, setResCounts] = useState<Record<string, number>>({});
   const [shifts, setShifts] = useState<StaffShift[]>([]);
@@ -124,6 +128,13 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
     }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [venueId, d, caps.ledger]);
+  // 결제수단 기본값 학습 — 매장이 자주 쓰는 결제수단을 팝오버 첫 버튼으로(localStorage 카운트 기반)
+  useEffect(() => {
+    try {
+      const c = JSON.parse(localStorage.getItem(`nuri:paymethod:${venueId}`) || '{}');
+      setPayOrder((['cash', 'card', 'transfer'] as const).slice().sort((a, b) => (c[b] || 0) - (c[a] || 0)));
+    } catch { setPayOrder(['cash', 'card', 'transfer']); }
+  }, [venueId]);
   const [loading, setLoading] = useState(true);
 
   const upcoming = schedules
@@ -239,13 +250,39 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const lpTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lpFired = useRef(false);
   const cancelLP = () => { if (lpTimer.current) { clearTimeout(lpTimer.current); lpTimer.current = null; } };
-  const startLP = (r: BuyinRequest) => { lpFired.current = false; cancelLP(); lpTimer.current = setTimeout(() => { lpFired.current = true; setPayFor(r.id); }, 480); };
-  const approveWithPay = async (r: BuyinRequest, method: 'cash' | 'card' | 'transfer') => {
+  const startLP = (r: BuyinRequest) => {
+    lpFired.current = false; cancelLP();
+    lpTimer.current = setTimeout(() => {
+      lpFired.current = true;
+      const amt = buyinAmountFor(r.requestedGameSeq) ?? 0; // 기본 금액 프리필(수정 가능)
+      setPayAmt(amt); setSplitOpen(false); setSplitVals({ cash: amt, card: 0, transfer: 0 });
+      setPayFor(r.id);
+    }, 480);
+  };
+  // 자주 쓰는 결제수단 학습 — 카운트++ 후 순서 갱신
+  const bumpPay = (method: 'cash' | 'card' | 'transfer') => {
+    try {
+      const key = `nuri:paymethod:${venueId}`;
+      const c = JSON.parse(localStorage.getItem(key) || '{}');
+      c[method] = (c[method] || 0) + 1;
+      localStorage.setItem(key, JSON.stringify(c));
+      setPayOrder((['cash', 'card', 'transfer'] as const).slice().sort((a, b) => (c[b] || 0) - (c[a] || 0)));
+    } catch { /* noop */ }
+  };
+  // 승인 + 바인 기록(금액/분할) — split 금액으로 기록, 우세 결제수단 학습
+  const doApprove = async (r: BuyinRequest, split: { cash: number; card: number; transfer: number }) => {
+    const sum = split.cash + split.card + split.transfer;
+    if (sum <= 0) { toast.show('금액을 입력하세요', 'error'); return; }
     setPayFor(null); setReqBusy(r.id);
-    try { await approveBuyinRequest(r.id, r.requestedGameSeq ?? 1, true, method); setPendingReqs((p) => p.filter((x) => x.id !== r.id)); toast.show(`${r.playerName} 승인 · ${method === 'cash' ? '현금' : method === 'card' ? '카드' : '이체'} 바인 기록`, 'success'); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '승인 실패', 'error'); }
+    try {
+      await approveBuyinRequest(r.id, r.requestedGameSeq ?? 1, true, 'cash', split);
+      bumpPay(split.cash >= split.card && split.cash >= split.transfer ? 'cash' : split.card >= split.transfer ? 'card' : 'transfer');
+      setPendingReqs((p) => p.filter((x) => x.id !== r.id));
+      toast.show(`${r.playerName} 승인 · 바인 ${wonToMan(sum)}만`, 'success');
+    } catch (e) { toast.show(e instanceof Error ? e.message : '승인 실패', 'error'); }
     finally { setReqBusy(null); }
   };
+  const PM_LABEL: Record<'cash' | 'card' | 'transfer', string> = { cash: '현금', card: '카드', transfer: '이체' };
 
   // ── 예약 / 출근 ──
   const totalRes = upcoming.reduce((a, g) => a + (resCounts[g.id] ?? 0), 0);
@@ -456,18 +493,46 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                           className="shrink-0 rounded-input bg-emerald-500/15 px-1.5 py-1 text-2xs font-bold text-emerald-400 hover:bg-emerald-500/25 disabled:opacity-40">✓</button>
                         <button type="button" disabled={reqBusy === r.id} onClick={() => quickReject(r)} title="거절"
                           className="shrink-0 rounded-input bg-rose-500/15 px-1.5 py-1 text-2xs font-bold text-rose-300 hover:bg-rose-500/25 disabled:opacity-40">✕</button>
-                        {payFor === r.id && (() => {
-                          const amt = buyinAmountFor(r.requestedGameSeq);
-                          return (
-                            <div className="absolute right-0 top-full z-30 mt-1 flex items-center gap-1 rounded-input border border-border-default bg-surface-float p-1 shadow-dialog">
-                              <span className="px-1 text-[10px] font-semibold text-gold-300">{amt ? `바인 ${wonToMan(amt)}만` : '바인'}</span>
-                              <button type="button" onClick={() => approveWithPay(r, 'cash')} className="rounded-[5px] bg-surface-high px-1.5 py-1 text-2xs font-bold text-ink-secondary hover:text-gold-300">현금</button>
-                              <button type="button" onClick={() => approveWithPay(r, 'card')} className="rounded-[5px] bg-surface-high px-1.5 py-1 text-2xs font-bold text-ink-secondary hover:text-gold-300">카드</button>
-                              <button type="button" onClick={() => approveWithPay(r, 'transfer')} className="rounded-[5px] bg-surface-high px-1.5 py-1 text-2xs font-bold text-ink-secondary hover:text-gold-300">이체</button>
-                              <button type="button" onClick={() => setPayFor(null)} className="px-1 text-2xs text-ink-muted hover:text-ink-secondary">✕</button>
+                        {payFor === r.id && (
+                          <div className="absolute right-0 top-full z-30 mt-1 w-52 space-y-1.5 rounded-input border border-border-default bg-surface-float p-2 shadow-dialog">
+                            {/* 바인 금액 직접 수정(리바인·할인) */}
+                            <div className="flex items-center gap-1">
+                              <span className="shrink-0 text-[10px] text-ink-muted">바인</span>
+                              <input type="number" inputMode="numeric" value={payAmt || ''} onChange={(e) => setPayAmt(Math.max(0, Number(e.target.value) || 0))}
+                                className="min-w-0 flex-1 rounded-[5px] border border-border-default bg-surface-high px-1.5 py-1 text-xs tabular-nums text-ink-primary" placeholder="금액" />
+                              <span className="shrink-0 text-[10px] text-ink-muted">원</span>
+                              <button type="button" onClick={() => setSplitOpen((v) => !v)} className={['shrink-0 rounded-[5px] px-1.5 py-1 text-[10px] font-bold', splitOpen ? 'bg-gold-300 text-ink-inverse' : 'bg-surface-high text-ink-secondary'].join(' ')}>분할</button>
                             </div>
-                          );
-                        })()}
+                            {!splitOpen ? (
+                              <div className="flex items-center gap-1">
+                                {payOrder.map((m, i) => (
+                                  <button key={m} type="button" onClick={() => doApprove(r, { cash: m === 'cash' ? payAmt : 0, card: m === 'card' ? payAmt : 0, transfer: m === 'transfer' ? payAmt : 0 })}
+                                    className={['flex-1 rounded-[5px] py-1 text-2xs font-bold', i === 0 ? 'bg-emerald-500/20 text-emerald-300' : 'bg-surface-high text-ink-secondary hover:text-gold-300'].join(' ')}>{PM_LABEL[m]}</button>
+                                ))}
+                                <button type="button" onClick={() => setPayFor(null)} className="shrink-0 px-1 text-2xs text-ink-muted hover:text-ink-secondary">✕</button>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="grid grid-cols-3 gap-1">
+                                  {(['cash', 'card', 'transfer'] as const).map((m) => (
+                                    <label key={m} className="flex flex-col gap-0.5">
+                                      <span className="text-[9px] text-ink-muted">{PM_LABEL[m]}</span>
+                                      <input type="number" inputMode="numeric" value={splitVals[m] || ''} onChange={(e) => setSplitVals((s) => ({ ...s, [m]: Math.max(0, Number(e.target.value) || 0) }))}
+                                        className="w-full rounded-[5px] border border-border-default bg-surface-high px-1 py-1 text-[11px] tabular-nums text-ink-primary" placeholder="0" />
+                                    </label>
+                                  ))}
+                                </div>
+                                <div className="flex items-center justify-between gap-1">
+                                  <span className={['text-[10px] tabular-nums', (splitVals.cash + splitVals.card + splitVals.transfer) === payAmt && payAmt > 0 ? 'text-emerald-400' : 'text-ink-muted'].join(' ')}>합계 {(splitVals.cash + splitVals.card + splitVals.transfer).toLocaleString()}{payAmt ? ` / ${payAmt.toLocaleString()}` : ''}</span>
+                                  <span className="flex items-center gap-1">
+                                    <button type="button" onClick={() => doApprove(r, splitVals)} className="rounded-[5px] bg-emerald-500/20 px-2 py-1 text-2xs font-bold text-emerald-300 hover:bg-emerald-500/30">승인</button>
+                                    <button type="button" onClick={() => setPayFor(null)} className="px-1 text-2xs text-ink-muted hover:text-ink-secondary">✕</button>
+                                  </span>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        )}
                       </li>
                     ))}
                   </ul>
@@ -493,17 +558,30 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                 return (
                   <div className="px-3 pb-2.5">
                     <p className="mb-1 text-[10px] text-ink-muted">최근 {DOW[todayDow]}요일 엔트리 추이</p>
-                    <div className="flex h-16 items-end justify-between gap-1.5">
-                      {bars.map((b, i) => {
-                        const isToday = i === bars.length - 1;
-                        return (
-                          <div key={i} className="flex h-full flex-1 flex-col items-center justify-end gap-0.5">
-                            <span className="text-[9px] tabular-nums text-ink-muted">{b.entries}</span>
-                            <div className={['w-full max-w-[26px] rounded-sm', isToday ? 'bg-gold-300' : 'bg-gold-300/40'].join(' ')} style={{ height: `${Math.max(6, (b.entries / max) * 100)}%` }} />
-                            <span className={['text-[9px] tabular-nums', isToday ? 'font-bold text-gold-300' : 'text-ink-muted'].join(' ')}>{b.label}</span>
-                          </div>
-                        );
-                      })}
+                    {/* 막대 트랙(h-16) + 4주 평균 점선 오버레이 */}
+                    <div className="relative h-16">
+                      {sameDowAvg != null && sameDowAvg > 0 && (
+                        <div className="pointer-events-none absolute inset-x-0 z-10" style={{ bottom: `${Math.min(98, (sameDowAvg / max) * 100)}%` }}>
+                          <div className="border-t border-dashed border-ink-secondary/60" />
+                          <span className="absolute -top-2 right-0 bg-surface-low/85 px-0.5 text-[8px] tabular-nums text-ink-secondary">평균 {sameDowAvg}</span>
+                        </div>
+                      )}
+                      <div className="flex h-full items-end justify-between gap-1.5">
+                        {bars.map((b, i) => {
+                          const isToday = i === bars.length - 1;
+                          return (
+                            <div key={i} className="flex h-full flex-1 flex-col items-center justify-end">
+                              <div className={['w-full max-w-[26px] rounded-sm', isToday ? 'bg-gold-300' : 'bg-gold-300/40'].join(' ')} style={{ height: `${Math.max(4, (b.entries / max) * 100)}%` }} />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    {/* 라벨(날짜·엔트리) */}
+                    <div className="mt-0.5 flex justify-between gap-1.5">
+                      {bars.map((b, i) => (
+                        <span key={i} className={['flex-1 text-center text-[9px] leading-tight tabular-nums', i === bars.length - 1 ? 'font-bold text-gold-300' : 'text-ink-muted'].join(' ')}>{b.label}<br />{b.entries}</span>
+                      ))}
                     </div>
                     <button type="button" onClick={() => onGoto('stats')} className="mt-1.5 text-2xs font-bold text-gold-300 hover:text-gold-200">통계에서 자세히 →</button>
                   </div>

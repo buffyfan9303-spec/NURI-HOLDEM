@@ -14,6 +14,25 @@ const mmss = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); ret
 const hms = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return `${pad(s / 3600)}:${pad((s % 3600) / 60)}:${pad(s % 60)}`; };
 const remainingOf = (s: ClockState) => (s.running && s.endsAt ? new Date(s.endsAt).getTime() - now() : s.remainingMs);
 
+// 지역 중심좌표(근사) — 정확한 주소 좌표가 없어 지역 단위로 "가까운 순" 근사. GPS와 함께 사용.
+const REGION_GEO: Record<string, [number, number]> = {
+  서울: [37.566, 126.978], 경기: [37.41, 127.52], 인천: [37.456, 126.705], 부산: [35.18, 129.075],
+  대구: [35.87, 128.60], 대전: [36.35, 127.385], 광주: [35.16, 126.85], 울산: [35.54, 129.31],
+  세종: [36.48, 127.29], 강원: [37.86, 128.31], 충북: [36.80, 127.70], 충남: [36.62, 126.85],
+  전북: [35.72, 127.15], 전남: [34.86, 126.99], 경북: [36.30, 128.80], 경남: [35.24, 128.69], 제주: [33.49, 126.50],
+};
+const centroidOf = (region?: string): [number, number] | null => {
+  if (!region) return null;
+  for (const k of Object.keys(REGION_GEO)) if (region.includes(k)) return REGION_GEO[k];
+  return null;
+};
+const haversine = (a: [number, number], b: [number, number]): number => {
+  const R = 6371, toR = Math.PI / 180;
+  const dLat = (b[0] - a[0]) * toR, dLng = (b[1] - a[1]) * toR;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a[0] * toR) * Math.cos(b[0] * toR) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+};
+
 /** 라이브 클락 → 연결 포스터 매칭(공개 데이터만): 같은 매장·같은 날짜의 스케줄(여럿이면 제목 일치 우선). 없으면 null → 매장 폴백. */
 function matchSchedule(g: ClockState, schedules: Schedule[]): Schedule | null {
   if (!g.sessionDate) return null;
@@ -46,7 +65,8 @@ function msToRegClose(s: ClockState, remaining: number): number | null {
 export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, active = true }: { venues: Venue[]; schedules: Schedule[]; onVenue: (id: string) => void; onSchedule: (s: Schedule) => void; active?: boolean }) {
   const [games, setGames] = useState<ClockState[] | null>(null);
   const [, setTick] = useState(0);
-  const [sortBy, setSortBy] = useState<'default' | 'players' | 'time'>('default'); // 진행 게임 정렬
+  const [sortBy, setSortBy] = useState<'default' | 'players' | 'time' | 'distance'>('default'); // 진행 게임 정렬
+  const [geo, setGeo] = useState<[number, number] | null>(null); // 손님 위치(거리순 정렬, 위치 권한 시)
   const load = () => getRunningClocks().then(setGames).catch(() => setGames([]));
   // 폴링·1초 틱은 라이브 탭이 보일 때만 — 숨김 시 멈춰 백그라운드 끊김 방지(재진입 시 즉시 갱신). 실시간 구독은 이벤트 기반이라 상시 유지.
   useEffect(() => { if (!active) return; load(); const t = setInterval(load, 30000); return () => clearInterval(t); }, [active]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -63,13 +83,30 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, a
     .filter((s) => s.approved && s.date === today && !liveSchedIds.has(s.id))
     .sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
 
-  // 정렬 — 기본(클락 순) / 남은인원 많은 순 / 시작 시간 빠른 순
+  // 정렬 — 기본(클락 순) / 남은인원 많은 순 / 시작 시간 빠른 순 / 거리순(지역 근사)
   const aliveOf = (g: ClockState) => g.liveStats?.alive ?? Math.max(0, g.adjEntries - g.eliminations);
   const startOf = (g: ClockState) => matchSchedule(g, schedules)?.startTime || '99:99';
+  const regionOf = (g: ClockState) => venues.find((v) => v.id === g.venueId)?.region || matchSchedule(g, schedules)?.region || '';
+  const distOf = (g: ClockState) => { if (!geo) return Infinity; const c = centroidOf(regionOf(g)); return c ? haversine(geo, c) : Infinity; };
   const sortedGames = games ? [...games].sort((a, b) =>
     sortBy === 'players' ? aliveOf(b) - aliveOf(a)
       : sortBy === 'time' ? startOf(a).localeCompare(startOf(b))
-        : 0) : games;
+        : sortBy === 'distance' ? distOf(a) - distOf(b)
+          : 0) : games;
+  // 거리순 선택 시 위치 권한 요청(최초 1회) — 좌표 도착하면 재정렬, 거부/미지원 시 기본으로 복귀
+  const pickSort = (k: 'default' | 'players' | 'time' | 'distance') => {
+    if (k === 'distance' && !geo) {
+      if (!navigator.geolocation) { setSortBy('default'); return; }
+      setSortBy('distance');
+      navigator.geolocation.getCurrentPosition(
+        (pos) => setGeo([pos.coords.latitude, pos.coords.longitude]),
+        () => setSortBy('default'),
+        { timeout: 8000, maximumAge: 300000 },
+      );
+      return;
+    }
+    setSortBy(k);
+  };
 
   return (
     <main className="px-page-x py-section animate-fade-in">
@@ -82,8 +119,8 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, a
           <div className="flex shrink-0 items-center gap-1">
             {games && games.length > 1 && (
               <div className="flex items-center gap-0.5 rounded-input bg-surface-high p-0.5">
-                {([['default', '기본'], ['players', '인원'], ['time', '시간']] as const).map(([k, l]) => (
-                  <button key={k} type="button" onClick={() => setSortBy(k)} title={k === 'players' ? '남은 인원 많은 순' : k === 'time' ? '시작 시간 빠른 순' : '기본 순'}
+                {([['default', '기본'], ['players', '인원'], ['time', '시간'], ['distance', '거리']] as const).map(([k, l]) => (
+                  <button key={k} type="button" onClick={() => pickSort(k)} title={k === 'players' ? '남은 인원 많은 순' : k === 'time' ? '시작 시간 빠른 순' : k === 'distance' ? '내 위치 기준 가까운 지역 먼저(위치 권한 필요)' : '기본 순'}
                     className={['rounded-[5px] px-1.5 py-1 text-2xs font-bold transition-colors', sortBy === k ? 'bg-gold-300 text-ink-inverse' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>{l}</button>
                 ))}
               </div>
