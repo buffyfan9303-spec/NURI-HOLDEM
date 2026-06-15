@@ -28,6 +28,10 @@ function applyThemeClass(theme: Theme) {
   const root = document.documentElement;
   root.classList.remove('dark', 'light');
   root.classList.add(theme);
+  // 상태바/주소창·설치형 TWA 툴바 색을 테마에 맞춰 동기화(앱 느낌) + 첫 페인트 배경 갱신
+  const color = theme === 'light' ? '#F2F3F5' : '#0A0C0F';
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', color);
+  root.style.backgroundColor = color;
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {

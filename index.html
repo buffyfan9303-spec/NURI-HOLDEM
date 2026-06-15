@@ -2,6 +2,8 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
+    <!-- 첫 페인트 흰 화면 방지(앱 느낌) — CSS 로드 전 저장된 테마색으로 배경 즉시 지정 -->
+    <script>try{document.documentElement.style.backgroundColor=localStorage.getItem('nuri-theme')==='light'?'#F2F3F5':'#0A0C0F'}catch(e){document.documentElement.style.backgroundColor='#0A0C0F'}</script>
     <!-- Google tag (gtag.js) — Google Analytics 4 -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-9T7JZNEQE8"></script>
     <script>

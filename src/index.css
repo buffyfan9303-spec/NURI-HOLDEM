@@ -332,3 +332,16 @@ button:active:not(:disabled), [role='button']:active {
   outline-offset: 2px;
   border-radius: 6px;
 }
+
+/* ── 앱(PWA/TWA) 네이티브 감각 ──────────────────────────────────────────────────
+   설치형(standalone)에서 당겨서새로고침·고무줄 바운스·더블탭 줌·이미지 롱프레스 메뉴를 없애
+   Play Store 앱처럼 동작하게 한다. 웹 브라우저에선 기본 동작(당겨서 새로고침 등) 유지. */
+html { touch-action: manipulation; }            /* 더블탭 줌 제거(핀치줌·접근성은 유지) */
+img, svg { -webkit-touch-callout: none; -webkit-user-drag: none; user-select: none; } /* 이미지 롱프레스 저장/드래그 메뉴 차단 */
+@media (display-mode: standalone), (display-mode: fullscreen) {
+  html, body { overscroll-behavior: none; }     /* 당겨서 새로고침·바운스로 새는 흰 배경 제거 */
+  ::-webkit-scrollbar { width: 0; height: 0; }   /* 설치형에선 스크롤바 숨겨 더 앱처럼 */
+  /* 설치형에선 본문 텍스트만 선택 가능, 그 외 UI는 비선택(네이티브 감각) */
+  body { -webkit-user-select: none; user-select: none; }
+  p, h1, h2, h3, h4, li, span.selectable, .select-text { -webkit-user-select: text; user-select: text; }
+}

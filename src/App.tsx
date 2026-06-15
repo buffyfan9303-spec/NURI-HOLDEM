@@ -634,7 +634,14 @@ export default function App() {
   const [myStoreDeep, setMyStoreDeep] = useState<'ledger' | null>(null);
   const [buyinPick, setBuyinPick] = useState<{ venueId: string; games: { gameSeq: number; title: string }[] } | null>(null); // 바인요청 게임 선택
   const [myBuyinReqs, setMyBuyinReqs] = useState<MyBuyinRequest[]>([]); // 손님 본인 오늘 바인요청(상태 배너)
-  const [activeTab, setActiveTab]     = useState<TabId>('browse');
+  // 시작 탭 — PWA 바로가기(?tab=)·딥링크 지원(앱 아이콘 길게 누르기 메뉴)
+  const [activeTab, setActiveTab]     = useState<TabId>(() => {
+    try {
+      const t = new URLSearchParams(window.location.search).get('tab');
+      const valid: TabId[] = ['browse', 'live', 'community', 'market', 'tools', 'my-store', 'admin'];
+      return (valid as string[]).includes(t ?? '') ? (t as TabId) : 'browse';
+    } catch { return 'browse'; }
+  });
   // 탭 전환을 트랜지션으로 — lazy 청크/무거운 렌더 동안 이전 화면을 유지해
   // '이전 메뉴 → 스피너 깜빡 → 새 메뉴' 3단 플래시를 없앤다(React 공식 패턴).
   const [, startTabTransition] = useTransition();
