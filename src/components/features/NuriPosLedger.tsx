@@ -99,6 +99,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const [payPick, setPayPick] = useState<string | null>(null); // 승인+바인 결제수단 선택 중인 요청 id
   const [splitFor, setSplitFor] = useState<string | null>(null); // 분할 결제 입력 중인 요청 id
   const [splitAmts, setSplitAmts] = useState<{ cash: number; card: number; transfer: number }>({ cash: 0, card: 0, transfer: 0 });
+  const [rejectFor, setRejectFor] = useState<string | null>(null); // 거절 사유 선택 중인 요청 id
   const [gameSeq, setGameSeq] = useState(MAIN_GAME_SEQ);   // 현재 보고있는 게임(1=메인, 2+=사이드)
   const [games, setGames]     = useState<LedgerGame[]>([]); // 그 날짜의 게임 목록(스위처용)
   const [loading, setLoading] = useState(true);
@@ -227,12 +228,14 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const approveReq = (r: BuyinRequest, withBuyin = false, payMethod: 'cash' | 'card' | 'transfer' = 'cash', split?: { cash: number; card: number; transfer: number }) => approveBuyinRequest(r.id, gameSeq, withBuyin, payMethod, split)
     .then(() => { setPayPick(null); setSplitFor(null); toast.show(`${r.playerName} 승인 — ${gameSeq === MAIN_GAME_SEQ ? '메인' : '사이드' + (gameSeq - 1)} 명단 추가${withBuyin ? (split ? ' + 분할 바인 기록' : ` + ${payMethod === 'card' ? '카드' : payMethod === 'transfer' ? '이체' : '현금'} 바인 기록`) : ''}`, 'success'); loadPending(); })
     .catch((e) => toast.show(e instanceof Error ? e.message : '승인 실패', 'error'));
-  const rejectReq = (r: BuyinRequest) => {
-    const reason = window.prompt(`${r.playerName} 요청 거절 — 사유(선택, 손님에게 표시)`);
-    if (reason === null) return; // 취소
-    rejectBuyinRequest(r.id, reason.trim() || undefined)
-      .then(() => loadPending())
-      .catch((e) => toast.show(e instanceof Error ? e.message : '거절 실패', 'error'));
+  const doReject = (r: BuyinRequest, reason?: string) => rejectBuyinRequest(r.id, reason)
+    .then(() => { setRejectFor(null); loadPending(); })
+    .catch((e) => toast.show(e instanceof Error ? e.message : '거절 실패', 'error'));
+  const bulkApprove = () => {
+    if (!pendingReqs.length) return;
+    const n = pendingReqs.length;
+    Promise.all(pendingReqs.map((r) => approveBuyinRequest(r.id, gameSeq).catch(() => null)))
+      .then(() => { toast.show(`${n}건 전체 승인 — ${gameSeq === MAIN_GAME_SEQ ? '메인' : '사이드' + (gameSeq - 1)} 명단 추가`, 'success'); loadPending(); });
   };
 
   // ── 연동 클락 — 리모컨 제어 + 바인 시점 얼리 확정(스타트 시각 미입력 버그 근본 해결) ──
@@ -662,6 +665,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
               return <span className="text-[10px] font-semibold text-sky-300/80">{parts.join(' · ')}</span>;
             })()}
             <span className="text-[10px] text-ink-muted">· 승인 시 현재({gameSeq === MAIN_GAME_SEQ ? '메인' : '사이드' + (gameSeq - 1)}) 추가</span>
+            {pendingReqs.length > 1 && <button type="button" onClick={bulkApprove} className="ml-auto shrink-0 rounded-input bg-emerald-500/90 px-2.5 py-1 text-2xs font-bold text-ink-inverse hover:bg-emerald-500">전체 승인</button>}
           </div>
           <ul className="space-y-1.5">
             {pendingReqs.map((r) => (
@@ -675,7 +679,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                   </div>
                   <button type="button" onClick={() => setPayPick(payPick === r.id ? null : r.id)} title="승인 + 바인 1건 기록(결제수단 선택)" className={['shrink-0 rounded-input px-2 py-1.5 text-2xs font-bold', payPick === r.id ? 'bg-emerald-600 text-ink-inverse' : 'bg-emerald-500/90 text-ink-inverse hover:bg-emerald-500'].join(' ')}>✓+💵</button>
                   <button type="button" onClick={() => approveReq(r)} title="승인만(명단 추가)" className="shrink-0 rounded-input border border-emerald-500/50 px-2 py-1.5 text-2xs font-bold text-emerald-300 hover:bg-emerald-500/10">승인</button>
-                  <button type="button" onClick={() => rejectReq(r)} aria-label="거절" className="shrink-0 rounded-input border border-border-default px-2 py-1.5 text-2xs font-bold text-ink-muted hover:text-danger-light hover:border-danger/40">✕</button>
+                  <button type="button" onClick={() => setRejectFor(rejectFor === r.id ? null : r.id)} aria-label="거절" className={['shrink-0 rounded-input border px-2 py-1.5 text-2xs font-bold', rejectFor === r.id ? 'border-danger/50 bg-danger/10 text-danger-light' : 'border-border-default text-ink-muted hover:text-danger-light hover:border-danger/40'].join(' ')}>✕</button>
                 </div>
                 {payPick === r.id && (
                   <div className="mt-1.5 border-t border-border-subtle pt-1.5 space-y-1.5">
@@ -696,13 +700,32 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                             </label>
                           ))}
                         </div>
-                        <div className="flex items-center gap-1.5">
-                          <span className="flex-1 text-[10px] text-ink-muted">합계 <b className="text-ink-secondary tabular-nums">{(splitAmts.cash + splitAmts.card + splitAmts.transfer).toLocaleString()}</b>원</span>
-                          <button type="button" onClick={() => setSplitFor(null)} className="rounded-input border border-border-default px-2.5 py-1 text-2xs font-bold text-ink-muted">취소</button>
-                          <button type="button" onClick={() => approveReq(r, true, 'cash', splitAmts)} className="rounded-input bg-emerald-500/90 px-3 py-1 text-2xs font-bold text-ink-inverse hover:bg-emerald-500">확정</button>
-                        </div>
+                        {(() => {
+                          const sum = splitAmts.cash + splitAmts.card + splitAmts.transfer;
+                          const unit = session.buyinAmount || 0;
+                          const mismatch = unit > 0 && sum !== unit;
+                          return (
+                            <div className="flex items-center gap-1.5">
+                              <span className="flex-1 text-[10px]">
+                                <span className="text-ink-muted">합계 </span><b className={['tabular-nums', mismatch ? 'text-danger-light' : 'text-ink-secondary'].join(' ')}>{sum.toLocaleString()}</b><span className="text-ink-muted">원</span>
+                                {mismatch && <span className="text-danger-light"> · 단가 {unit.toLocaleString()}원과 다름</span>}
+                              </span>
+                              <button type="button" onClick={() => setSplitFor(null)} className="rounded-input border border-border-default px-2.5 py-1 text-2xs font-bold text-ink-muted">취소</button>
+                              <button type="button" disabled={sum <= 0} onClick={() => approveReq(r, true, 'cash', splitAmts)} className="rounded-input bg-emerald-500/90 px-3 py-1 text-2xs font-bold text-ink-inverse hover:bg-emerald-500 disabled:opacity-40">확정</button>
+                            </div>
+                          );
+                        })()}
                       </>
                     )}
+                  </div>
+                )}
+                {rejectFor === r.id && (
+                  <div className="mt-1.5 flex items-center gap-1.5 border-t border-border-subtle pt-1.5">
+                    <span className="shrink-0 text-[10px] text-ink-muted">거절 사유</span>
+                    {['마감', '중복', '정보부족'].map((rs) => (
+                      <button key={rs} type="button" onClick={() => doReject(r, rs)} className="flex-1 rounded-input border border-border-default px-2 py-1.5 text-2xs font-bold text-ink-secondary hover:text-danger-light hover:border-danger/40">{rs}</button>
+                    ))}
+                    <button type="button" onClick={() => { const v = window.prompt('거절 사유 직접 입력'); if (v !== null) doReject(r, v.trim() || undefined); }} className="flex-1 rounded-input border border-border-default px-2 py-1.5 text-2xs font-bold text-ink-secondary hover:text-ink-primary">직접</button>
                   </div>
                 )}
               </li>

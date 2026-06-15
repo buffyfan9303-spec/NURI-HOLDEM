@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { useToast } from '../atoms/Toast';
 import {
   type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type VisitorType,
-  wonToMan, buyinFinance, getLedgerRange, getLedgerPlayers,
+  wonToMan, buyinFinance, getLedgerRange, getLedgerPlayers, getBuyinRequestStats, type BuyinReqStats,
   posHasPassword, setPosCancelPassword, subscribeLedger,
 } from '../../api/ledger';
 import { toCsv, downloadCsv } from '../../lib/csv';
@@ -59,6 +59,7 @@ function StatsView({ venueId }: { venueId: string }) {
   const [aiDays, setAiDays] = useState(7); // AI 리포트 분석 기간(일) — 7/30/90
   const [trendMetric, setTrendMetric] = useState<'revenue' | 'entries' | 'players'>('revenue'); // 추세 그래프 지표
   const [trendDetail, setTrendDetail] = useState<string | null>(null); // 추세 막대 클릭 → 그날 상세
+  const [reqStats, setReqStats] = useState<BuyinReqStats | null>(null); // 바인 요청 운영지표
   const [liveTick, setLiveTick] = useState(0); // 장부 실시간 변경 반영(당일 통계)
 
   const range = useMemo<{ from: string; to: string }>(() => {
@@ -85,6 +86,9 @@ function StatsView({ venueId }: { venueId: string }) {
     ]).then(([r, p]) => { setSessions(r.sessions); setBuyins(r.buyins); setPlayers(p); })
       .finally(() => { setLoading(false); hasLoaded.current = true; });
   }, [venueId, range.from, range.to, period, date, aiTick, liveTick]);
+
+  // 바인 요청 운영지표(기간) — 요청수·승인율·평균 대기(분)
+  useEffect(() => { getBuyinRequestStats(venueId, range.from, range.to).then(setReqStats).catch(() => setReqStats(null)); }, [venueId, range.from, range.to, liveTick, aiTick]);
 
   // '당일' 통계를 보는 중 장부(바이인 등) 변경 시 실시간 갱신
   useEffect(() => {
@@ -317,6 +321,17 @@ function StatsView({ venueId }: { venueId: string }) {
               ? <Mini label="가게지원" value={`${m.support}건`} />
               : <Mini label="일평균 매출" value={`${m.avgRevenuePerDay.toLocaleString(undefined, { maximumFractionDigits: 0 })}원`} />}
           </div>
+
+          {reqStats && reqStats.total > 0 && (
+            <Section icon="users" title="바인 요청 현황" suffix="· 손님 QR 요청">
+              <div className="grid grid-cols-4 gap-1.5 text-center">
+                <div className="rounded-input bg-surface-high border border-border-subtle py-1.5"><p className="text-base font-bold text-ink-primary tabular-nums">{reqStats.total}</p><p className="text-[11px] text-ink-muted">요청</p></div>
+                <div className="rounded-input bg-surface-high border border-border-subtle py-1.5"><p className="text-base font-bold text-emerald-400 tabular-nums">{reqStats.approved}</p><p className="text-[11px] text-ink-muted">승인</p></div>
+                <div className="rounded-input bg-surface-high border border-border-subtle py-1.5"><p className="text-base font-bold text-gold-300 tabular-nums">{reqStats.approveRate}%</p><p className="text-[11px] text-ink-muted">승인율</p></div>
+                <div className="rounded-input bg-surface-high border border-border-subtle py-1.5"><p className="text-base font-bold text-ink-primary tabular-nums">{reqStats.avgWaitMin != null ? reqStats.avgWaitMin + '분' : '—'}</p><p className="text-[11px] text-ink-muted">평균 대기</p></div>
+              </div>
+            </Section>
+          )}
 
           {m.sideGameCount > 0 && (
             <Section icon="users" title="게임별 구분" suffix="· 메인 / 사이드">
