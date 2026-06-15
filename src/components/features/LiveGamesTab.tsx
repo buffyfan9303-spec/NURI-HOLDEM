@@ -151,7 +151,10 @@ function LiveCard({ g, name, sched, onPoster, onVenue }: { g: ClockState; name: 
           <div className="min-w-0">
             <p className="text-2xs text-ink-muted">{isBreak ? '브레이크' : `레벨 ${levelNo}`}</p>
             {isBreak ? (
-              <p className="text-lg font-extrabold leading-tight text-sky-300">BREAK</p>
+              <>
+                <p className="text-lg font-extrabold leading-tight text-sky-300">BREAK</p>
+                {g.running && remaining <= 60_000 && <p className="text-2xs font-bold text-amber-300 animate-pulse">⏰ 곧 재개</p>}
+              </>
             ) : (
               <p className="text-lg font-extrabold leading-tight text-ink-primary tabular-nums">
                 {lv ? <>{lv.sb.toLocaleString()}/{lv.bb.toLocaleString()}{lv.ante > 0 && <span className="ml-1 text-2xs text-ink-muted">a{lv.ante.toLocaleString()}</span>}</> : '-'}

@@ -271,7 +271,9 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
   const [, setTick] = useState(0);
   const [buyins, setBuyins] = useState<LedgerBuyin[]>([]);
   const [linkedSession, setLinkedSession] = useState<LedgerSession | null>(null);
-  const [volume, setVolume] = useState(50);
+  // 볼륨/음소거 기억 — localStorage에 저장해 매번 재설정 불필요(0=음소거)
+  const [volume, setVolume] = useState(() => { try { const v = localStorage.getItem('nuri:clock-volume'); return v == null ? 50 : Math.max(0, Math.min(100, Number(v) || 0)); } catch { return 50; } });
+  useEffect(() => { try { localStorage.setItem('nuri:clock-volume', String(volume)); } catch { /* quota */ } }, [volume]);
   const [fs, setFs] = useState(false);
   // 전체 클락 공통 광고 이미지(운영자 설정) — 모든 클락 상단에 표시
   const [adImg, setAdImg] = useState<string | null>(null);
@@ -401,6 +403,24 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
       setTimeout(() => { advancingRef.current = false; }, 800);
     }
   }, [remaining, canManage, state.running, advance]);
+
+  // 마지막 10초 카운트다운 틱 — 9·8·7…초마다 짧은 비프(3초 이하는 더 높게 긴장감). 볼륨>0인 화면에서 재생
+  const secsLeft = state.running ? Math.ceil(remaining / 1000) : -1;
+  const tickedRef = useRef(-1);
+  useEffect(() => {
+    if (secsLeft > 10 || secsLeft < 1) { tickedRef.current = secsLeft; return; }
+    if (secsLeft !== tickedRef.current) { tickedRef.current = secsLeft; playTones([{ f: secsLeft <= 3 ? 1320 : 988, t: 0, d: 0.07 }]); }
+  }, [secsLeft, playTones]);
+
+  // 브레이크 종료 1분 전 — "곧 재개" 알림음(레벨당 1회)
+  const breakWarnRef = useRef(-1);
+  useEffect(() => {
+    if (!state.running || cur?.kind !== 'break') return;
+    if (remaining <= 60_000 && remaining > 0 && breakWarnRef.current !== state.currentIndex) {
+      breakWarnRef.current = state.currentIndex;
+      playChime('level');
+    }
+  }, [remaining, state.running, cur?.kind, state.currentIndex, playChime]);
 
   // 컨트롤
   const toggleRun = () => {
@@ -555,6 +575,9 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
               fs ? 'text-[min(4cqw,5cqh)]' : 'text-base sm:text-2xl'].join(' ')}>
               {isBreak ? (cur.label || 'BREAK') : `LEVEL ${levelNo}`}
             </p>
+            {isBreak && state.running && remaining <= 60_000 && (
+              <p className={['relative font-bold text-amber-300 animate-pulse', fs ? 'text-[min(2.6cqw,3.1cqh)]' : 'text-xs sm:text-base'].join(' ')}>⏰ 곧 재개됩니다</p>
+            )}
             <p className={['font-extrabold tabular-nums leading-none my-1 sm:my-2 drop-shadow-[0_3px_24px_rgba(0,0,0,0.5)]',
               fs ? 'text-[min(22cqw,32cqh)]' : 'text-6xl sm:text-8xl',
               urgent ? 'text-rose-400 animate-pulse' : isBreak ? 'text-sky-200' : 'text-white'].join(' ')}>

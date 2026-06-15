@@ -3,9 +3,10 @@ import CountUp from '../atoms/CountUp';
 import type { Schedule } from '../../api/schedules';
 import {
   getLedgerSession, getLedgerBuyins, getLedgerPlayers, getLedgerRange, buyinFinance, wonToMan, visitorLabel, subscribeLedger,
-  getPosterOpsSummaries, getPendingBuyinRequests, subscribeBuyinRequests,
+  getPosterOpsSummaries, getPendingBuyinRequests, subscribeBuyinRequests, approveBuyinRequest, rejectBuyinRequest,
   type LedgerSession, type LedgerBuyin, type LedgerPlayer, type BuyinRequest,
 } from '../../api/ledger';
+import { useToast } from '../atoms/Toast';
 import { getClockState, subscribeClock, type ClockState } from '../../api/clock';
 import { getReservationCounts, getVenueRegulars, subscribeReservations, type VenueRegular } from '../../api/reservations';
 import { aiGenerate } from '../../api/ai';
@@ -58,6 +59,7 @@ interface Props {
  * 모든 카드는 해당 운영 화면으로 바로가기. 직원은 부여된 권한(caps)의 카드만 노출 — 권한 없는 화면으로의 dead-end 방지.
  */
 export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePoster, caps, active = true }: Props) {
+  const toast = useToast();
   const d = localToday();
   const days = last7();
   const d14 = last14();
@@ -66,6 +68,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const [buyins, setBuyins] = useState<LedgerBuyin[]>([]);
   const [clock, setClock] = useState<ClockState | null>(null);
   const [pendingReqs, setPendingReqs] = useState<BuyinRequest[]>([]); // 라이브 위젯: 대기중 바인 요청
+  const [reqBusy, setReqBusy] = useState<string | null>(null); // 인라인 승인/거절 진행 중 요청 id
   const [, setNowTick] = useState(0); // 라이브 카운트다운/경과시간 1초 갱신
   const [resCounts, setResCounts] = useState<Record<string, number>>({});
   const [shifts, setShifts] = useState<StaffShift[]>([]);
@@ -162,6 +165,19 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const fmtClock = (ms: number) => { const t = Math.floor(ms / 1000); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
   const gameLabel = (g: number | null) => g == null ? '미지정' : g <= 1 ? '메인' : `사이드${g - 1}`;
   const timeAgo = (iso: string) => { const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); return s < 60 ? '방금' : s < 3600 ? `${Math.floor(s / 60)}분 전` : `${Math.floor(s / 3600)}시간 전`; };
+  // 위젯 인라인 승인/거절 — 장부로 안 넘어가고 즉시 처리(승인=요청 게임에 추가, 결제 기록은 장부에서 별도)
+  const quickApprove = async (r: BuyinRequest) => {
+    setReqBusy(r.id);
+    try { await approveBuyinRequest(r.id, r.requestedGameSeq ?? 1, false); setPendingReqs((p) => p.filter((x) => x.id !== r.id)); toast.show(`${r.playerName} 참가 승인`, 'success'); }
+    catch (e) { toast.show(e instanceof Error ? e.message : '승인 실패', 'error'); }
+    finally { setReqBusy(null); }
+  };
+  const quickReject = async (r: BuyinRequest) => {
+    setReqBusy(r.id);
+    try { await rejectBuyinRequest(r.id); setPendingReqs((p) => p.filter((x) => x.id !== r.id)); toast.show(`${r.playerName} 요청 거절`, 'info'); }
+    catch (e) { toast.show(e instanceof Error ? e.message : '거절 실패', 'error'); }
+    finally { setReqBusy(null); }
+  };
 
   // ── 예약 / 출근 ──
   const totalRes = upcoming.reduce((a, g) => a + (resCounts[g.id] ?? 0), 0);
@@ -185,6 +201,19 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const maxEntry = Math.max(1, ...perDay.map((x) => x.entry));
   const bestDay = perDay.reduce((a, x) => (x.entry > a.entry ? x : a), perDay[0]);
   const avgSpend = weekEntry > 0 ? Math.round(weekPaid / weekEntry) : 0; // 객단가(원/엔트리)
+
+  // ── 위젯 미니 추세: 오늘 엔트리 vs 같은 요일 평소(최근 2주 내 동일 요일 평균) ──
+  const todayDow = new Date(d + 'T00:00:00').getDay();
+  let sdSum = 0, sdN = 0;
+  for (const day of d14) {
+    if (day === d || new Date(day + 'T00:00:00').getDay() !== todayDow) continue;
+    const s = sessByDate[day]; if (!s) continue;
+    let e = 0; for (const b of range.buyins) { if (b.sessionDate === day) e += buyinFinance(b, s).entry; }
+    sdSum += e; sdN++;
+  }
+  const sameDowAvg = sdN > 0 ? Math.round(sdSum / sdN) : null;
+  const todayEntries = Math.round(fin.entry);
+  const dowDelta = sameDowAvg && sameDowAvg > 0 ? Math.round(((todayEntries - sameDowAvg) / sameDowAvg) * 100) : null;
 
   // ── 전주 대비(직전 7일) ──
   const prevDays = d14.slice(0, 7);
@@ -329,30 +358,44 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                 </div>
               )}
             </button>
-            {/* 대기 바인요청 */}
-            <button type="button" onClick={() => onGoto('ledger')} className="flex flex-col px-3 py-3 text-left transition-colors hover:bg-white/[0.02]">
+            {/* 대기 바인요청 — 위젯에서 바로 ✓승인 / ✕거절(장부로 안 넘어감) */}
+            <div className="flex flex-col px-3 py-3">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-2xs text-ink-muted">대기중 바인 요청</p>
                 <span className={`rounded-badge px-1.5 py-0.5 text-2xs font-bold ${pendingReqs.length > 0 ? 'bg-rose-500/15 text-rose-300' : 'bg-surface-float text-ink-muted'}`}>{pendingReqs.length}건</span>
               </div>
               {pendingReqs.length === 0 ? (
-                <p className="flex-1 py-3 text-center text-2xs text-ink-muted">대기중인 요청이 없습니다.</p>
+                <button type="button" onClick={() => onGoto('ledger')} className="flex-1 py-3 text-center text-2xs text-ink-muted hover:text-ink-secondary">대기중인 요청이 없습니다.</button>
               ) : (
                 <>
                   <ul className="mt-1.5 space-y-1">
                     {pendingReqs.slice(0, 3).map((r) => (
-                      <li key={r.id} className="flex items-center gap-2 text-xs">
+                      <li key={r.id} className="flex items-center gap-1.5 text-xs">
                         <span className="min-w-0 flex-1 truncate text-ink-secondary">{r.playerName}</span>
-                        <span className="shrink-0 rounded-badge bg-surface-float px-1.5 py-0.5 text-[10px] text-ink-muted">{gameLabel(r.requestedGameSeq)}</span>
                         <span className="shrink-0 text-[10px] tabular-nums text-ink-muted">{timeAgo(r.createdAt)}</span>
+                        <span className="shrink-0 rounded-badge bg-surface-float px-1 py-0.5 text-[10px] text-ink-muted">{gameLabel(r.requestedGameSeq)}</span>
+                        <button type="button" disabled={reqBusy === r.id} onClick={() => quickApprove(r)} title="승인 — 요청 게임에 추가(결제는 장부에서)"
+                          className="shrink-0 rounded-input bg-emerald-500/15 px-1.5 py-1 text-2xs font-bold text-emerald-400 hover:bg-emerald-500/25 disabled:opacity-40">✓</button>
+                        <button type="button" disabled={reqBusy === r.id} onClick={() => quickReject(r)} title="거절"
+                          className="shrink-0 rounded-input bg-rose-500/15 px-1.5 py-1 text-2xs font-bold text-rose-300 hover:bg-rose-500/25 disabled:opacity-40">✕</button>
                       </li>
                     ))}
                   </ul>
-                  <p className="mt-auto pt-1.5 text-2xs font-bold text-gold-300">{pendingReqs.length > 3 ? `외 ${pendingReqs.length - 3}건 · ` : ''}승인하러 가기 →</p>
+                  <button type="button" onClick={() => onGoto('ledger')} className="mt-auto pt-1.5 text-left text-2xs font-bold text-gold-300 hover:text-gold-200">{pendingReqs.length > 3 ? `외 ${pendingReqs.length - 3}건 · ` : ''}장부에서 전체 관리 →</button>
                 </>
               )}
-            </button>
+            </div>
           </div>
+          {/* 미니 추세 — 오늘 엔트리 vs 같은 요일 평소(최근 2주 동일 요일 평균) */}
+          {clockActive && sameDowAvg != null && (
+            <div className="flex items-center justify-between gap-2 border-t border-border-subtle px-3 py-2 text-2xs">
+              <span className="text-ink-muted">오늘 vs 평소 <b className="text-ink-secondary">{DOW[todayDow]}요일</b></span>
+              <span className="tabular-nums text-ink-secondary">
+                오늘 <b className="text-gold-300">{todayEntries}</b> · 평소 <b className="text-ink-primary">{sameDowAvg}</b>
+                {dowDelta != null && <span className={['ml-1 font-bold', dowDelta > 0 ? 'text-emerald-400' : dowDelta < 0 ? 'text-danger-light' : 'text-ink-muted'].join(' ')}>{dowDelta > 0 ? '▲' : dowDelta < 0 ? '▼' : '–'}{Math.abs(dowDelta)}%</span>}
+              </span>
+            </div>
+          )}
         </section>
       )}
 
