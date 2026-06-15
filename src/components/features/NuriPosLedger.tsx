@@ -148,7 +148,14 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     for (const s of staff) if (s.id !== user?.id && accessIds.includes(s.id)) opts.push({ id: s.id, label: `${s.name}${s.staffTitle ? ` · ${s.staffTitle}` : ''}${s.nickname ? ` · @${s.nickname}` : ''}` });
     return opts;
   }, [user, staff, isAdmin, accessIds]);
-  const operatorName2 = (id?: string | null) => operatorOptions.find((o) => o.id === id)?.label ?? operatorName;
+  // 전 직원 이름맵(권한 무관) — 담당이 operatorOptions(권한 직원) 밖이어도 정확히 표기(오라벨 방지)
+  const staffNameById = useMemo(() => {
+    const m = new Map<string, string>();
+    if (user) m.set(user.id, user.name ?? user.nickname ?? '나');
+    for (const s of staff) m.set(s.id, s.name ?? s.nickname ?? '직원');
+    return m;
+  }, [user, staff]);
+  const operFull = (id?: string | null) => (id ? (staffNameById.get(id) ?? '직원') : '미지정');
 
   const loadList = useCallback(() => {
     setListLoading(true);
@@ -528,7 +535,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                               <span className={['shrink-0 text-2xs font-bold px-1.5 py-0.5 rounded-badge border', s.gameSeq === MAIN_GAME_SEQ ? 'bg-surface-float text-ink-muted border-border-default' : 'bg-gold-300/15 text-gold-300 border-gold-400/40'].join(' ')}>{gl(s.gameSeq)}</span>
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm font-bold text-ink-primary truncate">{s.title || '게임'}</p>
-                                <p className="text-2xs text-ink-muted">바인 {s.buyinAmount.toLocaleString()}원 · {canOpen ? '탭하여 보기·수정' : '담당 미지정 — 접근 권한 없음'}</p>
+                                <p className="text-2xs text-ink-muted truncate">바인 {s.buyinAmount.toLocaleString()}원{s.operators.length > 0 ? ` · 담당 ${operFull(s.operators[0])}${s.operators.length > 1 ? ` 외 ${s.operators.length - 1}` : ''}` : ''}{canOpen ? '' : ' · 접근 권한 없음'}</p>
                               </div>
                               {!canOpen
                                 ? <span className="shrink-0 text-sm" aria-label="잠김">🔒</span>
@@ -600,7 +607,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
         <span className="text-sm font-bold text-ink-primary">{session.title || '세션'}</span>
         <span className="text-2xs text-ink-muted">현금 {wonToMan(session.buyinAmount)}만원
           {session.cardAmount && session.cardAmount > 0 ? ` · 카드 ${wonToMan(session.cardAmount)}만원` : ' · 카드=현금'}</span>
-        {session.openedAt && <span className="text-2xs text-ink-muted">· 담당 {operatorName2(session.openedBy)}</span>}
+        {session.openedAt && <span className="text-2xs text-ink-muted">· 담당 {operFull(session.openedBy)}</span>}
         {scheduleTitle(session.scheduleId) && <span className="text-2xs text-gold-300 font-semibold">· 대회 {scheduleTitle(session.scheduleId)}</span>}
         <span className="flex-1" />
         {onOpenClock && <button type="button" onClick={() => onOpenClock(date, gameSeq)} className="btn-ghost text-sm px-3.5 py-2 font-semibold">⏱ 클락</button>}
