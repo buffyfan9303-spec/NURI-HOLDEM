@@ -76,8 +76,8 @@ export interface LedgerSeed {
   gtd?: boolean;
 }
 
-export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI POS', onMakeRankingDraft, onOpenClock, onOpenStats, seed }: {
-  venueId: string; canManage: boolean; venueName?: string;
+export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI POS', onMakeRankingDraft, onOpenClock, onOpenStats, seed, active = true }: {
+  venueId: string; canManage: boolean; venueName?: string; active?: boolean;
   onMakeRankingDraft?: (date: string, names: string[], eventName?: string) => void;
   onOpenClock?: (date: string, gameSeq: number) => void;
   /** 마감 후 '주간 리포트 보기' — 통계 섹션으로 이동(업주/운영자만 전달) */
@@ -627,7 +627,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
 
       {/* 클락 리모컨 — 이 장부에 연결된 클락을 장부에서 바로 제어(레벨± · 일시정지/재개) */}
       {clockLinked && clock && !closed && (
-        <ClockRemoteBar clock={clock} onPatch={patchClock} onOpenClock={onOpenClock ? () => onOpenClock(date, gameSeq) : undefined} />
+        <ClockRemoteBar clock={clock} onPatch={patchClock} active={active} onOpenClock={onOpenClock ? () => onOpenClock(date, gameSeq) : undefined} />
       )}
 
       {closed && (
@@ -967,15 +967,15 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
 
 // ── 클락 리모컨 바 — 장부 화면에서 레벨±·일시정지/재개. 클락 화면이 닫혀 있어도 제어 가능 ──
 // (저장 → clock_states upsert → 열려 있는 클락/라이브 보드는 realtime 구독으로 즉시 반영)
-function ClockRemoteBar({ clock, onPatch, onOpenClock }: {
-  clock: ClockState; onPatch: (p: Partial<ClockState>) => void; onOpenClock?: () => void;
+function ClockRemoteBar({ clock, onPatch, onOpenClock, active = true }: {
+  clock: ClockState; onPatch: (p: Partial<ClockState>) => void; onOpenClock?: () => void; active?: boolean;
 }) {
   const [, tick] = useReducer((x: number) => x + 1, 0);
   useEffect(() => {
-    if (!clock.running) return;
+    if (!clock.running || !active) return; // 장부가 숨김(다른 섹션)이면 백그라운드 1초 틱 정지
     const t = setInterval(tick, 1000);
     return () => clearInterval(t);
-  }, [clock.running]);
+  }, [clock.running, active]);
 
   const lv = clock.config.levels;
   // 실효 레벨 — running인데 endsAt이 지났으면(클락 화면 미오픈으로 전진 못 함) 경과분만큼 전진해 표시/제어

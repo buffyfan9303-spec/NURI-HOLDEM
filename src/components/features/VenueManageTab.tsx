@@ -53,15 +53,22 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   const [clockSeed, setClockSeed] = useState<string | null>(null); // 장부→클락 연동 날짜
   const [clockSeedGame, setClockSeedGame] = useState(1); // 장부→클락 연동 게임(game_seq)
   const [ledgerSeed, setLedgerSeed] = useState<LedgerSeed | null>(null); // 게임관리→장부 바로가기
-  const [visited, setVisited] = useState<Set<Section>>(new Set()); // 방문한 섹션 — 마운트 유지(전환 깜빡임 제거)
+  const [visited, setVisited] = useState<Section[]>([]); // 방문 섹션(최근순) — 마운트 유지(깜빡임 제거), 상한 초과 시 가장 오래된 섹션 정리(메모리 가드)
 
   // 섹션 이동 공통 — 장부를 메뉴로 직접 열 땐 게임관리 시드를 지워 일반 진입으로
   const gotoSection = (s: Section) => {
     if (s === 'ledger') setLedgerSeed(null);
     setSection(s);
   };
-  // 한 번이라도 연 섹션은 방문 기록 — 이후 unmount 없이 display 토글만(재fetch·깜빡임 제거)
-  useEffect(() => { if (section) setVisited((v) => (v.has(section) ? v : new Set(v).add(section))); }, [section]);
+  // 방문 섹션을 최근순으로 기록 + 상한(8) 초과 시 가장 오래된 섹션 언마운트(메모리 가드).
+  // 잰크는 active 게이팅(클락·라이브·장부)으로 이미 차단했고, 이건 순수 메모리/구독 누적 방지용.
+  useEffect(() => {
+    if (!section) return;
+    setVisited((v) => {
+      const next = [...v.filter((x) => x !== section), section];
+      return next.length > 8 ? next.slice(next.length - 8) : next;
+    });
+  }, [section]);
 
   // 알림 딥링크("📒 장부 시작" 클릭 등) — 권한 확인이 끝나면 지정 섹션으로 1회 이동
   useEffect(() => {
@@ -270,9 +277,9 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 <div key={s} style={section === s && !curItem?.locked ? undefined : { display: 'none' }}>{node}</div>
               );
               return (<>
-                {visited.has('dashboard') && box('dashboard', <StoreDashboard venueId={venueId} schedules={schedules} onGoto={(s) => gotoSection(s as Section)} onCreatePoster={onCreatePoster}
+                {visited.includes('dashboard') && box('dashboard', <StoreDashboard venueId={venueId} schedules={schedules} onGoto={(s) => gotoSection(s as Section)} onCreatePoster={onCreatePoster}
                   caps={{ ledger: ledgerOk, manage: manageOk, voucher: manageOk || voucherView, posters: canPosters, staff: canStaff }} />)}
-                {visited.has('posters') && canPosters && box('posters', <MyPostersTab schedules={schedules} onCreate={onCreatePoster} onEdit={onEditPoster} onDelete={onDeletePoster}
+                {visited.includes('posters') && canPosters && box('posters', <MyPostersTab schedules={schedules} onCreate={onCreatePoster} onEdit={onEditPoster} onDelete={onDeletePoster}
                   onGotoRanking={ledgerOk ? (date) => { setRankingDraft({ date, names: [] }); setSection('ranking'); } : undefined}
                   onOpenLedger={ledgerOk ? (s, existingDate) => {
                     const schedDate = new Date(s.date).toLocaleDateString('en-CA');
@@ -281,20 +288,20 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                       : { date: schedDate, scheduleId: s.id, isNew: true, title: s.title, buyinAmount: s.buyIn?.amount ?? 0, gtd: !!s.guaranteed });
                     setSection('ledger');
                   } : undefined} />)}
-                {visited.has('ledger') && ledgerOk && box('ledger', <NuriPosLedger venueId={venueId} canManage={manageOk} seed={ledgerSeed}
+                {visited.includes('ledger') && ledgerOk && box('ledger', <NuriPosLedger venueId={venueId} canManage={manageOk} active={section === 'ledger'} seed={ledgerSeed}
                   onMakeRankingDraft={(d, names, ev) => { setRankingDraft({ date: d, names, event: ev ?? '' }); setSection('ranking'); }}
                   onOpenClock={(d, g) => { setClockSeed(d); setClockSeedGame(g); setSection('clock'); }}
                   onOpenStats={manageOk ? () => setSection('stats') : undefined} />)}
-                {visited.has('stats') && manageOk && box('stats', <LedgerStatsPanel venueId={venueId} />)}
-                {visited.has('ranking') && ledgerOk && box('ranking', <RankingEditor venueId={venueId} canEdit={isAdmin || user.approved === true || ledgerOk} draft={rankingDraft} />)}
-                {visited.has('venueRank') && ledgerOk && box('venueRank', <VenueRankHub venueId={venueId} canConfigure={manageOk} />)}
-                {visited.has('league') && ledgerOk && box('league', <LeaguePanel venueId={venueId} canConfigure={manageOk} />)}
-                {visited.has('page') && canStaff && box('page', <VenueCustomizePanel venueId={venueId} />)}
-                {visited.has('clock') && ledgerOk && box('clock', <TournamentClock venueId={venueId} canManage={ledgerOk} seedSessionDate={clockSeed} seedGameSeq={clockSeedGame} active={section === 'clock'} />)}
-                {visited.has('attendance') && ledgerOk && box('attendance', <StaffSelfAttendance venueId={venueId} />)}
-                {visited.has('staff') && canStaff && box('staff', <StaffHub venueId={venueId} />)}
-                {visited.has('settings') && canStaff && box('settings', <PosSettingsPanel venueId={venueId} />)}
-                {visited.has('voucher') && (manageOk || voucherView) && box('voucher', <VoucherManagePanel venueId={venueId} />)}
+                {visited.includes('stats') && manageOk && box('stats', <LedgerStatsPanel venueId={venueId} />)}
+                {visited.includes('ranking') && ledgerOk && box('ranking', <RankingEditor venueId={venueId} canEdit={isAdmin || user.approved === true || ledgerOk} draft={rankingDraft} />)}
+                {visited.includes('venueRank') && ledgerOk && box('venueRank', <VenueRankHub venueId={venueId} canConfigure={manageOk} />)}
+                {visited.includes('league') && ledgerOk && box('league', <LeaguePanel venueId={venueId} canConfigure={manageOk} />)}
+                {visited.includes('page') && canStaff && box('page', <VenueCustomizePanel venueId={venueId} />)}
+                {visited.includes('clock') && ledgerOk && box('clock', <TournamentClock venueId={venueId} canManage={ledgerOk} seedSessionDate={clockSeed} seedGameSeq={clockSeedGame} active={section === 'clock'} />)}
+                {visited.includes('attendance') && ledgerOk && box('attendance', <StaffSelfAttendance venueId={venueId} />)}
+                {visited.includes('staff') && canStaff && box('staff', <StaffHub venueId={venueId} />)}
+                {visited.includes('settings') && canStaff && box('settings', <PosSettingsPanel venueId={venueId} />)}
+                {visited.includes('voucher') && (manageOk || voucherView) && box('voucher', <VoucherManagePanel venueId={venueId} />)}
               </>);
             })()}
           </div>
