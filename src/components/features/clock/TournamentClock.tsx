@@ -12,10 +12,10 @@ import {
   defaultClockConfig, emptyClockState, deriveClockCounts, computeLiveStats, PRESET_LIMIT,
   countLevels, withDerivedEarly, generateBlinds,
   getClockPresets, saveClockPreset, deleteClockPreset,
-  getClockState, saveClockState, clearClockState, subscribeClock, getRunningClocks, subscribeRunningClocks,
+  getClockState, saveClockState, clearClockState, subscribeClock, subscribeRunningClocks, getVenueClocks,
 } from '../../../api/clock';
 import {
-  getLedgerBuyins, getLedgerSession, getLedgerSessionList, saveLedgerSession, subscribeLedger,
+  getLedgerBuyins, getLedgerSession, getLedgerSessionList, saveLedgerSession, subscribeLedger, getLedgerGames,
   type LedgerBuyin, type LedgerSession, type LedgerSessionListItem,
 } from '../../../api/ledger';
 
@@ -86,6 +86,7 @@ export default function TournamentClock({ venueId, canManage, seedSessionDate, s
 
   useEffect(() => {
     setLoading(true);
+    curGameSeqRef.current = seedGameSeq;
     Promise.all([getClockState(venueId, seedGameSeq), getClockPresets(venueId), getLedgerSessionList(venueId, 60).catch(() => [])])
       .then(([s, p, ls]) => { setState(s); setPresets(p); setSessions(ls); setView(seedSessionDate ? 'settings' : (s ? 'live' : 'settings')); })
       .finally(() => setLoading(false));
@@ -113,7 +114,7 @@ export default function TournamentClock({ venueId, canManage, seedSessionDate, s
   }, [state, seedSession]);
 
   const startClock = async (config: ClockConfig, linkDate: string | null, linkGameSeq: number = seedGameSeq) => {
-    const gseq = linkDate ? linkGameSeq : seedGameSeq; // 단독은 진입 슬롯(seed), 연동은 고른 게임
+    const gseq = linkDate ? linkGameSeq : curGameSeqRef.current; // 단독은 현재 선택 게임(멀티클락 전환 반영), 연동은 고른 게임
     const base = emptyClockState(venueId, withDerivedEarly(config), gseq);
     base.sessionDate = linkDate;
     base.title = base.config.title;
@@ -140,27 +141,30 @@ export default function TournamentClock({ venueId, canManage, seedSessionDate, s
   // 멀티 클락 오버뷰에서 다른 게임 탭 → 그 게임 클락으로 전환
   const switchGame = useCallback((g: number) => {
     curGameSeqRef.current = g;
-    getClockState(venueId, g).then((s) => { setState(s); setView('live'); }).catch(() => {});
+    getClockState(venueId, g).then((s) => { setState(s); setView(s ? 'live' : 'settings'); }).catch(() => {});
   }, [venueId]);
 
   if (loading) return <p className="py-10 text-center text-sm text-ink-muted">클락 불러오는 중…</p>;
 
   if (view === 'settings' || !state) {
     return (
-      <ClockSettings
-        key={`${state?.venueId ?? 'new'}-${seedSession?.title ?? ''}-${seedSessionDate ?? ''}`}
-        venueId={venueId} canManage={canManage} presets={presets} sessions={sessions} initial={seededInitial}
-        hasLive={!!state} seedSessionDate={seedSessionDate} seedGameSeq={seedGameSeq} seededFromLedger={!!seedSession}
-        onReloadPresets={reloadPresets}
-        onStart={startClock}
-        onBackToLive={state ? () => setView('live') : undefined}
-      />
+      <div className="space-y-2">
+        <MultiClockOverview venueId={venueId} sessionDate={seedSessionDate} currentGameSeq={curGameSeqRef.current} active={active} onSwitch={switchGame} />
+        <ClockSettings
+          key={`${state?.venueId ?? 'new'}-${seedSession?.title ?? ''}-${seedSessionDate ?? ''}`}
+          venueId={venueId} canManage={canManage} presets={presets} sessions={sessions} initial={seededInitial}
+          hasLive={!!state} seedSessionDate={seedSessionDate} seedGameSeq={seedGameSeq} seededFromLedger={!!seedSession}
+          onReloadPresets={reloadPresets}
+          onStart={startClock}
+          onBackToLive={state ? () => setView('live') : undefined}
+        />
+      </div>
     );
   }
 
   return (
     <div className="space-y-2">
-      <MultiClockOverview venueId={venueId} currentGameSeq={state.gameSeq} active={active} onSwitch={switchGame} />
+      <MultiClockOverview venueId={venueId} sessionDate={state.sessionDate} currentGameSeq={state.gameSeq} active={active} onSwitch={switchGame} />
       <ClockLive
         state={state} canManage={canManage} active={active}
         onChange={(s) => setState(s)}
@@ -171,22 +175,41 @@ export default function TournamentClock({ venueId, canManage, seedSessionDate, s
   );
 }
 
-// ── 멀티 클락 오버뷰 — 이 매장에서 동시 진행 중인 게임 클락(메인+사이드)을 한눈에 + 탭 전환 ──
-function MultiClockOverview({ venueId, currentGameSeq, active = true, onSwitch }: { venueId: string; currentGameSeq: number; active?: boolean; onSwitch: (g: number) => void }) {
+// ── 멀티 클락 오버뷰 — 매장 게임별 클락(메인+사이드N) 한눈에 + 탭 전환 + 사이드 클락 추가 ──
+function MultiClockOverview({ venueId, sessionDate, currentGameSeq, active = true, onSwitch }: { venueId: string; sessionDate?: string | null; currentGameSeq: number; active?: boolean; onSwitch: (g: number) => void }) {
   const [clocks, setClocks] = useState<ClockState[]>([]);
+  const [games, setGames] = useState<{ gameSeq: number; title?: string }[]>([]);
   const [, setTick] = useState(0);
   useEffect(() => {
-    const load = () => getRunningClocks().then((all) => setClocks(all.filter((c) => c.venueId === venueId))).catch(() => {});
+    const load = () => {
+      getVenueClocks(venueId).then(setClocks).catch(() => {});
+      getLedgerGames(venueId, sessionDate || undefined).then((gs) => setGames(gs.map((g) => ({ gameSeq: g.gameSeq, title: g.title })))).catch(() => setGames([]));
+    };
     load();
     return subscribeRunningClocks(load);
-  }, [venueId]);
+  }, [venueId, sessionDate]);
   useEffect(() => { if (!active) return; const t = setInterval(() => setTick((x) => x + 1), 1000); return () => clearInterval(t); }, [active]);
-  if (clocks.length < 2) return null; // 동시 진행 2개 미만이면 숨김(단일은 메인 클락만)
+  // 게임 슬롯 = 클락 존재 게임 ∪ 그날 장부 게임
+  const seqs = [...new Set([...clocks.map((c) => c.gameSeq), ...games.map((g) => g.gameSeq)])].sort((a, b) => a - b);
+  if (seqs.length < 1) return null;
+  const nextSide = Math.max(1, ...seqs) + 1;
+  const label = (g: number) => (g === 1 ? '메인' : '사이드' + (g - 1));
   return (
     <div className="rounded-card border border-gold-400/25 bg-surface-low/60 p-2 space-y-1.5">
-      <p className="text-2xs font-bold text-gold-300">⏱ 이 매장 동시 진행 {clocks.length}게임 — 탭하면 전환</p>
+      <p className="text-2xs font-bold text-gold-300">⏱ 게임 클락 {seqs.length} — 탭하면 전환/시작 · ＋로 사이드 클락 추가</p>
       <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-        {[...clocks].sort((a, b) => a.gameSeq - b.gameSeq).map((c) => {
+        {seqs.map((g) => {
+          const c = clocks.find((x) => x.gameSeq === g);
+          const on = g === currentGameSeq;
+          const base = ['rounded-input border p-1.5 text-left transition-colors', on ? 'border-gold-400/60 bg-gold-300/15' : 'border-border-subtle bg-surface-base hover:bg-surface-high'].join(' ');
+          if (!c) {
+            return (
+              <button key={g} type="button" onClick={() => onSwitch(g)} className={base}>
+                <div className="flex items-center justify-between gap-1"><span className="truncate text-2xs font-bold text-ink-primary">{label(g)}{on ? ' ●' : ''}</span><span className="text-[9px] font-bold text-ink-muted">시작 전</span></div>
+                <p className="mt-0.5 text-[10px] text-ink-muted">탭하여 클락 시작</p>
+              </button>
+            );
+          }
           const lv = c.config?.levels ?? [];
           let idx = Math.max(0, Math.min(c.currentIndex, Math.max(0, lv.length - 1)));
           let rem = c.running && c.endsAt ? new Date(c.endsAt).getTime() - now() : c.remainingMs;
@@ -194,12 +217,10 @@ function MultiClockOverview({ venueId, currentGameSeq, active = true, onSwitch }
           rem = Math.max(0, rem);
           const cur = lv[idx];
           let no = 0; for (let i = 0; i <= idx && i < lv.length; i++) if (lv[i].kind === 'level') no++;
-          const on = c.gameSeq === currentGameSeq;
           return (
-            <button key={c.gameSeq} type="button" onClick={() => onSwitch(c.gameSeq)}
-              className={['rounded-input border p-1.5 text-left transition-colors', on ? 'border-gold-400/60 bg-gold-300/15' : 'border-border-subtle bg-surface-base hover:bg-surface-high'].join(' ')}>
+            <button key={g} type="button" onClick={() => onSwitch(g)} className={base}>
               <div className="flex items-center justify-between gap-1">
-                <span className="truncate text-2xs font-bold text-ink-primary">{c.gameSeq === 1 ? '메인' : '사이드' + (c.gameSeq - 1)}{on ? ' ●' : ''}</span>
+                <span className="truncate text-2xs font-bold text-ink-primary">{label(g)}{on ? ' ●' : ''}</span>
                 <span className={['text-[9px] font-bold', c.running ? 'text-emerald-400' : 'text-gold-300'].join(' ')}>{c.running ? (cur?.kind === 'break' ? '브레이크' : 'L' + no) : '정지'}</span>
               </div>
               <p className="mt-0.5 text-base font-extrabold leading-none tabular-nums text-ink-primary">{pad(rem / 60_000)}:{pad((rem % 60_000) / 1000)}</p>
@@ -207,6 +228,8 @@ function MultiClockOverview({ venueId, currentGameSeq, active = true, onSwitch }
             </button>
           );
         })}
+        <button type="button" onClick={() => onSwitch(nextSide)}
+          className="flex flex-col items-center justify-center rounded-input border border-dashed border-gold-400/50 p-1.5 text-center text-2xs font-bold text-gold-300 hover:bg-gold-300/10">＋ 사이드<br />클락</button>
       </div>
     </div>
   );

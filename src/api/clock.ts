@@ -209,6 +209,14 @@ export async function getRunningClocks(): Promise<ClockState[]> {
   return (data ?? []).map((r: any) => rowToState(r));
 }
 
+/** 이 매장의 모든 게임 클락 상태(진행·정지 포함, 게임당 1개) — 멀티 클락 오버뷰용. */
+export async function getVenueClocks(venueId: string): Promise<ClockState[]> {
+  if (IS_MOCK) return [];
+  const { data } = await supabase.from('clock_states').select('*').eq('venue_id', venueId);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => rowToState(r));
+}
+
 export async function saveClockState(s: ClockState): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.from('clock_states').upsert({

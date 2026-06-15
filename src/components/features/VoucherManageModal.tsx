@@ -157,7 +157,10 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
       const imgs = await Promise.all(chosen.map((q) => q.data()));
       const w = window.open('', '_blank', 'width=480,height=860');
       if (!w) { toast.show('팝업이 차단되었습니다. 팝업을 허용한 뒤 다시 시도하세요.', 'error'); return; }
-      const cards = chosen.map((q, i) => `  <div class="card"><h2>${q.icon} ${q.title}</h2><img src="${imgs[i]}" alt="${q.title} QR"/><p>${q.desc}</p></div>`).join('\n');
+      const cards = chosen.map((q, i) => {
+        const tbl = q.id.startsWith('buyinG') && q.title.includes('·') ? `<div class="table">🪑 ${q.title.split('·')[1].trim()} 테이블</div>` : '';
+        return `  <div class="card"><h2>${q.icon} ${q.title}</h2>${tbl}<img src="${imgs[i]}" alt="${q.title} QR"/><p>${q.desc}</p></div>`;
+      }).join('\n');
       w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>NURI HOLDEM · 매장 비치 QR</title><style>
 *{box-sizing:border-box;margin:0}body{font-family:system-ui,'Apple SD Gothic Neo',sans-serif;text-align:center;padding:28px 22px;color:#111}
 .brandlogo{height:56px;width:auto;margin:0 auto 8px;display:block}
@@ -165,7 +168,7 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
 .tag{font-size:14px;color:#444;font-weight:700;margin-top:8px}.url{font-size:14px;color:#c9a43c;font-weight:800;margin-top:2px}
 .qrs{display:flex;flex-direction:column;align-items:center;gap:20px;margin-top:22px}
 .card{border:2px solid #ececec;border-radius:16px;padding:16px 16px 12px;width:320px}
-.card h2{font-size:17px;font-weight:800}.card img{width:236px;height:236px;margin-top:10px}.card p{font-size:12px;color:#666;margin-top:8px;line-height:1.4}
+.card h2{font-size:17px;font-weight:800}.card .table{margin-top:8px;font-size:20px;font-weight:900;color:#1a1a1a;background:#f5e6c8;border-radius:8px;padding:6px 8px}.card img{width:236px;height:236px;margin-top:10px}.card p{font-size:12px;color:#666;margin-top:8px;line-height:1.4}
 @media print{body{padding:10px}}
 </style></head><body>
 <img class="brandlogo" src="${window.location.origin}/nuri-logo.png" alt="" onerror="this.style.display='none'"/>
