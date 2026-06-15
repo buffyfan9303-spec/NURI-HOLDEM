@@ -18,6 +18,7 @@ import {
   getLedgerPlayers, addLedgerPlayer, updateLedgerPlayer, renameLedgerPlayer, removeLedgerPlayer,
   searchRegisteredPlayers, type RegisteredPlayer,
   subscribeLedger, posHasPassword, getLedgerPresets, type LedgerPreset,
+  getPendingBuyinRequests, approveBuyinRequest, rejectBuyinRequest, subscribeBuyinRequests, type BuyinRequest,
 } from '../../api/ledger';
 import { getStaffSchedule, addStaffShift } from '../../api/staffSchedule';
 import { getVenueRankings } from '../../api/rankings';
@@ -94,6 +95,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const [session, setSession] = useState<LedgerSession>({ venueId, sessionDate: today(), gameSeq: 1, buyinAmount: 0, cardAmount: null, gameType: 'gtd', targetEntries: 0, maxEntries: 0, isAddon: false, addonStack: 0, regClosed: false, closed: false, discounts: [], earlyDoubleMin: 0, earlySingleMin: 0, tournamentStart: null });
   const [buyins, setBuyins]   = useState<LedgerBuyin[]>([]);
   const [players, setPlayers] = useState<LedgerPlayer[]>([]);
+  const [pendingReqs, setPendingReqs] = useState<BuyinRequest[]>([]); // 손님 자가 바인요청(대기)
   const [gameSeq, setGameSeq] = useState(MAIN_GAME_SEQ);   // 현재 보고있는 게임(1=메인, 2+=사이드)
   const [games, setGames]     = useState<LedgerGame[]>([]); // 그 날짜의 게임 목록(스위처용)
   const [loading, setLoading] = useState(true);
@@ -215,6 +217,16 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   }, [venueId, date, gameSeq]);
 
   useEffect(() => subscribeLedger(venueId, () => { reload(); loadGames(); }), [venueId, reload, loadGames]);
+
+  // 손님 자가 바인요청(QR) — 그날 매장 단위 대기목록 로드 + 실시간. 승인 시 현재 게임(gameSeq) 명단에 추가.
+  const loadPending = useCallback(() => { getPendingBuyinRequests(venueId, date).then(setPendingReqs).catch(() => setPendingReqs([])); }, [venueId, date]);
+  useEffect(() => { loadPending(); return subscribeBuyinRequests(venueId, loadPending); }, [venueId, loadPending]);
+  const approveReq = (r: BuyinRequest) => approveBuyinRequest(r.id, gameSeq)
+    .then(() => { toast.show(`${r.playerName} 승인 — ${gameSeq === MAIN_GAME_SEQ ? '메인' : '사이드' + (gameSeq - 1)} 명단 추가`, 'success'); loadPending(); })
+    .catch((e) => toast.show(e instanceof Error ? e.message : '승인 실패', 'error'));
+  const rejectReq = (r: BuyinRequest) => rejectBuyinRequest(r.id)
+    .then(() => loadPending())
+    .catch((e) => toast.show(e instanceof Error ? e.message : '거절 실패', 'error'));
 
   // ── 연동 클락 — 리모컨 제어 + 바인 시점 얼리 확정(스타트 시각 미입력 버그 근본 해결) ──
   const [clock, setClock] = useState<ClockState | null>(null);
@@ -629,6 +641,28 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
             return <Metric label={live != null ? '생존' : '생존(추정)'} value={`${alive}`} />;
           })()}
           <Metric label="미수" value={`${wonToMan(stats.unpaid)}만`} tone={stats.unpaid > 0 ? 'danger' : undefined} />
+        </div>
+      )}
+
+      {/* 손님 자가 바인 요청(QR) — 운영자 원탭 승인 → 현재 게임 명단 추가 */}
+      {!closed && pendingReqs.length > 0 && (
+        <div className="rounded-card border border-sky-500/40 bg-sky-500/[0.06] p-2.5 space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-2xs font-bold text-sky-300">🙋 손님 바인 요청 {pendingReqs.length}건</span>
+            <span className="text-[10px] text-ink-muted">승인 시 현재 게임(<b className="text-ink-secondary">{gameSeq === MAIN_GAME_SEQ ? '메인' : '사이드' + (gameSeq - 1)}</b>) 명단에 추가</span>
+          </div>
+          <ul className="space-y-1.5">
+            {pendingReqs.map((r) => (
+              <li key={r.id} className="flex items-center gap-2 rounded-input bg-surface-base/60 border border-border-subtle px-2.5 py-1.5">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold text-ink-primary truncate">{r.playerName}</p>
+                  {r.note && <p className="text-2xs text-ink-muted truncate">{r.note}</p>}
+                </div>
+                <button type="button" onClick={() => approveReq(r)} className="shrink-0 rounded-input bg-emerald-500/90 px-2.5 py-1.5 text-2xs font-bold text-ink-inverse hover:bg-emerald-500">✓ 승인</button>
+                <button type="button" onClick={() => rejectReq(r)} aria-label="거절" className="shrink-0 rounded-input border border-border-default px-2 py-1.5 text-2xs font-bold text-ink-muted hover:text-danger-light hover:border-danger/40">✕</button>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

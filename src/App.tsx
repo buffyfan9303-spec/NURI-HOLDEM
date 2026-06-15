@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, useTransition, Suspense, type ReactNode } from 'react';
 import { useToast } from './components/atoms/Toast';
 import { checkIn, getMyCheckinStreak } from './api/checkins';
+import { requestBuyin } from './api/ledger';
 import UnreadBadge from './components/atoms/UnreadBadge';
 import ViewModeToggle from './components/atoms/ViewModeToggle';
 import type { ViewMode } from './components/atoms/ViewModeToggle';
@@ -682,6 +683,22 @@ export default function App() {
       .finally(() => {
         const url = new URL(window.location.href);
         url.searchParams.delete('checkin');
+        window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  // ── QR 자가 바인요청 (?buyin=<venueId>) — 로그인 회원만, 운영자 승인 대기 ──
+  useEffect(() => {
+    const bv = new URLSearchParams(window.location.search).get('buyin');
+    if (!bv) return;
+    if (!user) { setAuthOpen(true); return; }
+    requestBuyin(bv)
+      .then((name) => toast.show(`${name || '매장'} 참가(바인) 요청 전송! 운영자 승인을 기다려 주세요 🙋`, 'success'))
+      .catch((e) => toast.show(e instanceof Error ? e.message : '요청 전송 실패', 'error'))
+      .finally(() => {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('buyin');
         window.history.replaceState({}, '', url.pathname + url.search + url.hash);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps

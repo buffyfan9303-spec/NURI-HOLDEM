@@ -685,6 +685,54 @@ export function subscribeLedger(venueId: string, onChange: () => void): () => vo
   return () => { supabase.removeChannel(ch); };
 }
 
+// ── 손님 자가 바인(참가) 요청 — QR(?buyin=<venueId>) ───────────────────────────
+export interface BuyinRequest {
+  id: string; venueId: string; sessionDate: string; playerName: string;
+  userId: string | null; note: string | null; status: 'pending' | 'approved' | 'rejected'; createdAt: string;
+}
+/** 손님 QR 진입 URL — venue_id만(비민감). 로그인 회원만 요청 가능. */
+export function buyinRequestUrl(venueId: string): string {
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://nuriholdem.com';
+  return `${origin}/?buyin=${venueId}`;
+}
+/** 손님: 오늘 이 매장 참가(바인) 요청 — 성공 시 매장명 반환(같은 날 중복은 무시). */
+export async function requestBuyin(venueId: string, note?: string): Promise<string> {
+  if (IS_MOCK) return '데모 매장';
+  const { data, error } = await supabase.rpc('request_buyin', { p_venue_id: venueId, p_note: note ?? null });
+  if (error) throw new Error(error.message);
+  return (data as string) ?? '';
+}
+/** 운영자: 그날 대기중(pending) 바인 요청 목록. */
+export async function getPendingBuyinRequests(venueId: string, date: string): Promise<BuyinRequest[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.from('ledger_buyin_requests')
+    .select('*').eq('venue_id', venueId).eq('session_date', date).eq('status', 'pending')
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({ id: r.id, venueId: r.venue_id, sessionDate: r.session_date, playerName: r.player_name, userId: r.user_id, note: r.note ?? null, status: r.status, createdAt: r.created_at }));
+}
+/** 운영자: 요청 승인 → 해당 게임(gameSeq) 명단에 추가 + 요청 approved. */
+export async function approveBuyinRequest(id: string, gameSeq = MAIN_GAME_SEQ): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('approve_buyin_request', { p_request_id: id, p_game_seq: gameSeq });
+  if (error) throw new Error(error.message);
+}
+/** 운영자: 요청 거절. */
+export async function rejectBuyinRequest(id: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('reject_buyin_request', { p_request_id: id });
+  if (error) throw new Error(error.message);
+}
+/** 바인 요청 실시간 구독(매장별). */
+export function subscribeBuyinRequests(venueId: string, cb: () => void): () => void {
+  if (IS_MOCK) return () => {};
+  const ch = supabase.channel(`buyin_req:${venueId}:${Math.random().toString(36).slice(2)}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'ledger_buyin_requests', filter: `venue_id=eq.${venueId}` }, () => cb())
+    .subscribe();
+  return () => { supabase.removeChannel(ch); };
+}
+
 // ── 취소 비밀번호 ─────────────────────────────────────────────────────────────
 export async function posHasPassword(venueId: string): Promise<boolean> {
   if (IS_MOCK) return false;

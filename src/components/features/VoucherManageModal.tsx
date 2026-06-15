@@ -8,6 +8,7 @@ import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import QRCode from 'qrcode';
 import { checkinUrl } from '../../api/checkins';
+import { buyinRequestUrl } from '../../api/ledger';
 import { listVenueVouchers, issueVoucher, deleteVoucher, findUserForTransfer, voucherUsageByVenue, voucherHolderStats, isVoucherIssueApproved, voucherHolderProfiles, subscribeVenueVouchers, type Voucher, type VoucherUsage, type VoucherHolderStats, type TransferTarget, type VoucherHolderProfile, getVoucherQuota, requestVoucherCredit, myVoucherCreditRequests, type VoucherCreditRequest } from '../../api/vouchers';
 
 function fmtDateTime(iso: string | null): string {
@@ -38,6 +39,7 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
   const [qr, setQr] = useState('');
   const [signupQr, setSignupQr] = useState('');
   const [checkinQr, setCheckinQr] = useState('');
+  const [buyinQr, setBuyinQr] = useState('');
   const [approved, setApproved] = useState(true);
   // 발급 한도(쿼터) — null이면 구 DB(한도 미적용)라 표시 생략
   const [quota, setQuota] = useState<number | null>(null);
@@ -84,6 +86,7 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
   useEffect(() => { QRCode.toDataURL(`NURIV-VENUE:${venueId}`, { width: 240, margin: 1 }).then(setQr).catch(() => {}); }, [venueId]);
   useEffect(() => { QRCode.toDataURL('https://nuriholdem.com/?signup=1', { width: 240, margin: 1 }).then(setSignupQr).catch(() => {}); }, []);
   useEffect(() => { QRCode.toDataURL(checkinUrl(venueId), { width: 240, margin: 1 }).then(setCheckinQr).catch(() => {}); }, [venueId]);
+  useEffect(() => { QRCode.toDataURL(buyinRequestUrl(venueId), { width: 240, margin: 1 }).then(setBuyinQr).catch(() => {}); }, [venueId]);
 
   // 이용 내역 피드 — 발급(보낸 것)·사용(들어온 것)을 한 줄씩, 최신순. 실시간 구독이 reload를 부르므로 자동 갱신.
   const feed = useMemo(() => {
@@ -140,8 +143,9 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
     { id: 'voucher', icon: '🎟', title: '매장이용권 사용', data: () => QRCode.toDataURL(`NURIV-VENUE:${venueId}`, { width: 1024, margin: 2 }), desc: '대시보드 → 이용권 → 사용하기 → ‘매장 QR 스캔’' },
     { id: 'checkin', icon: '📍', title: '출석 체크인', data: () => QRCode.toDataURL(checkinUrl(venueId), { width: 1024, margin: 2 }), desc: 'QR 스캔 → 오늘 출석 도장(매장 점수 적립 · 출석왕 집계)' },
     { id: 'signup', icon: '📱', title: '회원가입', data: () => QRCode.toDataURL('https://nuriholdem.com/?signup=1', { width: 1024, margin: 2 }), desc: 'QR 스캔 → 바로 회원가입' },
+    { id: 'buyin', icon: '🙋', title: '바인(참가) 요청', data: () => QRCode.toDataURL(buyinRequestUrl(venueId), { width: 1024, margin: 2 }), desc: '손님 스캔 → 참가 요청 → 운영자가 장부에서 원탭 승인' },
   ] as const;
-  const [printSel, setPrintSel] = useState<Record<string, boolean>>({ voucher: true, checkin: false, signup: false });
+  const [printSel, setPrintSel] = useState<Record<string, boolean>>({ voucher: true, checkin: false, signup: false, buyin: false });
   const togglePrint = (id: string) => setPrintSel((m) => ({ ...m, [id]: !m[id] }));
   const printQr = async () => {
     const chosen = QR_DEFS.filter((q) => printSel[q.id]);
@@ -368,6 +372,11 @@ ${cards}
                   <p className="text-center text-2xs font-bold text-emerald-300">회원가입 QR</p>
                   {signupQr && <img src={signupQr} alt="회원가입 QR" width={130} height={130} className="rounded bg-white p-1.5" />}
                   <p className="text-center text-[10px] leading-tight text-ink-muted">스캔 시 회원가입 페이지로 이동</p>
+                </div>
+                <div className="flex flex-col items-center gap-1">
+                  <p className="text-center text-2xs font-bold text-sky-300">바인 요청 QR</p>
+                  {buyinQr && <img src={buyinQr} alt="바인 요청 QR" width={130} height={130} className="rounded bg-white p-1.5" />}
+                  <p className="text-center text-[10px] leading-tight text-ink-muted">손님 스캔 → 참가 요청 → 장부에서 승인</p>
                 </div>
               </div>
               {/* 인쇄할 QR 선택 — 종이가 작아 한꺼번에 안 됨. 1~3개 선택 */}
