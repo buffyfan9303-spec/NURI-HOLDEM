@@ -689,18 +689,41 @@ export function subscribeLedger(venueId: string, onChange: () => void): () => vo
 export interface BuyinRequest {
   id: string; venueId: string; sessionDate: string; playerName: string;
   userId: string | null; note: string | null; status: 'pending' | 'approved' | 'rejected'; createdAt: string;
+  requestedGameSeq: number | null;
 }
 /** 손님 QR 진입 URL — venue_id만(비민감). 로그인 회원만 요청 가능. */
 export function buyinRequestUrl(venueId: string): string {
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://nuriholdem.com';
   return `${origin}/?buyin=${venueId}`;
 }
-/** 손님: 오늘 이 매장 참가(바인) 요청 — 성공 시 매장명 반환(같은 날 중복은 무시). */
-export async function requestBuyin(venueId: string, note?: string): Promise<string> {
+/** 손님: 오늘 이 매장 참가(바인) 요청 — 성공 시 매장명 반환. gameSeq=원하는 게임(선택). */
+export async function requestBuyin(venueId: string, gameSeq?: number | null, note?: string): Promise<string> {
   if (IS_MOCK) return '데모 매장';
-  const { data, error } = await supabase.rpc('request_buyin', { p_venue_id: venueId, p_note: note ?? null });
+  const { data, error } = await supabase.rpc('request_buyin', { p_venue_id: venueId, p_note: note ?? null, p_game_seq: gameSeq ?? null });
   if (error) throw new Error(error.message);
   return (data as string) ?? '';
+}
+/** 손님: 오늘 그 매장의 게임 목록(메인/사이드) — QR 요청 시 게임 선택용(공개 RPC). */
+export async function venueTodayGames(venueId: string): Promise<{ gameSeq: number; title: string }[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.rpc('venue_today_games', { p_venue_id: venueId });
+  if (error) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({ gameSeq: r.game_seq, title: r.title }));
+}
+export interface MyBuyinRequest { venueId: string; venueName: string; status: 'pending' | 'approved' | 'rejected'; requestedGameSeq: number | null; }
+/** 손님: 오늘 내가 보낸 바인 요청(매장명·상태) — 홈 배너용(RLS 본인 select). */
+export async function getMyBuyinRequestsToday(): Promise<MyBuyinRequest[]> {
+  if (IS_MOCK) return [];
+  const { data: u } = await supabase.auth.getUser();
+  if (!u.user) return [];
+  const today = new Date().toLocaleDateString('en-CA');
+  const { data, error } = await supabase.from('ledger_buyin_requests')
+    .select('venue_id, status, requested_game_seq, venues(name)')
+    .eq('user_id', u.user.id).eq('session_date', today).order('created_at', { ascending: false });
+  if (error) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({ venueId: r.venue_id, venueName: r.venues?.name ?? '매장', status: r.status, requestedGameSeq: r.requested_game_seq ?? null }));
 }
 /** 운영자: 그날 대기중(pending) 바인 요청 목록. */
 export async function getPendingBuyinRequests(venueId: string, date: string): Promise<BuyinRequest[]> {
@@ -710,12 +733,12 @@ export async function getPendingBuyinRequests(venueId: string, date: string): Pr
     .order('created_at', { ascending: true });
   if (error) throw error;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((r: any) => ({ id: r.id, venueId: r.venue_id, sessionDate: r.session_date, playerName: r.player_name, userId: r.user_id, note: r.note ?? null, status: r.status, createdAt: r.created_at }));
+  return (data ?? []).map((r: any) => ({ id: r.id, venueId: r.venue_id, sessionDate: r.session_date, playerName: r.player_name, userId: r.user_id, note: r.note ?? null, status: r.status, createdAt: r.created_at, requestedGameSeq: r.requested_game_seq ?? null }));
 }
 /** 운영자: 요청 승인 → 해당 게임(gameSeq) 명단에 추가 + 요청 approved. */
-export async function approveBuyinRequest(id: string, gameSeq = MAIN_GAME_SEQ): Promise<void> {
+export async function approveBuyinRequest(id: string, gameSeq = MAIN_GAME_SEQ, recordBuyin = false): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.rpc('approve_buyin_request', { p_request_id: id, p_game_seq: gameSeq });
+  const { error } = await supabase.rpc('approve_buyin_request', { p_request_id: id, p_game_seq: gameSeq, p_record_buyin: recordBuyin });
   if (error) throw new Error(error.message);
 }
 /** 운영자: 요청 거절. */

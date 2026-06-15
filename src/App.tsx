@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, useTransition, Suspense, type ReactNode } from 'react';
 import { useToast } from './components/atoms/Toast';
 import { checkIn, getMyCheckinStreak } from './api/checkins';
-import { requestBuyin } from './api/ledger';
+import { requestBuyin, venueTodayGames, getMyBuyinRequestsToday, type MyBuyinRequest } from './api/ledger';
 import UnreadBadge from './components/atoms/UnreadBadge';
 import ViewModeToggle from './components/atoms/ViewModeToggle';
 import type { ViewMode } from './components/atoms/ViewModeToggle';
@@ -632,6 +632,8 @@ export default function App() {
   }, []);
   // 알림 딥링크 → 내 매장 탭의 특정 섹션(예: 📒 장부 시작 → 장부)
   const [myStoreDeep, setMyStoreDeep] = useState<'ledger' | null>(null);
+  const [buyinPick, setBuyinPick] = useState<{ venueId: string; games: { gameSeq: number; title: string }[] } | null>(null); // 바인요청 게임 선택
+  const [myBuyinReqs, setMyBuyinReqs] = useState<MyBuyinRequest[]>([]); // 손님 본인 오늘 바인요청(상태 배너)
   const [activeTab, setActiveTab]     = useState<TabId>('browse');
   // 탭 전환을 트랜지션으로 — lazy 청크/무거운 렌더 동안 이전 화면을 유지해
   // '이전 메뉴 → 스피너 깜빡 → 새 메뉴' 3단 플래시를 없앤다(React 공식 패턴).
@@ -693,15 +695,28 @@ export default function App() {
     const bv = new URLSearchParams(window.location.search).get('buyin');
     if (!bv) return;
     if (!user) { setAuthOpen(true); return; }
-    requestBuyin(bv)
-      .then((name) => toast.show(`${name || '매장'} 참가(바인) 요청 전송! 운영자 승인을 기다려 주세요 🙋`, 'success'))
-      .catch((e) => toast.show(e instanceof Error ? e.message : '요청 전송 실패', 'error'))
-      .finally(() => {
-        const url = new URL(window.location.href);
-        url.searchParams.delete('buyin');
-        window.history.replaceState({}, '', url.pathname + url.search + url.hash);
-      });
+    const url = new URL(window.location.href);
+    url.searchParams.delete('buyin');
+    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+    (async () => {
+      const games = await venueTodayGames(bv).catch(() => [] as { gameSeq: number; title: string }[]);
+      if (games.length > 1) { setBuyinPick({ venueId: bv, games }); return; } // 게임 여러 개면 선택 모달
+      try {
+        const name = await requestBuyin(bv, games[0]?.gameSeq ?? null);
+        toast.show(`${name || '매장'} 참가(바인) 요청 전송! 운영자 승인을 기다려 주세요 🙋`, 'success');
+        getMyBuyinRequestsToday().then(setMyBuyinReqs).catch(() => {});
+      } catch (e) { toast.show(e instanceof Error ? e.message : '요청 전송 실패', 'error'); }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  // 손님: 오늘 내가 보낸 바인 요청 상태(배너) — 로그인 시 로드 + 창 포커스 시 갱신(운영자 승인 반영)
+  useEffect(() => {
+    if (!user) { setMyBuyinReqs([]); return; }
+    const load = () => getMyBuyinRequestsToday().then(setMyBuyinReqs).catch(() => {});
+    load();
+    window.addEventListener('focus', load);
+    return () => window.removeEventListener('focus', load);
   }, [user]);
 
   // ── QR 회원가입 (?signup=1) — 매장 QR 옆 가입 QR 스캔 시 회원가입 모달 바로 열기 ──
@@ -1490,6 +1505,19 @@ export default function App() {
             <WeeklyBestStrip active={activeTab === 'browse'} />
           </div>
 
+          {/* 손님: 오늘 내 바인(참가) 요청 상태 배너 */}
+          {myBuyinReqs.length > 0 && (
+            <div className="px-page-x pt-3 space-y-1.5">
+              {myBuyinReqs.map((r) => (
+                <div key={r.venueId} className={['flex items-center gap-2 rounded-card border px-3 py-2 text-xs',
+                  r.status === 'approved' ? 'border-emerald-500/40 bg-emerald-500/[0.07]' : r.status === 'rejected' ? 'border-border-default bg-surface-low' : 'border-sky-500/40 bg-sky-500/[0.07]'].join(' ')}>
+                  <span className="shrink-0" aria-hidden>{r.status === 'approved' ? '✅' : r.status === 'rejected' ? '❌' : '⏳'}</span>
+                  <span className="min-w-0 flex-1 truncate text-ink-secondary"><b className="text-ink-primary">{r.venueName}</b> 바인 요청 {r.status === 'approved' ? '승인됨 — 입장하세요!' : r.status === 'rejected' ? '거절됨' : '대기중'}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* 공지 — 일정탐색 상단 (전체 공통 공지만) */}
           {(browseNotices.length > 0 || isAdmin) && (
             <div className="px-page-x pt-3">
@@ -1710,6 +1738,32 @@ export default function App() {
 
       {/* ── 모달 — 전부 lazy: 여는 순간에만 해당 청크 로드(첫 화면 가볍게) ── */}
       <Suspense fallback={<OverlayFallback />}>
+      {buyinPick && (() => {
+        const submit = (g: number | null) => {
+          const v = buyinPick.venueId; setBuyinPick(null);
+          requestBuyin(v, g).then((name) => { toast.show(`${name || '매장'} 참가(바인) 요청 전송! 🙋`, 'success'); getMyBuyinRequestsToday().then(setMyBuyinReqs).catch(() => {}); }).catch((e) => toast.show(e instanceof Error ? e.message : '요청 실패', 'error'));
+        };
+        return (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4" onClick={() => setBuyinPick(null)}>
+            <div className="w-full max-w-xs rounded-card border border-border-default bg-surface-high p-4 space-y-2" onClick={(e) => e.stopPropagation()}>
+              <p className="text-sm font-bold text-ink-primary">참가(바인) 요청 — 게임 선택</p>
+              <p className="text-2xs text-ink-muted">참가할 게임을 고르면 운영자에게 요청이 전송됩니다.</p>
+              <div className="space-y-1.5 pt-1">
+                {buyinPick.games.map((g) => (
+                  <button key={g.gameSeq} type="button" onClick={() => submit(g.gameSeq)}
+                    className="w-full rounded-input border border-gold-400/40 bg-gold-300/[0.06] px-3 py-2.5 text-left text-sm font-bold text-ink-primary hover:bg-gold-300/15">
+                    {g.gameSeq === 1 ? '🏆' : '🎲'} {g.title}
+                  </button>
+                ))}
+                <button type="button" onClick={() => submit(null)}
+                  className="w-full rounded-input border border-border-default px-3 py-2 text-xs text-ink-secondary hover:text-ink-primary">아무 게임이나 (운영자가 배정)</button>
+              </div>
+              <button type="button" onClick={() => setBuyinPick(null)} className="w-full pt-1 text-2xs text-ink-muted">취소</button>
+            </div>
+          </div>
+        );
+      })()}
+
       {authOpen && (
         <AuthModal key={authMode} open onClose={() => { setAuthOpen(false); setAuthMode('login'); }} initialMode={authMode} />
       )}

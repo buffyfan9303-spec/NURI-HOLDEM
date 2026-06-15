@@ -221,8 +221,8 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   // 손님 자가 바인요청(QR) — 그날 매장 단위 대기목록 로드 + 실시간. 승인 시 현재 게임(gameSeq) 명단에 추가.
   const loadPending = useCallback(() => { getPendingBuyinRequests(venueId, date).then(setPendingReqs).catch(() => setPendingReqs([])); }, [venueId, date]);
   useEffect(() => { loadPending(); return subscribeBuyinRequests(venueId, loadPending); }, [venueId, loadPending]);
-  const approveReq = (r: BuyinRequest) => approveBuyinRequest(r.id, gameSeq)
-    .then(() => { toast.show(`${r.playerName} 승인 — ${gameSeq === MAIN_GAME_SEQ ? '메인' : '사이드' + (gameSeq - 1)} 명단 추가`, 'success'); loadPending(); })
+  const approveReq = (r: BuyinRequest, withBuyin = false) => approveBuyinRequest(r.id, gameSeq, withBuyin)
+    .then(() => { toast.show(`${r.playerName} 승인 — ${gameSeq === MAIN_GAME_SEQ ? '메인' : '사이드' + (gameSeq - 1)} 명단 추가${withBuyin ? ' + 현금 바인 기록' : ''}`, 'success'); loadPending(); })
     .catch((e) => toast.show(e instanceof Error ? e.message : '승인 실패', 'error'));
   const rejectReq = (r: BuyinRequest) => rejectBuyinRequest(r.id)
     .then(() => loadPending())
@@ -653,12 +653,15 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
           </div>
           <ul className="space-y-1.5">
             {pendingReqs.map((r) => (
-              <li key={r.id} className="flex items-center gap-2 rounded-input bg-surface-base/60 border border-border-subtle px-2.5 py-1.5">
+              <li key={r.id} className="flex items-center gap-1.5 rounded-input bg-surface-base/60 border border-border-subtle px-2.5 py-1.5">
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-bold text-ink-primary truncate">{r.playerName}</p>
+                  <p className="text-sm font-bold text-ink-primary truncate">{r.playerName}
+                    {r.requestedGameSeq != null && <span className="ml-1.5 text-[10px] font-semibold text-sky-300">원함: {r.requestedGameSeq === MAIN_GAME_SEQ ? '메인' : '사이드' + (r.requestedGameSeq - 1)}</span>}
+                  </p>
                   {r.note && <p className="text-2xs text-ink-muted truncate">{r.note}</p>}
                 </div>
-                <button type="button" onClick={() => approveReq(r)} className="shrink-0 rounded-input bg-emerald-500/90 px-2.5 py-1.5 text-2xs font-bold text-ink-inverse hover:bg-emerald-500">✓ 승인</button>
+                <button type="button" onClick={() => approveReq(r, true)} title="승인 + 현금 바인 1건 자동 기록" className="shrink-0 rounded-input bg-emerald-500/90 px-2 py-1.5 text-2xs font-bold text-ink-inverse hover:bg-emerald-500">✓+💵</button>
+                <button type="button" onClick={() => approveReq(r)} title="승인만(명단 추가)" className="shrink-0 rounded-input border border-emerald-500/50 px-2 py-1.5 text-2xs font-bold text-emerald-300 hover:bg-emerald-500/10">승인</button>
                 <button type="button" onClick={() => rejectReq(r)} aria-label="거절" className="shrink-0 rounded-input border border-border-default px-2 py-1.5 text-2xs font-bold text-ink-muted hover:text-danger-light hover:border-danger/40">✕</button>
               </li>
             ))}
