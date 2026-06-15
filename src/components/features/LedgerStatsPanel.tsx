@@ -58,6 +58,7 @@ function StatsView({ venueId }: { venueId: string }) {
   const [aiTick, setAiTick] = useState(0); // AI 리포트 새로고침
   const [aiDays, setAiDays] = useState(7); // AI 리포트 분석 기간(일) — 7/30/90
   const [trendMetric, setTrendMetric] = useState<'revenue' | 'entries' | 'players'>('revenue'); // 추세 그래프 지표
+  const [trendDetail, setTrendDetail] = useState<string | null>(null); // 추세 막대 클릭 → 그날 상세
   const [liveTick, setLiveTick] = useState(0); // 장부 실시간 변경 반영(당일 통계)
 
   const range = useMemo<{ from: string; to: string }>(() => {
@@ -351,14 +352,15 @@ function StatsView({ venueId }: { venueId: string }) {
                     const barPx = total > 0 ? Math.round((total / max) * 88) + 4 : 2;
                     const sidePx = stacked && total > 0 ? Math.round((side / total) * barPx) : 0;
                     return (
-                      <div key={d.date} className="flex flex-col items-center gap-1 shrink-0 w-8"
+                      <button key={d.date} type="button" onClick={() => setTrendDetail(trendDetail === d.date ? null : d.date)}
+                        className={['flex flex-col items-center gap-1 shrink-0 w-8 rounded-sm cursor-pointer pt-0.5', trendDetail === d.date ? 'bg-gold-300/15 ring-1 ring-gold-400/50' : 'hover:bg-surface-high/50'].join(' ')}
                         title={`${d.date} · ${fmt(total)}${stacked && side > 0 ? ` (사이드 ${fmt(side)})` : ''}`}>
                         <div className="w-5 rounded-t-sm overflow-hidden flex flex-col-reverse bg-surface-high" style={{ height: barPx }}>
                           <div className="bg-emerald-500 flex-1" />
                           {stacked && <div className="bg-gold-300" style={{ height: sidePx }} />}
                         </div>
                         <span className="text-[8px] text-ink-muted tabular-nums leading-none">{d.date.slice(5).replace('-', '/')}</span>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -366,8 +368,24 @@ function StatsView({ venueId }: { venueId: string }) {
                   <div className="flex items-center gap-3 mt-1.5 text-[10px] text-ink-muted">
                     <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-sm bg-emerald-500" /> 메인</span>
                     <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-sm bg-gold-300" /> 사이드</span>
+                    <span className="text-ink-muted/70">· 막대 탭 = 그날 상세</span>
                   </div>
                 )}
+                {trendDetail && (() => {
+                  const d = m.trend.find((x) => x.date === trendDetail);
+                  if (!d) return null;
+                  const f1 = (n: number) => n.toFixed(n % 1 ? 1 : 0);
+                  return (
+                    <div className="mt-2 rounded-input border border-gold-400/30 bg-gold-300/[0.06] p-2.5">
+                      <p className="text-2xs font-bold text-gold-300 mb-1.5">{d.date} 상세</p>
+                      <div className="grid grid-cols-3 gap-1.5 text-center">
+                        <div><p className="text-[10px] text-ink-muted">엔트리</p><p className="text-sm font-bold text-ink-primary tabular-nums">{f1(d.mainE + d.sideE)}</p><p className="text-[9px] text-ink-muted">메인 {f1(d.mainE)} · 사이드 {f1(d.sideE)}</p></div>
+                        <div><p className="text-[10px] text-ink-muted">매출</p><p className="text-sm font-bold text-emerald-400 tabular-nums">{wonToMan(d.mainRev + d.sideRev)}만</p><p className="text-[9px] text-ink-muted">메인 {wonToMan(d.mainRev)} · 사이드 {wonToMan(d.sideRev)}</p></div>
+                        <div><p className="text-[10px] text-ink-muted">인원</p><p className="text-sm font-bold text-ink-primary tabular-nums">{d.players}명</p></div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </Section>
             );
           })()}
@@ -714,6 +732,29 @@ function buildAiReport(m: StatsAgg, days = 7): { empty: boolean; sales: string; 
 
 function AiReport({ m, days = 7, onRefresh }: { m: StatsAgg; days?: number; onRefresh: () => void }) {
   const rpt = useMemo(() => buildAiReport(m, days), [m, days]);
+  // 리포트 인쇄/PDF 저장 — 새 창에 렌더 후 인쇄(브라우저 'PDF로 저장'). 별도 의존성 없이 지류 양식과 동일 패턴.
+  const exportReport = () => {
+    if (rpt.empty) return;
+    const w = window.open('', '_blank', 'width=720,height=900');
+    if (!w) return;
+    const card = (t: string, b: string) => `<div class="c"><div class="t">${t}</div><div class="b">${b}</div></div>`;
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>NURI AI 주간 리포트</title><style>
+*{box-sizing:border-box;margin:0;font-family:'Apple SD Gothic Neo','Malgun Gothic',sans-serif}
+body{padding:32px;color:#1a1a1a;max-width:720px;margin:0 auto}
+h1{font-size:22px;font-weight:900}.sub{color:#777;font-size:12px;margin:4px 0 20px}
+.c{border:1px solid #e3e3e3;border-radius:10px;padding:14px 16px;margin-bottom:12px}
+.c .t{font-weight:800;font-size:14px;margin-bottom:6px;color:#6d28d9}.c .b{font-size:13px;line-height:1.7;color:#333;white-space:pre-line}
+@media print{body{padding:16px}}
+</style></head><body>
+<h1>✨ NURI AI 주간 리포트</h1><div class="sub">최근 ${days}일 누적 데이터 기반 인사이트 · nuriholdem.com</div>
+${card('매출 및 엔트리 분석', rpt.sales)}
+${card('리스크 & 누수 체크', rpt.risk)}
+${card('요일별 진단', rpt.weekday)}
+${card('AI 운영 액션 플랜', rpt.actions.map((a) => '• ' + a).join('\n'))}
+<script>window.onload=function(){setTimeout(function(){window.print();},250);};</script>
+</body></html>`);
+    w.document.close();
+  };
   return (
     <div className="rounded-card border border-violet-500/40 bg-gradient-to-br from-violet-500/[0.12] to-indigo-500/[0.04] p-3 space-y-3">
       <div className="flex items-start justify-between gap-2">
@@ -721,10 +762,13 @@ function AiReport({ m, days = 7, onRefresh }: { m: StatsAgg; days?: number; onRe
           <h4 className="text-sm font-bold text-violet-200">✨ NURI AI 주간 리포트</h4>
           <p className="text-2xs text-ink-muted mt-0.5">최근 {days}일간의 누적 데이터를 기반으로 분석된 비즈니스 인사이트입니다.</p>
         </div>
-        <button type="button" onClick={onRefresh}
-          className="shrink-0 inline-flex items-center gap-1 text-2xs font-semibold text-violet-200 bg-violet-500/15 border border-violet-500/40 rounded-input px-2.5 py-1.5 hover:bg-violet-500/25 transition-colors">
-          ✨ 새로고침
-        </button>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {!rpt.empty && <button type="button" onClick={exportReport} className="inline-flex items-center gap-1 text-2xs font-semibold text-ink-secondary bg-surface-high border border-border-default rounded-input px-2.5 py-1.5 hover:text-ink-primary transition-colors">📄 저장</button>}
+          <button type="button" onClick={onRefresh}
+            className="inline-flex items-center gap-1 text-2xs font-semibold text-violet-200 bg-violet-500/15 border border-violet-500/40 rounded-input px-2.5 py-1.5 hover:bg-violet-500/25 transition-colors">
+            ✨ 새로고침
+          </button>
+        </div>
       </div>
       {rpt.empty ? (
         <p className="text-center py-8 text-2xs text-ink-muted">최근 {days}일간 데이터가 부족합니다.<br />장부를 작성하면 인사이트가 표시됩니다.</p>

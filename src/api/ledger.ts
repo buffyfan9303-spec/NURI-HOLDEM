@@ -711,7 +711,7 @@ export async function venueTodayGames(venueId: string): Promise<{ gameSeq: numbe
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({ gameSeq: r.game_seq, title: r.title }));
 }
-export interface MyBuyinRequest { venueId: string; venueName: string; status: 'pending' | 'approved' | 'rejected'; requestedGameSeq: number | null; }
+export interface MyBuyinRequest { venueId: string; venueName: string; status: 'pending' | 'approved' | 'rejected'; requestedGameSeq: number | null; rejectReason: string | null; }
 /** 손님: 오늘 내가 보낸 바인 요청(매장명·상태) — 홈 배너용(RLS 본인 select). */
 export async function getMyBuyinRequestsToday(): Promise<MyBuyinRequest[]> {
   if (IS_MOCK) return [];
@@ -719,11 +719,11 @@ export async function getMyBuyinRequestsToday(): Promise<MyBuyinRequest[]> {
   if (!u.user) return [];
   const today = new Date().toLocaleDateString('en-CA');
   const { data, error } = await supabase.from('ledger_buyin_requests')
-    .select('venue_id, status, requested_game_seq, venues(name)')
+    .select('venue_id, status, requested_game_seq, resolve_note, venues(name)')
     .eq('user_id', u.user.id).eq('session_date', today).order('created_at', { ascending: false });
   if (error) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((r: any) => ({ venueId: r.venue_id, venueName: r.venues?.name ?? '매장', status: r.status, requestedGameSeq: r.requested_game_seq ?? null }));
+  return (data ?? []).map((r: any) => ({ venueId: r.venue_id, venueName: r.venues?.name ?? '매장', status: r.status, requestedGameSeq: r.requested_game_seq ?? null, rejectReason: r.resolve_note ?? null }));
 }
 /** 운영자: 그날 대기중(pending) 바인 요청 목록. */
 export async function getPendingBuyinRequests(venueId: string, date: string): Promise<BuyinRequest[]> {
@@ -736,15 +736,15 @@ export async function getPendingBuyinRequests(venueId: string, date: string): Pr
   return (data ?? []).map((r: any) => ({ id: r.id, venueId: r.venue_id, sessionDate: r.session_date, playerName: r.player_name, userId: r.user_id, note: r.note ?? null, status: r.status, createdAt: r.created_at, requestedGameSeq: r.requested_game_seq ?? null }));
 }
 /** 운영자: 요청 승인 → 해당 게임(gameSeq) 명단에 추가 + 요청 approved. */
-export async function approveBuyinRequest(id: string, gameSeq = MAIN_GAME_SEQ, recordBuyin = false, payMethod: 'cash' | 'card' | 'transfer' = 'cash'): Promise<void> {
+export async function approveBuyinRequest(id: string, gameSeq = MAIN_GAME_SEQ, recordBuyin = false, payMethod: 'cash' | 'card' | 'transfer' = 'cash', split?: { cash: number; card: number; transfer: number }): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.rpc('approve_buyin_request', { p_request_id: id, p_game_seq: gameSeq, p_record_buyin: recordBuyin, p_pay_method: payMethod });
+  const { error } = await supabase.rpc('approve_buyin_request', { p_request_id: id, p_game_seq: gameSeq, p_record_buyin: recordBuyin, p_pay_method: payMethod, p_split: !!split, p_cash: split?.cash ?? 0, p_card: split?.card ?? 0, p_transfer: split?.transfer ?? 0 });
   if (error) throw new Error(error.message);
 }
 /** 운영자: 요청 거절. */
-export async function rejectBuyinRequest(id: string): Promise<void> {
+export async function rejectBuyinRequest(id: string, reason?: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.rpc('reject_buyin_request', { p_request_id: id });
+  const { error } = await supabase.rpc('reject_buyin_request', { p_request_id: id, p_reason: reason ?? null });
   if (error) throw new Error(error.message);
 }
 /** 바인 요청 실시간 구독(매장별). */

@@ -15,6 +15,8 @@ import type { Comment } from '../../api/community';
 import { generateBlinds } from '../../api/clock';
 import { promptLogin, openPostForm } from '../../lib/requireLogin';
 import { googleCalendarUrl } from '../../lib/calendar';
+import QRCode from 'qrcode';
+import { requestBuyin, buyinRequestUrl } from '../../api/ledger';
 
 interface ScheduleDetailModalProps {
   schedule: Schedule | null;
@@ -264,6 +266,9 @@ export default function ScheduleDetailModal({
 
         {/* 예약하기 (첫 페이지) */}
         <ReserveBox scheduleId={schedule.id} ownerId={schedule.ownerId} venueId={schedule.venueId} />
+
+        {/* 현장 바인(참가) 요청 — QR + 버튼(운영자 승인 → 장부 명단 자동 등록) */}
+        {schedule.venueId && <BuyinRequestBox venueId={schedule.venueId} />}
 
         {/* 캘린더 등록 · 공유 — 참가 결심 직후 동선 */}
         <CalendarShareRow schedule={schedule} />
@@ -557,6 +562,33 @@ function CalendarShareRow({ schedule }: { schedule: Schedule }) {
 }
 
 // ── 예약하기 박스 ─────────────────────────────────────────────────────────────
+// 포스터 하단 — 현장 바인(참가) 요청. QR(다른 기기 스캔용) + 버튼(앱 내 회원 직접 요청).
+function BuyinRequestBox({ venueId }: { venueId: string }) {
+  const { user } = useAuth();
+  const toast = useToast();
+  const [qr, setQr] = useState('');
+  const [sending, setSending] = useState(false);
+  useEffect(() => { QRCode.toDataURL(buyinRequestUrl(venueId), { width: 200, margin: 1 }).then(setQr).catch(() => {}); }, [venueId]);
+  const send = () => {
+    if (!user) { promptLogin(); return; }
+    setSending(true);
+    requestBuyin(venueId)
+      .then((name) => toast.show(`${name || '매장'} 참가(바인) 요청 전송! 운영자 승인을 기다려 주세요 🙋`, 'success'))
+      .catch((e) => toast.show(e instanceof Error ? e.message : '요청 전송 실패', 'error'))
+      .finally(() => setSending(false));
+  };
+  return (
+    <div className="flex items-center gap-3 rounded-card border border-sky-500/30 bg-sky-500/[0.05] p-3">
+      {qr && <img src={qr} alt="바인 요청 QR" width={72} height={72} className="shrink-0 rounded bg-white p-1" />}
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-bold text-ink-primary">🙋 현장 바인(참가) 요청</p>
+        <p className="mt-0.5 text-2xs leading-relaxed text-ink-muted">QR 스캔 또는 버튼으로 운영자에게 참가를 요청하세요. 승인되면 장부 명단에 자동 등록됩니다.</p>
+        <button type="button" onClick={send} disabled={sending} className="btn-primary mt-1.5 px-3 py-1.5 text-xs disabled:opacity-50">{sending ? '전송 중…' : '🙋 바인 요청 보내기'}</button>
+      </div>
+    </div>
+  );
+}
+
 function ReserveBox({ scheduleId, ownerId, venueId }: { scheduleId: string; ownerId?: string | null; venueId?: string | null }) {
   const { user } = useAuth();
   const toast = useToast();

@@ -1516,7 +1516,7 @@ export default function App() {
                 <div key={r.venueId} className={['flex items-center gap-2 rounded-card border px-3 py-2 text-xs',
                   r.status === 'approved' ? 'border-emerald-500/40 bg-emerald-500/[0.07]' : r.status === 'rejected' ? 'border-border-default bg-surface-low' : 'border-sky-500/40 bg-sky-500/[0.07]'].join(' ')}>
                   <span className="shrink-0" aria-hidden>{r.status === 'approved' ? '✅' : r.status === 'rejected' ? '❌' : '⏳'}</span>
-                  <span className="min-w-0 flex-1 truncate text-ink-secondary"><b className="text-ink-primary">{r.venueName}</b> 바인 요청 {r.status === 'approved' ? '승인됨 — 입장하세요!' : r.status === 'rejected' ? '거절됨' : '대기중'}</span>
+                  <span className="min-w-0 flex-1 truncate text-ink-secondary"><b className="text-ink-primary">{r.venueName}</b> 바인 요청 {r.status === 'approved' ? '승인됨 — 입장하세요!' : r.status === 'rejected' ? `거절됨${r.rejectReason ? ` — ${r.rejectReason}` : ''}` : '대기중'}</span>
                 </div>
               ))}
             </div>
