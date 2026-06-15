@@ -5,7 +5,10 @@ const CACHE = 'nuri-shell-v1';
 // 캐시 대상: Vite 해시 자산(/assets, 불변) + 아이콘 + 이미지/폰트(같은 출처). HTML·API는 캐시 안 함(항상 최신).
 const CACHEABLE = /\/(assets|icon|favicon|nuri-logo|2)\b|\.(?:png|jpg|jpeg|svg|webp|gif|woff2?)$/i;
 
-self.addEventListener('install', () => { self.skipWaiting(); });
+self.addEventListener('install', (event) => {
+  // 오프라인 폴백 페이지 미리 캐시
+  event.waitUntil(caches.open(CACHE).then((c) => c.add('/offline.html')).catch(() => {}).then(() => self.skipWaiting()));
+});
 
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
@@ -20,9 +23,17 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
   let url;
   try { url = new URL(req.url); } catch (e) { return; }
-  // 외부(Supabase API·GA·AdSense 등)와 HTML 문서는 건드리지 않음 → 항상 네트워크(최신 보장, 스테일 방지)
+  // 외부(Supabase API·GA·AdSense 등)는 건드리지 않음 → 항상 네트워크
   if (url.origin !== self.location.origin) return;
-  if (req.mode === 'navigate' || !CACHEABLE.test(url.pathname)) return;
+  // 네비게이션(HTML): 네트워크 우선(최신 보장) → 오프라인이면 폴백 페이지
+  if (req.mode === 'navigate') {
+    event.respondWith((async () => {
+      try { return await fetch(req); }
+      catch (e) { return (await caches.match('/offline.html')) || Response.error(); }
+    })());
+    return;
+  }
+  if (!CACHEABLE.test(url.pathname)) return;
   // 해시 자산·아이콘·이미지: 캐시 우선(불변) → 재방문 즉시 로드, 오프라인에도 표시
   event.respondWith((async () => {
     const cached = await caches.match(req);

@@ -36,6 +36,8 @@ interface PostFormModalProps {
   onSubmit: (data: PostFormData) => Promise<void> | void;
   /** 열릴 때 기본 선택 카테고리 ('홀덤 공부' 탭 진입 시 'study') */
   defaultCategory?: PostCategory;
+  /** 열릴 때 본문 프리필(공유 타깃 — 다른 앱에서 공유받은 텍스트/링크) */
+  defaultContent?: string;
 }
 
 const CATEGORY_OPTIONS: { id: PostCategory; label: string }[] = [
@@ -51,7 +53,7 @@ const CATEGORY_OPTIONS: { id: PostCategory; label: string }[] = [
 const MAX_IMAGES = 4;
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 
-export default function PostFormModal({ open, onClose, onSubmit, defaultCategory }: PostFormModalProps) {
+export default function PostFormModal({ open, onClose, onSubmit, defaultCategory, defaultContent }: PostFormModalProps) {
   const { user } = useAuth();
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -75,12 +77,12 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
   // 모달 열릴 때 초기화 + 닫힐 때 objectURL 해제
   useEffect(() => {
     if (open) {
-      setCategory(defaultCategory ?? 'free'); setTitle(''); setContent('');
+      setCategory(defaultCategory ?? 'free'); setTitle(''); setContent(defaultContent ?? '');
       setFiles([]); setPreviews([]); setSaving(false);
       setShowHand(false); setHero([]); setVillain([]); setBoard([]); setHandTarget('hero');
       setPot(''); setActs({ pre: '', flop: '', turn: '', river: '' });
     }
-  }, [open, defaultCategory]);
+  }, [open, defaultCategory, defaultContent]);
 
   const usedIds = new Set<string>([...hero, ...villain, ...board]);
   const handlePickCard = (card: Card) => {

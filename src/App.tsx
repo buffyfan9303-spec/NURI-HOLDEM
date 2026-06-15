@@ -46,6 +46,7 @@ import {
   getMyFollowedVenueIds,
 } from './api/community';
 import { getListings, getNotices, createNotice, updateNotice, deleteNotice, createListing, deleteListing } from './api/marketplace';
+import { enablePush, isPushSubscribed, pushSupported } from './api/push';
 import type { NoticeFormData } from './components/features/NoticeFormModal';
 import type { LegalDoc } from './components/features/LegalDocsModal';
 import { getMyNotifications, markNotificationsRead } from './api/notifications';
@@ -634,6 +635,8 @@ export default function App() {
   const [myStoreDeep, setMyStoreDeep] = useState<'ledger' | null>(null);
   const [buyinPick, setBuyinPick] = useState<{ venueId: string; games: { gameSeq: number; title: string }[] } | null>(null); // 바인요청 게임 선택
   const [myBuyinReqs, setMyBuyinReqs] = useState<MyBuyinRequest[]>([]); // 손님 본인 오늘 바인요청(상태 배너)
+  const [updateReady, setUpdateReady] = useState(false); // 새 버전(SW) 감지 → 새로고침 배너
+  const [pushNudge, setPushNudge] = useState(false); // 운영자 푸시 권한 온보딩 배너(설치형·1회)
   // 시작 탭 — PWA 바로가기(?tab=)·딥링크 지원(앱 아이콘 길게 누르기 메뉴)
   const [activeTab, setActiveTab]     = useState<TabId>(() => {
     try {
@@ -657,6 +660,25 @@ export default function App() {
   // keep-alive: 한 번 방문한 핵심 탭은 언마운트하지 않고 display만 끈다 — 재방문 시 로드·마운트 비용 0(끊김 제거)
   const [visitedTabs] = useState(() => new Set<TabId>(['browse']));
   useEffect(() => { visitedTabs.add(activeTab); }, [activeTab, visitedTabs]);
+
+  // 새 버전(배포) 감지(main.tsx의 SW updatefound) → 새로고침 배너
+  useEffect(() => {
+    const onUpd = () => setUpdateReady(true);
+    window.addEventListener('nuri:sw-update', onUpd);
+    return () => window.removeEventListener('nuri:sw-update', onUpd);
+  }, []);
+  // 운영자 푸시 온보딩 — 설치형(앱)에서 운영자가 알림 미설정 시 1회 안내(새 바인요청 푸시)
+  useEffect(() => {
+    if (!(isOwner || isAdmin || user?.role === 'venue_staff') || !pushSupported()) return;
+    try { if (localStorage.getItem('nuri:push-nudge-dismissed') === '1') return; } catch { /* noop */ }
+    if (!window.matchMedia('(display-mode: standalone)').matches) return; // 설치형에서만
+    isPushSubscribed().then((sub) => { if (!sub) setPushNudge(true); }).catch(() => {});
+  }, [user, isOwner, isAdmin]);
+  const doEnablePush = async () => {
+    try { await enablePush(); setPushNudge(false); toast.show('알림을 켰습니다 — 새 바인요청을 폰으로 받습니다', 'success'); }
+    catch (e) { toast.show(e instanceof Error ? e.message : '알림 설정 실패', 'error'); }
+  };
+  const dismissPushNudge = () => { setPushNudge(false); try { localStorage.setItem('nuri:push-nudge-dismissed', '1'); } catch { /* noop */ } };
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -817,6 +839,20 @@ export default function App() {
   const [editingNotice, setEditingNotice] = useState<MarketplaceNotice | null>(null); // 있으면 공지 수정 모드
   const [postFormOpen, setPostFormOpen]     = useState(false);   // 커뮤니티 글쓰기
   const [postFormCategory, setPostFormCategory] = useState<PostCategory>('free'); // 글쓰기 기본 카테고리(공부 탭=study)
+  const [shareText, setShareText] = useState(''); // 공유 타깃(share_target) 프리필 본문
+  // PWA 공유 타깃 — 다른 앱에서 NURI로 공유하면 ?text/url을 받아 커뮤니티 글쓰기 프리필
+  useEffect(() => {
+    try {
+      const sp = new URLSearchParams(window.location.search);
+      if (!sp.has('shared')) return;
+      const parts = [sp.get('title'), sp.get('text'), sp.get('url')].filter(Boolean);
+      setShareText(parts.join('\n'));
+      setPostFormCategory('free'); setPostFormOpen(true);
+      const url = new URL(window.location.href);
+      ['shared', 'title', 'text', 'url'].forEach((k) => url.searchParams.delete(k));
+      history.replaceState(null, '', url.pathname + url.search);
+    } catch { /* noop */ }
+  }, []);
   const [marketFormOpen, setMarketFormOpen] = useState(false);   // 중고장터 글쓰기
 
   // GTO 공유 링크(#gto=...) 진입 — 받은 사람이 열면 같은 스팟으로 GTO 검색 모달 표시
@@ -1436,6 +1472,23 @@ export default function App() {
         suppressed={openVenueId !== null}
       />
 
+      {/* 🔄 새 버전 배너 — 배포 감지 시 새로고침 유도(앱이 멈춰 보이지 않게) */}
+      {updateReady && (
+        <button type="button" onClick={() => location.reload()}
+          className="flex w-full items-center justify-center gap-2 bg-gold-300 px-3 py-2 text-xs font-bold text-ink-inverse active:opacity-80">
+          🔄 새 버전이 있어요 — 탭하여 새로고침
+        </button>
+      )}
+      {/* 🔔 운영자 푸시 온보딩(설치형·1회) — 새 바인요청 폰 알림 */}
+      {pushNudge && (
+        <div className="flex items-center gap-2 border-b border-gold-400/30 bg-gold-300/[0.08] px-3 py-2.5">
+          <span className="text-lg" aria-hidden>🔔</span>
+          <p className="min-w-0 flex-1 text-2xs leading-snug text-ink-secondary">새 <b className="text-gold-300">바인요청</b>을 폰 알림으로 받으세요 — 게임 중에도 놓치지 않아요.</p>
+          <button type="button" onClick={doEnablePush} className="btn-primary shrink-0 px-3 py-1.5 text-2xs">알림 켜기</button>
+          <button type="button" onClick={dismissPushNudge} aria-label="닫기" className="shrink-0 px-1 text-ink-muted hover:text-ink-secondary">✕</button>
+        </div>
+      )}
+
       {/* 본인인증 유도 배너 (미인증·PortOne 설정 시) */}
       {user && !user.verified && PORTONE_CONFIGURED && (
         <button type="button" onClick={() => setProfileOpen(true)}
@@ -1912,6 +1965,7 @@ export default function App() {
         onClose={() => setPostFormOpen(false)}
         onSubmit={handleCreatePost}
         defaultCategory={postFormCategory}
+        defaultContent={shareText}
       />
       )}
 

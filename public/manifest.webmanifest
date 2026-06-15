@@ -23,6 +23,12 @@
     { "name": "일정 탐색", "short_name": "일정", "url": "/?tab=browse", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
     { "name": "라이브", "short_name": "라이브", "url": "/?tab=live", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
     { "name": "커뮤니티", "short_name": "커뮤니티", "url": "/?tab=community", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
-    { "name": "중고장터", "short_name": "장터", "url": "/?tab=market", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
-  ]
+    { "name": "중고장터", "short_name": "장터", "url": "/?tab=market", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "내 매장", "short_name": "내 매장", "url": "/?tab=my-store", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
+  ],
+  "share_target": {
+    "action": "/?tab=community&shared=1",
+    "method": "GET",
+    "params": { "title": "title", "text": "text", "url": "url" }
+  }
 }
