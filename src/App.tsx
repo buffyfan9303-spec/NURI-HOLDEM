@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, useTransition, Suspense, type ReactNode } from 'react';
 import { useToast } from './components/atoms/Toast';
 import { checkIn, getMyCheckinStreak } from './api/checkins';
-import { requestBuyin, venueTodayGames, getMyBuyinRequestsToday, type MyBuyinRequest } from './api/ledger';
+import { requestBuyin, venueTodayGames, getMyBuyinRequestsToday, subscribeMyBuyinRequests, type MyBuyinRequest } from './api/ledger';
 import UnreadBadge from './components/atoms/UnreadBadge';
 import ViewModeToggle from './components/atoms/ViewModeToggle';
 import type { ViewMode } from './components/atoms/ViewModeToggle';
@@ -719,7 +719,8 @@ export default function App() {
     const load = () => getMyBuyinRequestsToday().then(setMyBuyinReqs).catch(() => {});
     load();
     window.addEventListener('focus', load);
-    return () => window.removeEventListener('focus', load);
+    const unsub = subscribeMyBuyinRequests(user.id, load); // 운영자 승인/거절 즉시 반영
+    return () => { window.removeEventListener('focus', load); unsub(); };
   }, [user]);
 
   // ── QR 회원가입 (?signup=1) — 매장 QR 옆 가입 QR 스캔 시 회원가입 모달 바로 열기 ──

@@ -736,9 +736,9 @@ export async function getPendingBuyinRequests(venueId: string, date: string): Pr
   return (data ?? []).map((r: any) => ({ id: r.id, venueId: r.venue_id, sessionDate: r.session_date, playerName: r.player_name, userId: r.user_id, note: r.note ?? null, status: r.status, createdAt: r.created_at, requestedGameSeq: r.requested_game_seq ?? null }));
 }
 /** 운영자: 요청 승인 → 해당 게임(gameSeq) 명단에 추가 + 요청 approved. */
-export async function approveBuyinRequest(id: string, gameSeq = MAIN_GAME_SEQ, recordBuyin = false): Promise<void> {
+export async function approveBuyinRequest(id: string, gameSeq = MAIN_GAME_SEQ, recordBuyin = false, payMethod: 'cash' | 'card' | 'transfer' = 'cash'): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.rpc('approve_buyin_request', { p_request_id: id, p_game_seq: gameSeq, p_record_buyin: recordBuyin });
+  const { error } = await supabase.rpc('approve_buyin_request', { p_request_id: id, p_game_seq: gameSeq, p_record_buyin: recordBuyin, p_pay_method: payMethod });
   if (error) throw new Error(error.message);
 }
 /** 운영자: 요청 거절. */
@@ -752,6 +752,14 @@ export function subscribeBuyinRequests(venueId: string, cb: () => void): () => v
   if (IS_MOCK) return () => {};
   const ch = supabase.channel(`buyin_req:${venueId}:${Math.random().toString(36).slice(2)}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'ledger_buyin_requests', filter: `venue_id=eq.${venueId}` }, () => cb())
+    .subscribe();
+  return () => { supabase.removeChannel(ch); };
+}
+/** 손님 본인 바인요청 실시간 구독 — 운영자 승인/거절 즉시 반영(홈 배너). */
+export function subscribeMyBuyinRequests(userId: string, cb: () => void): () => void {
+  if (IS_MOCK) return () => {};
+  const ch = supabase.channel(`my_buyin_req:${userId}:${Math.random().toString(36).slice(2)}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'ledger_buyin_requests', filter: `user_id=eq.${userId}` }, () => cb())
     .subscribe();
   return () => { supabase.removeChannel(ch); };
 }

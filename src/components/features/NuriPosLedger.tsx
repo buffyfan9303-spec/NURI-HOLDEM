@@ -96,6 +96,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const [buyins, setBuyins]   = useState<LedgerBuyin[]>([]);
   const [players, setPlayers] = useState<LedgerPlayer[]>([]);
   const [pendingReqs, setPendingReqs] = useState<BuyinRequest[]>([]); // 손님 자가 바인요청(대기)
+  const [payPick, setPayPick] = useState<string | null>(null); // 승인+바인 결제수단 선택 중인 요청 id
   const [gameSeq, setGameSeq] = useState(MAIN_GAME_SEQ);   // 현재 보고있는 게임(1=메인, 2+=사이드)
   const [games, setGames]     = useState<LedgerGame[]>([]); // 그 날짜의 게임 목록(스위처용)
   const [loading, setLoading] = useState(true);
@@ -221,8 +222,8 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   // 손님 자가 바인요청(QR) — 그날 매장 단위 대기목록 로드 + 실시간. 승인 시 현재 게임(gameSeq) 명단에 추가.
   const loadPending = useCallback(() => { getPendingBuyinRequests(venueId, date).then(setPendingReqs).catch(() => setPendingReqs([])); }, [venueId, date]);
   useEffect(() => { loadPending(); return subscribeBuyinRequests(venueId, loadPending); }, [venueId, loadPending]);
-  const approveReq = (r: BuyinRequest, withBuyin = false) => approveBuyinRequest(r.id, gameSeq, withBuyin)
-    .then(() => { toast.show(`${r.playerName} 승인 — ${gameSeq === MAIN_GAME_SEQ ? '메인' : '사이드' + (gameSeq - 1)} 명단 추가${withBuyin ? ' + 현금 바인 기록' : ''}`, 'success'); loadPending(); })
+  const approveReq = (r: BuyinRequest, withBuyin = false, payMethod: 'cash' | 'card' | 'transfer' = 'cash') => approveBuyinRequest(r.id, gameSeq, withBuyin, payMethod)
+    .then(() => { setPayPick(null); toast.show(`${r.playerName} 승인 — ${gameSeq === MAIN_GAME_SEQ ? '메인' : '사이드' + (gameSeq - 1)} 명단 추가${withBuyin ? ` + ${payMethod === 'card' ? '카드' : payMethod === 'transfer' ? '이체' : '현금'} 바인 기록` : ''}`, 'success'); loadPending(); })
     .catch((e) => toast.show(e instanceof Error ? e.message : '승인 실패', 'error'));
   const rejectReq = (r: BuyinRequest) => rejectBuyinRequest(r.id)
     .then(() => loadPending())
@@ -653,16 +654,26 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
           </div>
           <ul className="space-y-1.5">
             {pendingReqs.map((r) => (
-              <li key={r.id} className="flex items-center gap-1.5 rounded-input bg-surface-base/60 border border-border-subtle px-2.5 py-1.5">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-bold text-ink-primary truncate">{r.playerName}
-                    {r.requestedGameSeq != null && <span className="ml-1.5 text-[10px] font-semibold text-sky-300">원함: {r.requestedGameSeq === MAIN_GAME_SEQ ? '메인' : '사이드' + (r.requestedGameSeq - 1)}</span>}
-                  </p>
-                  {r.note && <p className="text-2xs text-ink-muted truncate">{r.note}</p>}
+              <li key={r.id} className="rounded-input bg-surface-base/60 border border-border-subtle px-2.5 py-1.5">
+                <div className="flex items-center gap-1.5">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold text-ink-primary truncate">{r.playerName}
+                      {r.requestedGameSeq != null && <span className="ml-1.5 text-[10px] font-semibold text-sky-300">원함: {r.requestedGameSeq === MAIN_GAME_SEQ ? '메인' : '사이드' + (r.requestedGameSeq - 1)}</span>}
+                    </p>
+                    {r.note && <p className="text-2xs text-ink-muted truncate">{r.note}</p>}
+                  </div>
+                  <button type="button" onClick={() => setPayPick(payPick === r.id ? null : r.id)} title="승인 + 바인 1건 기록(결제수단 선택)" className={['shrink-0 rounded-input px-2 py-1.5 text-2xs font-bold', payPick === r.id ? 'bg-emerald-600 text-ink-inverse' : 'bg-emerald-500/90 text-ink-inverse hover:bg-emerald-500'].join(' ')}>✓+💵</button>
+                  <button type="button" onClick={() => approveReq(r)} title="승인만(명단 추가)" className="shrink-0 rounded-input border border-emerald-500/50 px-2 py-1.5 text-2xs font-bold text-emerald-300 hover:bg-emerald-500/10">승인</button>
+                  <button type="button" onClick={() => rejectReq(r)} aria-label="거절" className="shrink-0 rounded-input border border-border-default px-2 py-1.5 text-2xs font-bold text-ink-muted hover:text-danger-light hover:border-danger/40">✕</button>
                 </div>
-                <button type="button" onClick={() => approveReq(r, true)} title="승인 + 현금 바인 1건 자동 기록" className="shrink-0 rounded-input bg-emerald-500/90 px-2 py-1.5 text-2xs font-bold text-ink-inverse hover:bg-emerald-500">✓+💵</button>
-                <button type="button" onClick={() => approveReq(r)} title="승인만(명단 추가)" className="shrink-0 rounded-input border border-emerald-500/50 px-2 py-1.5 text-2xs font-bold text-emerald-300 hover:bg-emerald-500/10">승인</button>
-                <button type="button" onClick={() => rejectReq(r)} aria-label="거절" className="shrink-0 rounded-input border border-border-default px-2 py-1.5 text-2xs font-bold text-ink-muted hover:text-danger-light hover:border-danger/40">✕</button>
+                {payPick === r.id && (
+                  <div className="mt-1.5 flex items-center gap-1.5 border-t border-border-subtle pt-1.5">
+                    <span className="shrink-0 text-[10px] text-ink-muted">바인 결제수단</span>
+                    {([['cash', '현금'], ['card', '카드'], ['transfer', '이체']] as const).map(([mth, lbl]) => (
+                      <button key={mth} type="button" onClick={() => approveReq(r, true, mth)} className="flex-1 rounded-input border border-emerald-500/50 px-2 py-1.5 text-2xs font-bold text-emerald-300 hover:bg-emerald-500/15">{lbl}</button>
+                    ))}
+                  </div>
+                )}
               </li>
             ))}
           </ul>
