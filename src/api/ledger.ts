@@ -711,7 +711,7 @@ export async function venueTodayGames(venueId: string): Promise<{ gameSeq: numbe
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({ gameSeq: r.game_seq, title: r.title }));
 }
-export interface MyBuyinRequest { id: string; venueId: string; venueName: string; status: 'pending' | 'approved' | 'rejected'; requestedGameSeq: number | null; rejectReason: string | null; }
+export interface MyBuyinRequest { id: string; venueId: string; venueName: string; status: 'pending' | 'approved' | 'rejected'; requestedGameSeq: number | null; gameSeq: number | null; rejectReason: string | null; }
 /** 손님: 오늘 내가 보낸 바인 요청(매장명·상태) — 홈 배너용(RLS 본인 select). */
 export async function getMyBuyinRequestsToday(): Promise<MyBuyinRequest[]> {
   if (IS_MOCK) return [];
@@ -719,11 +719,11 @@ export async function getMyBuyinRequestsToday(): Promise<MyBuyinRequest[]> {
   if (!u.user) return [];
   const today = new Date().toLocaleDateString('en-CA');
   const { data, error } = await supabase.from('ledger_buyin_requests')
-    .select('id, venue_id, status, requested_game_seq, resolve_note, venues(name)')
+    .select('id, venue_id, status, requested_game_seq, game_seq, resolve_note, venues(name)')
     .eq('user_id', u.user.id).eq('session_date', today).order('created_at', { ascending: false });
   if (error) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((r: any) => ({ id: r.id, venueId: r.venue_id, venueName: r.venues?.name ?? '매장', status: r.status, requestedGameSeq: r.requested_game_seq ?? null, rejectReason: r.resolve_note ?? null }));
+  return (data ?? []).map((r: any) => ({ id: r.id, venueId: r.venue_id, venueName: r.venues?.name ?? '매장', status: r.status, requestedGameSeq: r.requested_game_seq ?? null, gameSeq: r.game_seq ?? null, rejectReason: r.resolve_note ?? null }));
 }
 /** 운영자: 그날 대기중(pending) 바인 요청 목록. */
 export async function getPendingBuyinRequests(venueId: string, date: string): Promise<BuyinRequest[]> {

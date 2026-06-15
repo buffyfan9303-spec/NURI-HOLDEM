@@ -1512,11 +1512,12 @@ export default function App() {
           {/* 손님: 오늘 내 바인(참가) 요청 상태 배너 */}
           {myBuyinReqs.length > 0 && (
             <div className="px-page-x pt-3 space-y-1.5">
+              <p className="px-1 text-2xs font-bold text-ink-secondary">🎮 내 참가 게임 · 바인 요청</p>
               {myBuyinReqs.map((r) => (
                 <div key={r.id} className={['flex items-center gap-2 rounded-card border px-3 py-2 text-xs',
                   r.status === 'approved' ? 'border-emerald-500/40 bg-emerald-500/[0.07]' : r.status === 'rejected' ? 'border-border-default bg-surface-low' : 'border-sky-500/40 bg-sky-500/[0.07]'].join(' ')}>
                   <span className="shrink-0" aria-hidden>{r.status === 'approved' ? '✅' : r.status === 'rejected' ? '❌' : '⏳'}</span>
-                  <span className="min-w-0 flex-1 truncate text-ink-secondary"><b className="text-ink-primary">{r.venueName}</b> 바인 요청 {r.status === 'approved' ? '승인됨 — 입장하세요!' : r.status === 'rejected' ? `거절됨${r.rejectReason ? ` — ${r.rejectReason}` : ''}` : '대기중'}</span>
+                  <span className="min-w-0 flex-1 truncate text-ink-secondary"><b className="text-ink-primary">{r.venueName}</b>{(() => { const n = r.status === 'approved' ? r.gameSeq : r.requestedGameSeq; return n != null ? ` · ${n === 1 ? '메인' : '사이드' + (n - 1)}` : ''; })()} {r.status === 'approved' ? '참가 승인 — 입장하세요! 🎉' : r.status === 'rejected' ? `요청 거절됨${r.rejectReason ? ` — ${r.rejectReason}` : ''}` : '바인 요청 대기중'}</span>
                   {r.status === 'pending' && <button type="button" onClick={() => cancelBuyinRequest(r.id).then(() => getMyBuyinRequestsToday().then(setMyBuyinReqs)).catch((e) => toast.show(e instanceof Error ? e.message : '취소 실패', 'error'))} className="shrink-0 rounded-input border border-border-default px-2 py-1 text-2xs font-bold text-ink-muted hover:text-danger-light hover:border-danger/40">취소</button>}
                 </div>
               ))}

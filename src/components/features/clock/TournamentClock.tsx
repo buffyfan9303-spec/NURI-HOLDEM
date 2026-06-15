@@ -135,8 +135,12 @@ export default function TournamentClock({ venueId, canManage, seedSessionDate, s
 
   const endClock = async () => {
     if (!confirm('클락을 종료하고 초기화할까요?')) return;
-    try { await clearClockState(venueId, state?.gameSeq ?? curGameSeqRef.current); setState(null); setView('settings'); toast.show('클락을 종료했습니다', 'info'); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '종료 실패', 'error'); }
+    const ended = state?.gameSeq ?? curGameSeqRef.current;
+    try {
+      await clearClockState(venueId, ended);
+      if (ended > 1) { toast.show('사이드 클락 종료 — 메인 클락으로 이동', 'info'); switchGame(1); } // 빈 슬롯 정돈: 메인으로 복귀
+      else { setState(null); setView('settings'); toast.show('클락을 종료했습니다', 'info'); }
+    } catch (e) { toast.show(e instanceof Error ? e.message : '종료 실패', 'error'); }
   };
   // 멀티 클락 오버뷰에서 다른 게임 탭 → 그 게임 클락으로 전환
   const switchGame = useCallback((g: number) => {
@@ -155,13 +159,18 @@ export default function TournamentClock({ venueId, canManage, seedSessionDate, s
     }
     switchGame(nextSeq);
   }, [venueId, switchGame, toast]);
+  // 빈 슬롯 1탭 시작 — 메인(또는 현재) 클락 설정을 복사해 그 게임 클락을 오늘 장부에 연동하여 바로 시작
+  const quickStart = async (g: number) => {
+    const main = await getClockState(venueId, 1).catch(() => null);
+    await startClock(main?.config ?? state?.config ?? defaultClockConfig(), new Date().toLocaleDateString('en-CA'), g);
+  };
 
   if (loading) return <p className="py-10 text-center text-sm text-ink-muted">클락 불러오는 중…</p>;
 
   if (view === 'settings' || !state) {
     return (
       <div className="space-y-2">
-        <MultiClockOverview venueId={venueId} sessionDate={seedSessionDate} currentGameSeq={curGameSeqRef.current} active={active} onSwitch={switchGame} onAddSide={addSide} />
+        <MultiClockOverview venueId={venueId} sessionDate={seedSessionDate} currentGameSeq={curGameSeqRef.current} active={active} onSwitch={switchGame} onAddSide={addSide} onQuickStart={quickStart} />
         <ClockSettings
           key={`${state?.venueId ?? 'new'}-${seedSession?.title ?? ''}-${seedSessionDate ?? ''}`}
           venueId={venueId} canManage={canManage} presets={presets} sessions={sessions} initial={seededInitial}
@@ -176,7 +185,7 @@ export default function TournamentClock({ venueId, canManage, seedSessionDate, s
 
   return (
     <div className="space-y-2">
-      <MultiClockOverview venueId={venueId} sessionDate={state.sessionDate} currentGameSeq={state.gameSeq} active={active} onSwitch={switchGame} onAddSide={addSide} />
+      <MultiClockOverview venueId={venueId} sessionDate={state.sessionDate} currentGameSeq={state.gameSeq} active={active} onSwitch={switchGame} onAddSide={addSide} onQuickStart={quickStart} />
       <ClockLive
         state={state} canManage={canManage} active={active}
         onChange={(s) => setState(s)}
@@ -188,7 +197,7 @@ export default function TournamentClock({ venueId, canManage, seedSessionDate, s
 }
 
 // ── 멀티 클락 오버뷰 — 매장 게임별 클락(메인+사이드N) 한눈에 + 탭 전환 + 사이드 클락 추가 ──
-function MultiClockOverview({ venueId, sessionDate, currentGameSeq, active = true, onSwitch, onAddSide }: { venueId: string; sessionDate?: string | null; currentGameSeq: number; active?: boolean; onSwitch: (g: number) => void; onAddSide: (g: number) => void }) {
+function MultiClockOverview({ venueId, sessionDate, currentGameSeq, active = true, onSwitch, onAddSide, onQuickStart }: { venueId: string; sessionDate?: string | null; currentGameSeq: number; active?: boolean; onSwitch: (g: number) => void; onAddSide: (g: number) => void; onQuickStart: (g: number) => void }) {
   const [clocks, setClocks] = useState<ClockState[]>([]);
   const [games, setGames] = useState<{ gameSeq: number; title?: string }[]>([]);
   const [, setTick] = useState(0);
@@ -215,10 +224,11 @@ function MultiClockOverview({ venueId, sessionDate, currentGameSeq, active = tru
           const on = g === currentGameSeq;
           const base = ['rounded-input border p-1.5 text-left transition-colors', on ? 'border-gold-400/60 bg-gold-300/15' : 'border-border-subtle bg-surface-base hover:bg-surface-high'].join(' ');
           if (!c) {
+            const gt = games.find((x) => x.gameSeq === g)?.title;
             return (
-              <button key={g} type="button" onClick={() => onSwitch(g)} className={base}>
-                <div className="flex items-center justify-between gap-1"><span className="truncate text-2xs font-bold text-ink-primary">{label(g)}{on ? ' ●' : ''}</span><span className="text-[9px] font-bold text-ink-muted">시작 전</span></div>
-                <p className="mt-0.5 text-[10px] text-ink-muted truncate">{games.find((x) => x.gameSeq === g)?.title || '탭하여 클락 시작'}</p>
+              <button key={g} type="button" onClick={() => onQuickStart(g)} title="메인 설정 복사해 바로 시작" className={base}>
+                <div className="flex items-center justify-between gap-1"><span className="truncate text-2xs font-bold text-ink-primary">{label(g)}{on ? ' ●' : ''}</span><span className="text-[9px] font-bold text-emerald-300">▶ 바로 시작</span></div>
+                <p className="mt-0.5 text-[10px] text-ink-muted truncate">{gt || '메인 설정으로 시작'}</p>
               </button>
             );
           }
