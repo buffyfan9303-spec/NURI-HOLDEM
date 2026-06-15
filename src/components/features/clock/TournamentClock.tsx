@@ -274,6 +274,9 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
   // 볼륨/음소거 기억 — localStorage에 저장해 매번 재설정 불필요(0=음소거)
   const [volume, setVolume] = useState(() => { try { const v = localStorage.getItem('nuri:clock-volume'); return v == null ? 50 : Math.max(0, Math.min(100, Number(v) || 0)); } catch { return 50; } });
   useEffect(() => { try { localStorage.setItem('nuri:clock-volume', String(volume)); } catch { /* quota */ } }, [volume]);
+  // 10초 카운트다운 틱 음색 — 비프/부드러움/끔(끔이면 레벨업·브레이크 음만). localStorage 기억
+  const [tickStyle, setTickStyle] = useState<'beep' | 'soft' | 'off'>(() => { try { const v = localStorage.getItem('nuri:clock-tick'); return v === 'soft' || v === 'off' ? v : 'beep'; } catch { return 'beep'; } });
+  useEffect(() => { try { localStorage.setItem('nuri:clock-tick', tickStyle); } catch { /* quota */ } }, [tickStyle]);
   const [fs, setFs] = useState(false);
   // 전체 클락 공통 광고 이미지(운영자 설정) — 모든 클락 상단에 표시
   const [adImg, setAdImg] = useState<string | null>(null);
@@ -302,6 +305,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
   const wrapRef = useRef<HTMLDivElement>(null);
   const advancingRef = useRef(false);
   const acRef = useRef<AudioContext | null>(null); // 사운드용 AudioContext 1개 재사용(매번 new 방지 → 브라우저 컨텍스트 한도/누수 방지)
+  const prevVolRef = useRef(50); // 음소거 토글 시 직전 볼륨 복원용
 
   // 장부 연동: 연결된 세션의 바인/얼리설정 자동 반영
   useEffect(() => {
@@ -404,13 +408,18 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
     }
   }, [remaining, canManage, state.running, advance]);
 
-  // 마지막 10초 카운트다운 틱 — 9·8·7…초마다 짧은 비프(3초 이하는 더 높게 긴장감). 볼륨>0인 화면에서 재생
+  // 마지막 10초 카운트다운 틱 — 9·8·7…초마다 짧은 비프(3초 이하 더 높게). 레벨·브레이크 공통(휴식 종료도 카운트다운).
+  // 음색: 비프(sine) / 부드러움(triangle, 낮은음) / 끔. localStorage로 기억.
   const secsLeft = state.running ? Math.ceil(remaining / 1000) : -1;
   const tickedRef = useRef(-1);
   useEffect(() => {
-    if (secsLeft > 10 || secsLeft < 1) { tickedRef.current = secsLeft; return; }
-    if (secsLeft !== tickedRef.current) { tickedRef.current = secsLeft; playTones([{ f: secsLeft <= 3 ? 1320 : 988, t: 0, d: 0.07 }]); }
-  }, [secsLeft, playTones]);
+    if (tickStyle === 'off' || secsLeft > 10 || secsLeft < 1) { tickedRef.current = secsLeft; return; }
+    if (secsLeft !== tickedRef.current) {
+      tickedRef.current = secsLeft;
+      if (tickStyle === 'soft') playTones([{ f: secsLeft <= 3 ? 880 : 660, t: 0, d: 0.06, type: 'triangle' }]);
+      else playTones([{ f: secsLeft <= 3 ? 1320 : 988, t: 0, d: 0.07 }]);
+    }
+  }, [secsLeft, tickStyle, playTones]);
 
   // 브레이크 종료 1분 전 — "곧 재개" 알림음(레벨당 1회)
   const breakWarnRef = useRef(-1);
@@ -421,6 +430,9 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
       playChime('level');
     }
   }, [remaining, state.running, cur?.kind, state.currentIndex, playChime]);
+
+  // 음소거 토글 — 0↔직전 볼륨 복원(원클릭)
+  const toggleMute = () => { if (volume > 0) { prevVolRef.current = volume; setVolume(0); } else { setVolume(prevVolRef.current || 50); } };
 
   // 컨트롤
   const toggleRun = () => {
@@ -625,9 +637,16 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
         {canManage && (
           <div className="shrink-0 border-t border-white/5 bg-black/30 px-2 py-2">
             <div className="flex flex-wrap items-end justify-center gap-x-3 gap-y-2">
-              <VolCtl value={volume} onChange={setVolume} />
+              <VolCtl value={volume} onChange={setVolume} onToggleMute={toggleMute} />
               <button type="button" onClick={() => playChime('level')} title="알림음 미리듣기"
                 className="self-end w-7 h-7 rounded-input bg-surface-high border border-border-default text-ink-secondary hover:text-gold-300 text-sm leading-none">🔊</button>
+              <div className="flex flex-col items-center gap-0.5">
+                <span className="text-[9px] text-ink-muted">10초틱</span>
+                <button type="button" onClick={() => setTickStyle((t) => t === 'beep' ? 'soft' : t === 'soft' ? 'off' : 'beep')} title="마지막 10초 카운트다운 틱 음색 — 비프/부드러움/끔(끔=레벨업음만)"
+                  className="h-7 px-2 rounded-input bg-surface-high border border-border-default text-2xs font-bold text-ink-secondary hover:text-gold-300">
+                  {tickStyle === 'beep' ? '비프' : tickStyle === 'soft' ? '부드러움' : '끔'}
+                </button>
+              </div>
               <Stepper label="Entries" onPlus={() => adj('adjEntries', 1)} onMinus={() => adj('adjEntries', -1)} />
               <Stepper label="Player" onPlus={() => adjPlayer(1)} onMinus={() => adjPlayer(-1)} />
               <Stepper label="Rebuy" onPlus={() => adj('adjRebuys', 1)} onMinus={() => adj('adjRebuys', -1)} />
@@ -679,11 +698,15 @@ function Stepper({ label, onPlus, onMinus }: { label: string; onPlus: () => void
     </div>
   );
 }
-function VolCtl({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+function VolCtl({ value, onChange, onToggleMute }: { value: number; onChange: (v: number) => void; onToggleMute: () => void }) {
   return (
     <div className="flex flex-col items-center gap-0.5">
       <span className="text-[9px] text-ink-muted">Volume ({value})</span>
-      <input type="range" min={0} max={100} value={value} onChange={(e) => onChange(Number(e.target.value))} className="w-16 accent-gold-300" />
+      <div className="flex items-center gap-1">
+        <button type="button" onClick={onToggleMute} title={value > 0 ? '음소거' : '음소거 해제'} aria-label={value > 0 ? '음소거' : '음소거 해제'}
+          className="text-sm leading-none hover:opacity-80">{value > 0 ? '🔈' : '🔇'}</button>
+        <input type="range" min={0} max={100} value={value} onChange={(e) => onChange(Number(e.target.value))} className="w-16 accent-gold-300" />
+      </div>
     </div>
   );
 }
