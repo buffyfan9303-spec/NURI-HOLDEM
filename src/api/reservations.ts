@@ -138,8 +138,8 @@ export async function getCustomerActivity(venueId: string, name: string): Promis
   const base: CustomerActivity = { name, buyins: 0, visits: 0, amount: 0, moneyIn: 0, reservations: 0 };
   if (IS_MOCK) return base;
   const [{ data: bs }, { data: sess }, { data: rk }, resCounts] = await Promise.all([
-    supabase.from('ledger_buyins').select('session_date, payment_method, is_unpaid, is_split, cash_amount, card_amount, transfer_amount, unpaid_amount, discount_index').eq('venue_id', venueId).eq('player_name', name),
-    supabase.from('ledger_sessions').select('session_date, buyin_amount').eq('venue_id', venueId),
+    supabase.from('ledger_buyins').select('session_date, game_seq, payment_method, is_unpaid, is_split, cash_amount, card_amount, transfer_amount, unpaid_amount, discount_index').eq('venue_id', venueId).eq('player_name', name),
+    supabase.from('ledger_sessions').select('session_date, game_seq, buyin_amount').eq('venue_id', venueId),
     // 머니인(입상) — venue_rankings에는 name 컬럼이 없음: 닉네임/실명 둘 다 매칭
     supabase.from('venue_rankings').select('id, nickname, real_name').eq('venue_id', venueId),
     getVenueReserverCounts(venueId),
@@ -151,14 +151,14 @@ export async function getCustomerActivity(venueId: string, name: string): Promis
   ).length;
   const unit = new Map<string, number>();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (sess ?? []).forEach((s: any) => unit.set(s.session_date, s.buyin_amount ?? 0));
+  (sess ?? []).forEach((s: any) => unit.set(s.session_date + '#' + (s.game_seq ?? 1), s.buyin_amount ?? 0));
   const dates = new Set<string>();
   let amount = 0;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (bs ?? []).forEach((b: any) => {
     dates.add(b.session_date);
     if (b.is_split) amount += (b.cash_amount ?? 0) + (b.card_amount ?? 0) + (b.transfer_amount ?? 0);
-    else if (b.payment_method !== 'support' && b.payment_method !== 'ticket' && !b.is_unpaid) amount += unit.get(b.session_date) ?? 0;
+    else if (b.payment_method !== 'support' && b.payment_method !== 'ticket' && !b.is_unpaid) amount += unit.get(b.session_date + '#' + (b.game_seq ?? 1)) ?? 0;
   });
   return {
     name,

@@ -614,7 +614,13 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
           className="sticky top-header-h z-10 grid grid-cols-4 gap-2 rounded-card border border-gold-400/30 bg-surface-mid/95 px-3 py-1.5 text-center shadow-sm backdrop-blur cursor-pointer">
           <Metric label="엔트리" value={stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} />
           <Metric label="완납 매출" value={`${wonToMan(stats.revenue)}만`} tone="emerald" />
-          <Metric label={clockLinked && clock?.liveStats ? '생존' : '총바인'} value={clockLinked && clock?.liveStats ? `${clock.liveStats.alive}` : `${stats.totalBuyins}`} />
+          {(() => {
+            // 생존 상시 표시 — 클락 연동 시 실집계(alive), 미연동/집계전이면 추정(엔트리−아웃)
+            const live = clockLinked && clock?.liveStats ? clock.liveStats.alive : null;
+            const est = Math.max(0, Math.round(stats.entries) - (clockLinked && clock ? (clock.eliminations ?? 0) : 0));
+            const alive = live != null ? live : est;
+            return <Metric label={live != null ? '생존' : '생존(추정)'} value={`${alive}`} />;
+          })()}
           <Metric label="미수" value={`${wonToMan(stats.unpaid)}만`} tone={stats.unpaid > 0 ? 'danger' : undefined} />
         </div>
       )}

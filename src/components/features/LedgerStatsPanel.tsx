@@ -602,6 +602,7 @@ interface StatsAgg {
   total: number; entries: number; revenue: number; unpaid: number; players: number; ticket: number;
   cardRatio: number; unpaidRatio: number; discountRatio: number; discountCnt: number;
   ranking: [string, number][];
+  mainEntries: number; mainRev: number; sideEntries: number; sideRev: number; sideGameCount: number;
   dow: Record<number, { entries: number; revenue: number; unpaid: number; buyins: number; dates: Set<string>; players: Set<string> }>;
 }
 
@@ -615,6 +616,13 @@ function buildAiReport(m: StatsAgg): { empty: boolean; sales: string; risk: stri
   const meanAvg = dows.length ? dows.reduce((s, d) => s + d.avg, 0) / dows.length : 0;
   const weak = dows.filter((d) => d.avg < meanAvg).sort((a, b) => a.avg - b.avg).slice(0, 2).map((d) => DOW[d.w]);
   const top = m.ranking.slice(0, 2).map(([n]) => n);
+
+  // 사이드 게임 수익 기여도 — 메인 대비 사이드 매출 비중 진단
+  const totalRev = m.mainRev + m.sideRev;
+  const sideShare = totalRev > 0 ? (m.sideRev / totalRev) * 100 : 0;
+  const sideLine = m.sideGameCount > 0
+    ? ` 또한 사이드 게임 ${m.sideGameCount}종이 전체 매출의 약 ${Math.round(sideShare)}%(${man(m.sideRev)}만 원·${m.sideEntries.toFixed(0)} 엔트리)를 책임집니다 — ${sideShare >= 30 ? '사이드가 핵심 수익원이니 라인업을 더 늘려보세요' : sideShare >= 10 ? '사이드가 메인 매출을 잘 보완하고 있습니다' : '사이드 비중이 낮아 시간대·홍보를 조정할 여지가 있습니다'}.`
+    : ' 아직 사이드 게임 기록이 없습니다 — 새틀라이트·하이롤러 같은 사이드를 1~2종 추가하면 객단가를 끌어올릴 수 있습니다.';
 
   // 요일별 진단(안좋은 날)
   let weekday: string;
@@ -630,7 +638,7 @@ function buildAiReport(m: StatsAgg): { empty: boolean; sales: string; risk: stri
     `${best ? `이번 주 ${DOW[best.w]}요일(${best.avg.toFixed(1)} 엔트리)의 성과가 가장 두드러집니다. ` : ''}` +
     `전체 매출 ${man(m.revenue)}만 원 중 카드 결제 비율이 ${Math.round(m.cardRatio)}%로 ` +
     `${m.cardRatio >= 60 ? '높아 결제 편의성이 잘 확보되어' : '적정 수준으로 유지되어'} 있습니다. ` +
-    `${m.players}명의 플레이어가 참여했습니다.`;
+    `${m.players}명의 플레이어가 참여했습니다.` + sideLine;
 
   const risk =
     `현재 미수금이 ${man(m.unpaid)}만 원(완납 매출 대비 약 ${Math.round(m.unpaidRatio)}%)으로 ` +
@@ -642,6 +650,8 @@ function buildAiReport(m: StatsAgg): { empty: boolean; sales: string; risk: stri
   if (weak.length) actions.push(`매출이 저조한 ${weak.join('·')} 요일에 '얼리버드 칩업' 이벤트를 커뮤니티에 공지해보세요.`);
   if (top.length) actions.push(`상위 바인 유저인 ${top.join(', ')} 님에게 회수된 티켓(${m.ticket}장) 중 일부를 리워드로 제공하여 VIP 이탈을 방지하세요.`);
   if (m.unpaidRatio >= 25) actions.push(`미수금 ${man(m.unpaid)}만 원 회수를 위해 다음 방문 시 정산을 유도하세요.`);
+  if (m.sideGameCount > 0 && sideShare >= 30) actions.push(`사이드 매출 비중이 ${Math.round(sideShare)}%로 높습니다 — 인기 사이드(${m.sideGameCount}종)의 시작 시간대를 고정 편성해 단골의 재방문 동선을 만드세요.`);
+  else if (m.sideGameCount === 0 && m.total >= 10) actions.push('메인 외 사이드 게임(예: 새틀라이트·하이롤러)을 추가해 체류시간과 객단가를 높여보세요.');
   if (!actions.length) actions.push('현재 운영 지표가 안정적입니다. 단골 고객 대상 리워드로 재방문을 유도해보세요.');
 
   return { empty: false, sales, risk, weekday, actions };
