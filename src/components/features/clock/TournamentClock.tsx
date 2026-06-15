@@ -340,7 +340,9 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
   };
 
   return (
-    <div ref={wrapRef} className={fs ? 'fixed inset-0 z-[70] bg-[#06080c] flex flex-col overflow-hidden' : 'space-y-2'}>
+    <div ref={wrapRef} className={fs ? 'fixed inset-0 z-[70] bg-[#06080c] flex items-center justify-center overflow-hidden' : ''}>
+      {/* 풀스크린은 16:9 고정 박스(레터박스) + container-type:size — cqw/cqh로 모든 모니터(16:9·21:9·세로) 동일 비율 */}
+      <div className={fs ? 'flex flex-col w-full aspect-[16/9] max-w-[177.78vh] max-h-screen [container-type:size]' : 'space-y-2'}>
       {/* 상단 바 */}
       <div className={['flex items-center gap-2', fs ? 'shrink-0 px-3 pt-2 pb-1' : ''].join(' ')}>
         {fs
@@ -378,35 +380,35 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
         {adImg && (
           <div className="shrink-0 border-b border-gold-400/20 bg-black">
             <img src={adImg} alt="광고" className={['mx-auto w-full object-contain',
-              adSize === 'sm' ? (fs ? 'max-h-[7vh]' : 'max-h-16') : adSize === 'lg' ? (fs ? 'max-h-[13vh]' : 'max-h-48') : (fs ? 'max-h-[10vh]' : 'max-h-28')].join(' ')} />
+              adSize === 'sm' ? (fs ? 'max-h-[7cqh]' : 'max-h-16') : adSize === 'lg' ? (fs ? 'max-h-[13cqh]' : 'max-h-48') : (fs ? 'max-h-[10cqh]' : 'max-h-28')].join(' ')} />
           </div>
         )}
 
         <div className="shrink-0 bg-gradient-to-r from-gold-400/15 via-gold-300/[0.06] to-gold-400/15 border-b border-gold-400/25 px-4 py-2 text-center">
-          <p className={['font-extrabold tracking-wide text-gold-200 truncate', fs ? 'text-[min(3.4vw,4vh)]' : 'text-sm sm:text-lg'].join(' ')}>{title}</p>
+          <p className={['font-extrabold tracking-wide text-gold-200 truncate', fs ? 'text-[min(3.4cqw,4cqh)]' : 'text-sm sm:text-lg'].join(' ')}>{title}</p>
         </div>
 
         {/* 본문 3열 */}
         <div className={['grid grid-cols-[minmax(76px,0.85fr)_2.6fr_minmax(90px,1fr)]', fs ? 'flex-1 min-h-0 overflow-hidden' : ''].join(' ')}>
           {/* 좌: 프라이즈 */}
           <div className="flex flex-col p-2 sm:p-3 border-r border-white/5 bg-black/20">
-            <p className={['text-gold-300/70 font-bold tracking-[0.18em] mb-1', fs ? 'text-[min(1.5vw,1.8vh)]' : 'text-[9px] sm:text-2xs'].join(' ')}>PRIZE</p>
+            <p className={['text-gold-300/70 font-bold tracking-[0.18em] mb-1', fs ? 'text-[min(1.5cqw,1.8cqh)]' : 'text-[9px] sm:text-2xs'].join(' ')}>PRIZE</p>
             <ul className="space-y-0.5 overflow-hidden">
               {cfg.prizes.map((p, i) => (
-                <li key={i} className={['flex items-center justify-between gap-1 text-ink-secondary', fs ? 'text-[min(1.8vw,2.1vh)]' : 'text-[10px] sm:text-xs'].join(' ')}>
+                <li key={i} className={['flex items-center justify-between gap-1 text-ink-secondary', fs ? 'text-[min(1.8cqw,2.1cqh)]' : 'text-[10px] sm:text-xs'].join(' ')}>
                   <span className="truncate opacity-80">{p.place}</span><span className="tabular-nums font-semibold text-ink-primary">{p.amount.toLocaleString()}</span>
                 </li>
               ))}
             </ul>
             {cfg.mysteryBounty > 0 && (
               <div className="mt-2 pt-2 border-t border-white/5">
-                <p className={['text-gold-300 font-semibold leading-tight', fs ? 'text-[min(1.5vw,1.8vh)]' : 'text-[9px] sm:text-2xs'].join(' ')}>Mystery Bounty</p>
-                <p className={['text-ink-primary tabular-nums', fs ? 'text-[min(1.9vw,2.2vh)]' : 'text-[10px] sm:text-xs'].join(' ')}>{cfg.mysteryBounty.toLocaleString()}</p>
+                <p className={['text-gold-300 font-semibold leading-tight', fs ? 'text-[min(1.5cqw,1.8cqh)]' : 'text-[9px] sm:text-2xs'].join(' ')}>Mystery Bounty</p>
+                <p className={['text-ink-primary tabular-nums', fs ? 'text-[min(1.9cqw,2.2cqh)]' : 'text-[10px] sm:text-xs'].join(' ')}>{cfg.mysteryBounty.toLocaleString()}</p>
               </div>
             )}
             <div className="mt-auto pt-2 border-t border-white/5">
-              <p className={['text-ink-muted tracking-wide', fs ? 'text-[min(1.4vw,1.7vh)]' : 'text-[9px] sm:text-2xs'].join(' ')}>TOTAL PRIZE</p>
-              <p className={['font-extrabold text-gold-300 tabular-nums leading-tight', fs ? 'text-[min(2.7vw,3.1vh)]' : 'text-sm sm:text-lg'].join(' ')}>{totalPrize.toLocaleString()}</p>
+              <p className={['text-ink-muted tracking-wide', fs ? 'text-[min(1.4cqw,1.7cqh)]' : 'text-[9px] sm:text-2xs'].join(' ')}>TOTAL PRIZE</p>
+              <p className={['font-extrabold text-gold-300 tabular-nums leading-tight', fs ? 'text-[min(2.7cqw,3.1cqh)]' : 'text-sm sm:text-lg'].join(' ')}>{totalPrize.toLocaleString()}</p>
             </div>
           </div>
 
@@ -416,38 +418,38 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
             isBreak ? 'bg-[radial-gradient(ellipse_at_center,rgba(56,120,200,0.16),transparent_72%)]'
                     : 'bg-[radial-gradient(ellipse_at_center,rgba(201,169,97,0.10),transparent_72%)]'].join(' ')}>
             {/* 누리홀덤 로고 워터마크(투명) — 트레이드마크. 클락은 항상 다크라 흰 워드마크 사용 */}
-            <img src="/2.png" alt="" aria-hidden className="pointer-events-none absolute inset-0 m-auto h-auto w-[58%] max-w-[62vh] select-none object-contain opacity-[0.05]" />
+            <img src="/2.png" alt="" aria-hidden className="pointer-events-none absolute inset-0 m-auto h-auto w-[58%] max-w-[62cqh] select-none object-contain opacity-[0.05]" />
             {/* 엔트리/생존 — 클락 상단 헤어라인 칩(화면 전환 없이 한눈에) */}
             <div className={['relative inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] backdrop-blur-[2px] tabular-nums',
-              fs ? 'gap-[1.2vw] px-[1.6vw] py-[0.5vh] text-[min(2.2vw,2.7vh)]' : 'gap-2.5 px-3 py-1 text-xs sm:text-sm'].join(' ')}>
+              fs ? 'gap-[1.2cqw] px-[1.6cqw] py-[0.5cqh] text-[min(2.2cqw,2.7cqh)]' : 'gap-2.5 px-3 py-1 text-xs sm:text-sm'].join(' ')}>
               <span className="text-ink-secondary">엔트리 <b className="font-extrabold text-gold-300">{entries}</b></span>
               <span className="h-[1em] w-px bg-white/15" aria-hidden />
               <span className="text-ink-secondary">생존 <b className="font-extrabold text-emerald-300">{alive}</b></span>
             </div>
             <p className={['relative mt-1 font-bold tracking-[0.16em] uppercase',
               isBreak ? 'text-sky-300/90' : 'text-gold-200/80',
-              fs ? 'text-[min(4vw,5vh)]' : 'text-base sm:text-2xl'].join(' ')}>
+              fs ? 'text-[min(4cqw,5cqh)]' : 'text-base sm:text-2xl'].join(' ')}>
               {isBreak ? (cur.label || 'BREAK') : `LEVEL ${levelNo}`}
             </p>
             <p className={['font-extrabold tabular-nums leading-none my-1 sm:my-2 drop-shadow-[0_3px_24px_rgba(0,0,0,0.5)]',
-              fs ? 'text-[min(22vw,32vh)]' : 'text-6xl sm:text-8xl',
+              fs ? 'text-[min(22cqw,32cqh)]' : 'text-6xl sm:text-8xl',
               urgent ? 'text-rose-400 animate-pulse' : isBreak ? 'text-sky-200' : 'text-white'].join(' ')}>
               {mmss(Math.max(0, remaining))}
             </p>
             {!isBreak && (
-              <div className={['flex items-center justify-center', fs ? 'gap-[7vw]' : 'gap-8 sm:gap-16'].join(' ')}>
+              <div className={['flex items-center justify-center', fs ? 'gap-[7cqw]' : 'gap-8 sm:gap-16'].join(' ')}>
                 <div>
-                  <p className={['text-ink-secondary tracking-widest', fs ? 'text-[min(2vw,2.4vh)]' : 'text-[10px] sm:text-sm'].join(' ')}>BLINDS</p>
-                  <p className={['font-bold text-ink-primary tabular-nums', fs ? 'text-[min(4.8vw,5.8vh)]' : 'text-base sm:text-2xl'].join(' ')}>{cur.sb.toLocaleString()}/{cur.bb.toLocaleString()}</p>
+                  <p className={['text-ink-secondary tracking-widest', fs ? 'text-[min(2cqw,2.4cqh)]' : 'text-[10px] sm:text-sm'].join(' ')}>BLINDS</p>
+                  <p className={['font-bold text-ink-primary tabular-nums', fs ? 'text-[min(4.8cqw,5.8cqh)]' : 'text-base sm:text-2xl'].join(' ')}>{cur.sb.toLocaleString()}/{cur.bb.toLocaleString()}</p>
                 </div>
                 <div>
-                  <p className={['text-ink-secondary tracking-widest', fs ? 'text-[min(2vw,2.4vh)]' : 'text-[10px] sm:text-sm'].join(' ')}>ANTE</p>
-                  <p className={['font-bold text-ink-primary tabular-nums', fs ? 'text-[min(4.8vw,5.8vh)]' : 'text-base sm:text-2xl'].join(' ')}>{cur.ante.toLocaleString()}</p>
+                  <p className={['text-ink-secondary tracking-widest', fs ? 'text-[min(2cqw,2.4cqh)]' : 'text-[10px] sm:text-sm'].join(' ')}>ANTE</p>
+                  <p className={['font-bold text-ink-primary tabular-nums', fs ? 'text-[min(4.8cqw,5.8cqh)]' : 'text-base sm:text-2xl'].join(' ')}>{cur.ante.toLocaleString()}</p>
                 </div>
               </div>
             )}
-            <p className={['mt-3 font-bold text-gold-300', fs ? 'text-[min(3.3vw,3.9vh)]' : 'text-sm sm:text-2xl'].join(' ')}>{nextPlayableLabel(cfg, state.currentIndex)}</p>
-            {!state.running && <span className={['absolute font-bold text-rose-200 bg-rose-950/60 rounded-badge', fs ? 'top-3 right-3 text-[min(2vw,2.4vh)] px-3 py-1' : 'top-2 right-2 text-[9px] sm:text-2xs px-2 py-0.5'].join(' ')}>일시정지</span>}
+            <p className={['mt-3 font-bold text-gold-300', fs ? 'text-[min(3.3cqw,3.9cqh)]' : 'text-sm sm:text-2xl'].join(' ')}>{nextPlayableLabel(cfg, state.currentIndex)}</p>
+            {!state.running && <span className={['absolute font-bold text-rose-200 bg-rose-950/60 rounded-badge', fs ? 'top-3 right-3 text-[min(2cqw,2.4cqh)] px-3 py-1' : 'top-2 right-2 text-[9px] sm:text-2xs px-2 py-0.5'].join(' ')}>일시정지</span>}
           </div>
 
           {/* 우: 스탯 */}
@@ -463,12 +465,12 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
         {/* 칩 스탯 — TOTAL / AVG STACK 강조(전체 폭) */}
         <div className="shrink-0 grid grid-cols-2 border-t border-gold-400/25 bg-gradient-to-r from-gold-400/[0.07] via-transparent to-gold-400/[0.07]">
           <div className="text-center border-r border-white/5 py-2 sm:py-2.5">
-            <p className={['text-gold-300/70 font-bold tracking-[0.18em]', fs ? 'text-[min(1.9vw,2.2vh)]' : 'text-[10px] sm:text-xs'].join(' ')}>TOTAL STACK</p>
-            <p className={['font-extrabold text-gold-200 tabular-nums leading-tight', fs ? 'text-[min(4.6vw,5.6vh)]' : 'text-xl sm:text-3xl'].join(' ')}>{totalStack.toLocaleString()}</p>
+            <p className={['text-gold-300/70 font-bold tracking-[0.18em]', fs ? 'text-[min(1.9cqw,2.2cqh)]' : 'text-[10px] sm:text-xs'].join(' ')}>TOTAL STACK</p>
+            <p className={['font-extrabold text-gold-200 tabular-nums leading-tight', fs ? 'text-[min(4.6cqw,5.6cqh)]' : 'text-xl sm:text-3xl'].join(' ')}>{totalStack.toLocaleString()}</p>
           </div>
           <div className="text-center py-2 sm:py-2.5">
-            <p className={['text-ink-secondary font-bold tracking-[0.18em]', fs ? 'text-[min(1.9vw,2.2vh)]' : 'text-[10px] sm:text-xs'].join(' ')}>AVG STACK</p>
-            <p className={['font-extrabold text-white tabular-nums leading-tight', fs ? 'text-[min(4.6vw,5.6vh)]' : 'text-xl sm:text-3xl'].join(' ')}>{avgStack.toLocaleString()}</p>
+            <p className={['text-ink-secondary font-bold tracking-[0.18em]', fs ? 'text-[min(1.9cqw,2.2cqh)]' : 'text-[10px] sm:text-xs'].join(' ')}>AVG STACK</p>
+            <p className={['font-extrabold text-white tabular-nums leading-tight', fs ? 'text-[min(4.6cqw,5.6cqh)]' : 'text-xl sm:text-3xl'].join(' ')}>{avgStack.toLocaleString()}</p>
           </div>
         </div>
 
@@ -502,6 +504,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
       {!fs && state.sessionDate && (
         <p className="text-2xs text-ink-muted text-center">장부({state.sessionDate}) 연동 중 — 엔트리·리바인은 장부에서 자동 반영, 하단 버튼으로 보정/아웃 처리하세요.</p>
       )}
+      </div>
     </div>
   );
 }
@@ -511,8 +514,8 @@ function Stat({ label, value, tone, fs }: { label: string; value: string; tone?:
   return (
     // 헤어라인 구분 — 첫 항목 제외하고 위쪽 미세 보더(스탯 패널 리듬 정리)
     <div className="text-center [&:not(:first-child)]:border-t [&:not(:first-child)]:border-white/[0.06] [&:not(:first-child)]:pt-2 sm:[&:not(:first-child)]:pt-3">
-      <p className={['text-ink-muted tracking-[0.14em] uppercase leading-tight', fs ? 'text-[min(1.5vw,1.8vh)]' : 'text-[9px] sm:text-2xs'].join(' ')}>{label}</p>
-      <p className={['font-bold tabular-nums leading-tight mt-0.5', fs ? 'text-[min(2.7vw,3.3vh)]' : 'text-sm sm:text-xl', c].join(' ')}>{value}</p>
+      <p className={['text-ink-muted tracking-[0.14em] uppercase leading-tight', fs ? 'text-[min(1.5cqw,1.8cqh)]' : 'text-[9px] sm:text-2xs'].join(' ')}>{label}</p>
+      <p className={['font-bold tabular-nums leading-tight mt-0.5', fs ? 'text-[min(2.7cqw,3.3cqh)]' : 'text-sm sm:text-xl', c].join(' ')}>{value}</p>
     </div>
   );
 }
