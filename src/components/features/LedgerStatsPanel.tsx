@@ -56,12 +56,14 @@ function StatsView({ venueId }: { venueId: string }) {
   const toggleExclude = (code: string) => setExcludeTypes((prev) => { const n = new Set(prev); n.has(code) ? n.delete(code) : n.add(code); return n; });
   const [loading, setLoading] = useState(true);
   const [aiTick, setAiTick] = useState(0); // AI 리포트 새로고침
+  const [aiDays, setAiDays] = useState(7); // AI 리포트 분석 기간(일) — 7/30/90
   const [liveTick, setLiveTick] = useState(0); // 장부 실시간 변경 반영(당일 통계)
 
   const range = useMemo<{ from: string; to: string }>(() => {
     const t = todayStr();
     if (period === 'day')   return { from: date, to: date };
-    if (period === 'week' || period === 'ai') return { from: shift(t, -6), to: t };
+    if (period === 'week') return { from: shift(t, -6), to: t };
+    if (period === 'ai') return { from: shift(t, -(aiDays - 1)), to: t };
     if (period === 'month') return { from: t.slice(0, 7) + '-01', to: t };
     if (period === 'dow') {
       if (dowRange === 'week')  return { from: shift(t, -6), to: t };
@@ -69,7 +71,7 @@ function StatsView({ venueId }: { venueId: string }) {
       return { from: '2000-01-01', to: t };
     }
     return { from: '2000-01-01', to: t }; // all
-  }, [period, date, dowRange]);
+  }, [period, date, dowRange, aiDays]);
 
   const hasLoaded = useRef(false);
   useEffect(() => {
@@ -116,6 +118,7 @@ function StatsView({ venueId }: { venueId: string }) {
     const fin = (b: LedgerBuyin) => buyinFinance(b, sessionByKey.get(bkey(b)) ?? { buyinAmount: 0, cardAmount: null, discounts: [] });
     let revenue = 0, unpaid = 0, support = 0, ticket = 0, ticketUnpaid = 0, entries = 0, underEntries = 0, discountCnt = 0;
     let mainEntries = 0, mainRev = 0, sideEntries = 0, sideRev = 0; const sideGames = new Set<string>();
+    const revByDate: Record<string, { main: number; side: number }> = {}; // 일자별 메인/사이드 매출(추세 그래프)
     const byMethod: Record<PaymentMethod, number> = { ticket: 0, cash: 0, transfer: 0, card: 0, support: 0 };
     const byPlayer: Record<string, number> = {};
     const playerSet = new Set<string>();
@@ -127,6 +130,8 @@ function StatsView({ venueId }: { venueId: string }) {
       revenue += f.paid; unpaid += f.unpaid; support += f.support; entries += f.entry;
       if (b.gameSeq > 1) { sideEntries += f.entry; sideRev += f.paid; sideGames.add(bkey(b)); }
       else { mainEntries += f.entry; mainRev += f.paid; }
+      const rd = revByDate[b.sessionDate] ?? (revByDate[b.sessionDate] = { main: 0, side: 0 });
+      if (b.gameSeq > 1) rd.side += f.paid; else rd.main += f.paid;
       if (f.entry > 0 && f.entry < 1) underEntries++; // 참고용
       if (b.discountIndex > 0 || (b.isSplit && b.discountLevel > 0)) discountCnt++; // 할인 적용된 바인
       ticket += f.ticketPaid + (b.isSplit ? b.ticketCount : 0); ticketUnpaid += f.ticketUnpaid;
@@ -162,6 +167,7 @@ function StatsView({ venueId }: { venueId: string }) {
       arpGuest: grossPerPlayer, // 1인당 (완납+미수)
       arpEntry: grossPerEntry,  // 엔트리당 (완납+미수)
       mainEntries, mainRev, sideEntries, sideRev, sideGameCount: sideGames.size,
+      trend: Object.entries(revByDate).map(([d, v]) => ({ date: d, main: v.main, side: v.side })).sort((a, b) => (a.date < b.date ? -1 : 1)),
       dayCount, visitor, dow,
       avgEntryPerDay: dayCount ? entries / dayCount : 0,
       avgRevenuePerDay: dayCount ? revenue / dayCount : 0,
@@ -248,7 +254,12 @@ function StatsView({ venueId }: { venueId: string }) {
       {loading ? (
         <p className="text-center py-6 text-2xs text-ink-muted">불러오는 중…</p>
       ) : period === 'ai' ? (
-        <AiReport m={m} onRefresh={() => setAiTick((t) => t + 1)} />
+        <div className="space-y-2">
+          <SegmentedTabs grow className="flex w-full"
+            items={[{ key: '7', label: '최근 7일' }, { key: '30', label: '30일' }, { key: '90', label: '90일' }]}
+            value={String(aiDays)} onChange={(k) => setAiDays(Number(k))} />
+          <AiReport m={m} days={aiDays} onRefresh={() => setAiTick((t) => t + 1)} />
+        </div>
       ) : period === 'dow' ? (
         <div className="space-y-2">
           <SegmentedTabs grow className="flex w-full"
@@ -319,6 +330,35 @@ function StatsView({ venueId }: { venueId: string }) {
               </div>
             </Section>
           )}
+
+          {period !== 'day' && m.trend.length >= 2 && (() => {
+            const max = Math.max(1, ...m.trend.map((d) => d.main + d.side));
+            return (
+              <Section icon="wallet" title="일자별 매출 추세" suffix="· 메인/사이드">
+                <div className="flex items-end gap-1 overflow-x-auto pb-1">
+                  {m.trend.map((d) => {
+                    const total = d.main + d.side;
+                    const barPx = total > 0 ? Math.round((total / max) * 88) + 4 : 2;
+                    const mainPx = total > 0 ? Math.round((d.main / total) * barPx) : 0;
+                    return (
+                      <div key={d.date} className="flex flex-col items-center gap-1 shrink-0 w-8"
+                        title={`${d.date} · 메인 ${wonToMan(d.main)}만 / 사이드 ${wonToMan(d.side)}만 / 합계 ${wonToMan(total)}만`}>
+                        <div className="w-5 rounded-t-sm overflow-hidden flex flex-col-reverse bg-surface-high" style={{ height: barPx }}>
+                          <div className="bg-emerald-500" style={{ height: mainPx }} />
+                          <div className="bg-gold-300 flex-1" />
+                        </div>
+                        <span className="text-[8px] text-ink-muted tabular-nums leading-none">{d.date.slice(5).replace('-', '/')}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="flex items-center gap-3 mt-1.5 text-[10px] text-ink-muted">
+                  <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-sm bg-emerald-500" /> 메인</span>
+                  <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-sm bg-gold-300" /> 사이드</span>
+                </div>
+              </Section>
+            );
+          })()}
 
           {clockAgg && (
             <Section icon="clock" title="클락 최종 (보정 포함)" suffix="· 운영자 클락 집계">
@@ -657,14 +697,14 @@ function buildAiReport(m: StatsAgg): { empty: boolean; sales: string; risk: stri
   return { empty: false, sales, risk, weekday, actions };
 }
 
-function AiReport({ m, onRefresh }: { m: StatsAgg; onRefresh: () => void }) {
+function AiReport({ m, days = 7, onRefresh }: { m: StatsAgg; days?: number; onRefresh: () => void }) {
   const rpt = useMemo(() => buildAiReport(m), [m]);
   return (
     <div className="rounded-card border border-violet-500/40 bg-gradient-to-br from-violet-500/[0.12] to-indigo-500/[0.04] p-3 space-y-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <h4 className="text-sm font-bold text-violet-200">✨ NURI AI 주간 리포트</h4>
-          <p className="text-2xs text-ink-muted mt-0.5">최근 7일간의 누적 데이터를 기반으로 분석된 비즈니스 인사이트입니다.</p>
+          <p className="text-2xs text-ink-muted mt-0.5">최근 {days}일간의 누적 데이터를 기반으로 분석된 비즈니스 인사이트입니다.</p>
         </div>
         <button type="button" onClick={onRefresh}
           className="shrink-0 inline-flex items-center gap-1 text-2xs font-semibold text-violet-200 bg-violet-500/15 border border-violet-500/40 rounded-input px-2.5 py-1.5 hover:bg-violet-500/25 transition-colors">
@@ -672,7 +712,7 @@ function AiReport({ m, onRefresh }: { m: StatsAgg; onRefresh: () => void }) {
         </button>
       </div>
       {rpt.empty ? (
-        <p className="text-center py-8 text-2xs text-ink-muted">최근 7일간 데이터가 부족합니다.<br />장부를 작성하면 인사이트가 표시됩니다.</p>
+        <p className="text-center py-8 text-2xs text-ink-muted">최근 {days}일간 데이터가 부족합니다.<br />장부를 작성하면 인사이트가 표시됩니다.</p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <ReportCard tone="emerald" title="매출 및 엔트리 분석" body={rpt.sales} />
