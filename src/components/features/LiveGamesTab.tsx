@@ -46,6 +46,7 @@ function msToRegClose(s: ClockState, remaining: number): number | null {
 export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, active = true }: { venues: Venue[]; schedules: Schedule[]; onVenue: (id: string) => void; onSchedule: (s: Schedule) => void; active?: boolean }) {
   const [games, setGames] = useState<ClockState[] | null>(null);
   const [, setTick] = useState(0);
+  const [sortBy, setSortBy] = useState<'default' | 'players' | 'time'>('default'); // 진행 게임 정렬
   const load = () => getRunningClocks().then(setGames).catch(() => setGames([]));
   // 폴링·1초 틱은 라이브 탭이 보일 때만 — 숨김 시 멈춰 백그라운드 끊김 방지(재진입 시 즉시 갱신). 실시간 구독은 이벤트 기반이라 상시 유지.
   useEffect(() => { if (!active) return; load(); const t = setInterval(load, 30000); return () => clearInterval(t); }, [active]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -62,6 +63,14 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, a
     .filter((s) => s.approved && s.date === today && !liveSchedIds.has(s.id))
     .sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
 
+  // 정렬 — 기본(클락 순) / 남은인원 많은 순 / 시작 시간 빠른 순
+  const aliveOf = (g: ClockState) => g.liveStats?.alive ?? Math.max(0, g.adjEntries - g.eliminations);
+  const startOf = (g: ClockState) => matchSchedule(g, schedules)?.startTime || '99:99';
+  const sortedGames = games ? [...games].sort((a, b) =>
+    sortBy === 'players' ? aliveOf(b) - aliveOf(a)
+      : sortBy === 'time' ? startOf(a).localeCompare(startOf(b))
+        : 0) : games;
+
   return (
     <main className="px-page-x py-section animate-fade-in">
       <div className="mx-auto w-full max-w-3xl space-y-3">
@@ -70,7 +79,17 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, a
             <h2 className="text-base font-semibold text-ink-primary">진행 중 게임 {games ? <span className="text-gold-300">{games.length}</span> : null}</h2>
             <p className="mt-0.5 text-2xs text-ink-muted">지금 클락이 돌아가는 대회를 실시간 확인 · 블라인드·남은인원·평균스택까지</p>
           </div>
-          <button type="button" onClick={load} className="btn-ghost shrink-0 px-3 text-xs">새로고침</button>
+          <div className="flex shrink-0 items-center gap-1">
+            {games && games.length > 1 && (
+              <div className="flex items-center gap-0.5 rounded-input bg-surface-high p-0.5">
+                {([['default', '기본'], ['players', '인원'], ['time', '시간']] as const).map(([k, l]) => (
+                  <button key={k} type="button" onClick={() => setSortBy(k)} title={k === 'players' ? '남은 인원 많은 순' : k === 'time' ? '시작 시간 빠른 순' : '기본 순'}
+                    className={['rounded-[5px] px-1.5 py-1 text-2xs font-bold transition-colors', sortBy === k ? 'bg-gold-300 text-ink-inverse' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>{l}</button>
+                ))}
+              </div>
+            )}
+            <button type="button" onClick={load} className="btn-ghost px-3 text-xs">새로고침</button>
+          </div>
         </div>
 
         {games === null ? (
@@ -86,7 +105,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, a
             {(() => {
               // 같은 매장의 여러 게임(메인+사이드)을 한 묶음으로
               const groups: { venueId: string; games: ClockState[] }[] = [];
-              for (const g of games) {
+              for (const g of sortedGames ?? []) {
                 const grp = groups.find((x) => x.venueId === g.venueId);
                 if (grp) grp.games.push(g); else groups.push({ venueId: g.venueId, games: [g] });
               }

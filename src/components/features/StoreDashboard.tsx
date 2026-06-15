@@ -73,7 +73,9 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const [clock, setClock] = useState<ClockState | null>(null);
   const [venueClocks, setVenueClocks] = useState<ClockState[]>([]); // 위젯 멀티게임 — 매장 전체 게임 클락(메인+사이드)
   const [widgetGame, setWidgetGame] = useState(1); // 위젯에서 보고 있는 게임(game_seq)
-  const [dowStats, setDowStats] = useState<{ avg: number | null }>({ avg: null }); // 같은 요일 평소 엔트리(최근 4주 평균)
+  const [wEntries, setWEntries] = useState<number | null>(null); // 위젯 사이드 게임 장부 엔트리(생존 정밀화용)
+  const [dowStats, setDowStats] = useState<{ avg: number | null; weeks: { label: string; entries: number }[] }>({ avg: null, weeks: [] }); // 같은 요일 4주(평균+주차별)
+  const [dowOpen, setDowOpen] = useState(false); // 요일 추세 드릴다운(주차 막대) 펼침
   const [pendingReqs, setPendingReqs] = useState<BuyinRequest[]>([]); // 라이브 위젯: 대기중 바인 요청
   const [reqBusy, setReqBusy] = useState<string | null>(null); // 인라인 승인/거절 진행 중 요청 id
   const [payFor, setPayFor] = useState<string | null>(null); // 인라인 승인 결제수단 팝오버(✓ 길게 누르기)
@@ -110,14 +112,15 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
     getLedgerRange(venueId, d28[0], d28[27]).then(({ sessions, buyins: bs }) => {
       const byDate: Record<string, LedgerSession> = {};
       sessions.forEach((s) => { byDate[s.sessionDate] = s; });
-      let sum = 0, n = 0;
+      const weeks: { label: string; entries: number }[] = [];
       for (const day of d28) {
         if (day === d || new Date(day + 'T00:00:00').getDay() !== todayDow) continue;
         const s = byDate[day]; if (!s) continue;
         let e = 0; for (const b of bs) { if (b.sessionDate === day) e += buyinFinance(b, s).entry; }
-        sum += e; n++;
+        weeks.push({ label: day.slice(5).replace('-', '/'), entries: Math.round(e) });
       }
-      setDowStats({ avg: n > 0 ? Math.round(sum / n) : null });
+      const avg = weeks.length > 0 ? Math.round(weeks.reduce((a, w) => a + w.entries, 0) / weeks.length) : null;
+      setDowStats({ avg, weeks });
     }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [venueId, d, caps.ledger]);
@@ -187,14 +190,29 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const clockRemainMs = wActive && wClock
     ? (wClock.running && wClock.endsAt ? Math.max(0, new Date(wClock.endsAt).getTime() - Date.now()) : Math.max(0, wClock.remainingMs))
     : 0;
-  // 생존: 클락이 저장한 liveStats 우선(사이드 게임은 fin이 메인이라 부정확) → 없으면 보정값
-  const survivors = wClock ? (wClock.liveStats?.alive ?? Math.max(0, wClock.adjEntries + wClock.adjRebuys - wClock.eliminations)) : 0;
+  // 생존: 클락 liveStats(게임별 장부 합산) 우선 → 없으면 게임 장부 엔트리(메인=fin, 사이드=wEntries) + 보정 − 탈락
+  const wEntriesEff = widgetGame === 1 ? Math.round(fin.entry) : wEntries;
+  const survivors = wClock
+    ? (wClock.liveStats?.alive ?? Math.max(0, (wEntriesEff ?? 0) + wClock.adjEntries + wClock.adjRebuys - wClock.eliminations))
+    : 0;
+  // 요청 게임의 바인 금액(결제 팝오버 표시) — 해당 게임 클락 liveStats 우선, 없으면 메인 세션
+  const buyinAmountFor = (gameSeq: number | null) => venueClocks.find((c) => c.gameSeq === (gameSeq ?? 1))?.liveStats?.buyInAmount ?? session?.buyinAmount ?? null;
   const liveWidget = caps.ledger && (clockActive || activeClocks.length > 0 || pendingReqs.length > 0); // 진행 클락(메인/사이드) 또는 대기 요청
   // 위젯에서 보는 게임이 비활성이면 첫 활성 게임으로 자동 전환
   useEffect(() => {
     if (activeClocks.length > 0 && !activeClocks.some((c) => c.gameSeq === widgetGame)) setWidgetGame(activeClocks[0].gameSeq);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [venueClocks]);
+  // 위젯 사이드 게임 생존 정밀화 — 선택 게임이 사이드면 그 게임 장부 엔트리 합산(메인은 fin 사용, liveStats 없을 때 폴백)
+  useEffect(() => {
+    if (widgetGame === 1) { setWEntries(null); return; }
+    let alive = true;
+    Promise.all([getLedgerBuyins(venueId, d, widgetGame), getLedgerSession(venueId, d, widgetGame)])
+      .then(([bs, s]) => { if (!alive) return; let e = 0; for (const b of bs) e += buyinFinance(b, s).entry; setWEntries(Math.round(e)); })
+      .catch(() => { if (alive) setWEntries(null); });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [venueId, d, widgetGame]);
   // 라이브 + 보이는 탭일 때만 1초 갱신(카운트다운·"분 전") — 숨김/평상시엔 멈춰 백그라운드 리렌더 방지
   useEffect(() => {
     if (!liveWidget || !active) return;
@@ -438,15 +456,18 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                           className="shrink-0 rounded-input bg-emerald-500/15 px-1.5 py-1 text-2xs font-bold text-emerald-400 hover:bg-emerald-500/25 disabled:opacity-40">✓</button>
                         <button type="button" disabled={reqBusy === r.id} onClick={() => quickReject(r)} title="거절"
                           className="shrink-0 rounded-input bg-rose-500/15 px-1.5 py-1 text-2xs font-bold text-rose-300 hover:bg-rose-500/25 disabled:opacity-40">✕</button>
-                        {payFor === r.id && (
-                          <div className="absolute right-0 top-full z-30 mt-1 flex items-center gap-1 rounded-input border border-border-default bg-surface-float p-1 shadow-dialog">
-                            <span className="px-1 text-[10px] text-ink-muted">바인</span>
-                            <button type="button" onClick={() => approveWithPay(r, 'cash')} className="rounded-[5px] bg-surface-high px-1.5 py-1 text-2xs font-bold text-ink-secondary hover:text-gold-300">현금</button>
-                            <button type="button" onClick={() => approveWithPay(r, 'card')} className="rounded-[5px] bg-surface-high px-1.5 py-1 text-2xs font-bold text-ink-secondary hover:text-gold-300">카드</button>
-                            <button type="button" onClick={() => approveWithPay(r, 'transfer')} className="rounded-[5px] bg-surface-high px-1.5 py-1 text-2xs font-bold text-ink-secondary hover:text-gold-300">이체</button>
-                            <button type="button" onClick={() => setPayFor(null)} className="px-1 text-2xs text-ink-muted hover:text-ink-secondary">✕</button>
-                          </div>
-                        )}
+                        {payFor === r.id && (() => {
+                          const amt = buyinAmountFor(r.requestedGameSeq);
+                          return (
+                            <div className="absolute right-0 top-full z-30 mt-1 flex items-center gap-1 rounded-input border border-border-default bg-surface-float p-1 shadow-dialog">
+                              <span className="px-1 text-[10px] font-semibold text-gold-300">{amt ? `바인 ${wonToMan(amt)}만` : '바인'}</span>
+                              <button type="button" onClick={() => approveWithPay(r, 'cash')} className="rounded-[5px] bg-surface-high px-1.5 py-1 text-2xs font-bold text-ink-secondary hover:text-gold-300">현금</button>
+                              <button type="button" onClick={() => approveWithPay(r, 'card')} className="rounded-[5px] bg-surface-high px-1.5 py-1 text-2xs font-bold text-ink-secondary hover:text-gold-300">카드</button>
+                              <button type="button" onClick={() => approveWithPay(r, 'transfer')} className="rounded-[5px] bg-surface-high px-1.5 py-1 text-2xs font-bold text-ink-secondary hover:text-gold-300">이체</button>
+                              <button type="button" onClick={() => setPayFor(null)} className="px-1 text-2xs text-ink-muted hover:text-ink-secondary">✕</button>
+                            </div>
+                          );
+                        })()}
                       </li>
                     ))}
                   </ul>
@@ -455,16 +476,40 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
               )}
             </div>
           </div>
-          {/* 미니 추세 — 오늘 엔트리 vs 같은 요일 평소(최근 4주 동일 요일 평균) · 탭하면 통계로 */}
+          {/* 미니 추세 — 오늘 vs 같은 요일 평소(4주 평균). 탭하면 주차별 막대 드릴다운 */}
           {(clockActive || activeClocks.length > 0) && sameDowAvg != null && (
-            <button type="button" onClick={() => onGoto('stats')} className="flex w-full items-center justify-between gap-2 border-t border-border-subtle px-3 py-2 text-2xs transition-colors hover:bg-white/[0.02]">
-              <span className="text-ink-muted">오늘 vs 평소 <b className="text-ink-secondary">{DOW[todayDow]}요일</b></span>
-              <span className="tabular-nums text-ink-secondary">
-                오늘 <b className="text-gold-300">{todayEntries}</b> · 평소 <b className="text-ink-primary">{sameDowAvg}</b>
-                {dowDelta != null && <span className={['ml-1 font-bold', dowDelta > 0 ? 'text-emerald-400' : dowDelta < 0 ? 'text-danger-light' : 'text-ink-muted'].join(' ')}>{dowDelta > 0 ? '▲' : dowDelta < 0 ? '▼' : '–'}{Math.abs(dowDelta)}%</span>}
-                <span className="ml-1 text-gold-300">→</span>
-              </span>
-            </button>
+            <div className="border-t border-border-subtle">
+              <button type="button" onClick={() => setDowOpen((v) => !v)} className="flex w-full items-center justify-between gap-2 px-3 py-2 text-2xs transition-colors hover:bg-white/[0.02]">
+                <span className="text-ink-muted">오늘 vs 평소 <b className="text-ink-secondary">{DOW[todayDow]}요일</b></span>
+                <span className="tabular-nums text-ink-secondary">
+                  오늘 <b className="text-gold-300">{todayEntries}</b> · 평소 <b className="text-ink-primary">{sameDowAvg}</b>
+                  {dowDelta != null && <span className={['ml-1 font-bold', dowDelta > 0 ? 'text-emerald-400' : dowDelta < 0 ? 'text-danger-light' : 'text-ink-muted'].join(' ')}>{dowDelta > 0 ? '▲' : dowDelta < 0 ? '▼' : '–'}{Math.abs(dowDelta)}%</span>}
+                  <span className="ml-1 text-ink-muted">{dowOpen ? '▲' : '▼'}</span>
+                </span>
+              </button>
+              {dowOpen && (() => {
+                const bars = [...dowStats.weeks, { label: '오늘', entries: todayEntries }];
+                const max = Math.max(1, ...bars.map((b) => b.entries));
+                return (
+                  <div className="px-3 pb-2.5">
+                    <p className="mb-1 text-[10px] text-ink-muted">최근 {DOW[todayDow]}요일 엔트리 추이</p>
+                    <div className="flex h-16 items-end justify-between gap-1.5">
+                      {bars.map((b, i) => {
+                        const isToday = i === bars.length - 1;
+                        return (
+                          <div key={i} className="flex h-full flex-1 flex-col items-center justify-end gap-0.5">
+                            <span className="text-[9px] tabular-nums text-ink-muted">{b.entries}</span>
+                            <div className={['w-full max-w-[26px] rounded-sm', isToday ? 'bg-gold-300' : 'bg-gold-300/40'].join(' ')} style={{ height: `${Math.max(6, (b.entries / max) * 100)}%` }} />
+                            <span className={['text-[9px] tabular-nums', isToday ? 'font-bold text-gold-300' : 'text-ink-muted'].join(' ')}>{b.label}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <button type="button" onClick={() => onGoto('stats')} className="mt-1.5 text-2xs font-bold text-gold-300 hover:text-gold-200">통계에서 자세히 →</button>
+                  </div>
+                );
+              })()}
+            </div>
           )}
         </section>
       )}
