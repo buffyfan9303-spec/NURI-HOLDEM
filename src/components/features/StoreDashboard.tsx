@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import CountUp from '../atoms/CountUp';
 import type { Schedule } from '../../api/schedules';
 import {
@@ -7,7 +7,7 @@ import {
   type LedgerSession, type LedgerBuyin, type LedgerPlayer, type BuyinRequest,
 } from '../../api/ledger';
 import { useToast } from '../atoms/Toast';
-import { getClockState, subscribeClock, type ClockState } from '../../api/clock';
+import { getClockState, getVenueClocks, subscribeClock, type ClockState } from '../../api/clock';
 import { getReservationCounts, getVenueRegulars, subscribeReservations, type VenueRegular } from '../../api/reservations';
 import { aiGenerate } from '../../api/ai';
 import { getVenueRankings } from '../../api/rankings';
@@ -29,6 +29,10 @@ const last7 = () => Array.from({ length: 7 }, (_, i) => {
 });
 const last14 = () => Array.from({ length: 14 }, (_, i) => {
   const dt = new Date(); dt.setDate(dt.getDate() - (13 - i));
+  return dt.toLocaleDateString('en-CA');
+});
+const last28 = () => Array.from({ length: 28 }, (_, i) => {
+  const dt = new Date(); dt.setDate(dt.getDate() - (27 - i));
   return dt.toLocaleDateString('en-CA');
 });
 const monthRange = () => {
@@ -67,8 +71,12 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const [session, setSession] = useState<LedgerSession | null>(null);
   const [buyins, setBuyins] = useState<LedgerBuyin[]>([]);
   const [clock, setClock] = useState<ClockState | null>(null);
+  const [venueClocks, setVenueClocks] = useState<ClockState[]>([]); // 위젯 멀티게임 — 매장 전체 게임 클락(메인+사이드)
+  const [widgetGame, setWidgetGame] = useState(1); // 위젯에서 보고 있는 게임(game_seq)
+  const [dowStats, setDowStats] = useState<{ avg: number | null }>({ avg: null }); // 같은 요일 평소 엔트리(최근 4주 평균)
   const [pendingReqs, setPendingReqs] = useState<BuyinRequest[]>([]); // 라이브 위젯: 대기중 바인 요청
   const [reqBusy, setReqBusy] = useState<string | null>(null); // 인라인 승인/거절 진행 중 요청 id
+  const [payFor, setPayFor] = useState<string | null>(null); // 인라인 승인 결제수단 팝오버(✓ 길게 누르기)
   const [, setNowTick] = useState(0); // 라이브 카운트다운/경과시간 1초 갱신
   const [resCounts, setResCounts] = useState<Record<string, number>>({});
   const [shifts, setShifts] = useState<StaffShift[]>([]);
@@ -94,6 +102,25 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
     if (!caps.manage) return;
     getUpcomingBirthdays(venueId).then(setBdays).catch(() => {});
   }, [venueId, caps.manage]);
+  // 같은 요일 평소 엔트리(최근 4주 동일 요일 평균) — 위젯 미니 추세용. 핫 리로드와 분리해 매장당 1회만 로드(28일 데이터).
+  useEffect(() => {
+    if (!caps.ledger) return;
+    const d28 = last28();
+    const todayDow = new Date(d + 'T00:00:00').getDay();
+    getLedgerRange(venueId, d28[0], d28[27]).then(({ sessions, buyins: bs }) => {
+      const byDate: Record<string, LedgerSession> = {};
+      sessions.forEach((s) => { byDate[s.sessionDate] = s; });
+      let sum = 0, n = 0;
+      for (const day of d28) {
+        if (day === d || new Date(day + 'T00:00:00').getDay() !== todayDow) continue;
+        const s = byDate[day]; if (!s) continue;
+        let e = 0; for (const b of bs) { if (b.sessionDate === day) e += buyinFinance(b, s).entry; }
+        sum += e; n++;
+      }
+      setDowStats({ avg: n > 0 ? Math.round(sum / n) : null });
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [venueId, d, caps.ledger]);
   const [loading, setLoading] = useState(true);
 
   const upcoming = schedules
@@ -106,6 +133,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
     getLedgerBuyins(venueId, d).then(setBuyins).catch(() => {});
     getLedgerPlayers(venueId, d).then(setPlayers).catch(() => {});
     getClockState(venueId).then(setClock).catch(() => {});
+    getVenueClocks(venueId).then(setVenueClocks).catch(() => {});
     getPendingBuyinRequests(venueId, d).then(setPendingReqs).catch(() => {});
     getStaffSchedule(venueId, d, d).then(setShifts).catch(() => {});
     getStaffSchedule(venueId, mr.start, mr.end).then(setMonthShifts).catch(() => {});
@@ -150,12 +178,23 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const lvl = clock?.config.levels[clock.currentIndex];
   const clockActive = !!clock && (clock.running || clock.currentIndex > 0 || clock.endsAt != null);
   const levelNo = clock ? clock.config.levels.slice(0, clock.currentIndex + 1).filter((l) => l.kind === 'level').length : 0;
-  // 라이브 위젯: 클락 남은시간(진행=endsAt 기준, 일시정지=remainingMs) · 생존 인원
-  const clockRemainMs = clockActive && clock
-    ? (clock.running && clock.endsAt ? Math.max(0, new Date(clock.endsAt).getTime() - Date.now()) : Math.max(0, clock.remainingMs))
+  // ── 위젯 멀티게임 — 활성 클락 게임 목록 + 선택 게임(widgetGame)의 라이브 값 ──
+  const activeClocks = venueClocks.filter((c) => c.running || c.currentIndex > 0 || c.endsAt != null).sort((a, b) => a.gameSeq - b.gameSeq);
+  const wClock = venueClocks.find((c) => c.gameSeq === widgetGame) ?? clock;
+  const wActive = !!wClock && (wClock.running || wClock.currentIndex > 0 || wClock.endsAt != null);
+  const wLvl = wClock?.config.levels[wClock.currentIndex];
+  const wLevelNo = wClock ? wClock.config.levels.slice(0, wClock.currentIndex + 1).filter((l) => l.kind === 'level').length : 0;
+  const clockRemainMs = wActive && wClock
+    ? (wClock.running && wClock.endsAt ? Math.max(0, new Date(wClock.endsAt).getTime() - Date.now()) : Math.max(0, wClock.remainingMs))
     : 0;
-  const survivors = clock ? Math.max(0, Math.round(fin.entry) + clock.adjEntries + clock.adjRebuys - clock.eliminations) : 0;
-  const liveWidget = caps.ledger && (clockActive || pendingReqs.length > 0); // 진행 클락 또는 대기 요청이 있을 때만 노출
+  // 생존: 클락이 저장한 liveStats 우선(사이드 게임은 fin이 메인이라 부정확) → 없으면 보정값
+  const survivors = wClock ? (wClock.liveStats?.alive ?? Math.max(0, wClock.adjEntries + wClock.adjRebuys - wClock.eliminations)) : 0;
+  const liveWidget = caps.ledger && (clockActive || activeClocks.length > 0 || pendingReqs.length > 0); // 진행 클락(메인/사이드) 또는 대기 요청
+  // 위젯에서 보는 게임이 비활성이면 첫 활성 게임으로 자동 전환
+  useEffect(() => {
+    if (activeClocks.length > 0 && !activeClocks.some((c) => c.gameSeq === widgetGame)) setWidgetGame(activeClocks[0].gameSeq);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [venueClocks]);
   // 라이브 + 보이는 탭일 때만 1초 갱신(카운트다운·"분 전") — 숨김/평상시엔 멈춰 백그라운드 리렌더 방지
   useEffect(() => {
     if (!liveWidget || !active) return;
@@ -176,6 +215,17 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
     setReqBusy(r.id);
     try { await rejectBuyinRequest(r.id); setPendingReqs((p) => p.filter((x) => x.id !== r.id)); toast.show(`${r.playerName} 요청 거절`, 'info'); }
     catch (e) { toast.show(e instanceof Error ? e.message : '거절 실패', 'error'); }
+    finally { setReqBusy(null); }
+  };
+  // ✓ 길게 누르기 → 결제수단(현금/카드/이체) 팝오버 → 바인 기록까지 승인. 짧게 탭 = 결제 기록 없이 게임 추가
+  const lpTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lpFired = useRef(false);
+  const cancelLP = () => { if (lpTimer.current) { clearTimeout(lpTimer.current); lpTimer.current = null; } };
+  const startLP = (r: BuyinRequest) => { lpFired.current = false; cancelLP(); lpTimer.current = setTimeout(() => { lpFired.current = true; setPayFor(r.id); }, 480); };
+  const approveWithPay = async (r: BuyinRequest, method: 'cash' | 'card' | 'transfer') => {
+    setPayFor(null); setReqBusy(r.id);
+    try { await approveBuyinRequest(r.id, r.requestedGameSeq ?? 1, true, method); setPendingReqs((p) => p.filter((x) => x.id !== r.id)); toast.show(`${r.playerName} 승인 · ${method === 'cash' ? '현금' : method === 'card' ? '카드' : '이체'} 바인 기록`, 'success'); }
+    catch (e) { toast.show(e instanceof Error ? e.message : '승인 실패', 'error'); }
     finally { setReqBusy(null); }
   };
 
@@ -202,16 +252,9 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const bestDay = perDay.reduce((a, x) => (x.entry > a.entry ? x : a), perDay[0]);
   const avgSpend = weekEntry > 0 ? Math.round(weekPaid / weekEntry) : 0; // 객단가(원/엔트리)
 
-  // ── 위젯 미니 추세: 오늘 엔트리 vs 같은 요일 평소(최근 2주 내 동일 요일 평균) ──
+  // ── 위젯 미니 추세: 오늘 엔트리 vs 같은 요일 평소(최근 4주 동일 요일 평균 — dowStats 별도 로드) ──
   const todayDow = new Date(d + 'T00:00:00').getDay();
-  let sdSum = 0, sdN = 0;
-  for (const day of d14) {
-    if (day === d || new Date(day + 'T00:00:00').getDay() !== todayDow) continue;
-    const s = sessByDate[day]; if (!s) continue;
-    let e = 0; for (const b of range.buyins) { if (b.sessionDate === day) e += buyinFinance(b, s).entry; }
-    sdSum += e; sdN++;
-  }
-  const sameDowAvg = sdN > 0 ? Math.round(sdSum / sdN) : null;
+  const sameDowAvg = dowStats.avg;
   const todayEntries = Math.round(fin.entry);
   const dowDelta = sameDowAvg && sameDowAvg > 0 ? Math.round(((todayEntries - sameDowAvg) / sameDowAvg) * 100) : null;
 
@@ -333,27 +376,41 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
             </span>
             <span className="text-2xs text-ink-muted tabular-nums">{d.slice(5).replace('-', '/')}</span>
           </div>
+          {/* 멀티게임 탭 — 메인+사이드 동시 진행 시 게임 전환 */}
+          {activeClocks.length >= 2 && (
+            <div className="flex items-center gap-1 overflow-x-auto border-b border-border-subtle px-2 py-1.5">
+              {activeClocks.map((c) => {
+                const on = c.gameSeq === widgetGame;
+                return (
+                  <button key={c.gameSeq} type="button" onClick={() => setWidgetGame(c.gameSeq)}
+                    className={['shrink-0 rounded-input px-2 py-1 text-2xs font-bold transition-colors', on ? 'bg-gold-300 text-ink-inverse' : 'bg-surface-float text-ink-secondary hover:text-ink-primary'].join(' ')}>
+                    {c.gameSeq <= 1 ? '메인' : `사이드${c.gameSeq - 1}`}{c.running ? '' : ' ⏸'}
+                  </button>
+                );
+              })}
+            </div>
+          )}
           <div className="grid grid-cols-1 divide-y divide-border-subtle sm:grid-cols-2 sm:divide-x sm:divide-y-0">
-            {/* 진행 클락 */}
+            {/* 진행 클락(선택 게임) */}
             <button type="button" onClick={() => onGoto('clock')} className="flex items-center justify-between gap-3 px-3 py-3 text-left transition-colors hover:bg-white/[0.02]">
               <div className="min-w-0">
-                <p className="mb-0.5 text-2xs text-ink-muted">토너먼트 클락{clockActive ? (clock?.running ? ' · 진행' : ' · 일시정지') : ''}</p>
-                {clockActive && lvl ? (
-                  lvl.kind === 'break' ? (
+                <p className="mb-0.5 text-2xs text-ink-muted">{activeClocks.length >= 2 ? (widgetGame <= 1 ? '메인' : `사이드${widgetGame - 1}`) + ' 클락' : '토너먼트 클락'}{wActive ? (wClock?.running ? ' · 진행' : ' · 일시정지') : ''}</p>
+                {wActive && wLvl ? (
+                  wLvl.kind === 'break' ? (
                     <p className="text-2xl font-extrabold leading-none text-gold-300">BREAK</p>
                   ) : (
                     <>
-                      <p className="text-xl font-extrabold leading-none text-ink-primary tabular-nums">{lvl.sb.toLocaleString()}<span className="text-ink-muted">/</span>{lvl.bb.toLocaleString()}</p>
-                      <p className="mt-1 text-2xs text-ink-muted">레벨 {levelNo}{lvl.ante > 0 ? ` · ante ${lvl.ante.toLocaleString()}` : ''}</p>
+                      <p className="text-xl font-extrabold leading-none text-ink-primary tabular-nums">{wLvl.sb.toLocaleString()}<span className="text-ink-muted">/</span>{wLvl.bb.toLocaleString()}</p>
+                      <p className="mt-1 text-2xs text-ink-muted">레벨 {wLevelNo}{wLvl.ante > 0 ? ` · ante ${wLvl.ante.toLocaleString()}` : ''}</p>
                     </>
                   )
                 ) : (
                   <p className="text-sm font-bold text-ink-secondary">클락 꺼짐 <span className="text-2xs font-normal text-ink-muted">— 눌러서 켜기</span></p>
                 )}
               </div>
-              {clockActive && (
+              {wActive && (
                 <div className="shrink-0 text-right">
-                  <p className={`text-3xl font-extrabold leading-none tabular-nums ${clock?.running ? 'text-emerald-400' : 'text-amber-400'}`}>{fmtClock(clockRemainMs)}</p>
+                  <p className={`text-3xl font-extrabold leading-none tabular-nums ${wClock?.running ? 'text-emerald-400' : 'text-amber-400'}`}>{fmtClock(clockRemainMs)}</p>
                   <p className="mt-1.5 text-2xs text-ink-muted">남은 인원 <b className="text-gold-300">{survivors}</b></p>
                 </div>
               )}
@@ -370,14 +427,26 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                 <>
                   <ul className="mt-1.5 space-y-1">
                     {pendingReqs.slice(0, 3).map((r) => (
-                      <li key={r.id} className="flex items-center gap-1.5 text-xs">
+                      <li key={r.id} className="relative flex items-center gap-1.5 text-xs">
                         <span className="min-w-0 flex-1 truncate text-ink-secondary">{r.playerName}</span>
                         <span className="shrink-0 text-[10px] tabular-nums text-ink-muted">{timeAgo(r.createdAt)}</span>
                         <span className="shrink-0 rounded-badge bg-surface-float px-1 py-0.5 text-[10px] text-ink-muted">{gameLabel(r.requestedGameSeq)}</span>
-                        <button type="button" disabled={reqBusy === r.id} onClick={() => quickApprove(r)} title="승인 — 요청 게임에 추가(결제는 장부에서)"
+                        <button type="button" disabled={reqBusy === r.id}
+                          onPointerDown={() => startLP(r)} onPointerUp={cancelLP} onPointerLeave={cancelLP} onPointerCancel={cancelLP}
+                          onClick={() => { if (lpFired.current) { lpFired.current = false; return; } quickApprove(r); }}
+                          title="탭: 승인(게임 추가) · 길게: 결제수단 선택해 바인 기록"
                           className="shrink-0 rounded-input bg-emerald-500/15 px-1.5 py-1 text-2xs font-bold text-emerald-400 hover:bg-emerald-500/25 disabled:opacity-40">✓</button>
                         <button type="button" disabled={reqBusy === r.id} onClick={() => quickReject(r)} title="거절"
                           className="shrink-0 rounded-input bg-rose-500/15 px-1.5 py-1 text-2xs font-bold text-rose-300 hover:bg-rose-500/25 disabled:opacity-40">✕</button>
+                        {payFor === r.id && (
+                          <div className="absolute right-0 top-full z-30 mt-1 flex items-center gap-1 rounded-input border border-border-default bg-surface-float p-1 shadow-dialog">
+                            <span className="px-1 text-[10px] text-ink-muted">바인</span>
+                            <button type="button" onClick={() => approveWithPay(r, 'cash')} className="rounded-[5px] bg-surface-high px-1.5 py-1 text-2xs font-bold text-ink-secondary hover:text-gold-300">현금</button>
+                            <button type="button" onClick={() => approveWithPay(r, 'card')} className="rounded-[5px] bg-surface-high px-1.5 py-1 text-2xs font-bold text-ink-secondary hover:text-gold-300">카드</button>
+                            <button type="button" onClick={() => approveWithPay(r, 'transfer')} className="rounded-[5px] bg-surface-high px-1.5 py-1 text-2xs font-bold text-ink-secondary hover:text-gold-300">이체</button>
+                            <button type="button" onClick={() => setPayFor(null)} className="px-1 text-2xs text-ink-muted hover:text-ink-secondary">✕</button>
+                          </div>
+                        )}
                       </li>
                     ))}
                   </ul>
@@ -386,15 +455,16 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
               )}
             </div>
           </div>
-          {/* 미니 추세 — 오늘 엔트리 vs 같은 요일 평소(최근 2주 동일 요일 평균) */}
-          {clockActive && sameDowAvg != null && (
-            <div className="flex items-center justify-between gap-2 border-t border-border-subtle px-3 py-2 text-2xs">
+          {/* 미니 추세 — 오늘 엔트리 vs 같은 요일 평소(최근 4주 동일 요일 평균) · 탭하면 통계로 */}
+          {(clockActive || activeClocks.length > 0) && sameDowAvg != null && (
+            <button type="button" onClick={() => onGoto('stats')} className="flex w-full items-center justify-between gap-2 border-t border-border-subtle px-3 py-2 text-2xs transition-colors hover:bg-white/[0.02]">
               <span className="text-ink-muted">오늘 vs 평소 <b className="text-ink-secondary">{DOW[todayDow]}요일</b></span>
               <span className="tabular-nums text-ink-secondary">
                 오늘 <b className="text-gold-300">{todayEntries}</b> · 평소 <b className="text-ink-primary">{sameDowAvg}</b>
                 {dowDelta != null && <span className={['ml-1 font-bold', dowDelta > 0 ? 'text-emerald-400' : dowDelta < 0 ? 'text-danger-light' : 'text-ink-muted'].join(' ')}>{dowDelta > 0 ? '▲' : dowDelta < 0 ? '▼' : '–'}{Math.abs(dowDelta)}%</span>}
+                <span className="ml-1 text-gold-300">→</span>
               </span>
-            </div>
+            </button>
           )}
         </section>
       )}
