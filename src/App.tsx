@@ -692,20 +692,23 @@ export default function App() {
 
   // ── QR 자가 바인요청 (?buyin=<venueId>) — 로그인 회원만, 운영자 승인 대기 ──
   useEffect(() => {
-    const bv = new URLSearchParams(window.location.search).get('buyin');
+    const sp = new URLSearchParams(window.location.search);
+    const bv = sp.get('buyin');
     if (!bv) return;
     if (!user) { setAuthOpen(true); return; }
+    const gm = sp.get('game'); // 테이블별 QR — 지정 게임(game_seq)
     const url = new URL(window.location.href);
-    url.searchParams.delete('buyin');
+    url.searchParams.delete('buyin'); url.searchParams.delete('game');
     window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+    const submitDirect = (g: number | null) => requestBuyin(bv, g)
+      .then((name) => { toast.show(`${name || '매장'} 참가(바인) 요청 전송! 운영자 승인을 기다려 주세요 🙋`, 'success'); getMyBuyinRequestsToday().then(setMyBuyinReqs).catch(() => {}); })
+      .catch((e) => toast.show(e instanceof Error ? e.message : '요청 전송 실패', 'error'));
+    const gNum = gm ? parseInt(gm, 10) : NaN;
+    if (Number.isFinite(gNum) && gNum > 0) { submitDirect(gNum); return; } // 게임 지정 QR → 바로 요청
     (async () => {
       const games = await venueTodayGames(bv).catch(() => [] as { gameSeq: number; title: string }[]);
       if (games.length > 1) { setBuyinPick({ venueId: bv, games }); return; } // 게임 여러 개면 선택 모달
-      try {
-        const name = await requestBuyin(bv, games[0]?.gameSeq ?? null);
-        toast.show(`${name || '매장'} 참가(바인) 요청 전송! 운영자 승인을 기다려 주세요 🙋`, 'success');
-        getMyBuyinRequestsToday().then(setMyBuyinReqs).catch(() => {});
-      } catch (e) { toast.show(e instanceof Error ? e.message : '요청 전송 실패', 'error'); }
+      submitDirect(games[0]?.gameSeq ?? null);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);

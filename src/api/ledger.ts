@@ -692,9 +692,9 @@ export interface BuyinRequest {
   requestedGameSeq: number | null;
 }
 /** 손님 QR 진입 URL — venue_id만(비민감). 로그인 회원만 요청 가능. */
-export function buyinRequestUrl(venueId: string): string {
+export function buyinRequestUrl(venueId: string, gameSeq?: number): string {
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://nuriholdem.com';
-  return `${origin}/?buyin=${venueId}`;
+  return `${origin}/?buyin=${venueId}${gameSeq ? `&game=${gameSeq}` : ''}`;
 }
 /** 손님: 오늘 이 매장 참가(바인) 요청 — 성공 시 매장명 반환. gameSeq=원하는 게임(선택). */
 export async function requestBuyin(venueId: string, gameSeq?: number | null, note?: string): Promise<string> {

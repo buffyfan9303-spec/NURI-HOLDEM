@@ -143,9 +143,12 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
     { id: 'voucher', icon: '🎟', title: '매장이용권 사용', data: () => QRCode.toDataURL(`NURIV-VENUE:${venueId}`, { width: 1024, margin: 2 }), desc: '대시보드 → 이용권 → 사용하기 → ‘매장 QR 스캔’' },
     { id: 'checkin', icon: '📍', title: '출석 체크인', data: () => QRCode.toDataURL(checkinUrl(venueId), { width: 1024, margin: 2 }), desc: 'QR 스캔 → 오늘 출석 도장(매장 점수 적립 · 출석왕 집계)' },
     { id: 'signup', icon: '📱', title: '회원가입', data: () => QRCode.toDataURL('https://nuriholdem.com/?signup=1', { width: 1024, margin: 2 }), desc: 'QR 스캔 → 바로 회원가입' },
-    { id: 'buyin', icon: '🙋', title: '바인(참가) 요청', data: () => QRCode.toDataURL(buyinRequestUrl(venueId), { width: 1024, margin: 2 }), desc: '손님 스캔 → 참가 요청 → 운영자가 장부에서 원탭 승인' },
+    { id: 'buyin', icon: '🙋', title: '바인(참가) 요청', data: () => QRCode.toDataURL(buyinRequestUrl(venueId), { width: 1024, margin: 2 }), desc: '손님 스캔 → 참가 요청(게임 선택) → 운영자가 장부에서 원탭 승인' },
+    { id: 'buyinG1', icon: '🏆', title: '바인 요청 · 메인', data: () => QRCode.toDataURL(buyinRequestUrl(venueId, 1), { width: 1024, margin: 2 }), desc: '메인 테이블 비치 — 스캔 시 메인 게임 바로 요청' },
+    { id: 'buyinG2', icon: '🎲', title: '바인 요청 · 사이드1', data: () => QRCode.toDataURL(buyinRequestUrl(venueId, 2), { width: 1024, margin: 2 }), desc: '사이드1 테이블 비치 — 스캔 시 사이드1 바로 요청' },
+    { id: 'buyinG3', icon: '🎲', title: '바인 요청 · 사이드2', data: () => QRCode.toDataURL(buyinRequestUrl(venueId, 3), { width: 1024, margin: 2 }), desc: '사이드2 테이블 비치 — 스캔 시 사이드2 바로 요청' },
   ] as const;
-  const [printSel, setPrintSel] = useState<Record<string, boolean>>({ voucher: true, checkin: false, signup: false, buyin: false });
+  const [printSel, setPrintSel] = useState<Record<string, boolean>>({ voucher: true, checkin: false, signup: false, buyin: false, buyinG1: false, buyinG2: false, buyinG3: false });
   const togglePrint = (id: string) => setPrintSel((m) => ({ ...m, [id]: !m[id] }));
   const printQr = async () => {
     const chosen = QR_DEFS.filter((q) => printSel[q.id]);

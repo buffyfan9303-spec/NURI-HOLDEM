@@ -124,7 +124,7 @@ function StatsView({ venueId }: { venueId: string }) {
     const byPlayer: Record<string, number> = {};
     const playerSet = new Set<string>();
     const dates = new Set<string>();
-    const dow: Record<number, { entries: number; revenue: number; unpaid: number; buyins: number; target: number; dates: Set<string>; players: Set<string> }> = {};
+    const dow: Record<number, { entries: number; revenue: number; unpaid: number; buyins: number; target: number; dates: Set<string>; players: Set<string>; sideE: number; sideRev: number }> = {};
     const unpaidByPlayer: Record<string, number> = {};
     for (const b of src) {
       const f = fin(b);
@@ -142,10 +142,11 @@ function StatsView({ venueId }: { venueId: string }) {
       if (f.unpaid > 0) unpaidByPlayer[b.playerName] = (unpaidByPlayer[b.playerName] ?? 0) + f.unpaid;
       playerSet.add(b.playerName); dates.add(b.sessionDate);
       const w = new Date(b.sessionDate + 'T00:00:00').getDay();
-      if (!dow[w]) dow[w] = { entries: 0, revenue: 0, unpaid: 0, buyins: 0, target: 0, dates: new Set(), players: new Set() };
+      if (!dow[w]) dow[w] = { entries: 0, revenue: 0, unpaid: 0, buyins: 0, target: 0, dates: new Set(), players: new Set(), sideE: 0, sideRev: 0 };
       if (!dow[w].dates.has(b.sessionDate)) dow[w].target += (sessionsByDate.get(b.sessionDate) ?? []).reduce((a, s) => a + (s.targetEntries ?? 0), 0); // 날짜별(전 게임) 기준엔트리 1회만 합산
       dow[w].entries += f.entry; dow[w].revenue += f.paid; dow[w].unpaid += f.unpaid;
       dow[w].buyins++; dow[w].dates.add(b.sessionDate); dow[w].players.add(b.playerName);
+      if (b.gameSeq > 1) { dow[w].sideE += f.entry; dow[w].sideRev += f.paid; }
     }
     const target = period === 'day' ? (sessionsByDate.get(date) ?? []).reduce((a, s) => a + (s.targetEntries ?? 0), 0) : 0;
     const visitor: Record<VisitorType, number> = { new: 0, regular: 0, staff: 0, other: 0 };
@@ -654,14 +655,14 @@ interface StatsAgg {
   cardRatio: number; unpaidRatio: number; discountRatio: number; discountCnt: number;
   ranking: [string, number][];
   mainEntries: number; mainRev: number; sideEntries: number; sideRev: number; sideGameCount: number;
-  dow: Record<number, { entries: number; revenue: number; unpaid: number; buyins: number; dates: Set<string>; players: Set<string> }>;
+  dow: Record<number, { entries: number; revenue: number; unpaid: number; buyins: number; dates: Set<string>; players: Set<string>; sideE: number; sideRev: number }>;
 }
 
 function buildAiReport(m: StatsAgg, days = 7): { empty: boolean; sales: string; risk: string; weekday: string; actions: string[] } {
   if (m.total === 0) return { empty: true, sales: '', risk: '', weekday: '', actions: [] };
   const man = (won: number) => wonToMan(won);
   const periodLabel = days <= 7 ? '이번 주' : `최근 ${days}일`;
-  const dows = Object.entries(m.dow).map(([w, d]) => ({ w: Number(w), avg: d.dates.size ? d.entries / d.dates.size : 0, rev: d.dates.size ? d.revenue / d.dates.size : 0 }));
+  const dows = Object.entries(m.dow).map(([w, d]) => ({ w: Number(w), avg: d.dates.size ? d.entries / d.dates.size : 0, rev: d.dates.size ? d.revenue / d.dates.size : 0, sideAvg: d.dates.size ? d.sideE / d.dates.size : 0 }));
   dows.sort((a, b) => b.avg - a.avg);
   const best = dows[0];
   const worst = dows.length ? dows[dows.length - 1] : null;
@@ -681,9 +682,11 @@ function buildAiReport(m: StatsAgg, days = 7): { empty: boolean; sales: string; 
   if (dows.length <= 1) {
     weekday = '아직 요일별 비교에 충분한 데이터가 없습니다. 며칠 더 운영되면 요일 패턴(약한 요일)을 진단해 드립니다.';
   } else {
+    const sideDays = dows.filter((d) => d.sideAvg > 0).sort((a, b) => b.sideAvg - a.sideAvg);
+    const sidePat = sideDays.length ? ` 사이드 게임은 ${DOW[sideDays[0].w]}요일에 가장 활발합니다(평균 ${sideDays[0].sideAvg.toFixed(1)} 엔트리) — 그날 사이드 라인업을 강화해 보세요.` : '';
     weekday = `${DOW[worst!.w]}요일이 가장 부진합니다 — 평균 ${worst!.avg.toFixed(1)} 엔트리 · 매출 ${man(worst!.rev)}만 원. ` +
       `반대로 ${DOW[best.w]}요일이 가장 활발(평균 ${best.avg.toFixed(1)} 엔트리)합니다. ` +
-      `${weak.length ? weak.join('·') + '요일' : DOW[worst!.w] + '요일'}에 집객 이벤트(얼리버드 칩업·신규 할인·보장 토너먼트)를 배치해 약한 요일을 끌어올리세요.`;
+      `${weak.length ? weak.join('·') + '요일' : DOW[worst!.w] + '요일'}에 집객 이벤트(얼리버드 칩업·신규 할인·보장 토너먼트)를 배치해 약한 요일을 끌어올리세요.` + sidePat;
   }
 
   const sales =
