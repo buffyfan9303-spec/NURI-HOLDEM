@@ -3,8 +3,8 @@ import CountUp from '../atoms/CountUp';
 import type { Schedule } from '../../api/schedules';
 import {
   getLedgerSession, getLedgerBuyins, getLedgerPlayers, getLedgerRange, buyinFinance, wonToMan, visitorLabel, subscribeLedger,
-  getPosterOpsSummaries,
-  type LedgerSession, type LedgerBuyin, type LedgerPlayer,
+  getPosterOpsSummaries, getPendingBuyinRequests, subscribeBuyinRequests,
+  type LedgerSession, type LedgerBuyin, type LedgerPlayer, type BuyinRequest,
 } from '../../api/ledger';
 import { getClockState, subscribeClock, type ClockState } from '../../api/clock';
 import { getReservationCounts, getVenueRegulars, subscribeReservations, type VenueRegular } from '../../api/reservations';
@@ -63,6 +63,8 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const [session, setSession] = useState<LedgerSession | null>(null);
   const [buyins, setBuyins] = useState<LedgerBuyin[]>([]);
   const [clock, setClock] = useState<ClockState | null>(null);
+  const [pendingReqs, setPendingReqs] = useState<BuyinRequest[]>([]); // 라이브 위젯: 대기중 바인 요청
+  const [, setNowTick] = useState(0); // 라이브 카운트다운/경과시간 1초 갱신
   const [resCounts, setResCounts] = useState<Record<string, number>>({});
   const [shifts, setShifts] = useState<StaffShift[]>([]);
   const [monthShifts, setMonthShifts] = useState<StaffShift[]>([]);
@@ -99,6 +101,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
     getLedgerBuyins(venueId, d).then(setBuyins).catch(() => {});
     getLedgerPlayers(venueId, d).then(setPlayers).catch(() => {});
     getClockState(venueId).then(setClock).catch(() => {});
+    getPendingBuyinRequests(venueId, d).then(setPendingReqs).catch(() => {});
     getStaffSchedule(venueId, d, d).then(setShifts).catch(() => {});
     getStaffSchedule(venueId, mr.start, mr.end).then(setMonthShifts).catch(() => {});
     getStaffWages(venueId).then(setWages).catch(() => {});
@@ -116,6 +119,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   useEffect(() => { setLoading(true); reload(); }, [reload]);
   useEffect(() => subscribeLedger(venueId, reload), [venueId, reload]);
   useEffect(() => subscribeClock(venueId, reload), [venueId, reload]);
+  useEffect(() => subscribeBuyinRequests(venueId, reload), [venueId, reload]);
   useEffect(() => subscribeReservations(reload), [reload]);
   useEffect(() => subscribeStaffSchedule(venueId, reload), [venueId, reload]);
 
@@ -141,6 +145,21 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const lvl = clock?.config.levels[clock.currentIndex];
   const clockActive = !!clock && (clock.running || clock.currentIndex > 0 || clock.endsAt != null);
   const levelNo = clock ? clock.config.levels.slice(0, clock.currentIndex + 1).filter((l) => l.kind === 'level').length : 0;
+  // 라이브 위젯: 클락 남은시간(진행=endsAt 기준, 일시정지=remainingMs) · 생존 인원
+  const clockRemainMs = clockActive && clock
+    ? (clock.running && clock.endsAt ? Math.max(0, new Date(clock.endsAt).getTime() - Date.now()) : Math.max(0, clock.remainingMs))
+    : 0;
+  const survivors = clock ? Math.max(0, Math.round(fin.entry) + clock.adjEntries + clock.adjRebuys - clock.eliminations) : 0;
+  const liveWidget = caps.ledger && (clockActive || pendingReqs.length > 0); // 진행 클락 또는 대기 요청이 있을 때만 노출
+  // 라이브일 때만 1초 갱신(카운트다운·"분 전") — 평상시엔 멈춰 불필요 리렌더 방지
+  useEffect(() => {
+    if (!liveWidget) return;
+    const id = setInterval(() => setNowTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [liveWidget]);
+  const fmtClock = (ms: number) => { const t = Math.floor(ms / 1000); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
+  const gameLabel = (g: number | null) => g == null ? '미지정' : g <= 1 ? '메인' : `사이드${g - 1}`;
+  const timeAgo = (iso: string) => { const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); return s < 60 ? '방금' : s < 3600 ? `${Math.floor(s / 60)}분 전` : `${Math.floor(s / 3600)}시간 전`; };
 
   // ── 예약 / 출근 ──
   const totalRes = upcoming.reduce((a, g) => a + (resCounts[g.id] ?? 0), 0);
@@ -270,6 +289,71 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       <CheckinModal open={checkinOpen} onClose={() => setCheckinOpen(false)} venueId={venueId} />
       <BoostContactModal open={boostOpen} onClose={() => setBoostOpen(false)} />
 
+      {/* 🔴 라이브 운영 현황 — 진행 클락 + 대기 바인요청을 한 카드에. 운영 중일 때만 노출(상황 인지형 커맨드센터) */}
+      {!loading && liveWidget && (
+        <section className="overflow-hidden rounded-card border border-gold-400/40 bg-gradient-to-br from-gold-300/[0.07] to-transparent">
+          <div className="flex items-center justify-between gap-2 border-b border-border-subtle px-3 py-2">
+            <span className="flex items-center gap-1.5 text-sm font-bold text-ink-primary">
+              <span className="relative flex h-2 w-2" aria-hidden>
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+              </span>
+              라이브 운영 현황
+            </span>
+            <span className="text-2xs text-ink-muted tabular-nums">{d.slice(5).replace('-', '/')}</span>
+          </div>
+          <div className="grid grid-cols-1 divide-y divide-border-subtle sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+            {/* 진행 클락 */}
+            <button type="button" onClick={() => onGoto('clock')} className="flex items-center justify-between gap-3 px-3 py-3 text-left transition-colors hover:bg-white/[0.02]">
+              <div className="min-w-0">
+                <p className="mb-0.5 text-2xs text-ink-muted">토너먼트 클락{clockActive ? (clock?.running ? ' · 진행' : ' · 일시정지') : ''}</p>
+                {clockActive && lvl ? (
+                  lvl.kind === 'break' ? (
+                    <p className="text-2xl font-extrabold leading-none text-gold-300">BREAK</p>
+                  ) : (
+                    <>
+                      <p className="text-xl font-extrabold leading-none text-ink-primary tabular-nums">{lvl.sb.toLocaleString()}<span className="text-ink-muted">/</span>{lvl.bb.toLocaleString()}</p>
+                      <p className="mt-1 text-2xs text-ink-muted">레벨 {levelNo}{lvl.ante > 0 ? ` · ante ${lvl.ante.toLocaleString()}` : ''}</p>
+                    </>
+                  )
+                ) : (
+                  <p className="text-sm font-bold text-ink-secondary">클락 꺼짐 <span className="text-2xs font-normal text-ink-muted">— 눌러서 켜기</span></p>
+                )}
+              </div>
+              {clockActive && (
+                <div className="shrink-0 text-right">
+                  <p className={`text-3xl font-extrabold leading-none tabular-nums ${clock?.running ? 'text-emerald-400' : 'text-amber-400'}`}>{fmtClock(clockRemainMs)}</p>
+                  <p className="mt-1.5 text-2xs text-ink-muted">남은 인원 <b className="text-gold-300">{survivors}</b></p>
+                </div>
+              )}
+            </button>
+            {/* 대기 바인요청 */}
+            <button type="button" onClick={() => onGoto('ledger')} className="flex flex-col px-3 py-3 text-left transition-colors hover:bg-white/[0.02]">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-2xs text-ink-muted">대기중 바인 요청</p>
+                <span className={`rounded-badge px-1.5 py-0.5 text-2xs font-bold ${pendingReqs.length > 0 ? 'bg-rose-500/15 text-rose-300' : 'bg-surface-float text-ink-muted'}`}>{pendingReqs.length}건</span>
+              </div>
+              {pendingReqs.length === 0 ? (
+                <p className="flex-1 py-3 text-center text-2xs text-ink-muted">대기중인 요청이 없습니다.</p>
+              ) : (
+                <>
+                  <ul className="mt-1.5 space-y-1">
+                    {pendingReqs.slice(0, 3).map((r) => (
+                      <li key={r.id} className="flex items-center gap-2 text-xs">
+                        <span className="min-w-0 flex-1 truncate text-ink-secondary">{r.playerName}</span>
+                        <span className="shrink-0 rounded-badge bg-surface-float px-1.5 py-0.5 text-[10px] text-ink-muted">{gameLabel(r.requestedGameSeq)}</span>
+                        <span className="shrink-0 text-[10px] tabular-nums text-ink-muted">{timeAgo(r.createdAt)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-auto pt-1.5 text-2xs font-bold text-gold-300">{pendingReqs.length > 3 ? `외 ${pendingReqs.length - 3}건 · ` : ''}승인하러 가기 →</p>
+                </>
+              )}
+            </button>
+          </div>
+        </section>
+      )}
+
       {/* 지금 할 일 — 시간대·운영 상태 인지형 다음 행동 카드(대시보드 = 행동 안내판) */}
       {(() => {
         if (loading) return null;
@@ -360,8 +444,8 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           )}
         </DashCard>
 
-        {/* 클락 */}
-        <DashCard show={caps.ledger} title="토너먼트 클락" onClick={() => onGoto('clock')}
+        {/* 클락 — 라이브 위젯이 클락을 표시 중(clockActive)이면 중복 방지 위해 숨김 */}
+        <DashCard show={caps.ledger && !clockActive} title="토너먼트 클락" onClick={() => onGoto('clock')}
           badge={clockActive
             ? <span className={`rounded-badge px-1.5 py-0.5 text-2xs font-bold ${clock?.running ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-500/15 text-amber-400'}`}>{clock?.running ? '진행중' : '일시정지'}</span>
             : <span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-surface-float text-ink-muted">미실행</span>}>

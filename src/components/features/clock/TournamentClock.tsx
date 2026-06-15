@@ -296,6 +296,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
   };
   const wrapRef = useRef<HTMLDivElement>(null);
   const advancingRef = useRef(false);
+  const acRef = useRef<AudioContext | null>(null); // 사운드용 AudioContext 1개 재사용(매번 new 방지 → 브라우저 컨텍스트 한도/누수 방지)
 
   // 장부 연동: 연결된 세션의 바인/얼리설정 자동 반영
   useEffect(() => {
@@ -341,27 +342,53 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
   const remaining = computeRemaining(state);
   const cur: ClockLevel = state.config.levels[state.currentIndex] ?? { kind: 'level', sb: 0, bb: 0, ante: 0, minutes: 0 };
 
-  const beep = useCallback(() => {
+  // 음 시퀀스 재생(엔벨로프 적용 → 거친 비프 대신 부드러운 차임). 컨텍스트 1개 재사용.
+  const playTones = useCallback((notes: { f: number; t: number; d: number; type?: OscillatorType }[]) => {
     if (volume <= 0) return;
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const Ctx = (window.AudioContext || (window as any).webkitAudioContext);
-      const ac = new Ctx(); const o = ac.createOscillator(); const g = ac.createGain();
-      o.connect(g); g.connect(ac.destination); o.type = 'sine'; o.frequency.value = 880;
-      g.gain.value = Math.min(0.3, volume / 100 * 0.3);
-      o.start(); o.stop(ac.currentTime + 0.5);
+      if (!acRef.current) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const Ctx = (window.AudioContext || (window as any).webkitAudioContext);
+        if (!Ctx) return;
+        acRef.current = new Ctx();
+      }
+      const ac = acRef.current;
+      if (ac.state === 'suspended') ac.resume().catch(() => {});
+      const vol = Math.min(0.35, volume / 100 * 0.35);
+      const t0 = ac.currentTime;
+      for (const n of notes) {
+        const o = ac.createOscillator(); const g = ac.createGain();
+        o.connect(g); g.connect(ac.destination);
+        o.type = n.type ?? 'sine'; o.frequency.value = n.f;
+        const s = t0 + n.t;
+        g.gain.setValueAtTime(0.0001, s);
+        g.gain.exponentialRampToValueAtTime(vol, s + 0.02);          // 빠른 어택
+        g.gain.exponentialRampToValueAtTime(0.0001, s + n.d);        // 자연 감쇠
+        o.start(s); o.stop(s + n.d + 0.03);
+      }
     } catch { /* noop */ }
   }, [volume]);
+
+  // 상황별 알림음 — 레벨업: 상승 차임 / 브레이크: 부드러운 하강음 / 종료: 팡파르
+  const playChime = useCallback((kind: 'level' | 'break' | 'finish') => {
+    if (kind === 'break') {
+      playTones([{ f: 587.33, t: 0, d: 0.24, type: 'triangle' }, { f: 440, t: 0.26, d: 0.55, type: 'triangle' }]);
+    } else if (kind === 'finish') {
+      playTones([{ f: 523.25, t: 0, d: 0.14 }, { f: 659.25, t: 0.14, d: 0.14 }, { f: 783.99, t: 0.28, d: 0.16 }, { f: 1046.5, t: 0.44, d: 0.6 }]);
+    } else {
+      playTones([{ f: 659.25, t: 0, d: 0.14 }, { f: 830.61, t: 0.14, d: 0.14 }, { f: 1046.5, t: 0.28, d: 0.34 }]);
+    }
+  }, [playTones]);
 
   // 레벨 자동 전환(운영자 화면만 기록)
   const advance = useCallback(() => {
     const lv = state.config.levels;
     const nextIndex = state.currentIndex + 1;
-    if (nextIndex >= lv.length) { persist({ running: false, remainingMs: 0, endsAt: null }); return; }
+    if (nextIndex >= lv.length) { persist({ running: false, remainingMs: 0, endsAt: null }); playChime('finish'); return; }
     const rem = lv[nextIndex].minutes * 60_000;
     persist({ currentIndex: nextIndex, remainingMs: rem, endsAt: state.running ? new Date(now() + rem).toISOString() : null });
-    beep();
-  }, [state, persist, beep]);
+    playChime(lv[nextIndex].kind === 'break' ? 'break' : 'level'); // 다음이 브레이크면 휴식음, 아니면 레벨업음
+  }, [state, persist, playChime]);
 
   useEffect(() => {
     if (!canManage || !state.running) return;
@@ -573,6 +600,8 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
           <div className="shrink-0 border-t border-white/5 bg-black/30 px-2 py-2">
             <div className="flex flex-wrap items-end justify-center gap-x-3 gap-y-2">
               <VolCtl value={volume} onChange={setVolume} />
+              <button type="button" onClick={() => playChime('level')} title="알림음 미리듣기"
+                className="self-end w-7 h-7 rounded-input bg-surface-high border border-border-default text-ink-secondary hover:text-gold-300 text-sm leading-none">🔊</button>
               <Stepper label="Entries" onPlus={() => adj('adjEntries', 1)} onMinus={() => adj('adjEntries', -1)} />
               <Stepper label="Player" onPlus={() => adjPlayer(1)} onMinus={() => adjPlayer(-1)} />
               <Stepper label="Rebuy" onPlus={() => adj('adjRebuys', 1)} onMinus={() => adj('adjRebuys', -1)} />
