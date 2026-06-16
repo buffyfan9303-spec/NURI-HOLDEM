@@ -30,3 +30,9 @@ dist-ssr
 누리홀덤_사업계획서.txt
 누리홀덤_사업계획서_상세본.md
 사업계획_자료_누리홀덤.md
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/

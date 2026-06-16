@@ -8,7 +8,10 @@
     "build": "node scripts/gen-sitemap.mjs && tsc -b && vite build",
     "sitemap": "node scripts/gen-sitemap.mjs",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -26,6 +29,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.61.0",
     "@types/node": "^24.12.3",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.2.14",
