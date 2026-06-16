@@ -14,7 +14,8 @@ import {
 } from '../../api/vouchers';
 import { wonToMan } from '../../api/ledger';
 import { getMyReservations, cancelMyReservation, type MyReservationRow } from '../../api/reservations';
-import { getMyRankingHistory, parsePrizeMan, placementPoints, type MyRankingRow } from '../../api/rankings';
+import { getMyRankingHistory, getGlobalRankingTotals, parsePrizeMan, placementPoints, type MyRankingRow } from '../../api/rankings';
+import { shareRecordCard } from '../../lib/recordCard';
 import { BADGES, getMyBadgeStats, type BadgeStats } from '../../lib/loyalty';
 
 function parseVenueId(text: string): string | null {
@@ -40,6 +41,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
   const [plays, setPlays] = useState<PlayHistory[]>([]);
   const [resv, setResv] = useState<MyReservationRow[]>([]);   // 대회 참가(예약) 이력
   const [ranks, setRanks] = useState<MyRankingRow[]>([]);     // 내 입상 기록(닉네임 기준)
+  const [percentile, setPercentile] = useState<number | null>(null); // 전국 상위 N%(prizePoints 기준)
   const [loading, setLoading] = useState(false);
   const [redeem, setRedeem] = useState<Stack | null>(null);
   const [badgeStats, setBadgeStats] = useState<BadgeStats | null>(null); // 내 업적(랭킹 탭에서 이전)
@@ -51,8 +53,18 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
       listMyVouchers(), myVisitedVenues(), myPlayHistory(),
       getMyReservations().catch(() => [] as MyReservationRow[]),
       user?.nickname ? getMyRankingHistory(user.nickname, 200).catch(() => [] as MyRankingRow[]) : Promise.resolve([] as MyRankingRow[]),
+      user?.nickname ? getGlobalRankingTotals().catch(() => []) : Promise.resolve([]),
     ])
-      .then(([vs, vi, pl, rv, rk]) => { setVouchers(vs); setVisits(vi); setPlays(pl); setResv(rv); setRanks(rk); })
+      .then(([vs, vi, pl, rv, rk, gt]) => {
+        setVouchers(vs); setVisits(vi); setPlays(pl); setResv(rv); setRanks(rk);
+        // 전국 상위 N% — prizePoints(누적 포인트) 기준 순위. 닉네임 매칭.
+        const nick = user?.nickname?.toLowerCase();
+        if (nick && gt.length) {
+          const sorted = [...gt].sort((a, b) => b.prizePoints - a.prizePoints);
+          const idx = sorted.findIndex((t) => t.nickname.toLowerCase() === nick);
+          setPercentile(idx >= 0 ? Math.max(1, Math.round(((idx + 1) / sorted.length) * 100)) : null);
+        } else setPercentile(null);
+      })
       .catch(() => {}).finally(() => setLoading(false));
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -279,7 +291,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
             {loading ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
               : !user?.nickname ? <p className="py-6 text-center text-2xs text-ink-muted">프로필에서 아이디(닉네임)를 설정하면 입상 기록이 자동 연결됩니다.</p>
               : ranks.length === 0 ? <p className="py-6 text-center text-2xs text-ink-muted">아직 입상 기록이 없습니다 — 매장에서 순위가 등록되면 자동으로 표시됩니다.</p>
-                : <><RecordSummary rows={ranks} /><RankTrendChart rows={ranks} />
+                : <><RecordSummary rows={ranks} percentile={percentile} nickname={user?.nickname ?? ''} /><RankTrendChart rows={ranks} />
                 <ul className="space-y-1.5">{ranks.slice(0, 15).map((r, i) => (
                   <li key={i} className="flex items-center gap-2.5 rounded-input border border-border-subtle bg-surface-low px-3 py-2">
                     <span className={['flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-2xs font-extrabold tabular-nums',
@@ -357,7 +369,9 @@ function SwipeCancelRow({ cancelable, onCancel, children }: { cancelable: boolea
 }
 
 /** 내 토너먼트 전적 요약 — 입상 기록(닉네임 매칭)에서 우승·입상·승률·누적 상금·즐겨찾는 매장 집계. */
-function RecordSummary({ rows }: { rows: MyRankingRow[] }) {
+function RecordSummary({ rows, percentile, nickname }: { rows: MyRankingRow[]; percentile: number | null; nickname: string }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
   const n = rows.length;
   if (n === 0) return null;
   const wins = rows.filter((r) => r.position === 1).length;       // 🥇 우승(1위)
@@ -372,9 +386,23 @@ function RecordSummary({ rows }: { rows: MyRankingRow[] }) {
   for (const r of rows) freq.set(r.venueName, (freq.get(r.venueName) ?? 0) + 1);
   const fav = [...freq.entries()].sort((a, b) => b[1] - a[1])[0] ?? null;
 
+  const doShare = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const res = await shareRecordCard({ nickname: nickname || '플레이어', wins, cashes, records: n, winRate, bestPosition: best, prizeMan, points, percentile });
+      toast.show(res === 'shared' ? '전적 카드를 공유했어요' : '전적 카드 이미지를 저장했어요', 'success');
+    } catch { toast.show('카드 생성에 실패했어요', 'error'); } finally { setBusy(false); }
+  };
+
   return (
     <div className="mb-2 rounded-card border border-gold-400/30 bg-gold-300/[0.05] p-3">
-      <p className="mb-2 text-xs font-bold text-gold-300">🏆 내 토너먼트 전적 <span className="font-normal text-ink-muted">(기록 {n}회)</span></p>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="text-xs font-bold text-gold-300">🏆 내 토너먼트 전적 <span className="font-normal text-ink-muted">(기록 {n}회)</span>
+          {percentile != null && <span className="ml-1.5 rounded-badge bg-gold-300/15 px-1.5 py-0.5 text-2xs text-gold-300">전국 상위 {percentile}%</span>}
+        </p>
+        <button type="button" onClick={doShare} disabled={busy} className="btn-ghost shrink-0 px-2.5 py-1 text-2xs disabled:opacity-50">{busy ? '생성 중…' : '📤 공유'}</button>
+      </div>
       <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-6">
         <Stat label="우승" value={`${wins}회`} accent />
         <Stat label="입상 TOP3" value={`${cashes}회`} />
