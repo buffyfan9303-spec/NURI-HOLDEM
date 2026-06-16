@@ -33,6 +33,7 @@ import type { MarketplaceFormData } from './components/features/MarketplaceFormM
 import { useBackClose } from './lib/backstack';
 import { useVisibilityRefresh } from './lib/useVisibilityRefresh';
 import { lazyWithReload } from './lib/lazyWithReload';
+import { applyScheduleSeo, applyVenueSeo, resetSeo } from './lib/seo';
 import { SpringButton } from './components/atoms/StatefulActionButton';
 import { motion } from 'framer-motion';
 import { useAuth } from './contexts/AuthContext';
@@ -1098,6 +1099,15 @@ export default function App() {
       } catch { /* ignore */ }
     }
   }, [venues]);
+
+  // 동적 SEO — 대회/매장 상세가 열리면 <head> 메타·canonical·JSON-LD 를 그에 맞게 갱신,
+  // 둘 다 닫히면 홈 기본값으로 복원. Googlebot/네이버의 JS 렌더링이 읽어 개별 페이지 색인.
+  useEffect(() => {
+    if (openSchedule) { applyScheduleSeo(openSchedule); return; }
+    const ov = openVenueId ? venues.find((v) => v.id === openVenueId) : null;
+    if (ov) { applyVenueSeo(ov); return; }
+    resetSeo();
+  }, [openSchedule, openVenueId, venues]);
 
   const handleScheduleSelect = useCallback((s: Schedule) => {
     // 포스터 상세는 전체화면 2열 모달(PC: 포스터 좌+정보 우)로 표시 — 좁은 패널보다 가독성↑
