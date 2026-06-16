@@ -522,6 +522,11 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
               {adImg && <button type="button" onClick={removeAd} className="btn-ghost text-2xs px-2 py-1 text-ink-muted">광고 삭제</button>}
             </>
           )}
+          {!fs && (
+            <button type="button" onClick={() => window.open(`/?display=${state.venueId}&g=${state.gameSeq ?? 1}`, '_blank', 'noopener')}
+              title="새 창으로 관전 화면(매장 TV·빔프로젝터)을 엽니다 — 그 창을 큰 화면으로 옮겨 띄워두세요"
+              className="btn-ghost text-2xs px-2.5 py-1 text-gold-300">📺 TV 송출</button>
+          )}
           <button type="button" onClick={toggleFs} className="btn-ghost text-2xs px-2.5 py-1">{fs ? '⤡ 전체화면 해제' : '⤢ 전체화면'}</button>
           {canManage && !fs && <button type="button" onClick={onOpenSettings} className="btn-ghost text-2xs px-2.5 py-1">설정</button>}
         </div>
