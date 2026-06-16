@@ -12,6 +12,7 @@ import VenueVerificationCard from './VenueVerificationCard';
 import NuriPosLedger, { type LedgerSeed } from './NuriPosLedger';
 import LedgerStatsPanel, { PosSettingsPanel } from './LedgerStatsPanel';
 import TournamentClock from './clock/TournamentClock';
+import AnnouncePanel from './AnnouncePanel';
 import StaffSchedule from './StaffSchedule';
 import { StaffWageManager, StaffSettlement, StaffWorkLog, StaffSelfAttendance } from './StaffPayroll';
 import StoreDashboard from './StoreDashboard';
@@ -281,9 +282,12 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 <div key={s} style={renderSection === s && !dItem?.locked ? undefined : { display: 'none' }}>{node}</div>
               );
               return (<>
-                {visited.includes('dashboard') && box('dashboard', <StoreDashboard venueId={venueId} schedules={schedules} onGoto={(s) => gotoSection(s as Section)} onCreatePoster={onCreatePoster}
-                  active={renderSection === 'dashboard'}
-                  caps={{ ledger: ledgerOk, manage: manageOk, voucher: manageOk || voucherView, posters: canPosters, staff: canStaff }} />)}
+                {visited.includes('dashboard') && box('dashboard', <>
+                  <StoreDashboard venueId={venueId} schedules={schedules} onGoto={(s) => gotoSection(s as Section)} onCreatePoster={onCreatePoster}
+                    active={renderSection === 'dashboard'}
+                    caps={{ ledger: ledgerOk, manage: manageOk, voucher: manageOk || voucherView, posters: canPosters, staff: canStaff }} />
+                  {manageOk && <div className="mt-4"><AnnouncePanel venueId={venueId} /></div>}
+                </>)}
                 {visited.includes('posters') && canPosters && box('posters', <MyPostersTab schedules={schedules} onCreate={onCreatePoster} onEdit={onEditPoster} onDelete={onDeletePoster}
                   onGotoRanking={ledgerOk ? (date) => { setRankingDraft({ date, names: [] }); setSection('ranking'); } : undefined}
                   onOpenLedger={ledgerOk ? (s, existingDate) => {
