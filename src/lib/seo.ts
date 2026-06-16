@@ -166,6 +166,38 @@ export function applyVenueSeo(v: Venue): void {
   setJsonLd(ld);
 }
 
+// ── 지역 디렉토리(SEO 허브) SEO ──────────────────────────────────────────────
+// "강남 홀덤", "분당 토너먼트" 류 long-tail 검색용 색인 페이지. CollectionPage + ItemList(매장).
+export function applyDirectorySeo(
+  region: string,
+  venues: { id: string; name: string; slug?: string | null }[],
+  tournamentCount: number,
+): void {
+  const url = `${SITE}/?directory=${encodeURIComponent(region)}`;
+  const title = clip(`${region} 홀덤펍·홀덤 대회 일정 | NHoldem`, 65);
+  const desc = clip(
+    `${region} 지역 홀덤펍 ${venues.length}곳, 홀덤 토너먼트 ${tournamentCount}개의 일정·바이인·상금·결과를 한눈에. ${region}에서 홀덤 어디서 칠지 NURI HOLDEM 에서 확인하세요.`,
+    155,
+  ) || DEFAULT_DESC;
+
+  applyCore({ title, desc, url, image: DEFAULT_IMAGE, ogType: 'website' });
+
+  const items = venues.slice(0, 30).map((v, i) => ({
+    '@type': 'ListItem',
+    position: i + 1,
+    name: v.name,
+    url: `${SITE}/?v=${v.slug || v.id.slice(0, 8)}`,
+  }));
+  setJsonLd({
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: `${region} 홀덤펍 디렉토리`,
+    url,
+    about: `${region} 홀덤펍·홀덤 토너먼트`,
+    mainEntity: { '@type': 'ItemList', numberOfItems: venues.length, itemListElement: items },
+  });
+}
+
 // ── 기본(홈)으로 복원 ─────────────────────────────────────────────────────────
 export function resetSeo(): void {
   applyCore({ title: DEFAULT_TITLE, desc: DEFAULT_DESC, url: SITE, image: DEFAULT_IMAGE, ogType: 'website' });
