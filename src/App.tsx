@@ -48,6 +48,7 @@ import {
 } from './api/community';
 import { getListings, getNotices, createNotice, updateNotice, deleteNotice, createListing, deleteListing } from './api/marketplace';
 import { enablePush, isPushSubscribed, pushSupported } from './api/push';
+import { rememberRefCode, pendingRefCode, clearRefCode, recordReferral } from './api/referrals';
 import type { NoticeFormData } from './components/features/NoticeFormModal';
 import type { LegalDoc } from './components/features/LegalDocsModal';
 import { getMyNotifications, markNotificationsRead } from './api/notifications';
@@ -767,6 +768,30 @@ export default function App() {
     if (!user) { setAuthMode('signup-user'); setAuthOpen(true); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── 친구 초대 (?ref=<추천코드>) — 코드 기억 + 비로그인 시 가입 유도 ──
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const ref = sp.get('ref');
+    if (!ref) return;
+    rememberRefCode(ref);
+    const url = new URL(window.location.href);
+    url.searchParams.delete('ref');
+    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+    if (!user) { setAuthMode('signup-user'); setAuthOpen(true); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 로그인/가입 완료 후 — 기억해둔 추천 코드가 있으면 record_referral 1회(신규 14일내만 서버에서 수락)
+  const refRecorded = useRef(false);
+  useEffect(() => {
+    if (!user || refRecorded.current) return;
+    const code = pendingRefCode();
+    if (!code) return;
+    refRecorded.current = true;
+    recordReferral(code).then((ok) => { if (ok) toast.show('추천 가입이 연결됐어요 · 본인인증하면 둘 다 활동점수!', 'success'); clearRefCode(); }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   // 비로그인 사용자가 쓰기(글·댓글·반응·채팅·예약)를 시도하면 로그인 모달을 띄운다.
   useEffect(() => {

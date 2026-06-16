@@ -16,6 +16,8 @@ import { wonToMan } from '../../api/ledger';
 import { getMyReservations, cancelMyReservation, type MyReservationRow } from '../../api/reservations';
 import { getMyRankingHistory, getGlobalRankingTotals, parsePrizeMan, placementPoints, type MyRankingRow } from '../../api/rankings';
 import { shareRecordCard } from '../../lib/recordCard';
+import { getMyReferralStats, inviteUrl, type ReferralStats } from '../../api/referrals';
+import QRCode from 'qrcode';
 import { BADGES, getMyBadgeStats, type BadgeStats } from '../../lib/loyalty';
 
 function parseVenueId(text: string): string | null {
@@ -42,6 +44,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
   const [resv, setResv] = useState<MyReservationRow[]>([]);   // 대회 참가(예약) 이력
   const [ranks, setRanks] = useState<MyRankingRow[]>([]);     // 내 입상 기록(닉네임 기준)
   const [percentile, setPercentile] = useState<number | null>(null); // 전국 상위 N%(prizePoints 기준)
+  const [refStats, setRefStats] = useState<ReferralStats>({ invited: 0, rewarded: 0 }); // 친구 초대 현황
   const [loading, setLoading] = useState(false);
   const [redeem, setRedeem] = useState<Stack | null>(null);
   const [badgeStats, setBadgeStats] = useState<BadgeStats | null>(null); // 내 업적(랭킹 탭에서 이전)
@@ -54,9 +57,10 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
       getMyReservations().catch(() => [] as MyReservationRow[]),
       user?.nickname ? getMyRankingHistory(user.nickname, 200).catch(() => [] as MyRankingRow[]) : Promise.resolve([] as MyRankingRow[]),
       user?.nickname ? getGlobalRankingTotals().catch(() => []) : Promise.resolve([]),
+      user?.nickname ? getMyReferralStats().catch(() => ({ invited: 0, rewarded: 0 })) : Promise.resolve({ invited: 0, rewarded: 0 }),
     ])
-      .then(([vs, vi, pl, rv, rk, gt]) => {
-        setVouchers(vs); setVisits(vi); setPlays(pl); setResv(rv); setRanks(rk);
+      .then(([vs, vi, pl, rv, rk, gt, rs]) => {
+        setVouchers(vs); setVisits(vi); setPlays(pl); setResv(rv); setRanks(rk); setRefStats(rs);
         // 전국 상위 N% — prizePoints(누적 포인트) 기준 순위. 닉네임 매칭.
         const nick = user?.nickname?.toLowerCase();
         if (nick && gt.length) {
@@ -183,6 +187,9 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
               <p className="mt-2 text-2xs leading-relaxed text-amber-300/90">⚠ 받는 아이디(닉네임)를 설정하면 업주가 더 쉽게 이용권을 보낼 수 있어요. 프로필에서 설정하세요.</p>
             )}
           </section>
+
+          {/* 친구 초대 — 추천 링크 + 현황. 친구 가입+본인인증 시 양쪽 활동점수 */}
+          <InviteSection nickname={user?.nickname ?? ''} stats={refStats} />
 
           <div className="rounded-card border border-amber-500/40 bg-amber-500/[0.08] p-3">
             <p className="text-sm font-bold text-amber-300">⚠️ 매장이용권은 금전적 가치가 없습니다</p>
@@ -561,5 +568,47 @@ function HiCard({ title, name, detail }: { title: string; name: string; detail: 
       <p className="mt-0.5 truncate text-sm font-bold text-ink-primary">{name}</p>
       <p className="text-2xs text-ink-muted">{detail}</p>
     </div>
+  );
+}
+
+/** 친구 초대 — 추천 링크(닉네임 코드) + 현황. 친구 가입+본인인증 시 양쪽 활동점수(+500/+300). */
+function InviteSection({ nickname, stats }: { nickname: string; stats: ReferralStats }) {
+  const toast = useToast();
+  const [qr, setQr] = useState<string | null>(null);
+  const url = nickname ? inviteUrl(nickname) : '';
+  useEffect(() => { if (url) QRCode.toDataURL(url, { width: 200, margin: 1 }).then(setQr).catch(() => {}); }, [url]);
+
+  if (!nickname) {
+    return (
+      <section className="rounded-card border border-border-default bg-surface-low p-3">
+        <p className="text-sm font-bold text-ink-primary">🎁 친구 초대</p>
+        <p className="mt-1 text-2xs leading-relaxed text-amber-300/90">받는 아이디(닉네임)를 설정하면 내 초대 링크가 생깁니다. 프로필에서 설정하세요.</p>
+      </section>
+    );
+  }
+  const copy = async () => { try { await navigator.clipboard.writeText(url); toast.show('초대 링크를 복사했어요', 'success'); } catch { toast.show('복사 실패', 'error'); } };
+  const share = async () => {
+    const text = 'NURI HOLDEM 같이 해요! 내 링크로 가입하고 본인인증하면 둘 다 활동점수 받아요 🎁';
+    if (navigator.share) { try { await navigator.share({ title: 'NURI HOLDEM 초대', text, url }); return; } catch { return; } }
+    copy();
+  };
+  return (
+    <section className="rounded-card border border-gold-400/30 bg-gold-300/[0.05] p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-bold text-gold-300">🎁 친구 초대</p>
+        <span className="text-2xs text-ink-muted">초대 <b className="text-ink-secondary tabular-nums">{stats.invited}</b> · 보상 <b className="text-gold-300 tabular-nums">{stats.rewarded}</b></span>
+      </div>
+      <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">친구가 내 링크로 가입하고 <b className="text-ink-primary">본인인증</b>까지 마치면 <b className="text-gold-300">둘 다 활동점수</b>(나 +500 · 친구 +300)!</p>
+      <div className="mt-2 flex items-center gap-2.5">
+        {qr && <img src={qr} alt="초대 QR" className="h-16 w-16 shrink-0 rounded bg-white p-0.5" />}
+        <div className="min-w-0 flex-1">
+          <div className="truncate rounded-input border border-border-subtle bg-surface-base px-2.5 py-1.5 text-2xs text-ink-muted">{url}</div>
+          <div className="mt-1.5 flex gap-1.5">
+            <button type="button" onClick={copy} className="btn-ghost flex-1 px-2 py-1 text-2xs">📋 복사</button>
+            <button type="button" onClick={share} className="btn-primary flex-1 px-2 py-1 text-2xs">📤 공유</button>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
