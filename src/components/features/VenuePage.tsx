@@ -28,6 +28,7 @@ import { listVenueCheckins } from '../../api/checkins';
 import { uploadVenueImages } from '../../lib/storage';
 import { useBackClose } from '../../lib/backstack';
 import VenueReviews from './VenueReviews';
+import SeasonPanel from './SeasonPanel';
 
 interface VenuePageProps {
   venue: Venue | null;
@@ -291,7 +292,7 @@ export default function VenuePage({
               />
             </div>
           )}
-          {tab === 'ranking' && <VenueRankingPanel venueId={venue.id} />}
+          {tab === 'ranking' && <><SeasonPanel venueId={venue.id} /><div className="mt-5 border-t border-border-subtle pt-4"><VenueRankingPanel venueId={venue.id} /></div></>}
           {tab === 'posters' && (
             <PostersPanel
               todayPosters={todayPosters}

@@ -13,6 +13,7 @@ import NuriPosLedger, { type LedgerSeed } from './NuriPosLedger';
 import LedgerStatsPanel, { PosSettingsPanel } from './LedgerStatsPanel';
 import TournamentClock from './clock/TournamentClock';
 import AnnouncePanel from './AnnouncePanel';
+import SeasonPanel from './SeasonPanel';
 import StaffSchedule from './StaffSchedule';
 import { StaffWageManager, StaffSettlement, StaffWorkLog, StaffSelfAttendance } from './StaffPayroll';
 import StoreDashboard from './StoreDashboard';
@@ -303,7 +304,10 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   onOpenStats={manageOk ? () => setSection('stats') : undefined} />)}
                 {visited.includes('stats') && manageOk && box('stats', <LedgerStatsPanel venueId={venueId} />)}
                 {visited.includes('ranking') && ledgerOk && box('ranking', <RankingEditor venueId={venueId} canEdit={isAdmin || user.approved === true || ledgerOk} draft={rankingDraft} />)}
-                {visited.includes('venueRank') && ledgerOk && box('venueRank', <VenueRankHub venueId={venueId} canConfigure={manageOk} />)}
+                {visited.includes('venueRank') && ledgerOk && box('venueRank', <>
+                  <SeasonPanel venueId={venueId} canManage={manageOk} />
+                  <div className="mt-5 border-t border-border-subtle pt-4"><VenueRankHub venueId={venueId} canConfigure={manageOk} /></div>
+                </>)}
                 {visited.includes('league') && ledgerOk && box('league', <LeaguePanel venueId={venueId} canConfigure={manageOk} />)}
                 {visited.includes('page') && canStaff && box('page', <VenueCustomizePanel venueId={venueId} />)}
                 {visited.includes('clock') && ledgerOk && box('clock', <TournamentClock venueId={venueId} canManage={ledgerOk} seedSessionDate={clockSeed} seedGameSeq={clockSeedGame} active={renderSection === 'clock'} />)}
