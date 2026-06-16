@@ -62,7 +62,7 @@ function msToRegClose(s: ClockState, remaining: number): number | null {
   return null;
 }
 
-export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, active = true }: { venues: Venue[]; schedules: Schedule[]; onVenue: (id: string) => void; onSchedule: (s: Schedule) => void; active?: boolean }) {
+export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, onDisplay, active = true }: { venues: Venue[]; schedules: Schedule[]; onVenue: (id: string) => void; onSchedule: (s: Schedule) => void; onDisplay: (venueId: string, gameSeq: number) => void; active?: boolean }) {
   const [games, setGames] = useState<ClockState[] | null>(null);
   const [, setTick] = useState(0);
   const [sortBy, setSortBy] = useState<'default' | 'players' | 'time' | 'distance'>('default'); // 진행 게임 정렬
@@ -153,7 +153,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, a
                   return (
                     <ul key={grp.venueId} className="grid grid-cols-1 gap-card-gap">
                       <LiveCard g={g} name={g.gameSeq > 1 ? `${nameOf(g.venueId)} · ${gl(g)}` : nameOf(g.venueId)} sched={sched}
-                        onPoster={() => sched && onSchedule(sched)} onVenue={() => onVenue(g.venueId)} />
+                        onPoster={() => sched && onSchedule(sched)} onVenue={() => onVenue(g.venueId)} onDisplay={() => onDisplay(g.venueId, g.gameSeq)} />
                     </ul>
                   );
                 }
@@ -164,7 +164,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, a
                       {grp.games.map((g) => {
                         const sched = matchSchedule(g, schedules);
                         return <LiveCard key={`${g.venueId}#${g.gameSeq}`} g={g} name={gl(g)} sched={sched}
-                          onPoster={() => sched && onSchedule(sched)} onVenue={() => onVenue(g.venueId)} />;
+                          onPoster={() => sched && onSchedule(sched)} onVenue={() => onVenue(g.venueId)} onDisplay={() => onDisplay(g.venueId, g.gameSeq)} />;
                       })}
                     </ul>
                   </div>
@@ -196,7 +196,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, a
   );
 }
 
-function LiveCard({ g, name, sched, onPoster, onVenue }: { g: ClockState; name: string; sched: Schedule | null; onPoster: () => void; onVenue: () => void }) {
+function LiveCard({ g, name, sched, onPoster, onVenue, onDisplay }: { g: ClockState; name: string; sched: Schedule | null; onPoster: () => void; onVenue: () => void; onDisplay: () => void }) {
   const lvls = g.config?.levels ?? [];
   const lv = lvls[g.currentIndex];
   const levelNo = levelNumberAt(lvls, g.currentIndex);
@@ -283,10 +283,14 @@ function LiveCard({ g, name, sched, onPoster, onVenue }: { g: ClockState; name: 
           <span className="text-ink-muted">다음 브레이크 <b className="text-ink-secondary">{nextBreak === null ? '—' : hms(nextBreak)}</b></span>
         </div>
       </button>
-      {sched && (
-        <button type="button" onClick={onVenue}
-          className="mt-1 w-full rounded-input border border-border-subtle py-1.5 text-2xs font-semibold text-ink-muted transition-colors hover:border-gold-400/40 hover:text-gold-300">🏪 매장 페이지 보기</button>
-      )}
+      <div className="mt-1 flex gap-1">
+        <button type="button" onClick={onDisplay} title="매장 TV·빔프로젝터용 큰 화면(관전 모드)"
+          className="flex-1 rounded-input border border-gold-400/40 py-1.5 text-2xs font-bold text-gold-300 transition-colors hover:bg-gold-300/10 active:scale-[0.99]">📺 큰 화면(관전)</button>
+        {sched && (
+          <button type="button" onClick={onVenue}
+            className="flex-1 rounded-input border border-border-subtle py-1.5 text-2xs font-semibold text-ink-muted transition-colors hover:border-gold-400/40 hover:text-gold-300">🏪 매장 페이지</button>
+        )}
+      </div>
     </li>
   );
 }

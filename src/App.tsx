@@ -84,6 +84,7 @@ const VenueManageTab = lazyWithReload(() => import('./components/features/VenueM
 const ToolsPanel     = lazyWithReload(() => import('./components/features/ToolsPanel'));
 const LiveGamesTab   = lazyWithReload(() => import('./components/features/LiveGamesTab'));
 const CustomerDashboardPage = lazyWithReload(() => import('./components/features/CustomerDashboardPage'));
+const ClockDisplay   = lazyWithReload(() => import('./components/features/clock/ClockDisplay'));
 
 // 지연 로딩 폴백 — 청크 받아오는 짧은 순간의 로더(레이아웃 점프 최소화)
 function LazyFallback() {
@@ -695,6 +696,7 @@ export default function App() {
   // changeTab(상단 선언)에서 TDZ 없이 오버레이를 닫기 위한 ref 바인딩
   closeOverlaysRef.current = () => setOpenVenueId(null);
   const [openSchedule, setOpenSchedule] = useState<Schedule | null>(null);
+  const [displayTarget, setDisplayTarget] = useState<{ venueId: string; gameSeq: number } | null>(null); // 관전/대형 디스플레이
   const [followedIds, setFollowedIds] = useState<Set<string>>(new Set()); // 팔로우한 매장 id
   const [followedOnly, setFollowedOnly] = useState(false); // 일정탐색: 팔로우 매장 포스터만
 
@@ -1109,6 +1111,25 @@ export default function App() {
     resetSeo();
   }, [openSchedule, openVenueId, venues]);
 
+  // 딥링크: ?display=<venueId>&g=<gameSeq> — 매장 TV/빔프로젝터용 대형 관전 디스플레이 바로 열기.
+  // venues 로드와 무관(디스플레이가 자체적으로 클락 조회) → 마운트 1회. URL 은 유지(새로고침해도 다시 표시).
+  const displayDeepLinked = useRef(false);
+  useEffect(() => {
+    if (displayDeepLinked.current) return;
+    displayDeepLinked.current = true;
+    const sp = new URLSearchParams(window.location.search);
+    const vid = sp.get('display');
+    if (!vid) return;
+    setDisplayTarget({ venueId: vid, gameSeq: Number(sp.get('g') || '1') || 1 });
+  }, []);
+
+  // 관전 디스플레이 열기(라이브 카드/운영자 클락에서) — 같은 탭에서 풀스크린 오버레이로
+  const openDisplay = useCallback((venueId: string, gameSeq = 1) => setDisplayTarget({ venueId, gameSeq }), []);
+  const closeDisplay = useCallback(() => {
+    setDisplayTarget(null);
+    try { const url = new URL(window.location.href); url.searchParams.delete('display'); url.searchParams.delete('g'); window.history.replaceState(null, '', url.pathname + url.search + url.hash); } catch { /* ignore */ }
+  }, []);
+
   const handleScheduleSelect = useCallback((s: Schedule) => {
     // 포스터 상세는 전체화면 2열 모달(PC: 포스터 좌+정보 우)로 표시 — 좁은 패널보다 가독성↑
     startTabTransition(() => setOpenSchedule(s));
@@ -1521,6 +1542,15 @@ export default function App() {
         </Suspense>
       )}
 
+      {/* 관전 / 대형 디스플레이(매장 TV·빔프로젝터) — 풀스크린 읽기전용 */}
+      {displayTarget && (
+        <Suspense fallback={<OverlayFallback />}>
+          <ClockDisplay venueId={displayTarget.venueId} gameSeq={displayTarget.gameSeq}
+            venueName={venues.find((v) => v.id === displayTarget.venueId)?.name}
+            onClose={closeDisplay} />
+        </Suspense>
+      )}
+
       <PendingApprovalBanner />
       <InstallBanner />
       <TierCelebration />
@@ -1704,7 +1734,7 @@ export default function App() {
       {(activeTab === 'live' || visitedTabs.has('live')) && (
         <div style={activeTab !== 'live' ? { display: 'none' } : undefined}>
           <ErrorBoundary inline resetKey="live">
-            <LiveGamesTab venues={venues} schedules={schedules} onVenue={handleVenueClick} onSchedule={handleScheduleSelect} active={activeTab === 'live'} />
+            <LiveGamesTab venues={venues} schedules={schedules} onVenue={handleVenueClick} onSchedule={handleScheduleSelect} onDisplay={openDisplay} active={activeTab === 'live'} />
           </ErrorBoundary>
         </div>
       )}
