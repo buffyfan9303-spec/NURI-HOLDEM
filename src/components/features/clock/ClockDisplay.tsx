@@ -5,7 +5,10 @@
 // 실시간: subscribeClock 으로 레벨 전환·통계 즉시 반영 + 1초 로컬 틱(숨김/복귀해도 endsAt 기준 정확).
 // 읽기전용(컨트롤 없음) — 운영은 운영자 클락 화면에서. 화면 항상 켜둠(Wake Lock, 베스트에포트).
 import { useEffect, useRef, useState } from 'react';
+import QRCode from 'qrcode';
 import { getVenueClocks, subscribeClock, type ClockState, type ClockLevel } from '../../../api/clock';
+import { buyinRequestUrl } from '../../../api/ledger';
+import { getAppSetting, CLOCK_AD_KEY } from '../../../api/settings';
 
 const pad = (n: number) => String(Math.floor(n)).padStart(2, '0');
 const mmss = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return `${pad(s / 60)}:${pad(s % 60)}`; };
@@ -39,12 +42,21 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
   const [sel, setSel] = useState(gameSeq);
   const [, setTick] = useState(0);
   const [fs, setFs] = useState(false);
+  const [auto, setAuto] = useState(true);          // 멀티게임 자동 순환
+  const [qr, setQr] = useState<string | null>(null); // 참가(바인요청) QR
+  const [sponsor, setSponsor] = useState<string | null>(null); // 스폰서 배너(app_settings 광고)
+  const [elimMsg, setElimMsg] = useState<{ text: string; until: number } | null>(null); // 탈락 티커
   const rootRef = useRef<HTMLDivElement>(null);
+  const gamesRef = useRef<ClockState[]>([]);
+  const prevElim = useRef<Map<number, number>>(new Map());
 
   const load = () => getVenueClocks(venueId).then(setClocks).catch(() => setClocks([]));
   useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [venueId]);
   useEffect(() => subscribeClock(venueId, load), [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { const t = setInterval(() => setTick((x) => x + 1), 1000); return () => clearInterval(t); }, []);
+
+  // 스폰서 배너 — 운영자가 등록한 전역 클락 광고 이미지(app_settings) 재사용
+  useEffect(() => { getAppSetting(CLOCK_AD_KEY).then(setSponsor).catch(() => {}); }, []);
 
   // 화면 꺼짐 방지(Wake Lock) — TV/태블릿에 띄워두면 절전으로 꺼지지 않게(미지원 시 무시)
   useEffect(() => {
@@ -91,6 +103,36 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
     alive: Math.max(0, g.adjEntries - g.eliminations), eliminations: g.eliminations, totalStack: 0, avgStack: 0, buyInAmount: null,
   } : null);
   const prizes = (g?.config?.prizes ?? []).filter((p) => p.amount > 0);
+  gamesRef.current = games;
+  const gSeq = g?.gameSeq ?? null;
+  const aliveNow = ls?.alive ?? 0;
+  const elimNow = g ? (g.liveStats?.eliminations ?? g.eliminations) : 0;
+
+  // 멀티게임 자동 순환 — auto && 게임 2개+ 일 때 15초마다 다음 게임으로
+  useEffect(() => {
+    if (!auto || games.length < 2) return;
+    const t = setInterval(() => {
+      const gs = gamesRef.current;
+      setSel((cur) => { const i = gs.findIndex((x) => x.gameSeq === cur); return gs[(i + 1) % gs.length]?.gameSeq ?? cur; });
+    }, 15000);
+    return () => clearInterval(t);
+  }, [auto, games.length]);
+
+  // 참가(바인요청) QR — 선택 게임 기준 ?buyin=<venue>&game=<seq>. 손님이 스캔 → 운영자 승인 대기
+  useEffect(() => {
+    if (gSeq == null) { setQr(null); return; }
+    QRCode.toDataURL(buyinRequestUrl(venueId, gSeq), { width: 360, margin: 1 }).then(setQr).catch(() => setQr(null));
+  }, [venueId, gSeq]);
+
+  // 탈락 티커 — 선택 게임의 eliminations 가 늘면 5초간 배너(게임별 이전값 추적으로 전환 시 오발동 방지)
+  useEffect(() => {
+    if (gSeq == null) return;
+    const prev = prevElim.current.get(gSeq);
+    if (prev != null && elimNow > prev) setElimMsg({ text: `💥 방금 ${elimNow - prev}명 탈락 · 남은 ${aliveNow}명`, until: Date.now() + 5000 });
+    prevElim.current.set(gSeq, elimNow);
+  }, [gSeq, elimNow, aliveNow]);
+
+  const showElim = !!elimMsg && Date.now() < elimMsg.until;
 
   return (
     <div ref={rootRef} className="fixed inset-0 z-[80] flex flex-col bg-[#06080B] text-white select-none">
@@ -106,12 +148,16 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
         {games.length > 1 && (
           <div className="ml-2 flex shrink-0 items-center gap-1">
             {games.map((c) => (
-              <button key={c.gameSeq} type="button" onClick={() => setSel(c.gameSeq)}
+              <button key={c.gameSeq} type="button" onClick={() => { setSel(c.gameSeq); setAuto(false); }}
                 className={['rounded-full px-[1.6vmin] py-[0.6vmin] text-[1.8vmin] font-bold transition-colors',
                   c.gameSeq === g?.gameSeq ? 'bg-gold-300 text-black' : 'bg-white/10 text-white/70 hover:bg-white/20'].join(' ')}>
                 {gameLabel(c)}{c.running ? '' : ' ⏸'}
               </button>
             ))}
+            <button type="button" onClick={() => setAuto((v) => !v)} title="멀티게임 자동 순환"
+              className={['rounded-full px-[1.6vmin] py-[0.6vmin] text-[1.8vmin] font-bold transition-colors', auto ? 'bg-emerald-400/20 text-emerald-300' : 'bg-white/10 text-white/50 hover:bg-white/20'].join(' ')}>
+              🔄 {auto ? '자동' : '수동'}
+            </button>
           </div>
         )}
         <div className="ml-auto flex shrink-0 items-center gap-1.5">
@@ -131,7 +177,13 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
         </div>
       ) : (
         <>
-          {/* 본문 — 좌: 레벨/타이머(주역), 우: 상금 보드 */}
+          {/* 탈락 티커 — eliminations 증가 시 5초 플래시 배너 */}
+          {showElim && (
+            <div className="pointer-events-none absolute left-1/2 top-[8vh] z-10 -translate-x-1/2 whitespace-nowrap rounded-full bg-rose-500/90 px-[3vmin] py-[1.1vmin] text-[2.8vmin] font-extrabold text-white shadow-2xl animate-fade-in">
+              {elimMsg!.text}
+            </div>
+          )}
+          {/* 본문 — 좌: 레벨/타이머(주역), 우: 상금 보드 + 참가 QR */}
           <div className="grid min-h-0 flex-1 grid-cols-1 gap-[2vmin] px-[2.5vmin] lg:grid-cols-[1.7fr_1fr]">
             {/* 타이머 영역 */}
             <div className="flex min-h-0 flex-col items-center justify-center">
@@ -159,23 +211,29 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
               </div>
             </div>
 
-            {/* 상금 보드(리더보드) */}
-            <div className="flex min-h-0 flex-col justify-center">
-              {prizes.length > 0 ? (
-                <div className="rounded-[2vmin] border border-gold-300/25 bg-gold-300/[0.06] p-[2vmin]">
-                  <p className="mb-[1.2vmin] text-[2.4vmin] font-bold text-gold-300">🏆 상금</p>
-                  <ul className="space-y-[0.8vmin]">
-                    {prizes.slice(0, 9).map((p, i) => (
-                      <li key={i} className="flex items-baseline justify-between gap-3 border-b border-white/5 pb-[0.6vmin] last:border-0">
-                        <span className="text-[2.6vmin] font-bold text-white/85">{p.place}</span>
-                        <span className="text-[2.8vmin] font-extrabold tabular-nums text-gold-300">{p.amount.toLocaleString()}<span className="text-[1.8vmin] font-bold text-white/50">만</span></span>
+            {/* 우측: 상금 보드(리더보드) + 참가 QR */}
+            <div className="flex min-h-0 flex-col justify-center gap-[1.5vmin]">
+              {prizes.length > 0 && (
+                <div className="min-h-0 overflow-hidden rounded-[2vmin] border border-gold-300/25 bg-gold-300/[0.06] p-[1.8vmin]">
+                  <p className="mb-[1vmin] text-[2.4vmin] font-bold text-gold-300">🏆 상금</p>
+                  <ul className="space-y-[0.5vmin]">
+                    {prizes.slice(0, 8).map((p, i) => (
+                      <li key={i} className="flex items-baseline justify-between gap-3 border-b border-white/5 pb-[0.5vmin] last:border-0">
+                        <span className="text-[2.5vmin] font-bold text-white/85">{p.place}</span>
+                        <span className="text-[2.7vmin] font-extrabold tabular-nums text-gold-300">{p.amount.toLocaleString()}<span className="text-[1.7vmin] font-bold text-white/50">만</span></span>
                       </li>
                     ))}
                   </ul>
                 </div>
-              ) : (
-                <div className="flex flex-1 items-center justify-center rounded-[2vmin] border border-white/10 text-center text-[2.2vmin] text-white/35">
-                  상금 정보 미설정
+              )}
+              {/* 참가 QR — 손님이 스캔하면 이 게임 바인(참가) 요청 → 운영자 승인 */}
+              {qr && (
+                <div className="flex shrink-0 items-center gap-[2vmin] rounded-[2vmin] border border-emerald-400/25 bg-emerald-400/[0.06] p-[1.6vmin]">
+                  <img src={qr} alt="참가 바인요청 QR" className="shrink-0 rounded-[1vmin] bg-white" style={{ width: 'clamp(72px, 13vmin, 190px)', height: 'auto' }} />
+                  <div className="min-w-0">
+                    <p className="text-[2.4vmin] font-extrabold text-emerald-300">📲 스캔해서 참가</p>
+                    <p className="mt-[0.5vmin] text-[1.9vmin] leading-snug text-white/65">휴대폰으로 QR을 찍으면 {g ? gameLabel(g) : ''} 바인(참가)을 요청합니다.</p>
+                  </div>
                 </div>
               )}
             </div>
@@ -190,6 +248,13 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
             <BigStat label="평균 스택" value={ls?.avgStack ? ls.avgStack.toLocaleString() : '-'} accent />
             <BigStat label="총 스택" value={ls?.totalStack ? ls.totalStack.toLocaleString() : '-'} />
           </div>
+
+          {/* 스폰서 배너 — 운영자 등록 광고 이미지(있을 때만) */}
+          {sponsor && (
+            <div className="flex shrink-0 items-center justify-center border-t border-white/5 bg-black/40 py-[0.8vmin]">
+              <img src={sponsor} alt="스폰서" className="w-auto object-contain" style={{ maxHeight: '9vh' }} />
+            </div>
+          )}
         </>
       )}
     </div>
