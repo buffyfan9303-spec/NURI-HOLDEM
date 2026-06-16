@@ -14,7 +14,7 @@ import {
 } from '../../api/vouchers';
 import { wonToMan } from '../../api/ledger';
 import { getMyReservations, cancelMyReservation, type MyReservationRow } from '../../api/reservations';
-import { getMyRankingHistory, type MyRankingRow } from '../../api/rankings';
+import { getMyRankingHistory, parsePrizeMan, placementPoints, type MyRankingRow } from '../../api/rankings';
 import { BADGES, getMyBadgeStats, type BadgeStats } from '../../lib/loyalty';
 
 function parseVenueId(text: string): string | null {
@@ -50,7 +50,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
     Promise.all([
       listMyVouchers(), myVisitedVenues(), myPlayHistory(),
       getMyReservations().catch(() => [] as MyReservationRow[]),
-      user?.nickname ? getMyRankingHistory(user.nickname).catch(() => [] as MyRankingRow[]) : Promise.resolve([] as MyRankingRow[]),
+      user?.nickname ? getMyRankingHistory(user.nickname, 200).catch(() => [] as MyRankingRow[]) : Promise.resolve([] as MyRankingRow[]),
     ])
       .then(([vs, vi, pl, rv, rk]) => { setVouchers(vs); setVisits(vi); setPlays(pl); setResv(rv); setRanks(rk); })
       .catch(() => {}).finally(() => setLoading(false));
@@ -279,7 +279,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
             {loading ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
               : !user?.nickname ? <p className="py-6 text-center text-2xs text-ink-muted">프로필에서 아이디(닉네임)를 설정하면 입상 기록이 자동 연결됩니다.</p>
               : ranks.length === 0 ? <p className="py-6 text-center text-2xs text-ink-muted">아직 입상 기록이 없습니다 — 매장에서 순위가 등록되면 자동으로 표시됩니다.</p>
-                : <><RankTrendChart rows={ranks} />
+                : <><RecordSummary rows={ranks} /><RankTrendChart rows={ranks} />
                 <ul className="space-y-1.5">{ranks.slice(0, 15).map((r, i) => (
                   <li key={i} className="flex items-center gap-2.5 rounded-input border border-border-subtle bg-surface-low px-3 py-2">
                     <span className={['flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-2xs font-extrabold tabular-nums',
@@ -290,7 +290,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
                       <p className="truncate text-sm font-semibold text-ink-primary">{r.venueName}</p>
                       <p className="text-[10px] tabular-nums text-ink-muted">{r.date}</p>
                     </div>
-                    {r.prize && <span className="shrink-0 text-xs font-bold tabular-nums text-gold-300">{r.prize}점</span>}
+                    {r.prize && <span className="shrink-0 text-xs font-bold tabular-nums text-gold-300">🏆 {parsePrizeMan(r.prize) ? parsePrizeMan(r.prize) + '만' : r.prize}</span>}
                   </li>
                 ))}</ul></>}
           </section>
@@ -353,6 +353,41 @@ function SwipeCancelRow({ cancelable, onCancel, children }: { cancelable: boolea
         {children}
       </div>
     </li>
+  );
+}
+
+/** 내 토너먼트 전적 요약 — 입상 기록(닉네임 매칭)에서 우승·입상·승률·누적 상금·즐겨찾는 매장 집계. */
+function RecordSummary({ rows }: { rows: MyRankingRow[] }) {
+  const n = rows.length;
+  if (n === 0) return null;
+  const wins = rows.filter((r) => r.position === 1).length;       // 🥇 우승(1위)
+  const cashes = rows.filter((r) => r.position <= 3).length;      // 🏅 입상(TOP3)
+  const best = Math.min(...rows.map((r) => r.position));
+  const avg = Math.round((rows.reduce((s, r) => s + r.position, 0) / n) * 10) / 10;
+  const winRate = Math.round((wins / n) * 100);                   // 우승률
+  const prizeMan = rows.reduce((s, r) => s + parsePrizeMan(r.prize), 0); // 누적 상금(만원)
+  const points = rows.reduce((s, r) => s + placementPoints(r.position), 0); // 누적 포인트
+  // 자주 입상하는 매장(빈도)
+  const freq = new Map<string, number>();
+  for (const r of rows) freq.set(r.venueName, (freq.get(r.venueName) ?? 0) + 1);
+  const fav = [...freq.entries()].sort((a, b) => b[1] - a[1])[0] ?? null;
+
+  return (
+    <div className="mb-2 rounded-card border border-gold-400/30 bg-gold-300/[0.05] p-3">
+      <p className="mb-2 text-xs font-bold text-gold-300">🏆 내 토너먼트 전적 <span className="font-normal text-ink-muted">(기록 {n}회)</span></p>
+      <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-6">
+        <Stat label="우승" value={`${wins}회`} accent />
+        <Stat label="입상 TOP3" value={`${cashes}회`} />
+        <Stat label="우승률" value={`${winRate}%`} accent />
+        <Stat label="최고 순위" value={`${best}위`} />
+        <Stat label="평균 순위" value={`${avg}위`} />
+        <Stat label="누적 상금" value={prizeMan ? `${prizeMan.toLocaleString()}만` : '-'} accent />
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs text-ink-muted">
+        {fav && <span>자주 입상 <b className="text-ink-secondary">{fav[0]}</b> ({fav[1]}회)</span>}
+        <span>누적 포인트 <b className="text-ink-secondary tabular-nums">{points.toLocaleString()}</b>점</span>
+      </div>
+    </div>
   );
 }
 
