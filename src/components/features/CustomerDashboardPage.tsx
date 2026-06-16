@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import Icon from '../atoms/Icon';
-import { Html5Qrcode } from 'html5-qrcode';
+import type { Html5Qrcode } from 'html5-qrcode'; // 타입만(런타임 번들 제외) — 실제 라이브러리는 스캐너 열 때 동적 로드
 import {
   listMyVouchers, myVisitedVenues, myPlayHistory,
   redeemMyVoucher, redeemMyVoucherByQr, redeemMyVoucherByPhone,
@@ -504,7 +504,8 @@ function QrScanner({ onResult, onError }: { onResult: (text: string) => void; on
     const stop = () => { const s = scanner; scanner = null; if (s) { s.stop().then(() => s.clear()).catch(() => {}); } };
     (async () => {
       try {
-        scanner = new Html5Qrcode('nuri-qr-reader');
+        const { Html5Qrcode: QrLib } = await import('html5-qrcode'); // 동적 로드 — 스캐너를 열 때만 다운로드(초기 번들 제외)
+        scanner = new QrLib('nuri-qr-reader');
         await scanner.start({ facingMode: 'environment' }, { fps: 10, qrbox: 220 },
           (text) => { if (!done) { done = true; const r = text; stop(); onResult(r); } },
           () => {});

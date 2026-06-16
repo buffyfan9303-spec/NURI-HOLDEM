@@ -12,19 +12,16 @@
 const DSN = import.meta.env.VITE_SENTRY_DSN as string | undefined;
 
 export function initMonitoring(): void {
-  if (!DSN) return; // DSN 미설정 → 비활성(스캐폴드 상태). 인앱 errorLog는 그대로 동작.
+  if (!DSN) return; // DSN 미설정 → 비활성. 인앱 errorLog(관리자 화면 수집)는 그대로 동작.
 
-  // ── @sentry/react 설치 후 아래 주석 해제 ──────────────────────────────────
-  // import('@sentry/react').then((Sentry) => {
-  //   Sentry.init({
-  //     dsn: DSN,
-  //     environment: import.meta.env.MODE,
-  //     tracesSampleRate: 0.1,
-  //     replaysSessionSampleRate: 0,
-  //   });
-  // }).catch((e) => console.warn('[monitoring] Sentry init 실패', e));
-
-  if (import.meta.env.DEV) {
-    console.info('[monitoring] VITE_SENTRY_DSN 감지됨 — @sentry/react 설치 후 init 주석을 해제하면 외부 알림이 활성화됩니다.');
-  }
+  // @sentry/react 를 동적 import — DSN 이 있을 때만 로드되는 별도 청크(메인 번들 비대화 없음).
+  import('@sentry/react').then((Sentry) => {
+    Sentry.init({
+      dsn: DSN,
+      environment: import.meta.env.MODE,
+      tracesSampleRate: 0.1,        // 성능 트레이스 10% 샘플
+      replaysSessionSampleRate: 0,  // 세션 리플레이 미사용(비용/프라이버시)
+      replaysOnErrorSampleRate: 0,
+    });
+  }).catch((e) => console.warn('[monitoring] Sentry init 실패', e));
 }
