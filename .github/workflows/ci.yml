@@ -1,0 +1,51 @@
+name: CI
+
+# push(main) · PR 마다 빌드 + Playwright 스모크 자동 실행 → 깨진 배포 차단용 게이트.
+# 배포를 "하드 차단"하려면: GitHub → Settings → Branches → main 브랜치 보호 규칙에
+#   "Require status checks to pass" 에 이 워크플로(build-and-e2e)를 지정 + Vercel 은
+#   Settings → Git → "Wait for CI before deploy" 를 켜면 됩니다(아래 README 참고).
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# 같은 ref 의 이전 실행은 취소(최신 커밋만 검사)
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Supabase 시크릿이 있으면 실데이터로, 없으면 자동으로 Mock 모드로 스모크가 돈다(둘 다 통과해야 정상)
+    env:
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Build (타입체크 + 번들 + sitemap 생성)
+        run: npm run build
+
+      - name: Install Playwright (chromium)
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E 스모크
+        run: npm run test:e2e
+
+      - name: 리포트 업로드(실패 시 추적)
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
