@@ -13,6 +13,8 @@ import { renderMentions } from '../../lib/mentions';
 import { promptLogin } from '../../lib/requireLogin';
 import HandCards from '../atoms/HandCards';
 import HandGtoModal from './HandGtoModal';
+import TitleChip from '../atoms/TitleChip';
+import { useTitlePoints } from '../../lib/useTitles';
 import Avatar from '../atoms/Avatar';
 import Icon from '../atoms/Icon';
 
@@ -54,6 +56,7 @@ export default function PostDetailModal({
   // 더블탭 좋아요(인스타) — 본문을 빠르게 두 번 탭하면 좋아요 + 하트 팝
   const [heartKey, setHeartKey] = useState(0);
   const [authorMark, setAuthorMark] = useState('');
+  const titlePts = useTitlePoints([post?.userId]); // 작성자 칭호(활동점수)
   useEffect(() => {
     setAuthorMark('');
     if (post?.userId) getEquippedMarks([post.userId]).then((m) => setAuthorMark(m[post.userId] ?? '')).catch(() => {});
@@ -144,6 +147,7 @@ export default function PostDetailModal({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
               <span className="text-sm font-semibold text-ink-primary truncate">{authorMark}{post.userName}</span>
+              <TitleChip points={titlePts(post.userId)} />
               {post.userRole === 'venue_owner' && (
                 <span className="text-2xs font-bold text-gold-300 bg-gold-300/15 px-1.5 py-0.5 rounded-badge">업주</span>
               )}

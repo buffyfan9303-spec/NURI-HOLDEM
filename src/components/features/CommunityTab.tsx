@@ -2,6 +2,8 @@ import { useState, useMemo, useEffect, useRef, Fragment, useTransition, type Rea
 import { motion } from 'framer-motion';
 import { getActiveCommunityAds, type CommunityAd } from '../../api/ads';
 import { getEquippedMarks } from '../../api/community';
+import TitleChip from '../atoms/TitleChip';
+import { useTitlePoints } from '../../lib/useTitles';
 import { getVenueRatings, type VenueRating } from '../../api/reviews';
 import type { Venue, Comment, CommunityPost, LiveMessage, PostCategory, GroupKind, JoinedGroup } from '../../api/community';
 import { getLiveMessages, addLiveMessage, deleteLiveMessage, subscribeLiveWall, createMyVenue, createGroup, GROUP_KIND_LABEL, getMyOwnedCommunities, getMyJoinedGroups, removeMember } from '../../api/community';
@@ -288,6 +290,8 @@ function FeedSection({
     if (ids.length === 0) { setAuthorMarks({}); return; }
     getEquippedMarks(ids).then(setAuthorMarks).catch(() => {});
   }, [posts]);
+  // 작성자 칭호(활동점수) — posts의 userId 일괄 조회(닉네임 옆 칭호)
+  const titleOf = useTitlePoints(posts.map((p) => p.userId));
   useEffect(() => {
     if (enableCategory) getActiveCommunityAds().then(setAds).catch(() => {});
   }, [enableCategory]);
@@ -454,8 +458,8 @@ function FeedSection({
         <div className="rounded-card border border-danger/30 bg-danger/[0.04] overflow-hidden">
           <ul>
             {hotPosts.map((p) => view === 'compact'
-              ? <PostRow key={p.id} post={p} hot selected={p.id === selectedId} onClick={() => onSelectPost(p)} />
-              : <PostCard key={p.id} post={p} hot selected={p.id === selectedId} onLike={() => onLike(p.id)} onClick={() => onSelectPost(p)} />)}
+              ? <PostRow key={p.id} post={p} hot selected={p.id === selectedId} mark={authorMarks[p.userId] ?? ''} titlePts={titleOf(p.userId)} onClick={() => onSelectPost(p)} />
+              : <PostCard key={p.id} post={p} hot selected={p.id === selectedId} mark={authorMarks[p.userId] ?? ''} titlePts={titleOf(p.userId)} onLike={() => onLike(p.id)} onClick={() => onSelectPost(p)} />)}
           </ul>
         </div>
       )}
@@ -483,8 +487,8 @@ function FeedSection({
                 return (
                   <Fragment key={p.id}>
                     {view === 'compact'
-                      ? <PostRow post={p} mark={authorMarks[p.userId] ?? ''} selected={p.id === selectedId} onClick={() => onSelectPost(p)} />
-                      : <PostCard post={p} mark={authorMarks[p.userId] ?? ''} selected={p.id === selectedId} onLike={() => onLike(p.id)} onClick={() => onSelectPost(p)} />}
+                      ? <PostRow post={p} mark={authorMarks[p.userId] ?? ''} titlePts={titleOf(p.userId)} selected={p.id === selectedId} onClick={() => onSelectPost(p)} />
+                      : <PostCard post={p} mark={authorMarks[p.userId] ?? ''} titlePts={titleOf(p.userId)} selected={p.id === selectedId} onLike={() => onLike(p.id)} onClick={() => onSelectPost(p)} />}
                     {showAd && <AdRow ad={ad} />}
                   </Fragment>
                 );
@@ -541,7 +545,7 @@ function AdRow({ ad }: { ad: CommunityAd }) {
 }
 
 // 에펨코리아식 한 줄 행 — 제목 크게(타이포 위계), 메타는 작고 연하게. 바이낸스 표 밀도(py-2).
-function PostRow({ post, onClick, hot = false, selected = false, mark = '' }: { post: CommunityPost; onClick: () => void; hot?: boolean; selected?: boolean; mark?: string }) {
+function PostRow({ post, onClick, hot = false, selected = false, mark = '', titlePts }: { post: CommunityPost; onClick: () => void; hot?: boolean; selected?: boolean; mark?: string; titlePts?: number }) {
   const catLabel = BOARD_CATEGORIES.find((c) => c.id === (post.category ?? 'free'))?.label ?? '자유';
   const { replay, hand } = parseAttachments(post.content);
   return (
@@ -562,13 +566,14 @@ function PostRow({ post, onClick, hot = false, selected = false, mark = '' }: { 
         {post.commentCount > 0 && <span className="ml-1 align-middle text-xs font-bold text-gold-300">[{post.commentCount}]</span>}
       </span>
       <span className="shrink-0 text-xs text-ink-muted">{mark}{post.userName}</span>
+      <TitleChip points={titlePts} />
       <span className="hidden shrink-0 text-xs tabular-nums text-ink-muted sm:inline">{relativeTime(post.createdAt)}</span>
       {(post.viewCount ?? 0) > 0 && <span className="shrink-0 w-10 text-right text-xs tabular-nums text-ink-muted">👁{post.viewCount}</span>}
     </li>
   );
 }
 
-function PostCard({ post, onLike, onClick, hot = false, selected = false, mark = '' }: { post: CommunityPost; onLike: () => void; onClick: () => void; hot?: boolean; selected?: boolean; mark?: string }) {
+function PostCard({ post, onLike, onClick, hot = false, selected = false, mark = '', titlePts }: { post: CommunityPost; onLike: () => void; onClick: () => void; hot?: boolean; selected?: boolean; mark?: string; titlePts?: number }) {
   return (
     <li
       onClick={onClick}
@@ -588,6 +593,7 @@ function PostCard({ post, onLike, onClick, hot = false, selected = false, mark =
               <span className="inline-flex items-center font-extrabold text-danger-light bg-danger/15 px-1 rounded-badge leading-none tracking-wide">HOT</span>
             )}
             <span className="font-semibold text-ink-primary truncate">{mark}{post.userName}</span>
+            <TitleChip points={titlePts} />
             {post.userRole === 'venue_owner' && (
               <span className="font-bold text-gold-300 bg-gold-300/15 px-1 rounded-badge leading-none">업주</span>
             )}

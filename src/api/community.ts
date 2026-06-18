@@ -217,6 +217,18 @@ export async function deleteComment(commentId: string): Promise<void> {
   if (error) throw error;
 }
 
+// 칭호 표시용 — 여러 유저의 활동점수 일괄 조회(공개 RPC). { userId: points } 맵 반환.
+export async function getActivityPointsMap(userIds: string[]): Promise<Record<string, number>> {
+  const ids = [...new Set(userIds.filter(Boolean))];
+  if (IS_MOCK || ids.length === 0) return {};
+  const { data, error } = await supabase.rpc('public_activity_points', { p_ids: ids });
+  if (error || !data) return {};
+  const map: Record<string, number> = {};
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const r of data as any[]) map[r.id] = Number(r.points) || 0;
+  return map;
+}
+
 // ── Community Posts ────────────────────────────────────────────────────────────
 export async function getPosts(): Promise<CommunityPost[]> {
   if (IS_MOCK) {

@@ -3,6 +3,8 @@ import type { Comment } from '../../api/community';
 import { useAuth } from '../../contexts/AuthContext';
 import { promptLogin } from '../../lib/requireLogin';
 import Avatar from '../atoms/Avatar';
+import TitleChip from '../atoms/TitleChip';
+import { useTitlePoints } from '../../lib/useTitles';
 import { getEquippedMarks } from '../../api/community';
 
 interface CommentThreadProps {
@@ -23,7 +25,7 @@ function relativeTime(iso: string): string {
   return `${Math.floor(diff / 86400)}일 전`;
 }
 
-function CommentItem({ marks = {},
+function CommentItem({ marks = {}, titleOf,
   comment,
   replies,
   onReply,
@@ -32,6 +34,7 @@ function CommentItem({ marks = {},
   loggedIn,
 }: {
   marks?: Record<string, string>;
+  titleOf?: (id?: string | null) => number | undefined;
   comment: Comment;
   replies: Comment[];
   onReply: (parentId: string, content: string) => void;
@@ -58,6 +61,7 @@ function CommentItem({ marks = {},
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-0.5">
             <span className="text-xs font-semibold text-ink-primary">{marks[comment.userId] ?? ''}{comment.userName}</span>
+            <TitleChip points={titleOf?.(comment.userId)} />
             {comment.isOwner && (
               <span className="text-2xs font-bold text-gold-300 bg-gold-300/15 px-1.5 py-0.5 rounded-badge">매장 답글</span>
             )}
@@ -112,7 +116,7 @@ function CommentItem({ marks = {},
       {replies.length > 0 && (
         <div className="ml-10 space-y-3 border-l-2 border-border-subtle pl-3">
           {replies.map((r) => (
-            <CommentItem key={r.id} marks={marks} comment={r} replies={[]} onReply={onReply} onDelete={onDelete} canDelete={canDelete} loggedIn={loggedIn} />
+            <CommentItem key={r.id} marks={marks} titleOf={titleOf} comment={r} replies={[]} onReply={onReply} onDelete={onDelete} canDelete={canDelete} loggedIn={loggedIn} />
           ))}
         </div>
       )}
@@ -130,6 +134,8 @@ export default function CommentThread({ comments, onSubmit, onDelete, moderator 
     if (ids.length === 0) { setMarks({}); return; }
     getEquippedMarks(ids).then(setMarks).catch(() => {});
   }, [comments]);
+  // 작성자 칭호(활동점수) — 댓글 userId 일괄 조회
+  const titleOf = useTitlePoints(comments.map((c) => c.userId));
 
   // 관리자/모더레이터(본인 매장 업주)는 모든 댓글, 일반 사용자는 본인 댓글만 삭제 (서버 RLS와 동일)
   const canDelete = (c: Comment) => moderator || user?.role === 'admin' || user?.id === c.userId;
@@ -181,6 +187,7 @@ export default function CommentThread({ comments, onSubmit, onDelete, moderator 
             <CommentItem
               key={c.id}
               marks={marks}
+              titleOf={titleOf}
               comment={c}
               replies={repliesByParent[c.id] ?? []}
               onReply={(parentId, content) => onSubmit(content, parentId)}
