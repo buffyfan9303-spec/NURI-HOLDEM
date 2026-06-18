@@ -51,16 +51,6 @@ test('대형 디스플레이 딥링크 — ?display 가 풀스크린 마운트',
   expect(errors, `디스플레이 예외: ${errors.join(' | ')}`).toEqual([]);
 });
 
-test('지역 디렉토리 딥링크 — ?directory 가 SEO 허브로 렌더', async ({ page }) => {
-  const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto('/?directory=' + encodeURIComponent('서울'));
-  await expect(page.locator('h1')).toContainText('서울');
-  const canonical = await page.locator('link[rel="canonical"]').getAttribute('href');
-  expect(canonical).toContain('directory');
-  expect(errors, `디렉토리 예외: ${errors.join(' | ')}`).toEqual([]);
-});
-
 test('대회 공유 딥링크 — ?s 진입이 크래시 없이 처리', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));

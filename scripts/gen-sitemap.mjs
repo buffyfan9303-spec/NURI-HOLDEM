@@ -61,16 +61,10 @@ async function main() {
     const code = v.slug || String(v.id).slice(0, 8);
     entries.push(urlEntry(`${SITE}/?v=${code}`, today, 'weekly', '0.6'));
   }
-  // 지역 디렉토리(SEO 허브) — 매장이 1곳 이상 있는 지역만(빈 페이지 방지)
-  const REGION_CHIPS = ['서울', '강남', '강서', '경기남부', '경기북부', '인천', '부산', '대전', '대구', '광주', '제주'];
-  const regionsWithVenues = REGION_CHIPS.filter((r) => venues.some((v) => (v.region || '').includes(r)));
-  for (const r of regionsWithVenues) {
-    entries.push(urlEntry(`${SITE}/?directory=${encodeURIComponent(r)}`, today, 'weekly', '0.5'));
-  }
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entries.join('\n')}\n</urlset>\n`;
   writeFileSync(OUT, xml, 'utf8');
-  console.log(`[sitemap] ${entries.length} URL (대회 ${schedules.length} · 매장 ${venues.length} · 디렉토리 ${regionsWithVenues.length}) → public/sitemap.xml`);
+  console.log(`[sitemap] ${entries.length} URL (대회 ${schedules.length} · 매장 ${venues.length}) → public/sitemap.xml`);
 }
 
 // 어떤 실패에도 throw 하지 않음(빌드 비차단). process.exit() 는 쓰지 않는다 —

@@ -5,7 +5,7 @@ import { requestBuyin, venueTodayGames, getMyBuyinRequestsToday, subscribeMyBuyi
 import UnreadBadge from './components/atoms/UnreadBadge';
 import ViewModeToggle from './components/atoms/ViewModeToggle';
 import type { ViewMode } from './components/atoms/ViewModeToggle';
-import IntegratedSearchBar, { expandRegions, REGION_CHIPS } from './components/features/IntegratedSearchBar';
+import IntegratedSearchBar, { expandRegions } from './components/features/IntegratedSearchBar';
 import type { SearchState } from './components/features/IntegratedSearchBar';
 import ScheduleCard from './components/features/ScheduleCard';
 import WeeklyBestStrip from './components/features/WeeklyBestStrip';
@@ -86,7 +86,6 @@ const ToolsPanel     = lazyWithReload(() => import('./components/features/ToolsP
 const LiveGamesTab   = lazyWithReload(() => import('./components/features/LiveGamesTab'));
 const CustomerDashboardPage = lazyWithReload(() => import('./components/features/CustomerDashboardPage'));
 const ClockDisplay   = lazyWithReload(() => import('./components/features/clock/ClockDisplay'));
-const DirectoryPage  = lazyWithReload(() => import('./components/features/DirectoryPage'));
 
 // 지연 로딩 폴백 — 청크 받아오는 짧은 순간의 로더(레이아웃 점프 최소화)
 function LazyFallback() {
@@ -699,7 +698,6 @@ export default function App() {
   closeOverlaysRef.current = () => setOpenVenueId(null);
   const [openSchedule, setOpenSchedule] = useState<Schedule | null>(null);
   const [displayTarget, setDisplayTarget] = useState<{ venueId: string; gameSeq: number } | null>(null); // 관전/대형 디스플레이
-  const [directoryRegion, setDirectoryRegion] = useState<string | null>(null); // SEO 지역 디렉토리
   const [followedIds, setFollowedIds] = useState<Set<string>>(new Set()); // 팔로우한 매장 id
   const [followedOnly, setFollowedOnly] = useState(false); // 일정탐색: 팔로우 매장 포스터만
 
@@ -1135,26 +1133,8 @@ export default function App() {
     if (openSchedule) { applyScheduleSeo(openSchedule); return; }
     const ov = openVenueId ? venues.find((v) => v.id === openVenueId) : null;
     if (ov) { applyVenueSeo(ov); return; }
-    if (directoryRegion) return; // DirectoryPage 가 자체 applyDirectorySeo 적용
     resetSeo();
-  }, [openSchedule, openVenueId, venues, directoryRegion]);
-
-  // 딥링크: ?directory=<region> — 지역 디렉토리(SEO 허브)로 진입. URL 유지(색인 가능 canonical).
-  const dirDeepLinked = useRef(false);
-  useEffect(() => {
-    if (dirDeepLinked.current) return;
-    dirDeepLinked.current = true;
-    const r = new URLSearchParams(window.location.search).get('directory');
-    if (r) setDirectoryRegion(r);
-  }, []);
-  const openDirectory = useCallback((region: string) => {
-    setDirectoryRegion(region);
-    try { const url = new URL(window.location.href); url.searchParams.set('directory', region); ['s', 'v', 'venue', 'display'].forEach((k) => url.searchParams.delete(k)); window.history.replaceState(null, '', url.pathname + url.search + url.hash); } catch { /* ignore */ }
-  }, []);
-  const closeDirectory = useCallback(() => {
-    setDirectoryRegion(null);
-    try { const url = new URL(window.location.href); url.searchParams.delete('directory'); window.history.replaceState(null, '', url.pathname + url.search + url.hash); } catch { /* ignore */ }
-  }, []);
+  }, [openSchedule, openVenueId, venues]);
 
   // 딥링크: ?display=<venueId>&g=<gameSeq> — 매장 TV/빔프로젝터용 대형 관전 디스플레이 바로 열기.
   // venues 로드와 무관(디스플레이가 자체적으로 클락 조회) → 마운트 1회. URL 은 유지(새로고침해도 다시 표시).
@@ -1596,16 +1576,6 @@ export default function App() {
         </Suspense>
       )}
 
-      {/* SEO 지역 디렉토리(허브) — 지역 홀덤펍·대회 목록 */}
-      {directoryRegion && (
-        <Suspense fallback={<OverlayFallback />}>
-          <DirectoryPage region={directoryRegion} venues={venues} schedules={schedules}
-            onVenue={(id) => { closeDirectory(); handleVenueClick(id); }}
-            onSchedule={(s) => { closeDirectory(); handleScheduleSelect(s); }}
-            onRegion={openDirectory} onClose={closeDirectory} />
-        </Suspense>
-      )}
-
       <PendingApprovalBanner />
       <InstallBanner />
       <TierCelebration />
@@ -1769,19 +1739,6 @@ export default function App() {
 
                 {/* 🏁 지난 대회 — 완료된 대회 아카이브(결과는 상세에서) */}
                 <PastTournaments schedules={schedules} onSelect={handleScheduleSelect} />
-
-                {/* 🗺 지역별 홀덤펍 디렉토리 — SEO 허브 진입(크롤 가능한 내부 링크) */}
-                <section className="mt-6 border-t border-border-subtle pt-4">
-                  <h2 className="mb-2 text-2xs font-bold text-ink-muted">🗺 지역별 홀덤펍 둘러보기</h2>
-                  <nav className="flex flex-wrap gap-1.5" aria-label="지역 디렉토리">
-                    {REGION_CHIPS.map((r) => (
-                      <a key={r} href={`/?directory=${encodeURIComponent(r)}`} onClick={(e) => { e.preventDefault(); openDirectory(r); }}
-                        className="rounded-full border border-border-subtle bg-surface-low px-3 py-1.5 text-2xs font-semibold text-ink-secondary transition-colors hover:border-gold-400/40 hover:text-gold-300">
-                        {r} 홀덤
-                      </a>
-                    ))}
-                  </nav>
-                </section>
               </div>
 
               {/* 우측 위젯 레일 — 주간 머니인 킹·HOT 게시글·오늘 요약 */}
