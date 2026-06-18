@@ -3,6 +3,7 @@
 // canManage=true(운영자)면 생성/종료 UI 노출. 랭킹·아카이브는 누구나 조회(공개).
 import { useEffect, useMemo, useState } from 'react';
 import { useToast } from '../atoms/Toast';
+import { shareChampionCard } from '../../lib/recordCard';
 import {
   listVenueSeasons, getCurrentSeasonStandings, getSeasonResults, getVenueHallOfFame,
   createVenueSeason, endVenueSeason, type VenueSeason, type SeasonStanding, type HallOfFameEntry,
@@ -13,7 +14,7 @@ const addDays = (iso: string, d: number) => { const t = new Date(iso); t.setDate
 const daysLeft = (endsOn: string) => Math.max(0, Math.ceil((new Date(endsOn + 'T23:59:59').getTime() - Date.now()) / 86400000));
 const medal = (r: number) => (r === 1 ? 'bg-gold-300 text-ink-inverse' : r === 2 ? 'bg-slate-300 text-ink-inverse' : r === 3 ? 'bg-amber-700 text-white' : 'bg-surface-float text-ink-secondary');
 
-export default function SeasonPanel({ venueId, canManage = false }: { venueId: string; canManage?: boolean }) {
+export default function SeasonPanel({ venueId, canManage = false, venueName }: { venueId: string; canManage?: boolean; venueName?: string }) {
   const toast = useToast();
   const [seasons, setSeasons] = useState<VenueSeason[] | null>(null);
   const [standings, setStandings] = useState<SeasonStanding[]>([]);
@@ -121,6 +122,11 @@ export default function SeasonPanel({ venueId, canManage = false }: { venueId: s
                   <p className="truncate text-2xs text-ink-muted">{h.seasonName} · {h.endsOn}</p>
                 </div>
                 <span className="shrink-0 text-xs font-bold tabular-nums text-gold-300">{h.points}점</span>
+                <button type="button" title="챔피언 카드 공유"
+                  onClick={() => shareChampionCard({ nickname: h.nickname, seasonName: h.seasonName, venueName, points: h.points })
+                    .then((r) => toast.show(r === 'shared' ? '챔피언 카드를 공유했어요' : '챔피언 카드를 저장했어요', 'success'))
+                    .catch(() => toast.show('카드 생성 실패', 'error'))}
+                  className="btn-ghost shrink-0 px-1.5 py-1 text-2xs">📤</button>
               </li>
             ))}
           </ul>

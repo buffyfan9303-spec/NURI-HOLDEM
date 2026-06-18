@@ -292,7 +292,7 @@ export default function VenuePage({
               />
             </div>
           )}
-          {tab === 'ranking' && <><SeasonPanel venueId={venue.id} /><div className="mt-5 border-t border-border-subtle pt-4"><VenueRankingPanel venueId={venue.id} /></div></>}
+          {tab === 'ranking' && <><SeasonPanel venueId={venue.id} venueName={venue.name} /><div className="mt-5 border-t border-border-subtle pt-4"><VenueRankingPanel venueId={venue.id} /></div></>}
           {tab === 'posters' && (
             <PostersPanel
               todayPosters={todayPosters}

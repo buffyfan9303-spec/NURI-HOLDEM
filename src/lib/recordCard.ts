@@ -21,6 +21,7 @@ export interface RecordCardData {
 }
 
 const N = (v: number) => v.toLocaleString('ko-KR');
+const clip = (s: string, n: number) => (s && s.length > n ? s.slice(0, n - 1) + '…' : (s || ''));
 
 export async function buildRecordCardBlob(d: RecordCardData): Promise<Blob> {
   const S = 1080;
@@ -100,6 +101,82 @@ export async function buildRecordCardBlob(d: RecordCardData): Promise<Blob> {
   return await new Promise<Blob>((resolve, reject) => {
     c.toBlob((b) => (b ? resolve(b) : reject(new Error('카드 생성 실패'))), 'image/png');
   });
+}
+
+// ── 시즌 챔피언(명예의 전당) 공유 카드 ───────────────────────────────────────
+export interface ChampionCardData {
+  nickname: string;
+  seasonName: string;
+  venueName?: string;
+  points: number;
+}
+
+export async function buildChampionCardBlob(d: ChampionCardData): Promise<Blob> {
+  const S = 1080;
+  const c = document.createElement('canvas');
+  c.width = S; c.height = S;
+  const x = c.getContext('2d')!;
+
+  const grad = x.createLinearGradient(0, 0, 0, S);
+  grad.addColorStop(0, BG0); grad.addColorStop(1, BG1);
+  x.fillStyle = grad; x.fillRect(0, 0, S, S);
+  x.fillStyle = GOLD; x.fillRect(0, 0, S, 10);
+
+  x.textAlign = 'center';
+  x.textBaseline = 'alphabetic';
+  x.fillStyle = GOLD; x.font = '800 38px sans-serif';
+  x.fillText('♠ NURI HOLDEM', S / 2, 110);
+
+  // 왕관 + 시즌 챔피언
+  x.font = '700 150px sans-serif';
+  x.fillText('👑', S / 2, 320);
+  x.fillStyle = GOLD; x.font = '800 64px sans-serif';
+  x.fillText('시즌 챔피언', S / 2, 420);
+
+  // 닉네임
+  x.fillStyle = INK; x.font = '800 84px sans-serif';
+  const nick = '@' + d.nickname;
+  x.fillText(nick.length > 16 ? nick.slice(0, 15) + '…' : nick, S / 2, 560);
+
+  // 시즌 / 매장
+  x.fillStyle = MUTED; x.font = '600 36px sans-serif';
+  x.fillText(clip(d.seasonName, 28), S / 2, 630);
+  if (d.venueName) { x.fillStyle = '#B0B6C0'; x.font = '500 34px sans-serif'; x.fillText(clip(d.venueName, 28), S / 2, 685); }
+
+  // 포인트 배지
+  const bw = 460, bh = 120, bx = (S - bw) / 2, by = 740;
+  x.fillStyle = 'rgba(252,213,53,0.10)'; roundRect(x, bx, by, bw, bh, 24); x.fill();
+  x.strokeStyle = 'rgba(252,213,53,0.45)'; x.lineWidth = 2; roundRect(x, bx, by, bw, bh, 24); x.stroke();
+  x.fillStyle = GOLD; x.font = '800 60px sans-serif';
+  x.fillText(`${N(d.points)} 점`, S / 2, by + 78);
+
+  // 푸터
+  x.fillStyle = LINE; x.fillRect(72, S - 96, S - 144, 1);
+  x.fillStyle = MUTED; x.font = '600 30px sans-serif';
+  x.fillText('nuriholdem.com · 시즌 리그', S / 2, S - 48);
+  x.textAlign = 'left';
+
+  return await new Promise<Blob>((resolve, reject) => {
+    c.toBlob((b) => (b ? resolve(b) : reject(new Error('카드 생성 실패'))), 'image/png');
+  });
+}
+
+export async function shareChampionCard(d: ChampionCardData): Promise<'shared' | 'downloaded'> {
+  const blob = await buildChampionCardBlob(d);
+  const file = new File([blob], `nuriholdem-챔피언-${d.nickname}.png`, { type: 'image/png' });
+  const nav = navigator as Navigator & { canShare?: (data: ShareData) => boolean };
+  if (nav.canShare && nav.canShare({ files: [file] }) && navigator.share) {
+    try {
+      await navigator.share({ files: [file], title: 'NURI HOLDEM 시즌 챔피언', text: `${d.seasonName} 시즌 챔피언 🏆` });
+      return 'shared';
+    } catch (e) { if ((e as Error).name === 'AbortError') return 'shared'; }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = file.name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return 'downloaded';
 }
 
 function roundRect(x: CanvasRenderingContext2D, px: number, py: number, w: number, h: number, r: number) {
