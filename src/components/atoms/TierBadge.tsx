@@ -19,25 +19,29 @@ export interface Tier {
   min: number;
   /** 강조 색 */
   color: string;
+  /** 레벨 (1~12, rank+1) */
+  level: number;
+  /** 한글 칭호 */
+  title: string;
 }
 
-interface TierDef { rank: string; min: number; color: string; }
+interface TierDef { rank: string; min: number; color: string; title: string; }
 
 // 점수로 도달 가능한 최대 등급은 K. A 는 상대평가(별도)로만 부여.
-// 색상은 등급군별로 구분(회색→블루→그린→퍼플→오렌지→레드→골드)
+// 색상은 등급군별로 구분(회색→블루→그린→퍼플→오렌지→레드→골드). title=레벨별 한글 칭호.
 const RANK_THRESHOLDS: readonly TierDef[] = [
-  { rank: '22',   min: 0,     color: '#7C8696' },
-  { rank: '33',   min: 20,    color: '#7C8696' },
-  { rank: '44',   min: 60,    color: '#94A0B5' },
-  { rank: '55',   min: 150,   color: '#5FA8FF' },
-  { rank: '66',   min: 300,   color: '#5FA8FF' },
-  { rank: '77',   min: 600,   color: '#4FCB98' },
-  { rank: '88',   min: 1200,  color: '#4FCB98' },
-  { rank: '99',   min: 2500,  color: '#B388FF' },
-  { rank: '1010', min: 4000,  color: '#B388FF' },
-  { rank: 'JJ',   min: 7000,  color: '#FF9F45' },
-  { rank: 'QQ',   min: 10000, color: '#FF7A8A' },
-  { rank: 'KK',   min: 14000, color: '#FFD100' },
+  { rank: '22',   min: 0,     color: '#7C8696', title: '홀덤 입문' },
+  { rank: '33',   min: 20,    color: '#7C8696', title: '뉴비' },
+  { rank: '44',   min: 60,    color: '#94A0B5', title: '루키' },
+  { rank: '55',   min: 150,   color: '#5FA8FF', title: '레귤러' },
+  { rank: '66',   min: 300,   color: '#5FA8FF', title: '그라인더' },
+  { rank: '77',   min: 600,   color: '#4FCB98', title: '세미프로' },
+  { rank: '88',   min: 1200,  color: '#4FCB98', title: '프로' },
+  { rank: '99',   min: 2500,  color: '#B388FF', title: '하이롤러' },
+  { rank: '1010', min: 4000,  color: '#B388FF', title: '샤크' },
+  { rank: 'JJ',   min: 7000,  color: '#FF9F45', title: '레전드' },
+  { rank: 'QQ',   min: 10000, color: '#FF7A8A', title: '챔피언' },
+  { rank: 'KK',   min: 14000, color: '#FFD100', title: '홀덤 마스터' },
 ] as const;
 
 // A(Ace) 부여 조건 — 상대평가
@@ -53,7 +57,7 @@ export function tierOf(points: number): Tier {
     if (p >= RANK_THRESHOLDS[i].min) idx = i; else break;
   }
   const d = RANK_THRESHOLDS[idx];
-  return { key: d.rank, label: d.rank, rank: idx, min: d.min, color: d.color };
+  return { key: d.rank, label: d.rank, rank: idx, min: d.min, color: d.color, level: idx + 1, title: d.title };
 }
 
 /** 등급 강조색 — 아바타 테두리 등에 사용. 운영자=빨강, 그 외 점수 등급색. */
@@ -96,7 +100,7 @@ export function tierProgress(points: number): TierProgress {
     return { current, next: null, ratio: 1, toNext: 0 };
   }
   const nd = RANK_THRESHOLDS[current.rank + 1];
-  const next: Tier = { key: nd.rank, label: nd.rank, rank: current.rank + 1, min: nd.min, color: nd.color };
+  const next: Tier = { key: nd.rank, label: nd.rank, rank: current.rank + 1, min: nd.min, color: nd.color, level: current.rank + 2, title: nd.title };
   const span = next.min - current.min;
   const done = p - current.min;
   return {
@@ -109,7 +113,7 @@ export function tierProgress(points: number): TierProgress {
 
 /** 전체 등급 목록(낮은→높은) — 안내/범례용 (2~K) */
 export function allTiers(): Tier[] {
-  return RANK_THRESHOLDS.map((d, i) => ({ key: d.rank, label: d.rank, rank: i, min: d.min, color: d.color }));
+  return RANK_THRESHOLDS.map((d, i) => ({ key: d.rank, label: d.rank, rank: i, min: d.min, color: d.color, level: i + 1, title: d.title }));
 }
 
 // 운영자(관리자) 전용 최상위 등급. 랭킹에는 집계하지 않는다.

@@ -19,6 +19,7 @@ import { shareRecordCard } from '../../lib/recordCard';
 import { getMyReferralStats, inviteUrl, type ReferralStats } from '../../api/referrals';
 import QRCode from 'qrcode';
 import { BADGES, getMyBadgeStats, type BadgeStats } from '../../lib/loyalty';
+import TierBadge, { tierOf, tierProgress } from '../atoms/TierBadge';
 
 function parseVenueId(text: string): string | null {
   const t = text.trim();
@@ -187,6 +188,9 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
               <p className="mt-2 text-2xs leading-relaxed text-amber-300/90">⚠ 받는 아이디(닉네임)를 설정하면 업주가 더 쉽게 이용권을 보낼 수 있어요. 프로필에서 설정하세요.</p>
             )}
           </section>
+
+          {/* 레벨·칭호 — 활동점수 기반 레벨/칭호 + 다음 레벨까지 진행 */}
+          <LevelCard points={user?.activityPoints ?? 0} />
 
           {/* 친구 초대 — 추천 링크 + 현황. 친구 가입+본인인증 시 양쪽 활동점수 */}
           <InviteSection nickname={user?.nickname ?? ''} stats={refStats} />
@@ -568,6 +572,33 @@ function HiCard({ title, name, detail }: { title: string; name: string; detail: 
       <p className="mt-0.5 truncate text-sm font-bold text-ink-primary">{name}</p>
       <p className="text-2xs text-ink-muted">{detail}</p>
     </div>
+  );
+}
+
+/** 레벨·칭호 — 활동점수 기반 레벨(1~12)·한글 칭호 + 다음 레벨까지 진행바. */
+function LevelCard({ points }: { points: number }) {
+  const t = tierOf(points);
+  const prog = tierProgress(points);
+  return (
+    <section className="rounded-card border border-border-default bg-surface-low p-3">
+      <div className="flex items-center gap-2.5">
+        <TierBadge points={points} size={28} />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-bold text-ink-primary">Lv {t.level} · <span style={{ color: t.color }}>{t.title}</span></p>
+          <p className="text-2xs text-ink-muted">활동점수 <b className="text-gold-300 tabular-nums">{points.toLocaleString()}</b>점</p>
+        </div>
+      </div>
+      {prog.next ? (
+        <div className="mt-2.5">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-float">
+            <div className="h-full rounded-full transition-all" style={{ width: `${Math.round(prog.ratio * 100)}%`, background: t.color }} />
+          </div>
+          <p className="mt-1 text-2xs text-ink-muted">다음 레벨 <b style={{ color: prog.next.color }}>{prog.next.title}</b>까지 <b className="text-ink-secondary tabular-nums">{prog.toNext.toLocaleString()}</b>점</p>
+        </div>
+      ) : (
+        <p className="mt-2 text-2xs font-bold text-gold-300">🏆 최고 레벨 달성! 활동을 이어가 명예의 전당에 도전하세요.</p>
+      )}
+    </section>
   );
 }
 
