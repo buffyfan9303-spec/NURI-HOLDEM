@@ -15,7 +15,8 @@ import {
 import { wonToMan } from '../../api/ledger';
 import { getMyReservations, cancelMyReservation, type MyReservationRow } from '../../api/reservations';
 import { getMyRankingHistory, getGlobalRankingTotals, parsePrizeMan, placementPoints, type MyRankingRow } from '../../api/rankings';
-import { shareRecordCard } from '../../lib/recordCard';
+import { shareRecordCard, shareRecordCardKakao } from '../../lib/recordCard';
+import { kakaoConfigured, kakaoShareLink } from '../../lib/kakao';
 import { getMyReferralStats, inviteUrl, type ReferralStats } from '../../api/referrals';
 import { getMyChampionships } from '../../api/seasons';
 import QRCode from 'qrcode';
@@ -400,13 +401,23 @@ function RecordSummary({ rows, percentile, nickname }: { rows: MyRankingRow[]; p
   for (const r of rows) freq.set(r.venueName, (freq.get(r.venueName) ?? 0) + 1);
   const fav = [...freq.entries()].sort((a, b) => b[1] - a[1])[0] ?? null;
 
+  const cardData = () => ({ nickname: nickname || '플레이어', wins, cashes, records: n, winRate, bestPosition: best, prizeMan, points, percentile });
   const doShare = async () => {
     if (busy) return;
     setBusy(true);
     try {
-      const res = await shareRecordCard({ nickname: nickname || '플레이어', wins, cashes, records: n, winRate, bestPosition: best, prizeMan, points, percentile });
+      const res = await shareRecordCard(cardData());
       toast.show(res === 'shared' ? '전적 카드를 공유했어요' : '전적 카드 이미지를 저장했어요', 'success');
     } catch { toast.show('카드 생성에 실패했어요', 'error'); } finally { setBusy(false); }
+  };
+  const doKakao = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const ok = await shareRecordCardKakao(cardData());
+      if (ok) toast.show('카카오톡으로 공유했어요', 'success');
+      else { const res = await shareRecordCard(cardData()); toast.show(res === 'shared' ? '공유했어요' : '카카오 공유가 미설정이라 이미지를 저장했어요', 'info'); }
+    } catch { toast.show('공유에 실패했어요', 'error'); } finally { setBusy(false); }
   };
 
   return (
@@ -415,7 +426,10 @@ function RecordSummary({ rows, percentile, nickname }: { rows: MyRankingRow[]; p
         <p className="text-xs font-bold text-gold-300">🏆 내 토너먼트 전적 <span className="font-normal text-ink-muted">(기록 {n}회)</span>
           {percentile != null && <span className="ml-1.5 rounded-badge bg-gold-300/15 px-1.5 py-0.5 text-2xs text-gold-300">전국 상위 {percentile}%</span>}
         </p>
-        <button type="button" onClick={doShare} disabled={busy} className="btn-ghost shrink-0 px-2.5 py-1 text-2xs disabled:opacity-50">{busy ? '생성 중…' : '📤 공유'}</button>
+        <div className="flex shrink-0 gap-1">
+          {kakaoConfigured() && <button type="button" onClick={doKakao} disabled={busy} className="shrink-0 rounded-badge px-2 py-1 text-2xs font-bold text-[#3C1E1E] disabled:opacity-50" style={{ background: '#FEE500' }}>카톡</button>}
+          <button type="button" onClick={doShare} disabled={busy} className="btn-ghost shrink-0 px-2.5 py-1 text-2xs disabled:opacity-50">{busy ? '생성 중…' : '📤 공유'}</button>
+        </div>
       </div>
       <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-6">
         <Stat label="우승" value={`${wins}회`} accent />
@@ -677,6 +691,10 @@ function InviteSection({ nickname, stats }: { nickname: string; stats: ReferralS
     if (navigator.share) { try { await navigator.share({ title: 'NURI HOLDEM 초대', text, url }); return; } catch { return; } }
     copy();
   };
+  const kakao = async () => {
+    const ok = await kakaoShareLink({ title: 'NURI HOLDEM 초대 🎁', description: '내 링크로 가입하고 본인인증하면 둘 다 활동점수를 받아요!', link: url });
+    if (!ok) { toast.show('카카오 공유가 미설정이라 링크를 복사했어요', 'info'); copy(); }
+  };
   return (
     <section className="rounded-card border border-gold-400/30 bg-gold-300/[0.05] p-3">
       <div className="flex items-center justify-between gap-2">
@@ -690,6 +708,7 @@ function InviteSection({ nickname, stats }: { nickname: string; stats: ReferralS
           <div className="truncate rounded-input border border-border-subtle bg-surface-base px-2.5 py-1.5 text-2xs text-ink-muted">{url}</div>
           <div className="mt-1.5 flex gap-1.5">
             <button type="button" onClick={copy} className="btn-ghost flex-1 px-2 py-1 text-2xs">📋 복사</button>
+            {kakaoConfigured() && <button type="button" onClick={kakao} className="flex-1 rounded-input px-2 py-1 text-2xs font-bold text-[#3C1E1E]" style={{ background: '#FEE500' }}>카톡 공유</button>}
             <button type="button" onClick={share} className="btn-primary flex-1 px-2 py-1 text-2xs">📤 공유</button>
           </div>
         </div>

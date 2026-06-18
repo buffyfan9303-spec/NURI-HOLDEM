@@ -3,7 +3,8 @@
 // canManage=true(운영자)면 생성/종료 UI 노출. 랭킹·아카이브는 누구나 조회(공개).
 import { useEffect, useMemo, useState } from 'react';
 import { useToast } from '../atoms/Toast';
-import { shareChampionCard } from '../../lib/recordCard';
+import { shareChampionCard, shareChampionCardKakao } from '../../lib/recordCard';
+import { kakaoConfigured } from '../../lib/kakao';
 import {
   listVenueSeasons, getCurrentSeasonStandings, getSeasonResults, getVenueHallOfFame,
   createVenueSeason, endVenueSeason, type VenueSeason, type SeasonStanding, type HallOfFameEntry,
@@ -123,9 +124,14 @@ export default function SeasonPanel({ venueId, canManage = false, venueName }: {
                 </div>
                 <span className="shrink-0 text-xs font-bold tabular-nums text-gold-300">{h.points}점</span>
                 <button type="button" title="챔피언 카드 공유"
-                  onClick={() => shareChampionCard({ nickname: h.nickname, seasonName: h.seasonName, venueName, points: h.points })
-                    .then((r) => toast.show(r === 'shared' ? '챔피언 카드를 공유했어요' : '챔피언 카드를 저장했어요', 'success'))
-                    .catch(() => toast.show('카드 생성 실패', 'error'))}
+                  onClick={async () => {
+                    const d = { nickname: h.nickname, seasonName: h.seasonName, venueName, points: h.points };
+                    try {
+                      if (kakaoConfigured() && await shareChampionCardKakao(d)) { toast.show('카카오톡으로 공유했어요', 'success'); return; }
+                      const r = await shareChampionCard(d);
+                      toast.show(r === 'shared' ? '챔피언 카드를 공유했어요' : '챔피언 카드를 저장했어요', 'success');
+                    } catch { toast.show('카드 생성 실패', 'error'); }
+                  }}
                   className="btn-ghost shrink-0 px-1.5 py-1 text-2xs">📤</button>
               </li>
             ))}

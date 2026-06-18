@@ -1,6 +1,8 @@
-// src/lib/recordCard.ts
+// src/lib/recordCard.ts (카카오 공유 변형 포함 — kakaoShareImage 사용)
 // 내 토너먼트 전적 공유 카드 — 캔버스로 1080x1080 PNG 를 그려 Blob 으로 반환(의존성 없음).
 // SNS 공유(navigator.share)/이미지 저장에 사용. 한글은 브라우저 sans-serif 폴백으로 렌더.
+import { kakaoShareImage } from './kakao';
+
 const BG0 = '#0E1116';
 const BG1 = '#06080B';
 const GOLD = '#FCD535';
@@ -211,4 +213,23 @@ export async function shareRecordCard(d: RecordCardData): Promise<'shared' | 'do
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   return 'downloaded';
+}
+
+// ── 카카오톡 공유(리치 카드) — 미설정/실패 시 false(호출부가 일반 공유로 폴백) ──────
+export async function shareRecordCardKakao(d: RecordCardData): Promise<boolean> {
+  const blob = await buildRecordCardBlob(d);
+  return kakaoShareImage(blob, {
+    title: 'NURI HOLDEM 내 전적',
+    description: `전국 상위 ${d.percentile ?? '-'}% · 우승 ${d.wins}회 · 우승률 ${d.winRate}%`,
+    link: 'https://nuriholdem.com',
+  });
+}
+
+export async function shareChampionCardKakao(d: ChampionCardData): Promise<boolean> {
+  const blob = await buildChampionCardBlob(d);
+  return kakaoShareImage(blob, {
+    title: 'NURI HOLDEM 시즌 챔피언',
+    description: `${d.seasonName} 시즌 챔피언 🏆 ${d.points}점`,
+    link: 'https://nuriholdem.com',
+  });
 }
