@@ -17,6 +17,7 @@ import { getMyReservations, cancelMyReservation, type MyReservationRow } from '.
 import { getMyRankingHistory, getGlobalRankingTotals, parsePrizeMan, placementPoints, type MyRankingRow } from '../../api/rankings';
 import { shareRecordCard } from '../../lib/recordCard';
 import { getMyReferralStats, inviteUrl, type ReferralStats } from '../../api/referrals';
+import { getMyChampionships } from '../../api/seasons';
 import QRCode from 'qrcode';
 import { BADGES, getMyBadgeStats, type BadgeStats } from '../../lib/loyalty';
 import TierBadge, { tierOf, tierProgress } from '../atoms/TierBadge';
@@ -46,6 +47,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
   const [ranks, setRanks] = useState<MyRankingRow[]>([]);     // 내 입상 기록(닉네임 기준)
   const [percentile, setPercentile] = useState<number | null>(null); // 전국 상위 N%(prizePoints 기준)
   const [refStats, setRefStats] = useState<ReferralStats>({ invited: 0, rewarded: 0 }); // 친구 초대 현황
+  const [championships, setChampionships] = useState(0); // 시즌 우승 횟수(영구 배지)
   const [loading, setLoading] = useState(false);
   const [redeem, setRedeem] = useState<Stack | null>(null);
   const [badgeStats, setBadgeStats] = useState<BadgeStats | null>(null); // 내 업적(랭킹 탭에서 이전)
@@ -59,9 +61,10 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
       user?.nickname ? getMyRankingHistory(user.nickname, 200).catch(() => [] as MyRankingRow[]) : Promise.resolve([] as MyRankingRow[]),
       user?.nickname ? getGlobalRankingTotals().catch(() => []) : Promise.resolve([]),
       user?.nickname ? getMyReferralStats().catch(() => ({ invited: 0, rewarded: 0 })) : Promise.resolve({ invited: 0, rewarded: 0 }),
+      user?.nickname ? getMyChampionships(user.nickname).catch(() => 0) : Promise.resolve(0),
     ])
-      .then(([vs, vi, pl, rv, rk, gt, rs]) => {
-        setVouchers(vs); setVisits(vi); setPlays(pl); setResv(rv); setRanks(rk); setRefStats(rs);
+      .then(([vs, vi, pl, rv, rk, gt, rs, ch]) => {
+        setVouchers(vs); setVisits(vi); setPlays(pl); setResv(rv); setRanks(rk); setRefStats(rs); setChampionships(ch);
         // 전국 상위 N% — prizePoints(누적 포인트) 기준 순위. 닉네임 매칭.
         const nick = user?.nickname?.toLowerCase();
         if (nick && gt.length) {
@@ -190,7 +193,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
           </section>
 
           {/* 레벨·칭호 — 활동점수 기반 레벨/칭호 + 다음 레벨까지 진행 */}
-          <LevelCard points={user?.activityPoints ?? 0} />
+          <LevelCard points={user?.activityPoints ?? 0} championships={championships} />
 
           {/* 친구 초대 — 추천 링크 + 현황. 친구 가입+본인인증 시 양쪽 활동점수 */}
           <InviteSection nickname={user?.nickname ?? ''} stats={refStats} />
@@ -576,7 +579,7 @@ function HiCard({ title, name, detail }: { title: string; name: string; detail: 
 }
 
 /** 레벨·칭호 — 활동점수 기반 레벨(1~12)·한글 칭호 + 다음 레벨까지 진행바. */
-function LevelCard({ points }: { points: number }) {
+function LevelCard({ points, championships = 0 }: { points: number; championships?: number }) {
   const t = tierOf(points);
   const prog = tierProgress(points);
   return (
@@ -587,6 +590,9 @@ function LevelCard({ points }: { points: number }) {
           <p className="text-sm font-bold text-ink-primary">Lv {t.level} · <span style={{ color: t.color }}>{t.title}</span></p>
           <p className="text-2xs text-ink-muted">활동점수 <b className="text-gold-300 tabular-nums">{points.toLocaleString()}</b>점</p>
         </div>
+        {championships > 0 && (
+          <span className="shrink-0 rounded-badge border border-gold-400/40 bg-gold-300/10 px-2 py-1 text-2xs font-bold text-gold-300" title="시즌 우승 영구 배지">👑 우승 {championships}</span>
+        )}
       </div>
       {prog.next ? (
         <div className="mt-2.5">

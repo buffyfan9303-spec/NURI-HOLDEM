@@ -4,8 +4,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useToast } from '../atoms/Toast';
 import {
-  listVenueSeasons, getCurrentSeasonStandings, getSeasonResults,
-  createVenueSeason, endVenueSeason, type VenueSeason, type SeasonStanding,
+  listVenueSeasons, getCurrentSeasonStandings, getSeasonResults, getVenueHallOfFame,
+  createVenueSeason, endVenueSeason, type VenueSeason, type SeasonStanding, type HallOfFameEntry,
 } from '../../api/seasons';
 
 const today = () => new Date().toLocaleDateString('en-CA');
@@ -20,6 +20,7 @@ export default function SeasonPanel({ venueId, canManage = false }: { venueId: s
   const [busy, setBusy] = useState(false);
   const [archiveId, setArchiveId] = useState<string | null>(null);
   const [archiveRows, setArchiveRows] = useState<SeasonStanding[]>([]);
+  const [hof, setHof] = useState<HallOfFameEntry[]>([]);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
   const [startsOn, setStartsOn] = useState(today());
@@ -28,6 +29,7 @@ export default function SeasonPanel({ venueId, canManage = false }: { venueId: s
   const load = () => {
     listVenueSeasons(venueId).then(setSeasons).catch(() => setSeasons([]));
     getCurrentSeasonStandings(venueId).then(setStandings).catch(() => {});
+    getVenueHallOfFame(venueId).then(setHof).catch(() => {});
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [venueId]);
 
@@ -104,6 +106,25 @@ export default function SeasonPanel({ venueId, canManage = false }: { venueId: s
         </div>
       ) : !creating && (
         <p className="rounded-card border border-border-subtle bg-surface-low py-4 text-center text-2xs text-ink-muted">진행 중인 시즌이 없습니다.{canManage ? " '시즌 시작'으로 분기 리그를 열어보세요." : ''}</p>
+      )}
+
+      {/* 🏆 역대 챔피언(명예의 전당) */}
+      {hof.length > 0 && (
+        <div className="rounded-card border border-gold-400/30 bg-gold-300/[0.05] p-3">
+          <p className="mb-2 text-sm font-bold text-gold-300">🏆 역대 챔피언</p>
+          <ul className="space-y-1.5">
+            {hof.map((h) => (
+              <li key={h.seasonId} className="flex items-center gap-2.5 rounded-input border border-gold-400/20 bg-surface-low px-3 py-2">
+                <span className="shrink-0 text-base" aria-hidden>👑</span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold text-ink-primary">{h.nickname}{h.realName ? <span className="text-2xs font-normal text-ink-muted"> ({h.realName})</span> : null}</p>
+                  <p className="truncate text-2xs text-ink-muted">{h.seasonName} · {h.endsOn}</p>
+                </div>
+                <span className="shrink-0 text-xs font-bold tabular-nums text-gold-300">{h.points}점</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {/* 지난 시즌 아카이브 */}

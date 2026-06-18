@@ -51,3 +51,18 @@ export async function endVenueSeason(seasonId: string): Promise<number> {
   if (error) throw new Error(error.message);
   return Number(data) || 0;
 }
+
+export interface HallOfFameEntry { seasonId: string; seasonName: string; endsOn: string; nickname: string; realName: string | null; points: number }
+export async function getVenueHallOfFame(venueId: string): Promise<HallOfFameEntry[]> {
+  if (IS_MOCK) return [];
+  const { data } = await supabase.rpc('venue_hall_of_fame', { p_venue_id: venueId });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({ seasonId: r.season_id, seasonName: r.season_name, endsOn: r.ends_on, nickname: r.nickname, realName: r.real_name ?? null, points: Number(r.points) || 0 }));
+}
+
+/** 내 시즌 우승 횟수(전 매장, 닉네임 기준) — 영구 배지용 */
+export async function getMyChampionships(nickname: string): Promise<number> {
+  if (IS_MOCK || !nickname.trim()) return 0;
+  const { data } = await supabase.rpc('my_championships', { p_nickname: nickname.trim() });
+  return Number(data) || 0;
+}
