@@ -14,6 +14,7 @@ import {
 import { useToast } from '../atoms/Toast';
 import { supabase } from '../../lib/supabase';
 import { getAppSetting, setAppSetting, BOOST_CONTACT_EMAIL_KEY, BOOST_CONTACT_PHONE_KEY } from '../../api/settings';
+import { getAdminPlatformStats, type PlatformStats } from '../../api/adminStats';
 import { getAllCommunityAds, saveCommunityAd, type CommunityAd } from '../../api/ads';
 import {
   MISSIONS, adminListCustomMissions, adminSaveCustomMission, adminDeleteCustomMission,
@@ -40,7 +41,7 @@ interface AdminTabProps {
   onReloadVenues?: () => void;
 }
 
-type Section = 'pending' | 'reorder' | 'users' | 'venues' | 'reports' | 'errors';
+type Section = 'analytics' | 'pending' | 'reorder' | 'users' | 'venues' | 'reports' | 'errors';
 // 노출 순서 하위 항목: 포스터(요강) / 매장
 type ReorderTarget = 'posters' | 'venues';
 
@@ -508,6 +509,7 @@ const aic = (children: ReactNode) => (
 );
 // 섹션 설명 — 공용 SectionHeader(내 매장과 동일 규격)
 const ADMIN_DESC: Record<Section, string> = {
+  analytics: '플랫폼 핵심 지표 — 회원·매장·대회·체크인·추천·푸시 한눈에',
   pending: '업주가 등록한 포스터 검수 — 승인하면 일정 탐색에 노출됩니다',
   reorder: '노출 순서 · 부스트 · 커뮤니티 광고 · 주간 미션 관리',
   users: '회원 검색 · 등급 · 제재',
@@ -517,6 +519,7 @@ const ADMIN_DESC: Record<Section, string> = {
 };
 
 const ADMIN_SECTIONS: { id: Section; label: string; icon: ReactNode }[] = [
+  { id: 'analytics', label: '운영 분석', icon: aic(<><path d="M3 3v18h18" /><path d="m7 14 4-4 3 3 5-6" /></>) },
   { id: 'pending', label: '포스터 승인', icon: aic(<><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><path d="m9 11 3 3L22 4" /></>) },
   { id: 'reorder', label: '게시물 관리', icon: aic(<><path d="m12 2 9 5-9 5-9-5 9-5Z" /><path d="m3 12 9 5 9-5" /><path d="m3 17 9 5 9-5" /></>) },
   { id: 'users', label: '회원 관리', icon: aic(<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>) },
@@ -537,10 +540,43 @@ function AdminNavBtn({ active, onClick, icon, badge, children }: { active: boole
   );
 }
 
+/** 관리자 운영 분석 — 플랫폼 핵심 지표 카드 그리드 */
+function PlatformStatsCard() {
+  const [s, setS] = useState<PlatformStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => { getAdminPlatformStats().then(setS).catch(() => {}).finally(() => setLoading(false)); }, []);
+  if (loading) return <p className="py-8 text-center text-2xs text-ink-muted">불러오는 중…</p>;
+  if (!s) return <p className="py-8 text-center text-2xs text-ink-muted">지표를 불러올 수 없습니다 (관리자 전용).</p>;
+  const cells: { label: string; value: string; sub?: string; accent?: boolean }[] = [
+    { label: '총 회원', value: s.users.toLocaleString(), sub: `+${s.newUsers7d} (7일)`, accent: true },
+    { label: '신규 가입(30일)', value: `${s.newUsers30d}` },
+    { label: '총 매장', value: `${s.venues}`, sub: `활성 ${s.activeVenues}` },
+    { label: '총 대회', value: `${s.schedules}`, sub: `예정 ${s.upcomingSchedules}`, accent: true },
+    { label: '체크인(7일)', value: `${s.checkins7d}`, sub: `오늘 ${s.checkinsToday}` },
+    { label: '추천 가입', value: `${s.referrals}`, sub: `보상 ${s.referralsRewarded}`, accent: true },
+    { label: '푸시 구독', value: `${s.pushSubs}`, sub: '알림 켠 기기' },
+    { label: '커뮤니티 글(7일)', value: `${s.posts7d}` },
+  ];
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {cells.map((c) => (
+          <div key={c.label} className="rounded-card border border-border-subtle bg-surface-low p-3 text-center">
+            <p className={`text-xl font-extrabold leading-none tabular-nums ${c.accent ? 'text-gold-300' : 'text-ink-primary'}`}>{c.value}</p>
+            <p className="mt-1 text-2xs text-ink-muted">{c.label}</p>
+            {c.sub && <p className="text-[10px] text-ink-muted">{c.sub}</p>}
+          </div>
+        ))}
+      </div>
+      <p className="text-2xs leading-relaxed text-ink-muted">마케팅 발송 누적 {s.announcements}건. 푸시 구독이 0이면 아직 알림을 켠 사용자가 없는 상태입니다.</p>
+    </div>
+  );
+}
+
 export default function AdminTab({
   schedules, venues, users, posts, onApproveSchedule, onRejectSchedule, onUpdateUser, onDeletePost, onReloadVenues,
 }: AdminTabProps) {
-  const [section, setSection] = useState<Section>('pending');
+  const [section, setSection] = useState<Section>('analytics');
   const [reorderTarget, setReorderTarget] = useState<ReorderTarget>('posters');
 
   const pending = schedules.filter((s) => !s.approved);
@@ -561,6 +597,7 @@ export default function AdminTab({
             title={ADMIN_SECTIONS.find((a) => a.id === section)?.label ?? ''}
             desc={ADMIN_DESC[section]}
           />
+          {section === 'analytics' && <PlatformStatsCard />}
           {section === 'venues' && (
             <div className="space-y-3">
               <PendingGroupsPanel onChanged={() => onReloadVenues?.()} />
