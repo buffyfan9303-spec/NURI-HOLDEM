@@ -48,7 +48,6 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
   const [percentile, setPercentile] = useState<number | null>(null); // 전국 상위 N%(prizePoints 기준)
   const [refStats, setRefStats] = useState<ReferralStats>({ invited: 0, rewarded: 0 }); // 친구 초대 현황
   const [championships, setChampionships] = useState(0); // 시즌 우승 횟수(영구 배지)
-  const [levelUp, setLevelUp] = useState<number | null>(null); // 레벨업 축하 연출(오른 레벨)
   const [loading, setLoading] = useState(false);
   const [redeem, setRedeem] = useState<Stack | null>(null);
   const [badgeStats, setBadgeStats] = useState<BadgeStats | null>(null); // 내 업적(랭킹 탭에서 이전)
@@ -79,15 +78,6 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (open) reload(); }, [open]);
   useEffect(() => { if (open && user) getMyBadgeStats(user.nickname ?? null, user.activityPoints ?? 0).then(setBadgeStats).catch(() => {}); }, [open, user]);
-  // 레벨업 감지 — 마지막으로 본 레벨보다 현재 레벨이 높으면 축하 연출(인앱)
-  useEffect(() => {
-    if (!open || !user) return;
-    const lvl = tierOf(user.activityPoints ?? 0).level;
-    let seen: number | null = null;
-    try { const s = localStorage.getItem('nuri:level-seen'); seen = s ? parseInt(s, 10) : null; } catch { /* ignore */ }
-    if (seen != null && lvl > seen) setLevelUp(lvl);
-    try { localStorage.setItem('nuri:level-seen', String(lvl)); } catch { /* ignore */ }
-  }, [open, user]);
 
   if (!open) return null;
 
@@ -334,7 +324,6 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
       </div>
 
       {redeem && <RedeemSheet stack={redeem} onClose={() => setRedeem(null)} onDone={() => { setRedeem(null); reload(); }} />}
-      {levelUp != null && <LevelUpCelebration points={user?.activityPoints ?? 0} onClose={() => setLevelUp(null)} />}
     </div>
   );
 }
@@ -585,55 +574,6 @@ function HiCard({ title, name, detail }: { title: string; name: string; detail: 
       <p className="text-2xs font-bold text-gold-300">{title}</p>
       <p className="mt-0.5 truncate text-sm font-bold text-ink-primary">{name}</p>
       <p className="text-2xs text-ink-muted">{detail}</p>
-    </div>
-  );
-}
-
-/** 컨페티 — 캔버스 색종이 낙하(의존성 없음, 약 3.5초 후 정지). */
-function Confetti() {
-  const ref = useRef<HTMLCanvasElement>(null);
-  useEffect(() => {
-    const c = ref.current; if (!c) return;
-    const ctx = c.getContext('2d'); if (!ctx) return;
-    const W = (c.width = c.offsetWidth), H = (c.height = c.offsetHeight);
-    const colors = ['#FCD535', '#FF7A8A', '#5FA8FF', '#4FCB98', '#B388FF', '#FF9F45'];
-    const parts = Array.from({ length: 130 }, () => ({
-      x: Math.random() * W, y: -20 - Math.random() * H,
-      vx: -1 + Math.random() * 2, vy: 2 + Math.random() * 3.5,
-      r: 4 + Math.random() * 5, c: colors[Math.floor(Math.random() * colors.length)],
-      rot: Math.random() * 6.28, vr: -0.2 + Math.random() * 0.4,
-    }));
-    let raf = 0; const start = performance.now();
-    const tick = (now: number) => {
-      ctx.clearRect(0, 0, W, H);
-      for (const p of parts) {
-        p.x += p.vx; p.y += p.vy; p.rot += p.vr;
-        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
-        ctx.fillStyle = p.c; ctx.fillRect(-p.r / 2, -p.r / 2, p.r, p.r * 0.6); ctx.restore();
-      }
-      if (now - start < 3500) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, []);
-  return <canvas ref={ref} className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden />;
-}
-
-/** 레벨업 축하 연출 — 컨페티 + 새 레벨/칭호 카드(인앱 보상감). */
-function LevelUpCelebration({ points, onClose }: { points: number; onClose: () => void }) {
-  const t = tierOf(points);
-  return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center" role="dialog" aria-label="레벨 업">
-      <button type="button" aria-label="닫기" onClick={onClose} className="absolute inset-0 bg-black/80" />
-      <Confetti />
-      <div className="relative mx-4 max-w-xs rounded-dialog border border-gold-400/40 bg-surface-mid p-6 text-center animate-slide-up">
-        <p className="text-2xs font-extrabold uppercase tracking-[0.3em] text-gold-300">LEVEL UP</p>
-        <div className="my-3 flex justify-center"><TierBadge points={points} size={56} /></div>
-        <p className="text-3xl font-extrabold leading-none text-ink-primary">Lv {t.level}</p>
-        <p className="mt-1.5 text-lg font-bold" style={{ color: t.color }}>{t.title}</p>
-        <p className="mt-2 text-2xs text-ink-muted">활동점수 {points.toLocaleString()}점 달성! 🎉</p>
-        <button type="button" onClick={onClose} className="btn-primary mt-4 w-full text-sm">확인</button>
-      </div>
     </div>
   );
 }

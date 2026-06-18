@@ -103,10 +103,12 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
     alive: Math.max(0, g.adjEntries - g.eliminations), eliminations: g.eliminations, totalStack: 0, avgStack: 0, buyInAmount: null,
   } : null);
   const prizes = (g?.config?.prizes ?? []).filter((p) => p.amount > 0);
-  gamesRef.current = games;
   const gSeq = g?.gameSeq ?? null;
   const aliveNow = ls?.alive ?? 0;
   const elimNow = g ? (g.liveStats?.eliminations ?? g.eliminations) : 0;
+
+  // 최신 games 를 ref 에 동기화(인터벌 콜백에서 stale 없이 참조) — 렌더 중 수정 금지라 effect 로
+  useEffect(() => { gamesRef.current = games; }, [games]);
 
   // 멀티게임 자동 순환 — auto && 게임 2개+ 일 때 15초마다 다음 게임으로
   useEffect(() => {

@@ -49,6 +49,7 @@ import {
 import { getListings, getNotices, createNotice, updateNotice, deleteNotice, createListing, deleteListing } from './api/marketplace';
 import { enablePush, isPushSubscribed, pushSupported } from './api/push';
 import { rememberRefCode, pendingRefCode, clearRefCode, recordReferral } from './api/referrals';
+import LevelUpWatcher from './components/features/LevelUpCelebration';
 import type { NoticeFormData } from './components/features/NoticeFormModal';
 import type { LegalDoc } from './components/features/LegalDocsModal';
 import { getMyNotifications, markNotificationsRead } from './api/notifications';
@@ -1575,6 +1576,9 @@ export default function App() {
             onClose={closeDisplay} />
         </Suspense>
       )}
+
+      {/* 전역 레벨업 감지 + 축하 — 점수 변동 즉시(대시보드 밖에서도) */}
+      <LevelUpWatcher points={user?.activityPoints} />
 
       <PendingApprovalBanner />
       <InstallBanner />
