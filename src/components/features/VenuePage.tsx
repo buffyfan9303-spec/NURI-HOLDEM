@@ -29,6 +29,7 @@ import { uploadVenueImages } from '../../lib/storage';
 import { useBackClose } from '../../lib/backstack';
 import VenueReviews from './VenueReviews';
 import SeasonPanel from './SeasonPanel';
+import { getVenuesSeasonLeaders, type SeasonLeader } from '../../api/seasons';
 
 interface VenuePageProps {
   venue: Venue | null;
@@ -279,6 +280,7 @@ export default function VenuePage({
         <div className="px-page-x py-4 min-h-[50vh]">
           {tab === 'about' && (
             <div className="space-y-4">
+              <SeasonLeaderBanner venueId={venue.id} onRanking={() => setTab('ranking')} />
               <AboutPanel
                 venue={venue}
                 editable={isMyVenue}
@@ -659,6 +661,29 @@ function readRankCache(venueId: string): RankPanelCache | undefined {
 function writeRankCache(venueId: string, e: RankPanelCache) {
   rankPanelCache.set(venueId, e);
   try { localStorage.setItem(RANK_LS(venueId), JSON.stringify(e)); } catch { /* noop */ }
+}
+
+/** 현 시즌 선두 위젯 — 매장 페이지 상단. 진행 시즌의 1위(닉네임·점수). 탭하면 시즌 랭킹으로. */
+function SeasonLeaderBanner({ venueId, onRanking }: { venueId: string; onRanking: () => void }) {
+  const [leader, setLeader] = useState<SeasonLeader | null>(null);
+  useEffect(() => {
+    let alive = true;
+    getVenuesSeasonLeaders([venueId]).then((m) => { if (alive) setLeader(m[venueId] ?? null); }).catch(() => {});
+    return () => { alive = false; };
+  }, [venueId]);
+  if (!leader) return null;
+  return (
+    <button type="button" onClick={onRanking}
+      className="flex w-full items-center gap-2.5 rounded-card border border-gold-400/30 bg-gold-300/[0.06] px-3 py-2.5 text-left transition-colors hover:border-gold-400/50 active:scale-[0.99]">
+      <span className="text-lg" aria-hidden>👑</span>
+      <div className="min-w-0 flex-1">
+        <p className="text-2xs font-bold text-gold-300">🏆 현 시즌 선두 · {leader.seasonName}</p>
+        <p className="truncate text-sm font-bold text-ink-primary">{leader.nickname}{leader.realName ? <span className="text-2xs font-normal text-ink-muted"> ({leader.realName})</span> : null}</p>
+      </div>
+      <span className="shrink-0 text-sm font-bold tabular-nums text-gold-300">{leader.points}점</span>
+      <span className="shrink-0 text-2xs text-ink-muted" aria-hidden>›</span>
+    </button>
+  );
 }
 
 function VenueRankingPanel({ venueId }: { venueId: string }) {

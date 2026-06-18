@@ -60,6 +60,18 @@ export async function getVenueHallOfFame(venueId: string): Promise<HallOfFameEnt
   return (data ?? []).map((r: any) => ({ seasonId: r.season_id, seasonName: r.season_name, endsOn: r.ends_on, nickname: r.nickname, realName: r.real_name ?? null, points: Number(r.points) || 0 }));
 }
 
+export interface SeasonLeader { venueId: string; seasonName: string; nickname: string; realName: string | null; points: number }
+/** 여러 매장의 현 시즌 1위 일괄 조회(진행 시즌 보유 매장만). { venueId: leader } */
+export async function getVenuesSeasonLeaders(venueIds: string[]): Promise<Record<string, SeasonLeader>> {
+  const ids = [...new Set(venueIds.filter(Boolean))];
+  if (IS_MOCK || ids.length === 0) return {};
+  const { data } = await supabase.rpc('venues_season_leaders', { p_venue_ids: ids });
+  const map: Record<string, SeasonLeader> = {};
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const r of (data ?? []) as any[]) map[r.venue_id] = { venueId: r.venue_id, seasonName: r.season_name, nickname: r.nickname, realName: r.real_name ?? null, points: Number(r.points) || 0 };
+  return map;
+}
+
 /** 내 시즌 우승 횟수(전 매장, 닉네임 기준) — 영구 배지용 */
 export async function getMyChampionships(nickname: string): Promise<number> {
   if (IS_MOCK || !nickname.trim()) return 0;
