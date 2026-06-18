@@ -10,40 +10,62 @@ const BUCKET_AVATARS  = 'avatars';
 // 커뮤니티 글쓰기 이미지 — 전용 공개 버킷(community_images). 정책: 공개 읽기 / 로그인 업로드 / 본인 삭제.
 const BUCKET_COMMUNITY = import.meta.env.VITE_STORAGE_BUCKET_COMMUNITY ?? 'community_images';
 
-// ── 이미지 리사이징 (Canvas API) ─────────────────────────────────────────────
+// ── 이미지 디코드 (EXIF 회전 보정) ───────────────────────────────────────────
+// 폰 사진은 EXIF orientation 으로 돌아가 보일 수 있음 → createImageBitmap(imageOrientation:'from-image')
+// 으로 정방향 디코드. 미지원 브라우저는 <img>(브라우저 기본 EXIF 적용)로 폴백.
+async function decodeImage(file: File): Promise<ImageBitmap | HTMLImageElement> {
+  if (typeof createImageBitmap === 'function') {
+    try { return await createImageBitmap(file, { imageOrientation: 'from-image' } as ImageBitmapOptions); }
+    catch { /* 폴백 */ }
+  }
+  return await new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('이미지를 불러오지 못했습니다')); };
+    img.src = url;
+  });
+}
+
+function toWebp(canvas: HTMLCanvasElement, q: number): Promise<Blob | null> {
+  return new Promise((res) => canvas.toBlob((b) => res(b), 'image/webp', q));
+}
+
+// ── 이미지 리사이징 + webp 인코딩 (Canvas API) ──────────────────────────────
+// 비율 유지 축소 후 webp 로 인코딩. 결과가 targetBytes 를 넘으면 품질을 단계적으로 낮춰
+// 재인코딩(대역폭·저장 비용 절감). EXIF 회전은 decodeImage 에서 보정.
 export async function resizeImage(
   file: File,
   maxWidth = 1200,
   maxHeight = 1200,
   quality = 0.85,
+  targetBytes = 500_000,
 ): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      let { width, height } = img;
+  const src = await decodeImage(file);
+  let width = src.width;
+  let height = src.height;
 
-      // 비율 유지 축소
-      if (width > maxWidth || height > maxHeight) {
-        const ratio = Math.min(maxWidth / width, maxHeight / height);
-        width  = Math.round(width  * ratio);
-        height = Math.round(height * ratio);
-      }
+  if (width > maxWidth || height > maxHeight) {
+    const ratio = Math.min(maxWidth / width, maxHeight / height);
+    width  = Math.round(width  * ratio);
+    height = Math.round(height * ratio);
+  }
 
-      const canvas = document.createElement('canvas');
-      canvas.width  = width;
-      canvas.height = height;
-      canvas.getContext('2d')!.drawImage(img, 0, 0, width, height);
-      canvas.toBlob(
-        (blob) => blob ? resolve(blob) : reject(new Error('이미지 처리에 실패했습니다')),
-        'image/webp',
-        quality,
-      );
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('이미지를 불러오지 못했습니다')); };
-    img.src = url;
-  });
+  const canvas = document.createElement('canvas');
+  canvas.width  = width;
+  canvas.height = height;
+  canvas.getContext('2d')!.drawImage(src as CanvasImageSource, 0, 0, width, height);
+  if (src instanceof ImageBitmap) src.close();
+
+  // 적응형 품질 — 목표 용량을 넘으면 품질을 0.12씩 낮춰 최대 3회 재인코딩(최저 0.5)
+  let q = quality;
+  let blob = await toWebp(canvas, q);
+  while (blob && blob.size > targetBytes && q > 0.5) {
+    q = Math.max(0.5, q - 0.12);
+    blob = await toWebp(canvas, q);
+  }
+  if (!blob) throw new Error('이미지 처리에 실패했습니다');
+  return blob;
 }
 
 // ── 공통 업로드 ──────────────────────────────────────────────────────────────
