@@ -15,6 +15,7 @@ import TournamentClock from './clock/TournamentClock';
 import AnnouncePanel from './AnnouncePanel';
 import SeasonPanel from './SeasonPanel';
 import PresetManager from './PresetManager';
+import KillSwitch from './KillSwitch';
 import StaffSchedule from './StaffSchedule';
 import { StaffWageManager, StaffSettlement, StaffWorkLog, StaffSelfAttendance } from './StaffPayroll';
 import StoreDashboard from './StoreDashboard';
@@ -323,6 +324,9 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
           </div>
         </div>
       )}
+
+      {/* 위험 구역 — 매장 킬스위치(전체 영구 삭제). 매장 대표 업주에게만 노출. */}
+      {isOwner && venueId && <KillSwitch venueId={venueId} />}
     </div>
   );
 }
