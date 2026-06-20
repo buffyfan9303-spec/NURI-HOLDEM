@@ -14,6 +14,7 @@ import LedgerStatsPanel, { PosSettingsPanel } from './LedgerStatsPanel';
 import TournamentClock from './clock/TournamentClock';
 import AnnouncePanel from './AnnouncePanel';
 import SeasonPanel from './SeasonPanel';
+import PresetManager from './PresetManager';
 import StaffSchedule from './StaffSchedule';
 import { StaffWageManager, StaffSettlement, StaffWorkLog, StaffSelfAttendance } from './StaffPayroll';
 import StoreDashboard from './StoreDashboard';
@@ -27,7 +28,7 @@ import { getSchedules, type Schedule } from '../../api/schedules';
 import { motion } from 'framer-motion';
 import { getLedgerBuyins, getLedgerSession } from '../../api/ledger';
 
-type Section = 'dashboard' | 'posters' | 'ledger' | 'stats' | 'ranking' | 'venueRank' | 'league' | 'staff' | 'settings' | 'clock' | 'attendance' | 'voucher' | 'page';
+type Section = 'dashboard' | 'posters' | 'presets' | 'ledger' | 'stats' | 'ranking' | 'venueRank' | 'league' | 'staff' | 'settings' | 'clock' | 'attendance' | 'voucher' | 'page';
 
 /** 업주/직원 전용 "매장 관리" 탭 — 장부(POS) · 통계 · 순위 입력 · (업주) 직원 관리 */
 export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster, onDeletePoster, deepSection, onConsumeDeepSection }: {
@@ -147,6 +148,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   //  · 업주만 가능한 섹션(포스터·통계·직원·POS)은 직원에게 아예 숨김.
   const available: { id: Section; label: string; locked?: boolean }[] = [{ id: 'dashboard', label: '대시보드' }];
   if (canPosters) available.push({ id: 'posters', label: '포스터·예약' });
+  if (canPosters) available.push({ id: 'presets', label: '게임 프리셋' });
   available.push({ id: 'ledger', label: '장부', locked: !ledgerOk });
   if (manageOk) available.push({ id: 'stats',  label: '통계' });
   if (ledgerOk) available.push({ id: 'ranking', label: '순위 입력' });
@@ -298,6 +300,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                       : { date: schedDate, scheduleId: s.id, isNew: true, title: s.title, buyinAmount: s.buyIn?.amount ?? 0, gtd: !!s.guaranteed });
                     setSection('ledger');
                   } : undefined} />)}
+                {visited.includes('presets') && canPosters && box('presets', <PresetManager venueId={venueId} />)}
                 {visited.includes('ledger') && ledgerOk && box('ledger', <NuriPosLedger venueId={venueId} canManage={manageOk} active={renderSection === 'ledger'} seed={ledgerSeed}
                   onMakeRankingDraft={(d, names, ev) => { setRankingDraft({ date: d, names, event: ev ?? '' }); setSection('ranking'); }}
                   onOpenClock={(d, g) => { setClockSeed(d); setClockSeedGame(g); setSection('clock'); }}
@@ -328,6 +331,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
 const SECTION_DESC: Record<Section, string> = {
   dashboard: '매장 운영 현황을 한눈에 — 오늘 장부·클락·추세·단골',
   posters: '게임(포스터)별 예약 관리 — 게임을 누르면 예약 리스트가 펼쳐집니다',
+  presets: '게임 내용·듀레이션을 템플릿으로 저장 — 포스터/장부 없이 만들고 수정',
   ledger: '게임(세션)별 장부 — 날짜·게임명으로 검색해 열람·수정하세요',
   stats: '기간별 매출·엔트리·요일 분석',
   ranking: '대회 순위 등록 — 닉네임이 일치하는 회원에게 점수가 자동 반영됩니다',
@@ -348,6 +352,7 @@ const ic = (children: ReactNode) => (
 const SECTION_ICON: Record<Section, ReactNode> = {
   dashboard: ic(<><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /></>),
   posters: ic(<><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-4.5-4.5L6 21" /></>),
+  presets: ic(<><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 8h6M9 12h6M9 16h4" /></>),
   ledger: ic(<><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" /></>),
   stats: ic(<><line x1="6" y1="20" x2="6" y2="14" /><line x1="12" y1="20" x2="12" y2="9" /><line x1="18" y1="20" x2="18" y2="4" /></>),
   ranking: ic(<><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" /><path d="M4 22h16" /><path d="M10 14.7V18M14 14.7V18" /><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" /></>),
