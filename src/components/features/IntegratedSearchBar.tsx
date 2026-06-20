@@ -19,6 +19,7 @@ import {
   useEffect,
   useDeferredValue,
   useTransition,
+  Fragment,
 } from 'react';
 import { motion } from 'framer-motion';
 
@@ -114,8 +115,6 @@ function DateTab({ slot, selected, onClick }: DateTabProps) {
   }, [selected]);
 
   const dowColor = slot.isSun ? 'text-red-400' : slot.isSat ? 'text-blue-400' : 'text-ink-muted';
-  // 상단 컨텍스트: 오늘 우선, 다음으로 월 경계('N월'). 칸 높이는 항상 고정(빈 줄로 정렬 유지)
-  const topLabel = slot.isToday ? '오늘' : slot.showMonth ? `${slot.month}월` : '';
 
   return (
     <motion.button
@@ -127,31 +126,26 @@ function DateTab({ slot, selected, onClick }: DateTabProps) {
       whileTap={{ scale: 0.9 }}
       transition={{ type: 'spring', stiffness: 700, damping: 30 }}
       className={[
-        'relative flex shrink-0 snap-center flex-col items-center justify-center',
-        'w-[3.1rem] h-[3.25rem] rounded-xl select-none',
+        // 정사각 셀(요일·날짜만) — '오늘' 텍스트 제거로 모든 칸 동일 높이
+        'relative flex h-[3.25rem] w-[3.25rem] shrink-0 snap-center flex-col items-center justify-center rounded-xl select-none',
         'focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-300',
         selected ? 'text-ink-inverse' : 'text-ink-secondary hover:bg-surface-high active:bg-surface-high/70',
+        // 오늘은 글자 대신 골드 테두리로 표시(미선택 시)
+        !selected && slot.isToday ? 'ring-1 ring-gold-300/55' : '',
       ].join(' ')}
     >
-      {/* 선택 시 골드 알약이 스프링으로 차오름(복수 선택이라 칸마다 독립) */}
+      {/* 선택 시 골드 정사각 알약 — 셀과 정확히 일치(inset-0·동일 rounded) */}
       {selected && (
         <motion.span
           aria-hidden
-          initial={{ scale: 0.55, opacity: 0 }}
+          initial={{ scale: 0.6, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ type: 'spring', stiffness: 620, damping: 26 }}
-          className="absolute inset-0 rounded-2xl bg-gold-300 shadow-[0_5px_16px_-5px_rgba(252,213,53,0.65)]"
+          className="absolute inset-0 rounded-xl bg-gold-300 shadow-[0_4px_14px_-4px_rgba(252,213,53,0.6)]"
         />
       )}
-      <span className={[
-        'relative h-2.5 text-[9px] font-bold leading-none',
-        selected ? 'text-ink-inverse/70' : slot.isToday ? 'text-gold-300' : 'text-ink-muted/70',
-      ].join(' ')}>{topLabel}</span>
-      <span className={[
-        'relative mt-0.5 text-2xs font-bold leading-none',
-        selected ? 'text-ink-inverse/85' : dowColor,
-      ].join(' ')}>{slot.dow}</span>
-      <span className="relative mt-0.5 text-sm font-extrabold leading-none tabular-nums">{slot.day}</span>
+      <span className={['relative text-[10px] font-bold leading-none', selected ? 'text-ink-inverse/85' : dowColor].join(' ')}>{slot.dow}</span>
+      <span className="relative mt-1 text-base font-extrabold leading-none tabular-nums">{slot.day}</span>
     </motion.button>
   );
 }
@@ -173,15 +167,20 @@ function DateSlider({ selectedDates, onToggle, onPick }: DateSliderProps) {
     <div
       role="group"
       aria-label="날짜 빠른 선택 (복수 선택 가능)"
-      className="flex gap-1.5 overflow-x-auto scrollbar-none snap-x scroll-px-page-x px-page-x pb-1.5 [-webkit-overflow-scrolling:touch] sm:gap-2"
+      className="flex items-center gap-1.5 overflow-x-auto scrollbar-none snap-x scroll-px-page-x px-page-x pt-1 pb-2.5 [-webkit-overflow-scrolling:touch] sm:gap-2"
     >
       {slots.map((slot) => (
-        <DateTab
-          key={slot.iso}
-          slot={slot}
-          selected={selectedDates.includes(slot.iso)}
-          onClick={() => onToggle(slot.iso)}
-        />
+        <Fragment key={slot.iso}>
+          {/* 월 경계(매월 1일)에만 'N월' 구분 라벨 — 칸 모양은 그대로 유지 */}
+          {slot.day === 1 && (
+            <span aria-hidden className="flex shrink-0 select-none items-center pl-1 text-2xs font-bold text-ink-muted">{slot.month}월</span>
+          )}
+          <DateTab
+            slot={slot}
+            selected={selectedDates.includes(slot.iso)}
+            onClick={() => onToggle(slot.iso)}
+          />
+        </Fragment>
       ))}
 
       {/* 날짜 직접 선택 (3주 이후) — 네이티브 date picker 오버레이 */}
@@ -229,7 +228,8 @@ export default function IntegratedSearchBar({
 }: IntegratedSearchBarProps) {
   const [rawQuery,       setRawQuery]       = useState('');
   // 날짜·지역은 복수 선택(배열). 토글 방식으로 추가/제거.
-  const [selectedDates,  setSelectedDates]  = useState<string[]>([]);
+  // 기본값 = 당일(오늘) 선택 — 일정탐색 진입 시 오늘 대회부터 보여준다.
+  const [selectedDates,  setSelectedDates]  = useState<string[]>(() => [new Date().toLocaleDateString('en-CA')]);
   const [selectedRegions, setSelectedRegions] = useState<string[]>([]);
   // 토너먼트 필터는 단일 선택(라디오). format/gtdOnly는 여기서 파생.
   const [tour,           setTour]           = useState<TourFilter>('all');

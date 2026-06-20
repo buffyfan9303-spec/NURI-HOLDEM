@@ -15,6 +15,8 @@ interface ModalProps {
   fillHeight?: boolean;
   /** true면 오버레이가 아닌 인라인 패널로 렌더(데스크탑 2-pane 우측 패널용). */
   inline?: boolean;
+  /** false면 배경(공백) 클릭으로 닫히지 않음 — 작성 폼에서 실수로 닫힘 방지(X·ESC는 유지). 기본 true. */
+  dismissOnBackdrop?: boolean;
 }
 
 const MAX_W: Record<NonNullable<ModalProps['maxWidth']>, string> = {
@@ -28,7 +30,7 @@ const MAX_W: Record<NonNullable<ModalProps['maxWidth']>, string> = {
 };
 
 export default function Modal({
-  open, onClose, title, children, variant = 'sheet', maxWidth = 'md', fillHeight = false, inline = false,
+  open, onClose, title, children, variant = 'sheet', maxWidth = 'md', fillHeight = false, inline = false, dismissOnBackdrop = true,
 }: ModalProps) {
   // ESC 키로 닫기 + 바디 스크롤 잠금
   useEffect(() => {
@@ -151,13 +153,17 @@ export default function Modal({
         justifyContent: 'center',
       }}
     >
-      {/* 배경 dim */}
-      <button
-        type="button"
-        aria-label="닫기"
-        onClick={onClose}
-        className="absolute inset-0 bg-black/80 backdrop-blur-md cursor-default"
-      />
+      {/* 배경 dim — dismissOnBackdrop=false면 클릭해도 닫히지 않음(작성 중 실수 방지) */}
+      {dismissOnBackdrop ? (
+        <button
+          type="button"
+          aria-label="닫기"
+          onClick={onClose}
+          className="absolute inset-0 bg-black/80 backdrop-blur-md cursor-default"
+        />
+      ) : (
+        <div aria-hidden className="absolute inset-0 bg-black/80 backdrop-blur-md" />
+      )}
       {/* 본문 */}
       <div
         ref={contentRef}

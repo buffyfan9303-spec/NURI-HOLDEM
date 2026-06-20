@@ -228,7 +228,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
   };
 
   return (
-    <Modal open={open} onClose={onClose} title={isEdit ? '포스터 수정' : '새 포스터 등록'} maxWidth="md" variant="sheet">
+    <Modal open={open} onClose={onClose} title={isEdit ? '포스터 수정' : '새 포스터 등록'} maxWidth="md" variant="sheet" dismissOnBackdrop={false}>
       <form onSubmit={submit} className="p-4 space-y-3">
 
         {/* ── 지난 포스터 불러오기(신규 전용) — 전 필드 자동 채움, 날짜만 새로 ── */}

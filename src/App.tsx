@@ -691,7 +691,8 @@ export default function App() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
-  const [searchState, setSearchState] = useState<SearchState>({ query: '', dates: [], regions: [], format: null, gtdOnly: false, competitionOnly: false });
+  // 일정탐색 기본값 — 당일(오늘)이 선택된 상태로 시작(오늘 열리는 대회를 바로 보여줌)
+  const [searchState, setSearchState] = useState<SearchState>({ query: '', dates: [new Date().toLocaleDateString('en-CA')], regions: [], format: null, gtdOnly: false, competitionOnly: false });
   const [authOpen, setAuthOpen]       = useState(false);
   const [authMode, setAuthMode]       = useState<'login' | 'signup-user'>('login'); // QR 회원가입 진입용
   const [openVenueId, setOpenVenueId] = useState<string | null>(null);
