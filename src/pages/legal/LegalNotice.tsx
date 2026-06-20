@@ -145,6 +145,24 @@ export default function LegalNotice() {
         </ul>
       </Section>
 
+      <Section icon="🏢" title="사업자 정보">
+        <div className="p-3 rounded-input bg-surface-high border border-border-default space-y-1">
+          {[
+            ['상호', '엔에이치홀딩스'],
+            ['대표자', '김윤혜'],
+            ['사업자등록번호', '525-20-02937'],
+            ['사업장 소재지', '경기도 남양주시 진건읍 사릉로372번길 25, 201동 1403호(주공아파트)'],
+            ['업태 / 종목', '정보통신업 / 컴퓨터 프로그래밍 서비스업, 포털 및 기타 인터넷 정보 매개 서비스업'],
+            ['고객센터', 'buffyfan9303@gmail.com'],
+          ].map(([k, v], i) => (
+            <p key={i} className="flex gap-2">
+              <span className="w-24 shrink-0 text-ink-muted">{k}</span>
+              <span className="flex-1 text-ink-secondary">{v}</span>
+            </p>
+          ))}
+        </div>
+      </Section>
+
       <p className="text-2xs text-ink-muted text-center pt-2 border-t border-border-subtle">
         본 공지는 {EFFECTIVE_DATE}부터 적용됩니다.
       </p>

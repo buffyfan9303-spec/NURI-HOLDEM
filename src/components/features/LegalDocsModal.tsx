@@ -7,17 +7,17 @@ import UnderlineTabs from '../atoms/UnderlineTabs';
 
 export type LegalDoc = 'terms' | 'privacy' | 'location';
 
-// ── 사업자 정보 플레이스홀더(확정 후 교체) ──────────────────────────────────
+// ── 사업자 정보(사업자등록증 기준) ──────────────────────────────────────────
 const BIZ = {
   service: 'NURI HOLDEM',
-  company: '[상호(법인/상호명)]',
-  ceo: '[대표자명]',
-  bizNo: '[사업자등록번호]',
-  addr: '[사업장 주소]',
-  contact: '[고객센터 연락처]',
-  email: '[이메일]',
-  privacyOfficer: '[개인정보 보호책임자명/직책]',
-  effective: '[시행일 YYYY-MM-DD]',
+  company: '엔에이치홀딩스',
+  ceo: '김윤혜',
+  bizNo: '525-20-02937',
+  addr: '경기도 남양주시 진건읍 사릉로372번길 25, 201동 1403호(주공아파트)',
+  contact: 'buffyfan9303@gmail.com',
+  email: 'buffyfan9303@gmail.com',
+  privacyOfficer: '김윤혜(대표)',
+  effective: '2026-06-15',
 };
 
 const TERMS = `제1조(목적)

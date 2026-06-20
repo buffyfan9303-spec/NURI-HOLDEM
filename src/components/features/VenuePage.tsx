@@ -9,7 +9,7 @@ import type { Venue, Comment } from '../../api/community';
 import type { Schedule } from '../../api/schedules';
 import type { MarketplaceNotice } from '../../api/marketplace';
 import { useAuth } from '../../contexts/AuthContext';
-import { followVenue, unfollowVenue, getMyFollowedVenueIds, updateVenueAddress, updateVenueKakao } from '../../api/community';
+import { followVenue, unfollowVenue, getMyFollowedVenueIds, updateVenueContact, updateVenueKakao } from '../../api/community';
 import { getVenueNotices, createVenueNotice, deleteVenueNotice, type VenueNotice } from '../../api/community';
 import { getVenueRatings } from '../../api/reviews';
 import { getVenueMessages, sendVenueMessage, deleteVenueMessage, subscribeVenueMessages, type VenueMessage } from '../../api/community';
@@ -974,21 +974,29 @@ function AboutPanel({
 }: { venue: Venue; editable?: boolean; onUpdateDescription?: (id: string, desc: string) => void }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft]     = useState(venue.description ?? '');
+  // 매장 정보(주소·전화·영업시간) 통합 편집
   const [addr, setAddr]       = useState(venue.address);
-  const [addrEditing, setAddrEditing] = useState(false);
+  const [phone, setPhone]     = useState(venue.contactPhone ?? '');
+  const [hours, setHours]     = useState(venue.businessHours ?? '');
+  const [infoEditing, setInfoEditing] = useState(false);
   const [addrDraft, setAddrDraft]     = useState(venue.address);
-  const [addrSaving, setAddrSaving]   = useState(false);
+  const [phoneDraft, setPhoneDraft]   = useState(venue.contactPhone ?? '');
+  const [hoursDraft, setHoursDraft]   = useState(venue.businessHours ?? '');
+  const [infoSaving, setInfoSaving]   = useState(false);
   const toast = useToast();
 
-  const saveAddr = async () => {
-    setAddrSaving(true);
+  const openInfoEdit = () => {
+    setAddrDraft(addr); setPhoneDraft(phone); setHoursDraft(hours); setInfoEditing(true);
+  };
+  const saveInfo = async () => {
+    setInfoSaving(true);
     try {
-      await updateVenueAddress(venue.id, addrDraft);
-      setAddr(addrDraft.trim());
-      setAddrEditing(false);
-      toast.show('주소가 저장되었습니다', 'success');
+      await updateVenueContact(venue.id, { address: addrDraft, phone: phoneDraft, hours: hoursDraft });
+      setAddr(addrDraft.trim()); setPhone(phoneDraft.trim()); setHours(hoursDraft.trim());
+      setInfoEditing(false);
+      toast.show('매장 정보가 저장되었습니다', 'success');
     } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
-    finally { setAddrSaving(false); }
+    finally { setInfoSaving(false); }
   };
 
   return (
@@ -1049,27 +1057,45 @@ function AboutPanel({
       <section className="space-y-2">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-ink-primary">매장 정보</h3>
-          {editable && !addrEditing && (
-            <button type="button" onClick={() => { setAddrDraft(addr); setAddrEditing(true); }}
-              className="text-2xs text-ink-muted hover:text-gold-300">주소 편집</button>
+          {editable && !infoEditing && (
+            <button type="button" onClick={openInfoEdit}
+              className="text-2xs text-ink-muted hover:text-gold-300">정보 편집</button>
           )}
         </div>
-        {addrEditing ? (
+        {infoEditing ? (
           <div className="space-y-2">
-            <input value={addrDraft} onChange={(e) => setAddrDraft(e.target.value)} maxLength={120}
-              placeholder="도로명 주소" className="input w-full text-sm" autoFocus />
+            <label className="block">
+              <span className="mb-0.5 block text-2xs font-semibold text-ink-secondary">주소</span>
+              <input value={addrDraft} onChange={(e) => setAddrDraft(e.target.value)} maxLength={120}
+                placeholder="도로명 주소" className="input w-full text-sm" autoFocus />
+            </label>
+            <label className="block">
+              <span className="mb-0.5 block text-2xs font-semibold text-ink-secondary">전화번호</span>
+              <input value={phoneDraft} onChange={(e) => setPhoneDraft(e.target.value)} maxLength={40}
+                inputMode="tel" placeholder="예: 010-1234-5678" className="input w-full text-sm" />
+            </label>
+            <label className="block">
+              <span className="mb-0.5 block text-2xs font-semibold text-ink-secondary">영업시간</span>
+              <input value={hoursDraft} onChange={(e) => setHoursDraft(e.target.value)} maxLength={60}
+                placeholder="예: 매일 18:00 ~ 익일 04:00" className="input w-full text-sm" />
+            </label>
             <div className="flex gap-2 justify-end">
-              <button type="button" className="btn-ghost text-xs" onClick={() => setAddrEditing(false)}>취소</button>
-              <button type="button" className="btn-primary text-xs disabled:opacity-60" disabled={addrSaving} onClick={saveAddr}>
-                {addrSaving ? '저장 중…' : '저장'}
+              <button type="button" className="btn-ghost text-xs" onClick={() => setInfoEditing(false)}>취소</button>
+              <button type="button" className="btn-primary text-xs disabled:opacity-60" disabled={infoSaving} onClick={saveInfo}>
+                {infoSaving ? '저장 중…' : '저장'}
               </button>
             </div>
           </div>
         ) : (
           <dl className="space-y-1.5">
             <AddressRow address={addr} />
-            {venue.contactPhone  && <PhoneRow phone={venue.contactPhone} />}
-            {venue.businessHours && <Row dt="영업시간" dd={venue.businessHours} />}
+            {phone ? <PhoneRow phone={phone} /> : editable && (
+              <button type="button" onClick={openInfoEdit}
+                className="inline-flex h-8 items-center gap-1.5 rounded-input border border-dashed border-gold-400/40 bg-gold-300/[0.06] px-3 text-2xs font-bold text-gold-300 hover:bg-gold-300/10 transition-colors">
+                + 전화번호 등록
+              </button>
+            )}
+            {hours && <Row dt="영업시간" dd={hours} />}
           </dl>
         )}
       </section>

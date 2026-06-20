@@ -128,7 +128,7 @@ export default function PrivacyPolicy() {
           정보주체의 불만처리 및 피해구제 등을 위하여 아래와 같이 개인정보 보호책임자를 지정하고 있습니다.
         </p>
         <InfoBox>
-          <p><span className="text-ink-secondary">책임자 성명/직책:</span> [추후 입력]</p>
+          <p><span className="text-ink-secondary">책임자 성명/직책:</span> 김윤혜 (대표)</p>
           <p><span className="text-ink-secondary">연락처(이메일):</span> buffyfan9303@gmail.com</p>
           <p className="mt-1.5 text-2xs">
             개인정보 침해 신고는 개인정보보호위원회(privacy.go.kr) 또는 한국인터넷진흥원(118)으로 문의하실 수 있습니다.

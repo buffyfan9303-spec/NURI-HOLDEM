@@ -174,6 +174,17 @@ export async function updateVenueAddress(venueId: string, address: string): Prom
   if (error) throw error;
 }
 
+/** 업주/운영자: 매장 연락처 통합 수정(주소·전화·영업시간 한 번에) */
+export async function updateVenueContact(
+  venueId: string, input: { address: string; phone: string; hours: string },
+): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('update_venue_contact', {
+    p_venue_id: venueId, p_address: input.address, p_phone: input.phone, p_hours: input.hours,
+  });
+  if (error) throw new Error(error.message);
+}
+
 // ── Comments ──────────────────────────────────────────────────────────────────
 export async function getComments(filter: { scheduleId?: string; venueId?: string }): Promise<Comment[]> {
   if (IS_MOCK) {
