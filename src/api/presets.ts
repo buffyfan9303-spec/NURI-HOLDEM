@@ -1,5 +1,6 @@
 // src/api/presets.ts — 게임 프리셋(포스터/장부 게임 내용 + 듀레이션 템플릿)
 import { supabase, IS_MOCK } from '../lib/supabase';
+import type { ClockLevel } from './clock';
 
 /** 프리셋에 담기는 게임 내용 — 포스터/장부에 적는 항목들 + 듀레이션. 날짜·시간은 제외(이벤트별). */
 export interface GamePresetData {
@@ -14,7 +15,8 @@ export interface GamePresetData {
   prizeAmount?: number;      // GTD 보장 상금(만원)
   prizePercent?: number;     // ENTRY 프라이즈 비율(%)
   duration?: string;         // 듀레이션(블라인드 레벨 시간 등 — 자유 입력)
-  blinds?: string;           // 블라인드 구조(텍스트)
+  blinds?: string;           // 블라인드 구조(텍스트 · 구버전 호환)
+  blindLevels?: ClockLevel[]; // 블라인드 구조(구조화 — 클락/포스터 structure.levels 로 적용)
   isCompetition?: boolean;   // 대회/이벤트 분류
   rankingPrizes?: { rank: string; amount: number; unit: string }[]; // 순위별 상금
   memo?: string;             // 메모

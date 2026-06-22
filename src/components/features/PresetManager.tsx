@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useToast } from '../atoms/Toast';
 import { listGamePresets, saveGamePreset, deleteGamePreset, type GamePreset, type GamePresetData } from '../../api/presets';
+import BlindLevelsEditor from './clock/BlindLevelsEditor';
 
 const EMPTY: GamePresetData = {
   title: '', gameType: '', buyIn: 0, startStack: 0, rebuyStack: 0, addonStack: 0, addonCost: 0,
@@ -72,7 +73,9 @@ export default function PresetManager({ venueId }: { venueId: string }) {
             ? <Field label="보장 상금(만원)"><NumInput v={d.prizeAmount} on={(n) => set({ prizeAmount: n })} /></Field>
             : <Field label="프라이즈 비율(%)"><NumInput v={d.prizePercent} on={(n) => set({ prizePercent: n })} /></Field>}
         </div>
-        <Field label="블라인드 구조"><textarea value={d.blinds ?? ''} onChange={(e) => set({ blinds: e.target.value })} rows={2} placeholder="예: 100/200 → 200/400 …" className="input w-full resize-none text-sm" /></Field>
+        <Field label="블라인드 구조 (클락에 그대로 적용)">
+          <BlindLevelsEditor levels={d.blindLevels ?? []} onChange={(lv) => set({ blindLevels: lv })} />
+        </Field>
         <Field label="메모"><textarea value={d.memo ?? ''} onChange={(e) => set({ memo: e.target.value })} rows={2} placeholder="기타 메모" className="input w-full resize-none text-sm" /></Field>
         <label className="flex items-center gap-2 text-2xs text-ink-secondary">
           <input type="checkbox" checked={!!d.isCompetition} onChange={(e) => set({ isCompetition: e.target.checked })} /> 대회/이벤트로 분류

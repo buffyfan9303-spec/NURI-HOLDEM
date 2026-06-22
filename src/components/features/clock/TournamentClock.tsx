@@ -18,6 +18,7 @@ import {
   getLedgerBuyins, getLedgerSession, getLedgerSessionList, saveLedgerSession, subscribeLedger, getLedgerGames, openLedgerSession,
   type LedgerBuyin, type LedgerSession, type LedgerSessionListItem,
 } from '../../../api/ledger';
+import { listGamePresets, type GamePreset } from '../../../api/presets';
 
 const now = () => Date.now();
 const pad = (n: number) => String(Math.floor(n)).padStart(2, '0');
@@ -716,6 +717,8 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
 }) {
   const toast = useToast();
   const [cfg, setCfg] = useState<ClockConfig>(initial);
+  const [gamePresets, setGamePresets] = useState<GamePreset[]>([]); // 게임 프리셋(블라인드 포함) — 클락에 적용
+  useEffect(() => { listGamePresets(venueId).then(setGamePresets).catch(() => {}); }, [venueId]);
   const [linkDate, setLinkDate] = useState<string | null>(seedSessionDate ?? null); // 연동할 장부(null=단독)
   const [linkGameSeq, setLinkGameSeq] = useState<number>(seedGameSeq ?? 1); // 연동할 게임(game_seq)
   const [sessQuery, setSessQuery] = useState(''); // 장부 목록 검색(날짜·게임명)
@@ -728,6 +731,19 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
   // 모든 변경 시 얼리(레벨)→분 파생값 재계산 — 블라인드 길이가 바뀌어도 얼리 분이 항상 동기화됨.
   const set = (patch: Partial<ClockConfig>) => setCfg((c) => withDerivedEarly({ ...c, ...patch }));
   const totalLevels = countLevels(cfg.levels);
+  // 게임 프리셋의 블라인드 구조(+스택)를 클락에 적용
+  const applyGamePreset = (p: GamePreset) => {
+    const lv = p.data.blindLevels;
+    if (!lv || !lv.length) { toast.show('이 프리셋엔 블라인드 구조가 없습니다', 'error'); return; }
+    set({
+      levels: lv,
+      ...(p.data.startStack ? { startStack: p.data.startStack } : {}),
+      ...(p.data.rebuyStack ? { rebuyStack: p.data.rebuyStack } : {}),
+      ...(p.data.addonStack ? { addonStack: p.data.addonStack } : {}),
+    });
+    setBldOpen(true);
+    toast.show(`'${p.name}' 블라인드(${countLevels(lv)}레벨)를 적용했습니다`, 'success');
+  };
   const filteredSessions = sessions.filter((s) => {
     const q = sessQuery.trim().toLowerCase();
     return !q || `${s.sessionDate} ${s.title ?? ''}`.toLowerCase().includes(q);
@@ -922,6 +938,18 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
         </button>
 
         {bldOpen && (<>
+        {/* 게임 프리셋에서 블라인드 불러오기 — 내 매장 > 게임 프리셋에 저장한 구조를 그대로 적용 */}
+        {gamePresets.some((p) => p.data.blindLevels?.length) && (
+          <div className="rounded-input border border-gold-400/30 bg-gold-300/[0.06] p-2">
+            <p className="mb-1 text-[10px] font-bold text-gold-300">📋 게임 프리셋에서 블라인드 불러오기</p>
+            <select value="" onChange={(e) => { const p = gamePresets.find((x) => x.id === e.target.value); if (p) applyGamePreset(p); }} className="input w-full text-xs">
+              <option value="" disabled>프리셋 선택 — 블라인드 구조를 클락에 적용</option>
+              {gamePresets.filter((p) => p.data.blindLevels?.length).map((p) => (
+                <option key={p.id} value={p.id}>{p.name} ({countLevels(p.data.blindLevels!)}레벨)</option>
+              ))}
+            </select>
+          </div>
+        )}
         {/* 듀레이션 일괄 설정 */}
         <div className="rounded-input bg-surface-high border border-border-subtle p-2 space-y-1.5">
           <p className="text-[10px] text-ink-muted">듀레이션 일괄 설정 · 레벨 길이(브레이크 제외)</p>
