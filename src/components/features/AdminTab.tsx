@@ -639,6 +639,8 @@ export default function AdminTab({
   schedules, venues, users, posts, onApproveSchedule, onRejectSchedule, onUpdateUser, onDeletePost, onReloadVenues,
 }: AdminTabProps) {
   const [section, setSection] = useState<Section>('analytics');
+  // 뒤로가기 — 비기본 섹션에선 먼저 기본(운영분석)으로 돌아오고, 그 다음에야 탭을 빠져나가게(일정탐색으로 바로 튐 방지)
+  useBackClose(section !== 'analytics', () => setSection('analytics'));
   const [reorderTarget, setReorderTarget] = useState<ReorderTarget>('posters');
 
   const pending = schedules.filter((s) => !s.approved);

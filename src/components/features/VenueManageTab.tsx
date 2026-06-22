@@ -1,6 +1,7 @@
 import { useEffect, useState, useDeferredValue, type ReactNode, useRef } from 'react';
 import Icon from '../atoms/Icon';
 import { useAuth } from '../../contexts/AuthContext';
+import { useBackClose } from '../../lib/backstack';
 import { useToast } from '../atoms/Toast';
 import type { User, VenueInvite } from '../../api/auth';
 import { getMyVenueStaff, getMyVenueInvites, inviteStaffByEmail, cancelStaffInvite, removeStaff, setStaffTitle, checkNicknameAvailable, searchMembersForRanking } from '../../api/auth';
@@ -64,6 +65,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     if (s === 'ledger') setLedgerSeed(null);
     setSection(s);
   };
+  // 뒤로가기 — 비대시보드 섹션에선 먼저 대시보드로 돌아오고, 그 다음에야 탭을 빠져나가게(일정탐색으로 바로 튐 방지)
+  useBackClose(!!section && section !== 'dashboard', () => gotoSection('dashboard'));
   // 방문 섹션을 최근순으로 기록 + 상한(8) 초과 시 가장 오래된 섹션 언마운트(메모리 가드).
   // 잰크는 active 게이팅(클락·라이브·장부)으로 이미 차단했고, 이건 순수 메모리/구독 누적 방지용.
   useEffect(() => {

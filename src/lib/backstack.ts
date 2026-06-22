@@ -75,14 +75,16 @@ export function pushLayer(close: CloseFn): () => void {
   return () => {
     if (disposed) return;
     disposed = true;
-    lastDisposeAt = Date.now();
     const idx = layers.findIndex((l) => l.id === id);
-    if (idx === -1) return; // 이미 Back 으로 제거됨 → 추가 정리 불필요
+    if (idx === -1) return; // 이미 Back 으로 제거됨 → 추가 정리 불필요(브라우저 back이므로 디바운스 불필요)
     layers.splice(idx, 1);
     // 현재 history 위치가 바로 이 레이어라면(최상단을 X/ESC/배경클릭으로 닫음)
     // history 항목을 하나 되돌려 균형을 맞춘다. 레이어를 먼저 제거했으므로,
     // 그로 인해 발생하는 popstate→handlePop 은 이 레이어를 중복으로 닫지 않는다.
     if (currentLayerId() === id) {
+      // 프로그램적 close(history.back 호출)만 디바운스 대상 — 이 back이 throttle된 탭 레이어를 과열 pop해
+      // 탭 back-close(예: changeTab('browse'))를 잘못 발동시키는 것을 overlayJustClosed()로 억제.
+      lastDisposeAt = Date.now();
       try { window.history.back(); } catch { /* pushState 불가 환경 — 무시 */ }
     }
     // 중간 겹을 순서 어긋나게 닫은 경우: 해당 history 항목은 그대로 두되(다음 Back 때
