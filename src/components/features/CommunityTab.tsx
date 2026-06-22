@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, Fragment, useTransition, type ReactNode } from 'react';
+import { memo, useState, useMemo, useEffect, useRef, Fragment, useTransition, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { getActiveCommunityAds, type CommunityAd } from '../../api/ads';
 import { getEquippedMarks } from '../../api/community';
@@ -553,7 +553,12 @@ function AdRow({ ad }: { ad: CommunityAd }) {
 }
 
 // 에펨코리아식 한 줄 행 — 제목 크게(타이포 위계), 메타는 작고 연하게. 바이낸스 표 밀도(py-2).
-function PostRow({ post, onClick, hot = false, selected = false, mark = '', titlePts }: { post: CommunityPost; onClick: () => void; hot?: boolean; selected?: boolean; mark?: string; titlePts?: number }) {
+// (A4) 피드 행 memo — 데이터 props만 비교(인라인 onClick/onLike 무시, 같은 post엔 동작 동일). 긴 피드에서 변경된 행만 재렌더.
+type PostRowData = { post: CommunityPost; selected?: boolean; mark?: string; titlePts?: number; hot?: boolean };
+const samePostProps = (a: PostRowData, b: PostRowData) =>
+  a.post === b.post && a.selected === b.selected && a.mark === b.mark && a.titlePts === b.titlePts && a.hot === b.hot;
+
+const PostRow = memo(function PostRow({ post, onClick, hot = false, selected = false, mark = '', titlePts }: { post: CommunityPost; onClick: () => void; hot?: boolean; selected?: boolean; mark?: string; titlePts?: number }) {
   const catLabel = BOARD_CATEGORIES.find((c) => c.id === (post.category ?? 'free'))?.label ?? '자유';
   const { replay, hand } = parseAttachments(post.content);
   return (
@@ -579,9 +584,9 @@ function PostRow({ post, onClick, hot = false, selected = false, mark = '', titl
       {(post.viewCount ?? 0) > 0 && <span className="shrink-0 w-10 text-right text-xs tabular-nums text-ink-muted">👁{post.viewCount}</span>}
     </li>
   );
-}
+}, samePostProps);
 
-function PostCard({ post, onLike, onClick, hot = false, selected = false, mark = '', titlePts }: { post: CommunityPost; onLike: () => void; onClick: () => void; hot?: boolean; selected?: boolean; mark?: string; titlePts?: number }) {
+const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, selected = false, mark = '', titlePts }: { post: CommunityPost; onLike: () => void; onClick: () => void; hot?: boolean; selected?: boolean; mark?: string; titlePts?: number }) {
   return (
     <li
       onClick={onClick}
@@ -658,7 +663,7 @@ function PostCard({ post, onLike, onClick, hot = false, selected = false, mark =
       </div>
     </li>
   );
-}
+}, samePostProps);
 
 // ── 매장 커뮤니티 섹션 ───────────────────────────────────────────────────────
 
