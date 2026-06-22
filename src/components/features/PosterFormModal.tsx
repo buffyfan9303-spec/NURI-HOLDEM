@@ -241,11 +241,11 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
                 const found = loadCandidates.find((s) => s.id === e.target.value);
                 if (found) applyPast(found);
               }}
-              className="input w-full text-sm"
+              className="input w-full text-sm text-ink-muted"
             >
-              <option value="">선택하면 모든 항목이 자동으로 채워집니다 (날짜만 새로)</option>
+              <option value="" disabled>항목 자동 기입</option>
               {loadCandidates.map((s) => (
-                <option key={s.id} value={s.id}>{s.date.slice(5)} · {s.title}</option>
+                <option key={s.id} value={s.id} className="text-ink-primary">{s.date.slice(5)} · {s.title}</option>
               ))}
             </select>
           </div>

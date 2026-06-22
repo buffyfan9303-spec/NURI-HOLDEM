@@ -332,7 +332,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
     openedAt: linkedSession?.openedAt ?? null,
   }), [buyins, linkedSession, cfg.earlyDoubleMin, cfg.earlySingleMin]);
   const liveStats = useMemo(() => computeLiveStats(state, derived, cfg), [state, derived, cfg]);
-  const { entries, rebuys, earlies, addons, alive, totalStack, avgStack } = liveStats;
+  const { rebuys, earlies, addons, totalStack, avgStack } = liveStats;
 
   const persist = useCallback((patch: Partial<ClockState>) => {
     const next = { ...state, ...patch };
@@ -580,13 +580,6 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
                     : 'bg-[radial-gradient(ellipse_at_center,rgba(201,169,97,0.10),transparent_72%)]'].join(' ')}>
             {/* 누리홀덤 로고 워터마크(투명) — 트레이드마크. 클락은 항상 다크라 흰 워드마크 사용 */}
             <img src="/2.png" alt="" aria-hidden className="pointer-events-none absolute inset-0 m-auto h-auto w-[58%] max-w-[62cqh] select-none object-contain opacity-[0.05]" />
-            {/* 엔트리/생존 — 클락 상단 헤어라인 칩(화면 전환 없이 한눈에) */}
-            <div className={['relative inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] backdrop-blur-[2px] tabular-nums',
-              fs ? 'gap-[1.2cqw] px-[1.6cqw] py-[0.5cqh] text-[min(2.2cqw,2.7cqh)]' : 'gap-2.5 px-3 py-1 text-xs sm:text-sm'].join(' ')}>
-              <span className="text-ink-secondary">엔트리 <b className="font-extrabold text-gold-300">{entries}</b></span>
-              <span className="h-[1em] w-px bg-white/15" aria-hidden />
-              <span className="text-ink-secondary">생존 <b className="font-extrabold text-emerald-300">{alive}</b></span>
-            </div>
             <p className={['relative mt-1 font-bold tracking-[0.16em] uppercase',
               isBreak ? 'text-sky-300/90' : 'text-gold-200/80',
               fs ? 'text-[min(4cqw,5cqh)]' : 'text-base sm:text-2xl'].join(' ')}>
@@ -618,7 +611,6 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
 
           {/* 우: 스탯 */}
           <div className="flex flex-col justify-center gap-2 sm:gap-3 p-2 sm:p-3 border-l border-white/5 bg-black/20">
-            <Stat fs={fs} label="PLAYERS" value={`${alive} / ${entries}`} />
             <Stat fs={fs} label="RE-BUY / EARLY" value={`${rebuys} / ${earlies}`} />
             {cfg.isAddon && <Stat fs={fs} label="ADD-ON" value={`${addons}`} />}
             <Stat fs={fs} label="REG CLOSE" value={regClose !== null ? hms(regClose) : '마감'} tone={regClose !== null ? 'muted' : 'rose'} />
