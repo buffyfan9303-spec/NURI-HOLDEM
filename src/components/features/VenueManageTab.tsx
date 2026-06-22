@@ -560,7 +560,7 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
       .catch(() => { setLedgerNames([]); setLedgerPlayers([]); });
   }, [venueId, date]);
   const [sugRow, setSugRow] = useState<number | null>(null);     // 드롭다운 열린 행
-  const [memCands, setMemCands] = useState<{ nickname: string; realName: string }[]>([]);
+  const [memCands, setMemCands] = useState<{ nickname: string; realName: string; verified: boolean }[]>([]);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onNickInput = (i: number, v: string) => {
     update(i, 'nickname', v);
@@ -823,6 +823,10 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
                         <button type="button" onMouseDown={(e) => { e.preventDefault(); pickSuggestion(i, 'member', c.nickname, c.realName); }}
                           className="flex w-full items-center gap-2 px-2.5 py-2 text-left text-xs hover:bg-surface-high">
                           <span className="shrink-0 rounded-badge bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-bold text-emerald-300">회원</span>
+                          {!c.verified && (
+                            <span className="shrink-0 rounded-badge bg-rose-500/15 px-1.5 py-0.5 text-[9px] font-bold text-rose-300"
+                              title="미인증 회원 — 본인인증 전이라 순위 기록은 되지만 점수·이용권은 사후 미지급될 수 있어요">미인증 ⚠️</span>
+                          )}
                           <span className="truncate font-semibold text-ink-primary">{c.nickname}{c.realName ? <span className="font-normal text-ink-muted"> · {c.realName}</span> : null}</span>
                         </button>
                       </li>

@@ -71,8 +71,10 @@ function rowToUser(row: any): User {
     activityPoints: row.activity_points ?? 0,
     badges:         row.badges ?? [],
     staffTitle:     row.staff_title ?? undefined,
-    // 재인증 만료: CI가 있어도 최근 인증(3년) 이내라야 verified=true. 만료 시 재인증 유도.
-    verified:       !!row.ci && (!row.verified_at || (Date.now() - new Date(row.verified_at).getTime()) < 94_672_800_000),
+    // 인증 판정: CI(본인확인) 보유 = 인증 완료. verify-identity 의 'CI 기반 1인 1계정' 의도 및
+    // is_verified_owner/RLS/find_user_by_phone/추천보상 트리거와 동일 기준. 약관에 본인인증 유효기간 조항이
+    // 없으므로 만료(재인증)는 적용하지 않는다 — 유효기간 정책 도입 시 약관 신설 후 RPC/클라이언트 공통상수로 통일할 것.
+    verified:       !!row.ci,
     verifiedAt:     row.verified_at ?? undefined,
     realName:       row.real_name ?? undefined,
     phone:          row.phone ?? undefined,
@@ -464,12 +466,12 @@ export async function updateMyConsent(consent: ConsentPayload): Promise<void> {
   if (error) throw error;
 }
 
-/** 순위 입력 자동완성 — 닉네임/실명 부분 일치(업주·운영자만 실명 반환, RPC 내부 게이트) */
-export async function searchMembersForRanking(q: string): Promise<{ nickname: string; realName: string }[]> {
+/** 순위 입력 자동완성 — 닉네임/실명 부분 일치(업주·운영자만 실명 반환, RPC 내부 게이트). verified=본인인증 보유 여부(미인증 선안내용) */
+export async function searchMembersForRanking(q: string): Promise<{ nickname: string; realName: string; verified: boolean }[]> {
   const t = q.trim();
   if (!t) return [];
   const { data, error } = await supabase.rpc('search_members_for_ranking', { p_q: t });
   if (error) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((r: any) => ({ nickname: r.nickname ?? '', realName: r.real_name ?? '' }));
+  return (data ?? []).map((r: any) => ({ nickname: r.nickname ?? '', realName: r.real_name ?? '', verified: r.verified === true }));
 }
