@@ -9,7 +9,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useBlocks } from '../../contexts/BlockContext';
 import { IS_MOCK } from '../../lib/supabase';
 import { resizeImage } from '../../lib/storage';
-import { requestPasswordChangeCode, changeMyPasswordWithCode, setMyNickname, withdrawMyAccount, verifyMyPassword } from '../../api/auth';
+import { requestPasswordChangeCode, changeMyPasswordWithCode, setMyNickname, withdrawMyAccount, verifyMyPassword, getMyAccountSummary } from '../../api/auth';
 import { pushSupported, isPushSubscribed, enablePush, disablePush } from '../../api/push';
 import AvatarCropper from './AvatarCropper';
 import ActivityBadges from '../atoms/ActivityBadges';
@@ -664,6 +664,12 @@ function WithdrawAccountSection() {
   const [open, setOpen] = useState(false);
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
+  const [summary, setSummary] = useState<{ vouchers: number; posts: number } | null>(null);
+
+  const start = () => {
+    setPassword(''); setSummary(null); setOpen(true);
+    getMyAccountSummary().then(setSummary).catch(() => setSummary({ vouchers: 0, posts: 0 }));
+  };
 
   const submit = async () => {
     if (!password) { toast.show('비밀번호를 입력하세요', 'error'); return; }
@@ -685,7 +691,7 @@ function WithdrawAccountSection() {
     <div className="px-4 pb-6 -mt-1">
       <h3 className="mb-2 text-xs font-semibold text-ink-secondary">회원 탈퇴</h3>
       {!open ? (
-        <button type="button" onClick={() => { setPassword(''); setOpen(true); }}
+        <button type="button" onClick={start}
           className="w-full rounded-card border border-danger/30 bg-danger/[0.04] px-3 py-2.5 text-left">
           <p className="text-sm font-bold text-danger">회원 탈퇴하기</p>
           <p className="mt-0.5 text-2xs leading-relaxed text-ink-muted">계정을 폐쇄하고 개인정보(실명·연락처·본인인증 정보 등)를 파기합니다. 되돌릴 수 없습니다.</p>
@@ -696,6 +702,12 @@ function WithdrawAccountSection() {
             탈퇴 시 <b className="text-danger">실명·전화번호·본인인증 정보·생년월일 등 개인정보가 즉시 파기</b>되고 계정이 폐쇄되며, <b className="text-ink-primary">다시 로그인할 수 없습니다.</b> 보유 중인 매장이용권 등은 함께 사라집니다.
             <br />매장 대표는 매장을 먼저 정리(삭제/양도)한 뒤 탈퇴할 수 있습니다.
           </p>
+          {/* 탈퇴 시 함께 사라지는 데이터 안내(실수 방지) */}
+          {summary && (summary.vouchers > 0 || summary.posts > 0) && (
+            <div className="rounded-input border border-amber-500/30 bg-amber-500/[0.06] px-3 py-2 text-2xs text-amber-200">
+              탈퇴하면 <b className="text-amber-100">보유 이용권 {summary.vouchers}개</b> · <b className="text-amber-100">작성 글 {summary.posts}개</b>의 연결이 사라지거나 익명 처리됩니다. 신중히 결정해 주세요.
+            </div>
+          )}
           <label className="block">
             <span className="mb-1 block text-2xs font-semibold text-ink-secondary">본인 확인 — 현재 비밀번호를 입력하세요</span>
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}

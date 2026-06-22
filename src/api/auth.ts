@@ -325,6 +325,20 @@ export async function verifyMyPassword(password: string): Promise<boolean> {
   return !error;
 }
 
+// ── 탈퇴 직전 데이터 안내 ──────────────────────────────────────────────────────
+// 탈퇴 시 함께 사라지는 내 데이터 요약(보유 이용권·작성 글 수) — 실수 방지용.
+export async function getMyAccountSummary(): Promise<{ vouchers: number; posts: number }> {
+  if (IS_MOCK) return { vouchers: 0, posts: 0 };
+  const { data: me } = await supabase.auth.getUser();
+  const uid = me.user?.id;
+  if (!uid) return { vouchers: 0, posts: 0 };
+  const [v, p] = await Promise.all([
+    supabase.from('store_vouchers').select('id', { count: 'exact', head: true }).eq('holder_user_id', uid).eq('status', 'active'),
+    supabase.from('community_posts').select('id', { count: 'exact', head: true }).eq('user_id', uid),
+  ]);
+  return { vouchers: v.count ?? 0, posts: p.count ?? 0 };
+}
+
 // ── 회원 자가 탈퇴 ────────────────────────────────────────────────────────────
 // 개인정보(실명·전화·CI·생년월일·성별·통신사·이메일) 파기 + status='withdrawn' 익명화.
 // 매장 대표는 매장을 먼저 정리(킬스위치 삭제/대표 양도)해야 하며, 서버가 거부한다.

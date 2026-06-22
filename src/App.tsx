@@ -1236,6 +1236,8 @@ export default function App() {
       changeTab(isAdmin ? 'admin' : 'my-store');
       return;
     }
+    // /support (1:1 문의 답변 알림) → 고객센터 모달 열기
+    if (link === '/support') { setSupportOpen(true); return; }
     toast.show(n.title, 'info');
   }, [schedules, isAdmin, toast]);
 
