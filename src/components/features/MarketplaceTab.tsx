@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { memo, useMemo, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import type {
   ListingCategory, ListingCondition, ListingStatus,
@@ -68,7 +68,7 @@ interface MarketplaceTabProps {
 
 type SortBy = 'recent' | 'popular';
 
-export default function MarketplaceTab({
+function MarketplaceTab({
   listings, notices, onSelect, onSelectNotice, onCreate,
   canWriteNotice = false, onWriteNotice, onListingsChanged, loading = false,
 }: MarketplaceTabProps) {
@@ -465,3 +465,6 @@ function SearchIcon({ className = '' }: { className?: string }) {
 }
 
 export { CATEGORIES, CONDITION_COLOR, STATUS_MAP, relativeTime };
+
+// (A2) 장터 탭 memo — App 무관 재렌더 차단. props는 App에서 안정화(marketNotices·handleMarketCreate 등).
+export default memo(MarketplaceTab);

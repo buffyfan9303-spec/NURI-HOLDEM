@@ -73,7 +73,7 @@ function relativeTime(iso: string): string {
   return `${Math.floor(diff/86400)}일 전`;
 }
 
-export default function CommunityTab({
+function CommunityTab({
   venues, comments, posts: rawPosts, notices = [], isAdmin = false, onWriteNotice, onSelectNotice,
   onSelectVenue, onSelectPost, onOpenWrite, onLikePost, onDeletePost, onReloadVenues, marketSlot,
 }: CommunityTabProps) {
@@ -1127,3 +1127,6 @@ function LiveWallSection() {
     </div>
   );
 }
+
+// (A2) App의 무관한 재렌더(알림·바인요청 등)에 커뮤니티 탭이 재렌더되지 않도록 memo. props는 App에서 useCallback/useMemo로 안정화됨.
+export default memo(CommunityTab);

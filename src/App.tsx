@@ -1527,6 +1527,23 @@ export default function App() {
     [notices],
   );
 
+  // (A2) CommunityTab/MarketplaceTab props 안정화 — memo 적용 시 App의 무관한 재렌더(알림·바인요청 등)에 피드가 재렌더되지 않게.
+  const communityNotices = useMemo(() => notices.filter((n) => !n.board || n.board === 'all' || n.board === 'community'), [notices]);
+  const marketNotices    = useMemo(() => notices.filter((n) => !n.board || n.board === 'all' || n.board === 'market'), [notices]);
+  const handleWriteNotice = useCallback(() => setNoticeFormOpen(true), []);
+  const handleOpenWrite = useCallback((category?: PostCategory) => {
+    if (!ensureVerified(user)) return; // 본인인증 회원만 글쓰기
+    setPostFormCategory(category ?? 'free');
+    setPostFormOpen(true);
+  }, [user]);
+  const handleMarketCreate = useCallback(() => { if (ensureVerified(user)) setMarketFormOpen(true); }, [user]);
+  const handleListingsChanged = useCallback(() => { getListings().then(setListings).catch(() => {}); }, []);
+  const marketSlot = useMemo(() => (
+    <MarketplaceTab listings={listings} loading={!marketLoaded} notices={marketNotices}
+      onSelect={setOpenListing} onSelectNotice={setOpenNotice} onCreate={handleMarketCreate}
+      canWriteNotice={isAdmin} onWriteNotice={handleWriteNotice} onListingsChanged={handleListingsChanged} />
+  ), [listings, marketLoaded, marketNotices, isAdmin, handleMarketCreate, handleWriteNotice, handleListingsChanged]);
+
   // ── 렌더 ──────────────────────────────────────────────────────────────
 
   return (
@@ -1796,33 +1813,17 @@ export default function App() {
       {(activeTab === 'community' || visitedTabs.has('community')) && (
         <main className="px-page-x pb-section" style={activeTab !== 'community' ? { display: 'none' } : undefined}>
           <CommunityTab
-            marketSlot={
-              <MarketplaceTab
-                listings={listings}
-                loading={!marketLoaded}
-                notices={notices.filter((n) => !n.board || n.board === 'all' || n.board === 'market')}
-                onSelect={setOpenListing}
-                onSelectNotice={setOpenNotice}
-                onCreate={() => { if (ensureVerified(user)) setMarketFormOpen(true); }}
-                canWriteNotice={isAdmin}
-                onWriteNotice={() => setNoticeFormOpen(true)}
-                onListingsChanged={() => getListings().then(setListings).catch(() => {})}
-              />
-            }
+            marketSlot={marketSlot}
             venues={venues}
             comments={comments}
             posts={posts}
-            notices={notices.filter((n) => !n.board || n.board === 'all' || n.board === 'community')}
+            notices={communityNotices}
             isAdmin={isAdmin}
-            onWriteNotice={() => setNoticeFormOpen(true)}
+            onWriteNotice={handleWriteNotice}
             onSelectNotice={setOpenNotice}
             onSelectVenue={handleVenueClick}
             onSelectPost={setOpenPost}
-            onOpenWrite={(category) => {
-              if (!ensureVerified(user)) return; // 본인인증 회원만 글쓰기
-              setPostFormCategory(category ?? 'free');
-              setPostFormOpen(true);
-            }}
+            onOpenWrite={handleOpenWrite}
             onLikePost={handleLikePost}
             onDeletePost={handleDeletePost}
             onReloadVenues={reloadVenues}
@@ -1836,13 +1837,13 @@ export default function App() {
           <MarketplaceTab
             listings={listings}
             loading={!marketLoaded}
-            notices={notices.filter((n) => !n.board || n.board === 'all' || n.board === 'market')}
+            notices={marketNotices}
             onSelect={setOpenListing}
             onSelectNotice={setOpenNotice}
-            onCreate={() => user ? setMarketFormOpen(true) : setAuthOpen(true)}
+            onCreate={handleMarketCreate}
             canWriteNotice={isAdmin}
-            onWriteNotice={() => setNoticeFormOpen(true)}
-            onListingsChanged={() => getListings().then(setListings).catch(() => {})}
+            onWriteNotice={handleWriteNotice}
+            onListingsChanged={handleListingsChanged}
           />
         </main>
       )}
