@@ -9,6 +9,7 @@ import QRCode from 'qrcode';
 import { getVenueClocks, subscribeClock, type ClockState, type ClockLevel } from '../../../api/clock';
 import { buyinRequestUrl } from '../../../api/ledger';
 import { getAppSetting, CLOCK_AD_KEY } from '../../../api/settings';
+import { useBackClose } from '../../../lib/backstack';
 
 const pad = (n: number) => String(Math.floor(n)).padStart(2, '0');
 const mmss = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return `${pad(s / 60)}:${pad(s % 60)}`; };
@@ -38,6 +39,7 @@ const gameLabel = (g: ClockState) => (g.gameSeq > 1 ? `사이드${g.gameSeq - 1}
 export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose }: {
   venueId: string; gameSeq?: number; venueName?: string; onClose: () => void;
 }) {
+  useBackClose(true, onClose); // 뒤로가기로 풀스크린 디스플레이 닫기(오버레이가 화면을 덮으므로 필수)
   const [clocks, setClocks] = useState<ClockState[] | null>(null);
   const [sel, setSel] = useState(gameSeq);
   const [, setTick] = useState(0);

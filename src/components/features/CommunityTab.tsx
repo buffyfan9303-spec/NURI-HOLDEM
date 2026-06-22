@@ -11,6 +11,7 @@ import { REGION_CHIPS } from './IntegratedSearchBar';
 import type { MarketplaceNotice } from '../../api/marketplace';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBlocks } from '../../contexts/BlockContext';
+import { useBackClose } from '../../lib/backstack';
 import OwnerCommunity from './OwnerCommunity';
 import DealerCommunity from './DealerCommunity';
 import TierLeaderboard from './TierLeaderboard';
@@ -88,6 +89,8 @@ function CommunityTab({
   // 칩 하이라이트(알약)는 즉시, 컨텐츠 교체는 트랜지션 — 장터(lazy) 첫 진입에도 이전 화면이 유지돼 끊김이 없다
   const [shownSec, setShownSec] = useState<Section>(lastCommunitySection);
   const [, startSecTransition] = useTransition();
+  // 뒤로가기 — 게시판이 아닌 서브섹션(홀덤펍/딜러/랭킹 등)에선 먼저 게시판으로 복귀, 그 다음에야 탭을 빠져나감
+  useBackClose(section !== 'board', () => { lastCommunitySection = 'board'; setShownSec('board'); setSectionState('board'); });
   const setSection = (s: Section) => {
     lastCommunitySection = s;
     setShownSec(s);
