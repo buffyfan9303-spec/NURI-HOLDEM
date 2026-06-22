@@ -158,13 +158,13 @@ export async function findUserForTransfer(nickname: string): Promise<TransferTar
   return p;
 }
 
-// 전화번호로 회원 조회(발급 대상 지정용)
+// 전화번호로 회원 조회(발급 대상 지정용). verified=본인인증(ci) 보유 — 닉네임 경로와 동일 기준이라 미인증 배지·차단 UI가 양 경로에서 일관 동작.
 export async function findUserByPhone(phone: string): Promise<TransferTarget[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase.rpc('find_user_by_phone', { p_phone: phone });
   if (error) throw new Error(error.message);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((r: any) => ({ id: r.id, display: r.display }));
+  return (data ?? []).map((r: any) => ({ id: r.id, display: r.display, verified: r.verified ?? undefined }));
 }
 
 export async function voucherUsageByVenue(venueId: string): Promise<VoucherUsage[]> {
