@@ -21,6 +21,7 @@ interface ProfileModalProps {
   open: boolean;
   onClose: () => void;
   onOpenLegal?: (d: LegalDoc) => void;
+  onOpenSupport?: () => void;
 }
 
 type Tab = 'profile' | 'security';
@@ -48,7 +49,7 @@ function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
-export default function ProfileModal({ open, onClose, onOpenLegal }: ProfileModalProps) {
+export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport }: ProfileModalProps) {
   const { user, updateProfile, refreshProfile } = useAuth();
   const toast = useToast();
   const [visitStats, setVisitStats] = useState({ visits: 0, upcoming: 0, total: 0 });
@@ -423,6 +424,16 @@ export default function ProfileModal({ open, onClose, onOpenLegal }: ProfileModa
               {saving ? '저장 중…' : '저장하기'}
             </button>
           </div>
+
+          {/* 고객센터 1:1 문의 */}
+          {onOpenSupport && (
+            <button type="button" onClick={() => { onClose(); onOpenSupport(); }}
+              className="flex w-full items-center gap-2 rounded-card border border-border-default bg-surface-high px-3 py-2.5 text-left transition-colors hover:border-gold-400/40">
+              <span aria-hidden>💬</span>
+              <span className="flex-1 text-sm font-semibold text-ink-primary">고객센터 1:1 문의</span>
+              <span className="text-2xs text-ink-muted">문의·답변 확인 →</span>
+            </button>
+          )}
 
           {/* 약관 및 정책 */}
           {onOpenLegal && (

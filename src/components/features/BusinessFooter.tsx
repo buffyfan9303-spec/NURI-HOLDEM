@@ -11,7 +11,7 @@ const BIZ_ROWS: [string, string][] = [
   ['고객센터', 'buffyfan9303@gmail.com'],
 ];
 
-export default function BusinessFooter({ onOpenLegal }: { onOpenLegal?: (d: LegalDoc) => void }) {
+export default function BusinessFooter({ onOpenLegal, onOpenSupport }: { onOpenLegal?: (d: LegalDoc) => void; onOpenSupport?: () => void }) {
   return (
     <footer className="mt-6 border-t border-border-subtle px-page-x pt-5 pb-[calc(6rem+env(safe-area-inset-bottom))] lg:pb-8">
       <div className="mx-auto w-full max-w-5xl space-y-3">
@@ -22,6 +22,10 @@ export default function BusinessFooter({ onOpenLegal }: { onOpenLegal?: (d: Lega
           <button type="button" onClick={() => onOpenLegal?.('privacy')} className="font-semibold text-ink-secondary hover:text-gold-300">개인정보처리방침</button>
           <span className="text-border-strong" aria-hidden>·</span>
           <button type="button" onClick={() => onOpenLegal?.('location')} className="font-semibold text-ink-secondary hover:text-gold-300">위치기반서비스 이용약관</button>
+          {onOpenSupport && <>
+            <span className="text-border-strong" aria-hidden>·</span>
+            <button type="button" onClick={onOpenSupport} className="font-semibold text-gold-300/90 hover:text-gold-300">고객센터 문의</button>
+          </>}
         </nav>
 
         {/* 사업자 정보 */}

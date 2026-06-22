@@ -27,6 +27,7 @@ import SectionHeader from '../atoms/SectionHeader';
 import NuriPosLedger from './NuriPosLedger';
 import LedgerStatsPanel from './LedgerStatsPanel';
 import { adminListRankVerifications, adminDecideRankVerification, signedVerifyUrl, type RankVerification, aiInspectVerification } from '../../api/rankverify';
+import { getAllInquiries, answerInquiry, type SupportInquiry } from '../../api/support';
 
 interface AdminTabProps {
   schedules: Schedule[];
@@ -41,7 +42,7 @@ interface AdminTabProps {
   onReloadVenues?: () => void;
 }
 
-type Section = 'analytics' | 'pending' | 'reorder' | 'users' | 'venues' | 'reports' | 'errors';
+type Section = 'analytics' | 'pending' | 'reorder' | 'users' | 'venues' | 'reports' | 'support' | 'errors';
 // 노출 순서 하위 항목: 포스터(요강) / 매장
 type ReorderTarget = 'posters' | 'venues';
 
@@ -396,6 +397,65 @@ function MissionsAdminCard() {
   );
 }
 
+// ── 고객센터 1:1 문의(운영자) — 접수 문의 열람·답변 ───────────────────────────
+function SupportInquiriesPanel() {
+  const toast = useToast();
+  const [rows, setRows] = useState<SupportInquiry[] | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const [onlyOpen, setOnlyOpen] = useState(true);
+
+  const load = useCallback(() => { getAllInquiries().then(setRows).catch(() => setRows([])); }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const send = async (id: string) => {
+    const text = (drafts[id] ?? '').trim();
+    if (!text) { toast.show('답변 내용을 입력하세요', 'error'); return; }
+    setBusy(id);
+    try { await answerInquiry(id, text); toast.show('답변을 등록했습니다', 'success'); setDrafts((d) => ({ ...d, [id]: '' })); load(); }
+    catch (e) { toast.show(e instanceof Error ? e.message : '답변 실패', 'error'); }
+    finally { setBusy(null); }
+  };
+
+  const list = (rows ?? []).filter((q) => !onlyOpen || q.status === 'open');
+  const openCount = (rows ?? []).filter((q) => q.status === 'open').length;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <p className="text-2xs text-ink-muted">미답변 <b className="text-amber-300">{openCount}</b>건</p>
+        <label className="ml-auto flex items-center gap-1.5 text-2xs text-ink-secondary">
+          <input type="checkbox" checked={onlyOpen} onChange={(e) => setOnlyOpen(e.target.checked)} /> 미답변만
+        </label>
+      </div>
+      {rows === null ? <p className="py-8 text-center text-2xs text-ink-muted">불러오는 중…</p>
+        : list.length === 0 ? <p className="rounded-card border border-border-subtle bg-surface-low py-8 text-center text-2xs text-ink-muted">{onlyOpen ? '미답변 문의가 없습니다.' : '접수된 문의가 없습니다.'}</p>
+        : <ul className="space-y-2.5">{list.map((q) => (
+            <li key={q.id} className="rounded-card border border-border-default bg-surface-low p-3">
+              <div className="flex items-center gap-2">
+                <span className="rounded-badge bg-surface-float px-1.5 py-0.5 text-[9px] font-bold text-ink-secondary">{q.category}</span>
+                <span className={['rounded-badge px-1.5 py-0.5 text-[9px] font-bold', q.status === 'answered' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'].join(' ')}>{q.status === 'answered' ? '답변완료' : '답변대기'}</span>
+                <span className="min-w-0 flex-1 truncate text-2xs text-ink-muted">{q.userName} · {q.createdAt.slice(0, 16).replace('T', ' ')}</span>
+              </div>
+              <p className="mt-1 text-sm font-bold text-ink-primary">{q.title}</p>
+              <p className="mt-0.5 whitespace-pre-wrap text-2xs leading-relaxed text-ink-secondary">{q.content}</p>
+              {q.answer && (
+                <div className="mt-2 rounded-input border border-emerald-500/25 bg-emerald-500/[0.05] p-2">
+                  <p className="text-[10px] font-bold text-emerald-300">등록된 답변</p>
+                  <p className="mt-0.5 whitespace-pre-wrap text-2xs text-ink-primary">{q.answer}</p>
+                </div>
+              )}
+              <div className="mt-2 space-y-1.5">
+                <textarea value={drafts[q.id] ?? ''} onChange={(e) => setDrafts((d) => ({ ...d, [q.id]: e.target.value }))}
+                  rows={2} placeholder={q.status === 'answered' ? '답변 수정…' : '답변 작성…'} className="input w-full resize-none text-sm" />
+                <button type="button" onClick={() => send(q.id)} disabled={busy === q.id} className="btn-primary px-3 py-1.5 text-2xs disabled:opacity-50">{busy === q.id ? '등록 중…' : q.status === 'answered' ? '답변 수정' : '답변 등록'}</button>
+              </div>
+            </li>
+          ))}</ul>}
+    </div>
+  );
+}
+
 // ── 오류 로그(운영자) — 전역 에러 감시망 수집분 열람·정리 ───────────────────────
 interface ClientErrorRow { id: string; message: string; stack: string | null; url: string | null; user_agent: string | null; created_at: string }
 function ErrorLogPanel() {
@@ -515,6 +575,7 @@ const ADMIN_DESC: Record<Section, string> = {
   users: '회원 검색 · 등급 · 제재',
   venues: '매장 생성 · 인증 · 그룹 승인',
   reports: '신고 접수 처리',
+  support: '고객센터 1:1 문의 답변',
   errors: '실유저 화면에서 자동 수집된 오류',
 };
 
@@ -525,6 +586,7 @@ const ADMIN_SECTIONS: { id: Section; label: string; icon: ReactNode }[] = [
   { id: 'users', label: '회원 관리', icon: aic(<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>) },
   { id: 'venues', label: '매장', icon: aic(<><path d="M3 9.5 5 4h14l2 5.5" /><path d="M4 9.5V20a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9.5" /><path d="M9 21v-6h6v6" /></>) },
   { id: 'reports', label: '신고', icon: aic(<><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></>) },
+  { id: 'support', label: '고객문의', icon: aic(<><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z" /></>) },
   { id: 'errors', label: '오류 로그', icon: aic(<><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></>) },
 ];
 
@@ -638,6 +700,7 @@ export default function AdminTab({
             />
           )}
           {section === 'reports' && <ReportQueue />}
+          {section === 'support' && <SupportInquiriesPanel />}
           {section === 'errors' && <ErrorLogPanel />}
         </div>
       </div>

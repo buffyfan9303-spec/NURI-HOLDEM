@@ -76,6 +76,7 @@ const ProfileModal         = lazyWithReload(() => import('./components/features/
 const GlobalSearchModal    = lazyWithReload(() => import('./components/features/GlobalSearchModal'));
 const NoticeFormModal      = lazyWithReload(() => import('./components/features/NoticeFormModal'));
 const LegalDocsModal       = lazyWithReload(() => import('./components/features/LegalDocsModal'));
+const SupportInquiryModal  = lazyWithReload(() => import('./components/features/SupportInquiryModal'));
 const PostFormModal        = lazyWithReload(() => import('./components/features/PostFormModal'));
 const MarketplaceFormModal = lazyWithReload(() => import('./components/features/MarketplaceFormModal'));
 const AdminTab       = lazyWithReload(() => import('./components/features/AdminTab'));
@@ -860,6 +861,7 @@ export default function App() {
   }, [pendingPostId, posts]);
   const [profileOpen, setProfileOpen]   = useState(false);
   const [legalDoc, setLegalDoc] = useState<LegalDoc | null>(null); // 약관·정책 모달
+  const [supportOpen, setSupportOpen] = useState(false); // 1:1 고객센터 문의
   const [voucherWalletOpen, setVoucherWalletOpen] = useState(false);
   // 비밀번호 변경 OTP 진행 중 페이지가 리로드되면(모바일에서 메일 앱을 다녀온 경우)
   // 프로필 모달을 다시 열어 코드 입력 화면으로 복귀시킨다.
@@ -1877,8 +1879,8 @@ export default function App() {
       )}
       </Suspense>
 
-      {/* 사업자 정보 푸터 — 전 화면 하단 상시 노출(전자상거래법 표시의무 + 약관 링크) */}
-      <BusinessFooter onOpenLegal={(d) => setLegalDoc(d)} />
+      {/* 사업자 정보 푸터 — 전 화면 하단 상시 노출(전자상거래법 표시의무 + 약관 링크 + 고객센터) */}
+      <BusinessFooter onOpenLegal={(d) => setLegalDoc(d)} onOpenSupport={() => setSupportOpen(true)} />
 
       {/* ── 모달 — 전부 lazy: 여는 순간에만 해당 청크 로드(첫 화면 가볍게) ── */}
       <Suspense fallback={<OverlayFallback />}>
@@ -2003,11 +2005,16 @@ export default function App() {
         open
         onClose={() => setProfileOpen(false)}
         onOpenLegal={(d) => setLegalDoc(d)}
+        onOpenSupport={() => setSupportOpen(true)}
       />
       )}
 
       {legalDoc !== null && (
       <LegalDocsModal open initial={legalDoc} onClose={() => setLegalDoc(null)} />
+      )}
+
+      {supportOpen && (
+      <SupportInquiryModal open onClose={() => setSupportOpen(false)} />
       )}
 
       {globalSearchOpen && (
