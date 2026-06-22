@@ -325,7 +325,8 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
   }, [state.venueId, state.sessionDate, state.gameSeq]);
 
   // 250ms 틱(부드러운 카운트다운) — 화면에 보일 때만. 숨김(다른 섹션) 시 멈춰 백그라운드 끊김 방지(재진입 시 endsAt로 즉시 복원)
-  useEffect(() => { if (!active) return; const id = setInterval(() => setTick((t) => t + 1), 250); return () => clearInterval(id); }, [active]);
+  // (A1) 일시정지(running=false) 중엔 카운트다운이 멈춰 있으므로 틱 불필요 → 재렌더 폭주 차단. 재개 시 effect 재가동.
+  useEffect(() => { if (!active || !state.running) return; const id = setInterval(() => setTick((t) => t + 1), 250); return () => clearInterval(id); }, [active, state.running]);
 
   // 집계(파생) — persist보다 위에서 계산해 liveStats를 저장에 첨부(라이브 보드 반영).
   const cfg = state.config;

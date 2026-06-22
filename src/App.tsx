@@ -842,6 +842,7 @@ export default function App() {
 
   // ── 데이터 (Supabase에서 로드) ──────────────────────────────────────────────
   const [schedules,     setSchedules]     = useState<Schedule[]>([]);
+  const [schedulesLoaded, setSchedulesLoaded] = useState(false); // (B1) 첫 로드 완료 여부 — 로딩 중엔 스켈레톤(빈결과 메시지 깜빡임 방지)
   // FOMO 뱃지용 예약자 수 — 다가오는 대회만 1회 조회
   useEffect(() => {
     const today = new Date().toLocaleDateString('en-CA');
@@ -921,7 +922,7 @@ export default function App() {
   }, []);
 
   // 서버 재조회 헬퍼
-  const reloadSchedules = useCallback(() => { getSchedules().then(setSchedules).catch(() => {}); }, []);
+  const reloadSchedules = useCallback(() => { getSchedules().then(setSchedules).catch(() => {}).finally(() => setSchedulesLoaded(true)); }, []);
   // 당겨서 새로고침(유튜브·당근) — 최상단에서 아래로 80px+ 당기면 갱신
   const [ptr, setPtr] = useState(0); // 0=대기, 양수=당김(px), -1=갱신 중
   const ptrStart = useRef<number | null>(null);
@@ -1725,7 +1726,9 @@ export default function App() {
             {/* PC 3컬럼: 중앙 콘텐츠 + 우측 위젯 레일(xl 이상) — 바이낸스식 정보 밀도 */}
             <div className="flex items-start gap-4">
               <div className="min-w-0 flex-1">
-                {visibleSchedules.length === 0 ? (
+                {!schedulesLoaded ? (
+                  <ScheduleSkeletonGrid viewMode={viewMode} />
+                ) : visibleSchedules.length === 0 ? (
                   <EmptyState />
                 ) : viewMode === 'table' ? (
                   <div className="animate-fade-in hidden md:block">
@@ -2289,6 +2292,19 @@ function BrowseSideRail({ posts, schedules, onSelectPost, onSelectSchedule }: {
 }
 
 // ── 빈 상태 ─────────────────────────────────────────────────────────────────
+
+// (B1) 일정 로딩 스켈레톤 — 카드 자리(aspect-ratio 고정)를 미리 잡아 CLS·빈결과 깜빡임 방지
+function ScheduleSkeletonGrid({ viewMode }: { viewMode: 'grid' | 'list' | 'table' }) {
+  const grid = viewMode === 'grid';
+  const n = grid ? 10 : 6;
+  return (
+    <div className={[grid ? 'grid grid-cols-2 gap-card-gap sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5' : 'grid grid-cols-1 lg:grid-cols-2 gap-card-gap'].join(' ')} aria-busy="true">
+      {Array.from({ length: n }).map((_, i) => (
+        <div key={i} className={[grid ? 'aspect-[3/4]' : 'h-24', 'animate-pulse rounded-card border border-border-subtle bg-surface-high'].join(' ')} />
+      ))}
+    </div>
+  );
+}
 
 function EmptyState() {
   return (

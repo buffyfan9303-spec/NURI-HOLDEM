@@ -229,16 +229,26 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   // 손님 자가 바인요청(QR) — 그날 매장 단위 대기목록 로드 + 실시간. 승인 시 현재 게임(gameSeq) 명단에 추가.
   const loadPending = useCallback(() => { getPendingBuyinRequests(venueId, date).then(setPendingReqs).catch(() => setPendingReqs([])); }, [venueId, date]);
   useEffect(() => { loadPending(); return subscribeBuyinRequests(venueId, loadPending); }, [venueId, loadPending]);
-  const approveReq = (r: BuyinRequest, withBuyin = false, payMethod: 'cash' | 'card' | 'transfer' = 'cash', split?: { cash: number; card: number; transfer: number }) => approveBuyinRequest(r.id, gameSeq, withBuyin, payMethod, split)
-    .then(() => { setPayPick(null); setSplitFor(null); toast.show(`${r.playerName} 승인 — ${gameSeq === MAIN_GAME_SEQ ? '메인' : '사이드' + (gameSeq - 1)} 명단 추가${withBuyin ? (split ? ' + 분할 바인 기록' : ` + ${payMethod === 'card' ? '카드' : payMethod === 'transfer' ? '이체' : '현금'} 바인 기록`) : ''}`, 'success'); loadPending(); })
-    .catch((e) => toast.show(e instanceof Error ? e.message : '승인 실패', 'error'));
-  const doReject = (r: BuyinRequest, reason?: string) => rejectBuyinRequest(r.id, reason)
-    .then(() => { setRejectFor(null); loadPending(); })
-    .catch((e) => toast.show(e instanceof Error ? e.message : '거절 실패', 'error'));
+  // (C1) 낙관적 업데이트 — 승인 즉시 대기열에서 제거하고 백그라운드 동기화. 실패 시 loadPending 으로 서버 기준 복원.
+  const approveReq = (r: BuyinRequest, withBuyin = false, payMethod: 'cash' | 'card' | 'transfer' = 'cash', split?: { cash: number; card: number; transfer: number }) => {
+    setPendingReqs((prev) => prev.filter((x) => x.id !== r.id));
+    setPayPick(null); setSplitFor(null);
+    return approveBuyinRequest(r.id, gameSeq, withBuyin, payMethod, split)
+      .then(() => { toast.show(`${r.playerName} 승인 — ${gameSeq === MAIN_GAME_SEQ ? '메인' : '사이드' + (gameSeq - 1)} 명단 추가${withBuyin ? (split ? ' + 분할 바인 기록' : ` + ${payMethod === 'card' ? '카드' : payMethod === 'transfer' ? '이체' : '현금'} 바인 기록`) : ''}`, 'success'); loadPending(); })
+      .catch((e) => { toast.show(e instanceof Error ? e.message : '승인 실패', 'error'); loadPending(); });
+  };
+  const doReject = (r: BuyinRequest, reason?: string) => {
+    setPendingReqs((prev) => prev.filter((x) => x.id !== r.id)); // 낙관 제거
+    setRejectFor(null);
+    return rejectBuyinRequest(r.id, reason)
+      .then(() => loadPending())
+      .catch((e) => { toast.show(e instanceof Error ? e.message : '거절 실패', 'error'); loadPending(); });
+  };
   const bulkApprove = () => {
     if (!pendingReqs.length) return;
-    const n = pendingReqs.length;
-    Promise.all(pendingReqs.map((r) => approveBuyinRequest(r.id, gameSeq).catch(() => null)))
+    const batch = pendingReqs; const n = batch.length;
+    setPendingReqs([]); // 낙관: 즉시 비움
+    Promise.all(batch.map((r) => approveBuyinRequest(r.id, gameSeq).catch(() => null)))
       .then(() => { toast.show(`${n}건 전체 승인 — ${gameSeq === MAIN_GAME_SEQ ? '메인' : '사이드' + (gameSeq - 1)} 명단 추가`, 'success'); loadPending(); });
   };
 
@@ -1811,11 +1821,11 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
               {/* 티켓: 완납·미수(가불) */}
               <div className="grid grid-cols-2 gap-2">
                 <button type="button" onClick={() => onPick('ticket', false, discIdx)}
-                  className="h-12 rounded-input border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 font-bold text-sm active:scale-95 transition-all hover:bg-emerald-500/20">
+                  className="h-12 rounded-input border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 font-bold text-sm active:scale-95 transition hover:bg-emerald-500/20">
                   티켓 완납{discIdx > 0 ? ' ·할인' : ''}
                 </button>
                 <button type="button" onClick={() => onPick('ticket', true, discIdx)}
-                  className="h-12 rounded-input border border-danger/50 bg-danger/10 text-danger-light font-bold text-sm active:scale-95 transition-all hover:bg-danger/20">
+                  className="h-12 rounded-input border border-danger/50 bg-danger/10 text-danger-light font-bold text-sm active:scale-95 transition hover:bg-danger/20">
                   티켓 미수{discIdx > 0 ? ' ·할인' : ''}
                 </button>
               </div>
@@ -1824,11 +1834,11 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
               {dualMethods.map((m) => (
                 <div key={m.key} className="grid grid-cols-2 gap-2">
                   <button type="button" onClick={() => onPick(m.key, false, discIdx)}
-                    className="h-12 rounded-input border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 font-bold text-sm active:scale-95 transition-all hover:bg-emerald-500/20">
+                    className="h-12 rounded-input border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 font-bold text-sm active:scale-95 transition hover:bg-emerald-500/20">
                     {m.label} 완납{discIdx > 0 ? ' ·할인' : ''}
                   </button>
                   <button type="button" onClick={() => onPick(m.key, true, discIdx)}
-                    className="h-12 rounded-input border border-danger/50 bg-danger/10 text-danger-light font-bold text-sm active:scale-95 transition-all hover:bg-danger/20">
+                    className="h-12 rounded-input border border-danger/50 bg-danger/10 text-danger-light font-bold text-sm active:scale-95 transition hover:bg-danger/20">
                     {m.label} 미수{discIdx > 0 ? ' ·할인' : ''}
                   </button>
                 </div>
@@ -1836,7 +1846,7 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
 
               {/* 가게지원 */}
               <button type="button" onClick={() => onPick('support', false, 0)}
-                className="w-full h-12 rounded-input border border-indigo-400/50 bg-indigo-500/10 text-indigo-300 font-bold text-sm active:scale-95 transition-all hover:bg-indigo-500/20">
+                className="w-full h-12 rounded-input border border-indigo-400/50 bg-indigo-500/10 text-indigo-300 font-bold text-sm active:scale-95 transition hover:bg-indigo-500/20">
                 가게지원
               </button>
 
