@@ -123,12 +123,39 @@ export async function redeemMyVoucher(voucherId: string): Promise<string> {
   return (data as string) ?? '';
 }
 
-export async function findUserForTransfer(nickname: string): Promise<TransferTarget[]> {
+async function rawFindUserForTransfer(nickname: string): Promise<TransferTarget[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase.rpc('find_user_for_transfer', { p_nickname: nickname });
   if (error) throw new Error(error.message);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({ id: r.id, display: r.display, verified: r.verified ?? undefined }));
+}
+
+// 동일 쿼리 중복 RPC 방지 — in-flight 합치기 + 짧은 TTL LRU. 발급 자동완성은 prefill+디바운스 동시발화,
+// 백스페이스 후 같은 글자 재입력, 엔터(resolveId)가 디바운스와 겹치는 등 같은 q 재호출이 흔하다.
+type XferCacheEntry = { at: number; data: TransferTarget[] };
+const XFER_TTL = 20_000; // 20s — 입력 세션 동안 동일 q 흡수(신규 가입자 반영은 최대 20s 지연 허용)
+const XFER_MAX = 30;     // 최근 N개만 유지(소형 LRU)
+const xferCache = new Map<string, XferCacheEntry>();
+const xferInflight = new Map<string, Promise<TransferTarget[]>>();
+const normXfer = (s: string) => s.trim().toLowerCase();
+
+export async function findUserForTransfer(nickname: string): Promise<TransferTarget[]> {
+  const key = normXfer(nickname);
+  if (!key) return [];
+  const hit = xferCache.get(key);
+  if (hit && Date.now() - hit.at < XFER_TTL) { xferCache.delete(key); xferCache.set(key, hit); return hit.data; } // LRU 터치
+  const live = xferInflight.get(key);
+  if (live) return live; // 동시 동일 q → 한 번만 비행
+  const p = rawFindUserForTransfer(nickname)
+    .then((data) => {
+      xferCache.set(key, { at: Date.now(), data });
+      if (xferCache.size > XFER_MAX) { const oldest = xferCache.keys().next().value; if (oldest !== undefined) xferCache.delete(oldest); }
+      return data;
+    })
+    .finally(() => { xferInflight.delete(key); });
+  xferInflight.set(key, p);
+  return p;
 }
 
 // 전화번호로 회원 조회(발급 대상 지정용)
