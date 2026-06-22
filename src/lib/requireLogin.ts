@@ -23,3 +23,20 @@ export const OPEN_POST_FORM_EVENT = 'nuri:open-post-form';
 export function openPostForm(category?: string): void {
   try { window.dispatchEvent(new CustomEvent(OPEN_POST_FORM_EVENT, { detail: { category } })); } catch { /* noop */ }
 }
+
+// ── 본인인증 게이트 ──────────────────────────────────────────────────────────
+// 본인인증(휴대폰)이 필요한 민감 기능(글쓰기·중고장터 등록·예약) 시도 시, App이 듣고 본인인증 안내를 띄운다.
+export const REQUIRE_VERIFY_EVENT = 'nuri:require-verify';
+export function promptVerify(): void {
+  try { window.dispatchEvent(new CustomEvent(REQUIRE_VERIFY_EVENT)); } catch { /* noop */ }
+}
+
+/**
+ * 본인인증 가드. 비로그인이면 로그인 모달, 미인증이면 본인인증 안내를 띄우고 false 반환(호출부는 즉시 return).
+ * @returns 로그인 + 본인인증 완료면 true.
+ */
+export function ensureVerified(user: { verified?: boolean } | null | undefined): boolean {
+  if (!user) { promptLogin(); return false; }
+  if (!user.verified) { promptVerify(); return false; }
+  return true;
+}

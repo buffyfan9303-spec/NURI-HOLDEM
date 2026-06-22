@@ -13,7 +13,7 @@ import { prizeMainText } from './ScheduleCard';
 import type { Schedule } from '../../api/schedules';
 import type { Comment } from '../../api/community';
 import { generateBlinds } from '../../api/clock';
-import { promptLogin, openPostForm } from '../../lib/requireLogin';
+import { promptLogin, openPostForm, ensureVerified } from '../../lib/requireLogin';
 import { googleCalendarUrl } from '../../lib/calendar';
 import QRCode from 'qrcode';
 import { requestBuyin, buyinRequestUrl } from '../../api/ledger';
@@ -623,8 +623,9 @@ function ReserveBox({ scheduleId, ownerId, venueId }: { scheduleId: string; owne
   };
   // 예약(생성)은 상태 버튼이 모핑으로 보여준다 — 체크 애니메이션이 끝난 onDone에서 '예약 완료' 카드로 전환
   const doReserve = async () => {
-    if (!user) { toast.show('로그인 후 예약할 수 있습니다', 'error'); promptLogin(); throw new Error('login'); }
-    const n = (name.trim() || user.name || '예약자');
+    if (!ensureVerified(user)) throw new Error('verify'); // 로그인 + 본인인증 회원만 예약
+    const _u = user!;
+    const n = (name.trim() || _u.name || '예약자');
     try {
       await createReservation(scheduleId, n); // 중복 닉네임이면 '이미 등록된 닉네임입니다' throw
     } catch (e) {

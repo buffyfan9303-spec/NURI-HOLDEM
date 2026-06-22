@@ -25,7 +25,7 @@ import StaffInviteBanner from './components/features/StaffInviteBanner';
 import TierCelebration from './components/features/TierCelebration';
 import ErrorBoundary from './components/atoms/ErrorBoundary';
 import InstallBanner from './components/atoms/InstallBanner';
-import { REQUIRE_LOGIN_EVENT, OPEN_POST_FORM_EVENT } from './lib/requireLogin';
+import { REQUIRE_LOGIN_EVENT, OPEN_POST_FORM_EVENT, REQUIRE_VERIFY_EVENT, ensureVerified } from './lib/requireLogin';
 import { tierColor } from './components/atoms/TierBadge';
 import ConsentGateModal from './components/features/ConsentGateModal';
 import type { PostFormData } from './components/features/PostFormModal';
@@ -803,16 +803,24 @@ export default function App() {
     return () => window.removeEventListener(REQUIRE_LOGIN_EVENT, h);
   }, []);
 
-  // 어디서든 글쓰기 모달 열기 — 포스터 상세 '대회 후기 쓰기' 등(카테고리 프리셋)
+  // 본인인증이 필요한 민감 기능(글쓰기·중고장터 등록·예약) 시도 시 → 안내 + 프로필(본인인증) 열기.
+  useEffect(() => {
+    const h = () => { toast.show('본인인증이 필요한 기능이에요. 프로필에서 휴대폰 본인인증을 완료해 주세요.', 'info'); setProfileOpen(true); };
+    window.addEventListener(REQUIRE_VERIFY_EVENT, h);
+    return () => window.removeEventListener(REQUIRE_VERIFY_EVENT, h);
+  }, []);
+
+  // 어디서든 글쓰기 모달 열기 — 포스터 상세 '대회 후기 쓰기' 등(카테고리 프리셋). 본인인증 회원만.
   useEffect(() => {
     const h = (e: Event) => {
+      if (!ensureVerified(user)) return;
       const cat = (e as CustomEvent).detail?.category as PostCategory | undefined;
       setPostFormCategory(cat ?? 'free');
       setPostFormOpen(true);
     };
     window.addEventListener(OPEN_POST_FORM_EVENT, h);
     return () => window.removeEventListener(OPEN_POST_FORM_EVENT, h);
-  }, []);
+  }, [user]);
 
   // ── 게시물 공유 딥링크 (?post=<id>) — 링크로 들어오면 비로그인도 해당 글 열람 ──
   const [pendingPostId, setPendingPostId] = useState<string | null>(() => {
@@ -1784,7 +1792,7 @@ export default function App() {
                 notices={notices.filter((n) => !n.board || n.board === 'all' || n.board === 'market')}
                 onSelect={setOpenListing}
                 onSelectNotice={setOpenNotice}
-                onCreate={() => user ? setMarketFormOpen(true) : setAuthOpen(true)}
+                onCreate={() => { if (ensureVerified(user)) setMarketFormOpen(true); }}
                 canWriteNotice={isAdmin}
                 onWriteNotice={() => setNoticeFormOpen(true)}
                 onListingsChanged={() => getListings().then(setListings).catch(() => {})}
@@ -1800,7 +1808,7 @@ export default function App() {
             onSelectVenue={handleVenueClick}
             onSelectPost={setOpenPost}
             onOpenWrite={(category) => {
-              if (!user) { setAuthOpen(true); return; }
+              if (!ensureVerified(user)) return; // 본인인증 회원만 글쓰기
               setPostFormCategory(category ?? 'free');
               setPostFormOpen(true);
             }}
