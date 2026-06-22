@@ -137,6 +137,16 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
       if (f.length === 1) pickRecv(f[0]); else setCands(f);
     } catch (e) { toast.show(e instanceof Error ? e.message : '조회 실패', 'error'); }
   };
+  // 입력 시 라이브 자동완성 — 장부 바인 검색과 동일 UX(디바운스 280ms). 입력하면 후보가 바로 뜨고 클릭해 선택.
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (recvMode !== 'id' || recvUserId) return;
+    const q = idInput.trim();
+    if (!q) { setCands([]); return; }
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => { findUserForTransfer(q).then(setCands).catch(() => setCands([])); }, 280);
+    return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
+  }, [idInput, recvMode, recvUserId]);
 
   // 매장 비치용 인쇄 — 선택한 QR만 출력(종이가 작아 한꺼번에 불가). 3개 중 1~3개 선택.
   const QR_DEFS = [
@@ -292,19 +302,25 @@ ${cards}
               ) : recvMode === 'id' ? (
                 <div className="space-y-1.5">
                   <div className="flex gap-1.5">
-                    <input value={idInput} onChange={(e) => setIdInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); resolveId(); } }} placeholder="받는 사람 아이디(닉네임)" className="input min-w-0 flex-1 text-sm" />
-                    <div className="flex w-24 shrink-0 gap-1">
-                      <button type="button" onClick={resolveId} className="flex-1 rounded-input border border-border-default bg-surface-high text-2xs font-bold text-ink-secondary hover:text-ink-primary">조회</button>
-                      <button type="button" onClick={() => { setRecvMode('none'); setCands([]); }} className="flex-1 rounded-input border border-border-default bg-surface-high text-2xs font-bold text-ink-muted hover:text-ink-secondary">취소</button>
-                    </div>
+                    <input value={idInput} onChange={(e) => setIdInput(e.target.value)} autoFocus
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); resolveId(); } }}
+                      placeholder="이름·아이디(닉네임) 입력 — 자동완성" className="input min-w-0 flex-1 text-sm" />
+                    <button type="button" onClick={() => { setRecvMode('none'); setCands([]); setIdInput(''); }} className="shrink-0 rounded-input border border-border-default bg-surface-high px-3 text-2xs font-bold text-ink-muted hover:text-ink-secondary">취소</button>
                   </div>
-                  {cands.length > 0 && (
-                    <ul className="max-h-32 space-y-1 overflow-y-auto rounded-input border border-border-subtle bg-surface-low p-1">
+                  {cands.length > 0 ? (
+                    <ul className="max-h-40 space-y-1 overflow-y-auto rounded-input border border-gold-400/30 bg-surface-low p-1">
                       {cands.map((c) => (
-                        <li key={c.id}><button type="button" onClick={() => pickRecv(c)} className="w-full truncate rounded-input px-2 py-1 text-left text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary">{c.display}</button></li>
+                        <li key={c.id}>
+                          <button type="button" onClick={() => pickRecv(c)} className="flex w-full items-center gap-1.5 rounded-input px-2 py-1.5 text-left hover:bg-surface-high">
+                            <span aria-hidden className="shrink-0 text-2xs">👤</span>
+                            <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{c.display}</span>
+                          </button>
+                        </li>
                       ))}
                     </ul>
-                  )}
+                  ) : idInput.trim() ? (
+                    <p className="px-1 text-[10px] text-ink-muted">일치하는 회원이 없습니다 — 아이디(닉네임)를 확인하세요.</p>
+                  ) : null}
                 </div>
               ) : (
                 <button type="button" onClick={() => setRecvMode('id')} className="btn-ghost w-full text-2xs">👤 아이디(닉네임)로 받는 사람 지정 (선택)</button>
