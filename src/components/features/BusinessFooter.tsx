@@ -21,6 +21,8 @@ export default function BusinessFooter({ onOpenLegal, onOpenSupport }: { onOpenL
           <span className="text-border-strong" aria-hidden>·</span>
           <button type="button" onClick={() => onOpenLegal?.('privacy')} className="font-semibold text-ink-secondary hover:text-gold-300">개인정보처리방침</button>
           <span className="text-border-strong" aria-hidden>·</span>
+          <button type="button" onClick={() => onOpenLegal?.('refund')} className="font-semibold text-ink-secondary hover:text-gold-300">취소·환불 정책</button>
+          <span className="text-border-strong" aria-hidden>·</span>
           <button type="button" onClick={() => onOpenLegal?.('location')} className="font-semibold text-ink-secondary hover:text-gold-300">위치기반서비스 이용약관</button>
           {onOpenSupport && <>
             <span className="text-border-strong" aria-hidden>·</span>

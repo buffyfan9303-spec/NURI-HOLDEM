@@ -5,7 +5,7 @@ import { useState } from 'react';
 import Modal from '../atoms/Modal';
 import UnderlineTabs from '../atoms/UnderlineTabs';
 
-export type LegalDoc = 'terms' | 'privacy' | 'location';
+export type LegalDoc = 'terms' | 'privacy' | 'location' | 'refund';
 
 // ── 사업자 정보(사업자등록증 기준) ──────────────────────────────────────────
 const BIZ = {
@@ -136,10 +136,40 @@ const LOCATION = `제1조(목적)
 [문의] ${BIZ.contact} / ${BIZ.email}
 시행일: ${BIZ.effective}`;
 
+const REFUND = `${BIZ.service}(이하 "회사")의 유료 서비스 결제 취소 및 환불에 관한 기준은 다음과 같습니다. 본 정책은 「전자상거래 등에서의 소비자보호에 관한 법률」을 따릅니다.
+
+1. 적용 대상
+- 본 정책은 회사가 유료로 제공하는 서비스(예: 포스터 상단 고정·노출 강화 등 광고/부가 서비스)의 결제에 적용됩니다.
+- 매장이용권은 매장이 손님에게 무상으로 발행하는 비(非)금전 포인트로서 현금 가치가 없으며, 환불·환전의 대상이 아닙니다.
+
+2. 청약철회(결제 취소)
+- 이용자는 결제일로부터 7일 이내에 청약철회를 요청할 수 있습니다.
+- 다만 다음의 경우에는 청약철회가 제한될 수 있습니다(전자상거래법 제17조제2항).
+  · 서비스가 이미 개시(노출·게재 등)되어 그 효력이 발생한 경우
+  · 기간제 노출 상품에서 이용 기간이 일부 경과한 경우(경과분 제외 후 잔여분 환불)
+
+3. 환불 금액의 산정
+- 서비스 개시 전: 전액 환불.
+- 기간제 상품 이용 중 해지: 총 결제금액에서 이미 이용한 기간(일할 계산) 및 부대비용을 공제한 잔액을 환불합니다.
+- 회사의 귀책사유(서비스 미제공·중대한 오류 등)로 인한 경우: 전액 환불 및 필요한 보상 조치.
+
+4. 환불 신청 및 처리
+- 환불은 고객센터(${BIZ.email})로 결제 정보와 함께 신청합니다.
+- 회사는 정당한 환불 요청을 확인한 날로부터 3영업일 이내에 환불 절차를 진행합니다.
+- 결제수단별로 카드 취소·계좌 환급 등 동일 수단 환불을 원칙으로 하며, 결제대행사 사정에 따라 영업일 기준 추가 기간이 소요될 수 있습니다.
+
+5. 유의사항
+- 부정한 방법으로 결제·이용한 경우 또는 약관·법령을 위반한 경우 환불이 제한될 수 있습니다.
+- 본 서비스는 금전을 베팅하는 도박·환전·사행성 서비스를 제공하지 않으며, 그러한 명목의 환불 요청에는 응하지 않습니다.
+
+[문의] ${BIZ.company} 고객센터 · ${BIZ.contact}
+시행일: ${BIZ.effective}`;
+
 const DOCS: Record<LegalDoc, { label: string; body: string }> = {
   terms:    { label: '이용약관',            body: TERMS },
   privacy:  { label: '개인정보처리방침',     body: PRIVACY },
   location: { label: '위치기반서비스',       body: LOCATION },
+  refund:   { label: '취소·환불 정책',       body: REFUND },
 };
 
 export default function LegalDocsModal({
