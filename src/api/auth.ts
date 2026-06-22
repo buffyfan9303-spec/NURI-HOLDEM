@@ -313,6 +313,18 @@ export async function updateUserStatus(
   }
 }
 
+// ── 본인 비밀번호 확인(재인증) ────────────────────────────────────────────────
+// 같은 계정으로 signInWithPassword 를 시도해 비밀번호 일치 여부만 확인한다(세션은 본인이라 유지).
+// 탈퇴 등 민감 작업의 본인 확인용. true=일치.
+export async function verifyMyPassword(password: string): Promise<boolean> {
+  if (IS_MOCK) return true;
+  const { data: me } = await supabase.auth.getUser();
+  const email = me.user?.email;
+  if (!email || !password) return false;
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  return !error;
+}
+
 // ── 회원 자가 탈퇴 ────────────────────────────────────────────────────────────
 // 개인정보(실명·전화·CI·생년월일·성별·통신사·이메일) 파기 + status='withdrawn' 익명화.
 // 매장 대표는 매장을 먼저 정리(킬스위치 삭제/대표 양도)해야 하며, 서버가 거부한다.
