@@ -25,6 +25,14 @@ interface Layer {
 const layers: Layer[] = [];
 let seq = 0;
 let initialized = false;
+// 마지막으로 오버레이가 닫힌(dispose) 시각. 모달 닫힘이 부르는 history.back() 이
+// (탭 레이어의 pushState 가 브라우저에 throttle 되어 누락된 경우) 루트까지 되돌아가
+// 탭 back-close(예: changeTab('browse'))를 잘못 발동시키는 것을 막는 디바운스용.
+let lastDisposeAt = 0;
+/** 직전 ~ms 내에 오버레이가 닫혔으면 true — 탭 back-close 가 잘못 발동하는 것을 억제한다. */
+export function overlayJustClosed(withinMs = 600): boolean {
+  return lastDisposeAt > 0 && Date.now() - lastDisposeAt < withinMs;
+}
 // 현재 history 위치의 레이어 토큰(없으면 0 = 앱 루트).
 function currentLayerId(): number {
   const st = window.history.state as { __layer?: number } | null;
@@ -67,6 +75,7 @@ export function pushLayer(close: CloseFn): () => void {
   return () => {
     if (disposed) return;
     disposed = true;
+    lastDisposeAt = Date.now();
     const idx = layers.findIndex((l) => l.id === id);
     if (idx === -1) return; // 이미 Back 으로 제거됨 → 추가 정리 불필요
     layers.splice(idx, 1);

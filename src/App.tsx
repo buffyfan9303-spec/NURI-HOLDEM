@@ -30,7 +30,7 @@ import { tierColor } from './components/atoms/TierBadge';
 import ConsentGateModal from './components/features/ConsentGateModal';
 import type { PostFormData } from './components/features/PostFormModal';
 import type { MarketplaceFormData } from './components/features/MarketplaceFormModal';
-import { useBackClose } from './lib/backstack';
+import { useBackClose, overlayJustClosed } from './lib/backstack';
 import { useVisibilityRefresh } from './lib/useVisibilityRefresh';
 import { lazyWithReload } from './lib/lazyWithReload';
 import { applyScheduleSeo, applyVenueSeo, resetSeo } from './lib/seo';
@@ -835,7 +835,9 @@ export default function App() {
 
   // 홈(browse) 외 탭에서 브라우저/모바일 뒤로가기 → 홈 탭으로 복귀(앱 종료 방지).
   // 오버레이가 열려 있으면 중앙 back-stack 이 LIFO 로 그 오버레이부터 닫는다.
-  useBackClose(activeTab !== 'browse', () => changeTab('browse'));
+  // 오버레이(모달)가 막 닫힌 직후의 잘못된 popstate 는 무시 — 모달 닫힘이 일정탐색으로
+  // 튀던 간헐 버그(탭 레이어 pushState throttle 시 history.back 과열) 방지.
+  useBackClose(activeTab !== 'browse', () => { if (!overlayJustClosed()) changeTab('browse'); });
 
   // ── 데이터 (Supabase에서 로드) ──────────────────────────────────────────────
   const [schedules,     setSchedules]     = useState<Schedule[]>([]);
