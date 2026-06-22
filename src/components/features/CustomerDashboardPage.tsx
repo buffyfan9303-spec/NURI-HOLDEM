@@ -4,7 +4,6 @@
 // 사용(회수) = 발급 매장 QR 스캔 또는 그 매장 업주 전화번호로만. 유저 간 전송 불가.
 import { useEffect, useRef, useState } from 'react';
 import { useToast } from '../atoms/Toast';
-import { useBackClose } from '../../lib/backstack';
 import { useAuth } from '../../contexts/AuthContext';
 import Icon from '../atoms/Icon';
 import type { Html5Qrcode } from 'html5-qrcode'; // 타입만(런타임 번들 제외) — 실제 라이브러리는 스캐너 열 때 동적 로드
@@ -42,7 +41,6 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
 }) {
   const { user } = useAuth();
   const toast = useToast();
-  useBackClose(open, onClose); // 뒤로가기로 내 정보(지갑) 페이지 닫기
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
   const [visits, setVisits] = useState<VisitedVenue[]>([]);
   const [plays, setPlays] = useState<PlayHistory[]>([]);

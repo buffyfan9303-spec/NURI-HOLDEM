@@ -1172,6 +1172,10 @@ export default function App() {
     setDisplayTarget(null);
     try { const url = new URL(window.location.href); url.searchParams.delete('display'); url.searchParams.delete('g'); window.history.replaceState(null, '', url.pathname + url.search + url.hash); } catch { /* ignore */ }
   }, []);
+  // 뒤로가기로 풀스크린 디스플레이 닫기 — App 레벨(초기 null→effect 세팅)이라 StrictMode 더블인보크 레이스 회피
+  useBackClose(displayTarget !== null, closeDisplay);
+  // 뒤로가기로 내 정보(지갑) 페이지 닫기 — 동일하게 App 레벨 게이트
+  useBackClose(voucherWalletOpen, () => setVoucherWalletOpen(false));
 
   const handleScheduleSelect = useCallback((s: Schedule) => {
     // 포스터 상세는 전체화면 2열 모달(PC: 포스터 좌+정보 우)로 표시 — 좁은 패널보다 가독성↑
