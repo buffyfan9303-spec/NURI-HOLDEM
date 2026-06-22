@@ -123,6 +123,36 @@ export async function redeemMyVoucher(voucherId: string): Promise<string> {
   return (data as string) ?? '';
 }
 
+// 동일 쿼리 중복 RPC 방지 — in-flight 합치기 + 짧은 TTL LRU 를 입히는 공용 팩토리.
+// 발급 자동완성은 prefill+디바운스 동시발화, 백스페이스 후 같은 글자 재입력, 엔터(resolveId)가
+// 디바운스와 겹치는 등 같은 q 재호출이 흔하다. 닉네임·전화 경로가 동일 캐싱을 공유(일관성).
+const SEARCH_TTL = 20_000; // 20s — 입력 세션 동안 동일 q 흡수(신규 가입자 반영은 최대 20s 지연 허용)
+const SEARCH_MAX = 30;     // 최근 N개만 유지(소형 LRU)
+function withSearchCache(
+  fetcher: (raw: string) => Promise<TransferTarget[]>,
+  normalize: (s: string) => string,
+): (raw: string) => Promise<TransferTarget[]> {
+  const cache = new Map<string, { at: number; data: TransferTarget[] }>();
+  const inflight = new Map<string, Promise<TransferTarget[]>>();
+  return (raw: string) => {
+    const key = normalize(raw);
+    if (!key) return Promise.resolve([]);
+    const hit = cache.get(key);
+    if (hit && Date.now() - hit.at < SEARCH_TTL) { cache.delete(key); cache.set(key, hit); return Promise.resolve(hit.data); } // LRU 터치
+    const live = inflight.get(key);
+    if (live) return live; // 동시 동일 q → 한 번만 비행
+    const p = fetcher(raw)
+      .then((data) => {
+        cache.set(key, { at: Date.now(), data });
+        if (cache.size > SEARCH_MAX) { const oldest = cache.keys().next().value; if (oldest !== undefined) cache.delete(oldest); }
+        return data;
+      })
+      .finally(() => { inflight.delete(key); });
+    inflight.set(key, p);
+    return p;
+  };
+}
+
 async function rawFindUserForTransfer(nickname: string): Promise<TransferTarget[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase.rpc('find_user_for_transfer', { p_nickname: nickname });
@@ -130,42 +160,18 @@ async function rawFindUserForTransfer(nickname: string): Promise<TransferTarget[
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({ id: r.id, display: r.display, verified: r.verified ?? undefined }));
 }
-
-// 동일 쿼리 중복 RPC 방지 — in-flight 합치기 + 짧은 TTL LRU. 발급 자동완성은 prefill+디바운스 동시발화,
-// 백스페이스 후 같은 글자 재입력, 엔터(resolveId)가 디바운스와 겹치는 등 같은 q 재호출이 흔하다.
-type XferCacheEntry = { at: number; data: TransferTarget[] };
-const XFER_TTL = 20_000; // 20s — 입력 세션 동안 동일 q 흡수(신규 가입자 반영은 최대 20s 지연 허용)
-const XFER_MAX = 30;     // 최근 N개만 유지(소형 LRU)
-const xferCache = new Map<string, XferCacheEntry>();
-const xferInflight = new Map<string, Promise<TransferTarget[]>>();
-const normXfer = (s: string) => s.trim().toLowerCase();
-
-export async function findUserForTransfer(nickname: string): Promise<TransferTarget[]> {
-  const key = normXfer(nickname);
-  if (!key) return [];
-  const hit = xferCache.get(key);
-  if (hit && Date.now() - hit.at < XFER_TTL) { xferCache.delete(key); xferCache.set(key, hit); return hit.data; } // LRU 터치
-  const live = xferInflight.get(key);
-  if (live) return live; // 동시 동일 q → 한 번만 비행
-  const p = rawFindUserForTransfer(nickname)
-    .then((data) => {
-      xferCache.set(key, { at: Date.now(), data });
-      if (xferCache.size > XFER_MAX) { const oldest = xferCache.keys().next().value; if (oldest !== undefined) xferCache.delete(oldest); }
-      return data;
-    })
-    .finally(() => { xferInflight.delete(key); });
-  xferInflight.set(key, p);
-  return p;
-}
-
-// 전화번호로 회원 조회(발급 대상 지정용). verified=본인인증(ci) 보유 — 닉네임 경로와 동일 기준이라 미인증 배지·차단 UI가 양 경로에서 일관 동작.
-export async function findUserByPhone(phone: string): Promise<TransferTarget[]> {
+async function rawFindUserByPhone(phone: string): Promise<TransferTarget[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase.rpc('find_user_by_phone', { p_phone: phone });
   if (error) throw new Error(error.message);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({ id: r.id, display: r.display, verified: r.verified ?? undefined }));
 }
+
+// 닉네임/이름 경로 — 키는 trim+소문자
+export const findUserForTransfer = withSearchCache(rawFindUserForTransfer, (s) => s.trim().toLowerCase());
+// 전화번호 경로 — 키는 숫자만 끝10자리(국가코드 유무 무시, RPC 매칭과 동일 정규화). verified=본인인증(ci) 보유라 미인증 배지·차단 UI가 양 경로 일관.
+export const findUserByPhone = withSearchCache(rawFindUserByPhone, (s) => s.replace(/[^0-9]/g, '').slice(-10));
 
 export async function voucherUsageByVenue(venueId: string): Promise<VoucherUsage[]> {
   if (IS_MOCK) return [];

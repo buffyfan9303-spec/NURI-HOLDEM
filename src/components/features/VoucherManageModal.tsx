@@ -9,7 +9,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import QRCode from 'qrcode';
 import { checkinUrl } from '../../api/checkins';
 import { buyinRequestUrl } from '../../api/ledger';
-import { listVenueVouchers, issueVoucher, deleteVoucher, findUserForTransfer, voucherUsageByVenue, voucherHolderStats, isVoucherIssueApproved, voucherHolderProfiles, subscribeVenueVouchers, type Voucher, type VoucherUsage, type VoucherHolderStats, type TransferTarget, type VoucherHolderProfile, getVoucherQuota, requestVoucherCredit, myVoucherCreditRequests, type VoucherCreditRequest } from '../../api/vouchers';
+import { listVenueVouchers, issueVoucher, deleteVoucher, findUserForTransfer, findUserByPhone, voucherUsageByVenue, voucherHolderStats, isVoucherIssueApproved, voucherHolderProfiles, subscribeVenueVouchers, type Voucher, type VoucherUsage, type VoucherHolderStats, type TransferTarget, type VoucherHolderProfile, getVoucherQuota, requestVoucherCredit, myVoucherCreditRequests, type VoucherCreditRequest } from '../../api/vouchers';
 
 function fmtDateTime(iso: string | null): string {
   if (!iso) return '-';
@@ -31,7 +31,7 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
   const [count, setCount] = useState(1);
   const [recvUserId, setRecvUserId] = useState<string | null>(null);
   const [recvDisplay, setRecvDisplay] = useState('');
-  const [recvMode, setRecvMode] = useState<'none' | 'id'>('none');
+  const [recvMode, setRecvMode] = useState<'none' | 'id' | 'phone'>('none');
   const [idInput, setIdInput] = useState('');
   const [cands, setCands] = useState<TransferTarget[]>([]);
   const [activeIdx, setActiveIdx] = useState(-1); // 자동완성 키보드 하이라이트
@@ -149,20 +149,22 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
   const resolveId = async () => {
     const q = idInput.trim();
     if (!q) return;
+    const finder = recvMode === 'phone' ? findUserByPhone : findUserForTransfer;
     try {
-      const f = await findUserForTransfer(q);
-      if (!f.length) { toast.show('해당 아이디(닉네임)의 회원이 없습니다', 'error'); setCands([]); return; }
+      const f = await finder(q);
+      if (!f.length) { toast.show(recvMode === 'phone' ? '해당 전화번호의 회원이 없습니다' : '해당 아이디(닉네임)의 회원이 없습니다', 'error'); setCands([]); return; }
       if (f.length === 1) pickRecv(f[0]); else setCands(f);
     } catch (e) { toast.show(e instanceof Error ? e.message : '조회 실패', 'error'); }
   };
-  // 입력 시 라이브 자동완성 — 장부 바인 검색과 동일 UX(디바운스 280ms). 입력하면 후보가 바로 뜨고 클릭해 선택.
+  // 입력 시 라이브 자동완성 — 장부 바인 검색과 동일 UX(디바운스 280ms). 닉네임·전화 경로 공용.
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (recvMode !== 'id' || recvUserId) return;
+    if ((recvMode !== 'id' && recvMode !== 'phone') || recvUserId) return;
     const q = idInput.trim();
     if (!q) { setCands([]); return; }
+    const finder = recvMode === 'phone' ? findUserByPhone : findUserForTransfer;
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => { findUserForTransfer(q).then((f) => { setCands(f); setActiveIdx(-1); }).catch(() => { setCands([]); setActiveIdx(-1); }); }, 280);
+    searchTimer.current = setTimeout(() => { finder(q).then((f) => { setCands(f); setActiveIdx(-1); }).catch(() => { setCands([]); setActiveIdx(-1); }); }, 280);
     return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
   }, [idInput, recvMode, recvUserId]);
 
@@ -317,7 +319,7 @@ ${cards}
                   <span className="min-w-0 flex-1 truncate text-xs text-ink-primary">받는 손님: <b className="text-gold-300">{recvDisplay}</b></span>
                   <button type="button" onClick={() => { setRecvUserId(null); setRecvDisplay(''); }} className="shrink-0 text-2xs text-ink-muted">변경</button>
                 </div>
-              ) : recvMode === 'id' ? (
+              ) : (recvMode === 'id' || recvMode === 'phone') ? (
                 <div className="space-y-1.5">
                   {/* 최근 발급한 손님(단골) 빠른 선택 — 자주 주는 대상 원탭 */}
                   {recentRecipients.length > 0 && (
@@ -340,7 +342,8 @@ ${cards}
                         else if (e.key === 'Enter') { e.preventDefault(); if (activeIdx >= 0 && activeIdx < cands.length) pickRecv(cands[activeIdx]); else resolveId(); }
                         else if (e.key === 'Escape') { setCands([]); setActiveIdx(-1); }
                       }}
-                      placeholder="이름·아이디(닉네임) 입력 — 자동완성 (↑/↓·Enter)" className="input min-w-0 flex-1 text-sm" />
+                      inputMode={recvMode === 'phone' ? 'numeric' : 'text'}
+                      placeholder={recvMode === 'phone' ? '전화번호 입력 — 자동완성 (↑/↓·Enter)' : '이름·아이디(닉네임) 입력 — 자동완성 (↑/↓·Enter)'} className="input min-w-0 flex-1 text-sm" />
                     <button type="button" onClick={() => { setRecvMode('none'); setCands([]); setIdInput(''); setActiveIdx(-1); }} className="shrink-0 rounded-input border border-border-default bg-surface-high px-3 text-2xs font-bold text-ink-muted hover:text-ink-secondary">취소</button>
                   </div>
                   {cands.length > 0 ? (
@@ -360,11 +363,14 @@ ${cards}
                       })}
                     </ul>
                   ) : idInput.trim() ? (
-                    <p className="px-1 text-[10px] text-ink-muted">일치하는 회원이 없습니다 — 아이디(닉네임)를 확인하세요.</p>
+                    <p className="px-1 text-[10px] text-ink-muted">일치하는 회원이 없습니다 — {recvMode === 'phone' ? '전화번호' : '아이디(닉네임)'}를 확인하세요.</p>
                   ) : null}
                 </div>
               ) : (
-                <button type="button" onClick={() => setRecvMode('id')} className="btn-ghost w-full text-2xs">👤 아이디(닉네임)로 받는 사람 지정 (선택)</button>
+                <div className="flex gap-1.5">
+                  <button type="button" onClick={() => setRecvMode('id')} className="btn-ghost flex-1 text-2xs">👤 아이디(닉네임)로 지정</button>
+                  <button type="button" onClick={() => setRecvMode('phone')} className="btn-ghost flex-1 text-2xs">📞 전화번호로 지정</button>
+                </div>
               )}
               <button type="button" disabled={busy || (!isAdmin && !approved)} onClick={issue} className="btn-primary w-full text-sm disabled:opacity-50">{busy ? '배포 중…' : `+ ${count}개 발급${recvDisplay ? ` → ${recvDisplay}` : ''}`}</button>
               <p className="text-[10px] text-ink-muted">1회 최대 1000개 · 아이디(닉네임)로 손님 지정 시 그 회원 지갑으로. 미지정이면 매장 보관용. 손님은 ‘사용하기 → 매장 QR 스캔’으로 사용합니다. <b className="text-ink-secondary">매장이용권은 금전적 가치가 없습니다.</b></p>
