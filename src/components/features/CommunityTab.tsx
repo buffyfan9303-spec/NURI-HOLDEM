@@ -77,9 +77,13 @@ export default function CommunityTab({
   venues, comments, posts: rawPosts, notices = [], isAdmin = false, onWriteNotice, onSelectNotice,
   onSelectVenue, onSelectPost, onOpenWrite, onLikePost, onDeletePost, onReloadVenues, marketSlot,
 }: CommunityTabProps) {
-  // 차단한 사용자의 글은 커뮤니티 피드에서 숨김
+  // 차단한 사용자의 글 + 신고 누적 자동 숨김(blinded) 글은 피드에서 제외(운영자·작성자는 예외)
   const { isBlocked } = useBlocks();
-  const posts = useMemo(() => rawPosts.filter((p) => !isBlocked(p.userId)), [rawPosts, isBlocked]);
+  const { user: meForFeed } = useAuth();
+  const posts = useMemo(
+    () => rawPosts.filter((p) => !isBlocked(p.userId) && (!p.blinded || isAdmin || p.userId === meForFeed?.id)),
+    [rawPosts, isBlocked, isAdmin, meForFeed],
+  );
   const [section, setSectionState] = useState<Section>(lastCommunitySection);
   // 칩 하이라이트(알약)는 즉시, 컨텐츠 교체는 트랜지션 — 장터(lazy) 첫 진입에도 이전 화면이 유지돼 끊김이 없다
   const [shownSec, setShownSec] = useState<Section>(lastCommunitySection);

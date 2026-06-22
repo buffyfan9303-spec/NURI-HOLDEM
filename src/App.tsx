@@ -2202,7 +2202,7 @@ function BrowseSideRail({ posts, schedules, onSelectPost, onSelectSchedule }: {
   const today = new Date().toLocaleDateString('en-CA');
   const { isBlocked } = useBlocks();
   const hot = [...posts]
-    .filter((p) => !isBlocked(p.userId) && (p.viewCount ?? 0) > 0 && Date.now() - new Date(p.createdAt).getTime() < 6 * 3600 * 1000)
+    .filter((p) => !isBlocked(p.userId) && !p.blinded && (p.viewCount ?? 0) > 0 && Date.now() - new Date(p.createdAt).getTime() < 6 * 3600 * 1000)
     .sort((a, b) => (b.viewCount ?? 0) - (a.viewCount ?? 0))
     .slice(0, 3);
   const medal = ['👑', '🥈', '🥉'];

@@ -6,7 +6,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useBlocks } from '../../contexts/BlockContext';
 import { useToast } from '../atoms/Toast';
 import type { CommunityPost, ReactionType } from '../../api/community';
-import { reactToPost, removeReaction, getMyReaction, incrementPostView } from '../../api/community';
+import { reactToPost, removeReaction, getMyReaction, incrementPostView, adminSetPostBlinded } from '../../api/community';
 import ReportModal from './ReportModal';
 import { parseAttachments } from '../../lib/hand';
 import HandReplayer from './HandReplayer';
@@ -192,6 +192,21 @@ export default function PostDetailModal({
             </button>
           )}
         </header>
+
+        {/* 신고 누적 자동 숨김 안내(운영자·작성자만 이 글에 접근) */}
+        {post.blinded && (
+          <div className="mt-2 flex flex-wrap items-center gap-2 rounded-card border border-danger/40 bg-danger/[0.06] px-3 py-2">
+            <span className="text-2xs font-bold text-danger">🚫 신고 누적으로 숨김 처리된 게시글입니다</span>
+            {user?.role === 'admin' && (
+              <button type="button"
+                onClick={async () => {
+                  try { await adminSetPostBlinded(post.id, false); toast.show('숨김을 해제했습니다', 'success'); onClose(); }
+                  catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
+                }}
+                className="ml-auto rounded-input border border-border-default px-2.5 py-1 text-2xs font-bold text-ink-secondary hover:text-gold-300">숨김 해제</button>
+            )}
+          </div>
+        )}
 
         {/* ── 본문 ───────────────────────────────────────── */}
         {(() => {

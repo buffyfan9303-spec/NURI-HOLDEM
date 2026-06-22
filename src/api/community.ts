@@ -73,6 +73,7 @@ export interface CommunityPost {
   images?: string[];        // 첨부 이미지 URL[]
   badbeatCount?: number;    // 억까(Bad Beat) 수
   goodrunCount?: number;    // 나이스런(Good Run) 수
+  blinded?: boolean;        // 신고 누적 자동 숨김(운영자/작성자만 열람)
 }
 
 export type ReactionType = 'badbeat' | 'goodrun';
@@ -113,7 +114,15 @@ const rowToPost = (r: any): CommunityPost => ({
   category: r.category ?? undefined,
   title:    r.title ?? undefined,
   images:   Array.isArray(r.images) ? r.images : undefined,
+  blinded:  r.blinded ?? false,
 });
+
+/** 운영자: 게시글 블라인드(신고 누적 숨김) 해제/설정 */
+export async function adminSetPostBlinded(postId: string, blinded: boolean): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('admin_set_post_blinded', { p_post_id: postId, p_blinded: blinded });
+  if (error) throw new Error(error.message);
+}
 
 // ── Venues ────────────────────────────────────────────────────────────────────
 export async function getVenues(): Promise<Venue[]> {
