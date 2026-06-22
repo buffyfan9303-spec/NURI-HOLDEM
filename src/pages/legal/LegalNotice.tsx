@@ -1,7 +1,7 @@
 // src/pages/legal/LegalNotice.tsx
 // 사행성 배제 및 건전 이용 공지 — 게임산업진흥에 관한 법률 §32 반영
 
-const EFFECTIVE_DATE = '2026년 1월 1일';
+const EFFECTIVE_DATE = '2026년 6월 15일';
 
 function Section({ icon, title, children }: {
   icon: string; title: string; children: React.ReactNode;

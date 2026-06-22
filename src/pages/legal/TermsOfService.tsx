@@ -1,7 +1,7 @@
 // src/pages/legal/TermsOfService.tsx
 // 서비스 이용약관 — 추후 실 약관 텍스트로 교체 가능
 
-const EFFECTIVE_DATE = '2026년 1월 1일';
+const EFFECTIVE_DATE = '2026년 6월 15일';
 
 function Article({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (

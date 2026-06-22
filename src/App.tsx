@@ -50,6 +50,7 @@ import { getListings, getNotices, createNotice, updateNotice, deleteNotice, crea
 import { enablePush, isPushSubscribed, pushSupported } from './api/push';
 import { rememberRefCode, pendingRefCode, clearRefCode, recordReferral } from './api/referrals';
 import LevelUpWatcher from './components/features/LevelUpCelebration';
+import BusinessFooter from './components/features/BusinessFooter';
 import type { NoticeFormData } from './components/features/NoticeFormModal';
 import type { LegalDoc } from './components/features/LegalDocsModal';
 import { getMyNotifications, markNotificationsRead } from './api/notifications';
@@ -1874,6 +1875,9 @@ export default function App() {
         </main>
       )}
       </Suspense>
+
+      {/* 사업자 정보 푸터 — 전 화면 하단 상시 노출(전자상거래법 표시의무 + 약관 링크) */}
+      <BusinessFooter onOpenLegal={(d) => setLegalDoc(d)} />
 
       {/* ── 모달 — 전부 lazy: 여는 순간에만 해당 청크 로드(첫 화면 가볍게) ── */}
       <Suspense fallback={<OverlayFallback />}>

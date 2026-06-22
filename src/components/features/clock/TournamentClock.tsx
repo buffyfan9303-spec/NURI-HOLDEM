@@ -943,7 +943,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
           </div>
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-2xs text-ink-secondary w-8 shrink-0">레벨</span>
-            <input type="number" min="1" value={bulkFrom || ''} onChange={(e) => setBulkFrom(+e.target.value || 0)} className="input w-12 text-xs tabular-nums" />
+            <input type="number" min="1" value={bulkFrom || ''} onChange={(e) => setBulkFrom(+e.target.value || 0)} className="input w-16 text-center text-xs tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
             <span className="text-2xs text-ink-muted">부터</span>
             <div className="relative w-16">
               <input type="number" min="1" value={bulkFromMin || ''} onChange={(e) => setBulkFromMin(+e.target.value || 0)} className="input w-full text-xs tabular-nums pr-5" />

@@ -1,7 +1,7 @@
 // src/pages/legal/PrivacyPolicy.tsx
 // 개인정보처리방침 — 추후 실 방침으로 교체 가능 (개인정보보호법 §30)
 
-const EFFECTIVE_DATE = '2026년 1월 1일';
+const EFFECTIVE_DATE = '2026년 6월 15일';
 
 function Article({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
