@@ -30,6 +30,7 @@ import { accrueVoucher } from '../../api/vouchers';
 import { useBackClose } from '../../lib/backstack';
 import EmptyState from '../atoms/EmptyState';
 import SegmentedTabs from '../atoms/SegmentedTabs';
+import { SkeletonList } from '../atoms/Skeleton';
 
 const today = () => new Date().toLocaleDateString('en-CA'); // 로컬 날짜 — UTC 자정 넘김 방지
 const shiftDays = (d: string, n: number) => { const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate() + n); return x.toLocaleDateString('en-CA'); };
@@ -202,9 +203,12 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     catch (e) { toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'); }
   }, [venueId, toast, loadList]);
 
+  // (A4) reload 에도 요청 토큰 가드 — 실시간 콜백이 날짜 전환 중 호출돼도 stale 응답이 현재 명단을 덮지 않게.
+  const reloadSeq = useRef(0);
   const reload = useCallback(() => {
+    const my = ++reloadSeq.current;
     Promise.all([getLedgerBuyins(venueId, date, gameSeq), getLedgerPlayers(venueId, date, gameSeq)])
-      .then(([b, p]) => { setBuyins(b); setPlayers(p); }).catch(() => {});
+      .then(([b, p]) => { if (my === reloadSeq.current) { setBuyins(b); setPlayers(p); } }).catch(() => {});
   }, [venueId, date, gameSeq]);
   const loadGames = useCallback(() => { getLedgerGames(venueId, date).then(setGames).catch(() => {}); }, [venueId, date]);
   const reloadSession = useCallback(() => { getLedgerSession(venueId, date, gameSeq).then(setSession).catch(() => {}); loadGames(); }, [venueId, date, gameSeq, loadGames]);
@@ -514,7 +518,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
         </div>
 
         {listLoading ? (
-          <p className="py-10 text-center text-xs text-ink-muted">불러오는 중…</p>
+          <SkeletonList rows={5} rowClassName="h-14" />
         ) : sessionList.length === 0 ? (
           <EmptyState title="아직 작성한 장부가 없습니다" hint='"+ 장부 추가"를 누르면 오늘 장부가 열립니다' />
         ) : filtered.length === 0 ? (
@@ -589,7 +593,13 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     );
   }
 
-  if (loading) return <p className="py-10 text-center text-xs text-ink-muted">장부 불러오는 중…</p>;
+  // (B1) 전체를 한 줄 텍스트로 치환하던 것 → 표 골격을 유지하는 스켈레톤(레이아웃 점프 방지)
+  if (loading) return (
+    <div className="space-y-3">
+      <div className="h-9 animate-pulse rounded-input bg-surface-high" />
+      <SkeletonList rows={6} rowClassName="h-10" />
+    </div>
+  );
 
   // ── 세션 설정(장부 입장 게이트) ────────────────────────────────────────────
   if (showSetup) {

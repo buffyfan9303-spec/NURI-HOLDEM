@@ -35,7 +35,7 @@ import { useVisibilityRefresh } from './lib/useVisibilityRefresh';
 import { lazyWithReload } from './lib/lazyWithReload';
 import { applyScheduleSeo, applyVenueSeo, resetSeo } from './lib/seo';
 import { SpringButton } from './components/atoms/StatefulActionButton';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from './contexts/AuthContext';
 import { listAllUsers, updateUserStatus, approveOwner } from './api/auth';
 import {
@@ -759,7 +759,8 @@ export default function App() {
     window.addEventListener('focus', load);
     const unsub = subscribeMyBuyinRequests(user.id, load); // 운영자 승인/거절 즉시 반영
     return () => { window.removeEventListener('focus', load); unsub(); };
-  }, [user]);
+    // (A3) user.id 로만 의존 — user 객체 참조 변경(일일점수 갱신 등)마다 채널 재구독되던 churn 방지
+  }, [user?.id]);
 
   // ── QR 회원가입 (?signup=1) — 매장 QR 옆 가입 QR 스캔 시 회원가입 모달 바로 열기 ──
   useEffect(() => {
@@ -1656,9 +1657,11 @@ export default function App() {
             <WeeklyBestStrip active={activeTab === 'browse'} />
           </div>
 
-          {/* 손님: 오늘 내 바인(참가) 요청 상태 배너 */}
+          {/* 손님: 오늘 내 바인(참가) 요청 상태 배너 — (B3) 등장/퇴장 height·opacity 트랜지션으로 CLS 완화 */}
+          <AnimatePresence initial={false}>
           {myBuyinReqs.length > 0 && (
-            <div className="px-page-x pt-3 space-y-1.5">
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.22, ease: 'easeOut' }} className="overflow-hidden px-page-x pt-3 space-y-1.5">
               <p className="px-1 text-2xs font-bold text-ink-secondary">🎮 내 참가 게임 · 바인 요청</p>
               {myBuyinReqs.map((r) => (
                 <div key={r.id} className={['flex items-center gap-2 rounded-card border px-3 py-2 text-xs',
@@ -1668,8 +1671,9 @@ export default function App() {
                   {r.status === 'pending' && <button type="button" onClick={() => cancelBuyinRequest(r.id).then(() => getMyBuyinRequestsToday().then(setMyBuyinReqs)).catch((e) => toast.show(e instanceof Error ? e.message : '취소 실패', 'error'))} className="shrink-0 rounded-input border border-border-default px-2 py-1 text-2xs font-bold text-ink-muted hover:text-danger-light hover:border-danger/40">취소</button>}
                 </div>
               ))}
-            </div>
+            </motion.div>
           )}
+          </AnimatePresence>
 
           {/* 공지 — 일정탐색 상단 (전체 공통 공지만) */}
           {(browseNotices.length > 0 || isAdmin) && (

@@ -305,19 +305,23 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
   };
   const wrapRef = useRef<HTMLDivElement>(null);
   const advancingRef = useRef(false);
+  const snapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null); // (A2) 장부 변동 스냅샷 저장 디바운스
   const acRef = useRef<AudioContext | null>(null); // 사운드용 AudioContext 1개 재사용(매번 new 방지 → 브라우저 컨텍스트 한도/누수 방지)
   const prevVolRef = useRef(50); // 음소거 토글 시 직전 볼륨 복원용
 
   // 장부 연동: 연결된 세션의 바인/얼리설정 자동 반영
+  // (A1) stale 가드 — 게임/세션을 빠르게 전환하면 이전 fetch 응답이 늦게 도착해 현재 값을 덮어쓰는 race 차단.
   useEffect(() => {
     if (!state.sessionDate) { setBuyins([]); setLinkedSession(null); return; }
-    const d = state.sessionDate; const g = state.gameSeq;
+    const d = state.sessionDate; const g = state.gameSeq; const v = state.venueId;
+    let alive = true;
     const load = () => {
-      getLedgerBuyins(state.venueId, d, g).then(setBuyins).catch(() => {});
-      getLedgerSession(state.venueId, d, g).then(setLinkedSession).catch(() => {});
+      getLedgerBuyins(v, d, g).then((b) => { if (alive) setBuyins(b); }).catch(() => {});
+      getLedgerSession(v, d, g).then((s) => { if (alive) setLinkedSession(s); }).catch(() => {});
     };
     load();
-    return subscribeLedger(state.venueId, load);
+    const unsub = subscribeLedger(v, load);
+    return () => { alive = false; unsub(); };
   }, [state.venueId, state.sessionDate, state.gameSeq]);
 
   // 250ms 틱(부드러운 카운트다운) — 화면에 보일 때만. 숨김(다른 섹션) 시 멈춰 백그라운드 끊김 방지(재진입 시 endsAt로 즉시 복원)
@@ -341,11 +345,16 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
     if (canManage) saveClockState({ ...next, liveStats: { ...computeLiveStats(next, derived, cfg), buyInAmount: linkedSession?.buyinAmount ?? null } }).catch((e) => toast.show(e instanceof Error ? e.message : '저장 실패', 'error'));
   }, [state, canManage, onChange, toast, derived, cfg, linkedSession]);
 
-  // 장부 변동(엔트리/리바인/얼리) 시 라이브 통계 스냅샷 최신화 → 보드 반영.
-  const derivedKey = `${derived.entries}/${derived.rebuys}/${derived.earlies}/${derived.doubleEarlies}`;
+  // 장부 변동(엔트리/리바인/얼리/바인단가) 시 라이브 통계 스냅샷 최신화 → 보드 반영.
+  // (A2) persist(수동 제어)와 이중 저장되며 경쟁하던 것을 디바운스(400ms) 단일 쓰기로 정리 + buyinAmount 키 포함.
+  const derivedKey = `${derived.entries}/${derived.rebuys}/${derived.earlies}/${derived.doubleEarlies}/${linkedSession?.buyinAmount ?? ''}`;
   useEffect(() => {
     if (!canManage || !state.sessionDate) return;
-    saveClockState({ ...state, liveStats: { ...computeLiveStats(state, derived, cfg), buyInAmount: linkedSession?.buyinAmount ?? null } }).catch(() => {});
+    if (snapTimerRef.current) clearTimeout(snapTimerRef.current);
+    snapTimerRef.current = setTimeout(() => {
+      saveClockState({ ...state, liveStats: { ...computeLiveStats(state, derived, cfg), buyInAmount: linkedSession?.buyinAmount ?? null } }).catch(() => {});
+    }, 400);
+    return () => { if (snapTimerRef.current) clearTimeout(snapTimerRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [derivedKey]);
 
