@@ -5,6 +5,7 @@ import type {
   MarketplaceListing, MarketplaceNotice, NoticeType,
 } from '../../api/marketplace';
 import { useAuth } from '../../contexts/AuthContext';
+import { useBlocks } from '../../contexts/BlockContext';
 import { getMyChatThreads } from '../../api/chat';
 import { MessagesModal, MyListingsModal } from './MyMarketModal';
 
@@ -72,6 +73,7 @@ export default function MarketplaceTab({
   canWriteNotice = false, onWriteNotice, onListingsChanged, loading = false,
 }: MarketplaceTabProps) {
   const { user } = useAuth();
+  const { isBlocked } = useBlocks();
   const [category, setCategory]       = useState<ListingCategory | 'all'>('all');
   const [includeSold, setIncludeSold] = useState(false);
   const [query, setQuery]             = useState('');
@@ -88,6 +90,7 @@ export default function MarketplaceTab({
 
   const visible = useMemo(() => {
     const filtered = listings.filter((l) => {
+      if (isBlocked(l.sellerId))                          return false; // 차단한 판매자 숨김
       if (category !== 'all' && l.category !== category) return false;
       if (!includeSold && l.status === 'sold')           return false;
       if (query && !l.title.includes(query))             return false;
@@ -98,7 +101,7 @@ export default function MarketplaceTab({
         ? new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         : b.viewCount - a.viewCount,
     );
-  }, [listings, category, includeSold, query, sortBy]);
+  }, [listings, category, includeSold, query, sortBy, isBlocked]);
 
   const [limit, setLimit] = useState(20);
   useEffect(() => { setLimit(20); }, [category, includeSold, query, sortBy]);

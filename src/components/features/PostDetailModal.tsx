@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { getEquippedMarks } from '../../api/community';
 import Modal from '../atoms/Modal';
 import { useAuth } from '../../contexts/AuthContext';
+import { useBlocks } from '../../contexts/BlockContext';
 import { useToast } from '../atoms/Toast';
 import type { CommunityPost, ReactionType } from '../../api/community';
 import { reactToPost, removeReaction, getMyReaction, incrementPostView } from '../../api/community';
@@ -53,6 +54,7 @@ export default function PostDetailModal({
 }: PostDetailModalProps) {
   const [gtoHero, setGtoHero] = useState<string[] | null>(null);
   const { user } = useAuth();
+  const { block } = useBlocks();
   // 더블탭 좋아요(인스타) — 본문을 빠르게 두 번 탭하면 좋아요 + 하트 팝
   const [heartKey, setHeartKey] = useState(0);
   const [authorMark, setAuthorMark] = useState('');
@@ -167,6 +169,17 @@ export default function PostDetailModal({
             <button type="button" onClick={() => setReportOpen(true)}
               className="shrink-0 text-2xs text-ink-muted hover:text-danger-light transition-colors px-1 py-1">
               신고
+            </button>
+          )}
+          {user && user.id !== post.userId && (
+            <button type="button"
+              onClick={async () => {
+                if (!confirm(`'${post.userName}'님을 차단할까요?\n이 사용자의 글·댓글이 보이지 않게 됩니다.`)) return;
+                try { await block(post.userId, post.userName); toast.show('차단했습니다 — 이 사용자의 글이 숨겨집니다', 'info'); onClose(); }
+                catch (e) { toast.show(e instanceof Error ? e.message : '차단 실패', 'error'); }
+              }}
+              className="shrink-0 text-2xs text-ink-muted hover:text-danger-light transition-colors px-1 py-1">
+              차단
             </button>
           )}
           {onDelete && (user?.role === 'admin' || user?.id === post.userId) && (

@@ -51,6 +51,7 @@ import { enablePush, isPushSubscribed, pushSupported } from './api/push';
 import { rememberRefCode, pendingRefCode, clearRefCode, recordReferral } from './api/referrals';
 import LevelUpWatcher from './components/features/LevelUpCelebration';
 import BusinessFooter from './components/features/BusinessFooter';
+import { useBlocks } from './contexts/BlockContext';
 import type { NoticeFormData } from './components/features/NoticeFormModal';
 import type { LegalDoc } from './components/features/LegalDocsModal';
 import { getMyNotifications, markNotificationsRead } from './api/notifications';
@@ -2182,8 +2183,9 @@ function BrowseSideRail({ posts, schedules, onSelectPost, onSelectSchedule }: {
     getWeeklyMoneyinKings(3).then((r) => setKings(r.kings)).catch(() => {});
   }, []);
   const today = new Date().toLocaleDateString('en-CA');
+  const { isBlocked } = useBlocks();
   const hot = [...posts]
-    .filter((p) => (p.viewCount ?? 0) > 0 && Date.now() - new Date(p.createdAt).getTime() < 6 * 3600 * 1000)
+    .filter((p) => !isBlocked(p.userId) && (p.viewCount ?? 0) > 0 && Date.now() - new Date(p.createdAt).getTime() < 6 * 3600 * 1000)
     .sort((a, b) => (b.viewCount ?? 0) - (a.viewCount ?? 0))
     .slice(0, 3);
   const medal = ['👑', '🥈', '🥉'];

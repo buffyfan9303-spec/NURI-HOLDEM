@@ -10,6 +10,7 @@ import { getLiveMessages, addLiveMessage, deleteLiveMessage, subscribeLiveWall, 
 import { REGION_CHIPS } from './IntegratedSearchBar';
 import type { MarketplaceNotice } from '../../api/marketplace';
 import { useAuth } from '../../contexts/AuthContext';
+import { useBlocks } from '../../contexts/BlockContext';
 import OwnerCommunity from './OwnerCommunity';
 import DealerCommunity from './DealerCommunity';
 import TierLeaderboard from './TierLeaderboard';
@@ -73,9 +74,12 @@ function relativeTime(iso: string): string {
 }
 
 export default function CommunityTab({
-  venues, comments, posts, notices = [], isAdmin = false, onWriteNotice, onSelectNotice,
+  venues, comments, posts: rawPosts, notices = [], isAdmin = false, onWriteNotice, onSelectNotice,
   onSelectVenue, onSelectPost, onOpenWrite, onLikePost, onDeletePost, onReloadVenues, marketSlot,
 }: CommunityTabProps) {
+  // 차단한 사용자의 글은 커뮤니티 피드에서 숨김
+  const { isBlocked } = useBlocks();
+  const posts = useMemo(() => rawPosts.filter((p) => !isBlocked(p.userId)), [rawPosts, isBlocked]);
   const [section, setSectionState] = useState<Section>(lastCommunitySection);
   // 칩 하이라이트(알약)는 즉시, 컨텐츠 교체는 트랜지션 — 장터(lazy) 첫 진입에도 이전 화면이 유지돼 끊김이 없다
   const [shownSec, setShownSec] = useState<Section>(lastCommunitySection);

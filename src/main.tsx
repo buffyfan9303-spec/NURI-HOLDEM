@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import './index.css';
 import App from './App.tsx';
 import { AuthProvider } from './contexts/AuthContext';
+import { BlockProvider } from './contexts/BlockContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { ToastProvider } from './components/atoms/Toast';
 import ErrorBoundary from './components/atoms/ErrorBoundary';
@@ -44,7 +45,9 @@ createRoot(document.getElementById('root')!).render(
       <ThemeProvider>
         <ToastProvider>
           <AuthProvider>
-            <App />
+            <BlockProvider>
+              <App />
+            </BlockProvider>
           </AuthProvider>
         </ToastProvider>
       </ThemeProvider>

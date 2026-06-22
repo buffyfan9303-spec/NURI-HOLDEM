@@ -3,6 +3,7 @@ import Modal from '../atoms/Modal';
 import type { MarketplaceListing } from '../../api/marketplace';
 import { CATEGORIES, CONDITION_COLOR, STATUS_MAP, relativeTime } from './MarketplaceTab';
 import { useAuth } from '../../contexts/AuthContext';
+import { useBlocks } from '../../contexts/BlockContext';
 import { useToast } from '../atoms/Toast';
 import { promptLogin } from '../../lib/requireLogin';
 import ReportModal from './ReportModal';
@@ -20,6 +21,7 @@ interface ListingDetailModalProps {
 
 export default function ListingDetailModal({ listing, open, onClose, onDelete }: ListingDetailModalProps) {
   const { user }                  = useAuth();
+  const { block }                 = useBlocks();
   const [liked, setLiked]         = useState(false);
   const [chatOpen, setChatOpen]   = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
@@ -84,6 +86,15 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete }:
           <span className="text-ink-muted">{relativeTime(listing.createdAt)}</span>
           {user && user.id !== listing.sellerId && (
             <button type="button" onClick={() => setReportOpen(true)} className="ml-auto text-ink-muted hover:text-danger-light transition-colors">신고</button>
+          )}
+          {user && user.id !== listing.sellerId && (
+            <button type="button"
+              onClick={async () => {
+                if (!confirm(`'${listing.sellerName}'님을 차단할까요?\n이 판매자의 매물·글이 보이지 않게 됩니다.`)) return;
+                try { await block(listing.sellerId, listing.sellerName); toast.show('차단했습니다 — 이 판매자의 매물이 숨겨집니다', 'info'); onClose(); }
+                catch (e) { toast.show(e instanceof Error ? e.message : '차단 실패', 'error'); }
+              }}
+              className="text-ink-muted hover:text-danger-light transition-colors">차단</button>
           )}
         </div>
 

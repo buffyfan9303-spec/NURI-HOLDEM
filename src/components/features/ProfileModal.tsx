@@ -6,6 +6,7 @@ import UnderlineTabs from '../atoms/UnderlineTabs';
 import { useToast } from '../atoms/Toast';
 // (프로필 카드 이미지 저장 기능 제거 — 2026-06-15 사장님 요청)
 import { useAuth } from '../../contexts/AuthContext';
+import { useBlocks } from '../../contexts/BlockContext';
 import { IS_MOCK } from '../../lib/supabase';
 import { resizeImage } from '../../lib/storage';
 import { requestPasswordChangeCode, changeMyPasswordWithCode, setMyNickname, withdrawMyAccount } from '../../api/auth';
@@ -534,6 +535,7 @@ export default function ProfileModal({ open, onClose, onOpenLegal }: ProfileModa
           )}
         </form>
         <PushNotificationSetting />
+        <BlockListSection />
         <WithdrawAccountSection />
         </>
       )}
@@ -601,6 +603,41 @@ function PushNotificationSetting() {
           ].join(' ')} />
         </button>
       </div>
+    </div>
+  );
+}
+
+// ── 차단 목록 관리 ────────────────────────────────────────────────────────────
+function BlockListSection() {
+  const { blocks, unblock } = useBlocks();
+  const toast = useToast();
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const doUnblock = async (id: string, name: string) => {
+    setBusy(id);
+    try { await unblock(id); toast.show(`'${name}' 차단을 해제했습니다`, 'info'); }
+    catch (e) { toast.show(e instanceof Error ? e.message : '해제 실패', 'error'); }
+    finally { setBusy(null); }
+  };
+
+  return (
+    <div className="px-4 pb-4 -mt-1">
+      <h3 className="mb-2 text-xs font-semibold text-ink-secondary">차단한 사용자 {blocks.length > 0 && <span className="text-ink-muted">({blocks.length})</span>}</h3>
+      {blocks.length === 0 ? (
+        <p className="rounded-card border border-border-subtle bg-surface-high px-3 py-3 text-2xs text-ink-muted">차단한 사용자가 없습니다. 글·매물에서 ‘차단’을 누르면 그 사용자의 글이 보이지 않게 됩니다.</p>
+      ) : (
+        <ul className="space-y-1.5">
+          {blocks.map((b) => (
+            <li key={b.blockedId} className="flex items-center gap-2 rounded-card border border-border-subtle bg-surface-high px-3 py-2">
+              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{b.name}</span>
+              <button type="button" onClick={() => doUnblock(b.blockedId, b.name)} disabled={busy === b.blockedId}
+                className="shrink-0 rounded-input border border-border-default px-2.5 py-1 text-2xs font-bold text-ink-secondary hover:text-gold-300 disabled:opacity-50">
+                {busy === b.blockedId ? '해제 중…' : '차단 해제'}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
