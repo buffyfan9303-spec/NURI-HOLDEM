@@ -8,7 +8,7 @@ import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import { IS_MOCK } from '../../lib/supabase';
 import { resizeImage } from '../../lib/storage';
-import { requestPasswordChangeCode, changeMyPasswordWithCode, setMyNickname } from '../../api/auth';
+import { requestPasswordChangeCode, changeMyPasswordWithCode, setMyNickname, withdrawMyAccount } from '../../api/auth';
 import { pushSupported, isPushSubscribed, enablePush, disablePush } from '../../api/push';
 import AvatarCropper from './AvatarCropper';
 import ActivityBadges from '../atoms/ActivityBadges';
@@ -534,6 +534,7 @@ export default function ProfileModal({ open, onClose, onOpenLegal }: ProfileModa
           )}
         </form>
         <PushNotificationSetting />
+        <WithdrawAccountSection />
         </>
       )}
 
@@ -600,6 +601,61 @@ function PushNotificationSetting() {
           ].join(' ')} />
         </button>
       </div>
+    </div>
+  );
+}
+
+// ── 회원 탈퇴 ─────────────────────────────────────────────────────────────────
+// 개인정보(실명·전화·CI·생년월일 등)를 파기하고 계정을 폐쇄. 복구 불가.
+// 매장 대표는 서버가 거부(매장 정리 먼저). 탈퇴 성공 시 로그아웃 후 새로고침.
+const WITHDRAW_PHRASE = '회원 탈퇴';
+function WithdrawAccountSection() {
+  const { logout } = useAuth();
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
+    if (confirmText.trim() !== WITHDRAW_PHRASE) { toast.show(`확인을 위해 '${WITHDRAW_PHRASE}'를 입력하세요`, 'error'); return; }
+    setBusy(true);
+    try {
+      await withdrawMyAccount();
+      toast.show('회원 탈퇴가 완료되었습니다. 그동안 이용해 주셔서 감사합니다.', 'success');
+      try { await logout(); } catch { /* ignore */ }
+      setTimeout(() => window.location.reload(), 900);
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : '탈퇴에 실패했습니다', 'error');
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="px-4 pb-6 -mt-1">
+      <h3 className="mb-2 text-xs font-semibold text-ink-secondary">회원 탈퇴</h3>
+      {!open ? (
+        <button type="button" onClick={() => { setConfirmText(''); setOpen(true); }}
+          className="w-full rounded-card border border-danger/30 bg-danger/[0.04] px-3 py-2.5 text-left">
+          <p className="text-sm font-bold text-danger">회원 탈퇴하기</p>
+          <p className="mt-0.5 text-2xs leading-relaxed text-ink-muted">계정을 폐쇄하고 개인정보(실명·연락처·본인인증 정보 등)를 파기합니다. 되돌릴 수 없습니다.</p>
+        </button>
+      ) : (
+        <div className="space-y-2.5 rounded-card border border-danger/40 bg-danger/[0.05] p-3">
+          <p className="text-2xs leading-relaxed text-ink-secondary">
+            탈퇴 시 <b className="text-danger">실명·전화번호·본인인증 정보·생년월일 등 개인정보가 즉시 파기</b>되고 계정이 폐쇄되며, <b className="text-ink-primary">다시 로그인할 수 없습니다.</b> 보유 중인 매장이용권 등은 함께 사라집니다.
+            <br />매장 대표는 매장을 먼저 정리(삭제/양도)한 뒤 탈퇴할 수 있습니다.
+          </p>
+          <label className="block">
+            <span className="mb-1 block text-2xs font-semibold text-ink-secondary">확인을 위해 '{WITHDRAW_PHRASE}'를 입력하세요</span>
+            <input value={confirmText} onChange={(e) => setConfirmText(e.target.value)} placeholder={WITHDRAW_PHRASE} className="input w-full text-sm" />
+          </label>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setOpen(false)} disabled={busy} className="btn-ghost flex-1 text-sm">취소</button>
+            <button type="button" onClick={submit} disabled={busy || confirmText.trim() !== WITHDRAW_PHRASE}
+              className="flex-1 rounded-input bg-danger py-2 text-sm font-bold text-white disabled:opacity-40">{busy ? '처리 중…' : '탈퇴하기'}</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -33,6 +33,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // 프로필을 세팅하고, 하루 1회 접속 활동 점수(+1)를 적립해 점수를 반영한다.
   const applyProfileWithDailyPoint = useCallback((profile: User | null) => {
+    // 탈퇴·영구정지 계정은 로그인 차단 — 세션을 즉시 종료하고 진입 거부.
+    if (profile && (profile.status === 'withdrawn' || profile.status === 'banned')) {
+      apiSignOut().catch(() => {});
+      setUser(null);
+      return;
+    }
     setUser(profile);
     if (!profile) return;
     claimDailyLoginPoint()

@@ -313,6 +313,15 @@ export async function updateUserStatus(
   }
 }
 
+// ── 회원 자가 탈퇴 ────────────────────────────────────────────────────────────
+// 개인정보(실명·전화·CI·생년월일·성별·통신사·이메일) 파기 + status='withdrawn' 익명화.
+// 매장 대표는 매장을 먼저 정리(킬스위치 삭제/대표 양도)해야 하며, 서버가 거부한다.
+export async function withdrawMyAccount(): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('withdraw_my_account');
+  if (error) throw new Error(error.message);
+}
+
 // ── 관리자: 업주 승인 ─────────────────────────────────────────────────────────
 export async function approveOwner(userId: string, approve: boolean): Promise<void> {
   if (IS_MOCK) return;
