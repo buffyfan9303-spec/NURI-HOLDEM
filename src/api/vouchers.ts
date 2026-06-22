@@ -10,7 +10,7 @@ export interface Voucher {
 export interface VoucherUsage { usedVenueId: string | null; venueName: string | null; usedCount: number }
 export interface VisitedVenue { venueId: string; venueName: string | null; visits: number }
 export interface PlayHistory { venueId: string; venueName: string | null; moneyinCount: number; totalAmount: number; lastAt: string | null }
-export interface TransferTarget { id: string; display: string }
+export interface TransferTarget { id: string; display: string; verified?: boolean }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapRow(r: any): Voucher {
@@ -128,7 +128,7 @@ export async function findUserForTransfer(nickname: string): Promise<TransferTar
   const { data, error } = await supabase.rpc('find_user_for_transfer', { p_nickname: nickname });
   if (error) throw new Error(error.message);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((r: any) => ({ id: r.id, display: r.display }));
+  return (data ?? []).map((r: any) => ({ id: r.id, display: r.display, verified: r.verified ?? undefined }));
 }
 
 // 전화번호로 회원 조회(발급 대상 지정용)

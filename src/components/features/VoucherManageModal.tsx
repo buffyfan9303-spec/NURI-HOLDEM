@@ -34,6 +34,7 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
   const [recvMode, setRecvMode] = useState<'none' | 'id'>('none');
   const [idInput, setIdInput] = useState('');
   const [cands, setCands] = useState<TransferTarget[]>([]);
+  const [activeIdx, setActiveIdx] = useState(-1); // 자동완성 키보드 하이라이트
   const [busy, setBusy] = useState(false);
   const [stats, setStats] = useState<VoucherHolderStats | null>(null);
   const [qr, setQr] = useState('');
@@ -115,7 +116,24 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
   }, [list, profileMap]);
   const fmtFeed = (iso: string) => { const d = new Date(iso); const p2 = (n: number) => String(n).padStart(2, '0'); return `${d.getMonth() + 1}/${d.getDate()} ${p2(d.getHours())}:${p2(d.getMinutes())}`; };
 
-  const pickRecv = (t: TransferTarget) => { setRecvUserId(t.id); setRecvDisplay(t.display); setRecvMode('none'); setIdInput(''); setCands([]); };
+  const pickRecv = (t: TransferTarget) => {
+    if (t.verified === false) { toast.show('본인인증을 완료한 회원에게만 이용권을 발급할 수 있습니다', 'error'); return; }
+    setRecvUserId(t.id); setRecvDisplay(t.display); setRecvMode('none'); setIdInput(''); setCands([]); setActiveIdx(-1);
+  };
+  // 최근 발급한 손님(단골) — 자주 주는 대상 빠른 선택. 이미 발급된 이력이라 본인인증 완료자로 간주(발급은 인증자만 가능).
+  const recentRecipients = useMemo<TransferTarget[]>(() => {
+    const seen = new Map<string, { display: string; at: string }>();
+    for (const v of list) {
+      if (!v.holderUserId) continue;
+      const p = profileMap.get(v.holderUserId);
+      const display = (p?.realName && p?.nickname) ? `${p.realName}/${p.nickname}` : (p?.nickname || p?.realName || v.holderName || '회원');
+      const at = v.createdAt ?? '';
+      const prev = seen.get(v.holderUserId);
+      if (!prev || at > prev.at) seen.set(v.holderUserId, { display, at });
+    }
+    return [...seen.entries()].sort((a, b) => b[1].at.localeCompare(a[1].at)).slice(0, 6)
+      .map(([id, x]) => ({ id, display: x.display, verified: true }));
+  }, [list, profileMap]);
   // 단골 TOP '이용권 보내기' 진입 — 받는 사람을 자동 입력·검색(1명 매치면 즉시 선택)
   useEffect(() => {
     const q = (prefillReceiver ?? '').trim();
@@ -144,7 +162,7 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
     const q = idInput.trim();
     if (!q) { setCands([]); return; }
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => { findUserForTransfer(q).then(setCands).catch(() => setCands([])); }, 280);
+    searchTimer.current = setTimeout(() => { findUserForTransfer(q).then((f) => { setCands(f); setActiveIdx(-1); }).catch(() => { setCands([]); setActiveIdx(-1); }); }, 280);
     return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
   }, [idInput, recvMode, recvUserId]);
 
@@ -301,22 +319,45 @@ ${cards}
                 </div>
               ) : recvMode === 'id' ? (
                 <div className="space-y-1.5">
+                  {/* 최근 발급한 손님(단골) 빠른 선택 — 자주 주는 대상 원탭 */}
+                  {recentRecipients.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1">
+                      <span className="self-center text-[10px] text-ink-muted">최근:</span>
+                      {recentRecipients.map((r) => (
+                        <button key={r.id} type="button" onClick={() => pickRecv(r)}
+                          className="rounded-full border border-gold-400/30 bg-gold-300/[0.06] px-2 py-0.5 text-[11px] text-ink-secondary hover:border-gold-400/60 hover:text-gold-300">
+                          👤 {r.display}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   <div className="flex gap-1.5">
                     <input value={idInput} onChange={(e) => setIdInput(e.target.value)} autoFocus
-                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); resolveId(); } }}
-                      placeholder="이름·아이디(닉네임) 입력 — 자동완성" className="input min-w-0 flex-1 text-sm" />
-                    <button type="button" onClick={() => { setRecvMode('none'); setCands([]); setIdInput(''); }} className="shrink-0 rounded-input border border-border-default bg-surface-high px-3 text-2xs font-bold text-ink-muted hover:text-ink-secondary">취소</button>
+                      role="combobox" aria-expanded={cands.length > 0} aria-autocomplete="list"
+                      onKeyDown={(e) => {
+                        if (e.key === 'ArrowDown' && cands.length) { e.preventDefault(); setActiveIdx((i) => Math.min(cands.length - 1, i + 1)); }
+                        else if (e.key === 'ArrowUp' && cands.length) { e.preventDefault(); setActiveIdx((i) => Math.max(0, i - 1)); }
+                        else if (e.key === 'Enter') { e.preventDefault(); if (activeIdx >= 0 && activeIdx < cands.length) pickRecv(cands[activeIdx]); else resolveId(); }
+                        else if (e.key === 'Escape') { setCands([]); setActiveIdx(-1); }
+                      }}
+                      placeholder="이름·아이디(닉네임) 입력 — 자동완성 (↑/↓·Enter)" className="input min-w-0 flex-1 text-sm" />
+                    <button type="button" onClick={() => { setRecvMode('none'); setCands([]); setIdInput(''); setActiveIdx(-1); }} className="shrink-0 rounded-input border border-border-default bg-surface-high px-3 text-2xs font-bold text-ink-muted hover:text-ink-secondary">취소</button>
                   </div>
                   {cands.length > 0 ? (
-                    <ul className="max-h-40 space-y-1 overflow-y-auto rounded-input border border-gold-400/30 bg-surface-low p-1">
-                      {cands.map((c) => (
-                        <li key={c.id}>
-                          <button type="button" onClick={() => pickRecv(c)} className="flex w-full items-center gap-1.5 rounded-input px-2 py-1.5 text-left hover:bg-surface-high">
-                            <span aria-hidden className="shrink-0 text-2xs">👤</span>
-                            <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{c.display}</span>
-                          </button>
-                        </li>
-                      ))}
+                    <ul role="listbox" className="max-h-40 space-y-1 overflow-y-auto rounded-input border border-gold-400/30 bg-surface-low p-1">
+                      {cands.map((c, i) => {
+                        const unverified = c.verified === false;
+                        return (
+                          <li key={c.id} role="option" aria-selected={i === activeIdx}>
+                            <button type="button" disabled={unverified} onClick={() => pickRecv(c)} onMouseEnter={() => setActiveIdx(i)}
+                              className={`flex w-full items-center gap-1.5 rounded-input px-2 py-1.5 text-left ${unverified ? 'cursor-not-allowed opacity-60' : i === activeIdx ? 'bg-surface-high' : 'hover:bg-surface-high'}`}>
+                              <span aria-hidden className="shrink-0 text-2xs">👤</span>
+                              <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{c.display}</span>
+                              {unverified && <span className="shrink-0 rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] font-bold text-red-300">미인증 · 발급 불가</span>}
+                            </button>
+                          </li>
+                        );
+                      })}
                     </ul>
                   ) : idInput.trim() ? (
                     <p className="px-1 text-[10px] text-ink-muted">일치하는 회원이 없습니다 — 아이디(닉네임)를 확인하세요.</p>
