@@ -2,8 +2,12 @@
 import { supabase, IS_MOCK } from '../lib/supabase';
 
 export type LeagueMemberStatus = 'pending' | 'accepted' | 'declined';
-export interface League { id: string; name: string; ownerVenueId: string; ownerVenueName?: string; seasonStart: string; }
+export type LeaguePhase = 'idle' | 'live' | 'settled' | 'final';
+export type LeagueLiveStatus = 'pending' | 'running' | 'settled'; // 🟡 시작전 · 🟢 진행중 · 🔴 정산완료
+export interface League { id: string; name: string; ownerVenueId: string; ownerVenueName?: string; seasonStart: string; phase: LeaguePhase; finalVenueId: string | null; eventDate: string | null; }
 export interface LeagueMember { id: string; leagueId: string; venueId: string; venueName?: string; status: LeagueMemberStatus; }
+export interface LeagueItmPlayer { name: string; place?: number; prize?: string }
+export interface LeagueVenueStatus { venueId: string; liveStatus: LeagueLiveStatus; entries: number; itm: LeagueItmPlayer[]; updatedAt: string }
 export interface LeagueEntry { id: string; leagueId: string; venueId: string; venueName?: string; name: string; points: number; reason: string | null; entryDate: string; }
 
 /** 내 매장이 리그장이거나 멤버(초대 포함)인 리그 전부 */
@@ -33,7 +37,7 @@ export async function getMyLeagues(venueId: string): Promise<{ league: League; m
       .map((m) => ({ id: m.id, leagueId: m.league_id, venueId: m.venue_id, venueName: m.venues?.name, status: m.status }));
     const mine = members.find((m) => m.venueId === venueId);
     return {
-      league: { id: l.id, name: l.name, ownerVenueId: l.owner_venue_id, ownerVenueName: l.venues?.name, seasonStart: l.season_start },
+      league: { id: l.id, name: l.name, ownerVenueId: l.owner_venue_id, ownerVenueName: l.venues?.name, seasonStart: l.season_start, phase: l.phase ?? 'idle', finalVenueId: l.final_venue_id ?? null, eventDate: l.event_date ?? null },
       myStatus: l.owner_venue_id === venueId ? 'owner' as const : (mine?.status ?? 'pending'),
       members,
     };
@@ -106,6 +110,53 @@ export async function deleteLeagueEntry(id: string): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.from('league_entries').delete().eq('id', id);
   if (error) throw error;
+}
+
+// ── 라이브 이벤트(실시간 정산 상태 + ITM + 전체정산 + 파이널) ──────────────────
+/** 리그 참가 매장들의 실시간 상태(🟡pending/🟢running/🔴settled)·엔트리·ITM */
+export async function getLeagueStatuses(leagueId: string): Promise<LeagueVenueStatus[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.from('league_event_status')
+    .select('venue_id, live_status, entries, itm, updated_at').eq('league_id', leagueId);
+  if (error) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({ venueId: r.venue_id, liveStatus: r.live_status, entries: r.entries ?? 0, itm: Array.isArray(r.itm) ? r.itm : [], updatedAt: r.updated_at }));
+}
+
+export function subscribeLeagueStatus(leagueId: string, cb: () => void): () => void {
+  if (IS_MOCK) return () => {};
+  const ch = supabase.channel(`league_status:${leagueId}:${Math.random().toString(36).slice(2)}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'league_event_status', filter: `league_id=eq.${leagueId}` }, () => cb())
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'leagues', filter: `id=eq.${leagueId}` }, () => cb())
+    .subscribe();
+  return () => { supabase.removeChannel(ch); };
+}
+
+/** 참가 매장: 내 매장 상태 보고(시작·정산완료 + 엔트리 + ITM 스냅샷) */
+export async function setLeagueStatus(leagueId: string, venueId: string, status: LeagueLiveStatus, entries: number, itm?: LeagueItmPlayer[]): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('league_set_status', { p_league_id: leagueId, p_venue_id: venueId, p_status: status, p_entries: entries, p_itm: itm ?? null });
+  if (error) throw new Error(error.message);
+}
+
+/** 리그장: 전체 정산 완료 → 파이널 매장(엔트리 최다) 반환 */
+export async function leagueSettleAll(leagueId: string): Promise<string | null> {
+  if (IS_MOCK) return null;
+  const { data, error } = await supabase.rpc('league_settle_all', { p_league_id: leagueId });
+  if (error) throw new Error(error.message);
+  return (data as string) ?? null;
+}
+
+export async function leagueStartFinal(leagueId: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('league_start_final', { p_league_id: leagueId });
+  if (error) throw new Error(error.message);
+}
+
+export async function leagueResetEvent(leagueId: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('league_reset_event', { p_league_id: leagueId });
+  if (error) throw new Error(error.message);
 }
 
 /** 통합 스탠딩 — 시즌 시작일 이후 entries를 이름별 합산 */
