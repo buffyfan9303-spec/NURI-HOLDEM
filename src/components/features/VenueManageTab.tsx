@@ -1,4 +1,4 @@
-import { useEffect, useState, useDeferredValue, type ReactNode, useRef } from 'react';
+import { useEffect, useState, useDeferredValue, type ReactNode, useRef, memo, useCallback, useMemo } from 'react';
 import Icon from '../atoms/Icon';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBackClose } from '../../lib/backstack';
@@ -32,6 +32,25 @@ import { getLedgerBuyins, getLedgerSession } from '../../api/ledger';
 
 type Section = 'dashboard' | 'posters' | 'presets' | 'ledger' | 'stats' | 'ranking' | 'venueRank' | 'league' | 'staff' | 'settings' | 'clock' | 'attendance' | 'voucher' | 'page';
 
+// 메뉴 전환 잰크 제거 — 방문 섹션은 마운트 유지(display 토글)라, 부모(VenueManageTab) 재렌더 시
+// 숨겨진 무거운 섹션들이 전부 재조정(reconcile)되며 프레임을 잡아먹었다. memo 로 감싸 prop 이
+// 그대로면 재렌더를 건너뛴다 → 전환 시 "나가는 섹션 + 들어오는 섹션"만 재렌더(active 변경분).
+// (active 게이팅은 내부 작업만 멈출 뿐 재렌더 자체는 못 막아서 이 한 겹이 빠져 있었음.)
+const StoreDashboardM = memo(StoreDashboard);
+const NuriPosLedgerM = memo(NuriPosLedger);
+const LedgerStatsPanelM = memo(LedgerStatsPanel);
+const TournamentClockM = memo(TournamentClock);
+const MyPostersTabM = memo(MyPostersTab);
+const PresetManagerM = memo(PresetManager);
+const SeasonPanelM = memo(SeasonPanel);
+const LeaguePanelM = memo(LeaguePanel);
+const VenueCustomizePanelM = memo(VenueCustomizePanel);
+const VoucherManagePanelM = memo(VoucherManagePanel);
+const AnnouncePanelM = memo(AnnouncePanel);
+const VenueRankHubM = memo(VenueRankHub);
+const PosSettingsPanelM = memo(PosSettingsPanel);
+const StaffSelfAttendanceM = memo(StaffSelfAttendance);
+
 /** 업주/직원 전용 "매장 관리" 탭 — 장부(POS) · 통계 · 순위 입력 · (업주) 직원 관리 */
 export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster, onDeletePoster, deepSection, onConsumeDeepSection }: {
   schedules: Schedule[]; onCreatePoster: () => void; onEditPoster: (id: string) => void; onDeletePoster: (id: string) => void;
@@ -60,11 +79,34 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   const [ledgerSeed, setLedgerSeed] = useState<LedgerSeed | null>(null); // 게임관리→장부 바로가기
   const [visited, setVisited] = useState<Section[]>([]); // 방문 섹션(최근순) — 마운트 유지(깜빡임 제거), 상한 초과 시 가장 오래된 섹션 정리(메모리 가드)
 
-  // 섹션 이동 공통 — 장부를 메뉴로 직접 열 땐 게임관리 시드를 지워 일반 진입으로
-  const gotoSection = (s: Section) => {
+  // 섹션 이동 공통 — 장부를 메뉴로 직접 열 땐 게임관리 시드를 지워 일반 진입으로.
+  // useCallback — memo 섹션들의 prop 안정성을 위해 참조 고정(상태 setter 는 항상 안정).
+  const gotoSection = useCallback((s: Section) => {
     if (s === 'ledger') setLedgerSeed(null);
     setSection(s);
-  };
+  }, []);
+
+  // ── memo 섹션에 넘기는 핸들러/객체 prop 을 참조 고정(재렌더 건너뛰기 조건 충족) ──
+  const caps = useMemo(() => ({ ledger: ledgerOk, manage: manageOk, voucher: manageOk || voucherView, posters: canPosters, staff: canStaff }),
+    [ledgerOk, manageOk, voucherView, canPosters, canStaff]);
+  const onGotoStore = useCallback((s: string) => gotoSection(s as Section), [gotoSection]);
+  const onMakeRankingDraft = useCallback((d: string, names: string[], ev?: string) => {
+    setRankingDraft({ date: d, names, event: ev ?? '' }); setSection('ranking');
+  }, []);
+  const onOpenClockFromLedger = useCallback((d: string, g: number) => {
+    setClockSeed(d); setClockSeedGame(g); setSection('clock');
+  }, []);
+  const onOpenStatsCb = useCallback(() => setSection('stats'), []);
+  const onGotoRankingFromPosters = useCallback((date: string) => {
+    setRankingDraft({ date, names: [] }); setSection('ranking');
+  }, []);
+  const onOpenLedgerFromPosters = useCallback((s: Schedule, existingDate: string | null) => {
+    const schedDate = new Date(s.date).toLocaleDateString('en-CA');
+    setLedgerSeed(existingDate
+      ? { date: existingDate, scheduleId: s.id, isNew: false }
+      : { date: schedDate, scheduleId: s.id, isNew: true, title: s.title, buyinAmount: s.buyIn?.amount ?? 0, gtd: !!s.guaranteed });
+    setSection('ledger');
+  }, []);
   // 뒤로가기 — 비대시보드 섹션에선 먼저 대시보드로 돌아오고, 그 다음에야 탭을 빠져나가게(일정탐색으로 바로 튐 방지)
   useBackClose(!!section && section !== 'dashboard', () => gotoSection('dashboard'));
   // 방문 섹션을 최근순으로 기록 + 상한(8) 초과 시 가장 오래된 섹션 언마운트(메모리 가드).
@@ -290,38 +332,31 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
               );
               return (<>
                 {visited.includes('dashboard') && box('dashboard', <>
-                  <StoreDashboard venueId={venueId} schedules={schedules} onGoto={(s) => gotoSection(s as Section)} onCreatePoster={onCreatePoster}
-                    active={renderSection === 'dashboard'}
-                    caps={{ ledger: ledgerOk, manage: manageOk, voucher: manageOk || voucherView, posters: canPosters, staff: canStaff }} />
-                  {manageOk && <div className="mt-4"><AnnouncePanel venueId={venueId} /></div>}
+                  <StoreDashboardM venueId={venueId} schedules={schedules} onGoto={onGotoStore} onCreatePoster={onCreatePoster}
+                    active={renderSection === 'dashboard'} caps={caps} />
+                  {manageOk && <div className="mt-4"><AnnouncePanelM venueId={venueId} /></div>}
                 </>)}
-                {visited.includes('posters') && canPosters && box('posters', <MyPostersTab schedules={schedules} onCreate={onCreatePoster} onEdit={onEditPoster} onDelete={onDeletePoster}
-                  onGotoRanking={ledgerOk ? (date) => { setRankingDraft({ date, names: [] }); setSection('ranking'); } : undefined}
-                  onOpenLedger={ledgerOk ? (s, existingDate) => {
-                    const schedDate = new Date(s.date).toLocaleDateString('en-CA');
-                    setLedgerSeed(existingDate
-                      ? { date: existingDate, scheduleId: s.id, isNew: false }
-                      : { date: schedDate, scheduleId: s.id, isNew: true, title: s.title, buyinAmount: s.buyIn?.amount ?? 0, gtd: !!s.guaranteed });
-                    setSection('ledger');
-                  } : undefined} />)}
-                {visited.includes('presets') && canPosters && box('presets', <PresetManager venueId={venueId} />)}
-                {visited.includes('ledger') && ledgerOk && box('ledger', <NuriPosLedger venueId={venueId} canManage={manageOk} active={renderSection === 'ledger'} seed={ledgerSeed}
-                  onMakeRankingDraft={(d, names, ev) => { setRankingDraft({ date: d, names, event: ev ?? '' }); setSection('ranking'); }}
-                  onOpenClock={(d, g) => { setClockSeed(d); setClockSeedGame(g); setSection('clock'); }}
-                  onOpenStats={manageOk ? () => setSection('stats') : undefined} />)}
-                {visited.includes('stats') && manageOk && box('stats', <LedgerStatsPanel venueId={venueId} />)}
+                {visited.includes('posters') && canPosters && box('posters', <MyPostersTabM schedules={schedules} onCreate={onCreatePoster} onEdit={onEditPoster} onDelete={onDeletePoster}
+                  onGotoRanking={ledgerOk ? onGotoRankingFromPosters : undefined}
+                  onOpenLedger={ledgerOk ? onOpenLedgerFromPosters : undefined} />)}
+                {visited.includes('presets') && canPosters && box('presets', <PresetManagerM venueId={venueId} />)}
+                {visited.includes('ledger') && ledgerOk && box('ledger', <NuriPosLedgerM venueId={venueId} canManage={manageOk} active={renderSection === 'ledger'} seed={ledgerSeed}
+                  onMakeRankingDraft={onMakeRankingDraft}
+                  onOpenClock={onOpenClockFromLedger}
+                  onOpenStats={manageOk ? onOpenStatsCb : undefined} />)}
+                {visited.includes('stats') && manageOk && box('stats', <LedgerStatsPanelM venueId={venueId} />)}
                 {visited.includes('ranking') && ledgerOk && box('ranking', <RankingEditor venueId={venueId} canEdit={isAdmin || user.approved === true || ledgerOk} draft={rankingDraft} />)}
                 {visited.includes('venueRank') && ledgerOk && box('venueRank', <>
-                  <SeasonPanel venueId={venueId} canManage={manageOk} />
-                  <div className="mt-5 border-t border-border-subtle pt-4"><VenueRankHub venueId={venueId} canConfigure={manageOk} /></div>
+                  <SeasonPanelM venueId={venueId} canManage={manageOk} />
+                  <div className="mt-5 border-t border-border-subtle pt-4"><VenueRankHubM venueId={venueId} canConfigure={manageOk} /></div>
                 </>)}
-                {visited.includes('league') && ledgerOk && box('league', <LeaguePanel venueId={venueId} canConfigure={manageOk} />)}
-                {visited.includes('page') && canStaff && box('page', <VenueCustomizePanel venueId={venueId} />)}
-                {visited.includes('clock') && ledgerOk && box('clock', <TournamentClock venueId={venueId} canManage={ledgerOk} seedSessionDate={clockSeed} seedGameSeq={clockSeedGame} active={renderSection === 'clock'} />)}
-                {visited.includes('attendance') && ledgerOk && box('attendance', <StaffSelfAttendance venueId={venueId} />)}
+                {visited.includes('league') && ledgerOk && box('league', <LeaguePanelM venueId={venueId} canConfigure={manageOk} />)}
+                {visited.includes('page') && canStaff && box('page', <VenueCustomizePanelM venueId={venueId} />)}
+                {visited.includes('clock') && ledgerOk && box('clock', <TournamentClockM venueId={venueId} canManage={ledgerOk} seedSessionDate={clockSeed} seedGameSeq={clockSeedGame} active={renderSection === 'clock'} />)}
+                {visited.includes('attendance') && ledgerOk && box('attendance', <StaffSelfAttendanceM venueId={venueId} />)}
                 {visited.includes('staff') && canStaff && box('staff', <StaffHub venueId={venueId} />)}
-                {visited.includes('settings') && canStaff && box('settings', <PosSettingsPanel venueId={venueId} />)}
-                {visited.includes('voucher') && (manageOk || voucherView) && box('voucher', <VoucherManagePanel venueId={venueId} />)}
+                {visited.includes('settings') && canStaff && box('settings', <PosSettingsPanelM venueId={venueId} />)}
+                {visited.includes('voucher') && (manageOk || voucherView) && box('voucher', <VoucherManagePanelM venueId={venueId} />)}
               </>);
             })()}
           </div>
