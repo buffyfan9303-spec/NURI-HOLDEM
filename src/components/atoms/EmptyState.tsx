@@ -2,10 +2,13 @@
 // 사용: <EmptyState title="아직 기록이 없어요" hint="첫 기록을 남겨보세요" />
 import type { ReactNode } from 'react';
 
-export default function EmptyState({ title, hint, action }: { title: string; hint?: string; action?: ReactNode }) {
+export default function EmptyState({ title, hint, action, icon }: { title: string; hint?: string; action?: ReactNode; icon?: ReactNode }) {
   return (
     <div className="flex flex-col items-center justify-center gap-2 py-10 text-center animate-fade-in">
-      {/* 카드 캐릭터 — 살짝 기울어진 스페이드 A 카드, 졸린 표정 */}
+      {/* 화면별 맥락 아이콘이 주어지면 그것을, 아니면 기본 졸린 카드 캐릭터 */}
+      {icon ? (
+        <div className="mb-1 text-ink-muted opacity-80 [&>svg]:h-14 [&>svg]:w-14" aria-hidden>{icon}</div>
+      ) : (
       <svg width="72" height="72" viewBox="0 0 96 96" fill="none" aria-hidden className="opacity-90">
         <g transform="rotate(-8 48 48)">
           <rect x="24" y="14" width="48" height="66" rx="7" fill="#181A20" stroke="#2B3139" strokeWidth="2" />
@@ -21,6 +24,7 @@ export default function EmptyState({ title, hint, action }: { title: string; hin
         <text x="70" y="26" fontFamily="Arial" fontWeight="700" fontSize="10" fill="#848E9C">z</text>
         <text x="76" y="18" fontFamily="Arial" fontWeight="700" fontSize="12" fill="#848E9C">z</text>
       </svg>
+      )}
       <p className="text-sm font-semibold text-ink-secondary">{title}</p>
       {hint && <p className="text-xs text-ink-muted">{hint}</p>}
       {action && <div className="mt-1">{action}</div>}

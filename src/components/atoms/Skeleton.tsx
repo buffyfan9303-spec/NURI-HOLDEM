@@ -30,11 +30,11 @@ export function SkeletonText({ lines = 3, className = '' }: { lines?: number; cl
   );
 }
 
-/** 공용 빈 상태 — 카드 캐릭터(atoms/EmptyState)로 단일화. icon은 하위 호환용으로 받고 무시. */
-export function EmptyState({ title, desc, action, className = '' }: { icon?: ReactNode; title: string; desc?: string; action?: ReactNode; className?: string }) {
+/** 공용 빈 상태 — 화면별 icon 이 주어지면 그것을, 아니면 카드 캐릭터(atoms/EmptyState). */
+export function EmptyState({ icon, title, desc, action, className = '' }: { icon?: ReactNode; title: string; desc?: string; action?: ReactNode; className?: string }) {
   return (
     <div className={className}>
-      <CardEmptyState title={title} hint={desc} action={action} />
+      <CardEmptyState icon={icon} title={title} hint={desc} action={action} />
     </div>
   );
 }

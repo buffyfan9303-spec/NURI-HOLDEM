@@ -1,5 +1,5 @@
 // src/components/features/AuthModal.tsx
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useId } from 'react';
 import Modal from '../atoms/Modal';
 import Icon from '../atoms/Icon';
 import { useBackClose } from '../../lib/backstack';
@@ -669,12 +669,14 @@ function NicknameField({
 // ── 폼 필드 헬퍼 ──────────────────────────────────────────────────────────────
 
 function Field({ label, ...rest }: { label: string } & React.InputHTMLAttributes<HTMLInputElement>) {
+  const autoId = useId();
+  const id = rest.id ?? autoId; // 라벨-입력 연결(스크린리더·라벨탭 접근성)
   return (
     <div>
-      <label className="block text-xs font-medium text-ink-secondary mb-1">
+      <label htmlFor={id} className="block text-xs font-medium text-ink-secondary mb-1">
         {label}{rest.required && <span className="text-danger ml-0.5">*</span>}
       </label>
-      <input {...rest} className="input" />
+      <input {...rest} id={id} className="input" />
     </div>
   );
 }
