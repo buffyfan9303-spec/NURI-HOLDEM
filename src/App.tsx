@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, useTransition, Suspense, type ReactNode } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, useTransition, Suspense, memo, type ReactNode } from 'react';
 import { useToast } from './components/atoms/Toast';
 import { checkIn, getMyCheckinStreak } from './api/checkins';
 import { requestBuyin, venueTodayGames, getMyBuyinRequestsToday, subscribeMyBuyinRequests, cancelBuyinRequest, type MyBuyinRequest } from './api/ledger';
@@ -90,6 +90,14 @@ const MarketplaceTab = lazyWithReload(() => import('./components/features/Market
 const VenueManageTab = lazyWithReload(() => import('./components/features/VenueManageTab'));
 const ToolsPanel     = lazyWithReload(() => import('./components/features/ToolsPanel'));
 const LiveGamesTab   = lazyWithReload(() => import('./components/features/LiveGamesTab'));
+
+// 최상위 탭은 visitedTabs 로 마운트 유지(display 토글)라, App 재렌더(실시간 데이터·알림 등)마다
+// 숨은 탭까지 재렌더됐다. memo 로 감싸 props 안정 시 재렌더 스킵 — 데이터가 실제로 바뀔 때만 갱신.
+// ToolsPanel 은 prop 이 없어 마운트 후 재렌더 0. (핸들러는 이미 useCallback, 데이터는 state/useMemo 라 안정)
+const LiveGamesTabM   = memo(LiveGamesTab);
+const CommunityTabM   = memo(CommunityTab);
+const MarketplaceTabM = memo(MarketplaceTab);
+const ToolsPanelM     = memo(ToolsPanel);
 const CustomerDashboardPage = lazyWithReload(() => import('./components/features/CustomerDashboardPage'));
 const ClockDisplay   = lazyWithReload(() => import('./components/features/clock/ClockDisplay'));
 
@@ -1838,7 +1846,7 @@ export default function App() {
       {(activeTab === 'live' || visitedTabs.has('live')) && (
         <div style={activeTab !== 'live' ? { display: 'none' } : undefined}>
           <ErrorBoundary inline resetKey="live">
-            <LiveGamesTab venues={venues} schedules={schedules} onVenue={handleVenueClick} onSchedule={handleScheduleSelect} onDisplay={openDisplay} active={activeTab === 'live'} />
+            <LiveGamesTabM venues={venues} schedules={schedules} onVenue={handleVenueClick} onSchedule={handleScheduleSelect} onDisplay={openDisplay} active={activeTab === 'live'} />
           </ErrorBoundary>
         </div>
       )}
@@ -1846,7 +1854,7 @@ export default function App() {
       {/* 커뮤니티 */}
       {(activeTab === 'community' || visitedTabs.has('community')) && (
         <main className="px-page-x pb-section" style={activeTab !== 'community' ? { display: 'none' } : undefined}>
-          <CommunityTab
+          <CommunityTabM
             marketSlot={marketSlot}
             venues={venues}
             comments={comments}
@@ -1868,7 +1876,7 @@ export default function App() {
       {/* 중고장터 */}
       {(activeTab === 'market' || visitedTabs.has('market')) && (
         <main className="px-page-x py-section" style={activeTab !== 'market' ? { display: 'none' } : undefined}>
-          <MarketplaceTab
+          <MarketplaceTabM
             listings={listings}
             loading={!marketLoaded}
             notices={marketNotices}
@@ -1886,7 +1894,7 @@ export default function App() {
       {(activeTab === 'tools' || visitedTabs.has('tools')) && (
         <main className="px-page-x py-section" style={activeTab !== 'tools' ? { display: 'none' } : undefined}>
           <ErrorBoundary inline resetKey="tools">
-            <ToolsPanel />
+            <ToolsPanelM />
           </ErrorBoundary>
         </main>
       )}

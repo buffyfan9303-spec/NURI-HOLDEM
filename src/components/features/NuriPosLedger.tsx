@@ -367,12 +367,19 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     return { totalBuyins, entries, ticket, ticketUnpaid, revenue, unpaid, support };
   }, [buyins, session]);
 
-  // 플레이어별 총 바이인/미수(금액)
-  const playerTotals = (name: string) => {
-    let paid = 0, unpaid = 0;
-    for (const b of buyins) if (b.playerName === name) { const f = buyinFinance(b, session); paid += f.paid; unpaid += f.unpaid; }
-    return { paid, unpaid };
-  };
+  // 플레이어별 총 바이인/미수(금액) — 행마다 buyins 전체를 훑던 것(O(행×바인))을
+  // buyins 1회 집계 맵(O(바인))으로 전환. 리스트 렌더에서 두 번 호출돼 재계산 부담이 컸음.
+  const playerTotalsMap = useMemo(() => {
+    const m = new Map<string, { paid: number; unpaid: number }>();
+    for (const b of buyins) {
+      const f = buyinFinance(b, session);
+      const cur = m.get(b.playerName) ?? { paid: 0, unpaid: 0 };
+      cur.paid += f.paid; cur.unpaid += f.unpaid;
+      m.set(b.playerName, cur);
+    }
+    return m;
+  }, [buyins, session]);
+  const playerTotals = (name: string) => playerTotalsMap.get(name) ?? { paid: 0, unpaid: 0 };
 
   // ── 액션 ──────────────────────────────────────────────────────────────────
   const handleOpen = async (s: LedgerSession) => {
