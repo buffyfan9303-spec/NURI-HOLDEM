@@ -19,6 +19,28 @@ export async function saveCustomerProfile(venueId: string, name: string, p: { bi
   if (error) throw error;
 }
 
+// ── 장부 이름 ↔ 회원 수동 연결(alias) ─────────────────────────────────────────
+export interface CustomerAlias { alias: string; userId: string; display: string }
+/** 이 매장의 alias(장부명)→회원 매핑 목록. */
+export async function getCustomerAliases(venueId: string): Promise<CustomerAlias[]> {
+  if (IS_MOCK) return [];
+  const { data } = await supabase.from('customer_aliases')
+    .select('alias, user_id, profiles:user_id(nickname, name)').eq('venue_id', venueId);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({ alias: r.alias, userId: r.user_id, display: r.profiles?.nickname || r.profiles?.name || '회원' }));
+}
+/** 장부 이름을 회원에 연결(동명 미연결 프로필 방문수 병합). can_manage_pos 강제(RPC). */
+export async function linkCustomerAlias(venueId: string, alias: string, userId: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('link_customer_alias', { p_venue_id: venueId, p_alias: alias, p_user_id: userId });
+  if (error) throw new Error(error.message);
+}
+export async function unlinkCustomerAlias(venueId: string, alias: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('unlink_customer_alias', { p_venue_id: venueId, p_alias: alias });
+  if (error) throw new Error(error.message);
+}
+
 /** 매장 손님별 방문 집계(user_id→방문횟수) — '오늘 방문 손님' 보드의 단골/첫방문 배지용. can_manage_pos 만 조회. */
 export async function getVenueVisitorStats(venueId: string): Promise<Record<string, number>> {
   if (IS_MOCK) return {};

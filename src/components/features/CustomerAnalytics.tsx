@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { getVenueCustomerStats, paymentLabel, type CustomerStat } from '../../api/reservations';
+import { getCustomerAliases, linkCustomerAlias, unlinkCustomerAlias } from '../../api/crm';
+import { findUserForTransfer, type TransferTarget } from '../../api/vouchers';
+import { useToast } from '../atoms/Toast';
 import { toCsv, downloadCsv } from '../../lib/csv';
 
 type Range = 'all' | '7' | '30' | '90';
@@ -17,6 +20,31 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
   const [loading, setLoading] = useState(true);
   const hasLoaded = useRef(false);
   const [sort, setSort] = useState<'buyins' | 'visits' | 'rate' | 'unpaid' | 'recent'>('buyins');
+  // 장부명 ↔ 회원 연결(alias)
+  const toast = useToast();
+  const [aliases, setAliases] = useState<Record<string, { userId: string; display: string }>>({});
+  const [linking, setLinking] = useState<string | null>(null); // 연결 중인 장부 이름
+  const [mq, setMq] = useState('');
+  const [mcands, setMcands] = useState<TransferTarget[]>([]);
+  const [busy, setBusy] = useState(false);
+  const reloadAliases = () => { getCustomerAliases(venueId).then((a) => setAliases(Object.fromEntries(a.map((x) => [x.alias.trim().toLowerCase(), { userId: x.userId, display: x.display }])))).catch(() => {}); };
+  useEffect(reloadAliases, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const q = mq.trim();
+    if (!linking || !q) { setMcands([]); return; }
+    const t = setTimeout(() => { findUserForTransfer(q).then(setMcands).catch(() => setMcands([])); }, 280);
+    return () => clearTimeout(t);
+  }, [mq, linking]);
+  const doLink = async (alias: string, t: TransferTarget) => {
+    setBusy(true);
+    try { await linkCustomerAlias(venueId, alias, t.id); toast.show(`'${alias}' → ${t.display} 연결됨`, 'success'); setLinking(null); setMq(''); setMcands([]); reloadAliases(); }
+    catch (e) { toast.show(e instanceof Error ? e.message : '연결 실패', 'error'); }
+    finally { setBusy(false); }
+  };
+  const doUnlink = async (alias: string) => {
+    try { await unlinkCustomerAlias(venueId, alias); toast.show('연결 해제됨', 'info'); reloadAliases(); }
+    catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -99,6 +127,7 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
                   {r.name}
                   {r.buyins >= 5 && <span className="ml-1.5 rounded-badge bg-gold-300/15 px-1.5 py-0.5 text-[10px] font-bold text-gold-300">단골</span>}
                   {r.unpaidCount > 0 && <span className="ml-1 rounded-badge bg-danger/15 px-1.5 py-0.5 text-[10px] font-bold text-danger-light">미수 {r.unpaidCount}</span>}
+                  {aliases[r.name.trim().toLowerCase()] && <span className="ml-1 rounded-badge bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-300">🔗 {aliases[r.name.trim().toLowerCase()].display}</span>}
                 </p>
                 {r.lastVisit && <span className="shrink-0 text-[10px] tabular-nums text-ink-muted">최근 {r.lastVisit.slice(5)}</span>}
               </div>
@@ -110,6 +139,35 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
                 <span>결제 <b className="text-ink-secondary">{paymentLabel(r.topPayment)}</b></span>
                 {r.peakHour !== null && <span>주 방문 <b className="tabular-nums text-ink-secondary">{r.peakHour}시</b></span>}
               </div>
+              {/* 장부명 ↔ 회원 연결(alias) */}
+              {(() => {
+                const linked = aliases[r.name.trim().toLowerCase()];
+                if (linked) return (
+                  <button type="button" onClick={() => doUnlink(r.name.trim())} className="mt-1 text-[10px] text-ink-muted hover:text-danger-light">🔗 {linked.display} · 연결 해제</button>
+                );
+                if (linking === r.name) return (
+                  <div className="mt-1.5 space-y-1">
+                    <div className="flex gap-1.5">
+                      <input autoFocus value={mq} onChange={(e) => setMq(e.target.value)} placeholder="회원 닉네임·이름 검색" className="input min-w-0 flex-1 text-xs py-1" />
+                      <button type="button" onClick={() => { setLinking(null); setMq(''); setMcands([]); }} className="shrink-0 rounded-input border border-border-default bg-surface-float px-2 text-[10px] text-ink-muted">취소</button>
+                    </div>
+                    {mcands.length > 0 ? (
+                      <ul className="space-y-0.5 rounded-input border border-gold-400/30 bg-surface-low p-1">
+                        {mcands.map((c) => (
+                          <li key={c.id}>
+                            <button type="button" disabled={busy} onClick={() => doLink(r.name.trim(), c)} className="flex w-full items-center gap-1.5 rounded-input px-2 py-1 text-left text-xs text-ink-primary hover:bg-surface-high disabled:opacity-50">
+                              <span aria-hidden>👤</span><span className="truncate font-semibold">{c.display}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : mq.trim() ? <p className="px-1 text-[10px] text-ink-muted">일치하는 회원이 없습니다.</p> : null}
+                  </div>
+                );
+                return (
+                  <button type="button" onClick={() => { setLinking(r.name); setMq(''); setMcands([]); }} className="mt-1 text-[10px] text-gold-300 hover:underline">🔗 회원 연결</button>
+                );
+              })()}
             </li>
           ))}
           {filtered.length > 200 && <li className="py-1 text-center text-[10px] text-ink-muted">상위 200명까지 표시 — 검색으로 좁혀보세요.</li>}
