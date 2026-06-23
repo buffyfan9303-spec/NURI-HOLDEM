@@ -291,6 +291,7 @@ export default function VenuePage({
                 userId={user?.id ?? null}
                 nickname={user?.nickname ?? null}
                 isAdmin={user?.role === 'admin'}
+                canReply={isMyVenue || user?.role === 'admin'}
               />
             </div>
           )}

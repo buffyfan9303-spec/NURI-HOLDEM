@@ -1,6 +1,6 @@
 // 매장 후기·별점 — 소개 탭 하단. 체크인 인증자만 작성(서버 RLS), 매장당 1인 1후기(수정형).
 import { useEffect, useMemo, useState } from 'react';
-import { getVenueReviews, canReviewVenue, saveVenueReview, deleteVenueReview, type VenueReview } from '../../api/reviews';
+import { getVenueReviews, canReviewVenue, saveVenueReview, deleteVenueReview, replyToReview, aiDraftReviewReply, type VenueReview } from '../../api/reviews';
 import { useToast } from '../atoms/Toast';
 
 interface Props {
@@ -9,6 +9,8 @@ interface Props {
   userId: string | null;
   nickname: string | null;
   isAdmin?: boolean;
+  /** 이 매장 업주/운영자(답글 작성 가능) */
+  canReply?: boolean;
 }
 
 function Stars({ value, size = 14, onPick }: { value: number; size?: number; onPick?: (n: number) => void }) {
@@ -31,7 +33,7 @@ function Stars({ value, size = 14, onPick }: { value: number; size?: number; onP
   );
 }
 
-export default function VenueReviews({ venueId, userId, nickname, isAdmin }: Props) {
+export default function VenueReviews({ venueId, userId, nickname, isAdmin, canReply }: Props) {
   const toast = useToast();
   const [reviews, setReviews] = useState<VenueReview[] | null>(null);
   const [eligible, setEligible] = useState(false);
@@ -39,6 +41,27 @@ export default function VenueReviews({ venueId, userId, nickname, isAdmin }: Pro
   const [rating, setRating] = useState(5);
   const [content, setContent] = useState('');
   const [saving, setSaving] = useState(false);
+  // #23 업주 답글
+  const [replyDraft, setReplyDraft] = useState<Record<string, string>>({});
+  const [replyOpen, setReplyOpen] = useState<string | null>(null);
+  const [replyBusy, setReplyBusy] = useState<string | null>(null);
+  const [aiBusy, setAiBusy] = useState<string | null>(null);
+  const doReply = async (r: VenueReview) => {
+    setReplyBusy(r.id);
+    try {
+      await replyToReview(r.id, replyDraft[r.id] ?? '');
+      toast.show('답글을 등록했습니다', 'success');
+      setReplyOpen(null);
+      setReviews(await getVenueReviews(venueId));
+    } catch (e) { toast.show(e instanceof Error ? e.message : '답글 실패', 'error'); }
+    finally { setReplyBusy(null); }
+  };
+  const doAiDraft = async (r: VenueReview) => {
+    setAiBusy(r.id);
+    try { setReplyDraft((d) => ({ ...d, [r.id]: '' })); const t = await aiDraftReviewReply(r); setReplyDraft((d) => ({ ...d, [r.id]: t })); }
+    catch (e) { toast.show(e instanceof Error ? e.message : 'AI 초안 실패', 'error'); }
+    finally { setAiBusy(null); }
+  };
 
   useEffect(() => {
     let on = true;
@@ -149,6 +172,27 @@ export default function VenueReviews({ venueId, userId, nickname, isAdmin }: Pro
                 )}
               </div>
               {r.content && <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-ink-secondary">{r.content}</p>}
+              {r.ownerReply && (
+                <div className="mt-1.5 rounded-input border border-gold-400/25 bg-gold-300/[0.05] p-2">
+                  <p className="text-[10px] font-bold text-gold-300">사장님 답글</p>
+                  <p className="mt-0.5 whitespace-pre-wrap text-2xs leading-relaxed text-ink-primary">{r.ownerReply}</p>
+                </div>
+              )}
+              {canReply && (
+                replyOpen === r.id ? (
+                  <div className="mt-1.5 space-y-1">
+                    <textarea value={replyDraft[r.id] ?? r.ownerReply ?? ''} onChange={(e) => setReplyDraft((d) => ({ ...d, [r.id]: e.target.value }))}
+                      rows={2} maxLength={300} placeholder="답글…" className="input w-full resize-none text-sm" />
+                    <div className="flex items-center gap-1.5">
+                      <button type="button" onClick={() => doReply(r)} disabled={replyBusy === r.id} className="btn-primary px-3 py-1 text-2xs disabled:opacity-50">{replyBusy === r.id ? '등록 중…' : '답글 등록'}</button>
+                      <button type="button" onClick={() => doAiDraft(r)} disabled={aiBusy === r.id} className="rounded-input border border-gold-400/40 bg-gold-300/[0.06] px-2.5 py-1 text-2xs font-bold text-gold-300 disabled:opacity-50">{aiBusy === r.id ? '생성 중…' : '✨ AI 초안'}</button>
+                      <button type="button" onClick={() => setReplyOpen(null)} className="text-2xs text-ink-muted">취소</button>
+                    </div>
+                  </div>
+                ) : (
+                  <button type="button" onClick={() => setReplyOpen(r.id)} className="mt-1 text-[10px] text-gold-300 hover:underline">{r.ownerReply ? '답글 수정' : '🗨 답글 달기'}</button>
+                )
+              )}
             </li>
           ))}
         </ul>

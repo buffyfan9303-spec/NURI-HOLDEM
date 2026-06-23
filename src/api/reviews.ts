@@ -1,5 +1,6 @@
 // src/api/reviews.ts — 매장 후기·별점. 읽기 공개 / 작성은 해당 매장 체크인 인증자만(RLS 강제).
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { aiGenerate } from './ai';
 
 export interface VenueReview {
   id: string;
@@ -10,16 +11,35 @@ export interface VenueReview {
   content: string;
   createdAt: string;
   updatedAt: string;
+  ownerReply?: string;
+  ownerReplyAt?: string;
 }
 
 interface ReviewRow {
   id: string; venue_id: string; user_id: string; nickname: string;
   rating: number; content: string; created_at: string; updated_at: string;
+  owner_reply?: string | null; owner_reply_at?: string | null;
 }
 const mapRow = (r: ReviewRow): VenueReview => ({
   id: r.id, venueId: r.venue_id, userId: r.user_id, nickname: r.nickname || '회원',
   rating: r.rating, content: r.content ?? '', createdAt: r.created_at, updatedAt: r.updated_at,
+  ownerReply: r.owner_reply ?? undefined, ownerReplyAt: r.owner_reply_at ?? undefined,
 });
+
+/** 업주 답글 등록/수정(빈 문자열이면 삭제). can_manage_pos 강제(RPC). */
+export async function replyToReview(reviewId: string, reply: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('reply_to_review', { p_review_id: reviewId, p_reply: reply });
+  if (error) throw new Error(error.message);
+}
+
+/** AI 답글 초안 — 후기 별점·본문으로 정중한 점주 답글 생성(운영자 검토 후 등록). */
+export async function aiDraftReviewReply(r: VenueReview): Promise<string> {
+  return aiGenerate(
+    `[매장 후기] 별점: ${r.rating}/5\n작성자: ${r.nickname}\n내용: ${r.content || '(내용 없음)'}`,
+    '너는 홀덤펍 점주다. 위 후기에 대한 답글 초안을 정중한 존댓말 2~3문장으로 작성하라. 호평이면 감사+재방문 유도, 불만(낮은 별점)이면 사과+개선 약속. 과장·환전/사행성 표현 금지. 답글 본문만 출력.',
+  );
+}
 
 /** 매장 후기 목록(최신순). */
 export async function getVenueReviews(venueId: string): Promise<VenueReview[]> {
