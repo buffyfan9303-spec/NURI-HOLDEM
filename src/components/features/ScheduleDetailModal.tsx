@@ -625,7 +625,7 @@ function ReserveBox({ scheduleId, ownerId, venueId }: { scheduleId: string; owne
   };
   // 예약(생성)은 상태 버튼이 모핑으로 보여준다 — 체크 애니메이션이 끝난 onDone에서 '예약 완료' 카드로 전환
   const doReserve = async () => {
-    if (!ensureVerified(user)) throw new Error('verify'); // 로그인 + 본인인증 회원만 예약
+    if (!ensureVerified(user, '대회 예약')) throw new Error('verify'); // 로그인 + 본인인증 회원만 예약
     const _u = user!;
     const n = (name.trim() || _u.name || '예약자');
     try {

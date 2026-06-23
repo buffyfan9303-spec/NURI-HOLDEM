@@ -25,18 +25,20 @@ export function openPostForm(category?: string): void {
 }
 
 // ── 본인인증 게이트 ──────────────────────────────────────────────────────────
-// 본인인증(휴대폰)이 필요한 민감 기능(글쓰기·중고장터 등록·예약) 시도 시, App이 듣고 본인인증 안내를 띄운다.
+// 본인인증(휴대폰)이 필요한 민감 기능(글쓰기·중고장터 등록·예약) 시도 시, App이 듣고 본인인증 안내 시트를 띄운다.
 export const REQUIRE_VERIFY_EVENT = 'nuri:require-verify';
-export function promptVerify(): void {
-  try { window.dispatchEvent(new CustomEvent(REQUIRE_VERIFY_EVENT)); } catch { /* noop */ }
+/** @param reason 차단된 기능명(예: '예약', '글쓰기') — 안내 시트가 맥락 문구로 표시. */
+export function promptVerify(reason?: string): void {
+  try { window.dispatchEvent(new CustomEvent(REQUIRE_VERIFY_EVENT, { detail: { reason } })); } catch { /* noop */ }
 }
 
 /**
  * 본인인증 가드. 비로그인이면 로그인 모달, 미인증이면 본인인증 안내를 띄우고 false 반환(호출부는 즉시 return).
+ * @param reason 차단된 기능명 — 안내 시트 맥락 문구에 사용.
  * @returns 로그인 + 본인인증 완료면 true.
  */
-export function ensureVerified(user: { verified?: boolean } | null | undefined): boolean {
+export function ensureVerified(user: { verified?: boolean } | null | undefined, reason?: string): boolean {
   if (!user) { promptLogin(); return false; }
-  if (!user.verified) { promptVerify(); return false; }
+  if (!user.verified) { promptVerify(reason); return false; }
   return true;
 }

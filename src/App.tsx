@@ -14,6 +14,7 @@ import { getWeeklyMoneyinKings, getVenueRankings, type WeeklyKing, type RankingE
 import { getReservationCounts } from './api/reservations';
 import { getVenueRatings } from './api/reviews';
 import NotificationPanel from './components/features/NotificationPanel';
+import VerifyGateSheet from './components/features/VerifyGateSheet';
 import { decodeSpot, readGtoHash } from './components/features/gto/gtoShare';
 import type { DeepGtoInit } from './components/features/gto/useDeepGto';
 import type { PosterFormData } from './components/features/PosterFormModal';
@@ -25,7 +26,7 @@ import StaffInviteBanner from './components/features/StaffInviteBanner';
 import TierCelebration from './components/features/TierCelebration';
 import ErrorBoundary from './components/atoms/ErrorBoundary';
 import InstallBanner from './components/atoms/InstallBanner';
-import { REQUIRE_LOGIN_EVENT, OPEN_POST_FORM_EVENT, REQUIRE_VERIFY_EVENT, ensureVerified } from './lib/requireLogin';
+import { REQUIRE_LOGIN_EVENT, OPEN_POST_FORM_EVENT, ensureVerified } from './lib/requireLogin';
 import { tierColor } from './components/atoms/TierBadge';
 import ConsentGateModal from './components/features/ConsentGateModal';
 import type { PostFormData } from './components/features/PostFormModal';
@@ -804,17 +805,13 @@ export default function App() {
     return () => window.removeEventListener(REQUIRE_LOGIN_EVENT, h);
   }, []);
 
-  // 본인인증이 필요한 민감 기능(글쓰기·중고장터 등록·예약) 시도 시 → 안내 + 프로필(본인인증) 열기.
-  useEffect(() => {
-    const h = () => { toast.show('본인인증이 필요한 기능이에요. 프로필에서 휴대폰 본인인증을 완료해 주세요.', 'info'); setProfileOpen(true); };
-    window.addEventListener(REQUIRE_VERIFY_EVENT, h);
-    return () => window.removeEventListener(REQUIRE_VERIFY_EVENT, h);
-  }, []);
+  // 본인인증 게이트 안내는 <VerifyGateSheet/> 가 REQUIRE_VERIFY_EVENT 를 직접 듣고 시트로 띄운다(#31).
+  // (기존: 사라지는 토스트 → 무엇이 왜 필요한지 설명하는 하단 시트로 교체)
 
   // 어디서든 글쓰기 모달 열기 — 포스터 상세 '대회 후기 쓰기' 등(카테고리 프리셋). 본인인증 회원만.
   useEffect(() => {
     const h = (e: Event) => {
-      if (!ensureVerified(user)) return;
+      if (!ensureVerified(user, '글쓰기')) return;
       const cat = (e as CustomEvent).detail?.category as PostCategory | undefined;
       setPostFormCategory(cat ?? 'free');
       setPostFormOpen(true);
@@ -1562,11 +1559,11 @@ export default function App() {
   const marketNotices    = useMemo(() => notices.filter((n) => !n.board || n.board === 'all' || n.board === 'market'), [notices]);
   const handleWriteNotice = useCallback(() => setNoticeFormOpen(true), []);
   const handleOpenWrite = useCallback((category?: PostCategory) => {
-    if (!ensureVerified(user)) return; // 본인인증 회원만 글쓰기
+    if (!ensureVerified(user, '글쓰기')) return; // 본인인증 회원만 글쓰기
     setPostFormCategory(category ?? 'free');
     setPostFormOpen(true);
   }, [user]);
-  const handleMarketCreate = useCallback(() => { if (ensureVerified(user)) setMarketFormOpen(true); }, [user]);
+  const handleMarketCreate = useCallback(() => { if (ensureVerified(user, '중고장터 등록')) setMarketFormOpen(true); }, [user]);
   const handleListingsChanged = useCallback(() => { getListings().then(setListings).catch(() => {}); }, []);
   const marketSlot = useMemo(() => (
     <MarketplaceTab listings={listings} loading={!marketLoaded} notices={marketNotices}
@@ -1621,6 +1618,9 @@ export default function App() {
           <span className="shrink-0 text-2xs font-bold text-gold-300">인증하기 →</span>
         </button>
       )}
+
+      {/* 본인인증 게이트 안내 시트(#31) — 미인증 회원이 민감 기능 시도 시 자동 표시 */}
+      <VerifyGateSheet onStart={() => setProfileOpen(true)} />
 
       {voucherWalletOpen && (
         <Suspense fallback={<OverlayFallback />}>
