@@ -3,6 +3,12 @@ import { test, expect } from '@playwright/test';
 // 공개(비로그인·비변이) 회귀 스모크 — 배포 전 게이트.
 // 실데이터/목 모드 어느 쪽이든 통과해야 한다(데이터 내용이 아니라 "크래시 없이 렌더"를 검증).
 
+// 첫 진입 온보딩 시트(#29)는 신규 방문자에게 700ms 뒤 떠서 상호작용을 가린다.
+// 온보딩 자체 검증은 별도 테스트에서 하고, 나머지 테스트는 '이미 본 것'으로 시드해 격리한다.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => { try { localStorage.setItem('nuri_onboarding_v1', '1'); } catch { /* noop */ } });
+});
+
 test('앱 부팅 — 루트 렌더 + 제목 + 미처리 JS 예외 0', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
@@ -57,4 +63,16 @@ test('대회 공유 딥링크 — ?s 진입이 크래시 없이 처리', async (
   await page.goto('/?s=00000000-0000-0000-0000-000000000000'); // 없는 대회 → 무시하고 홈
   await expect(page.locator('#root')).not.toBeEmpty();
   expect(errors, `딥링크 예외: ${errors.join(' | ')}`).toEqual([]);
+});
+
+test('첫 진입 온보딩(#29) — 신규 방문자 웰컴 시트 표시 후 닫힘', async ({ page }) => {
+  // beforeEach 의 시드를 이 테스트에서만 해제(나중 등록된 init script 가 뒤에 실행됨) → 온보딩 노출
+  await page.addInitScript(() => { try { localStorage.removeItem('nuri_onboarding_v1'); } catch { /* noop */ } });
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('/');
+  await expect(page.getByText('NURI HOLDEM에 오신 걸 환영해요')).toBeVisible();
+  await page.getByRole('button', { name: '건너뛰기' }).click();
+  await expect(page.getByText('NURI HOLDEM에 오신 걸 환영해요')).toBeHidden();
+  expect(errors, `온보딩 예외: ${errors.join(' | ')}`).toEqual([]);
 });

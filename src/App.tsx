@@ -15,6 +15,7 @@ import { getReservationCounts } from './api/reservations';
 import { getVenueRatings } from './api/reviews';
 import NotificationPanel from './components/features/NotificationPanel';
 import VerifyGateSheet from './components/features/VerifyGateSheet';
+import OnboardingSheet from './components/features/OnboardingSheet';
 import { decodeSpot, readGtoHash } from './components/features/gto/gtoShare';
 import type { DeepGtoInit } from './components/features/gto/useDeepGto';
 import type { PosterFormData } from './components/features/PosterFormModal';
@@ -1621,6 +1622,9 @@ export default function App() {
 
       {/* 본인인증 게이트 안내 시트(#31) — 미인증 회원이 민감 기능 시도 시 자동 표시 */}
       <VerifyGateSheet onStart={() => setProfileOpen(true)} />
+
+      {/* 첫 진입 온보딩(#29) — 신규 방문자 1회성 웰컴 시트(딥링크 진입 시 미표시) */}
+      <OnboardingSheet />
 
       {voucherWalletOpen && (
         <Suspense fallback={<OverlayFallback />}>

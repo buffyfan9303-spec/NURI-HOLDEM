@@ -10,7 +10,7 @@
  *    프리뷰는 grid-cols-4 정사각 썸네일 → 줄바꿈/넘침 없음.
  *  - 로그인 필요: 비로그인 시 호출부에서 진입을 막지만, 방어적으로 user 없으면 제출 차단.
  * ========================================================================== */
-import { useState, useEffect, useRef, Fragment } from 'react';
+import { useState, useEffect, useRef, useId, Fragment } from 'react';
 import Modal from '../atoms/Modal';
 import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
@@ -57,6 +57,11 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
   const { user } = useAuth();
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
+  // a11y(#30): 라벨↔입력 프로그램적 연결용 고유 id
+  const titleId = useId();
+  const contentId = useId();
+  const potId = useId();
+  const actId = useId();
 
   const [category, setCategory] = useState<PostCategory>('free');
   const [title,    setTitle]    = useState('');
@@ -210,10 +215,11 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
 
         {/* 제목 */}
         <div>
-          <label className="block text-xs font-medium text-ink-secondary mb-1.5">
+          <label htmlFor={titleId} className="block text-xs font-medium text-ink-secondary mb-1.5">
             제목 <span className="text-danger ml-0.5">*</span>
           </label>
           <input
+            id={titleId}
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -225,10 +231,11 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
 
         {/* 내용 */}
         <div>
-          <label className="block text-xs font-medium text-ink-secondary mb-1.5">
+          <label htmlFor={contentId} className="block text-xs font-medium text-ink-secondary mb-1.5">
             내용 <span className="text-danger ml-0.5">*</span>
           </label>
           <textarea
+            id={contentId}
             value={content}
             onChange={(e) => setContent(e.target.value)}
             maxLength={4000}
@@ -356,13 +363,13 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
                 <div className="space-y-1.5 border-t border-border-subtle pt-2 animate-fade-in">
                   {/* 라벨 + 짧은 placeholder — 좁은 화면에서 안 잘린다(전부 선택 입력) */}
                   <div className="grid grid-cols-[3.75rem_1fr] items-center gap-x-2 gap-y-1.5">
-                    <span className="text-2xs font-bold text-ink-secondary">팟</span>
-                    <input type="text" value={pot} onChange={(e) => setPot(e.target.value)} maxLength={20}
+                    <label htmlFor={potId} className="text-2xs font-bold text-ink-secondary">팟</label>
+                    <input id={potId} type="text" value={pot} onChange={(e) => setPot(e.target.value)} maxLength={20}
                       placeholder="예: 12.5bb, 34만" className="input w-full text-sm" />
                     {([['pre', '프리플랍'], ['flop', '플랍'], ['turn', '턴'], ['river', '리버']] as const).map(([k, lab]) => (
                       <Fragment key={k}>
-                        <span className="text-2xs font-bold text-ink-secondary">{lab}</span>
-                        <input type="text" value={acts[k]} maxLength={80}
+                        <label htmlFor={`${actId}-${k}`} className="text-2xs font-bold text-ink-secondary">{lab}</label>
+                        <input id={`${actId}-${k}`} type="text" value={acts[k]} maxLength={80}
                           onChange={(e) => setActs((p) => ({ ...p, [k]: e.target.value }))}
                           placeholder="예: 내가 2.5bb 오픈, 상대 콜" className="input w-full text-sm" />
                       </Fragment>

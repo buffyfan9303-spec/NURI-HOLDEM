@@ -1,5 +1,5 @@
 ﻿// src/components/features/PosterFormModal.tsx
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useId } from 'react';
 import Modal from '../atoms/Modal';
 import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
@@ -66,6 +66,27 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
   const { user } = useAuth();
   const isEdit = !!schedule;
   const isAdmin = user?.role === 'admin';
+
+  // a11y: 라벨 연결용 고유 id
+  const pastPosterId = useId();
+  const venueSelectId = useId();
+  const pubNameId    = useId();
+  const titleId      = useId();
+  const dateId       = useId();
+  const repeatWeeksId = useId();
+  const regLevelId   = useId();
+  const regTimeId    = useId();
+  const durationId   = useId();
+  const blindsId     = useId();
+  const prizeAmountId = useId();
+  const prizePercentId = useId();
+  const buyInId      = useId();
+  const gameTypeId   = useId();
+  const addonStackId = useId();
+  const addonCostId  = useId();
+  const startStackId = useId();
+  const rebuyStackId = useId();
+  const regionId     = useId();
 
   const empty: PosterFormData = {
     title: '', date: new Date().toLocaleDateString('en-CA'),
@@ -234,8 +255,9 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
         {/* ── 지난 포스터 불러오기(신규 전용) — 전 필드 자동 채움, 날짜만 새로 ── */}
         {!isEdit && loadCandidates.length > 0 && (
           <div className="rounded-card border border-gold-400/30 bg-gold-300/[0.06] p-3">
-            <label className="mb-1.5 block text-sm font-bold text-gold-300">📋 지난 포스터 불러오기</label>
+            <label htmlFor={pastPosterId} className="mb-1.5 block text-sm font-bold text-gold-300">📋 지난 포스터 불러오기</label>
             <select
+              id={pastPosterId}
               value=""
               onChange={(e) => {
                 const found = loadCandidates.find((s) => s.id === e.target.value);
@@ -292,9 +314,10 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
 
         {/* 관리자: 홀덤펍 선택(기존) 또는 직접 입력 */}
         {isAdmin && (
-          <FieldWrap label="홀덤펍 (매장)" required>
+          <FieldWrap label="홀덤펍 (매장)" required htmlFor={venueSelectId}>
             <div className="space-y-1.5">
               <select
+                id={venueSelectId}
                 value={form.venueId || ''}
                 onChange={(e) => {
                   const v = venues.find((x) => x.id === e.target.value);
@@ -309,7 +332,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
                 ))}
               </select>
               {!form.venueId && (
-                <input type="text" value={form.pubName ?? ''}
+                <input id={pubNameId} aria-label="홀덤펍 이름 직접 입력" type="text" value={form.pubName ?? ''}
                   onChange={(e) => update('pubName', e.target.value)}
                   placeholder="홀덤펍 이름 직접 입력" className="input w-full text-sm" />
               )}
@@ -318,16 +341,16 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
         )}
 
         {/* 게임 이름 */}
-        <FieldWrap label="게임 이름" required>
-          <input type="text" required value={form.title}
+        <FieldWrap label="게임 이름" required htmlFor={titleId}>
+          <input id={titleId} type="text" required value={form.title}
             onChange={(e) => update('title', e.target.value)}
             placeholder="예: 로티 단독 파이널롤백20" className="input" />
         </FieldWrap>
 
         {/* 날짜 + 스타트시간 */}
         <div className="grid grid-cols-2 gap-2">
-          <FieldWrap label="날짜" required>
-            <input type="date" required value={form.date}
+          <FieldWrap label="날짜" required htmlFor={dateId}>
+            <input id={dateId} type="date" required value={form.date}
               onChange={(e) => update('date', e.target.value)} className="input" />
           </FieldWrap>
           <FieldWrap label="스타트 시간" required>
@@ -337,8 +360,9 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
 
         {/* 반복 등록 (생성 시에만) — 매주 같은 요일/시간으로 N주 자동 생성 */}
         {!isEdit && (
-          <FieldWrap label="반복 등록 (매주 같은 요일)">
+          <FieldWrap label="반복 등록 (매주 같은 요일)" htmlFor={repeatWeeksId}>
             <select
+              id={repeatWeeksId}
               value={form.repeatWeeks ?? 1}
               onChange={(e) => update('repeatWeeks', Number(e.target.value))}
               className="input"
@@ -398,17 +422,17 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
         <FieldWrap label="레지마감 (레벨 또는 시간 중 하나 이상)" required>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <span className="block text-2xs text-ink-muted mb-1">레벨</span>
+              <label htmlFor={regLevelId} className="block text-2xs text-ink-muted mb-1">레벨</label>
               <div className="relative">
-                <input type="number" inputMode="numeric" min={1} value={regLevel}
+                <input id={regLevelId} type="number" inputMode="numeric" min={1} value={regLevel}
                   onChange={(e) => setRegLevel(e.target.value.replace(/[^0-9]/g, ''))}
                   placeholder="예: 16" className="input w-full text-sm pr-9" />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-ink-muted pointer-events-none">LV</span>
               </div>
             </div>
             <div>
-              <span className="block text-2xs text-ink-muted mb-1">시간</span>
-              <input type="time" value={regTime} onChange={(e) => setRegTime(e.target.value)} className="input w-full text-sm" />
+              <label htmlFor={regTimeId} className="block text-2xs text-ink-muted mb-1">시간</label>
+              <input id={regTimeId} type="time" value={regTime} onChange={(e) => setRegTime(e.target.value)} className="input w-full text-sm" />
             </div>
           </div>
           {(regLevel || regTime) && (
@@ -419,15 +443,15 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
         </FieldWrap>
 
         {/* 듀레이션 — 총 진행 시간/레벨 등 (포스터 정보) */}
-        <FieldWrap label="듀레이션">
-          <input type="text" value={form.duration}
+        <FieldWrap label="듀레이션" htmlFor={durationId}>
+          <input id={durationId} type="text" value={form.duration}
             onChange={(e) => update('duration', e.target.value)}
             placeholder="예: 25/15분 또는 약 5시간" className="input" />
         </FieldWrap>
 
         {/* 블라인드 구조 — 선택(입력 안 해도 됨) */}
-        <FieldWrap label="블라인드 (선택)">
-          <input type="text" value={form.blinds}
+        <FieldWrap label="블라인드 (선택)" htmlFor={blindsId}>
+          <input id={blindsId} type="text" value={form.blinds}
             onChange={(e) => update('blinds', e.target.value)}
             placeholder="예: 100/200 (25분 레벨) · 비워둬도 됩니다" className="input" />
         </FieldWrap>
@@ -445,50 +469,51 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
         {/* 상금 + 바이인 */}
         <div className="grid grid-cols-2 gap-2">
           {form.prizeType === 'GTD' ? (
-            <FieldWrap label="보장 상금" suffix="만원" required>
-              <input type="number" required min={0} value={form.prizeAmount || ''}
+            <FieldWrap label="보장 상금" suffix="만원" required htmlFor={prizeAmountId}>
+              <input id={prizeAmountId} type="number" required min={0} value={form.prizeAmount || ''}
                 onChange={(e) => update('prizeAmount', Number(e.target.value))} placeholder="1100" className="input" />
             </FieldWrap>
           ) : (
-            <FieldWrap label="프라이즈" suffix="%" required>
-              <input type="number" required min={0} max={100} value={form.prizePercent || ''}
+            <FieldWrap label="프라이즈" suffix="%" required htmlFor={prizePercentId}>
+              <input id={prizePercentId} type="number" required min={0} max={100} value={form.prizePercent || ''}
                 onChange={(e) => update('prizePercent', Number(e.target.value))} placeholder="예: 90" className="input" />
             </FieldWrap>
           )}
-          <FieldWrap label="바이인" suffix="원" required>
-            <input type="number" required min={0} value={form.buyIn || ''}
+          <FieldWrap label="바이인" suffix="원" required htmlFor={buyInId}>
+            <input id={buyInId} type="number" required min={0} value={form.buyIn || ''}
               onChange={(e) => update('buyIn', Number(e.target.value))} placeholder="100000" className="input" />
           </FieldWrap>
         </div>
 
         {/* 게임 종류(자유 입력) — 포스터 상금 옆 뱃지로 표시. 애드온 게임이면 스택·비용 입력 */}
-        <FieldWrap label="게임 종류">
-          <input type="text" value={form.gameType} maxLength={20}
+        <FieldWrap label="게임 종류" htmlFor={gameTypeId}>
+          <input id={gameTypeId} type="text" value={form.gameType} maxLength={20}
             onChange={(e) => update('gameType', e.target.value)}
             placeholder="예: 프리즈아웃, 바운티, 애드온, 딥스택…" className="input" />
         </FieldWrap>
         <div className="grid grid-cols-2 gap-2">
-          <FieldWrap label="애드온 스택" suffix="칩">
-            <input type="number" min={0} value={form.addonStack || ''}
+          <FieldWrap label="애드온 스택" suffix="칩" htmlFor={addonStackId}>
+            <input id={addonStackId} type="number" min={0} value={form.addonStack || ''}
               onChange={(e) => update('addonStack', Number(e.target.value))} placeholder="예: 20000" className="input" />
           </FieldWrap>
-          <FieldWrap label="애드온 비용" suffix="원">
-            <input type="number" min={0} value={form.addonCost || ''}
+          <FieldWrap label="애드온 비용" suffix="원" htmlFor={addonCostId}>
+            <input id={addonCostId} type="number" min={0} value={form.addonCost || ''}
               onChange={(e) => update('addonCost', Number(e.target.value))} placeholder="예: 50000" className="input" />
           </FieldWrap>
-          <FieldWrap label="스타팅 스택" suffix="칩">
-            <input type="number" min={0} value={form.startStack || ''}
+          <FieldWrap label="스타팅 스택" suffix="칩" htmlFor={startStackId}>
+            <input id={startStackId} type="number" min={0} value={form.startStack || ''}
               onChange={(e) => update('startStack', Number(e.target.value))} placeholder="예: 50000" className="input" />
           </FieldWrap>
-          <FieldWrap label="리바인 스택" suffix="칩">
-            <input type="number" min={0} value={form.rebuyStack || ''}
+          <FieldWrap label="리바인 스택" suffix="칩" htmlFor={rebuyStackId}>
+            <input id={rebuyStackId} type="number" min={0} value={form.rebuyStack || ''}
               onChange={(e) => update('rebuyStack', Number(e.target.value))} placeholder="예: 70000" className="input" />
           </FieldWrap>
         </div>
 
         {/* 지역 — 일정탐색 지역에서 선택 (직접입력 없음) */}
-        <FieldWrap label="지역" required>
+        <FieldWrap label="지역" required htmlFor={regionId}>
           <select
+            id={regionId}
             value={form.region}
             onChange={(e) => update('region', e.target.value)}
             className="input w-full"
@@ -735,15 +760,22 @@ function TagAdder({ items, max, total, placeholder, onAdd, onRemove }: {
 }
 
 // 주의: label 로 감싸면 빈 영역 클릭이 내부 첫 컨트롤(예: 결제수단 첫 버튼)을 토글하므로 div 사용
-function FieldWrap({ label, required, suffix, children }: {
-  label: string; required?: boolean; suffix?: string; children: React.ReactNode;
+// a11y: 단일 컨트롤을 감쌀 때 htmlFor 를 넘기면 라벨 텍스트가 <label> 로 렌더되어 연결됨
+function FieldWrap({ label, required, suffix, htmlFor, children }: {
+  label: string; required?: boolean; suffix?: string; htmlFor?: string; children: React.ReactNode;
 }) {
   return (
     <div className="block">
       <div className="flex items-baseline justify-between mb-1">
-        <span className="text-xs font-medium text-ink-secondary">
-          {label}{required && <span className="text-danger ml-0.5">*</span>}
-        </span>
+        {htmlFor ? (
+          <label htmlFor={htmlFor} className="text-xs font-medium text-ink-secondary">
+            {label}{required && <span className="text-danger ml-0.5">*</span>}
+          </label>
+        ) : (
+          <span className="text-xs font-medium text-ink-secondary">
+            {label}{required && <span className="text-danger ml-0.5">*</span>}
+          </span>
+        )}
         {suffix && <span className="text-2xs text-ink-muted">단위: {suffix}</span>}
       </div>
       {children}
