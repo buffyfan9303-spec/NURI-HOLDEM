@@ -550,7 +550,9 @@ function CalendarShareRow({ schedule }: { schedule: Schedule }) {
       <button type="button"
         onClick={async () => {
           try {
-            await navigator.clipboard.writeText(`https://nuriholdem.com/?s=${schedule.id}`);
+            // /p/<id> = 카톡·페북 봇에 대회별 OG 카드(포스터·바이인)를 주는 프리렌더 경로.
+            // 사람은 자동으로 /?s=<id> (앱 포스터 상세)로 리다이렉트된다.
+            await navigator.clipboard.writeText(`https://nuriholdem.com/p/${schedule.id}`);
             toast.show('공유 링크를 복사했습니다 — 붙여넣으면 이 대회로 바로 열려요', 'success');
           } catch { toast.show('복사에 실패했습니다', 'error'); }
         }}
