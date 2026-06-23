@@ -992,9 +992,20 @@ export default function App() {
     return () => { window.removeEventListener('resize', update); clearTimeout(t); };
   }, [activeTab]);
 
-  // #13 커뮤니티 게시글·댓글 실시간 — 다른 사용자가 올린 글/댓글이 즉시 반영(알림/일정/장부와 동일 수준)
-  useEffect(() => subscribePosts(reloadPosts), [reloadPosts]);
-  useEffect(() => subscribeComments(reloadComments), [reloadComments]);
+  // #13 커뮤니티 게시글·댓글 실시간 — 다른 사용자가 올린 글/댓글이 즉시 반영(알림/일정/장부와 동일 수준).
+  // 700ms 디바운스로 이벤트 폭주 시 getPosts(50건+내좋아요) 재조회를 1회로 합침(부하 점검 #1).
+  useEffect(() => {
+    let t: ReturnType<typeof setTimeout> | null = null;
+    const unsub = subscribePosts(() => { if (t) clearTimeout(t); t = setTimeout(reloadPosts, 700); });
+    return () => { if (t) clearTimeout(t); unsub(); };
+  }, [reloadPosts]);
+  useEffect(() => {
+    let t: ReturnType<typeof setTimeout> | null = null;
+    const unsub = subscribeComments(() => { if (t) clearTimeout(t); t = setTimeout(reloadComments, 700); });
+    return () => { if (t) clearTimeout(t); unsub(); };
+  }, [reloadComments]);
+  // 열린 상세(openPost)를 피드 갱신과 동기화 — 실시간/리로드로 posts 가 바뀌면 좋아요·댓글수·조회수도 상세에 반영
+  useEffect(() => { setOpenPost((cur) => (cur ? (posts.find((p) => p.id === cur.id) ?? cur) : cur)); }, [posts]);
 
   // 로그인 사용자: 내 알림 로드
   useEffect(() => {
