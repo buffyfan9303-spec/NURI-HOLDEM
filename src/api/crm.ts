@@ -19,6 +19,17 @@ export async function saveCustomerProfile(venueId: string, name: string, p: { bi
   if (error) throw error;
 }
 
+/** 매장 손님별 방문 집계(user_id→방문횟수) — '오늘 방문 손님' 보드의 단골/첫방문 배지용. can_manage_pos 만 조회. */
+export async function getVenueVisitorStats(venueId: string): Promise<Record<string, number>> {
+  if (IS_MOCK) return {};
+  const { data } = await supabase.from('customer_profiles')
+    .select('user_id, visit_count').eq('venue_id', venueId).not('user_id', 'is', null);
+  const m: Record<string, number> = {};
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const r of (data ?? []) as any[]) if (r.user_id) m[r.user_id as string] = (r.visit_count as number) ?? 0;
+  return m;
+}
+
 /** 다가오는 생일 단골(7일 내) — 월·일 비교, 연도 무시 */
 export async function getUpcomingBirthdays(venueId: string): Promise<{ name: string; birthday: string; dday: number }[]> {
   if (IS_MOCK) return [];

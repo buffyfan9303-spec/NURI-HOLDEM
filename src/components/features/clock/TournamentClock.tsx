@@ -19,6 +19,8 @@ import {
   type LedgerBuyin, type LedgerSession, type LedgerSessionListItem,
 } from '../../../api/ledger';
 import { listGamePresets, type GamePreset } from '../../../api/presets';
+import { saveVenueRankings } from '../../../api/rankings';
+import Modal from '../../atoms/Modal';
 
 const now = () => Date.now();
 const pad = (n: number) => String(Math.floor(n)).padStart(2, '0');
@@ -400,15 +402,39 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
     }
   }, [playTones]);
 
+  // 토너 종료 → 입상 순위 자동 초안(장부 연동 시): cfg.prizes 자리수만큼 행 + 장부 참가자 자동완성 → saveVenueRankings
+  const [finishRows, setFinishRows] = useState<{ name: string; prize: string }[] | null>(null);
+  const [finishBusy, setFinishBusy] = useState(false);
+  const saveFinishRanks = async () => {
+    if (!state.sessionDate || !finishRows) return;
+    const entries = finishRows.filter((r) => r.name.trim()).map((r) => ({ nickname: r.name.trim(), realName: '', prize: r.prize.trim() }));
+    if (!entries.length) { toast.show('최소 1명의 입상자를 입력하세요', 'error'); return; }
+    setFinishBusy(true);
+    try {
+      await saveVenueRankings(state.venueId, state.sessionDate, entries, (cfg.title || '').trim());
+      toast.show(`입상 ${entries.length}명 순위 저장 완료 — 매장 순위·시즌·머니인킹에 반영됩니다`, 'success');
+      setFinishRows(null);
+    } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
+    finally { setFinishBusy(false); }
+  };
+
   // 레벨 자동 전환(운영자 화면만 기록)
   const advance = useCallback(() => {
     const lv = state.config.levels;
     const nextIndex = state.currentIndex + 1;
-    if (nextIndex >= lv.length) { persist({ running: false, remainingMs: 0, endsAt: null }); playChime('finish'); return; }
+    if (nextIndex >= lv.length) {
+      persist({ running: false, remainingMs: 0, endsAt: null }); playChime('finish');
+      if (canManage && state.sessionDate) {
+        setFinishRows(cfg.prizes.length
+          ? cfg.prizes.map((p) => ({ name: '', prize: p.amount >= 10000 ? String(Math.round(p.amount / 10000)) : (p.amount ? String(p.amount) : '') }))
+          : [{ name: '', prize: '' }, { name: '', prize: '' }, { name: '', prize: '' }]);
+      }
+      return;
+    }
     const rem = lv[nextIndex].minutes * 60_000;
     persist({ currentIndex: nextIndex, remainingMs: rem, endsAt: state.running ? new Date(now() + rem).toISOString() : null });
     playChime(lv[nextIndex].kind === 'break' ? 'break' : 'level'); // 다음이 브레이크면 휴식음, 아니면 레벨업음
-  }, [state, persist, playChime]);
+  }, [state, persist, playChime, canManage]);
 
   useEffect(() => {
     if (!canManage || !state.running) return;
@@ -681,6 +707,33 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
         <p className="text-2xs text-ink-muted text-center">장부({state.sessionDate}) 연동 중 — 엔트리·리바인은 장부에서 자동 반영, 하단 버튼으로 보정/아웃 처리하세요.</p>
       )}
       </div>
+
+      {/* 토너 종료 → 입상 순위 자동 초안 입력(장부 연동 시) */}
+      {finishRows && state.sessionDate && (
+        <Modal open onClose={() => setFinishRows(null)} title="🏆 입상 순위 입력" maxWidth="md" variant="sheet">
+          <div className="space-y-2 p-4">
+            <p className="text-2xs text-ink-muted">토너 종료 — 입상 순위를 저장하면 매장 순위·시즌·머니인킹에 자동 반영됩니다. 이름은 장부 참가자에서 자동완성, 상금은 만원 단위.</p>
+            <datalist id="clk-finish-players">
+              {[...new Set(buyins.map((b) => b.playerName).filter(Boolean))].map((n) => <option key={n} value={n} />)}
+            </datalist>
+            {finishRows.map((r, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <span className="w-9 shrink-0 text-center text-2xs font-bold text-gold-300">{i + 1}위</span>
+                <input list="clk-finish-players" value={r.name}
+                  onChange={(e) => setFinishRows((rs) => (rs ? rs.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)) : rs))}
+                  placeholder="이름(닉네임)" className="input min-w-0 flex-1 text-sm" />
+                <input value={r.prize} inputMode="numeric"
+                  onChange={(e) => setFinishRows((rs) => (rs ? rs.map((x, j) => (j === i ? { ...x, prize: e.target.value.replace(/[^\d.]/g, '') } : x)) : rs))}
+                  placeholder="상금(만)" className="input w-20 text-sm tabular-nums" />
+              </div>
+            ))}
+            <div className="flex gap-2 pt-1">
+              <button type="button" onClick={() => setFinishRows((rs) => [...(rs ?? []), { name: '', prize: '' }])} className="btn-ghost shrink-0 text-2xs">+ 줄 추가</button>
+              <button type="button" disabled={finishBusy} onClick={saveFinishRanks} className="btn-primary flex-1 text-sm disabled:opacity-50">{finishBusy ? '저장 중…' : '순위 저장'}</button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

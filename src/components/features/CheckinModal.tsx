@@ -4,14 +4,20 @@ import QRCode from 'qrcode';
 import Modal from '../atoms/Modal';
 import { useToast } from '../atoms/Toast';
 import { listVenueCheckins, subscribeCheckins, checkinUrl, type Checkin } from '../../api/checkins';
+import { getVenueVisitorStats } from '../../api/crm';
 
 export default function CheckinModal({ open, onClose, venueId, venueName }: { open: boolean; onClose: () => void; venueId: string; venueName?: string }) {
   const toast = useToast();
   const [list, setList] = useState<Checkin[]>([]);
+  const [visits, setVisits] = useState<Record<string, number>>({}); // user_id→누적 방문횟수(CRM 단골/첫방문 배지)
   const [qr, setQr] = useState(''); // #15 로컬 생성(외부 api.qrserver.com 의존 제거 — 가용성·프라이버시)
   useEffect(() => { QRCode.toDataURL(checkinUrl(venueId), { width: 240, margin: 2 }).then(setQr).catch(() => setQr('')); }, [venueId]);
 
-  const reload = () => { const s = new Date(); s.setHours(0, 0, 0, 0); listVenueCheckins(venueId, s.toISOString()).then(setList).catch(() => {}); };
+  const reload = () => {
+    const s = new Date(); s.setHours(0, 0, 0, 0);
+    listVenueCheckins(venueId, s.toISOString()).then(setList).catch(() => {});
+    getVenueVisitorStats(venueId).then(setVisits).catch(() => {});
+  };
   useEffect(() => {
     if (!open) return;
     reload();
@@ -38,6 +44,12 @@ export default function CheckinModal({ open, onClose, venueId, venueName }: { op
             : <ul className="space-y-1">{list.map((c) => (
               <li key={c.id} className="flex items-center justify-between rounded-input border border-border-subtle bg-surface-low px-3 py-1.5">
                 <span className="min-w-0 flex-1 truncate text-sm text-ink-primary">{c.displayName ?? '회원'}</span>
+                {(() => {
+                  const v = visits[c.userId] ?? 0;
+                  const label = v >= 5 ? `단골 ${v}회` : v <= 1 ? '첫 방문' : `${v}회`;
+                  const cls = v >= 5 ? 'bg-gold-300/15 text-gold-300' : v <= 1 ? 'bg-emerald-500/15 text-emerald-300' : 'bg-surface-float text-ink-secondary';
+                  return <span className={`mr-2 shrink-0 rounded-badge px-1.5 py-0.5 text-[10px] font-bold ${cls}`}>{label}</span>;
+                })()}
                 <span className="shrink-0 text-2xs text-ink-muted tabular-nums">{fmt(c.createdAt)}</span>
               </li>
             ))}</ul>}
