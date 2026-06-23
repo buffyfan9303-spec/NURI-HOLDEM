@@ -27,7 +27,7 @@ import SectionHeader from '../atoms/SectionHeader';
 import NuriPosLedger from './NuriPosLedger';
 import LedgerStatsPanel from './LedgerStatsPanel';
 import { adminListRankVerifications, adminDecideRankVerification, signedVerifyUrl, type RankVerification, aiInspectVerification } from '../../api/rankverify';
-import { getAllInquiries, answerInquiry, type SupportInquiry } from '../../api/support';
+import { getAllInquiries, answerInquiry, subscribeInquiries, type SupportInquiry } from '../../api/support';
 
 interface AdminTabProps {
   schedules: Schedule[];
@@ -406,7 +406,7 @@ function SupportInquiriesPanel() {
   const [onlyOpen, setOnlyOpen] = useState(true);
 
   const load = useCallback(() => { getAllInquiries().then(setRows).catch(() => setRows([])); }, []);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); return subscribeInquiries(load); }, [load]); // #14 신규 문의/답변 실시간 반영
 
   const send = async (id: string) => {
     const text = (drafts[id] ?? '').trim();

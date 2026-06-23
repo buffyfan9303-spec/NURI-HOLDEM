@@ -73,3 +73,13 @@ export async function deleteMyInquiry(id: string): Promise<void> {
   const { error } = await supabase.from('support_inquiries').delete().eq('id', id);
   if (error) throw new Error(error.message);
 }
+
+// #14 실시간 — 신규 문의/답변을 즉시 반영(RLS가 수신 범위를 강제: 운영자=전체, 회원=본인). 변경 시 reload 콜백.
+export function subscribeInquiries(onChange: () => void): () => void {
+  if (IS_MOCK) return () => {};
+  const channel = supabase
+    .channel(`support:${Math.random().toString(36).slice(2)}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'support_inquiries' }, () => onChange())
+    .subscribe();
+  return () => { supabase.removeChannel(channel); };
+}

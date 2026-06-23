@@ -42,7 +42,7 @@ import {
   getSchedules, createSchedule, updateSchedule, deleteSchedule, subscribeSchedules,
 } from './api/schedules';
 import {
-  getVenues, getComments, getPosts, addComment, addPost, togglePostLike, deletePost,
+  getVenues, getComments, getPosts, addComment, addPost, togglePostLike, deletePost, subscribePosts, subscribeComments,
   updateVenueDescription, updateVenueImage, updateVenueImages, deleteComment, logActivity,
   getMyFollowedVenueIds,
 } from './api/community';
@@ -991,6 +991,10 @@ export default function App() {
     const t = setTimeout(update, 300); // 폰트/레이아웃 안정화 후 재측정
     return () => { window.removeEventListener('resize', update); clearTimeout(t); };
   }, [activeTab]);
+
+  // #13 커뮤니티 게시글·댓글 실시간 — 다른 사용자가 올린 글/댓글이 즉시 반영(알림/일정/장부와 동일 수준)
+  useEffect(() => subscribePosts(reloadPosts), [reloadPosts]);
+  useEffect(() => subscribeComments(reloadComments), [reloadComments]);
 
   // 로그인 사용자: 내 알림 로드
   useEffect(() => {

@@ -1020,10 +1020,11 @@ function LiveWallSection() {
       .then((m) => { if (active) setMessages(m); })
       .catch(() => { /* 조회 실패 시 빈 목록 유지 */ })
       .finally(() => { if (active) setLoading(false); });
-    // 실시간 수신 — 새 메시지 prepend (id 중복 방지)
-    const unsub = subscribeLiveWall((msg) => {
-      setMessages((prev) => (prev.some((x) => x.id === msg.id) ? prev : [msg, ...prev]));
-    });
+    // 실시간 수신 — 새 메시지 prepend(id 중복 방지) + 타인 삭제 전파(#19)
+    const unsub = subscribeLiveWall(
+      (msg) => setMessages((prev) => (prev.some((x) => x.id === msg.id) ? prev : [msg, ...prev])),
+      (id) => setMessages((prev) => prev.filter((x) => x.id !== id)),
+    );
     return () => { active = false; unsub(); };
   }, []);
 

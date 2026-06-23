@@ -369,17 +369,42 @@ export async function deleteLiveMessage(id: string): Promise<void> {
   if (error) throw error;
 }
 
-// 실시간 구독 — 새 메시지 INSERT 수신. 반환 함수 호출로 구독 해제.
-export function subscribeLiveWall(onInsert: (msg: LiveMessage) => void): () => void {
+// 실시간 구독 — 새 메시지 INSERT + 삭제 DELETE 수신(#19: 타인 삭제 전파). 반환 함수 호출로 구독 해제.
+// 채널명에 랜덤 suffix 부여(코드베이스 표준) — 재마운트/멀티 인스턴스 시 고정명 충돌·누수 방지.
+export function subscribeLiveWall(onInsert: (msg: LiveMessage) => void, onDelete?: (id: string) => void): () => void {
   if (IS_MOCK) return () => {};
   const channel = supabase
-    .channel('live_wall_inserts')
+    .channel(`live_wall:${Math.random().toString(36).slice(2)}`)
     .on(
       'postgres_changes',
       { event: 'INSERT', schema: 'public', table: 'live_wall' },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (payload: any) => onInsert(rowToLiveMessage(payload.new)),
     )
+    .on(
+      'postgres_changes',
+      { event: 'DELETE', schema: 'public', table: 'live_wall' },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (payload: any) => { const id = payload.old?.id; if (id && onDelete) onDelete(String(id)); },
+    )
+    .subscribe();
+  return () => { supabase.removeChannel(channel); };
+}
+
+// #13 커뮤니티 게시글/댓글 실시간 — 변경 시 reload 콜백 호출(라이브월/장부와 동일 패턴: 랜덤 채널+cleanup).
+export function subscribePosts(onChange: () => void): () => void {
+  if (IS_MOCK) return () => {};
+  const channel = supabase
+    .channel(`posts:${Math.random().toString(36).slice(2)}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'community_posts' }, () => onChange())
+    .subscribe();
+  return () => { supabase.removeChannel(channel); };
+}
+export function subscribeComments(onChange: () => void): () => void {
+  if (IS_MOCK) return () => {};
+  const channel = supabase
+    .channel(`comments:${Math.random().toString(36).slice(2)}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'comments' }, () => onChange())
     .subscribe();
   return () => { supabase.removeChannel(channel); };
 }
