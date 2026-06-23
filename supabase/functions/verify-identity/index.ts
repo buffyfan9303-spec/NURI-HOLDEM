@@ -57,10 +57,10 @@ Deno.serve(async (req: Request) => {
     const ci: string | undefined = vc.ci;
     if (!ci) return json({ error: '인증 정보(CI)를 확인할 수 없습니다.' }, 422);
 
-    // 만 19세 게이트(청소년보호법·게임산업법)
+    // 만 19세 게이트(청소년보호법·게임산업법) — fail-closed: 생년 미확인(age null) 시에도 거부(우회 차단).
     const birth: string | null = vc.birthDate ?? null;
     const age = ageFrom(birth);
-    if (age !== null && age < 19) return json({ error: '만 19세 이상만 이용할 수 있습니다.' }, 403);
+    if (age === null || age < 19) return json({ error: '만 19세 이상만 이용할 수 있습니다. (생년월일 확인 불가 시 가입 제한)' }, 403);
 
     const admin = createClient(SUPABASE_URL, SERVICE);
     const { data: dup } = await admin.from('profiles').select('id').eq('ci', ci).neq('id', user.id).limit(1).maybeSingle();
