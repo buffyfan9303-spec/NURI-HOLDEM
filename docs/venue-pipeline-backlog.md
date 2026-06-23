@@ -79,3 +79,43 @@
 - ☐ [중간/S·연결] 평점 SEO JSON-LD(LocalBusiness+aggregateRating) — 공유 카드에 평점 미노출.
 - ☐ [중간/M·연결] 근처/비슷한 매장 추천 + 팔로우 매장 통합 피드 — 회원 체류·재방문 고리 없음.
 - ☐ [중간/M·분석] 마케팅 푸시 성과 분석(도달·후속 방문 귀인) — `venue_announcements`는 발송 수만 저장.
+
+---
+
+# 플랫폼 교차영역 36건 (2026-06-23 심층연구) — 상태
+
+## 보안 (security-antifraud)
+- ☑ profiles 특권컬럼 자가수정 차단(권한상승·인증위장·포인트조작) — `guard_profile_privileged_cols`
+- ☑ 추천보상 게이트 `verified_at` 기준(다계정 파밍 2차 방어)
+- ☑ client_errors 길이/분당 캡 + 30일 purge
+- ☑ 운영자 감사로그(`audit_log`/`_audit`) — kill_venue 배선(나머지 RPC 점진)
+- ☐ [중간/S] PII 열람 RPC(find_user_by_phone) enumeration 제한 — caller-verified+rate
+- ☐ [중간/L] 칩덤핑·담합 의심패턴 탐지 — 원장 user_id 연결 선행(CRM alias 토대 위)
+
+## 신뢰성·스케일 (reliability)
+- ☑ 일정 실시간 700ms 디바운스 / getPosts 좋아요 50글 한정 / clock_states 중복정책 제거
+- ☐ [높음/M] **#6 RLS 81정책 `(select auth.uid())` 래핑** — ⚠️접근제어 대량변경, 전용 검증 패스 필요(성능, 데이터 6행이라 비급)
+- ☐ [높음/S] Sentry DSN 실연동 — Vercel 환경변수 설정 필요(외부)
+- ☐ [중간/M] 홈위젯 클라풀스캔(getVenueRankingTotals·주간머니인킹) → SQL 집계 RPC
+- ☐ [중간/S] unused index 18건 정리(advisor 확인 후)
+
+## 규제·책임게이밍 (regulation)
+- ☑ verify-identity 만19세 fail-closed(v3 배포) / consent_logs / 서버 UGC 필터
+- ☐ [높음/M] 이용권 P2P 양도 환전성 — 현재 dormant(UI/RPC 없음). 양도기능 추가 시 매장토글·환전금지동의 선행
+- ☐ [법무] 약관 '18세 미만' ↔ 코드 만19 문구 통일, 상금 면책 — **사장님/법무 결정 필요**
+
+## 성장·수익화 (growth)
+- ☑ 공유카드 `?ref` 임베드(바이럴 루프 완성)
+- ☐ [높음/M] 대회 OG 봇 프리렌더(/e/:id) — Vercel 엣지
+- ☐ [높음/L] 셀프부스트 결제 #19 · [높음/M] 이용권 쿼터 Freemium #20 — **PG 키/계약 필요**(또는 베타 PIN즉시지급)
+- ☐ [높음/L] 매장간 이용권 상호인정(제휴) · [중간/L] 신규매장 온보딩 퍼널+공개 디렉토리 — 제품 정책
+
+## AI (ai-data)
+- ☑ 고객문의 AI 답변 초안 #24
+- ☐ [높음/M] 리뷰 AI 답글 초안 #23 — venue_reviews.owner_reply 컬럼+RPC+UI
+- ☐ [중간~높음/L] 노쇼예측 #25 · 핸드 코칭 #26 · 장부 이상거래 #27 · 수요예측 #28 — 데이터 축적 후 ROI↑
+
+## UX·접근성 (ux)
+- ☑ reduced-motion / EmptyState icon / AuthModal 라벨 연결
+- ☐ [높음/M] 신규유저 첫진입 투어 #29(일정탐색 빈상태는 이미 메시지 있음 — 코치마크가 잔여) · 인증게이트 안내시트 #31
+- ☐ [중간/S] 나머지 폼(Poster/Post/Profile/Marketplace) 라벨 연결 · [중간/L] 영문 i18n #34
