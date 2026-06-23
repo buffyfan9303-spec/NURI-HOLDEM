@@ -577,11 +577,10 @@ function MobileTabBar({ tabs, active, onChange, dot, onOpenMe }: {
               {/* 아이콘 22px · 라벨 11px — 공백 줄이고 또렷하게 */}
               <span className={['relative flex h-8 w-14 items-center justify-center rounded-full [&_svg]:h-[22px] [&_svg]:w-[22px] transition-colors duration-200',
                 on ? 'text-accent-300' : 'text-ink-secondary'].join(' ')}>
-                {on && (
-                  <motion.span layoutId="mobile-tab-pill" aria-hidden
-                    className="absolute inset-0 rounded-full bg-accent-300/15"
-                    transition={{ type: 'spring', stiffness: 700, damping: 42 }} />
-                )}
+                {/* 활성 알약 — 각 칸이 자기 핀을 갖고 opacity 만 토글(transform·layout 0). 전환 시 크로스페이드 */}
+                <span aria-hidden
+                  className={['pointer-events-none absolute inset-0 rounded-full bg-accent-300/15 transition-opacity duration-200',
+                    on ? 'opacity-100' : 'opacity-0'].join(' ')} />
                 {tab ? TAB_ICON[tab] : ME_ICON}
                 {tab && dot?.[tab] && !on && <span className="absolute right-2 top-0.5 h-1.5 w-1.5 rounded-full bg-accent-300" aria-hidden />}
               </span>

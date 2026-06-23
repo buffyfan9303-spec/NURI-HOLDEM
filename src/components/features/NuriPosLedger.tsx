@@ -329,9 +329,26 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     } else setCopyMain(null);
   }, [showSetup, gameSeq, venueId, date]);
 
-  const cellAt = (name: string, e: number) => buyins.find((b) => b.playerName === name && b.entryNo === e) ?? null;
-  const countOf = (name: string) => buyins.filter((b) => b.playerName === name).length;
-  const maxEntryOf = (name: string) => buyins.reduce((m, b) => (b.playerName === name && b.entryNo > m ? b.entryNo : m), 0);
+  // 셀/행 조회는 표에서 행×열×바인(예: 50명×10칸×200바인 ≈ 10만회/렌더)으로 폭증하던 곳 —
+  // buyins 1회 순회로 맵을 만들어 O(1) 조회로 전환(필터/find/reduce per-cell 제거).
+  const binByKey = useMemo(() => {
+    const m = new Map<string, typeof buyins[number]>();
+    for (const b of buyins) m.set(`${b.playerName} ${b.entryNo}`, b);
+    return m;
+  }, [buyins]);
+  const countByName = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const b of buyins) m.set(b.playerName, (m.get(b.playerName) ?? 0) + 1);
+    return m;
+  }, [buyins]);
+  const maxEntryByName = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const b of buyins) { const c = m.get(b.playerName) ?? 0; if (b.entryNo > c) m.set(b.playerName, b.entryNo); }
+    return m;
+  }, [buyins]);
+  const cellAt = (name: string, e: number) => binByKey.get(`${name} ${e}`) ?? null;
+  const countOf = (name: string) => countByName.get(name) ?? 0;
+  const maxEntryOf = (name: string) => maxEntryByName.get(name) ?? 0;
   // 바인 컬럼 수 — PC는 10 고정(폭 축소로 한 화면에), 모바일은 "쓰인 최대 바인+1"만 렌더(가로 스크롤 최소화)
   const isDesktopLedger = useIsDesktop();
   const globalMaxEntry = buyins.reduce((m, b) => Math.max(m, b.entryNo), 0);
