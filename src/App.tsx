@@ -1355,8 +1355,8 @@ export default function App() {
         logActivity({ action: 'delete', targetType: 'post', targetId: id, targetOwnerId: target?.userId, targetSummary: target?.title || target?.content, actorName: user?.name });
         toast.show('게시글이 삭제되었습니다', 'success');
       })
-      .catch(() => toast.show('삭제에 실패했습니다', 'error'));
-  }, [posts, user, toast]);
+      .catch(() => { toast.show('삭제에 실패했습니다', 'error'); reloadPosts(); }); // #12 실패 시 목록 복원
+  }, [posts, user, toast, reloadPosts]);
 
   // 관리자/판매자: 매물 삭제 — 서버 삭제 + 활동로그
   const handleDeleteListing = useCallback((id: string) => {
@@ -1368,7 +1368,7 @@ export default function App() {
         logActivity({ action: 'delete', targetType: 'listing', targetId: id, targetOwnerId: target?.sellerId, targetSummary: target?.title, actorName: user?.name });
         toast.show('매물이 삭제되었습니다', 'success');
       })
-      .catch(() => toast.show('삭제에 실패했습니다', 'error'));
+      .catch(() => { toast.show('삭제에 실패했습니다', 'error'); getListings().then(setListings).catch(() => {}); }); // #12 실패 시 목록 복원
   }, [listings, user, toast]);
 
   // 관리자: 댓글 삭제 — 낙관적 제거 후 서버 반영(권한은 RLS가 강제)

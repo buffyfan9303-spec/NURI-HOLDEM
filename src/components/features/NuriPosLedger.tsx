@@ -1035,7 +1035,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
               await upsertBuyin({ venueId, sessionDate: date, gameSeq, playerName: pn, entryNo: selected.entryNo, paymentMethod: method, isUnpaid, discountIndex, earlyOverride: eo });
               setSelected(null); reload();
               if (isNew && (session.voucherAccrualPerBin ?? 0) > 0) {
-                accrueVoucher(venueId, pn, session.voucherAccrualPerBin as number).then((n) => { if (n > 0) toast.show(`${pn}님 이용권 ${n}개 적립`, 'success'); }).catch(() => {});
+                accrueVoucher(venueId, pn, session.voucherAccrualPerBin as number).then((n) => { if (n > 0) toast.show(`${pn}님 이용권 ${n}개 적립`, 'success'); }).catch(() => toast.show('이용권 적립 실패 — 수동 발급이 필요할 수 있어요', 'error')); // #20 적립 누락 가시화
               }
             } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
           }}
@@ -1045,7 +1045,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
               await upsertBuyinSplit({ venueId, sessionDate: date, gameSeq, playerName: pn, entryNo: selected.entryNo, ...d, earlyOverride: (isNew && selected.entryNo === 1) ? clockEarlyNow() : undefined });
               setSelected(null); reload();
               if (isNew && (session.voucherAccrualPerBin ?? 0) > 0) {
-                accrueVoucher(venueId, pn, session.voucherAccrualPerBin as number).then((n) => { if (n > 0) toast.show(`${pn}님 이용권 ${n}개 적립`, 'success'); }).catch(() => {});
+                accrueVoucher(venueId, pn, session.voucherAccrualPerBin as number).then((n) => { if (n > 0) toast.show(`${pn}님 이용권 ${n}개 적립`, 'success'); }).catch(() => toast.show('이용권 적립 실패 — 수동 발급이 필요할 수 있어요', 'error')); // #20 적립 누락 가시화
               }
             } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
           }}

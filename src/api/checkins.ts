@@ -37,11 +37,6 @@ export function checkinUrl(venueId: string): string {
   return `${origin}/?checkin=${venueId}`;
 }
 
-/** QR 이미지 URL (venue_id만 인코딩 — 비민감). */
-export function checkinQrUrl(venueId: string): string {
-  return `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=8&data=${encodeURIComponent(checkinUrl(venueId))}`;
-}
-
 export function subscribeCheckins(venueId: string, cb: () => void): () => void {
   if (IS_MOCK) return () => {};
   const ch = supabase.channel(`checkins:${venueId}:${Math.random().toString(36).slice(2)}`)

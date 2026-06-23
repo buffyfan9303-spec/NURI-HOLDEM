@@ -307,9 +307,12 @@ export async function updateUserStatus(
   // Edge Function(notify-sanction) 미배포 시에도 상태 변경은 성공하도록 실패는 무시.
   if (status === 'suspended' || status === 'banned' || status === 'withdrawn') {
     try {
-      await supabase.functions.invoke('notify-sanction', {
+      const { data } = await supabase.functions.invoke('notify-sanction', {
         body: { userId, status, reason: reason ?? '', suspendedUntil: suspendedUntil ?? null },
       });
+      // #20 200 {sent:false}(RESEND 미설정 등)는 예외가 아니라 조용히 누락됨 → 가시화
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if (data && (data as any).sent === false) console.warn('[sanction] notify email NOT sent:', (data as any).error ?? 'RESEND_API_KEY 미설정 가능');
     } catch (e) {
       console.warn('[sanction] notify email failed (function may be undeployed):', e);
     }
