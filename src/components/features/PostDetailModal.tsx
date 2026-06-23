@@ -254,10 +254,11 @@ export default function PostDetailModal({
           <div className="flex items-center gap-3 text-ink-muted">
             <button
               type="button"
+              aria-pressed={!!post.liked}
               onClick={() => { if (!user) { toast.show('로그인 후 이용할 수 있습니다', 'error'); promptLogin(); return; } onLike(post.id); }}
-              className="inline-flex items-center gap-1 hover:text-danger transition-colors"
+              className={`inline-flex items-center gap-1 transition-colors ${post.liked ? 'text-danger' : 'hover:text-danger'}`}
             >
-              <svg width="14" height="14" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden>
+              <svg width="14" height="14" viewBox="0 0 13 13" fill={post.liked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.4" aria-hidden>
                 <path d="M6.5 11.5L1.5 6.5C0.5 5.5 0.5 3.5 1.5 2.5C2.5 1.5 4.5 1.5 5.5 2.5L6.5 3.5L7.5 2.5C8.5 1.5 10.5 1.5 11.5 2.5C12.5 3.5 12.5 5.5 11.5 6.5L6.5 11.5Z" strokeLinejoin="round" />
               </svg>
               좋아요 {post.likeCount}

@@ -1322,15 +1322,16 @@ export default function App() {
   }, [user]);
 
   const handleLikePost = useCallback((postId: string) => {
-    // 낙관적 토글(1인 1회) → 서버 권위값으로 보정, 실패 시 롤백+안내
+    // 낙관적 토글(1인 1회) → 서버 권위값 보정, 실패 시 롤백. 피드(posts)와 상세(openPost) 동시 반영.
     const flip = (p: CommunityPost) => ({ ...p, liked: !p.liked, likeCount: Math.max(0, p.likeCount + (p.liked ? -1 : 1)) });
-    setPosts((prev) => prev.map((p) => p.id === postId ? flip(p) : p));
+    const apply = (fn: (p: CommunityPost) => CommunityPost) => {
+      setPosts((prev) => prev.map((p) => p.id === postId ? fn(p) : p));
+      setOpenPost((cur) => (cur && cur.id === postId ? fn(cur) : cur));
+    };
+    apply(flip);
     togglePostLike(postId)
-      .then(({ liked, count }) => setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, liked, likeCount: count } : p)))
-      .catch((e) => {
-        setPosts((prev) => prev.map((p) => p.id === postId ? flip(p) : p)); // 되돌리기(이미 뒤집힌 상태를 재뒤집음)
-        toast.show(e instanceof Error ? e.message : '좋아요 처리 실패', 'error');
-      });
+      .then(({ liked, count }) => apply((p) => ({ ...p, liked, likeCount: count })))
+      .catch((e) => { apply(flip); toast.show(e instanceof Error ? e.message : '좋아요 처리 실패', 'error'); }); // 되돌리기
   }, [toast]);
 
   // 관리자: 회원 업데이트 (승인/정지/해제) — 서버 반영
