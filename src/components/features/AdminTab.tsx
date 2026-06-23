@@ -28,6 +28,7 @@ import NuriPosLedger from './NuriPosLedger';
 import LedgerStatsPanel from './LedgerStatsPanel';
 import { adminListRankVerifications, adminDecideRankVerification, signedVerifyUrl, type RankVerification, aiInspectVerification } from '../../api/rankverify';
 import { getAllInquiries, answerInquiry, subscribeInquiries, type SupportInquiry } from '../../api/support';
+import { aiGenerate } from '../../api/ai';
 
 interface AdminTabProps {
   schedules: Schedule[];
@@ -403,7 +404,20 @@ function SupportInquiriesPanel() {
   const [rows, setRows] = useState<SupportInquiry[] | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
+  const [aiBusy, setAiBusy] = useState<string | null>(null);
   const [onlyOpen, setOnlyOpen] = useState(true);
+  // #24 AI 답변 초안 — 문의 내용으로 정중한 답변 초안을 생성해 드래프트에 채움(운영자 검토 후 수정/등록).
+  const aiDraft = async (q: SupportInquiry) => {
+    setAiBusy(q.id);
+    try {
+      const text = await aiGenerate(
+        `[1:1 문의] 카테고리: ${q.category}\n제목: ${q.title}\n내용: ${q.content}`,
+        '너는 홀덤 플랫폼 고객지원 담당자다. 위 문의에 대한 답변 초안을 정중한 존댓말 3~5문장으로 작성하라. 불만/신고면 사과+해결 약속, 단순 문의면 명확한 안내. 환전·사행성 조장 표현 금지. 답변 본문만 출력.',
+      );
+      setDrafts((d) => ({ ...d, [q.id]: text }));
+    } catch (e) { toast.show(e instanceof Error ? e.message : 'AI 초안 생성 실패', 'error'); }
+    finally { setAiBusy(null); }
+  };
 
   const load = useCallback(() => { getAllInquiries().then(setRows).catch(() => setRows([])); }, []);
   useEffect(() => { load(); return subscribeInquiries(load); }, [load]); // #14 신규 문의/답변 실시간 반영
@@ -448,7 +462,10 @@ function SupportInquiriesPanel() {
               <div className="mt-2 space-y-1.5">
                 <textarea value={drafts[q.id] ?? ''} onChange={(e) => setDrafts((d) => ({ ...d, [q.id]: e.target.value }))}
                   rows={2} placeholder={q.status === 'answered' ? '답변 수정…' : '답변 작성…'} className="input w-full resize-none text-sm" />
-                <button type="button" onClick={() => send(q.id)} disabled={busy === q.id} className="btn-primary px-3 py-1.5 text-2xs disabled:opacity-50">{busy === q.id ? '등록 중…' : q.status === 'answered' ? '답변 수정' : '답변 등록'}</button>
+                <div className="flex items-center gap-1.5">
+                  <button type="button" onClick={() => send(q.id)} disabled={busy === q.id} className="btn-primary px-3 py-1.5 text-2xs disabled:opacity-50">{busy === q.id ? '등록 중…' : q.status === 'answered' ? '답변 수정' : '답변 등록'}</button>
+                  <button type="button" onClick={() => aiDraft(q)} disabled={aiBusy === q.id} className="rounded-input border border-gold-400/40 bg-gold-300/[0.06] px-2.5 py-1.5 text-2xs font-bold text-gold-300 disabled:opacity-50">{aiBusy === q.id ? '생성 중…' : '✨ AI 초안'}</button>
+                </div>
               </div>
             </li>
           ))}</ul>}
