@@ -29,7 +29,7 @@ export default function CheckinModal({ open, onClose, venueId, venueName }: { op
           {qr
             ? <img src={qr} alt="체크인 QR" width={200} height={200} className="rounded-lg bg-white p-2" />
             : <div className="h-[200px] w-[200px] animate-pulse rounded-lg bg-white/10" aria-label="QR 생성 중" />}
-          <p className="text-center text-2xs text-ink-muted"><b className="text-gold-300">고정 QR</b> — 손님이 스캔하면 <b className="text-ink-secondary">{venueName ?? '우리 매장'}</b>에 방문 체크됩니다.<br />로그인 회원만 · 4시간 내 중복 방지. 예약 손님이 스캔·이용권 결제하면 방문 처리됩니다.</p>
+          <p className="text-center text-2xs text-ink-muted"><b className="text-gold-300">고정 QR</b> — 손님이 스캔하면 <b className="text-ink-secondary">{venueName ?? '우리 매장'}</b>에 방문 체크됩니다.<br />로그인 회원만 · 4시간 내 중복 방지. 손님이 매장이용권을 사용하면 방문이 자동 기록됩니다.</p>
           <button type="button" onClick={copy} className="btn-ghost px-3 text-2xs">체크인 링크 복사</button>
         </div>
         <div>

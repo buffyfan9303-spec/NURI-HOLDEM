@@ -123,11 +123,16 @@ function LeagueLiveBoard({ league, isOwner, members, venueId, canConfigure, onCh
       const entries = Math.max(0, parseInt(entriesInput, 10) || statusOf(venueId)?.entries || 0);
       let itm: LeagueItmPlayer[] | undefined;
       if (status === 'settled') {
-        const today = new Date().toLocaleDateString('en-CA');
+        // Asia/Seoul 기준 오늘(entry_date 기본값과 정합 — 자정 경계 브라우저 TZ 어긋남 방지)
+        const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const r = await getVenueRankings(venueId, today).catch(() => ({ entries: [] as any[] }));
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        itm = (r.entries ?? []).map((e: any, i: number) => ({ name: e.nickname || e.realName || '참가자', place: i + 1, prize: e.prize || undefined }));
+        // 입상권(prize 있는 순위)만 ITM 으로 보고 — 실제 등수(position) 사용
+        itm = (r.entries ?? [])
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .filter((e: any) => (e.prize ?? '').toString().trim() !== '')
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .map((e: any) => ({ name: e.nickname || e.realName || '참가자', place: e.position, prize: e.prize || undefined }));
       }
       await setLeagueStatus(league.id, venueId, status, entries, itm);
       toast.show(status === 'running' ? '진행 중으로 표시했습니다' : status === 'settled' ? `정산 완료 — 입상 ${itm?.length ?? 0}명 보고됨` : '시작 전으로 되돌렸습니다', 'success');

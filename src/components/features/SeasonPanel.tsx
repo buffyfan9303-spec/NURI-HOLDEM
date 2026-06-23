@@ -9,6 +9,7 @@ import {
   listVenueSeasons, getCurrentSeasonStandings, getSeasonResults, getVenueHallOfFame,
   createVenueSeason, endVenueSeason, type VenueSeason, type SeasonStanding, type HallOfFameEntry,
 } from '../../api/seasons';
+import { subscribeRankings } from '../../api/rankings';
 
 const today = () => new Date().toLocaleDateString('en-CA');
 const addDays = (iso: string, d: number) => { const t = new Date(iso); t.setDate(t.getDate() + d); return t.toLocaleDateString('en-CA'); };
@@ -33,7 +34,8 @@ export default function SeasonPanel({ venueId, canManage = false, venueName }: {
     getCurrentSeasonStandings(venueId).then(setStandings).catch(() => {});
     getVenueHallOfFame(venueId).then(setHof).catch(() => {});
   };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [venueId]);
+  // 순위 입력(venue_rankings 변경) 시 시즌 standings·HOF 즉시 갱신(실시간). 퍼블리케이션 등록 완료.
+  useEffect(() => { load(); return subscribeRankings(venueId, load); /* eslint-disable-next-line */ }, [venueId]);
 
   const active = useMemo(() => seasons?.find((s) => s.status === 'active') ?? null, [seasons]);
   const archived = useMemo(() => seasons?.filter((s) => s.status === 'ended') ?? [], [seasons]);

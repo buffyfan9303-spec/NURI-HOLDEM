@@ -486,13 +486,11 @@ export async function closeLedgerSession(venueId: string, date: string, memo: st
   if (error) throw error;
 }
 
-/** 마감 해제(업주 전용 — UI에서 권한 게이트) */
+/** 마감 해제(업주 전용 — 서버 RPC가 can_manage_pos 로 강제, UI 게이트와 이중) */
 export async function reopenLedgerSession(venueId: string, date: string, gameSeq = MAIN_GAME_SEQ): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('ledger_sessions')
-    .update({ closed: false, closed_at: null, updated_at: new Date().toISOString() })
-    .eq('venue_id', venueId).eq('session_date', date).eq('game_seq', gameSeq);
-  if (error) throw error;
+  const { error } = await supabase.rpc('reopen_ledger_session', { p_venue_id: venueId, p_date: date, p_game_seq: gameSeq });
+  if (error) throw new Error(error.message);
 }
 
 /** 장부(세션) 통째 삭제 — 바인·명단·세션 일괄 제거. POS 관리 권한 필요(SECURITY DEFINER RPC). */
