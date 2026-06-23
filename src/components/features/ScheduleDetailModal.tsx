@@ -92,6 +92,7 @@ export default function ScheduleDetailModal({
                 <img
                   src={schedule.posterUrl}
                   alt={`${schedule.title} 포스터`}
+                  decoding="async"
                   className="block h-auto w-full max-h-[65vh] object-contain lg:max-h-screen"
                 />
               </button>
@@ -581,7 +582,7 @@ function BuyinRequestBox({ venueId }: { venueId: string }) {
   };
   return (
     <div className="flex items-center gap-3 rounded-card border border-sky-500/30 bg-sky-500/[0.05] p-3">
-      {qr && <img src={qr} alt="바인 요청 QR" width={72} height={72} className="shrink-0 rounded bg-white p-1" />}
+      {qr && <img src={qr} alt="바인 요청 QR" width={72} height={72} decoding="async" className="shrink-0 rounded bg-white p-1" />}
       <div className="min-w-0 flex-1">
         <p className="text-sm font-bold text-ink-primary">🙋 현장 바인(참가) 요청</p>
         <p className="mt-0.5 text-2xs leading-relaxed text-ink-muted">QR 스캔 또는 버튼으로 운영자에게 참가를 요청하세요. 승인되면 장부 명단에 자동 등록됩니다.</p>
