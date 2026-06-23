@@ -11,9 +11,10 @@ export function Skeleton({ className = 'h-12' }: { className?: string }) {
 /** 리스트 행 스켈레톤 — "불러오는 중…" 텍스트 대신 뼈대→내용 페이드 통일용. */
 export function SkeletonList({ rows = 4, rowClassName = 'h-12' }: { rows?: number; rowClassName?: string }) {
   return (
-    <div className="space-y-1.5 animate-fade-in" aria-hidden aria-busy="true">
+    // 스태거(행마다 70ms 지연)를 제거 — 로딩 시 위→아래로 '주르륵' 흐르며 깜빡이던 느낌 제거(균일 셰이드).
+    <div className="space-y-1.5" aria-hidden aria-busy="true">
       {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className={`skeleton rounded-input ${rowClassName}`} style={{ animationDelay: `${i * 70}ms` }} />
+        <div key={i} className={`skeleton rounded-input ${rowClassName}`} />
       ))}
     </div>
   );

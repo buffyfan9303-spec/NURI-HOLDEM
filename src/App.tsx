@@ -1789,12 +1789,11 @@ export default function App() {
                 ) : visibleSchedules.length === 0 ? (
                   <EmptyState />
                 ) : viewMode === 'table' ? (
-                  <div className="animate-fade-in hidden md:block">
+                  <div className="hidden md:block">
                     <ScheduleTable schedules={visibleSchedules} onSelect={handleScheduleSelect} onVenueClick={handleVenueClick} />
                   </div>
                 ) : (
                   <div className={[
-                    'animate-fade-in',
                     viewMode === 'grid'
                       // 그리드 뷰: 모바일 2열 → 데스크톱 4~5열
                       ? 'grid grid-cols-2 gap-card-gap sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
@@ -1816,7 +1815,7 @@ export default function App() {
                 )}
                 {/* 표 모드는 PC 전용 — 모바일 폭에선 리스트로 자동 표시 */}
                 {viewMode === 'table' && visibleSchedules.length > 0 && (
-                  <div className="grid grid-cols-1 gap-card-gap animate-fade-in md:hidden">
+                  <div className="grid grid-cols-1 gap-card-gap md:hidden">
                     {visibleSchedules.map((s) => (
                       <ScheduleCard key={s.id} mode="list" schedule={s} reserveCount={browseResCounts[s.id]} rating={venueRatings[s.venueId]} onVenueClick={handleVenueClick} onSelect={handleScheduleSelect} />
                     ))}
