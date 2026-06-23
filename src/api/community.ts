@@ -74,6 +74,7 @@ export interface CommunityPost {
   badbeatCount?: number;    // 억까(Bad Beat) 수
   goodrunCount?: number;    // 나이스런(Good Run) 수
   blinded?: boolean;        // 신고 누적 자동 숨김(운영자/작성자만 열람)
+  liked?: boolean;          // 현재 사용자가 좋아요했는지(post_likes 기준) — 토글 UI용
 }
 
 export type ReactionType = 'badbeat' | 'goodrun';
@@ -255,10 +256,14 @@ export async function getPosts(): Promise<CommunityPost[]> {
     const { MOCK_COMMUNITY_POSTS } = await import('../mock/data');
     return MOCK_COMMUNITY_POSTS;
   }
-  const { data, error } = await supabase.from('community_posts').select('*')
-    .order('created_at', { ascending: false }).limit(50);
-  if (error) throw error;
-  return (data ?? []).map(rowToPost);
+  const [postsRes, likesRes] = await Promise.all([
+    supabase.from('community_posts').select('*').order('created_at', { ascending: false }).limit(50),
+    supabase.from('post_likes').select('post_id'), // RLS: 본인 것만 반환(미로그인은 0건)
+  ]);
+  if (postsRes.error) throw postsRes.error;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const likedIds = new Set((likesRes.data ?? []).map((r: any) => r.post_id as string));
+  return (postsRes.data ?? []).map(rowToPost).map((p) => ({ ...p, liked: likedIds.has(p.id) }));
 }
 
 export async function addPost(
@@ -295,9 +300,14 @@ export async function addPost(
   return { ...rowToPost(fallback.data), category: payload.category, title: payload.title, images: payload.images };
 }
 
-export async function likePost(postId: string): Promise<void> {
-  if (IS_MOCK) return;
-  await supabase.rpc('increment_post_likes', { post_id: postId });
+// 좋아요 토글 — 1인 1회, 다시 누르면 취소. 서버 권위 카운트+liked 반환(스팸 증가 차단).
+export async function togglePostLike(postId: string): Promise<{ liked: boolean; count: number }> {
+  if (IS_MOCK) return { liked: true, count: 1 };
+  const { data, error } = await supabase.rpc('toggle_post_like', { p_post_id: postId });
+  if (error) throw new Error(error.message);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const d = (data ?? {}) as any;
+  return { liked: d.liked === true, count: Number(d.count ?? 0) };
 }
 
 // 게시글 삭제 — RLS(posts_delete: 본인 또는 admin)가 권한 강제

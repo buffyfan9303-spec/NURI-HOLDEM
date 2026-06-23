@@ -42,7 +42,7 @@ import {
   getSchedules, createSchedule, updateSchedule, deleteSchedule, subscribeSchedules,
 } from './api/schedules';
 import {
-  getVenues, getComments, getPosts, addComment, addPost, likePost, deletePost,
+  getVenues, getComments, getPosts, addComment, addPost, togglePostLike, deletePost,
   updateVenueDescription, updateVenueImage, updateVenueImages, deleteComment, logActivity,
   getMyFollowedVenueIds,
 } from './api/community';
@@ -1318,11 +1318,16 @@ export default function App() {
   }, [user]);
 
   const handleLikePost = useCallback((postId: string) => {
-    setPosts((prev) =>
-      prev.map((p) => p.id === postId ? { ...p, likeCount: p.likeCount + 1 } : p),
-    );
-    likePost(postId).catch(() => {});
-  }, []);
+    // 낙관적 토글(1인 1회) → 서버 권위값으로 보정, 실패 시 롤백+안내
+    const flip = (p: CommunityPost) => ({ ...p, liked: !p.liked, likeCount: Math.max(0, p.likeCount + (p.liked ? -1 : 1)) });
+    setPosts((prev) => prev.map((p) => p.id === postId ? flip(p) : p));
+    togglePostLike(postId)
+      .then(({ liked, count }) => setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, liked, likeCount: count } : p)))
+      .catch((e) => {
+        setPosts((prev) => prev.map((p) => p.id === postId ? flip(p) : p)); // 되돌리기(이미 뒤집힌 상태를 재뒤집음)
+        toast.show(e instanceof Error ? e.message : '좋아요 처리 실패', 'error');
+      });
+  }, [toast]);
 
   // 관리자: 회원 업데이트 (승인/정지/해제) — 서버 반영
   const handleUpdateUser = useCallback((id: string, patch: Partial<User>) => {
