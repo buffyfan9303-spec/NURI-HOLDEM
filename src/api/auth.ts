@@ -1,5 +1,6 @@
 ﻿// src/api/auth.ts
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { makeSearchCache } from '../lib/searchCache';
 
 export type UserRole   = 'user' | 'venue_owner' | 'venue_staff' | 'admin';
 // 'withdrawn' = 강제 탈퇴(Stage 3). 정지(suspended)/영구정지(banned)와 구분.
@@ -71,9 +72,9 @@ function rowToUser(row: any): User {
     activityPoints: row.activity_points ?? 0,
     badges:         row.badges ?? [],
     staffTitle:     row.staff_title ?? undefined,
-    // 인증 판정: CI(본인확인) 보유 = 인증 완료. verify-identity 의 'CI 기반 1인 1계정' 의도 및
-    // is_verified_owner/RLS/find_user_by_phone/추천보상 트리거와 동일 기준. 약관에 본인인증 유효기간 조항이
-    // 없으므로 만료(재인증)는 적용하지 않는다 — 유효기간 정책 도입 시 약관 신설 후 RPC/클라이언트 공통상수로 통일할 것.
+    // 인증 판정: CI(본인확인) 보유 = 인증 완료. 이 식은 서버 단일 소스 SQL 헬퍼 public.is_ci_verified(ci, verified_at)
+    // 의 클라이언트 미러다(현재 body = `ci is not null`). 약관에 본인인증 유효기간 조항이 없어 만료(재인증)는 미적용.
+    // ⚠️ 만료 정책 도입 시: 약관 신설 → is_ci_verified body 수정 → 이 줄도 동일 기준으로 동기화(두 곳이 짝). [[holdem-verification-policy]]
     verified:       !!row.ci,
     verifiedAt:     row.verified_at ?? undefined,
     realName:       row.real_name ?? undefined,
@@ -466,8 +467,7 @@ export async function updateMyConsent(consent: ConsentPayload): Promise<void> {
   if (error) throw error;
 }
 
-/** 순위 입력 자동완성 — 닉네임/실명 부분 일치(업주·운영자만 실명 반환, RPC 내부 게이트). verified=본인인증 보유 여부(미인증 선안내용) */
-export async function searchMembersForRanking(q: string): Promise<{ nickname: string; realName: string; verified: boolean }[]> {
+async function rawSearchMembersForRanking(q: string): Promise<{ nickname: string; realName: string; verified: boolean }[]> {
   const t = q.trim();
   if (!t) return [];
   const { data, error } = await supabase.rpc('search_members_for_ranking', { p_q: t });
@@ -475,3 +475,6 @@ export async function searchMembersForRanking(q: string): Promise<{ nickname: st
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({ nickname: r.nickname ?? '', realName: r.real_name ?? '', verified: r.verified === true }));
 }
+/** 순위 입력 자동완성 — 닉네임/실명 부분 일치(업주·운영자만 실명 반환, RPC 내부 게이트). verified=본인인증 보유 여부(미인증 선안내용).
+ *  이용권 검색과 동일하게 동일 q 중복 호출을 in-flight+20s LRU 로 흡수(키=trim+소문자, ILIKE라 대소문자·공백 무관). */
+export const searchMembersForRanking = makeSearchCache(rawSearchMembersForRanking, (s) => s.trim().toLowerCase());
