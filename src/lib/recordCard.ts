@@ -2,6 +2,7 @@
 // 내 토너먼트 전적 공유 카드 — 캔버스로 1080x1080 PNG 를 그려 Blob 으로 반환(의존성 없음).
 // SNS 공유(navigator.share)/이미지 저장에 사용. 한글은 브라우저 sans-serif 폴백으로 렌더.
 import { kakaoShareImage } from './kakao';
+import { inviteUrl } from '../api/referrals';
 
 const BG0 = '#0E1116';
 const BG1 = '#06080B';
@@ -169,7 +170,7 @@ export async function shareChampionCard(d: ChampionCardData): Promise<'shared' |
   const nav = navigator as Navigator & { canShare?: (data: ShareData) => boolean };
   if (nav.canShare && nav.canShare({ files: [file] }) && navigator.share) {
     try {
-      await navigator.share({ files: [file], title: 'NURI HOLDEM 시즌 챔피언', text: `${d.seasonName} 시즌 챔피언 🏆` });
+      await navigator.share({ files: [file], title: 'NURI HOLDEM 시즌 챔피언', text: `${d.seasonName} 시즌 챔피언 🏆\n나도 도전하기 👉 ${inviteUrl(d.nickname)}`, url: inviteUrl(d.nickname) });
       return 'shared';
     } catch (e) { if ((e as Error).name === 'AbortError') return 'shared'; }
   }
@@ -199,7 +200,7 @@ export async function shareRecordCard(d: RecordCardData): Promise<'shared' | 'do
   const nav = navigator as Navigator & { canShare?: (data: ShareData) => boolean };
   if (nav.canShare && nav.canShare({ files: [file] }) && navigator.share) {
     try {
-      await navigator.share({ files: [file], title: 'NURI HOLDEM 전적', text: `내 홀덤 토너먼트 전적 (전국 상위 ${d.percentile ?? '-'}%)` });
+      await navigator.share({ files: [file], title: 'NURI HOLDEM 전적', text: `내 홀덤 토너먼트 전적 (전국 상위 ${d.percentile ?? '-'}%)\n나도 기록 남기기 👉 ${inviteUrl(d.nickname)}`, url: inviteUrl(d.nickname) });
       return 'shared';
     } catch (e) {
       if ((e as Error).name === 'AbortError') return 'shared'; // 사용자가 취소 — 에러 아님
@@ -221,7 +222,7 @@ export async function shareRecordCardKakao(d: RecordCardData): Promise<boolean> 
   return kakaoShareImage(blob, {
     title: 'NURI HOLDEM 내 전적',
     description: `전국 상위 ${d.percentile ?? '-'}% · 우승 ${d.wins}회 · 우승률 ${d.winRate}%`,
-    link: 'https://nuriholdem.com',
+    link: inviteUrl(d.nickname),
   });
 }
 
@@ -230,6 +231,6 @@ export async function shareChampionCardKakao(d: ChampionCardData): Promise<boole
   return kakaoShareImage(blob, {
     title: 'NURI HOLDEM 시즌 챔피언',
     description: `${d.seasonName} 시즌 챔피언 🏆 ${d.points}점`,
-    link: 'https://nuriholdem.com',
+    link: inviteUrl(d.nickname),
   });
 }
