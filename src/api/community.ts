@@ -256,14 +256,18 @@ export async function getPosts(): Promise<CommunityPost[]> {
     const { MOCK_COMMUNITY_POSTS } = await import('../mock/data');
     return MOCK_COMMUNITY_POSTS;
   }
-  const [postsRes, likesRes] = await Promise.all([
-    supabase.from('community_posts').select('*').order('created_at', { ascending: false }).limit(50),
-    supabase.from('post_likes').select('post_id'), // RLS: 본인 것만 반환(미로그인은 0건)
-  ]);
+  const postsRes = await supabase.from('community_posts').select('*').order('created_at', { ascending: false }).limit(50);
   if (postsRes.error) throw postsRes.error;
+  const rows = postsRes.data ?? [];
+  // #10 내 좋아요는 '노출된 50글'로 한정(전건 로드 방지). RLS 가 본인 것만 반환(미로그인 0건).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ids = rows.map((r: any) => r.id as string);
+  const likesRes = ids.length
+    ? await supabase.from('post_likes').select('post_id').in('post_id', ids)
+    : { data: [] as { post_id: string }[] };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const likedIds = new Set((likesRes.data ?? []).map((r: any) => r.post_id as string));
-  return (postsRes.data ?? []).map(rowToPost).map((p) => ({ ...p, liked: likedIds.has(p.id) }));
+  return rows.map(rowToPost).map((p) => ({ ...p, liked: likedIds.has(p.id) }));
 }
 
 export async function addPost(

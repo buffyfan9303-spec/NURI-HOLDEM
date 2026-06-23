@@ -1040,7 +1040,12 @@ export default function App() {
   }, [user]);
 
   // 일정(포스터/게임) 실시간 동기화 — 다른 기기/사용자의 등록·수정·삭제 즉시 반영
-  useEffect(() => subscribeSchedules(reloadSchedules), [reloadSchedules]);
+  // #7 일정 실시간 — 700ms 디바운스로 변경 폭주 시 전체 refetch 를 1회로 합침(동시접속 팬아웃 완화).
+  useEffect(() => {
+    let t: ReturnType<typeof setTimeout> | null = null;
+    const unsub = subscribeSchedules(() => { if (t) clearTimeout(t); t = setTimeout(reloadSchedules, 700); });
+    return () => { if (t) clearTimeout(t); unsub(); };
+  }, [reloadSchedules]);
 
   // 관리자: 회원 목록 로드
   useEffect(() => {
