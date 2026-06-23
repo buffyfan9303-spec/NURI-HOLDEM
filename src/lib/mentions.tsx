@@ -32,7 +32,7 @@ export function renderMentions(
         key={`m${key++}`}
         type="button"
         onClick={(e) => { e.stopPropagation(); if (v) onVenueClick(v.id); }}
-        className="text-gold-300 font-semibold hover:underline"
+        className="text-accent-300 font-semibold hover:underline"
       >
         @{name}
       </button>,

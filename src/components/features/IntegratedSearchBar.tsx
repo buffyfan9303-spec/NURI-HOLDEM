@@ -128,10 +128,10 @@ function DateTab({ slot, selected, onClick }: DateTabProps) {
       className={[
         // 정사각 셀(요일·날짜만) — '오늘' 텍스트 제거로 모든 칸 동일 높이
         'relative flex h-[3.25rem] w-[3.25rem] shrink-0 snap-center flex-col items-center justify-center rounded-xl select-none',
-        'focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-300',
+        'focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-300',
         selected ? 'text-ink-inverse' : 'text-ink-secondary hover:bg-surface-high active:bg-surface-high/70',
         // 오늘은 글자 대신 골드 테두리로 표시(미선택 시)
-        !selected && slot.isToday ? 'ring-1 ring-gold-300/55' : '',
+        !selected && slot.isToday ? 'ring-1 ring-accent-300/55' : '',
       ].join(' ')}
     >
       {/* 선택 시 골드 정사각 알약 — 셀과 정확히 일치(inset-0·동일 rounded) */}
@@ -141,7 +141,7 @@ function DateTab({ slot, selected, onClick }: DateTabProps) {
           initial={{ scale: 0.6, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ type: 'spring', stiffness: 620, damping: 26 }}
-          className="absolute inset-0 rounded-xl bg-gold-300 shadow-[0_4px_14px_-4px_rgba(252,213,53,0.6)]"
+          className="absolute inset-0 rounded-xl bg-accent-300 shadow-[0_4px_14px_-4px_rgba(252,213,53,0.6)]"
         />
       )}
       <span className={['relative text-[10px] font-bold leading-none', selected ? 'text-ink-inverse/85' : dowColor].join(' ')}>{slot.dow}</span>
@@ -186,7 +186,7 @@ function DateSlider({ selectedDates, onToggle, onPick }: DateSliderProps) {
       {/* 날짜 직접 선택 (3주 이후) — 네이티브 date picker 오버레이 */}
       <label
         title="날짜 직접 선택"
-        className="relative flex shrink-0 snap-center flex-col items-center justify-center w-[3.1rem] h-[3.25rem] rounded-xl border border-dashed border-border-default text-ink-secondary hover:bg-surface-high hover:border-gold-400/50 cursor-pointer transition-colors focus-within:ring-2 focus-within:ring-gold-300"
+        className="relative flex shrink-0 snap-center flex-col items-center justify-center w-[3.1rem] h-[3.25rem] rounded-xl border border-dashed border-border-default text-ink-secondary hover:bg-surface-high hover:border-accent-400/50 cursor-pointer transition-colors focus-within:ring-2 focus-within:ring-accent-300"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
@@ -300,7 +300,7 @@ export default function IntegratedSearchBar({
             'bg-surface-high rounded-input h-11',
             'border transition-all duration-150',
             isFocused
-              ? 'border-gold-300'
+              ? 'border-accent-300'
               : 'border-border-default',
           ].join(' ')}
         >
@@ -344,7 +344,7 @@ export default function IntegratedSearchBar({
           {hasActiveFilter && (
             <span
               aria-label="활성 필터"
-              className="shrink-0 min-w-[1.25rem] h-5 flex items-center justify-center rounded-badge bg-gold-300 text-ink-inverse text-2xs font-bold px-1"
+              className="shrink-0 min-w-[1.25rem] h-5 flex items-center justify-center rounded-badge bg-accent-300 text-white text-2xs font-bold px-1"
             >
               {activeCount}
             </span>
@@ -374,13 +374,13 @@ export default function IntegratedSearchBar({
                   aria-checked={active}
                   onClick={() => setTour(id)}
                   className={[
-                    'relative inline-flex items-center h-6 px-3 rounded-[6px] text-2xs font-bold leading-none transition-colors duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-300',
+                    'relative inline-flex items-center h-6 px-3 rounded-[6px] text-2xs font-bold leading-none transition-colors duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-300',
                     active ? 'text-ink-inverse' : 'text-ink-muted hover:text-ink-secondary',
                   ].join(' ')}
                 >
                   {active && (
                     <motion.span layoutId="tour-filter-pill" aria-hidden
-                      className="absolute inset-0 rounded-[6px] bg-gold-300"
+                      className="absolute inset-0 rounded-[6px] bg-accent-300"
                       transition={{ type: 'spring', stiffness: 700, damping: 42 }} />
                   )}
                   <span className="relative">{label}</span>
@@ -396,9 +396,9 @@ export default function IntegratedSearchBar({
               value={selectedRegions[0] ?? ''}
               onChange={(e) => setSelectedRegions(e.target.value ? [e.target.value] : [])}
               className={[
-                'appearance-none h-7 pl-3 pr-7 rounded-input border text-2xs font-bold leading-none cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-300',
+                'appearance-none h-7 pl-3 pr-7 rounded-input border text-2xs font-bold leading-none cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-300',
                 selectedRegions.length > 0
-                  ? 'bg-gold-300/15 border-gold-300 text-gold-300'
+                  ? 'bg-accent-300/15 border-accent-300 text-accent-300'
                   : 'bg-surface-high/60 border-border-subtle text-ink-secondary hover:border-border-strong',
               ].join(' ')}
             >

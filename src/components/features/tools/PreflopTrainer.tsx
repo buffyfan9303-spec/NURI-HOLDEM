@@ -42,12 +42,12 @@ export default function PreflopTrainer() {
         <div className="inline-flex rounded-input border border-border-default bg-surface-high p-0.5">
           {(['6', '9'] as const).map((s) => (
             <button key={s} type="button" onClick={() => { setSize(s); }}
-              className={['h-6 px-2.5 rounded-[6px] text-2xs font-bold leading-none transition-colors', size === s ? 'bg-gold-300 text-ink-inverse' : 'text-ink-muted'].join(' ')}>{s}맥스</button>
+              className={['h-6 px-2.5 rounded-[6px] text-2xs font-bold leading-none transition-colors', size === s ? 'bg-accent-300 text-white' : 'text-ink-muted'].join(' ')}>{s}맥스</button>
           ))}
         </div>
         <div className="flex items-center gap-3 text-2xs">
           <span className="text-ink-muted">정답률 <b className="text-ink-primary tabular-nums">{acc}%</b> <span className="text-ink-muted">({stats.correct}/{stats.total})</span></span>
-          <span className="text-ink-muted">연속 <b className="text-gold-300 tabular-nums">{stats.streak}</b></span>
+          <span className="text-ink-muted">연속 <b className="text-accent-300 tabular-nums">{stats.streak}</b></span>
           <span className="text-ink-muted">최고 <b className="text-ink-secondary tabular-nums">{stats.best}</b></span>
         </div>
       </div>
@@ -55,7 +55,7 @@ export default function PreflopTrainer() {
       {/* 문제 카드 */}
       <div className="rounded-card border border-border-default bg-surface-low p-4 text-center space-y-3">
         <p className="text-2xs font-bold text-ink-muted">내 포지션</p>
-        <p className="text-2xl font-extrabold text-gold-300 leading-none">{quiz.pos}</p>
+        <p className="text-2xl font-extrabold text-accent-300 leading-none">{quiz.pos}</p>
         <div className="flex items-center justify-center gap-2 pt-1">
           {quiz.cards.map((c, i) => (
             <div key={i} className="flex h-24 w-16 flex-col items-center justify-center rounded-lg bg-white shadow-card">
@@ -72,7 +72,7 @@ export default function PreflopTrainer() {
           <button type="button" onClick={() => answer('fold')}
             className="rounded-card border border-border-default bg-surface-high py-3.5 text-sm font-extrabold text-ink-secondary hover:text-ink-primary hover:border-ink-muted/50 transition-colors active:scale-[0.98]">폴드</button>
           <button type="button" onClick={() => answer('open')}
-            className="rounded-card border border-gold-400/50 bg-gold-300/15 py-3.5 text-sm font-extrabold text-gold-300 hover:bg-gold-300/25 transition-colors active:scale-[0.98]">오픈 (레이즈)</button>
+            className="rounded-card border border-accent-400/50 bg-accent-300/15 py-3.5 text-sm font-extrabold text-accent-300 hover:bg-accent-300/25 transition-colors active:scale-[0.98]">오픈 (레이즈)</button>
         </div>
       ) : (
         <div className="space-y-2">
@@ -82,7 +82,7 @@ export default function PreflopTrainer() {
             </p>
             <p className="mt-1 text-xs text-ink-secondary">
               {quiz.pos}에서 <b className="text-ink-primary">{quiz.label}</b> 권장 액션:{' '}
-              <b className={result.act === 'fold' ? 'text-ink-muted' : 'text-gold-300'}>
+              <b className={result.act === 'fold' ? 'text-ink-muted' : 'text-accent-300'}>
                 {result.act === 'raise' ? '오픈' : result.act === 'mix' ? '혼합(오픈/폴드 둘 다 OK)' : '폴드'}
               </b>
               <span className="text-ink-muted"> · 상위 {pctRank}%</span>

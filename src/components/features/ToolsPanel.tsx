@@ -178,7 +178,7 @@ export default function ToolsPanel() {
       {/* ★ 즐겨찾기 — 그룹이 접혀 있어도 항상 보이는 내 도구 */}
       {!hits && favTools.length > 0 && (
         <section className="space-y-2">
-          <p className="text-2xs font-bold text-gold-300">★ 즐겨찾기</p>
+          <p className="text-2xs font-bold text-accent-300">★ 즐겨찾기</p>
           {renderRows(favTools)}
         </section>
       )}
@@ -222,8 +222,8 @@ function ToolCard({ name, desc, icon, onClick, active, fav, onToggleFav }: {
     <button type="button" onClick={onClick}
       // 가로형 컴팩트 — 아이콘 좌·텍스트 우(칸 높이 절반)
       className={['group/tool flex items-center gap-2.5 rounded-card border px-2.5 py-2 text-left transition-colors active:scale-[0.98]',
-        active ? 'border-gold-400/60 bg-gold-300/[0.08]' : 'border-border-default bg-surface-low hover:border-gold-400/40 hover:bg-surface-high'].join(' ')}>
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-input bg-gold-300/15 text-gold-300">
+        active ? 'border-accent-400/60 bg-accent-300/[0.08]' : 'border-border-default bg-surface-low hover:border-accent-400/40 hover:bg-surface-high'].join(' ')}>
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-input bg-accent-300/15 text-accent-300">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{icon}</svg>
       </span>
       <span className="min-w-0 flex-1">
@@ -235,7 +235,7 @@ function ToolCard({ name, desc, icon, onClick, active, fav, onToggleFav }: {
         <span role="button" tabIndex={-1} aria-label={fav ? '즐겨찾기 해제' : '즐겨찾기 추가'}
           onClick={(e) => { e.stopPropagation(); onToggleFav(); }}
           className={['shrink-0 px-0.5 text-sm leading-none transition-opacity',
-            fav ? 'text-gold-300 opacity-100' : 'text-ink-muted opacity-30 hover:opacity-70'].join(' ')}>
+            fav ? 'text-accent-300 opacity-100' : 'text-ink-muted opacity-30 hover:opacity-70'].join(' ')}>
           {fav ? '★' : '☆'}
         </span>
       )}

@@ -11,7 +11,7 @@ interface NoticeDetailModalProps {
 }
 
 const TYPE_STYLE: Record<NoticeType, { label: string; cls: string }> = {
-  pinned:  { label: '공지',   cls: 'bg-gold-300/15 text-gold-300 border-gold-400/40' },
+  pinned:  { label: '공지',   cls: 'bg-accent-300/15 text-accent-300 border-accent-400/40' },
   event:   { label: '이벤트', cls: 'bg-blue-500/15 text-blue-400 border-blue-500/40' },
   caution: { label: '주의',   cls: 'bg-amber-500/15 text-amber-400 border-amber-500/40' },
 };
@@ -68,7 +68,7 @@ export default function NoticeDetailModal({ notice, open, onClose, isAdmin, onEd
         <div className="pt-2 space-y-2">
           {isAdmin && (onEdit || onDelete) && (
             <div className="flex gap-2">
-              {onEdit && <button type="button" onClick={onEdit} className="btn-ghost flex-1 text-gold-300">✏️ 수정</button>}
+              {onEdit && <button type="button" onClick={onEdit} className="btn-ghost flex-1 text-accent-300">✏️ 수정</button>}
               {onDelete && <button type="button" onClick={() => { if (window.confirm('이 공지사항을 삭제할까요?')) onDelete(); }} className="btn-ghost flex-1 hover:text-danger-light">🗑 삭제</button>}
             </div>
           )}

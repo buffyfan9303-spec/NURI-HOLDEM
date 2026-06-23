@@ -36,7 +36,7 @@ const STATUS_MAP: Record<ListingStatus, { label: string; cls: string }> = {
 };
 
 const NOTICE_STYLE: Record<NoticeType, { icon: string; cls: string; iconBg: string }> = {
-  pinned:  { icon: '공', cls: 'border-gold-400/40    bg-gold-300/[0.06]',    iconBg: 'bg-gold-300/20 text-gold-300' },
+  pinned:  { icon: '공', cls: 'border-accent-400/40    bg-accent-300/[0.06]',    iconBg: 'bg-accent-300/20 text-accent-300' },
   event:   { icon: '이', cls: 'border-blue-500/40    bg-blue-500/[0.06]',    iconBg: 'bg-blue-500/20 text-blue-400' },
   caution: { icon: '주', cls: 'border-amber-500/40   bg-amber-500/[0.06]',   iconBg: 'bg-amber-500/20 text-amber-400' },
 };
@@ -129,7 +129,7 @@ function MarketplaceTab({
           <button type="button" onClick={() => setMsgOpen(true)}
             className="flex-1 relative flex items-center justify-center gap-1.5 py-2 rounded-input bg-surface-high border border-border-default text-xs font-semibold text-ink-secondary hover:text-ink-primary transition-colors">
             <span aria-hidden>💬</span> 메시지함
-            {msgCount > 0 && <span className="ml-0.5 inline-flex items-center justify-center min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-gold-300 text-ink-inverse text-[10px] font-bold tabular-nums">{msgCount}</span>}
+            {msgCount > 0 && <span className="ml-0.5 inline-flex items-center justify-center min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-accent-300 text-white text-[10px] font-bold tabular-nums">{msgCount}</span>}
           </button>
         </div>
       )}
@@ -173,7 +173,7 @@ function MarketplaceTab({
             >
               {active && (
                 <motion.span layoutId="market-cat-pill" aria-hidden
-                  className="absolute inset-0 rounded-input bg-gold-300"
+                  className="absolute inset-0 rounded-input bg-accent-300"
                   transition={{ type: 'spring', stiffness: 700, damping: 42 }} />
               )}
               <span className="relative">{cat.label}</span>
@@ -193,7 +193,7 @@ function MarketplaceTab({
               type="checkbox"
               checked={includeSold}
               onChange={(e) => setIncludeSold(e.target.checked)}
-              className="accent-gold-300 mr-1 align-middle"
+              className="accent-accent-300 mr-1 align-middle"
             />
             <label htmlFor="includeSold" className="cursor-pointer">거래완료 포함</label>
           </span>
@@ -265,9 +265,9 @@ function NoticeBoard({
   onSelect: (n: MarketplaceNotice) => void;
 }) {
   return (
-    <section className="rounded-card border border-gold-400/30 bg-gradient-to-br from-gold-300/[0.05] to-transparent overflow-hidden">
-      <header className="flex items-center justify-between px-3 py-2 border-b border-gold-400/20">
-        <h2 className="inline-flex items-center gap-1.5 text-xs font-bold text-gold-300">
+    <section className="rounded-card border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.05] to-transparent overflow-hidden">
+      <header className="flex items-center justify-between px-3 py-2 border-b border-accent-400/20">
+        <h2 className="inline-flex items-center gap-1.5 text-xs font-bold text-accent-300">
           공지사항
           <span className="text-2xs text-ink-muted font-normal">({notices.length})</span>
         </h2>
@@ -275,7 +275,7 @@ function NoticeBoard({
           <button
             type="button"
             onClick={onWrite}
-            className="text-2xs text-gold-300 hover:text-gold-200 font-semibold"
+            className="text-2xs text-accent-300 hover:text-accent-200 font-semibold"
           >
             + 공지 작성
           </button>
@@ -347,7 +347,7 @@ function SortPill({ active, onClick, label }: { active: boolean; onClick: () => 
       onClick={onClick}
       className={[
         'px-2 py-0.5 rounded-badge transition-colors',
-        active ? 'text-gold-300 font-bold' : 'text-ink-muted hover:text-ink-secondary',
+        active ? 'text-accent-300 font-bold' : 'text-ink-muted hover:text-ink-secondary',
       ].join(' ')}
     >
       {label}
@@ -407,7 +407,7 @@ function ListingRow({
           ].join(' ')}>
             {listing.title}
             {listing.commentCount > 0 && (
-              <span className="ml-1.5 text-2xs text-gold-300 font-bold align-middle">
+              <span className="ml-1.5 text-2xs text-accent-300 font-bold align-middle">
                 [{listing.commentCount}]
               </span>
             )}

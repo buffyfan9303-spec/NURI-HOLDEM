@@ -39,7 +39,7 @@ export function MdfCalc() {
       <div className="flex flex-wrap gap-1.5">
         {[[25, '¼팟'], [33, '⅓팟'], [50, '½팟'], [66, '⅔팟'], [75, '¾팟'], [100, '팟'], [150, '1.5팟']].map(([pct, label]) => (
           <button key={pct} type="button" onClick={() => setBet(String(Math.round((p * Number(pct)) / 100)))}
-            className="rounded-badge border border-border-default bg-surface-high px-2 py-1 text-2xs font-bold text-ink-secondary hover:border-gold-400/50 hover:text-gold-300 transition-colors">
+            className="rounded-badge border border-border-default bg-surface-high px-2 py-1 text-2xs font-bold text-ink-secondary hover:border-accent-400/50 hover:text-accent-300 transition-colors">
             {label}
           </button>
         ))}
@@ -56,9 +56,9 @@ export function MdfCalc() {
 
 function Result({ label, value, desc, gold }: { label: string; value: string; desc: string; gold?: boolean }) {
   return (
-    <div className={['rounded-input border p-2.5', gold ? 'border-gold-400/50 bg-gold-300/[0.07]' : 'border-border-subtle bg-surface-high'].join(' ')}>
+    <div className={['rounded-input border p-2.5', gold ? 'border-accent-400/50 bg-accent-300/[0.07]' : 'border-border-subtle bg-surface-high'].join(' ')}>
       <p className="text-[10px] font-semibold text-ink-muted">{label}</p>
-      <p className={['mt-0.5 text-xl font-extrabold tabular-nums', gold ? 'text-gold-300' : 'text-ink-primary'].join(' ')}>{value}</p>
+      <p className={['mt-0.5 text-xl font-extrabold tabular-nums', gold ? 'text-accent-300' : 'text-ink-primary'].join(' ')}>{value}</p>
       <p className="mt-1 text-[10px] leading-snug text-ink-muted">{desc}</p>
     </div>
   );
@@ -96,7 +96,7 @@ export function AggroChart() {
           <tbody>
             {AGGRO_ROWS.map((r) => (
               <tr key={r.pos} className="border-t border-border-subtle">
-                <td className="py-1.5 px-2 text-left font-bold text-gold-300">{r.pos}</td>
+                <td className="py-1.5 px-2 text-left font-bold text-accent-300">{r.pos}</td>
                 <td className="py-1.5 px-2"><Bar v={r.open} max={50} /></td>
                 <td className="py-1.5 px-2"><Bar v={r.threeBet} max={12} /></td>
                 <td className="py-1.5 px-2"><Bar v={r.coldCall} max={32} /></td>
@@ -115,7 +115,7 @@ function Bar({ v, max }: { v: number; max: number }) {
   return (
     <span className="flex items-center gap-1.5">
       <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-high">
-        <span className="block h-full rounded-full bg-gold-300/80" style={{ width: `${Math.min(100, (v / max) * 100)}%` }} />
+        <span className="block h-full rounded-full bg-accent-300/80" style={{ width: `${Math.min(100, (v / max) * 100)}%` }} />
       </span>
       <span className="w-9 shrink-0 text-right tabular-nums text-ink-primary font-semibold">{v}%</span>
     </span>
@@ -148,7 +148,7 @@ export function RangeMatrix() {
       </div>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <label className="space-y-1">
-          <span className="text-2xs font-semibold text-gold-300">내 레인지</span>
+          <span className="text-2xs font-semibold text-accent-300">내 레인지</span>
           <select value={a} onChange={(e) => setA(Number(e.target.value))} className="input w-full text-sm">
             {RANGES.map((r, i) => <option key={r} value={i}>{r}</option>)}
           </select>
@@ -163,11 +163,11 @@ export function RangeMatrix() {
       {/* 결과 바 */}
       <div>
         <div className="flex items-baseline justify-between text-2xs">
-          <span className="font-bold text-gold-300">내 {eq.toFixed(1)}%</span>
+          <span className="font-bold text-accent-300">내 {eq.toFixed(1)}%</span>
           <span className="font-bold text-ink-secondary">상대 {(100 - eq).toFixed(1)}%</span>
         </div>
         <div className="mt-1 flex h-2.5 overflow-hidden rounded-full bg-surface-high">
-          <div className="h-full bg-gold-300 transition-[width] duration-300" style={{ width: `${eq}%` }} />
+          <div className="h-full bg-accent-300 transition-[width] duration-300" style={{ width: `${eq}%` }} />
         </div>
       </div>
       {/* 전체 매트릭스 */}
@@ -182,11 +182,11 @@ export function RangeMatrix() {
           <tbody>
             {RANGES.map((r, i) => (
               <tr key={r} className="border-t border-border-subtle">
-                <td className="py-1 px-1.5 text-left font-bold text-gold-300 whitespace-nowrap">{r.split('(')[0]}</td>
+                <td className="py-1 px-1.5 text-left font-bold text-accent-300 whitespace-nowrap">{r.split('(')[0]}</td>
                 {RANGES.map((_, j) => (
                   <td key={j} onClick={() => { setA(i); setB(j); }}
                     className={['py-1 px-1.5 tabular-nums cursor-pointer transition-colors',
-                      i === a && j === b ? 'bg-gold-300/15 font-extrabold text-gold-300' : 'text-ink-secondary hover:bg-surface-high'].join(' ')}>
+                      i === a && j === b ? 'bg-accent-300/15 font-extrabold text-accent-300' : 'text-ink-secondary hover:bg-surface-high'].join(' ')}>
                     {EQ[i][j].toFixed(1)}
                   </td>
                 ))}

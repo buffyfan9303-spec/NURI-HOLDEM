@@ -27,7 +27,7 @@ function CardSlot({ card, active, onClick }: { card: Card | null; active: boolea
         card
           ? 'border-border-strong bg-surface-high'
           : active
-            ? 'border-dashed border-gold-300 bg-gold-300/5'
+            ? 'border-dashed border-accent-300 bg-accent-300/5'
             : 'border-dashed border-border-default bg-surface-low/40',
       ].join(' ')}
     >
@@ -60,7 +60,7 @@ function Section({
       <button
         type="button"
         onClick={() => onSelectTarget(target)}
-        className={['mb-1 block text-2xs font-bold uppercase tracking-wider transition-colors', active ? 'text-gold-300' : 'text-ink-muted'].join(' ')}
+        className={['mb-1 block text-2xs font-bold uppercase tracking-wider transition-colors', active ? 'text-accent-300' : 'text-ink-muted'].join(' ')}
       >
         {title}
       </button>
@@ -161,7 +161,7 @@ function DeepActionSheet({
       <div className="relative flex max-h-[75vh] w-full max-w-md flex-col rounded-t-dialog bg-surface-mid shadow-dialog animate-slide-up">
         <div className="flex justify-center pt-2 pb-1"><div className="h-1 w-10 rounded-full bg-border-strong" /></div>
         <header className="flex items-center justify-between border-b border-border-subtle px-4 py-2">
-          <h3 className="text-sm font-bold text-gold-300">AI 액션 해설</h3>
+          <h3 className="text-sm font-bold text-accent-300">AI 액션 해설</h3>
           <button type="button" onClick={onClose} aria-label="닫기" className="flex h-8 w-8 items-center justify-center rounded-input text-ink-secondary hover:bg-surface-high hover:text-ink-primary">
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><line x1="2" y1="2" x2="12" y2="12" /><line x1="12" y1="2" x2="2" y2="12" /></svg>
           </button>
@@ -257,7 +257,7 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
       {showResult && deep.result && deep.normalizedAction ? (
         <div className="animate-fade-in space-y-3 rounded-card border border-border-default bg-surface-low p-4">
           <p className="text-center text-sm">
-            <b className="text-gold-300">{heroId}</b>
+            <b className="text-accent-300">{heroId}</b>
             <span className="mx-2 text-ink-muted">vs</span>
             <b className="text-ink-primary">{villainId}</b>
           </p>
@@ -268,16 +268,16 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
             </p>
             {deep.calculating || !deep.equity ? (
               <div className="flex h-5 items-center gap-2 text-2xs text-ink-muted">
-                <span className="h-3 w-3 animate-spin rounded-full border-2 border-gold-300 border-t-transparent" />
+                <span className="h-3 w-3 animate-spin rounded-full border-2 border-accent-300 border-t-transparent" />
                 에퀴티 계산 중...
               </div>
             ) : (
               <>
                 <div className="flex h-5 overflow-hidden rounded-input bg-surface-high">
-                  <div style={{ width: `${deep.equity.hero * 100}%` }} className="bg-gold-300 transition-[width] duration-500" />
+                  <div style={{ width: `${deep.equity.hero * 100}%` }} className="bg-accent-300 transition-[width] duration-500" />
                 </div>
                 <div className="mt-1 flex justify-between text-2xs">
-                  <span className="font-bold text-gold-300">Hero {Math.round(deep.equity.hero * 100)}%</span>
+                  <span className="font-bold text-accent-300">Hero {Math.round(deep.equity.hero * 100)}%</span>
                   <span className="text-ink-secondary">Villain {Math.round(deep.equity.villain * 100)}%</span>
                 </div>
               </>
@@ -358,7 +358,7 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
                 onClick={() => deep.setTarget(t)}
                 className={[
                   'h-7 rounded-input px-2.5 text-2xs font-semibold transition-colors',
-                  deep.currentTarget === t ? 'bg-gold-300 text-ink-inverse' : 'bg-surface-high text-ink-secondary border border-border-default',
+                  deep.currentTarget === t ? 'bg-accent-300 text-white' : 'bg-surface-high text-ink-secondary border border-border-default',
                 ].join(' ')}
               >
                 {label}

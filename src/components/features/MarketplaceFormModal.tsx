@@ -154,7 +154,7 @@ export default function MarketplaceFormModal({ open, onClose, onSubmit }: Market
                 className={[
                   'min-h-[44px] px-1 inline-flex items-center justify-center text-xs font-semibold rounded-input border transition-colors focus:outline-none',
                   category === o.id
-                    ? 'bg-gold-300/20 border-gold-300 text-gold-300'
+                    ? 'bg-accent-300/20 border-accent-300 text-accent-300'
                     : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary',
                 ].join(' ')}
               >
@@ -203,12 +203,12 @@ export default function MarketplaceFormModal({ open, onClose, onSubmit }: Market
             </select>
             <button type="button" onClick={() => setShipping((v) => !v)}
               className={['px-3 rounded-input text-xs font-semibold border transition-colors whitespace-nowrap',
-                shipping ? 'bg-gold-300/20 border-gold-300 text-gold-300' : 'bg-surface-high border-border-default text-ink-muted'].join(' ')}>
+                shipping ? 'bg-accent-300/20 border-accent-300 text-accent-300' : 'bg-surface-high border-border-default text-ink-muted'].join(' ')}>
               비대면(택배)
             </button>
             <button type="button" onClick={() => setPickup((v) => !v)}
               className={['px-3 rounded-input text-xs font-semibold border transition-colors whitespace-nowrap',
-                pickup ? 'bg-gold-300/20 border-gold-300 text-gold-300' : 'bg-surface-high border-border-default text-ink-muted'].join(' ')}>
+                pickup ? 'bg-accent-300/20 border-accent-300 text-accent-300' : 'bg-surface-high border-border-default text-ink-muted'].join(' ')}>
               직거래
             </button>
           </div>
@@ -231,7 +231,7 @@ export default function MarketplaceFormModal({ open, onClose, onSubmit }: Market
               사진 <span className="text-ink-muted">({previews.length}/{MAX_IMAGES})</span>
             </label>
             <button type="button" onClick={() => fileRef.current?.click()} disabled={previews.length >= MAX_IMAGES}
-              className="text-2xs font-semibold text-gold-300 hover:text-gold-200 disabled:opacity-40 disabled:cursor-not-allowed">
+              className="text-2xs font-semibold text-accent-300 hover:text-accent-200 disabled:opacity-40 disabled:cursor-not-allowed">
               + 사진 추가
             </button>
           </div>
@@ -248,7 +248,7 @@ export default function MarketplaceFormModal({ open, onClose, onSubmit }: Market
             </div>
           ) : (
             <button type="button" onClick={() => fileRef.current?.click()}
-              className="w-full py-6 rounded-input border border-dashed border-border-default text-2xs text-ink-muted hover:border-gold-400/50 hover:text-ink-secondary transition-colors">
+              className="w-full py-6 rounded-input border border-dashed border-border-default text-2xs text-ink-muted hover:border-accent-400/50 hover:text-ink-secondary transition-colors">
               사진을 첨부하려면 클릭하세요 (최대 {MAX_IMAGES}장 · 5MB)
             </button>
           )}

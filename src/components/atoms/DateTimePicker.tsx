@@ -71,15 +71,15 @@ export default function DateTimePicker({
           {/* 날짜 */}
           <div>
             <div className="flex items-center justify-between gap-2">
-              <button type="button" onClick={() => setYmd((d) => shiftDate(d, -1))} className="w-8 h-8 rounded-input bg-surface-high text-ink-secondary hover:text-gold-300">‹</button>
+              <button type="button" onClick={() => setYmd((d) => shiftDate(d, -1))} className="w-8 h-8 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">‹</button>
               <div className="flex-1 text-center">
-                <p className="text-sm font-bold text-gold-300 tabular-nums">{(() => { const d = new Date(`${ymd}T00:00:00`); return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())} (${WDAY[d.getDay()]})`; })()}</p>
+                <p className="text-sm font-bold text-accent-300 tabular-nums">{(() => { const d = new Date(`${ymd}T00:00:00`); return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())} (${WDAY[d.getDay()]})`; })()}</p>
               </div>
-              <button type="button" onClick={() => setYmd((d) => shiftDate(d, 1))} className="w-8 h-8 rounded-input bg-surface-high text-ink-secondary hover:text-gold-300">›</button>
+              <button type="button" onClick={() => setYmd((d) => shiftDate(d, 1))} className="w-8 h-8 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">›</button>
             </div>
             <div className="flex items-center justify-center gap-1.5 mt-1.5">
-              <button type="button" onClick={() => setYmd(toLocalDate(new Date()))} className="text-2xs px-2 py-1 rounded-input bg-surface-high text-ink-secondary hover:text-gold-300">오늘</button>
-              <button type="button" onClick={() => setYmd(shiftDate(toLocalDate(new Date()), 1))} className="text-2xs px-2 py-1 rounded-input bg-surface-high text-ink-secondary hover:text-gold-300">내일(새벽 마감용)</button>
+              <button type="button" onClick={() => setYmd(toLocalDate(new Date()))} className="text-2xs px-2 py-1 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">오늘</button>
+              <button type="button" onClick={() => setYmd(shiftDate(toLocalDate(new Date()), 1))} className="text-2xs px-2 py-1 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">내일(새벽 마감용)</button>
             </div>
           </div>
 
@@ -90,7 +90,7 @@ export default function DateTimePicker({
               <div className="h-32 overflow-y-auto rounded-input border border-border-subtle bg-surface-base grid grid-cols-3 gap-0.5 p-1 scrollbar-none">
                 {hours.map((h) => (
                   <button key={h} type="button" onClick={() => setHh(h)}
-                    className={['py-1.5 rounded text-xs font-bold tabular-nums transition-colors', hh === h ? 'bg-gold-300 text-ink-inverse' : 'text-ink-secondary hover:bg-surface-high'].join(' ')}>{pad(h)}</button>
+                    className={['py-1.5 rounded text-xs font-bold tabular-nums transition-colors', hh === h ? 'bg-accent-300 text-white' : 'text-ink-secondary hover:bg-surface-high'].join(' ')}>{pad(h)}</button>
                 ))}
               </div>
             </div>
@@ -99,7 +99,7 @@ export default function DateTimePicker({
               <div className="h-32 overflow-y-auto rounded-input border border-border-subtle bg-surface-base grid grid-cols-2 gap-0.5 p-1 scrollbar-none">
                 {minutes.map((m) => (
                   <button key={m} type="button" onClick={() => setMm(m)}
-                    className={['py-1.5 rounded text-xs font-bold tabular-nums transition-colors', mm === m ? 'bg-gold-300 text-ink-inverse' : 'text-ink-secondary hover:bg-surface-high'].join(' ')}>{pad(m)}</button>
+                    className={['py-1.5 rounded text-xs font-bold tabular-nums transition-colors', mm === m ? 'bg-accent-300 text-white' : 'text-ink-secondary hover:bg-surface-high'].join(' ')}>{pad(m)}</button>
                 ))}
               </div>
             </div>

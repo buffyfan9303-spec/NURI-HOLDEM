@@ -219,13 +219,13 @@ function MultiClockOverview({ venueId, sessionDate, currentGameSeq, active = tru
   const nextSide = Math.max(1, ...seqs) + 1;
   const label = (g: number) => (g === 1 ? '메인' : '사이드' + (g - 1));
   return (
-    <div className="rounded-card border border-gold-400/25 bg-surface-low/60 p-2 space-y-1.5">
-      <p className="text-2xs font-bold text-gold-300">⏱ 게임 클락 {seqs.length} — 탭하면 전환/시작 · ＋로 사이드 클락 추가</p>
+    <div className="rounded-card border border-accent-400/25 bg-surface-low/60 p-2 space-y-1.5">
+      <p className="text-2xs font-bold text-accent-300">⏱ 게임 클락 {seqs.length} — 탭하면 전환/시작 · ＋로 사이드 클락 추가</p>
       <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
         {seqs.map((g) => {
           const c = clocks.find((x) => x.gameSeq === g);
           const on = g === currentGameSeq;
-          const base = ['rounded-input border p-1.5 text-left transition-colors', on ? 'border-gold-400/60 bg-gold-300/15' : 'border-border-subtle bg-surface-base hover:bg-surface-high'].join(' ');
+          const base = ['rounded-input border p-1.5 text-left transition-colors', on ? 'border-accent-400/60 bg-accent-300/15' : 'border-border-subtle bg-surface-base hover:bg-surface-high'].join(' ');
           if (!c) {
             const gt = games.find((x) => x.gameSeq === g)?.title;
             return (
@@ -246,7 +246,7 @@ function MultiClockOverview({ venueId, sessionDate, currentGameSeq, active = tru
             <button key={g} type="button" onClick={() => onSwitch(g)} className={base}>
               <div className="flex items-center justify-between gap-1">
                 <span className="truncate text-2xs font-bold text-ink-primary">{label(g)}{on ? ' ●' : ''}</span>
-                <span className={['text-[9px] font-bold', c.running ? 'text-emerald-400' : 'text-gold-300'].join(' ')}>{c.running ? (cur?.kind === 'break' ? '브레이크' : 'L' + no) : '정지'}</span>
+                <span className={['text-[9px] font-bold', c.running ? 'text-emerald-400' : 'text-accent-300'].join(' ')}>{c.running ? (cur?.kind === 'break' ? '브레이크' : 'L' + no) : '정지'}</span>
               </div>
               <p className="mt-0.5 text-base font-extrabold leading-none tabular-nums text-ink-primary">{pad(rem / 60_000)}:{pad((rem % 60_000) / 1000)}</p>
               {cur && cur.kind === 'level' && <p className="truncate text-[9px] tabular-nums text-ink-muted">{cur.sb.toLocaleString()}/{cur.bb.toLocaleString()}</p>}
@@ -254,7 +254,7 @@ function MultiClockOverview({ venueId, sessionDate, currentGameSeq, active = tru
           );
         })}
         <button type="button" onClick={() => onAddSide(nextSide)} title="사이드 게임 클락 추가(메인 설정 복사)"
-          className="flex flex-col items-center justify-center gap-1 rounded-input border border-dashed border-gold-400/50 p-1.5 text-center font-bold text-gold-300 hover:bg-gold-300/10">
+          className="flex flex-col items-center justify-center gap-1 rounded-input border border-dashed border-accent-400/50 p-1.5 text-center font-bold text-accent-300 hover:bg-accent-300/10">
           <span className="text-lg leading-none" aria-hidden>＋</span>
           <span className="text-2xs leading-tight">사이드 클락</span>
         </button>
@@ -552,7 +552,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
                 <div className="flex items-center gap-0.5 rounded-input bg-surface-high p-0.5">
                   {([['sm', '작게'], ['md', '중간'], ['lg', '크게']] as const).map(([s, l]) => (
                     <button key={s} type="button" onClick={() => changeAdSize(s)}
-                      className={['rounded-[5px] px-1.5 py-0.5 text-2xs font-bold transition-colors', adSize === s ? 'bg-gold-300 text-ink-inverse' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>{l}</button>
+                      className={['rounded-[5px] px-1.5 py-0.5 text-2xs font-bold transition-colors', adSize === s ? 'bg-accent-300 text-white' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>{l}</button>
                   ))}
                 </div>
               )}
@@ -562,7 +562,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
           {!fs && (
             <button type="button" onClick={() => window.open(`/?display=${state.venueId}&g=${state.gameSeq ?? 1}`, '_blank', 'noopener')}
               title="새 창으로 관전 화면(매장 TV·빔프로젝터)을 엽니다 — 그 창을 큰 화면으로 옮겨 띄워두세요"
-              className="btn-ghost text-2xs px-2.5 py-1 text-gold-300">📺 TV 송출</button>
+              className="btn-ghost text-2xs px-2.5 py-1 text-accent-300">📺 TV 송출</button>
           )}
           <button type="button" onClick={toggleFs} className="btn-ghost text-2xs px-2.5 py-1">{fs ? '⤡ 전체화면 해제' : '⤢ 전체화면'}</button>
           {canManage && !fs && <button type="button" onClick={onOpenSettings} className="btn-ghost text-2xs px-2.5 py-1">설정</button>}
@@ -576,21 +576,21 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
         {/* 타이틀 바 */}
         {/* 전체 클락 공통 광고(운영자 등록) — 최상단 */}
         {adImg && (
-          <div className="shrink-0 border-b border-gold-400/20 bg-black">
+          <div className="shrink-0 border-b border-accent-400/20 bg-black">
             <img src={adImg} alt="광고" className={['mx-auto w-full object-contain',
               adSize === 'sm' ? (fs ? 'max-h-[7cqh]' : 'max-h-16') : adSize === 'lg' ? (fs ? 'max-h-[13cqh]' : 'max-h-48') : (fs ? 'max-h-[10cqh]' : 'max-h-28')].join(' ')} />
           </div>
         )}
 
-        <div className="shrink-0 bg-gradient-to-r from-gold-400/15 via-gold-300/[0.06] to-gold-400/15 border-b border-gold-400/25 px-4 py-2 text-center">
-          <p className={['font-extrabold tracking-wide text-gold-200 truncate', fs ? 'text-[min(3.4cqw,4cqh)]' : 'text-sm sm:text-lg'].join(' ')}>{title}</p>
+        <div className="shrink-0 bg-gradient-to-r from-accent-400/15 via-accent-300/[0.06] to-accent-400/15 border-b border-accent-400/25 px-4 py-2 text-center">
+          <p className={['font-extrabold tracking-wide text-accent-200 truncate', fs ? 'text-[min(3.4cqw,4cqh)]' : 'text-sm sm:text-lg'].join(' ')}>{title}</p>
         </div>
 
         {/* 본문 3열 */}
         <div className={['grid grid-cols-[minmax(76px,0.85fr)_2.6fr_minmax(90px,1fr)]', fs ? 'flex-1 min-h-0 overflow-hidden' : ''].join(' ')}>
           {/* 좌: 프라이즈 */}
           <div className="flex flex-col p-2 sm:p-3 border-r border-white/5 bg-black/20">
-            <p className={['text-gold-300/70 font-bold tracking-[0.18em] mb-1', fs ? 'text-[min(1.5cqw,1.8cqh)]' : 'text-[9px] sm:text-2xs'].join(' ')}>PRIZE</p>
+            <p className={['text-accent-300/70 font-bold tracking-[0.18em] mb-1', fs ? 'text-[min(1.5cqw,1.8cqh)]' : 'text-[9px] sm:text-2xs'].join(' ')}>PRIZE</p>
             <ul className="space-y-0.5 overflow-hidden">
               {cfg.prizes.map((p, i) => (
                 <li key={i} className={['flex items-center justify-between gap-1 text-ink-secondary', fs ? 'text-[min(1.8cqw,2.1cqh)]' : 'text-[10px] sm:text-xs'].join(' ')}>
@@ -600,13 +600,13 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
             </ul>
             {cfg.mysteryBounty > 0 && (
               <div className="mt-2 pt-2 border-t border-white/5">
-                <p className={['text-gold-300 font-semibold leading-tight', fs ? 'text-[min(1.5cqw,1.8cqh)]' : 'text-[9px] sm:text-2xs'].join(' ')}>Mystery Bounty</p>
+                <p className={['text-accent-300 font-semibold leading-tight', fs ? 'text-[min(1.5cqw,1.8cqh)]' : 'text-[9px] sm:text-2xs'].join(' ')}>Mystery Bounty</p>
                 <p className={['text-ink-primary tabular-nums', fs ? 'text-[min(1.9cqw,2.2cqh)]' : 'text-[10px] sm:text-xs'].join(' ')}>{cfg.mysteryBounty.toLocaleString()}</p>
               </div>
             )}
             <div className="mt-auto pt-2 border-t border-white/5">
               <p className={['text-ink-muted tracking-wide', fs ? 'text-[min(1.4cqw,1.7cqh)]' : 'text-[9px] sm:text-2xs'].join(' ')}>TOTAL PRIZE</p>
-              <p className={['font-extrabold text-gold-300 tabular-nums leading-tight', fs ? 'text-[min(2.7cqw,3.1cqh)]' : 'text-sm sm:text-lg'].join(' ')}>{totalPrize.toLocaleString()}</p>
+              <p className={['font-extrabold text-accent-300 tabular-nums leading-tight', fs ? 'text-[min(2.7cqw,3.1cqh)]' : 'text-sm sm:text-lg'].join(' ')}>{totalPrize.toLocaleString()}</p>
             </div>
           </div>
 
@@ -618,7 +618,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
             {/* 누리홀덤 로고 워터마크(투명) — 트레이드마크. 클락은 항상 다크라 흰 워드마크 사용 */}
             <img src="/2.png" alt="" aria-hidden className="pointer-events-none absolute inset-0 m-auto h-auto w-[58%] max-w-[62cqh] select-none object-contain opacity-[0.05]" />
             <p className={['relative mt-1 font-bold tracking-[0.16em] uppercase',
-              isBreak ? 'text-sky-300/90' : 'text-gold-200/80',
+              isBreak ? 'text-sky-300/90' : 'text-accent-200/80',
               fs ? 'text-[min(4cqw,5cqh)]' : 'text-base sm:text-2xl'].join(' ')}>
               {isBreak ? (cur.label || 'BREAK') : `LEVEL ${levelNo}`}
             </p>
@@ -642,7 +642,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
                 </div>
               </div>
             )}
-            <p className={['mt-3 font-bold text-gold-300', fs ? 'text-[min(3.3cqw,3.9cqh)]' : 'text-sm sm:text-2xl'].join(' ')}>{nextPlayableLabel(cfg, state.currentIndex)}</p>
+            <p className={['mt-3 font-bold text-accent-300', fs ? 'text-[min(3.3cqw,3.9cqh)]' : 'text-sm sm:text-2xl'].join(' ')}>{nextPlayableLabel(cfg, state.currentIndex)}</p>
             {!state.running && <span className={['absolute font-bold text-rose-200 bg-rose-950/60 rounded-badge', fs ? 'top-3 right-3 text-[min(2cqw,2.4cqh)] px-3 py-1' : 'top-2 right-2 text-[9px] sm:text-2xs px-2 py-0.5'].join(' ')}>일시정지</span>}
           </div>
 
@@ -656,10 +656,10 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
         </div>
 
         {/* 칩 스탯 — TOTAL / AVG STACK 강조(전체 폭) */}
-        <div className="shrink-0 grid grid-cols-2 border-t border-gold-400/25 bg-gradient-to-r from-gold-400/[0.07] via-transparent to-gold-400/[0.07]">
+        <div className="shrink-0 grid grid-cols-2 border-t border-accent-400/25 bg-gradient-to-r from-accent-400/[0.07] via-transparent to-accent-400/[0.07]">
           <div className="text-center border-r border-white/5 py-2 sm:py-2.5">
-            <p className={['text-gold-300/70 font-bold tracking-[0.18em]', fs ? 'text-[min(1.9cqw,2.2cqh)]' : 'text-[10px] sm:text-xs'].join(' ')}>TOTAL STACK</p>
-            <p className={['font-extrabold text-gold-200 tabular-nums leading-tight', fs ? 'text-[min(4.6cqw,5.6cqh)]' : 'text-xl sm:text-3xl'].join(' ')}>{totalStack.toLocaleString()}</p>
+            <p className={['text-accent-300/70 font-bold tracking-[0.18em]', fs ? 'text-[min(1.9cqw,2.2cqh)]' : 'text-[10px] sm:text-xs'].join(' ')}>TOTAL STACK</p>
+            <p className={['font-extrabold text-accent-200 tabular-nums leading-tight', fs ? 'text-[min(4.6cqw,5.6cqh)]' : 'text-xl sm:text-3xl'].join(' ')}>{totalStack.toLocaleString()}</p>
           </div>
           <div className="text-center py-2 sm:py-2.5">
             <p className={['text-ink-secondary font-bold tracking-[0.18em]', fs ? 'text-[min(1.9cqw,2.2cqh)]' : 'text-[10px] sm:text-xs'].join(' ')}>AVG STACK</p>
@@ -673,11 +673,11 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
             <div className="flex flex-wrap items-end justify-center gap-x-3 gap-y-2">
               <VolCtl value={volume} onChange={setVolume} onToggleMute={toggleMute} />
               <button type="button" onClick={() => playChime('level')} title="알림음 미리듣기"
-                className="self-end w-7 h-7 rounded-input bg-surface-high border border-border-default text-ink-secondary hover:text-gold-300 text-sm leading-none">🔊</button>
+                className="self-end w-7 h-7 rounded-input bg-surface-high border border-border-default text-ink-secondary hover:text-accent-300 text-sm leading-none">🔊</button>
               <div className="flex flex-col items-center gap-0.5">
                 <span className="text-[9px] text-ink-muted">10초틱</span>
                 <button type="button" onClick={() => setTickStyle((t) => t === 'beep' ? 'soft' : t === 'soft' ? 'off' : 'beep')} title="마지막 10초 카운트다운 틱 음색 — 비프/부드러움/끔(끔=레벨업음만)"
-                  className="h-7 px-2 rounded-input bg-surface-high border border-border-default text-2xs font-bold text-ink-secondary hover:text-gold-300">
+                  className="h-7 px-2 rounded-input bg-surface-high border border-border-default text-2xs font-bold text-ink-secondary hover:text-accent-300">
                   {tickStyle === 'beep' ? '비프' : tickStyle === 'soft' ? '부드러움' : '끔'}
                 </button>
               </div>
@@ -718,7 +718,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
             </datalist>
             {finishRows.map((r, i) => (
               <div key={i} className="flex items-center gap-2">
-                <span className="w-9 shrink-0 text-center text-2xs font-bold text-gold-300">{i + 1}위</span>
+                <span className="w-9 shrink-0 text-center text-2xs font-bold text-accent-300">{i + 1}위</span>
                 <input list="clk-finish-players" value={r.name}
                   onChange={(e) => setFinishRows((rs) => (rs ? rs.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)) : rs))}
                   placeholder="이름(닉네임)" className="input min-w-0 flex-1 text-sm" />
@@ -753,7 +753,7 @@ function Stepper({ label, onPlus, onMinus }: { label: string; onPlus: () => void
     <div className="flex flex-col items-center gap-0.5">
       <span className="text-[9px] text-ink-muted">{label}</span>
       <div className="flex gap-0.5">
-        <button type="button" onClick={onPlus} className="w-7 h-7 rounded-input bg-surface-high border border-border-default text-ink-secondary hover:text-gold-300 text-sm leading-none">＋</button>
+        <button type="button" onClick={onPlus} className="w-7 h-7 rounded-input bg-surface-high border border-border-default text-ink-secondary hover:text-accent-300 text-sm leading-none">＋</button>
         <button type="button" onClick={onMinus} className="w-7 h-7 rounded-input bg-surface-high border border-border-default text-ink-secondary hover:text-danger-light text-sm leading-none">－</button>
       </div>
     </div>
@@ -766,7 +766,7 @@ function VolCtl({ value, onChange, onToggleMute }: { value: number; onChange: (v
       <div className="flex items-center gap-1">
         <button type="button" onClick={onToggleMute} title={value > 0 ? '음소거' : '음소거 해제'} aria-label={value > 0 ? '음소거' : '음소거 해제'}
           className="text-sm leading-none hover:opacity-80">{value > 0 ? '🔈' : '🔇'}</button>
-        <input type="range" min={0} max={100} value={value} onChange={(e) => onChange(Number(e.target.value))} className="w-16 accent-gold-300" />
+        <input type="range" min={0} max={100} value={value} onChange={(e) => onChange(Number(e.target.value))} className="w-16 accent-accent-300" />
       </div>
     </div>
   );
@@ -873,15 +873,15 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
       </div>
 
       {/* ── 클락 시작(진입) — 맨 위: 단독 / 장부 연동 리스트 ───────────── */}
-      <section className="rounded-card border border-gold-400/30 bg-gradient-to-br from-gold-300/[0.06] to-transparent p-3 space-y-2.5">
-        <p className="text-2xs font-bold text-gold-300">클락 시작 방식</p>
+      <section className="rounded-card border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.06] to-transparent p-3 space-y-2.5">
+        <p className="text-2xs font-bold text-accent-300">클락 시작 방식</p>
         <div className="grid grid-cols-2 gap-2">
           <button type="button" onClick={() => setLinkDate(null)}
-            className={['rounded-input border p-2.5 text-left transition-colors', linkDate === null ? 'border-gold-400/60 bg-gold-300/15' : 'border-border-default bg-surface-high hover:border-border-strong'].join(' ')}>
+            className={['rounded-input border p-2.5 text-left transition-colors', linkDate === null ? 'border-accent-400/60 bg-accent-300/15' : 'border-border-default bg-surface-high hover:border-border-strong'].join(' ')}>
             <p className="text-xs font-bold text-ink-primary">🎰 단독 클락</p>
             <p className="text-[10px] text-ink-muted mt-0.5">장부 연동 없이 실행</p>
           </button>
-          <div className={['rounded-input border p-2.5 transition-colors', linkDate !== null ? 'border-gold-400/60 bg-gold-300/15' : 'border-border-default bg-surface-high'].join(' ')}>
+          <div className={['rounded-input border p-2.5 transition-colors', linkDate !== null ? 'border-accent-400/60 bg-accent-300/15' : 'border-border-default bg-surface-high'].join(' ')}>
             <p className="text-xs font-bold text-ink-primary">📒 장부 연동</p>
             <p className="text-[10px] text-ink-muted mt-0.5 truncate">{linkDate ? linkDate : '아래 목록에서 선택'}</p>
           </div>
@@ -905,12 +905,12 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
               return (
               <button key={`${s.sessionDate}#${s.gameSeq}`} type="button"
                 onClick={() => { setLinkDate(s.sessionDate); setLinkGameSeq(s.gameSeq); if (s.title) set({ title: s.title }); }}
-                className={['w-full flex items-center gap-2 px-2.5 py-2 text-left transition-colors', sel ? 'bg-gold-300/15' : 'hover:bg-surface-high'].join(' ')}>
-                <span className="text-2xs font-bold text-gold-300 tabular-nums shrink-0">{s.sessionDate}</span>
-                {s.gameSeq > 1 && <span className="shrink-0 rounded-badge bg-gold-300/15 border border-gold-400/40 px-1 text-[9px] font-bold text-gold-300">사이드{s.gameSeq - 1}</span>}
+                className={['w-full flex items-center gap-2 px-2.5 py-2 text-left transition-colors', sel ? 'bg-accent-300/15' : 'hover:bg-surface-high'].join(' ')}>
+                <span className="text-2xs font-bold text-accent-300 tabular-nums shrink-0">{s.sessionDate}</span>
+                {s.gameSeq > 1 && <span className="shrink-0 rounded-badge bg-accent-300/15 border border-accent-400/40 px-1 text-[9px] font-bold text-accent-300">사이드{s.gameSeq - 1}</span>}
                 <span className="flex-1 text-xs text-ink-primary truncate">{s.title || '제목 없음'}</span>
                 {s.closed && <span className="text-[9px] text-ink-muted shrink-0">마감</span>}
-                {sel && <span className="text-gold-300 text-xs shrink-0">✓</span>}
+                {sel && <span className="text-accent-300 text-xs shrink-0">✓</span>}
               </button>
             );})}
           </div>
@@ -923,9 +923,9 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
       </section>
 
       {/* 프리셋 — 장부 연동과 동일 포맷(검색 + 스크롤 클릭). 잘 보이도록 골드 강조 */}
-      <section className="rounded-card border border-gold-400/30 bg-gold-300/[0.05] p-3 space-y-2">
+      <section className="rounded-card border border-accent-400/30 bg-accent-300/[0.05] p-3 space-y-2">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-base font-bold text-gold-300">📋 프리셋 · 클릭해 불러오기</p>
+          <p className="text-base font-bold text-accent-300">📋 프리셋 · 클릭해 불러오기</p>
           <span className="text-xs text-ink-muted tabular-nums shrink-0">{filteredPresets.length}/{presets.length} · 최대 {PRESET_LIMIT}</span>
         </div>
         {presets.length > 0 && (
@@ -942,7 +942,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
           <div className="max-h-[13rem] overflow-y-auto rounded-input border border-border-subtle bg-surface-base divide-y divide-border-subtle">
             {filteredPresets.map((p) => (
               <div key={p.id} className="flex items-center gap-2 px-3 py-2.5 hover:bg-surface-high">
-                <button type="button" onClick={() => loadPreset(p)} className="flex-1 text-left text-sm font-semibold text-ink-primary truncate hover:text-gold-300">{p.name}</button>
+                <button type="button" onClick={() => loadPreset(p)} className="flex-1 text-left text-sm font-semibold text-ink-primary truncate hover:text-accent-300">{p.name}</button>
                 <span className="text-xs text-ink-muted tabular-nums shrink-0">{countLevels(p.config.levels)}레벨</span>
                 <button type="button" onClick={() => delPreset(p)} className="text-ink-muted hover:text-danger-light text-sm px-1.5 shrink-0" aria-label="삭제">✕</button>
               </div>
@@ -966,7 +966,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
           <Field label="애드온 스택"><input type="number" disabled={!cfg.isAddon} value={cfg.isAddon ? (cfg.addonStack || '') : ''} onChange={(e) => set({ addonStack: +e.target.value || 0 })} className={`${numInput} disabled:opacity-50`} /></Field>
         </div>
         <label className="flex items-center gap-2 text-xs text-ink-secondary">
-          <input type="checkbox" checked={cfg.isAddon} onChange={(e) => set({ isAddon: e.target.checked })} className="accent-gold-300 w-4 h-4" />
+          <input type="checkbox" checked={cfg.isAddon} onChange={(e) => set({ isAddon: e.target.checked })} className="accent-accent-300 w-4 h-4" />
           애드온 게임 (라이브에 ADD-ON 표시 · 켜야 애드온 스택 입력 가능)
         </label>
         <div className="grid grid-cols-3 gap-2">
@@ -974,22 +974,22 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
           <Field label="최대 레벨 (자동생성용)"><input type="number" min="1" max="60" value={cfg.maxLevel || ''} onChange={(e) => set({ maxLevel: Math.max(0, +e.target.value || 0) })} className={numInput} /></Field>
           <Field label="미스터리 바운티"><input type="number" value={cfg.mysteryBounty || ''} onChange={(e) => set({ mysteryBounty: +e.target.value || 0 })} className={numInput} /></Field>
         </div>
-        <button type="button" onClick={autoGenerate} className="w-full py-2 rounded-input bg-gold-300/12 text-gold-300 border border-gold-400/40 text-xs font-bold hover:bg-gold-300/20">
+        <button type="button" onClick={autoGenerate} className="w-full py-2 rounded-input bg-accent-300/12 text-accent-300 border border-accent-400/40 text-xs font-bold hover:bg-accent-300/20">
           ⚙ 블라인드 자동 생성 — 등록마감({cfg.regCloseLevel || '-'})·최대({cfg.maxLevel || 15})레벨 기준 (마감 후 가파르게)
         </button>
       </section>
 
       {/* 얼리 구간 — 레벨 기준 */}
-      <section className="rounded-card border border-gold-400/30 bg-gradient-to-br from-gold-300/[0.05] to-transparent p-3 space-y-2">
-        <p className="text-2xs font-semibold text-gold-300">얼리 구간 (레벨 기준 · 장부 바인 시각→레벨 환산으로 자동 분류)</p>
+      <section className="rounded-card border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.05] to-transparent p-3 space-y-2">
+        <p className="text-2xs font-semibold text-accent-300">얼리 구간 (레벨 기준 · 장부 바인 시각→레벨 환산으로 자동 분류)</p>
         <div className="grid grid-cols-2 gap-2">
           <Field label="더블얼리 ~레벨까지"><input type="number" min="0" max={totalLevels} value={cfg.earlyDoubleLevel || ''} onChange={(e) => set({ earlyDoubleLevel: +e.target.value || 0 })} placeholder="예) 1" className={numInput} /></Field>
           <Field label="1얼리 ~레벨까지"><input type="number" min="0" max={totalLevels} value={cfg.earlySingleLevel || ''} onChange={(e) => set({ earlySingleLevel: +e.target.value || 0 })} placeholder="예) 4" className={numInput} /></Field>
         </div>
         <p className="text-[10px] text-ink-muted">
           예) 더블얼리 1레벨·1얼리 4레벨 → 레벨1 도착=더블얼리, 레벨2~4 도착=1얼리. 전체 {totalLevels}레벨.
-          {cfg.earlyDoubleLevel > 0 && <> · 더블얼리 ≈ <b className="text-gold-300">{cfg.earlyDoubleMin}분</b></>}
-          {cfg.earlySingleLevel > 0 && <> · 1얼리 ≈ <b className="text-gold-300">{cfg.earlySingleMin}분</b></>} · 라이브 수기 보정 가능.
+          {cfg.earlyDoubleLevel > 0 && <> · 더블얼리 ≈ <b className="text-accent-300">{cfg.earlyDoubleMin}분</b></>}
+          {cfg.earlySingleLevel > 0 && <> · 1얼리 ≈ <b className="text-accent-300">{cfg.earlySingleMin}분</b></>} · 라이브 수기 보정 가능.
         </p>
       </section>
 
@@ -997,14 +997,14 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
       <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
         <button type="button" onClick={() => setBldOpen((v) => !v)} className="w-full flex items-center justify-between py-0.5">
           <span className="text-2xs font-semibold text-ink-secondary">블라인드 구조 · {totalLevels}레벨</span>
-          <span className="text-2xs font-bold text-gold-300">{bldOpen ? '접기 ▲' : '펼치기 ▼'}</span>
+          <span className="text-2xs font-bold text-accent-300">{bldOpen ? '접기 ▲' : '펼치기 ▼'}</span>
         </button>
 
         {bldOpen && (<>
         {/* 게임 프리셋에서 블라인드 불러오기 — 내 매장 > 게임 프리셋에 저장한 구조를 그대로 적용 */}
         {gamePresets.some((p) => p.data.blindLevels?.length) && (
-          <div className="rounded-input border border-gold-400/30 bg-gold-300/[0.06] p-2">
-            <p className="mb-1 text-[10px] font-bold text-gold-300">📋 게임 프리셋에서 블라인드 불러오기</p>
+          <div className="rounded-input border border-accent-400/30 bg-accent-300/[0.06] p-2">
+            <p className="mb-1 text-[10px] font-bold text-accent-300">📋 게임 프리셋에서 블라인드 불러오기</p>
             <select value="" onChange={(e) => { const p = gamePresets.find((x) => x.id === e.target.value); if (p) applyGamePreset(p); }} className="input w-full text-xs">
               <option value="" disabled>프리셋 선택 — 블라인드 구조를 클락에 적용</option>
               {gamePresets.filter((p) => p.data.blindLevels?.length).map((p) => (
@@ -1022,7 +1022,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
               <input type="number" min="1" value={bulkAll || ''} onChange={(e) => setBulkAll(+e.target.value || 0)} className="input w-full text-xs tabular-nums pr-5" />
               <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-ink-muted">분</span>
             </div>
-            <button type="button" onClick={() => applyBulkAll(bulkAll)} className="text-2xs font-bold px-2.5 py-1.5 rounded-input bg-gold-300/15 text-gold-300 border border-gold-400/40 hover:bg-gold-300/25">전체 적용</button>
+            <button type="button" onClick={() => applyBulkAll(bulkAll)} className="text-2xs font-bold px-2.5 py-1.5 rounded-input bg-accent-300/15 text-accent-300 border border-accent-400/40 hover:bg-accent-300/25">전체 적용</button>
           </div>
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-2xs text-ink-secondary w-8 shrink-0">레벨</span>
@@ -1032,15 +1032,15 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
               <input type="number" min="1" value={bulkFromMin || ''} onChange={(e) => setBulkFromMin(+e.target.value || 0)} className="input w-full text-xs tabular-nums pr-5" />
               <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-ink-muted">분</span>
             </div>
-            <button type="button" onClick={() => applyBulkFrom(bulkFrom, bulkFromMin)} className="text-2xs font-bold px-2.5 py-1.5 rounded-input bg-gold-300/15 text-gold-300 border border-gold-400/40 hover:bg-gold-300/25">적용</button>
+            <button type="button" onClick={() => applyBulkFrom(bulkFrom, bulkFromMin)} className="text-2xs font-bold px-2.5 py-1.5 rounded-input bg-accent-300/15 text-accent-300 border border-accent-400/40 hover:bg-accent-300/25">적용</button>
           </div>
-          <button type="button" onClick={() => setBulkFrom(cfg.regCloseLevel || 9)} className="text-[10px] text-gold-300/90 hover:text-gold-300">↩ 레지 마감 레벨({cfg.regCloseLevel || 9})부터로 설정</button>
+          <button type="button" onClick={() => setBulkFrom(cfg.regCloseLevel || 9)} className="text-[10px] text-accent-300/90 hover:text-accent-300">↩ 레지 마감 레벨({cfg.regCloseLevel || 9})부터로 설정</button>
           <p className="text-[10px] text-ink-muted">레지 마감 후 블라인드가 길어지면, 마감 레벨부터 다른 듀레이션을 일괄 적용하세요.</p>
         </div>
         <div className="space-y-1">
           {cfg.levels.map((l, i) => (
             <div key={i} className="flex items-center gap-1.5">
-              <span className="w-6 text-center text-2xs font-bold text-gold-300 shrink-0">{l.kind === 'break' ? 'B' : levelNumberAt(cfg, i)}</span>
+              <span className="w-6 text-center text-2xs font-bold text-accent-300 shrink-0">{l.kind === 'break' ? 'B' : levelNumberAt(cfg, i)}</span>
               {l.kind === 'break' ? (
                 <input value={l.label ?? ''} onChange={(e) => setLevel(i, { label: e.target.value })} placeholder="BREAK" className="input flex-1 text-sm" />
               ) : (
@@ -1059,8 +1059,8 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
           ))}
         </div>
         <div className="flex gap-2">
-          <button type="button" onClick={addLevel} className="flex-1 py-1.5 rounded-input border border-dashed border-border-default text-2xs text-ink-secondary hover:text-gold-300">+ 레벨</button>
-          <button type="button" onClick={addBreak} className="flex-1 py-1.5 rounded-input border border-dashed border-border-default text-2xs text-ink-secondary hover:text-gold-300">+ 브레이크</button>
+          <button type="button" onClick={addLevel} className="flex-1 py-1.5 rounded-input border border-dashed border-border-default text-2xs text-ink-secondary hover:text-accent-300">+ 레벨</button>
+          <button type="button" onClick={addBreak} className="flex-1 py-1.5 rounded-input border border-dashed border-border-default text-2xs text-ink-secondary hover:text-accent-300">+ 브레이크</button>
         </div>
         </>)}
       </section>
@@ -1077,7 +1077,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
             </div>
           ))}
         </div>
-        <button type="button" onClick={addPrize} className="w-full py-1.5 rounded-input border border-dashed border-border-default text-2xs text-ink-secondary hover:text-gold-300">+ 프라이즈</button>
+        <button type="button" onClick={addPrize} className="w-full py-1.5 rounded-input border border-dashed border-border-default text-2xs text-ink-secondary hover:text-accent-300">+ 프라이즈</button>
       </section>
 
       {/* 시작 — 위에서 고른 방식(단독/장부)으로 */}

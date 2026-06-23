@@ -166,7 +166,7 @@ export default function NotificationPanel({
                   'flex items-start gap-3 px-4 py-3',
                   'border-b border-border-subtle last:border-b-0',
                   'hover:bg-surface-high active:bg-surface-high cursor-pointer transition-colors',
-                  !n.read && 'bg-gold-300/[0.04]',
+                  !n.read && 'bg-accent-300/[0.04]',
                 ].filter(Boolean).join(' ')}
               >
                 {/* 좌측: 발신자 아바타 (텍스트가 있으면 텍스트, 없으면 타입 아이콘) */}
@@ -224,7 +224,7 @@ export default function NotificationPanel({
                 const ids = notifications.filter((n) => !n.read).map((n) => n.id);
                 if (ids.length) { onMarkRead(ids); unreadOnOpenRef.current = []; }
               }}
-              className="text-xs font-semibold text-gold-300 hover:text-gold-200 transition-colors focus:outline-none"
+              className="text-xs font-semibold text-accent-300 hover:text-accent-200 transition-colors focus:outline-none"
             >
               모두 읽음으로 표시
             </button>

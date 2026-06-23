@@ -118,7 +118,7 @@ export default function VenueReviews({ venueId, userId, nickname, isAdmin, canRe
           {reviews && reviews.length > 0 && (
             <span className="flex items-center gap-1 text-xs text-ink-secondary">
               <Stars value={Math.round(avg)} size={12} />
-              <b className="tabular-nums text-gold-300">{avg.toFixed(1)}</b>
+              <b className="tabular-nums text-accent-300">{avg.toFixed(1)}</b>
               <span className="text-ink-muted">({reviews.length})</span>
             </span>
           )}
@@ -135,11 +135,11 @@ export default function VenueReviews({ venueId, userId, nickname, isAdmin, canRe
       )}
 
       {writing && (
-        <div className="space-y-2 rounded-card border border-gold-400/30 bg-gold-300/[0.04] p-3">
+        <div className="space-y-2 rounded-card border border-accent-400/30 bg-accent-300/[0.04] p-3">
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-ink-secondary">별점</span>
             <Stars value={rating} size={22} onPick={setRating} />
-            <b className="text-sm tabular-nums text-gold-300">{rating}.0</b>
+            <b className="text-sm tabular-nums text-accent-300">{rating}.0</b>
           </div>
           <textarea
             value={content} onChange={(e) => setContent(e.target.value)} maxLength={300} rows={3}
@@ -173,8 +173,8 @@ export default function VenueReviews({ venueId, userId, nickname, isAdmin, canRe
               </div>
               {r.content && <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-ink-secondary">{r.content}</p>}
               {r.ownerReply && (
-                <div className="mt-1.5 rounded-input border border-gold-400/25 bg-gold-300/[0.05] p-2">
-                  <p className="text-[10px] font-bold text-gold-300">사장님 답글</p>
+                <div className="mt-1.5 rounded-input border border-accent-400/25 bg-accent-300/[0.05] p-2">
+                  <p className="text-[10px] font-bold text-accent-300">사장님 답글</p>
                   <p className="mt-0.5 whitespace-pre-wrap text-2xs leading-relaxed text-ink-primary">{r.ownerReply}</p>
                 </div>
               )}
@@ -185,12 +185,12 @@ export default function VenueReviews({ venueId, userId, nickname, isAdmin, canRe
                       rows={2} maxLength={300} placeholder="답글…" className="input w-full resize-none text-sm" />
                     <div className="flex items-center gap-1.5">
                       <button type="button" onClick={() => doReply(r)} disabled={replyBusy === r.id} className="btn-primary px-3 py-1 text-2xs disabled:opacity-50">{replyBusy === r.id ? '등록 중…' : '답글 등록'}</button>
-                      <button type="button" onClick={() => doAiDraft(r)} disabled={aiBusy === r.id} className="rounded-input border border-gold-400/40 bg-gold-300/[0.06] px-2.5 py-1 text-2xs font-bold text-gold-300 disabled:opacity-50">{aiBusy === r.id ? '생성 중…' : '✨ AI 초안'}</button>
+                      <button type="button" onClick={() => doAiDraft(r)} disabled={aiBusy === r.id} className="rounded-input border border-accent-400/40 bg-accent-300/[0.06] px-2.5 py-1 text-2xs font-bold text-accent-300 disabled:opacity-50">{aiBusy === r.id ? '생성 중…' : '✨ AI 초안'}</button>
                       <button type="button" onClick={() => setReplyOpen(null)} className="text-2xs text-ink-muted">취소</button>
                     </div>
                   </div>
                 ) : (
-                  <button type="button" onClick={() => setReplyOpen(r.id)} className="mt-1 text-[10px] text-gold-300 hover:underline">{r.ownerReply ? '답글 수정' : '🗨 답글 달기'}</button>
+                  <button type="button" onClick={() => setReplyOpen(r.id)} className="mt-1 text-[10px] text-accent-300 hover:underline">{r.ownerReply ? '답글 수정' : '🗨 답글 달기'}</button>
                 )
               )}
             </li>

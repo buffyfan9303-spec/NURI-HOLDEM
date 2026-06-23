@@ -86,11 +86,11 @@ export default function ChatPane({ listingId, buyerId, meId, emptyHint, onRead }
           return (
             <div key={m.id} className={['flex flex-col', mine ? 'items-end' : 'items-start', grouped ? 'mt-0' : 'mt-1.5'].join(' ')}>
               <div className={['group max-w-[78%] px-3 py-2 text-sm leading-snug whitespace-pre-wrap break-words shadow-sm',
-                mine ? 'bg-gold-300 text-ink-inverse rounded-2xl rounded-br-md' : 'bg-surface-high text-ink-primary rounded-2xl rounded-bl-md'].join(' ')}>
+                mine ? 'bg-accent-300 text-white rounded-2xl rounded-br-md' : 'bg-surface-high text-ink-primary rounded-2xl rounded-bl-md'].join(' ')}>
                 {m.content}
                 <span className={['ml-2 align-bottom text-[9px] tabular-nums', mine ? 'text-ink-inverse/60' : 'text-ink-muted'].join(' ')}>{relativeTime(m.createdAt)}</span>
               </div>
-              {readByCo && <span className="text-[9px] text-gold-300/80 mt-0.5 mr-1">읽음</span>}
+              {readByCo && <span className="text-[9px] text-accent-300/80 mt-0.5 mr-1">읽음</span>}
             </div>
           );
         })}
@@ -99,7 +99,7 @@ export default function ChatPane({ listingId, buyerId, meId, emptyHint, onRead }
         <input type="text" value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="메시지를 입력하세요" maxLength={1000} disabled={sending}
           className="input flex-1 text-sm rounded-full" />
         <button type="submit" disabled={!draft.trim() || sending}
-          className="shrink-0 w-10 h-10 rounded-full bg-gold-300 text-ink-inverse flex items-center justify-center disabled:opacity-40 hover:bg-gold-200 transition-colors" aria-label="전송">
+          className="shrink-0 w-10 h-10 rounded-full bg-accent-300 text-white flex items-center justify-center disabled:opacity-40 hover:bg-accent-200 transition-colors" aria-label="전송">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
         </button>
       </form>

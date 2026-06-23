@@ -23,8 +23,8 @@ export default function WeeklyBestStrip({ active = true }: { active?: boolean })
   const k = kings[idx];
 
   return (
-    <div className="flex items-center gap-2 overflow-hidden rounded-card border border-gold-400/25 bg-gradient-to-r from-gold-300/10 via-surface-low to-surface-low px-3 py-2">
-      <span className="shrink-0 text-xs font-extrabold tracking-wide text-gold-300">{isLastWeek ? '지난주' : '이번 주'} 머니인 킹</span>
+    <div className="flex items-center gap-2 overflow-hidden rounded-card border border-accent-400/25 bg-gradient-to-r from-accent-300/10 via-surface-low to-surface-low px-3 py-2">
+      <span className="shrink-0 text-xs font-extrabold tracking-wide text-accent-300">{isLastWeek ? '지난주' : '이번 주'} 머니인 킹</span>
       <div key={idx} className="flex min-w-0 flex-1 animate-fade-in items-center gap-1.5">
         <span aria-hidden className="shrink-0 text-sm leading-none">{MEDAL[idx] ?? '🏅'}</span>
         <span className="min-w-0 truncate text-sm font-bold text-ink-primary">{k.nickname}</span>
@@ -33,7 +33,7 @@ export default function WeeklyBestStrip({ active = true }: { active?: boolean })
       {kings.length > 1 && (
         <span className="flex shrink-0 gap-1" aria-hidden>
           {kings.map((_, i) => (
-            <span key={i} className={['h-1 w-1 rounded-full transition-colors', i === idx ? 'bg-gold-300' : 'bg-surface-float'].join(' ')} />
+            <span key={i} className={['h-1 w-1 rounded-full transition-colors', i === idx ? 'bg-accent-300' : 'bg-surface-float'].join(' ')} />
           ))}
         </span>
       )}

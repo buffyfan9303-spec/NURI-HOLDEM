@@ -185,8 +185,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     <div className="space-y-3 mx-auto w-full max-w-5xl">
       {/* 운영자: 전 매장 접근 — 관리할 매장 선택 */}
       {isAdmin && (
-        <div className="rounded-card border border-gold-400/40 bg-gold-300/[0.06] p-2.5 space-y-1.5">
-          <p className="text-2xs font-bold text-gold-300">운영자 전체 접근 · 관리할 매장 선택</p>
+        <div className="rounded-card border border-accent-400/40 bg-accent-300/[0.06] p-2.5 space-y-1.5">
+          <p className="text-2xs font-bold text-accent-300">운영자 전체 접근 · 관리할 매장 선택</p>
           <select value={venueId ?? ''} onChange={(e) => setAdminVenueId(e.target.value || null)} className="input text-sm">
             {adminVenues.length === 0 && <option value="">불러오는 중…</option>}
             {adminVenues.map((v) => (
@@ -215,8 +215,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
               {/* 모바일: 아코디언 — 현재 메뉴만 보이고, 탭하면 전체 펼침(위로 다 몰지 않게) */}
               <div className="lg:hidden">
                 <button type="button" onClick={() => setNavOpen((v) => !v)} aria-expanded={navOpen}
-                  className="flex w-full items-center gap-2 rounded-card border border-gold-400/30 bg-surface-high px-3 py-2.5">
-                  <span className="shrink-0 text-gold-300" aria-hidden>{SECTION_ICON[section as Section]}</span>
+                  className="flex w-full items-center gap-2 rounded-card border border-accent-400/30 bg-surface-high px-3 py-2.5">
+                  <span className="shrink-0 text-accent-300" aria-hidden>{SECTION_ICON[section as Section]}</span>
                   <span className="min-w-0 flex-1 text-left text-sm font-bold text-ink-primary truncate">{curItem?.label ?? '메뉴'}</span>
                   <span className="text-2xs text-ink-muted">{navOpen ? '닫기' : '메뉴'}</span>
                   <Icon name="chevron-down" size={16} className={['shrink-0 text-ink-muted transition-transform', navOpen ? 'rotate-180' : ''].join(' ')} />
@@ -230,7 +230,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                         return (
                           // 메뉴 이동(좌)과 즐겨찾기 토글(우 ★)을 분리된 탭 타겟으로 — 별이 항상 보여 토글 가능함이 명확
                           <div key={a.id} className={['flex items-center rounded-input transition-colors',
-                            on ? 'bg-gold-300' : a.locked ? '' : 'hover:bg-surface-float'].join(' ')}>
+                            on ? 'bg-accent-300' : a.locked ? '' : 'hover:bg-surface-float'].join(' ')}>
                             <button type="button" onClick={() => { gotoSection(a.id); setNavOpen(false); }}
                               className={['flex min-w-0 flex-1 items-center gap-2 py-2.5 pl-2.5 text-xs font-bold',
                                 on ? 'text-ink-inverse' : a.locked ? 'text-ink-muted/60' : 'text-ink-secondary'].join(' ')}>
@@ -242,7 +242,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                               <button type="button" onClick={(e) => { e.stopPropagation(); toggleFav(a.id); }}
                                 aria-label={fav ? '즐겨찾기 해제' : '즐겨찾기 추가'} aria-pressed={fav}
                                 className={['shrink-0 px-2.5 py-2.5 text-base leading-none transition-colors active:scale-90',
-                                  fav ? (on ? 'text-ink-inverse' : 'text-gold-300') : (on ? 'text-ink-inverse/45' : 'text-ink-muted/40')].join(' ')}>
+                                  fav ? (on ? 'text-ink-inverse' : 'text-accent-300') : (on ? 'text-ink-inverse/45' : 'text-ink-muted/40')].join(' ')}>
                                 {fav ? '★' : '☆'}
                               </button>
                             )}
@@ -270,7 +270,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
               <div className="rounded-card border border-border-default bg-surface-low p-6 text-center space-y-2.5">
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-surface-high text-ink-muted"><Icon name="lock" size={22} /></div>
                 <p className="text-sm font-bold text-ink-primary">{dItem.label} · 접근 권한이 없습니다</p>
-                <p className="text-2xs leading-relaxed text-ink-muted">이 기능은 업주가 권한을 부여해야 사용할 수 있어요.<br />매장 업주에게 <span className="font-semibold text-gold-300">{dItem.id === 'voucher' ? '이용권 내역' : '장부·순위'} 권한</span>을 요청하세요.</p>
+                <p className="text-2xs leading-relaxed text-ink-muted">이 기능은 업주가 권한을 부여해야 사용할 수 있어요.<br />매장 업주에게 <span className="font-semibold text-accent-300">{dItem.id === 'voucher' ? '이용권 내역' : '장부·순위'} 권한</span>을 요청하세요.</p>
               </div>
             )}
             {/* 공용 섹션 헤더 — 모든 섹션의 제목·설명·주 액션 위치/크기를 한 규격으로(콘텐츠와 함께 deferred 전환) */}
@@ -391,7 +391,7 @@ function SectionBtn({ active, onClick, icon, children, locked, fav, onToggleFav 
         active ? 'text-ink-inverse' : locked ? 'text-ink-muted/60 hover:text-ink-secondary lg:hover:bg-surface-high' : 'text-ink-secondary hover:text-ink-primary lg:hover:bg-surface-high'].join(' ')}>
       {active && (
         <motion.span layoutId="manage-nav-pill" aria-hidden
-          className="absolute inset-0 rounded-[7px] bg-gold-300"
+          className="absolute inset-0 rounded-[7px] bg-accent-300"
           transition={{ type: 'spring', stiffness: 700, damping: 42 }} />
       )}
       <span className="relative shrink-0" aria-hidden>{icon}</span>
@@ -403,7 +403,7 @@ function SectionBtn({ active, onClick, icon, children, locked, fav, onToggleFav 
           role="button" tabIndex={-1} aria-label={fav ? '즐겨찾기 해제' : '즐겨찾기 추가'}
           onClick={(e) => { e.stopPropagation(); onToggleFav(); }}
           className={[locked ? '' : 'lg:ml-auto', 'relative hidden lg:inline shrink-0 px-0.5 text-sm leading-none transition-opacity',
-            fav ? (active ? 'text-ink-inverse' : 'text-gold-300') + ' opacity-100'
+            fav ? (active ? 'text-ink-inverse' : 'text-accent-300') + ' opacity-100'
                 : 'opacity-0 group-hover/nav:opacity-60 ' + (active ? 'text-ink-inverse' : 'text-ink-muted')].join(' ')}
         >{fav ? '★' : '☆'}</span>
       )}
@@ -661,7 +661,7 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
           <button type="button" onClick={() => setDate(today)} className="btn-ghost text-xs px-3 shrink-0">오늘</button>
         )}
         <button type="button" onClick={printPaperForm} title="공식 결과 기록지(수기 양식) 인쇄 — 인증 펍 전용"
-          className="btn-ghost text-xs px-3 shrink-0 text-gold-300">🖨 지류 양식</button>
+          className="btn-ghost text-xs px-3 shrink-0 text-accent-300">🖨 지류 양식</button>
       </div>
 
       {/* 어떤 게임의 순위인지 — 메인(포스터)·사이드(사이드 포스터)·장부·기타로 구분해 선택 */}
@@ -683,7 +683,7 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
           return (
             <button key={k} type="button" onClick={() => setEventName(ev)}
               className={['text-xs font-bold px-2.5 py-1.5 rounded-input border transition-colors',
-                on ? 'bg-gold-300 text-ink-inverse border-gold-300' : 'bg-surface-float text-ink-secondary border-border-default hover:text-ink-primary'].join(' ')}>
+                on ? 'bg-accent-300 text-white border-accent-300' : 'bg-surface-float text-ink-secondary border-border-default hover:text-ink-primary'].join(' ')}>
               {label ?? ev}{has ? ' ✓' : ''}
             </button>
           );
@@ -696,10 +696,10 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
         );
 
         return (
-          <div className="rounded-card border border-gold-400/30 bg-gold-300/[0.05] p-2.5 space-y-2.5">
+          <div className="rounded-card border border-accent-400/30 bg-accent-300/[0.05] p-2.5 space-y-2.5">
             <div className="flex items-center gap-2">
               <span className="text-2xs font-bold text-ink-muted shrink-0">🎯 입력 중인 게임</span>
-              <span className="min-w-0 flex-1 truncate text-sm font-extrabold text-gold-300">{eventName || '메인 게임(기본)'}</span>
+              <span className="min-w-0 flex-1 truncate text-sm font-extrabold text-accent-300">{eventName || '메인 게임(기본)'}</span>
             </div>
 
             {/* 메인 게임 — 기본 + 그날 포스터 제목 */}
@@ -727,10 +727,10 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
               {extras.map((n) => chip(n, 'g-x-' + n))}
               <button type="button"
                 onClick={() => { const v = window.prompt('게임 이름 직접 입력 (예: 사이드 2, 새틀라이트, 하이롤러)'); if (v && v.trim()) setEventName(v.trim().slice(0, 40)); }}
-                className="text-xs font-bold px-2.5 py-1.5 rounded-input border bg-surface-float text-gold-300 border-dashed border-gold-400/40 hover:bg-gold-300/10">+ 직접 추가</button>
+                className="text-xs font-bold px-2.5 py-1.5 rounded-input border bg-surface-float text-accent-300 border-dashed border-accent-400/40 hover:bg-accent-300/10">+ 직접 추가</button>
             </Section>
 
-            <p className="text-[10px] leading-relaxed text-ink-muted">하루에 게임이 여러 개면 <b className="text-ink-secondary">게임마다 따로</b> 골라 입력하세요. 메인·사이드·기타를 선택해 순위를 넣으면 그 게임 순위만 따로 저장·표시됩니다. <b className="text-gold-300">✓</b> 표시는 이미 입력된 게임입니다.</p>
+            <p className="text-[10px] leading-relaxed text-ink-muted">하루에 게임이 여러 개면 <b className="text-ink-secondary">게임마다 따로</b> 골라 입력하세요. 메인·사이드·기타를 선택해 순위를 넣으면 그 게임 순위만 따로 저장·표시됩니다. <b className="text-accent-300">✓</b> 표시는 이미 입력된 게임입니다.</p>
           </div>
         );
       })()}
@@ -775,7 +775,7 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
       </div>
 
       <p className="text-2xs text-ink-muted">
-        <span className="text-gold-300 font-semibold">닉네임은 필수</span>, 실명·프라이즈는 선택입니다. 등수마다 <span className="text-gold-300 font-semibold">기준 점수(+N점)</span>가 자동 부여되고, 프라이즈는 <span className="text-gold-300 font-semibold">매장 커뮤니티 순위 점수</span>로만 쓰입니다(금전적 가치 없음). 손님 화면엔 <span className="text-gold-300 font-semibold">실명(닉네임) 형식</span>으로 닉네임 일부를 가려 표시됩니다(예: 누리홀덤(나*리)).
+        <span className="text-accent-300 font-semibold">닉네임은 필수</span>, 실명·프라이즈는 선택입니다. 등수마다 <span className="text-accent-300 font-semibold">기준 점수(+N점)</span>가 자동 부여되고, 프라이즈는 <span className="text-accent-300 font-semibold">매장 커뮤니티 순위 점수</span>로만 쓰입니다(금전적 가치 없음). 손님 화면엔 <span className="text-accent-300 font-semibold">실명(닉네임) 형식</span>으로 닉네임 일부를 가려 표시됩니다(예: 누리홀덤(나*리)).
       </p>
 
       {loading ? (
@@ -786,7 +786,7 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
             <li key={i}
               className="grid grid-cols-[2rem_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_2rem] lg:grid-cols-[2.25rem_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_6rem_minmax(0,1.4fr)_2rem] items-center gap-1.5 rounded-input border border-border-subtle bg-surface-low/40 p-1.5">
               <span className="text-center">
-                <span className="block text-sm font-bold text-gold-300 tabular-nums">{i + 1}</span>
+                <span className="block text-sm font-bold text-accent-300 tabular-nums">{i + 1}</span>
                 {/* 등수→점수 미리보기(매장 꾸미기 '기준 점수' 반영) */}
                 <span className="block text-[9px] font-semibold text-ink-muted tabular-nums">+{placementPointsOf(i + 1, cfg)}점</span>
               </span>
@@ -806,7 +806,7 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
                       <li key={'l' + n}>
                         <button type="button" onMouseDown={(e) => { e.preventDefault(); pickSuggestion(i, 'ledger', n); }}
                           className="flex w-full items-center gap-2 px-2.5 py-2 text-left text-xs hover:bg-surface-high">
-                          <span className="shrink-0 rounded-badge bg-gold-300/15 px-1.5 py-0.5 text-[9px] font-bold text-gold-300">장부</span>
+                          <span className="shrink-0 rounded-badge bg-accent-300/15 px-1.5 py-0.5 text-[9px] font-bold text-accent-300">장부</span>
                           <span className="truncate font-semibold text-ink-primary">{n}</span>
                         </button>
                       </li>
@@ -872,7 +872,7 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
       )}
 
       <button type="button" onClick={addRow}
-        className="w-full py-2 rounded-input border border-dashed border-border-default text-xs font-semibold text-ink-secondary hover:text-ink-primary hover:border-gold-400/50 transition-colors">
+        className="w-full py-2 rounded-input border border-dashed border-border-default text-xs font-semibold text-ink-secondary hover:text-ink-primary hover:border-accent-400/50 transition-colors">
         + 줄 추가
       </button>
 
@@ -927,7 +927,7 @@ function VenueCreateForm({ onCreated }: { onCreated: () => Promise<void> }) {
   return (
     <div className="mx-auto w-full max-w-xl space-y-4 py-6">
       <div className="text-center space-y-1">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-gold-300/15 text-2xl">🏪</div>
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-accent-300/15 text-2xl">🏪</div>
         <h2 className="text-base font-extrabold text-ink-primary">내 매장 만들기</h2>
         <p className="text-2xs leading-relaxed text-ink-muted">매장 정보를 입력하면 NURI HOLDEM 커뮤니티에 매장이 등록됩니다.<br />운영자 승인 후 일정탐색·커뮤니티에 공개돼요.</p>
       </div>
@@ -936,7 +936,7 @@ function VenueCreateForm({ onCreated }: { onCreated: () => Promise<void> }) {
         {/* 대표 이미지(선택) */}
         <div>
           <p className="mb-1 text-2xs font-bold text-ink-secondary">대표 이미지 <span className="font-normal text-ink-muted">(선택)</span></p>
-          <label className="flex h-32 cursor-pointer items-center justify-center overflow-hidden rounded-input border border-dashed border-border-default bg-surface-base hover:border-gold-400/50">
+          <label className="flex h-32 cursor-pointer items-center justify-center overflow-hidden rounded-input border border-dashed border-border-default bg-surface-base hover:border-accent-400/50">
             {imgPreview
               ? <img src={imgPreview} alt="미리보기" className="h-full w-full object-cover" />
               : <span className="text-2xs text-ink-muted">탭하여 매장 사진 업로드</span>}
@@ -984,7 +984,7 @@ function StaffHub({ venueId }: { venueId: string }) {
             <button type="button" onClick={() => setOpen(isOpen ? '' : it.id)}
               className="w-full flex items-center justify-between px-3 py-3 text-left hover:bg-surface-high transition-colors">
               <span className="text-sm font-bold text-ink-primary">{it.label}</span>
-              <span className="text-gold-300 text-xs">{isOpen ? '▲ 접기' : '▼ 펼치기'}</span>
+              <span className="text-accent-300 text-xs">{isOpen ? '▲ 접기' : '▼ 펼치기'}</span>
             </button>
             {isOpen && <div className="px-3 pb-3 border-t border-border-subtle pt-3">{it.node}</div>}
           </div>
@@ -1106,7 +1106,7 @@ function StaffManager({ venueId }: { venueId: string }) {
           {/* 구성원 목록 */}
           <div className="space-y-1.5">
             <p className="text-xs font-semibold text-ink-secondary">구성원 ({staff.length})</p>
-            <p className="text-[10px] text-ink-muted">직책은 표시용 라벨이고, <span className="text-gold-300 font-semibold">장부·순위 권한</span>은 별도로 켜야 적용됩니다. 권한 받은 직원만 장부 담당자로 지정·운영할 수 있습니다.</p>
+            <p className="text-[10px] text-ink-muted">직책은 표시용 라벨이고, <span className="text-accent-300 font-semibold">장부·순위 권한</span>은 별도로 켜야 적용됩니다. 권한 받은 직원만 장부 담당자로 지정·운영할 수 있습니다.</p>
             <datalist id="staff-title-suggest">
               {TITLE_SUGGEST.map((t) => <option key={t} value={t} />)}
             </datalist>
@@ -1125,7 +1125,7 @@ function StaffManager({ venueId }: { venueId: string }) {
                       </div>
                       <div className="flex-1 min-w-0">
                         <span className="block text-sm font-semibold text-ink-primary truncate">
-                          {s.name}{s.staffTitle ? <span className="ml-1.5 text-2xs font-bold text-gold-300">· {s.staffTitle}</span> : null}
+                          {s.name}{s.staffTitle ? <span className="ml-1.5 text-2xs font-bold text-accent-300">· {s.staffTitle}</span> : null}
                         </span>
                         <p className="text-2xs text-ink-muted truncate">{s.nickname ? `@${s.nickname}` : s.email}</p>
                       </div>
@@ -1141,12 +1141,12 @@ function StaffManager({ venueId }: { venueId: string }) {
                       />
                       <button type="button" onClick={() => toggleAccess(s.id)}
                         className={['shrink-0 text-2xs font-bold px-2.5 py-1.5 rounded-badge border transition-colors',
-                          hasAccess ? 'bg-gold-300/15 text-gold-300 border-gold-400/40' : 'bg-surface-float text-ink-muted border-border-default'].join(' ')}>
+                          hasAccess ? 'bg-accent-300/15 text-accent-300 border-accent-400/40' : 'bg-surface-float text-ink-muted border-border-default'].join(' ')}>
                         장부·순위 {hasAccess ? '권한 ✓' : '권한 없음'}
                       </button>
                       <button type="button" onClick={() => toggleVoucher(s.id)}
                         className={['shrink-0 text-2xs font-bold px-2.5 py-1.5 rounded-badge border transition-colors',
-                          vouch.includes(s.id) ? 'bg-gold-300/15 text-gold-300 border-gold-400/40' : 'bg-surface-float text-ink-muted border-border-default'].join(' ')}>
+                          vouch.includes(s.id) ? 'bg-accent-300/15 text-accent-300 border-accent-400/40' : 'bg-surface-float text-ink-muted border-border-default'].join(' ')}>
                         이용권내역 {vouch.includes(s.id) ? '✓' : '✗'}
                       </button>
                     </div>

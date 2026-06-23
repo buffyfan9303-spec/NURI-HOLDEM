@@ -151,7 +151,7 @@ export default function PostDetailModal({
               <span className="text-sm font-semibold text-ink-primary truncate">{authorMark}{post.userName}</span>
               <TitleChip points={titlePts(post.userId)} />
               {post.userRole === 'venue_owner' && (
-                <span className="text-2xs font-bold text-gold-300 bg-gold-300/15 px-1.5 py-0.5 rounded-badge">업주</span>
+                <span className="text-2xs font-bold text-accent-300 bg-accent-300/15 px-1.5 py-0.5 rounded-badge">업주</span>
               )}
               {post.userRole === 'admin' && (
                 <span className="text-2xs font-bold text-danger-light bg-danger/15 px-1.5 py-0.5 rounded-badge">운영자</span>
@@ -162,7 +162,7 @@ export default function PostDetailModal({
             </p>
           </div>
           <button type="button" onClick={copyLink} aria-label="링크 복사"
-            className="shrink-0 inline-flex items-center gap-1 text-2xs text-ink-muted hover:text-gold-300 transition-colors px-1.5 py-1">
+            className="shrink-0 inline-flex items-center gap-1 text-2xs text-ink-muted hover:text-accent-300 transition-colors px-1.5 py-1">
             <Icon name="share" size={13} /> 공유
           </button>
           {user && user.id !== post.userId && (
@@ -203,7 +203,7 @@ export default function PostDetailModal({
                   try { await adminSetPostBlinded(post.id, false); toast.show('숨김을 해제했습니다', 'success'); onClose(); }
                   catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
                 }}
-                className="ml-auto rounded-input border border-border-default px-2.5 py-1 text-2xs font-bold text-ink-secondary hover:text-gold-300">숨김 해제</button>
+                className="ml-auto rounded-input border border-border-default px-2.5 py-1 text-2xs font-bold text-ink-secondary hover:text-accent-300">숨김 해제</button>
             )}
           </div>
         )}
@@ -239,7 +239,7 @@ export default function PostDetailModal({
                 if (heroCards.length < 2) return null;
                 return (
                   <button type="button" onClick={() => setGtoHero(heroCards)}
-                    className="inline-flex items-center gap-1.5 rounded-input border border-gold-400/40 bg-gold-300/10 px-3 py-2 text-xs font-bold text-gold-300 active:opacity-80">
+                    className="inline-flex items-center gap-1.5 rounded-input border border-accent-400/40 bg-accent-300/10 px-3 py-2 text-xs font-bold text-accent-300 active:opacity-80">
                     🎯 이 핸드 GTO 분석
                   </button>
                 );
@@ -330,7 +330,7 @@ export default function PostDetailModal({
                     <div className="flex items-center gap-1.5 mb-0.5">
                       <span className="text-xs font-semibold text-ink-primary">{r.author}</span>
                       {r.isOwner && (
-                        <span className="text-2xs font-bold text-gold-300 bg-gold-300/15 px-1 rounded-badge">업주</span>
+                        <span className="text-2xs font-bold text-accent-300 bg-accent-300/15 px-1 rounded-badge">업주</span>
                       )}
                       {r.isAdmin && (
                         <span className="text-2xs font-bold text-danger-light bg-danger/15 px-1 rounded-badge">운영자</span>

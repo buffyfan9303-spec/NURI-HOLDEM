@@ -8,7 +8,7 @@ function Section({ icon, title, children }: {
 }) {
   return (
     <section className="mb-5">
-      <h3 className="flex items-center gap-2 text-sm font-bold text-gold-300 mb-2">
+      <h3 className="flex items-center gap-2 text-sm font-bold text-accent-300 mb-2">
         <span aria-hidden>{icon}</span>{title}
       </h3>
       <div className="space-y-2 text-xs text-ink-secondary leading-relaxed">{children}</div>
@@ -76,8 +76,8 @@ export default function LegalNotice() {
       </div>
 
       {/* 서비스 성격 명시 */}
-      <div className="mb-5 p-3 rounded-input bg-gold-300/10 border border-gold-400/30">
-        <p className="text-xs text-gold-300 font-semibold mb-1">📋 NURI HOLDEM 서비스 성격</p>
+      <div className="mb-5 p-3 rounded-input bg-accent-300/10 border border-accent-400/30">
+        <p className="text-xs text-accent-300 font-semibold mb-1">📋 NURI HOLDEM 서비스 성격</p>
         <p className="text-xs text-ink-secondary leading-relaxed">
           본 서비스는 <strong className="text-ink-primary">전국 홀덤 토너먼트 일정 정보 제공 플랫폼</strong>입니다.
           홀덤 포커는 「국민체육진흥법」상 마인드 스포츠로, 등록된 홀덤 펍에서의 합법적 토너먼트
@@ -121,7 +121,7 @@ export default function LegalNotice() {
         </p>
         <div className="p-3 rounded-input bg-surface-high border border-border-default space-y-1.5">
           <p><span className="text-ink-primary font-medium">운영팀 이메일:</span>{' '}
-            <span className="text-gold-300">buffyfan9303@gmail.com</span></p>
+            <span className="text-accent-300">buffyfan9303@gmail.com</span></p>
           <p><span className="text-ink-primary font-medium">게임물관리위원회 신고:</span>{' '}
             <span className="text-ink-muted">1488 (평일 09:00–18:00)</span></p>
           <p><span className="text-ink-primary font-medium">경찰청 사이버범죄신고시스템:</span>{' '}

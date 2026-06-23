@@ -91,7 +91,7 @@ function PrizeBanner({ schedule, large = false }: { schedule: Schedule; large?: 
       'inline-flex items-baseline gap-1 rounded-input',
       large ? 'text-lg' : 'text-base',
     ].join(' ')}>
-      <span className={`font-extrabold text-gold-300 tabular-nums leading-none ${large ? 'text-xl' : 'text-base'}`}>
+      <span className={`font-extrabold text-accent-300 tabular-nums leading-none ${large ? 'text-xl' : 'text-base'}`}>
         {prizeMainText(schedule)}
       </span>
       <span className={[
@@ -120,7 +120,7 @@ function VenueLink({
     <button
       type="button"
       onClick={(e) => { e.stopPropagation(); onClick(e); }}
-      className="group inline-flex items-baseline gap-1 text-xs text-ink-muted hover:text-gold-300 transition-colors max-w-full"
+      className="group inline-flex items-baseline gap-1 text-xs text-ink-muted hover:text-accent-300 transition-colors max-w-full"
     >
       <span className="font-medium underline decoration-dotted underline-offset-2 truncate">
         {pubName}
@@ -153,7 +153,7 @@ function ListCard({ schedule, onVenueClick, onSelect, reserveCount, rating }: Ca
         'flex items-center gap-2.5 overflow-hidden rounded-card border transition-all duration-300 ease-out',
         'hover:-translate-y-1 cursor-pointer active:scale-[0.98] p-2',
         schedule.isPremium
-          ? 'border-gold-400 shadow-gold bg-surface-low'
+          ? 'border-accent-400 shadow-gold bg-surface-low'
           : 'border-border-default shadow-card bg-surface-low hover:border-border-strong',
       ].join(' ')}
       // 포스터 색 글로우 — 카드 뒤로 은은하게 번지는 포스터 고유색(글라스 감성)
@@ -173,14 +173,14 @@ function ListCard({ schedule, onVenueClick, onSelect, reserveCount, rating }: Ca
         {/* 1행: 배지 + 제목 */}
         <div className="flex items-center gap-1 min-w-0">
           {schedule.isPremium && (
-            <span className="shrink-0 rounded-badge bg-gold-300 px-1 py-0.5 text-2xs font-bold text-ink-inverse leading-none">
+            <span className="shrink-0 rounded-badge bg-accent-300 px-1 py-0.5 text-2xs font-bold text-white leading-none">
               TOP
             </span>
           )}
           <FormatBadge format={schedule.format} />
           <h3 className={[
             'text-sm font-bold tracking-tight leading-tight truncate flex-1 min-w-0',
-            schedule.isPremium ? 'text-gold-300' : 'text-ink-primary',
+            schedule.isPremium ? 'text-accent-300' : 'text-ink-primary',
           ].join(' ')}>
             {schedule.title}
           </h3>
@@ -195,13 +195,13 @@ function ListCard({ schedule, onVenueClick, onSelect, reserveCount, rating }: Ca
               onClick={() => onVenueClick(schedule.venueId)}
             />
             {rating && rating.count > 0 && (
-              <span className="shrink-0 text-2xs font-bold tabular-nums text-gold-300" title={`방문 후기 ${rating.count}건 평균`}>
+              <span className="shrink-0 text-2xs font-bold tabular-nums text-accent-300" title={`방문 후기 ${rating.count}건 평균`}>
                 ⭐{rating.avg.toFixed(1)}<span className="font-normal text-ink-muted">({rating.count})</span>
               </span>
             )}
           </span>
           <span className="shrink-0 inline-flex items-baseline gap-1">
-            <span className="font-extrabold text-gold-300 tabular-nums text-sm leading-none">
+            <span className="font-extrabold text-accent-300 tabular-nums text-sm leading-none">
               {prizeMainText(schedule)}
             </span>
             <span className={[
@@ -251,7 +251,7 @@ function GridCard({ schedule, onVenueClick, onSelect, rating }: CardProps) {
         'flex flex-col overflow-hidden rounded-card border transition-all duration-300 ease-out',
         'hover:-translate-y-1 cursor-pointer active:scale-[0.98]',
         schedule.isPremium
-          ? 'border-gold-400 shadow-gold bg-surface-low'
+          ? 'border-accent-400 shadow-gold bg-surface-low'
           : 'border-border-default shadow-card bg-surface-low hover:border-border-strong',
       ].join(' ')}
     >
@@ -266,7 +266,7 @@ function GridCard({ schedule, onVenueClick, onSelect, rating }: CardProps) {
         <div className="absolute top-2 left-2 right-2 flex items-start justify-between gap-2">
           <div className="flex flex-col gap-1 items-start">
             {schedule.isPremium && (
-              <span className="rounded-badge bg-gold-300 px-1.5 py-0.5 text-2xs font-bold text-ink-inverse leading-none">
+              <span className="rounded-badge bg-accent-300 px-1.5 py-0.5 text-2xs font-bold text-white leading-none">
                 TOP
               </span>
             )}
@@ -288,7 +288,7 @@ function GridCard({ schedule, onVenueClick, onSelect, rating }: CardProps) {
       <div className="flex flex-col gap-1.5 p-2.5">
         <h3 className={[
           'text-sm font-bold tracking-tight leading-tight line-clamp-2',
-          schedule.isPremium ? 'text-gold-300' : 'text-ink-primary',
+          schedule.isPremium ? 'text-accent-300' : 'text-ink-primary',
         ].join(' ')}>
           {schedule.title}
         </h3>
@@ -299,7 +299,7 @@ function GridCard({ schedule, onVenueClick, onSelect, rating }: CardProps) {
             onClick={() => onVenueClick(schedule.venueId)}
           />
           {rating && rating.count > 0 && (
-            <span className="shrink-0 text-2xs font-bold tabular-nums text-gold-300" title={`방문 후기 ${rating.count}건 평균`}>
+            <span className="shrink-0 text-2xs font-bold tabular-nums text-accent-300" title={`방문 후기 ${rating.count}건 평균`}>
               ⭐{rating.avg.toFixed(1)}<span className="font-normal text-ink-muted">({rating.count})</span>
             </span>
           )}

@@ -114,7 +114,7 @@ export default function ScheduleDetailModal({
             {/* 상단 배지 */}
             <div className="absolute top-3 left-3 flex items-center gap-1 z-10">
               {schedule.isPremium && (
-                <span className="rounded-badge bg-gold-300 px-2 py-0.5 text-xs font-bold text-ink-inverse leading-none">
+                <span className="rounded-badge bg-accent-300 px-2 py-0.5 text-xs font-bold text-white leading-none">
                   TOP
                 </span>
               )}
@@ -143,7 +143,7 @@ export default function ScheduleDetailModal({
           <div className="px-3.5 pt-3.5 pb-2">
             <h1 className={[
               'text-xl font-bold leading-tight',
-              schedule.isPremium ? 'text-gold-300' : 'text-ink-primary',
+              schedule.isPremium ? 'text-accent-300' : 'text-ink-primary',
             ].join(' ')}>
               {schedule.title}
             </h1>
@@ -160,7 +160,7 @@ export default function ScheduleDetailModal({
               <button
                 type="button"
                 onClick={() => onVenueClick(schedule.venueId!)}
-                className="mt-1.5 inline-flex items-center gap-1 text-sm text-ink-secondary hover:text-gold-300 transition-colors group"
+                className="mt-1.5 inline-flex items-center gap-1 text-sm text-ink-secondary hover:text-accent-300 transition-colors group"
               >
                 <span className="font-medium underline decoration-dotted underline-offset-2">
                   {schedule.pubName}
@@ -168,7 +168,7 @@ export default function ScheduleDetailModal({
                 <span className="text-border-strong">·</span>
                 <span>{schedule.region}</span>
                 {rating && rating.count > 0 && (
-                  <span className="shrink-0 font-bold tabular-nums text-gold-300" title={`방문 후기 ${rating.count}건 평균`}>
+                  <span className="shrink-0 font-bold tabular-nums text-accent-300" title={`방문 후기 ${rating.count}건 평균`}>
                     ⭐{rating.avg.toFixed(1)}<span className="font-normal text-ink-muted">({rating.count})</span>
                   </span>
                 )}
@@ -186,7 +186,7 @@ export default function ScheduleDetailModal({
                 <span className="text-border-strong">·</span>
                 <span>{schedule.region}</span>
                 {rating && rating.count > 0 && (
-                  <span className="shrink-0 font-bold tabular-nums text-gold-300" title={`방문 후기 ${rating.count}건 평균`}>
+                  <span className="shrink-0 font-bold tabular-nums text-accent-300" title={`방문 후기 ${rating.count}건 평균`}>
                     ⭐{rating.avg.toFixed(1)}<span className="font-normal text-ink-muted">({rating.count})</span>
                   </span>
                 )}
@@ -220,7 +220,7 @@ export default function ScheduleDetailModal({
               onClick={() => setTab(t)}
               className={[
                 'relative py-3 text-sm font-medium transition-colors text-center',
-                active ? 'text-gold-300' : 'text-ink-muted hover:text-ink-secondary',
+                active ? 'text-accent-300' : 'text-ink-muted hover:text-ink-secondary',
               ].join(' ')}
             >
               {t === 'info' ? '대회 정보' : 'Q&A'}
@@ -232,7 +232,7 @@ export default function ScheduleDetailModal({
               )}
               {active && (
                 <motion.span layoutId="schedule-detail-tab" aria-hidden
-                  className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-gold-300"
+                  className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-accent-300"
                   transition={{ type: 'spring', stiffness: 700, damping: 42 }} />
               )}
             </button>
@@ -246,13 +246,13 @@ export default function ScheduleDetailModal({
           {/* 대회 후기 쓰기 — 커뮤니티 게시판(대회 후기 카테고리)으로 바로 작성 */}
           <button type="button"
             onClick={() => { if (!user) { promptLogin(); return; } openPostForm('tourney'); }}
-            className="flex w-full items-center gap-2 rounded-input border border-gold-400/40 bg-gold-300/[0.06] px-3 py-2.5 text-left transition-colors hover:bg-gold-300/[0.1]">
+            className="flex w-full items-center gap-2 rounded-input border border-accent-400/40 bg-accent-300/[0.06] px-3 py-2.5 text-left transition-colors hover:bg-accent-300/[0.1]">
             <span aria-hidden>📝</span>
             <span className="min-w-0 flex-1">
-              <span className="block text-xs font-bold text-gold-300">이 대회 후기 쓰기</span>
+              <span className="block text-xs font-bold text-accent-300">이 대회 후기 쓰기</span>
               <span className="block text-[10px] text-ink-muted">참가 후기를 커뮤니티 게시판(대회 후기)에 남겨보세요 — 다른 플레이어에게 큰 도움이 됩니다.</span>
             </span>
-            <span className="shrink-0 text-gold-300" aria-hidden>→</span>
+            <span className="shrink-0 text-accent-300" aria-hidden>→</span>
           </button>
           <CommentThread
             comments={qnaComments}
@@ -275,10 +275,10 @@ export default function ScheduleDetailModal({
 
         {/* 프라이즈 강조 박스 */}
         {(schedule.prizePool || schedule.prizePercent) && (
-          <section className="rounded-card border border-gold-400/50 bg-gradient-to-br from-gold-300/10 to-transparent p-4">
+          <section className="rounded-card border border-accent-400/50 bg-gradient-to-br from-accent-300/10 to-transparent p-4">
             <p className="text-2xs uppercase tracking-wider text-gold-500 mb-1">{schedule.guaranteed ? '상금 풀' : '프라이즈'}</p>
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-extrabold text-gold-300 tabular-nums leading-none">
+              <span className="text-3xl font-extrabold text-accent-300 tabular-nums leading-none">
                 {prizeMainText(schedule)}
               </span>
               <span className={[
@@ -390,10 +390,10 @@ export default function ScheduleDetailModal({
               {schedule.promotions.map((p, i) => (
                 <li
                   key={i}
-                  className="flex items-center gap-2 px-3 py-2 rounded-input border border-gold-400/30 bg-gold-300/[0.04]"
+                  className="flex items-center gap-2 px-3 py-2 rounded-input border border-accent-400/30 bg-accent-300/[0.04]"
                 >
                   {p.badge && (
-                    <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-badge bg-gold-300 text-ink-inverse text-2xs font-bold leading-none">
+                    <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-badge bg-accent-300 text-white text-2xs font-bold leading-none">
                       {p.badge}
                     </span>
                   )}
@@ -438,13 +438,13 @@ export default function ScheduleDetailModal({
                       <tr key={i} className="border-b border-border-subtle last:border-b-0">
                         <td className={[
                           'px-3 py-1.5 w-20',
-                          isTop3 ? 'text-gold-300 font-bold' : 'text-ink-secondary',
+                          isTop3 ? 'text-accent-300 font-bold' : 'text-ink-secondary',
                         ].join(' ')}>
                           {rp.rank}
                         </td>
                         <td className={[
                           'px-3 py-1.5 text-right tabular-nums',
-                          isTop3 ? 'text-gold-300 font-extrabold text-sm' : 'text-ink-primary font-semibold',
+                          isTop3 ? 'text-accent-300 font-extrabold text-sm' : 'text-ink-primary font-semibold',
                         ].join(' ')}>
                           {rp.amount.toLocaleString()}{rp.unit ?? ''}
                         </td>
@@ -543,7 +543,7 @@ function CalendarShareRow({ schedule }: { schedule: Schedule }) {
             '_blank', 'noopener',
           );
         }}
-        className="flex items-center justify-center gap-1.5 rounded-input border border-border-default bg-surface-high py-3 text-sm font-bold text-ink-secondary transition-colors hover:border-gold-400/50 hover:text-gold-300">
+        className="flex items-center justify-center gap-1.5 rounded-input border border-border-default bg-surface-high py-3 text-sm font-bold text-ink-secondary transition-colors hover:border-accent-400/50 hover:text-accent-300">
         <span aria-hidden>📅</span> 내 캘린더에 추가
       </button>
       {/* 공유 링크 복사 — 이 대회로 바로 열리는 주소 */}
@@ -556,7 +556,7 @@ function CalendarShareRow({ schedule }: { schedule: Schedule }) {
             toast.show('공유 링크를 복사했습니다 — 붙여넣으면 이 대회로 바로 열려요', 'success');
           } catch { toast.show('복사에 실패했습니다', 'error'); }
         }}
-        className="flex items-center justify-center gap-1.5 rounded-input border border-border-default bg-surface-high py-3 text-sm font-bold text-ink-secondary transition-colors hover:border-gold-400/50 hover:text-gold-300">
+        className="flex items-center justify-center gap-1.5 rounded-input border border-border-default bg-surface-high py-3 text-sm font-bold text-ink-secondary transition-colors hover:border-accent-400/50 hover:text-accent-300">
         <span aria-hidden>🔗</span> 공유 링크
       </button>
     </div>
@@ -646,9 +646,9 @@ function ReserveBox({ scheduleId, ownerId, venueId }: { scheduleId: string; owne
   const fmtRes = (iso: string) => { const d = new Date(iso); const p = (n: number) => String(n).padStart(2, '0'); return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`; };
 
   return (
-    <section className="rounded-card border border-gold-400/40 bg-gradient-to-br from-gold-300/[0.08] to-transparent p-4 space-y-2">
+    <section className="rounded-card border border-accent-400/40 bg-gradient-to-br from-accent-300/[0.08] to-transparent p-4 space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-bold text-gold-300">참가 예약</p>
+        <p className="text-sm font-bold text-accent-300">참가 예약</p>
         {mine && <span className="text-2xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-badge">예약 완료</span>}
       </div>
       {!mine && (
@@ -669,9 +669,9 @@ function ReserveBox({ scheduleId, ownerId, venueId }: { scheduleId: string; owne
 
       {/* 업주/운영자: 예약 내역(실제 아이디·닉네임) — 접이식 */}
       {isManager && (
-        <div className="mt-1 border-t border-gold-400/20 pt-2">
+        <div className="mt-1 border-t border-accent-400/20 pt-2">
           <button type="button" onClick={() => setResOpen((v) => !v)} className="flex w-full items-center justify-between gap-2 text-left">
-            <span className="text-2xs font-bold text-gold-300">예약 내역 <span className="font-normal text-ink-muted">({resList.length})</span></span>
+            <span className="text-2xs font-bold text-accent-300">예약 내역 <span className="font-normal text-ink-muted">({resList.length})</span></span>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className={['text-ink-muted transition-transform', resOpen ? 'rotate-180' : ''].join(' ')} aria-hidden><polyline points="6 9 12 15 18 9" /></svg>
           </button>
           {resOpen && (
@@ -740,8 +740,8 @@ function BlindStructure({ schedule }: { schedule: Schedule }) {
               {levels.map((l, i) => {
                 if (l.kind === 'break') {
                   return (
-                    <tr key={i} className="bg-gold-300/[0.06] border-t border-border-subtle">
-                      <td colSpan={4} className="py-1.5 px-2 text-center font-bold text-gold-300">BREAK · {l.minutes}분</td>
+                    <tr key={i} className="bg-accent-300/[0.06] border-t border-border-subtle">
+                      <td colSpan={4} className="py-1.5 px-2 text-center font-bold text-accent-300">BREAK · {l.minutes}분</td>
                     </tr>
                   );
                 }

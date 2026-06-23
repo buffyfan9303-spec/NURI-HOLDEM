@@ -15,7 +15,7 @@ import SegmentedTabs from '../atoms/SegmentedTabs';
 
 const KIND_LABEL: Record<DealerPostKind, string> = { hiring: '구인', seeking: '구직', general: '일반' };
 const KIND_STYLE: Record<DealerPostKind, string> = {
-  hiring:  'bg-gold-300/15 text-gold-300 border-gold-400/40',
+  hiring:  'bg-accent-300/15 text-accent-300 border-accent-400/40',
   seeking: 'bg-sky-500/15 text-sky-300 border-sky-400/40',
   general: 'bg-surface-float text-ink-secondary border-border-default',
 };
@@ -107,14 +107,14 @@ export default function DealerCommunity() {
       </div>
 
       {notices.length > 0 && (
-        <section className="rounded-card border border-gold-400/30 bg-gradient-to-br from-gold-300/[0.05] to-transparent overflow-hidden">
-          <header className="px-3 py-2 border-b border-gold-400/20">
-            <h3 className="text-xs font-bold text-gold-300">공지사항</h3>
+        <section className="rounded-card border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.05] to-transparent overflow-hidden">
+          <header className="px-3 py-2 border-b border-accent-400/20">
+            <h3 className="text-xs font-bold text-accent-300">공지사항</h3>
           </header>
           <ul>
             {notices.slice(0, 5).map((n) => (
               <li key={n.id} className="border-b border-border-subtle last:border-b-0">
-                <button type="button" onClick={() => setOpenNotice(n)} className="w-full text-left px-3 py-2 hover:bg-gold-300/[0.06] transition-colors">
+                <button type="button" onClick={() => setOpenNotice(n)} className="w-full text-left px-3 py-2 hover:bg-accent-300/[0.06] transition-colors">
                   <p className="text-xs font-semibold text-ink-primary">{n.title}</p>
                   {n.body && <p className="mt-0.5 text-2xs text-ink-muted line-clamp-2 leading-snug">{n.body}</p>}
                 </button>
@@ -128,7 +128,7 @@ export default function DealerCommunity() {
       <div className="grid grid-cols-2 gap-2">
         <button type="button" onClick={() => setShowIcm((v) => !v)}
           className="flex items-center justify-center gap-1.5 rounded-input border border-border-default bg-surface-high px-3 py-2.5 text-xs font-semibold text-ink-secondary hover:text-ink-primary transition-colors">
-          <span className="inline-flex items-center gap-1"><span className="text-gold-300">ICM</span> 계산기</span>
+          <span className="inline-flex items-center gap-1"><span className="text-accent-300">ICM</span> 계산기</span>
           <span className="text-2xs text-ink-muted">{showIcm ? '▲' : '▼'}</span>
         </button>
         {canPost ? (
@@ -195,7 +195,7 @@ export default function DealerCommunity() {
           return (
             <button key={k} type="button" onClick={() => setFilterKind(k)}
               className={['flex-1 rounded-[6px] py-1.5 text-xs font-bold leading-none transition-colors',
-                on ? 'bg-gold-300 text-ink-inverse' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
+                on ? 'bg-accent-300 text-white' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
               {label}{cnt > 0 ? ` ${cnt}` : ''}
             </button>
           );
@@ -224,7 +224,7 @@ export default function DealerCommunity() {
                 {/* 구인 핵심 조건 칩 */}
                 {p.kind === 'hiring' && (p.wage || p.workHours || p.workPeriod) && (
                   <div className="mt-1.5 flex flex-wrap gap-1">
-                    {p.wage && <span className="inline-flex items-center gap-1 rounded-badge bg-gold-300/10 border border-gold-400/30 px-1.5 py-0.5 text-2xs text-gold-300">시급 {p.wage}</span>}
+                    {p.wage && <span className="inline-flex items-center gap-1 rounded-badge bg-accent-300/10 border border-accent-400/30 px-1.5 py-0.5 text-2xs text-accent-300">시급 {p.wage}</span>}
                     {p.workHours && <span className="inline-flex items-center gap-1 rounded-badge bg-surface-high border border-border-default px-1.5 py-0.5 text-2xs text-ink-secondary">{p.workHours}</span>}
                     {p.workPeriod && <span className="inline-flex items-center gap-1 rounded-badge bg-surface-high border border-border-default px-1.5 py-0.5 text-2xs text-ink-secondary">{p.workPeriod}</span>}
                   </div>
@@ -236,7 +236,7 @@ export default function DealerCommunity() {
                   </div>
                   <span className="text-2xs text-ink-muted">{p.authorName}</span>
                   {(p.kind === 'hiring' || p.kind === 'seeking') && (
-                    <span className="ml-auto text-2xs font-semibold text-gold-300">자세히 · 지원 →</span>
+                    <span className="ml-auto text-2xs font-semibold text-accent-300">자세히 · 지원 →</span>
                   )}
                 </div>
               </button>
@@ -337,8 +337,8 @@ function DealerPostBody({ post, isAdmin, userId, userName }: {
       ) : isAuthor ? null : applied ? (
         <p className="rounded-input bg-emerald-500/10 border border-emerald-500/30 px-3 py-2 text-center text-xs font-semibold text-emerald-400">지원이 접수되었습니다 ✓</p>
       ) : canApply ? (
-        <form onSubmit={apply} className="space-y-2 rounded-card border border-gold-400/30 bg-gold-300/[0.04] p-3">
-          <p className="text-xs font-bold text-gold-300">지원하기</p>
+        <form onSubmit={apply} className="space-y-2 rounded-card border border-accent-400/30 bg-accent-300/[0.04] p-3">
+          <p className="text-xs font-bold text-accent-300">지원하기</p>
           <div className="grid grid-cols-2 gap-2">
             <label className="block">
               <span className="block text-2xs font-medium text-ink-secondary mb-1">이름 <span className="text-danger">*</span></span>
@@ -370,7 +370,7 @@ function DealerPostBody({ post, isAdmin, userId, userName }: {
                 <li key={a.id} className="rounded-input border border-border-default bg-surface-high p-2.5">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold text-ink-primary">{a.applicantName}</span>
-                    <a href={`tel:${a.phone}`} className="text-xs font-bold text-gold-300 tabular-nums">{a.phone}</a>
+                    <a href={`tel:${a.phone}`} className="text-xs font-bold text-accent-300 tabular-nums">{a.phone}</a>
                     <span className="ml-auto text-2xs text-ink-muted">{relativeTime(a.createdAt)}</span>
                   </div>
                   {a.message && <p className="mt-1 whitespace-pre-wrap break-words text-2xs text-ink-secondary leading-snug">{a.message}</p>}
@@ -386,9 +386,9 @@ function DealerPostBody({ post, isAdmin, userId, userName }: {
 
 function ConditionCell({ label, value, highlight }: { label: string; value?: string; highlight?: boolean }) {
   return (
-    <div className={['rounded-input border p-2 text-center', highlight ? 'border-gold-400/40 bg-gold-300/[0.06]' : 'border-border-default bg-surface-high'].join(' ')}>
+    <div className={['rounded-input border p-2 text-center', highlight ? 'border-accent-400/40 bg-accent-300/[0.06]' : 'border-border-default bg-surface-high'].join(' ')}>
       <p className="text-[10px] text-ink-muted">{label}</p>
-      <p className={['text-xs font-bold mt-0.5 break-words', highlight ? 'text-gold-300' : 'text-ink-primary'].join(' ')}>{value || '-'}</p>
+      <p className={['text-xs font-bold mt-0.5 break-words', highlight ? 'text-accent-300' : 'text-ink-primary'].join(' ')}>{value || '-'}</p>
     </div>
   );
 }

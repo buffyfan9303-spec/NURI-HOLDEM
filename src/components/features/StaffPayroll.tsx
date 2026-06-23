@@ -116,14 +116,14 @@ export function StaffSettlement({ venueId }: { venueId: string }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-center gap-1">
-        <button type="button" onClick={() => setMonth((m) => shiftMonth(m, -1))} className="w-7 h-7 rounded-input bg-surface-high text-ink-secondary hover:text-gold-300">‹</button>
-        <span className="text-sm font-bold text-gold-300 tabular-nums w-[5rem] text-center">{month}</span>
-        <button type="button" onClick={() => setMonth((m) => shiftMonth(m, 1))} className="w-7 h-7 rounded-input bg-surface-high text-ink-secondary hover:text-gold-300">›</button>
+        <button type="button" onClick={() => setMonth((m) => shiftMonth(m, -1))} className="w-7 h-7 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">‹</button>
+        <span className="text-sm font-bold text-accent-300 tabular-nums w-[5rem] text-center">{month}</span>
+        <button type="button" onClick={() => setMonth((m) => shiftMonth(m, 1))} className="w-7 h-7 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">›</button>
       </div>
       <div className="grid grid-cols-2 gap-2">
-        <div className="rounded-card border border-gold-400/40 bg-gold-300/[0.07] p-2.5 text-center">
+        <div className="rounded-card border border-accent-400/40 bg-accent-300/[0.07] p-2.5 text-center">
           <p className="text-[10px] text-ink-muted">총 인건비</p>
-          <p className="text-xl font-extrabold text-gold-200 tabular-nums">{totalPay.toLocaleString()}원</p>
+          <p className="text-xl font-extrabold text-accent-200 tabular-nums">{totalPay.toLocaleString()}원</p>
         </div>
         <div className="rounded-card border border-border-subtle bg-surface-base p-2.5 text-center">
           <p className="text-[10px] text-ink-muted">총 근무시간</p>
@@ -145,7 +145,7 @@ export function StaffSettlement({ venueId }: { venueId: string }) {
                   <td className="text-ink-secondary tabular-nums">{r.days}일</td>
                   <td className="text-ink-secondary tabular-nums">{r.hrs.toFixed(1)}h</td>
                   <td className="text-ink-muted tabular-nums text-[11px]">{r.avgIn}/{r.avgOut}</td>
-                  <td className="text-gold-300 tabular-nums font-bold">{r.pay.toLocaleString()}</td>
+                  <td className="text-accent-300 tabular-nums font-bold">{r.pay.toLocaleString()}</td>
                 </tr>
               ))}
             </tbody>
@@ -171,15 +171,15 @@ export function StaffWorkLog({ venueId }: { venueId: string }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-center gap-1">
-        <button type="button" onClick={() => setMonth((m) => shiftMonth(m, -1))} className="w-7 h-7 rounded-input bg-surface-high text-ink-secondary hover:text-gold-300">‹</button>
-        <span className="text-sm font-bold text-gold-300 tabular-nums w-[5rem] text-center">{month}</span>
-        <button type="button" onClick={() => setMonth((m) => shiftMonth(m, 1))} className="w-7 h-7 rounded-input bg-surface-high text-ink-secondary hover:text-gold-300">›</button>
+        <button type="button" onClick={() => setMonth((m) => shiftMonth(m, -1))} className="w-7 h-7 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">‹</button>
+        <span className="text-sm font-bold text-accent-300 tabular-nums w-[5rem] text-center">{month}</span>
+        <button type="button" onClick={() => setMonth((m) => shiftMonth(m, 1))} className="w-7 h-7 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">›</button>
       </div>
       {sorted.length === 0 ? <p className="text-2xs text-ink-muted text-center py-3">기록이 없습니다.</p> : (
         <div className="rounded-input border border-border-subtle bg-surface-base divide-y divide-border-subtle max-h-[24rem] overflow-y-auto">
           {sorted.map((s, i) => (
             <div key={`${s.date}-${s.name}-${i}`} className="flex items-center gap-2 px-2.5 py-1.5 text-xs">
-              <span className="w-14 shrink-0 text-2xs text-gold-300 tabular-nums">{s.date.slice(5)}</span>
+              <span className="w-14 shrink-0 text-2xs text-accent-300 tabular-nums">{s.date.slice(5)}</span>
               <span className="flex-1 font-semibold text-ink-primary truncate">{s.name}</span>
               <span className="text-ink-secondary tabular-nums">{s.checkIn || s.startHm || '—'}~{s.checkOut || '—'}</span>
               <span className="w-12 text-right text-emerald-400 tabular-nums">{(s.checkIn && s.checkOut) ? `${hours(s.checkIn, s.checkOut).toFixed(1)}h` : ''}</span>
@@ -217,9 +217,9 @@ export function StaffSelfAttendance({ venueId }: { venueId: string }) {
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-bold text-ink-primary">내 출근 관리 (출퇴근 기록)</h3>
         <div className="flex items-center gap-1">
-          <button type="button" onClick={() => setMonth((m) => shiftMonth(m, -1))} className="w-7 h-7 rounded-input bg-surface-high text-ink-secondary hover:text-gold-300">‹</button>
-          <span className="text-xs font-bold text-gold-300 tabular-nums w-[4.5rem] text-center">{month}</span>
-          <button type="button" onClick={() => setMonth((m) => shiftMonth(m, 1))} className="w-7 h-7 rounded-input bg-surface-high text-ink-secondary hover:text-gold-300">›</button>
+          <button type="button" onClick={() => setMonth((m) => shiftMonth(m, -1))} className="w-7 h-7 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">‹</button>
+          <span className="text-xs font-bold text-accent-300 tabular-nums w-[4.5rem] text-center">{month}</span>
+          <button type="button" onClick={() => setMonth((m) => shiftMonth(m, 1))} className="w-7 h-7 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">›</button>
         </div>
       </div>
       {!user ? <p className="text-2xs text-ink-muted">로그인이 필요합니다.</p> : sorted.length === 0 ? (
@@ -229,7 +229,7 @@ export function StaffSelfAttendance({ venueId }: { venueId: string }) {
           {sorted.map((s) => {
             const isToday = s.date === today;
             return (
-              <div key={s.date} className={['rounded-input border p-2.5', isToday ? 'border-gold-400/50 bg-gold-300/[0.06]' : 'border-border-subtle bg-surface-base'].join(' ')}>
+              <div key={s.date} className={['rounded-input border p-2.5', isToday ? 'border-accent-400/50 bg-accent-300/[0.06]' : 'border-border-subtle bg-surface-base'].join(' ')}>
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-bold text-ink-primary">{s.date.slice(5)}{isToday ? ' (오늘)' : ''}{s.confirmed && <span className="ml-1.5 text-2xs text-emerald-400">확정</span>}</span>
                   {isToday && (
@@ -242,7 +242,7 @@ export function StaffSelfAttendance({ venueId }: { venueId: string }) {
                 <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                   <label className="flex items-center gap-1 text-[10px] text-ink-muted">출근<input type="time" value={s.checkIn ?? s.startHm ?? ''} onChange={(e) => setT(s, 'checkIn', e.target.value)} className="input text-xs py-1 w-[6rem]" /></label>
                   <label className="flex items-center gap-1 text-[10px] text-ink-muted">퇴근<input type="time" value={s.checkOut ?? ''} onChange={(e) => setT(s, 'checkOut', e.target.value)} className="input text-xs py-1 w-[6rem]" /></label>
-                  {s.checkIn && s.checkOut && <span className="text-2xs text-gold-300 tabular-nums font-bold">{hours(s.checkIn, s.checkOut).toFixed(1)}h</span>}
+                  {s.checkIn && s.checkOut && <span className="text-2xs text-accent-300 tabular-nums font-bold">{hours(s.checkIn, s.checkOut).toFixed(1)}h</span>}
                 </div>
               </div>
             );

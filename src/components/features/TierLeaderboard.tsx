@@ -205,7 +205,7 @@ export default function TierLeaderboard() {
                       )}
                     </div>
                     <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-float">
-                      <div className={['h-full rounded-full transition-all', done ? 'bg-emerald-400' : 'bg-gold-300'].join(' ')} style={{ width: `${Math.round((cur / m.goal) * 100)}%` }} />
+                      <div className={['h-full rounded-full transition-all', done ? 'bg-emerald-400' : 'bg-accent-300'].join(' ')} style={{ width: `${Math.round((cur / m.goal) * 100)}%` }} />
                     </div>
                   </li>
                 );
@@ -218,7 +218,7 @@ export default function TierLeaderboard() {
     <div className="space-y-3 animate-fade-in">
       {/* 내 등급 카드 */}
       {user && myProg && (
-        <section className="rounded-card border border-gold-400/40 bg-gradient-to-br from-gold-300/[0.07] to-transparent p-4">
+        <section className="rounded-card border border-accent-400/40 bg-gradient-to-br from-accent-300/[0.07] to-transparent p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <TierBadge points={user.activityPoints ?? 0} size={30} admin={isAdmin} overallRank={myRank} />
@@ -232,7 +232,7 @@ export default function TierLeaderboard() {
             </div>
             <div className="text-right">
               <p className="text-2xs text-ink-muted">활동 점수</p>
-              <p className="text-lg font-extrabold text-gold-300 tabular-nums leading-tight">
+              <p className="text-lg font-extrabold text-accent-300 tabular-nums leading-tight">
                 <CountUp value={user.activityPoints ?? 0} />
               </p>
               {!isAdmin && myRank && <p className="text-2xs text-ink-muted">전체 {myRank}위</p>}
@@ -250,15 +250,15 @@ export default function TierLeaderboard() {
               </div>
               <div className="h-2 rounded-full bg-surface-high overflow-hidden">
                 <div
-                  className="h-full rounded-full bg-gold-300 transition-all"
+                  className="h-full rounded-full bg-accent-300 transition-all"
                   style={{ width: `${Math.round(myProg.ratio * 100)}%` }}
                 />
               </div>
             </div>
           ) : myIsAce ? (
-            <p className="mt-3 text-2xs font-bold text-gold-300">AA 등급 달성 · 전체 상위 {ACE_TOP_RANK}위</p>
+            <p className="mt-3 text-2xs font-bold text-accent-300">AA 등급 달성 · 전체 상위 {ACE_TOP_RANK}위</p>
           ) : (
-            <p className="mt-3 text-2xs font-bold text-gold-300">KK 등급(최고 점수) · 전체 {ACE_TOP_RANK}위 안에 들면 AA 등급</p>
+            <p className="mt-3 text-2xs font-bold text-accent-300">KK 등급(최고 점수) · 전체 {ACE_TOP_RANK}위 안에 들면 AA 등급</p>
           )}
 
           {/* 점수 적립 안내 */}
@@ -278,7 +278,7 @@ export default function TierLeaderboard() {
           <button
             type="button"
             onClick={() => setShowLadder((v) => !v)}
-            className="mt-2 text-2xs font-semibold text-gold-300 hover:text-gold-200"
+            className="mt-2 text-2xs font-semibold text-accent-300 hover:text-accent-200"
           >
             {showLadder ? '등급표 닫기' : '전체 등급표 보기'}
           </button>
@@ -286,10 +286,10 @@ export default function TierLeaderboard() {
           {showLadder && (
             <div className="mt-2 grid grid-cols-2 gap-1.5 animate-slide-up">
               {/* A — 점수가 아닌 상대평가(명예) 등급 */}
-              <div className="col-span-2 flex items-center justify-between px-2 py-1.5 rounded-input border border-gold-400/60 bg-gradient-to-r from-gold-300/15 to-transparent">
+              <div className="col-span-2 flex items-center justify-between px-2 py-1.5 rounded-input border border-accent-400/60 bg-gradient-to-r from-accent-300/15 to-transparent">
                 <span className="inline-flex items-center gap-1.5">
                   <TierBadge points={ACE_MIN_POINTS} size={16} overallRank={1} />
-                  <span className="text-2xs font-bold text-gold-300">AA 등급</span>
+                  <span className="text-2xs font-bold text-accent-300">AA 등급</span>
                 </span>
                 <span className="text-2xs text-ink-muted">KK 달성 + 전체 상위 {ACE_TOP_RANK}명</span>
               </div>
@@ -299,7 +299,7 @@ export default function TierLeaderboard() {
                   className={[
                     'flex items-center justify-between px-2 py-1.5 rounded-input border',
                     t.rank === myProg.current.rank
-                      ? 'border-gold-400/50 bg-gold-300/[0.06]'
+                      ? 'border-accent-400/50 bg-accent-300/[0.06]'
                       : 'border-border-subtle bg-surface-high',
                   ].join(' ')}
                 >
@@ -321,7 +321,7 @@ export default function TierLeaderboard() {
                 board === b ? 'text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
               {board === b && (
                 <motion.span layoutId="rank-board-pill" aria-hidden
-                  className="absolute inset-0 rounded-[6px] bg-gold-300"
+                  className="absolute inset-0 rounded-[6px] bg-accent-300"
                   transition={{ type: 'spring', stiffness: 700, damping: 42 }} />
               )}
               <span className="relative">{BOARD_LABEL[b]}</span>
@@ -342,7 +342,7 @@ export default function TierLeaderboard() {
               <div className="space-y-2">
                 {/* 승급 안내 배너 — 다음 티어까지 남은 점수 */}
                 {me && (
-                  <div className="rounded-card border border-gold-400/30 bg-gold-300/10 px-3 py-2 text-center text-xs font-semibold text-gold-300">
+                  <div className="rounded-card border border-accent-400/30 bg-accent-300/10 px-3 py-2 text-center text-xs font-semibold text-accent-300">
                     {nextTier
                       ? `${nextTier.min - me.score}점만 더 모으면 ${nextTier.emoji} ${nextTier.label} 티어로 승급해요`
                       : '💎 최고 티어 — 이번 주 왕좌를 지키세요!'}
@@ -355,20 +355,20 @@ export default function TierLeaderboard() {
                     if (isMe) {
                       // 내 순위 빅 카드 — 리스트 흐름 속 인라인 강조(이미지 패턴)
                       return (
-                        <li key={r.userId} className="border-b border-y border-gold-400/40 bg-gold-300/[0.08] px-3 py-3 last:border-b-0">
+                        <li key={r.userId} className="border-b border-y border-accent-400/40 bg-accent-300/[0.08] px-3 py-3 last:border-b-0">
                           <div className="flex items-center gap-3">
-                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gold-300 text-base font-extrabold text-ink-inverse">
+                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-300 text-base font-extrabold text-white">
                               {r.nickname.slice(0, 1)}
                             </div>
                             <div className="min-w-0 flex-1">
-                              <p className="text-xs font-bold text-gold-300">{myRank}위 · {markPrefix(r)}{r.nickname} <span className="text-ink-muted font-semibold">(나)</span></p>
+                              <p className="text-xs font-bold text-accent-300">{myRank}위 · {markPrefix(r)}{r.nickname} <span className="text-ink-muted font-semibold">(나)</span></p>
                               <p className="text-2xl font-extrabold leading-tight tabular-nums text-ink-primary">
                                 {r.score}<span className="ml-0.5 text-xs font-bold text-ink-muted">점</span>
                               </p>
                               <p className="text-2xs text-ink-muted">체크인 {r.checkins}회 · 입상 {r.placements}회</p>
                             </div>
                             {t && (
-                              <span className="shrink-0 rounded-badge border border-gold-400/40 bg-surface-float px-2 py-1 text-xs font-bold text-gold-300">
+                              <span className="shrink-0 rounded-badge border border-accent-400/40 bg-surface-float px-2 py-1 text-xs font-bold text-accent-300">
                                 {t.emoji} {t.label}
                               </span>
                             )}
@@ -384,7 +384,7 @@ export default function TierLeaderboard() {
                           <span className="block text-2xs text-ink-muted">체크인 {r.checkins}회 · 입상 {r.placements}회</span>
                         </div>
                         {t && <span className="shrink-0 rounded-badge bg-surface-float px-1.5 py-0.5 text-2xs font-bold text-ink-secondary">{t.emoji} {t.label}</span>}
-                        <span className="w-12 shrink-0 text-right text-sm font-bold tabular-nums text-gold-300">{r.score}</span>
+                        <span className="w-12 shrink-0 text-right text-sm font-bold tabular-nums text-accent-300">{r.score}</span>
                       </li>
                     );
                   })}
@@ -403,11 +403,11 @@ export default function TierLeaderboard() {
                     return (
                       <div key={t.key}
                         className={['rounded-card border px-1 py-2 text-center transition-colors',
-                          mine ? 'border-gold-400/60 bg-gold-300/10'
+                          mine ? 'border-accent-400/60 bg-accent-300/10'
                             : reached ? 'border-border-subtle bg-surface-high'
                             : 'border-border-subtle bg-surface-high opacity-40'].join(' ')}>
                         <p className="text-xl leading-none">{t.emoji}</p>
-                        <p className={['mt-1 text-2xs font-bold', mine ? 'text-gold-300' : 'text-ink-secondary'].join(' ')}>{t.label}</p>
+                        <p className={['mt-1 text-2xs font-bold', mine ? 'text-accent-300' : 'text-ink-secondary'].join(' ')}>{t.label}</p>
                         <p className="text-[10px] tabular-nums text-ink-muted">{t.min}점~</p>
                       </div>
                     );
@@ -427,9 +427,9 @@ export default function TierLeaderboard() {
                 const got = b.check(badgeStats);
                 return (
                   <div key={b.key} title={b.desc}
-                    className={['rounded-card border p-2.5 text-center transition-colors', got ? 'border-gold-400/50 bg-gold-300/[0.08]' : 'border-border-subtle bg-surface-high opacity-55'].join(' ')}>
+                    className={['rounded-card border p-2.5 text-center transition-colors', got ? 'border-accent-400/50 bg-accent-300/[0.08]' : 'border-border-subtle bg-surface-high opacity-55'].join(' ')}>
                     <p className={['text-xl leading-none', got ? '' : 'grayscale'].join(' ')}>{b.emoji}</p>
-                    <p className={['mt-1 text-xs font-bold', got ? 'text-gold-300' : 'text-ink-secondary'].join(' ')}>{b.label}</p>
+                    <p className={['mt-1 text-xs font-bold', got ? 'text-accent-300' : 'text-ink-secondary'].join(' ')}>{b.label}</p>
                     <p className="mt-0.5 text-2xs leading-tight text-ink-muted">{b.desc}</p>
                   </div>
                 );
@@ -443,7 +443,7 @@ export default function TierLeaderboard() {
             <ul className="space-y-1">
               {domestic.map((r, i) => (
                 <li key={r.nickname} className="flex items-center gap-2.5 rounded-input bg-surface-high px-3 py-2">
-                  <span className="w-6 shrink-0 text-center text-sm font-extrabold tabular-nums text-gold-300">{i + 1}</span>
+                  <span className="w-6 shrink-0 text-center text-sm font-extrabold tabular-nums text-accent-300">{i + 1}</span>
                   <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{r.nickname}</span>
                   <span className="shrink-0 text-2xs text-ink-muted">{r.wins}회</span>
                   <span className="shrink-0 text-sm font-extrabold tabular-nums text-emerald-300">{(r.totalWon / 10000).toLocaleString()}만</span>
@@ -485,7 +485,7 @@ export default function TierLeaderboard() {
                   {myVerifs.map((v) => (
                     <li key={v.id} className="flex items-center gap-2 rounded-input bg-surface-high px-3 py-2 text-2xs">
                       <span className={['shrink-0 rounded-badge px-1.5 py-0.5 font-bold leading-none',
-                        v.status === 'approved' ? 'bg-emerald-500/15 text-emerald-300' : v.status === 'rejected' ? 'bg-danger/15 text-danger-light' : 'bg-gold-300/15 text-gold-300'].join(' ')}>
+                        v.status === 'approved' ? 'bg-emerald-500/15 text-emerald-300' : v.status === 'rejected' ? 'bg-danger/15 text-danger-light' : 'bg-accent-300/15 text-accent-300'].join(' ')}>
                         {v.status === 'approved' ? '승인' : v.status === 'rejected' ? '반려' : '검토 중'}
                       </span>
                       <span className="min-w-0 flex-1 truncate text-ink-secondary">{v.eventName}</span>
@@ -502,7 +502,7 @@ export default function TierLeaderboard() {
             <div className="space-y-2">
               <div className="flex items-center justify-between rounded-card border border-border-subtle bg-surface-high px-3 py-2">
                 <span className="text-xs text-ink-secondary">내 활동점수</span>
-                <span className="text-sm font-extrabold tabular-nums text-gold-300">{(user.activityPoints ?? 0).toLocaleString()}점</span>
+                <span className="text-sm font-extrabold tabular-nums text-accent-300">{(user.activityPoints ?? 0).toLocaleString()}점</span>
               </div>
               <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
                 {SHOP_MARKS.map((mk) => {
@@ -512,7 +512,7 @@ export default function TierLeaderboard() {
                   return (
                     <div key={mk.key}
                       className={['rounded-card border p-2.5 text-center transition-colors',
-                        on ? 'border-gold-300 bg-gold-300/[0.1]' : unlocked ? 'border-border-default bg-surface-high' : 'border-border-subtle bg-surface-high opacity-50'].join(' ')}>
+                        on ? 'border-accent-300 bg-accent-300/[0.1]' : unlocked ? 'border-border-default bg-surface-high' : 'border-border-subtle bg-surface-high opacity-50'].join(' ')}>
                       <p className={['text-2xl leading-none', unlocked ? '' : 'grayscale'].join(' ')}>{mk.emoji}</p>
                       <p className="mt-1 text-xs font-bold text-ink-primary">{mk.name}</p>
                       <p className="mt-0.5 text-2xs leading-tight text-ink-muted">{mk.desc}</p>
@@ -520,7 +520,7 @@ export default function TierLeaderboard() {
                         <button type="button" disabled={equipBusy !== null}
                           onClick={() => handleEquip(on ? null : mk.key)}
                           className={['mt-1.5 w-full rounded-input px-2 py-1.5 text-2xs font-bold transition-colors',
-                            on ? 'bg-gold-300 text-ink-inverse' : 'border border-gold-400/40 text-gold-300 hover:bg-gold-300/10'].join(' ')}>
+                            on ? 'bg-accent-300 text-white' : 'border border-accent-400/40 text-accent-300 hover:bg-accent-300/10'].join(' ')}>
                           {equipBusy === (on ? null : mk.key) || (equipBusy === '' && on) ? '적용 중…' : on ? '✓ 장착 중 — 해제' : '장착하기'}
                         </button>
                       ) : (
@@ -541,10 +541,10 @@ export default function TierLeaderboard() {
           : (
             <div className="space-y-1.5">
               {hall.rows.map((r, i) => (
-                <div key={r.nickname} className={['flex items-center gap-3 rounded-card border p-3', i === 0 ? 'border-gold-400/60 bg-gold-300/[0.08]' : 'border-border-subtle bg-surface-high'].join(' ')}>
+                <div key={r.nickname} className={['flex items-center gap-3 rounded-card border p-3', i === 0 ? 'border-accent-400/60 bg-accent-300/[0.08]' : 'border-border-subtle bg-surface-high'].join(' ')}>
                   <span className="text-2xl leading-none">{['👑', '🥈', '🥉'][i]}</span>
                   <div className="min-w-0 flex-1">
-                    <p className={['truncate font-extrabold', i === 0 ? 'text-lg text-gold-300' : 'text-sm text-ink-primary'].join(' ')}>{markPrefix(r)}{r.nickname}</p>
+                    <p className={['truncate font-extrabold', i === 0 ? 'text-lg text-accent-300' : 'text-sm text-ink-primary'].join(' ')}>{markPrefix(r)}{r.nickname}</p>
                     <p className="text-2xs text-ink-muted">{hall.label} 입상 점수 {r.pts}점{r.wins > 0 ? ` · 우승 ${r.wins}회` : ''}</p>
                   </div>
                 </div>
@@ -566,7 +566,7 @@ export default function TierLeaderboard() {
                     <span className="block text-[10px] text-ink-muted">매장 {r.venues}곳 · 최고 {r.bestPosition}등</span>
                   </div>
                   <span className="text-right">
-                    <span className="block text-sm font-bold tabular-nums text-gold-300">
+                    <span className="block text-sm font-bold tabular-nums text-accent-300">
                       {board === 'prize' ? `${r.prizePoints.toLocaleString()}점` : `${r.moneyinCount.toLocaleString()}회`}
                     </span>
                     <span className="block text-[10px] text-ink-muted tabular-nums">
@@ -590,13 +590,13 @@ export default function TierLeaderboard() {
                 const place = idx === 1 ? 1 : idx === 0 ? 2 : 3;
                 const big = place === 1;
                 return (
-                  <div key={r.id} className={['rounded-card border p-2.5 text-center', big ? 'border-gold-400/60 bg-gold-300/[0.08]' : 'border-border-subtle bg-surface-high'].join(' ')}>
+                  <div key={r.id} className={['rounded-card border p-2.5 text-center', big ? 'border-accent-400/60 bg-accent-300/[0.08]' : 'border-border-subtle bg-surface-high'].join(' ')}>
                     <p className={big ? 'text-xl leading-none' : 'text-base leading-none'}>{['🥈', '👑', '🥉'][idx]}</p>
                     <span className={['mx-auto mt-1 flex items-center justify-center rounded-full font-bold text-white', big ? 'h-9 w-9 text-sm' : 'h-7 w-7 text-2xs'].join(' ')}
                       style={{ background: r.avatarColor ?? '#5A6175' }}>
                       {r.nickname[0]}
                     </span>
-                    <p className={['mt-1 truncate font-bold', big ? 'text-sm text-gold-300' : 'text-xs text-ink-primary'].join(' ')}>{markPrefix(r)}{r.nickname}</p>
+                    <p className={['mt-1 truncate font-bold', big ? 'text-sm text-accent-300' : 'text-xs text-ink-primary'].join(' ')}>{markPrefix(r)}{r.nickname}</p>
                     <p className="text-2xs tabular-nums text-ink-muted">{r.activityPoints.toLocaleString()}점</p>
                   </div>
                 );
@@ -612,14 +612,14 @@ export default function TierLeaderboard() {
               if (isMe && !isAdmin) {
                 // 내 순위 빅 카드 — 리그 보드와 동일 패턴(리스트 흐름 속 인라인 강조)
                 return (
-                  <li key={r.id} className="border-y border-gold-400/40 bg-gold-300/[0.08] px-3 py-3 last:border-b-0">
+                  <li key={r.id} className="border-y border-accent-400/40 bg-accent-300/[0.08] px-3 py-3 last:border-b-0">
                     <div className="flex items-center gap-3">
                       <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-base font-extrabold text-white"
                         style={{ background: r.avatarColor ?? '#5A6175' }}>
                         {r.nickname[0]}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs font-bold text-gold-300">{i + 1}위 · {r.nickname} <span className="font-semibold text-ink-muted">(나)</span></p>
+                        <p className="text-xs font-bold text-accent-300">{i + 1}위 · {r.nickname} <span className="font-semibold text-ink-muted">(나)</span></p>
                         <p className="text-2xl font-extrabold leading-tight tabular-nums" style={{ color: rowAce ? '#FFD700' : t.color }}>
                           {r.activityPoints.toLocaleString()}<span className="ml-0.5 text-xs font-bold text-ink-muted">점</span>
                         </p>
@@ -644,7 +644,7 @@ export default function TierLeaderboard() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
                       <span className="text-sm font-semibold text-ink-primary truncate">{markPrefix(r)}{r.nickname}</span>
-                      {isMe && <span className="text-2xs font-bold text-gold-300">나</span>}
+                      {isMe && <span className="text-2xs font-bold text-accent-300">나</span>}
                     </div>
                   </div>
                   <TierBadge points={r.activityPoints} size={16} overallRank={i + 1} />
@@ -657,12 +657,12 @@ export default function TierLeaderboard() {
           </ul>
           {/* TOP30 밖 — 리스트 아래 내 점수 카드(순위 미표기) */}
           {user && !isAdmin && !myRank && (
-            <div className="mt-2 flex items-center gap-3 rounded-card border border-gold-400/40 bg-gold-300/[0.08] px-3 py-3">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gold-300 text-base font-extrabold text-ink-inverse">
+            <div className="mt-2 flex items-center gap-3 rounded-card border border-accent-400/40 bg-accent-300/[0.08] px-3 py-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-300 text-base font-extrabold text-white">
                 {(user.nickname ?? '나')[0]}
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-bold text-gold-300">{user.nickname ?? '나'} <span className="font-semibold text-ink-muted">(나)</span></p>
+                <p className="text-xs font-bold text-accent-300">{user.nickname ?? '나'} <span className="font-semibold text-ink-muted">(나)</span></p>
                 <p className="text-2xl font-extrabold leading-tight tabular-nums text-ink-primary">
                   {(user.activityPoints ?? 0).toLocaleString()}<span className="ml-0.5 text-xs font-bold text-ink-muted">점</span>
                 </p>

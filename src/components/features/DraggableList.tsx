@@ -134,7 +134,7 @@ function SortableRow({ item, index, isDragging, onPremiumToggle, onCompetitionTo
         className={[
           'shrink-0 text-2xs font-bold px-1.5 py-1 rounded-badge border transition-colors active:scale-95',
           item.isCompetition
-            ? 'bg-gold-300/15 text-gold-300 border-gold-400/40'
+            ? 'bg-accent-300/15 text-accent-300 border-accent-400/40'
             : 'bg-surface-high text-ink-muted border-border-default hover:text-ink-secondary',
         ].join(' ')}
       >
@@ -151,7 +151,7 @@ function SortableRow({ item, index, isDragging, onPremiumToggle, onCompetitionTo
           className={[
             'text-2xs font-bold px-1.5 py-1 rounded-badge border transition-colors active:scale-95',
             boostLeft > 0
-              ? 'bg-gold-300/15 text-gold-300 border-gold-400/40'
+              ? 'bg-accent-300/15 text-accent-300 border-accent-400/40'
               : 'bg-surface-high text-ink-muted border-border-default hover:text-ink-secondary',
           ].join(' ')}
         >
@@ -162,7 +162,7 @@ function SortableRow({ item, index, isDragging, onPremiumToggle, onCompetitionTo
             {[{ d: 1, l: '24시간' }, { d: 3, l: '3일' }, { d: 7, l: '7일' }, { d: 14, l: '14일' }, { d: 30, l: '30일' }].map(({ d, l }) => (
               <button key={d} type="button"
                 onClick={() => { onBoost(item.id, d); setBoostOpen(false); }}
-                className="rounded-badge bg-surface-high px-2 py-1 text-2xs font-bold text-ink-secondary transition-colors hover:bg-gold-300/15 hover:text-gold-300 whitespace-nowrap">
+                className="rounded-badge bg-surface-high px-2 py-1 text-2xs font-bold text-ink-secondary transition-colors hover:bg-accent-300/15 hover:text-accent-300 whitespace-nowrap">
                 {l}
               </button>
             ))}
@@ -179,10 +179,10 @@ function SortableRow({ item, index, isDragging, onPremiumToggle, onCompetitionTo
       <div className="flex-1 min-w-0">
         <p className={[
           'text-sm font-medium truncate',
-          item.isPremium ? 'text-gold-300' : 'text-ink-primary',
+          item.isPremium ? 'text-accent-300' : 'text-ink-primary',
         ].join(' ')}>
           {item.isPremium && (
-            <span className="inline-block mr-1.5 text-2xs bg-gold-300 text-ink-inverse px-1.5 py-0.5 rounded-badge font-bold">
+            <span className="inline-block mr-1.5 text-2xs bg-accent-300 text-white px-1.5 py-0.5 rounded-badge font-bold">
               TOP
             </span>
           )}
@@ -210,7 +210,7 @@ function DragOverlayCard({ item }: { item: Schedule }) {
   return (
     <div className={[
       'flex items-center gap-3 px-3 py-3',
-      'bg-surface-float border border-gold-400 rounded-card shadow-gold',
+      'bg-surface-float border border-accent-400 rounded-card shadow-gold',
       'rotate-1 scale-[1.02] cursor-grabbing',
     ].join(' ')}>
       <span className="w-6" />

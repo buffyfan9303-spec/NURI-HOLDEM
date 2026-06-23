@@ -254,8 +254,8 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
 
         {/* ── 지난 포스터 불러오기(신규 전용) — 전 필드 자동 채움, 날짜만 새로 ── */}
         {!isEdit && loadCandidates.length > 0 && (
-          <div className="rounded-card border border-gold-400/30 bg-gold-300/[0.06] p-3">
-            <label htmlFor={pastPosterId} className="mb-1.5 block text-sm font-bold text-gold-300">📋 지난 포스터 불러오기</label>
+          <div className="rounded-card border border-accent-400/30 bg-accent-300/[0.06] p-3">
+            <label htmlFor={pastPosterId} className="mb-1.5 block text-sm font-bold text-accent-300">📋 지난 포스터 불러오기</label>
             <select
               id={pastPosterId}
               value=""
@@ -280,7 +280,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
             onClick={() => fileRef.current?.click()}
             className={[
               'relative w-full aspect-[3/4] max-h-48 rounded-card overflow-hidden cursor-pointer',
-              'border-2 border-dashed border-border-default hover:border-gold-400 transition-colors',
+              'border-2 border-dashed border-border-default hover:border-accent-400 transition-colors',
               'flex flex-col items-center justify-center gap-2 bg-surface-high',
             ].join(' ')}
           >
@@ -298,7 +298,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
             )}
             {uploading && (
               <div className="absolute inset-0 bg-surface-base/70 flex items-center justify-center">
-                <span className="w-6 h-6 rounded-full border-2 border-gold-300 border-t-transparent animate-spin"/>
+                <span className="w-6 h-6 rounded-full border-2 border-accent-300 border-t-transparent animate-spin"/>
               </div>
             )}
           </div>
@@ -379,14 +379,14 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
         {/* 블라인드 표 직접 편집(선택) — 저장 시 포스터 상세 '블라인드 구조'에 그대로 표시 */}
         <FieldWrap label="블라인드 표 직접 편집 (선택)">
           <button type="button" onClick={() => setBlindOpen((v) => !v)}
-            className="w-full flex items-center justify-between px-3 py-2 rounded-input border border-border-default bg-surface-high text-sm font-semibold text-ink-secondary hover:text-gold-300 transition-colors">
+            className="w-full flex items-center justify-between px-3 py-2 rounded-input border border-border-default bg-surface-high text-sm font-semibold text-ink-secondary hover:text-accent-300 transition-colors">
             <span>{(form.blindLevels?.length ?? 0) > 0 ? `맞춤 ${form.blindLevels!.filter((l) => !l.isBreak).length}레벨 저장됨` : '블라인드 표 편집 열기 (비우면 기본 표)'}</span>
-            <span className="text-2xs text-gold-300">{blindOpen ? '▲' : '▼'}</span>
+            <span className="text-2xs text-accent-300">{blindOpen ? '▲' : '▼'}</span>
           </button>
           {blindOpen && (
             <div className="mt-2 space-y-2 rounded-input border border-border-subtle bg-surface-base p-2.5">
               <div className="flex items-center gap-2">
-                <button type="button" onClick={fillBlinds} className="btn-ghost text-2xs px-2 text-gold-300">자동 생성(레지 {regLevel || '16'}LV·20분·25레벨)</button>
+                <button type="button" onClick={fillBlinds} className="btn-ghost text-2xs px-2 text-accent-300">자동 생성(레지 {regLevel || '16'}LV·20분·25레벨)</button>
                 {(form.blindLevels?.length ?? 0) > 0 && <button type="button" onClick={() => setBlinds(() => [])} className="btn-ghost text-2xs px-2 hover:text-danger-light">전체 비우기</button>}
               </div>
               {(form.blindLevels?.length ?? 0) === 0 ? (
@@ -397,7 +397,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
                     <div key={i} className="flex items-center gap-1">
                       <span className="w-5 shrink-0 text-center text-2xs text-ink-muted">{l.isBreak ? '–' : (form.blindLevels!.slice(0, i + 1).filter((x) => !x.isBreak).length)}</span>
                       {l.isBreak ? (
-                        <span className="flex-1 text-2xs font-bold text-gold-300">BREAK</span>
+                        <span className="flex-1 text-2xs font-bold text-accent-300">BREAK</span>
                       ) : (
                         <>
                           <input type="number" inputMode="numeric" value={l.sb || ''} onChange={(e) => setBlindRow(i, { sb: parseInt(e.target.value, 10) || 0 })} placeholder="SB" className="input min-w-0 flex-1 px-1.5 py-1 text-2xs tabular-nums" />
@@ -436,7 +436,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
             </div>
           </div>
           {(regLevel || regTime) && (
-            <p className="mt-1 text-2xs font-semibold text-gold-300">
+            <p className="mt-1 text-2xs font-semibold text-accent-300">
               레지마감: {[regLevel ? `${regLevel}LV` : '', regTime].filter(Boolean).join(' ')}
             </p>
           )}
@@ -536,7 +536,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
                       ? form.paymentMethods.filter((m) => m !== p)
                       : (form.paymentMethods.length >= MAX_PAYMENTS ? form.paymentMethods : [...form.paymentMethods, p]))}
                     className={['px-2.5 py-1 rounded-badge text-xs font-semibold border transition-colors',
-                      checked ? 'bg-gold-300/15 border-gold-300 text-gold-300'
+                      checked ? 'bg-accent-300/15 border-accent-300 text-accent-300'
                         : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary'].join(' ')}>
                     {checked ? '✓ ' : ''}{p}
                   </button>
@@ -606,7 +606,7 @@ function PrizeList({ prizes, onChange }: { prizes: string[]; onChange: (prizes: 
       {prizes.length > 0 && (
         <ul className="space-y-1">
           {prizes.map((p, i) => (
-            <li key={i} className="flex items-center gap-2 px-2 py-1.5 rounded-input bg-gold-300/5 border border-gold-400/30">
+            <li key={i} className="flex items-center gap-2 px-2 py-1.5 rounded-input bg-accent-300/5 border border-accent-400/30">
               <span className="text-xs text-ink-primary flex-1 truncate">{p}</span>
               <button type="button" onClick={() => onChange(prizes.filter((_, idx) => idx !== i))}
                 aria-label="삭제" className="text-ink-muted hover:text-danger text-2xs px-1">✕</button>
@@ -692,7 +692,7 @@ function PromotionEditor({ items, onChange }: {
           {items.map((p, i) => (
             <li key={i} className="flex items-center gap-1.5">
               <input value={p.badge ?? ''} onChange={(e) => setAt(i, { badge: e.target.value })} maxLength={6}
-                placeholder="배지" className="input w-16 shrink-0 text-center text-sm font-bold text-gold-300" />
+                placeholder="배지" className="input w-16 shrink-0 text-center text-sm font-bold text-accent-300" />
               <input value={p.title} onChange={(e) => setAt(i, { title: e.target.value })} maxLength={40}
                 placeholder="내용 (예: 첫 방문 50% 할인)" className="input flex-1 min-w-0 text-sm" />
               <button type="button" onClick={() => onChange(items.filter((_, k) => k !== i))}
@@ -709,8 +709,8 @@ function PromotionEditor({ items, onChange }: {
           <button key={p.badge + p.title} type="button"
             disabled={items.length >= MAX_EVENTS || items.some((x) => x.title === p.title)}
             onClick={() => add(p)}
-            className="rounded-badge border border-border-default bg-surface-high px-2 py-0.5 text-2xs text-ink-secondary hover:text-gold-300 disabled:opacity-40">
-            + <b className="text-gold-300">{p.badge}</b> {p.title}
+            className="rounded-badge border border-border-default bg-surface-high px-2 py-0.5 text-2xs text-ink-secondary hover:text-accent-300 disabled:opacity-40">
+            + <b className="text-accent-300">{p.badge}</b> {p.title}
           </button>
         ))}
       </div>
@@ -812,8 +812,8 @@ function RadioCard({ checked, onClick, title, desc }: {
   return (
     <button type="button" onClick={onClick}
       className={['p-3 rounded-input border-2 text-left transition-all',
-        checked ? 'border-gold-300 bg-gold-300/10' : 'border-border-default bg-surface-high hover:border-border-strong'].join(' ')}>
-      <p className={['text-sm font-bold leading-none', checked ? 'text-gold-300' : 'text-ink-primary'].join(' ')}>{title}</p>
+        checked ? 'border-accent-300 bg-accent-300/10' : 'border-border-default bg-surface-high hover:border-border-strong'].join(' ')}>
+      <p className={['text-sm font-bold leading-none', checked ? 'text-accent-300' : 'text-ink-primary'].join(' ')}>{title}</p>
       <p className="text-2xs text-ink-muted mt-1">{desc}</p>
     </button>
   );

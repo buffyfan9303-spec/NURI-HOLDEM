@@ -25,7 +25,7 @@ export default function HandReplayer({ replay }: { replay: ReplayData }) {
   return (
     <div className="w-full max-w-md rounded-card border border-border-subtle bg-surface-low p-3 space-y-3 sm:p-4">
       <div className="flex items-center justify-between">
-        <span className="text-2xs font-extrabold tracking-wide text-gold-300">🎬 핸드 리뷰</span>
+        <span className="text-2xs font-extrabold tracking-wide text-accent-300">🎬 핸드 리뷰</span>
         {replay.pot && <span className="text-2xs text-ink-muted">팟 {replay.pot}</span>}
       </div>
 
@@ -48,7 +48,7 @@ export default function HandReplayer({ replay }: { replay: ReplayData }) {
       {hasAction && (
         <div className="space-y-1 border-t border-border-subtle pt-3">
           {STREET_ACT.map(([k, lab]) => replay.actions[k] ? (
-            <p key={k} className="text-xs leading-relaxed text-ink-secondary"><b className="text-gold-300">{lab}</b> · {replay.actions[k]}</p>
+            <p key={k} className="text-xs leading-relaxed text-ink-secondary"><b className="text-accent-300">{lab}</b> · {replay.actions[k]}</p>
           ) : null)}
         </div>
       )}

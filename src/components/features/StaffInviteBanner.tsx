@@ -36,15 +36,15 @@ export default function StaffInviteBanner() {
   return (
     <div className="space-y-2 pt-3">
       {invites.map((iv) => (
-        <div key={iv.id} className="flex items-center gap-2 p-3 rounded-card bg-gold-300/10 border border-gold-400/40">
+        <div key={iv.id} className="flex items-center gap-2 p-3 rounded-card bg-accent-300/10 border border-accent-400/40">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFD100" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" aria-hidden>
             <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><line x1="19" y1="8" x2="19" y2="14" /><line x1="22" y1="11" x2="16" y2="11" />
           </svg>
           <p className="flex-1 min-w-0 text-xs text-ink-primary leading-relaxed">
-            <b className="text-gold-300">{iv.venueName}</b>에서 구성원으로 초대했습니다.
+            <b className="text-accent-300">{iv.venueName}</b>에서 구성원으로 초대했습니다.
           </p>
           <button type="button" disabled={busy} onClick={() => respond(iv.id, true)}
-            className="text-2xs font-semibold px-2.5 py-1 rounded-input bg-gold-300 text-ink-inverse hover:bg-gold-200 transition-colors disabled:opacity-60">수락</button>
+            className="text-2xs font-semibold px-2.5 py-1 rounded-input bg-accent-300 text-white hover:bg-accent-200 transition-colors disabled:opacity-60">수락</button>
           <button type="button" disabled={busy} onClick={() => respond(iv.id, false)}
             className="text-2xs px-2 py-1 rounded-input text-ink-muted hover:text-danger-light transition-colors disabled:opacity-60">거절</button>
         </div>

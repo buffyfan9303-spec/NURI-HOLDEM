@@ -264,7 +264,7 @@ ${cards}
       {/* 0) 이용 내역 — 실시간(발급·사용). 장부/이용권 권한 직원도 열람 — 기본 열림 */}
       <div className="rounded-card border border-border-default bg-surface-low p-2.5">
         <div className="mb-1.5 flex items-center justify-between gap-2">
-          <p className="text-2xs font-bold text-gold-300">🎟 이용 내역 <span className="font-normal text-ink-muted">· 실시간</span></p>
+          <p className="text-2xs font-bold text-accent-300">🎟 이용 내역 <span className="font-normal text-ink-muted">· 실시간</span></p>
           <button type="button" onClick={reload} disabled={loading}
             className="inline-flex h-7 items-center gap-1 rounded-input border border-border-subtle bg-surface-high/60 px-2 text-2xs font-bold text-ink-secondary hover:text-ink-primary disabled:opacity-50">
             <span className={loading ? 'inline-block animate-spin' : ''} aria-hidden>↻</span> 새로고침
@@ -277,12 +277,12 @@ ${cards}
             {feed.map((e, i) => (
               <li key={i} className="flex items-center gap-2 rounded-input bg-surface-base/50 px-2 py-1.5 text-2xs">
                 <span className={['shrink-0 rounded-badge px-1.5 py-0.5 font-bold leading-none',
-                  e.t === 'used' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-gold-300/15 text-gold-300'].join(' ')}>
+                  e.t === 'used' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-accent-300/15 text-accent-300'].join(' ')}>
                   {e.t === 'used' ? '↘ 사용(받음)' : '↗ 발급(보냄)'}
                 </span>
                 <span className="min-w-0 flex-1 truncate text-ink-secondary">
                   <b className="text-ink-primary">{e.who || '회원'}</b> · {e.title}
-                  {e.n > 1 && <b className="ml-1 text-gold-300">×{e.n}</b>}
+                  {e.n > 1 && <b className="ml-1 text-accent-300">×{e.n}</b>}
                 </span>
                 <span className="shrink-0 tabular-nums text-ink-muted">{fmtFeed(e.at)}</span>
               </li>
@@ -293,9 +293,9 @@ ${cards}
 
       {/* 1) 매장이용권 발급 — 접기 */}
       {canIssue ? (
-        <div className="rounded-input border border-gold-400/30 bg-gold-300/[0.05]">
+        <div className="rounded-input border border-accent-400/30 bg-accent-300/[0.05]">
           <button type="button" onClick={() => setIssueOpen((v) => !v)} className="flex w-full items-center justify-between gap-2 px-2.5 py-2">
-            <span className="text-2xs font-bold text-gold-300">매장이용권 발급 <span className="font-normal text-ink-muted">· 업주 전용</span>{quota !== null && <span className={['ml-1.5 rounded-badge px-1.5 py-0.5 font-bold', quota < 50 ? 'bg-danger/15 text-danger-light' : 'bg-surface-high text-ink-secondary'].join(' ')}>잔여 한도 {quota.toLocaleString()}개</span>}</span>
+            <span className="text-2xs font-bold text-accent-300">매장이용권 발급 <span className="font-normal text-ink-muted">· 업주 전용</span>{quota !== null && <span className={['ml-1.5 rounded-badge px-1.5 py-0.5 font-bold', quota < 50 ? 'bg-danger/15 text-danger-light' : 'bg-surface-high text-ink-secondary'].join(' ')}>잔여 한도 {quota.toLocaleString()}개</span>}</span>
             <Icon name="chevron-down" size={14} className={['shrink-0 text-ink-muted transition-transform', issueOpen ? 'rotate-180' : ''].join(' ')} />
           </button>
           {issueOpen && (
@@ -315,8 +315,8 @@ ${cards}
               </div>
               {/* 받는 손님 지정 — 아이디(닉네임)로 지정 */}
               {recvUserId ? (
-                <div className="flex items-center gap-2 rounded-input border border-gold-400/40 bg-gold-300/[0.06] px-2.5 py-1.5">
-                  <span className="min-w-0 flex-1 truncate text-xs text-ink-primary">받는 손님: <b className="text-gold-300">{recvDisplay}</b></span>
+                <div className="flex items-center gap-2 rounded-input border border-accent-400/40 bg-accent-300/[0.06] px-2.5 py-1.5">
+                  <span className="min-w-0 flex-1 truncate text-xs text-ink-primary">받는 손님: <b className="text-accent-300">{recvDisplay}</b></span>
                   <button type="button" onClick={() => { setRecvUserId(null); setRecvDisplay(''); }} className="shrink-0 text-2xs text-ink-muted">변경</button>
                 </div>
               ) : (recvMode === 'id' || recvMode === 'phone') ? (
@@ -327,7 +327,7 @@ ${cards}
                       <span className="self-center text-[10px] text-ink-muted">최근:</span>
                       {recentRecipients.map((r) => (
                         <button key={r.id} type="button" onClick={() => pickRecv(r)}
-                          className="rounded-full border border-gold-400/30 bg-gold-300/[0.06] px-2 py-0.5 text-[11px] text-ink-secondary hover:border-gold-400/60 hover:text-gold-300">
+                          className="rounded-full border border-accent-400/30 bg-accent-300/[0.06] px-2 py-0.5 text-[11px] text-ink-secondary hover:border-accent-400/60 hover:text-accent-300">
                           👤 {r.display}
                         </button>
                       ))}
@@ -347,7 +347,7 @@ ${cards}
                     <button type="button" onClick={() => { setRecvMode('none'); setCands([]); setIdInput(''); setActiveIdx(-1); }} className="shrink-0 rounded-input border border-border-default bg-surface-high px-3 text-2xs font-bold text-ink-muted hover:text-ink-secondary">취소</button>
                   </div>
                   {cands.length > 0 ? (
-                    <ul role="listbox" className="max-h-40 space-y-1 overflow-y-auto rounded-input border border-gold-400/30 bg-surface-low p-1">
+                    <ul role="listbox" className="max-h-40 space-y-1 overflow-y-auto rounded-input border border-accent-400/30 bg-surface-low p-1">
                       {cands.map((c, i) => {
                         const unverified = c.verified === false;
                         return (
@@ -381,14 +381,14 @@ ${cards}
                   {creditReqs.some((r) => r.status === 'pending') ? (
                     <p className="text-2xs text-amber-300 font-semibold">⏳ 충전 요청 {creditReqs.find((r) => r.status === 'pending')?.amount.toLocaleString()}개 — 운영자 승인 대기 중</p>
                   ) : !creditOpen ? (
-                    <button type="button" onClick={() => setCreditOpen(true)} className="btn-ghost w-full text-2xs text-gold-300">🛒 발급 한도 충전(구매) 요청 — 운영진 승인</button>
+                    <button type="button" onClick={() => setCreditOpen(true)} className="btn-ghost w-full text-2xs text-accent-300">🛒 발급 한도 충전(구매) 요청 — 운영진 승인</button>
                   ) : (
                     <>
                       <div className="flex items-center gap-1.5">
                         {[500, 1000, 3000].map((n) => (
                           <button key={n} type="button" onClick={() => setCreditAmt(n)}
                             className={['flex-1 rounded-input border px-2 py-1.5 text-2xs font-bold transition-colors',
-                              creditAmt === n ? 'border-gold-400/50 bg-gold-300/15 text-gold-300' : 'border-border-default bg-surface-high text-ink-secondary'].join(' ')}>
+                              creditAmt === n ? 'border-accent-400/50 bg-accent-300/15 text-accent-300' : 'border-border-default bg-surface-high text-ink-secondary'].join(' ')}>
                             {n.toLocaleString()}개
                           </button>
                         ))}
@@ -419,16 +419,16 @@ ${cards}
 
       {/* 2) QR 코드 — 접기 */}
       {canIssue && qr && (
-        <div className="rounded-input border border-gold-400/30 bg-gold-300/[0.05]">
+        <div className="rounded-input border border-accent-400/30 bg-accent-300/[0.05]">
           <button type="button" onClick={() => setQrOpen((v) => !v)} className="flex w-full items-center justify-between gap-2 px-2.5 py-2">
-            <span className="text-2xs font-bold text-gold-300">매장 QR <span className="font-normal text-ink-muted">· 이용권 · 출석 체크인 · 회원가입</span></span>
+            <span className="text-2xs font-bold text-accent-300">매장 QR <span className="font-normal text-ink-muted">· 이용권 · 출석 체크인 · 회원가입</span></span>
             <Icon name="chevron-down" size={14} className={['shrink-0 text-ink-muted transition-transform', qrOpen ? 'rotate-180' : ''].join(' ')} />
           </button>
           {qrOpen && (
             <div className="px-3 pb-3">
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col items-center gap-1">
-                  <p className="text-center text-2xs font-bold text-gold-300">이용권 사용 QR</p>
+                  <p className="text-center text-2xs font-bold text-accent-300">이용권 사용 QR</p>
                   <img src={qr} alt="매장 이용권 QR" width={130} height={130} className="rounded bg-white p-1.5" />
                   <p className="text-center text-[10px] leading-tight text-ink-muted">손님이 스캔해 사용 (고정)</p>
                 </div>
@@ -457,7 +457,7 @@ ${cards}
                     return (
                       <button key={q.id} type="button" onClick={() => togglePrint(q.id)}
                         className={['inline-flex items-center gap-1 rounded-badge border px-2 py-1 text-2xs font-bold transition-colors',
-                          on ? 'border-gold-400/50 bg-gold-300/15 text-gold-300' : 'border-border-default bg-surface-high text-ink-muted'].join(' ')}>
+                          on ? 'border-accent-400/50 bg-accent-300/15 text-accent-300' : 'border-border-default bg-surface-high text-ink-muted'].join(' ')}>
                         <span>{on ? '☑' : '☐'}</span> {q.icon} {q.title}
                       </button>
                     );
@@ -480,10 +480,10 @@ ${cards}
         </button>
       )}
       {canIssue && ownerOpen && stats && (
-        <div className="rounded-card border border-gold-400/30 bg-gradient-to-br from-gold-300/[0.07] via-surface-low to-surface-low p-3 space-y-2.5">
+        <div className="rounded-card border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.07] via-surface-low to-surface-low p-3 space-y-2.5">
           <div className="grid grid-cols-3 gap-2">
             {([
-              ['👥', stats.holderCount, '보유 회원', 'text-gold-300'],
+              ['👥', stats.holderCount, '보유 회원', 'text-accent-300'],
               ['🎟', stats.activeCount + stats.usedCount, '활성 이용권', 'text-ink-primary'],
               ['✨', stats.activeCount, '잔여 이용권', 'text-emerald-300'],
             ] as const).map(([emoji, val, label, cls]) => (
@@ -498,10 +498,10 @@ ${cards}
             <div>
               <div className="flex items-baseline justify-between text-[10px] text-ink-muted">
                 <span>사용률</span>
-                <span className="font-bold tabular-nums text-gold-300">{Math.round((stats.usedCount / (stats.activeCount + stats.usedCount)) * 100)}%</span>
+                <span className="font-bold tabular-nums text-accent-300">{Math.round((stats.usedCount / (stats.activeCount + stats.usedCount)) * 100)}%</span>
               </div>
               <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-high">
-                <div className="h-full rounded-full bg-gradient-to-r from-gold-400 to-gold-300 transition-[width] duration-500"
+                <div className="h-full rounded-full bg-gradient-to-r from-accent-400 to-accent-300 transition-[width] duration-500"
                   style={{ width: `${Math.round((stats.usedCount / (stats.activeCount + stats.usedCount)) * 100)}%` }} />
               </div>
             </div>
@@ -515,7 +515,7 @@ ${cards}
           <ul className="space-y-1">
             {usage.slice(0, 6).map((u, i) => (
               <li key={u.usedVenueId ?? i} className="flex items-center justify-between text-2xs">
-                <span className="min-w-0 flex-1 truncate text-ink-secondary">{i + 1}. {u.venueName ?? '(알수없음)'}{u.usedVenueId && u.usedVenueId !== venueId && <span className="ml-1 text-gold-300">타 매장</span>}</span>
+                <span className="min-w-0 flex-1 truncate text-ink-secondary">{i + 1}. {u.venueName ?? '(알수없음)'}{u.usedVenueId && u.usedVenueId !== venueId && <span className="ml-1 text-accent-300">타 매장</span>}</span>
                 <span className="shrink-0 font-bold text-ink-primary tabular-nums">{u.usedCount}건</span>
               </li>
             ))}
@@ -526,7 +526,7 @@ ${cards}
       <div className={canIssue && ownerOpen ? '' : 'hidden'}>
         <div className="mb-1 flex items-center justify-between gap-2">
           <p className="text-2xs font-bold text-ink-secondary">보유자 현황</p>
-          <p className="text-2xs text-ink-muted">보유 인원 <b className="text-gold-300 tabular-nums">{holderCount}</b>명 · 보유 갯수 <b className="text-ink-primary tabular-nums">{active.length}</b>개</p>
+          <p className="text-2xs text-ink-muted">보유 인원 <b className="text-accent-300 tabular-nums">{holderCount}</b>명 · 보유 갯수 <b className="text-ink-primary tabular-nums">{active.length}</b>개</p>
         </div>
         {holders.length > 0 && (
           <input value={holderQuery} onChange={(e) => setHolderQuery(e.target.value)} placeholder="보유자 검색 (실명·닉네임)" className="input mb-1.5 w-full text-sm" />
@@ -544,7 +544,7 @@ ${cards}
                         <p className="truncate text-sm font-semibold text-ink-primary">{holderLabel(g)}</p>
                         <p className="text-[10px] text-ink-muted">보유 {g.active.length}개{g.used.length > 0 && <> · 사용 {g.used.length}회</>}</p>
                       </button>
-                      <span className="shrink-0 rounded-badge bg-gold-300/15 px-2 py-0.5 text-xs font-bold text-gold-300 tabular-nums">{g.active.length}</span>
+                      <span className="shrink-0 rounded-badge bg-accent-300/15 px-2 py-0.5 text-xs font-bold text-accent-300 tabular-nums">{g.active.length}</span>
                       {!g.isStore && <button type="button" onClick={() => setExpanded(open ? null : g.key)} className="btn-ghost shrink-0 px-2 text-2xs text-ink-secondary">{open ? '닫기' : '관리'}</button>}
                       {(isAdmin || g.isStore) && canIssue && <button type="button" disabled={busy} onClick={() => deleteGroup({ name: holderLabel(g), ids: [...g.active, ...g.used].map((v) => v.id) })} aria-label="삭제" className="shrink-0 px-1 text-xs text-ink-muted hover:text-danger-light disabled:opacity-50">✕</button>}
                     </div>

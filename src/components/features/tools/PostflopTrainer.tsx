@@ -73,13 +73,13 @@ export default function PostflopTrainer() {
           <p className="text-2xs text-ink-muted mt-0.5">상황을 보고 최적 액션을 고르세요 — 정답률·연속 기록을 추적합니다.</p>
         </div>
         <div className="shrink-0 text-right text-2xs tabular-nums">
-          <p className="font-bold text-gold-300">{total > 0 ? Math.round((right / total) * 100) : 0}% <span className="font-normal text-ink-muted">({right}/{total})</span></p>
+          <p className="font-bold text-accent-300">{total > 0 ? Math.round((right / total) * 100) : 0}% <span className="font-normal text-ink-muted">({right}/{total})</span></p>
           <p className="text-ink-muted">연속 {streak} · 최고 {best}</p>
         </div>
       </div>
 
       {/* 상황 */}
-      <div className="rounded-input border border-gold-400/25 bg-gold-300/[0.04] p-3 space-y-2">
+      <div className="rounded-input border border-accent-400/25 bg-accent-300/[0.04] p-3 space-y-2">
         <p className="text-xs font-semibold text-ink-secondary">{sc.spot}</p>
         <div className="flex flex-wrap items-center gap-3">
           <span className="flex items-center gap-1">
@@ -106,7 +106,7 @@ export default function PostflopTrainer() {
           const chosen = picked === a;
           const reveal = picked !== null;
           const cls = !reveal
-            ? 'border-border-default bg-surface-high hover:border-gold-400/50 text-ink-primary'
+            ? 'border-border-default bg-surface-high hover:border-accent-400/50 text-ink-primary'
             : isCorrect(a)
               ? 'border-emerald-400/60 bg-emerald-400/10 text-emerald-300'
               : chosen

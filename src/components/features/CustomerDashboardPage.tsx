@@ -122,8 +122,8 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
         <div className="mx-auto w-full max-w-2xl space-y-4 px-page-x py-section">
           {/* 미읽음 알림 미리보기 — 상위 3개(탭하면 해당 화면으로) */}
           {unread.length > 0 && (
-            <section className="rounded-card border border-gold-400/30 bg-gold-300/[0.05] p-3">
-              <p className="mb-1.5 text-sm font-bold text-gold-300">🔔 안 읽은 알림 {unread.length > 3 ? '(' + unread.length + ')' : ''}</p>
+            <section className="rounded-card border border-accent-400/30 bg-accent-300/[0.05] p-3">
+              <p className="mb-1.5 text-sm font-bold text-accent-300">🔔 안 읽은 알림 {unread.length > 3 ? '(' + unread.length + ')' : ''}</p>
               <ul className="space-y-1">
                 {unread.slice(0, 3).map((n) => (
                   <li key={n.id}>
@@ -150,9 +150,9 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
                     const got = b.check(badgeStats);
                     return (
                       <div key={b.key} title={b.desc}
-                        className={['rounded-card border p-2.5 text-center transition-colors', got ? 'border-gold-400/50 bg-gold-300/[0.08]' : 'border-border-subtle bg-surface-high opacity-55'].join(' ')}>
+                        className={['rounded-card border p-2.5 text-center transition-colors', got ? 'border-accent-400/50 bg-accent-300/[0.08]' : 'border-border-subtle bg-surface-high opacity-55'].join(' ')}>
                         <p className={['text-xl leading-none', got ? '' : 'grayscale'].join(' ')}>{b.emoji}</p>
-                        <p className={['mt-1 text-xs font-bold', got ? 'text-gold-300' : 'text-ink-secondary'].join(' ')}>{b.label}</p>
+                        <p className={['mt-1 text-xs font-bold', got ? 'text-accent-300' : 'text-ink-secondary'].join(' ')}>{b.label}</p>
                         <p className="mt-0.5 text-2xs leading-tight text-ink-muted">{b.desc}</p>
                       </div>
                     );
@@ -164,7 +164,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
           {/* 내 계정 — 받는 아이디 · 본인인증(매장이용권 수령 조건) */}
           <section className="rounded-card border border-border-default bg-surface-low p-3">
             <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gold-400/15 text-base font-bold text-gold-300">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-400/15 text-base font-bold text-accent-300">
                 {(user?.nickname ?? user?.name ?? '?').slice(0, 1)}
               </div>
               <div className="min-w-0 flex-1">
@@ -223,16 +223,16 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
           )}
 
           <section>
-            <p className="mb-1.5 text-sm font-bold text-ink-primary">내 매장이용권 <span className="text-gold-300">{active.length}</span></p>
+            <p className="mb-1.5 text-sm font-bold text-ink-primary">내 매장이용권 <span className="text-accent-300">{active.length}</span></p>
             {loading ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
               : venueGroups.length === 0 ? <p className="py-6 text-center text-2xs text-ink-muted">보유한 매장이용권이 없습니다.</p>
                 : <div className="space-y-3">{venueGroups.map((g) => (
                   <div key={g.vid} className="rounded-card border border-border-default bg-surface-low p-3">
                     <p className="mb-2 flex items-center gap-1.5 text-sm font-bold text-ink-primary">
-                      <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-gold-300" /><span className="min-w-0 truncate">{g.name}</span>
+                      <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-accent-300" /><span className="min-w-0 truncate">{g.name}</span>
                     </p>
                     <ul className="space-y-1.5">{g.stacks.map((s) => (
-                      <li key={s.title} className="flex items-center gap-2 rounded-input border border-gold-400/40 bg-gold-300/[0.05] px-3 py-2">
+                      <li key={s.title} className="flex items-center gap-2 rounded-input border border-accent-400/40 bg-accent-300/[0.05] px-3 py-2">
                         <span className="text-base" aria-hidden>🎟</span>
                         <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{s.title} <span className="text-2xs text-ink-muted">×{s.ids.length}</span></span>
                         <button type="button" onClick={() => setRedeem(s)} className="btn-primary shrink-0 px-3 text-2xs">사용하기</button>
@@ -255,7 +255,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
                     <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-2xs text-ink-muted">
                       <span>방문 <b className="text-ink-secondary tabular-nums">{u.visits}</b>회</span>
                       <span>머니인 <b className="text-ink-secondary tabular-nums">{u.moneyin}</b>회</span>
-                      <span>누적 <b className="text-gold-300 tabular-nums">{u.amount ? wonToMan(u.amount) + '만' : '-'}</b></span>
+                      <span>누적 <b className="text-accent-300 tabular-nums">{u.amount ? wonToMan(u.amount) + '만' : '-'}</b></span>
                     </div>
                   </li>
                 ))}</ul>}
@@ -421,10 +421,10 @@ function RecordSummary({ rows, percentile, nickname }: { rows: MyRankingRow[]; p
   };
 
   return (
-    <div className="mb-2 rounded-card border border-gold-400/30 bg-gold-300/[0.05] p-3">
+    <div className="mb-2 rounded-card border border-accent-400/30 bg-accent-300/[0.05] p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
         <p className="text-xs font-bold text-gold-300">🏆 내 토너먼트 전적 <span className="font-normal text-ink-muted">(기록 {n}회)</span>
-          {percentile != null && <span className="ml-1.5 rounded-badge bg-gold-300/15 px-1.5 py-0.5 text-2xs text-gold-300">전국 상위 {percentile}%</span>}
+          {percentile != null && <span className="ml-1.5 rounded-badge bg-accent-300/15 px-1.5 py-0.5 text-2xs text-accent-300">전국 상위 {percentile}%</span>}
         </p>
         <div className="flex shrink-0 gap-1">
           {kakaoConfigured() && <button type="button" onClick={doKakao} disabled={busy} className="shrink-0 rounded-badge px-2 py-1 text-2xs font-bold text-[#3C1E1E] disabled:opacity-50" style={{ background: '#FEE500' }}>카톡</button>}
@@ -464,7 +464,7 @@ function RankTrendChart({ rows }: { rows: MyRankingRow[] }) {
     <div className="mb-2 rounded-card border border-border-subtle bg-surface-low p-3">
       <div className="flex items-baseline justify-between">
         <p className="text-xs font-bold text-ink-secondary">순위 추이 <span className="font-normal text-ink-muted">(최근 {pts.length}회 · 위로 갈수록 높은 순위)</span></p>
-        <p className="text-2xs text-ink-muted">최고 <b className="text-gold-300">{best}위</b> · 평균 <b className="text-ink-secondary">{avg}위</b></p>
+        <p className="text-2xs text-ink-muted">최고 <b className="text-accent-300">{best}위</b> · 평균 <b className="text-ink-secondary">{avg}위</b></p>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} className="mt-1 w-full" role="img" aria-label="내 순위 추이 그래프">
         {/* 가이드선: 1위/중간/하단 */}
@@ -576,7 +576,7 @@ function QrScanner({ onResult, onError }: { onResult: (text: string) => void; on
 function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
     <div className="rounded-input border border-border-subtle bg-surface-low p-2 text-center">
-      <p className={`text-base font-extrabold leading-none tabular-nums ${accent ? 'text-gold-300' : 'text-ink-primary'}`}>{value}</p>
+      <p className={`text-base font-extrabold leading-none tabular-nums ${accent ? 'text-accent-300' : 'text-ink-primary'}`}>{value}</p>
       <p className="mt-1 text-[10px] text-ink-muted">{label}</p>
     </div>
   );
@@ -584,8 +584,8 @@ function Stat({ label, value, accent }: { label: string; value: string; accent?:
 
 function HiCard({ title, name, detail }: { title: string; name: string; detail: string }) {
   return (
-    <div className="rounded-card border border-gold-400/30 bg-gold-300/[0.05] p-3">
-      <p className="text-2xs font-bold text-gold-300">{title}</p>
+    <div className="rounded-card border border-accent-400/30 bg-accent-300/[0.05] p-3">
+      <p className="text-2xs font-bold text-accent-300">{title}</p>
       <p className="mt-0.5 truncate text-sm font-bold text-ink-primary">{name}</p>
       <p className="text-2xs text-ink-muted">{detail}</p>
     </div>
@@ -604,17 +604,17 @@ function LevelGuideModal({ points, onClose }: { points: number; onClose: () => v
           <p className="text-sm font-bold text-ink-primary">🎖 레벨 도감</p>
           <button type="button" onClick={onClose} aria-label="닫기" className="text-lg leading-none text-ink-muted">✕</button>
         </div>
-        <p className="mb-3 text-2xs leading-relaxed text-ink-muted">활동점수가 쌓이면 레벨이 오릅니다. 지금은 <b className="text-gold-300">Lv {cur.level} · {cur.title}</b>.</p>
+        <p className="mb-3 text-2xs leading-relaxed text-ink-muted">활동점수가 쌓이면 레벨이 오릅니다. 지금은 <b className="text-accent-300">Lv {cur.level} · {cur.title}</b>.</p>
         <ul className="space-y-1.5">
           {tiers.map((t) => {
             const isCur = t.level === cur.level;
             const reached = points >= t.min;
             return (
-              <li key={t.key} className={['flex items-center gap-2.5 rounded-input border px-3 py-2', isCur ? 'border-gold-400/60 bg-gold-300/10' : reached ? 'border-border-subtle bg-surface-low' : 'border-border-subtle bg-surface-low opacity-50'].join(' ')}>
+              <li key={t.key} className={['flex items-center gap-2.5 rounded-input border px-3 py-2', isCur ? 'border-accent-400/60 bg-accent-300/10' : reached ? 'border-border-subtle bg-surface-low' : 'border-border-subtle bg-surface-low opacity-50'].join(' ')}>
                 <TierBadge points={t.min} size={24} />
                 <p className="min-w-0 flex-1 text-sm font-bold" style={{ color: reached ? t.color : undefined }}>
                   Lv {t.level} · {t.title}
-                  {isCur && <span className="ml-1.5 rounded-badge bg-gold-300 px-1.5 py-0.5 align-middle text-[10px] font-bold text-ink-inverse">현재</span>}
+                  {isCur && <span className="ml-1.5 rounded-badge bg-accent-300 px-1.5 py-0.5 align-middle text-[10px] font-bold text-white">현재</span>}
                 </p>
                 <span className="shrink-0 text-2xs tabular-nums text-ink-muted">{t.min.toLocaleString()}점~</span>
               </li>
@@ -648,7 +648,7 @@ function LevelCard({ points, championships = 0 }: { points: number; championship
         <TierBadge points={points} size={28} />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold text-ink-primary">Lv {t.level} · <span style={{ color: t.color }}>{t.title}</span></p>
-          <p className="text-2xs text-ink-muted">활동점수 <b className="text-gold-300 tabular-nums">{points.toLocaleString()}</b>점</p>
+          <p className="text-2xs text-ink-muted">활동점수 <b className="text-accent-300 tabular-nums">{points.toLocaleString()}</b>점</p>
         </div>
         {championships > 0 && (
           <span className="shrink-0 rounded-badge border border-gold-400/40 bg-gold-300/10 px-1.5 py-1 text-2xs font-bold text-gold-300" title="시즌 우승 영구 배지">👑 {championships}</span>
@@ -696,12 +696,12 @@ function InviteSection({ nickname, stats }: { nickname: string; stats: ReferralS
     if (!ok) { toast.show('카카오 공유가 미설정이라 링크를 복사했어요', 'info'); copy(); }
   };
   return (
-    <section className="rounded-card border border-gold-400/30 bg-gold-300/[0.05] p-3">
+    <section className="rounded-card border border-accent-400/30 bg-accent-300/[0.05] p-3">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-bold text-gold-300">🎁 친구 초대</p>
-        <span className="text-2xs text-ink-muted">초대 <b className="text-ink-secondary tabular-nums">{stats.invited}</b> · 보상 <b className="text-gold-300 tabular-nums">{stats.rewarded}</b></span>
+        <p className="text-sm font-bold text-accent-300">🎁 친구 초대</p>
+        <span className="text-2xs text-ink-muted">초대 <b className="text-ink-secondary tabular-nums">{stats.invited}</b> · 보상 <b className="text-accent-300 tabular-nums">{stats.rewarded}</b></span>
       </div>
-      <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">친구가 내 링크로 가입하고 <b className="text-ink-primary">본인인증</b>까지 마치면 <b className="text-gold-300">둘 다 활동점수</b>(나 +500 · 친구 +300)!</p>
+      <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">친구가 내 링크로 가입하고 <b className="text-ink-primary">본인인증</b>까지 마치면 <b className="text-accent-300">둘 다 활동점수</b>(나 +500 · 친구 +300)!</p>
       <div className="mt-2 flex items-center gap-2.5">
         {qr && <img src={qr} alt="초대 QR" className="h-16 w-16 shrink-0 rounded bg-white p-0.5" />}
         <div className="min-w-0 flex-1">

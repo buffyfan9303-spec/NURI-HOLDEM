@@ -203,7 +203,7 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
                 className={[
                   'min-h-[44px] px-1 inline-flex items-center justify-center text-xs font-semibold rounded-input border transition-colors focus:outline-none',
                   category === o.id
-                    ? 'bg-gold-300/20 border-gold-300 text-gold-300'
+                    ? 'bg-accent-300/20 border-accent-300 text-accent-300'
                     : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary',
                 ].join(' ')}
               >
@@ -257,7 +257,7 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
               type="button"
               onClick={() => fileRef.current?.click()}
               disabled={previews.length >= MAX_IMAGES}
-              className="text-2xs font-semibold text-gold-300 hover:text-gold-200 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="text-2xs font-semibold text-accent-300 hover:text-accent-200 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               + 사진 추가
             </button>
@@ -290,7 +290,7 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
-              className="w-full py-6 rounded-input border border-dashed border-border-default text-2xs text-ink-muted hover:border-gold-400/50 hover:text-ink-secondary transition-colors"
+              className="w-full py-6 rounded-input border border-dashed border-border-default text-2xs text-ink-muted hover:border-accent-400/50 hover:text-ink-secondary transition-colors"
             >
               사진을 첨부하려면 클릭하세요 (최대 {MAX_IMAGES}장 · 5MB)
             </button>
@@ -306,7 +306,7 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
             <button
               type="button"
               onClick={() => setShowHand((v) => !v)}
-              className="text-2xs font-semibold text-gold-300 hover:text-gold-200"
+              className="text-2xs font-semibold text-accent-300 hover:text-accent-200"
             >
               {showHand ? '닫기' : '+ 핸드 추가'}
             </button>
@@ -328,7 +328,7 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
                       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setHandTarget(t); }}
                       className={[
                         'rounded-input border p-2 cursor-pointer transition-colors focus:outline-none',
-                        handTarget === t ? 'border-gold-300 bg-gold-300/10' : 'border-border-default bg-surface-high',
+                        handTarget === t ? 'border-accent-300 bg-accent-300/10' : 'border-border-default bg-surface-high',
                       ].join(' ')}
                     >
                       <span className="block text-xs text-ink-muted mb-1">{label}</span>
@@ -353,8 +353,8 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
                 })}
               </div>
               <p className="text-xs text-ink-muted">
-                <span className="text-gold-300 font-semibold">{handTarget === 'hero' ? '내 핸드' : handTarget === 'villain' ? '상대 핸드' : '보드'}</span>
-                에 넣을 카드를 아래에서 선택하세요 (카드를 다시 누르면 제거) · 보드를 3장 이상 고르면 <b className="text-gold-300">🎬 단계별 리플레이</b>로 올라갑니다
+                <span className="text-accent-300 font-semibold">{handTarget === 'hero' ? '내 핸드' : handTarget === 'villain' ? '상대 핸드' : '보드'}</span>
+                에 넣을 카드를 아래에서 선택하세요 (카드를 다시 누르면 제거) · 보드를 3장 이상 고르면 <b className="text-accent-300">🎬 단계별 리플레이</b>로 올라갑니다
               </p>
               <CardGridPicker usedIds={usedIds} onPick={handlePickCard} />
 

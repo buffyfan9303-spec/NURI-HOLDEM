@@ -50,12 +50,12 @@ export default function OnboardingSheet() {
         <div className="flex justify-center gap-1.5 pb-4" aria-hidden>
           {STEPS.map((_, i) => (
             <span key={i} className={['h-1.5 rounded-full transition-all duration-300',
-              i === step ? 'w-5 bg-gold-300' : i < step ? 'w-1.5 bg-gold-300/50' : 'w-1.5 bg-border-strong'].join(' ')} />
+              i === step ? 'w-5 bg-accent-300' : i < step ? 'w-1.5 bg-accent-300/50' : 'w-1.5 bg-border-strong'].join(' ')} />
           ))}
         </div>
 
         <div className="flex flex-col items-center gap-3 text-center" aria-live="polite">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gold-300/[0.12] text-3xl" aria-hidden>{s.icon}</div>
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-accent-300/[0.12] text-3xl" aria-hidden>{s.icon}</div>
           <h3 className="text-base font-bold text-ink-primary">{s.title}</h3>
           <p className="min-h-[3.5rem] text-2xs leading-relaxed text-ink-secondary">{s.body}</p>
         </div>

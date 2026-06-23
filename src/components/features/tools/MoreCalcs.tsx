@@ -48,7 +48,7 @@ export function PayoutCalc() {
         <div className="grid grid-cols-3 gap-1">
           {PAYOUT_STYLES.map((s) => (
             <button key={s.id} type="button" onClick={() => setStyle(s.id)} title={s.desc}
-              className={['rounded-input py-1.5 text-2xs font-bold leading-tight transition-colors', style === s.id ? 'bg-gold-300 text-ink-inverse' : 'bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>{s.label}</button>
+              className={['rounded-input py-1.5 text-2xs font-bold leading-tight transition-colors', style === s.id ? 'bg-accent-300 text-white' : 'bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>{s.label}</button>
           ))}
         </div>
         <p className="mt-1 text-[10px] text-ink-muted">{PAYOUT_STYLES.find((s) => s.id === style)!.desc}</p>
@@ -63,8 +63,8 @@ export function PayoutCalc() {
           <tbody>
             {amounts.map((a, i) => (
               <tr key={i} className="border-t border-border-subtle">
-                <td className={['py-1 px-2 text-left', i < 3 ? 'font-bold text-gold-300' : 'text-ink-secondary'].join(' ')}>{i + 1}위</td>
-                <td className={['py-1 px-2 text-right', i < 3 ? 'font-bold text-gold-300' : 'text-ink-primary'].join(' ')}>{a.toLocaleString()}</td>
+                <td className={['py-1 px-2 text-left', i < 3 ? 'font-bold text-accent-300' : 'text-ink-secondary'].join(' ')}>{i + 1}위</td>
+                <td className={['py-1 px-2 text-right', i < 3 ? 'font-bold text-accent-300' : 'text-ink-primary'].join(' ')}>{a.toLocaleString()}</td>
                 <td className="py-1 px-2 text-right text-ink-muted">{pool > 0 ? Math.round((a / pool) * 100) : 0}%</td>
               </tr>
             ))}

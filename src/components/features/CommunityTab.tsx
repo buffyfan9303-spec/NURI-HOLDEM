@@ -253,7 +253,7 @@ function SectionTab({ active, label, onClick }: { active: boolean; label: string
     >
       {active && (
         <motion.span layoutId="comm-section-pill" aria-hidden
-          className="absolute inset-0 rounded-[6px] bg-gold-300"
+          className="absolute inset-0 rounded-[6px] bg-accent-300"
           transition={{ type: 'spring', stiffness: 700, damping: 42 }} />
       )}
       <span className="relative">{label}</span>
@@ -338,10 +338,10 @@ function FeedSection({
         <button
           type="button"
           onClick={onOpenWrite}
-          className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-input bg-surface-high border border-border-default hover:border-gold-400/50 transition-colors text-left"
+          className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-input bg-surface-high border border-border-default hover:border-accent-400/50 transition-colors text-left"
         >
           <span className="text-xs text-ink-muted">{placeholder}</span>
-          <span className="shrink-0 inline-flex items-center gap-1 text-2xs font-bold text-gold-300">
+          <span className="shrink-0 inline-flex items-center gap-1 text-2xs font-bold text-accent-300">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
             </svg>
@@ -356,9 +356,9 @@ function FeedSection({
 
       {/* ── 관리자 공지 (게시판 맨 위) ───────────────────────── */}
       {(notices && notices.length > 0) || isAdmin ? (
-        <section className="rounded-card border border-gold-400/40 bg-gradient-to-br from-gold-300/[0.06] to-transparent overflow-hidden">
-          <header className="flex items-center justify-between px-3 py-2 border-b border-gold-400/20">
-            <h2 className="inline-flex items-center gap-1.5 text-xs font-bold text-gold-300">
+        <section className="rounded-card border border-accent-400/40 bg-gradient-to-br from-accent-300/[0.06] to-transparent overflow-hidden">
+          <header className="flex items-center justify-between px-3 py-2 border-b border-accent-400/20">
+            <h2 className="inline-flex items-center gap-1.5 text-xs font-bold text-accent-300">
               공지사항
               {notices && <span className="text-2xs text-ink-muted font-normal">({notices.length})</span>}
             </h2>
@@ -366,7 +366,7 @@ function FeedSection({
               <button
                 type="button"
                 onClick={onWriteNotice}
-                className="text-2xs text-gold-300 hover:text-gold-200 font-semibold"
+                className="text-2xs text-accent-300 hover:text-accent-200 font-semibold"
               >
                 + 공지 작성
               </button>
@@ -428,14 +428,14 @@ function FeedSection({
             <div className="flex shrink-0 rounded-input border border-border-default bg-surface-high p-0.5">
               <button type="button" aria-label="한 줄 목록" title="한 줄 목록"
                 onClick={() => switchView('compact')}
-                className={['rounded-[6px] px-2 py-1.5 transition-colors', view === 'compact' ? 'bg-surface-float text-gold-300' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
+                className={['rounded-[6px] px-2 py-1.5 transition-colors', view === 'compact' ? 'bg-surface-float text-accent-300' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
                   <line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="18" x2="20" y2="18" />
                 </svg>
               </button>
               <button type="button" aria-label="미리보기 피드" title="미리보기 피드"
                 onClick={() => switchView('feed')}
-                className={['rounded-[6px] px-2 py-1.5 transition-colors', view === 'feed' ? 'bg-surface-float text-gold-300' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
+                className={['rounded-[6px] px-2 py-1.5 transition-colors', view === 'feed' ? 'bg-surface-float text-accent-300' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
                   <rect x="3" y="4" width="18" height="7" rx="1.5" /><rect x="3" y="13" width="18" height="7" rx="1.5" />
                 </svg>
@@ -452,7 +452,7 @@ function FeedSection({
                   className={[
                     'shrink-0 inline-flex items-center h-7 px-3 rounded-badge text-2xs font-semibold leading-none border transition-colors',
                     cat === c.id
-                      ? 'bg-gold-300/20 border-gold-300 text-gold-300'
+                      ? 'bg-accent-300/20 border-accent-300 text-accent-300'
                       : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary',
                   ].join(' ')}
                 >
@@ -540,12 +540,12 @@ function AdRow({ ad }: { ad: CommunityAd }) {
   const href = ad.linkUrl && /^https?:\/\//.test(ad.linkUrl) ? ad.linkUrl : ad.linkUrl ? `https://${ad.linkUrl}` : '';
   const inner = (
     <>
-      <span className="shrink-0 rounded-badge bg-gold-300 px-1 py-0.5 text-2xs font-extrabold leading-none text-ink-inverse">AD</span>
+      <span className="shrink-0 rounded-badge bg-accent-300 px-1 py-0.5 text-2xs font-extrabold leading-none text-white">AD</span>
       <span className="min-w-0 flex-1 truncate text-[15px] font-bold text-ink-primary">{ad.title}</span>
       {ad.advertiser && <span className="shrink-0 text-xs text-ink-muted">{ad.advertiser}</span>}
     </>
   );
-  const cls = 'flex items-center gap-2 border-b border-border-subtle bg-gold-300/[0.04] px-3 py-2 transition-colors last:border-b-0 hover:bg-gold-300/10';
+  const cls = 'flex items-center gap-2 border-b border-border-subtle bg-accent-300/[0.04] px-3 py-2 transition-colors last:border-b-0 hover:bg-accent-300/10';
   return (
     <li>
       {href
@@ -570,7 +570,7 @@ const PostRow = memo(function PostRow({ post, onClick, hot = false, selected = f
       aria-current={selected || undefined}
       className={[
         'flex items-center gap-2 px-3 py-2 cursor-pointer border-b border-border-subtle last:border-b-0 transition-colors',
-        selected ? 'bg-gold-300/10' : 'hover:bg-surface-high/60 active:bg-surface-high',
+        selected ? 'bg-accent-300/10' : 'hover:bg-surface-high/60 active:bg-surface-high',
       ].join(' ')}
     >
       {hot
@@ -578,8 +578,8 @@ const PostRow = memo(function PostRow({ post, onClick, hot = false, selected = f
         : <span className="shrink-0 rounded-badge bg-surface-high px-1 py-0.5 text-2xs font-semibold leading-none text-ink-muted">{catLabel}</span>}
       <span className="min-w-0 flex-1 truncate">
         <span className="text-[15px] font-bold leading-tight text-ink-primary">{post.title || post.content.slice(0, 40)}</span>
-        {(replay || hand) && <span className="ml-1 align-middle text-2xs text-gold-300">{replay ? '🎬' : '♠'}</span>}
-        {post.commentCount > 0 && <span className="ml-1 align-middle text-xs font-bold text-gold-300">[{post.commentCount}]</span>}
+        {(replay || hand) && <span className="ml-1 align-middle text-2xs text-accent-300">{replay ? '🎬' : '♠'}</span>}
+        {post.commentCount > 0 && <span className="ml-1 align-middle text-xs font-bold text-accent-300">[{post.commentCount}]</span>}
       </span>
       <span className="shrink-0 text-xs text-ink-muted">{mark}{post.userName}</span>
       <TitleChip points={titlePts} />
@@ -597,7 +597,7 @@ const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, se
       className={[
         'py-1.5 px-3 transition-colors cursor-pointer border-b border-border-subtle last:border-b-0',
         selected
-          ? 'bg-gold-300/10 border-l-2 border-l-gold-300 -ml-px pl-[calc(0.75rem-1px)]'
+          ? 'bg-accent-300/10 border-l-2 border-l-accent-300 -ml-px pl-[calc(0.75rem-1px)]'
           : 'hover:bg-surface-high/50 active:bg-surface-high',
       ].join(' ')}
     >
@@ -611,7 +611,7 @@ const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, se
             <span className="font-semibold text-ink-primary truncate">{mark}{post.userName}</span>
             <TitleChip points={titlePts} />
             {post.userRole === 'venue_owner' && (
-              <span className="font-bold text-gold-300 bg-gold-300/15 px-1 rounded-badge leading-none">업주</span>
+              <span className="font-bold text-accent-300 bg-accent-300/15 px-1 rounded-badge leading-none">업주</span>
             )}
             {post.userRole === 'admin' && (
               <span className="font-bold text-danger-light bg-danger/15 px-1 rounded-badge leading-none">운영자</span>
@@ -627,7 +627,7 @@ const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, se
               return (
                 <>
                   {(hand || replay) && (
-                    <span className="inline-flex items-center mr-1 px-1 rounded-badge bg-gold-300/15 text-gold-300 font-bold leading-none align-middle">
+                    <span className="inline-flex items-center mr-1 px-1 rounded-badge bg-accent-300/15 text-accent-300 font-bold leading-none align-middle">
                       {replay ? '🎬 리플레이' : '핸드'}
                     </span>
                   )}
@@ -641,7 +641,7 @@ const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, se
               type="button"
               aria-pressed={!!post.liked}
               onClick={(e) => { e.stopPropagation(); onLike(); }}
-              className={`inline-flex items-center gap-1 transition-colors ${post.liked ? 'text-gold-300' : 'hover:text-gold-300'}`}
+              className={`inline-flex items-center gap-1 transition-colors ${post.liked ? 'text-accent-300' : 'hover:text-accent-300'}`}
             >
               <svg width="13" height="13" viewBox="0 0 13 13" fill={post.liked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.4" aria-hidden>
                 <path d="M6.5 11.5L1.5 6.5C0.5 5.5 0.5 3.5 1.5 2.5C2.5 1.5 4.5 1.5 5.5 2.5L6.5 3.5L7.5 2.5C8.5 1.5 10.5 1.5 11.5 2.5C12.5 3.5 12.5 5.5 11.5 6.5L6.5 11.5Z" strokeLinejoin="round" />
@@ -716,16 +716,16 @@ function MyCommunitiesAction({ onSelectVenue, onCreated }: {
   };
 
   return (
-    <div className="rounded-card border border-gold-400/40 bg-gradient-to-br from-gold-300/[0.08] to-transparent">
+    <div className="rounded-card border border-accent-400/40 bg-gradient-to-br from-accent-300/[0.08] to-transparent">
       <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-input bg-gold-300/15 text-gold-300">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-input bg-accent-300/15 text-accent-300">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" /></svg>
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-bold text-ink-primary leading-tight">내 커뮤니티 관리</span>
           <span className="block text-2xs text-ink-muted">내가 운영 {owned.length} · 가입한 그룹 {joined.length}</span>
         </span>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={['shrink-0 text-gold-300 transition-transform duration-200', open ? 'rotate-180' : ''].join(' ')} aria-hidden><polyline points="6 9 12 15 18 9" /></svg>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={['shrink-0 text-accent-300 transition-transform duration-200', open ? 'rotate-180' : ''].join(' ')} aria-hidden><polyline points="6 9 12 15 18 9" /></svg>
       </button>
       {open && (
         <div className="px-3 pb-3 space-y-3 animate-slide-up">
@@ -738,7 +738,7 @@ function MyCommunitiesAction({ onSelectVenue, onCreated }: {
                 {owned.map((v) => (
                   <li key={v.id}>
                     <button type="button" onClick={() => onSelectVenue(v.id)} className="w-full flex items-center gap-1.5 rounded-input bg-surface-high px-2.5 py-1.5 text-left hover:bg-surface-float">
-                      <span className="shrink-0 rounded-badge bg-gold-300/15 px-1.5 py-0.5 text-2xs font-bold text-gold-300">{GROUP_KIND_LABEL[v.kind ?? 'venue']}</span>
+                      <span className="shrink-0 rounded-badge bg-accent-300/15 px-1.5 py-0.5 text-2xs font-bold text-accent-300">{GROUP_KIND_LABEL[v.kind ?? 'venue']}</span>
                       <span className="text-xs font-semibold text-ink-primary truncate">{v.name}</span>
                       {!v.approved && <span className="ml-auto shrink-0 text-2xs text-ink-muted">승인 대기</span>}
                     </button>
@@ -768,7 +768,7 @@ function MyCommunitiesAction({ onSelectVenue, onCreated }: {
           </div>
           {isOwner && !hasVenue && (
             !createOpen ? (
-              <button type="button" onClick={() => setCreateOpen(true)} className="w-full rounded-input border border-gold-400/40 py-1.5 text-2xs font-bold text-gold-300">+ 홀덤펍 커뮤니티 생성</button>
+              <button type="button" onClick={() => setCreateOpen(true)} className="w-full rounded-input border border-accent-400/40 py-1.5 text-2xs font-bold text-accent-300">+ 홀덤펍 커뮤니티 생성</button>
             ) : (
               <div className="space-y-2 rounded-input border border-border-default p-2.5">
                 <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} placeholder="매장명 (예: 강남 로얄 홀덤)" className="input w-full text-sm" />
@@ -838,12 +838,12 @@ function VenuesSection({
         {VENUE_FILTERS.map((f) => (
           <button key={f.key} type="button" onClick={() => setKindFilter(f.key)}
             className={['shrink-0 rounded-badge px-2.5 py-1 text-2xs font-bold border transition-colors',
-              kindFilter === f.key ? 'bg-gold-300 text-ink-inverse border-gold-300' : 'bg-surface-high text-ink-secondary border-border-default hover:text-ink-primary'].join(' ')}>
+              kindFilter === f.key ? 'bg-accent-300 text-white border-accent-300' : 'bg-surface-high text-ink-secondary border-border-default hover:text-ink-primary'].join(' ')}>
             {f.label}
           </button>
         ))}
         {user && (
-          <button type="button" onClick={() => setCreateOpen(true)} className="ml-auto shrink-0 rounded-badge px-2.5 py-1 text-2xs font-bold border border-gold-400/50 text-gold-300 hover:bg-gold-300/10">+ 그룹 만들기</button>
+          <button type="button" onClick={() => setCreateOpen(true)} className="ml-auto shrink-0 rounded-badge px-2.5 py-1 text-2xs font-bold border border-accent-400/50 text-accent-300 hover:bg-accent-300/10">+ 그룹 만들기</button>
         )}
       </div>
 
@@ -854,7 +854,7 @@ function VenuesSection({
       {/* 정렬 안내 */}
       <div className="flex items-center gap-2 text-2xs text-ink-muted">
         <span>정렬:</span>
-        <span className="text-gold-300 font-semibold">유료광고</span>
+        <span className="text-accent-300 font-semibold">유료광고</span>
         <span className="text-border-strong">→</span>
         <span className="text-ink-secondary">팔로워순</span>
       </div>
@@ -872,7 +872,7 @@ function VenuesSection({
                 className={[
                   'w-full text-left flex items-center gap-2.5 px-2.5 py-2 rounded-card border transition-all duration-150 cursor-pointer active:bg-surface-high',
                   venue.isPaidAd
-                    ? 'bg-surface-low border-gold-400/50 shadow-gold hover:border-gold-400'
+                    ? 'bg-surface-low border-accent-400/50 shadow-gold hover:border-accent-400'
                     : 'bg-surface-low border-border-default hover:border-border-strong hover:bg-surface-high',
                 ].join(' ')}
               >
@@ -884,12 +884,12 @@ function VenuesSection({
                     <div className="min-w-0">
                       <div className="flex items-center gap-1 mb-0.5">
                         {venue.isPaidAd && (
-                          <span className="rounded-badge bg-gold-300 px-1.5 py-0.5 text-2xs font-bold text-ink-inverse leading-none">
+                          <span className="rounded-badge bg-accent-300 px-1.5 py-0.5 text-2xs font-bold text-white leading-none">
                             AD
                           </span>
                         )}
                         {venue.verificationStatus === 'verified' && (
-                          <span className="inline-flex items-center gap-0.5 rounded-badge border border-gold-400/50 bg-gold-300/15 px-1.5 py-0.5 text-2xs font-bold text-gold-300 leading-none">
+                          <span className="inline-flex items-center gap-0.5 rounded-badge border border-accent-400/50 bg-accent-300/15 px-1.5 py-0.5 text-2xs font-bold text-accent-300 leading-none">
                             <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden><polyline points="20 6 9 17 4 12" /></svg>
                             인증
                           </span>
@@ -902,23 +902,23 @@ function VenuesSection({
                           <> · 팔로워 {venue.followerCount.toLocaleString()}</>
                         )}
                         {ratings[venue.id] && (
-                          <span className="font-bold text-gold-300"> · ⭐{ratings[venue.id].avg.toFixed(1)}<span className="font-normal text-ink-muted">({ratings[venue.id].count})</span></span>
+                          <span className="font-bold text-accent-300"> · ⭐{ratings[venue.id].avg.toFixed(1)}<span className="font-normal text-ink-muted">({ratings[venue.id].count})</span></span>
                         )}
                       </p>
                     </div>
                     {commentCount > 0 && (
-                      <span className="shrink-0 inline-flex items-center gap-1 text-2xs text-gold-300 font-semibold">
+                      <span className="shrink-0 inline-flex items-center gap-1 text-2xs text-accent-300 font-semibold">
                         댓글 {commentCount}
                       </span>
                     )}
                   </div>
 
                   {latest && (
-                    <div className="mt-1.5 px-2 py-1.5 bg-surface-base/50 rounded-input border-l-2 border-gold-400/40">
+                    <div className="mt-1.5 px-2 py-1.5 bg-surface-base/50 rounded-input border-l-2 border-accent-400/40">
                       <p className="text-2xs text-ink-muted leading-tight">
                         <span className={[
                           'font-semibold',
-                          latest.isOwner ? 'text-gold-300' : 'text-ink-secondary',
+                          latest.isOwner ? 'text-accent-300' : 'text-ink-secondary',
                         ].join(' ')}>
                           {latest.userName}
                           {latest.isOwner && ' (매장)'}
@@ -975,7 +975,7 @@ function CreateGroupModal({ onClose, onCreated }: { onClose: () => void; onCreat
             {KINDS.map((k) => (
               <button key={k} type="button" onClick={() => setKind(k)}
                 className={['rounded-badge border px-3 py-1.5 text-xs font-semibold transition-colors',
-                  kind === k ? 'bg-gold-300 text-ink-inverse border-gold-300' : 'bg-surface-high text-ink-secondary border-border-default'].join(' ')}>
+                  kind === k ? 'bg-accent-300 text-white border-accent-300' : 'bg-surface-high text-ink-secondary border-border-default'].join(' ')}>
                 {GROUP_KIND_LABEL[k]}
               </button>
             ))}
@@ -994,7 +994,7 @@ function CreateGroupModal({ onClose, onCreated }: { onClose: () => void; onCreat
           <textarea value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} rows={3} placeholder="그룹 소개를 적어주세요" className="input w-full resize-none text-sm" />
         </label>
         <label className="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" checked={joinApproval} onChange={(e) => setJoinApproval(e.target.checked)} className="accent-gold-300" />
+          <input type="checkbox" checked={joinApproval} onChange={(e) => setJoinApproval(e.target.checked)} className="accent-accent-300" />
           <span className="text-xs text-ink-secondary">가입 시 내 승인 필요 (해제 시 누구나 즉시 가입)</span>
         </label>
         <p className="text-2xs text-ink-muted">개설하면 내가 매니저가 되며, 운영자 승인 후 목록에 공개됩니다.</p>
@@ -1110,7 +1110,7 @@ function LiveWallSection() {
                 <div className="flex items-center gap-1 text-2xs">
                   <span className="font-semibold text-ink-primary truncate">{m.userName}</span>
                   {m.userRole === 'venue_owner' && (
-                    <span className="font-bold text-gold-300 bg-gold-300/15 px-1 rounded-badge leading-none">업주</span>
+                    <span className="font-bold text-accent-300 bg-accent-300/15 px-1 rounded-badge leading-none">업주</span>
                   )}
                   {m.userRole === 'admin' && (
                     <span className="font-bold text-danger-light bg-danger/15 px-1 rounded-badge leading-none">운영자</span>

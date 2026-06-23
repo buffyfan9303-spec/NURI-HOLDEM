@@ -182,7 +182,7 @@ export default function VenuePage({
           {venue.name}
         </h1>
         {isMyVenue && (
-          <span className="ml-2 shrink-0 inline-block px-1.5 py-0.5 text-2xs font-bold rounded-badge bg-gold-300 text-ink-inverse">
+          <span className="ml-2 shrink-0 inline-block px-1.5 py-0.5 text-2xs font-bold rounded-badge bg-accent-300 text-white">
             내 매장
           </span>
         )}
@@ -211,7 +211,7 @@ export default function VenuePage({
                   {venue.region}
                 </span>
                 {venue.isPaidAd && (
-                  <span className="inline-flex items-center px-2 py-[3px] leading-none text-2xs font-bold rounded-badge bg-gold-300 text-ink-inverse">
+                  <span className="inline-flex items-center px-2 py-[3px] leading-none text-2xs font-bold rounded-badge bg-accent-300 text-white">
                     프리미엄
                   </span>
                 )}
@@ -219,7 +219,7 @@ export default function VenuePage({
               <h2 className="text-xl font-bold text-ink-primary">
                 {venue.name}
                 {rating && rating.count > 0 && (
-                  <span className="ml-2 align-middle text-sm font-bold tabular-nums text-gold-300" title={`방문 후기 ${rating.count}건 평균`}>
+                  <span className="ml-2 align-middle text-sm font-bold tabular-nums text-accent-300" title={`방문 후기 ${rating.count}건 평균`}>
                     ⭐{rating.avg.toFixed(1)}<span className="font-normal text-ink-muted">({rating.count})</span>
                   </span>
                 )}
@@ -233,14 +233,14 @@ export default function VenuePage({
                   </a>
                 )}
                 {isMyVenue && (
-                  <button type="button" onClick={editKakao} className="text-2xs text-ink-muted hover:text-gold-300">{kakao ? '카톡링크 수정' : '+ 카톡링크 등록'}</button>
+                  <button type="button" onClick={editKakao} className="text-2xs text-ink-muted hover:text-accent-300">{kakao ? '카톡링크 수정' : '+ 카톡링크 등록'}</button>
                 )}
               </div>
             </div>
             {/* 팔로우 + 링크공유 한 묶음 */}
             <div className="inline-grid shrink-0 grid-cols-1 content-start gap-1.5">
               <FollowButton venueId={venue.id} followerCount={venue.followerCount} />
-              <button type="button" onClick={shareVenue} className="inline-flex items-center justify-center gap-1 px-3 h-9 rounded-input bg-surface-high border border-border-default text-xs font-semibold text-ink-secondary hover:text-gold-300 transition-colors">
+              <button type="button" onClick={shareVenue} className="inline-flex items-center justify-center gap-1 px-3 h-9 rounded-input bg-surface-high border border-border-default text-xs font-semibold text-ink-secondary hover:text-accent-300 transition-colors">
                 <span aria-hidden>🔗</span> 링크 공유
               </button>
             </div>
@@ -261,13 +261,13 @@ export default function VenuePage({
                   role="tab"
                   className={[
                     'lg:flex-1 whitespace-nowrap px-0.5 lg:px-2 py-3 text-[13px] lg:text-sm font-medium transition-colors text-center relative',
-                    active ? 'text-gold-300' : 'text-ink-muted hover:text-ink-secondary',
+                    active ? 'text-accent-300' : 'text-ink-muted hover:text-ink-secondary',
                   ].join(' ')}
                 >
                   {TAB_LABEL[t]}
                   {active && (
                     <motion.span layoutId="venue-tab-underline" aria-hidden
-                      className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-gold-300"
+                      className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-accent-300"
                       transition={{ type: 'spring', stiffness: 700, damping: 42 }} />
                   )}
                 </button>
@@ -517,7 +517,7 @@ function HeroSection({
               type="button"
               onClick={() => go(i)}
               aria-label={`${i + 1}번째 사진 보기`}
-              className={['h-1.5 rounded-full transition-all', i === safeIdx ? 'w-5 bg-gold-300' : 'w-1.5 bg-white/50 hover:bg-white/80'].join(' ')}
+              className={['h-1.5 rounded-full transition-all', i === safeIdx ? 'w-5 bg-accent-300' : 'w-1.5 bg-white/50 hover:bg-white/80'].join(' ')}
             />
           ))}
         </div>
@@ -540,7 +540,7 @@ function HeroSection({
             type="button"
             onClick={() => galleryInputRef.current?.click()}
             disabled={busy}
-            className="inline-flex h-8 items-center gap-1.5 rounded-input bg-gold-300/90 px-3 text-xs font-bold text-ink-inverse backdrop-blur transition-colors hover:bg-gold-200 disabled:opacity-50"
+            className="inline-flex h-8 items-center gap-1.5 rounded-input bg-accent-300/90 px-3 text-xs font-bold text-white backdrop-blur transition-colors hover:bg-accent-200 disabled:opacity-50"
           >
             {busy ? '추가 중' : '사진 추가'}
           </button>
@@ -572,7 +572,7 @@ function VenueCommunitySection({ venueId, canManage, board }: { venueId: string;
         {(['chat', 'board'] as const).map((t) => (
           <button key={t} type="button" onClick={() => setSub(t)}
             className={['flex-1 py-1.5 text-xs font-bold rounded-[6px] transition-colors',
-              sub === t ? 'bg-gold-300 text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
+              sub === t ? 'bg-accent-300 text-white' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
             {t === 'chat' ? '실시간 채팅' : '게시판'}
           </button>
         ))}
@@ -675,13 +675,13 @@ function SeasonLeaderBanner({ venueId, onRanking }: { venueId: string; onRanking
   if (!leader) return null;
   return (
     <button type="button" onClick={onRanking}
-      className="flex w-full items-center gap-2.5 rounded-card border border-gold-400/30 bg-gold-300/[0.06] px-3 py-2.5 text-left transition-colors hover:border-gold-400/50 active:scale-[0.99]">
+      className="flex w-full items-center gap-2.5 rounded-card border border-accent-400/30 bg-accent-300/[0.06] px-3 py-2.5 text-left transition-colors hover:border-accent-400/50 active:scale-[0.99]">
       <span className="text-lg" aria-hidden>👑</span>
       <div className="min-w-0 flex-1">
         <p className="text-2xs font-bold text-gold-300">🏆 현 시즌 선두 · {leader.seasonName}</p>
         <p className="truncate text-sm font-bold text-ink-primary">{leader.nickname}{leader.realName ? <span className="text-2xs font-normal text-ink-muted"> ({leader.realName})</span> : null}</p>
       </div>
-      <span className="shrink-0 text-sm font-bold tabular-nums text-gold-300">{leader.points}점</span>
+      <span className="shrink-0 text-sm font-bold tabular-nums text-accent-300">{leader.points}점</span>
       <span className="shrink-0 text-2xs text-ink-muted" aria-hidden>›</span>
     </button>
   );
@@ -839,13 +839,13 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
           {metrics.map((id) => (
             <button key={id} type="button" onClick={() => setMetric(id)}
               className={['flex-1 py-1.5 text-xs font-bold rounded-[6px] transition-colors',
-                cur === id ? 'bg-gold-300 text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
+                cur === id ? 'bg-accent-300 text-white' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
               {boardLabel(id, cfg)}
             </button>
           ))}
         </div>
       ) : (
-        <p className="text-sm font-bold text-gold-300">{boardLabel(cur, cfg)} 순위</p>
+        <p className="text-sm font-bold text-accent-300">{boardLabel(cur, cfg)} 순위</p>
       )}
       <p className="text-2xs text-ink-muted">{boardDesc(cur, cfg)} · 매장 커뮤니티 순위용 점수(금전적 가치 없음)</p>
 
@@ -857,18 +857,18 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
             const rank = slot === 1 ? 1 : slot === 0 ? 2 : 3;
             const { main: rMain, sub: rSub } = rankDisplay(e);
             const big = rank === 1;
-            const ring = rank === 1 ? 'border-gold-300/80 bg-gradient-to-b from-gold-300/[0.14] to-transparent'
+            const ring = rank === 1 ? 'border-accent-300/80 bg-gradient-to-b from-accent-300/[0.14] to-transparent'
               : rank === 2 ? 'border-slate-300/50 bg-gradient-to-b from-slate-300/[0.08] to-transparent'
               : 'border-amber-700/50 bg-gradient-to-b from-amber-700/[0.10] to-transparent';
-            const medal = rank === 1 ? 'bg-gold-300 text-ink-inverse' : rank === 2 ? 'bg-slate-300 text-ink-inverse' : 'bg-amber-700 text-white';
+            const medal = rank === 1 ? 'bg-accent-300 text-white' : rank === 2 ? 'bg-slate-300 text-white' : 'bg-amber-700 text-white';
             return (
               <div key={e.nickname} className={['flex-1 max-w-[9.5rem] rounded-card border p-2.5 text-center', ring, big ? 'pb-4 -translate-y-2 shadow-[0_0_18px_rgba(255,209,0,0.12)]' : ''].join(' ')}>
                 {big && <div aria-hidden className="text-base leading-none mb-1">👑</div>}
                 <span className={['mx-auto flex items-center justify-center rounded-full font-extrabold tabular-nums', medal, big ? 'w-8 h-8 text-sm' : 'w-6 h-6 text-2xs'].join(' ')}>{rank}</span>
-                <p className={['mt-1 font-bold uppercase tracking-wide', rank === 1 ? 'text-gold-300' : 'text-ink-secondary', 'text-[10px]'].join(' ')}>{titleOf(rank)}</p>
+                <p className={['mt-1 font-bold uppercase tracking-wide', rank === 1 ? 'text-accent-300' : 'text-ink-secondary', 'text-[10px]'].join(' ')}>{titleOf(rank)}</p>
                 <p className={['font-extrabold text-ink-primary truncate', big ? 'text-base' : 'text-sm'].join(' ')}>{rMain}</p>
                 {rSub && <p className="text-[10px] text-ink-muted">({rSub})</p>}
-                <p className={['font-bold tabular-nums', big ? 'text-sm text-gold-300' : 'text-xs text-ink-secondary'].join(' ')}>{fmtVal(e.value)}</p>
+                <p className={['font-bold tabular-nums', big ? 'text-sm text-accent-300' : 'text-xs text-ink-secondary'].join(' ')}>{fmtVal(e.value)}</p>
               </div>
             );
           })}
@@ -885,7 +885,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
               <span className="min-w-0 truncate text-sm font-semibold text-ink-primary">{rMain}</span>
               {rSub && <span className="shrink-0 text-2xs text-ink-muted">({rSub})</span>}
               <span className="ml-auto shrink-0 text-right">
-                <span className="text-sm font-bold tabular-nums text-gold-300">{fmtVal(e.value)}</span>
+                <span className="text-sm font-bold tabular-nums text-accent-300">{fmtVal(e.value)}</span>
                 {e.appearances > 0 && <span className="block text-xs leading-tight text-ink-muted">{e.appearances}회{e.bestPosition > 0 && e.bestPosition < 9999 ? ` · 최고 ${e.bestPosition}등` : ''}</span>}
               </span>
             </li>
@@ -902,7 +902,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
             const multi = evs.length > 1;
             return (
               <div key={ev || '_main'} className={multi ? 'mb-1.5' : ''}>
-                {multi && <p className="text-2xs font-bold text-gold-300 mb-1">{ev || '메인'}</p>}
+                {multi && <p className="text-2xs font-bold text-accent-300 mb-1">{ev || '메인'}</p>}
                 <div className="flex flex-wrap gap-1.5">
                   {group.map((e) => {
                     const { main: rMain, sub: rSub } = rankDisplay(e);
@@ -958,7 +958,7 @@ function FollowButton({ venueId, followerCount }: { venueId: string; followerCou
       className={[
         'shrink-0 inline-flex items-center justify-center gap-1 px-3 h-9 rounded-input text-xs font-semibold transition-colors disabled:opacity-60',
         following
-          ? 'bg-gold-300 text-ink-inverse'
+          ? 'bg-accent-300 text-white'
           : 'bg-surface-high text-ink-secondary border border-border-default hover:text-ink-primary',
       ].join(' ')}
     >
@@ -1009,7 +1009,7 @@ function AboutPanel({
             <button
               type="button"
               onClick={() => { setDraft(venue.description ?? ''); setEditing(true); }}
-              className="text-2xs text-ink-muted hover:text-gold-300"
+              className="text-2xs text-ink-muted hover:text-accent-300"
             >
               편집
             </button>
@@ -1044,7 +1044,7 @@ function AboutPanel({
             <p className="text-sm text-ink-secondary leading-relaxed whitespace-pre-wrap">{venue.description}</p>
           ) : editable ? (
             <button type="button" onClick={() => { setDraft(venue.description ?? ''); setEditing(true); }}
-              className="inline-flex h-9 items-center gap-1.5 rounded-input border border-dashed border-gold-400/40 bg-gold-300/[0.06] px-3.5 text-xs font-bold text-gold-300 hover:bg-gold-300/10 transition-colors">
+              className="inline-flex h-9 items-center gap-1.5 rounded-input border border-dashed border-accent-400/40 bg-accent-300/[0.06] px-3.5 text-xs font-bold text-accent-300 hover:bg-accent-300/10 transition-colors">
               + 소개 쓰기
             </button>
           ) : (
@@ -1060,7 +1060,7 @@ function AboutPanel({
           <h3 className="text-sm font-semibold text-ink-primary">매장 정보</h3>
           {editable && !infoEditing && (
             <button type="button" onClick={openInfoEdit}
-              className="text-2xs text-ink-muted hover:text-gold-300">정보 편집</button>
+              className="text-2xs text-ink-muted hover:text-accent-300">정보 편집</button>
           )}
         </div>
         {infoEditing ? (
@@ -1092,7 +1092,7 @@ function AboutPanel({
             <AddressRow address={addr} />
             {phone ? <PhoneRow phone={phone} /> : editable && (
               <button type="button" onClick={openInfoEdit}
-                className="inline-flex h-8 items-center gap-1.5 rounded-input border border-dashed border-gold-400/40 bg-gold-300/[0.06] px-3 text-2xs font-bold text-gold-300 hover:bg-gold-300/10 transition-colors">
+                className="inline-flex h-8 items-center gap-1.5 rounded-input border border-dashed border-accent-400/40 bg-accent-300/[0.06] px-3 text-2xs font-bold text-accent-300 hover:bg-accent-300/10 transition-colors">
                 + 전화번호 등록
               </button>
             )}
@@ -1225,7 +1225,7 @@ function KakaoMap({ address, name }: { address: string; name: string }) {
       <div className="rounded-card overflow-hidden border border-border-subtle" style={{ height: 200 }}>
         {loading || geocoding ? (
           <div className="w-full h-full flex items-center justify-center bg-surface-high">
-            <span className="w-5 h-5 rounded-full border-2 border-gold-300 border-t-transparent animate-spin" />
+            <span className="w-5 h-5 rounded-full border-2 border-accent-300 border-t-transparent animate-spin" />
           </div>
         ) : error || !coords ? (
           <div className="w-full h-full flex items-center justify-center bg-surface-high">
@@ -1249,7 +1249,7 @@ function KakaoMap({ address, name }: { address: string; name: string }) {
         href={`https://map.kakao.com/link/search/${encodeURIComponent(address)}`}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex items-center gap-1 text-2xs text-ink-muted hover:text-gold-300 transition-colors"
+        className="inline-flex items-center gap-1 text-2xs text-ink-muted hover:text-accent-300 transition-colors"
       >
         카카오맵에서 보기 ↗
       </a>
@@ -1283,14 +1283,14 @@ function PostersPanel({
   return (
     <div className="space-y-4">
       {/* ── 금일 포스터 아코디언 ───────────────────────────────── */}
-      <section className="rounded-card border border-gold-400/40 overflow-hidden">
+      <section className="rounded-card border border-accent-400/40 overflow-hidden">
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
-          className="w-full flex items-center justify-between px-3 py-2.5 bg-gradient-to-br from-gold-300/[0.08] to-transparent hover:from-gold-300/[0.12] transition-colors focus:outline-none"
+          className="w-full flex items-center justify-between px-3 py-2.5 bg-gradient-to-br from-accent-300/[0.08] to-transparent hover:from-accent-300/[0.12] transition-colors focus:outline-none"
         >
-          <span className="inline-flex items-center gap-1.5 text-sm font-bold text-gold-300">
+          <span className="inline-flex items-center gap-1.5 text-sm font-bold text-accent-300">
             금일 포스터
             <span className="text-2xs text-ink-muted font-normal">({todayPosters.length})</span>
           </span>
@@ -1307,14 +1307,14 @@ function PostersPanel({
 
         {/* 아코디언 본문 — 공지글 + 금일 포스터 */}
         {open && (
-          <div className="px-3 py-3 space-y-3 border-t border-gold-400/20 animate-slide-up">
+          <div className="px-3 py-3 space-y-3 border-t border-accent-400/20 animate-slide-up">
             {/* 공지글 (있을 때만) */}
             {notices.length > 0 && (
               <div className="space-y-1.5">
                 <p className="text-2xs font-bold text-ink-muted">공지</p>
                 <ul className="space-y-1.5">
                   {notices.slice(0, 3).map((n) => (
-                    <li key={n.id} className="px-2.5 py-2 rounded-input bg-surface-high border-l-2 border-gold-400/50">
+                    <li key={n.id} className="px-2.5 py-2 rounded-input bg-surface-high border-l-2 border-accent-400/50">
                       <p className="text-xs font-semibold text-ink-primary">{n.title}</p>
                       {n.body && <p className="text-2xs text-ink-muted line-clamp-2 mt-0.5">{n.body}</p>}
                     </li>
@@ -1331,7 +1331,7 @@ function PostersPanel({
                 {todayPosters.map((s) => (
                   <li key={s.id} onClick={() => onSelect?.(s)} role="button" tabIndex={0}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect?.(s); } }}
-                    className="flex items-center gap-3 p-2.5 rounded-input bg-surface-low border border-border-subtle cursor-pointer hover:border-gold-400/40 focus:outline-none focus-visible:border-gold-300 transition-colors">
+                    className="flex items-center gap-3 p-2.5 rounded-input bg-surface-low border border-border-subtle cursor-pointer hover:border-accent-400/40 focus:outline-none focus-visible:border-accent-300 transition-colors">
                     {/* 포스터 썸네일 */}
                     <div
                       className="w-10 h-14 shrink-0 rounded-input overflow-hidden flex items-center justify-center"
@@ -1347,7 +1347,7 @@ function PostersPanel({
                         {s.startTime} · 바이인 {s.buyIn.amount.toLocaleString()}
                       </p>
                     </div>
-                    <span className="shrink-0 text-2xs font-bold text-gold-300 bg-gold-300/15 px-1.5 py-0.5 rounded-badge">
+                    <span className="shrink-0 text-2xs font-bold text-accent-300 bg-accent-300/15 px-1.5 py-0.5 rounded-badge">
                       TODAY
                     </span>
                   </li>
@@ -1370,10 +1370,10 @@ function PostersPanel({
               return (
                 <li key={s.id} onClick={() => onSelect?.(s)} role="button" tabIndex={0}
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect?.(s); } }}
-                  className="flex items-center gap-3 p-3 rounded-input bg-surface-high border border-border-subtle cursor-pointer hover:border-gold-400/40 focus:outline-none focus-visible:border-gold-300 transition-colors">
+                  className="flex items-center gap-3 p-3 rounded-input bg-surface-high border border-border-subtle cursor-pointer hover:border-accent-400/40 focus:outline-none focus-visible:border-accent-300 transition-colors">
                   <div className="text-center shrink-0">
                     <p className="text-2xs text-ink-muted">{dows[d.getDay()]}</p>
-                    <p className="text-lg font-bold text-gold-300 tabular-nums leading-none">{d.getDate()}</p>
+                    <p className="text-lg font-bold text-accent-300 tabular-nums leading-none">{d.getDate()}</p>
                     <p className="text-2xs text-ink-muted">{d.getMonth() + 1}월</p>
                   </div>
                   <div className="flex-1 min-w-0">
@@ -1423,13 +1423,13 @@ function VenueNoticeBoard({ venueId, canManage }: { venueId: string; canManage: 
   if (notices.length === 0 && !canManage) return null;
 
   return (
-    <section className="rounded-card border border-gold-400/30 bg-gradient-to-br from-gold-300/[0.06] to-transparent overflow-hidden">
-      <header className="flex items-center justify-between px-3 py-2 border-b border-gold-400/20">
-        <h3 className="inline-flex items-center gap-1.5 text-xs font-bold text-gold-300">
+    <section className="rounded-card border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.06] to-transparent overflow-hidden">
+      <header className="flex items-center justify-between px-3 py-2 border-b border-accent-400/20">
+        <h3 className="inline-flex items-center gap-1.5 text-xs font-bold text-accent-300">
           매장 공지 <span className="text-2xs text-ink-muted font-normal">({notices.length})</span>
         </h3>
         {canManage && (
-          <button type="button" onClick={() => setOpen((v) => !v)} className="text-2xs text-gold-300 hover:text-gold-200 font-semibold">
+          <button type="button" onClick={() => setOpen((v) => !v)} className="text-2xs text-accent-300 hover:text-accent-200 font-semibold">
             {open ? '닫기' : '+ 공지 작성'}
           </button>
         )}
@@ -1481,10 +1481,10 @@ function SchedulesPanel({ schedules, onSelect }: { schedules: Schedule[]; onSele
         return (
           <li key={s.id} onClick={() => onSelect?.(s)} role="button" tabIndex={0}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect?.(s); } }}
-            className="flex items-center gap-3 p-3 rounded-input bg-surface-high border border-border-subtle cursor-pointer hover:border-gold-400/40 focus:outline-none focus-visible:border-gold-300 transition-colors">
+            className="flex items-center gap-3 p-3 rounded-input bg-surface-high border border-border-subtle cursor-pointer hover:border-accent-400/40 focus:outline-none focus-visible:border-accent-300 transition-colors">
             <div className="text-center shrink-0">
               <p className="text-2xs text-ink-muted">{dows[d.getDay()]}</p>
-              <p className="text-lg font-bold text-gold-300 tabular-nums leading-none">{d.getDate()}</p>
+              <p className="text-lg font-bold text-accent-300 tabular-nums leading-none">{d.getDate()}</p>
               <p className="text-2xs text-ink-muted">{d.getMonth() + 1}월</p>
             </div>
             <div className="flex-1 min-w-0">

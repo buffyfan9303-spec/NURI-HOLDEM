@@ -53,7 +53,7 @@ export default function ActivityBadges({ points, visits, upcoming }: { points: n
         <div className="rounded-input border border-border-subtle bg-surface-high p-2.5">
           <p className="mb-1 text-2xs text-ink-muted">매장 방문 점수</p>
           <div className="flex items-baseline gap-1.5">
-            <span className="text-base font-extrabold leading-none text-gold-300 tabular-nums">{visits}</span>
+            <span className="text-base font-extrabold leading-none text-accent-300 tabular-nums">{visits}</span>
             <span className="text-2xs text-ink-muted">회 방문{upcoming > 0 ? ` · 예정 ${upcoming}` : ''}</span>
           </div>
         </div>

@@ -144,7 +144,7 @@ function ConsentSection({ c, allChecked, set, toggleAll, onView }: ConsentSectio
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="mt-0.5 accent-gold-300 shrink-0"
+        className="mt-0.5 accent-accent-300 shrink-0"
       />
       <div className="flex-1 min-w-0 flex items-start justify-between gap-2">
         <label
@@ -163,7 +163,7 @@ function ConsentSection({ c, allChecked, set, toggleAll, onView }: ConsentSectio
           <button
             type="button"
             onClick={() => onView(doc)}
-            className="shrink-0 text-2xs text-gold-300 hover:text-gold-200 underline decoration-dotted underline-offset-2 transition-colors"
+            className="shrink-0 text-2xs text-accent-300 hover:text-accent-200 underline decoration-dotted underline-offset-2 transition-colors"
           >
             보기
           </button>
@@ -178,7 +178,7 @@ function ConsentSection({ c, allChecked, set, toggleAll, onView }: ConsentSectio
       <div className={[
         'flex items-center gap-2 p-2.5 rounded-input border transition-colors cursor-pointer',
         allChecked
-          ? 'bg-gold-300/10 border-gold-400/40'
+          ? 'bg-accent-300/10 border-accent-400/40'
           : 'bg-surface-high border-border-default',
       ].join(' ')}
         onClick={() => toggleAll(!allChecked)}
@@ -188,11 +188,11 @@ function ConsentSection({ c, allChecked, set, toggleAll, onView }: ConsentSectio
           checked={allChecked}
           onChange={(e) => toggleAll(e.target.checked)}
           onClick={(e) => e.stopPropagation()}
-          className="accent-gold-300 shrink-0"
+          className="accent-accent-300 shrink-0"
         />
         <span className={[
           'text-xs font-semibold select-none',
-          allChecked ? 'text-gold-300' : 'text-ink-primary',
+          allChecked ? 'text-accent-300' : 'text-ink-primary',
         ].join(' ')}>
           전체 동의 (필수 + 선택 포함)
         </span>
@@ -246,7 +246,7 @@ export default function AuthModal({ open, onClose, initialMode = 'login' }: Auth
             className={[
               'py-3 text-xs sm:text-sm font-medium transition-colors border-b-2 -mb-px',
               mode === m
-                ? 'border-gold-300 text-gold-300'
+                ? 'border-accent-300 text-accent-300'
                 : 'border-transparent text-ink-muted hover:text-ink-secondary',
             ].join(' ')}
           >
@@ -301,7 +301,7 @@ function LoginForm({ onClose, onForgot }: { onClose: () => void; onForgot: () =>
         value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
 
       <div className="text-right -mt-1">
-        <button type="button" onClick={onForgot} className="text-2xs text-ink-muted hover:text-gold-300 transition-colors">
+        <button type="button" onClick={onForgot} className="text-2xs text-ink-muted hover:text-accent-300 transition-colors">
           비밀번호를 잊으셨나요?
         </button>
       </div>
@@ -366,7 +366,7 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
         <button type="submit" disabled={loading} className="btn-primary w-full disabled:opacity-60">
           {loading ? '발송 중…' : '인증번호 받기'}
         </button>
-        <button type="button" onClick={onBack} className="w-full text-2xs text-ink-muted hover:text-gold-300 transition-colors">
+        <button type="button" onClick={onBack} className="w-full text-2xs text-ink-muted hover:text-accent-300 transition-colors">
           로그인으로 돌아가기
         </button>
       </form>
@@ -395,8 +395,8 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
         {loading ? '재설정 중…' : '비밀번호 재설정'}
       </button>
       <div className="flex justify-between text-2xs">
-        <button type="button" onClick={() => setStep('email')} className="text-ink-muted hover:text-gold-300 transition-colors">코드 재전송</button>
-        <button type="button" onClick={onBack} className="text-ink-muted hover:text-gold-300 transition-colors">로그인으로</button>
+        <button type="button" onClick={() => setStep('email')} className="text-ink-muted hover:text-accent-300 transition-colors">코드 재전송</button>
+        <button type="button" onClick={onBack} className="text-ink-muted hover:text-accent-300 transition-colors">로그인으로</button>
       </div>
     </form>
   );
@@ -531,11 +531,11 @@ function SignupOwnerForm({ onDone }: { onDone: () => void }) {
     <>
       <form onSubmit={submit} className="space-y-3">
         {/* 안내 배너 */}
-        <div className="flex items-start gap-2 p-3 rounded-input bg-gold-300/10 border border-gold-400/30">
+        <div className="flex items-start gap-2 p-3 rounded-input bg-accent-300/10 border border-accent-400/30">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#FFD100" strokeWidth="1.5" className="shrink-0 mt-0.5" aria-hidden>
             <circle cx="8" cy="8" r="6.5"/><line x1="8" y1="5" x2="8" y2="9"/><circle cx="8" cy="11.5" r="0.5" fill="#FFD100"/>
           </svg>
-          <p className="text-xs text-gold-300 leading-relaxed">
+          <p className="text-xs text-accent-300 leading-relaxed">
             매장 업주는 <strong>운영자 승인</strong> 후 포스터 업로드 권한이 활성화됩니다.<br/>
             승인 처리는 영업일 기준 1~2일 소요됩니다.
           </p>

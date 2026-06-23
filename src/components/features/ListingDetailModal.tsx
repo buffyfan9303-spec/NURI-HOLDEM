@@ -101,7 +101,7 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete }:
         {/* 제목 + 가격 */}
         <section>
           <h1 className="text-lg font-bold text-ink-primary leading-snug">{listing.title}</h1>
-          <p className="mt-1.5 text-3xl font-extrabold text-gold-300 tabular-nums leading-none">
+          <p className="mt-1.5 text-3xl font-extrabold text-accent-300 tabular-nums leading-none">
             {listing.price.toLocaleString()}
           </p>
         </section>
@@ -303,7 +303,7 @@ function SellerChatModal({
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-xs text-ink-primary truncate">{listing.title}</p>
-          <p className="text-2xs font-bold text-gold-300 tabular-nums">{listing.price.toLocaleString()}</p>
+          <p className="text-2xs font-bold text-accent-300 tabular-nums">{listing.price.toLocaleString()}</p>
         </div>
       </div>
 

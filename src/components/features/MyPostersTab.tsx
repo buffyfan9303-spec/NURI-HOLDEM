@@ -86,7 +86,7 @@ export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete, on
         const cntOf = (k: string) => myPosters.filter((p) => isoOf(p) === k).length;
         const shown = dateFilter ? myPosters.filter((p) => isoOf(p) === dateFilter) : myPosters;
         const dow = ['일', '월', '화', '수', '목', '금', '토'];
-        const chip = (on: boolean) => ['shrink-0 rounded-input px-2.5 py-1.5 text-2xs font-bold transition-colors', on ? 'bg-gold-300 text-ink-inverse' : 'bg-surface-high text-ink-secondary hover:text-ink-primary border border-border-default'].join(' ');
+        const chip = (on: boolean) => ['shrink-0 rounded-input px-2.5 py-1.5 text-2xs font-bold transition-colors', on ? 'bg-accent-300 text-white' : 'bg-surface-high text-ink-secondary hover:text-ink-primary border border-border-default'].join(' ');
         return (
           <>
             {/* 날짜 선택 — 예약을 날짜별로 관리(장부 날짜 선택과 동일한 방식) */}
@@ -95,7 +95,7 @@ export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete, on
               {dk.map((k) => { const d = new Date(k + 'T00:00:00'); return (
                 <button key={k} type="button" onClick={() => setDateFilter(k)} className={chip(dateFilter === k)}>{d.getMonth() + 1}/{d.getDate()}({dow[d.getDay()]}) {cntOf(k)}</button>
               ); })}
-              <label className="relative shrink-0 cursor-pointer rounded-input border border-dashed border-border-default px-2.5 py-1.5 text-2xs font-bold text-ink-secondary hover:border-gold-400/50">
+              <label className="relative shrink-0 cursor-pointer rounded-input border border-dashed border-border-default px-2.5 py-1.5 text-2xs font-bold text-ink-secondary hover:border-accent-400/50">
                 📅 날짜
                 <input type="date" value={dateFilter || ''} onChange={(e) => setDateFilter(e.target.value)} className="absolute inset-0 cursor-pointer opacity-0" aria-label="날짜 직접 선택" />
               </label>
@@ -175,7 +175,7 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUse
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1 mb-0.5">
-            {schedule.isPremium && <span className="rounded-badge bg-gold-300 px-1 py-0.5 text-2xs font-bold text-ink-inverse leading-none">TOP</span>}
+            {schedule.isPremium && <span className="rounded-badge bg-accent-300 px-1 py-0.5 text-2xs font-bold text-white leading-none">TOP</span>}
             {!schedule.approved && <span className="rounded-badge bg-amber-500/15 text-amber-400 border border-amber-500/30 px-1 py-0.5 text-2xs font-semibold leading-none">승인대기</span>}
             <span className="rounded-badge bg-surface-high text-ink-secondary border border-border-default px-1 py-0.5 text-2xs font-semibold leading-none">{schedule.format}</span>
           </div>
@@ -190,7 +190,7 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUse
               {ops && (
                 <>
                   <span className="rounded-badge bg-surface-high px-1.5 py-0.5 text-ink-secondary">바인 {ops.buyinCount}</span>
-                  <span className="rounded-badge bg-gold-300/15 px-1.5 py-0.5 text-gold-300">매출 {ops.revenueMan.toLocaleString()}만</span>
+                  <span className="rounded-badge bg-accent-300/15 px-1.5 py-0.5 text-accent-300">매출 {ops.revenueMan.toLocaleString()}만</span>
                   {ops.closed && ops.hasRankings && (
                     <span className="rounded-badge bg-surface-high px-1.5 py-0.5 text-ink-muted">마감 · 순위 ✓</span>
                   )}
@@ -201,7 +201,7 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUse
         </div>
         {/* PC: 우측 인라인 액션(기존). 모바일은 아래 하단 바로 분리 — 줄바꿈/세로 쌓임 방지 */}
         <div className="hidden sm:flex items-center gap-1 shrink-0">
-          <button type="button" onClick={toggle} className="btn-ghost text-xs px-2 text-gold-300">예약관리{reservations ? `(${reservations.length})` : ''} {open ? '▲' : '▼'}</button>
+          <button type="button" onClick={toggle} className="btn-ghost text-xs px-2 text-accent-300">예약관리{reservations ? `(${reservations.length})` : ''} {open ? '▲' : '▼'}</button>
           {onLedgerAt && (
             <button type="button" onClick={toggleLedgers}
               title={ledgerDate ? '연결된 장부 목록 보기' : '이 게임으로 장부 등록'}
@@ -223,7 +223,7 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUse
             </>
           ) : (
             <>
-              <button type="button" onClick={onEdit} className="btn-ghost text-xs px-2 text-gold-300">수정</button>
+              <button type="button" onClick={onEdit} className="btn-ghost text-xs px-2 text-accent-300">수정</button>
               <button type="button" onClick={() => setConfirming(true)} className="btn-ghost text-xs px-2 hover:text-danger-light">삭제</button>
             </>
           )}
@@ -239,7 +239,7 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUse
           </button>
         )}
         <div className="flex items-stretch divide-x divide-border-subtle">
-          <button type="button" onClick={toggle} className="flex-1 py-2.5 text-xs font-semibold text-gold-300 active:bg-surface-high/60">예약 {reservations ? reservations.length : (resCount ?? 0) || ''}{open ? ' ▲' : ' ▼'}</button>
+          <button type="button" onClick={toggle} className="flex-1 py-2.5 text-xs font-semibold text-accent-300 active:bg-surface-high/60">예약 {reservations ? reservations.length : (resCount ?? 0) || ''}{open ? ' ▲' : ' ▼'}</button>
           {onLedgerAt && (
             <button type="button" onClick={toggleLedgers}
               className={['flex-1 py-2.5 text-xs font-semibold active:bg-surface-high/60', ledgerDate ? 'text-emerald-400' : 'text-ink-secondary'].join(' ')}>
@@ -253,7 +253,7 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUse
             </>
           ) : (
             <>
-              <button type="button" onClick={onEdit} className="flex-1 py-2.5 text-xs font-semibold text-gold-300 active:bg-surface-high/60">수정</button>
+              <button type="button" onClick={onEdit} className="flex-1 py-2.5 text-xs font-semibold text-accent-300 active:bg-surface-high/60">수정</button>
               <button type="button" onClick={() => setConfirming(true)} className="flex-1 py-2.5 text-xs font-semibold text-ink-muted active:bg-surface-high/60 hover:text-danger-light">삭제</button>
             </>
           )}
@@ -276,7 +276,7 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUse
                 </button>
               ))}
               <button type="button" onClick={() => onLedgerAt(null)}
-                className="w-full rounded-input border border-dashed border-border-default px-2.5 py-2 text-2xs font-semibold text-gold-300 active:opacity-80">
+                className="w-full rounded-input border border-dashed border-border-default px-2.5 py-2 text-2xs font-semibold text-accent-300 active:opacity-80">
                 + 이 포스터로 새 장부 (다른 날짜는 장부에서 날짜 변경)
               </button>
             </>
@@ -296,7 +296,7 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUse
                 return (
                   <button key={g.id} type="button"
                     onClick={() => { setResSchedId(g.id); setReservations(null); loadRes(g.id); }}
-                    className={['rounded-input px-2 py-1 text-2xs font-bold transition-colors', on ? 'bg-gold-300 text-ink-inverse' : 'bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
+                    className={['rounded-input px-2 py-1 text-2xs font-bold transition-colors', on ? 'bg-accent-300 text-white' : 'bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
                     {+mm}/{+dd}
                   </button>
                 );
@@ -311,7 +311,7 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUse
             <>
               <div className="flex items-center justify-between">
                 <p className="text-2xs text-ink-muted">예약 {reservations.length}명</p>
-                <button type="button" onClick={() => exportReservationsCsv(schedule, reservations)} className="btn-ghost text-2xs px-2 text-gold-300">CSV 내보내기</button>
+                <button type="button" onClick={() => exportReservationsCsv(schedule, reservations)} className="btn-ghost text-2xs px-2 text-accent-300">CSV 내보내기</button>
               </div>
               {reservations.map((r, i) => (
                 <ReservationItem key={r.id || i} idx={i + 1} res={r} venueId={venueId}
@@ -343,12 +343,12 @@ function ReservationItem({ idx, res, venueId, visited, regular, reserveCount, on
   return (
     <div className="rounded-input border border-border-subtle bg-surface-low">
       <div className="flex items-center gap-2 px-2.5 py-2">
-        <span className="w-5 text-center text-2xs font-bold text-gold-300 tabular-nums">{idx}</span>
+        <span className="w-5 text-center text-2xs font-bold text-accent-300 tabular-nums">{idx}</span>
         <div className="flex-1 min-w-0">
           <p className="flex flex-wrap items-center gap-1.5 text-sm font-semibold text-ink-primary">
             <span className="min-w-0 truncate">{res.displayName}</span>
             {visited && <span className="shrink-0 rounded-badge bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-bold text-emerald-300">✓ 방문</span>}
-            {regular && <span className="shrink-0 text-2xs font-bold text-gold-300 bg-gold-300/15 px-1.5 py-0.5 rounded-badge">단골 {reserveCount}회</span>}
+            {regular && <span className="shrink-0 text-2xs font-bold text-accent-300 bg-accent-300/15 px-1.5 py-0.5 rounded-badge">단골 {reserveCount}회</span>}
           </p>
           {/* 예약 접수 일시 — 업주 전용 화면이라 노출 OK */}
           <p className="text-[10px] text-ink-muted tabular-nums mt-0.5">
@@ -356,7 +356,7 @@ function ReservationItem({ idx, res, venueId, visited, regular, reserveCount, on
           </p>
         </div>
         {regular && <button type="button" onClick={openCustomer} className="btn-ghost text-2xs px-2 text-sky-300">{showCustomer ? '닫기' : '고객정보'}</button>}
-        <button type="button" onClick={onRename} className="text-ink-muted hover:text-gold-300 text-2xs px-1">수정</button>
+        <button type="button" onClick={onRename} className="text-ink-muted hover:text-accent-300 text-2xs px-1">수정</button>
         <button type="button" onClick={onDelete} className="text-ink-muted hover:text-danger-light text-2xs px-1">삭제</button>
       </div>
       {showCustomer && (
@@ -379,7 +379,7 @@ function ReservationItem({ idx, res, venueId, visited, regular, reserveCount, on
 function Cell({ label, value, gold }: { label: string; value: string; gold?: boolean }) {
   return (
     <div className="rounded bg-surface-base border border-border-subtle py-1.5">
-      <p className={['text-sm font-bold tabular-nums leading-none', gold ? 'text-gold-300' : 'text-ink-primary'].join(' ')}>{value}</p>
+      <p className={['text-sm font-bold tabular-nums leading-none', gold ? 'text-accent-300' : 'text-ink-primary'].join(' ')}>{value}</p>
       <p className="text-[10px] text-ink-muted mt-0.5">{label}</p>
     </div>
   );

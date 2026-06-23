@@ -29,7 +29,7 @@ export default function OutsCalc() {
               onClick={() => setStreet(s.id)}
               className={[
                 'flex-1 h-9 rounded-input text-2xs font-bold leading-none border transition-colors focus:outline-none',
-                street === s.id ? 'bg-gold-300 border-gold-300 text-ink-inverse' : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary',
+                street === s.id ? 'bg-accent-300 border-accent-300 text-white' : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary',
               ].join(' ')}
             >
               {s.label}

@@ -42,8 +42,8 @@ export default function BlindBuilder() {
             {levels.map((l, i) => {
               if (l.kind === 'break') {
                 return (
-                  <tr key={i} className="border-t border-border-subtle bg-gold-300/[0.06]">
-                    <td colSpan={4} className="py-1.5 px-2 text-center font-bold text-gold-300">BREAK · {l.minutes}분</td>
+                  <tr key={i} className="border-t border-border-subtle bg-accent-300/[0.06]">
+                    <td colSpan={4} className="py-1.5 px-2 text-center font-bold text-accent-300">BREAK · {l.minutes}분</td>
                   </tr>
                 );
               }

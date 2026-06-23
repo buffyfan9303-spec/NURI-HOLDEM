@@ -77,8 +77,8 @@ export default function DealerShiftsModal({ open, onClose, venueId, monthKey }: 
 
         {/* 급여 명세 */}
         {payroll.length > 0 && (
-          <div className="rounded-input border border-gold-400/30 bg-gold-300/[0.05] p-2.5">
-            <p className="mb-1 text-2xs font-bold text-gold-300">이번 달 급여 명세 · 합계 {wonToMan(totalPay)}만원</p>
+          <div className="rounded-input border border-accent-400/30 bg-accent-300/[0.05] p-2.5">
+            <p className="mb-1 text-2xs font-bold text-accent-300">이번 달 급여 명세 · 합계 {wonToMan(totalPay)}만원</p>
             <ul className="space-y-1">
               {payroll.map((p) => (
                 <li key={p.dealer} className="flex items-center justify-between text-2xs">

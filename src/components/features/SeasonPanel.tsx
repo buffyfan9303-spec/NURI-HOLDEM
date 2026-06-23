@@ -14,7 +14,7 @@ import { subscribeRankings } from '../../api/rankings';
 const today = () => new Date().toLocaleDateString('en-CA');
 const addDays = (iso: string, d: number) => { const t = new Date(iso); t.setDate(t.getDate() + d); return t.toLocaleDateString('en-CA'); };
 const daysLeft = (endsOn: string) => Math.max(0, Math.ceil((new Date(endsOn + 'T23:59:59').getTime() - Date.now()) / 86400000));
-const medal = (r: number) => (r === 1 ? 'bg-gold-300 text-ink-inverse' : r === 2 ? 'bg-slate-300 text-ink-inverse' : r === 3 ? 'bg-amber-700 text-white' : 'bg-surface-float text-ink-secondary');
+const medal = (r: number) => (r === 1 ? 'bg-accent-300 text-white' : r === 2 ? 'bg-slate-300 text-white' : r === 3 ? 'bg-amber-700 text-white' : 'bg-surface-float text-ink-secondary');
 
 export default function SeasonPanel({ venueId, canManage = false, venueName }: { venueId: string; canManage?: boolean; venueName?: string }) {
   const toast = useToast();
@@ -65,7 +65,7 @@ export default function SeasonPanel({ venueId, canManage = false, venueName }: {
       <span className={['flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-2xs font-extrabold tabular-nums', medal(s.rank)].join(' ')}>{s.rank}</span>
       <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{s.nickname}{s.realName ? <span className="text-2xs font-normal text-ink-muted"> ({s.realName})</span> : null}</span>
       <span className="shrink-0 text-2xs text-ink-muted tabular-nums">{s.appearances}회 · 최고 {s.bestPosition}위</span>
-      <span className="shrink-0 text-xs font-bold tabular-nums text-gold-300">{s.points}점</span>
+      <span className="shrink-0 text-xs font-bold tabular-nums text-accent-300">{s.points}점</span>
     </li>
   );
 
@@ -94,10 +94,10 @@ export default function SeasonPanel({ venueId, canManage = false, venueName }: {
 
       {/* 현재 시즌 + 랭킹 */}
       {active ? (
-        <div className="rounded-card border border-gold-400/30 bg-gold-300/[0.04] p-3">
+        <div className="rounded-card border border-accent-400/30 bg-accent-300/[0.04] p-3">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
-              <p className="truncate text-sm font-bold text-gold-300">{active.name}</p>
+              <p className="truncate text-sm font-bold text-accent-300">{active.name}</p>
               <p className="text-2xs text-ink-muted">{active.startsOn} ~ {active.endsOn} · <b className="text-ink-secondary">D-{daysLeft(active.endsOn)}</b></p>
             </div>
             {canManage && <button type="button" onClick={doEnd} disabled={busy} className="btn-ghost shrink-0 px-2.5 py-1 text-2xs text-amber-300 disabled:opacity-50">시즌 종료</button>}
@@ -114,17 +114,17 @@ export default function SeasonPanel({ venueId, canManage = false, venueName }: {
 
       {/* 🏆 역대 챔피언(명예의 전당) */}
       {hof.length > 0 && (
-        <div className="rounded-card border border-gold-400/30 bg-gold-300/[0.05] p-3">
+        <div className="rounded-card border border-accent-400/30 bg-accent-300/[0.05] p-3">
           <p className="mb-2 text-sm font-bold text-gold-300">🏆 역대 챔피언</p>
           <ul className="space-y-1.5">
             {hof.map((h) => (
-              <li key={h.seasonId} className="flex items-center gap-2.5 rounded-input border border-gold-400/20 bg-surface-low px-3 py-2">
+              <li key={h.seasonId} className="flex items-center gap-2.5 rounded-input border border-accent-400/20 bg-surface-low px-3 py-2">
                 <span className="shrink-0 text-base" aria-hidden>👑</span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-bold text-ink-primary">{h.nickname}{h.realName ? <span className="text-2xs font-normal text-ink-muted"> ({h.realName})</span> : null}</p>
                   <p className="truncate text-2xs text-ink-muted">{h.seasonName} · {h.endsOn}</p>
                 </div>
-                <span className="shrink-0 text-xs font-bold tabular-nums text-gold-300">{h.points}점</span>
+                <span className="shrink-0 text-xs font-bold tabular-nums text-accent-300">{h.points}점</span>
                 <button type="button" title="챔피언 카드 공유"
                   onClick={async () => {
                     const d = { nickname: h.nickname, seasonName: h.seasonName, venueName, points: h.points };

@@ -54,7 +54,7 @@ export default function ReportModal({ open, onClose, target }: ReportModalProps)
           {REASONS.map((r) => (
             <button key={r} type="button" onClick={() => setReason(r)}
               className={['min-h-[44px] px-2 text-xs font-semibold rounded-input border transition-colors',
-                reason === r ? 'bg-gold-300/20 border-gold-300 text-gold-300' : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary'].join(' ')}>
+                reason === r ? 'bg-accent-300/20 border-accent-300 text-accent-300' : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary'].join(' ')}>
               {r}
             </button>
           ))}

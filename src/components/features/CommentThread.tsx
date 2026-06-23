@@ -63,7 +63,7 @@ function CommentItem({ marks = {}, titleOf,
             <span className="text-xs font-semibold text-ink-primary">{marks[comment.userId] ?? ''}{comment.userName}</span>
             <TitleChip points={titleOf?.(comment.userId)} />
             {comment.isOwner && (
-              <span className="text-2xs font-bold text-gold-300 bg-gold-300/15 px-1.5 py-0.5 rounded-badge">매장 답글</span>
+              <span className="text-2xs font-bold text-accent-300 bg-accent-300/15 px-1.5 py-0.5 rounded-badge">매장 답글</span>
             )}
             {comment.userRole === 'admin' && (
               <span className="text-2xs font-bold text-danger-light bg-danger/15 px-1.5 py-0.5 rounded-badge">운영자</span>
@@ -77,7 +77,7 @@ function CommentItem({ marks = {}, titleOf,
             <button
               type="button"
               onClick={() => { if (!loggedIn) { promptLogin(); return; } setShowReplyBox((v) => !v); }}
-              className="text-2xs text-ink-muted hover:text-gold-300 transition-colors"
+              className="text-2xs text-ink-muted hover:text-accent-300 transition-colors"
             >
               {showReplyBox ? '취소' : '답글'}
             </button>

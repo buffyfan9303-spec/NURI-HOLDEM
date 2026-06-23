@@ -74,12 +74,12 @@ export default function VenueCustomizePanel({ venueId }: { venueId: string }) {
             const t = PAGE_TABS.find((x) => x.key === k)!;
             return (
               <li key={k} className="flex items-center gap-2 rounded-input border border-border-subtle bg-surface-high px-2.5 py-1.5">
-                <span className="w-5 text-center text-2xs font-bold text-gold-300 tabular-nums">{i + 1}</span>
+                <span className="w-5 text-center text-2xs font-bold text-accent-300 tabular-nums">{i + 1}</span>
                 <span className="flex-1 text-sm font-semibold text-ink-primary">{t.label}</span>
                 <button type="button" aria-label="위로" disabled={i === 0} onClick={() => move(k, -1)}
-                  className="h-7 w-7 rounded-input border border-border-default text-ink-secondary disabled:opacity-30 hover:border-gold-400/50">↑</button>
+                  className="h-7 w-7 rounded-input border border-border-default text-ink-secondary disabled:opacity-30 hover:border-accent-400/50">↑</button>
                 <button type="button" aria-label="아래로" disabled={i === order.length - 1} onClick={() => move(k, 1)}
-                  className="h-7 w-7 rounded-input border border-border-default text-ink-secondary disabled:opacity-30 hover:border-gold-400/50">↓</button>
+                  className="h-7 w-7 rounded-input border border-border-default text-ink-secondary disabled:opacity-30 hover:border-accent-400/50">↓</button>
               </li>
             );
           })}
@@ -89,7 +89,7 @@ export default function VenueCustomizePanel({ venueId }: { venueId: string }) {
       {/* 내 매장 링크(커스텀 슬러그) — nuriholdem.com/s/<원하는이름> */}
       <SlugEditor venueId={venueId} />
 
-      <p className="text-2xs text-ink-muted">순위 탭에 보일 <span className="font-semibold text-gold-300">랭킹 보드 종류·1~3등 칭호·기준 점수·포인트 지급</span>은 「매장 랭킹」 탭에서 설정합니다.</p>
+      <p className="text-2xs text-ink-muted">순위 탭에 보일 <span className="font-semibold text-accent-300">랭킹 보드 종류·1~3등 칭호·기준 점수·포인트 지급</span>은 「매장 랭킹」 탭에서 설정합니다.</p>
 
       <button type="button" onClick={save} disabled={saving} className="btn-primary w-full text-sm py-2.5 disabled:opacity-50">
         {saving ? '저장 중…' : '탭 순서 저장'}
@@ -151,7 +151,7 @@ function SlugEditor({ venueId }: { venueId: string }) {
       {check === 'taken' && <p className="text-2xs font-semibold text-danger-light">✕ 이미 사용 중인 링크입니다 — 다른 이름을 시도하세요.</p>}
       {check === 'invalid' && <p className="text-2xs font-semibold text-danger-light">✕ 영문 소문자·숫자·하이픈(-)으로 2~20자여야 합니다.</p>}
       <p className="text-[10px] text-ink-muted">
-        {saved ? <>현재 링크: <span className="font-bold text-gold-300">nuriholdem.com/s/{saved}</span> · 비우고 저장하면 기본 링크로 돌아갑니다.</>
+        {saved ? <>현재 링크: <span className="font-bold text-accent-300">nuriholdem.com/s/{saved}</span> · 비우고 저장하면 기본 링크로 돌아갑니다.</>
           : '설정하면 매장 페이지 「링크 공유」가 이 주소로 나갑니다. 기존 기본 링크도 계속 작동해요.'}
       </p>
     </section>
@@ -257,12 +257,12 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
               return (
                 <button key={m} type="button" onClick={() => toggleMetric(m)}
                   className={['rounded-input border p-2.5 text-left transition-colors',
-                    on ? 'border-gold-400/60 bg-gold-300/[0.08]' : 'border-border-default bg-surface-high hover:border-gold-400/40'].join(' ')}>
+                    on ? 'border-accent-400/60 bg-accent-300/[0.08]' : 'border-border-default bg-surface-high hover:border-accent-400/40'].join(' ')}>
                   <span className="flex items-center gap-1.5">
-                    <span className={['h-3.5 w-3.5 rounded-full border flex items-center justify-center', on ? 'border-gold-300 bg-gold-300' : 'border-ink-muted'].join(' ')}>
+                    <span className={['h-3.5 w-3.5 rounded-full border flex items-center justify-center', on ? 'border-accent-300 bg-accent-300' : 'border-ink-muted'].join(' ')}>
                       {on && <Icon name="check" size={10} className="text-ink-inverse" />}
                     </span>
-                    <span className={['text-xs font-bold', on ? 'text-gold-300' : 'text-ink-primary'].join(' ')}>{boardLabel(m, cfg)}</span>
+                    <span className={['text-xs font-bold', on ? 'text-accent-300' : 'text-ink-primary'].join(' ')}>{boardLabel(m, cfg)}</span>
                     {isCustomBoard(m) && <span className="rounded-badge bg-violet-500/15 px-1 py-0.5 text-[9px] font-bold text-violet-300">커스텀</span>}
                   </span>
                   <span className="mt-1 block text-[10px] leading-snug text-ink-muted">{boardDesc(m, cfg)}</span>
@@ -288,7 +288,7 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
                     {BOARD_PERIOD_LABEL[b.period ?? 'all']}{b.period === 'season' && b.seasonStart ? ` · ${b.seasonStart.slice(5)}~` : ''}
                   </span>
                   {b.period === 'season' && (
-                    <button type="button" onClick={() => resetSeason(b.key)} className="shrink-0 rounded-badge border border-gold-400/40 px-1.5 py-0.5 text-[9px] font-bold text-gold-300 hover:bg-gold-300/10">시즌 리셋</button>
+                    <button type="button" onClick={() => resetSeason(b.key)} className="shrink-0 rounded-badge border border-accent-400/40 px-1.5 py-0.5 text-[9px] font-bold text-accent-300 hover:bg-accent-300/10">시즌 리셋</button>
                   )}
                   <button type="button" onClick={() => removeBoard(b.key)} aria-label="보드 삭제" className="shrink-0 text-ink-muted hover:text-danger-light"><Icon name="close" size={13} /></button>
                 </li>
@@ -410,7 +410,7 @@ export function ScorePointsPanel({ venueId, customBoards = [] }: { venueId: stri
     <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-3">
       <div>
         <h3 className="text-sm font-bold text-ink-primary">포인트 지급 · 차감</h3>
-        <p className="text-2xs text-ink-muted mt-0.5">이벤트·미션 보상 등 자유 점수를 <span className="font-semibold text-gold-300">날짜·보드별</span>로 매일 기록합니다. 커스텀 보드는 여기서 입력한 명단으로만 순위가 만들어집니다.</p>
+        <p className="text-2xs text-ink-muted mt-0.5">이벤트·미션 보상 등 자유 점수를 <span className="font-semibold text-accent-300">날짜·보드별</span>로 매일 기록합니다. 커스텀 보드는 여기서 입력한 명단으로만 순위가 만들어집니다.</p>
       </div>
       <div className="flex flex-wrap gap-1.5">
         <select value={board} onChange={(e) => setBoard(e.target.value)} className="input w-full text-sm sm:w-auto sm:min-w-[10rem]">
@@ -427,7 +427,7 @@ export function ScorePointsPanel({ venueId, customBoards = [] }: { venueId: stri
             placeholder="이름(닉네임)" maxLength={30} className="input w-full text-sm" />
           {/* 가입 회원 자동완성 — 클릭 시 닉네임으로 채움 */}
           {suggestOpen && suggest.length > 0 && (
-            <ul className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-input border border-gold-400/40 bg-surface-base shadow-lg">
+            <ul className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-input border border-accent-400/40 bg-surface-base shadow-lg">
               {suggest.map((s) => {
                 const fill = s.nickname || s.realName || '';
                 return (
@@ -458,10 +458,10 @@ export function ScorePointsPanel({ venueId, customBoards = [] }: { venueId: stri
             {rows.map((r) => (
               <li key={r.id} className="flex items-center gap-2 rounded-input border border-border-subtle bg-surface-high px-2.5 py-1.5">
                 <span className="shrink-0 text-[10px] tabular-nums text-ink-muted">{r.entryDate.slice(5)}</span>
-                <span className={['shrink-0 rounded-badge px-1.5 py-0.5 text-[9px] font-bold', r.boardKey ? 'bg-violet-500/15 text-violet-300' : 'bg-gold-300/15 text-gold-300'].join(' ')}>{boardName(r.boardKey)}</span>
+                <span className={['shrink-0 rounded-badge px-1.5 py-0.5 text-[9px] font-bold', r.boardKey ? 'bg-violet-500/15 text-violet-300' : 'bg-accent-300/15 text-accent-300'].join(' ')}>{boardName(r.boardKey)}</span>
                 <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{r.name}</span>
                 {r.reason && <span className="hidden min-w-0 max-w-[9rem] truncate text-[10px] text-ink-muted sm:block">{r.reason}</span>}
-                <span className={['shrink-0 text-xs font-bold tabular-nums', r.points >= 0 ? 'text-gold-300' : 'text-danger-light'].join(' ')}>
+                <span className={['shrink-0 text-xs font-bold tabular-nums', r.points >= 0 ? 'text-accent-300' : 'text-danger-light'].join(' ')}>
                   {r.points >= 0 ? '+' : ''}{r.points.toLocaleString()}
                 </span>
                 <button type="button" onClick={() => del(r.id)} aria-label="삭제" className="shrink-0 text-ink-muted hover:text-danger-light"><Icon name="close" size={12} /></button>
@@ -522,9 +522,9 @@ export function ScoreCalendar({ venueId, customBoards = [] }: { venueId: string;
           <h3 className="text-sm font-bold text-ink-primary">일별 기록 달력</h3>
           <p className="text-2xs text-ink-muted">날짜를 누르면 그날 누가 몇 점 받았는지 보입니다.</p>
         </div>
-        <button type="button" onClick={() => move(-1)} aria-label="이전 달" className="h-8 w-8 shrink-0 rounded-input border border-border-default text-ink-secondary hover:border-gold-400/50">‹</button>
-        <span className="shrink-0 text-sm font-bold tabular-nums text-gold-300">{ym.y}.{String(ym.m + 1).padStart(2, '0')}</span>
-        <button type="button" onClick={() => move(1)} aria-label="다음 달" className="h-8 w-8 shrink-0 rounded-input border border-border-default text-ink-secondary hover:border-gold-400/50">›</button>
+        <button type="button" onClick={() => move(-1)} aria-label="이전 달" className="h-8 w-8 shrink-0 rounded-input border border-border-default text-ink-secondary hover:border-accent-400/50">‹</button>
+        <span className="shrink-0 text-sm font-bold tabular-nums text-accent-300">{ym.y}.{String(ym.m + 1).padStart(2, '0')}</span>
+        <button type="button" onClick={() => move(1)} aria-label="다음 달" className="h-8 w-8 shrink-0 rounded-input border border-border-default text-ink-secondary hover:border-accent-400/50">›</button>
       </div>
 
       {/* 요일 헤더 + 날짜 그리드 */}
@@ -542,12 +542,12 @@ export function ScoreCalendar({ venueId, customBoards = [] }: { venueId: string;
           return (
             <button key={iso} type="button" onClick={() => setSel(iso)}
               className={['flex min-h-[3rem] flex-col items-center justify-start rounded-input border px-0.5 pt-1 transition-colors',
-                isSel ? 'border-gold-300 bg-gold-300/[0.1]'
-                : list.length ? 'border-gold-400/35 bg-gold-300/[0.04] hover:bg-gold-300/[0.08]'
+                isSel ? 'border-accent-300 bg-accent-300/[0.1]'
+                : list.length ? 'border-accent-400/35 bg-accent-300/[0.04] hover:bg-accent-300/[0.08]'
                 : 'border-border-subtle bg-surface-high/40 hover:bg-surface-high'].join(' ')}>
-              <span className={['text-2xs font-bold tabular-nums leading-none', iso === todayIso ? 'text-gold-300' : 'text-ink-secondary'].join(' ')}>{day}</span>
+              <span className={['text-2xs font-bold tabular-nums leading-none', iso === todayIso ? 'text-accent-300' : 'text-ink-secondary'].join(' ')}>{day}</span>
               {list.length > 0 && (<>
-                <span className="mt-0.5 rounded-badge bg-gold-300/20 px-1 text-[9px] font-bold leading-tight text-gold-300 tabular-nums">{list.length}건</span>
+                <span className="mt-0.5 rounded-badge bg-accent-300/20 px-1 text-[9px] font-bold leading-tight text-accent-300 tabular-nums">{list.length}건</span>
                 <span className={['text-[9px] font-semibold tabular-nums leading-tight', sum >= 0 ? 'text-ink-muted' : 'text-danger-light'].join(' ')}>{sum > 0 ? '+' : ''}{sum}</span>
               </>)}
             </button>
@@ -565,10 +565,10 @@ export function ScoreCalendar({ venueId, customBoards = [] }: { venueId: string;
             <ul className="max-h-48 space-y-1 overflow-y-auto pr-1">
               {selEntries.map((r) => (
                 <li key={r.id} className="flex items-center gap-2 rounded-input bg-surface-base/60 px-2 py-1.5">
-                  <span className={['shrink-0 rounded-badge px-1.5 py-0.5 text-[9px] font-bold', r.boardKey ? 'bg-violet-500/15 text-violet-300' : 'bg-gold-300/15 text-gold-300'].join(' ')}>{boardName(r.boardKey)}</span>
+                  <span className={['shrink-0 rounded-badge px-1.5 py-0.5 text-[9px] font-bold', r.boardKey ? 'bg-violet-500/15 text-violet-300' : 'bg-accent-300/15 text-accent-300'].join(' ')}>{boardName(r.boardKey)}</span>
                   <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{r.name}</span>
                   {r.reason && <span className="hidden max-w-[8rem] truncate text-[10px] text-ink-muted sm:block">{r.reason}</span>}
-                  <span className={['shrink-0 text-xs font-bold tabular-nums', r.points >= 0 ? 'text-gold-300' : 'text-danger-light'].join(' ')}>{r.points >= 0 ? '+' : ''}{r.points.toLocaleString()}</span>
+                  <span className={['shrink-0 text-xs font-bold tabular-nums', r.points >= 0 ? 'text-accent-300' : 'text-danger-light'].join(' ')}>{r.points >= 0 ? '+' : ''}{r.points.toLocaleString()}</span>
                   <button type="button" onClick={() => del(r.id)} aria-label="삭제" className="shrink-0 text-ink-muted hover:text-danger-light"><Icon name="close" size={12} /></button>
                 </li>
               ))}
@@ -653,9 +653,9 @@ function RankBoardPreview({ venueId, cfg }: { venueId: string; cfg: VenuePageCon
   const unit = boardUnit(metric, cfg);
 
   return (
-    <section className="rounded-card border border-gold-400/25 bg-gold-300/[0.04] p-3 space-y-2">
+    <section className="rounded-card border border-accent-400/25 bg-accent-300/[0.04] p-3 space-y-2">
       <div className="flex flex-wrap items-center gap-2">
-        <h3 className="min-w-0 flex-1 text-sm font-bold text-gold-300">보드 미리보기 (TOP 10)</h3>
+        <h3 className="min-w-0 flex-1 text-sm font-bold text-accent-300">보드 미리보기 (TOP 10)</h3>
         <select value={metric} onChange={(e) => setMetric(e.target.value)} className="input w-auto shrink-0 text-2xs py-1.5">
           {options.map((m) => <option key={m} value={m}>{boardLabel(m, cfg)}</option>)}
         </select>
@@ -666,9 +666,9 @@ function RankBoardPreview({ venueId, cfg }: { venueId: string; cfg: VenuePageCon
           <ol className="grid grid-cols-1 gap-x-4 gap-y-0.5 sm:grid-cols-2">
             {rows.map((b, i) => (
               <li key={b.name} className="flex items-baseline gap-2 text-xs">
-                <span className={['w-4 text-right font-bold tabular-nums', i < 3 ? 'text-gold-300' : 'text-ink-muted'].join(' ')}>{i + 1}</span>
+                <span className={['w-4 text-right font-bold tabular-nums', i < 3 ? 'text-accent-300' : 'text-ink-muted'].join(' ')}>{i + 1}</span>
                 <span className="min-w-0 flex-1 truncate font-semibold text-ink-primary">{b.name}</span>
-                <span className="font-bold tabular-nums text-gold-300">{b.value.toLocaleString()}{unit}</span>
+                <span className="font-bold tabular-nums text-accent-300">{b.value.toLocaleString()}{unit}</span>
               </li>
             ))}
           </ol>

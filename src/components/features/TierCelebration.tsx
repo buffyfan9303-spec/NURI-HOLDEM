@@ -41,10 +41,10 @@ export default function TierCelebration() {
             }} />
         ))}
       </div>
-      <div className="relative mx-6 max-w-sm rounded-card border border-gold-400/60 bg-gradient-to-b from-gold-300/[0.12] to-surface-base p-8 text-center shadow-[0_0_60px_rgba(255,209,0,0.25)] animate-slide-up">
-        <p className="text-2xs font-bold uppercase tracking-[0.2em] text-gold-300">RANK UP</p>
+      <div className="relative mx-6 max-w-sm rounded-card border border-accent-400/60 bg-gradient-to-b from-accent-300/[0.12] to-surface-base p-8 text-center shadow-[0_0_60px_rgba(255,209,0,0.25)] animate-slide-up">
+        <p className="text-2xs font-bold uppercase tracking-[0.2em] text-accent-300">RANK UP</p>
         <div className="mt-4 flex justify-center"><TierBadge points={show.points} size={72} /></div>
-        <p className="mt-4 text-3xl font-extrabold text-gold-300">{show.label} <span className="text-base font-bold text-ink-secondary">등급 달성!</span></p>
+        <p className="mt-4 text-3xl font-extrabold text-accent-300">{show.label} <span className="text-base font-bold text-ink-secondary">등급 달성!</span></p>
         <p className="mt-2 text-2xs leading-relaxed text-ink-muted">활동 점수 {show.points.toLocaleString()}점 — 꾸준한 활동의 결과예요.<br />다음 등급까지 계속 달려볼까요?</p>
         <button type="button" onClick={() => setShow(null)} className="btn-primary mt-5 w-full py-2.5 text-sm">좋아요!</button>
       </div>

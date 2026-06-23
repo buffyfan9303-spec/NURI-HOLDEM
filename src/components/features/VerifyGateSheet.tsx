@@ -33,7 +33,7 @@ export default function VerifyGateSheet({ onStart }: { onStart: () => void }) {
     <Modal open={open} onClose={() => setOpen(false)} variant="sheet" maxWidth="sm" title="휴대폰 본인인증">
       <div className="space-y-4 px-4 pb-5 pt-1">
         <div className="flex flex-col items-center gap-2 pt-2 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gold-300/[0.12] text-2xl" aria-hidden>🔒</div>
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-accent-300/[0.12] text-2xl" aria-hidden>🔒</div>
           <div>
             <p className="text-sm font-bold text-ink-primary">
               {reason ? `'${reason}'은(는) 본인인증이 필요해요` : '본인인증이 필요한 기능이에요'}

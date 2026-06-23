@@ -104,10 +104,10 @@ export default function StaffSchedule({ venueId }: { venueId: string }) {
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h3 className="text-sm font-bold text-ink-primary">딜러 출근 스케줄</h3>
         <div className="flex items-center gap-1">
-          <button type="button" onClick={() => setMonth((m) => shiftMonth(m, -1))} className="w-7 h-7 rounded-input bg-surface-high text-ink-secondary hover:text-gold-300">‹</button>
-          <span className="text-xs font-bold text-gold-300 tabular-nums w-[4.5rem] text-center">{month}</span>
-          <button type="button" onClick={() => setMonth((m) => shiftMonth(m, 1))} className="w-7 h-7 rounded-input bg-surface-high text-ink-secondary hover:text-gold-300">›</button>
-          <button type="button" onClick={() => setMonth(thisMonth())} className="text-2xs text-ink-muted hover:text-gold-300 px-1">이번달</button>
+          <button type="button" onClick={() => setMonth((m) => shiftMonth(m, -1))} className="w-7 h-7 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">‹</button>
+          <span className="text-xs font-bold text-accent-300 tabular-nums w-[4.5rem] text-center">{month}</span>
+          <button type="button" onClick={() => setMonth((m) => shiftMonth(m, 1))} className="w-7 h-7 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">›</button>
+          <button type="button" onClick={() => setMonth(thisMonth())} className="text-2xs text-ink-muted hover:text-accent-300 px-1">이번달</button>
         </div>
       </div>
 
@@ -136,13 +136,13 @@ export default function StaffSchedule({ venueId }: { venueId: string }) {
             return (
               <button key={date} type="button" onClick={() => setSelDay(sel ? null : date)}
                 className={['min-h-[4rem] rounded-[6px] border p-1 text-left flex flex-col transition-colors',
-                  sel ? 'border-gold-400 bg-gold-300/15' : date === todayStr ? 'border-gold-400/40 bg-surface-high' : 'border-border-subtle bg-surface-base hover:bg-surface-high'].join(' ')}>
+                  sel ? 'border-accent-400 bg-accent-300/15' : date === todayStr ? 'border-accent-400/40 bg-surface-high' : 'border-border-subtle bg-surface-base hover:bg-surface-high'].join(' ')}>
                 <span className={['text-[11px] font-bold leading-none mb-0.5', dow === 0 ? 'text-rose-400' : dow === 6 ? 'text-sky-400' : 'text-ink-secondary'].join(' ')}>{dn}</span>
                 <div className="flex flex-col gap-0.5 overflow-hidden">
                   {list.slice(0, 3).map((s) => {
                     const t = s.checkIn || s.startHm ? `${s.checkIn || s.startHm || ''}${s.checkOut ? `~${s.checkOut}` : ''}` : '';
                     return (
-                      <span key={s.name} className="text-[10px] leading-tight px-1 rounded bg-gold-300/20 text-gold-100 truncate">
+                      <span key={s.name} className="text-[10px] leading-tight px-1 rounded bg-accent-300/20 text-accent-100 truncate">
                         {s.name}{t ? ` ${t}` : ''}
                       </span>
                     );
@@ -157,8 +157,8 @@ export default function StaffSchedule({ venueId }: { venueId: string }) {
 
       {/* 선택 날짜 편집 — 배정 토글 + 출퇴근 시각 */}
       {selDay && (
-        <div className="rounded-input border border-gold-400/40 bg-gold-300/[0.06] p-2.5 space-y-2">
-          <p className="text-xs font-bold text-gold-300">{selDay} 출근 직원 · 시각 입력</p>
+        <div className="rounded-input border border-accent-400/40 bg-accent-300/[0.06] p-2.5 space-y-2">
+          <p className="text-xs font-bold text-accent-300">{selDay} 출근 직원 · 시각 입력</p>
           {roster.length === 0 ? (
             <p className="text-2xs text-ink-muted">먼저 위에서 직원을 등록하세요.</p>
           ) : roster.map((n) => {
@@ -168,7 +168,7 @@ export default function StaffSchedule({ venueId }: { venueId: string }) {
               <div key={n} className="flex items-center gap-1.5 flex-wrap">
                 <button type="button" onClick={() => toggle(selDay, n)}
                   className={['text-xs font-semibold px-2.5 py-1.5 rounded-badge border transition-colors shrink-0 w-20 text-center',
-                    on ? 'bg-gold-300 text-ink-inverse border-gold-300' : 'bg-surface-high text-ink-secondary border-border-default'].join(' ')}>{n}</button>
+                    on ? 'bg-accent-300 text-white border-accent-300' : 'bg-surface-high text-ink-secondary border-border-default'].join(' ')}>{n}</button>
                 {on && (
                   <>
                     <label className="flex items-center gap-1 text-[10px] text-ink-muted">출근<input type="time" value={sh?.checkIn ?? sh?.startHm ?? ''} onChange={(e) => setTime(selDay, n, 'checkIn', e.target.value)} className="input text-xs py-1 w-[5.5rem]" /></label>
@@ -184,7 +184,7 @@ export default function StaffSchedule({ venueId }: { venueId: string }) {
 
       {/* 확정 */}
       <button type="button" onClick={confirm} disabled={saving || shifts.length === 0}
-        className="w-full py-2 rounded-input bg-gold-300/15 text-gold-300 border border-gold-400/40 text-xs font-bold hover:bg-gold-300/25 disabled:opacity-50">
+        className="w-full py-2 rounded-input bg-accent-300/15 text-accent-300 border border-accent-400/40 text-xs font-bold hover:bg-accent-300/25 disabled:opacity-50">
         ✓ {month} 스케줄 확정 (등록 직원에게 공유)
       </button>
 
@@ -200,7 +200,7 @@ export default function StaffSchedule({ venueId }: { venueId: string }) {
                 <span className="flex-1 font-semibold text-ink-primary truncate">{r.name}</span>
                 <span className="text-emerald-400 tabular-nums font-bold">출근 {r.work}일</span>
                 <span className="text-ink-muted tabular-nums">휴무 {r.off}일</span>
-                <span className="text-gold-300 tabular-nums">{r.hours.toFixed(1)}h</span>
+                <span className="text-accent-300 tabular-nums">{r.hours.toFixed(1)}h</span>
               </div>
             ))}
           </div>

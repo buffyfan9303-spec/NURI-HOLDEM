@@ -103,7 +103,7 @@ export default function ViewModeToggle({
           >
             {active && (
               <motion.span layoutId="viewmode-pill" aria-hidden
-                className="absolute inset-0 rounded-[5px] bg-gold-300 shadow-sm"
+                className="absolute inset-0 rounded-[5px] bg-accent-300 shadow-sm"
                 transition={{ type: 'spring', stiffness: 700, damping: 42 }} />
             )}
             <span className="relative inline-flex"><Icon /></span>

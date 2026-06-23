@@ -32,7 +32,7 @@ export default function ChipDistributor() {
           </div>
         ))}
         <button type="button" onClick={add}
-          className="w-full py-1.5 rounded-input border border-dashed border-border-default text-2xs text-ink-secondary hover:text-gold-300 hover:border-gold-400/50 transition-colors">+ 액면 추가</button>
+          className="w-full py-1.5 rounded-input border border-dashed border-border-default text-2xs text-ink-secondary hover:text-accent-300 hover:border-accent-400/50 transition-colors">+ 액면 추가</button>
       </div>
       <div className="grid grid-cols-2 gap-2">
         <Result label="1인 스택" value={perStack.toLocaleString()} accent />

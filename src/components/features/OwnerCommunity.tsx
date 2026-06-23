@@ -58,7 +58,7 @@ export default function OwnerCommunity() {
 
   return (
     <div className="space-y-3">
-      <div className="rounded-input border border-gold-400/30 bg-gold-300/[0.06] px-3 py-2 text-2xs leading-relaxed text-gold-300">
+      <div className="rounded-input border border-accent-400/30 bg-accent-300/[0.06] px-3 py-2 text-2xs leading-relaxed text-accent-300">
         인증 업주 전용 라운지입니다. 작성한 글은 24시간이 지나면 자동으로 사라집니다.
       </div>
 
@@ -85,7 +85,7 @@ export default function OwnerCommunity() {
             onClick={() => setShowDeleted((v) => !v)}
             className={[
               'rounded-input px-2 py-1 text-2xs font-semibold transition-colors',
-              showDeleted ? 'bg-gold-300 text-ink-inverse' : 'border border-border-default text-ink-muted',
+              showDeleted ? 'bg-accent-300 text-white' : 'border border-border-default text-ink-muted',
             ].join(' ')}
           >
             {showDeleted ? '삭제/만료 글 보는 중' : '삭제/만료 글 보기(운영자)'}

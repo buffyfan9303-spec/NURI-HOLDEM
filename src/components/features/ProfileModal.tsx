@@ -245,7 +245,7 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
                 type="button"
                 onClick={() => fileRef.current?.click()}
                 className="relative w-24 h-24 rounded-full overflow-hidden group
-                           ring-4 ring-border-default hover:ring-gold-300 transition-all"
+                           ring-4 ring-border-default hover:ring-accent-300 transition-all"
                 aria-label="프로필 사진 변경"
               >
                 {avatarPreview ? (
@@ -324,8 +324,8 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
               </div>
             </div>
           ) : (
-            <div className="space-y-1.5 rounded-card border border-gold-400/30 bg-gold-300/[0.06] p-3">
-              <p className="text-sm font-semibold text-gold-300">휴대폰 본인인증</p>
+            <div className="space-y-1.5 rounded-card border border-accent-400/30 bg-accent-300/[0.06] p-3">
+              <p className="text-sm font-semibold text-accent-300">휴대폰 본인인증</p>
               <p className="text-2xs text-ink-muted leading-relaxed">안전한 거래와 1인 1계정을 위해 휴대폰 실명인증이 필요합니다. 매장이용권 등 일부 기능에 사용됩니다.</p>
               <IdentityVerificationButton onVerified={() => { refreshProfile().catch(() => {}); }} />
             </div>
@@ -393,7 +393,7 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
               user.role === 'admin'
                 ? 'bg-purple-500/20 text-purple-300'
                 : user.role === 'venue_owner'
-                  ? 'bg-gold-300/20 text-gold-300'
+                  ? 'bg-accent-300/20 text-accent-300'
                   : 'bg-surface-float text-ink-secondary',
             ].join(' ')}>
               {ROLE_LABELS[user.role] ?? user.role}
@@ -428,7 +428,7 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
           {/* 고객센터 1:1 문의 */}
           {onOpenSupport && (
             <button type="button" onClick={() => { onClose(); onOpenSupport(); }}
-              className="flex w-full items-center gap-2 rounded-card border border-border-default bg-surface-high px-3 py-2.5 text-left transition-colors hover:border-gold-400/40">
+              className="flex w-full items-center gap-2 rounded-card border border-border-default bg-surface-high px-3 py-2.5 text-left transition-colors hover:border-accent-400/40">
               <span aria-hidden>💬</span>
               <span className="flex-1 text-sm font-semibold text-ink-primary">고객센터 1:1 문의</span>
               <span className="text-2xs text-ink-muted">문의·답변 확인 →</span>
@@ -438,13 +438,13 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
           {/* 약관 및 정책 */}
           {onOpenLegal && (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border-subtle pt-3 text-2xs text-ink-muted">
-              <button type="button" onClick={() => onOpenLegal('terms')} className="transition-colors hover:text-gold-300">이용약관</button>
+              <button type="button" onClick={() => onOpenLegal('terms')} className="transition-colors hover:text-accent-300">이용약관</button>
               <span className="text-border-strong">·</span>
-              <button type="button" onClick={() => onOpenLegal('privacy')} className="transition-colors hover:text-gold-300">개인정보처리방침</button>
+              <button type="button" onClick={() => onOpenLegal('privacy')} className="transition-colors hover:text-accent-300">개인정보처리방침</button>
               <span className="text-border-strong">·</span>
-              <button type="button" onClick={() => onOpenLegal('refund')} className="transition-colors hover:text-gold-300">취소·환불 정책</button>
+              <button type="button" onClick={() => onOpenLegal('refund')} className="transition-colors hover:text-accent-300">취소·환불 정책</button>
               <span className="text-border-strong">·</span>
-              <button type="button" onClick={() => onOpenLegal('location')} className="transition-colors hover:text-gold-300">위치기반서비스 이용약관</button>
+              <button type="button" onClick={() => onOpenLegal('location')} className="transition-colors hover:text-accent-300">위치기반서비스 이용약관</button>
             </div>
           )}
         </div>
@@ -532,7 +532,7 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
                   type="button"
                   onClick={handleSendCode}
                   disabled={sendingCode}
-                  className="mt-1 text-2xs text-ink-muted hover:text-gold-300 transition-colors disabled:opacity-50"
+                  className="mt-1 text-2xs text-ink-muted hover:text-accent-300 transition-colors disabled:opacity-50"
                 >
                   코드 재전송
                 </button>
@@ -604,7 +604,7 @@ function PushNotificationSetting() {
           aria-label="푸시 알림 토글"
           className={[
             'relative w-11 h-6 rounded-full transition-colors shrink-0 disabled:opacity-40',
-            on ? 'bg-gold-300' : 'bg-surface-float',
+            on ? 'bg-accent-300' : 'bg-surface-float',
           ].join(' ')}
         >
           <motion.span
@@ -644,7 +644,7 @@ function BlockListSection() {
             <li key={b.blockedId} className="flex items-center gap-2 rounded-card border border-border-subtle bg-surface-high px-3 py-2">
               <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{b.name}</span>
               <button type="button" onClick={() => doUnblock(b.blockedId, b.name)} disabled={busy === b.blockedId}
-                className="shrink-0 rounded-input border border-border-default px-2.5 py-1 text-2xs font-bold text-ink-secondary hover:text-gold-300 disabled:opacity-50">
+                className="shrink-0 rounded-input border border-border-default px-2.5 py-1 text-2xs font-bold text-ink-secondary hover:text-accent-300 disabled:opacity-50">
                 {busy === b.blockedId ? '해제 중…' : '차단 해제'}
               </button>
             </li>

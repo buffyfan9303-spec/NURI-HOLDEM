@@ -9,53 +9,52 @@
    * - 기본값(:root)은 다크 테마. html.light 클래스가 붙으면 라이트 테마로 전환된다.
    * - 값은 "R G B" 공백 구분(알파 합성을 위해). gold/danger 등 브랜드 색은 고정.
    * ────────────────────────────────────────────────────────────────────────── */
-  /* ── 바이낸스 다크 팔레트 — 차콜 배경·플랫 패널·회색 위계 (B17-3) ── */
+  /* ── NURI PET · Linear 인디고 다크 (시그니처) — 근검정 배경·헤어라인 패널 ── */
   :root,
   html.dark {
-    --surface-base:  24 26 32;   /* #181A20 바이낸스 bg */
-    --surface-low:   30 35 41;   /* #1E2329 패널/카드 */
-    --surface-mid:   37 42 50;   /* #252A32 모달/사이드 */
-    --surface-high:  43 49 57;   /* #2B3139 인풋/호버 */
-    --surface-float: 51 59 71;   /* #333B47 드롭다운/툴팁 */
+    --surface-base:  8 9 10;     /* #08090A Linear bg */
+    --surface-low:   17 18 20;   /* #111214 패널/카드 */
+    --surface-mid:   22 24 27;   /* #16181B 모달/사이드 */
+    --surface-high:  29 32 36;   /* #1D2024 인풋/호버 */
+    --surface-float: 36 40 46;   /* #24282E 드롭다운/툴팁 */
 
-    --ink-primary:   234 236 239; /* #EAECEF 본문 */
-    --ink-secondary: 183 189 198; /* #B7BDC6 보조 */
-    --ink-muted:     139 149 164; /* #8B95A4 메타/라벨 — WCAG AA 보강(카드·모달 배경서 ≥4.5:1, 위계 유지) */
-    --ink-inverse:   24 26 32;    /* 옐로 버튼 위 검정 */
+    --ink-primary:   244 245 246; /* #F4F5F6 본문 */
+    --ink-secondary: 138 143 152; /* #8A8F98 보조 */
+    --ink-muted:     110 116 124; /* #6E747C 메타/라벨 — PET tx3 기반 + AA 보강 */
+    --ink-inverse:   24 26 32;    /* 골드(상금) 버튼 위 검정 */
 
-    --border-subtle:  43 49 57;   /* #2B3139 — 구분선 위주, 보더 존재감 최소 */
-    --border-default: 51 59 71;   /* #333B47 */
-    --border-strong:  71 77 87;   /* #474D57 */
+    --border-subtle:  28 30 34;   /* #1C1E22 — PET 흰색 헤어라인 0.07 등가(근검정 위) */
+    --border-default: 38 41 46;   /* #26292E */
+    --border-strong:  52 56 62;   /* #34383E */
 
-    /* 카드 헤어라인/그림자 — 다크에서는 미세한 흰색 링 */
-    --card-ring:   rgba(255, 255, 255, 0.03);
-    --card-shadow: rgba(0, 0, 0, 0.5);
+    /* 카드 헤어라인/그림자 — PET inset 하이라이트 + 미세 섀도 */
+    --card-ring:   rgba(255, 255, 255, 0.05);
+    --card-shadow: rgba(0, 0, 0, 0.6);
 
     /* 다크 모드 네이티브 렌더(스크롤바·폼·포커스) 정합 → 클릭 시 플래시 방지 */
     color-scheme: dark;
   }
 
-  /* 라이트 테마 — 바이낸스 라이트(화이트 패널·옅은 회색 보더) */
+  /* 라이트 테마 — NURI PET 라이트(화이트 패널·옅은 회색 보더) */
   html.light {
-    /* 가시성 보강: 배경↔흰 카드 단차 확대(#FAFAFA→#F2F3F5), 보더 한 단계 진하게 */
-    --surface-base:  242 243 245; /* #F2F3F5 — 흰 카드 경계가 또렷해짐 */
+    --surface-base:  245 246 248; /* #F5F6F8 PET bg */
     --surface-low:   255 255 255;
     --surface-mid:   255 255 255;
-    --surface-high:  243 244 246; /* 인풋/호버 */
-    --surface-float: 232 234 238;
+    --surface-high:  240 241 244; /* #F0F1F4 인풋/호버 */
+    --surface-float: 230 232 236; /* #E6E8EC */
 
-    --ink-primary:   24 28 35;    /* #181C23 — 본문 대비 ↑ */
-    --ink-secondary: 62 69 80;    /* #3E4550 */
-    --ink-muted:     99 108 123;  /* #636C7B — WCAG AA 보강(흰/회색 배경서 ≥4.5:1, 기존 #6B7483는 #F2F3F5 위 4.3:1로 미달) */
-    --ink-inverse:   24 26 32;    /* 골드 버튼 위 텍스트는 라이트/다크 모두 어둡게 유지 */
+    --ink-primary:   20 22 26;    /* #14161A PET tx */
+    --ink-secondary: 91 97 110;   /* #5B616E PET tx2 */
+    --ink-muted:     99 108 123;  /* #636C7B — WCAG AA 보강(흰/회색 배경서 ≥4.5:1) */
+    --ink-inverse:   24 26 32;    /* 골드 버튼 위 텍스트는 어둡게 유지 */
 
-    --border-subtle:  226 229 234; /* #E2E5EA */
-    --border-default: 206 211 219; /* #CED3DB */
-    --border-strong:  158 167 180; /* #9EA7B4 */
+    --border-subtle:  230 232 236; /* #E6E8EC PET line */
+    --border-default: 216 219 225; /* #D8DBE1 */
+    --border-strong:  185 190 200; /* #B9BEC8 */
 
     /* 라이트에서는 흰색 헤어라인이 보이면 안 됨 → 어두운 톤으로 교체 */
-    --card-ring:   rgba(0, 0, 0, 0.06);
-    --card-shadow: rgba(15, 23, 42, 0.10);
+    --card-ring:   rgba(15, 18, 26, 0.08);
+    --card-shadow: rgba(15, 18, 26, 0.12);
 
     color-scheme: light;
   }
@@ -79,6 +78,10 @@
     @apply bg-surface-base text-ink-primary antialiased;
     overflow-x: clip;
     max-width: 100%;
+    /* PET 시그니처 — 상단 인디고 글로우(고정). 근검정 배경 위 은은한 Linear 분위기 */
+    background-image: radial-gradient(900px 460px at 50% -12%, rgba(94, 106, 210, 0.12), transparent 70%);
+    background-attachment: fixed;
+    background-repeat: no-repeat;
     font-family: 'Pretendard Variable', 'Pretendard', system-ui, sans-serif;
     /* iOS 탭 하이라이트 제거 */
     -webkit-tap-highlight-color: transparent;
@@ -114,7 +117,7 @@
 
   /* 포커스 링 — 키보드 탐색 접근성 */
   :focus-visible {
-    @apply outline-none ring-2 ring-gold-300 ring-offset-2 ring-offset-surface-base;
+    @apply outline-none ring-2 ring-accent-300 ring-offset-2 ring-offset-surface-base;
   }
 }
 
@@ -141,11 +144,11 @@
            font-semibold text-sm leading-none
            rounded-input px-3 py-2 min-h-[2.4rem]
            transition-all duration-150 ease-out active:opacity-80
-           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-300;
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-300;
   }
 
   .btn-primary {
-    @apply btn bg-gold-300 text-ink-inverse hover:bg-gold-400 active:bg-gold-500;
+    @apply btn bg-accent-300 text-white hover:bg-accent-400 active:bg-accent-500;
   }
 
   .btn-ghost {
@@ -165,7 +168,7 @@
            rounded-input px-3 py-2 min-h-[2.4rem]
            border border-border-default
            placeholder:text-ink-muted
-           focus:outline-none focus:border-gold-300 focus:ring-1 focus:ring-gold-300
+           focus:outline-none focus:border-accent-300 focus:ring-1 focus:ring-accent-300
            transition-colors duration-150;
   }
 
@@ -269,6 +272,9 @@ html.light .text-gold-200, html.light .text-gold-300 { color: #A06D00; }
 html.light .text-gold-400 { color: #8F6200; }
 html.light .text-emerald-300, html.light .text-emerald-400 { color: #0A8F5C; }
 html.light .text-danger-light { color: #D63A4E; }
+/* 인디고 액센트 텍스트 — 라이트 배경 대비 보강(AA) */
+html.light .text-accent-200, html.light .text-accent-300 { color: #4853B8; }
+html.light .text-accent-400 { color: #3A4392; }
 
 /* ── 모바일 하단 탭바(Riot Mobile 스타일) 공간 확보 — 컨텐츠가 탭바에 가리지 않게 */
 @media (max-width: 1023.5px) {
@@ -326,9 +332,9 @@ button:active:not(:disabled), [role='button']:active {
 }
 .anim-shake { animation: shake-x 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97); }
 
-/* ── PC 키보드 포커스 링(Linear) — Tab 키 순회 시에만 골드 링, 마우스 클릭엔 안 뜸 ── */
+/* ── PC 키보드 포커스 링(Linear) — Tab 키 순회 시에만 인디고 링, 마우스 클릭엔 안 뜸 ── */
 :focus-visible {
-  outline: 2px solid rgba(252, 213, 53, 0.9) !important;
+  outline: 2px solid rgba(94, 106, 210, 0.9) !important;
   outline-offset: 2px;
   border-radius: 6px;
 }

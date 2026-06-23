@@ -85,7 +85,7 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
           <h3 className="text-sm font-bold text-ink-primary">고객 분석</h3>
           <p className="text-2xs text-ink-muted">방문했던 손님 전체 — 장부 기준 행동 통계 ({rows.length}명)</p>
         </div>
-        <button type="button" onClick={exportCsv} className="btn-ghost shrink-0 px-2 text-2xs text-gold-300">CSV</button>
+        <button type="button" onClick={exportCsv} className="btn-ghost shrink-0 px-2 text-2xs text-accent-300">CSV</button>
       </div>
 
       {/* 기간 + 검색 + 정렬 */}
@@ -97,7 +97,7 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
               <button key={id} type="button" onClick={() => setRange(id)}
                 className={['relative rounded-[6px] px-2.5 py-1 text-2xs font-bold transition-colors duration-300 focus:outline-none',
                   on ? 'text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
-                {on && <motion.span layoutId="cust-range-pill" aria-hidden className="absolute inset-0 rounded-[6px] bg-gold-300" transition={{ type: 'spring', stiffness: 700, damping: 42 }} />}
+                {on && <motion.span layoutId="cust-range-pill" aria-hidden className="absolute inset-0 rounded-[6px] bg-accent-300" transition={{ type: 'spring', stiffness: 700, damping: 42 }} />}
                 <span className="relative">{label}</span>
               </button>
             );
@@ -125,7 +125,7 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
               <div className="flex items-center justify-between gap-2">
                 <p className="min-w-0 truncate text-sm font-bold text-ink-primary">
                   {r.name}
-                  {r.buyins >= 5 && <span className="ml-1.5 rounded-badge bg-gold-300/15 px-1.5 py-0.5 text-[10px] font-bold text-gold-300">단골</span>}
+                  {r.buyins >= 5 && <span className="ml-1.5 rounded-badge bg-accent-300/15 px-1.5 py-0.5 text-[10px] font-bold text-accent-300">단골</span>}
                   {r.unpaidCount > 0 && <span className="ml-1 rounded-badge bg-danger/15 px-1.5 py-0.5 text-[10px] font-bold text-danger-light">미수 {r.unpaidCount}</span>}
                   {aliases[r.name.trim().toLowerCase()] && <span className="ml-1 rounded-badge bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-300">🔗 {aliases[r.name.trim().toLowerCase()].display}</span>}
                 </p>
@@ -135,7 +135,7 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
                 <span>바인 <b className="tabular-nums text-ink-secondary">{r.buyins}</b>회</span>
                 <span>방문 <b className="tabular-nums text-ink-secondary">{r.visits}</b>회</span>
                 <span>머니인 <b className="tabular-nums text-ink-secondary">{r.moneyIn}</b>회</span>
-                <span>비율 <b className={['tabular-nums', (r.rate ?? 0) >= 30 ? 'text-gold-300' : 'text-ink-secondary'].join(' ')}>{r.rate !== null ? `${r.rate}%` : '-'}</b></span>
+                <span>비율 <b className={['tabular-nums', (r.rate ?? 0) >= 30 ? 'text-accent-300' : 'text-ink-secondary'].join(' ')}>{r.rate !== null ? `${r.rate}%` : '-'}</b></span>
                 <span>결제 <b className="text-ink-secondary">{paymentLabel(r.topPayment)}</b></span>
                 {r.peakHour !== null && <span>주 방문 <b className="tabular-nums text-ink-secondary">{r.peakHour}시</b></span>}
               </div>
@@ -152,7 +152,7 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
                       <button type="button" onClick={() => { setLinking(null); setMq(''); setMcands([]); }} className="shrink-0 rounded-input border border-border-default bg-surface-float px-2 text-[10px] text-ink-muted">취소</button>
                     </div>
                     {mcands.length > 0 ? (
-                      <ul className="space-y-0.5 rounded-input border border-gold-400/30 bg-surface-low p-1">
+                      <ul className="space-y-0.5 rounded-input border border-accent-400/30 bg-surface-low p-1">
                         {mcands.map((c) => (
                           <li key={c.id}>
                             <button type="button" disabled={busy} onClick={() => doLink(r.name.trim(), c)} className="flex w-full items-center gap-1.5 rounded-input px-2 py-1 text-left text-xs text-ink-primary hover:bg-surface-high disabled:opacity-50">
@@ -165,7 +165,7 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
                   </div>
                 );
                 return (
-                  <button type="button" onClick={() => { setLinking(r.name); setMq(''); setMcands([]); }} className="mt-1 text-[10px] text-gold-300 hover:underline">🔗 회원 연결</button>
+                  <button type="button" onClick={() => { setLinking(r.name); setMq(''); setMcands([]); }} className="mt-1 text-[10px] text-accent-300 hover:underline">🔗 회원 연결</button>
                 );
               })()}
             </li>

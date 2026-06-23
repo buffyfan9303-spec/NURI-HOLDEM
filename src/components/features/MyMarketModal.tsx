@@ -74,7 +74,7 @@ export function MessagesModal({ open, onClose }: { open: boolean; onClose: () =>
             <Thumb src={active.listingImage} size="w-8 h-8" />
             <div className="flex-1 min-w-0">
               <p className="text-xs text-ink-primary truncate">{active.listingTitle}</p>
-              <p className="text-2xs font-bold text-gold-300 tabular-nums">{active.listingPrice.toLocaleString()}</p>
+              <p className="text-2xs font-bold text-accent-300 tabular-nums">{active.listingPrice.toLocaleString()}</p>
             </div>
           </div>
           <ChatPane listingId={active.listingId} buyerId={active.buyerId} meId={user.id}
@@ -105,7 +105,7 @@ export function MessagesModal({ open, onClose }: { open: boolean; onClose: () =>
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-sm font-semibold text-ink-primary truncate">{t.counterpartyName}</span>
                         <span className="flex items-center gap-1 shrink-0">
-                          {t.unread > 0 && <span className="inline-flex items-center justify-center min-w-[1.05rem] h-[1.05rem] px-1 rounded-full bg-gold-300 text-ink-inverse text-[10px] font-bold tabular-nums">{t.unread}</span>}
+                          {t.unread > 0 && <span className="inline-flex items-center justify-center min-w-[1.05rem] h-[1.05rem] px-1 rounded-full bg-accent-300 text-white text-[10px] font-bold tabular-nums">{t.unread}</span>}
                           <span className="text-2xs text-ink-muted">{relativeTime(t.lastAt)}</span>
                         </span>
                       </div>
@@ -176,7 +176,7 @@ export function MyListingsModal({ open, onClose, onOpenListing, onChanged }: {
               <button type="button" onClick={() => onOpenListing(l)} className="shrink-0"><Thumb src={l.images[0] ?? null} /></button>
               <button type="button" onClick={() => onOpenListing(l)} className="flex-1 min-w-0 text-left">
                 <p className="text-sm font-semibold text-ink-primary truncate">{l.title}</p>
-                <p className="text-sm font-bold text-gold-300 tabular-nums">{l.price.toLocaleString()}</p>
+                <p className="text-sm font-bold text-accent-300 tabular-nums">{l.price.toLocaleString()}</p>
                 <p className="text-2xs text-ink-muted">조회 {l.viewCount} · 찜 {l.likeCount} · {relativeTime(l.createdAt)}</p>
               </button>
               <button type="button" onClick={() => del(l)} className="shrink-0 text-2xs text-ink-muted hover:text-danger-light px-1">삭제</button>

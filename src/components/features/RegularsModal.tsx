@@ -59,9 +59,9 @@ function RegularRow({ idx, r, venueId }: { idx: number; r: VenueRegular; venueId
   return (
     <li className="rounded-input border border-border-subtle bg-surface-low">
       <button type="button" onClick={toggle} className="flex w-full items-center gap-2 px-3 py-2 text-left">
-        <span className={`w-5 shrink-0 text-center text-2xs font-bold tabular-nums ${idx === 1 ? 'text-gold-300' : 'text-ink-muted'}`}>{idx}</span>
+        <span className={`w-5 shrink-0 text-center text-2xs font-bold tabular-nums ${idx === 1 ? 'text-accent-300' : 'text-ink-muted'}`}>{idx}</span>
         <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">
-          {r.name}{r.buyins >= 5 && <span className="ml-1.5 text-2xs font-bold text-gold-300">단골</span>}
+          {r.name}{r.buyins >= 5 && <span className="ml-1.5 text-2xs font-bold text-accent-300">단골</span>}
         </span>
         <span className="shrink-0 text-2xs text-ink-muted tabular-nums">바인 {r.buyins} · 방문 {r.visits}</span>
         <span className="shrink-0 text-xs text-ink-muted">{open ? '▲' : '▼'}</span>
@@ -84,16 +84,16 @@ function RegularRow({ idx, r, venueId }: { idx: number; r: VenueRegular; venueId
             <div className="flex items-center gap-1.5">
               <span className="shrink-0 text-2xs text-ink-muted">생일</span>
               <input type="date" value={bday} onChange={(e) => setBday(e.target.value)} className="input flex-1 text-2xs" />
-              <button type="button" onClick={saveBday} className="btn-ghost shrink-0 px-2 text-2xs text-gold-300">저장</button>
+              <button type="button" onClick={saveBday} className="btn-ghost shrink-0 px-2 text-2xs text-accent-300">저장</button>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-2xs text-ink-muted">활성 쿠폰 {coupons.filter((c) => c.status === 'active').length}장</span>
-              <button type="button" onClick={addCoupon} className="btn-ghost px-2 text-2xs text-gold-300">+ 쿠폰 발급</button>
+              <button type="button" onClick={addCoupon} className="btn-ghost px-2 text-2xs text-accent-300">+ 쿠폰 발급</button>
             </div>
             {coupons.filter((c) => c.status === 'active').map((c) => (
               <div key={c.id} className="flex items-center justify-between gap-2 rounded bg-surface-high px-2 py-1">
                 <span className="min-w-0 flex-1 truncate text-2xs text-ink-secondary">🎟 {c.title}</span>
-                <button type="button" onClick={() => useCoupon(c.id)} className="shrink-0 text-2xs font-bold text-gold-300">사용</button>
+                <button type="button" onClick={() => useCoupon(c.id)} className="shrink-0 text-2xs font-bold text-accent-300">사용</button>
               </div>
             ))}
           </div>
@@ -106,7 +106,7 @@ function RegularRow({ idx, r, venueId }: { idx: number; r: VenueRegular; venueId
 function Cell({ label, v, gold }: { label: string; v: string; gold?: boolean }) {
   return (
     <div className="rounded bg-surface-high py-1.5 text-center">
-      <p className={`text-sm font-bold leading-none tabular-nums ${gold ? 'text-gold-300' : 'text-ink-primary'}`}>{v}</p>
+      <p className={`text-sm font-bold leading-none tabular-nums ${gold ? 'text-accent-300' : 'text-ink-primary'}`}>{v}</p>
       <p className="mt-0.5 text-[10px] text-ink-muted">{label}</p>
     </div>
   );

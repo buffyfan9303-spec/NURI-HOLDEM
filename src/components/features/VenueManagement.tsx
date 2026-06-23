@@ -183,7 +183,7 @@ function SortableVenueRow({ venue, order, handlers }: { venue: Venue; order: num
       style={style}
       className={[
         'rounded-card border bg-surface-low p-2.5 space-y-2',
-        isDragging ? 'border-gold-400 shadow-gold opacity-90 z-10' : 'border-border-default',
+        isDragging ? 'border-accent-400 shadow-gold opacity-90 z-10' : 'border-border-default',
       ].join(' ')}
     >
       <RowContent
@@ -218,8 +218,8 @@ function RowContent({ venue: v, order, handlers, dragHandle }: {
         <span className="shrink-0 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-badge bg-surface-high border border-border-default text-2xs font-bold text-ink-secondary tabular-nums">{order}</span>
         <span className="text-sm font-semibold text-ink-primary truncate">{v.name}</span>
         <span className={['text-2xs px-1.5 py-0.5 rounded-badge border font-semibold', st.cls].join(' ')}>{st.label}</span>
-        {v.isPaidAd && <span className="text-2xs px-1.5 py-0.5 rounded-badge bg-gold-300 text-ink-inverse font-bold">⭐ 프리미엄</span>}
-        {v.verificationStatus === 'verified' && <span className="text-2xs px-1.5 py-0.5 rounded-badge bg-gold-300/15 text-gold-300 border border-gold-400/40 font-bold">인증</span>}
+        {v.isPaidAd && <span className="text-2xs px-1.5 py-0.5 rounded-badge bg-accent-300 text-white font-bold">⭐ 프리미엄</span>}
+        {v.verificationStatus === 'verified' && <span className="text-2xs px-1.5 py-0.5 rounded-badge bg-accent-300/15 text-accent-300 border border-accent-400/40 font-bold">인증</span>}
         {v.verificationStatus === 'pending' && <span className="text-2xs px-1.5 py-0.5 rounded-badge bg-amber-500/15 text-amber-400 border border-amber-500/30 font-semibold">인증 심사중</span>}
         {!v.approved && <span className="text-2xs px-1.5 py-0.5 rounded-badge bg-amber-500/15 text-amber-400 border border-amber-500/30 font-semibold">미승인</span>}
         <span className="text-2xs text-ink-muted ml-auto truncate">{v.region}</span>
@@ -249,7 +249,7 @@ function Btn({ onClick, variant, children }: {
     warn:    'bg-amber-500/15 text-amber-400 border-amber-500/30 hover:bg-amber-500/25',
     danger:  'bg-danger/15 text-danger-light border-danger/30 hover:bg-danger/25',
     muted:   'bg-surface-high text-ink-muted border-border-default hover:text-ink-secondary',
-    gold:    'bg-gold-300/15 text-gold-300 border-gold-400/30 hover:bg-gold-300/25',
+    gold:    'bg-accent-300/15 text-accent-300 border-accent-400/30 hover:bg-accent-300/25',
   }[variant];
   return (
     <button type="button" onClick={onClick} className={`text-2xs font-semibold px-2 py-1 rounded-badge border transition-colors active:scale-95 ${cls}`}>

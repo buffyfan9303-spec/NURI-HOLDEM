@@ -19,14 +19,24 @@ export default {
           high:  'rgb(var(--surface-high) / <alpha-value>)',  // 호버 영역, 입력 필드
           float: 'rgb(var(--surface-float) / <alpha-value>)', // 드롭다운, 툴팁
         },
-        // Gold: 바이낸스 옐로 계열 — 프리미엄·주요 액션 (브랜드 색 — 테마 고정)
+        // Accent: Linear 인디고 (NURI PET 시그니처) — 주요 액션·활성·링크·포커스
+        accent: {
+          50:  '#EEF0FB',
+          100: '#D7DBF5',
+          200: '#AEB5EE', // 다크 배경 위 인디고 텍스트(PET --accent-ink)
+          300: '#5E6AD2', // primary — Linear 인디고(PET --accent)
+          400: '#525DC4', // hover
+          500: '#4853B8', // pressed(PET --accent-strong)
+          600: '#3A4392',
+        },
+        // Gold: 바이낸스 옐로 — 상금·트로피·랭킹·프리미엄 강조 전용(인터랙션은 accent 로 이관)
         gold: {
           50:  '#FEF6D8',
           100: '#FCEBA8',
           200: '#FCE45C',
-          300: '#FCD535', // primary action — 바이낸스 옐로
-          400: '#F0B90B', // 바이낸스 브랜드 옐로(hover)
-          500: '#C99400', // pressed state
+          300: '#FCD535', // 상금/프리미엄 하이라이트
+          400: '#F0B90B',
+          500: '#C99400',
           600: '#8D6A00',
         },
         // Red: 바이낸스 레드 — 언리드 뱃지, 경고 전용 (브랜드 색 — 테마 고정)

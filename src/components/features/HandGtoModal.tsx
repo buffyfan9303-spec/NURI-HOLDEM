@@ -16,9 +16,9 @@ export default function HandGtoModal({ hero, onClose }: { hero: string[]; onClos
       ) : (
         <div className="space-y-3 p-4">
           {/* 핸드 + 강도 */}
-          <div className="rounded-card border border-gold-400/30 bg-gold-300/[0.05] p-3 text-center">
+          <div className="rounded-card border border-accent-400/30 bg-accent-300/[0.05] p-3 text-center">
             <p className="text-2xs text-ink-muted">내 핸드</p>
-            <p className="text-3xl font-extrabold leading-none text-gold-300">{label}</p>
+            <p className="text-3xl font-extrabold leading-none text-accent-300">{label}</p>
             <p className="mt-1 text-xs text-ink-secondary">169핸드 중 <b className="text-ink-primary">상위 {pctRank}%</b> 강도</p>
           </div>
 
@@ -29,7 +29,7 @@ export default function HandGtoModal({ hero, onClose }: { hero: string[]; onClos
               return (
                 <button key={st.bb} type="button" onClick={() => setBb(st.bb)}
                   className={['flex-1 h-8 rounded-input text-xs font-bold border transition-colors',
-                    on ? 'bg-gold-300 border-gold-300 text-ink-inverse' : 'bg-surface-high border-border-default text-ink-muted'].join(' ')}>
+                    on ? 'bg-accent-300 border-accent-300 text-white' : 'bg-surface-high border-border-default text-ink-muted'].join(' ')}>
                   {st.label}
                 </button>
               );
@@ -43,7 +43,7 @@ export default function HandGtoModal({ hero, onClose }: { hero: string[]; onClos
               {POSITIONS.map((p) => {
                 const a = action(label, openPct(p.id, '6', 'open', bb));
                 const lab = a === 'raise' ? '오픈' : a === 'mix' ? '혼합' : '폴드';
-                const cls = a === 'raise' ? 'bg-gold-300 text-ink-inverse' : a === 'mix' ? 'bg-gold-300/25 text-gold-300' : 'bg-surface-high text-ink-muted/70';
+                const cls = a === 'raise' ? 'bg-accent-300 text-white' : a === 'mix' ? 'bg-accent-300/25 text-accent-300' : 'bg-surface-high text-ink-muted/70';
                 return (
                   <div key={p.id} className="text-center">
                     <p className="text-2xs font-bold text-ink-secondary">{p.label}</p>
@@ -54,7 +54,7 @@ export default function HandGtoModal({ hero, onClose }: { hero: string[]; onClos
             </div>
           </div>
 
-          <p className="text-[10px] leading-relaxed text-ink-muted">※ 참고용 근사 레인지(스택·6맥스 오픈 기준)입니다. 멀티웨이·림프·PKO 등 상황 보정은 도구 탭의 <b className="text-gold-300">스타팅핸드 가이드</b>에서 확인하세요.</p>
+          <p className="text-[10px] leading-relaxed text-ink-muted">※ 참고용 근사 레인지(스택·6맥스 오픈 기준)입니다. 멀티웨이·림프·PKO 등 상황 보정은 도구 탭의 <b className="text-accent-300">스타팅핸드 가이드</b>에서 확인하세요.</p>
         </div>
       )}
     </Modal>

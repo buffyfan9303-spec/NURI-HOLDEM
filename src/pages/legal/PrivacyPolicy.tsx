@@ -6,7 +6,7 @@ const EFFECTIVE_DATE = '2026년 6월 15일';
 function Article({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
     <section className="mb-5">
-      <h3 className="text-sm font-bold text-gold-300 mb-2">제{n}조 ({title})</h3>
+      <h3 className="text-sm font-bold text-accent-300 mb-2">제{n}조 ({title})</h3>
       <div className="space-y-2 text-xs text-ink-secondary leading-relaxed">{children}</div>
     </section>
   );

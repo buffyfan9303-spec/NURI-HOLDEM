@@ -45,8 +45,8 @@ export function LevelUpCelebration({ points, onClose }: { points: number; onClos
     <div className="fixed inset-0 z-[90] flex items-center justify-center" role="dialog" aria-label="레벨 업">
       <button type="button" aria-label="닫기" onClick={onClose} className="absolute inset-0 bg-black/80" />
       <Confetti />
-      <div className="relative mx-4 max-w-xs rounded-dialog border border-gold-400/40 bg-surface-mid p-6 text-center animate-slide-up">
-        <p className="text-2xs font-extrabold uppercase tracking-[0.3em] text-gold-300">LEVEL UP</p>
+      <div className="relative mx-4 max-w-xs rounded-dialog border border-accent-400/40 bg-surface-mid p-6 text-center animate-slide-up">
+        <p className="text-2xs font-extrabold uppercase tracking-[0.3em] text-accent-300">LEVEL UP</p>
         <div className="my-3 flex justify-center"><TierBadge points={points} size={56} /></div>
         <p className="text-3xl font-extrabold leading-none text-ink-primary">Lv {t.level}</p>
         <p className="mt-1.5 text-lg font-bold" style={{ color: t.color }}>{t.title}</p>

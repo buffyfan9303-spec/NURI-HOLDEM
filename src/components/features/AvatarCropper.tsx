@@ -200,7 +200,7 @@ export default function AvatarCropper({
             <input
               type="range" min={MIN_ZOOM} max={MAX_ZOOM} step={0.01} value={zoom}
               onChange={(e) => zoomAround(Number(e.target.value), BOX / 2, BOX / 2)}
-              className="flex-1 accent-gold-300" aria-label="확대"
+              className="flex-1 accent-accent-300" aria-label="확대"
             />
             <button type="button" aria-label="확대" onClick={() => zoomAround(zoom + 0.3, BOX / 2, BOX / 2)}
               className="w-7 h-7 shrink-0 rounded-input bg-surface-high text-ink-secondary hover:text-ink-primary text-base leading-none">+</button>

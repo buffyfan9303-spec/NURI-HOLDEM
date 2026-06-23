@@ -81,7 +81,7 @@ export default function NoticeFormModal({ open, onClose, onSubmit, editing }: No
                 className={[
                   'flex-1 py-2 text-xs font-semibold rounded-input border transition-colors',
                   type === o.id
-                    ? 'bg-gold-300/20 border-gold-300 text-gold-300'
+                    ? 'bg-accent-300/20 border-accent-300 text-accent-300'
                     : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary',
                 ].join(' ')}
               >
@@ -103,7 +103,7 @@ export default function NoticeFormModal({ open, onClose, onSubmit, editing }: No
                 className={[
                   'py-2 text-2xs font-semibold rounded-input border transition-colors',
                   board === o.id
-                    ? 'bg-gold-300/20 border-gold-300 text-gold-300'
+                    ? 'bg-accent-300/20 border-accent-300 text-accent-300'
                     : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary',
                 ].join(' ')}
               >

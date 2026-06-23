@@ -43,7 +43,7 @@ export default function SupportInquiryModal({ open, onClose }: { open: boolean; 
             {INQUIRY_CATEGORIES.map((c) => (
               <button key={c} type="button" onClick={() => setCat(c)}
                 className={['rounded-input border px-2.5 py-1 text-2xs font-bold transition-colors',
-                  cat === c ? 'border-gold-300 bg-gold-300/15 text-gold-300' : 'border-border-default bg-surface-high text-ink-muted hover:text-ink-secondary'].join(' ')}>
+                  cat === c ? 'border-accent-300 bg-accent-300/15 text-accent-300' : 'border-border-default bg-surface-high text-ink-muted hover:text-ink-secondary'].join(' ')}>
                 {c}
               </button>
             ))}
@@ -71,8 +71,8 @@ export default function SupportInquiryModal({ open, onClose }: { open: boolean; 
                   <p className="mt-1 text-sm font-bold text-ink-primary">{q.title}</p>
                   <p className="mt-0.5 whitespace-pre-wrap text-2xs leading-relaxed text-ink-secondary">{q.content}</p>
                   {q.answer && (
-                    <div className="mt-2 rounded-input border border-gold-400/30 bg-gold-300/[0.05] p-2.5">
-                      <p className="text-[10px] font-bold text-gold-300">운영자 답변 {q.answeredAt ? `· ${q.answeredAt.slice(0, 10)}` : ''}</p>
+                    <div className="mt-2 rounded-input border border-accent-400/30 bg-accent-300/[0.05] p-2.5">
+                      <p className="text-[10px] font-bold text-accent-300">운영자 답변 {q.answeredAt ? `· ${q.answeredAt.slice(0, 10)}` : ''}</p>
                       <p className="mt-0.5 whitespace-pre-wrap text-2xs leading-relaxed text-ink-primary">{q.answer}</p>
                     </div>
                   )}

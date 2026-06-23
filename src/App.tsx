@@ -229,9 +229,9 @@ function AppHeader({
               'relative w-9 h-9 flex items-center justify-center rounded-full',
               'transition-colors duration-200 ease-out active:scale-90',
               notifOpen
-                ? 'bg-surface-high text-gold-300'
+                ? 'bg-surface-high text-accent-300'
                 : unreadCount > 0
-                ? 'text-gold-300 hover:bg-surface-high'              // 미읽음: 골드 포인트
+                ? 'text-accent-300 hover:bg-surface-high'              // 미읽음: 골드 포인트
                 : 'text-ink-secondary hover:text-ink-primary hover:bg-surface-high',
             ].join(' ')}
           >
@@ -250,7 +250,7 @@ function AppHeader({
               type="button"
               onClick={onOpenVouchers}
               aria-label="내 매장이용권"
-              className="w-9 h-9 hidden lg:flex items-center justify-center rounded-full text-ink-secondary hover:text-gold-300 hover:bg-surface-high transition-colors"
+              className="w-9 h-9 hidden lg:flex items-center justify-center rounded-full text-ink-secondary hover:text-accent-300 hover:bg-surface-high transition-colors"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" /><path d="M13 5v14" /></svg>
             </button>
@@ -324,7 +324,7 @@ function AppHeader({
                     <button type="button" onClick={() => { setNotifOpen(true); setUserMenu(false); }}
                       className="w-full text-left flex items-center gap-2 px-3 py-2.5 text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></svg>
-                      알림{unreadCount > 0 && <span className="ml-auto rounded-badge bg-gold-300 px-1.5 py-0.5 text-2xs font-bold text-ink-inverse tabular-nums">{unreadCount}</span>}
+                      알림{unreadCount > 0 && <span className="ml-auto rounded-badge bg-accent-300 px-1.5 py-0.5 text-2xs font-bold text-white tabular-nums">{unreadCount}</span>}
                     </button>
                     <button type="button" onClick={() => { onOpenVouchers(); setUserMenu(false); }}
                       className="w-full text-left flex items-center gap-2 px-3 py-2.5 text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
@@ -477,7 +477,7 @@ function TabBar({
               // 데스크톱(sm+): 자연폭 + 컨테이너 sm:justify-center로 중앙 정렬 그룹(과도한 벌어짐 방지).
               // transition에 text-shadow 포함 → 활성 전환 시 글로우가 '톡' 튀지 않고 은은히 이징(터치 시 노란색 깜빡임 제거)
               'flex-1 px-2 sm:flex-none sm:px-5 py-2.5 text-sm font-medium whitespace-nowrap transition-[color,text-shadow] duration-200 focus:outline-none touch-manipulation rounded-t-input',
-              isActive ? 'text-gold-300 text-gold-glow' : 'text-ink-muted [text-shadow:0_0_0_rgba(255,209,0,0)] hover:text-ink-secondary',
+              isActive ? 'text-accent-300 text-gold-glow' : 'text-ink-muted [text-shadow:0_0_0_rgba(255,209,0,0)] hover:text-ink-secondary',
             ].join(' ')}
           >
             <span
@@ -494,7 +494,7 @@ function TabBar({
       {/* 단일 슬라이딩 밑줄 인디케이터 — 활성 탭 라벨 폭/위치로 부드럽게 이동(중앙 정렬) */}
       <span
         aria-hidden
-        className="pointer-events-none absolute bottom-0 h-0.5 rounded-full bg-gold-300
+        className="pointer-events-none absolute bottom-0 h-0.5 rounded-full bg-accent-300
                    shadow-[0_0_8px_rgba(255,209,0,0.5)]
                    transition-[left,width] duration-300 ease-out"
         style={{ left: indicator.left, width: indicator.width }}
@@ -568,17 +568,17 @@ function MobileTabBar({ tabs, active, onChange, dot, onOpenMe }: {
             >
               {/* 아이콘 22px · 라벨 11px — 공백 줄이고 또렷하게 */}
               <span className={['relative flex h-8 w-14 items-center justify-center rounded-full [&_svg]:h-[22px] [&_svg]:w-[22px] transition-colors duration-200',
-                on ? 'text-gold-300' : 'text-ink-secondary'].join(' ')}>
+                on ? 'text-accent-300' : 'text-ink-secondary'].join(' ')}>
                 {on && (
                   <motion.span layoutId="mobile-tab-pill" aria-hidden
-                    className="absolute inset-0 rounded-full bg-gold-300/15"
+                    className="absolute inset-0 rounded-full bg-accent-300/15"
                     transition={{ type: 'spring', stiffness: 700, damping: 42 }} />
                 )}
                 {tab ? TAB_ICON[tab] : ME_ICON}
-                {tab && dot?.[tab] && !on && <span className="absolute right-2 top-0.5 h-1.5 w-1.5 rounded-full bg-gold-300" aria-hidden />}
+                {tab && dot?.[tab] && !on && <span className="absolute right-2 top-0.5 h-1.5 w-1.5 rounded-full bg-accent-300" aria-hidden />}
               </span>
               <span className={['text-[11px] font-bold leading-none transition-colors duration-200',
-                on ? 'text-gold-300' : 'text-ink-secondary'].join(' ')}>
+                on ? 'text-accent-300' : 'text-ink-secondary'].join(' ')}>
                 {label}
               </span>
             </button>
@@ -1596,15 +1596,15 @@ export default function App() {
       {/* 🔄 새 버전 배너 — 배포 감지 시 새로고침 유도(앱이 멈춰 보이지 않게) */}
       {updateReady && (
         <button type="button" onClick={() => location.reload()}
-          className="flex w-full items-center justify-center gap-2 bg-gold-300 px-3 py-2 text-xs font-bold text-ink-inverse active:opacity-80">
+          className="flex w-full items-center justify-center gap-2 bg-accent-300 px-3 py-2 text-xs font-bold text-white active:opacity-80">
           🔄 새 버전이 있어요 — 탭하여 새로고침
         </button>
       )}
       {/* 🔔 운영자 푸시 온보딩(설치형·1회) — 새 바인요청 폰 알림 */}
       {pushNudge && (
-        <div className="flex items-center gap-2 border-b border-gold-400/30 bg-gold-300/[0.08] px-3 py-2.5">
+        <div className="flex items-center gap-2 border-b border-accent-400/30 bg-accent-300/[0.08] px-3 py-2.5">
           <span className="text-lg" aria-hidden>🔔</span>
-          <p className="min-w-0 flex-1 text-2xs leading-snug text-ink-secondary">새 <b className="text-gold-300">바인요청</b>을 폰 알림으로 받으세요 — 게임 중에도 놓치지 않아요.</p>
+          <p className="min-w-0 flex-1 text-2xs leading-snug text-ink-secondary">새 <b className="text-accent-300">바인요청</b>을 폰 알림으로 받으세요 — 게임 중에도 놓치지 않아요.</p>
           <button type="button" onClick={doEnablePush} className="btn-primary shrink-0 px-3 py-1.5 text-2xs">알림 켜기</button>
           <button type="button" onClick={dismissPushNudge} aria-label="닫기" className="shrink-0 px-1 text-ink-muted hover:text-ink-secondary">✕</button>
         </div>
@@ -1613,10 +1613,10 @@ export default function App() {
       {/* 본인인증 유도 배너 (미인증·PortOne 설정 시) */}
       {user && !user.verified && PORTONE_CONFIGURED && (
         <button type="button" onClick={() => setProfileOpen(true)}
-          className="w-full flex items-center gap-2 bg-gold-300/[0.08] border-b border-gold-400/30 px-page-x py-2 text-left hover:bg-gold-300/[0.12] transition-colors">
+          className="w-full flex items-center gap-2 bg-accent-300/[0.08] border-b border-accent-400/30 px-page-x py-2 text-left hover:bg-accent-300/[0.12] transition-colors">
           <span className="text-sm" aria-hidden>🔒</span>
-          <span className="flex-1 text-2xs text-gold-300">휴대폰 본인인증이 필요합니다 — 안전한 이용을 위해 인증해 주세요.</span>
-          <span className="shrink-0 text-2xs font-bold text-gold-300">인증하기 →</span>
+          <span className="flex-1 text-2xs text-accent-300">휴대폰 본인인증이 필요합니다 — 안전한 이용을 위해 인증해 주세요.</span>
+          <span className="shrink-0 text-2xs font-bold text-accent-300">인증하기 →</span>
         </button>
       )}
 
@@ -1669,7 +1669,7 @@ export default function App() {
           {ptr !== 0 && (
             <div className="flex items-center justify-center overflow-hidden transition-[height] lg:hidden"
               style={{ height: ptr === -1 ? 52 : ptr }} aria-hidden>
-              <span className={['text-2xl text-gold-300', ptr === -1 ? 'animate-spin' : ''].join(' ')}
+              <span className={['text-2xl text-accent-300', ptr === -1 ? 'animate-spin' : ''].join(' ')}
                 style={ptr !== -1 ? { transform: `rotate(${ptr * 3}deg)`, opacity: Math.min(1, ptr / 56) } : undefined}>♠</span>
             </div>
           )}
@@ -1682,7 +1682,7 @@ export default function App() {
             <div className="flex items-center justify-between gap-2 px-page-x pt-2">
               <span className="text-2xs text-ink-muted">
                 총 <span className="text-ink-secondary tabular-nums font-semibold">{visibleSchedules.length}</span>개
-                {followedOnly && <span className="ml-1 text-gold-300">· 팔로우 매장</span>}
+                {followedOnly && <span className="ml-1 text-accent-300">· 팔로우 매장</span>}
               </span>
               <div className="flex items-center gap-1.5">
                 {user && (
@@ -1692,7 +1692,7 @@ export default function App() {
                     aria-pressed={followedOnly}
                     className={[
                       'inline-flex h-9 items-center gap-1 rounded-input border px-2.5 text-2xs font-bold leading-none transition-colors',
-                      followedOnly ? 'border-gold-300 bg-gold-300 text-ink-inverse' : 'border-border-subtle bg-surface-high/60 text-ink-secondary hover:text-ink-primary',
+                      followedOnly ? 'border-accent-300 bg-accent-300 text-white' : 'border-border-subtle bg-surface-high/60 text-ink-secondary hover:text-ink-primary',
                     ].join(' ')}
                   >
                     <svg width="11" height="11" viewBox="0 0 24 24" fill={followedOnly ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 17.3l-5.4 3 1-6L3 9.8l6-.9L12 3.5l3 5.4 6 .9-4.6 4.5 1 6z" /></svg>
@@ -1730,13 +1730,13 @@ export default function App() {
           {/* 공지 — 일정탐색 상단 (전체 공통 공지만) */}
           {(browseNotices.length > 0 || isAdmin) && (
             <div className="px-page-x pt-3">
-              <section className="rounded-card border border-gold-400/30 bg-gradient-to-br from-gold-300/[0.05] to-transparent overflow-hidden">
-                <header className="flex items-center justify-between px-3 py-2 border-b border-gold-400/20">
+              <section className="rounded-card border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.05] to-transparent overflow-hidden">
+                <header className="flex items-center justify-between px-3 py-2 border-b border-accent-400/20">
                   <button
                     type="button"
                     onClick={() => setNoticesOpen((v) => !v)}
                     aria-expanded={noticesOpen}
-                    className="flex items-center gap-1.5 text-xs font-bold text-gold-300 focus:outline-none"
+                    className="flex items-center gap-1.5 text-xs font-bold text-accent-300 focus:outline-none"
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                       strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden
@@ -1746,7 +1746,7 @@ export default function App() {
                     공지사항 {browseNotices.length > 0 && <span className="text-2xs text-ink-muted font-normal">({browseNotices.length})</span>}
                   </button>
                   {isAdmin && (
-                    <button type="button" onClick={() => setNoticeFormOpen(true)} className="text-2xs text-gold-300 hover:text-gold-200 font-semibold">
+                    <button type="button" onClick={() => setNoticeFormOpen(true)} className="text-2xs text-accent-300 hover:text-accent-200 font-semibold">
                       + 공지 작성
                     </button>
                   )}
@@ -1951,7 +1951,7 @@ export default function App() {
               <div className="space-y-1.5 pt-1">
                 {buyinPick.games.map((g) => (
                   <button key={g.gameSeq} type="button" onClick={() => submit(g.gameSeq)}
-                    className="w-full rounded-input border border-gold-400/40 bg-gold-300/[0.06] px-3 py-2.5 text-left text-sm font-bold text-ink-primary hover:bg-gold-300/15">
+                    className="w-full rounded-input border border-accent-400/40 bg-accent-300/[0.06] px-3 py-2.5 text-left text-sm font-bold text-ink-primary hover:bg-accent-300/15">
                     {g.gameSeq === 1 ? '🏆' : '🎲'} {g.title}
                   </button>
                 ))}
@@ -2151,7 +2151,7 @@ function ScrollTopButton() {
       aria-label="맨 위로"
       onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
       // 모바일: 하단 탭바(≈4.5rem+safe-area) 위로 띄움 / PC: 기존 위치
-      className="fixed bottom-[5.75rem] lg:bottom-5 right-4 z-40 flex h-10 w-10 items-center justify-center rounded-full border border-border-default bg-surface-mid/95 text-ink-secondary shadow-dialog backdrop-blur transition-colors hover:text-gold-300 animate-fade-in"
+      className="fixed bottom-[5.75rem] lg:bottom-5 right-4 z-40 flex h-10 w-10 items-center justify-center rounded-full border border-border-default bg-surface-mid/95 text-ink-secondary shadow-dialog backdrop-blur transition-colors hover:text-accent-300 animate-fade-in"
     >
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         <polyline points="18 15 12 9 6 15" />
@@ -2214,12 +2214,12 @@ function PastTournaments({ schedules, onSelect }: { schedules: Schedule[]; onSel
                           {medal(e.position) ?? `${e.position}위`}
                         </span>
                         <span className="min-w-0 flex-1 truncate font-semibold text-ink-primary">{e.nickname}</span>
-                        {e.prize && <span className="shrink-0 text-xs tabular-nums text-gold-300">{e.prize}</span>}
+                        {e.prize && <span className="shrink-0 text-xs tabular-nums text-accent-300">{e.prize}</span>}
                       </li>
                     ))}
                   </ul>
                   <button type="button" onClick={() => onSelect(s)}
-                    className="mt-1.5 text-xs font-semibold text-ink-muted transition-colors hover:text-gold-300">
+                    className="mt-1.5 text-xs font-semibold text-ink-muted transition-colors hover:text-accent-300">
                     대회 정보 전체 보기 →
                   </button>
                 </div>
@@ -2271,7 +2271,7 @@ function BrowseSideRail({ posts, schedules, onSelectPost, onSelectSchedule }: {
               <li key={s.id} className="border-b border-border-subtle last:border-b-0">
                 <button type="button" onClick={() => onSelectSchedule(s)}
                   className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-surface-high/70">
-                  <span className={['shrink-0 rounded-badge px-1.5 py-0.5 text-2xs font-bold tabular-nums', s.date === today ? 'bg-gold-300/15 text-gold-300' : 'bg-surface-high text-ink-muted'].join(' ')}>{dday(s.date)}</span>
+                  <span className={['shrink-0 rounded-badge px-1.5 py-0.5 text-2xs font-bold tabular-nums', s.date === today ? 'bg-accent-300/15 text-accent-300' : 'bg-surface-high text-ink-muted'].join(' ')}>{dday(s.date)}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-semibold text-ink-primary">{s.title}</span>
                     <span className="block truncate text-xs text-ink-muted">{s.pubName} · {s.startTime}</span>
@@ -2285,8 +2285,8 @@ function BrowseSideRail({ posts, schedules, onSelectPost, onSelectSchedule }: {
 
       {/* 주간 머니인 킹 */}
       {kings.length > 0 && (
-        <section className="rounded-card border border-gold-400/25 bg-surface-low overflow-hidden">
-          <header className="border-b border-border-subtle px-3 py-2 text-xs font-bold text-gold-300">이번 주 머니인 킹</header>
+        <section className="rounded-card border border-accent-400/25 bg-surface-low overflow-hidden">
+          <header className="border-b border-border-subtle px-3 py-2 text-xs font-bold text-accent-300">이번 주 머니인 킹</header>
           <ul>
             {kings.map((k, i) => (
               <li key={k.nickname} className="flex items-center gap-2 border-b border-border-subtle px-3 py-2 last:border-b-0">

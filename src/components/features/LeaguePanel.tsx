@@ -47,8 +47,8 @@ export default function LeaguePanel({ venueId, canConfigure }: { venueId: string
     <div className="space-y-3">
       {/* 받은 초대 */}
       {invites.length > 0 && (
-        <section className="rounded-card border border-gold-400/50 bg-gold-300/[0.07] p-3 space-y-2">
-          <h3 className="text-sm font-bold text-gold-300">받은 초대 {invites.length}건</h3>
+        <section className="rounded-card border border-accent-400/50 bg-accent-300/[0.07] p-3 space-y-2">
+          <h3 className="text-sm font-bold text-accent-300">받은 초대 {invites.length}건</h3>
           {invites.map(({ league, members }) => {
             const mine = members.find((m) => m.venueId === venueId);
             return (
@@ -178,7 +178,7 @@ function LeagueLiveBoard({ league, isOwner, members, venueId, canConfigure, onCh
           return (
             <li key={v.venueId} className="flex items-center gap-2 rounded-input bg-surface-base/50 px-2 py-1.5">
               <span className={['h-2.5 w-2.5 shrink-0 rounded-full', LIVE_DOT[ls].c].join(' ')} aria-hidden />
-              <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{v.name}{v.owner && <span className="ml-1 text-[9px] font-bold text-gold-300">리그장</span>}{v.venueId === league.finalVenueId && <span className="ml-1 text-[9px] font-bold text-sky-300">🏁 파이널</span>}</span>
+              <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{v.name}{v.owner && <span className="ml-1 text-[9px] font-bold text-accent-300">리그장</span>}{v.venueId === league.finalVenueId && <span className="ml-1 text-[9px] font-bold text-sky-300">🏁 파이널</span>}</span>
               <span className="shrink-0 text-[10px] tabular-nums text-ink-muted">엔트리 {st?.entries ?? 0}</span>
               <span className={['shrink-0 text-[10px] font-bold', ls === 'settled' ? 'text-rose-300' : ls === 'running' ? 'text-emerald-300' : 'text-amber-300'].join(' ')}>{LIVE_DOT[ls].label}</span>
             </li>
@@ -207,8 +207,8 @@ function LeagueLiveBoard({ league, isOwner, members, venueId, canConfigure, onCh
 
       {/* 정산 후: 합산 ITM + 파이널 안내 */}
       {revealItm && (
-        <div className="rounded-input border border-gold-400/30 bg-gold-300/[0.05] p-2.5 space-y-1.5">
-          <p className="text-2xs font-bold text-gold-300">🎯 통합 ITM (입상권) · 총 엔트리 {statuses.reduce((a, s) => a + (s.entries || 0), 0)}</p>
+        <div className="rounded-input border border-accent-400/30 bg-accent-300/[0.05] p-2.5 space-y-1.5">
+          <p className="text-2xs font-bold text-accent-300">🎯 통합 ITM (입상권) · 총 엔트리 {statuses.reduce((a, s) => a + (s.entries || 0), 0)}</p>
           {finalVenueName && (
             <p className="text-[11px] text-ink-secondary">🏁 파이널 집결 매장: <b className="text-sky-300">{finalVenueName}</b>(엔트리 최다) · 3테이블로 시작 — 통합 클락은 이 매장에서 새 클락으로 진행</p>
           )}
@@ -218,7 +218,7 @@ function LeagueLiveBoard({ league, isOwner, members, venueId, canConfigure, onCh
             <ul className="max-h-48 space-y-0.5 overflow-y-auto pr-1">
               {combinedItm.map((p, i) => (
                 <li key={i} className="flex items-center gap-2 text-xs">
-                  <span className="w-5 text-right font-bold tabular-nums text-gold-300">{p.place ?? i + 1}</span>
+                  <span className="w-5 text-right font-bold tabular-nums text-accent-300">{p.place ?? i + 1}</span>
                   <span className="min-w-0 flex-1 truncate font-semibold text-ink-primary">{p.name}</span>
                   <span className="shrink-0 rounded-badge bg-surface-float px-1.5 py-0.5 text-[9px] font-bold text-ink-secondary">{p.venue}</span>
                   {p.prize && <span className="shrink-0 text-[10px] text-gold-300">{p.prize}</span>}
@@ -277,7 +277,7 @@ function LeagueCard({ league, isOwner, members, venueId, canConfigure, onChanged
       <div className="flex flex-wrap items-center gap-2">
         <div className="min-w-0 flex-1">
           <p className="text-sm font-extrabold text-ink-primary">🏆 {league.name}</p>
-          <p className="text-[10px] text-ink-muted">주최 {league.ownerVenueName ?? '매장'} · 시즌 {league.seasonStart}~ {isOwner && <span className="text-gold-300 font-bold">· 내가 리그장</span>}</p>
+          <p className="text-[10px] text-ink-muted">주최 {league.ownerVenueName ?? '매장'} · 시즌 {league.seasonStart}~ {isOwner && <span className="text-accent-300 font-bold">· 내가 리그장</span>}</p>
         </div>
         {isOwner && canConfigure && (
           <button type="button" onClick={async () => { try { await deleteLeague(league.id); toast.show('리그를 해산했습니다', 'info'); onChanged(); } catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); } }}
@@ -287,7 +287,7 @@ function LeagueCard({ league, isOwner, members, venueId, canConfigure, onChanged
 
       {/* 멤버 매장 — 수락/대기/거절 전부 표시 */}
       <div className="flex flex-wrap items-center gap-1.5">
-        <span className="rounded-badge bg-gold-300/15 px-2 py-0.5 text-[10px] font-bold text-gold-300">{league.ownerVenueName ?? '주최'} (리그장)</span>
+        <span className="rounded-badge bg-accent-300/15 px-2 py-0.5 text-[10px] font-bold text-accent-300">{league.ownerVenueName ?? '주최'} (리그장)</span>
         {members.map((m) => (
           <span key={m.id} className={['inline-flex items-center gap-1 rounded-badge px-2 py-0.5 text-[10px] font-bold', STATUS_BADGE[m.status].cls].join(' ')}>
             {m.venueName ?? '매장'} · {STATUS_BADGE[m.status].label}
@@ -313,18 +313,18 @@ function LeagueCard({ league, isOwner, members, venueId, canConfigure, onChanged
       <LeagueLiveBoard league={league} isOwner={isOwner} members={members} venueId={venueId} canConfigure={canConfigure} onChanged={onChanged} />
 
       {/* 통합 스탠딩 */}
-      <div className="rounded-input border border-gold-400/25 bg-gold-300/[0.04] p-2.5">
-        <p className="mb-1.5 text-2xs font-bold text-gold-300">통합 순위 (TOP 10 · 시즌 {league.seasonStart}~)</p>
+      <div className="rounded-input border border-accent-400/25 bg-accent-300/[0.04] p-2.5">
+        <p className="mb-1.5 text-2xs font-bold text-accent-300">통합 순위 (TOP 10 · 시즌 {league.seasonStart}~)</p>
         {standings.length === 0 ? (
           <p className="py-2 text-center text-2xs text-ink-muted">아직 기록이 없습니다 — 아래에서 포인트를 입력하면 모든 멤버 매장 합산 순위가 만들어져요.</p>
         ) : (
           <ol className="grid grid-cols-1 gap-x-4 gap-y-0.5 sm:grid-cols-2">
             {standings.slice(0, 10).map((s, i) => (
               <li key={s.name} className="flex items-baseline gap-2 text-xs">
-                <span className={['w-4 text-right font-bold tabular-nums', i < 3 ? 'text-gold-300' : 'text-ink-muted'].join(' ')}>{i + 1}</span>
+                <span className={['w-4 text-right font-bold tabular-nums', i < 3 ? 'text-accent-300' : 'text-ink-muted'].join(' ')}>{i + 1}</span>
                 <span className="min-w-0 flex-1 truncate font-semibold text-ink-primary">{s.name}</span>
                 <span className="shrink-0 text-[10px] text-ink-muted">{s.venues}개 매장</span>
-                <span className="font-bold tabular-nums text-gold-300">{s.points.toLocaleString()}점</span>
+                <span className="font-bold tabular-nums text-accent-300">{s.points.toLocaleString()}점</span>
               </li>
             ))}
           </ol>
@@ -339,7 +339,7 @@ function LeagueCard({ league, isOwner, members, venueId, canConfigure, onChanged
       </div>
 
       {/* 입력 내역(최근) */}
-      <button type="button" onClick={() => setOpenLog((v) => !v)} className="text-2xs font-semibold text-gold-300 hover:text-gold-200">
+      <button type="button" onClick={() => setOpenLog((v) => !v)} className="text-2xs font-semibold text-accent-300 hover:text-accent-200">
         {openLog ? '내역 접기 ▲' : `전체 입력 내역 보기 (${entries.length}) ▼`}
       </button>
       {openLog && (
@@ -349,7 +349,7 @@ function LeagueCard({ league, isOwner, members, venueId, canConfigure, onChanged
               <span className="shrink-0 text-[10px] tabular-nums text-ink-muted">{e.entryDate.slice(5)}</span>
               <span className="shrink-0 rounded-badge bg-surface-float px-1.5 py-0.5 text-[9px] font-bold text-ink-secondary">{e.venueName ?? '매장'}</span>
               <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{e.name}</span>
-              <span className={['shrink-0 text-xs font-bold tabular-nums', e.points >= 0 ? 'text-gold-300' : 'text-danger-light'].join(' ')}>{e.points >= 0 ? '+' : ''}{e.points}</span>
+              <span className={['shrink-0 text-xs font-bold tabular-nums', e.points >= 0 ? 'text-accent-300' : 'text-danger-light'].join(' ')}>{e.points >= 0 ? '+' : ''}{e.points}</span>
               {(e.venueId === venueId || isOwner) && (
                 <button type="button" onClick={async () => { await deleteLeagueEntry(e.id).catch(() => {}); reloadEntries(); }} aria-label="삭제" className="shrink-0 text-ink-muted hover:text-danger-light"><Icon name="close" size={12} /></button>
               )}

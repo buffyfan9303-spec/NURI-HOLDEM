@@ -521,8 +521,8 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-2xs text-ink-muted">{hasRange ? `${filterFrom || '처음'} ~ ${filterTo || '오늘'}` : '기간 설정 시 그 범위만'}</span>
-            <button type="button" onClick={() => { setFilterFrom(shiftDays(todayStr, -6)); setFilterTo(todayStr); }} className="text-2xs font-semibold text-gold-300/90 hover:text-gold-300">최근 7일</button>
-            <button type="button" onClick={() => { setFilterFrom(todayStr.slice(0, 7) + '-01'); setFilterTo(todayStr); }} className="text-2xs font-semibold text-gold-300/90 hover:text-gold-300">이번 달</button>
+            <button type="button" onClick={() => { setFilterFrom(shiftDays(todayStr, -6)); setFilterTo(todayStr); }} className="text-2xs font-semibold text-accent-300/90 hover:text-accent-300">최근 7일</button>
+            <button type="button" onClick={() => { setFilterFrom(todayStr.slice(0, 7) + '-01'); setFilterTo(todayStr); }} className="text-2xs font-semibold text-accent-300/90 hover:text-accent-300">이번 달</button>
             {hasRange && <button type="button" onClick={() => { setFilterFrom(''); setFilterTo(''); }} className="text-2xs text-ink-muted hover:text-ink-secondary ml-auto">전체 보기</button>}
           </div>
         </div>
@@ -554,7 +554,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                       onClick={() => setCollapsedDates((prev) => { const n = new Set(prev); n.has(date) ? n.delete(date) : n.add(date); return n; })}
                       className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-surface-high transition-colors">
                       <span className="text-sm font-bold text-ink-primary">{date}{date === todayStr ? ' (오늘)' : ''}</span>
-                      <span className="text-2xs font-semibold text-gold-300/90">게임 {items.length}</span>
+                      <span className="text-2xs font-semibold text-accent-300/90">게임 {items.length}</span>
                       {liveN > 0 && <span className="text-2xs font-bold text-emerald-400">진행 {liveN}</span>}
                       {closedN > 0 && <span className="text-2xs text-ink-muted">마감 {closedN}</span>}
                       <span className="flex-1" />
@@ -568,7 +568,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                           <li key={`${s.sessionDate}#${s.gameSeq}`} className="flex items-center hover:bg-surface-high/40 transition-colors">
                             <button type="button" disabled={!canOpen} onClick={() => canOpen && openBoard(s.sessionDate, s.gameSeq)}
                               className={['flex-1 min-w-0 flex items-center gap-2.5 px-3 py-2.5 text-left', canOpen ? '' : 'opacity-50 cursor-not-allowed'].join(' ')}>
-                              <span className={['shrink-0 text-2xs font-bold px-1.5 py-0.5 rounded-badge border', s.gameSeq === MAIN_GAME_SEQ ? 'bg-surface-float text-ink-muted border-border-default' : 'bg-gold-300/15 text-gold-300 border-gold-400/40'].join(' ')}>{gl(s.gameSeq)}</span>
+                              <span className={['shrink-0 text-2xs font-bold px-1.5 py-0.5 rounded-badge border', s.gameSeq === MAIN_GAME_SEQ ? 'bg-surface-float text-ink-muted border-border-default' : 'bg-accent-300/15 text-accent-300 border-accent-400/40'].join(' ')}>{gl(s.gameSeq)}</span>
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm font-bold text-ink-primary truncate">{s.title || '게임'}</p>
                                 <p className="text-2xs text-ink-muted truncate">바인 {s.buyinAmount.toLocaleString()}원{s.operators.length > 0 ? ` · 담당 ${operFull(s.operators[0])}${s.operators.length > 1 ? ` 외 ${s.operators.length - 1}` : ''}` : ''}{canOpen ? '' : ' · 접근 권한 없음'}</p>
@@ -576,7 +576,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                               {!canOpen
                                 ? <span className="shrink-0 text-sm" aria-label="잠김">🔒</span>
                                 : s.closed
-                                ? <span className="shrink-0 text-2xs font-bold text-gold-300 bg-gold-300/15 px-2 py-0.5 rounded-badge">마감</span>
+                                ? <span className="shrink-0 text-2xs font-bold text-accent-300 bg-accent-300/15 px-2 py-0.5 rounded-badge">마감</span>
                                 : s.regClosed
                                 ? <span className="shrink-0 text-2xs font-bold text-danger-light bg-danger/10 px-2 py-0.5 rounded-badge">레지마감</span>
                                 : <span className="shrink-0 text-2xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-badge">진행중</span>}
@@ -650,7 +650,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
         <span className="text-2xs text-ink-muted">현금 {wonToMan(session.buyinAmount)}만원
           {session.cardAmount && session.cardAmount > 0 ? ` · 카드 ${wonToMan(session.cardAmount)}만원` : ' · 카드=현금'}</span>
         {session.openedAt && <span className="text-2xs text-ink-muted">· 담당 {operFull(session.openedBy)}</span>}
-        {scheduleTitle(session.scheduleId) && <span className="text-2xs text-gold-300 font-semibold">· 대회 {scheduleTitle(session.scheduleId)}</span>}
+        {scheduleTitle(session.scheduleId) && <span className="text-2xs text-accent-300 font-semibold">· 대회 {scheduleTitle(session.scheduleId)}</span>}
         <span className="flex-1" />
         {onOpenClock && <button type="button" onClick={() => onOpenClock(date, gameSeq)} className="btn-ghost text-sm px-3.5 py-2 font-semibold">⏱ 클락</button>}
         {!closed && <button type="button" onClick={() => setEditOpen(true)} className="btn-ghost text-sm px-3.5 py-2 font-semibold">세션 정보 수정</button>}
@@ -660,7 +660,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       {!closed && (
         <div role="button" tabIndex={0} title="탭하면 하단 정산/마감으로 이동"
           onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}
-          className="sticky top-header-h z-10 grid grid-cols-4 gap-2 rounded-card border border-gold-400/30 bg-surface-mid/95 px-3 py-1.5 text-center shadow-sm backdrop-blur cursor-pointer">
+          className="sticky top-header-h z-10 grid grid-cols-4 gap-2 rounded-card border border-accent-400/30 bg-surface-mid/95 px-3 py-1.5 text-center shadow-sm backdrop-blur cursor-pointer">
           <Metric label="엔트리" value={stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} />
           <Metric label="완납 매출" value={`${wonToMan(stats.revenue)}만`} tone="emerald" />
           {(() => {
@@ -709,7 +709,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                         {([['cash', '현금'], ['card', '카드'], ['transfer', '이체']] as const).map(([mth, lbl]) => (
                           <button key={mth} type="button" onClick={() => approveReq(r, true, mth)} className="flex-1 rounded-input border border-emerald-500/50 px-2 py-1.5 text-2xs font-bold text-emerald-300 hover:bg-emerald-500/15">{lbl}</button>
                         ))}
-                        <button type="button" onClick={() => { setSplitFor(r.id); setSplitAmts({ cash: session.buyinAmount || 0, card: 0, transfer: 0 }); }} className="flex-1 rounded-input border border-gold-400/50 px-2 py-1.5 text-2xs font-bold text-gold-300 hover:bg-gold-300/10">분할</button>
+                        <button type="button" onClick={() => { setSplitFor(r.id); setSplitAmts({ cash: session.buyinAmount || 0, card: 0, transfer: 0 }); }} className="flex-1 rounded-input border border-accent-400/50 px-2 py-1.5 text-2xs font-bold text-accent-300 hover:bg-accent-300/10">분할</button>
                       </div>
                     ) : (
                       <>
@@ -760,8 +760,8 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       )}
 
       {closed && (
-        <div className="rounded-card border border-gold-400/40 bg-gold-300/10 p-2.5 flex items-center gap-2">
-          <span className="text-xs font-bold text-gold-300">마감됨 (읽기전용){session.closedAt ? ` · ${hhmm(session.closedAt)}` : ''}</span>
+        <div className="rounded-card border border-accent-400/40 bg-accent-300/10 p-2.5 flex items-center gap-2">
+          <span className="text-xs font-bold text-accent-300">마감됨 (읽기전용){session.closedAt ? ` · ${hhmm(session.closedAt)}` : ''}</span>
           {session.closeMemo && <span className="text-2xs text-ink-secondary truncate">메모: {session.closeMemo}</span>}
           <span className="flex-1" />
           {canManage && <button type="button" onClick={handleReopen} className="btn-ghost text-2xs px-2.5 py-1">마감 해제</button>}
@@ -781,7 +781,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
               }}
               className={hasRank === false
                 ? 'btn-primary px-3 py-1.5 text-xs'
-                : 'btn-ghost px-3 py-1.5 text-xs text-gold-300'}>
+                : 'btn-ghost px-3 py-1.5 text-xs text-accent-300'}>
               🏆 순위 입력하기{hasRank === false ? ' (미입력)' : hasRank ? ' · 입력됨 ✓' : ''}
             </button>
           )}
@@ -817,7 +817,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addPlayer(); } }}
                 placeholder="닉네임/이름 (입력 시 가입자 자동완성)" maxLength={20} className="input w-full text-sm" autoFocus />
               {(suggest.length > 0 || memOnly.length > 0 || newName.trim()) && (
-                <ul className="max-h-52 space-y-1 overflow-y-auto rounded-input border border-gold-400/30 bg-surface-base/60 p-1">
+                <ul className="max-h-52 space-y-1 overflow-y-auto rounded-input border border-accent-400/30 bg-surface-base/60 p-1">
                   {newName.trim() && (
                     <li>
                       <button type="button" onClick={addPlayer} className="flex w-full items-center gap-2 rounded-input px-2 py-1.5 text-left hover:bg-surface-high">
@@ -851,14 +851,14 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                 {VISITOR_OPTS.map((t) => (
                   <button key={t.code} type="button" onClick={() => setNewType((cur) => (cur === t.code ? null : t.code))}
                     className={['text-2xs font-bold px-2 py-1 rounded-badge border transition-colors',
-                      newType === t.code ? 'bg-gold-300/15 text-gold-300 border-gold-400/40' : 'bg-surface-float text-ink-muted border-border-default'].join(' ')}>
+                      newType === t.code ? 'bg-accent-300/15 text-accent-300 border-accent-400/40' : 'bg-surface-float text-ink-muted border-border-default'].join(' ')}>
                     {t.label}
                   </button>
                 ))}
                 <button type="button"
                   onClick={() => { const v = window.prompt('유형 직접입력'); if (v && v.trim()) setNewType(v.trim()); }}
                   className={['text-2xs font-bold px-2 py-1 rounded-badge border transition-colors',
-                    newType && !VISITOR_OPTS.some((o) => o.code === newType) ? 'bg-gold-300/15 text-gold-300 border-gold-400/40' : 'bg-surface-float text-ink-muted border-border-default'].join(' ')}>
+                    newType && !VISITOR_OPTS.some((o) => o.code === newType) ? 'bg-accent-300/15 text-accent-300 border-accent-400/40' : 'bg-surface-float text-ink-muted border-border-default'].join(' ')}>
                   {newType && !VISITOR_OPTS.some((o) => o.code === newType) ? newType : '직접입력'}
                 </button>
                 <span className="flex-1" />
@@ -914,7 +914,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                             </div>
                             <div className="flex items-center gap-1 mt-0.5">
                               {r.player?.visitorType
-                                ? <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-badge bg-gold-300/15 text-gold-300 border border-gold-400/40">{visitorLabel(r.player.visitorType)}</span>
+                                ? <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-badge bg-accent-300/15 text-accent-300 border border-accent-400/40">{visitorLabel(r.player.visitorType)}</span>
                                 : r.player ? <span className="text-[9px] text-ink-muted">{closed ? '' : '유형/비고 +'}</span> : <span className="text-[9px] text-ink-muted">—</span>}
                               {r.player?.note && <span className="text-[9px] text-ink-secondary truncate max-w-[4rem]">· {r.player.note}</span>}
                             </div>
@@ -931,7 +931,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                           const tone = c.paymentMethod === 'support'
                             ? 'border-indigo-400/50 bg-indigo-500/10 text-indigo-300'
                             : c.isUnpaid ? 'border-danger bg-danger/10 text-danger-light'
-                            : (c.isSplit || c.discountIndex > 0) ? 'border-gold-400/50 bg-gold-300/10 text-gold-300'
+                            : (c.isSplit || c.discountIndex > 0) ? 'border-accent-400/50 bg-accent-300/10 text-accent-300'
                             : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300';
                           const topLabel = c.isSplit ? '분납' : `${METHOD_SHORT[c.paymentMethod]}${c.isUnpaid ? '·미' : ''}`;
                           const et = earlyTypeOf(c, session);
@@ -945,7 +945,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                                 {et !== 'none'
                                   ? <span className="text-[7px] font-bold text-amber-300 leading-none">{et === 'double' ? '더블얼리' : '얼리'}</span>
                                   : frac < 0.999
-                                  ? <span className="text-[8px] font-bold text-gold-200 leading-none mt-0.5">{frac.toLocaleString(undefined, { maximumFractionDigits: 2 })}엔트리</span>
+                                  ? <span className="text-[8px] font-bold text-accent-200 leading-none mt-0.5">{frac.toLocaleString(undefined, { maximumFractionDigits: 2 })}엔트리</span>
                                   : <span className="text-[8px] opacity-80 mt-0.5">{hhmm(c.buyinAt)}</span>}
                               </button>
                             </td>
@@ -955,7 +955,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                           return (
                             <td key={e} className={cls}>
                               <button type="button" onClick={() => setSelected({ playerName: r.name, entryNo: e, buyin: null })}
-                                className="w-full h-full rounded-input border-2 border-dashed border-border-default text-ink-muted hover:border-gold-400 hover:text-gold-300 transition-colors flex items-center justify-center text-base font-bold">+</button>
+                                className="w-full h-full rounded-input border-2 border-dashed border-border-default text-ink-muted hover:border-accent-400 hover:text-accent-300 transition-colors flex items-center justify-center text-base font-bold">+</button>
                             </td>
                           );
                         }
@@ -967,14 +967,14 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                           <button type="button" disabled={closed} onClick={() => setEditPlayer(r.player as LedgerPlayer)} className="w-full text-left text-2xs disabled:cursor-default">
                             {r.player.note
                               ? <span className="text-ink-secondary line-clamp-2 whitespace-pre-wrap break-words">{r.player.note}</span>
-                              : <span className="text-gold-300 font-semibold">{closed ? '—' : '비고 +'}</span>}
+                              : <span className="text-accent-300 font-semibold">{closed ? '—' : '비고 +'}</span>}
                           </button>
                         ) : first ? <span className="text-2xs text-ink-muted">—</span> : null}
                       </td>
                       <td className="sticky right-[4rem] z-10 bg-surface-low w-[4rem] px-1 py-1 border-b border-l border-border-strong text-2xs tabular-nums">
                         {first ? (
                           <span className="leading-tight block">
-                            <b className="text-gold-300">{cnt}회</b>
+                            <b className="text-accent-300">{cnt}회</b>
                             <span className="block text-ink-secondary">{wonToMan(tot.paid + tot.unpaid)}만</span>
                           </span>
                         ) : ''}
@@ -1010,7 +1010,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                 </button>
                 <button type="button" onClick={() => setCloseOpen(true)} className="btn-primary text-2xs px-2 py-1">정산 마감</button>
               </div>
-            ) : <span className="text-2xs text-gold-300 text-center font-bold px-3 py-1">마감됨</span>}
+            ) : <span className="text-2xs text-accent-300 text-center font-bold px-3 py-1">마감됨</span>}
           </div>
         </div>
         {(stats.support > 0 || stats.ticketUnpaid > 0) && (
@@ -1143,7 +1143,7 @@ function ClockRemoteBar({ clock, onPatch, onOpenClock, active = true }: {
   const stepBtn = 'h-8 w-8 shrink-0 rounded-input border border-border-default text-ink-secondary text-base font-bold flex items-center justify-center active:bg-surface-high disabled:opacity-35';
 
   return (
-    <div className="rounded-card border border-gold-400/30 bg-gradient-to-r from-gold-300/[0.07] to-transparent px-2.5 py-2 space-y-2">
+    <div className="rounded-card border border-accent-400/30 bg-gradient-to-r from-accent-300/[0.07] to-transparent px-2.5 py-2 space-y-2">
       {/* 1행: 레벨/시간 제어 */}
       <div className="flex items-center gap-2">
         <button type="button" onClick={onOpenClock} disabled={!onOpenClock} className="min-w-0 flex-1 text-left disabled:cursor-default">
@@ -1151,19 +1151,19 @@ function ClockRemoteBar({ clock, onPatch, onOpenClock, active = true }: {
             <span>⏱ {cur.kind === 'break' ? '브레이크' : `레벨 ${no}`}</span>
             {clock.running
               ? <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" aria-label="진행 중" />
-              : <span className="text-gold-300 font-bold">일시정지</span>}
+              : <span className="text-accent-300 font-bold">일시정지</span>}
           </p>
           <p className="text-base font-extrabold text-ink-primary tabular-nums leading-tight mt-0.5 truncate">
             {cur.kind === 'break'
               ? (cur.label || 'BREAK')
               : <>{cur.sb.toLocaleString()}/{cur.bb.toLocaleString()}{cur.ante > 0 ? <span className="text-xs text-ink-secondary"> ({cur.ante.toLocaleString()})</span> : null}</>}
-            <span className={clock.running ? 'ml-2 text-emerald-300' : 'ml-2 text-gold-300'}>{mm}:{String(ss).padStart(2, '0')}</span>
+            <span className={clock.running ? 'ml-2 text-emerald-300' : 'ml-2 text-accent-300'}>{mm}:{String(ss).padStart(2, '0')}</span>
           </p>
         </button>
         <button type="button" onClick={() => go(-1)} disabled={idx <= 0} aria-label="이전 레벨"
           className={`${ctl} border-border-default text-ink-secondary hover:text-ink-primary disabled:opacity-35`}>‹</button>
         <button type="button" onClick={toggle} aria-label={clock.running ? '일시정지' : '재개'}
-          className={`${ctl} ${clock.running ? 'border-gold-400/50 bg-gold-300/15 text-gold-300' : 'border-emerald-500/50 bg-emerald-500/15 text-emerald-300'}`}>
+          className={`${ctl} ${clock.running ? 'border-accent-400/50 bg-accent-300/15 text-accent-300' : 'border-emerald-500/50 bg-emerald-500/15 text-emerald-300'}`}>
           {clock.running ? '⏸' : '▶'}
         </button>
         <button type="button" onClick={() => go(1)} disabled={idx >= lv.length - 1} aria-label="다음 레벨"
@@ -1171,7 +1171,7 @@ function ClockRemoteBar({ clock, onPatch, onOpenClock, active = true }: {
       </div>
 
       {/* 2행: 아웃 처리(최우선) — 생존 카운트 + 큰 아웃 버튼 + 되돌리기 아이콘 */}
-      <div className="flex items-center gap-2 border-t border-gold-400/15 pt-2">
+      <div className="flex items-center gap-2 border-t border-accent-400/15 pt-2">
         <div className="min-w-0 flex-1 leading-none">
           <span className="text-2xs text-ink-muted">생존</span>
           <span className="ml-1.5 text-lg font-extrabold text-emerald-300 tabular-nums">{alive}</span>
@@ -1191,7 +1191,7 @@ function ClockRemoteBar({ clock, onPatch, onOpenClock, active = true }: {
         <span className="text-2xs text-ink-muted/70">자동 {ls?.earlies ?? 0}{(clock.adjEarlies ?? 0) !== 0 ? ` ${(clock.adjEarlies ?? 0) > 0 ? '+' : ''}${clock.adjEarlies}` : ''}</span>
         <span className="flex-1" />
         <button type="button" onClick={() => adjEarly(-1)} aria-label="얼리 −1" className={stepBtn}>−</button>
-        <span className="w-7 text-center text-sm font-extrabold text-gold-300 tabular-nums">{(ls?.earlies ?? 0) + (clock.adjEarlies ?? 0)}</span>
+        <span className="w-7 text-center text-sm font-extrabold text-accent-300 tabular-nums">{(ls?.earlies ?? 0) + (clock.adjEarlies ?? 0)}</span>
         <button type="button" onClick={() => adjEarly(1)} aria-label="얼리 +1" className={stepBtn}>+</button>
       </div>
     </div>
@@ -1275,7 +1275,7 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
   return (
     <button type="button" onClick={onClick}
       className={['text-2xs font-bold px-2.5 py-1 rounded-badge border transition-colors',
-        active ? 'bg-gold-300/15 text-gold-300 border-gold-400/40' : 'bg-surface-float text-ink-muted border-border-default'].join(' ')}>
+        active ? 'bg-accent-300/15 text-accent-300 border-accent-400/40' : 'bg-surface-float text-ink-muted border-border-default'].join(' ')}>
       {children}
     </button>
   );
@@ -1306,16 +1306,16 @@ function GameSwitcher({ games, gameSeq, onSelect, onAddSide, canAdd }: {
       {games.map((g) => (
         <button key={g.gameSeq} type="button" onClick={() => onSelect(g.gameSeq)}
           className={['shrink-0 text-xs font-bold px-2.5 py-1.5 rounded-badge border transition-colors whitespace-nowrap',
-            g.gameSeq === gameSeq ? 'bg-gold-300 text-ink-inverse border-gold-300' : 'bg-surface-high text-ink-secondary border-border-default hover:text-ink-primary'].join(' ')}>
+            g.gameSeq === gameSeq ? 'bg-accent-300 text-white border-accent-300' : 'bg-surface-high text-ink-secondary border-border-default hover:text-ink-primary'].join(' ')}>
           {label(g.gameSeq)}{g.title ? ` · ${g.title}` : ''}{g.closed ? ' ·마감' : ''}
         </button>
       ))}
       {showPending && (
-        <span className="shrink-0 text-xs font-bold px-2.5 py-1.5 rounded-badge border bg-gold-300 text-ink-inverse border-gold-300 whitespace-nowrap">{label(gameSeq)} (작성중)</span>
+        <span className="shrink-0 text-xs font-bold px-2.5 py-1.5 rounded-badge border bg-accent-300 text-white border-accent-300 whitespace-nowrap">{label(gameSeq)} (작성중)</span>
       )}
       {canAdd && !showPending && (
         <button type="button" onClick={onAddSide}
-          className="shrink-0 text-xs font-bold px-2.5 py-1.5 rounded-badge border border-dashed border-gold-400/50 text-gold-300 hover:bg-gold-300/10 transition-colors whitespace-nowrap">+ 사이드</button>
+          className="shrink-0 text-xs font-bold px-2.5 py-1.5 rounded-badge border border-dashed border-accent-400/50 text-accent-300 hover:bg-accent-300/10 transition-colors whitespace-nowrap">+ 사이드</button>
       )}
     </div>
   );
@@ -1459,10 +1459,10 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   };
 
   return (
-    <div className={embedded ? 'space-y-3' : 'rounded-card border border-gold-400/30 bg-gradient-to-br from-gold-300/[0.05] to-transparent p-3 space-y-2.5'}>
+    <div className={embedded ? 'space-y-3' : 'rounded-card border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.05] to-transparent p-3 space-y-2.5'}>
       {mode === 'open' && (
         <div>
-          <h3 className="text-sm font-bold text-gold-300">장부 시작 설정</h3>
+          <h3 className="text-sm font-bold text-accent-300">장부 시작 설정</h3>
           <p className="text-2xs text-ink-muted mt-0.5">담당직원: <b className="text-ink-secondary">{operatorName}</b> · 아래 정보를 입력 후 장부에 입장합니다.</p>
           {prefilled && <p className="text-xs font-semibold text-emerald-400 mt-0.5">✅ 직전 게임 설정을 불러왔습니다 — 바로 시작하거나 수정하세요.</p>}
           {autoLinked && <p className="text-xs font-semibold text-emerald-400 mt-0.5">✅ 오늘 포스터를 자동으로 연동했습니다 — 게임명·바인·유형이 채워졌어요(수정 가능).</p>}
@@ -1471,14 +1471,14 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
 
       {mode === 'open' && copyMain && (base.gameSeq ?? 1) > 1 && (
         <button type="button" onClick={applyCopyMain}
-          className="w-full flex items-center justify-center gap-1.5 rounded-input border border-gold-400/50 bg-gold-300/12 px-3 py-2.5 text-sm font-bold text-gold-300 transition-colors hover:bg-gold-300/20">
+          className="w-full flex items-center justify-center gap-1.5 rounded-input border border-accent-400/50 bg-accent-300/12 px-3 py-2.5 text-sm font-bold text-accent-300 transition-colors hover:bg-accent-300/20">
           📋 메인 게임 설정 그대로 복사 (단가·할인·딜러·유형)
         </button>
       )}
       {mode === 'open' && presets.length > 0 && (
         <Field label="프리셋 게임 · 클릭하면 아래 내용 자동입력(수정 가능)">
           <button type="button" onClick={() => setPresetOpen((v) => !v)}
-            className="w-full flex items-center justify-between px-3.5 py-3 rounded-input border border-gold-400/40 bg-gold-300/10 text-base font-bold text-gold-300 hover:bg-gold-300/15 transition-colors">
+            className="w-full flex items-center justify-between px-3.5 py-3 rounded-input border border-accent-400/40 bg-accent-300/10 text-base font-bold text-accent-300 hover:bg-accent-300/15 transition-colors">
             <span>📋 {presetOpen ? '프리셋 닫기' : `프리셋에서 게임 불러오기 (${presets.length})`}</span>
             <span className="text-sm">{presetOpen ? '▲' : '▼'}</span>
           </button>
@@ -1487,7 +1487,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
               {presets.map((p, i) => (
                 <button key={i} type="button" onClick={() => { applyPreset(p); setPresetOpen(false); }}
                   className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-surface-high transition-colors">
-                  {i < 3 && <span className="shrink-0 text-2xs font-bold text-gold-300 bg-gold-300/15 px-1.5 py-0.5 rounded-badge">최근</span>}
+                  {i < 3 && <span className="shrink-0 text-2xs font-bold text-accent-300 bg-accent-300/15 px-1.5 py-0.5 rounded-badge">최근</span>}
                   <span className="flex-1 min-w-0 text-sm font-semibold text-ink-primary truncate">{p.title}</span>
                   <span className="shrink-0 text-sm text-ink-muted tabular-nums">{wonToMan(p.buyinAmount)}만</span>
                 </button>
@@ -1531,7 +1531,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
               return (
                 <button key={o.id} type="button" onClick={() => toggleOper(o.id)}
                   className={['text-xs font-semibold px-2.5 py-1.5 rounded-badge border transition-colors',
-                    on ? 'bg-gold-300 text-ink-inverse border-gold-300' : 'bg-surface-high text-ink-secondary border-border-default hover:text-ink-primary'].join(' ')}>
+                    on ? 'bg-accent-300 text-white border-accent-300' : 'bg-surface-high text-ink-secondary border-border-default hover:text-ink-primary'].join(' ')}>
                   {on ? '✓ ' : ''}{o.label}
                 </button>
               );
@@ -1554,7 +1554,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
         <div className="space-y-1.5">
           {discs.map((d, i) => (
             <div key={i} className="flex items-center gap-1.5">
-              <span className="text-2xs text-gold-300 font-bold w-9 shrink-0">할인{i + 1}</span>
+              <span className="text-2xs text-accent-300 font-bold w-9 shrink-0">할인{i + 1}</span>
               <input value={d.label} onChange={(e) => setDisc(i, { label: e.target.value })} maxLength={20} placeholder="예) 1레벨" className="input flex-1 min-w-0 text-sm" />
               <div className="relative w-24 shrink-0">
                 <input type="number" inputMode="decimal" step="0.1" min="0" value={manVal(d.amount)} onChange={(e) => setDisc(i, { amount: parseMan(e.target.value) })} placeholder="할인액" className="input w-full text-sm pr-6 tabular-nums" />
@@ -1564,17 +1564,17 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
             </div>
           ))}
           {discs.length < 5 && (
-            <button type="button" onClick={addDisc} className="w-full py-1.5 rounded-input border border-dashed border-border-default text-2xs text-ink-secondary hover:text-gold-300 hover:border-gold-400/50 transition-colors">+ 할인 추가</button>
+            <button type="button" onClick={addDisc} className="w-full py-1.5 rounded-input border border-dashed border-border-default text-2xs text-ink-secondary hover:text-accent-300 hover:border-accent-400/50 transition-colors">+ 할인 추가</button>
           )}
-          <p className="text-[10px] text-ink-muted">할인액(만원)만큼 차감해 엔트리를 비례 계산합니다. 예) 10만 게임에 5만 할인 = <b className="text-gold-300">0.5 엔트리</b>, 2만 할인 = 0.8 엔트리.</p>
+          <p className="text-[10px] text-ink-muted">할인액(만원)만큼 차감해 엔트리를 비례 계산합니다. 예) 10만 게임에 5만 할인 = <b className="text-accent-300">0.5 엔트리</b>, 2만 할인 = 0.8 엔트리.</p>
         </div>
       </Field>
 
       <Field label="토너먼트 스타트 시각 · 선택 (클락 연동·얼리 판정 기준)">
         <DateTimePicker value={startISO} onChange={setStartISO} defaultDate={base.sessionDate} placeholder="스타트 날짜·시각 선택" />
         <p className="text-[10px] text-ink-muted mt-1 leading-relaxed">
-          얼리 구간(더블/1얼리)은 이제 <b className="text-gold-300">「클락」 설정에서 레벨 기준</b>으로 지정합니다(예: 1레벨=더블얼리, 2~4레벨=1얼리). 이 장부를 클락과 연동해 시작하면 위 스타트 시각을 기준으로 바인이 레벨→얼리로 자동 분류되며, 바인 칸에서 '없음'으로 수기 변경도 가능합니다.
-          {(base.earlyDoubleMin || base.earlySingleMin) ? <span className="text-gold-300/90"> 현재 적용: 더블 ~{base.earlyDoubleMin}분 · 1얼리 ~{base.earlySingleMin}분.</span> : null}
+          얼리 구간(더블/1얼리)은 이제 <b className="text-accent-300">「클락」 설정에서 레벨 기준</b>으로 지정합니다(예: 1레벨=더블얼리, 2~4레벨=1얼리). 이 장부를 클락과 연동해 시작하면 위 스타트 시각을 기준으로 바인이 레벨→얼리로 자동 분류되며, 바인 칸에서 '없음'으로 수기 변경도 가능합니다.
+          {(base.earlyDoubleMin || base.earlySingleMin) ? <span className="text-accent-300/90"> 현재 적용: 더블 ~{base.earlyDoubleMin}분 · 1얼리 ~{base.earlySingleMin}분.</span> : null}
         </p>
       </Field>
 
@@ -1605,7 +1605,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
           {([['gtd', 'GTD (보장)'], ['entry', '엔트리 게임']] as const).map(([k, lbl]) => (
             <button key={k} type="button" onClick={() => setGameType(k)}
               className={['py-2 rounded-input border text-sm font-bold transition-colors',
-                gameType === k ? 'bg-gold-300/15 text-gold-300 border-gold-400/50' : 'bg-surface-high text-ink-secondary border-border-default'].join(' ')}>{lbl}</button>
+                gameType === k ? 'bg-accent-300/15 text-accent-300 border-accent-400/50' : 'bg-surface-high text-ink-secondary border-border-default'].join(' ')}>{lbl}</button>
           ))}
         </div>
       </Field>
@@ -1630,7 +1630,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
         <div className="flex items-center gap-2">
           <button type="button" onClick={() => setIsAddon((v) => !v)}
             className={['px-3 py-2 rounded-input border text-sm font-bold transition-colors shrink-0',
-              isAddon ? 'bg-gold-300/15 text-gold-300 border-gold-400/50' : 'bg-surface-high text-ink-secondary border-border-default'].join(' ')}>
+              isAddon ? 'bg-accent-300/15 text-accent-300 border-accent-400/50' : 'bg-surface-high text-ink-secondary border-border-default'].join(' ')}>
             {isAddon ? '✓ 애드온 게임' : '애드온 없음'}
           </button>
           {isAddon ? (
@@ -1800,7 +1800,7 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
                       className={['text-xs font-bold px-2.5 py-1.5 rounded-badge border', discIdx === 0 ? 'bg-surface-float text-ink-primary border-border-strong' : 'text-ink-muted border-border-default'].join(' ')}>없음</button>
                     {discs.map((d, i) => (
                       <button key={i} type="button" onClick={() => setDiscIdx(i + 1)}
-                        className={['text-xs font-bold px-2.5 py-1.5 rounded-badge border', discIdx === i + 1 ? 'bg-gold-300/15 text-gold-300 border-gold-400/40' : 'text-ink-muted border-border-default'].join(' ')}>
+                        className={['text-xs font-bold px-2.5 py-1.5 rounded-badge border', discIdx === i + 1 ? 'bg-accent-300/15 text-accent-300 border-accent-400/40' : 'text-ink-muted border-border-default'].join(' ')}>
                         {d.label || `할인${i + 1}`} ({wonToMan(d.amount)}만)
                       </button>
                     ))}
@@ -1809,7 +1809,7 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
                     const da = discs[discIdx - 1]?.amount ?? 0;
                     const ent = Math.max(0, session.buyinAmount - da) / session.buyinAmount;
                     return (
-                      <p className="text-2xs text-gold-300">
+                      <p className="text-2xs text-accent-300">
                         할인 적용 → 이 바인 <b className="text-sm">{ent.toLocaleString(undefined, { maximumFractionDigits: 2 })} 엔트리</b>
                         <span className="text-ink-muted"> = ({wonToMan(session.buyinAmount)}만 − {wonToMan(da)}만) / {wonToMan(session.buyinAmount)}만</span>
                       </p>
@@ -1852,7 +1852,7 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
 
               {/* 분납/할인 상세 */}
               <button type="button" onClick={() => setSplitMode(true)}
-                className="w-full h-11 rounded-input border border-gold-400/40 text-gold-300 font-semibold text-sm hover:bg-gold-300/10 transition-colors">
+                className="w-full h-11 rounded-input border border-accent-400/40 text-accent-300 font-semibold text-sm hover:bg-accent-300/10 transition-colors">
                 분납 / 할인 상세 입력
               </button>
             </>
@@ -1860,7 +1860,7 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <button type="button" onClick={() => setSplitMode(false)} className="text-2xs text-ink-muted hover:text-ink-primary">← 빠른 입력</button>
-                <span className="text-2xs font-semibold text-gold-300">분납 / 할인</span>
+                <span className="text-2xs font-semibold text-accent-300">분납 / 할인</span>
               </div>
               <AmountRow label="현금" value={cash} set={setCash} />
               <AmountRow label="카드" value={card} set={setCard} />

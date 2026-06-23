@@ -32,7 +32,7 @@ export default function ScheduleTable({ schedules, onSelect, onVenueClick }: {
               onClick={() => onSelect(s)}
               className={[
                 'cursor-pointer border-b border-border-subtle last:border-b-0 transition-colors',
-                s.isPremium ? 'bg-gold-300/[0.05] hover:bg-gold-300/10' : 'hover:bg-surface-high/70',
+                s.isPremium ? 'bg-accent-300/[0.05] hover:bg-accent-300/10' : 'hover:bg-surface-high/70',
               ].join(' ')}
             >
               <td className="whitespace-nowrap px-3 py-2 tabular-nums text-ink-secondary">
@@ -42,22 +42,22 @@ export default function ScheduleTable({ schedules, onSelect, onVenueClick }: {
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); if (s.venueId) onVenueClick(s.venueId); }}
-                  className="block max-w-full truncate font-semibold text-ink-primary hover:text-gold-300"
+                  className="block max-w-full truncate font-semibold text-ink-primary hover:text-accent-300"
                 >
                   {s.pubName}
                 </button>
               </td>
               <td className="max-w-[16rem] px-3 py-2">
                 <span className="flex items-center gap-1.5">
-                  {s.isPremium && <span className="shrink-0 rounded-badge bg-gold-300 px-1 text-2xs font-bold leading-tight text-ink-inverse">TOP</span>}
-                  {s.isCompetition && <span className="shrink-0 rounded-badge bg-gold-300/15 px-1 text-2xs font-bold leading-tight text-gold-300">대회</span>}
+                  {s.isPremium && <span className="shrink-0 rounded-badge bg-accent-300 px-1 text-2xs font-bold leading-tight text-white">TOP</span>}
+                  {s.isCompetition && <span className="shrink-0 rounded-badge bg-accent-300/15 px-1 text-2xs font-bold leading-tight text-accent-300">대회</span>}
                   <span className="truncate font-bold text-ink-primary">{s.title}</span>
                 </span>
               </td>
               <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums font-semibold text-ink-primary">
                 {(s.buyIn?.amount ?? 0).toLocaleString()}
               </td>
-              <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-gold-300 font-semibold">
+              <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-accent-300 font-semibold">
                 {s.guaranteed && s.prizePool
                   ? `GTD ${Math.round(s.prizePool / 10000).toLocaleString()}만`
                   : s.prizePercent

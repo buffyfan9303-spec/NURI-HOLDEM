@@ -25,7 +25,7 @@ export default function RangeGuide() {
           return (
             <button key={st.bb} type="button" onClick={() => setBb(st.bb)}
               className={['flex-1 h-8 rounded-input text-xs font-bold leading-none border transition-colors focus:outline-none',
-                on ? 'bg-gold-300 border-gold-300 text-ink-inverse' : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary'].join(' ')}>
+                on ? 'bg-accent-300 border-accent-300 text-white' : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary'].join(' ')}>
               {st.label}
             </button>
           );
@@ -40,13 +40,13 @@ export default function RangeGuide() {
           return (
             <button key={sc.id} type="button" onClick={() => setScenario(sc.id)}
               className={['flex-1 h-7 rounded-input text-2xs font-bold leading-none border transition-colors focus:outline-none',
-                on ? 'bg-gold-300 border-gold-300 text-ink-inverse' : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary'].join(' ')}>
+                on ? 'bg-accent-300 border-accent-300 text-white' : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary'].join(' ')}>
               {sc.label}
             </button>
           );
         })}
       </div>
-      {scenario !== 'std' && <p className="text-[10px] leading-relaxed text-gold-200 rounded-input bg-gold-300/[0.06] border border-gold-400/20 px-2 py-1.5">🎯 {scen.hint}</p>}
+      {scenario !== 'std' && <p className="text-[10px] leading-relaxed text-accent-200 rounded-input bg-accent-300/[0.06] border border-accent-400/20 px-2 py-1.5">🎯 {scen.hint}</p>}
 
       {/* 포지션 선택 */}
       <div className="flex flex-wrap gap-1">
@@ -59,7 +59,7 @@ export default function RangeGuide() {
               onClick={() => setPos(p.id)}
               className={[
                 'h-7 px-3 rounded-input text-2xs font-bold leading-none border transition-colors focus:outline-none',
-                on ? 'bg-gold-300 border-gold-300 text-ink-inverse' : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary',
+                on ? 'bg-accent-300 border-accent-300 text-white' : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary',
               ].join(' ')}
             >
               {p.label}
@@ -73,7 +73,7 @@ export default function RangeGuide() {
         <div className="inline-flex rounded-input border border-border-default bg-surface-high p-0.5">
           {(['6', '9'] as const).map((s) => (
             <button key={s} type="button" onClick={() => setSize(s)}
-              className={['h-6 px-2.5 rounded-[6px] text-2xs font-bold leading-none transition-colors', size === s ? 'bg-gold-300 text-ink-inverse' : 'text-ink-muted'].join(' ')}>
+              className={['h-6 px-2.5 rounded-[6px] text-2xs font-bold leading-none transition-colors', size === s ? 'bg-accent-300 text-white' : 'text-ink-muted'].join(' ')}>
               {s}맥스
             </button>
           ))}
@@ -81,7 +81,7 @@ export default function RangeGuide() {
         <div className="inline-flex rounded-input border border-border-default bg-surface-high p-0.5">
           {([{ id: 'open', label: '오픈레이즈' }, { id: '3bet', label: '3벳' }] as const).map((a) => (
             <button key={a.id} type="button" onClick={() => setAct(a.id)}
-              className={['h-6 px-2.5 rounded-[6px] text-2xs font-bold leading-none transition-colors', act === a.id ? 'bg-gold-300 text-ink-inverse' : 'text-ink-muted'].join(' ')}>
+              className={['h-6 px-2.5 rounded-[6px] text-2xs font-bold leading-none transition-colors', act === a.id ? 'bg-accent-300 text-white' : 'text-ink-muted'].join(' ')}>
               {a.label}
             </button>
           ))}
@@ -100,7 +100,7 @@ export default function RangeGuide() {
                   title={h.label}
                   className={[
                     'aspect-square flex items-center justify-center rounded-[3px] text-[8px] font-bold leading-none tabular-nums',
-                    a === 'raise' ? 'bg-gold-300 text-ink-inverse' : a === 'mix' ? 'bg-gold-300/25 text-gold-300' : 'bg-surface-high text-ink-muted/60',
+                    a === 'raise' ? 'bg-accent-300 text-white' : a === 'mix' ? 'bg-accent-300/25 text-accent-300' : 'bg-surface-high text-ink-muted/60',
                   ].join(' ')}
                 >
                   {h.label}
@@ -113,8 +113,8 @@ export default function RangeGuide() {
 
       {/* 범례 + 요약 */}
       <div className="flex items-center justify-center gap-3">
-        <Legend cls="bg-gold-300" label={actionLabel} />
-        <Legend cls="bg-gold-300/25" label="혼합" />
+        <Legend cls="bg-accent-300" label={actionLabel} />
+        <Legend cls="bg-accent-300/25" label="혼합" />
         <Legend cls="bg-surface-high border border-border-default" label="폴드" />
         <span className="text-2xs text-ink-muted">{actionLabel} {openCount}콤보 (~{Math.round((openCount / 169) * 100)}%)</span>
       </div>

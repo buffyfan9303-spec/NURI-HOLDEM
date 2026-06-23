@@ -41,7 +41,7 @@ export function Result({ label, value, accent, good, bad }: { label: string; val
   return (
     <div className="rounded-input bg-surface-high p-2">
       <p className="text-2xs text-ink-muted">{label}</p>
-      <p className={`text-lg font-extrabold tabular-nums leading-tight ${bad ? 'text-danger-light' : good ? 'text-emerald-400' : accent ? 'text-gold-300' : 'text-ink-primary'}`}>{value}</p>
+      <p className={`text-lg font-extrabold tabular-nums leading-tight ${bad ? 'text-danger-light' : good ? 'text-emerald-400' : accent ? 'text-accent-300' : 'text-ink-primary'}`}>{value}</p>
     </div>
   );
 }

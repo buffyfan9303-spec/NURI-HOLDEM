@@ -34,8 +34,8 @@ export default function InstallBanner() {
   if (!show || !evt) return null;
   return (
     <div className="fixed bottom-3 left-1/2 z-[60] w-[min(92%,28rem)] -translate-x-1/2 animate-slide-up">
-      <div className="flex items-center gap-3 rounded-card border border-gold-400/40 bg-surface-float/95 px-3 py-2.5 shadow-dialog backdrop-blur">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-input bg-gold-300/15 text-gold-300">
+      <div className="flex items-center gap-3 rounded-card border border-accent-400/40 bg-surface-float/95 px-3 py-2.5 shadow-dialog backdrop-blur">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-input bg-accent-300/15 text-accent-300">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <path d="M12 3v11" /><path d="M8 10l4 4 4-4" /><rect x="4" y="18" width="16" height="3" rx="1" />
           </svg>

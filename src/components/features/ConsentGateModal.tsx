@@ -49,7 +49,7 @@ export default function ConsentGateModal({ open }: { open: boolean }) {
 
         {/* 전체 동의 */}
         <label className="flex items-center gap-2 p-2.5 rounded-input bg-surface-high border border-border-default cursor-pointer">
-          <input type="checkbox" checked={allChecked} onChange={(e) => toggleAll(e.target.checked)} className="accent-gold-300 w-4 h-4" />
+          <input type="checkbox" checked={allChecked} onChange={(e) => toggleAll(e.target.checked)} className="accent-accent-300 w-4 h-4" />
           <span className="text-sm font-bold text-ink-primary">전체 동의 (필수 + 선택 포함)</span>
         </label>
 
@@ -77,9 +77,9 @@ function ConsentRow({
 }: { checked: boolean; onChange: (v: boolean) => void; label: string; required?: boolean }) {
   return (
     <label className="flex items-start gap-2 cursor-pointer">
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="accent-gold-300 w-4 h-4 mt-0.5 shrink-0" />
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="accent-accent-300 w-4 h-4 mt-0.5 shrink-0" />
       <span className="text-xs text-ink-secondary leading-relaxed">
-        {required && <span className="text-gold-300 font-bold mr-1">[필수]</span>}
+        {required && <span className="text-accent-300 font-bold mr-1">[필수]</span>}
         {label}
       </span>
     </label>

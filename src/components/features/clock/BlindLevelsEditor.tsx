@@ -50,7 +50,7 @@ export default function BlindLevelsEditor({ levels, onChange }: { levels: ClockL
             <input type="number" min="1" value={bulkAll || ''} onChange={(e) => setBulkAll(+e.target.value || 0)} className="input w-full pr-5 text-xs tabular-nums" />
             <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-ink-muted">분</span>
           </div>
-          <button type="button" onClick={() => applyAll(bulkAll)} className="rounded-input border border-gold-400/40 bg-gold-300/15 px-2.5 py-1.5 text-2xs font-bold text-gold-300 hover:bg-gold-300/25">전체 적용</button>
+          <button type="button" onClick={() => applyAll(bulkAll)} className="rounded-input border border-accent-400/40 bg-accent-300/15 px-2.5 py-1.5 text-2xs font-bold text-accent-300 hover:bg-accent-300/25">전체 적용</button>
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="w-8 shrink-0 text-2xs text-ink-secondary">레벨</span>
@@ -60,13 +60,13 @@ export default function BlindLevelsEditor({ levels, onChange }: { levels: ClockL
             <input type="number" min="1" value={bulkFromMin || ''} onChange={(e) => setBulkFromMin(+e.target.value || 0)} className="input w-full pr-5 text-xs tabular-nums" />
             <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-ink-muted">분</span>
           </div>
-          <button type="button" onClick={() => applyFrom(bulkFrom, bulkFromMin)} className="rounded-input border border-gold-400/40 bg-gold-300/15 px-2.5 py-1.5 text-2xs font-bold text-gold-300 hover:bg-gold-300/25">적용</button>
+          <button type="button" onClick={() => applyFrom(bulkFrom, bulkFromMin)} className="rounded-input border border-accent-400/40 bg-accent-300/15 px-2.5 py-1.5 text-2xs font-bold text-accent-300 hover:bg-accent-300/25">적용</button>
         </div>
         <div className="flex items-center gap-1.5">
           <span className="text-[10px] text-ink-muted">자동 생성 · 최대</span>
           <input type="number" min="1" max="60" value={genMax || ''} onChange={(e) => setGenMax(+e.target.value || 0)} className="input w-14 text-center text-xs tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
           <span className="text-[10px] text-ink-muted">레벨</span>
-          <button type="button" onClick={autoGen} className="rounded-input border border-border-default px-2 py-1 text-2xs font-bold text-ink-secondary hover:text-gold-300">⚙ 자동 생성</button>
+          <button type="button" onClick={autoGen} className="rounded-input border border-border-default px-2 py-1 text-2xs font-bold text-ink-secondary hover:text-accent-300">⚙ 자동 생성</button>
         </div>
       </div>
 
@@ -75,7 +75,7 @@ export default function BlindLevelsEditor({ levels, onChange }: { levels: ClockL
         <p className="text-[10px] text-ink-muted">총 {total}레벨 · 부족하면 아래 ‘+ 레벨’로 계속 추가하세요</p>
         {levels.map((l, i) => (
           <div key={i} className="flex items-center gap-1.5">
-            <span className="w-6 shrink-0 text-center text-2xs font-bold text-gold-300">{l.kind === 'break' ? 'B' : levelNoAt(levels, i)}</span>
+            <span className="w-6 shrink-0 text-center text-2xs font-bold text-accent-300">{l.kind === 'break' ? 'B' : levelNoAt(levels, i)}</span>
             {l.kind === 'break' ? (
               <input value={l.label ?? ''} onChange={(e) => setLevel(i, { label: e.target.value })} placeholder="BREAK" className="input flex-1 text-xs" />
             ) : (<>
@@ -92,8 +92,8 @@ export default function BlindLevelsEditor({ levels, onChange }: { levels: ClockL
         ))}
       </div>
       <div className="flex gap-2">
-        <button type="button" onClick={addLevel} className="flex-1 rounded-input border border-dashed border-border-default py-1.5 text-2xs text-ink-secondary hover:text-gold-300">+ 레벨</button>
-        <button type="button" onClick={addBreak} className="flex-1 rounded-input border border-dashed border-border-default py-1.5 text-2xs text-ink-secondary hover:text-gold-300">+ 브레이크</button>
+        <button type="button" onClick={addLevel} className="flex-1 rounded-input border border-dashed border-border-default py-1.5 text-2xs text-ink-secondary hover:text-accent-300">+ 레벨</button>
+        <button type="button" onClick={addBreak} className="flex-1 rounded-input border border-dashed border-border-default py-1.5 text-2xs text-ink-secondary hover:text-accent-300">+ 브레이크</button>
       </div>
     </div>
   );

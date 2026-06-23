@@ -70,8 +70,8 @@ function BoostContactCard() {
     }
   };
   return (
-    <section className="rounded-card border border-gold-400/30 bg-gold-300/[0.05] p-3 space-y-2">
-      <p className="text-sm font-bold text-gold-300">⚡ 부스트 문의 연락처</p>
+    <section className="rounded-card border border-accent-400/30 bg-accent-300/[0.05] p-3 space-y-2">
+      <p className="text-sm font-bold text-accent-300">⚡ 부스트 문의 연락처</p>
       <p className="text-xs text-ink-muted">업주가 내 매장 → '포스터 상단 고정' 카드에서 보게 될 메일·전화입니다. 비워두면 "준비 중"으로 표시됩니다.</p>
       <div className="grid gap-1.5 sm:grid-cols-2">
         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={80}
@@ -104,13 +104,13 @@ function VenueOwnerRequestsCard() {
   };
   if (reqs.length === 0) return null;
   return (
-    <section className="rounded-card border border-gold-400/30 bg-gold-300/[0.04] p-3 space-y-2">
-      <h3 className="text-sm font-bold text-gold-300">👔 공동 업주(사장님) 초대 승인 <span className="text-2xs font-normal text-ink-muted">· 승인 시 공동 업주 활성</span></h3>
+    <section className="rounded-card border border-accent-400/30 bg-accent-300/[0.04] p-3 space-y-2">
+      <h3 className="text-sm font-bold text-accent-300">👔 공동 업주(사장님) 초대 승인 <span className="text-2xs font-normal text-ink-muted">· 승인 시 공동 업주 활성</span></h3>
       <ul className="space-y-1.5">
         {reqs.map((r) => (
           <li key={r.venueId + r.userId} className="flex items-center gap-2 rounded-input border border-border-subtle bg-surface-low px-2.5 py-2">
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-bold text-ink-primary truncate">{r.name ? `${r.name}(${r.nickname})` : r.nickname} <span className="text-gold-300">→ {r.venueName}</span></p>
+              <p className="text-xs font-bold text-ink-primary truncate">{r.name ? `${r.name}(${r.nickname})` : r.nickname} <span className="text-accent-300">→ {r.venueName}</span></p>
               <p className="text-2xs text-ink-muted truncate">초대: {r.invitedBy || '업주'} · {new Date(r.createdAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
             </div>
             <button type="button" disabled={busy === r.venueId + r.userId} onClick={() => decide(r, true)} className="btn-primary shrink-0 px-3 py-1.5 text-2xs disabled:opacity-50">승인</button>
@@ -139,13 +139,13 @@ function VoucherQuotaAdminCard() {
   };
   if (reqs.length === 0) return null;
   return (
-    <section className="rounded-card border border-gold-400/30 bg-gold-300/[0.04] p-3 space-y-2">
-      <h3 className="text-sm font-bold text-gold-300">🛒 이용권 충전 요청 <span className="text-2xs font-normal text-ink-muted">· 승인 시 즉시 충전</span></h3>
+    <section className="rounded-card border border-accent-400/30 bg-accent-300/[0.04] p-3 space-y-2">
+      <h3 className="text-sm font-bold text-accent-300">🛒 이용권 충전 요청 <span className="text-2xs font-normal text-ink-muted">· 승인 시 즉시 충전</span></h3>
       <ul className="space-y-1.5">
         {reqs.map((r) => (
           <li key={r.id} className="flex items-center gap-2 rounded-input border border-border-subtle bg-surface-low px-2.5 py-2">
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-bold text-ink-primary truncate">{r.venueName} <span className="text-gold-300">+{r.amount.toLocaleString()}개</span></p>
+              <p className="text-xs font-bold text-ink-primary truncate">{r.venueName} <span className="text-accent-300">+{r.amount.toLocaleString()}개</span></p>
               <p className="text-2xs text-ink-muted truncate">{r.requester}{r.note ? ` · ${r.note}` : ''} · {new Date(r.createdAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
             </div>
             <button type="button" disabled={busy === r.id} onClick={() => decide(r, true)} className="btn-primary shrink-0 px-3 py-1.5 text-2xs disabled:opacity-50">승인</button>
@@ -263,11 +263,11 @@ function CommunityAdsCard() {
             <li key={ad.slot} className="flex flex-wrap items-center gap-1.5 rounded-input border border-border-subtle bg-surface-high/40 p-1.5">
               <span className="flex shrink-0 flex-col gap-0.5">
                 <button type="button" onClick={() => move(ad.slot, -1)} disabled={i === 0 || savingSlot !== null} aria-label="위로 이동"
-                  className="leading-none px-1 rounded border border-border-default text-2xs text-ink-secondary hover:text-gold-300 hover:border-gold-400/50 disabled:opacity-25 transition-colors">▲</button>
+                  className="leading-none px-1 rounded border border-border-default text-2xs text-ink-secondary hover:text-accent-300 hover:border-accent-400/50 disabled:opacity-25 transition-colors">▲</button>
                 <button type="button" onClick={() => move(ad.slot, 1)} disabled={i === ads.length - 1 || savingSlot !== null} aria-label="아래로 이동"
-                  className="leading-none px-1 rounded border border-border-default text-2xs text-ink-secondary hover:text-gold-300 hover:border-gold-400/50 disabled:opacity-25 transition-colors">▼</button>
+                  className="leading-none px-1 rounded border border-border-default text-2xs text-ink-secondary hover:text-accent-300 hover:border-accent-400/50 disabled:opacity-25 transition-colors">▼</button>
               </span>
-              <span className={['shrink-0 rounded-badge px-1.5 py-0.5 text-2xs font-bold', live ? 'bg-gold-300 text-ink-inverse' : 'bg-surface-float text-ink-muted'].join(' ')}>{ad.slot}번 {live ? '게재중' : '비어있음'}</span>
+              <span className={['shrink-0 rounded-badge px-1.5 py-0.5 text-2xs font-bold', live ? 'bg-accent-300 text-white' : 'bg-surface-float text-ink-muted'].join(' ')}>{ad.slot}번 {live ? '게재중' : '비어있음'}</span>
               <input value={ad.title} onChange={(e) => patch(ad.slot, { title: e.target.value })} maxLength={40}
                 placeholder="광고 문구" className="input min-w-[10rem] flex-1 text-sm" />
               <input value={ad.linkUrl} onChange={(e) => patch(ad.slot, { linkUrl: e.target.value })} maxLength={200}
@@ -360,14 +360,14 @@ function MissionsAdminCard() {
         ))}
         {rows.map((m) => (
           <li key={m.id} className="flex flex-wrap items-center gap-1.5 rounded-input border border-border-subtle bg-surface-high/40 px-2 py-1.5 text-xs">
-            <span className={['rounded-badge px-1.5 py-0.5 text-2xs font-bold', m.active ? 'bg-gold-300 text-ink-inverse' : 'bg-surface-float text-ink-muted'].join(' ')}>
+            <span className={['rounded-badge px-1.5 py-0.5 text-2xs font-bold', m.active ? 'bg-accent-300 text-white' : 'bg-surface-float text-ink-muted'].join(' ')}>
               {m.active ? '진행중' : '중단'}
             </span>
             <span className="font-bold text-ink-primary">{m.title}</span>
             <span className="text-ink-muted">{GOAL_TYPE_OPTIONS.find((o) => o.value === m.goal_type)?.label.replace('N', String(m.goal))}</span>
             <span className="font-bold text-emerald-400">+{m.reward}점</span>
             <span className="ml-auto flex gap-1">
-              <button type="button" onClick={() => startEdit(m)} disabled={busy} className="btn-ghost px-2 py-1 text-2xs text-gold-300 disabled:opacity-60">수정</button>
+              <button type="button" onClick={() => startEdit(m)} disabled={busy} className="btn-ghost px-2 py-1 text-2xs text-accent-300 disabled:opacity-60">수정</button>
               <button type="button" onClick={() => toggle(m)} disabled={busy} className="btn-ghost px-2 py-1 text-2xs disabled:opacity-60">
                 {m.active ? '중단' : '재개'}
               </button>
@@ -377,8 +377,8 @@ function MissionsAdminCard() {
         ))}
       </ul>
       {/* 새 미션 추가 */}
-      <div className={['flex flex-wrap items-center gap-1.5 rounded-input border border-dashed p-2', editRow ? 'border-gold-400/60 bg-gold-300/[0.05]' : 'border-border-strong'].join(' ')}>
-        {editRow && <span className="w-full text-2xs font-bold text-gold-300">✏️ ‘{editRow.title}’ 수정 중 — 저장하면 덮어씁니다</span>}
+      <div className={['flex flex-wrap items-center gap-1.5 rounded-input border border-dashed p-2', editRow ? 'border-accent-400/60 bg-accent-300/[0.05]' : 'border-border-strong'].join(' ')}>
+        {editRow && <span className="w-full text-2xs font-bold text-accent-300">✏️ ‘{editRow.title}’ 수정 중 — 저장하면 덮어씁니다</span>}
         <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={30}
           placeholder="미션 이름 (예: 이번 주 3회 출석 도전)" className="input min-w-[11rem] flex-1 text-sm" />
         <select value={goalType} onChange={(e) => setGoalType(e.target.value as MissionGoalType)} className="input w-auto text-sm">
@@ -464,7 +464,7 @@ function SupportInquiriesPanel() {
                   rows={2} placeholder={q.status === 'answered' ? '답변 수정…' : '답변 작성…'} className="input w-full resize-none text-sm" />
                 <div className="flex items-center gap-1.5">
                   <button type="button" onClick={() => send(q.id)} disabled={busy === q.id} className="btn-primary px-3 py-1.5 text-2xs disabled:opacity-50">{busy === q.id ? '등록 중…' : q.status === 'answered' ? '답변 수정' : '답변 등록'}</button>
-                  <button type="button" onClick={() => aiDraft(q)} disabled={aiBusy === q.id} className="rounded-input border border-gold-400/40 bg-gold-300/[0.06] px-2.5 py-1.5 text-2xs font-bold text-gold-300 disabled:opacity-50">{aiBusy === q.id ? '생성 중…' : '✨ AI 초안'}</button>
+                  <button type="button" onClick={() => aiDraft(q)} disabled={aiBusy === q.id} className="rounded-input border border-accent-400/40 bg-accent-300/[0.06] px-2.5 py-1.5 text-2xs font-bold text-accent-300 disabled:opacity-50">{aiBusy === q.id ? '생성 중…' : '✨ AI 초안'}</button>
                 </div>
               </div>
             </li>
@@ -555,8 +555,8 @@ function PendingGroupsPanel({ onChanged }: { onChanged: () => void }) {
   };
   if (loading) return <p className="py-3 text-center text-2xs text-ink-muted">불러오는 중…</p>;
   return (
-    <section className="rounded-card border border-gold-400/30 bg-surface-low p-3 space-y-2">
-      <h3 className="text-sm font-bold text-gold-300">그룹 개설 승인 ({groups.length})</h3>
+    <section className="rounded-card border border-accent-400/30 bg-surface-low p-3 space-y-2">
+      <h3 className="text-sm font-bold text-accent-300">그룹 개설 승인 ({groups.length})</h3>
       {groups.length === 0 ? (
         <p className="text-2xs text-ink-muted py-1">대기 중인 그룹 개설 신청이 없습니다</p>
       ) : (
@@ -564,7 +564,7 @@ function PendingGroupsPanel({ onChanged }: { onChanged: () => void }) {
           {groups.map((g) => (
             <li key={g.id} className="rounded-input border border-border-default bg-surface-high p-2.5">
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="rounded-badge bg-gold-300/15 px-1.5 py-0.5 text-2xs font-bold text-gold-300">{GROUP_KIND_LABEL[g.kind ?? 'other']}</span>
+                <span className="rounded-badge bg-accent-300/15 px-1.5 py-0.5 text-2xs font-bold text-accent-300">{GROUP_KIND_LABEL[g.kind ?? 'other']}</span>
                 <span className="text-sm font-semibold text-ink-primary">{g.name}</span>
                 {g.region && <span className="text-2xs text-ink-muted">{g.region}</span>}
               </div>
@@ -611,7 +611,7 @@ function AdminNavBtn({ active, onClick, icon, badge, children }: { active: boole
   return (
     <button type="button" onClick={onClick}
       className={['flex shrink-0 items-center gap-2 whitespace-nowrap rounded-[6px] px-3 py-2 text-xs font-semibold transition-colors focus:outline-none touch-manipulation lg:w-full lg:justify-start',
-        active ? 'bg-gold-300 text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary lg:hover:bg-surface-high'].join(' ')}>
+        active ? 'bg-accent-300 text-white' : 'text-ink-secondary hover:text-ink-primary lg:hover:bg-surface-high'].join(' ')}>
       <span className="shrink-0" aria-hidden>{icon}</span>
       <span className="flex-1 lg:text-left">{children}</span>
       {badge ? <span className="inline-flex h-4 min-w-[1.1rem] items-center justify-center rounded-full bg-danger px-1 text-2xs font-bold tabular-nums text-white">{badge}</span> : null}
@@ -641,7 +641,7 @@ function PlatformStatsCard() {
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {cells.map((c) => (
           <div key={c.label} className="rounded-card border border-border-subtle bg-surface-low p-3 text-center">
-            <p className={`text-xl font-extrabold leading-none tabular-nums ${c.accent ? 'text-gold-300' : 'text-ink-primary'}`}>{c.value}</p>
+            <p className={`text-xl font-extrabold leading-none tabular-nums ${c.accent ? 'text-accent-300' : 'text-ink-primary'}`}>{c.value}</p>
             <p className="mt-1 text-2xs text-ink-muted">{c.label}</p>
             {c.sub && <p className="text-[10px] text-ink-muted">{c.sub}</p>}
           </div>
@@ -755,8 +755,8 @@ function VenueCreateCard({ venues, users, onCreated }: { venues: Venue[]; users:
 
   return (
     <div className="space-y-3">
-      <section className="rounded-card border border-gold-400/30 bg-gradient-to-br from-gold-300/[0.05] to-transparent p-3 space-y-2">
-        <h3 className="text-sm font-bold text-gold-300">홀덤펍 생성 + 관리 업주 임명</h3>
+      <section className="rounded-card border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.05] to-transparent p-3 space-y-2">
+        <h3 className="text-sm font-bold text-accent-300">홀덤펍 생성 + 관리 업주 임명</h3>
         <div className="grid grid-cols-2 gap-2">
           <label className="block">
             <span className="block text-2xs text-ink-secondary mb-1">매장명 <span className="text-danger">*</span></span>
@@ -865,12 +865,12 @@ function VenueAdminRow({ venue, candidates, onChanged }: { venue: Venue; candida
           <p className="text-2xs text-ink-muted truncate">{venue.region} · 업주: {owner ? (owner.nickname ?? owner.name) : '미지정'}</p>
         </div>
         {venue.verificationStatus === 'verified' && (
-          <span className="shrink-0 text-2xs font-bold text-gold-300 bg-gold-300/15 px-1.5 py-0.5 rounded-badge">인증</span>
+          <span className="shrink-0 text-2xs font-bold text-accent-300 bg-accent-300/15 px-1.5 py-0.5 rounded-badge">인증</span>
         )}
         <button
           type="button"
           onClick={() => setPosOpen(true)}
-          className="shrink-0 text-2xs font-semibold px-2.5 py-1 rounded-input border border-gold-400/40 text-gold-300 hover:bg-gold-300/10 transition-colors"
+          className="shrink-0 text-2xs font-semibold px-2.5 py-1 rounded-input border border-accent-400/40 text-accent-300 hover:bg-accent-300/10 transition-colors"
         >
           장부·통계
         </button>
@@ -879,14 +879,14 @@ function VenueAdminRow({ venue, candidates, onChanged }: { venue: Venue; candida
           onClick={toggleVIssue}
           title="매장이용권 발급 승인"
           className={['shrink-0 text-2xs font-semibold px-2.5 py-1 rounded-input border transition-colors',
-            vIssue ? 'border-gold-400/40 text-gold-300 bg-gold-300/10' : 'border-border-default text-ink-muted hover:text-ink-primary'].join(' ')}
+            vIssue ? 'border-accent-400/40 text-accent-300 bg-accent-300/10' : 'border-border-default text-ink-muted hover:text-ink-primary'].join(' ')}
         >
           이용권발급 {vIssue == null ? '…' : vIssue ? '✓' : '✗'}
         </button>
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
-          className="shrink-0 text-2xs font-semibold px-2.5 py-1 rounded-input border border-border-default text-ink-secondary hover:text-ink-primary hover:border-gold-400/50 transition-colors"
+          className="shrink-0 text-2xs font-semibold px-2.5 py-1 rounded-input border border-border-default text-ink-secondary hover:text-ink-primary hover:border-accent-400/50 transition-colors"
         >
           {open ? '닫기' : '관리'}
         </button>
@@ -972,7 +972,7 @@ function AdminVenuePos({ venueId, venueName, onClose }: { venueId: string; venue
       <header className="sticky top-0 z-10 h-header-h px-page-x flex items-center gap-2 bg-surface-base/95 backdrop-blur-md border-b border-border-subtle">
         <button type="button" onClick={onClose} className="text-sm font-semibold text-ink-secondary hover:text-ink-primary">← 닫기</button>
         <span className="text-sm font-bold text-ink-primary truncate">{venueName} · 장부/통계</span>
-        <span className="ml-auto shrink-0 text-2xs font-bold text-gold-300 bg-gold-300/15 px-2 py-0.5 rounded-badge">운영자 전체 접근</span>
+        <span className="ml-auto shrink-0 text-2xs font-bold text-accent-300 bg-accent-300/15 px-2 py-0.5 rounded-badge">운영자 전체 접근</span>
       </header>
       <div className="max-w-6xl mx-auto px-page-x py-3">
         <SegmentedTabs grow size="md" className="w-full mb-3"
@@ -1092,7 +1092,7 @@ function StaffRow({ staff, onChanged }: { staff: VenueStaff; onChanged: () => vo
         className="input w-16 shrink-0 text-xs !py-1"
       />
       {dirty && (
-        <button type="button" onClick={save} disabled={busy} className="shrink-0 text-2xs font-bold text-gold-300 disabled:opacity-50">저장</button>
+        <button type="button" onClick={save} disabled={busy} className="shrink-0 text-2xs font-bold text-accent-300 disabled:opacity-50">저장</button>
       )}
       <button type="button" onClick={remove} disabled={busy} className="shrink-0 text-2xs text-ink-muted hover:text-danger-light transition-colors">삭제</button>
     </li>
@@ -1205,7 +1205,7 @@ function PendingRow({
             <button
               type="button"
               onClick={onApprove}
-              className="text-xs font-semibold px-3 py-1.5 rounded-input bg-gold-300 text-ink-inverse hover:bg-gold-200 transition-colors"
+              className="text-xs font-semibold px-3 py-1.5 rounded-input bg-accent-300 text-white hover:bg-accent-200 transition-colors"
             >
               승인
             </button>
@@ -1231,7 +1231,7 @@ function SubPill({ active, onClick, children }: { active: boolean; onClick: () =
       onClick={onClick}
       className={[
         'flex-1 inline-flex items-center justify-center gap-1 py-1.5 text-xs font-semibold rounded-[6px] transition-all focus:outline-none',
-        active ? 'bg-gold-300 text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary',
+        active ? 'bg-accent-300 text-white' : 'text-ink-secondary hover:text-ink-primary',
       ].join(' ')}
     >
       {children}

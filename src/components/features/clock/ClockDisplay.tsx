@@ -152,7 +152,7 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
             {games.map((c) => (
               <button key={c.gameSeq} type="button" onClick={() => { setSel(c.gameSeq); setAuto(false); }}
                 className={['rounded-full px-[1.6vmin] py-[0.6vmin] text-[1.8vmin] font-bold transition-colors',
-                  c.gameSeq === g?.gameSeq ? 'bg-gold-300 text-black' : 'bg-white/10 text-white/70 hover:bg-white/20'].join(' ')}>
+                  c.gameSeq === g?.gameSeq ? 'bg-accent-300 text-black' : 'bg-white/10 text-white/70 hover:bg-white/20'].join(' ')}>
                 {gameLabel(c)}{c.running ? '' : ' ⏸'}
               </button>
             ))}
@@ -201,7 +201,7 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
                   {lv && lv.ante > 0 && <span className="ml-[1.5vmin] align-middle text-white/45" style={{ fontSize: 'clamp(16px, 3.5vmin, 60px)' }}>ante {lv.ante.toLocaleString()}</span>}
                 </p>
               )}
-              <p className={`mt-[1vmin] font-extrabold leading-none tabular-nums ${urgent ? 'text-rose-400 animate-pulse' : isBreak ? 'text-sky-300' : 'text-gold-300'}`}
+              <p className={`mt-[1vmin] font-extrabold leading-none tabular-nums ${urgent ? 'text-rose-400 animate-pulse' : isBreak ? 'text-sky-300' : 'text-accent-300'}`}
                 style={{ fontSize: 'clamp(72px, 24vmin, 360px)' }}>
                 {mmss(Math.max(0, remaining))}
               </p>
@@ -216,13 +216,13 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
             {/* 우측: 상금 보드(리더보드) + 참가 QR */}
             <div className="flex min-h-0 flex-col justify-center gap-[1.5vmin]">
               {prizes.length > 0 && (
-                <div className="min-h-0 overflow-hidden rounded-[2vmin] border border-gold-300/25 bg-gold-300/[0.06] p-[1.8vmin]">
+                <div className="min-h-0 overflow-hidden rounded-[2vmin] border border-accent-300/25 bg-accent-300/[0.06] p-[1.8vmin]">
                   <p className="mb-[1vmin] text-[2.4vmin] font-bold text-gold-300">🏆 상금</p>
                   <ul className="space-y-[0.5vmin]">
                     {prizes.slice(0, 8).map((p, i) => (
                       <li key={i} className="flex items-baseline justify-between gap-3 border-b border-white/5 pb-[0.5vmin] last:border-0">
                         <span className="text-[2.5vmin] font-bold text-white/85">{p.place}</span>
-                        <span className="text-[2.7vmin] font-extrabold tabular-nums text-gold-300">{p.amount.toLocaleString()}<span className="text-[1.7vmin] font-bold text-white/50">만</span></span>
+                        <span className="text-[2.7vmin] font-extrabold tabular-nums text-accent-300">{p.amount.toLocaleString()}<span className="text-[1.7vmin] font-bold text-white/50">만</span></span>
                       </li>
                     ))}
                   </ul>
@@ -264,7 +264,7 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
 function BigStat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
     <div className="px-1 text-center">
-      <p className={`font-extrabold leading-none tabular-nums ${accent ? 'text-gold-300' : 'text-white'}`} style={{ fontSize: 'clamp(20px, 4vmin, 64px)' }}>{value}</p>
+      <p className={`font-extrabold leading-none tabular-nums ${accent ? 'text-accent-300' : 'text-white'}`} style={{ fontSize: 'clamp(20px, 4vmin, 64px)' }}>{value}</p>
       <p className="mt-[0.6vmin] text-[1.7vmin] text-white/45">{label}</p>
     </div>
   );

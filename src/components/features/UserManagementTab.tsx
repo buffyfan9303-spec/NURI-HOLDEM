@@ -240,7 +240,7 @@ function UserRow({ user, onUpdate }: { user: User; onUpdate: (id: string, patch:
             <span className={[
               'text-2xs px-1.5 py-0.5 rounded-badge font-semibold',
               user.role === 'admin'       ? 'bg-danger/15 text-danger-light' :
-              user.role === 'venue_owner' ? 'bg-gold-300/15 text-gold-300'  :
+              user.role === 'venue_owner' ? 'bg-accent-300/15 text-accent-300'  :
                                             'bg-blue-500/15 text-blue-400',
             ].join(' ')}>
               {ROLE_LABEL[user.role]}
@@ -463,7 +463,7 @@ function SectionPill({ active, onClick, label, count }: { active: boolean; onCli
     <button type="button" onClick={onClick}
       className={[
         'flex-1 py-2 text-xs font-semibold rounded-[6px] transition-all',
-        active ? 'bg-gold-300 text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary',
+        active ? 'bg-accent-300 text-white' : 'text-ink-secondary hover:text-ink-primary',
       ].join(' ')}>
       {label} <span className="text-2xs opacity-70">({count})</span>
     </button>
@@ -488,7 +488,7 @@ function FilterPill({ active, onClick, label, group }: { active: boolean; onClic
       ].join(' ')}>
       {active && (
         <motion.span layoutId={group} aria-hidden
-          className="absolute inset-0 rounded-input bg-gold-300"
+          className="absolute inset-0 rounded-input bg-accent-300"
           transition={{ type: 'spring', stiffness: 700, damping: 42 }} />
       )}
       <span className="relative">{label}</span>

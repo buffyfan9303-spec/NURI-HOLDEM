@@ -85,7 +85,7 @@ export function BankrollCalc() {
           {([{ id: 'tourney', label: '토너먼트' }, { id: 'cash', label: '캐시' }] as const).map((t) => (
             <button key={t.id} type="button" onClick={() => setType(t.id)}
               className={['flex-1 h-9 rounded-input text-2xs font-bold leading-none border transition-colors focus:outline-none',
-                type === t.id ? 'bg-gold-300 border-gold-300 text-ink-inverse' : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary'].join(' ')}>
+                type === t.id ? 'bg-accent-300 border-accent-300 text-white' : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary'].join(' ')}>
               {t.label}
             </button>
           ))}

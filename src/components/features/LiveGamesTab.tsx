@@ -113,7 +113,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
       <div className="mx-auto w-full max-w-3xl space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
-            <h2 className="text-base font-semibold text-ink-primary">진행 중 게임 {games ? <span className="text-gold-300">{games.length}</span> : null}</h2>
+            <h2 className="text-base font-semibold text-ink-primary">진행 중 게임 {games ? <span className="text-accent-300">{games.length}</span> : null}</h2>
             <p className="mt-0.5 text-2xs text-ink-muted">지금 클락이 돌아가는 대회를 실시간 확인 · 블라인드·남은인원·평균스택까지</p>
           </div>
           <div className="flex shrink-0 items-center gap-1">
@@ -121,7 +121,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
               <div className="flex items-center gap-0.5 rounded-input bg-surface-high p-0.5">
                 {([['default', '기본'], ['players', '인원'], ['time', '시간'], ['distance', '거리']] as const).map(([k, l]) => (
                   <button key={k} type="button" onClick={() => pickSort(k)} title={k === 'players' ? '남은 인원 많은 순' : k === 'time' ? '시작 시간 빠른 순' : k === 'distance' ? '내 위치 기준 가까운 지역 먼저(위치 권한 필요)' : '기본 순'}
-                    className={['rounded-[5px] px-1.5 py-1 text-2xs font-bold transition-colors', sortBy === k ? 'bg-gold-300 text-ink-inverse' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>{l}</button>
+                    className={['rounded-[5px] px-1.5 py-1 text-2xs font-bold transition-colors', sortBy === k ? 'bg-accent-300 text-white' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>{l}</button>
                 ))}
               </div>
             )}
@@ -158,8 +158,8 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
                   );
                 }
                 return (
-                  <div key={grp.venueId} className="rounded-card border border-gold-400/25 bg-gold-300/[0.03] p-2 space-y-2">
-                    <p className="px-1 text-sm font-bold text-ink-primary">🏠 {nameOf(grp.venueId)} <span className="text-2xs font-normal text-gold-300">· {grp.games.length}게임 동시 진행</span></p>
+                  <div key={grp.venueId} className="rounded-card border border-accent-400/25 bg-accent-300/[0.03] p-2 space-y-2">
+                    <p className="px-1 text-sm font-bold text-ink-primary">🏠 {nameOf(grp.venueId)} <span className="text-2xs font-normal text-accent-300">· {grp.games.length}게임 동시 진행</span></p>
                     <ul className="grid grid-cols-1 gap-card-gap">
                       {grp.games.map((g) => {
                         const sched = matchSchedule(g, schedules);
@@ -175,13 +175,13 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
         )}
         {upcoming.length > 0 && (
           <div className="space-y-1.5 pt-1">
-            <p className="px-1 text-2xs font-bold text-ink-muted">⏳ 오늘 곧 시작 <span className="text-gold-300">{upcoming.length}</span> <span className="font-normal">— 아직 클락 전</span></p>
+            <p className="px-1 text-2xs font-bold text-ink-muted">⏳ 오늘 곧 시작 <span className="text-accent-300">{upcoming.length}</span> <span className="font-normal">— 아직 클락 전</span></p>
             <ul className="grid grid-cols-1 gap-1.5">
               {upcoming.map((s) => (
                 <li key={s.id}>
                   <button type="button" onClick={() => onSchedule(s)}
-                    className="flex w-full items-center gap-2 rounded-card border border-border-subtle bg-surface-low px-3 py-2 text-left transition-colors hover:border-gold-400/40 active:scale-[0.99]">
-                    <span className="shrink-0 rounded-badge bg-surface-high px-1.5 py-0.5 text-2xs font-bold tabular-nums text-gold-300">{s.startTime || '예정'}</span>
+                    className="flex w-full items-center gap-2 rounded-card border border-border-subtle bg-surface-low px-3 py-2 text-left transition-colors hover:border-accent-400/40 active:scale-[0.99]">
+                    <span className="shrink-0 rounded-badge bg-surface-high px-1.5 py-0.5 text-2xs font-bold tabular-nums text-accent-300">{s.startTime || '예정'}</span>
                     <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{s.title}</span>
                     <span className="shrink-0 max-w-[40%] truncate text-2xs text-ink-muted">{nameOf(s.venueId)}</span>
                   </button>
@@ -215,12 +215,12 @@ function LiveCard({ g, name, sched, onPoster, onVenue, onDisplay }: { g: ClockSt
   return (
     <li>
       <button type="button" onClick={sched ? onPoster : onVenue}
-        className="w-full rounded-card border border-gold-400/30 bg-surface-low p-3 text-left transition-colors hover:border-gold-400/60 active:scale-[0.99]">
+        className="w-full rounded-card border border-accent-400/30 bg-surface-low p-3 text-left transition-colors hover:border-accent-400/60 active:scale-[0.99]">
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
             <p className="truncate text-sm font-bold text-ink-primary">{name}</p>
             <p className="truncate text-2xs text-ink-muted">{g.title || g.config?.title || '토너먼트'}</p>
-            {sched && <p className="truncate text-2xs font-semibold text-gold-300/90 mt-0.5">📋 탭하면 대회 포스터로 이동</p>}
+            {sched && <p className="truncate text-2xs font-semibold text-accent-300/90 mt-0.5">📋 탭하면 대회 포스터로 이동</p>}
           </div>
           <span className={`inline-flex shrink-0 items-center gap-1 rounded-badge px-2 py-0.5 text-2xs font-bold ${g.running ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-500/15 text-amber-400'}`}>
             <span className={`h-1.5 w-1.5 rounded-full ${g.running ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />{g.running ? 'LIVE' : '일시정지'}
@@ -244,7 +244,7 @@ function LiveCard({ g, name, sched, onPoster, onVenue, onDisplay }: { g: ClockSt
           </div>
           <div className="shrink-0 text-right">
             <p className="text-2xs text-ink-muted">남은 시간</p>
-            <p className={`text-2xl font-extrabold leading-none tabular-nums ${urgent ? 'text-rose-400' : 'text-gold-300'}`}>{mmss(Math.max(0, remaining))}</p>
+            <p className={`text-2xl font-extrabold leading-none tabular-nums ${urgent ? 'text-rose-400' : 'text-accent-300'}`}>{mmss(Math.max(0, remaining))}</p>
           </div>
         </div>
 
@@ -252,8 +252,8 @@ function LiveCard({ g, name, sched, onPoster, onVenue, onDisplay }: { g: ClockSt
         {(ls.buyInAmount || g.config?.startStack || g.config?.rebuyStack) ? (
           <div className="mt-2 rounded-input bg-surface-base/60 px-3 py-1.5 text-2xs text-ink-secondary space-y-0.5">
             <p>
-              {ls.buyInAmount ? <>바인 <b className="text-gold-300">{wonToMan(ls.buyInAmount)}만</b> · </> : null}
-              스타팅 <b className="text-gold-300 tabular-nums">{(g.config?.startStack ?? 0).toLocaleString()}</b> · 리바인 <b className="text-gold-300 tabular-nums">{(g.config?.rebuyStack ?? 0).toLocaleString()}</b>
+              {ls.buyInAmount ? <>바인 <b className="text-accent-300">{wonToMan(ls.buyInAmount)}만</b> · </> : null}
+              스타팅 <b className="text-accent-300 tabular-nums">{(g.config?.startStack ?? 0).toLocaleString()}</b> · 리바인 <b className="text-accent-300 tabular-nums">{(g.config?.rebuyStack ?? 0).toLocaleString()}</b>
             </p>
             {((g.config?.earlyBonus ?? 0) > 0 || (g.config?.doubleEarlyBonus ?? 0) > 0) && (
               <p className="text-amber-300">
@@ -285,10 +285,10 @@ function LiveCard({ g, name, sched, onPoster, onVenue, onDisplay }: { g: ClockSt
       </button>
       <div className="mt-1 flex gap-1">
         <button type="button" onClick={onDisplay} title="매장 TV·빔프로젝터용 큰 화면(관전 모드)"
-          className="flex-1 rounded-input border border-gold-400/40 py-1.5 text-2xs font-bold text-gold-300 transition-colors hover:bg-gold-300/10 active:scale-[0.99]">📺 큰 화면(관전)</button>
+          className="flex-1 rounded-input border border-accent-400/40 py-1.5 text-2xs font-bold text-accent-300 transition-colors hover:bg-accent-300/10 active:scale-[0.99]">📺 큰 화면(관전)</button>
         {sched && (
           <button type="button" onClick={onVenue}
-            className="flex-1 rounded-input border border-border-subtle py-1.5 text-2xs font-semibold text-ink-muted transition-colors hover:border-gold-400/40 hover:text-gold-300">🏪 매장 페이지</button>
+            className="flex-1 rounded-input border border-border-subtle py-1.5 text-2xs font-semibold text-ink-muted transition-colors hover:border-accent-400/40 hover:text-accent-300">🏪 매장 페이지</button>
         )}
       </div>
     </li>
@@ -298,7 +298,7 @@ function LiveCard({ g, name, sched, onPoster, onVenue, onDisplay }: { g: ClockSt
 function Cell({ label, value, sub, accent, wide }: { label: string; value: string; sub?: string; accent?: boolean; wide?: boolean }) {
   return (
     <div className="rounded-input bg-surface-base/60 px-2 py-1.5 text-center">
-      <p className={`font-extrabold leading-none tabular-nums ${wide ? 'text-base' : 'text-sm'} ${accent ? 'text-gold-300' : 'text-ink-primary'}`}>
+      <p className={`font-extrabold leading-none tabular-nums ${wide ? 'text-base' : 'text-sm'} ${accent ? 'text-accent-300' : 'text-ink-primary'}`}>
         {value}{sub && <span className="text-2xs font-normal text-ink-muted">{sub}</span>}
       </p>
       <p className="mt-0.5 text-[10px] text-ink-muted">{label}</p>

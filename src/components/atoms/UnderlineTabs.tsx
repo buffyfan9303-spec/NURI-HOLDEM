@@ -26,13 +26,13 @@ export default function UnderlineTabs<T extends string>({
             className={[
               'relative flex-1 font-medium transition-colors focus:outline-none',
               size === 'md' ? 'py-3 text-sm' : 'py-2 text-xs',
-              on ? 'text-gold-300' : 'text-ink-muted hover:text-ink-secondary',
+              on ? 'text-accent-300' : 'text-ink-muted hover:text-ink-secondary',
             ].join(' ')}
           >
             {it.label}
             {on && (
               <motion.span layoutId={lid} aria-hidden
-                className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-gold-300"
+                className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-accent-300"
                 transition={{ type: 'spring', stiffness: 700, damping: 42 }} />
             )}
           </button>

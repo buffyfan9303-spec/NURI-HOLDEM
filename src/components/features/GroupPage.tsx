@@ -108,7 +108,7 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
           <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><polyline points="14,5 7,11 14,17" /></svg>
         </button>
         <span className="ml-1 inline-flex items-center gap-1.5 min-w-0">
-          <span className="shrink-0 px-1.5 py-0.5 text-2xs font-bold rounded-badge bg-gold-300/15 text-gold-300">{kindLabel}</span>
+          <span className="shrink-0 px-1.5 py-0.5 text-2xs font-bold rounded-badge bg-accent-300/15 text-accent-300">{kindLabel}</span>
           <h1 className="text-base font-bold text-ink-primary truncate">{group.name}</h1>
         </span>
       </header>
@@ -147,7 +147,7 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
               {!user ? (
                 <p className="rounded-input bg-surface-high px-3 py-2 text-center text-2xs text-ink-muted">로그인 후 가입할 수 있습니다</p>
               ) : isManager ? (
-                <span className="inline-block rounded-input bg-gold-300/15 px-3 py-1.5 text-xs font-bold text-gold-300">운영 중인 그룹</span>
+                <span className="inline-block rounded-input bg-accent-300/15 px-3 py-1.5 text-xs font-bold text-accent-300">운영 중인 그룹</span>
               ) : membership?.status === 'approved' ? (
                 <button type="button" onClick={leave} className="rounded-input border border-border-default px-3 py-1.5 text-xs font-semibold text-ink-secondary hover:text-danger-light">가입됨 · 탈퇴</button>
               ) : membership?.status === 'pending' ? (
@@ -161,8 +161,8 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
           {/* 공지 (공개) */}
           <div className="px-page-x py-3 border-b border-border-subtle">
             <div className="flex items-center justify-between mb-1.5">
-              <h3 className="text-xs font-bold text-gold-300">공지사항</h3>
-              {isManager && <button type="button" onClick={addNotice} className="text-2xs text-gold-300 hover:text-gold-200">+ 공지</button>}
+              <h3 className="text-xs font-bold text-accent-300">공지사항</h3>
+              {isManager && <button type="button" onClick={addNotice} className="text-2xs text-accent-300 hover:text-accent-200">+ 공지</button>}
             </div>
             {notices.length === 0 ? (
               <p className="text-2xs text-ink-muted py-1">등록된 공지가 없습니다</p>
@@ -185,21 +185,21 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
           {isManager && (
             <div className="px-page-x py-2 border-b border-border-subtle">
               <button type="button" onClick={() => setManagePanel((v) => !v)} className="flex w-full items-center justify-between text-xs font-semibold text-ink-secondary">
-                <span>멤버 관리 {pendingMembers.length > 0 && <span className="ml-1 text-gold-300">· 신청 {pendingMembers.length}</span>}</span>
+                <span>멤버 관리 {pendingMembers.length > 0 && <span className="ml-1 text-accent-300">· 신청 {pendingMembers.length}</span>}</span>
                 <span className="text-2xs text-ink-muted">{managePanel ? '닫기' : '열기'}</span>
               </button>
               {managePanel && (
                 <div className="mt-2 space-y-2 animate-slide-up">
                   {pendingMembers.length > 0 && (
                     <div>
-                      <p className="text-2xs font-bold text-gold-300 mb-1">가입 신청 ({pendingMembers.length})</p>
+                      <p className="text-2xs font-bold text-accent-300 mb-1">가입 신청 ({pendingMembers.length})</p>
                       <ul className="space-y-1">
                         {pendingMembers.map((m) => (
                           <li key={m.id} className="flex items-center gap-2 rounded-input bg-surface-high px-2.5 py-1.5">
                             <Avatar name={m.name} color={m.color} size={22} />
                             <span className="text-xs text-ink-primary">{m.name}</span>
                             <div className="ml-auto flex gap-1">
-                              <button type="button" onClick={() => doApprove(m)} className="rounded-input bg-gold-300 px-2 py-1 text-2xs font-bold text-ink-inverse">승인</button>
+                              <button type="button" onClick={() => doApprove(m)} className="rounded-input bg-accent-300 px-2 py-1 text-2xs font-bold text-white">승인</button>
                               <button type="button" onClick={() => doKick(m, '거절')} className="rounded-input border border-border-default px-2 py-1 text-2xs text-ink-muted hover:text-danger-light">거절</button>
                             </div>
                           </li>
@@ -214,7 +214,7 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
                         <li key={m.id} className="flex items-center gap-2 rounded-input bg-surface-high px-2.5 py-1.5">
                           <Avatar name={m.name} color={m.color} size={22} />
                           <span className="text-xs text-ink-primary">{m.name}</span>
-                          {m.role === 'manager' && <span className="text-2xs font-bold text-gold-300">매니저</span>}
+                          {m.role === 'manager' && <span className="text-2xs font-bold text-accent-300">매니저</span>}
                           {m.role !== 'manager' && m.userId !== user?.id && (
                             <button type="button" onClick={() => doKick(m, '강제 탈퇴')} className="ml-auto text-2xs text-ink-muted hover:text-danger-light">추방</button>
                           )}

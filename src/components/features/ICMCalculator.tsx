@@ -63,7 +63,7 @@ export default function ICMCalculator() {
               className="w-6 h-6 inline-flex items-center justify-center rounded-input border border-border-default bg-surface-high text-base font-bold text-ink-secondary leading-none disabled:opacity-30">−</button>
             <span className="min-w-[2.75rem] text-center text-2xs font-bold text-ink-primary tabular-nums">{prizes.length}명</span>
             <button type="button" aria-label="상금 자리 늘리기" onClick={() => setPrizes((p) => [...p, 0])} disabled={prizes.length >= 20}
-              className="w-6 h-6 inline-flex items-center justify-center rounded-input border border-gold-400/50 bg-gold-300/10 text-base font-bold text-gold-300 leading-none disabled:opacity-30">+</button>
+              className="w-6 h-6 inline-flex items-center justify-center rounded-input border border-accent-400/50 bg-accent-300/10 text-base font-bold text-accent-300 leading-none disabled:opacity-30">+</button>
           </div>
         </div>
         <div className="grid grid-cols-3 gap-1.5">
@@ -89,7 +89,7 @@ export default function ICMCalculator() {
               className="w-6 h-6 inline-flex items-center justify-center rounded-input border border-border-default bg-surface-high text-base font-bold text-ink-secondary leading-none disabled:opacity-30">−</button>
             <span className="min-w-[2.75rem] text-center text-2xs font-bold text-ink-primary tabular-nums">{stacks.length}/{MAX_PLAYERS}명</span>
             <button type="button" aria-label="플레이어 늘리기" onClick={() => setStacks((p) => [...p, 1000])} disabled={stacks.length >= MAX_PLAYERS}
-              className="w-6 h-6 inline-flex items-center justify-center rounded-input border border-gold-400/50 bg-gold-300/10 text-base font-bold text-gold-300 leading-none disabled:opacity-30">+</button>
+              className="w-6 h-6 inline-flex items-center justify-center rounded-input border border-accent-400/50 bg-accent-300/10 text-base font-bold text-accent-300 leading-none disabled:opacity-30">+</button>
           </div>
         </div>
         <ul className="space-y-1.5">
@@ -99,7 +99,7 @@ export default function ICMCalculator() {
               <input type="number" inputMode="numeric" value={v === 0 ? '' : v}
                 onChange={(e) => setStack(i, e.target.value === '' ? 0 : (parseInt(e.target.value, 10) || 0))}
                 className="input flex-1 text-sm tabular-nums" placeholder="스택" />
-              <span className="w-24 shrink-0 text-right text-sm font-extrabold text-gold-300 tabular-nums">
+              <span className="w-24 shrink-0 text-right text-sm font-extrabold text-accent-300 tabular-nums">
                 {equities[i] !== undefined ? equities[i].toFixed(2) : '0'}
                 {awarded > 0 && (
                   <span className="ml-1 text-2xs font-normal text-ink-muted">
