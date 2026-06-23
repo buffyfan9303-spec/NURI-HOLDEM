@@ -687,50 +687,8 @@ interface StatsAgg {
   total: number; entries: number; revenue: number; unpaid: number; players: number; ticket: number;
   cardRatio: number; unpaidRatio: number; discountRatio: number; discountCnt: number;
   ranking: [string, number][];
-  unpaidRanking: [string, number][]; support: number; ticketUnpaid: number; byMethod: Record<PaymentMethod, number>;
   mainEntries: number; mainRev: number; sideEntries: number; sideRev: number; sideGameCount: number;
   dow: Record<number, { entries: number; revenue: number; unpaid: number; buyins: number; dates: Set<string>; players: Set<string>; sideE: number; sideRev: number }>;
-}
-
-// ── 이상 거래 감지(#27) — 장부에서 운영자가 점검할 비정상 신호를 규칙으로 탐지 ──────
-// 금액·비율 신호는 LLM 이 아닌 결정론적 규칙으로 판단(수치 환각 방지). high=즉시 점검, warn=주의.
-type AnomalySev = 'high' | 'warn';
-interface AnomalyFlag { sev: AnomalySev; title: string; detail: string }
-function detectAnomalies(m: StatsAgg): AnomalyFlag[] {
-  const flags: AnomalyFlag[] = [];
-  if (m.total === 0) return flags;
-  const man = (won: number) => wonToMan(won);
-  // 1) 미수 집중 — 한 사람에게 미수의 절반 이상이 몰림
-  if (m.unpaid > 0 && m.unpaidRanking.length) {
-    const [topName, topAmt] = m.unpaidRanking[0];
-    const share = topAmt / m.unpaid;
-    if (share >= 0.5 && topAmt >= 50000) {
-      flags.push({ sev: share >= 0.7 ? 'high' : 'warn', title: '미수 집중',
-        detail: `${topName} 님 한 명이 전체 미수의 ${Math.round(share * 100)}%(${man(topAmt)}만 원)를 차지합니다. 개별 회수 또는 추가 바인 제한을 검토하세요.` });
-    }
-  }
-  // 2) 미수율 과다 — 완납 대비 외상 비중
-  if (m.unpaidRatio >= 25) {
-    flags.push({ sev: m.unpaidRatio >= 40 ? 'high' : 'warn', title: '미수율 과다',
-      detail: `완납 매출 대비 미수 비율이 ${Math.round(m.unpaidRatio)}%입니다(미수 ${man(m.unpaid)}만 원). 외상 운영이 과도하지 않은지 점검하세요.` });
-  }
-  // 3) 할인 과다 — 마진 누수·임의 할인 가능성
-  if (m.discountRatio >= 20) {
-    flags.push({ sev: m.discountRatio >= 35 ? 'high' : 'warn', title: '할인 과다',
-      detail: `전체 바인의 ${m.discountRatio.toFixed(0)}%(${m.discountCnt}건)에 할인이 적용됐습니다. 정상가 대비 마진 누수나 임의 할인이 없는지 확인하세요.` });
-  }
-  // 4) 가게지원 과다 — 무상 처리(컴프) 남용·정산 누수
-  const supportRatio = m.entries > 0 ? m.support / m.entries : 0;
-  if (m.support >= 5 && supportRatio >= 0.15) {
-    flags.push({ sev: supportRatio >= 0.3 ? 'high' : 'warn', title: '가게지원 과다',
-      detail: `'지원'(무상) 처리 바인이 ${m.support}건(전체의 ${Math.round(supportRatio * 100)}%)입니다. 무상 처리 기준과 직원 입력을 점검하세요.` });
-  }
-  // 5) 티켓 미회수 — 정산 과정에서 빠진 티켓
-  if (m.ticketUnpaid >= 5) {
-    flags.push({ sev: 'warn', title: '티켓 미회수',
-      detail: `회수되지 않은 티켓이 ${m.ticketUnpaid}장입니다. 티켓 정산 과정을 확인하세요.` });
-  }
-  return flags;
 }
 
 function buildAiReport(m: StatsAgg, days = 7): { empty: boolean; sales: string; risk: string; weekday: string; actions: string[] } {
@@ -789,16 +747,11 @@ function buildAiReport(m: StatsAgg, days = 7): { empty: boolean; sales: string; 
 
 function AiReport({ m, days = 7, onRefresh }: { m: StatsAgg; days?: number; onRefresh: () => void }) {
   const rpt = useMemo(() => buildAiReport(m, days), [m, days]);
-  const anomalies = useMemo(() => detectAnomalies(m), [m]);
-  const hasHigh = anomalies.some((a) => a.sev === 'high');
   // 리포트 인쇄/PDF 저장 — 새 창에 렌더 후 인쇄(브라우저 'PDF로 저장'). 별도 의존성 없이 지류 양식과 동일 패턴.
   const exportReport = () => {
     if (rpt.empty) return;
     const w = window.open('', '_blank', 'width=720,height=900');
     if (!w) return;
-    const anomalyBlock = anomalies.length
-      ? anomalies.map((a) => `${a.sev === 'high' ? '🔴' : '🟠'} ${a.title} — ${a.detail}`).join('\n')
-      : '특이사항 없음 — 미수·할인·지원 모두 정상 범위입니다.';
     // 플레이어명 등 운영자 자유입력이 리포트 본문에 섞이므로 HTML 이스케이프(인쇄창 인젝션 방지).
     const esc = (s: string) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const card = (t: string, b: string) => `<div class="c"><div class="t">${esc(t)}</div><div class="b">${esc(b)}</div></div>`;
@@ -811,7 +764,6 @@ h1{font-size:22px;font-weight:900}.sub{color:#777;font-size:12px;margin:4px 0 20
 @media print{body{padding:16px}}
 </style></head><body>
 <h1>✨ NURI AI 주간 리포트</h1><div class="sub">최근 ${days}일 누적 데이터 기반 인사이트 · nuriholdem.com</div>
-${card('🚨 이상 거래 감지', anomalyBlock)}
 ${card('매출 및 엔트리 분석', rpt.sales)}
 ${card('리스크 & 누수 체크', rpt.risk)}
 ${card('요일별 진단', rpt.weekday)}
@@ -838,35 +790,12 @@ ${card('AI 운영 액션 플랜', rpt.actions.map((a) => '• ' + a).join('\n'))
       {rpt.empty ? (
         <p className="text-center py-8 text-2xs text-ink-muted">최근 {days}일간 데이터가 부족합니다.<br />장부를 작성하면 인사이트가 표시됩니다.</p>
       ) : (
-       <>
-        {/* 🚨 이상 거래 감지(#27) — 결정론적 규칙으로 미수 집중·할인/지원 과다 등 점검 신호 */}
-        <div className={['rounded-input border p-3',
-          anomalies.length === 0 ? 'border-emerald-500/35 bg-emerald-500/[0.05]'
-            : hasHigh ? 'border-rose-500/50 bg-rose-500/[0.08]' : 'border-amber-500/45 bg-amber-500/[0.07]'].join(' ')}>
-          <p className={['flex items-center gap-1 text-xs font-bold mb-1.5',
-            anomalies.length === 0 ? 'text-emerald-300' : hasHigh ? 'text-rose-300' : 'text-amber-300'].join(' ')}>
-            <span>🚨</span>이상 거래 감지{anomalies.length > 0 && <span className="ml-1 text-2xs font-semibold opacity-80">{anomalies.length}건</span>}
-          </p>
-          {anomalies.length === 0 ? (
-            <p className="text-2xs text-ink-secondary leading-relaxed">최근 {days}일 거래에서 특이사항이 발견되지 않았습니다 — 미수·할인·지원 모두 정상 범위입니다.</p>
-          ) : (
-            <ul className="space-y-1.5">
-              {anomalies.map((a, i) => (
-                <li key={i} className="flex gap-1.5 text-2xs leading-relaxed">
-                  <span className={['shrink-0', a.sev === 'high' ? 'text-rose-400' : 'text-amber-400'].join(' ')}>{a.sev === 'high' ? '●' : '○'}</span>
-                  <span className="text-ink-secondary"><b className={a.sev === 'high' ? 'text-rose-200' : 'text-amber-200'}>{a.title}</b> — {a.detail}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <ReportCard tone="emerald" title="매출 및 엔트리 분석" body={rpt.sales} />
           <ReportCard tone="rose" title="리스크 & 누수 체크" body={rpt.risk} />
           <ReportCard tone="sky" title="요일별 진단 (안좋은 날)" body={rpt.weekday} />
           <ReportCard tone="amber" title="AI 운영 액션 플랜" bullets={rpt.actions} />
         </div>
-       </>
       )}
     </div>
   );
