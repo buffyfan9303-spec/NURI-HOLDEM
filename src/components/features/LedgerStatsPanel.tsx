@@ -799,7 +799,9 @@ function AiReport({ m, days = 7, onRefresh }: { m: StatsAgg; days?: number; onRe
     const anomalyBlock = anomalies.length
       ? anomalies.map((a) => `${a.sev === 'high' ? '🔴' : '🟠'} ${a.title} — ${a.detail}`).join('\n')
       : '특이사항 없음 — 미수·할인·지원 모두 정상 범위입니다.';
-    const card = (t: string, b: string) => `<div class="c"><div class="t">${t}</div><div class="b">${b}</div></div>`;
+    // 플레이어명 등 운영자 자유입력이 리포트 본문에 섞이므로 HTML 이스케이프(인쇄창 인젝션 방지).
+    const esc = (s: string) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const card = (t: string, b: string) => `<div class="c"><div class="t">${esc(t)}</div><div class="b">${esc(b)}</div></div>`;
     w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>NURI AI 주간 리포트</title><style>
 *{box-sizing:border-box;margin:0;font-family:'Apple SD Gothic Neo','Malgun Gothic',sans-serif}
 body{padding:32px;color:#1a1a1a;max-width:720px;margin:0 auto}

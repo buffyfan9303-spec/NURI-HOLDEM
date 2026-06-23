@@ -8,8 +8,9 @@ import { useEffect, useState } from 'react';
 import Modal from '../atoms/Modal';
 
 const SEEN_KEY = 'nuri_onboarding_v1';
-// 딥링크로 들어온 경우(공유 대회/매장/체크인/디스플레이 등)엔 온보딩을 띄우지 않는다.
-const DEEPLINK_KEYS = ['s', 'v', 'venue', 'display', 'checkin', 'post', 'ref', 'shared', 'g'];
+// 딥링크/QR로 들어온 경우엔 온보딩을 띄우지 않는다(해당 플로우를 가리지 않도록).
+// 공유 대회/매장/체크인/디스플레이 + 테이블 바인 QR(buyin·game)·가입 QR(signup) 포함.
+const DEEPLINK_KEYS = ['s', 'v', 'venue', 'display', 'checkin', 'post', 'ref', 'shared', 'g', 'buyin', 'game', 'signup'];
 
 interface Step { icon: string; title: string; body: string; }
 const STEPS: Step[] = [
