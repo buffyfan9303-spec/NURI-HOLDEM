@@ -2365,7 +2365,7 @@ function ScheduleSkeletonGrid({ viewMode }: { viewMode: 'grid' | 'list' | 'table
 
 function EmptyState() {
   return (
-    <div className="flex flex-col items-center justify-center py-20 gap-3 text-ink-muted animate-fade-in">
+    <div className="flex flex-col items-center justify-center py-14 gap-3 text-ink-muted">
       <svg width="48" height="48" viewBox="0 0 48 48" fill="none"
         stroke="currentColor" strokeWidth="1.5" aria-hidden>
         <circle cx="22" cy="22" r="14" />

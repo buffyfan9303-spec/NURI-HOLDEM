@@ -187,6 +187,12 @@
   /* 숫자 정렬 일관화 — 숫자 입력 필드도 고정폭 숫자로(자릿수 흔들림 방지). 통계/금액/시간은 컴포넌트에서 tabular-nums 사용 */
   input[type="number"], input[type="date"], input[type="time"] { font-variant-numeric: tabular-nums; }
 
+  /* 가로 스크롤 레일 오른쪽 끝 페이드 — 잘린 마지막 칸이 하드컷 대신 부드럽게 사라지며 '더 있음' 암시 */
+  .scroll-fade-r {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 1.75rem), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 1.75rem), transparent);
+  }
+
   /* 골드 포인트 텍스트 글로우 — 다크 배경에서 묻히지 않고 고급스럽게 (은은하게) */
   .text-gold-glow {
     text-shadow: none;

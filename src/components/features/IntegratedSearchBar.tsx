@@ -129,7 +129,7 @@ function DateTab({ slot, selected, onClick }: DateTabProps) {
       transition={{ type: 'spring', stiffness: 700, damping: 30 }}
       className={[
         // 정사각 셀(요일·날짜만) — '오늘' 텍스트 제거로 모든 칸 동일 높이
-        'relative flex h-[3rem] w-[3rem] shrink-0 snap-center flex-col items-center justify-center rounded-xl select-none',
+        'relative flex h-[3rem] w-[3rem] shrink-0 flex-col items-center justify-center rounded-xl select-none',
         'focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-300',
         selected ? 'text-ink-inverse' : 'text-ink-secondary hover:bg-surface-high active:bg-surface-high/70',
         // 오늘은 글자 대신 골드 테두리로 표시(미선택 시)
@@ -169,7 +169,7 @@ function DateSlider({ selectedDates, onToggle, onPick }: DateSliderProps) {
     <div
       role="group"
       aria-label="날짜 빠른 선택 (복수 선택 가능)"
-      className="flex items-center gap-1.5 overflow-x-auto scrollbar-none snap-x scroll-px-page-x px-page-x pt-0.5 pb-1.5 [-webkit-overflow-scrolling:touch] sm:gap-2"
+      className="flex items-center gap-1.5 overflow-x-auto scrollbar-none scroll-fade-r px-page-x pt-0.5 pb-1.5 [-webkit-overflow-scrolling:touch] sm:gap-2"
     >
       {slots.map((slot) => (
         <Fragment key={slot.iso}>
@@ -188,7 +188,7 @@ function DateSlider({ selectedDates, onToggle, onPick }: DateSliderProps) {
       {/* 날짜 직접 선택 (3주 이후) — 네이티브 date picker 오버레이 */}
       <label
         title="날짜 직접 선택"
-        className="relative flex shrink-0 snap-center flex-col items-center justify-center w-[3rem] h-[3rem] rounded-xl border border-dashed border-border-default text-ink-secondary hover:bg-surface-high hover:border-accent-400/50 cursor-pointer transition-colors focus-within:ring-2 focus-within:ring-accent-300"
+        className="relative flex shrink-0 flex-col items-center justify-center w-[3rem] h-[3rem] rounded-xl border border-dashed border-border-default text-ink-secondary hover:bg-surface-high hover:border-accent-400/50 cursor-pointer transition-colors focus-within:ring-2 focus-within:ring-accent-300"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
