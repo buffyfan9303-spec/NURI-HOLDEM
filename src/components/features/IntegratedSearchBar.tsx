@@ -127,7 +127,7 @@ function DateTab({ slot, selected, onClick }: DateTabProps) {
       transition={{ type: 'spring', stiffness: 700, damping: 30 }}
       className={[
         // 정사각 셀(요일·날짜만) — '오늘' 텍스트 제거로 모든 칸 동일 높이
-        'relative flex h-[3.25rem] w-[3.25rem] shrink-0 snap-center flex-col items-center justify-center rounded-xl select-none',
+        'relative flex h-[3rem] w-[3rem] shrink-0 snap-center flex-col items-center justify-center rounded-xl select-none',
         'focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-300',
         selected ? 'text-ink-inverse' : 'text-ink-secondary hover:bg-surface-high active:bg-surface-high/70',
         // 오늘은 글자 대신 골드 테두리로 표시(미선택 시)
@@ -167,7 +167,7 @@ function DateSlider({ selectedDates, onToggle, onPick }: DateSliderProps) {
     <div
       role="group"
       aria-label="날짜 빠른 선택 (복수 선택 가능)"
-      className="flex items-center gap-1.5 overflow-x-auto scrollbar-none snap-x scroll-px-page-x px-page-x pt-1 pb-2.5 [-webkit-overflow-scrolling:touch] sm:gap-2"
+      className="flex items-center gap-1.5 overflow-x-auto scrollbar-none snap-x scroll-px-page-x px-page-x pt-0.5 pb-1.5 [-webkit-overflow-scrolling:touch] sm:gap-2"
     >
       {slots.map((slot) => (
         <Fragment key={slot.iso}>
@@ -186,7 +186,7 @@ function DateSlider({ selectedDates, onToggle, onPick }: DateSliderProps) {
       {/* 날짜 직접 선택 (3주 이후) — 네이티브 date picker 오버레이 */}
       <label
         title="날짜 직접 선택"
-        className="relative flex shrink-0 snap-center flex-col items-center justify-center w-[3.1rem] h-[3.25rem] rounded-xl border border-dashed border-border-default text-ink-secondary hover:bg-surface-high hover:border-accent-400/50 cursor-pointer transition-colors focus-within:ring-2 focus-within:ring-accent-300"
+        className="relative flex shrink-0 snap-center flex-col items-center justify-center w-[3rem] h-[3rem] rounded-xl border border-dashed border-border-default text-ink-secondary hover:bg-surface-high hover:border-accent-400/50 cursor-pointer transition-colors focus-within:ring-2 focus-within:ring-accent-300"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
@@ -292,7 +292,7 @@ export default function IntegratedSearchBar({
   return (
     <div className={['w-full', className].join(' ')}>
       {/* ── 검색창 ─────────────────────────────────────────────────────── */}
-      <div className="px-page-x pt-2 pb-2">
+      <div className="px-page-x pt-1.5 pb-1.5">
         <form
           onSubmit={handleSubmit}
           className={[
@@ -356,7 +356,7 @@ export default function IntegratedSearchBar({
       <DateSlider selectedDates={selectedDates} onToggle={handleDateToggle} onPick={handlePickDate} />
 
       {/* ── 지역(복수선택) + 토너먼트(라디오) 필터 ──────────────────────── */}
-      <div className="flex flex-col gap-2 px-page-x pt-2 pb-1">
+      <div className="flex flex-col gap-2 px-page-x pt-1.5 pb-0.5">
         {/* 토너먼트 + 지역 필터 — 한 줄(라디오 + 지역 드롭다운) */}
         <div className="flex items-center gap-1.5 flex-wrap">
           <div
@@ -429,10 +429,11 @@ export default function IntegratedSearchBar({
         </div>
       </div>
 
-      {/* ── 활성 필터 요약 칩 (토너먼트 선택은 칩 하이라이트로 충분 → 요약 제외) ── */}
-      {(rawQuery || selectedDates.length > 0 || selectedRegions.length > 0) && (
+      {/* ── 활성 필터 요약 칩 — 날짜는 슬라이더에 이미 표시되므로 '복수 선택일 때만' 칩 노출
+           (기본 단일 오늘 칩이 매번 한 줄을 먹던 문제 제거). 검색어·지역은 그대로 칩. ── */}
+      {(rawQuery || selectedRegions.length > 0 || selectedDates.length > 1) && (
         <div
-          className="flex flex-wrap gap-1.5 px-page-x pt-1 pb-2 animate-slide-up"
+          className="flex flex-wrap gap-1.5 px-page-x pt-0.5 pb-1.5"
           role="status"
           aria-live="polite"
           aria-label="적용된 필터"
@@ -440,8 +441,8 @@ export default function IntegratedSearchBar({
           {rawQuery && (
             <FilterChip label={`"${rawQuery}"`} onRemove={handleClear} />
           )}
-          {/* 선택된 날짜마다 칩 1개 (복수 선택) */}
-          {selectedDates.map((iso) => (
+          {/* 날짜는 2개 이상 선택했을 때만 칩으로(단일 오늘은 슬라이더 하이라이트로 충분) */}
+          {selectedDates.length > 1 && selectedDates.map((iso) => (
             <FilterChip key={iso} label={formatDateLabel(iso)} onRemove={() => handleDateToggle(iso)} />
           ))}
           {/* 선택된 지역마다 칩 1개 (복수 선택) */}

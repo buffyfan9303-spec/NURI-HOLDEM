@@ -1681,12 +1681,12 @@ export default function App() {
             </div>
           )}
           <div
-            className="sticky z-30 bg-surface-base border-b border-border-subtle pt-3 pb-3"
+            className="sticky z-30 bg-surface-base border-b border-border-subtle pt-1.5 pb-2"
             style={{ top: 'calc(var(--stack-top, 6.0625rem) - 1px)' }}
           >
             <IntegratedSearchBar onChange={setSearchState} />
             {/* 뷰 모드 토글 + 팔로우 매장만 보기 — 일정 탐색 컨텍스트 안에 배치 */}
-            <div className="flex items-center justify-between gap-2 px-page-x pt-2">
+            <div className="flex items-center justify-between gap-2 px-page-x pt-1.5">
               <span className="text-2xs text-ink-muted">
                 총 <span className="text-ink-secondary tabular-nums font-semibold">{visibleSchedules.length}</span>개
                 {followedOnly && <span className="ml-1 text-accent-300">· 팔로우 매장</span>}

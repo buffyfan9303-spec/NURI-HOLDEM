@@ -263,6 +263,10 @@ body { overscroll-behavior-y: contain; }
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+  /* 진입/로딩 애니메이션은 아예 끔(0.01ms 단축이 아니라 none) — 모션 민감 사용자에게 깜빡임 0.
+     framer-motion 은 main.tsx 의 MotionConfig reducedMotion="user" 가 별도로 처리. */
+  .animate-fade-in, .animate-fade-out, .animate-slide-up, .animate-slide-down,
+  .tab-anim-r, .tab-anim-l, .animate-shimmer, .skeleton, .confetti { animation: none !important; }
 }
 
 /* ── 라이트 모드 가독 오버라이드(unlayered — utilities 레이어보다 우선) ──
@@ -280,6 +284,10 @@ html.light .text-accent-400 { color: #3A4392; }
 @media (max-width: 1023.5px) {
   /* py-* 유틸 클래스가 태그 셀렉터를 이겨 패딩이 무효되던 버그 — 하단 탭바 가림의 원인 */
   main { padding-bottom: calc(5.5rem + env(safe-area-inset-bottom)) !important; }
+  /* 모바일: 항상 떠 있던 세로 스크롤바 숨김(터치 스크롤이라 불필요) — 오른쪽 '삐져나옴' 제거.
+     데스크톱은 scrollbar-gutter:stable 로 폭 흔들림 방지 유지(위 html 규칙). */
+  html { overflow-y: auto; scrollbar-gutter: auto; }
+  html::-webkit-scrollbar, body::-webkit-scrollbar { width: 0; height: 0; }
 }
 
 /* ── 프레스 스프링(버튼 이펙트) — 누르면 깊게 눌리고, 떼면 통통 튀며 복귀 */
