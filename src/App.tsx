@@ -572,10 +572,10 @@ function MobileTabBar({ tabs, active, onChange, dot, onOpenMe }: {
               key={key} type="button"
               onClick={() => { if (tab) { setOptimistic(tab); onChange(tab); window.scrollTo({ top: 0 }); } else onOpenMe(); }}
               aria-current={on ? 'page' : undefined}
-              className="press-spring flex min-w-0 flex-1 flex-col items-center gap-1 pb-2 pt-2.5 touch-manipulation focus:outline-none"
+              className="press-spring flex min-w-0 flex-1 flex-col items-center gap-0.5 pb-1.5 pt-2 touch-manipulation focus:outline-none"
             >
               {/* 아이콘 22px · 라벨 11px — 공백 줄이고 또렷하게 */}
-              <span className={['relative flex h-8 w-14 items-center justify-center rounded-full [&_svg]:h-[22px] [&_svg]:w-[22px] transition-colors duration-200',
+              <span className={['relative flex h-7 w-12 items-center justify-center rounded-full [&_svg]:h-[21px] [&_svg]:w-[21px] transition-colors duration-200',
                 on ? 'text-accent-300' : 'text-ink-secondary'].join(' ')}>
                 {/* 활성 알약 — 각 칸이 자기 핀을 갖고 opacity 만 토글(transform·layout 0). 전환 시 크로스페이드 */}
                 <span aria-hidden
@@ -1683,11 +1683,11 @@ export default function App() {
                 style={ptr !== -1 ? { transform: `rotate(${ptr * 3}deg)`, opacity: Math.min(1, ptr / 56) } : undefined}>♠</span>
             </div>
           )}
-          <div
-            className="sticky z-30 bg-surface-base border-b border-border-subtle pt-1.5 pb-2"
-            style={{ top: 'calc(var(--stack-top, 6.0625rem) - 1px)' }}
-          >
-            <IntegratedSearchBar ref={searchBarRef} onChange={setSearchState} />
+          {/* display:contents 로 래퍼 박스를 없애 검색+날짜 sticky 가 '긴 컨텐츠 컨테이너'의 직계자식이 되도록
+              (짧은 헤더 박스에 갇히면 리스트를 스크롤할 때 검색+날짜가 같이 사라짐) */}
+          <div className="contents">
+            {/* 검색바+날짜만 sticky(아래 필터·카운트는 스크롤되어 사라짐) */}
+            <IntegratedSearchBar ref={searchBarRef} onChange={setSearchState} stickyTop="calc(var(--stack-top, 6.0625rem) - 1px)" />
             {/* 뷰 모드 토글 + 팔로우 매장만 보기 — 일정 탐색 컨텍스트 안에 배치 */}
             <div className="flex items-center justify-between gap-2 px-page-x pt-1.5">
               <div className="flex min-w-0 items-center gap-2">

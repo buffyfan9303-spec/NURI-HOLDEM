@@ -129,7 +129,7 @@ function DateTab({ slot, selected, onClick }: DateTabProps) {
       transition={{ type: 'spring', stiffness: 700, damping: 30 }}
       className={[
         // 정사각 셀(요일·날짜만) — '오늘' 텍스트 제거로 모든 칸 동일 높이
-        'relative flex h-[3rem] w-[3rem] shrink-0 flex-col items-center justify-center rounded-xl select-none',
+        'relative flex h-[2.6rem] w-[2.6rem] shrink-0 flex-col items-center justify-center rounded-[10px] select-none',
         'focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-300',
         selected ? 'text-ink-inverse' : 'text-ink-secondary hover:bg-surface-high active:bg-surface-high/70',
         // 오늘은 글자 대신 골드 테두리로 표시(미선택 시)
@@ -143,11 +143,11 @@ function DateTab({ slot, selected, onClick }: DateTabProps) {
           initial={{ scale: 0.6, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ type: 'spring', stiffness: 620, damping: 26 }}
-          className="absolute inset-0 rounded-xl bg-accent-300 shadow-[0_4px_14px_-4px_rgba(252,213,53,0.6)]"
+          className="absolute inset-0 rounded-[10px] bg-accent-300 shadow-[0_4px_14px_-4px_rgba(94,106,210,0.55)]"
         />
       )}
       <span className={['relative text-[10px] font-bold leading-none', selected ? 'text-ink-inverse/85' : dowColor].join(' ')}>{slot.dow}</span>
-      <span className="relative mt-1 text-base font-extrabold leading-none tabular-nums">{slot.day}</span>
+      <span className="relative mt-0.5 text-[15px] font-extrabold leading-none tabular-nums">{slot.day}</span>
     </motion.button>
   );
 }
@@ -188,7 +188,7 @@ function DateSlider({ selectedDates, onToggle, onPick }: DateSliderProps) {
       {/* 날짜 직접 선택 (3주 이후) — 네이티브 date picker 오버레이 */}
       <label
         title="날짜 직접 선택"
-        className="relative flex shrink-0 flex-col items-center justify-center w-[3rem] h-[3rem] rounded-xl border border-dashed border-border-default text-ink-secondary hover:bg-surface-high hover:border-accent-400/50 cursor-pointer transition-colors focus-within:ring-2 focus-within:ring-accent-300"
+        className="relative flex shrink-0 flex-col items-center justify-center w-[2.6rem] h-[2.6rem] rounded-[10px] border border-dashed border-border-default text-ink-secondary hover:bg-surface-high hover:border-accent-400/50 cursor-pointer transition-colors focus-within:ring-2 focus-within:ring-accent-300"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
@@ -221,6 +221,8 @@ interface IntegratedSearchBarProps {
   onChange: (state: SearchState) => void;
   placeholder?: string;
   className?: string;
+  /** 지정 시 검색창+날짜 부분만 이 top 값으로 sticky 고정(필터·칩은 스크롤). */
+  stickyTop?: string;
 }
 
 export interface SearchBarHandle { clearAll: () => void }
@@ -229,6 +231,7 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
   onChange,
   placeholder = '대회명, 펍 이름, 지역 검색…',
   className = '',
+  stickyTop,
 }, ref) {
   const [rawQuery,       setRawQuery]       = useState('');
   // 날짜·지역은 복수 선택(배열). 토글 방식으로 추가/제거.
@@ -297,14 +300,19 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
   useImperativeHandle(ref, () => ({ clearAll }), [clearAll]);
 
   return (
-    <div className={['w-full', className].join(' ')}>
+    <div className={[stickyTop ? 'contents' : 'w-full', className].join(' ')}>
+      {/* 검색창 + 날짜만 sticky 고정(필터·칩은 스크롤되어 사라짐 → 고정 높이 최소화) */}
+      <div
+        className={stickyTop ? 'sticky z-30 bg-surface-base border-b border-border-subtle' : ''}
+        style={stickyTop ? { top: stickyTop } : undefined}
+      >
       {/* ── 검색창 ─────────────────────────────────────────────────────── */}
       <div className="px-page-x pt-1.5 pb-1.5">
         <form
           onSubmit={handleSubmit}
           className={[
             'flex items-center gap-2 px-3',
-            'bg-surface-high rounded-input h-11',
+            'bg-surface-high rounded-input h-10',
             'border transition-all duration-150',
             isFocused
               ? 'border-accent-300'
@@ -361,6 +369,7 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
 
       {/* ── 날짜 슬라이더 탭 (복수 선택) ─────────────────────────────────── */}
       <DateSlider selectedDates={selectedDates} onToggle={handleDateToggle} onPick={handlePickDate} />
+      </div>{/* /sticky 검색+날짜 */}
 
       {/* ── 지역(복수선택) + 토너먼트(라디오) 필터 ──────────────────────── */}
       <div className="flex flex-col gap-2 px-page-x pt-1.5 pb-0.5">
