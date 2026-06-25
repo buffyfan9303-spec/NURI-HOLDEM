@@ -19,6 +19,8 @@ import {
   useEffect,
   useDeferredValue,
   useTransition,
+  useImperativeHandle,
+  forwardRef,
   Fragment,
 } from 'react';
 import { motion } from 'framer-motion';
@@ -221,11 +223,13 @@ interface IntegratedSearchBarProps {
   className?: string;
 }
 
-export default function IntegratedSearchBar({
+export interface SearchBarHandle { clearAll: () => void }
+
+const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps>(function IntegratedSearchBar({
   onChange,
   placeholder = '대회명, 펍 이름, 지역 검색…',
   className = '',
-}: IntegratedSearchBarProps) {
+}, ref) {
   const [rawQuery,       setRawQuery]       = useState('');
   // 날짜·지역은 복수 선택(배열). 토글 방식으로 추가/제거.
   // 기본값 = 당일(오늘) 선택 — 일정탐색 진입 시 오늘 대회부터 보여준다.
@@ -288,6 +292,9 @@ export default function IntegratedSearchBar({
     setSelectedRegions([]);
     setTour('all');
   }, []);
+
+  // 전체 초기화를 부모(App)의 '총 N개' 줄에서 호출 — 필터바 안에서 한 줄 먹던 버튼 제거
+  useImperativeHandle(ref, () => ({ clearAll }), [clearAll]);
 
   return (
     <div className={['w-full', className].join(' ')}>
@@ -416,16 +423,7 @@ export default function IntegratedSearchBar({
             </svg>
           </div>
 
-          {/* 전체 초기화 (필터 있을 때만) */}
-          {hasActiveFilter && (
-            <button
-              type="button"
-              onClick={clearAll}
-              className="ml-auto px-2 py-1 rounded-badge text-2xs text-ink-muted hover:text-danger border border-transparent hover:border-danger/40 transition-colors focus:outline-none"
-            >
-              전체 초기화
-            </button>
-          )}
+          {/* 전체 초기화는 App 의 '총 N개' 줄로 이동(여기서 한 줄 먹던 것 제거) */}
         </div>
       </div>
 
@@ -441,10 +439,13 @@ export default function IntegratedSearchBar({
           {rawQuery && (
             <FilterChip label={`"${rawQuery}"`} onRemove={handleClear} />
           )}
-          {/* 날짜는 2개 이상 선택했을 때만 칩으로(단일 오늘은 슬라이더 하이라이트로 충분) */}
-          {selectedDates.length > 1 && selectedDates.map((iso) => (
-            <FilterChip key={iso} label={formatDateLabel(iso)} onRemove={() => handleDateToggle(iso)} />
-          ))}
+          {/* 날짜 여러 개 → 칩 하나로 요약(2줄 폭증 방지). ×는 날짜 필터 전체 해제. 개별 해제는 슬라이더 탭. */}
+          {selectedDates.length > 1 && (
+            <FilterChip
+              label={`${formatDateLabel([...selectedDates].sort()[0])} 외 ${selectedDates.length - 1}일`}
+              onRemove={() => setSelectedDates([])}
+            />
+          )}
           {/* 선택된 지역마다 칩 1개 (복수 선택) */}
           {selectedRegions.map((r) => (
             <FilterChip key={r} label={r} onRemove={() => handleRegionToggle(r)} />
@@ -453,13 +454,15 @@ export default function IntegratedSearchBar({
       )}
     </div>
   );
-}
+});
+
+export default IntegratedSearchBar;
 
 // ── 필터 칩 ──────────────────────────────────────────────────────────────────
 
 function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
-    <span className="inline-flex items-center gap-1 h-6 px-2 rounded-badge bg-surface-float border border-border-default text-xs text-ink-secondary">
+    <span className="inline-flex items-center gap-0.5 h-5 px-1.5 rounded-badge bg-surface-float border border-border-default text-2xs text-ink-secondary">
       {label}
       <button
         type="button"

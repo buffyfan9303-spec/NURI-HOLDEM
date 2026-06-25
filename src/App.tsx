@@ -705,6 +705,9 @@ export default function App() {
   }, []);
   // 일정탐색 기본값 — 당일(오늘)이 선택된 상태로 시작(오늘 열리는 대회를 바로 보여줌)
   const [searchState, setSearchState] = useState<SearchState>({ query: '', dates: [new Date().toLocaleDateString('en-CA')], regions: [], format: null, gtdOnly: false, competitionOnly: false });
+  // 전체 초기화 버튼을 '총 N개' 줄에 두기 위해 검색바의 clearAll 을 ref 로 끌어올림
+  const searchBarRef = useRef<{ clearAll: () => void } | null>(null);
+  const hasActiveSearchFilter = !!(searchState.query || searchState.dates.length || searchState.regions.length || searchState.format || searchState.gtdOnly || searchState.competitionOnly);
   const [authOpen, setAuthOpen]       = useState(false);
   const [authMode, setAuthMode]       = useState<'login' | 'signup-user'>('login'); // QR 회원가입 진입용
   const [openVenueId, setOpenVenueId] = useState<string | null>(null);
@@ -1684,13 +1687,26 @@ export default function App() {
             className="sticky z-30 bg-surface-base border-b border-border-subtle pt-1.5 pb-2"
             style={{ top: 'calc(var(--stack-top, 6.0625rem) - 1px)' }}
           >
-            <IntegratedSearchBar onChange={setSearchState} />
+            <IntegratedSearchBar ref={searchBarRef} onChange={setSearchState} />
             {/* 뷰 모드 토글 + 팔로우 매장만 보기 — 일정 탐색 컨텍스트 안에 배치 */}
             <div className="flex items-center justify-between gap-2 px-page-x pt-1.5">
-              <span className="text-2xs text-ink-muted">
-                총 <span className="text-ink-secondary tabular-nums font-semibold">{visibleSchedules.length}</span>개
-                {followedOnly && <span className="ml-1 text-accent-300">· 팔로우 매장</span>}
-              </span>
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="shrink-0 text-2xs text-ink-muted">
+                  총 <span className="text-ink-secondary tabular-nums font-semibold">{visibleSchedules.length}</span>개
+                  {followedOnly && <span className="ml-1 text-accent-300">· 팔로우</span>}
+                </span>
+                {/* 전체 초기화 — 별도 줄 차지하지 않게 '총 N개' 옆에 배치(검색바 clearAll 호출) */}
+                {hasActiveSearchFilter && (
+                  <button
+                    type="button"
+                    onClick={() => searchBarRef.current?.clearAll()}
+                    className="shrink-0 inline-flex items-center gap-0.5 rounded-badge border border-transparent px-1.5 py-0.5 text-2xs text-ink-muted transition-colors hover:border-danger/40 hover:text-danger focus:outline-none"
+                  >
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 6h18M8 6V4h8v2m-1 0v14H9V6" /></svg>
+                    초기화
+                  </button>
+                )}
+              </div>
               <div className="flex items-center gap-1.5">
                 {user && (
                   <button
