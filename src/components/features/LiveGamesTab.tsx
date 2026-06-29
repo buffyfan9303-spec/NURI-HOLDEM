@@ -109,7 +109,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
   };
 
   return (
-    <main className="px-page-x py-section animate-fade-in">
+    <main className="px-page-x pt-3 pb-section">
       <div className="mx-auto w-full max-w-3xl space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">

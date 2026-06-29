@@ -301,9 +301,10 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
 
   return (
     <div className={[stickyTop ? 'contents' : 'w-full', className].join(' ')}>
-      {/* 검색창 + 날짜만 sticky 고정(필터·칩은 스크롤되어 사라짐 → 고정 높이 최소화) */}
+      {/* 검색창 + 날짜만 sticky 고정(필터·칩은 스크롤되어 사라짐 → 고정 높이 최소화).
+          반투명+backdrop-blur 로 밑을 지나는 컨텐츠가 살짝 비쳐 '떠있는 글래스' 느낌 + 또렷한 구분선. */}
       <div
-        className={stickyTop ? 'sticky z-30 bg-surface-base border-b border-border-subtle' : ''}
+        className={stickyTop ? 'sticky z-30 bg-surface-base/90 backdrop-blur-md border-b border-border-default' : ''}
         style={stickyTop ? { top: stickyTop } : undefined}
       >
       {/* ── 검색창 ─────────────────────────────────────────────────────── */}

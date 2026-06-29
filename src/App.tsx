@@ -1889,7 +1889,7 @@ export default function App() {
 
       {/* 중고장터 */}
       {(activeTab === 'market' || visitedTabs.has('market')) && (
-        <main className="px-page-x py-section" style={activeTab !== 'market' ? { display: 'none' } : undefined}>
+        <main className="px-page-x pt-3 pb-section" style={activeTab !== 'market' ? { display: 'none' } : undefined}>
           <MarketplaceTabM
             listings={listings}
             loading={!marketLoaded}
