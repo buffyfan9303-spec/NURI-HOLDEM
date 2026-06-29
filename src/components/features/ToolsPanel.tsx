@@ -153,7 +153,7 @@ export default function ToolsPanel() {
           ))}
         </div>
         {row.some((t) => t.key === active) && (
-          <div className="animate-fade-in pt-1 lg:max-w-3xl">
+          <div className="pt-1 lg:max-w-3xl">
             <Suspense fallback={<div className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</div>}>
               {renderTool(active!)}
             </Suspense>

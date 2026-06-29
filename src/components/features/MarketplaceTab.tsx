@@ -221,7 +221,7 @@ function MarketplaceTab({
           조건에 맞는 글이 없습니다
         </div>
       ) : (
-        <div className="rounded-card border border-border-default bg-surface-low overflow-hidden animate-fade-in">
+        <div className="rounded-card border border-border-default bg-surface-low overflow-hidden">
           <BoardHeader />
           <ul>
             {shown.map((l, idx) => (

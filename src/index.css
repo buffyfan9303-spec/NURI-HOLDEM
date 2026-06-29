@@ -247,6 +247,17 @@ main { max-width: 48rem; margin-inline: auto; }
 .animate-fade-out { animation-duration: 0.18s; animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1); }
 .animate-slide-up { animation-duration: 0.32s; animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1); }
 
+/* ── 전역 안전망 — 탭 전환 '치직'(진입 애니메이션 재생) 재발 차단 ──────────────
+   keep-alive 탭(.tab-pane)은 언마운트 대신 display:none 으로만 숨겼다가 다시 보이는데,
+   브라우저는 display:none→block 복귀 시 그 안의 CSS 진입 애니메이션을 처음부터 재생한다.
+   → .tab-pane 내부의 항상-렌더 진입 애니메이션을 무효화해 재방문 시 깜빡임을 0으로.
+   단, 탭 안에 인라인 렌더되는 모달/오버레이(position:fixed)와 그 자식은 '진짜 새로 뜨는'
+   것이므로 :not(.fixed):not(.fixed *) 로 제외해 슬라이드/페이드 유지.
+   (로딩 spin/pulse/shimmer 등 무한 반복 애니메이션은 대상 클래스에 없어 영향 없음) */
+.tab-pane :is(.animate-fade-in, .animate-slide-up, .animate-slide-down, .animate-scale-in):not(.fixed):not(.fixed *) {
+  animation: none !important;
+}
+
 /* 네이티브 스크롤 감각 — 부드러운 앵커 이동 + 바운스가 새로고침으로 새지 않게 */
 html { scroll-behavior: smooth; }
 body { overscroll-behavior-y: contain; }

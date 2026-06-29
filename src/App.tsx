@@ -179,6 +179,7 @@ function AppHeader({
 
   return (
     <header
+      data-stack-header
       aria-hidden={suppressed || undefined}
       className={[
         'sticky top-0 z-50 bg-surface-base border-b border-border-subtle',
@@ -570,7 +571,7 @@ function MobileTabBar({ tabs, active, onChange, dot, onOpenMe }: {
           return (
             <button
               key={key} type="button"
-              onClick={() => { if (tab) { setOptimistic(tab); onChange(tab); window.scrollTo({ top: 0 }); } else onOpenMe(); }}
+              onClick={() => { if (tab) { setOptimistic(tab); onChange(tab); window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior }); } else onOpenMe(); }}
               aria-current={on ? 'page' : undefined}
               className="press-spring flex min-w-0 flex-1 flex-col items-center gap-0.5 pb-1.5 pt-2 touch-manipulation focus:outline-none"
             >
@@ -986,18 +987,32 @@ export default function App() {
   // 헤더+탭바 실제 높이를 측정 → 일정탐색 sticky 필터가 정확히 그 아래에 붙도록 --stack-top 노출.
   // (토큰 추정/-1rem 보정 대신 실측값을 사용해 모바일 sticky 겹침을 방지)
   useEffect(() => {
+    const headerEl = document.querySelector('[data-stack-header]');
     const update = () => {
       const tabbar = document.querySelector('[data-stack-tabbar]');
-      if (!tabbar) { document.documentElement.style.setProperty('--stack-top', '97px'); return; }
-      // 탭바가 고정될 위치(top: header-h) + 탭바 실제 높이 = 탭바 고정 시 하단 = 필터가 붙을 지점
-      const stickyTop = parseFloat(getComputedStyle(tabbar).top) || 56;
-      const h = stickyTop + tabbar.getBoundingClientRect().height;
-      document.documentElement.style.setProperty('--stack-top', `${Math.round(h)}px`);
+      // 데스크톱: 헤더 아래 sticky 탭바까지가 상단 스택 — 탭바 고정 하단 = 필터가 붙을 지점
+      if (tabbar && tabbar.getBoundingClientRect().height > 0) {
+        const stickyTop = parseFloat(getComputedStyle(tabbar).top) || 56;
+        const h = stickyTop + tabbar.getBoundingClientRect().height;
+        document.documentElement.style.setProperty('--stack-top', `${Math.round(h)}px`);
+        return;
+      }
+      // 모바일: 탭바가 숨겨져 있음 → 헤더의 '현재' 하단을 그대로 사용.
+      // 헤더는 스크롤 시 축소(h-header-h→h-11)되는데, --stack-top을 미축소 높이로 한 번만 재면
+      // 축소 후 헤더 하단과 검색바 sticky top 사이에 비침 띠(gap)가 생긴다.
+      // ResizeObserver로 헤더 높이 변화(축소 애니메이션 매 프레임 포함)를 추적해 검색바가 항상 헤더 바로 아래에 붙게 한다.
+      if (headerEl) {
+        document.documentElement.style.setProperty('--stack-top', `${Math.round(headerEl.getBoundingClientRect().bottom)}px`);
+      } else {
+        document.documentElement.style.setProperty('--stack-top', '97px');
+      }
     };
     update();
     window.addEventListener('resize', update);
+    let ro: ResizeObserver | undefined;
+    if (headerEl && 'ResizeObserver' in window) { ro = new ResizeObserver(update); ro.observe(headerEl); }
     const t = setTimeout(update, 300); // 폰트/레이아웃 안정화 후 재측정
-    return () => { window.removeEventListener('resize', update); clearTimeout(t); };
+    return () => { window.removeEventListener('resize', update); ro?.disconnect(); clearTimeout(t); };
   }, [activeTab]);
 
   // #13 커뮤니티 게시글·댓글 실시간 — 다른 사용자가 올린 글/댓글이 즉시 반영(알림/일정/장부와 동일 수준).
@@ -1673,7 +1688,7 @@ export default function App() {
       <div className="px-page-x"><StaffInviteBanner /></div>
 
       {(activeTab === 'browse' || visitedTabs.has('browse')) && (
-        <main style={activeTab !== 'browse' ? { display: 'none' } : undefined}
+        <main className="tab-pane" style={activeTab !== 'browse' ? { display: 'none' } : undefined}
           onTouchStart={onPtrStart} onTouchMove={onPtrMove} onTouchEnd={onPtrEnd}>
           {/* 당겨서 새로고침 인디케이터 — ♠ 회전 */}
           {ptr !== 0 && (
@@ -1775,7 +1790,7 @@ export default function App() {
                   )}
                 </header>
                 {noticesOpen && (browseNotices.length > 0 ? (
-                  <ul className="animate-slide-up">
+                  <ul>
                     {browseNotices.slice(0, 3).map((n) => (
                       <li key={n.id}>
                         <button
@@ -1858,7 +1873,7 @@ export default function App() {
       <Suspense fallback={<LazyFallback />}>
       {/* 라이브 — 진행 중 게임 현황 */}
       {(activeTab === 'live' || visitedTabs.has('live')) && (
-        <div style={activeTab !== 'live' ? { display: 'none' } : undefined}>
+        <div className="tab-pane" style={activeTab !== 'live' ? { display: 'none' } : undefined}>
           <ErrorBoundary inline resetKey="live">
             <LiveGamesTabM venues={venues} schedules={schedules} onVenue={handleVenueClick} onSchedule={handleScheduleSelect} onDisplay={openDisplay} active={activeTab === 'live'} />
           </ErrorBoundary>
@@ -1867,7 +1882,7 @@ export default function App() {
 
       {/* 커뮤니티 */}
       {(activeTab === 'community' || visitedTabs.has('community')) && (
-        <main className="px-page-x pb-section" style={activeTab !== 'community' ? { display: 'none' } : undefined}>
+        <main className="tab-pane px-page-x pb-section" style={activeTab !== 'community' ? { display: 'none' } : undefined}>
           <CommunityTabM
             marketSlot={marketSlot}
             venues={venues}
@@ -1889,7 +1904,7 @@ export default function App() {
 
       {/* 중고장터 */}
       {(activeTab === 'market' || visitedTabs.has('market')) && (
-        <main className="px-page-x pt-3 pb-section" style={activeTab !== 'market' ? { display: 'none' } : undefined}>
+        <main className="tab-pane px-page-x pt-3 pb-section" style={activeTab !== 'market' ? { display: 'none' } : undefined}>
           <MarketplaceTabM
             listings={listings}
             loading={!marketLoaded}
@@ -1906,7 +1921,7 @@ export default function App() {
 
       {/* 도구 — 매장 운영·플레이어 도구 모음 (메인 탭) */}
       {(activeTab === 'tools' || visitedTabs.has('tools')) && (
-        <main className="px-page-x pt-3 pb-section" style={activeTab !== 'tools' ? { display: 'none' } : undefined}>
+        <main className="tab-pane px-page-x pt-3 pb-section" style={activeTab !== 'tools' ? { display: 'none' } : undefined}>
           <ErrorBoundary inline resetKey="tools">
             <ToolsPanelM />
           </ErrorBoundary>

@@ -322,7 +322,9 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
           불투명 배경 + 구분선 — 스크롤 시 뒤 컨텐츠가 비쳐 보이던 현상 제거(깔끔한 고정). */}
       <div
         ref={stickyRef}
-        className={stickyTop ? 'sticky z-30 bg-surface-base border-b border-border-subtle transition-colors duration-200' : ''}
+        // before:* = '브리지' — 검색바 위로 불투명 surface-base 띠를 깔아, 스크롤 시 헤더 축소로 생길 수 있는
+        // 헤더-검색바 사이 틈으로 뒤 컨텐츠가 비치는 현상을 어떤 상태에서도 가린다(JS 측정 의존 없이 확실).
+        className={stickyTop ? "relative sticky z-30 bg-surface-base border-b border-border-subtle transition-colors duration-200 before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-4 before:bg-surface-base before:content-['']" : ''}
         style={stickyTop ? { top: stickyTop } : undefined}
       >
       {/* ── 검색창 ─────────────────────────────────────────────────────── */}
