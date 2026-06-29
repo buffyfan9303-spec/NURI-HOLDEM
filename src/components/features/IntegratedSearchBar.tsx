@@ -242,7 +242,24 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
   const [tour,           setTour]           = useState<TourFilter>('all');
   const [isFocused,      setIsFocused]      = useState(false);
   const inputRef                            = useRef<HTMLInputElement>(null);
+  const stickyRef                           = useRef<HTMLDivElement>(null);
   const [, startTransition]                = useTransition();
+
+  // 고정바 구분선: 스크롤 위치에 따라 .is-stuck 토글(정지=옅게/스크롤=또렷). classList 만 만져 리렌더 0.
+  useEffect(() => {
+    if (!stickyTop) return;
+    const el = stickyRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const stuck = window.scrollY > 4;
+      // 테마 인지 Tailwind 보더 클래스 토글(정지=옅은 subtle / 스크롤=또렷한 strong). transition-colors 로 부드럽게.
+      el.classList.toggle('border-border-strong', stuck);
+      el.classList.toggle('border-border-subtle', !stuck);
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [stickyTop]);
 
   const deferredQuery = useDeferredValue(rawQuery);
 
@@ -304,7 +321,8 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
       {/* 검색창 + 날짜만 sticky 고정(필터·칩은 스크롤되어 사라짐 → 고정 높이 최소화).
           불투명 배경 + 구분선 — 스크롤 시 뒤 컨텐츠가 비쳐 보이던 현상 제거(깔끔한 고정). */}
       <div
-        className={stickyTop ? 'sticky z-30 bg-surface-base border-b border-border-default' : ''}
+        ref={stickyRef}
+        className={stickyTop ? 'sticky z-30 bg-surface-base border-b border-border-subtle transition-colors duration-200' : ''}
         style={stickyTop ? { top: stickyTop } : undefined}
       >
       {/* ── 검색창 ─────────────────────────────────────────────────────── */}

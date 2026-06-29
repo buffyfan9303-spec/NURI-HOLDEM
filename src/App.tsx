@@ -1915,7 +1915,7 @@ export default function App() {
 
       {/* 내 매장 — 게임관리 + 매장운영 통합 허브 (업주/직원/운영자) */}
       {activeTab === 'my-store' && (
-        <main className="px-page-x py-section">
+        <main className="px-page-x pt-3 pb-section">
           <VenueManageTab
             schedules={schedules}
             deepSection={myStoreDeep}
