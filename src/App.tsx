@@ -1906,7 +1906,7 @@ export default function App() {
 
       {/* 도구 — 매장 운영·플레이어 도구 모음 (메인 탭) */}
       {(activeTab === 'tools' || visitedTabs.has('tools')) && (
-        <main className="px-page-x py-section" style={activeTab !== 'tools' ? { display: 'none' } : undefined}>
+        <main className="px-page-x pt-3 pb-section" style={activeTab !== 'tools' ? { display: 'none' } : undefined}>
           <ErrorBoundary inline resetKey="tools">
             <ToolsPanelM />
           </ErrorBoundary>
