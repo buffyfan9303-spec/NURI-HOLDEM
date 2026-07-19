@@ -422,9 +422,13 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           <b className="text-ink-primary">📖 운영 가이드</b><span className="hidden sm:inline"> — 포스터→장부→클락→순위→정산 한눈에</span>
         </span>
         <span className="flex shrink-0 items-center gap-1.5">
-          <button type="button" onClick={() => window.open('/guide/owner.html', '_blank', 'noopener')}
+          <button type="button" onClick={() => window.open('/guide/manual.html', '_blank', 'noopener')}
             className="rounded-input border border-accent-400/40 bg-accent-300/10 px-2.5 py-1 text-2xs font-bold text-accent-300 hover:bg-accent-300/20 transition-colors">
-            가이드 보기
+            사용설명서
+          </button>
+          <button type="button" onClick={() => window.open('/guide/owner.html', '_blank', 'noopener')}
+            className="rounded-input border border-border-default px-2.5 py-1 text-2xs font-bold text-ink-secondary hover:text-ink-primary transition-colors">
+            슬라이드
           </button>
           <a href="/guide/owner.pdf" download="NURI-HOLDEM-업주가이드.pdf"
             className="rounded-input border border-border-default px-2.5 py-1 text-2xs font-bold text-ink-secondary hover:text-ink-primary transition-colors">

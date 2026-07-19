@@ -17,6 +17,9 @@ export default function BusinessFooter({ onOpenLegal, onOpenSupport }: { onOpenL
       <div className="mx-auto w-full max-w-5xl space-y-3">
         {/* 약관·정책 링크 */}
         <nav className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-2xs">
+          {/* 업주 완전 사용설명서(공개 정적 페이지) — 회원가입부터 정산까지 전 기능 안내 */}
+          <a href="/guide/manual.html" target="_blank" rel="noopener" className="font-semibold text-accent-300/90 hover:text-accent-300">📖 사용설명서</a>
+          <span className="text-border-strong" aria-hidden>·</span>
           <button type="button" onClick={() => onOpenLegal?.('terms')} className="font-semibold text-ink-secondary hover:text-accent-300">이용약관</button>
           <span className="text-border-strong" aria-hidden>·</span>
           <button type="button" onClick={() => onOpenLegal?.('privacy')} className="font-semibold text-ink-secondary hover:text-accent-300">개인정보처리방침</button>

@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="index, follow">
+<title>NURI HOLDEM 업주 사용설명서 — 회원가입부터 정산까지</title>
+<meta name="description" content="NURI HOLDEM 홀덤펍 업주 완전 사용설명서 — 회원가입·매장 개설·포스터·예약·장부·클락·순위·통계·이용권·직원 관리까지 전 기능 안내">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  :root {
+    --bg:#08090a; --card:#111214; --card2:#16181c; --accent:#5e6ad2; --accent-soft:rgba(94,106,210,0.13);
+    --ink:#f4f5f6; --ink2:#9a9fa8; --ink3:#6a6e75; --line:#24262b;
+    --green:#36b37e; --amber:#d99a30; --rose:#e5658a;
+  }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--ink); font-family:'Pretendard','Malgun Gothic','맑은 고딕',sans-serif; line-height:1.65; }
+  .wrap { max-width:760px; margin:0 auto; padding:28px 20px 90px; }
+  a { color:#aab2f0; text-decoration:none; }
+  a:hover { text-decoration:underline; }
+
+  /* 헤더 */
+  .hero { padding:18px 0 22px; border-bottom:1px solid var(--line); margin-bottom:22px; }
+  .badge { display:inline-flex; gap:7px; align-items:center; background:var(--accent-soft); color:#aab2f0;
+    border:1px solid rgba(94,106,210,0.35); border-radius:999px; padding:5px 13px; font-size:12.5px; font-weight:700; margin-bottom:12px; }
+  h1 { font-size:27px; font-weight:900; letter-spacing:-0.02em; line-height:1.25; }
+  .hero p { color:var(--ink2); font-size:14px; margin-top:8px; }
+  .hero .links { margin-top:12px; display:flex; gap:8px; flex-wrap:wrap; }
+  .hero .links a { font-size:12px; font-weight:700; border:1px solid var(--line); background:var(--card);
+    border-radius:9px; padding:6px 12px; }
+
+  /* 목차 */
+  .toc { display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-bottom:26px; }
+  @media (min-width:560px){ .toc { grid-template-columns:1fr 1fr 1fr; } }
+  .toc a { display:flex; align-items:center; gap:7px; background:var(--card); border:1px solid var(--line);
+    border-radius:10px; padding:9px 11px; font-size:12.5px; font-weight:700; color:var(--ink); }
+  .toc a:hover { border-color:rgba(94,106,210,0.5); text-decoration:none; background:var(--card2); }
+  .toc .n { color:var(--accent); font-size:11px; font-weight:900; }
+
+  /* 섹션 */
+  section { margin-bottom:30px; scroll-margin-top:16px; }
+  h2 { font-size:19.5px; font-weight:900; letter-spacing:-0.01em; padding-bottom:8px; margin-bottom:12px;
+    border-bottom:1px solid var(--line); display:flex; align-items:center; gap:8px; }
+  h2 .n { color:var(--accent); font-size:13px; }
+  h3 { font-size:14.5px; font-weight:800; margin:16px 0 6px; }
+  p, li { font-size:13.8px; color:var(--ink2); }
+  b { color:var(--ink); font-weight:700; }
+  ol, ul { padding-left:20px; margin:6px 0; }
+  li { margin:4px 0; }
+  .path { display:inline-flex; align-items:center; gap:5px; background:var(--card2); border:1px solid var(--line);
+    border-radius:7px; padding:2px 8px; font-size:12px; font-weight:700; color:var(--ink); white-space:nowrap; }
+  .path .s { color:var(--ink3); }
+  .tip { border-left:3px solid var(--green); background:rgba(54,179,126,0.07); border-radius:0 9px 9px 0;
+    padding:9px 13px; font-size:13px; color:#9fd6bd; margin:10px 0; }
+  .warn { border-left:3px solid var(--amber); background:rgba(217,154,48,0.07); border-radius:0 9px 9px 0;
+    padding:9px 13px; font-size:13px; color:#e2c188; margin:10px 0; }
+  .danger { border-left:3px solid var(--rose); background:rgba(229,101,138,0.07); border-radius:0 9px 9px 0;
+    padding:9px 13px; font-size:13px; color:#eda9bd; margin:10px 0; }
+  table { width:100%; border-collapse:collapse; margin:10px 0; font-size:13px; }
+  th, td { border:1px solid var(--line); padding:7px 9px; text-align:left; vertical-align:top; }
+  th { background:var(--card2); color:var(--ink); font-size:12.5px; }
+  td { color:var(--ink2); }
+  .top { position:fixed; right:16px; bottom:18px; width:40px; height:40px; border-radius:999px; background:var(--accent);
+    color:#fff; display:flex; align-items:center; justify-content:center; font-size:17px; font-weight:900;
+    box-shadow:0 6px 20px rgba(94,106,210,0.4); }
+  .top:hover { text-decoration:none; }
+  footer { margin-top:36px; padding-top:16px; border-top:1px solid var(--line); font-size:12px; color:var(--ink3); }
+  @media print {
+    body { background:#fff; color:#111; }
+    .top, .hero .links { display:none; }
+    :root { --card:#f5f6f8; --card2:#eceef2; --ink:#111; --ink2:#333; --ink3:#666; --line:#ccc; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="hero">
+  <div class="badge">📖 업주 완전 사용설명서 · 2026-07 기준</div>
+  <h1>NURI HOLDEM<br>홀덤펍 사장님을 위한 모든 것</h1>
+  <p>회원가입부터 매장 개설, 포스터·예약·장부·클락·순위·정산·통계·이용권·직원 관리까지 —<br>실제 화면 메뉴 이름 그대로 안내합니다.</p>
+  <div class="links">
+    <a href="/guide/owner.html" target="_blank" rel="noopener">🖼 요약 슬라이드(10장)</a>
+    <a href="/guide/owner.pdf" download>📄 PDF 내려받기</a>
+    <a href="mailto:buffyfan9303@gmail.com">💬 고객센터 문의</a>
+  </div>
+</div>
+
+<nav class="toc" aria-label="목차">
+  <a href="#s1"><span class="n">01</span>회원가입·본인인증</a>
+  <a href="#s2"><span class="n">02</span>매장 개설·승인</a>
+  <a href="#s3"><span class="n">03</span>내 매장 메뉴 지도</a>
+  <a href="#s4"><span class="n">04</span>매장 꾸미기</a>
+  <a href="#s5"><span class="n">05</span>게임 프리셋</a>
+  <a href="#s6"><span class="n">06</span>포스터 등록</a>
+  <a href="#s7"><span class="n">07</span>예약 관리</a>
+  <a href="#s8"><span class="n">08</span>QR·체크인</a>
+  <a href="#s9"><span class="n">09</span>장부</a>
+  <a href="#s10"><span class="n">10</span>클락</a>
+  <a href="#s11"><span class="n">11</span>순위 입력</a>
+  <a href="#s12"><span class="n">12</span>매장 랭킹·시즌</a>
+  <a href="#s13"><span class="n">13</span>연합 리그</a>
+  <a href="#s14"><span class="n">14</span>통계</a>
+  <a href="#s15"><span class="n">15</span>매장이용권</a>
+  <a href="#s16"><span class="n">16</span>직원·출근 관리</a>
+  <a href="#s17"><span class="n">17</span>공지·소통·리뷰</a>
+  <a href="#s18"><span class="n">18</span>대시보드 읽는 법</a>
+  <a href="#s19"><span class="n">19</span>계정·보안</a>
+  <a href="#s20"><span class="n">20</span>자주 묻는 질문</a>
+</nav>
+
+<section id="s1">
+  <h2><span class="n">01</span>회원가입 · 본인인증</h2>
+  <ol>
+    <li>우상단 <span class="path">로그인</span> → <b>업주 가입</b> 탭 선택(일반 가입과 구분됩니다).</li>
+    <li>이메일·비밀번호·이름을 입력하고 약관에 동의하면 가입 완료.</li>
+    <li>프로필에서 <b>본인인증</b>을 진행하세요(휴대폰 인증). 만 19세 이상만 가능합니다.</li>
+  </ol>
+  <div class="tip">✅ 본인인증을 완료해야 대회 예약·글쓰기·장터 등록 등 핵심 기능이 열립니다. 사장님 본인도 인증해 두는 것을 권장합니다.</div>
+  <div class="warn">⚠ 업주 가입 후에는 <b>운영자 승인</b>을 기다리는 상태가 됩니다 — 다음 단계(매장 개설)를 먼저 진행하세요.</div>
+</section>
+
+<section id="s2">
+  <h2><span class="n">02</span>매장 개설 · 승인</h2>
+  <ol>
+    <li>하단 탭 <span class="path">내 매장</span> 진입 → <b>내 매장 만들기</b> 화면이 나옵니다.</li>
+    <li>대표 이미지(선택) · <b>매장명* · 주소* · 전화*</b> · 지역 · 카카오톡 링크 · 영업시간 · 소개를 입력하고 생성.</li>
+    <li>운영자 검토 후 승인되면 알림이 오고, 매장이 <b>일정탐색·커뮤니티에 공개</b>됩니다.</li>
+  </ol>
+  <h3>인증 매장이 되면</h3>
+  <ul>
+    <li>포스터가 <b>승인 없이 즉시 게시</b>되고 매장 목록 상단에 <b>인증 배지</b>와 함께 우선 노출됩니다.</li>
+    <li>순위 입력의 <b>지류 양식 인쇄</b> 기능이 열립니다. (인증은 운영자가 검토 후 부여)</li>
+  </ul>
+</section>
+
+<section id="s3">
+  <h2><span class="n">03</span>내 매장 메뉴 지도</h2>
+  <p>모바일은 상단 현재 메뉴를 탭하면 전체 메뉴가 펼쳐지고, PC는 좌측 사이드바입니다. <b>★</b>를 눌러 자주 쓰는 메뉴를 상단에 고정할 수 있어요(최대 5개).</p>
+  <table>
+    <tr><th>메뉴</th><th>하는 일</th></tr>
+    <tr><td><b>대시보드</b></td><td>오늘 장부·클락·추세·단골·지금 할 일 요약(§18)</td></tr>
+    <tr><td><b>포스터·예약</b></td><td>게임(포스터) 등록·수정·삭제 + 게임별 예약 리스트 + 운영 현황판</td></tr>
+    <tr><td><b>게임 프리셋</b></td><td>반복 대회 템플릿 저장(바인·블라인드 구조 포함)</td></tr>
+    <tr><td><b>장부</b></td><td>게임(세션)별 바인·매출 기록 — 운영의 심장(§9)</td></tr>
+    <tr><td><b>통계</b></td><td>당일/기간/총괄/요일별 매출·고객 분석·AI 분석·CSV(§14)</td></tr>
+    <tr><td><b>순위 입력</b></td><td>마감 장부 기반 순위 저장 → 포인트·랭킹 자동(§11)</td></tr>
+    <tr><td><b>매장 랭킹</b></td><td>우리 매장 명예의 전당·기간 랭킹</td></tr>
+    <tr><td><b>연합 리그</b></td><td>여러 매장 합동 리그전(§13)</td></tr>
+    <tr><td><b>클락</b></td><td>토너먼트 타이머 — 단독/장부 연동·TV 송출(§10)</td></tr>
+    <tr><td><b>출근 관리</b></td><td>직원 출근일지·근무 스케줄</td></tr>
+    <tr><td><b>매장이용권/QR</b></td><td>이용권 발급/사용 + 체크인 QR 인쇄(§8·§15)</td></tr>
+    <tr><td><b>매장 꾸미기</b></td><td>매장 페이지 사진·소개·탭 구성·나만의 주소(§4)</td></tr>
+    <tr><td><b>직원 관리</b></td><td>이메일로 직원 초대·권한·직급(§16)</td></tr>
+    <tr><td><b>설정</b></td><td>매장 정보 수정·위험 구역(킬스위치)</td></tr>
+  </table>
+</section>
+
+<section id="s4">
+  <h2><span class="n">04</span>매장 꾸미기</h2>
+  <ul>
+    <li><span class="path">내 매장 <span class="s">›</span> 매장 꾸미기</span> — 배경/사진 여러 장, 소개글, 매장 페이지의 탭 구성·순서를 편집합니다.</li>
+    <li><b>나만의 주소(슬러그)</b>를 설정하면 nuriholdem.com/?v=<b>내주소</b> 형태로 공유하기 좋아집니다.</li>
+    <li>매장 페이지의 <b>정보 편집</b>에서 주소·전화·영업시간을 언제든 수정할 수 있습니다.</li>
+  </ul>
+  <div class="tip">✅ 사진과 소개가 채워진 매장이 팔로우·예약 전환이 눈에 띄게 좋습니다. 개설 직후 5분만 투자하세요.</div>
+</section>
+
+<section id="s5">
+  <h2><span class="n">05</span>게임 프리셋</h2>
+  <p>매주 반복하는 대회는 프리셋으로 저장해 두면 포스터·장부·클락에서 재사용됩니다.</p>
+  <ul>
+    <li>저장 항목: 제목·게임 종류·바인·스타팅/리바인/애드온 스택·GTD(또는 엔트리%)·듀레이션·<b>블라인드 구조(레벨별 SB/BB/앤티/시간)</b>·메모.</li>
+    <li>블라인드 편집기에서 "15레벨까지 25분, 16부터 15분" 같은 <b>일괄 듀레이션</b>과 자동 생성이 가능합니다.</li>
+    <li>클락 설정의 <b>게임 프리셋에서 블라인드 불러오기</b>로 바로 적용됩니다.</li>
+  </ul>
+</section>
+
+<section id="s6">
+  <h2><span class="n">06</span>포스터 등록 — 대회를 알리고 예약 받기</h2>
+  <ol>
+    <li><span class="path">내 매장 <span class="s">›</span> 포스터·예약 <span class="s">›</span> + 새 게임</span></li>
+    <li>포스터 이미지 업로드 + <b>게임 이름* · 날짜* · 스타트 시간* · 바이인* · 상금(GTD/프라이즈%)* · 레지마감(레벨 또는 시간)* · 지역* · 결제 수단*</b> 입력.</li>
+    <li><b>반복 등록</b>(매주 같은 요일 4/8/12주)과 <b>지난 포스터 불러오기</b>로 재등록이 빨라집니다.</li>
+    <li>등록하면 운영자 승인 후 <b>일정탐색 메인에 노출</b>되고 예약이 열립니다(인증 매장은 즉시 게시).</li>
+  </ol>
+  <div class="tip">✅ 등록 즉시 <b>팔로워에게 새 포스터 알림</b>이 자동 발송되고, 대회 전날 리마인더도 자동으로 나갑니다.</div>
+  <div class="warn">⚠ 승인 전에는 목록에 보이지 않습니다. 승인 요청은 운영자에게 자동 알림되니 기다리시면 됩니다.</div>
+  <h3>부스트(상단 고정)</h3>
+  <p>내 포스터를 일정탐색 <b>맨 위에 N일 고정</b>하고 TOP 배지를 답니다 — 대시보드의 부스트 카드에서 문의 방법을 확인하세요.</p>
+</section>
+
+<section id="s7">
+  <h2><span class="n">07</span>예약 관리</h2>
+  <ul>
+    <li><span class="path">포스터·예약</span>에서 게임을 누르면 <b>예약 리스트가 펼쳐집니다</b> — 예약명·날짜·시간은 해당 매장 업주/직원만 볼 수 있어요.</li>
+    <li>게임 행의 <b>운영 미니칩</b>(예약 N · 바인 N · 매출 N만)으로 상황을 한눈에.</li>
+    <li>손님은 본인인증 회원만 예약 가능하며, 같은 닉네임 중복 예약은 자동 차단됩니다.</li>
+  </ul>
+</section>
+
+<section id="s8">
+  <h2><span class="n">08</span>QR · 체크인 — 방문 데이터의 시작</h2>
+  <ol>
+    <li><span class="path">매장이용권/QR</span>에서 <b>고정 QR 3종</b>(체크인·바인요청·이용권)을 선택 인쇄해 매장에 비치.</li>
+    <li>손님이 <b>체크인 QR</b>을 스캔하면 방문 기록 + 출석 도장(활동점수 +3, 7일 연속 시 +10 보너스). 4시간 내 중복 방지.</li>
+    <li><b>바인요청 QR</b>을 스캔한 손님의 참가(바인) 요청은 장부에 알림으로 도착 — 승인만 하면 자동 기입됩니다.</li>
+  </ol>
+  <div class="tip">✅ 체크인은 통계의 방문 집계·단골 분석(고객 CRM)에 자동 적재됩니다. 오픈 첫날부터 꼭 비치하세요.</div>
+</section>
+
+<section id="s9">
+  <h2><span class="n">09</span>장부 — 운영의 심장</h2>
+  <h3>장부 시작</h3>
+  <ol>
+    <li><span class="path">장부 <span class="s">›</span> + 장부 추가</span> — 오늘 포스터가 있으면 <b>자동 연동</b>되어 게임명·바인이 채워집니다(직접 입력도 가능).</li>
+    <li>담당 직원(최대 10명)을 고르고 <b>장부 시작</b> — 선택한 직원만 이 장부를 열람합니다.</li>
+    <li>시작 직후 "클락도 켤까요?"에서 바로 클락으로 이어갈 수 있어요. 메인 1개 + <b>+ 사이드</b>로 같은 날 여러 게임 운영.</li>
+  </ol>
+  <h3>바인 기록</h3>
+  <ul>
+    <li><b>+ 유저 추가</b>(닉네임 입력 시 가입 회원 자동완성·✓회원 표시) → 행의 <b>＋</b>를 눌러 바인 종류 선택:</li>
+    <li><b>티켓/현금/이체/카드 × 완납/미수</b> · 가게지원 · <b>분납/할인 상세 입력</b>. 얼리(더블/싱글)는 클락 레벨 기준 자동 판정.</li>
+    <li>상단 지표(엔트리·완납 매출·생존·미수)와 하단 합계(총 엔트리·회수 티켓·완납 매출·미수금)가 실시간 계산됩니다.</li>
+    <li>정렬(등록순/가나다/바인순)·검색·<b>엑셀</b> 내보내기 지원. 100명도 한 화면에서 관리됩니다.</li>
+  </ul>
+  <h3>마감</h3>
+  <ul>
+    <li><b>레지 마감</b> — 신규 등록만 중단(정산과 별개).</li>
+    <li><b>정산 마감</b> — 금일 통계 요약 확인 후 <b>"꾹 눌러 마감 확정"(길게 누르기)</b>. 마감하면 읽기전용으로 잠기고(업주만 재오픈 가능), 클락이 연동돼 있었다면 최종 수치가 스냅샷으로 함께 저장됩니다.</li>
+    <li>마감 후 <b>🏆 순위 입력하기</b> 버튼으로 바로 이어집니다.</li>
+  </ul>
+  <div class="warn">⚠ 미수는 완납 처리 전까지 통계의 '미수금'에 계속 표시됩니다 — 마감 전 미수자 목록을 꼭 확인하세요.</div>
+</section>
+
+<section id="s10">
+  <h2><span class="n">10</span>클락 — 토너먼트 타이머</h2>
+  <ul>
+    <li><span class="path">클락</span> 진입 → <b>🎰 단독으로 시작</b>(장부 없이) 또는 <b>📒 장부 연동해 시작</b>(오늘 장부 선택 — 게임명·엔트리·얼리 자동 반영).</li>
+    <li>화면: LEVEL·타이머·BLINDS·ANTE·NEXT LEVEL·AVG STACK·PRIZE 보드·TOTAL PRIZE·RE-BUY/EARLY·REG CLOSE.</li>
+    <li>블라인드는 <b>프리셋</b>(최대 50개) 저장/불러오기 + 게임 프리셋에서 가져오기.</li>
+    <li><b>⤢ 전체화면</b>은 매장 모니터용, <b>📺 TV 송출</b>은 새 창(두 번째 화면)용. 공유 링크(?display=)로 아무 TV 브라우저에서나 열 수 있고 멀티게임 자동 순환·참가 QR·탈락 티커가 포함됩니다.</li>
+    <li>장부 화면 상단의 <b>클락 리모컨</b>으로 레벨 이동·일시정지·아웃 처리·얼리 보정을 장부에서 바로 조작합니다.</li>
+    <li>클락이 켜져 있으면 <b>라이브 탭에 매장 게임이 실시간 공개</b>되어 홍보 효과가 있습니다(30초 자동 갱신).</li>
+  </ul>
+</section>
+
+<section id="s11">
+  <h2><span class="n">11</span>순위 입력 — 입력 한 번으로 랭킹까지</h2>
+  <ol>
+    <li><span class="path">순위 입력</span> → 날짜 선택 → <b>🎯 입력 중인 게임</b>에서 메인/장부 게임/기타를 선택(하루 여러 게임이면 게임마다 따로).</li>
+    <li><b>📒 그날 장부 명단</b>을 펼쳐 <b>전체 추가</b> — 바인한 손님이 순위표에 자동으로 올라갑니다.</li>
+    <li>등수를 정리하고 프라이즈(선택)를 채운 뒤 <b>순위 저장</b>.</li>
+  </ol>
+  <ul>
+    <li>등수마다 기준 점수(+N점)가 자동 부여되고, <b>닉네임이 일치하는 회원에게 활동점수가 자동 반영</b>됩니다.</li>
+    <li>손님 화면엔 닉네임 일부가 가려져 표시됩니다(예: 나*리). 일정탐색 '지난 대회'에 👑 우승자가 노출됩니다.</li>
+    <li>인증 매장은 <b>🖨 지류 양식</b>(NAME/EVENT/PLACE/PRIZE/TD SIGN 수기 폼) 인쇄가 가능합니다.</li>
+  </ul>
+</section>
+
+<section id="s12">
+  <h2><span class="n">12</span>매장 랭킹 · 시즌</h2>
+  <ul>
+    <li><span class="path">매장 랭킹</span> — 순위 입력이 쌓이면 기간별 매장 랭킹과 <b>🏆 역대 챔피언(명예의 전당)</b>이 자동 구성됩니다.</li>
+    <li><b>시즌 만들기</b> → 기간 내 순위점수(10/7/5/3/2/1)·상금이 자동 집계, 종료 시 상위 3명에게 활동점수(1000/500/300) 자동 보상 + 결과 아카이브.</li>
+    <li>시즌은 만료일에 자동 종료되며, 매장 페이지의 랭킹 탭으로 손님에게도 공개됩니다.</li>
+  </ul>
+</section>
+
+<section id="s13">
+  <h2><span class="n">13</span>연합 리그 — 여러 매장 합동전</h2>
+  <ol>
+    <li>리그장이 리그를 만들고 <b>닉네임으로 매장 초대</b> → 상대 매장이 수락하면 매칭.</li>
+    <li>이벤트 날, 각 매장은 자기 장부·순위로 예선을 치르고 상태 보드(🟡대기 🟢진행 🔴정산완료)로 실시간 공유.</li>
+    <li>매장별 <b>정산 완료 보고</b>(그날 순위→ITM 스냅샷) → 리그장이 <b>전체 정산 완료</b> → 통합 ITM 공개.</li>
+    <li><b>파이널</b>은 엔트리 최다 매장에 모여 새 클락(3테이블)으로 시작합니다.</li>
+  </ol>
+</section>
+
+<section id="s14">
+  <h2><span class="n">14</span>통계 — 정산과 분석</h2>
+  <ul>
+    <li><span class="path">통계</span> — <b>당일/일주일/한 달/총괄/요일별</b> 탭 + 기간 직접 설정.</li>
+    <li>총 엔트리·완납 매출·미수·회수 티켓·객단가(인/엔트리)·결제수단별 바인·할인 비율 + <b>클락 최종 보정 수치</b>(마감 스냅샷).</li>
+    <li>손님 유형(신규/기존/관계자) 분석 · 단골 TOP · <b>✨ AI 분석</b> 요약 · <b>CSV</b> 내보내기.</li>
+    <li>게임별 현황판(<span class="path">포스터·예약</span>)에서 포스터별 바인 수·매출·마감·순위입력 여부를 확인.</li>
+    <li>매주 월요일 아침, 지난주 <b>주간 리포트가 자동 발송</b>됩니다.</li>
+  </ul>
+</section>
+
+<section id="s15">
+  <h2><span class="n">15</span>매장이용권 — 디지털 티켓</h2>
+  <ul>
+    <li><span class="path">매장이용권/QR</span> — 발급 한도(승인 매장 기본 1,000장) 내에서 손님에게 이용권을 발급합니다. 부족하면 <b>충전 요청</b> → 운영자 승인.</li>
+    <li>사용 경로: 손님 지갑의 QR 스캔 · 전화번호 조회 · 직접 차감. 바인 1회당 자동 적립 옵션도 있습니다.</li>
+    <li><b>이용권으로 바인</b>하면 장부에 '🎟 이용권 사용' 승인 요청이 떠서 <b>업주가 확인 후 승인</b>해야 기록됩니다(대납·수량 불일치 방지).</li>
+    <li>손님끼리 양도 가능하며 이용 내역엔 실명(닉네임)이 함께 표시됩니다.</li>
+  </ul>
+</section>
+
+<section id="s16">
+  <h2><span class="n">16</span>직원 · 출근 관리</h2>
+  <ul>
+    <li><span class="path">직원 관리</span> — <b>이메일로 초대</b> → 직원이 수락하면 소속됩니다. 직급/호칭 설정 가능.</li>
+    <li>직원은 장부·클락 등 운영 기능을 함께 쓸 수 있고, 장부는 <b>담당 직원으로 지정된 사람만</b> 열람합니다.</li>
+    <li><span class="path">출근 관리</span> — 직원 출근일지와 근무 스케줄을 기록·조회합니다.</li>
+    <li><b>공동 사장님</b>은 설정의 사장님 관리에서 닉네임으로 추가(운영자 승인제) — 대표 이전도 가능합니다(§19).</li>
+  </ul>
+</section>
+
+<section id="s17">
+  <h2><span class="n">17</span>공지 · 소통 · 리뷰</h2>
+  <ul>
+    <li><b>매장 공지</b> — 매장 페이지에 고정 공지를 올립니다.</li>
+    <li><b>📢 팔로워에게 알림 보내기</b>(대시보드) — 마케팅 메시지를 팔로워 전원에게 푸시(하루 3회 한도).</li>
+    <li><b>리뷰</b> — 체크인 인증 손님만 별점·후기를 남길 수 있고, 업주는 <b>답글</b>을 달 수 있습니다. 별점은 일정탐색 카드에 ⭐로 노출됩니다.</li>
+    <li><b>매장 소통</b> 탭에서 손님과 채팅형 소통이 가능합니다.</li>
+  </ul>
+</section>
+
+<section id="s18">
+  <h2><span class="n">18</span>대시보드 읽는 법</h2>
+  <ul>
+    <li><b>지금 할 일 카드</b> — 상황 인지형 안내: 오늘 포스터가 있으면 "장부 시작하기", 진행 중인데 클락이 꺼져 있으면 "클락 켜기", 마감했는데 순위가 비면 "순위 입력하기"를 먼저 제안합니다. 이 카드만 따라가도 운영 흐름이 완성됩니다.</li>
+    <li><b>🔴 라이브 운영 현황</b> — 진행 중 클락 + 대기 바인요청을 한 카드에서 처리.</li>
+    <li>오늘 장부/클락 상태 · 최근 7일 추세 · 전주 대비 · 다가오는 예약 · 단골 TOP · 부스트/알림 보내기 바로가기.</li>
+    <li>상단 <b>📖 운영 가이드</b> 바에서 이 설명서·슬라이드·PDF를 언제든 다시 열 수 있어요.</li>
+  </ul>
+</section>
+
+<section id="s19">
+  <h2><span class="n">19</span>계정 · 보안</h2>
+  <ul>
+    <li><b>비밀번호 변경</b> — 프로필 › 보안. <b>회원 탈퇴</b>는 현재 비밀번호 확인 후 진행(보유 이용권·작성글 안내 표시).</li>
+    <li><b>공동 사장님 추가/제외 · 대표 이전</b> — 장부 설정의 사장님 관리 카드(현 대표만 이전 가능, 새 대표는 승인된 공동 사장).</li>
+  </ul>
+  <div class="danger">🧨 <b>킬스위치(매장 전체 초기화)</b> — 설정 맨 아래 위험 구역. 장부·순위·이용권·직원·클락·로그 <b>전부 영구 삭제</b>되며 복구 불가. 업주 본인 확인 → 킬스위치 비밀번호(최초 1회 설정 후 변경 불가) → '영구 삭제' 타이핑 3단계를 거칩니다. 폐업·양도 등 최후의 수단으로만 사용하세요.</div>
+</section>
+
+<section id="s20">
+  <h2><span class="n">20</span>자주 묻는 질문</h2>
+  <table>
+    <tr><th>Q</th><th>A</th></tr>
+    <tr><td>포스터를 올렸는데 일정탐색에 안 보여요</td><td>운영자 승인 대기 상태입니다. 승인되면 알림이 오고 즉시 노출됩니다(인증 매장은 즉시 게시).</td></tr>
+    <tr><td>장부를 실수로 마감했어요</td><td>업주 계정으로 해당 장부에서 재오픈할 수 있습니다.</td></tr>
+    <tr><td>순위 입력이 안 열려요</td><td>순위 입력은 장부 권한이 있는 계정만 가능합니다. 마감된 장부가 있으면 명단이 자동으로 올라옵니다.</td></tr>
+    <tr><td>손님이 예약이 안 된대요</td><td>본인인증 회원만 예약 가능합니다. 같은 닉네임이 이미 예약돼 있어도 차단됩니다.</td></tr>
+    <tr><td>클락을 손님 TV에 띄우고 싶어요</td><td>클락의 📺 TV 송출 또는 공유 링크(?display=매장)를 TV 브라우저에서 열면 됩니다.</td></tr>
+    <tr><td>직원이 장부를 못 봐요</td><td>장부 시작 시 담당 직원으로 지정된 사람만 열람합니다. 세션 정보 수정에서 담당을 추가하세요.</td></tr>
+    <tr><td>이용권 한도가 부족해요</td><td>매장이용권/QR에서 충전 요청을 보내면 운영자 승인 후 충전됩니다.</td></tr>
+  </table>
+  <p style="margin-top:12px">더 궁금한 점은 <a href="mailto:buffyfan9303@gmail.com">buffyfan9303@gmail.com</a> 또는 앱 하단 <b>고객센터 문의</b>로 보내주세요. 보통 1영업일 내 답변드립니다.</p>
+</section>
+
+<footer>
+  NURI HOLDEM 업주 사용설명서 · 2026-07 기준 · 엔에이치홀딩스<br>
+  화면 구성은 업데이트에 따라 달라질 수 있습니다. 인쇄(Ctrl/⌘+P)하면 밝은 배경으로 출력됩니다.
+</footer>
+
+</div>
+<a class="top" href="#" aria-label="맨 위로">↑</a>
+</body>
+</html>
