@@ -730,7 +730,10 @@ export default function App() {
         const streak = await getMyCheckinStreak().catch(() => 0);
         const bonus = streak > 0 && streak % 7 === 0 ? ` · 7일 연속 보너스 +10점!` : '';
         const fire = streak >= 2 ? ` 🔥 ${streak}일 연속` : '';
-        toast.show(`${name || '매장'} 체크인 완료! 출석 도장 +3점${fire}${bonus} 🎉`, 'success');
+        // 🎁 오픈 이벤트(~2026-08-03): 출석 도장 2배 — 서버(check_in)와 동일한 KST 날짜 게이트
+        const kstToday = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
+        const eventOn = kstToday >= '2026-07-20' && kstToday <= '2026-08-03';
+        toast.show(`${name || '매장'} 체크인 완료! 출석 도장 +${eventOn ? '6점 (오픈 이벤트 2배!)' : '3점'}${fire}${bonus} 🎉`, 'success');
       })
       .catch((e) => toast.show(e instanceof Error ? e.message : '체크인 실패', 'error'))
       .finally(() => {
