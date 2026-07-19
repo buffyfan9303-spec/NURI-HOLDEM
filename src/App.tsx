@@ -1280,6 +1280,11 @@ export default function App() {
       });
       return;
     }
+    // /guide/* (사용설명서 등 정적 가이드) → 새 탭으로 열기 — approval 타입 분기보다 먼저 평가해야 함
+    if (link.startsWith('/guide/')) {
+      window.open(link, '_blank', 'noopener');
+      return;
+    }
     // /invites (매장 구성원 초대) → 상단 초대 배너로 안내
     if (link === '/invites') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
