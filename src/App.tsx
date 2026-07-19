@@ -718,6 +718,8 @@ export default function App() {
   const [displayTarget, setDisplayTarget] = useState<{ venueId: string; gameSeq: number } | null>(null); // 관전/대형 디스플레이
   const [followedIds, setFollowedIds] = useState<Set<string>>(new Set()); // 팔로우한 매장 id
   const [followedOnly, setFollowedOnly] = useState(false); // 일정탐색: 팔로우 매장 포스터만
+  // 🎁 오픈 이벤트 배너(~2026-08-03 KST 자동 소멸) — 닫으면 localStorage 유지
+  const [eventBannerHidden, setEventBannerHidden] = useState(() => { try { return localStorage.getItem('nuri:event-2607-hidden') === '1'; } catch { return false; } });
 
   // ── QR 체크인 (?checkin=<venueId>) ─────────────────────────────────────
   // QR엔 venue_id만(비민감). 로그인 회원만 기록(check_in RPC, 4시간 중복 방지). 미로그인 시 로그인 후 재진입에서 처리.
@@ -1753,6 +1755,36 @@ export default function App() {
               </div>
             </div>
           </div>
+
+          {/* 🎁 오픈 이벤트 배너 — 서버(check_in 등)와 동일한 KST 날짜 게이트, 8/3 이후 자동 소멸 */}
+          {(() => {
+            const kst = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
+            if (kst < '2026-07-20' || kst > '2026-08-03' || eventBannerHidden) return null;
+            const evNotice = browseNotices.find((n) => n.title.includes('오픈 기념 이벤트'));
+            return (
+              <div className="px-page-x pt-3">
+                <div className="relative flex items-center gap-2.5 overflow-hidden rounded-card border border-accent-400/45 bg-gradient-to-r from-accent-300/[0.16] via-accent-300/[0.07] to-transparent px-3 py-2.5">
+                  <span className="shrink-0 text-lg" aria-hidden>🎁</span>
+                  <button
+                    type="button"
+                    onClick={() => { if (evNotice) setOpenNotice(evNotice); }}
+                    className="min-w-0 flex-1 text-left focus:outline-none"
+                  >
+                    <p className="truncate text-xs font-bold text-ink-primary">오픈 이벤트 — 출석 도장 2배 · 첫 예약 +50 · 웰컴 +100</p>
+                    <p className="text-2xs text-ink-muted">8/3(월)까지 · 자세히 보기 →</p>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="이벤트 배너 닫기"
+                    onClick={() => { setEventBannerHidden(true); try { localStorage.setItem('nuri:event-2607-hidden', '1'); } catch { /* 무시 */ } }}
+                    className="shrink-0 flex h-7 w-7 items-center justify-center rounded-full text-ink-muted hover:bg-surface-high hover:text-ink-primary transition-colors"
+                  >
+                    <svg width="11" height="11" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden><path d="M1.5 1.5 L8.5 8.5 M8.5 1.5 L1.5 8.5" /></svg>
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* 주간 베스트 — 이번 주 머니인 킹 TOP3 롤링 */}
           <div className="px-page-x pt-3">
