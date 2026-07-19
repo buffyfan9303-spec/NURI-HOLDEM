@@ -575,7 +575,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                   <div key={date} className="rounded-card border border-border-subtle bg-surface-low overflow-hidden">
                     {/* 날짜 헤더 — 접기/펼치기(그날 게임 묶음) */}
                     <button type="button"
-                      onClick={() => setCollapsedDates((prev) => { const n = new Set(prev); n.has(date) ? n.delete(date) : n.add(date); return n; })}
+                      onClick={() => setCollapsedDates((prev) => { const n = new Set(prev); if (n.has(date)) n.delete(date); else n.add(date); return n; })}
                       className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-surface-high transition-colors">
                       <span className="text-sm font-bold text-ink-primary">{date}{date === todayStr ? ' (오늘)' : ''}</span>
                       <span className="text-2xs font-semibold text-accent-300/90">게임 {items.length}</span>
@@ -1423,6 +1423,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       setRebuyStack(c.rebuyStack ?? 70000);
     }).catch(() => {});
     return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [base.venueId]);
 
   const setDisc = (i: number, patch: Partial<DiscountPreset>) =>

@@ -12,7 +12,7 @@ export default function AnnouncePanel({ venueId }: { venueId: string }) {
   const [busy, setBusy] = useState(false);
 
   const load = () => getVenueAnnounceStatus(venueId).then(setStatus).catch(() => {});
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [venueId]);
+  useEffect(() => { load(); }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
   const remaining = Math.max(0, 3 - status.sentToday);
 
   const send = async () => {

@@ -53,7 +53,7 @@ function StatsView({ venueId }: { venueId: string }) {
   const [buyins, setBuyins] = useState<LedgerBuyin[]>([]);
   const [players, setPlayers] = useState<LedgerPlayer[]>([]);
   const [excludeTypes, setExcludeTypes] = useState<Set<string>>(new Set()); // 제외할 손님유형 코드(new/regular/staff/other/none)
-  const toggleExclude = (code: string) => setExcludeTypes((prev) => { const n = new Set(prev); n.has(code) ? n.delete(code) : n.add(code); return n; });
+  const toggleExclude = (code: string) => setExcludeTypes((prev) => { const n = new Set(prev); if (n.has(code)) n.delete(code); else n.add(code); return n; });
   const [loading, setLoading] = useState(true);
   const [aiTick, setAiTick] = useState(0); // AI 리포트 새로고침
   const [aiDays, setAiDays] = useState(7); // AI 리포트 분석 기간(일) — 7/30/90

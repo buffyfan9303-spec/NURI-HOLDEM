@@ -29,7 +29,7 @@ export default function LeaguePanel({ venueId, canConfigure }: { venueId: string
   const reload = () => {
     getMyLeagues(venueId).then(setRows).catch(() => setRows([])).finally(() => setLoading(false));
   };
-  useEffect(() => { setLoading(true); reload(); /* eslint-disable-next-line */ }, [venueId]);
+  useEffect(() => { setLoading(true); reload(); }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const create = async () => {
     if (!name.trim()) return toast.show('리그 이름을 입력하세요', 'error');

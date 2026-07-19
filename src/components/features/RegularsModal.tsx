@@ -55,7 +55,8 @@ function RegularRow({ idx, r, venueId }: { idx: number; r: VenueRegular; venueId
   };
   const saveBday = async () => { try { await saveCustomerProfile(venueId, r.name, { birthday: bday || null }); } catch { /* noop */ } };
   const addCoupon = async () => { const t = window.prompt('쿠폰 내용 (예: 5만 바인권 / 첫방문 50%)'); if (!t) return; try { await issueCoupon(venueId, r.name, t); getCoupons(venueId, r.name).then(setCoupons); } catch { /* noop */ } };
-  const useCoupon = async (id: string) => { await setCouponStatus(id, 'used'); getCoupons(venueId, r.name).then(setCoupons); };
+  // 쿠폰 사용 처리 — 'use' 접두어가 훅으로 오인되지 않도록 redeem 으로 명명
+  const redeemCoupon = async (id: string) => { await setCouponStatus(id, 'used'); getCoupons(venueId, r.name).then(setCoupons); };
   return (
     <li className="rounded-input border border-border-subtle bg-surface-low">
       <button type="button" onClick={toggle} className="flex w-full items-center gap-2 px-3 py-2 text-left">
@@ -93,7 +94,7 @@ function RegularRow({ idx, r, venueId }: { idx: number; r: VenueRegular; venueId
             {coupons.filter((c) => c.status === 'active').map((c) => (
               <div key={c.id} className="flex items-center justify-between gap-2 rounded bg-surface-high px-2 py-1">
                 <span className="min-w-0 flex-1 truncate text-2xs text-ink-secondary">🎟 {c.title}</span>
-                <button type="button" onClick={() => useCoupon(c.id)} className="shrink-0 text-2xs font-bold text-accent-300">사용</button>
+                <button type="button" onClick={() => redeemCoupon(c.id)} className="shrink-0 text-2xs font-bold text-accent-300">사용</button>
               </div>
             ))}
           </div>

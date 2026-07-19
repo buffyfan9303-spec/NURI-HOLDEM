@@ -52,6 +52,7 @@ type DateSlot = ReturnType<typeof buildDateSlots>[number];
 // ── 필터 상수 ─────────────────────────────────────────────────────────────────
 
 // 지역 대분류(요구사항 2) — 복수선택 유지, 목록만 교체
+// eslint-disable-next-line react-refresh/only-export-components -- 검색 상수를 외부(App)와 공유(기존 구조 유지)
 export const REGION_CHIPS = [
   '서울', '강남', '강서', '경기남부', '경기북부',
   '인천', '부산', '대전', '대구', '광주', '제주',
@@ -64,6 +65,7 @@ const REGION_GROUPS: Record<string, string[]> = {
 };
 
 /** 선택된 지역 칩들을 권역 묶음까지 펼쳐 중복 제거한 매칭 키 목록으로 변환 */
+// eslint-disable-next-line react-refresh/only-export-components -- 검색 유틸을 외부(App)와 공유(기존 구조 유지)
 export function expandRegions(regions: string[]): string[] {
   const out = new Set<string>();
   for (const r of regions) {

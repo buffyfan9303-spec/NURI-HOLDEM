@@ -24,7 +24,7 @@ export default function DealerShiftsModal({ open, onClose, venueId, monthKey }: 
   const [wage, setWage] = useState(0);
 
   const reload = (mk: string) => { const { start: s, end: e } = monthRange(mk); getDealerShifts(venueId, s, e).then(setList).catch(() => {}); };
-  useEffect(() => { if (open) { setMonth(monthKey); reload(monthKey); } /* eslint-disable-next-line */ }, [open, venueId, monthKey]);
+  useEffect(() => { if (open) { setMonth(monthKey); reload(monthKey); } }, [open, venueId, monthKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const shiftMonth = (delta: number) => { const [y, m] = month.split('-').map(Number); const d = new Date(y, m - 1 + delta, 1); const mk = ym(d); setMonth(mk); reload(mk); };
 

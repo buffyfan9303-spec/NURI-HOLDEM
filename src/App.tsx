@@ -775,6 +775,7 @@ export default function App() {
     const unsub = subscribeMyBuyinRequests(user.id, load); // 운영자 승인/거절 즉시 반영
     return () => { window.removeEventListener('focus', load); unsub(); };
     // (A3) user.id 로만 의존 — user 객체 참조 변경(일일점수 갱신 등)마다 채널 재구독되던 churn 방지
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
   // ── QR 회원가입 (?signup=1) — 매장 QR 옆 가입 QR 스캔 시 회원가입 모달 바로 열기 ──
@@ -860,7 +861,6 @@ export default function App() {
     const ids = schedules.filter((s) => s.approved && s.date >= today).map((s) => s.id);
     if (ids.length === 0) { setBrowseResCounts({}); return; }
     getReservationCounts(ids).then(setBrowseResCounts).catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schedules]);
   const [venues,        setVenues]        = useState<Venue[]>([]);
   const [comments,      setComments]      = useState<Comment[]>([]);
@@ -1110,6 +1110,7 @@ export default function App() {
   // 탭이 사라지면 (로그아웃 등) browse로 돌아감
   useEffect(() => {
     if (!tabs.find((t) => t.id === activeTab)) changeTab('browse');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabs, activeTab]);
 
   // 팔로우한 매장 id 로드(로그인 시)
@@ -1238,6 +1239,7 @@ export default function App() {
     setPosterFormTarget(null);
     setSearchState({ query: '', dates: [], regions: [], format: null, gtdOnly: false, competitionOnly: false });
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleMarkRead = useCallback((ids: string[]) => {
@@ -1293,6 +1295,7 @@ export default function App() {
     // /support (1:1 문의 답변 알림) → 고객센터 모달 열기
     if (link === '/support') { setSupportOpen(true); return; }
     toast.show(n.title, 'info');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schedules, isAdmin, toast]);
 
   const handleSubmitVenueComment = useCallback(
@@ -1576,6 +1579,7 @@ export default function App() {
       .then(reloadSchedules)
       .then(() => { if (weeks > 1) toast.show(`${weeks}주 반복 일정이 등록되었습니다`, 'success'); })
       .catch(() => toast.show('포스터 등록에 실패했습니다. 매장 승인 상태를 확인해 주세요.', 'error'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, venues, toast, reloadSchedules]);
 
   // 일정탐색(browse) 상단 공지 — 전체('all') 공지만 노출(게시판/딜러/장터 전용 공지는 제외)

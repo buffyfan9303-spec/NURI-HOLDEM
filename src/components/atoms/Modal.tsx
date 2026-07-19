@@ -43,6 +43,7 @@ export default function Modal({
       window.removeEventListener('keydown', onKey);
       unlockScroll();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, onClose]);
 
   // 뒤로가기(브라우저/모바일 back) → 페이지 이탈 대신 "이 모달만" 닫기.
@@ -99,6 +100,7 @@ export default function Modal({
     };
     el.addEventListener('keydown', onKey);
     return () => { window.clearTimeout(t); el.removeEventListener('keydown', onKey); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   // 인라인 패널(2-pane 우측) — 오버레이/딤/백버튼 없이 콘텐츠만 카드로.

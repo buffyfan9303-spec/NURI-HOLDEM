@@ -43,7 +43,7 @@ export default function StaffSchedule({ venueId }: { venueId: string }) {
   const from = days[0], to = days[days.length - 1];
 
   const reload = () => { getStaffSchedule(venueId, from, to).then(setShifts).catch(() => {}).finally(() => setLoading(false)); };
-  useEffect(() => { setLoading(true); reload(); setSelDay(null); /* eslint-disable-next-line */ }, [venueId, from, to]);
+  useEffect(() => { setLoading(true); reload(); setSelDay(null); }, [venueId, from, to]); // eslint-disable-line react-hooks/exhaustive-deps
   // 실시간: 직원 셀프 출퇴근/배정 변경 자동 반영
   useEffect(() => subscribeStaffSchedule(venueId, reload), [venueId, from, to]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { getMyVenueStaff().then((s) => setVenueStaff(s.map((x) => x.name))).catch(() => {}); }, []);

@@ -17,7 +17,7 @@ export default function PresetManager({ venueId }: { venueId: string }) {
   const [busy, setBusy] = useState(false);
 
   const load = () => listGamePresets(venueId).then(setPresets).catch(() => setPresets([]));
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [venueId]);
+  useEffect(() => { load(); }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startNew = () => setEditing({ name: '', data: { ...EMPTY } });
   const startEdit = (p: GamePreset) => setEditing({ id: p.id, name: p.name, data: { ...EMPTY, ...p.data } });

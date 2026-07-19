@@ -464,6 +464,7 @@ function SearchIcon({ className = '' }: { className?: string }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- 장터 상수/유틸을 외부와 공유(기존 구조 유지)
 export { CATEGORIES, CONDITION_COLOR, STATUS_MAP, relativeTime };
 
 // (A2) 장터 탭 memo — App 무관 재렌더 차단. props는 App에서 안정화(marketNotices·handleMarketCreate 등).

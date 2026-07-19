@@ -54,7 +54,6 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
     getVoucherQuota(venueId).then(setQuota).catch(() => {});
     myVoucherCreditRequests(venueId).then(setCreditReqs).catch(() => {});
   };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(reloadQuota, [venueId, canIssue]);
   const submitCredit = async () => {
     if (creditAmt < 1) return;
@@ -81,7 +80,7 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
     isVoucherIssueApproved(venueId).then(setApproved).catch(() => {});
     if (canIssue) voucherUsageByVenue(venueId).then(setUsage).catch(() => {});
   };
-  useEffect(() => { reload(); /* eslint-disable-next-line */ }, [venueId]);
+  useEffect(() => { reload(); }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
   // 실시간: 이 매장 이용권이 들어오면(사용/발급/회수) 즉시 갱신 — 권한은 RLS로 자동 게이트
   useEffect(() => subscribeVenueVouchers(venueId, () => reload()), [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { QRCode.toDataURL(`NURIV-VENUE:${venueId}`, { width: 240, margin: 1 }).then(setQr).catch(() => {}); }, [venueId]);

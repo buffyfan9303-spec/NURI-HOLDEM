@@ -1,4 +1,5 @@
 // src/components/atoms/TierBadge.tsx
+/* eslint-disable react-refresh/only-export-components -- 등급 유틸(tierOf 등)+뱃지 컴포넌트 동거 파일: 기존 공개 API 유지(분리 시 임포트 전면 수정) */
 import type { CSSProperties } from 'react';
 
 /**

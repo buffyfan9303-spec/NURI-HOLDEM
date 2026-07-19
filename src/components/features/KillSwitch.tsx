@@ -26,7 +26,7 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
   const [err, setErr] = useState('');
 
   const refreshStatus = () => killSwitchIsSet(venueId).then(setPwIsSet).catch(() => setPwIsSet(false));
-  useEffect(() => { refreshStatus(); /* eslint-disable-next-line */ }, [venueId]);
+  useEffect(() => { refreshStatus(); }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const reset = () => {
     setSetupPw(''); setSetupPw2(''); setStep(1);

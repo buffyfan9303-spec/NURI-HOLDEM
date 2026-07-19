@@ -16,6 +16,7 @@ function formatDate(dateStr: string, timeStr: string) {
 }
 
 /** 프라이즈 금액 표시: 10,000,000 → "1000만", 100,000,000 → "1억" */
+// eslint-disable-next-line react-refresh/only-export-components -- 표시 유틸을 외부와 공유(기존 구조 유지)
 export function formatPrize(n: number): string {
   if (n >= 100_000_000) {
     const eok = n / 100_000_000;
@@ -26,6 +27,7 @@ export function formatPrize(n: number): string {
 }
 
 /** 카드/상세에 표시할 메인 상금 텍스트 — GTD: 금액, 엔트리: 프라이즈 % */
+// eslint-disable-next-line react-refresh/only-export-components -- 표시 유틸을 외부와 공유(기존 구조 유지)
 export function prizeMainText(s: { guaranteed: boolean; prizePool?: number; prizePercent?: number }): string {
   if (!s.guaranteed && s.prizePercent && s.prizePercent > 0) return `${s.prizePercent}%`;
   return s.prizePool ? formatPrize(s.prizePool) : '-';

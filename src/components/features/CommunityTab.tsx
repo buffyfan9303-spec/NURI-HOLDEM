@@ -691,7 +691,7 @@ function MyCommunitiesAction({ onSelectVenue, onCreated }: {
     getMyOwnedCommunities().then(setOwned).catch(() => {});
     getMyJoinedGroups().then(setJoined).catch(() => {});
   };
-  useEffect(() => { reload(); /* eslint-disable-next-line */ }, []);
+  useEffect(() => { reload(); }, []);
 
   if (!user) return null;
   const isOwner = user.role === 'venue_owner';

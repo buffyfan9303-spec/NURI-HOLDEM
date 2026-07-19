@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>NURI HOLDEM 업주 운영 가이드</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #08090a; --card: #111214; --card2: #16181c;
+    --accent: #5e6ad2; --accent-soft: rgba(94,106,210,0.14);
+    --ink: #f4f5f6; --ink2: #8a8f98; --ink3: #62666d;
+    --line: #24262b; --green: #36b37e; --amber: #d99a30; --pink: #e5658a;
+  }
+  html, body { background: var(--bg); }
+  body { font-family: 'Pretendard', 'Malgun Gothic', '맑은 고딕', sans-serif; color: var(--ink); }
+  @page { size: 1280px 720px; margin: 0; }
+  .slide {
+    width: 1280px; height: 720px; page-break-after: always; position: relative;
+    background: var(--bg); overflow: hidden; padding: 64px 72px; display: flex; flex-direction: column;
+  }
+  .slide::before { content: ''; position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(900px 420px at 85% -10%, rgba(94,106,210,0.10), transparent 60%); }
+  .kicker { font-size: 15px; font-weight: 800; letter-spacing: 0.14em; color: var(--accent); margin-bottom: 14px; }
+  h1 { font-size: 54px; font-weight: 900; letter-spacing: -0.02em; line-height: 1.15; }
+  h2 { font-size: 38px; font-weight: 900; letter-spacing: -0.02em; margin-bottom: 8px; }
+  .sub { font-size: 19px; color: var(--ink2); line-height: 1.55; }
+  .foot { position: absolute; left: 72px; right: 72px; bottom: 34px; display: flex; justify-content: space-between;
+    font-size: 13px; color: var(--ink3); border-top: 1px solid var(--line); padding-top: 14px; }
+  .badge { display: inline-flex; align-items: center; gap: 8px; background: var(--accent-soft); color: #aab2f0;
+    border: 1px solid rgba(94,106,210,0.35); border-radius: 999px; padding: 7px 16px; font-size: 15px; font-weight: 700; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 22px 24px; }
+  .card h3 { font-size: 19px; font-weight: 800; margin-bottom: 8px; display: flex; align-items: center; gap: 9px; }
+  .card p, .card li { font-size: 15.5px; color: var(--ink2); line-height: 1.62; }
+  .card ul { list-style: none; }
+  .card li { padding-left: 18px; position: relative; margin-top: 5px; }
+  .card li::before { content: '·'; position: absolute; left: 4px; color: var(--accent); font-weight: 900; }
+  .num { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 10px;
+    background: var(--accent); color: #fff; font-weight: 900; font-size: 17px; flex: none; }
+  .tip { border-left: 3px solid var(--green); background: rgba(54,179,126,0.07); border-radius: 0 12px 12px 0;
+    padding: 14px 18px; font-size: 15px; color: #9fd6bd; line-height: 1.6; }
+  .warn { border-left: 3px solid var(--amber); background: rgba(217,154,48,0.07); border-radius: 0 12px 12px 0;
+    padding: 14px 18px; font-size: 15px; color: #e2c188; line-height: 1.6; }
+  .menupath { display: inline-flex; align-items: center; gap: 7px; background: var(--card2); border: 1px solid var(--line);
+    border-radius: 10px; padding: 7px 14px; font-size: 14.5px; font-weight: 700; color: var(--ink); }
+  .menupath .sep { color: var(--ink3); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; }
+  /* 파이프라인 플로우 */
+  .flow { display: flex; align-items: stretch; gap: 0; margin: 34px 0 26px; }
+  .flow-step { flex: 1; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 20px 14px;
+    text-align: center; position: relative; }
+  .flow-step.hot { border-color: rgba(94,106,210,0.55); background: linear-gradient(180deg, rgba(94,106,210,0.10), var(--card)); }
+  .flow-step .ic { font-size: 30px; margin-bottom: 10px; }
+  .flow-step .t { font-size: 17px; font-weight: 800; }
+  .flow-step .d { font-size: 12.5px; color: var(--ink2); margin-top: 6px; line-height: 1.45; }
+  .flow-arrow { display: flex; align-items: center; padding: 0 7px; color: var(--accent); font-size: 20px; font-weight: 900; flex: none; }
+</style>
+</head>
+<body>
+
+<!-- 1. 표지 -->
+<section class="slide" style="justify-content:center">
+  <div class="badge" style="margin-bottom:28px">🃏 매장 운영 완벽 가이드</div>
+  <h1>NURI HOLDEM<br>업주 운영 가이드</h1>
+  <p class="sub" style="margin-top:22px; max-width:760px">
+    포스터 등록부터 예약 접수, 장부, 토너먼트 클락, 순위 입력, 정산·통계까지 —<br>
+    매장 운영의 전 과정을 하나의 파이프라인으로 안내합니다.
+  </p>
+  <div style="margin-top:40px; display:flex; gap:12px">
+    <span class="menupath">📱 nuriholdem.com</span>
+    <span class="menupath">앱 하단 <b style="color:#aab2f0">내 매장</b> 탭에서 시작</span>
+  </div>
+  <div class="foot"><span>NURI HOLDEM</span><span>엔에이치홀딩스 · 2026</span></div>
+</section>
+
+<!-- 2. 파이프라인 한눈에 -->
+<section class="slide">
+  <div class="kicker">OVERVIEW</div>
+  <h2>운영 파이프라인 한눈에</h2>
+  <p class="sub">모든 단계가 자동으로 이어집니다 — 앞 단계 데이터가 다음 단계의 기반이 됩니다.</p>
+  <div class="flow">
+    <div class="flow-step hot"><div class="ic">📢</div><div class="t">① 포스터</div><div class="d">대회 등록 →<br>일정탐색 노출</div></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step"><div class="ic">🎟️</div><div class="t">② 예약·체크인</div><div class="d">손님 예약 접수<br>QR 방문 체크</div></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step hot"><div class="ic">📒</div><div class="t">③ 장부</div><div class="d">포스터 기반 개설<br>바인·리바이 기록</div></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step"><div class="ic">⏱️</div><div class="t">④ 클락</div><div class="d">장부 연동 실행<br>TV 디스플레이</div></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step hot"><div class="ic">🏆</div><div class="t">⑤ 순위 입력</div><div class="d">장부 참가자 기반<br>랭킹·시즌 자동</div></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step"><div class="ic">📊</div><div class="t">⑥ 정산·통계</div><div class="d">게임별 매출 현황판<br>기간 통계·주간 리포트</div></div>
+  </div>
+  <div class="grid2">
+    <div class="tip">✅ <b>연결의 핵심</b> — 장부를 포스터와 연결해 열면, 게임관리 현황판에서 바인 수·매출·마감·순위입력 여부가 포스터별로 자동 집계됩니다.</div>
+    <div class="card"><h3>🧭 내 매장 메뉴 구성</h3>
+      <p>대시보드 · 포스터·예약 · 게임 프리셋 · 장부 · 통계 · 순위 입력 · 매장 랭킹 · 연합 리그 · 클락 · 출근 관리 · 매장이용권/QR · 매장 꾸미기 · 직원 관리 · 설정</p></div>
+  </div>
+  <div class="foot"><span>NURI HOLDEM 업주 가이드</span><span>02 — 파이프라인</span></div>
+</section>
+
+<!-- 3. 시작하기 -->
+<section class="slide">
+  <div class="kicker">GETTING STARTED</div>
+  <h2>시작하기 — 매장 개설과 승인</h2>
+  <div class="grid3" style="margin-top:22px">
+    <div class="card"><h3><span class="num">1</span> 회원가입·본인인증</h3>
+      <ul><li>앱에서 회원가입 후 본인인증을 완료합니다</li><li>본인인증 회원만 예약·바인요청 등 핵심 기능을 쓸 수 있어요</li></ul></div>
+    <div class="card"><h3><span class="num">2</span> 매장 생성</h3>
+      <ul><li><b>내 매장</b> 탭에서 매장 정보를 입력해 생성</li><li>매장명 · 지역 · 주소 · 연락처</li></ul></div>
+    <div class="card"><h3><span class="num">3</span> 운영자 승인</h3>
+      <ul><li>운영자 승인 후 일정탐색·커뮤니티에 공개</li><li>승인이 완료되면 포스터 등록이 열립니다</li></ul></div>
+  </div>
+  <div style="margin-top:20px" class="grid2">
+    <div class="card"><h3>👥 직원과 함께 운영</h3>
+      <ul><li><span class="menupath" style="font-size:13px">내 매장 <span class="sep">›</span> 직원 관리</span> 에서 이메일로 직원 초대</li>
+      <li>직원은 장부·클락 등 운영 기능을 함께 사용</li><li>직급/권한은 업주가 관리합니다</li></ul></div>
+    <div class="warn">⚠️ 매장 승인 전에는 포스터 등록이 차단됩니다. 승인 알림을 받은 뒤 STEP 1을 진행하세요.</div>
+  </div>
+  <div class="foot"><span>NURI HOLDEM 업주 가이드</span><span>03 — 시작하기</span></div>
+</section>
+
+<!-- 4. STEP 1 포스터 -->
+<section class="slide">
+  <div class="kicker">STEP 1</div>
+  <h2>📢 포스터 등록 — 대회를 알리고 예약을 받으세요</h2>
+  <span class="menupath" style="margin:10px 0 18px">내 매장 <span class="sep">›</span> 포스터·예약 <span class="sep">›</span> 게임 등록</span>
+  <div class="grid2">
+    <div class="card"><h3>등록 방법</h3>
+      <ul>
+        <li>포스터 이미지 업로드 + 대회명 · 날짜/시간 · 바인 · 프라이즈(GTD) · 지역 입력</li>
+        <li><b>지난 포스터 불러오기</b>로 반복 대회는 몇 초 만에 재등록</li>
+        <li><b>게임 프리셋</b>에 자주 쓰는 구성(바인·블라인드)을 저장해 두면 더 빨라요</li>
+      </ul></div>
+    <div class="card"><h3>등록하면 자동으로</h3>
+      <ul>
+        <li>운영자 승인 후 <b>일정탐색 메인</b>에 노출 — 전국 유저에게 공개</li>
+        <li>손님이 앱에서 바로 <b>참가 예약</b> 가능 (예약 현황 실시간 확인)</li>
+        <li>팔로워에게 새 포스터 알림 발송 · 공유링크/구글캘린더 연동</li>
+      </ul></div>
+  </div>
+  <div style="margin-top:18px" class="tip">✅ <b>부스트</b> — 내 포스터를 일정탐색 맨 위에 고정하고 TOP 뱃지를 달 수 있습니다(운영자 문의).</div>
+  <div class="foot"><span>NURI HOLDEM 업주 가이드</span><span>04 — STEP 1 포스터</span></div>
+</section>
+
+<!-- 5. STEP 2 예약·체크인 -->
+<section class="slide">
+  <div class="kicker">STEP 2</div>
+  <h2>🎟️ 예약·체크인 — 오는 손님을 미리 파악</h2>
+  <div class="grid3" style="margin-top:22px">
+    <div class="card"><h3>📋 예약 확인</h3>
+      <ul><li><span class="menupath" style="font-size:13px">포스터·예약</span> 에서 게임별 예약자 명단 확인</li>
+      <li>예약명 · 날짜 · 시간은 해당 매장 업주/직원만 열람</li></ul></div>
+    <div class="card"><h3>📲 QR 체크인</h3>
+      <ul><li><span class="menupath" style="font-size:13px">매장이용권/QR</span> 의 <b>고정 QR</b>을 매장에 비치</li>
+      <li>손님이 스캔하면 방문 체크 + 출석 도장(+3점)</li><li>4시간 내 중복 방지 · 로그인 회원만</li></ul></div>
+    <div class="card"><h3>🙋 QR 자가 바인요청</h3>
+      <ul><li>손님이 QR로 직접 참가(바인) 요청</li><li>업주는 장부에서 승인/거절만 하면 끝</li></ul></div>
+  </div>
+  <div style="margin-top:20px" class="tip">✅ 체크인 데이터는 방문 통계·단골 분석·매장이용권 적립의 기반이 됩니다 — 첫날부터 QR을 꼭 비치하세요.</div>
+  <div class="foot"><span>NURI HOLDEM 업주 가이드</span><span>05 — STEP 2 예약·체크인</span></div>
+</section>
+
+<!-- 6. STEP 3 장부 -->
+<section class="slide">
+  <div class="kicker">STEP 3</div>
+  <h2>📒 장부 — 운영의 심장, 포스터와 연결해 여세요</h2>
+  <span class="menupath" style="margin:10px 0 18px">내 매장 <span class="sep">›</span> 장부</span>
+  <div class="grid2">
+    <div class="card"><h3>장부 열기</h3>
+      <ul>
+        <li>오늘 날짜로 장부(세션)를 열고 <b>포스터(대회)와 연결</b>을 선택</li>
+        <li>메인 대회 1개 + 사이드 게임 N개를 같은 날 함께 운영 가능</li>
+        <li>연결해 두면 게임관리 현황판이 포스터별로 자동 집계</li>
+      </ul></div>
+    <div class="card"><h3>기록하기</h3>
+      <ul>
+        <li>참가자 <b>바인 · 리바이</b>를 터치로 기록 (현금/카드/할인 구분)</li>
+        <li>손님 QR 바인요청은 알림으로 받고 <b>승인 → 자동 기록</b></li>
+        <li>참가자 명단은 이후 <b>순위 입력</b>의 기반이 됩니다</li>
+      </ul></div>
+  </div>
+  <div style="margin-top:18px" class="grid2">
+    <div class="tip">✅ 장부에 쌓인 바인 기록이 곧 매출 데이터 — 정산·통계(STEP 6)가 자동으로 계산됩니다.</div>
+    <div class="warn">⚠️ 게임이 끝나면 장부를 <b>마감</b>하세요. 마감해야 통계·순위 흐름이 정확해집니다(마감 후에도 재오픈 가능).</div>
+  </div>
+  <div class="foot"><span>NURI HOLDEM 업주 가이드</span><span>06 — STEP 3 장부</span></div>
+</section>
+
+<!-- 7. STEP 4 클락 -->
+<section class="slide">
+  <div class="kicker">STEP 4</div>
+  <h2>⏱️ 클락 — 장부와 연동되는 토너먼트 타이머</h2>
+  <span class="menupath" style="margin:10px 0 18px">내 매장 <span class="sep">›</span> 클락</span>
+  <div class="grid2">
+    <div class="card"><h3>실행 방법</h3>
+      <ul>
+        <li><b>🎰 단독 클락</b> — 장부 없이 타이머만 빠르게</li>
+        <li><b>📒 장부 연동</b> — 오늘 연 장부를 선택하면 참가자·프라이즈가 클락에 연동</li>
+        <li>블라인드 구조는 <b>프리셋</b>으로 저장/불러오기</li>
+      </ul></div>
+    <div class="card"><h3>화면 활용</h3>
+      <ul>
+        <li>블라인드 · 앤티 · 브레이크 · AVG 스택 · TOTAL PRIZE 표시</li>
+        <li><b>전체화면</b>으로 매장 모니터에 크게</li>
+        <li><b>TV 관전 디스플레이</b> — 공유링크(?display=)로 별도 TV에 자동 순환 화면(참가 QR·탈락 티커 포함)</li>
+      </ul></div>
+  </div>
+  <div style="margin-top:18px" class="tip">✅ 클락 진행 상태는 실시간 동기화 — 여러 기기에서 같은 클락을 보고 조작할 수 있습니다.</div>
+  <div class="foot"><span>NURI HOLDEM 업주 가이드</span><span>07 — STEP 4 클락</span></div>
+</section>
+
+<!-- 8. STEP 5 순위 입력 -->
+<section class="slide">
+  <div class="kicker">STEP 5</div>
+  <h2>🏆 순위 입력 — 입력 한 번으로 랭킹·시즌까지</h2>
+  <span class="menupath" style="margin:10px 0 18px">내 매장 <span class="sep">›</span> 순위 입력</span>
+  <div class="grid2">
+    <div class="card"><h3>입력 방법</h3>
+      <ul>
+        <li>마감한 장부를 고르면 <b>참가자 명단이 자동으로</b> 올라옵니다</li>
+        <li>등수만 지정하면 끝 — 닉네임 자동완성(본인인증 뱃지 표시)</li>
+        <li>프라이즈(상금)도 함께 기록 가능</li>
+      </ul></div>
+    <div class="card"><h3>입력하면 자동으로</h3>
+      <ul>
+        <li>참가자 <b>활동점수·개인 전적</b>에 반영 (전국 상위 % 공유카드)</li>
+        <li><b>매장 랭킹</b> 집계 — 우리 매장 명예의 전당</li>
+        <li><b>시즌 리그</b> 분기 랭킹 자동 누적 · 시즌 종료 시 자동 보상/아카이브</li>
+        <li>일정탐색 '지난 대회'에 👑 우승자 표시</li>
+      </ul></div>
+  </div>
+  <div style="margin-top:18px" class="tip">✅ 연합 리그 — 여러 매장이 함께하는 리그전도 <span style="font-weight:700">연합 리그</span> 섹션에서 운영할 수 있습니다.</div>
+  <div class="foot"><span>NURI HOLDEM 업주 가이드</span><span>08 — STEP 5 순위</span></div>
+</section>
+
+<!-- 9. STEP 6 정산·통계 -->
+<section class="slide">
+  <div class="kicker">STEP 6</div>
+  <h2>📊 정산·통계 — 오늘 얼마 벌었는지 바로 확인</h2>
+  <div class="grid3" style="margin-top:22px">
+    <div class="card"><h3>🧾 게임별 현황판</h3>
+      <ul><li><span class="menupath" style="font-size:13px">포스터·예약</span> 현황판에서 포스터별 <b>바인 수 · 매출 · 마감 · 순위입력 여부</b>를 한눈에</li></ul></div>
+    <div class="card"><h3>📈 통계</h3>
+      <ul><li><span class="menupath" style="font-size:13px">내 매장 <span class="sep">›</span> 통계</span> — 일별/기간 매출, 현금·카드·할인 구분</li>
+      <li>고객 분석 — 방문·바인 상위 손님, 단골 파악</li></ul></div>
+    <div class="card"><h3>📬 주간 리포트</h3>
+      <ul><li>매주 월요일 아침, 지난주 운영 요약이 <b>자동 발송</b>됩니다</li>
+      <li>주간 머니인 킹 위젯으로 커뮤니티 노출까지</li></ul></div>
+  </div>
+  <div style="margin-top:20px" class="tip">✅ 정산 흐름 정리 — 장부 마감 → 현황판에서 게임별 확인 → 통계에서 기간 합산 → 월요일 자동 리포트. 별도 엑셀 정리가 필요 없습니다.</div>
+  <div class="foot"><span>NURI HOLDEM 업주 가이드</span><span>09 — STEP 6 정산·통계</span></div>
+</section>
+
+<!-- 10. 부가기능 + 체크리스트 -->
+<section class="slide">
+  <div class="kicker">MORE + CHECKLIST</div>
+  <h2>더 활용하기 & 오픈 체크리스트</h2>
+  <div class="grid2" style="margin-top:20px">
+    <div class="card"><h3>🎁 함께 쓰면 좋은 기능</h3>
+      <ul>
+        <li><b>매장이용권/QR</b> — 방문 적립·이용권 발급/사용, 손님 지갑에서 QR 사용</li>
+        <li><b>매장 꾸미기</b> — 매장 페이지 사진·소개·탭 구성, 나만의 주소(슬러그)</li>
+        <li><b>공지·소통</b> — 매장 공지, 손님과 소통 채널, 리뷰 답글</li>
+        <li><b>출근 관리</b> — 직원 출근일지·근무 스케줄</li>
+      </ul></div>
+    <div class="card"><h3>✅ 오픈 첫 주 체크리스트</h3>
+      <ul>
+        <li>① 매장 생성 → 승인 확인 → 매장 꾸미기(사진·소개)</li>
+        <li>② 게임 프리셋 저장 → 첫 포스터 등록</li>
+        <li>③ 매장에 고정 QR 비치(체크인·바인요청)</li>
+        <li>④ 대회 당일: 장부 열기(포스터 연결) → 클락 실행</li>
+        <li>⑤ 종료 후: 장부 마감 → 순위 입력 → 통계 확인</li>
+      </ul></div>
+  </div>
+  <div style="margin-top:20px; display:flex; gap:14px; align-items:center">
+    <span class="badge">💬 문의 · buffyfan9303@gmail.com</span>
+    <span class="badge">🌐 nuriholdem.com</span>
+  </div>
+  <div class="foot"><span>NURI HOLDEM — 「국민체육진흥법」상 마인드 스포츠인 홀덤의 합법적 토너먼트 정보 제공 플랫폼</span><span>10 — 끝</span></div>
+</section>
+
+</body>
+</html>

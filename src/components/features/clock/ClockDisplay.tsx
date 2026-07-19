@@ -51,7 +51,7 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
   const prevElim = useRef<Map<number, number>>(new Map());
 
   const load = () => getVenueClocks(venueId).then(setClocks).catch(() => setClocks([]));
-  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [venueId]);
+  useEffect(() => { load(); }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => subscribeClock(venueId, load), [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { const t = setInterval(() => setTick((x) => x + 1), 1000); return () => clearInterval(t); }, []);
 
@@ -62,6 +62,7 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let lock: any = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Wake Lock API 미지원 브라우저 타입 호환
     const req = async () => { try { lock = await (navigator as any).wakeLock?.request('screen'); } catch { /* 미지원/거부 */ } };
     req();
     const onVis = () => { if (document.visibilityState === 'visible') req(); };

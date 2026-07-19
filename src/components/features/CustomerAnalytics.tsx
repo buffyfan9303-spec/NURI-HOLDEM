@@ -28,7 +28,7 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
   const [mcands, setMcands] = useState<TransferTarget[]>([]);
   const [busy, setBusy] = useState(false);
   const reloadAliases = () => { getCustomerAliases(venueId).then((a) => setAliases(Object.fromEntries(a.map((x) => [x.alias.trim().toLowerCase(), { userId: x.userId, display: x.display }])))).catch(() => {}); };
-  useEffect(reloadAliases, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(reloadAliases, [venueId]);
   useEffect(() => {
     const q = mq.trim();
     if (!linking || !q) { setMcands([]); return; }

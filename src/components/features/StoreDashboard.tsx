@@ -126,7 +126,6 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       const avg = weeks.length > 0 ? Math.round(weeks.reduce((a, w) => a + w.entries, 0) / weeks.length) : null;
       setDowStats({ avg, weeks });
     }).catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [venueId, d, caps.ledger]);
   // 결제수단 기본값 학습 — 매장이 자주 쓰는 결제수단을 팝오버 첫 버튼으로(localStorage 카운트 기반)
   useEffect(() => {
@@ -222,7 +221,6 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       .then(([bs, s]) => { if (!alive) return; let e = 0; for (const b of bs) e += buyinFinance(b, s).entry; setWEntries(Math.round(e)); })
       .catch(() => { if (alive) setWEntries(null); });
     return () => { alive = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [venueId, d, widgetGame]);
   // 라이브 + 보이는 탭일 때만 1초 갱신(카운트다운·"분 전") — 숨김/평상시엔 멈춰 백그라운드 리렌더 방지
   useEffect(() => {
@@ -417,6 +415,23 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       <VoucherManageModal open={voucherOpen} onClose={() => { setVoucherOpen(false); setVoucherPrefill(''); }} venueId={venueId} prefillReceiver={voucherPrefill} />
       <CheckinModal open={checkinOpen} onClose={() => setCheckinOpen(false)} venueId={venueId} />
       <BoostContactModal open={boostOpen} onClose={() => setBoostOpen(false)} />
+
+      {/* 📖 업주 운영 가이드 — 슬라이드(새 탭)·PDF. 원본 docs/owner-guide, 배포 사본 public/guide */}
+      <div className="flex items-center justify-between gap-2 rounded-card border border-border-subtle bg-surface-low px-3 py-2">
+        <span className="min-w-0 truncate text-xs text-ink-secondary">
+          <b className="text-ink-primary">📖 운영 가이드</b><span className="hidden sm:inline"> — 포스터→장부→클락→순위→정산 한눈에</span>
+        </span>
+        <span className="flex shrink-0 items-center gap-1.5">
+          <button type="button" onClick={() => window.open('/guide/owner.html', '_blank', 'noopener')}
+            className="rounded-input border border-accent-400/40 bg-accent-300/10 px-2.5 py-1 text-2xs font-bold text-accent-300 hover:bg-accent-300/20 transition-colors">
+            가이드 보기
+          </button>
+          <a href="/guide/owner.pdf" download="NURI-HOLDEM-업주가이드.pdf"
+            className="rounded-input border border-border-default px-2.5 py-1 text-2xs font-bold text-ink-secondary hover:text-ink-primary transition-colors">
+            PDF
+          </a>
+        </span>
+      </div>
 
       {/* 🔴 라이브 운영 현황 — 진행 클락 + 대기 바인요청을 한 카드에. 운영 중일 때만 노출(상황 인지형 커맨드센터) */}
       {!loading && liveWidget && (

@@ -55,6 +55,7 @@ const NOOP: BlockContextValue = {
   blockedIds: new Set(), blocks: [], isBlocked: () => false,
   block: async () => {}, unblock: async () => {}, reload: async () => {},
 };
+// eslint-disable-next-line react-refresh/only-export-components -- Provider+훅 동거(컨텍스트 표준 패턴)
 export function useBlocks(): BlockContextValue {
   return useContext(BlockContext) ?? NOOP;
 }

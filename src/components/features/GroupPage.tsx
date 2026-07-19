@@ -54,7 +54,7 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
   }, [open, group?.id, user?.id]);
 
   // 멤버/매니저면 멤버 목록 로드(매니저는 승인 대기 포함)
-  useEffect(() => { if (isMember) reloadMembers(); /* eslint-disable-next-line */ }, [isMember, group?.id]);
+  useEffect(() => { if (isMember) reloadMembers(); }, [isMember, group?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!open || !group) return null;
 
@@ -322,7 +322,7 @@ function GroupBoard({ groupId, canManage }: { groupId: string; canManage: boolea
   const [sending, setSending] = useState(false);
 
   const reload = () => getGroupPosts(groupId).then(setPosts).catch(() => {});
-  useEffect(() => { reload(); /* eslint-disable-next-line */ }, [groupId]);
+  useEffect(() => { reload(); }, [groupId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();

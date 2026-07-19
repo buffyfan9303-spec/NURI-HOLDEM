@@ -547,7 +547,6 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
   useEffect(() => {
     if (draft?.date) setDate(draft.date);
     setEventName(draft?.event ?? ''); // 사이드 마감→순위입력 시 그 사이드 title로 바로(메인은 '')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft]);
 
   useEffect(() => {
@@ -556,7 +555,6 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
       .then(({ entries }) => { setAllEntries(entries); })
       .catch(() => setAllEntries([]))
       .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [venueId, date]);
 
   // 선택한 게임(이벤트)의 줄만 편집 — 게임 전환 시 해당 저장본/장부 초안 로드
@@ -965,6 +963,11 @@ function VenueCreateForm({ onCreated }: { onCreated: () => Promise<void> }) {
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-accent-300/15 text-2xl">🏪</div>
         <h2 className="text-base font-extrabold text-ink-primary">내 매장 만들기</h2>
         <p className="text-2xs leading-relaxed text-ink-muted">매장 정보를 입력하면 NURI HOLDEM 커뮤니티에 매장이 등록됩니다.<br />운영자 승인 후 일정탐색·커뮤니티에 공개돼요.</p>
+        {/* 신규 업주 온보딩 — 운영 가이드 슬라이드로 전체 흐름 먼저 파악 */}
+        <button type="button" onClick={() => window.open('/guide/owner.html', '_blank', 'noopener')}
+          className="mx-auto inline-flex items-center gap-1 rounded-input border border-accent-400/40 bg-accent-300/10 px-3 py-1.5 text-2xs font-bold text-accent-300 hover:bg-accent-300/20 transition-colors">
+          📖 운영 가이드 먼저 보기 <span className="text-ink-muted font-normal">(포스터→장부→클락→정산)</span>
+        </button>
       </div>
 
       <div className="space-y-3 rounded-card border border-border-default bg-surface-low p-4">

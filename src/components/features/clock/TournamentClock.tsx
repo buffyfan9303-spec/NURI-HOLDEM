@@ -435,6 +435,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
     const rem = lv[nextIndex].minutes * 60_000;
     persist({ currentIndex: nextIndex, remainingMs: rem, endsAt: state.running ? new Date(now() + rem).toISOString() : null });
     playChime(lv[nextIndex].kind === 'break' ? 'break' : 'level'); // 다음이 브레이크면 휴식음, 아니면 레벨업음
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, persist, playChime, canManage]);
 
   useEffect(() => {

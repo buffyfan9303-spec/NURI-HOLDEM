@@ -111,6 +111,7 @@ export default function VenuePage({
     if (!open || !venue) return;
     lockScroll();
     return () => { unlockScroll(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, venue?.id]);
 
   // 브라우저/모바일 뒤로가기 → 매장 페이지만 닫기 (중앙 back-stack 매니저가 중첩/충돌 처리)

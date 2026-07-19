@@ -35,7 +35,7 @@ export default function SeasonPanel({ venueId, canManage = false, venueName }: {
     getVenueHallOfFame(venueId).then(setHof).catch(() => {});
   };
   // 순위 입력(venue_rankings 변경) 시 시즌 standings·HOF 즉시 갱신(실시간). 퍼블리케이션 등록 완료.
-  useEffect(() => { load(); return subscribeRankings(venueId, load); /* eslint-disable-next-line */ }, [venueId]);
+  useEffect(() => { load(); return subscribeRankings(venueId, load); }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const active = useMemo(() => seasons?.find((s) => s.status === 'active') ?? null, [seasons]);
   const archived = useMemo(() => seasons?.filter((s) => s.status === 'ended') ?? [], [seasons]);

@@ -144,7 +144,6 @@ export function useDeepGto(init?: DeepGtoInit): UseDeepGto {
     chosen.slice(0, 5).forEach((c, i) => { next[i] = c; });
     setBoard(next);
     setCurrentTarget('board');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hero, villain]);
 
   const heroComplete = hero.every((x) => x !== null);
