@@ -110,7 +110,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
   const fmtDate = (iso: string | null) => { if (!iso) return ''; const d = new Date(iso); return `${d.getMonth() + 1}/${d.getDate()}`; };
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-surface-base">
+    <div className="fixed inset-0 z-[60] flex flex-col bg-surface-base pt-[env(safe-area-inset-top)]">
       <header className="flex h-header-h shrink-0 items-center gap-2 border-b border-border-subtle px-page-x">
         <button type="button" onClick={onClose} aria-label="닫기" className="flex h-9 w-9 items-center justify-center rounded-full text-ink-secondary hover:bg-surface-high">
           <Icon name="back" size={20} />

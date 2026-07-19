@@ -33,7 +33,8 @@ export default function InstallBanner() {
 
   if (!show || !evt) return null;
   return (
-    <div className="fixed bottom-3 left-1/2 z-[60] w-[min(92%,28rem)] -translate-x-1/2 animate-slide-up">
+    // 모바일: 하단 탭바(z-50, ~5.75rem)를 덮지 않게 그 위로 — PC는 기존 위치
+    <div className="fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom))] lg:bottom-3 left-1/2 z-[60] w-[min(92%,28rem)] -translate-x-1/2 animate-slide-up">
       <div className="flex items-center gap-3 rounded-card border border-accent-400/40 bg-surface-float/95 px-3 py-2.5 shadow-dialog backdrop-blur">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-input bg-accent-300/15 text-accent-300">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>

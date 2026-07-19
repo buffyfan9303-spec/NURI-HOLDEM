@@ -29,7 +29,10 @@ const StatefulActionButton = forwardRef<HTMLButtonElement, {
 }, ref) {
   const [phase, setPhase] = useState<Phase>('idle');
   const [shakeKey, setShakeKey] = useState(0); // 실패 복귀 시 좌우 흔들기 트리거
-  // w-full은 Idle에서만 — Loading/Success는 컨텐츠 폭으로 줄어 캡슐 모핑(layout이 보간)
+  // w-full 버튼은 '전 단계' 폭 고정 — 내용(라벨→스피너→체크)만 교체한다.
+  // 과거엔 Loading/Success에서 컨텐츠 폭 캡슐로 줄었다가 다시 늘어나는 모핑이었는데,
+  // 예약하기 같은 풀폭 CTA에서 '늘었다→줄었다→늘었다' 튐으로 보여 폐기(2026-07-20).
+  // 폭 미지정 컴팩트 버튼만 기존 캡슐 모핑을 유지.
   const wantsFull = className.includes('w-full');
   const restClass = className.split(/\s+/).filter((c) => c !== 'w-full').join(' ');
 
@@ -68,10 +71,11 @@ const StatefulActionButton = forwardRef<HTMLButtonElement, {
       className={[
         shakeKey > 0 ? 'anim-shake' : '',
         'inline-flex h-10 items-center justify-center gap-1.5 overflow-hidden font-bold',
-        phase === 'idle' ? (disabled ? 'px-5 text-ink-muted' : 'px-5 text-ink-inverse') : 'px-4',
+        phase === 'idle' ? (disabled ? 'text-ink-muted' : 'text-ink-inverse') : '',
+        wantsFull || phase === 'idle' ? 'px-5' : 'px-4',
         phase === 'success' ? 'text-white' : phase === 'loading' ? 'text-ink-secondary' : '',
         'disabled:cursor-default focus:outline-none',
-        phase === 'idle' && wantsFull ? 'w-full' : '',
+        wantsFull ? 'w-full' : '',
         restClass,
       ].join(' ')}
       aria-live="polite"

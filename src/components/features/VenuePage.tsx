@@ -27,6 +27,7 @@ import {
 import { listVenueCheckins } from '../../api/checkins';
 import { uploadVenueImages } from '../../lib/storage';
 import { useBackClose } from '../../lib/backstack';
+import { lockScroll, unlockScroll } from '../../lib/scrollLock';
 import VenueReviews from './VenueReviews';
 import SeasonPanel from './SeasonPanel';
 import { getVenuesSeasonLeaders, type SeasonLeader } from '../../api/seasons';
@@ -105,11 +106,11 @@ export default function VenuePage({
   }, [venue?.id]);
   const orderedTabs = tabOrder ?? TABS;
 
-  // 바디 스크롤 잠금 (페이지가 열려있는 동안)
+  // 배경 스크롤 잠금 (페이지가 열려있는 동안) — 뷰포트 스크롤러는 html이라 공용 유틸 사용
   useEffect(() => {
     if (!open || !venue) return;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = ''; };
+    lockScroll();
+    return () => { unlockScroll(); };
   }, [open, venue?.id]);
 
   // 브라우저/모바일 뒤로가기 → 매장 페이지만 닫기 (중앙 back-stack 매니저가 중첩/충돌 처리)
@@ -165,7 +166,7 @@ export default function VenuePage({
     <div
       role="dialog"
       aria-label={`${venue.name} 매장 페이지`}
-      className="fixed inset-0 z-40 bg-surface-base flex flex-col animate-slide-up"
+      className="fixed inset-0 z-40 bg-surface-base flex flex-col animate-slide-up pt-[env(safe-area-inset-top)]"
       style={{ animationDuration: '0.25s' }}
     >
       {/* ── 최상단: 뒤로가기 헤더 ──────────────────────────────────────── */}
@@ -189,7 +190,8 @@ export default function VenuePage({
       </header>
 
       {/* ── 스크롤 컨테이너 ────────────────────────────────────────────── */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
+      {/* 모바일 하단 탭바(z-50)가 이 오버레이(z-40) 위에 떠 있으므로 마지막 콘텐츠가 가려지지 않게 하단 여백 확보 */}
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-0">
         {/* PC 에서 전체 폭으로 퍼져 공백이 과해지지 않도록 중앙 컬럼(최대 768px)으로 제한 */}
         <div className="mx-auto w-full max-w-3xl">
 
@@ -493,7 +495,7 @@ function HeroSection({
             type="button"
             onClick={() => go(safeIdx - 1)}
             aria-label="이전 사진"
-            className="absolute left-2 top-1/2 z-10 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-surface-base/55 text-white backdrop-blur transition-colors hover:bg-surface-base/80"
+            className="absolute left-2 top-1/2 z-10 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-surface-base/55 text-ink-primary backdrop-blur transition-colors hover:bg-surface-base/80"
           >
             <Icon name="chevron-left" size={14} />
           </button>
@@ -501,7 +503,7 @@ function HeroSection({
             type="button"
             onClick={() => go(safeIdx + 1)}
             aria-label="다음 사진"
-            className="absolute right-2 top-1/2 z-10 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-surface-base/55 text-white backdrop-blur transition-colors hover:bg-surface-base/80"
+            className="absolute right-2 top-1/2 z-10 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-surface-base/55 text-ink-primary backdrop-blur transition-colors hover:bg-surface-base/80"
           >
             <Icon name="chevron-right" size={14} />
           </button>

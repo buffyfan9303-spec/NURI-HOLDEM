@@ -20,7 +20,8 @@ export default async function handler(req, res) {
     const SB = process.env.VITE_SUPABASE_URL;
     const KEY = process.env.VITE_SUPABASE_ANON_KEY;
     if (SB && KEY) {
-      const r = await fetch(`${SB}/rest/v1/venues?select=id,slug&limit=2000`, {
+      // 공개 목록·정적 생성기(scripts/gen-sitemap.mjs)와 동일 필터: 승인(approved) + 활성(status=active) 매장만 노출
+      const r = await fetch(`${SB}/rest/v1/venues?select=id,slug&approved=eq.true&status=eq.active&limit=2000`, {
         headers: { apikey: KEY, Authorization: `Bearer ${KEY}` },
       });
       if (r.ok) {

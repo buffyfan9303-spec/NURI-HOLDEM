@@ -53,7 +53,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {/* 토스트 컨테이너 — fixed 하단 중앙 */}
       <div
         aria-live="polite"
-        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center gap-2 pointer-events-none"
+        className="fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom))] lg:bottom-4 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center gap-2 pointer-events-none"
       >
         {toasts.map((t) => (
           <ToastItem key={t.id} {...t} />

@@ -124,15 +124,15 @@ export default function NotificationPanel({
         role="dialog"
         aria-label="알림"
         className={[
-          // 모바일: 화면 우측 1rem 안쪽으로 고정, 헤더 바로 아래
-          'fixed top-[calc(theme(spacing.header-h)+0.5rem)] right-page-x',
+          // 모바일: 화면 우측 1rem 안쪽으로 고정, 헤더 바로 아래(노치 safe-area만큼 헤더가 늘어나므로 포함)
+          'fixed top-[calc(theme(spacing.header-h)+env(safe-area-inset-top)+0.5rem)] right-page-x',
           'left-page-x sm:left-auto',
           // 데스크톱: 우측에 380px 카드
           'sm:w-[380px] sm:right-page-x-md',
           // 공통
           'z-50 bg-surface-mid border border-border-default rounded-card shadow-dialog',
           'animate-slide-up',
-          'max-h-[calc(100vh-theme(spacing.header-h)-1rem)] flex flex-col overflow-hidden',
+          'max-h-[calc(100vh-theme(spacing.header-h)-env(safe-area-inset-top)-1rem)] flex flex-col overflow-hidden',
         ].join(' ')}
       >
         {/* 헤더 */}

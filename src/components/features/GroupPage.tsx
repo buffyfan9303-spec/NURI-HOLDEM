@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
 import { useBackClose } from '../../lib/backstack';
+import { lockScroll, unlockScroll } from '../../lib/scrollLock';
 import Avatar from '../atoms/Avatar';
 import UnderlineTabs from '../atoms/UnderlineTabs';
 import { relativeTime } from './MarketplaceTab';
@@ -37,8 +38,8 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
   useBackClose(!!open && !!group, onClose);
   useEffect(() => {
     if (!open || !group) return;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = ''; };
+    lockScroll(); // 뷰포트 스크롤러는 html — 공용 유틸로 배경 스크롤 잠금
+    return () => { unlockScroll(); };
   }, [open, group]);
 
   const reloadMembership = () => { if (group && user) getMyMembership(group.id).then(setMembership).catch(() => {}); };
@@ -101,7 +102,7 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
   const images = group.images ?? (group.imageUrl ? [group.imageUrl] : []);
 
   return (
-    <div className="fixed inset-0 z-40 bg-surface-base flex flex-col animate-slide-up" style={{ animationDuration: '0.25s' }}>
+    <div className="fixed inset-0 z-40 bg-surface-base flex flex-col animate-slide-up pt-[env(safe-area-inset-top)]" style={{ animationDuration: '0.25s' }}>
       {/* 헤더 */}
       <header className="shrink-0 sticky top-0 z-30 flex items-center h-header-h px-page-x bg-surface-base border-b border-border-subtle">
         <button type="button" onClick={onClose} aria-label="뒤로 가기" className="w-11 h-11 -ml-2 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high transition-colors">
@@ -113,13 +114,14 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
         </span>
       </header>
 
-      <div className="flex-1 overflow-y-auto">
+      {/* 모바일 하단 탭바(z-50)가 이 오버레이(z-40) 위에 떠 있으므로 하단 여백 확보 */}
+      <div className="flex-1 overflow-y-auto pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-0">
         <div className="mx-auto w-full max-w-2xl">
           {/* 이미지 갤러리 */}
           <div className="relative w-full overflow-hidden h-40 sm:h-48 bg-surface-low">
             {images.length > 0 ? (
               <div className="flex h-full overflow-x-auto scrollbar-none [-webkit-overflow-scrolling:touch] snap-x">
-                {images.map((src, i) => <img key={`${src}-${i}`} src={src} alt={`${group.name} ${i + 1}`} loading="lazy" decoding="async" className="h-full w-auto shrink-0 object-cover snap-center" />)}
+                {images.map((src, i) => <img key={`${src}-${i}`} src={src} alt={`${group.name} ${i + 1}`} loading="lazy" decoding="async" className="h-full w-auto min-w-[55%] shrink-0 object-cover snap-center" />)}
               </div>
             ) : (
               <div className="absolute inset-0" style={{ background: `linear-gradient(180deg, ${group.themeColor ?? '#1A1D24'} 0%, #0a0c0f 100%)` }} />

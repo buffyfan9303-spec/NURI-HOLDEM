@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useToast } from '../../atoms/Toast';
 import { useBackClose } from '../../../lib/backstack';
+import { lockScroll, unlockScroll } from '../../../lib/scrollLock';
 import { useAuth } from '../../../contexts/AuthContext';
 import { getAppSetting, setAppSetting, CLOCK_AD_KEY, CLOCK_AD_SIZE_KEY } from '../../../api/settings';
 import { uploadPoster } from '../../../lib/storage';
@@ -510,8 +511,8 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
   }, []);
   useEffect(() => {
     if (!fs) return;
-    const prev = document.body.style.overflow; document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
+    lockScroll(); // 뷰포트 스크롤러는 html이라 body만 잠그면 무효 — 공용 유틸(ref-count)로 documentElement+body 동시 잠금
+    return () => unlockScroll();
   }, [fs]);
   // 뒤로가기 → 전체화면만 해제(앱 이탈 방지)
   useBackClose(fs, () => { setFs(false); if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {}); });
@@ -583,30 +584,30 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
         )}
 
         <div className="shrink-0 bg-gradient-to-r from-accent-400/15 via-accent-300/[0.06] to-accent-400/15 border-b border-accent-400/25 px-4 py-2 text-center">
-          <p className={['font-extrabold tracking-wide text-accent-200 truncate', fs ? 'text-[min(3.4cqw,4cqh)]' : 'text-sm sm:text-lg'].join(' ')}>{title}</p>
+          <p className={['font-extrabold tracking-wide text-[#A8B0F0] truncate', fs ? 'text-[min(3.4cqw,4cqh)]' : 'text-sm sm:text-lg'].join(' ')}>{title}</p>
         </div>
 
         {/* 본문 3열 */}
         <div className={['grid grid-cols-[minmax(76px,0.85fr)_2.6fr_minmax(90px,1fr)]', fs ? 'flex-1 min-h-0 overflow-hidden' : ''].join(' ')}>
           {/* 좌: 프라이즈 */}
           <div className="flex flex-col p-2 sm:p-3 border-r border-white/5 bg-black/20">
-            <p className={['text-accent-300/70 font-bold tracking-[0.18em] mb-1', fs ? 'text-[min(1.5cqw,1.8cqh)]' : 'text-[9px] sm:text-2xs'].join(' ')}>PRIZE</p>
+            <p className={['text-[#8B94E8]/70 font-bold tracking-[0.18em] mb-1', fs ? 'text-[min(1.5cqw,1.8cqh)]' : 'text-[9px] sm:text-2xs'].join(' ')}>PRIZE</p>
             <ul className="space-y-0.5 overflow-hidden">
               {cfg.prizes.map((p, i) => (
-                <li key={i} className={['flex items-center justify-between gap-1 text-ink-secondary', fs ? 'text-[min(1.8cqw,2.1cqh)]' : 'text-[10px] sm:text-xs'].join(' ')}>
-                  <span className="truncate opacity-80">{p.place}</span><span className="tabular-nums font-semibold text-ink-primary">{p.amount.toLocaleString()}</span>
+                <li key={i} className={['flex items-center justify-between gap-1 text-white/60', fs ? 'text-[min(1.8cqw,2.1cqh)]' : 'text-[10px] sm:text-xs'].join(' ')}>
+                  <span className="truncate opacity-80">{p.place}</span><span className="tabular-nums font-semibold text-white">{p.amount.toLocaleString()}</span>
                 </li>
               ))}
             </ul>
             {cfg.mysteryBounty > 0 && (
               <div className="mt-2 pt-2 border-t border-white/5">
-                <p className={['text-accent-300 font-semibold leading-tight', fs ? 'text-[min(1.5cqw,1.8cqh)]' : 'text-[9px] sm:text-2xs'].join(' ')}>Mystery Bounty</p>
-                <p className={['text-ink-primary tabular-nums', fs ? 'text-[min(1.9cqw,2.2cqh)]' : 'text-[10px] sm:text-xs'].join(' ')}>{cfg.mysteryBounty.toLocaleString()}</p>
+                <p className={['text-[#8B94E8] font-semibold leading-tight', fs ? 'text-[min(1.5cqw,1.8cqh)]' : 'text-[9px] sm:text-2xs'].join(' ')}>Mystery Bounty</p>
+                <p className={['text-white tabular-nums', fs ? 'text-[min(1.9cqw,2.2cqh)]' : 'text-[10px] sm:text-xs'].join(' ')}>{cfg.mysteryBounty.toLocaleString()}</p>
               </div>
             )}
             <div className="mt-auto pt-2 border-t border-white/5">
-              <p className={['text-ink-muted tracking-wide', fs ? 'text-[min(1.4cqw,1.7cqh)]' : 'text-[9px] sm:text-2xs'].join(' ')}>TOTAL PRIZE</p>
-              <p className={['font-extrabold text-accent-300 tabular-nums leading-tight', fs ? 'text-[min(2.7cqw,3.1cqh)]' : 'text-sm sm:text-lg'].join(' ')}>{totalPrize.toLocaleString()}</p>
+              <p className={['text-white/45 tracking-wide', fs ? 'text-[min(1.4cqw,1.7cqh)]' : 'text-[9px] sm:text-2xs'].join(' ')}>TOTAL PRIZE</p>
+              <p className={['font-extrabold text-[#8B94E8] tabular-nums leading-tight', fs ? 'text-[min(2.7cqw,3.1cqh)]' : 'text-sm sm:text-lg'].join(' ')}>{totalPrize.toLocaleString()}</p>
             </div>
           </div>
 
@@ -618,7 +619,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
             {/* 누리홀덤 로고 워터마크(투명) — 트레이드마크. 클락은 항상 다크라 흰 워드마크 사용 */}
             <img src="/2.png" alt="" aria-hidden className="pointer-events-none absolute inset-0 m-auto h-auto w-[58%] max-w-[62cqh] select-none object-contain opacity-[0.05]" />
             <p className={['relative mt-1 font-bold tracking-[0.16em] uppercase',
-              isBreak ? 'text-sky-300/90' : 'text-accent-200/80',
+              isBreak ? 'text-sky-300/90' : 'text-[#A8B0F0]/80',
               fs ? 'text-[min(4cqw,5cqh)]' : 'text-base sm:text-2xl'].join(' ')}>
               {isBreak ? (cur.label || 'BREAK') : `LEVEL ${levelNo}`}
             </p>
@@ -633,16 +634,16 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
             {!isBreak && (
               <div className={['flex items-center justify-center', fs ? 'gap-[7cqw]' : 'gap-8 sm:gap-16'].join(' ')}>
                 <div>
-                  <p className={['text-ink-secondary tracking-widest', fs ? 'text-[min(2cqw,2.4cqh)]' : 'text-[10px] sm:text-sm'].join(' ')}>BLINDS</p>
-                  <p className={['font-bold text-ink-primary tabular-nums', fs ? 'text-[min(4.8cqw,5.8cqh)]' : 'text-base sm:text-2xl'].join(' ')}>{cur.sb.toLocaleString()}/{cur.bb.toLocaleString()}</p>
+                  <p className={['text-white/60 tracking-widest', fs ? 'text-[min(2cqw,2.4cqh)]' : 'text-[10px] sm:text-sm'].join(' ')}>BLINDS</p>
+                  <p className={['font-bold text-white tabular-nums', fs ? 'text-[min(4.8cqw,5.8cqh)]' : 'text-base sm:text-2xl'].join(' ')}>{cur.sb.toLocaleString()}/{cur.bb.toLocaleString()}</p>
                 </div>
                 <div>
-                  <p className={['text-ink-secondary tracking-widest', fs ? 'text-[min(2cqw,2.4cqh)]' : 'text-[10px] sm:text-sm'].join(' ')}>ANTE</p>
-                  <p className={['font-bold text-ink-primary tabular-nums', fs ? 'text-[min(4.8cqw,5.8cqh)]' : 'text-base sm:text-2xl'].join(' ')}>{cur.ante.toLocaleString()}</p>
+                  <p className={['text-white/60 tracking-widest', fs ? 'text-[min(2cqw,2.4cqh)]' : 'text-[10px] sm:text-sm'].join(' ')}>ANTE</p>
+                  <p className={['font-bold text-white tabular-nums', fs ? 'text-[min(4.8cqw,5.8cqh)]' : 'text-base sm:text-2xl'].join(' ')}>{cur.ante.toLocaleString()}</p>
                 </div>
               </div>
             )}
-            <p className={['mt-3 font-bold text-accent-300', fs ? 'text-[min(3.3cqw,3.9cqh)]' : 'text-sm sm:text-2xl'].join(' ')}>{nextPlayableLabel(cfg, state.currentIndex)}</p>
+            <p className={['mt-3 font-bold text-[#8B94E8]', fs ? 'text-[min(3.3cqw,3.9cqh)]' : 'text-sm sm:text-2xl'].join(' ')}>{nextPlayableLabel(cfg, state.currentIndex)}</p>
             {!state.running && <span className={['absolute font-bold text-rose-200 bg-rose-950/60 rounded-badge', fs ? 'top-3 right-3 text-[min(2cqw,2.4cqh)] px-3 py-1' : 'top-2 right-2 text-[9px] sm:text-2xs px-2 py-0.5'].join(' ')}>일시정지</span>}
           </div>
 
@@ -658,11 +659,11 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
         {/* 칩 스탯 — TOTAL / AVG STACK 강조(전체 폭) */}
         <div className="shrink-0 grid grid-cols-2 border-t border-accent-400/25 bg-gradient-to-r from-accent-400/[0.07] via-transparent to-accent-400/[0.07]">
           <div className="text-center border-r border-white/5 py-2 sm:py-2.5">
-            <p className={['text-accent-300/70 font-bold tracking-[0.18em]', fs ? 'text-[min(1.9cqw,2.2cqh)]' : 'text-[10px] sm:text-xs'].join(' ')}>TOTAL STACK</p>
-            <p className={['font-extrabold text-accent-200 tabular-nums leading-tight', fs ? 'text-[min(4.6cqw,5.6cqh)]' : 'text-xl sm:text-3xl'].join(' ')}>{totalStack.toLocaleString()}</p>
+            <p className={['text-[#8B94E8]/70 font-bold tracking-[0.18em]', fs ? 'text-[min(1.9cqw,2.2cqh)]' : 'text-[10px] sm:text-xs'].join(' ')}>TOTAL STACK</p>
+            <p className={['font-extrabold text-[#A8B0F0] tabular-nums leading-tight', fs ? 'text-[min(4.6cqw,5.6cqh)]' : 'text-xl sm:text-3xl'].join(' ')}>{totalStack.toLocaleString()}</p>
           </div>
           <div className="text-center py-2 sm:py-2.5">
-            <p className={['text-ink-secondary font-bold tracking-[0.18em]', fs ? 'text-[min(1.9cqw,2.2cqh)]' : 'text-[10px] sm:text-xs'].join(' ')}>AVG STACK</p>
+            <p className={['text-white/60 font-bold tracking-[0.18em]', fs ? 'text-[min(1.9cqw,2.2cqh)]' : 'text-[10px] sm:text-xs'].join(' ')}>AVG STACK</p>
             <p className={['font-extrabold text-white tabular-nums leading-tight', fs ? 'text-[min(4.6cqw,5.6cqh)]' : 'text-xl sm:text-3xl'].join(' ')}>{avgStack.toLocaleString()}</p>
           </div>
         </div>
@@ -673,11 +674,11 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
             <div className="flex flex-wrap items-end justify-center gap-x-3 gap-y-2">
               <VolCtl value={volume} onChange={setVolume} onToggleMute={toggleMute} />
               <button type="button" onClick={() => playChime('level')} title="알림음 미리듣기"
-                className="self-end w-7 h-7 rounded-input bg-surface-high border border-border-default text-ink-secondary hover:text-accent-300 text-sm leading-none">🔊</button>
+                className="self-end w-7 h-7 rounded-input bg-white/10 hover:bg-white/15 border border-border-default text-white/60 hover:text-[#8B94E8] text-sm leading-none">🔊</button>
               <div className="flex flex-col items-center gap-0.5">
-                <span className="text-[9px] text-ink-muted">10초틱</span>
+                <span className="text-[9px] text-white/45">10초틱</span>
                 <button type="button" onClick={() => setTickStyle((t) => t === 'beep' ? 'soft' : t === 'soft' ? 'off' : 'beep')} title="마지막 10초 카운트다운 틱 음색 — 비프/부드러움/끔(끔=레벨업음만)"
-                  className="h-7 px-2 rounded-input bg-surface-high border border-border-default text-2xs font-bold text-ink-secondary hover:text-accent-300">
+                  className="h-7 px-2 rounded-input bg-white/10 hover:bg-white/15 border border-border-default text-2xs font-bold text-white/60 hover:text-[#8B94E8]">
                   {tickStyle === 'beep' ? '비프' : tickStyle === 'soft' ? '부드러움' : '끔'}
                 </button>
               </div>
@@ -694,10 +695,10 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
                   state.running ? 'bg-amber-500/90 text-ink-inverse hover:bg-amber-500' : 'bg-emerald-500/90 text-ink-inverse hover:bg-emerald-500'].join(' ')}>
                 {state.running ? '⏸ STOP' : '▶ START'}
               </button>
-              <button type="button" onClick={resetClock} className="px-3 py-2 rounded-input text-xs font-bold bg-surface-float text-ink-secondary border border-border-default hover:text-amber-300">↺ 초기화</button>
+              <button type="button" onClick={resetClock} className="px-3 py-2 rounded-input text-xs font-bold bg-white/10 hover:bg-white/15 text-white/60 border border-border-default hover:text-amber-300">↺ 초기화</button>
               {fs
-                ? <button type="button" onClick={toggleFs} className="px-4 py-2 rounded-input text-xs font-bold bg-surface-float text-ink-secondary border border-border-default">⤡ 해제</button>
-                : <button type="button" onClick={onEnd} className="px-4 py-2 rounded-input text-xs font-bold bg-surface-float text-ink-secondary border border-border-default hover:text-danger-light">END</button>}
+                ? <button type="button" onClick={toggleFs} className="px-4 py-2 rounded-input text-xs font-bold bg-white/10 hover:bg-white/15 text-white/60 border border-border-default">⤡ 해제</button>
+                : <button type="button" onClick={onEnd} className="px-4 py-2 rounded-input text-xs font-bold bg-white/10 hover:bg-white/15 text-white/60 border border-border-default hover:text-danger-light">END</button>}
             </div>
           </div>
         )}
@@ -739,11 +740,11 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
 }
 
 function Stat({ label, value, tone, fs }: { label: string; value: string; tone?: 'muted' | 'rose'; fs?: boolean }) {
-  const c = tone === 'rose' ? 'text-rose-300' : tone === 'muted' ? 'text-ink-secondary' : 'text-ink-primary';
+  const c = tone === 'rose' ? 'text-rose-300' : tone === 'muted' ? 'text-white/60' : 'text-white';
   return (
     // 헤어라인 구분 — 첫 항목 제외하고 위쪽 미세 보더(스탯 패널 리듬 정리)
     <div className="text-center [&:not(:first-child)]:border-t [&:not(:first-child)]:border-white/[0.06] [&:not(:first-child)]:pt-2 sm:[&:not(:first-child)]:pt-3">
-      <p className={['text-ink-muted tracking-[0.14em] uppercase leading-tight', fs ? 'text-[min(1.5cqw,1.8cqh)]' : 'text-[9px] sm:text-2xs'].join(' ')}>{label}</p>
+      <p className={['text-white/45 tracking-[0.14em] uppercase leading-tight', fs ? 'text-[min(1.5cqw,1.8cqh)]' : 'text-[9px] sm:text-2xs'].join(' ')}>{label}</p>
       <p className={['font-bold tabular-nums leading-tight mt-0.5', fs ? 'text-[min(2.7cqw,3.3cqh)]' : 'text-sm sm:text-xl', c].join(' ')}>{value}</p>
     </div>
   );
@@ -751,10 +752,10 @@ function Stat({ label, value, tone, fs }: { label: string; value: string; tone?:
 function Stepper({ label, onPlus, onMinus }: { label: string; onPlus: () => void; onMinus: () => void }) {
   return (
     <div className="flex flex-col items-center gap-0.5">
-      <span className="text-[9px] text-ink-muted">{label}</span>
+      <span className="text-[9px] text-white/45">{label}</span>
       <div className="flex gap-0.5">
-        <button type="button" onClick={onPlus} className="w-7 h-7 rounded-input bg-surface-high border border-border-default text-ink-secondary hover:text-accent-300 text-sm leading-none">＋</button>
-        <button type="button" onClick={onMinus} className="w-7 h-7 rounded-input bg-surface-high border border-border-default text-ink-secondary hover:text-danger-light text-sm leading-none">－</button>
+        <button type="button" onClick={onPlus} className="w-7 h-7 rounded-input bg-white/10 hover:bg-white/15 border border-border-default text-white/60 hover:text-[#8B94E8] text-sm leading-none">＋</button>
+        <button type="button" onClick={onMinus} className="w-7 h-7 rounded-input bg-white/10 hover:bg-white/15 border border-border-default text-white/60 hover:text-danger-light text-sm leading-none">－</button>
       </div>
     </div>
   );
@@ -762,7 +763,7 @@ function Stepper({ label, onPlus, onMinus }: { label: string; onPlus: () => void
 function VolCtl({ value, onChange, onToggleMute }: { value: number; onChange: (v: number) => void; onToggleMute: () => void }) {
   return (
     <div className="flex flex-col items-center gap-0.5">
-      <span className="text-[9px] text-ink-muted">Volume ({value})</span>
+      <span className="text-[9px] text-white/45">Volume ({value})</span>
       <div className="flex items-center gap-1">
         <button type="button" onClick={onToggleMute} title={value > 0 ? '음소거' : '음소거 해제'} aria-label={value > 0 ? '음소거' : '음소거 해제'}
           className="text-sm leading-none hover:opacity-80">{value > 0 ? '🔈' : '🔇'}</button>

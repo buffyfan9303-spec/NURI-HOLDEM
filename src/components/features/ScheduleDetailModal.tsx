@@ -64,7 +64,7 @@ export default function ScheduleDetailModal({
         type="button"
         onClick={onClose}
         aria-label="닫기"
-        className="lg:hidden fixed top-3 right-3 z-[60] w-9 h-9 flex items-center justify-center rounded-full bg-surface-base/80 backdrop-blur text-ink-primary hover:bg-surface-high transition-colors"
+        className="lg:hidden fixed top-[calc(0.75rem+env(safe-area-inset-top))] right-3 z-[60] w-9 h-9 flex items-center justify-center rounded-full bg-surface-base/80 backdrop-blur text-ink-primary hover:bg-surface-high transition-colors"
       >
         <Icon name="close" size={15} />
       </button>
@@ -93,6 +93,9 @@ export default function ScheduleDetailModal({
                   src={schedule.posterUrl}
                   alt={`${schedule.title} 포스터`}
                   decoding="async"
+                  // 로드 전 높이 예약 — 이미지가 뜨는 순간 아래 제목/배지가 통째로 밀리는 점프(CLS) 방지.
+                  // 포스터는 세로형(1200x1600)이라 로드 후 실제 높이가 이 최소값을 항상 넘어 시각 영향 없음.
+                  style={{ minHeight: 'min(40vh, 320px)' }}
                   className="block h-auto w-full max-h-[65vh] object-contain lg:max-h-screen"
                 />
               </button>

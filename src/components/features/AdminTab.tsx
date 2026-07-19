@@ -22,6 +22,7 @@ import {
 } from '../../lib/loyalty';
 import { isVoucherIssueApproved, setVoucherIssueApproval, adminListVoucherCreditRequests, adminDecideVoucherCredit, type AdminCreditRequest } from '../../api/vouchers';
 import { useBackClose } from '../../lib/backstack';
+import { lockScroll, unlockScroll } from '../../lib/scrollLock';
 import { REGION_CHIPS } from './IntegratedSearchBar';
 import SectionHeader from '../atoms/SectionHeader';
 import NuriPosLedger from './NuriPosLedger';
@@ -666,7 +667,7 @@ export default function AdminTab({
     <div className="space-y-3 mx-auto w-full max-w-5xl">
       <StatsPanel />
       <div className="lg:flex lg:gap-4">
-        <nav className="flex gap-1 overflow-x-auto scrollbar-none rounded-input bg-surface-high p-0.5 lg:sticky lg:top-16 lg:w-44 lg:shrink-0 lg:flex-col lg:self-start lg:overflow-visible lg:bg-transparent lg:p-0">
+        <nav className="flex gap-1 overflow-x-auto scrollbar-none rounded-input bg-surface-high p-0.5 lg:sticky lg:top-[calc(var(--stack-top,6.0625rem)+0.75rem)] lg:w-44 lg:shrink-0 lg:flex-col lg:self-start lg:overflow-visible lg:bg-transparent lg:p-0">
           {ADMIN_SECTIONS.map((a) => (
             <AdminNavBtn key={a.id} icon={a.icon} active={section === a.id} onClick={() => setSection(a.id)} badge={a.id === 'pending' && pending.length > 0 ? pending.length : undefined}>{a.label}</AdminNavBtn>
           ))}
@@ -960,9 +961,9 @@ function AdminVenuePos({ venueId, venueName, onClose }: { venueId: string; venue
   const [tab, setTab] = useState<'stats' | 'ledger'>('stats');
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    document.body.style.overflow = 'hidden';
+    lockScroll(); // 뷰포트 스크롤러는 html — 공용 유틸로 배경 스크롤 잠금
     window.addEventListener('keydown', onKey);
-    return () => { document.body.style.overflow = ''; window.removeEventListener('keydown', onKey); };
+    return () => { unlockScroll(); window.removeEventListener('keydown', onKey); };
   }, [onClose]);
   // 뒤로가기 → 운영자 장부 뷰 닫기
   useBackClose(true, onClose);

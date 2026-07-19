@@ -738,8 +738,10 @@ export default function App() {
         url.searchParams.delete('checkin');
         window.history.replaceState({}, '', url.pathname + url.search + url.hash);
       });
+    // user '객체 참조'가 아닌 id 기준 — 로그인 직후 프로필 갱신으로 참조만 바뀌어도
+    // effect가 재실행되어 체크인 RPC가 중복 호출되던 문제 방지
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [user?.id]);
 
   // ── QR 자가 바인요청 (?buyin=<venueId>) — 로그인 회원만, 운영자 승인 대기 ──
   useEffect(() => {
@@ -1093,11 +1095,11 @@ export default function App() {
   }, [isOwner, isStaff, isAdmin]);
 
   // 커뮤니티 탭 새 글 점(모바일 탭바) — 마지막 방문 이후 새 글이 있으면 골드 점
-  const [commSeenAt, setCommSeenAt] = useState(() => localStorage.getItem('nuri:comm-seen') ?? '');
+  const [commSeenAt, setCommSeenAt] = useState(() => { try { return localStorage.getItem('nuri:comm-seen') ?? ''; } catch { return ''; } });
   useEffect(() => {
     if (activeTab !== 'community') return;
     const now = new Date().toISOString();
-    localStorage.setItem('nuri:comm-seen', now);
+    try { localStorage.setItem('nuri:comm-seen', now); } catch { /* storage 차단/쿼터 초과 무시 */ }
     setCommSeenAt(now);
   }, [activeTab]);
   const commHasNew = useMemo(
@@ -1242,7 +1244,8 @@ export default function App() {
     setNotifications((prev) =>
       prev.map((n) => ids.includes(n.id) ? { ...n, read: true } : n),
     );
-    markNotificationsRead(ids).catch(() => {});
+    // 실패 시 서버 상태로 재동기화 — 배지가 사라졌다 되살아나는 왕복 방지
+    markNotificationsRead(ids).catch(() => { getMyNotifications().then(setNotifications).catch(() => {}); });
   }, []);
 
   // 알림 클릭 → 해당 페이지로 이동
@@ -1377,11 +1380,12 @@ export default function App() {
   const handleUpdateUser = useCallback((id: string, patch: Partial<User>) => {
     setUsers((prev) => prev.map((u) => u.id === id ? { ...u, ...patch } : u));
     if (patch.approved !== undefined) {
-      approveOwner(id, patch.approved).catch(() => toast.show('승인 처리에 실패했습니다', 'error'));
+      // 실패 시 낙관적 패치를 서버 상태로 재동기화 — 승인 실패가 '승인됨'으로 남는 불일치 방지
+      approveOwner(id, patch.approved).catch(() => { toast.show('승인 처리에 실패했습니다', 'error'); listAllUsers().then(setUsers).catch(() => {}); });
     }
     if (patch.status !== undefined) {
       updateUserStatus(id, patch.status, patch.suspendedUntil, patch.sanctionReason)
-        .catch(() => toast.show('상태 변경에 실패했습니다', 'error'));
+        .catch(() => { toast.show('상태 변경에 실패했습니다', 'error'); listAllUsers().then(setUsers).catch(() => {}); });
     }
   }, [toast]);
 
@@ -1442,24 +1446,25 @@ export default function App() {
     } catch (e) { toast.show(e instanceof Error ? e.message : '삭제에 실패했습니다', 'error'); }
   }, [toast]);
 
+  // 매장 소개/이미지 저장 — 실패 시 낙관적 반영을 서버 상태로 되돌림(저장된 것처럼 보이는 불일치 방지)
   const handleUpdateVenueDescription = useCallback((venueId: string, description: string) => {
     setVenues((prev) => prev.map((v) => v.id === venueId ? { ...v, description } : v));
-    updateVenueDescription(venueId, description).catch(() => toast.show('저장에 실패했습니다', 'error'));
-  }, [toast]);
+    updateVenueDescription(venueId, description).catch(() => { toast.show('저장에 실패했습니다', 'error'); reloadVenues(); });
+  }, [toast, reloadVenues]);
 
   const handleUpdateVenueImage = useCallback((venueId: string, dataUrl: string) => {
     setVenues((prev) => prev.map((v) => v.id === venueId ? { ...v, imageUrl: dataUrl } : v));
     updateVenueImage(venueId, dataUrl)
       .then(() => toast.show('배경이 저장되었습니다', 'success'))
-      .catch(() => toast.show('저장에 실패했습니다', 'error'));
-  }, [toast]);
+      .catch(() => { toast.show('저장에 실패했습니다', 'error'); reloadVenues(); });
+  }, [toast, reloadVenues]);
 
   const handleUpdateVenueImages = useCallback((venueId: string, urls: string[]) => {
     setVenues((prev) => prev.map((v) => v.id === venueId ? { ...v, images: urls } : v));
     updateVenueImages(venueId, urls)
       .then(() => toast.show('매장 사진이 저장되었습니다', 'success'))
-      .catch(() => toast.show('저장에 실패했습니다', 'error'));
-  }, [toast]);
+      .catch(() => { toast.show('저장에 실패했습니다', 'error'); reloadVenues(); });
+  }, [toast, reloadVenues]);
 
   const handleDeletePoster = useCallback((id: string) => {
     const target = schedules.find((s) => s.id === id);
@@ -1883,6 +1888,7 @@ export default function App() {
       {/* 커뮤니티 */}
       {(activeTab === 'community' || visitedTabs.has('community')) && (
         <main className="tab-pane px-page-x pb-section" style={activeTab !== 'community' ? { display: 'none' } : undefined}>
+          <ErrorBoundary inline resetKey="community">
           <CommunityTabM
             marketSlot={marketSlot}
             venues={venues}
@@ -1899,12 +1905,14 @@ export default function App() {
             onDeletePost={handleDeletePost}
             onReloadVenues={reloadVenues}
           />
+          </ErrorBoundary>
         </main>
       )}
 
       {/* 중고장터 */}
       {(activeTab === 'market' || visitedTabs.has('market')) && (
         <main className="tab-pane px-page-x pt-3 pb-section" style={activeTab !== 'market' ? { display: 'none' } : undefined}>
+          <ErrorBoundary inline resetKey="market">
           <MarketplaceTabM
             listings={listings}
             loading={!marketLoaded}
@@ -1916,6 +1924,7 @@ export default function App() {
             onWriteNotice={handleWriteNotice}
             onListingsChanged={handleListingsChanged}
           />
+          </ErrorBoundary>
         </main>
       )}
 
@@ -1931,6 +1940,7 @@ export default function App() {
       {/* 내 매장 — 게임관리 + 매장운영 통합 허브 (업주/직원/운영자) */}
       {activeTab === 'my-store' && (
         <main className="px-page-x pt-3 pb-section">
+          <ErrorBoundary inline resetKey="my-store">
           <VenueManageTab
             schedules={schedules}
             deepSection={myStoreDeep}
@@ -1949,12 +1959,14 @@ export default function App() {
             }}
             onDeletePoster={(id) => { handleDeletePoster(id); toast.show('포스터가 삭제되었습니다', 'success'); }}
           />
+          </ErrorBoundary>
         </main>
       )}
 
       {/* 관리자 */}
       {activeTab === 'admin' && (
         <main className="px-page-x py-section">
+          <ErrorBoundary inline resetKey="admin">
           <AdminTab
             schedules={schedules}
             venues={venues}
@@ -1966,6 +1978,7 @@ export default function App() {
             onDeletePost={handleDeletePost}
             onReloadVenues={() => { reloadVenues(); if (isAdmin) listAllUsers().then(setUsers).catch(() => {}); }}
           />
+          </ErrorBoundary>
         </main>
       )}
       </Suspense>
@@ -1974,7 +1987,9 @@ export default function App() {
       <BusinessFooter onOpenLegal={(d) => setLegalDoc(d)} onOpenSupport={() => setSupportOpen(true)} />
 
       {/* ── 모달 — 전부 lazy: 여는 순간에만 해당 청크 로드(첫 화면 가볍게) ── */}
+      {/* 모달 렌더 크래시가 앱 전체 폴백으로 번지지 않게 묶음 단위 바운더리 — 대상이 바뀌면 자동 리셋 */}
       <Suspense fallback={<OverlayFallback />}>
+      <ErrorBoundary inline resetKey={`${openSchedule?.id ?? ''}:${openVenueId ?? ''}:${openPost?.id ?? ''}`}>
       {buyinPick && (() => {
         const submit = (g: number | null) => {
           const v = buyinPick.venueId; setBuyinPick(null);
@@ -2168,6 +2183,7 @@ export default function App() {
         onSubmit={handleCreateListing}
       />
       )}
+      </ErrorBoundary>
       </Suspense>
     </div>
   );
@@ -2298,7 +2314,7 @@ function BrowseSideRail({ posts, schedules, onSelectPost, onSelectSchedule }: {
   };
 
   return (
-    <aside className="sticky top-16 hidden w-72 shrink-0 space-y-3 xl:block">
+    <aside className="sticky top-[calc(var(--stack-top,6.0625rem)+0.75rem)] hidden w-72 shrink-0 space-y-3 xl:block">
       {/* 곧 시작하는 대회 — 시간 임박 순 3개 */}
       {upcoming.length > 0 && (
         <section className="overflow-hidden rounded-card border border-border-subtle bg-surface-low">

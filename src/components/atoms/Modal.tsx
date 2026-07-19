@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useBackClose } from '../../lib/backstack';
+import { lockScroll, unlockScroll } from '../../lib/scrollLock';
 import Icon from './Icon';
 
 interface ModalProps {
@@ -37,10 +38,10 @@ export default function Modal({
     if (!open || inline) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
-    document.body.style.overflow = 'hidden';
+    lockScroll(); // 뷰포트 스크롤러는 html — body만 잠그면 무효(scrollLock 유틸이 둘 다 처리)
     return () => {
       window.removeEventListener('keydown', onKey);
-      document.body.style.overflow = '';
+      unlockScroll();
     };
   }, [open, onClose]);
 
@@ -126,9 +127,9 @@ export default function Modal({
       <div ref={contentRef}
         onTouchStart={onSheetStart} onTouchMove={onSheetMove} onTouchEnd={onSheetEnd}
         style={dragY > 0 ? { transform: `translateY(${dragY}px)`, transition: 'none' } : { transition: 'transform 0.28s cubic-bezier(0.32, 0.72, 0, 1)' }}
-        className={['fixed inset-0 z-[55] bg-surface-base flex flex-col', closing ? 'animate-fade-out' : 'animate-fade-in'].join(' ')}>
+        className={['fixed inset-0 z-[55] bg-surface-base flex flex-col pt-[env(safe-area-inset-top)]', closing ? 'animate-fade-out' : 'animate-fade-in'].join(' ')}>
         {/* 드래그 핸들(모바일) — 시트를 끌어내려 닫기 */}
-        <div aria-hidden className="lg:hidden absolute top-1.5 left-1/2 z-10 h-1 w-10 -translate-x-1/2 rounded-full bg-white/20" />
+        <div aria-hidden className="lg:hidden absolute top-1.5 left-1/2 z-10 h-1 w-10 -translate-x-1/2 rounded-full bg-ink-primary/25" />
         {title && (
           <header className="shrink-0 flex items-center justify-between px-4 h-header-h border-b border-border-subtle bg-surface-base">
             <h2 id="modal-title" className="text-[17px] font-bold tracking-tight text-ink-primary">{title}</h2>

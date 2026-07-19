@@ -2,8 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     { "source": "/s/:code", "destination": "/api/s?code=:code" },
-    { "source": "/p/:id", "destination": "/api/p?id=:id" },
-    { "source": "/sitemap.xml", "destination": "/api/sitemap" }
+    { "source": "/p/:id", "destination": "/api/p?id=:id" }
   ],
   "headers": [
     {

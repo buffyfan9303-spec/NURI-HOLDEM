@@ -296,6 +296,15 @@ html.light .text-danger-light { color: #D63A4E; }
 /* 인디고 액센트 텍스트 — 라이트 배경 대비 보강(AA) */
 html.light .text-accent-200, html.light .text-accent-300 { color: #4853B8; }
 html.light .text-accent-400 { color: #3A4392; }
+/* 상태/경고용 파스텔 텍스트 — 흰 배경에서 대비가 무너지는 나머지 계열 전부 딥 톤 교정 */
+html.light .text-amber-200, html.light .text-amber-300 { color: #92600A; }
+html.light .text-sky-300 { color: #0369A1; }
+html.light .text-rose-200, html.light .text-rose-300 { color: #BE123C; }
+html.light .text-violet-200, html.light .text-violet-300 { color: #6D28D9; }
+html.light .text-purple-300 { color: #7E22CE; }
+html.light .text-teal-300 { color: #0F766E; }
+html.light .text-blue-300 { color: #1D4ED8; }
+html.light .text-pink-300 { color: #BE185D; }
 
 /* ── 모바일 하단 탭바(Riot Mobile 스타일) 공간 확보 — 컨텐츠가 탭바에 가리지 않게 */
 @media (max-width: 1023.5px) {

@@ -297,7 +297,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 )}
               </div>
               {/* PC: 세로 사이드바(기존) */}
-              <nav className="hidden lg:flex lg:sticky lg:top-16 lg:w-44 lg:shrink-0 lg:flex-col lg:self-start lg:gap-1">
+              <nav className="hidden lg:flex lg:sticky lg:top-[calc(var(--stack-top,6.0625rem)+0.75rem)] lg:w-44 lg:shrink-0 lg:flex-col lg:self-start lg:gap-1">
                 {sorted.map((a) => (
                   <SectionBtn key={a.id} icon={SECTION_ICON[a.id]} active={section === a.id} locked={a.locked}
                     fav={favs.includes(a.id)} onToggleFav={() => toggleFav(a.id)}

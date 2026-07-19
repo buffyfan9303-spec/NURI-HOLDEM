@@ -1,7 +1,8 @@
 /* NURI HOLDEM — Service Worker: 앱 셸 캐싱(빠른 재방문) + 웹 푸시 */
 /* eslint-disable no-undef */
 
-const CACHE = 'nuri-shell-v1';
+const CACHE = 'nuri-shell-v2'; // 버전 올리면 activate 에서 옛 캐시 전체 삭제(누적 정리)
+const CACHE_MAX_ENTRIES = 60; // 캐시 엔트리 상한 — 초과 시 오래된 것부터 삭제(무한 성장 방지)
 // 캐시 대상: Vite 해시 자산(/assets, 불변) + 아이콘 + 이미지/폰트(같은 출처). HTML·API는 캐시 안 함(항상 최신).
 const CACHEABLE = /\/(assets|icon|favicon|nuri-logo|2)\b|\.(?:png|jpg|jpeg|svg|webp|gif|woff2?)$/i;
 
@@ -40,7 +41,19 @@ self.addEventListener('fetch', (event) => {
     if (cached) return cached;
     try {
       const res = await fetch(req);
-      if (res && res.ok && res.type === 'basic') { const c = await caches.open(CACHE); c.put(req, res.clone()); }
+      if (res && res.ok && res.type === 'basic') {
+        const c = await caches.open(CACHE);
+        await c.put(req, res.clone());
+        // 상한 초과분은 오래된 것(추가 순서 앞쪽)부터 삭제 — 오프라인 폴백 페이지는 보존
+        try {
+          const keys = await c.keys();
+          if (keys.length > CACHE_MAX_ENTRIES) {
+            const removable = keys.filter((k) => !k.url.endsWith('/offline.html'));
+            const excess = keys.length - CACHE_MAX_ENTRIES;
+            await Promise.all(removable.slice(0, excess).map((k) => c.delete(k)));
+          }
+        } catch (e) { /* 트림 실패는 무시(캐싱 자체는 유지) */ }
+      }
       return res;
     } catch (e) { return cached || Response.error(); }
   })());

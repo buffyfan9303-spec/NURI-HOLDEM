@@ -56,8 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     getMyProfile().then((profile) => {
       applyProfileWithDailyPoint(profile);
-      setLoading(false);
-    });
+    }).catch(() => { /* 드문 초기화 실패 — 비로그인 상태로 진행 */ }).finally(() => setLoading(false));
 
     // ⚠️ onAuthStateChange 콜백 내부에서 supabase를 await하면 GoTrue 락 데드락 →
     //    로그인이 "로그인 중..."에서 무한 대기. 콜백은 동기로만 두고

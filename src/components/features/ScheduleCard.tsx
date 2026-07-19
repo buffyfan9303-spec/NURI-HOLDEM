@@ -278,8 +278,9 @@ function GridCard({ schedule, onVenueClick, onSelect, rating }: CardProps) {
           className="absolute bottom-0 left-0 right-0 px-2.5 pb-2 pt-8"
           style={{ background: 'linear-gradient(to top, rgba(10,12,15,0.95) 30%, transparent)' }}
         >
-          <p className="text-sm font-bold text-ink-primary tabular-nums leading-tight">
-            {d.monthDay}<span className="text-xs font-medium text-ink-secondary">({d.dow})</span> {d.time}
+          {/* 고정 다크 스크림 위 텍스트 — 테마 토큰을 쓰면 라이트 모드에서 근검정 글자가 되어 안 보임 → 고정 흰색 */}
+          <p className="text-sm font-bold text-white tabular-nums leading-tight">
+            {d.monthDay}<span className="text-xs font-medium text-white/70">({d.dow})</span> {d.time}
           </p>
         </div>
       </div>

@@ -23,7 +23,8 @@ function Chip({ label, color, earned }: { label: string; color: string; earned: 
     <span
       className="inline-flex items-center gap-1 rounded-badge px-2 py-1 text-2xs font-bold leading-none border"
       style={earned
-        ? { color, borderColor: `${color}66`, background: 'rgba(10,12,15,0.55)' }
+        // 고정 다크 배경 대신 뱃지색 틴트 — 라이트 모드에서도 이질감 없이 원색 유지
+        ? { color, borderColor: `${color}66`, background: `color-mix(in srgb, ${color} 14%, transparent)` }
         : { color: 'rgb(var(--ink-muted))', borderColor: 'rgb(var(--border-subtle))', opacity: 0.55 }}
       title={earned ? `${label} 획득` : `${label} (미획득)`}
     >

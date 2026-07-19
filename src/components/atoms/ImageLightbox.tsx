@@ -2,6 +2,7 @@
 // 리렌더 없이 ref로 transform을 직접 조작해 60fps 제스처를 유지한다.
 import { useEffect, useRef } from 'react';
 import { useBackClose } from '../../lib/backstack';
+import { lockScroll, unlockScroll } from '../../lib/scrollLock';
 
 interface Props {
   src: string;
@@ -40,10 +41,9 @@ export default function ImageLightbox({ src, alt, onClose }: Props) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
-    // 배경 스크롤 잠금
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
+    // 배경 스크롤 잠금 — 뷰포트 스크롤러는 html(공용 유틸이 ref-count로 중첩까지 처리)
+    lockScroll();
+    return () => { window.removeEventListener('keydown', onKey); unlockScroll(); };
   }, [onClose]);
 
   const onPointerDown = (e: React.PointerEvent) => {
