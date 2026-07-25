@@ -14,7 +14,7 @@ import {
 import { useToast } from '../atoms/Toast';
 import { supabase } from '../../lib/supabase';
 import { getAppSetting, setAppSetting, BOOST_CONTACT_EMAIL_KEY, BOOST_CONTACT_PHONE_KEY } from '../../api/settings';
-import { getAdminPlatformStats, type PlatformStats } from '../../api/adminStats';
+import { getAdminPlatformStats, getFreePlanUsage, type PlatformStats, type PlanUsageRow } from '../../api/adminStats';
 import { getAllCommunityAds, saveCommunityAd, type CommunityAd } from '../../api/ads';
 import {
   MISSIONS, adminListCustomMissions, adminSaveCustomMission, adminDeleteCustomMission,
@@ -649,7 +649,45 @@ function PlatformStatsCard() {
         ))}
       </div>
       <p className="text-2xs leading-relaxed text-ink-muted">마케팅 발송 누적 {s.announcements}건. 푸시 구독이 0이면 아직 알림을 켠 사용자가 없는 상태입니다.</p>
+      <PlanUsageCard />
     </div>
+  );
+}
+
+/** 💰 Supabase 무료 한도 사용률 — 70% 주의·90% 위험. 넘기 전에 최적화, 그래도 넘으면 요금제 상향 */
+function PlanUsageCard() {
+  const [rows, setRows] = useState<PlanUsageRow[]>([]);
+  useEffect(() => { getFreePlanUsage().then(setRows).catch(() => {}); }, []);
+  if (rows.length === 0) return null;
+  const worst = Math.max(...rows.map((r) => r.pct));
+  return (
+    <section className="rounded-card border border-border-subtle bg-surface-low p-3">
+      <header className="mb-2 flex items-center justify-between gap-2">
+        <span className="text-xs font-bold text-ink-primary">💰 Supabase 무료 한도</span>
+        <span className={['text-2xs font-bold', worst >= 90 ? 'text-danger-light' : worst >= 70 ? 'text-amber-300' : 'text-emerald-400'].join(' ')}>
+          {worst >= 90 ? '상향 검토' : worst >= 70 ? '최적화 필요' : '여유'}
+        </span>
+      </header>
+      <ul className="space-y-1.5">
+        {rows.map((r) => (
+          <li key={r.metric}>
+            <div className="flex items-baseline justify-between gap-2 text-2xs">
+              <span className="text-ink-secondary">{r.metric}</span>
+              <span className="tabular-nums text-ink-muted">{r.used} / {r.limitVal} · {r.pct}%</span>
+            </div>
+            <div className="mt-0.5 h-1 overflow-hidden rounded-full bg-surface-high">
+              <div
+                className={['h-full rounded-full', r.pct >= 90 ? 'bg-danger' : r.pct >= 70 ? 'bg-amber-400' : 'bg-emerald-500'].join(' ')}
+                style={{ width: `${Math.min(100, Math.max(2, r.pct))}%` }}
+              />
+            </div>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2 text-[10px] leading-relaxed text-ink-muted">
+        70% 도달 시 운영자 알림이 하루 1회 발송됩니다. Egress(월 5GB)·MAU 정확값은 Supabase 대시보드에서 확인하세요.
+      </p>
+    </section>
   );
 }
 

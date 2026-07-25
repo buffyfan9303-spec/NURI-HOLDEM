@@ -82,6 +82,10 @@ async function uploadToStorage(
   const { error } = await supabase.storage.from(bucket).upload(path, blob, {
     contentType: 'image/webp',
     upsert: true,
+    // 💰 Egress 절감(무료 한도 5GB/월 유지의 핵심) — 이미지 경로는 타임스탬프/고정 파일명이라
+    //    내용이 바뀌면 경로도 바뀐다(아바타는 upsert지만 브라우저가 갱신해도 무방한 수준).
+    //    기본값(1시간) 대신 1년 캐시로 두면 재방문·재조회 시 CDN/브라우저가 처리해 전송량이 거의 0이 된다.
+    cacheControl: '31536000',
   });
   if (error) throw error;
 

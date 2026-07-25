@@ -10,6 +10,20 @@ export interface PlatformStats {
   pushSubs: number; announcements: number; posts7d: number;
 }
 
+/** 💰 Supabase 무료 한도 사용률 — 요금제 상향 시점 판단용(관리자 전용) */
+export interface PlanUsageRow { metric: string; used: number; limitVal: number; pct: number; status: string; }
+
+export async function getFreePlanUsage(): Promise<PlanUsageRow[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.rpc('free_plan_usage');
+  if (error || !data) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data as any[]).map((r) => ({
+    metric: String(r.metric), used: +r.used || 0, limitVal: +r.limit_val || 0,
+    pct: +r.pct || 0, status: String(r.status),
+  }));
+}
+
 export async function getAdminPlatformStats(): Promise<PlatformStats | null> {
   if (IS_MOCK) return null;
   const { data, error } = await supabase.rpc('admin_platform_stats');
