@@ -140,7 +140,7 @@ function StatsView({ venueId }: { venueId: string }) {
       if (b.gameSeq > 1) { rd.sideRev += f.paid; rd.sideE += f.entry; } else { rd.mainRev += f.paid; rd.mainE += f.entry; }
       rd.players.add(b.playerName);
       if (f.entry > 0 && f.entry < 1) underEntries++; // 참고용
-      if (b.discountIndex > 0 || (b.isSplit && b.discountLevel > 0)) discountCnt++; // 할인 적용된 바인
+      if (b.discountIndex > 0) discountCnt++; // 할인 이벤트가 적용된 바인(분납 포함 — discountIndex로 일원화)
       ticket += f.ticketPaid + (b.isSplit ? b.ticketCount : 0); ticketUnpaid += f.ticketUnpaid;
       byMethod[b.paymentMethod]++;
       byPlayer[b.playerName] = (byPlayer[b.playerName] ?? 0) + 1;

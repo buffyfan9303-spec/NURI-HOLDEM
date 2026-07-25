@@ -965,7 +965,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                               <button type="button" disabled={closed}
                                 onClick={() => !closed && setSelected({ playerName: r.name, entryNo: e, buyin: c })}
                                 className={['w-full h-full rounded-input border-2 flex flex-col items-center justify-center leading-none', tone, closed ? 'cursor-default' : ''].join(' ')}>
-                                <span className="text-[11px] font-extrabold">{topLabel}{(c.discountIndex > 0 || (c.isSplit && c.discountLevel > 0)) ? '*' : ''}</span>
+                                <span className="text-[11px] font-extrabold">{topLabel}{c.discountIndex > 0 ? '*' : ''}</span>
                                 {et !== 'none'
                                   ? <span className="text-[7px] font-bold text-amber-300 leading-none">{et === 'double' ? '더블얼리' : '얼리'}</span>
                                   : frac < 0.999
@@ -1746,7 +1746,7 @@ function Overlay({ title, onClose, children }: { title: string; onClose: () => v
 }
 
 // ── 2-Tap 결제 입력 모달 ──────────────────────────────────────────────────────
-interface SplitInput { cashAmount: number; cardAmount: number; transferAmount: number; ticketCount: number; unpaidAmount: number; discountLevel: number; }
+interface SplitInput { cashAmount: number; cardAmount: number; transferAmount: number; ticketCount: number; unpaidAmount: number; discountIndex: number; }
 
 function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCancelBuyin, onSetEarly }: {
   cell: SelectedCell; hasPw: boolean; session: LedgerSession;
@@ -1772,10 +1772,9 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
   const [transfer, setTransfer] = useState<number>(init?.transferAmount ?? 0);
   const [tkt, setTkt]           = useState<number>(init?.ticketCount ?? 0);
   const [unpaidAmt, setUnpaidAmt] = useState<number>(init?.unpaidAmount ?? 0);
-  const [discount, setDiscount] = useState<number>(init?.discountLevel ?? 0);
   const splitTotal = cash + card + transfer + unpaidAmt;
   const canSaveSplit = splitTotal > 0 || tkt > 0;
-  const submitSplit = () => onPickSplit({ cashAmount: cash, cardAmount: card, transferAmount: transfer, ticketCount: tkt, unpaidAmount: unpaidAmt, discountLevel: discount });
+  const submitSplit = () => onPickSplit({ cashAmount: cash, cardAmount: card, transferAmount: transfer, ticketCount: tkt, unpaidAmount: unpaidAmt, discountIndex: discIdx });
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -1897,16 +1896,32 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
                   <input type="number" inputMode="numeric" min={0} value={tkt || ''} onChange={(e) => setTkt(Math.max(0, parseInt(e.target.value, 10) || 0))}
                     placeholder="0" className="input w-full text-sm tabular-nums" />
                 </label>
-                <label className="block">
-                  <span className="block text-2xs text-ink-muted mb-0.5">레벨 할인</span>
-                  <div className="relative">
-                    <input type="number" inputMode="numeric" min={0} value={discount || ''} onChange={(e) => setDiscount(Math.max(0, parseInt(e.target.value, 10) || 0))}
-                      placeholder="0" className="input w-full text-sm tabular-nums pr-9" />
-                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">레벨</span>
-                  </div>
-                </label>
               </div>
-              <p className="text-2xs text-ink-secondary text-right">합계 <b className="tabular-nums">{wonToMan(splitTotal)}</b>만원{discount > 0 ? ` · ${discount}레벨 할인` : ''}</p>
+              {/* 할인 이벤트 — 단순 결제와 동일한 프리셋을 분납에서도 적용(예: 1레벨 바인 5만 할인).
+                  이전의 '레벨 할인' 숫자칸은 계산 어디에도 반영되지 않는 죽은 값이라 제거했다. */}
+              {discs.length > 0 && (
+                <div>
+                  <span className="mb-1 block text-2xs text-ink-muted">할인 이벤트 (선택)</span>
+                  <div className="flex flex-wrap gap-1">
+                    <button type="button" onClick={() => setDiscIdx(0)}
+                      className={['rounded-input border px-2 py-1 text-2xs font-bold transition-colors',
+                        discIdx === 0 ? 'border-accent-400/40 bg-accent-300/15 text-accent-300' : 'border-border-default text-ink-muted'].join(' ')}>
+                      없음
+                    </button>
+                    {discs.map((d, i) => (
+                      <button key={i} type="button" onClick={() => setDiscIdx(i + 1)}
+                        className={['rounded-input border px-2 py-1 text-2xs font-bold transition-colors',
+                          discIdx === i + 1 ? 'border-accent-400/40 bg-accent-300/15 text-accent-300' : 'border-border-default text-ink-muted'].join(' ')}>
+                        {d.label || `할인${i + 1}`} ({wonToMan(d.amount)}만)
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <p className="text-2xs text-ink-secondary text-right">
+                합계 <b className="tabular-nums">{wonToMan(splitTotal)}</b>만원
+                {discIdx > 0 && discs[discIdx - 1] ? ` · ${discs[discIdx - 1].label || '할인'} 적용(−${wonToMan(discs[discIdx - 1].amount)}만)` : ''}
+              </p>
               <button type="button" onClick={submitSplit} disabled={!canSaveSplit} className="btn-primary w-full text-sm disabled:opacity-50">저장</button>
             </div>
           )}

@@ -51,7 +51,7 @@ export const GROUP_KIND_LABEL: Record<GroupKind, string> = {
 export type VenueVerificationStatus = 'unverified' | 'pending' | 'verified';
 
 export interface Comment {
-  id: string; scheduleId?: string; venueId?: string; parentId?: string;
+  id: string; scheduleId?: string; venueId?: string; postId?: string; parentId?: string;
   userId: string; userName: string; userRole: UserRole; isOwner: boolean;
   userAvatar?: string;
   content: string; createdAt: string; edited?: boolean;
@@ -98,7 +98,7 @@ const rowToVenue = (r: any): Venue => ({
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const rowToComment = (r: any): Comment => ({
-  id: r.id, scheduleId: r.schedule_id, venueId: r.venue_id, parentId: r.parent_id,
+  id: r.id, scheduleId: r.schedule_id, venueId: r.venue_id, postId: r.post_id ?? undefined, parentId: r.parent_id,
   userId: r.user_id, userName: r.user_name, userRole: r.user_role,
   isOwner: r.is_owner, userAvatar: r.user_avatar ?? undefined,
   content: r.content, createdAt: r.created_at, edited: r.edited,
@@ -196,7 +196,7 @@ export async function updateVenueContact(
 }
 
 // ── Comments ──────────────────────────────────────────────────────────────────
-export async function getComments(filter: { scheduleId?: string; venueId?: string }): Promise<Comment[]> {
+export async function getComments(filter: { scheduleId?: string; venueId?: string; postId?: string }): Promise<Comment[]> {
   if (IS_MOCK) {
     const { MOCK_COMMENTS } = await import('../mock/data');
     return MOCK_COMMENTS.filter((c) =>
@@ -207,13 +207,14 @@ export async function getComments(filter: { scheduleId?: string; venueId?: strin
   let q = supabase.from('comments').select('*').order('created_at');
   if (filter.scheduleId) q = q.eq('schedule_id', filter.scheduleId);
   if (filter.venueId)    q = q.eq('venue_id',    filter.venueId);
+  if (filter.postId)     q = q.eq('post_id',     filter.postId);
   const { data, error } = await q;
   if (error) throw error;
   return (data ?? []).map(rowToComment);
 }
 
 export async function addComment(
-  payload: Pick<Comment, 'scheduleId' | 'venueId' | 'parentId' | 'userId' | 'userName' | 'userRole' | 'isOwner' | 'content'>,
+  payload: Pick<Comment, 'scheduleId' | 'venueId' | 'postId' | 'parentId' | 'userId' | 'userName' | 'userRole' | 'isOwner' | 'content'>,
 ): Promise<Comment> {
   if (IS_MOCK) {
     return { ...payload, id: `c_${Date.now()}`, createdAt: new Date().toISOString() } as Comment;
@@ -221,6 +222,7 @@ export async function addComment(
   const { data, error } = await supabase.from('comments').insert({
     schedule_id: payload.scheduleId ?? null,
     venue_id:    payload.venueId    ?? null,
+    post_id:     payload.postId     ?? null,
     parent_id:   payload.parentId   ?? null,
     user_id:     payload.userId, user_name: payload.userName,
     user_role:   payload.userRole,  is_owner: payload.isOwner,

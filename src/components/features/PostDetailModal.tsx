@@ -5,8 +5,9 @@ import Modal from '../atoms/Modal';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBlocks } from '../../contexts/BlockContext';
 import { useToast } from '../atoms/Toast';
-import type { CommunityPost, ReactionType } from '../../api/community';
-import { reactToPost, removeReaction, getMyReaction, incrementPostView, adminSetPostBlinded } from '../../api/community';
+import type { CommunityPost, ReactionType, Comment } from '../../api/community';
+import { reactToPost, removeReaction, getMyReaction, incrementPostView, adminSetPostBlinded, getComments, addComment } from '../../api/community';
+import { relativeTime } from './MarketplaceTab';
 import ReportModal from './ReportModal';
 import { parseAttachments } from '../../lib/hand';
 import HandReplayer from './HandReplayer';
@@ -44,6 +45,20 @@ interface PostReply {
   isOwner?: boolean;
 }
 
+/** DB 댓글 → 화면용 형태 */
+function toReply(c: Comment): PostReply {
+  return {
+    id: c.id,
+    author: c.userName,
+    authorColor: '#5A6175',
+    authorAvatar: c.userAvatar,
+    content: c.content,
+    time: relativeTime(c.createdAt),
+    isAdmin: c.userRole === 'admin',
+    isOwner: c.isOwner,
+  };
+}
+
 function formatFullDate(iso: string): string {
   const d = new Date(iso);
   return `${d.getFullYear()}.${(d.getMonth()+1).toString().padStart(2,'0')}.${d.getDate().toString().padStart(2,'0')} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
@@ -70,6 +85,7 @@ export default function PostDetailModal({
   };
   const [replies, setReplies] = useState<PostReply[]>([]);
   const [draft, setDraft] = useState('');
+  const [sending, setSending] = useState(false); // 댓글 전송 중(중복 제출 방지)
   const [reportOpen, setReportOpen] = useState(false);
   const toast = useToast();
   const [myReaction, setMyReaction] = useState<ReactionType | null>(null);
@@ -84,6 +100,11 @@ export default function PostDetailModal({
     let active = true;
     getMyReaction(post.id).then((r) => { if (active) setMyReaction(r); }).catch(() => {});
     incrementPostView(post.id).catch(() => {});
+    // 댓글 실제 조회 — 이전에는 로컬 state에만 쌓여 새로고침 시 사라졌다(저장 안 됨).
+    setReplies([]);
+    getComments({ postId: post.id })
+      .then((cs) => { if (active) setReplies(cs.map(toReply)); })
+      .catch(() => { /* 조회 실패 시 빈 목록 유지 */ });
     return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, post?.id]);
@@ -120,16 +141,21 @@ export default function PostDetailModal({
     }
   };
 
-  const submit = (e: React.FormEvent) => {
+  // 댓글 작성 — DB 저장(이전에는 화면에만 추가돼 새로고침 시 사라졌다).
+  // 낙관적 추가 후 실패하면 되돌리고 입력값을 복구해 다시 시도할 수 있게 한다.
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!draft.trim() || !user) return;
+    if (!user) { toast.show('로그인 후 이용할 수 있습니다', 'error'); promptLogin(); return; }
+    const content = draft.trim();
+    if (!content || sending) return;
+    const tempId = `tmp_${Date.now()}`;
     setReplies((prev) => [
       {
-        id: `r${Date.now()}`,
+        id: tempId,
         author: user.name,
         authorColor: user.avatarColor ?? '#5A6175',
         authorAvatar: user.avatarUrl,
-        content: draft.trim(),
+        content,
         time: '방금 전',
         isAdmin: user.role === 'admin',
         isOwner: user.role === 'venue_owner',
@@ -137,6 +163,21 @@ export default function PostDetailModal({
       ...prev,
     ]);
     setDraft('');
+    setSending(true);
+    try {
+      const saved = await addComment({
+        postId: post.id,
+        userId: user.id, userName: user.name, userRole: user.role,
+        isOwner: user.role === 'venue_owner', content,
+      });
+      setReplies((prev) => prev.map((r) => (r.id === tempId ? toReply(saved) : r)));
+    } catch (err) {
+      setReplies((prev) => prev.filter((r) => r.id !== tempId)); // 롤백
+      setDraft(content);                                        // 입력 복구
+      toast.show(err instanceof Error ? err.message : '댓글 등록에 실패했습니다', 'error');
+    } finally {
+      setSending(false);
+    }
   };
 
   return (

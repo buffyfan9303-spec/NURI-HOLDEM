@@ -9,6 +9,7 @@ import {
 import { getPosterOpsSummaries, getScheduleLedgers, type PosterOpsSummary, type ScheduleLedgerItem } from '../../api/ledger';
 import { listVenueCheckins } from '../../api/checkins';
 import { toCsv, downloadCsv } from '../../lib/csv';
+import { thumbUrl, thumbSrcSet } from '../../lib/imageUrl';
 import EmptyState from '../atoms/EmptyState';
 
 // 예약 명단 CSV 내보내기 (엑셀 한글 호환)
@@ -171,7 +172,8 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUse
       <div className="flex items-start sm:items-center gap-3 p-3">
         <div aria-hidden className="w-12 h-16 shrink-0 rounded-input overflow-hidden flex items-center justify-center"
           style={schedule.posterUrl ? undefined : { background: `linear-gradient(135deg, ${schedule.posterColor ?? '#1a1d24'}ee, #0a0c0f)` }}>
-          {schedule.posterUrl ? <img src={schedule.posterUrl} alt="" className="w-full h-full object-cover" loading="lazy" /> : <span className="text-2xl opacity-30">♠</span>}
+          {/* 💰 목록 썸네일 — 원본 대신 폭 맞춤 webp 변환본 */}
+          {schedule.posterUrl ? <img src={thumbUrl(schedule.posterUrl, 200)} srcSet={thumbSrcSet(schedule.posterUrl, 200)} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" /> : <span className="text-2xl opacity-30">♠</span>}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1 mb-0.5">

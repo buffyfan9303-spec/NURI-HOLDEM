@@ -104,6 +104,11 @@ export function buyinFinance(b: LedgerBuyin, s: { buyinAmount: number; cardAmoun
   const entryUnit = s.buyinAmount;
   const z: BuyinFinance = { paid: 0, unpaid: 0, entry: 0, ticketPaid: 0, ticketUnpaid: 0, support: 0 };
   if (b.isSplit) {
+    // 분납 = 결제수단 쪼개기(예: 카드 4만 + 티켓 6만). 실제 받은 금액이 매출, 미수는 별도 입력값.
+    // 할인 이벤트(예: 1레벨 바인 5만 할인)가 걸리면 그만큼 덜 받으므로, 엔트리는 '할인 후 낼 금액' 기준이다.
+    //   엔트리 = (수납 + 미수) / 단가  ← 할인분은 애초에 입력 금액에 포함되지 않는다.
+    // ⚠ 과거의 discountLevel(레벨 수 숫자)은 계산 어디에도 반영되지 않는 죽은 값이었다.
+    //   할인은 discountIndex(할인 프리셋)로 일원화한다 — 분납도 동일.
     const paid = b.cashAmount + b.cardAmount + b.transferAmount;
     const total = paid + b.unpaidAmount;
     return { ...z, paid, unpaid: b.unpaidAmount, entry: entryUnit > 0 ? total / entryUnit : (total > 0 ? 1 : 0) };
@@ -633,7 +638,9 @@ export async function setBuyinEarly(buyinId: string, override: EarlyType | null)
 export async function upsertBuyinSplit(input: {
   venueId: string; sessionDate: string; gameSeq?: number; playerName: string; entryNo: number;
   cashAmount: number; cardAmount: number; transferAmount: number;
-  ticketCount: number; unpaidAmount: number; discountLevel: number;
+  ticketCount: number; unpaidAmount: number;
+  /** 적용 할인 이벤트(세션 할인 프리셋 1~5, 0=없음) — 분납도 단순결제와 동일하게 기록한다 */
+  discountIndex?: number;
   /** undefined=기존 값 보존(수정), 값/null=바인 시점 확정 기록(신규) */
   earlyOverride?: EarlyType | null;
 }): Promise<void> {
@@ -651,7 +658,8 @@ export async function upsertBuyinSplit(input: {
     payment_method: primary, is_unpaid: input.unpaidAmount > 0,
     is_split: true,
     cash_amount: input.cashAmount, card_amount: input.cardAmount, transfer_amount: input.transferAmount,
-    ticket_count: input.ticketCount, unpaid_amount: input.unpaidAmount, discount_level: input.discountLevel, discount_index: 0,
+    // ⚠ 과거엔 discount_index를 0으로 덮어써 분납 시 할인 이벤트 기록이 사라졌다(정산·통계 누락).
+    ticket_count: input.ticketCount, unpaid_amount: input.unpaidAmount, discount_level: 0, discount_index: input.discountIndex ?? 0,
     ...(input.earlyOverride !== undefined ? { early_override: input.earlyOverride } : {}),
     buyin_at: new Date().toISOString(), created_by: user?.id ?? null,
   }, { onConflict: 'venue_id,session_date,game_seq,player_name,entry_no' });

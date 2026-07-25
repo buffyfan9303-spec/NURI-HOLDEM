@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { thumbUrl, thumbSrcSet } from '../../lib/imageUrl';
 import type { Schedule, TournamentFormat } from '../../api/schedules';
 import type { ViewMode } from '../atoms/ViewModeToggle';
 
@@ -56,12 +57,20 @@ function FormatBadge({ format }: { format: TournamentFormat }) {
 const SUITS = ['♠', '♥', '♦', '♣'];
 
 function PosterArea({
-  posterUrl, posterColor = '#1a1d24', title, className = '',
-}: { posterUrl?: string; posterColor?: string; title: string; className?: string }) {
+  posterUrl, posterColor = '#1a1d24', title, className = '', thumbWidth = 400,
+}: { posterUrl?: string; posterColor?: string; title: string; className?: string; thumbWidth?: number }) {
   if (posterUrl) {
     return (
       <div className={`overflow-hidden bg-surface-mid ${className}`}>
-        <img src={posterUrl} alt={`${title} 포스터`} className="w-full h-full object-cover" loading="lazy" />
+        {/* 💰 목록 카드는 원본(평균 165KB) 대신 폭 맞춤 webp 썸네일(400px≈60KB) — Egress 62% 절감 */}
+        <img
+          src={thumbUrl(posterUrl, thumbWidth)}
+          srcSet={thumbSrcSet(posterUrl, thumbWidth)}
+          alt={`${title} 포스터`}
+          className="w-full h-full object-cover"
+          loading="lazy"
+          decoding="async"
+        />
       </div>
     );
   }
@@ -161,12 +170,13 @@ function ListCard({ schedule, onVenueClick, onSelect, reserveCount, rating }: Ca
       // 포스터 색 글로우 — 카드 뒤로 은은하게 번지는 포스터 고유색(글라스 감성)
       style={!schedule.isPremium && schedule.posterColor ? { boxShadow: `0 4px 26px -10px ${schedule.posterColor}59` } : undefined}
     >
-      {/* 정사각 썸네일 (64x64) */}
+      {/* 정사각 썸네일 (64x64) — 화면 64px이라 160px 썸네일이면 레티나까지 충분(원본 대비 90%↓) */}
       <PosterArea
         posterUrl={schedule.posterUrl}
         posterColor={schedule.posterColor}
         title={schedule.title}
         className="w-16 h-16 shrink-0 rounded-input"
+        thumbWidth={160}
       />
 
       {/* 본문 — 압축 3행 */}

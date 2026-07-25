@@ -45,9 +45,13 @@ export function buildLedgerHtml(input: LedgerExportInput): string {
   const cellOf = (name: string, e: number): string => {
     const c = byPlayer(name).find((b) => b.entryNo === e);
     if (!c) return '';
-    const tag = c.isSplit ? `분납${c.unpaidAmount > 0 ? '/미수' : ''}${c.discountLevel > 0 ? `(${c.discountLevel}레벨할인)` : ''}`
+    // 할인 이벤트는 분납·단순결제 공통으로 discountIndex(세션 프리셋)로 기록된다.
+    const dLabel = c.discountIndex > 0
+      ? `(${session.discounts?.[c.discountIndex - 1]?.label || '할인'})`
+      : '';
+    const tag = c.isSplit ? `분납${c.unpaidAmount > 0 ? '/미수' : ''}${dLabel}`
       : c.paymentMethod === 'support' ? '지원'
-      : `${METHOD_KO[c.paymentMethod]}${c.isUnpaid ? '/미수' : '/완납'}`;
+      : `${METHOD_KO[c.paymentMethod]}${c.isUnpaid ? '/미수' : '/완납'}${dLabel}`;
     return `${tag}<br>${hhmm(c.buyinAt)}`;
   };
 

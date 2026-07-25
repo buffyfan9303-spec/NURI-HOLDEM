@@ -5,7 +5,6 @@ import { CATEGORIES, CONDITION_COLOR, STATUS_MAP, relativeTime } from './Marketp
 import { useAuth } from '../../contexts/AuthContext';
 import { useBlocks } from '../../contexts/BlockContext';
 import { useToast } from '../atoms/Toast';
-import { promptLogin } from '../../lib/requireLogin';
 import ReportModal from './ReportModal';
 import type { ChatThread } from '../../api/chat';
 import { getListingThreads } from '../../api/chat';
@@ -160,9 +159,13 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete }:
           <Stat label="댓글" value={listing.commentCount} />
         </div>
 
-        {/* 댓글 (게시판형 단순 표시) */}
-        <section id="listing-comments">
-          <CommentSection initialCount={listing.commentCount} />
+        {/* 문의 안내 — 판매자와의 대화는 1:1 채팅으로 일원화.
+            (이전엔 목업 댓글창이라 남겨도 저장·전달되지 않아 "문의했는데 답이 없다"는 오해를 만들었다) */}
+        <section id="listing-comments" className="rounded-card border border-border-subtle bg-surface-low p-3 text-center">
+          <p className="text-xs font-bold text-ink-primary">궁금한 점이 있으신가요?</p>
+          <p className="mt-1 text-2xs leading-relaxed text-ink-muted">
+            가격 협상·상태 문의는 아래 <b className="text-accent-300">판매자에게 문의</b> 버튼으로<br />1:1 채팅에서 바로 대화할 수 있어요.
+          </p>
         </section>
       </div>
 
@@ -408,78 +411,3 @@ function Stat({ label, value }: { label: string; value: number }) {
   );
 }
 
-// ── 간단한 댓글 섹션 (인메모리) ─────────────────────────────────────────────
-
-interface DemoComment {
-  id: string;
-  author: string;
-  authorColor: string;
-  content: string;
-  time: string;
-}
-
-function CommentSection({ initialCount }: { initialCount: number }) {
-  const { user } = useAuth();
-  const [comments, setComments] = useState<DemoComment[]>([]);
-  const [draft, setDraft]       = useState('');
-
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user) { promptLogin(); return; }
-    if (!draft.trim()) return;
-    setComments((prev) => [
-      { id: `dc${Date.now()}`, author: '나', authorColor: '#0EA5E9', content: draft.trim(), time: '방금' },
-      ...prev,
-    ]);
-    setDraft('');
-  };
-
-  return (
-    <section>
-      <h3 className="text-sm font-semibold text-ink-primary mb-2">
-        댓글 <span className="text-ink-muted">({initialCount + comments.length})</span>
-      </h3>
-      {user ? (
-        <form onSubmit={submit} className="flex gap-2 mb-3">
-          <input
-            type="text"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder="댓글로 가격 협상·문의를 남겨보세요"
-            className="input flex-1 text-sm"
-          />
-          <button type="submit" className="btn-primary text-xs px-3 shrink-0" disabled={!draft.trim()}>
-            등록
-          </button>
-        </form>
-      ) : (
-        <button type="button" onClick={promptLogin} className="mb-3 w-full rounded-input bg-surface-high py-2.5 text-center text-2xs text-ink-muted hover:text-ink-secondary transition-colors">
-          로그인하면 댓글을 작성할 수 있습니다
-        </button>
-      )}
-      {comments.length === 0 ? (
-        <p className="text-center py-4 text-2xs text-ink-muted">첫 댓글을 남겨보세요</p>
-      ) : (
-        <ul className="space-y-2">
-          {comments.map((c) => (
-            <li key={c.id} className="flex items-start gap-2 p-2.5 rounded-input bg-surface-high">
-              <div
-                className="w-7 h-7 shrink-0 rounded-full flex items-center justify-center text-2xs font-bold text-white"
-                style={{ background: c.authorColor }}
-              >
-                {c.author[0]}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-semibold text-ink-primary">{c.author}</span>
-                  <span className="text-2xs text-ink-muted">· {c.time}</span>
-                </div>
-                <p className="text-sm text-ink-primary mt-0.5 leading-relaxed">{c.content}</p>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}

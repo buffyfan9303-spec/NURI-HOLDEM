@@ -10,12 +10,14 @@ import type { MarketplaceListing, ListingStatus } from '../../api/marketplace';
 import { getMyListings, updateListingStatus, deleteListing } from '../../api/marketplace';
 import { relativeTime, STATUS_MAP } from './MarketplaceTab';
 import ChatPane from './chat/ChatPane';
+import { thumbUrl, thumbSrcSet } from '../../lib/imageUrl';
 
 function Thumb({ src, size = 'w-12 h-12' }: { src: string | null; size?: string }) {
   return (
     <div className={`${size} shrink-0 rounded-input overflow-hidden bg-surface-float flex items-center justify-center`}>
       {src
-        ? <img src={src} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
+        // 💰 작은 썸네일(48px)이라 160px webp면 레티나까지 충분 — 원본 대신 변환본 사용
+        ? <img src={thumbUrl(src, 160)} srcSet={thumbSrcSet(src, 160)} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
         : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="opacity-30" aria-hidden><path d="M21 8l-9-5-9 5 9 5 9-5z" /><path d="M3 8v8l9 5 9-5V8" /></svg>}
     </div>
   );
