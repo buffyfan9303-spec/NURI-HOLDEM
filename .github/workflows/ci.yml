@@ -36,6 +36,11 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # 금액 계산 단위 테스트 — 매출·미수·엔트리·할인이 조합별로 정확한지 값으로 고정.
+      # (2026-07 '레벨 할인' 사건: 빌드·린트·E2E 다 통과하는데 돈 계산만 조용히 틀렸던 유형 방지)
+      - name: 단위 테스트 (장부 금액 계산)
+        run: npm test
+
       - name: Build (타입체크 + 번들 + sitemap 생성)
         run: npm run build
 
