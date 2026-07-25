@@ -505,7 +505,11 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
     }
     const w = window.open('', '_blank', 'width=560,height=900');
     if (!w) { toast.show('팝업이 차단되었습니다. 팝업을 허용한 뒤 다시 시도하세요.', 'error'); return; }
-    const field = (label: string, sub: string) => `<div class="f"><div class="lb">${label} <span>${sub}</span></div><div class="ln"></div></div>`;
+    // 매장명은 업주 자유입력(DB) → 인쇄창(about:blank, 같은 출처) HTML 인젝션 방지를 위해 반드시 이스케이프.
+    const esc = (s: string) => String(s ?? '')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    const field = (label: string, sub: string) => `<div class="f"><div class="lb">${esc(label)} <span>${esc(sub)}</span></div><div class="ln"></div></div>`;
     w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>NURI HOLDEM · 공식 결과 기록지</title><style>
 *{box-sizing:border-box;margin:0}body{font-family:Georgia,'Apple SD Gothic Neo',serif;color:#111;padding:34px 38px}
 .top{text-align:center;border-bottom:3px double #1a1a1a;padding-bottom:14px}
@@ -523,7 +527,7 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
 <div class="top">
   <div class="logo">NURI <span class="h">HOLDEM</span></div>
   <div class="sub">OFFICIAL RESULT SLIP</div>
-  <div class="venue">${venueName || '매장명'}</div>
+  <div class="venue">${esc(venueName) || '매장명'}</div>
   <div class="note">NURI HOLDEM 인증 펍 전용 양식 — 인증 펍 외 사용·발급은 무효입니다.</div>
 </div>
 <div class="fs">

@@ -58,7 +58,7 @@ export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete, on
       getReservationCounts(ids).then(setResCounts).catch(() => {});
     };
     reload();
-    return subscribeReservations(reload); // 실시간: 신규/취소 예약 자동 반영
+    return subscribeReservations(reload, ids); // 실시간: 내 포스터 예약만 수신(서버 필터 — 전 매장 수신 방지)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [venueId, myPosters.length]);
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import CountUp from '../atoms/CountUp';
 import type { Schedule } from '../../api/schedules';
 import {
@@ -163,10 +163,16 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   }, [venueId, d]);
 
   useEffect(() => { setLoading(true); reload(); }, [reload]);
-  useEffect(() => subscribeLedger(venueId, reload), [venueId, reload]);
-  useEffect(() => subscribeClock(venueId, reload), [venueId, reload]);
-  useEffect(() => subscribeBuyinRequests(venueId, reload), [venueId, reload]);
-  useEffect(() => subscribeReservations(reload), [reload]);
+  // ⚡ 실시간 구독은 대시보드를 실제로 보고 있을 때만(active) — 숨은 탭이 채널을 물고 있지 않게.
+  useEffect(() => { if (active) return subscribeLedger(venueId, reload); }, [venueId, reload, active]);
+  useEffect(() => { if (active) return subscribeClock(venueId, reload); }, [venueId, reload, active]);
+  useEffect(() => { if (active) return subscribeBuyinRequests(venueId, reload); }, [venueId, reload, active]);
+  // 예약은 내 매장의 다가오는 포스터만 서버 필터로 수신(전 매장 예약 수신 방지)
+  const upcomingIds = useMemo(
+    () => schedules.filter((s) => s.venueId === venueId && s.date >= d).map((s) => s.id),
+    [schedules, venueId, d],
+  );
+  useEffect(() => { if (active) return subscribeReservations(reload, upcomingIds); }, [reload, upcomingIds, active]);
   useEffect(() => subscribeStaffSchedule(venueId, reload), [venueId, reload]);
 
   // ── 오늘 장부 집계 ──

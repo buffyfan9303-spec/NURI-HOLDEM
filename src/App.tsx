@@ -1024,16 +1024,22 @@ export default function App() {
 
   // #13 커뮤니티 게시글·댓글 실시간 — 다른 사용자가 올린 글/댓글이 즉시 반영(알림/일정/장부와 동일 수준).
   // 700ms 디바운스로 이벤트 폭주 시 getPosts(50건+내좋아요) 재조회를 1회로 합침(부하 점검 #1).
+  // ⚡ 트래픽 대비: 실시간 채널은 접속자 1명당 서버가 WAL을 상시 폴링하므로(전체 DB 시간의 대부분),
+  //    "지금 보고 있는 화면"에서만 구독한다. 커뮤니티/글상세를 볼 때만 연결하고 떠나면 즉시 해제.
+  //    구독 해제 구간의 변경분은 탭 복귀 시 reload* 로 어차피 다시 불러오므로 사용자 체감은 동일.
+  const wantCommunityRealtime = activeTab === 'community' || openPost !== null;
   useEffect(() => {
+    if (!wantCommunityRealtime) return;
     let t: ReturnType<typeof setTimeout> | null = null;
     const unsub = subscribePosts(() => { if (t) clearTimeout(t); t = setTimeout(reloadPosts, 700); });
     return () => { if (t) clearTimeout(t); unsub(); };
-  }, [reloadPosts]);
+  }, [reloadPosts, wantCommunityRealtime]);
   useEffect(() => {
+    if (!wantCommunityRealtime) return;
     let t: ReturnType<typeof setTimeout> | null = null;
     const unsub = subscribeComments(() => { if (t) clearTimeout(t); t = setTimeout(reloadComments, 700); });
     return () => { if (t) clearTimeout(t); unsub(); };
-  }, [reloadComments]);
+  }, [reloadComments, wantCommunityRealtime]);
   // 열린 상세(openPost)를 피드 갱신과 동기화 — 실시간/리로드로 posts 가 바뀌면 좋아요·댓글수·조회수도 상세에 반영
   useEffect(() => { setOpenPost((cur) => (cur ? (posts.find((p) => p.id === cur.id) ?? cur) : cur)); }, [posts]);
 
@@ -1071,11 +1077,16 @@ export default function App() {
 
   // 일정(포스터/게임) 실시간 동기화 — 다른 기기/사용자의 등록·수정·삭제 즉시 반영
   // #7 일정 실시간 — 700ms 디바운스로 변경 폭주 시 전체 refetch 를 1회로 합침(동시접속 팬아웃 완화).
+  // ⚡ 트래픽 대비: 일정이 실제로 보이는 화면(일정탐색·라이브·내매장/관리자·대회상세)에서만 구독.
+  //    커뮤니티·장터·도구만 보는 사용자는 채널을 열지 않는다.
+  const wantScheduleRealtime = activeTab === 'browse' || activeTab === 'live'
+    || activeTab === 'my-store' || activeTab === 'admin' || openSchedule !== null;
   useEffect(() => {
+    if (!wantScheduleRealtime) return;
     let t: ReturnType<typeof setTimeout> | null = null;
     const unsub = subscribeSchedules(() => { if (t) clearTimeout(t); t = setTimeout(reloadSchedules, 700); });
     return () => { if (t) clearTimeout(t); unsub(); };
-  }, [reloadSchedules]);
+  }, [reloadSchedules, wantScheduleRealtime]);
 
   // 관리자: 회원 목록 로드
   useEffect(() => {

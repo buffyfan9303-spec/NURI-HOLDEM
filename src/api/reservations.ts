@@ -1,13 +1,24 @@
 // src/api/reservations.ts — 포스터(게임) 예약 + 단골 고객 활동내역 CRM
 import { supabase, IS_MOCK } from '../lib/supabase';
 
-/** 예약 변경 실시간 구독 — 신규/취소 예약을 게임관리에 자동 반영 */
-export function subscribeReservations(onChange: () => void): () => void {
+/** 예약 변경 실시간 구독 — 신규/취소 예약을 게임관리에 자동 반영.
+ *  ⚡ 트래픽 대비: scheduleIds 를 주면 그 포스터들의 예약만 수신한다(서버 필터).
+ *     내 매장 화면은 자기 포스터만 보므로 전 매장 예약을 받을 이유가 없다.
+ *     (빈 배열이면 구독 자체를 열지 않음 — 포스터가 아직 없는 매장의 불필요 채널 방지) */
+export function subscribeReservations(onChange: () => void, scheduleIds?: string[]): () => void {
   if (IS_MOCK) return () => {};
-  const ch = supabase
-    .channel(`schedule_reservations_all_${Math.random().toString(36).slice(2)}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'schedule_reservations' }, () => onChange())
-    .subscribe();
+  if (scheduleIds && scheduleIds.length === 0) return () => {};
+  const ch = supabase.channel(`schedule_reservations_${Math.random().toString(36).slice(2)}`);
+  if (scheduleIds && scheduleIds.length > 0) {
+    // in.(a,b,c) 서버 필터 — 내 포스터 예약만 전달받아 채널 트래픽 최소화
+    ch.on('postgres_changes', {
+      event: '*', schema: 'public', table: 'schedule_reservations',
+      filter: `schedule_id=in.(${scheduleIds.join(',')})`,
+    }, () => onChange());
+  } else {
+    ch.on('postgres_changes', { event: '*', schema: 'public', table: 'schedule_reservations' }, () => onChange());
+  }
+  ch.subscribe();
   return () => { supabase.removeChannel(ch); };
 }
 

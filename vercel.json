@@ -6,6 +6,27 @@
   ],
   "headers": [
     {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Strict-Transport-Security", "value": "max-age=63072000; includeSubDomains; preload" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(self), geolocation=(self), fullscreen=(self), screen-wake-lock=(self), clipboard-write=(self), web-share=(self), autoplay=(self), payment=(self), microphone=(), display-capture=(), usb=(), serial=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), local-fonts=(), idle-detection=()"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "frame-ancestors 'self'; object-src 'none'; base-uri 'self'; upgrade-insecure-requests"
+        },
+        {
+          "key": "Content-Security-Policy-Report-Only",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://*.googlesyndication.com https://*.doubleclick.net https://*.google.com https://*.gstatic.com https://*.adtrafficquality.google https://t1.kakaocdn.net https://dapi.kakao.com https://*.kakao.com https://cdn.portone.io; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https://idsxiqspecrucvfvtgbw.supabase.co wss://idsxiqspecrucvfvtgbw.supabase.co https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com https://*.googlesyndication.com https://*.doubleclick.net https://*.google.com https://*.gstatic.com https://*.adtrafficquality.google https://dapi.kakao.com https://*.kakao.com https://*.kakaocdn.net https://*.daumcdn.net https://api.portone.io https://cdn.portone.io https://*.portone.io https://*.sentry.io; worker-src 'self' blob:; manifest-src 'self'; media-src 'self' data: blob:; frame-src 'self' https://*.googlesyndication.com https://*.doubleclick.net https://*.google.com https://*.kakao.com https://*.portone.io; form-action 'self' https://*.portone.io https://*.kakao.com; base-uri 'self'; object-src 'none'; frame-ancestors 'self'"
+        }
+      ]
+    },
+    {
       "source": "/",
       "headers": [
         { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
