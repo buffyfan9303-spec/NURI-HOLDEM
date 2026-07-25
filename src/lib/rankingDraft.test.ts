@@ -7,7 +7,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   rankDraftKey, readRowsDraft, writeRowsDraft, clearRowsDraft, pruneRowsDrafts,
-  hasRowContent, RANK_DRAFT_TTL_MS, type RankRow,
+  hasRowContent, moveRankRow, RANK_DRAFT_TTL_MS, type RankRow,
 } from './rankingDraft';
 
 // vitest environment 가 'node' 라 localStorage 가 없다 — 최소 스텁을 깐다.
@@ -118,5 +118,34 @@ describe('스토리지가 막힌 환경(사파리 프라이빗 등)에서도 죽
     expect(() => writeRowsDraft(K(''), [row({ nickname: 'a' })])).not.toThrow();
     expect(readRowsDraft(K(''))![0].nickname).toBe('a'); // 메모리 Map 에서 복원
     expect(() => pruneRowsDrafts()).not.toThrow();
+  });
+});
+
+// 재배치는 초안과 한 몸이다 — 이동 방식이 조금만 달라져도(행 객체 재생성 등)
+// '되돌리면 초안이 스스로 지워진다'는 성질이 깨져 배너가 영영 남는다. 그 경계를 여기서 고정한다.
+describe('등수 재배치 — 배열 순서가 곧 등수다', () => {
+  const three = () => [row({ nickname: 'a' }), row({ nickname: 'b' }), row({ nickname: 'c' })];
+
+  it('한 칸 위로 = 앞 줄과 자리를 바꾼다', () => {
+    expect(moveRankRow(three(), 2, 1).map((r) => r.nickname)).toEqual(['a', 'c', 'b']);
+  });
+
+  it('맨 위로 보내면 나머지는 순서를 유지한 채 한 칸씩 밀린다(등수 직접 지정)', () => {
+    expect(moveRankRow(three(), 2, 0).map((r) => r.nickname)).toEqual(['c', 'a', 'b']);
+  });
+
+  it('경계 밖·제자리 이동은 같은 배열을 그대로 돌려준다 — 헛 커밋으로 초안이 갱신되면 안 된다', () => {
+    const r0 = three();
+    expect(moveRankRow(r0, 0, -1)).toBe(r0);
+    expect(moveRankRow(r0, 0, 3)).toBe(r0);
+    expect(moveRankRow(r0, 1, 1)).toBe(r0);
+  });
+
+  it('🔴 행 객체를 새로 만들지 않는다 — 원래 순서로 되돌리면 기준선(JSON)과 정확히 같아져 초안이 지워진다', () => {
+    const r0 = three();
+    const base = JSON.stringify(r0);
+    const back = moveRankRow(moveRankRow(r0, 0, 2), 2, 0);
+    expect(JSON.stringify(back)).toBe(base);
+    expect(back[0]).toBe(r0[0]); // 객체 동일성까지 유지
   });
 });

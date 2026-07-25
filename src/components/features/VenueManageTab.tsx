@@ -29,7 +29,7 @@ import SectionHeader from '../atoms/SectionHeader';
 import { getSchedules, type Schedule } from '../../api/schedules';
 import { motion } from 'framer-motion';
 import { getLedgerBuyins, getLedgerSession } from '../../api/ledger';
-import { rankDraftKey, readRowsDraft, writeRowsDraft, clearRowsDraft, pruneRowsDrafts, hasRowContent, type RankRow } from '../../lib/rankingDraft';
+import { rankDraftKey, readRowsDraft, writeRowsDraft, clearRowsDraft, pruneRowsDrafts, hasRowContent, moveRankRow, type RankRow } from '../../lib/rankingDraft';
 
 type Section = 'dashboard' | 'posters' | 'presets' | 'ledger' | 'stats' | 'ranking' | 'venueRank' | 'league' | 'staff' | 'settings' | 'clock' | 'attendance' | 'voucher' | 'page';
 
@@ -675,7 +675,50 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
     void checkMemberByName(n);
   };
   const addAllFromLedger = () => { for (const p of ledgerPlayers) addFromLedger(p.name); };
-  const removeRow = (i: number) => setRows((r) => (r.length > 1 ? r.filter((_, idx) => idx !== i) : r));
+  // 줄 삭제는 닉네임만 지우는 게 아니다 — 실명·프라이즈·이용권 개수·비고가 한꺼번에 날아간다.
+  // 저장 전이라 서버에도 없고, 초안은 '지워진 뒤 상태'를 보관하므로 여기선 아무 보호가 안 된다.
+  // 왜 유예 큐(lib/undoableDelete)가 아닌가: 저건 '서버에 나가면 복구 경로가 0'인 조작을 위한 장치다.
+  //   여기는 로컬 배열이라 유예할 요청 자체가 없고, 유예하면 '지웠는데 화면에 남는' 상태가 생긴다.
+  // 왜 전체 스냅샷이 아니라 그 줄만 되꽂는가: 되돌리기 전에 다른 줄을 고쳤어도 그 수정이 안 날아간다.
+  const removeRow = (i: number) => {
+    const removed = rows[i];
+    if (rows.length <= 1 || !removed) return; // 마지막 한 줄은 남긴다(기존 동작 유지)
+    setRows((r) => r.filter((_, idx) => idx !== i));
+    setSugRow(null); // 자동완성은 행 인덱스로 열려 있어 삭제 후엔 남의 줄에 붙는다
+    const filled = removed.nickname.trim() || removed.realName.trim() || removed.prize.trim() || removed.voucher.trim() || removed.note.trim();
+    if (!filled) return; // 빈 줄까지 토스트를 띄우면 잔소리가 된다
+    toast.show(`${i + 1}위 '${removed.nickname.trim() || '이름 없음'}' 줄을 지웠습니다`, 'info', {
+      action: { label: '되돌리기', onClick: () => setRows((r) => [...r.slice(0, i), removed, ...r.slice(i)]) },
+    });
+  };
+
+  // ── 등수 재배치 ─────────────────────────────────────────────────────────────
+  // 왜 필요한가: 행 순서가 곧 등수인데(서버가 배열 순서대로 position 을 매긴다) 행을 채우는 두 경로가
+  //   등수와 무관하다 — 장부 '전체 추가'는 바인 기록순, 장부 마감 초안은 참가자 명단순.
+  //   순서를 바꿀 수단이 없으면 대회 직후 가장 바쁜 시각에 20줄을 지우고 다시 치는 수밖에 없었다.
+  // 왜 드래그가 아닌가: RankRow 에 안정적인 id 가 없고, 이 타입은 초안으로 localStorage 에
+  //   직렬화되는 포맷이라 id 를 심으면 기존 초안(48h)과 형태가 어긋난다. 한 손 조작에도 ▲▼가 안전하다.
+  const [moved, setMoved] = useState<{ i: number } | null>(null); // 방금 옮긴 줄 — 줄들이 서로 똑같이 생겨서 어디로 갔는지 놓친다
+  useEffect(() => {
+    if (!moved) return;
+    const t = setTimeout(() => setMoved(null), 900);
+    return () => clearTimeout(t);
+  }, [moved]);
+  const moveRow = (from: number, to: number) => {
+    if (to < 0 || to >= rows.length || from === to) return;
+    setRows((r) => moveRankRow(r, from, to)); // 객체는 그대로 — 되돌리면 기준선과 같아져 초안이 스스로 지워진다
+    setSugRow(null);                          // 자동완성 드롭다운은 행 인덱스로 열려 있다
+    setMoved({ i: to });
+  };
+  // ▲▼만으로는 20위 우승자를 1위로 올리는 데 19번을 눌러야 한다 — 등수를 직접 찍어 한 번에 옮긴다
+  // (게임 이름 '직접 추가'와 같은 window.prompt 패턴 — 이 화면의 기존 관행)
+  const promptMoveTo = (from: number) => {
+    const v = window.prompt(`'${rows[from]?.nickname.trim() || `${from + 1}위`}' 을(를) 몇 위로 옮길까요? (1~${rows.length})`, String(from + 1));
+    if (v == null) return;
+    const n = parseInt(v.trim(), 10);
+    if (!Number.isFinite(n) || n < 1 || n > rows.length) { toast.show(`1~${rows.length} 사이의 등수를 입력해 주세요`, 'error'); return; }
+    moveRow(from, n - 1);
+  };
 
   const save = async () => {
     const clean = rows.filter((r) => r.nickname.trim() || r.realName.trim() || r.prize.trim());
@@ -908,11 +951,35 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
         <ul className="space-y-1.5">
           {rows.map((row, i) => (
             <li key={i}
-              className="grid grid-cols-[2rem_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_2rem] lg:grid-cols-[2.25rem_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_6rem_minmax(0,1.4fr)_2rem] items-center gap-1.5 rounded-input border border-border-subtle bg-surface-low/40 p-1.5">
-              <span className="text-center">
-                <span className="block text-sm font-bold text-accent-300 tabular-nums">{i + 1}</span>
-                {/* 등수→점수 미리보기(매장 꾸미기 '기준 점수' 반영) */}
-                <span className="block text-[9px] font-semibold text-ink-muted tabular-nums">+{placementPointsOf(i + 1, cfg)}점</span>
+              className={['grid grid-cols-[2.5rem_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_2rem] lg:grid-cols-[5.75rem_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_6rem_minmax(0,1.4fr)_2rem] items-center gap-1.5 rounded-input border p-1.5 transition-colors',
+                // 방금 옮긴 줄만 잠깐 물들인다 — 줄이 전부 똑같이 생겨서 어디로 갔는지 눈으로 못 쫓는다
+                moved?.i === i ? 'border-accent-400/70 bg-accent-300/[0.07]' : 'border-border-subtle bg-surface-low/40'].join(' ')}>
+              {/* 등수 = 행 순서. 순서를 못 바꾸면 정정 수단이 '지우고 다시 치기'뿐이라 ▲▼를 등수에 붙인다.
+                  모바일은 2줄 그리드의 비어 있던 왼쪽 아래 칸을 세로로 흡수하고(row-span-2),
+                  PC는 한 줄짜리라 가로로 편다(첫 열만 넓힘). */}
+              <span className="row-span-2 lg:row-span-1 flex flex-col lg:flex-row items-center justify-center gap-0.5">
+                <button
+                  type="button" onClick={() => moveRow(i, i - 1)} disabled={i === 0}
+                  aria-label={`${i + 1}위를 한 칸 위로`} title="위로 — 등수 올리기"
+                  className="flex h-7 w-full shrink-0 items-center justify-center rounded-input text-ink-muted transition-colors hover:bg-surface-high hover:text-accent-300 active:scale-95 disabled:pointer-events-none disabled:opacity-20 lg:w-6"
+                >
+                  <Icon name="chevron-up" size={14} />
+                </button>
+                {/* 숫자 자체가 '등수 직접 지정' 버튼 — ▲만으로는 20위를 1위로 올리는 데 19번을 눌러야 한다 */}
+                <button type="button" onClick={() => promptMoveTo(i)}
+                  aria-label={`${i + 1}위 — 등수 직접 지정`} title="등수 직접 지정 — 몇 위로 옮길지 입력"
+                  className="min-w-0 shrink-0 px-0.5 text-center leading-none">
+                  <span className="block text-sm font-bold text-accent-300 tabular-nums">{i + 1}</span>
+                  {/* 등수→점수 미리보기(매장 꾸미기 '기준 점수' 반영) */}
+                  <span className="block text-[9px] font-semibold text-ink-muted tabular-nums">+{placementPointsOf(i + 1, cfg)}점</span>
+                </button>
+                <button
+                  type="button" onClick={() => moveRow(i, i + 1)} disabled={i === rows.length - 1}
+                  aria-label={`${i + 1}위를 한 칸 아래로`} title="아래로 — 등수 내리기"
+                  className="flex h-7 w-full shrink-0 items-center justify-center rounded-input text-ink-muted transition-colors hover:bg-surface-high hover:text-accent-300 active:scale-95 disabled:pointer-events-none disabled:opacity-20 lg:w-6"
+                >
+                  <Icon name="chevron-down" size={14} />
+                </button>
               </span>
               <div className="relative min-w-0">
                 <input

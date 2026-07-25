@@ -28,6 +28,7 @@ import { getClockState, saveClockState, subscribeClock, defaultClockConfig, deri
 import { getMyVenueStaff, searchMembersForRanking, type User } from '../../api/auth';
 import { accrueVoucher } from '../../api/vouchers';
 import { useBackClose } from '../../lib/backstack';
+import { planBuyinApprovals } from '../../lib/buyinApproval';
 import EmptyState from '../atoms/EmptyState';
 import SegmentedTabs from '../atoms/SegmentedTabs';
 import { SkeletonList } from '../atoms/Skeleton';
@@ -253,11 +254,27 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const loadPending = useCallback(() => { getPendingBuyinRequests(venueId, date).then(setPendingReqs).catch(() => setPendingReqs([])); }, [venueId, date]);
   useEffect(() => { loadPending(); return subscribeBuyinRequests(venueId, loadPending); }, [venueId, loadPending]);
   // (C1) 낙관적 업데이트 — 승인 즉시 대기열에서 제거하고 백그라운드 동기화. 실패 시 loadPending 으로 서버 기준 복원.
+  const gLabel = (seq: number) => (seq === MAIN_GAME_SEQ ? '메인' : `사이드${seq - 1}`);
+  const openSeqs = games.map((g) => g.gameSeq); // 그날 실제로 열려 있는 게임
+  // 이 요청이 들어갈 게임 — 손님이 고른 게임이 우선, 미지정만 현재 보고 있는 게임.
+  // 왜: 카드에 '원함: 사이드1'까지 띄워 놓고 현재 게임 명단에 넣으면 명단이 조용히 틀어지고,
+  //     원복은 한 명씩 삭제 + (바인까지 찍혔으면) 취소 비밀번호가 필요하다.
+  const wantSeq = (r: BuyinRequest) => r.requestedGameSeq ?? gameSeq;
+  // 분할 금액은 '들어갈 게임'의 단가로 프리필/검증해야 한다 — 서버가 분할은 입력값을 그대로 기록하므로
+  // 현재 화면 단가를 쓰면 사이드 손님이 메인 단가로 찍힌다(재계산으로 구제 안 됨).
+  const gameUnit = (seq: number) => (seq === gameSeq ? session.buyinAmount : (games.find((g) => g.gameSeq === seq)?.buyinAmount ?? session.buyinAmount));
   const approveReq = (r: BuyinRequest, withBuyin = false, payMethod: 'cash' | 'card' | 'transfer' = 'cash', split?: { cash: number; card: number; transfer: number }) => {
+    const want = wantSeq(r);
+    let target = want;
+    // 요청한 게임이 아직 안 열렸으면 조용히 현재 게임에 넣지 않는다 — 한 번 묻고, 아니면 중단.
+    if (want !== gameSeq && !openSeqs.includes(want)) {
+      if (!window.confirm(`${gLabel(want)}는 아직 열리지 않았습니다.\n현재 ${gLabel(gameSeq)} 명단에 추가할까요?`)) return Promise.resolve();
+      target = gameSeq;
+    }
     setPendingReqs((prev) => prev.filter((x) => x.id !== r.id));
     setPayPick(null); setSplitFor(null);
-    return approveBuyinRequest(r.id, gameSeq, withBuyin, payMethod, split)
-      .then(() => { toast.show(`${r.playerName} 승인 — ${gameSeq === MAIN_GAME_SEQ ? '메인' : '사이드' + (gameSeq - 1)} 명단 추가${withBuyin ? (split ? ' + 분할 바인 기록' : ` + ${payMethod === 'card' ? '카드' : payMethod === 'transfer' ? '이체' : '현금'} 바인 기록`) : ''}`, 'success'); loadPending(); })
+    return approveBuyinRequest(r.id, target, withBuyin, payMethod, split)
+      .then(() => { toast.show(`${r.playerName} 승인 — ${gLabel(target)} 명단 추가${withBuyin ? (split ? ' + 분할 바인 기록' : ` + ${payMethod === 'card' ? '카드' : payMethod === 'transfer' ? '이체' : '현금'} 바인 기록`) : ''}`, 'success'); loadPending(); })
       .catch((e) => { toast.show(e instanceof Error ? e.message : '승인 실패', 'error'); loadPending(); });
   };
   const doReject = (r: BuyinRequest, reason?: string) => {
@@ -269,10 +286,20 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   };
   const bulkApprove = () => {
     if (!pendingReqs.length) return;
-    const batch = pendingReqs; const n = batch.length;
-    setPendingReqs([]); // 낙관: 즉시 비움
-    Promise.all(batch.map((r) => approveBuyinRequest(r.id, gameSeq).catch(() => null)))
-      .then(() => { toast.show(`${n}건 전체 승인 — ${gameSeq === MAIN_GAME_SEQ ? '메인' : '사이드' + (gameSeq - 1)} 명단 추가`, 'success'); loadPending(); });
+    // 요청 게임별로 나눠 승인 — 전원을 현재 게임에 몰아넣던 동작이 명단·정산을 조용히 틀어놨다.
+    const plan = planBuyinApprovals(pendingReqs, gameSeq, openSeqs);
+    const flat = plan.groups.flatMap((g) => g.items.map((r) => ({ id: r.id, seq: g.gameSeq })));
+    if (!flat.length) { toast.show('요청한 게임이 아직 열리지 않았습니다 — 게임을 먼저 여세요', 'error'); return; }
+    // 확인은 게임이 섞였을 때만 — 접수대에서 반복되는 조작이라 같은 게임뿐이면 그냥 승인한다.
+    if (plan.mixed && !window.confirm(`${plan.groups.map((g) => `${gLabel(g.gameSeq)} ${g.items.length}명`).join(' / ')}으로 나눠 승인합니다.\n계속할까요?`)) return;
+    const n = flat.length;
+    setPendingReqs(plan.skipped); // 낙관: 승인 대상만 비우고 '게임 미개설' 보류 건은 목록에 남긴다
+    Promise.all(flat.map((x) => approveBuyinRequest(x.id, x.seq).catch(() => null)))
+      .then(() => {
+        const spread = plan.groups.map((g) => `${gLabel(g.gameSeq)} ${g.items.length}`).join(' · ');
+        toast.show(`${n}건 승인 — ${spread}${plan.skipped.length ? ` · ${plan.skipped.length}건 보류(게임 미개설)` : ''}`, 'success');
+        loadPending();
+      });
   };
 
   // ── 연동 클락 — 리모컨 제어 + 바인 시점 얼리 확정(스타트 시각 미입력 버그 근본 해결) ──
@@ -740,7 +767,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
               const parts = Object.entries(cnt).sort((a, b) => Number(a[0]) - Number(b[0])).map(([k, n]) => `${Number(k) === 0 ? '미지정' : Number(k) === MAIN_GAME_SEQ ? '메인' : '사이드' + (Number(k) - 1)} ${n}`);
               return <span className="text-[10px] font-semibold text-sky-300/80">{parts.join(' · ')}</span>;
             })()}
-            <span className="text-[10px] text-ink-muted">· 승인 시 현재({gameSeq === MAIN_GAME_SEQ ? '메인' : '사이드' + (gameSeq - 1)}) 추가</span>
+            <span className="text-[10px] text-ink-muted">· 승인 시 각자 원한 게임에 추가(미지정은 현재 {gLabel(gameSeq)})</span>
             {pendingReqs.length > 1 && <button type="button" onClick={bulkApprove} className="ml-auto shrink-0 rounded-input bg-emerald-500/90 px-2.5 py-1 text-2xs font-bold text-ink-inverse hover:bg-emerald-500">전체 승인</button>}
           </div>
           <ul className="space-y-1.5">
@@ -765,7 +792,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                         {([['cash', '현금'], ['card', '카드'], ['transfer', '이체']] as const).map(([mth, lbl]) => (
                           <button key={mth} type="button" onClick={() => approveReq(r, true, mth)} className="flex-1 rounded-input border border-emerald-500/50 px-2 py-1.5 text-2xs font-bold text-emerald-300 hover:bg-emerald-500/15">{lbl}</button>
                         ))}
-                        <button type="button" onClick={() => { setSplitFor(r.id); setSplitAmts({ cash: session.buyinAmount || 0, card: 0, transfer: 0 }); }} className="flex-1 rounded-input border border-accent-400/50 px-2 py-1.5 text-2xs font-bold text-accent-300 hover:bg-accent-300/10">분할</button>
+                        <button type="button" onClick={() => { setSplitFor(r.id); setSplitAmts({ cash: gameUnit(wantSeq(r)) || 0, card: 0, transfer: 0 }); }} className="flex-1 rounded-input border border-accent-400/50 px-2 py-1.5 text-2xs font-bold text-accent-300 hover:bg-accent-300/10">분할</button>
                       </div>
                     ) : (
                       <>
@@ -778,7 +805,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                         </div>
                         {(() => {
                           const sum = splitAmts.cash + splitAmts.card + splitAmts.transfer;
-                          const unit = session.buyinAmount || 0;
+                          const unit = gameUnit(wantSeq(r)) || 0; // 현재 화면 게임이 아니라 '승인해서 들어갈 게임'의 단가
                           const mismatch = unit > 0 && sum !== unit;
                           return (
                             <div className="flex items-center gap-1.5">

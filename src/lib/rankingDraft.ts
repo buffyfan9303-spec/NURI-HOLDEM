@@ -84,3 +84,19 @@ export function pruneRowsDrafts(now = Date.now()): number {
   } catch { /* 스토리지 차단 */ }
   return removed;
 }
+
+/**
+ * 행 이동(등수 재배치) — 배열 순서가 곧 등수다(save_venue_rankings 가 배열 순서대로 position 을 매긴다).
+ * 왜 초안 모듈에 두는가: 초안 커밋이 JSON.stringify(rows) 를 기준선과 비교해 '손댔는지'를 판정한다.
+ *   이동이 행 객체를 새로 만들면 원래 순서로 되돌려도 문자열이 달라져 초안이 안 지워지고,
+ *   '저장 전 입력분' 배너가 영영 남는다. 그래서 '객체는 그대로 두고 순서만 바꾼다'와
+ *   '헛 이동은 같은 배열을 그대로 돌려준다'(=rows 참조가 안 바뀌어 커밋 효과가 헛돌지 않는다)를
+ *   이 파일의 계약으로 못 박고 테스트로 고정한다.
+ */
+export function moveRankRow<T>(rows: T[], from: number, to: number): T[] {
+  if (from === to || from < 0 || to < 0 || from >= rows.length || to >= rows.length) return rows;
+  const next = rows.slice();
+  const [moved] = next.splice(from, 1);
+  next.splice(to, 0, moved);
+  return next;
+}
