@@ -39,7 +39,7 @@ export function buildLedgerHtml(input: LedgerExportInput): string {
     totalBuyins++;
     const f = buyinFinance(b, session);
     revenue += f.paid; unpaid += f.unpaid; support += f.support; entries += f.entry;
-    ticket += f.ticketPaid + (b.isSplit ? b.ticketCount : 0);
+    ticket += f.ticketPaid;
   }
 
   const cellOf = (name: string, e: number): string => {

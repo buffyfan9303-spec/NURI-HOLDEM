@@ -1891,7 +1891,7 @@ export default function App() {
                       // 리스트 뷰: 모바일 1열(가로 카드) → PC 2열(공간 활용·광고 여백 확보)
                       : 'grid grid-cols-1 lg:grid-cols-2 gap-card-gap',
                   ].join(' ')}>
-                    {visibleSchedules.map((s) => (
+                    {visibleSchedules.map((s, i) => (
                       <ScheduleCard
                         key={s.id}
                         mode={viewMode}
@@ -1900,6 +1900,9 @@ export default function App() {
                         rating={venueRatings[s.venueId]}
                         onVenueClick={handleVenueClick}
                         onSelect={handleScheduleSelect}
+                        // ⚡ 첫 화면에 보이는 상단 카드만 포스터를 즉시 로드(LCP 단축).
+                        //    그리드는 한 화면에 더 많이 보이므로 6장, 리스트는 4장.
+                        priority={i < (viewMode === 'grid' ? 6 : 4)}
                       />
                     ))}
                   </div>
@@ -1907,8 +1910,8 @@ export default function App() {
                 {/* 표 모드는 PC 전용 — 모바일 폭에선 리스트로 자동 표시 */}
                 {viewMode === 'table' && visibleSchedules.length > 0 && (
                   <div className="grid grid-cols-1 gap-card-gap md:hidden">
-                    {visibleSchedules.map((s) => (
-                      <ScheduleCard key={s.id} mode="list" schedule={s} reserveCount={browseResCounts[s.id]} rating={venueRatings[s.venueId]} onVenueClick={handleVenueClick} onSelect={handleScheduleSelect} />
+                    {visibleSchedules.map((s, i) => (
+                      <ScheduleCard key={s.id} mode="list" schedule={s} reserveCount={browseResCounts[s.id]} rating={venueRatings[s.venueId]} onVenueClick={handleVenueClick} onSelect={handleScheduleSelect} priority={i < 4} />
                     ))}
                   </div>
                 )}

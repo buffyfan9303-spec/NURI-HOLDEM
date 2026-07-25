@@ -171,6 +171,18 @@
            focus:outline-none focus:border-accent-300 focus:ring-1 focus:ring-accent-300
            transition-colors duration-150;
   }
+  /* iOS Safari는 글자 16px 미만 입력창을 탭하면 화면을 자동 확대하고 되돌리지 않는다.
+     디자인(14px)은 유지하면서 확대만 막기 위해, 터치 기기에서만 실제 폰트를 16px로 올린다.
+     (max-width 대신 pointer:coarse — 데스크톱 좁은 창은 영향 없음) */
+  @media (pointer: coarse) {
+    .input,
+    input[type="text"], input[type="search"], input[type="email"], input[type="password"],
+    input[type="number"], input[type="tel"], input[type="url"],
+    input[type="date"], input[type="time"], input[type="datetime-local"],
+    select, textarea {
+      font-size: 16px;
+    }
+  }
 
   /* ── 뱃지 ───────────────────────────────────────────── */
   .badge {

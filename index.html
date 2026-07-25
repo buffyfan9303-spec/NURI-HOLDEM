@@ -2,6 +2,10 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
+    <!-- ⚡ 데이터/이미지 오리진 조기 연결 — 이게 없으면 JS 번들을 다 받아 실행한 뒤에야
+         DNS+TCP+TLS 핸드셰이크가 시작돼 첫 데이터가 200~400ms(국내 모바일) 늦어진다. -->
+    <link rel="preconnect" href="https://idsxiqspecrucvfvtgbw.supabase.co" crossorigin />
+    <link rel="dns-prefetch" href="https://idsxiqspecrucvfvtgbw.supabase.co" />
     <!-- 첫 페인트 흰 화면 방지(앱 느낌) — CSS 로드 전 저장된 테마색으로 배경 즉시 지정 -->
     <script>try{document.documentElement.style.backgroundColor=localStorage.getItem('nuri-theme')==='light'?'#F2F3F5':'#0A0C0F'}catch(e){document.documentElement.style.backgroundColor='#0A0C0F'}</script>
     <!-- Google tag (gtag.js) — Google Analytics 4 -->

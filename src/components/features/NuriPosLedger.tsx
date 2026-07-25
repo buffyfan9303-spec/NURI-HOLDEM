@@ -379,7 +379,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       totalBuyins++;
       const f = buyinFinance(b, session);
       revenue += f.paid; unpaid += f.unpaid; entries += f.entry;
-      ticket += f.ticketPaid + (b.isSplit ? b.ticketCount : 0); ticketUnpaid += f.ticketUnpaid; support += f.support;
+      ticket += f.ticketPaid; ticketUnpaid += f.ticketUnpaid; support += f.support;
     }
     return { totalBuyins, entries, ticket, ticketUnpaid, revenue, unpaid, support };
   }, [buyins, session]);
@@ -1758,7 +1758,9 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
 }) {
   const [cancelMode, setCancelMode] = useState(false);
   const [pw, setPw] = useState('');
-  const [discIdx, setDiscIdx] = useState<number>(cell.buyin && !cell.buyin.isSplit ? cell.buyin.discountIndex : 0);
+  // 분납 셀도 저장된 할인 이벤트를 그대로 복원한다.
+  // ⚠ 과거엔 분납이면 무조건 0으로 시작해, 금액만 고쳐 재저장할 때마다 할인 기록이 지워졌다.
+  const [discIdx, setDiscIdx] = useState<number>(cell.buyin ? cell.buyin.discountIndex : 0);
   const discs = session.discounts ?? [];
   const dualMethods: { key: PaymentMethod; label: string }[] = [
     { key: 'cash', label: '현금' }, { key: 'transfer', label: '이체' }, { key: 'card', label: '카드' },

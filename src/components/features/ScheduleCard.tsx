@@ -57,19 +57,30 @@ function FormatBadge({ format }: { format: TournamentFormat }) {
 const SUITS = ['♠', '♥', '♦', '♣'];
 
 function PosterArea({
-  posterUrl, posterColor = '#1a1d24', title, className = '', thumbWidth = 400,
-}: { posterUrl?: string; posterColor?: string; title: string; className?: string; thumbWidth?: number }) {
+  posterUrl, posterColor = '#1a1d24', title, className = '', thumbWidth = 400, priority = false,
+}: { posterUrl?: string; posterColor?: string; title: string; className?: string; thumbWidth?: number; priority?: boolean }) {
   if (posterUrl) {
     return (
       <div className={`overflow-hidden bg-surface-mid ${className}`}>
         {/* 💰 목록 카드는 원본(평균 165KB) 대신 폭 맞춤 webp 썸네일(400px≈60KB) — Egress 62% 절감 */}
+        {/* ⚡ 첫 화면 상단 카드(priority)는 lazy 를 쓰지 않는다 — lazy 이미지는 프리로드 스캐너가 미리
+            받지 못해 LCP(가장 큰 콘텐츠 표시)가 1왕복 늦어진다. 상위 몇 장만 eager+high 로 당긴다. */}
         <img
           src={thumbUrl(posterUrl, thumbWidth)}
           srcSet={thumbSrcSet(posterUrl, thumbWidth)}
           alt={`${title} 포스터`}
           className="w-full h-full object-cover"
-          loading="lazy"
+          loading={priority ? 'eager' : 'lazy'}
+          fetchPriority={priority ? 'high' : 'auto'}
           decoding="async"
+          // 변환(썸네일) 실패 시 원본으로 자동 복구 — 포스터가 상품인 서비스라 깨진 이미지는 치명적
+          onError={(e) => {
+            const el = e.currentTarget;
+            if (el.dataset.fb) return;
+            el.dataset.fb = '1';
+            el.removeAttribute('srcset');
+            el.src = posterUrl;
+          }}
         />
       </div>
     );
@@ -152,9 +163,11 @@ interface CardProps {
   reserveCount?: number;
   /** 매장 후기 별점(체크인 인증 후기 평균) — 있으면 매장명 옆 ⭐4.8(12) */
   rating?: { avg: number; count: number };
+  /** 첫 화면 상단 카드면 true — 포스터를 lazy 대신 즉시 로드해 LCP를 앞당긴다(상위 몇 장만) */
+  priority?: boolean;
 }
 
-function ListCard({ schedule, onVenueClick, onSelect, reserveCount, rating }: CardProps) {
+function ListCard({ schedule, onVenueClick, onSelect, reserveCount, rating, priority }: CardProps) {
   const d = formatDate(schedule.date, schedule.startTime);
 
   return (
@@ -177,6 +190,7 @@ function ListCard({ schedule, onVenueClick, onSelect, reserveCount, rating }: Ca
         title={schedule.title}
         className="w-16 h-16 shrink-0 rounded-input"
         thumbWidth={160}
+        priority={priority}
       />
 
       {/* 본문 — 압축 3행 */}
@@ -253,7 +267,7 @@ function ListCard({ schedule, onVenueClick, onSelect, reserveCount, rating }: Ca
 
 // ── 메인: 그리드 뷰 카드 ────────────────────────────────────────────────────
 
-function GridCard({ schedule, onVenueClick, onSelect, rating }: CardProps) {
+function GridCard({ schedule, onVenueClick, onSelect, rating, priority }: CardProps) {
   const d = formatDate(schedule.date, schedule.startTime);
 
   return (
@@ -274,6 +288,7 @@ function GridCard({ schedule, onVenueClick, onSelect, rating }: CardProps) {
           posterColor={schedule.posterColor}
           title={schedule.title}
           className="aspect-[3/4] w-full"
+          priority={priority}
         />
         <div className="absolute top-2 left-2 right-2 flex items-start justify-between gap-2">
           <div className="flex flex-col gap-1 items-start">

@@ -114,13 +114,22 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
     const d28 = last28();
     const todayDow = new Date(d + 'T00:00:00').getDay();
     getLedgerRange(venueId, d28[0], d28[27]).then(({ sessions, buyins: bs }) => {
-      const byDate: Record<string, LedgerSession> = {};
-      sessions.forEach((s) => { byDate[s.sessionDate] = s; });
+      // ⚠ 세션은 (날짜 + 게임)이 키다. 날짜만으로 매핑하면 사이드 게임이 있는 날
+      //   메인 바인이 사이드 단가로 계산돼 엔트리·매출이 통째로 틀어진다(통계 화면과 값이 갈림).
+      const byGame = new Map<string, LedgerSession>();
+      sessions.forEach((s) => { byGame.set(`${s.sessionDate}#${s.gameSeq}`, s); });
       const weeks: { label: string; entries: number }[] = [];
       for (const day of d28) {
         if (day === d || new Date(day + 'T00:00:00').getDay() !== todayDow) continue;
-        const s = byDate[day]; if (!s) continue;
-        let e = 0; for (const b of bs) { if (b.sessionDate === day) e += buyinFinance(b, s).entry; }
+        let e = 0; let has = false;
+        for (const b of bs) {
+          if (b.sessionDate !== day) continue;
+          const s = byGame.get(`${b.sessionDate}#${b.gameSeq}`);
+          if (!s) continue;
+          has = true;
+          e += buyinFinance(b, s).entry;
+        }
+        if (!has) continue;
         weeks.push({ label: day.slice(5).replace('-', '/'), entries: Math.round(e) });
       }
       const avg = weeks.length > 0 ? Math.round(weeks.reduce((a, w) => a + w.entries, 0) / weeks.length) : null;
@@ -293,13 +302,16 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const workedStaff = shifts.filter((s) => s.checkIn);
 
   // ── 최근 7일 추세 + 객단가 ──
-  const sessByDate: Record<string, LedgerSession> = {};
-  range.sessions.forEach((s) => { sessByDate[s.sessionDate] = s; });
+  // ⚠ 통계 패널과 동일하게 (날짜 + 게임) 키로 페어링 — 날짜만 쓰면 사이드 게임이 있는 날
+  //   메인 바인이 사이드 단가로 계산돼 대시보드와 통계가 다른 숫자를 보여준다.
+  const sessByGame = new Map<string, LedgerSession>();
+  range.sessions.forEach((s) => { sessByGame.set(`${s.sessionDate}#${s.gameSeq}`, s); });
   const perDay = days.map((day) => {
-    const s = sessByDate[day];
     let entry = 0, paid = 0;
-    if (s) for (const b of range.buyins) {
+    for (const b of range.buyins) {
       if (b.sessionDate !== day) continue;
+      const s = sessByGame.get(`${b.sessionDate}#${b.gameSeq}`);
+      if (!s) continue;
       const f = buyinFinance(b, s);
       entry += f.entry; paid += f.paid;
     }
@@ -323,7 +335,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   let prevEntry = 0, prevPaid = 0;
   for (const b of range.buyins) {
     if (!prevSet.has(b.sessionDate)) continue;
-    const s = sessByDate[b.sessionDate];
+    const s = sessByGame.get(`${b.sessionDate}#${b.gameSeq}`);
     if (!s) continue;
     const f = buyinFinance(b, s);
     prevEntry += f.entry; prevPaid += f.paid;
@@ -336,7 +348,8 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   let weekTicket = 0;
   for (const b of range.buyins) {
     if (!days.includes(b.sessionDate)) continue;
-    const s = sessByDate[b.sessionDate];
+    // 분납 티켓도 buyinFinance가 ticketPaid에 포함해 반환한다(과거엔 대시보드만 누락)
+    const s = sessByGame.get(`${b.sessionDate}#${b.gameSeq}`);
     if (s) weekTicket += buyinFinance(b, s).ticketPaid;
   }
   // 매장이용권 발행/시상(세션 입력값) — 7일 / 오늘

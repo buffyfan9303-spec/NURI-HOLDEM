@@ -104,14 +104,26 @@ export function buyinFinance(b: LedgerBuyin, s: { buyinAmount: number; cardAmoun
   const entryUnit = s.buyinAmount;
   const z: BuyinFinance = { paid: 0, unpaid: 0, entry: 0, ticketPaid: 0, ticketUnpaid: 0, support: 0 };
   if (b.isSplit) {
-    // 분납 = 결제수단 쪼개기(예: 카드 4만 + 티켓 6만). 실제 받은 금액이 매출, 미수는 별도 입력값.
-    // 할인 이벤트(예: 1레벨 바인 5만 할인)가 걸리면 그만큼 덜 받으므로, 엔트리는 '할인 후 낼 금액' 기준이다.
-    //   엔트리 = (수납 + 미수) / 단가  ← 할인분은 애초에 입력 금액에 포함되지 않는다.
+    // 분납 = 결제수단 쪼개기(예: 카드 4만 + 티켓 1장). 실제 받은 현금성 금액이 매출, 미수는 별도 입력값.
+    // 할인 이벤트가 걸리면 그만큼 덜 받으므로 할인분은 애초에 입력 금액에 포함되지 않는다.
     // ⚠ 과거의 discountLevel(레벨 수 숫자)은 계산 어디에도 반영되지 않는 죽은 값이었다.
     //   할인은 discountIndex(할인 프리셋)로 일원화한다 — 분납도 동일.
+    // ⚠ 티켓(이용권)은 현금 매출이 아니지만 '참가'는 했으므로 엔트리에 포함해야 한다.
+    //   과거엔 ticketCount가 엔트리·티켓 집계에서 통째로 빠져, 티켓만으로 참가한 손님이
+    //   '회수 티켓 1장인데 엔트리 0'으로 잡히는 모순이 있었다(빠른입력 티켓은 엔트리 1).
+    //   비분납 티켓 결제와 동일하게 1장 = 바인 1회(엔트리 1)로 환산한다.
     const paid = b.cashAmount + b.cardAmount + b.transferAmount;
-    const total = paid + b.unpaidAmount;
-    return { ...z, paid, unpaid: b.unpaidAmount, entry: entryUnit > 0 ? total / entryUnit : (total > 0 ? 1 : 0) };
+    const ticketWon = b.ticketCount * entryUnit; // 티켓 1장 = 바인 1회 상당
+    const total = paid + b.unpaidAmount + ticketWon;
+    const isTicketUnpaid = b.unpaidAmount > 0 && paid === 0 && b.ticketCount > 0;
+    return {
+      ...z,
+      paid,
+      unpaid: b.unpaidAmount,
+      entry: entryUnit > 0 ? total / entryUnit : (total > 0 ? 1 : 0),
+      ticketPaid: isTicketUnpaid ? 0 : b.ticketCount,
+      ticketUnpaid: isTicketUnpaid ? b.ticketCount : 0,
+    };
   }
   const disc = (s.discounts && b.discountIndex > 0 && s.discounts[b.discountIndex - 1]) ? s.discounts[b.discountIndex - 1].amount : 0;
   const entry = entryUnit > 0 ? Math.max(0, entryUnit - disc) / entryUnit : 1;

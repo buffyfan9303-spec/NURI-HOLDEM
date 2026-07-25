@@ -141,7 +141,7 @@ function StatsView({ venueId }: { venueId: string }) {
       rd.players.add(b.playerName);
       if (f.entry > 0 && f.entry < 1) underEntries++; // 참고용
       if (b.discountIndex > 0) discountCnt++; // 할인 이벤트가 적용된 바인(분납 포함 — discountIndex로 일원화)
-      ticket += f.ticketPaid + (b.isSplit ? b.ticketCount : 0); ticketUnpaid += f.ticketUnpaid;
+      ticket += f.ticketPaid; ticketUnpaid += f.ticketUnpaid;
       byMethod[b.paymentMethod]++;
       byPlayer[b.playerName] = (byPlayer[b.playerName] ?? 0) + 1;
       if (f.unpaid > 0) unpaidByPlayer[b.playerName] = (unpaidByPlayer[b.playerName] ?? 0) + f.unpaid;
@@ -218,7 +218,7 @@ function StatsView({ venueId }: { venueId: string }) {
       for (const b of buyins) {
         if (b.sessionDate !== s.sessionDate || b.gameSeq !== s.gameSeq) continue;
         const f = buyinFinance(b, s);
-        entry += f.entry; paid += f.paid; unpaid += f.unpaid; ticket += f.ticketPaid + (b.isSplit ? b.ticketCount : 0);
+        entry += f.entry; paid += f.paid; unpaid += f.unpaid; ticket += f.ticketPaid;
         ps.add(b.playerName);
       }
       const gl = s.gameSeq > 1 ? `사이드${s.gameSeq - 1}` : '메인';
