@@ -1,5 +1,6 @@
 import { memo } from 'react';
 import { thumbUrl, thumbSrcSet } from '../../lib/imageUrl';
+import { scheduleStatus } from '../../lib/scheduleStatus';
 import type { Schedule, TournamentFormat } from '../../api/schedules';
 import type { ViewMode } from '../atoms/ViewModeToggle';
 
@@ -169,6 +170,8 @@ interface CardProps {
 
 function ListCard({ schedule, onVenueClick, onSelect, reserveCount, rating, priority }: CardProps) {
   const d = formatDate(schedule.date, schedule.startTime);
+  // 끝난 대회를 '예약 가능'처럼 보여주지 않기 위한 상태 표시(실제 차단은 상세·서버에서)
+  const status = scheduleStatus(schedule.date, schedule.startTime);
 
   return (
     <article
@@ -248,6 +251,16 @@ function ListCard({ schedule, onVenueClick, onSelect, reserveCount, rating, prio
 
         {/* 3행: 날짜 · 시간 · 바이인 (+예약 FOMO 뱃지) */}
         <div className="flex items-center gap-1.5 text-2xs text-ink-muted">
+          {status !== 'upcoming' && (
+            <span className={[
+              'shrink-0 rounded-badge px-1.5 py-0.5 font-bold leading-none',
+              status === 'ended'
+                ? 'border border-border-default bg-surface-high text-ink-muted'
+                : 'bg-danger/15 text-danger-light',
+            ].join(' ')}>
+              {status === 'ended' ? '종료' : 'LIVE'}
+            </span>
+          )}
           <span className="text-ink-secondary tabular-nums font-medium">
             {d.monthDay}({d.dow}) {d.time}
           </span>
@@ -269,6 +282,7 @@ function ListCard({ schedule, onVenueClick, onSelect, reserveCount, rating, prio
 
 function GridCard({ schedule, onVenueClick, onSelect, rating, priority }: CardProps) {
   const d = formatDate(schedule.date, schedule.startTime);
+  const status = scheduleStatus(schedule.date, schedule.startTime);
 
   return (
     <article
@@ -299,6 +313,15 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority }: CardPr
             )}
             <FormatBadge format={schedule.format} />
           </div>
+          {/* 포스터 위 스크림이 깔린 자리라 테마 토큰 대신 고정 색을 쓴다(라이트 모드에서 안 보이는 문제 방지) */}
+          {status !== 'upcoming' && (
+            <span className={[
+              'shrink-0 rounded-badge px-1.5 py-0.5 text-2xs font-bold leading-none',
+              status === 'ended' ? 'bg-black/70 text-white/80' : 'bg-danger text-white',
+            ].join(' ')}>
+              {status === 'ended' ? '종료' : 'LIVE'}
+            </span>
+          )}
         </div>
         {/* 하단 오버레이: 날짜 + 프라이즈 */}
         <div

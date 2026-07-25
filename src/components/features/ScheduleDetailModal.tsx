@@ -11,12 +11,13 @@ import HoldToConfirmButton from '../atoms/HoldToConfirmButton';
 import { getMyReservation, createReservation, cancelMyReservation, getOwnerReservations, type Reservation, type OwnerReservation } from '../../api/reservations';
 import { prizeMainText } from './ScheduleCard';
 import type { Schedule } from '../../api/schedules';
+import { scheduleStatus } from '../../lib/scheduleStatus';
 import type { Comment } from '../../api/community';
 import { generateBlinds } from '../../api/clock';
 import { promptLogin, openPostForm, ensureVerified } from '../../lib/requireLogin';
 import { googleCalendarUrl } from '../../lib/calendar';
 import QRCode from 'qrcode';
-import { requestBuyin, buyinRequestUrl } from '../../api/ledger';
+import { requestBuyin, buyinRequestUrl, kstToday } from '../../api/ledger';
 
 interface ScheduleDetailModalProps {
   schedule: Schedule | null;
@@ -56,6 +57,14 @@ export default function ScheduleDetailModal({
   const d = new Date(schedule.date);
   const dow = DAYS_KO[d.getDay()];
   const qnaComments = comments.filter((c) => c.scheduleId === schedule.id);
+  // 끝난 대회에 '예약하기'가 살아 있으면 손님은 참가된 줄 알고 업주 명단엔 유령 예약이 남는다
+  const status = scheduleStatus(schedule.date, schedule.startTime);
+  // 현장 바인 요청은 서버가 무조건 'KST 오늘' 장부에 넣는다(request_buyin). 그래서 대회 당일이 아닌
+  // 포스터에서 요청 UI 를 띄우면 2주 뒤 대회를 보던 손님의 요청이 오늘 장부에 조용히 섞인다 — 날짜로 잠근다.
+  const kToday = kstToday();
+  const eventDate = schedule.date.slice(0, 10); // date 컬럼이지만 방어적으로 앞 10자만 비교
+  const isEventToday = eventDate === kToday;
+  const isPastEvent = eventDate < kToday;       // ISO(YYYY-MM-DD) 라 사전순 비교 = 날짜 비교
 
   return (
     <Modal open={open} onClose={onClose} maxWidth="6xl" variant="page" inline={inline}>
@@ -117,6 +126,14 @@ export default function ScheduleDetailModal({
 
             {/* 상단 배지 */}
             <div className="absolute top-3 left-3 flex items-center gap-1 z-10">
+              {status !== 'upcoming' && (
+                <span className={[
+                  'rounded-badge px-2 py-0.5 text-xs font-bold leading-none',
+                  status === 'ended' ? 'bg-black/70 text-white/85' : 'bg-danger text-white',
+                ].join(' ')}>
+                  {status === 'ended' ? '종료' : '진행 중'}
+                </span>
+              )}
               {schedule.isPremium && (
                 <span className="rounded-badge bg-accent-300 px-2 py-0.5 text-xs font-bold text-white leading-none">
                   TOP
@@ -269,10 +286,19 @@ export default function ScheduleDetailModal({
       <div className="px-3.5 pt-3.5 pb-5 space-y-4">
 
         {/* 예약하기 (첫 페이지) */}
-        <ReserveBox scheduleId={schedule.id} ownerId={schedule.ownerId} venueId={schedule.venueId} />
+        {/* status 를 계산해 넘기지 않고 date/startTime 을 넘긴다 — 모달을 열어둔 채 종료 시각을
+            넘길 수 있어, 클릭 시점에 다시 판정해야 하기 때문 */}
+        <ReserveBox scheduleId={schedule.id} ownerId={schedule.ownerId} venueId={schedule.venueId}
+          date={schedule.date} startTime={schedule.startTime} />
 
-        {/* 현장 바인(참가) 요청 — QR + 버튼(운영자 승인 → 장부 명단 자동 등록) */}
-        {schedule.venueId && <BuyinRequestBox venueId={schedule.venueId} />}
+        {/* 현장 바인(참가) 요청 — 대회 당일에만 연다. 요청이 '오늘' 장부로 들어가기 때문(위 kToday 주석)
+            지난 대회에선 안내조차 띄우지 않는다 — 할 수 있는 게 없어 소음일 뿐이라. */}
+        {schedule.venueId && isEventToday && <BuyinRequestBox venueId={schedule.venueId} eventDate={eventDate} />}
+        {schedule.venueId && !isEventToday && !isPastEvent && (
+          <p className="rounded-card border border-border-subtle bg-surface-high px-3 py-2 text-2xs leading-relaxed text-ink-muted">
+            🙋 <b className="text-ink-secondary">현장 참가 신청</b>은 대회 <b className="text-ink-secondary">당일</b>에 이 화면에서 열립니다. 지금은 위 <b className="text-ink-secondary">참가 예약</b>으로 자리를 잡아두세요.
+          </p>
+        )}
 
         {/* 캘린더 등록 · 공유 — 참가 결심 직후 동선 */}
         <CalendarShareRow schedule={schedule} />
@@ -569,7 +595,9 @@ function CalendarShareRow({ schedule }: { schedule: Schedule }) {
 
 // ── 예약하기 박스 ─────────────────────────────────────────────────────────────
 // 포스터 하단 — 현장 바인(참가) 요청. QR(다른 기기 스캔용) + 버튼(앱 내 회원 직접 요청).
-function BuyinRequestBox({ venueId }: { venueId: string }) {
+// 호출부에서 '대회 당일'에만 렌더한다. 왜: 요청은 서버(request_buyin)가 KST 오늘 장부에 넣기 때문에
+// 다른 날짜 포스터에서 누르면 엉뚱한 날 장부가 오염된다. eventDate 를 서버에도 넘겨 2중으로 막는다.
+function BuyinRequestBox({ venueId, eventDate }: { venueId: string; eventDate: string }) {
   const { user } = useAuth();
   const toast = useToast();
   const [qr, setQr] = useState('');
@@ -577,8 +605,9 @@ function BuyinRequestBox({ venueId }: { venueId: string }) {
   useEffect(() => { QRCode.toDataURL(buyinRequestUrl(venueId), { width: 200, margin: 1 }).then(setQr).catch(() => {}); }, [venueId]);
   const send = () => {
     if (!user) { promptLogin(); return; }
+    if (sending) return;
     setSending(true);
-    requestBuyin(venueId)
+    requestBuyin(venueId, null, undefined, eventDate)
       .then((name) => toast.show(`${name || '매장'} 참가(바인) 요청 전송! 운영자 승인을 기다려 주세요 🙋`, 'success'))
       .catch((e) => toast.show(e instanceof Error ? e.message : '요청 전송 실패', 'error'))
       .finally(() => setSending(false));
@@ -587,20 +616,28 @@ function BuyinRequestBox({ venueId }: { venueId: string }) {
     <div className="flex items-center gap-3 rounded-card border border-sky-500/30 bg-sky-500/[0.05] p-3">
       {qr && <img src={qr} alt="바인 요청 QR" width={72} height={72} decoding="async" className="shrink-0 rounded bg-white p-1" />}
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-bold text-ink-primary">🙋 현장 바인(참가) 요청</p>
-        <p className="mt-0.5 text-2xs leading-relaxed text-ink-muted">QR 스캔 또는 버튼으로 운영자에게 참가를 요청하세요. 승인되면 장부 명단에 자동 등록됩니다.</p>
-        <button type="button" onClick={send} disabled={sending} className="btn-primary mt-1.5 px-3 py-1.5 text-xs disabled:opacity-50">{sending ? '전송 중…' : '🙋 바인 요청 보내기'}</button>
+        <p className="text-sm font-bold text-ink-primary">🙋 지금 매장에서 참가 신청 <span className="font-normal text-ink-muted">· 오늘 · 현장</span></p>
+        <p className="mt-0.5 text-2xs leading-relaxed text-ink-muted">매장에 도착한 뒤 눌러주세요. 운영자가 승인하면 <b className="text-ink-secondary">오늘 장부 명단</b>에 바로 등록됩니다.</p>
+        {/* 오발신이 곧 운영자 장부 오염 + 업주 푸시 알림이라, 스치는 탭으로는 나가지 않게 꾹 누르기
+            (예약 취소와 동일 패턴 — 확인 팝업보다 빠르면서 오작동엔 더 안전) */}
+        <HoldToConfirmButton onConfirm={send} disabled={sending} holdingLabel="계속 누르세요…"
+          className="btn-primary mt-1.5 px-3 py-1.5 text-xs disabled:opacity-50">
+          {sending ? '전송 중…' : '🙋 꾹 눌러 참가 신청'}
+        </HoldToConfirmButton>
       </div>
     </div>
   );
 }
 
-function ReserveBox({ scheduleId, ownerId, venueId }: { scheduleId: string; ownerId?: string | null; venueId?: string | null }) {
+function ReserveBox({ scheduleId, ownerId, venueId, date, startTime }: { scheduleId: string; ownerId?: string | null; venueId?: string | null; date: string; startTime: string }) {
   const { user } = useAuth();
   const toast = useToast();
   const [mine, setMine] = useState<Reservation | null>(null);
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
+  // 'live'(시작했지만 레지 마감 전)는 예약을 계속 받는다 — 현장 레이트 레지를 막으면 매출이 죽는다
+  const status = scheduleStatus(date, startTime);
+  const ended = status === 'ended';
 
   // 예약 내역(예약명·날짜·시간)은 '이 포스터의 매장' 업주/운영자만 — 타 매장 업주·일반 노출 차단
   const isManager = user?.role === 'admin'
@@ -629,6 +666,11 @@ function ReserveBox({ scheduleId, ownerId, venueId }: { scheduleId: string; owne
   };
   // 예약(생성)은 상태 버튼이 모핑으로 보여준다 — 체크 애니메이션이 끝난 onDone에서 '예약 완료' 카드로 전환
   const doReserve = async () => {
+    // 렌더 시점 status 는 낡을 수 있다(모달을 켜둔 채 종료 시각을 넘김) → 누르는 순간 다시 판정
+    if (scheduleStatus(date, startTime) === 'ended') {
+      toast.show('종료된 대회는 예약할 수 없습니다', 'error');
+      throw new Error('ended');
+    }
     if (!ensureVerified(user, '대회 예약')) throw new Error('verify'); // 로그인 + 본인인증 회원만 예약
     const _u = user!;
     const n = (name.trim() || _u.name || '예약자');
@@ -652,24 +694,36 @@ function ReserveBox({ scheduleId, ownerId, venueId }: { scheduleId: string; owne
   return (
     <section className="rounded-card border border-accent-400/40 bg-gradient-to-br from-accent-300/[0.08] to-transparent p-4 space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-bold text-accent-300">참가 예약</p>
+        {/* 아래 '지금 매장에서 참가 신청'과 역할이 헷갈려 손님이 잘못 누르는 사고가 있어 제목에 역할을 박아둔다 */}
+        <p className="text-sm font-bold text-accent-300">참가 예약 <span className="font-normal text-ink-muted">· 미리 자리 잡아두기</span></p>
         {mine && <span className="text-2xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-badge">예약 완료</span>}
+        {!mine && ended && <span className="text-2xs font-bold text-ink-muted bg-surface-high border border-border-default px-2 py-0.5 rounded-badge">종료</span>}
       </div>
-      {!mine && (
+      {!mine && !ended && (
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="닉네임 또는 실명" maxLength={30} className="input w-full text-sm" />
       )}
+      {/* 취소는 종료 후에도 열어둔다 — 막는 건 '새 예약'이지 이미 남긴 기록의 정리가 아니다 */}
       {mine ? (
         <HoldToConfirmButton onConfirm={act} disabled={busy} holdingLabel="취소하는 중…"
           className="w-full py-3 rounded-input text-sm font-bold transition-colors disabled:opacity-60 bg-surface-high text-danger-light border border-danger/40">
           꾹 눌러 예약 취소
         </HoldToConfirmButton>
+      ) : ended ? (
+        <p className="rounded-input border border-border-default bg-surface-high py-3 text-center text-sm font-bold text-ink-muted">
+          종료된 대회입니다 — 예약을 받지 않습니다
+        </p>
       ) : (
         <div className="flex justify-center">
           <StatefulActionButton label="예약하기" successLabel="예약 완료!"
             onAction={doReserve} onDone={afterReserve} className="w-full" />
         </div>
       )}
-      <p className="text-[10px] text-ink-muted">{mine ? `예약자: ${mine.displayName}` : '같은 닉네임이 이미 있으면 예약할 수 없어요. 닉네임을 바꿔 다시 시도하세요.'}</p>
+      <p className="text-[10px] text-ink-muted">
+        {mine ? `예약자: ${mine.displayName}`
+          : ended ? '이미 끝난 대회라 예약이 닫혔습니다. 다음 대회 일정을 확인해 주세요.'
+          : status === 'live' ? '이미 시작한 대회입니다 — 레이트 레지 가능 여부는 매장에 확인해 주세요.'
+          : '같은 닉네임이 이미 있으면 예약할 수 없어요. 닉네임을 바꿔 다시 시도하세요.'}
+      </p>
 
       {/* 업주/운영자: 예약 내역(실제 아이디·닉네임) — 접이식 */}
       {isManager && (

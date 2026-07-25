@@ -85,6 +85,15 @@ export interface LedgerPlayer {
 }
 
 const today = () => new Date().toLocaleDateString('en-CA'); // 로컬 날짜(YYYY-MM-DD) — UTC 자정 넘김 방지
+/**
+ * KST(Asia/Seoul) 기준 오늘 — YYYY-MM-DD.
+ * 왜 today() 를 안 쓰나: 위 today() 는 브라우저 로컬 TZ 라 해외·시계 오설정 기기에서 하루가 어긋난다.
+ * 서버 RPC(request_buyin·check_in)는 (now() at time zone 'Asia/Seoul')::date 로 날짜를 정하므로,
+ * '오늘만 가능한' 게이트는 서버와 같은 기준으로 판단해야 화면과 서버가 따로 놀지 않는다.
+ * now 인자는 테스트에서 자정 경계(15:00Z)를 고정하려고 열어둔 것.
+ */
+export const kstToday = (now: number = Date.now()): string =>
+  new Date(now + 9 * 3600_000).toISOString().slice(0, 10);
 
 export const WON_PER_MAN = 10000;
 /** 원 → 만원 표시 문자열 (예: 310000 → "31", 77000 → "7.7") */
@@ -735,10 +744,16 @@ export function buyinRequestUrl(venueId: string, gameSeq?: number): string {
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://nuriholdem.com';
   return `${origin}/?buyin=${venueId}${gameSeq ? `&game=${gameSeq}` : ''}`;
 }
-/** 손님: 오늘 이 매장 참가(바인) 요청 — 성공 시 매장명 반환. gameSeq=원하는 게임(선택). */
-export async function requestBuyin(venueId: string, gameSeq?: number | null, note?: string): Promise<string> {
+/**
+ * 손님: 오늘 이 매장 참가(바인) 요청 — 성공 시 매장명 반환. gameSeq=원하는 게임(선택).
+ * expectedDate: 화면이 '이 날짜로 요청한다'고 믿은 날(YYYY-MM-DD). 서버가 KST 오늘과 대조해 다르면 거절한다.
+ * 왜: 요청은 서버가 정한 KST '오늘' 장부로만 들어간다. 다른 날짜 포스터에서 눌린 요청이 오늘 장부를
+ *     오염시키는 사고를 프런트 게이트 하나에만 맡기지 않기 위한 2중 방어(캐시된 구버전·공유된 QR 대비).
+ *     현장 QR 경로는 언제나 '오늘'이라 넘기지 않는다 — 미지정이면 서버가 검사를 생략한다.
+ */
+export async function requestBuyin(venueId: string, gameSeq?: number | null, note?: string, expectedDate?: string): Promise<string> {
   if (IS_MOCK) return '데모 매장';
-  const { data, error } = await supabase.rpc('request_buyin', { p_venue_id: venueId, p_note: note ?? null, p_game_seq: gameSeq ?? null });
+  const { data, error } = await supabase.rpc('request_buyin', { p_venue_id: venueId, p_note: note ?? null, p_game_seq: gameSeq ?? null, p_expected_date: expectedDate ?? null });
   if (error) throw new Error(error.message);
   return (data as string) ?? '';
 }
