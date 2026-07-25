@@ -81,8 +81,11 @@ export async function cancelMyReservation(scheduleId: string): Promise<void> {
 /** 업주: 예약 삭제 / 이름 수정 */
 export async function deleteReservation(id: string): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.from('schedule_reservations').delete().eq('id', id);
+  // .select() 를 붙이는 이유: RLS(sr_delete)에 막히면 Supabase 는 error 없이 0행을 반환한다.
+  // 그대로 두면 권한 없는 계정이 눌러도 화면에선 지워진 것처럼 보이고 새로고침하면 되살아난다.
+  const { data, error } = await supabase.from('schedule_reservations').delete().eq('id', id).select('id');
   if (error) throw error;
+  if (!data || data.length === 0) throw new Error('예약을 삭제할 권한이 없습니다');
 }
 export async function updateReservationName(id: string, name: string): Promise<void> {
   if (IS_MOCK) return;

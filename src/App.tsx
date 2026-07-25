@@ -36,6 +36,7 @@ import { useBackClose, overlayJustClosed } from './lib/backstack';
 import { useVisibilityRefresh } from './lib/useVisibilityRefresh';
 import { lazyWithReload } from './lib/lazyWithReload';
 import { applyScheduleSeo, applyVenueSeo, resetSeo } from './lib/seo';
+import { createUndoQueue } from './lib/undoableDelete';
 import { SpringButton } from './components/atoms/StatefulActionButton';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from './contexts/AuthContext';
@@ -1490,14 +1491,38 @@ export default function App() {
       .catch(() => { toast.show('저장에 실패했습니다', 'error'); reloadVenues(); });
   }, [toast, reloadVenues]);
 
+  // 포스터 삭제 유예 큐 — schedules 삭제는 예약(schedule_reservations)과 문의(comments)를
+  // FK CASCADE 로 물리 삭제한다(ledger_sessions 만 SET NULL 로 살아남는다).
+  // 지운 뒤 되살릴 방법이 없으므로 '5초 동안 서버로 안 보내기'가 유일한 실행취소다.
+  const posterDeleteQ = useMemo(() => createUndoQueue(5000), []);
   const handleDeletePoster = useCallback((id: string) => {
     const target = schedules.find((s) => s.id === id);
     setSchedules((prev) => prev.filter((s) => s.id !== id));
     setOpenSchedule((cur) => (cur?.id === id ? null : cur));
-    deleteSchedule(id)
-      .then(() => logActivity({ action: 'delete', targetType: 'schedule', targetId: id, targetOwnerId: target?.ownerId, targetSummary: target?.title, actorName: user?.name }))
-      .catch(() => { toast.show('삭제에 실패했습니다', 'error'); reloadSchedules(); });
-  }, [schedules, user, toast, reloadSchedules]);
+    posterDeleteQ.schedule(id, () => {
+      deleteSchedule(id)
+        .then(() => logActivity({ action: 'delete', targetType: 'schedule', targetId: id, targetOwnerId: target?.ownerId, targetSummary: target?.title, actorName: user?.name }))
+        .catch(() => { toast.show('삭제에 실패했습니다', 'error'); reloadSchedules(); });
+    });
+    // durationMs 를 유예 시간(5초)에 맞춘다 — 토스트가 더 오래 남으면 이미 삭제된 뒤에도
+    // '되돌리기'가 눌러지는 것처럼 보여 사장님을 두 번 속인다.
+    toast.show(`'${target?.title ?? '포스터'}' 삭제됨`, 'info', {
+      durationMs: 5000,
+      action: { label: '되돌리기', onClick: () => {
+        // 취소 성공 = 서버엔 아무 일도 일어나지 않았다는 뜻 — 목록은 서버에서 다시 받아 정렬까지 원복
+        if (posterDeleteQ.cancel(id)) { reloadSchedules(); toast.show('삭제를 취소했습니다', 'success'); }
+        else toast.show('이미 삭제되어 되돌릴 수 없습니다', 'error');
+      } },
+    });
+  }, [schedules, user, toast, reloadSchedules, posterDeleteQ]);
+
+  // 탭을 닫거나 앱을 벗어나면 대기 중인 삭제를 즉시 흘려보낸다 —
+  // 안 그러면 '지웠는데 새로고침하면 살아있는' 상태로 남는다.
+  useEffect(() => {
+    const flush = () => posterDeleteQ.flushAll();
+    window.addEventListener('pagehide', flush);
+    return () => { window.removeEventListener('pagehide', flush); flush(); };
+  }, [posterDeleteQ]);
 
   // 관리자: 포스터 승인 / 반려 — 서버 반영
   const handleApproveSchedule = useCallback((id: string) => {
@@ -2015,7 +2040,7 @@ export default function App() {
               const s = schedules.find((x) => x.id === id);
               if (s) setPosterFormTarget(s);
             }}
-            onDeletePoster={(id) => { handleDeletePoster(id); toast.show('포스터가 삭제되었습니다', 'success'); }}
+            onDeletePoster={handleDeletePoster}
           />
           </ErrorBoundary>
         </main>

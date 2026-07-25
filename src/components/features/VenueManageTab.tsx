@@ -29,6 +29,7 @@ import SectionHeader from '../atoms/SectionHeader';
 import { getSchedules, type Schedule } from '../../api/schedules';
 import { motion } from 'framer-motion';
 import { getLedgerBuyins, getLedgerSession } from '../../api/ledger';
+import { rankDraftKey, readRowsDraft, writeRowsDraft, clearRowsDraft, pruneRowsDrafts, hasRowContent, type RankRow } from '../../lib/rankingDraft';
 
 type Section = 'dashboard' | 'posters' | 'presets' | 'ledger' | 'stats' | 'ranking' | 'venueRank' | 'league' | 'staff' | 'settings' | 'clock' | 'attendance' | 'voucher' | 'page';
 
@@ -448,7 +449,8 @@ function SectionBtn({ active, onClick, icon, children, locked, fav, onToggleFav 
 
 
 // ── 일일 순위 입력 ────────────────────────────────────────────────────────────
-interface Row { nickname: string; realName: string; prize: string; voucher: string; note: string; member?: boolean | null; }
+// Row 정의는 lib/rankingDraft 에 둔다 — 임시 초안으로 직렬화·복원되는 값이라 두 곳이 어긋나면 복구가 깨진다.
+type Row = RankRow;
 const emptyRow = (): Row => ({ nickname: '', realName: '', prize: '', voucher: '', note: '' });
 // 그날 열린 게임 후보 — 메인(포스터 제목) · 사이드(포스터 sideEvents) · 장부(장부만 있는 게임)
 type GameOpt = { name: string; kind: 'main' | 'side' | 'ledger' };
@@ -460,6 +462,17 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
   const [rows, setRows] = useState<Row[]>([emptyRow()]);
   // 같은 날 여러 게임(메인+사이드) — 게임(이벤트)별로 순위를 따로 저장. ''=기본 게임
   const [eventName, setEventName] = useState('');
+  // 저장 전 입력분 보호 — (매장·날짜·게임)별 임시 초안.
+  // 왜: 아래 로더가 날짜·게임이 바뀔 때마다 rows 를 통째로 갈아끼운다. 20명 다 친 뒤 사이드 칩을
+  //     잘못 누르면 경고 없이 빈 줄 하나로 리셋됐고, 저장 전이라 서버에도 없어 되돌릴 수단이 없었다.
+  //     칩 오탭뿐 아니라 장부→순위 딥링크(draft prop), 섹션 상한 초과 언마운트, 새로고침도 같은 손실이라
+  //     확인 다이얼로그가 아니라 '키별 초안 보관 + 되돌아오면 복원'으로 막는다.
+  const dkey = rankDraftKey(venueId, date, eventName);
+  const baselineRef = useRef('');                                   // 로더가 넣은 원본(서버 저장본/장부 초안/빈 줄) — 이것과 다르면 사장님이 손댄 것
+  const [rowsKey, setRowsKey] = useState('');                       // 지금 rows 가 '어느 키의 것'인지 — 전환 직후 커밋에서 남의 칸을 덮어쓰는 걸 막는 가드
+  const [drafted, setDrafted] = useState(false);                    // 임시 보관 중 표시
+  const [restorable, setRestorable] = useState<Row[] | null>(null); // 저장본이 있는 칸의 복구 후보(자동 복원 금지 — 저장이 전체 교체라 위험)
+  useEffect(() => { pruneRowsDrafts(); }, []);                      // 만료 초안 청소(매장·날짜·게임마다 키가 쌓인다)
   const [allEntries, setAllEntries] = useState<RankingEntry[]>([]);
   // 그날 열린 게임 후보 = 그날 포스터 제목 + 그날 장부 제목(둘 다 '어떤 게임인지' 선택지)
   const [dayGames, setDayGames] = useState<GameOpt[]>([]);
@@ -561,20 +574,42 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
       .finally(() => setLoading(false));
   }, [venueId, date]);
 
-  // 선택한 게임(이벤트)의 줄만 편집 — 게임 전환 시 해당 저장본/장부 초안 로드
+  // 선택한 게임(이벤트)의 줄만 편집 — 게임 전환 시 해당 저장본/장부 초안 로드.
+  // ⚠ 여기서 rows 를 통째로 갈아끼운다. 그래서 갈아끼우기 직전에 임시 초안을 먼저 본다.
+  //   · 저장본이 없는 칸(아직 저장 안 한 게임)이면 초안을 그대로 되살린다 — 칩·날짜 오탭 즉시 복구.
+  //   · 저장본이 있는 칸이면 자동 복원하지 않는다. 저장(save_venue_rankings)이 (날짜+게임) 단위
+  //     전체 삭제 후 재삽입이라, 낡은 초안을 무심코 저장하면 이미 저장된 순위를 통째로 덮어쓴다.
+  //     그래서 '되살리기' 버튼을 눌렀을 때만 올린다.
   useEffect(() => {
     if (loading) return;
     const mine = allEntries.filter((e) => (e.eventName ?? '') === eventName);
-    if (mine.length) {
-      setRows(mine.map((e) => ({ nickname: e.nickname, realName: e.realName, prize: e.prize ?? '', voucher: '', note: '' })));
-    } else if (draft && draft.date === date && draft.names.length && (allEntries.length === 0 || (draft.event ?? '') === eventName)) {
-      // 정산 마감 참가자 명단을 닉네임으로 미리 채움(순서는 업주가 정리)
-      setRows(draft.names.map((n) => ({ nickname: n, realName: '', prize: '', voucher: '', note: '' })));
-    } else {
-      setRows([emptyRow()]);
-    }
+    const base: Row[] = mine.length
+      ? mine.map((e) => ({ nickname: e.nickname, realName: e.realName, prize: e.prize ?? '', voucher: '', note: '' }))
+      : (draft && draft.date === date && draft.names.length && (allEntries.length === 0 || (draft.event ?? '') === eventName))
+        // 정산 마감 참가자 명단을 닉네임으로 미리 채움(순서는 업주가 정리)
+        ? draft.names.map((n) => ({ nickname: n, realName: '', prize: '', voucher: '', note: '' }))
+        : [emptyRow()];
+    const kept = readRowsDraft(dkey);
+    // 기준선은 항상 '원본'. 복구본을 기준선으로 잡으면 아래 보관 효과가 초안을 즉시 지워버린다.
+    baselineRef.current = JSON.stringify(base);
+    setRows(kept && !mine.length ? kept : base);
+    setRowsKey(dkey);
+    setDrafted(!!kept && !mine.length);
+    setRestorable(kept && mine.length && JSON.stringify(kept) !== baselineRef.current ? kept : null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, allEntries, eventName]);
+  }, [loading, allEntries, eventName, dkey]);
+
+  // 저장 전 입력분을 (매장·날짜·게임) 키로 임시 보관 — 전환·딥링크·섹션 정리·새로고침에도 남게.
+  // rowsKey 가드가 핵심: 칩을 누른 직후 커밋에는 'rows=이전 게임 것 + dkey=새 게임'이 섞여 있어,
+  // 그대로 쓰면 방금 고른 게임 칸에 이전 게임 명단이 들어가 오염된다.
+  useEffect(() => {
+    if (loading || rowsKey !== dkey) return;
+    if (JSON.stringify(rows) === baselineRef.current || !hasRowContent(rows)) {
+      clearRowsDraft(dkey); setDrafted(false); return; // 원본과 같아짐 = 지킬 게 없음
+    }
+    writeRowsDraft(dkey, rows);
+    setDrafted(true);
+  }, [rows, rowsKey, dkey, loading]);
 
   const update = (i: number, k: keyof Row, v: string) =>
     setRows((r) => r.map((row, idx) => (idx === i
@@ -683,9 +718,18 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
         } catch { failed++; }
       }
       // 지급 성공한 줄의 이용권 칸 비우기 — 재저장 시 중복 발행 방지
-      if (issuedNicks.length > 0) {
-        setRows((prev) => prev.map((row) => (issuedNicks.includes(row.nickname.trim()) ? { ...row, voucher: '' } : row)));
-      }
+      // + 저장 성공 = 서버가 정본이므로 임시 초안을 폐기한다. 남겨두면 다음 진입 때 낡은 초안이
+      //   되살아나고, 저장이 (날짜+게임) 전체 교체라 방금 저장한 순위를 덮어쓸 수 있다.
+      setRows((prev) => {
+        const next = issuedNicks.length > 0
+          ? prev.map((row) => (issuedNicks.includes(row.nickname.trim()) ? { ...row, voucher: '' } : row))
+          : prev;
+        baselineRef.current = JSON.stringify(next); // 저장 직후 화면 = 새 기준선(보관 효과가 곧바로 다시 쓰는 걸 막는다)
+        return next;
+      });
+      clearRowsDraft(dkey);
+      setDrafted(false);
+      setRestorable(null);
       toast.show(
         issued > 0
           ? `순위 저장 + 이용권 ${issued}개 지급${failed ? ` · 미지급 ${failed}명(미가입/미인증)` : ''}${ambiguous ? ` · 확인필요 ${ambiguous}명(닉네임 불일치)` : ''}`
@@ -840,6 +884,23 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
       <p className="text-2xs text-ink-muted">
         <span className="text-accent-300 font-semibold">닉네임은 필수</span>, 실명·프라이즈는 선택입니다. 프라이즈는 <span className="text-accent-300 font-semibold">만원 단위</span>로 입력하세요 — 100만원은 <span className="text-accent-300 font-semibold">100</span>, 1,000만원은 <span className="text-accent-300 font-semibold">1000</span>(원 단위로 치면 순위 점수가 1만 배로 잘못 쌓입니다). 등수마다 <span className="text-accent-300 font-semibold">기준 점수(+N점)</span>가 자동 부여되고, 프라이즈는 <span className="text-accent-300 font-semibold">매장 커뮤니티 순위 점수</span>로만 쓰입니다(금전적 가치 없음). 손님 화면엔 <span className="text-accent-300 font-semibold">실명(닉네임) 형식</span>으로 닉네임 일부를 가려 표시됩니다(예: 누리홀덤(나*리)).
       </p>
+
+      {/* 저장 전 입력분 안내 — 초안은 자동 보관되지만, 상태를 보여주지 않으면 사장님이 오탭을 눈치채지 못한다 */}
+      {(drafted || restorable) && (
+        <div className="flex items-center gap-2 rounded-input border border-amber-500/30 bg-amber-500/[0.06] px-2.5 py-1.5">
+          {restorable ? (
+            <>
+              <span className="min-w-0 flex-1 text-2xs text-amber-200">저장하지 않고 나갔던 입력분이 있어요({restorable.length}줄). 지금 화면은 <b>저장된 순위</b>입니다.</span>
+              <button type="button" onClick={() => { setRows(restorable); setRestorable(null); }}
+                className="shrink-0 rounded-input border border-amber-500/40 px-2 py-1 text-2xs font-bold text-amber-200 hover:bg-amber-500/10">되살리기</button>
+              <button type="button" onClick={() => { clearRowsDraft(dkey); setRestorable(null); setDrafted(false); }}
+                className="shrink-0 text-2xs text-ink-muted hover:text-ink-secondary">버리기</button>
+            </>
+          ) : (
+            <span className="min-w-0 flex-1 text-2xs text-amber-200">✎ 저장 전 임시 보관 중 — 날짜·게임을 바꿔도 되돌아오면 그대로 있어요. 마무리하려면 아래 <b>순위 저장</b>을 눌러 주세요.</span>
+          )}
+        </div>
+      )}
 
       {loading ? (
         <p className="text-center py-8 text-2xs text-ink-muted">불러오는 중…</p>

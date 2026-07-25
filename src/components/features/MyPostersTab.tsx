@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Schedule } from '../../api/schedules';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
@@ -11,6 +11,9 @@ import { listVenueCheckins } from '../../api/checkins';
 import { toCsv, downloadCsv } from '../../lib/csv';
 import { thumbUrl, thumbSrcSet } from '../../lib/imageUrl';
 import EmptyState from '../atoms/EmptyState';
+import HoldToConfirmButton from '../atoms/HoldToConfirmButton';
+import { getComments, logActivity } from '../../api/community';
+import { createUndoQueue } from '../../lib/undoableDelete';
 
 // 예약 명단 CSV 내보내기 (엑셀 한글 호환)
 function exportReservationsCsv(schedule: Schedule, reservations: Reservation[]) {
@@ -145,6 +148,13 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUse
   const ledgerDate = ops?.date ?? null;
   const toast = useToast();
   const [confirming, setConfirming] = useState(false);
+  // 삭제 경고에 쓸 문의(Q&A) 수 — comments.schedule_id 는 ON DELETE CASCADE 라 포스터와 함께 영구 소멸한다.
+  // 목록 전체에 미리 조회하면 낭비라, 확인 단계에 들어가는 순간에만 한 번 가져온다.
+  const [qnaCount, setQnaCount] = useState<number | null>(null);
+  const askDelete = () => {
+    setConfirming(true);
+    if (qnaCount === null) getComments({ scheduleId: schedule.id }).then((cs) => setQnaCount(cs.length)).catch(() => setQnaCount(0));
+  };
   const [open, setOpen] = useState(false);
   // 연결 장부 펼침 — 한 포스터에 여러 장부(멀티데이·사이드) 최신순
   const [ledgersOpen, setLedgersOpen] = useState(false);
@@ -161,7 +171,28 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUse
 
   const loadRes = (sid: string = resSchedId) => { getReservations(sid).then(setReservations).catch(() => setReservations([])); };
   const toggle = () => { const next = !open; setOpen(next); if (next && reservations === null) loadRes(); };
-  const onDel = async (r: Reservation) => { try { await deleteReservation(r.id); setReservations((arr) => (arr ?? []).filter((x) => x.id !== r.id)); } catch (e) { toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'); } };
+  // 예약 삭제 유예 큐 — RLS sr_insert 의 with check 가 user_id = auth.uid() 하나뿐이라
+  // 업주도 운영자도 손님 예약을 대신 INSERT 할 수 없다(= 지우면 앱으로는 절대 복구 불가).
+  // 그래서 '지운 뒤 되살리기'가 아니라 '5초 동안 서버로 안 보내기'로 실행취소를 만든다.
+  const resDeleteQ = useMemo(() => createUndoQueue(5000), []);
+  const onDel = (r: Reservation) => {
+    setReservations((arr) => (arr ?? []).filter((x) => x.id !== r.id));
+    resDeleteQ.schedule(r.id, () => {
+      deleteReservation(r.id)
+        // 예약 삭제는 여태 아무 흔적도 안 남아 '누가 지웠는지' 추적이 불가능했다
+        .then(() => logActivity({ action: 'delete', targetType: 'reservation', targetId: r.id, targetSummary: `${schedule.title} / ${r.displayName}` }))
+        .catch((e) => { toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'); loadRes(); });
+    });
+    toast.show(`‘${r.displayName}’ 예약 삭제됨`, 'info', {
+      durationMs: 5000, // 유예 시간과 일치 — 더 길면 이미 삭제된 뒤에도 되돌리기가 눌러지는 것처럼 보인다
+      action: { label: '되돌리기', onClick: () => {
+        if (!resDeleteQ.cancel(r.id)) { toast.show('이미 삭제되어 되돌릴 수 없습니다', 'error'); return; }
+        // getReservations 가 created_at 오름차순이라 같은 기준으로 되끼운다(번호가 뒤섞이지 않게)
+        setReservations((arr) => ((arr ?? []).some((x) => x.id === r.id) ? arr : [...(arr ?? []), r].sort((a, b) => a.createdAt.localeCompare(b.createdAt))));
+        toast.show('삭제를 취소했습니다', 'success');
+      } },
+    });
+  };
   const onRename = async (r: Reservation) => {
     const n = window.prompt('예약자 이름 수정', r.displayName); if (n === null) return;
     try { await updateReservationName(r.id, n); setReservations((arr) => (arr ?? []).map((x) => (x.id === r.id ? { ...x, displayName: n.trim() } : x))); } catch (e) { toast.show(e instanceof Error ? e.message : '수정 실패', 'error'); }
@@ -218,19 +249,41 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUse
               순위 미입력
             </button>
           )}
-          {confirming ? (
-            <>
-              <button type="button" onClick={() => setConfirming(false)} className="btn-ghost text-xs px-2">취소</button>
-              <button type="button" onClick={() => { onDelete(); setConfirming(false); }} className="btn-danger text-xs px-2">삭제</button>
-            </>
-          ) : (
-            <>
-              <button type="button" onClick={onEdit} className="btn-ghost text-xs px-2 text-accent-300">수정</button>
-              <button type="button" onClick={() => setConfirming(true)} className="btn-ghost text-xs px-2 hover:text-danger-light">삭제</button>
-            </>
-          )}
+          <button type="button" onClick={onEdit} className="btn-ghost text-xs px-2 text-accent-300">수정</button>
+          {/* 확인 단계를 이 자리에 겹치지 않는 이유: 예전엔 같은 좌표에 라벨까지 같은 '삭제'가 나타나
+              더블클릭 한 번이면 사용자가 아무것도 인지하지 못한 채 확인을 통과했다.
+              여기는 경고 바 여닫기만 하고, 실제 실행은 아래 경고 바(다른 위치 + 꾹 누르기)에만 둔다. */}
+          <button type="button" onClick={() => (confirming ? setConfirming(false) : askDelete())}
+            className={['btn-ghost text-xs px-2', confirming ? 'text-danger-light' : 'hover:text-danger-light'].join(' ')}>
+            {confirming ? '삭제 취소' : '삭제'}
+          </button>
         </div>
       </div>
+
+      {/* 삭제 확인 — 액션 버튼과 '다른 자리'에 펼쳐지는 풀폭 경고 바.
+          같은 칸/같은 좌표에 확인 버튼을 두면 더블탭·더블클릭 한 번으로 확인 단계가 무의미해지기 때문.
+          문구의 숫자는 라이브 FK 실측 기준이다:
+            schedule_reservations.schedule_id → CASCADE(영구 삭제)
+            comments.schedule_id             → CASCADE(영구 삭제)
+            ledger_sessions.schedule_id      → SET NULL(장부는 남고 연결만 끊김) */}
+      {confirming && (
+        <div className="border-t border-danger/30 bg-danger/10 px-3 py-2.5 space-y-2">
+          <p className="text-xs font-bold text-danger-light">⚠ ‘{schedule.title}’ 게임을 삭제합니다 — 되돌릴 수 없습니다</p>
+          <ul className="space-y-0.5 text-2xs leading-relaxed text-ink-secondary">
+            <li>· 예약자 <b className="text-ink-primary tabular-nums">{reservations?.length ?? resCount ?? 0}명</b>이 함께 영구 삭제됩니다 (손님에게 알림은 가지 않습니다)</li>
+            <li>· 포스터 문의(Q&amp;A) <b className="text-ink-primary tabular-nums">{qnaCount === null ? '…' : `${qnaCount}건`}</b>이 함께 영구 삭제됩니다</li>
+            <li>{ledgerDate ? '· 연결된 장부와 매출은 지워지지 않습니다 — 이 게임과의 연결만 끊깁니다' : '· 연결된 장부는 없습니다'}</li>
+          </ul>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => setConfirming(false)}
+              className="flex-1 rounded-input border border-border-default py-2 text-xs font-semibold text-ink-secondary active:opacity-80">취소</button>
+            <HoldToConfirmButton onConfirm={() => { onDelete(); setConfirming(false); }} holdingLabel="삭제하는 중…"
+              className="flex-1 rounded-input border border-danger/50 bg-danger/20 py-2 text-xs font-bold text-danger-light">
+              꾹 눌러 삭제
+            </HoldToConfirmButton>
+          </div>
+        </div>
+      )}
 
       {/* 모바일 전용 하단 액션 바 — 가로 균등(아래로 쌓이지 않게). 순위 미입력은 풀폭 경고로 위에 */}
       <div className="sm:hidden border-t border-border-subtle">
@@ -248,17 +301,13 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUse
               장부{ledgerDate ? (ledgersOpen ? ' ▲' : ' ▼') : ' +'}
             </button>
           )}
-          {confirming ? (
-            <>
-              <button type="button" onClick={() => setConfirming(false)} className="flex-1 py-2.5 text-xs font-semibold text-ink-secondary active:bg-surface-high/60">취소</button>
-              <button type="button" onClick={() => { onDelete(); setConfirming(false); }} className="flex-1 py-2.5 text-xs font-bold text-danger-light active:bg-danger/10">삭제 확인</button>
-            </>
-          ) : (
-            <>
-              <button type="button" onClick={onEdit} className="flex-1 py-2.5 text-xs font-semibold text-accent-300 active:bg-surface-high/60">수정</button>
-              <button type="button" onClick={() => setConfirming(true)} className="flex-1 py-2.5 text-xs font-semibold text-ink-muted active:bg-surface-high/60 hover:text-danger-light">삭제</button>
-            </>
-          )}
+          <button type="button" onClick={onEdit} className="flex-1 py-2.5 text-xs font-semibold text-accent-300 active:bg-surface-high/60">수정</button>
+          {/* 칸 수가 4개 그대로라 마지막 칸의 좌표가 픽셀 단위로 같았다 — 더블탭 1회로 확인이 통과됐다.
+              그래서 이 칸은 토글만 하고, 실행 버튼은 위 경고 바로 올린다. */}
+          <button type="button" onClick={() => (confirming ? setConfirming(false) : askDelete())}
+            className={['flex-1 py-2.5 text-xs font-semibold active:bg-surface-high/60', confirming ? 'text-danger-light' : 'text-ink-muted hover:text-danger-light'].join(' ')}>
+            {confirming ? '삭제 취소' : '삭제'}
+          </button>
         </div>
       </div>
 
@@ -337,6 +386,8 @@ function ReservationItem({ idx, res, venueId, visited, regular, reserveCount, on
   onDelete: () => void; onRename: () => void;
 }) {
   const [showCustomer, setShowCustomer] = useState(false);
+  // '수정' 바로 옆 20px짜리 삭제라 오탭이 잦다 — 실행은 아래 넓은 확인 스트립에서만 한다
+  const [ask, setAsk] = useState(false);
   const [act, setAct] = useState<CustomerActivity | null>(null);
   const openCustomer = () => {
     const next = !showCustomer; setShowCustomer(next);
@@ -359,8 +410,17 @@ function ReservationItem({ idx, res, venueId, visited, regular, reserveCount, on
         </div>
         {regular && <button type="button" onClick={openCustomer} className="btn-ghost text-2xs px-2 text-sky-300">{showCustomer ? '닫기' : '고객정보'}</button>}
         <button type="button" onClick={onRename} className="text-ink-muted hover:text-accent-300 text-2xs px-1">수정</button>
-        <button type="button" onClick={onDelete} className="text-ink-muted hover:text-danger-light text-2xs px-1">삭제</button>
+        <button type="button" onClick={() => setAsk((v) => !v)} aria-expanded={ask}
+          className={['text-2xs px-1', ask ? 'text-danger-light' : 'text-ink-muted hover:text-danger-light'].join(' ')}>{ask ? '닫기' : '삭제'}</button>
       </div>
+      {/* 예약자 삭제 확인 — 버튼과 다른 줄(다른 좌표)에 펼친다. 삭제해도 손님에게 알림이 가지 않으므로 그 사실을 적는다. */}
+      {ask && (
+        <div className="flex items-center gap-2 border-t border-danger/30 bg-danger/10 px-2.5 py-2">
+          <p className="flex-1 min-w-0 text-2xs leading-relaxed text-ink-secondary"><b className="text-danger-light">{res.displayName}</b> 님의 예약을 삭제합니다 — 손님에게 알림은 가지 않습니다</p>
+          <button type="button" onClick={() => setAsk(false)} className="shrink-0 rounded-input border border-border-default px-2 py-1 text-2xs font-semibold text-ink-secondary active:opacity-80">취소</button>
+          <button type="button" onClick={() => { setAsk(false); onDelete(); }} className="shrink-0 rounded-input border border-danger/50 bg-danger/20 px-2 py-1 text-2xs font-bold text-danger-light active:opacity-80">삭제</button>
+        </div>
+      )}
       {showCustomer && (
         <div className="border-t border-border-subtle px-2.5 py-2">
           {!act ? <p className="text-2xs text-ink-muted text-center py-1">불러오는 중…</p> : (
