@@ -139,6 +139,27 @@ export function discountAmountOf(s: { discounts?: DiscountPreset[] }, idx: numbe
   return (s.discounts && idx > 0 && s.discounts[idx - 1]) ? s.discounts[idx - 1].amount : 0;
 }
 
+export interface LedgerLossSummary { buyins: number; people: number; revenue: number; unpaid: number }
+
+/** 장부 삭제 확인창에 띄울 '잃는 양' 요약.
+ *  왜 별도 함수인가: 확인창 숫자가 실제 장부와 다르면 "별거 없네" 하고 지우게 돼 경고 자체가 거짓말이 된다.
+ *  마감 모달과 같은 buyinFinance 규칙을 강제로 재사용해 두 화면이 갈리지 않게 한다.
+ *  인원은 '명단 ∪ 바인 기록 이름' — 보드도 명단에 없는 바인만 있는 손님을 행으로 보여주기 때문. */
+export function ledgerLossSummary(
+  buyins: LedgerBuyin[],
+  players: { name: string }[],
+  s: { buyinAmount: number; cardAmount: number | null; discounts?: DiscountPreset[] },
+): LedgerLossSummary {
+  let revenue = 0, unpaid = 0;
+  const names = new Set<string>(players.map((p) => p.name));
+  for (const b of buyins) {
+    const f = buyinFinance(b, s);
+    revenue += f.paid; unpaid += f.unpaid;
+    names.add(b.playerName);
+  }
+  return { buyins: buyins.length, people: names.size, revenue, unpaid };
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const rowToBuyin = (r: any): LedgerBuyin => ({
   id: r.id, venueId: r.venue_id, sessionDate: r.session_date, gameSeq: r.game_seq ?? MAIN_GAME_SEQ,

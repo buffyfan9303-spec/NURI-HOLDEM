@@ -96,6 +96,25 @@ export function parsePrizeMan(prize?: string | null): number {
   return m ? Math.round(parseFloat(m[0])) : 0;
 }
 
+// ── 프라이즈 단위 오입력 감지 ────────────────────────────────────────────────
+// 왜 필요한가: prize 는 '만원 단위' 자유 텍스트인데 순위 입력칸엔 단위 표기가 없었다.
+//   1등 100만원을 '1000000'(원)으로 치면 그 한 줄이 매장 프라이즈 보드와
+//   전국 통합 랭킹(global_ranking_totals)을 1만 배로 오염시키고, 되돌리려면
+//   그 날짜 순위를 통째로 다시 입력해야 한다.
+// 왜 차단이 아니라 경고인가: 1,000만원 프라이즈는 실제로 존재해서 막으면 정상 입력을 잃는다.
+//   1억(10,000만) 이상만 '사실상 불가'로 보고 저장 직전에 한 번 되묻는다.
+export const PRIZE_SUSPECT_MAN = 1_000;      // 1,000만원 — 원 단위 오입력 의심(경고만)
+export const PRIZE_IMPOSSIBLE_MAN = 10_000;  // 1억 — 펍 단일 입상금으로 사실상 불가(저장 전 재확인)
+
+export type PrizeUnitRisk = 'ok' | 'suspect' | 'impossible';
+/** 프라이즈 입력값의 단위 오입력 위험도 — 입력칸 경고와 저장 전 확인이 같은 기준을 쓰도록 단일화 */
+export function prizeUnitRisk(prize?: string | null): PrizeUnitRisk {
+  const man = parsePrizeMan(prize);
+  if (man >= PRIZE_IMPOSSIBLE_MAN) return 'impossible';
+  if (man >= PRIZE_SUSPECT_MAN) return 'suspect';
+  return 'ok';
+}
+
 export async function getVenueRankingTotals(venueId: string, cfg?: VenuePageConfig | null): Promise<RankingTotal[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase

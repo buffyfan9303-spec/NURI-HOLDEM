@@ -5,7 +5,7 @@ import { useBackClose } from '../../lib/backstack';
 import { useToast } from '../atoms/Toast';
 import type { User, VenueInvite } from '../../api/auth';
 import { getMyVenueStaff, getMyVenueInvites, inviteStaffByEmail, cancelStaffInvite, removeStaff, setStaffTitle, checkNicknameAvailable, searchMembersForRanking } from '../../api/auth';
-import { getVenueRankings, saveVenueRankings, getVenuePageConfig, placementPointsOf, type VenuePageConfig, type RankingEntry } from '../../api/rankings';
+import { getVenueRankings, saveVenueRankings, getVenuePageConfig, placementPointsOf, prizeUnitRisk, type VenuePageConfig, type RankingEntry } from '../../api/rankings';
 import { canAccessLedger, canManagePos, getLedgerAccessUserIds, grantLedgerAccess, revokeLedgerAccess } from '../../api/ledger';
 import { getAllVenues, createMyVenue, type Venue } from '../../api/community';
 import { uploadPoster } from '../../lib/storage';
@@ -647,6 +647,15 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
     if (clean.length === 0) return toast.show('순위를 한 명 이상 입력해 주세요', 'error');
     if (clean.some((r) => !r.nickname.trim()))
       return toast.show('각 줄에 닉네임을 입력해 주세요 (실명·프라이즈는 선택)', 'error');
+    // 프라이즈는 만원 단위 — 1억(10,000만) 이상은 원 단위 오입력이 거의 확실하다.
+    // 저장되는 순간 매장·전국 프라이즈 보드에 그대로 누적되고, 되돌리려면 그 날짜 순위를
+    // 통째로 다시 입력해야 해서 인라인 경고만으로는 부족하다. 여기서 한 번 붙잡는다.
+    const wrongUnit = clean.filter((r) => prizeUnitRisk(r.prize) === 'impossible');
+    if (wrongUnit.length > 0 && !window.confirm(
+      `프라이즈가 원 단위로 입력된 것 같습니다 (${wrongUnit.map((r) => r.prize).join(', ')}).\n\n`
+      + '이 칸은 만원 단위입니다 — 100만원이면 100, 1,000만원이면 1000.\n\n'
+      + '이대로 저장하면 매장·전국 프라이즈 순위가 크게 왜곡됩니다. 그래도 저장할까요?',
+    )) return;
     setSaving(true);
     try {
       await saveVenueRankings(venueId, date, clean.map(({ nickname, realName, prize }) => ({ nickname, realName, prize })), eventName);
@@ -829,7 +838,7 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
       </div>
 
       <p className="text-2xs text-ink-muted">
-        <span className="text-accent-300 font-semibold">닉네임은 필수</span>, 실명·프라이즈는 선택입니다. 등수마다 <span className="text-accent-300 font-semibold">기준 점수(+N점)</span>가 자동 부여되고, 프라이즈는 <span className="text-accent-300 font-semibold">매장 커뮤니티 순위 점수</span>로만 쓰입니다(금전적 가치 없음). 손님 화면엔 <span className="text-accent-300 font-semibold">실명(닉네임) 형식</span>으로 닉네임 일부를 가려 표시됩니다(예: 누리홀덤(나*리)).
+        <span className="text-accent-300 font-semibold">닉네임은 필수</span>, 실명·프라이즈는 선택입니다. 프라이즈는 <span className="text-accent-300 font-semibold">만원 단위</span>로 입력하세요 — 100만원은 <span className="text-accent-300 font-semibold">100</span>, 1,000만원은 <span className="text-accent-300 font-semibold">1000</span>(원 단위로 치면 순위 점수가 1만 배로 잘못 쌓입니다). 등수마다 <span className="text-accent-300 font-semibold">기준 점수(+N점)</span>가 자동 부여되고, 프라이즈는 <span className="text-accent-300 font-semibold">매장 커뮤니티 순위 점수</span>로만 쓰입니다(금전적 가치 없음). 손님 화면엔 <span className="text-accent-300 font-semibold">실명(닉네임) 형식</span>으로 닉네임 일부를 가려 표시됩니다(예: 누리홀덤(나*리)).
       </p>
 
       {loading ? (
@@ -901,13 +910,22 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
                 placeholder="실명"
                 className="input w-full min-w-0 text-sm py-2"
               />
-              <input
-                type="text" inputMode="numeric" value={row.prize} maxLength={12}
-                onChange={(e) => update(i, 'prize', e.target.value.replace(/[^\d.]/g, ''))}
-                onKeyDown={(e) => { if (e.key === 'Enter' && i === rows.length - 1) addRow(); }}
-                placeholder="프라이즈"
-                className="input w-full min-w-0 text-sm py-2"
-              />
+              {/* 프라이즈는 '만원 단위'다. 단위 표기가 없어 원 단위로 치면 매장·전국 프라이즈
+                  랭킹이 1만 배로 오염되므로, 값이 지워져도 안 사라지는 고정 suffix 로 못 박는다.
+                  (placeholder 만으로는 입력 시작하는 순간 단위가 화면에서 사라진다) */}
+              <div className="relative min-w-0">
+                <input
+                  type="text" inputMode="numeric" value={row.prize} maxLength={12}
+                  onChange={(e) => update(i, 'prize', e.target.value.replace(/[^\d.]/g, ''))}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && i === rows.length - 1) addRow(); }}
+                  placeholder="프라이즈"
+                  aria-label="프라이즈 (만원 단위)"
+                  title="만원 단위 — 100만원이면 100, 1,000만원이면 1000"
+                  className={['input w-full min-w-0 text-sm py-2 pr-7',
+                    prizeUnitRisk(row.prize) !== 'ok' ? 'border-amber-400/70 focus:border-amber-400 focus:ring-amber-400' : ''].join(' ')}
+                />
+                <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">만</span>
+              </div>
               <button
                 type="button" onClick={() => removeRow(i)} aria-label="줄 삭제"
                 className="h-8 w-8 justify-self-center flex items-center justify-center rounded-input text-ink-muted hover:text-danger-light transition-colors lg:order-last"
@@ -924,6 +942,19 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
           ))}
         </ul>
       )}
+
+      {/* 프라이즈 단위 오입력 경고 — 저장 버튼을 누르기 전에 어느 등수가 이상한지 짚어 준다.
+          막지 않는 이유: 1,000만원 프라이즈는 실제로 있어서, 차단하면 정상 입력을 잃는다. */}
+      {(() => {
+        const bad = rows.map((r, i) => ({ no: i + 1, risk: prizeUnitRisk(r.prize) })).filter((x) => x.risk !== 'ok');
+        if (bad.length === 0) return null;
+        return (
+          <p className="rounded-input border border-amber-400/40 bg-amber-500/10 px-2.5 py-2 text-2xs leading-relaxed text-amber-200">
+            ⚠️ <b>{bad.map((x) => `${x.no}위`).join(', ')}</b> 프라이즈가 큽니다 — 이 칸은 <b>만원 단위</b>예요.
+            100만원이면 <b>100</b>, 1,000만원이면 <b>1000</b>. 원 단위로 치면 매장·전국 프라이즈 순위가 크게 왜곡됩니다.
+          </p>
+        );
+      })()}
 
       <button type="button" onClick={addRow}
         className="w-full py-2 rounded-input border border-dashed border-border-default text-xs font-semibold text-ink-secondary hover:text-ink-primary hover:border-accent-400/50 transition-colors">

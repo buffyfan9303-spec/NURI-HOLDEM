@@ -10,7 +10,7 @@ import type { SearchState } from './components/features/IntegratedSearchBar';
 import ScheduleCard from './components/features/ScheduleCard';
 import WeeklyBestStrip from './components/features/WeeklyBestStrip';
 import ScheduleTable from './components/features/ScheduleTable';
-import { getWeeklyMoneyinKings, getVenueRankings, type WeeklyKing, type RankingEntry } from './api/rankings';
+import { getWeeklyMoneyinKings, getVenueRankings, parsePrizeMan, type WeeklyKing, type RankingEntry } from './api/rankings';
 import { getReservationCounts } from './api/reservations';
 import { getVenueRatings } from './api/reviews';
 import NotificationPanel from './components/features/NotificationPanel';
@@ -2325,7 +2325,8 @@ function PastTournaments({ schedules, onSelect }: { schedules: Schedule[]; onSel
                           {medal(e.position) ?? `${e.position}위`}
                         </span>
                         <span className="min-w-0 flex-1 truncate font-semibold text-ink-primary">{e.nickname}</span>
-                        {e.prize && <span className="shrink-0 text-xs tabular-nums text-accent-300">{e.prize}</span>}
+                        {/* prize 는 만원 단위 텍스트 — 개인 대시보드(CustomerDashboardPage)와 같은 표기로 맞춘다 */}
+                        {e.prize && <span className="shrink-0 text-xs tabular-nums text-accent-300">{parsePrizeMan(e.prize) ? `${parsePrizeMan(e.prize).toLocaleString()}만` : e.prize}</span>}
                       </li>
                     ))}
                   </ul>

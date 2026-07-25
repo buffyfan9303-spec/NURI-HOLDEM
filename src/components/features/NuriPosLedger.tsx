@@ -10,8 +10,8 @@ import DateTimePicker from '../atoms/DateTimePicker';
 import { useAuth } from '../../contexts/AuthContext';
 import Icon from '../atoms/Icon';
 import {
-  type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type LedgerSessionListItem, type DiscountPreset, type EarlyType, type LedgerGame, type ClockSnapshot,
-  visitorLabel, wonToMan, WON_PER_MAN, buyinFinance, earlyTypeOf, setBuyinEarly, MAIN_GAME_SEQ,
+  type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type LedgerSessionListItem, type DiscountPreset, type EarlyType, type LedgerGame, type ClockSnapshot, type LedgerLossSummary,
+  visitorLabel, wonToMan, WON_PER_MAN, buyinFinance, earlyTypeOf, setBuyinEarly, MAIN_GAME_SEQ, ledgerLossSummary,
   getLedgerSession, getLedgerGames, saveLedgerSession, openLedgerSession, closeLedgerSession, reopenLedgerSession, deleteLedgerSession,
   setRegistrationClosed, getLastLedgerSettings, getLedgerSessionList, getLedgerAccessUserIds, notifyLedgerOpen,
   getLedgerBuyins, upsertBuyin, upsertBuyinSplit, cancelBuyin,
@@ -24,7 +24,7 @@ import { getStaffSchedule, addStaffShift } from '../../api/staffSchedule';
 import { getVenueRankings } from '../../api/rankings';
 import { exportLedgerXls } from '../../lib/ledgerExport';
 import { getSchedules, type Schedule } from '../../api/schedules';
-import { getClockState, saveClockState, subscribeClock, defaultClockConfig, deriveClockCounts, computeLiveStats, type ClockState } from '../../api/clock';
+import { getClockState, saveClockState, subscribeClock, defaultClockConfig, deriveClockCounts, computeLiveStats, levelSnapshot, levelMovePatch, levelUndoPatch, type ClockState, type ClockLevelSnapshot } from '../../api/clock';
 import { getMyVenueStaff, searchMembersForRanking, type User } from '../../api/auth';
 import { accrueVoucher } from '../../api/vouchers';
 import { useBackClose } from '../../lib/backstack';
@@ -196,12 +196,35 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     setGameSeq(MAIN_GAME_SEQ); // 포스터→장부 진입은 메인 게임
     setMode('board');
   }, [seed]);
-  const handleDeleteSession = useCallback(async (d: string, g = MAIN_GAME_SEQ) => {
-    const gl = g === MAIN_GAME_SEQ ? '메인' : `사이드${g - 1}`;
-    if (!confirm(`${d} ${gl} 장부를 삭제할까요?\n바인·명단·세션 기록이 모두 삭제되며 되돌릴 수 없습니다.`)) return;
-    try { await deleteLedgerSession(venueId, d, g); toast.show('장부를 삭제했습니다', 'info'); loadList(); }
+  // 장부 삭제는 바인·명단·세션을 통째로 지우는 하드 삭제 RPC라 복구 수단이 0이다.
+  // 그런데 정작 '되돌릴 수 있는' 정산 마감은 꾹-누르기로 막혀 있어 위험도와 확인 강도가 역전돼 있었다.
+  // → confirm 1회를 없애고, 무엇을 잃는지(바인·인원·매출·미수)를 실수치로 먼저 보여준 뒤 마감과 같은 꾹-누르기로 통일한다.
+  const [delTarget, setDelTarget] = useState<{ date: string; gameSeq: number; label: string } | null>(null);
+  const [delLoss, setDelLoss] = useState<LedgerLossSummary | null>(null);
+  const [delLossErr, setDelLossErr] = useState(false);
+  const [delBusy, setDelBusy] = useState(false);
+  const delSeq = useRef(0); // (reload 와 같은 관행) 다른 장부의 늦은 응답이 현재 수치를 덮지 않게
+  // 목록 API는 단가·담당만 들고 있어 '잃는 양'을 모른다. 목록 로드를 무겁게 만들지 않으려고
+  // 삭제를 누른 그 장부 하나만 이 시점에 조회한다(보드의 buyins/players 는 다른 날짜 것이라 못 씀).
+  const askDeleteSession = useCallback((d: string, g = MAIN_GAME_SEQ) => {
+    const my = ++delSeq.current;
+    setDelTarget({ date: d, gameSeq: g, label: `${d} ${g === MAIN_GAME_SEQ ? '메인' : `사이드${g - 1}`}` });
+    setDelLoss(null); setDelLossErr(false);
+    Promise.all([getLedgerSession(venueId, d, g), getLedgerBuyins(venueId, d, g), getLedgerPlayers(venueId, d, g)])
+      .then(([s, bs, ps]) => { if (my === delSeq.current) setDelLoss(ledgerLossSummary(bs, ps, s)); })
+      .catch(() => { if (my === delSeq.current) setDelLossErr(true); });
+  }, [venueId]);
+  const doDeleteSession = useCallback(async () => {
+    if (!delTarget || delBusy) return; // 홀드 재진입/연타로 두 번 실행되지 않게
+    setDelBusy(true);
+    try {
+      await deleteLedgerSession(venueId, delTarget.date, delTarget.gameSeq);
+      toast.show(`${delTarget.label} 장부를 삭제했습니다`, 'info'); // 어느 장부였는지 남긴다(오삭제 사후 추적)
+      setDelTarget(null); loadList();
+    }
     catch (e) { toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'); }
-  }, [venueId, toast, loadList]);
+    finally { setDelBusy(false); }
+  }, [venueId, delTarget, delBusy, toast, loadList]);
 
   // (A4) reload 에도 요청 토큰 가드 — 실시간 콜백이 날짜 전환 중 호출돼도 stale 응답이 현재 명단을 덮지 않게.
   const reloadSeq = useRef(0);
@@ -606,8 +629,8 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                                 : <span className="shrink-0 text-2xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-badge">진행중</span>}
                             </button>
                             {fullAccess && (
-                              <button type="button" onClick={() => handleDeleteSession(s.sessionDate, s.gameSeq)} aria-label={`${s.sessionDate} ${gl(s.gameSeq)} 장부 삭제`}
-                                className="shrink-0 mr-1.5 w-8 h-8 flex items-center justify-center rounded-input text-ink-muted hover:text-danger-light hover:bg-danger/10 transition-colors">
+                              <button type="button" onClick={() => askDeleteSession(s.sessionDate, s.gameSeq)} aria-label={`${s.sessionDate} ${gl(s.gameSeq)} 장부 삭제`}
+                                className="shrink-0 ml-1 mr-1.5 w-8 h-8 flex items-center justify-center rounded-input text-ink-muted hover:text-danger-light hover:bg-danger/10 transition-colors">
                                 <Icon name="trash" size={15} />
                               </button>
                             )}
@@ -622,6 +645,15 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
               });
             })()}
           </div>
+        )}
+
+        {/* 삭제 확인 — 되돌릴 수 없으므로 실수치 + 꾹 눌러 확정(마감과 최소 동일 강도) */}
+        {delTarget && (
+          <DeleteSessionModal
+            label={delTarget.label} loss={delLoss} lossErr={delLossErr} busy={delBusy}
+            onClose={() => { if (!delBusy) setDelTarget(null); }}
+            onConfirm={doDeleteSession}
+          />
         )}
       </div>
     );
@@ -1130,6 +1162,12 @@ function ClockRemoteBar({ clock, onPatch, onOpenClock, active = true }: {
     return () => clearInterval(t);
   }, [clock.running, active]);
 
+  // 레벨 이동 되돌리기 — ‹ ⏸ › 는 40px 이지만 8px 간격으로 붙어 있어 방향 오탭이 실제로 난다.
+  // 이동 직전 raw 행을 6초 보관했다가 그대로 되쓰면 클락 화면·TV(?display=)까지 함께 원상 복구된다.
+  const [levelUndo, setLevelUndo] = useState<ClockLevelSnapshot | null>(null);
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (undoTimerRef.current) clearTimeout(undoTimerRef.current); }, []);
+
   const lv = clock.config.levels;
   // 실효 레벨 — running인데 endsAt이 지났으면(클락 화면 미오픈으로 전진 못 함) 경과분만큼 전진해 표시/제어
   let idx = Math.max(0, Math.min(clock.currentIndex, Math.max(0, lv.length - 1)));
@@ -1142,11 +1180,21 @@ function ClockRemoteBar({ clock, onPatch, onOpenClock, active = true }: {
   const mm = Math.floor(rem / 60_000), ss = Math.floor((rem % 60_000) / 1000);
   if (!cur) return null;
 
+  // 이동 계산은 실효 idx(endsAt 경과분 전진 반영) 기준이지만, 되돌리기는 '이동 전 DB 행'을 그대로 복원한다.
+  // 파생값(rem)이 아니라 raw 를 복원해야 클락 화면·TV 가 이동 전과 완전히 같은 값을 다시 계산한다.
   const go = (delta: number) => {
-    const n = Math.max(0, Math.min(lv.length - 1, idx + delta));
-    if (n === idx && delta > 0) return;
-    const ms = (lv[n].minutes || 0) * 60_000;
-    onPatch({ currentIndex: n, remainingMs: ms, endsAt: clock.running ? new Date(Date.now() + ms).toISOString() : null });
+    const patch = levelMovePatch(clock, idx, delta);
+    if (!patch) return; // 경계에서 현재 레벨 타이머만 통째로 리셋되던 사고 차단(기존 ‹ 쪽 가드 누락도 함께 닫힘)
+    setLevelUndo(levelSnapshot(clock));
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    undoTimerRef.current = setTimeout(() => setLevelUndo(null), 6000);
+    onPatch(patch);
+  };
+  const undoGo = () => {
+    if (!levelUndo) return;
+    onPatch(levelUndoPatch(levelUndo));
+    setLevelUndo(null);
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
   };
   const toggle = () => {
     if (clock.running) {
@@ -1193,6 +1241,14 @@ function ClockRemoteBar({ clock, onPatch, onOpenClock, active = true }: {
         <button type="button" onClick={() => go(1)} disabled={idx >= lv.length - 1} aria-label="다음 레벨"
           className={`${ctl} border-border-default text-ink-secondary hover:text-ink-primary disabled:opacity-35`}>›</button>
       </div>
+
+      {/* 레벨 오조작 복구(6초) — 이동 전 레벨·남은 시간으로 되돌린다. TV 송출 화면도 함께 복원됨 */}
+      {levelUndo && (
+        <button type="button" onClick={undoGo} aria-label="레벨 이동 되돌리기"
+          className="flex w-full items-center justify-center gap-1.5 rounded-input border border-amber-400/60 bg-amber-400/12 py-2 text-2xs font-extrabold text-amber-300 active:bg-amber-400/20">
+          ↩ 레벨 이동 되돌리기 <span className="font-normal text-amber-300/70">— 남은 시간까지 복원</span>
+        </button>
+      )}
 
       {/* 2행: 아웃 처리(최우선) — 생존 카운트 + 큰 아웃 버튼 + 되돌리기 아이콘 */}
       <div className="flex items-center gap-2 border-t border-accent-400/15 pt-2">
@@ -2023,6 +2079,51 @@ function CloseModal({ stats, unpaidPlayers, onClose, onConfirm }: {
           <button type="button" onClick={onClose} className="btn-ghost text-sm flex-1">취소</button>
           <HoldToConfirmButton onConfirm={() => onConfirm(memo)} className="btn-primary text-sm flex-1">
             꾹 눌러 마감 확정
+          </HoldToConfirmButton>
+        </div>
+      </div>
+    </Overlay>
+  );
+}
+
+// ── 장부 삭제 확인 모달 ───────────────────────────────────────────────────────
+// 왜 confirm 이 아니라 이 모달인가: 삭제는 복구 수단이 0인데(하드 삭제 RPC) 되돌릴 수 있는 '마감'보다
+// 확인이 약했다. 잃는 실수치를 먼저 보여주고, 마감과 같은 꾹-누르기로 강도를 맞춘다.
+// 수치 로딩 중에는 확정을 막는다 — 무엇을 잃는지 모른 채 누르는 것이 이 결함의 핵심이라 그 상태를 재현하면 안 된다.
+function DeleteSessionModal({ label, loss, lossErr, busy, onClose, onConfirm }: {
+  label: string;
+  loss: LedgerLossSummary | null;
+  lossErr: boolean;
+  busy: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <Overlay title={`${label} 장부 삭제`} onClose={onClose}>
+      <div className="space-y-3">
+        <p className="text-sm font-bold text-danger-light">삭제하면 아래 기록이 영구히 사라집니다. 되돌릴 수 없습니다.</p>
+        {loss ? (
+          <div className="grid grid-cols-2 gap-2">
+            <SummaryStat label="바인 기록" value={`${loss.buyins}건`} />
+            <SummaryStat label="명단 인원" value={`${loss.people}명`} />
+            <SummaryStat label="완납 매출" value={`${wonToMan(loss.revenue)}만원`} tone="emerald" />
+            <SummaryStat label="미수금 기록" value={`${wonToMan(loss.unpaid)}만원`} tone="danger" />
+          </div>
+        ) : lossErr ? (
+          <p className="rounded-input border border-danger/30 bg-danger/[0.05] p-2.5 text-2xs text-danger-light">
+            잃는 기록의 양을 불러오지 못했습니다(네트워크). 수치를 확인하지 못한 채로도 삭제는 가능하지만, 확인 후 진행을 권합니다.
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 gap-2">
+            {[0, 1, 2, 3].map((i) => <div key={i} className="h-[58px] animate-pulse rounded-input bg-surface-high" />)}
+          </div>
+        )}
+        <p className="text-2xs text-ink-muted">마감(읽기전용)은 업주가 다시 해제할 수 있지만, 삭제는 복구 수단이 없습니다. 보관만 원하면 삭제 대신 마감을 쓰세요.</p>
+        <div className="flex gap-2">
+          <button type="button" onClick={onClose} disabled={busy} className="btn-ghost text-sm flex-1 disabled:opacity-50">취소</button>
+          <HoldToConfirmButton onConfirm={onConfirm} disabled={busy || (!loss && !lossErr)}
+            className="btn-danger text-sm flex-1 disabled:opacity-50">
+            {busy ? '삭제 중…' : '꾹 눌러 영구 삭제'}
           </HoldToConfirmButton>
         </div>
       </div>

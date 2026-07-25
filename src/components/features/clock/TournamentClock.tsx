@@ -12,6 +12,7 @@ import {
   type ClockConfig, type ClockLevel, type ClockPreset, type ClockState, type ClockPrizeRow,
   defaultClockConfig, emptyClockState, deriveClockCounts, computeLiveStats, PRESET_LIMIT,
   countLevels, withDerivedEarly, generateBlinds,
+  levelSnapshot, levelMovePatch, levelUndoPatch, type ClockLevelSnapshot,
   getClockPresets, saveClockPreset, deleteClockPreset,
   getClockState, saveClockState, clearClockState, subscribeClock, subscribeRunningClocks, getVenueClocks,
 } from '../../../api/clock';
@@ -20,7 +21,7 @@ import {
   type LedgerBuyin, type LedgerSession, type LedgerSessionListItem,
 } from '../../../api/ledger';
 import { listGamePresets, type GamePreset } from '../../../api/presets';
-import { saveVenueRankings } from '../../../api/rankings';
+import { saveVenueRankings, prizeUnitRisk } from '../../../api/rankings';
 import Modal from '../../atoms/Modal';
 
 const now = () => Date.now();
@@ -311,6 +312,12 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
   const snapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null); // (A2) 장부 변동 스냅샷 저장 디바운스
   const acRef = useRef<AudioContext | null>(null); // 사운드용 AudioContext 1개 재사용(매번 new 방지 → 브라우저 컨텍스트 한도/누수 방지)
   const prevVolRef = useRef(50); // 음소거 토글 시 직전 볼륨 복원용
+  // 레벨 이동 되돌리기 — 이동 직전 raw 스냅샷을 6초 보관.
+  // 왜 서버가 아니라 클라이언트인가: 되돌리기는 '방금 잘못 누른 그 사람'의 즉시 취소라,
+  // DB에 이력을 남기면 장부 리모컨·클락 화면·TV 사이에 누가 무엇을 되돌리는지 경합만 생긴다.
+  const [levelUndo, setLevelUndo] = useState<ClockLevelSnapshot | null>(null);
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (undoTimerRef.current) clearTimeout(undoTimerRef.current); }, []);
 
   // 장부 연동: 연결된 세션의 바인/얼리설정 자동 반영
   // (A1) stale 가드 — 게임/세션을 빠르게 전환하면 이전 fetch 응답이 늦게 도착해 현재 값을 덮어쓰는 race 차단.
@@ -410,6 +417,13 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
     if (!state.sessionDate || !finishRows) return;
     const entries = finishRows.filter((r) => r.name.trim()).map((r) => ({ nickname: r.name.trim(), realName: '', prize: r.prize.trim() }));
     if (!entries.length) { toast.show('최소 1명의 입상자를 입력하세요', 'error'); return; }
+    // 이 칸도 만원 단위다. cfg.prizes 자동 채움은 10,000원 미만 금액을 만원 값으로 그대로 넘기므로
+    // (`p.amount >= 10000 ? … : String(p.amount)`), 순위 입력 화면과 같은 기준으로 한 번 더 거른다.
+    const wrongUnit = entries.filter((e) => prizeUnitRisk(e.prize) === 'impossible');
+    if (wrongUnit.length > 0 && !window.confirm(
+      `상금이 원 단위로 입력된 것 같습니다 (${wrongUnit.map((e) => e.prize).join(', ')}).\n\n`
+      + '이 칸은 만원 단위입니다 — 100만원이면 100.\n\n이대로 저장하면 매장·전국 프라이즈 순위가 크게 왜곡됩니다. 그래도 저장할까요?',
+    )) return;
     setFinishBusy(true);
     try {
       await saveVenueRankings(state.venueId, state.sessionDate, entries, (cfg.title || '').trim());
@@ -478,10 +492,25 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
     if (state.running) persist({ running: false, remainingMs: Math.max(0, remaining), endsAt: null });
     else persist({ running: true, endsAt: new Date(now() + Math.max(0, state.remainingMs || remaining)).toISOString() });
   };
+  // 레벨 이동 — 되돌리기 6초 무장 후 이동. 이동은 대상 레벨의 전체 분으로 타이머를 덮어쓰므로
+  // (진행하던 시간이 사라지므로) 스냅샷 없이는 복구 수단이 아예 없다.
+  const armLevelUndo = () => {
+    setLevelUndo(levelSnapshot(state));
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    undoTimerRef.current = setTimeout(() => setLevelUndo(null), 6000);
+  };
+  const undoLevel = () => {
+    if (!levelUndo) return;
+    persist(levelUndoPatch(levelUndo)); // 같은 저장 경로 → realtime 으로 TV(?display=)까지 함께 복원
+    setLevelUndo(null);
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    toast.show('레벨 이동을 되돌렸습니다 — 남은 시간까지 복원', 'info');
+  };
   const setLevel = (delta: number) => {
-    const idx = Math.max(0, Math.min(state.config.levels.length - 1, state.currentIndex + delta));
-    const rem = state.config.levels[idx].minutes * 60_000;
-    persist({ currentIndex: idx, remainingMs: rem, endsAt: state.running ? new Date(now() + rem).toISOString() : null });
+    const patch = levelMovePatch(state, state.currentIndex, delta);
+    if (!patch) return; // 첫/마지막 레벨: 레벨은 그대로인데 현재 레벨 타이머만 리셋되던 사고 차단
+    armLevelUndo();
+    persist(patch);
   };
   const adjustTime = (deltaMs: number) => {
     if (state.running && state.endsAt) {
@@ -688,7 +717,13 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
               <Stepper label="Rebuy" onPlus={() => adj('adjRebuys', 1)} onMinus={() => adj('adjRebuys', -1)} />
               <Stepper label="Early" onPlus={() => adj('adjEarlies', 1)} onMinus={() => adj('adjEarlies', -1)} />
               <Stepper label="Addon" onPlus={() => adj('adjAddons', 1)} onMinus={() => adj('adjAddons', -1)} />
-              <Stepper label="Level" onPlus={() => setLevel(1)} onMinus={() => setLevel(-1)} />
+              <Stepper label="Level" size="lg"
+                plusDisabled={state.currentIndex >= cfg.levels.length - 1} minusDisabled={state.currentIndex <= 0}
+                onPlus={() => setLevel(1)} onMinus={() => setLevel(-1)} />
+              {levelUndo && (
+                <button type="button" onClick={undoLevel} title="방금 레벨 이동을 취소하고 남은 시간까지 되돌립니다(TV 포함)"
+                  className="self-end h-10 px-3 rounded-input border border-amber-400/60 bg-amber-400/15 text-2xs font-extrabold text-amber-200 hover:bg-amber-400/25">↩ 레벨 되돌리기</button>
+              )}
               <Stepper label="Min" onPlus={() => adjustTime(60_000)} onMinus={() => adjustTime(-60_000)} />
               <Stepper label="Sec" onPlus={() => adjustTime(1_000)} onMinus={() => adjustTime(-1_000)} />
               <button type="button" onClick={toggleRun}
@@ -750,13 +785,21 @@ function Stat({ label, value, tone, fs }: { label: string; value: string; tone?:
     </div>
   );
 }
-function Stepper({ label, onPlus, onMinus }: { label: string; onPlus: () => void; onMinus: () => void }) {
+// size='lg' 는 레벨 스테퍼 전용. 왜 이것만 크게 하나:
+// 오조작 시 '남은 시간이 통째로 사라지는' 유일한 스테퍼인데 다른 보정 스테퍼와 똑같이 28px·2px 간격이라
+// ＋(다음 레벨)와 －(이전 레벨)를 손가락 하나로 헷갈려 누른다. 전체를 키우면 풀스크린 16:9 박스에서
+// 컨트롤 바가 shrink-0 라 타이머 영역이 깎이므로 여기만 40px·6px 로 분리한다.
+function Stepper({ label, onPlus, onMinus, size = 'sm', plusDisabled, minusDisabled }: {
+  label: string; onPlus: () => void; onMinus: () => void;
+  size?: 'sm' | 'lg'; plusDisabled?: boolean; minusDisabled?: boolean;
+}) {
+  const box = size === 'lg' ? 'w-10 h-10 text-base' : 'w-7 h-7 text-sm';
   return (
     <div className="flex flex-col items-center gap-0.5">
       <span className="text-[9px] text-white/45">{label}</span>
-      <div className="flex gap-0.5">
-        <button type="button" onClick={onPlus} className="w-7 h-7 rounded-input bg-white/10 hover:bg-white/15 border border-border-default text-white/60 hover:text-[#8B94E8] text-sm leading-none">＋</button>
-        <button type="button" onClick={onMinus} className="w-7 h-7 rounded-input bg-white/10 hover:bg-white/15 border border-border-default text-white/60 hover:text-danger-light text-sm leading-none">－</button>
+      <div className={size === 'lg' ? 'flex gap-1.5' : 'flex gap-0.5'}>
+        <button type="button" onClick={onPlus} disabled={plusDisabled} className={`${box} rounded-input bg-white/10 hover:bg-white/15 border border-border-default text-white/60 hover:text-[#8B94E8] leading-none disabled:opacity-30`}>＋</button>
+        <button type="button" onClick={onMinus} disabled={minusDisabled} className={`${box} rounded-input bg-white/10 hover:bg-white/15 border border-border-default text-white/60 hover:text-danger-light leading-none disabled:opacity-30`}>－</button>
       </div>
     </div>
   );

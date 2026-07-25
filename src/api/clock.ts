@@ -150,6 +150,42 @@ export function emptyClockState(venueId: string, config = defaultClockConfig(), 
   };
 }
 
+// ── 레벨 이동 / 되돌리기 ───────────────────────────────────────────────────────
+// 왜 여기(api)에 두는가: 레벨을 움직이는 화면이 둘(클락 하단 Level ＋－, 장부 클락 리모컨 ‹ ›)인데
+// 각자 인라인으로 계산하다 보니 경계 가드가 한쪽에만 있고(‹ 쪽 누락) 되돌리기는 양쪽 다 없었다.
+// 두 화면이 같은 함수를 쓰게 해 규칙을 한 곳에 고정한다.
+
+/** 레벨 이동 직전 스냅샷 — '이동 전 DB 행'을 그대로 복원하기 위한 최소 4필드.
+ *  왜 파생 remaining 이 아니라 raw 인가: TV(?display=)·리모컨·클락 화면이 모두 이 4필드로만
+ *  화면을 계산하므로, 이 값만 되돌리면 세 화면이 동시에 정확히 복원된다. */
+export interface ClockLevelSnapshot { currentIndex: number; remainingMs: number; endsAt: string | null; running: boolean }
+
+export function levelSnapshot(s: Pick<ClockState, 'currentIndex' | 'remainingMs' | 'endsAt' | 'running'>): ClockLevelSnapshot {
+  return { currentIndex: s.currentIndex, remainingMs: s.remainingMs, endsAt: s.endsAt, running: s.running };
+}
+
+/** 레벨 이동 패치 — 이동한 레벨의 전체 분으로 타이머를 다시 채운다(기존 동작 유지).
+ *  fromIndex 는 '실효 인덱스'를 넘긴다(리모컨은 endsAt 경과분만큼 전진시킨 값을 쓴다).
+ *  왜 null 을 반환하나: 기존 코드는 clamp 만 해서 첫 레벨에서 －, 마지막 레벨에서 ＋ 를 누르면
+ *  레벨은 그대로인 채 현재 레벨 타이머만 통째로 리셋됐다 — 레벨 번호가 안 바뀌어 사고를 인지조차 못 한다. */
+export function levelMovePatch(
+  s: Pick<ClockState, 'config' | 'running'>, fromIndex: number, delta: number, nowMs = Date.now(),
+): Partial<ClockState> | null {
+  const lv = s.config?.levels ?? [];
+  if (!lv.length) return null;
+  const to = Math.max(0, Math.min(lv.length - 1, fromIndex + delta));
+  if (to === fromIndex) return null;
+  const ms = (lv[to].minutes || 0) * 60_000;
+  return { currentIndex: to, remainingMs: ms, endsAt: s.running ? new Date(nowMs + ms).toISOString() : null };
+}
+
+/** 되돌리기 패치 — 이동 직전 스냅샷을 그대로 복원.
+ *  왜 endsAt(절대시각)을 그대로 쓰나: 진행 중이던 클락은 오조작을 알아채는 그 몇 초 동안에도
+ *  실제로 흘렀어야 한다. 남은 시간을 되감으면 없던 시간이 생겨 오히려 두 번째 오염이 된다. */
+export function levelUndoPatch(snap: ClockLevelSnapshot): Partial<ClockState> {
+  return { currentIndex: snap.currentIndex, remainingMs: snap.remainingMs, endsAt: snap.endsAt, running: snap.running };
+}
+
 // ── 매퍼 ──────────────────────────────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function rowToState(r: any): ClockState {

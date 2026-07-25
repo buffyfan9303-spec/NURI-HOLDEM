@@ -9,7 +9,7 @@
 //   ① buyinFinance 가 분납 티켓을 엔트리·티켓에 포함하는가
 //   ② (날짜+게임) 페어링과 (날짜만) 페어링의 결과가 다르다는 사실을 못 박아, 날짜-only 회귀를 막는다
 import { describe, it, expect } from 'vitest';
-import { buyinFinance, type LedgerBuyin, type LedgerSession } from '../api/ledger';
+import { buyinFinance, ledgerLossSummary, type LedgerBuyin, type LedgerSession } from '../api/ledger';
 
 function buyin(over: Partial<LedgerBuyin> = {}): LedgerBuyin {
   return {
@@ -195,5 +195,41 @@ describe('할인 프리셋 자리번호 — 중간 삭제 시 기존 바인 금�
     const blanked = presets.map((d, i) => (i === 1 ? { label: '', amount: 0 } : d));
     const b2 = buyin({ paymentMethod: 'cash', discountIndex: 2 });
     expect(buyinFinance(b2, session({ discounts: blanked })).paid).toBe(100_000);
+  });
+});
+
+// 삭제 확인창의 '잃는 양'은 마감 모달과 반드시 같은 규칙이어야 한다.
+// 왜: 확인창 숫자가 실제 장부보다 작게 나오면 사용자는 "별거 없네" 하고 지운다.
+//     경고가 거짓말이 되는 순간 확인 UI 자체가 무의미해지므로, 규칙 공유를 테스트로 못 박는다.
+describe('삭제 확인 요약 — 마감 모달과 같은 숫자를 말한다', () => {
+  const S = session({ discounts: [{ label: '1레벨', amount: 50_000 }] });
+  const rows = [
+    buyin({ playerName: 'A', entryNo: 1, paymentMethod: 'cash' }),                     // 10만
+    buyin({ playerName: 'A', entryNo: 2, paymentMethod: 'cash', discountIndex: 1 }),   // 5만(할인)
+    buyin({ playerName: 'B', entryNo: 1, paymentMethod: 'cash', isUnpaid: true }),     // 미수 10만
+    buyin({ playerName: 'C', entryNo: 1, paymentMethod: 'ticket' }),                   // 티켓(매출 0)
+  ];
+
+  it('매출·미수가 마감 모달 계산과 정확히 일치한다', () => {
+    const closeModal = rows.map((b) => buyinFinance(b, S))
+      .reduce((a, f) => ({ paid: a.paid + f.paid, unpaid: a.unpaid + f.unpaid }), { paid: 0, unpaid: 0 });
+    const loss = ledgerLossSummary(rows, [{ name: 'A' }, { name: 'B' }, { name: 'C' }], S);
+    expect(loss.revenue).toBe(closeModal.paid);
+    expect(loss.unpaid).toBe(closeModal.unpaid);
+    expect(loss.revenue).toBe(150_000);
+    expect(loss.unpaid).toBe(100_000);
+  });
+
+  it('바인 건수는 기록 행 수 그대로(엔트리 환산값이 아니다)', () => {
+    expect(ledgerLossSummary(rows, [], S).buyins).toBe(4);
+  });
+
+  it('🔴 인원 = 명단 ∪ 바인 이름 — 명단에서 빠진 바인만 있는 손님도 세야 한다', () => {
+    // 보드는 명단에 없는 바인 기록도 행으로 보여준다. 확인창이 명단만 세면 잃는 인원을 과소 표시한다.
+    expect(ledgerLossSummary(rows, [{ name: 'A' }], S).people).toBe(3);
+  });
+
+  it('빈 장부는 0으로 안전하게 나온다(0건인데 경고가 터지지 않게)', () => {
+    expect(ledgerLossSummary([], [], S)).toEqual({ buyins: 0, people: 0, revenue: 0, unpaid: 0 });
   });
 });
