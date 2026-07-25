@@ -1429,7 +1429,14 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   const setDisc = (i: number, patch: Partial<DiscountPreset>) =>
     setDiscs((arr) => arr.map((d, idx) => (idx === i ? { ...d, ...patch } : d)));
   const addDisc = () => setDiscs((arr) => (arr.length < 5 ? [...arr, { label: '', amount: 0 }] : arr));
-  const removeDisc = (i: number) => setDiscs((arr) => arr.filter((_, idx) => idx !== i));
+  // ⚠ 바인은 discountIndex(1-based 자리번호)로 할인을 참조한다 → 중간 칸을 배열에서 빼면
+  //   그 뒤 할인을 쓰던 기존 바인이 한 칸씩 당겨져 '다른 금액'으로 계산된다(과거 금액 오류 원인).
+  //   마지막 칸만 실제로 줄이고, 중간 칸은 자리를 남긴 채 비운다(계산은 0원 · 선택 목록에선 숨김).
+  const removeDisc = (i: number) => setDiscs((arr) => (
+    i === arr.length - 1
+      ? arr.slice(0, -1)
+      : arr.map((d, idx) => (idx === i ? { label: '', amount: 0 } : d))
+  ));
 
   // 프리셋 게임 클릭 → 아래 내용 자동입력(수정 가능). 담당직원(operId)은 프리셋과 무관 → 그대로 유지.
   const applyPreset = (p: LedgerPreset) => {
@@ -1478,7 +1485,10 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       isAddon, addonStack: isAddon ? addonStack : 0, voucherIssued, voucherAccrualPerBin: accrualPerBin,
       eventMemo: event.trim() || undefined, dealers: dealers.trim() || undefined,
       scheduleId: schedId || null, openedBy: operIds[0] ?? null, operators: operIds,
-      discounts: discs.filter((d) => d.amount > 0),
+      // ⚠ 압축 금지 — 바인은 discountIndex(1-based 자리번호)로 할인을 참조한다.
+      //   filter로 빈 칸을 없애면 3번 할인을 쓰던 기존 바인이 2번 금액으로 바뀌거나 할인이 증발한다.
+      //   빈 칸은 amount 0으로 자리만 남겨 두고(계산은 0원), 선택 목록에서만 감춘다.
+      discounts: discs.map((d) => ({ label: d.label ?? '', amount: d.amount > 0 ? d.amount : 0 })),
       earlyDoubleMin: base.earlyDoubleMin ?? 0, earlySingleMin: base.earlySingleMin ?? 0, tournamentStart: tStart,
     });
   };
@@ -1824,12 +1834,13 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
                     <span className="text-xs text-ink-muted">할인:</span>
                     <button type="button" onClick={() => setDiscIdx(0)}
                       className={['text-xs font-bold px-2.5 py-1.5 rounded-badge border', discIdx === 0 ? 'bg-surface-float text-ink-primary border-border-strong' : 'text-ink-muted border-border-default'].join(' ')}>없음</button>
-                    {discs.map((d, i) => (
+                    {/* 비운 자리(0원)는 감추되 인덱스는 그대로 둔다 — 자리번호가 바인 계산의 기준이라 재배열 불가 */}
+                    {discs.map((d, i) => (d.amount <= 0 ? null : (
                       <button key={i} type="button" onClick={() => setDiscIdx(i + 1)}
                         className={['text-xs font-bold px-2.5 py-1.5 rounded-badge border', discIdx === i + 1 ? 'bg-accent-300/15 text-accent-300 border-accent-400/40' : 'text-ink-muted border-border-default'].join(' ')}>
                         {d.label || `할인${i + 1}`} ({wonToMan(d.amount)}만)
                       </button>
-                    ))}
+                    )))}
                   </div>
                   {discIdx > 0 && session.buyinAmount > 0 && (() => {
                     const da = discs[discIdx - 1]?.amount ?? 0;
@@ -1910,13 +1921,13 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
                         discIdx === 0 ? 'border-accent-400/40 bg-accent-300/15 text-accent-300' : 'border-border-default text-ink-muted'].join(' ')}>
                       없음
                     </button>
-                    {discs.map((d, i) => (
+                    {discs.map((d, i) => (d.amount <= 0 ? null : (
                       <button key={i} type="button" onClick={() => setDiscIdx(i + 1)}
                         className={['rounded-input border px-2 py-1 text-2xs font-bold transition-colors',
                           discIdx === i + 1 ? 'border-accent-400/40 bg-accent-300/15 text-accent-300' : 'border-border-default text-ink-muted'].join(' ')}>
                         {d.label || `할인${i + 1}`} ({wonToMan(d.amount)}만)
                       </button>
-                    ))}
+                    )))}
                   </div>
                 </div>
               )}

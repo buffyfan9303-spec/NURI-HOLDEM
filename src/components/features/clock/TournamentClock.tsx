@@ -1069,16 +1069,31 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
 
       {/* 프라이즈 */}
       <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
-        <p className="text-2xs font-semibold text-ink-secondary">프라이즈</p>
+        <p className="text-2xs font-semibold text-ink-secondary">프라이즈 <span className="font-normal text-ink-muted">· 금액은 원 단위로 입력 (예: 50만원 → 500000)</span></p>
         <div className="space-y-1">
           {cfg.prizes.map((p, i) => (
             <div key={i} className="flex items-center gap-1.5">
               <input value={p.place} onChange={(e) => setPrize(i, { place: e.target.value })} className="input w-20 text-sm shrink-0" />
-              <input type="number" value={p.amount || ''} onChange={(e) => setPrize(i, { amount: +e.target.value || 0 })} className="input flex-1 text-sm tabular-nums" />
+              {/* 단위 표시가 없어 '50'(만원)과 '500000'(원)이 뒤섞였고, 순위 초안이 만원 환산을
+                  amount>=10000 여부로 추측해 1/10,000로 기록되는 일이 있었다 → 단위를 명시한다. */}
+              <div className="relative flex-1">
+                <input type="number" inputMode="numeric" value={p.amount || ''} onChange={(e) => setPrize(i, { amount: +e.target.value || 0 })}
+                  placeholder="500000" className="input w-full text-sm tabular-nums pr-8" />
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">원</span>
+              </div>
               <button type="button" onClick={() => removePrize(i)} className="text-ink-muted hover:text-danger-light text-xs px-1 shrink-0">✕</button>
             </div>
           ))}
         </div>
+        {(() => {
+          const sum = cfg.prizes.reduce((s, p) => s + (p.amount || 0), 0);
+          return sum > 0 ? (
+            <p className="text-right text-2xs text-ink-muted">
+              합계 <b className="text-ink-secondary tabular-nums">{sum.toLocaleString()}원</b>
+              {sum >= 10000 ? ` (${Math.round(sum / 10000).toLocaleString()}만원)` : ''}
+            </p>
+          ) : null;
+        })()}
         <button type="button" onClick={addPrize} className="w-full py-1.5 rounded-input border border-dashed border-border-default text-2xs text-ink-secondary hover:text-accent-300">+ 프라이즈</button>
       </section>
 

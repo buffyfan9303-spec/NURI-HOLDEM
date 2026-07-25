@@ -164,3 +164,36 @@ describe('화면 간 합계 일치 — 장부·통계·엑셀이 같은 규칙�
     expect(onlyTickets.reduce((s, f) => s + f.ticketPaid, 0)).toBe(2);
   });
 });
+
+// 할인 프리셋은 '자리번호(discountIndex)'로 참조된다 — 배열을 압축하면 과거 바인의 금액이 바뀐다.
+// 세션 설정에서 중간 할인을 지웠을 때 뒤 항목이 당겨지면, 이미 저장된 바인이 조용히 다른 금액이 된다.
+describe('할인 프리셋 자리번호 — 중간 삭제 시 기존 바인 금액 보존', () => {
+  const presets = [
+    { label: '1레벨', amount: 50_000 },
+    { label: '첫바인', amount: 30_000 },
+    { label: '레이디', amount: 20_000 },
+  ];
+  const b3 = buyin({ paymentMethod: 'cash', discountIndex: 3 }); // '레이디' 20,000 할인 적용된 바인
+
+  it('삭제 전: 3번 할인 = 2만 → 8만 결제', () => {
+    expect(buyinFinance(b3, session({ discounts: presets })).paid).toBe(80_000);
+  });
+
+  it('🔴 2번을 압축 삭제하면 3번 바인이 엉뚱한 금액이 된다(과거 버그 재현)', () => {
+    const compacted = presets.filter((_, i) => i !== 1); // [1레벨, 레이디] — 자리번호가 밀림
+    const f = buyinFinance(b3, session({ discounts: compacted }));
+    expect(f.paid).not.toBe(80_000); // 3번 자리가 사라져 할인 0 → 10만
+    expect(f.paid).toBe(100_000);
+  });
+
+  it('✅ 자리를 비우면(0원) 3번 바인의 금액이 그대로 유지된다', () => {
+    const blanked = presets.map((d, i) => (i === 1 ? { label: '', amount: 0 } : d));
+    expect(buyinFinance(b3, session({ discounts: blanked })).paid).toBe(80_000);
+  });
+
+  it('✅ 비운 자리를 참조하던 바인은 할인 0으로 안전하게 처리된다(터지지 않음)', () => {
+    const blanked = presets.map((d, i) => (i === 1 ? { label: '', amount: 0 } : d));
+    const b2 = buyin({ paymentMethod: 'cash', discountIndex: 2 });
+    expect(buyinFinance(b2, session({ discounts: blanked })).paid).toBe(100_000);
+  });
+});

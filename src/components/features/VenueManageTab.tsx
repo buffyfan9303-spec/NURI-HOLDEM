@@ -651,22 +651,39 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
     try {
       await saveVenueRankings(venueId, date, clean.map(({ nickname, realName, prize }) => ({ nickname, realName, prize })), eventName);
       // 매장이용권 지급 — 갯수>0 줄: 닉네임으로 가입자 조회 후 발급(본인인증 회원만, 서버 강제)
-      let issued = 0, failed = 0;
+      // ⚠ 과거 문제 2가지를 여기서 막는다.
+      //   ① found[0](부분일치 첫 번째)에게 그냥 지급 → 동명이인·유사닉에게 상품이 잘못 나감.
+      //      닉네임이 정확히 일치하는 1명일 때만 지급하고, 애매하면 건너뛰고 사장님께 알린다.
+      //   ② 저장 후 voucher 칸이 그대로 남아, 순위를 한 번 더 저장하면 이용권이 중복 발행됐다.
+      //      성공한 줄은 voucher 를 비워 재발급을 막는다(순위 점수는 서버가 덮어쓰므로 무해).
+      let issued = 0, failed = 0, ambiguous = 0;
+      const issuedNicks: string[] = [];
       for (const r of clean) {
         const cnt = parseInt(r.voucher, 10);
         if (!cnt || cnt < 1) continue;
+        const nick = r.nickname.trim();
         try {
-          const found = await findUserForTransfer(r.nickname.trim());
-          if (!found.length) { failed++; continue; }
-          await issueVoucher(venueId, { title: '순위 시상', count: Math.min(1000, cnt), holderUserId: found[0].id, holderName: found[0].display, note: r.note.trim() || '순위 시상' });
+          const found = await findUserForTransfer(nick);
+          // 정확 일치(대소문자 무시)만 인정 — 부분일치 후보가 여럿이면 오지급 위험이라 보류
+          const exact = found.filter((u) => (u.display ?? '').trim().toLowerCase() === nick.toLowerCase());
+          const target = exact.length === 1 ? exact[0] : null;
+          if (!target) { if (found.length > 0) ambiguous++; else failed++; continue; }
+          await issueVoucher(venueId, { title: '순위 시상', count: Math.min(1000, cnt), holderUserId: target.id, holderName: target.display, note: r.note.trim() || '순위 시상' });
           issued += Math.min(1000, cnt);
+          issuedNicks.push(nick);
         } catch { failed++; }
+      }
+      // 지급 성공한 줄의 이용권 칸 비우기 — 재저장 시 중복 발행 방지
+      if (issuedNicks.length > 0) {
+        setRows((prev) => prev.map((row) => (issuedNicks.includes(row.nickname.trim()) ? { ...row, voucher: '' } : row)));
       }
       toast.show(
         issued > 0
-          ? `순위 저장 + 이용권 ${issued}개 지급${failed ? ` · 미지급 ${failed}명(미가입/미인증)` : ''}`
-          : '순위 저장 완료 — 닉네임이 일치하는 회원에게 포인트가 반영됩니다',
-        'success',
+          ? `순위 저장 + 이용권 ${issued}개 지급${failed ? ` · 미지급 ${failed}명(미가입/미인증)` : ''}${ambiguous ? ` · 확인필요 ${ambiguous}명(닉네임 불일치)` : ''}`
+          : ambiguous > 0
+            ? `순위 저장 완료 — 이용권 ${ambiguous}명은 닉네임이 정확히 일치하지 않아 지급하지 않았습니다(직접 확인 후 발급해 주세요)`
+            : '순위 저장 완료 — 닉네임이 일치하는 회원에게 포인트가 반영됩니다',
+        ambiguous > 0 && issued === 0 ? 'info' : 'success',
       );
     } catch (e) {
       toast.show(e instanceof Error ? e.message : '저장에 실패했습니다', 'error');

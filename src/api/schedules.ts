@@ -115,6 +115,9 @@ export async function createSchedule(
     buy_in: payload.buyIn, structure: payload.structure,
     description: payload.description, payment_methods: payload.paymentMethods,
     partners: payload.partners,
+    // ⚠ seats(시상/시드권)가 insert에서 빠져 있어 '신규 등록'한 포스터만 시상이 저장되지 않았다
+    //   (수정 시엔 updateSchedule이 저장 → 등록 후 수정해야 나타나는 기이한 동작).
+    seats: payload.seats ?? null,
     ranking_prizes: payload.rankingPrizes, promotions: payload.promotions,
     poster_url: payload.posterUrl, poster_color: payload.posterColor,
     display_order: payload.displayOrder, is_premium: payload.isPremium,

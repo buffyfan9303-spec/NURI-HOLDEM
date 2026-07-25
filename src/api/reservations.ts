@@ -51,12 +51,15 @@ export async function getOwnerReservations(scheduleId: string): Promise<OwnerRes
   return (data ?? []).map((r: any) => ({ id: r.id, displayName: r.display_name, nickname: r.nickname ?? null, realName: r.real_name ?? null, createdAt: r.created_at }));
 }
 
+// ⚠ 테이블 직접 조회 금지 — RLS(sr_select)가 '본인 예약 또는 매장주'만 허용하므로
+//   손님 화면에서는 남의 예약이 안 보여 '예약 N명'이 항상 0으로 찍혔다(마감임박 뱃지도 무력화).
+//   명단은 계속 감추고, 인원 수만 주는 공개 RPC로 집계한다.
 export async function getReservationCounts(scheduleIds: string[]): Promise<Record<string, number>> {
   if (IS_MOCK || scheduleIds.length === 0) return {};
-  const { data } = await supabase.from('schedule_reservations').select('schedule_id').in('schedule_id', scheduleIds);
+  const { data } = await supabase.rpc('schedule_reservation_counts', { p_ids: scheduleIds });
   const m: Record<string, number> = {};
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (data ?? []).forEach((r: any) => { m[r.schedule_id] = (m[r.schedule_id] ?? 0) + 1; });
+  (data ?? []).forEach((r: any) => { m[r.schedule_id] = r.cnt ?? 0; });
   return m;
 }
 
