@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import Modal from '../atoms/Modal';
-import type { MarketplaceListing } from '../../api/marketplace';
+import type { MarketplaceListing, ListingLikeState } from '../../api/marketplace';
+import { getListingLikeState, toggleListingLike, nextLikeState } from '../../api/marketplace';
 import { CATEGORIES, CONDITION_COLOR, STATUS_MAP, relativeTime } from './MarketplaceTab';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBlocks } from '../../contexts/BlockContext';
@@ -21,12 +22,41 @@ interface ListingDetailModalProps {
 export default function ListingDetailModal({ listing, open, onClose, onDelete }: ListingDetailModalProps) {
   const { user }                  = useAuth();
   const { block }                 = useBlocks();
-  const [liked, setLiked]         = useState(false);
+  // 찜은 서버(listing_likes)가 단일 진실. liked 와 총계를 한 덩어리로 든 이유는
+  // 낙관적 토글에서 둘이 항상 같이 움직여야 하고, 서버 응답으로 통째로 덮어써야 하기 때문.
+  const [like, setLike]           = useState<ListingLikeState>({ liked: false, likeCount: listing?.likeCount ?? 0 });
+  const [likeBusy, setLikeBusy]   = useState(false);
   const [chatOpen, setChatOpen]   = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const toast                     = useToast();
 
+  // 열 때마다 서버에서 다시 읽는다 — 목록의 likeCount 는 탭 로드 시점 스냅샷이고,
+  // 내 찜 여부는 애초에 목록에 실려오지 않는다. (early return 위에 둬야 훅 순서가 안전)
+  useEffect(() => {
+    if (!open || !listing) return;
+    let alive = true;
+    getListingLikeState(listing.id).then((s) => { if (alive) setLike(s); }).catch(() => {});
+    return () => { alive = false; };
+  }, [open, listing]);
+
   if (!listing) return null;
+
+  // 찜 토글 — 낙관적 반영 후 서버 권위값으로 확정, 실패하면 원복.
+  const onToggleLike = async () => {
+    if (!user) { toast.show('로그인 후 찜할 수 있습니다', 'info'); return; }
+    if (likeBusy) return; // 연타 시 두 요청이 엇갈려 하트와 카운트가 반대로 굳는 걸 막는다
+    setLikeBusy(true);
+    const prev = like;
+    setLike(nextLikeState(prev));
+    try {
+      setLike(await toggleListingLike(listing.id));
+    } catch (e) {
+      setLike(prev); // 되돌리기 — '찜했다고 믿었는데 저장 안 됨'을 다시 만들지 않는다
+      toast.show(e instanceof Error ? e.message : '찜 처리에 실패했습니다', 'error');
+    } finally {
+      setLikeBusy(false);
+    }
+  };
 
   const status   = STATUS_MAP[listing.status];
   const category = CATEGORIES.find((c) => c.id === listing.category);
@@ -152,11 +182,11 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete }:
           </p>
         </section>
 
-        {/* 통계 */}
-        <div className="grid grid-cols-3 gap-2 text-center text-2xs text-ink-muted">
+        {/* 통계 — '댓글'은 뺐다. 장터 문의는 1:1 채팅으로 대체돼 comment_count 가 영원히 0 이라
+            숫자를 보여주면 '문의가 하나도 없는 매물'로 오독된다. grid 도 2칸으로 맞춘다. */}
+        <div className="grid grid-cols-2 gap-2 text-center text-2xs text-ink-muted">
           <Stat label="조회" value={listing.viewCount} />
-          <Stat label="찜"   value={listing.likeCount} />
-          <Stat label="댓글" value={listing.commentCount} />
+          <Stat label="찜"   value={like.likeCount} />
         </div>
 
         {/* 문의 안내 — 판매자와의 대화는 1:1 채팅으로 일원화.
@@ -172,21 +202,22 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete }:
       {/* ── 하단 고정 CTA ─────────────────────────────────────────── */}
       {!isSold && (
         <div className="sticky bottom-0 bg-surface-mid border-t border-border-default px-4 py-3 flex items-center gap-2">
-          {/* 찜하기 (토글) */}
+          {/* 찜하기 — 서버 영속 토글(listing_likes). 로컬 state 시절엔 닫으면 사라졌다 */}
           <button
             type="button"
-            onClick={() => setLiked((v) => !v)}
-            aria-pressed={liked}
-            aria-label={liked ? '찜 해제' : '찜하기'}
+            onClick={onToggleLike}
+            disabled={likeBusy}
+            aria-pressed={like.liked}
+            aria-label={like.liked ? '찜 해제' : '찜하기'}
             className={[
-              'shrink-0 w-11 h-11 rounded-input border transition-colors flex items-center justify-center',
-              liked
+              'shrink-0 w-11 h-11 rounded-input border transition-colors flex items-center justify-center disabled:opacity-60',
+              like.liked
                 ? 'bg-danger/15 border-danger text-danger'
                 : 'border-border-default text-ink-secondary hover:text-danger',
             ].join(' ')}
           >
             <svg width="20" height="20" viewBox="0 0 22 22"
-              fill={liked ? 'currentColor' : 'none'}
+              fill={like.liked ? 'currentColor' : 'none'}
               stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
               aria-hidden>
               <path d="M11 19.5L2.5 11C1 9.5 1 6.5 2.5 5C4 3.5 7 3.5 8.5 5L11 7.5L13.5 5C15 3.5 18 3.5 19.5 5C21 6.5 21 9.5 19.5 11L11 19.5Z" />
@@ -203,9 +234,9 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete }:
             </button>
           )}
 
-          {/* 댓글로 스크롤 */}
+          {/* 문의 안내로 스크롤 — 장터 댓글은 1:1 채팅으로 대체돼 더는 없다. 라벨을 실제 목적지에 맞춘다. */}
           <button type="button" onClick={scrollToComments} className="flex-1 btn-ghost py-2.5">
-            댓글
+            문의 안내
           </button>
 
           {/* 판매자 채팅 모달 열기 */}

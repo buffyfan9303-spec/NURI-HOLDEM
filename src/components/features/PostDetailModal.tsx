@@ -19,6 +19,8 @@ import TitleChip from '../atoms/TitleChip';
 import { useTitlePoints } from '../../lib/useTitles';
 import Avatar from '../atoms/Avatar';
 import Icon from '../atoms/Icon';
+import ImageLightbox from '../atoms/ImageLightbox';
+import { thumbUrl, thumbSrcSet } from '../../lib/imageUrl';
 
 interface PostDetailModalProps {
   post: CommunityPost | null;
@@ -68,6 +70,8 @@ export default function PostDetailModal({
   post, open, onClose, onLike, onDelete, venues = [], onVenueClick, inline = false,
 }: PostDetailModalProps) {
   const [gtoHero, setGtoHero] = useState<string[] | null>(null);
+  // 확대해서 볼 첨부 사진의 인덱스(null=닫힘). 뷰어는 포스터에 쓰던 ImageLightbox 를 그대로 재사용한다.
+  const [zoomIdx, setZoomIdx] = useState<number | null>(null);
   const { user } = useAuth();
   const { block } = useBlocks();
   // 더블탭 좋아요(인스타) — 본문을 빠르게 두 번 탭하면 좋아요 + 하트 팝
@@ -97,6 +101,7 @@ export default function PostDetailModal({
     setBb(post.badbeatCount ?? 0);
     setGr(post.goodrunCount ?? 0);
     setMyReaction(null);
+    setZoomIdx(null); // 2-pane 은 같은 인스턴스로 글만 갈아끼우므로 이전 글의 확대 뷰가 남는다
     let active = true;
     getMyReaction(post.id).then((r) => { if (active) setMyReaction(r); }).catch(() => {});
     incrementPostView(post.id).catch(() => {});
@@ -110,6 +115,12 @@ export default function PostDetailModal({
   }, [open, post?.id]);
 
   if (!post) return null;
+
+  // 첨부 사진(최대 4장, community_posts.images). 업로드·저장은 되고 있었는데 그리는 코드가 없어
+  // 어느 화면에도 안 나왔다 → 글쓴이가 재업로드/삭제하던 원인.
+  const images = post.images ?? [];
+  // 인덱스로 직접 접근하면 타입이 흔들려 여기서 한 번만 좁혀 둔다.
+  const zoomSrc = zoomIdx === null ? null : (images[zoomIdx] ?? null);
 
   const copyLink = async () => {
     const url = `${window.location.origin}/?post=${post.id}`;
@@ -273,6 +284,23 @@ export default function PostDetailModal({
                   {onVenueClick ? renderMentions(text, venues, onVenueClick) : text}
                 </div>
               )}
+              {/* 본문 사진 — 탭하면 확대. 그리드는 480px 변환본만 받아 Egress 를 아끼고,
+                  원본은 라이트박스에서만 내려받는다(무료 5GB/월 한도 방어). */}
+              {images.length > 0 && (
+                <ul className={`grid gap-1.5 ${images.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
+                  {images.map((url, i) => (
+                    <li key={url}>
+                      <button type="button" onClick={() => setZoomIdx(i)}
+                        aria-label={`첨부 사진 ${i + 1} 확대 보기`}
+                        className={`block w-full overflow-hidden rounded-card border border-border-subtle bg-surface-high active:opacity-80 ${images.length === 1 ? 'aspect-[4/3]' : 'aspect-square'}`}>
+                        <img src={thumbUrl(url, 480)} srcSet={thumbSrcSet(url, 480)}
+                          alt={`첨부 사진 ${i + 1}`} loading="lazy" decoding="async"
+                          className="h-full w-full object-cover" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
               {hand && <HandCards hand={hand} />}
               {replay && <HandReplayer replay={replay} />}
               {(() => {
@@ -304,7 +332,11 @@ export default function PostDetailModal({
               </svg>
               좋아요 {post.likeCount}
             </button>
-            <span>댓글 {post.commentCount + replies.length}</span>
+            {/* 댓글 수는 화면에 실제로 불러온 목록(replies)만 신뢰한다.
+                post.commentCount 는 DB 트리거가 같은 값을 넣어주는 컬럼이라 더하면 2배가 된다.
+                (트리거 도입 전에는 항상 0이라 0+n 으로 우연히 맞아 보였을 뿐이다.
+                 App.tsx 가 posts 갱신마다 openPost 를 덮어쓰므로 리얼타임 갱신 때 반드시 드러난다.) */}
+            <span>댓글 {replies.length}</span>
           </div>
         </div>
 
@@ -387,6 +419,11 @@ export default function PostDetailModal({
         </section>
       </article>
     </Modal>
+    {/* Modal 밖에 두는 이유: 데스크톱 2-pane 은 Modal 이 inline 패널(overflow-hidden 카드)로 렌더돼
+        안에 넣으면 확대 뷰가 그 패널 안에 갇힌다. ReportModal 과 같은 층에 세운다. */}
+    {zoomSrc && (
+      <ImageLightbox src={zoomSrc} alt={`${post.title || '게시글'} 첨부 사진`} onClose={() => setZoomIdx(null)} />
+    )}
     <ReportModal open={reportOpen} onClose={() => setReportOpen(false)}
       target={{ type: 'post', id: post.id, ownerId: post.userId, summary: post.title || post.content }} />
     </>

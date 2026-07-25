@@ -199,9 +199,11 @@ export async function updateVenueContact(
 export async function getComments(filter: { scheduleId?: string; venueId?: string; postId?: string }): Promise<Comment[]> {
   if (IS_MOCK) {
     const { MOCK_COMMENTS } = await import('../mock/data');
+    // postId 필터 누락 시 목 모드에서 '남의 글 댓글'이 전부 딸려온다 — 실서버 동작과 맞춘다.
     return MOCK_COMMENTS.filter((c) =>
       (filter.scheduleId ? c.scheduleId === filter.scheduleId : true) &&
-      (filter.venueId    ? c.venueId    === filter.venueId    : true),
+      (filter.venueId    ? c.venueId    === filter.venueId    : true) &&
+      (filter.postId     ? c.postId     === filter.postId     : true),
     );
   }
   let q = supabase.from('comments').select('*').order('created_at');

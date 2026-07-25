@@ -24,6 +24,7 @@ import VenueThumb from '../atoms/VenueThumb';
 import Modal from '../atoms/Modal';
 import PostDetailModal from './PostDetailModal';
 import { useIsDesktop } from '../../lib/responsive';
+import { thumbUrl, thumbSrcSet } from '../../lib/imageUrl';
 
 interface CommunityTabProps {
   /** 장터 화면 임베드 슬롯 — 서브탭을 유지한 채 커뮤니티 안에서 장터를 보여준다 */
@@ -564,6 +565,8 @@ const samePostProps = (a: PostRowData, b: PostRowData) =>
 const PostRow = memo(function PostRow({ post, onClick, hot = false, selected = false, mark = '', titlePts }: { post: CommunityPost; onClick: () => void; hot?: boolean; selected?: boolean; mark?: string; titlePts?: number }) {
   const catLabel = BOARD_CATEGORIES.find((c) => c.id === (post.category ?? 'free'))?.label ?? '자유';
   const { replay, hand } = parseAttachments(post.content);
+  // 한 줄 행(에펨식)은 행 높이가 곧 목록 밀도라 썸네일을 넣으면 표가 무너진다 → 📷 배지로만 알린다.
+  const imgCount = post.images?.length ?? 0;
   return (
     <li
       onClick={onClick}
@@ -579,6 +582,7 @@ const PostRow = memo(function PostRow({ post, onClick, hot = false, selected = f
       <span className="min-w-0 flex-1 truncate">
         <span className="text-[15px] font-bold leading-tight text-ink-primary">{post.title || post.content.slice(0, 40)}</span>
         {(replay || hand) && <span className="ml-1 align-middle text-2xs text-accent-300">{replay ? '🎬' : '♠'}</span>}
+        {imgCount > 0 && <span className="ml-1 align-middle text-2xs text-ink-muted" aria-label={`사진 ${imgCount}장`}>📷{imgCount > 1 ? imgCount : ''}</span>}
         {post.commentCount > 0 && <span className="ml-1 align-middle text-xs font-bold text-accent-300">[{post.commentCount}]</span>}
       </span>
       <span className="shrink-0 text-xs text-ink-muted">{mark}{post.userName}</span>
@@ -590,6 +594,8 @@ const PostRow = memo(function PostRow({ post, onClick, hot = false, selected = f
 }, samePostProps);
 
 const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, selected = false, mark = '', titlePts }: { post: CommunityPost; onLike: () => void; onClick: () => void; hot?: boolean; selected?: boolean; mark?: string; titlePts?: number }) {
+  // 카드 높이를 늘리지 않으려고 첫 장만 44px 썸네일로. 2장 이상은 장수 배지로 알린다.
+  const imgs = post.images ?? [];
   return (
     <li
       onClick={onClick}
@@ -664,6 +670,17 @@ const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, se
             )}
           </div>
         </div>
+        {/* 사진 첨부 글을 목록에서 바로 구분하려는 것 — 지금까진 첨부해도 목록에 아무 표시가 없어 '안 올라갔다'고 오해했다.
+            88px 썸네일(=44px 레티나 2x)만 받아 목록에서 원본(최대 1200px)을 내려받지 않는다. */}
+        {imgs.length > 0 && (
+          <div className="relative mt-0.5 h-11 w-11 shrink-0 overflow-hidden rounded-input border border-border-subtle bg-surface-high">
+            <img src={thumbUrl(imgs[0], 88)} srcSet={thumbSrcSet(imgs[0], 88)}
+              alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
+            {imgs.length > 1 && (
+              <span className="absolute bottom-0 right-0 bg-black/60 px-1 text-2xs font-bold leading-tight text-white">{imgs.length}</span>
+            )}
+          </div>
+        )}
       </div>
     </li>
   );

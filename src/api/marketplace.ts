@@ -117,6 +117,61 @@ export async function deleteListing(id: string): Promise<void> {
   if (error) throw error;
 }
 
+// ── 찜(관심) ──────────────────────────────────────────────────────────────────
+// 커뮤니티 좋아요(post_likes/toggle_post_like)와 같은 구조를 쓴다. 쓰기를 RPC 한 곳으로만
+// 통과시켜야 찜 행과 listings.like_count 가 항상 같은 트랜잭션에서 움직인다.
+export interface ListingLikeState { liked: boolean; likeCount: number }
+
+/** 낙관적 토글 계산(순수) — 클릭 즉시 UI 를 뒤집고, 서버 응답이 오면 그 값으로 덮어쓴다.
+ *  음수 하한은 서버의 greatest(0, ..) 와 같은 규칙이라 되돌리기 시 값이 어긋나지 않는다. */
+export function nextLikeState(cur: ListingLikeState): ListingLikeState {
+  return { liked: !cur.liked, likeCount: Math.max(0, cur.likeCount + (cur.liked ? -1 : 1)) };
+}
+
+/** 상세 진입 시: 내 찜 여부 + 서버의 최신 총 개수.
+ *  목록 배열의 likeCount 는 탭 로드 시점 스냅샷이라 그 사이 남이 찜하면 어긋난다. */
+export async function getListingLikeState(listingId: string): Promise<ListingLikeState> {
+  if (IS_MOCK) return { liked: false, likeCount: 0 };
+  // listing_likes 는 RLS 가 '내 행'만 돌려주므로 user_id 조건이 따로 필요 없다(미로그인=0행).
+  const [mine, row] = await Promise.all([
+    supabase.from('listing_likes').select('listing_id').eq('listing_id', listingId).maybeSingle(),
+    supabase.from('marketplace_listings').select('like_count').eq('id', listingId).maybeSingle(),
+  ]);
+  return {
+    liked: !!mine.data,
+    likeCount: Number((row.data as { like_count?: number } | null)?.like_count ?? 0),
+  };
+}
+
+/** 찜 토글 — 1인 1회, 다시 누르면 취소. 서버 권위 카운트+liked 반환(카운트 조작 경로 차단). */
+export async function toggleListingLike(listingId: string): Promise<ListingLikeState> {
+  if (IS_MOCK) return { liked: true, likeCount: 1 };
+  const { data, error } = await supabase.rpc('toggle_listing_like', { p_listing_id: listingId });
+  if (error) throw new Error(error.message);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const d = (data ?? {}) as any;
+  return { liked: d.liked === true, likeCount: Number(d.count ?? 0) };
+}
+
+/** 내가 찜한 매물 — 최근 찜한 순. listing_likes 는 RLS 로 내 행만 보인다(미로그인=0건). */
+export async function getMyLikedListings(): Promise<MarketplaceListing[]> {
+  if (IS_MOCK) return [];
+  const { data: likes, error } = await supabase
+    .from('listing_likes').select('listing_id, created_at')
+    .order('created_at', { ascending: false }).limit(100);
+  if (error) throw error;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ids = (likes ?? []).map((r: any) => r.listing_id as string);
+  if (ids.length === 0) return [];
+  const { data, error: e2 } = await supabase.from('marketplace_listings').select('*').in('id', ids);
+  if (e2) throw e2;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const byId = new Map<string, MarketplaceListing>((data ?? []).map((r: any) => [r.id as string, rowToListing(r)]));
+  // 순서는 찜한 시각 기준이라 ids 를 기준으로 되짚는다. 삭제된 매물은 cascade 로 찜도 지워지지만,
+  // 두 조회 사이의 레이스는 filter 로 흘려보낸다.
+  return ids.map((id) => byId.get(id)).filter((l): l is MarketplaceListing => !!l);
+}
+
 // ── Notices ───────────────────────────────────────────────────────────────────
 export async function getNotices(): Promise<MarketplaceNotice[]> {
   if (IS_MOCK) {

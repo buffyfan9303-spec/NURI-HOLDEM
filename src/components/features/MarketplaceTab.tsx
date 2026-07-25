@@ -7,7 +7,7 @@ import type {
 import { useAuth } from '../../contexts/AuthContext';
 import { useBlocks } from '../../contexts/BlockContext';
 import { getMyChatThreads } from '../../api/chat';
-import { MessagesModal, MyListingsModal } from './MyMarketModal';
+import { MessagesModal, MyListingsModal, MyLikesModal } from './MyMarketModal';
 
 // ── 상수 ─────────────────────────────────────────────────────────────────────
 
@@ -79,6 +79,7 @@ function MarketplaceTab({
   const [query, setQuery]             = useState('');
   const [sortBy, setSortBy]           = useState<SortBy>('recent');
   const [myListOpen, setMyListOpen]   = useState(false);
+  const [likesOpen, setLikesOpen]     = useState(false);
   const [msgOpen, setMsgOpen]         = useState(false);
   const [msgCount, setMsgCount]       = useState(0);
 
@@ -125,6 +126,11 @@ function MarketplaceTab({
           <button type="button" onClick={() => setMyListOpen(true)}
             className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-input bg-surface-high border border-border-default text-xs font-semibold text-ink-secondary hover:text-ink-primary transition-colors">
             <span aria-hidden>📦</span> 내 판매목록
+          </button>
+          {/* 찜은 재방문 1순위 동선이라 판매목록·메시지함과 같은 높이에 둔다 */}
+          <button type="button" onClick={() => setLikesOpen(true)}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-input bg-surface-high border border-border-default text-xs font-semibold text-ink-secondary hover:text-ink-primary transition-colors">
+            <span aria-hidden>❤️</span> 찜한 매물
           </button>
           <button type="button" onClick={() => setMsgOpen(true)}
             className="flex-1 relative flex items-center justify-center gap-1.5 py-2 rounded-input bg-surface-high border border-border-default text-xs font-semibold text-ink-secondary hover:text-ink-primary transition-colors">
@@ -249,6 +255,8 @@ function MarketplaceTab({
       <MyListingsModal open={myListOpen} onClose={() => setMyListOpen(false)}
         onOpenListing={(l) => { setMyListOpen(false); onSelect(l); }}
         onChanged={onListingsChanged} />
+      <MyLikesModal open={likesOpen} onClose={() => setLikesOpen(false)}
+        onOpenListing={(l) => { setLikesOpen(false); onSelect(l); }} />
       <MessagesModal open={msgOpen} onClose={() => setMsgOpen(false)} />
     </div>
   );
@@ -406,11 +414,9 @@ function ListingRow({
             isSold ? 'text-ink-muted line-through decoration-1' : 'text-ink-primary',
           ].join(' ')}>
             {listing.title}
-            {listing.commentCount > 0 && (
-              <span className="ml-1.5 text-2xs text-accent-300 font-bold align-middle">
-                [{listing.commentCount}]
-              </span>
-            )}
+            {/* 장터 [n] 배지 제거 — comments 테이블에 listing_id 컬럼 자체가 없어
+                marketplace_listings.comment_count 는 구조적으로 0 이상이 될 수 없다.
+                문의는 1:1 채팅으로 일원화됐으므로 남겨두면 '문의 0건'이라는 거짓 신호만 준다. */}
           </p>
           {/* 모바일에서는 가격·판매자·시간을 제목 아래에 1줄로 압축 */}
           <div className="sm:hidden flex items-center gap-2 mt-1 text-2xs">

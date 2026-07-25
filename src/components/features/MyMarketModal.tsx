@@ -7,7 +7,7 @@ import { useToast } from '../atoms/Toast';
 import type { InboxThread } from '../../api/chat';
 import { getMyChatThreads } from '../../api/chat';
 import type { MarketplaceListing, ListingStatus } from '../../api/marketplace';
-import { getMyListings, updateListingStatus, deleteListing } from '../../api/marketplace';
+import { getMyListings, getMyLikedListings, updateListingStatus, deleteListing } from '../../api/marketplace';
 import { relativeTime, STATUS_MAP } from './MarketplaceTab';
 import ChatPane from './chat/ChatPane';
 import { thumbUrl, thumbSrcSet } from '../../lib/imageUrl';
@@ -196,6 +196,57 @@ export function MyListingsModal({ open, onClose, onOpenListing, onChanged }: {
               })}
             </div>
           </div>
+        ))}
+      </div>
+    </Modal>
+  );
+}
+
+// ── 찜한 매물 ────────────────────────────────────────────────────────────────
+// 판매목록 모달과 같은 셸(헤더 + 스크롤 리스트)을 쓴다. 재방문 동선이라 탭하면 바로 상세로 넘긴다.
+export function MyLikesModal({ open, onClose, onOpenListing }: {
+  open: boolean; onClose: () => void;
+  onOpenListing: (l: MarketplaceListing) => void;
+}) {
+  const { user } = useAuth();
+  const [items, setItems] = useState<MarketplaceListing[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!open || !user) return;
+    setLoading(true);
+    getMyLikedListings().then(setItems).catch(() => {}).finally(() => setLoading(false));
+  }, [open, user]);
+
+  if (!user) return <LoginRequired open={open} onClose={onClose} />;
+
+  return (
+    <Modal open={open} onClose={onClose} maxWidth="md" variant="sheet">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-border-subtle">
+        <p className="flex-1 text-sm font-bold text-ink-primary">찜한 매물 {items.length > 0 && <span className="text-ink-muted font-normal">({items.length})</span>}</p>
+        <button type="button" onClick={onClose} aria-label="닫기" className="w-8 h-8 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><line x1="2" y1="2" x2="12" y2="12" /><line x1="12" y1="2" x2="2" y2="12" /></svg>
+        </button>
+      </div>
+
+      <div className="max-h-[64vh] min-h-[200px] overflow-y-auto p-2 space-y-2">
+        {loading ? (
+          <p className="text-center py-14 text-sm text-ink-muted">불러오는 중…</p>
+        ) : items.length === 0 ? (
+          <div className="text-center py-14 text-ink-muted">
+            <p className="text-sm">찜한 매물이 없습니다</p>
+            <p className="text-2xs mt-1">매물 상세에서 하트를 눌러 담아두세요.</p>
+          </div>
+        ) : items.map((l) => (
+          <button key={l.id} type="button" onClick={() => onOpenListing(l)}
+            className="w-full text-left flex items-center gap-3 rounded-card border border-border-subtle bg-surface-low p-2.5 hover:bg-surface-high active:bg-surface-float transition-colors">
+            <Thumb src={l.images[0] ?? null} />
+            <div className="flex-1 min-w-0">
+              <p className={['text-sm font-semibold truncate', l.status === 'sold' ? 'text-ink-muted line-through decoration-1' : 'text-ink-primary'].join(' ')}>{l.title}</p>
+              <p className="text-sm font-bold text-accent-300 tabular-nums">{l.price.toLocaleString()}</p>
+              <p className="text-2xs text-ink-muted truncate">{STATUS_MAP[l.status].label} · {l.sellerName} · {relativeTime(l.createdAt)}</p>
+            </div>
+          </button>
         ))}
       </div>
     </Modal>
