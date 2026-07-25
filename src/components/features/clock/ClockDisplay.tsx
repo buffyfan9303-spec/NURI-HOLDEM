@@ -6,31 +6,31 @@
 // 읽기전용(컨트롤 없음) — 운영은 운영자 클락 화면에서. 화면 항상 켜둠(Wake Lock, 베스트에포트).
 import { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
-import { getVenueClocks, subscribeClock, type ClockState, type ClockLevel } from '../../../api/clock';
+import { getVenueClocks, subscribeClock, effectiveLevel, type ClockState, type ClockLevel } from '../../../api/clock';
 import { buyinRequestUrl } from '../../../api/ledger';
 import { getAppSetting, CLOCK_AD_KEY } from '../../../api/settings';
 
 const pad = (n: number) => String(Math.floor(n)).padStart(2, '0');
 const mmss = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return `${pad(s / 60)}:${pad(s % 60)}`; };
 const hms = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return s >= 3600 ? `${pad(s / 3600)}:${pad((s % 3600) / 60)}:${pad(s % 60)}` : `${pad(s / 60)}:${pad(s % 60)}`; };
-const remainingOf = (s: ClockState) => (s.running && s.endsAt ? new Date(s.endsAt).getTime() - Date.now() : s.remainingMs);
 
 function levelNumberAt(levels: ClockLevel[], index: number): number {
   let n = 0;
   for (let i = 0; i <= index && i < levels.length; i++) if (levels[i].kind === 'level') n++;
   return n;
 }
-function msToNextBreak(s: ClockState, remaining: number): number | null {
+// index 를 받는 이유: DB 의 current_index 가 낡아 있을 수 있어 '실효 인덱스'로 계산해야 한다.
+function msToNextBreak(s: ClockState, index: number, remaining: number): number | null {
   const lv = s.config?.levels ?? []; let acc = remaining;
-  for (let i = s.currentIndex + 1; i < lv.length; i++) { if (lv[i].kind === 'break') return acc; acc += lv[i].minutes * 60_000; }
+  for (let i = index + 1; i < lv.length; i++) { if (lv[i].kind === 'break') return acc; acc += lv[i].minutes * 60_000; }
   return null;
 }
-function msToRegClose(s: ClockState, remaining: number): number | null {
+function msToRegClose(s: ClockState, index: number, remaining: number): number | null {
   const lv = s.config?.levels ?? []; const target = s.config?.regCloseLevel ?? 0;
   let acc = remaining, num = 0;
-  for (let i = 0; i <= s.currentIndex; i++) if (lv[i]?.kind === 'level') num++;
+  for (let i = 0; i <= index; i++) if (lv[i]?.kind === 'level') num++;
   if (num >= target) return 0;
-  for (let i = s.currentIndex + 1; i < lv.length; i++) { if (lv[i].kind === 'level') { num++; if (num >= target) return acc; } acc += lv[i].minutes * 60_000; }
+  for (let i = index + 1; i < lv.length; i++) { if (lv[i].kind === 'level') { num++; if (num >= target) return acc; } acc += lv[i].minutes * 60_000; }
   return null;
 }
 const gameLabel = (g: ClockState) => (g.gameSeq > 1 ? `사이드${g.gameSeq - 1}` : '메인');
@@ -92,13 +92,18 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
   const g = games.find((c) => c.gameSeq === sel) ?? games.find((c) => c.running) ?? games[0] ?? null;
 
   const lvls = g?.config?.levels ?? [];
-  const lv = g ? lvls[g.currentIndex] : undefined;
-  const levelNo = g ? levelNumberAt(lvls, g.currentIndex) : 0;
+  // DB 행이 낡아 있어도(운영자 기기가 아무도 전진을 쓰지 못한 상태) '지금 진짜 레벨'을 계산해 표시한다.
+  // 왜 여기서 DB를 고치지 않나: 이 화면은 손님 기기(매장 TV·?display= 딥링크)라 clock_states 쓰기 권한
+  // (RLS can_access_ledger)이 없고, 있어서도 안 된다. 표시는 여기서, DB 전진은 운영자 화면이 책임진다.
+  const eff = g ? effectiveLevel(g) : null;
+  const curIdx = eff ? eff.index : 0;
+  const lv = g ? lvls[curIdx] : undefined;
+  const levelNo = g ? levelNumberAt(lvls, curIdx) : 0;
   const isBreak = lv?.kind === 'break';
-  const remaining = g ? remainingOf(g) : 0;
+  const remaining = eff ? eff.remainingMs : 0;
   const urgent = !!g?.running && remaining <= 60_000 && !isBreak;
-  const nextBreak = g ? msToNextBreak(g, remaining) : null;
-  const regClose = g ? msToRegClose(g, remaining) : null;
+  const nextBreak = g ? msToNextBreak(g, curIdx, remaining) : null;
+  const regClose = g ? msToRegClose(g, curIdx, remaining) : null;
   const ls = g?.liveStats ?? (g ? {
     entries: g.adjEntries, rebuys: g.adjRebuys, earlies: g.adjEarlies, addons: g.adjAddons,
     alive: Math.max(0, g.adjEntries - g.eliminations), eliminations: g.eliminations, totalStack: 0, avgStack: 0, buyInAmount: null,

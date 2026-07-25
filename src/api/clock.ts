@@ -186,6 +186,84 @@ export function levelUndoPatch(snap: ClockLevelSnapshot): Partial<ClockState> {
   return { currentIndex: snap.currentIndex, remainingMs: snap.remainingMs, endsAt: snap.endsAt, running: snap.running };
 }
 
+/** 레벨 4필드만 갱신 — '백업 전진자' 전용 부분 업데이트.
+ *
+ *  왜 saveClockState(전 행 upsert)를 쓰면 안 되나: 백업 경로는 '아무도 보고 있지 않은 기기'가
+ *  레벨 경계마다 자동으로 쓰는 자리다. 낡은 스냅샷으로 전 행을 덮으면 다른 기기가 방금 찍은
+ *  아웃(eliminations)이나 보정값(adj*)이 조용히 되돌아간다. 사람이 버튼을 눌렀을 때만 나던 위험이
+ *  자동화되면 노출 빈도가 질적으로 달라진다.
+ *  레벨 전진에 필요한 건 이 4필드뿐이고, 이 값들은 levelCatchUp 이 'DB행 + 절대시각'만으로 정하므로
+ *  누가 먼저 쓰든 결과가 같다(멱등) — 그래서 부분 업데이트로 좁히면 경합 표면이 사실상 사라진다.
+ *  UPDATE 라 행이 없으면 아무 일도 안 하는 것도 의도다(백업은 새 클락을 만들지 않는다). */
+export async function saveClockLevel(
+  venueId: string, gameSeq: number,
+  patch: Pick<ClockState, 'currentIndex' | 'remainingMs' | 'endsAt'> & Partial<Pick<ClockState, 'running'>>,
+): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.from('clock_states').update({
+    current_index: patch.currentIndex,
+    remaining_ms: patch.remainingMs,
+    ends_at: patch.endsAt,
+    ...(patch.running !== undefined && { running: patch.running }),
+    updated_at: new Date().toISOString(),
+  }).eq('venue_id', venueId).eq('game_seq', gameSeq);
+  if (error) throw error;
+}
+
+// ── 자동 전진 / 표시 보정 ──────────────────────────────────────────────────────
+// 왜 여기(api)에 두는가: 레벨을 실제로 DB에 전진시키는 주체가 '클락 화면을 열고 있는 운영자' 하나뿐이었다.
+// 업주가 장부 섹션으로 옮기면 클락 섹션은 display:none 으로 마운트만 남아 재렌더가 멈추고 전진도 멈춘다 —
+// 손님이 보는 TV·홈 라이브 카드가 00:00 에 얼어붙던 원인. 책임을 둘로 쪼개 규칙을 한 곳에 고정한다.
+//   · effectiveLevel : 표시 보정(읽기 전용). 낡은 행에서도 '지금 진짜 레벨'을 계산. 아무것도 쓰지 않는다.
+//   · levelCatchUp   : 실제 전진 패치(쓰기). 쓰기 권한(can_access_ledger) 있는 운영자 화면만 호출한다.
+// 같은 while 보정이 이미 MultiClockOverview·ClockRemoteBar 에 복붙돼 있어 3벌째가 되기 전에 단일소스로 뺀다.
+
+/** 표시용 실효 레벨 — running 인데 endsAt 이 지났으면 경과분만큼 인덱스를 전진시켜 계산.
+ *  drifted=true = DB 행이 낡았다(아직 아무도 전진을 쓰지 못했다). */
+export interface ClockEffective { index: number; remainingMs: number; drifted: boolean }
+
+export function effectiveLevel(
+  s: Pick<ClockState, 'config' | 'running' | 'currentIndex' | 'endsAt' | 'remainingMs'>, nowMs = Date.now(),
+): ClockEffective {
+  const lv = s.config?.levels ?? [];
+  const last = Math.max(0, lv.length - 1);
+  const from = Math.max(0, Math.min(s.currentIndex, last));
+  let idx = from;
+  let rem = s.running && s.endsAt ? new Date(s.endsAt).getTime() - nowMs : s.remainingMs;
+  // idx < last 가드가 핵심 — 없으면 종료된 토너의 인덱스가 무한히 커진다(브레이크는 levels 원소라 자연히 지나간다).
+  while (s.running && rem < 0 && idx < last) { idx++; rem += (lv[idx].minutes || 0) * 60_000; }
+  return { index: idx, remainingMs: Math.max(0, rem), drifted: idx !== from };
+}
+
+/** 자동 전진 결과. advanced=한 번에 넘어간 레벨 수(2 이상이면 '밀렸다가 따라잡은' 보정),
+ *  finished=마지막 레벨까지 소진해 토너가 끝난 경우. */
+export interface ClockCatchUp { patch: Partial<ClockState>; advanced: number; toIndex: number; finished: boolean }
+
+/** 경과 시각 기준 자동 전진 패치(전진할 게 없으면 null).
+ *  ★ 왜 now+레벨전체분 이 아니라 'endsAt 에 레벨 길이를 누적' 하는가:
+ *    이 계산은 여러 기기(운영자 PC 클락 화면 + 폰 장부 리모컨)가 동시에 돌 수 있다.
+ *    결과가 DB 행과 절대시각만으로 정해지면 누가 먼저 쓰든 값이 똑같아 경합이 사고로 번지지 않는다.
+ *    now 기준으로 타이머를 다시 채우면 쓰는 시점마다 값이 달라져 서로를 덮어쓰고 진행 시간이 늘어난다.
+ *    (기존 advance() 가 바로 그 방식이라, 재진입할 때마다 밀린 시간이 통째로 증발했다.) */
+export function levelCatchUp(
+  s: Pick<ClockState, 'config' | 'running' | 'currentIndex' | 'endsAt' | 'remainingMs'>, nowMs = Date.now(),
+): ClockCatchUp | null {
+  const lv = s.config?.levels ?? [];
+  if (!s.running || !lv.length) return null;
+  const last = lv.length - 1;
+  let idx = Math.max(0, Math.min(s.currentIndex, last));
+  let end = s.endsAt ? new Date(s.endsAt).getTime() : nowMs + s.remainingMs;
+  if (!Number.isFinite(end) || nowMs < end) return null;
+  let advanced = 0;
+  // minutes=0 인 레벨이 섞여도 idx 가 매 회 증가하므로 루프는 levels 길이로 유한하다.
+  while (nowMs >= end && idx < last) { idx++; end += (lv[idx].minutes || 0) * 60_000; advanced++; }
+  if (nowMs >= end) {
+    // 마지막 레벨까지 소진 = 토너 종료. 여기서 멈추지 않으면 무한 전진이 된다.
+    return { patch: { currentIndex: last, running: false, remainingMs: 0, endsAt: null }, advanced, toIndex: last, finished: true };
+  }
+  return { patch: { currentIndex: idx, remainingMs: end - nowMs, endsAt: new Date(end).toISOString() }, advanced, toIndex: idx, finished: false };
+}
+
 // ── 매퍼 ──────────────────────────────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function rowToState(r: any): ClockState {

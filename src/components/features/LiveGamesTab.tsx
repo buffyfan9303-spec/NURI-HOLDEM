@@ -2,17 +2,15 @@
 // 라이브 — 진행 중(클락 running) 게임 현황 보드. 클락에서 보이는 정보 전부 공개:
 // 레벨/블라인드/앤티·남은시간·생존/엔트리·리바인·얼리·애드온·탈락·총스택·평균스택·등록마감·다음브레이크.
 import { useEffect, useState } from 'react';
-import { getRunningClocks, subscribeRunningClocks, type ClockState, type ClockLevel } from '../../api/clock';
+import { getRunningClocks, subscribeRunningClocks, effectiveLevel, type ClockState, type ClockLevel } from '../../api/clock';
 import { wonToMan } from '../../api/ledger';
 import { EmptyState } from '../atoms/Skeleton';
 import type { Venue } from '../../api/community';
 import type { Schedule } from '../../api/schedules';
 
-const now = () => Date.now();
 const pad = (n: number) => String(Math.floor(n)).padStart(2, '0');
 const mmss = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return `${pad(s / 60)}:${pad(s % 60)}`; };
 const hms = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return `${pad(s / 3600)}:${pad((s % 3600) / 60)}:${pad(s % 60)}`; };
-const remainingOf = (s: ClockState) => (s.running && s.endsAt ? new Date(s.endsAt).getTime() - now() : s.remainingMs);
 
 // 지역 중심좌표(근사) — 정확한 주소 좌표가 없어 지역 단위로 "가까운 순" 근사. GPS와 함께 사용.
 const REGION_GEO: Record<string, [number, number]> = {
@@ -48,17 +46,18 @@ function levelNumberAt(levels: ClockLevel[], index: number): number {
   for (let i = 0; i <= index && i < levels.length; i++) if (levels[i].kind === 'level') n++;
   return n;
 }
-function msToNextBreak(s: ClockState, remaining: number): number | null {
+// index 를 받는 이유: DB 의 current_index 가 낡아 있을 수 있어 '실효 인덱스'로 계산해야 한다.
+function msToNextBreak(s: ClockState, index: number, remaining: number): number | null {
   const lv = s.config?.levels ?? []; let acc = remaining;
-  for (let i = s.currentIndex + 1; i < lv.length; i++) { if (lv[i].kind === 'break') return acc; acc += lv[i].minutes * 60_000; }
+  for (let i = index + 1; i < lv.length; i++) { if (lv[i].kind === 'break') return acc; acc += lv[i].minutes * 60_000; }
   return null;
 }
-function msToRegClose(s: ClockState, remaining: number): number | null {
+function msToRegClose(s: ClockState, index: number, remaining: number): number | null {
   const lv = s.config?.levels ?? []; const target = s.config?.regCloseLevel ?? 0;
   let acc = remaining, num = 0;
-  for (let i = 0; i <= s.currentIndex; i++) if (lv[i]?.kind === 'level') num++;
+  for (let i = 0; i <= index; i++) if (lv[i]?.kind === 'level') num++;
   if (num >= target) return 0;
-  for (let i = s.currentIndex + 1; i < lv.length; i++) { if (lv[i].kind === 'level') { num++; if (num >= target) return acc; } acc += lv[i].minutes * 60_000; }
+  for (let i = index + 1; i < lv.length; i++) { if (lv[i].kind === 'level') { num++; if (num >= target) return acc; } acc += lv[i].minutes * 60_000; }
   return null;
 }
 
@@ -198,12 +197,14 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
 
 function LiveCard({ g, name, sched, onPoster, onVenue, onDisplay }: { g: ClockState; name: string; sched: Schedule | null; onPoster: () => void; onVenue: () => void; onDisplay: () => void }) {
   const lvls = g.config?.levels ?? [];
-  const lv = lvls[g.currentIndex];
-  const levelNo = levelNumberAt(lvls, g.currentIndex);
+  // 공개 카드도 손님 기기다 — 쓰기 권한이 없으므로 표시만 보정한다(DB 전진은 운영자 화면 책임).
+  const eff = effectiveLevel(g);
+  const lv = lvls[eff.index];
+  const levelNo = levelNumberAt(lvls, eff.index);
   const isBreak = lv?.kind === 'break';
-  const remaining = remainingOf(g);
-  const nextBreak = msToNextBreak(g, remaining);
-  const regClose = msToRegClose(g, remaining);
+  const remaining = eff.remainingMs;
+  const nextBreak = msToNextBreak(g, eff.index, remaining);
+  const regClose = msToRegClose(g, eff.index, remaining);
   const isAddon = !!g.config?.isAddon;
   const ls = g.liveStats ?? {
     entries: g.adjEntries, rebuys: g.adjRebuys, earlies: g.adjEarlies, addons: g.adjAddons,

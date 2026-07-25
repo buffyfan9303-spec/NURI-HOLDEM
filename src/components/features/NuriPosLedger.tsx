@@ -24,7 +24,7 @@ import { getStaffSchedule, addStaffShift } from '../../api/staffSchedule';
 import { getVenueRankings } from '../../api/rankings';
 import { exportLedgerXls } from '../../lib/ledgerExport';
 import { getSchedules, type Schedule } from '../../api/schedules';
-import { getClockState, saveClockState, subscribeClock, defaultClockConfig, deriveClockCounts, computeLiveStats, levelSnapshot, levelMovePatch, levelUndoPatch, type ClockState, type ClockLevelSnapshot } from '../../api/clock';
+import { getClockState, saveClockState, saveClockLevel, subscribeClock, defaultClockConfig, deriveClockCounts, computeLiveStats, levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, type ClockState, type ClockLevelSnapshot } from '../../api/clock';
 import { getMyVenueStaff, searchMembersForRanking, type User } from '../../api/auth';
 import { accrueVoucher } from '../../api/vouchers';
 import { useBackClose } from '../../lib/backstack';
@@ -1194,6 +1194,35 @@ function ClockRemoteBar({ clock, onPatch, onOpenClock, active = true }: {
   const [levelUndo, setLevelUndo] = useState<ClockLevelSnapshot | null>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (undoTimerRef.current) clearTimeout(undoTimerRef.current); }, []);
+
+  // 백업 전진자 — 클락 화면이 아예 안 열려 있으면(이번 세션 미방문·visited LRU 언마운트) DB를 전진시켜
+  // 줄 주체가 아무도 없다. 그럴 때만 장부가 대신 쓴다. active(섹션 노출)와 무관한 것은 의도다.
+  // 3초 유예: 클락 화면이 떠 있으면 1초 안에 먼저 쓰고 realtime 으로 여기 clock 이 갱신되므로
+  //   이 경로는 조용히 지나간다 = 전환음도 클락 화면에서 한 번만 난다.
+  // 쓰기는 4필드 부분 업데이트다(전 행 upsert 금지) — 낡은 스냅샷으로 아웃·보정값을 되돌리지 않기 위함.
+  // 로컬 화면은 realtime 구독이 갱신하므로 낙관 갱신을 하지 않고, 같은 경계는 한 번만 쓴다.
+  const remoteRef = useRef(clock);
+  useEffect(() => { remoteRef.current = clock; });
+  const wroteForRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!clock.running) return;
+    const t = setInterval(() => {
+      const c = remoteRef.current;
+      if (!c.running || !c.endsAt) return;
+      if (Date.now() - new Date(c.endsAt).getTime() < 3000) return; // 클락 화면이 먼저 쓸 시간을 준다
+      if (wroteForRef.current === c.endsAt) return;                 // 이 경계는 이미 우리가 썼다(realtime 대기 중)
+      const cu = levelCatchUp(c);
+      if (!cu) return;
+      wroteForRef.current = c.endsAt;
+      saveClockLevel(c.venueId, c.gameSeq ?? 1, {
+        currentIndex: cu.patch.currentIndex ?? c.currentIndex,
+        remainingMs: cu.patch.remainingMs ?? 0,
+        endsAt: cu.patch.endsAt ?? null,
+        ...(cu.finished && { running: false }),
+      }).catch(() => {});
+    }, 1000);
+    return () => clearInterval(t);
+  }, [clock.running]);
 
   const lv = clock.config.levels;
   // 실효 레벨 — running인데 endsAt이 지났으면(클락 화면 미오픈으로 전진 못 함) 경과분만큼 전진해 표시/제어

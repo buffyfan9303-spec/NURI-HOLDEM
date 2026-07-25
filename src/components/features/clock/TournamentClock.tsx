@@ -12,7 +12,7 @@ import {
   type ClockConfig, type ClockLevel, type ClockPreset, type ClockState, type ClockPrizeRow,
   defaultClockConfig, emptyClockState, deriveClockCounts, computeLiveStats, PRESET_LIMIT,
   countLevels, withDerivedEarly, generateBlinds,
-  levelSnapshot, levelMovePatch, levelUndoPatch, type ClockLevelSnapshot,
+  levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, type ClockLevelSnapshot,
   getClockPresets, saveClockPreset, deleteClockPreset,
   getClockState, saveClockState, clearClockState, subscribeClock, subscribeRunningClocks, getVenueClocks,
 } from '../../../api/clock';
@@ -433,12 +433,19 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
     finally { setFinishBusy(false); }
   };
 
-  // 레벨 자동 전환(운영자 화면만 기록)
+  // 레벨 자동 전진 — 시간이 시키는 일이지, 화면을 보는 사람이 시키는 일이 아니다.
+  // 예전엔 (1) 250ms 표시 틱의 재렌더에 얹혀 있어 장부 섹션으로 옮기면 아예 멈췄고,
+  //        (2) 겨우 돌아와도 nextIndex 로 딱 1레벨만 올리며 타이머를 '전체 분'으로 리셋해
+  //            밀린 레벨과 잔여 시간이 통째로 증발했다. levelCatchUp 은 endsAt 을 누적해 둘 다 막는다.
   const advance = useCallback(() => {
-    const lv = state.config.levels;
-    const nextIndex = state.currentIndex + 1;
-    if (nextIndex >= lv.length) {
-      persist({ running: false, remainingMs: 0, endsAt: null }); playChime('finish');
+    if (advancingRef.current) return;
+    const cu = levelCatchUp(state);
+    if (!cu) return;
+    advancingRef.current = true;
+    setTimeout(() => { advancingRef.current = false; }, 800);
+    persist(cu.patch);
+    if (cu.finished) {
+      playChime('finish');
       if (canManage && state.sessionDate) {
         setFinishRows(cfg.prizes.length
           ? cfg.prizes.map((p) => ({ name: '', prize: p.amount >= 10000 ? String(Math.round(p.amount / 10000)) : (p.amount ? String(p.amount) : '') }))
@@ -446,20 +453,26 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
       }
       return;
     }
-    const rem = lv[nextIndex].minutes * 60_000;
-    persist({ currentIndex: nextIndex, remainingMs: rem, endsAt: state.running ? new Date(now() + rem).toISOString() : null });
-    playChime(lv[nextIndex].kind === 'break' ? 'break' : 'level'); // 다음이 브레이크면 휴식음, 아니면 레벨업음
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, persist, playChime, canManage]);
+    playChime(cfg.levels[cu.toIndex]?.kind === 'break' ? 'break' : 'level'); // 도착이 브레이크면 휴식음
+    // 2레벨 이상 한 번에 넘어갔다 = 그동안 아무도 전진을 쓰지 못했다는 뜻.
+    // 조용히 넘기면 업주가 "레벨이 왜 튀지" 하고 수기로 되돌려 오히려 더 어긋난다.
+    if (cu.advanced > 1) {
+      toast.show(`⏱ 레벨 자동 보정 — L${levelNumberAt(cfg, state.currentIndex)} → L${levelNumberAt(cfg, cu.toIndex)}`, 'info', { durationMs: 5000 });
+    }
+  }, [state, persist, playChime, canManage, cfg, toast]);
 
+  // 워치독 — active(섹션 노출)와 무관하게 running 인 동안 계속 돈다.
+  // 비용: 경계를 안 지났으면 setState 를 하지 않으므로 재렌더가 0 이다(1초에 Date.now 비교 1회).
+  // 250ms 가 아니라 1초인 근거: 이 틱은 화면을 그리지 않고 '경계를 지났나'만 본다. 최대 1초 늦어도
+  // TV·라이브카드·리모컨은 endsAt 기준 표시 보정(effectiveLevel)으로 이미 정확하다.
+  const advanceRef = useRef(advance);
+  useEffect(() => { advanceRef.current = advance; });
   useEffect(() => {
     if (!canManage || !state.running) return;
-    if (remaining <= 0 && !advancingRef.current) {
-      advancingRef.current = true;
-      advance();
-      setTimeout(() => { advancingRef.current = false; }, 800);
-    }
-  }, [remaining, canManage, state.running, advance]);
+    advanceRef.current();                      // 재진입·재개 즉시 1회 — 밀린 레벨을 한 번에 따라잡는다
+    const id = setInterval(() => advanceRef.current(), 1000);
+    return () => clearInterval(id);
+  }, [canManage, state.running]);
 
   // 마지막 10초 카운트다운 틱 — 9·8·7…초마다 짧은 비프(3초 이하 더 높게). 레벨·브레이크 공통(휴식 종료도 카운트다운).
   // 음색: 비프(sine) / 부드러움(triangle, 낮은음) / 끔. localStorage로 기억.
@@ -745,8 +758,13 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
       )}
       </div>
 
-      {/* 토너 종료 → 입상 순위 자동 초안 입력(장부 연동 시) */}
-      {finishRows && state.sessionDate && (
+      {/* 토너 종료 → 입상 순위 자동 초안 입력(장부 연동 시)
+          ⚠ active 조건이 반드시 필요하다: Modal 은 createPortal 을 쓰지 않고 마운트 시 lockScroll()로
+             documentElement·body 의 overflow 를 '전역' 잠근다. 클락 섹션은 숨겨질 때 display:none 으로
+             마운트만 유지되므로(섹션 keep-alive), 숨은 상태에서 이 모달이 뜨면 화면엔 안 보이는 채
+             장부 같은 긴 화면이 통째로 스크롤 불능이 되고 ESC·뒤로가기도 유령 모달이 먼저 먹는다.
+             finishRows 상태는 그대로 두므로 클락 섹션으로 돌아오면 정상적으로 뜬다. */}
+      {finishRows && state.sessionDate && active && (
         <Modal open onClose={() => setFinishRows(null)} title="🏆 입상 순위 입력" maxWidth="md" variant="sheet">
           <div className="space-y-2 p-4">
             <p className="text-2xs text-ink-muted">토너 종료 — 입상 순위를 저장하면 매장 순위·시즌·머니인킹에 자동 반영됩니다. 이름은 장부 참가자에서 자동완성, 상금은 만원 단위.</p>
