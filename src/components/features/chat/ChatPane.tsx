@@ -26,14 +26,21 @@ export default function ChatPane({ listingId, buyerId, meId, emptyHint, onRead }
     }).catch(() => {});
   }, [listingId, buyerId, meId]);
 
+  // ⚠ onRead 는 부모가 인라인 화살표로 넘겨 매 렌더마다 신원이 바뀐다. 의존성에 두면
+  //   [읽음처리 → onRead → 부모 setState → 리렌더 → 이펙트 재실행] 이 끝없이 돌아
+  //   읽음 upsert(쓰기)와 스레드 조회가 네트워크 왕복 속도로 폭주했다(5초 폴링도 매번 취소돼 안 돎).
+  //   최신 콜백은 ref 로 들고, 이펙트는 스레드가 바뀔 때만 돌게 한다.
+  const onReadRef = useRef(onRead);
+  useEffect(() => { onReadRef.current = onRead; });
+
   // 이 스레드를 내가 읽음 처리(열람 시 + 새 메시지 도착 시) + 상대 읽음 폴링
   useEffect(() => {
     if (!buyerId) return;
-    markThreadRead(listingId, buyerId).then(() => onRead?.()).catch(() => {});
+    markThreadRead(listingId, buyerId).then(() => onReadRef.current?.()).catch(() => {});
     refreshReads();
     const id = setInterval(refreshReads, 5000);
     return () => clearInterval(id);
-  }, [listingId, buyerId, refreshReads, onRead]);
+  }, [listingId, buyerId, refreshReads]);
 
   useEffect(() => {
     if (!buyerId) { setMessages([]); return; }
