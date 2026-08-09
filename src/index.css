@@ -19,13 +19,17 @@
     --surface-float: 36 40 46;   /* #24282E 드롭다운/툴팁 */
 
     --ink-primary:   244 245 246; /* #F4F5F6 본문 */
-    --ink-secondary: 138 143 152; /* #8A8F98 보조 */
-    --ink-muted:     110 116 124; /* #6E747C 메타/라벨 — PET tx3 기반 + AA 보강 */
+    /* ⚠ 보조/메타 텍스트는 앱에서 가장 많이 쓰이는데(1087곳) 대비가 부족했다.
+       현장 조명이 어둡고 화면을 비스듬히 보는 상황이 기본이라, '읽을 수 있음'의 하한을 올린다.
+       (#8A8F98 → #A0A6B0 / #6E747C → #868C96 — surface-base 대비 AA 확보) */
+    --ink-secondary: 160 166 176; /* #A0A6B0 보조 */
+    --ink-muted:     134 140 150; /* #868C96 메타/라벨 */
     --ink-inverse:   24 26 32;    /* 골드(상금) 버튼 위 검정 */
 
     --border-subtle:  28 30 34;   /* #1C1E22 — PET 흰색 헤어라인 0.07 등가(근검정 위) */
-    --border-default: 38 41 46;   /* #26292E */
-    --border-strong:  52 56 62;   /* #34383E */
+    /* 입력칸 경계가 1.28:1 이라 '칸이 어디까지인지'가 안 보였다. subtle < default < strong 위계는 유지한다. */
+    --border-default: 58 63 70;   /* #3A3F46 */
+    --border-strong:  86 92 101;  /* #565C65 */
 
     /* 카드 헤어라인/그림자 — PET inset 하이라이트 + 미세 섀도 */
     --card-ring:   rgba(255, 255, 255, 0.05);
@@ -49,8 +53,9 @@
     --ink-inverse:   24 26 32;    /* 골드 버튼 위 텍스트는 어둡게 유지 */
 
     --border-subtle:  230 232 236; /* #E6E8EC PET line */
-    --border-default: 216 219 225; /* #D8DBE1 */
-    --border-strong:  185 190 200; /* #B9BEC8 */
+    /* 라이트도 같은 문제(1.28:1) — 흰 배경에서 입력칸 테두리가 사실상 안 보였다 */
+    --border-default: 203 208 216; /* #CBD0D8 */
+    --border-strong:  163 170 182; /* #A3AAB6 */
 
     /* 라이트에서는 흰색 헤어라인이 보이면 안 됨 → 어두운 톤으로 교체 */
     --card-ring:   rgba(15, 18, 26, 0.08);
@@ -175,12 +180,13 @@
      디자인(14px)은 유지하면서 확대만 막기 위해, 터치 기기에서만 실제 폰트를 16px로 올린다.
      (max-width 대신 pointer:coarse — 데스크톱 좁은 창은 영향 없음) */
   @media (pointer: coarse) {
+    /* ⚠ !important 인 이유(디자인 선택이 아니다):
+       이 규칙은 (0,1,0) 또는 (0,0,1) 인데 Tailwind 의 text-sm/text-xs 도 (0,1,0) 이고 utilities 레이어라
+       뒤에 와서 이겨 왔다. 그 결과 type 을 안 적은 input·textarea·select 에서 확대 방지가 통째로 꺼져 있었다.
+       이건 iOS 자동확대라는 '플랫폼 버그 회피'라서 어떤 유틸리티도 덮어선 안 된다 — 덮이면 그게 버그다. */
     .input,
-    input[type="text"], input[type="search"], input[type="email"], input[type="password"],
-    input[type="number"], input[type="tel"], input[type="url"],
-    input[type="date"], input[type="time"], input[type="datetime-local"],
-    select, textarea {
-      font-size: 16px;
+    input, select, textarea {
+      font-size: 16px !important;
     }
   }
 
@@ -316,6 +322,22 @@ html.light .text-violet-200, html.light .text-violet-300 { color: #6D28D9; }
 html.light .text-purple-300 { color: #7E22CE; }
 html.light .text-teal-300 { color: #0F766E; }
 html.light .text-blue-300 { color: #1D4ED8; }
+/* ⚠ -400 계열이 빠져 있었다. 보정 목록이 -200/-300 까지만 덮어서, 표준 경고색인 text-amber-400
+   (승인 대기·일시정지·예약중 등 39곳)이 흰 배경에서 1.5:1 로 사실상 안 보였다.
+   '상태를 알리는 색'이 상태를 못 알리면 색이 아니라 장식이다. */
+html.light .text-amber-400  { color: #92600A; }
+html.light .text-rose-400   { color: #BE123C; }
+html.light .text-red-400    { color: #C81E2B; }
+html.light .text-blue-400   { color: #1D4ED8; }
+html.light .text-sky-400    { color: #0369A1; }
+html.light .text-teal-400   { color: #0F766E; }
+html.light .text-purple-400 { color: #7E22CE; }
+html.light .text-pink-400   { color: #BE185D; }
+html.light .text-green-400  { color: #15803D; }
+html.light .text-orange-400 { color: #B45309; }
+html.light .text-emerald-200 { color: #0A8F5C; }
+html.light .text-accent-100 { color: #4853B8; }
+html.light .text-gold-500   { color: #8F6200; }
 html.light .text-pink-300 { color: #BE185D; }
 
 /* ── 모바일 하단 탭바(Riot Mobile 스타일) 공간 확보 — 컨텐츠가 탭바에 가리지 않게 */
@@ -347,7 +369,12 @@ button, [role='button'], a, [role='tab'] {
   -webkit-user-select: none;
   user-select: none;
 }
-button, [role='button'] {
+/* ⚠ 셀렉터에 :not([data-no-press]) 를 붙여 특이도를 (0,1,1) 로 올린 이유:
+   원래 `button`(0,0,1) 은 Tailwind 의 transition-colors(0,1,0, utilities 레이어)에 져서,
+   그 클래스를 쓴 274곳에서 transition-property 가 color 계열로 덮여 transform/opacity 가 빠졌다.
+   → :active 의 눌림(scale) 이 애니메이션되지 않아 '버튼 절반만 반응하는' 상태였다.
+   data-no-press 를 달면 이 규칙에서 빠져나갈 수 있게 탈출구도 함께 만든다. */
+button:not([data-no-press]), [role='button']:not([data-no-press]) {
   transition-property: opacity, transform, color, background-color, border-color;
   transition-duration: 0.2s;
   transition-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
@@ -395,5 +422,8 @@ img, svg { -webkit-touch-callout: none; -webkit-user-drag: none; user-select: no
   ::-webkit-scrollbar { width: 0; height: 0; }   /* 설치형에선 스크롤바 숨겨 더 앱처럼 */
   /* 설치형에선 본문 텍스트만 선택 가능, 그 외 UI는 비선택(네이티브 감각) */
   body { -webkit-user-select: none; user-select: none; }
-  p, h1, h2, h3, h4, li, span.selectable, .select-text { -webkit-user-select: text; user-select: text; }
+  /* ⚠ input/textarea/contenteditable 이 빠져 있어 설치형 PWA 에서 '붙여넣기'가 통째로 막혀 있었다.
+     카톡에서 복사한 닉네임·매장명을 장부·순위에 붙여넣지 못하는 건 현장에서 치명적이다. */
+  p, h1, h2, h3, h4, li, span.selectable, .select-text,
+  input, textarea, [contenteditable] { -webkit-user-select: text; user-select: text; }
 }

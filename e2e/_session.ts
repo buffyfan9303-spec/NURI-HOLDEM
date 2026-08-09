@@ -47,6 +47,22 @@ export async function loginAs(page: Page, email: string, password: string): Prom
 }
 
 /**
+ * 백스택 shim — Playwright 전용. 앱 코드는 건드리지 않는다.
+ *
+ * 왜 필요한가: 이 앱은 모달을 열 때 history.pushState 하고 뒤로가기(popstate)로 닫는다.
+ *   그런데 Playwright 가 새로 연 페이지는 history.length === 1 이라 '되돌아갈 곳이 없는' 상태로 보이고,
+ *   pushState 직후 popstate 가 즉시 발화해 **모달이 열리자마자 닫힌다**.
+ *   실제 사용자 브라우저는 방문 이력이 쌓여 있어 이 조건에 걸리지 않는다 — 프로덕션 영향 없음,
+ *   순수하게 테스트 환경에서만 나타나는 현상이라 앱이 아니라 여기서 막는다.
+ * 부작용: 이 shim 을 쓴 테스트에서는 '뒤로가기로 모달 닫기' 를 검증할 수 없다(별도 테스트로 다뤄야 한다).
+ */
+export async function stabilizeBackstack(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    try { history.pushState({ __e2e: true }, ''); } catch { /* noop */ }
+  });
+}
+
+/**
  * 진입을 가로막는 모달을 걷어낸다(온보딩 '시작하기' 등).
  * 왜 필요한가: 온보딩을 안 끝낸 계정은 로그인 직후 전체화면 모달이 떠서
  *   하단 탭바 클릭이 전부 오버레이에 가로채인다 — 검증하려는 것과 무관하게 모든 테스트가 죽는다.
