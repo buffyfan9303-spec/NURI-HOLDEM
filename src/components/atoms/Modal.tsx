@@ -66,21 +66,32 @@ export default function Modal({
   const pageScrollRef = useRef<HTMLDivElement>(null);
   const [dragY, setDragY] = useState(0);
   const sheetStart = useRef<number | null>(null);
+  // ⚠ `?? 1` 이면 시트에서 드래그가 시작조차 안 된다 — pageScrollRef 는 page 변형에만 붙어 있어
+  //   시트에서는 항상 null 이고, 1 <= 0 이 거짓이라 매번 무시됐다(그래서 그립 핸들이 죽어 있었다).
+  //   ref 가 없다 = 추적할 스크롤 영역이 없다(핸들을 직접 잡았다) = 맨 위로 간주하는 게 맞다.
   const onSheetStart = (e: React.TouchEvent) => {
     if (window.innerWidth >= 1024) return;
-    if ((pageScrollRef.current?.scrollTop ?? 1) <= 0) sheetStart.current = e.touches[0].clientY;
+    if ((pageScrollRef.current?.scrollTop ?? 0) <= 0) sheetStart.current = e.touches[0].clientY;
   };
   const onSheetMove = (e: React.TouchEvent) => {
     if (sheetStart.current == null) return;
     const dy = e.touches[0].clientY - sheetStart.current;
-    if ((pageScrollRef.current?.scrollTop ?? 1) > 0) { sheetStart.current = null; setDragY(0); return; }
+    if ((pageScrollRef.current?.scrollTop ?? 0) > 0) { sheetStart.current = null; setDragY(0); return; }
+    // 0.55 감쇠 — 손가락보다 조금 덜 따라와야 '무게감'이 생긴다(iOS 시트와 같은 감각).
     setDragY(dy > 0 ? dy * 0.55 : 0);
   };
   const onSheetEnd = () => {
     const pulled = dragY;
     sheetStart.current = null;
-    setDragY(0);
-    if (pulled > 120) onClose();
+    if (pulled > 120) {
+      // ⚠ setDragY(0) 을 먼저 하면 시트가 원위치로 '튀어올랐다가' 사라진다 —
+      //   손가락으로 끌어내린 방향과 반대로 움직여서 조작이 취소된 것처럼 보인다.
+      //   끌던 방향 그대로 화면 밖까지 밀어낸 뒤 닫는다.
+      setDragY(window.innerHeight);
+      onClose();
+      return;
+    }
+    setDragY(0); // 임계 미만이면 제자리로(이때는 되돌아오는 게 맞다)
   };
   useEffect(() => {
     if (!open || inline) return;
@@ -177,7 +188,9 @@ export default function Modal({
           'relative w-full bg-surface-mid shadow-dialog',
           closing
             ? (variant === 'sheet' ? 'animate-slide-down' : 'animate-fade-out')
-            : 'animate-slide-up',
+            // 시트는 아래에서 올라오고(sheet-up), 가운데 모달은 기존의 짧은 넛지(slide-up).
+            // 열림과 닫힘이 같은 문법을 쓰게 맞춘 것 — 예전엔 닫힘만 100% 이동이라 짝이 안 맞았다.
+            : (variant === 'sheet' ? 'animate-sheet-up' : 'animate-slide-up'),
           variant === 'sheet'
             ? 'rounded-t-dialog sm:rounded-dialog sm:my-auto sm:max-h-[85vh]'
             : 'rounded-dialog my-auto max-h-[85vh]',
@@ -189,11 +202,26 @@ export default function Modal({
           maxHeight: variant === 'sheet' ? '88vh' : '85vh',
           // fillHeight: 콘텐츠 양과 무관하게 높이 고정 (탭 전환 시 크기 변동 방지)
           height: fillHeight ? (variant === 'sheet' ? '88vh' : '85vh') : undefined,
+          // 손끝 추종 — 끄는 동안엔 트랜지션을 끄고(지연 없이 손가락을 따라옴),
+          // 손을 떼면 트랜지션으로 부드럽게 제자리 또는 화면 밖으로. 이 둘을 섞으면 '고무줄'이 된다.
+          ...(variant === 'sheet' && dragY > 0
+            ? { transform: `translateY(${dragY}px)`, transition: 'none', animation: 'none' }
+            : variant === 'sheet'
+              ? { transition: 'transform 0.28s cubic-bezier(0.32, 0.72, 0, 1)' }
+              : {}),
         }}
       >
-        {/* 그립 핸들 (sheet 전용) */}
+        {/* 그립 핸들 (sheet 전용) — 실제로 끌어서 닫을 수 있다.
+            ⚠ 예전엔 드래그 핸들러가 page 변형에만 붙어 있어서, 핸들이 '끌 수 있다'고 말해 놓고
+              잡아끌면 아무 반응이 없었다. UI 가 거짓말을 하면 사용자는 앱을 못 믿게 된다.
+            영역을 핸들 자체가 아니라 이 래퍼로 잡은 이유: 1px 짜리 막대를 정확히 짚기 어렵다. */}
         {variant === 'sheet' && (
-          <div className="flex justify-center pt-2 pb-1 sm:hidden">
+          <div
+            className="flex justify-center pt-2 pb-1 sm:hidden touch-none cursor-grab active:cursor-grabbing"
+            onTouchStart={onSheetStart}
+            onTouchMove={onSheetMove}
+            onTouchEnd={onSheetEnd}
+          >
             <div className="w-10 h-1 rounded-full bg-border-strong" aria-hidden />
           </div>
         )}

@@ -125,6 +125,13 @@ export default {
           from: { transform: 'translateY(8px)', opacity: '0' },
           to:   { transform: 'translateY(0)',   opacity: '1' },
         },
+        // 시트(하단 모달) 열기: 화면 아래에서 실제로 올라온다.
+        // ⚠ slide-up(8px 넛지)을 쓰면 시트가 '올라오지' 않고 반투명하게 번쩍 나타난다 —
+        //   닫힘은 translateY(100%) 인데 열림만 8px 이라 열고 닫는 문법이 서로 달랐다.
+        'sheet-up': {
+          from: { transform: 'translateY(100%)' },
+          to:   { transform: 'translateY(0)' },
+        },
         // 시트(하단 모달) 닫기: 아래로 슬라이드되며 사라짐
         'slide-down': {
           from: { transform: 'translateY(0)',    opacity: '1' },
@@ -148,6 +155,8 @@ export default {
       animation: {
         'badge-pulse': 'badge-pulse 2s ease-in-out infinite',
         'slide-up':    'slide-up 0.2s ease-out',
+        // iOS 시트 감각 — 빠르게 출발해 부드럽게 안착(감속 위주 곡선). 0.2s 는 '툭' 끊겨 보인다.
+        'sheet-up':    'sheet-up 0.32s cubic-bezier(0.32, 0.72, 0, 1)',
         'slide-down':  'slide-down 0.2s cubic-bezier(0.4, 0, 1, 1) forwards',
         'fade-in':     'fade-in 0.15s ease-out',
         'fade-out':    'fade-out 0.18s ease-in forwards',
