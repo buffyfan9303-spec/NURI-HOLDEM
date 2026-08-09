@@ -265,8 +265,12 @@ export async function canManagePos(venueId: string): Promise<boolean> {
 // ── 세션(매장+날짜+게임) ───────────────────────────────────────────────────────
 export async function getLedgerSession(venueId: string, date = today(), gameSeq = MAIN_GAME_SEQ): Promise<LedgerSession> {
   if (IS_MOCK) return emptySession(venueId, date, gameSeq);
-  const { data } = await supabase.from('ledger_sessions')
+  // ⚠ 여기서 error 를 버리면 조회 실패가 '오늘 게임 없음'(emptySession)으로 둔갑한다.
+  //    화면은 세팅 폼을 띄우고, 사장님이 열면 진행 중인 장부의 마감·단가·할인이 덮인다.
+  //    빈 장부와 조회 실패는 완전히 다른 상태다.
+  const { data, error } = await supabase.from('ledger_sessions')
     .select('*').eq('venue_id', venueId).eq('session_date', date).eq('game_seq', gameSeq).maybeSingle();
+  if (error) throw error;
   return data ? rowToSession(venueId, date, data) : emptySession(venueId, date, gameSeq);
 }
 
@@ -641,6 +645,9 @@ export async function getLedgerRange(venueId: string, from: string, to: string):
     supabase.from('ledger_sessions').select('*').eq('venue_id', venueId).gte('session_date', from).lte('session_date', to),
     supabase.from('ledger_buyins').select('*').eq('venue_id', venueId).gte('session_date', from).lte('session_date', to),
   ]);
+  // 통계는 '0원'과 '못 불러옴'이 시각적으로 같아서 특히 위험하다 — 매출이 0으로 보이면 사장님이 오판한다.
+  if (sRes.error) throw sRes.error;
+  if (bRes.error) throw bRes.error;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sessions = (sRes.data ?? []).map((d: any) => rowToSession(venueId, d.session_date, d));
   const buyins = (bRes.data ?? []).map(rowToBuyin);

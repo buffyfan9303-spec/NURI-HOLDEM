@@ -29,6 +29,7 @@ import { getMyVenueStaff, searchMembersForRanking, type User } from '../../api/a
 import { accrueVoucher } from '../../api/vouchers';
 import { useBackClose } from '../../lib/backstack';
 import { planBuyinApprovals } from '../../lib/buyinApproval';
+import LoadErrorCard from '../atoms/LoadErrorCard';
 import EmptyState from '../atoms/EmptyState';
 import SegmentedTabs from '../atoms/SegmentedTabs';
 import { SkeletonList } from '../atoms/Skeleton';
@@ -105,6 +106,8 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const [gameSeq, setGameSeq] = useState(MAIN_GAME_SEQ);   // 현재 보고있는 게임(1=메인, 2+=사이드)
   const [games, setGames]     = useState<LedgerGame[]>([]); // 그 날짜의 게임 목록(스위처용)
   const [loading, setLoading] = useState(true);
+  // 조회 실패를 '빈 장부'와 구분하기 위한 세 번째 상태(로딩/빈값/실패)
+  const [loadError, setLoadError] = useState<unknown>(null);
   const [hasPw, setHasPw]     = useState(false);
   const [selected, setSelected] = useState<SelectedCell | null>(null);
   const [query, setQuery]     = useState('');
@@ -242,8 +245,12 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     // 응답이 늦게 도착해 현재 세션을 빈 값으로 덮어쓰는 race가 난다. cleanup으로 무시.
     let alive = true;
     setLoading(true);
+    setLoadError(null);
     Promise.all([getLedgerSession(venueId, date, gameSeq), getLedgerBuyins(venueId, date, gameSeq), getLedgerPlayers(venueId, date, gameSeq), posHasPassword(venueId), getLedgerGames(venueId, date)])
       .then(([s, b, p, pw, gs]) => { if (!alive) return; setSession(s); setBuyins(b); setPlayers(p); setHasPw(pw); setGames(gs); })
+      // ⚠ 여기서 실패를 삼키면 '조회 실패'가 '오늘 게임 없음'이 되어 세팅 폼이 뜬다.
+      //   사장님이 [시작]을 누르는 순간 진행 중이던 장부의 마감·단가·할인이 덮인다.
+      .catch((e) => { if (alive) setLoadError(e); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, [venueId, date, gameSeq]);
@@ -339,7 +346,8 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
 
   const closed = session.closed;
   const regClosed = session.regClosed;
-  const showSetup = !session.openedAt && !closed && buyins.length === 0 && players.length === 0;
+  // 실패는 '빈 장부'가 아니다 — loadError 가 있으면 세팅 폼으로 넘어가지 않는다.
+  const showSetup = !loadError && !session.openedAt && !closed && buyins.length === 0 && players.length === 0;
 
   // 마감 후 다음 액션 바 — 그날 순위가 이미 입력됐는지(미입력이면 입력 유도 강조)
   const [hasRank, setHasRank] = useState<boolean | null>(null);
@@ -693,6 +701,16 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       <SkeletonList rows={6} rowClassName="h-10" />
     </div>
   );
+
+  // 불러오기 실패 — 세팅 폼(=새 장부 시작)으로 절대 넘기지 않는다.
+  if (loadError) {
+    return (
+      <div className="space-y-3">
+        <DateBar date={date} setDate={setDate} onBack={() => setMode('list')} />
+        <LoadErrorCard error={loadError} what="장부" onRetry={() => { setLoadError(null); reloadSession(); reload(); }} />
+      </div>
+    );
+  }
 
   // ── 세션 설정(장부 입장 게이트) ────────────────────────────────────────────
   if (showSetup) {

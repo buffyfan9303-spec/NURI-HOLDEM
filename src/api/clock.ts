@@ -311,14 +311,18 @@ export async function deleteClockPreset(id: string): Promise<void> {
 // ── 라이브 상태 ───────────────────────────────────────────────────────────────
 export async function getClockState(venueId: string, gameSeq = 1): Promise<ClockState | null> {
   if (IS_MOCK) return null;
-  const { data } = await supabase.from('clock_states').select('*').eq('venue_id', venueId).eq('game_seq', gameSeq).maybeSingle();
+  // ⚠ error 를 버리면 '조회 실패'가 '클락 없음'이 된다 → 화면이 설정폼으로 바뀌고
+  //    운영자가 [시작]을 누르면 진행 중인 대회가 0으로 덮인다. 실패는 실패로 올린다.
+  const { data, error } = await supabase.from('clock_states').select('*').eq('venue_id', venueId).eq('game_seq', gameSeq).maybeSingle();
+  if (error) throw error;
   return data ? rowToState(data) : null;
 }
 
 /** 진행 중(running) 클락 전체 — 라이브 게임 현황 보드용. (공개 읽기 정책 필요, 없으면 접근 가능한 것만) */
 export async function getRunningClocks(): Promise<ClockState[]> {
   if (IS_MOCK) return [];
-  const { data } = await supabase.from('clock_states').select('*').eq('running', true).order('updated_at', { ascending: false });
+  const { data, error } = await supabase.from('clock_states').select('*').eq('running', true).order('updated_at', { ascending: false });
+  if (error) throw error; // 실패를 빈 배열로 바꾸면 '진행 중인 대회 없음'으로 위장된다
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => rowToState(r));
 }
@@ -326,7 +330,8 @@ export async function getRunningClocks(): Promise<ClockState[]> {
 /** 이 매장의 모든 게임 클락 상태(진행·정지 포함, 게임당 1개) — 멀티 클락 오버뷰용. */
 export async function getVenueClocks(venueId: string): Promise<ClockState[]> {
   if (IS_MOCK) return [];
-  const { data } = await supabase.from('clock_states').select('*').eq('venue_id', venueId);
+  const { data, error } = await supabase.from('clock_states').select('*').eq('venue_id', venueId);
+  if (error) throw error;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => rowToState(r));
 }
