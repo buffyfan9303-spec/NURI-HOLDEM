@@ -915,7 +915,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
           {addOpen && !regClosed && (
             <div className="rounded-input border border-border-default bg-surface-low p-2 space-y-2">
               <input value={newName} onChange={(e) => setNewName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addPlayer(); } }}
+                onKeyDown={(e) => { if (e.nativeEvent.isComposing) return; /* 한글 조합 확정 Enter 로 이름이 두 번 들어가던 문제 */ if (e.key === 'Enter') { e.preventDefault(); addPlayer(); } }}
                 placeholder="닉네임/이름 (입력 시 가입자 자동완성)" maxLength={20} className="input w-full text-sm" autoFocus />
               {(suggest.length > 0 || memOnly.length > 0 || newName.trim()) && (
                 <ul className="max-h-52 space-y-1 overflow-y-auto rounded-input border border-accent-400/30 bg-surface-base/60 p-1">

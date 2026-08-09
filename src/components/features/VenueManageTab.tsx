@@ -1045,7 +1045,7 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
                 <input
                   type="text" inputMode="numeric" value={row.prize} maxLength={12}
                   onChange={(e) => update(i, 'prize', e.target.value.replace(/[^\d.]/g, ''))}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && i === rows.length - 1) addRow(); }}
+                  onKeyDown={(e) => { if (e.nativeEvent.isComposing) return; /* 한글 조합 확정 Enter 를 제출로 오인하지 않게 */ if (e.key === 'Enter' && i === rows.length - 1) addRow(); }}
                   placeholder="프라이즈"
                   aria-label="프라이즈 (만원 단위)"
                   title="만원 단위 — 100만원이면 100, 1,000만원이면 1000"

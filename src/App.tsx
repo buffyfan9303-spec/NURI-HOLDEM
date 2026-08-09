@@ -38,6 +38,7 @@ import { lazyWithReload } from './lib/lazyWithReload';
 import { applyScheduleSeo, applyVenueSeo, resetSeo } from './lib/seo';
 import { createUndoQueue } from './lib/undoableDelete';
 import { scheduleStatus } from './lib/scheduleStatus';
+import LoadErrorCard from './components/atoms/LoadErrorCard';
 import { SpringButton } from './components/atoms/StatefulActionButton';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from './contexts/AuthContext';
@@ -862,6 +863,9 @@ export default function App() {
   // ── 데이터 (Supabase에서 로드) ──────────────────────────────────────────────
   const [schedules,     setSchedules]     = useState<Schedule[]>([]);
   const [schedulesLoaded, setSchedulesLoaded] = useState(false); // (B1) 첫 로드 완료 여부 — 로딩 중엔 스켈레톤(빈결과 메시지 깜빡임 방지)
+  // 목록을 못 불러온 것과 '대회가 없는 것'은 다르다 — 구분하지 않으면
+  // 서비스가 죽은 날에도 사용자는 '대회가 없나 보다' 하고 조용히 떠난다.
+  const [schedulesError, setSchedulesError] = useState<unknown>(null);
   // FOMO 뱃지용 예약자 수 — 다가오는 대회만 1회 조회
   useEffect(() => {
     const today = new Date().toLocaleDateString('en-CA');
@@ -940,7 +944,12 @@ export default function App() {
   }, []);
 
   // 서버 재조회 헬퍼
-  const reloadSchedules = useCallback(() => { getSchedules().then(setSchedules).catch(() => {}).finally(() => setSchedulesLoaded(true)); }, []);
+  const reloadSchedules = useCallback(() => {
+    getSchedules()
+      .then((v) => { setSchedules(v); setSchedulesError(null); })
+      .catch((e) => setSchedulesError(e))
+      .finally(() => setSchedulesLoaded(true));
+  }, []);
   // 당겨서 새로고침(유튜브·당근) — 최상단에서 아래로 80px+ 당기면 갱신
   const [ptr, setPtr] = useState(0); // 0=대기, 양수=당김(px), -1=갱신 중
   const ptrStart = useRef<number | null>(null);
@@ -1917,6 +1926,9 @@ export default function App() {
               <div className="min-w-0 flex-1">
                 {!schedulesLoaded ? (
                   <ScheduleSkeletonGrid viewMode={viewMode} />
+                ) : schedulesError && schedules.length === 0 ? (
+                  <LoadErrorCard error={schedulesError} what="대회 목록"
+                    onRetry={() => { setSchedulesLoaded(false); reloadSchedules(); }} />
                 ) : visibleSchedules.length === 0 ? (
                   <EmptyState
                     filtered={!!searchState.query.trim() || searchState.dates.length > 0

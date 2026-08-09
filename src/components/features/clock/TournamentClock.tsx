@@ -22,6 +22,8 @@ import {
 } from '../../../api/ledger';
 import { listGamePresets, type GamePreset } from '../../../api/presets';
 import { saveVenueRankings, prizeUnitRisk } from '../../../api/rankings';
+import LoadErrorCard from '../../atoms/LoadErrorCard';
+import { msgOf } from '../../../lib/dbError';
 import Modal from '../../atoms/Modal';
 
 const now = () => Date.now();
@@ -83,6 +85,9 @@ export default function TournamentClock({ venueId, canManage, seedSessionDate, s
   const [seedSession, setSeedSession] = useState<LedgerSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'settings' | 'live'>('live');
+  // 로드 실패를 '클락 없음'과 구분한다 — 구분하지 않으면 실패가 설정폼으로 이어지고,
+  // 운영자가 [시작]을 누르는 순간 진행 중이던 대회가 0으로 덮인다.
+  const [loadError, setLoadError] = useState<unknown>(null);
 
   // 이 화면이 다루는 게임(클락). 연동 시작 시 그 게임으로 바뀜 — subscribe 콜백에서 최신값 참조용 ref.
   const curGameSeqRef = useRef(seedGameSeq);
@@ -92,8 +97,10 @@ export default function TournamentClock({ venueId, canManage, seedSessionDate, s
   useEffect(() => {
     setLoading(true);
     curGameSeqRef.current = seedGameSeq;
+    setLoadError(null);
     Promise.all([getClockState(venueId, seedGameSeq), getClockPresets(venueId), getLedgerSessionList(venueId, 60).catch(() => [])])
       .then(([s, p, ls]) => { setState(s); setPresets(p); setSessions(ls); setView(seedSessionDate ? 'settings' : (s ? 'live' : 'settings')); })
+      .catch((e) => setLoadError(e)) // 실패를 삼키면 '클락 없음'으로 위장된다
       .finally(() => setLoading(false));
   }, [venueId, seedGameSeq]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -123,6 +130,23 @@ export default function TournamentClock({ venueId, canManage, seedSessionDate, s
     const base = emptyClockState(venueId, withDerivedEarly(config), gseq);
     base.sessionDate = linkDate;
     base.title = base.config.title;
+    // ⚠ 마지막 안전망 — [시작]은 그 게임의 클락을 통째로 새 값으로 덮어쓴다(upsert).
+    //   화면이 '클락 없음'으로 보이는 이유가 '정말 없어서'가 아니라 '조회에 실패해서'일 수 있으므로,
+    //   쓰기 직전에 서버 상태를 한 번 더 확인한다. 여기서 실패하면 덮어쓰지 않고 멈춘다 —
+    //   진행 중인 대회를 0으로 되돌리는 것보다 '시작이 안 되는' 쪽이 훨씬 낫다.
+    try {
+      const existing = await getClockState(venueId, gseq);
+      if (existing?.running) {
+        const ok = window.confirm(
+          '이 게임에 이미 진행 중인 클락이 있습니다.\n'
+          + '새로 시작하면 지금까지의 레벨·경과 시간이 사라집니다.\n\n그래도 새로 시작할까요?',
+        );
+        if (!ok) return;
+      }
+    } catch (e) {
+      toast.show(msgOf(e, '현재 클락 상태를 확인하지 못해 시작을 취소했습니다'), 'error');
+      return;
+    }
     try {
       await saveClockState(base);
       // 장부 연동 시: 클락의 얼리(레벨→분 환산)를 장부 세션에 기록 → 장부 셀 얼리 태그가 동일 기준으로 표시됨.
@@ -171,6 +195,12 @@ export default function TournamentClock({ venueId, canManage, seedSessionDate, s
   };
 
   if (loading) return <p className="py-10 text-center text-sm text-ink-muted">클락 불러오는 중…</p>;
+
+  // 불러오기 실패 — 설정폼(=새 클락 시작)으로 절대 넘기지 않는다.
+  if (loadError) {
+    return <LoadErrorCard error={loadError} what="클락"
+      onRetry={() => { setLoadError(null); setLoading(true); reloadState().finally(() => setLoading(false)); }} />;
+  }
 
   if (view === 'settings' || !state) {
     return (

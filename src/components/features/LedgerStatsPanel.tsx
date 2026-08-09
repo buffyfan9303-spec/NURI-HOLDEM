@@ -10,6 +10,7 @@ import {
 } from '../../api/ledger';
 import { toCsv, downloadCsv } from '../../lib/csv';
 import Icon from '../atoms/Icon';
+import LoadErrorCard from '../atoms/LoadErrorCard';
 import { getMyVenueNotifyMute, setMyVenueNotifyMute } from '../../api/auth';
 import { useAuth } from '../../contexts/AuthContext';
 import { listVenueOwners, addVenueOwner, removeVenueOwner, transferVenuePrimary, type VenueOwner } from '../../api/community';
@@ -55,6 +56,8 @@ function StatsView({ venueId }: { venueId: string }) {
   const [excludeTypes, setExcludeTypes] = useState<Set<string>>(new Set()); // 제외할 손님유형 코드(new/regular/staff/other/none)
   const toggleExclude = (code: string) => setExcludeTypes((prev) => { const n = new Set(prev); if (n.has(code)) n.delete(code); else n.add(code); return n; });
   const [loading, setLoading] = useState(true);
+  // 통계는 '0원'과 '못 불러옴'이 시각적으로 같아서 특히 위험하다 — 매출이 0으로 보이면 사장님이 오판한다.
+  const [loadError, setLoadError] = useState<unknown>(null);
   const [aiTick, setAiTick] = useState(0); // AI 리포트 새로고침
   const [aiDays, setAiDays] = useState(7); // AI 리포트 분석 기간(일) — 7/30/90
   const [trendMetric, setTrendMetric] = useState<'revenue' | 'entries' | 'players'>('revenue'); // 추세 그래프 지표
@@ -83,7 +86,8 @@ function StatsView({ venueId }: { venueId: string }) {
     Promise.all([
       getLedgerRange(venueId, range.from, range.to),
       period === 'day' ? getLedgerPlayers(venueId, date) : Promise.resolve([] as LedgerPlayer[]),
-    ]).then(([r, p]) => { setSessions(r.sessions); setBuyins(r.buyins); setPlayers(p); })
+    ]).then(([r, p]) => { setSessions(r.sessions); setBuyins(r.buyins); setPlayers(p); setLoadError(null); })
+      .catch((e) => setLoadError(e))
       .finally(() => { setLoading(false); hasLoaded.current = true; });
   }, [venueId, range.from, range.to, period, date, aiTick, liveTick]);
 
@@ -227,6 +231,18 @@ function StatsView({ venueId }: { venueId: string }) {
     downloadCsv(`장부통계_${range.from}_${range.to}`, toCsv(['날짜', '요일', '게임', '기준엔트리', '엔트리', '완납매출(원)', '미수(원)', '회수티켓', '발행이용권', '플레이어수'], rows));
     toast.show('통계 CSV를 내보냈습니다', 'success');
   };
+
+  // 불러오기 실패 — 숫자를 0으로 보여주면 사장님이 '오늘 매출 0'으로 오판한다.
+  // 빈 통계와 실패는 완전히 다른 상태라, 실패는 실패로 말하고 다시 시도할 수단을 준다.
+  if (loadError) {
+    return (
+      <section className="rounded-card border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.05] to-transparent p-3 space-y-3">
+        <h3 className="text-sm font-bold text-accent-300">통계</h3>
+        <LoadErrorCard error={loadError} what="통계"
+          onRetry={() => { setLoadError(null); setLiveTick((v) => v + 1); }} />
+      </section>
+    );
+  }
 
   return (
     <section className="rounded-card border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.05] to-transparent p-3 space-y-3">
@@ -933,7 +949,7 @@ function OwnerManageCard({ venueId }: { venueId: string }) {
         </ul>
       )}
       <div className="flex gap-1.5">
-        <input value={nick} onChange={(e) => setNick(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') add(); }}
+        <input value={nick} onChange={(e) => setNick(e.target.value)} onKeyDown={(e) => { if (e.nativeEvent.isComposing) return; /* 한글 조합 확정 Enter 를 제출로 오인하지 않게 */ if (e.key === 'Enter') add(); }}
           placeholder="추가할 사장님 아이디(닉네임)" className="input min-w-0 flex-1 text-sm" />
         <button type="button" disabled={busy || !nick.trim()} onClick={add} className="btn-primary shrink-0 px-3 text-xs disabled:opacity-50">+ 사장님 추가</button>
       </div>

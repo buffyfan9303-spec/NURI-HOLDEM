@@ -617,7 +617,7 @@ function PrizeList({ prizes, onChange }: { prizes: string[]; onChange: (prizes: 
       {prizes.length < MAX_PRIZES && (
         <div className="flex gap-1.5">
           <input type="text" value={draft} onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+            onKeyDown={(e) => { if (e.nativeEvent.isComposing) return; /* 한글 조합 확정 Enter 를 제출로 오인하지 않게 */ if (e.key === 'Enter') { e.preventDefault(); add(); } }}
             placeholder="예: KPT 메인 1석" className="input flex-1 text-sm" />
           <button type="button" onClick={add} disabled={!draft.trim()}
             className="btn-ghost text-xs px-3 shrink-0 disabled:opacity-40">추가</button>
@@ -749,7 +749,7 @@ function TagAdder({ items, max, total, placeholder, onAdd, onRemove }: {
       {total < max && (
         <div className="flex gap-1.5">
           <input type="text" value={draft} onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+            onKeyDown={(e) => { if (e.nativeEvent.isComposing) return; /* 한글 조합 확정 Enter 를 제출로 오인하지 않게 */ if (e.key === 'Enter') { e.preventDefault(); add(); } }}
             placeholder={placeholder} maxLength={20} className="input flex-1 text-sm" />
           <button type="button" onClick={add} disabled={!draft.trim()}
             className="btn-ghost text-xs px-3 shrink-0 disabled:opacity-40">추가</button>

@@ -336,6 +336,9 @@ ${cards}
                     <input value={idInput} onChange={(e) => setIdInput(e.target.value)} autoFocus
                       role="combobox" aria-expanded={cands.length > 0} aria-autocomplete="list"
                       onKeyDown={(e) => {
+                        // ⚠ 한글 조합 중의 확정 Enter 가 여기 들어오면, 화살표로 고르지도 않은 후보에게
+                        //   이용권이 발급된다(activeIdx 가 남아 있으면 pickRecv 가 그대로 실행된다).
+                        if (e.nativeEvent.isComposing) return; // 한글 조합 확정 Enter 를 제출로 오인하지 않게
                         if (e.key === 'ArrowDown' && cands.length) { e.preventDefault(); setActiveIdx((i) => Math.min(cands.length - 1, i + 1)); }
                         else if (e.key === 'ArrowUp' && cands.length) { e.preventDefault(); setActiveIdx((i) => Math.max(0, i - 1)); }
                         else if (e.key === 'Enter') { e.preventDefault(); if (activeIdx >= 0 && activeIdx < cands.length) pickRecv(cands[activeIdx]); else resolveId(); }

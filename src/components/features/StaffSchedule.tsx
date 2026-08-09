@@ -115,7 +115,7 @@ export default function StaffSchedule({ venueId }: { venueId: string }) {
       <div>
         <p className="text-2xs font-semibold text-ink-secondary mb-1">직원 등록 — 이름 입력(등록된 매장 직원 자동 포함)</p>
         <div className="flex gap-2">
-          <input value={newName} onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addName()} placeholder="직원 이름" maxLength={20} className="input flex-1 text-sm" />
+          <input value={newName} onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => { if (e.nativeEvent.isComposing) return; /* 한글 조합 확정 Enter 를 제출로 오인하지 않게 */ if (e.key === 'Enter') addName(); }} placeholder="직원 이름" maxLength={20} className="input flex-1 text-sm" />
           <button type="button" onClick={addName} className="btn-ghost text-xs px-3 shrink-0">+ 추가</button>
         </div>
         {roster.length > 0 && <p className="text-[10px] text-ink-muted mt-1">명부: {roster.join(' · ')}</p>}
