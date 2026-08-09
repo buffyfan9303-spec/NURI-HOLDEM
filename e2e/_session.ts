@@ -8,8 +8,8 @@
 // 앱이 로드되기 전에 그 값을 심으면 앱은 정상 로그인 상태로 시작한다.
 import type { Page } from '@playwright/test';
 
-const SUPABASE_URL = process.env.E2E_SUPABASE_URL ?? 'https://idsxiqspecrucvfvtgbw.supabase.co';
-const ANON_KEY = process.env.E2E_SUPABASE_ANON_KEY ?? 'sb_publishable_5H0ITdQ27V7EVO9fcfBdew_V9DUF0Kt';
+export const SUPABASE_URL = process.env.E2E_SUPABASE_URL ?? 'https://idsxiqspecrucvfvtgbw.supabase.co';
+export const ANON_KEY = process.env.E2E_SUPABASE_ANON_KEY ?? 'sb_publishable_5H0ITdQ27V7EVO9fcfBdew_V9DUF0Kt';
 
 /** 프로젝트 ref — 스토리지 키(sb-<ref>-auth-token)를 만드는 데 쓴다 */
 const projectRef = new URL(SUPABASE_URL).hostname.split('.')[0];
@@ -47,6 +47,37 @@ export async function loginAs(page: Page, email: string, password: string): Prom
 }
 
 /**
+ * 로그인한 사용자 자격으로 PostgREST 를 호출한다 — **테스트가 자기 픽스처를 직접 심기 위한 통로**.
+ *
+ * 왜 필요한가: 워치독 테스트는 '러닝 중인 클락' 이 DB 에 있어야 성립하는데,
+ *   그걸 사람이 SQL 로 미리 심어 두는 방식이었다. 그 행이 만료되거나 지워지는 순간
+ *   테스트는 영구 실패로 바뀌고, 그때부터는 '환경 탓' 으로 치부돼 아무도 안 본다.
+ *   테스트는 자기가 필요한 상태를 스스로 만들고 스스로 치워야 재현 가능하다.
+ *
+ * service key 가 아니라 **로그인 사용자의 토큰**을 쓴다 — 앱이 실제로 쓰는 것과 같은 권한이라
+ * RLS 를 우회하지 않고, 비밀 키를 저장소에 둘 필요도 없다.
+ */
+export async function restAs(
+  session: E2ESession,
+  path: string,
+  init: { method?: string; body?: unknown; prefer?: string } = {},
+): Promise<unknown> {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    method: init.method ?? 'GET',
+    headers: {
+      apikey: ANON_KEY,
+      Authorization: `Bearer ${session.access_token}`,
+      'Content-Type': 'application/json',
+      ...(init.prefer ? { Prefer: init.prefer } : {}),
+    },
+    body: init.body === undefined ? undefined : JSON.stringify(init.body),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`REST ${init.method ?? 'GET'} ${path} 실패(${res.status}): ${text.slice(0, 300)}`);
+  return text ? JSON.parse(text) : null;
+}
+
+/**
  * 백스택 shim — Playwright 전용. 앱 코드는 건드리지 않는다.
  *
  * 왜 필요한가: 이 앱은 모달을 열 때 history.pushState 하고 뒤로가기(popstate)로 닫는다.
@@ -67,10 +98,20 @@ export async function stabilizeBackstack(page: Page): Promise<void> {
  * 왜 필요한가: 온보딩을 안 끝낸 계정은 로그인 직후 전체화면 모달이 떠서
  *   하단 탭바 클릭이 전부 오버레이에 가로채인다 — 검증하려는 것과 무관하게 모든 테스트가 죽는다.
  * 실패해도 조용히 넘어간다: 모달이 없는 계정에서도 같은 헬퍼를 쓸 수 있어야 한다.
+ *
+ * ⚠ 여기서 한 번 크게 물렸다 — 예전 구현은 호출 즉시 `count()===0` 이면 그대로 반환했다.
+ *   그런데 OnboardingSheet 는 **첫 페인트 뒤 700ms 에 일부러 늦게** 뜬다(자연스러운 등장).
+ *   즉 goto 직후에는 다이얼로그가 아직 0개라 헬퍼가 "치울 게 없다"며 빠져나가고,
+ *   그 직후 모달이 떠서 로그인 버튼 클릭을 가로챘다. 부재를 근거로 한 판단이
+ *   '아직 안 나타난 것'과 '영원히 없는 것'을 구분하지 못한 전형적인 경합이다.
+ *   그래서 첫 바퀴는 지연 등장 구간(1.6s)을 **기다려 준 뒤** 판단한다.
  */
 export async function dismissOverlays(page: Page): Promise<void> {
+  const dialog = page.locator('[role="dialog"]');
+  // 지연 등장(700ms) + 시트 애니메이션을 넉넉히 덮는다. 안 뜨면 그냥 지나간다.
+  await dialog.first().waitFor({ state: 'visible', timeout: 1_600 }).catch(() => {});
+
   for (let i = 0; i < 4; i++) {
-    const dialog = page.locator('[role="dialog"]');
     if (!(await dialog.count())) return;
     const skip = dialog.getByRole('button', { name: /건너뛰기|닫기|시작하기|확인/ }).first();
     if (!(await skip.count())) return;

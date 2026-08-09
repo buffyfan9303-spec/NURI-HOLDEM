@@ -83,5 +83,14 @@ function loadThirdParty() {
 // requestIdleCallback 이 없으면(사파리 구버전) 타이머로 폴백. timeout 은 '한가해지지 않아도 결국 로드'.
 type IdleWin = Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number };
 const w = window as IdleWin;
-if (w.requestIdleCallback) w.requestIdleCallback(loadThirdParty, { timeout: 8000 });
-else setTimeout(loadThirdParty, 5000);
+// ⚠ 유휴 콜백만으로는 부족했다. 기기가 느리거나 CPU 가 붐비면 **앱이 첫 데이터를 요청하기도 전에**
+//   유휴 창이 먼저 열려 서드파티가 앞질러 나갔다(실측 순서: third → third → data).
+//   그러면 미뤄 놓은 의미가 없다 — 사용자가 기다리는 대회 목록과 다시 대역폭을 다투게 된다.
+//   그래서 load 이벤트(초기 서브리소스가 끝난 시점 = 앱이 마운트되어 첫 조회를 이미 띄운 뒤)를
+//   먼저 기다리고, 그다음에 한가해지길 기다린다. 순서가 기기 속도와 무관하게 고정된다.
+const afterIdle = () => {
+  if (w.requestIdleCallback) w.requestIdleCallback(loadThirdParty, { timeout: 8000 });
+  else setTimeout(loadThirdParty, 5000);
+};
+if (document.readyState === 'complete') afterIdle();
+else window.addEventListener('load', afterIdle, { once: true });

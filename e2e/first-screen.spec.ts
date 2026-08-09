@@ -50,6 +50,15 @@ test.describe('첫 화면 — 앱을 막 켠 사람이 보는 것', () => {
   });
 
   test('목록이 시간순으로 정렬된다(업주 진열 순서가 아니라)', async ({ page }) => {
+    // ⚠ 첫 화면은 '오늘' 이 기본 선택이라 카드가 0~1장인 날이 많다. 그러면 정렬을 판단할 수 없어
+    //   테스트가 매번 skip 됐다 — 게이트가 사실상 꺼져 있었던 것이다.
+    //   날짜 조건을 풀어 예정된 대회 전체를 보이게 한 뒤에 정렬을 본다.
+    const reset = page.getByRole('button', { name: /초기화/ }).first();
+    if (await reset.count()) {
+      await reset.click().catch(() => {});
+      await page.waitForTimeout(1500);
+    }
+
     const dates = await page.evaluate(() => {
       const out: string[] = [];
       for (const el of document.querySelectorAll('article')) {
@@ -58,7 +67,10 @@ test.describe('첫 화면 — 앱을 막 켠 사람이 보는 것', () => {
       }
       return out;
     });
-    test.skip(dates.length < 2, '카드가 2개 미만이라 정렬을 판단할 수 없다');
+    // 데이터가 없어서 못 도는 것과 코드가 틀린 것은 다르다 — 이유를 정확히 남긴다.
+    // (조건을 다 풀었는데도 2장 미만이면 DB 에 예정 대회 자체가 없다는 뜻이다.)
+    test.skip(dates.length < 2, `조건을 모두 푼 뒤에도 카드가 ${dates.length}장이라 정렬을 판단할 수 없다`
+      + ' — DB 에 예정된 대회가 없는 상태다(코드 문제가 아니라 데이터 문제).');
     // 프리미엄 고정이 앞에 올 수 있으므로 '전체가 내림차순은 아니다' 정도로 약하게 본다:
     // 최소한 '뒤로 갈수록 과거'인 역순이면 안 된다.
     const reversed = [...dates].sort((a, b) => b.localeCompare(a));

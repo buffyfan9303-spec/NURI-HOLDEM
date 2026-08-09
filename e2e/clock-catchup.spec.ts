@@ -4,28 +4,84 @@
 //   levelCatchUp/effectiveLevel 의 계산은 유닛테스트로 고정했지만, 그 값이 실제로 손님이 보는
 //   TV 화면(?display=)까지 도달하는지는 진짜 렌더러로만 확인할 수 있다.
 //
-// 사전 조건: clock_states 에 '밀린' 행이 있어야 한다. 아래 SQL 을 먼저 실행하고 돌린다.
-//   (레벨 1분 × 8, current_index=0, ends_at = now() - 3분 30초 → 기대 표시: L4 · 약 30초)
+// 픽스처: **테스트가 직접 심는다.**
+//   ⚠ 예전에는 사람이 SQL 로 넣어둔 '밀린 클락' 행을 전제하고, 없으면 skip 했다.
+//     그 행은 결국 사라졌고(0행), 스위트는 초록인 채로 이 게이트만 조용히 꺼져 있었다.
+//     '실패하지 않는 것' 과 '지키고 있는 것' 은 다르다 — 그래서 픽스처를 코드로 옮겼다.
+//   레벨 1분 × 8, current_index=0, ends_at = now − 3분 30초 → 기대: L4 전후, 잔여 30초 전후.
 //
-//   insert into public.clock_states (venue_id, game_seq, title, config, current_index, running, ends_at, remaining_ms,
-//     adj_entries, adj_rebuys, adj_earlies, adj_addons, eliminations)
-//   values ('<venue>', 1, '⏱ 검증용 1분 블라인드', '<config>', 0, true, now() - interval '3 minutes 30 seconds', 0, 0,0,0,0,0);
+//   ⚠ game_seq=2 를 쓴다. clock-watchdog 스펙이 같은 매장의 game_seq=1 을 점유하는데,
+//     Playwright 는 파일을 병렬로 돌리므로 같은 행을 쓰면 서로의 픽스처를 덮어쓴다.
+//     (PK 가 (venue_id, game_seq) 라 seq 만 갈라 두면 완전히 격리된다.)
 //
 // 실행: npx playwright test e2e/clock-catchup.spec.ts
 import { test, expect } from '@playwright/test';
+import { loginAs, restAs, type E2ESession } from './_session';
 
-const VENUE = process.env.E2E_CLOCK_VENUE ?? 'f35b42d1-2d54-4905-95c1-1fda24e0f178';
+const EMAIL = process.env.E2E_EMAIL;
+const PASSWORD = process.env.E2E_PASSWORD;
+const GAME_SEQ = 2;          // 워치독(seq 1)과 겹치지 않게
+const LEVEL_MIN = 1;         // 1분 블라인드
+const BEHIND_MS = 3.5 * 60_000; // 3분 30초 밀린 상태 → 4번째 레벨 언저리
+
+let VENUE = process.env.E2E_CLOCK_VENUE ?? '';
+
+/** 1분짜리 레벨 8개 */
+function oneMinuteLevels() {
+  return Array.from({ length: 8 }, (_, i) => ({
+    kind: 'level' as const, sb: 100 * (i + 1), bb: 200 * (i + 1), ante: 0, minutes: LEVEL_MIN,
+  }));
+}
+
+/** 업주 자격으로 '밀린' 클락을 심는다 */
+async function seedStaleClock(session: E2ESession): Promise<string> {
+  const uid = (session.user as { id: string }).id;
+  const venueId = VENUE
+    || (await restAs(session, `venues?select=id&owner_id=eq.${uid}&limit=1`) as { id: string }[])[0]?.id;
+  if (!venueId) throw new Error('테스트 계정이 소유한 매장을 찾지 못했다 — E2E_CLOCK_VENUE 로 직접 지정하라');
+
+  await restAs(session, 'clock_states', {
+    method: 'POST',
+    prefer: 'resolution=merge-duplicates',
+    body: {
+      venue_id: venueId, game_seq: GAME_SEQ,
+      session_date: new Date().toLocaleDateString('en-CA'),
+      title: '⏱ 검증용 1분 블라인드',
+      running: true, current_index: 0,
+      ends_at: new Date(Date.now() - BEHIND_MS).toISOString(), // ← 한참 지난 시각 = '밀린' 상태
+      remaining_ms: 0,
+      config: {
+        title: '⏱ 검증용 1분 블라인드', startStack: 30000, rebuyStack: 30000, addonStack: 30000,
+        isAddon: false, earlyBonus: 0, doubleEarlyBonus: 0,
+        regCloseLevel: 99, maxLevel: 8, earlyDoubleLevel: 0, earlySingleLevel: 0,
+        earlyDoubleMin: 0, earlySingleMin: 0, mysteryBounty: 0,
+        prizes: [], levels: oneMinuteLevels(),
+      },
+    },
+  });
+  return venueId;
+}
 
 test.describe('TV 디스플레이 — 낡은 클락 행에서도 실효 레벨을 보여준다', () => {
-  // 이 스펙은 DB 픽스처(진행 중인 '밀린' 클락)를 전제로 한다.
-  // 픽스처가 없을 때 '실패'로 두면 코드와 무관한 이유로 스위트가 빨개져 신호가 죽는다 —
-  // 없으면 이유를 밝히고 skip 한다(있을 때만 진짜 게이트로 동작).
+  test.skip(!EMAIL || !PASSWORD, 'E2E_EMAIL/E2E_PASSWORD 미설정 — 픽스처를 심을 수 없다');
+
+  let session: E2ESession;
+
   test.beforeEach(async ({ page }) => {
-    await page.goto(`/?display=${VENUE}`);
-    const hasClock = await page.locator('body').filter({ hasText: /LEVEL/i }).count()
-      .then(() => page.waitForFunction(() => /LEVEL/i.test(document.body.innerText), null, { timeout: 8_000 }).then(() => true))
-      .catch(() => false);
-    test.skip(!hasClock, `진행 중인 클락 픽스처가 없다(venue=${VENUE}) — 파일 상단 SQL 로 심고 다시 실행`);
+    session = await loginAs(page, EMAIL!, PASSWORD!);
+    VENUE = await seedStaleClock(session);
+    await page.goto(`/?display=${VENUE}&g=${GAME_SEQ}`);
+    await expect(page.locator('body'), 'TV 화면에 클락이 안 뜬다 — 픽스처 심기가 실패했을 수 있다')
+      .toContainText(/LEVEL/i, { timeout: 20_000 });
+  });
+
+  test.afterEach(async () => {
+    // 켜진 채 남기면 라이브 목록에 '유령 대회' 가 뜬다
+    if (session && VENUE) {
+      await restAs(session, `clock_states?venue_id=eq.${VENUE}&game_seq=eq.${GAME_SEQ}`, {
+        method: 'PATCH', body: { running: false },
+      }).catch(() => { /* 정리 실패는 무시 */ });
+    }
   });
 
   test('🔴 밀린 클락이 00:00 에 얼지 않고 따라잡은 레벨·잔여시간을 표시한다', async ({ page }) => {
@@ -79,7 +135,7 @@ test.describe('TV 디스플레이 — 낡은 클락 행에서도 실효 레벨�
       if (u.includes('/rest/v1/clock_states') && r.method() !== 'GET') writes.push(`${r.method()} ${u}`);
     });
 
-    await page.goto(`/?display=${VENUE}`);
+    await page.goto(`/?display=${VENUE}&g=${GAME_SEQ}`);
     await expect(page.locator('body')).toContainText(/LEVEL/i, { timeout: 20_000 });
     await page.waitForTimeout(3000); // 워치독 주기(1초)보다 충분히 길게
 

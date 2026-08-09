@@ -85,7 +85,23 @@ export function pushLayer(close: CloseFn): () => void {
       // 프로그램적 close(history.back 호출)만 디바운스 대상 — 이 back이 throttle된 탭 레이어를 과열 pop해
       // 탭 back-close(예: changeTab('browse'))를 잘못 발동시키는 것을 overlayJustClosed()로 억제.
       lastDisposeAt = Date.now();
-      try { window.history.back(); } catch { /* pushState 불가 환경 — 무시 */ }
+      // ⚠ back() 을 여기서 바로 부르면 안 된다.
+      //   history.back() 은 **비동기**다(popstate 는 다음 태스크에 온다). 그런데 정리 직후
+      //   같은 커밋 안에서 레이어가 다시 push 되는 경우가 있다 — React StrictMode 의 이중 이펙트
+      //   (실행→정리→재실행)와 리마운트가 그렇다. 그러면 순서가 이렇게 꼬인다.
+      //     정리: back() 예약  →  재실행: pushState({__layer:2})  →  뒤늦게 back() 도착
+      //   back() 이 도착했을 때 history 최상단은 이미 새 레이어(2)이므로, 한 칸 뒤로 가면
+      //   handlePop 이 "2 는 현재 위치보다 위" 라고 판단해 **방금 연 모달을 닫아버린다.**
+      //   실제로 `{open && <Modal open/>}` 형태의 모달이 개발 모드에서 전부
+      //   '떴다가 즉시 사라지는' 증상을 보였다(프로덕션은 이중 실행이 없어 멀쩡했다).
+      //
+      //   그래서 back() 을 마이크로태스크로 미루고, 그 사이 최상단이 바뀌었으면 취소한다.
+      //   최상단이 더는 내 레이어가 아니라는 건 내가 되돌릴 항목이 이미 아래로 밀렸다는 뜻이고,
+      //   그때 back() 은 남의 레이어를 닫는 짓이 된다. 플래그·타이머 없이 토큰만으로 판정된다.
+      queueMicrotask(() => {
+        if (currentLayerId() !== id) return; // 그 사이 새 레이어가 올라왔다 → 되돌릴 것이 없다
+        try { window.history.back(); } catch { /* pushState 불가 환경 — 무시 */ }
+      });
     }
     // 중간 겹을 순서 어긋나게 닫은 경우: 해당 history 항목은 그대로 두되(다음 Back 때
     // 무해하게 소비됨) 스택에서만 제거한다. 실사용에서 오버레이는 LIFO 로 닫히므로 드묾.

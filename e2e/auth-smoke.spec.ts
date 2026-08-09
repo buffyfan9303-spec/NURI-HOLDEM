@@ -88,6 +88,9 @@ test.describe('인증 스모크', () => {
 
   test('로그인 사용자의 주요 탭이 예외 없이 렌더된다', async ({ page }) => {
     test.skip(!HAS_CREDS, '자격증명 미설정');
+    // 로그인 왕복 + 탭 4개를 1.5초씩 머무르며 도는 테스트다 — 기본 30초로는 네트워크가
+    // 조금만 느려도 단언에 닿기 전에 죽는다(실패가 아니라 시간 초과로 끝나 원인이 안 보였다).
+    test.setTimeout(90_000);
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(e.message));
     page.on('console', (m) => { if (m.type() === 'error') errors.push(`console: ${m.text()}`); });

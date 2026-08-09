@@ -47,8 +47,16 @@ jobs:
       - name: Install Playwright (chromium)
         run: npx playwright install --with-deps chromium
 
-      - name: E2E 스모크
+      # E2E 는 두 단계다(package.json 참고).
+      #   ① main — 병렬. 기능·회귀 전반.
+      #   ② boot(@boot) — 단일 워커. '무엇이 먼저 출발했는가' 를 재는 부팅 경쟁 테스트라
+      #      워커가 CPU 를 다투면 측정 대상 자체가 왜곡된다. 끄지 않고 분리해서 돌린다.
+      # 자격증명이 있으면 인증 스모크·클락 워치독까지 실제로 돈다(없으면 그 스펙만 skip).
+      - name: E2E 스모크 (기능 + 부팅 예산)
         run: npm run test:e2e
+        env:
+          E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
+          E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
 
       - name: 리포트 업로드(실패 시 추적)
         if: ${{ !cancelled() }}
