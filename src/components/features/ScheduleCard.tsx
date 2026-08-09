@@ -266,10 +266,13 @@ function ListCard({ schedule, onVenueClick, onSelect, reserveCount, rating, prio
           </span>
           <span className="text-border-strong">·</span>
           <span className="tabular-nums">바이인 {schedule.buyIn.amount.toLocaleString()}</span>
+          {/* '마감 임박'은 아직 시작 안 한 대회에서만 — 끝난 대회에 붙으면 거짓 긴박감이고,
+              라이브에서 실제로 두 달 전 대회가 이 배지를 달고 상단에 떠 있었다.
+              종료 후에는 숫자만 사실로 남긴다(참가 규모 정보로는 여전히 쓸모 있다). */}
           {(reserveCount ?? 0) > 0 && (
             <span className={['ml-auto shrink-0 rounded-badge px-1.5 py-0.5 font-bold tabular-nums',
-              (reserveCount ?? 0) >= 10 ? 'bg-danger/15 text-danger-light' : 'bg-emerald-400/10 text-emerald-400'].join(' ')}>
-              {(reserveCount ?? 0) >= 10 ? `🔥 예약 ${reserveCount}명 · 마감 임박` : `예약 ${reserveCount}명`}
+              (reserveCount ?? 0) >= 10 && status === 'upcoming' ? 'bg-danger/15 text-danger-light' : 'bg-emerald-400/10 text-emerald-400'].join(' ')}>
+              {(reserveCount ?? 0) >= 10 && status === 'upcoming' ? `🔥 예약 ${reserveCount}명 · 마감 임박` : `예약 ${reserveCount}명`}
             </span>
           )}
         </div>

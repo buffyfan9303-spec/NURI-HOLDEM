@@ -37,6 +37,7 @@ import { useVisibilityRefresh } from './lib/useVisibilityRefresh';
 import { lazyWithReload } from './lib/lazyWithReload';
 import { applyScheduleSeo, applyVenueSeo, resetSeo } from './lib/seo';
 import { createUndoQueue } from './lib/undoableDelete';
+import { scheduleStatus } from './lib/scheduleStatus';
 import { SpringButton } from './components/atoms/StatefulActionButton';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from './contexts/AuthContext';
@@ -1139,10 +1140,19 @@ export default function App() {
   const visibleSchedules = useMemo(() => {
     const list = schedules.filter((s) => s.approved);
     const q = searchState.query.trim();
+    // 검색은 사람이 치는 대로 맞춘다 — 'gtd'로 'GTD'를, '누리 홀덤'으로 '누리홀덤'을 찾게.
+    // 그리고 주소를 넣는다: 손님이 실제로 치는 건 '강남역·서면'인데 region 은 '강남' 같은 대분류뿐이었다.
+    const norm = (t: string) => t.toLowerCase().replace(/\s+/g, '');
+    const nq = norm(q);
     // 권역 묶음 펼치기(예: 서울 → 서울/강남/강서) — 매 일정마다 재계산하지 않도록 1회만
     const regionKeys = expandRegions(searchState.regions);
+    // 아무 조건도 안 걸었을 때(= 앱을 막 켠 상태)는 끝난 대회를 첫 화면에서 뺀다.
+    // 왜 조건부인가: 검색어나 날짜를 직접 고른 사람은 지난 대회를 찾고 있을 수 있다 —
+    //   그때까지 숨기면 '검색했는데 없다'가 되어 더 나쁘다. 지난 대회는 하단 🏁 섹션이 담당한다.
+    const hideEnded = !q && searchState.dates.length === 0;
     return list.filter((s) => {
-      const matchQ = !q || [s.title, s.pubName, s.region].some((t) => t.includes(q));
+      if (hideEnded && scheduleStatus(s.date, s.startTime) === 'ended') return false;
+      const matchQ = !nq || [s.title, s.pubName, s.region, s.address ?? ''].some((t) => norm(t).includes(nq));
       // 복수 선택: 비어있으면 전체 통과, 아니면 선택된 값 중 하나라도 일치(OR)
       const matchD = searchState.dates.length === 0   || searchState.dates.includes(s.date);
       const matchR = regionKeys.length === 0 || regionKeys.some((r) => s.region.includes(r));
@@ -1151,7 +1161,12 @@ export default function App() {
       const matchC = !searchState.competitionOnly || s.isCompetition === true;
       const matchFollow = !followedOnly || (!!s.venueId && followedIds.has(s.venueId));
       return matchQ && matchD && matchR && matchF && matchG && matchC && matchFollow;
-    });
+    })
+      // 정렬이 아예 없어서 '업주가 정한 진열 순서'로 나왔다 — 손님은 '지금 갈 수 있는 게 뭐지'를
+      // 시간순으로 훑을 수가 없었다. 상단 고정(프리미엄)은 유지하되 그 안에서는 빠른 대회부터.
+      .sort((a, b) =>
+        Number(b.isPremium) - Number(a.isPremium)
+        || (a.date + a.startTime).localeCompare(b.date + b.startTime));
   }, [schedules, searchState, followedOnly, followedIds]);
 
   // ── 핸들러 ─────────────────────────────────────────────────────────────
@@ -1903,7 +1918,15 @@ export default function App() {
                 {!schedulesLoaded ? (
                   <ScheduleSkeletonGrid viewMode={viewMode} />
                 ) : visibleSchedules.length === 0 ? (
-                  <EmptyState />
+                  <EmptyState
+                    filtered={!!searchState.query.trim() || searchState.dates.length > 0
+                      || searchState.regions.length > 0 || !!searchState.format
+                      || searchState.gtdOnly || searchState.competitionOnly}
+                    followedOnly={followedOnly}
+                    onClearFilters={() => searchBarRef.current?.clearAll()}
+                    onClearFollow={() => setFollowedOnly(false)}
+                    upcoming={schedules.filter((s) => s.approved && scheduleStatus(s.date, s.startTime) !== 'ended').length}
+                  />
                 ) : viewMode === 'table' ? (
                   <div className="hidden md:block">
                     <ScheduleTable schedules={visibleSchedules} onSelect={handleScheduleSelect} onVenueClick={handleVenueClick} />
@@ -2478,7 +2501,17 @@ function ScheduleSkeletonGrid({ viewMode }: { viewMode: 'grid' | 'list' | 'table
   );
 }
 
-function EmptyState() {
+// 빈 화면은 앱의 첫인상이 되는 경우가 많다(대회가 없는 시간대·평일 오전).
+// 예전엔 '검색 결과가 없습니다' 한 줄로 끝나 다음에 누를 것이 하나도 없었다 —
+// 사용자는 자기가 잘못 검색한 줄 알거나 '대회가 없는 서비스'로 오해하고 나간다.
+// 그래서 ① 왜 비었는지(필터 때문인지 진짜 없는 건지)를 구분해 말하고 ② 반드시 다음 행동을 하나 준다.
+function EmptyState({ filtered, followedOnly, onClearFilters, onClearFollow, upcoming }: {
+  filtered: boolean;          // 검색어·날짜·지역 등 조건이 걸려 있는가
+  followedOnly: boolean;
+  onClearFilters: () => void;
+  onClearFollow: () => void;
+  upcoming: number;           // 조건을 풀면 보일 예정 대회 수
+}) {
   return (
     <div className="flex flex-col items-center justify-center py-14 gap-3 text-ink-muted">
       <svg width="48" height="48" viewBox="0 0 48 48" fill="none"
@@ -2488,8 +2521,23 @@ function EmptyState() {
         <line x1="16" y1="22" x2="28" y2="22" />
         <line x1="22" y1="16" x2="22" y2="28" />
       </svg>
-      <p className="text-sm">검색 결과가 없습니다</p>
-      <p className="text-xs">다른 키워드나 날짜를 선택해 보세요</p>
+      {followedOnly ? (
+        <>
+          <p className="text-sm">팔로우한 매장의 예정 대회가 없어요</p>
+          <button type="button" onClick={onClearFollow} className="btn-primary px-4 py-2 text-xs">전체 매장 보기</button>
+        </>
+      ) : filtered ? (
+        <>
+          <p className="text-sm">조건에 맞는 대회가 없어요</p>
+          <p className="text-xs">{upcoming > 0 ? `조건을 풀면 예정 대회 ${upcoming}개를 볼 수 있어요` : '조건을 바꿔 다시 찾아보세요'}</p>
+          <button type="button" onClick={onClearFilters} className="btn-primary px-4 py-2 text-xs">조건 초기화</button>
+        </>
+      ) : (
+        <>
+          <p className="text-sm">예정된 대회가 없어요</p>
+          <p className="text-xs">아래 <b className="text-ink-secondary">🏁 지난 대회</b>에서 결과를 볼 수 있어요</p>
+        </>
+      )}
     </div>
   );
 }
