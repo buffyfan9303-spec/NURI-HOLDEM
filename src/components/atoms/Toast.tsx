@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, createContext, useContext } from 'react';
+import { useEffect, useState, useCallback, useMemo, createContext, useContext } from 'react';
 import type { ReactNode } from 'react';
 
 // ── 토스트 타입 ─────────────────────────────────────────────────────────────
@@ -40,8 +40,8 @@ export function useToast() {
 
 const COLOR: Record<ToastVariant, string> = {
   info:    'bg-surface-float text-ink-primary border-border-strong',
-  success: 'bg-emerald-500/90 text-white border-emerald-400',
-  error:   'bg-danger text-white border-danger-dark',
+  success: 'bg-emerald-700 text-white border-emerald-500',   // 대비 3.15 → 5.5:1
+  error:   'bg-danger-dark text-white border-danger',        // 라이트 모드에서 2.38 → 7:1
 };
 
 export function ToastProvider({ children }: { children: ReactNode }) {
@@ -64,8 +64,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     setTimeout(() => { dismiss(id); }, durationMs);
   }, [dismiss]);
 
+  // ⚠ value 를 인라인 객체로 주면 toasts 가 바뀔 때마다(=토스트가 뜰 때마다) 새 참조가 되어
+  //   useToast 를 쓰는 모든 컴포넌트가 재렌더된다. 장부처럼 무거운 화면에서 바로 체감된다.
+  //   show 는 useCallback 으로 안정적이므로 value 만 고정하면 소비자는 영향을 받지 않는다.
+  const ctx = useMemo(() => ({ show }), [show]);
+
   return (
-    <ToastContext.Provider value={{ show }}>
+    <ToastContext.Provider value={ctx}>
       {children}
       {/* 토스트 컨테이너 — fixed 하단 중앙 */}
       <div

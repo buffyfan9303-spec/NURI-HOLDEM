@@ -10,7 +10,7 @@ import type { SearchState } from './components/features/IntegratedSearchBar';
 import ScheduleCard from './components/features/ScheduleCard';
 import WeeklyBestStrip from './components/features/WeeklyBestStrip';
 import ScheduleTable from './components/features/ScheduleTable';
-import { getWeeklyMoneyinKings, getVenueRankings, parsePrizeMan, type WeeklyKing, type RankingEntry } from './api/rankings';
+import { getWeeklyMoneyinKings, getRankingsBulk, parsePrizeMan, type WeeklyKing, type RankingEntry } from './api/rankings';
 import { getReservationCounts } from './api/reservations';
 import { getVenueRatings } from './api/reviews';
 import NotificationPanel from './components/features/NotificationPanel';
@@ -1070,16 +1070,35 @@ export default function App() {
 
   // 창/탭 복귀(focus·visibility) 시 모든 주요 데이터 자동 동기화
   //  → 다른 기기·다른 사용자가 바꾼 일정·매장·게시글·댓글·장터·공지·알림이 즉시 최신화
+  // ⚠ 예전엔 복귀 때마다 8종을 전부 다시 받았다. 문제는 요청 수만이 아니다 —
+  //   getSchedules() 는 매번 '완전히 새 Schedule 객체 배열'을 만들므로, ScheduleCard 가 memo 여도
+  //   prop 참조가 전부 바뀌어 화면의 모든 카드가 재렌더된다(카톡 갔다 온 순간 뻑뻑해지는 정체).
+  //   게다가 schedules 참조 변경이 예약자 수·지난대회 순위·매장 별점 재조회를 연쇄로 부른다.
+  //   → '지금 보고 있는 탭'에 필요한 것만 갱신하고, 디바운스를 실제 사용 리듬에 맞춰 늘린다.
+  //   (다른 탭 데이터는 그 탭으로 이동할 때 어차피 최신화된다 + 실시간 구독이 이미 돌고 있다)
   useVisibilityRefresh(() => {
-    reloadSchedules();
-    reloadVenues();
-    reloadPosts();
-    reloadComments();
-    reloadNotices();
-    getListings().then((l) => { setListings(l); setMarketLoaded(true); }).catch(() => setMarketLoaded(true));
+    // 알림은 탭과 무관하게 항상 — 뱃지 숫자가 틀리면 바로 눈에 띈다(가볍기도 하다)
     if (user) getMyNotifications().then(setNotifications).catch(() => {});
-    if (isAdmin) listAllUsers().then(setUsers).catch(() => {});
-  }, [user, isAdmin, reloadSchedules, reloadVenues, reloadPosts, reloadComments, reloadNotices]);
+    switch (activeTab) {
+      case 'browse':
+      case 'live':
+      case 'my-store':
+        reloadSchedules(); reloadVenues(); reloadNotices();
+        break;
+      case 'community':
+        reloadPosts(); reloadComments();
+        break;
+      case 'market':
+        getListings().then((l) => { setListings(l); setMarketLoaded(true); }).catch(() => setMarketLoaded(true));
+        break;
+      case 'admin':
+        reloadSchedules(); reloadVenues();
+        if (isAdmin) listAllUsers().then(setUsers).catch(() => {});
+        break;
+      default:
+        break;
+    }
+  }, [activeTab, user, isAdmin, reloadSchedules, reloadVenues, reloadPosts, reloadComments, reloadNotices]);
 
   // 알림 실시간 수신(신규/읽음)
   useEffect(() => {
@@ -1802,7 +1821,9 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => searchBarRef.current?.clearAll()}
-                    className="shrink-0 inline-flex items-center gap-0.5 rounded-badge border border-transparent px-1.5 py-0.5 text-2xs text-ink-muted transition-colors hover:border-danger/40 hover:text-danger focus:outline-none"
+                    // 22px 였다 — 빈 화면에서 유일한 탈출구인데 9px 아이콘에 회색 글씨라
+                    // 눈에도 안 띄고 손가락으로도 짚기 어려웠다. 히트영역을 키우고 대비를 올린다.
+                    className="shrink-0 -my-1.5 inline-flex h-8 items-center gap-1 rounded-badge border border-border-default px-2 text-2xs text-ink-secondary transition-colors hover:border-danger/40 hover:text-danger focus:outline-none"
                   >
                     <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 6h18M8 6V4h8v2m-1 0v14H9V6" /></svg>
                     초기화
@@ -1891,7 +1912,9 @@ export default function App() {
                     type="button"
                     onClick={() => setNoticesOpen((v) => !v)}
                     aria-expanded={noticesOpen}
-                    className="flex items-center gap-1.5 text-xs font-bold text-accent-300 focus:outline-none"
+                    // 글자 높이 그대로면 17px 다. 헤더의 py-2 를 음수 마진으로 되먹여
+                    // 헤더 높이는 유지한 채 손가락이 닿는 영역만 33px 로 넓힌다.
+                    className="-my-2 py-2 -ml-1 pl-1 pr-2 flex items-center gap-1.5 text-xs font-bold text-accent-300 focus:outline-none"
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                       strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden
@@ -1901,7 +1924,7 @@ export default function App() {
                     공지사항 {browseNotices.length > 0 && <span className="text-2xs text-ink-muted font-normal">({browseNotices.length})</span>}
                   </button>
                   {isAdmin && (
-                    <button type="button" onClick={() => setNoticeFormOpen(true)} className="text-2xs text-accent-300 hover:text-accent-200 font-semibold">
+                    <button type="button" onClick={() => setNoticeFormOpen(true)} className="-my-2 py-2 pl-2 text-2xs text-accent-300 hover:text-accent-200 font-semibold">
                       + 공지 작성
                     </button>
                   )}
@@ -2349,15 +2372,28 @@ function PastTournaments({ schedules, onSelect }: { schedules: Schedule[]; onSel
     .slice(0, 5);
   const [results, setResults] = useState<Record<string, RankingEntry[]>>({});
   const [openId, setOpenId] = useState<string | null>(null);
+  // ⚠ 의존성을 배열 참조([schedules])로 두면 실시간 갱신·창 복귀·당겨서 새로고침마다
+  //   내용이 똑같아도 다시 돈다. 실제로 보는 값(매장·날짜 쌍)을 문자열 키로 만들어 그것에만 반응한다.
+  const pastKey = past.map((s) => `${s.venueId ?? ''}:${s.date}`).join('|');
   useEffect(() => {
-    past.forEach((s) => {
-      if (!s.venueId) return;
-      getVenueRankings(s.venueId, s.date)
-        .then((r) => { if (r.entries.length > 0) setResults((prev) => ({ ...prev, [s.id]: r.entries })); })
-        .catch(() => {});
-    });
+    const pairs = past.filter((s) => s.venueId).map((s) => ({ venueId: s.venueId as string, date: s.date }));
+    if (pairs.length === 0) return;
+    let alive = true;
+    // 항목마다 1건씩 쏘던 것을 한 번에 — 5요청 → 1요청(데이터가 0행이어도 5건이 나가던 구조였다)
+    getRankingsBulk(pairs)
+      .then((byKey) => {
+        if (!alive) return;
+        const next: Record<string, RankingEntry[]> = {};
+        for (const s of past) {
+          const e = s.venueId ? byKey[`${s.venueId}|${s.date}`] : undefined;
+          if (e && e.length > 0) next[s.id] = e;
+        }
+        setResults(next);
+      })
+      .catch(() => {});
+    return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [schedules]);
+  }, [pastKey]);
   if (past.length === 0) return null;
   const day = (d: string) => ['일', '월', '화', '수', '목', '금', '토'][new Date(`${d}T00:00:00`).getDay()];
   const medal = (p: number) => (p === 1 ? '👑' : p === 2 ? '🥈' : p === 3 ? '🥉' : null);

@@ -1,5 +1,6 @@
 // src/api/chat.ts — 중고장터 1:1 실시간 채팅
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { currentUser } from './_session';
 
 export interface ChatMessage {
   id: string;
@@ -27,7 +28,7 @@ function rowToMsg(r: any): ChatMessage {
 
 export async function getMyId(): Promise<string | null> {
   if (IS_MOCK) return null;
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
   return user?.id ?? null;
 }
 
@@ -46,7 +47,7 @@ export async function getThreadMessages(listingId: string, buyerId: string): Pro
 
 export async function sendChatMessage(listingId: string, buyerId: string, content: string): Promise<ChatMessage> {
   if (IS_MOCK) throw new Error('데모 모드에서는 메시지를 보낼 수 없습니다');
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
   if (!user) throw new Error('로그인이 필요합니다');
   const trimmed = content.trim();
   if (!trimmed) throw new Error('내용을 입력해 주세요');

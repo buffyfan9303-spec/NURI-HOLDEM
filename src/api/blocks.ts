@@ -1,6 +1,7 @@
 // src/api/blocks.ts — 사용자 차단/숨기기.
 // 차단하면 그 사용자의 글·댓글·매물이 내 화면에서 숨겨진다(클라 필터). 본인 차단목록만 RLS로 관리.
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { currentUser } from './_session';
 
 export interface BlockedUser { blockedId: string; name: string; createdAt: string }
 
@@ -25,19 +26,19 @@ export async function listMyBlocks(): Promise<BlockedUser[]> {
 /** 차단 — 닉네임을 함께 저장(목록 표시용, profiles 조인 불가) */
 export async function blockUser(blockedId: string, name?: string): Promise<void> {
   if (IS_MOCK) return;
-  const { data: me } = await supabase.auth.getUser();
-  if (!me.user) throw new Error('로그인이 필요합니다');
-  if (me.user.id === blockedId) throw new Error('자기 자신은 차단할 수 없습니다');
+  const me = await currentUser();
+  if (!me) throw new Error('로그인이 필요합니다');
+  if (me.id === blockedId) throw new Error('자기 자신은 차단할 수 없습니다');
   const { error } = await supabase.from('user_blocks')
-    .upsert({ blocker_id: me.user.id, blocked_id: blockedId, blocked_name: name ?? null }, { onConflict: 'blocker_id,blocked_id' });
+    .upsert({ blocker_id: me.id, blocked_id: blockedId, blocked_name: name ?? null }, { onConflict: 'blocker_id,blocked_id' });
   if (error) throw new Error(error.message);
 }
 
 export async function unblockUser(blockedId: string): Promise<void> {
   if (IS_MOCK) return;
-  const { data: me } = await supabase.auth.getUser();
-  if (!me.user) return;
+  const me = await currentUser();
+  if (!me) return;
   const { error } = await supabase.from('user_blocks').delete()
-    .eq('blocker_id', me.user.id).eq('blocked_id', blockedId);
+    .eq('blocker_id', me.id).eq('blocked_id', blockedId);
   if (error) throw new Error(error.message);
 }

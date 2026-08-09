@@ -1,5 +1,6 @@
 // src/api/vouchers.ts — 매장이용권(store_vouchers). 모든 변경은 SECURITY DEFINER RPC로만.
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { currentUser } from './_session';
 import { makeSearchCache } from '../lib/searchCache';
 
 export interface Voucher {
@@ -46,8 +47,7 @@ export function subscribeVenueVouchers(venueId: string, onChange: () => void): (
 /** 내가 보유한 이용권 (손님) */
 export async function listMyVouchers(): Promise<Voucher[]> {
   if (IS_MOCK) return [];
-  const { data: u } = await supabase.auth.getUser();
-  const uid = u?.user?.id;
+  const uid = (await currentUser())?.id;
   if (!uid) return [];
   const { data } = await supabase.from('store_vouchers')
     .select('*, venue:venue_id(name), used_venue:used_venue_id(name)')

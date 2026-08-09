@@ -1,6 +1,7 @@
 // src/lib/loyalty.ts — 랭킹 허브(충성도): 주간 리그·업적 뱃지·주간 미션·명예의 전당.
 // 미션/뱃지는 코드 규칙(서버 검증은 claim_mission RPC), 리그·전당은 집계 조회.
 import { supabase, IS_MOCK } from './supabase';
+import { currentUser } from '../api/_session';
 
 // ── 주간 리그 ────────────────────────────────────────────────────────────────
 export interface LeagueRow { userId: string; nickname: string; score: number; checkins: number; placements: number }
@@ -77,8 +78,7 @@ export interface MissionProgress { key: string; current: number; claimed: boolea
 export async function getMissionProgress(nickname: string | null, missions: Mission[] = MISSIONS): Promise<MissionProgress[]> {
   if (IS_MOCK) return missions.map((m) => ({ key: m.key, current: 0, claimed: false }));
   const ws = weekStartStr();
-  const { data: u } = await supabase.auth.getUser();
-  const uid = u.user?.id;
+  const uid = (await currentUser())?.id;
   if (!uid) return missions.map((m) => ({ key: m.key, current: 0, claimed: false }));
   const wsIso = new Date(`${ws}T00:00:00`).toISOString();
   const [ck, po, mo, cl] = await Promise.all([
@@ -124,8 +124,8 @@ export const BADGES: BadgeDef[] = [
 export async function getMyBadgeStats(nickname: string | null, points: number): Promise<BadgeStats> {
   const empty: BadgeStats = { moneyin: 0, bestPosition: 9999, visits: 0, streak: 0, points };
   if (IS_MOCK) return empty;
-  const { data: u } = await supabase.auth.getUser();
-  const uid = u.user?.id;
+  const u = await currentUser();
+  const uid = u?.id;
   if (!uid) return empty;
   const [vr, ck, pf] = await Promise.all([
     nickname
@@ -181,8 +181,8 @@ export const SHOP_MARKS: ShopMark[] = [
 
 /** 내가 장착한 마크 키 조회 */
 export async function getMyEquippedMark(): Promise<string | null> {
-  const { data: u } = await supabase.auth.getUser();
-  const uid = u.user?.id;
+  const u = await currentUser();
+  const uid = u?.id;
   if (!uid) return null;
   const { data } = await supabase.from('profiles').select('equipped_mark').eq('id', uid).single();
   return (data?.equipped_mark as string | null) ?? null;
@@ -190,8 +190,8 @@ export async function getMyEquippedMark(): Promise<string | null> {
 
 /** 마크 장착/해제(null) — 본인 프로필만(RLS) */
 export async function setEquippedMark(key: string | null): Promise<void> {
-  const { data: u } = await supabase.auth.getUser();
-  const uid = u.user?.id;
+  const u = await currentUser();
+  const uid = u?.id;
   if (!uid) throw new Error('로그인이 필요합니다');
   const { error } = await supabase.from('profiles').update({ equipped_mark: key }).eq('id', uid);
   if (error) throw new Error(error.message);

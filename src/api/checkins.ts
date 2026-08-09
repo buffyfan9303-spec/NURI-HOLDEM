@@ -1,5 +1,6 @@
 // src/api/checkins.ts — QR 체크인. 기록은 check_in RPC로만(로그인 회원·4시간 중복 방지).
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { currentUser } from './_session';
 
 export interface Checkin { id: string; venueId: string; userId: string; displayName: string | null; createdAt: string }
 
@@ -22,10 +23,10 @@ export async function listVenueCheckins(venueId: string, sinceIso: string): Prom
 /** 내 출석 스트릭(연속 체크인 일수). 오늘/어제 외 마지막 체크인이면 화면용으로 0 처리. */
 export async function getMyCheckinStreak(): Promise<number> {
   if (IS_MOCK) return 0;
-  const { data: u } = await supabase.auth.getUser();
-  if (!u.user) return 0;
+  const u = await currentUser();
+  if (!u) return 0;
   const { data } = await supabase.from('profiles')
-    .select('checkin_streak, last_checkin_date').eq('id', u.user.id).single();
+    .select('checkin_streak, last_checkin_date').eq('id', u.id).single();
   if (!data?.last_checkin_date) return 0;
   const last = new Date(`${data.last_checkin_date}T00:00:00`);
   const diff = Math.round((Date.now() - last.getTime()) / 86400000);

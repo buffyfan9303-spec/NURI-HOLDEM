@@ -1,5 +1,6 @@
 ﻿// src/api/community.ts
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { currentUser } from './_session';
 import type { UserRole } from './auth';
 
 // 매장 상태 (관리자 게시물 관리) — active 외에는 공개 목록에서 숨김. 모두 active로 복구 가능.
@@ -470,7 +471,7 @@ export interface ActivityLogInput {
 export async function logActivity(input: ActivityLogInput): Promise<void> {
   if (IS_MOCK) return;
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await currentUser();
     await supabase.from('activity_log').insert({
       actor_id:        user?.id ?? null,
       actor_name:      input.actorName ?? null,
@@ -544,7 +545,7 @@ export async function getOwnerPosts(opts?: { deleted?: boolean }): Promise<Owner
 }
 export async function createOwnerPost(content: string): Promise<void> {
   if (IS_MOCK) return;
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
   if (!user) throw new Error('로그인이 필요합니다');
   const c = content.trim();
   if (!c) throw new Error('내용을 입력해 주세요');
@@ -617,7 +618,7 @@ export async function createDealerPost(input: {
   wage?: string; workHours?: string; workPeriod?: string;
 }): Promise<void> {
   if (IS_MOCK) return;
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
   if (!user) throw new Error('로그인이 필요합니다');
   const content = input.content.trim();
   if (!content) throw new Error('내용을 입력해 주세요');
@@ -662,7 +663,7 @@ export async function createDealerApplication(
   input: { name: string; phone: string; message?: string },
 ): Promise<void> {
   if (IS_MOCK) return;
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
   if (!user) throw new Error('로그인이 필요합니다');
   const name = input.name.trim();
   const phone = input.phone.trim();
@@ -716,7 +717,7 @@ export async function createGroup(input: { name: string; kind: GroupKind; region
 /** 내 멤버십(없으면 null) */
 export async function getMyMembership(groupId: string): Promise<GroupMember | null> {
   if (IS_MOCK) return null;
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
   if (!user) return null;
   const { data } = await supabase.from('group_members').select('*').eq('group_id', groupId).eq('user_id', user.id).maybeSingle();
   if (!data) return null;
@@ -765,7 +766,7 @@ export async function getGroupMessages(groupId: string, limit = 50): Promise<Gro
 }
 export async function sendGroupMessage(groupId: string, input: { userName: string; userColor?: string; content: string }): Promise<GroupMessage> {
   if (IS_MOCK) throw new Error('mock');
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
   if (!user) throw new Error('로그인이 필요합니다');
   const body = input.content.trim();
   if (!body) throw new Error('내용을 입력해 주세요');
@@ -800,7 +801,7 @@ export async function getVenueMessages(venueId: string, limit = 80): Promise<Ven
 }
 export async function sendVenueMessage(venueId: string, input: { userName: string; userColor?: string; content: string }): Promise<VenueMessage> {
   if (IS_MOCK) throw new Error('mock');
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
   if (!user) throw new Error('로그인이 필요합니다');
   const body = input.content.trim();
   if (!body) throw new Error('내용을 입력해 주세요');
@@ -833,7 +834,7 @@ export async function getGroupPosts(groupId: string): Promise<GroupPost[]> {
 }
 export async function createGroupPost(groupId: string, input: { authorName: string; authorColor?: string; title?: string; content: string }): Promise<void> {
   if (IS_MOCK) return;
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
   if (!user) throw new Error('로그인이 필요합니다');
   const body = input.content.trim();
   if (!body) throw new Error('내용을 입력해 주세요');
@@ -863,7 +864,7 @@ export async function approveGroup(groupId: string): Promise<void> {
 /** 내가 운영(소유)하는 커뮤니티 — 매장+그룹(미승인 그룹 포함, RLS: owner 본인) */
 export async function getMyOwnedCommunities(): Promise<Venue[]> {
   if (IS_MOCK) return [];
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
   if (!user) return [];
   const { data, error } = await supabase.from('venues').select('*').eq('owner_id', user.id).order('created_at', { ascending: false });
   if (error) throw error;
@@ -873,7 +874,7 @@ export async function getMyOwnedCommunities(): Promise<Venue[]> {
 export interface JoinedGroup { membershipId: string; status: MemberStatus; group: Venue }
 export async function getMyJoinedGroups(): Promise<JoinedGroup[]> {
   if (IS_MOCK) return [];
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
   if (!user) return [];
   const { data: mems } = await supabase.from('group_members').select('id, group_id, role, status').eq('user_id', user.id).neq('role', 'manager');
   if (!mems || mems.length === 0) return [];
@@ -1002,7 +1003,7 @@ export async function deleteVenueNotice(id: string): Promise<void> {
 // ── 배드빗/굿런 반응 (작성자 활동점수 증가) ───────────────────────────────────
 export async function getMyReaction(postId: string): Promise<ReactionType | null> {
   if (IS_MOCK) return null;
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
   if (!user) return null;
   const { data } = await supabase
     .from('post_reactions').select('type')
@@ -1011,7 +1012,7 @@ export async function getMyReaction(postId: string): Promise<ReactionType | null
 }
 export async function reactToPost(postId: string, type: ReactionType): Promise<void> {
   if (IS_MOCK) return;
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
   if (!user) throw new Error('로그인이 필요합니다');
   const { error } = await supabase
     .from('post_reactions')
@@ -1020,7 +1021,7 @@ export async function reactToPost(postId: string, type: ReactionType): Promise<v
 }
 export async function removeReaction(postId: string): Promise<void> {
   if (IS_MOCK) return;
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
   if (!user) return;
   const { error } = await supabase
     .from('post_reactions').delete()
@@ -1031,7 +1032,7 @@ export async function removeReaction(postId: string): Promise<void> {
 // ── 매장 인증 등급 ────────────────────────────────────────────────────────────
 export async function getMyVenue(): Promise<Venue | null> {
   if (IS_MOCK) return null;
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
   if (!user) return null;
   const { data } = await supabase.from('venues').select('*').eq('owner_id', user.id).limit(1).maybeSingle();
   return data ? rowToVenue(data) : null;
@@ -1058,7 +1059,7 @@ export async function updateVenueImages(venueId: string, urls: string[]): Promis
 // ── 매장 팔로우(즐겨찾기) ──────────────────────────────────────────────────────
 export async function getMyFollowedVenueIds(): Promise<string[]> {
   if (IS_MOCK) return [];
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
   if (!user) return [];
   const { data, error } = await supabase.from('venue_follows').select('venue_id').eq('user_id', user.id);
   if (error) throw error;
@@ -1067,14 +1068,14 @@ export async function getMyFollowedVenueIds(): Promise<string[]> {
 }
 export async function followVenue(venueId: string): Promise<void> {
   if (IS_MOCK) return;
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
   if (!user) throw new Error('로그인이 필요합니다');
   const { error } = await supabase.from('venue_follows').insert({ user_id: user.id, venue_id: venueId });
   if (error && error.code !== '23505') throw error; // 중복(이미 팔로우)은 무시
 }
 export async function unfollowVenue(venueId: string): Promise<void> {
   if (IS_MOCK) return;
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
   if (!user) throw new Error('로그인이 필요합니다');
   const { error } = await supabase.from('venue_follows').delete().eq('user_id', user.id).eq('venue_id', venueId);
   if (error) throw error;

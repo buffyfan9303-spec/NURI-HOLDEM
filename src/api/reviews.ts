@@ -1,5 +1,6 @@
 // src/api/reviews.ts — 매장 후기·별점. 읽기 공개 / 작성은 해당 매장 체크인 인증자만(RLS 강제).
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { currentUser } from './_session';
 import { aiGenerate } from './ai';
 
 export interface VenueReview {
@@ -53,8 +54,7 @@ export async function getVenueReviews(venueId: string): Promise<VenueReview[]> {
 /** 내가 이 매장에 체크인한 적 있는지(후기 작성 자격) — 서버 RLS와 동일 조건의 UX 프리체크. */
 export async function canReviewVenue(venueId: string): Promise<boolean> {
   if (IS_MOCK) return false;
-  const { data: u } = await supabase.auth.getUser();
-  const uid = u.user?.id;
+  const uid = (await currentUser())?.id;
   if (!uid) return false;
   const { count } = await supabase.from('checkins').select('id', { count: 'exact', head: true })
     .eq('user_id', uid).eq('venue_id', venueId);
@@ -63,8 +63,7 @@ export async function canReviewVenue(venueId: string): Promise<boolean> {
 
 /** 후기 저장 — 매장당 1인 1후기(있으면 수정). */
 export async function saveVenueReview(venueId: string, rating: number, content: string, nickname: string): Promise<void> {
-  const { data: u } = await supabase.auth.getUser();
-  const uid = u.user?.id;
+  const uid = (await currentUser())?.id;
   if (!uid) throw new Error('로그인이 필요합니다');
   const { error } = await supabase.from('venue_reviews').upsert({
     venue_id: venueId, user_id: uid, nickname, rating,

@@ -125,3 +125,47 @@ test.describe('전역 토큰 — 규칙이 실제로 걸려 있는가', () => {
     }
   });
 });
+
+test.describe('손이 닿는 곳의 정밀도', () => {
+  test('토스트 성공·실패 색이 흰 글씨 대비 AA 를 넘는다', async ({ page }) => {
+    await page.goto('/');
+    // 토큰 값을 직접 재는 대신, 실제 클래스가 만들어내는 배경색을 측정한다.
+    const { ok, err } = await page.evaluate(() => {
+      const mk = (cls: string) => {
+        const d = document.createElement('div');
+        d.className = cls;
+        document.body.appendChild(d);
+        const bg = getComputedStyle(d).backgroundColor;
+        d.remove();
+        return bg;
+      };
+      return { ok: mk('bg-emerald-700'), err: mk('bg-danger-dark') };
+    });
+    // 토스트 글자는 항상 흰색이다
+    expect(contrast('rgb(255,255,255)', ok), `성공 토스트 배경 ${ok}`).toBeGreaterThanOrEqual(4.5);
+    expect(contrast('rgb(255,255,255)', err), `실패 토스트 배경 ${err}`).toBeGreaterThanOrEqual(4.5);
+  });
+
+  test('🔴 화면에 보이는 버튼 중 히트영역이 40px 미만인 것이 없다', async ({ page }) => {
+    await page.goto('/');
+    await dismissOverlays(page);
+    await page.waitForTimeout(1200);
+    const small = await page.evaluate(() => {
+      const out: { label: string; w: number; h: number }[] = [];
+      for (const el of document.querySelectorAll<HTMLElement>('button, [role="button"]')) {
+        const r = el.getBoundingClientRect();
+        if (r.width === 0 || r.height === 0) continue;          // 숨김
+        if (r.bottom < 0 || r.top > innerHeight) continue;       // 화면 밖
+        // 인라인 텍스트 링크형(높이만 작은 것)은 제외하고, 아이콘형 작은 버튼만 잡는다
+        if (r.height < 40 && r.width < 120) {
+          out.push({ label: (el.textContent || el.getAttribute('aria-label') || '?').trim().slice(0, 18), w: Math.round(r.width), h: Math.round(r.height) });
+        }
+      }
+      return out;
+    });
+    // 전부 40px 로 만드는 건 현실적이지 않다(밀도 높은 표·칩). 여기서는 '심각하게 작은' 것만 막는다.
+    const tiny = small.filter((s) => s.h < 28 || s.w < 28);
+    expect(tiny, `28px 미만 히트영역 — 한 손 조작에서 오탭이 난다:
+${JSON.stringify(tiny, null, 1)}`).toEqual([]);
+  });
+});

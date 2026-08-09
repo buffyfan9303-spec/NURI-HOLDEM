@@ -1,5 +1,6 @@
 // src/api/ledger.ts — NURI POS 장부 시스템 API
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { currentUser } from './_session';
 
 export type PaymentMethod = 'ticket' | 'cash' | 'transfer' | 'card' | 'support';
 export type EarlyType = 'double' | 'single' | 'none'; // 더블얼리 / 1얼리 / 없음
@@ -499,7 +500,7 @@ export async function saveLedgerSession(s: LedgerSession): Promise<void> {
 /** 장부 입장(세션 오픈) — 담당직원/오픈시각 기록 + 편집 필드 저장. closed=false 로 리셋. */
 export async function openLedgerSession(s: LedgerSession, operatorId?: string | null): Promise<void> {
   if (IS_MOCK) return;
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
   const { error } = await supabase.from('ledger_sessions').upsert({
     venue_id: s.venueId, session_date: s.sessionDate, game_seq: s.gameSeq ?? MAIN_GAME_SEQ,
     buyin_amount: s.buyinAmount, card_amount: s.cardAmount,
@@ -566,7 +567,7 @@ export async function addLedgerPlayer(input: {
   visitorType?: string | null; sortOrder?: number;
 }): Promise<void> {
   if (IS_MOCK) return;
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
   const { error } = await supabase.from('ledger_players').insert({
     venue_id: input.venueId, session_date: input.sessionDate, game_seq: input.gameSeq ?? MAIN_GAME_SEQ, name: input.name,
     visitor_type: input.visitorType ?? null, sort_order: input.sortOrder ?? 0,
@@ -661,7 +662,7 @@ export async function upsertBuyin(input: {
   paymentMethod: PaymentMethod; isUnpaid: boolean; discountIndex?: number; earlyOverride?: EarlyType | null;
 }): Promise<void> {
   if (IS_MOCK) return;
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
   // 가게지원은 항상 완납. 티켓은 미수(가불) 허용.
   const unpaid = input.paymentMethod === 'support' ? false : input.isUnpaid;
   const { error } = await supabase.from('ledger_buyins').upsert({
@@ -694,7 +695,7 @@ export async function upsertBuyinSplit(input: {
   earlyOverride?: EarlyType | null;
 }): Promise<void> {
   if (IS_MOCK) return;
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
   // 대표 결제수단(셀 표기/정렬용): 금액이 큰 수단. 전부 0이고 티켓만이면 ticket.
   const primary: PaymentMethod =
     input.ticketCount > 0 && (input.cashAmount + input.cardAmount + input.transferAmount) === 0 ? 'ticket'
@@ -776,12 +777,12 @@ export interface MyBuyinRequest { id: string; venueId: string; venueName: string
 /** 손님: 오늘 내가 보낸 바인 요청(매장명·상태) — 홈 배너용(RLS 본인 select). */
 export async function getMyBuyinRequestsToday(): Promise<MyBuyinRequest[]> {
   if (IS_MOCK) return [];
-  const { data: u } = await supabase.auth.getUser();
-  if (!u.user) return [];
+  const u = await currentUser();
+  if (!u) return [];
   const today = new Date().toLocaleDateString('en-CA');
   const { data, error } = await supabase.from('ledger_buyin_requests')
     .select('id, venue_id, status, requested_game_seq, game_seq, resolve_note, venues(name)')
-    .eq('user_id', u.user.id).eq('session_date', today).order('created_at', { ascending: false });
+    .eq('user_id', u.id).eq('session_date', today).order('created_at', { ascending: false });
   if (error) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({ id: r.id, venueId: r.venue_id, venueName: r.venues?.name ?? '매장', status: r.status, requestedGameSeq: r.requested_game_seq ?? null, gameSeq: r.game_seq ?? null, rejectReason: r.resolve_note ?? null }));

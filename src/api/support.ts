@@ -1,5 +1,6 @@
 // src/api/support.ts — 1:1 고객센터 문의. 회원 접수 + 운영자 답변(RLS로 권한 강제).
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { currentUser } from './_session';
 
 export const INQUIRY_CATEGORIES = ['이용 문의', '신고/제재', '결제·이용권', '버그/오류', '기타'] as const;
 export type InquiryCategory = typeof INQUIRY_CATEGORIES[number];
@@ -29,10 +30,10 @@ function rowTo(r: any): SupportInquiry {
 /** 문의 접수 — 본인 명의로만(RLS) */
 export async function submitInquiry(input: { category: string; title: string; content: string; userName?: string }): Promise<void> {
   if (IS_MOCK) return;
-  const { data: me } = await supabase.auth.getUser();
-  if (!me.user) throw new Error('로그인이 필요합니다');
+  const me = await currentUser();
+  if (!me) throw new Error('로그인이 필요합니다');
   const { error } = await supabase.from('support_inquiries').insert({
-    user_id: me.user.id, user_name: input.userName ?? null,
+    user_id: me.id, user_name: input.userName ?? null,
     category: input.category, title: input.title.trim(), content: input.content.trim(),
   });
   if (error) throw new Error(error.message);
@@ -41,10 +42,10 @@ export async function submitInquiry(input: { category: string; title: string; co
 /** 내 문의 내역(답변 포함) */
 export async function getMyInquiries(): Promise<SupportInquiry[]> {
   if (IS_MOCK) return [];
-  const { data: me } = await supabase.auth.getUser();
-  if (!me.user) return [];
+  const me = await currentUser();
+  if (!me) return [];
   const { data, error } = await supabase.from('support_inquiries')
-    .select('*').eq('user_id', me.user.id).order('created_at', { ascending: false });
+    .select('*').eq('user_id', me.id).order('created_at', { ascending: false });
   if (error) return [];
   return (data ?? []).map(rowTo);
 }

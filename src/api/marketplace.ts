@@ -1,5 +1,6 @@
 ﻿// src/api/marketplace.ts
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { currentUser } from './_session';
 
 // 카테고리(요구사항 4): '게임머니' 노출 제거 → [용품(pokerGear), 아이템(item), 기타(etc)].
 //  gameMoney는 기존 DB 데이터 호환을 위해 타입에는 유지(신규 작성 UI에선 미노출).
@@ -70,7 +71,7 @@ export async function getListings(opts?: {
 /** 내가 등록한 판매글 (최신순) */
 export async function getMyListings(): Promise<MarketplaceListing[]> {
   if (IS_MOCK) return [];
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
   if (!user) return [];
   const { data, error } = await supabase.from('marketplace_listings')
     .select('*').eq('seller_id', user.id).order('created_at', { ascending: false });

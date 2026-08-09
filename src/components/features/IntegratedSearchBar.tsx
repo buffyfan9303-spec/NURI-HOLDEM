@@ -413,7 +413,10 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
                   aria-checked={active}
                   onClick={() => setTour(id)}
                   className={[
-                    'relative inline-flex items-center h-6 px-3 rounded-[6px] text-2xs font-bold leading-none transition-colors duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-300',
+                    // ⚠ h-6(24px) 였다. 걸으면서 한 손으로 누르는 자리인데 4개가 gap-0.5 로 붙어 있어
+                    //   옆 값이 눌리고, 그때마다 목록이 갈아엎어져 스크롤 위치를 잃었다.
+                    //   같은 줄의 팔로우·뷰토글이 이미 h-9 라 오히려 이쪽이 기준에서 벗어나 있었다.
+                    'relative inline-flex items-center h-9 px-3.5 rounded-[6px] text-2xs font-bold leading-none transition-colors duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-300',
                     active ? 'text-ink-inverse' : 'text-ink-muted hover:text-ink-secondary',
                   ].join(' ')}
                 >
@@ -435,7 +438,7 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
               value={selectedRegions[0] ?? ''}
               onChange={(e) => setSelectedRegions(e.target.value ? [e.target.value] : [])}
               className={[
-                'appearance-none h-7 pl-3 pr-7 rounded-input border text-2xs font-bold leading-none cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-300',
+                'appearance-none h-9 pl-3 pr-7 rounded-input border text-2xs font-bold leading-none cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-300',
                 selectedRegions.length > 0
                   ? 'bg-accent-300/15 border-accent-300 text-accent-300'
                   : 'bg-surface-high/60 border-border-subtle text-ink-secondary hover:border-border-strong',

@@ -1,5 +1,6 @@
 // src/api/leagues.ts — 연합 리그(여러 매장 공동 보드): 생성 → 초대(알림) → 수락/거절 → 포인트 → 통합 순위
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { currentUser } from './_session';
 
 export type LeagueMemberStatus = 'pending' | 'accepted' | 'declined';
 export type LeaguePhase = 'idle' | 'live' | 'settled' | 'final';
@@ -98,7 +99,7 @@ export async function getLeagueEntries(leagueId: string, limit = 400): Promise<L
 
 export async function addLeagueEntry(leagueId: string, venueId: string, input: { name: string; points: number; reason?: string }): Promise<void> {
   if (IS_MOCK) return;
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
   const { error } = await supabase.from('league_entries').insert({
     league_id: leagueId, venue_id: venueId, name: input.name.trim(),
     points: input.points, reason: input.reason?.trim() || null, created_by: user?.id ?? null,

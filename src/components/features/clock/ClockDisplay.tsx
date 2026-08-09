@@ -50,9 +50,21 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
   const gamesRef = useRef<ClockState[]>([]);
   const prevElim = useRef<Map<number, number>>(new Map());
 
-  const load = () => getVenueClocks(venueId).then(setClocks).catch(() => setClocks([]));
+  // ⚠ 실패 시 setClocks([]) 로 비우면 순간 끊김 한 번에 매장 TV 가 통째로 빈 화면이 된다.
+  //   이 화면은 손님이 보는 읽기전용 TV 라 '다시 시도' 버튼을 띄워도 누를 사람이 없다 —
+  //   여기서 옳은 답은 실패를 드러내는 게 아니라 '마지막으로 알던 상태를 계속 보여주는 것'이다.
+  //   (아직 한 번도 못 받았을 때만 빈 배열로 확정해 로딩 문구가 영원히 남지 않게 한다)
+  const load = () => getVenueClocks(venueId).then(setClocks).catch(() => setClocks((cur) => cur ?? []));
   useEffect(() => { load(); }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => subscribeClock(venueId, load), [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // 실시간 구독이 조용히 끊기면(대회장 와이파이·지하 매장에서 흔하다) 복구 수단이 없었다.
+  // 라이브 탭이 이미 쓰고 있는 30초 폴링 + 복귀 재조회를 그대로 이식한다.
+  useEffect(() => {
+    const t = setInterval(load, 30_000);
+    const onVis = () => { if (document.visibilityState === 'visible') load(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVis); };
+  }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { const t = setInterval(() => setTick((x) => x + 1), 1000); return () => clearInterval(t); }, []);
 
   // 스폰서 배너 — 운영자가 등록한 전역 클락 광고 이미지(app_settings) 재사용

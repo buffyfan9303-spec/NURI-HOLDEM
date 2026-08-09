@@ -1,5 +1,6 @@
 // src/api/rankings.ts — 매장 일일 손님 순위
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { currentUser } from './_session';
 
 /** 매장 순위 변경 실시간 구독 — 순위 입력/수정 시 공개 표시에 자동 반영 */
 export function subscribeRankings(venueId: string, onChange: () => void): () => void {
@@ -68,6 +69,37 @@ export async function getVenueRankings(
     .order('position', { ascending: true });
   if (error) throw error;
   return { date: d, entries: (data ?? []).map(rowToEntry) };
+}
+
+/**
+ * (매장, 날짜) 여러 쌍의 순위를 한 번에 — 목록 화면의 N+1 제거용.
+ *
+ * 왜 필요한가: '지난 대회' 위젯이 5개 항목마다 getVenueRankings 를 따로 불러 요청 5건을 쐈다.
+ *   venue_rankings 가 0행이어도 5건이 나가는 구조적 오버헤드였고, 의존성이 배열 참조라
+ *   실시간 갱신·창 복귀·당겨서 새로고침마다 다시 5건이 반복됐다.
+ * 반환 키는 `${venueId}|${date}` — 호출부가 항목마다 O(1) 로 찾아 쓴다.
+ */
+export async function getRankingsBulk(
+  pairs: { venueId: string; date: string }[],
+): Promise<Record<string, RankingEntry[]>> {
+  const out: Record<string, RankingEntry[]> = {};
+  if (IS_MOCK || pairs.length === 0) return out;
+  const venueIds = [...new Set(pairs.map((p) => p.venueId))];
+  const dates = [...new Set(pairs.map((p) => p.date))];
+  // 교차곱이라 요청한 조합보다 넓게 잡힐 수 있다 — 아래에서 요청한 쌍만 남긴다.
+  const { data, error } = await supabase
+    .from('venue_rankings').select('*')
+    .in('venue_id', venueIds).in('ranking_date', dates)
+    .order('position', { ascending: true });
+  if (error) throw error;
+  const want = new Set(pairs.map((p) => `${p.venueId}|${p.date}`));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const r of (data ?? []) as any[]) {
+    const key = `${r.venue_id}|${r.ranking_date}`;
+    if (!want.has(key)) continue;
+    (out[key] ??= []).push(rowToEntry(r));
+  }
+  return out;
 }
 
 // ── 매장 커뮤니티 누적 순위 ────────────────────────────────────────────────────
@@ -247,7 +279,7 @@ export async function getScoreEntries(venueId: string, limit = 300): Promise<Sco
 
 export async function addScoreEntry(venueId: string, input: { name: string; points: number; reason?: string; entryDate?: string; boardKey?: string | null }): Promise<void> {
   if (IS_MOCK) return;
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
   const { error } = await supabase.from('venue_score_entries').insert({
     venue_id: venueId, name: input.name.trim(), points: input.points,
     reason: input.reason?.trim() || null, ...(input.entryDate ? { entry_date: input.entryDate } : {}),

@@ -1,5 +1,6 @@
 // src/api/reservations.ts — 포스터(게임) 예약 + 단골 고객 활동내역 CRM
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { currentUser } from './_session';
 
 /** 예약 변경 실시간 구독 — 신규/취소 예약을 게임관리에 자동 반영.
  *  ⚡ 트래픽 대비: scheduleIds 를 주면 그 포스터들의 예약만 수신한다(서버 필터).
@@ -28,7 +29,7 @@ const rowToRes = (r: any): Reservation => ({ id: r.id, scheduleId: r.schedule_id
 
 export async function getMyReservation(scheduleId: string): Promise<Reservation | null> {
   if (IS_MOCK) return null;
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
   if (!user) return null;
   const { data } = await supabase.from('schedule_reservations').select('*').eq('schedule_id', scheduleId).eq('user_id', user.id).maybeSingle();
   return data ? rowToRes(data) : null;
@@ -72,7 +73,7 @@ export async function createReservation(scheduleId: string, displayName: string)
 
 export async function cancelMyReservation(scheduleId: string): Promise<void> {
   if (IS_MOCK) return;
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
   if (!user) return;
   const { error } = await supabase.from('schedule_reservations').delete().eq('schedule_id', scheduleId).eq('user_id', user.id);
   if (error) throw error;
@@ -97,7 +98,7 @@ export async function updateReservationName(id: string, name: string): Promise<v
 export async function getMyVisitStats(): Promise<{ visits: number; upcoming: number; total: number }> {
   const empty = { visits: 0, upcoming: 0, total: 0 };
   if (IS_MOCK) return empty;
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
   if (!user) return empty;
   // schedule_reservations → schedules(date) 조인. 지난 날짜 예약 = 방문으로 집계.
   const { data, error } = await supabase
@@ -191,7 +192,7 @@ export async function getCustomerActivity(venueId: string, name: string): Promis
 export interface MyReservationRow { scheduleId: string; title: string; date: string; startTime: string | null; venueName: string | null; displayName: string; reservedAt: string }
 export async function getMyReservations(limit = 30): Promise<MyReservationRow[]> {
   if (IS_MOCK) return [];
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
   if (!user) return [];
   const { data, error } = await supabase
     .from('schedule_reservations')

@@ -1,5 +1,6 @@
 // src/api/reports.ts — 신고(reports) API
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { currentUser } from './_session';
 
 export type ReportTargetType = 'post' | 'comment' | 'listing' | 'live' | 'user';
 
@@ -14,7 +15,7 @@ export interface ReportInput {
 
 export async function submitReport(input: ReportInput): Promise<void> {
   if (IS_MOCK) return;
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
   if (!user) throw new Error('로그인이 필요합니다');
   const { error } = await supabase.from('reports').insert({
     reporter_id:     user.id,

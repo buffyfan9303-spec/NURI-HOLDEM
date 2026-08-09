@@ -1,5 +1,6 @@
 // src/api/push.ts — 웹 푸시 구독 관리 (클라이언트)
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { currentUser } from './_session';
 
 // VAPID 공개키(노출되어도 안전). 비공개키는 Edge Function secret(VAPID_PRIVATE_KEY)로만 보관.
 export const VAPID_PUBLIC_KEY =
@@ -50,7 +51,7 @@ export async function enablePush(): Promise<void> {
     });
   }
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
   if (!user) throw new Error('로그인이 필요합니다');
 
   const json = sub.toJSON();

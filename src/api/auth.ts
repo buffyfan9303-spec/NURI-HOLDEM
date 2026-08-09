@@ -1,5 +1,6 @@
 ﻿// src/api/auth.ts
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { currentUser } from './_session';
 import { makeSearchCache } from '../lib/searchCache';
 
 export type UserRole   = 'user' | 'venue_owner' | 'venue_staff' | 'admin';
@@ -132,7 +133,7 @@ export async function adminSetNickname(userId: string, nickname: string): Promis
 
 // 매장 알림 수신 설정(본인) — true=수신 거부
 export async function getMyVenueNotifyMute(): Promise<boolean> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
   if (!user) return false;
   const { data } = await supabase.from('profiles').select('mute_venue_notify').eq('id', user.id).single();
   return data?.mute_venue_notify === true;
@@ -262,7 +263,7 @@ export async function signOut(): Promise<void> {
 // ── 현재 세션에서 프로필 조회 ─────────────────────────────────────────────────
 export async function getMyProfile(): Promise<User | null> {
   if (IS_MOCK) return null;
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
   if (!user) return null;
 
   const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
@@ -324,6 +325,8 @@ export async function updateUserStatus(
 // 탈퇴 등 민감 작업의 본인 확인용. true=일치.
 export async function verifyMyPassword(password: string): Promise<boolean> {
   if (IS_MOCK) return true;
+  // ⚠ 여기만 getUser() 를 유지한다 — 비밀번호 재확인이라 '지금 이 토큰이 진짜 살아 있는가'
+  //   자체가 조작의 전제다. 나머지 전 구간은 currentUser()(=getSession) 로 왕복을 없앴다.
   const { data: me } = await supabase.auth.getUser();
   const email = me.user?.email;
   if (!email || !password) return false;
@@ -335,8 +338,7 @@ export async function verifyMyPassword(password: string): Promise<boolean> {
 // 탈퇴 시 함께 사라지는 내 데이터 요약(보유 이용권·작성 글 수) — 실수 방지용.
 export async function getMyAccountSummary(): Promise<{ vouchers: number; posts: number }> {
   if (IS_MOCK) return { vouchers: 0, posts: 0 };
-  const { data: me } = await supabase.auth.getUser();
-  const uid = me.user?.id;
+  const uid = (await currentUser())?.id;
   if (!uid) return { vouchers: 0, posts: 0 };
   const [v, p] = await Promise.all([
     supabase.from('store_vouchers').select('id', { count: 'exact', head: true }).eq('holder_user_id', uid).eq('status', 'active'),
@@ -380,7 +382,7 @@ export async function updateMyProfile(patch: ProfilePatch): Promise<User> {
   if (patch.avatarUrl   !== undefined) dbPatch.avatar_url   = patch.avatarUrl;
   if (patch.avatarColor !== undefined) dbPatch.avatar_color = patch.avatarColor;
 
-  const { data: { user: authUser } } = await supabase.auth.getUser();
+  const authUser = await currentUser();
   if (!authUser) throw new Error('로그인이 필요합니다');
 
   const { data, error } = await supabase
@@ -458,7 +460,7 @@ export async function signInWithGoogle(): Promise<void> {
 // ── 동의 갱신 (구글 가입자 등 동의 미이행 사용자용 게이트) ────────────────────
 export async function updateMyConsent(consent: ConsentPayload): Promise<void> {
   if (IS_MOCK) return;
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
   if (!user) throw new Error('로그인이 필요합니다');
   const { error } = await supabase.from('profiles').update({
     agreed_to_terms:         consent.agreedToTerms,

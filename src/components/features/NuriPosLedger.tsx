@@ -1232,12 +1232,17 @@ function ClockRemoteBar({ clock, onPatch, onOpenClock, active = true }: {
       const cu = levelCatchUp(c);
       if (!cu) return;
       wroteForRef.current = c.endsAt;
+      const boundary = c.endsAt;
       saveClockLevel(c.venueId, c.gameSeq ?? 1, {
         currentIndex: cu.patch.currentIndex ?? c.currentIndex,
         remainingMs: cu.patch.remainingMs ?? 0,
         endsAt: cu.patch.endsAt ?? null,
         ...(cu.finished && { running: false }),
-      }).catch(() => {});
+      }).catch(() => {
+        // 쓰기가 한 번 실패했다고 이 레벨 경계를 영구 포기하면(wroteForRef 가 그대로 남으면)
+        // 대회장 와이파이가 잠깐 끊긴 것만으로 레벨이 영영 안 넘어간다 → 다음 틱에 재시도하게 푼다.
+        if (wroteForRef.current === boundary) wroteForRef.current = null;
+      });
     }, 1000);
     return () => clearInterval(t);
   }, [clock.running]);

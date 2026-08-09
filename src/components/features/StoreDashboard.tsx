@@ -524,13 +524,18 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                         <span className="min-w-0 flex-1 truncate text-ink-secondary">{r.playerName}</span>
                         <span className="shrink-0 text-[10px] tabular-nums text-ink-muted">{timeAgo(r.createdAt)}</span>
                         <span className="shrink-0 rounded-badge bg-surface-float px-1 py-0.5 text-[10px] text-ink-muted">{gameLabel(r.requestedGameSeq)}</span>
+                        {/* ⚠ 승인(✓)과 거절(✕)이 24px 로 6px 간격에 붙어 있었다.
+                            접수대에서 한 손으로 누르는 자리인데, 오탭하면 손님이 거절되거나
+                            엉뚱한 사람이 명단에 들어간다 — 되돌리는 비용이 승인 1탭과 비대칭이다.
+                            시각 크기는 유지하면서 히트영역만 40px 로 키우고(-my 로 줄 높이는 그대로),
+                            둘 사이 간격을 벌려 손가락 하나 안에서 갈리지 않게 한다. */}
                         <button type="button" disabled={reqBusy === r.id}
                           onPointerDown={() => startLP(r)} onPointerUp={cancelLP} onPointerLeave={cancelLP} onPointerCancel={cancelLP}
                           onClick={() => { if (lpFired.current) { lpFired.current = false; return; } quickApprove(r); }}
-                          title="탭: 승인(게임 추가) · 길게: 결제수단 선택해 바인 기록"
-                          className="shrink-0 rounded-input bg-emerald-500/15 px-1.5 py-1 text-2xs font-bold text-emerald-400 hover:bg-emerald-500/25 disabled:opacity-40">✓</button>
-                        <button type="button" disabled={reqBusy === r.id} onClick={() => quickReject(r)} title="거절"
-                          className="shrink-0 rounded-input bg-rose-500/15 px-1.5 py-1 text-2xs font-bold text-rose-300 hover:bg-rose-500/25 disabled:opacity-40">✕</button>
+                          title="탭: 승인(게임 추가) · 길게: 결제수단 선택해 바인 기록" aria-label="승인"
+                          className="shrink-0 -my-2 ml-0.5 flex h-10 min-w-[2.5rem] items-center justify-center rounded-input bg-emerald-500/15 text-sm font-bold text-emerald-400 hover:bg-emerald-500/25 active:scale-95 disabled:opacity-40">✓</button>
+                        <button type="button" disabled={reqBusy === r.id} onClick={() => quickReject(r)} title="거절" aria-label="거절"
+                          className="shrink-0 -my-2 ml-2 flex h-10 min-w-[2.5rem] items-center justify-center rounded-input bg-rose-500/15 text-sm font-bold text-rose-300 hover:bg-rose-500/25 active:scale-95 disabled:opacity-40">✕</button>
                         {payFor === r.id && (
                           <div className="absolute right-0 top-full z-30 mt-1 w-52 space-y-1.5 rounded-input border border-border-default bg-surface-float p-2 shadow-dialog">
                             {/* 바인 금액 직접 수정(리바인·할인) */}

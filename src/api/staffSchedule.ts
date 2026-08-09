@@ -1,5 +1,6 @@
 // src/api/staffSchedule.ts — 딜러/직원 월별 출근 스케줄
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { currentUser } from './_session';
 
 /** 직원 출근 스케줄 변경 실시간 구독(매장별) — 셀프 출퇴근·배정 변경을 자동 반영 */
 export function subscribeStaffSchedule(venueId: string, onChange: () => void): () => void {
@@ -87,7 +88,7 @@ export async function saveStaffWage(venueId: string, w: StaffWage): Promise<void
 /** 특정 날짜에 직원 출근 배정(중복 무시) */
 export async function addStaffShift(venueId: string, date: string, name: string): Promise<void> {
   if (IS_MOCK) return;
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
   const { error } = await supabase.from('staff_schedule').upsert(
     { venue_id: venueId, work_date: date, staff_name: name.trim(), created_by: user?.id ?? null },
     { onConflict: 'venue_id,work_date,staff_name', ignoreDuplicates: true },

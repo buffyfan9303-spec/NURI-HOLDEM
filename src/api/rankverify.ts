@@ -1,6 +1,7 @@
 // src/api/rankverify.ts — 순위(머니인) 인증: 외부 대회 입상 증빙 제출 → 운영자 승인 → 국내 순위 집계.
 // 이미지 2장(머니인 증빙 + 신분증)은 비공개 버킷 'verifications'에 저장 — 승인/거절 즉시 신분증 삭제.
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { currentUser } from './_session';
 import { resizeImage } from '../lib/storage';
 import { aiInspectImages } from './ai';
 
@@ -22,8 +23,7 @@ export async function submitRankVerification(input: {
   nickname: string; eventName: string; amountWon: number; proof: File; idCard: File;
 }): Promise<void> {
   if (IS_MOCK) return;
-  const { data: u } = await supabase.auth.getUser();
-  const uid = u.user?.id;
+  const uid = (await currentUser())?.id;
   if (!uid) throw new Error('로그인이 필요합니다');
   const up = async (file: File, tag: string) => {
     const blob = await resizeImage(file, 1600, 1600, 0.85);
@@ -44,10 +44,10 @@ export async function submitRankVerification(input: {
 /** 내 신청 내역 */
 export async function myRankVerifications(): Promise<RankVerification[]> {
   if (IS_MOCK) return [];
-  const { data: u } = await supabase.auth.getUser();
-  if (!u.user) return [];
+  const u = await currentUser();
+  if (!u) return [];
   const { data } = await supabase.from('rank_verifications').select('*')
-    .eq('user_id', u.user.id).order('created_at', { ascending: false }).limit(10);
+    .eq('user_id', u.id).order('created_at', { ascending: false }).limit(10);
   return (data ?? []).map(mapRow);
 }
 

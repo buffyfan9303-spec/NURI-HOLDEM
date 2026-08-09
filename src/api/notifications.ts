@@ -1,4 +1,5 @@
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { currentUser } from './_session';
 
 export type NotificationType = 'qna' | 'approval' | 'comment' | 'system' | 'mention';
 
@@ -27,7 +28,7 @@ function rowToNotif(r: any): AppNotification {
 // ── 내 알림 조회 ──────────────────────────────────────────────────────────────
 export async function getMyNotifications(): Promise<AppNotification[]> {
   if (IS_MOCK) return [];
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
   if (!user) return [];
   const { data, error } = await supabase
     .from('notifications')

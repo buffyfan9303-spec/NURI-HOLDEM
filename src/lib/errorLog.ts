@@ -2,6 +2,7 @@
 // window.onerror / unhandledrejection / ErrorBoundary에서 client_errors 테이블로 자동 수집.
 // 읽기는 관리자만(RLS). 같은 메시지 반복·세션당 과다 전송은 클라에서 차단.
 import { supabase, IS_MOCK } from './supabase';
+import { currentUser } from '../api/_session';
 
 const sent = new Map<string, number>(); // message → 마지막 전송 시각
 let sessionCount = 0;
@@ -20,9 +21,9 @@ export function logClientError(message: string, stack?: string | null): void {
   // 실패해도 앱에 영향 없도록 완전 비동기 + 무시
   void (async () => {
     try {
-      const { data: u } = await supabase.auth.getUser();
+      const u = await currentUser();
       await supabase.from('client_errors').insert({
-        user_id: u.user?.id ?? null,
+        user_id: u?.id ?? null,
         message: key,
         stack: stack?.slice(0, 3000) ?? null,
         url: typeof location !== 'undefined' ? location.href.slice(0, 300) : null,
