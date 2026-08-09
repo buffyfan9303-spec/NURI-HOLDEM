@@ -8,16 +8,19 @@
     <link rel="dns-prefetch" href="https://idsxiqspecrucvfvtgbw.supabase.co" />
     <!-- 첫 페인트 흰 화면 방지(앱 느낌) — CSS 로드 전 저장된 테마색으로 배경 즉시 지정 -->
     <script>try{document.documentElement.style.backgroundColor=localStorage.getItem('nuri-theme')==='light'?'#F2F3F5':'#0A0C0F'}catch(e){document.documentElement.style.backgroundColor='#0A0C0F'}</script>
-    <!-- Google tag (gtag.js) — Google Analytics 4 -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-9T7JZNEQE8"></script>
+    <!-- ⚡ 서드파티(GA·AdSense)는 여기서 로드하지 않는다 — main.tsx 가 첫 페인트 뒤 유휴에 주입한다.
+         왜: 라이브 실측(모바일)에서 adsbygoogle.js 가 t=23ms, 즉 앱의 index/vendor-react/vendor-supabase 와
+         '같은 순간' 시작해 decoded 665KB(광고 665 vs 앱 셸 839)를 파싱했고, 호스트 6곳으로 요청 11건이 퍼졌다.
+         정작 src 안에 광고 슬롯(<ins class="adsbygoogle">)은 0개다(Auto Ads 전용).
+         중저가 안드로이드에서 이 파싱·실행이 첫 탭 반응을 눈에 띄게 늦춘다.
+         gtag 스텁만 여기 남긴다 — 스크립트가 늦게 와도 그 사이 호출이 dataLayer 큐에 쌓였다가
+         나중에 그대로 전송되므로 이벤트가 유실되지 않는다. -->
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
       gtag('config', 'G-9T7JZNEQE8');
     </script>
-    <!-- Google AdSense -->
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6018943099120763" crossorigin="anonymous"></script>
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="64x64" href="/favicon-64.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/favicon-180.png" />

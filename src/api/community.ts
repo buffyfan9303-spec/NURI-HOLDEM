@@ -210,6 +210,10 @@ export async function getComments(filter: { scheduleId?: string; venueId?: strin
   if (filter.scheduleId) q = q.eq('schedule_id', filter.scheduleId);
   if (filter.venueId)    q = q.eq('venue_id',    filter.venueId);
   if (filter.postId)     q = q.eq('post_id',     filter.postId);
+  // ⚠ 필터가 하나도 없으면 전 서비스 댓글을 통째로 받는다(App 부팅 시 getComments({}) 가 그랬다).
+  //   PostgREST 상한(1000행)까지 그대로 내려오고, 그게 첫 화면 로딩과 경쟁했다.
+  //   무필터 조회는 '어느 글에 댓글이 있나' 정도의 용도라 상한을 걸어도 기능이 깨지지 않는다.
+  if (!filter.scheduleId && !filter.venueId && !filter.postId) q = q.limit(300);
   const { data, error } = await q;
   if (error) throw error;
   return (data ?? []).map(rowToComment);

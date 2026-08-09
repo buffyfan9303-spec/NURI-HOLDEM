@@ -628,29 +628,6 @@ export default function App() {
   // 매장 후기 별점(체크인 인증) — 카드 매장명 옆 ⭐4.8(12)
   const [venueRatings, setVenueRatings] = useState<Record<string, { avg: number; count: number }>>({});
   useEffect(() => { getVenueRatings().then(setVenueRatings).catch(() => {}); }, []);
-  // 탭 청크 idle 프리로드 — 동일 동적 import는 Vite가 같은 청크로 캐시한다
-  useEffect(() => {
-    const warm = () => {
-      void Promise.allSettled([
-        import('./components/features/CommunityTab'),
-        import('./components/features/MarketplaceTab'),
-        import('./components/features/LiveGamesTab'),
-        import('./components/features/VenueManageTab'),
-        import('./components/features/ToolsPanel'),
-        import('./components/features/VenuePage'),
-        import('./components/features/ScheduleDetailModal'),
-        import('./components/features/CustomerDashboardPage'),
-        import('./components/features/AuthModal'),
-        import('./components/features/ProfileModal'),
-        import('./components/features/GlobalSearchModal'),
-        import('./components/features/PostDetailModal'),
-        import('./components/features/ListingDetailModal'),
-      ]);
-    };
-    const w = window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number };
-    if (w.requestIdleCallback) w.requestIdleCallback(warm, { timeout: 4000 });
-    else setTimeout(warm, 2500);
-  }, []);
   // 알림 딥링크 → 내 매장 탭의 특정 섹션(예: 📒 장부 시작 → 장부)
   const [myStoreDeep, setMyStoreDeep] = useState<'ledger' | null>(null);
   const [buyinPick, setBuyinPick] = useState<{ venueId: string; games: { gameSeq: number; title: string }[] } | null>(null); // 바인요청 게임 선택
@@ -866,6 +843,37 @@ export default function App() {
   // 목록을 못 불러온 것과 '대회가 없는 것'은 다르다 — 구분하지 않으면
   // 서비스가 죽은 날에도 사용자는 '대회가 없나 보다' 하고 조용히 떠난다.
   const [schedulesError, setSchedulesError] = useState<unknown>(null);
+
+  // 탭 청크 idle 프리로드 — 동일 동적 import는 Vite가 같은 청크로 캐시한다
+  useEffect(() => {
+    // ⚠ 첫 화면 데이터가 도착하기 전에는 프리페치를 시작하지 않는다.
+    //   라이브 실측에서 idle 콜백이 t=115ms 에 떨어졌는데 Supabase 첫 응답은 170~215ms 라,
+    //   '사용자가 기다리는 목록'보다 '나중에 쓸지도 모르는 청크'가 먼저 대역폭·메인스레드를 가져갔다.
+    if (!schedulesLoaded) return;
+    const warm = () => {
+      void Promise.allSettled([
+        import('./components/features/CommunityTab'),
+        import('./components/features/MarketplaceTab'),
+        import('./components/features/LiveGamesTab'),
+        // ⚠ VenueManageTab 은 여기 넣지 않는다 — 업주 전용 스위트(장부·통계·클락·급여)를 static import 로
+        //   끌고 와서 306KB + LedgerStatsPanel 155KB 가 '비로그인 손님'에게도 내려갔다.
+        //   아래 prefetch() 가 이미 `if (isOwner)` 로 게이팅하고 있는데 여기가 그걸 무력화하고 있었다.
+        import('./components/features/ToolsPanel'),
+        import('./components/features/VenuePage'),
+        import('./components/features/ScheduleDetailModal'),
+        import('./components/features/CustomerDashboardPage'),
+        import('./components/features/AuthModal'),
+        import('./components/features/ProfileModal'),
+        import('./components/features/GlobalSearchModal'),
+        import('./components/features/PostDetailModal'),
+        import('./components/features/ListingDetailModal'),
+      ]);
+    };
+    const w = window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number };
+    // timeout 을 늘린 이유: 4초는 '한가하지 않아도 4초 뒤엔 무조건 실행'이라 첫 화면과 자주 겹쳤다.
+    if (w.requestIdleCallback) w.requestIdleCallback(warm, { timeout: 10000 });
+    else setTimeout(warm, 5000);
+  }, [schedulesLoaded]);
   // FOMO 뱃지용 예약자 수 — 다가오는 대회만 1회 조회
   useEffect(() => {
     const today = new Date().toLocaleDateString('en-CA');

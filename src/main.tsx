@@ -59,3 +59,29 @@ createRoot(document.getElementById('root')!).render(
     </ErrorBoundary>
   </StrictMode>,
 );
+
+// ── 서드파티(GA·AdSense) 지연 주입 ──────────────────────────────────────────
+// 왜 index.html 이 아니라 여기인가: <head> 에 두면 앱 번들과 '같은 순간' 다운로드·파싱이 시작된다.
+// 라이브 실측에서 adsbygoogle.js 가 t=23ms 로 index/vendor-react/vendor-supabase 와 동시에 출발해
+// decoded 665KB 를 파싱했고(앱 셸 839KB 의 80%), 서드파티 호스트 6곳으로 요청 11건이 퍼졌다.
+// 첫 화면에는 광고가 필요 없고(src 에 광고 슬롯 0개), 사용자가 기다리는 건 대회 목록이다.
+// 그래서 '첫 페인트가 끝나고 브라우저가 한가해진 뒤'로 미룬다 — 수익 로직은 그대로 살아 있다.
+function loadThirdParty() {
+  const srcs = [
+    'https://www.googletagmanager.com/gtag/js?id=G-9T7JZNEQE8',
+    'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6018943099120763',
+  ];
+  for (const src of srcs) {
+    if (document.querySelector(`script[src="${src}"]`)) continue;
+    const el = document.createElement('script');
+    el.async = true;
+    el.crossOrigin = 'anonymous';
+    el.src = src;
+    document.head.appendChild(el);
+  }
+}
+// requestIdleCallback 이 없으면(사파리 구버전) 타이머로 폴백. timeout 은 '한가해지지 않아도 결국 로드'.
+type IdleWin = Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number };
+const w = window as IdleWin;
+if (w.requestIdleCallback) w.requestIdleCallback(loadThirdParty, { timeout: 8000 });
+else setTimeout(loadThirdParty, 5000);
