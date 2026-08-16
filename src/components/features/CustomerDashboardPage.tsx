@@ -10,7 +10,8 @@ import type { Html5Qrcode } from 'html5-qrcode'; // 타입만(런타임 번들 �
 import {
   listMyVouchers, myVisitedVenues, myPlayHistory,
   redeemMyVoucher, redeemMyVoucherByQr, redeemMyVoucherByPhone,
-  type Voucher, type VisitedVenue, type PlayHistory,
+  findUserByPhone,
+  type Voucher, type VisitedVenue, type PlayHistory, type TransferTarget,
 } from '../../api/vouchers';
 import { wonToMan } from '../../api/ledger';
 import { getMyReservations, cancelMyReservation, type MyReservationRow } from '../../api/reservations';
@@ -80,9 +81,23 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
   useEffect(() => { if (open) reload(); }, [open]);
   useEffect(() => { if (open && user) getMyBadgeStats(user.nickname ?? null, user.activityPoints ?? 0).then(setBadgeStats).catch(() => {}); }, [open, user]);
 
+  // 차감 성공 전면 확인 화면 상태(Phase 15-1) — 3초 자동 닫힘.
+  // ⚠ 훅은 조건부 return 보다 반드시 위에 — 순서가 흔들리면 React 가 상태를 잃는다.
+  const [redeemDone, setRedeemDone] = useState<{ title: string; venueName: string; remain: number } | null>(null);
+  useEffect(() => {
+    if (!redeemDone) return;
+    const t = setTimeout(() => setRedeemDone(null), 3000);
+    return () => clearTimeout(t);
+  }, [redeemDone]);
+
   if (!open) return null;
 
   const active = vouchers.filter((v) => v.status === 'active');
+  // 이용권 사용 내역(Phase 15-1 '모든 차감은 즉시 이 리스트에') — used 상태를 시간 역순으로.
+  const usedHistory = vouchers
+    .filter((v) => v.status === 'used' && v.usedAt)
+    .sort((a, b) => new Date(b.usedAt!).getTime() - new Date(a.usedAt!).getTime())
+    .slice(0, 20);
   const venueMap = new Map<string, { name: string; stacks: Map<string, Stack> }>();
   for (const v of active) {
     const vid = v.venueId; const vname = v.venueName ?? '기타 매장';
@@ -242,6 +257,21 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
                 ))}</div>}
           </section>
 
+          {/* 이용권 사용 내역(Phase 15-1) — '모든 차감은 즉시 이 리스트에 나타나야 한다'.
+              와홀덤 '사용 내역 자동 기록'과 같은 신뢰 장치: 언제·어디서·무엇이 차감됐는지. */}
+          {usedHistory.length > 0 && (
+            <section>
+              <p className="mb-1.5 text-sm font-bold text-ink-primary">이용권 사용 내역</p>
+              <ul className="space-y-1">{usedHistory.map((v) => (
+                <li key={v.id} className="flex items-center gap-2 rounded-input border border-border-subtle bg-surface-low px-3 py-2 text-2xs">
+                  <span className="shrink-0 text-ink-muted tabular-nums">{fmtDate(v.usedAt!)}</span>
+                  <span className="min-w-0 flex-1 truncate text-ink-secondary">{v.usedVenueName ?? v.venueName ?? '-'} · {v.title}</span>
+                  <span className="shrink-0 font-bold text-danger-light tabular-nums">-1장</span>
+                </li>
+              ))}</ul>
+            </section>
+          )}
+
           <section>
             <p className="mb-1.5 text-sm font-bold text-ink-primary">매장 이용·참가 내역</p>
             {loading ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
@@ -324,7 +354,22 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
         </div>
       </div>
 
-      {redeem && <RedeemSheet stack={redeem} onClose={() => setRedeem(null)} onDone={() => { setRedeem(null); reload(); }} />}
+      {redeem && <RedeemSheet stack={redeem} onClose={() => setRedeem(null)}
+        onDone={(used) => { setRedeem(null); setRedeemDone(used); reload(); }} />}
+      {/* 차감 성공 전면 확인(Phase 15-1) — 직원과 고객이 한 화면을 같이 확인하는 것이
+          실제 사용 장면이다. 큰 체크 + 수량 + 남은 잔량, 3초 뒤 자동 닫힘. */}
+      {redeemDone && (
+        <div role="status" className="fixed inset-0 z-[80] flex flex-col items-center justify-center gap-3 bg-emerald-600 px-6 text-white animate-fade-in"
+          onClick={() => setRedeemDone(null)}>
+          <svg width="88" height="88" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <circle cx="12" cy="12" r="10" opacity="0.35" /><path d="M7 12.5l3.2 3.2L17 9" />
+          </svg>
+          <p className="text-2xl font-extrabold">이용권 1장 사용 완료</p>
+          <p className="text-sm font-semibold opacity-90">{redeemDone.venueName} · {redeemDone.title}</p>
+          <p className="text-4xl font-extrabold tabular-nums">남은 이용권 {redeemDone.remain}장</p>
+          <p className="mt-2 text-xs opacity-75">화면을 탭하면 닫힙니다</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -491,7 +536,7 @@ function RankTrendChart({ rows }: { rows: MyRankingRow[] }) {
   );
 }
 
-function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => void; onDone: () => void }) {
+function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => void; onDone: (used: { title: string; venueName: string; remain: number }) => void }) {
   const toast = useToast();
   const [mode, setMode] = useState<'menu' | 'qr' | 'phone'>('menu');
   const [phone, setPhone] = useState('');
@@ -501,19 +546,30 @@ function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => 
   const doDirect = async () => {
     if (!window.confirm(`'${stack.venueName}'에서 이용권을 사용(전송)할까요? 되돌릴 수 없습니다.`)) return;
     setBusy(true);
-    try { const n = await redeemMyVoucher(vid); toast.show(`${n} 이용권 사용 완료`, 'success'); onDone(); }
+    try { await redeemMyVoucher(vid); onDone({ title: stack.title, venueName: stack.venueName, remain: stack.ids.length - 1 }); }
     catch (e) { toast.show(e instanceof Error ? e.message : '사용 실패', 'error'); setBusy(false); }
   };
   const doQr = async (text: string) => {
     const venueId = parseVenueId(text);
     if (!venueId) { toast.show('매장 QR이 아닙니다', 'error'); setMode('menu'); return; }
     setBusy(true);
-    try { const n = await redeemMyVoucherByQr(vid, venueId); toast.show(`${n} 이용권 사용 완료`, 'success'); onDone(); }
+    try { await redeemMyVoucherByQr(vid, venueId); onDone({ title: stack.title, venueName: stack.venueName, remain: stack.ids.length - 1 }); }
     catch (e) { toast.show(e instanceof Error ? e.message : '사용 실패', 'error'); setBusy(false); setMode('menu'); }
+  };
+  // 전화번호 경로 2단계(Phase 15-2/S6): 번호만 치고 원탭 전송하면 오타 = 오전송이다.
+  // 1단계 조회로 받는 쪽(업주)을 확인 카드로 보여주고, 2단계에서만 실제 차감한다.
+  const [phoneTarget, setPhoneTarget] = useState<TransferTarget | null>(null);
+  const lookupPhone = async () => {
+    setBusy(true);
+    try {
+      const t = (await findUserByPhone(phone))[0] ?? null; // 후보 배열 — 첫 일치를 확인 카드로
+      if (!t) { toast.show('해당 번호의 회원을 찾지 못했어요 — 번호를 다시 확인해 주세요', 'error'); setBusy(false); return; }
+      setPhoneTarget(t); setBusy(false);
+    } catch (e) { toast.show(e instanceof Error ? e.message : '조회 실패', 'error'); setBusy(false); }
   };
   const doPhone = async () => {
     setBusy(true);
-    try { const n = await redeemMyVoucherByPhone(vid, phone); toast.show(`${n} 이용권 사용 완료`, 'success'); onDone(); }
+    try { await redeemMyVoucherByPhone(vid, phone); onDone({ title: stack.title, venueName: stack.venueName, remain: stack.ids.length - 1 }); }
     catch (e) { toast.show(e instanceof Error ? e.message : '사용 실패', 'error'); setBusy(false); }
   };
 
@@ -541,10 +597,21 @@ function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => 
         {mode === 'phone' && (
           <div className="space-y-2">
             <p className="text-2xs text-ink-muted">발급 매장 <b className="text-ink-secondary">업주 전화번호</b>를 입력하세요.</p>
-            <input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" placeholder="010-0000-0000" className="input w-full text-sm" />
+            <input value={phone} onChange={(e) => { setPhone(e.target.value); setPhoneTarget(null); }} inputMode="tel" autoComplete="tel" placeholder="010-0000-0000" className="input w-full text-sm" />
+            {phoneTarget && (
+              <div className="flex items-center gap-2 rounded-input border border-emerald-500/40 bg-emerald-500/[0.08] px-3 py-2.5">
+                <span aria-hidden>👤</span>
+                <p className="min-w-0 flex-1 text-sm font-bold text-ink-primary truncate">{phoneTarget.display}</p>
+                <span className="shrink-0 text-2xs text-emerald-400 font-bold">받는 사람 확인</span>
+              </div>
+            )}
             <div className="flex gap-2">
-              <button type="button" onClick={() => setMode('menu')} className="btn-ghost flex-1 text-sm">뒤로</button>
-              <button type="button" disabled={busy} onClick={doPhone} className="btn-primary flex-1 text-sm disabled:opacity-50">{busy ? '처리 중…' : '사용'}</button>
+              <button type="button" onClick={() => { setMode('menu'); setPhoneTarget(null); }} className="btn-ghost flex-1 text-sm">뒤로</button>
+              {phoneTarget ? (
+                <button type="button" disabled={busy} onClick={doPhone} className="btn-primary flex-1 text-sm disabled:opacity-50">{busy ? '처리 중…' : `✓ ${phoneTarget.display}에게 사용 확정`}</button>
+              ) : (
+                <button type="button" disabled={busy || phone.replace(/\D/g, '').length < 10} onClick={lookupPhone} className="btn-primary flex-1 text-sm disabled:opacity-50">{busy ? '조회 중…' : '받는 사람 확인'}</button>
+              )}
             </div>
           </div>
         )}
