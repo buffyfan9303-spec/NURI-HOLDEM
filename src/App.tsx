@@ -36,6 +36,7 @@ import { useBackClose, overlayJustClosed } from './lib/backstack';
 import { useVisibilityRefresh } from './lib/useVisibilityRefresh';
 import { lazyWithReload } from './lib/lazyWithReload';
 import { getRunningClocks } from './api/clock';
+import { myVisitedVenues } from './api/vouchers';
 import { readSnap, writeSnap } from './lib/snapshot';
 import { applyScheduleSeo, applyVenueSeo, resetSeo } from './lib/seo';
 import { createUndoQueue } from './lib/undoableDelete';
@@ -651,7 +652,13 @@ export default function App() {
     try {
       const t = new URLSearchParams(window.location.search).get('tab');
       const valid: TabId[] = ['browse', 'live', 'community', 'market', 'tools', 'my-store', 'admin'];
-      return (valid as string[]).includes(t ?? '') ? (t as TabId) : 'browse';
+      if ((valid as string[]).includes(t ?? '')) return t as TabId;
+      // 16-2 마지막 탭 복원 — 우선순위: 딥링크 > 마지막 탭 > 온보딩 persona 기본.
+      // Phase 4-3 의 탭별 스크롤 복원과 결합되어 '어제 보던 그 자리'로 돌아간다.
+      const last = localStorage.getItem('nuri:last-tab');
+      if ((valid as string[]).includes(last ?? '') && last !== 'admin') return last as TabId;
+      if (localStorage.getItem('nuri:persona') === 'gto') return 'tools';
+      return 'browse';
     } catch { return 'browse'; }
   });
   // 탭 전환을 트랜지션으로 — lazy 청크/무거운 렌더 동안 이전 화면을 유지해
@@ -669,6 +676,7 @@ export default function App() {
     // 탭 이동은 '화면 전환' — 떠 있는 매장 페이지 오버레이는 닫는다(탭을 눌렀는데 그대로 보이는 혼란 방지)
     closeOverlaysRef.current?.();
     tabScrollRef.current.set(activeTabRef.current, window.scrollY);
+    try { localStorage.setItem('nuri:last-tab', t); } catch { /* noop */ } // 16-2 재방문 복원용
     startTabTransition(() => setActiveTab(t));
   }, []);
   // 복원은 layout 단계에서 — 페인트 전에 위치를 잡아야 '맨 위가 번쩍했다가 내려가는' 깜빡임이 없다.
@@ -1052,6 +1060,12 @@ export default function App() {
   // 탭 진입만 기다리면 매번 스켈레톤을 본다 — 둘을 합치면 양쪽 다 없다.
   // 라이브 탭 배지 — '지금 N게임 진행중'(Phase 14, PokerAtlas real-time counts).
   const [liveCount, setLiveCount] = useState(0);
+  // 16-1 '이어서 하기' — 최근 방문 매장 1곳(my_visited_venues 재활용, 신규 쿼리 0)
+  const [recentVenue, setRecentVenue] = useState<{ venueId: string; venueName: string | null } | null>(null);
+  useEffect(() => {
+    if (!user) { setRecentVenue(null); return; }
+    myVisitedVenues().then((vs) => setRecentVenue(vs[0] ?? null)).catch(() => {});
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const deferredLoadedRef = useRef(false);
   const loadDeferred = useCallback(() => {
     if (deferredLoadedRef.current) return;
@@ -1977,6 +1991,21 @@ export default function App() {
           </AnimatePresence>
 
           {/* 공지 — 일정탐색 상단 (전체 공통 공지만) */}
+            {/* 16-1 이어서 하기 — 재방문 사용자의 반복 여정(최근 매장 → 체크인/오늘 대회)을 한 탭으로.
+                비로그인·이력 없음이면 DOM 미렌더(10-1 원칙). */}
+            {recentVenue && (
+              <div className="px-page-x pt-3">
+                <button type="button" onClick={() => handleVenueClick(recentVenue.venueId)}
+                  className="w-full flex items-center gap-2.5 rounded-card border border-border-default bg-surface-low px-3 py-2.5 text-left hover:border-accent-400/50 transition-colors">
+                  <span className="shrink-0 text-lg" aria-hidden>↩️</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-2xs font-bold text-ink-muted">이어서 하기</span>
+                    <span className="block truncate text-sm font-bold text-ink-primary">{recentVenue.venueName ?? '최근 방문 매장'}</span>
+                  </span>
+                  <span className="shrink-0 text-2xs font-bold text-accent-300">체크인 · 오늘 대회 ›</span>
+                </button>
+              </div>
+            )}
           {(browseNotices.length > 0 || isAdmin) && (
             <div className="px-page-x pt-3">
               <section className="rounded-card border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.05] to-transparent overflow-hidden">

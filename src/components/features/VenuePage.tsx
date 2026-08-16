@@ -187,7 +187,9 @@ export default function VenuePage({
       const streak = await getMyCheckinStreak().catch(() => 0);
       const fire = streak >= 2 ? ` 🔥 ${streak}일 연속` : '';
       const bonus = streak > 0 && streak % 7 === 0 ? ' · 7일 연속 보너스 +10점!' : '';
-      toast.show(`${name || venue!.name} 체크인 완료! 출석 도장 +3점${fire}${bonus} 🎉`, 'success');
+      // 16-4 성공 = 다음 여정의 출발점: 오늘 대회가 있으면 바로 열어볼 수 있게.
+      toast.show(`${name || venue!.name} 체크인 완료! 출석 도장 +3점${fire}${bonus} 🎉`, 'success',
+        todayPosters.length > 0 ? { action: { label: '오늘 대회 보기', onClick: () => onSelectSchedule?.(todayPosters[0]) } } : undefined);
       setMyAct((cur) => (cur ? { ...cur, streak } : { streak, visits: 0 }));
     } catch (e) { toast.show(e instanceof Error ? e.message : '체크인 실패', 'error'); }
     finally { setCheckinBusy(false); }

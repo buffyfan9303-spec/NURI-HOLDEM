@@ -19,6 +19,26 @@ interface Props {
 export default function GlobalSearchModal({ open, onClose, venues, schedules, posts, onVenue, onSchedule, onPost }: Props) {
   const [q, setQ] = useState('');
   useEffect(() => { if (open) setQ(''); }, [open]);
+  // 16-3 최근 검색어(5개, 개별 삭제) — 열자마자 입력 전 화면이 빈 안내문이 아니라 출발점이 되게.
+  const [recents, setRecents] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('nuri:recent-search') || '[]'); } catch { return []; }
+  });
+  const saveRecent = (kw: string) => {
+    const w = kw.trim();
+    if (w.length < 2) return;
+    setRecents((prev) => {
+      const next = [w, ...prev.filter((x) => x !== w)].slice(0, 5);
+      try { localStorage.setItem('nuri:recent-search', JSON.stringify(next)); } catch { /* noop */ }
+      return next;
+    });
+  };
+  const removeRecent = (kw: string) => setRecents((prev) => {
+    const next = prev.filter((x) => x !== kw);
+    try { localStorage.setItem('nuri:recent-search', JSON.stringify(next)); } catch { /* noop */ }
+    return next;
+  });
+  // 결과를 실제로 열었을 때만 기록(오타·중간 입력을 저장하지 않게)
+  const openAnd = (fn: () => void) => { saveRecent(q); fn(); };
 
   const query = q.trim().toLowerCase();
   const res = useMemo(() => {
@@ -44,29 +64,48 @@ export default function GlobalSearchModal({ open, onClose, venues, schedules, po
           className="input w-full text-sm"
         />
         {!query ? (
-          <p className="py-8 text-center text-2xs text-ink-muted">매장 · 대회 · 게시글을 한 번에 검색하세요. (단축키 ⌘K / Ctrl+K)</p>
+          recents.length > 0 ? (
+            <div className="space-y-1.5 py-2">
+              <p className="text-2xs font-bold text-ink-muted">최근 검색어</p>
+              <ul className="space-y-1">{recents.map((r) => (
+                <li key={r} className="flex items-center gap-1">
+                  <button type="button" onClick={() => setQ(r)}
+                    className="min-w-0 flex-1 truncate rounded-input px-2.5 py-2 text-left text-sm text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
+                    🕐 {r}
+                  </button>
+                  <button type="button" onClick={() => removeRecent(r)} aria-label={`'${r}' 삭제`}
+                    className="h-9 w-9 shrink-0 rounded-input text-ink-muted hover:text-danger-light transition-colors">✕</button>
+                </li>
+              ))}</ul>
+            </div>
+          ) : (
+            <p className="py-8 text-center text-2xs text-ink-muted">매장 · 대회 · 게시글을 한 번에 검색하세요. (단축키 ⌘K / Ctrl+K)</p>
+          )
         ) : empty ? (
-          <p className="py-8 text-center text-2xs text-ink-muted">"{q}" 검색 결과가 없습니다.</p>
+          <div className="space-y-3 py-8 text-center">
+            <p className="text-2xs text-ink-muted">"{q}" 검색 결과가 없습니다 — 철자를 바꾸거나 더 짧게 검색해 보세요.</p>
+            <button type="button" onClick={() => setQ('')} className="btn-ghost mx-auto text-xs">검색어 지우기</button>
+          </div>
         ) : (
           <div className="space-y-3">
             {res.s.length > 0 && (
               <Group title="대회 · 일정">
                 {res.s.map((s) => (
-                  <Row key={s.id} title={s.title} sub={[s.pubName, s.region].filter(Boolean).join(' · ')} onClick={() => { onSchedule(s); onClose(); }} />
+                  <Row key={s.id} title={s.title} sub={[s.pubName, s.region].filter(Boolean).join(' · ')} onClick={() => openAnd(() => { onSchedule(s); onClose(); })} />
                 ))}
               </Group>
             )}
             {res.v.length > 0 && (
               <Group title="홀덤펍">
                 {res.v.map((v) => (
-                  <Row key={v.id} title={v.name} sub={v.region} onClick={() => { onVenue(v.id); onClose(); }} />
+                  <Row key={v.id} title={v.name} sub={v.region} onClick={() => openAnd(() => { onVenue(v.id); onClose(); })} />
                 ))}
               </Group>
             )}
             {res.p.length > 0 && (
               <Group title="게시글">
                 {res.p.map((p) => (
-                  <Row key={p.id} title={p.title || '(제목 없음)'} sub={(p.content || '').replace(/\n/g, ' ').slice(0, 50)} onClick={() => { onPost(p); onClose(); }} />
+                  <Row key={p.id} title={p.title || '(제목 없음)'} sub={(p.content || '').replace(/\n/g, ' ').slice(0, 50)} onClick={() => openAnd(() => { onPost(p); onClose(); })} />
                 ))}
               </Group>
             )}
