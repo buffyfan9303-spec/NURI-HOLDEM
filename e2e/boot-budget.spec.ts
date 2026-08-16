@@ -84,22 +84,27 @@ test.describe('부팅 예산 — 첫 화면과 경쟁하는 것이 없어야 한
     //   request 이벤트는 이미 발생 순서대로 도착하므로 **배열에 담긴 순서 자체**를 보면 된다.
     //   (간헐 실패는 '가끔 빨간 테스트' 로 끝나지 않는다 — 사람들이 재실행으로 넘기기 시작하면
     //    진짜 회귀도 같은 방식으로 넘어간다.)
-    const order: ('data' | 'prefetch')[] = [];
-    page.on('request', (r) => {
-      const u = r.url();
-      if (/\/rest\/v1\/schedules/.test(u)) order.push('data');
-      else if (/\/assets\/(CommunityTab|MarketplaceTab|ToolsPanel|VenuePage)-/.test(u)) order.push('prefetch');
-    });
-
+    //   …인데 그 '배열 순서' 도 로컬 프리뷰에서는 무너졌다 — 부팅 전체가 한 145ms 배치에
+    //   들어가면 Playwright 는 배치 안 발행 순서를 보존하지 않는다(서드파티 테스트와 동일 결함).
+    //   최종형: **브라우저 자신의 Resource Timing**(서브 ms startTime)을 읽는다.
     await page.goto('/');
     await dismissOverlays(page);
     await page.waitForTimeout(6000);
 
-    const iData = order.indexOf('data');
-    const iPrefetch = order.indexOf('prefetch');
-    expect(iData, '첫 화면 데이터(schedules) 요청이 아예 관측되지 않았다').toBeGreaterThanOrEqual(0);
-    if (iPrefetch === -1) return; // 프리페치가 아직 안 돌았다면 순서를 따질 것도 없이 통과
-    expect(iData, `프리페치가 첫 화면 데이터보다 먼저 나갔다. 관측 순서: ${order.slice(0, 8).join(' → ')}`)
-      .toBeLessThan(iPrefetch);
+    const t = await page.evaluate(() => {
+      const res = performance.getEntriesByType('resource') as PerformanceResourceTiming[];
+      const first = (re: RegExp) => {
+        const hit = res.filter((r) => re.test(r.name)).sort((a, b) => a.startTime - b.startTime)[0];
+        return hit ? Math.round(hit.startTime * 100) / 100 : null;
+      };
+      return {
+        data: first(/\/rest\/v1\/schedules/),
+        prefetch: first(/\/assets\/(CommunityTab|MarketplaceTab|ToolsPanel|VenuePage)-/),
+      };
+    });
+    expect(t.data, '첫 화면 데이터(schedules) 요청이 아예 관측되지 않았다').not.toBeNull();
+    if (t.prefetch === null) return; // 프리페치가 아직 안 돌았다면 순서를 따질 것도 없이 통과
+    expect(t.data!, `프리페치(${t.prefetch}ms)가 첫 화면 데이터(${t.data}ms)보다 먼저 나갔다`)
+      .toBeLessThan(t.prefetch!);
   });
 });

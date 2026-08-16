@@ -893,13 +893,16 @@ export default function App() {
         import('./components/features/GlobalSearchModal'),
         import('./components/features/PostDetailModal'),
         import('./components/features/ListingDetailModal'),
+        // 역할 전용 청크 — 해당 역할일 때만(손님에게 업주 스위트를 내려보내지 않는다)
+        ...(isOwner ? [import('./components/features/VenueManageTab')] : []),
+        ...(isAdmin ? [import('./components/features/AdminTab')] : []),
       ]);
     };
     const w = window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number };
     // timeout 을 늘린 이유: 4초는 '한가하지 않아도 4초 뒤엔 무조건 실행'이라 첫 화면과 자주 겹쳤다.
     if (w.requestIdleCallback) w.requestIdleCallback(warm, { timeout: 10000 });
     else setTimeout(warm, 5000);
-  }, [schedulesLoaded]);
+  }, [schedulesLoaded, isOwner, isAdmin]);
   // FOMO 뱃지용 예약자 수 — 다가오는 대회만 1회 조회
   useEffect(() => {
     const today = new Date().toLocaleDateString('en-CA');
@@ -1051,24 +1054,10 @@ export default function App() {
     if (activeTab === 'community' || activeTab === 'market') loadDeferred();
   }, [activeTab, loadDeferred]);
 
-  // 유휴 시간에 다음에 열 가능성이 큰 청크를 미리 받아둔다 → 탭 전환/매장 진입 시 로더 깜빡임 제거.
-  useEffect(() => {
-    const prefetch = () => {
-      import('./components/features/CommunityTab');
-      import('./components/features/MarketplaceTab');
-      import('./components/features/VenuePage');
-      if (isOwner) import('./components/features/VenueManageTab');
-      if (isAdmin) import('./components/features/AdminTab');
-    };
-    const w = window as Window & {
-      requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number;
-      cancelIdleCallback?: (h: number) => void;
-    };
-    const id = w.requestIdleCallback
-      ? w.requestIdleCallback(prefetch, { timeout: 3000 })
-      : window.setTimeout(prefetch, 1500);
-    return () => { if (w.cancelIdleCallback) w.cancelIdleCallback(id as number); else window.clearTimeout(id as number); };
-  }, [isOwner, isAdmin]);
+  // (탭 청크 프리페치는 위 warm() 하나로 통합 — 여기 있던 두 번째 프리페처가
+  //  schedulesLoaded 게이트 **없이** 유휴 즉시(실측 138ms) CommunityTab 등을 내려받아,
+  //  첫 화면 데이터(142ms)보다 먼저 대역폭을 가져갔다. 게이트를 만든 warm 과 중복이기도 했다.
+  //  역할 게이팅(isOwner/isAdmin 전용 청크)은 warm 안으로 이사.)
 
   // 헤더+탭바 실제 높이를 측정 → 일정탐색 sticky 필터가 정확히 그 아래에 붙도록 --stack-top 노출.
   // (토큰 추정/-1rem 보정 대신 실측값을 사용해 모바일 sticky 겹침을 방지)
