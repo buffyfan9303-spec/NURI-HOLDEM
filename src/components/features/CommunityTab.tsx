@@ -418,7 +418,7 @@ function FeedSection({
                 <circle cx="6" cy="6" r="4.5" /><line x1="9.5" y1="9.5" x2="13" y2="13" />
               </svg>
               <input
-                type="search"
+                type="search" enterKeyHint="search"
                 value={q}
                 onChange={(e) => { setQ(e.target.value); setVisible(15); }}
                 placeholder="게시글 검색 (제목·내용·작성자)"
@@ -833,7 +833,7 @@ function VenuesSection({
       {/* 검색 */}
       <div className="relative">
         <input
-          type="search"
+          type="search" enterKeyHint="search"
           value={query}
           onChange={(e) => onQuery(e.target.value)}
           placeholder="매장명, 지역으로 검색…"

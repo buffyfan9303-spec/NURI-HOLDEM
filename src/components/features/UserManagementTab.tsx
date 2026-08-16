@@ -88,7 +88,7 @@ export default function UserManagementTab({
 
           {/* 검색 */}
           <input
-            type="search"
+            type="search" enterKeyHint="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="이름·이메일로 검색"

@@ -391,7 +391,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   // buyins 1회 순회로 맵을 만들어 O(1) 조회로 전환(필터/find/reduce per-cell 제거).
   const binByKey = useMemo(() => {
     const m = new Map<string, typeof buyins[number]>();
-    for (const b of buyins) m.set(`${b.playerName} ${b.entryNo}`, b);
+    for (const b of buyins) m.set(`${b.playerName}\u0000${b.entryNo}`, b);
     return m;
   }, [buyins]);
   const countByName = useMemo(() => {
@@ -404,7 +404,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     for (const b of buyins) { const c = m.get(b.playerName) ?? 0; if (b.entryNo > c) m.set(b.playerName, b.entryNo); }
     return m;
   }, [buyins]);
-  const cellAt = (name: string, e: number) => binByKey.get(`${name} ${e}`) ?? null;
+  const cellAt = (name: string, e: number) => binByKey.get(`${name}\u0000${e}`) ?? null;
   const countOf = (name: string) => countByName.get(name) ?? 0;
   const maxEntryOf = (name: string) => maxEntryByName.get(name) ?? 0;
   // 바인 컬럼 수 — PC는 10 고정(폭 축소로 한 화면에), 모바일은 "쓰인 최대 바인+1"만 렌더(가로 스크롤 최소화)
@@ -665,7 +665,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                             </button>
                             {fullAccess && (
                               <button type="button" onClick={() => askDeleteSession(s.sessionDate, s.gameSeq)} aria-label={`${s.sessionDate} ${gl(s.gameSeq)} 장부 삭제`}
-                                className="shrink-0 ml-1 mr-1.5 w-8 h-8 flex items-center justify-center rounded-input text-ink-muted hover:text-danger-light hover:bg-danger/10 transition-colors">
+                                className="shrink-0 -my-1.5 ml-1 mr-1 h-11 w-11 flex items-center justify-center rounded-input text-ink-muted hover:text-danger-light hover:bg-danger/10 transition-colors">
                                 <Icon name="trash" size={15} />
                               </button>
                             )}
@@ -798,9 +798,9 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                     </p>
                     {r.note && <p className="text-2xs text-ink-muted truncate">{r.note}</p>}
                   </div>
-                  <button type="button" onClick={() => setPayPick(payPick === r.id ? null : r.id)} title="승인 + 바인 1건 기록(결제수단 선택)" className={['shrink-0 rounded-input px-2 py-1.5 text-2xs font-bold', payPick === r.id ? 'bg-emerald-600 text-ink-inverse' : 'bg-emerald-500/90 text-ink-inverse hover:bg-emerald-500'].join(' ')}>✓+💵</button>
-                  <button type="button" onClick={() => approveReq(r)} title="승인만(명단 추가)" className="shrink-0 rounded-input border border-emerald-500/50 px-2 py-1.5 text-2xs font-bold text-emerald-300 hover:bg-emerald-500/10">승인</button>
-                  <button type="button" onClick={() => setRejectFor(rejectFor === r.id ? null : r.id)} aria-label="거절" className={['shrink-0 rounded-input border px-2 py-1.5 text-2xs font-bold', rejectFor === r.id ? 'border-danger/50 bg-danger/10 text-danger-light' : 'border-border-default text-ink-muted hover:text-danger-light hover:border-danger/40'].join(' ')}>✕</button>
+                  <button type="button" onClick={() => setPayPick(payPick === r.id ? null : r.id)} title="승인 + 바인 1건 기록(결제수단 선택)" className={['shrink-0 inline-flex h-10 items-center rounded-input px-2.5 text-2xs font-bold', payPick === r.id ? 'bg-emerald-600 text-ink-inverse' : 'bg-emerald-500/90 text-ink-inverse hover:bg-emerald-500'].join(' ')}>✓+💵</button>
+                  <button type="button" onClick={() => approveReq(r)} title="승인만(명단 추가)" className="shrink-0 inline-flex h-10 items-center rounded-input border border-emerald-500/50 px-3 text-2xs font-bold text-emerald-300 hover:bg-emerald-500/10">승인</button>
+                  <button type="button" onClick={() => setRejectFor(rejectFor === r.id ? null : r.id)} aria-label="거절" className={['shrink-0 inline-flex h-10 min-w-[2.5rem] items-center justify-center rounded-input border px-2.5 text-2xs font-bold', rejectFor === r.id ? 'border-danger/50 bg-danger/10 text-danger-light' : 'border-border-default text-ink-muted hover:text-danger-light hover:border-danger/40'].join(' ')}>✕</button>
                 </div>
                 {payPick === r.id && (
                   <div className="mt-1.5 border-t border-border-subtle pt-1.5 space-y-1.5">
@@ -808,9 +808,9 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                       <div className="flex items-center gap-1.5">
                         <span className="shrink-0 text-[10px] text-ink-muted">결제수단</span>
                         {([['cash', '현금'], ['card', '카드'], ['transfer', '이체']] as const).map(([mth, lbl]) => (
-                          <button key={mth} type="button" onClick={() => approveReq(r, true, mth)} className="flex-1 rounded-input border border-emerald-500/50 px-2 py-1.5 text-2xs font-bold text-emerald-300 hover:bg-emerald-500/15">{lbl}</button>
+                          <button key={mth} type="button" onClick={() => approveReq(r, true, mth)} className="flex-1 inline-flex h-9 items-center justify-center rounded-input border border-emerald-500/50 px-2 text-2xs font-bold text-emerald-300 hover:bg-emerald-500/15">{lbl}</button>
                         ))}
-                        <button type="button" onClick={() => { setSplitFor(r.id); setSplitAmts({ cash: gameUnit(wantSeq(r)) || 0, card: 0, transfer: 0 }); }} className="flex-1 rounded-input border border-accent-400/50 px-2 py-1.5 text-2xs font-bold text-accent-300 hover:bg-accent-300/10">분할</button>
+                        <button type="button" onClick={() => { setSplitFor(r.id); setSplitAmts({ cash: gameUnit(wantSeq(r)) || 0, card: 0, transfer: 0 }); }} className="flex-1 inline-flex h-9 items-center justify-center rounded-input border border-accent-400/50 px-2 text-2xs font-bold text-accent-300 hover:bg-accent-300/10">분할</button>
                       </div>
                     ) : (
                       <>
@@ -844,9 +844,9 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                   <div className="mt-1.5 flex items-center gap-1.5 border-t border-border-subtle pt-1.5">
                     <span className="shrink-0 text-[10px] text-ink-muted">거절 사유</span>
                     {['마감', '중복', '정보부족'].map((rs) => (
-                      <button key={rs} type="button" onClick={() => doReject(r, rs)} className="flex-1 rounded-input border border-border-default px-2 py-1.5 text-2xs font-bold text-ink-secondary hover:text-danger-light hover:border-danger/40">{rs}</button>
+                      <button key={rs} type="button" onClick={() => doReject(r, rs)} className="flex-1 inline-flex h-9 items-center justify-center rounded-input border border-border-default px-2 text-2xs font-bold text-ink-secondary hover:text-danger-light hover:border-danger/40">{rs}</button>
                     ))}
-                    <button type="button" onClick={() => { const v = window.prompt('거절 사유 직접 입력'); if (v !== null) doReject(r, v.trim() || undefined); }} className="flex-1 rounded-input border border-border-default px-2 py-1.5 text-2xs font-bold text-ink-secondary hover:text-ink-primary">직접</button>
+                    <button type="button" onClick={() => { const v = window.prompt('거절 사유 직접 입력'); if (v !== null) doReject(r, v.trim() || undefined); }} className="flex-1 inline-flex h-9 items-center justify-center rounded-input border border-border-default px-2 text-2xs font-bold text-ink-secondary hover:text-ink-primary">직접</button>
                   </div>
                 )}
               </li>
@@ -1291,7 +1291,7 @@ function ClockRemoteBar({ clock, onPatch, onOpenClock, active = true }: {
   const alive = ls?.alive != null ? ls.alive : Math.max(0, entries - clock.eliminations);
   const out = (d: number) => onPatch({ eliminations: Math.max(0, clock.eliminations + d) });
   const adjEarly = (d: number) => onPatch({ adjEarlies: Math.max(-9999, (clock.adjEarlies ?? 0) + d) });
-  const stepBtn = 'h-8 w-8 shrink-0 rounded-input border border-border-default text-ink-secondary text-base font-bold flex items-center justify-center active:bg-surface-high disabled:opacity-35';
+  const stepBtn = 'h-10 w-10 shrink-0 rounded-input border border-border-default text-ink-secondary text-base font-bold flex items-center justify-center active:bg-surface-high disabled:opacity-35';
 
   return (
     <div className="rounded-card border border-accent-400/30 bg-gradient-to-r from-accent-300/[0.07] to-transparent px-2.5 py-2 space-y-2">
@@ -1880,7 +1880,7 @@ function Overlay({ title, onClose, children }: { title: string; onClose: () => v
       <div role="dialog" aria-modal="true" className="relative w-full max-w-md mx-4 max-h-[88vh] overflow-y-auto rounded-dialog bg-surface-mid shadow-dialog animate-slide-up">
         <header className="sticky top-0 px-4 py-3 border-b border-border-subtle bg-surface-mid flex items-center justify-between">
           <h2 className="text-sm font-bold text-ink-primary">{title}</h2>
-          <button type="button" onClick={onClose} aria-label="닫기" className="w-8 h-8 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high">
+          <button type="button" onClick={onClose} aria-label="닫기" className="-mr-1 h-10 w-10 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high">
             <Icon name="close" size={14} />
           </button>
         </header>
@@ -1938,7 +1938,7 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
       <div role="dialog" aria-modal="true" className="relative w-full max-w-sm mx-4 rounded-dialog bg-surface-mid shadow-dialog animate-slide-up overflow-hidden">
         <header className="px-4 py-3 border-b border-border-subtle flex items-center justify-between">
           <h2 className="text-sm font-bold text-ink-primary">{cell.playerName} · {cell.entryNo}바인</h2>
-          <button type="button" onClick={onClose} aria-label="닫기" className="w-8 h-8 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high">
+          <button type="button" onClick={onClose} aria-label="닫기" className="-mr-1 h-10 w-10 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high">
             <Icon name="close" size={14} />
           </button>
         </header>

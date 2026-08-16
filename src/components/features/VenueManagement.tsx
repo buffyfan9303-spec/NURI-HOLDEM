@@ -128,7 +128,7 @@ export default function VenueManagement() {
   return (
     <div className="space-y-2">
       <input
-        type="search" value={query} onChange={(e) => setQuery(e.target.value)}
+        type="search" enterKeyHint="search" value={query} onChange={(e) => setQuery(e.target.value)}
         placeholder="매장명·지역 검색" className="input"
       />
       {!query && venues.length > 1 && (

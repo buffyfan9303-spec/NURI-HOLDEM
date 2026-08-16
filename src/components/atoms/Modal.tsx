@@ -97,6 +97,12 @@ export default function Modal({
     if (!open || inline) return;
     const el = contentRef.current;
     if (!el) return;
+
+    // 열기 직전에 포커스가 있던 곳을 기억한다. 닫을 때 여기로 돌려보내지 않으면
+    // 포커스가 문서 맨 앞으로 튀어, 방금 누른 버튼으로 못 돌아간다(키보드·스크린리더 사용자는
+    // 자기가 어디 있었는지 잃어버린다). 모달의 '되돌리기' 는 시각만이 아니라 포커스에도 필요하다.
+    const opener = document.activeElement as HTMLElement | null;
+
     const focusables = () => Array.from(
       el.querySelectorAll<HTMLElement>('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'),
     ).filter((n) => n.offsetParent !== null);
@@ -110,7 +116,28 @@ export default function Modal({
       else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
     };
     el.addEventListener('keydown', onKey);
-    return () => { window.clearTimeout(t); el.removeEventListener('keydown', onKey); };
+
+    // ⚠ Tab 키만 막는 건 반쪽짜리다. 포커스는 Tab 말고도 새는 길이 많다 —
+    //   배경 dim 버튼 클릭, 주소창에서 F6 로 돌아오기, 스크린리더의 가상 커서 이동,
+    //   모달 밖 요소가 자기 자신에게 focus() 를 거는 경우 등.
+    //   그래서 '탭 순서'가 아니라 '실제로 포커스가 어디에 들어왔는가'를 보고 되잡는다.
+    const onFocusIn = (e: FocusEvent) => {
+      const target = e.target as Node | null;
+      if (!target || el.contains(target)) return;
+      (focusables()[0] ?? el).focus();
+    };
+    document.addEventListener('focusin', onFocusIn);
+
+    return () => {
+      window.clearTimeout(t);
+      el.removeEventListener('keydown', onKey);
+      document.removeEventListener('focusin', onFocusIn);
+      // 아직 화면에 붙어 있는 요소일 때만 되돌린다(그 사이 언마운트됐으면 건드리지 않는다).
+      if (opener && document.contains(opener)) {
+        // 되돌리는 순간의 focusin 이 위 가드에 걸리지 않도록 리스너 해제 뒤에 실행한다.
+        try { opener.focus({ preventScroll: true }); } catch { /* 포커스 불가 요소 무시 */ }
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -138,6 +165,14 @@ export default function Modal({
   if (variant === 'page') {
     return (
       <div ref={contentRef}
+        // ⚠ 여기에 role/aria 가 아예 없었다. 전체화면 변형(포스터 상세·매장 페이지 등)이
+        //   스크린리더에게는 그냥 div 였고, 뒤 페이지도 여전히 읽혔다.
+        //   sheet/center 변형만 dialog 로 선언돼 있어 '어떤 모달은 접근 가능하고 어떤 건 아닌' 상태였다.
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={title ? 'modal-title' : undefined}
+        // 제목이 없는 전체화면은 이름이 없어 그냥 '대화상자' 로만 읽힌다 — 최소한의 이름을 준다.
+        aria-label={title ? undefined : '전체화면 보기'}
         onTouchStart={onSheetStart} onTouchMove={onSheetMove} onTouchEnd={onSheetEnd}
         style={dragY > 0 ? { transform: `translateY(${dragY}px)`, transition: 'none' } : { transition: 'transform 0.28s cubic-bezier(0.32, 0.72, 0, 1)' }}
         className={['fixed inset-0 z-[55] bg-surface-base flex flex-col pt-[env(safe-area-inset-top)]', closing ? 'animate-fade-out' : 'animate-fade-in'].join(' ')}>
@@ -171,7 +206,13 @@ export default function Modal({
       {dismissOnBackdrop ? (
         <button
           type="button"
-          aria-label="닫기"
+          // ⚠ 화면 전체를 덮는 이 버튼이 dialog **바깥**에 있어서, 탭 순서상 모달 내용보다 먼저 잡혔다.
+          //   키보드 사용자는 모달을 열자마자 '화면만 한 닫기 버튼' 에 착지했고,
+          //   스크린리더는 대화상자에 들어가기 전에 "닫기, 버튼" 을 먼저 읽었다.
+          //   배경 클릭은 마우스·터치용 편의지 키보드 경로가 아니다 — 키보드에는 ESC 와 헤더 X 가 있다.
+          //   그래서 탭 순서·접근성 트리에서 빼고, 포인터 동작만 남긴다.
+          tabIndex={-1}
+          aria-hidden
           onClick={onClose}
           className="absolute inset-0 bg-black/80 backdrop-blur-md cursor-default"
         />

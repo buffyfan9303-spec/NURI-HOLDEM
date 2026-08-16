@@ -83,14 +83,26 @@ function loadThirdParty() {
 // requestIdleCallback 이 없으면(사파리 구버전) 타이머로 폴백. timeout 은 '한가해지지 않아도 결국 로드'.
 type IdleWin = Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number };
 const w = window as IdleWin;
-// ⚠ 유휴 콜백만으로는 부족했다. 기기가 느리거나 CPU 가 붐비면 **앱이 첫 데이터를 요청하기도 전에**
-//   유휴 창이 먼저 열려 서드파티가 앞질러 나갔다(실측 순서: third → third → data).
-//   그러면 미뤄 놓은 의미가 없다 — 사용자가 기다리는 대회 목록과 다시 대역폭을 다투게 된다.
-//   그래서 load 이벤트(초기 서브리소스가 끝난 시점 = 앱이 마운트되어 첫 조회를 이미 띄운 뒤)를
-//   먼저 기다리고, 그다음에 한가해지길 기다린다. 순서가 기기 속도와 무관하게 고정된다.
-const afterIdle = () => {
+// ⚠ '시간을 기다리는' 방식은 두 번 실패했다.
+//   1차: 유휴 콜백만 → 붐비는 기기에서 앱의 첫 데이터 요청보다 유휴 창이 먼저 열렸다.
+//   2차: load 후 유휴 → 이번엔 빠른 환경(로컬 캐시·프리뷰)에서 load 가 React 이펙트보다
+//        먼저 떠서 또 앞질렀다(실측 third → third → data). 느려도 빨라도 지는 레이스였다.
+//   결론: 순서는 시간이 아니라 **신호**로 보장해야 한다. 앱(App.tsx)이 첫 화면 데이터 요청을
+//   쏘는 순간 'nuri:first-data-requested' 이벤트를 낸다. 서드파티는 load 와 그 신호가
+//   **둘 다** 도착한 뒤 유휴에 출발한다 — 기기 속도와 무관하게 구조적으로 뒤다.
+//   신호가 영영 안 오는 비정상 상황(모의 모드·부팅 크래시)엔 load 후 8초 폴백으로 어차피 나간다.
+let tpLoaded = false, tpWindowLoaded = false, tpDataRequested = false;
+const tpAfterIdle = () => {
+  if (tpLoaded) return;
+  tpLoaded = true;
   if (w.requestIdleCallback) w.requestIdleCallback(loadThirdParty, { timeout: 8000 });
   else setTimeout(loadThirdParty, 5000);
 };
-if (document.readyState === 'complete') afterIdle();
-else window.addEventListener('load', afterIdle, { once: true });
+const tpMaybe = () => { if (tpWindowLoaded && tpDataRequested) tpAfterIdle(); };
+window.addEventListener('nuri:first-data-requested', () => { tpDataRequested = true; tpMaybe(); }, { once: true });
+const tpOnLoad = () => {
+  tpWindowLoaded = true; tpMaybe();
+  setTimeout(tpAfterIdle, 8000); // 신호 유실 폴백 — 광고·GA 가 영영 안 뜨는 것보단 늦게라도
+};
+if (document.readyState === 'complete') tpOnLoad();
+else window.addEventListener('load', tpOnLoad, { once: true });

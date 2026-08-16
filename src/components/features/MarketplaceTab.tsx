@@ -144,7 +144,7 @@ function MarketplaceTab({
       <div className="flex gap-2">
         <div className="relative flex-1">
           <input
-            type="search"
+            type="search" enterKeyHint="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="제목으로 검색…"

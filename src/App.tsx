@@ -574,7 +574,9 @@ function MobileTabBar({ tabs, active, onChange, dot, onOpenMe }: {
           return (
             <button
               key={key} type="button"
-              onClick={() => { if (tab) { setOptimistic(tab); onChange(tab); window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior }); } else onOpenMe(); }}
+              // 같은 탭 재탭 = 맨 위로(iOS 관례). 다른 탭 이동은 changeTab 의 스크롤 저장/복원이 맡는다 —
+              // 예전엔 무조건 맨 위로 튕겨서, 목록을 한참 내려 보다 다른 탭을 잠깐 다녀오면 위치를 전부 잃었다.
+              onClick={() => { if (tab) { if (tab === shown) { window.scrollTo({ top: 0, behavior: 'smooth' }); } else { setOptimistic(tab); onChange(tab); } } else onOpenMe(); }}
               aria-current={on ? 'page' : undefined}
               className="press-spring flex min-w-0 flex-1 flex-col items-center gap-0.5 pb-1.5 pt-2 touch-manipulation focus:outline-none"
             >
@@ -627,7 +629,7 @@ export default function App() {
   const [browseResCounts, setBrowseResCounts] = useState<Record<string, number>>({});
   // 매장 후기 별점(체크인 인증) — 카드 매장명 옆 ⭐4.8(12)
   const [venueRatings, setVenueRatings] = useState<Record<string, { avg: number; count: number }>>({});
-  useEffect(() => { getVenueRatings().then(setVenueRatings).catch(() => {}); }, []);
+  // (별점 로드는 loadDeferred 로 이동 — 부팅 임계경로에서 제외)
   // 알림 딥링크 → 내 매장 탭의 특정 섹션(예: 📒 장부 시작 → 장부)
   const [myStoreDeep, setMyStoreDeep] = useState<'ledger' | null>(null);
   const [buyinPick, setBuyinPick] = useState<{ venueId: string; games: { gameSeq: number; title: string }[] } | null>(null); // 바인요청 게임 선택
@@ -648,11 +650,22 @@ export default function App() {
   const closeOverlaysRef = useRef<(() => void) | null>(null);
   // 탭 전환은 즉시 스왑(인스타·유튜브 문법) — 컨텐츠 페이드·슬라이드는 큰 면적에서 '깜빡임'으로 인지돼 전부 제거.
   // 모션은 알약 인디케이터(layoutId)가 전담한다.
+  // 탭별 스크롤 위치 — keep-alive 로 DOM 은 남지만 스크롤러가 window(html) 하나라
+  // 탭을 오가면 위치가 섞였다. 떠날 때 저장하고 도착하면 되돌린다.
+  const tabScrollRef = useRef(new Map<TabId, number>());
+  const activeTabRef = useRef<TabId>('browse');
+  useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
   const changeTab = useCallback((t: TabId) => {
     // 탭 이동은 '화면 전환' — 떠 있는 매장 페이지 오버레이는 닫는다(탭을 눌렀는데 그대로 보이는 혼란 방지)
     closeOverlaysRef.current?.();
+    tabScrollRef.current.set(activeTabRef.current, window.scrollY);
     startTabTransition(() => setActiveTab(t));
   }, []);
+  // 복원은 layout 단계에서 — 페인트 전에 위치를 잡아야 '맨 위가 번쩍했다가 내려가는' 깜빡임이 없다.
+  // keep-alive 라 재방문 탭의 DOM 높이는 이미 존재한다(복원 위치가 잘릴 일 없음).
+  useLayoutEffect(() => {
+    window.scrollTo({ top: tabScrollRef.current.get(activeTab) ?? 0, behavior: 'instant' as ScrollBehavior });
+  }, [activeTab]);
 
   // keep-alive: 한 번 방문한 핵심 탭은 언마운트하지 않고 display만 끈다 — 재방문 시 로드·마운트 비용 0(끊김 제거)
   const [visitedTabs] = useState(() => new Set<TabId>(['browse']));
@@ -981,15 +994,49 @@ export default function App() {
   const reloadComments  = useCallback(() => { getComments({}).then(setComments).catch(() => {}); }, []);
   const reloadNotices   = useCallback(() => { getNotices().then(setNotices).catch(() => {}); }, []);
 
-  // 공개 데이터 초기 로드
+  // 공개 데이터 초기 로드 — **첫 화면(일정탐색)에 필요한 것만** 즉시 받는다.
+  // 예전엔 게시글·댓글·장터까지 6종을 부팅과 동시에 쐈다. 사용자가 기다리는 건 대회 목록인데
+  // 안 보이는 탭의 데이터가 같은 대역폭·같은 DB 를 두고 경쟁했다.
   useEffect(() => {
     reloadSchedules();
     reloadVenues();
+    reloadNotices(); // 공지는 첫 화면(일정탐색 상단)에도 뜬다
+  }, [reloadSchedules, reloadVenues, reloadNotices]);
+  // 서드파티(GA·AdSense) 게이트 해제 신호 — main.tsx 는 load 와 이 신호가 둘 다 온 뒤에야 받는다.
+  // ⚠ 처음엔 reloadSchedules() '호출 직후' 에 쐈다. 그런데 supabase-js 는 fetch 전에
+  //   비동기 세션 획득(navigator.locks)을 거치므로, 붐비는 기기에선 신호→유휴→서드파티가
+  //   그 틈에 끼어들어 데이터보다 먼저 나갔다(본 스위트 직후에만 재현되던 실패의 정체).
+  //   '요청했다' 는 흔들리지만 '응답이 왔다' 는 흔들릴 수 없다 — 응답은 요청보다 반드시 뒤다.
+  //   덤으로 첫 화면 콘텐츠가 그려진 뒤에야 광고가 내려오므로 의도(목록 먼저)와도 정확히 겹친다.
+  useEffect(() => {
+    if (schedulesLoaded) window.dispatchEvent(new Event('nuri:first-data-requested'));
+  }, [schedulesLoaded]);
+
+  // 커뮤니티·장터·별점: '부팅이 끝난 뒤 유휴' 와 '해당 탭 진입' 중 먼저 오는 쪽에서 1회.
+  // 유휴만 기다리면 유휴 전에 탭을 누른 사람이 빈 화면을 보고,
+  // 탭 진입만 기다리면 매번 스켈레톤을 본다 — 둘을 합치면 양쪽 다 없다.
+  const deferredLoadedRef = useRef(false);
+  const loadDeferred = useCallback(() => {
+    if (deferredLoadedRef.current) return;
+    deferredLoadedRef.current = true;
     reloadPosts();
     reloadComments();
-    reloadNotices();
     getListings().then((l) => { setListings(l); setMarketLoaded(true); }).catch(() => setMarketLoaded(true));
-  }, [reloadSchedules, reloadVenues, reloadPosts, reloadComments, reloadNotices]);
+    getVenueRatings().then(setVenueRatings).catch(() => {}); // 카드 ⭐ 별점 — 몇 초 늦게 떠도 되는 장식
+  }, [reloadPosts, reloadComments]);
+  useEffect(() => {
+    type IdleWin = Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number };
+    const w = window as IdleWin;
+    const kick = () => {
+      if (w.requestIdleCallback) w.requestIdleCallback(loadDeferred, { timeout: 4000 });
+      else window.setTimeout(loadDeferred, 2500);
+    };
+    if (document.readyState === 'complete') kick();
+    else { window.addEventListener('load', kick, { once: true }); return () => window.removeEventListener('load', kick); }
+  }, [loadDeferred]);
+  useEffect(() => {
+    if (activeTab === 'community' || activeTab === 'market') loadDeferred();
+  }, [activeTab, loadDeferred]);
 
   // 유휴 시간에 다음에 열 가능성이 큰 청크를 미리 받아둔다 → 탭 전환/매장 진입 시 로더 깜빡임 제거.
   useEffect(() => {
@@ -1306,6 +1353,7 @@ export default function App() {
     setOpenPost(null);
     setPosterFormTarget(null);
     setSearchState({ query: '', dates: [], regions: [], format: null, gtdOnly: false, competitionOnly: false });
+    tabScrollRef.current.set('browse', 0); // 홈 = 처음부터 — 복원 로직이 옛 위치로 되돌리지 않게
     window.scrollTo({ top: 0, behavior: 'smooth' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

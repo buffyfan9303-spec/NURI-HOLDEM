@@ -452,9 +452,9 @@ function SignupUserForm({ onDone }: { onDone: () => void }) {
       <form onSubmit={submit} className="space-y-3">
         <Field label="이름"           type="text"     placeholder="홍길동"          required value={name}     onChange={(e) => setName(e.target.value)} />
         <NicknameField value={nick.value} status={nick.status} onChange={nick.setValue} />
-        <Field label="이메일"         type="email"    placeholder="you@example.com" required value={email}    onChange={(e) => setEmail(e.target.value)} />
-        <Field label="비밀번호"       type="password" placeholder="8자 이상"        required value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} />
-        <Field label="비밀번호 확인"  type="password" placeholder="••••••••"        required value={confirm}  onChange={(e) => setConfirm(e.target.value)} />
+        <Field label="이메일"         type="email"    autoComplete="email" placeholder="you@example.com" required value={email}    onChange={(e) => setEmail(e.target.value)} />
+        <Field label="비밀번호"       type="password" autoComplete="new-password" placeholder="8자 이상"        required value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} />
+        <Field label="비밀번호 확인"  type="password" autoComplete="new-password" placeholder="••••••••"        required value={confirm}  onChange={(e) => setConfirm(e.target.value)} />
 
         <p className="rounded-input border border-border-subtle bg-surface-high px-2.5 py-2 text-2xs leading-relaxed text-ink-muted">
           🔒 가입 후 첫 로그인 시 <b className="text-ink-secondary">휴대폰 본인인증</b>이 필요합니다 (1인 1계정·안전거래).
@@ -546,8 +546,8 @@ function SignupOwnerForm({ onDone }: { onDone: () => void }) {
           <div className="space-y-3">
             <Field label="대표자명"  type="text"     placeholder="홍길동"          required value={name}     onChange={(e) => setName(e.target.value)} />
             <NicknameField value={nick.value} status={nick.status} onChange={nick.setValue} />
-            <Field label="이메일"    type="email"    placeholder="you@example.com"  required value={email}    onChange={(e) => setEmail(e.target.value)} />
-            <Field label="비밀번호"  type="password" placeholder="8자 이상"         required value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} />
+            <Field label="이메일"    type="email"    autoComplete="email" placeholder="you@example.com"  required value={email}    onChange={(e) => setEmail(e.target.value)} />
+            <Field label="비밀번호"  type="password" autoComplete="new-password" placeholder="8자 이상"         required value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} />
           </div>
         </section>
 
@@ -557,7 +557,7 @@ function SignupOwnerForm({ onDone }: { onDone: () => void }) {
             <Field label="매장명"        type="text" placeholder="OO 홀덤펍"           required value={venueName} onChange={(e) => setVenueName(e.target.value)} />
             <div className="grid grid-cols-2 gap-2">
               <Field label="지역"   type="text" placeholder="강남"          required value={region} onChange={(e) => setRegion(e.target.value)} />
-              <Field label="연락처" type="tel"  placeholder="010-0000-0000" required value={phone}  onChange={(e) => setPhone(e.target.value)} />
+              <Field label="연락처" type="tel"  autoComplete="tel" inputMode="tel" placeholder="010-0000-0000" required value={phone}  onChange={(e) => setPhone(e.target.value)} />
             </div>
             <Field label="상세 주소"      type="text" placeholder="서울시 강남구 …" required value={address} onChange={(e) => setAddress(e.target.value)} />
             <Field label="사업자등록번호" type="text" placeholder="000-00-00000"       required value={bizNum}  onChange={(e) => setBizNum(e.target.value)} />

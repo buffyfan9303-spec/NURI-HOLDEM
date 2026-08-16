@@ -17,31 +17,36 @@ import { dismissOverlays } from './_session';
 
 test.describe('부팅 예산 — 첫 화면과 경쟁하는 것이 없어야 한다', () => {
   test('🔴 서드파티(GA·AdSense)가 사용자 데이터보다 먼저 출발하지 않는다 @boot', async ({ page }) => {
-    // ⚠ 절대 시간(예: 3초)으로 단언하지 않는다 — 머신 속도에 따라 흔들리는 테스트가 된다.
-    //   의미 있는 불변식은 '경주 순서'다: 사용자가 기다리는 것이 먼저 출발했는가.
-    //   빠른 로컬에서도 느린 실기기에서도 똑같이 참이어야 하는 조건이다.
-    //   ⚠ 그리고 '순서'는 시계가 아니라 **관측 순서**로 재야 한다. 처음엔 Date.now() 로
-    //     양쪽 시각을 찍어 비교했는데, 전체 스위트를 워커 여러 개로 돌리면 재는 쪽이 부하를 받아
-    //     간헐 실패했다. request 이벤트는 발생 순서대로 오므로 배열 순서를 그대로 쓰면 된다.
-    const order: ('data' | 'third')[] = [];
-    page.on('request', (r) => {
-      const u = r.url();
-      if (/\/rest\/v1\/schedules/.test(u)) order.push('data');
-      else if (/googletagmanager|pagead2\.googlesyndication|doubleclick/.test(u)) order.push('third');
-    });
-
+    // ⚠ 측정 방법을 두 번 갈아엎었다 — 무엇을 재는지가 이 테스트의 전부다.
+    //   1차 Date.now(): 재는 쪽(테스트 프로세스)이 부하를 받으면 시각이 어긋났다.
+    //   2차 request 이벤트 순서: 로컬 프리뷰가 너무 빨라 부팅 전체가 한 145ms 배치에 들어가고,
+    //     Playwright 는 같은 배치 안에서 발행 순서를 보존하지 않았다(fetch 보다 <script> 가
+    //     먼저 찍힘 — 실제로는 데이터가 먼저 나갔는데도 실패했다).
+    //   3차(현재): **브라우저 자신의 Resource Timing** 을 읽는다. startTime 은 요청을 개시한
+    //     시각을 서브 ms 로 기록하므로, 같은 밀리초에 몰려도 순서가 정확하다.
+    //     재는 자가 밖(테스트 프로세스)에 있으면 흔들린다 — 안(브라우저)의 시계를 믿는다.
     await page.goto('/');
     await dismissOverlays(page);
-    await page.waitForTimeout(4000);
+    await page.waitForTimeout(4000); // 서드파티가 출발할 시간(신호 게이트 + 유휴)을 준다
 
-    const iData = order.indexOf('data');
-    const iThird = order.indexOf('third');
-    expect(iData, '첫 화면 데이터(schedules) 요청이 아예 관측되지 않았다').toBeGreaterThanOrEqual(0);
-    if (iThird === -1) return; // 서드파티가 아예 안 왔다(차단 환경 등) — 경쟁 자체가 없으니 통과
+    const t = await page.evaluate(() => {
+      const res = performance.getEntriesByType('resource') as PerformanceResourceTiming[];
+      const first = (re: RegExp) => {
+        const hit = res.filter((r) => re.test(r.name)).sort((a, b) => a.startTime - b.startTime)[0];
+        return hit ? Math.round(hit.startTime * 100) / 100 : null;
+      };
+      return {
+        data: first(/\/rest\/v1\/schedules/),
+        third: first(/googletagmanager|pagead2\.googlesyndication|doubleclick/),
+      };
+    });
+
+    expect(t.data, '첫 화면 데이터(schedules) 요청이 아예 관측되지 않았다').not.toBeNull();
+    if (t.third === null) return; // 서드파티가 아예 안 왔다(차단 환경 등) — 경쟁 자체가 없으니 통과
     expect(
-      iData,
-      `서드파티가 첫 화면 데이터보다 먼저 출발했다 — <head> 로 되돌아갔는지 확인.\n관측 순서: ${order.slice(0, 8).join(' → ')}`,
-    ).toBeLessThan(iThird);
+      t.data!,
+      `서드파티(${t.third}ms)가 첫 화면 데이터(${t.data}ms)보다 먼저 출발했다 — main.tsx 신호 게이트 확인`,
+    ).toBeLessThan(t.third!);
   });
 
   test('index.html <head> 에 서드파티 스크립트가 없다(정적 회귀 방지)', async ({ page }) => {
