@@ -35,6 +35,7 @@ import type { MarketplaceFormData } from './components/features/MarketplaceFormM
 import { useBackClose, overlayJustClosed } from './lib/backstack';
 import { useVisibilityRefresh } from './lib/useVisibilityRefresh';
 import { lazyWithReload } from './lib/lazyWithReload';
+import { readSnap, writeSnap } from './lib/snapshot';
 import { applyScheduleSeo, applyVenueSeo, resetSeo } from './lib/seo';
 import { createUndoQueue } from './lib/undoableDelete';
 import { scheduleStatus } from './lib/scheduleStatus';
@@ -851,8 +852,20 @@ export default function App() {
   useBackClose(activeTab !== 'browse', () => { if (!overlayJustClosed()) changeTab('browse'); });
 
   // ── 데이터 (Supabase에서 로드) ──────────────────────────────────────────────
-  const [schedules,     setSchedules]     = useState<Schedule[]>([]);
-  const [schedulesLoaded, setSchedulesLoaded] = useState(false); // (B1) 첫 로드 완료 여부 — 로딩 중엔 스켈레톤(빈결과 메시지 깜빡임 방지)
+  // 캐시 퍼스트(Phase 6): 직전 세션 스냅샷이 있으면 네트워크를 기다리지 않고 먼저 그린다.
+  // ⚠ isPremium 은 rowToSchedule 이 '조회 시각' 기준으로 계산한 파생값이다 — 스냅샷을
+  //   그대로 복원하면 밤새 만료된 부스트가 아침에도 상단 고정된다. premiumUntil 로 재계산.
+  const [schedules,     setSchedules]     = useState<Schedule[]>(() => {
+    const snap = readSnap<Schedule[]>('schedules');
+    if (!snap) return [];
+    const now = Date.now();
+    return snap.map((sc) => ({
+      ...sc,
+      isPremium: sc.isPremium && (sc.premiumUntil == null || new Date(sc.premiumUntil).getTime() > now),
+    }));
+  });
+  // 스냅샷이 있으면 스켈레톤을 건너뛴다 — '열자마자 내용이 있다' 가 이 기능의 전부다.
+  const [schedulesLoaded, setSchedulesLoaded] = useState(() => readSnap<Schedule[]>('schedules') != null); // (B1)
   // 목록을 못 불러온 것과 '대회가 없는 것'은 다르다 — 구분하지 않으면
   // 서비스가 죽은 날에도 사용자는 '대회가 없나 보다' 하고 조용히 떠난다.
   const [schedulesError, setSchedulesError] = useState<unknown>(null);
@@ -894,13 +907,13 @@ export default function App() {
     if (ids.length === 0) { setBrowseResCounts({}); return; }
     getReservationCounts(ids).then(setBrowseResCounts).catch(() => {});
   }, [schedules]);
-  const [venues,        setVenues]        = useState<Venue[]>([]);
+  const [venues,        setVenues]        = useState<Venue[]>(() => readSnap<Venue[]>('venues') ?? []);
   const [comments,      setComments]      = useState<Comment[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
-  const [posts,         setPosts]         = useState<CommunityPost[]>([]);
-  const [listings,      setListings]      = useState<MarketplaceListing[]>([]);
-  const [marketLoaded,  setMarketLoaded]  = useState(false); // 장터 최초 로딩 완료 여부(스켈레톤 게이팅)
-  const [notices,       setNotices]       = useState<MarketplaceNotice[]>([]);
+  const [posts,         setPosts]         = useState<CommunityPost[]>(() => readSnap<CommunityPost[]>('posts') ?? []);
+  const [listings,      setListings]      = useState<MarketplaceListing[]>(() => readSnap<MarketplaceListing[]>('listings') ?? []);
+  const [marketLoaded,  setMarketLoaded]  = useState(() => readSnap<MarketplaceListing[]>('listings') != null); // 장터 첫 로딩 여부 — 스냅샷 있으면 스켈레톤 생략
+  const [notices,       setNotices]       = useState<MarketplaceNotice[]>(() => readSnap<MarketplaceNotice[]>('notices') ?? []);
   const [users,         setUsers]         = useState<User[]>([]);
   const [openListing, setOpenListing]      = useState<MarketplaceListing | null>(null);
   const [openNotice, setOpenNotice]        = useState<MarketplaceNotice | null>(null);
@@ -967,7 +980,14 @@ export default function App() {
   // 서버 재조회 헬퍼
   const reloadSchedules = useCallback(() => {
     getSchedules()
-      .then((v) => { setSchedules(v); setSchedulesError(null); })
+      .then((v) => {
+        setSchedules(v); setSchedulesError(null);
+        writeSnap('schedules', v); // 다음 방문의 '즉시 콘텐츠' — realtime 재조회도 이 길을 지나므로 자동 최신화
+        // 서드파티(GA·AdSense) 게이트 해제 — **네트워크 응답** 이 왔다는 신호.
+        // ⚠ schedulesLoaded 에 걸면 안 된다: 캐시 복원이 그 플래그를 부팅 즉시 켜므로
+        //   광고가 재검증 요청과 대역폭을 다시 다투게 된다(이 게이트를 만든 이유가 무색해짐).
+        window.dispatchEvent(new Event('nuri:first-data-requested'));
+      })
       .catch((e) => setSchedulesError(e))
       .finally(() => setSchedulesLoaded(true));
   }, []);
@@ -989,10 +1009,10 @@ export default function App() {
       setTimeout(() => setPtr(0), 900);
     } else setPtr(0);
   };
-  const reloadVenues    = useCallback(() => { getVenues().then(setVenues).catch(() => {}); }, []);
-  const reloadPosts     = useCallback(() => { getPosts().then(setPosts).catch(() => {}); }, []);
+  const reloadVenues    = useCallback(() => { getVenues().then((v) => { setVenues(v); writeSnap('venues', v); }).catch(() => {}); }, []);
+  const reloadPosts     = useCallback(() => { getPosts().then((v) => { setPosts(v); writeSnap('posts', v); }).catch(() => {}); }, []);
   const reloadComments  = useCallback(() => { getComments({}).then(setComments).catch(() => {}); }, []);
-  const reloadNotices   = useCallback(() => { getNotices().then(setNotices).catch(() => {}); }, []);
+  const reloadNotices   = useCallback(() => { getNotices().then((v) => { setNotices(v); writeSnap('notices', v); }).catch(() => {}); }, []);
 
   // 공개 데이터 초기 로드 — **첫 화면(일정탐색)에 필요한 것만** 즉시 받는다.
   // 예전엔 게시글·댓글·장터까지 6종을 부팅과 동시에 쐈다. 사용자가 기다리는 건 대회 목록인데
@@ -1002,15 +1022,8 @@ export default function App() {
     reloadVenues();
     reloadNotices(); // 공지는 첫 화면(일정탐색 상단)에도 뜬다
   }, [reloadSchedules, reloadVenues, reloadNotices]);
-  // 서드파티(GA·AdSense) 게이트 해제 신호 — main.tsx 는 load 와 이 신호가 둘 다 온 뒤에야 받는다.
-  // ⚠ 처음엔 reloadSchedules() '호출 직후' 에 쐈다. 그런데 supabase-js 는 fetch 전에
-  //   비동기 세션 획득(navigator.locks)을 거치므로, 붐비는 기기에선 신호→유휴→서드파티가
-  //   그 틈에 끼어들어 데이터보다 먼저 나갔다(본 스위트 직후에만 재현되던 실패의 정체).
-  //   '요청했다' 는 흔들리지만 '응답이 왔다' 는 흔들릴 수 없다 — 응답은 요청보다 반드시 뒤다.
-  //   덤으로 첫 화면 콘텐츠가 그려진 뒤에야 광고가 내려오므로 의도(목록 먼저)와도 정확히 겹친다.
-  useEffect(() => {
-    if (schedulesLoaded) window.dispatchEvent(new Event('nuri:first-data-requested'));
-  }, [schedulesLoaded]);
+  // (서드파티 게이트 신호는 reloadSchedules 의 네트워크 성공 콜백에서 발사 — 위 주석 참고.
+  //  schedulesLoaded 기반이었으나 캐시 복원이 그 플래그를 즉시 켜게 되면서 이전했다.)
 
   // 커뮤니티·장터·별점: '부팅이 끝난 뒤 유휴' 와 '해당 탭 진입' 중 먼저 오는 쪽에서 1회.
   // 유휴만 기다리면 유휴 전에 탭을 누른 사람이 빈 화면을 보고,
@@ -1021,7 +1034,7 @@ export default function App() {
     deferredLoadedRef.current = true;
     reloadPosts();
     reloadComments();
-    getListings().then((l) => { setListings(l); setMarketLoaded(true); }).catch(() => setMarketLoaded(true));
+    getListings().then((l) => { setListings(l); setMarketLoaded(true); writeSnap('listings', l); }).catch(() => setMarketLoaded(true));
     getVenueRatings().then(setVenueRatings).catch(() => {}); // 카드 ⭐ 별점 — 몇 초 늦게 떠도 되는 장식
   }, [reloadPosts, reloadComments]);
   useEffect(() => {
@@ -1136,7 +1149,7 @@ export default function App() {
         reloadPosts(); reloadComments();
         break;
       case 'market':
-        getListings().then((l) => { setListings(l); setMarketLoaded(true); }).catch(() => setMarketLoaded(true));
+        getListings().then((l) => { setListings(l); setMarketLoaded(true); writeSnap('listings', l); }).catch(() => setMarketLoaded(true));
         break;
       case 'admin':
         reloadSchedules(); reloadVenues();
