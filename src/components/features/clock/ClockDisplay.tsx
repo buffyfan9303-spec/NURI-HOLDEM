@@ -4,7 +4,7 @@
 // 진입: 라이브 카드 '📺 큰 화면' / 운영자 클락 'TV 송출' / 딥링크 ?display=<venueId>&g=<gameSeq>.
 // 실시간: subscribeClock 으로 레벨 전환·통계 즉시 반영 + 1초 로컬 틱(숨김/복귀해도 endsAt 기준 정확).
 // 읽기전용(컨트롤 없음) — 운영은 운영자 클락 화면에서. 화면 항상 켜둠(Wake Lock, 베스트에포트).
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { getVenueClocks, subscribeClock, effectiveLevel, type ClockState, type ClockLevel } from '../../../api/clock';
 import { buyinRequestUrl } from '../../../api/ledger';
@@ -40,7 +40,7 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
 }) {
   const [clocks, setClocks] = useState<ClockState[] | null>(null);
   const [sel, setSel] = useState(gameSeq);
-  const [, setTick] = useState(0);
+
   const [fs, setFs] = useState(false);
   const [auto, setAuto] = useState(true);          // 멀티게임 자동 순환
   const [qr, setQr] = useState<string | null>(null); // 참가(바인요청) QR
@@ -65,7 +65,7 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
     document.addEventListener('visibilitychange', onVis);
     return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVis); };
   }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { const t = setInterval(() => setTick((x) => x + 1), 1000); return () => clearInterval(t); }, []);
+  // (초당 틱은 CenterPanel 내부로 격리 — 아래 CenterPanel 주석 참고)
 
   // 스폰서 배너 — 운영자가 등록한 전역 클락 광고 이미지(app_settings) 재사용
   useEffect(() => { getAppSetting(CLOCK_AD_KEY).then(setSponsor).catch(() => {}); }, []);
@@ -107,15 +107,10 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
   // DB 행이 낡아 있어도(운영자 기기가 아무도 전진을 쓰지 못한 상태) '지금 진짜 레벨'을 계산해 표시한다.
   // 왜 여기서 DB를 고치지 않나: 이 화면은 손님 기기(매장 TV·?display= 딥링크)라 clock_states 쓰기 권한
   // (RLS can_access_ledger)이 없고, 있어서도 안 된다. 표시는 여기서, DB 전진은 운영자 화면이 책임진다.
+  // (레벨·타이머·카운트다운 파생값은 CenterPanel 내부로 이사 — 초당 틱 격리.
+  //  부모에는 BB 병기 계산에 쓰는 curIdx 만 남긴다: 30초 폴링·실시간 갱신 주기로 충분한 값이다.)
   const eff = g ? effectiveLevel(g) : null;
   const curIdx = eff ? eff.index : 0;
-  const lv = g ? lvls[curIdx] : undefined;
-  const levelNo = g ? levelNumberAt(lvls, curIdx) : 0;
-  const isBreak = lv?.kind === 'break';
-  const remaining = eff ? eff.remainingMs : 0;
-  const urgent = !!g?.running && remaining <= 60_000 && !isBreak;
-  const nextBreak = g ? msToNextBreak(g, curIdx, remaining) : null;
-  const regClose = g ? msToRegClose(g, curIdx, remaining) : null;
   const ls = g?.liveStats ?? (g ? {
     entries: g.adjEntries, rebuys: g.adjRebuys, earlies: g.adjEarlies, addons: g.adjAddons,
     alive: Math.max(0, g.adjEntries - g.eliminations), eliminations: g.eliminations, totalStack: 0, avgStack: 0, buyInAmount: null,
@@ -205,31 +200,8 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
           )}
           {/* 본문 — 좌: 레벨/타이머(주역), 우: 상금 보드 + 참가 QR */}
           <div className="grid min-h-0 flex-1 grid-cols-1 gap-[2vmin] px-[2.5vmin] lg:grid-cols-[1.7fr_1fr]">
-            {/* 타이머 영역 */}
-            <div className="flex min-h-0 flex-col items-center justify-center">
-              <p className="text-[3vmin] font-bold uppercase tracking-[0.3em] text-white/55">
-                {isBreak ? 'BREAK' : `LEVEL ${levelNo}`}
-              </p>
-              {isBreak ? (
-                <p className="leading-none text-sky-300" style={{ fontSize: 'clamp(40px, 9vmin, 160px)', fontWeight: 800 }}>휴식</p>
-              ) : (
-                <p className="mt-[1vmin] text-center font-extrabold leading-none tabular-nums text-white"
-                  style={{ fontSize: 'clamp(28px, 8.5vmin, 150px)' }}>
-                  {lv ? <>{lv.sb.toLocaleString()}<span className="text-white/40"> / </span>{lv.bb.toLocaleString()}</> : '-'}
-                  {lv && lv.ante > 0 && <span className="ml-[1.5vmin] align-middle text-white/45" style={{ fontSize: 'clamp(16px, 3.5vmin, 60px)' }}>ante {lv.ante.toLocaleString()}</span>}
-                </p>
-              )}
-              <p className={`mt-[1vmin] font-extrabold leading-none tabular-nums ${urgent ? 'text-rose-400 animate-pulse' : isBreak ? 'text-sky-300' : 'text-accent-300'}`}
-                style={{ fontSize: 'clamp(72px, 24vmin, 360px)' }}>
-                {mmss(Math.max(0, remaining))}
-              </p>
-              {!g.running && <p className="mt-[1vmin] text-[2.6vmin] font-bold text-amber-400">⏸ 일시정지</p>}
-              {/* 다음 브레이크 · 등록마감 */}
-              <div className="mt-[2vmin] flex flex-wrap items-center justify-center gap-x-[3vmin] gap-y-[1vmin] text-[2.3vmin] text-white/55">
-                <span>다음 브레이크 <b className="text-white/90 tabular-nums">{nextBreak === null ? '—' : hms(nextBreak)}</b></span>
-                <span>등록마감 <b className={`tabular-nums ${regClose === 0 ? 'text-rose-300' : 'text-white/90'}`}>{regClose === null ? '—' : regClose === 0 ? '마감' : hms(regClose)}</b></span>
-              </div>
-            </div>
+            {/* 타이머 영역 — 초당 틱은 CenterPanel 안에 격리(타이머 외 리렌더 0) */}
+            <CenterPanel g={g} />
 
             {/* 우측: 상금 보드(리더보드) + 참가 QR */}
             <div className="flex min-h-0 flex-col justify-center gap-[1.5vmin]">
@@ -263,7 +235,11 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
           <div className="grid shrink-0 grid-cols-2 gap-px bg-white/5 px-[2.5vmin] py-[1.5vmin] sm:grid-cols-4">
             <BigStat label="리바인" value={`${ls?.rebuys ?? 0}`} />
             <BigStat label="얼리" value={`${ls?.earlies ?? 0}`} />
-            <BigStat label="평균 스택" value={ls?.avgStack ? ls.avgStack.toLocaleString() : '-'} accent />
+            <BigStat label="평균 스택" value={ls?.avgStack ? `${ls.avgStack.toLocaleString()}${(() => {
+              // BB 병기(실물 ②·④) — 브레이크 중엔 직전 플레이 레벨의 BB
+              for (let i = curIdx; i >= 0; i--) { const l = lvls[i]; if (l && l.kind === 'level' && l.bb > 0) return ` (${Math.round((ls.avgStack) / l.bb)}BB)`; }
+              return '';
+            })()}` : '-'} accent />
             <BigStat label="총 스택" value={ls?.totalStack ? ls.totalStack.toLocaleString() : '-'} />
           </div>
 
@@ -278,6 +254,57 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
     </div>
   );
 }
+
+/**
+ * CenterPanel — 레벨·블라인드·대형 타이머·브레이크/등록마감 카운트다운.
+ *
+ * 초당 setInterval 틱을 이 컴포넌트 **안에** 가둔다(마스터 지시서 Phase 11 검증:
+ * "1분 방치 → 타이머 노드 외 리렌더 0회"). 예전엔 부모(ClockDisplay 전체)가 1초마다
+ * 다시 그려져 헤더·상금 보드·QR·스탯·스폰서까지 초당 재렌더됐다 — 몇 시간씩 켜 두는
+ * 매장 TV 화면이라 격리 이득이 가장 큰 자리다. memo: 부모가 30초 폴링·실시간 구독으로
+ * 다시 그려질 때 g 참조가 같으면 이 패널은 그마저 건너뛴다.
+ */
+const CenterPanel = memo(function CenterPanel({ g }: { g: ClockState }) {
+  const [, setTick] = useState(0);
+  useEffect(() => { const t = setInterval(() => setTick((x) => x + 1), 1000); return () => clearInterval(t); }, []);
+  const lvls = g.config?.levels ?? [];
+  const eff = effectiveLevel(g);
+  const curIdx = eff.index;
+  const lv = lvls[curIdx];
+  const levelNo = levelNumberAt(lvls, curIdx);
+  const isBreak = lv?.kind === 'break';
+  const remaining = eff.remainingMs;
+  const urgent = !!g.running && remaining <= 60_000 && !isBreak;
+  const nextBreak = msToNextBreak(g, curIdx, remaining);
+  const regClose = msToRegClose(g, curIdx, remaining);
+  return (
+    <div className="flex min-h-0 flex-col items-center justify-center">
+      <p className="text-[3vmin] font-bold uppercase tracking-[0.3em] text-white/55">
+        {isBreak ? 'BREAK' : `LEVEL ${levelNo}`}
+      </p>
+      {isBreak ? (
+        <p className="leading-none text-sky-300" style={{ fontSize: 'clamp(40px, 9vmin, 160px)', fontWeight: 800 }}>휴식</p>
+      ) : (
+        <p className="mt-[1vmin] text-center font-extrabold leading-none tabular-nums text-white"
+          style={{ fontSize: 'clamp(28px, 8.5vmin, 150px)' }}>
+          {lv ? <>{lv.sb.toLocaleString()}<span className="text-white/40"> / </span>{lv.bb.toLocaleString()}</> : '-'}
+          {lv && lv.ante > 0 && <span className="ml-[1.5vmin] align-middle text-white/45" style={{ fontSize: 'clamp(16px, 3.5vmin, 60px)' }}>ante {lv.ante.toLocaleString()}</span>}
+        </p>
+      )}
+      <p className={`mt-[1vmin] font-extrabold leading-none tabular-nums ${urgent ? 'text-rose-400 animate-pulse' : isBreak ? 'text-sky-300' : 'text-accent-300'}`}
+        style={{ fontSize: 'clamp(72px, 24vmin, 360px)' }}>
+        {mmss(Math.max(0, remaining))}
+      </p>
+      {!g.running && <p className="mt-[1vmin] text-[2.6vmin] font-bold text-amber-400">⏸ 일시정지</p>}
+      {/* 다음 브레이크 · 등록마감 */}
+      <div className="mt-[2vmin] flex flex-wrap items-center justify-center gap-x-[3vmin] gap-y-[1vmin] text-[2.3vmin] text-white/55">
+        <span>다음 브레이크 <b className="text-white/90 tabular-nums">{nextBreak === null ? '—' : hms(nextBreak)}</b></span>
+        {/* 실물 ①의 '레벨+남은시간 복합 표기' — '언제까지'를 두 축으로(Phase 11) */}
+        <span>등록마감 <b className={`tabular-nums ${regClose === 0 ? 'text-rose-300' : 'text-white/90'}`}>{regClose === null ? '—' : regClose === 0 ? '마감' : `LV${g.config.regCloseLevel} · ${hms(regClose)}`}</b></span>
+      </div>
+    </div>
+  );
+});
 
 function BigStat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (

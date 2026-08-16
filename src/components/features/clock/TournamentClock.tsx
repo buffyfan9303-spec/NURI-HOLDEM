@@ -378,7 +378,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
     openedAt: linkedSession?.openedAt ?? null,
   }), [buyins, linkedSession, cfg.earlyDoubleMin, cfg.earlySingleMin]);
   const liveStats = useMemo(() => computeLiveStats(state, derived, cfg), [state, derived, cfg]);
-  const { rebuys, earlies, addons, totalStack, avgStack } = liveStats;
+  const { rebuys, earlies, addons, totalStack, avgStack, entries, alive } = liveStats;
 
   const persist = useCallback((patch: Partial<ClockState>) => {
     const next = { ...state, ...patch };
@@ -531,9 +531,24 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
   const toggleMute = () => { if (volume > 0) { prevVolRef.current = volume; setVolume(0); } else { setVolume(prevVolRef.current || 50); } };
 
   // 컨트롤
+  // 일시정지·재개는 손님 전원이 보는 화면을 그 자리에서 바꾼다(Phase 11-9 오조작 방지) —
+  // 확인 다이얼로그는 정상 조작까지 느리게 하므로, 실행 직후 5초 [실행취소] 토스트를 택했다.
   const toggleRun = () => {
-    if (state.running) persist({ running: false, remainingMs: Math.max(0, remaining), endsAt: null });
-    else persist({ running: true, endsAt: new Date(now() + Math.max(0, state.remainingMs || remaining)).toISOString() });
+    if (state.running) {
+      const frozen = Math.max(0, remaining);
+      persist({ running: false, remainingMs: frozen, endsAt: null });
+      toast.show('클락을 일시정지했어요 — 손님 화면에도 바로 반영됩니다', 'info', {
+        durationMs: 5000,
+        action: { label: '실행취소', onClick: () => persist({ running: true, endsAt: new Date(now() + frozen).toISOString() }) },
+      });
+    } else {
+      const ms = Math.max(0, state.remainingMs || remaining);
+      persist({ running: true, endsAt: new Date(now() + ms).toISOString() });
+      toast.show('클락을 재개했어요', 'info', {
+        durationMs: 5000,
+        action: { label: '실행취소', onClick: () => persist({ running: false, remainingMs: ms, endsAt: null }) },
+      });
+    }
   };
   // 레벨 이동 — 되돌리기 6초 무장 후 이동. 이동은 대상 레벨의 전체 분으로 타이머를 덮어쓰므로
   // (진행하던 시간이 사라지므로) 스냅샷 없이는 복구 수단이 아예 없다.
@@ -587,11 +602,40 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
     lockScroll(); // 뷰포트 스크롤러는 html이라 body만 잠그면 무효 — 공용 유틸(ref-count)로 documentElement+body 동시 잠금
     return () => unlockScroll();
   }, [fs]);
+  // 풀스크린 = 매장 방송 화면 — 화면 꺼짐은 운영 사고다(Phase 11-9). 손님용 ClockDisplay 에만
+  // 있던 WakeLock 을 운영자 풀스크린에도. 미지원 브라우저는 조용히 무시(기능 저하 허용).
+  useEffect(() => {
+    if (!fs) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let sentinel: any = null;
+    const request = async () => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        sentinel = await (navigator as any).wakeLock?.request('screen');
+      } catch { /* 미지원·거부 — 무시 */ }
+    };
+    request();
+    const onVis = () => { if (document.visibilityState === 'visible') request(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      try { sentinel?.release(); } catch { /* noop */ }
+    };
+  }, [fs]);
   // 뒤로가기 → 전체화면만 해제(앱 이탈 방지)
   useBackClose(fs, () => { setFs(false); if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {}); });
 
   const nextBreak = msToNextBreak(state, remaining);
   const regClose = msToRegClose(state, remaining);
+  // AVG STACK 의 BB 환산(실물 클락 ②티티X망고·④J-BLUFF 채택 패턴) — 플레이어가 실제 판단에
+  // 쓰는 값은 칩 수가 아니라 'BB 로 몇 개인가'다. 브레이크 중엔 직전 플레이 레벨의 BB 로.
+  const curBB = (() => {
+    for (let i = state.currentIndex; i >= 0; i--) {
+      const l = cfg.levels[i];
+      if (l && l.kind === 'level' && l.bb > 0) return l.bb;
+    }
+    return 0;
+  })();
   const totalPrize = cfg.prizes.reduce((s, p) => s + (p.amount || 0), 0);
   const isBreak = cur?.kind === 'break';
   const levelNo = levelNumberAt(cfg, state.currentIndex);
@@ -720,11 +764,17 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
             {!state.running && <span className={['absolute font-bold text-rose-200 bg-rose-950/60 rounded-badge', fs ? 'top-3 right-3 text-[min(2cqw,2.4cqh)] px-3 py-1' : 'top-2 right-2 text-[9px] sm:text-2xs px-2 py-0.5'].join(' ')}>일시정지</span>}
           </div>
 
-          {/* 우: 스탯 */}
+          {/* 우: 스탯 — 실물 4종 공통 순서: PLAYERS(히어로) → RE-BUY/EARLY → REG CLOSE → NEXT BREAK.
+              운영자 풀스크린에 생존/엔트리 '표시'가 없어(조작 스테퍼만) 손님이 물어봐야 했다 — 신설. */}
           <div className="flex flex-col justify-center gap-2 sm:gap-3 p-2 sm:p-3 border-l border-white/5 bg-black/20">
+            <Stat fs={fs} label="PLAYERS" value={`${alive} / ${entries}`} hero />
             <Stat fs={fs} label="RE-BUY / EARLY" value={`${rebuys} / ${earlies}`} />
             {cfg.isAddon && <Stat fs={fs} label="ADD-ON" value={`${addons}`} />}
-            <Stat fs={fs} label="REG CLOSE" value={regClose !== null ? hms(regClose) : '마감'} tone={regClose !== null ? 'muted' : 'rose'} />
+            {/* ⚠ 예전 표기는 null(마감 레벨 미설정)을 '마감'으로 보여줬다 — 0(진짜 마감)과 정반대.
+                실물 ①홀덤마스터스의 'LV·남은시간 복합 표기'(언제까지를 두 축으로) 채택. */}
+            <Stat fs={fs} label="REG CLOSE"
+              value={regClose === null ? '—' : regClose === 0 ? '마감' : `LV${cfg.regCloseLevel} · ${hms(regClose)}`}
+              tone={regClose === null ? 'muted' : 'rose'} />
             <Stat fs={fs} label="NEXT BREAK" value={nextBreak !== null ? hms(nextBreak) : '—'} tone="rose" />
           </div>
         </div>
@@ -737,7 +787,14 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
           </div>
           <div className="text-center py-2 sm:py-2.5">
             <p className={['text-white/60 font-bold tracking-[0.18em]', fs ? 'text-[min(1.9cqw,2.2cqh)]' : 'text-[10px] sm:text-xs'].join(' ')}>AVG STACK</p>
-            <p className={['font-extrabold text-white tabular-nums leading-tight', fs ? 'text-[min(4.6cqw,5.6cqh)]' : 'text-xl sm:text-3xl'].join(' ')}>{avgStack.toLocaleString()}</p>
+            <p className={['font-extrabold text-white tabular-nums leading-tight', fs ? 'text-[min(4.6cqw,5.6cqh)]' : 'text-xl sm:text-3xl'].join(' ')}>
+              {avgStack.toLocaleString()}
+              {curBB > 0 && avgStack > 0 && (
+                <span className={['ml-1.5 font-bold text-white/55', fs ? 'text-[min(2.4cqw,2.9cqh)]' : 'text-xs sm:text-base'].join(' ')}>
+                  ({Math.round(avgStack / curBB)} BB)
+                </span>
+              )}
+            </p>
           </div>
         </div>
 
@@ -823,13 +880,16 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
   );
 }
 
-function Stat({ label, value, tone, fs }: { label: string; value: string; tone?: 'muted' | 'rose'; fs?: boolean }) {
+function Stat({ label, value, tone, fs, hero }: { label: string; value: string; tone?: 'muted' | 'rose'; fs?: boolean; hero?: boolean }) {
   const c = tone === 'rose' ? 'text-rose-300' : tone === 'muted' ? 'text-white/60' : 'text-white';
   return (
     // 헤어라인 구분 — 첫 항목 제외하고 위쪽 미세 보더(스탯 패널 리듬 정리)
     <div className="text-center [&:not(:first-child)]:border-t [&:not(:first-child)]:border-white/[0.06] [&:not(:first-child)]:pt-2 sm:[&:not(:first-child)]:pt-3">
       <p className={['text-white/45 tracking-[0.14em] uppercase leading-tight', fs ? 'text-[min(1.5cqw,1.8cqh)]' : 'text-[9px] sm:text-2xs'].join(' ')}>{label}</p>
-      <p className={['font-bold tabular-nums leading-tight mt-0.5', fs ? 'text-[min(2.7cqw,3.3cqh)]' : 'text-sm sm:text-xl', c].join(' ')}>{value}</p>
+      {/* hero: PLAYERS 전용 — 실물 4종 공통으로 스탯 열의 시각적 1순위(3m 가독) */}
+      <p className={['font-bold tabular-nums leading-tight mt-0.5',
+        hero ? (fs ? 'text-[min(4.2cqw,5.1cqh)] font-extrabold' : 'text-lg sm:text-3xl font-extrabold')
+             : (fs ? 'text-[min(2.7cqw,3.3cqh)]' : 'text-sm sm:text-xl'), c].join(' ')}>{value}</p>
     </div>
   );
 }
