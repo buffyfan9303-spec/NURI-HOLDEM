@@ -21,6 +21,7 @@ interface PosterFormModalProps {
 }
 
 export interface PosterFormData {
+  grade: 'daily' | 'satellite' | 'series' | null;
   id?: string;
   title: string;
   date: string;
@@ -93,6 +94,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
     startTime: '19:00', regCloseTime: '', duration: '', blinds: '',
     prizeType: 'GTD', prizeAmount: 0, prizePercent: 0, buyIn: 0, gameType: '', addonStack: 0, addonCost: 0, startStack: 0, rebuyStack: 0, region: '',
     isCompetition: false,
+    grade: null as 'daily' | 'satellite' | 'series' | null,
     paymentMethods: ['현금'], partners: [], prizes: [],
     rankingPrizes: [], events: [], repeatWeeks: 1, blindLevels: [],
     venueId: '', pubName: '',
@@ -133,6 +135,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
         prizePercent: schedule.prizePercent ?? 0,
         buyIn: schedule.buyIn.amount, gameType: schedule.buyIn.gameType ?? '', addonStack: schedule.buyIn.addonStack ?? 0, addonCost: schedule.buyIn.addon ?? 0, startStack: schedule.buyIn.startStack ?? 0, rebuyStack: schedule.buyIn.rebuyStack ?? 0, region: schedule.region,
         isCompetition: schedule.isCompetition ?? false,
+        grade: schedule.grade ?? null,
         paymentMethods: schedule.paymentMethods ?? ['현금'],
         partners: schedule.partners ?? [],
         prizes: schedule.seats?.map((s) => `${s.label} ${s.count}석`) ?? [],
@@ -179,6 +182,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
       prizePercent: s.prizePercent ?? 0,
       buyIn: s.buyIn.amount, gameType: s.buyIn.gameType ?? '', addonStack: s.buyIn.addonStack ?? 0, addonCost: s.buyIn.addon ?? 0, startStack: s.buyIn.startStack ?? 0, rebuyStack: s.buyIn.rebuyStack ?? 0, region: s.region,
       isCompetition: s.isCompetition ?? false,
+      grade: s.grade ?? null,
       paymentMethods: s.paymentMethods ?? ['현금'],
       partners: s.partners ?? [],
       prizes: s.seats?.map((x) => `${x.label} ${x.count}석`) ?? [],
@@ -461,6 +465,19 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
           <div className="grid grid-cols-2 gap-2">
             <RadioCard checked={form.prizeType === 'GTD'} onClick={() => update('prizeType', 'GTD')} title="GTD" desc="보장 상금" />
             <RadioCard checked={form.prizeType === 'ENTRY'} onClick={() => update('prizeType', 'ENTRY')} title="엔트리" desc="참가비 누적" />
+          </div>
+        </FieldWrap>
+
+        {/* 대회 등급(선택) — waholdem 탐색 축: 손님이 '데일리만/새틀만' 골라 보게 된다 */}
+        <FieldWrap label="대회 등급 (선택)">
+          <div className="grid grid-cols-4 gap-1.5">
+            {([[null, '일반'], ['daily', '데일리'], ['satellite', '새틀라이트'], ['series', '시리즈']] as const).map(([v, l]) => (
+              <button key={l} type="button" onClick={() => update('grade', v)}
+                className={['h-9 rounded-input border text-xs font-bold transition-colors',
+                  form.grade === v ? 'border-accent-300 bg-accent-300/10 text-accent-300' : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
+                {l}
+              </button>
+            ))}
           </div>
         </FieldWrap>
 

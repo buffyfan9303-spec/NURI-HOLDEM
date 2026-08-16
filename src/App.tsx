@@ -37,6 +37,7 @@ import { useVisibilityRefresh } from './lib/useVisibilityRefresh';
 import { lazyWithReload } from './lib/lazyWithReload';
 import { getRunningClocks } from './api/clock';
 import { myVisitedVenues } from './api/vouchers';
+import { haversineKm } from './lib/geo';
 import { readSnap, writeSnap } from './lib/snapshot';
 import { applyScheduleSeo, applyVenueSeo, resetSeo } from './lib/seo';
 import { createUndoQueue } from './lib/undoableDelete';
@@ -742,10 +743,10 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
   // 일정탐색 기본값 — 당일(오늘)이 선택된 상태로 시작(오늘 열리는 대회를 바로 보여줌)
-  const [searchState, setSearchState] = useState<SearchState>({ query: '', dates: [new Date().toLocaleDateString('en-CA')], regions: [], format: null, gtdOnly: false, competitionOnly: false });
+  const [searchState, setSearchState] = useState<SearchState>({ query: '', dates: [new Date().toLocaleDateString('en-CA')], regions: [], format: null, gtdOnly: false, competitionOnly: false, grade: null });
   // 전체 초기화 버튼을 '총 N개' 줄에 두기 위해 검색바의 clearAll 을 ref 로 끌어올림
   const searchBarRef = useRef<{ clearAll: () => void } | null>(null);
-  const hasActiveSearchFilter = !!(searchState.query || searchState.dates.length || searchState.regions.length || searchState.format || searchState.gtdOnly || searchState.competitionOnly);
+  const hasActiveSearchFilter = !!(searchState.query || searchState.dates.length || searchState.regions.length || searchState.format || searchState.gtdOnly || searchState.competitionOnly || searchState.grade);
   const [authOpen, setAuthOpen]       = useState(false);
   const [authMode, setAuthMode]       = useState<'login' | 'signup-user'>('login'); // QR 회원가입 진입용
   const [openVenueId, setOpenVenueId] = useState<string | null>(null);
@@ -755,6 +756,19 @@ export default function App() {
   const [displayTarget, setDisplayTarget] = useState<{ venueId: string; gameSeq: number } | null>(null); // 관전/대형 디스플레이
   const [followedIds, setFollowedIds] = useState<Set<string>>(new Set()); // 팔로우한 매장 id
   const [followedOnly, setFollowedOnly] = useState(false); // 일정탐색: 팔로우 매장 포스터만
+  // 📍 가까운 순(Phase 14 보류 해제 — venues.lat/lng 신설): 위치 1회 요청, 거부 시 지역 필터 안내.
+  const [nearSort, setNearSort] = useState(false);
+  const [myPos, setMyPos] = useState<{ lat: number; lng: number } | null>(null);
+  const toggleNearSort = () => {
+    if (nearSort) { setNearSort(false); return; }
+    if (myPos) { setNearSort(true); return; }
+    if (!('geolocation' in navigator)) { toast.show('이 기기에서 위치를 사용할 수 없어요 — 지역 필터를 이용해 주세요', 'error'); return; }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { setMyPos({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setNearSort(true); },
+      () => toast.show('위치 권한이 거부되었어요 — 지역 필터로 좁혀 보세요', 'error'),
+      { timeout: 8000, maximumAge: 300_000 },
+    );
+  };
   // 🎁 오픈 이벤트 배너(~2026-08-03 KST 자동 소멸) — 닫으면 localStorage 유지
   const [eventBannerHidden, setEventBannerHidden] = useState(() => { try { return localStorage.getItem('nuri:event-2607-hidden') === '1'; } catch { return false; } });
 
@@ -954,6 +968,7 @@ export default function App() {
     getReservationCounts(ids).then(setBrowseResCounts).catch(() => {});
   }, [schedules]);
   const [venues,        setVenues]        = useState<Venue[]>(() => readSnap<Venue[]>('venues') ?? []);
+  const venueById = useMemo(() => new Map(venues.map((v) => [v.id, v])), [venues]);
   const [comments,      setComments]      = useState<Comment[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [posts,         setPosts]         = useState<CommunityPost[]>(() => readSnap<CommunityPost[]>('posts') ?? []);
@@ -1297,15 +1312,26 @@ export default function App() {
       const matchF = !searchState.format || s.format === searchState.format;
       const matchG = !searchState.gtdOnly || s.guaranteed === true;
       const matchC = !searchState.competitionOnly || s.isCompetition === true;
+      const matchGr = !searchState.grade || s.grade === searchState.grade; // 등급 축(Phase 14)
       const matchFollow = !followedOnly || (!!s.venueId && followedIds.has(s.venueId));
-      return matchQ && matchD && matchR && matchF && matchG && matchC && matchFollow;
+      return matchQ && matchD && matchR && matchF && matchG && matchC && matchGr && matchFollow;
     })
       // 정렬이 아예 없어서 '업주가 정한 진열 순서'로 나왔다 — 손님은 '지금 갈 수 있는 게 뭐지'를
       // 시간순으로 훑을 수가 없었다. 상단 고정(프리미엄)은 유지하되 그 안에서는 빠른 대회부터.
-      .sort((a, b) =>
-        Number(b.isPremium) - Number(a.isPremium)
-        || (a.date + a.startTime).localeCompare(b.date + b.startTime));
-  }, [schedules, searchState, followedOnly, followedIds]);
+      .sort((a, b) => {
+        // 📍 가까운 순 — 좌표 있는 매장이 앞, 좌표 없으면 뒤(라이트백이 채우면 자연 편입).
+        if (nearSort && myPos) {
+          const dOf = (x: Schedule) => {
+            const v = x.venueId ? venueById.get(x.venueId) : undefined;
+            return v && v.lat != null && v.lng != null ? haversineKm(myPos.lat, myPos.lng, v.lat, v.lng) : Infinity;
+          };
+          const dd = dOf(a) - dOf(b);
+          if (dd !== 0 && Number.isFinite(dd)) return dd;
+        }
+        return Number(b.isPremium) - Number(a.isPremium)
+          || (a.date + a.startTime).localeCompare(b.date + b.startTime);
+      });
+  }, [schedules, searchState, followedOnly, followedIds, nearSort, myPos, venueById]);
 
   // ── 핸들러 ─────────────────────────────────────────────────────────────
 
@@ -1407,7 +1433,7 @@ export default function App() {
     setOpenNotice(null);
     setOpenPost(null);
     setPosterFormTarget(null);
-    setSearchState({ query: '', dates: [], regions: [], format: null, gtdOnly: false, competitionOnly: false });
+    setSearchState({ query: '', dates: [], regions: [], format: null, gtdOnly: false, competitionOnly: false, grade: null });
     tabScrollRef.current.set('browse', 0); // 홈 = 처음부터 — 복원 로직이 옛 위치로 되돌리지 않게
     window.scrollTo({ top: 0, behavior: 'smooth' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1925,6 +1951,15 @@ export default function App() {
                   총 <span className="text-ink-secondary tabular-nums font-semibold">{visibleSchedules.length}</span>개
                   {followedOnly && <span className="ml-1 text-accent-300">· 팔로우</span>}
                 </span>
+                {/* 📍 가까운 순 — 위치 1회 요청 토글(Phase 14). 좌표 없는 매장은 뒤로. */}
+                <button
+                  type="button"
+                  onClick={toggleNearSort}
+                  aria-pressed={nearSort}
+                  className={['hit shrink-0 -my-1.5 inline-flex h-8 items-center gap-1 rounded-badge border px-2 text-2xs font-bold transition-colors',
+                    nearSort ? 'border-accent-300 bg-accent-300/10 text-accent-300' : 'border-border-default text-ink-secondary hover:text-ink-primary'].join(' ')}>
+                  📍 가까운 순
+                </button>
                 {/* 전체 초기화 — 별도 줄 차지하지 않게 '총 N개' 옆에 배치(검색바 clearAll 호출) */}
                 {hasActiveSearchFilter && (
                   <button

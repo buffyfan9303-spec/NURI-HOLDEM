@@ -29,6 +29,8 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
   const [loading, setLoading] = useState(false);
   const [title, setTitle] = useState('매장이용권');
   const [count, setCount] = useState(1);
+  // 만료일(선택) — 비우면 무기한. 서버는 KST 자정 직전으로 저장돼 그날까지 사용 가능.
+  const [expiry, setExpiry] = useState('');
   const [recvUserId, setRecvUserId] = useState<string | null>(null);
   const [recvDisplay, setRecvDisplay] = useState('');
   const [recvMode, setRecvMode] = useState<'none' | 'id' | 'phone'>('none');
@@ -215,9 +217,9 @@ ${cards}
   const issue = async () => {
     setBusy(true);
     try {
-      await issueVoucher(venueId, { title, count, holderUserId: recvUserId ?? undefined, holderName: recvDisplay || undefined });
+      await issueVoucher(venueId, { title, count, holderUserId: recvUserId ?? undefined, holderName: recvDisplay || undefined, expiresAt: expiry ? `${expiry}T23:59:59+09:00` : null });
       toast.show(`매장이용권 ${count}개를 ${recvDisplay ? recvDisplay + '님께 ' : ''}배포했습니다`, 'success');
-      setTitle('매장이용권'); setCount(1); setRecvUserId(null); setRecvDisplay(''); setRecvMode('none'); setCands([]);
+      setTitle('매장이용권'); setCount(1); setExpiry(''); setRecvUserId(null); setRecvDisplay(''); setRecvMode('none'); setCands([]);
       reload(); reloadQuota();
     } catch (e) {
       const msg = e instanceof Error ? e.message : '배포 실패';
@@ -312,6 +314,19 @@ ${cards}
                   <span className="self-center pl-0.5 text-2xs text-ink-muted">개</span>
                 </div>
               </div>
+              {/* 유효기간(선택) — 비우면 무기한. 만료 이용권은 사용 RPC 가 서버에서 거부하고
+                  손님 지갑에서도 자동 제외된다(스키마 확장 2026-08-17). */}
+              <label className="flex items-center gap-2 text-2xs text-ink-secondary">
+                <span className="shrink-0 font-semibold">유효기간</span>
+                <input type="date" value={expiry} min={new Date(Date.now() + 86400000).toLocaleDateString('en-CA')}
+                  onChange={(e) => setExpiry(e.target.value)}
+                  className="input h-9 w-40 text-sm tabular-nums" aria-label="이용권 만료일(선택)" />
+                {expiry ? (
+                  <button type="button" onClick={() => setExpiry('')} className="hit shrink-0 text-2xs text-ink-muted hover:text-danger-light">지우기</button>
+                ) : (
+                  <span className="text-ink-muted">비우면 무기한</span>
+                )}
+              </label>
               {/* 받는 손님 지정 — 아이디(닉네임)로 지정 */}
               {recvUserId ? (
                 <div className="flex items-center gap-2 rounded-input border border-accent-400/40 bg-accent-300/[0.06] px-2.5 py-1.5">

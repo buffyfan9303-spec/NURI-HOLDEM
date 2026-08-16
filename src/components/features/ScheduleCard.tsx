@@ -261,6 +261,11 @@ function ListCard({ schedule, onVenueClick, onSelect, reserveCount, rating, prio
               {status === 'ended' ? '종료' : 'LIVE'}
             </span>
           )}
+          {schedule.grade && (
+            <span className="shrink-0 rounded-badge bg-surface-high px-1.5 py-0.5 font-bold text-ink-secondary">
+              {schedule.grade === 'daily' ? '데일리' : schedule.grade === 'satellite' ? '새틀' : '시리즈'}
+            </span>
+          )}
           <span className="text-ink-secondary tabular-nums font-medium">
             {d.monthDay}({d.dow}) {d.time}
           </span>

@@ -210,6 +210,8 @@ export interface SearchState {
   format: string | null;
   gtdOnly: boolean;
   competitionOnly: boolean; // '대회' 필터 — is_competition=true 만 노출 (Task 3)
+  /** 대회 등급 축(데일리/새틀라이트/시리즈) — null=전체 */
+  grade: 'daily' | 'satellite' | 'series' | null;
 }
 
 interface IntegratedSearchBarProps {
@@ -235,6 +237,8 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
   const [selectedRegions, setSelectedRegions] = useState<string[]>([]);
   // 토너먼트 필터는 단일 선택(라디오). format/gtdOnly는 여기서 파생.
   const [tour,           setTour]           = useState<TourFilter>('all');
+  // 대회 등급 축(Phase 14 보류 해제 — schedules.grade 컬럼 신설)
+  const [grade, setGrade] = useState<'daily' | 'satellite' | 'series' | null>(null);
   const [isFocused,      setIsFocused]      = useState(false);
   const inputRef                            = useRef<HTMLInputElement>(null);
   const stickyRef                           = useRef<HTMLDivElement>(null);
@@ -264,9 +268,9 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
     const gtdOnly         = tour === 'GTD';
     const competitionOnly = tour === 'comp';
     startTransition(() => {
-      onChange({ query: deferredQuery, dates: selectedDates, regions: selectedRegions, format, gtdOnly, competitionOnly });
+      onChange({ query: deferredQuery, dates: selectedDates, regions: selectedRegions, format, gtdOnly, competitionOnly, grade });
     });
-  }, [deferredQuery, selectedDates, selectedRegions, tour, onChange]);
+  }, [deferredQuery, selectedDates, selectedRegions, tour, grade, onChange]);
 
   const handleQueryChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => { setRawQuery(e.target.value); },
@@ -306,6 +310,7 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
     setSelectedDates([]);
     setSelectedRegions([]);
     setTour('all');
+    setGrade(null);
   }, []);
 
   // 전체 초기화를 부모(App)의 '총 N개' 줄에서 호출 — 필터바 안에서 한 줄 먹던 버튼 제거
@@ -416,6 +421,23 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
                   ].join(' ')}
                 >
                   <span className="relative">{label}</span>
+                </button>
+              );
+            })}
+          </div>
+          {/* 대회 등급 축(Phase 14 보류 해제) — 데일리/새틀라이트/시리즈 */}
+          <div role="radiogroup" aria-label="대회 등급"
+            className="relative inline-flex items-center gap-0.5 rounded-input bg-surface-high/60 p-0.5 border border-border-subtle">
+            <SlidingPill activeKey={grade ?? 'all'} className="rounded-[6px] bg-accent-300" />
+            {([[null, '등급 전체'], ['daily', '데일리'], ['satellite', '새틀'], ['series', '시리즈']] as const).map(([v, l]) => {
+              const on = grade === v;
+              return (
+                <button key={l} type="button" role="radio" aria-checked={on}
+                  data-pill-active={on || undefined}
+                  onClick={() => setGrade(v)}
+                  className={['relative inline-flex items-center h-9 px-3 rounded-[6px] text-2xs font-bold leading-none transition-colors duration-300 focus:outline-none',
+                    on ? 'text-ink-inverse' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
+                  <span className="relative">{l}</span>
                 </button>
               );
             })}

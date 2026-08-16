@@ -8,6 +8,8 @@ export interface Voucher {
   holderUserId: string | null; holderName: string | null;
   title: string; status: string;
   usedVenueId: string | null; usedVenueName: string | null; usedAt: string | null; createdAt: string;
+  /** 유효기간(없으면 무기한) — 만료 시 사용 RPC 가 서버에서 거부한다 */
+  expiresAt: string | null;
 }
 export interface VoucherUsage { usedVenueId: string | null; venueName: string | null; usedCount: number }
 export interface VisitedVenue { venueId: string; venueName: string | null; visits: number }
@@ -22,6 +24,7 @@ function mapRow(r: any): Voucher {
     title: r.title, status: r.status ?? 'active',
     usedVenueId: r.used_venue_id ?? null, usedVenueName: r.used_venue?.name ?? null,
     usedAt: r.used_at ?? null, createdAt: r.created_at,
+    expiresAt: r.expires_at ?? null,
   };
 }
 
@@ -55,11 +58,12 @@ export async function listMyVouchers(): Promise<Voucher[]> {
   return (data ?? []).map(mapRow);
 }
 
-export async function issueVoucher(venueId: string, input: { title: string; count?: number; holderName?: string; holderUserId?: string; note?: string }): Promise<void> {
+export async function issueVoucher(venueId: string, input: { title: string; count?: number; holderName?: string; holderUserId?: string; note?: string; expiresAt?: string | null }): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.rpc('issue_voucher', {
     p_venue_id: venueId, p_title: input.title, p_count: input.count ?? 1,
     p_holder_name: input.holderName ?? null, p_holder_user_id: input.holderUserId ?? null, p_note: input.note ?? null,
+    p_expires_at: input.expiresAt ?? null,
   });
   if (error) throw new Error(error.message);
 }

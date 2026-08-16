@@ -32,7 +32,7 @@ function parseVenueId(text: string): string | null {
   return null;
 }
 
-interface Stack { venueId: string; venueName: string; title: string; ids: string[] }
+interface Stack { venueId: string; venueName: string; title: string; ids: string[]; expiries: (string | null)[] }
 
 export default function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification }: {
   open: boolean; onClose: () => void;
@@ -92,7 +92,9 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
 
   if (!open) return null;
 
-  const active = vouchers.filter((v) => v.status === 'active');
+  // 만료일 지난 이용권은 status 가 active 여도 사용 불가(서버 가드) — 지갑에서도 제외한다.
+  const nowMs = Date.now();
+  const active = vouchers.filter((v) => v.status === 'active' && (!v.expiresAt || new Date(v.expiresAt).getTime() > nowMs));
   // 이용권 사용 내역(Phase 15-1 '모든 차감은 즉시 이 리스트에') — used 상태를 시간 역순으로.
   const usedHistory = vouchers
     .filter((v) => v.status === 'used' && v.usedAt)
@@ -103,8 +105,17 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
     const vid = v.venueId; const vname = v.venueName ?? '기타 매장';
     if (!venueMap.has(vid)) venueMap.set(vid, { name: vname, stacks: new Map() });
     const g = venueMap.get(vid)!;
-    if (!g.stacks.has(v.title)) g.stacks.set(v.title, { venueId: vid, venueName: vname, title: v.title, ids: [] });
-    g.stacks.get(v.title)!.ids.push(v.id);
+    if (!g.stacks.has(v.title)) g.stacks.set(v.title, { venueId: vid, venueName: vname, title: v.title, ids: [], expiries: [] });
+    // 임박한 만료가 먼저 소진되도록 만료 오름차순 정렬 삽입(무기한은 뒤)
+    const st = g.stacks.get(v.title)!;
+    const expMs = v.expiresAt ? new Date(v.expiresAt).getTime() : Infinity;
+    let ins = st.ids.length;
+    for (let i = 0; i < st.ids.length; i++) {
+      const cur = st.expiries[i] ? new Date(st.expiries[i]!).getTime() : Infinity;
+      if (expMs < cur) { ins = i; break; }
+    }
+    st.ids.splice(ins, 0, v.id);
+    st.expiries.splice(ins, 0, v.expiresAt);
   }
   const venueGroups = [...venueMap.entries()].map(([vid, g]) => ({ vid, name: g.name, stacks: [...g.stacks.values()] }))
     .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
@@ -249,7 +260,17 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
                     <ul className="space-y-1.5">{g.stacks.map((s) => (
                       <li key={s.title} className="flex items-center gap-2 rounded-input border border-accent-400/40 bg-accent-300/[0.05] px-3 py-2">
                         <span className="text-base" aria-hidden>🎟</span>
-                        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{s.title} <span className="text-2xs text-ink-muted">×{s.ids.length}</span></span>
+                        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">
+                          {s.title} <span className="text-2xs text-ink-muted">×{s.ids.length}</span>
+                          {s.expiries[0] && (() => {
+                            const d = Math.ceil((new Date(s.expiries[0]!).getTime() - Date.now()) / 86400000);
+                            return (
+                              <span className={['ml-1.5 align-middle text-[10px] font-bold tabular-nums', d <= 7 ? 'text-danger-light' : 'text-ink-muted'].join(' ')}>
+                                ~{new Date(s.expiries[0]!).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' })}{d <= 7 ? ` · D-${Math.max(0, d)}` : ''}
+                              </span>
+                            );
+                          })()}
+                        </span>
                         <button type="button" onClick={() => setRedeem(s)} className="btn-primary shrink-0 px-3 text-2xs">사용하기</button>
                       </li>
                     ))}</ul>

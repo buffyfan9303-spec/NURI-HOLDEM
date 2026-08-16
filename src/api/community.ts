@@ -17,6 +17,8 @@ export interface Venue {
   verificationStatus?: VenueVerificationStatus; // 인증 등급
   images?: string[];     // 매장 갤러리(자동 슬라이드)
   kind?: GroupKind;      // venue(홀덤펍) | dealer_team | club | youtuber | other
+  /** 위경도 — 카카오 지오코딩 라이트백(set_venue_coords). 거리순 정렬용, 없으면 정렬 뒤로 */
+  lat?: number | null; lng?: number | null;
   joinApproval?: boolean;// 비-매장 그룹: 가입 시 개설자 승인 필요 여부
   slug?: string | null;  // 커스텀 공유 링크(/s/<slug>) — 업주 설정, 전역 유니크
 }
@@ -90,6 +92,7 @@ const rowToVenue = (r: any): Venue => ({
   businessHours: r.business_hours, followerCount: r.follower_count, isPaidAd: r.is_paid_ad,
   displayOrder: r.display_order,
   status: r.status ?? 'active',
+  lat: r.lat ?? null, lng: r.lng ?? null,
   verificationStatus: r.verification_status ?? 'unverified',
   images: r.images ?? [],
   kind: r.kind ?? 'venue',
@@ -186,6 +189,13 @@ export async function updateVenueAddress(venueId: string, address: string): Prom
 }
 
 /** 업주/운영자: 매장 연락처 통합 수정(주소·전화·영업시간 한 번에) */
+/** 좌표 라이트백 — 지도 임베드가 지오코딩에 성공하면 매장 관리자 기기가 조용히 저장(can_manage_venue 게이트) */
+export async function setVenueCoords(venueId: string, lat: number, lng: number): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('set_venue_coords', { p_venue_id: venueId, p_lat: lat, p_lng: lng });
+  if (error) throw new Error(error.message);
+}
+
 export async function updateVenueContact(
   venueId: string, input: { address: string; phone: string; hours: string },
 ): Promise<void> {

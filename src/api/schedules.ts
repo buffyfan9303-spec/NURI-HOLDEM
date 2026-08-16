@@ -23,6 +23,8 @@ export interface Schedule {
   date: string; startTime: string; duration: string; format: TournamentFormat;
   guaranteed: boolean; prizePool?: number; prizePercent?: number; regCloseTime?: string;
   isCompetition?: boolean; // '대회/이벤트' 분류 — 필터 [대회]용 (Task 3)
+  /** 대회 등급 축(Phase 14 보류 해제) — 데일리/새틀라이트/시리즈, null=일반 */
+  grade?: 'daily' | 'satellite' | 'series' | null;
   blinds?: string;         // 블라인드 구조(선택) — 직접 입력
   buyIn: BuyInInfo; seats?: SeatVoucher[];
   structure?: { startingChips?: number; rebuyStack?: number; blindLevelMinutes?: number; lateRegLevels?: number; levels?: { sb: number; bb: number; ante: number; minutes: number; isBreak?: boolean }[] };
@@ -54,6 +56,7 @@ function rowToSchedule(r: any): Schedule {
     format: r.format, guaranteed: r.guaranteed, prizePool: r.prize_pool,
     prizePercent: r.prize_percent ?? undefined,
     isCompetition: r.is_competition ?? false,
+    grade: r.grade ?? null,
     blinds: r.blinds ?? undefined,
     regCloseTime: r.reg_close_time,
     buyIn: r.buy_in, seats: r.seats, structure: r.structure,
@@ -110,6 +113,7 @@ export async function createSchedule(
     format: payload.format, guaranteed: payload.guaranteed, prize_pool: payload.prizePool,
     prize_percent: payload.prizePercent ?? null,
     is_competition: payload.isCompetition ?? false,
+    grade: payload.grade ?? null,
     blinds: payload.blinds ?? null,
     reg_close_time: payload.regCloseTime,
     buy_in: payload.buyIn, structure: payload.structure,
@@ -139,6 +143,7 @@ export async function updateSchedule(id: string, patch: Partial<Schedule>): Prom
     ...(patch.format        !== undefined && { format:          patch.format }),
     ...(patch.guaranteed    !== undefined && { guaranteed:      patch.guaranteed }),
     ...(patch.isCompetition !== undefined && { is_competition:  patch.isCompetition }),
+    ...(patch.grade         !== undefined && { grade:            patch.grade }),
     ...(patch.prizePool     !== undefined && { prize_pool:      patch.prizePool }),
     ...(patch.prizePercent  !== undefined && { prize_percent:   patch.prizePercent }),
     ...(patch.blinds        !== undefined && { blinds:          patch.blinds }),

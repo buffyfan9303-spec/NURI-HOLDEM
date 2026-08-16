@@ -8,7 +8,7 @@ import type { Venue, Comment } from '../../api/community';
 import type { Schedule } from '../../api/schedules';
 import type { MarketplaceNotice } from '../../api/marketplace';
 import { useAuth } from '../../contexts/AuthContext';
-import { followVenue, unfollowVenue, getMyFollowedVenueIds, updateVenueContact, updateVenueKakao } from '../../api/community';
+import { setVenueCoords, followVenue, unfollowVenue, getMyFollowedVenueIds, updateVenueContact, updateVenueKakao } from '../../api/community';
 import { getVenueNotices, createVenueNotice, deleteVenueNotice, type VenueNotice } from '../../api/community';
 import { getVenueRatings } from '../../api/reviews';
 import { getVenueMessages, sendVenueMessage, deleteVenueMessage, subscribeVenueMessages, type VenueMessage } from '../../api/community';
@@ -381,6 +381,12 @@ export default function VenuePage({
                 onUpdateDescription={onUpdateDescription}
                 kakao={kakao}
                 onEditKakao={editKakao}
+                onCoords={(la, ln) => {
+                  // 매장 관리자(또는 admin) 기기이고 좌표 미보유일 때만 조용히 저장 — 거리순 데이터 자급.
+                  if ((isMyVenue || user?.role === 'admin') && venue.lat == null) {
+                    setVenueCoords(venue.id, la, ln).catch(() => { /* 권한·일시 오류 무시 */ });
+                  }
+                }}
               />
               <VenueReviews
                 venueId={venue.id}
@@ -1092,8 +1098,8 @@ function FollowButton({ venueId, followerCount, compact }: { venueId: string; fo
 // ── About 패널 ───────────────────────────────────────────────────────────────
 
 function AboutPanel({
-  venue, editable, onUpdateDescription, kakao, onEditKakao,
-}: { venue: Venue; editable?: boolean; onUpdateDescription?: (id: string, desc: string) => void; kakao?: string; onEditKakao?: () => void }) {
+  venue, editable, onUpdateDescription, kakao, onEditKakao, onCoords,
+}: { venue: Venue; editable?: boolean; onUpdateDescription?: (id: string, desc: string) => void; kakao?: string; onEditKakao?: () => void; onCoords?: (lat: number, lng: number) => void }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft]     = useState(venue.description ?? '');
   // 매장 정보(주소·전화·영업시간) 통합 편집
@@ -1245,7 +1251,7 @@ function AboutPanel({
       </section>
 
       {/* 카카오맵 위치 + 외부 지도 링크(주소 행에서 재배치) */}
-      <KakaoMap address={addr} name={venue.name} />
+      <KakaoMap address={addr} name={venue.name} onCoords={onCoords} />
       <div className="flex gap-1.5">
         <a href={`https://map.kakao.com/link/search/${encodeURIComponent(addr)}`} target="_blank" rel="noopener noreferrer" className={MAP_CHIP}>
           <span aria-hidden className="h-2 w-2 rounded-full bg-[#FEE500]" /> 카카오맵에서 보기
@@ -1337,7 +1343,10 @@ function PhoneRow({ phone }: { phone: string }) {
 
 const KAKAO_KEY = import.meta.env.VITE_KAKAO_MAP_KEY as string | undefined;
 
-function KakaoMap({ address, name }: { address: string; name: string }) {
+function KakaoMap({ address, name, onCoords }: { address: string; name: string; onCoords?: (lat: number, lng: number) => void }) {
+  // 부모가 인라인 함수를 넘겨도 지오코딩 이펙트가 렌더마다 재실행되지 않게 ref 로 고정
+  const onCoordsRef = useRef(onCoords);
+  onCoordsRef.current = onCoords;
   const [loading, error] = useKakaoLoader({
     appkey: KAKAO_KEY ?? '',
     libraries: ['services'],
@@ -1356,6 +1365,8 @@ function KakaoMap({ address, name }: { address: string; name: string }) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (status === (window as any).kakao.maps.services.Status.OK && result[0]) {
         setCoords({ lat: parseFloat(result[0].y), lng: parseFloat(result[0].x) });
+        // 좌표 라이트백(Phase 14 거리순의 데이터 공급) — 관리자 기기에서만 저장(부모 게이트)
+        onCoordsRef.current?.(parseFloat(result[0].y), parseFloat(result[0].x));
       }
     });
   }, [loading, error, address]);
