@@ -71,8 +71,12 @@ test('첫 진입 온보딩(#29) — 신규 방문자 웰컴 시트 표시 후 �
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('/');
-  await expect(page.getByText('NURI HOLDEM에 오신 걸 환영해요')).toBeVisible();
-  await page.getByRole('button', { name: '건너뛰기' }).click();
-  await expect(page.getByText('NURI HOLDEM에 오신 걸 환영해요')).toBeHidden();
+  // Phase 13-4: 5스텝 투어 → 1문답('주로 무엇을 하시나요?')으로 교체됨
+  await expect(page.getByText('주로 무엇을 하시나요?')).toBeVisible();
+  // 답 하나를 실제로 골라본다 — persona 가 저장되고 시트가 닫혀야 한다
+  await page.getByRole('button', { name: /대회 찾기/ }).click();
+  await expect(page.getByText('주로 무엇을 하시나요?')).toBeHidden();
+  expect(await page.evaluate(() => { try { return localStorage.getItem('nuri:persona'); } catch { return null; } }),
+    'persona 가 저장되지 않았다').toBe('tourney');
   expect(errors, `온보딩 예외: ${errors.join(' | ')}`).toEqual([]);
 });

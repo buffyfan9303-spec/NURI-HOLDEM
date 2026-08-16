@@ -672,6 +672,16 @@ export default function App() {
   const [visitedTabs] = useState(() => new Set<TabId>(['browse']));
   useEffect(() => { visitedTabs.add(activeTab); }, [activeTab, visitedTabs]);
 
+  // 온보딩 1문답(persona) → 즉시 탭 전환 이벤트 수신 (Phase 13-4)
+  useEffect(() => {
+    const h = (e: Event) => {
+      const t = (e as CustomEvent).detail as TabId;
+      if (t) changeTab(t);
+    };
+    window.addEventListener('nuri:goto-tab', h);
+    return () => window.removeEventListener('nuri:goto-tab', h);
+  }, [changeTab]);
+
   // 새 버전(배포) 감지(main.tsx의 SW updatefound) → 새로고침 배너
   useEffect(() => {
     const onUpd = () => setUpdateReady(true);

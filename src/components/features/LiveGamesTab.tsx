@@ -137,6 +137,11 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
             icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2.5 2.5" /><path d="M9 2h6" /></svg>}
             title="진행 중인 게임이 없습니다"
             desc="대회 클락이 시작되면 여기에 실시간으로 표시됩니다."
+            action={
+              // 빈 화면은 막다른 길이 아니라 다음 행동의 출발점(Phase 13-2)
+              <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('nuri:goto-tab', { detail: 'browse' }))}
+                className="btn-primary h-10 px-4 text-sm font-bold">📅 대회 일정 보기</button>
+            }
           />
         ) : (
           <div className="space-y-card-gap">

@@ -21,6 +21,7 @@ import { promptLogin } from '../../lib/requireLogin';
 import { checkIn, getMyCheckinStreak } from '../../api/checkins';
 import { myVisitedVenues } from '../../api/vouchers';
 import { scheduleStatus } from '../../lib/scheduleStatus';
+import CoachMark from '../atoms/CoachMark';
 import {
   getVenueRankings, getVenueRankingTotals, subscribeRankings, rankDisplay,
   getVenuePageConfig, getScoreEntries, getVenuePlayerCounts,
@@ -331,6 +332,7 @@ export default function VenuePage({
               </a>
             )}
           </div>
+          <CoachMark id="venue-checkin">체크인하면 출석 도장 · 전적 인정 · 방문 후기가 열려요 — 하루 한 번이면 충분해요.</CoachMark>
           {user && myAct && (myAct.streak > 0 || myAct.visits > 0) && (
             <p className="text-2xs text-ink-muted tabular-nums">
               {myAct.streak > 0 && <>🔥 연속 출석 <b className="text-ink-secondary">{myAct.streak}일</b></>}

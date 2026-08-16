@@ -12,18 +12,11 @@ const SEEN_KEY = 'nuri_onboarding_v1';
 // 공유 대회/매장/체크인/디스플레이 + 테이블 바인 QR(buyin·game)·가입 QR(signup) 포함.
 const DEEPLINK_KEYS = ['s', 'v', 'venue', 'display', 'checkin', 'post', 'ref', 'shared', 'g', 'buyin', 'game', 'signup'];
 
-interface Step { icon: string; title: string; body: string; }
-const STEPS: Step[] = [
-  { icon: '👋', title: 'NURI HOLDEM에 오신 걸 환영해요', body: '전국 홀덤 대회 일정 · 홀덤펍 커뮤니티 · 중고장터를 한 곳에서. 핵심만 30초 안에 안내할게요.' },
-  { icon: '🗺️', title: '내 주변 대회 찾기', body: '지역 · 날짜 · 바이인으로 토너먼트를 찾고, 마음에 드는 대회는 내 캘린더에 바로 추가하세요.' },
-  { icon: '📍', title: '체크인 & 출석', body: '매장 QR로 체크인하면 출석 도장이 쌓이고, 전적이 인정되며 방문 후기를 남길 수 있어요.' },
-  { icon: '💬', title: '커뮤니티 & 중고장터', body: '핸드 분석을 공유하고, 칩 · 용품을 안전하게 사고팔 수 있어요.' },
-  { icon: '🔒', title: '휴대폰 본인인증 한 번', body: '글쓰기 · 대회 예약 · 전적 인정을 위해 휴대폰 인증을 1회만 하면 모든 기능이 열려요.' },
-];
-
 export default function OnboardingSheet() {
+  // 마스터 지시서 Phase 13-4: 최초 방문에 단 하나만 묻는다 — 3초 안에 끝나고 건너뛸 수 있다.
+  // (예전 5스텝 스와이프 투어는 문서 원칙 '풀스크린 투어 금지 — 스킵된다'에 따라 1문답으로 교체.
+  //  각 화면의 사용법 안내는 코치마크(CoachMark)가 그 자리에서 1개씩 담당한다.)
   const [open, setOpen] = useState(false);
-  const [step, setStep] = useState(0);
 
   useEffect(() => {
     try {
@@ -35,40 +28,40 @@ export default function OnboardingSheet() {
     } catch { /* SSR/no storage */ }
   }, []);
 
-  const finish = () => {
-    try { localStorage.setItem(SEEN_KEY, '1'); } catch { /* noop */ }
+  const finish = (persona?: 'tourney' | 'regular' | 'gto') => {
+    try {
+      localStorage.setItem(SEEN_KEY, '1');
+      if (persona) localStorage.setItem('nuri:persona', persona);
+    } catch { /* noop */ }
     setOpen(false);
+    // GTO 공부가 목적이면 도구 탭에서 시작 — 새 방문의 첫 화면이 곧 답이 되게.
+    if (persona === 'gto') window.dispatchEvent(new CustomEvent('nuri:goto-tab', { detail: 'tools' }));
   };
-  const next = () => { if (step < STEPS.length - 1) setStep((s) => s + 1); else finish(); };
-  const isLast = step === STEPS.length - 1;
-  const s = STEPS[step];
+
+  const OPTIONS: { key: 'tourney' | 'regular' | 'gto'; icon: string; title: string; desc: string }[] = [
+    { key: 'tourney', icon: '🏆', title: '대회 찾기', desc: '내 주변 토너먼트 일정을 본다' },
+    { key: 'regular', icon: '📍', title: '매장 단골', desc: '자주 가는 매장 체크인 · 이용권' },
+    { key: 'gto', icon: '🎯', title: 'GTO 공부', desc: '핸드 분석 · 트레이너로 연습' },
+  ];
 
   return (
-    <Modal open={open} onClose={finish} variant="sheet" maxWidth="sm" title="시작하기">
-      <div className="flex flex-col px-5 pb-5 pt-2">
-        {/* 진행 점 */}
-        <div className="flex justify-center gap-1.5 pb-4" aria-hidden>
-          {STEPS.map((_, i) => (
-            <span key={i} className={['h-1.5 rounded-full transition-all duration-300',
-              i === step ? 'w-5 bg-accent-300' : i < step ? 'w-1.5 bg-accent-300/50' : 'w-1.5 bg-border-strong'].join(' ')} />
-          ))}
-        </div>
-
-        <div className="flex flex-col items-center gap-3 text-center" aria-live="polite">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-accent-300/[0.12] text-3xl" aria-hidden>{s.icon}</div>
-          <h3 className="text-base font-bold text-ink-primary">{s.title}</h3>
-          <p className="min-h-[3.5rem] text-2xs leading-relaxed text-ink-secondary">{s.body}</p>
-        </div>
-
-        <div className="mt-5 flex items-center gap-2">
-          <button type="button" onClick={finish} className="btn-ghost px-3 py-2.5 text-xs text-ink-muted">
-            건너뛰기
+    <Modal open={open} onClose={() => finish()} variant="sheet" maxWidth="sm" title="시작하기">
+      <div className="flex flex-col gap-2 px-5 pb-5 pt-2">
+        <p className="text-sm font-bold text-ink-primary">주로 무엇을 하시나요?</p>
+        <p className="-mt-1 text-2xs text-ink-muted">첫 화면을 맞춰드려요 — 언제든 바꿀 수 있어요.</p>
+        {OPTIONS.map((o) => (
+          <button key={o.key} type="button" onClick={() => finish(o.key)}
+            className="flex items-center gap-3 rounded-card border border-border-default bg-surface-high px-3.5 py-3 text-left transition-colors hover:border-accent-400/50 hover:bg-accent-300/[0.06] active:scale-[0.99]">
+            <span className="text-2xl" aria-hidden>{o.icon}</span>
+            <span className="min-w-0">
+              <span className="block text-sm font-bold text-ink-primary">{o.title}</span>
+              <span className="block text-2xs text-ink-secondary">{o.desc}</span>
+            </span>
           </button>
-          <button type="button" onClick={next} className="btn-primary flex-1 py-3 text-sm">
-            {isLast ? '시작하기' : '다음'}
-          </button>
-        </div>
-        <p className="mt-2 text-center text-[10px] text-ink-muted">{step + 1} / {STEPS.length}</p>
+        ))}
+        <button type="button" onClick={() => finish()} className="btn-ghost mt-1 py-2.5 text-xs text-ink-muted">
+          건너뛰기
+        </button>
       </div>
     </Modal>
   );
