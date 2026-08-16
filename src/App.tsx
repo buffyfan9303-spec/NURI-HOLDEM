@@ -563,7 +563,7 @@ function MobileTabBar({ tabs, active, onChange, dot, onOpenMe }: {
     <nav
       className={['fixed inset-x-0 bottom-0 z-50 lg:hidden pointer-events-none transition-transform duration-300',
         hidden ? 'translate-y-[120%]' : 'translate-y-0'].join(' ')}
-      style={{ paddingBottom: 'env(safe-area-inset-bottom)', transitionTimingFunction: 'cubic-bezier(0.32, 0.72, 0, 1)' }}
+      style={{ paddingBottom: 'env(safe-area-inset-bottom)', transitionTimingFunction: 'var(--ease)' }}
       aria-label="하단 내비게이션"
     >
       {/* 탭바 밖(좌우·아래) 틈으로 스크롤 컨텐츠가 비치지 않게 — 베이스색 그라데이션 커튼 */}

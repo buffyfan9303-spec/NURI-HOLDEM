@@ -174,7 +174,7 @@ export default function Modal({
         // 제목이 없는 전체화면은 이름이 없어 그냥 '대화상자' 로만 읽힌다 — 최소한의 이름을 준다.
         aria-label={title ? undefined : '전체화면 보기'}
         onTouchStart={onSheetStart} onTouchMove={onSheetMove} onTouchEnd={onSheetEnd}
-        style={dragY > 0 ? { transform: `translateY(${dragY}px)`, transition: 'none' } : { transition: 'transform 0.28s cubic-bezier(0.32, 0.72, 0, 1)' }}
+        style={dragY > 0 ? { transform: `translateY(${dragY}px)`, transition: 'none' } : { transition: 'transform 0.28s var(--ease)' }}
         className={['fixed inset-0 z-[55] bg-surface-base flex flex-col pt-[env(safe-area-inset-top)]', closing ? 'animate-fade-out' : 'animate-fade-in'].join(' ')}>
         {/* 드래그 핸들(모바일) — 시트를 끌어내려 닫기 */}
         <div aria-hidden className="lg:hidden absolute top-1.5 left-1/2 z-10 h-1 w-10 -translate-x-1/2 rounded-full bg-ink-primary/25" />
@@ -248,7 +248,7 @@ export default function Modal({
           ...(variant === 'sheet' && dragY > 0
             ? { transform: `translateY(${dragY}px)`, transition: 'none', animation: 'none' }
             : variant === 'sheet'
-              ? { transition: 'transform 0.28s cubic-bezier(0.32, 0.72, 0, 1)' }
+              ? { transition: 'transform 0.28s var(--ease)' }
               : {}),
         }}
       >

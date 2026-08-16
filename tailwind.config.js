@@ -113,8 +113,16 @@ export default {
 
       // ── Animation ─────────────────────────────────────────────────────────
       transitionTimingFunction: {
-        spring:          'cubic-bezier(0.34, 1.56, 0.64, 1)',
-        'ease-out-quart':'cubic-bezier(0.25, 1, 0.5, 1)',
+        // ── 단일 물리(Phase 1): DEFAULT 재정의 = 앱의 모든 transition-* 유틸이
+        //    파일 수정 없이 한 곡선으로 통일(기본 cubic-bezier(0.4,0,0.2,1) 대체).
+        //    ease-in/out/in-out 유틸도 같은 곡선 — 화면마다 다른 가속을 없앤다.
+        //    (spring/ease-out-quart 는 사용처 0의 죽은 값 — 같은 곡선으로 봉인)
+        DEFAULT:         'cubic-bezier(0.32, 0.72, 0, 1)',
+        in:              'cubic-bezier(0.32, 0.72, 0, 1)',
+        out:             'cubic-bezier(0.32, 0.72, 0, 1)',
+        'in-out':        'cubic-bezier(0.32, 0.72, 0, 1)',
+        spring:          'cubic-bezier(0.32, 0.72, 0, 1)',
+        'ease-out-quart':'cubic-bezier(0.32, 0.72, 0, 1)',
       },
       keyframes: {
         'badge-pulse': {
@@ -154,12 +162,12 @@ export default {
       },
       animation: {
         'badge-pulse': 'badge-pulse 2s ease-in-out infinite',
-        'slide-up':    'slide-up 0.2s ease-out',
+        'slide-up':    'slide-up 0.2s cubic-bezier(0.32, 0.72, 0, 1)',
         // iOS 시트 감각 — 빠르게 출발해 부드럽게 안착(감속 위주 곡선). 0.2s 는 '툭' 끊겨 보인다.
         'sheet-up':    'sheet-up 0.32s cubic-bezier(0.32, 0.72, 0, 1)',
-        'slide-down':  'slide-down 0.2s cubic-bezier(0.4, 0, 1, 1) forwards',
-        'fade-in':     'fade-in 0.15s ease-out',
-        'fade-out':    'fade-out 0.18s ease-in forwards',
+        'slide-down':  'slide-down 0.2s cubic-bezier(0.32, 0.72, 0, 1) forwards',
+        'fade-in':     'fade-in 0.15s cubic-bezier(0.32, 0.72, 0, 1)',
+        'fade-out':    'fade-out 0.18s cubic-bezier(0.32, 0.72, 0, 1) forwards',
         shimmer:       'shimmer 1.5s linear infinite',
       },
     },

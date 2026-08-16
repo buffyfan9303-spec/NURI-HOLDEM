@@ -10,6 +10,19 @@
    * - 값은 "R G B" 공백 구분(알파 합성을 위해). gold/danger 등 브랜드 색은 고정.
    * ────────────────────────────────────────────────────────────────────────── */
   /* ── NURI PET · Linear 인디고 다크 (시그니처) — 근검정 배경·헤어라인 패널 ── */
+  /* ── 모션 물리 (마스터 지시서 Phase 1) — 앱 전체가 이 한 벌만 쓴다 ──────────
+     곡선이 여러 개면 화면마다 물리 법칙이 달라져 '삐걱거린다'고 지각된다.
+     apislive 실측·iOS UIKit 시트와 동일 계열의 감속 곡선 하나로 통일.
+     예외 2개뿐: 루프(스피너·펄스), shake(오류 진동 이펙트). 테마와 무관해 :root 단독. */
+  :root {
+    --ease: cubic-bezier(0.32, 0.72, 0, 1);
+    --dur-fast: 0.15s;   /* 색·배경·보더, 프레스 */
+    --dur-base: 0.2s;    /* 요소 등장/퇴장, 칩 전환 */
+    --dur-panel: 0.26s;  /* 시트·오버레이·풀스크린 */
+    --press: scale(0.985);
+    --press-icon: scale(0.88);
+  }
+
   :root,
   html.dark {
     --surface-base:  8 9 10;     /* #08090A Linear bg */
@@ -260,10 +273,10 @@ main { max-width: 48rem; margin-inline: auto; }
 
 /* ── 앱(iOS) 감성 모션 ──────────────────────────────────────────────────────
    네이티브처럼 '빠르게 시작해 부드럽게 정착'하는 곡선으로 통일.
-   cubic-bezier(0.32, 0.72, 0, 1) = iOS 시트/내비 전환과 동일 계열. */
-.animate-fade-in  { animation-duration: 0.16s; animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1); }
-.animate-fade-out { animation-duration: 0.18s; animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1); }
-.animate-slide-up { animation-duration: 0.32s; animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1); }
+   var(--ease) = iOS 시트/내비 전환과 동일 계열. */
+.animate-fade-in  { animation-duration: 0.16s; animation-timing-function: var(--ease); }
+.animate-fade-out { animation-duration: 0.18s; animation-timing-function: var(--ease); }
+.animate-slide-up { animation-duration: 0.32s; animation-timing-function: var(--ease); }
 
 /* ── 전역 안전망 — 탭 전환 '치직'(진입 애니메이션 재생) 재발 차단 ──────────────
    keep-alive 탭(.tab-pane)은 언마운트 대신 display:none 으로만 숨겼다가 다시 보이는데,
@@ -352,7 +365,7 @@ html.light .text-pink-300 { color: #BE185D; }
 
 /* ── 프레스 스프링(버튼 이펙트) — 누르면 깊게 눌리고, 떼면 통통 튀며 복귀 */
 .press-spring {
-  transition: transform 0.45s cubic-bezier(0.18, 2, 0.32, 1);
+  transition: transform var(--dur-base) var(--ease);
   will-change: transform;
 }
 .press-spring:active {
@@ -377,7 +390,7 @@ button, [role='button'], a, [role='tab'] {
 button:not([data-no-press]), [role='button']:not([data-no-press]) {
   transition-property: opacity, transform, color, background-color, border-color;
   transition-duration: 0.2s;
-  transition-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+  transition-timing-function: var(--ease);
   -webkit-tap-highlight-color: transparent;
 }
 button:active:not(:disabled), [role='button']:active {
@@ -388,11 +401,11 @@ button:active:not(:disabled), [role='button']:active {
 /* ── 탭 방향 슬라이드(모바일 전용) — 탭 순서상 오른쪽이면 오른쪽에서 8px 진입 ── */
 @keyframes tab-in-r { from { opacity: 0.55; transform: translateX(8px); }  to { opacity: 1; transform: translateX(0); } }
 @keyframes tab-in-l { from { opacity: 0.55; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
-.tab-anim-r { animation: tab-in-r 0.18s cubic-bezier(0.32, 0.72, 0, 1); }
-.tab-anim-l { animation: tab-in-l 0.18s cubic-bezier(0.32, 0.72, 0, 1); }
+.tab-anim-r { animation: tab-in-r 0.18s var(--ease); }
+.tab-anim-l { animation: tab-in-l 0.18s var(--ease); }
 @media (min-width: 1024px) {
   /* PC는 기존 페이드 감각 유지 — 가로 슬라이드는 모바일 제스처 문법 */
-  .tab-anim-r, .tab-anim-l { animation: fade-in 0.16s cubic-bezier(0.32, 0.72, 0, 1); }
+  .tab-anim-r, .tab-anim-l { animation: fade-in 0.16s var(--ease); }
 }
 
 /* 실패 흔들기 — macOS 비밀번호 틀림 패턴(말 없이 '아니야') */
