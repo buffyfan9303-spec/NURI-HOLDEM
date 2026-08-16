@@ -2256,6 +2256,7 @@ export default function App() {
                 onUpdateImage={handleUpdateVenueImage}
                 onUpdateImages={handleUpdateVenueImages}
                 onSelectSchedule={handleScheduleSelect}
+                onOpenWallet={() => setVoucherWalletOpen(true)}
               />
             )}
           </Suspense>

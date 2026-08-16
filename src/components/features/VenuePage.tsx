@@ -18,6 +18,9 @@ import EmptyState from '../atoms/EmptyState';
 import { SkeletonList } from '../atoms/Skeleton';
 import { relativeTime } from './MarketplaceTab';
 import { promptLogin } from '../../lib/requireLogin';
+import { checkIn, getMyCheckinStreak } from '../../api/checkins';
+import { myVisitedVenues } from '../../api/vouchers';
+import { scheduleStatus } from '../../lib/scheduleStatus';
 import {
   getVenueRankings, getVenueRankingTotals, subscribeRankings, rankDisplay,
   getVenuePageConfig, getScoreEntries, getVenuePlayerCounts,
@@ -47,6 +50,8 @@ interface VenuePageProps {
   onUpdateImages?: (venueId: string, urls: string[]) => void;
   /** 포스터/진행예정 클릭 시 일정 상세 열기 */
   onSelectSchedule?: (s: Schedule) => void;
+  /** Tier3 '내 활동'에서 이용권·포인트 지갑(내 정보) 열기 */
+  onOpenWallet?: () => void;
 }
 
 type Tab = 'about' | 'ranking' | 'posters' | 'schedules' | 'community';
@@ -73,7 +78,7 @@ const TAB_LABEL: Record<Tab, string> = {
 export default function VenuePage({
   venue, open, onClose, schedules, comments, notices = [],
   onSubmitComment, onDeleteComment, onUpdateDescription, onUpdateImage, onUpdateImages,
-  onSelectSchedule,
+  onSelectSchedule, onOpenWallet,
 }: VenuePageProps) {
   const [tab, setTab] = useState<Tab>('about');
   const { user, isApprovedOwner } = useAuth();
@@ -90,6 +95,23 @@ export default function VenuePage({
     getVenueRatings().then((m) => { if (alive) setRating(m[venue.id] ?? null); }).catch(() => {});
     return () => { alive = false; };
   }, [venue?.id]);
+
+  // Tier1 요약·Tier3 게이트용 내 활동(연속 출석·이 매장 방문 횟수) — 로그인 시 1회
+  const [myAct, setMyAct] = useState<{ streak: number; visits: number } | null>(null);
+  const [checkinBusy, setCheckinBusy] = useState(false);
+  useEffect(() => {
+    setMyAct(null);
+    if (!user || !venue?.id) return;
+    let alive = true;
+    Promise.all([getMyCheckinStreak().catch(() => 0), myVisitedVenues().catch(() => [])])
+      .then(([streak, visited]) => {
+        if (!alive) return;
+        const mine = visited.find((v) => v.venueId === venue.id);
+        setMyAct({ streak, visits: mine?.visits ?? 0 });
+      });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, venue?.id]);
 
   // 업주가 설정한 탭 순서(page_config.tabOrder) — 미설정 시 기본 순서
   const [tabOrder, setTabOrder] = useState<Tab[] | null>(null);
@@ -153,6 +175,22 @@ export default function VenuePage({
     try { await updateVenueKakao(venue.id, url); setKakaoOverride(url.trim()); toast.show(url.trim() ? '카카오톡 링크를 저장했습니다' : '링크를 삭제했습니다', 'success'); }
     catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
   };
+  // Tier1 [QR 체크인] — 매장 비치 QR 스캔(?checkin= 딥링크)과 같은 RPC·같은 게이트(4시간 중복 방지).
+  // 매장 페이지에 이미 들어와 있다 = venueId 를 안다 — 스캔과 동일한 보안 수준이므로 바로 호출한다.
+  const doCheckin = async () => {
+    if (!user) { toast.show('로그인 후 체크인할 수 있습니다', 'error'); promptLogin(); return; }
+    if (checkinBusy) return;
+    setCheckinBusy(true);
+    try {
+      const name = await checkIn(venue!.id);
+      const streak = await getMyCheckinStreak().catch(() => 0);
+      const fire = streak >= 2 ? ` 🔥 ${streak}일 연속` : '';
+      const bonus = streak > 0 && streak % 7 === 0 ? ' · 7일 연속 보너스 +10점!' : '';
+      toast.show(`${name || venue!.name} 체크인 완료! 출석 도장 +3점${fire}${bonus} 🎉`, 'success');
+      setMyAct((cur) => (cur ? { ...cur, streak } : { streak, visits: 0 }));
+    } catch (e) { toast.show(e instanceof Error ? e.message : '체크인 실패', 'error'); }
+    finally { setCheckinBusy(false); }
+  };
   const shareVenue = async () => {
     // 단축 + 카톡 미리보기: /s/<커스텀 슬러그 또는 8자리> → 봇은 OG 카드, 사람은 /?v= 앱으로.
     const url = `${location.origin}/s/${venue.slug || venue.id.slice(0, 8)}`;
@@ -188,6 +226,17 @@ export default function VenuePage({
             내 매장
           </span>
         )}
+        {/* Phase 10: 팔로우·공유를 헤더로 — 히어로는 '지금 필요한 행동' 4개만 남긴다 */}
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          <FollowButton venueId={venue.id} followerCount={venue.followerCount} compact />
+          <button type="button" onClick={shareVenue} aria-label="매장 링크 공유"
+            className="w-9 h-9 flex items-center justify-center rounded-full text-ink-secondary hover:text-ink-primary hover:bg-surface-high transition-colors">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
+              <path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4" />
+            </svg>
+          </button>
+        </div>
       </header>
 
       {/* ── 스크롤 컨테이너 ────────────────────────────────────────────── */}
@@ -228,26 +277,67 @@ export default function VenuePage({
                 )}
               </h2>
               <p className="text-xs text-ink-muted mt-1">{venue.address}</p>
-              <div className="flex items-center gap-2 mt-2 flex-wrap">
-                {kakao && (
-                  <a href={kakao} target="_blank" rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input bg-[#FEE500] text-[#3A1D1D] text-xs font-bold hover:brightness-95 transition-all active:scale-95">
-                    <span aria-hidden>💬</span> 카카오톡 오픈채팅
-                  </a>
-                )}
-                {isMyVenue && (
-                  <button type="button" onClick={editKakao} className="text-2xs text-ink-muted hover:text-accent-300">{kakao ? '카톡링크 수정' : '+ 카톡링크 등록'}</button>
-                )}
-              </div>
+              {/* 카카오톡 오픈채팅 링크는 '매장 정보'(AboutPanel)로 이동 — Phase 10:
+                  첫 뷰포트의 인터랙티브 요소를 '지금 필요한 행동'만 남기기 위해서다. */}
             </div>
-            {/* 팔로우 + 링크공유 한 묶음 */}
-            <div className="inline-grid shrink-0 grid-cols-1 content-start gap-1.5">
-              <FollowButton venueId={venue.id} followerCount={venue.followerCount} />
-              <button type="button" onClick={shareVenue} className="inline-flex items-center justify-center gap-1 px-3 h-9 rounded-input bg-surface-high border border-border-default text-xs font-semibold text-ink-secondary hover:text-accent-300 transition-colors">
-                <span aria-hidden>🔗</span> 링크 공유
-              </button>
-            </div>
+            {/* (팔로우·링크공유는 헤더로 이동 — Phase 10) */}
           </div>
+        </div>
+
+        {/* ── Tier 1: 지금 필요한 행동 (마스터 지시서 Phase 10-1) ──────────────
+            매장 상세의 물리적 최종 행동은 '도착을 알리거나(체크인)·걸거나(전화)·찾아가는(길찾기)'
+            것이다 — 이 셋이 스크롤 없이 첫 화면에 있어야 한다. PokerAtlas·러너러너·와홀덤·apis
+            4개 서비스 공통으로 최상단은 '지금 무슨 게임이 도는가'다. 존재하는 데이터만 렌더. */}
+        <div className="px-page-x py-3 border-b border-border-subtle space-y-2.5">
+          {todayPosters.length > 0 && (() => {
+            const t0 = todayPosters[0];
+            const st = scheduleStatus(t0.date, t0.startTime);
+            return (
+              <button type="button" onClick={() => onSelectSchedule?.(t0)}
+                className="w-full flex items-center gap-2.5 rounded-card border border-accent-400/30 bg-accent-300/[0.06] px-3 py-2.5 text-left hover:bg-accent-300/10 transition-colors">
+                <span className="shrink-0 text-lg" aria-hidden>🔥</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-2xs font-bold text-accent-300">
+                    오늘의 대회{todayPosters.length > 1 ? ` 외 ${todayPosters.length - 1}건` : ''}
+                  </span>
+                  <span className="block truncate text-sm font-bold text-ink-primary">{t0.title}</span>
+                  <span className="block text-2xs text-ink-secondary tabular-nums">
+                    {t0.startTime} 시작{t0.buyIn?.amount ? ` · 바이인 ${t0.buyIn.amount.toLocaleString()}원` : ''}
+                  </span>
+                </span>
+                <span className={['shrink-0 text-2xs font-bold px-2 py-0.5 rounded-badge',
+                  st === 'live' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-surface-high text-ink-secondary'].join(' ')}>
+                  {st === 'live' ? '진행중' : st === 'ended' ? '종료' : '예정'}
+                </span>
+              </button>
+            );
+          })()}
+          <div className="flex gap-2">
+            <button type="button" onClick={doCheckin} disabled={checkinBusy} data-coach="venue-checkin"
+              className="btn-primary h-11 flex-1 text-sm font-bold disabled:opacity-60">
+              {checkinBusy ? '체크인 중…' : '📍 QR 체크인'}
+            </button>
+            {venue.contactPhone && (
+              <a href={`tel:${venue.contactPhone}`}
+                className="inline-flex h-11 items-center gap-1 rounded-input border border-border-default bg-surface-high px-3.5 text-sm font-semibold text-ink-secondary hover:text-ink-primary transition-colors">
+                <span aria-hidden>📞</span> 전화
+              </a>
+            )}
+            {venue.address && (
+              <a href={`https://map.kakao.com/link/search/${encodeURIComponent(venue.address)}`}
+                target="_blank" rel="noopener noreferrer"
+                className="inline-flex h-11 items-center gap-1 rounded-input border border-border-default bg-surface-high px-3.5 text-sm font-semibold text-ink-secondary hover:text-ink-primary transition-colors">
+                <span aria-hidden>🗺</span> 길찾기
+              </a>
+            )}
+          </div>
+          {user && myAct && (myAct.streak > 0 || myAct.visits > 0) && (
+            <p className="text-2xs text-ink-muted tabular-nums">
+              {myAct.streak > 0 && <>🔥 연속 출석 <b className="text-ink-secondary">{myAct.streak}일</b></>}
+              {myAct.streak > 0 && myAct.visits > 0 && ' · '}
+              {myAct.visits > 0 && <>이 매장 방문 <b className="text-ink-secondary">{myAct.visits}회</b></>}
+            </p>
+          )}
         </div>
 
         {/* ── Sticky 탭바 ─────────────────────────────────────────── */}
@@ -288,6 +378,8 @@ export default function VenuePage({
                 venue={venue}
                 editable={isMyVenue}
                 onUpdateDescription={onUpdateDescription}
+                kakao={kakao}
+                onEditKakao={editKakao}
               />
               <VenueReviews
                 venueId={venue.id}
@@ -296,6 +388,27 @@ export default function VenuePage({
                 isAdmin={user?.role === 'admin'}
                 canReply={isMyVenue || user?.role === 'admin'}
               />
+              {/* ── Tier 3: 내 활동 (Phase 10-1 계층3) ──────────────────────────
+                  단골에게만 의미 있는 것들(이용권·포인트·시즌)은 접힌 채로 —
+                  처음 온 사용자는 이 블록 자체가 DOM 에 없다(display:none 이 아니라 미렌더).
+                  게이트: 로그인 + 활동 이력(연속출석 또는 이 매장 방문 기록). */}
+              {user && myAct && (myAct.streak > 0 || myAct.visits > 0) && (
+                <details className="rounded-card border border-border-subtle overflow-hidden">
+                  <summary className="cursor-pointer list-none flex items-center justify-between px-3 py-2.5 text-sm font-semibold text-ink-primary hover:bg-surface-high/50 transition-colors">
+                    <span>🙋 내 활동</span><span className="text-xs text-ink-muted" aria-hidden>▾</span>
+                  </summary>
+                  <div className="border-t border-border-subtle divide-y divide-border-subtle">
+                    <button type="button" onClick={onOpenWallet}
+                      className="w-full flex items-center justify-between px-3 py-2.5 text-sm text-ink-secondary hover:text-ink-primary hover:bg-surface-high/50 transition-colors">
+                      <span>🎟 이용권 · 포인트 관리</span><span className="text-ink-muted" aria-hidden>›</span>
+                    </button>
+                    <button type="button" onClick={() => setTab('ranking')}
+                      className="w-full flex items-center justify-between px-3 py-2.5 text-sm text-ink-secondary hover:text-ink-primary hover:bg-surface-high/50 transition-colors">
+                      <span>🏅 시즌 순위 · 명예의 전당</span><span className="text-ink-muted" aria-hidden>›</span>
+                    </button>
+                  </div>
+                </details>
+              )}
             </div>
           )}
           {tab === 'ranking' && <><SeasonPanel venueId={venue.id} venueName={venue.name} /><div className="mt-5 border-t border-border-subtle pt-4"><VenueRankingPanel venueId={venue.id} /></div></>}
@@ -925,7 +1038,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
   );
 }
 
-function FollowButton({ venueId, followerCount }: { venueId: string; followerCount?: number }) {
+function FollowButton({ venueId, followerCount, compact }: { venueId: string; followerCount?: number; compact?: boolean }) {
   const { user } = useAuth();
   const toast = useToast();
   const [following, setFollowing] = useState(false);
@@ -958,15 +1071,19 @@ function FollowButton({ venueId, followerCount }: { venueId: string; followerCou
       onClick={toggle}
       disabled={busy}
       aria-pressed={following}
+      aria-label={following ? '팔로우 해제' : '매장 팔로우'}
       className={[
-        'shrink-0 inline-flex items-center justify-center gap-1 px-3 h-9 rounded-input text-xs font-semibold transition-colors disabled:opacity-60',
+        // compact: 헤더용 — 높이만 헤더 아이콘(36px)에 맞추고 라벨은 유지(팔로워 수는 숨김)
+        compact
+          ? 'shrink-0 inline-flex items-center justify-center gap-1 px-2.5 h-9 rounded-full text-xs font-semibold transition-colors disabled:opacity-60'
+          : 'shrink-0 inline-flex items-center justify-center gap-1 px-3 h-9 rounded-input text-xs font-semibold transition-colors disabled:opacity-60',
         following
           ? 'bg-accent-300 text-white'
           : 'bg-surface-high text-ink-secondary border border-border-default hover:text-ink-primary',
       ].join(' ')}
     >
       {following ? '팔로잉' : '팔로우'}
-      <span className="text-2xs opacity-80">({count.toLocaleString()})</span>
+      {!compact && <span className="text-2xs opacity-80">({count.toLocaleString()})</span>}
     </button>
   );
 }
@@ -974,8 +1091,8 @@ function FollowButton({ venueId, followerCount }: { venueId: string; followerCou
 // ── About 패널 ───────────────────────────────────────────────────────────────
 
 function AboutPanel({
-  venue, editable, onUpdateDescription,
-}: { venue: Venue; editable?: boolean; onUpdateDescription?: (id: string, desc: string) => void }) {
+  venue, editable, onUpdateDescription, kakao, onEditKakao,
+}: { venue: Venue; editable?: boolean; onUpdateDescription?: (id: string, desc: string) => void; kakao?: string; onEditKakao?: () => void }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft]     = useState(venue.description ?? '');
   // 매장 정보(주소·전화·영업시간) 통합 편집
@@ -1058,14 +1175,20 @@ function AboutPanel({
 
       <div className="border-t border-border-subtle" />
 
-      <section className="space-y-2">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-ink-primary">매장 정보</h3>
-          {editable && !infoEditing && (
+      {/* 계층 2(Phase 10): 위치·연락처·영업시간 상세는 접힌 채 —
+          '가는 행동' 자체는 Tier1(전화/길찾기)이 이미 담당하므로 여기는 참고 정보다. */}
+      <details className="group/vinfo" open={editable || undefined}>
+        <summary className="cursor-pointer list-none flex items-center justify-between py-1">
+          <h3 className="text-sm font-semibold text-ink-primary">📍 위치 · 연락처 · 영업시간</h3>
+          <span className="text-xs text-ink-muted transition-transform group-open/vinfo:rotate-180" aria-hidden>▾</span>
+        </summary>
+      <section className="space-y-2 pt-1.5">
+        {editable && !infoEditing && (
+          <div className="flex justify-end">
             <button type="button" onClick={openInfoEdit}
               className="text-2xs text-ink-muted hover:text-accent-300">정보 편집</button>
-          )}
-        </div>
+          </div>
+        )}
         {infoEditing ? (
           <div className="space-y-2">
             <label className="block">
@@ -1102,10 +1225,35 @@ function AboutPanel({
             {hours && <Row dt="영업시간" dd={hours} />}
           </dl>
         )}
+        {/* 카카오톡 오픈채팅 — 첫 화면(Tier1)에서 매장 정보로 이동(Phase 10) */}
+        {(kakao || editable) && (
+          <div className="flex items-center gap-2 pt-1 flex-wrap">
+            {kakao && (
+              <a href={kakao} target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input bg-[#FEE500] text-[#3A1D1D] text-xs font-bold hover:brightness-95 transition-all active:scale-95">
+                <span aria-hidden>💬</span> 카카오톡 오픈채팅
+              </a>
+            )}
+            {editable && (
+              <button type="button" onClick={onEditKakao} className="text-2xs text-ink-muted hover:text-accent-300">
+                {kakao ? '카톡링크 수정' : '+ 카톡링크 등록'}
+              </button>
+            )}
+          </div>
+        )}
       </section>
 
-      {/* 카카오맵 위치 */}
+      {/* 카카오맵 위치 + 외부 지도 링크(주소 행에서 재배치) */}
       <KakaoMap address={addr} name={venue.name} />
+      <div className="flex gap-1.5">
+        <a href={`https://map.kakao.com/link/search/${encodeURIComponent(addr)}`} target="_blank" rel="noopener noreferrer" className={MAP_CHIP}>
+          <span aria-hidden className="h-2 w-2 rounded-full bg-[#FEE500]" /> 카카오맵에서 보기
+        </a>
+        <a href={`https://map.naver.com/v5/search/${encodeURIComponent(addr)}`} target="_blank" rel="noopener noreferrer" className={MAP_CHIP}>
+          <span aria-hidden className="h-2 w-2 rounded-full bg-[#03C75A]" /> 네이버지도
+        </a>
+      </div>
+      </details>
     </div>
   );
 }
@@ -1133,29 +1281,21 @@ function AddressRow({ address }: { address: string }) {
       toast.show('복사에 실패했습니다', 'error');
     }
   };
-  // 길찾기 딥링크 — 모바일은 앱으로, PC는 웹 지도로 연결
-  const naverUrl = `https://map.naver.com/v5/search/${encodeURIComponent(address)}`;
-  const kakaoUrl = `https://map.kakao.com/link/search/${encodeURIComponent(address)}`;
   return (
     <div className="flex items-start gap-2 text-xs">
       <dt className="w-14 shrink-0 text-ink-muted">주소</dt>
       <dd className="flex-1 space-y-1.5">
-        <span className="block text-ink-secondary whitespace-pre-line">{address}</span>
-        <div className="grid grid-cols-3 gap-1.5 lg:flex lg:flex-wrap lg:items-center">
-          {/* 동일 규격 칩 — 브랜드 원색 배경 대신 색점만. 모바일은 3등분 그리드로 항상 한 줄 */}
-          <a href={kakaoUrl} target="_blank" rel="noopener noreferrer" className={MAP_CHIP}>
-            <span aria-hidden className="h-2 w-2 rounded-full bg-[#FEE500]" /> 카카오맵
-          </a>
-          <a href={naverUrl} target="_blank" rel="noopener noreferrer" className={MAP_CHIP}>
-            <span aria-hidden className="h-2 w-2 rounded-full bg-[#03C75A]" /> 네이버지도
-          </a>
-          <button type="button" onClick={copy} aria-label="주소 복사" className={MAP_CHIP}>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-            </svg>
-            주소 복사
-          </button>
-        </div>
+        {/* Phase 10 재배치: 주소 텍스트 탭 = 복사(칩 3개 → 1컨트롤 통합).
+            카카오맵/네이버지도 링크는 지도 임베드 하단으로 이동 — Tier1 [길찾기]와
+            같은 목적지를 첫 화면에 세 번 반복하지 않기 위해서다(기능은 전부 보존). */}
+        <button type="button" onClick={copy} title="탭하면 주소가 복사됩니다"
+          className="group flex w-full items-start gap-1.5 text-left text-ink-secondary hover:text-ink-primary transition-colors">
+          <span className="whitespace-pre-line">{address}</span>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden
+            className="mt-0.5 shrink-0 text-ink-muted group-hover:text-accent-300">
+            <rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+          </svg>
+        </button>
       </dd>
     </div>
   );
