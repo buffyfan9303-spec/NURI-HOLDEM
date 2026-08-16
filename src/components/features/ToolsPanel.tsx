@@ -15,6 +15,8 @@ import PostflopTrainer from './tools/PostflopTrainer';
 import BlindBuilder from './tools/BlindBuilder';
 
 // GTO 패널은 에퀴티 엔진을 포함해 무거우므로 지연 로드(다른 도구와 동일하게 인라인 표시)
+import { readSnap } from '../../lib/snapshot';
+import type { DeepGtoInit } from './gto/useDeepGto';
 const GtoDeepPanel = lazyWithReload(() => import('./gto/GtoDeepPanel'));
 
 type ToolKey = 'gto' | 'pot' | 'icm' | 'range' | 'trainer' | 'postflop' | 'mdf' | 'aggro' | 'rvr' | 'outs' | 'pushfold' | 'spr' | 'ev' | 'blindgen' | 'chip' | 'sim' | 'payout' | 'endtime' | 'combo';
@@ -70,7 +72,17 @@ const GROUPS: { id: ToolGroup; title: string; desc: string }[] = [
 
 function renderTool(k: ToolKey): ReactNode {
   switch (k) {
-    case 'gto': return <GtoDeepPanel />;
+    // Phase 12-1 '결과 먼저': 빈 폼 대신 직전 입력(스냅샷) 또는 대표 데모 핸드(AKs vs QQ —
+    // 가장 유명한 플립)로 진입 즉시 계산 결과가 보인다. 사용자는 '고치는' 방식으로 학습한다.
+    case 'gto': {
+      const saved = readSnap<DeepGtoInit>('tool:gto');
+      const hasSaved = !!(saved && ((saved.hero?.length ?? 0) + (saved.villain?.length ?? 0) > 0));
+      const demo: DeepGtoInit = {
+        hero: [{ rank: 'A', suit: 's' }, { rank: 'K', suit: 's' }],
+        villain: [{ rank: 'Q', suit: 'h' }, { rank: 'Q', suit: 'd' }],
+      };
+      return <GtoDeepPanel initialState={hasSaved ? saved! : demo} />;
+    }
     case 'pot': return <PotOddsCalc />;
     case 'icm': return <ICMCalculator />;
     case 'range': return <RangeGuide />;
@@ -115,7 +127,21 @@ function useGridCols(): number {
  *  (행 단위 렌더 — 같은 행의 옆 카드는 밀리지 않고, 패널이 그룹 맨 아래로 떨어지지도 않음) */
 export default function ToolsPanel() {
   const [active, setActive] = useState<ToolKey | null>(null);
-  const select = (k: ToolKey) => setActive((a) => (a === k ? null : k));
+  // 최근 사용(Phase 12-2) — 재방문 시 도구 재탐색 비용을 0으로. 최대 3개, 앞이 최신.
+  const [recent, setRecent] = useState<ToolKey[]>(() => {
+    try { return JSON.parse(localStorage.getItem('nuri:tool:recent') || '[]'); } catch { return []; }
+  });
+  const select = (k: ToolKey) => setActive((a) => {
+    const next = a === k ? null : k;
+    if (next) {
+      setRecent((prev) => {
+        const r = [k, ...prev.filter((x) => x !== k)].slice(0, 3);
+        try { localStorage.setItem('nuri:tool:recent', JSON.stringify(r)); } catch { /* quota */ }
+        return r;
+      });
+    }
+    return next;
+  });
   const cols = useGridCols();
   // 검색 + 그룹 접기(기본 접힘 — 한 화면 간략 보기). 열림 상태는 기억.
   const [q, setQ] = useState('');
@@ -176,6 +202,26 @@ export default function ToolsPanel() {
       </div>
 
       {/* ★ 즐겨찾기 — 그룹이 접혀 있어도 항상 보이는 내 도구 */}
+      {/* 🕐 최근 사용 — 마지막으로 쓴 도구로 원탭 복귀(Phase 12-2) */}
+      {!hits && recent.length > 0 && (
+        <section className="space-y-1.5">
+          <p className="text-2xs font-bold text-ink-muted">🕐 최근 사용</p>
+          <div className="flex flex-wrap gap-1.5">
+            {recent.map((k) => {
+              const t = TOOLS.find((x) => x.key === k);
+              if (!t) return null;
+              return (
+                <button key={k} type="button" onClick={() => select(k)}
+                  className={['inline-flex h-9 items-center gap-1.5 rounded-input border px-3 text-xs font-semibold transition-colors',
+                    active === k ? 'border-accent-300 bg-accent-300/10 text-accent-300' : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
+                  {t.name}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       {!hits && favTools.length > 0 && (
         <section className="space-y-2">
           <p className="text-2xs font-bold text-accent-300">★ 즐겨찾기</p>

@@ -1,10 +1,11 @@
 // src/components/features/gto/GtoDeepPanel.tsx
 // GTO 핸드 분석 — 인라인 패널. 도구 탭에서 다른 계산기와 동일한 카드형 UI로 표시된다.
 // 공유 링크(#gto=) 진입 시에는 GtoDeepModal 이 이 패널을 모달로 감싸 재사용한다.
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useBackClose } from '../../../lib/backstack';
 import { useToast } from '../../atoms/Toast';
 import CardGridPicker, { SUIT_COLOR, SUIT_LABEL } from './CardGridPicker';
+import { writeSnap } from '../../../lib/snapshot';
 import { useDeepGto, type CardTarget, type DeepGtoInit } from './useDeepGto';
 import { canonicalizeHand } from './useGtoCalculator';
 import { computeEquity } from './equityEngine';
@@ -200,6 +201,16 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
   const deep = useDeepGto(initialState);
   const toast = useToast();
   const [sheetOpen, setSheetOpen] = useState(false);
+
+  // 마지막 입력 영속(Phase 12-2) — 재진입 시 ToolsPanel 이 이 스냅샷을 initialState 로 복원한다.
+  // '만드는' 도구가 아니라 '고치는' 도구가 되도록: 사용자는 항상 직전(또는 데모) 결과에서 시작한다.
+  useEffect(() => {
+    writeSnap('tool:gto', {
+      hero: deep.hero.filter(Boolean),
+      villain: deep.villain.filter(Boolean),
+      board: deep.board.filter(Boolean),
+    });
+  }, [deep.hero, deep.villain, deep.board]);
 
   const heroId = comboIdOf(deep.hero);
   const villainId = deep.villainComboId;
