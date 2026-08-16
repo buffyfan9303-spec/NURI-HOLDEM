@@ -2,7 +2,6 @@
 // 홀드 투 컨펌 — 위험/되돌리기 어려운 액션은 0.7초 꾹 눌러 실행(Telegram·게임 UI 패턴).
 // 확인 팝업 한 단계가 사라져 더 빠르면서, 스치는 탭으로는 절대 실행되지 않아 더 안전하다.
 import { useRef, useState } from 'react';
-import { motion } from 'framer-motion';
 
 const HOLD_MS = 700;
 
@@ -39,13 +38,14 @@ export default function HoldToConfirmButton({
       className={['relative overflow-hidden select-none touch-none', className].join(' ')}
       aria-label={typeof children === 'string' ? children : undefined}
     >
-      {/* 게이지 — 누르는 동안 좌→우로 차오르고, 떼면 빠르게 리셋 */}
-      <motion.span
+      {/* 게이지 — 누르는 동안 좌→우로 차오르고, 떼면 빠르게 리셋(순수 CSS 트랜지션) */}
+      <span
         aria-hidden
         className="absolute inset-0 origin-left bg-white/25"
-        initial={false}
-        animate={{ scaleX: holding ? 1 : 0 }}
-        transition={holding ? { duration: HOLD_MS / 1000, ease: 'linear' } : { duration: 0.15 }}
+        style={{
+          transform: `scaleX(${holding ? 1 : 0})`,
+          transition: holding ? `transform ${HOLD_MS}ms linear` : 'transform 0.15s var(--ease)',
+        }}
       />
       <span className="relative">{holding ? holdingLabel : children}</span>
     </button>

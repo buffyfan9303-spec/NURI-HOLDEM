@@ -1,5 +1,4 @@
 import { memo, useMemo, useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
 import type {
   ListingCategory, ListingCondition, ListingStatus,
   MarketplaceListing, MarketplaceNotice, NoticeType,
@@ -8,6 +7,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useBlocks } from '../../contexts/BlockContext';
 import { getMyChatThreads } from '../../api/chat';
 import { MessagesModal, MyListingsModal, MyLikesModal } from './MyMarketModal';
+import SlidingPill from '../atoms/SlidingPill';
 
 // ── 상수 ─────────────────────────────────────────────────────────────────────
 
@@ -162,13 +162,15 @@ function MarketplaceTab({
       </div>
 
       {/* ── 카테고리 — 가로 스크롤(번개장터식, 줄바꿈 없음) ───────── */}
-      <div className="flex gap-1.5 overflow-x-auto scrollbar-none [-webkit-overflow-scrolling:touch]">
+      <div className="relative flex gap-1.5 overflow-x-auto scrollbar-none [-webkit-overflow-scrolling:touch]">
+        <SlidingPill activeKey={category} className="rounded-input bg-accent-300" />
         {CATEGORIES.map((cat) => {
           const active = category === cat.id;
           return (
             <button
               key={cat.id}
               type="button"
+              data-pill-active={active || undefined}
               onClick={() => setCategory(cat.id)}
               className={[
                 'relative shrink-0 h-9 px-4 rounded-input text-xs font-semibold transition-colors',
@@ -177,11 +179,6 @@ function MarketplaceTab({
                   : 'bg-surface-high text-ink-secondary hover:text-ink-primary border border-border-default',
               ].join(' ')}
             >
-              {active && (
-                <motion.span layoutId="market-cat-pill" aria-hidden
-                  className="absolute inset-0 rounded-input bg-accent-300"
-                  transition={{ type: 'spring', stiffness: 700, damping: 42 }} />
-              )}
               <span className="relative">{cat.label}</span>
             </button>
           );

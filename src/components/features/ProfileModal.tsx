@@ -1,6 +1,5 @@
 // src/components/features/ProfileModal.tsx
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { motion } from 'framer-motion';
 import Modal from '../atoms/Modal';
 import UnderlineTabs from '../atoms/UnderlineTabs';
 import { useToast } from '../atoms/Toast';
@@ -607,13 +606,9 @@ function PushNotificationSetting() {
             on ? 'bg-accent-300' : 'bg-surface-float',
           ].join(' ')}
         >
-          <motion.span
-            initial={false}
-            animate={{ x: on ? 20 : 0 }}
-            transition={{ type: 'spring', stiffness: 600, damping: 32 }}
-            className={[
-            'absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white',
-          ].join(' ')} />
+          <span
+            className="absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform"
+            style={{ transform: `translateX(${on ? 20 : 0}px)` }} />
         </button>
       </div>
     </div>

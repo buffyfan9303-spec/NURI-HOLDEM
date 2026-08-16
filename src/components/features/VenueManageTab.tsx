@@ -27,7 +27,6 @@ import VenueCustomizePanel, { VenueRankHub } from './VenueCustomizePanel';
 import LeaguePanel from './LeaguePanel';
 import SectionHeader from '../atoms/SectionHeader';
 import { getSchedules, type Schedule } from '../../api/schedules';
-import { motion } from 'framer-motion';
 import { getLedgerBuyins, getLedgerSession } from '../../api/ledger';
 import { rankDraftKey, readRowsDraft, writeRowsDraft, clearRowsDraft, pruneRowsDrafts, hasRowContent, moveRankRow, type RankRow } from '../../lib/rankingDraft';
 
@@ -425,11 +424,7 @@ function SectionBtn({ active, onClick, icon, children, locked, fav, onToggleFav 
       // 모바일=인라인 칩(아이콘+라벨 한 줄, 1행 가로 스크롤) / PC=세로 리스트. 글씨 13px 가독 유지
       className={['group/nav relative flex shrink-0 snap-start flex-row items-center justify-center gap-1.5 whitespace-nowrap rounded-[7px] px-3 py-2 text-xs font-semibold transition-colors duration-300 focus:outline-none touch-manipulation lg:w-full lg:shrink lg:justify-start lg:gap-2 lg:py-2.5 lg:text-[13px]',
         active ? 'text-ink-inverse' : locked ? 'text-ink-muted/60 hover:text-ink-secondary lg:hover:bg-surface-high' : 'text-ink-secondary hover:text-ink-primary lg:hover:bg-surface-high'].join(' ')}>
-      {active && (
-        <motion.span layoutId="manage-nav-pill" aria-hidden
-          className="absolute inset-0 rounded-[7px] bg-accent-300"
-          transition={{ type: 'spring', stiffness: 700, damping: 42 }} />
-      )}
+      {active && <span aria-hidden className="absolute inset-0 rounded-[7px] bg-accent-300 animate-fade-in" />}
       <span className="relative shrink-0" aria-hidden>{icon}</span>
       <span className="relative">{children}</span>
       {locked && <Icon name="lock" size={11} className={['hidden lg:block ml-auto shrink-0', active ? 'text-ink-inverse/70' : 'text-ink-muted'].join(' ')} />}

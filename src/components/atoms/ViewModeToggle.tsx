@@ -1,5 +1,5 @@
-import { useId } from 'react';
-import { motion } from 'framer-motion';
+import { useRef } from 'react';
+import SlidingPill from './SlidingPill';
 
 export type ViewMode = 'list' | 'grid' | 'table';
 
@@ -64,7 +64,7 @@ function TableIcon({ className = '' }: { className?: string }) {
 export default function ViewModeToggle({
   value, onChange, className = '',
 }: ViewModeToggleProps) {
-  const id = useId();
+  const ref = useRef<HTMLDivElement>(null);
 
   const options: { mode: ViewMode; label: string; Icon: typeof ListIcon; desktopOnly?: boolean }[] = [
     { mode: 'list', label: '목록 보기', Icon: ListIcon },
@@ -76,19 +76,21 @@ export default function ViewModeToggle({
   return (
     <div
       role="group"
+      ref={ref}
       aria-label="보기 방식 선택"
       className={[
-        'inline-flex items-center h-9 p-0.5',
+        'relative inline-flex items-center h-9 p-0.5',
         'bg-surface-high/60 rounded-input border border-border-subtle',
         className,
       ].join(' ')}
     >
+      <SlidingPill containerRef={ref} activeKey={value} className="rounded-[5px] bg-accent-300 shadow-sm" />
       {options.map(({ mode, label, Icon, desktopOnly }) => {
         const active = value === mode;
         return (
           <button
             key={mode}
-            id={`${id}-${mode}`}
+            data-pill-active={active || undefined}
             type="button"
             role="radio"
             aria-checked={active}
@@ -101,11 +103,6 @@ export default function ViewModeToggle({
               active ? 'text-ink-inverse' : 'text-ink-muted hover:text-ink-secondary',
             ].join(' ')}
           >
-            {active && (
-              <motion.span layoutId="viewmode-pill" aria-hidden
-                className="absolute inset-0 rounded-[5px] bg-accent-300 shadow-sm"
-                transition={{ type: 'spring', stiffness: 700, damping: 42 }} />
-            )}
             <span className="relative inline-flex"><Icon /></span>
           </button>
         );

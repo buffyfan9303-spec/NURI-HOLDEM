@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
 import Modal from '../atoms/Modal';
 import Icon from '../atoms/Icon';
 import ImageLightbox from '../atoms/ImageLightbox';
@@ -18,6 +17,7 @@ import { promptLogin, openPostForm, ensureVerified } from '../../lib/requireLogi
 import { googleCalendarUrl, icsDataUrl, isIOS } from '../../lib/calendar';
 import QRCode from 'qrcode';
 import { requestBuyin, buyinRequestUrl, kstToday } from '../../api/ledger';
+import SlidingPill from '../atoms/SlidingPill';
 
 interface ScheduleDetailModalProps {
   schedule: Schedule | null;
@@ -220,6 +220,7 @@ export default function ScheduleDetailModal({
 
       {/* ── 탭바 (정보 / Q&A) — sticky 상단 고정. PC는 우측에 닫기 통합 ──────── */}
       <div className="relative grid grid-cols-2 border-b border-border-subtle sticky top-0 bg-surface-mid z-10 lg:pr-[4.25rem]">
+        <SlidingPill activeKey={tab} underline className="rounded-full bg-accent-300" />
         {/* PC 닫기 — 정보 영역 우상단(항상 보이는 sticky 탭바, 손 닿는 위치) */}
         <button
           type="button"
@@ -238,6 +239,7 @@ export default function ScheduleDetailModal({
               type="button"
               role="tab"
               aria-selected={active}
+              data-pill-active={active || undefined}
               onClick={() => setTab(t)}
               className={[
                 'relative py-3 text-sm font-medium transition-colors text-center',
@@ -250,11 +252,6 @@ export default function ScheduleDetailModal({
               )}
               {t === 'qna' && schedule.unreadQnaCount > 0 && (
                 <span className="ml-1.5 text-2xs text-danger font-bold">새 {schedule.unreadQnaCount}</span>
-              )}
-              {active && (
-                <motion.span layoutId="schedule-detail-tab" aria-hidden
-                  className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-accent-300"
-                  transition={{ type: 'spring', stiffness: 700, damping: 42 }} />
               )}
             </button>
           );

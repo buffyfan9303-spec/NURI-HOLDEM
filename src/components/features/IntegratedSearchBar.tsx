@@ -23,7 +23,7 @@ import {
   forwardRef,
   Fragment,
 } from 'react';
-import { motion } from 'framer-motion';
+import SlidingPill from '../atoms/SlidingPill';
 
 // ── 날짜 유틸 ─────────────────────────────────────────────────────────────────
 
@@ -121,15 +121,14 @@ function DateTab({ slot, selected, onClick }: DateTabProps) {
   const dowColor = slot.isSun ? 'text-red-400' : slot.isSat ? 'text-blue-400' : 'text-ink-muted';
 
   return (
-    <motion.button
+    <button
       ref={tabRef}
       type="button"
       onClick={() => { navigator.vibrate?.(8); onClick(); }}
       aria-pressed={selected}
       aria-label={`${slot.month}월 ${slot.day}일 ${slot.dow}요일${slot.isToday ? ' (오늘)' : ''}`}
-      whileTap={{ scale: 0.9 }}
-      transition={{ type: 'spring', stiffness: 700, damping: 30 }}
       className={[
+        'active:scale-90 transition-transform',
         // 정사각 셀(요일·날짜만) — '오늘' 텍스트 제거로 모든 칸 동일 높이
         'relative flex h-[2.6rem] w-[2.6rem] shrink-0 flex-col items-center justify-center rounded-[10px] select-none',
         'focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-300',
@@ -140,17 +139,11 @@ function DateTab({ slot, selected, onClick }: DateTabProps) {
     >
       {/* 선택 시 골드 정사각 알약 — 셀과 정확히 일치(inset-0·동일 rounded) */}
       {selected && (
-        <motion.span
-          aria-hidden
-          initial={{ scale: 0.6, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: 'spring', stiffness: 620, damping: 26 }}
-          className="absolute inset-0 rounded-[10px] bg-accent-300 shadow-[0_4px_14px_-4px_rgba(94,106,210,0.55)]"
-        />
+        <span aria-hidden className="anim-pop absolute inset-0 rounded-[10px] bg-accent-300 shadow-[0_4px_14px_-4px_rgba(94,106,210,0.55)]" />
       )}
       <span className={['relative text-[10px] font-bold leading-none', selected ? 'text-ink-inverse/85' : dowColor].join(' ')}>{slot.dow}</span>
       <span className="relative mt-0.5 text-[15px] font-extrabold leading-none tabular-nums">{slot.day}</span>
-    </motion.button>
+    </button>
   );
 }
 
@@ -401,8 +394,9 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
           <div
             role="radiogroup"
             aria-label="토너먼트 필터"
-            className="inline-flex items-center gap-0.5 rounded-input bg-surface-high/60 p-0.5 border border-border-subtle"
+            className="relative inline-flex items-center gap-0.5 rounded-input bg-surface-high/60 p-0.5 border border-border-subtle"
           >
+            <SlidingPill activeKey={tour} className="rounded-[6px] bg-accent-300" />
             {TOUR_OPTIONS.map(({ id, label }) => {
               const active = tour === id;
               return (
@@ -411,6 +405,7 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
                   type="button"
                   role="radio"
                   aria-checked={active}
+                  data-pill-active={active || undefined}
                   onClick={() => setTour(id)}
                   className={[
                     // ⚠ h-6(24px) 였다. 걸으면서 한 손으로 누르는 자리인데 4개가 gap-0.5 로 붙어 있어
@@ -420,11 +415,6 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
                     active ? 'text-ink-inverse' : 'text-ink-muted hover:text-ink-secondary',
                   ].join(' ')}
                 >
-                  {active && (
-                    <motion.span layoutId="tour-filter-pill" aria-hidden
-                      className="absolute inset-0 rounded-[6px] bg-accent-300"
-                      transition={{ type: 'spring', stiffness: 700, damping: 42 }} />
-                  )}
                   <span className="relative">{label}</span>
                 </button>
               );

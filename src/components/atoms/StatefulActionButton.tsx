@@ -1,13 +1,41 @@
 // src/components/atoms/StatefulActionButton.tsx
 // 상태 주도형 액션 버튼 — Idle → Loading → Success 를 한 컴포넌트 안에서 모핑.
-// Framer Motion layout으로 너비 변화가 끊기지 않고, 성공 시 체크마크가 SVG path로 그려진다.
 // 매장 인증 요청·토너먼트 참가 등 "한 번 누르고 결과를 기다리는" 비동기 액션 전용.
-import { useState, forwardRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+//
+// framer-motion 제거 재작성(FLIP 전환의 마지막 조각):
+//  · 폭 모핑은 2026-07-20 에 이미 폐기(w-full 폭 고정) — layout 애니메이션이 필요 없어짐.
+//  · 단계 교차는 key 교체 + CSS 등장(nuri-pop/fade), 배경색은 transition-colors,
+//    체크 드로잉은 stroke-dasharray 트랜지션, 스피너는 animate-spin — 전부 컴포지터/CSS.
+import { useEffect, useState, forwardRef } from 'react';
 
 type Phase = 'idle' | 'loading' | 'success';
 
-const SPRING = { type: 'spring', stiffness: 520, damping: 32 } as const;
+const BG: Record<string, string> = {
+  success: '#19b8e6',
+  loading: '#3a4253',
+  disabled: '#3a4253', /* 미완성: 회색 — 입력이 완성되는 순간 골드로 살아난다(토스 패턴) */
+  idle: '#FCD535',
+};
+
+/** 성공 체크 — path 를 dasharray 로 그려낸다(마운트 후 dashoffset 24→0 트랜지션) */
+function DrawnCheck() {
+  const [drawn, setDrawn] = useState(false);
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setDrawn(true));
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M4.5 12.5l5 5L19.5 7"
+        stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+        strokeDasharray="24"
+        strokeDashoffset={drawn ? 0 : 24}
+        style={{ transition: 'stroke-dashoffset 0.45s var(--ease) 0.05s' }}
+      />
+    </svg>
+  );
+}
 
 const StatefulActionButton = forwardRef<HTMLButtonElement, {
   label?: string;
@@ -30,9 +58,7 @@ const StatefulActionButton = forwardRef<HTMLButtonElement, {
   const [phase, setPhase] = useState<Phase>('idle');
   const [shakeKey, setShakeKey] = useState(0); // 실패 복귀 시 좌우 흔들기 트리거
   // w-full 버튼은 '전 단계' 폭 고정 — 내용(라벨→스피너→체크)만 교체한다.
-  // 과거엔 Loading/Success에서 컨텐츠 폭 캡슐로 줄었다가 다시 늘어나는 모핑이었는데,
-  // 예약하기 같은 풀폭 CTA에서 '늘었다→줄었다→늘었다' 튐으로 보여 폐기(2026-07-20).
-  // 폭 미지정 컴팩트 버튼만 기존 캡슐 모핑을 유지.
+  // (과거의 캡슐 폭 모핑은 '늘었다→줄었다→늘었다' 튐으로 폐기 — 2026-07-20)
   const wantsFull = className.includes('w-full');
   const restClass = className.split(/\s+/).filter((c) => c !== 'w-full').join(' ');
 
@@ -49,29 +75,20 @@ const StatefulActionButton = forwardRef<HTMLButtonElement, {
     }
   };
 
+  const bg = phase === 'success' ? BG.success : phase === 'loading' ? BG.loading : disabled ? BG.disabled : BG.idle;
+
   return (
-    <motion.button
+    <button
       ref={ref}
       type="button"
-      layout
       onClick={run}
       disabled={disabled || phase !== 'idle'}
-      whileTap={phase === 'idle' ? { scale: 0.95 } : undefined}
-      whileHover={phase === 'idle' ? { scale: 0.97 } : undefined}
-      transition={SPRING}
-      animate={{
-        backgroundColor:
-          phase === 'success' ? '#19b8e6'
-          : phase === 'loading' ? '#3a4253'
-          : disabled ? '#3a4253' /* 미완성: 회색 — 입력이 완성되는 순간 골드로 살아난다(토스 패턴) */
-          : '#FCD535',
-      }}
-      style={{ borderRadius: 999 }}
+      style={{ borderRadius: 999, backgroundColor: bg, transition: 'background-color var(--dur-base) var(--ease), transform var(--dur-fast) var(--ease)' }}
       key={shakeKey > 0 ? `shake-${shakeKey}` : undefined}
       className={[
         shakeKey > 0 ? 'anim-shake' : '',
         'inline-flex h-10 items-center justify-center gap-1.5 overflow-hidden font-bold',
-        phase === 'idle' ? (disabled ? 'text-ink-muted' : 'text-ink-inverse') : '',
+        phase === 'idle' ? (disabled ? 'text-ink-muted' : 'text-ink-inverse enabled:hover:scale-[0.97] enabled:active:scale-95') : '',
         wantsFull || phase === 'idle' ? 'px-5' : 'px-4',
         phase === 'success' ? 'text-white' : phase === 'loading' ? 'text-ink-secondary' : '',
         'disabled:cursor-default focus:outline-none',
@@ -81,83 +98,37 @@ const StatefulActionButton = forwardRef<HTMLButtonElement, {
       aria-live="polite"
       aria-busy={phase === 'loading'}
     >
-      <AnimatePresence mode="popLayout" initial={false}>
-        {phase === 'idle' && (
-          <motion.span
-            key="idle"
-            layout
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.14 }}
-            className="whitespace-nowrap text-sm"
-          >
-            {label}
-          </motion.span>
-        )}
-        {phase === 'loading' && (
-          <motion.span
-            key="loading"
-            layout
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.16 }}
-            className="flex items-center justify-center"
-            aria-label="처리 중"
-          >
-            <motion.span
-              className="block h-4 w-4 rounded-full border-2 border-white/25 border-t-white"
-              animate={{ rotate: 360 }}
-              transition={{ repeat: Infinity, duration: 0.7, ease: 'linear' }}
-            />
-          </motion.span>
-        )}
-        {phase === 'success' && (
-          <motion.span
-            key="success"
-            layout
-            initial={{ opacity: 0, scale: 0.6 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={SPRING}
-            className="flex items-center gap-1.5"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <motion.path
-                d="M4.5 12.5l5 5L19.5 7"
-                stroke="currentColor"
-                strokeWidth="3"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                initial={{ pathLength: 0 }}
-                animate={{ pathLength: 1 }}
-                transition={{ duration: 0.45, ease: 'easeOut', delay: 0.05 }}
-              />
-            </svg>
-            {successLabel && <span className="whitespace-nowrap text-sm">{successLabel}</span>}
-          </motion.span>
-        )}
-      </AnimatePresence>
-    </motion.button>
+      {phase === 'idle' && (
+        <span key="idle" className="animate-fade-in whitespace-nowrap text-sm">{label}</span>
+      )}
+      {phase === 'loading' && (
+        <span key="loading" className="animate-fade-in flex items-center justify-center" aria-label="처리 중">
+          <span className="block h-4 w-4 animate-spin rounded-full border-2 border-white/25 border-t-white" />
+        </span>
+      )}
+      {phase === 'success' && (
+        <span key="success" className="anim-pop flex items-center gap-1.5">
+          <DrawnCheck />
+          {successLabel && <span className="whitespace-nowrap text-sm">{successLabel}</span>}
+        </span>
+      )}
+    </button>
   );
 });
 export default StatefulActionButton;
 
-/** 스프링 프레스 버튼 — 정적 그림자 없이 물리 피드백만. 헤더 로그인 등 컴팩트 CTA용 */
+/** 프레스 버튼 — 정적 그림자 없이 눌림 피드백만. 헤더 로그인 등 컴팩트 CTA용 (CSS 전환) */
 export function SpringButton({
   children, onClick, className = '', ariaLabel,
 }: { children: React.ReactNode; onClick: () => void; className?: string; ariaLabel?: string }) {
   return (
-    <motion.button
+    <button
       type="button"
       onClick={onClick}
       aria-label={ariaLabel}
-      whileHover={{ scale: 0.97 }}
-      whileTap={{ scale: 0.95 }}
-      transition={SPRING}
-      className={['focus:outline-none', className].join(' ')}
+      className={['transition-transform hover:scale-[0.97] active:scale-95 focus:outline-none', className].join(' ')}
     >
       {children}
-    </motion.button>
+    </button>
   );
 }

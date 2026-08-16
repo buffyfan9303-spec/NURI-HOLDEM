@@ -1,5 +1,4 @@
 import { memo, useState, useMemo, useEffect, useRef, Fragment, useTransition, type ReactNode } from 'react';
-import { motion } from 'framer-motion';
 import { getActiveCommunityAds, type CommunityAd } from '../../api/ads';
 import { getEquippedMarks } from '../../api/community';
 import TitleChip from '../atoms/TitleChip';
@@ -252,11 +251,8 @@ function SectionTab({ active, label, onClick }: { active: boolean; label: string
         active ? 'text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary',
       ].join(' ')}
     >
-      {active && (
-        <motion.span layoutId="comm-section-pill" aria-hidden
-          className="absolute inset-0 rounded-[6px] bg-accent-300"
-          transition={{ type: 'spring', stiffness: 700, damping: 42 }} />
-      )}
+      {/* 버튼이 독립 컴포넌트라 형제 간 공용 알약을 둘 부모가 없다 — 팝인으로 대체(framer 제거) */}
+      {active && <span aria-hidden className="absolute inset-0 rounded-[6px] bg-accent-300 animate-fade-in" />}
       <span className="relative">{label}</span>
     </button>
   );

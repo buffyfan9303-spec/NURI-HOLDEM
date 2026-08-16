@@ -1,6 +1,5 @@
 // src/components/features/TierLeaderboard.tsx
 import { useEffect, useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
 import { getDomesticRankings, myRankVerifications, submitRankVerification, type RankVerification } from '../../api/rankverify';
 import { useAuth } from '../../contexts/AuthContext';
 import TierBadge, { tierOf, tierProgress, allTiers, isAceRank, ACE_TOP_RANK, ACE_MIN_POINTS } from '../atoms/TierBadge';
@@ -8,6 +7,7 @@ import { getActivityLeaderboard, type LeaderboardEntry } from '../../api/communi
 import { getGlobalRankingTotals, type GlobalRankingTotal } from '../../api/rankings';
 import { useToast } from '../atoms/Toast';
 import CountUp from '../atoms/CountUp';
+import SlidingPill from '../atoms/SlidingPill';
 import {
   getWeeklyLeague, leagueTierOf, LEAGUE_TIERS, type LeagueRow,
   MISSIONS, getActiveMissions, getMissionProgress, claimMission, type Mission, type MissionProgress,
@@ -314,16 +314,12 @@ export default function TierLeaderboard() {
 
       {/* 랭킹 리스트 — 다중 보드(활동/머니인/프라이즈) */}
       <section>
-        <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5 mb-1.5 overflow-x-auto scrollbar-none lg:flex-wrap lg:overflow-visible">
+        <div className="relative flex items-center gap-1 bg-surface-high rounded-input p-0.5 mb-1.5 overflow-x-auto scrollbar-none lg:flex-wrap lg:overflow-visible">
+          <SlidingPill activeKey={board} className="rounded-[6px] bg-accent-300" />
           {(['activity', 'league', 'hall', 'moneyin', 'domestic', 'verify', 'shop'] as Board[]).map((b) => (
-            <button key={b} type="button" onClick={() => setBoard(b)}
+            <button key={b} type="button" data-pill-active={board === b || undefined} onClick={() => setBoard(b)}
               className={['relative shrink-0 px-2 lg:px-3 py-1.5 text-[11px] lg:text-xs font-bold rounded-[6px] transition-colors duration-300',
                 board === b ? 'text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
-              {board === b && (
-                <motion.span layoutId="rank-board-pill" aria-hidden
-                  className="absolute inset-0 rounded-[6px] bg-accent-300"
-                  transition={{ type: 'spring', stiffness: 700, damping: 42 }} />
-              )}
               <span className="relative">{BOARD_LABEL[b]}</span>
             </button>
           ))}

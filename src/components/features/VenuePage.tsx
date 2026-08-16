@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useMemo, type ReactNode } from 'react';
 import { Map, MapMarker, useKakaoLoader } from 'react-kakao-maps-sdk';
-import { motion } from 'framer-motion';
 import CommentThread from './CommentThread';
 import RotiArenaLogo from '../atoms/RotiArenaLogo';
 import Icon from '../atoms/Icon';
@@ -35,6 +34,7 @@ import { lockScroll, unlockScroll } from '../../lib/scrollLock';
 import VenueReviews from './VenueReviews';
 import SeasonPanel from './SeasonPanel';
 import { getVenuesSeasonLeaders, type SeasonLeader } from '../../api/seasons';
+import SlidingPill from '../atoms/SlidingPill';
 
 interface VenuePageProps {
   venue: Venue | null;
@@ -346,7 +346,8 @@ export default function VenuePage({
 
         {/* ── Sticky 탭바 ─────────────────────────────────────────── */}
         <div className="sticky top-0 z-20 bg-surface-base border-b border-border-subtle">
-          <div className="grid grid-cols-5 lg:flex">
+          <div className="relative grid grid-cols-5 lg:flex">
+            <SlidingPill activeKey={tab} underline className="rounded-full bg-accent-300" />
             {orderedTabs.map((t) => {
               const active = tab === t;
               return (
@@ -355,6 +356,7 @@ export default function VenuePage({
                   type="button"
                   onClick={() => setTab(t)}
                   aria-selected={active}
+                  data-pill-active={active || undefined}
                   role="tab"
                   className={[
                     'lg:flex-1 whitespace-nowrap px-0.5 lg:px-2 py-3 text-[13px] lg:text-sm font-medium transition-colors text-center relative',
@@ -362,11 +364,6 @@ export default function VenuePage({
                   ].join(' ')}
                 >
                   {TAB_LABEL[t]}
-                  {active && (
-                    <motion.span layoutId="venue-tab-underline" aria-hidden
-                      className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-accent-300"
-                      transition={{ type: 'spring', stiffness: 700, damping: 42 }} />
-                  )}
                 </button>
               );
             })}

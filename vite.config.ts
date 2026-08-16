@@ -27,7 +27,7 @@ export default defineConfig({
           // lazy 라우트 전용)는 기본 분할에 맡겨 eager 화되지 않도록 한다 — catch-all 금지.
           if (!id.includes('node_modules')) return;
           if (id.includes('react-dom') || id.includes('/react/') || id.includes('react/jsx') || id.includes('scheduler')) return 'vendor-react';
-          if (id.includes('framer-motion') || id.includes('motion-dom') || id.includes('motion-utils')) return 'vendor-motion';
+          // (vendor-motion 청크는 framer-motion 제거로 소멸 — FLIP 공용 유틸이 대체)
           if (id.includes('@supabase')) return 'vendor-supabase';
         },
       },

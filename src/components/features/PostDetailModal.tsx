@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { getEquippedMarks } from '../../api/community';
 import Modal from '../atoms/Modal';
 import { useAuth } from '../../contexts/AuthContext';
@@ -268,19 +267,13 @@ export default function PostDetailModal({
               {text && (
                 <div onDoubleClick={doubleLike}
                   className="relative text-base text-ink-primary leading-relaxed whitespace-pre-wrap break-words">
-                  <AnimatePresence>
-                    {heartKey > 0 && (
-                      <motion.span key={heartKey} aria-hidden
-                        className="pointer-events-none absolute inset-0 flex items-center justify-center text-6xl"
-                        initial={{ scale: 0.3, opacity: 0 }}
-                        animate={{ scale: [0.3, 1.15, 1], opacity: [0, 1, 1] }}
-                        exit={{ scale: 1.3, opacity: 0 }}
-                        transition={{ duration: 0.45 }}
-                        onAnimationComplete={() => setTimeout(() => setHeartKey(0), 250)}>
-                        ❤️
-                      </motion.span>
-                    )}
-                  </AnimatePresence>
+                  {heartKey > 0 && (
+                    <span key={heartKey} aria-hidden
+                      className="anim-heart pointer-events-none absolute inset-0 flex items-center justify-center text-6xl"
+                      onAnimationEnd={() => setTimeout(() => setHeartKey(0), 250)}>
+                      ❤️
+                    </span>
+                  )}
                   {onVenueClick ? renderMentions(text, venues, onVenueClick) : text}
                 </div>
               )}

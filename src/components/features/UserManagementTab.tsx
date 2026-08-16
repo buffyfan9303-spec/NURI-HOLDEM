@@ -1,5 +1,4 @@
 import { useState, useMemo } from 'react';
-import { motion } from 'framer-motion';
 import { useToast } from '../atoms/Toast';
 import type { User, UserStatus } from '../../api/auth';
 import { adminSetNickname } from '../../api/auth';
@@ -97,19 +96,19 @@ export default function UserManagementTab({
 
           {/* 역할 필터 */}
           <div className="grid grid-cols-4 gap-1 text-2xs">
-            <FilterPill group="umt-role" active={roleFilter === 'all'}         onClick={() => setRoleFilter('all')}         label="전체" />
-            <FilterPill group="umt-role" active={roleFilter === 'user'}        onClick={() => setRoleFilter('user')}        label="일반" />
-            <FilterPill group="umt-role" active={roleFilter === 'venue_owner'} onClick={() => setRoleFilter('venue_owner')} label="업주" />
-            <FilterPill group="umt-role" active={roleFilter === 'admin'}       onClick={() => setRoleFilter('admin')}       label="운영자" />
+            <FilterPill active={roleFilter === 'all'}         onClick={() => setRoleFilter('all')}         label="전체" />
+            <FilterPill active={roleFilter === 'user'}        onClick={() => setRoleFilter('user')}        label="일반" />
+            <FilterPill active={roleFilter === 'venue_owner'} onClick={() => setRoleFilter('venue_owner')} label="업주" />
+            <FilterPill active={roleFilter === 'admin'}       onClick={() => setRoleFilter('admin')}       label="운영자" />
           </div>
 
           {/* 상태 필터 */}
           <div className="grid grid-cols-5 gap-1 text-2xs">
-            <FilterPill group="umt-status" active={statusFilter === 'all'}       onClick={() => setStatusF('all')}       label="전체" />
-            <FilterPill group="umt-status" active={statusFilter === 'active'}    onClick={() => setStatusF('active')}    label="활성" />
-            <FilterPill group="umt-status" active={statusFilter === 'pending'}   onClick={() => setStatusF('pending')}   label="대기" />
-            <FilterPill group="umt-status" active={statusFilter === 'suspended'} onClick={() => setStatusF('suspended')} label="정지" />
-            <FilterPill group="umt-status" active={statusFilter === 'banned'}    onClick={() => setStatusF('banned')}    label="영구" />
+            <FilterPill active={statusFilter === 'all'}       onClick={() => setStatusF('all')}       label="전체" />
+            <FilterPill active={statusFilter === 'active'}    onClick={() => setStatusF('active')}    label="활성" />
+            <FilterPill active={statusFilter === 'pending'}   onClick={() => setStatusF('pending')}   label="대기" />
+            <FilterPill active={statusFilter === 'suspended'} onClick={() => setStatusF('suspended')} label="정지" />
+            <FilterPill active={statusFilter === 'banned'}    onClick={() => setStatusF('banned')}    label="영구" />
           </div>
 
           {/* 회원 리스트 */}
@@ -479,18 +478,14 @@ function SummaryCard({ label, count, cls }: { label: string; count: number; cls:
   );
 }
 
-function FilterPill({ active, onClick, label, group }: { active: boolean; onClick: () => void; label: string; group?: string }) {
+function FilterPill({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
   return (
     <button type="button" onClick={onClick}
       className={[
         'relative py-1.5 rounded-input font-semibold transition-colors',
         active ? 'text-ink-inverse' : 'bg-surface-high text-ink-muted hover:text-ink-secondary',
       ].join(' ')}>
-      {active && (
-        <motion.span layoutId={group} aria-hidden
-          className="absolute inset-0 rounded-input bg-accent-300"
-          transition={{ type: 'spring', stiffness: 700, damping: 42 }} />
-      )}
+      {active && <span aria-hidden className="absolute inset-0 rounded-input bg-accent-300 animate-fade-in" />}
       <span className="relative">{label}</span>
     </button>
   );

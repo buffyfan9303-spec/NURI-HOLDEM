@@ -1,8 +1,8 @@
 // src/components/atoms/SegmentedTabs.tsx
-// 공용 세그먼트 토글 — 골드 알약이 선택 칸으로 스프링 슬라이드(앱 전체 모션 언어 통일).
-// 기존 'bg-accent-300 토글' 패턴의 대체 표준. layoutId는 useId로 인스턴스별 자동 격리.
-import { useId } from 'react';
-import { motion } from 'framer-motion';
+// 공용 세그먼트 토글 — 알약이 선택 칸으로 슬라이드(앱 전체 모션 언어 통일).
+// framer-motion layoutId → 공용 FLIP(SlidingPill) 로 교체: 동작 동일, 의존성 0.
+import { useRef } from 'react';
+import SlidingPill from './SlidingPill';
 
 export interface SegItem<T extends string> { key: T; label: string }
 
@@ -18,15 +18,17 @@ export default function SegmentedTabs<T extends string>({
   /** true면 칸들이 컨테이너를 균등 분할 */
   grow?: boolean;
 }) {
-  const lid = useId();
+  const ref = useRef<HTMLDivElement>(null);
   return (
-    <div role="tablist"
-      className={['inline-flex items-center gap-0.5 rounded-input border border-border-subtle bg-surface-high/60 p-0.5', className].join(' ')}>
+    <div role="tablist" ref={ref}
+      className={['relative inline-flex items-center gap-0.5 rounded-input border border-border-subtle bg-surface-high/60 p-0.5', className].join(' ')}>
+      <SlidingPill containerRef={ref} activeKey={value} className="rounded-[6px] bg-accent-300" />
       {items.map((it) => {
         const on = it.key === value;
         return (
           <button
             key={it.key} type="button" role="tab" aria-selected={on}
+            data-pill-active={on || undefined}
             onClick={() => onChange(it.key)}
             className={[
               'relative shrink-0 rounded-[6px] font-bold leading-none transition-colors duration-300 focus:outline-none',
@@ -35,11 +37,6 @@ export default function SegmentedTabs<T extends string>({
               on ? 'text-white' : 'text-ink-secondary hover:text-ink-primary',
             ].join(' ')}
           >
-            {on && (
-              <motion.span layoutId={lid} aria-hidden
-                className="absolute inset-0 rounded-[6px] bg-accent-300"
-                transition={{ type: 'spring', stiffness: 700, damping: 42 }} />
-            )}
             <span className="relative">{it.label}</span>
           </button>
         );

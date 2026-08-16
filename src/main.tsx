@@ -1,6 +1,5 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { MotionConfig } from 'framer-motion';
 import './index.css';
 import App from './App.tsx';
 import { AuthProvider } from './contexts/AuthContext';
@@ -45,7 +44,6 @@ if ('serviceWorker' in navigator) {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
-      <MotionConfig reducedMotion="user">
         <ThemeProvider>
           <ToastProvider>
             <AuthProvider>
@@ -55,7 +53,6 @@ createRoot(document.getElementById('root')!).render(
             </AuthProvider>
           </ToastProvider>
         </ThemeProvider>
-      </MotionConfig>
     </ErrorBoundary>
   </StrictMode>,
 );

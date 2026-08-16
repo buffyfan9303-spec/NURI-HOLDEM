@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
 import { getVenueCustomerStats, paymentLabel, type CustomerStat } from '../../api/reservations';
 import { getCustomerAliases, linkCustomerAlias, unlinkCustomerAlias } from '../../api/crm';
 import { findUserForTransfer, type TransferTarget } from '../../api/vouchers';
 import { useToast } from '../atoms/Toast';
 import { toCsv, downloadCsv } from '../../lib/csv';
+import SlidingPill from '../atoms/SlidingPill';
 
 type Range = 'all' | '7' | '30' | '90';
 
@@ -90,14 +90,14 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
 
       {/* 기간 + 검색 + 정렬 */}
       <div className="flex flex-wrap items-center gap-1.5">
-        <div className="flex items-center gap-0.5 rounded-input bg-surface-high p-0.5">
+        <div className="relative flex items-center gap-0.5 rounded-input bg-surface-high p-0.5">
+          <SlidingPill activeKey={range} className="rounded-[6px] bg-accent-300" />
           {([['all', '전체'], ['7', '7일'], ['30', '30일'], ['90', '90일']] as const).map(([id, label]) => {
             const on = range === id;
             return (
-              <button key={id} type="button" onClick={() => setRange(id)}
+              <button key={id} type="button" data-pill-active={on || undefined} onClick={() => setRange(id)}
                 className={['relative rounded-[6px] px-2.5 py-1 text-2xs font-bold transition-colors duration-300 focus:outline-none',
                   on ? 'text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
-                {on && <motion.span layoutId="cust-range-pill" aria-hidden className="absolute inset-0 rounded-[6px] bg-accent-300" transition={{ type: 'spring', stiffness: 700, damping: 42 }} />}
                 <span className="relative">{label}</span>
               </button>
             );

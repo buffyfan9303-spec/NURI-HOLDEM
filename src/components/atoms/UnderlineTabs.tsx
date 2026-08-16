@@ -1,8 +1,8 @@
 // src/components/atoms/UnderlineTabs.tsx
-// 공용 밑줄형 탭 — 골드 밑줄이 선택 칸으로 스프링 슬라이드(모달·페이지 상단 탭의 모션 언어 통일).
-// 알약형은 SegmentedTabs, 밑줄형은 이 컴포넌트를 쓴다. layoutId는 useId로 인스턴스별 자동 격리.
-import { useId } from 'react';
-import { motion } from 'framer-motion';
+// 공용 밑줄형 탭 — 밑줄이 선택 칸으로 슬라이드. 알약형은 SegmentedTabs.
+// framer-motion layoutId → 공용 FLIP(SlidingPill underline 모드) 로 교체.
+import { useRef } from 'react';
+import SlidingPill from './SlidingPill';
 import type { SegItem } from './SegmentedTabs';
 
 export default function UnderlineTabs<T extends string>({
@@ -14,14 +14,16 @@ export default function UnderlineTabs<T extends string>({
   className?: string;
   size?: 'sm' | 'md';
 }) {
-  const lid = useId();
+  const ref = useRef<HTMLDivElement>(null);
   return (
-    <div role="tablist" className={['flex border-b border-border-subtle', className].join(' ')}>
+    <div role="tablist" ref={ref} className={['relative flex border-b border-border-subtle', className].join(' ')}>
+      <SlidingPill containerRef={ref} activeKey={value} underline className="rounded-full bg-accent-300" />
       {items.map((it) => {
         const on = it.key === value;
         return (
           <button
             key={it.key} type="button" role="tab" aria-selected={on}
+            data-pill-active={on || undefined}
             onClick={() => onChange(it.key)}
             className={[
               'relative flex-1 font-medium transition-colors focus:outline-none',
@@ -30,11 +32,6 @@ export default function UnderlineTabs<T extends string>({
             ].join(' ')}
           >
             {it.label}
-            {on && (
-              <motion.span layoutId={lid} aria-hidden
-                className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-accent-300"
-                transition={{ type: 'spring', stiffness: 700, damping: 42 }} />
-            )}
           </button>
         );
       })}

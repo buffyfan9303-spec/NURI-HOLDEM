@@ -43,7 +43,6 @@ import { createUndoQueue } from './lib/undoableDelete';
 import { scheduleStatus } from './lib/scheduleStatus';
 import LoadErrorCard from './components/atoms/LoadErrorCard';
 import { SpringButton } from './components/atoms/StatefulActionButton';
-import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from './contexts/AuthContext';
 import { listAllUsers, updateUserStatus, approveOwner } from './api/auth';
 import {
@@ -1996,10 +1995,8 @@ export default function App() {
           </div>
 
           {/* 손님: 오늘 내 바인(참가) 요청 상태 배너 — (B3) 등장/퇴장 height·opacity 트랜지션으로 CLS 완화 */}
-          <AnimatePresence initial={false}>
           {myBuyinReqs.length > 0 && (
-            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.22, ease: 'easeOut' }} className="overflow-hidden px-page-x pt-3 space-y-1.5">
+            <div className="animate-fade-in overflow-hidden px-page-x pt-3 space-y-1.5">
               <p className="px-1 text-2xs font-bold text-ink-secondary">🎮 내 참가 게임 · 바인 요청</p>
               {myBuyinReqs.map((r) => (
                 <div key={r.id} className={['flex items-center gap-2 rounded-card border px-3 py-2 text-xs',
@@ -2009,9 +2006,8 @@ export default function App() {
                   {r.status === 'pending' && <button type="button" onClick={() => cancelBuyinRequest(r.id).then(() => getMyBuyinRequestsToday().then(setMyBuyinReqs)).catch((e) => toast.show(e instanceof Error ? e.message : '취소 실패', 'error'))} className="shrink-0 rounded-input border border-border-default px-2 py-1 text-2xs font-bold text-ink-muted hover:text-danger-light hover:border-danger/40">취소</button>}
                 </div>
               ))}
-            </motion.div>
+            </div>
           )}
-          </AnimatePresence>
 
           {/* 공지 — 일정탐색 상단 (전체 공통 공지만) */}
             {/* 16-1 이어서 하기 — 재방문 사용자의 반복 여정(최근 매장 → 체크인/오늘 대회)을 한 탭으로.

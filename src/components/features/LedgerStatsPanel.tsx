@@ -1,7 +1,6 @@
 // src/components/features/LedgerStatsPanel.tsx
 // 업주 전용 — 기간 통계(오늘/주/월/전체/요일평균, 할인 반영) + POS 설정.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { motion } from 'framer-motion';
 import { useToast } from '../atoms/Toast';
 import {
   type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type VisitorType,
@@ -16,6 +15,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { listVenueOwners, addVenueOwner, removeVenueOwner, transferVenuePrimary, type VenueOwner } from '../../api/community';
 import CustomerAnalytics from './CustomerAnalytics';
 import SegmentedTabs from '../atoms/SegmentedTabs';
+import SlidingPill from '../atoms/SlidingPill';
 
 const todayStr = () => new Date().toLocaleDateString('en-CA');
 const shift = (d: string, n: number) => { const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate() + n); return x.toLocaleDateString('en-CA'); };
@@ -259,16 +259,17 @@ function StatsView({ venueId }: { venueId: string }) {
         </div>
       </div>
 
-      <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5 overflow-x-auto scrollbar-none">
+      <div className="relative flex items-center gap-1 bg-surface-high rounded-input p-0.5 overflow-x-auto scrollbar-none">
+            {/* AI 기간은 그라데이션이라 알약을 공용으로 못 쓴다 — 일반 기간에만 슬라이드 */}
+            <SlidingPill activeKey={period} className="rounded-[6px] bg-accent-300" />
         {PERIODS.map((p) => {
           const on = period === p.id;
           return (
-            <button key={p.id} type="button" onClick={() => setPeriod(p.id)}
+            <button key={p.id} type="button" data-pill-active={(on && !p.ai) || undefined} onClick={() => setPeriod(p.id)}
               className={['relative flex-1 min-w-[3.6rem] py-1.5 text-xs font-bold rounded-[6px] whitespace-nowrap transition-colors duration-300 focus:outline-none',
                 on ? (p.ai ? 'text-white' : 'text-ink-inverse') : (p.ai ? 'text-violet-300' : 'text-ink-secondary hover:text-ink-primary')].join(' ')}>
-              {on && <motion.span layoutId="stat-period-pill" aria-hidden
-                className={['absolute inset-0 rounded-[6px]', p.ai ? 'bg-gradient-to-r from-violet-500 to-indigo-500 shadow' : 'bg-accent-300'].join(' ')}
-                transition={{ type: 'spring', stiffness: 700, damping: 42 }} />}
+              {/* AI 기간(그라데이션)은 자기 배경을 직접 칠한다 — 공용 알약은 숨김 */}
+              {on && p.ai && <span aria-hidden className="absolute inset-0 rounded-[6px] bg-gradient-to-r from-violet-500 to-indigo-500 shadow animate-fade-in" />}
               <span className="relative">{p.label}</span>
             </button>
           );

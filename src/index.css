@@ -363,6 +363,16 @@ html.light .text-pink-300 { color: #BE185D; }
   html::-webkit-scrollbar, body::-webkit-scrollbar { width: 0; height: 0; }
 }
 
+/* ── framer 대체 마이크로 모션 (FLIP 전환 부속) ─────────────────────────────── */
+@keyframes nuri-pop { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.anim-pop { animation: nuri-pop var(--dur-base) var(--ease) both; }
+@keyframes nuri-heart {
+  0% { transform: scale(0.3); opacity: 0; }
+  60% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.anim-heart { animation: nuri-heart 0.45s var(--ease) both; }
+
 /* ── 히트영역 확장 유틸 (마스터 지시서 Phase 17-1) ────────────────────────────
    시각 크기는 그대로 두고 손가락이 닿는 영역만 최소 44×44 로(iOS HIG 44pt).
    ::after 는 버튼 내부 요소라 클릭이 그대로 버튼에 전달된다.
