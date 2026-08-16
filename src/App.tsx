@@ -35,6 +35,7 @@ import type { MarketplaceFormData } from './components/features/MarketplaceFormM
 import { useBackClose, overlayJustClosed } from './lib/backstack';
 import { useVisibilityRefresh } from './lib/useVisibilityRefresh';
 import { lazyWithReload } from './lib/lazyWithReload';
+import { getRunningClocks } from './api/clock';
 import { readSnap, writeSnap } from './lib/snapshot';
 import { applyScheduleSeo, applyVenueSeo, resetSeo } from './lib/seo';
 import { createUndoQueue } from './lib/undoableDelete';
@@ -517,9 +518,11 @@ function TabBar({
 }
 
 // ── 모바일 하단 탭바(Riot Mobile 스타일) — 플로팅 알약 + 아이콘/라벨 + 프레스 스프링 ──
-function MobileTabBar({ tabs, active, onChange, dot, onOpenMe }: {
+function MobileTabBar({ tabs, active, onChange, dot, count, onOpenMe }: {
   tabs: TabDef[]; active: TabId; onChange: (t: TabId) => void;
   dot?: Partial<Record<TabId, boolean>>;
+  /** 숫자 배지(예: 라이브 'N게임 진행중') — dot 보다 정보량이 높은 칸에만 */
+  count?: Partial<Record<TabId, number>>;
   /** 일반 유저 5번째 칸 '내 정보'(개인 대시보드 — 비로그인이면 로그인 유도) */
   onOpenMe: () => void;
 }) {
@@ -590,6 +593,12 @@ function MobileTabBar({ tabs, active, onChange, dot, onOpenMe }: {
                     on ? 'opacity-100' : 'opacity-0'].join(' ')} />
                 {tab ? TAB_ICON[tab] : ME_ICON}
                 {tab && dot?.[tab] && !on && <span className="absolute right-2 top-0.5 h-1.5 w-1.5 rounded-full bg-accent-300" aria-hidden />}
+                {tab && (count?.[tab] ?? 0) > 0 && (
+                  <span aria-label={`진행 중 ${count![tab]}게임`}
+                    className="absolute -top-0.5 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[9px] font-extrabold tabular-nums text-white ring-2 ring-surface-mid">
+                    {count![tab]}
+                  </span>
+                )}
               </span>
               <span className={['text-[11px] font-bold leading-none transition-colors duration-200',
                 on ? 'text-accent-300' : 'text-ink-secondary'].join(' ')}>
@@ -1041,6 +1050,8 @@ export default function App() {
   // 커뮤니티·장터·별점: '부팅이 끝난 뒤 유휴' 와 '해당 탭 진입' 중 먼저 오는 쪽에서 1회.
   // 유휴만 기다리면 유휴 전에 탭을 누른 사람이 빈 화면을 보고,
   // 탭 진입만 기다리면 매번 스켈레톤을 본다 — 둘을 합치면 양쪽 다 없다.
+  // 라이브 탭 배지 — '지금 N게임 진행중'(Phase 14, PokerAtlas real-time counts).
+  const [liveCount, setLiveCount] = useState(0);
   const deferredLoadedRef = useRef(false);
   const loadDeferred = useCallback(() => {
     if (deferredLoadedRef.current) return;
@@ -1049,6 +1060,7 @@ export default function App() {
     reloadComments();
     getListings().then((l) => { setListings(l); setMarketLoaded(true); writeSnap('listings', l); }).catch(() => setMarketLoaded(true));
     getVenueRatings().then(setVenueRatings).catch(() => {}); // 카드 ⭐ 별점 — 몇 초 늦게 떠도 되는 장식
+    getRunningClocks().then((cs) => setLiveCount(cs.length)).catch(() => {}); // 라이브 탭 배지
   }, [reloadPosts, reloadComments]);
   useEffect(() => {
     type IdleWin = Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number };
@@ -1142,6 +1154,7 @@ export default function App() {
       case 'browse':
       case 'live':
       case 'my-store':
+        getRunningClocks().then((cs) => setLiveCount(cs.length)).catch(() => {});
         reloadSchedules(); reloadVenues(); reloadNotices();
         break;
       case 'community':
@@ -1847,7 +1860,7 @@ export default function App() {
 
       <TabBar tabs={tabs.filter((t) => t.id !== 'market')} active={activeTab} onChange={changeTab} />
       {/* 모바일 하단 탭바(Riot Mobile 스타일) — 상단 GNB 대체 */}
-      <MobileTabBar tabs={tabs} active={activeTab} onChange={changeTab} dot={{ community: commHasNew }}
+      <MobileTabBar tabs={tabs} active={activeTab} onChange={changeTab} dot={{ community: commHasNew }} count={{ live: liveCount }}
         onOpenMe={() => { if (user) setVoucherWalletOpen(true); else setAuthOpen(true); }} />
 
       {/* 일정 탐색 */}

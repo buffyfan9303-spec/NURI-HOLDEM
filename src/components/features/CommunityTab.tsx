@@ -288,6 +288,8 @@ function FeedSection({
   const { user } = useAuth();
   const [q, setQ] = useState('');
   const [cat, setCat] = useState<PostCategory | 'all'>('all');
+  // 정렬(Phase 14, pokergosu 추천/인기 축) — 별도 게시판 신설 대신 정렬 칩으로.
+  const [order, setOrder] = useState<'new' | 'popular'>('new');
   const [visible, setVisible] = useState(15);
   // 보기 모드: compact(에펨코리아식 한 줄, 기본) / feed(미리보기 포함)
   const [view, setView] = useState<'compact' | 'feed'>(() =>
@@ -321,14 +323,18 @@ function FeedSection({
 
   const filtered = useMemo(() => {
     const kw = q.trim().toLowerCase();
-    return posts.filter((p) => {
+    const base = posts.filter((p) => {
       if (enableCategory && cat !== 'all' && (p.category ?? 'free') !== cat) return false;
       if (kw && !(p.content.toLowerCase().includes(kw) || (p.title?.toLowerCase().includes(kw) ?? false) || p.userName.toLowerCase().includes(kw))) return false;
       return true;
     });
-  }, [posts, q, cat, enableCategory]);
+    // 인기 정렬(Phase 14, pokergosu 추천 축) — 별도 게시판 대신 정렬 칩. 동률은 최신순.
+    return order === 'popular'
+      ? [...base].sort((a, b) => (b.likeCount - a.likeCount) || (new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()))
+      : base;
+  }, [posts, q, cat, enableCategory, order]);
 
-  const pinHot = enableCategory && cat === 'all' && !q.trim() && hotPosts.length > 0;
+  const pinHot = enableCategory && cat === 'all' && !q.trim() && order === 'new' && hotPosts.length > 0;
   const listSource = pinHot ? filtered.filter((p) => !hotIds.has(p.id)) : filtered;
   const shown = listSource.slice(0, visible);
 
@@ -427,6 +433,15 @@ function FeedSection({
             </div>
             {/* 보기 모드 토글 — 한 줄 목록 / 미리보기 피드 */}
             <div className="flex shrink-0 rounded-input border border-border-default bg-surface-high p-0.5">
+              {/* 최신/인기 정렬(Phase 14) — 인기 = 좋아요순 */}
+              <div className="mr-1 inline-flex overflow-hidden rounded-input border border-border-default">
+                {(['new', 'popular'] as const).map((o) => (
+                  <button key={o} type="button" onClick={() => setOrder(o)} aria-pressed={order === o}
+                    className={['h-7 px-2.5 text-2xs font-bold transition-colors', order === o ? 'bg-accent-300 text-white' : 'bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
+                    {o === 'new' ? '최신' : '인기'}
+                  </button>
+                ))}
+              </div>
               <button type="button" aria-label="한 줄 목록" title="한 줄 목록"
                 onClick={() => switchView('compact')}
                 className={['rounded-[6px] px-2 py-1.5 transition-colors', view === 'compact' ? 'bg-surface-float text-accent-300' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
@@ -581,6 +596,10 @@ const PostRow = memo(function PostRow({ post, onClick, hot = false, selected = f
         ? <span className="shrink-0 rounded-badge bg-danger/15 px-1 text-2xs font-extrabold leading-none tracking-wide text-danger-light">HOT</span>
         : <span className="shrink-0 rounded-badge bg-surface-high px-1 py-0.5 text-2xs font-semibold leading-none text-ink-muted">{catLabel}</span>}
       <span className="min-w-0 flex-1 truncate">
+        {/* NEW 도트(Phase 14, pokergosu 리스트 밀도) — 24시간 이내 글 */}
+        {Date.now() - new Date(post.createdAt).getTime() < 24 * 3600_000 && (
+          <span aria-label="새 글" className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-danger align-middle" />
+        )}
         <span className="text-[15px] font-bold leading-tight text-ink-primary">{post.title || post.content.slice(0, 40)}</span>
         {(replay || hand) && <span className="ml-1 align-middle text-2xs text-accent-300">{replay ? '🎬' : '♠'}</span>}
         {imgCount > 0 && <span className="ml-1 align-middle text-2xs text-ink-muted" aria-label={`사진 ${imgCount}장`}>📷{imgCount > 1 ? imgCount : ''}</span>}

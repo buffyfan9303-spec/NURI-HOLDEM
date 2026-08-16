@@ -15,7 +15,7 @@ import { scheduleStatus } from '../../lib/scheduleStatus';
 import type { Comment } from '../../api/community';
 import { generateBlinds } from '../../api/clock';
 import { promptLogin, openPostForm, ensureVerified } from '../../lib/requireLogin';
-import { googleCalendarUrl } from '../../lib/calendar';
+import { googleCalendarUrl, icsDataUrl, isIOS } from '../../lib/calendar';
 import QRCode from 'qrcode';
 import { requestBuyin, buyinRequestUrl, kstToday } from '../../api/ledger';
 
@@ -568,10 +568,16 @@ function CalendarShareRow({ schedule }: { schedule: Schedule }) {
       {/* 구글 캘린더 바로 등록 — 다운로드 없이 새 창에서 '저장'만 누르면 끝 */}
       <button type="button"
         onClick={() => {
-          window.open(
-            googleCalendarUrl({ title: schedule.title, date: schedule.date, startTime: schedule.startTime, venueName: schedule.pubName, address: schedule.address }),
-            '_blank', 'noopener',
-          );
+          const ev = { title: schedule.title, date: schedule.date, startTime: schedule.startTime, venueName: schedule.pubName, address: schedule.address };
+          // iOS 기본 캘린더 사용자는 구글 URL 로는 등록이 안 된다(Phase 14) — .ics 는 네이티브로 열린다.
+          if (isIOS()) {
+            const a = document.createElement('a');
+            a.href = icsDataUrl(ev);
+            a.download = `${schedule.title.slice(0, 30)}.ics`;
+            document.body.appendChild(a); a.click(); a.remove();
+          } else {
+            window.open(googleCalendarUrl(ev), '_blank', 'noopener');
+          }
         }}
         className="flex items-center justify-center gap-1.5 rounded-input border border-border-default bg-surface-high py-3 text-sm font-bold text-ink-secondary transition-colors hover:border-accent-400/50 hover:text-accent-300">
         <span aria-hidden>📅</span> 내 캘린더에 추가

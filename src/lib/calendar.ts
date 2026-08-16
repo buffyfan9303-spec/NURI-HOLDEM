@@ -100,3 +100,32 @@ export async function shareOrCopy(input: { title: string; text: string; url: str
   await navigator.clipboard.writeText(`${input.text}\n${input.url}`);
   return 'copy';
 }
+
+
+/**
+ * .ics 파일(데이터 URL) — iOS 기본 캘린더 대응 (마스터 지시서 Phase 14, PokerAtlas 'Calendar Sync').
+ * 구글 캘린더 URL 은 구글 계정 전제라 아이폰 기본 캘린더 사용자를 놓친다 — .ics 는 네이티브로 열린다.
+ * 서버 불필요: 전부 클라이언트 문자열 조립.
+ */
+export function icsDataUrl(input: { title: string; date: string; startTime: string; venueName?: string; address?: string; durationH?: number }): string {
+  const start = `${input.date.replace(/-/g, '')}T${(input.startTime || '19:00').replace(':', '')}00`;
+  const endH = Math.min(23, Number((input.startTime || '19:00').slice(0, 2)) + (input.durationH ?? 5));
+  const end = `${input.date.replace(/-/g, '')}T${String(endH).padStart(2, '0')}${(input.startTime || '19:00').slice(3, 5)}00`;
+  const esc = (v: string) => v.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+  const lines = [
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//NURI HOLDEM//KR', 'BEGIN:VEVENT',
+    `UID:nuri-${input.date}-${esc(input.title).slice(0, 24)}@nuriholdem.com`,
+    `DTSTART;TZID=Asia/Seoul:${start}`,
+    `DTEND;TZID=Asia/Seoul:${end}`,
+    `SUMMARY:${esc(input.title)}${input.venueName ? esc(` @ ${input.venueName}`) : ''}`,
+    ...(input.address ? [`LOCATION:${esc(input.address)}`] : []),
+    'END:VEVENT', 'END:VCALENDAR',
+  ];
+  return `data:text/calendar;charset=utf-8,${encodeURIComponent(lines.join('\r\n'))}`;
+}
+
+/** iOS(아이폰·아이패드) 판별 — 캘린더 등록 방식 분기용 */
+export function isIOS(): boolean {
+  const ua = navigator.userAgent;
+  return /iPhone|iPad|iPod/.test(ua) || (ua.includes('Mac') && 'ontouchend' in document);
+}

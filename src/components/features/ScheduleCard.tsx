@@ -264,6 +264,18 @@ function ListCard({ schedule, onVenueClick, onSelect, reserveCount, rating, prio
           <span className="text-ink-secondary tabular-nums font-medium">
             {d.monthDay}({d.dow}) {d.time}
           </span>
+          {/* 시작까지 남은 시간(Phase 14, apis '~까지 N분' 패턴) — 오늘 예정 대회만.
+              렌더 시점 계산(창 복귀 재조회 주기로 충분) — 초당 갱신은 과하다. */}
+          {status === 'upcoming' && (() => {
+            const ms = new Date(`${schedule.date}T${schedule.startTime || '19:00'}:00+09:00`).getTime() - Date.now();
+            if (ms <= 0 || ms > 24 * 3600_000) return null;
+            const h = Math.floor(ms / 3600_000), m = Math.floor((ms % 3600_000) / 60_000);
+            return (
+              <span className="shrink-0 rounded-badge bg-accent-300/12 px-1.5 py-0.5 font-bold tabular-nums text-accent-300">
+                ⏰ {h > 0 ? `${h}시간 ` : ''}{m}분 후
+              </span>
+            );
+          })()}
           <span className="text-border-strong">·</span>
           <span className="tabular-nums">바이인 {schedule.buyIn.amount.toLocaleString()}</span>
           {/* '마감 임박'은 아직 시작 안 한 대회에서만 — 끝난 대회에 붙으면 거짓 긴박감이고,
