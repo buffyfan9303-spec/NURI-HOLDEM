@@ -563,6 +563,7 @@ const samePostProps = (a: PostRowData, b: PostRowData) =>
   a.post === b.post && a.selected === b.selected && a.mark === b.mark && a.titlePts === b.titlePts && a.hot === b.hot;
 
 const PostRow = memo(function PostRow({ post, onClick, hot = false, selected = false, mark = '', titlePts }: { post: CommunityPost; onClick: () => void; hot?: boolean; selected?: boolean; mark?: string; titlePts?: number }) {
+  // 화면 밖 행은 브라우저가 렌더를 통째로 건너뛴다(content-visibility) — cv-row-* 는 index.css
   const catLabel = BOARD_CATEGORIES.find((c) => c.id === (post.category ?? 'free'))?.label ?? '자유';
   const { replay, hand } = parseAttachments(post.content);
   // 한 줄 행(에펨식)은 행 높이가 곧 목록 밀도라 썸네일을 넣으면 표가 무너진다 → 📷 배지로만 알린다.
@@ -572,7 +573,7 @@ const PostRow = memo(function PostRow({ post, onClick, hot = false, selected = f
       onClick={onClick}
       aria-current={selected || undefined}
       className={[
-        'flex items-center gap-2 px-3 py-2 cursor-pointer border-b border-border-subtle last:border-b-0 transition-colors',
+        'cv-row-sm flex items-center gap-2 px-3 py-2 cursor-pointer border-b border-border-subtle last:border-b-0 transition-colors',
         selected ? 'bg-accent-300/10' : 'hover:bg-surface-high/60 active:bg-surface-high',
       ].join(' ')}
     >
@@ -583,7 +584,7 @@ const PostRow = memo(function PostRow({ post, onClick, hot = false, selected = f
         <span className="text-[15px] font-bold leading-tight text-ink-primary">{post.title || post.content.slice(0, 40)}</span>
         {(replay || hand) && <span className="ml-1 align-middle text-2xs text-accent-300">{replay ? '🎬' : '♠'}</span>}
         {imgCount > 0 && <span className="ml-1 align-middle text-2xs text-ink-muted" aria-label={`사진 ${imgCount}장`}>📷{imgCount > 1 ? imgCount : ''}</span>}
-        {post.commentCount > 0 && <span className="ml-1 align-middle text-xs font-bold text-accent-300">[{post.commentCount}]</span>}
+        {post.commentCount > 0 && <span className="ml-1 align-middle text-xs font-bold tabular-nums text-accent-300">[{post.commentCount}]</span>}
       </span>
       <span className="shrink-0 text-xs text-ink-muted">{mark}{post.userName}</span>
       <TitleChip points={titlePts} />
@@ -601,7 +602,7 @@ const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, se
       onClick={onClick}
       aria-current={selected || undefined}
       className={[
-        'py-1.5 px-3 transition-colors cursor-pointer border-b border-border-subtle last:border-b-0',
+        'cv-row-lg py-1.5 px-3 transition-colors cursor-pointer border-b border-border-subtle last:border-b-0',
         selected
           ? 'bg-accent-300/10 border-l-2 border-l-accent-300 -ml-px pl-[calc(0.75rem-1px)]'
           : 'hover:bg-surface-high/50 active:bg-surface-high',
@@ -652,20 +653,20 @@ const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, se
               <svg width="13" height="13" viewBox="0 0 13 13" fill={post.liked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.4" aria-hidden>
                 <path d="M6.5 11.5L1.5 6.5C0.5 5.5 0.5 3.5 1.5 2.5C2.5 1.5 4.5 1.5 5.5 2.5L6.5 3.5L7.5 2.5C8.5 1.5 10.5 1.5 11.5 2.5C12.5 3.5 12.5 5.5 11.5 6.5L6.5 11.5Z" strokeLinejoin="round" />
               </svg>
-              {post.likeCount}
+              <span className="tabular-nums">{post.likeCount}</span>
             </button>
             <span className="inline-flex items-center gap-1">
               <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden>
                 <path d="M11 7.5C11 8.5 10.5 9.5 9 9.5H4L2 11.5V3.5C2 2.5 3 1.5 4 1.5H9C10 1.5 11 2.5 11 3.5V7.5Z" strokeLinejoin="round" />
               </svg>
-              {post.commentCount}
+              <span className="tabular-nums">{post.commentCount}</span>
             </span>
             {(post.viewCount ?? 0) > 0 && (
               <span className="inline-flex items-center gap-1">
                 <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden>
                   <path d="M1 6.5C2.2 4 4.2 2.7 6.5 2.7S10.8 4 12 6.5C10.8 9 8.8 10.3 6.5 10.3S2.2 9 1 6.5Z" /><circle cx="6.5" cy="6.5" r="1.8" />
                 </svg>
-                {post.viewCount}
+                <span className="tabular-nums">{post.viewCount}</span>
               </span>
             )}
           </div>

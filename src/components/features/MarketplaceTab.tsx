@@ -246,7 +246,7 @@ function MarketplaceTab({
         <button
           type="button"
           onClick={() => setLimit((v) => v + 20)}
-          className="w-full py-2.5 rounded-input bg-surface-high text-xs font-semibold text-ink-secondary hover:text-ink-primary active:bg-surface-float transition-colors"
+          className="w-full py-2.5 rounded-input bg-surface-high text-xs font-semibold tabular-nums text-ink-secondary hover:text-ink-primary active:bg-surface-float transition-colors"
         >
           더보기 ({(visible.length - limit).toLocaleString()})
         </button>
@@ -372,7 +372,7 @@ function ListingRow({
   const isSold = listing.status === 'sold';
 
   return (
-    <li>
+    <li className="cv-row-md">
       <button
         type="button"
         onClick={onClick}

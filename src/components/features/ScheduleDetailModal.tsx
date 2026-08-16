@@ -392,18 +392,18 @@ export default function ScheduleDetailModal({
         {schedule.structure && (schedule.structure.startingChips != null || schedule.structure.rebuyStack != null || schedule.structure.blindLevelMinutes != null) && (
           <section>
             <h3 className="text-sm font-semibold text-ink-primary mb-2">토너먼트 구조</h3>
-            <div className="flex gap-2 overflow-x-auto scrollbar-none">
+            <div className="flex gap-2 overflow-x-auto scrollbar-none snap-x snap-proximity overscroll-x-contain">
               {schedule.structure.startingChips != null && (
-                <div className="shrink-0 w-[5.5rem]"><InfoCard label="시작 칩" value={schedule.structure.startingChips.toLocaleString()} compact /></div>
+                <div className="shrink-0 w-[5.5rem] snap-start"><InfoCard label="시작 칩" value={schedule.structure.startingChips.toLocaleString()} compact /></div>
               )}
               {schedule.structure.rebuyStack != null && (
-                <div className="shrink-0 w-[5.5rem]"><InfoCard label="리바인 칩" value={schedule.structure.rebuyStack.toLocaleString()} compact /></div>
+                <div className="shrink-0 w-[5.5rem] snap-start"><InfoCard label="리바인 칩" value={schedule.structure.rebuyStack.toLocaleString()} compact /></div>
               )}
               {schedule.structure.blindLevelMinutes != null && (
-                <div className="shrink-0 w-[5.5rem]"><InfoCard label="레벨" value={`${schedule.structure.blindLevelMinutes}분`} compact /></div>
+                <div className="shrink-0 w-[5.5rem] snap-start"><InfoCard label="레벨" value={`${schedule.structure.blindLevelMinutes}분`} compact /></div>
               )}
               {schedule.structure.lateRegLevels !== undefined && (
-                <div className="shrink-0 w-[5.5rem]"><InfoCard label="레이트 레지" value={`${schedule.structure.lateRegLevels}레벨`} compact /></div>
+                <div className="shrink-0 w-[5.5rem] snap-start"><InfoCard label="레이트 레지" value={`${schedule.structure.lateRegLevels}레벨`} compact /></div>
               )}
             </div>
           </section>
