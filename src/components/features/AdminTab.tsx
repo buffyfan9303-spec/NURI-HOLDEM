@@ -386,10 +386,10 @@ function MissionsAdminCard() {
           {GOAL_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
         <label className="flex items-center gap-1 text-xs text-ink-muted">목표
-          <input type="number" min={1} max={50} value={goal} onChange={(e) => setGoal(Math.max(1, Math.min(50, Number(e.target.value) || 1)))} className="input w-16 text-sm" />회
+          <input type="number" inputMode="numeric" min={1} max={50} value={goal} onChange={(e) => setGoal(Math.max(1, Math.min(50, Number(e.target.value) || 1)))} className="input w-16 text-sm" />회
         </label>
         <label className="flex items-center gap-1 text-xs text-ink-muted">보상
-          <input type="number" min={1} max={500} value={reward} onChange={(e) => setReward(Math.max(1, Math.min(500, Number(e.target.value) || 1)))} className="input w-20 text-sm" />점
+          <input type="number" inputMode="numeric" min={1} max={500} value={reward} onChange={(e) => setReward(Math.max(1, Math.min(500, Number(e.target.value) || 1)))} className="input w-20 text-sm" />점
         </label>
         <button type="button" onClick={save} disabled={busy} className="btn-primary px-3 py-1.5 text-xs disabled:opacity-60">{editRow ? '수정 저장' : '+ 추가'}</button>
         {editRow && <button type="button" onClick={resetForm} disabled={busy} className="btn-ghost px-3 py-1.5 text-xs disabled:opacity-60">취소</button>}

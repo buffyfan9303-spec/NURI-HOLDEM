@@ -233,7 +233,7 @@ export default function VenuePage({
         <div className="ml-auto flex shrink-0 items-center gap-1">
           <FollowButton venueId={venue.id} followerCount={venue.followerCount} compact />
           <button type="button" onClick={shareVenue} aria-label="매장 링크 공유"
-            className="w-9 h-9 flex items-center justify-center rounded-full text-ink-secondary hover:text-ink-primary hover:bg-surface-high transition-colors">
+            className="hit w-9 h-9 flex items-center justify-center rounded-full text-ink-secondary hover:text-ink-primary hover:bg-surface-high transition-colors">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
               <path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4" />
@@ -1272,7 +1272,7 @@ function Row({ dt, dd }: { dt: string; dd: string }) {
 }
 
 // 매장 정보 액션 칩 공통 규격 — 높이·글자·여백 통일(조잡함 방지)
-const MAP_CHIP = 'inline-flex h-8 items-center justify-center gap-1.5 rounded-input border border-border-default bg-surface-high px-2 text-2xs font-semibold text-ink-secondary transition-colors hover:border-border-strong hover:text-ink-primary active:scale-95';
+const MAP_CHIP = 'hit inline-flex h-8 items-center justify-center gap-1.5 rounded-input border border-border-default bg-surface-high px-2 text-2xs font-semibold text-ink-secondary transition-colors hover:border-border-strong hover:text-ink-primary active:scale-95';
 
 // 주소 — 클릭하면 클립보드 복사 + 외부 지도 링크
 function AddressRow({ address }: { address: string }) {

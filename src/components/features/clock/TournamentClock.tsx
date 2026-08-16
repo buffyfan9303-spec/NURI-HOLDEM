@@ -1114,18 +1114,18 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
           <input value={cfg.title} onChange={(e) => set({ title: e.target.value })} maxLength={60} className="input w-full text-sm" />
         </Field>
         <div className="grid grid-cols-3 gap-2">
-          <Field label="스타팅 스택"><input type="number" value={cfg.startStack || ''} onChange={(e) => set({ startStack: +e.target.value || 0 })} className={numInput} /></Field>
-          <Field label="리바인 스택"><input type="number" value={cfg.rebuyStack || ''} onChange={(e) => set({ rebuyStack: +e.target.value || 0 })} className={numInput} /></Field>
-          <Field label="애드온 스택"><input type="number" disabled={!cfg.isAddon} value={cfg.isAddon ? (cfg.addonStack || '') : ''} onChange={(e) => set({ addonStack: +e.target.value || 0 })} className={`${numInput} disabled:opacity-50`} /></Field>
+          <Field label="스타팅 스택"><input type="number" inputMode="numeric" value={cfg.startStack || ''} onChange={(e) => set({ startStack: +e.target.value || 0 })} className={numInput} /></Field>
+          <Field label="리바인 스택"><input type="number" inputMode="numeric" value={cfg.rebuyStack || ''} onChange={(e) => set({ rebuyStack: +e.target.value || 0 })} className={numInput} /></Field>
+          <Field label="애드온 스택"><input type="number" inputMode="numeric" disabled={!cfg.isAddon} value={cfg.isAddon ? (cfg.addonStack || '') : ''} onChange={(e) => set({ addonStack: +e.target.value || 0 })} className={`${numInput} disabled:opacity-50`} /></Field>
         </div>
         <label className="flex items-center gap-2 text-xs text-ink-secondary">
           <input type="checkbox" checked={cfg.isAddon} onChange={(e) => set({ isAddon: e.target.checked })} className="accent-accent-300 w-4 h-4" />
           애드온 게임 (라이브에 ADD-ON 표시 · 켜야 애드온 스택 입력 가능)
         </label>
         <div className="grid grid-cols-3 gap-2">
-          <Field label={`등록마감 레벨 (전체 ${totalLevels})`}><input type="number" min="0" max="60" value={cfg.regCloseLevel || ''} onChange={(e) => set({ regCloseLevel: Math.max(0, +e.target.value || 0) })} className={numInput} /></Field>
-          <Field label="최대 레벨 (자동생성용)"><input type="number" min="1" max="60" value={cfg.maxLevel || ''} onChange={(e) => set({ maxLevel: Math.max(0, +e.target.value || 0) })} className={numInput} /></Field>
-          <Field label="미스터리 바운티"><input type="number" value={cfg.mysteryBounty || ''} onChange={(e) => set({ mysteryBounty: +e.target.value || 0 })} className={numInput} /></Field>
+          <Field label={`등록마감 레벨 (전체 ${totalLevels})`}><input type="number" inputMode="numeric" min="0" max="60" value={cfg.regCloseLevel || ''} onChange={(e) => set({ regCloseLevel: Math.max(0, +e.target.value || 0) })} className={numInput} /></Field>
+          <Field label="최대 레벨 (자동생성용)"><input type="number" inputMode="numeric" min="1" max="60" value={cfg.maxLevel || ''} onChange={(e) => set({ maxLevel: Math.max(0, +e.target.value || 0) })} className={numInput} /></Field>
+          <Field label="미스터리 바운티"><input type="number" inputMode="numeric" value={cfg.mysteryBounty || ''} onChange={(e) => set({ mysteryBounty: +e.target.value || 0 })} className={numInput} /></Field>
         </div>
         <button type="button" onClick={autoGenerate} className="w-full py-2 rounded-input bg-accent-300/12 text-accent-300 border border-accent-400/40 text-xs font-bold hover:bg-accent-300/20">
           ⚙ 블라인드 자동 생성 — 등록마감({cfg.regCloseLevel || '-'})·최대({cfg.maxLevel || 15})레벨 기준 (마감 후 가파르게)
@@ -1136,8 +1136,8 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
       <section className="rounded-card border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.05] to-transparent p-3 space-y-2">
         <p className="text-2xs font-semibold text-accent-300">얼리 구간 (레벨 기준 · 장부 바인 시각→레벨 환산으로 자동 분류)</p>
         <div className="grid grid-cols-2 gap-2">
-          <Field label="더블얼리 ~레벨까지"><input type="number" min="0" max={totalLevels} value={cfg.earlyDoubleLevel || ''} onChange={(e) => set({ earlyDoubleLevel: +e.target.value || 0 })} placeholder="예) 1" className={numInput} /></Field>
-          <Field label="1얼리 ~레벨까지"><input type="number" min="0" max={totalLevels} value={cfg.earlySingleLevel || ''} onChange={(e) => set({ earlySingleLevel: +e.target.value || 0 })} placeholder="예) 4" className={numInput} /></Field>
+          <Field label="더블얼리 ~레벨까지"><input type="number" inputMode="numeric" min="0" max={totalLevels} value={cfg.earlyDoubleLevel || ''} onChange={(e) => set({ earlyDoubleLevel: +e.target.value || 0 })} placeholder="예) 1" className={numInput} /></Field>
+          <Field label="1얼리 ~레벨까지"><input type="number" inputMode="numeric" min="0" max={totalLevels} value={cfg.earlySingleLevel || ''} onChange={(e) => set({ earlySingleLevel: +e.target.value || 0 })} placeholder="예) 4" className={numInput} /></Field>
         </div>
         <p className="text-[10px] text-ink-muted">
           예) 더블얼리 1레벨·1얼리 4레벨 → 레벨1 도착=더블얼리, 레벨2~4 도착=1얼리. 전체 {totalLevels}레벨.
@@ -1172,17 +1172,17 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-2xs text-ink-secondary w-8 shrink-0">전체</span>
             <div className="relative w-16">
-              <input type="number" min="1" value={bulkAll || ''} onChange={(e) => setBulkAll(+e.target.value || 0)} className="input w-full text-xs tabular-nums pr-5" />
+              <input type="number" inputMode="numeric" min="1" value={bulkAll || ''} onChange={(e) => setBulkAll(+e.target.value || 0)} className="input w-full text-xs tabular-nums pr-5" />
               <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-ink-muted">분</span>
             </div>
             <button type="button" onClick={() => applyBulkAll(bulkAll)} className="text-2xs font-bold px-2.5 py-1.5 rounded-input bg-accent-300/15 text-accent-300 border border-accent-400/40 hover:bg-accent-300/25">전체 적용</button>
           </div>
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-2xs text-ink-secondary w-8 shrink-0">레벨</span>
-            <input type="number" min="1" value={bulkFrom || ''} onChange={(e) => setBulkFrom(+e.target.value || 0)} className="input w-16 text-center text-xs tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
+            <input type="number" inputMode="numeric" min="1" value={bulkFrom || ''} onChange={(e) => setBulkFrom(+e.target.value || 0)} className="input w-16 text-center text-xs tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
             <span className="text-2xs text-ink-muted">부터</span>
             <div className="relative w-16">
-              <input type="number" min="1" value={bulkFromMin || ''} onChange={(e) => setBulkFromMin(+e.target.value || 0)} className="input w-full text-xs tabular-nums pr-5" />
+              <input type="number" inputMode="numeric" min="1" value={bulkFromMin || ''} onChange={(e) => setBulkFromMin(+e.target.value || 0)} className="input w-full text-xs tabular-nums pr-5" />
               <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-ink-muted">분</span>
             </div>
             <button type="button" onClick={() => applyBulkFrom(bulkFrom, bulkFromMin)} className="text-2xs font-bold px-2.5 py-1.5 rounded-input bg-accent-300/15 text-accent-300 border border-accent-400/40 hover:bg-accent-300/25">적용</button>
@@ -1198,13 +1198,13 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
                 <input value={l.label ?? ''} onChange={(e) => setLevel(i, { label: e.target.value })} placeholder="BREAK" className="input flex-1 text-sm" />
               ) : (
                 <>
-                  <input type="number" value={l.sb || ''} onChange={(e) => setLevel(i, { sb: +e.target.value || 0 })} placeholder="SB" className="input w-full text-xs tabular-nums min-w-0" />
-                  <input type="number" value={l.bb || ''} onChange={(e) => setLevel(i, { bb: +e.target.value || 0 })} placeholder="BB" className="input w-full text-xs tabular-nums min-w-0" />
-                  <input type="number" value={l.ante || ''} onChange={(e) => setLevel(i, { ante: +e.target.value || 0 })} placeholder="ANTE" className="input w-full text-xs tabular-nums min-w-0" />
+                  <input type="number" inputMode="numeric" value={l.sb || ''} onChange={(e) => setLevel(i, { sb: +e.target.value || 0 })} placeholder="SB" className="input w-full text-xs tabular-nums min-w-0" />
+                  <input type="number" inputMode="numeric" value={l.bb || ''} onChange={(e) => setLevel(i, { bb: +e.target.value || 0 })} placeholder="BB" className="input w-full text-xs tabular-nums min-w-0" />
+                  <input type="number" inputMode="numeric" value={l.ante || ''} onChange={(e) => setLevel(i, { ante: +e.target.value || 0 })} placeholder="ANTE" className="input w-full text-xs tabular-nums min-w-0" />
                 </>
               )}
               <div className="relative w-[4.75rem] shrink-0">
-                <input type="number" value={l.minutes || ''} onChange={(e) => setLevel(i, { minutes: +e.target.value || 0 })} className="input w-full text-xs tabular-nums pr-7 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
+                <input type="number" inputMode="numeric" value={l.minutes || ''} onChange={(e) => setLevel(i, { minutes: +e.target.value || 0 })} className="input w-full text-xs tabular-nums pr-7 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
                 <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-ink-muted pointer-events-none">분</span>
               </div>
               <button type="button" onClick={() => removeLevel(i)} className="text-ink-muted hover:text-danger-light text-xs px-1 shrink-0">✕</button>

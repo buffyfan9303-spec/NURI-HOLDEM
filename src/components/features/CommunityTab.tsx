@@ -437,7 +437,7 @@ function FeedSection({
               <div className="mr-1 inline-flex overflow-hidden rounded-input border border-border-default">
                 {(['new', 'popular'] as const).map((o) => (
                   <button key={o} type="button" onClick={() => setOrder(o)} aria-pressed={order === o}
-                    className={['h-7 px-2.5 text-2xs font-bold transition-colors', order === o ? 'bg-accent-300 text-white' : 'bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
+                    className={['hit h-7 px-2.5 text-2xs font-bold transition-colors', order === o ? 'bg-accent-300 text-white' : 'bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
                     {o === 'new' ? '최신' : '인기'}
                   </button>
                 ))}

@@ -74,7 +74,7 @@ export default function GlobalSearchModal({ open, onClose, venues, schedules, po
                     🕐 {r}
                   </button>
                   <button type="button" onClick={() => removeRecent(r)} aria-label={`'${r}' 삭제`}
-                    className="h-9 w-9 shrink-0 rounded-input text-ink-muted hover:text-danger-light transition-colors">✕</button>
+                    className="hit h-9 w-9 shrink-0 rounded-input text-ink-muted hover:text-danger-light transition-colors">✕</button>
                 </li>
               ))}</ul>
             </div>

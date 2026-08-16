@@ -470,17 +470,17 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
         <div className="grid grid-cols-2 gap-2">
           {form.prizeType === 'GTD' ? (
             <FieldWrap label="보장 상금" suffix="만원" required htmlFor={prizeAmountId}>
-              <input id={prizeAmountId} type="number" required min={0} value={form.prizeAmount || ''}
+              <input id={prizeAmountId} type="number" inputMode="numeric" required min={0} value={form.prizeAmount || ''}
                 onChange={(e) => update('prizeAmount', Number(e.target.value))} placeholder="1100" className="input" />
             </FieldWrap>
           ) : (
             <FieldWrap label="프라이즈" suffix="%" required htmlFor={prizePercentId}>
-              <input id={prizePercentId} type="number" required min={0} max={100} value={form.prizePercent || ''}
+              <input id={prizePercentId} type="number" inputMode="numeric" required min={0} max={100} value={form.prizePercent || ''}
                 onChange={(e) => update('prizePercent', Number(e.target.value))} placeholder="예: 90" className="input" />
             </FieldWrap>
           )}
           <FieldWrap label="바이인" suffix="원" required htmlFor={buyInId}>
-            <input id={buyInId} type="number" required min={0} value={form.buyIn || ''}
+            <input id={buyInId} type="number" inputMode="numeric" required min={0} value={form.buyIn || ''}
               onChange={(e) => update('buyIn', Number(e.target.value))} placeholder="100000" className="input" />
           </FieldWrap>
         </div>
@@ -493,19 +493,19 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
         </FieldWrap>
         <div className="grid grid-cols-2 gap-2">
           <FieldWrap label="애드온 스택" suffix="칩" htmlFor={addonStackId}>
-            <input id={addonStackId} type="number" min={0} value={form.addonStack || ''}
+            <input id={addonStackId} type="number" inputMode="numeric" min={0} value={form.addonStack || ''}
               onChange={(e) => update('addonStack', Number(e.target.value))} placeholder="예: 20000" className="input" />
           </FieldWrap>
           <FieldWrap label="애드온 비용" suffix="원" htmlFor={addonCostId}>
-            <input id={addonCostId} type="number" min={0} value={form.addonCost || ''}
+            <input id={addonCostId} type="number" inputMode="numeric" min={0} value={form.addonCost || ''}
               onChange={(e) => update('addonCost', Number(e.target.value))} placeholder="예: 50000" className="input" />
           </FieldWrap>
           <FieldWrap label="스타팅 스택" suffix="칩" htmlFor={startStackId}>
-            <input id={startStackId} type="number" min={0} value={form.startStack || ''}
+            <input id={startStackId} type="number" inputMode="numeric" min={0} value={form.startStack || ''}
               onChange={(e) => update('startStack', Number(e.target.value))} placeholder="예: 50000" className="input" />
           </FieldWrap>
           <FieldWrap label="리바인 스택" suffix="칩" htmlFor={rebuyStackId}>
-            <input id={rebuyStackId} type="number" min={0} value={form.rebuyStack || ''}
+            <input id={rebuyStackId} type="number" inputMode="numeric" min={0} value={form.rebuyStack || ''}
               onChange={(e) => update('rebuyStack', Number(e.target.value))} placeholder="예: 70000" className="input" />
           </FieldWrap>
         </div>

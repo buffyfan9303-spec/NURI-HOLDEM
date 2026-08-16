@@ -65,9 +65,9 @@ export function StaffWageManager({ venueId }: { venueId: string }) {
             </div>
             <div className="grid grid-cols-2 gap-2">
               <label className="block"><span className="block text-[10px] text-ink-muted mb-0.5">시급(원)</span>
-                <input type="number" value={w.hourlyWage || ''} onChange={(e) => set(n, { hourlyWage: +e.target.value || 0 })} placeholder="예) 12000" className="input w-full text-sm tabular-nums" /></label>
+                <input type="number" inputMode="numeric" value={w.hourlyWage || ''} onChange={(e) => set(n, { hourlyWage: +e.target.value || 0 })} placeholder="예) 12000" className="input w-full text-sm tabular-nums" /></label>
               <label className="block"><span className="block text-[10px] text-ink-muted mb-0.5">급여일(매월)</span>
-                <input type="number" min="0" max="31" value={w.payday || ''} onChange={(e) => set(n, { payday: Math.min(31, +e.target.value || 0) })} placeholder="예) 10" className="input w-full text-sm tabular-nums" /></label>
+                <input type="number" inputMode="numeric" min="0" max="31" value={w.payday || ''} onChange={(e) => set(n, { payday: Math.min(31, +e.target.value || 0) })} placeholder="예) 10" className="input w-full text-sm tabular-nums" /></label>
             </div>
             <div>
               <span className="block text-[10px] text-ink-muted mb-0.5">휴무 요일</span>

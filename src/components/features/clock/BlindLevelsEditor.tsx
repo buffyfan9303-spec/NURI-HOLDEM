@@ -47,24 +47,24 @@ export default function BlindLevelsEditor({ levels, onChange }: { levels: ClockL
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="w-8 shrink-0 text-2xs text-ink-secondary">전체</span>
           <div className="relative w-16">
-            <input type="number" min="1" value={bulkAll || ''} onChange={(e) => setBulkAll(+e.target.value || 0)} className="input w-full pr-5 text-xs tabular-nums" />
+            <input type="number" inputMode="numeric" min="1" value={bulkAll || ''} onChange={(e) => setBulkAll(+e.target.value || 0)} className="input w-full pr-5 text-xs tabular-nums" />
             <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-ink-muted">분</span>
           </div>
           <button type="button" onClick={() => applyAll(bulkAll)} className="rounded-input border border-accent-400/40 bg-accent-300/15 px-2.5 py-1.5 text-2xs font-bold text-accent-300 hover:bg-accent-300/25">전체 적용</button>
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="w-8 shrink-0 text-2xs text-ink-secondary">레벨</span>
-          <input type="number" min="1" value={bulkFrom || ''} onChange={(e) => setBulkFrom(+e.target.value || 0)} className="input w-16 text-center text-xs tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
+          <input type="number" inputMode="numeric" min="1" value={bulkFrom || ''} onChange={(e) => setBulkFrom(+e.target.value || 0)} className="input w-16 text-center text-xs tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
           <span className="text-2xs text-ink-muted">부터</span>
           <div className="relative w-16">
-            <input type="number" min="1" value={bulkFromMin || ''} onChange={(e) => setBulkFromMin(+e.target.value || 0)} className="input w-full pr-5 text-xs tabular-nums" />
+            <input type="number" inputMode="numeric" min="1" value={bulkFromMin || ''} onChange={(e) => setBulkFromMin(+e.target.value || 0)} className="input w-full pr-5 text-xs tabular-nums" />
             <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-ink-muted">분</span>
           </div>
           <button type="button" onClick={() => applyFrom(bulkFrom, bulkFromMin)} className="rounded-input border border-accent-400/40 bg-accent-300/15 px-2.5 py-1.5 text-2xs font-bold text-accent-300 hover:bg-accent-300/25">적용</button>
         </div>
         <div className="flex items-center gap-1.5">
           <span className="text-[10px] text-ink-muted">자동 생성 · 최대</span>
-          <input type="number" min="1" max="60" value={genMax || ''} onChange={(e) => setGenMax(+e.target.value || 0)} className="input w-14 text-center text-xs tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
+          <input type="number" inputMode="numeric" min="1" max="60" value={genMax || ''} onChange={(e) => setGenMax(+e.target.value || 0)} className="input w-14 text-center text-xs tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
           <span className="text-[10px] text-ink-muted">레벨</span>
           <button type="button" onClick={autoGen} className="rounded-input border border-border-default px-2 py-1 text-2xs font-bold text-ink-secondary hover:text-accent-300">⚙ 자동 생성</button>
         </div>
@@ -79,12 +79,12 @@ export default function BlindLevelsEditor({ levels, onChange }: { levels: ClockL
             {l.kind === 'break' ? (
               <input value={l.label ?? ''} onChange={(e) => setLevel(i, { label: e.target.value })} placeholder="BREAK" className="input flex-1 text-xs" />
             ) : (<>
-              <input type="number" value={l.sb || ''} onChange={(e) => setLevel(i, { sb: +e.target.value || 0 })} placeholder="SB" className={NUM} />
-              <input type="number" value={l.bb || ''} onChange={(e) => setLevel(i, { bb: +e.target.value || 0 })} placeholder="BB" className={NUM} />
-              <input type="number" value={l.ante || ''} onChange={(e) => setLevel(i, { ante: +e.target.value || 0 })} placeholder="ANTE" className={NUM} />
+              <input type="number" inputMode="numeric" value={l.sb || ''} onChange={(e) => setLevel(i, { sb: +e.target.value || 0 })} placeholder="SB" className={NUM} />
+              <input type="number" inputMode="numeric" value={l.bb || ''} onChange={(e) => setLevel(i, { bb: +e.target.value || 0 })} placeholder="BB" className={NUM} />
+              <input type="number" inputMode="numeric" value={l.ante || ''} onChange={(e) => setLevel(i, { ante: +e.target.value || 0 })} placeholder="ANTE" className={NUM} />
             </>)}
             <div className="relative w-[4.5rem] shrink-0">
-              <input type="number" value={l.minutes || ''} onChange={(e) => setLevel(i, { minutes: +e.target.value || 0 })} className="input w-full pr-6 text-xs tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
+              <input type="number" inputMode="numeric" value={l.minutes || ''} onChange={(e) => setLevel(i, { minutes: +e.target.value || 0 })} className="input w-full pr-6 text-xs tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
               <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-ink-muted pointer-events-none">분</span>
             </div>
             <button type="button" onClick={() => removeLevel(i)} className="shrink-0 px-1 text-xs text-ink-muted hover:text-danger-light">✕</button>

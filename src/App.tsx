@@ -227,7 +227,7 @@ function AppHeader({
             type="button"
             onClick={onOpenSearch}
             aria-label="통합 검색"
-            className="w-9 h-9 flex items-center justify-center rounded-full text-ink-secondary hover:text-ink-primary hover:bg-surface-high transition-colors"
+            className="hit w-9 h-9 flex items-center justify-center rounded-full text-ink-secondary hover:text-ink-primary hover:bg-surface-high transition-colors"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
           </button>
@@ -688,6 +688,23 @@ export default function App() {
   // keep-alive: 한 번 방문한 핵심 탭은 언마운트하지 않고 display만 끈다 — 재방문 시 로드·마운트 비용 0(끊김 제거)
   const [visitedTabs] = useState(() => new Set<TabId>(['browse']));
   useEffect(() => { visitedTabs.add(activeTab); }, [activeTab, visitedTabs]);
+
+  // 17-5 오프라인·재연결 — 홀덤펍은 지하 매장이 많다: 단절이 예외가 아니라 일상 조건.
+  // 캐시 퍼스트(Phase 6) 덕에 화면은 살아 있으므로, 배너로 상태만 알리고
+  // 재연결 시 현재 탭 데이터를 조용히 재검증한다.
+  const [offline, setOffline] = useState(() => typeof navigator !== 'undefined' && !navigator.onLine);
+  useEffect(() => {
+    const onOff = () => setOffline(true);
+    const onOn = () => {
+      setOffline(false);
+      reloadSchedules(); reloadVenues(); reloadNotices();
+      if (user) getMyNotifications().then(setNotifications).catch(() => {});
+    };
+    window.addEventListener('offline', onOff);
+    window.addEventListener('online', onOn);
+    return () => { window.removeEventListener('offline', onOff); window.removeEventListener('online', onOn); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   // 온보딩 1문답(persona) → 즉시 탭 전환 이벤트 수신 (Phase 13-4)
   useEffect(() => {
@@ -1795,6 +1812,12 @@ export default function App() {
   return (
     // 모바일: 폭 그대로(full). 데스크톱: 중앙 정렬 + 최대폭으로 무한 확장 방지 + 프레임.
     <div className="min-h-screen bg-surface-base mx-auto w-full max-w-6xl xl:border-x xl:border-border-subtle">
+      {/* 오프라인 배너(Phase 17-5) — 토스트(z-100)와 층 분리, 헤더 위 상시 고정 */}
+      {offline && (
+        <div role="status" className="sticky top-0 z-[60] flex items-center justify-center gap-1.5 bg-amber-500/95 px-3 py-1.5 text-xs font-bold text-black">
+          <span aria-hidden>📡</span> 오프라인 — 저장된 정보를 보여드려요. 연결되면 자동으로 새로고침합니다.
+        </div>
+      )}
       <AppHeader
         title={activeTab === 'browse' ? undefined : tabs.find((t) => t.id === activeTab)?.label}
         activeTab={activeTab}
