@@ -15,6 +15,7 @@ import type { Comment } from '../../api/community';
 import { generateBlinds } from '../../api/clock';
 import { promptLogin, openPostForm, ensureVerified } from '../../lib/requireLogin';
 import { googleCalendarUrl, icsDataUrl, isIOS } from '../../lib/calendar';
+import { enablePush, pushSupported } from '../../api/push';
 import QRCode from 'qrcode';
 import { requestBuyin, buyinRequestUrl, kstToday } from '../../api/ledger';
 import SlidingPill from '../atoms/SlidingPill';
@@ -286,7 +287,7 @@ export default function ScheduleDetailModal({
         {/* status 를 계산해 넘기지 않고 date/startTime 을 넘긴다 — 모달을 열어둔 채 종료 시각을
             넘길 수 있어, 클릭 시점에 다시 판정해야 하기 때문 */}
         <ReserveBox scheduleId={schedule.id} ownerId={schedule.ownerId} venueId={schedule.venueId}
-          date={schedule.date} startTime={schedule.startTime} />
+          date={schedule.date} startTime={schedule.startTime} sched={schedule} />
 
         {/* 현장 바인(참가) 요청 — 대회 당일에만 연다. 요청이 '오늘' 장부로 들어가기 때문(위 kToday 주석)
             지난 대회에선 안내조차 띄우지 않는다 — 할 수 있는 게 없어 소음일 뿐이라. */}
@@ -632,10 +633,13 @@ function BuyinRequestBox({ venueId, eventDate }: { venueId: string; eventDate: s
   );
 }
 
-function ReserveBox({ scheduleId, ownerId, venueId, date, startTime }: { scheduleId: string; ownerId?: string | null; venueId?: string | null; date: string; startTime: string }) {
+function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched }: { scheduleId: string; ownerId?: string | null; venueId?: string | null; date: string; startTime: string; sched: Schedule }) {
   const { user } = useAuth();
   const toast = useToast();
   const [mine, setMine] = useState<Reservation | null>(null);
+  // 예약 성공 순간 — 토스트 한 줄로 끝내지 않고 '다음 단계'(캘린더·1시간 전 알림)를 제안
+  const [justReserved, setJustReserved] = useState(false);
+  const [pushOn, setPushOn] = useState(false);
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   // 'live'(시작했지만 레지 마감 전)는 예약을 계속 받는다 — 현장 레이트 레지를 막으면 매출이 죽는다
@@ -689,8 +693,26 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime }: { schedul
     if (!user) return;
     const n = (name.trim() || user.name || '예약자');
     setMine({ id: '', scheduleId, userId: user.id, displayName: n, createdAt: new Date().toISOString() });
-    toast.show('예약되었습니다', 'success');
+    setJustReserved(true); // 성공 패널이 다음 행동(캘린더·알림)까지 안내 — 토스트 대체
     loadRes();
+  };
+  // D-day — 대회는 보통 며칠 뒤라, 잊지 않게 하는 장치(캘린더·알림)와 함께 보여준다
+  const ddayNum = Math.round((new Date(date + 'T00:00:00').getTime() - new Date(new Date().toLocaleDateString('en-CA') + 'T00:00:00').getTime()) / 86400000);
+  const ddayLabel = ddayNum <= 0 ? '오늘' : ddayNum === 1 ? '내일' : `D-${ddayNum}`;
+  const addToCalendar = () => {
+    const ev = { title: sched.title, date: sched.date, startTime: sched.startTime, venueName: sched.pubName, address: sched.address };
+    if (isIOS()) {
+      const a = document.createElement('a');
+      a.href = icsDataUrl(ev);
+      a.download = `${sched.title.slice(0, 30)}.ics`;
+      document.body.appendChild(a); a.click(); a.remove();
+    } else {
+      window.open(googleCalendarUrl(ev), '_blank', 'noopener');
+    }
+  };
+  const enableReminderPush = async () => {
+    try { await enablePush(); setPushOn(true); toast.show('알림을 켰습니다 — 시작 1시간 전에 알려드려요', 'success'); }
+    catch (e) { toast.show(e instanceof Error ? e.message : '알림 설정 실패', 'error'); }
   };
   const fmtRes = (iso: string) => { const d = new Date(iso); const p = (n: number) => String(n).padStart(2, '0'); return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`; };
 
@@ -704,6 +726,30 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime }: { schedul
       </div>
       {!mine && !ended && (
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="닉네임 또는 실명" maxLength={30} className="input w-full text-sm" />
+      )}
+      {/* 예약 성공 패널 — 완료 순간에 다음 행동을 제안(캘린더 등록·1시간 전 알림). 서버
+          리마인더는 이미 예약자 전원에게 발송되므로, 여기의 '알림 받기'는 푸시 구독만 켠다. */}
+      {justReserved && mine && (
+        <div className="animate-fade-in space-y-2 rounded-input border border-emerald-500/40 bg-emerald-500/[0.07] p-3">
+          <p className="text-sm font-bold text-emerald-400">🎉 예약 완료 · {ddayLabel} {startTime?.slice(0, 5)} 시작</p>
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" onClick={addToCalendar}
+              className="rounded-input border border-border-default bg-surface-high py-2.5 text-2xs font-bold text-ink-secondary hover:border-accent-400/50 hover:text-accent-300 transition-colors">
+              📅 캘린더에 추가
+            </button>
+            {pushSupported() ? (
+              <button type="button" onClick={enableReminderPush} disabled={pushOn}
+                className={['rounded-input border py-2.5 text-2xs font-bold transition-colors',
+                  pushOn ? 'border-emerald-500/40 text-emerald-400' : 'border-border-default bg-surface-high text-ink-secondary hover:border-accent-400/50 hover:text-accent-300'].join(' ')}>
+                {pushOn ? '🔔 알림 켜짐 ✓' : '🔔 1시간 전 알림'}
+              </button>
+            ) : (
+              <span className="flex items-center justify-center rounded-input border border-border-default bg-surface-high py-2.5 text-2xs text-ink-muted">⏰ 시작 1시간 전 알림 예정</span>
+            )}
+          </div>
+          <button type="button" onClick={() => setJustReserved(false)}
+            className="w-full py-1 text-center text-2xs font-bold text-ink-muted hover:text-ink-secondary">확인</button>
+        </div>
       )}
       {/* 취소는 종료 후에도 열어둔다 — 막는 건 '새 예약'이지 이미 남긴 기록의 정리가 아니다 */}
       {mine ? (

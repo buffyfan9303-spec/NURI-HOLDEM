@@ -106,10 +106,12 @@ function SearchIcon({ className = '' }: { className?: string }) {
 interface DateTabProps {
   slot: DateSlot;
   selected: boolean;
+  /** 이 날짜에 승인된 대회가 있으면 하단 점 표시 — '눌러도 빈 날' 헛탭 방지 */
+  hasEvents?: boolean;
   onClick: () => void;
 }
 
-function DateTab({ slot, selected, onClick }: DateTabProps) {
+function DateTab({ slot, selected, hasEvents, onClick }: DateTabProps) {
   const tabRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -143,6 +145,9 @@ function DateTab({ slot, selected, onClick }: DateTabProps) {
       )}
       <span className={['relative text-[10px] font-bold leading-none', selected ? 'text-ink-inverse/85' : dowColor].join(' ')}>{slot.dow}</span>
       <span className="relative mt-0.5 text-[15px] font-extrabold leading-none tabular-nums">{slot.day}</span>
+      {hasEvents && !selected && (
+        <span aria-hidden className="absolute bottom-[3px] left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-accent-300/85" />
+      )}
     </button>
   );
 }
@@ -153,9 +158,10 @@ interface DateSliderProps {
   selectedDates: string[];      // 복수 선택
   onToggle: (iso: string) => void;
   onPick: (iso: string) => void; // 7일 이후 임의 날짜 직접 선택
+  eventDates?: ReadonlySet<string>;
 }
 
-function DateSlider({ selectedDates, onToggle, onPick }: DateSliderProps) {
+function DateSlider({ selectedDates, onToggle, onPick, eventDates }: DateSliderProps) {
   // 3주치를 가로 모멘텀 레일로 노출(스냅·관성 스크롤), 그 외는 '달력'으로 지정
   const slots = useRef(buildDateSlots(21)).current;
   const todayIso = slots[0].iso;
@@ -175,6 +181,7 @@ function DateSlider({ selectedDates, onToggle, onPick }: DateSliderProps) {
           <DateTab
             slot={slot}
             selected={selectedDates.includes(slot.iso)}
+            hasEvents={!!eventDates?.has(slot.iso)}
             onClick={() => onToggle(slot.iso)}
           />
         </Fragment>
@@ -220,6 +227,8 @@ interface IntegratedSearchBarProps {
   className?: string;
   /** 지정 시 검색창+날짜 부분만 이 top 값으로 sticky 고정(필터·칩은 스크롤). */
   stickyTop?: string;
+  /** 승인된 대회가 있는 날짜(ISO) 집합 — 날짜 슬라이더에 점(·)으로 표시해 헛탭 방지 */
+  eventDates?: ReadonlySet<string>;
 }
 
 export interface SearchBarHandle { clearAll: () => void }
@@ -229,11 +238,13 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
   placeholder = '대회명, 펍 이름, 지역 검색…',
   className = '',
   stickyTop,
+  eventDates,
 }, ref) {
   const [rawQuery,       setRawQuery]       = useState('');
   // 날짜·지역은 복수 선택(배열). 토글 방식으로 추가/제거.
-  // 기본값 = 당일(오늘) 선택 — 일정탐색 진입 시 오늘 대회부터 보여준다.
-  const [selectedDates,  setSelectedDates]  = useState<string[]>(() => [new Date().toLocaleDateString('en-CA')]);
+  // 기본값 = 무선택('오늘부터 앞으로') — 예전엔 '오늘'이 기본 선택이라 심야·평일 오전 첫 방문이
+  // 빈 화면/종료 카드가 됐고, 아무것도 안 건 사람에게 '초기화' 버튼까지 보였다(UX 재감사 1순위).
+  const [selectedDates,  setSelectedDates]  = useState<string[]>([]);
   const [selectedRegions, setSelectedRegions] = useState<string[]>([]);
   // 토너먼트 필터는 단일 선택(라디오). format/gtdOnly는 여기서 파생.
   const [tour,           setTour]           = useState<TourFilter>('all');
@@ -389,7 +400,7 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
       </div>
 
       {/* ── 날짜 슬라이더 탭 (복수 선택) ─────────────────────────────────── */}
-      <DateSlider selectedDates={selectedDates} onToggle={handleDateToggle} onPick={handlePickDate} />
+      <DateSlider selectedDates={selectedDates} onToggle={handleDateToggle} onPick={handlePickDate} eventDates={eventDates} />
       </div>{/* /sticky 검색+날짜 */}
 
       {/* ── 지역(복수선택) + 토너먼트(라디오) 필터 ──────────────────────── */}

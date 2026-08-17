@@ -11,7 +11,7 @@ import ScheduleCard from './components/features/ScheduleCard';
 import WeeklyBestStrip from './components/features/WeeklyBestStrip';
 import ScheduleTable from './components/features/ScheduleTable';
 import { getWeeklyMoneyinKings, getRankingsBulk, parsePrizeMan, type WeeklyKing, type RankingEntry } from './api/rankings';
-import { getReservationCounts } from './api/reservations';
+import { getReservationCounts, getMyReservations, type MyReservationRow } from './api/reservations';
 import { getVenueRatings } from './api/reviews';
 import NotificationPanel from './components/features/NotificationPanel';
 import VerifyGateSheet from './components/features/VerifyGateSheet';
@@ -722,15 +722,17 @@ export default function App() {
     window.addEventListener('nuri:sw-update', onUpd);
     return () => window.removeEventListener('nuri:sw-update', onUpd);
   }, []);
-  // 운영자 푸시 온보딩 — 설치형(앱)에서 운영자가 알림 미설정 시 1회 안내(새 바인요청 푸시)
+  // 푸시 온보딩 — 설치형(앱)에서 알림 미설정 시 1회 안내.
+  // 예전엔 운영자 전용 게이트라 손님은 푸시의 존재조차 몰랐다 — 리마인더·이용권 도착이
+  // 앱 안에 갇히는 원인. 로그인한 모두에게 열고 문구만 역할별로 바꾼다.
   useEffect(() => {
-    if (!(isOwner || isAdmin || user?.role === 'venue_staff') || !pushSupported()) return;
+    if (!user || !pushSupported()) return;
     try { if (localStorage.getItem('nuri:push-nudge-dismissed') === '1') return; } catch { /* noop */ }
     if (!window.matchMedia('(display-mode: standalone)').matches) return; // 설치형에서만
     isPushSubscribed().then((sub) => { if (!sub) setPushNudge(true); }).catch(() => {});
   }, [user, isOwner, isAdmin]);
   const doEnablePush = async () => {
-    try { await enablePush(); setPushNudge(false); toast.show('알림을 켰습니다 — 새 바인요청을 폰으로 받습니다', 'success'); }
+    try { await enablePush(); setPushNudge(false); toast.show('알림을 켰습니다 — 중요한 소식을 폰으로 받습니다', 'success'); }
     catch (e) { toast.show(e instanceof Error ? e.message : '알림 설정 실패', 'error'); }
   };
   const dismissPushNudge = () => { setPushNudge(false); try { localStorage.setItem('nuri:push-nudge-dismissed', '1'); } catch { /* noop */ } };
@@ -742,8 +744,9 @@ export default function App() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
-  // 일정탐색 기본값 — 당일(오늘)이 선택된 상태로 시작(오늘 열리는 대회를 바로 보여줌)
-  const [searchState, setSearchState] = useState<SearchState>({ query: '', dates: [new Date().toLocaleDateString('en-CA')], regions: [], format: null, gtdOnly: false, competitionOnly: false, grade: null });
+  // 일정탐색 기본값 — 무선택('오늘부터 앞으로'). 예전 '오늘' 기본 선택은 심야·평일 오전
+  // 첫 방문을 빈 화면으로 만들었고, 프리스틴 상태가 '필터 걸림'으로 판정되는 부작용도 있었다.
+  const [searchState, setSearchState] = useState<SearchState>({ query: '', dates: [], regions: [], format: null, gtdOnly: false, competitionOnly: false, grade: null });
   // 전체 초기화 버튼을 '총 N개' 줄에 두기 위해 검색바의 clearAll 을 ref 로 끌어올림
   const searchBarRef = useRef<{ clearAll: () => void } | null>(null);
   const hasActiveSearchFilter = !!(searchState.query || searchState.dates.length || searchState.regions.length || searchState.format || searchState.gtdOnly || searchState.competitionOnly || searchState.grade);
@@ -1370,6 +1373,22 @@ export default function App() {
           || (a.date + a.startTime).localeCompare(b.date + b.startTime);
       });
   }, [schedules, searchState, followedOnly, followedIds, nearSort, myPos, venueById]);
+  // 날짜 슬라이더 점 표시용 — 승인된 대회가 있는 날짜 집합(헛탭 방지)
+  const eventDates = useMemo(() => new Set(schedules.filter((sc) => sc.approved).map((sc) => sc.date)), [schedules]);
+  // 📍 가까운 순일 때 카드에 실제 거리를 보여준다 — 정렬만 하고 숫자를 감추면 체감·검증 불가
+  const distanceOf = useCallback((sc: Schedule): number | undefined => {
+    if (!nearSort || !myPos) return undefined;
+    const v = sc.venueId ? venueById.get(sc.venueId) : undefined;
+    return v && v.lat != null && v.lng != null ? haversineKm(myPos.lat, myPos.lng, v.lat, v.lng) : undefined;
+  }, [nearSort, myPos, venueById]);
+  // 🎫 오늘 예약한 대회 — 대회 당일 홈에서 '내 예약'이 안 보이던 격차(예약→방문 전환 지원)
+  const [myTodayRes, setMyTodayRes] = useState<MyReservationRow[]>([]);
+  useEffect(() => {
+    if (!user) { setMyTodayRes([]); return; }
+    const today = new Date().toLocaleDateString('en-CA');
+    getMyReservations(30).then((list) => setMyTodayRes(list.filter((r) => r.date === today))).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   // ── 핸들러 ─────────────────────────────────────────────────────────────
 
@@ -1932,7 +1951,11 @@ export default function App() {
       {pushNudge && (
         <div className="flex items-center gap-2 border-b border-accent-400/30 bg-accent-300/[0.08] px-3 py-2.5">
           <span className="text-lg" aria-hidden>🔔</span>
-          <p className="min-w-0 flex-1 text-2xs leading-snug text-ink-secondary">새 <b className="text-accent-300">바인요청</b>을 폰 알림으로 받으세요 — 게임 중에도 놓치지 않아요.</p>
+          <p className="min-w-0 flex-1 text-2xs leading-snug text-ink-secondary">
+            {(isOwner || isAdmin || user?.role === 'venue_staff')
+              ? <>새 <b className="text-accent-300">바인요청</b>을 폰 알림으로 받으세요 — 게임 중에도 놓치지 않아요.</>
+              : <>예약한 대회 <b className="text-accent-300">1시간 전 리마인더</b>와 이용권 도착을 폰으로 받으세요.</>}
+          </p>
           <button type="button" onClick={doEnablePush} className="btn-primary shrink-0 px-3 py-1.5 text-2xs">알림 켜기</button>
           <button type="button" onClick={dismissPushNudge} aria-label="닫기" className="shrink-0 px-1 text-ink-muted hover:text-ink-secondary">✕</button>
         </div>
@@ -2005,7 +2028,7 @@ export default function App() {
               (짧은 헤더 박스에 갇히면 리스트를 스크롤할 때 검색+날짜가 같이 사라짐) */}
           <div className="contents">
             {/* 검색바+날짜만 sticky(아래 필터·카운트는 스크롤되어 사라짐) */}
-            <IntegratedSearchBar ref={searchBarRef} onChange={setSearchState} stickyTop="calc(var(--stack-top, 6.0625rem) - 1px)" />
+            <IntegratedSearchBar ref={searchBarRef} onChange={setSearchState} eventDates={eventDates} stickyTop="calc(var(--stack-top, 6.0625rem) - 1px)" />
             {/* 뷰 모드 토글 + 팔로우 매장만 보기 — 일정 탐색 컨텍스트 안에 배치 */}
             <div className="flex items-center justify-between gap-2 px-page-x pt-1.5">
               <div className="flex min-w-0 items-center gap-2">
@@ -2092,6 +2115,29 @@ export default function App() {
           </div>
 
           {/* 손님: 오늘 내 바인(참가) 요청 상태 배너 — (B3) 등장/퇴장 height·opacity 트랜지션으로 CLS 완화 */}
+          {myTodayRes.length > 0 && (
+            <div className="animate-fade-in overflow-hidden px-page-x pt-3 space-y-1.5">
+              <p className="px-1 text-2xs font-bold text-ink-secondary">🎫 오늘 예약한 대회</p>
+              {myTodayRes.map((r) => {
+                const sc = schedules.find((x) => x.id === r.scheduleId);
+                return (
+                  <button key={r.scheduleId} type="button"
+                    onClick={() => { if (sc) setOpenSchedule(sc); }}
+                    className="w-full flex items-center gap-2.5 rounded-card border border-accent-400/45 bg-gradient-to-r from-accent-300/[0.12] to-transparent px-3 py-2.5 text-left hover:border-accent-300 transition-colors">
+                    <span className="shrink-0 text-lg" aria-hidden>🎫</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-bold text-ink-primary">{r.title}</span>
+                      <span className="block truncate text-2xs text-ink-muted">
+                        {r.venueName ?? '매장'} · {r.startTime ? r.startTime.slice(0, 5) : '19:00'} 시작 · 예약명 {r.displayName}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-2xs font-bold text-accent-300">포스터 →</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {myBuyinReqs.length > 0 && (
             <div className="animate-fade-in overflow-hidden px-page-x pt-3 space-y-1.5">
               <p className="px-1 text-2xs font-bold text-ink-secondary">🎮 내 참가 게임 · 바인 요청</p>
@@ -2207,6 +2253,7 @@ export default function App() {
                         schedule={s}
                         reserveCount={browseResCounts[s.id]}
                         rating={venueRatings[s.venueId]}
+                        distanceKm={distanceOf(s)}
                         onVenueClick={handleVenueClick}
                         onSelect={handleScheduleSelect}
                         // ⚡ 첫 화면에 보이는 상단 카드만 포스터를 즉시 로드(LCP 단축).
@@ -2220,7 +2267,7 @@ export default function App() {
                 {viewMode === 'table' && visibleSchedules.length > 0 && (
                   <div className="grid grid-cols-1 gap-card-gap md:hidden">
                     {visibleSchedules.map((s, i) => (
-                      <ScheduleCard key={s.id} mode="list" schedule={s} reserveCount={browseResCounts[s.id]} rating={venueRatings[s.venueId]} onVenueClick={handleVenueClick} onSelect={handleScheduleSelect} priority={i < 4} />
+                      <ScheduleCard key={s.id} mode="list" schedule={s} reserveCount={browseResCounts[s.id]} rating={venueRatings[s.venueId]} distanceKm={distanceOf(s)} onVenueClick={handleVenueClick} onSelect={handleScheduleSelect} priority={i < 4} />
                     ))}
                   </div>
                 )}

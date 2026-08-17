@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { thumbUrl, thumbSrcSet } from '../../lib/imageUrl';
 import { scheduleStatus } from '../../lib/scheduleStatus';
+import { fmtKm } from '../../lib/geo';
 import type { Schedule, TournamentFormat } from '../../api/schedules';
 import type { ViewMode } from '../atoms/ViewModeToggle';
 
@@ -166,9 +167,11 @@ interface CardProps {
   rating?: { avg: number; count: number };
   /** 첫 화면 상단 카드면 true — 포스터를 lazy 대신 즉시 로드해 LCP를 앞당긴다(상위 몇 장만) */
   priority?: boolean;
+  /** 📍 가까운 순이 켜져 있을 때 내 위치→매장 거리(km) — '갈까?' 판단의 핵심 변수 */
+  distanceKm?: number;
 }
 
-function ListCard({ schedule, onVenueClick, onSelect, reserveCount, rating, priority }: CardProps) {
+function ListCard({ schedule, onVenueClick, onSelect, reserveCount, rating, priority, distanceKm }: CardProps) {
   const d = formatDate(schedule.date, schedule.startTime);
   // 끝난 대회를 '예약 가능'처럼 보여주지 않기 위한 상태 표시(실제 차단은 상세·서버에서)
   const status = scheduleStatus(schedule.date, schedule.startTime);
@@ -230,6 +233,9 @@ function ListCard({ schedule, onVenueClick, onSelect, reserveCount, rating, prio
               <span className="shrink-0 text-2xs font-bold tabular-nums text-accent-300" title={`방문 후기 ${rating.count}건 평균`}>
                 ⭐{rating.avg.toFixed(1)}<span className="font-normal text-ink-muted">({rating.count})</span>
               </span>
+            )}
+            {distanceKm != null && (
+              <span className="shrink-0 text-2xs font-bold tabular-nums text-sky-300">📍{fmtKm(distanceKm)}</span>
             )}
           </span>
           <span className="shrink-0 inline-flex items-baseline gap-1">
@@ -303,7 +309,7 @@ function ListCard({ schedule, onVenueClick, onSelect, reserveCount, rating, prio
 
 // ── 메인: 그리드 뷰 카드 ────────────────────────────────────────────────────
 
-function GridCard({ schedule, onVenueClick, onSelect, rating, priority }: CardProps) {
+function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distanceKm }: CardProps) {
   const d = formatDate(schedule.date, schedule.startTime);
   const status = scheduleStatus(schedule.date, schedule.startTime);
 
@@ -372,11 +378,13 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority }: CardPr
             region={schedule.region}
             onClick={() => onVenueClick(schedule.venueId)}
           />
-          {rating && rating.count > 0 && (
+          {distanceKm != null ? (
+            <span className="shrink-0 text-2xs font-bold tabular-nums text-sky-300">📍{fmtKm(distanceKm)}</span>
+          ) : rating && rating.count > 0 ? (
             <span className="shrink-0 text-2xs font-bold tabular-nums text-accent-300" title={`방문 후기 ${rating.count}건 평균`}>
               ⭐{rating.avg.toFixed(1)}<span className="font-normal text-ink-muted">({rating.count})</span>
             </span>
-          )}
+          ) : null}
         </div>
 
         <div className="border-t border-border-subtle my-0.5" />
