@@ -122,6 +122,18 @@ const rowToPost = (r: any): CommunityPost => ({
   blinded:  r.blinded ?? false,
 });
 
+/** 단건 게시글 — 공유 딥링크·알림 링크가 목록(최근 50건) 밖의 글을 가리킬 때 사용 */
+export async function getPostById(postId: string): Promise<CommunityPost | null> {
+  if (IS_MOCK) {
+    const { MOCK_COMMUNITY_POSTS } = await import('../mock/data');
+    return MOCK_COMMUNITY_POSTS.find((p) => p.id === postId) ?? null;
+  }
+  const res = await supabase.from('community_posts').select('*').eq('id', postId).maybeSingle();
+  if (res.error || !res.data) return null;
+  const liked = await supabase.from('post_likes').select('post_id').eq('post_id', postId).limit(1);
+  return { ...rowToPost(res.data), liked: (liked.data ?? []).length > 0 };
+}
+
 /** 운영자: 게시글 블라인드(신고 누적 숨김) 해제/설정 */
 export async function adminSetPostBlinded(postId: string, blinded: boolean): Promise<void> {
   if (IS_MOCK) return;

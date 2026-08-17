@@ -53,6 +53,13 @@ function TypeIcon({ type, className = '' }: { type: NotificationType; className?
           <path d="M9 1L11 5L15 5.5L12 8.5L13 13L9 11L5 13L6 8.5L3 5.5L7 5Z" />
         </svg>
       );
+    case 'reminder':
+      return (
+        <svg {...common} className={className} aria-hidden>
+          <circle cx="9" cy="9" r="7" />
+          <polyline points="9,5 9,9 12,11" />
+        </svg>
+      );
   }
 }
 

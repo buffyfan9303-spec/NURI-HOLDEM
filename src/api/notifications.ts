@@ -1,7 +1,7 @@
 import { supabase, IS_MOCK } from '../lib/supabase';
 import { currentUser } from './_session';
 
-export type NotificationType = 'qna' | 'approval' | 'comment' | 'system' | 'mention';
+export type NotificationType = 'qna' | 'approval' | 'comment' | 'system' | 'mention' | 'reminder';
 
 export interface AppNotification {
   id: string;

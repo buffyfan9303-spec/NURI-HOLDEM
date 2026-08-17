@@ -49,7 +49,7 @@ import { listAllUsers, updateUserStatus, approveOwner } from './api/auth';
 import {
   getSchedules, createSchedule, updateSchedule, deleteSchedule, subscribeSchedules,
 } from './api/schedules';
-import {
+import { getPostById,
   getVenues, getComments, getPosts, addComment, addPost, togglePostLike, deletePost, subscribePosts, subscribeComments,
   updateVenueDescription, updateVenueImage, updateVenueImages, deleteComment, logActivity,
   getMyFollowedVenueIds,
@@ -990,7 +990,16 @@ export default function App() {
     if (!pendingPostId || posts.length === 0) return;
     const found = posts.find((p) => p.id === pendingPostId);
     if (found) setOpenPost(found);
+    // 링크가 최근 50건 밖(오래된 글)이면 조용히 실패하던 구간 — 단건 조회로 살린다
+    else {
+      const missingId = pendingPostId;
+      getPostById(missingId).then((fetched) => {
+        if (fetched) setOpenPost(fetched);
+        else toast.show('삭제되었거나 찾을 수 없는 글이에요', 'info');
+      }).catch(() => {});
+    }
     setPendingPostId(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingPostId, posts]);
   const [profileOpen, setProfileOpen]   = useState(false);
   const [legalDoc, setLegalDoc] = useState<LegalDoc | null>(null); // 약관·정책 모달
@@ -1485,6 +1494,7 @@ export default function App() {
     if (sm) {
       const sched = schedules.find((s) => s.id === sm[1]);
       if (sched) setOpenSchedule(sched);
+      else toast.show('종료되었거나 내려간 포스터예요', 'info'); // 조용한 무반응 방지
       return;
     }
     // /community/:venueId
@@ -1497,6 +1507,11 @@ export default function App() {
       setPosts((prev) => {
         const found = prev.find((p) => p.id === pm[1]);
         if (found) setOpenPost(found);
+        // 최근 50건 밖의 글(오래된 글에 달린 좋아요·댓글 알림)은 단건 조회로 연다
+        else getPostById(pm[1]).then((fetched) => {
+          if (fetched) setOpenPost(fetched);
+          else toast.show('삭제되었거나 찾을 수 없는 글이에요', 'info');
+        }).catch(() => {});
         return prev;
       });
       return;
@@ -1525,6 +1540,10 @@ export default function App() {
     }
     // /support (1:1 문의 답변 알림) → 고객센터 모달 열기
     if (link === '/support') { setSupportOpen(true); return; }
+    // /wallet (🎟 이용권 도착) → 내 지갑(이용권 대시보드) 바로 열기
+    if (link === '/wallet') { setVoucherWalletOpen(true); return; }
+    // '/' (홈 안내형 알림) → 홈 탭으로 — 제목만 다시 토스트하는 막다른 길 방지
+    if (link === '/') { changeTab('browse'); return; }
     toast.show(n.title, 'info');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schedules, isAdmin, toast]);
