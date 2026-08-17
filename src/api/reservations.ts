@@ -43,13 +43,15 @@ export async function getReservations(scheduleId: string): Promise<Reservation[]
 }
 
 // 업주/운영자용 — 예약자 실제 계정(닉네임·실명)까지. 해당 매장 권한자만(RPC 게이트).
-export interface OwnerReservation { id: string; displayName: string; nickname: string | null; realName: string | null; createdAt: string; }
+export interface OwnerReservation { id: string; displayName: string; nickname: string | null; realName: string | null; createdAt: string;   /** 대회 당일 그 매장 체크인 여부 — 예약→방문 전환(노쇼 근거 1단계) */
+  visited?: boolean;
+}
 export async function getOwnerReservations(scheduleId: string): Promise<OwnerReservation[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase.rpc('schedule_reservations_for_owner', { p_schedule_id: scheduleId });
   if (error) throw new Error(error.message);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((r: any) => ({ id: r.id, displayName: r.display_name, nickname: r.nickname ?? null, realName: r.real_name ?? null, createdAt: r.created_at }));
+  return (data ?? []).map((r: any) => ({ id: r.id, displayName: r.display_name, nickname: r.nickname ?? null, realName: r.real_name ?? null, createdAt: r.created_at, visited: r.visited ?? false }));
 }
 
 // ⚠ 테이블 직접 조회 금지 — RLS(sr_select)가 '본인 예약 또는 매장주'만 허용하므로

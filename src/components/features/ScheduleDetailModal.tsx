@@ -788,7 +788,15 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched }: { 
                   {resList.map((r) => (
                     <li key={r.id} className="flex items-center justify-between gap-2 rounded-input bg-surface-base/50 px-2.5 py-1.5">
                       <div className="min-w-0">
-                        <p className="truncate text-xs font-semibold text-ink-primary">{r.realName ? `${r.realName}(${r.nickname ?? '-'})` : (r.nickname ?? '비회원')}</p>
+                        <p className="flex items-center gap-1 truncate text-xs font-semibold text-ink-primary">
+                          <span className="truncate">{r.realName ? `${r.realName}(${r.nickname ?? '-'})` : (r.nickname ?? '비회원')}</span>
+                          {/* 예약→방문 전환 표시 — 당일 체크인 있으면 ✓, 종료 후에도 없으면 노쇼 */}
+                          {r.visited
+                            ? <span className="shrink-0 rounded-badge bg-emerald-500/15 px-1 py-0.5 text-[9px] font-bold leading-none text-emerald-400">방문 ✓</span>
+                            : ended
+                              ? <span className="shrink-0 rounded-badge border border-border-default bg-surface-high px-1 py-0.5 text-[9px] font-bold leading-none text-ink-muted">노쇼</span>
+                              : null}
+                        </p>
                         <p className="truncate text-[10px] text-ink-muted">예약명: {r.displayName}</p>
                       </div>
                       <span className="shrink-0 text-[10px] tabular-nums text-ink-muted">{fmtRes(r.createdAt)}</span>
