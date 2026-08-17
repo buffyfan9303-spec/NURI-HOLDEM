@@ -76,6 +76,16 @@ function rowToSchedule(r: any): Schedule {
   };
 }
 
+/** 주간 퍼널(최근 7일 KST): 포스터 조회 합→예약→매장 체크인 — 업주 성과 최소 지표 */
+export interface WeeklyFunnel { views: number; reservations: number; checkins: number; tournaments: number }
+export async function getVenueWeeklyFunnel(venueId: string): Promise<WeeklyFunnel | null> {
+  if (IS_MOCK) return null;
+  const { data, error } = await supabase.rpc('venue_weekly_funnel', { p_venue_id: venueId });
+  if (error || !data || !data.length) return null;
+  const r = data[0];
+  return { views: r.views ?? 0, reservations: r.reservations ?? 0, checkins: r.checkins ?? 0, tournaments: r.tournaments ?? 0 };
+}
+
 /** 포스터 조회 +1 — 상세를 연 세션당 1회(호출측 가드). 실패해도 무시(장식 지표) */
 export async function bumpScheduleView(id: string): Promise<void> {
   if (IS_MOCK) return;

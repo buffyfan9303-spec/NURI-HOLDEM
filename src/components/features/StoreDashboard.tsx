@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import CountUp from '../atoms/CountUp';
+import { getVenueWeeklyFunnel, type WeeklyFunnel } from '../../api/schedules';
 import type { Schedule } from '../../api/schedules';
 import {
   getLedgerSession, getLedgerBuyins, getLedgerPlayers, getLedgerRange, buyinFinance, wonToMan, visitorLabel, subscribeLedger,
@@ -101,6 +102,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const [voucherOpen, setVoucherOpen] = useState(false);
   const [voucherPrefill, setVoucherPrefill] = useState(''); // 단골 행 '이용권 보내기' 프리필
   const [hasRankToday, setHasRankToday] = useState<boolean | null>(null); // 지금 할 일 카드(순위 입력 유도)
+  const [funnel, setFunnel] = useState<WeeklyFunnel | null>(null); // 주간 퍼널(조회→예약→방문)
   const [pendingRanks, setPendingRanks] = useState<{ date: string }[]>([]); // 마감됐는데 순위 미입력인 지난 대회(밀린 것)
   // 다가오는 생일 단골(7일 내) — CRM 생일 필드 기반
   const [bdays, setBdays] = useState<{ name: string; birthday: string; dday: number }[]>([]);
@@ -163,6 +165,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
     getLedgerRange(venueId, d14[0], d14[13]).then(setRange).catch(() => {});
     getVenueRegulars(venueId).then(setRegulars).catch(() => {});
     getVenueRankings(venueId, d).then(({ entries }) => setHasRankToday(entries.length > 0)).catch(() => {});
+    getVenueWeeklyFunnel(venueId).then(setFunnel).catch(() => {});
     getPosterOpsSummaries(venueId).then((sums) => setPendingRanks(Object.values(sums).filter((s) => s.closed && !s.hasRankings && s.date < d).sort((a, b) => b.date.localeCompare(a.date)))).catch(() => {});
     const ids = schedules.filter((s) => s.venueId === venueId && s.date >= d).map((s) => s.id);
     if (ids.length) getReservationCounts(ids).then(setResCounts).catch(() => {});
@@ -631,6 +634,41 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                 );
               })()}
             </div>
+          )}
+        </section>
+      )}
+
+      {/* 📊 주간 퍼널 — 조회→예약→방문 전환. '왜 예약이 없는지'에 데이터로 답하는 첫 카드.
+          조회수 추적(2026-08-17 신설)이 쌓이기 시작한 뒤부터 의미가 생긴다. */}
+      {!loading && funnel && funnel.tournaments > 0 && (
+        <section className="rounded-card border border-border-subtle bg-surface-low p-3">
+          <div className="flex items-baseline justify-between gap-2">
+            <h3 className="text-sm font-bold text-ink-primary">📊 최근 7일 퍼널 <span className="font-normal text-ink-muted">대회 {funnel.tournaments}개</span></h3>
+            <button type="button" onClick={() => onGoto('stats')} className="shrink-0 text-2xs font-bold text-accent-300">통계 →</button>
+          </div>
+          <div className="mt-2 flex items-center gap-1.5 text-center">
+            <div className="min-w-0 flex-1 rounded-input bg-surface-high px-1 py-2">
+              <p className="text-lg font-extrabold tabular-nums text-ink-primary">{funnel.views}</p>
+              <p className="text-[9px] text-ink-muted">포스터 조회</p>
+            </div>
+            <span aria-hidden className="shrink-0 text-ink-muted">→</span>
+            <div className="min-w-0 flex-1 rounded-input bg-surface-high px-1 py-2">
+              <p className="text-lg font-extrabold tabular-nums text-ink-primary">
+                {funnel.reservations}
+                {funnel.views > 0 && funnel.reservations > 0 && (
+                  <span className="ml-1 text-2xs font-bold text-accent-300">{Math.round((funnel.reservations / funnel.views) * 100)}%</span>
+                )}
+              </p>
+              <p className="text-[9px] text-ink-muted">예약</p>
+            </div>
+            <span aria-hidden className="shrink-0 text-ink-muted">→</span>
+            <div className="min-w-0 flex-1 rounded-input bg-surface-high px-1 py-2">
+              <p className="text-lg font-extrabold tabular-nums text-ink-primary">{funnel.checkins}</p>
+              <p className="text-[9px] text-ink-muted">방문 체크인</p>
+            </div>
+          </div>
+          {funnel.views === 0 && (
+            <p className="mt-1.5 text-2xs text-ink-muted">조회수는 손님이 포스터 상세를 열 때부터 쌓입니다 — 이번 주부터 집계가 시작됐어요.</p>
           )}
         </section>
       )}
