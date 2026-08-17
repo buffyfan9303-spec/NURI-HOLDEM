@@ -86,7 +86,14 @@ function CommunityTab({
     () => rawPosts.filter((p) => !isBlocked(p.userId) && (!p.blinded || isAdmin || p.userId === meForFeed?.id)),
     [rawPosts, isBlocked, isAdmin, meForFeed],
   );
-  const [section, setSectionState] = useState<Section>(lastCommunitySection);
+  const [section, setSectionState] = useState<Section>(() => {
+    // 은퇴한 market 탭 딥링크(?tab=market)·'내 장터 거래' 바로가기가 남긴 1회성 지정
+    try {
+      const pre = sessionStorage.getItem('nuri:community-section');
+      if (pre) { sessionStorage.removeItem('nuri:community-section'); lastCommunitySection = pre as Section; }
+    } catch { /* noop */ }
+    return lastCommunitySection;
+  });
   // 칩 하이라이트(알약)는 즉시, 컨텐츠 교체는 트랜지션 — 장터(lazy) 첫 진입에도 이전 화면이 유지돼 끊김이 없다
   const [shownSec, setShownSec] = useState<Section>(lastCommunitySection);
   const [, startSecTransition] = useTransition();
@@ -97,6 +104,16 @@ function CommunityTab({
     setShownSec(s);
     startSecTransition(() => setSectionState(s));
   };
+  // 이미 마운트된 상태(keep-alive)에서 외부가 섹션을 지정할 때 — 예: 대시보드 '내 장터 거래'
+  useEffect(() => {
+    const h = (e: Event) => {
+      const sec = (e as CustomEvent<string>).detail as Section;
+      if (sec) setSection(sec);
+    };
+    window.addEventListener('nuri:community-section', h);
+    return () => window.removeEventListener('nuri:community-section', h);
+     
+  }, []);
   const [query, setQuery] = useState('');
 
   // 스와이프 탭 전환(인스타 DM 문법) — 컨텐츠를 좌우로 쓸면 이웃 섹션으로

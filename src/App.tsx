@@ -102,7 +102,6 @@ const LiveGamesTab   = lazyWithReload(() => import('./components/features/LiveGa
 // ToolsPanel 은 prop 이 없어 마운트 후 재렌더 0. (핸들러는 이미 useCallback, 데이터는 state/useMemo 라 안정)
 const LiveGamesTabM   = memo(LiveGamesTab);
 const CommunityTabM   = memo(CommunityTab);
-const MarketplaceTabM = memo(MarketplaceTab);
 const ToolsPanelM     = memo(ToolsPanel);
 const CustomerDashboardPage = lazyWithReload(() => import('./components/features/CustomerDashboardPage'));
 const ClockDisplay   = lazyWithReload(() => import('./components/features/clock/ClockDisplay'));
@@ -1177,7 +1176,7 @@ export default function App() {
     else { window.addEventListener('load', kick, { once: true }); return () => window.removeEventListener('load', kick); }
   }, [loadDeferred]);
   useEffect(() => {
-    if (activeTab === 'community' || activeTab === 'market') loadDeferred();
+    if (activeTab === 'community') loadDeferred();
   }, [activeTab, loadDeferred]);
 
   // (탭 청크 프리페치는 위 warm() 하나로 통합 — 여기 있던 두 번째 프리페처가
@@ -1265,8 +1264,7 @@ export default function App() {
         break;
       case 'community':
         reloadPosts(); reloadComments();
-        break;
-      case 'market':
+        // 장터는 커뮤니티 서브탭 — 복귀 갱신도 함께(은퇴한 market 탭의 케이스 흡수)
         getListings().then((l) => { setListings(l); setMarketLoaded(true); writeSnap('listings', l); }).catch(() => setMarketLoaded(true));
         break;
       case 'admin':
@@ -1318,7 +1316,6 @@ export default function App() {
       { id: 'browse',    label: '일정 탐색' },
       { id: 'live',      label: '라이브' },
       { id: 'community', label: '커뮤니티' },
-      { id: 'market',    label: '중고장터' },
       { id: 'tools',     label: '도구' },
     ];
     if (isOwner || isStaff || isAdmin) base.push({ id: 'my-store', label: '내 매장' });
@@ -2019,7 +2016,12 @@ export default function App() {
             }}
             onOpenPost={(pp) => { setVoucherWalletOpen(false); changeTab('community'); setOpenPost(pp); }}
             onOpenProfile={() => { setVoucherWalletOpen(false); setProfileOpen(true); }}
-            onOpenMarket={() => { setVoucherWalletOpen(false); changeTab('market'); }} />
+            onOpenMarket={() => {
+              setVoucherWalletOpen(false);
+              window.dispatchEvent(new CustomEvent('nuri:community-section', { detail: 'market' }));
+              try { sessionStorage.setItem('nuri:community-section', 'market'); } catch { /* noop */ }
+              changeTab('community');
+            }} />
         </Suspense>
       )}
 
@@ -2366,24 +2368,7 @@ export default function App() {
         </main>
       )}
 
-      {/* 중고장터 */}
-      {(activeTab === 'market' || visitedTabs.has('market')) && (
-        <main className="tab-pane px-page-x pt-3 pb-section" style={activeTab !== 'market' ? { display: 'none' } : undefined}>
-          <ErrorBoundary inline resetKey="market">
-          <MarketplaceTabM
-            listings={listings}
-            loading={!marketLoaded}
-            notices={marketNotices}
-            onSelect={setOpenListing}
-            onSelectNotice={setOpenNotice}
-            onCreate={handleMarketCreate}
-            canWriteNotice={isAdmin}
-            onWriteNotice={handleWriteNotice}
-            onListingsChanged={handleListingsChanged}
-          />
-          </ErrorBoundary>
-        </main>
-      )}
+      {/* (중고장터 독립 페인 은퇴 — 실경로는 커뮤니티 서브탭 '장터'(marketSlot). ?tab=market 은 리다이렉트) */}
 
       {/* 도구 — 매장 운영·플레이어 도구 모음 (메인 탭) */}
       {(activeTab === 'tools' || visitedTabs.has('tools')) && (
