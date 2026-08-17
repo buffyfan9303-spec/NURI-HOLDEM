@@ -5,8 +5,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useBlocks } from '../../contexts/BlockContext';
 import { useToast } from '../atoms/Toast';
 import type { CommunityPost, ReactionType, Comment } from '../../api/community';
-import { reactToPost, removeReaction, getMyReaction, incrementPostView, adminSetPostBlinded, getComments, addComment } from '../../api/community';
-import { relativeTime } from './MarketplaceTab';
+import { reactToPost, removeReaction, getMyReaction, incrementPostView, adminSetPostBlinded, getComments, addComment, deleteComment } from '../../api/community';
+import CommentThread from './CommentThread';
 import ReportModal from './ReportModal';
 import { parseAttachments } from '../../lib/hand';
 import HandReplayer from './HandReplayer';
@@ -35,31 +35,6 @@ interface PostDetailModalProps {
   inline?: boolean;
 }
 
-interface PostReply {
-  id: string;
-  author: string;
-  authorColor: string;
-  authorAvatar?: string;
-  content: string;
-  time: string;
-  isAdmin?: boolean;
-  isOwner?: boolean;
-}
-
-/** DB 댓글 → 화면용 형태 */
-function toReply(c: Comment): PostReply {
-  return {
-    id: c.id,
-    author: c.userName,
-    authorColor: '#5A6175',
-    authorAvatar: c.userAvatar,
-    content: c.content,
-    time: relativeTime(c.createdAt),
-    isAdmin: c.userRole === 'admin',
-    isOwner: c.isOwner,
-  };
-}
-
 function formatFullDate(iso: string): string {
   const d = new Date(iso);
   return `${d.getFullYear()}.${(d.getMonth()+1).toString().padStart(2,'0')}.${d.getDate().toString().padStart(2,'0')} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
@@ -86,9 +61,7 @@ export default function PostDetailModal({
     onLike(post.id);
     setHeartKey((k) => k + 1);
   };
-  const [replies, setReplies] = useState<PostReply[]>([]);
-  const [draft, setDraft] = useState('');
-  const [sending, setSending] = useState(false); // 댓글 전송 중(중복 제출 방지)
+  const [replies, setReplies] = useState<Comment[]>([]);
   const [reportOpen, setReportOpen] = useState(false);
   const toast = useToast();
   const [myReaction, setMyReaction] = useState<ReactionType | null>(null);
@@ -107,7 +80,7 @@ export default function PostDetailModal({
     // 댓글 실제 조회 — 이전에는 로컬 state에만 쌓여 새로고침 시 사라졌다(저장 안 됨).
     setReplies([]);
     getComments({ postId: post.id })
-      .then((cs) => { if (active) setReplies(cs.map(toReply)); })
+      .then((cs) => { if (active) setReplies(cs); })
       .catch(() => { /* 조회 실패 시 빈 목록 유지 */ });
     return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -151,43 +124,21 @@ export default function PostDetailModal({
     }
   };
 
-  // 댓글 작성 — DB 저장(이전에는 화면에만 추가돼 새로고침 시 사라졌다).
-  // 낙관적 추가 후 실패하면 되돌리고 입력값을 복구해 다시 시도할 수 있게 한다.
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user) { toast.show('로그인 후 이용할 수 있습니다', 'error'); promptLogin(); return; }
-    const content = draft.trim();
-    if (!content || sending) return;
-    const tempId = `tmp_${Date.now()}`;
-    setReplies((prev) => [
-      {
-        id: tempId,
-        author: user.name,
-        authorColor: user.avatarColor ?? '#5A6175',
-        authorAvatar: user.avatarUrl,
-        content,
-        time: '방금 전',
-        isAdmin: user.role === 'admin',
-        isOwner: user.role === 'venue_owner',
-      },
-      ...prev,
-    ]);
-    setDraft('');
-    setSending(true);
-    try {
-      const saved = await addComment({
-        postId: post.id,
-        userId: user.id, userName: user.name, userRole: user.role,
-        isOwner: user.role === 'venue_owner', content,
-      });
-      setReplies((prev) => prev.map((r) => (r.id === tempId ? toReply(saved) : r)));
-    } catch (err) {
-      setReplies((prev) => prev.filter((r) => r.id !== tempId)); // 롤백
-      setDraft(content);                                        // 입력 복구
-      toast.show(err instanceof Error ? err.message : '댓글 등록에 실패했습니다', 'error');
-    } finally {
-      setSending(false);
-    }
+  // 댓글 작성 — CommentThread(답글 parentId 지원) 계약. 저장 성공분만 반영(임시행 롤백 불필요).
+  const handleSubmitComment = (content: string, parentId?: string) => {
+    if (!user) { promptLogin(); return; }
+    addComment({
+      postId: post.id, parentId,
+      userId: user.id, userName: user.name, userRole: user.role,
+      isOwner: user.role === 'venue_owner', content,
+    })
+      .then((saved) => setReplies((prev) => [saved, ...prev]))
+      .catch((err) => toast.show(err instanceof Error ? err.message : '댓글 등록에 실패했습니다', 'error'));
+  };
+  const handleDeleteComment = (commentId: string) => {
+    deleteComment(commentId) // 권한은 RLS(본인·관리자)가 강제
+      .then(() => setReplies((prev) => prev.filter((c) => c.id !== commentId && c.parentId !== commentId)))
+      .catch((err) => toast.show(err instanceof Error ? err.message : '삭제에 실패했습니다', 'error'));
   };
 
   return (
@@ -361,54 +312,17 @@ export default function PostDetailModal({
           </button>
         </div>
 
-        {/* ── 댓글 입력 ───────────────────────────────────── */}
-        {user ? (
-          <form onSubmit={submit} className="flex gap-2">
-            <Avatar name={user.name} src={user.avatarUrl} color={user.avatarColor} size={32} />
-            <input
-              type="text"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder="댓글을 입력하세요…"
-              className="input flex-1 text-sm"
-            />
-            <button type="submit" className="btn-primary text-xs" disabled={!draft.trim()}>
-              등록
-            </button>
-          </form>
-        ) : (
-          <div className="text-center p-2 rounded-input bg-surface-high text-2xs text-ink-muted">
-            로그인 후 댓글을 작성할 수 있습니다
-          </div>
-        )}
-
-        {/* ── 댓글 목록 ───────────────────────────────────── */}
-        <section className="space-y-3">
+        {/* ── 댓글 — CommentThread 재사용: 답글(대댓글)·칭호칩·삭제까지 게시판에도 동일하게.
+            예전 자체 flat 목록은 답글 버튼이 없어 '너라면 어떻게?' 대화가 이어지질 못했다. */}
+        <section className="space-y-2">
           <h3 className="text-sm font-semibold text-ink-primary">댓글 {replies.length}</h3>
-          {replies.length === 0 ? (
-            <p className="text-center py-4 text-2xs text-ink-muted">첫 댓글을 남겨보세요</p>
-          ) : (
-            <ul className="space-y-3">
-              {replies.map((r) => (
-                <li key={r.id} className="flex gap-2">
-                  <Avatar name={r.author} src={r.authorAvatar} color={r.authorColor} size={28} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 mb-0.5">
-                      <span className="text-xs font-semibold text-ink-primary">{r.author}</span>
-                      {r.isOwner && (
-                        <span className="text-2xs font-bold text-accent-300 bg-accent-300/15 px-1 rounded-badge">업주</span>
-                      )}
-                      {r.isAdmin && (
-                        <span className="text-2xs font-bold text-danger-light bg-danger/15 px-1 rounded-badge">운영자</span>
-                      )}
-                      <span className="text-2xs text-ink-muted">· {r.time}</span>
-                    </div>
-                    <p className="text-sm text-ink-primary leading-relaxed">{r.content}</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
+          <CommentThread
+            comments={replies}
+            onSubmit={handleSubmitComment}
+            onDelete={handleDeleteComment}
+            moderator={user?.role === 'admin'}
+            emptyText="첫 댓글을 남겨보세요"
+          />
         </section>
       </article>
     </Modal>
