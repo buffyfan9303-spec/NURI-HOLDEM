@@ -61,7 +61,7 @@ function msToRegClose(s: ClockState, index: number, remaining: number): number |
   return null;
 }
 
-export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, onDisplay, active = true }: { venues: Venue[]; schedules: Schedule[]; onVenue: (id: string) => void; onSchedule: (s: Schedule) => void; onDisplay: (venueId: string, gameSeq: number) => void; active?: boolean }) {
+export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, onDisplay, active = true, myGames }: { venues: Venue[]; schedules: Schedule[]; onVenue: (id: string) => void; onSchedule: (s: Schedule) => void; onDisplay: (venueId: string, gameSeq: number) => void; active?: boolean; myGames?: { venueId: string; venueName: string; gameSeq: number | null }[] }) {
   const [games, setGames] = useState<ClockState[] | null>(null);
   const [, setTick] = useState(0);
   const [sortBy, setSortBy] = useState<'default' | 'players' | 'time' | 'distance'>('default'); // 진행 게임 정렬
@@ -129,6 +129,19 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
             <button type="button" onClick={load} className="btn-ghost px-3 text-xs">새로고침</button>
           </div>
         </div>
+
+        {/* 🎯 내 토너 — 바인 승인 후 참가자 시점이 어디에도 없던 격차. 승인된 내 게임이
+            진행 중이면 블라인드·평균스택 + 스택 자가입력 → BB·평균 대비 %를 맨 위에. */}
+        {myGames && myGames.length > 0 && (games ?? []).length > 0 && (
+          <div className="space-y-card-gap">
+            {myGames.map((m) => {
+              const g = (games ?? []).find((x) => x.venueId === m.venueId && (m.gameSeq == null || x.gameSeq === m.gameSeq));
+              if (!g) return null;
+              return <MyTournamentCard key={`${m.venueId}:${m.gameSeq ?? 0}`} g={g} venueName={m.venueName}
+                onDisplay={() => onDisplay(g.venueId, g.gameSeq ?? 1)} />;
+            })}
+          </div>
+        )}
 
         {games === null ? (
           <p className="py-10 text-center text-2xs text-ink-muted">불러오는 중…</p>
@@ -317,5 +330,61 @@ function Cell({ label, value, sub, accent, wide }: { label: string; value: strin
       </p>
       <p className="mt-0.5 text-[10px] text-ink-muted">{label}</p>
     </div>
+  );
+}
+
+// ── 🎯 내 토너 카드 — 참가자 시점(스택은 자가입력, 서버 스키마 무변경) ─────────
+function MyTournamentCard({ g, venueName, onDisplay }: { g: ClockState; venueName: string; onDisplay: () => void }) {
+  const lvls = g.config?.levels ?? [];
+  const eff = effectiveLevel(g);
+  const lv = lvls[eff.index];
+  // 브레이크 중엔 직전 플레이 레벨의 BB 로 환산(클락 AVG BB 병기와 동일 규칙)
+  let bb = 0;
+  for (let i = eff.index; i >= 0; i--) { const l = lvls[i]; if (l && l.kind === 'level' && l.bb > 0) { bb = l.bb; break; } }
+  const ls = g.liveStats;
+  const avg = ls?.avgStack ?? 0;
+  // 스택은 게임·날짜 단위로 기억 — 토너 중 앱을 들락여도 유지, 다음 날엔 초기화
+  const storeKey = `nuri:mystack:${g.venueId}:${g.gameSeq ?? 1}:${new Date().toLocaleDateString('en-CA')}`;
+  const [stack, setStack] = useState<number>(() => { try { return Number(localStorage.getItem(storeKey)) || 0; } catch { return 0; } });
+  const update = (n: number) => { setStack(n); try { localStorage.setItem(storeKey, String(n)); } catch { /* noop */ } };
+  const myBB = bb > 0 && stack > 0 ? Math.round((stack / bb) * 10) / 10 : null;
+  const vsAvg = avg > 0 && stack > 0 ? Math.round((stack / avg) * 100) : null;
+  const tone = vsAvg == null ? '' : vsAvg >= 100 ? 'text-emerald-400' : vsAvg >= 50 ? 'text-amber-300' : 'text-rose-400';
+  return (
+    <section className="rounded-card border border-accent-300/60 bg-gradient-to-br from-accent-300/[0.12] to-transparent p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="min-w-0 flex-1 truncate text-sm font-bold text-accent-300">🎯 내 토너 · <span className="text-ink-primary">{venueName}</span></p>
+        <button type="button" onClick={onDisplay} className="btn-ghost shrink-0 px-2.5 py-1 text-2xs">관전 화면</button>
+      </div>
+      <div className="mt-2 grid grid-cols-3 gap-1.5 text-center">
+        <div className="rounded-input bg-surface-base/60 px-1 py-1.5">
+          <p className="text-[9px] text-ink-muted">현재 블라인드</p>
+          <p className="text-xs font-extrabold tabular-nums text-ink-primary">{lv && lv.kind === 'level' ? `${lv.sb.toLocaleString()}/${lv.bb.toLocaleString()}` : '휴식'}</p>
+        </div>
+        <div className="rounded-input bg-surface-base/60 px-1 py-1.5">
+          <p className="text-[9px] text-ink-muted">평균 스택</p>
+          <p className="text-xs font-extrabold tabular-nums text-ink-primary">{avg > 0 ? avg.toLocaleString() : '-'}</p>
+        </div>
+        <div className="rounded-input bg-surface-base/60 px-1 py-1.5">
+          <p className="text-[9px] text-ink-muted">생존 / 엔트리</p>
+          <p className="text-xs font-extrabold tabular-nums text-ink-primary">{ls ? `${ls.alive} / ${ls.entries}` : '-'}</p>
+        </div>
+      </div>
+      <div className="mt-2 flex items-center gap-2">
+        <input type="number" inputMode="numeric" value={stack || ''} placeholder="내 스택 입력"
+          onChange={(e) => update(Math.max(0, Number(e.target.value) || 0))}
+          className="input h-10 min-w-0 flex-1 text-sm tabular-nums" aria-label="내 스택" />
+        <div className="shrink-0 text-right">
+          {myBB != null ? (
+            <>
+              <p className={['text-sm font-extrabold tabular-nums leading-tight', tone].join(' ')}>{myBB}BB</p>
+              {vsAvg != null && <p className={['text-2xs font-bold tabular-nums leading-tight', tone].join(' ')}>평균 대비 {vsAvg}%</p>}
+            </>
+          ) : (
+            <p className="text-2xs text-ink-muted">스택을 넣으면<br />BB·평균 대비 표시</p>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }

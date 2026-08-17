@@ -1402,6 +1402,10 @@ export default function App() {
     const v = sc.venueId ? venueById.get(sc.venueId) : undefined;
     return v && v.lat != null && v.lng != null ? haversineKm(myPos.lat, myPos.lng, v.lat, v.lng) : undefined;
   }, [nearSort, myPos, venueById]);
+  // 🎯 내 토너 — 오늘 승인된 내 바인의 게임 목록(라이브 탭 참가자 시점 카드)
+  const myApprovedGames = useMemo(() => myBuyinReqs
+    .filter((r) => r.status === 'approved')
+    .map((r) => ({ venueId: r.venueId, venueName: r.venueName, gameSeq: r.gameSeq })), [myBuyinReqs]);
   // 🎫 오늘 예약한 대회 — 대회 당일 홈에서 '내 예약'이 안 보이던 격차(예약→방문 전환 지원)
   const [myTodayRes, setMyTodayRes] = useState<MyReservationRow[]>([]);
   useEffect(() => {
@@ -2319,7 +2323,7 @@ export default function App() {
       {(activeTab === 'live' || visitedTabs.has('live')) && (
         <div className="tab-pane" style={activeTab !== 'live' ? { display: 'none' } : undefined}>
           <ErrorBoundary inline resetKey="live">
-            <LiveGamesTabM venues={venues} schedules={schedules} onVenue={handleVenueClick} onSchedule={handleScheduleSelect} onDisplay={openDisplay} active={activeTab === 'live'} />
+            <LiveGamesTabM venues={venues} schedules={schedules} onVenue={handleVenueClick} onSchedule={handleScheduleSelect} onDisplay={openDisplay} active={activeTab === 'live'} myGames={myApprovedGames} />
           </ErrorBoundary>
         </div>
       )}
