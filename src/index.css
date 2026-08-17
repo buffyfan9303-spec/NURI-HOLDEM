@@ -96,10 +96,9 @@
     @apply bg-surface-base text-ink-primary antialiased;
     overflow-x: clip;
     max-width: 100%;
-    /* PET 시그니처 — 상단 인디고 글로우(고정). 근검정 배경 위 은은한 Linear 분위기 */
-    background-image: radial-gradient(900px 460px at 50% -12%, rgba(94, 106, 210, 0.12), transparent 70%);
-    background-attachment: fixed;
-    background-repeat: no-repeat;
+    /* PET 시그니처 상단 인디고 글로우는 body::before 고정 레이어로 —
+       background-attachment:fixed 는 스크롤 프레임마다 뷰포트 전체 재페인트를 강제한다
+       (2026-08-17 끊김 계측의 페인트 1순위). 고정 ::before 는 합성만 하므로 비용 0. */
     font-family: 'Pretendard Variable', 'Pretendard', system-ui, sans-serif;
     /* iOS 탭 하이라이트 제거 */
     -webkit-tap-highlight-color: transparent;
@@ -107,6 +106,16 @@
        긴 영문/URL/숫자는 칸을 넘칠 때만 강제로 끊어 레이아웃이 깨지지 않게 한다. */
     word-break: keep-all;
     overflow-wrap: break-word;
+  }
+
+  /* 상단 인디고 글로우 — 고정 레이어(스크롤 시 재페인트 없음). body 배경에서 이전. */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background: radial-gradient(900px 460px at 50% -12%, rgba(94, 106, 210, 0.12), transparent 70%);
   }
 
   /* ── 줄배열 최적화(세계적 표준: Vercel·Apple·Toss) ──────────────────────────
@@ -253,17 +262,11 @@
   100% { opacity: 0; transform: translateY(-24px) scale(1); }
 }
 
-/* 최상위 등급 아바타 테두리 — 은은한 명예 글로우(운영자 SS=레드 / AA·최상위=골드) */
-@keyframes tierPulseAdmin {
-  0%, 100% { box-shadow: 0 0 0 2px #FF4D6D, 0 0 7px 0 rgba(255, 77, 109, 0.55); }
-  50%      { box-shadow: 0 0 0 2px #FF6B85, 0 0 16px 4px rgba(255, 77, 109, 0.95); }
-}
-@keyframes tierPulseAce {
-  0%, 100% { box-shadow: 0 0 0 2px #FFD700, 0 0 8px 0 rgba(255, 215, 0, 0.6); }
-  50%      { box-shadow: 0 0 0 2px #FFE680, 0 0 18px 5px rgba(255, 215, 0, 1); }
-}
-.tier-glow-admin { animation: tierPulseAdmin 2.6s ease-in-out infinite; }
-.tier-glow-ace   { animation: tierPulseAce 2.3s ease-in-out infinite; }
+/* 최상위 등급 아바타 테두리 — 은은한 명예 글로우(운영자 SS=레드 / AA·최상위=골드).
+   ⚠ box-shadow 키프레임은 매 프레임 페인트를 강제해(합성 불가 속성) 상시 CPU 를 태웠다 —
+   정적 글로우로 고정(명예 표시는 유지, 페인트 루프만 제거). */
+.tier-glow-admin { box-shadow: 0 0 0 2px #FF4D6D, 0 0 12px 2px rgba(255, 77, 109, 0.8); }
+.tier-glow-ace   { box-shadow: 0 0 0 2px #FFD700, 0 0 13px 2px rgba(255, 215, 0, 0.85); }
 
 /* PC에서 본문이 좌측으로 쏠리지 않도록 — 콘텐츠 최대 폭 제한 + 가운데 정렬(모바일은 100%) */
 /* 기본(모바일·태블릿): 48rem 읽기폭. 데스크탑(lg≥1024): 2-pane·그리드가 화면을 활용하도록 72rem까지 확장.

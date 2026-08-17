@@ -2,15 +2,9 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://nuriholdem.com/</loc>
-    <lastmod>2026-08-09</lastmod>
+    <lastmod>2026-08-17</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
-  </url>
-  <url>
-    <loc>https://nuriholdem.com/?s=88617132-ef8f-4db2-9e66-d7cdd3871b77</loc>
-    <lastmod>2026-06-07</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
   </url>
   <url>
     <loc>https://nuriholdem.com/?s=106bd813-c21d-459e-a0f2-5152bf29ae67</loc>
@@ -37,8 +31,14 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://nuriholdem.com/?s=88617132-ef8f-4db2-9e66-d7cdd3871b77</loc>
+    <lastmod>2026-06-07</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://nuriholdem.com/?v=roti</loc>
-    <lastmod>2026-08-09</lastmod>
+    <lastmod>2026-08-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>

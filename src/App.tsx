@@ -130,7 +130,7 @@ interface TabDef { id: TabId; label: string; }
 
 // ── 헤더 ─────────────────────────────────────────────────────────────────────
 
-function AppHeader({
+const AppHeader = memo(function AppHeader({
   unreadCount, notifications, onMarkRead, onOpenLogin, onNavigateNotification, onHome, onOpenProfile, onOpenSearch, onOpenVouchers,
   onGotoTab, activeTab, suppressed = false,
 }: {
@@ -419,7 +419,7 @@ function AppHeader({
       />
     </header>
   );
-}
+});
 
 // ── 탭 바 ─────────────────────────────────────────────────────────────────────
 
@@ -446,7 +446,7 @@ const TAB_ICON: Record<TabId, ReactNode> = {
   admin: tabIcon(<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />),
 };
 
-function TabBar({
+const TabBar = memo(function TabBar({
   tabs, active, onChange,
 }: { tabs: TabDef[]; active: TabId; onChange: (t: TabId) => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -516,10 +516,10 @@ function TabBar({
       />
     </div>
   );
-}
+});
 
 // ── 모바일 하단 탭바(Riot Mobile 스타일) — 플로팅 알약 + 아이콘/라벨 + 프레스 스프링 ──
-function MobileTabBar({ tabs, active, onChange, dot, count, onOpenMe }: {
+const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, count, onOpenMe }: {
   tabs: TabDef[]; active: TabId; onChange: (t: TabId) => void;
   dot?: Partial<Record<TabId, boolean>>;
   /** 숫자 배지(예: 라이브 'N게임 진행중') — dot 보다 정보량이 높은 칸에만 */
@@ -611,7 +611,7 @@ function MobileTabBar({ tabs, active, onChange, dot, count, onOpenMe }: {
       </div>
     </nav>
   );
-}
+});
 
 // ── 승인 대기 배너 ───────────────────────────────────────────────────────────
 
@@ -960,13 +960,17 @@ export default function App() {
     if (w.requestIdleCallback) w.requestIdleCallback(warm, { timeout: 10000 });
     else setTimeout(warm, 5000);
   }, [schedulesLoaded, isOwner, isAdmin]);
-  // FOMO 뱃지용 예약자 수 — 다가오는 대회만 1회 조회
-  useEffect(() => {
+  // FOMO 뱃지용 예약자 수 — 다가오는 대회만 1회 조회.
+  // ⚠ [schedules] 배열 의존이면 스냅샷→네트워크 교체(내용 동일)에도 재조회·리렌더가 났다 —
+  //   id 집합 문자열 키로 좁혀 '같은 대회 목록'이면 건너뛴다(PastTournaments pastKey 패턴).
+  const resIdsKey = useMemo(() => {
     const today = new Date().toLocaleDateString('en-CA');
-    const ids = schedules.filter((s) => s.approved && s.date >= today).map((s) => s.id);
-    if (ids.length === 0) { setBrowseResCounts({}); return; }
-    getReservationCounts(ids).then(setBrowseResCounts).catch(() => {});
+    return schedules.filter((sc) => sc.approved && sc.date >= today).map((sc) => sc.id).sort().join('|');
   }, [schedules]);
+  useEffect(() => {
+    if (!resIdsKey) { setBrowseResCounts({}); return; }
+    getReservationCounts(resIdsKey.split('|')).then(setBrowseResCounts).catch(() => {});
+  }, [resIdsKey]);
   const [venues,        setVenues]        = useState<Venue[]>(() => readSnap<Venue[]>('venues') ?? []);
   const venueById = useMemo(() => new Map(venues.map((v) => [v.id, v])), [venues]);
   const [comments,      setComments]      = useState<Comment[]>([]);
@@ -1039,10 +1043,14 @@ export default function App() {
   }, []);
 
   // 서버 재조회 헬퍼
+  // 내용이 같으면 이전 참조를 유지 — no-op 재조회(실시간 디바운스·창 복귀)가 카드 전체·
+  // keep-alive 탭들의 memo 를 깨지 않게. 동일 참조 반환 시 React 는 리렌더 자체를 생략한다.
+  // (목록이 작아 stringify 비용은 수 ms — memo 파손 비용보다 훨씬 싸다)
+  const sameJson = (a: unknown, b: unknown) => { try { return JSON.stringify(a) === JSON.stringify(b); } catch { return false; } };
   const reloadSchedules = useCallback(() => {
     getSchedules()
       .then((v) => {
-        setSchedules(v); setSchedulesError(null);
+        setSchedules((prev) => (sameJson(prev, v) ? prev : v)); setSchedulesError(null);
         writeSnap('schedules', v); // 다음 방문의 '즉시 콘텐츠' — realtime 재조회도 이 길을 지나므로 자동 최신화
         // 서드파티(GA·AdSense) 게이트 해제 — **네트워크 응답** 이 왔다는 신호.
         // ⚠ schedulesLoaded 에 걸면 안 된다: 캐시 복원이 그 플래그를 부팅 즉시 켜므로
@@ -1070,7 +1078,7 @@ export default function App() {
       setTimeout(() => setPtr(0), 900);
     } else setPtr(0);
   };
-  const reloadVenues    = useCallback(() => { getVenues().then((v) => { setVenues(v); writeSnap('venues', v); }).catch(() => {}); }, []);
+  const reloadVenues    = useCallback(() => { getVenues().then((v) => { setVenues((prev) => (sameJson(prev, v) ? prev : v)); writeSnap('venues', v); }).catch(() => {}); }, []);  
   const reloadPosts     = useCallback(() => { getPosts().then((v) => { setPosts(v); writeSnap('posts', v); }).catch(() => {}); }, []);
   const reloadComments  = useCallback(() => { getComments({}).then(setComments).catch(() => {}); }, []);
   const reloadNotices   = useCallback(() => { getNotices().then((v) => { setNotices(v); writeSnap('notices', v); }).catch(() => {}); }, []);
@@ -1079,10 +1087,22 @@ export default function App() {
   // 예전엔 게시글·댓글·장터까지 6종을 부팅과 동시에 쐈다. 사용자가 기다리는 건 대회 목록인데
   // 안 보이는 탭의 데이터가 같은 대역폭·같은 DB 를 두고 경쟁했다.
   useEffect(() => {
-    reloadSchedules();
-    reloadVenues();
-    reloadNotices(); // 공지는 첫 화면(일정탐색 상단)에도 뜬다
-  }, [reloadSchedules, reloadVenues, reloadNotices]);
+    // 실측(2026-08-17 끊김 심층분석): 부팅 5초간 App 풀 리렌더가 ~17회였다 — setState 가
+    // 각자 다른 마이크로태스크에서 발화한 탓. React 18 자동 배칭은 '같은 콜백 안'만 묶으므로,
+    // 세 응답을 allSettled 로 모아 **한 콜백에서 일괄 반영**한다(3렌더→1렌더).
+    Promise.allSettled([getSchedules(), getVenues(), getNotices()]).then(([sr, vr, nr]) => {
+      if (sr.status === 'fulfilled') {
+        setSchedules((prev) => (sameJson(prev, sr.value) ? prev : sr.value));
+        setSchedulesError(null);
+        writeSnap('schedules', sr.value);
+        window.dispatchEvent(new Event('nuri:first-data-requested')); // 광고 게이트(응답 후)
+      } else setSchedulesError(sr.reason);
+      setSchedulesLoaded(true);
+      if (vr.status === 'fulfilled') { setVenues((prev) => (sameJson(prev, vr.value) ? prev : vr.value)); writeSnap('venues', vr.value); }
+      if (nr.status === 'fulfilled') { setNotices(nr.value); writeSnap('notices', nr.value); }
+    });
+     
+  }, []);
   // (서드파티 게이트 신호는 reloadSchedules 의 네트워크 성공 콜백에서 발사 — 위 주석 참고.
   //  schedulesLoaded 기반이었으나 캐시 복원이 그 플래그를 즉시 켜게 되면서 이전했다.)
 
@@ -1101,12 +1121,18 @@ export default function App() {
   const loadDeferred = useCallback(() => {
     if (deferredLoadedRef.current) return;
     deferredLoadedRef.current = true;
-    reloadPosts();
-    reloadComments();
-    getListings().then((l) => { setListings(l); setMarketLoaded(true); writeSnap('listings', l); }).catch(() => setMarketLoaded(true));
-    getVenueRatings().then(setVenueRatings).catch(() => {}); // 카드 ⭐ 별점 — 몇 초 늦게 떠도 되는 장식
-    getRunningClocks().then((cs) => setLiveCount(cs.length)).catch(() => {}); // 라이브 탭 배지
-  }, [reloadPosts, reloadComments]);
+    // 5개 응답을 한 콜백에서 일괄 반영(5렌더→1렌더) — 부팅 리렌더 폭풍 계측의 직접 조치
+    Promise.allSettled([getPosts(), getComments({}), getListings(), getVenueRatings(), getRunningClocks()])
+      .then(([pr, cr, lr, rr, kr]) => {
+        if (pr.status === 'fulfilled') { setPosts(pr.value); writeSnap('posts', pr.value); }
+        if (cr.status === 'fulfilled') setComments(cr.value);
+        if (lr.status === 'fulfilled') { setListings(lr.value); writeSnap('listings', lr.value); }
+        setMarketLoaded(true);
+        if (rr.status === 'fulfilled') setVenueRatings(rr.value);
+        if (kr.status === 'fulfilled') setLiveCount(kr.value.length);
+      });
+     
+  }, []);
   useEffect(() => {
     type IdleWin = Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number };
     const w = window as IdleWin;
@@ -1182,7 +1208,9 @@ export default function App() {
   useEffect(() => {
     if (user) getMyNotifications().then(setNotifications).catch(() => {});
     else setNotifications([]);
-  }, [user]);
+    // ⚠ [user] 객체 의존이면 일일 출석점수 반영(setUser 참조 교체)에도 재실행돼 fetch·리렌더가 2배였다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   // 창/탭 복귀(focus·visibility) 시 모든 주요 데이터 자동 동기화
   //  → 다른 기기·다른 사용자가 바꾼 일정·매장·게시글·댓글·장터·공지·알림이 즉시 최신화
@@ -1288,7 +1316,8 @@ export default function App() {
   useEffect(() => {
     if (!user) { setFollowedIds(new Set()); setFollowedOnly(false); return; }
     getMyFollowedVenueIds().then((ids) => setFollowedIds(new Set(ids))).catch(() => {});
-  }, [user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   const visibleSchedules = useMemo(() => {
     const list = schedules.filter((s) => s.approved);
@@ -1819,12 +1848,26 @@ export default function App() {
   const communityNotices = useMemo(() => notices.filter((n) => !n.board || n.board === 'all' || n.board === 'community'), [notices]);
   const marketNotices    = useMemo(() => notices.filter((n) => !n.board || n.board === 'all' || n.board === 'market'), [notices]);
   const handleWriteNotice = useCallback(() => setNoticeFormOpen(true), []);
+  // 헤더·탭바에 인라인 화살표를 넘기면 memo 를 걸어도 매 렌더 무효 — 참조 고정 콜백으로.
+  const openLoginCb = useCallback(() => setAuthOpen(true), []);
+  const openProfileCb = useCallback(() => setProfileOpen(true), []);
+  const openSearchCb = useCallback(() => setGlobalSearchOpen(true), []);
+  const openVouchersCb = useCallback(() => setVoucherWalletOpen(true), []);
+  const pcTabs = useMemo(() => tabs.filter((t) => t.id !== 'market'), [tabs]);
+  const tabDot = useMemo(() => ({ community: commHasNew }), [commHasNew]);
+  const tabCount = useMemo(() => ({ live: liveCount }), [liveCount]);
+  const openMeCb = useCallback(() => { if (userRefForGate.current) setVoucherWalletOpen(true); else setAuthOpen(true); }, []);
+  // ⚠ deps 에 user '객체'를 두면 부팅 중 참조 교체(로그인→일일점수)마다 콜백이 재생성돼
+  //   CommunityTabM·MarketplaceTabM·marketSlot 세 곳의 memo 가 동시에 깨졌다(실측).
+  //   최신 user 는 ref 로 읽고 콜백 참조는 고정한다.
+  const userRefForGate = useRef(user);
+  useEffect(() => { userRefForGate.current = user; });
   const handleOpenWrite = useCallback((category?: PostCategory) => {
-    if (!ensureVerified(user, '글쓰기')) return; // 본인인증 회원만 글쓰기
+    if (!ensureVerified(userRefForGate.current, '글쓰기')) return; // 본인인증 회원만 글쓰기
     setPostFormCategory(category ?? 'free');
     setPostFormOpen(true);
-  }, [user]);
-  const handleMarketCreate = useCallback(() => { if (ensureVerified(user, '중고장터 등록')) setMarketFormOpen(true); }, [user]);
+  }, []);
+  const handleMarketCreate = useCallback(() => { if (ensureVerified(userRefForGate.current, '중고장터 등록')) setMarketFormOpen(true); }, []);
   const handleListingsChanged = useCallback(() => { getListings().then(setListings).catch(() => {}); }, []);
   const marketSlot = useMemo(() => (
     <MarketplaceTab listings={listings} loading={!marketLoaded} notices={marketNotices}
@@ -1846,16 +1889,16 @@ export default function App() {
       <AppHeader
         title={activeTab === 'browse' ? undefined : tabs.find((t) => t.id === activeTab)?.label}
         activeTab={activeTab}
-        onGotoTab={(t) => changeTab(t)}
+        onGotoTab={changeTab}
         unreadCount={unreadNotifs}
         notifications={notifications}
         onMarkRead={handleMarkRead}
-        onOpenLogin={() => setAuthOpen(true)}
+        onOpenLogin={openLoginCb}
         onNavigateNotification={handleNavigateNotification}
         onHome={handleHome}
-        onOpenProfile={() => setProfileOpen(true)}
-        onOpenSearch={() => setGlobalSearchOpen(true)}
-        onOpenVouchers={() => setVoucherWalletOpen(true)}
+        onOpenProfile={openProfileCb}
+        onOpenSearch={openSearchCb}
+        onOpenVouchers={openVouchersCb}
         suppressed={openVenueId !== null}
       />
 
@@ -1920,10 +1963,10 @@ export default function App() {
       <InstallBanner />
       <TierCelebration />
 
-      <TabBar tabs={tabs.filter((t) => t.id !== 'market')} active={activeTab} onChange={changeTab} />
+      <TabBar tabs={pcTabs} active={activeTab} onChange={changeTab} />
       {/* 모바일 하단 탭바(Riot Mobile 스타일) — 상단 GNB 대체 */}
-      <MobileTabBar tabs={tabs} active={activeTab} onChange={changeTab} dot={{ community: commHasNew }} count={{ live: liveCount }}
-        onOpenMe={() => { if (user) setVoucherWalletOpen(true); else setAuthOpen(true); }} />
+      <MobileTabBar tabs={tabs} active={activeTab} onChange={changeTab} dot={tabDot} count={tabCount}
+        onOpenMe={openMeCb} />
 
       {/* 일정 탐색 */}
       <div className="px-page-x"><StaffInviteBanner /></div>
@@ -2521,7 +2564,7 @@ function ScrollTopButton() {
 
 // ── 🏁 지난 대회 아카이브 — 일정탐색 하단(완료 대회, 최근 5개) ─────────────────
 // 순위가 입력된 대회면 행에 👑 우승자 표시 + 클릭 시 입상 순위 펼침(미입력이면 바로 상세).
-function PastTournaments({ schedules, onSelect }: { schedules: Schedule[]; onSelect: (s: Schedule) => void }) {
+const PastTournaments = memo(function PastTournaments({ schedules, onSelect }: { schedules: Schedule[]; onSelect: (s: Schedule) => void }) {
   const today = new Date().toLocaleDateString('en-CA');
   const past = [...schedules]
     .filter((s) => s.approved && s.date < today)
@@ -2603,10 +2646,10 @@ function PastTournaments({ schedules, onSelect }: { schedules: Schedule[]; onSel
       </ul>
     </section>
   );
-}
+});
 
 // ── PC 우측 위젯 레일(일정탐색) — 오늘 요약·주간 머니인 킹·HOT 게시글 ──────────
-function BrowseSideRail({ posts, schedules, onSelectPost, onSelectSchedule }: {
+const BrowseSideRail = memo(function BrowseSideRail({ posts, schedules, onSelectPost, onSelectSchedule }: {
   posts: CommunityPost[];
   schedules: Schedule[];
   onSelectPost: (p: CommunityPost) => void;
@@ -2697,7 +2740,7 @@ function BrowseSideRail({ posts, schedules, onSelectPost, onSelectSchedule }: {
       </section>
     </aside>
   );
-}
+});
 
 // ── 빈 상태 ─────────────────────────────────────────────────────────────────
 

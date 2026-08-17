@@ -177,14 +177,17 @@ function ListCard({ schedule, onVenueClick, onSelect, reserveCount, rating, prio
     <article
       onClick={() => onSelect(schedule)}
       className={[
-        'flex items-center gap-2.5 overflow-hidden rounded-card border transition-all duration-300 ease-out',
+        // ⚠ transition-all 은 hover 의 box-shadow 변화까지 애니메이션해 카드마다 페인트 루프를 만든다
+        //   — 합성되는 transform + 저비용 border-color 만 명시 전환(시각 차이 없음, 페인트만 소멸)
+        'flex items-center gap-2.5 overflow-hidden rounded-card border transition-[transform,border-color] duration-300 ease-out',
         'hover:-translate-y-1 cursor-pointer active:scale-[0.98] p-2',
         schedule.isPremium
           ? 'border-accent-400 shadow-gold bg-surface-low'
           : 'border-border-default shadow-card bg-surface-low hover:border-border-strong',
       ].join(' ')}
-      // 포스터 색 글로우 — 카드 뒤로 은은하게 번지는 포스터 고유색(글라스 감성)
-      style={!schedule.isPremium && schedule.posterColor ? { boxShadow: `0 4px 26px -10px ${schedule.posterColor}59` } : undefined}
+      // 포스터 색 글로우 — 카드 뒤로 은은하게 번지는 포스터 고유색(글라스 감성).
+      // blur 26px 는 카드 면적보다 큰 페인트 영역을 만든다 — 12px 로 줄여 비용 절반 이하(체감 동일)
+      style={!schedule.isPremium && schedule.posterColor ? { boxShadow: `0 3px 12px -8px ${schedule.posterColor}59` } : undefined}
     >
       {/* 정사각 썸네일 (64x64) — 화면 64px이라 160px 썸네일이면 레티나까지 충분(원본 대비 90%↓) */}
       <PosterArea
@@ -308,7 +311,7 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority }: CardPr
     <article
       onClick={() => onSelect(schedule)}
       className={[
-        'flex flex-col overflow-hidden rounded-card border transition-all duration-300 ease-out',
+        'flex flex-col overflow-hidden rounded-card border transition-[transform,border-color] duration-300 ease-out',
         'hover:-translate-y-1 cursor-pointer active:scale-[0.98]',
         schedule.isPremium
           ? 'border-accent-400 shadow-gold bg-surface-low'

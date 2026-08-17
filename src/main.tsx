@@ -92,8 +92,12 @@ let tpLoaded = false, tpWindowLoaded = false, tpDataRequested = false;
 const tpAfterIdle = () => {
   if (tpLoaded) return;
   tpLoaded = true;
-  if (w.requestIdleCallback) w.requestIdleCallback(loadThirdParty, { timeout: 8000 });
-  else setTimeout(loadThirdParty, 5000);
+  // 신호(load+첫 데이터 응답) 직후는 사용자가 첫 상호작용을 하는 구간 — 3.5초 더 물러나
+  // AdSense 파싱 클러스터(계측: 105~158ms 태스크 다수)를 유휴 구간으로 밀어낸다.
+  setTimeout(() => {
+    if (w.requestIdleCallback) w.requestIdleCallback(loadThirdParty, { timeout: 8000 });
+    else setTimeout(loadThirdParty, 5000);
+  }, 3500);
 };
 const tpMaybe = () => { if (tpWindowLoaded && tpDataRequested) tpAfterIdle(); };
 window.addEventListener('nuri:first-data-requested', () => { tpDataRequested = true; tpMaybe(); }, { once: true });
