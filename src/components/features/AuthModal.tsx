@@ -76,7 +76,7 @@ function LegalSheet({ doc, onClose }: { doc: LegalDoc | null; onClose: () => voi
 
       {/* 시트 본문 */}
       <div className={[
-        'relative w-full max-w-lg bg-surface-mid shadow-dialog animate-slide-up',
+        'relative w-full max-w-lg bg-surface-mid shadow-dialog animate-sheet-up', // Modal 원자와 동일 모션(8px 넛지 slide-up 은 시트 규격 위반)
         'rounded-t-dialog sm:rounded-dialog',
         'flex flex-col',
       ].join(' ')}

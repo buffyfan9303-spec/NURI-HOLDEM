@@ -1988,7 +1988,7 @@ export default function App() {
               : <>예약한 대회 <b className="text-accent-300">1시간 전 리마인더</b>와 이용권 도착을 폰으로 받으세요.</>}
           </p>
           <button type="button" onClick={doEnablePush} className="btn-primary shrink-0 px-3 py-1.5 text-2xs">알림 켜기</button>
-          <button type="button" onClick={dismissPushNudge} aria-label="닫기" className="shrink-0 px-1 text-ink-muted hover:text-ink-secondary">✕</button>
+          <button type="button" onClick={dismissPushNudge} aria-label="닫기" className="hit relative shrink-0 px-1 text-ink-muted hover:text-ink-secondary">✕</button>
         </div>
       )}
 
@@ -2263,6 +2263,15 @@ export default function App() {
                     filtered={!!searchState.query.trim() || searchState.dates.length > 0
                       || searchState.regions.length > 0 || !!searchState.format
                       || searchState.gtdOnly || searchState.competitionOnly}
+                    filterSummary={[
+                      searchState.query.trim() && `검색어 "${searchState.query.trim()}"`,
+                      searchState.dates.length > 0 && `날짜 ${searchState.dates.length}일`,
+                      searchState.regions.length > 0 && `지역 ${searchState.regions.join('·')}`,
+                      searchState.format,
+                      searchState.grade && ({ daily: '데일리', satellite: '새틀', series: '시리즈' } as Record<string, string>)[searchState.grade],
+                      searchState.gtdOnly && 'GTD',
+                      searchState.competitionOnly && '대회',
+                    ].filter(Boolean).join(' · ')}
                     followedOnly={followedOnly}
                     onClearFilters={() => searchBarRef.current?.clearAll()}
                     onClearFollow={() => setFollowedOnly(false)}
@@ -2869,12 +2878,14 @@ function ScheduleSkeletonGrid({ viewMode }: { viewMode: 'grid' | 'list' | 'table
 // 예전엔 '검색 결과가 없습니다' 한 줄로 끝나 다음에 누를 것이 하나도 없었다 —
 // 사용자는 자기가 잘못 검색한 줄 알거나 '대회가 없는 서비스'로 오해하고 나간다.
 // 그래서 ① 왜 비었는지(필터 때문인지 진짜 없는 건지)를 구분해 말하고 ② 반드시 다음 행동을 하나 준다.
-function EmptyState({ filtered, followedOnly, onClearFilters, onClearFollow, upcoming }: {
+function EmptyState({ filtered, followedOnly, onClearFilters, onClearFollow, upcoming, filterSummary }: {
   filtered: boolean;          // 검색어·날짜·지역 등 조건이 걸려 있는가
   followedOnly: boolean;
   onClearFilters: () => void;
   onClearFollow: () => void;
   upcoming: number;           // 조건을 풀면 보일 예정 대회 수
+  /** 현재 걸린 조건 요약 — '무엇 때문에 0건인지'를 보여줘야 사용자가 하나만 풀 수 있다 */
+  filterSummary?: string;
 }) {
   return (
     <div className="flex flex-col items-center justify-center py-14 gap-3 text-ink-muted">
@@ -2893,6 +2904,7 @@ function EmptyState({ filtered, followedOnly, onClearFilters, onClearFollow, upc
       ) : filtered ? (
         <>
           <p className="text-sm">조건에 맞는 대회가 없어요</p>
+          {filterSummary && <p className="max-w-xs text-center text-2xs text-ink-muted">걸린 조건: <b className="text-ink-secondary">{filterSummary}</b> — 검색바에서 하나만 풀어도 달라져요</p>}
           <p className="text-xs">{upcoming > 0 ? `조건을 풀면 예정 대회 ${upcoming}개를 볼 수 있어요` : '조건을 바꿔 다시 찾아보세요'}</p>
           <button type="button" onClick={onClearFilters} className="btn-primary px-4 py-2 text-xs">조건 초기화</button>
         </>
