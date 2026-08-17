@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import Modal from '../atoms/Modal';
 import Icon from '../atoms/Icon';
 import ImageLightbox from '../atoms/ImageLightbox';
@@ -52,6 +52,9 @@ export default function ScheduleDetailModal({
   const [shown, setShown] = useState<Schedule | null>(scheduleProp);
   useEffect(() => { if (scheduleProp) setShown(scheduleProp); }, [scheduleProp]);
   const schedule = scheduleProp ?? shown;
+  // 열린 시각 — 고스트 클릭(탭 직후 합성 click) 판정 기준(포스터 확대 400ms 가드)
+  const openedAtRef = useRef(0);
+  useEffect(() => { if (open) openedAtRef.current = performance.now(); }, [open, scheduleProp?.id]);
 
   if (!schedule) return null;
 
@@ -95,7 +98,12 @@ export default function ScheduleDetailModal({
             {schedule.posterUrl ? (
               <button
                 type="button"
-                onClick={() => setLightbox(true)}
+                onClick={() => {
+                  // 고스트 클릭 가드 — 카드 탭의 합성 click 이 방금 마운트된 포스터에 꽂혀
+                  // 라이트박스가 멋대로 열리는 것 방지(View Transition 동기 커밋 도입 후 재현).
+                  if (performance.now() - openedAtRef.current < 400) return;
+                  setLightbox(true);
+                }}
                 aria-label="포스터 확대 보기"
                 className="block w-full cursor-zoom-in"
               >

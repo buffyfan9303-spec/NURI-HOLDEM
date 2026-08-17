@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, useTransition, Suspense, memo, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
+import { withViewTransition } from './lib/viewTransition';
 import { useToast } from './components/atoms/Toast';
 import { checkIn, getMyCheckinStreak } from './api/checkins';
 import { requestBuyin, venueTodayGames, getMyBuyinRequestsToday, subscribeMyBuyinRequests, cancelBuyinRequest, type MyBuyinRequest } from './api/ledger';
@@ -682,9 +683,11 @@ export default function App() {
     // 가능하므로 flushSync 를 트랜지션 콜백 안에서 돌려 display 토글·스크롤 복원 비용 전부를
     // 이전 화면 스냅샷 '뒤에서' 치르고, 완성된 새 화면으로 180ms 크로스페이드만 보여준다.
     // 첫 방문(lazy 청크)은 Suspense 가 끼므로 기존 startTransition 유지(이전 화면 유지 효과 동일).
-    const vt = (document as Document & { startViewTransition?: (cb: () => void) => unknown }).startViewTransition;
-    if (vt && visitedTabs.has(t) && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      vt.call(document, () => { flushSync(() => setActiveTab(t)); });
+    if (visitedTabs.has(t)) {
+      withViewTransition(
+        () => { flushSync(() => setActiveTab(t)); },
+        () => startTabTransition(() => setActiveTab(t)),
+      );
     } else {
       startTabTransition(() => setActiveTab(t));
     }
@@ -1441,8 +1444,11 @@ export default function App() {
 
   const handleVenueClick = useCallback((venueId: string) => {
     if (!venueId) return; // 직접입력 포스터 등 매장 미연결 시 무시
-    setOpenSchedule(null);   // 일정 모달이 열려있으면 닫고 매장으로 전환
-    setOpenVenueId(venueId);
+    // 풀페이지 마운트(지도 임베드 포함)를 스냅샷 뒤에서 끝낸다 — 포스터→매장 전환도 크로스페이드
+    withViewTransition(() => flushSync(() => {
+      setOpenSchedule(null);   // 일정 모달이 열려있으면 닫고 매장으로 전환
+      setOpenVenueId(venueId);
+    }));
   }, []);
 
   // 딥링크: ?s=<scheduleId> — 대회 공유 링크로 들어오면 해당 포스터 상세 자동 오픈
@@ -1525,7 +1531,11 @@ export default function App() {
 
   const handleScheduleSelect = useCallback((s: Schedule) => {
     // 포스터 상세는 전체화면 2열 모달(PC: 포스터 좌+정보 우)로 표시 — 좁은 패널보다 가독성↑
-    startTabTransition(() => setOpenSchedule(s));
+    // 마운트 비용을 스냅샷 뒤에서 치러 sheet-up 첫 프레임 드랍을 없앤다(미지원은 기존 경로)
+    withViewTransition(
+      () => flushSync(() => setOpenSchedule(s)),
+      () => startTabTransition(() => setOpenSchedule(s)),
+    );
   }, []);
 
   // 로고 클릭 → 메인(일정 탐색)으로 + 모든 모달/패널 닫기
