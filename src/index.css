@@ -292,6 +292,19 @@ main { max-width: 48rem; margin-inline: auto; }
   animation: none !important;
 }
 
+/* ── 탭 전환 크로스페이드(View Transition) ──────────────────────────────────
+   전환 커밋(디스플레이 토글·스크롤 복원)이 스냅샷 뒤에서 끝나고, 사용자에겐
+   완성된 화면으로의 180ms 페이드만 보인다 — '투두둑'이 물리적으로 보일 수 없는 구조. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.18s;
+  animation-timing-function: var(--ease);
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) { animation: none; }
+}
+
 /* 네이티브 스크롤 감각 — 부드러운 앵커 이동 + 바운스가 새로고침으로 새지 않게 */
 html { scroll-behavior: smooth; }
 body { overscroll-behavior-y: contain; }

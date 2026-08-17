@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, useTransition, Suspense, memo, type ReactNode } from 'react';
+import { flushSync } from 'react-dom';
 import { useToast } from './components/atoms/Toast';
 import { checkIn, getMyCheckinStreak } from './api/checkins';
 import { requestBuyin, venueTodayGames, getMyBuyinRequestsToday, subscribeMyBuyinRequests, cancelBuyinRequest, type MyBuyinRequest } from './api/ledger';
@@ -676,7 +677,19 @@ export default function App() {
     closeOverlaysRef.current?.();
     tabScrollRef.current.set(activeTabRef.current, window.scrollY);
     try { localStorage.setItem('nuri:last-tab', t); } catch { /* noop */ } // 16-2 재방문 복원용
-    startTabTransition(() => setActiveTab(t));
+    // 메이저 사이트의 '부드러움'은 전환 커밋 비용이 0이라서가 아니라, 스냅샷 크로스페이드가
+    // 무거운 프레임을 가리기 때문이다(View Transition). 재방문 탭(keep-alive)은 동기 커밋이
+    // 가능하므로 flushSync 를 트랜지션 콜백 안에서 돌려 display 토글·스크롤 복원 비용 전부를
+    // 이전 화면 스냅샷 '뒤에서' 치르고, 완성된 새 화면으로 180ms 크로스페이드만 보여준다.
+    // 첫 방문(lazy 청크)은 Suspense 가 끼므로 기존 startTransition 유지(이전 화면 유지 효과 동일).
+    const vt = (document as Document & { startViewTransition?: (cb: () => void) => unknown }).startViewTransition;
+    if (vt && visitedTabs.has(t) && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      vt.call(document, () => { flushSync(() => setActiveTab(t)); });
+    } else {
+      startTabTransition(() => setActiveTab(t));
+    }
+    // visitedTabs 는 안정 Set 인스턴스(useState 초기화) — 참조 불변
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // 복원은 layout 단계에서 — 페인트 전에 위치를 잡아야 '맨 위가 번쩍했다가 내려가는' 깜빡임이 없다.
   // keep-alive 라 재방문 탭의 DOM 높이는 이미 존재한다(복원 위치가 잘릴 일 없음).
