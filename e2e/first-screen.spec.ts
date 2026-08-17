@@ -53,7 +53,9 @@ test.describe('첫 화면 — 앱을 막 켠 사람이 보는 것', () => {
     // ⚠ 첫 화면은 '오늘' 이 기본 선택이라 카드가 0~1장인 날이 많다. 그러면 정렬을 판단할 수 없어
     //   테스트가 매번 skip 됐다 — 게이트가 사실상 꺼져 있었던 것이다.
     //   날짜 조건을 풀어 예정된 대회 전체를 보이게 한 뒤에 정렬을 본다.
-    const reset = page.getByRole('button', { name: /초기화/ }).first();
+    // ⚠ /초기화/ 정규식은 검색창의 '검색어 초기화' X 버튼도 잡는다(그쪽이 DOM 상 먼저) —
+    //   전체 초기화만 정확 매칭해야 날짜 필터가 실제로 풀린다.
+    const reset = page.getByRole('button', { name: '초기화', exact: true });
     if (await reset.count()) {
       await reset.click().catch(() => {});
       await page.waitForTimeout(1500);
