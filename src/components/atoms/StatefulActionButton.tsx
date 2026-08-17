@@ -11,7 +11,7 @@ import { useEffect, useState, forwardRef } from 'react';
 type Phase = 'idle' | 'loading' | 'success';
 
 const BG: Record<string, string> = {
-  success: '#19b8e6',
+  success: '#0ECB81', // 팔레트 밖 청록이던 성공색 → emerald(토스트 성공과 동일 계열)
   loading: '#3a4253',
   disabled: '#3a4253', /* 미완성: 회색 — 입력이 완성되는 순간 골드로 살아난다(토스 패턴) */
   idle: '#FCD535',

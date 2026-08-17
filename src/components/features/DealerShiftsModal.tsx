@@ -105,7 +105,7 @@ export default function DealerShiftsModal({ open, onClose, venueId, monthKey }: 
             ))}
           </ul>
         )}
-        <p className="text-[10px] text-ink-muted">급여 = 근무 시간 × 시급. 종료가 시작보다 빠르면 익일 근무로 계산됩니다.</p>
+        <p className="text-2xs text-ink-muted">급여 = 근무 시간 × 시급. 종료가 시작보다 빠르면 익일 근무로 계산됩니다.</p>
       </div>
     </Modal>
   );

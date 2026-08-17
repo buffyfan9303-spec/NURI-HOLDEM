@@ -32,7 +32,7 @@ export default function RegularsModal({ open, onClose, venueId, exclude = [] }: 
             {rows.map((r, i) => <RegularRow key={r.name} idx={i + 1} r={r} venueId={venueId} />)}
           </ul>
         )}
-        <p className="text-[10px] text-ink-muted">장부 바인 기록 기준 · 직원(관계자) 제외 · 5회 이상 ‘단골’</p>
+        <p className="text-2xs text-ink-muted">장부 바인 기록 기준 · 직원(관계자) 제외 · 5회 이상 ‘단골’</p>
       </div>
     </Modal>
   );
@@ -108,7 +108,7 @@ function Cell({ label, v, gold }: { label: string; v: string; gold?: boolean }) 
   return (
     <div className="rounded bg-surface-high py-1.5 text-center">
       <p className={`text-sm font-bold leading-none tabular-nums ${gold ? 'text-accent-300' : 'text-ink-primary'}`}>{v}</p>
-      <p className="mt-0.5 text-[10px] text-ink-muted">{label}</p>
+      <p className="mt-0.5 text-2xs text-ink-muted">{label}</p>
     </div>
   );
 }

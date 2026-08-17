@@ -48,7 +48,7 @@ export default function CheckinModal({ open, onClose, venueId, venueName }: { op
                   const v = visits[c.userId] ?? 0;
                   const label = v >= 5 ? `단골 ${v}회` : v <= 1 ? '첫 방문' : `${v}회`;
                   const cls = v >= 5 ? 'bg-accent-300/15 text-accent-300' : v <= 1 ? 'bg-emerald-500/15 text-emerald-300' : 'bg-surface-float text-ink-secondary';
-                  return <span className={`mr-2 shrink-0 rounded-badge px-1.5 py-0.5 text-[10px] font-bold ${cls}`}>{label}</span>;
+                  return <span className={`mr-2 shrink-0 rounded-badge px-1.5 py-0.5 text-2xs font-bold ${cls}`}>{label}</span>;
                 })()}
                 <span className="shrink-0 text-2xs text-ink-muted tabular-nums">{fmt(c.createdAt)}</span>
               </li>

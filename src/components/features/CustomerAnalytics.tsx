@@ -125,11 +125,11 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
               <div className="flex items-center justify-between gap-2">
                 <p className="min-w-0 truncate text-sm font-bold text-ink-primary">
                   {r.name}
-                  {r.buyins >= 5 && <span className="ml-1.5 rounded-badge bg-accent-300/15 px-1.5 py-0.5 text-[10px] font-bold text-accent-300">단골</span>}
-                  {r.unpaidCount > 0 && <span className="ml-1 rounded-badge bg-danger/15 px-1.5 py-0.5 text-[10px] font-bold text-danger-light">미수 {r.unpaidCount}</span>}
-                  {aliases[r.name.trim().toLowerCase()] && <span className="ml-1 rounded-badge bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-300">🔗 {aliases[r.name.trim().toLowerCase()].display}</span>}
+                  {r.buyins >= 5 && <span className="ml-1.5 rounded-badge bg-accent-300/15 px-1.5 py-0.5 text-2xs font-bold text-accent-300">단골</span>}
+                  {r.unpaidCount > 0 && <span className="ml-1 rounded-badge bg-danger/15 px-1.5 py-0.5 text-2xs font-bold text-danger-light">미수 {r.unpaidCount}</span>}
+                  {aliases[r.name.trim().toLowerCase()] && <span className="ml-1 rounded-badge bg-emerald-500/15 px-1.5 py-0.5 text-2xs font-bold text-emerald-300">🔗 {aliases[r.name.trim().toLowerCase()].display}</span>}
                 </p>
-                {r.lastVisit && <span className="shrink-0 text-[10px] tabular-nums text-ink-muted">최근 {r.lastVisit.slice(5)}</span>}
+                {r.lastVisit && <span className="shrink-0 text-2xs tabular-nums text-ink-muted">최근 {r.lastVisit.slice(5)}</span>}
               </div>
               <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-2xs text-ink-muted">
                 <span>바인 <b className="tabular-nums text-ink-secondary">{r.buyins}</b>회</span>
@@ -143,13 +143,13 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
               {(() => {
                 const linked = aliases[r.name.trim().toLowerCase()];
                 if (linked) return (
-                  <button type="button" onClick={() => doUnlink(r.name.trim())} className="mt-1 text-[10px] text-ink-muted hover:text-danger-light">🔗 {linked.display} · 연결 해제</button>
+                  <button type="button" onClick={() => doUnlink(r.name.trim())} className="mt-1 text-2xs text-ink-muted hover:text-danger-light">🔗 {linked.display} · 연결 해제</button>
                 );
                 if (linking === r.name) return (
                   <div className="mt-1.5 space-y-1">
                     <div className="flex gap-1.5">
                       <input autoFocus value={mq} onChange={(e) => setMq(e.target.value)} placeholder="회원 닉네임·이름 검색" className="input min-w-0 flex-1 text-xs py-1" />
-                      <button type="button" onClick={() => { setLinking(null); setMq(''); setMcands([]); }} className="shrink-0 rounded-input border border-border-default bg-surface-float px-2 text-[10px] text-ink-muted">취소</button>
+                      <button type="button" onClick={() => { setLinking(null); setMq(''); setMcands([]); }} className="shrink-0 rounded-input border border-border-default bg-surface-float px-2 text-2xs text-ink-muted">취소</button>
                     </div>
                     {mcands.length > 0 ? (
                       <ul className="space-y-0.5 rounded-input border border-accent-400/30 bg-surface-low p-1">
@@ -161,16 +161,16 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
                           </li>
                         ))}
                       </ul>
-                    ) : mq.trim() ? <p className="px-1 text-[10px] text-ink-muted">일치하는 회원이 없습니다.</p> : null}
+                    ) : mq.trim() ? <p className="px-1 text-2xs text-ink-muted">일치하는 회원이 없습니다.</p> : null}
                   </div>
                 );
                 return (
-                  <button type="button" onClick={() => { setLinking(r.name); setMq(''); setMcands([]); }} className="mt-1 text-[10px] text-accent-300 hover:underline">🔗 회원 연결</button>
+                  <button type="button" onClick={() => { setLinking(r.name); setMq(''); setMcands([]); }} className="mt-1 text-2xs text-accent-300 hover:underline">🔗 회원 연결</button>
                 );
               })()}
             </li>
           ))}
-          {filtered.length > 200 && <li className="py-1 text-center text-[10px] text-ink-muted">상위 200명까지 표시 — 검색으로 좁혀보세요.</li>}
+          {filtered.length > 200 && <li className="py-1 text-center text-2xs text-ink-muted">상위 200명까지 표시 — 검색으로 좁혀보세요.</li>}
         </ul>
       )}
     </section>

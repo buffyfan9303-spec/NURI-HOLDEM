@@ -292,7 +292,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                         );
                       })}
                     </div>
-                    <p className="mt-1 px-1 text-[10px] text-ink-muted">★ 별을 누르면 즐겨찾기로 상단에 고정돼요</p>
+                    <p className="mt-1 px-1 text-2xs text-ink-muted">★ 별을 누르면 즐겨찾기로 상단에 고정돼요</p>
                   </>
                 )}
               </div>
@@ -841,7 +841,7 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
         };
         const Section = ({ icon, label, hint, children }: { icon: string; label: string; hint: string; children: ReactNode }) => (
           <div className="space-y-1">
-            <p className="text-[10px] font-bold text-ink-muted">{icon} {label}<span className="font-normal text-ink-muted/70"> · {hint}</span></p>
+            <p className="text-2xs font-bold text-ink-muted">{icon} {label}<span className="font-normal text-ink-muted/70"> · {hint}</span></p>
             <div className="flex items-center gap-1.5 flex-wrap">{children}</div>
           </div>
         );
@@ -881,7 +881,7 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
                 className="text-xs font-bold px-2.5 py-1.5 rounded-input border bg-surface-float text-accent-300 border-dashed border-accent-400/40 hover:bg-accent-300/10">+ 직접 추가</button>
             </Section>
 
-            <p className="text-[10px] leading-relaxed text-ink-muted">하루에 게임이 여러 개면 <b className="text-ink-secondary">게임마다 따로</b> 골라 입력하세요. 메인·사이드·기타를 선택해 순위를 넣으면 그 게임 순위만 따로 저장·표시됩니다. <b className="text-accent-300">✓</b> 표시는 이미 입력된 게임입니다.</p>
+            <p className="text-2xs leading-relaxed text-ink-muted">하루에 게임이 여러 개면 <b className="text-ink-secondary">게임마다 따로</b> 골라 입력하세요. 메인·사이드·기타를 선택해 순위를 넣으면 그 게임 순위만 따로 저장·표시됩니다. <b className="text-accent-300">✓</b> 표시는 이미 입력된 게임입니다.</p>
           </div>
         );
       })()}
@@ -900,7 +900,7 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
             ) : (
               <>
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-[10px] text-ink-muted">장부에 바인한 손님 — <b className="text-emerald-300">＋</b>로 순위에 추가</p>
+                  <p className="text-2xs text-ink-muted">장부에 바인한 손님 — <b className="text-emerald-300">＋</b>로 순위에 추가</p>
                   <button type="button" onClick={addAllFromLedger} className="rounded-input border border-emerald-500/40 px-2 py-1 text-2xs font-bold text-emerald-300 hover:bg-emerald-500/10">전체 추가</button>
                 </div>
                 <ul className="flex flex-wrap gap-1.5">
@@ -1175,7 +1175,7 @@ function VenueCreateForm({ onCreated }: { onCreated: () => Promise<void> }) {
         <button type="button" disabled={!ready || busy} onClick={submit} className="btn-primary w-full py-3 text-sm font-bold disabled:opacity-50">
           {busy ? '생성 중…' : '+ 매장 생성하기'}
         </button>
-        <p className="text-[10px] text-ink-muted">* 표시는 필수입니다. 생성 후 ‘매장 꾸미기·설정’에서 추가 정보(갤러리·테마·블라인드 등)를 채울 수 있어요.</p>
+        <p className="text-2xs text-ink-muted">* 표시는 필수입니다. 생성 후 ‘매장 꾸미기·설정’에서 추가 정보(갤러리·테마·블라인드 등)를 채울 수 있어요.</p>
       </div>
     </div>
   );
@@ -1325,7 +1325,7 @@ function StaffManager({ venueId }: { venueId: string }) {
           {/* 구성원 목록 */}
           <div className="space-y-1.5">
             <p className="text-xs font-semibold text-ink-secondary">구성원 ({staff.length})</p>
-            <p className="text-[10px] text-ink-muted">직책은 표시용 라벨이고, <span className="text-accent-300 font-semibold">장부·순위 권한</span>은 별도로 켜야 적용됩니다. 권한 받은 직원만 장부 담당자로 지정·운영할 수 있습니다.</p>
+            <p className="text-2xs text-ink-muted">직책은 표시용 라벨이고, <span className="text-accent-300 font-semibold">장부·순위 권한</span>은 별도로 켜야 적용됩니다. 권한 받은 직원만 장부 담당자로 지정·운영할 수 있습니다.</p>
             <datalist id="staff-title-suggest">
               {TITLE_SUGGEST.map((t) => <option key={t} value={t} />)}
             </datalist>

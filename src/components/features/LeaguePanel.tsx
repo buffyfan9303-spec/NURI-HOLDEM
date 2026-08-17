@@ -55,7 +55,7 @@ export default function LeaguePanel({ venueId, canConfigure }: { venueId: string
               <div key={league.id} className="flex flex-wrap items-center gap-2 rounded-input border border-border-subtle bg-surface-base/60 px-3 py-2.5">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-bold text-ink-primary">{league.name}</p>
-                  <p className="text-[10px] text-ink-muted">주최: {league.ownerVenueName ?? '매장'} · 시즌 {league.seasonStart}~</p>
+                  <p className="text-2xs text-ink-muted">주최: {league.ownerVenueName ?? '매장'} · 시즌 {league.seasonStart}~</p>
                 </div>
                 <button type="button" disabled={!canConfigure} onClick={async () => { if (!mine) return; try { await respondLeagueInvite(mine.id, true); toast.show('초대를 수락했습니다 🎉', 'success'); reload(); } catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); } }}
                   className="btn-primary shrink-0 px-3 py-1.5 text-xs disabled:opacity-50">수락</button>
@@ -64,7 +64,7 @@ export default function LeaguePanel({ venueId, canConfigure }: { venueId: string
               </div>
             );
           })}
-          {!canConfigure && <p className="text-[10px] text-ink-muted">수락/거절은 업주만 가능합니다.</p>}
+          {!canConfigure && <p className="text-2xs text-ink-muted">수락/거절은 업주만 가능합니다.</p>}
         </section>
       )}
 
@@ -167,7 +167,7 @@ function LeagueLiveBoard({ league, isOwner, members, venueId, canConfigure, onCh
           {league.phase === 'idle' ? '대기' : league.phase === 'live' ? '진행 중' : league.phase === 'settled' ? '정산 완료' : '파이널'}
         </span>
         {isOwner && league.phase !== 'idle' && canConfigure && (
-          <button type="button" onClick={doReset} className="ml-auto text-[10px] text-ink-muted hover:text-danger-light">초기화</button>
+          <button type="button" onClick={doReset} className="ml-auto text-2xs text-ink-muted hover:text-danger-light">초기화</button>
         )}
       </div>
 
@@ -179,8 +179,8 @@ function LeagueLiveBoard({ league, isOwner, members, venueId, canConfigure, onCh
             <li key={v.venueId} className="flex items-center gap-2 rounded-input bg-surface-base/50 px-2 py-1.5">
               <span className={['h-2.5 w-2.5 shrink-0 rounded-full', LIVE_DOT[ls].c].join(' ')} aria-hidden />
               <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{v.name}{v.owner && <span className="ml-1 text-[9px] font-bold text-accent-300">리그장</span>}{v.venueId === league.finalVenueId && <span className="ml-1 text-[9px] font-bold text-sky-300">🏁 파이널</span>}</span>
-              <span className="shrink-0 text-[10px] tabular-nums text-ink-muted">엔트리 {st?.entries ?? 0}</span>
-              <span className={['shrink-0 text-[10px] font-bold', ls === 'settled' ? 'text-rose-300' : ls === 'running' ? 'text-emerald-300' : 'text-amber-300'].join(' ')}>{LIVE_DOT[ls].label}</span>
+              <span className="shrink-0 text-2xs tabular-nums text-ink-muted">엔트리 {st?.entries ?? 0}</span>
+              <span className={['shrink-0 text-2xs font-bold', ls === 'settled' ? 'text-rose-300' : ls === 'running' ? 'text-emerald-300' : 'text-amber-300'].join(' ')}>{LIVE_DOT[ls].label}</span>
             </li>
           );
         })}
@@ -193,7 +193,7 @@ function LeagueLiveBoard({ league, isOwner, members, venueId, canConfigure, onCh
             placeholder={`엔트리(현재 ${statusOf(venueId)?.entries ?? 0})`} className="input w-28 text-xs tabular-nums" />
           <button type="button" disabled={busy} onClick={() => report('running')} className="rounded-input border border-emerald-500/50 px-2.5 py-1.5 text-2xs font-bold text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-50">🟢 진행</button>
           <button type="button" disabled={busy} onClick={() => report('settled')} className="rounded-input border border-rose-500/50 px-2.5 py-1.5 text-2xs font-bold text-rose-300 hover:bg-rose-500/10 disabled:opacity-50">🔴 정산완료(ITM 보고)</button>
-          {myStatus && myStatus !== 'pending' && <button type="button" disabled={busy} onClick={() => report('pending')} className="text-[10px] text-ink-muted hover:text-ink-secondary">되돌리기</button>}
+          {myStatus && myStatus !== 'pending' && <button type="button" disabled={busy} onClick={() => report('pending')} className="text-2xs text-ink-muted hover:text-ink-secondary">되돌리기</button>}
         </div>
       )}
 
@@ -221,7 +221,7 @@ function LeagueLiveBoard({ league, isOwner, members, venueId, canConfigure, onCh
                   <span className="w-5 text-right font-bold tabular-nums text-accent-300">{p.place ?? i + 1}</span>
                   <span className="min-w-0 flex-1 truncate font-semibold text-ink-primary">{p.name}</span>
                   <span className="shrink-0 rounded-badge bg-surface-float px-1.5 py-0.5 text-[9px] font-bold text-ink-secondary">{p.venue}</span>
-                  {p.prize && <span className="shrink-0 text-[10px] text-gold-300">{p.prize}</span>}
+                  {p.prize && <span className="shrink-0 text-2xs text-gold-300">{p.prize}</span>}
                 </li>
               ))}
             </ul>
@@ -277,7 +277,7 @@ function LeagueCard({ league, isOwner, members, venueId, canConfigure, onChanged
       <div className="flex flex-wrap items-center gap-2">
         <div className="min-w-0 flex-1">
           <p className="text-sm font-extrabold text-ink-primary">🏆 {league.name}</p>
-          <p className="text-[10px] text-ink-muted">주최 {league.ownerVenueName ?? '매장'} · 시즌 {league.seasonStart}~ {isOwner && <span className="text-accent-300 font-bold">· 내가 리그장</span>}</p>
+          <p className="text-2xs text-ink-muted">주최 {league.ownerVenueName ?? '매장'} · 시즌 {league.seasonStart}~ {isOwner && <span className="text-accent-300 font-bold">· 내가 리그장</span>}</p>
         </div>
         {isOwner && canConfigure && (
           <button type="button" onClick={async () => { try { await deleteLeague(league.id); toast.show('리그를 해산했습니다', 'info'); onChanged(); } catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); } }}
@@ -287,9 +287,9 @@ function LeagueCard({ league, isOwner, members, venueId, canConfigure, onChanged
 
       {/* 멤버 매장 — 수락/대기/거절 전부 표시 */}
       <div className="flex flex-wrap items-center gap-1.5">
-        <span className="rounded-badge bg-accent-300/15 px-2 py-0.5 text-[10px] font-bold text-accent-300">{league.ownerVenueName ?? '주최'} (리그장)</span>
+        <span className="rounded-badge bg-accent-300/15 px-2 py-0.5 text-2xs font-bold text-accent-300">{league.ownerVenueName ?? '주최'} (리그장)</span>
         {members.map((m) => (
-          <span key={m.id} className={['inline-flex items-center gap-1 rounded-badge px-2 py-0.5 text-[10px] font-bold', STATUS_BADGE[m.status].cls].join(' ')}>
+          <span key={m.id} className={['inline-flex items-center gap-1 rounded-badge px-2 py-0.5 text-2xs font-bold', STATUS_BADGE[m.status].cls].join(' ')}>
             {m.venueName ?? '매장'} · {STATUS_BADGE[m.status].label}
             {isOwner && canConfigure && m.status !== 'accepted' && (
               <button type="button" onClick={async () => { await removeLeagueMember(m.id).catch(() => {}); onChanged(); }} aria-label="초대 취소" className="opacity-70 hover:opacity-100">×</button>
@@ -323,7 +323,7 @@ function LeagueCard({ league, isOwner, members, venueId, canConfigure, onChanged
               <li key={s.name} className="flex items-baseline gap-2 text-xs">
                 <span className={['w-4 text-right font-bold tabular-nums', i < 3 ? 'text-accent-300' : 'text-ink-muted'].join(' ')}>{i + 1}</span>
                 <span className="min-w-0 flex-1 truncate font-semibold text-ink-primary">{s.name}</span>
-                <span className="shrink-0 text-[10px] text-ink-muted">{s.venues}개 매장</span>
+                <span className="shrink-0 text-2xs text-ink-muted">{s.venues}개 매장</span>
                 <span className="font-bold tabular-nums text-accent-300">{s.points.toLocaleString()}점</span>
               </li>
             ))}
@@ -346,7 +346,7 @@ function LeagueCard({ league, isOwner, members, venueId, canConfigure, onChanged
         <ul className="max-h-52 space-y-1 overflow-y-auto pr-1">
           {entries.map((e) => (
             <li key={e.id} className="flex items-center gap-2 rounded-input border border-border-subtle bg-surface-high px-2.5 py-1.5">
-              <span className="shrink-0 text-[10px] tabular-nums text-ink-muted">{e.entryDate.slice(5)}</span>
+              <span className="shrink-0 text-2xs tabular-nums text-ink-muted">{e.entryDate.slice(5)}</span>
               <span className="shrink-0 rounded-badge bg-surface-float px-1.5 py-0.5 text-[9px] font-bold text-ink-secondary">{e.venueName ?? '매장'}</span>
               <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{e.name}</span>
               <span className={['shrink-0 text-xs font-bold tabular-nums', e.points >= 0 ? 'text-accent-300' : 'text-danger-light'].join(' ')}>{e.points >= 0 ? '+' : ''}{e.points}</span>

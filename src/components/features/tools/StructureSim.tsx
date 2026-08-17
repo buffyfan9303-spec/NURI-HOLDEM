@@ -30,7 +30,7 @@ export default function StructureSim() {
         <Result label="시작 깊이" value={`${r.startDepth} BB`} />
         <Result label="전체 칩(BB)" value={`${r.totalBB.toLocaleString()} BB`} />
       </div>
-      <p className="text-[10px] text-ink-muted leading-snug">리바인 비율 = 총 리바인 칩 / 스타팅 칩 추정치. 실제 구조는 블라인드 상승 속도에 따라 달라집니다.</p>
+      <p className="text-2xs text-ink-muted leading-snug">리바인 비율 = 총 리바인 칩 / 스타팅 칩 추정치. 실제 구조는 블라인드 상승 속도에 따라 달라집니다.</p>
     </CalcCard>
   );
 }

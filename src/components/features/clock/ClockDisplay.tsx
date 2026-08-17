@@ -143,7 +143,11 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
   useEffect(() => {
     if (gSeq == null) return;
     const prev = prevElim.current.get(gSeq);
-    if (prev != null && elimNow > prev) setElimMsg({ text: `💥 방금 ${elimNow - prev}명 탈락 · 남은 ${aliveNow}명`, until: Date.now() + 5000 });
+    if (prev != null && elimNow > prev) {
+      setElimMsg({ text: `💥 방금 ${elimNow - prev}명 탈락 · 남은 ${aliveNow}명`, until: Date.now() + 5000 });
+      // 만료를 렌더 틱에만 맡기면 틱이 뜸한 화면에서 최대 수십 초 잔류 — 명시 해제
+      window.setTimeout(() => setElimMsg((cur) => (cur && Date.now() >= cur.until ? null : cur)), 5200);
+    }
     prevElim.current.set(gSeq, elimNow);
   }, [gSeq, elimNow, aliveNow]);
 
@@ -212,7 +216,8 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
                     {prizes.slice(0, 8).map((p, i) => (
                       <li key={i} className="flex items-baseline justify-between gap-3 border-b border-white/5 pb-[0.5vmin] last:border-0">
                         <span className="text-[2.5vmin] font-bold text-white/85">{p.place}</span>
-                        <span className="text-[2.7vmin] font-extrabold tabular-nums text-accent-300">{p.amount.toLocaleString()}<span className="text-[1.7vmin] font-bold text-white/50">만</span></span>
+                        {/* 원 단위 오입력(1,000,000)도 '만' 기준으로 환산 표시 — 순위 자동채움과 동일 휴리스틱 */}
+                        <span className="text-[2.7vmin] font-extrabold tabular-nums text-accent-300">{(p.amount >= 10000 ? Math.round(p.amount / 10000) : p.amount).toLocaleString()}<span className="text-[1.7vmin] font-bold text-white/50">만</span></span>
                       </li>
                     ))}
                   </ul>
@@ -285,7 +290,21 @@ const CenterPanel = memo(function CenterPanel({ g }: { g: ClockState }) {
         {isBreak ? 'BREAK' : `LEVEL ${levelNo}`}
       </p>
       {isBreak ? (
-        <p className="leading-none text-sky-300" style={{ fontSize: 'clamp(40px, 9vmin, 160px)', fontWeight: 800 }}>휴식</p>
+        <>
+          <p className="leading-none text-sky-300" style={{ fontSize: 'clamp(40px, 9vmin, 160px)', fontWeight: 800 }}>휴식</p>
+          {/* 돌아오면 블라인드가 얼마인지 — 브레이크 중 관전자·참가자의 1순위 질문(운영자 클락 NEXT와 동일) */}
+          {(() => {
+            for (let i = curIdx + 1; i < lvls.length; i++) {
+              const n = lvls[i];
+              if (n.kind === 'level') return (
+                <p className="mt-[0.8vmin] font-bold tabular-nums text-white/60" style={{ fontSize: 'clamp(14px, 2.8vmin, 44px)' }}>
+                  NEXT {n.sb.toLocaleString()}/{n.bb.toLocaleString()}{n.ante > 0 ? ` (${n.ante.toLocaleString()})` : ''}
+                </p>
+              );
+            }
+            return null;
+          })()}
+        </>
       ) : (
         <p className="mt-[1vmin] text-center font-extrabold leading-none tabular-nums text-white"
           style={{ fontSize: 'clamp(28px, 8.5vmin, 150px)' }}>

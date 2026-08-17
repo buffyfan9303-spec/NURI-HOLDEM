@@ -387,7 +387,7 @@ function DealerPostBody({ post, isAdmin, userId, userName }: {
 function ConditionCell({ label, value, highlight }: { label: string; value?: string; highlight?: boolean }) {
   return (
     <div className={['rounded-input border p-2 text-center', highlight ? 'border-accent-400/40 bg-accent-300/[0.06]' : 'border-border-default bg-surface-high'].join(' ')}>
-      <p className="text-[10px] text-ink-muted">{label}</p>
+      <p className="text-2xs text-ink-muted">{label}</p>
       <p className={['text-xs font-bold mt-0.5 break-words', highlight ? 'text-accent-300' : 'text-ink-primary'].join(' ')}>{value || '-'}</p>
     </div>
   );

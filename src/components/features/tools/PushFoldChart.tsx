@@ -99,7 +99,7 @@ export default function PushFoldChart() {
         <span className="inline-flex items-center gap-1 text-ink-secondary"><span className="inline-block w-3 h-3 rounded-[3px] bg-surface-high border border-border-default" />폴드</span>
         <span className="text-ink-muted">셔브 {shoveCount}콤보 (~{Math.round((shoveCount / 169) * 100)}%)</span>
       </div>
-      <p className="text-[10px] text-ink-muted text-center leading-relaxed">참고용 근사 차트입니다. 포지션·상대 콜 레인지·앤티에 따라 조정하세요.</p>
+      <p className="text-2xs text-ink-muted text-center leading-relaxed">참고용 근사 차트입니다. 포지션·상대 콜 레인지·앤티에 따라 조정하세요.</p>
     </CalcCard>
   );
 }

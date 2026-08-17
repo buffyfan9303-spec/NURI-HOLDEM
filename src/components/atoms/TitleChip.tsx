@@ -8,7 +8,7 @@ export default function TitleChip({ points }: { points?: number }) {
   const t = tierOf(points);
   return (
     <span
-      className="ml-1 inline-flex shrink-0 items-center rounded-badge px-1.5 py-0.5 align-middle text-[10px] font-bold leading-none"
+      className="ml-1 inline-flex shrink-0 items-center rounded-badge px-1.5 py-0.5 align-middle text-2xs font-bold leading-none"
       style={{ color: t.color, background: `${t.color}1a`, border: `1px solid ${t.color}40` }}
       title={`Lv ${t.level} · 활동 ${points.toLocaleString()}점`}
     >

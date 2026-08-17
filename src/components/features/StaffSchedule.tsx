@@ -118,7 +118,7 @@ export default function StaffSchedule({ venueId }: { venueId: string }) {
           <input value={newName} onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => { if (e.nativeEvent.isComposing) return; /* 한글 조합 확정 Enter 를 제출로 오인하지 않게 */ if (e.key === 'Enter') addName(); }} placeholder="직원 이름" maxLength={20} className="input flex-1 text-sm" />
           <button type="button" onClick={addName} className="btn-ghost text-xs px-3 shrink-0">+ 추가</button>
         </div>
-        {roster.length > 0 && <p className="text-[10px] text-ink-muted mt-1">명부: {roster.join(' · ')}</p>}
+        {roster.length > 0 && <p className="text-2xs text-ink-muted mt-1">명부: {roster.join(' · ')}</p>}
       </div>
 
       {/* 월 캘린더 — 칸에 이름·출퇴근 시각 표시(가독성 확대) */}
@@ -142,7 +142,7 @@ export default function StaffSchedule({ venueId }: { venueId: string }) {
                   {list.slice(0, 3).map((s) => {
                     const t = s.checkIn || s.startHm ? `${s.checkIn || s.startHm || ''}${s.checkOut ? `~${s.checkOut}` : ''}` : '';
                     return (
-                      <span key={s.name} className="text-[10px] leading-tight px-1 rounded bg-accent-300/20 text-accent-100 truncate">
+                      <span key={s.name} className="text-2xs leading-tight px-1 rounded bg-accent-300/20 text-accent-100 truncate">
                         {s.name}{t ? ` ${t}` : ''}
                       </span>
                     );
@@ -171,9 +171,9 @@ export default function StaffSchedule({ venueId }: { venueId: string }) {
                     on ? 'bg-accent-300 text-white border-accent-300' : 'bg-surface-high text-ink-secondary border-border-default'].join(' ')}>{n}</button>
                 {on && (
                   <>
-                    <label className="flex items-center gap-1 text-[10px] text-ink-muted">출근<input type="time" value={sh?.checkIn ?? sh?.startHm ?? ''} onChange={(e) => setTime(selDay, n, 'checkIn', e.target.value)} className="input text-xs py-1 w-[5.5rem]" /></label>
-                    <label className="flex items-center gap-1 text-[10px] text-ink-muted">퇴근<input type="time" value={sh?.checkOut ?? ''} onChange={(e) => setTime(selDay, n, 'checkOut', e.target.value)} className="input text-xs py-1 w-[5.5rem]" /></label>
-                    {sh?.checkIn && sh?.checkOut && <span className="text-[10px] text-emerald-400 tabular-nums">{hoursBetween(sh.checkIn, sh.checkOut).toFixed(1)}h</span>}
+                    <label className="flex items-center gap-1 text-2xs text-ink-muted">출근<input type="time" value={sh?.checkIn ?? sh?.startHm ?? ''} onChange={(e) => setTime(selDay, n, 'checkIn', e.target.value)} className="input text-xs py-1 w-[5.5rem]" /></label>
+                    <label className="flex items-center gap-1 text-2xs text-ink-muted">퇴근<input type="time" value={sh?.checkOut ?? ''} onChange={(e) => setTime(selDay, n, 'checkOut', e.target.value)} className="input text-xs py-1 w-[5.5rem]" /></label>
+                    {sh?.checkIn && sh?.checkOut && <span className="text-2xs text-emerald-400 tabular-nums">{hoursBetween(sh.checkIn, sh.checkOut).toFixed(1)}h</span>}
                   </>
                 )}
               </div>

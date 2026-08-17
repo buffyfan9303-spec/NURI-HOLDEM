@@ -42,7 +42,7 @@ export default function OutsCalc() {
         <Result label="간이 (4·2 법칙)" value={`≈${rule}%`} />
       </div>
       <Result label="브레이크이븐 팟 오즈" value={breakeven} />
-      <p className="text-[10px] leading-relaxed text-ink-muted">상대 베팅이 팟 대비 이 비율보다 작으면 콜이 이득입니다. (예: 3:1 이상이면 콜)</p>
+      <p className="text-2xs leading-relaxed text-ink-muted">상대 베팅이 팟 대비 이 비율보다 작으면 콜이 이득입니다. (예: 3:1 이상이면 콜)</p>
     </CalcCard>
   );
 }

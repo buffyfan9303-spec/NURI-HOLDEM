@@ -783,9 +783,9 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
             {(() => {
               const cnt = pendingReqs.reduce((mm, r) => { const k = r.requestedGameSeq ?? 0; mm[k] = (mm[k] || 0) + 1; return mm; }, {} as Record<number, number>);
               const parts = Object.entries(cnt).sort((a, b) => Number(a[0]) - Number(b[0])).map(([k, n]) => `${Number(k) === 0 ? '미지정' : Number(k) === MAIN_GAME_SEQ ? '메인' : '사이드' + (Number(k) - 1)} ${n}`);
-              return <span className="text-[10px] font-semibold text-sky-300/80">{parts.join(' · ')}</span>;
+              return <span className="text-2xs font-semibold text-sky-300/80">{parts.join(' · ')}</span>;
             })()}
-            <span className="text-[10px] text-ink-muted">· 승인 시 각자 원한 게임에 추가(미지정은 현재 {gLabel(gameSeq)})</span>
+            <span className="text-2xs text-ink-muted">· 승인 시 각자 원한 게임에 추가(미지정은 현재 {gLabel(gameSeq)})</span>
             {pendingReqs.length > 1 && <button type="button" onClick={bulkApprove} className="ml-auto shrink-0 rounded-input bg-emerald-500/90 px-2.5 py-1 text-2xs font-bold text-ink-inverse hover:bg-emerald-500">전체 승인</button>}
           </div>
           <ul className="space-y-1.5">
@@ -794,7 +794,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                 <div className="flex items-center gap-1.5">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-bold text-ink-primary truncate">{r.playerName}
-                      {r.requestedGameSeq != null && <span className="ml-1.5 text-[10px] font-semibold text-sky-300">원함: {r.requestedGameSeq === MAIN_GAME_SEQ ? '메인' : '사이드' + (r.requestedGameSeq - 1)}</span>}
+                      {r.requestedGameSeq != null && <span className="ml-1.5 text-2xs font-semibold text-sky-300">원함: {r.requestedGameSeq === MAIN_GAME_SEQ ? '메인' : '사이드' + (r.requestedGameSeq - 1)}</span>}
                     </p>
                     {r.note && <p className="text-2xs text-ink-muted truncate">{r.note}</p>}
                   </div>
@@ -806,7 +806,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                   <div className="mt-1.5 border-t border-border-subtle pt-1.5 space-y-1.5">
                     {splitFor !== r.id ? (
                       <div className="flex items-center gap-1.5">
-                        <span className="shrink-0 text-[10px] text-ink-muted">결제수단</span>
+                        <span className="shrink-0 text-2xs text-ink-muted">결제수단</span>
                         {([['cash', '현금'], ['card', '카드'], ['transfer', '이체']] as const).map(([mth, lbl]) => (
                           <button key={mth} type="button" onClick={() => approveReq(r, true, mth)} className="flex-1 inline-flex h-9 items-center justify-center rounded-input border border-emerald-500/50 px-2 text-2xs font-bold text-emerald-300 hover:bg-emerald-500/15">{lbl}</button>
                         ))}
@@ -816,7 +816,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                       <>
                         <div className="grid grid-cols-3 gap-1.5">
                           {([['cash', '현금'], ['card', '카드'], ['transfer', '이체']] as const).map(([k, lbl]) => (
-                            <label key={k} className="text-[10px] text-ink-muted">{lbl}
+                            <label key={k} className="text-2xs text-ink-muted">{lbl}
                               <input type="number" inputMode="numeric" value={splitAmts[k] || ''} onChange={(e) => setSplitAmts((s) => ({ ...s, [k]: parseInt(e.target.value, 10) || 0 }))} className="input w-full text-2xs py-1 mt-0.5" />
                             </label>
                           ))}
@@ -827,7 +827,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                           const mismatch = unit > 0 && sum !== unit;
                           return (
                             <div className="flex items-center gap-1.5">
-                              <span className="flex-1 text-[10px]">
+                              <span className="flex-1 text-2xs">
                                 <span className="text-ink-muted">합계 </span><b className={['tabular-nums', mismatch ? 'text-danger-light' : 'text-ink-secondary'].join(' ')}>{sum.toLocaleString()}</b><span className="text-ink-muted">원</span>
                                 {mismatch && <span className="text-danger-light"> · 단가 {unit.toLocaleString()}원과 다름</span>}
                               </span>
@@ -842,7 +842,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                 )}
                 {rejectFor === r.id && (
                   <div className="mt-1.5 flex items-center gap-1.5 border-t border-border-subtle pt-1.5">
-                    <span className="shrink-0 text-[10px] text-ink-muted">거절 사유</span>
+                    <span className="shrink-0 text-2xs text-ink-muted">거절 사유</span>
                     {['마감', '중복', '정보부족'].map((rs) => (
                       <button key={rs} type="button" onClick={() => doReject(r, rs)} className="flex-1 inline-flex h-9 items-center justify-center rounded-input border border-border-default px-2 text-2xs font-bold text-ink-secondary hover:text-danger-light hover:border-danger/40">{rs}</button>
                     ))}
@@ -932,7 +932,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                       <button type="button" onClick={() => pickRegistered(rp)} className="flex w-full items-center gap-2 rounded-input px-2 py-1.5 text-left hover:bg-surface-high">
                         <span className="shrink-0 rounded-badge border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-bold text-emerald-300">✓회원</span>
                         <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{rp.realName ? `${rp.realName}(${rp.nickname ?? '-'})` : (rp.nickname ?? '-')}</span>
-                        <span className="shrink-0 text-[10px] text-ink-muted">방문 {rp.visits}회</span>
+                        <span className="shrink-0 text-2xs text-ink-muted">방문 {rp.visits}회</span>
                       </button>
                     </li>
                   ))}
@@ -941,7 +941,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                       <button type="button" onClick={() => pickMember(m2)} className="flex w-full items-center gap-2 rounded-input px-2 py-1.5 text-left hover:bg-surface-high">
                         <span className="shrink-0 rounded-badge border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-bold text-emerald-300">✓회원</span>
                         <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{m2.realName ? `${m2.realName}(${m2.nickname})` : m2.nickname}</span>
-                        <span className="shrink-0 text-[10px] text-ink-muted">첫 방문</span>
+                        <span className="shrink-0 text-2xs text-ink-muted">첫 방문</span>
                       </button>
                     </li>
                   ))}
@@ -1005,7 +1005,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                   const first = chunk === 0;
                   return (
                     <tr key={`${r.name}-${chunk}`} className={first ? 'border-t-2 border-border-default' : ''}>
-                      <td className="sticky left-0 z-10 bg-surface-low w-9 px-1 py-1 text-[10px] text-ink-muted border-b border-border-subtle tabular-nums">{first ? ri + 1 : <span className="opacity-40">↳</span>}</td>
+                      <td className="sticky left-0 z-10 bg-surface-low w-9 px-1 py-1 text-2xs text-ink-muted border-b border-border-subtle tabular-nums">{first ? ri + 1 : <span className="opacity-40">↳</span>}</td>
                       <td className="sticky left-9 z-10 bg-surface-low min-w-[6rem] max-w-[9rem] px-2 py-1 border-b border-l border-border-subtle text-left">
                         {first ? (
                           <button type="button" disabled={!r.player || closed} onClick={() => r.player && setEditPlayer(r.player)} className="w-full text-left disabled:cursor-default">
@@ -1020,7 +1020,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                               {r.player?.note && <span className="text-[9px] text-ink-secondary truncate max-w-[4rem]">· {r.player.note}</span>}
                             </div>
                           </button>
-                        ) : <span className="text-[10px] text-ink-muted/50 truncate">{r.name}</span>}
+                        ) : <span className="text-2xs text-ink-muted/50 truncate">{r.name}</span>}
                       </td>
 
                       {Array.from({ length: binCols }, (_, i) => {
@@ -1115,7 +1115,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
           </div>
         </div>
         {(stats.support > 0 || stats.ticketUnpaid > 0) && (
-          <p className="text-[10px] text-center mt-0.5">
+          <p className="text-2xs text-center mt-0.5">
             {stats.ticketUnpaid > 0 && <span className="text-danger-light">티켓 미수 {stats.ticketUnpaid}장</span>}
             {stats.ticketUnpaid > 0 && stats.support > 0 && <span className="text-ink-muted"> · </span>}
             {stats.support > 0 && <span className="text-indigo-300">가게지원 {stats.support}건</span>}
@@ -1428,7 +1428,7 @@ function PlayerEditModal({ player, recordCount, hasPw, onClose, onSave, onDelete
           <button type="button" onClick={() => setDelMode(true)} className="w-full rounded-input border border-danger/40 py-2 text-xs font-semibold text-danger-light transition-colors hover:bg-danger/10">플레이어 삭제 (바인 {recordCount}건 포함)</button>
         ) : (
           <div className="space-y-1.5 rounded-input border border-danger/40 bg-danger/[0.06] p-2">
-            <p className="text-[10px] text-danger-light">바인 {recordCount}건이 함께 삭제됩니다. 취소 비밀번호를 입력하세요.</p>
+            <p className="text-2xs text-danger-light">바인 {recordCount}건이 함께 삭제됩니다. 취소 비밀번호를 입력하세요.</p>
             <div className="flex gap-1.5">
               <input type="password" inputMode="numeric" value={delPw} onChange={(e) => setDelPw(e.target.value)} placeholder={hasPw ? '취소 비밀번호' : '비밀번호 미설정'} disabled={!hasPw} className="input min-w-0 flex-1 text-sm" autoFocus />
               <button type="button" onClick={() => onDelete(delPw)} disabled={!hasPw || !delPw} className="btn-danger shrink-0 px-3 text-xs disabled:opacity-50">삭제 확정</button>
@@ -1500,7 +1500,7 @@ function Metric({ label, value, tone }: { label: string; value: string; tone?: '
   const c = tone === 'emerald' ? 'text-emerald-400' : tone === 'danger' ? 'text-danger-light' : 'text-ink-primary';
   return (
     <div>
-      <p className="text-[10px] text-ink-muted leading-none">{label}</p>
+      <p className="text-2xs text-ink-muted leading-none">{label}</p>
       <p className={['text-sm font-bold tabular-nums leading-tight mt-0.5', c].join(' ')}>{value}</p>
     </div>
   );
@@ -1723,7 +1723,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
               );
             })}
           </div>
-          <p className="text-[10px] text-ink-muted mt-1">선택한 담당 직원만 이 장부를 열람·운영할 수 있습니다(업주·운영자는 전체 접근). 후보는 장부 접근 권한 직원입니다.</p>
+          <p className="text-2xs text-ink-muted mt-1">선택한 담당 직원만 이 장부를 열람·운영할 수 있습니다(업주·운영자는 전체 접근). 후보는 장부 접근 권한 직원입니다.</p>
         </Field>
       )}
 
@@ -1752,13 +1752,13 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
           {discs.length < 5 && (
             <button type="button" onClick={addDisc} className="w-full py-1.5 rounded-input border border-dashed border-border-default text-2xs text-ink-secondary hover:text-accent-300 hover:border-accent-400/50 transition-colors">+ 할인 추가</button>
           )}
-          <p className="text-[10px] text-ink-muted">할인액(만원)만큼 차감해 엔트리를 비례 계산합니다. 예) 10만 게임에 5만 할인 = <b className="text-accent-300">0.5 엔트리</b>, 2만 할인 = 0.8 엔트리.</p>
+          <p className="text-2xs text-ink-muted">할인액(만원)만큼 차감해 엔트리를 비례 계산합니다. 예) 10만 게임에 5만 할인 = <b className="text-accent-300">0.5 엔트리</b>, 2만 할인 = 0.8 엔트리.</p>
         </div>
       </Field>
 
       <Field label="토너먼트 스타트 시각 · 선택 (클락 연동·얼리 판정 기준)">
         <DateTimePicker value={startISO} onChange={setStartISO} defaultDate={base.sessionDate} placeholder="스타트 날짜·시각 선택" />
-        <p className="text-[10px] text-ink-muted mt-1 leading-relaxed">
+        <p className="text-2xs text-ink-muted mt-1 leading-relaxed">
           얼리 구간(더블/1얼리)은 이제 <b className="text-accent-300">「클락」 설정에서 레벨 기준</b>으로 지정합니다(예: 1레벨=더블얼리, 2~4레벨=1얼리). 이 장부를 클락과 연동해 시작하면 위 스타트 시각을 기준으로 바인이 레벨→얼리로 자동 분류되며, 바인 칸에서 '없음'으로 수기 변경도 가능합니다.
           {(base.earlyDoubleMin || base.earlySingleMin) ? <span className="text-accent-300/90"> 현재 적용: 더블 ~{base.earlyDoubleMin}분 · 1얼리 ~{base.earlySingleMin}분.</span> : null}
         </p>
@@ -1769,7 +1769,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
           <EarlyNum label="스타팅 스택" value={startStack} onChange={setStartStack} suffix="칩" disabled={!!clockState?.running} />
           <EarlyNum label="리바인 스택" value={rebuyStack} onChange={setRebuyStack} suffix="칩" disabled={!!clockState?.running} />
         </div>
-        <p className="text-[10px] text-ink-muted mt-1 leading-relaxed">첫 바인은 스타팅 스택(+얼리 추가스택), 2번째부터는 리바인 스택을 받습니다 — 평균 스택·라이브 보드에 반영됩니다.</p>
+        <p className="text-2xs text-ink-muted mt-1 leading-relaxed">첫 바인은 스타팅 스택(+얼리 추가스택), 2번째부터는 리바인 스택을 받습니다 — 평균 스택·라이브 보드에 반영됩니다.</p>
       </Field>
 
       <Field label="얼리 설정 · 연동 클락 (추가 스택 · 레벨)">
@@ -1779,7 +1779,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
           <EarlyNum label="더블얼리 마감레벨" value={earlyDoubleLevel} onChange={setEarlyDoubleLevel} suffix="LV" disabled={!!clockState?.running} />
           <EarlyNum label="1얼리 마감레벨" value={earlySingleLevel} onChange={setEarlySingleLevel} suffix="LV" disabled={!!clockState?.running} />
         </div>
-        <p className="text-[10px] text-ink-muted mt-1 leading-relaxed">
+        <p className="text-2xs text-ink-muted mt-1 leading-relaxed">
           {clockState?.running
             ? '클락이 진행 중이라 얼리 설정은 클락 화면에서만 변경할 수 있습니다.'
             : '여기서 변경하면 연동 클락 설정에 반영됩니다(장부 시작 시 저장). 예) 더블얼리 1LV · 1얼리 4LV.'}
@@ -1829,7 +1829,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
             <span className="text-2xs text-ink-muted leading-snug">애드온이 있으면 켜서 스택을 입력하세요.</span>
           )}
         </div>
-        {isAddon && <p className="text-[10px] text-ink-muted mt-1">애드온 스택은 클락에 표시됩니다.</p>}
+        {isAddon && <p className="text-2xs text-ink-muted mt-1">애드온 스택은 클락에 표시됩니다.</p>}
       </Field>
 
       <Field label="매장이용권 발행/시상 · 선택 (당일 발급 장수)">
@@ -1838,7 +1838,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
             placeholder="0" className="input w-full text-sm pr-7 tabular-nums" />
           <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted pointer-events-none">장</span>
         </div>
-        <p className="text-[10px] text-ink-muted mt-1">오늘 발행·시상한 매장이용권 수 — 대시보드 '매장이용권' 카드에 합산됩니다.</p>
+        <p className="text-2xs text-ink-muted mt-1">오늘 발행·시상한 매장이용권 수 — 대시보드 '매장이용권' 카드에 합산됩니다.</p>
       </Field>
 
       <Field label="바인 1회당 매장이용권 적립 · 선택 (0=사용 안 함)">
@@ -1847,7 +1847,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
             placeholder="0" className="input w-full text-sm pr-7 tabular-nums" />
           <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted pointer-events-none">개</span>
         </div>
-        <p className="text-[10px] text-ink-muted mt-1">바인할 때마다 그 손님에게 매장이용권을 자동 적립합니다. 닉네임/실명이 회원과 일치하면 손님 지갑으로, 아니면 매장 기록으로 들어가 매장관리에서 동기화됩니다. (운영자 발급 승인 필요)</p>
+        <p className="text-2xs text-ink-muted mt-1">바인할 때마다 그 손님에게 매장이용권을 자동 적립합니다. 닉네임/실명이 회원과 일치하면 손님 지갑으로, 아니면 매장 기록으로 들어가 매장관리에서 동기화됩니다. (운영자 발급 승인 필요)</p>
       </Field>
 
       <Field label="이벤트 · 비고 · 선택">
@@ -2241,7 +2241,7 @@ function SummaryStat({ label, value, tone }: { label: string; value: string; ton
   return (
     <div className="rounded-input bg-surface-low border border-border-subtle py-2 text-center">
       <p className={['text-base font-extrabold tabular-nums', c].join(' ')}>{value}</p>
-      <p className="text-[10px] text-ink-muted mt-0.5">{label}</p>
+      <p className="text-2xs text-ink-muted mt-0.5">{label}</p>
     </div>
   );
 }

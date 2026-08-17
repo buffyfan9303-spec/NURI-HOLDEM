@@ -68,8 +68,8 @@ export default function UnreadBadge({
         dot
           ? 'w-2 h-2 rounded-full'
           : count > 9
-          ? 'min-w-[1.05rem] h-[17px] rounded-badge px-1 text-[10px]'
-          : 'w-[17px] h-[17px] rounded-full text-[10px]',
+          ? 'min-w-[1.05rem] h-[17px] rounded-badge px-1 text-2xs'
+          : 'w-[17px] h-[17px] rounded-full text-2xs',
         className,
       ].join(' ')}
     >

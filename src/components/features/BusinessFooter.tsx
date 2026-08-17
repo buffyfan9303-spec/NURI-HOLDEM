@@ -44,7 +44,7 @@ export default function BusinessFooter({ onOpenLegal, onOpenSupport }: { onOpenL
         </dl>
 
         {/* 사행성 배제 고지 */}
-        <p className="text-[10px] leading-relaxed text-ink-muted/80">
+        <p className="text-2xs leading-relaxed text-ink-muted/80">
           NURI HOLDEM은 「국민체육진흥법」상 마인드 스포츠인 홀덤의 합법적 토너먼트 정보 제공 플랫폼이며, 어떠한 형태의 도박·환전·사행행위와도 무관합니다.
           <br />© {`2026`} 엔에이치홀딩스. All rights reserved.
         </p>

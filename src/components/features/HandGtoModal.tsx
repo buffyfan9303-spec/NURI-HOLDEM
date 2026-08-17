@@ -54,7 +54,7 @@ export default function HandGtoModal({ hero, onClose }: { hero: string[]; onClos
             </div>
           </div>
 
-          <p className="text-[10px] leading-relaxed text-ink-muted">※ 참고용 근사 레인지(스택·6맥스 오픈 기준)입니다. 멀티웨이·림프·PKO 등 상황 보정은 도구 탭의 <b className="text-accent-300">스타팅핸드 가이드</b>에서 확인하세요.</p>
+          <p className="text-2xs leading-relaxed text-ink-muted">※ 참고용 근사 레인지(스택·6맥스 오픈 기준)입니다. 멀티웨이·림프·PKO 등 상황 보정은 도구 탭의 <b className="text-accent-300">스타팅핸드 가이드</b>에서 확인하세요.</p>
         </div>
       )}
     </Modal>

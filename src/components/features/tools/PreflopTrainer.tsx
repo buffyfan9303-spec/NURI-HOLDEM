@@ -97,7 +97,7 @@ export default function PreflopTrainer() {
 
       <div className="flex items-center justify-between">
         <button type="button" onClick={reset} className="text-2xs text-ink-muted hover:text-ink-secondary transition-colors">점수 초기화</button>
-        <p className="text-[10px] text-ink-muted">※ 참고용 근사 레인지 기준 채점(6·9맥스 오픈). 실제는 상대·스택에 따라 조정.</p>
+        <p className="text-2xs text-ink-muted">※ 참고용 근사 레인지 기준 채점(6·9맥스 오픈). 실제는 상대·스택에 따라 조정.</p>
       </div>
     </CalcCard>
   );

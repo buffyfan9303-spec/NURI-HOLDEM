@@ -127,7 +127,7 @@ function PrizeBanner({ schedule, large = false }: { schedule: Schedule; large?: 
         {schedule.guaranteed ? 'GTD' : '예상'}
       </span>
       {schedule.buyIn?.gameType && (
-        <span className={`font-bold tracking-wider rounded-badge px-1.5 py-0.5 border bg-violet-500/15 text-violet-300 border-violet-500/30 ${large ? 'text-2xs' : 'text-[10px]'}`}>
+        <span className={`font-bold tracking-wider rounded-badge px-1.5 py-0.5 border bg-violet-500/15 text-violet-300 border-violet-500/30 ${large ? 'text-2xs' : 'text-2xs'}`}>
           {schedule.buyIn.gameType}
         </span>
       )}
@@ -182,7 +182,7 @@ function ListCard({ schedule, onVenueClick, onSelect, reserveCount, rating, prio
       className={[
         // ⚠ transition-all 은 hover 의 box-shadow 변화까지 애니메이션해 카드마다 페인트 루프를 만든다
         //   — 합성되는 transform + 저비용 border-color 만 명시 전환(시각 차이 없음, 페인트만 소멸)
-        'flex items-center gap-2.5 overflow-hidden rounded-card border transition-[transform,border-color] duration-300 ease-out',
+        'flex items-center gap-2.5 overflow-hidden rounded-card border transition-[transform,border-color] duration-300 ease-out active:duration-75',
         'hover:-translate-y-1 cursor-pointer active:scale-[0.98] p-2',
         schedule.isPremium
           ? 'border-accent-400 shadow-gold bg-surface-low'
@@ -251,7 +251,7 @@ function ListCard({ schedule, onVenueClick, onSelect, reserveCount, rating, prio
               {schedule.guaranteed ? 'GTD' : '엔트리'}
             </span>
             {schedule.buyIn?.gameType && (
-              <span className="text-[10px] font-bold tracking-wider rounded-badge px-1 py-0.5 border leading-none bg-violet-500/15 text-violet-300 border-violet-500/30">
+              <span className="text-2xs font-bold tracking-wider rounded-badge px-1 py-0.5 border leading-none bg-violet-500/15 text-violet-300 border-violet-500/30">
                 {schedule.buyIn.gameType}
               </span>
             )}
@@ -278,6 +278,9 @@ function ListCard({ schedule, onVenueClick, onSelect, reserveCount, rating, prio
           <span className="text-ink-secondary tabular-nums font-medium">
             {d.monthDay}({d.dow}) {d.time}
           </span>
+          {schedule.duration && (
+            <span className="shrink-0 text-ink-muted">· {schedule.duration}</span>
+          )}
           {/* 시작까지 남은 시간(Phase 14, apis '~까지 N분' 패턴) — 오늘 예정 대회만.
               렌더 시점 계산(창 복귀 재조회 주기로 충분) — 초당 갱신은 과하다. */}
           {status === 'upcoming' && (() => {
@@ -309,7 +312,7 @@ function ListCard({ schedule, onVenueClick, onSelect, reserveCount, rating, prio
 
 // ── 메인: 그리드 뷰 카드 ────────────────────────────────────────────────────
 
-function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distanceKm }: CardProps) {
+function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distanceKm, reserveCount }: CardProps) {
   const d = formatDate(schedule.date, schedule.startTime);
   const status = scheduleStatus(schedule.date, schedule.startTime);
 
@@ -317,7 +320,7 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
     <article
       onClick={() => onSelect(schedule)}
       className={[
-        'flex flex-col overflow-hidden rounded-card border transition-[transform,border-color] duration-300 ease-out',
+        'flex flex-col overflow-hidden rounded-card border transition-[transform,border-color] duration-300 ease-out active:duration-75',
         'hover:-translate-y-1 cursor-pointer active:scale-[0.98]',
         schedule.isPremium
           ? 'border-accent-400 shadow-gold bg-surface-low'
@@ -397,6 +400,9 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
           <span className="inline-flex items-center gap-1">
             {schedule.buyIn.amount.toLocaleString()}
           </span>
+          {(reserveCount ?? 0) > 0 && (
+            <span className="ml-auto shrink-0 font-bold tabular-nums text-accent-300">예약 {reserveCount}</span>
+          )}
         </div>
       </div>
     </article>

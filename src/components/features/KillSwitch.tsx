@@ -78,7 +78,7 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
             <b className="text-danger"> 복구할 수 없습니다.</b> 업주 본인 확인 → 킬스위치 비밀번호 → 최종 확인 3단계를 거칩니다.
           </p>
           {pwIsSet === false && (
-            <p className="mt-1 text-[10px] text-ink-muted">처음 누르면 <b className="text-ink-secondary">킬스위치 비밀번호</b>를 먼저 설정합니다(이후 변경 불가).</p>
+            <p className="mt-1 text-2xs text-ink-muted">처음 누르면 <b className="text-ink-secondary">킬스위치 비밀번호</b>를 먼저 설정합니다(이후 변경 불가).</p>
           )}
         </div>
       </div>
@@ -190,9 +190,9 @@ function Steps({ step }: { step: 1 | 2 | 3 }) {
         const on = step === n, done = step > n;
         return (
           <div key={t} className="flex flex-1 items-center gap-1.5">
-            <div className={['flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold',
+            <div className={['flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-2xs font-bold',
               on ? 'bg-danger text-white' : done ? 'bg-danger/30 text-danger' : 'bg-surface-high text-ink-muted'].join(' ')}>{done ? '✓' : n}</div>
-            <span className={['text-[10px] font-semibold', on ? 'text-danger' : 'text-ink-muted'].join(' ')}>{t}</span>
+            <span className={['text-2xs font-semibold', on ? 'text-danger' : 'text-ink-muted'].join(' ')}>{t}</span>
           </div>
         );
       })}

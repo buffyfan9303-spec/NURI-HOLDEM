@@ -215,7 +215,11 @@ export default function ScheduleDetailModal({
               </p>
             )}
             {schedule.address && (
-              <p className="mt-0.5 ml-5 text-xs text-ink-muted">{schedule.address}</p>
+              <a href={`https://map.kakao.com/link/search/${encodeURIComponent(schedule.address)}`}
+                target="_blank" rel="noopener noreferrer"
+                className="mt-0.5 ml-5 block text-xs text-ink-muted underline decoration-border-strong underline-offset-2 hover:text-accent-300">
+                🗺 {schedule.address}
+              </a>
             )}
           </div>
 
@@ -269,7 +273,7 @@ export default function ScheduleDetailModal({
             <span aria-hidden>📝</span>
             <span className="min-w-0 flex-1">
               <span className="block text-xs font-bold text-accent-300">이 대회 후기 쓰기</span>
-              <span className="block text-[10px] text-ink-muted">참가 후기를 커뮤니티 게시판(대회 후기)에 남겨보세요 — 다른 플레이어에게 큰 도움이 됩니다.</span>
+              <span className="block text-2xs text-ink-muted">참가 후기를 커뮤니티 게시판(대회 후기)에 남겨보세요 — 다른 플레이어에게 큰 도움이 됩니다.</span>
             </span>
             <span className="shrink-0 text-accent-300" aria-hidden>→</span>
           </button>
@@ -724,6 +728,11 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched }: { 
         {mine && <span className="text-2xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-badge">예약 완료</span>}
         {!mine && ended && <span className="text-2xs font-bold text-ink-muted bg-surface-high border border-border-default px-2 py-0.5 rounded-badge">종료</span>}
       </div>
+      {!user && !ended && (
+        <p className="rounded-input bg-surface-base/50 px-2.5 py-2 text-2xs leading-relaxed text-ink-muted">
+          예약엔 <b className="text-ink-secondary">로그인·본인인증</b>이 필요해요 — 노쇼 방지를 위한 자리 보장 장치예요.
+        </p>
+      )}
       {!mine && !ended && (
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="닉네임 또는 실명" maxLength={30} className="input w-full text-sm" />
       )}
@@ -767,7 +776,7 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched }: { 
             onAction={doReserve} onDone={afterReserve} className="w-full" />
         </div>
       )}
-      <p className="text-[10px] text-ink-muted">
+      <p className="text-2xs text-ink-muted">
         {mine ? `예약자: ${mine.displayName}`
           : ended ? '이미 끝난 대회라 예약이 닫혔습니다. 다음 대회 일정을 확인해 주세요.'
           : status === 'live' ? '이미 시작한 대회입니다 — 레이트 레지 가능 여부는 매장에 확인해 주세요.'
@@ -797,9 +806,9 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched }: { 
                               ? <span className="shrink-0 rounded-badge border border-border-default bg-surface-high px-1 py-0.5 text-[9px] font-bold leading-none text-ink-muted">노쇼</span>
                               : null}
                         </p>
-                        <p className="truncate text-[10px] text-ink-muted">예약명: {r.displayName}</p>
+                        <p className="truncate text-2xs text-ink-muted">예약명: {r.displayName}</p>
                       </div>
-                      <span className="shrink-0 text-[10px] tabular-nums text-ink-muted">{fmtRes(r.createdAt)}</span>
+                      <span className="shrink-0 text-2xs tabular-nums text-ink-muted">{fmtRes(r.createdAt)}</span>
                     </li>
                   ))}
                 </ul>
@@ -875,7 +884,7 @@ function BlindStructure({ schedule }: { schedule: Schedule }) {
               })}
             </tbody>
           </table>
-          <p className="bg-surface-base px-2 py-1.5 text-[10px] text-ink-muted">※ 매장 기본 구조 예시입니다. 실제 운영 시 변동될 수 있습니다.</p>
+          <p className="bg-surface-base px-2 py-1.5 text-2xs text-ink-muted">※ 매장 기본 구조 예시입니다. 실제 운영 시 변동될 수 있습니다.</p>
         </div>
       )}
     </section>

@@ -51,7 +51,7 @@ export function PayoutCalc() {
               className={['rounded-input py-1.5 text-2xs font-bold leading-tight transition-colors', style === s.id ? 'bg-accent-300 text-white' : 'bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>{s.label}</button>
           ))}
         </div>
-        <p className="mt-1 text-[10px] text-ink-muted">{PAYOUT_STYLES.find((s) => s.id === style)!.desc}</p>
+        <p className="mt-1 text-2xs text-ink-muted">{PAYOUT_STYLES.find((s) => s.id === style)!.desc}</p>
       </div>
       <Field label="시상 인원 (0=자동)"><NumIn value={placesIn} onChange={setPlacesIn} suffix="명" /></Field>
       <Result label={`시상 인원 ${places}명 · 1위`} value={(amounts[0] ?? 0).toLocaleString()} accent />
@@ -71,7 +71,7 @@ export function PayoutCalc() {
           </tbody>
         </table>
       </div>
-      <p className="text-[10px] leading-relaxed text-ink-muted">표준 곡선 기반 참고값입니다. 실제 시상은 매장 정책에 맞게 조정하세요.</p>
+      <p className="text-2xs leading-relaxed text-ink-muted">표준 곡선 기반 참고값입니다. 실제 시상은 매장 정책에 맞게 조정하세요.</p>
     </CalcCard>
   );
 }
@@ -110,7 +110,7 @@ export function EndTimeCalc() {
         <Result label="총 소요시간" value={`${h}시간 ${m}분`} />
         <Result label={`예상 종료${overnight ? ' (익일)' : ''}`} value={`${pad(endH)}:${pad(endM)}`} accent />
       </div>
-      <p className="text-[10px] text-ink-muted">레지 마감 전 탈락·딜레이는 미반영. 브레이크 {numBreaks}회 포함.</p>
+      <p className="text-2xs text-ink-muted">레지 마감 전 탈락·딜레이는 미반영. 브레이크 {numBreaks}회 포함.</p>
     </CalcCard>
   );
 }
@@ -161,7 +161,7 @@ export function ComboCalc() {
         <div className="rounded-input bg-surface-high p-2"><p className="text-2xs text-ink-muted">수딧</p><p className="text-sm font-bold text-ink-primary">4</p></div>
         <div className="rounded-input bg-surface-high p-2"><p className="text-2xs text-ink-muted">오프수트</p><p className="text-sm font-bold text-ink-primary">12</p></div>
       </div>
-      <p className="text-[10px] text-ink-muted">블로커(내 카드·보드)가 있으면 실제 콤보는 더 줄어듭니다.</p>
+      <p className="text-2xs text-ink-muted">블로커(내 카드·보드)가 있으면 실제 콤보는 더 줄어듭니다.</p>
     </CalcCard>
   );
 }

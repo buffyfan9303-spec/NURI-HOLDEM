@@ -63,7 +63,7 @@ export default function BlindBuilder() {
           </tbody>
         </table>
       </div>
-      <p className="text-[10px] text-ink-muted leading-relaxed">클락 설정에서도 동일 엔진으로 자동 생성됩니다. 레벨 5단위마다 브레이크가 들어갑니다.</p>
+      <p className="text-2xs text-ink-muted leading-relaxed">클락 설정에서도 동일 엔진으로 자동 생성됩니다. 레벨 5단위마다 브레이크가 들어갑니다.</p>
     </CalcCard>
   );
 }

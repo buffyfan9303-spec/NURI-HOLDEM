@@ -109,7 +109,7 @@ export function MessagesModal({ open, onClose }: { open: boolean; onClose: () =>
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-sm font-semibold text-ink-primary truncate">{t.counterpartyName}</span>
                         <span className="flex items-center gap-1 shrink-0">
-                          {t.unread > 0 && <span className="inline-flex items-center justify-center min-w-[1.05rem] h-[1.05rem] px-1 rounded-full bg-accent-300 text-white text-[10px] font-bold tabular-nums">{t.unread}</span>}
+                          {t.unread > 0 && <span className="inline-flex items-center justify-center min-w-[1.05rem] h-[1.05rem] px-1 rounded-full bg-accent-300 text-white text-2xs font-bold tabular-nums">{t.unread}</span>}
                           <span className="text-2xs text-ink-muted">{relativeTime(t.lastAt)}</span>
                         </span>
                       </div>

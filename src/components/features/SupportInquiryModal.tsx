@@ -65,14 +65,14 @@ export default function SupportInquiryModal({ open, onClose }: { open: boolean; 
                     <span className={['rounded-badge px-1.5 py-0.5 text-[9px] font-bold', q.status === 'answered' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'].join(' ')}>
                       {q.status === 'answered' ? '답변완료' : '답변대기'}
                     </span>
-                    <span className="ml-auto text-[10px] text-ink-muted">{q.createdAt.slice(0, 10)}</span>
+                    <span className="ml-auto text-2xs text-ink-muted">{q.createdAt.slice(0, 10)}</span>
                     <button type="button" onClick={() => remove(q.id)} aria-label="삭제" className="text-ink-muted hover:text-danger-light text-xs">✕</button>
                   </div>
                   <p className="mt-1 text-sm font-bold text-ink-primary">{q.title}</p>
                   <p className="mt-0.5 whitespace-pre-wrap text-2xs leading-relaxed text-ink-secondary">{q.content}</p>
                   {q.answer && (
                     <div className="mt-2 rounded-input border border-accent-400/30 bg-accent-300/[0.05] p-2.5">
-                      <p className="text-[10px] font-bold text-accent-300">운영자 답변 {q.answeredAt ? `· ${q.answeredAt.slice(0, 10)}` : ''}</p>
+                      <p className="text-2xs font-bold text-accent-300">운영자 답변 {q.answeredAt ? `· ${q.answeredAt.slice(0, 10)}` : ''}</p>
                       <p className="mt-0.5 whitespace-pre-wrap text-2xs leading-relaxed text-ink-primary">{q.answer}</p>
                     </div>
                   )}

@@ -64,13 +64,13 @@ export function StaffWageManager({ venueId }: { venueId: string }) {
               <button type="button" onClick={() => save(n)} className="btn-ghost text-2xs px-2.5 py-1">저장</button>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <label className="block"><span className="block text-[10px] text-ink-muted mb-0.5">시급(원)</span>
+              <label className="block"><span className="block text-2xs text-ink-muted mb-0.5">시급(원)</span>
                 <input type="number" inputMode="numeric" value={w.hourlyWage || ''} onChange={(e) => set(n, { hourlyWage: +e.target.value || 0 })} placeholder="예) 12000" className="input w-full text-sm tabular-nums" /></label>
-              <label className="block"><span className="block text-[10px] text-ink-muted mb-0.5">급여일(매월)</span>
+              <label className="block"><span className="block text-2xs text-ink-muted mb-0.5">급여일(매월)</span>
                 <input type="number" inputMode="numeric" min="0" max="31" value={w.payday || ''} onChange={(e) => set(n, { payday: Math.min(31, +e.target.value || 0) })} placeholder="예) 10" className="input w-full text-sm tabular-nums" /></label>
             </div>
             <div>
-              <span className="block text-[10px] text-ink-muted mb-0.5">휴무 요일</span>
+              <span className="block text-2xs text-ink-muted mb-0.5">휴무 요일</span>
               <div className="flex gap-1">
                 {DOW.map((d) => (
                   <button key={d} type="button" onClick={() => toggleOff(n, d)}
@@ -122,11 +122,11 @@ export function StaffSettlement({ venueId }: { venueId: string }) {
       </div>
       <div className="grid grid-cols-2 gap-2">
         <div className="rounded-card border border-accent-400/40 bg-accent-300/[0.07] p-2.5 text-center">
-          <p className="text-[10px] text-ink-muted">총 인건비</p>
+          <p className="text-2xs text-ink-muted">총 인건비</p>
           <p className="text-xl font-extrabold text-accent-200 tabular-nums">{totalPay.toLocaleString()}원</p>
         </div>
         <div className="rounded-card border border-border-subtle bg-surface-base p-2.5 text-center">
-          <p className="text-[10px] text-ink-muted">총 근무시간</p>
+          <p className="text-2xs text-ink-muted">총 근무시간</p>
           <p className="text-xl font-extrabold text-ink-primary tabular-nums">{totalHrs.toFixed(1)}h</p>
         </div>
       </div>
@@ -152,7 +152,7 @@ export function StaffSettlement({ venueId }: { venueId: string }) {
           </table>
         </div>
       )}
-      <p className="text-[10px] text-ink-muted">급여 = 근무시간 × 시급(「인건비 관리」 설정). 시간은 출퇴근이 모두 기록된 날만 합산됩니다.</p>
+      <p className="text-2xs text-ink-muted">급여 = 근무시간 × 시급(「인건비 관리」 설정). 시간은 출퇴근이 모두 기록된 날만 합산됩니다.</p>
     </div>
   );
 }
@@ -240,8 +240,8 @@ export function StaffSelfAttendance({ venueId }: { venueId: string }) {
                   )}
                 </div>
                 <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                  <label className="flex items-center gap-1 text-[10px] text-ink-muted">출근<input type="time" value={s.checkIn ?? s.startHm ?? ''} onChange={(e) => setT(s, 'checkIn', e.target.value)} className="input text-xs py-1 w-[6rem]" /></label>
-                  <label className="flex items-center gap-1 text-[10px] text-ink-muted">퇴근<input type="time" value={s.checkOut ?? ''} onChange={(e) => setT(s, 'checkOut', e.target.value)} className="input text-xs py-1 w-[6rem]" /></label>
+                  <label className="flex items-center gap-1 text-2xs text-ink-muted">출근<input type="time" value={s.checkIn ?? s.startHm ?? ''} onChange={(e) => setT(s, 'checkIn', e.target.value)} className="input text-xs py-1 w-[6rem]" /></label>
+                  <label className="flex items-center gap-1 text-2xs text-ink-muted">퇴근<input type="time" value={s.checkOut ?? ''} onChange={(e) => setT(s, 'checkOut', e.target.value)} className="input text-xs py-1 w-[6rem]" /></label>
                   {s.checkIn && s.checkOut && <span className="text-2xs text-accent-300 tabular-nums font-bold">{hours(s.checkIn, s.checkOut).toFixed(1)}h</span>}
                 </div>
               </div>

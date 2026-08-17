@@ -988,9 +988,9 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
               <div key={e.nickname} className={['flex-1 max-w-[9.5rem] rounded-card border p-2.5 text-center', ring, big ? 'pb-4 -translate-y-2 shadow-[0_0_18px_rgba(255,209,0,0.12)]' : ''].join(' ')}>
                 {big && <div aria-hidden className="text-base leading-none mb-1">👑</div>}
                 <span className={['mx-auto flex items-center justify-center rounded-full font-extrabold tabular-nums', medal, big ? 'w-8 h-8 text-sm' : 'w-6 h-6 text-2xs'].join(' ')}>{rank}</span>
-                <p className={['mt-1 font-bold uppercase tracking-wide', rank === 1 ? 'text-accent-300' : 'text-ink-secondary', 'text-[10px]'].join(' ')}>{titleOf(rank)}</p>
+                <p className={['mt-1 font-bold uppercase tracking-wide', rank === 1 ? 'text-accent-300' : 'text-ink-secondary', 'text-2xs'].join(' ')}>{titleOf(rank)}</p>
                 <p className={['font-extrabold text-ink-primary truncate', big ? 'text-base' : 'text-sm'].join(' ')}>{rMain}</p>
-                {rSub && <p className="text-[10px] text-ink-muted">({rSub})</p>}
+                {rSub && <p className="text-2xs text-ink-muted">({rSub})</p>}
                 <p className={['font-bold tabular-nums', big ? 'text-sm text-accent-300' : 'text-xs text-ink-secondary'].join(' ')}>{fmtVal(e.value)}</p>
               </div>
             );
@@ -1064,7 +1064,7 @@ function FollowButton({ venueId, followerCount, compact }: { venueId: string; fo
     setFollowing(next); setBusy(true);
     try {
       if (next) await followVenue(venueId); else await unfollowVenue(venueId);
-      toast.show(next ? '매장을 팔로우했습니다' : '팔로우를 해제했습니다', 'info');
+      toast.show(next ? '팔로우 완료 — 새 대회 포스터가 올라오면 알려드려요' : '팔로우를 해제했습니다', next ? 'success' : 'info');
     } catch (e) {
       setFollowing(!next);
       toast.show(e instanceof Error ? e.message : '처리에 실패했습니다', 'error');

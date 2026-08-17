@@ -135,7 +135,7 @@ function MarketplaceTab({
           <button type="button" onClick={() => setMsgOpen(true)}
             className="flex-1 relative flex items-center justify-center gap-1.5 py-2 rounded-input bg-surface-high border border-border-default text-xs font-semibold text-ink-secondary hover:text-ink-primary transition-colors">
             <span aria-hidden>💬</span> 메시지함
-            {msgCount > 0 && <span className="ml-0.5 inline-flex items-center justify-center min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-accent-300 text-white text-[10px] font-bold tabular-nums">{msgCount}</span>}
+            {msgCount > 0 && <span className="ml-0.5 inline-flex items-center justify-center min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-accent-300 text-white text-2xs font-bold tabular-nums">{msgCount}</span>}
           </button>
         </div>
       )}

@@ -275,7 +275,7 @@ function ToolCard({ name, desc, icon, onClick, active, fav, onToggleFav }: {
       <span className="min-w-0 flex-1">
         {/* 이름은 절대 안 자른다 — 2줄까지 허용. 설명은 칸이 넉넉한 화면에서만 */}
         <span className="block text-xs font-bold text-ink-primary leading-tight [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] overflow-hidden">{name}</span>
-        <span className="hidden sm:block truncate text-[10px] text-ink-muted leading-snug mt-0.5">{desc}</span>
+        <span className="hidden sm:block truncate text-2xs text-ink-muted leading-snug mt-0.5">{desc}</span>
       </span>
       {onToggleFav && (
         <span role="button" tabIndex={-1} aria-label={fav ? '즐겨찾기 해제' : '즐겨찾기 추가'}

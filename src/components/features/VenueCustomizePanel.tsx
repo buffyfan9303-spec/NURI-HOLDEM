@@ -150,7 +150,7 @@ function SlugEditor({ venueId }: { venueId: string }) {
       {check === 'ok' && <p className="text-2xs font-semibold text-emerald-400">✓ 사용할 수 있는 링크입니다 — 저장을 누르세요.</p>}
       {check === 'taken' && <p className="text-2xs font-semibold text-danger-light">✕ 이미 사용 중인 링크입니다 — 다른 이름을 시도하세요.</p>}
       {check === 'invalid' && <p className="text-2xs font-semibold text-danger-light">✕ 영문 소문자·숫자·하이픈(-)으로 2~20자여야 합니다.</p>}
-      <p className="text-[10px] text-ink-muted">
+      <p className="text-2xs text-ink-muted">
         {saved ? <>현재 링크: <span className="font-bold text-accent-300">nuriholdem.com/s/{saved}</span> · 비우고 저장하면 기본 링크로 돌아갑니다.</>
           : '설정하면 매장 페이지 「링크 공유」가 이 주소로 나갑니다. 기존 기본 링크도 계속 작동해요.'}
       </p>
@@ -265,12 +265,12 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
                     <span className={['text-xs font-bold', on ? 'text-accent-300' : 'text-ink-primary'].join(' ')}>{boardLabel(m, cfg)}</span>
                     {isCustomBoard(m) && <span className="rounded-badge bg-violet-500/15 px-1 py-0.5 text-[9px] font-bold text-violet-300">커스텀</span>}
                   </span>
-                  <span className="mt-1 block text-[10px] leading-snug text-ink-muted">{boardDesc(m, cfg)}</span>
+                  <span className="mt-1 block text-2xs leading-snug text-ink-muted">{boardDesc(m, cfg)}</span>
                 </button>
               );
             })}
           </div>
-          <p className="text-[10px] text-ink-muted">1개만 선택하면 토글 없이 해당 순위만 크게 보여줍니다.</p>
+          <p className="text-2xs text-ink-muted">1개만 선택하면 토글 없이 해당 순위만 크게 보여줍니다.</p>
         </section>
 
         {/* ② 커스텀 보드 만들기 — 목록에 없는 랭킹을 직접 */}
@@ -330,7 +330,7 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
           <div className="grid grid-cols-5 gap-1.5">
             {points.map((p, i) => (
               <label key={i} className="space-y-0.5 text-center">
-                <span className="text-[10px] font-semibold text-ink-muted">{i + 1}등</span>
+                <span className="text-2xs font-semibold text-ink-muted">{i + 1}등</span>
                 <input type="number" inputMode="numeric" value={p}
                   onChange={(e) => setPoint(i, Number(e.target.value))}
                   className="input w-full text-center text-sm tabular-nums" />
@@ -435,9 +435,9 @@ export function ScorePointsPanel({ venueId, customBoards = [] }: { venueId: stri
                     <button type="button" onMouseDown={(e) => { e.preventDefault(); setName(fill); setSuggestOpen(false); }}
                       className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left hover:bg-surface-high transition-colors">
                       <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">
-                        {s.nickname ?? '(닉네임 없음)'}{s.realName ? <span className="ml-1 text-[10px] text-ink-muted">{s.realName}</span> : null}
+                        {s.nickname ?? '(닉네임 없음)'}{s.realName ? <span className="ml-1 text-2xs text-ink-muted">{s.realName}</span> : null}
                       </span>
-                      <span className="shrink-0 text-[10px] tabular-nums text-ink-muted">방문 {s.visits}회</span>
+                      <span className="shrink-0 text-2xs tabular-nums text-ink-muted">방문 {s.visits}회</span>
                     </button>
                   </li>
                 );
@@ -457,10 +457,10 @@ export function ScorePointsPanel({ venueId, customBoards = [] }: { venueId: stri
           <ul className="max-h-56 space-y-1 overflow-y-auto pr-1">
             {rows.map((r) => (
               <li key={r.id} className="flex items-center gap-2 rounded-input border border-border-subtle bg-surface-high px-2.5 py-1.5">
-                <span className="shrink-0 text-[10px] tabular-nums text-ink-muted">{r.entryDate.slice(5)}</span>
+                <span className="shrink-0 text-2xs tabular-nums text-ink-muted">{r.entryDate.slice(5)}</span>
                 <span className={['shrink-0 rounded-badge px-1.5 py-0.5 text-[9px] font-bold', r.boardKey ? 'bg-violet-500/15 text-violet-300' : 'bg-accent-300/15 text-accent-300'].join(' ')}>{boardName(r.boardKey)}</span>
                 <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{r.name}</span>
-                {r.reason && <span className="hidden min-w-0 max-w-[9rem] truncate text-[10px] text-ink-muted sm:block">{r.reason}</span>}
+                {r.reason && <span className="hidden min-w-0 max-w-[9rem] truncate text-2xs text-ink-muted sm:block">{r.reason}</span>}
                 <span className={['shrink-0 text-xs font-bold tabular-nums', r.points >= 0 ? 'text-accent-300' : 'text-danger-light'].join(' ')}>
                   {r.points >= 0 ? '+' : ''}{r.points.toLocaleString()}
                 </span>
@@ -530,7 +530,7 @@ export function ScoreCalendar({ venueId, customBoards = [] }: { venueId: string;
       {/* 요일 헤더 + 날짜 그리드 */}
       <div className="grid grid-cols-7 gap-1 text-center">
         {['일', '월', '화', '수', '목', '금', '토'].map((d, i) => (
-          <span key={d} className={['text-[10px] font-semibold', i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-ink-muted'].join(' ')}>{d}</span>
+          <span key={d} className={['text-2xs font-semibold', i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-ink-muted'].join(' ')}>{d}</span>
         ))}
         {Array.from({ length: firstDow }, (_, i) => <span key={`e${i}`} />)}
         {Array.from({ length: daysInMonth }, (_, i) => {
@@ -567,7 +567,7 @@ export function ScoreCalendar({ venueId, customBoards = [] }: { venueId: string;
                 <li key={r.id} className="flex items-center gap-2 rounded-input bg-surface-base/60 px-2 py-1.5">
                   <span className={['shrink-0 rounded-badge px-1.5 py-0.5 text-[9px] font-bold', r.boardKey ? 'bg-violet-500/15 text-violet-300' : 'bg-accent-300/15 text-accent-300'].join(' ')}>{boardName(r.boardKey)}</span>
                   <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{r.name}</span>
-                  {r.reason && <span className="hidden max-w-[8rem] truncate text-[10px] text-ink-muted sm:block">{r.reason}</span>}
+                  {r.reason && <span className="hidden max-w-[8rem] truncate text-2xs text-ink-muted sm:block">{r.reason}</span>}
                   <span className={['shrink-0 text-xs font-bold tabular-nums', r.points >= 0 ? 'text-accent-300' : 'text-danger-light'].join(' ')}>{r.points >= 0 ? '+' : ''}{r.points.toLocaleString()}</span>
                   <button type="button" onClick={() => del(r.id)} aria-label="삭제" className="shrink-0 text-ink-muted hover:text-danger-light"><Icon name="close" size={12} /></button>
                 </li>

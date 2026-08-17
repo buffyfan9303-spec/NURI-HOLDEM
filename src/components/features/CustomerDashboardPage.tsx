@@ -215,11 +215,11 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
             </div>
             <div className="mt-2.5 grid grid-cols-2 gap-2">
               <div className="rounded-input border border-border-subtle bg-surface-base px-2.5 py-1.5">
-                <p className="text-[10px] text-ink-muted">받는 아이디</p>
+                <p className="text-2xs text-ink-muted">받는 아이디</p>
                 <p className="truncate text-xs font-bold text-ink-primary">{user?.nickname ? '@' + user.nickname : <span className="text-amber-300">미설정</span>}</p>
               </div>
               <div className="rounded-input border border-border-subtle bg-surface-base px-2.5 py-1.5">
-                <p className="text-[10px] text-ink-muted">이용권 수령</p>
+                <p className="text-2xs text-ink-muted">이용권 수령</p>
                 <p className={`truncate text-xs font-bold ${user?.verified ? 'text-emerald-300' : 'text-danger'}`}>{user?.verified ? '가능' : '인증 필요'}</p>
               </div>
             </div>
@@ -313,7 +313,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
                           {s.expiries[0] && (() => {
                             const d = Math.ceil((new Date(s.expiries[0]!).getTime() - Date.now()) / 86400000);
                             return (
-                              <span className={['ml-1.5 align-middle text-[10px] font-bold tabular-nums', d <= 7 ? 'text-danger-light' : 'text-ink-muted'].join(' ')}>
+                              <span className={['ml-1.5 align-middle text-2xs font-bold tabular-nums', d <= 7 ? 'text-danger-light' : 'text-ink-muted'].join(' ')}>
                                 ~{new Date(s.expiries[0]!).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' })}{d <= 7 ? ` · D-${Math.max(0, d)}` : ''}
                               </span>
                             );
@@ -349,7 +349,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
                   <li key={i} className="rounded-input border border-border-subtle bg-surface-low px-3 py-2">
                     <div className="flex items-center justify-between gap-2">
                       <p className="min-w-0 truncate text-sm font-semibold text-ink-primary">{u.name}</p>
-                      {u.lastAt && <span className="shrink-0 text-[10px] text-ink-muted">최근 {fmtDate(u.lastAt)}</span>}
+                      {u.lastAt && <span className="shrink-0 text-2xs text-ink-muted">최근 {fmtDate(u.lastAt)}</span>}
                     </div>
                     <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-2xs text-ink-muted">
                       <span>방문 <b className="text-ink-secondary tabular-nums">{u.visits}</b>회</span>
@@ -385,7 +385,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
                       <p className="min-w-0 truncate text-sm font-semibold text-ink-primary">{r.title}
                         {upcoming && <span className="ml-1.5 rounded-badge bg-emerald-400/15 px-1.5 py-0.5 text-2xs font-bold text-emerald-400 align-middle">예정</span>}
                       </p>
-                      <span className="shrink-0 text-[10px] tabular-nums text-ink-muted">{r.date}{r.startTime ? ` ${r.startTime.slice(0, 5)}` : ''}</span>
+                      <span className="shrink-0 text-2xs tabular-nums text-ink-muted">{r.date}{r.startTime ? ` ${r.startTime.slice(0, 5)}` : ''}</span>
                     </div>
                     <p className="mt-0.5 flex flex-wrap gap-x-3 text-2xs text-ink-muted">
                       {r.venueName && <span>{r.venueName}</span>}
@@ -414,7 +414,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-ink-primary">{r.venueName}</p>
-                      <p className="text-[10px] tabular-nums text-ink-muted">{r.date}</p>
+                      <p className="text-2xs tabular-nums text-ink-muted">{r.date}</p>
                     </div>
                     {r.prize && <span className="shrink-0 text-xs font-bold tabular-nums text-gold-300">🏆 {parsePrizeMan(r.prize) ? parsePrizeMan(r.prize) + '만' : r.prize}</span>}
                   </li>
@@ -713,7 +713,7 @@ function Stat({ label, value, accent }: { label: string; value: string; accent?:
   return (
     <div className="rounded-input border border-border-subtle bg-surface-low p-2 text-center">
       <p className={`text-base font-extrabold leading-none tabular-nums ${accent ? 'text-accent-300' : 'text-ink-primary'}`}>{value}</p>
-      <p className="mt-1 text-[10px] text-ink-muted">{label}</p>
+      <p className="mt-1 text-2xs text-ink-muted">{label}</p>
     </div>
   );
 }
@@ -750,7 +750,7 @@ function LevelGuideModal({ points, onClose }: { points: number; onClose: () => v
                 <TierBadge points={t.min} size={24} />
                 <p className="min-w-0 flex-1 text-sm font-bold" style={{ color: reached ? t.color : undefined }}>
                   Lv {t.level} · {t.title}
-                  {isCur && <span className="ml-1.5 rounded-badge bg-accent-300 px-1.5 py-0.5 align-middle text-[10px] font-bold text-white">현재</span>}
+                  {isCur && <span className="ml-1.5 rounded-badge bg-accent-300 px-1.5 py-0.5 align-middle text-2xs font-bold text-white">현재</span>}
                 </p>
                 <span className="shrink-0 text-2xs tabular-nums text-ink-muted">{t.min.toLocaleString()}점~</span>
               </li>

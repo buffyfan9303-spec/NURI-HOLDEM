@@ -31,7 +31,7 @@ export default function RangeGuide() {
           );
         })}
       </div>
-      <p className="text-[10px] leading-relaxed text-ink-secondary rounded-input bg-surface-high/60 border border-border-subtle px-2 py-1.5">💡 {stack.hint}</p>
+      <p className="text-2xs leading-relaxed text-ink-secondary rounded-input bg-surface-high/60 border border-border-subtle px-2 py-1.5">💡 {stack.hint}</p>
 
       {/* 시나리오 — 멀티웨이 / vs 림프 / PKO */}
       <div className="flex items-center gap-1">
@@ -46,7 +46,7 @@ export default function RangeGuide() {
           );
         })}
       </div>
-      {scenario !== 'std' && <p className="text-[10px] leading-relaxed text-accent-200 rounded-input bg-accent-300/[0.06] border border-accent-400/20 px-2 py-1.5">🎯 {scen.hint}</p>}
+      {scenario !== 'std' && <p className="text-2xs leading-relaxed text-accent-200 rounded-input bg-accent-300/[0.06] border border-accent-400/20 px-2 py-1.5">🎯 {scen.hint}</p>}
 
       {/* 포지션 선택 */}
       <div className="flex flex-wrap gap-1">
@@ -118,7 +118,7 @@ export default function RangeGuide() {
         <Legend cls="bg-surface-high border border-border-default" label="폴드" />
         <span className="text-2xs text-ink-muted">{actionLabel} {openCount}콤보 (~{Math.round((openCount / 169) * 100)}%)</span>
       </div>
-      <p className="text-[10px] text-ink-muted text-center leading-relaxed">※ 참고용 근사 레인지입니다(스택 4구간 × 6·9맥스 × 오픈·3벳). 12bb 오픈은 사실상 올인 레인지로 보세요.</p>
+      <p className="text-2xs text-ink-muted text-center leading-relaxed">※ 참고용 근사 레인지입니다(스택 4구간 × 6·9맥스 × 오픈·3벳). 12bb 오픈은 사실상 올인 레인지로 보세요.</p>
     </CalcCard>
   );
 }

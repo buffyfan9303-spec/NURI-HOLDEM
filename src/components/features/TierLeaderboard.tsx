@@ -404,7 +404,7 @@ export default function TierLeaderboard() {
                             : 'border-border-subtle bg-surface-high opacity-40'].join(' ')}>
                         <p className="text-xl leading-none">{t.emoji}</p>
                         <p className={['mt-1 text-2xs font-bold', mine ? 'text-accent-300' : 'text-ink-secondary'].join(' ')}>{t.label}</p>
-                        <p className="text-[10px] tabular-nums text-ink-muted">{t.min}점~</p>
+                        <p className="text-2xs tabular-nums text-ink-muted">{t.min}점~</p>
                       </div>
                     );
                   })}
@@ -472,7 +472,7 @@ export default function TierLeaderboard() {
                 <button type="button" disabled={vBusy || !vForm.event.trim() || !vForm.amount || !vProof || !vIdCard}
                   onClick={submitVerify}
                   className="btn-primary w-full disabled:opacity-50">{vBusy ? '제출 중…' : '인증 요청'}</button>
-                <p className="text-[10px] leading-relaxed text-ink-muted">
+                <p className="text-2xs leading-relaxed text-ink-muted">
                   운영자 검토 후 승인되면 국내 순위에 합산됩니다. <b className="text-ink-secondary">신분증 이미지는 승인·거절 즉시 삭제</b>되며 다른 용도로 사용되지 않습니다. AI 생성·조작 이미지는 반려됩니다.
                 </p>
               </div>
@@ -559,13 +559,13 @@ export default function TierLeaderboard() {
                   <RankNum n={i + 1} />
                   <div className="flex-1 min-w-0">
                     <span className="text-sm font-semibold text-ink-primary truncate">{markPrefix(r)}{r.nickname}</span>
-                    <span className="block text-[10px] text-ink-muted">매장 {r.venues}곳 · 최고 {r.bestPosition}등</span>
+                    <span className="block text-2xs text-ink-muted">매장 {r.venues}곳 · 최고 {r.bestPosition}등</span>
                   </div>
                   <span className="text-right">
                     <span className="block text-sm font-bold tabular-nums text-accent-300">
                       {board === 'prize' ? `${r.prizePoints.toLocaleString()}점` : `${r.moneyinCount.toLocaleString()}회`}
                     </span>
-                    <span className="block text-[10px] text-ink-muted tabular-nums">
+                    <span className="block text-2xs text-ink-muted tabular-nums">
                       {board === 'prize' ? `머니인 ${r.moneyinCount}회` : `프라이즈 ${r.prizePoints.toLocaleString()}점`}
                     </span>
                   </span>

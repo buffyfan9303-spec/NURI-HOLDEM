@@ -456,7 +456,7 @@ function SupportInquiriesPanel() {
               <p className="mt-0.5 whitespace-pre-wrap text-2xs leading-relaxed text-ink-secondary">{q.content}</p>
               {q.answer && (
                 <div className="mt-2 rounded-input border border-emerald-500/25 bg-emerald-500/[0.05] p-2">
-                  <p className="text-[10px] font-bold text-emerald-300">등록된 답변</p>
+                  <p className="text-2xs font-bold text-emerald-300">등록된 답변</p>
                   <p className="mt-0.5 whitespace-pre-wrap text-2xs text-ink-primary">{q.answer}</p>
                 </div>
               )}
@@ -644,7 +644,7 @@ function PlatformStatsCard() {
           <div key={c.label} className="rounded-card border border-border-subtle bg-surface-low p-3 text-center">
             <p className={`text-xl font-extrabold leading-none tabular-nums ${c.accent ? 'text-accent-300' : 'text-ink-primary'}`}>{c.value}</p>
             <p className="mt-1 text-2xs text-ink-muted">{c.label}</p>
-            {c.sub && <p className="text-[10px] text-ink-muted">{c.sub}</p>}
+            {c.sub && <p className="text-2xs text-ink-muted">{c.sub}</p>}
           </div>
         ))}
       </div>
@@ -684,7 +684,7 @@ function PlanUsageCard() {
           </li>
         ))}
       </ul>
-      <p className="mt-2 text-[10px] leading-relaxed text-ink-muted">
+      <p className="mt-2 text-2xs leading-relaxed text-ink-muted">
         70% 도달 시 운영자 알림이 하루 1회 발송됩니다. Egress(월 5GB)·MAU 정확값은 Supabase 대시보드에서 확인하세요.
       </p>
     </section>
@@ -822,7 +822,7 @@ function VenueCreateCard({ venues, users, onCreated }: { venues: Venue[]; users:
               <option key={u.id} value={u.id}>{u.nickname ?? u.name} · {u.email}</option>
             ))}
           </select>
-          <span className="block text-[10px] text-ink-muted mt-1">임명 시 해당 회원이 업주(인증)로 전환되어 이 매장을 관리합니다.</span>
+          <span className="block text-2xs text-ink-muted mt-1">임명 시 해당 회원이 업주(인증)로 전환되어 이 매장을 관리합니다.</span>
         </label>
         <div className="flex justify-end">
           <button type="button" onClick={submit} disabled={busy} className="btn-primary px-4 text-xs disabled:opacity-60">매장 생성</button>
@@ -961,7 +961,7 @@ function VenueAdminRow({ venue, candidates, onChanged }: { venue: Venue; candida
                 <option key={u.id} value={u.id}>{u.nickname ?? u.name} · {u.email}</option>
               ))}
             </select>
-            <span className="block text-[10px] text-ink-muted mt-1">변경 시 새 업주가 인증 업주로 전환되어 이 매장을 관리합니다.</span>
+            <span className="block text-2xs text-ink-muted mt-1">변경 시 새 업주가 인증 업주로 전환되어 이 매장을 관리합니다.</span>
           </label>
           <label className="block">
             <span className="block text-2xs text-ink-secondary mb-1">인증 상태</span>
@@ -1060,11 +1060,11 @@ function VenueStaffManager({ venueId }: { venueId: string }) {
       {/* 직원 추가 */}
       <div className="flex items-end gap-1.5">
         <label className="flex-1 block min-w-0">
-          <span className="block text-[10px] text-ink-muted mb-0.5">직원 아이디 (닉네임/이메일)</span>
+          <span className="block text-2xs text-ink-muted mb-0.5">직원 아이디 (닉네임/이메일)</span>
           <input value={login} onChange={(e) => setLogin(e.target.value)} maxLength={60} placeholder="예: dealer_kim" className="input w-full text-sm" />
         </label>
         <label className="w-20 shrink-0 block">
-          <span className="block text-[10px] text-ink-muted mb-0.5">직책</span>
+          <span className="block text-2xs text-ink-muted mb-0.5">직책</span>
           <input value={position} onChange={(e) => setPosition(e.target.value)} maxLength={20} placeholder="딜러" className="input w-full text-sm" />
         </label>
         <button type="button" onClick={add} disabled={busy} className="btn-primary text-xs px-3 h-9 shrink-0 disabled:opacity-60">추가</button>
@@ -1118,10 +1118,10 @@ function StaffRow({ staff, onChanged }: { staff: VenueStaff; onChanged: () => vo
         <p className="text-xs font-semibold text-ink-primary truncate">
           {staff.name || staff.login}
           {staff.userId
-            ? <span className="ml-1 text-[10px] font-normal text-emerald-400">계정연결</span>
-            : <span className="ml-1 text-[10px] font-normal text-ink-muted">미가입</span>}
+            ? <span className="ml-1 text-2xs font-normal text-emerald-400">계정연결</span>
+            : <span className="ml-1 text-2xs font-normal text-ink-muted">미가입</span>}
         </p>
-        <p className="text-[10px] text-ink-muted truncate">아이디: {staff.login}</p>
+        <p className="text-2xs text-ink-muted truncate">아이디: {staff.login}</p>
       </div>
       <input
         value={position}

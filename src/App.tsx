@@ -631,7 +631,7 @@ function PendingApprovalBanner() {
 
 // 데스크탑(lg+) 여부 — 일정탐색 2-pane 분기용
 export default function App() {
-  const { user, isAdmin, isOwner } = useAuth();
+  const { user, isAdmin, isOwner, loading: authLoading } = useAuth();
   const toast = useToast();
 
   // UI 상태
@@ -1339,11 +1339,16 @@ export default function App() {
     [posts, commSeenAt, activeTab],
   );
 
-  // 탭이 사라지면 (로그아웃 등) browse로 돌아감
+  // 탭이 사라지면 (로그아웃 등) browse로 돌아감.
+  // ⚠ 부팅 시 auth 는 비동기 — 해석 전엔 my-store/admin 이 잠시 목록에 없어서
+  //   업주의 '마지막 탭 복원'이 매번 browse 로 덮이던 문제. 해석 끝날 때까지 보류.
   useEffect(() => {
-    if (!tabs.find((t) => t.id === activeTab)) changeTab('browse');
+    if (!tabs.find((t) => t.id === activeTab)) {
+      if (authLoading && (activeTab === 'my-store' || activeTab === 'admin')) return;
+      changeTab('browse');
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tabs, activeTab]);
+  }, [tabs, activeTab, authLoading]);
 
   // 팔로우한 매장 id 로드(로그인 시)
   useEffect(() => {

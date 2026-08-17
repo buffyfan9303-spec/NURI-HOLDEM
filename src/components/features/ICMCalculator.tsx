@@ -69,7 +69,7 @@ export default function ICMCalculator() {
         <div className="grid grid-cols-3 gap-1.5">
           {prizes.map((v, i) => (
             <label key={i} className="block">
-              <span className="block text-[10px] text-ink-muted mb-0.5">{i + 1}위</span>
+              <span className="block text-2xs text-ink-muted mb-0.5">{i + 1}위</span>
               <input type="number" inputMode="decimal" value={v === 0 ? '' : v}
                 onChange={(e) => setPrize(i, e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))}
                 className="input w-full text-sm tabular-nums" />
@@ -112,7 +112,7 @@ export default function ICMCalculator() {
         </ul>
       </div>
 
-      <p className="text-[10px] text-ink-muted">
+      <p className="text-2xs text-ink-muted">
         Malmuth-Harville 모델 기준 추정치입니다. 실제 딜·체급에 따라 차이가 있을 수 있습니다.
       </p>
     </div>

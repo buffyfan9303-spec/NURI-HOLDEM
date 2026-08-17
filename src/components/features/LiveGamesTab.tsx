@@ -209,7 +209,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
             </ul>
           </div>
         )}
-        <p className="text-center text-[10px] text-ink-muted">운영 중 클락의 공개 정보입니다 · 30초 자동 갱신.</p>
+        <p className="text-center text-2xs text-ink-muted">운영 중 클락의 공개 정보입니다 · 30초 자동 갱신.</p>
       </div>
     </main>
   );
@@ -328,7 +328,7 @@ function Cell({ label, value, sub, accent, wide }: { label: string; value: strin
       <p className={`font-extrabold leading-none tabular-nums ${wide ? 'text-base' : 'text-sm'} ${accent ? 'text-accent-300' : 'text-ink-primary'}`}>
         {value}{sub && <span className="text-2xs font-normal text-ink-muted">{sub}</span>}
       </p>
-      <p className="mt-0.5 text-[10px] text-ink-muted">{label}</p>
+      <p className="mt-0.5 text-2xs text-ink-muted">{label}</p>
     </div>
   );
 }

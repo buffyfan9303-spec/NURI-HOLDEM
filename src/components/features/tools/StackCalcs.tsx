@@ -19,7 +19,7 @@ export function SprCalc() {
         <Field label="현재 팟"><NumIn value={pot} onChange={setPot} /></Field>
       </div>
       <Result label="SPR" value={spr ? spr.toFixed(1) : '-'} accent />
-      <p className="text-[10px] leading-relaxed text-ink-muted">{guide}</p>
+      <p className="text-2xs leading-relaxed text-ink-muted">{guide}</p>
     </CalcCard>
   );
 }
@@ -68,7 +68,7 @@ export function EvCalc() {
         <Field label="질 때 −손실"><NumIn value={loss} onChange={setLoss} /></Field>
       </div>
       <Result label="기대값 (EV)" value={`${ev >= 0 ? '+' : ''}${Math.round(ev).toLocaleString()}`} good={ev > 0} bad={ev < 0} />
-      <p className="text-[10px] text-ink-muted">EV가 +면 장기적으로 이득인 결정입니다.</p>
+      <p className="text-2xs text-ink-muted">EV가 +면 장기적으로 이득인 결정입니다.</p>
     </CalcCard>
   );
 }
@@ -96,7 +96,7 @@ export function BankrollCalc() {
         <Result label={`권장 (${mult.rec}바이인)`} value={(buyin * mult.rec).toLocaleString()} accent />
         <Result label={`최소 (${mult.min}바이인)`} value={(buyin * mult.min).toLocaleString()} />
       </div>
-      <p className="text-[10px] text-ink-muted">뱅크롤이 최소 미만이면 한 단계 낮은 바이인을 권장합니다.</p>
+      <p className="text-2xs text-ink-muted">뱅크롤이 최소 미만이면 한 단계 낮은 바이인을 권장합니다.</p>
     </CalcCard>
   );
 }
@@ -130,7 +130,7 @@ export function VarianceCalc() {
         <Result label="68% 구간 (±1σ)" value={`${fmt(mean - sigma)} ~ ${fmt(mean + sigma)}`} />
         <Result label="손실 확률" value={`${Math.round(lossProb * 100)}%`} bad={lossProb > 0.4} />
       </div>
-      <p className="text-[10px] leading-relaxed text-ink-muted">정규분포 근사입니다. 캐시 기준 표준편차는 보통 80~120bb/100입니다.</p>
+      <p className="text-2xs leading-relaxed text-ink-muted">정규분포 근사입니다. 캐시 기준 표준편차는 보통 80~120bb/100입니다.</p>
     </CalcCard>
   );
 }

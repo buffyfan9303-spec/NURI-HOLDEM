@@ -397,7 +397,7 @@ function StatsView({ venueId }: { venueId: string }) {
                   })}
                 </div>
                 {stacked && (
-                  <div className="flex items-center gap-3 mt-1.5 text-[10px] text-ink-muted">
+                  <div className="flex items-center gap-3 mt-1.5 text-2xs text-ink-muted">
                     <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-sm bg-emerald-500" /> 메인</span>
                     <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-sm bg-accent-300" /> 사이드</span>
                     <span className="text-ink-muted/70">· 막대 탭 = 그날 상세</span>
@@ -411,9 +411,9 @@ function StatsView({ venueId }: { venueId: string }) {
                     <div className="mt-2 rounded-input border border-accent-400/30 bg-accent-300/[0.06] p-2.5">
                       <p className="text-2xs font-bold text-accent-300 mb-1.5">{d.date} 상세</p>
                       <div className="grid grid-cols-3 gap-1.5 text-center">
-                        <div><p className="text-[10px] text-ink-muted">엔트리</p><p className="text-sm font-bold text-ink-primary tabular-nums">{f1(d.mainE + d.sideE)}</p><p className="text-[9px] text-ink-muted">메인 {f1(d.mainE)} · 사이드 {f1(d.sideE)}</p></div>
-                        <div><p className="text-[10px] text-ink-muted">매출</p><p className="text-sm font-bold text-emerald-400 tabular-nums">{wonToMan(d.mainRev + d.sideRev)}만</p><p className="text-[9px] text-ink-muted">메인 {wonToMan(d.mainRev)} · 사이드 {wonToMan(d.sideRev)}</p></div>
-                        <div><p className="text-[10px] text-ink-muted">인원</p><p className="text-sm font-bold text-ink-primary tabular-nums">{d.players}명</p></div>
+                        <div><p className="text-2xs text-ink-muted">엔트리</p><p className="text-sm font-bold text-ink-primary tabular-nums">{f1(d.mainE + d.sideE)}</p><p className="text-[9px] text-ink-muted">메인 {f1(d.mainE)} · 사이드 {f1(d.sideE)}</p></div>
+                        <div><p className="text-2xs text-ink-muted">매출</p><p className="text-sm font-bold text-emerald-400 tabular-nums">{wonToMan(d.mainRev + d.sideRev)}만</p><p className="text-[9px] text-ink-muted">메인 {wonToMan(d.mainRev)} · 사이드 {wonToMan(d.sideRev)}</p></div>
+                        <div><p className="text-2xs text-ink-muted">인원</p><p className="text-sm font-bold text-ink-primary tabular-nums">{d.players}명</p></div>
                       </div>
                     </div>
                   );
@@ -442,7 +442,7 @@ function StatsView({ venueId }: { venueId: string }) {
                   <p className="text-[11px] text-ink-muted">얼리</p>
                 </div>
               </div>
-              <p className="text-[10px] text-ink-muted mt-1.5 leading-relaxed">
+              <p className="text-2xs text-ink-muted mt-1.5 leading-relaxed">
                 마감 시 클락에서 손보정된 최종 수치(생존·아웃 포함)입니다. <b className="text-ink-secondary">장부 총 엔트리({m.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })})는 바인 기록 기준</b>이라 다를 수 있어요 — 통계·정산은 장부 기준, 이 값은 운영 참고용입니다.{clockAgg.games > 1 ? ` (게임 ${clockAgg.games}개 합산)` : ''}
               </p>
             </Section>
@@ -576,7 +576,7 @@ function DowStats({ dow, rangeLabel = '전체' }: { dow: Record<number, { entrie
           <div className="flex gap-0.5 bg-surface-high rounded-input p-0.5">
             {([['fill', '달성률'], ['entry', '엔트리'], ['revenue', '매출']] as const).map(([k, lbl]) => (
               <button key={k} type="button" onClick={() => setMetric(k)}
-                className={['px-2 py-0.5 text-[10px] font-bold rounded-[5px] transition-colors',
+                className={['px-2 py-0.5 text-2xs font-bold rounded-[5px] transition-colors',
                   metric === k ? 'bg-accent-300 text-white' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>{lbl}</button>
             ))}
           </div>
@@ -607,7 +607,7 @@ function DowStats({ dow, rangeLabel = '전체' }: { dow: Record<number, { entrie
       {/* 상세 표 */}
       <div className="overflow-x-auto scrollbar-none">
         <table className="w-full text-center border-separate border-spacing-0 min-w-[19rem]">
-          <thead><tr className="text-[10px] text-ink-muted">
+          <thead><tr className="text-2xs text-ink-muted">
             <th className="py-1 text-left pl-1">요일</th><th>영업일</th><th>일평균<br/>엔트리</th><th>일평균<br/>매출(만)</th><th>객단가<br/>(만)</th>
           </tr></thead>
           <tbody>
@@ -639,10 +639,10 @@ function DowHilite({ tone, cap, w, a, b }: { tone: 'emerald' | 'rose'; cap: stri
   const head = tone === 'emerald' ? 'text-emerald-300' : 'text-rose-300';
   return (
     <div className={['rounded-card border p-2.5', ring].join(' ')}>
-      <p className="text-[10px] text-ink-muted">{cap}</p>
+      <p className="text-2xs text-ink-muted">{cap}</p>
       <p className={['text-lg font-extrabold leading-tight', head].join(' ')}>{DOW[w]}요일</p>
       <p className="text-[11px] text-ink-primary mt-0.5 leading-tight">{a}</p>
-      <p className="text-[10px] text-ink-muted mt-0.5 leading-tight">{b}</p>
+      <p className="text-2xs text-ink-muted mt-0.5 leading-tight">{b}</p>
     </div>
   );
 }
@@ -886,7 +886,7 @@ export function PosSettingsPanel({ venueId }: { venueId: string }) {
       <div className="flex items-center gap-2 border-t border-border-subtle pt-3">
         <div className="min-w-0 flex-1">
           <p className="text-2xs font-semibold text-ink-secondary">매장 알림 수신</p>
-          <p className="text-[10px] text-ink-muted">매장 공지·직원 호출 알림을 내 알림센터로 받습니다.</p>
+          <p className="text-2xs text-ink-muted">매장 공지·직원 호출 알림을 내 알림센터로 받습니다.</p>
         </div>
         <button type="button" role="switch" aria-checked={!mute} onClick={toggleMute}
           className={['relative h-6 w-11 shrink-0 rounded-full transition-colors', !mute ? 'bg-accent-300' : 'bg-surface-float'].join(' ')}>
@@ -897,7 +897,7 @@ export function PosSettingsPanel({ venueId }: { venueId: string }) {
       {/* 사장님(공동 업주) 관리 — 업주/운영자만 */}
       {canOwner && <OwnerManageCard venueId={venueId} />}
 
-      <p className="text-[10px] text-ink-muted pt-1 border-t border-border-subtle">통계는 업주만 볼 수 있습니다. 직원의 <span className="text-accent-300 font-semibold">장부·순위 권한과 직책</span>은 「직원 관리」 탭, 매장 페이지 탭 순서·순위 구성은 <span className="text-accent-300 font-semibold">「매장 꾸미기」</span>에서 설정하세요.</p>
+      <p className="text-2xs text-ink-muted pt-1 border-t border-border-subtle">통계는 업주만 볼 수 있습니다. 직원의 <span className="text-accent-300 font-semibold">장부·순위 권한과 직책</span>은 「직원 관리」 탭, 매장 페이지 탭 순서·순위 구성은 <span className="text-accent-300 font-semibold">「매장 꾸미기」</span>에서 설정하세요.</p>
     </section>
   );
 }
@@ -954,7 +954,7 @@ function OwnerManageCard({ venueId }: { venueId: string }) {
           placeholder="추가할 사장님 아이디(닉네임)" className="input min-w-0 flex-1 text-sm" />
         <button type="button" disabled={busy || !nick.trim()} onClick={add} className="btn-primary shrink-0 px-3 text-xs disabled:opacity-50">+ 사장님 추가</button>
       </div>
-      <p className="text-[10px] text-ink-muted">초대한 회원은 <b className="text-amber-400">운영자 승인 후</b> 이 매장의 <b className="text-ink-secondary">공동 업주</b>가 되어 장부·포스터·이용권을 함께 관리합니다. 승인된 공동 사장은 <b className="text-accent-300">대표</b>로 교체할 수 있어요.</p>
+      <p className="text-2xs text-ink-muted">초대한 회원은 <b className="text-amber-400">운영자 승인 후</b> 이 매장의 <b className="text-ink-secondary">공동 업주</b>가 되어 장부·포스터·이용권을 함께 관리합니다. 승인된 공동 사장은 <b className="text-accent-300">대표</b>로 교체할 수 있어요.</p>
     </div>
   );
 }

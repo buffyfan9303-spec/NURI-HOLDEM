@@ -525,8 +525,8 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                     {pendingReqs.slice(0, 3).map((r) => (
                       <li key={r.id} className="relative flex items-center gap-1.5 text-xs">
                         <span className="min-w-0 flex-1 truncate text-ink-secondary">{r.playerName}</span>
-                        <span className="shrink-0 text-[10px] tabular-nums text-ink-muted">{timeAgo(r.createdAt)}</span>
-                        <span className="shrink-0 rounded-badge bg-surface-float px-1 py-0.5 text-[10px] text-ink-muted">{gameLabel(r.requestedGameSeq)}</span>
+                        <span className="shrink-0 text-2xs tabular-nums text-ink-muted">{timeAgo(r.createdAt)}</span>
+                        <span className="shrink-0 rounded-badge bg-surface-float px-1 py-0.5 text-2xs text-ink-muted">{gameLabel(r.requestedGameSeq)}</span>
                         {/* ⚠ 승인(✓)과 거절(✕)이 24px 로 6px 간격에 붙어 있었다.
                             접수대에서 한 손으로 누르는 자리인데, 오탭하면 손님이 거절되거나
                             엉뚱한 사람이 명단에 들어간다 — 되돌리는 비용이 승인 1탭과 비대칭이다.
@@ -543,11 +543,11 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                           <div className="absolute right-0 top-full z-30 mt-1 w-52 space-y-1.5 rounded-input border border-border-default bg-surface-float p-2 shadow-dialog">
                             {/* 바인 금액 직접 수정(리바인·할인) */}
                             <div className="flex items-center gap-1">
-                              <span className="shrink-0 text-[10px] text-ink-muted">바인</span>
+                              <span className="shrink-0 text-2xs text-ink-muted">바인</span>
                               <input type="number" inputMode="numeric" value={payAmt || ''} onChange={(e) => setPayAmt(Math.max(0, Number(e.target.value) || 0))}
                                 className="min-w-0 flex-1 rounded-[5px] border border-border-default bg-surface-high px-1.5 py-1 text-xs tabular-nums text-ink-primary" placeholder="금액" />
-                              <span className="shrink-0 text-[10px] text-ink-muted">원</span>
-                              <button type="button" onClick={() => setSplitOpen((v) => !v)} className={['shrink-0 rounded-[5px] px-1.5 py-1 text-[10px] font-bold', splitOpen ? 'bg-accent-300 text-white' : 'bg-surface-high text-ink-secondary'].join(' ')}>분할</button>
+                              <span className="shrink-0 text-2xs text-ink-muted">원</span>
+                              <button type="button" onClick={() => setSplitOpen((v) => !v)} className={['shrink-0 rounded-[5px] px-1.5 py-1 text-2xs font-bold', splitOpen ? 'bg-accent-300 text-white' : 'bg-surface-high text-ink-secondary'].join(' ')}>분할</button>
                             </div>
                             {!splitOpen ? (
                               <div className="flex items-center gap-1">
@@ -569,7 +569,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                                   ))}
                                 </div>
                                 <div className="flex items-center justify-between gap-1">
-                                  <span className={['text-[10px] tabular-nums', (splitVals.cash + splitVals.card + splitVals.transfer) === payAmt && payAmt > 0 ? 'text-emerald-400' : 'text-ink-muted'].join(' ')}>합계 {(splitVals.cash + splitVals.card + splitVals.transfer).toLocaleString()}{payAmt ? ` / ${payAmt.toLocaleString()}` : ''}</span>
+                                  <span className={['text-2xs tabular-nums', (splitVals.cash + splitVals.card + splitVals.transfer) === payAmt && payAmt > 0 ? 'text-emerald-400' : 'text-ink-muted'].join(' ')}>합계 {(splitVals.cash + splitVals.card + splitVals.transfer).toLocaleString()}{payAmt ? ` / ${payAmt.toLocaleString()}` : ''}</span>
                                   <span className="flex items-center gap-1">
                                     <button type="button" onClick={() => doApprove(r, splitVals)} className="rounded-[5px] bg-emerald-500/20 px-2 py-1 text-2xs font-bold text-emerald-300 hover:bg-emerald-500/30">승인</button>
                                     <button type="button" onClick={() => setPayFor(null)} className="px-1 text-2xs text-ink-muted hover:text-ink-secondary">✕</button>
@@ -603,7 +603,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                 const max = Math.max(1, ...bars.map((b) => b.entries));
                 return (
                   <div className="px-3 pb-2.5">
-                    <p className="mb-1 text-[10px] text-ink-muted">최근 {DOW[todayDow]}요일 엔트리 추이</p>
+                    <p className="mb-1 text-2xs text-ink-muted">최근 {DOW[todayDow]}요일 엔트리 추이</p>
                     {/* 막대 트랙(h-16) + 4주 평균 점선 오버레이 */}
                     <div className="relative h-16">
                       {sameDowAvg != null && sameDowAvg > 0 && (
@@ -926,7 +926,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                 <Stat label="7일 회수" value={`${weekTicket}`} unit="장" />
                 <Stat label="오늘 회수" value={`${fin.ticket}`} unit="장" />
               </div>
-              <p className="mt-1.5 text-[10px] text-ink-muted">발행=장부에서 입력한 발급/시상 · 회수=티켓으로 바인한 합계.</p>
+              <p className="mt-1.5 text-2xs text-ink-muted">발행=장부에서 입력한 발급/시상 · 회수=티켓으로 바인한 합계.</p>
             </>
           )}
         </DashCard>
@@ -948,12 +948,12 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                 <li key={b.name} className="flex items-center gap-2 text-2xs">
                   <span className="min-w-0 flex-1 truncate font-semibold text-ink-primary">{b.name}</span>
                   <span className="shrink-0 tabular-nums text-ink-muted">{b.birthday}</span>
-                  <span className={['shrink-0 rounded-badge px-1.5 py-0.5 text-[10px] font-bold', b.dday === 0 ? 'bg-pink-500/20 text-pink-300' : 'bg-surface-float text-ink-secondary'].join(' ')}>
+                  <span className={['shrink-0 rounded-badge px-1.5 py-0.5 text-2xs font-bold', b.dday === 0 ? 'bg-pink-500/20 text-pink-300' : 'bg-surface-float text-ink-secondary'].join(' ')}>
                     {b.dday === 0 ? '오늘 🎉' : `D-${b.dday}`}
                   </span>
                 </li>
               ))}
-              <li className="pt-0.5 text-[10px] text-ink-muted">축하 쿠폰은 단골 TOP → 고객정보 → 쿠폰 발급으로 보내세요.</li>
+              <li className="pt-0.5 text-2xs text-ink-muted">축하 쿠폰은 단골 TOP → 고객정보 → 쿠폰 발급으로 보내세요.</li>
             </ul>
           )}
         </DashCard>
@@ -1042,7 +1042,7 @@ function CompareRow({ label, now, prev, delta, won }: { label: string; now: numb
       <span className="shrink-0 text-2xs text-ink-muted">{label}</span>
       <span className="flex items-baseline gap-1.5 tabular-nums">
         <span className="text-sm font-bold text-ink-primary">{fmt(now)}</span>
-        <span className="text-[10px] text-ink-muted">전주 {fmt(prev)}</span>
+        <span className="text-2xs text-ink-muted">전주 {fmt(prev)}</span>
         {delta != null && (
           <span className={`text-2xs font-bold ${up ? 'text-emerald-400' : down ? 'text-danger-light' : 'text-ink-muted'}`}>
             {up ? '▲' : down ? '▼' : '–'}{Math.abs(delta)}%

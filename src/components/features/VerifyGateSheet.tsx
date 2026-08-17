@@ -60,7 +60,7 @@ export default function VerifyGateSheet({ onStart }: { onStart: () => void }) {
           <button type="button" onClick={start} className="btn-primary w-full py-3 text-sm">휴대폰 본인인증 하기</button>
           <button type="button" onClick={() => setOpen(false)} className="btn-ghost w-full py-2.5 text-xs">나중에 할게요</button>
         </div>
-        <p className="text-center text-[10px] text-ink-muted">인증 정보는 본인 확인 용도로만 사용되며 안전하게 보호됩니다.</p>
+        <p className="text-center text-2xs text-ink-muted">인증 정보는 본인 확인 용도로만 사용되며 안전하게 보호됩니다.</p>
       </div>
     </Modal>
   );

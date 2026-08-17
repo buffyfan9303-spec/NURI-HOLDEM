@@ -86,7 +86,7 @@ export default function DateTimePicker({
           {/* 시 · 분 */}
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <p className="text-[10px] text-ink-muted text-center mb-1">시</p>
+              <p className="text-2xs text-ink-muted text-center mb-1">시</p>
               <div className="h-32 overflow-y-auto rounded-input border border-border-subtle bg-surface-base grid grid-cols-3 gap-0.5 p-1 scrollbar-none">
                 {hours.map((h) => (
                   <button key={h} type="button" onClick={() => setHh(h)}
@@ -95,7 +95,7 @@ export default function DateTimePicker({
               </div>
             </div>
             <div>
-              <p className="text-[10px] text-ink-muted text-center mb-1">분 (5분)</p>
+              <p className="text-2xs text-ink-muted text-center mb-1">분 (5분)</p>
               <div className="h-32 overflow-y-auto rounded-input border border-border-subtle bg-surface-base grid grid-cols-2 gap-0.5 p-1 scrollbar-none">
                 {minutes.map((m) => (
                   <button key={m} type="button" onClick={() => setMm(m)}

@@ -143,7 +143,7 @@ function DateTab({ slot, selected, hasEvents, onClick }: DateTabProps) {
       {selected && (
         <span aria-hidden className="anim-pop absolute inset-0 rounded-[10px] bg-accent-300 shadow-[0_4px_14px_-4px_rgba(94,106,210,0.55)]" />
       )}
-      <span className={['relative text-[10px] font-bold leading-none', selected ? 'text-ink-inverse/85' : dowColor].join(' ')}>{slot.dow}</span>
+      <span className={['relative text-2xs font-bold leading-none', selected ? 'text-ink-inverse/85' : dowColor].join(' ')}>{slot.dow}</span>
       <span className="relative mt-0.5 text-[15px] font-extrabold leading-none tabular-nums">{slot.day}</span>
       {hasEvents && !selected && (
         <span aria-hidden className="absolute bottom-[3px] left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-accent-300/85" />
@@ -195,7 +195,7 @@ function DateSlider({ selectedDates, onToggle, onPick, eventDates }: DateSliderP
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
         </svg>
-        <span className="text-[10px] font-semibold leading-none mt-0.5">달력</span>
+        <span className="text-2xs font-semibold leading-none mt-0.5">달력</span>
         <input
           type="date"
           min={todayIso}

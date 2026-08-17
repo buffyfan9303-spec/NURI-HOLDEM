@@ -343,7 +343,7 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUse
         <div className="border-t border-border-subtle bg-surface-base/40 p-3 space-y-1.5">
           {gameDates && gameDates.length > 1 && (
             <div className="mb-1 flex flex-wrap gap-1 border-b border-border-subtle pb-1.5">
-              <span className="mb-0.5 w-full text-[10px] text-ink-muted">같은 게임 · 날짜별 예약</span>
+              <span className="mb-0.5 w-full text-2xs text-ink-muted">같은 게임 · 날짜별 예약</span>
               {gameDates.map((g) => {
                 const [, mm, dd] = g.date.split('-');
                 const on = g.id === resSchedId;
@@ -407,7 +407,7 @@ function ReservationItem({ idx, res, venueId, visited, regular, reserveCount, on
             {regular && <span className="shrink-0 text-2xs font-bold text-accent-300 bg-accent-300/15 px-1.5 py-0.5 rounded-badge">단골 {reserveCount}회</span>}
           </p>
           {/* 예약 접수 일시 — 업주 전용 화면이라 노출 OK */}
-          <p className="text-[10px] text-ink-muted tabular-nums mt-0.5">
+          <p className="text-2xs text-ink-muted tabular-nums mt-0.5">
             {new Date(res.createdAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 예약
           </p>
         </div>
@@ -445,7 +445,7 @@ function Cell({ label, value, gold }: { label: string; value: string; gold?: boo
   return (
     <div className="rounded bg-surface-base border border-border-subtle py-1.5">
       <p className={['text-sm font-bold tabular-nums leading-none', gold ? 'text-accent-300' : 'text-ink-primary'].join(' ')}>{value}</p>
-      <p className="text-[10px] text-ink-muted mt-0.5">{label}</p>
+      <p className="text-2xs text-ink-muted mt-0.5">{label}</p>
     </div>
   );
 }

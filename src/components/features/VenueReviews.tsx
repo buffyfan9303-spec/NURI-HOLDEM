@@ -174,7 +174,7 @@ export default function VenueReviews({ venueId, userId, nickname, isAdmin, canRe
               {r.content && <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-ink-secondary">{r.content}</p>}
               {r.ownerReply && (
                 <div className="mt-1.5 rounded-input border border-accent-400/25 bg-accent-300/[0.05] p-2">
-                  <p className="text-[10px] font-bold text-accent-300">사장님 답글</p>
+                  <p className="text-2xs font-bold text-accent-300">사장님 답글</p>
                   <p className="mt-0.5 whitespace-pre-wrap text-2xs leading-relaxed text-ink-primary">{r.ownerReply}</p>
                 </div>
               )}
@@ -190,7 +190,7 @@ export default function VenueReviews({ venueId, userId, nickname, isAdmin, canRe
                     </div>
                   </div>
                 ) : (
-                  <button type="button" onClick={() => setReplyOpen(r.id)} className="mt-1 text-[10px] text-accent-300 hover:underline">{r.ownerReply ? '답글 수정' : '🗨 답글 달기'}</button>
+                  <button type="button" onClick={() => setReplyOpen(r.id)} className="mt-1 text-2xs text-accent-300 hover:underline">{r.ownerReply ? '답글 수정' : '🗨 답글 달기'}</button>
                 )
               )}
             </li>

@@ -49,7 +49,7 @@ export function MdfCalc() {
         <Result label="콜에 필요한 승률" value={fmtPct(callEq)} desc="이 승률보다 핸드 에퀴티가 높으면 수학적으로 콜이 이득입니다." />
         <Result label="내 벳의 적정 블러프 비율" value={fmtPct(bluffRatio)} desc={`리버 기준 밸류 ${fmtPct(100 - bluffRatio)} : 블러프 ${fmtPct(bluffRatio)}로 섞으면 상대가 콜/폴드 어느 쪽도 착취 못 해요.`} />
       </div>
-      <p className="text-[10px] text-ink-muted">※ 이론(GTO) 기준 수치입니다. 상대가 과도하게 폴드/콜하면 그에 맞춰 블러프를 늘리거나 줄이세요.</p>
+      <p className="text-2xs text-ink-muted">※ 이론(GTO) 기준 수치입니다. 상대가 과도하게 폴드/콜하면 그에 맞춰 블러프를 늘리거나 줄이세요.</p>
     </div>
   );
 }
@@ -57,9 +57,9 @@ export function MdfCalc() {
 function Result({ label, value, desc, gold }: { label: string; value: string; desc: string; gold?: boolean }) {
   return (
     <div className={['rounded-input border p-2.5', gold ? 'border-accent-400/50 bg-accent-300/[0.07]' : 'border-border-subtle bg-surface-high'].join(' ')}>
-      <p className="text-[10px] font-semibold text-ink-muted">{label}</p>
+      <p className="text-2xs font-semibold text-ink-muted">{label}</p>
       <p className={['mt-0.5 text-xl font-extrabold tabular-nums', gold ? 'text-accent-300' : 'text-ink-primary'].join(' ')}>{value}</p>
-      <p className="mt-1 text-[10px] leading-snug text-ink-muted">{desc}</p>
+      <p className="mt-1 text-2xs leading-snug text-ink-muted">{desc}</p>
     </div>
   );
 }
@@ -106,7 +106,7 @@ export function AggroChart() {
           </tbody>
         </table>
       </div>
-      <p className="text-[10px] text-ink-muted">BB 오픈 0% = 림프 팟 외 오픈 기회 없음(빅블라인드). 콜드콜 30%는 BB 디펜드 기준.</p>
+      <p className="text-2xs text-ink-muted">BB 오픈 0% = 림프 팟 외 오픈 기회 없음(빅블라인드). 콜드콜 30%는 BB 디펜드 기준.</p>
     </div>
   );
 }
@@ -172,7 +172,7 @@ export function RangeMatrix() {
       </div>
       {/* 전체 매트릭스 */}
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[30rem] text-center text-[10px]">
+        <table className="w-full min-w-[30rem] text-center text-2xs">
           <thead>
             <tr>
               <th className="py-1 px-1.5 text-left text-ink-muted font-semibold">내 \ 상대</th>
@@ -195,7 +195,7 @@ export function RangeMatrix() {
           </tbody>
         </table>
       </div>
-      <p className="text-[10px] text-ink-muted">※ 몬테카를로 시뮬레이션 요약 근사치(±1%p). 레인지가 넓을수록 보드 의존도가 커집니다.</p>
+      <p className="text-2xs text-ink-muted">※ 몬테카를로 시뮬레이션 요약 근사치(±1%p). 레인지가 넓을수록 보드 의존도가 커집니다.</p>
     </div>
   );
 }

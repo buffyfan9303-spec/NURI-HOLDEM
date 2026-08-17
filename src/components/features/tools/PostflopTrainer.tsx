@@ -83,14 +83,14 @@ export default function PostflopTrainer() {
         <p className="text-xs font-semibold text-ink-secondary">{sc.spot}</p>
         <div className="flex flex-wrap items-center gap-3">
           <span className="flex items-center gap-1">
-            <span className="text-[10px] text-ink-muted mr-0.5">내 핸드</span>
+            <span className="text-2xs text-ink-muted mr-0.5">내 핸드</span>
             {cards.map((c) => (
               <span key={c} className={['rounded-[5px] border border-border-default bg-surface-base px-1.5 py-1 text-sm font-extrabold', suitColor(c)].join(' ')}>{c}</span>
             ))}
           </span>
           {boardCards.length > 0 && (
             <span className="flex items-center gap-1">
-              <span className="text-[10px] text-ink-muted mr-0.5">보드</span>
+              <span className="text-2xs text-ink-muted mr-0.5">보드</span>
               {boardCards.map((c, i) => c === '/' ? <span key={i} className="text-ink-muted">·</span> : (
                 <span key={i} className={['rounded-[5px] border border-border-default bg-surface-base px-1.5 py-1 text-sm font-extrabold', suitColor(c)].join(' ')}>{c}</span>
               ))}
