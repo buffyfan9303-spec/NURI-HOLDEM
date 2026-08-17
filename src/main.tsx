@@ -57,16 +57,18 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>,
 );
 
-// ── 서드파티(GA·AdSense) 지연 주입 ──────────────────────────────────────────
+// ── 서드파티(GA) 지연 주입 ──────────────────────────────────────────
 // 왜 index.html 이 아니라 여기인가: <head> 에 두면 앱 번들과 '같은 순간' 다운로드·파싱이 시작된다.
-// 라이브 실측에서 adsbygoogle.js 가 t=23ms 로 index/vendor-react/vendor-supabase 와 동시에 출발해
-// decoded 665KB 를 파싱했고(앱 셸 839KB 의 80%), 서드파티 호스트 6곳으로 요청 11건이 퍼졌다.
-// 첫 화면에는 광고가 필요 없고(src 에 광고 슬롯 0개), 사용자가 기다리는 건 대회 목록이다.
-// 그래서 '첫 페인트가 끝나고 브라우저가 한가해진 뒤'로 미룬다 — 수익 로직은 그대로 살아 있다.
+// 그래서 '첫 페인트가 끝나고 브라우저가 한가해진 뒤'로 미룬다.
+//
+// ⚠️ AdSense(Auto Ads) 제거 — 2026-08 정책 위반("게시자 콘텐츠 없는 화면에 광고") 대응.
+//    이 앱은 수동 광고 슬롯이 0개, adsbygoogle.js 로더만 실어 Auto Ads 가 캘린더 목록·모달 등
+//    "행동 목적 화면"에 광고를 자동 삽입했고, 그게 위반 판정의 원인이다.
+//    심사 통과 후 재도입할 땐 Auto Ads 가 아니라 콘텐츠가 있는 화면(포스트 상세·전적 대시보드 등)에만
+//    수동 <ins class="adsbygoogle"> 슬롯으로 넣을 것. (누리 마인드 AdSlot 패턴 참고)
 function loadThirdParty() {
   const srcs = [
     'https://www.googletagmanager.com/gtag/js?id=G-9T7JZNEQE8',
-    'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6018943099120763',
   ];
   for (const src of srcs) {
     if (document.querySelector(`script[src="${src}"]`)) continue;
@@ -93,7 +95,7 @@ const tpAfterIdle = () => {
   if (tpLoaded) return;
   tpLoaded = true;
   // 신호(load+첫 데이터 응답) 직후는 사용자가 첫 상호작용을 하는 구간 — 3.5초 더 물러나
-  // AdSense 파싱 클러스터(계측: 105~158ms 태스크 다수)를 유휴 구간으로 밀어낸다.
+  // 서드파티 파싱을 유휴 구간으로 밀어낸다.
   setTimeout(() => {
     if (w.requestIdleCallback) w.requestIdleCallback(loadThirdParty, { timeout: 8000 });
     else setTimeout(loadThirdParty, 5000);
