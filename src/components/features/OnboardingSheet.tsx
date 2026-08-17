@@ -34,13 +34,15 @@ export default function OnboardingSheet() {
       if (persona) localStorage.setItem('nuri:persona', persona);
     } catch { /* noop */ }
     setOpen(false);
-    // GTO 공부가 목적이면 도구 탭에서 시작 — 새 방문의 첫 화면이 곧 답이 되게.
+    // 선택이 실제 화면을 바꾼다 — '첫 화면을 맞춰드려요' 약속의 이행.
+    // gto → 도구 탭 / regular(매장 단골) → 가까운 순 정렬 켜기(위치 1회 요청) / tourney → 기본 일정탐색.
     if (persona === 'gto') window.dispatchEvent(new CustomEvent('nuri:goto-tab', { detail: 'tools' }));
+    else if (persona === 'regular') window.dispatchEvent(new Event('nuri:enable-near'));
   };
 
   const OPTIONS: { key: 'tourney' | 'regular' | 'gto'; icon: string; title: string; desc: string }[] = [
     { key: 'tourney', icon: '🏆', title: '대회 찾기', desc: '내 주변 토너먼트 일정을 본다' },
-    { key: 'regular', icon: '📍', title: '매장 단골', desc: '자주 가는 매장 체크인 · 이용권' },
+    { key: 'regular', icon: '📍', title: '매장 단골', desc: '내 주변 매장부터 — 가까운 순으로 보여드려요' },
     { key: 'gto', icon: '🎯', title: 'GTO 공부', desc: '핸드 분석 · 트레이너로 연습' },
   ];
 

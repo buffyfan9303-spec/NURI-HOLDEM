@@ -46,7 +46,7 @@ import LoadErrorCard from './components/atoms/LoadErrorCard';
 import { SpringButton } from './components/atoms/StatefulActionButton';
 import { useAuth } from './contexts/AuthContext';
 import { listAllUsers, updateUserStatus, approveOwner } from './api/auth';
-import {
+import { bumpScheduleView,
   getSchedules, createSchedule, updateSchedule, deleteSchedule, subscribeSchedules,
 } from './api/schedules';
 import { getPostById,
@@ -756,12 +756,31 @@ export default function App() {
   // changeTab(상단 선언)에서 TDZ 없이 오버레이를 닫기 위한 ref 바인딩
   closeOverlaysRef.current = () => setOpenVenueId(null);
   const [openSchedule, setOpenSchedule] = useState<Schedule | null>(null);
+  // 포스터 조회수 — 상세가 열리는 모든 경로(카드·검색·배너·딥링크)를 한 곳에서 집계.
+  // 세션당 포스터별 1회(새로고침 어뷰징 방지), 실패 무시(장식 지표가 UX 를 막으면 안 된다).
+  useEffect(() => {
+    const sid = openSchedule?.id;
+    if (!sid) return;
+    try {
+      const k = `nuri:viewed:${sid}`;
+      if (sessionStorage.getItem(k)) return;
+      sessionStorage.setItem(k, '1');
+    } catch { /* 스토리지 불가 시 그냥 1회 발사 */ }
+    bumpScheduleView(sid).catch(() => {});
+  }, [openSchedule?.id]);
   const [displayTarget, setDisplayTarget] = useState<{ venueId: string; gameSeq: number } | null>(null); // 관전/대형 디스플레이
   const [followedIds, setFollowedIds] = useState<Set<string>>(new Set()); // 팔로우한 매장 id
   const [followedOnly, setFollowedOnly] = useState(false); // 일정탐색: 팔로우 매장 포스터만
   // 📍 가까운 순(Phase 14 보류 해제 — venues.lat/lng 신설): 위치 1회 요청, 거부 시 지역 필터 안내.
   const [nearSort, setNearSort] = useState(false);
   const [myPos, setMyPos] = useState<{ lat: number; lng: number } | null>(null);
+  // 온보딩 '매장 단골' 선택 → 가까운 순을 실제로 켠다('첫 화면을 맞춰드려요' 약속 이행)
+  useEffect(() => {
+    const h = () => { if (!nearSort) toggleNearSort(); };
+    window.addEventListener('nuri:enable-near', h);
+    return () => window.removeEventListener('nuri:enable-near', h);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nearSort, myPos]);
   const toggleNearSort = () => {
     if (nearSort) { setNearSort(false); return; }
     if (myPos) { setNearSort(true); return; }
@@ -790,6 +809,8 @@ export default function App() {
         const kstToday = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
         const eventOn = kstToday >= '2026-07-20' && kstToday <= '2026-08-03';
         toast.show(`${name || '매장'} 체크인 완료! 출석 도장 +${eventOn ? '6점 (오픈 이벤트 2배!)' : '3점'}${fire}${bonus} 🎉`, 'success');
+        // 매장 QR 스캔은 '그 매장에 와 있다'는 뜻 — 홈이 아니라 그 매장 페이지(오늘 대회·내 활동)에 착지
+        setOpenVenueId(cv);
       })
       .catch((e) => toast.show(e instanceof Error ? e.message : '체크인 실패', 'error'))
       .finally(() => {

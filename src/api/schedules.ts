@@ -34,6 +34,8 @@ export interface Schedule {
   posterUrl?: string; posterColor?: string;
   displayOrder: number; isPremium: boolean; ownerId: string;
   unreadQnaCount: number; approved: boolean;
+  /** 포스터 상세 조회수(성과 지표) — 승인된 포스터만 집계 */
+  viewCount?: number;
   /** 부스트 만료 시각 — 있고 미래면 isPremium과 동일하게 상단 고정 */
   premiumUntil?: string | null;
 }
@@ -70,7 +72,14 @@ function rowToSchedule(r: any): Schedule {
     isPremium: r.is_premium || (r.premium_until != null && new Date(r.premium_until) > new Date()),
     premiumUntil: r.premium_until ?? null,
     ownerId: r.owner_id, unreadQnaCount: r.unread_qna_count, approved: r.approved,
+    viewCount: r.view_count ?? 0,
   };
+}
+
+/** 포스터 조회 +1 — 상세를 연 세션당 1회(호출측 가드). 실패해도 무시(장식 지표) */
+export async function bumpScheduleView(id: string): Promise<void> {
+  if (IS_MOCK) return;
+  await supabase.rpc('bump_schedule_view', { p_id: id });
 }
 
 // ── 전체 조회 ─────────────────────────────────────────────────────────────────

@@ -215,8 +215,11 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUse
           <p className="text-sm font-medium text-ink-primary truncate">{schedule.title}</p>
           <p className="text-2xs text-ink-muted mt-0.5">{d.getMonth() + 1}/{d.getDate()} {schedule.startTime} · 바이인 {schedule.buyIn.amount.toLocaleString()}</p>
           {/* 운영 현황 미니칩 — 예약·바인·매출(연결 장부 기준). 게임관리가 곧 운영 현황판 */}
-          {(ops || (resCount ?? 0) > 0) && (
+          {(ops || (resCount ?? 0) > 0 || (schedule.viewCount ?? 0) > 0) && (
             <span className="mt-1 flex flex-wrap items-center gap-1 text-2xs font-semibold tabular-nums">
+              {(schedule.viewCount ?? 0) > 0 && (
+                <span className="rounded-badge bg-surface-high px-1.5 py-0.5 text-ink-secondary">조회 {schedule.viewCount}</span>
+              )}
               {(resCount ?? 0) > 0 && (
                 <span className="rounded-badge bg-surface-high px-1.5 py-0.5 text-ink-secondary">예약 {resCount}</span>
               )}
