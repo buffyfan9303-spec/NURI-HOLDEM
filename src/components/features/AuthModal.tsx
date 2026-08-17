@@ -71,7 +71,7 @@ function LegalSheet({ doc, onClose }: { doc: LegalDoc | null; onClose: () => voi
         type="button"
         aria-label="닫기"
         onClick={onClose}
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm cursor-default"
+        className="absolute inset-0 bg-black/80 backdrop-blur-md cursor-default" // Modal 원자와 동일 딤 토큰
       />
 
       {/* 시트 본문 */}
@@ -82,11 +82,7 @@ function LegalSheet({ doc, onClose }: { doc: LegalDoc | null; onClose: () => voi
       ].join(' ')}
         style={{ maxHeight: '88vh' }}
       >
-        {/* 그립 핸들 (모바일) */}
-        <div className="flex justify-center pt-2 pb-1 sm:hidden">
-          <div className="w-10 h-1 rounded-full bg-border-strong" aria-hidden />
-        </div>
-
+        {/* (그립 핸들 제거 — 드래그 핸들러가 없는 장식 핸들은 '끌어서 닫힘' 기대만 만든다) */}
         {/* 헤더 */}
         <header className="flex items-center justify-between px-4 py-3 border-b border-border-subtle shrink-0">
           <h2 className="text-base font-semibold text-ink-primary">{LEGAL_TITLES[doc]}</h2>
@@ -94,7 +90,7 @@ function LegalSheet({ doc, onClose }: { doc: LegalDoc | null; onClose: () => voi
             type="button"
             onClick={onClose}
             aria-label="닫기"
-            className="w-8 h-8 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high transition-colors"
+            className="w-11 h-11 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high transition-colors"
           >
             <Icon name="close" size={14} />
           </button>
