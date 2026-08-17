@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import Modal from '../atoms/Modal';
-import type { MarketplaceListing, ListingLikeState } from '../../api/marketplace';
-import { getListingLikeState, toggleListingLike, nextLikeState } from '../../api/marketplace';
+import type { ListingStatus, MarketplaceListing, ListingLikeState } from '../../api/marketplace';
+import { updateListingStatus, getListingLikeState, toggleListingLike, nextLikeState } from '../../api/marketplace';
 import { CATEGORIES, CONDITION_COLOR, STATUS_MAP, relativeTime } from './MarketplaceTab';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBlocks } from '../../contexts/BlockContext';
@@ -12,6 +12,8 @@ import { getListingThreads } from '../../api/chat';
 import ChatPane from './chat/ChatPane';
 
 interface ListingDetailModalProps {
+  /** 본인 매물 상태 변경 직후 — 목록·열린 매물 동기화(팔린 물건이 '판매중'으로 남는 헛문의 방지) */
+  onStatusChanged?: (id: string, status: ListingStatus) => void;
   listing: MarketplaceListing | null;
   open: boolean;
   onClose: () => void;
@@ -19,7 +21,7 @@ interface ListingDetailModalProps {
   onDelete?: (id: string) => void;
 }
 
-export default function ListingDetailModal({ listing, open, onClose, onDelete }: ListingDetailModalProps) {
+export default function ListingDetailModal({ listing, open, onClose, onDelete, onStatusChanged }: ListingDetailModalProps) {
   const { user }                  = useAuth();
   const { block }                 = useBlocks();
   // 찜은 서버(listing_likes)가 단일 진실. liked 와 총계를 한 덩어리로 든 이유는
@@ -28,6 +30,7 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete }:
   const [likeBusy, setLikeBusy]   = useState(false);
   const [chatOpen, setChatOpen]   = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [statusBusy, setStatusBusy] = useState(false); // 본인 매물 상태 토글(훅은 early return 위에)
   const toast                     = useToast();
 
   // 열 때마다 서버에서 다시 읽는다 — 목록의 likeCount 는 탭 로드 시점 스냅샷이고,
@@ -62,6 +65,18 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete }:
   const category = CATEGORIES.find((c) => c.id === listing.category);
   const isSold   = listing.status === 'sold';
   const hasImage = listing.images.length > 0;
+  // 본인 매물 — 상태 변경이 '내 판매목록'에 숨어 있어 갱신이 안 되던 격차(헛문의 원인)
+  const mine = !!user && user.id === listing.sellerId;
+  const changeStatus = async (next: ListingStatus) => {
+    if (next === listing.status || statusBusy) return;
+    setStatusBusy(true);
+    try {
+      await updateListingStatus(listing.id, next);
+      onStatusChanged?.(listing.id, next);
+      toast.show(next === 'sold' ? '거래완료로 변경 — 목록에서 판매중 표시가 내려갑니다' : next === 'reserved' ? '예약중으로 변경했습니다' : '판매중으로 변경했습니다', 'success');
+    } catch (e) { toast.show(e instanceof Error ? e.message : '상태 변경 실패', 'error'); }
+    finally { setStatusBusy(false); }
+  };
 
   const scrollToComments = () => {
     document.getElementById('listing-comments')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -199,7 +214,28 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete }:
       </div>
 
       {/* ── 하단 고정 CTA ─────────────────────────────────────────── */}
-      {!isSold && (
+      {mine ? (
+        <div className="sticky bottom-0 border-t border-border-default bg-surface-mid px-4 py-3">
+          <p className="mb-1.5 text-2xs font-bold text-ink-muted">내 매물 상태 — 채팅으로 확정되면 바로 바꿔주세요</p>
+          <div className="flex items-center gap-2">
+            {([['on_sale', '판매중'], ['reserved', '예약중'], ['sold', '거래완료']] as const).map(([k, l]) => (
+              <button key={k} type="button" disabled={statusBusy}
+                onClick={() => changeStatus(k)}
+                aria-pressed={listing.status === k}
+                className={['flex-1 rounded-input border py-2.5 text-sm font-bold transition-colors disabled:opacity-60',
+                  listing.status === k
+                    ? (k === 'sold' ? 'border-border-strong bg-surface-high text-ink-primary' : k === 'reserved' ? 'border-amber-500/60 bg-amber-500/15 text-amber-300' : 'border-emerald-500/60 bg-emerald-500/15 text-emerald-400')
+                    : 'border-border-default text-ink-muted hover:text-ink-secondary'].join(' ')}>
+                {l}
+              </button>
+            ))}
+            {onDelete && (
+              <button type="button" onClick={() => { if (confirm('이 매물을 삭제하시겠습니까?')) onDelete(listing.id); }}
+                className="btn-ghost shrink-0 px-3 py-2.5 text-danger-light hover:bg-danger/10">삭제</button>
+            )}
+          </div>
+        </div>
+      ) : !isSold && (
         <div className="sticky bottom-0 bg-surface-mid border-t border-border-default px-4 py-3 flex items-center gap-2">
           {/* 찜하기 — 서버 영속 토글(listing_likes). 로컬 state 시절엔 닫으면 사라졌다 */}
           <button

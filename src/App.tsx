@@ -2518,6 +2518,10 @@ export default function App() {
         listing={openListing}
         onClose={() => setOpenListing(null)}
         onDelete={handleDeleteListing}
+        onStatusChanged={(id, st) => {
+          setOpenListing((cur) => (cur && cur.id === id ? { ...cur, status: st } : cur));
+          setListings((prev) => prev.map((l) => (l.id === id ? { ...l, status: st } : l)));
+        }}
       />
       )}
 
