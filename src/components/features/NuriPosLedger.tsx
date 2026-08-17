@@ -1127,6 +1127,16 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       {selected && (
         <PaymentModal
           cell={selected} hasPw={hasPw} session={session}
+          lastPick={(() => {
+            // 신규 기록일 때만 — 그 손님의 직전 바인과 동일하게 원탭 반복(하룻밤 100+ 바인의 왕복 절감)
+            if (selected.buyin) return null;
+            const prev = buyins.filter((b) => b.playerName === selected.playerName && !b.isSplit && b.paymentMethod !== 'support')
+              .sort((a, b) => (b.buyinAt || '').localeCompare(a.buyinAt || ''))[0];
+            if (!prev) return null;
+            const mLabel = ({ ticket: '티켓', cash: '현금', transfer: '이체', card: '카드', support: '가게지원' } as Record<string, string>)[prev.paymentMethod] ?? prev.paymentMethod;
+            return { method: prev.paymentMethod, isUnpaid: prev.isUnpaid, discountIndex: prev.discountIndex,
+              label: `${mLabel} ${prev.isUnpaid ? '미수' : '완납'}${prev.discountIndex > 0 ? ' ·할인' : ''}` };
+          })()}
           onClose={() => setSelected(null)}
           onPick={async (method, isUnpaid, discountIndex) => {
             const pn = selected.playerName; const isNew = !selected.buyin;
@@ -1157,7 +1167,13 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
           }}
           onSetEarly={async (override) => {
             if (!selected.buyin) return;
-            try { await setBuyinEarly(selected.buyin.id, override); toast.show('얼리 유형을 변경했습니다', 'success'); setSelected(null); reload(); }
+            try {
+              await setBuyinEarly(selected.buyin.id, override);
+              toast.show('얼리 유형을 변경했습니다', 'success');
+              // 모달 유지 — 얼리만 바꾸고 결제수단도 이어서 고치는 흐름이 잦다(닫으면 재탐색 왕복)
+              setSelected((cur) => cur && cur.buyin ? { ...cur, buyin: { ...cur.buyin, earlyOverride: override } } : cur);
+              reload();
+            }
             catch (e) { toast.show(e instanceof Error ? e.message : '변경 실패', 'error'); }
           }}
         />
@@ -1842,7 +1858,8 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
         <textarea value={dealers} onChange={(e) => setDealers(e.target.value)} rows={2} placeholder="한 줄에 한 명" maxLength={300} className="input w-full text-sm resize-none" />
       </Field>
 
-      <div className="flex gap-2 pt-1">
+      {/* sticky — 필드 15+ 폼이라 실행 버튼이 화면 밖으로 밀렸다. 매일 반복하는 화면이니 항상 보이게 */}
+      <div className="sticky bottom-0 -mx-1 flex gap-2 bg-surface-base/90 px-1 pb-1 pt-2 backdrop-blur-sm">
         {onCancel && <button type="button" onClick={onCancel} className="btn-ghost text-sm flex-1">취소</button>}
         <button type="button" onClick={submit} disabled={cash <= 0} className="btn-primary text-sm flex-1 disabled:opacity-50">
           {mode === 'open' ? '장부 시작' : '저장'}
@@ -1893,9 +1910,11 @@ function Overlay({ title, onClose, children }: { title: string; onClose: () => v
 // ── 2-Tap 결제 입력 모달 ──────────────────────────────────────────────────────
 interface SplitInput { cashAmount: number; cardAmount: number; transferAmount: number; ticketCount: number; unpaidAmount: number; discountIndex: number; }
 
-function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCancelBuyin, onSetEarly }: {
+function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCancelBuyin, onSetEarly, lastPick }: {
   cell: SelectedCell; hasPw: boolean; session: LedgerSession;
   onClose: () => void;
+  /** 같은 손님의 직전 바인 반복용 원탭(신규 기록일 때만) — null 이면 미표시 */
+  lastPick?: { method: PaymentMethod; isUnpaid: boolean; discountIndex: number; label: string } | null;
   onPick: (m: PaymentMethod, isUnpaid: boolean, discountIndex: number) => void;
   onPickSplit: (d: SplitInput) => void;
   onCancelBuyin: (pw: string) => void;
@@ -1990,6 +2009,13 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
                 </div>
               )}
 
+              {/* ⚡ 직전과 동일 — 리바인 대부분은 그 손님의 직전 결제수단 반복이다 */}
+              {lastPick && (
+                <button type="button" onClick={() => onPick(lastPick.method, lastPick.isUnpaid, lastPick.discountIndex)}
+                  className="w-full h-12 rounded-input border border-accent-300 bg-accent-300/15 text-accent-300 font-bold text-sm active:scale-95 transition hover:bg-accent-300/25">
+                  ⚡ 직전과 동일 — {lastPick.label}
+                </button>
+              )}
               {/* 티켓: 완납·미수(가불) */}
               <div className="grid grid-cols-2 gap-2">
                 <button type="button" onClick={() => onPick('ticket', false, discIdx)}

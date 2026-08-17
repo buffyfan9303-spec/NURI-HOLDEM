@@ -660,14 +660,20 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
     try { const available = await checkNicknameAvailable(n); setRows((r) => r.map((row) => (row.nickname.trim() === n ? { ...row, member: !available } : row))); } catch { /* skip */ }
   };
   const addFromLedger = (name: string) => {
-    const n = name.trim(); if (!n) return;
+    // 장부는 '실명(닉네임)' 합성 표기를 쓴다 — 그대로 닉네임 칸에 넣으면 회원 매칭·이용권
+    // 자동지급이 전부 '비회원'으로 판정된다. 경계에서 분리해 각 칸에 넣는다.
+    const raw = name.trim(); if (!raw) return;
+    const m = raw.match(/^(.+?)\((.+)\)$/);
+    const nick = (m ? m[2] : raw).trim();
+    const real = (m ? m[1] : '').trim();
+    if (!nick) return;
     setRows((r) => {
-      if (r.some((row) => row.nickname.trim() === n)) return r;
+      if (r.some((row) => row.nickname.trim() === nick)) return r;
       const emptyIdx = r.findIndex((row) => !row.nickname.trim() && !row.realName.trim() && !row.prize.trim());
-      if (emptyIdx >= 0) return r.map((row, idx) => (idx === emptyIdx ? { ...row, nickname: n, member: null } : row));
-      return [...r, { ...emptyRow(), nickname: n }];
+      if (emptyIdx >= 0) return r.map((row, idx) => (idx === emptyIdx ? { ...row, nickname: nick, realName: real || row.realName, member: null } : row));
+      return [...r, { ...emptyRow(), nickname: nick, realName: real }];
     });
-    void checkMemberByName(n);
+    void checkMemberByName(nick);
   };
   const addAllFromLedger = () => { for (const p of ledgerPlayers) addFromLedger(p.name); };
   // 줄 삭제는 닉네임만 지우는 게 아니다 — 실명·프라이즈·이용권 개수·비고가 한꺼번에 날아간다.

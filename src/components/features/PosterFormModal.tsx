@@ -216,15 +216,26 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
   };
 
   // ── 제출 ─────────────────────────────────────────────────────────────────
+  // 오류 필드로 화면을 데려간다 — 긴 폼에서 토스트만 뜨면 업주가 문제 칸을 스크롤로 찾아야 했다
+  const failAt = (id: string, msg: string) => {
+    const el = document.getElementById(id);
+    if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); (el as HTMLElement).focus?.({ preventScroll: true }); }
+    toast.show(msg, 'error');
+  };
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.title.trim())     return toast.show('게임 이름을 입력해 주세요', 'error');
-    if (!form.region.trim())    return toast.show('지역을 선택해 주세요', 'error');
-    if (form.buyIn <= 0)        return toast.show('바이인 금액을 입력해 주세요', 'error');
-    if (form.prizeType === 'GTD'   && form.prizeAmount <= 0)  return toast.show('보장 상금 금액을 입력해 주세요', 'error');
-    if (form.prizeType === 'ENTRY' && form.prizePercent <= 0) return toast.show('프라이즈 비율(%)을 입력해 주세요', 'error');
+    if (!form.title.trim())     return failAt(titleId, '게임 이름을 입력해 주세요');
+    if (!form.region.trim())    return failAt(regionId, '지역을 선택해 주세요');
+    if (form.buyIn <= 0)        return failAt(buyInId, '바이인 금액을 입력해 주세요');
+    if (form.prizeType === 'GTD'   && form.prizeAmount <= 0)  return failAt(prizeAmountId, '보장 상금 금액을 입력해 주세요');
+    if (form.prizeType === 'ENTRY' && form.prizePercent <= 0) return failAt(prizePercentId, '프라이즈 비율(%)을 입력해 주세요');
     const regClose = [regLevel.trim() ? `${regLevel.trim()}LV` : '', regTime.trim()].filter(Boolean).join(' ');
-    if (!regClose)              return toast.show('레지마감은 레벨 또는 시간 중 하나 이상 입력해 주세요', 'error');
+    if (!regClose)              return failAt(regLevelId, '레지마감은 레벨 또는 시간 중 하나 이상 입력해 주세요');
+    // 과거 날짜 가드 — 신규 등록이 어제로 잡히면 첫 화면에서 '종료'로 시작한다(오타 사고 방지)
+    if (form.date && form.date < new Date().toLocaleDateString('en-CA')
+        && !window.confirm(`날짜가 과거(${form.date})입니다 — 등록하면 바로 '종료' 처리됩니다. 그래도 등록할까요?`)) {
+      return failAt(dateId, '날짜를 확인해 주세요');
+    }
 
     // 법적 필터링
     const check = filterContent(`${form.title} ${form.prizes.join(' ')}`);
@@ -499,8 +510,21 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
           <FieldWrap label="바이인" suffix="원" required htmlFor={buyInId}>
             <input id={buyInId} type="number" inputMode="numeric" required min={0} value={form.buyIn || ''}
               onChange={(e) => update('buyIn', Number(e.target.value))} placeholder="100000" className="input" />
+            {/* 실시간 환산 — 옆 칸(만원)과 단위가 달라 0 하나 오차가 잦다 */}
+            {form.buyIn > 0 && (
+              <p className={['mt-1 text-2xs tabular-nums', form.buyIn < 1000 ? 'font-bold text-amber-400' : 'text-ink-muted'].join(' ')}>
+                = {form.buyIn >= 10000 ? `${(form.buyIn / 10000).toLocaleString()}만원` : `${form.buyIn.toLocaleString()}원`}
+                {form.buyIn < 1000 && ' — 만원 단위로 적으셨나요? 이 칸은 원 단위입니다'}
+              </p>
+            )}
           </FieldWrap>
         </div>
+        {form.prizeType === 'GTD' && form.prizeAmount > 0 && (
+          <p className={['-mt-1 text-2xs tabular-nums', form.prizeAmount >= 100000 ? 'font-bold text-amber-400' : 'text-ink-muted'].join(' ')}>
+            보장 상금 = {form.prizeAmount >= 10000 ? `${(form.prizeAmount / 10000).toLocaleString()}억원` : `${form.prizeAmount.toLocaleString()}만원`}
+            {form.prizeAmount >= 100000 && ' — 원 단위로 적으셨나요? 이 칸은 만원 단위입니다'}
+          </p>
+        )}
 
         {/* 게임 종류(자유 입력) — 포스터 상금 옆 뱃지로 표시. 애드온 게임이면 스택·비용 입력 */}
         <FieldWrap label="게임 종류" htmlFor={gameTypeId}>
