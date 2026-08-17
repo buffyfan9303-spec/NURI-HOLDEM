@@ -15,6 +15,7 @@ import {
 } from '../../api/vouchers';
 import { wonToMan } from '../../api/ledger';
 import { getMyReservations, cancelMyReservation, type MyReservationRow } from '../../api/reservations';
+import { getPostsByUser, type CommunityPost } from '../../api/community';
 import { getMyRankingHistory, getGlobalRankingTotals, parsePrizeMan, placementPoints, type MyRankingRow } from '../../api/rankings';
 import { shareRecordCard, shareRecordCardKakao } from '../../lib/recordCard';
 import { kakaoConfigured, kakaoShareLink } from '../../lib/kakao';
@@ -34,11 +35,15 @@ function parseVenueId(text: string): string | null {
 
 interface Stack { venueId: string; venueName: string; title: string; ids: string[]; expiries: (string | null)[] }
 
-export default function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification }: {
+export default function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification, onOpenPost, onOpenProfile, onOpenMarket }: {
   open: boolean; onClose: () => void;
   /** 미읽음 알림 미리보기(상위 3개) — 프로필 메뉴까지 안 가도 되게 */
   unread?: { id: string; title: string; message: string; createdAt: string }[];
   onOpenNotification?: (id: string) => void;
+  /** '내 것' 허브 — 흩어져 있던 내 글·내 거래·프로필을 이 화면에서 잇는다 */
+  onOpenPost?: (p: CommunityPost) => void;
+  onOpenProfile?: () => void;
+  onOpenMarket?: () => void;
 }) {
   const { user } = useAuth();
   const toast = useToast();
@@ -54,6 +59,13 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
   const [redeem, setRedeem] = useState<Stack | null>(null);
   const [badgeStats, setBadgeStats] = useState<BadgeStats | null>(null); // 내 업적(랭킹 탭에서 이전)
   const [achOpen, setAchOpen] = useState(false); // 내 업적 접기/펼치기 — 기본 닫힘
+  const [myPosts, setMyPosts] = useState<CommunityPost[]>([]); // 내가 쓴 글 — 그동안 찾을 화면 자체가 없었다
+
+  useEffect(() => {
+    if (!open || !user) { setMyPosts([]); return; }
+    getPostsByUser(user.id).then(setMyPosts).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, user?.id]);
 
   const reload = () => {
     setLoading(true);
@@ -221,6 +233,42 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
 
           {/* 레벨·칭호 — 활동점수 기반 레벨/칭호 + 다음 레벨까지 진행 */}
           <LevelCard points={user?.activityPoints ?? 0} championships={championships} />
+
+          {/* 내 것 바로가기 — 프로필·장터 내 거래가 각각 다른 구석에 살아서 늘 헤맸다 */}
+          <div className="grid grid-cols-2 gap-2">
+            {onOpenProfile && (
+              <button type="button" onClick={onOpenProfile}
+                className="rounded-card border border-border-default bg-surface-low px-3 py-2.5 text-left hover:border-accent-400/50 transition-colors">
+                <span className="block text-sm font-bold text-ink-primary">👤 프로필 관리</span>
+                <span className="block text-2xs text-ink-muted mt-0.5">닉네임 · 본인인증 · 알림 설정</span>
+              </button>
+            )}
+            {onOpenMarket && (
+              <button type="button" onClick={onOpenMarket}
+                className="rounded-card border border-border-default bg-surface-low px-3 py-2.5 text-left hover:border-accent-400/50 transition-colors">
+                <span className="block text-sm font-bold text-ink-primary">🛒 내 장터 거래</span>
+                <span className="block text-2xs text-ink-muted mt-0.5">판매목록 · 채팅 · 찜</span>
+              </button>
+            )}
+          </div>
+
+          {/* 내가 쓴 글 — 커뮤니티에 흩어진 내 글을 다시 찾을 유일한 화면 */}
+          {myPosts.length > 0 && onOpenPost && (
+            <section className="rounded-card border border-border-default bg-surface-low p-3">
+              <h2 className="text-sm font-bold text-ink-primary">📝 내가 쓴 글 <span className="font-normal text-ink-muted">({myPosts.length})</span></h2>
+              <ul className="mt-2 space-y-1">
+                {myPosts.slice(0, 5).map((mp) => (
+                  <li key={mp.id}>
+                    <button type="button" onClick={() => onOpenPost(mp)}
+                      className="w-full rounded-input px-2 py-1.5 text-left hover:bg-surface-high transition-colors">
+                      <span className="block truncate text-xs font-semibold text-ink-secondary">{mp.title || (mp.content || '').replace(/\n/g, ' ').slice(0, 40) || '(내용 없음)'}</span>
+                      <span className="block text-2xs text-ink-muted tabular-nums">❤️{mp.likeCount} · 💬{mp.commentCount} · {new Date(mp.createdAt).toLocaleDateString()}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
           {/* 친구 초대 — 추천 링크 + 현황. 친구 가입+본인인증 시 양쪽 활동점수 */}
           <InviteSection nickname={user?.nickname ?? ''} stats={refStats} />

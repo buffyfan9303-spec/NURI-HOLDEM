@@ -54,7 +54,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const show = useCallback((message: string, variant: ToastVariant = 'info', opts?: ToastOptions) => {
     const id = Date.now() + Math.random();
     // 되돌리기 버튼이 있으면 읽고 누를 시간이 필요하다 — 2.4초로는 손이 못 따라간다.
-    const durationMs = opts?.durationMs ?? (opts?.action ? 6000 : 2400);
+    // 에러도 마찬가지 — '왜 실패했는지'를 읽기 전에 사라지면 같은 실수를 반복한다.
+    const durationMs = opts?.durationMs ?? (opts?.action ? 6000 : variant === 'error' ? 4500 : 2400);
     setToasts((prev) => [...prev, { id, message, variant, action: opts?.action, durationMs }]);
     // 햅틱 피드백(모바일) — 성공 10ms 한 번, 에러는 짧게 두 번(네이티브 앱 감각)
     try {
@@ -95,9 +96,11 @@ function ToastItem({ message, variant, action, durationMs, onDismiss }: Toast & 
   return (
     <div
       role="status"
+      onClick={onDismiss}
+      title="탭하면 닫힘"
       className={[
         'inline-flex items-center gap-2 px-4 py-2.5 rounded-input border shadow-dialog',
-        'text-sm font-medium pointer-events-auto max-w-[92vw]',
+        'text-sm font-medium pointer-events-auto max-w-[92vw] cursor-pointer select-none',
         'transition-all duration-300',
         COLOR[variant],
         out ? 'opacity-0 translate-y-2' : 'opacity-100 animate-slide-up',
@@ -109,8 +112,8 @@ function ToastItem({ message, variant, action, durationMs, onDismiss }: Toast & 
         // 되돌리기는 실수를 되돌리는 마지막 기회다 — 본문과 확실히 구분되고 손가락으로 짚을 크기여야 한다
         <button
           type="button"
-          onClick={() => { action.onClick(); onDismiss(); }}
-          className="ml-1 shrink-0 -my-1 px-3 py-1.5 rounded-badge border border-current/40 bg-black/15 text-xs font-bold underline underline-offset-2 active:scale-95 transition"
+          onClick={(e) => { e.stopPropagation(); action.onClick(); onDismiss(); }}
+          className="hit relative ml-1 shrink-0 -my-1 px-3 py-1.5 rounded-badge border border-current/40 bg-black/15 text-xs font-bold underline underline-offset-2 active:scale-95 transition"
         >
           {action.label}
         </button>

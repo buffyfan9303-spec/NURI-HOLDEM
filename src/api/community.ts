@@ -122,6 +122,15 @@ const rowToPost = (r: any): CommunityPost => ({
   blinded:  r.blinded ?? false,
 });
 
+/** 내가 쓴 글 — 개인 허브('내 대시보드')용. 목록 50건 제한과 무관하게 본인 글만 조회 */
+export async function getPostsByUser(userId: string, limit = 20): Promise<CommunityPost[]> {
+  if (IS_MOCK) return [];
+  const res = await supabase.from('community_posts').select('*').eq('user_id', userId)
+    .order('created_at', { ascending: false }).limit(limit);
+  if (res.error) return [];
+  return (res.data ?? []).map(rowToPost);
+}
+
 /** 단건 게시글 — 공유 딥링크·알림 링크가 목록(최근 50건) 밖의 글을 가리킬 때 사용 */
 export async function getPostById(postId: string): Promise<CommunityPost | null> {
   if (IS_MOCK) {

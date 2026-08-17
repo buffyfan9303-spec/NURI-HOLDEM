@@ -264,8 +264,8 @@ const AppHeader = memo(function AppHeader({
             <button
               type="button"
               onClick={onOpenVouchers}
-              aria-label="내 매장이용권"
-              className="w-9 h-9 hidden lg:flex items-center justify-center rounded-full text-ink-secondary hover:text-accent-300 hover:bg-surface-high transition-colors"
+              aria-label="내 대시보드 (예약·이용권·전적)"
+              className="w-9 h-9 flex items-center justify-center rounded-full text-ink-secondary hover:text-accent-300 hover:bg-surface-high transition-colors"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" /><path d="M13 5v14" /></svg>
             </button>
@@ -344,7 +344,7 @@ const AppHeader = memo(function AppHeader({
                     <button type="button" onClick={() => { onOpenVouchers(); setUserMenu(false); }}
                       className="w-full text-left flex items-center gap-2 px-3 py-2.5 text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" /><path d="M13 5v14" /></svg>
-                      내 매장이용권
+                      내 대시보드 <span className="text-ink-muted">(예약·이용권·전적)</span>
                     </button>
                     <button type="button" onClick={() => { onGotoTab?.('tools'); setUserMenu(false); }}
                       className="w-full text-left flex items-center gap-2 px-3 py-2.5 text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
@@ -1986,7 +1986,10 @@ export default function App() {
               const n = notifications.find((x) => x.id === id);
               setVoucherWalletOpen(false);
               if (n) { handleMarkRead([n.id]); handleNavigateNotification(n); }
-            }} />
+            }}
+            onOpenPost={(pp) => { setVoucherWalletOpen(false); changeTab('community'); setOpenPost(pp); }}
+            onOpenProfile={() => { setVoucherWalletOpen(false); setProfileOpen(true); }}
+            onOpenMarket={() => { setVoucherWalletOpen(false); changeTab('market'); }} />
         </Suspense>
       )}
 

@@ -421,13 +421,14 @@ button, [role='button'], a, [role='tab'] {
    그 클래스를 쓴 274곳에서 transition-property 가 color 계열로 덮여 transform/opacity 가 빠졌다.
    → :active 의 눌림(scale) 이 애니메이션되지 않아 '버튼 절반만 반응하는' 상태였다.
    data-no-press 를 달면 이 규칙에서 빠져나갈 수 있게 탈출구도 함께 만든다. */
-button:not([data-no-press]), [role='button']:not([data-no-press]) {
+button:not([data-no-press]), [role='button']:not([data-no-press]), a:not([data-no-press]) {
   transition-property: opacity, transform, color, background-color, border-color;
   transition-duration: 0.2s;
   transition-timing-function: var(--ease);
   -webkit-tap-highlight-color: transparent;
 }
-button:active:not(:disabled), [role='button']:active {
+/* a 도 동일 — 전화·길찾기·카카오맵 앵커가 눌러도 무반응이라 '죽은 버튼'처럼 느껴졌다 */
+button:active:not(:disabled), [role='button']:active, a:active:not([data-no-press]) {
   opacity: 0.72;
   transition-duration: 0.06s;
 }
