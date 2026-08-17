@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { getEquippedMarks } from '../../api/community';
 import Modal from '../atoms/Modal';
 import { useAuth } from '../../contexts/AuthContext';
@@ -46,6 +46,9 @@ export default function PostDetailModal({
   const [gtoHero, setGtoHero] = useState<string[] | null>(null);
   // 확대해서 볼 첨부 사진의 인덱스(null=닫힘). 뷰어는 포스터에 쓰던 ImageLightbox 를 그대로 재사용한다.
   const [zoomIdx, setZoomIdx] = useState<number | null>(null);
+  // 열린 시각 — 고스트 클릭(피드 카드 탭의 합성 click) 판정 기준. 방금 마운트된 첨부 사진에
+  // 유령 클릭이 꽂혀 라이트박스가 멋대로 열리는 것 방지(ScheduleDetailModal 과 동일 패턴).
+  const openedAtRef = useRef(0);
   const { user } = useAuth();
   const { block } = useBlocks();
   // 더블탭 좋아요(인스타) — 본문을 빠르게 두 번 탭하면 좋아요 + 하트 팝
@@ -74,6 +77,7 @@ export default function PostDetailModal({
     setGr(post.goodrunCount ?? 0);
     setMyReaction(null);
     setZoomIdx(null); // 2-pane 은 같은 인스턴스로 글만 갈아끼우므로 이전 글의 확대 뷰가 남는다
+    openedAtRef.current = performance.now();
     let active = true;
     getMyReaction(post.id).then((r) => { if (active) setMyReaction(r); }).catch(() => {});
     incrementPostView(post.id).catch(() => {});
@@ -234,7 +238,7 @@ export default function PostDetailModal({
                 <ul className={`grid gap-1.5 ${images.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
                   {images.map((url, i) => (
                     <li key={url}>
-                      <button type="button" onClick={() => setZoomIdx(i)}
+                      <button type="button" onClick={() => { if (performance.now() - openedAtRef.current < 400) return; setZoomIdx(i); }}
                         aria-label={`첨부 사진 ${i + 1} 확대 보기`}
                         className={`block w-full overflow-hidden rounded-card border border-border-subtle bg-surface-high active:opacity-80 ${images.length === 1 ? 'aspect-[4/3]' : 'aspect-square'}`}>
                         <img src={thumbUrl(url, 480)} srcSet={thumbSrcSet(url, 480)}
