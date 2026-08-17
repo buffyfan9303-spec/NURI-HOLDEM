@@ -109,6 +109,19 @@ export function pushLayer(close: CloseFn): () => void {
 }
 
 /**
+ * 가드(overlayJustClosed)에 걸려 '무반응으로 소진'된 레이어를 즉시 재적립한다.
+ * 부작용 수복: 비-browse 탭에서 모달을 X로 닫고 600ms 안에 진짜 뒤로가기를 누르면
+ * 탭 레이어가 아무 일도 안 하고 사라져 다음 뒤로가기에 앱이 종료되던 문제 —
+ * 소진된 자리에 같은 close 를 다시 쌓아 다음 뒤로가기가 정상 동작하게 한다.
+ */
+export function rearmLayer(close: CloseFn): void {
+  init();
+  const id = ++seq;
+  layers.push({ id, close });
+  try { window.history.pushState({ __layer: id }, ''); } catch { /* pushState 불가 환경 — 무시 */ }
+}
+
+/**
  * 훅: `open` 인 동안 브라우저/모바일 뒤로가기로 이 오버레이만 닫는다.
  * 모든 모달/풀스크린 페이지가 이 훅 하나로 동일하게 동작한다.
  */

@@ -32,7 +32,7 @@ import { tierColor } from './components/atoms/TierBadge';
 import ConsentGateModal from './components/features/ConsentGateModal';
 import type { PostFormData } from './components/features/PostFormModal';
 import type { MarketplaceFormData } from './components/features/MarketplaceFormModal';
-import { useBackClose, overlayJustClosed } from './lib/backstack';
+import { rearmLayer, useBackClose, overlayJustClosed } from './lib/backstack';
 import { useVisibilityRefresh } from './lib/useVisibilityRefresh';
 import { lazyWithReload } from './lib/lazyWithReload';
 import { getRunningClocks } from './api/clock';
@@ -929,7 +929,14 @@ export default function App() {
   // 오버레이가 열려 있으면 중앙 back-stack 이 LIFO 로 그 오버레이부터 닫는다.
   // 오버레이(모달)가 막 닫힌 직후의 잘못된 popstate 는 무시 — 모달 닫힘이 일정탐색으로
   // 튀던 간헐 버그(탭 레이어 pushState throttle 시 history.back 과열) 방지.
-  useBackClose(activeTab !== 'browse', () => { if (!overlayJustClosed()) changeTab('browse'); });
+  // 모달 닫힘 직후(디바운스 창) 들어온 뒤로가기는 오발동 방지로 무시하되,
+  // 소진된 탭 레이어를 즉시 재적립(rearmLayer) — 안 그러면 다음 뒤로가기가 앱을 종료시켰다.
+  const tabBackRef = useRef<() => void>(() => {});
+  tabBackRef.current = () => {
+    if (overlayJustClosed()) { rearmLayer(() => tabBackRef.current()); return; }
+    changeTab('browse');
+  };
+  useBackClose(activeTab !== 'browse', () => tabBackRef.current());
 
   // ── 데이터 (Supabase에서 로드) ──────────────────────────────────────────────
   // 캐시 퍼스트(Phase 6): 직전 세션 스냅샷이 있으면 네트워크를 기다리지 않고 먼저 그린다.
