@@ -5,8 +5,8 @@ import UnderlineTabs from '../atoms/UnderlineTabs';
 import { useToast } from '../atoms/Toast';
 // (프로필 카드 이미지 저장 기능 제거 — 2026-06-15 사장님 요청)
 import { useAuth } from '../../contexts/AuthContext';
+import { supabase, IS_MOCK } from '../../lib/supabase';
 import { useBlocks } from '../../contexts/BlockContext';
-import { IS_MOCK } from '../../lib/supabase';
 import { resizeImage } from '../../lib/storage';
 import { requestPasswordChangeCode, changeMyPasswordWithCode, setMyNickname, withdrawMyAccount, verifyMyPassword, getMyAccountSummary } from '../../api/auth';
 import { pushSupported, isPushSubscribed, enablePush, disablePush } from '../../api/push';
@@ -660,18 +660,30 @@ function WithdrawAccountSection() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [summary, setSummary] = useState<{ vouchers: number; posts: number } | null>(null);
+  // 소셜(카카오) 계정은 비밀번호가 없다 — 재인증을 '영구 삭제' 타이핑 확인으로 폴백
+  const [social, setSocial] = useState(false);
 
   const start = () => {
     setPassword(''); setSummary(null); setOpen(true);
     getMyAccountSummary().then(setSummary).catch(() => setSummary({ vouchers: 0, posts: 0 }));
+    if (!IS_MOCK) {
+      supabase.auth.getSession().then(({ data }) => {
+        const prov = (data.session?.user.app_metadata as { provider?: string } | undefined)?.provider;
+        setSocial(!!prov && prov !== 'email');
+      }).catch(() => {});
+    }
   };
 
   const submit = async () => {
-    if (!password) { toast.show('비밀번호를 입력하세요', 'error'); return; }
+    if (!password) { toast.show(social ? "'영구 삭제'를 입력하세요" : '비밀번호를 입력하세요', 'error'); return; }
     setBusy(true);
     try {
+      if (social) {
+        if (password.trim() !== '영구 삭제') { toast.show("'영구 삭제'를 정확히 입력하세요", 'error'); setBusy(false); return; }
+      } else {
       const ok = await verifyMyPassword(password);
       if (!ok) { toast.show('비밀번호가 일치하지 않습니다', 'error'); setBusy(false); return; }
+      }
       await withdrawMyAccount();
       toast.show('회원 탈퇴가 완료되었습니다. 그동안 이용해 주셔서 감사합니다.', 'success');
       try { await logout(); } catch { /* ignore */ }
@@ -704,9 +716,11 @@ function WithdrawAccountSection() {
             </div>
           )}
           <label className="block">
-            <span className="mb-1 block text-2xs font-semibold text-ink-secondary">본인 확인 — 현재 비밀번호를 입력하세요</span>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password" placeholder="현재 비밀번호"
+            <span className="mb-1 block text-2xs font-semibold text-ink-secondary">
+              {social ? "본인 확인 — '영구 삭제' 를 입력하세요 (카카오 계정은 비밀번호가 없어요)" : '본인 확인 — 현재 비밀번호를 입력하세요'}
+            </span>
+            <input type={social ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)}
+              autoComplete={social ? 'off' : 'current-password'} placeholder={social ? '영구 삭제' : '현재 비밀번호'}
               onKeyDown={(e) => { if (e.key === 'Enter' && password && !busy) submit(); }}
               className="input w-full text-sm" />
           </label>

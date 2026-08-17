@@ -483,3 +483,18 @@ async function rawSearchMembersForRanking(q: string): Promise<{ nickname: string
 /** 순위 입력 자동완성 — 닉네임/실명 부분 일치(업주·운영자만 실명 반환, RPC 내부 게이트). verified=본인인증 보유 여부(미인증 선안내용).
  *  이용권 검색과 동일하게 동일 q 중복 호출을 in-flight+20s LRU 로 흡수(키=trim+소문자, ILIKE라 대소문자·공백 무관). */
 export const searchMembersForRanking = makeSearchCache(rawSearchMembersForRanking, (s) => s.trim().toLowerCase());
+
+/** 카카오 로그인 — Supabase OAuth(kakao). 리다이렉트 후 detectSessionInUrl 이 세션을 잡고
+ *  onAuthStateChange → 프로필 로드로 이어진다. 신규 유저 프로필은 handle_new_user 트리거가 생성. */
+export async function loginWithKakao(): Promise<void> {
+  if (IS_MOCK) throw new Error('환경 설정 후 이용할 수 있습니다');
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'kakao',
+    options: { redirectTo: window.location.origin },
+  });
+  if (error) {
+    throw new Error(/provider is not enabled|unsupported provider/i.test(error.message)
+      ? '카카오 로그인 준비 중입니다 — 잠시 후 다시 시도해 주세요'
+      : error.message);
+  }
+}

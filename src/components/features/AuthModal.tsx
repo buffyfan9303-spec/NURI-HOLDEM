@@ -6,7 +6,7 @@ import { useBackClose } from '../../lib/backstack';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
 import StatefulActionButton from '../atoms/StatefulActionButton';
-import {
+import { loginWithKakao,
   signUpUser, signUpOwner, checkNicknameAvailable,
   requestPasswordReset, verifyPasswordResetOtp, setNewPassword,
 } from '../../api/auth';
@@ -267,6 +267,31 @@ export default function AuthModal({ open, onClose, initialMode = 'login' }: Auth
 
 // ── 로그인 폼 ─────────────────────────────────────────────────────────────────
 
+function KakaoLoginButton({ onError }: { onError: (msg: string) => void }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="space-y-1.5">
+      <button type="button" disabled={busy}
+        onClick={() => { setBusy(true); loginWithKakao().catch((e) => { onError(e instanceof Error ? e.message : '카카오 로그인 실패'); setBusy(false); }); }}
+        className="flex h-12 w-full items-center justify-center gap-2 rounded-input bg-[#FEE500] text-sm font-bold text-black/85 transition active:scale-[0.99] disabled:opacity-60">
+        {/* 카카오 심볼(말풍선) — 공식 버튼 규격 색상 */}
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="#000000" aria-hidden>
+          <path d="M12 3C6.48 3 2 6.58 2 11c0 2.84 1.86 5.33 4.66 6.74-.15.52-.96 3.32-.99 3.54 0 0-.02.17.09.23.11.06.24.01.24.01.32-.04 3.66-2.4 4.24-2.81.57.08 1.16.13 1.76.13 5.52 0 10-3.58 10-8s-4.48-8-10-8Z" />
+        </svg>
+        {busy ? '카카오로 이동 중…' : '카카오로 3초 만에 시작하기'}
+      </button>
+      <p className="text-center text-2xs leading-relaxed text-ink-muted">
+        가입 시 <b className="text-ink-secondary">이용약관·개인정보처리방침</b>에 동의하게 됩니다
+      </p>
+      <div className="flex items-center gap-2 py-0.5" aria-hidden>
+        <span className="h-px flex-1 bg-border-subtle" />
+        <span className="text-2xs text-ink-muted">또는 이메일로</span>
+        <span className="h-px flex-1 bg-border-subtle" />
+      </div>
+    </div>
+  );
+}
+
 function LoginForm({ onClose, onForgot }: { onClose: () => void; onForgot: () => void }) {
   const { login } = useAuth();
   const toast = useToast();
@@ -295,6 +320,7 @@ function LoginForm({ onClose, onForgot }: { onClose: () => void; onForgot: () =>
 
   return (
     <form onSubmit={submit} className="space-y-3">
+      <KakaoLoginButton onError={(m) => setError(m)} />
       <Field label="이메일" type="email" required autoComplete="email"
         value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
       <Field label="비밀번호" type="password" required autoComplete="current-password"
