@@ -173,9 +173,10 @@ export default function CommentThread({ comments, onSubmit, onDelete, moderator 
           </button>
         </form>
       ) : (
-        <div className="p-3 rounded-input bg-surface-high text-center text-xs text-ink-muted">
-          로그인하면 댓글을 작성할 수 있습니다.
-        </div>
+        <button type="button" onClick={() => promptLogin()}
+          className="w-full rounded-input bg-surface-high p-3 text-center text-xs text-ink-secondary transition-colors hover:bg-surface-high/70 hover:text-accent-300">
+          로그인하면 댓글을 작성할 수 있어요 — <b className="text-accent-300">로그인하기 →</b>
+        </button>
       )}
 
       {/* 목록 */}

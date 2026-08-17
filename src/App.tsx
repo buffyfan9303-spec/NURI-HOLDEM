@@ -27,7 +27,7 @@ import StaffInviteBanner from './components/features/StaffInviteBanner';
 import TierCelebration from './components/features/TierCelebration';
 import ErrorBoundary from './components/atoms/ErrorBoundary';
 import InstallBanner from './components/atoms/InstallBanner';
-import { REQUIRE_LOGIN_EVENT, OPEN_POST_FORM_EVENT, ensureVerified } from './lib/requireLogin';
+import { promptLogin, REQUIRE_LOGIN_EVENT, OPEN_POST_FORM_EVENT, ensureVerified } from './lib/requireLogin';
 import { tierColor } from './components/atoms/TierBadge';
 import ConsentGateModal from './components/features/ConsentGateModal';
 import type { PostFormData } from './components/features/PostFormModal';
@@ -1630,12 +1630,13 @@ export default function App() {
       sellerName: user.name,
       sellerAvatarColor: user.avatarColor ?? '#5A6175',
       sellerTradeCount: 0,
-      sellerVerified: user.role === 'venue_owner' || user.role === 'admin',
+      sellerVerified: !!user.verified, // '본인 인증 ✓'가 업주 여부로 찍히던 가짜 신호 — CI 인증 기준으로 정직화
     });
     setListings((prev) => [saved, ...prev]);
   }, [user]);
 
   const handleLikePost = useCallback((postId: string) => {
+    if (!userRefForGate.current) { promptLogin(); return; } // 비로그인: flip→서버실패→롤백 소음 대신 바로 유도
     // 낙관적 토글(1인 1회) → 서버 권위값 보정, 실패 시 롤백. 피드(posts)와 상세(openPost) 동시 반영.
     const flip = (p: CommunityPost) => ({ ...p, liked: !p.liked, likeCount: Math.max(0, p.likeCount + (p.liked ? -1 : 1)) });
     const apply = (fn: (p: CommunityPost) => CommunityPost) => {
@@ -2545,9 +2546,13 @@ export default function App() {
         venues={venues}
         schedules={schedules}
         posts={posts}
+        listings={listings}
+        notices={notices}
         onVenue={handleVenueClick}
         onSchedule={handleScheduleSelect}
         onPost={setOpenPost}
+        onListing={setOpenListing}
+        onNotice={setOpenNotice}
       />
       )}
 

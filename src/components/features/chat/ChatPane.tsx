@@ -80,6 +80,10 @@ export default function ChatPane({ listingId, buyerId, meId, emptyHint, onRead }
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
+      {/* 사기 방지 고정 안내 — 대화가 시작되는 바로 그 지점에 상시 노출(장터 신뢰 장치) */}
+      <p className="shrink-0 border-b border-border-subtle bg-amber-500/[0.07] px-4 py-1.5 text-2xs leading-snug text-amber-300">
+        ⚠️ 선입금 요구는 거절하세요 — 직거래·대면 확인 권장, 의심 시 매물 화면에서 신고
+      </p>
       <div ref={scrollRef} className="flex flex-col gap-1.5 px-4 py-4 flex-1 min-h-[200px] overflow-y-auto bg-surface-base/40">
         {loading ? (
           <p className="m-auto text-2xs text-ink-muted">불러오는 중…</p>

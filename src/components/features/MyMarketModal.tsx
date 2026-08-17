@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Modal from '../atoms/Modal';
 import { useAuth } from '../../contexts/AuthContext';
+import { promptLogin } from '../../lib/requireLogin';
 import { useToast } from '../atoms/Toast';
 import type { InboxThread } from '../../api/chat';
 import { getMyChatThreads } from '../../api/chat';
@@ -28,7 +29,8 @@ function LoginRequired({ open, onClose }: { open: boolean; onClose: () => void }
     <Modal open={open} onClose={onClose} title="로그인 필요" maxWidth="sm" variant="center">
       <div className="p-4 space-y-3 text-center">
         <p className="text-sm text-ink-secondary">로그인 후 이용할 수 있습니다.</p>
-        <button type="button" onClick={onClose} className="btn-primary w-full">닫기</button>
+        <button type="button" onClick={() => { onClose(); promptLogin(); }} className="btn-primary w-full">로그인하기</button>
+        <button type="button" onClick={onClose} className="btn-ghost w-full text-sm">닫기</button>
       </div>
     </Modal>
   );

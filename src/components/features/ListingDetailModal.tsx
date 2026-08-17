@@ -162,15 +162,11 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete }:
                   <span title="본인 인증 완료" className="text-emerald-400">✓</span>
                 )}
               </div>
-              <p className="mt-0.5 text-2xs text-ink-muted">거래 {listing.sellerTradeCount}회</p>
+              {/* '거래 0회' 고정 표기는 갱신이 없는 죽은 스냅샷이라 오히려 불신을 만든다 — 0이면 숨김 */}
+              {listing.sellerTradeCount > 0 && (
+                <p className="mt-0.5 text-2xs text-ink-muted">거래 {listing.sellerTradeCount}회</p>
+              )}
             </div>
-            <button
-              type="button"
-              onClick={() => toast.show(`${listing.sellerName}님의 다른 상품은 검색창에서 이름으로 찾아보세요`, 'info')}
-              className="shrink-0 btn-ghost text-xs px-3 py-1.5"
-            >
-              판매상품
-            </button>
           </div>
         </section>
 
@@ -195,6 +191,9 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete }:
           <p className="text-xs font-bold text-ink-primary">궁금한 점이 있으신가요?</p>
           <p className="mt-1 text-2xs leading-relaxed text-ink-muted">
             가격 협상·상태 문의는 아래 <b className="text-accent-300">판매자에게 문의</b> 버튼으로<br />1:1 채팅에서 바로 대화할 수 있어요.
+          </p>
+          <p className="mt-2 rounded-input bg-amber-500/[0.08] px-2 py-1.5 text-2xs leading-relaxed text-amber-300">
+            ⚠️ 안전거래: 선입금 요구는 거절하세요 — 직거래·대면 확인을 권장하고, 의심되면 신고해 주세요.
           </p>
         </section>
       </div>

@@ -1,4 +1,5 @@
 import { memo, useState, useMemo, useEffect, useRef, Fragment, useTransition, type ReactNode } from 'react';
+import { promptLogin } from '../../lib/requireLogin';
 import { getActiveCommunityAds, type CommunityAd } from '../../api/ads';
 import { getEquippedMarks } from '../../api/community';
 import TitleChip from '../atoms/TitleChip';
@@ -352,9 +353,10 @@ function FeedSection({
           </span>
         </button>
       ) : (
-        <div className="p-2 rounded-input bg-surface-high text-center text-2xs text-ink-muted">
-          로그인하면 게시글을 작성할 수 있습니다
-        </div>
+        <button type="button" onClick={() => promptLogin()}
+          className="w-full rounded-input bg-surface-high p-2 text-center text-2xs text-ink-secondary transition-colors hover:bg-surface-high/70 hover:text-accent-300">
+          로그인하면 게시글을 작성할 수 있어요 — <b className="text-accent-300">로그인하기 →</b>
+        </button>
       )}
 
       {/* ── 관리자 공지 (게시판 맨 위) ───────────────────────── */}

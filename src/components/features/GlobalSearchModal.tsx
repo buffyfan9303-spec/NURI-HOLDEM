@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import Modal from '../atoms/Modal';
 import type { Venue, CommunityPost } from '../../api/community';
 import type { Schedule } from '../../api/schedules';
+import type { MarketplaceListing, MarketplaceNotice } from '../../api/marketplace';
 
 interface Props {
   open: boolean;
@@ -11,12 +12,17 @@ interface Props {
   venues: Venue[];
   schedules: Schedule[];
   posts: CommunityPost[];
+  /** 중고장터 매물·공지 — 검색 사각지대 해소(탭 미방문 시 빈 배열이어도 동작) */
+  listings?: MarketplaceListing[];
+  notices?: MarketplaceNotice[];
+  onListing?: (l: MarketplaceListing) => void;
+  onNotice?: (n: MarketplaceNotice) => void;
   onVenue: (id: string) => void;
   onSchedule: (s: Schedule) => void;
   onPost: (p: CommunityPost) => void;
 }
 
-export default function GlobalSearchModal({ open, onClose, venues, schedules, posts, onVenue, onSchedule, onPost }: Props) {
+export default function GlobalSearchModal({ open, onClose, venues, schedules, posts, listings = [], notices = [], onVenue, onSchedule, onPost, onListing, onNotice }: Props) {
   const [q, setQ] = useState('');
   useEffect(() => { if (open) setQ(''); }, [open]);
   // 16-3 최근 검색어(5개, 개별 삭제) — 열자마자 입력 전 화면이 빈 안내문이 아니라 출발점이 되게.
@@ -42,16 +48,18 @@ export default function GlobalSearchModal({ open, onClose, venues, schedules, po
 
   const query = q.trim().toLowerCase();
   const res = useMemo(() => {
-    if (!query) return { v: [] as Venue[], s: [] as Schedule[], p: [] as CommunityPost[] };
+    if (!query) return { v: [] as Venue[], s: [] as Schedule[], p: [] as CommunityPost[], l: [] as MarketplaceListing[], n: [] as MarketplaceNotice[] };
     const has = (t?: string | null) => (t ?? '').toLowerCase().includes(query);
     return {
       s: schedules.filter((x) => has(x.title) || has(x.pubName) || has(x.region)).slice(0, 8),
       v: venues.filter((x) => has(x.name) || has(x.region)).slice(0, 6),
       p: posts.filter((x) => has(x.title) || has(x.content)).slice(0, 8),
+      l: listings.filter((x) => has(x.title) || has(x.description) || has(x.sellerName)).slice(0, 6),
+      n: notices.filter((x) => has(x.title) || has(x.body)).slice(0, 4),
     };
-  }, [query, venues, schedules, posts]);
+  }, [query, venues, schedules, posts, listings, notices]);
 
-  const empty = !!query && !res.v.length && !res.s.length && !res.p.length;
+  const empty = !!query && !res.v.length && !res.s.length && !res.p.length && !res.l.length && !res.n.length;
 
   return (
     <Modal open={open} onClose={onClose} title="통합 검색" maxWidth="md" variant="sheet">
@@ -60,7 +68,7 @@ export default function GlobalSearchModal({ open, onClose, venues, schedules, po
           autoFocus
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="매장 이름·지역, 대회명, 게시글 검색…"
+          placeholder="매장·대회·게시글·장터 매물·공지 검색…"
           className="input w-full text-sm"
         />
         {!query ? (
@@ -106,6 +114,20 @@ export default function GlobalSearchModal({ open, onClose, venues, schedules, po
               <Group title="게시글">
                 {res.p.map((p) => (
                   <Row key={p.id} title={p.title || '(제목 없음)'} sub={(p.content || '').replace(/\n/g, ' ').slice(0, 50)} onClick={() => openAnd(() => { onPost(p); onClose(); })} />
+                ))}
+              </Group>
+            )}
+            {res.l.length > 0 && onListing && (
+              <Group title="중고장터">
+                {res.l.map((l) => (
+                  <Row key={l.id} title={l.title} sub={`${l.price.toLocaleString()}원 · ${l.sellerName}`} onClick={() => openAnd(() => { onListing(l); onClose(); })} />
+                ))}
+              </Group>
+            )}
+            {res.n.length > 0 && onNotice && (
+              <Group title="공지">
+                {res.n.map((nn) => (
+                  <Row key={nn.id} title={nn.title} sub={(nn.body || '').replace(/\n/g, ' ').slice(0, 50)} onClick={() => openAnd(() => { onNotice(nn); onClose(); })} />
                 ))}
               </Group>
             )}

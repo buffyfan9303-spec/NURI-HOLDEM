@@ -153,8 +153,7 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return toast.show('로그인이 필요합니다', 'error');
-    const heading = title.trim();
-    if (!heading) return toast.show('제목을 입력해 주세요', 'error');
+    // 제목은 선택 — 목록은 content 앞부분 폴백 표시가 이미 있다(제출 payload 가 title.trim() 사용)
     const body = content.trim();
     if (!body) return toast.show('내용을 입력해 주세요', 'error');
 
@@ -216,7 +215,7 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
         {/* 제목 */}
         <div>
           <label htmlFor={titleId} className="block text-xs font-medium text-ink-secondary mb-1.5">
-            제목 <span className="text-danger ml-0.5">*</span>
+            제목 <span className="text-2xs text-ink-muted">(선택)</span>
           </label>
           <input
             id={titleId}
@@ -224,7 +223,7 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             maxLength={80}
-            placeholder="제목을 입력하세요"
+            placeholder="제목 (비워도 돼요)"
             className="input"
           />
         </div>
