@@ -226,7 +226,13 @@ function LiveCard({ g, name, sched, onPoster, onVenue, onDisplay }: { g: ClockSt
         className="w-full rounded-card border border-accent-400/30 bg-surface-low p-3 text-left transition-colors hover:border-accent-400/60 active:scale-[0.99]">
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
-            <p className="truncate text-sm font-bold text-ink-primary">{name}</p>
+            {/* 손님이 라이브 탭을 보는 실질 질문은 '지금 가면 낄 수 있나' — 결정 정보를 최상단에 */}
+            <p className="flex min-w-0 items-center gap-1.5 text-sm font-bold text-ink-primary">
+              <span className="truncate">{name}</span>
+              {regClose !== null && (regClose === 0
+                ? <span className="shrink-0 rounded-badge border border-border-default bg-surface-high px-1.5 py-0.5 text-2xs font-bold leading-none text-ink-muted">등록마감</span>
+                : <span className="shrink-0 rounded-badge bg-emerald-500/15 px-1.5 py-0.5 text-2xs font-bold leading-none text-emerald-400">🟢 등록가능</span>)}
+            </p>
             <p className="truncate text-2xs text-ink-muted">{g.title || g.config?.title || '토너먼트'}</p>
             {sched && <p className="truncate text-2xs font-semibold text-accent-300/90 mt-0.5">📋 탭하면 대회 포스터로 이동</p>}
           </div>

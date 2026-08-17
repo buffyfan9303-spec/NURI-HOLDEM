@@ -443,6 +443,19 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
   // 토너 종료 → 입상 순위 자동 초안(장부 연동 시): cfg.prizes 자리수만큼 행 + 장부 참가자 자동완성 → saveVenueRankings
   const [finishRows, setFinishRows] = useState<{ name: string; prize: string }[] | null>(null);
   const [finishBusy, setFinishBusy] = useState(false);
+  // END(조기 종료) 경로 — 실전 토너는 대부분 헤즈업 딜/우승 확정으로 블라인드가 남은 채 끝난다.
+  // 예전엔 이 경로가 순위 입력을 통째로 건너뛰어 매장 순위·시즌·전적 데이터가 비었다.
+  const [endAfterFinish, setEndAfterFinish] = useState(false);
+  const handleEnd = () => {
+    if (canManage && state.sessionDate && !finishRows) {
+      setEndAfterFinish(true);
+      setFinishRows(cfg.prizes.length
+        ? cfg.prizes.map((pz) => ({ name: '', prize: pz.amount >= 10000 ? String(Math.round(pz.amount / 10000)) : (pz.amount ? String(pz.amount) : '') }))
+        : [{ name: '', prize: '' }, { name: '', prize: '' }, { name: '', prize: '' }]);
+      return; // 모달에서 '순위 저장 후 종료' 또는 '입력 없이 종료'를 고른다
+    }
+    onEnd();
+  };
   const saveFinishRanks = async () => {
     if (!state.sessionDate || !finishRows) return;
     const entries = finishRows.filter((r) => r.name.trim()).map((r) => ({ nickname: r.name.trim(), realName: '', prize: r.prize.trim() }));
@@ -459,6 +472,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
       await saveVenueRankings(state.venueId, state.sessionDate, entries, (cfg.title || '').trim());
       toast.show(`입상 ${entries.length}명 순위 저장 완료 — 매장 순위·시즌·머니인킹에 반영됩니다`, 'success');
       setFinishRows(null);
+      if (endAfterFinish) { setEndAfterFinish(false); onEnd(); } // END 경로였으면 이어서 종료(최종 확인은 onEnd 의 confirm)
     } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
     finally { setFinishBusy(false); }
   };
@@ -834,7 +848,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
               <button type="button" onClick={resetClock} className="px-3 py-2 rounded-input text-xs font-bold bg-white/10 hover:bg-white/15 text-white/60 border border-border-default hover:text-amber-300">↺ 초기화</button>
               {fs
                 ? <button type="button" onClick={toggleFs} className="px-4 py-2 rounded-input text-xs font-bold bg-white/10 hover:bg-white/15 text-white/60 border border-border-default">⤡ 해제</button>
-                : <button type="button" onClick={onEnd} className="px-4 py-2 rounded-input text-xs font-bold bg-white/10 hover:bg-white/15 text-white/60 border border-border-default hover:text-danger-light">END</button>}
+                : <button type="button" onClick={handleEnd} className="px-4 py-2 rounded-input text-xs font-bold bg-white/10 hover:bg-white/15 text-white/60 border border-border-default hover:text-danger-light">END</button>}
             </div>
           </div>
         )}
@@ -852,7 +866,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
              장부 같은 긴 화면이 통째로 스크롤 불능이 되고 ESC·뒤로가기도 유령 모달이 먼저 먹는다.
              finishRows 상태는 그대로 두므로 클락 섹션으로 돌아오면 정상적으로 뜬다. */}
       {finishRows && state.sessionDate && active && (
-        <Modal open onClose={() => setFinishRows(null)} title="🏆 입상 순위 입력" maxWidth="md" variant="sheet">
+        <Modal open onClose={() => { setFinishRows(null); setEndAfterFinish(false); }} title="🏆 입상 순위 입력" maxWidth="md" variant="sheet">
           <div className="space-y-2 p-4">
             <p className="text-2xs text-ink-muted">토너 종료 — 입상 순위를 저장하면 매장 순위·시즌·머니인킹에 자동 반영됩니다. 이름은 장부 참가자에서 자동완성, 상금은 만원 단위.</p>
             <datalist id="clk-finish-players">
@@ -871,8 +885,12 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
             ))}
             <div className="flex gap-2 pt-1">
               <button type="button" onClick={() => setFinishRows((rs) => [...(rs ?? []), { name: '', prize: '' }])} className="btn-ghost shrink-0 text-2xs">+ 줄 추가</button>
-              <button type="button" disabled={finishBusy} onClick={saveFinishRanks} className="btn-primary flex-1 text-sm disabled:opacity-50">{finishBusy ? '저장 중…' : '순위 저장'}</button>
+              <button type="button" disabled={finishBusy} onClick={saveFinishRanks} className="btn-primary flex-1 text-sm disabled:opacity-50">{finishBusy ? '저장 중…' : endAfterFinish ? '순위 저장 후 종료' : '순위 저장'}</button>
             </div>
+            {endAfterFinish && (
+              <button type="button" onClick={() => { setFinishRows(null); setEndAfterFinish(false); onEnd(); }}
+                className="w-full py-2 text-center text-2xs font-bold text-ink-muted hover:text-danger-light">입력 없이 종료</button>
+            )}
           </div>
         </Modal>
       )}

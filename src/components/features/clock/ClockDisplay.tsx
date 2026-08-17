@@ -231,8 +231,10 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
             </div>
           </div>
 
-          {/* 하단 통계 스트립 — 리바인·얼리·평균/총스택 (엔트리·생존 제외) */}
-          <div className="grid shrink-0 grid-cols-2 gap-px bg-white/5 px-[2.5vmin] py-[1.5vmin] sm:grid-cols-4">
+          {/* 하단 통계 스트립 — 관전자 1순위 질문은 '몇 명 남았나'다. 탈락 티커 5초로만
+              스치던 생존/엔트리를 첫 칸·강조로 상시 표시(운영자 클락 PLAYERS hero와 동일 사상). */}
+          <div className="grid shrink-0 grid-cols-3 gap-px bg-white/5 px-[2.5vmin] py-[1.5vmin] sm:grid-cols-5">
+            <BigStat label="생존 / 엔트리" value={`${ls?.alive ?? 0} / ${ls?.entries ?? 0}`} accent />
             <BigStat label="리바인" value={`${ls?.rebuys ?? 0}`} />
             <BigStat label="얼리" value={`${ls?.earlies ?? 0}`} />
             <BigStat label="평균 스택" value={ls?.avgStack ? `${ls.avgStack.toLocaleString()}${(() => {
