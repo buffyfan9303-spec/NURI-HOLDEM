@@ -21,7 +21,7 @@ import {
   type LedgerBuyin, type LedgerSession, type LedgerSessionListItem,
 } from '../../../api/ledger';
 import { listGamePresets, type GamePreset } from '../../../api/presets';
-import { saveVenueRankings, prizeUnitRisk } from '../../../api/rankings';
+import { saveVenueRankings, prizeUnitRisk, getVenueRankings } from '../../../api/rankings';
 import LoadErrorCard from '../../atoms/LoadErrorCard';
 import { msgOf } from '../../../lib/dbError';
 import Modal from '../../atoms/Modal';
@@ -191,7 +191,11 @@ export default function TournamentClock({ venueId, canManage, seedSessionDate, s
   // 빈 슬롯 1탭 시작 — 메인(또는 현재) 클락 설정을 복사해 그 게임 클락을 오늘 장부에 연동하여 바로 시작
   const quickStart = async (g: number) => {
     const main = await getClockState(venueId, 1).catch(() => null);
-    await startClock(main?.config ?? state?.config ?? defaultClockConfig(), new Date().toLocaleDateString('en-CA'), g);
+    const base = main?.config ?? state?.config ?? defaultClockConfig();
+    // 사이드는 제목에 접미 강제 — 같은 event_name 으로 END 순위를 저장하면
+    // 메인 대회 순위·점수 지급이 통째로 교체되는 사고가 났다(save 가 (날짜,이벤트) 단위 replace)
+    const cfg2 = g > 1 ? { ...base, title: `${(base.title || '게임').trim()} 사이드${g - 1}` } : base;
+    await startClock(cfg2, new Date().toLocaleDateString('en-CA'), g);
   };
 
   if (loading) return <p className="py-10 text-center text-sm text-ink-muted">클락 불러오는 중…</p>;
@@ -471,7 +475,14 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
     )) return;
     setFinishBusy(true);
     try {
-      await saveVenueRankings(state.venueId, state.sessionDate, entries, (cfg.title || '').trim());
+      // 같은 (날짜, 이벤트)에 이미 저장된 순위가 있으면 통째 교체됨을 알린다 — 무음 대체 방지
+      const evName = (cfg.title || '').trim();
+      const prevRanks = await getVenueRankings(state.venueId, state.sessionDate).catch(() => ({ date: null, entries: [] }));
+      const clash = prevRanks.entries.filter((pe) => (pe.eventName ?? '') === evName).length;
+      if (clash > 0 && !window.confirm(`'${evName || '메인'}' 이벤트에 이미 저장된 순위 ${clash}명이 있습니다.\n저장하면 기존 순위·점수 지급이 이 결과로 교체됩니다. 계속할까요?`)) {
+        setFinishBusy(false); return;
+      }
+      await saveVenueRankings(state.venueId, state.sessionDate, entries, evName);
       toast.show(`입상 ${entries.length}명 순위 저장 완료 — 매장 순위·시즌·머니인킹에 반영됩니다`, 'success');
       setFinishRows(null);
       if (endAfterFinish) { setEndAfterFinish(false); onEnd(); } // END 경로였으면 이어서 종료(최종 확인은 onEnd 의 confirm)

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import CountUp from '../atoms/CountUp';
 import { getVenueWeeklyFunnel, type WeeklyFunnel } from '../../api/schedules';
 import type { Schedule } from '../../api/schedules';
-import {
+import { listStaleOpenSessions,
   getLedgerSession, getLedgerBuyins, getLedgerPlayers, getLedgerRange, buyinFinance, wonToMan, visitorLabel, subscribeLedger,
   getPosterOpsSummaries, getPendingBuyinRequests, subscribeBuyinRequests, approveBuyinRequest, rejectBuyinRequest,
   type LedgerSession, type LedgerBuyin, type LedgerPlayer, type BuyinRequest,
@@ -103,6 +103,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const [voucherPrefill, setVoucherPrefill] = useState(''); // 단골 행 '이용권 보내기' 프리필
   const [hasRankToday, setHasRankToday] = useState<boolean | null>(null); // 지금 할 일 카드(순위 입력 유도)
   const [funnel, setFunnel] = useState<WeeklyFunnel | null>(null); // 주간 퍼널(조회→예약→방문)
+  const [staleOpen, setStaleOpen] = useState<{ sessionDate: string; gameSeq: number; title: string | null }[]>([]); // 미마감 지난 장부
   const [pendingRanks, setPendingRanks] = useState<{ date: string }[]>([]); // 마감됐는데 순위 미입력인 지난 대회(밀린 것)
   // 다가오는 생일 단골(7일 내) — CRM 생일 필드 기반
   const [bdays, setBdays] = useState<{ name: string; birthday: string; dday: number }[]>([]);
@@ -166,6 +167,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
     getVenueRegulars(venueId).then(setRegulars).catch(() => {});
     getVenueRankings(venueId, d).then(({ entries }) => setHasRankToday(entries.length > 0)).catch(() => {});
     getVenueWeeklyFunnel(venueId).then(setFunnel).catch(() => {});
+    listStaleOpenSessions(venueId).then(setStaleOpen).catch(() => {});
     getPosterOpsSummaries(venueId).then((sums) => setPendingRanks(Object.values(sums).filter((s) => s.closed && !s.hasRankings && s.date < d).sort((a, b) => b.date.localeCompare(a.date)))).catch(() => {});
     const ids = schedules.filter((s) => s.venueId === venueId && s.date >= d).map((s) => s.id);
     if (ids.length) getReservationCounts(ids).then(setResCounts).catch(() => {});
@@ -679,7 +681,11 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         const todayPoster = schedules.some((s) => s.venueId === venueId && s.date === d && s.approved);
         const hour = new Date().getHours();
         let todo: { emoji: string; title: string; desc: string; cta: string; onClick: () => void; tone: 'warn' | 'gold' | 'ok' } | null = null;
-        if (caps.ledger && session?.closed && hasRankToday === false) {
+        if (caps.ledger && staleOpen.length > 0) {
+          // 미마감 = 순위→시즌→머니인킹→전적 하류 전체 정지. 실제 라이브에서 두 달치가 쌓여 있었다.
+          const list = staleOpen.slice(0, 3).map((x) => x.sessionDate.slice(5)).join(' · ');
+          todo = { emoji: '📕', title: `지난 장부 ${staleOpen.length}건이 미마감이에요`, desc: `${list} — 마감해야 순위·시즌·전적에 반영되고 정산이 확정됩니다.`, cta: '장부에서 마감하기', onClick: () => onGoto('ledger'), tone: 'warn' };
+        } else if (caps.ledger && session?.closed && hasRankToday === false) {
           todo = { emoji: '🏆', title: '순위 입력이 비어 있어요', desc: '마감한 장부의 참가자 명단으로 바로 채울 수 있어요 — 입상 점수·아카이브에 반영됩니다.', cta: '순위 입력하기', onClick: () => onGoto('ranking'), tone: 'warn' };
         } else if (caps.ledger && started && !session?.closed) {
           todo = clockActive

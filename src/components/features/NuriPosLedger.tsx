@@ -9,13 +9,13 @@ import { useToast } from '../atoms/Toast';
 import DateTimePicker from '../atoms/DateTimePicker';
 import { useAuth } from '../../contexts/AuthContext';
 import Icon from '../atoms/Icon';
-import { CELL_TAKEN, cancelMyRecentBuyin,
+import { deleteLedgerPlayerAtomic, CELL_TAKEN, cancelMyRecentBuyin,
   type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type LedgerSessionListItem, type DiscountPreset, type EarlyType, type LedgerGame, type ClockSnapshot, type LedgerLossSummary,
   visitorLabel, wonToMan, WON_PER_MAN, buyinFinance, earlyTypeOf, setBuyinEarly, MAIN_GAME_SEQ, ledgerLossSummary,
   getLedgerSession, getLedgerGames, saveLedgerSession, openLedgerSession, closeLedgerSession, reopenLedgerSession, deleteLedgerSession,
   setRegistrationClosed, getLastLedgerSettings, getLedgerSessionList, getLedgerAccessUserIds, notifyLedgerOpen,
   getLedgerBuyins, upsertBuyin, upsertBuyinSplit, cancelBuyin,
-  getLedgerPlayers, addLedgerPlayer, updateLedgerPlayer, renameLedgerPlayer, removeLedgerPlayer,
+  getLedgerPlayers, addLedgerPlayer, updateLedgerPlayer, renameLedgerPlayer,
   searchRegisteredPlayers, type RegisteredPlayer,
   subscribeLedger, posHasPassword, getLedgerPresets, type LedgerPreset,
   getPendingBuyinRequests, approveBuyinRequest, rejectBuyinRequest, subscribeBuyinRequests, type BuyinRequest,
@@ -259,8 +259,15 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   useEffect(() => subscribeLedger(venueId, () => { reload(); loadGames(); }), [venueId, reload, loadGames]);
 
   // 손님 자가 바인요청(QR) — 그날 매장 단위 대기목록 로드 + 실시간. 승인 시 현재 게임(gameSeq) 명단에 추가.
-  const loadPending = useCallback(() => { getPendingBuyinRequests(venueId, date).then(setPendingReqs).catch(() => setPendingReqs([])); }, [venueId, date]);
+  // 실패 시 기존 목록 유지 — 빈 배열로 덮으면 '요청 0건'으로 위장돼 새벽 대기열이 증발해 보인다
+  const loadPending = useCallback(() => { getPendingBuyinRequests(venueId, date).then(setPendingReqs).catch(() => {}); }, [venueId, date]);
   useEffect(() => { loadPending(); return subscribeBuyinRequests(venueId, loadPending); }, [venueId, loadPending]);
+  // 지하 매장 재연결 — 단절 중 놓친 바인·세션·대기요청을 복귀 즉시 일괄 재검증
+  useEffect(() => {
+    const onOn = () => { reload(); reloadSession(); loadPending(); };
+    window.addEventListener('online', onOn);
+    return () => window.removeEventListener('online', onOn);
+  }, [reload, reloadSession, loadPending]);
   // (C1) 낙관적 업데이트 — 승인 즉시 대기열에서 제거하고 백그라운드 동기화. 실패 시 loadPending 으로 서버 기준 복원.
   const gLabel = (seq: number) => (seq === MAIN_GAME_SEQ ? '메인' : `사이드${seq - 1}`);
   const openSeqs = games.map((g) => g.gameSeq); // 그날 실제로 열려 있는 게임
@@ -525,7 +532,9 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     if (!n) return;
     try {
       await addLedgerPlayer({ venueId, sessionDate: date, gameSeq, name: n, visitorType: newType, sortOrder: players.length });
-      setNewName(''); setNewType('regular'); setAddOpen(false); setSuggest([]); reload();
+      // 개장 러시: 손님 10~20명이 줄 선다 — 폼을 유지하고 입력만 비워 연속 등록(닫기는 ✕로)
+      setNewName(''); setNewType('regular'); setSuggest([]); reload();
+      toast.show(`${n} 추가됨 — 이어서 입력하세요`, 'success');
     } catch (e) { toast.show(e instanceof Error ? e.message : '추가 실패', 'error'); }
   };
   // 가입자 검색(디바운스) — 순위입력과 동일 메커니즘: 매장 방문 가입자 + 전체 회원(닉네임/실명) 병합
@@ -544,7 +553,8 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     const label = m2.realName ? `${m2.realName}(${m2.nickname})` : m2.nickname;
     try {
       await addLedgerPlayer({ venueId, sessionDate: date, gameSeq, name: label, visitorType: newType, sortOrder: players.length });
-      setNewName(''); setSuggest([]); setMemSuggest([]); setNewType('regular'); setAddOpen(false); reload();
+      setNewName(''); setSuggest([]); setMemSuggest([]); setNewType('regular'); reload();
+      toast.show(`${label} 추가됨 — 이어서 입력하세요`, 'success');
     } catch (e) { toast.show(e instanceof Error ? e.message : '추가 실패', 'error'); }
   };
   // 가입자 선택 → 실명(닉네임)으로 장부 기록(강제 아님, 그냥 추가하면 입력값 그대로)
@@ -552,7 +562,8 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     const label = rp.realName ? `${rp.realName}(${rp.nickname ?? ''})` : (rp.nickname ?? newName.trim());
     try {
       await addLedgerPlayer({ venueId, sessionDate: date, gameSeq, name: label, visitorType: newType, sortOrder: players.length });
-      setNewName(''); setSuggest([]); setNewType('regular'); setAddOpen(false); reload();
+      setNewName(''); setSuggest([]); setNewType('regular'); reload();
+      toast.show(`${label} 추가됨 — 이어서 입력하세요`, 'success');
     } catch (e) { toast.show(e instanceof Error ? e.message : '추가 실패', 'error'); }
   };
   const savePlayer = async (id: string, patch: { visitorType?: string | null; note?: string | null; name?: string }) => {
@@ -569,13 +580,11 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
   };
   const removePlayer = async (p: LedgerPlayer, password?: string) => {
-    const ids = buyins.filter((b) => b.playerName === p.name).map((b) => b.id);
+    const hasBuyins = buyins.some((b) => b.playerName === p.name);
     try {
-      if (ids.length > 0) {
-        if (!password) { toast.show('바인 기록 삭제에는 취소 비밀번호가 필요합니다', 'error'); return; }
-        for (const id of ids) await cancelBuyin(id, password); // 서버에서 비밀번호 검증
-      }
-      await removeLedgerPlayer(p.id);
+      if (hasBuyins && !password) { toast.show('바인 기록 삭제에는 취소 비밀번호가 필요합니다', 'error'); return; }
+      // 원자 RPC — 예전 순차 삭제는 중간 실패 시 '바인 2건만 사라진' 반쪽 장부를 남겼다
+      await deleteLedgerPlayerAtomic(p.id, password);
       toast.show('플레이어를 삭제했습니다', 'info'); setEditPlayer(null); reload();
     } catch (e) { toast.show(e instanceof Error ? e.message : '삭제 실패(비밀번호 확인)', 'error'); }
   };

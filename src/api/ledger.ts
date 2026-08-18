@@ -600,23 +600,34 @@ export async function renameLedgerPlayer(input: {
   if (IS_MOCK) return;
   const newName = input.newName.trim();
   if (!newName || newName === input.oldName) return;
-  const gameSeq = input.gameSeq ?? MAIN_GAME_SEQ;
-  // 같은 게임에 동일 이름이 이미 있으면 바인 키 충돌 → 차단
-  const { data: dup } = await supabase.from('ledger_players')
-    .select('id').eq('venue_id', input.venueId).eq('session_date', input.sessionDate).eq('game_seq', gameSeq)
-    .eq('name', newName).neq('id', input.id).limit(1);
-  if (dup && dup.length > 0) throw new Error('같은 이름의 플레이어가 이미 있습니다');
-  const { error: e1 } = await supabase.from('ledger_players').update({ name: newName }).eq('id', input.id);
-  if (e1) throw e1;
-  const { error: e2 } = await supabase.from('ledger_buyins').update({ player_name: newName })
-    .eq('venue_id', input.venueId).eq('session_date', input.sessionDate).eq('game_seq', gameSeq).eq('player_name', input.oldName);
-  if (e2) throw e2;
+  // 원자 RPC(20260818g) — 명단+바인이 단일 트랜잭션. 예전 2단계 갱신은 중간 실패 시
+  // '명단 이름 다르고 바인은 옛 이름'인 반쪽 상태를 조용히 남겼다.
+  const { error } = await supabase.rpc('rename_ledger_player', { p_player_id: input.id, p_new_name: newName });
+  if (error) throw new Error(error.message);
+}
+
+/** 플레이어 + 그 세션의 바인 전건을 단일 트랜잭션으로 삭제(바인 있으면 서버가 취소 비밀번호 검증) */
+export async function deleteLedgerPlayerAtomic(id: string, password?: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('delete_ledger_player', { p_player_id: id, p_password: password ?? null });
+  if (error) throw new Error(error.message);
 }
 
 export async function removeLedgerPlayer(id: string): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.from('ledger_players').delete().eq('id', id);
   if (error) throw error;
+}
+
+/** 미마감 지난 장부 — 마감을 안 하면 순위→시즌→전적 하류 전체가 막힌다(대시보드 넛지용) */
+export async function listStaleOpenSessions(venueId: string): Promise<{ sessionDate: string; gameSeq: number; title: string | null }[]> {
+  if (IS_MOCK) return [];
+  const { data } = await supabase.from('ledger_sessions')
+    .select('session_date, game_seq, title')
+    .eq('venue_id', venueId).eq('closed', false).lt('session_date', kstToday())
+    .order('session_date', { ascending: false }).limit(5);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({ sessionDate: r.session_date, gameSeq: r.game_seq ?? 1, title: r.title ?? null }));
 }
 
 // 바인 추가 시 가입계정 연동 — 이름/닉네임으로 누리홀덤 가입자 검색(실명·닉네임·이 매장 방문횟수).

@@ -21,7 +21,7 @@ import StaffSchedule from './StaffSchedule';
 import { StaffWageManager, StaffSettlement, StaffWorkLog, StaffSelfAttendance } from './StaffPayroll';
 import StoreDashboard from './StoreDashboard';
 import { VoucherManagePanel } from './VoucherManageModal';
-import { iCanViewVouchers, getVoucherAccessUserIds, grantVoucherAccess, revokeVoucherAccess, findUserForTransfer, issueVoucher } from '../../api/vouchers';
+import { listVoucherNotes, iCanViewVouchers, getVoucherAccessUserIds, grantVoucherAccess, revokeVoucherAccess, findUserForTransfer, issueVoucher } from '../../api/vouchers';
 import MyPostersTab from './MyPostersTab';
 import VenueCustomizePanel, { VenueRankHub } from './VenueCustomizePanel';
 import LeaguePanel from './LeaguePanel';
@@ -582,7 +582,11 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
       ? mine.map((e) => ({ nickname: e.nickname, realName: e.realName, prize: e.prize ?? '', voucher: '', note: '' }))
       : (draft && draft.date === date && draft.names.length && (allEntries.length === 0 || (draft.event ?? '') === eventName))
         // 정산 마감 참가자 명단을 닉네임으로 미리 채움(순서는 업주가 정리)
-        ? draft.names.map((n) => ({ nickname: n, realName: '', prize: '', voucher: '', note: '' }))
+        // 장부 합성 표기 '실명(닉네임)' 분리 — 그대로 닉네임 칸에 넣으면 회원 매칭·시상이 전원 미지급
+        ? draft.names.map((n) => {
+            const mm = n.trim().match(/^(.+?)\((.+)\)$/);
+            return { nickname: (mm ? mm[2] : n).trim(), realName: (mm ? mm[1] : '').trim(), prize: '', voucher: '', note: '' };
+          })
         : [emptyRow()];
     const kept = readRowsDraft(dkey);
     // 기준선은 항상 '원본'. 복구본을 기준선으로 잡으면 아래 보관 효과가 초안을 즉시 지워버린다.
@@ -744,22 +748,31 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
       //      닉네임이 정확히 일치하는 1명일 때만 지급하고, 애매하면 건너뛰고 사장님께 알린다.
       //   ② 저장 후 voucher 칸이 그대로 남아, 순위를 한 번 더 저장하면 이용권이 중복 발행됐다.
       //      성공한 줄은 voucher 를 비워 재발급을 막는다(순위 점수는 서버가 덮어쓰므로 무해).
-      let issued = 0, failed = 0, ambiguous = 0;
+      let issued = 0, failed = 0, ambiguous = 0, dup = 0, quotaFail = 0;
       const issuedNicks: string[] = [];
+      // 멱등 키 — 같은 (날짜·이벤트·닉네임) 시상은 재저장돼도 다시 발급하지 않는다.
+      // 중간 이탈(네트워크 단절·탭 종료) 후 재저장의 중복 발급을 note 마커로 차단.
+      const keyBase = `AWARD:${date}:${(eventName || '메인').trim()}`;
+      const existingKeys = await listVoucherNotes(venueId, keyBase).catch(() => [] as string[]);
       for (const r of clean) {
         const cnt = parseInt(r.voucher, 10);
         if (!cnt || cnt < 1) continue;
         const nick = r.nickname.trim();
+        const rowKey = `${keyBase}:${nick}`;
+        if (existingKeys.some((nt) => nt.includes(rowKey))) { dup++; continue; }
         try {
           const found = await findUserForTransfer(nick);
           // 정확 일치(대소문자 무시)만 인정 — 부분일치 후보가 여럿이면 오지급 위험이라 보류
           const exact = found.filter((u) => (u.display ?? '').trim().toLowerCase() === nick.toLowerCase());
           const target = exact.length === 1 ? exact[0] : null;
           if (!target) { if (found.length > 0) ambiguous++; else failed++; continue; }
-          await issueVoucher(venueId, { title: '순위 시상', count: Math.min(1000, cnt), holderUserId: target.id, holderName: target.display, note: r.note.trim() || '순위 시상' });
+          await issueVoucher(venueId, { title: '순위 시상', count: Math.min(1000, cnt), holderUserId: target.id, holderName: target.display, note: `${r.note.trim() || '순위 시상'} · ${rowKey}` });
           issued += Math.min(1000, cnt);
           issuedNicks.push(nick);
-        } catch { failed++; }
+        } catch (e) {
+          // 쿼터 부족을 '미가입/미인증'으로 뭉개지 않는다 — 원인이 달라야 다음 행동이 다르다
+          if (e instanceof Error && /한도|충전/.test(e.message)) quotaFail++; else failed++;
+        }
       }
       // 지급 성공한 줄의 이용권 칸 비우기 — 재저장 시 중복 발행 방지
       // + 저장 성공 = 서버가 정본이므로 임시 초안을 폐기한다. 남겨두면 다음 진입 때 낡은 초안이
@@ -776,7 +789,7 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
       setRestorable(null);
       toast.show(
         issued > 0
-          ? `순위 저장 + 이용권 ${issued}개 지급${failed ? ` · 미지급 ${failed}명(미가입/미인증)` : ''}${ambiguous ? ` · 확인필요 ${ambiguous}명(닉네임 불일치)` : ''}`
+          ? `순위 저장 + 이용권 ${issued}개 지급${failed ? ` · 미지급 ${failed}명(미가입/미인증)` : ''}${ambiguous ? ` · 확인필요 ${ambiguous}명(닉네임 불일치)` : ''}${quotaFail ? ` · 한도부족 ${quotaFail}명(충전 필요)` : ''}${dup ? ` · 기지급 ${dup}명 건너뜀` : ''}`
           : ambiguous > 0
             ? `순위 저장 완료 — 이용권 ${ambiguous}명은 닉네임이 정확히 일치하지 않아 지급하지 않았습니다(직접 확인 후 발급해 주세요)`
             : '순위 저장 완료 — 닉네임이 일치하는 회원에게 포인트가 반영됩니다',

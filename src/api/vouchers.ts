@@ -58,6 +58,15 @@ export async function listMyVouchers(): Promise<Voucher[]> {
   return (data ?? []).map(mapRow);
 }
 
+/** 시상 멱등 키 조회 — note 에 AWARD:{date}:{event}:{nick} 마커가 있는 발급분(중복 발급 차단용) */
+export async function listVoucherNotes(venueId: string, noteLike: string): Promise<string[]> {
+  if (IS_MOCK) return [];
+  const { data } = await supabase.from('store_vouchers')
+    .select('note').eq('venue_id', venueId).like('note', `%${noteLike}%`).limit(500);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => (r.note as string) ?? '').filter(Boolean);
+}
+
 export async function issueVoucher(venueId: string, input: { title: string; count?: number; holderName?: string; holderUserId?: string; note?: string; expiresAt?: string | null }): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.rpc('issue_voucher', {
