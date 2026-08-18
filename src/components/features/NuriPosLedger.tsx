@@ -9,7 +9,7 @@ import { useToast } from '../atoms/Toast';
 import DateTimePicker from '../atoms/DateTimePicker';
 import { useAuth } from '../../contexts/AuthContext';
 import Icon from '../atoms/Icon';
-import {
+import { CELL_TAKEN, cancelMyRecentBuyin,
   type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type LedgerSessionListItem, type DiscountPreset, type EarlyType, type LedgerGame, type ClockSnapshot, type LedgerLossSummary,
   visitorLabel, wonToMan, WON_PER_MAN, buyinFinance, earlyTypeOf, setBuyinEarly, MAIN_GAME_SEQ, ledgerLossSummary,
   getLedgerSession, getLedgerGames, saveLedgerSession, openLedgerSession, closeLedgerSession, reopenLedgerSession, deleteLedgerSession,
@@ -110,6 +110,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const [loadError, setLoadError] = useState<unknown>(null);
   const [hasPw, setHasPw]     = useState(false);
   const [selected, setSelected] = useState<SelectedCell | null>(null);
+  const [payBusy, setPayBusy] = useState(false); // 결제 저장 중 — 더블탭 이중 기록 방지
   const [query, setQuery]     = useState('');
   const [addOpen, setAddOpen] = useState(false);
   const [newName, setNewName] = useState('');
@@ -281,7 +282,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     setPendingReqs((prev) => prev.filter((x) => x.id !== r.id));
     setPayPick(null); setSplitFor(null);
     return approveBuyinRequest(r.id, target, withBuyin, payMethod, split)
-      .then(() => { toast.show(`${r.playerName} 승인 — ${gLabel(target)} 명단 추가${withBuyin ? (split ? ' + 분할 바인 기록' : ` + ${payMethod === 'card' ? '카드' : payMethod === 'transfer' ? '이체' : '현금'} 바인 기록`) : ''}`, 'success'); loadPending(); })
+      .then(() => { toast.show(`${r.playerName} 승인 — ${gLabel(target)} 명단 추가${r.voucherId ? ' + 티켓 기록(이용권)' : withBuyin ? (split ? ' + 분할 바인 기록' : ` + ${payMethod === 'card' ? '카드' : payMethod === 'transfer' ? '이체' : '현금'} 바인 기록`) : ''}`, 'success'); loadPending(); })
       .catch((e) => { toast.show(e instanceof Error ? e.message : '승인 실패', 'error'); loadPending(); });
   };
   const doReject = (r: BuyinRequest, reason?: string) => {
@@ -474,6 +475,13 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     catch (e) { toast.show(e instanceof Error ? e.message : '시작 실패', 'error'); }
   };
   const handleEditSave = async (s: LedgerSession) => {
+    // 비분납 바인은 세션 단가·할인을 '참조'로 재계산한다 — 변경이 기존 기록 전체에 소급된다는
+    // 사실을 모르고 고치면 실제 받은 현금과 장부가 조용히 어긋난다. 바뀔 때만 한 번 묻는다.
+    const priceChanged = s.buyinAmount !== session.buyinAmount
+      || (s.cardAmount ?? null) !== (session.cardAmount ?? null)
+      || JSON.stringify(s.discounts ?? []) !== JSON.stringify(session.discounts ?? []);
+    if (priceChanged && buyins.length > 0 && !window.confirm(
+      `단가·할인 변경은 이미 기록된 바인 ${buyins.length}건의 매출 계산에 소급 적용됩니다.\n(실제 받은 금액과 달라질 수 있어요) 계속할까요?`)) return;
     try { await saveLedgerSession(s); await syncDealersToSchedule(s.sessionDate, s.dealers); setSession((prev) => ({ ...prev, ...s })); setEditOpen(false); toast.show('세션 정보를 저장했습니다', 'success'); }
     catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
   };
@@ -798,8 +806,12 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                     </p>
                     {r.note && <p className="text-2xs text-ink-muted truncate">{r.note}</p>}
                   </div>
-                  <button type="button" onClick={() => setPayPick(payPick === r.id ? null : r.id)} title="승인 + 바인 1건 기록(결제수단 선택)" className={['shrink-0 inline-flex h-10 items-center rounded-input px-2.5 text-2xs font-bold', payPick === r.id ? 'bg-emerald-600 text-ink-inverse' : 'bg-emerald-500/90 text-ink-inverse hover:bg-emerald-500'].join(' ')}>✓+💵</button>
-                  <button type="button" onClick={() => approveReq(r)} title="승인만(명단 추가)" className="shrink-0 inline-flex h-10 items-center rounded-input border border-emerald-500/50 px-3 text-2xs font-bold text-emerald-300 hover:bg-emerald-500/10">승인</button>
+                  {/* 이용권 요청은 서버가 '티켓 완납' 바인을 자동 기록(무료입장 정합) — 💵 유료 패널은
+                      승인해도 서버가 금액을 버리므로(20260623d #9) 숨겨서 '기록됐다고 믿는' 사고를 없앤다 */}
+                  {r.voucherId == null && (
+                    <button type="button" onClick={() => setPayPick(payPick === r.id ? null : r.id)} title="승인 + 바인 1건 기록(결제수단 선택)" className={['shrink-0 inline-flex h-10 items-center rounded-input px-2.5 text-2xs font-bold', payPick === r.id ? 'bg-emerald-600 text-ink-inverse' : 'bg-emerald-500/90 text-ink-inverse hover:bg-emerald-500'].join(' ')}>✓+💵</button>
+                  )}
+                  <button type="button" onClick={() => approveReq(r)} title={r.voucherId ? '승인(티켓 1장 자동 기록)' : '승인만(명단 추가)'} className="shrink-0 inline-flex h-10 items-center rounded-input border border-emerald-500/50 px-3 text-2xs font-bold text-emerald-300 hover:bg-emerald-500/10">{r.voucherId ? '✓ 승인·티켓' : '승인'}</button>
                   <button type="button" onClick={() => setRejectFor(rejectFor === r.id ? null : r.id)} aria-label="거절" className={['shrink-0 inline-flex h-10 min-w-[2.5rem] items-center justify-center rounded-input border px-2.5 text-2xs font-bold', rejectFor === r.id ? 'border-danger/50 bg-danger/10 text-danger-light' : 'border-border-default text-ink-muted hover:text-danger-light hover:border-danger/40'].join(' ')}>✕</button>
                 </div>
                 {payPick === r.id && (
@@ -1138,27 +1150,51 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
               label: `${mLabel} ${prev.isUnpaid ? '미수' : '완납'}${prev.discountIndex > 0 ? ' ·할인' : ''}` };
           })()}
           onClose={() => setSelected(null)}
+          busy={payBusy}
           onPick={async (method, isUnpaid, discountIndex) => {
+            if (payBusy) return; // 더블탭 → 이중 기록·이용권 이중 적립 방지
             const pn = selected.playerName; const isNew = !selected.buyin;
+            setPayBusy(true);
             try {
               // 신규 첫 바인(entryNo=1)만 클락 현재 레벨로 얼리 확정. 2번째+는 리바인이라 얼리 없음.
               const eo = (isNew && selected.entryNo === 1) ? clockEarlyNow() : (selected.buyin?.earlyOverride ?? null);
-              await upsertBuyin({ venueId, sessionDate: date, gameSeq, playerName: pn, entryNo: selected.entryNo, paymentMethod: method, isUnpaid, discountIndex, earlyOverride: eo });
+              const savedId = await upsertBuyin({ venueId, sessionDate: date, gameSeq, playerName: pn, entryNo: selected.entryNo, paymentMethod: method, isUnpaid, discountIndex, earlyOverride: eo, existingId: selected.buyin?.id ?? null });
               setSelected(null); reload();
+              if (isNew) {
+                // 오입력 즉시 복구 — 최빈 조작(바인 기록)에 90초 셀프 되돌리기(비번 불요, 서버 검증)
+                toast.show(`${pn} 바인 기록됨`, 'success', { durationMs: 6000, action: { label: '되돌리기', onClick: () => {
+                  cancelMyRecentBuyin(savedId).then(() => { toast.show('바인을 되돌렸습니다', 'info'); reload(); })
+                    .catch((err) => toast.show(err instanceof Error ? err.message : '되돌리기 실패', 'error'));
+                } } });
+              }
               if (isNew && (session.voucherAccrualPerBin ?? 0) > 0) {
                 accrueVoucher(venueId, pn, session.voucherAccrualPerBin as number).then((n) => { if (n > 0) toast.show(`${pn}님 이용권 ${n}개 적립`, 'success'); }).catch((e) => toast.show(e instanceof Error ? e.message : '이용권 적립 실패 — 수동 발급이 필요할 수 있어요', 'error')); // #20 + 쿼터 소진 사유 표면화
               }
-            } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
+            } catch (e) {
+              if (e instanceof Error && e.message === CELL_TAKEN) { toast.show('다른 직원이 방금 이 칸을 입력했어요 — 최신 내용으로 갱신합니다', 'info'); setSelected(null); reload(); }
+              else toast.show(e instanceof Error ? e.message : '저장 실패', 'error');
+            } finally { setPayBusy(false); }
           }}
           onPickSplit={async (d) => {
+            if (payBusy) return;
             const pn = selected.playerName; const isNew = !selected.buyin;
+            setPayBusy(true);
             try {
-              await upsertBuyinSplit({ venueId, sessionDate: date, gameSeq, playerName: pn, entryNo: selected.entryNo, ...d, earlyOverride: (isNew && selected.entryNo === 1) ? clockEarlyNow() : undefined });
+              const savedId = await upsertBuyinSplit({ venueId, sessionDate: date, gameSeq, playerName: pn, entryNo: selected.entryNo, ...d, earlyOverride: (isNew && selected.entryNo === 1) ? clockEarlyNow() : undefined, existingId: selected.buyin?.id ?? null });
               setSelected(null); reload();
+              if (isNew) {
+                toast.show(`${pn} 분납 바인 기록됨`, 'success', { durationMs: 6000, action: { label: '되돌리기', onClick: () => {
+                  cancelMyRecentBuyin(savedId).then(() => { toast.show('바인을 되돌렸습니다', 'info'); reload(); })
+                    .catch((err) => toast.show(err instanceof Error ? err.message : '되돌리기 실패', 'error'));
+                } } });
+              }
               if (isNew && (session.voucherAccrualPerBin ?? 0) > 0) {
                 accrueVoucher(venueId, pn, session.voucherAccrualPerBin as number).then((n) => { if (n > 0) toast.show(`${pn}님 이용권 ${n}개 적립`, 'success'); }).catch((e) => toast.show(e instanceof Error ? e.message : '이용권 적립 실패 — 수동 발급이 필요할 수 있어요', 'error')); // #20 + 쿼터 소진 사유 표면화
               }
-            } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
+            } catch (e) {
+              if (e instanceof Error && e.message === CELL_TAKEN) { toast.show('다른 직원이 방금 이 칸을 입력했어요 — 최신 내용으로 갱신합니다', 'info'); setSelected(null); reload(); }
+              else toast.show(e instanceof Error ? e.message : '저장 실패', 'error');
+            } finally { setPayBusy(false); }
           }}
           onCancelBuyin={async (pw) => {
             if (!selected.buyin) return;
@@ -1910,9 +1946,11 @@ function Overlay({ title, onClose, children }: { title: string; onClose: () => v
 // ── 2-Tap 결제 입력 모달 ──────────────────────────────────────────────────────
 interface SplitInput { cashAmount: number; cardAmount: number; transferAmount: number; ticketCount: number; unpaidAmount: number; discountIndex: number; }
 
-function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCancelBuyin, onSetEarly, lastPick }: {
+function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCancelBuyin, onSetEarly, lastPick, busy = false }: {
   cell: SelectedCell; hasPw: boolean; session: LedgerSession;
   onClose: () => void;
+  /** 저장 처리 중 — 모든 기록 버튼 비활성(더블탭 이중 기록 방지) */
+  busy?: boolean;
   /** 같은 손님의 직전 바인 반복용 원탭(신규 기록일 때만) — null 이면 미표시 */
   lastPick?: { method: PaymentMethod; isUnpaid: boolean; discountIndex: number; label: string } | null;
   onPick: (m: PaymentMethod, isUnpaid: boolean, discountIndex: number) => void;
@@ -2011,18 +2049,18 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
 
               {/* ⚡ 직전과 동일 — 리바인 대부분은 그 손님의 직전 결제수단 반복이다 */}
               {lastPick && (
-                <button type="button" onClick={() => onPick(lastPick.method, lastPick.isUnpaid, lastPick.discountIndex)}
+                <button type="button" disabled={busy} onClick={() => onPick(lastPick.method, lastPick.isUnpaid, lastPick.discountIndex)}
                   className="w-full h-12 rounded-input border border-accent-300 bg-accent-300/15 text-accent-300 font-bold text-sm active:scale-95 transition hover:bg-accent-300/25">
                   ⚡ 직전과 동일 — {lastPick.label}
                 </button>
               )}
               {/* 티켓: 완납·미수(가불) */}
               <div className="grid grid-cols-2 gap-2">
-                <button type="button" onClick={() => onPick('ticket', false, discIdx)}
+                <button type="button" disabled={busy} onClick={() => onPick('ticket', false, discIdx)}
                   className="h-12 rounded-input border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 font-bold text-sm active:scale-95 transition hover:bg-emerald-500/20">
                   티켓 완납{discIdx > 0 ? ' ·할인' : ''}
                 </button>
-                <button type="button" onClick={() => onPick('ticket', true, discIdx)}
+                <button type="button" disabled={busy} onClick={() => onPick('ticket', true, discIdx)}
                   className="h-12 rounded-input border border-danger/50 bg-danger/10 text-danger-light font-bold text-sm active:scale-95 transition hover:bg-danger/20">
                   티켓 미수{discIdx > 0 ? ' ·할인' : ''}
                 </button>
@@ -2031,11 +2069,11 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
               {/* 현금/이체/카드: 완납·미수 */}
               {dualMethods.map((m) => (
                 <div key={m.key} className="grid grid-cols-2 gap-2">
-                  <button type="button" onClick={() => onPick(m.key, false, discIdx)}
+                  <button type="button" disabled={busy} onClick={() => onPick(m.key, false, discIdx)}
                     className="h-12 rounded-input border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 font-bold text-sm active:scale-95 transition hover:bg-emerald-500/20">
                     {m.label} 완납{discIdx > 0 ? ' ·할인' : ''}
                   </button>
-                  <button type="button" onClick={() => onPick(m.key, true, discIdx)}
+                  <button type="button" disabled={busy} onClick={() => onPick(m.key, true, discIdx)}
                     className="h-12 rounded-input border border-danger/50 bg-danger/10 text-danger-light font-bold text-sm active:scale-95 transition hover:bg-danger/20">
                     {m.label} 미수{discIdx > 0 ? ' ·할인' : ''}
                   </button>
@@ -2043,7 +2081,7 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
               ))}
 
               {/* 가게지원 */}
-              <button type="button" onClick={() => onPick('support', false, 0)}
+              <button type="button" disabled={busy} onClick={() => onPick('support', false, 0)}
                 className="w-full h-12 rounded-input border border-indigo-400/50 bg-indigo-500/10 text-indigo-300 font-bold text-sm active:scale-95 transition hover:bg-indigo-500/20">
                 가게지원
               </button>
@@ -2096,7 +2134,7 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
                 합계 <b className="tabular-nums">{wonToMan(splitTotal)}</b>만원
                 {discIdx > 0 && discs[discIdx - 1] ? ` · ${discs[discIdx - 1].label || '할인'} 적용(−${wonToMan(discs[discIdx - 1].amount)}만)` : ''}
               </p>
-              <button type="button" onClick={submitSplit} disabled={!canSaveSplit} className="btn-primary w-full text-sm disabled:opacity-50">저장</button>
+              <button type="button" onClick={submitSplit} disabled={!canSaveSplit || busy} className="btn-primary w-full text-sm disabled:opacity-50">저장</button>
             </div>
           )}
 

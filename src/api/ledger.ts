@@ -655,26 +655,43 @@ export async function getLedgerRange(venueId: string, from: string, to: string):
   return { sessions, buyins };
 }
 
-/** 셀 결제 입력/수정 — (매장,날짜,게임,플레이어,회차) 충돌 시 갱신. buyin_at = NOW.
- *  티켓/가게지원은 항상 완납 처리(미수 불가). */
+/** 다른 기기가 같은 셀을 먼저 기록했을 때(23505) — 호출측이 안내 후 reload 하도록 식별 가능한 에러 */
+export const CELL_TAKEN = 'CELL_TAKEN';
+
+/** 셀 결제 입력/수정.
+ *  신규(existingId 없음)는 INSERT — 두 직원이 같은 리바인 칸을 동시에 찍으면 늦은 쪽이
+ *  조용히 덮어쓰던(=현금 1건 증발) upsert 를 버리고 충돌을 표면화한다.
+ *  수정(existingId)은 id 기반 UPDATE — buyin_at·created_by 를 보존해 얼리 자동판정·
+ *  감사기록·'직전과 동일' 정렬이 수정 한 번에 무너지지 않게 한다.
+ *  티켓/가게지원은 항상 완납 처리(미수 불가). 반환 = 바인 id(신규 되돌리기용). */
 export async function upsertBuyin(input: {
   venueId: string; sessionDate: string; gameSeq?: number; playerName: string; entryNo: number;
   paymentMethod: PaymentMethod; isUnpaid: boolean; discountIndex?: number; earlyOverride?: EarlyType | null;
-}): Promise<void> {
-  if (IS_MOCK) return;
+  existingId?: string | null;
+}): Promise<string> {
+  if (IS_MOCK) return 'mock';
   const user = await currentUser();
   // 가게지원은 항상 완납. 티켓은 미수(가불) 허용.
   const unpaid = input.paymentMethod === 'support' ? false : input.isUnpaid;
-  const { error } = await supabase.from('ledger_buyins').upsert({
-    venue_id: input.venueId, session_date: input.sessionDate, game_seq: input.gameSeq ?? MAIN_GAME_SEQ,
-    player_name: input.playerName, entry_no: input.entryNo,
+  const fields = {
     payment_method: input.paymentMethod, is_unpaid: unpaid,
     is_split: false, cash_amount: 0, card_amount: 0, transfer_amount: 0,
     ticket_count: 0, unpaid_amount: 0, discount_level: 0, discount_index: input.discountIndex ?? 0,
     early_override: input.earlyOverride ?? null,
-    buyin_at: new Date().toISOString(), created_by: user?.id ?? null,
-  }, { onConflict: 'venue_id,session_date,game_seq,player_name,entry_no' });
-  if (error) throw error;
+  };
+  if (input.existingId) {
+    const { error } = await supabase.from('ledger_buyins').update(fields).eq('id', input.existingId);
+    if (error) throw error;
+    return input.existingId;
+  }
+  const { data, error } = await supabase.from('ledger_buyins').insert({
+    venue_id: input.venueId, session_date: input.sessionDate, game_seq: input.gameSeq ?? MAIN_GAME_SEQ,
+    player_name: input.playerName, entry_no: input.entryNo,
+    ...fields,
+    created_by: user?.id ?? null, // buyin_at 은 DB default now() — 기록 시각의 단일 출처
+  }).select('id').single();
+  if (error) throw new Error(error.code === '23505' ? CELL_TAKEN : error.message);
+  return (data as { id: string }).id;
 }
 
 /** 기존 바인의 얼리 유형만 수기 변경(자동=null) */
@@ -693,8 +710,9 @@ export async function upsertBuyinSplit(input: {
   discountIndex?: number;
   /** undefined=기존 값 보존(수정), 값/null=바인 시점 확정 기록(신규) */
   earlyOverride?: EarlyType | null;
-}): Promise<void> {
-  if (IS_MOCK) return;
+  existingId?: string | null;
+}): Promise<string> {
+  if (IS_MOCK) return 'mock';
   const user = await currentUser();
   // 대표 결제수단(셀 표기/정렬용): 금액이 큰 수단. 전부 0이고 티켓만이면 ticket.
   const primary: PaymentMethod =
@@ -702,18 +720,34 @@ export async function upsertBuyinSplit(input: {
     : input.cardAmount >= input.cashAmount && input.cardAmount >= input.transferAmount && input.cardAmount > 0 ? 'card'
     : input.transferAmount > input.cashAmount && input.transferAmount > 0 ? 'transfer'
     : 'cash';
-  const { error } = await supabase.from('ledger_buyins').upsert({
-    venue_id: input.venueId, session_date: input.sessionDate, game_seq: input.gameSeq ?? MAIN_GAME_SEQ,
-    player_name: input.playerName, entry_no: input.entryNo,
+  const fields = {
     payment_method: primary, is_unpaid: input.unpaidAmount > 0,
     is_split: true,
     cash_amount: input.cashAmount, card_amount: input.cardAmount, transfer_amount: input.transferAmount,
     // ⚠ 과거엔 discount_index를 0으로 덮어써 분납 시 할인 이벤트 기록이 사라졌다(정산·통계 누락).
     ticket_count: input.ticketCount, unpaid_amount: input.unpaidAmount, discount_level: 0, discount_index: input.discountIndex ?? 0,
     ...(input.earlyOverride !== undefined ? { early_override: input.earlyOverride } : {}),
-    buyin_at: new Date().toISOString(), created_by: user?.id ?? null,
-  }, { onConflict: 'venue_id,session_date,game_seq,player_name,entry_no' });
-  if (error) throw error;
+  };
+  if (input.existingId) {
+    const { error } = await supabase.from('ledger_buyins').update(fields).eq('id', input.existingId);
+    if (error) throw error;
+    return input.existingId;
+  }
+  const { data, error } = await supabase.from('ledger_buyins').insert({
+    venue_id: input.venueId, session_date: input.sessionDate, game_seq: input.gameSeq ?? MAIN_GAME_SEQ,
+    player_name: input.playerName, entry_no: input.entryNo,
+    ...fields,
+    created_by: user?.id ?? null,
+  }).select('id').single();
+  if (error) throw new Error(error.code === '23505' ? CELL_TAKEN : error.message);
+  return (data as { id: string }).id;
+}
+
+/** 본인이 '방금(90초)' 기록한 바인 되돌리기 — 비밀번호 불요(서버가 created_by·시각 검증) */
+export async function cancelMyRecentBuyin(id: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('cancel_my_recent_buyin', { p_id: id });
+  if (error) throw new Error(error.message);
 }
 
 /** 바이인 취소(삭제) — 업주 설정 비밀번호 필요 */
@@ -746,6 +780,8 @@ export interface BuyinRequest {
   id: string; venueId: string; sessionDate: string; playerName: string;
   userId: string | null; note: string | null; status: 'pending' | 'approved' | 'rejected'; createdAt: string;
   requestedGameSeq: number | null;
+  /** 이용권 사용 요청이면 원본 이용권 id — 서버가 티켓 바인을 자동 기록하므로 💵 패널은 숨긴다 */
+  voucherId: string | null;
 }
 /** 손님 QR 진입 URL — venue_id만(비민감). 로그인 회원만 요청 가능. */
 export function buyinRequestUrl(venueId: string, gameSeq?: number): string {
@@ -790,12 +826,15 @@ export async function getMyBuyinRequestsToday(): Promise<MyBuyinRequest[]> {
 /** 운영자: 그날 대기중(pending) 바인 요청 목록. */
 export async function getPendingBuyinRequests(venueId: string, date: string): Promise<BuyinRequest[]> {
   if (IS_MOCK) return [];
+  // 자정을 넘긴 운영: 서버는 요청을 영업일에 귀속시키지만(20260818f), 혹시 남은 교차 날짜
+  // 요청도 어제 보드에서 보이도록 '보드 날짜 + KST 오늘' 두 날짜를 함께 조회한다.
+  const dates = Array.from(new Set([date, kstToday()]));
   const { data, error } = await supabase.from('ledger_buyin_requests')
-    .select('*').eq('venue_id', venueId).eq('session_date', date).eq('status', 'pending')
+    .select('*').eq('venue_id', venueId).in('session_date', dates).eq('status', 'pending')
     .order('created_at', { ascending: true });
   if (error) throw error;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((r: any) => ({ id: r.id, venueId: r.venue_id, sessionDate: r.session_date, playerName: r.player_name, userId: r.user_id, note: r.note ?? null, status: r.status, createdAt: r.created_at, requestedGameSeq: r.requested_game_seq ?? null }));
+  return (data ?? []).map((r: any) => ({ id: r.id, venueId: r.venue_id, sessionDate: r.session_date, playerName: r.player_name, userId: r.user_id, note: r.note ?? null, status: r.status, createdAt: r.created_at, requestedGameSeq: r.requested_game_seq ?? null, voucherId: r.voucher_id ?? null }));
 }
 /** 운영자: 요청 승인 → 해당 게임(gameSeq) 명단에 추가 + 요청 approved. */
 export async function approveBuyinRequest(id: string, gameSeq = MAIN_GAME_SEQ, recordBuyin = false, payMethod: 'cash' | 'card' | 'transfer' = 'cash', split?: { cash: number; card: number; transfer: number }): Promise<void> {
