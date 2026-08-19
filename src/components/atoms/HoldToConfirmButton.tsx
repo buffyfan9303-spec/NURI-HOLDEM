@@ -34,6 +34,7 @@ export default function HoldToConfirmButton({
       onPointerDown={start}
       onPointerUp={cancel}
       onPointerLeave={cancel}
+      onPointerCancel={cancel}
       onContextMenu={(e) => e.preventDefault()}
       className={['relative overflow-hidden select-none touch-none', className].join(' ')}
       aria-label={typeof children === 'string' ? children : undefined}

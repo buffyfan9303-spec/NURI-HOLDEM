@@ -303,7 +303,7 @@ function StatsView({ venueId }: { venueId: string }) {
                   return (
                     <button key={code} type="button" onClick={() => toggleExclude(code)}
                       className={['py-1.5 text-xs font-bold rounded-[6px] border transition-colors',
-                        on ? 'bg-danger/15 text-danger-light border-danger/40' : 'bg-surface-base text-ink-secondary border-border-subtle hover:text-ink-primary'].join(' ')}>
+                        on ? 'bg-danger/15 text-danger-light border-danger/40' : 'bg-surface-base text-ink-secondary border-border-default hover:text-ink-primary'].join(' ')}>
                       {label}
                     </button>
                   );
@@ -342,10 +342,10 @@ function StatsView({ venueId }: { venueId: string }) {
           {reqStats && reqStats.total > 0 && (
             <Section icon="users" title="바인 요청 현황" suffix="· 손님 QR 요청">
               <div className="grid grid-cols-4 gap-1.5 text-center">
-                <div className="rounded-input bg-surface-high border border-border-subtle py-1.5"><p className="text-base font-bold text-ink-primary tabular-nums">{reqStats.total}</p><p className="text-[11px] text-ink-muted">요청</p></div>
-                <div className="rounded-input bg-surface-high border border-border-subtle py-1.5"><p className="text-base font-bold text-emerald-400 tabular-nums">{reqStats.approved}</p><p className="text-[11px] text-ink-muted">승인</p></div>
-                <div className="rounded-input bg-surface-high border border-border-subtle py-1.5"><p className="text-base font-bold text-accent-300 tabular-nums">{reqStats.approveRate}%</p><p className="text-[11px] text-ink-muted">승인율</p></div>
-                <div className="rounded-input bg-surface-high border border-border-subtle py-1.5"><p className="text-base font-bold text-ink-primary tabular-nums">{reqStats.avgWaitMin != null ? reqStats.avgWaitMin + '분' : '—'}</p><p className="text-[11px] text-ink-muted">평균 대기</p></div>
+                <div className="rounded-input bg-surface-high border border-border-default py-1.5"><p className="text-base font-bold text-ink-primary tabular-nums">{reqStats.total}</p><p className="text-[11px] text-ink-muted">요청</p></div>
+                <div className="rounded-input bg-surface-high border border-border-default py-1.5"><p className="text-base font-bold text-emerald-400 tabular-nums">{reqStats.approved}</p><p className="text-[11px] text-ink-muted">승인</p></div>
+                <div className="rounded-input bg-surface-high border border-border-default py-1.5"><p className="text-base font-bold text-accent-300 tabular-nums">{reqStats.approveRate}%</p><p className="text-[11px] text-ink-muted">승인율</p></div>
+                <div className="rounded-input bg-surface-high border border-border-default py-1.5"><p className="text-base font-bold text-ink-primary tabular-nums">{reqStats.avgWaitMin != null ? reqStats.avgWaitMin + '분' : '—'}</p><p className="text-[11px] text-ink-muted">평균 대기</p></div>
               </div>
             </Section>
           )}
@@ -353,7 +353,7 @@ function StatsView({ venueId }: { venueId: string }) {
           {m.sideGameCount > 0 && (
             <Section icon="users" title="게임별 구분" suffix="· 메인 / 사이드">
               <div className="grid grid-cols-2 gap-1.5">
-                <div className="rounded-input bg-surface-high border border-border-subtle py-2 text-center">
+                <div className="rounded-input bg-surface-high border border-border-default py-2 text-center">
                   <p className="text-2xs text-ink-muted">메인</p>
                   <p className="text-sm font-bold text-ink-primary tabular-nums">{m.mainEntries.toLocaleString(undefined, { maximumFractionDigits: 1 })} 엔트리</p>
                   <p className="text-2xs text-emerald-400 tabular-nums">{wonToMan(m.mainRev)}만</p>
@@ -391,7 +391,7 @@ function StatsView({ venueId }: { venueId: string }) {
                           <div className="bg-emerald-500 flex-1" />
                           {stacked && <div className="bg-accent-300" style={{ height: sidePx }} />}
                         </div>
-                        <span className="text-[8px] text-ink-muted tabular-nums leading-none">{d.date.slice(5).replace('-', '/')}</span>
+                        <span className="text-[10px] text-ink-muted tabular-nums leading-none">{d.date.slice(5).replace('-', '/')}</span>
                       </button>
                     );
                   })}
@@ -411,8 +411,8 @@ function StatsView({ venueId }: { venueId: string }) {
                     <div className="mt-2 rounded-input border border-accent-400/30 bg-accent-300/[0.06] p-2.5">
                       <p className="text-2xs font-bold text-accent-300 mb-1.5">{d.date} 상세</p>
                       <div className="grid grid-cols-3 gap-1.5 text-center">
-                        <div><p className="text-2xs text-ink-muted">엔트리</p><p className="text-sm font-bold text-ink-primary tabular-nums">{f1(d.mainE + d.sideE)}</p><p className="text-[9px] text-ink-muted">메인 {f1(d.mainE)} · 사이드 {f1(d.sideE)}</p></div>
-                        <div><p className="text-2xs text-ink-muted">매출</p><p className="text-sm font-bold text-emerald-400 tabular-nums">{wonToMan(d.mainRev + d.sideRev)}만</p><p className="text-[9px] text-ink-muted">메인 {wonToMan(d.mainRev)} · 사이드 {wonToMan(d.sideRev)}</p></div>
+                        <div><p className="text-2xs text-ink-muted">엔트리</p><p className="text-sm font-bold text-ink-primary tabular-nums">{f1(d.mainE + d.sideE)}</p><p className="text-[10px] text-ink-muted">메인 {f1(d.mainE)} · 사이드 {f1(d.sideE)}</p></div>
+                        <div><p className="text-2xs text-ink-muted">매출</p><p className="text-sm font-bold text-emerald-400 tabular-nums">{wonToMan(d.mainRev + d.sideRev)}만</p><p className="text-[10px] text-ink-muted">메인 {wonToMan(d.mainRev)} · 사이드 {wonToMan(d.sideRev)}</p></div>
                         <div><p className="text-2xs text-ink-muted">인원</p><p className="text-sm font-bold text-ink-primary tabular-nums">{d.players}명</p></div>
                       </div>
                     </div>
@@ -425,19 +425,19 @@ function StatsView({ venueId }: { venueId: string }) {
           {clockAgg && (
             <Section icon="clock" title="클락 최종 (보정 포함)" suffix="· 운영자 클락 집계">
               <div className="grid grid-cols-4 gap-1.5">
-                <div className="rounded-input bg-surface-high border border-border-subtle py-1.5 text-center">
+                <div className="rounded-input bg-surface-high border border-border-default py-1.5 text-center">
                   <p className="text-base font-bold text-accent-300 tabular-nums">{clockAgg.entries}</p>
                   <p className="text-[11px] text-ink-muted">엔트리</p>
                 </div>
-                <div className="rounded-input bg-surface-high border border-border-subtle py-1.5 text-center">
+                <div className="rounded-input bg-surface-high border border-border-default py-1.5 text-center">
                   <p className="text-base font-bold text-emerald-400 tabular-nums">{clockAgg.alive}</p>
                   <p className="text-[11px] text-ink-muted">생존</p>
                 </div>
-                <div className="rounded-input bg-surface-high border border-border-subtle py-1.5 text-center">
+                <div className="rounded-input bg-surface-high border border-border-default py-1.5 text-center">
                   <p className="text-base font-bold text-ink-primary tabular-nums">{clockAgg.eliminations}</p>
                   <p className="text-[11px] text-ink-muted">아웃</p>
                 </div>
-                <div className="rounded-input bg-surface-high border border-border-subtle py-1.5 text-center">
+                <div className="rounded-input bg-surface-high border border-border-default py-1.5 text-center">
                   <p className="text-base font-bold text-amber-300 tabular-nums">{clockAgg.earlies}</p>
                   <p className="text-[11px] text-ink-muted">얼리</p>
                 </div>
@@ -451,7 +451,7 @@ function StatsView({ venueId }: { venueId: string }) {
           <Section icon="card" title="결제 수단별 바인 수">
             <div className="grid grid-cols-5 gap-1.5">
               {(['ticket', 'cash', 'transfer', 'card', 'support'] as PaymentMethod[]).map((k) => (
-                <div key={k} className="rounded-input bg-surface-high border border-border-subtle py-1.5 text-center">
+                <div key={k} className="rounded-input bg-surface-high border border-border-default py-1.5 text-center">
                   <p className="text-base font-bold text-ink-primary tabular-nums">{m.byMethod[k]}</p>
                   <p className="text-[11px] text-ink-muted">{METHOD_LABEL[k]}</p>
                 </div>
@@ -463,7 +463,7 @@ function StatsView({ venueId }: { venueId: string }) {
             <Section icon="usercheck" title="방문 유형" suffix="(명단 기준)">
               <div className="grid grid-cols-4 gap-1.5">
                 {(['new', 'regular', 'staff', 'other'] as VisitorType[]).map((k) => (
-                  <div key={k} className="rounded-input bg-surface-high border border-border-subtle py-1.5 text-center">
+                  <div key={k} className="rounded-input bg-surface-high border border-border-default py-1.5 text-center">
                     <p className="text-base font-bold text-ink-primary tabular-nums">{m.visitor[k]}</p>
                     <p className="text-[11px] text-ink-muted">{VISITOR_LABEL[k]}</p>
                   </div>
@@ -478,7 +478,7 @@ function StatsView({ venueId }: { venueId: string }) {
             ) : (
               <ul className="space-y-1">
                 {m.ranking.slice(0, 10).map(([name, cnt], i) => (
-                  <li key={name} className="flex items-center gap-2 px-2 py-2 rounded-input bg-surface-high border border-border-subtle">
+                  <li key={name} className="flex items-center gap-2 px-2 py-2 rounded-input bg-surface-high border border-border-default">
                     <span className={['w-5 text-center text-xs font-bold tabular-nums', i === 0 ? 'text-accent-300' : i === 2 ? 'text-amber-600' : 'text-ink-secondary'].join(' ')}>{i + 1}</span>
                     <span className="flex-1 text-xs font-semibold text-ink-primary truncate">{name}</span>
                     <span className="text-xs font-bold text-ink-secondary tabular-nums">{cnt}회</span>
@@ -625,7 +625,7 @@ function DowStats({ dow, rangeLabel = '전체' }: { dow: Record<number, { entrie
       </div>
 
       {/* 인사이트 */}
-      <p className="text-[11px] text-ink-secondary bg-surface-low/70 border border-border-subtle rounded-input p-2.5 leading-relaxed">
+      <p className="text-[11px] text-ink-secondary bg-surface-low/70 border border-border-default rounded-input p-2.5 leading-relaxed">
         💡 {multi
           ? <>{DOW[worst.w]}요일이 일평균 <b className="text-rose-300">{worst.avgEntry.toFixed(1)}</b> 엔트리로 가장 저조합니다(전체 평균 {meanAvg.toFixed(1)}). 반대로 <b className="text-emerald-300">{DOW[best.w]}</b>요일이 {best.avgEntry.toFixed(1)}로 가장 활발합니다. {DOW[worst.w]}요일에 집객 이벤트(얼리버드 칩업·신규 할인·보장 토너먼트)를 배치해 보세요.</>
           : <>아직 한 요일({DOW[best.w]})만 집계됐습니다. 다른 요일도 운영되면 요일 간 비교·약한 요일 진단을 표시합니다.</>}
@@ -667,9 +667,9 @@ function StatIcon({ name, className = '' }: { name: IconName; className?: string
 function StatCard({ label, value, sub, icon, danger, emerald, gold }: { label: string; value: string; sub?: string; icon: IconName; danger?: boolean; emerald?: boolean; gold?: boolean }) {
   const c = danger ? 'text-danger-light' : emerald ? 'text-emerald-400' : gold ? 'text-accent-300' : 'text-ink-primary';
   return (
-    <div className="rounded-card bg-surface-low border border-border-subtle p-2.5 flex flex-col min-h-[5.25rem]">
+    <div className="rounded-card bg-surface-low border border-border-default p-2.5 flex flex-col min-h-[5.25rem]">
       <div className="flex items-start justify-between gap-1">
-        <p className="text-[13px] font-medium text-ink-secondary leading-tight">{label}</p>
+        <p className="text-xs font-medium text-ink-secondary leading-tight">{label}</p>
         <StatIcon name={icon} className="text-ink-muted shrink-0" />
       </div>
       <p className={['mt-auto pt-2 text-lg font-extrabold tabular-nums leading-none', c].join(' ')}>{value}</p>
@@ -680,9 +680,9 @@ function StatCard({ label, value, sub, icon, danger, emerald, gold }: { label: s
 
 function Mini({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="rounded-input bg-surface-high border border-border-subtle py-2 px-1 text-center" title={hint}>
+    <div className="rounded-input bg-surface-high border border-border-default py-2 px-1 text-center" title={hint}>
       <p className="text-base font-bold text-ink-primary tabular-nums leading-none">{value}</p>
-      <p className="text-[11px] text-ink-muted mt-1 leading-tight">{label}{hint ? <span className="block text-[9px] text-ink-muted/70">{hint}</span> : null}</p>
+      <p className="text-[11px] text-ink-muted mt-1 leading-tight">{label}{hint ? <span className="block text-[10px] text-ink-muted/70">{hint}</span> : null}</p>
     </div>
   );
 }
@@ -822,7 +822,7 @@ function ReportCard({ tone, title, body, bullets }: { tone: 'emerald' | 'rose' |
   const head = tone === 'emerald' ? 'text-emerald-300' : tone === 'rose' ? 'text-rose-300' : tone === 'sky' ? 'text-sky-300' : 'text-amber-300';
   const mark = tone === 'emerald' ? '📈' : tone === 'rose' ? '⚠️' : tone === 'sky' ? '📅' : '💡';
   return (
-    <div className="rounded-input bg-surface-low/80 border border-border-subtle p-3">
+    <div className="rounded-input bg-surface-low/80 border border-border-default p-3">
       <p className={['flex items-center gap-1 text-xs font-bold mb-1.5', head].join(' ')}><span>{mark}</span>{title}</p>
       {body && <p className="text-2xs text-ink-secondary leading-relaxed">{body}</p>}
       {bullets && (
@@ -883,7 +883,7 @@ export function PosSettingsPanel({ venueId }: { venueId: string }) {
       </div>
 
       {/* 알림 수신 — 매장 공지/호출 알림을 본인이 받을지 */}
-      <div className="flex items-center gap-2 border-t border-border-subtle pt-3">
+      <div className="flex items-center gap-2 border-t border-border-default pt-3">
         <div className="min-w-0 flex-1">
           <p className="text-2xs font-semibold text-ink-secondary">매장 알림 수신</p>
           <p className="text-2xs text-ink-muted">매장 공지·직원 호출 알림을 내 알림센터로 받습니다.</p>
@@ -897,7 +897,7 @@ export function PosSettingsPanel({ venueId }: { venueId: string }) {
       {/* 사장님(공동 업주) 관리 — 업주/운영자만 */}
       {canOwner && <OwnerManageCard venueId={venueId} />}
 
-      <p className="text-2xs text-ink-muted pt-1 border-t border-border-subtle">통계는 업주만 볼 수 있습니다. 직원의 <span className="text-accent-300 font-semibold">장부·순위 권한과 직책</span>은 「직원 관리」 탭, 매장 페이지 탭 순서·순위 구성은 <span className="text-accent-300 font-semibold">「매장 꾸미기」</span>에서 설정하세요.</p>
+      <p className="text-2xs text-ink-muted pt-1 border-t border-border-default">통계는 업주만 볼 수 있습니다. 직원의 <span className="text-accent-300 font-semibold">장부·순위 권한과 직책</span>은 「직원 관리」 탭, 매장 페이지 탭 순서·순위 구성은 <span className="text-accent-300 font-semibold">「매장 꾸미기」</span>에서 설정하세요.</p>
     </section>
   );
 }
@@ -929,16 +929,16 @@ function OwnerManageCard({ venueId }: { venueId: string }) {
     catch (e) { toast.show(e instanceof Error ? e.message : '교체 실패', 'error'); }
   };
   return (
-    <div className="border-t border-border-subtle pt-3 space-y-2">
+    <div className="border-t border-border-default pt-3 space-y-2">
       <p className="text-2xs font-semibold text-ink-secondary">사장님(공동 업주) 관리</p>
       {owners.length > 0 && (
         <ul className="space-y-1">
           {owners.map((o) => (
-            <li key={o.userId} className="flex items-center gap-2 rounded-input border border-border-subtle bg-surface-base px-2.5 py-1.5">
+            <li key={o.userId} className="flex items-center gap-2 rounded-input border border-border-default bg-surface-base px-2.5 py-1.5">
               <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{o.name ? `${o.name}(${o.nickname})` : o.nickname}</span>
-              {o.status === 'pending' && <span className="shrink-0 rounded-badge bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold text-amber-400">승인 대기</span>}
+              {o.status === 'pending' && <span className="shrink-0 rounded-badge bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-400">승인 대기</span>}
               {o.isPrimary
-                ? <span className="shrink-0 rounded-badge bg-accent-300/15 px-1.5 py-0.5 text-[9px] font-bold text-accent-300">대표</span>
+                ? <span className="shrink-0 rounded-badge bg-accent-300/15 px-1.5 py-0.5 text-[10px] font-bold text-accent-300">대표</span>
                 : (
                   <>
                     {o.status === 'approved' && <button type="button" onClick={() => makePrimary(o)} className="shrink-0 text-2xs font-semibold text-accent-300 hover:text-accent-200">대표로</button>}

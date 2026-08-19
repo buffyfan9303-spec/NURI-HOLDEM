@@ -105,6 +105,8 @@ export default function ImageLightbox({ src, alt, onClose }: Props) {
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 animate-fade-in"
       role="dialog" aria-modal="true" aria-label={`${alt} 확대 보기`}
       onWheel={onWheel}
+      // 배경 탭 닫기 — 이미지 제스처(포인터 캡처)와 충돌하지 않게 배경 자신을 탭했을 때만
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <button
         type="button" onClick={onClose} aria-label="닫기"
@@ -112,7 +114,8 @@ export default function ImageLightbox({ src, alt, onClose }: Props) {
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden><path d="M18 6L6 18M6 6l12 12" /></svg>
       </button>
-      <p className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-white/10 px-3 py-1 text-2xs text-white/80 backdrop-blur">
+      {/* 터치 전용 조작 힌트 — PC(휠줌)에서는 불필요해 숨김 */}
+      <p className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-white/10 px-3 py-1 text-2xs text-white/80 backdrop-blur lg:hidden">
         두 손가락으로 확대 · 두 번 탭하면 줌
       </p>
       <img

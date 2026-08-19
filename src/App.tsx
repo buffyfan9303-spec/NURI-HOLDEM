@@ -308,7 +308,6 @@ const AppHeader = memo(function AppHeader({
               {userMenuOpen && (
                 <div
                   className="absolute right-0 top-full mt-2 w-56 bg-surface-mid border border-border-default rounded-card shadow-dialog animate-slide-up z-50 overflow-hidden"
-                  onMouseLeave={() => setUserMenu(false)}
                 >
                   {/* 사용자 정보 헤더 — 행 전체가 클릭/터치 영역(빈 여백 포함)이 되도록 button으로 확장 */}
                   <button
@@ -491,9 +490,8 @@ const TabBar = memo(function TabBar({
               // 모바일: flex-1로 컨테이너 폭을 균등 분배(좌측 쏠림 제거) → 라벨은 셀 정중앙.
               //   min-width:auto(기본) 유지 → 탭이 많아 좁아지면 라벨 폭 이하로 줄지 않고 가로 스크롤(겹침 방지).
               // 데스크톱(sm+): 자연폭 + 컨테이너 sm:justify-center로 중앙 정렬 그룹(과도한 벌어짐 방지).
-              // transition에 text-shadow 포함 → 활성 전환 시 글로우가 '톡' 튀지 않고 은은히 이징(터치 시 노란색 깜빡임 제거)
-              'flex-1 px-2 sm:flex-none sm:px-5 py-2.5 text-sm font-medium whitespace-nowrap transition-[color,text-shadow] duration-200 focus:outline-none touch-manipulation rounded-t-input',
-              isActive ? 'text-accent-300 text-gold-glow' : 'text-ink-muted [text-shadow:0_0_0_rgba(255,209,0,0)] hover:text-ink-secondary',
+              'flex-1 px-2 sm:flex-none sm:px-5 py-2.5 text-sm font-medium whitespace-nowrap transition-colors duration-200 focus:outline-none touch-manipulation rounded-t-input',
+              isActive ? 'text-accent-300' : 'text-ink-muted hover:text-ink-secondary',
             ].join(' ')}
           >
             <span
@@ -511,7 +509,7 @@ const TabBar = memo(function TabBar({
       <span
         aria-hidden
         className="pointer-events-none absolute bottom-0 h-0.5 rounded-full bg-accent-300
-                   shadow-[0_0_8px_rgba(255,209,0,0.5)]
+                   shadow-[0_0_8px_rgba(94,106,210,0.5)]
                    transition-[left,width] duration-300 ease-out"
         style={{ left: indicator.left, width: indicator.width }}
       />
@@ -2011,10 +2009,10 @@ export default function App() {
         suppressed={openVenueId !== null}
       />
 
-      {/* 🔄 새 버전 배너 — 배포 감지 시 새로고침 유도(앱이 멈춰 보이지 않게) */}
+      {/* 🔄 새 버전 배너 — 배포 감지 시 새로고침 유도(앱이 멈춰 보이지 않게). 오프라인 배너처럼 sticky로 스크롤 중에도 보이게(z는 오프라인 바로 아래) */}
       {updateReady && (
         <button type="button" onClick={() => location.reload()}
-          className="flex w-full items-center justify-center gap-2 bg-accent-300 px-3 py-2 text-xs font-bold text-white active:opacity-80">
+          className="sticky top-0 z-[59] flex w-full items-center justify-center gap-2 bg-accent-300 px-3 py-2 text-xs font-bold text-white active:opacity-80">
           🔄 새 버전이 있어요 — 탭하여 새로고침
         </button>
       )}
@@ -2133,7 +2131,7 @@ export default function App() {
                     // 눈에도 안 띄고 손가락으로도 짚기 어려웠다. 히트영역을 키우고 대비를 올린다.
                     className="shrink-0 -my-1.5 inline-flex h-8 items-center gap-1 rounded-badge border border-border-default px-2 text-2xs text-ink-secondary transition-colors hover:border-danger/40 hover:text-danger focus:outline-none"
                   >
-                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 6h18M8 6V4h8v2m-1 0v14H9V6" /></svg>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 6h18M8 6V4h8v2m-1 0v14H9V6" /></svg>
                     초기화
                   </button>
                 )}
@@ -2469,7 +2467,9 @@ export default function App() {
       </Suspense>
 
       {/* 사업자 정보 푸터 — 전 화면 하단 상시 노출(전자상거래법 표시의무 + 약관 링크 + 고객센터) */}
-      <BusinessFooter onOpenLegal={(d) => setLegalDoc(d)} onOpenSupport={() => setSupportOpen(true)} />
+      <div className="reveal">
+        <BusinessFooter onOpenLegal={(d) => setLegalDoc(d)} onOpenSupport={() => setSupportOpen(true)} />
+      </div>
 
       {/* ── 모달 — 전부 lazy: 여는 순간에만 해당 청크 로드(첫 화면 가볍게) ── */}
       {/* 모달 렌더 크래시가 앱 전체 폴백으로 번지지 않게 묶음 단위 바운더리 — 대상이 바뀌면 자동 리셋 */}
@@ -2821,11 +2821,12 @@ const BrowseSideRail = memo(function BrowseSideRail({ posts, schedules, onSelect
     return diff === 0 ? '오늘' : diff === 1 ? '내일' : `D-${diff}`;
   };
 
+  // sticky 요소에 reveal을 걸면 view() 진행도가 고정될 수 있어 내부 섹션에 개별 적용
   return (
-    <aside className="reveal sticky top-[calc(var(--stack-top,6.0625rem)+0.75rem)] hidden w-72 shrink-0 space-y-3 xl:block">
+    <aside className="sticky top-[calc(var(--stack-top,6.0625rem)+0.75rem)] hidden w-72 shrink-0 space-y-3 xl:block">
       {/* 곧 시작하는 대회 — 시간 임박 순 3개 */}
       {upcoming.length > 0 && (
-        <section className="overflow-hidden rounded-card border border-border-subtle bg-surface-low">
+        <section className="reveal overflow-hidden rounded-card border border-border-subtle bg-surface-low">
           <header className="border-b border-border-subtle px-3 py-2 text-xs font-bold text-ink-secondary">⏰ 곧 시작</header>
           <ul>
             {upcoming.map((s) => (
@@ -2846,7 +2847,7 @@ const BrowseSideRail = memo(function BrowseSideRail({ posts, schedules, onSelect
 
       {/* 주간 머니인 킹 */}
       {kings.length > 0 && (
-        <section className="rounded-card border border-accent-400/25 bg-surface-low overflow-hidden">
+        <section className="reveal rounded-card border border-accent-400/25 bg-surface-low overflow-hidden">
           <header className="border-b border-border-subtle px-3 py-2 text-xs font-bold text-accent-300">이번 주 머니인 킹</header>
           <ul>
             {kings.map((k, i) => (
@@ -2862,7 +2863,7 @@ const BrowseSideRail = memo(function BrowseSideRail({ posts, schedules, onSelect
 
       {/* HOT 게시글 */}
       {hot.length > 0 && (
-        <section className="rounded-card border border-danger/25 bg-surface-low overflow-hidden">
+        <section className="reveal rounded-card border border-danger/25 bg-surface-low overflow-hidden">
           <header className="border-b border-border-subtle px-3 py-2 text-xs font-bold text-danger-light">🔥 지금 HOT</header>
           <ul>
             {hot.map((p) => (
@@ -2879,7 +2880,7 @@ const BrowseSideRail = memo(function BrowseSideRail({ posts, schedules, onSelect
       )}
 
       {/* 광고 자리 — 비어 있을 땐 문의 안내(수익 슬롯) */}
-      <section className="rounded-card border border-dashed border-border-default bg-surface-low/60 px-3 py-3 text-center">
+      <section className="reveal rounded-card border border-dashed border-border-default bg-surface-low/60 px-3 py-3 text-center">
         <p className="text-xs font-bold text-ink-secondary">📢 광고 자리</p>
         <p className="mt-0.5 text-2xs leading-relaxed text-ink-muted">이 자리에 매장·브랜드 광고를 게재할 수 있습니다.<br />내 매장 → 포스터 상단 고정 카드에서 문의하세요.</p>
       </section>

@@ -255,7 +255,7 @@ export default function PostDetailModal({
                 const heroCards = (replay?.hero?.length ? replay.hero : hand?.hero) ?? [];
                 if (heroCards.length < 2) return null;
                 return (
-                  <button type="button" onClick={() => setGtoHero(heroCards)}
+                  <button type="button" onClick={() => { if (performance.now() - openedAtRef.current < 400) return; setGtoHero(heroCards); }}
                     className="inline-flex items-center gap-1.5 rounded-input border border-accent-400/40 bg-accent-300/10 px-3 py-2 text-xs font-bold text-accent-300 active:opacity-80">
                     🎯 이 핸드 GTO 분석
                   </button>
@@ -280,11 +280,6 @@ export default function PostDetailModal({
               </svg>
               좋아요 {post.likeCount}
             </button>
-            {/* 댓글 수는 화면에 실제로 불러온 목록(replies)만 신뢰한다.
-                post.commentCount 는 DB 트리거가 같은 값을 넣어주는 컬럼이라 더하면 2배가 된다.
-                (트리거 도입 전에는 항상 0이라 0+n 으로 우연히 맞아 보였을 뿐이다.
-                 App.tsx 가 posts 갱신마다 openPost 를 덮어쓰므로 리얼타임 갱신 때 반드시 드러난다.) */}
-            <span>댓글 {replies.length}</span>
           </div>
         </div>
 
@@ -318,7 +313,11 @@ export default function PostDetailModal({
 
         {/* ── 댓글 — CommentThread 재사용: 답글(대댓글)·칭호칩·삭제까지 게시판에도 동일하게.
             예전 자체 flat 목록은 답글 버튼이 없어 '너라면 어떻게?' 대화가 이어지질 못했다. */}
-        <section className="space-y-2">
+        <section className="reveal space-y-2">
+          {/* 댓글 수는 화면에 실제로 불러온 목록(replies)만 신뢰한다.
+              post.commentCount 는 DB 트리거가 같은 값을 넣어주는 컬럼이라 더하면 2배가 된다.
+              (트리거 도입 전에는 항상 0이라 0+n 으로 우연히 맞아 보였을 뿐이다.
+               App.tsx 가 posts 갱신마다 openPost 를 덮어쓰므로 리얼타임 갱신 때 반드시 드러난다.) */}
           <h3 className="text-sm font-semibold text-ink-primary">댓글 {replies.length}</h3>
           <CommentThread
             comments={replies}

@@ -183,7 +183,7 @@ function SortableVenueRow({ venue, order, handlers }: { venue: Venue; order: num
       style={style}
       className={[
         'rounded-card border bg-surface-low p-2.5 space-y-2',
-        isDragging ? 'border-accent-400 shadow-gold opacity-90 z-10' : 'border-border-default',
+        isDragging ? 'border-accent-400 shadow-[0_0_12px_rgba(94,106,210,0.22)] opacity-90 z-10' : 'border-border-default',
       ].join(' ')}
     >
       <RowContent

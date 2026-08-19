@@ -162,11 +162,6 @@
     @apply card cursor-pointer hover:bg-surface-high hover:border-border-strong ;
   }
 
-  /* 프리미엄(상단 고정) 카드: 골드 테두리 + glow */
-  .card-premium {
-    @apply card border-gold-400 shadow-gold;
-  }
-
   /* ── 버튼 공통 — 바이낸스 밀도(높이 40px대, 패딩 압축. 터치 최소 40px 유지) ── */
   .btn {
     @apply inline-flex items-center justify-center gap-1.5 whitespace-nowrap
@@ -233,11 +228,6 @@
   .scroll-fade-r {
     -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 1.75rem), transparent);
     mask-image: linear-gradient(to right, #000 calc(100% - 1.75rem), transparent);
-  }
-
-  /* 골드 포인트 텍스트 글로우 — 다크 배경에서 묻히지 않고 고급스럽게 (은은하게) */
-  .text-gold-glow {
-    text-shadow: none;
   }
 
   /* ── 스켈레톤 로더 ──────────────────────────────────── */
@@ -406,7 +396,8 @@ html.light .text-danger-light { color: #D63A4E; }
 html.light .text-accent-200, html.light .text-accent-300 { color: #4853B8; }
 html.light .text-accent-400 { color: #3A4392; }
 /* 상태/경고용 파스텔 텍스트 — 흰 배경에서 대비가 무너지는 나머지 계열 전부 딥 톤 교정 */
-html.light .text-amber-200, html.light .text-amber-300 { color: #92600A; }
+  html.light .text-indigo-300, html.light .text-indigo-400 { color: #4338CA; }
+html.light .text-amber-100, html.light .text-amber-200, html.light .text-amber-300 { color: #92600A; }
 html.light .text-sky-300 { color: #0369A1; }
 html.light .text-rose-200, html.light .text-rose-300 { color: #BE123C; }
 html.light .text-violet-200, html.light .text-violet-300 { color: #6D28D9; }

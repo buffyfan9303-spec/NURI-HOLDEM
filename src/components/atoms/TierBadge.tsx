@@ -154,7 +154,7 @@ export default function TierBadge({ points, showLabel = false, size = 14, admin 
         height: size, minWidth: size, padding: '0 2px', fontSize,
         color,
         border: `1px solid ${color}66`,
-        background: 'rgba(10,12,15,0.88)',
+        background: 'rgb(var(--surface-base) / 0.9)', // 토큰 — 라이트 모드에서도 자동 대응
         boxShadow: glow ? `0 0 6px ${color}99` : undefined,
       };
 

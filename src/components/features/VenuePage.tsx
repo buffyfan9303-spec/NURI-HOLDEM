@@ -207,6 +207,7 @@ export default function VenuePage({
   return (
     <div
       role="dialog"
+      aria-modal="true"
       aria-label={`${venue.name} 매장 페이지`}
       className="fixed inset-0 z-40 bg-surface-base flex flex-col animate-slide-up pt-[env(safe-area-inset-top)]"
       style={{ animationDuration: '0.25s' }}
@@ -388,21 +389,23 @@ export default function VenuePage({
                   }
                 }}
               />
-              <VenueReviews
-                venueId={venue.id}
-                userId={user?.id ?? null}
-                nickname={user?.nickname ?? null}
-                isAdmin={user?.role === 'admin'}
-                canReply={isMyVenue || user?.role === 'admin'}
-              />
+              <div className="reveal">
+                <VenueReviews
+                  venueId={venue.id}
+                  userId={user?.id ?? null}
+                  nickname={user?.nickname ?? null}
+                  isAdmin={user?.role === 'admin'}
+                  canReply={isMyVenue || user?.role === 'admin'}
+                />
+              </div>
               {/* ── Tier 3: 내 활동 (Phase 10-1 계층3) ──────────────────────────
                   단골에게만 의미 있는 것들(이용권·포인트·시즌)은 접힌 채로 —
                   처음 온 사용자는 이 블록 자체가 DOM 에 없다(display:none 이 아니라 미렌더).
                   게이트: 로그인 + 활동 이력(연속출석 또는 이 매장 방문 기록). */}
               {user && myAct && (myAct.streak > 0 || myAct.visits > 0) && (
-                <details className="rounded-card border border-border-subtle overflow-hidden">
+                <details className="reveal group rounded-card border border-border-subtle overflow-hidden">
                   <summary className="cursor-pointer list-none flex items-center justify-between px-3 py-2.5 text-sm font-semibold text-ink-primary hover:bg-surface-high/50 transition-colors">
-                    <span>🙋 내 활동</span><span className="text-xs text-ink-muted" aria-hidden>▾</span>
+                    <span>🙋 내 활동</span><span className="text-xs text-ink-muted transition-transform group-open:rotate-180" aria-hidden>▾</span>
                   </summary>
                   <div className="border-t border-border-subtle divide-y divide-border-subtle">
                     <button type="button" onClick={onOpenWallet}
@@ -712,7 +715,7 @@ function VenueChat({ venueId, canManage }: { venueId: string; canManage: boolean
   const [messages, setMessages] = useState<VenueMessage[]>([]);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
-  const endRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
 
   useEffect(() => {
     let active = true;
@@ -720,7 +723,8 @@ function VenueChat({ venueId, canManage }: { venueId: string; canManage: boolean
     const unsub = subscribeVenueMessages(venueId, (m) => setMessages((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m])));
     return () => { active = false; unsub(); };
   }, [venueId]);
-  useEffect(() => { endRef.current?.scrollIntoView({ block: 'end' }); }, [messages.length]);
+  // scrollIntoView 는 조상 스크롤러까지 끌어내려 페이지 점프 유발 → 채팅 ul 내부만 스크롤
+  useEffect(() => { const ul = listRef.current; if (ul) ul.scrollTop = ul.scrollHeight; }, [messages.length]);
 
   const send = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -738,7 +742,7 @@ function VenueChat({ venueId, canManage }: { venueId: string; canManage: boolean
 
   return (
     <div className="space-y-2">
-      <ul className="space-y-1.5 max-h-[55vh] overflow-y-auto">
+      <ul ref={listRef} className="space-y-1.5 max-h-[55vh] overflow-y-auto">
         {messages.length === 0 ? <p className="py-8 text-center text-2xs text-ink-muted">이 매장의 첫 메시지를 남겨보세요</p> : messages.map((m) => (
           <li key={m.id} className="flex items-start gap-2">
             <Avatar name={m.userName} color={m.userColor} size={24} className="mt-0.5" />
@@ -754,7 +758,6 @@ function VenueChat({ venueId, canManage }: { venueId: string; canManage: boolean
             </div>
           </li>
         ))}
-        <div ref={endRef} />
       </ul>
       <form onSubmit={send} className="flex items-center gap-2">
         <input type="text" value={draft} onChange={(e) => setDraft(e.target.value)} maxLength={500}
@@ -985,7 +988,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
               : 'border-amber-700/50 bg-gradient-to-b from-amber-700/[0.10] to-transparent';
             const medal = rank === 1 ? 'bg-accent-300 text-white' : rank === 2 ? 'bg-slate-300 text-white' : 'bg-amber-700 text-white';
             return (
-              <div key={e.nickname} className={['flex-1 max-w-[9.5rem] rounded-card border p-2.5 text-center', ring, big ? 'pb-4 -translate-y-2 shadow-[0_0_18px_rgba(255,209,0,0.12)]' : ''].join(' ')}>
+              <div key={e.nickname} className={['flex-1 max-w-[9.5rem] rounded-card border p-2.5 text-center', ring, big ? 'pb-4 -translate-y-2 shadow-[0_0_18px_rgba(94,106,210,0.18)]' : ''].join(' ')}>
                 {big && <div aria-hidden className="text-base leading-none mb-1">👑</div>}
                 <span className={['mx-auto flex items-center justify-center rounded-full font-extrabold tabular-nums', medal, big ? 'w-8 h-8 text-sm' : 'w-6 h-6 text-2xs'].join(' ')}>{rank}</span>
                 <p className={['mt-1 font-bold uppercase tracking-wide', rank === 1 ? 'text-accent-300' : 'text-ink-secondary', 'text-2xs'].join(' ')}>{titleOf(rank)}</p>
@@ -999,7 +1002,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
       )}
 
       {/* 4등~ 리스트 — 바이낸스 표 문법(구분선·행 40px대·숫자 우측 tabular) */}
-      <ol className="overflow-hidden rounded-input border border-border-subtle bg-surface-high divide-y divide-border-subtle">
+      <ol className="reveal overflow-hidden rounded-input border border-border-subtle bg-surface-high divide-y divide-border-subtle">
         {rest.map((e, i) => {
           const { main: rMain, sub: rSub } = rankDisplay(e);
           return (
@@ -1017,7 +1020,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
       </ol>
 
       {latest.date && latest.entries.length > 0 && (
-        <div className="pt-2 border-t border-border-subtle">
+        <div className="reveal pt-2 border-t border-border-subtle">
           <p className="text-2xs font-semibold text-ink-secondary mb-1.5">최근 등록 · {latest.date}</p>
           {/* 같은 날 여러 게임(메인+사이드)이면 게임별로 묶어 표시 */}
           {[...new Set(latest.entries.map((e) => e.eventName ?? ''))].map((ev, _i, evs) => {
@@ -1375,7 +1378,7 @@ function KakaoMap({ address, name, onCoords }: { address: string; name: string; 
   if (!KAKAO_KEY) return null;
 
   return (
-    <section className="space-y-2">
+    <section className="reveal space-y-2">
       <h3 className="text-sm font-semibold text-ink-primary">위치</h3>
       <div className="rounded-card overflow-hidden border border-border-subtle" style={{ height: 200 }}>
         {loading || geocoding ? (
@@ -1514,7 +1517,7 @@ function PostersPanel({
       </section>
 
       {/* ── 예정 포스터 ─────────────────────────────────────────── */}
-      <div className="space-y-2">
+      <div className="reveal space-y-2">
         <p className="text-2xs font-bold text-ink-muted px-0.5">예정 포스터 ({upcoming.length})</p>
         {upcoming.length === 0 ? (
           <p className="text-center py-6 text-xs text-ink-muted">예정된 포스터가 없습니다.</p>

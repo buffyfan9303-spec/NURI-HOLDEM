@@ -12,9 +12,9 @@ type Phase = 'idle' | 'loading' | 'success';
 
 const BG: Record<string, string> = {
   success: '#0ECB81', // 팔레트 밖 청록이던 성공색 → emerald(토스트 성공과 동일 계열)
-  loading: '#3a4253',
-  disabled: '#3a4253', /* 미완성: 회색 — 입력이 완성되는 순간 골드로 살아난다(토스 패턴) */
-  idle: '#FCD535',
+  loading: 'rgb(var(--surface-float))',
+  disabled: 'rgb(var(--surface-float))', /* 미완성: 회색 — 입력이 완성되는 순간 인디고로 살아난다(토스 패턴) */
+  idle: '#5E6AD2',
 };
 
 /** 성공 체크 — path 를 dasharray 로 그려낸다(마운트 후 dashoffset 24→0 트랜지션) */
@@ -88,7 +88,7 @@ const StatefulActionButton = forwardRef<HTMLButtonElement, {
       className={[
         shakeKey > 0 ? 'anim-shake' : '',
         'inline-flex h-10 items-center justify-center gap-1.5 overflow-hidden font-bold',
-        phase === 'idle' ? (disabled ? 'text-ink-muted' : 'text-ink-inverse enabled:hover:scale-[0.97] enabled:active:scale-95') : '',
+        phase === 'idle' ? (disabled ? 'text-ink-muted' : 'text-white enabled:hover:scale-[0.97] enabled:active:scale-95') : '',
         wantsFull || phase === 'idle' ? 'px-5' : 'px-4',
         phase === 'success' ? 'text-white' : phase === 'loading' ? 'text-ink-secondary' : '',
         'disabled:cursor-default focus:outline-none',

@@ -113,7 +113,7 @@ function ToastItem({ message, variant, action, durationMs, onDismiss }: Toast & 
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); action.onClick(); onDismiss(); }}
-          className="hit relative ml-1 shrink-0 -my-1 px-3 py-1.5 rounded-badge border border-current/40 bg-black/15 text-xs font-bold underline underline-offset-2 active:scale-95 transition"
+          className="hit relative ml-1 shrink-0 -my-1 px-3 py-1.5 rounded-badge border border-white/40 bg-black/15 text-xs font-bold underline underline-offset-2 active:scale-95 transition"
         >
           {action.label}
         </button>

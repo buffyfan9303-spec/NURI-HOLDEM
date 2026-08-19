@@ -626,8 +626,8 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-2xs text-ink-muted">{hasRange ? `${filterFrom || '처음'} ~ ${filterTo || '오늘'}` : '기간 설정 시 그 범위만'}</span>
-            <button type="button" onClick={() => { setFilterFrom(shiftDays(todayStr, -6)); setFilterTo(todayStr); }} className="text-2xs font-semibold text-accent-300/90 hover:text-accent-300">최근 7일</button>
-            <button type="button" onClick={() => { setFilterFrom(todayStr.slice(0, 7) + '-01'); setFilterTo(todayStr); }} className="text-2xs font-semibold text-accent-300/90 hover:text-accent-300">이번 달</button>
+            <button type="button" onClick={() => { setFilterFrom(shiftDays(todayStr, -6)); setFilterTo(todayStr); }} className="px-1.5 py-1.5 -my-1.5 text-2xs font-semibold text-accent-200/90 hover:text-accent-200">최근 7일</button>
+            <button type="button" onClick={() => { setFilterFrom(todayStr.slice(0, 7) + '-01'); setFilterTo(todayStr); }} className="px-1.5 py-1.5 -my-1.5 text-2xs font-semibold text-accent-200/90 hover:text-accent-200">이번 달</button>
             {hasRange && <button type="button" onClick={() => { setFilterFrom(''); setFilterTo(''); }} className="text-2xs text-ink-muted hover:text-ink-secondary ml-auto">전체 보기</button>}
           </div>
         </div>
@@ -659,7 +659,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                       onClick={() => setCollapsedDates((prev) => { const n = new Set(prev); if (n.has(date)) n.delete(date); else n.add(date); return n; })}
                       className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-surface-high transition-colors">
                       <span className="text-sm font-bold text-ink-primary">{date}{date === todayStr ? ' (오늘)' : ''}</span>
-                      <span className="text-2xs font-semibold text-accent-300/90">게임 {items.length}</span>
+                      <span className="text-2xs font-semibold text-accent-200">게임 {items.length}</span>
                       {liveN > 0 && <span className="text-2xs font-bold text-emerald-400">진행 {liveN}</span>}
                       {closedN > 0 && <span className="text-2xs text-ink-muted">마감 {closedN}</span>}
                       <span className="flex-1" />
@@ -681,7 +681,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                               {!canOpen
                                 ? <span className="shrink-0 text-sm" aria-label="잠김">🔒</span>
                                 : s.closed
-                                ? <span className="shrink-0 text-2xs font-bold text-accent-300 bg-accent-300/15 px-2 py-0.5 rounded-badge">마감</span>
+                                ? <span className="shrink-0 text-2xs font-bold text-accent-200 bg-accent-300/15 px-2 py-0.5 rounded-badge">마감</span>
                                 : s.regClosed
                                 ? <span className="shrink-0 text-2xs font-bold text-danger-light bg-danger/10 px-2 py-0.5 rounded-badge">레지마감</span>
                                 : <span className="shrink-0 text-2xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-badge">진행중</span>}
@@ -762,7 +762,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
 
   // ── 보드 ────────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-3 pb-28">
+    <div className="space-y-3 pb-48 lg:pb-28">
       <DateBar date={date} setDate={setDate} onBack={() => setMode('list')} />
       {(games.length > 0 || gameSeq > MAIN_GAME_SEQ) && (
         <GameSwitcher games={games} gameSeq={gameSeq} onSelect={(g) => { setGameSeq(g); setSelected(null); }} onAddSide={addSide} canAdd={operatorOk} />
@@ -806,10 +806,10 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
             {(() => {
               const cnt = pendingReqs.reduce((mm, r) => { const k = r.requestedGameSeq ?? 0; mm[k] = (mm[k] || 0) + 1; return mm; }, {} as Record<number, number>);
               const parts = Object.entries(cnt).sort((a, b) => Number(a[0]) - Number(b[0])).map(([k, n]) => `${Number(k) === 0 ? '미지정' : Number(k) === MAIN_GAME_SEQ ? '메인' : '사이드' + (Number(k) - 1)} ${n}`);
-              return <span className="text-2xs font-semibold text-sky-300/80">{parts.join(' · ')}</span>;
+              return <span className="text-2xs font-semibold text-sky-300">{parts.join(' · ')}</span>;
             })()}
             <span className="text-2xs text-ink-muted">· 승인 시 각자 원한 게임에 추가(미지정은 현재 {gLabel(gameSeq)})</span>
-            {pendingReqs.length > 1 && <button type="button" onClick={bulkApprove} className="ml-auto shrink-0 rounded-input bg-emerald-500/90 px-2.5 py-1 text-2xs font-bold text-ink-inverse hover:bg-emerald-500">전체 승인</button>}
+            {pendingReqs.length > 1 && <button type="button" onClick={bulkApprove} className="ml-auto shrink-0 rounded-input bg-emerald-500/90 px-2.5 py-1.5 min-h-[2.25rem] text-2xs font-bold text-ink-inverse hover:bg-emerald-500">전체 승인</button>}
           </div>
           <ul className="space-y-1.5">
             {pendingReqs.map((r) => (
@@ -963,7 +963,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                   {newName.trim() && (
                     <li>
                       <button type="button" onClick={addPlayer} className="flex w-full items-center gap-2 rounded-input px-2 py-1.5 text-left hover:bg-surface-high">
-                        <span className="shrink-0 rounded-badge border border-border-default bg-surface-float px-1.5 py-0.5 text-[9px] font-bold text-ink-muted">비회원</span>
+                        <span className="shrink-0 rounded-badge border border-border-default bg-surface-float px-1.5 py-0.5 text-[10px] font-bold text-ink-muted">비회원</span>
                         <span className="min-w-0 truncate text-xs font-semibold text-ink-primary">‘{newName.trim()}’ 입력값 그대로 등록</span>
                       </button>
                     </li>
@@ -971,7 +971,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                   {suggest.map((rp) => (
                     <li key={rp.userId}>
                       <button type="button" onClick={() => pickRegistered(rp)} className="flex w-full items-center gap-2 rounded-input px-2 py-1.5 text-left hover:bg-surface-high">
-                        <span className="shrink-0 rounded-badge border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-bold text-emerald-300">✓회원</span>
+                        <span className="shrink-0 rounded-badge border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-bold text-emerald-300">✓회원</span>
                         <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{rp.realName ? `${rp.realName}(${rp.nickname ?? '-'})` : (rp.nickname ?? '-')}</span>
                         <span className="shrink-0 text-2xs text-ink-muted">방문 {rp.visits}회</span>
                       </button>
@@ -980,7 +980,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                   {memOnly.map((m2) => (
                     <li key={`m-${m2.nickname}`}>
                       <button type="button" onClick={() => pickMember(m2)} className="flex w-full items-center gap-2 rounded-input px-2 py-1.5 text-left hover:bg-surface-high">
-                        <span className="shrink-0 rounded-badge border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-bold text-emerald-300">✓회원</span>
+                        <span className="shrink-0 rounded-badge border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-bold text-emerald-300">✓회원</span>
                         <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{m2.realName ? `${m2.realName}(${m2.nickname})` : m2.nickname}</span>
                         <span className="shrink-0 text-2xs text-ink-muted">첫 방문</span>
                       </button>
@@ -992,14 +992,14 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                 <span className="text-2xs text-ink-muted">유형(선택):</span>
                 {VISITOR_OPTS.map((t) => (
                   <button key={t.code} type="button" onClick={() => setNewType((cur) => (cur === t.code ? null : t.code))}
-                    className={['text-2xs font-bold px-2 py-1 rounded-badge border transition-colors',
+                    className={['text-2xs font-bold px-2 py-1.5 min-h-[2rem] rounded-badge border transition-colors',
                       newType === t.code ? 'bg-accent-300/15 text-accent-300 border-accent-400/40' : 'bg-surface-float text-ink-muted border-border-default'].join(' ')}>
                     {t.label}
                   </button>
                 ))}
                 <button type="button"
                   onClick={() => { const v = window.prompt('유형 직접입력'); if (v && v.trim()) setNewType(v.trim()); }}
-                  className={['text-2xs font-bold px-2 py-1 rounded-badge border transition-colors',
+                  className={['text-2xs font-bold px-2 py-1.5 min-h-[2rem] rounded-badge border transition-colors',
                     newType && !VISITOR_OPTS.some((o) => o.code === newType) ? 'bg-accent-300/15 text-accent-300 border-accent-400/40' : 'bg-surface-float text-ink-muted border-border-default'].join(' ')}>
                   {newType && !VISITOR_OPTS.some((o) => o.code === newType) ? newType : '직접입력'}
                 </button>
@@ -1026,21 +1026,21 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
           // 휠 = 순수 세로 스크롤(가로 변환 제거 — 대각선 이동 방지). PC는 10바인 한 화면이라 가로 휠 불필요.
           // overscroll-contain 금지: 표에 스크롤할 내용이 없을 때 표 위에서 페이지 스크롤까지 막아버린다.
           // 표 안 스크롤이 끝나면 페이지로 이어지는 건 브라우저 표준 동작으로 둔다.
-          className="overflow-auto max-h-[70vh] [-webkit-overflow-scrolling:touch] rounded-card border border-border-subtle [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar]:w-2.5"
+          className="overflow-auto max-h-[70vh] [-webkit-overflow-scrolling:touch] rounded-card border border-border-default bg-surface-low [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar]:w-2.5"
         >
           {/* w-max: 칸을 압축하지 않고 고정폭 유지 → 모바일에서 가로 스크롤. min-w-full: 데스크톱은 꽉 채움 */}
           <table className="border-separate border-spacing-0 text-center w-max min-w-full">
             <thead>
               {/* 헤더는 세로 스크롤에도 고정(sticky top) — 100명 명단에서도 바인 번호가 항상 보임 */}
               <tr className="bg-surface-high">
-                <th className="sticky left-0 top-0 z-40 bg-surface-high w-9 px-1 py-2 text-xs text-ink-muted border-b border-border-subtle">No</th>
-                <th className="sticky left-9 top-0 z-40 bg-surface-high min-w-[6rem] max-w-[9rem] px-2 py-2 text-xs text-ink-muted border-b border-l border-border-subtle text-left">플레이어</th>
+                <th className="sticky left-0 top-0 z-40 bg-surface-high w-9 px-1 py-2 text-xs text-ink-muted border-b border-border-default">No</th>
+                <th className="sticky left-9 top-0 z-40 bg-surface-high min-w-[6rem] max-w-[9rem] px-2 py-2 text-xs text-ink-muted border-b border-l border-r border-border-default border-r-border-strong text-left shadow-[8px_0_8px_-8px_rgba(0,0,0,0.55)]">플레이어</th>
                 {Array.from({ length: binCols }, (_, i) => (
-                  <th key={i} className="sticky top-0 z-30 bg-surface-high w-12 px-0.5 py-2 text-xs text-ink-muted border-b border-l border-border-subtle">{i + 1}바인</th>
+                  <th key={i} className="sticky top-0 z-30 bg-surface-high w-12 px-0.5 py-2 text-xs text-ink-muted border-b border-l border-border-default">{i + 1}바인</th>
                 ))}
-                <th className="sticky top-0 z-30 bg-surface-high min-w-[4rem] px-2 py-2 text-xs text-ink-muted border-b border-l border-border-subtle text-left">비고</th>
-                <th className="sticky right-[4rem] top-0 z-40 bg-surface-high w-[4rem] px-1 py-2 text-xs text-ink-muted border-b border-l border-border-strong">총바인</th>
-                <th className="sticky right-0 top-0 z-40 bg-surface-high w-[4rem] px-1 py-2 text-xs text-ink-muted border-b border-l border-border-subtle">미수</th>
+                <th className="sticky top-0 z-30 bg-surface-high min-w-[4rem] max-w-[10rem] px-2 py-2 text-xs text-ink-muted border-b border-l border-border-default text-left">비고</th>
+                <th className="sticky right-[4rem] top-0 z-40 bg-surface-high w-[4rem] min-w-[4rem] max-w-[4rem] px-1 py-2 text-xs text-ink-muted border-b border-l border-border-default border-l-border-strong shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.55)]">총바인</th>
+                <th className="sticky right-0 top-0 z-40 bg-surface-high w-[4rem] min-w-[4rem] max-w-[4rem] px-1 py-2 text-xs text-ink-muted border-b border-l border-border-default">미수</th>
               </tr>
             </thead>
             <tbody>
@@ -1052,35 +1052,35 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                 return Array.from({ length: rowChunks }, (_, chunk) => {
                   const first = chunk === 0;
                   return (
-                    <tr key={`${r.name}-${chunk}`} className={first ? 'border-t-2 border-border-default' : ''}>
-                      <td className="sticky left-0 z-10 bg-surface-low w-9 px-1 py-1 text-2xs text-ink-muted border-b border-border-subtle tabular-nums">{first ? ri + 1 : <span className="opacity-40">↳</span>}</td>
-                      <td className="sticky left-9 z-10 bg-surface-low min-w-[6rem] max-w-[9rem] px-2 py-1 border-b border-l border-border-subtle text-left">
+                    <tr key={`${r.name}-${chunk}`}>
+                      <td className="sticky left-0 z-10 bg-surface-low w-9 px-1 py-1 text-2xs text-ink-muted border-b border-border-default tabular-nums">{first ? ri + 1 : <span className="opacity-40">↳</span>}</td>
+                      <td className="sticky left-9 z-10 bg-surface-low min-w-[6rem] max-w-[9rem] px-2 py-1 border-b border-l border-r border-border-default border-r-border-strong text-left shadow-[8px_0_8px_-8px_rgba(0,0,0,0.55)]">
                         {first ? (
                           <button type="button" disabled={!r.player || closed} onClick={() => r.player && setEditPlayer(r.player)} className="w-full text-left disabled:cursor-default">
                             <div className="flex items-center gap-1">
                               <span className="text-xs font-bold text-ink-primary truncate max-w-[5rem]" title={r.name}>{r.name}</span>
-                              <span className="text-[9px] text-ink-muted shrink-0">{cnt}회</span>
+                              <span className="text-[10px] text-ink-muted shrink-0">{cnt}회</span>
                             </div>
                             <div className="flex items-center gap-1 mt-0.5">
                               {r.player?.visitorType
-                                ? <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-badge bg-accent-300/15 text-accent-300 border border-accent-400/40">{visitorLabel(r.player.visitorType)}</span>
-                                : r.player ? <span className="text-[9px] text-ink-muted">{closed ? '' : '유형/비고 +'}</span> : <span className="text-[9px] text-ink-muted">—</span>}
-                              {r.player?.note && <span className="text-[9px] text-ink-secondary truncate max-w-[4rem]">· {r.player.note}</span>}
+                                ? <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-badge bg-accent-300/15 text-accent-300 border border-accent-400/40">{visitorLabel(r.player.visitorType)}</span>
+                                : r.player ? <span className="text-[10px] text-ink-muted">{closed ? '' : '유형/비고 +'}</span> : <span className="text-[10px] text-ink-muted">—</span>}
+                              {r.player?.note && <span className="text-[10px] text-ink-secondary truncate max-w-[4rem]">· {r.player.note}</span>}
                             </div>
                           </button>
-                        ) : <span className="text-2xs text-ink-muted/50 truncate">{r.name}</span>}
+                        ) : <span className="block text-2xs text-ink-muted/50 truncate">{r.name}</span>}
                       </td>
 
                       {Array.from({ length: binCols }, (_, i) => {
                         const e = chunk * 10 + i + 1;
                         const c = cellAt(r.name, e);
-                        const cls = 'w-12 h-[2.6rem] px-0.5 py-0.5 border-b border-l border-border-subtle align-middle';
+                        const cls = 'w-12 h-12 px-0.5 py-0.5 border-b border-l border-border-default align-middle';
                         if (e > 100) return <td key={e} className={cls} />;
                         if (c) {
                           const tone = c.paymentMethod === 'support'
                             ? 'border-indigo-400/50 bg-indigo-500/10 text-indigo-300'
                             : c.isUnpaid ? 'border-danger bg-danger/10 text-danger-light'
-                            : (c.isSplit || c.discountIndex > 0) ? 'border-accent-400/50 bg-accent-300/10 text-accent-300'
+                            : (c.isSplit || c.discountIndex > 0) ? 'border-accent-400/50 bg-accent-300/10 text-accent-200'
                             : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300';
                           const topLabel = c.isSplit ? '분납' : `${METHOD_SHORT[c.paymentMethod]}${c.isUnpaid ? '·미' : ''}`;
                           const et = earlyTypeOf(c, session);
@@ -1092,10 +1092,10 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                                 className={['w-full h-full rounded-input border-2 flex flex-col items-center justify-center leading-none', tone, closed ? 'cursor-default' : ''].join(' ')}>
                                 <span className="text-[11px] font-extrabold">{topLabel}{c.discountIndex > 0 ? '*' : ''}</span>
                                 {et !== 'none'
-                                  ? <span className="text-[7px] font-bold text-amber-300 leading-none">{et === 'double' ? '더블얼리' : '얼리'}</span>
+                                  ? <span className="text-[10px] font-bold text-amber-300 leading-none">{et === 'double' ? '더블얼리' : '얼리'}</span>
                                   : frac < 0.999
-                                  ? <span className="text-[8px] font-bold text-accent-200 leading-none mt-0.5">{frac.toLocaleString(undefined, { maximumFractionDigits: 2 })}엔트리</span>
-                                  : <span className="text-[8px] opacity-80 mt-0.5">{hhmm(c.buyinAt)}</span>}
+                                  ? <span className="text-[10px] font-bold text-accent-200 leading-none mt-0.5">{frac.toLocaleString(undefined, { maximumFractionDigits: 2 })}엔트리</span>
+                                  : <span className="text-[10px] opacity-80 mt-0.5">{hhmm(c.buyinAt)}</span>}
                               </button>
                             </td>
                           );
@@ -1111,16 +1111,16 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                         return <td key={e} className={cls}><div className="w-full h-full rounded-input bg-surface-base/30" /></td>;
                       })}
 
-                      <td className="min-w-[4rem] px-1 py-1 border-b border-l border-border-subtle text-left">
+                      <td className="min-w-[4rem] max-w-[10rem] px-1 py-1 border-b border-l border-border-default text-left">
                         {first && r.player ? (
                           <button type="button" disabled={closed} onClick={() => setEditPlayer(r.player as LedgerPlayer)} className="w-full text-left text-2xs disabled:cursor-default">
                             {r.player.note
                               ? <span className="text-ink-secondary line-clamp-2 whitespace-pre-wrap break-words">{r.player.note}</span>
-                              : <span className="text-accent-300 font-semibold">{closed ? '—' : '비고 +'}</span>}
+                              : <span className="text-accent-200 font-semibold">{closed ? '—' : '비고 +'}</span>}
                           </button>
                         ) : first ? <span className="text-2xs text-ink-muted">—</span> : null}
                       </td>
-                      <td className="sticky right-[4rem] z-10 bg-surface-low w-[4rem] px-1 py-1 border-b border-l border-border-strong text-2xs tabular-nums">
+                      <td className="sticky right-[4rem] z-10 bg-surface-low w-[4rem] min-w-[4rem] max-w-[4rem] px-1 py-1 border-b border-l border-border-default border-l-border-strong text-2xs tabular-nums text-left shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.55)]">
                         {first && r.player ? (
                           // 리바인 원탭 — 다음 '+' 셀은 가로 스크롤 밖(6~9열)에 있기 일쑤. 항상 보이는
                           // sticky 셀에서 바로 다음 회차 결제 모달을 연다('직전과 동일'과 짝)
@@ -1128,17 +1128,17 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                             onClick={() => setSelected({ playerName: (r.player as LedgerPlayer).name, entryNo: maxEntryOf((r.player as LedgerPlayer).name) + 1, buyin: null })}
                             title="+1 바인 — 결제수단 선택"
                             className="block w-full rounded-input px-0.5 py-0.5 text-left leading-tight transition-colors hover:bg-accent-300/10 disabled:cursor-default disabled:hover:bg-transparent">
-                            <b className="text-accent-300">{cnt}회{closed ? '' : ' +'}</b>
+                            <b className="text-accent-200">{cnt}회{closed ? '' : ' +'}</b>
                             <span className="block text-ink-secondary">{wonToMan(tot.paid + tot.unpaid)}만</span>
                           </button>
                         ) : first ? (
-                          <span className="leading-tight block">
-                            <b className="text-accent-300">{cnt}회</b>
+                          <span className="leading-tight block text-left">
+                            <b className="text-accent-200">{cnt}회</b>
                             <span className="block text-ink-secondary">{wonToMan(tot.paid + tot.unpaid)}만</span>
                           </span>
                         ) : ''}
                       </td>
-                      <td className="sticky right-0 z-10 bg-surface-low w-[4rem] px-1 py-1 border-b border-l border-border-subtle text-2xs tabular-nums text-danger-light">{first && tot.unpaid > 0 ? `${wonToMan(tot.unpaid)}만` : ''}</td>
+                      <td className="sticky right-0 z-10 bg-surface-low w-[4rem] min-w-[4rem] max-w-[4rem] px-1 py-1 border-b border-l border-border-default text-2xs tabular-nums text-left text-danger-light">{first && tot.unpaid > 0 ? `${wonToMan(tot.unpaid)}만` : ''}</td>
                     </tr>
                   );
                 });
@@ -1149,7 +1149,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       )}
 
       {/* 정산 바 (고정) */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 mx-auto max-w-6xl bg-surface-mid border-t border-border-default px-page-x py-2">
+      <div className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] lg:bottom-0 left-0 right-0 z-30 mx-auto max-w-6xl bg-surface-mid border-t border-x border-border-default rounded-t-card lg:rounded-none lg:border-x-0 px-page-x py-2">
         <div className="flex items-center gap-2">
           <div className="grid grid-cols-4 gap-2 flex-1 text-center">
             <Metric label="총 엔트리" value={stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} />
@@ -1163,7 +1163,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
             {!closed ? (
               <div className="flex gap-1">
                 <button type="button" onClick={handleRegClose}
-                  className={['text-2xs px-2 py-1 rounded-input border font-semibold transition-colors',
+                  className={['text-2xs px-2 py-1 min-h-[2.4rem] rounded-input border font-semibold transition-colors',
                     regClosed ? 'border-danger/40 text-danger-light bg-danger/10' : 'border-border-default text-ink-secondary hover:text-ink-primary'].join(' ')}>
                   {regClosed ? '레지 열기' : '레지 마감'}
                 </button>
@@ -1424,7 +1424,7 @@ function ClockRemoteBar({ clock, onPatch, onOpenClock, active = true }: {
       {levelUndo && (
         <button type="button" onClick={undoGo} aria-label="레벨 이동 되돌리기"
           className="flex w-full items-center justify-center gap-1.5 rounded-input border border-amber-400/60 bg-amber-400/12 py-2 text-2xs font-extrabold text-amber-300 active:bg-amber-400/20">
-          ↩ 레벨 이동 되돌리기 <span className="font-normal text-amber-300/70">— 남은 시간까지 복원</span>
+          ↩ 레벨 이동 되돌리기 <span className="font-normal text-amber-300">— 남은 시간까지 복원</span>
         </button>
       )}
 
@@ -1829,7 +1829,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
                 <input type="number" inputMode="decimal" step="0.1" min="0" value={manVal(d.amount)} onChange={(e) => setDisc(i, { amount: parseMan(e.target.value) })} placeholder="할인액" className="input w-full text-sm pr-6 tabular-nums" />
                 <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">만</span>
               </div>
-              <button type="button" onClick={() => removeDisc(i)} className="text-ink-muted hover:text-danger-light text-xs px-1 shrink-0">✕</button>
+              <button type="button" onClick={() => removeDisc(i)} className="h-9 w-9 flex items-center justify-center text-ink-muted hover:text-danger-light text-xs shrink-0">✕</button>
             </div>
           ))}
           {discs.length < 5 && (
@@ -1942,7 +1942,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       </Field>
 
       {/* sticky — 필드 15+ 폼이라 실행 버튼이 화면 밖으로 밀렸다. 매일 반복하는 화면이니 항상 보이게 */}
-      <div className="sticky bottom-0 -mx-1 flex gap-2 bg-surface-base/90 px-1 pb-1 pt-2 backdrop-blur-sm">
+      <div className={['sticky bottom-0 -mx-1 flex gap-2 px-1 pb-1 pt-2 backdrop-blur-sm', mode === 'edit' ? 'bg-surface-mid/90' : 'bg-surface-base/90'].join(' ')}>
         {onCancel && <button type="button" onClick={onCancel} className="btn-ghost text-sm flex-1">취소</button>}
         <button type="button" onClick={submit} disabled={cash <= 0} className="btn-primary text-sm flex-1 disabled:opacity-50">
           {mode === 'open' ? '장부 시작' : '저장'}
@@ -1978,7 +1978,7 @@ function Overlay({ title, onClose, children }: { title: string; onClose: () => v
     <div className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in">
       <button type="button" aria-label="닫기" onClick={onClose} className="absolute inset-0 bg-black/80 backdrop-blur-md cursor-default" />
       <div role="dialog" aria-modal="true" className="relative w-full max-w-md mx-4 max-h-[88vh] overflow-y-auto rounded-dialog bg-surface-mid shadow-dialog animate-slide-up">
-        <header className="sticky top-0 px-4 py-3 border-b border-border-subtle bg-surface-mid flex items-center justify-between">
+        <header className="sticky top-0 z-10 px-4 py-3 border-b border-border-subtle bg-surface-mid flex items-center justify-between">
           <h2 className="text-sm font-bold text-ink-primary">{title}</h2>
           <button type="button" onClick={onClose} aria-label="닫기" className="-mr-1 h-10 w-10 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high">
             <Icon name="close" size={14} />
@@ -2039,8 +2039,8 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in">
       <button type="button" aria-label="닫기" onClick={onClose} className="absolute inset-0 bg-black/80 backdrop-blur-md cursor-default" />
-      <div role="dialog" aria-modal="true" className="relative w-full max-w-sm mx-4 rounded-dialog bg-surface-mid shadow-dialog animate-slide-up overflow-hidden">
-        <header className="px-4 py-3 border-b border-border-subtle flex items-center justify-between">
+      <div role="dialog" aria-modal="true" className="relative w-full max-w-sm mx-4 max-h-[85vh] overflow-y-auto rounded-dialog bg-surface-mid shadow-dialog animate-slide-up">
+        <header className="sticky top-0 z-10 bg-surface-mid px-4 py-3 border-b border-border-subtle flex items-center justify-between">
           <h2 className="text-sm font-bold text-ink-primary">{cell.playerName} · {cell.entryNo}바인</h2>
           <button type="button" onClick={onClose} aria-label="닫기" className="-mr-1 h-10 w-10 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high">
             <Icon name="close" size={14} />
@@ -2055,11 +2055,11 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
                 const active = (cell.buyin!.earlyOverride ?? null) === v;
                 return (
                   <button key={String(v)} type="button" onClick={() => onSetEarly(v)}
-                    className={['text-2xs font-bold px-2 py-1 rounded-badge border transition-colors',
+                    className={['text-2xs font-bold px-2 py-1.5 min-h-[2rem] rounded-badge border transition-colors',
                       active ? 'bg-amber-400/20 text-amber-300 border-amber-400/50' : 'bg-surface-high text-ink-muted border-border-default hover:text-ink-secondary'].join(' ')}>{label}</button>
                 );
               })}
-              <span className="text-[9px] text-ink-muted w-full">
+              <span className="text-[10px] text-ink-muted w-full">
                 현재 {(() => { const t = earlyTypeOf(cell.buyin, session); return t === 'double' ? '더블얼리' : t === 'single' ? '1얼리' : '없음'; })()} · {cell.buyin.earlyOverride ? '확정(클락/수기)' : '시각 자동'}
               </span>
             </div>
@@ -2097,18 +2097,18 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
               {/* ⚡ 직전과 동일 — 리바인 대부분은 그 손님의 직전 결제수단 반복이다 */}
               {lastPick && (
                 <button type="button" disabled={busy} onClick={() => onPick(lastPick.method, lastPick.isUnpaid, lastPick.discountIndex)}
-                  className="w-full h-12 rounded-input border border-accent-300 bg-accent-300/15 text-accent-300 font-bold text-sm active:scale-95 transition hover:bg-accent-300/25">
+                  className="w-full h-12 rounded-input border border-accent-300 bg-accent-300/15 text-accent-300 font-bold text-sm active:scale-95 transition hover:bg-accent-300/25 disabled:opacity-50 disabled:pointer-events-none">
                   ⚡ 직전과 동일 — {lastPick.label}
                 </button>
               )}
               {/* 티켓: 완납·미수(가불) */}
               <div className="grid grid-cols-2 gap-2">
                 <button type="button" disabled={busy} onClick={() => onPick('ticket', false, discIdx)}
-                  className="h-12 rounded-input border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 font-bold text-sm active:scale-95 transition hover:bg-emerald-500/20">
+                  className="h-12 rounded-input border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 font-bold text-sm active:scale-95 transition hover:bg-emerald-500/20 disabled:opacity-50 disabled:pointer-events-none">
                   티켓 완납{discIdx > 0 ? ' ·할인' : ''}
                 </button>
                 <button type="button" disabled={busy} onClick={() => onPick('ticket', true, discIdx)}
-                  className="h-12 rounded-input border border-danger/50 bg-danger/10 text-danger-light font-bold text-sm active:scale-95 transition hover:bg-danger/20">
+                  className="h-12 rounded-input border border-danger/50 bg-danger/10 text-danger-light font-bold text-sm active:scale-95 transition hover:bg-danger/20 disabled:opacity-50 disabled:pointer-events-none">
                   티켓 미수{discIdx > 0 ? ' ·할인' : ''}
                 </button>
               </div>
@@ -2117,11 +2117,11 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
               {dualMethods.map((m) => (
                 <div key={m.key} className="grid grid-cols-2 gap-2">
                   <button type="button" disabled={busy} onClick={() => onPick(m.key, false, discIdx)}
-                    className="h-12 rounded-input border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 font-bold text-sm active:scale-95 transition hover:bg-emerald-500/20">
+                    className="h-12 rounded-input border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 font-bold text-sm active:scale-95 transition hover:bg-emerald-500/20 disabled:opacity-50 disabled:pointer-events-none">
                     {m.label} 완납{discIdx > 0 ? ' ·할인' : ''}
                   </button>
                   <button type="button" disabled={busy} onClick={() => onPick(m.key, true, discIdx)}
-                    className="h-12 rounded-input border border-danger/50 bg-danger/10 text-danger-light font-bold text-sm active:scale-95 transition hover:bg-danger/20">
+                    className="h-12 rounded-input border border-danger/50 bg-danger/10 text-danger-light font-bold text-sm active:scale-95 transition hover:bg-danger/20 disabled:opacity-50 disabled:pointer-events-none">
                     {m.label} 미수{discIdx > 0 ? ' ·할인' : ''}
                   </button>
                 </div>
@@ -2129,7 +2129,7 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
 
               {/* 가게지원 */}
               <button type="button" disabled={busy} onClick={() => onPick('support', false, 0)}
-                className="w-full h-12 rounded-input border border-indigo-400/50 bg-indigo-500/10 text-indigo-300 font-bold text-sm active:scale-95 transition hover:bg-indigo-500/20">
+                className="w-full h-12 rounded-input border border-indigo-400/50 bg-indigo-500/10 text-indigo-300 font-bold text-sm active:scale-95 transition hover:bg-indigo-500/20 disabled:opacity-50 disabled:pointer-events-none">
                 가게지원
               </button>
 
@@ -2253,7 +2253,7 @@ function CloseModal({ stats, unpaidPlayers, onClose, onConfirm }: {
               {unpaidPlayers.map((p, i) => (
                 <li key={i} className="flex items-center justify-between gap-2 text-xs">
                   <span className="min-w-0 flex-1 truncate font-semibold text-ink-primary">{p.name}</span>
-                  <span className="shrink-0 font-bold text-danger-light tabular-nums">{p.unpaid.toLocaleString()}원</span>
+                  <span className="shrink-0 font-bold text-danger-light tabular-nums">{wonToMan(p.unpaid)}만원</span>
                 </li>
               ))}
             </ul>

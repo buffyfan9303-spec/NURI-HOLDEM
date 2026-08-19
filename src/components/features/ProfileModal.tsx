@@ -269,7 +269,7 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
                 <button
                   type="button"
                   onClick={removeAvatar}
-                  className="absolute -top-1 -right-1 w-5 h-5 rounded-full
+                  className="absolute -top-1 -right-1 w-7 h-7 rounded-full
                              bg-danger text-white text-xs flex items-center justify-center
                              hover:bg-danger-dark transition-colors focus:outline-none"
                   aria-label="사진 제거"
@@ -455,8 +455,8 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
         <form onSubmit={handleConfirmChange} className="p-4 space-y-4">
 
           <div className="flex items-start gap-2 p-3 rounded-card bg-surface-high border border-border-subtle">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9AA3B2"
-              strokeWidth="2" strokeLinecap="round" className="shrink-0 mt-0.5" aria-hidden>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="2" strokeLinecap="round" className="shrink-0 mt-0.5 text-ink-muted" aria-hidden>
               <circle cx="12" cy="12" r="10"/>
               <line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
             </svg>
@@ -712,7 +712,7 @@ function WithdrawAccountSection() {
           {/* 탈퇴 시 함께 사라지는 데이터 안내(실수 방지) */}
           {summary && (summary.vouchers > 0 || summary.posts > 0) && (
             <div className="rounded-input border border-amber-500/30 bg-amber-500/[0.06] px-3 py-2 text-2xs text-amber-200">
-              탈퇴하면 <b className="text-amber-100">보유 이용권 {summary.vouchers}개</b> · <b className="text-amber-100">작성 글 {summary.posts}개</b>의 연결이 사라지거나 익명 처리됩니다. 신중히 결정해 주세요.
+              탈퇴하면 <b className="text-amber-200">보유 이용권 {summary.vouchers}개</b> · <b className="text-amber-200">작성 글 {summary.posts}개</b>의 연결이 사라지거나 익명 처리됩니다. 신중히 결정해 주세요.
             </div>
           )}
           <label className="block">

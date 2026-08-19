@@ -232,7 +232,7 @@ export default function ScheduleDetailModal({
           </div>
 
       {/* ── 탭바 (정보 / Q&A) — sticky 상단 고정. PC는 우측에 닫기 통합 ──────── */}
-      <div className="relative grid grid-cols-2 border-b border-border-subtle sticky top-0 bg-surface-mid z-10 lg:pr-[4.25rem]">
+      <div className="relative grid grid-cols-2 border-b border-border-subtle sticky top-0 bg-surface-base z-10 lg:pr-[4.25rem]">
         <SlidingPill activeKey={tab} underline className="rounded-full bg-accent-300" />
         {/* PC 닫기 — 정보 영역 우상단(항상 보이는 sticky 탭바, 손 닿는 위치) */}
         <button
@@ -316,9 +316,9 @@ export default function ScheduleDetailModal({
         {/* 프라이즈 강조 박스 */}
         {(schedule.prizePool || schedule.prizePercent) && (
           <section className="rounded-card border border-accent-400/50 bg-gradient-to-br from-accent-300/10 to-transparent p-4">
-            <p className="text-2xs uppercase tracking-wider text-gold-500 mb-1">{schedule.guaranteed ? '상금 풀' : '프라이즈'}</p>
+            <p className="text-2xs uppercase tracking-wider text-ink-muted mb-1">{schedule.guaranteed ? '상금 풀' : '프라이즈'}</p>
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-extrabold text-accent-300 tabular-nums leading-none">
+              <span className="text-3xl font-extrabold text-gold-300 tabular-nums leading-none">
                 {prizeMainText(schedule)}
               </span>
               <span className={[
@@ -465,7 +465,7 @@ export default function ScheduleDetailModal({
 
         {/* RANKING GTD */}
         {schedule.rankingPrizes && schedule.rankingPrizes.length > 0 && (
-          <section>
+          <section className="reveal">
             <h3 className="text-sm font-semibold text-ink-primary mb-2 flex items-center gap-1.5">
               순위별 상금
             </h3>
@@ -499,7 +499,7 @@ export default function ScheduleDetailModal({
 
         {/* 파트너 & 결제 */}
         {(schedule.partners || schedule.paymentMethods) && (
-          <section className="space-y-3">
+          <section className="reveal space-y-3">
             {schedule.partners && schedule.partners.length > 0 && (
               <div>
                 <h3 className="text-sm font-semibold text-ink-primary mb-2">파트너 / 시드권 발행</h3>
@@ -536,7 +536,7 @@ export default function ScheduleDetailModal({
 
         {/* 규정 */}
         {schedule.rules && schedule.rules.length > 0 && (
-          <section>
+          <section className="reveal">
             <h3 className="text-sm font-semibold text-ink-primary mb-2">운영 규정</h3>
             <ul className="space-y-1 text-xs text-ink-secondary">
               {schedule.rules.map((r, i) => (
@@ -551,7 +551,7 @@ export default function ScheduleDetailModal({
 
         {/* 상세 설명 */}
         {schedule.description && (
-          <section>
+          <section className="reveal">
             <h3 className="text-sm font-semibold text-ink-primary mb-2">상세 설명</h3>
             <p className="text-sm text-ink-secondary leading-relaxed whitespace-pre-wrap">
               {schedule.description}
@@ -630,7 +630,7 @@ function BuyinRequestBox({ venueId, eventDate }: { venueId: string; eventDate: s
   };
   return (
     <div className="flex items-center gap-3 rounded-card border border-sky-500/30 bg-sky-500/[0.05] p-3">
-      {qr && <img src={qr} alt="바인 요청 QR" width={72} height={72} decoding="async" className="shrink-0 rounded bg-white p-1" />}
+      {qr && <img src={qr} alt="바인 요청 QR" width={72} height={72} decoding="async" className="shrink-0 rounded-input bg-white p-1" />}
       <div className="min-w-0 flex-1">
         <p className="text-sm font-bold text-ink-primary">🙋 지금 매장에서 참가 신청 <span className="font-normal text-ink-muted">· 오늘 · 현장</span></p>
         <p className="mt-0.5 text-2xs leading-relaxed text-ink-muted">매장에 도착한 뒤 눌러주세요. 운영자가 승인하면 <b className="text-ink-secondary">오늘 장부 명단</b>에 바로 등록됩니다.</p>
@@ -809,9 +809,9 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched }: { 
                           <span className="truncate">{r.realName ? `${r.realName}(${r.nickname ?? '-'})` : (r.nickname ?? '비회원')}</span>
                           {/* 예약→방문 전환 표시 — 당일 체크인 있으면 ✓, 종료 후에도 없으면 노쇼 */}
                           {r.visited
-                            ? <span className="shrink-0 rounded-badge bg-emerald-500/15 px-1 py-0.5 text-[9px] font-bold leading-none text-emerald-400">방문 ✓</span>
+                            ? <span className="shrink-0 rounded-badge bg-emerald-500/15 px-1 py-0.5 text-2xs font-bold leading-none text-emerald-400">방문 ✓</span>
                             : ended
-                              ? <span className="shrink-0 rounded-badge border border-border-default bg-surface-high px-1 py-0.5 text-[9px] font-bold leading-none text-ink-muted">노쇼</span>
+                              ? <span className="shrink-0 rounded-badge border border-border-default bg-surface-high px-1 py-0.5 text-2xs font-bold leading-none text-ink-muted">노쇼</span>
                               : null}
                         </p>
                         <p className="truncate text-2xs text-ink-muted">예약명: {r.displayName}</p>

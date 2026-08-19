@@ -170,7 +170,7 @@ function CommunityTab({
     <div className="space-y-3">
       {/* 섹션 토글 — 실시간 댓글 / 게시판 / 홀덤 공부 / 홀덤펍 (Task 4) */}
       {/* 스크롤해도 항상 보이도록 헤더+메인탭 바로 아래에 고정 */}
-      <div className="sticky top-[calc(theme(spacing.header-h)+env(safe-area-inset-top)-0.5rem)] lg:top-[calc(theme(spacing.header-h)+theme(spacing.tab-h)-0.5rem)] z-30 -mx-page-x px-page-x bg-surface-base border-b border-border-default pt-2.5 pb-2 lg:pt-2.5 before:pointer-events-none before:absolute before:inset-x-0 before:-top-4 before:h-4 before:bg-surface-base">
+      <div className="sticky top-[calc(theme(spacing.header-h)+env(safe-area-inset-top)-0.5rem)] lg:top-[calc(theme(spacing.header-h)+theme(spacing.tab-h)-0.5rem)] z-30 -mx-page-x px-page-x bg-surface-base border-b border-border-subtle pt-2.5 pb-2 lg:pt-2.5 before:pointer-events-none before:absolute before:inset-x-0 before:-top-4 before:h-4 before:bg-surface-base">
         {/* 모바일: 줄바꿈으로 전부 표시(가로 스크롤 제거) */}
         <div className="flex flex-wrap items-center gap-1 bg-surface-high rounded-input p-0.5 lg:flex-nowrap">
           <SectionTab active={shownSec === 'venues'} label="커뮤니티"    onClick={() => setSection('venues')} />
@@ -260,8 +260,7 @@ function SectionTab({ active, label, onClick }: { active: boolean; label: string
   return (
     <button
       type="button"
-      // 탭 시 골드 포커스링이 깜빡이지 않도록 클릭 후 포커스 해제
-      onClick={(e) => { e.currentTarget.blur(); onClick(); }}
+      onClick={onClick}
       className={[
         'relative flex-1 px-1 lg:px-2 py-2 text-xs font-semibold rounded-[6px] whitespace-nowrap',
         'transition-colors duration-300 ease-out',
@@ -452,7 +451,8 @@ function FeedSection({
               <div className="mr-1 inline-flex overflow-hidden rounded-input border border-border-default">
                 {(['new', 'popular'] as const).map((o) => (
                   <button key={o} type="button" onClick={() => setOrder(o)} aria-pressed={order === o}
-                    className={['hit h-7 px-2.5 text-2xs font-bold transition-colors', order === o ? 'bg-accent-300 text-white' : 'bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
+                    // 부모 overflow-hidden이 .hit 확장을 잘라내므로 .hit 대신 실높이(h-9)로 탭 타깃 확보
+                    className={['h-9 px-2.5 text-2xs font-bold transition-colors', order === o ? 'bg-accent-300 text-white' : 'bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
                     {o === 'new' ? '최신' : '인기'}
                   </button>
                 ))}
@@ -521,7 +521,7 @@ function FeedSection({
         </>
       ) : (
         <>
-          <div className="rounded-card border border-border-default bg-surface-low overflow-hidden">
+          <div className="rounded-card border border-border-subtle bg-surface-low overflow-hidden">
             <ul>
               {shown.map((p, i) => {
                 const ad = ads[Math.floor(i / 4)];
@@ -601,9 +601,18 @@ const PostRow = memo(function PostRow({ post, onClick, hot = false, selected = f
   return (
     <li
       onClick={onClick}
+      // 공지 행과 같은 키보드 접근 패턴 — Enter/Space로도 열리게
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }}
       aria-current={selected || undefined}
       className={[
-        'cv-row-sm flex items-center gap-2 px-3 py-2 cursor-pointer border-b border-border-subtle last:border-b-0 transition-colors',
+        'cv-row-sm flex items-center gap-2 px-3 py-2 cursor-pointer border-b border-border-subtle last:border-b-0 transition-colors focus:outline-none focus-visible:bg-surface-high/60',
         selected ? 'bg-accent-300/10' : 'hover:bg-surface-high/60 active:bg-surface-high',
       ].join(' ')}
     >
@@ -634,9 +643,18 @@ const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, se
   return (
     <li
       onClick={onClick}
+      // 공지 행과 같은 키보드 접근 패턴 — Enter/Space로도 열리게
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }}
       aria-current={selected || undefined}
       className={[
-        'cv-row-lg py-1.5 px-3 transition-colors cursor-pointer border-b border-border-subtle last:border-b-0',
+        'cv-row-lg py-1.5 px-3 transition-colors cursor-pointer border-b border-border-subtle last:border-b-0 focus:outline-none focus-visible:bg-surface-high/50',
         selected
           ? 'bg-accent-300/10 border-l-2 border-l-accent-300 -ml-px pl-[calc(0.75rem-1px)]'
           : 'hover:bg-surface-high/50 active:bg-surface-high',
@@ -903,9 +921,11 @@ function VenuesSection({
         홀덤펍·딜러팀·동호회·유튜버 그룹을 선택해 커뮤니티를 이용하세요
       </p>
 
-      {/* 정렬 안내 */}
+      {/* 정렬 안내 — 실제 정렬(인증 → 유료광고 → 팔로워순)과 일치 */}
       <div className="flex items-center gap-2 text-2xs text-ink-muted">
         <span>정렬:</span>
+        <span className="text-accent-300 font-semibold">인증</span>
+        <span className="text-border-strong">→</span>
         <span className="text-accent-300 font-semibold">유료광고</span>
         <span className="text-border-strong">→</span>
         <span className="text-ink-secondary">팔로워순</span>
@@ -924,7 +944,7 @@ function VenuesSection({
                 className={[
                   'w-full text-left flex items-center gap-2.5 px-2.5 py-2 rounded-card border transition-all duration-150 cursor-pointer active:bg-surface-high',
                   venue.isPaidAd
-                    ? 'bg-surface-low border-accent-400/50 shadow-gold hover:border-accent-400'
+                    ? 'bg-surface-low border-accent-400/50 shadow-[0_0_12px_rgba(94,106,210,0.22)] hover:border-accent-400'
                     : 'bg-surface-low border-border-default hover:border-border-strong hover:bg-surface-high',
                 ].join(' ')}
               >

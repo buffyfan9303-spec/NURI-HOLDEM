@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { getRunningClocks, subscribeRunningClocks, effectiveLevel, type ClockState, type ClockLevel } from '../../api/clock';
 import { wonToMan } from '../../api/ledger';
-import { EmptyState } from '../atoms/Skeleton';
+import { EmptyState, SkeletonList } from '../atoms/Skeleton';
 import type { Venue } from '../../api/community';
 import type { Schedule } from '../../api/schedules';
 
@@ -122,7 +122,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
               <div className="flex items-center gap-0.5 rounded-input bg-surface-high p-0.5">
                 {([['default', '기본'], ['players', '인원'], ['time', '시간'], ['distance', '거리']] as const).map(([k, l]) => (
                   <button key={k} type="button" onClick={() => pickSort(k)} title={k === 'players' ? '남은 인원 많은 순' : k === 'time' ? '시작 시간 빠른 순' : k === 'distance' ? '내 위치 기준 가까운 지역 먼저(위치 권한 필요)' : '기본 순'}
-                    className={['rounded-[5px] px-1.5 py-1 text-2xs font-bold transition-colors', sortBy === k ? 'bg-accent-300 text-white' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>{l}</button>
+                    className={['h-7 rounded-[5px] px-2 text-2xs font-bold transition-colors', sortBy === k ? 'bg-accent-300 text-white' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>{l}</button>
                 ))}
               </div>
             )}
@@ -144,7 +144,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
         )}
 
         {games === null ? (
-          <p className="py-10 text-center text-2xs text-ink-muted">불러오는 중…</p>
+          <SkeletonList rows={3} rowClassName="h-40" />
         ) : games.length === 0 ? (
           <EmptyState
             icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2.5 2.5" /><path d="M9 2h6" /></svg>}
@@ -193,7 +193,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
           </div>
         )}
         {upcoming.length > 0 && (
-          <div className="space-y-1.5 pt-1">
+          <div className="reveal space-y-1.5 pt-1">
             <p className="px-1 text-2xs font-bold text-ink-muted">⏳ 오늘 곧 시작 <span className="text-accent-300">{upcoming.length}</span> <span className="font-normal">— 아직 클락 전</span></p>
             <ul className="grid grid-cols-1 gap-1.5">
               {upcoming.map((s) => (
@@ -326,7 +326,7 @@ function Cell({ label, value, sub, accent, wide }: { label: string; value: strin
   return (
     <div className="rounded-input bg-surface-base/60 px-2 py-1.5 text-center">
       <p className={`font-extrabold leading-none tabular-nums ${wide ? 'text-base' : 'text-sm'} ${accent ? 'text-accent-300' : 'text-ink-primary'}`}>
-        {value}{sub && <span className="text-2xs font-normal text-ink-muted">{sub}</span>}
+        {value}{sub && <span className="ml-1 text-2xs font-normal text-ink-muted">{sub}</span>}
       </p>
       <p className="mt-0.5 text-2xs text-ink-muted">{label}</p>
     </div>
@@ -358,15 +358,15 @@ function MyTournamentCard({ g, venueName, onDisplay }: { g: ClockState; venueNam
       </div>
       <div className="mt-2 grid grid-cols-3 gap-1.5 text-center">
         <div className="rounded-input bg-surface-base/60 px-1 py-1.5">
-          <p className="text-[9px] text-ink-muted">현재 블라인드</p>
+          <p className="text-2xs text-ink-muted">현재 블라인드</p>
           <p className="text-xs font-extrabold tabular-nums text-ink-primary">{lv && lv.kind === 'level' ? `${lv.sb.toLocaleString()}/${lv.bb.toLocaleString()}` : '휴식'}</p>
         </div>
         <div className="rounded-input bg-surface-base/60 px-1 py-1.5">
-          <p className="text-[9px] text-ink-muted">평균 스택</p>
+          <p className="text-2xs text-ink-muted">평균 스택</p>
           <p className="text-xs font-extrabold tabular-nums text-ink-primary">{avg > 0 ? avg.toLocaleString() : '-'}</p>
         </div>
         <div className="rounded-input bg-surface-base/60 px-1 py-1.5">
-          <p className="text-[9px] text-ink-muted">생존 / 엔트리</p>
+          <p className="text-2xs text-ink-muted">생존 / 엔트리</p>
           <p className="text-xs font-extrabold tabular-nums text-ink-primary">{ls ? `${ls.alive} / ${ls.entries}` : '-'}</p>
         </div>
       </div>
