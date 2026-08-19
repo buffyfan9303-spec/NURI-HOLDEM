@@ -1,5 +1,6 @@
 // src/components/features/gto/equityEngine.ts
-// 몬테카를로 에퀴티 계산기 (Hero 2장 vs Villain 2장, 보드 0~5장)
+// 에퀴티 계산기 (Hero 2장 vs Villain 2장/레인지, 보드 0~5장)
+// - 보드 3장 이상(잔여 ≤2장)은 전수계산, 그 외는 몬테카를로
 import { RANKS, SUITS, type Card } from './gto.types';
 
 const RANK_VALUE: Record<string, number> = (() => {
@@ -11,6 +12,7 @@ const RANK_VALUE: Record<string, number> = (() => {
 
 interface NCard { r: number; s: number; }
 function toN(c: Card): NCard { return { r: RANK_VALUE[c.rank], s: SUITS.indexOf(c.suit) }; }
+const keyOf = (c: NCard): number => c.r * 4 + c.s;
 
 // 5장 점수(높을수록 강함). 카테고리*가중 + 타이브레이크(내림차순)
 function score5(cs: NCard[]): number {
@@ -74,6 +76,18 @@ function best7(seven: NCard[]): number {
   return best;
 }
 
+/** 지정 키를 제외한 잔여 덱 생성 */
+function buildDeck(excludeKeys: ReadonlySet<number>): NCard[] {
+  const deck: NCard[] = [];
+  for (const r of RANKS) {
+    for (const s of SUITS) {
+      const c: NCard = { r: RANK_VALUE[r], s: SUITS.indexOf(s) };
+      if (!excludeKeys.has(keyOf(c))) deck.push(c);
+    }
+  }
+  return deck;
+}
+
 export interface EquityResult {
   hero: number;
   villain: number;
@@ -81,50 +95,188 @@ export interface EquityResult {
   iterations: number;
 }
 
+/** 가중 콤보 — 레인지를 실제 카드 2장 조합으로 전개한 단위 (weight 0..1) */
+export interface WeightedCombo {
+  cards: [Card, Card];
+  weight: number;
+}
+
+// 레인지 샘플링용 내부 표현: 숫자 카드 + 키 + 누적가중(이분탐색)
+interface NWCombo { a: NCard; b: NCard; ka: number; kb: number; cum: number; }
+
+/** 레인지 전처리 — 차단 카드(hero/보드)와 충돌하는 콤보 사전 제거 + 누적가중 계산 */
+function prepareCombos(range: WeightedCombo[], blockedKeys: ReadonlySet<number>): { combos: NWCombo[]; total: number } {
+  const combos: NWCombo[] = [];
+  let total = 0;
+  for (const wc of range) {
+    if (wc.weight <= 0) continue;
+    const a = toN(wc.cards[0]);
+    const b = toN(wc.cards[1]);
+    const ka = keyOf(a);
+    const kb = keyOf(b);
+    if (blockedKeys.has(ka) || blockedKeys.has(kb)) continue;
+    total += wc.weight;
+    combos.push({ a, b, ka, kb, cum: total });
+  }
+  return { combos, total };
+}
+
+/** 누적가중 이분탐색으로 콤보 1개 가중 랜덤 샘플 */
+function sampleCombo(combos: NWCombo[], total: number): NWCombo {
+  const r = Math.random() * total;
+  let lo = 0;
+  let hi = combos.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (combos[mid].cum <= r) lo = mid + 1; else hi = mid;
+  }
+  return combos[lo];
+}
+
+const NEUTRAL: EquityResult = { hero: 0.5, villain: 0.5, tie: 0, iterations: 0 };
+
 export function computeEquity(
   hero: [Card, Card],
   villain: [Card, Card],
   board: Card[],
   iterations = 2500,
 ): EquityResult {
-  const known = [...hero, ...villain, ...board].map(toN);
-  const knownKey = new Set(known.map((c) => c.r * 4 + c.s));
-
-  const deck: NCard[] = [];
-  for (const r of RANKS) {
-    for (const s of SUITS) {
-      const c: NCard = { r: RANK_VALUE[r], s: SUITS.indexOf(s) };
-      if (!knownKey.has(c.r * 4 + c.s)) deck.push(c);
-    }
-  }
-
   const heroN = [toN(hero[0]), toN(hero[1])];
   const villN = [toN(villain[0]), toN(villain[1])];
   const boardN = board.map(toN);
+  const knownKey = new Set([...heroN, ...villN, ...boardN].map(keyOf));
+  const deck = buildDeck(knownKey);
   const need = 5 - boardN.length;
 
   let hw = 0; let vw = 0; let tie = 0; let total = 0;
 
-  if (need <= 0) {
-    const h = best7([...heroN, ...boardN]);
-    const v = best7([...villN, ...boardN]);
+  const judge = (full: NCard[]) => {
+    const h = best7([...heroN, ...full]);
+    const v = best7([...villN, ...full]);
     if (h > v) hw += 1; else if (v > h) vw += 1; else tie += 1;
-    total = 1;
+    total += 1;
+  };
+
+  if (need <= 0) {
+    // 리버: 단일 평가 (전수)
+    judge(boardN);
+  } else if (need === 1) {
+    // 턴: 잔여 덱 전 장 루프 (전수)
+    for (let i = 0; i < deck.length; i += 1) judge([...boardN, deck[i]]);
+  } else if (need === 2) {
+    // 플랍: 잔여 2장 전 조합(≈990) 루프 (전수) — 몬테카를로보다 정확하고 충분히 빠름
+    for (let i = 0; i < deck.length; i += 1)
+      for (let j = i + 1; j < deck.length; j += 1) judge([...boardN, deck[i], deck[j]]);
   } else {
+    // 프리플랍/보드 1~2장: 몬테카를로
     for (let i = 0; i < iterations; i += 1) {
       // 부분 Fisher-Yates: 앞쪽 need 장만 랜덤 추출
       for (let k = 0; k < need; k += 1) {
         const j = k + Math.floor(Math.random() * (deck.length - k));
         const tmp = deck[k]; deck[k] = deck[j]; deck[j] = tmp;
       }
-      const full = [...boardN, ...deck.slice(0, need)];
-      const h = best7([...heroN, ...full]);
-      const v = best7([...villN, ...full]);
-      if (h > v) hw += 1; else if (v > h) vw += 1; else tie += 1;
-      total += 1;
+      judge([...boardN, ...deck.slice(0, need)]);
     }
   }
 
+  return {
+    hero: (hw + tie / 2) / total,
+    villain: (vw + tie / 2) / total,
+    tie: tie / total,
+    iterations: total,
+  };
+}
+
+/** Hero 특정 핸드 vs 빌런 레인지 — 매 반복 가중 랜덤 콤보 샘플 + 보드 완성 몬테카를로 */
+export function computeEquityVsRange(
+  hero: [Card, Card],
+  villainRange: WeightedCombo[],
+  board: Card[],
+  iterations = 2500,
+): EquityResult {
+  const heroN = [toN(hero[0]), toN(hero[1])];
+  const boardN = board.map(toN);
+  const blocked = new Set([...heroN, ...boardN].map(keyOf));
+  const { combos, total: rangeTotal } = prepareCombos(villainRange, blocked);
+  if (combos.length === 0 || rangeTotal <= 0) return NEUTRAL; // 레인지가 전부 차단됨
+
+  const deck = buildDeck(blocked); // 빌런 후보 카드는 덱에 남음 → 매 반복 리젝션으로 회피
+  const need = 5 - boardN.length;
+
+  let hw = 0; let vw = 0; let tie = 0; let total = 0;
+  for (let i = 0; i < iterations; i += 1) {
+    const vc = sampleCombo(combos, rangeTotal);
+    const full = boardN.slice();
+    if (need > 0) {
+      const used = new Set<number>([vc.ka, vc.kb]);
+      while (full.length < boardN.length + need) {
+        const c = deck[Math.floor(Math.random() * deck.length)];
+        const k = keyOf(c);
+        if (used.has(k)) continue;
+        used.add(k);
+        full.push(c);
+      }
+    }
+    const h = best7([...heroN, ...full]);
+    const v = best7([vc.a, vc.b, ...full]);
+    if (h > v) hw += 1; else if (v > h) vw += 1; else tie += 1;
+    total += 1;
+  }
+
+  return {
+    hero: (hw + tie / 2) / total,
+    villain: (vw + tie / 2) / total,
+    tie: tie / total,
+    iterations: total,
+  };
+}
+
+/** 레인지 vs 레인지 — 양쪽 가중 샘플 + 충돌 시 빌런 리샘플 + 보드 완성 몬테카를로 */
+export function computeRangeVsRange(
+  heroRange: WeightedCombo[],
+  villainRange: WeightedCombo[],
+  board: Card[],
+  iterations = 2500,
+): EquityResult {
+  const boardN = board.map(toN);
+  const blocked = new Set(boardN.map(keyOf));
+  const heroP = prepareCombos(heroRange, blocked);
+  const villP = prepareCombos(villainRange, blocked);
+  if (heroP.combos.length === 0 || villP.combos.length === 0) return NEUTRAL;
+
+  const deck = buildDeck(blocked);
+  const need = 5 - boardN.length;
+
+  let hw = 0; let vw = 0; let tie = 0; let total = 0;
+  for (let i = 0; i < iterations; i += 1) {
+    const hc = sampleCombo(heroP.combos, heroP.total);
+    // 충돌(카드 중복) 시 빌런 리샘플 — 상한을 두고 실패하면 이번 반복은 건너뜀
+    let vc = sampleCombo(villP.combos, villP.total);
+    let retry = 0;
+    while ((vc.ka === hc.ka || vc.ka === hc.kb || vc.kb === hc.ka || vc.kb === hc.kb) && retry < 30) {
+      vc = sampleCombo(villP.combos, villP.total);
+      retry += 1;
+    }
+    if (vc.ka === hc.ka || vc.ka === hc.kb || vc.kb === hc.ka || vc.kb === hc.kb) continue;
+
+    const full = boardN.slice();
+    if (need > 0) {
+      const used = new Set<number>([hc.ka, hc.kb, vc.ka, vc.kb]);
+      while (full.length < boardN.length + need) {
+        const c = deck[Math.floor(Math.random() * deck.length)];
+        const k = keyOf(c);
+        if (used.has(k)) continue;
+        used.add(k);
+        full.push(c);
+      }
+    }
+    const h = best7([hc.a, hc.b, ...full]);
+    const v = best7([vc.a, vc.b, ...full]);
+    if (h > v) hw += 1; else if (v > h) vw += 1; else tie += 1;
+    total += 1;
+  }
+
+  if (total === 0) return NEUTRAL;
   return {
     hero: (hw + tie / 2) / total,
     villain: (vw + tie / 2) / total,

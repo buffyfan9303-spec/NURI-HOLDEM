@@ -213,8 +213,10 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
   }, [deep.hero, deep.villain, deep.board]);
 
   const heroId = comboIdOf(deep.hero);
-  const villainId = deep.villainComboId;
-  const showResult = deep.heroComplete && deep.villainComplete && deep.result && deep.normalizedAction;
+  const rangeMode = deep.villainMode === 'range';
+  // 레인지 모드에선 빌런 슬롯 대신 선택 레인지 이름을 표시
+  const villainId = rangeMode ? deep.villainRange.label : deep.villainComboId;
+  const showResult = deep.heroComplete && (rangeMode || deep.villainComplete) && deep.result && deep.normalizedAction;
 
   const na = deep.normalizedAction;
   const recommended = na
@@ -245,11 +247,58 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
     <div className="space-y-3">
       {/* 카드 입력 */}
       <div className="space-y-4 rounded-card border border-border-default bg-surface-low p-4">
+        {/* 빌런 입력 모드 토글 — 특정 핸드 / 레인지 프리셋 */}
+        <div className="flex justify-center gap-1">
+          {([['hand', '특정 핸드'], ['range', '레인지 프리셋']] as const).map(([m, label]) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => deep.setVillainMode(m)}
+              className={[
+                'h-7 rounded-input px-3 text-2xs font-semibold transition-colors',
+                deep.villainMode === m ? 'bg-accent-300 text-white' : 'border border-border-default bg-surface-high text-ink-secondary',
+              ].join(' ')}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         <div className="flex items-end justify-center gap-3">
           <Section title="Hero" target="hero" cards={deep.hero} current={deep.currentTarget} onSelectTarget={deep.setTarget} onRemove={deep.removeAt} />
           <span className="pb-4 text-2xs font-bold text-ink-muted">vs</span>
-          <Section title="Villain" target="villain" cards={deep.villain} current={deep.currentTarget} onSelectTarget={deep.setTarget} onRemove={deep.removeAt} />
+          {deep.villainMode === 'hand' ? (
+            <Section title="Villain" target="villain" cards={deep.villain} current={deep.currentTarget} onSelectTarget={deep.setTarget} onRemove={deep.removeAt} />
+          ) : (
+            <div>
+              <p className="mb-1 text-2xs font-bold uppercase tracking-wider text-ink-muted">Villain</p>
+              <div className="flex h-12 items-center rounded-input border border-border-strong bg-surface-high px-3">
+                <span className="text-xs font-bold text-ink-primary">{deep.villainRange.label}</span>
+                <span className="ml-1.5 text-2xs tabular-nums text-ink-muted">
+                  {Math.round(deep.villainRange.combos.reduce((s, c) => s + c.weight, 0))}콤보
+                </span>
+              </div>
+            </div>
+          )}
         </div>
+        {deep.villainMode === 'range' && (
+          <div className="flex flex-wrap justify-center gap-1.5">
+            {deep.villainRanges.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => deep.selectVillainRange(r.id)}
+                className={[
+                  'rounded-badge border px-2 py-1 text-2xs font-bold transition-colors',
+                  deep.villainRange.id === r.id
+                    ? 'border-accent-400/60 bg-accent-300/15 text-accent-300'
+                    : 'border-border-default bg-surface-high text-ink-secondary hover:text-accent-300',
+                ].join(' ')}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="flex justify-center">
           <Section title="Board (선택)" target="board" cards={deep.board} current={deep.currentTarget} onSelectTarget={deep.setTarget} onRemove={deep.removeAt} />
         </div>
@@ -296,8 +345,9 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
           </div>
 
           <div>
-            <p className="mb-1 text-2xs font-semibold text-ink-secondary">GTO 액션 믹스</p>
+            <p className="mb-1 text-2xs font-semibold text-ink-secondary">참고 액션 가이드</p>
             <MixBar action={deep.normalizedAction} />
+            <p className="mt-1.5 text-2xs text-ink-muted">※ 에퀴티·팟오즈 기반 근사(솔버 아님) — 실제 GTO 솔버 값과 다를 수 있습니다.</p>
           </div>
 
           {deep.equity && !deep.calculating && (() => {
@@ -338,6 +388,8 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
             </div>
           )}
 
+          {/* AI 해설·공유는 특정 핸드(hand) 모드 전용 — 공유 해시가 hand 조합만 인코딩 */}
+          {!rangeMode && (
           <div className="flex gap-2">
             <button type="button" onClick={() => setSheetOpen(true)} className="btn-ghost inline-flex flex-1 items-center justify-center gap-2 py-2.5">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4z" /></svg>
@@ -351,10 +403,13 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
               공유
             </button>
           </div>
+          )}
         </div>
       ) : (
         <p className="rounded-card border border-border-default bg-surface-low px-3 py-4 text-center text-2xs leading-relaxed text-ink-muted">
-          아래 그리드에서 Hero 2장과 Villain 2장을 선택하면 실시간 에퀴티와 GTO 액션이 표시됩니다. (보드는 선택)
+          {rangeMode
+            ? '아래 그리드에서 Hero 2장을 선택하면 선택한 레인지 상대 실시간 에퀴티와 참고 액션이 표시됩니다. (보드는 선택)'
+            : '아래 그리드에서 Hero 2장과 Villain 2장을 선택하면 실시간 에퀴티와 참고 액션이 표시됩니다. (보드는 선택)'}
         </p>
       )}
 
@@ -362,7 +417,7 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
       <div className="space-y-2 rounded-card border border-border-default bg-surface-low p-3">
         <div className="flex items-center justify-between">
           <div className="flex gap-1">
-            {TARGET_TABS.map(({ t, label }) => (
+            {TARGET_TABS.filter(({ t }) => !(rangeMode && t === 'villain')).map(({ t, label }) => (
               <button
                 key={t}
                 type="button"

@@ -124,7 +124,7 @@ export function withDerivedEarly(cfg: ClockConfig): ClockConfig {
   };
 }
 
-/** 등록마감·최대레벨 기준 블라인드 구조 자동 생성. 마감 후엔 더 가파르게(1.6x)·길게(postDur) 상승. */
+/** 등록마감·최대레벨 기준 블라인드 구조 자동 생성. 레지 마감 후에는 레벨 시간만 단축(postDur 적용). */
 export function generateBlinds(regCloseLevel: number, maxLevel: number, preDur = 20, postDur = 20): ClockLevel[] {
   const round1k = (v: number) => (v < 2000 ? Math.round(v / 100) * 100 : v < 10000 ? Math.round(v / 500) * 500 : Math.round(v / 1000) * 1000);
   const out: ClockLevel[] = [];

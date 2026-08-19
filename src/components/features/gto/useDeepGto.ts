@@ -2,12 +2,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DEEP_SITUATIONS } from './gto.deep.data';
 import { canonicalizeHand, normalizeFrequency } from './useGtoCalculator';
-import { computeEquity } from './equityEngine';
-import type { ActionFrequency, Card, Rank, Suit } from './gto.types';
+import { computeEquity, computeEquityVsRange, type WeightedCombo } from './equityEngine';
+import { buildFreq, type FreqMap } from '../../../lib/ranges';
+import { RANGE_SCENARIOS } from '../../../lib/ranges.data';
+import { SUITS, type ActionFrequency, type Card, type Rank, type Suit } from './gto.types';
 import type { GtoDeepSituation, GtoResult, Equity } from './gto.deep.types';
 
 export type CardTarget = 'hero' | 'villain' | 'board';
 export type CardId = string; // 예: 'As'
+
+/** 빌런 입력 모드 — 특정 핸드 2장 or 프리셋 레인지 */
+export type VillainMode = 'hand' | 'range';
 
 export function cardId(c: Card): CardId {
   return `${c.rank}${c.suit}`;
@@ -24,6 +29,57 @@ function actionFromEquity(eq: number): ActionFrequency {
   if (eq >= 0.38) return { raise: 0.10, call: 0.30, fold: 0.60 };
   return { raise: 0.03, call: 0.05, fold: 0.92 };
 }
+
+// ── 레인지 프리셋 ────────────────────────────────────────────────
+// FreqMap(핸드 이름 → 빈도) → WeightedCombo[](실제 카드 2장 조합) 전개.
+// hero/보드 카드와의 충돌 제거는 엔진(prepareCombos)이 담당한다.
+export function expandFreqToCombos(freq: FreqMap): WeightedCombo[] {
+  const out: WeightedCombo[] = [];
+  for (const [name, f] of freq) {
+    if (f <= 0) continue;
+    const hi = name[0] as Rank;
+    const lo = name[1] as Rank;
+    const suited = name.length === 3 && name[2] === 's';
+    if (hi === lo) {
+      // 페어: 무늬 조합 6개
+      for (let i = 0; i < 4; i += 1)
+        for (let j = i + 1; j < 4; j += 1)
+          out.push({ cards: [{ rank: hi, suit: SUITS[i] }, { rank: lo, suit: SUITS[j] }], weight: f });
+    } else if (suited) {
+      // 수딧: 같은 무늬 4개
+      for (const s of SUITS) out.push({ cards: [{ rank: hi, suit: s }, { rank: lo, suit: s }], weight: f });
+    } else {
+      // 오프수트: 서로 다른 무늬 12개
+      for (const s1 of SUITS)
+        for (const s2 of SUITS)
+          if (s1 !== s2) out.push({ cards: [{ rank: hi, suit: s1 }, { rank: lo, suit: s2 }], weight: f });
+    }
+  }
+  return out;
+}
+
+/** ranges.data 시나리오의 특정 액션 스펙 → WeightedCombo[] */
+export function scenarioActionCombos(scenarioId: string, actionKey: 'raise' | 'call'): WeightedCombo[] {
+  const sc = RANGE_SCENARIOS.find((s) => s.id === scenarioId);
+  const act = sc?.actions.find((a) => a.key === actionKey);
+  return act ? expandFreqToCombos(buildFreq(act.spec)) : [];
+}
+
+export interface VillainRangePreset {
+  id: string;
+  label: string;
+  combos: WeightedCombo[];
+}
+
+/** 빌런 프리셋 레인지 — 100bb 표준 차트(RFI 5종 + BB 수비콜)를 콤보 단위로 전개 */
+export const VILLAIN_RANGE_PRESETS: VillainRangePreset[] = [
+  { id: 'rfi_lj', label: 'LJ 오픈', combos: scenarioActionCombos('rfi_lj', 'raise') },
+  { id: 'rfi_hj', label: 'HJ 오픈', combos: scenarioActionCombos('rfi_hj', 'raise') },
+  { id: 'rfi_co', label: 'CO 오픈', combos: scenarioActionCombos('rfi_co', 'raise') },
+  { id: 'rfi_btn', label: 'BTN 오픈', combos: scenarioActionCombos('rfi_btn', 'raise') },
+  { id: 'rfi_sb', label: 'SB 오픈', combos: scenarioActionCombos('rfi_sb', 'raise') },
+  { id: 'bb_call_btn', label: 'BB 수비콜', combos: scenarioActionCombos('bb_vs_btn', 'call') },
+];
 
 export interface UseDeepGto {
   situations: readonly GtoDeepSituation[];
@@ -42,9 +98,15 @@ export interface UseDeepGto {
   heroComplete: boolean;
   villainComplete: boolean;
   villainComboId: string | null;
+  /** 빌런 입력 모드 — 'hand'(특정 2장) / 'range'(프리셋 레인지) */
+  villainMode: VillainMode;
+  setVillainMode: (m: VillainMode) => void;
+  villainRanges: readonly VillainRangePreset[];
+  villainRange: VillainRangePreset;
+  selectVillainRange: (id: string) => void;
   result: GtoResult | null;
   normalizedAction: Required<ActionFrequency> | null;
-  /** 몬테카를로 실시간 에퀴티 (Hero/Villain 완성 시, 보드 반영) */
+  /** 몬테카를로 실시간 에퀴티 (입력 완성 시, 보드 반영) */
   equity: Equity | null;
   /** 에퀴티 계산 중 여부 */
   calculating: boolean;
@@ -72,6 +134,25 @@ export function useDeepGto(init?: DeepGtoInit): UseDeepGto {
     return 'board';
   });
 
+  // 빌런 모드: hand(기존 2장) / range(프리셋 레인지)
+  const [villainMode, setVillainModeState] = useState<VillainMode>('hand');
+  const [villainRangeId, setVillainRangeId] = useState<string>(VILLAIN_RANGE_PRESETS[3].id); // 기본 BTN 오픈
+  const villainRange = useMemo(
+    () => VILLAIN_RANGE_PRESETS.find((r) => r.id === villainRangeId) ?? VILLAIN_RANGE_PRESETS[0],
+    [villainRangeId],
+  );
+
+  const setVillainMode = useCallback((m: VillainMode) => {
+    setVillainModeState(m);
+    if (m === 'range') {
+      // 레인지 모드에선 빌런 슬롯을 비워 카드 그리드 차단을 없앤다
+      setVillain([null, null]);
+      setCurrentTarget((t) => (t === 'villain' ? 'board' : t));
+    } else {
+      setCurrentTarget('villain');
+    }
+  }, []);
+
   const usedIds = useMemo(() => {
     const s = new Set<CardId>();
     [...hero, ...villain, ...board].forEach((c) => { if (c) s.add(cardId(c)); });
@@ -93,14 +174,15 @@ export function useDeepGto(init?: DeepGtoInit): UseDeepGto {
     next[idx] = c;
     setters[currentTarget](next);
 
-    // 현재 타겟이 다 찼으면 빈 슬롯이 남은 다음 타겟으로 자동 이동
+    // 현재 타겟이 다 찼으면 빈 슬롯이 남은 다음 타겟으로 자동 이동 (레인지 모드에선 villain 건너뜀)
     if (next.every((x) => x !== null)) {
       const after: Record<CardTarget, (Card | null)[]> = { ...arrs, [currentTarget]: next };
-      const nextTarget = TARGET_ORDER.find((t) => after[t].some((x) => x === null));
+      const order = villainMode === 'range' ? TARGET_ORDER.filter((t) => t !== 'villain') : TARGET_ORDER;
+      const nextTarget = order.find((t) => after[t].some((x) => x === null));
       if (nextTarget) setCurrentTarget(nextTarget);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentTarget, hero, villain, board, usedIds]);
+  }, [currentTarget, hero, villain, board, usedIds, villainMode]);
 
   const removeAt = useCallback((t: CardTarget, index: number) => {
     const arrs: Record<CardTarget, (Card | null)[]> = { hero, villain, board };
@@ -124,8 +206,8 @@ export function useDeepGto(init?: DeepGtoInit): UseDeepGto {
     setHero([s.heroHand[0], s.heroHand[1]]);
     setVillain([null, null]);
     setBoard([null, null, null, null, null]);
-    setCurrentTarget('villain');
-  }, [situations]);
+    setCurrentTarget(villainMode === 'range' ? 'board' : 'villain');
+  }, [situations, villainMode]);
 
   // 보드 텍스처 프리셋 빠른 입력(이미 사용 중인 카드는 다른 무늬로 대체, 없으면 건너뜀)
   const applyBoardPreset = useCallback((cards: { rank: Rank; suit: Suit }[]) => {
@@ -148,6 +230,8 @@ export function useDeepGto(init?: DeepGtoInit): UseDeepGto {
 
   const heroComplete = hero.every((x) => x !== null);
   const villainComplete = villain.every((x) => x !== null);
+  // 계산 가능 여부 — 레인지 모드는 hero만 있으면 됨
+  const inputReady = heroComplete && (villainMode === 'range' || villainComplete);
 
   const villainComboId = useMemo(() => {
     if (!villain[0] || !villain[1]) return null;
@@ -159,7 +243,7 @@ export function useDeepGto(init?: DeepGtoInit): UseDeepGto {
   const [equity, setEquity] = useState<Equity | null>(null);
   const [calculating, setCalculating] = useState(false);
   useEffect(() => {
-    if (!heroComplete || !villainComplete) {
+    if (!inputReady) {
       setEquity(null);
       setCalculating(false);
       return;
@@ -169,21 +253,23 @@ export function useDeepGto(init?: DeepGtoInit): UseDeepGto {
     const v = villain as Card[];
     const b = board.filter((c): c is Card => c !== null);
     const id = setTimeout(() => {
-      const r = computeEquity([h[0], h[1]], [v[0], v[1]], b, 2500);
+      const r = villainMode === 'range'
+        ? computeEquityVsRange([h[0], h[1]], villainRange.combos, b, 2500)
+        : computeEquity([h[0], h[1]], [v[0], v[1]], b, 2500);
       setEquity({ hero: r.hero, villain: r.villain, tie: r.tie });
       setCalculating(false);
     }, 0);
     return () => clearTimeout(id);
-  }, [hero, villain, board, heroComplete, villainComplete]);
+  }, [hero, villain, board, inputReady, villainMode, villainRange]);
 
   const result = useMemo<GtoResult | null>(() => {
-    // Hero/Villain 카드가 모두 입력되면 실시간 에퀴티 기반으로 액션 믹스를 추정.
-    if (!heroComplete || !villainComplete) return null;
+    // 입력 완성 시 실시간 에퀴티 기반으로 참고 액션 믹스를 추정 (솔버 아님).
+    if (!inputReady) return null;
     if (!equity) {
       return { action: { raise: 0.34, call: 0.33, fold: 0.33 }, heuristic_explanation: '' };
     }
     return { action: actionFromEquity(equity.hero), equity, heuristic_explanation: '' };
-  }, [heroComplete, villainComplete, equity]);
+  }, [inputReady, equity]);
 
   const normalizedAction = useMemo(
     () => (result ? normalizeFrequency(result.action) : null),
@@ -207,6 +293,11 @@ export function useDeepGto(init?: DeepGtoInit): UseDeepGto {
     heroComplete,
     villainComplete,
     villainComboId,
+    villainMode,
+    setVillainMode,
+    villainRanges: VILLAIN_RANGE_PRESETS,
+    villainRange,
+    selectVillainRange: setVillainRangeId,
     result,
     normalizedAction,
     equity,

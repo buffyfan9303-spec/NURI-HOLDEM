@@ -18,7 +18,8 @@ export default function OutsCalc() {
   return (
     <CalcCard title="아웃츠 / 확률 계산기" desc="남은 아웃츠로 완성 확률과 필요한 팟 오즈를 계산">
       <Field label="아웃츠 (남은 도움 카드 수)">
-        <NumIn value={outs} onChange={setOuts} suffix="장" />
+        {/* 디스카운트 아웃츠(예: 7.5장) 입력을 위해 소수 허용 */}
+        <NumIn value={outs} onChange={setOuts} suffix="장" decimal />
       </Field>
       <Field label="시점">
         <div className="flex gap-1.5">
@@ -42,6 +43,9 @@ export default function OutsCalc() {
         <Result label="간이 (4·2 법칙)" value={`≈${rule}%`} />
       </div>
       <Result label="브레이크이븐 팟 오즈" value={breakeven} />
+      {street === 'flop' && (
+        <p className="text-2xs leading-relaxed text-amber-400">⚠ 한 스트리트 콜 판단은 1장 기준(2장 확률은 올인일 때만)</p>
+      )}
       <p className="text-2xs leading-relaxed text-ink-muted">상대 베팅이 팟 대비 이 비율보다 작으면 콜이 이득입니다. (예: 3:1 이상이면 콜)</p>
     </CalcCard>
   );

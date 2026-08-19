@@ -8,12 +8,17 @@ export default function BlindBuilder() {
   const [maxLevel, setMaxLevel] = useState(25);
   const [preDur, setPreDur] = useState(20);
   const [postDur, setPostDur] = useState(15);
+  const [startStack, setStartStack] = useState(50000);           // 스타팅 스택 — 시작 깊이(bb) 표시용
+  const [anteMode, setAnteMode] = useState<'none' | 'bb'>('bb'); // 앤티 토글 — 표시용 컬럼에만 반영(엔진은 그대로)
 
   const mx = Math.max(5, Math.min(maxLevel, 40));
   const rc = Math.max(1, Math.min(regClose, mx));
   const levels = generateBlinds(rc, mx, Math.max(1, preDur), Math.max(1, postDur));
   const levelCount = levels.filter((l) => l.kind === 'level').length;
   const totalMin = levels.reduce((a, l) => a + l.minutes, 0);
+  // 시작 깊이 = 스타팅 스택 ÷ 첫 레벨 BB
+  const firstBb = levels.find((l) => l.kind === 'level')?.bb ?? 0;
+  const startDepth = firstBb > 0 && startStack > 0 ? Math.round(startStack / firstBb) : 0;
   let no = 0;
 
   return (
@@ -23,9 +28,22 @@ export default function BlindBuilder() {
         <Field label="최대 레벨"><NumIn value={maxLevel} onChange={setMaxLevel} suffix="LV" /></Field>
         <Field label="레벨 길이(레지 전)"><NumIn value={preDur} onChange={setPreDur} suffix="분" /></Field>
         <Field label="레벨 길이(레지 후)"><NumIn value={postDur} onChange={setPostDur} suffix="분" /></Field>
+        <Field label="스타팅 스택"><NumIn value={startStack} onChange={setStartStack} /></Field>
+        <Field label="앤티">
+          <div className="flex gap-1.5">
+            {([{ id: 'none', label: '없음' }, { id: 'bb', label: 'BB앤티' }] as const).map((a) => (
+              <button key={a.id} type="button" onClick={() => setAnteMode(a.id)}
+                className={['flex-1 h-9 rounded-input text-2xs font-bold leading-none border transition-colors focus:outline-none',
+                  anteMode === a.id ? 'bg-accent-300 border-accent-300 text-white' : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary'].join(' ')}>
+                {a.label}
+              </button>
+            ))}
+          </div>
+        </Field>
       </div>
       <p className="text-2xs text-ink-muted">
         총 <b className="text-ink-secondary">{levelCount}</b>레벨 · 예상 <b className="text-ink-secondary">{(Math.round((totalMin / 60) * 10) / 10).toFixed(1)}</b>시간 (브레이크 포함)
+        {startDepth > 0 && <> · 시작 깊이 <b className="text-ink-secondary">{startDepth}bb</b></>}
       </p>
 
       <div className="max-h-80 overflow-y-auto rounded-input border border-border-subtle">
@@ -55,7 +73,7 @@ export default function BlindBuilder() {
                     {no}{isRc && <span className="ml-1 text-[9px] font-bold text-amber-400">레지마감</span>}
                   </td>
                   <td className="py-1.5 px-2 text-right font-semibold text-ink-primary">{l.sb.toLocaleString()} / {l.bb.toLocaleString()}</td>
-                  <td className="py-1.5 px-2 text-right text-ink-muted">{l.ante ? l.ante.toLocaleString() : '-'}</td>
+                  <td className="py-1.5 px-2 text-right text-ink-muted">{anteMode === 'bb' && l.ante ? l.ante.toLocaleString() : '-'}</td>
                   <td className="py-1.5 px-2 text-right text-ink-muted">{l.minutes}분</td>
                 </tr>
               );

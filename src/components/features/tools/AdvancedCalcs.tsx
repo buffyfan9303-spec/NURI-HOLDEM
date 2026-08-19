@@ -1,6 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { handName, type FreqMap } from '../../../lib/ranges';
+import { computeRangeVsRange, type WeightedCombo } from '../gto/equityEngine';
+import { expandFreqToCombos, scenarioActionCombos } from '../gto/useDeepGto';
 
-/* GTO 위자드형 보조 도구 3종 — MDF/블러프 계산기 · 어그레션 빈도 차트 · 레인지 vs 레인지 에퀴티(근사) */
+/* GTO 위자드형 보조 도구 3종 — MDF/블러프 계산기 · 어그레션 빈도 차트 · 레인지 vs 레인지 에퀴티(실계산) */
 
 const fmtPct = (x: number) => `${Math.round(x * 10) / 10}%`;
 
@@ -122,80 +125,149 @@ function Bar({ v, max }: { v: number; max: number }) {
   );
 }
 
-// ── 레인지 vs 레인지 에퀴티(근사 매트릭스) ────────────────────────────────────
-// 프리셋 레인지 간 프리플랍 에퀴티 근사값(행 레인지 기준 %, 솔버/시뮬레이터 결과 요약).
-const RANGES = ['UTG 오픈(17%)', 'CO 오픈(27%)', 'BTN 오픈(44%)', 'BB 디펜드(30%)', '3벳 레인지(8%)', '랜덤(100%)'] as const;
-const EQ: number[][] = [
-  // vs UTG  CO    BTN   BB    3bet  Random
-  [50.0, 53.5, 57.5, 58.5, 44.5, 62.5], // UTG 오픈
-  [46.5, 50.0, 54.0, 55.5, 41.5, 59.5], // CO 오픈
-  [42.5, 46.0, 50.0, 52.0, 38.5, 56.0], // BTN 오픈
-  [41.5, 44.5, 48.0, 50.0, 37.5, 54.5], // BB 디펜드
-  [55.5, 58.5, 61.5, 62.5, 50.0, 66.0], // 3벳 레인지
-  [37.5, 40.5, 44.0, 45.5, 34.0, 50.0], // 랜덤
+// ── 레인지 vs 레인지 에퀴티(실계산 매트릭스) ──────────────────────────────────
+// 표준 차트(ranges.data)를 콤보 단위로 전개해 computeRangeVsRange 몬테카를로로 실계산.
+const MATRIX_ITER = 2500; // 프리플랍 반복 수 (성능 규칙: 3000회 이하)
+
+/** 랜덤(전체 100%) — 169 핸드 전부 빈도 1 */
+function fullRandomFreq(): FreqMap {
+  const m: FreqMap = new Map();
+  for (let hi = 0; hi <= 12; hi += 1) {
+    m.set(handName(hi, hi, false), 1);
+    for (let lo = 0; lo < hi; lo += 1) {
+      m.set(handName(hi, lo, true), 1);
+      m.set(handName(hi, lo, false), 1);
+    }
+  }
+  return m;
+}
+
+interface MatrixPreset { label: string; combos: WeightedCombo[]; }
+const MATRIX_PRESETS: MatrixPreset[] = [
+  { label: '타이트 오픈(LJ)', combos: scenarioActionCombos('rfi_lj', 'raise') },
+  { label: '미들 오픈(HJ)', combos: scenarioActionCombos('rfi_hj', 'raise') },
+  { label: '와이드 오픈(BTN)', combos: scenarioActionCombos('rfi_btn', 'raise') },
+  { label: '3벳(SB vs BTN)', combos: scenarioActionCombos('sb_3bet_btn', 'raise') },
+  { label: 'BB 수비콜', combos: scenarioActionCombos('bb_vs_btn', 'call') },
+  { label: '랜덤(100%)', combos: expandFreqToCombos(fullRandomFreq()) },
 ];
+/** 콤보 가중 %(1326 기준) — 셀렉트 라벨용 */
+const presetPct = (p: MatrixPreset): string =>
+  `${Math.round((100 * p.combos.reduce((s, c) => s + c.weight, 0)) / 1326)}%`;
+
+// 결과 캐시 — 'i:j'(i<j) → i 기준 에퀴티 %. 세션 내 재계산 방지.
+const eqCache = new Map<string, number>();
+const pairKey = (i: number, j: number): string => (i < j ? `${i}:${j}` : `${j}:${i}`);
 
 export function RangeMatrix() {
-  const [a, setA] = useState(2); // BTN 오픈
-  const [b, setB] = useState(3); // BB 디펜드
-  const eq = useMemo(() => EQ[a][b], [a, b]);
+  const [a, setA] = useState(2); // 와이드 오픈(BTN)
+  const [b, setB] = useState(4); // BB 수비콜
+  const [, setTick] = useState(0); // 캐시 갱신 리렌더 트리거
+
+  // 대각선은 대칭이라 정확히 50, 하삼각은 상삼각의 보수(100-x) — 15쌍만 계산하면 된다.
+  const getEq = (i: number, j: number): number | null => {
+    if (i === j) return 50.0;
+    const v = eqCache.get(pairKey(i, j));
+    if (v === undefined) return null;
+    return i < j ? v : 100 - v;
+  };
+
+  // 선택 쌍 우선 → 나머지 쌍 순차 계산. 한 틱에 한 쌍(setTimeout 0)으로 UI 반응성 유지.
+  useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const pending: string[] = [];
+    const enqueue = (i: number, j: number) => {
+      if (i === j) return;
+      const key = pairKey(i, j);
+      if (!eqCache.has(key) && !pending.includes(key)) pending.push(key);
+    };
+    enqueue(a, b);
+    for (let i = 0; i < MATRIX_PRESETS.length; i += 1)
+      for (let j = i + 1; j < MATRIX_PRESETS.length; j += 1) enqueue(i, j);
+
+    const step = () => {
+      if (cancelled) return;
+      const key = pending.shift();
+      if (!key) return;
+      const [i, j] = key.split(':').map(Number);
+      const r = computeRangeVsRange(MATRIX_PRESETS[i].combos, MATRIX_PRESETS[j].combos, [], MATRIX_ITER);
+      eqCache.set(key, r.hero * 100);
+      setTick((t) => t + 1);
+      timer = setTimeout(step, 0);
+    };
+    timer = setTimeout(step, 0);
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
+  }, [a, b]);
+
+  const eq = getEq(a, b);
 
   return (
     <div className="rounded-card border border-border-default bg-surface-low p-3 space-y-3">
       <div>
         <h3 className="text-sm font-bold text-ink-primary">레인지 vs 레인지 에퀴티</h3>
-        <p className="text-2xs text-ink-muted mt-0.5">프리셋 레인지끼리의 프리플랍 승률(근사). 특정 핸드 vs 레인지는 「GTO 핸드 분석」에서 정밀 계산하세요.</p>
+        <p className="text-2xs text-ink-muted mt-0.5">표준 차트 레인지를 콤보 단위로 전개해 프리플랍 승률을 실시간 계산합니다. 특정 핸드 vs 레인지는 「GTO 핸드 분석」에서.</p>
       </div>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <label className="space-y-1">
           <span className="text-2xs font-semibold text-accent-300">내 레인지</span>
           <select value={a} onChange={(e) => setA(Number(e.target.value))} className="input w-full text-sm">
-            {RANGES.map((r, i) => <option key={r} value={i}>{r}</option>)}
+            {MATRIX_PRESETS.map((r, i) => <option key={r.label} value={i}>{`${r.label} · ${presetPct(r)}`}</option>)}
           </select>
         </label>
         <label className="space-y-1">
           <span className="text-2xs font-semibold text-ink-secondary">상대 레인지</span>
           <select value={b} onChange={(e) => setB(Number(e.target.value))} className="input w-full text-sm">
-            {RANGES.map((r, i) => <option key={r} value={i}>{r}</option>)}
+            {MATRIX_PRESETS.map((r, i) => <option key={r.label} value={i}>{`${r.label} · ${presetPct(r)}`}</option>)}
           </select>
         </label>
       </div>
       {/* 결과 바 */}
-      <div>
-        <div className="flex items-baseline justify-between text-2xs">
-          <span className="font-bold text-accent-300">내 {eq.toFixed(1)}%</span>
-          <span className="font-bold text-ink-secondary">상대 {(100 - eq).toFixed(1)}%</span>
+      {eq === null ? (
+        <div className="flex h-8 items-center gap-2 text-2xs text-ink-muted">
+          <span className="h-3 w-3 animate-spin rounded-full border-2 border-accent-300 border-t-transparent" />
+          에퀴티 계산 중...
         </div>
-        <div className="mt-1 flex h-2.5 overflow-hidden rounded-full bg-surface-high">
-          <div className="h-full bg-accent-300 transition-[width] duration-300" style={{ width: `${eq}%` }} />
+      ) : (
+        <div>
+          <div className="flex items-baseline justify-between text-2xs">
+            <span className="font-bold text-accent-300">내 {eq.toFixed(1)}%</span>
+            <span className="font-bold text-ink-secondary">상대 {(100 - eq).toFixed(1)}%</span>
+          </div>
+          <div className="mt-1 flex h-2.5 overflow-hidden rounded-full bg-surface-high">
+            <div className="h-full bg-accent-300 transition-[width] duration-300" style={{ width: `${eq}%` }} />
+          </div>
         </div>
-      </div>
-      {/* 전체 매트릭스 */}
+      )}
+      {/* 전체 매트릭스 — 미계산 셀은 백그라운드 순차 계산 후 채워짐 */}
       <div className="overflow-x-auto">
         <table className="w-full min-w-[30rem] text-center text-2xs">
           <thead>
             <tr>
               <th className="py-1 px-1.5 text-left text-ink-muted font-semibold">내 \ 상대</th>
-              {RANGES.map((r) => <th key={r} className="py-1 px-1.5 text-ink-muted font-semibold whitespace-nowrap">{r.split('(')[0]}</th>)}
+              {MATRIX_PRESETS.map((r) => <th key={r.label} className="py-1 px-1.5 text-ink-muted font-semibold whitespace-nowrap">{r.label}</th>)}
             </tr>
           </thead>
           <tbody>
-            {RANGES.map((r, i) => (
-              <tr key={r} className="border-t border-border-subtle">
-                <td className="py-1 px-1.5 text-left font-bold text-accent-300 whitespace-nowrap">{r.split('(')[0]}</td>
-                {RANGES.map((_, j) => (
-                  <td key={j} onClick={() => { setA(i); setB(j); }}
-                    className={['py-1 px-1.5 tabular-nums cursor-pointer transition-colors',
-                      i === a && j === b ? 'bg-accent-300/15 font-extrabold text-accent-300' : 'text-ink-secondary hover:bg-surface-high'].join(' ')}>
-                    {EQ[i][j].toFixed(1)}
-                  </td>
-                ))}
+            {MATRIX_PRESETS.map((r, i) => (
+              <tr key={r.label} className="border-t border-border-subtle">
+                <td className="py-1 px-1.5 text-left font-bold text-accent-300 whitespace-nowrap">{r.label}</td>
+                {MATRIX_PRESETS.map((_, j) => {
+                  const v = getEq(i, j);
+                  return (
+                    <td key={j} onClick={() => { setA(i); setB(j); }}
+                      className={['py-1 px-1.5 tabular-nums cursor-pointer transition-colors',
+                        i === a && j === b ? 'bg-accent-300/15 font-extrabold text-accent-300' : 'text-ink-secondary hover:bg-surface-high'].join(' ')}>
+                      {v === null ? '…' : v.toFixed(1)}
+                    </td>
+                  );
+                })}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <p className="text-2xs text-ink-muted">※ 몬테카를로 시뮬레이션 요약 근사치(±1%p). 레인지가 넓을수록 보드 의존도가 커집니다.</p>
+      <p className="text-2xs text-ink-muted">※ 몬테카를로 실계산(쌍마다 {MATRIX_ITER.toLocaleString()}회, ±1%p 오차). 레인지가 넓을수록 보드 의존도가 커집니다.</p>
     </div>
   );
 }

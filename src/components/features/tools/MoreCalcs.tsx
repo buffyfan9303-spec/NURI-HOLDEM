@@ -12,17 +12,31 @@ const PAYOUT_STYLES: { id: PayoutStyle; label: string; desc: string }[] = [
   { id: 'satellite', label: '세틀라이트', desc: '상위 동일 금액(시트)' },
 ];
 
+// 표준 분배 프리셋 — 자주 쓰는 고정 %표. 클릭 시 인원·시상 수를 맞추고 %표 그대로 분배.
+const PAYOUT_PRESETS = [
+  { id: 'sng9', label: '9인 SNG 50/30/20', entries: 9, pct: [50, 30, 20] },
+  { id: 'mtt18', label: '18인 40/25/16/12/7', entries: 18, pct: [40, 25, 16, 12, 7] },
+] as const;
+type PayoutPresetId = (typeof PAYOUT_PRESETS)[number]['id'];
+
 export function PayoutCalc() {
   const [pool, setPool] = useState(11000000);
   const [entries, setEntries] = useState(80);
   const [placesIn, setPlacesIn] = useState(0); // 0 = 자동
   const [style, setStyle] = useState<PayoutStyle>('topheavy');
+  const [presetId, setPresetId] = useState<PayoutPresetId | null>(null); // 곡선 대신 고정 %표 사용
 
+  const preset = presetId ? PAYOUT_PRESETS.find((p) => p.id === presetId)! : null;
   const autoPct = style === 'flat' ? 0.18 : style === 'satellite' ? 0.15 : 0.10;
-  const places = Math.max(1, placesIn > 0 ? placesIn : Math.round(entries * autoPct));
+  const places = preset ? preset.pct.length : Math.max(1, placesIn > 0 ? placesIn : Math.round(entries * autoPct));
 
   let amounts: number[];
-  if (style === 'satellite') {
+  if (preset) {
+    // 프리셋: 고정 %표 그대로 1000 단위 반올림, 잔액은 1위에 보정.
+    amounts = preset.pct.map((p) => Math.max(0, Math.round((p / 100) * pool / 1000) * 1000));
+    const used = amounts.reduce((a, b) => a + b, 0);
+    if (amounts.length) amounts[0] += pool - used;
+  } else if (style === 'satellite') {
     // 세틀라이트: 상위 시상자 동일 금액(시트). 반올림 잔액은 1위에 보정.
     const each = Math.max(0, Math.floor(pool / places / 1000) * 1000);
     amounts = Array.from({ length: places }, () => each);
@@ -36,24 +50,41 @@ export function PayoutCalc() {
     const used = amounts.reduce((a, b) => a + b, 0);
     if (amounts.length) amounts[0] += pool - used;
   }
+  // 가드: 잔액 보정이 음수면 flat 곡선에서 1위<2위 역전 가능 — 2위에서 차액을 옮겨 1위≥2위 유지(합계 불변).
+  if (amounts.length > 1 && amounts[0] < amounts[1]) {
+    const d = Math.ceil((amounts[1] - amounts[0]) / 2 / 1000) * 1000;
+    amounts[0] += d;
+    amounts[1] -= d;
+  }
 
   return (
     <CalcCard title="상금 분배 계산기" desc="총 상금·참가 인원 → 시상 인원과 분배표(참고용)">
       <div className="grid grid-cols-2 gap-2">
         <Field label="총 상금"><NumIn value={pool} onChange={setPool} /></Field>
-        <Field label="참가 인원"><NumIn value={entries} onChange={setEntries} suffix="명" /></Field>
+        <Field label="참가 인원"><NumIn value={entries} onChange={(v) => { setEntries(v); setPresetId(null); }} suffix="명" /></Field>
+      </div>
+      {/* 표준 프리셋 — 클릭 시 고정 %표 적용, 다른 입력을 만지면 곡선 모드로 복귀 */}
+      <div className="flex gap-1.5">
+        {PAYOUT_PRESETS.map((p) => (
+          <button key={p.id} type="button"
+            onClick={() => { setPresetId(p.id); setEntries(p.entries); setPlacesIn(p.pct.length); }}
+            className={['flex-1 h-8 rounded-input border text-2xs font-bold leading-none transition-colors',
+              presetId === p.id ? 'bg-accent-300 border-accent-300 text-white' : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
+            {p.label}
+          </button>
+        ))}
       </div>
       <div>
         <p className="mb-1 text-2xs font-semibold text-ink-secondary">분배 방식</p>
         <div className="grid grid-cols-3 gap-1">
           {PAYOUT_STYLES.map((s) => (
-            <button key={s.id} type="button" onClick={() => setStyle(s.id)} title={s.desc}
-              className={['rounded-input py-1.5 text-2xs font-bold leading-tight transition-colors', style === s.id ? 'bg-accent-300 text-white' : 'bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>{s.label}</button>
+            <button key={s.id} type="button" onClick={() => { setStyle(s.id); setPresetId(null); }} title={s.desc}
+              className={['rounded-input py-1.5 text-2xs font-bold leading-tight transition-colors', style === s.id && !presetId ? 'bg-accent-300 text-white' : 'bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>{s.label}</button>
           ))}
         </div>
-        <p className="mt-1 text-2xs text-ink-muted">{PAYOUT_STYLES.find((s) => s.id === style)!.desc}</p>
+        <p className="mt-1 text-2xs text-ink-muted">{presetId ? '표준 고정 %표를 그대로 적용 중입니다.' : PAYOUT_STYLES.find((s) => s.id === style)!.desc}</p>
       </div>
-      <Field label="시상 인원 (0=자동)"><NumIn value={placesIn} onChange={setPlacesIn} suffix="명" /></Field>
+      <Field label="시상 인원 (0=자동)"><NumIn value={placesIn} onChange={(v) => { setPlacesIn(v); setPresetId(null); }} suffix="명" /></Field>
       <Result label={`시상 인원 ${places}명 · 1위`} value={(amounts[0] ?? 0).toLocaleString()} accent />
       <div className="max-h-56 overflow-y-auto rounded-input border border-border-subtle">
         <table className="w-full text-2xs tabular-nums">

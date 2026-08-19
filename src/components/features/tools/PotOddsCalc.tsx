@@ -28,6 +28,7 @@ export default function PotOddsCalc() {
           {ok ? '✓ 콜이 이득 (+EV)' : '✗ 콜은 손해 (−EV)'} · 손익분기 {need.toFixed(1)}%
         </p>
       </div>
+      <p className="text-2xs text-ink-muted">이 승률이 실제로 나오는지는 아웃츠/확률 계산기 도구로 확인해 보세요.</p>
     </CalcCard>
   );
 }

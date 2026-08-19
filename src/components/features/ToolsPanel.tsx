@@ -1,5 +1,6 @@
-import { useEffect, useState, Suspense, Fragment, type ReactNode } from 'react';
+import { useEffect, useState, Suspense, type ReactNode } from 'react';
 import { lazyWithReload } from '../../lib/lazyWithReload';
+import Modal from '../atoms/Modal';
 import ICMCalculator from './ICMCalculator';
 import PotOddsCalc from './tools/PotOddsCalc';
 import ChipDistributor from './tools/ChipDistributor';
@@ -8,18 +9,18 @@ import RangeGuide from './tools/RangeGuide';
 import PreflopTrainer from './tools/PreflopTrainer';
 import OutsCalc from './tools/OutsCalc';
 import PushFoldChart from './tools/PushFoldChart';
-import { SprCalc, EvCalc } from './tools/StackCalcs';
+import { SprCalc, EvCalc, MzoneCalc, BankrollCalc, VarianceCalc } from './tools/StackCalcs';
 import { PayoutCalc, EndTimeCalc, ComboCalc } from './tools/MoreCalcs';
 import { MdfCalc, AggroChart, RangeMatrix } from './tools/AdvancedCalcs';
 import PostflopTrainer from './tools/PostflopTrainer';
 import BlindBuilder from './tools/BlindBuilder';
 
-// GTO 패널은 에퀴티 엔진을 포함해 무거우므로 지연 로드(다른 도구와 동일하게 인라인 표시)
+// GTO 패널은 에퀴티 엔진을 포함해 무거우므로 지연 로드
 import { readSnap } from '../../lib/snapshot';
 import type { DeepGtoInit } from './gto/useDeepGto';
 const GtoDeepPanel = lazyWithReload(() => import('./gto/GtoDeepPanel'));
 
-type ToolKey = 'gto' | 'pot' | 'icm' | 'range' | 'trainer' | 'postflop' | 'mdf' | 'aggro' | 'rvr' | 'outs' | 'pushfold' | 'spr' | 'ev' | 'blindgen' | 'chip' | 'sim' | 'payout' | 'endtime' | 'combo';
+type ToolKey = 'gto' | 'pot' | 'icm' | 'range' | 'trainer' | 'postflop' | 'mdf' | 'aggro' | 'rvr' | 'outs' | 'pushfold' | 'spr' | 'ev' | 'mzone' | 'bankroll' | 'variance' | 'blindgen' | 'chip' | 'sim' | 'payout' | 'endtime' | 'combo';
 type ToolGroup = 'ops' | 'player';
 
 const TOOLS: { key: ToolKey; group: ToolGroup; name: string; desc: string; icon: ReactNode }[] = [
@@ -37,9 +38,11 @@ const TOOLS: { key: ToolKey; group: ToolGroup; name: string; desc: string; icon:
   // ── 플레이어 도구 ──
   { key: 'gto', group: 'player', name: 'GTO 핸드 분석', desc: '프리/포스트플랍 승률·전략',
     icon: <><rect x="3" y="4" width="7" height="16" rx="1.5" /><rect x="14" y="4" width="7" height="16" rx="1.5" /></> },
-  { key: 'range', group: 'player', name: '스타팅핸드 가이드', desc: '포지션별 프리플랍 레인지',
+  { key: 'range', group: 'player', name: '스타팅핸드 가이드', desc: '오픈·수비·3벳 표준 레인지',
     icon: <><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="9" y1="3" x2="9" y2="21" /></> },
-  { key: 'trainer', group: 'player', name: '프리플랍 트레이너', desc: '오픈/폴드 맞히기·정답률',
+  { key: 'pushfold', group: 'player', name: '푸시 · 폴드 차트', desc: '자체 Nash — 셔브·콜 레인지',
+    icon: <><path d="M12 21V4" /><path d="M5 11l7-7 7 7" /></> },
+  { key: 'trainer', group: 'player', name: '프리플랍 트레이너', desc: '오픈·셔브 맞히기, 오답 노트',
     icon: <><path d="M12 2v4M12 18v4M2 12h4M18 12h4" /><circle cx="12" cy="12" r="4" /></> },
   { key: 'postflop', group: 'player', name: '포스트플랍 트레이너', desc: '실전 상황 퀴즈·해설',
     icon: <><rect x="3" y="6" width="5" height="7" rx="1" /><rect x="9.5" y="6" width="5" height="7" rx="1" /><rect x="16" y="6" width="5" height="7" rx="1" /><path d="M7 17h10" /><path d="M9 21h6" /></> },
@@ -55,14 +58,18 @@ const TOOLS: { key: ToolKey; group: ToolGroup; name: string; desc: string; icon:
     icon: <><rect x="4" y="3" width="16" height="18" rx="2" /><line x1="8" y1="7" x2="16" y2="7" /><line x1="8" y1="11" x2="16" y2="11" /><line x1="8" y1="15" x2="12" y2="15" /></> },
   { key: 'outs', group: 'player', name: '아웃츠 / 확률', desc: '완성 확률·팟 오즈',
     icon: <><circle cx="12" cy="12" r="9" /><path d="M8.5 12.5l2.5 2.5 4.5-4.5" /></> },
-  { key: 'pushfold', group: 'player', name: '푸시 · 폴드 차트', desc: '숏스택 셔브 레인지',
-    icon: <><path d="M12 21V4" /><path d="M5 11l7-7 7 7" /></> },
   { key: 'spr', group: 'player', name: 'SPR 계산기', desc: '스택 대 팟 비율',
     icon: <><rect x="3" y="11" width="7" height="9" rx="1" /><rect x="14" y="4" width="7" height="16" rx="1" /></> },
   { key: 'ev', group: 'player', name: 'EV 계산기', desc: '기대값 손익 판단',
     icon: <><line x1="12" y1="3" x2="12" y2="21" /><path d="M8 7h6a3 3 0 0 1 0 6H8" /></> },
   { key: 'combo', group: 'player', name: '콤보 계산기', desc: '핸드·레인지 콤보 수',
     icon: <><rect x="4" y="4" width="9" height="13" rx="1.5" /><rect x="11" y="7" width="9" height="13" rx="1.5" /></> },
+  { key: 'mzone', group: 'player', name: 'M존 계산기', desc: '토너 생존 압박 지수',
+    icon: <><circle cx="12" cy="12" r="9" /><path d="M8 15V9l4 4 4-4v6" /></> },
+  { key: 'bankroll', group: 'player', name: '뱅크롤 관리', desc: '바인 대비 자금 권장선',
+    icon: <><rect x="3" y="7" width="18" height="12" rx="2" /><path d="M3 11h18" /><circle cx="12" cy="15" r="1.5" /></> },
+  { key: 'variance', group: 'player', name: '분산 시뮬', desc: 'ROI·표본 → 파산 확률',
+    icon: <><path d="M3 20c3-1 4-6 6-6s3 4 5 4 4-9 7-10" /></> },
 ];
 
 const GROUPS: { id: ToolGroup; title: string; desc: string }[] = [
@@ -72,8 +79,7 @@ const GROUPS: { id: ToolGroup; title: string; desc: string }[] = [
 
 function renderTool(k: ToolKey): ReactNode {
   switch (k) {
-    // Phase 12-1 '결과 먼저': 빈 폼 대신 직전 입력(스냅샷) 또는 대표 데모 핸드(AKs vs QQ —
-    // 가장 유명한 플립)로 진입 즉시 계산 결과가 보인다. 사용자는 '고치는' 방식으로 학습한다.
+    // '결과 먼저': 빈 폼 대신 직전 입력(스냅샷) 또는 대표 데모 핸드(AKs vs QQ)로 진입 즉시 결과.
     case 'gto': {
       const saved = readSnap<DeepGtoInit>('tool:gto');
       const hasSaved = !!(saved && ((saved.hero?.length ?? 0) + (saved.villain?.length ?? 0) > 0));
@@ -95,6 +101,9 @@ function renderTool(k: ToolKey): ReactNode {
     case 'pushfold': return <PushFoldChart />;
     case 'spr': return <SprCalc />;
     case 'ev': return <EvCalc />;
+    case 'mzone': return <MzoneCalc />;
+    case 'bankroll': return <BankrollCalc />;
+    case 'variance': return <VarianceCalc />;
     case 'payout': return <PayoutCalc />;
     case 'endtime': return <EndTimeCalc />;
     case 'combo': return <ComboCalc />;
@@ -105,48 +114,43 @@ function renderTool(k: ToolKey): ReactNode {
   }
 }
 
-// 화면 폭별 그리드 열 수 — 카드 그리드 클래스(2/sm:3/lg:4/xl:5)와 동일 기준.
-// 행 단위 렌더에 필요(패널을 "누른 카드 행 바로 아래"에 끼우기 위함).
-function useGridCols(): number {
-  const calc = () => {
-    if (typeof window === 'undefined') return 2;
-    const w = window.innerWidth;
-    return w >= 1280 ? 5 : w >= 1024 ? 4 : w >= 640 ? 3 : 2;
-  };
-  const [cols, setCols] = useState(calc);
-  useEffect(() => {
-    const on = () => setCols(calc());
-    window.addEventListener('resize', on);
-    return () => window.removeEventListener('resize', on);
-  }, []);
-  return cols;
-}
-
-/** 도구 모음 — 카드형 런처. 매장 운영 / 플레이어 두 그룹.
- *  카드를 누르면 패널이 "그 카드가 속한 행 바로 아래"에 전체폭으로 열린다.
- *  (행 단위 렌더 — 같은 행의 옆 카드는 밀리지 않고, 패널이 그룹 맨 아래로 떨어지지도 않음) */
+/** 도구 모음 — 카드형 런처.
+ *  누르면 "그 카드 행 아래 인라인"이 아니라 **전체화면 페이지**로 연다.
+ *  (인라인 방식은 중간 카드를 누르면 위에 런처가 그대로 남아, 열린 도구를 찾아 내려가야 했다 —
+ *   전체화면 Modal(page)은 헤더·닫기·뒤로가기·드래그 닫기까지 앱의 다른 상세 화면과 같은 문법.) */
 export default function ToolsPanel() {
-  const [active, setActive] = useState<ToolKey | null>(null);
-  // 최근 사용(Phase 12-2) — 재방문 시 도구 재탐색 비용을 0으로. 최대 3개, 앞이 최신.
+  const [active, setActive] = useState<ToolKey | null>(() => {
+    // 딥링크: #tool=key 로 특정 도구 바로 열기(공유·재방문)
+    const m = window.location.hash.match(/^#tool=([a-z]+)/);
+    return m && TOOLS.some((t) => t.key === m[1]) ? (m[1] as ToolKey) : null;
+  });
+  // 최근 사용 — 재방문 시 도구 재탐색 비용 0. 최대 3개, 앞이 최신.
   const [recent, setRecent] = useState<ToolKey[]>(() => {
     try { return JSON.parse(localStorage.getItem('nuri:tool:recent') || '[]'); } catch { return []; }
   });
-  const select = (k: ToolKey) => setActive((a) => {
-    const next = a === k ? null : k;
-    if (next) {
-      setRecent((prev) => {
-        const r = [k, ...prev.filter((x) => x !== k)].slice(0, 3);
-        try { localStorage.setItem('nuri:tool:recent', JSON.stringify(r)); } catch { /* quota */ }
-        return r;
-      });
+  const open = (k: ToolKey) => {
+    setActive(k);
+    try { history.replaceState(null, '', `#tool=${k}`); } catch { /* 무시 */ }
+    setRecent((prev) => {
+      const r = [k, ...prev.filter((x) => x !== k)].slice(0, 3);
+      try { localStorage.setItem('nuri:tool:recent', JSON.stringify(r)); } catch { /* quota */ }
+      return r;
+    });
+  };
+  const close = () => {
+    setActive(null);
+    if (window.location.hash.startsWith('#tool=')) {
+      try { history.replaceState(null, '', window.location.pathname + window.location.search); } catch { /* 무시 */ }
     }
-    return next;
-  });
-  const cols = useGridCols();
-  // 검색 + 그룹 접기(기본 접힘 — 한 화면 간략 보기). 열림 상태는 기억.
+  };
+
+  // 검색 + 그룹 접기 — 첫 방문엔 플레이어 그룹을 펼쳐 "빈 화면 + 접힌 헤더 2개"를 피한다.
   const [q, setQ] = useState('');
   const [openG, setOpenG] = useState<Record<string, boolean>>(() => {
-    try { return JSON.parse(localStorage.getItem('nuri:tools-open') || '{}'); } catch { return {}; }
+    try {
+      const saved = localStorage.getItem('nuri:tools-open');
+      return saved ? JSON.parse(saved) : { player: true };
+    } catch { return { player: true }; }
   });
   const toggleG = (id: string) => setOpenG((prev) => {
     const next = { ...prev, [id]: !prev[id] };
@@ -166,28 +170,26 @@ export default function ToolsPanel() {
   });
   const favTools = favs.map((k) => TOOLS.find((t) => t.key === k)).filter(Boolean) as typeof TOOLS;
 
-  // 열 수 단위 행 분할 — 활성 카드가 있는 행 바로 뒤에 실행 패널 삽입(옆 카드 안 밀림)
-  const renderRows = (items: typeof TOOLS) => {
-    const rows: typeof TOOLS[] = [];
-    for (let i = 0; i < items.length; i += cols) rows.push(items.slice(i, i + cols));
-    return rows.map((row, ri) => (
-      <Fragment key={ri}>
-        <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
-          {row.map((t) => (
-            <ToolCard key={t.key} name={t.name} desc={t.desc} icon={t.icon} active={active === t.key} onClick={() => select(t.key)}
-              fav={favs.includes(t.key)} onToggleFav={() => toggleFav(t.key)} />
-          ))}
-        </div>
-        {row.some((t) => t.key === active) && (
-          <div className="pt-1 lg:max-w-3xl">
-            <Suspense fallback={<div className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</div>}>
-              {renderTool(active!)}
-            </Suspense>
-          </div>
-        )}
-      </Fragment>
-    ));
-  };
+  // 다른 곳(공유 링크)에서 해시가 바뀌면 반영
+  useEffect(() => {
+    const onHash = () => {
+      const m = window.location.hash.match(/^#tool=([a-z]+)/);
+      if (m && TOOLS.some((t) => t.key === m[1])) setActive(m[1] as ToolKey);
+    };
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+
+  const grid = (items: typeof TOOLS) => (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+      {items.map((t) => (
+        <ToolCard key={t.key} name={t.name} desc={t.desc} icon={t.icon} onClick={() => open(t.key)}
+          fav={favs.includes(t.key)} onToggleFav={() => toggleFav(t.key)} />
+      ))}
+    </div>
+  );
+
+  const activeTool = active ? TOOLS.find((t) => t.key === active) : null;
 
   return (
     <div className="space-y-3">
@@ -201,8 +203,7 @@ export default function ToolsPanel() {
           className="input w-full pl-9 text-sm" aria-label="도구 검색" />
       </div>
 
-      {/* ★ 즐겨찾기 — 그룹이 접혀 있어도 항상 보이는 내 도구 */}
-      {/* 🕐 최근 사용 — 마지막으로 쓴 도구로 원탭 복귀(Phase 12-2) */}
+      {/* 🕐 최근 사용 — 마지막으로 쓴 도구로 원탭 복귀 */}
       {!hits && recent.length > 0 && (
         <section className="space-y-1.5">
           <p className="text-2xs font-bold text-ink-muted">🕐 최근 사용</p>
@@ -211,9 +212,8 @@ export default function ToolsPanel() {
               const t = TOOLS.find((x) => x.key === k);
               if (!t) return null;
               return (
-                <button key={k} type="button" onClick={() => select(k)}
-                  className={['inline-flex h-9 items-center gap-1.5 rounded-input border px-3 text-xs font-semibold transition-colors',
-                    active === k ? 'border-accent-300 bg-accent-300/10 text-accent-300' : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
+                <button key={k} type="button" onClick={() => open(k)}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-input border border-border-default bg-surface-high px-3 text-xs font-semibold text-ink-secondary transition-colors hover:text-ink-primary">
                   {t.name}
                 </button>
               );
@@ -222,17 +222,18 @@ export default function ToolsPanel() {
         </section>
       )}
 
+      {/* ★ 즐겨찾기 — 그룹이 접혀 있어도 항상 보이는 내 도구 */}
       {!hits && favTools.length > 0 && (
         <section className="space-y-2">
-          <p className="text-2xs font-bold text-accent-300">★ 즐겨찾기</p>
-          {renderRows(favTools)}
+          <p className="text-2xs font-bold text-accent-200">★ 즐겨찾기</p>
+          {grid(favTools)}
         </section>
       )}
 
       {hits ? (
         hits.length === 0
           ? <p className="py-8 text-center text-2xs text-ink-muted">'{q.trim()}' 에 맞는 도구가 없습니다</p>
-          : <div className="space-y-2">{renderRows(hits)}</div>
+          : grid(hits)
       ) : (
         GROUPS.map((g) => {
           const items = TOOLS.filter((t) => t.group === g.id);
@@ -251,40 +252,49 @@ export default function ToolsPanel() {
                   <polyline points="6 9 12 15 18 9" />
                 </svg>
               </button>
-              {opened && <div className="space-y-2 border-t border-border-subtle p-2.5 animate-fade-in">{renderRows(items)}</div>}
+              {opened && <div className="border-t border-border-subtle p-2.5 animate-fade-in">{grid(items)}</div>}
             </section>
           );
         })
       )}
+
+      {/* 도구 실행 — 전체화면 페이지(헤더·뒤로가기·드래그 닫기 = 앱 공통 문법) */}
+      <Modal open={!!activeTool} onClose={close} variant="page" title={activeTool?.name} maxWidth="2xl">
+        <div className="px-page-x py-3 pb-8">
+          <Suspense fallback={<div className="py-10 text-center text-2xs text-ink-muted">불러오는 중…</div>}>
+            {active ? renderTool(active) : null}
+          </Suspense>
+        </div>
+      </Modal>
     </div>
   );
 }
 
-function ToolCard({ name, desc, icon, onClick, active, fav, onToggleFav }: {
-  name: string; desc: string; icon: ReactNode; onClick: () => void; active?: boolean;
+function ToolCard({ name, desc, icon, onClick, fav, onToggleFav }: {
+  name: string; desc: string; icon: ReactNode; onClick: () => void;
   fav?: boolean; onToggleFav?: () => void;
 }) {
+  // 버튼 안에 role="button" 스팬(중첩 인터랙티브 위반) 대신 형제 버튼 2개 — 키보드로도 별을 켤 수 있다.
   return (
-    <button type="button" onClick={onClick}
-      // 가로형 컴팩트 — 아이콘 좌·텍스트 우(칸 높이 절반)
-      className={['group/tool flex items-center gap-2.5 rounded-card border px-2.5 py-2 text-left transition-colors active:scale-[0.98]',
-        active ? 'border-accent-400/60 bg-accent-300/[0.08]' : 'border-border-default bg-surface-low hover:border-accent-400/40 hover:bg-surface-high'].join(' ')}>
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-input bg-accent-300/15 text-accent-300">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{icon}</svg>
-      </span>
-      <span className="min-w-0 flex-1">
-        {/* 이름은 절대 안 자른다 — 2줄까지 허용. 설명은 칸이 넉넉한 화면에서만 */}
-        <span className="block text-xs font-bold text-ink-primary leading-tight [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] overflow-hidden">{name}</span>
-        <span className="hidden sm:block truncate text-2xs text-ink-muted leading-snug mt-0.5">{desc}</span>
-      </span>
+    <div className="relative">
+      <button type="button" onClick={onClick}
+        className="group/tool flex w-full items-center gap-2.5 rounded-card border border-border-default bg-surface-low px-2.5 py-2 pr-8 text-left transition-colors hover:border-accent-400/40 hover:bg-surface-high active:scale-[0.98]">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-input bg-accent-300/15 text-accent-300">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{icon}</svg>
+        </span>
+        <span className="min-w-0 flex-1">
+          {/* 이름은 절대 안 자른다 — 2줄까지 허용. 설명은 칸이 넉넉한 화면에서만 */}
+          <span className="block text-xs font-bold text-ink-primary leading-tight [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] overflow-hidden">{name}</span>
+          <span className="hidden sm:block truncate text-2xs text-ink-muted leading-snug mt-0.5">{desc}</span>
+        </span>
+      </button>
       {onToggleFav && (
-        <span role="button" tabIndex={-1} aria-label={fav ? '즐겨찾기 해제' : '즐겨찾기 추가'}
-          onClick={(e) => { e.stopPropagation(); onToggleFav(); }}
-          className={['shrink-0 px-0.5 text-sm leading-none transition-opacity',
+        <button type="button" onClick={onToggleFav} aria-label={fav ? `${name} 즐겨찾기 해제` : `${name} 즐겨찾기 추가`} aria-pressed={fav}
+          className={['absolute right-0.5 top-1/2 -translate-y-1/2 flex h-9 w-8 items-center justify-center text-sm leading-none transition-opacity',
             fav ? 'text-accent-300 opacity-100' : 'text-ink-muted opacity-30 hover:opacity-70'].join(' ')}>
           {fav ? '★' : '☆'}
-        </span>
+        </button>
       )}
-    </button>
+    </div>
   );
 }

@@ -58,17 +58,33 @@ export function EvCalc() {
   const [win, setWin] = useState(50);
   const [gain, setGain] = useState(30000);
   const [loss, setLoss] = useState(20000);
+  const [foldPct, setFoldPct] = useState(0); // 상대 폴드 확률(선택) — 0이면 순수 쇼다운 EV
+  const [pot, setPot] = useState(0);         // 폴드 시 그대로 가져오는 현재 팟
   const p = Math.max(0, Math.min(win, 100)) / 100;
-  const ev = p * gain - (1 - p) * loss;
+  const baseEv = p * gain - (1 - p) * loss;
+  // 폴드에퀴티 반영: EV = F×팟 + (1−F)×쇼다운EV (세미블러프 판단용)
+  const f = Math.max(0, Math.min(foldPct, 100)) / 100;
+  const ev = f > 0 ? f * Math.max(0, pot) + (1 - f) * baseEv : baseEv;
+  // 프리셋 — 플립 콜(50% 동액), 블러프 손익분기(팟사이즈 블러프 = 폴드 50%면 EV 0)
+  const applyFlip = () => { setWin(50); setGain(20000); setLoss(20000); setFoldPct(0); setPot(0); };
+  const applyBluff = () => { setWin(0); setGain(0); setLoss(20000); setFoldPct(50); setPot(20000); };
   return (
-    <CalcCard title="EV 계산기" desc="승률·이득·손실로 기대값(EV) 계산">
-      <Field label="승률"><NumIn value={win} onChange={setWin} suffix="%" /></Field>
+    <CalcCard title="EV 계산기" desc="EV = 승률×이득 − (1−승률)×손실 (폴드에퀴티 선택 반영)">
+      <div className="flex gap-1.5">
+        <button type="button" onClick={applyFlip}
+          className="flex-1 h-8 rounded-input border border-border-default bg-surface-high text-2xs font-bold text-ink-secondary leading-none hover:text-ink-primary transition-colors">플립 콜</button>
+        <button type="button" onClick={applyBluff}
+          className="flex-1 h-8 rounded-input border border-border-default bg-surface-high text-2xs font-bold text-ink-secondary leading-none hover:text-ink-primary transition-colors">블러프 손익분기</button>
+      </div>
+      <Field label="승률"><NumIn value={win} onChange={setWin} suffix="%" decimal /></Field>
       <div className="grid grid-cols-2 gap-2">
         <Field label="이길 때 +이득"><NumIn value={gain} onChange={setGain} /></Field>
         <Field label="질 때 −손실"><NumIn value={loss} onChange={setLoss} /></Field>
+        <Field label="상대 폴드 확률(선택)"><NumIn value={foldPct} onChange={setFoldPct} suffix="%" decimal /></Field>
+        <Field label="폴드 시 얻는 팟"><NumIn value={pot} onChange={setPot} /></Field>
       </div>
-      <Result label="기대값 (EV)" value={`${ev >= 0 ? '+' : ''}${Math.round(ev).toLocaleString()}`} good={ev > 0} bad={ev < 0} />
-      <p className="text-2xs text-ink-muted">EV가 +면 장기적으로 이득인 결정입니다.</p>
+      <Result label={f > 0 ? `기대값 (EV) · 폴드 ${foldPct}% 반영` : '기대값 (EV)'} value={`${ev >= 0 ? '+' : ''}${Math.round(ev).toLocaleString()}`} good={ev > 0} bad={ev < 0} />
+      <p className="text-2xs text-ink-muted">EV = 승률×이득 − (1−승률)×손실. 폴드 확률 F를 넣으면 EV = F×팟 + (1−F)×쇼다운EV로 세미블러프를 판단합니다.</p>
     </CalcCard>
   );
 }

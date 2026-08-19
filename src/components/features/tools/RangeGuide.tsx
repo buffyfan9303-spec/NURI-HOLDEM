@@ -1,133 +1,76 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { CalcCard } from './calcUi';
-import { GRID, POSITIONS, STACKS, SCENARIOS, action, openPct, type Pos, type StackBB, type Scenario } from '../../../lib/preflop';
+import RangeMatrix13, { type MatrixAction } from './RangeMatrix13';
+import { ACTION_COLORS } from '../../../lib/ranges.data';
+import { buildFreq } from '../../../lib/ranges';
+import { RANGE_GROUPS, RANGE_SCENARIOS, type RangeScenario } from '../../../lib/ranges.data';
 
-// 스타팅핸드(프리플랍) 레인지 가이드 — 공용 lib/preflop(Chen 점수 기반 참고 레인지) 사용.
+// 스타팅핸드 가이드 — Chen 근사(19개 계수 파생)를 폐기하고 자체 제작 표준 차트로 전환.
+// 오픈(6맥스+9인 얼리)·블라인드 수비·3벳·vs 3벳 15개 시나리오, 혼합 빈도는 셀 채움으로.
 
 export default function RangeGuide() {
-  const [pos, setPos] = useState<Pos>('BTN');
-  const [size, setSize] = useState<'6' | '9'>('6');
-  const [act, setAct] = useState<'open' | '3bet'>('open');
-  const [bb, setBb] = useState<StackBB>(100);
-  const [scenario, setScenario] = useState<Scenario>('std');
-  const stack = STACKS.find((x) => x.bb === bb)!;
-  const scen = SCENARIOS.find((x) => x.id === scenario)!;
-  const pct = openPct(pos, size, act, bb, scenario);
-  const actionLabel = act === '3bet' ? stack.threeBetLabel : stack.openLabel;
-  const openCount = GRID.flat().filter((h) => action(h.label, pct) !== 'fold').length;
+  const [group, setGroup] = useState<RangeScenario['group']>('rfi6');
+  const inGroup = RANGE_SCENARIOS.filter((s) => s.group === group);
+  const [scenId, setScenId] = useState<string>(inGroup[0].id);
+  const scen = RANGE_SCENARIOS.find((s) => s.id === scenId) ?? inGroup[0];
 
-  return (
-    <CalcCard title="스타팅핸드 가이드" desc="스택·포지션·테이블·액션별 프리플랍 참고 레인지">
-      {/* 스택 깊이(bb) — 토너 4구간 */}
-      <div className="flex items-center gap-1">
-        {STACKS.map((st) => {
-          const on = st.bb === bb;
-          return (
-            <button key={st.bb} type="button" onClick={() => setBb(st.bb)}
-              className={['flex-1 h-8 rounded-input text-xs font-bold leading-none border transition-colors focus:outline-none',
-                on ? 'bg-accent-300 border-accent-300 text-white' : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary'].join(' ')}>
-              {st.label}
-            </button>
-          );
-        })}
-      </div>
-      <p className="text-2xs leading-relaxed text-ink-secondary rounded-input bg-surface-high/60 border border-border-subtle px-2 py-1.5">💡 {stack.hint}</p>
-
-      {/* 시나리오 — 멀티웨이 / vs 림프 / PKO */}
-      <div className="flex items-center gap-1">
-        {SCENARIOS.map((sc) => {
-          const on = sc.id === scenario;
-          return (
-            <button key={sc.id} type="button" onClick={() => setScenario(sc.id)}
-              className={['flex-1 h-7 rounded-input text-2xs font-bold leading-none border transition-colors focus:outline-none',
-                on ? 'bg-accent-300 border-accent-300 text-white' : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary'].join(' ')}>
-              {sc.label}
-            </button>
-          );
-        })}
-      </div>
-      {scenario !== 'std' && <p className="text-2xs leading-relaxed text-accent-200 rounded-input bg-accent-300/[0.06] border border-accent-400/20 px-2 py-1.5">🎯 {scen.hint}</p>}
-
-      {/* 포지션 선택 */}
-      <div className="flex flex-wrap gap-1">
-        {POSITIONS.map((p) => {
-          const on = p.id === pos;
-          return (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => setPos(p.id)}
-              className={[
-                'h-7 px-3 rounded-input text-2xs font-bold leading-none border transition-colors focus:outline-none',
-                on ? 'bg-accent-300 border-accent-300 text-white' : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary',
-              ].join(' ')}
-            >
-              {p.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* 테이블 크기 · 액션 토글 */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        <div className="inline-flex rounded-input border border-border-default bg-surface-high p-0.5">
-          {(['6', '9'] as const).map((s) => (
-            <button key={s} type="button" onClick={() => setSize(s)}
-              className={['h-6 px-2.5 rounded-[6px] text-2xs font-bold leading-none transition-colors', size === s ? 'bg-accent-300 text-white' : 'text-ink-muted'].join(' ')}>
-              {s}맥스
-            </button>
-          ))}
-        </div>
-        <div className="inline-flex rounded-input border border-border-default bg-surface-high p-0.5">
-          {([{ id: 'open', label: '오픈레이즈' }, { id: '3bet', label: '3벳' }] as const).map((a) => (
-            <button key={a.id} type="button" onClick={() => setAct(a.id)}
-              className={['h-6 px-2.5 rounded-[6px] text-2xs font-bold leading-none transition-colors', act === a.id ? 'bg-accent-300 text-white' : 'text-ink-muted'].join(' ')}>
-              {a.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* 13x13 핸드 매트릭스 */}
-      <div className="mx-auto w-full max-w-[400px]">
-        <div className="grid gap-[2px]" style={{ gridTemplateColumns: 'repeat(13, minmax(0, 1fr))' }}>
-          {GRID.map((row, i) =>
-            row.map((h, j) => {
-              const a = action(h.label, pct);
-              return (
-                <div
-                  key={`${i}-${j}`}
-                  title={h.label}
-                  className={[
-                    'aspect-square flex items-center justify-center rounded-[3px] text-[8px] font-bold leading-none tabular-nums',
-                    a === 'raise' ? 'bg-accent-300 text-white' : a === 'mix' ? 'bg-accent-300/25 text-accent-300' : 'bg-surface-high text-ink-muted/60',
-                  ].join(' ')}
-                >
-                  {h.label}
-                </div>
-              );
-            }),
-          )}
-        </div>
-      </div>
-
-      {/* 범례 + 요약 */}
-      <div className="flex items-center justify-center gap-3">
-        <Legend cls="bg-accent-300" label={actionLabel} />
-        <Legend cls="bg-accent-300/25" label="혼합" />
-        <Legend cls="bg-surface-high border border-border-default" label="폴드" />
-        <span className="text-2xs text-ink-muted">{actionLabel} {openCount}콤보 (~{Math.round((openCount / 169) * 100)}%)</span>
-      </div>
-      <p className="text-2xs text-ink-muted text-center leading-relaxed">※ 참고용 근사 레인지입니다(스택 4구간 × 6·9맥스 × 오픈·3벳). 12bb 오픈은 사실상 올인 레인지로 보세요.</p>
-    </CalcCard>
+  const actions = useMemo<MatrixAction[]>(
+    () => scen.actions.map((a) => ({
+      key: a.key,
+      label: a.label,
+      color: a.key === 'call' ? ACTION_COLORS.call : a.key === 'fourbet' ? ACTION_COLORS.fourbet : ACTION_COLORS.raise,
+      freq: buildFreq(a.spec),
+    })),
+    [scen],
   );
-}
 
-function Legend({ cls, label }: { cls: string; label: string }) {
+  const pickGroup = (g: RangeScenario['group']) => {
+    setGroup(g);
+    setScenId(RANGE_SCENARIOS.find((s) => s.group === g)!.id);
+  };
+  const groupMeta = RANGE_GROUPS.find((g) => g.id === group)!;
+
   return (
-    <span className="inline-flex items-center gap-1 text-2xs text-ink-secondary">
-      <span className={`inline-block w-3 h-3 rounded-[3px] ${cls}`} />
-      {label}
-    </span>
+    <CalcCard title="스타팅핸드 가이드" desc="포지션·상황별 표준 프리플랍 레인지 — 셀을 누르면 핸드별 빈도">
+      {/* 상황 그룹 */}
+      <div className="flex flex-wrap gap-1">
+        {RANGE_GROUPS.map((g) => {
+          const on = g.id === group;
+          return (
+            <button key={g.id} type="button" onClick={() => pickGroup(g.id)}
+              className={['h-8 px-2.5 rounded-input text-2xs font-bold leading-none border transition-colors focus:outline-none',
+                on ? 'bg-accent-300 border-accent-300 text-white' : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary'].join(' ')}>
+              {g.label}
+            </button>
+          );
+        })}
+      </div>
+      <p className="text-2xs leading-relaxed text-ink-secondary rounded-input bg-surface-high/60 border border-border-subtle px-2 py-1.5">💡 {groupMeta.desc}</p>
+
+      {/* 시나리오(포지션/매치업) */}
+      <div className="flex flex-wrap gap-1">
+        {inGroup.map((s) => {
+          const on = s.id === scen.id;
+          return (
+            <button key={s.id} type="button" onClick={() => setScenId(s.id)}
+              className={['h-8 px-3 rounded-input text-2xs font-bold leading-none border transition-colors focus:outline-none',
+                on ? 'bg-accent-300 border-accent-300 text-white' : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary'].join(' ')}>
+              {s.label}
+            </button>
+          );
+        })}
+      </div>
+      <p className="text-2xs text-ink-muted">{scen.desc}</p>
+
+      <RangeMatrix13 actions={actions} />
+
+      {scen.note && (
+        <p className="text-2xs leading-relaxed text-accent-200 rounded-input bg-accent-300/[0.06] border border-accent-400/20 px-2 py-1.5">🎯 {scen.note}</p>
+      )}
+      <p className="text-2xs text-ink-muted text-center leading-relaxed">
+        ※ 100bb 기준 자체 제작 표준 차트(학습용). %는 1326콤보 가중 — 실제 참여율 감각과 일치합니다.
+        숏스택(≤15bb)은 <b>푸시·폴드 차트</b>를 쓰세요.
+      </p>
+    </CalcCard>
   );
 }
