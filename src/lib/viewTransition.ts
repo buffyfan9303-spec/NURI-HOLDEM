@@ -9,9 +9,15 @@
 // 미지원 브라우저·모션 축소 설정에선 fallback(없으면 update)을 그대로 실행 — 점진적 향상.
 type VTDocument = Document & { startViewTransition?: (cb: () => void) => unknown };
 
-export function withViewTransition(update: () => void, fallback?: () => void): void {
+export type VTDirection = 'forward' | 'back';
+
+export function withViewTransition(update: () => void, fallback?: () => void, dir?: VTDirection): void {
   const d = document as VTDocument;
   if (d.startViewTransition && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    // 방향 마커 — 탭 전환은 애플식 '밀어내기'(패럴랙스 슬라이드), 오버레이는 기본 크로스페이드.
+    // 속성은 남아 있어도 다음 호출이 덮으므로 정리 타이머가 필요 없다.
+    if (dir) document.documentElement.dataset.vtDir = dir;
+    else delete document.documentElement.dataset.vtDir;
     d.startViewTransition.call(document, update);
   } else {
     (fallback ?? update)();

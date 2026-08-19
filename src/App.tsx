@@ -684,9 +684,14 @@ export default function App() {
     // 이전 화면 스냅샷 '뒤에서' 치르고, 완성된 새 화면으로 180ms 크로스페이드만 보여준다.
     // 첫 방문(lazy 청크)은 Suspense 가 끼므로 기존 startTransition 유지(이전 화면 유지 효과 동일).
     if (visitedTabs.has(t)) {
+      // 애플식 방향성: 탭바에서 오른쪽 탭으로 가면 새 화면이 오른쪽에서 밀려 들어온다(반대는 반대).
+      const ORDER: TabId[] = ['browse', 'live', 'community', 'tools', 'my-store', 'admin'];
+      const from = ORDER.indexOf(activeTabRef.current);
+      const to = ORDER.indexOf(t);
       withViewTransition(
         () => { flushSync(() => setActiveTab(t)); },
         () => startTabTransition(() => setActiveTab(t)),
+        to >= from ? 'forward' : 'back',
       );
     } else {
       startTabTransition(() => setActiveTab(t));

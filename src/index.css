@@ -292,17 +292,27 @@ main { max-width: 48rem; margin-inline: auto; }
   animation: none !important;
 }
 
-/* ── 탭 전환 크로스페이드(View Transition) ──────────────────────────────────
-   전환 커밋(디스플레이 토글·스크롤 복원)이 스냅샷 뒤에서 끝나고, 사용자에겐
-   완성된 화면으로의 180ms 페이드만 보인다 — '투두둑'이 물리적으로 보일 수 없는 구조. */
+/* ── 화면 전환(View Transition) — 애플 감각의 핵심 ───────────────────────────
+   전환 커밋(디스플레이 토글·스크롤 복원)은 스냅샷 뒤에서 끝난다('투두둑' 원천 차단).
+   그 위에 '움직임'을 입힌다: 탭 전환은 방향성 패럴랙스 푸시(이전 화면이 밀려나가고
+   새 화면이 감속 곡선으로 미끄러져 들어옴 — iOS 내비게이션 문법), 오버레이 열기는
+   짧은 크로스페이드(내부 sheet-up 이 모션을 담당하므로 이중 모션 방지). */
 ::view-transition-old(root),
 ::view-transition-new(root) {
   animation-duration: 0.18s;
   animation-timing-function: var(--ease);
 }
+@keyframes vt-push-out-l { to   { opacity: 0; transform: translateX(-32px); } }
+@keyframes vt-push-in-r  { from { opacity: 0; transform: translateX(32px); } }
+@keyframes vt-push-out-r { to   { opacity: 0; transform: translateX(32px); } }
+@keyframes vt-push-in-l  { from { opacity: 0; transform: translateX(-32px); } }
+html[data-vt-dir='forward']::view-transition-old(root) { animation: vt-push-out-l 0.3s var(--ease) both; }
+html[data-vt-dir='forward']::view-transition-new(root) { animation: vt-push-in-r 0.3s var(--ease) both; }
+html[data-vt-dir='back']::view-transition-old(root)    { animation: vt-push-out-r 0.3s var(--ease) both; }
+html[data-vt-dir='back']::view-transition-new(root)    { animation: vt-push-in-l 0.3s var(--ease) both; }
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-old(root),
-  ::view-transition-new(root) { animation: none; }
+  ::view-transition-new(root) { animation: none !important; }
 }
 
 /* 네이티브 스크롤 감각 — 부드러운 앵커 이동 + 바운스가 새로고침으로 새지 않게 */
@@ -441,8 +451,11 @@ button:not([data-no-press]), [role='button']:not([data-no-press]), a:not([data-n
   -webkit-tap-highlight-color: transparent;
 }
 /* a 도 동일 — 전화·길찾기·카카오맵 앵커가 눌러도 무반응이라 '죽은 버튼'처럼 느껴졌다 */
+/* 눌림 = 스케일(물리감) + 미세 감광. 아이폰의 손맛은 '즉시 눌리고(60ms) 천천히 복귀(200ms)'다.
+   자체 active:scale-* 유틸을 가진 요소(카드·날짜셀 등)는 그 값이 우선한다. */
 button:active:not(:disabled), [role='button']:active, a:active:not([data-no-press]) {
-  opacity: 0.72;
+  opacity: 0.8;
+  transform: scale(0.97);
   transition-duration: 0.06s;
 }
 
