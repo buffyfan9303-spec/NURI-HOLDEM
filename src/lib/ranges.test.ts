@@ -106,7 +106,9 @@ describe('ranges.data 표준 차트 위생', () => {
       for (const a of s.actions) {
         const m = buildFreq(a.spec);
         const pct = rangeComboPct(m);
-        expect(pct, `${s.id}:${a.key}`).toBeGreaterThan(2);
+        // 4벳(fourbet)은 최상위 밸류(KK+ 중심)라 1.5%대가 정상 — 별도 하한
+        const floor = a.key === 'fourbet' ? 1.5 : 2;
+        expect(pct, `${s.id}:${a.key}`).toBeGreaterThan(floor);
         expect(pct, `${s.id}:${a.key}`).toBeLessThan(62);
       }
     }

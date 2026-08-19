@@ -10,6 +10,7 @@ import { buildFreq, gridName, type FreqMap } from '../../../lib/ranges';
 import { RANGE_SCENARIOS } from '../../../lib/ranges.data';
 import { HAND_ORDER, nashRange } from '../../../lib/nash.data';
 import { freqFromArray } from '../../../lib/ranges';
+import { useTrainerProgress, recordAnswer, setDailyGoal, GOAL_CHOICES } from '../../../lib/trainerProgress';
 
 type Mode = 'rfi' | 'push';
 const PUSH_POS: { k: number; label: string }[] = [
@@ -93,6 +94,8 @@ export default function PreflopTrainer() {
   const [stats, setStats] = useState<Stats>(loadStats);
   const [quiz, setQuiz] = useState<Quiz>(() => makeQuiz('rfi'));
   const [result, setResult] = useState<null | { correct: boolean; chose: 'act' | 'fold' }>(null);
+  const prog = useTrainerProgress();            // 게이미피케이션 진행(로컬 공용 — 별도 키)
+  const [celebrate, setCelebrate] = useState(false); // 목표 달성 순간 인라인 배너 1회
 
   const saveStats = (s: Stats) => { setStats(s); try { localStorage.setItem(STAT_KEY, JSON.stringify(s)); } catch { /* quota */ } };
 
@@ -102,6 +105,7 @@ export default function PreflopTrainer() {
     // 혼합(25~75%)은 어느 쪽이든 정답 — 순수 구간에서만 갈린다 (GTO Wizard 류 표준 채점의 단순화)
     const correct = chose === 'act' ? f >= 0.25 : f <= 0.75;
     setResult({ correct, chose });
+    if (recordAnswer(correct).justHitGoal) setCelebrate(true); // 오늘 목표 달성 순간 감지
     const streak = correct ? stats.streak + 1 : 0;
     const wrong = correct ? stats.wrong.filter((k) => k !== quiz.key) : [...stats.wrong.filter((k) => k !== quiz.key), quiz.key].slice(-40);
     saveStats({ total: stats.total + 1, correct: stats.correct + (correct ? 1 : 0), streak, best: Math.max(stats.best, streak), wrong });
@@ -113,6 +117,7 @@ export default function PreflopTrainer() {
       ? stats.wrong[Math.floor(Math.random() * stats.wrong.length)] : undefined;
     setQuiz(makeQuiz(mode, retry && retry.startsWith(mode) ? retry : undefined));
     setResult(null);
+    setCelebrate(false);
   };
   const switchMode = (m: Mode) => { setMode(m); setQuiz(makeQuiz(m)); setResult(null); };
   const reset = () => { saveStats({ total: 0, correct: 0, streak: 0, best: 0, wrong: [] }); next(); };
@@ -136,6 +141,28 @@ export default function PreflopTrainer() {
           <span className="text-ink-muted">연속 <b className="text-accent-200 tabular-nums">{stats.streak}</b></span>
           <span className="text-ink-muted">최고 <b className="text-ink-secondary tabular-nums">{stats.best}</b></span>
         </div>
+      </div>
+
+      {/* 게이미피케이션 진행 — 일일 목표·스트릭·XP (기존 정답률 기록과 별도 로컬 키) */}
+      <div className="rounded-input border border-border-subtle bg-surface-base p-2.5 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-3 text-2xs">
+            <span className="text-ink-muted">오늘 <b className="text-ink-primary tabular-nums">{prog.today}/{prog.goal}</b></span>
+            <span className="text-ink-muted" title={`스트릭 프리즈 ${prog.freezes}개 보유`}>🔥 <b className="text-accent-200 tabular-nums">{prog.streak}</b></span>
+            <span className="text-ink-muted">XP <b className="text-ink-secondary tabular-nums">{prog.xp.toLocaleString()}</b></span>
+          </div>
+          <div className="inline-flex items-center gap-1">
+            <span className="text-2xs text-ink-muted mr-0.5">목표</span>
+            {GOAL_CHOICES.map((g) => (
+              <button key={g} type="button" onClick={() => setDailyGoal(g)}
+                className={['h-6 px-1.5 rounded-[6px] text-2xs font-bold leading-none tabular-nums transition-colors', prog.goal === g ? 'bg-accent-300 text-white' : 'bg-surface-high text-ink-muted'].join(' ')}>{g}</button>
+            ))}
+          </div>
+        </div>
+        <div className="h-1.5 overflow-hidden rounded-full bg-surface-high">
+          <div className={['h-full rounded-full', prog.goalMet ? 'bg-emerald-400' : 'bg-accent-300'].join(' ')} style={{ width: `${prog.goal ? Math.min(100, Math.round((prog.today / prog.goal) * 100)) : 0}%` }} />
+        </div>
+        {prog.goalMet && <p className="text-2xs text-emerald-300">🎉 오늘 목표 달성 — 스트릭 🔥{prog.streak}일 유지 중</p>}
       </div>
 
       {/* 문제 카드 */}
@@ -162,6 +189,12 @@ export default function PreflopTrainer() {
         </div>
       ) : (
         <div className="space-y-2">
+          {celebrate && (
+            <div className="animate-fade-in rounded-card border border-emerald-400/50 bg-emerald-500/10 p-3 text-center">
+              <p className="text-base font-extrabold text-emerald-300">🎉 오늘 목표 달성!</p>
+              <p className="mt-0.5 text-2xs text-ink-secondary">+50 XP 보너스 · 스트릭 🔥{prog.streak}일</p>
+            </div>
+          )}
           <div className={['rounded-card border p-3 text-center', result.correct ? 'border-emerald-400/50 bg-emerald-500/10' : 'border-danger/50 bg-danger/10'].join(' ')}>
             <p className={['text-base font-extrabold', result.correct ? 'text-emerald-300' : 'text-danger-light'].join(' ')}>
               {result.correct ? '✅ 정답!' : '❌ 아쉬워요'}

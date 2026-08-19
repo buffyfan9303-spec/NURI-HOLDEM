@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useTrainerProgress, recordAnswer, setDailyGoal, GOAL_CHOICES } from '../../../lib/trainerProgress';
 
 /* 포스트플랍 트레이너 — 실전 상황 퀴즈(GTO 위자드 연습 모드 스타일).
    시나리오를 보고 최적 액션을 고르면 정답·해설 + 정답률을 추적한다.
@@ -129,6 +130,8 @@ export default function PostflopTrainer() {
   const [picked, setPicked] = useState<Action | null>(null);
   const [wrongIds, setWrongIds] = useState<number[]>([]); // 이번 사이클 오답 → 다음 사이클 앞쪽 배치
   const [stats, setStats] = useState<Stats>(loadStats);
+  const prog = useTrainerProgress();            // 게이미피케이션 진행(로컬 공용 — 별도 키)
+  const [celebrate, setCelebrate] = useState(false); // 목표 달성 순간 인라인 배너 1회
 
   const sc = order[idx % order.length];
   const isCorrect = (a: Action) => a === sc.answer || a === sc.alsoOk;
@@ -139,6 +142,7 @@ export default function PostflopTrainer() {
     if (picked) return;
     setPicked(a);
     const ok = isCorrect(a);
+    if (recordAnswer(ok).justHitGoal) setCelebrate(true); // 오늘 목표 달성 순간 감지
     if (!ok) setWrongIds((w) => (w.includes(sc.id) ? w : [...w, sc.id]));
     const streak = ok ? stats.streak + 1 : 0;
     const cur = stats.byCat[sc.cat] ?? { t: 0, c: 0 };
@@ -153,6 +157,7 @@ export default function PostflopTrainer() {
 
   const next = () => {
     setPicked(null);
+    setCelebrate(false);
     if (idx + 1 >= order.length) {
       // 사이클 종료 — 재셔플하되 오답 문항을 앞쪽에 우선 배치(같은 순서 반복 금지)
       const wrong = order.filter((s) => wrongIds.includes(s.id));
@@ -170,6 +175,7 @@ export default function PostflopTrainer() {
     setIdx(0);
     setPicked(null);
     setWrongIds([]);
+    setCelebrate(false);
   };
 
   const acc = stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0;
@@ -195,6 +201,28 @@ export default function PostflopTrainer() {
           <p className="font-bold text-accent-300">{acc}% <span className="font-normal text-ink-muted">({stats.correct}/{stats.total})</span></p>
           <p className="text-ink-muted">연속 {stats.streak} · 최고 {stats.best}</p>
         </div>
+      </div>
+
+      {/* 게이미피케이션 진행 — 일일 목표·스트릭·XP (두 트레이너 공용 로컬 키, 위 정답률과 별도) */}
+      <div className="rounded-input border border-border-subtle bg-surface-base p-2.5 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-3 text-2xs">
+            <span className="text-ink-muted">오늘 <b className="text-ink-primary tabular-nums">{prog.today}/{prog.goal}</b></span>
+            <span className="text-ink-muted" title={`스트릭 프리즈 ${prog.freezes}개 보유`}>🔥 <b className="text-accent-300 tabular-nums">{prog.streak}</b></span>
+            <span className="text-ink-muted">XP <b className="text-ink-secondary tabular-nums">{prog.xp.toLocaleString()}</b></span>
+          </div>
+          <div className="inline-flex items-center gap-1">
+            <span className="text-2xs text-ink-muted mr-0.5">목표</span>
+            {GOAL_CHOICES.map((g) => (
+              <button key={g} type="button" onClick={() => setDailyGoal(g)}
+                className={['h-6 px-1.5 rounded-[6px] text-2xs font-bold leading-none tabular-nums transition-colors', prog.goal === g ? 'bg-accent-300 text-white' : 'bg-surface-high text-ink-muted'].join(' ')}>{g}</button>
+            ))}
+          </div>
+        </div>
+        <div className="h-1.5 overflow-hidden rounded-full bg-surface-high">
+          <div className={['h-full rounded-full', prog.goalMet ? 'bg-emerald-400' : 'bg-accent-300'].join(' ')} style={{ width: `${prog.goal ? Math.min(100, Math.round((prog.today / prog.goal) * 100)) : 0}%` }} />
+        </div>
+        {prog.goalMet && <p className="text-2xs text-emerald-300">🎉 오늘 목표 달성 — 스트릭 🔥{prog.streak}일 유지 중</p>}
       </div>
 
       {/* 카테고리 필터 칩 */}
@@ -257,6 +285,12 @@ export default function PostflopTrainer() {
       {/* 해설 + 다음 */}
       {picked && (
         <div className="animate-fade-in space-y-2">
+          {celebrate && (
+            <div className="rounded-input border border-emerald-400/50 bg-emerald-400/10 p-2.5 text-center">
+              <p className="text-sm font-extrabold text-emerald-300">🎉 오늘 목표 달성!</p>
+              <p className="mt-0.5 text-2xs text-ink-secondary">+50 XP 보너스 · 스트릭 🔥{prog.streak}일</p>
+            </div>
+          )}
           <div className={['rounded-input border p-2.5 text-2xs leading-relaxed',
             isCorrect(picked) ? 'border-emerald-400/40 bg-emerald-400/[0.06] text-ink-secondary' : 'border-danger/40 bg-danger/[0.06] text-ink-secondary'].join(' ')}>
             <p className="font-bold mb-0.5">{isCorrect(picked) ? '✅ 정답!' : `❌ 정답은 「${sc.answer}」${sc.alsoOk ? ` (「${sc.alsoOk}」도 인정)` : ''}`}</p>

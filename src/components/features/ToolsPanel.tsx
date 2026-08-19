@@ -1,6 +1,8 @@
 import { useEffect, useState, Suspense, type ReactNode } from 'react';
 import { lazyWithReload } from '../../lib/lazyWithReload';
 import Modal from '../atoms/Modal';
+import { useToast } from '../atoms/Toast';
+import { shareOrCopy } from '../../lib/calendar';
 import ICMCalculator from './ICMCalculator';
 import PotOddsCalc from './tools/PotOddsCalc';
 import ChipDistributor from './tools/ChipDistributor';
@@ -77,6 +79,19 @@ const GROUPS: { id: ToolGroup; title: string; desc: string }[] = [
   { id: 'ops', title: '매장 운영 도구', desc: '토너먼트 운영·세팅용' },
 ];
 
+// 트레이너류는 '퀴즈' 뉘앙스(맞히기), 나머지 계산기·차트류는 '도구' 뉘앙스로 라벨링.
+const QUIZ_KEYS = new Set<ToolKey>(['range', 'pushfold', 'trainer', 'postflop']);
+
+/** 오늘의 추천 도구 — 날짜 해시로 플레이어 도구 하나를 결정적으로 고른다(매일 바뀜, 하루엔 고정).
+ *  new Date().toLocaleDateString('sv') = 'YYYY-MM-DD'(로컬 자정 기준) 를 시드로. */
+function pickDailyTool(): ToolKey {
+  const players = TOOLS.filter((t) => t.group === 'player');
+  const seed = new Date().toLocaleDateString('sv');
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return players[h % players.length].key;
+}
+
 function renderTool(k: ToolKey): ReactNode {
   switch (k) {
     // '결과 먼저': 빈 폼 대신 직전 입력(스냅샷) 또는 대표 데모 핸드(AKs vs QQ)로 진입 즉시 결과.
@@ -119,6 +134,7 @@ function renderTool(k: ToolKey): ReactNode {
  *  (인라인 방식은 중간 카드를 누르면 위에 런처가 그대로 남아, 열린 도구를 찾아 내려가야 했다 —
  *   전체화면 Modal(page)은 헤더·닫기·뒤로가기·드래그 닫기까지 앱의 다른 상세 화면과 같은 문법.) */
 export default function ToolsPanel() {
+  const toast = useToast();
   const [active, setActive] = useState<ToolKey | null>(() => {
     // 딥링크: #tool=key 로 특정 도구 바로 열기(공유·재방문)
     const m = window.location.hash.match(/^#tool=([a-z]+)/);
@@ -142,6 +158,19 @@ export default function ToolsPanel() {
     if (window.location.hash.startsWith('#tool=')) {
       try { history.replaceState(null, '', window.location.pathname + window.location.search); } catch { /* 무시 */ }
     }
+  };
+  // 도구 딥링크 공유 — 시스템 공유 시트(모바일) 또는 클립보드 복사(PC). #tool= 로 그 도구가 바로 열린다.
+  const share = async (k: ToolKey) => {
+    const t = TOOLS.find((x) => x.key === k);
+    const label = QUIZ_KEYS.has(k) ? '오늘의 퀴즈' : '포커 도구';
+    try {
+      const how = await shareOrCopy({
+        title: t ? `${t.name} · 누리홀덤` : '누리홀덤 도구',
+        text: t ? `${t.name} — ${label}` : '누리홀덤 도구',
+        url: `${window.location.origin}/#tool=${k}`,
+      });
+      if (how === 'copy') toast.show('링크 복사됨', 'success');
+    } catch { /* 사용자가 공유 시트를 닫음 */ }
   };
 
   // 검색 + 그룹 접기 — 첫 방문엔 플레이어 그룹을 펼쳐 "빈 화면 + 접힌 헤더 2개"를 피한다.
@@ -191,6 +220,11 @@ export default function ToolsPanel() {
 
   const activeTool = active ? TOOLS.find((t) => t.key === active) : null;
 
+  // 🎲 오늘의 도구 — 날짜 결정적 추천. 트레이너류면 '퀴즈', 아니면 '도구' 뉘앙스.
+  const dailyKey = pickDailyTool();
+  const dailyTool = TOOLS.find((t) => t.key === dailyKey)!;
+  const dailyIsQuiz = QUIZ_KEYS.has(dailyKey);
+
   return (
     <div className="space-y-3">
       {/* 도구 검색 */}
@@ -202,6 +236,24 @@ export default function ToolsPanel() {
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="도구 검색 — 이름·기능"
           className="input w-full pl-9 text-sm" aria-label="도구 검색" />
       </div>
+
+      {/* 🎲 오늘의 도구 — 날짜 기반 추천 1개. 커뮤니티 '오늘의 퀴즈/도구' 유입 동선의 진입점. */}
+      {!hits && (
+        <button type="button" onClick={() => open(dailyKey)}
+          aria-label={`${dailyIsQuiz ? '오늘의 퀴즈' : '오늘의 도구'} — ${dailyTool.name} 열기`}
+          className="group flex w-full items-center gap-3 rounded-card border border-accent-400/30 bg-accent-300/10 px-3.5 py-3 text-left transition-colors hover:border-accent-400/50 hover:bg-accent-300/15 active:scale-[0.99]">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-input bg-accent-300/20 text-lg" aria-hidden>🎲</span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-2xs font-bold text-accent-200">{dailyIsQuiz ? '오늘의 퀴즈' : '오늘의 도구'}</span>
+            <span className="block truncate text-sm font-bold text-ink-primary">{dailyTool.name}</span>
+            <span className="block truncate text-2xs text-ink-muted">{dailyTool.desc}</span>
+          </span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
+            className="shrink-0 text-ink-muted transition-transform group-hover:translate-x-0.5" aria-hidden>
+            <polyline points="9 6 15 12 9 18" />
+          </svg>
+        </button>
+      )}
 
       {/* 🕐 최근 사용 — 마지막으로 쓴 도구로 원탭 복귀 */}
       {!hits && recent.length > 0 && (
@@ -261,6 +313,18 @@ export default function ToolsPanel() {
       {/* 도구 실행 — 전체화면 페이지(헤더·뒤로가기·드래그 닫기 = 앱 공통 문법) */}
       <Modal open={!!activeTool} onClose={close} variant="page" title={activeTool?.name} maxWidth="2xl">
         <div className="px-page-x py-3 pb-8">
+          {/* 공유 — 이 도구 딥링크(#tool=key)를 시스템 공유 시트/클립보드로. 커뮤니티 유입 동선. */}
+          <div className="mb-2 flex justify-end">
+            <button type="button" onClick={() => active && share(active)}
+              aria-label={`${activeTool?.name ?? '도구'} 링크 공유`}
+              className="inline-flex h-8 items-center gap-1.5 rounded-input border border-border-default bg-surface-high px-3 text-2xs font-semibold text-ink-secondary transition-colors hover:text-ink-primary">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
+                <line x1="8.6" y1="13.5" x2="15.4" y2="17.5" /><line x1="15.4" y1="6.5" x2="8.6" y2="10.5" />
+              </svg>
+              공유
+            </button>
+          </div>
           <Suspense fallback={<div className="py-10 text-center text-2xs text-ink-muted">불러오는 중…</div>}>
             {active ? renderTool(active) : null}
           </Suspense>
