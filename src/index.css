@@ -16,6 +16,8 @@
      예외 2개뿐: 루프(스피너·펄스), shake(오류 진동 이펙트). 테마와 무관해 :root 단독. */
   :root {
     --ease: cubic-bezier(0.32, 0.72, 0, 1);
+    /* 스프링(언더댐핑) — linear() 로 근사한 iOS 스프링. 시트 복귀·미세 바운스에 사용 */
+    --spring: linear(0, 0.36 8%, 0.72 16%, 0.95 24%, 1.06 33%, 1.09 40%, 1.06 48%, 1.02 58%, 0.995 70%, 1);
     --dur-fast: 0.15s;   /* 색·배경·보더, 프레스 */
     --dur-base: 0.2s;    /* 요소 등장/퇴장, 칩 전환 */
     --dur-panel: 0.26s;  /* 시트·오버레이·풀스크린 */
@@ -313,6 +315,56 @@ html[data-vt-dir='back']::view-transition-new(root)    { animation: vt-push-in-l
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-old(root),
   ::view-transition-new(root) { animation: none !important; }
+}
+
+/* ── 모션 2단계 — 애플 웹의 '등장감'과 손맛 ─────────────────────────────────
+   ① 스크롤 리빌(.reveal): 뷰포트에 들어오는 섹션이 살짝 떠오르며 나타난다.
+      스크롤 구동 애니메이션(순수 CSS·컴포지터 전용) — 미지원 브라우저는 정적 표시,
+      로드 시 이미 화면 안인 요소는 진행도 100%라 애니메이션 없음(첫 화면 무영향).
+   ② 탭바 아이콘 마이크로 바운스: 활성화 순간 아이콘이 스프링으로 통통. */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .reveal {
+      animation: reveal-up 1ms linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 45%;
+    }
+  }
+}
+@keyframes reveal-up {
+  from { opacity: 0.01; transform: translateY(18px); }
+}
+@keyframes tab-bounce {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.16); }
+  62% { transform: scale(0.94); }
+  82% { transform: scale(1.04); }
+  100% { transform: scale(1); }
+}
+.animate-tab-bounce { animation: tab-bounce 0.4s var(--ease); }
+@media (prefers-reduced-motion: reduce) {
+  .animate-tab-bounce { animation: none; }
+}
+
+/* ── 아코디언(details) 부드러운 개폐 — interpolate-size(2025 CSS) 점진 적용 ──
+   height:auto 로의 전환이 가능해져, '뚝' 열리던 매장정보·공지 접기가 미끄러진다. */
+@supports (interpolate-size: allow-keywords) {
+  :root { interpolate-size: allow-keywords; }
+  details::details-content {
+    transition: content-visibility 0.3s allow-discrete, block-size 0.3s var(--ease);
+    block-size: 0;
+    overflow: clip;
+  }
+  details[open]::details-content { block-size: auto; }
+}
+
+/* textarea 자동 성장(field-sizing) — 댓글·메모가 내용만큼 자란다(수동 리사이즈 불필요) */
+@supports (field-sizing: content) {
+  textarea.input {
+    field-sizing: content;
+    min-block-size: 3.25rem;
+    max-block-size: 40vh;
+  }
 }
 
 /* 네이티브 스크롤 감각 — 부드러운 앵커 이동 + 바운스가 새로고침으로 새지 않게 */

@@ -588,7 +588,7 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
             >
               {/* 아이콘 22px · 라벨 11px — 공백 줄이고 또렷하게 */}
               <span className={['relative flex h-7 w-12 items-center justify-center rounded-full [&_svg]:h-[21px] [&_svg]:w-[21px] transition-colors duration-200',
-                on ? 'text-accent-300' : 'text-ink-secondary'].join(' ')}>
+                on ? 'text-accent-300 animate-tab-bounce' : 'text-ink-secondary'].join(' ')}>
                 {/* 활성 알약 — 각 칸이 자기 핀을 갖고 opacity 만 토글(transform·layout 0). 전환 시 크로스페이드 */}
                 <span aria-hidden
                   className={['pointer-events-none absolute inset-0 rounded-full bg-accent-300/15 transition-opacity duration-200',
@@ -1337,6 +1337,14 @@ export default function App() {
   }, [isAdmin]);
 
   const unreadNotifs = notifications.filter((n) => !n.read).length;
+  // 설치형 PWA 아이콘 배지(Badging API) — 앱을 안 열어도 미읽음이 홈 화면에 보인다
+  useEffect(() => {
+    try {
+      const nav = navigator as Navigator & { setAppBadge?: (n: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
+      if (unreadNotifs > 0) nav.setAppBadge?.(unreadNotifs);
+      else nav.clearAppBadge?.();
+    } catch { /* 미지원 무시 */ }
+  }, [unreadNotifs]);
   const isStaff = user?.role === 'venue_staff';
 
   const tabs: TabDef[] = useMemo(() => {
@@ -2181,7 +2189,7 @@ export default function App() {
           })()}
 
           {/* 주간 베스트 — 이번 주 머니인 킹 TOP3 롤링 */}
-          <div className="px-page-x pt-3">
+          <div className="reveal px-page-x pt-3">
             <WeeklyBestStrip active={activeTab === 'browse'} />
           </div>
 
@@ -2735,7 +2743,7 @@ const PastTournaments = memo(function PastTournaments({ schedules, onSelect }: {
   const day = (d: string) => ['일', '월', '화', '수', '목', '금', '토'][new Date(`${d}T00:00:00`).getDay()];
   const medal = (p: number) => (p === 1 ? '👑' : p === 2 ? '🥈' : p === 3 ? '🥉' : null);
   return (
-    <section className="mt-4 overflow-hidden rounded-card border border-border-subtle bg-surface-low">
+    <section className="reveal mt-4 overflow-hidden rounded-card border border-border-subtle bg-surface-low">
       <header className="flex items-center justify-between border-b border-border-subtle px-3 py-2">
         <h2 className="text-xs font-bold text-ink-secondary">🏁 지난 대회</h2>
         <span className="text-2xs text-ink-muted">눌러서 결과·정보 보기</span>
@@ -2814,7 +2822,7 @@ const BrowseSideRail = memo(function BrowseSideRail({ posts, schedules, onSelect
   };
 
   return (
-    <aside className="sticky top-[calc(var(--stack-top,6.0625rem)+0.75rem)] hidden w-72 shrink-0 space-y-3 xl:block">
+    <aside className="reveal sticky top-[calc(var(--stack-top,6.0625rem)+0.75rem)] hidden w-72 shrink-0 space-y-3 xl:block">
       {/* 곧 시작하는 대회 — 시간 임박 순 3개 */}
       {upcoming.length > 0 && (
         <section className="overflow-hidden rounded-card border border-border-subtle bg-surface-low">

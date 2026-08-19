@@ -34,6 +34,7 @@ export default function Modal({
   open, onClose, title, children, variant = 'sheet', maxWidth = 'md', fillHeight = false, inline = false, dismissOnBackdrop = true,
 }: ModalProps) {
   // ESC 키로 닫기 + 바디 스크롤 잠금
+  useEffect(() => { if (open) { setDragY(0); setFlingOut(false); } }, [open]);
   useEffect(() => {
     if (!open || inline) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -65,6 +66,7 @@ export default function Modal({
   // 드래그 시트(page·모바일) — 컨텐츠가 맨 위일 때 아래로 끌면 시트가 따라오고, 120px 넘으면 닫힌다(애플 지도 문법)
   const pageScrollRef = useRef<HTMLDivElement>(null);
   const [dragY, setDragY] = useState(0);
+  const [flingOut, setFlingOut] = useState(false); // 드래그 퇴장 중(감속 트랜지션 유지)
   const sheetStart = useRef<number | null>(null);
   // ⚠ `?? 1` 이면 시트에서 드래그가 시작조차 안 된다 — pageScrollRef 는 page 변형에만 붙어 있어
   //   시트에서는 항상 null 이고, 1 <= 0 이 거짓이라 매번 무시됐다(그래서 그립 핸들이 죽어 있었다).
@@ -73,25 +75,37 @@ export default function Modal({
     if (window.innerWidth >= 1024) return;
     if ((pageScrollRef.current?.scrollTop ?? 0) <= 0) sheetStart.current = e.touches[0].clientY;
   };
+  // 플릭 속도 추적 — 마지막 두 이동 샘플로 px/ms 를 구한다(짧게 튕겨도 닫히는 iOS 감각)
+  const velSample = useRef<{ t: number; y: number } | null>(null);
+  const velocity = useRef(0);
   const onSheetMove = (e: React.TouchEvent) => {
     if (sheetStart.current == null) return;
     const dy = e.touches[0].clientY - sheetStart.current;
     if ((pageScrollRef.current?.scrollTop ?? 0) > 0) { sheetStart.current = null; setDragY(0); return; }
-    // 0.55 감쇠 — 손가락보다 조금 덜 따라와야 '무게감'이 생긴다(iOS 시트와 같은 감각).
-    setDragY(dy > 0 ? dy * 0.55 : 0);
+    const now = e.timeStamp;
+    if (velSample.current) {
+      const dt = now - velSample.current.t;
+      if (dt > 0) velocity.current = (dy - velSample.current.y) / dt;
+    }
+    velSample.current = { t: now, y: dy };
+    // 1:1 추종 — 손가락에 정확히 붙어야 '내가 쥐고 있다'는 감각이 난다(iOS 시트).
+    setDragY(dy > 0 ? dy : 0);
   };
   const onSheetEnd = () => {
     const pulled = dragY;
+    const v = velocity.current;
     sheetStart.current = null;
-    if (pulled > 120) {
-      // ⚠ setDragY(0) 을 먼저 하면 시트가 원위치로 '튀어올랐다가' 사라진다 —
-      //   손가락으로 끌어내린 방향과 반대로 움직여서 조작이 취소된 것처럼 보인다.
-      //   끌던 방향 그대로 화면 밖까지 밀어낸 뒤 닫는다.
+    velSample.current = null;
+    velocity.current = 0;
+    // 거리(120px) 또는 속도(0.6px/ms 플릭) — 짧게 튕겨도 닫힌다
+    if (pulled > 120 || (pulled > 24 && v > 0.6)) {
+      // 끌던 방향 그대로 감속하며 화면 밖으로(예전엔 transition:none 이라 순간이동으로 사라졌다)
+      setFlingOut(true);
       setDragY(window.innerHeight);
-      onClose();
+      window.setTimeout(onClose, 180);
       return;
     }
-    setDragY(0); // 임계 미만이면 제자리로(이때는 되돌아오는 게 맞다)
+    setDragY(0); // 임계 미만 — 스프링(--spring)으로 제자리 복귀
   };
   useEffect(() => {
     if (!open || inline) return;
@@ -174,7 +188,11 @@ export default function Modal({
         // 제목이 없는 전체화면은 이름이 없어 그냥 '대화상자' 로만 읽힌다 — 최소한의 이름을 준다.
         aria-label={title ? undefined : '전체화면 보기'}
         onTouchStart={onSheetStart} onTouchMove={onSheetMove} onTouchEnd={onSheetEnd}
-        style={dragY > 0 ? { transform: `translateY(${dragY}px)`, transition: 'none' } : { transition: 'transform 0.28s var(--ease)' }}
+        style={flingOut
+          ? { transform: `translateY(${dragY}px)`, transition: 'transform 0.2s var(--ease)' }
+          : dragY > 0
+            ? { transform: `translateY(${dragY}px)`, transition: 'none' }
+            : { transition: 'transform 0.5s var(--spring)' }}
         className={['fixed inset-0 z-[55] bg-surface-base flex flex-col pt-[env(safe-area-inset-top)]', closing ? 'animate-fade-out' : 'animate-fade-in'].join(' ')}>
         {/* 드래그 핸들(모바일) — 시트를 끌어내려 닫기 */}
         <div aria-hidden className="lg:hidden absolute top-1.5 left-1/2 z-10 h-1 w-10 -translate-x-1/2 rounded-full bg-ink-primary/25" />
@@ -245,11 +263,13 @@ export default function Modal({
           height: fillHeight ? (variant === 'sheet' ? '88vh' : '85vh') : undefined,
           // 손끝 추종 — 끄는 동안엔 트랜지션을 끄고(지연 없이 손가락을 따라옴),
           // 손을 떼면 트랜지션으로 부드럽게 제자리 또는 화면 밖으로. 이 둘을 섞으면 '고무줄'이 된다.
-          ...(variant === 'sheet' && dragY > 0
-            ? { transform: `translateY(${dragY}px)`, transition: 'none', animation: 'none' }
-            : variant === 'sheet'
-              ? { transition: 'transform 0.28s var(--ease)' }
-              : {}),
+          ...(variant === 'sheet' && flingOut
+            ? { transform: `translateY(${dragY}px)`, transition: 'transform 0.2s var(--ease)', animation: 'none' }
+            : variant === 'sheet' && dragY > 0
+              ? { transform: `translateY(${dragY}px)`, transition: 'none', animation: 'none' }
+              : variant === 'sheet'
+                ? { transition: 'transform 0.5s var(--spring)' }
+                : {}),
         }}
       >
         {/* 그립 핸들 (sheet 전용) — 실제로 끌어서 닫을 수 있다.
