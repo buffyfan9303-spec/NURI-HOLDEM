@@ -72,6 +72,19 @@ describe('nash.data 정합', () => {
       expect(sum).toBeGreaterThan(0); // 최소한 AA는 민다
     }
   });
+  it('🔴 BB 콜은 전 포지션(k=1~8)에 데이터가 있다(예전 버그: k>=3 이 비어 100% 폴드)', () => {
+    for (const k of [1, 2, 3, 4, 5, 6, 7, 8]) for (const s of NASH_STACKS) {
+      const a = nashRange('callBB', k, s, false);
+      const sum = Array.from(a).reduce((x, y) => x + y, 0);
+      expect(sum, `callBB k=${k} s=${s}`).toBeGreaterThan(0); // AA 는 어디서든 콜
+    }
+  });
+  it('SB 콜은 k>=2 에 데이터가 있다', () => {
+    for (const k of [2, 3, 4, 5, 6, 7, 8]) {
+      const a = nashRange('callSB', k, 10, false);
+      expect(Array.from(a).reduce((x, y) => x + y, 0), `callSB k=${k}`).toBeGreaterThan(0);
+    }
+  });
   it('AA는 어디서든 100% 셔브', () => {
     const iAA = HAND_ORDER.indexOf('AA');
     for (const k of [1, 4, 8]) for (const s of [5, 10, 20]) {

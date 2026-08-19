@@ -29,8 +29,8 @@ export default function PushFoldChart() {
   const [view, setView] = useState<View>('shove');
   const pos = POSITIONS.find((p) => p.k === k)!;
 
-  // SB 콜 레인지는 BTN 셔브(k=2) 상황에서만 존재
-  const effView: View = view === 'callSB' && k !== 2 ? 'callBB' : view;
+  // SB 콜 레인지는 SB 가 콜러인 상황(k>=2)에서만 존재(k=1 은 SB 가 셔버 본인)
+  const effView: View = view === 'callSB' && k < 2 ? 'callBB' : view;
 
   const actions = useMemo<MatrixAction[]>(() => {
     const arr = nashRange(effView, k, stack, ante);
@@ -43,7 +43,7 @@ export default function PushFoldChart() {
   }, [effView, k, stack, ante]);
 
   return (
-    <CalcCard title="푸시 · 폴드 차트" desc="숏스택 올인 균형 — 포지션·스택·안테별, 콜 레인지까지">
+    <CalcCard title="푸시 · 폴드 차트" desc="숏스택 올인 균형 — 포지션·스택·앤티별, 콜 레인지까지">
       {/* 포지션 */}
       <div className="grid grid-cols-4 gap-1">
         {POSITIONS.map((p) => {
@@ -72,13 +72,13 @@ export default function PushFoldChart() {
         })}
       </div>
 
-      {/* 보기 (셔브/콜) + 안테 */}
+      {/* 보기 — 누가 올인하고, 누가 콜하는지 */}
       <div className="flex flex-wrap items-center gap-1.5">
         <div className="inline-flex rounded-input border border-border-default bg-surface-high p-0.5">
           {([
             { id: 'shove' as const, label: `${pos.label} 올인` },
             { id: 'callBB' as const, label: 'BB 콜' },
-            ...(k === 2 ? [{ id: 'callSB' as const, label: 'SB 콜' }] : []),
+            ...(k >= 2 ? [{ id: 'callSB' as const, label: 'SB 콜' }] : []),
           ]).map((v) => (
             <button key={v.id} type="button" onClick={() => setView(v.id)}
               className={['h-7 px-2.5 rounded-[6px] text-2xs font-bold leading-none transition-colors', effView === v.id ? 'bg-accent-300 text-white' : 'text-ink-muted'].join(' ')}>
@@ -86,25 +86,39 @@ export default function PushFoldChart() {
             </button>
           ))}
         </div>
-        <button type="button" onClick={() => setAnte(!ante)} aria-pressed={ante}
-          className={['h-8 px-2.5 rounded-input text-2xs font-bold leading-none border transition-colors focus:outline-none',
-            ante ? 'bg-amber-400/20 border-amber-400/50 text-amber-300' : 'bg-surface-high border-border-default text-ink-muted'].join(' ')}>
-          BB안테 {ante ? 'ON' : 'OFF'}
-        </button>
       </div>
+
+      {/* 앤티(ante) — 초보용 설명 포함 */}
+      <div className="rounded-input border border-border-subtle bg-surface-high/60 px-2 py-1.5 space-y-1">
+        <div className="flex items-center gap-2">
+          <span className="shrink-0 text-2xs font-bold text-ink-secondary">앤티</span>
+          <div className="inline-flex rounded-input border border-border-default bg-surface-high p-0.5">
+            {([{ v: false, label: '없음' }, { v: true, label: 'BB 앤티' }] as const).map((a) => (
+              <button key={String(a.v)} type="button" onClick={() => setAnte(a.v)} aria-pressed={ante === a.v}
+                className={['h-6 px-2.5 rounded-[6px] text-2xs font-bold leading-none transition-colors', ante === a.v ? 'bg-accent-300 text-white' : 'text-ink-muted'].join(' ')}>
+                {a.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <p className="text-2xs leading-relaxed text-ink-muted">
+          앤티 = 핸드 시작 전에 미리 내는 강제 칩. 요즘 토너먼트는 보통 <b className="text-ink-secondary">BB 한 명이 대표로 1BB</b>를 낸다(=BB 앤티). 팟이 미리 커져 있어 <b className="text-ink-secondary">올인·콜을 더 넓게</b> 한다. 우리 대회에 앤티가 없으면 <b className="text-ink-secondary">‘없음’</b>으로 둔다.
+        </p>
+      </div>
+
       <p className="text-2xs leading-relaxed text-ink-secondary rounded-input bg-surface-high/60 border border-border-subtle px-2 py-1.5">
         💡 {effView === 'shove'
-          ? `${pos.label}(${pos.desc})에서 ${stack}bb로 첫 진입 올인하는 균형 레인지${ante ? ' — BB안테가 팟을 키워 더 넓게 밀 수 있다' : ''}.`
+          ? `${pos.label}(${pos.desc})에서 ${stack}bb로 첫 진입 올인하는 균형 레인지${ante ? ' — BB 앤티가 팟을 키워 더 넓게 민다' : ''}.`
           : effView === 'callBB'
-            ? `${pos.label}의 ${stack}bb 올인에 대한 BB의 균형 콜 레인지 — 팟오즈 때문에 생각보다 넓다.`
-            : `BTN의 ${stack}bb 올인에 대한 SB의 균형 콜 레인지 — 뒤에 BB가 남아 BB 콜보다 타이트하다.`}
+            ? `${pos.label}의 ${stack}bb 올인에 BB가 콜하는 균형 레인지 — 팟오즈 덕에 생각보다 넓다${ante ? ' (앤티로 더 넓어짐)' : ''}.`
+            : `${pos.label}의 ${stack}bb 올인에 SB가 콜하는 균형 레인지 — 뒤에 BB가 남아 BB 콜보다 타이트하다.`}
       </p>
 
       <RangeMatrix13 actions={actions} />
 
       <p className="text-2xs text-ink-muted text-center leading-relaxed">
         ※ 자체 계산 Nash 균형(fictitious play, 첫 진입 올인·단일 콜러 모델) — 몬테카를로 에퀴티 4만회/쌍 기반.
-        부분 채움 셀은 혼합 전략(그 빈도만큼만 올인). 안테는 BB안테 1bb 기준.
+        부분 채움 셀은 혼합 전략(그 빈도만큼만 올인). 앤티는 BB 앤티 1bb 기준.
       </p>
     </CalcCard>
   );
