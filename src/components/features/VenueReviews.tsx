@@ -14,19 +14,28 @@ interface Props {
 }
 
 function Stars({ value, size = 14, onPick }: { value: number; size?: number; onPick?: (n: number) => void }) {
+  // 표시 전용(onPick 없음)일 땐 버튼이 아니라 장식이다 — disabled 버튼 5개는 스크린리더·
+  // IA 게이트(첫 뷰포트 행동 요소)에 유령 액션 10개(평균+후기 카드)로 잡혔다.
+  const star = (n: number) => (
+    <svg width={size} height={size} viewBox="0 0 24 24"
+      fill={n <= value ? '#FCD535' : 'none'} stroke={n <= value ? '#FCD535' : '#5E6673'}
+      strokeWidth="1.6" strokeLinejoin="round" aria-hidden>
+      <path d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.4 6.1 20.5l1.2-6.5L2.5 9.4l6.6-.9 2.9-6z" />
+    </svg>
+  );
+  if (!onPick) {
+    return (
+      <span className="inline-flex items-center gap-0.5" aria-label={`별점 ${value}점`}>
+        {[1, 2, 3, 4, 5].map((n) => <span key={n} aria-hidden>{star(n)}</span>)}
+      </span>
+    );
+  }
   return (
-    <span className="inline-flex items-center gap-0.5" role={onPick ? 'radiogroup' : undefined} aria-label={`별점 ${value}점`}>
+    <span className="inline-flex items-center gap-0.5" role="radiogroup" aria-label={`별점 ${value}점`}>
       {[1, 2, 3, 4, 5].map((n) => (
-        <button
-          key={n} type="button" disabled={!onPick} onClick={() => onPick?.(n)}
-          className={onPick ? 'p-0.5 active:opacity-80' : 'pointer-events-none'}
-          aria-label={`${n}점`}
-        >
-          <svg width={size} height={size} viewBox="0 0 24 24"
-            fill={n <= value ? '#FCD535' : 'none'} stroke={n <= value ? '#FCD535' : '#5E6673'}
-            strokeWidth="1.6" strokeLinejoin="round" aria-hidden>
-            <path d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.4 6.1 20.5l1.2-6.5L2.5 9.4l6.6-.9 2.9-6z" />
-          </svg>
+        <button key={n} type="button" onClick={() => onPick(n)}
+          className="p-0.5 active:opacity-80" role="radio" aria-checked={n === value} aria-label={`${n}점`}>
+          {star(n)}
         </button>
       ))}
     </span>

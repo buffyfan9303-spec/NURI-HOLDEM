@@ -139,9 +139,29 @@ export function buyinFinance(b: LedgerBuyin, s: { buyinAmount: number; cardAmoun
   const entry = entryUnit > 0 ? Math.max(0, entryUnit - disc) / entryUnit : 1;
   if (b.paymentMethod === 'support') return { ...z, entry, support: 1 };
   if (b.paymentMethod === 'ticket') return { ...z, entry, ticketPaid: b.isUnpaid ? 0 : 1, ticketUnpaid: b.isUnpaid ? 1 : 0 };
+  // 스냅샷 우선(2026-08-18 전환): 기록 시점 net 금액이 amounts 칸에 저장돼 있으면 그 값이 정본 —
+  // 이후 세션 단가·할인을 고쳐도 과거 기록이 소급 변형되지 않는다(실제 받은 현금 = 장부).
+  // 저장 금액이 0인 행은 전환 이전 레거시 — 기존처럼 세션 참조로 계산(하위호환).
+  const stored = b.cashAmount + b.cardAmount + b.transferAmount;
   const payUnit = b.paymentMethod === 'card' ? cardUnit(s) : s.buyinAmount;
-  const effPay = Math.max(0, payUnit - disc);
+  const effPay = stored > 0 ? stored : Math.max(0, payUnit - disc);
   return b.isUnpaid ? { ...z, entry, unpaid: effPay } : { ...z, entry, paid: effPay };
+}
+
+/** 기록 시점 확정 금액(스냅샷) — 비분납 현금/카드/이체는 net(단가−할인)을 amounts 칸에 저장한다.
+ *  buyinFinance 가 저장 금액을 우선하므로, 이후 세션 단가·할인 수정이 과거 기록에 소급되지 않는다.
+ *  (서버 approve_buyin_request 는 처음부터 이 방식 — 클라 기록을 같은 원리로 정렬) */
+export function nonSplitSnapshot(method: PaymentMethod, discountIndex: number,
+  s: { buyinAmount: number; cardAmount: number | null; discounts?: DiscountPreset[] },
+): { cash_amount: number; card_amount: number; transfer_amount: number } {
+  const z = { cash_amount: 0, card_amount: 0, transfer_amount: 0 };
+  if (method !== 'cash' && method !== 'card' && method !== 'transfer') return z;
+  const disc = discountAmountOf(s, discountIndex);
+  const unit = method === 'card' ? cardUnit(s) : s.buyinAmount;
+  const eff = Math.max(0, unit - disc);
+  if (method === 'cash') return { ...z, cash_amount: eff };
+  if (method === 'card') return { ...z, card_amount: eff };
+  return { ...z, transfer_amount: eff };
 }
 
 /** 할인 적용 후 표시용 금액(원). */
@@ -679,14 +699,19 @@ export async function upsertBuyin(input: {
   venueId: string; sessionDate: string; gameSeq?: number; playerName: string; entryNo: number;
   paymentMethod: PaymentMethod; isUnpaid: boolean; discountIndex?: number; earlyOverride?: EarlyType | null;
   existingId?: string | null;
+  /** 기록 시점 세션 단가·할인 — 전달 시 net 금액을 스냅샷으로 저장(소급 변형 차단) */
+  snapshot?: { buyinAmount: number; cardAmount: number | null; discounts?: DiscountPreset[] } | null;
 }): Promise<string> {
   if (IS_MOCK) return 'mock';
   const user = await currentUser();
   // 가게지원은 항상 완납. 티켓은 미수(가불) 허용.
   const unpaid = input.paymentMethod === 'support' ? false : input.isUnpaid;
+  const snap = input.snapshot
+    ? nonSplitSnapshot(input.paymentMethod, input.discountIndex ?? 0, input.snapshot)
+    : { cash_amount: 0, card_amount: 0, transfer_amount: 0 };
   const fields = {
     payment_method: input.paymentMethod, is_unpaid: unpaid,
-    is_split: false, cash_amount: 0, card_amount: 0, transfer_amount: 0,
+    is_split: false, ...snap,
     ticket_count: 0, unpaid_amount: 0, discount_level: 0, discount_index: input.discountIndex ?? 0,
     early_override: input.earlyOverride ?? null,
   };

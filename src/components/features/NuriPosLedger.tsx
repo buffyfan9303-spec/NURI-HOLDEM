@@ -487,8 +487,12 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     const priceChanged = s.buyinAmount !== session.buyinAmount
       || (s.cardAmount ?? null) !== (session.cardAmount ?? null)
       || JSON.stringify(s.discounts ?? []) !== JSON.stringify(session.discounts ?? []);
-    if (priceChanged && buyins.length > 0 && !window.confirm(
-      `단가·할인 변경은 이미 기록된 바인 ${buyins.length}건의 매출 계산에 소급 적용됩니다.\n(실제 받은 금액과 달라질 수 있어요) 계속할까요?`)) return;
+    // 스냅샷 전환 후 신규 기록은 소급되지 않는다 — 금액 미저장 '레거시' 행에만 경고
+    const legacyCnt = buyins.filter((b) => !b.isSplit
+      && (b.paymentMethod === 'cash' || b.paymentMethod === 'card' || b.paymentMethod === 'transfer')
+      && (b.cashAmount + b.cardAmount + b.transferAmount) === 0).length;
+    if (priceChanged && legacyCnt > 0 && !window.confirm(
+      `단가·할인 변경이 예전 방식으로 저장된 바인 ${legacyCnt}건의 매출 계산에 소급 적용됩니다.\n(새 기록은 기록 시점 금액이 고정돼 영향 없음) 계속할까요?`)) return;
     try { await saveLedgerSession(s); await syncDealersToSchedule(s.sessionDate, s.dealers); setSession((prev) => ({ ...prev, ...s })); setEditOpen(false); toast.show('세션 정보를 저장했습니다', 'success'); }
     catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
   };
@@ -515,7 +519,9 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
         const diff = snap.entries - ledgerPlayers;
         if (Math.abs(diff) >= 1) closeMsg += ` · ⚠ 클락 ${snap.entries}명 vs 장부 ${ledgerPlayers}명(${diff > 0 ? '+' : ''}${diff})`;
       }
-      toast.show(closeMsg, 'success');
+      // 인원차 경보는 마감 해제 골든타임 안에 읽혀야 한다 — error 8초(성공 2.4초로는 대조 불가)
+      if (closeMsg.includes('⚠')) toast.show(closeMsg, 'error', { durationMs: 8000 });
+      else toast.show(closeMsg, 'success');
     }
     catch (e) { toast.show(e instanceof Error ? e.message : '마감 실패', 'error'); }
   };
@@ -882,11 +888,25 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       )}
 
       {closed && (
-        <div className="rounded-card border border-accent-400/40 bg-accent-300/10 p-2.5 flex items-center gap-2">
-          <span className="text-xs font-bold text-accent-300">마감됨 (읽기전용){session.closedAt ? ` · ${hhmm(session.closedAt)}` : ''}</span>
-          {session.closeMemo && <span className="text-2xs text-ink-secondary truncate">메모: {session.closeMemo}</span>}
-          <span className="flex-1" />
-          {canManage && <button type="button" onClick={handleReopen} className="btn-ghost text-2xs px-2.5 py-1">마감 해제</button>}
+        <div className="rounded-card border border-accent-400/40 bg-accent-300/10 p-2.5 space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-accent-300">마감됨 (읽기전용){session.closedAt ? ` · ${hhmm(session.closedAt)}` : ''}</span>
+            {session.closeMemo && <span className="text-2xs text-ink-secondary truncate">메모: {session.closeMemo}</span>}
+            <span className="flex-1" />
+            {canManage && <button type="button" onClick={handleReopen} className="btn-ghost text-2xs px-2.5 py-1">마감 해제</button>}
+          </div>
+          {/* 마감 요약 — 토스트 2.4초로 스치던 핵심 수치를 그 자리에 상시(인원차는 정산 누수 경보) */}
+          <p className="text-2xs tabular-nums text-ink-secondary">
+            바인 <b className="text-ink-primary">{stats.totalBuyins}</b> · 매출 <b className="text-ink-primary">{wonToMan(stats.revenue)}만</b>
+            {stats.unpaid > 0 ? <> · 미수 <b className="text-danger-light">{wonToMan(stats.unpaid)}만</b></> : ' · 미수 없음'}
+            {session.clockSnapshot && (() => {
+              const lp = new Set(buyins.map((b) => b.playerName)).size;
+              const d = (session.clockSnapshot.entries ?? 0) - lp;
+              return d !== 0
+                ? <b className="text-danger-light"> · ⚠ 클락 {session.clockSnapshot.entries}명 vs 장부 {lp}명({d > 0 ? '+' : ''}{d})</b>
+                : <span className="text-emerald-400"> · 클락 대조 일치 ✓</span>;
+            })()}
+          </p>
         </div>
       )}
 
@@ -930,7 +950,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
               value={sortBy} onChange={setSortBy} />
             {regClosed
               ? <span className="shrink-0 self-center text-2xs font-bold text-danger-light px-2">레지 마감</span>
-              : <button type="button" onClick={() => setAddOpen((v) => !v)} className="btn-primary text-xs px-3 shrink-0">+ 유저 추가</button>}
+              : <button type="button" onClick={() => { if (!addOpen && query.trim()) setNewName(query.trim()); setAddOpen((v) => !v); }} className="btn-primary text-xs px-3 shrink-0">+ 유저 추가</button>}
           </div>
 
           {addOpen && !regClosed && (
@@ -993,7 +1013,14 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
 
       {/* 표 보드 */}
       {rows.length === 0 ? (
-        <p className="py-10 text-center text-xs text-ink-muted">{query ? '검색 결과가 없습니다.' : '유저를 추가하면 바인을 입력할 수 있습니다.'}</p>
+        <div className="py-10 text-center space-y-2">
+          <p className="text-xs text-ink-muted">{query ? '검색 결과가 없습니다.' : '유저를 추가하면 바인을 입력할 수 있습니다.'}</p>
+          {/* 검색으로 '없음'을 확인한 이름을 다시 타이핑하지 않게 — 그대로 추가 폼으로 */}
+          {query.trim() && !closed && !regClosed && (
+            <button type="button" onClick={() => { setNewName(query.trim()); setAddOpen(true); }}
+              className="btn-primary px-3 py-1.5 text-xs">'{query.trim()}' 바로 추가</button>
+          )}
+        </div>
       ) : (
         <div
           // 휠 = 순수 세로 스크롤(가로 변환 제거 — 대각선 이동 방지). PC는 10바인 한 화면이라 가로 휠 불필요.
@@ -1094,7 +1121,17 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                         ) : first ? <span className="text-2xs text-ink-muted">—</span> : null}
                       </td>
                       <td className="sticky right-[4rem] z-10 bg-surface-low w-[4rem] px-1 py-1 border-b border-l border-border-strong text-2xs tabular-nums">
-                        {first ? (
+                        {first && r.player ? (
+                          // 리바인 원탭 — 다음 '+' 셀은 가로 스크롤 밖(6~9열)에 있기 일쑤. 항상 보이는
+                          // sticky 셀에서 바로 다음 회차 결제 모달을 연다('직전과 동일'과 짝)
+                          <button type="button" disabled={closed}
+                            onClick={() => setSelected({ playerName: (r.player as LedgerPlayer).name, entryNo: maxEntryOf((r.player as LedgerPlayer).name) + 1, buyin: null })}
+                            title="+1 바인 — 결제수단 선택"
+                            className="block w-full rounded-input px-0.5 py-0.5 text-left leading-tight transition-colors hover:bg-accent-300/10 disabled:cursor-default disabled:hover:bg-transparent">
+                            <b className="text-accent-300">{cnt}회{closed ? '' : ' +'}</b>
+                            <span className="block text-ink-secondary">{wonToMan(tot.paid + tot.unpaid)}만</span>
+                          </button>
+                        ) : first ? (
                           <span className="leading-tight block">
                             <b className="text-accent-300">{cnt}회</b>
                             <span className="block text-ink-secondary">{wonToMan(tot.paid + tot.unpaid)}만</span>
@@ -1167,7 +1204,8 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
             try {
               // 신규 첫 바인(entryNo=1)만 클락 현재 레벨로 얼리 확정. 2번째+는 리바인이라 얼리 없음.
               const eo = (isNew && selected.entryNo === 1) ? clockEarlyNow() : (selected.buyin?.earlyOverride ?? null);
-              const savedId = await upsertBuyin({ venueId, sessionDate: date, gameSeq, playerName: pn, entryNo: selected.entryNo, paymentMethod: method, isUnpaid, discountIndex, earlyOverride: eo, existingId: selected.buyin?.id ?? null });
+              const savedId = await upsertBuyin({ venueId, sessionDate: date, gameSeq, playerName: pn, entryNo: selected.entryNo, paymentMethod: method, isUnpaid, discountIndex, earlyOverride: eo, existingId: selected.buyin?.id ?? null,
+                snapshot: { buyinAmount: session.buyinAmount, cardAmount: session.cardAmount ?? null, discounts: session.discounts } });
               setSelected(null); reload();
               if (isNew) {
                 // 오입력 즉시 복구 — 최빈 조작(바인 기록)에 90초 셀프 되돌리기(비번 불요, 서버 검증)
