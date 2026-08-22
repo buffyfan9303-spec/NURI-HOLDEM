@@ -1,7 +1,7 @@
 // src/components/features/gto/equityEngine.ts
 // 에퀴티 계산기 (Hero 2장 vs Villain 2장/레인지, 보드 0~5장)
 // - 보드 3장 이상(잔여 ≤2장)은 전수계산, 그 외는 몬테카를로
-import { RANKS, SUITS, type Card } from './gto.types';
+import { RANKS, SUITS, type Card, type Rank } from './gto.types';
 
 const RANK_VALUE: Record<string, number> = (() => {
   const m: Record<string, number> = {};
@@ -9,9 +9,16 @@ const RANK_VALUE: Record<string, number> = (() => {
   RANKS.forEach((r, i) => { m[r] = vals[i]; });
   return m;
 })();
+const VALUE_RANK: Record<number, Rank> = (() => {
+  const m: Record<number, Rank> = {};
+  const vals = [14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2];
+  RANKS.forEach((r, i) => { m[vals[i]] = r; });
+  return m;
+})();
 
 interface NCard { r: number; s: number; }
 function toN(c: Card): NCard { return { r: RANK_VALUE[c.rank], s: SUITS.indexOf(c.suit) }; }
+function toCard(c: NCard): Card { return { rank: VALUE_RANK[c.r], suit: SUITS[c.s] }; }
 const keyOf = (c: NCard): number => c.r * 4 + c.s;
 
 // 5장 점수(높을수록 강함). 카테고리*가중 + 타이브레이크(내림차순)
@@ -228,6 +235,42 @@ export function computeEquityVsRange(
     villain: (vw + tie / 2) / total,
     tie: tie / total,
     iterations: total,
+  };
+}
+
+/** 아웃츠 분석 결과 — 다음 카드(턴 또는 리버)로 hero 가 앞서게/이기게 되는 카드 목록 */
+export interface OutsResult {
+  /** 'river' = 리버 1장 남음(히트=승리), 'turn' = 턴 1장 남음(히트=역전 우세) */
+  next: 'turn' | 'river';
+  outs: number;   // 유리 전환 카드 수(클린 아웃)
+  total: number;  // 잔여 덱 크기
+  prob: number;   // 다음 카드가 아웃일 확률(outs/total)
+  cards: Card[];  // 아웃 카드 목록(랭크 내림차순)
+}
+
+/**
+ * 다음 스트리트 아웃츠 — hero·villain 2장씩 + 보드 3장(플랍)/4장(턴)일 때만.
+ *  · 턴(보드 4장): 리버 1장으로 hero 가 이기는(에퀴티>0.5) 클린 아웃.
+ *  · 플랍(보드 3장): 턴 1장으로 hero 가 우세(리버 전수 에퀴티>0.5)해지는 카드.
+ * computeEquity 를 그대로 재사용(리버=단일평가, 턴=44장 전수) — 값이 흔들리지 않는다.
+ */
+export function computeOuts(hero: [Card, Card], villain: [Card, Card], board: Card[]): OutsResult | null {
+  if (board.length !== 3 && board.length !== 4) return null;
+  const known = new Set([...hero, ...villain, ...board].map((c) => keyOf(toN(c))));
+  const deck = buildDeck(known);
+  const cards: Card[] = [];
+  for (const c of deck) {
+    const nextCard = toCard(c);
+    const eq = computeEquity(hero, villain, [...board, nextCard]);
+    if (eq.hero > 0.5) cards.push(nextCard);
+  }
+  cards.sort((a, b) => (RANK_VALUE[b.rank] - RANK_VALUE[a.rank]) || (SUITS.indexOf(a.suit) - SUITS.indexOf(b.suit)));
+  return {
+    next: board.length === 4 ? 'river' : 'turn',
+    outs: cards.length,
+    total: deck.length,
+    prob: deck.length ? cards.length / deck.length : 0,
+    cards,
   };
 }
 

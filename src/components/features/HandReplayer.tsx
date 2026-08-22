@@ -4,13 +4,25 @@
 import { useEffect, useState } from 'react';
 import { MiniCard } from '../atoms/HandCards';
 import type { ReplayData } from '../../lib/hand';
-import { computeEquity, type EquityResult } from './gto/equityEngine';
+import { computeEquity, computeOuts, type OutsResult } from './gto/equityEngine';
 import type { Card, Rank, Suit } from './gto/gto.types';
 
 const STREET_ACT = [['pre', '프리플랍'], ['flop', '플랍'], ['turn', '턴'], ['river', '리버']] as const;
 
 // 카드 표기(`${rank}${suit}`, 예: 'As','Th','9c') → 에퀴티 엔진 Card 로 변환
 const toCard = (id: string): Card => ({ rank: id[0] as Rank, suit: id[1] as Suit });
+
+const SUIT_GLYPH: Record<string, string> = { s: '♠', h: '♥', d: '♦', c: '♣' };
+// 아웃 카드 칩 — 랭크+무늬 글리프, 빨강(♥♦)/검정(♠♣)
+function OutChip({ card }: { card: Card }) {
+  const red = card.suit === 'h' || card.suit === 'd';
+  return (
+    <span className={['inline-flex items-center rounded-[4px] border border-border-default bg-surface-high px-1 py-0.5 text-2xs font-bold tabular-nums',
+      red ? 'text-danger-light' : 'text-ink-primary'].join(' ')}>
+      {card.rank}{SUIT_GLYPH[card.suit]}
+    </span>
+  );
+}
 
 function CardRow({ label, cards, hidden }: { label: string; cards: string[]; hidden?: boolean }) {
   if (cards.length === 0) return null;
@@ -61,30 +73,45 @@ export default function HandReplayer({ replay }: { replay: ReplayData }) {
     ...(on(turnAt) ? turn : []),
     ...(on(riverAt) ? river : []),
   ];
-  const streetLabel = shownBoard.length >= 5 ? '리버' : shownBoard.length === 4 ? '턴'
-    : shownBoard.length >= 3 ? '플랍' : '프리플랍';
   const heroKey = replay.hero.join(',');
   const villainKey = replay.villain.join(',');
   const boardKey = shownBoard.join(',');
 
-  const [equity, setEquity] = useState<EquityResult | null>(null);
+  // 스트리트별 hero 승률 추이 + 다음 카드 아웃츠(내/상대). 무거운 루프는 렌더 밖(setTimeout)으로.
+  const [traj, setTraj] = useState<{ label: string; hero: number; villain: number }[] | null>(null);
+  const [heroOuts, setHeroOuts] = useState<OutsResult | null>(null);
+  const [villainOuts, setVillainOuts] = useState<OutsResult | null>(null);
   const [computing, setComputing] = useState(false);
 
-  // 스트리트(공개 보드)가 바뀔 때 1회만 계산 — 무거운 루프를 렌더 밖(setTimeout)으로 미뤄
-  // 스피너부터 그린 뒤 계산한다. 엔진이 리버·플랍=전수, 프리플랍=기본 iterations 로 자동 분기.
   useEffect(() => {
-    if (!canEquity) { setEquity(null); setComputing(false); return; }
+    if (!canEquity) { setTraj(null); setHeroOuts(null); setVillainOuts(null); setComputing(false); return; }
     setComputing(true);
     let alive = true;
     const hero = heroKey.split(',').map(toCard) as [Card, Card];
     const villain = villainKey.split(',').map(toCard) as [Card, Card];
-    const board = boardKey ? boardKey.split(',').map(toCard) : [];
+    const shown = boardKey ? boardKey.split(',').map(toCard) : [];
     const id = window.setTimeout(() => {
-      const res = computeEquity(hero, villain, board);
-      if (alive) { setEquity(res); setComputing(false); }
+      // 공개된 스트리트까지의 마일스톤 보드마다 승률 1회씩(리버=단일, 턴=44 전수, 플랍=990 전수)
+      const milestones: { label: string; board: Card[] }[] = [{ label: '프리', board: [] }];
+      if (shown.length >= 3) milestones.push({ label: '플랍', board: shown.slice(0, 3) });
+      if (shown.length >= 4) milestones.push({ label: '턴', board: shown.slice(0, 4) });
+      if (shown.length >= 5) milestones.push({ label: '리버', board: shown.slice(0, 5) });
+      const t = milestones.map((m) => {
+        const e = computeEquity(hero, villain, m.board);
+        return { label: m.label, hero: e.hero, villain: e.villain };
+      });
+      // 아웃츠는 현재 공개 스트리트가 플랍(3)·턴(4)일 때만(리버는 다음 카드 없음)
+      const ho = computeOuts(hero, villain, shown);
+      const vo = computeOuts(villain, hero, shown);
+      if (alive) { setTraj(t); setHeroOuts(ho); setVillainOuts(vo); setComputing(false); }
     }, 0);
     return () => { alive = false; window.clearTimeout(id); };
   }, [canEquity, heroKey, villainKey, boardKey]);
+
+  const cur = traj && traj.length ? traj[traj.length - 1] : null;
+  // 내가 뒤지면 '내 아웃츠(역전 카드)', 앞서면 '상대 아웃츠(위험 카드)'를 보여준다.
+  const showOuts = cur && cur.hero < 0.5 ? heroOuts : villainOuts;
+  const outsIsHero = !!(cur && cur.hero < 0.5);
 
   return (
     <div className="w-full max-w-md rounded-card border border-border-subtle bg-surface-low p-3 space-y-3 sm:p-4">
@@ -128,31 +155,63 @@ export default function HandReplayer({ replay }: { replay: ReplayData }) {
         </div>
       )}
 
-      {/* 에퀴티 오버레이 — hero·villain 둘 다 알 때만, 현재 공개 보드 기준 hero 승률 */}
+      {/* 에퀴티 추이 + 아웃츠 — hero·villain 둘 다 알 때만. 스트리트가 공개될수록 그래프가 자란다. */}
       {canEquity && (
-        <div className="space-y-1.5 border-t border-border-subtle pt-3">
+        <div className="space-y-2 border-t border-border-subtle pt-3">
           <div className="flex items-center justify-between">
-            <span className="text-2xs font-bold text-ink-muted"><b className="text-accent-300">{streetLabel}</b> 승률</span>
-            {computing ? (
+            <span className="text-2xs font-bold text-ink-muted">스트리트별 <b className="text-accent-300">내 승률 추이</b></span>
+            {computing && (
               <span className="flex items-center gap-1 text-2xs text-ink-muted">
                 <span aria-hidden className="h-3 w-3 animate-spin rounded-full border-2 border-accent-300 border-t-transparent" />계산 중…
               </span>
-            ) : equity && (
-              <span className="text-sm font-extrabold tabular-nums text-accent-300">{Math.round(equity.hero * 100)}%</span>
             )}
           </div>
-          {equity && !computing && (
-            <>
-              <div className="flex h-2.5 w-full overflow-hidden rounded-badge bg-surface-high" role="img"
-                aria-label={`내 핸드 승률 ${Math.round(equity.hero * 100)}%`}>
-                <div className="h-full bg-accent-400" style={{ width: `${equity.hero * 100}%` }} />
+
+          {/* 스트리트별 막대 + 직전 대비 증감(꺾은선 대용 추이) */}
+          {traj && !computing && (
+            <div className="space-y-1">
+              {traj.map((s, i) => {
+                const prev = i > 0 ? traj[i - 1].hero : null;
+                const delta = prev != null ? s.hero - prev : null;
+                const dPts = delta != null ? Math.round(delta * 100) : 0;
+                return (
+                  <div key={s.label} className="flex items-center gap-2">
+                    <span className="w-7 shrink-0 text-2xs font-semibold text-ink-muted">{s.label}</span>
+                    <div className="relative h-3 flex-1 overflow-hidden rounded-badge bg-surface-high" role="img" aria-label={`${s.label} 내 승률 ${Math.round(s.hero * 100)}%`}>
+                      <div className="h-full bg-accent-400" style={{ width: `${s.hero * 100}%` }} />
+                    </div>
+                    <span className="w-9 shrink-0 text-right text-2xs font-extrabold tabular-nums text-accent-300">{Math.round(s.hero * 100)}%</span>
+                    <span className={['w-8 shrink-0 text-right text-2xs font-bold tabular-nums',
+                      delta == null ? 'text-transparent' : dPts >= 0 ? 'text-emerald-400' : 'text-danger-light'].join(' ')}
+                      aria-hidden>
+                      {delta == null ? '·' : `${dPts >= 0 ? '▲' : '▼'}${Math.abs(dPts)}`}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* 아웃츠/런아웃 — 내가 뒤지면 역전 카드, 앞서면 상대의 위험 카드 */}
+          {showOuts && !computing && showOuts.outs > 0 && showOuts.outs < showOuts.total && (
+            <div className={['rounded-input border px-2.5 py-2 space-y-1.5',
+              outsIsHero ? 'border-emerald-400/25 bg-emerald-500/[0.06]' : 'border-danger/25 bg-danger/[0.06]'].join(' ')}>
+              <p className="text-2xs font-bold">
+                <span className={outsIsHero ? 'text-emerald-300' : 'text-danger-light'}>
+                  {outsIsHero ? '🎯 내 아웃츠' : '⚠ 상대 아웃츠'} {showOuts.outs}장
+                </span>
+                <span className="font-normal text-ink-muted"> · {showOuts.total}장 중 · 다음 {showOuts.next === 'river' ? '리버' : '턴'} 확률 {(showOuts.prob * 100).toFixed(1)}%</span>
+              </p>
+              <div className="flex flex-wrap gap-1">
+                {showOuts.cards.slice(0, 16).map((c) => <OutChip key={c.rank + c.suit} card={c} />)}
+                {showOuts.cards.length > 16 && <span className="self-center text-2xs text-ink-muted">+{showOuts.cards.length - 16}</span>}
               </div>
-              <div className="flex justify-between text-2xs text-ink-muted tabular-nums">
-                <span>내 {Math.round(equity.hero * 100)}%</span>
-                {equity.tie > 0.0005 && <span>타이 {(equity.tie * 100).toFixed(1)}%</span>}
-                <span>상대 {Math.round(equity.villain * 100)}%</span>
-              </div>
-            </>
+              <p className="text-2xs text-ink-muted">
+                {outsIsHero
+                  ? (showOuts.next === 'river' ? '이 리버 카드가 뜨면 이깁니다(클린 아웃).' : '이 턴 카드가 뜨면 앞서게 됩니다.')
+                  : (showOuts.next === 'river' ? '이 리버 카드가 뜨면 역전당합니다(주의).' : '이 턴 카드가 뜨면 상대가 앞섭니다.')}
+              </p>
+            </div>
           )}
         </div>
       )}
