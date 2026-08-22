@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useToast } from '../atoms/Toast';
 import type { User, UserStatus } from '../../api/auth';
-import { adminSetNickname } from '../../api/auth';
+import { adminSetNickname, adminSetShadowban } from '../../api/auth';
 import { getUserActivity, getActivityLog } from '../../api/community';
 import type { PostCategory, UserActivityItem, ActivityLogEntry } from '../../api/community';
 
@@ -194,6 +194,16 @@ function UserRow({ user, onUpdate }: { user: User; onUpdate: (id: string, patch:
     try { await adminSetNickname(user.id, t); toast.show('닉네임을 변경했습니다 (목록 새로고침 시 반영)', 'success'); close(); }
     catch (e) { toast.show(e instanceof Error ? e.message : '변경 실패', 'error'); }
   };
+  // 운영자: 섀도우밴 토글 — 오류 없이 콘텐츠는 그대로, 활동 랭킹에서만 조용히 제외/복귀.
+  const toggleShadowban = async () => {
+    const next = !user.shadowbanned;
+    try {
+      await adminSetShadowban(user.id, next);
+      onUpdate(user.id, { shadowbanned: next });
+      toast.show(next ? `${user.name} 섀도우밴 — 활동 랭킹에서 제외됨` : `${user.name} 섀도우밴 해제`, next ? 'info' : 'success');
+      close();
+    } catch (e) { toast.show(e instanceof Error ? e.message : '변경 실패', 'error'); }
+  };
 
   // 사유 입력 후 제재 확정 — 자동 이메일은 App handleUpdateUser → updateUserStatus 에서 발송
   const confirmSanction = () => {
@@ -247,6 +257,9 @@ function UserRow({ user, onUpdate }: { user: User; onUpdate: (id: string, patch:
             <span className={['text-2xs px-1.5 py-0.5 rounded-badge border font-semibold', statusStyle.cls].join(' ')}>
               {statusStyle.label}
             </span>
+            {user.shadowbanned && (
+              <span className="text-2xs px-1.5 py-0.5 rounded-badge border font-semibold border-violet-400/40 bg-violet-500/15 text-violet-300" title="활동 랭킹에서 조용히 제외됨">🕶 섀도우밴</span>
+            )}
           </div>
           <p className="text-2xs text-ink-muted truncate">{user.email}</p>
           <p className="text-2xs text-ink-muted">
@@ -312,6 +325,13 @@ function UserRow({ user, onUpdate }: { user: User; onUpdate: (id: string, patch:
             // ── 액션 선택 단계 ──
             <div className="flex flex-wrap gap-1.5">
               <button type="button" onClick={changeNick} className="text-2xs font-semibold px-2.5 py-1 rounded-badge border border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary transition-colors">아이디 변경</button>
+              <button type="button" onClick={toggleShadowban}
+                className={['text-2xs font-semibold px-2.5 py-1 rounded-badge border transition-colors',
+                  user.shadowbanned
+                    ? 'border-violet-400/50 bg-violet-500/15 text-violet-300 hover:bg-violet-500/25'
+                    : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
+                {user.shadowbanned ? '섀도우밴 해제' : '섀도우밴'}
+              </button>
               {status === 'pending' && (
                 <>
                   <ActionBtn onClick={approve} variant="success">가입 승인</ActionBtn>

@@ -32,6 +32,7 @@ export interface User {
   verifiedAt?: string;      // 본인인증 시각
   realName?: string;        // 인증된 실명(표시명/닉네임과 분리 저장)
   phone?: string;           // 인증된 전화번호
+  shadowbanned?: boolean;   // 섀도우밴 — 콘텐츠는 정상이나 활동 랭킹에서만 조용히 제외(운영자 전용)
 }
 
 export interface LoginPayload { email: string; password: string; }
@@ -80,6 +81,7 @@ function rowToUser(row: any): User {
     verifiedAt:     row.verified_at ?? undefined,
     realName:       row.real_name ?? undefined,
     phone:          row.phone ?? undefined,
+    shadowbanned:   row.shadowbanned === true,
   };
 }
 
@@ -128,6 +130,11 @@ export async function setMyNickname(nickname: string): Promise<void> {
 // 운영자 전용: 회원 닉네임 변경(잠금 무시).
 export async function adminSetNickname(userId: string, nickname: string): Promise<void> {
   const { error } = await supabase.rpc('admin_set_nickname', { p_user_id: userId, p_nickname: nickname.trim() });
+  if (error) throw new Error(error.message);
+}
+// 운영자 전용: 섀도우밴 토글 — 콘텐츠·트레이닝은 그대로 두고 활동 랭킹에서만 조용히 제외.
+export async function adminSetShadowban(userId: string, on: boolean): Promise<void> {
+  const { error } = await supabase.rpc('admin_set_shadowban', { p_user_id: userId, p_on: on });
   if (error) throw new Error(error.message);
 }
 
