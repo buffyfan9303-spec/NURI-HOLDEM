@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, useTransition, Suspense, memo, type ReactNode } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, useTransition, startTransition, Suspense, memo, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import { withViewTransition } from './lib/viewTransition';
 import { useToast } from './components/atoms/Toast';
@@ -706,6 +706,8 @@ export default function App() {
   // keep-alive: 한 번 방문한 핵심 탭은 언마운트하지 않고 display만 끈다 — 재방문 시 로드·마운트 비용 0(끊김 제거)
   const [visitedTabs] = useState(() => new Set<TabId>(['browse']));
   useEffect(() => { visitedTabs.add(activeTab); }, [activeTab, visitedTabs]);
+  // 프리마운트 커밋 트리거 — visitedTabs 는 렌더를 못 깨우는 가변 Set 이라 상태 범프가 필요
+  const [, setPremountTick] = useState(0);
 
   // 17-5 오프라인·재연결 — 홀덤펍은 지하 매장이 많다: 단절이 예외가 아니라 일상 조건.
   // 캐시 퍼스트(Phase 6) 덕에 화면은 살아 있으므로, 배너로 상태만 알리고
@@ -982,6 +984,11 @@ export default function App() {
     //   라이브 실측에서 idle 콜백이 t=115ms 에 떨어졌는데 Supabase 첫 응답은 170~215ms 라,
     //   '사용자가 기다리는 목록'보다 '나중에 쓸지도 모르는 청크'가 먼저 대역폭·메인스레드를 가져갔다.
     if (!schedulesLoaded) return;
+    const idle = (cb: () => void) => {
+      const w = window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number };
+      if (w.requestIdleCallback) w.requestIdleCallback(cb, { timeout: 10000 });
+      else setTimeout(cb, 5000);
+    };
     const warm = () => {
       void Promise.allSettled([
         import('./components/features/CommunityTab'),
@@ -1002,12 +1009,27 @@ export default function App() {
         // 역할 전용 청크 — 해당 역할일 때만(손님에게 업주 스위트를 내려보내지 않는다)
         ...(isOwner ? [import('./components/features/VenueManageTab')] : []),
         ...(isAdmin ? [import('./components/features/AdminTab')] : []),
-      ]);
+      ]).then(() => {
+        // 프리마운트: 청크가 데워진 뒤, 핵심 탭을 idle 마다 하나씩 숨김 마운트해 둔다.
+        // 이유 — '첫 탭 진입'만 VT 마스킹이 못 가리는 경로(Suspense·startTransition 커밋)라
+        // 실측에서 유일하게 잡히는 상호작용 멈칫(스로틀 4x 67~150ms·6x 최대 250ms)이었다.
+        // 미리 방문 처리하면 사용자 첫 탭도 재방문(스냅샷 뒤 flushSync) 경로가 된다.
+        // 한 번에 하나씩인 이유: 3개 동시 커밋은 그 자체가 idle 롱태스크가 된다.
+        const seq: TabId[] = ['live', 'community', 'tools'];
+        const mountNext = () => {
+          const t = seq.find((x) => !visitedTabs.has(x));
+          if (!t) return;
+          visitedTabs.add(t);
+          startTransition(() => setPremountTick((n) => n + 1)); // transition: 만약 suspend 돼도 폴백 커밋 없음
+          idle(mountNext);
+        };
+        idle(mountNext);
+      });
     };
-    const w = window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number };
     // timeout 을 늘린 이유: 4초는 '한가하지 않아도 4초 뒤엔 무조건 실행'이라 첫 화면과 자주 겹쳤다.
-    if (w.requestIdleCallback) w.requestIdleCallback(warm, { timeout: 10000 });
-    else setTimeout(warm, 5000);
+    idle(warm);
+    // visitedTabs 는 안정 Set 인스턴스 — 참조 불변
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schedulesLoaded, isOwner, isAdmin]);
   // FOMO 뱃지용 예약자 수 — 다가오는 대회만 1회 조회.
   // ⚠ [schedules] 배열 의존이면 스냅샷→네트워크 교체(내용 동일)에도 재조회·리렌더가 났다 —

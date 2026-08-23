@@ -34,10 +34,14 @@ test.describe('캐시 퍼스트 — 재방문 즉시 콘텐츠', () => {
     const busyAtMount = await page.evaluate(() => document.querySelectorAll('[aria-busy="true"]').length);
     expect(busyAtMount, '스냅샷이 있는데도 마운트 직후 스켈레톤이 떴다 — 캐시 복원이 안 걸린 것').toBe(0);
 
-    // 재검증(네트워크) 구간에도 스켈레톤으로 되돌아가면 안 된다 — 값만 조용히 바뀌어야 한다
+    // 재검증(네트워크) 구간에도 스켈레톤으로 되돌아가면 안 된다 — 값만 조용히 바뀌어야 한다.
+    // '보이는' 것만 센다: idle 프리마운트가 숨김(display:none) 탭을 미리 깔아두는데,
+    // 그 안의 로딩 상태는 사용자에게 안 보이므로 이 계약(가시 화면의 스켈레톤 회귀 금지) 밖이다.
     await page.waitForTimeout(1500);
-    const busyLater = await page.evaluate(() => document.querySelectorAll('[aria-busy="true"]').length);
-    expect(busyLater, '재검증 중 스켈레톤으로 회귀했다 — 캐시 페인트가 무의미해진다').toBe(0);
+    const busyLater = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('[aria-busy="true"]'))
+        .filter((el) => (el as HTMLElement).offsetParent !== null).length);
+    expect(busyLater, '재검증 중 (보이는) 스켈레톤으로 회귀했다 — 캐시 페인트가 무의미해진다').toBe(0);
   });
 
   test('깨진 스냅샷은 앱을 죽이지 못한다 — 스켈레톤 경로로 조용히 물러난다', async ({ page }) => {
