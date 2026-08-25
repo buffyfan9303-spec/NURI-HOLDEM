@@ -1802,3 +1802,207 @@ AGPL 솔버 코드 임베드 금지(네트워크 카피레프트), 상용 솔버
   스켈레톤 높이·이미지 치수 예약의 문제다. §16(모션 리서치)의 진단을 따를 것.
 - 기존 자산(`--ease` iOS 이징·View Transitions·scroll-driven reveal·content-visibility·SlidingPill)은
   **버리는 게 아니라** 새 도구와 역할을 나눠 정밀화한다.
+
+---
+
+# 18. ✅ 실행 큐 실화 (2026-08-26 최종 관문 v2 반영) — §15.3 큐를 대체한다
+
+> 최종 관문 v2 판정: **GO-with-fixes.** §15의 진단·앵커는 정확했으나 **큐로서는 미완성**이었다
+> (부르는 카드 ID 24~29개에 본문 없음, 파킹 규칙이 자기 큐를 취소, 첫 카드가 헛수고, 백업이 물리적 불가, 브랜치 부재).
+> 이 섹션이 그 6건을 해소한 **실행 가능한 큐**다. §15.3보다 이 섹션이 우선한다.
+
+## 18.0 전제 — git 규칙 (첫 명령 모호성 제거)
+
+- **C1·C2·C4는 이미 완료됨** (d8019fe, cdb2893, 906a2fd). "CLAUDE.md 복원" 지시문은 **수행 불필요**.
+- **C0 (신설, 첫 명령)**: `git switch -c feat/master-exec`
+  → C3부터 모든 커밋은 이 브랜치. main 머지는 **웨이브 경계에서만** `--no-ff`. push = 프로덕션 배포임을 기억.
+- §15.3의 "직렬 자원 리전 순서" 줄은 **파일 경합 회피용 보조 정보**일 뿐, **순서의 단일 소스는 이 섹션의 큐**다
+  (§15.3 리전 줄이 TB2→TB1로 적은 것은 오류, 아래 큐가 맞다).
+
+## 18.1 파킹 규칙 재정의 (자기모순 해소)
+
+§15.6 #2의 [파킹] 규칙("명세 없으면 supabase/migrations·functions·api 즉흥 설계 금지")은 **유지한다.**
+대신 아래 카드들에 **명세를 채워 파킹 조건을 해제**했다. 여전히 명세가 없는 DB 카드(W6의 CI-HMAC·WITHDRAW-FIX 등)는
+**backlog로 내리고 오너 동석 세션으로 분리**한다 — 무인 실행자가 라이브 DB에 스키마를 즉흥 설계하는 것보다 미루는 게 낫다.
+
+---
+
+## 18.2 W0 — 착수 준비 (코드 기능 변경 0)
+
+| ID | 상태 | 내용 |
+|---|---|---|
+| C0 | ⬜ | `git switch -c feat/master-exec` — 첫 명령 |
+| C1 | ✅ | CLAUDE.md — 완료(d8019fe), 이후 §17로 재작성(906a2fd) |
+| C2 | ✅ | `.claude/` 스킬·훅 — 완료(d8019fe), 훅은 §17로 정보제공 전환(906a2fd) |
+| C3 | ⬜ | 워킹트리 3파일(App.tsx·StoreDashboard·VenueManageTab, keep-alive WIP) 독립 커밋 |
+| C4 | ✅ | `docs/plans/` + BLOCKED.md + backlog.md — 완료(cdb2893) |
+| C5 | ⚠️ | 백업 — **이 머신에서 물리적 불가**(pg_dump·psql 미설치, Docker 데몬 다운, DB 비번 부재) → 18.6 참조 |
+
+**C3 리허설 결과(관문 v2 실측):** `tsc -b --force` exit 0 · `npm run build` 성공(vite 1.66s) ·
+`test:e2e` main 39 passed/8 skipped + boot 2 passed — **완전 그린. 지금 커밋 가능.**
+⚠️ 단 build가 `public/sitemap.xml`을 재생성하므로 커밋에 딸려 들어간다(의도 확인).
+
+---
+
+## 18.3 W1 — 유저 즉효 + 라이브 버그 (순서 교체됨)
+
+### 🚨 W1-0 · PUSH-SEC — send-push 무인증 (라이브 보안, 최우선)
+
+- **상태**: 코드로 확인 완료. `supabase/functions/send-push/index.ts` 핸들러에 **인증 검사 0줄**
+  (Authorization·시크릿·오리진 검사 전무). CORS `*`. 호출자가 준 userIds/title/body/url을 그대로 받아
+  SERVICE_ROLE로 push_subscriptions를 조회해 발송.
+- **왜 위험한가**: DB 트리거(20260603e)가 **공개 anon 키**로 호출한다. anon 키는 클라이언트 번들에 있어 누구나 얻는다.
+  → **유저 UUID만 알면 임의 제목·본문·임의 딥링크 푸시를 그 사람 기기로 발송 가능**(PWA 피싱).
+  마이그레이션 주석의 "공개 키라 노출되어도 안전"은 *키의 안전성*은 맞지만 *함수가 열린다*는 점을 놓쳤다.
+- **재량 등급**: [파킹→해제] — 아래 명세가 있으므로 착수 가능
+- **접근**:
+  1. 착수 전 2분: Supabase 대시보드(또는 MCP list_edge_functions)에서 send-push의 `verify_jwt` 실값 확인.
+  2. 핸들러 최상단에 **공유 시크릿 헤더 검사** 추가 — `req.headers.get('x-nuri-push-secret')`이
+     `Deno.env.get('PUSH_SHARED_SECRET')`와 다르면 401.
+  3. **같은 패스에서** DB 트리거 `push_on_notification()`의 `net.http_post` 헤더에 동일 시크릿 추가
+     — 안 하면 알림 푸시가 전부 죽는다(순서: 함수 배포 → 트리거 업데이트, 또는 시크릿 미설정 시 임시 통과 후 제거).
+  4. 배포: `npx supabase functions deploy send-push --project-ref idsxiqspecrucvfvtgbw --use-api`
+     ⚠️ **슬러그 필수** — 생략하면 로컬 7개 함수 전량이 배포돼 라이브 gemini·verify-identity·notify-sanction을 덮는다.
+- **DoD**: 시크릿 없는 호출 401 · 알림 INSERT → 푸시 정상 도달(회귀 확인) · 배포 후 실호출 검증
+- **롤백**: 이전 버전 재배포 + 트리거 헤더 원복
+- ⚠️ **정정**: §15.5 #3의 "gto-explain·gemini가 CORS `*`라서 무인증"은 **오진**이다(둘은 JWT로 보호됨).
+  실제 구멍은 send-push다. AI-CAP의 "비로그인 403" DoD도 플랫폼이 이미 강제하므로 문구 정정.
+
+### W1-1 · SORT-FIX — 부스트가 날짜를 이긴다 (§15.7 #8에서 승격)
+
+- **앵커**: `src/App.tsx` visibleSchedules 정렬 반환부
+  (`Number(b.isPremium) - Number(a.isPremium) || (a.date + a.startTime).localeCompare(...)`, 1456 부근.
+  **라인 번호가 아니라 이 코드 문자열로 찾을 것**)
+- **재량 등급**: [자유]
+- **접근**: isPremium을 **1차 키에서 제거**, 날짜+시각을 1차 키로. 부스트는 **동일 시각 내 tie-break**로만.
+  비교 함수를 **순수 함수로 추출**해 vitest 고정 픽스처(부스트된 다음 주 일정 vs 40분 뒤 오늘 일정)로 검증.
+- **DoD**: 40분 뒤 시작하는 오늘 게임이 다음 주 부스트 포스터보다 위 · vitest 통과
+- **왜 지금**: `first-screen.spec.ts`의 해당 케이스가 `test.skip(dates.length < 2)`로 실제 skip 중이라
+  **e2e로는 영구 미검출**. 단위 테스트가 유일한 회귀 가드. 부스트 결제를 열기 전이 유일한 개입 시점.
+- ⚠️ backlog.md #8의 "⚠️ 단서"는 **이 카드 참조로 교체** — "착수 금지 목록 안의 착수하라 항목"은 무인 실행에서 반드시 사라진다.
+
+### W1-2 · UX-6 — §28 금액 표시 범위 명문화 (코드 전 필수 선행)
+
+- **write target**: `CLAUDE.md` (리포 어디에도 §28 정의가 없어 후속 카드가 전부 막힌다)
+- **넣을 문장**: "§28(사행성 금액 미표시)은 **성과·상금·수익·이용권 등 환금성 프레이밍에만** 적용된다.
+  **참가비(바이인)·GTD·프라이즈풀은 상품 가격 정보**이므로 표시를 유지한다(전자상거래법상 가격 고지 의무와도 정합)."
+- **왜**: 문자 그대로 적용하면 `바이인 60,000`·`1000만 GTD`가 사라져 유저의 "얼마?"가 통째로 증발하고,
+  이미 라이브인 라이브 탭 buyInAmount 노출과도 모순된다. DAI-2·DAI-3·DAI-6·IMG-5가 전부 ScheduleCard를 앵커로 잡는다.
+
+### W1-3 · TB1a — 하단 오프셋 8곳 단일화 (렌더 diff 0)
+
+- **앵커(관문 v2 실측: 라인 밀림 0)**: `src/index.css`(main padding-bottom) · `src/App.tsx`(ScrollTopButton,
+  **env 누락 = 확정 버그**) · `atoms/Toast.tsx` · `atoms/InstallBanner.tsx` · `features/BusinessFooter.tsx` ·
+  `features/GroupPage.tsx` · `features/VenuePage.tsx` · `features/NuriPosLedger.tsx`(정산바)
+- **재량 등급**: [자유]
+- **접근**: `:root`에 `--tabbar-safe: calc(5.5rem + max(env(safe-area-inset-bottom), 12px))` /
+  `--tabbar-float: calc(5.75rem + max(env(safe-area-inset-bottom), 12px))` 정의 후 8곳 치환. `lg:` 오버라이드 전부 유지.
+  정산바만 `calc(var(--tabbar-safe) - 0.75rem)`로 파생(의도 주석). ScrollTopButton은 치환과 동시에 누락된 env 복구.
+- **DoD**: 12px 하한선 제외 모든 계산 결과가 기존과 동일(렌더 diff 0) · PC 변화 0 · build+e2e 그린
+- **롤백**: 커밋 revert(순수 CSS 변수 치환)
+
+### W1-4 · OBS-8 — 킬스위치 플래그 (TB2 선행)
+
+- **앵커**: 기존 `app_settings` 테이블 + `set_app_setting` RPC **재사용**(신규 스키마 0)
+- **재량 등급**: [계획준수]
+- **접근**: 원격 on/off 플래그 1개(`tabbar_autohide_v2`). TB2를 이 플래그 뒤에 둔다.
+- **DoD**: 플래그 off 시 앱 재접속만으로 구 동작 복구(재배포 불필요)
+
+### W1-5 · TB2 — 탭바 자동숨김 재작성 (플래그 뒤)
+
+- **앵커**: `src/App.tsx` MobileTabBar 스크롤 리스너(현재 `dy > 14` / `dy < -8` 이벤트 델타 임계)
+- **재량 등급**: [자유] — 단 §13-A의 구현 스케치를 그대로 따를 것
+- **접근**: rAF 스로틀 + 짧은화면 가드(max < 200) + 오버스크롤 클램프 + **문서끝 감지(cy >= max-4 → 무조건 숨김,
+  삼성 버튼과 시간축 배타)** + 방향전환 리셋 누적델타(아래 48 숨김 / 위 24 복귀) + active useLayoutEffect 억제창(300ms) + resize 리싱크
+- **DoD**: 천천히 끌어 바닥까지 → 탭바 숨음 · 바닥에서 위로 튕김 → 복귀 · 깊은 스크롤 탭 전환 시 탭바 유지 ·
+  짧은 페이지 깜빡임 0 · **실기기(갤럭시) 검증은 오너 QA로 분리**(무인 실행자는 원리적으로 불가)
+- **롤백**: OBS-8 플래그 off
+
+### W1-6 · UX-1 — "지금 등록 되나?" 를 browse·상세로 승격
+
+- **앵커**: `LiveGamesTab.tsx`의 msToRegClose·matchSchedule(이미 존재) · getRunningClocks(anon 공개 조회) ·
+  `ScheduleCard.tsx` · `ScheduleDetailModal.tsx`("레이트 레지 가능 여부는 매장에 확인해 주세요" 문구를 실제 답으로 교체)
+- **재량 등급**: [자유]
+- **접근**: 라이브 탭에만 갇힌 레지 상태를 대회를 **고르는 화면**으로 승격. 부수로 scheduleStatus의
+  "시작+10시간 윈도" 추정 때문에 레지가 2시간 전 닫혀도 LIVE로 뜨는 **거짓 배지 제거**.
+- **DoD**: browse 카드·상세에서 등록 가능 여부가 보임 · 거짓 LIVE 배지 사라짐
+
+### W1-7 · UX-2 — 바이인 예산 필터
+
+- **앵커**: `IntegratedSearchBar.tsx`의 SearchState(현재 축: 검색어·날짜·지역·종류·등급 — **가격 없음**) ·
+  `App.tsx` visibleSchedules 필터 체인
+- **재량 등급**: [자유]
+- **접근**: 금액대 필터 1축 추가(예: 3만↓/5만↓/10만↓). buyIn.amount는 이미 모든 일정에 존재하고 카드에 렌더 중.
+  **백엔드 0·마이그레이션 0·신규 컬럼 0.**
+- **DoD**: 예산으로 목록이 걸러짐 · UX-6의 §28 정의와 정합(참가비는 가격정보라 표시 유지)
+
+---
+
+## 18.4 W2 — 법적 하드가드 (명세 채움 → 파킹 해제)
+
+> ⚠️ **W2 전체는 백업(18.6) 완료 후 착수.** DDL/RPC 변경이라 되돌리기 어렵다.
+
+### W2-1 · VCH-1 — 이용권 제한부 (변호사 무관, 어느 쪽 판단이든 안전한 방향)
+
+- **앵커**: `src/api/vouchers.ts` — find_user_for_transfer(양도) · request_voucher_credit /
+  admin_grant_voucher_quota의 p_amount(유상 쿼터)
+- **재량 등급**: [계획준수] — RPC 가드 추가만, 스키마 변경 없음
+- **접근**: ①양도를 **발행매장 내로 제한**(또는 무상 한정) ②유상 발급쿼터 **제거**.
+  전부 "금지 추가"라 마이그레이션 없이 RPC 가드로 끝난다.
+- ✅ **교차매장 사용 차단은 이미 출시됨**(20260816a_redeem_voucher_issuing_venue_guard.sql) — 신규 작업 아님.
+  ⚠️ CHECK 제약을 걸려면 2026-08-16 이전 레거시 행 때문에 반드시 `NOT VALID` 후 오너 검토.
+- **DoD**: 타매장 양도 차단 · 유상 쿼터 경로 0 · 기존 이용권 보유자 영향 없음
+- **롤백**: `-- ROLLBACK:` 블록에 `pg_get_functiondef()`로 뜬 현재 정의를 역방향으로 박아둘 것
+
+### W2-2 · VCH-1b — 바인 자동적립 중단 (⚠️ 데이터 손실 함정)
+
+- **앵커**: `src/api/ledger.ts` — voucherAccrualPerBin, accrueVoucher 호출부
+- **접근**: **UI·호출부만 제거.** TS 필드와 DB 컬럼의 read/write는 **유지**한다.
+- ⚠️ **이유**: ledger.ts의 세션 저장 경로가 매 저장마다 `voucher_accrual_per_bin: s.voucherAccrualPerBin ?? 0`을
+  **write**한다 → TS 필드를 지우면 **전 매장 설정이 조용히 0으로 덮인다**. 컬럼 폐기는 한참 뒤 contract 단계에서.
+- ⚠️ **PL2 모순**: PL2가 이 필드를 프리셋 스키마에 *추가*하라고 지시한다 — **PL2에서 제외**할 것.
+
+### W2-3 · LEAGUE-FREEZE — 연합리그 동결 (삭제 아님)
+
+- **접근**: 진입점 제거 + `REVOKE EXECUTE` + 구독 해제까지만. **DROP·하드 delete 금지**(백업 자동화 전).
+- ⚠️ **치명 함정**: `src/lib/loyalty.ts`의 leagueTierOf·weekly_league는 **연합리그가 아니라 코스메틱 활동점수 티어**다.
+  `grep league`로 문자 매칭해 지우면 **§10이 "환금성 리스크 해소 모범"으로 지목한 바로 그 파일을 파괴**한다.
+  반드시 leagues 테이블/LeaguePanel 계열만 대상.
+
+---
+
+## 18.5 GTO-FIX 재작성 (정직하게)
+
+§15가 W1 선두로 올렸던 GTO-FIX는 **목적을 달성하지 못한다**:
+
+- gto-explain **호출자가 src 전체에 0개**(functions.invoke는 gemini·notify-sanction·verify-identity 3종뿐).
+  유저가 보는 GTO 해설은 GtoDeepPanel의 **로컬 computeEquity**다.
+- Edge Function은 **git push로 배포되지 않고** `.github/workflows/`에 deploy 스텝이 0 → 커밋해도 라이브 502가 남는다.
+  즉 4게이트가 초록인데 실제로는 안 고쳐진 **"실패가 초록으로 보고되는"** 최악 실패 모드.
+
+**정정된 카드(W5 이후로 강등):**
+
+- 문구: "gto-explain은 배포됐으나 호출자 0 — **죽은 함수**. GTO AI 해설은 애초에 구현돼 있지 않다."
+  §15의 "GKR 14장의 전제"·"§12-D 기함" 서술은 **삭제**.
+- 진짜 할 일은 "모델 문자열 수정"이 아니라 **"AI 해설 기능을 실제로 연결할지 결정"**(GKR 트랙에서).
+- 손댈 경우 DoD는 "커밋"이 아니라 **"배포 후 실호출 200"**, 배포 명령은 슬러그 필수.
+
+---
+
+## 18.6 백업 — 불가능한 경로를 가능한 경로로 (BLOCKED.md #3 정정)
+
+**이 머신에서 로컬 백업은 물리적으로 불가능**(pg_dump·psql PATH 부재, PostgreSQL 미설치, Docker 데몬 다운, DB 비번 부재).
+그런데 §15.6 #5가 백업을 **모든 DDL의 하드 선행조건**으로 못 박아 W2 전체가 연쇄 정지한다.
+
+**정답은 이미 PR #4에 있다** — `.github/workflows/backup.yml`이 ubuntu 러너에 postgresql-client-17을 설치해
+`pg_dump --format=custom`을 돌리고 R2로 업로드한다. R2 키 5종은 이미 GitHub Secrets에 설정 완료.
+
+**오너 5단계(약 3분) — 오늘 오너가 할 유일한 일:**
+
+1. Supabase 대시보드 → Connect → **Session pooler (5432)** 연결문자열 복사
+2. `gh secret set SUPABASE_DB_URL` (붙여넣기, 화면 노출 없음)
+3. **PR #4 머지**
+4. `gh workflow run backup.yml`
+5. R2 버킷에 오브젝트 생성 확인
+
+이게 안 되면 **W2를 백업 완료 후로 재배치**하는 편이 정직하다(착수 금지로 큐를 멈추는 것보다).
