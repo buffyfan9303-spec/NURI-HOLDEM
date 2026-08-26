@@ -1,0 +1,70 @@
+name: DB Backup to R2
+
+# OBS-1 — 무료 Supabase는 자동 백업·PITR이 없다. 야간 pg_dump → Cloudflare R2(S3 호환).
+# 라이브 DB는 읽기(dump)만. SUPABASE_DB_URL 미설정이면 실패가 아니라 우아하게 스킵.
+on:
+  schedule:
+    - cron: '0 18 * * *'   # 18:00 UTC = 03:00 KST 매일
+  workflow_dispatch:        # 수동 실행(테스트)
+
+permissions:
+  contents: read
+
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Guard — SUPABASE_DB_URL 필요(없으면 스킵, 실패 아님)
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$DB_URL" ]; then
+            echo "::notice::SUPABASE_DB_URL 미설정 — 백업 스킵. 오너가 'gh secret set SUPABASE_DB_URL'(세션 풀러 5432) 후 활성화됩니다."
+            echo "SKIP=1" >> "$GITHUB_ENV"
+          fi
+
+      - name: PostgreSQL 17 client 설치
+        if: env.SKIP != '1'
+        run: |
+          sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+
+      - name: pg_dump → gzip
+        if: env.SKIP != '1'
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          STAMP="$(date -u +%Y%m%d-%H%M)"
+          pg_dump --format=custom --no-owner --no-privileges "$DB_URL" -f "nuri-$STAMP.dump"
+          gzip "nuri-$STAMP.dump"
+          echo "FILE=nuri-$STAMP.dump.gz" >> "$GITHUB_ENV"
+          ls -lh "nuri-$STAMP.dump.gz"
+
+      - name: R2 업로드(S3) — 버킷 없으면 생성
+        if: env.SKIP != '1'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          # ubuntu 러너엔 aws-cli v2 기본 설치. R2는 S3 호환.
+          aws s3api head-bucket --bucket "$BUCKET" --endpoint-url "$ENDPOINT" 2>/dev/null \
+            || aws s3api create-bucket --bucket "$BUCKET" --endpoint-url "$ENDPOINT"
+          aws s3 cp "$FILE" "s3://$BUCKET/db/$FILE" --endpoint-url "$ENDPOINT"
+          echo "::notice::백업 업로드 완료 — s3://$BUCKET/db/$FILE"
+
+      # (선택) 하트비트 — OBS-2에서 Healthchecks.io URL을 secret으로 넣으면 활성
+      - name: Heartbeat ping(선택)
+        if: env.SKIP != '1' && success()
+        env:
+          HC_URL: ${{ secrets.HEALTHCHECK_BACKUP_URL }}
+        run: |
+          if [ -n "$HC_URL" ]; then curl -fsS -m 10 "$HC_URL" >/dev/null || true; fi

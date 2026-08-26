@@ -1,0 +1,28 @@
+# DEV-3 — 의존성 보안·호환 자동 유지. 그룹 PR로 1인 개발 소음 최소화, 보안 패치는 즉시.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Seoul"
+    open-pull-requests-limit: 5
+    labels: ["dependencies"]
+    groups:
+      # minor/patch는 주 1회 단일 PR로 묶어 소음 최소화(보안 업데이트는 그룹과 무관하게 즉시)
+      minor-and-patch:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels: ["dependencies", "ci"]
+    commit-message:
+      prefix: "chore(ci)"
