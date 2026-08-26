@@ -23,6 +23,7 @@ import { decodeSpot, readGtoHash } from './components/features/gto/gtoShare';
 import type { DeepGtoInit } from './components/features/gto/useDeepGto';
 import type { PosterFormData } from './components/features/PosterFormModal';
 import NuriHoldemLogo from './components/atoms/NuriHoldemLogo';
+import Icon from './components/atoms/Icon';
 import ThemeToggle from './components/atoms/ThemeToggle';
 import { useTheme } from './contexts/ThemeContext';
 import { PORTONE_CONFIGURED } from './components/features/IdentityVerificationButton';
@@ -2170,7 +2171,7 @@ export default function App() {
       {/* 🔔 운영자 푸시 온보딩(설치형·1회) — 새 바인요청 폰 알림 */}
       {pushNudge && (
         <div className="flex items-center gap-2 border-b border-accent-400/30 bg-accent-300/[0.08] px-3 py-2.5">
-          <span className="text-lg" aria-hidden>🔔</span>
+          <span className="text-accent-300" aria-hidden><Icon name="bell" size={18} /></span>
           <p className="min-w-0 flex-1 text-2xs leading-snug text-ink-secondary">
             {(isOwner || isAdmin || user?.role === 'venue_staff')
               ? <>새 <b className="text-accent-300">바인요청</b>을 폰 알림으로 받으세요 — 게임 중에도 놓치지 않아요.</>
@@ -2185,7 +2186,7 @@ export default function App() {
       {user && !user.verified && PORTONE_CONFIGURED && (
         <button type="button" onClick={() => setProfileOpen(true)}
           className="w-full flex items-center gap-2 bg-accent-300/[0.08] border-b border-accent-400/30 px-page-x py-2 text-left hover:bg-accent-300/[0.12] transition-colors">
-          <span className="text-sm" aria-hidden>🔒</span>
+          <span className="text-accent-300" aria-hidden><Icon name="lock" size={14} /></span>
           <span className="flex-1 text-2xs text-accent-300">휴대폰 본인인증이 필요합니다 — 안전한 이용을 위해 인증해 주세요.</span>
           <span className="shrink-0 text-2xs font-bold text-accent-300">인증하기 →</span>
         </button>
@@ -2468,14 +2469,14 @@ export default function App() {
           {/* 손님: 오늘 내 바인(참가) 요청 상태 배너 */}
                 {myTodayRes.length > 0 && (
                   <div className="animate-fade-in overflow-hidden px-page-x pt-3 space-y-1.5">
-                    <p className="px-1 text-2xs font-bold text-ink-secondary">🎫 오늘 예약한 대회</p>
+                    <p className="flex items-center gap-1 px-1 text-2xs font-bold text-ink-secondary"><Icon name="cards" size={13} /> 오늘 예약한 대회</p>
                     {myTodayRes.map((r) => {
                       const sc = schedules.find((x) => x.id === r.scheduleId);
                       return (
                         <button key={r.scheduleId} type="button"
                           onClick={() => { if (sc) setOpenSchedule(sc); }}
                           className="w-full flex items-center gap-2.5 rounded-card border border-accent-400/45 bg-gradient-to-r from-accent-300/[0.12] to-transparent px-3 py-2.5 text-left hover:border-accent-300 transition-colors">
-                          <span className="shrink-0 text-lg" aria-hidden>🎫</span>
+                          <span className="shrink-0 text-accent-300" aria-hidden><Icon name="cards" size={18} /></span>
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-sm font-bold text-ink-primary">{r.title}</span>
                             <span className="block truncate text-2xs text-ink-muted">
@@ -2491,11 +2492,11 @@ export default function App() {
 
                 {myBuyinReqs.length > 0 && (
                   <div className="animate-fade-in overflow-hidden px-page-x pt-3 space-y-1.5">
-                    <p className="px-1 text-2xs font-bold text-ink-secondary">🎮 내 참가 게임 · 바인 요청</p>
+                    <p className="flex items-center gap-1 px-1 text-2xs font-bold text-ink-secondary"><Icon name="chip" size={13} /> 내 참가 게임 · 바인 요청</p>
                     {myBuyinReqs.map((r) => (
                       <div key={r.id} className={['flex items-center gap-2 rounded-card border px-3 py-2 text-xs',
                         r.status === 'approved' ? 'border-emerald-500/40 bg-emerald-500/[0.07]' : r.status === 'rejected' ? 'border-border-default bg-surface-low' : 'border-sky-500/40 bg-sky-500/[0.07]'].join(' ')}>
-                        <span className="shrink-0" aria-hidden>{r.status === 'approved' ? '✅' : r.status === 'rejected' ? '❌' : '⏳'}</span>
+                        <span className={['shrink-0', r.status === 'approved' ? 'text-emerald-400' : r.status === 'rejected' ? 'text-ink-muted' : 'text-sky-400'].join(' ')} aria-hidden><Icon name={r.status === 'approved' ? 'check-circle' : r.status === 'rejected' ? 'close' : 'clock'} size={15} /></span>
                         <span className="min-w-0 flex-1 truncate text-ink-secondary"><b className="text-ink-primary">{r.venueName}</b>{(() => { const n = r.status === 'approved' ? r.gameSeq : r.requestedGameSeq; return n != null ? ` · ${n === 1 ? '메인' : '사이드' + (n - 1)}` : ''; })()} {r.status === 'approved' ? '참가 승인 — 입장하세요! 🎉' : r.status === 'rejected' ? `요청 거절됨${r.rejectReason ? ` — ${r.rejectReason}` : ''}` : '바인 요청 대기중'}</span>
                         {r.status === 'pending' && <button type="button" onClick={() => cancelBuyinRequest(r.id).then(() => getMyBuyinRequestsToday().then(setMyBuyinReqs)).catch((e) => toast.show(e instanceof Error ? e.message : '취소 실패', 'error'))} className="shrink-0 rounded-input border border-border-default px-2 py-1 text-2xs font-bold text-ink-muted hover:text-danger-light hover:border-danger/40">취소</button>}
                       </div>
@@ -2509,7 +2510,7 @@ export default function App() {
                   <div className="px-page-x pt-3">
                     <button type="button" onClick={() => handleVenueClick(recentVenue.venueId)}
                       className="w-full flex items-center gap-2.5 rounded-card border border-border-default bg-surface-low px-3 py-2.5 text-left hover:border-accent-400/50 transition-colors">
-                      <span className="shrink-0 text-lg" aria-hidden>↩️</span>
+                      <span className="shrink-0 text-accent-300" aria-hidden><Icon name="refresh" size={18} /></span>
                       <span className="min-w-0 flex-1">
                         <span className="block text-2xs font-bold text-ink-muted">이어서 하기</span>
                         <span className="block truncate text-sm font-bold text-ink-primary">{recentVenue.venueName ?? '최근 방문 매장'}</span>
@@ -2901,7 +2902,7 @@ const PastTournaments = memo(function PastTournaments({ schedules, onSelect }: {
   return (
     <section className="reveal mt-4 overflow-hidden rounded-card border border-border-subtle bg-surface-low">
       <header className="flex items-center justify-between border-b border-border-subtle px-3 py-2">
-        <h2 className="text-xs font-bold text-ink-secondary">🏁 지난 대회</h2>
+        <h2 data-testid="past-tournaments" className="flex items-center gap-1 text-xs font-bold text-ink-secondary"><Icon name="trophy" size={13} /> 지난 대회</h2>
         <span className="text-2xs text-ink-muted">눌러서 결과·정보 보기</span>
       </header>
       <ul>
@@ -3122,7 +3123,7 @@ function EmptyState({ filtered, followedOnly, onClearFilters, onClearFollow, upc
       ) : (
         <>
           <p className="text-sm">예정된 대회가 없어요</p>
-          <p className="text-xs">아래 <b className="text-ink-secondary">🏁 지난 대회</b>에서 결과를 볼 수 있어요</p>
+          <p className="text-xs">아래 <b className="text-ink-secondary">지난 대회</b>에서 결과를 볼 수 있어요</p>
         </>
       )}
     </div>
