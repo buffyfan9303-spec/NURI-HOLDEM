@@ -12,7 +12,6 @@ import type { Schedule } from '../../api/schedules';
 import type { RegInfo } from '../../lib/regStatus';
 import { compareByStartThenBoost } from '../../lib/scheduleSort';
 import { useTrainerProgress } from '../../lib/trainerProgress';
-import type { CommunityPost } from '../../api/community';
 
 const DAYS_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
@@ -31,7 +30,7 @@ function greeting(now: Date): string {
 }
 
 export default function HomeTab({
-  schedules, loaded, clocksLoaded, liveCount, regInfoBySchedule, posts, onOpenPost, onTools, onSelect, onVenue, onExplore, onLive, active,
+  schedules, loaded, clocksLoaded, liveCount, regInfoBySchedule, onTools, onSelect, onVenue, onExplore, onLive, onRotiCommunity, active,
 }: {
   schedules: Schedule[];
   loaded: boolean;
@@ -39,9 +38,9 @@ export default function HomeTab({
   liveCount: number;
   /** 클락 응답 도착 여부 — 도착 전 '지금 등록 가능' 자리 예약 판단 */
   clocksLoaded: boolean;
-  posts: CommunityPost[];
-  onOpenPost: (p: CommunityPost) => void;
   onTools: () => void;
+  /** 캐러셀 로티아레나 배너 → 로티아레나 매장 커뮤니티 페이지 */
+  onRotiCommunity: () => void;
   regInfoBySchedule: ReadonlyMap<string, RegInfo>;
   onSelect: (s: Schedule) => void;
   onVenue: (venueId: string) => void;
@@ -74,15 +73,6 @@ export default function HomeTab({
   // 학습 이어가기 — 로컬 트레이너 진행(신규 fetch 0). 학습 이력이 있는 기기만 노출.
   const trainer = useTrainerProgress();
   const showTrainer = trainer.xp > 0 || trainer.today > 0 || trainer.streak > 0;
-
-  // 커뮤니티 HOT 1행 — 최근 48시간 내 좋아요 최다 글(없으면 최신 글, 그것도 없으면 숨김)
-  const hotPost = useMemo(() => {
-    const cutoff = Date.now() - 48 * 3600_000;
-    const recent = posts.filter((p) => new Date(p.createdAt).getTime() > cutoff);
-    const pool = recent.length > 0 ? recent : posts;
-    if (pool.length === 0) return null;
-    return [...pool].sort((a, b) => (b.likeCount ?? 0) - (a.likeCount ?? 0))[0];
-  }, [posts]);
 
   const fmtLeft = (ms: number) => {
     const m = Math.floor(ms / 60_000);
@@ -149,8 +139,12 @@ export default function HomeTab({
         </section>
       )}
 
-      {/* 포스터 캐러셀(부스트 우선) — 홈의 유일한 이미지 히어로 */}
-      <PosterCarousel schedules={schedules} loaded={loaded} onSelect={onSelect} />
+      {/* 포스터 캐러셀 — 고정 배너(로티아레나·도구·NURI) + 부스트 우선 대회 포스터 */}
+      <PosterCarousel
+        schedules={schedules}
+        onSelect={onSelect}
+        onBanner={(a) => (a === 'tools' ? onTools() : a === 'explore' ? onExplore() : onRotiCommunity())}
+      />
 
       {/* 오늘·내일 일정 */}
       <section className="px-page-x pt-4">
@@ -214,20 +208,7 @@ export default function HomeTab({
         </div>
       )}
 
-      {/* 커뮤니티 HOT 1행 */}
-      {hotPost && (
-        <div className="px-page-x pt-3">
-          <button type="button" onClick={() => onOpenPost(hotPost)}
-            className="flex w-full items-center gap-2.5 rounded-card bg-surface-low px-3 py-2.5 text-left transition-colors hover:bg-surface-high/60">
-            <span className="text-danger-light"><Icon name="flame" size={16} /></span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-bold text-ink-primary">{hotPost.title || hotPost.content.slice(0, 40)}</span>
-              <span className="block text-2xs tabular-nums text-ink-muted">커뮤니티 인기 글{(hotPost.likeCount ?? 0) > 0 ? ` · 좋아요 ${hotPost.likeCount}` : ''}</span>
-            </span>
-            <Icon name="chevron-right" size={15} className="shrink-0 text-ink-muted" />
-          </button>
-        </div>
-      )}
+      {/* 커뮤니티 인기글 1행은 오너 지시(2026-08-27)로 제거 — 홈은 일정·포스터에 집중 */}
 
       {/* 주간 머니인 킹(브라우즈에서 이사) — 홈의 마지막 줄 */}
       <WeeklyBestStrip active={active} />
