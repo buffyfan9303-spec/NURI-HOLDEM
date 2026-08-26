@@ -77,6 +77,7 @@ export default function PrivacyPolicy() {
             <p className="font-semibold text-ink-primary mb-1">① 일반 회원 가입 시</p>
             <SubItems items={[
               '필수항목: 이메일 주소, 비밀번호, 닉네임, 만 19세 이상 여부 확인',
+              '본인인증 시: 이름, 휴대전화번호, 생년월일, 성별, 통신사, 본인확인기관 발급 연계정보(CI)·중복가입확인정보(DI) — 주민등록번호는 수집·저장하지 않습니다',
               '선택항목: 프로필 이미지, 마케팅 수신 동의 여부',
             ]} />
           </div>
@@ -90,6 +91,7 @@ export default function PrivacyPolicy() {
             <p className="font-semibold text-ink-primary mb-1">③ 서비스 이용 과정에서 자동 수집되는 정보</p>
             <SubItems items={[
               'IP 주소, 쿠키, 서비스 이용 기록(방문 일시, 불량 이용 기록 등)',
+              'Google Analytics 쿠키(이용 통계) — 브라우저 쿠키 차단 설정으로 거부할 수 있습니다',
             ]} />
           </div>
         </div>
@@ -122,7 +124,45 @@ export default function PrivacyPolicy() {
         ]} />
       </Article>
 
-      <Article n={6} title="개인정보 보호책임자">
+      <Article n={6} title="개인정보의 처리 위탁 및 국외 이전">
+        <Items items={[
+          '회사는 서비스 운영을 위해 Supabase, Inc.(데이터베이스·스토리지 — 데이터는 Amazon Web Services 대한민국 서울(ap-northeast-2) 리전에 보관) 및 포트원(주)·제휴 본인확인기관(휴대폰 본인인증, 국내 처리)에 개인정보 처리를 위탁하고 있습니다.',
+          '회사는 「개인정보 보호법」 제28조의8에 따라 다음과 같이 개인정보를 국외로 이전(전송·처리)합니다.',
+        ]} />
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[40rem] text-2xs text-left">
+            <thead>
+              <tr className="text-ink-muted border-b border-border-default">
+                <th className="py-1.5 pr-2 font-semibold">이전받는 자</th>
+                <th className="py-1.5 pr-2 font-semibold">국가</th>
+                <th className="py-1.5 pr-2 font-semibold">이전 항목</th>
+                <th className="py-1.5 pr-2 font-semibold">목적</th>
+                <th className="py-1.5 pr-2 font-semibold">보유·이용기간</th>
+                <th className="py-1.5 font-semibold">이전 방법</th>
+              </tr>
+            </thead>
+            <tbody className="text-ink-secondary">
+              {([
+                ['Vercel Inc.', '미국', '접속 IP·요청 로그', '웹 호스팅·콘텐츠 전송', '위탁계약 종료 또는 벤더 로그 보존주기까지', '서비스 접속 시 네트워크 전송'],
+                ['Cloudflare, Inc.', '미국·글로벌 엣지', '접속 IP·요청 정보', 'API·이미지 전송구간 프록시/캐싱(CDN)', '전송 처리 중 일시 처리', '서비스 접속 시 네트워크 경유'],
+                ['Functional Software, Inc. (Sentry)', '미국', '오류 스택·브라우저 정보·IP', '오류 모니터링·품질 개선', '벤더 보존주기(약 90일) 후 자동 파기', '오류 발생 시 API 전송'],
+                ['Plus Five Five, Inc. (Resend)', '미국', '이메일 주소·닉네임', '주간 소식 이메일 발송(수신 동의자 한정)', '발송 처리 후 벤더 정책에 따른 단기 보관', '발송 시 API 전송'],
+                ['Google LLC (Gemini·Analytics)', '미국', '순위 인증 이미지, 핸드 분석 텍스트, 매장 주간 운영 요약, 이용 통계', 'AI 자동 판정·요약 생성, 이용 통계', '처리 즉시 완료(모델 입력 별도 저장 없음)', '해당 기능 실행 시 API 전송'],
+              ] as string[][]).map((row, i) => (
+                <tr key={i} className="border-b border-border-subtle align-top">
+                  {row.map((cell, j) => <td key={j} className="py-1.5 pr-2">{cell}</td>)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-2xs text-ink-muted">
+          정보주체는 개인정보의 국외 이전을 거부할 수 있습니다(문의: buffyfan9303@gmail.com).
+          다만 거부 시 오류 자동 보고·AI 판정·이메일 소식 등 해당 기능의 이용이 제한될 수 있습니다.
+        </p>
+      </Article>
+
+      <Article n={7} title="개인정보 보호책임자">
         <p>
           회사는 개인정보 처리에 관한 업무를 총괄해서 책임지고, 개인정보 처리와 관련한
           정보주체의 불만처리 및 피해구제 등을 위하여 아래와 같이 개인정보 보호책임자를 지정하고 있습니다.

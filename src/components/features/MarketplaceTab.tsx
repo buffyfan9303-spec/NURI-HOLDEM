@@ -142,6 +142,12 @@ function MarketplaceTab({
         </div>
       )}
 
+      {/* 전자상거래법 §20 통신판매중개자 개별고지 — 거래 전 상시 노출(LAW-8) */}
+      <p data-testid="broker-notice" className="rounded-input border border-border-subtle bg-surface-low px-3 py-2 text-2xs leading-relaxed text-ink-muted">
+        본 장터의 거래는 회원 간 직거래이며, 엔에이치홀딩스는 통신판매중개자로서 거래의 당사자가 아닙니다.
+        상품·거래정보 및 거래에 대한 책임은 판매 회원에게 있습니다.
+      </p>
+
       {/* ── 액션 바 (검색 + 글쓰기) ────────────────────────────────── */}
       <div className="flex gap-2">
         <div className="relative flex-1">

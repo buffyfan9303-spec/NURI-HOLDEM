@@ -114,6 +114,21 @@ export default function LegalNotice() {
         </p>
       </Section>
 
+      <Section icon="🔞" title="건전 이용 안내">
+        <ul className="space-y-1 text-ink-muted">
+          {[
+            '본 서비스는 만 19세 미만 청소년은 이용할 수 없습니다.',
+            '본 서비스는 금전 베팅·환전이 없는 토너먼트 정보·커뮤니티 서비스입니다.',
+            '도박 문제로 어려움을 겪고 있다면 한국도박문제예방치유원 헬프라인 1336(24시간·무료)에서 상담받을 수 있습니다.',
+          ].map((t, i) => (
+            <li key={i} className="flex gap-2">
+              <span className="shrink-0 text-border-strong">·</span>
+              <span>{t}</span>
+            </li>
+          ))}
+        </ul>
+      </Section>
+
       <Section icon="📞" title="신고 및 문의">
         <p>
           불법 환전 시도, 사행 행위 의심 게시물, 피해 사례 등을 발견하신 경우
@@ -124,6 +139,8 @@ export default function LegalNotice() {
             <span className="text-accent-300">buffyfan9303@gmail.com</span></p>
           <p><span className="text-ink-primary font-medium">게임물관리위원회 신고:</span>{' '}
             <span className="text-ink-muted">1488 (평일 09:00–18:00)</span></p>
+          <p><span className="text-ink-primary font-medium">도박문제 상담(한국도박문제예방치유원):</span>{' '}
+            <span className="text-ink-muted">1336 (24시간·무료)</span></p>
           <p><span className="text-ink-primary font-medium">경찰청 사이버범죄신고시스템:</span>{' '}
             <span className="text-ink-muted">ecrm.police.go.kr</span></p>
         </div>

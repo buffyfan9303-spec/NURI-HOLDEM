@@ -9,6 +9,8 @@ const BIZ_ROWS: [string, string][] = [
   ['사업자등록번호', '525-20-02937'],
   ['소재지', '경기도 남양주시 진건읍 사릉로372번길 25, 201동 1403호'],
   ['고객센터', 'buffyfan9303@gmail.com'],
+  // 전자상거래법 §10 표시사항 — 호스팅 서비스 제공자
+  ['호스팅 제공자', 'Vercel Inc.'],
 ];
 
 export default function BusinessFooter({ onOpenLegal, onOpenSupport }: { onOpenLegal?: (d: LegalDoc) => void; onOpenSupport?: () => void }) {
@@ -46,6 +48,7 @@ export default function BusinessFooter({ onOpenLegal, onOpenSupport }: { onOpenL
         {/* 사행성 배제 고지 */}
         <p className="text-2xs leading-relaxed text-ink-muted/80">
           NURI HOLDEM은 「국민체육진흥법」상 마인드 스포츠인 홀덤의 합법적 토너먼트 정보 제공 플랫폼이며, 어떠한 형태의 도박·환전·사행행위와도 무관합니다.
+          <br />만 19세 미만은 이용할 수 없습니다 · 도박문제 상담 1336(24시간·무료)
           <br />© {`2026`} 엔에이치홀딩스. All rights reserved.
         </p>
       </div>
