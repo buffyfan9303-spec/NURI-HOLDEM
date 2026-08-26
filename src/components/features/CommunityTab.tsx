@@ -20,6 +20,7 @@ import { useToast } from '../atoms/Toast';
 import EmptyState from '../atoms/EmptyState';
 import { filterContent } from '../../lib/content-filter';
 import { parseAttachments } from '../../lib/hand';
+import { MiniCard } from '../atoms/HandCards';
 import Avatar from '../atoms/Avatar';
 import Icon from '../atoms/Icon';
 import VenueThumb from '../atoms/VenueThumb';
@@ -672,6 +673,10 @@ const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, se
   // 미디어는 첫 장만 44px 썸네일(88px=레티나 2x 요청)로, 2장 이상은 장수 배지 — 목록에서 원본을 내려받지 않는다.
   const imgs = post.images ?? [];
   const catLabel = BOARD_CATEGORIES.find((c) => c.id === (post.category ?? 'free'))?.label ?? '자유';
+  // 핸드/리플레이 첨부 파싱(검증 #12) — 기존 lib/hand 파서 재사용, 실패 시 조용히 원문 표시로 폴백
+  let att: ReturnType<typeof parseAttachments>;
+  try { att = parseAttachments(post.content); }
+  catch { att = { text: post.content, hand: null, replay: null }; }
   return (
     <li
       onClick={onClick}
@@ -720,21 +725,37 @@ const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, se
           )}
           {/* 본문 — 2줄 클램프 */}
           <p className="text-xs text-ink-primary leading-snug line-clamp-2 mt-0.5 break-words">
-            {(() => {
-              const { text, hand, replay } = parseAttachments(post.content);
-              return (
-                <>
-                  {(hand || replay) && (
-                    <span className="mr-1 inline-flex items-center gap-0.5 rounded-badge bg-accent-300/15 px-1 align-middle font-bold leading-none text-accent-300">
-                      <Icon name={replay ? 'cards' : 'spade'} size={10} className="shrink-0" />
-                      {replay ? '리플레이' : '핸드'}
-                    </span>
-                  )}
-                  {text || (replay ? '핸드 리플레이를 공유했습니다' : hand ? '핸드를 공유했습니다' : '')}
-                </>
-              );
-            })()}
+            {(att.hand || att.replay) && (
+              <span className="mr-1 inline-flex items-center gap-0.5 rounded-badge bg-accent-300/15 px-1 align-middle font-bold leading-none text-accent-300">
+                <Icon name={att.replay ? 'cards' : 'spade'} size={10} className="shrink-0" />
+                {att.replay ? '리플레이' : '핸드'}
+              </span>
+            )}
+            {att.text || (att.replay ? '핸드 리플레이를 공유했습니다' : att.hand ? '핸드를 공유했습니다' : '')}
           </p>
+          {/* 컴팩트 핸드 프리뷰(검증 #12) — 히어로 카드 최대 2장(+리플레이 보드 소형) 절제된 1행.
+              기존 MiniCard 아톰 + parseAttachments 재사용, 새 파서/스키마 없음. 카드가 없으면 렌더 생략(=기존 표시). */}
+          {(() => {
+            if (!att.hand && !att.replay) return null;
+            const hero = (att.replay?.hero ?? att.hand?.hero ?? []).filter(Boolean).slice(0, 2);
+            const villain = (att.replay?.villain ?? att.hand?.villain ?? []).filter(Boolean).slice(0, 2);
+            const shown = hero.length > 0 ? hero : villain; // 히어로 미기입 핸드는 상대 핸드로 폴백
+            const board = (att.replay?.board ?? []).filter(Boolean).slice(0, 5);
+            if (shown.length === 0 && board.length === 0) return null;
+            return (
+              <span className="mt-1 flex items-center gap-1">
+                {shown.map((cd) => <MiniCard key={cd} id={cd} />)}
+                {board.length > 0 && (
+                  <>
+                    <span aria-hidden className="mx-0.5 h-5 w-px shrink-0 bg-border-default" />
+                    <span className="flex origin-left scale-90 gap-0.5">
+                      {board.map((cd) => <MiniCard key={cd} id={cd} />)}
+                    </span>
+                  </>
+                )}
+              </span>
+            );
+          })()}
           {/* 미디어 — 사진 첨부 글을 목록에서 바로 구분하려는 것 — 지금까진 첨부해도 목록에 아무 표시가 없어 '안 올라갔다'고 오해했다.
               88px 썸네일(=44px 레티나 2x)만 받아 목록에서 원본(최대 1200px)을 내려받지 않는다. */}
           {imgs.length > 0 && (

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import type { Comment } from '../../api/community';
 import { useAuth } from '../../contexts/AuthContext';
 import { promptLogin } from '../../lib/requireLogin';
@@ -25,9 +25,58 @@ function relativeTime(iso: string): string {
   return `${Math.floor(diff / 86400)}일 전`;
 }
 
+// ── 읽기시점 재그룹(검증 #05) ────────────────────────────────────────────────
+// 과거 버그: 대댓글의 replies 를 하드코딩 빈 배열로 렌더 → 3레벨 이상 댓글이 화면에서
+// 유실됐다(데이터는 존재). 수정: parentId 데이터는 보존하되, 렌더 시 루트 스레드 밑으로
+// 전체 하위 트리를 평탄 수집한다(4레벨+ 흡수). 루트 직속이 아닌 답글은 '@원부모닉'
+// 프리픽스(mentionOf)로 맥락을 유지한다.
+
+export interface ThreadGroup {
+  root: Comment;
+  /** 루트 아래 전체 하위 트리(깊이 무관)를 DFS 순서로 평탄 수집한 답글 목록 */
+  replies: { comment: Comment; mentionOf?: string }[];
+}
+
+// eslint-disable-next-line react-refresh/only-export-components -- 테스트가 순수 함수를 직접 검증(기존 표시 유틸 공유 관행과 동일)
+export function groupThreads(comments: Comment[]): ThreadGroup[] {
+  const byId = new Map(comments.map((c) => [c.id, c]));
+  const kids = new Map<string, Comment[]>();
+  // 부모가 목록에 없는 답글(부모 삭제 등) — 루트로 승격해 화면 유실을 막는다
+  const orphans: Comment[] = [];
+  for (const c of comments) {
+    if (!c.parentId) continue;
+    if (byId.has(c.parentId)) {
+      const arr = kids.get(c.parentId);
+      if (arr) arr.push(c);
+      else kids.set(c.parentId, [c]);
+    } else {
+      orphans.push(c);
+    }
+  }
+  const roots = [...comments.filter((c) => !c.parentId), ...orphans];
+  return roots.map((root) => {
+    const replies: ThreadGroup['replies'] = [];
+    const walk = (id: string, depth: number) => {
+      if (depth > 50) return; // 순환 데이터 방어
+      for (const child of kids.get(id) ?? []) {
+        replies.push({
+          comment: child,
+          // 루트 직속 답글은 바로 위가 문맥이므로 생략, 3레벨+에서만 원부모 닉 표기
+          mentionOf: child.parentId !== root.id ? byId.get(child.parentId!)?.userName : undefined,
+        });
+        walk(child.id, depth + 1);
+      }
+    };
+    walk(root.id, 0);
+    return { root, replies };
+  });
+}
+
 function CommentItem({ marks = {}, titleOf,
   comment,
+  mention,
   replies,
+  composeParentId,
   onReply,
   onDelete,
   canDelete,
@@ -36,7 +85,11 @@ function CommentItem({ marks = {}, titleOf,
   marks?: Record<string, string>;
   titleOf?: (id?: string | null) => number | undefined;
   comment: Comment;
-  replies: Comment[];
+  /** 평탄화된 3레벨+ 답글의 원부모 닉 — '@닉' 프리픽스로 맥락 유지 */
+  mention?: string;
+  replies: ThreadGroup['replies'];
+  /** 이 댓글에 답글을 달 때 저장할 parentId — depth≥1 댓글은 루트 id 로 캡(쓰기시점 재부모화 아님, 새 글만) */
+  composeParentId: string;
   onReply: (parentId: string, content: string) => void;
   onDelete?: (commentId: string) => void;
   /** (commentId) => 이 댓글을 삭제할 권한이 있는지 */
@@ -49,7 +102,7 @@ function CommentItem({ marks = {}, titleOf,
   const submitReply = (e: React.FormEvent) => {
     e.preventDefault();
     if (!replyContent.trim()) return;
-    onReply(comment.id, replyContent.trim());
+    onReply(composeParentId, replyContent.trim());
     setReplyContent('');
     setShowReplyBox(false);
   };
@@ -71,6 +124,7 @@ function CommentItem({ marks = {}, titleOf,
             <span className="text-2xs text-ink-muted">· {relativeTime(comment.createdAt)}</span>
           </div>
           <p className="text-sm text-ink-primary leading-relaxed whitespace-pre-wrap break-words">
+            {mention && <span className="font-semibold text-accent-300">@{mention} </span>}
             {comment.content}
           </p>
           <div className="mt-1 flex items-center gap-3">
@@ -112,11 +166,11 @@ function CommentItem({ marks = {}, titleOf,
         </form>
       )}
 
-      {/* 답글 목록 */}
+      {/* 답글 목록 — 루트 아래 전체 하위 트리 평탄 수집(3레벨+ 유실 방지, 검증 #05) */}
       {replies.length > 0 && (
         <div className="ml-10 space-y-3 border-l-2 border-border-subtle pl-3">
-          {replies.map((r) => (
-            <CommentItem key={r.id} marks={marks} titleOf={titleOf} comment={r} replies={[]} onReply={onReply} onDelete={onDelete} canDelete={canDelete} loggedIn={loggedIn} />
+          {replies.map(({ comment: r, mentionOf }) => (
+            <CommentItem key={r.id} marks={marks} titleOf={titleOf} comment={r} mention={mentionOf} replies={[]} composeParentId={composeParentId} onReply={onReply} onDelete={onDelete} canDelete={canDelete} loggedIn={loggedIn} />
           ))}
         </div>
       )}
@@ -140,13 +194,8 @@ export default function CommentThread({ comments, onSubmit, onDelete, moderator 
   // 관리자/모더레이터(본인 매장 업주)는 모든 댓글, 일반 사용자는 본인 댓글만 삭제 (서버 RLS와 동일)
   const canDelete = (c: Comment) => moderator || user?.role === 'admin' || user?.id === c.userId;
 
-  const roots   = comments.filter((c) => !c.parentId);
-  const repliesByParent = comments
-    .filter((c) => c.parentId)
-    .reduce<Record<string, Comment[]>>((acc, c) => {
-      (acc[c.parentId!] ??= []).push(c);
-      return acc;
-    }, {});
+  // 읽기시점 재그룹 — 루트별 전체 하위 트리 평탄 수집(3레벨+ 유실 0, 검증 #05)
+  const threads = useMemo(() => groupThreads(comments), [comments]);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -180,17 +229,18 @@ export default function CommentThread({ comments, onSubmit, onDelete, moderator 
       )}
 
       {/* 목록 */}
-      {roots.length === 0 ? (
+      {threads.length === 0 ? (
         <p className="text-center py-8 text-xs text-ink-muted">{emptyText}</p>
       ) : (
         <div className="space-y-4">
-          {roots.map((c) => (
+          {threads.map(({ root, replies }) => (
             <CommentItem
-              key={c.id}
+              key={root.id}
               marks={marks}
               titleOf={titleOf}
-              comment={c}
-              replies={repliesByParent[c.id] ?? []}
+              comment={root}
+              replies={replies}
+              composeParentId={root.id}
               onReply={(parentId, content) => onSubmit(content, parentId)}
               onDelete={onDelete}
               canDelete={canDelete}
