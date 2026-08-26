@@ -2733,8 +2733,8 @@ function ScrollTopButton() {
       type="button"
       aria-label="맨 위로"
       onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-      // 모바일: 하단 탭바(≈4.5rem+safe-area) 위로 띄움 / PC: 기존 위치
-      className="fixed bottom-[5.75rem] lg:bottom-5 right-4 z-40 flex h-10 w-10 items-center justify-center rounded-full border border-border-default bg-surface-mid/95 text-ink-secondary shadow-dialog backdrop-blur transition-colors hover:text-accent-300 animate-fade-in"
+      // 모바일: 하단 탭바 위로 띄움(--tabbar-float, 누락됐던 safe-area 복구) / PC: 기존 위치
+      className="fixed bottom-[var(--tabbar-float)] lg:bottom-5 right-4 z-40 flex h-10 w-10 items-center justify-center rounded-full border border-border-default bg-surface-mid/95 text-ink-secondary shadow-dialog backdrop-blur transition-colors hover:text-accent-300 animate-fade-in"
     >
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         <polyline points="18 15 12 9 6 15" />

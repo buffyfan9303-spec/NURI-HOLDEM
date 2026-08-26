@@ -13,7 +13,7 @@ const BIZ_ROWS: [string, string][] = [
 
 export default function BusinessFooter({ onOpenLegal, onOpenSupport }: { onOpenLegal?: (d: LegalDoc) => void; onOpenSupport?: () => void }) {
   return (
-    <footer className="mt-6 border-t border-border-subtle px-page-x pt-5 pb-[calc(6rem+env(safe-area-inset-bottom))] lg:pb-8">
+    <footer className="mt-6 border-t border-border-subtle px-page-x pt-5 pb-[calc(var(--tabbar-safe)+0.5rem)] lg:pb-8">
       <div className="mx-auto w-full max-w-5xl space-y-3">
         {/* 약관·정책 링크 */}
         <nav className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-2xs">

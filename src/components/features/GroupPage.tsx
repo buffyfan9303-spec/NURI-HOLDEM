@@ -115,7 +115,7 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
       </header>
 
       {/* 모바일 하단 탭바(z-50)가 이 오버레이(z-40) 위에 떠 있으므로 하단 여백 확보 */}
-      <div className="flex-1 overflow-y-auto pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-0">
+      <div className="flex-1 overflow-y-auto pb-[var(--tabbar-safe)] lg:pb-0">
         <div className="mx-auto w-full max-w-2xl">
           {/* 이미지 갤러리 */}
           <div className="relative w-full overflow-hidden h-40 sm:h-48 bg-surface-low">

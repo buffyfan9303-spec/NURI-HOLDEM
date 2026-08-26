@@ -23,6 +23,12 @@
     --dur-panel: 0.26s;  /* 시트·오버레이·풀스크린 */
     --press: scale(0.985);
     --press-icon: scale(0.88);
+    /* ── 하단 탭바 회피 오프셋 단일 소스(W1-3 TB1a) — 8곳에 흩어졌던 5.5/5.75/6/4.75rem 통일.
+       safe: 스크롤 콘텐츠의 하단 패딩 기준 / float: 탭바 위에 떠 있는 요소(토스트·배너·버튼) 기준.
+       max(env, 12px): safe-area 없는 안드로이드에서도 최소 숨통 12px — 유일하게 의도된 값 변화.
+       파생 규칙: 푸터 = safe + 0.5rem, 정산바 = safe − 0.75rem (임의 상수 신설 금지). */
+    --tabbar-safe: calc(5.5rem + max(env(safe-area-inset-bottom), 12px));
+    --tabbar-float: calc(5.75rem + max(env(safe-area-inset-bottom), 12px));
   }
 
   :root,
@@ -425,7 +431,7 @@ html.light .text-pink-300 { color: #BE185D; }
 /* ── 모바일 하단 탭바(Riot Mobile 스타일) 공간 확보 — 컨텐츠가 탭바에 가리지 않게 */
 @media (max-width: 1023.5px) {
   /* py-* 유틸 클래스가 태그 셀렉터를 이겨 패딩이 무효되던 버그 — 하단 탭바 가림의 원인 */
-  main { padding-bottom: calc(5.5rem + env(safe-area-inset-bottom)) !important; }
+  main { padding-bottom: var(--tabbar-safe) !important; }
   /* 모바일: 항상 떠 있던 세로 스크롤바 숨김(터치 스크롤이라 불필요) — 오른쪽 '삐져나옴' 제거.
      데스크톱은 scrollbar-gutter:stable 로 폭 흔들림 방지 유지(위 html 규칙). */
   html { overflow-y: auto; scrollbar-gutter: auto; }
