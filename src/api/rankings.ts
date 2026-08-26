@@ -217,6 +217,7 @@ export interface VenuePageConfig {
   placementPoints?: number[];             // 1등부터의 점수 매핑(그 외 등수 = 마지막 값 또는 1)
   customBoards?: CustomBoard[];           // 커스텀 보드 정의(최대 3)
   notifyStaff?: boolean;                  // 직원 호출/공지 알림 수신
+  clockTheme?: import('../components/features/clock/clockTheme').ClockTheme; // TV 송출 클락 테마 v1
 }
 
 export const isCustomBoard = (id: string): boolean => id.startsWith('custom:');
@@ -254,6 +255,18 @@ export async function getVenuePageConfig(venueId: string): Promise<VenuePageConf
   if (IS_MOCK) return null;
   const { data, error } = await supabase.from('venues').select('page_config').eq('id', venueId).single();
   if (error) return null;
+  return (data?.page_config as VenuePageConfig) ?? null;
+}
+
+/**
+ * getVenuePageConfig 의 '실패를 던지는' 판 — TV 송출(ClockDisplay) keep-last 캐시용.
+ * 위 함수는 에러를 null 로 삼켜 '네트워크 실패'와 '설정 없음'을 구분할 수 없다 —
+ * 송출 화면은 실패 시 직전 테마를 유지해야 하므로(기본 테마로 깜빡임 금지) 여기선 throw 한다.
+ */
+export async function fetchVenuePageConfig(venueId: string): Promise<VenuePageConfig | null> {
+  if (IS_MOCK) return null;
+  const { data, error } = await supabase.from('venues').select('page_config').eq('id', venueId).single();
+  if (error) throw error;
   return (data?.page_config as VenuePageConfig) ?? null;
 }
 

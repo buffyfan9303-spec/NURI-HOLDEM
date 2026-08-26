@@ -9,6 +9,9 @@ import QRCode from 'qrcode';
 import { getVenueClocks, subscribeClock, effectiveLevel, type ClockState, type ClockLevel } from '../../../api/clock';
 import { buyinRequestUrl } from '../../../api/ledger';
 import { getAppSetting, CLOCK_AD_KEY } from '../../../api/settings';
+import { fetchVenuePageConfig } from '../../../api/rankings';
+import { readSnap, writeSnap } from '../../../lib/snapshot';
+import { clockThemeVars, sanitizeClockTheme, clockThemeSnapKey, type ClockTheme } from './clockTheme';
 
 const pad = (n: number) => String(Math.floor(n)).padStart(2, '0');
 const mmss = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return `${pad(s / 60)}:${pad(s % 60)}`; };
@@ -40,6 +43,26 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
 }) {
   const [clocks, setClocks] = useState<ClockState[] | null>(null);
   const [sel, setSel] = useState(gameSeq);
+
+  // 클락 테마 v1 — page_config.clockTheme → 루트 CSS 변수(모든 변수 기본값 = 현행 하드코딩 1:1).
+  // 캐시 퍼스트(readSnap) + 실패 시 keep-last: 네트워크 블립에 기본 테마로 깜빡이면 안 되는 매장 TV 화면.
+  const [clkVars, setClkVars] = useState<Record<string, string>>(
+    () => clockThemeVars(readSnap<ClockTheme | null>(clockThemeSnapKey(venueId))),
+  );
+  useEffect(() => {
+    let alive = true;
+    // venue 전환 시 그 venue 의 캐시로 즉시 페인트(없으면 기본 룩)
+    setClkVars(clockThemeVars(readSnap<ClockTheme | null>(clockThemeSnapKey(venueId))));
+    fetchVenuePageConfig(venueId)
+      .then((c) => {
+        if (!alive) return;
+        const t = sanitizeClockTheme(c?.clockTheme); // 성공 응답의 '테마 없음(null)'도 정답 — 캐시에 반영
+        writeSnap(clockThemeSnapKey(venueId), t);
+        setClkVars(clockThemeVars(t));
+      })
+      .catch(() => { /* keep-last — 직전 테마 유지 */ });
+    return () => { alive = false; };
+  }, [venueId]);
 
   const [fs, setFs] = useState(false);
   const [auto, setAuto] = useState(true);          // 멀티게임 자동 순환
@@ -154,7 +177,9 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
   const showElim = !!elimMsg && Date.now() < elimMsg.until;
 
   return (
-    <div ref={rootRef} className="fixed inset-0 z-[80] flex flex-col bg-[#06080B] text-white select-none">
+    // 배경·강조색은 테마 변수 — 기본값이 곧 기존 하드코딩(bg-[#06080B] · accent-300)이라 무테마 룩 불변
+    <div ref={rootRef} className="fixed inset-0 z-[80] flex flex-col text-white select-none"
+      style={{ ...clkVars, background: 'var(--clk-bg, #06080B)' }}>
       {/* 상단 바 — 매장/게임 + 컨트롤(읽기전용 컨트롤만: 게임전환·풀스크린·닫기) */}
       <header className="flex shrink-0 items-center gap-2 px-[2.5vmin] py-[1.5vmin]">
         <span className="flex h-2.5 w-2.5 shrink-0 items-center justify-center">
@@ -168,8 +193,9 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
           <div className="ml-2 flex shrink-0 items-center gap-1">
             {games.map((c) => (
               <button key={c.gameSeq} type="button" onClick={() => { setSel(c.gameSeq); setAuto(false); }}
+                style={c.gameSeq === g?.gameSeq ? { background: 'var(--clk-accent, #5E6AD2)' } : undefined}
                 className={['rounded-full px-[1.6vmin] py-[0.6vmin] text-[1.8vmin] font-bold transition-colors',
-                  c.gameSeq === g?.gameSeq ? 'bg-accent-300 text-black' : 'bg-white/10 text-white/70 hover:bg-white/20'].join(' ')}>
+                  c.gameSeq === g?.gameSeq ? 'text-black' : 'bg-white/10 text-white/70 hover:bg-white/20'].join(' ')}>
                 {gameLabel(c)}{c.running ? '' : ' ⏸'}
               </button>
             ))}
@@ -217,7 +243,7 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
                       <li key={i} className="flex items-baseline justify-between gap-3 border-b border-white/5 pb-[0.5vmin] last:border-0">
                         <span className="text-[2.5vmin] font-bold text-white/85">{p.place}</span>
                         {/* 원 단위 오입력(1,000,000)도 '만' 기준으로 환산 표시 — 순위 자동채움과 동일 휴리스틱 */}
-                        <span className="text-[2.7vmin] font-extrabold tabular-nums text-accent-300">{(p.amount >= 10000 ? Math.round(p.amount / 10000) : p.amount).toLocaleString()}<span className="text-[1.7vmin] font-bold text-white/50">만</span></span>
+                        <span className="text-[2.7vmin] font-extrabold tabular-nums" style={{ color: 'var(--clk-accent, #5E6AD2)' }}>{(p.amount >= 10000 ? Math.round(p.amount / 10000) : p.amount).toLocaleString()}<span className="text-[1.7vmin] font-bold text-white/50">만</span></span>
                       </li>
                     ))}
                   </ul>
@@ -312,8 +338,12 @@ const CenterPanel = memo(function CenterPanel({ g }: { g: ClockState }) {
           {lv && lv.ante > 0 && <span className="ml-[1.5vmin] align-middle text-white/45" style={{ fontSize: 'clamp(16px, 3.5vmin, 60px)' }}>ante {lv.ante.toLocaleString()}</span>}
         </p>
       )}
-      <p className={`mt-[1vmin] font-extrabold leading-none tabular-nums ${urgent ? 'text-rose-400 animate-pulse' : isBreak ? 'text-sky-300' : 'text-accent-300'}`}
-        style={{ fontSize: 'clamp(72px, 24vmin, 360px)' }}>
+      {/* 타이머 3상태색 분리(검증 #04) — 긴급 rose·브레이크 sky 는 테마가 못 덮는 잠금 변수, 평시만 테마 accent */}
+      <p className={`mt-[1vmin] font-extrabold leading-none tabular-nums ${urgent ? 'animate-pulse' : ''}`}
+        style={{
+          fontSize: 'clamp(72px, 24vmin, 360px)',
+          color: urgent ? 'var(--clk-timer-urgent, #fb7185)' : isBreak ? 'var(--clk-timer-break, #7dd3fc)' : 'var(--clk-timer, #5E6AD2)',
+        }}>
         {mmss(Math.max(0, remaining))}
       </p>
       {!g.running && <p className="mt-[1vmin] text-[2.6vmin] font-bold text-amber-400">⏸ 일시정지</p>}
@@ -330,7 +360,8 @@ const CenterPanel = memo(function CenterPanel({ g }: { g: ClockState }) {
 function BigStat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
     <div className="px-1 text-center">
-      <p className={`font-extrabold leading-none tabular-nums ${accent ? 'text-accent-300' : 'text-white'}`} style={{ fontSize: 'clamp(20px, 4vmin, 64px)' }}>{value}</p>
+      <p className={`font-extrabold leading-none tabular-nums ${accent ? '' : 'text-white'}`}
+        style={{ fontSize: 'clamp(20px, 4vmin, 64px)', ...(accent ? { color: 'var(--clk-accent, #5E6AD2)' } : null) }}>{value}</p>
       <p className="mt-[0.6vmin] text-[1.7vmin] text-white/45">{label}</p>
     </div>
   );

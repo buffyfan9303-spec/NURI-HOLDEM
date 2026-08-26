@@ -9,6 +9,10 @@ import {
 } from '../../api/rankings';
 import { searchRegisteredPlayers, type RegisteredPlayer } from '../../api/ledger';
 import { getVenueSlug, isSlugAvailable, setVenueSlug } from '../../api/community';
+import {
+  CLOCK_THEME_PRESETS, CLOCK_ACCENT_SWATCHES, DEFAULT_CLOCK_PRESET_ID,
+  clockPresetById, makeClockTheme, sanitizeClockTheme, type ClockTheme,
+} from './clock/clockTheme';
 
 // 매장 페이지 탭(VenuePage와 동일 키)
 const PAGE_TABS: { key: string; label: string }[] = [
@@ -89,12 +93,106 @@ export default function VenueCustomizePanel({ venueId }: { venueId: string }) {
       {/* 내 매장 링크(커스텀 슬러그) — nuriholdem.com/s/<원하는이름> */}
       <SlugEditor venueId={venueId} />
 
+      {/* 클락 테마 — TV 송출 화면 배경·강조색(누르면 즉시 저장). 부모 cfg 에 동기화해
+          아래 '탭 순서 저장'(전체 JSON 교체 RPC)이 방금 고른 테마를 되돌리지 않게 한다 */}
+      <ClockThemeSection venueId={venueId}
+        theme={cfg.clockTheme ?? null}
+        onSaved={(t) => setCfg((c) => {
+          const n = { ...c };
+          if (t) n.clockTheme = t; else delete n.clockTheme;
+          return n;
+        })} />
+
       <p className="text-2xs text-ink-muted">순위 탭에 보일 <span className="font-semibold text-accent-300">랭킹 보드 종류·1~3등 칭호·기준 점수·포인트 지급</span>은 「매장 랭킹」 탭에서 설정합니다.</p>
 
       <button type="button" onClick={save} disabled={saving} className="btn-primary w-full text-sm py-2.5 disabled:opacity-50">
         {saving ? '저장 중…' : '탭 순서 저장'}
       </button>
     </div>
+  );
+}
+
+/**
+ * 클락 테마 — TV 송출(ClockDisplay) 배경·강조색 설정. 프리셋 6종 + accent 스와치, 즉시 저장.
+ * set_venue_page_config 는 page_config 전체를 교체하는 RPC 라, 저장 직전 최신 config 를
+ * 다시 읽어 clockTheme 키만 갈아끼운다(다른 화면에서 바꾼 탭 순서·랭킹 설정 보존).
+ */
+function ClockThemeSection({ venueId, theme, onSaved }: {
+  venueId: string; theme: ClockTheme | null; onSaved: (t: ClockTheme | null) => void;
+}) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+
+  const cur = sanitizeClockTheme(theme);
+  const curPresetId = cur ? (cur.background?.preset ?? cur.palette?.preset ?? DEFAULT_CLOCK_PRESET_ID) : DEFAULT_CLOCK_PRESET_ID;
+  const curPreset = clockPresetById(curPresetId) ?? CLOCK_THEME_PRESETS[0];
+  const curAccent = cur?.palette?.accent ?? curPreset.accent;
+
+  const persist = async (next: ClockTheme | null) => {
+    setBusy(true);
+    try {
+      const latest = (await getVenuePageConfig(venueId)) ?? {};
+      const merged: VenuePageConfig = { ...latest };
+      if (next) merged.clockTheme = next; else delete merged.clockTheme;
+      await setVenuePageConfig(venueId, merged);
+      onSaved(next);
+      toast.show(next ? '클락 테마를 저장했습니다 — TV 송출 화면에 반영됩니다' : '클락 테마를 기본으로 되돌렸습니다', 'success');
+    } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2.5">
+      <div>
+        <h3 className="text-sm font-bold text-ink-primary">클락 테마 <span className="text-2xs font-normal text-ink-muted">(TV 송출 화면)</span></h3>
+        <p className="mt-0.5 text-2xs text-ink-muted">
+          TV 송출 화면의 배경과 강조색입니다. 누르면 바로 저장됩니다.
+          긴급(1분 미만) 적색·브레이크 청색 표시는 테마와 무관하게 유지됩니다.
+        </p>
+      </div>
+
+      {/* 프리셋 6종 — 미리보기 사각형(배경 = 실제 CSS 값, 프리셋 상수라 인라인 hex 허용) */}
+      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+        {CLOCK_THEME_PRESETS.map((p) => {
+          const on = p.id === curPresetId && !!cur;
+          const onDefault = p.id === DEFAULT_CLOCK_PRESET_ID && !cur; // 미설정 = 기본 프리셋 룩
+          const active = on || onDefault;
+          return (
+            <button key={p.id} type="button" disabled={busy}
+              onClick={() => persist(makeClockTheme(p.id))}
+              aria-pressed={active}
+              className={['rounded-input border p-1.5 text-left transition-colors disabled:opacity-50',
+                active ? 'border-accent-300' : 'border-border-default hover:border-accent-400/40'].join(' ')}>
+              <span className="flex h-12 items-center justify-center rounded-input" style={{ background: p.bg }}>
+                <span className="text-sm font-extrabold tabular-nums" style={{ color: active && cur ? curAccent : p.accent }}>12:34</span>
+              </span>
+              <span className={['mt-1 block text-2xs font-semibold', active ? 'text-accent-300' : 'text-ink-secondary'].join(' ')}>{p.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* accent 스와치 — 안전 색 10종에서만 선택(임의 색 입력 없음) */}
+      <div>
+        <p className="mb-1 text-2xs font-semibold text-ink-secondary">강조색 <span className="font-normal text-ink-muted">(타이머·상금 숫자)</span></p>
+        <div className="flex flex-wrap gap-1.5">
+          {CLOCK_ACCENT_SWATCHES.map((s) => {
+            const on = s.value === curAccent;
+            return (
+              <button key={s.value} type="button" disabled={busy} title={s.label} aria-label={`강조색 ${s.label}`}
+                aria-pressed={on}
+                onClick={() => persist(makeClockTheme(curPresetId, s.value))}
+                className={['h-7 w-7 rounded-full border-2 transition-colors disabled:opacity-50',
+                  on ? 'border-ink-primary' : 'border-transparent hover:border-ink-muted'].join(' ')}
+                style={{ backgroundColor: s.value }} />
+            );
+          })}
+        </div>
+      </div>
+
+      <button type="button" disabled={busy || !cur} onClick={() => persist(null)}
+        className="btn-ghost px-3 text-2xs disabled:opacity-40">기본으로 되돌리기</button>
+    </section>
   );
 }
 
