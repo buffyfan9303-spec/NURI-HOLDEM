@@ -27,7 +27,7 @@ interface ProfileModalProps {
   onOpenSupport?: () => void;
 }
 
-type Tab = 'profile' | 'security';
+type Tab = 'profile' | 'settings' | 'security';
 
 const ROLE_LABELS: Record<string, string> = {
   user:        '일반 회원',
@@ -240,14 +240,134 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
     <Modal open={open} onClose={() => { sessionStorage.removeItem('nh_pw_otp'); onClose(); }} title="프로필 관리" maxWidth="sm" variant="sheet">
       {/* ── 탭 바 (골드 밑줄 스프링 슬라이드) ─────────────────────────── */}
       <UnderlineTabs
-        items={[{ key: 'profile', label: '기본 정보' }, { key: 'security', label: '보안' }]}
+        items={[
+          { key: 'profile',  label: '프로필' },
+          { key: 'settings', label: '설정' },
+          { key: 'security', label: '보안' },
+        ]}
         value={tab} onChange={setTab} />
 
-      {/* ── 기본 정보 탭 ──────────────────────────────────────────── */}
+      {/* ── 프로필 탭 (대시보드 — 읽기 전용) ─────────────────────── */}
       {tab === 'profile' && (
         <div className="p-4 space-y-5">
 
           {/* 아이덴티티 헤더 — 아바타(등급 링) · 닉네임 · 등급 · 칭호 · 인증 마크 */}
+          <div className="flex flex-col items-center gap-3 pt-1">
+            <div
+              className="relative w-24 h-24 rounded-full overflow-hidden ring-4"
+              style={{ '--tw-ring-color': ringColor } as CSSProperties}
+            >
+              {avatarPreview ? (
+                <img src={avatarPreview} alt="프로필" className="w-full h-full object-cover" />
+              ) : (
+                <span
+                  className="w-full h-full flex items-center justify-center text-4xl font-bold text-white"
+                  style={{ background: selectedColor }}
+                >
+                  {(name || user.name)[0]?.toUpperCase()}
+                </span>
+              )}
+            </div>
+
+            {/* 닉네임 · 등급 · 칭호 · 인증 */}
+            <div className="flex flex-col items-center gap-1">
+              <div className="flex max-w-full items-center gap-1.5">
+                <span className="min-w-0 truncate text-base font-bold text-ink-primary">{name.trim() || user.name}</span>
+                <TierBadge points={points} admin={isAdmin} size={16} />
+                <TitleChip points={points} />
+              </div>
+              {user.verified && (
+                <span className="inline-flex items-center gap-1 text-2xs font-semibold text-emerald-400">
+                  <Icon name="check-circle" size={12} className="shrink-0" /> 본인인증 완료
+                </span>
+              )}
+            </div>
+
+            {/* 등급 진행 — CSS width 바 (활동 점수 기반, 새 fetch 없음) */}
+            <div className="w-full max-w-[280px]">
+              <div className="mb-1 flex items-center justify-between text-2xs text-ink-muted">
+                <span>Lv {prog.current.level} · {prog.current.title}</span>
+                <span className="tabular-nums">
+                  {prog.next ? `다음 등급까지 ${prog.toNext.toLocaleString()}점` : '최고 등급'}
+                </span>
+              </div>
+              <div className="h-1 overflow-hidden rounded-full bg-surface-float">
+                <div
+                  className="h-full rounded-full"
+                  style={{ width: `${Math.round(prog.ratio * 100)}%`, background: prog.current.color }}
+                />
+              </div>
+            </div>
+
+            <p className="text-2xs text-ink-muted">사진·닉네임 변경은 ‘설정’ 탭에서 할 수 있습니다</p>
+          </div>
+
+          {/* 내 활동 · 뱃지 진열장 */}
+          <ActivityBadges points={user?.activityPoints ?? 0} visits={visitStats.visits} upcoming={visitStats.upcoming} />
+          {/* 계정 정보 (읽기 전용) — 2xs 라벨 위 / 값 카드 아래 고정 높이 행 */}
+          <div className="space-y-3">
+            <div>
+              <p className="mb-1 text-2xs text-ink-muted">이메일</p>
+              <div className="flex h-10 items-center rounded-input border border-border-subtle bg-surface-high px-3">
+                <span className="min-w-0 select-all truncate text-sm text-ink-secondary">{user.email}</span>
+              </div>
+              <p className="mt-1 text-2xs text-ink-muted">이메일은 변경할 수 없습니다</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <p className="mb-1 text-2xs text-ink-muted">회원 구분</p>
+                <div className="flex h-10 items-center gap-2 rounded-input border border-border-subtle bg-surface-high px-3">
+                  <span className="min-w-0 truncate text-sm font-semibold text-ink-primary">
+                    {ROLE_LABELS[user.role] ?? user.role}
+                  </span>
+                  {user.role === 'venue_owner' && (
+                    <span className={['shrink-0 text-2xs', user.approved ? 'text-emerald-400' : 'text-amber-400'].join(' ')}>
+                      {user.approved ? '승인됨' : '승인 대기'}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div>
+                <p className="mb-1 text-2xs text-ink-muted">가입일</p>
+                <div className="flex h-10 items-center rounded-input border border-border-subtle bg-surface-high px-3">
+                  <span className="min-w-0 truncate text-sm tabular-nums text-ink-secondary">
+                    {user.joinedAt ? `${new Date(user.joinedAt).toLocaleDateString('ko-KR')} 가입` : '—'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 고객센터 1:1 문의 */}
+          {onOpenSupport && (
+            <button type="button" onClick={() => { onClose(); onOpenSupport(); }}
+              className="flex w-full items-center gap-2 rounded-card border border-border-default bg-surface-high px-3 py-2.5 text-left transition-colors hover:border-accent-400/40">
+              <Icon name="comment" size={16} className="shrink-0 text-ink-muted" />
+              <span className="flex-1 text-sm font-semibold text-ink-primary">고객센터 1:1 문의</span>
+              <span className="text-2xs text-ink-muted">문의·답변 확인 →</span>
+            </button>
+          )}
+
+          {/* 약관 및 정책 */}
+          {onOpenLegal && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border-subtle pt-3 text-2xs text-ink-muted">
+              <button type="button" onClick={() => onOpenLegal('terms')} className="transition-colors hover:text-accent-300">이용약관</button>
+              <span className="text-border-strong">·</span>
+              <button type="button" onClick={() => onOpenLegal('privacy')} className="transition-colors hover:text-accent-300">개인정보처리방침</button>
+              <span className="text-border-strong">·</span>
+              <button type="button" onClick={() => onOpenLegal('refund')} className="transition-colors hover:text-accent-300">취소·환불 정책</button>
+              <span className="text-border-strong">·</span>
+              <button type="button" onClick={() => onOpenLegal('location')} className="transition-colors hover:text-accent-300">위치기반서비스 이용약관</button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── 설정 탭 (편집 폼 — 저장 플로우는 기존 그대로) ─────────── */}
+      {tab === 'settings' && (
+        <div className="p-4 space-y-5">
+
+          {/* 아바타 편집 — 클릭 → 크롭 편집기 */}
           <div className="flex flex-col items-center gap-3 pt-1">
             <div className="relative">
               <button
@@ -297,36 +417,6 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
               onChange={handleAvatarChange}
             />
 
-            {/* 닉네임 · 등급 · 칭호 · 인증 */}
-            <div className="flex flex-col items-center gap-1">
-              <div className="flex max-w-full items-center gap-1.5">
-                <span className="min-w-0 truncate text-base font-bold text-ink-primary">{name.trim() || user.name}</span>
-                <TierBadge points={points} admin={isAdmin} size={16} />
-                <TitleChip points={points} />
-              </div>
-              {user.verified && (
-                <span className="inline-flex items-center gap-1 text-2xs font-semibold text-emerald-400">
-                  <Icon name="check-circle" size={12} className="shrink-0" /> 본인인증 완료
-                </span>
-              )}
-            </div>
-
-            {/* 등급 진행 — CSS width 바 (활동 점수 기반, 새 fetch 없음) */}
-            <div className="w-full max-w-[280px]">
-              <div className="mb-1 flex items-center justify-between text-2xs text-ink-muted">
-                <span>Lv {prog.current.level} · {prog.current.title}</span>
-                <span className="tabular-nums">
-                  {prog.next ? `다음 등급까지 ${prog.toNext.toLocaleString()}점` : '최고 등급'}
-                </span>
-              </div>
-              <div className="h-1 overflow-hidden rounded-full bg-surface-float">
-                <div
-                  className="h-full rounded-full"
-                  style={{ width: `${Math.round(prog.ratio * 100)}%`, background: prog.current.color }}
-                />
-              </div>
-            </div>
-
             <p className="text-2xs text-ink-muted">클릭하여 사진 변경 · JPG / PNG / WEBP · 최대 5MB</p>
 
             {/* 배경색 팔레트 (사진 없을 때) */}
@@ -349,27 +439,6 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
               </div>
             )}
           </div>
-
-          {/* 내 활동 · 뱃지 진열장 */}
-          <ActivityBadges points={user?.activityPoints ?? 0} visits={visitStats.visits} upcoming={visitStats.upcoming} />
-
-
-          {/* 본인인증 (1인 1계정) */}
-          {user?.verified ? (
-            <div className="flex items-center gap-2 rounded-card border border-emerald-500/30 bg-emerald-500/[0.06] px-3 py-2.5">
-              <Icon name="check-circle" size={18} className="shrink-0 text-emerald-400" />
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-emerald-300">본인인증 완료</p>
-                <p className="text-2xs text-ink-muted">{user.realName ? `실명 ${user.realName} · ` : ''}1인 1계정 인증됨</p>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-1.5 rounded-card border border-accent-400/30 bg-accent-300/[0.06] p-3">
-              <p className="text-sm font-semibold text-accent-300">휴대폰 본인인증</p>
-              <p className="text-2xs text-ink-muted leading-relaxed">안전한 거래와 1인 1계정을 위해 휴대폰 실명인증이 필요합니다. 매장이용권 등 일부 기능에 사용됩니다.</p>
-              <IdentityVerificationButton onVerified={() => { refreshProfile().catch(() => {}); }} />
-            </div>
-          )}
 
           {/* 닉네임 */}
           <div>
@@ -417,40 +486,6 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
             )}
           </div>
 
-          {/* 계정 정보 (읽기 전용) — 2xs 라벨 위 / 값 카드 아래 고정 높이 행 */}
-          <div className="space-y-3">
-            <div>
-              <p className="mb-1 text-2xs text-ink-muted">이메일</p>
-              <div className="flex h-10 items-center rounded-input border border-border-subtle bg-surface-high px-3">
-                <span className="min-w-0 select-all truncate text-sm text-ink-secondary">{user.email}</span>
-              </div>
-              <p className="mt-1 text-2xs text-ink-muted">이메일은 변경할 수 없습니다</p>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <p className="mb-1 text-2xs text-ink-muted">회원 구분</p>
-                <div className="flex h-10 items-center gap-2 rounded-input border border-border-subtle bg-surface-high px-3">
-                  <span className="min-w-0 truncate text-sm font-semibold text-ink-primary">
-                    {ROLE_LABELS[user.role] ?? user.role}
-                  </span>
-                  {user.role === 'venue_owner' && (
-                    <span className={['shrink-0 text-2xs', user.approved ? 'text-emerald-400' : 'text-amber-400'].join(' ')}>
-                      {user.approved ? '승인됨' : '승인 대기'}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div>
-                <p className="mb-1 text-2xs text-ink-muted">가입일</p>
-                <div className="flex h-10 items-center rounded-input border border-border-subtle bg-surface-high px-3">
-                  <span className="min-w-0 truncate text-sm tabular-nums text-ink-secondary">
-                    {user.joinedAt ? `${new Date(user.joinedAt).toLocaleDateString('ko-KR')} 가입` : '—'}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
           {/* 버튼 */}
           <div className="flex gap-2 pt-1">
             <button type="button" onClick={onClose} className="btn-ghost flex-1">
@@ -465,35 +500,30 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
               {saving ? '저장 중…' : '저장하기'}
             </button>
           </div>
-
-          {/* 고객센터 1:1 문의 */}
-          {onOpenSupport && (
-            <button type="button" onClick={() => { onClose(); onOpenSupport(); }}
-              className="flex w-full items-center gap-2 rounded-card border border-border-default bg-surface-high px-3 py-2.5 text-left transition-colors hover:border-accent-400/40">
-              <Icon name="comment" size={16} className="shrink-0 text-ink-muted" />
-              <span className="flex-1 text-sm font-semibold text-ink-primary">고객센터 1:1 문의</span>
-              <span className="text-2xs text-ink-muted">문의·답변 확인 →</span>
-            </button>
-          )}
-
-          {/* 약관 및 정책 */}
-          {onOpenLegal && (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border-subtle pt-3 text-2xs text-ink-muted">
-              <button type="button" onClick={() => onOpenLegal('terms')} className="transition-colors hover:text-accent-300">이용약관</button>
-              <span className="text-border-strong">·</span>
-              <button type="button" onClick={() => onOpenLegal('privacy')} className="transition-colors hover:text-accent-300">개인정보처리방침</button>
-              <span className="text-border-strong">·</span>
-              <button type="button" onClick={() => onOpenLegal('refund')} className="transition-colors hover:text-accent-300">취소·환불 정책</button>
-              <span className="text-border-strong">·</span>
-              <button type="button" onClick={() => onOpenLegal('location')} className="transition-colors hover:text-accent-300">위치기반서비스 이용약관</button>
-            </div>
-          )}
         </div>
       )}
 
       {/* ── 보안 탭 ───────────────────────────────────────────────── */}
       {tab === 'security' && (
         <>
+        {/* 본인인증 (1인 1계정) */}
+        <div className="px-4 pt-4">
+          {user?.verified ? (
+            <div className="flex items-center gap-2 rounded-card border border-emerald-500/30 bg-emerald-500/[0.06] px-3 py-2.5">
+              <Icon name="check-circle" size={18} className="shrink-0 text-emerald-400" />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-emerald-300">본인인증 완료</p>
+                <p className="text-2xs text-ink-muted">{user.realName ? `실명 ${user.realName} · ` : ''}1인 1계정 인증됨</p>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-1.5 rounded-card border border-accent-400/30 bg-accent-300/[0.06] p-3">
+              <p className="text-sm font-semibold text-accent-300">휴대폰 본인인증</p>
+              <p className="text-2xs text-ink-muted leading-relaxed">안전한 거래와 1인 1계정을 위해 휴대폰 실명인증이 필요합니다. 매장이용권 등 일부 기능에 사용됩니다.</p>
+              <IdentityVerificationButton onVerified={() => { refreshProfile().catch(() => {}); }} />
+            </div>
+          )}
+        </div>
         <form onSubmit={handleConfirmChange} className="p-4 space-y-4">
 
           <div className="flex items-start gap-2 p-3 rounded-card bg-surface-high border border-border-subtle">
