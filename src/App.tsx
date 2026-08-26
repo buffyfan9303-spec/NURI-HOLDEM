@@ -1097,6 +1097,9 @@ export default function App() {
   const [listings,      setListings]      = useState<MarketplaceListing[]>(() => readSnap<MarketplaceListing[]>('listings') ?? []);
   const [marketLoaded,  setMarketLoaded]  = useState(() => readSnap<MarketplaceListing[]>('listings') != null); // 장터 첫 로딩 여부 — 스냅샷 있으면 스켈레톤 생략
   const [notices,       setNotices]       = useState<MarketplaceNotice[]>(() => readSnap<MarketplaceNotice[]>('notices') ?? []);
+  // MO-7B: 공지 스냅샷조차 없는 최초 방문에서 섹션이 늦게 끼어들며 목록을 밀지 않도록,
+  // 응답 전에는 섹션 셸(헤더만)을 자리에 둔다. 스냅샷이 있으면 이미 확정 상태.
+  const [noticesLoaded, setNoticesLoaded] = useState<boolean>(() => readSnap<MarketplaceNotice[]>('notices') != null);
   const [users,         setUsers]         = useState<User[]>([]);
   const [openListing, setOpenListing]      = useState<MarketplaceListing | null>(null);
   const [openNotice, setOpenNotice]        = useState<MarketplaceNotice | null>(null);
@@ -1248,7 +1251,7 @@ export default function App() {
   const reloadVenues    = useCallback(() => { getVenues().then((v) => { setVenues((prev) => (sameJson(prev, v) ? prev : v)); writeSnap('venues', v); }).catch(() => {}); }, []);  
   const reloadPosts     = useCallback(() => { getPosts().then((v) => { setPosts(v); writeSnap('posts', v); }).catch(() => {}); }, []);
   const reloadComments  = useCallback(() => { getComments({}).then(setComments).catch(() => {}); }, []);
-  const reloadNotices   = useCallback(() => { getNotices().then((v) => { setNotices(v); writeSnap('notices', v); }).catch(() => {}); }, []);
+  const reloadNotices   = useCallback(() => { getNotices().then((v) => { setNotices(v); writeSnap('notices', v); setNoticesLoaded(true); }).catch(() => {}); }, []);
 
   // 공개 데이터 초기 로드 — **첫 화면(일정탐색)에 필요한 것만** 즉시 받는다.
   // 예전엔 게시글·댓글·장터까지 6종을 부팅과 동시에 쐈다. 사용자가 기다리는 건 대회 목록인데
@@ -1266,7 +1269,7 @@ export default function App() {
       } else setSchedulesError(sr.reason);
       setSchedulesLoaded(true);
       if (vr.status === 'fulfilled') { setVenues((prev) => (sameJson(prev, vr.value) ? prev : vr.value)); writeSnap('venues', vr.value); }
-      if (nr.status === 'fulfilled') { setNotices(nr.value); writeSnap('notices', nr.value); }
+      if (nr.status === 'fulfilled') { setNotices(nr.value); writeSnap('notices', nr.value); setNoticesLoaded(true); }
     });
      
   }, []);
@@ -2331,66 +2334,11 @@ export default function App() {
             );
           })()}
 
-          {/* 주간 베스트 — 이번 주 머니인 킹 TOP3 롤링 */}
-          <div className="reveal px-page-x pt-3">
-            <WeeklyBestStrip active={activeTab === 'browse'} />
-          </div>
-
-          {/* 손님: 오늘 내 바인(참가) 요청 상태 배너 — (B3) 등장/퇴장 height·opacity 트랜지션으로 CLS 완화 */}
-          {myTodayRes.length > 0 && (
-            <div className="animate-fade-in overflow-hidden px-page-x pt-3 space-y-1.5">
-              <p className="px-1 text-2xs font-bold text-ink-secondary">🎫 오늘 예약한 대회</p>
-              {myTodayRes.map((r) => {
-                const sc = schedules.find((x) => x.id === r.scheduleId);
-                return (
-                  <button key={r.scheduleId} type="button"
-                    onClick={() => { if (sc) setOpenSchedule(sc); }}
-                    className="w-full flex items-center gap-2.5 rounded-card border border-accent-400/45 bg-gradient-to-r from-accent-300/[0.12] to-transparent px-3 py-2.5 text-left hover:border-accent-300 transition-colors">
-                    <span className="shrink-0 text-lg" aria-hidden>🎫</span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-bold text-ink-primary">{r.title}</span>
-                      <span className="block truncate text-2xs text-ink-muted">
-                        {r.venueName ?? '매장'} · {r.startTime ? r.startTime.slice(0, 5) : '19:00'} 시작 · 예약명 {r.displayName}
-                      </span>
-                    </span>
-                    <span className="shrink-0 text-2xs font-bold text-accent-300">포스터 →</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          {myBuyinReqs.length > 0 && (
-            <div className="animate-fade-in overflow-hidden px-page-x pt-3 space-y-1.5">
-              <p className="px-1 text-2xs font-bold text-ink-secondary">🎮 내 참가 게임 · 바인 요청</p>
-              {myBuyinReqs.map((r) => (
-                <div key={r.id} className={['flex items-center gap-2 rounded-card border px-3 py-2 text-xs',
-                  r.status === 'approved' ? 'border-emerald-500/40 bg-emerald-500/[0.07]' : r.status === 'rejected' ? 'border-border-default bg-surface-low' : 'border-sky-500/40 bg-sky-500/[0.07]'].join(' ')}>
-                  <span className="shrink-0" aria-hidden>{r.status === 'approved' ? '✅' : r.status === 'rejected' ? '❌' : '⏳'}</span>
-                  <span className="min-w-0 flex-1 truncate text-ink-secondary"><b className="text-ink-primary">{r.venueName}</b>{(() => { const n = r.status === 'approved' ? r.gameSeq : r.requestedGameSeq; return n != null ? ` · ${n === 1 ? '메인' : '사이드' + (n - 1)}` : ''; })()} {r.status === 'approved' ? '참가 승인 — 입장하세요! 🎉' : r.status === 'rejected' ? `요청 거절됨${r.rejectReason ? ` — ${r.rejectReason}` : ''}` : '바인 요청 대기중'}</span>
-                  {r.status === 'pending' && <button type="button" onClick={() => cancelBuyinRequest(r.id).then(() => getMyBuyinRequestsToday().then(setMyBuyinReqs)).catch((e) => toast.show(e instanceof Error ? e.message : '취소 실패', 'error'))} className="shrink-0 rounded-input border border-border-default px-2 py-1 text-2xs font-bold text-ink-muted hover:text-danger-light hover:border-danger/40">취소</button>}
-                </div>
-              ))}
-            </div>
-          )}
+          {/* 주간 베스트 — 이번 주 머니인 킹 TOP3 롤링 (MO-7B: 래퍼·로딩 스켈레톤 내장) */}
+          <WeeklyBestStrip active={activeTab === 'browse'} />
 
           {/* 공지 — 일정탐색 상단 (전체 공통 공지만) */}
-            {/* 16-1 이어서 하기 — 재방문 사용자의 반복 여정(최근 매장 → 체크인/오늘 대회)을 한 탭으로.
-                비로그인·이력 없음이면 DOM 미렌더(10-1 원칙). */}
-            {recentVenue && (
-              <div className="px-page-x pt-3">
-                <button type="button" onClick={() => handleVenueClick(recentVenue.venueId)}
-                  className="w-full flex items-center gap-2.5 rounded-card border border-border-default bg-surface-low px-3 py-2.5 text-left hover:border-accent-400/50 transition-colors">
-                  <span className="shrink-0 text-lg" aria-hidden>↩️</span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-2xs font-bold text-ink-muted">이어서 하기</span>
-                    <span className="block truncate text-sm font-bold text-ink-primary">{recentVenue.venueName ?? '최근 방문 매장'}</span>
-                  </span>
-                  <span className="shrink-0 text-2xs font-bold text-accent-300">체크인 · 오늘 대회 ›</span>
-                </button>
-              </div>
-            )}
-          {(browseNotices.length > 0 || isAdmin) && (
+          {(browseNotices.length > 0 || isAdmin || !noticesLoaded) && (
             <div className="px-page-x pt-3">
               <section className="rounded-card border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.05] to-transparent overflow-hidden">
                 <header className="flex items-center justify-between px-3 py-2 border-b border-accent-400/20">
@@ -2506,6 +2454,64 @@ export default function App() {
 
                 {/* 🏁 지난 대회 — 완료된 대회 아카이브(결과는 상세에서) */}
                 <PastTournaments schedules={schedules} onSelect={handleScheduleSelect} />
+
+                {/* [DS] MO-7B 규칙 A — 개인화 블록(오늘예약·바인요청·이어서하기)은 auth 왕복
+                    '뒤'에 도착해 목록 위에 끼어들며 매 로그인 부팅마다 계단식 밀림을 만들었다.
+                    결과가 오기 전에는 자리를 만들지 않고, 오면 목록 아래에 붙인다 — 상단 스택 불변.
+                    (알림함·마이에서도 같은 정보에 접근 가능해 기능 손실 없음) */}
+          {/* 손님: 오늘 내 바인(참가) 요청 상태 배너 */}
+                {myTodayRes.length > 0 && (
+                  <div className="animate-fade-in overflow-hidden px-page-x pt-3 space-y-1.5">
+                    <p className="px-1 text-2xs font-bold text-ink-secondary">🎫 오늘 예약한 대회</p>
+                    {myTodayRes.map((r) => {
+                      const sc = schedules.find((x) => x.id === r.scheduleId);
+                      return (
+                        <button key={r.scheduleId} type="button"
+                          onClick={() => { if (sc) setOpenSchedule(sc); }}
+                          className="w-full flex items-center gap-2.5 rounded-card border border-accent-400/45 bg-gradient-to-r from-accent-300/[0.12] to-transparent px-3 py-2.5 text-left hover:border-accent-300 transition-colors">
+                          <span className="shrink-0 text-lg" aria-hidden>🎫</span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-bold text-ink-primary">{r.title}</span>
+                            <span className="block truncate text-2xs text-ink-muted">
+                              {r.venueName ?? '매장'} · {r.startTime ? r.startTime.slice(0, 5) : '19:00'} 시작 · 예약명 {r.displayName}
+                            </span>
+                          </span>
+                          <span className="shrink-0 text-2xs font-bold text-accent-300">포스터 →</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {myBuyinReqs.length > 0 && (
+                  <div className="animate-fade-in overflow-hidden px-page-x pt-3 space-y-1.5">
+                    <p className="px-1 text-2xs font-bold text-ink-secondary">🎮 내 참가 게임 · 바인 요청</p>
+                    {myBuyinReqs.map((r) => (
+                      <div key={r.id} className={['flex items-center gap-2 rounded-card border px-3 py-2 text-xs',
+                        r.status === 'approved' ? 'border-emerald-500/40 bg-emerald-500/[0.07]' : r.status === 'rejected' ? 'border-border-default bg-surface-low' : 'border-sky-500/40 bg-sky-500/[0.07]'].join(' ')}>
+                        <span className="shrink-0" aria-hidden>{r.status === 'approved' ? '✅' : r.status === 'rejected' ? '❌' : '⏳'}</span>
+                        <span className="min-w-0 flex-1 truncate text-ink-secondary"><b className="text-ink-primary">{r.venueName}</b>{(() => { const n = r.status === 'approved' ? r.gameSeq : r.requestedGameSeq; return n != null ? ` · ${n === 1 ? '메인' : '사이드' + (n - 1)}` : ''; })()} {r.status === 'approved' ? '참가 승인 — 입장하세요! 🎉' : r.status === 'rejected' ? `요청 거절됨${r.rejectReason ? ` — ${r.rejectReason}` : ''}` : '바인 요청 대기중'}</span>
+                        {r.status === 'pending' && <button type="button" onClick={() => cancelBuyinRequest(r.id).then(() => getMyBuyinRequestsToday().then(setMyBuyinReqs)).catch((e) => toast.show(e instanceof Error ? e.message : '취소 실패', 'error'))} className="shrink-0 rounded-input border border-border-default px-2 py-1 text-2xs font-bold text-ink-muted hover:text-danger-light hover:border-danger/40">취소</button>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+            {/* 16-1 이어서 하기 — 재방문 사용자의 반복 여정(최근 매장 → 체크인/오늘 대회)을 한 탭으로.
+                    비로그인·이력 없음이면 DOM 미렌더(10-1 원칙). */}
+                {recentVenue && (
+                  <div className="px-page-x pt-3">
+                    <button type="button" onClick={() => handleVenueClick(recentVenue.venueId)}
+                      className="w-full flex items-center gap-2.5 rounded-card border border-border-default bg-surface-low px-3 py-2.5 text-left hover:border-accent-400/50 transition-colors">
+                      <span className="shrink-0 text-lg" aria-hidden>↩️</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-2xs font-bold text-ink-muted">이어서 하기</span>
+                        <span className="block truncate text-sm font-bold text-ink-primary">{recentVenue.venueName ?? '최근 방문 매장'}</span>
+                      </span>
+                      <span className="shrink-0 text-2xs font-bold text-accent-300">체크인 · 오늘 대회 ›</span>
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* 우측 위젯 레일 — 주간 머니인 킹·HOT 게시글·오늘 요약 */}

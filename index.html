@@ -107,8 +107,35 @@
           </div>
         </div>
       </header>
+      <!-- [DS] MO-7A: React browse 첫 화면의 상단 스택(검색바 55 + 날짜레일 59 + 필터 199 +
+           뷰토글 45 + 주간킹 51 + 공지 50) 자리를 정적으로 예약 — 예전엔 셸이 헤더 바로 아래
+           y≈74 에서 카드를 시작해 마운트 순간 ~360px 낙하가 콜드 로드마다 100% 재현됐다.
+           실측 2026-08-26 · 375px · html 17px. 클래스는 소스에 존재하는 문자열만(Tailwind 퍼지
+           안전), 보정치는 인라인 style. 값이 어긋나면 App.tsx browse 상단과 함께 재측정할 것. -->
+      <div class="bg-surface-base border-b border-border-subtle">
+        <div class="px-page-x pt-1.5 pb-1.5"><div class="skeleton rounded-input" style="height:42.5px"></div></div>
+        <div class="flex items-center gap-1.5 overflow-x-auto scrollbar-none px-page-x" style="height:58.7px"><div class="skeleton shrink-0 h-[2.6rem] w-[2.6rem]"></div><div class="skeleton shrink-0 h-[2.6rem] w-[2.6rem]"></div><div class="skeleton shrink-0 h-[2.6rem] w-[2.6rem]"></div><div class="skeleton shrink-0 h-[2.6rem] w-[2.6rem]"></div><div class="skeleton shrink-0 h-[2.6rem] w-[2.6rem]"></div><div class="skeleton shrink-0 h-[2.6rem] w-[2.6rem]"></div><div class="skeleton shrink-0 h-[2.6rem] w-[2.6rem]"></div><div class="skeleton shrink-0 h-[2.6rem] w-[2.6rem]"></div><div class="skeleton shrink-0 h-[2.6rem] w-[2.6rem]"></div><div class="skeleton shrink-0 h-[2.6rem] w-[2.6rem]"></div></div>
+      </div>
+      <div class="flex flex-col gap-2 px-page-x pt-1.5 pb-0.5">
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <div class="skeleton rounded-input" style="height:44.5px;width:100%"></div>
+          <div class="skeleton rounded-input" style="height:44.5px;width:100%"></div>
+          <div class="skeleton rounded-input" style="height:44.5px;width:100%"></div>
+          <div class="skeleton rounded-input" style="height:38.3px;width:60%"></div>
+        </div>
+      </div>
+      <div class="flex items-center justify-between gap-2 px-page-x pt-1.5">
+        <div class="skeleton" style="height:20px;width:96px"></div>
+        <div class="skeleton rounded-input" style="height:38.3px;width:150px"></div>
+      </div>
+      <div class="px-page-x pt-3"><div class="skeleton rounded-card" style="height:38px"></div></div>
       <div class="px-page-x pt-3">
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-card-gap"><div class="h-24 animate-pulse rounded-card border border-border-subtle bg-surface-high"></div><div class="h-24 animate-pulse rounded-card border border-border-subtle bg-surface-high"></div><div class="h-24 animate-pulse rounded-card border border-border-subtle bg-surface-high"></div><div class="h-24 animate-pulse rounded-card border border-border-subtle bg-surface-high"></div><div class="h-24 animate-pulse rounded-card border border-border-subtle bg-surface-high"></div><div class="h-24 animate-pulse rounded-card border border-border-subtle bg-surface-high"></div></div>
+        <div class="rounded-card border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.05] to-transparent overflow-hidden">
+          <div class="flex items-center justify-between px-3 py-2 border-b border-accent-400/20"><span class="text-xs font-bold text-accent-300">공지사항</span></div>
+        </div>
+      </div>
+      <div class="px-page-x pt-3 pb-section lg:pt-4">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-card-gap"><div class="flex min-h-[87px] items-center gap-2.5 rounded-card border border-border-subtle bg-surface-low p-2"><div class="skeleton h-16 w-16 shrink-0 rounded-input"></div><div class="flex min-w-0 flex-1 flex-col gap-1"><div class="skeleton h-[17px] w-3/4"></div><div class="skeleton h-[17px]"></div><div class="skeleton h-[17px] w-1/2"></div></div></div><div class="flex min-h-[87px] items-center gap-2.5 rounded-card border border-border-subtle bg-surface-low p-2"><div class="skeleton h-16 w-16 shrink-0 rounded-input"></div><div class="flex min-w-0 flex-1 flex-col gap-1"><div class="skeleton h-[17px] w-3/4"></div><div class="skeleton h-[17px]"></div><div class="skeleton h-[17px] w-1/2"></div></div></div><div class="flex min-h-[87px] items-center gap-2.5 rounded-card border border-border-subtle bg-surface-low p-2"><div class="skeleton h-16 w-16 shrink-0 rounded-input"></div><div class="flex min-w-0 flex-1 flex-col gap-1"><div class="skeleton h-[17px] w-3/4"></div><div class="skeleton h-[17px]"></div><div class="skeleton h-[17px] w-1/2"></div></div></div><div class="flex min-h-[87px] items-center gap-2.5 rounded-card border border-border-subtle bg-surface-low p-2"><div class="skeleton h-16 w-16 shrink-0 rounded-input"></div><div class="flex min-w-0 flex-1 flex-col gap-1"><div class="skeleton h-[17px] w-3/4"></div><div class="skeleton h-[17px]"></div><div class="skeleton h-[17px] w-1/2"></div></div></div><div class="flex min-h-[87px] items-center gap-2.5 rounded-card border border-border-subtle bg-surface-low p-2"><div class="skeleton h-16 w-16 shrink-0 rounded-input"></div><div class="flex min-w-0 flex-1 flex-col gap-1"><div class="skeleton h-[17px] w-3/4"></div><div class="skeleton h-[17px]"></div><div class="skeleton h-[17px] w-1/2"></div></div></div><div class="flex min-h-[87px] items-center gap-2.5 rounded-card border border-border-subtle bg-surface-low p-2"><div class="skeleton h-16 w-16 shrink-0 rounded-input"></div><div class="flex min-w-0 flex-1 flex-col gap-1"><div class="skeleton h-[17px] w-3/4"></div><div class="skeleton h-[17px]"></div><div class="skeleton h-[17px] w-1/2"></div></div></div></div>
       </div>
       <nav class="fixed inset-x-0 bottom-0 z-50 lg:hidden pointer-events-none" style="padding-bottom:env(safe-area-inset-bottom)">
         <div class="absolute inset-x-0 -top-3 bottom-0 bg-gradient-to-t from-surface-base via-surface-base/90 to-transparent"></div>
