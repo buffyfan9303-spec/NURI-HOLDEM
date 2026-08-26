@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useBackClose } from '../../lib/backstack';
 import type { AppNotification, NotificationType } from '../../api/notifications';
 import SegmentedTabs from '../atoms/SegmentedTabs';
+import Icon, { type IconName } from '../atoms/Icon';
 
 interface NotificationPanelProps {
   open: boolean;
@@ -13,55 +14,16 @@ interface NotificationPanelProps {
   onNavigate?: (notification: AppNotification) => void;
 }
 
-// ── 타입별 SVG 아이콘 ────────────────────────────────────────────────────────
-
-function TypeIcon({ type, className = '' }: { type: NotificationType; className?: string }) {
-  const common = { width: 18, height: 18, viewBox: '0 0 18 18', fill: 'none', stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
-  switch (type) {
-    case 'qna':
-      return (
-        <svg {...common} className={className} aria-hidden>
-          <path d="M14.5 11A2 2 0 0 1 12.5 13H6L3 16V5A2 2 0 0 1 5 3H12.5A2 2 0 0 1 14.5 5V11Z" />
-        </svg>
-      );
-    case 'comment':
-      return (
-        <svg {...common} className={className} aria-hidden>
-          <polyline points="4,8 4,11 1,11" />
-          <path d="M16,14A6,6 0 0 0 4,11" />
-          <polyline points="14,10 14,7 17,7" />
-          <path d="M2,4A6,6 0 0 0 14,7" />
-        </svg>
-      );
-    case 'mention':
-      return (
-        <svg {...common} className={className} aria-hidden>
-          <circle cx="9" cy="9" r="3" />
-          <path d="M12 9V10.5A2.5 2.5 0 0 0 16 8.5C16 4.5 13 2 9 2C5 2 2 5 2 9C2 13 5 16 9 16H12" />
-        </svg>
-      );
-    case 'approval':
-      return (
-        <svg {...common} className={className} aria-hidden>
-          <circle cx="9" cy="9" r="7" />
-          <polyline points="6,9 8,11 12,7" />
-        </svg>
-      );
-    case 'system':
-      return (
-        <svg {...common} className={className} aria-hidden>
-          <path d="M9 1L11 5L15 5.5L12 8.5L13 13L9 11L5 13L6 8.5L3 5.5L7 5Z" />
-        </svg>
-      );
-    case 'reminder':
-      return (
-        <svg {...common} className={className} aria-hidden>
-          <circle cx="9" cy="9" r="7" />
-          <polyline points="9,5 9,9 12,11" />
-        </svg>
-      );
-  }
-}
+// ── 타입 → Icon 레지스트리 글리프 매핑 (커스텀 인라인 SVG 제거, PATHS 단일 소스) ──
+// qna·comment 는 둘 다 대화성 알림이라 가장 가까운 글리프가 동일하다(제목 텍스트로 구분).
+const TYPE_GLYPH: Record<NotificationType, IconName> = {
+  qna: 'comment',
+  comment: 'comment',
+  mention: 'user',
+  approval: 'check-circle',
+  system: 'info',
+  reminder: 'clock',
+};
 
 function relativeTime(iso: string): string {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -154,9 +116,7 @@ export default function NotificationPanel({
         <ul className="flex-1 overflow-y-auto">
           {visible.length === 0 ? (
             <li className="flex flex-col items-center justify-center py-12 gap-2 text-ink-muted">
-              <svg width="34" height="34" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6.29-4.71L18 17V11c0-3.07-1.63-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.64 5.36 6 7.92 6 11v6l-.29.29A1 1 0 0 0 6.41 19h11.18a1 1 0 0 0 .7-1.71z" />
-              </svg>
+              <Icon name="bell" size={32} strokeWidth={1.5} />
               <p className="text-xs">새 알림이 없습니다</p>
             </li>
           ) : (
@@ -170,42 +130,48 @@ export default function NotificationPanel({
                   }
                 }}
                 className={[
-                  'flex items-start gap-3 px-4 py-3',
+                  // 행 문법 고정: 아바타 + 텍스트(제목 1줄 + 본문 2줄 예약) + 우측 고정폭 자리
+                  // → 텍스트 길이와 무관하게 모든 행 높이 동일
+                  'relative flex items-center gap-3 px-4 py-3',
                   'border-b border-border-subtle last:border-b-0',
                   'hover:bg-surface-high active:bg-surface-high cursor-pointer transition-colors',
-                  !n.read && 'bg-accent-300/[0.04]',
-                ].filter(Boolean).join(' ')}
+                ].join(' ')}
               >
-                {/* 좌측: 발신자 아바타 (텍스트가 있으면 텍스트, 없으면 타입 아이콘) */}
+                {/* 안읽음: 배경 틴트 대신 좌측 2px 액센트 바 하나 */}
+                {!n.read && (
+                  <span
+                    className="absolute left-0 top-3 bottom-3 w-0.5 rounded-full bg-accent-300"
+                    aria-label="안읽음"
+                  />
+                )}
+
+                {/* 좌측: 발신자 아바타 (텍스트가 있으면 텍스트, 없으면 타입 글리프) */}
                 <div className="relative shrink-0">
                   <div
-                    className="w-9 h-9 rounded-full flex items-center justify-center text-white"
-                    style={{ background: n.avatarColor ?? '#5A6175' }}
+                    className={[
+                      'w-9 h-9 rounded-full flex items-center justify-center',
+                      n.avatarColor ? 'text-white' : 'bg-surface-high text-ink-secondary',
+                    ].join(' ')}
+                    style={n.avatarColor ? { background: n.avatarColor } : undefined}
                   >
                     {n.avatarText
                       ? <span className="text-sm font-bold leading-none">{n.avatarText}</span>
-                      : <TypeIcon type={n.type} className="text-white" />}
+                      : <Icon name={TYPE_GLYPH[n.type]} size={16} />}
                   </div>
-                  {/* 좌하단 타입 아이콘 (텍스트 아바타가 있을 때) */}
+                  {/* 우하단 겹침 타입 글리프 배지 (텍스트 아바타일 때) */}
                   {n.avatarText && (
                     <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-surface-mid border border-border-default flex items-center justify-center text-ink-secondary">
-                      <TypeIcon type={n.type} className="w-2.5 h-2.5" />
+                      <Icon name={TYPE_GLYPH[n.type]} size={10} strokeWidth={2.5} />
                     </span>
-                  )}
-                  {!n.read && (
-                    <span
-                      className="absolute -top-0.5 -left-0.5 w-2.5 h-2.5 rounded-full bg-danger border-2 border-surface-mid"
-                      aria-label="안읽음"
-                    />
                   )}
                 </div>
 
-                {/* 내용 */}
+                {/* 내용: 제목 1줄 truncate + 본문 2줄 클램프(min-h로 2줄 공간 예약) */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-baseline justify-between gap-2">
                     <p className={[
-                      'text-xs font-semibold leading-tight',
-                      n.read ? 'text-ink-secondary' : 'text-ink-primary',
+                      'text-xs leading-tight truncate min-w-0',
+                      n.read ? 'font-medium text-ink-secondary' : 'font-semibold text-ink-primary',
                     ].join(' ')}>
                       {n.title}
                     </p>
@@ -213,10 +179,15 @@ export default function NotificationPanel({
                       {relativeTime(n.createdAt)}
                     </span>
                   </div>
-                  <p className="mt-0.5 text-xs text-ink-muted leading-snug line-clamp-2">
+                  <p className="mt-0.5 text-xs text-ink-muted leading-snug line-clamp-2 min-h-[2lh]">
                     {n.message}
                   </p>
                 </div>
+
+                {/* 우측 고정폭 자리 — 썸네일 필드가 생기면 이 슬롯을 채운다. 지금은 딥링크 affordance */}
+                <span className="w-4 shrink-0 flex items-center justify-center text-ink-muted" aria-hidden>
+                  {onNavigate && <Icon name="chevron-right" size={14} />}
+                </span>
               </li>
             ))
           )}
