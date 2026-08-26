@@ -383,6 +383,27 @@ body { overscroll-behavior-y: contain; }
 
 /* 승급 축하 컨페티 — 위에서 흩날리며 떨어지는 골드 조각 */
 .confetti { top: -3%; animation-name: confettiFall; animation-timing-function: linear; animation-iteration-count: infinite; }
+/* ── 포스터 오토 캐러셀(APIS식) — 무한 루프 마퀴(모션 헌법 허용 예외 ①) ─────────
+   transform 전용·컴포지터 상주. 트랙은 2배 복제 + -50% 이동으로 이음새 없이 순환.
+   (각 카드 mr-3 이라 세트 경계 간격이 내부 간격과 동일 = -50% 지점이 정확히 맞물림)
+   호버·프레스 중 일시정지. reduced-motion 은 아래 블록에서 수동 스크롤로 폴백. */
+@keyframes poster-marquee-x { to { transform: translateX(-50%); } }
+.poster-marquee { animation: poster-marquee-x 36s linear infinite; }
+.poster-marquee:hover, .poster-marquee:active { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) {
+  .poster-marquee { animation: none !important; }
+  .poster-marquee-viewport { overflow-x: auto; }
+}
+
+/* ── 펠트 시그니처(DAI-2b·6) — 딱 한 곳(포스터 캐러셀 히어로)에만 절제 적용 ─────
+   딥 펠트 그린 라디얼 + 초미세 SVG 노이즈(data-uri) — 순수 CSS, 이미지 에셋·egress 0.
+   '밤+펠트+칩' 색 스토리의 designed 시그니처. 다른 서피스로 확산 금지(과용=소음). */
+.felt-hero {
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E"),
+    radial-gradient(120% 150% at 50% 0%, rgb(31 93 68 / 0.16), transparent 62%);
+}
+
 @keyframes confettiFall {
   0%   { transform: translateY(0) rotate(0deg); opacity: 1; }
   100% { transform: translateY(108vh) rotate(540deg); opacity: 0.6; }
@@ -399,7 +420,7 @@ body { overscroll-behavior-y: contain; }
   /* 진입/로딩 애니메이션은 아예 끔(0.01ms 단축이 아니라 none) — 모션 민감 사용자에게 깜빡임 0.
      framer-motion 은 main.tsx 의 MotionConfig reducedMotion="user" 가 별도로 처리. */
   .animate-fade-in, .animate-fade-out, .animate-slide-up, .animate-slide-down,
-  .tab-anim-r, .tab-anim-l, .skeleton, .confetti, .anim-pop { animation: none !important; }
+  .tab-anim-r, .tab-anim-l, .skeleton, .confetti, .anim-pop, .poster-marquee { animation: none !important; }
 }
 
 /* ── 라이트 모드 가독 오버라이드(unlayered — utilities 레이어보다 우선) ──

@@ -39,6 +39,7 @@ import type { MarketplaceFormData } from './components/features/MarketplaceFormM
 import { rearmLayer, useBackClose, overlayJustClosed } from './lib/backstack';
 import { useVisibilityRefresh } from './lib/useVisibilityRefresh';
 import { useScrollY } from './lib/useScrollY';
+import PosterCarousel from './components/features/PosterCarousel';
 import { lazyWithReload } from './lib/lazyWithReload';
 import { getRunningClocks, type ClockState } from './api/clock';
 import { buildRegInfoMap } from './lib/regStatus';
@@ -2260,7 +2261,9 @@ export default function App() {
           <div className="contents">
             {/* 검색바+날짜만 sticky(아래 필터·카운트는 스크롤되어 사라짐) */}
             <IntegratedSearchBar ref={searchBarRef} onChange={setSearchState} eventDates={eventDates} stickyTop="calc(var(--stack-top, 6.0625rem) - 1px)" />
-            {/* 뷰 모드 토글 + 팔로우 매장만 보기 — 일정 탐색 컨텍스트 안에 배치 */}
+            {/* APIS식 포스터 오토 캐러셀 — 부스트 우선, 포스터 있는 예정 대회만 */}
+            <PosterCarousel schedules={schedules} loaded={schedulesLoaded} onSelect={handleScheduleSelect} />
+            {/* 뷰 모드 토글 — 일정 탐색 컨텍스트 안에 배치 */}
             <div className="flex items-center justify-between gap-2 px-page-x pt-1.5">
               <div className="flex min-w-0 items-center gap-2">
                 <span className="shrink-0 text-2xs text-ink-muted">
