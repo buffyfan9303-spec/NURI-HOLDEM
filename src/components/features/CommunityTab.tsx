@@ -21,6 +21,7 @@ import EmptyState from '../atoms/EmptyState';
 import { filterContent } from '../../lib/content-filter';
 import { parseAttachments } from '../../lib/hand';
 import Avatar from '../atoms/Avatar';
+import Icon from '../atoms/Icon';
 import VenueThumb from '../atoms/VenueThumb';
 import Modal from '../atoms/Modal';
 import PostDetailModal from './PostDetailModal';
@@ -67,6 +68,22 @@ const BOARD_CATEGORIES: { id: PostCategory | 'all'; label: string }[] = [
   { id: 'free',     label: '자유' },
   { id: 'study',    label: '공부' },
 ];
+
+// 카테고리 pill 고정 팔레트(Nightingale §20.1) — 무지개 남발 금지, 15% 틴트 4계열로 고정.
+// accent(전략·분석) / emerald(정보·질문 긍정 신호) / gold(대회·후기) / 무채(자유·기본).
+const CATEGORY_TINT_FALLBACK = 'bg-surface-high text-ink-muted';
+const CATEGORY_TINTS: Partial<Record<PostCategory, string>> = {
+  hand:     'bg-accent-300/15 text-accent-300',
+  study:    'bg-accent-300/15 text-accent-300',
+  question: 'bg-emerald-400/15 text-emerald-400',
+  info:     'bg-emerald-400/15 text-emerald-400',
+  tourney:  'bg-gold-300/15 text-gold-400',
+  review:   'bg-gold-300/15 text-gold-400',
+  free:     CATEGORY_TINT_FALLBACK,
+};
+function categoryPillClass(cat: PostCategory | undefined): string {
+  return CATEGORY_TINTS[cat ?? 'free'] ?? CATEGORY_TINT_FALLBACK;
+}
 
 function relativeTime(iso: string): string {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -597,7 +614,7 @@ const PostRow = memo(function PostRow({ post, onClick, hot = false, selected = f
   // 화면 밖 행은 브라우저가 렌더를 통째로 건너뛴다(content-visibility) — cv-row-* 는 index.css
   const catLabel = BOARD_CATEGORIES.find((c) => c.id === (post.category ?? 'free'))?.label ?? '자유';
   const { replay, hand } = parseAttachments(post.content);
-  // 한 줄 행(에펨식)은 행 높이가 곧 목록 밀도라 썸네일을 넣으면 표가 무너진다 → 📷 배지로만 알린다.
+  // 한 줄 행(에펨식)은 행 높이가 곧 목록 밀도라 썸네일을 넣으면 표가 무너진다 → image 아이콘 배지로만 알린다.
   const imgCount = post.images?.length ?? 0;
   return (
     <li
@@ -619,28 +636,42 @@ const PostRow = memo(function PostRow({ post, onClick, hot = false, selected = f
     >
       {hot
         ? <span className="shrink-0 rounded-badge bg-danger/15 px-1 text-2xs font-extrabold leading-none tracking-wide text-danger-light">HOT</span>
-        : <span className="shrink-0 rounded-badge bg-surface-high px-1 py-0.5 text-2xs font-semibold leading-none text-ink-muted">{catLabel}</span>}
+        : <span className={['shrink-0 rounded-badge px-1 py-0.5 text-2xs font-semibold leading-none', categoryPillClass(post.category)].join(' ')}>{catLabel}</span>}
       <span className="min-w-0 flex-1 truncate">
         {/* NEW 도트(Phase 14, pokergosu 리스트 밀도) — 24시간 이내 글 */}
         {Date.now() - new Date(post.createdAt).getTime() < 24 * 3600_000 && (
           <span aria-label="새 글" className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-danger align-middle" />
         )}
         <span className="text-[15px] font-bold leading-tight text-ink-primary">{post.title || post.content.slice(0, 40)}</span>
-        {(replay || hand) && <span className="ml-1 align-middle text-2xs text-accent-300">{replay ? '🎬' : '♠'}</span>}
-        {imgCount > 0 && <span className="ml-1 align-middle text-2xs text-ink-muted" aria-label={`사진 ${imgCount}장`}>📷{imgCount > 1 ? imgCount : ''}</span>}
+        {(replay || hand) && (
+          <span className="ml-1 align-middle text-accent-300" aria-label={replay ? '리플레이 첨부' : '핸드 첨부'}>
+            <Icon name={replay ? 'cards' : 'spade'} size={12} className="inline align-[-2px]" />
+          </span>
+        )}
+        {imgCount > 0 && (
+          <span className="ml-1 align-middle text-2xs tabular-nums text-ink-muted" aria-label={`사진 ${imgCount}장`}>
+            <Icon name="image" size={12} className="inline align-[-2px]" />{imgCount > 1 ? imgCount : ''}
+          </span>
+        )}
         {post.commentCount > 0 && <span className="ml-1 align-middle text-xs font-bold tabular-nums text-accent-300">[{post.commentCount}]</span>}
       </span>
       <span className="shrink-0 text-xs text-ink-muted">{mark}{post.userName}</span>
       <TitleChip points={titlePts} />
       <span className="hidden shrink-0 text-xs tabular-nums text-ink-muted sm:inline">{relativeTime(post.createdAt)}</span>
-      {(post.viewCount ?? 0) > 0 && <span className="shrink-0 w-10 text-right text-xs tabular-nums text-ink-muted">👁{post.viewCount}</span>}
+      {(post.viewCount ?? 0) > 0 && (
+        <span className="shrink-0 inline-flex w-10 items-center justify-end gap-0.5 text-xs tabular-nums text-ink-muted" aria-label={`조회 ${post.viewCount}`}>
+          <Icon name="eye" size={11} className="shrink-0" />{post.viewCount}
+        </span>
+      )}
     </li>
   );
 }, samePostProps);
 
 const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, selected = false, mark = '', titlePts }: { post: CommunityPost; onLike: () => void; onClick: () => void; hot?: boolean; selected?: boolean; mark?: string; titlePts?: number }) {
-  // 카드 높이를 늘리지 않으려고 첫 장만 44px 썸네일로. 2장 이상은 장수 배지로 알린다.
+  // Nightingale 카드 문법(§20.1) — 헤더(이름/시간 2줄 스택)·제목·본문 2줄 클램프·미디어·반응 푸터 순서 고정.
+  // 미디어는 첫 장만 44px 썸네일(88px=레티나 2x 요청)로, 2장 이상은 장수 배지 — 목록에서 원본을 내려받지 않는다.
   const imgs = post.images ?? [];
+  const catLabel = BOARD_CATEGORIES.find((c) => c.id === (post.category ?? 'free'))?.label ?? '자유';
   return (
     <li
       onClick={onClick}
@@ -664,31 +695,39 @@ const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, se
       <div className="flex items-start gap-2">
         <Avatar name={post.userName} src={post.userAvatar} color={post.userColor} size={24} className="mt-0.5" />
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1 text-2xs flex-wrap">
-            {hot && (
-              <span className="inline-flex items-center font-extrabold text-danger-light bg-danger/15 px-1 rounded-badge leading-none tracking-wide">HOT</span>
-            )}
-            <span className="font-semibold text-ink-primary truncate">{mark}{post.userName}</span>
-            <TitleChip points={titlePts} />
-            {post.userRole === 'venue_owner' && (
-              <span className="font-bold text-accent-300 bg-accent-300/15 px-1 rounded-badge leading-none">업주</span>
-            )}
-            {post.userRole === 'admin' && (
-              <span className="font-bold text-danger-light bg-danger/15 px-1 rounded-badge leading-none">운영자</span>
-            )}
-            <span className="text-ink-muted ml-auto shrink-0">{relativeTime(post.createdAt)}</span>
+          {/* 헤더 — 이름(bold) 위 / 시간·칭호 아래 2줄 스택: 이름 길이와 무관하게 줄수(=높이)가 고정된다 */}
+          <div className="flex items-start gap-1.5">
+            <div className="min-w-0 flex-1">
+              <p className="flex items-center gap-1 text-2xs leading-4">
+                {hot && (
+                  <span className="shrink-0 inline-flex items-center font-extrabold text-danger-light bg-danger/15 px-1 rounded-badge leading-none tracking-wide">HOT</span>
+                )}
+                <span className="min-w-0 truncate font-bold text-ink-primary">{mark}{post.userName}</span>
+              </p>
+              <p className="flex items-center gap-1 text-2xs leading-4 text-ink-muted">
+                <span className="shrink-0 tabular-nums">{relativeTime(post.createdAt)}</span>
+                <TitleChip points={titlePts} />
+                {post.userRole === 'venue_owner' && <span className="shrink-0">· 업주</span>}
+                {post.userRole === 'admin' && <span className="shrink-0">· 운영자</span>}
+              </p>
+            </div>
+            {/* 카테고리 pill — CATEGORY_TINTS 고정 팔레트 */}
+            <span className={['mt-px shrink-0 rounded-badge px-1.5 py-0.5 text-2xs font-semibold leading-none', categoryPillClass(post.category)].join(' ')}>{catLabel}</span>
           </div>
+          {/* 제목 */}
           {post.title && (
-            <p className="text-xs font-bold text-ink-primary mt-0.5 truncate">{post.title}</p>
+            <p className="text-xs font-bold text-ink-primary mt-1 truncate">{post.title}</p>
           )}
+          {/* 본문 — 2줄 클램프 */}
           <p className="text-xs text-ink-primary leading-snug line-clamp-2 mt-0.5 break-words">
             {(() => {
               const { text, hand, replay } = parseAttachments(post.content);
               return (
                 <>
                   {(hand || replay) && (
-                    <span className="inline-flex items-center mr-1 px-1 rounded-badge bg-accent-300/15 text-accent-300 font-bold leading-none align-middle">
-                      {replay ? '🎬 리플레이' : '핸드'}
+                    <span className="mr-1 inline-flex items-center gap-0.5 rounded-badge bg-accent-300/15 px-1 align-middle font-bold leading-none text-accent-300">
+                      <Icon name={replay ? 'cards' : 'spade'} size={10} className="shrink-0" />
+                      {replay ? '리플레이' : '핸드'}
                     </span>
                   )}
                   {text || (replay ? '핸드 리플레이를 공유했습니다' : hand ? '핸드를 공유했습니다' : '')}
@@ -696,45 +735,41 @@ const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, se
               );
             })()}
           </p>
-          <div className="mt-1 flex items-center gap-2.5 text-2xs text-ink-muted">
+          {/* 미디어 — 사진 첨부 글을 목록에서 바로 구분하려는 것 — 지금까진 첨부해도 목록에 아무 표시가 없어 '안 올라갔다'고 오해했다.
+              88px 썸네일(=44px 레티나 2x)만 받아 목록에서 원본(최대 1200px)을 내려받지 않는다. */}
+          {imgs.length > 0 && (
+            <div className="relative mt-1 h-11 w-11 overflow-hidden rounded-input border border-border-subtle bg-surface-high">
+              <img src={thumbUrl(imgs[0], 88)} srcSet={thumbSrcSet(imgs[0], 88)}
+                alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
+              {imgs.length > 1 && (
+                <span className="absolute bottom-0 right-0 bg-black/60 px-1 text-2xs font-bold leading-tight text-white">{imgs.length}</span>
+              )}
+            </div>
+          )}
+          {/* 반응 푸터 — 메트릭 스트립: 라벨 없이 아이콘+tabular-nums 좌측 정렬, 좋아요만 인터랙티브 */}
+          <div className="mt-1 flex items-center gap-3 text-2xs text-ink-muted">
             <button
               type="button"
               aria-pressed={!!post.liked}
+              aria-label={`좋아요 ${post.likeCount}`}
               onClick={(e) => { e.stopPropagation(); onLike(); }}
               className={`inline-flex items-center gap-1 transition-colors ${post.liked ? 'text-accent-300' : 'hover:text-accent-300'}`}
             >
-              <svg width="13" height="13" viewBox="0 0 13 13" fill={post.liked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.4" aria-hidden>
-                <path d="M6.5 11.5L1.5 6.5C0.5 5.5 0.5 3.5 1.5 2.5C2.5 1.5 4.5 1.5 5.5 2.5L6.5 3.5L7.5 2.5C8.5 1.5 10.5 1.5 11.5 2.5C12.5 3.5 12.5 5.5 11.5 6.5L6.5 11.5Z" strokeLinejoin="round" />
-              </svg>
+              <Icon name={post.liked ? 'heart-fill' : 'heart'} size={13} strokeWidth={1.6} className="shrink-0" />
               <span className="tabular-nums">{post.likeCount}</span>
             </button>
-            <span className="inline-flex items-center gap-1">
-              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden>
-                <path d="M11 7.5C11 8.5 10.5 9.5 9 9.5H4L2 11.5V3.5C2 2.5 3 1.5 4 1.5H9C10 1.5 11 2.5 11 3.5V7.5Z" strokeLinejoin="round" />
-              </svg>
+            <span className="inline-flex items-center gap-1" aria-label={`댓글 ${post.commentCount}`}>
+              <Icon name="comment" size={13} strokeWidth={1.6} className="shrink-0" />
               <span className="tabular-nums">{post.commentCount}</span>
             </span>
             {(post.viewCount ?? 0) > 0 && (
-              <span className="inline-flex items-center gap-1">
-                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden>
-                  <path d="M1 6.5C2.2 4 4.2 2.7 6.5 2.7S10.8 4 12 6.5C10.8 9 8.8 10.3 6.5 10.3S2.2 9 1 6.5Z" /><circle cx="6.5" cy="6.5" r="1.8" />
-                </svg>
+              <span className="inline-flex items-center gap-1" aria-label={`조회 ${post.viewCount}`}>
+                <Icon name="eye" size={13} strokeWidth={1.6} className="shrink-0" />
                 <span className="tabular-nums">{post.viewCount}</span>
               </span>
             )}
           </div>
         </div>
-        {/* 사진 첨부 글을 목록에서 바로 구분하려는 것 — 지금까진 첨부해도 목록에 아무 표시가 없어 '안 올라갔다'고 오해했다.
-            88px 썸네일(=44px 레티나 2x)만 받아 목록에서 원본(최대 1200px)을 내려받지 않는다. */}
-        {imgs.length > 0 && (
-          <div className="relative mt-0.5 h-11 w-11 shrink-0 overflow-hidden rounded-input border border-border-subtle bg-surface-high">
-            <img src={thumbUrl(imgs[0], 88)} srcSet={thumbSrcSet(imgs[0], 88)}
-              alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
-            {imgs.length > 1 && (
-              <span className="absolute bottom-0 right-0 bg-black/60 px-1 text-2xs font-bold leading-tight text-white">{imgs.length}</span>
-            )}
-          </div>
-        )}
       </div>
     </li>
   );
@@ -975,7 +1010,7 @@ function VenuesSection({
                           <> · 팔로워 {venue.followerCount.toLocaleString()}</>
                         )}
                         {ratings[venue.id] && (
-                          <span className="font-bold text-accent-300"> · ⭐{ratings[venue.id].avg.toFixed(1)}<span className="font-normal text-ink-muted">({ratings[venue.id].count})</span></span>
+                          <span className="font-bold tabular-nums text-accent-300"> · <Icon name="star-fill" size={10} className="inline align-[-1px]" />{ratings[venue.id].avg.toFixed(1)}<span className="font-normal text-ink-muted">({ratings[venue.id].count})</span></span>
                         )}
                       </p>
                     </div>

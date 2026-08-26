@@ -482,7 +482,7 @@ html.light .text-pink-300 { color: #BE185D; }
    프로덕션 데이터): sm 43.5 → 44 / lg 87~106(제목·본문 줄수) → 최빈 106 /
    md 모바일 83 · sm+ 63(6컬럼 단일행으로 접혀 방향이 반대 — 미디어쿼리 필수).
    `auto` 키워드는 반드시 유지 — 첫 렌더 후 실제 크기를 기억해 추정 오차를 스스로 지운다. */
-:root { --row-h-sm: 44px; --row-h-md: 83px; --row-h-lg: 106px; }
+:root { --row-h-sm: 44px; --row-h-md: 83px; --row-h-lg: 120px; } /* lg: Nightingale 2줄 헤더 재문법 후 실추정(2026-08-27) */
 @media (min-width: 640px) { :root { --row-h-md: 63px; } }
 .cv-row-sm { content-visibility: auto; contain-intrinsic-size: auto var(--row-h-sm); }  /* 커뮤니티 한줄 행 */
 .cv-row-lg { content-visibility: auto; contain-intrinsic-size: auto var(--row-h-lg); }  /* 커뮤니티 피드 카드 */
