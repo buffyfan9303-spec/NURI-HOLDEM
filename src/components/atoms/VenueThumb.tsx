@@ -1,4 +1,5 @@
 // src/components/atoms/VenueThumb.tsx
+import Icon from './Icon';
 // 매장 썸네일 — 사진이 있으면 사진, 없으면 이름 기반 딥톤 타일(이니셜+옅은 수트 마크).
 // 카드 목록에서 themeColor 원색을 그대로 쓰면 조잡해 보여(골드 떡칠), 채도 낮춘 고정 팔레트를 해시로 배정한다.
 const PALETTE = [
@@ -9,7 +10,9 @@ const PALETTE = [
   '#1D3D43', // 딥 틸
   '#3E2F23', // 웜 브라운
 ];
-const SUITS = ['♠', '♥', '♦', '♣'];
+// [DS] IMG-2: 유니코드 수트(♥♦)는 iOS·일부 안드로이드가 컬러 이모지로 승격시켜
+// text-white/10 워터마크 색 제어가 무력화된다 → Icon 글리프로 교체(픽셀 결정론).
+const SUITS = ['spade', 'heart-suit', 'diamond', 'club'] as const;
 
 function hashOf(name: string): number {
   let h = 0;
@@ -47,7 +50,7 @@ export default function VenueThumb({ name, imageUrl, size = 'md', className = ''
       className={`${base} relative flex items-center justify-center`}
       style={{ background: `radial-gradient(circle at 30% 25%, color-mix(in srgb, ${c} 82%, white) 0%, ${c} 52%, color-mix(in srgb, ${c} 55%, black) 100%)` }}
     >
-      <span className="absolute -bottom-1.5 -right-1 text-3xl text-white/10 rotate-[-14deg] leading-none">{suit}</span>
+      <span className="absolute -bottom-1.5 -right-1 rotate-[-14deg] text-white/10 leading-none"><Icon name={suit} size={30} /></span>
       <span className={`relative font-extrabold text-white/95 ${size === 'lg' ? 'text-xl' : size === 'sm' ? 'text-sm' : 'text-base'}`}>
         {(name || '?').slice(0, 1)}
       </span>
