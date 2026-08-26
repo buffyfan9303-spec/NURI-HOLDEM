@@ -643,7 +643,7 @@ function HeroSection({
               type="button"
               onClick={() => go(i)}
               aria-label={`${i + 1}번째 사진 보기`}
-              className={['h-1.5 rounded-full transition-all', i === safeIdx ? 'w-5 bg-accent-300' : 'w-1.5 bg-white/50 hover:bg-white/80'].join(' ')}
+              className={['h-1.5 rounded-full transition-[width,background-color]', i === safeIdx ? 'w-5 bg-accent-300' : 'w-1.5 bg-white/50 hover:bg-white/80'].join(' ')}
             />
           ))}
         </div>
@@ -1240,7 +1240,7 @@ function AboutPanel({
           <div className="flex items-center gap-2 pt-1 flex-wrap">
             {kakao && (
               <a href={kakao} target="_blank" rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input bg-[#FEE500] text-[#3A1D1D] text-xs font-bold hover:brightness-95 transition-all active:scale-95">
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input bg-[#FEE500] text-[#3A1D1D] text-xs font-bold hover:brightness-95 transition-[transform,filter] active:scale-95">
                 <span aria-hidden>💬</span> 카카오톡 오픈채팅
               </a>
             )}

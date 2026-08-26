@@ -49,6 +49,24 @@
 > 아이콘 라이브러리 도입은 이제 자유입니다. 단 **혼용하면 스트로크 두께·사이즈가 갈리므로** 이관 계획을 세우세요.
 > ⚖️ 현재 `PATHS`의 다수 path가 Lucide 원본과 동일한데 저작권 고지가 없습니다 — ISC 고지 1줄 추가가 필요합니다.
 
+## 모션 헌법 v1 (§20.4 — 앱 전체의 유일한 물리 법칙)
+
+새 곡선·duration·애니메이트 속성을 추가하려면 이 절을 먼저 고친다.
+
+1. **이징 4개뿐**: `--ease`(기본·감속 — 판단 안 서면 무조건 이것) · `--ease-out`(오직 '화면 밖으로
+   사라지는 것') · `--spring`(손 뗀 뒤 복귀) · 예외 2개(무한 루프, shake). 오버슈트 베지어·Material 값 신규 도입 금지.
+2. **duration 토큰 4단**: `--dur-fast .15s / --dur-base .2s / --dur-panel .26s / --dur-tab .22s`.
+   `duration-200` 류 유틸 신규 사용 금지(토큰과 분리돼 표류). 거리를 줄이는 게 duration 줄이기보다 빠르게 지각된다.
+3. **애니메이트 화이트리스트**: `transform`/`opacity`(+색 계열은 ≤0.15s hover·press 한정).
+   ❌ `height width top left margin padding gap font-size` ❌ `background-position background-size filter backdrop-filter`(페인트 폭탄)
+   ❌ **`transition-all` 신규 금지**(2026-08-26 전수 0건 달성 — 나중에 누가 height 를 추가하면 자동 레이아웃 애니가 된다).
+   예외: SlidingPill(absolute 격리) · 자기완결 소형 진행바의 `transition-[width]` · `grid-template-rows 0fr→1fr` 단일 요소.
+4. **새 진입 애니 클래스 = 두 목록 동시 등록**: `index.css` `.tab-pane :is(...)` 무효화 목록 + `prefers-reduced-motion` 목록.
+5. **will-change 상시 부착 금지**(현 3곳이 상한) · 상시 fixed 요소에 backdrop-filter 금지 ·
+   토스트로 폼 에러 금지(등장·퇴장이 또 하나의 '움직임') · CLS 는 진입 애니가 아니라 **공간 예약**으로만 해결.
+6. **모션 라이브러리 재고 게이트**(§19.1): MO-1 계측 후 실기기 INP p75 > 200ms + 제스처 특정 + CSS 재현 불가 판정 시에만
+   `LazyMotion+m+domAnimation` 동적 로드 한정 재논의. 스크롤 하이재킹(Lenis·ScrollSmoother)은 무조건 금지.
+
 ## 애니메이션 — 자유. 단 아래 함정은 그대로 존재
 과거 framer-motion을 제거하고 `layoutId` 기반 슬라이딩 인디케이터 13곳을
 `src/components/atoms/SlidingPill.tsx`의 자체 FLIP으로 대체했습니다(`SegmentedTabs`, `StatefulActionButton` 참고).

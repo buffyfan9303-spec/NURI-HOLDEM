@@ -37,6 +37,7 @@ import type { PostFormData } from './components/features/PostFormModal';
 import type { MarketplaceFormData } from './components/features/MarketplaceFormModal';
 import { rearmLayer, useBackClose, overlayJustClosed } from './lib/backstack';
 import { useVisibilityRefresh } from './lib/useVisibilityRefresh';
+import { useScrollY } from './lib/useScrollY';
 import { lazyWithReload } from './lib/lazyWithReload';
 import { getRunningClocks, type ClockState } from './api/clock';
 import { buildRegInfoMap } from './lib/regStatus';
@@ -163,18 +164,13 @@ const AppHeader = memo(function AppHeader({
   const [userMenuOpen, setUserMenu]  = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
-  // 모바일 스크롤 축소 — 내리면 헤더가 낮아져 포스터 화면이 넓어진다(rAF 스로틀)
+  // 모바일 스크롤 축소 — 내리면 헤더가 낮아져 포스터 화면이 넓어진다(useScrollY 공용 구독 — MO-9A)
+  // MO-3: 높이 전환이 즉시가 되면서 단일 임계값(48)은 그 부근 미세 스크롤에서
+  // 축소↔복원이 덜덜 떨린다 → 히스테리시스 밴드(내릴 때 56 넘어야 축소, 올릴 때 40 밑이어야 복원)
   const [shrunk, setShrunk] = useState(false);
-  useEffect(() => {
-    let raf = 0;
-    const onScroll = () => {
-      if (raf) return;
-      raf = requestAnimationFrame(() => { setShrunk(window.scrollY > 48); raf = 0; });
-    };
-    window.addEventListener('scroll', onScroll, { passive: true });
-    onScroll();
-    return () => { window.removeEventListener('scroll', onScroll); if (raf) cancelAnimationFrame(raf); };
-  }, []);
+  useScrollY(useCallback((y: number) => {
+    setShrunk((prev) => (prev ? y > 40 : y > 56));
+  }, []));
 
   // 프로필 드롭다운: 바깥(다른 버튼 등)을 클릭/터치하면 자동으로 닫는다.
   useEffect(() => {
@@ -201,7 +197,9 @@ const AppHeader = memo(function AppHeader({
     >
       {/* ── 단순화된 헤더: 좌(로고) / 우(알림+유저) — 모바일은 스크롤 시 축소 ── */}
       <div className={[
-        'flex items-center justify-between px-page-x transition-[height] duration-200 ease-out',
+        // [DS] MO-3: height 트랜지션 금지 — 200ms 동안 매 프레임 문서 전체 리레이아웃(+RO 연쇄 재측정)이
+        // 스크롤과 겹쳐 얀크의 주범이었다. 즉시 전환 = 리레이아웃 1회. (§20.5 #1 height 애니 금지)
+        'flex items-center justify-between px-page-x',
         shrunk ? 'h-11 md:h-header-h' : 'h-header-h',
       ].join(' ')}>
 
@@ -543,6 +541,7 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
   // 탭 전환 억제창 — 자식 layoutEffect 가 부모(App)의 복원 스크롤보다 먼저 실행되므로
   // 복원 이벤트 도착 전에 창이 열려 순서가 보장된다. |dy| 크기 추정은 빠른 플링(프레임당 200px+)을 삼키므로 금지.
   const suppressUntil = useRef(0);
+  const tb2Ref = useRef({ lastY: 0, acc: 0 });
   useLayoutEffect(() => { suppressUntil.current = performance.now() + 300; }, [active]);
   useEffect(() => {
     if (!autohideV2) {
@@ -559,27 +558,27 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
       window.addEventListener('scroll', onScroll, { passive: true });
       return () => window.removeEventListener('scroll', onScroll);
     }
-    let lastY = window.scrollY, acc = 0, raf = 0;
-    const apply = () => {
-      raf = 0;
-      if (performance.now() < suppressUntil.current) { lastY = window.scrollY; acc = 0; return; }
-      const max = document.documentElement.scrollHeight - window.innerHeight;
-      if (max < 200) { setHidden(false); lastY = window.scrollY; acc = 0; return; }  // 짧은 화면 — 내비 영구 소멸·깜빡임 방지
-      const cy = Math.min(Math.max(window.scrollY, 0), max);                          // 고무줄·툴바 개폐 클램프 흡수
-      const dy = cy - lastY; lastY = cy;
-      if (cy >= max - 4) { setHidden(true); acc = 0; return; }                        // 문서 끝 — 무조건 숨김(삼성 버튼과 시간축 배타)
-      if (cy < 80) { setHidden(false); acc = 0; return; }
-      acc = (dy > 0) === (acc > 0) ? acc + dy : dy;                                   // 방향 바뀌면 리셋되는 누적 — 느린 끌기도 판정
-      if (acc > 48) { setHidden(true); acc = 0; }
-      else if (acc < -24) { setHidden(false); acc = 0; }
-    };
-    const onScroll = () => { if (!raf) raf = requestAnimationFrame(apply); };
-    const resync = () => { lastY = window.scrollY; acc = 0; };
-    window.addEventListener('scroll', onScroll, { passive: true });
+    // MO-9A: 공용 useScrollY 브로드캐스트에 합류(별도 리스너·rAF 가드 제거 — 훅이 프레임당 1회 보장)
+    tb2Ref.current = { lastY: window.scrollY, acc: 0 };
+    const resync = () => { tb2Ref.current = { lastY: window.scrollY, acc: 0 }; };
     window.addEventListener('resize', resync);
     window.visualViewport?.addEventListener('resize', resync);
-    return () => { cancelAnimationFrame(raf); window.removeEventListener('scroll', onScroll); window.removeEventListener('resize', resync); window.visualViewport?.removeEventListener('resize', resync); };
+    return () => { window.removeEventListener('resize', resync); window.visualViewport?.removeEventListener('resize', resync); };
   }, [autohideV2]);
+  useScrollY(useCallback((sy: number) => {
+    if (!autohideV2) return; // 킬스위치 off — 레거시 리스너가 담당
+    const st = tb2Ref.current;
+    if (performance.now() < suppressUntil.current) { st.lastY = sy; st.acc = 0; return; }
+    const max = document.documentElement.scrollHeight - window.innerHeight;
+    if (max < 200) { setHidden(false); st.lastY = sy; st.acc = 0; return; }  // 짧은 화면 — 내비 영구 소멸·깜빡임 방지
+    const cy = Math.min(Math.max(sy, 0), max);                               // 고무줄·툴바 개폐 클램프 흡수
+    const dy = cy - st.lastY; st.lastY = cy;
+    if (cy >= max - 4) { setHidden(true); st.acc = 0; return; }              // 문서 끝 — 무조건 숨김(삼성 버튼과 시간축 배타)
+    if (cy < 80) { setHidden(false); st.acc = 0; return; }
+    st.acc = (dy > 0) === (st.acc > 0) ? st.acc + dy : dy;                   // 방향 바뀌면 리셋되는 누적 — 느린 끌기도 판정
+    if (st.acc > 48) { setHidden(true); st.acc = 0; }
+    else if (st.acc < -24) { setHidden(false); st.acc = 0; }
+  }, [autohideV2]));
   // 장터는 커뮤니티 서브탭으로 이동(사용 빈도 기준) — 탭바 4번째 칸은 도구
   const items: { key: string; tab?: TabId; label: string }[] = [
     { key: 'browse', tab: 'browse', label: '일정' },
@@ -608,7 +607,7 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
     >
       {/* 탭바 밖(좌우·아래) 틈으로 스크롤 컨텐츠가 비치지 않게 — 베이스색 그라데이션 커튼 */}
       <div aria-hidden className="absolute inset-x-0 -top-3 bottom-0 bg-gradient-to-t from-surface-base via-surface-base/90 to-transparent" />
-      <div className="pointer-events-auto mx-2.5 mb-2 flex rounded-2xl border border-border-default bg-surface-mid/95 shadow-dialog backdrop-blur-md">
+      <div className="pointer-events-auto mx-2.5 mb-2 flex rounded-2xl border border-border-default bg-surface-mid shadow-dialog">
         {items.map(({ key, tab, label }) => {
           const on = tab ? shown === tab : false;
           return (
@@ -1090,6 +1089,9 @@ export default function App() {
   const [listings,      setListings]      = useState<MarketplaceListing[]>(() => readSnap<MarketplaceListing[]>('listings') ?? []);
   const [marketLoaded,  setMarketLoaded]  = useState(() => readSnap<MarketplaceListing[]>('listings') != null); // 장터 첫 로딩 여부 — 스냅샷 있으면 스켈레톤 생략
   const [notices,       setNotices]       = useState<MarketplaceNotice[]>(() => readSnap<MarketplaceNotice[]>('notices') ?? []);
+  // MO-7B: 공지 스냅샷조차 없는 최초 방문에서 섹션이 늦게 끼어들며 목록을 밀지 않도록,
+  // 응답 전에는 섹션 셸(헤더만)을 자리에 둔다. 스냅샷이 있으면 이미 확정 상태.
+  const [noticesLoaded, setNoticesLoaded] = useState<boolean>(() => readSnap<MarketplaceNotice[]>('notices') != null);
   const [users,         setUsers]         = useState<User[]>([]);
   const [openListing, setOpenListing]      = useState<MarketplaceListing | null>(null);
   const [openNotice, setOpenNotice]        = useState<MarketplaceNotice | null>(null);
@@ -1180,28 +1182,68 @@ export default function App() {
       .catch((e) => setSchedulesError(e))
       .finally(() => setSchedulesLoaded(true));
   }, []);
-  // 당겨서 새로고침(유튜브·당근) — 최상단에서 아래로 80px+ 당기면 갱신
-  const [ptr, setPtr] = useState(0); // 0=대기, 양수=당김(px), -1=갱신 중
+  // 당겨서 새로고침(유튜브·당근) — 최상단에서 아래로 56px+ 당기면 갱신
+  // [DS] MO-4: 드래그 값은 React 상태 밖(§20.5 #2) — 예전엔 touchmove 마다 setPtr 로
+  // App 전체가 프레임당 리렌더됐고, in-flow height 인디케이터가 리스트 전체를 매 프레임 밀었다.
+  // 이제 인디케이터는 out-of-flow(fixed) + transform/opacity 전용, 값은 ref + rAF 직접 기록.
+  // React 상태는 '갱신 중' 스피너 불리언 하나뿐이다.
+  const [ptrRefreshing, setPtrRefreshing] = useState(false);
+  const ptrRefreshingRef = useRef(false);
   const ptrStart = useRef<number | null>(null);
-  const onPtrStart = (e: React.TouchEvent) => { if (window.scrollY <= 0) ptrStart.current = e.touches[0].clientY; };
+  const ptrVal = useRef(0);
+  const ptrRaf = useRef(0);
+  const ptrBoxRef = useRef<HTMLDivElement | null>(null);
+  const ptrIconRef = useRef<HTMLSpanElement | null>(null);
+  const ptrPaint = () => {
+    ptrRaf.current = 0;
+    const box = ptrBoxRef.current, icon = ptrIconRef.current;
+    if (!box || !icon) return;
+    const v = ptrVal.current;
+    box.style.transform = `translateY(${Math.min(110, v) - 52}px)`;
+    icon.style.transform = `rotate(${v * 3}deg)`;
+    icon.style.opacity = String(Math.min(1, v / 56));
+  };
+  // 놓은 뒤 스냅백/정착 — transform 전용 트랜지션(컴포지터). 드래그 중엔 start 에서 none 으로 끈다.
+  const ptrSettle = (y: number, iconOpacity: string) => {
+    const box = ptrBoxRef.current, icon = ptrIconRef.current;
+    if (!box) return;
+    box.style.transition = 'transform 0.2s var(--ease)';
+    box.style.transform = `translateY(${y}px)`;
+    if (icon) { icon.style.transform = ''; icon.style.opacity = iconOpacity; }
+  };
+  const onPtrStart = (e: React.TouchEvent) => {
+    if (window.scrollY <= 0 && !ptrRefreshingRef.current) {
+      ptrStart.current = e.touches[0].clientY;
+      if (ptrBoxRef.current) ptrBoxRef.current.style.transition = 'none';
+    }
+  };
   const onPtrMove = (e: React.TouchEvent) => {
-    if (ptrStart.current == null || ptr === -1) return;
+    if (ptrStart.current == null || ptrRefreshingRef.current) return;
     const dy = e.touches[0].clientY - ptrStart.current;
-    setPtr(dy > 8 && window.scrollY <= 0 ? Math.min(110, dy * 0.5) : 0);
+    ptrVal.current = dy > 8 && window.scrollY <= 0 ? Math.min(110, dy * 0.5) : 0;
+    if (!ptrRaf.current) ptrRaf.current = requestAnimationFrame(ptrPaint);
   };
   const onPtrEnd = () => {
-    const pulled = ptr;
+    const pulled = ptrVal.current;
     ptrStart.current = null;
+    ptrVal.current = 0;
+    if (ptrRaf.current) { cancelAnimationFrame(ptrRaf.current); ptrRaf.current = 0; }
     if (pulled >= 56) {
-      setPtr(-1);
+      ptrRefreshingRef.current = true;
+      setPtrRefreshing(true);
+      ptrSettle(4, '1'); // 헤더 바로 아래 정착 후 스핀
       reloadSchedules();
-      setTimeout(() => setPtr(0), 900);
-    } else setPtr(0);
+      setTimeout(() => {
+        ptrRefreshingRef.current = false;
+        setPtrRefreshing(false);
+        ptrSettle(-52, '0');
+      }, 900);
+    } else ptrSettle(-52, '0');
   };
   const reloadVenues    = useCallback(() => { getVenues().then((v) => { setVenues((prev) => (sameJson(prev, v) ? prev : v)); writeSnap('venues', v); }).catch(() => {}); }, []);  
   const reloadPosts     = useCallback(() => { getPosts().then((v) => { setPosts(v); writeSnap('posts', v); }).catch(() => {}); }, []);
   const reloadComments  = useCallback(() => { getComments({}).then(setComments).catch(() => {}); }, []);
-  const reloadNotices   = useCallback(() => { getNotices().then((v) => { setNotices(v); writeSnap('notices', v); }).catch(() => {}); }, []);
+  const reloadNotices   = useCallback(() => { getNotices().then((v) => { setNotices(v); writeSnap('notices', v); setNoticesLoaded(true); }).catch(() => {}); }, []);
 
   // 공개 데이터 초기 로드 — **첫 화면(일정탐색)에 필요한 것만** 즉시 받는다.
   // 예전엔 게시글·댓글·장터까지 6종을 부팅과 동시에 쐈다. 사용자가 기다리는 건 대회 목록인데
@@ -1219,7 +1261,7 @@ export default function App() {
       } else setSchedulesError(sr.reason);
       setSchedulesLoaded(true);
       if (vr.status === 'fulfilled') { setVenues((prev) => (sameJson(prev, vr.value) ? prev : vr.value)); writeSnap('venues', vr.value); }
-      if (nr.status === 'fulfilled') { setNotices(nr.value); writeSnap('notices', nr.value); }
+      if (nr.status === 'fulfilled') { setNotices(nr.value); writeSnap('notices', nr.value); setNoticesLoaded(true); }
     });
      
   }, []);
@@ -1278,31 +1320,45 @@ export default function App() {
   // (토큰 추정/-1rem 보정 대신 실측값을 사용해 모바일 sticky 겹침을 방지)
   useEffect(() => {
     const headerEl = document.querySelector('[data-stack-header]');
-    const update = () => {
+    // [DS] MO-3(B-2): RO 콜백에서 직접 측정+setProperty 하면
+    //   레이아웃 변경 → RO 발화 → 측정(강제 동기 레이아웃) → CSS 변수 쓰기 → 또 레이아웃 …
+    // 의 되먹임이 프레임마다 돌았다. rAF 로 한 프레임 1회로 코얼레스하고,
+    // 값이 실제로 변했을 때만 setProperty(같은 값 재기록도 스타일 무효화를 일으킨다).
+    // (헤더 height 트랜지션 제거로 축소는 이제 1회성 이벤트 — RO 는 폰트 로드·회전 등 안전판)
+    let raf = 0;
+    let last = '';
+    const measure = () => {
+      raf = 0;
       const tabbar = document.querySelector('[data-stack-tabbar]');
+      let next: string;
       // 데스크톱: 헤더 아래 sticky 탭바까지가 상단 스택 — 탭바 고정 하단 = 필터가 붙을 지점
       if (tabbar && tabbar.getBoundingClientRect().height > 0) {
         const stickyTop = parseFloat(getComputedStyle(tabbar).top) || 56;
-        const h = stickyTop + tabbar.getBoundingClientRect().height;
-        document.documentElement.style.setProperty('--stack-top', `${Math.round(h)}px`);
-        return;
-      }
-      // 모바일: 탭바가 숨겨져 있음 → 헤더의 '현재' 하단을 그대로 사용.
-      // 헤더는 스크롤 시 축소(h-header-h→h-11)되는데, --stack-top을 미축소 높이로 한 번만 재면
-      // 축소 후 헤더 하단과 검색바 sticky top 사이에 비침 띠(gap)가 생긴다.
-      // ResizeObserver로 헤더 높이 변화(축소 애니메이션 매 프레임 포함)를 추적해 검색바가 항상 헤더 바로 아래에 붙게 한다.
-      if (headerEl) {
-        document.documentElement.style.setProperty('--stack-top', `${Math.round(headerEl.getBoundingClientRect().bottom)}px`);
+        next = `${Math.round(stickyTop + tabbar.getBoundingClientRect().height)}px`;
+      } else if (headerEl) {
+        // 모바일: 탭바가 숨겨져 있음 → 헤더의 '현재' 하단을 그대로 사용.
+        // (미축소 높이로 한 번만 재면 축소 후 헤더 하단과 검색바 sticky top 사이에 비침 띠가 생긴다)
+        next = `${Math.round(headerEl.getBoundingClientRect().bottom)}px`;
       } else {
-        document.documentElement.style.setProperty('--stack-top', '97px');
+        next = '97px';
+      }
+      if (next !== last) {
+        last = next;
+        document.documentElement.style.setProperty('--stack-top', next);
       }
     };
-    update();
-    window.addEventListener('resize', update);
+    const schedule = () => { if (!raf) raf = requestAnimationFrame(measure); };
+    measure();
+    window.addEventListener('resize', schedule);
     let ro: ResizeObserver | undefined;
-    if (headerEl && 'ResizeObserver' in window) { ro = new ResizeObserver(update); ro.observe(headerEl); }
-    const t = setTimeout(update, 300); // 폰트/레이아웃 안정화 후 재측정
-    return () => { window.removeEventListener('resize', update); ro?.disconnect(); clearTimeout(t); };
+    if (headerEl && 'ResizeObserver' in window) { ro = new ResizeObserver(schedule); ro.observe(headerEl); }
+    const t = setTimeout(schedule, 300); // 폰트/레이아웃 안정화 후 재측정
+    return () => {
+      window.removeEventListener('resize', schedule);
+      ro?.disconnect();
+      if (raf) cancelAnimationFrame(raf);
+      clearTimeout(t);
+    };
   }, [activeTab]);
 
   // #13 커뮤니티 게시글·댓글 실시간 — 다른 사용자가 올린 글/댓글이 즉시 반영(알림/일정/장부와 동일 수준).
@@ -2175,14 +2231,16 @@ export default function App() {
       {(activeTab === 'browse' || visitedTabs.has('browse')) && (
         <main className="tab-pane" style={activeTab !== 'browse' ? { display: 'none' } : undefined}
           onTouchStart={onPtrStart} onTouchMove={onPtrMove} onTouchEnd={onPtrEnd}>
-          {/* 당겨서 새로고침 인디케이터 — ♠ 회전 */}
-          {ptr !== 0 && (
-            <div className="flex items-center justify-center overflow-hidden transition-[height] lg:hidden"
-              style={{ height: ptr === -1 ? 52 : ptr }} aria-hidden>
-              <span className={['text-2xl text-accent-300', ptr === -1 ? 'animate-spin' : ''].join(' ')}
-                style={ptr !== -1 ? { transform: `rotate(${ptr * 3}deg)`, opacity: Math.min(1, ptr / 56) } : undefined}>♠</span>
-            </div>
-          )}
+          {/* 당겨서 새로고침 인디케이터 — ♠ 회전. out-of-flow(fixed) 오버레이(MO-4):
+              헤더(z-50) 아래 z-40 에서 translateY 로 내려온다 — 콘텐츠를 밀지 않는다(리레이아웃 0).
+              대기 시 translateY(-52px)로 불투명 헤더 뒤에 숨는다. */}
+          <div ref={ptrBoxRef}
+            className="pointer-events-none fixed inset-x-0 z-40 flex h-[52px] items-center justify-center lg:hidden"
+            style={{ top: 'var(--stack-top, 97px)', transform: 'translateY(-52px)' }} aria-hidden>
+            <span ref={ptrIconRef}
+              className={['text-2xl text-accent-300', ptrRefreshing ? 'animate-spin' : ''].join(' ')}
+              style={{ opacity: 0 }}>♠</span>
+          </div>
           {/* display:contents 로 래퍼 박스를 없애 검색+날짜 sticky 가 '긴 컨텐츠 컨테이너'의 직계자식이 되도록
               (짧은 헤더 박스에 갇히면 리스트를 스크롤할 때 검색+날짜가 같이 사라짐) */}
           <div className="contents">
@@ -2268,66 +2326,11 @@ export default function App() {
             );
           })()}
 
-          {/* 주간 베스트 — 이번 주 머니인 킹 TOP3 롤링 */}
-          <div className="reveal px-page-x pt-3">
-            <WeeklyBestStrip active={activeTab === 'browse'} />
-          </div>
-
-          {/* 손님: 오늘 내 바인(참가) 요청 상태 배너 — (B3) 등장/퇴장 height·opacity 트랜지션으로 CLS 완화 */}
-          {myTodayRes.length > 0 && (
-            <div className="animate-fade-in overflow-hidden px-page-x pt-3 space-y-1.5">
-              <p className="px-1 text-2xs font-bold text-ink-secondary">🎫 오늘 예약한 대회</p>
-              {myTodayRes.map((r) => {
-                const sc = schedules.find((x) => x.id === r.scheduleId);
-                return (
-                  <button key={r.scheduleId} type="button"
-                    onClick={() => { if (sc) setOpenSchedule(sc); }}
-                    className="w-full flex items-center gap-2.5 rounded-card border border-accent-400/45 bg-gradient-to-r from-accent-300/[0.12] to-transparent px-3 py-2.5 text-left hover:border-accent-300 transition-colors">
-                    <span className="shrink-0 text-lg" aria-hidden>🎫</span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-bold text-ink-primary">{r.title}</span>
-                      <span className="block truncate text-2xs text-ink-muted">
-                        {r.venueName ?? '매장'} · {r.startTime ? r.startTime.slice(0, 5) : '19:00'} 시작 · 예약명 {r.displayName}
-                      </span>
-                    </span>
-                    <span className="shrink-0 text-2xs font-bold text-accent-300">포스터 →</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          {myBuyinReqs.length > 0 && (
-            <div className="animate-fade-in overflow-hidden px-page-x pt-3 space-y-1.5">
-              <p className="px-1 text-2xs font-bold text-ink-secondary">🎮 내 참가 게임 · 바인 요청</p>
-              {myBuyinReqs.map((r) => (
-                <div key={r.id} className={['flex items-center gap-2 rounded-card border px-3 py-2 text-xs',
-                  r.status === 'approved' ? 'border-emerald-500/40 bg-emerald-500/[0.07]' : r.status === 'rejected' ? 'border-border-default bg-surface-low' : 'border-sky-500/40 bg-sky-500/[0.07]'].join(' ')}>
-                  <span className="shrink-0" aria-hidden>{r.status === 'approved' ? '✅' : r.status === 'rejected' ? '❌' : '⏳'}</span>
-                  <span className="min-w-0 flex-1 truncate text-ink-secondary"><b className="text-ink-primary">{r.venueName}</b>{(() => { const n = r.status === 'approved' ? r.gameSeq : r.requestedGameSeq; return n != null ? ` · ${n === 1 ? '메인' : '사이드' + (n - 1)}` : ''; })()} {r.status === 'approved' ? '참가 승인 — 입장하세요! 🎉' : r.status === 'rejected' ? `요청 거절됨${r.rejectReason ? ` — ${r.rejectReason}` : ''}` : '바인 요청 대기중'}</span>
-                  {r.status === 'pending' && <button type="button" onClick={() => cancelBuyinRequest(r.id).then(() => getMyBuyinRequestsToday().then(setMyBuyinReqs)).catch((e) => toast.show(e instanceof Error ? e.message : '취소 실패', 'error'))} className="shrink-0 rounded-input border border-border-default px-2 py-1 text-2xs font-bold text-ink-muted hover:text-danger-light hover:border-danger/40">취소</button>}
-                </div>
-              ))}
-            </div>
-          )}
+          {/* 주간 베스트 — 이번 주 머니인 킹 TOP3 롤링 (MO-7B: 래퍼·로딩 스켈레톤 내장) */}
+          <WeeklyBestStrip active={activeTab === 'browse'} />
 
           {/* 공지 — 일정탐색 상단 (전체 공통 공지만) */}
-            {/* 16-1 이어서 하기 — 재방문 사용자의 반복 여정(최근 매장 → 체크인/오늘 대회)을 한 탭으로.
-                비로그인·이력 없음이면 DOM 미렌더(10-1 원칙). */}
-            {recentVenue && (
-              <div className="px-page-x pt-3">
-                <button type="button" onClick={() => handleVenueClick(recentVenue.venueId)}
-                  className="w-full flex items-center gap-2.5 rounded-card border border-border-default bg-surface-low px-3 py-2.5 text-left hover:border-accent-400/50 transition-colors">
-                  <span className="shrink-0 text-lg" aria-hidden>↩️</span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-2xs font-bold text-ink-muted">이어서 하기</span>
-                    <span className="block truncate text-sm font-bold text-ink-primary">{recentVenue.venueName ?? '최근 방문 매장'}</span>
-                  </span>
-                  <span className="shrink-0 text-2xs font-bold text-accent-300">체크인 · 오늘 대회 ›</span>
-                </button>
-              </div>
-            )}
-          {(browseNotices.length > 0 || isAdmin) && (
+          {(browseNotices.length > 0 || isAdmin || !noticesLoaded) && (
             <div className="px-page-x pt-3">
               <section className="rounded-card border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.05] to-transparent overflow-hidden">
                 <header className="flex items-center justify-between px-3 py-2 border-b border-accent-400/20">
@@ -2443,6 +2446,64 @@ export default function App() {
 
                 {/* 🏁 지난 대회 — 완료된 대회 아카이브(결과는 상세에서) */}
                 <PastTournaments schedules={schedules} onSelect={handleScheduleSelect} />
+
+                {/* [DS] MO-7B 규칙 A — 개인화 블록(오늘예약·바인요청·이어서하기)은 auth 왕복
+                    '뒤'에 도착해 목록 위에 끼어들며 매 로그인 부팅마다 계단식 밀림을 만들었다.
+                    결과가 오기 전에는 자리를 만들지 않고, 오면 목록 아래에 붙인다 — 상단 스택 불변.
+                    (알림함·마이에서도 같은 정보에 접근 가능해 기능 손실 없음) */}
+          {/* 손님: 오늘 내 바인(참가) 요청 상태 배너 */}
+                {myTodayRes.length > 0 && (
+                  <div className="animate-fade-in overflow-hidden px-page-x pt-3 space-y-1.5">
+                    <p className="px-1 text-2xs font-bold text-ink-secondary">🎫 오늘 예약한 대회</p>
+                    {myTodayRes.map((r) => {
+                      const sc = schedules.find((x) => x.id === r.scheduleId);
+                      return (
+                        <button key={r.scheduleId} type="button"
+                          onClick={() => { if (sc) setOpenSchedule(sc); }}
+                          className="w-full flex items-center gap-2.5 rounded-card border border-accent-400/45 bg-gradient-to-r from-accent-300/[0.12] to-transparent px-3 py-2.5 text-left hover:border-accent-300 transition-colors">
+                          <span className="shrink-0 text-lg" aria-hidden>🎫</span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-bold text-ink-primary">{r.title}</span>
+                            <span className="block truncate text-2xs text-ink-muted">
+                              {r.venueName ?? '매장'} · {r.startTime ? r.startTime.slice(0, 5) : '19:00'} 시작 · 예약명 {r.displayName}
+                            </span>
+                          </span>
+                          <span className="shrink-0 text-2xs font-bold text-accent-300">포스터 →</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {myBuyinReqs.length > 0 && (
+                  <div className="animate-fade-in overflow-hidden px-page-x pt-3 space-y-1.5">
+                    <p className="px-1 text-2xs font-bold text-ink-secondary">🎮 내 참가 게임 · 바인 요청</p>
+                    {myBuyinReqs.map((r) => (
+                      <div key={r.id} className={['flex items-center gap-2 rounded-card border px-3 py-2 text-xs',
+                        r.status === 'approved' ? 'border-emerald-500/40 bg-emerald-500/[0.07]' : r.status === 'rejected' ? 'border-border-default bg-surface-low' : 'border-sky-500/40 bg-sky-500/[0.07]'].join(' ')}>
+                        <span className="shrink-0" aria-hidden>{r.status === 'approved' ? '✅' : r.status === 'rejected' ? '❌' : '⏳'}</span>
+                        <span className="min-w-0 flex-1 truncate text-ink-secondary"><b className="text-ink-primary">{r.venueName}</b>{(() => { const n = r.status === 'approved' ? r.gameSeq : r.requestedGameSeq; return n != null ? ` · ${n === 1 ? '메인' : '사이드' + (n - 1)}` : ''; })()} {r.status === 'approved' ? '참가 승인 — 입장하세요! 🎉' : r.status === 'rejected' ? `요청 거절됨${r.rejectReason ? ` — ${r.rejectReason}` : ''}` : '바인 요청 대기중'}</span>
+                        {r.status === 'pending' && <button type="button" onClick={() => cancelBuyinRequest(r.id).then(() => getMyBuyinRequestsToday().then(setMyBuyinReqs)).catch((e) => toast.show(e instanceof Error ? e.message : '취소 실패', 'error'))} className="shrink-0 rounded-input border border-border-default px-2 py-1 text-2xs font-bold text-ink-muted hover:text-danger-light hover:border-danger/40">취소</button>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+            {/* 16-1 이어서 하기 — 재방문 사용자의 반복 여정(최근 매장 → 체크인/오늘 대회)을 한 탭으로.
+                    비로그인·이력 없음이면 DOM 미렌더(10-1 원칙). */}
+                {recentVenue && (
+                  <div className="px-page-x pt-3">
+                    <button type="button" onClick={() => handleVenueClick(recentVenue.venueId)}
+                      className="w-full flex items-center gap-2.5 rounded-card border border-border-default bg-surface-low px-3 py-2.5 text-left hover:border-accent-400/50 transition-colors">
+                      <span className="shrink-0 text-lg" aria-hidden>↩️</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-2xs font-bold text-ink-muted">이어서 하기</span>
+                        <span className="block truncate text-sm font-bold text-ink-primary">{recentVenue.venueName ?? '최근 방문 매장'}</span>
+                      </span>
+                      <span className="shrink-0 text-2xs font-bold text-accent-300">체크인 · 오늘 대회 ›</span>
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* 우측 위젯 레일 — 주간 머니인 킹·HOT 게시글·오늘 요약 */}
@@ -2764,19 +2825,22 @@ export default function App() {
 // ── ↑ 맨 위로 플로팅 버튼 — 무한 스크롤 보조(Reddit 문법) ───────────────────────
 function ScrollTopButton() {
   const [show, setShow] = useState(false);
-  useEffect(() => {
-    const onScroll = () => setShow(window.scrollY > 600);
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
-  if (!show) return null;
+  // MO-9A: 공용 useScrollY 구독(개별 리스너 제거) + 마운트 유지 —
+  // 예전 `return null` 은 fixed 요소를 스크롤 중에 삽입/제거해 DOM 변동을 만들었다.
+  // opacity/pointer-events 토글은 컴포지터에서 끝난다.
+  useScrollY(useCallback((y: number) => setShow(y > 600), []));
   return (
     <button
       type="button"
       aria-label="맨 위로"
+      aria-hidden={!show || undefined}
+      tabIndex={show ? undefined : -1}
       onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
       // 모바일: 하단 탭바 위로 띄움(--tabbar-float, 누락됐던 safe-area 복구) / PC: 기존 위치
-      className="fixed bottom-[var(--tabbar-float)] lg:bottom-5 right-4 z-40 flex h-10 w-10 items-center justify-center rounded-full border border-border-default bg-surface-mid/95 text-ink-secondary shadow-dialog backdrop-blur transition-colors hover:text-accent-300 animate-fade-in"
+      className={[
+        'fixed bottom-[var(--tabbar-float)] lg:bottom-5 right-4 z-40 flex h-10 w-10 items-center justify-center rounded-full border border-border-default bg-surface-mid text-ink-secondary shadow-dialog transition-opacity hover:text-accent-300',
+        show ? 'opacity-100' : 'pointer-events-none opacity-0',
+      ].join(' ')}
     >
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         <polyline points="18 15 12 9 6 15" />
@@ -2969,14 +3033,40 @@ const BrowseSideRail = memo(function BrowseSideRail({ posts, schedules, onSelect
 // ── 빈 상태 ─────────────────────────────────────────────────────────────────
 
 // (B1) 일정 로딩 스켈레톤 — 카드 자리(aspect-ratio 고정)를 미리 잡아 CLS·빈결과 깜빡임 방지
+// [DS] MO-6: 스켈레톤은 '실제 카드 마크업의 텍스트만 치환' — 새로 그리지 않는다.
+// 전엔 grid 가 포스터 높이(aspect-[3/4])만 있어 실데이터 교체 순간 본문 높이만큼(+713px/10장)
+// 낙하했고, list 는 임의값 h-24(96px) vs 실측 87px 로 어긋났다. 골격을 복제하면 높이가
+// 구조적으로 일치한다(list 는 실측 87px 고정 — 2026-08-25, 375px, html 17px).
 function ScheduleSkeletonGrid({ viewMode }: { viewMode: 'grid' | 'list' | 'table' }) {
   const grid = viewMode === 'grid';
   const n = grid ? 10 : 6;
   return (
     <div className={[grid ? 'grid grid-cols-2 gap-card-gap sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5' : 'grid grid-cols-1 lg:grid-cols-2 gap-card-gap'].join(' ')} aria-busy="true">
-      {Array.from({ length: n }).map((_, i) => (
-        <div key={i} className={[grid ? 'aspect-[3/4]' : 'h-24', 'animate-pulse rounded-card border border-border-subtle bg-surface-high'].join(' ')} />
-      ))}
+      {Array.from({ length: n }).map((_, i) =>
+        grid ? (
+          // GridCard 골격: 포스터 3/4 + 본문(p-2.5 gap-1.5: 제목 2줄 + 매장 1줄 + 구분선 + 바인 1줄)
+          <div key={i} className="flex flex-col overflow-hidden rounded-card border border-border-subtle bg-surface-low">
+            <div className="skeleton aspect-[3/4] w-full rounded-none" />
+            <div className="flex flex-col gap-1.5 p-2.5">
+              <div className="skeleton h-4" />
+              <div className="skeleton h-4 w-2/3" />
+              <div className="skeleton h-3 w-1/2" />
+              <div className="border-t border-border-subtle my-0.5" />
+              <div className="skeleton h-4 w-3/4" />
+            </div>
+          </div>
+        ) : (
+          // ListCard 골격: p-2 + 64px 썸네일 + 압축 3행
+          <div key={i} className="flex min-h-[87px] items-center gap-2.5 rounded-card border border-border-subtle bg-surface-low p-2">
+            <div className="skeleton h-16 w-16 shrink-0 rounded-input" />
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <div className="skeleton h-[17px] w-3/4" />
+              <div className="skeleton h-[17px]" />
+              <div className="skeleton h-[17px] w-1/2" />
+            </div>
+          </div>
+        )
+      )}
     </div>
   );
 }

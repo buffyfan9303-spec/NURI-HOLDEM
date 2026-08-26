@@ -289,7 +289,7 @@ export default function PostDetailModal({
             type="button"
             onClick={() => react('goodrun')}
             className={[
-              'relative flex items-center justify-center gap-1.5 rounded-card border py-3 text-sm font-bold transition-all active:scale-[0.98]',
+              'relative flex items-center justify-center gap-1.5 rounded-card border py-3 text-sm font-bold transition-colors active:scale-[0.98]',
               myReaction === 'goodrun'
                 ? 'border-emerald-400 bg-emerald-500/15 text-emerald-300'
                 : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary',
@@ -301,7 +301,7 @@ export default function PostDetailModal({
             type="button"
             onClick={() => react('badbeat')}
             className={[
-              'relative flex items-center justify-center gap-1.5 rounded-card border py-3 text-sm font-bold transition-all active:scale-[0.98]',
+              'relative flex items-center justify-center gap-1.5 rounded-card border py-3 text-sm font-bold transition-colors active:scale-[0.98]',
               myReaction === 'badbeat'
                 ? 'border-ink-muted bg-surface-float text-ink-primary'
                 : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary',

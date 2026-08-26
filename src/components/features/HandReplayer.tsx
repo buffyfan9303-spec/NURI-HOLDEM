@@ -4,7 +4,8 @@
 import { useEffect, useState } from 'react';
 import { MiniCard } from '../atoms/HandCards';
 import type { ReplayData } from '../../lib/hand';
-import { computeEquity, computeOuts, type OutsResult } from './gto/equityEngine';
+import { type OutsResult } from './gto/equityEngine';
+import { equityAsync, outsAsync } from './gto/equityClient';
 import type { Card, Rank, Suit } from './gto/gto.types';
 
 const STREET_ACT = [['pre', '프리플랍'], ['flop', '플랍'], ['turn', '턴'], ['river', '리버']] as const;
@@ -90,22 +91,25 @@ export default function HandReplayer({ replay }: { replay: ReplayData }) {
     const hero = heroKey.split(',').map(toCard) as [Card, Card];
     const villain = villainKey.split(',').map(toCard) as [Card, Card];
     const shown = boardKey ? boardKey.split(',').map(toCard) : [];
-    const id = window.setTimeout(() => {
-      // 공개된 스트리트까지의 마일스톤 보드마다 승률 1회씩(리버=단일, 턴=44 전수, 플랍=990 전수)
-      const milestones: { label: string; board: Card[] }[] = [{ label: '프리', board: [] }];
-      if (shown.length >= 3) milestones.push({ label: '플랍', board: shown.slice(0, 3) });
-      if (shown.length >= 4) milestones.push({ label: '턴', board: shown.slice(0, 4) });
-      if (shown.length >= 5) milestones.push({ label: '리버', board: shown.slice(0, 5) });
-      const t = milestones.map((m) => {
-        const e = computeEquity(hero, villain, m.board);
-        return { label: m.label, hero: e.hero, villain: e.villain };
-      });
+    // [DS] MO-9C: setTimeout(0)은 렌더만 피할 뿐 계산은 메인스레드 롱태스크였다(플랍 990 전수 ×
+    // 마일스톤 + 아웃츠 45×). 워커로 위임 — 글 상세를 열 때 화면이 멈추지 않는다. 결과 동일.
+    const milestones: { label: string; board: Card[] }[] = [{ label: '프리', board: [] }];
+    if (shown.length >= 3) milestones.push({ label: '플랍', board: shown.slice(0, 3) });
+    if (shown.length >= 4) milestones.push({ label: '턴', board: shown.slice(0, 4) });
+    if (shown.length >= 5) milestones.push({ label: '리버', board: shown.slice(0, 5) });
+    Promise.all([
+      Promise.all(milestones.map((m) => equityAsync(hero, villain, m.board))),
       // 아웃츠는 현재 공개 스트리트가 플랍(3)·턴(4)일 때만(리버는 다음 카드 없음)
-      const ho = computeOuts(hero, villain, shown);
-      const vo = computeOuts(villain, hero, shown);
-      if (alive) { setTraj(t); setHeroOuts(ho); setVillainOuts(vo); setComputing(false); }
-    }, 0);
-    return () => { alive = false; window.clearTimeout(id); };
+      outsAsync(hero, villain, shown),
+      outsAsync(villain, hero, shown),
+    ]).then(([es, ho, vo]) => {
+      if (!alive) return;
+      setTraj(milestones.map((m, i) => ({ label: m.label, hero: es[i].hero, villain: es[i].villain })));
+      setHeroOuts(ho);
+      setVillainOuts(vo);
+      setComputing(false);
+    });
+    return () => { alive = false; };
   }, [canEquity, heroKey, villainKey, boardKey]);
 
   const cur = traj && traj.length ? traj[traj.length - 1] : null;

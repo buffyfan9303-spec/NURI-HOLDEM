@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { handName, type FreqMap } from '../../../lib/ranges';
-import { computeRangeVsRange, type WeightedCombo } from '../gto/equityEngine';
+import { type WeightedCombo } from '../gto/equityEngine';
+import { rangeVsRangeAsync } from '../gto/equityClient';
 import { expandFreqToCombos, scenarioActionCombos } from '../gto/useDeepGto';
 
 /* GTO 위자드형 보조 도구 3종 — MDF/블러프 계산기 · 어그레션 빈도 차트 · 레인지 vs 레인지 에퀴티(실계산) */
@@ -172,10 +173,11 @@ export function RangeMatrix() {
     return i < j ? v : 100 - v;
   };
 
-  // 선택 쌍 우선 → 나머지 쌍 순차 계산. 한 틱에 한 쌍(setTimeout 0)으로 UI 반응성 유지.
+  // 선택 쌍 우선 → 나머지 쌍 순차 계산.
+  // [DS] MO-9C: setTimeout(0) 체인은 프레임 사이 양보만 할 뿐 15개 롱태스크가 메인스레드에
+  // 연속됐다 → 워커에 한 쌍씩 순차 위임(메인스레드 점유 0). 결과·캐시·표시 로직은 동일.
   useEffect(() => {
     let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
     const pending: string[] = [];
     const enqueue = (i: number, j: number) => {
       if (i === j) return;
@@ -191,13 +193,15 @@ export function RangeMatrix() {
       const key = pending.shift();
       if (!key) return;
       const [i, j] = key.split(':').map(Number);
-      const r = computeRangeVsRange(MATRIX_PRESETS[i].combos, MATRIX_PRESETS[j].combos, [], MATRIX_ITER);
-      eqCache.set(key, r.hero * 100);
-      setTick((t) => t + 1);
-      timer = setTimeout(step, 0);
+      rangeVsRangeAsync(MATRIX_PRESETS[i].combos, MATRIX_PRESETS[j].combos, [], MATRIX_ITER).then((r) => {
+        if (cancelled) return;
+        eqCache.set(key, r.hero * 100);
+        setTick((t) => t + 1);
+        step();
+      });
     };
-    timer = setTimeout(step, 0);
-    return () => { cancelled = true; if (timer) clearTimeout(timer); };
+    step();
+    return () => { cancelled = true; };
   }, [a, b]);
 
   const eq = getEq(a, b);

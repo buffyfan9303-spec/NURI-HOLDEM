@@ -8,7 +8,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { ToastProvider } from './components/atoms/Toast';
 import ErrorBoundary from './components/atoms/ErrorBoundary';
 import { initErrorLog } from './lib/errorLog';
-import { initMonitoring } from './lib/monitoring';
+import { initMonitoring, initMotionTelemetry } from './lib/monitoring';
 
 // 초기 테마 클래스는 ThemeProvider 가 마운트 시 적용한다.
 // FOUC(깜빡임) 최소화를 위해 마운트 전에 저장된 테마를 즉시 반영.
@@ -21,6 +21,8 @@ document.documentElement.classList.add(savedTheme === 'light' ? 'light' : 'dark'
 initErrorLog();
 // 외부 실시간 오류 알림(Sentry) — VITE_SENTRY_DSN 설정 시에만 활성화(미설정 시 무동작)
 initMonitoring();
+// [DS] MO-1 모션 계측 — LoAF·CLS·INP 후보를 관리자 errorLog 로(순수 PerformanceObserver, 번들 +0)
+initMotionTelemetry();
 
 // 서비스워커 등록 — 설치형 PWA/Play Store(TWA) 요건 + 앱 셸(해시 자산) 캐싱으로 재방문 즉시 로드 + 웹푸시.
 // (기존엔 푸시 켤 때만 등록됐으나, 설치 가능·빠른 재방문을 위해 로드 시 항상 등록)

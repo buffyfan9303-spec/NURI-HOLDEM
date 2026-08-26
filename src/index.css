@@ -16,11 +16,15 @@
      예외 2개뿐: 루프(스피너·펄스), shake(오류 진동 이펙트). 테마와 무관해 :root 단독. */
   :root {
     --ease: cubic-bezier(0.32, 0.72, 0, 1);
+    /* MO-2: 퇴장 전용 가속 곡선 — '화면 밖으로 사라지는 것'(VT push-out·시트 닫힘·토스트 퇴장)에만.
+       진입은 감속(--ease), 퇴장은 가속이어야 물리적으로 읽힌다(§20.4 §1). */
+    --ease-out: cubic-bezier(0.3, 0, 1, 1);
     /* 스프링(언더댐핑) — linear() 로 근사한 iOS 스프링. 시트 복귀·미세 바운스에 사용 */
     --spring: linear(0, 0.36 8%, 0.72 16%, 0.95 24%, 1.06 33%, 1.09 40%, 1.06 48%, 1.02 58%, 0.995 70%, 1);
     --dur-fast: 0.15s;   /* 색·배경·보더, 프레스 */
     --dur-base: 0.2s;    /* 요소 등장/퇴장, 칩 전환 */
     --dur-panel: 0.26s;  /* 시트·오버레이·풀스크린 */
+    --dur-tab: 0.22s;    /* 탭 전환(VT 방향성 푸시 — MO-8 소비) */
     --press: scale(0.985);
     --press-icon: scale(0.88);
     /* ── 하단 탭바 회피 오프셋 단일 소스(W1-3 TB1a) — 8곳에 흩어졌던 5.5/5.75/6/4.75rem 통일.
@@ -237,15 +241,11 @@
   }
 
   /* ── 스켈레톤 로더 ──────────────────────────────────── */
+  /* MO-5: shimmer(background-position 무한 애니 = 매 프레임 페인트 폭탄)를 pulse(opacity 전용,
+     컴포지터)로 교체 — 정적 셸·ScheduleSkeletonGrid 가 이미 pulse 라 시각 언어까지 통일(§20.5 #3). */
   .skeleton {
-    background: linear-gradient(
-      90deg,
-      theme('colors.surface.high') 25%,
-      theme('colors.surface.float') 50%,
-      theme('colors.surface.high') 75%
-    );
-    background-size: 200% 100%;
-    @apply animate-shimmer rounded;
+    background: theme('colors.surface.high');
+    @apply animate-pulse rounded;
   }
 
   /* ── 활동 점수 +N 팝업 ──────────────────────────────── */
@@ -286,7 +286,11 @@ main { max-width: 48rem; margin-inline: auto; }
    단, 탭 안에 인라인 렌더되는 모달/오버레이(position:fixed)와 그 자식은 '진짜 새로 뜨는'
    것이므로 :not(.fixed):not(.fixed *) 로 제외해 슬라이드/페이드 유지.
    (로딩 spin/pulse/shimmer 등 무한 반복 애니메이션은 대상 클래스에 없어 영향 없음) */
-.tab-pane :is(.animate-fade-in, .animate-slide-up, .animate-slide-down, .animate-scale-in):not(.fixed):not(.fixed *) {
+/* ✅ 체크리스트(MO-2): 새 '진입 애니메이션' 클래스를 만들면 반드시 두 목록에 동시 등록 —
+   ① 아래 :is(...) 무효화 목록(keep-alive 재방문 깜빡임 방지)
+   ② prefers-reduced-motion 블록의 animation:none 목록
+   (.animate-scale-in 은 tailwind 에 정의가 없는 죽은 셀렉터라 제거, .anim-pop 은 뚫려 있던 유일한 구멍이라 등록) */
+.tab-pane :is(.animate-fade-in, .animate-slide-up, .animate-slide-down, .anim-pop):not(.fixed):not(.fixed *) {
   animation: none !important;
 }
 
@@ -300,14 +304,18 @@ main { max-width: 48rem; margin-inline: auto; }
   animation-duration: 0.18s;
   animation-timing-function: var(--ease);
 }
-@keyframes vt-push-out-l { to   { opacity: 0; transform: translateX(-32px); } }
-@keyframes vt-push-in-r  { from { opacity: 0; transform: translateX(32px); } }
-@keyframes vt-push-out-r { to   { opacity: 0; transform: translateX(32px); } }
-@keyframes vt-push-in-l  { from { opacity: 0; transform: translateX(-32px); } }
-html[data-vt-dir='forward']::view-transition-old(root) { animation: vt-push-out-l 0.3s var(--ease) both; }
-html[data-vt-dir='forward']::view-transition-new(root) { animation: vt-push-in-r 0.3s var(--ease) both; }
-html[data-vt-dir='back']::view-transition-old(root)    { animation: vt-push-out-r 0.3s var(--ease) both; }
-html[data-vt-dir='back']::view-transition-new(root)    { animation: vt-push-in-l 0.3s var(--ease) both; }
+/* [DS] MO-8A 방향성 이징: 나가는 화면은 짧고 가속(--ease-out 0.2s)으로 비켜주고,
+   들어오는 화면은 감속(--ease, --dur-tab)으로 안착 — iOS 푸시의 비대칭 문법.
+   (양쪽 같은 곡선 0.3s 는 '둘이 동시에 미끄러지는' 밋밋한 평행이동으로 읽혔다)
+   이동량 32px→20px: 시차 푸시는 거리보다 겹침 타이밍이 감각을 만든다 — 과한 거리는 들뜸. */
+@keyframes vt-push-out-l { to   { opacity: 0; transform: translateX(-20px); } }
+@keyframes vt-push-in-r  { from { opacity: 0; transform: translateX(20px); } }
+@keyframes vt-push-out-r { to   { opacity: 0; transform: translateX(20px); } }
+@keyframes vt-push-in-l  { from { opacity: 0; transform: translateX(-20px); } }
+html[data-vt-dir='forward']::view-transition-old(root) { animation: vt-push-out-l var(--dur-base) var(--ease-out) both; }
+html[data-vt-dir='forward']::view-transition-new(root) { animation: vt-push-in-r var(--dur-tab) var(--ease) both; }
+html[data-vt-dir='back']::view-transition-old(root)    { animation: vt-push-out-r var(--dur-base) var(--ease-out) both; }
+html[data-vt-dir='back']::view-transition-new(root)    { animation: vt-push-in-l var(--dur-tab) var(--ease) both; }
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-old(root),
   ::view-transition-new(root) { animation: none !important; }
@@ -364,7 +372,9 @@ html[data-vt-dir='back']::view-transition-new(root)    { animation: vt-push-in-l
 }
 
 /* 네이티브 스크롤 감각 — 부드러운 앵커 이동 + 바운스가 새로고침으로 새지 않게 */
-html { scroll-behavior: smooth; }
+/* MO-2: 전역 smooth 제거 — 앵커뿐 아니라 scrollIntoView·scrollTo·포커스 이동·스크롤 복원까지
+   전부 수백 ms 애니메이션이 되어 사장님의 '주르륵'과 정확히 겹쳤다(§20.5 #6).
+   부드럽게 할 호출부에서만 behavior:'smooth' 명시(ChatPane·NuriPosLedger 는 이미 그렇게 함). */
 body { overscroll-behavior-y: contain; }
 
 /* 카드/리스트 행 등 클릭 가능한 요소의 공통 탭 피드백(버튼 외 영역) */
@@ -388,7 +398,7 @@ body { overscroll-behavior-y: contain; }
   /* 진입/로딩 애니메이션은 아예 끔(0.01ms 단축이 아니라 none) — 모션 민감 사용자에게 깜빡임 0.
      framer-motion 은 main.tsx 의 MotionConfig reducedMotion="user" 가 별도로 처리. */
   .animate-fade-in, .animate-fade-out, .animate-slide-up, .animate-slide-down,
-  .tab-anim-r, .tab-anim-l, .animate-shimmer, .skeleton, .confetti { animation: none !important; }
+  .tab-anim-r, .tab-anim-l, .skeleton, .confetti, .anim-pop { animation: none !important; }
 }
 
 /* ── 라이트 모드 가독 오버라이드(unlayered — utilities 레이어보다 우선) ──
@@ -464,10 +474,23 @@ html.light .text-pink-300 { color: #BE185D; }
 /* ── 화면 밖 목록 행 렌더 스킵 (마스터 지시서 Phase 8-3) ─────────────────────
    content-visibility:auto = 뷰포트 밖 행의 스타일·레이아웃·페인트를 브라우저가 통째로
    건너뛴다 — 수백 개 목록에서 스크롤 프레임을 지키는 가장 싼 방법.
-   contain-intrinsic-size 는 실측 행 높이와 맞춰야 스크롤바가 점프하지 않는다. */
-.cv-row-sm { content-visibility: auto; contain-intrinsic-size: auto 41px; }  /* 커뮤니티 한줄 행 */
-.cv-row-lg { content-visibility: auto; contain-intrinsic-size: auto 120px; } /* 커뮤니티 피드 카드 */
-.cv-row-md { content-visibility: auto; contain-intrinsic-size: auto 72px; }  /* 장터 행(모바일) */
+   contain-intrinsic-size 는 실측 행 높이와 맞춰야 스크롤바가 점프하지 않는다.
+
+   [DS] MO-6 높이 계약: 행 높이를 :root 토큰 하나로 모아 cv 추정치·스켈레톤·실제 행이
+   같은 값을 본다(불일치를 물리적으로 차단). 값은 실측(2026-08-25, 375px, html 17px,
+   프로덕션 데이터): sm 43.5 → 44 / lg 87~106(제목·본문 줄수) → 최빈 106 /
+   md 모바일 83 · sm+ 63(6컬럼 단일행으로 접혀 방향이 반대 — 미디어쿼리 필수).
+   `auto` 키워드는 반드시 유지 — 첫 렌더 후 실제 크기를 기억해 추정 오차를 스스로 지운다. */
+:root { --row-h-sm: 44px; --row-h-md: 83px; --row-h-lg: 106px; }
+@media (min-width: 640px) { :root { --row-h-md: 63px; } }
+.cv-row-sm { content-visibility: auto; contain-intrinsic-size: auto var(--row-h-sm); }  /* 커뮤니티 한줄 행 */
+.cv-row-lg { content-visibility: auto; contain-intrinsic-size: auto var(--row-h-lg); }  /* 커뮤니티 피드 카드 */
+.cv-row-md { content-visibility: auto; contain-intrinsic-size: auto var(--row-h-md); }  /* 장터 행 */
+
+/* [DS] MO-6D — 갱신되는 숫자(타이머·카운터·금액)는 tabular-nums 로 폭을 고정해
+   자리수가 바뀔 때마다 옆 요소가 밀리는 미세 흔들림을 없앤다.
+   신규 코드는 이 유틸을 쓰고, 기존 tailwind `tabular-nums` 사용처는 그대로 둔다(동작 동일). */
+.num { font-variant-numeric: tabular-nums; }
 
 /* ── 프레스 스프링(버튼 이펙트) — 누르면 깊게 눌리고, 떼면 통통 튀며 복귀 */
 .press-spring {

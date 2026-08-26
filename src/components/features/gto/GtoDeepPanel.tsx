@@ -1,14 +1,14 @@
 // src/components/features/gto/GtoDeepPanel.tsx
 // GTO 핸드 분석 — 인라인 패널. 도구 탭에서 다른 계산기와 동일한 카드형 UI로 표시된다.
 // 공유 링크(#gto=) 진입 시에는 GtoDeepModal 이 이 패널을 모달로 감싸 재사용한다.
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useBackClose } from '../../../lib/backstack';
 import { useToast } from '../../atoms/Toast';
 import CardGridPicker, { SUIT_COLOR, SUIT_LABEL } from './CardGridPicker';
 import { writeSnap } from '../../../lib/snapshot';
 import { useDeepGto, type CardTarget, type DeepGtoInit } from './useDeepGto';
 import { canonicalizeHand } from './useGtoCalculator';
-import { computeEquity } from './equityEngine';
+import { equityAsync } from './equityClient';
 import { encodeSpot } from './gtoShare';
 import type { Card, ActionFrequency } from './gto.types';
 
@@ -135,22 +135,31 @@ function DeepActionSheet({
   villain: readonly (Card | null)[];
   board: readonly (Card | null)[];
 }) {
-  const rows = useMemo(() => {
-    if (!open) return null;
+  // [DS] MO-9C: 시트 열림 시 3000회 × 4스트릿 동기 계산이 useMemo(렌더 중) 롱태스크였다
+  // → 워커 비동기로 전환(열리는 프레임이 더는 멈추지 않는다). 결과·표시는 동일.
+  type ActionRow = { key: string; eq: number | null; rec: (eq: number) => { label: string; color: string; note: string } };
+  const [rows, setRows] = useState<ActionRow[] | null>(null);
+  useEffect(() => {
+    if (!open) { setRows(null); return; }
     const h = hero.filter((c): c is Card => c !== null);
     const v = villain.filter((c): c is Card => c !== null);
-    if (h.length < 2 || v.length < 2) return null;
+    if (h.length < 2 || v.length < 2) { setRows(null); return; }
     const b = board.filter((c): c is Card => c !== null);
-    const eqAt = (n: number): number | null => {
-      if (n > 0 && b.length < n) return null;
-      return computeEquity([h[0], h[1]], [v[0], v[1]], b.slice(0, n), 3000).hero;
-    };
-    return [
-      { key: '비포 (프리플랍) 액션', eq: eqAt(0), rec: preflopRec },
-      { key: '플랍 액션',            eq: eqAt(3), rec: postRec },
-      { key: '턴 액션',             eq: eqAt(4), rec: postRec },
-      { key: '리버 액션',           eq: eqAt(5), rec: postRec },
-    ];
+    let alive = true;
+    const eqAt = (n: number): Promise<number | null> =>
+      n > 0 && b.length < n
+        ? Promise.resolve(null)
+        : equityAsync([h[0], h[1]], [v[0], v[1]], b.slice(0, n), 3000).then((r) => r.hero);
+    Promise.all([eqAt(0), eqAt(3), eqAt(4), eqAt(5)]).then(([e0, e3, e4, e5]) => {
+      if (!alive) return;
+      setRows([
+        { key: '비포 (프리플랍) 액션', eq: e0, rec: preflopRec },
+        { key: '플랍 액션',            eq: e3, rec: postRec },
+        { key: '턴 액션',             eq: e4, rec: postRec },
+        { key: '리버 액션',           eq: e5, rec: postRec },
+      ]);
+    });
+    return () => { alive = false; };
   }, [open, hero, villain, board]);
 
   useBackClose(open, onClose);

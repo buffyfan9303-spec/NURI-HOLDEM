@@ -1,11 +1,12 @@
 // src/components/features/LiveGamesTab.tsx
 // 라이브 — 진행 중(클락 running) 게임 현황 보드. 클락에서 보이는 정보 전부 공개:
 // 레벨/블라인드/앤티·남은시간·생존/엔트리·리바인·얼리·애드온·탈락·총스택·평균스택·등록마감·다음브레이크.
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { getRunningClocks, subscribeRunningClocks, effectiveLevel, type ClockState, type ClockLevel } from '../../api/clock';
 import { matchClockSchedule as matchSchedule, msToRegClose } from '../../lib/regStatus';
 import { wonToMan } from '../../api/ledger';
-import { EmptyState, SkeletonList } from '../atoms/Skeleton';
+import { EmptyState } from '../atoms/Skeleton';
+import { useSkeletonGate } from '../../lib/useSkeletonGate';
 import type { Venue } from '../../api/community';
 import type { Schedule } from '../../api/schedules';
 
@@ -48,7 +49,7 @@ function msToNextBreak(s: ClockState, index: number, remaining: number): number 
 
 export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, onDisplay, active = true, myGames }: { venues: Venue[]; schedules: Schedule[]; onVenue: (id: string) => void; onSchedule: (s: Schedule) => void; onDisplay: (venueId: string, gameSeq: number) => void; active?: boolean; myGames?: { venueId: string; venueName: string; gameSeq: number | null }[] }) {
   const [games, setGames] = useState<ClockState[] | null>(null);
-  const [, setTick] = useState(0);
+  const showSkel = useSkeletonGate(games === null); // MO-6C: 200ms 내 도착하면 스켈레톤 생략
   const [sortBy, setSortBy] = useState<'default' | 'players' | 'time' | 'distance'>('default'); // 진행 게임 정렬
   const [geo, setGeo] = useState<[number, number] | null>(null); // 손님 위치(거리순 정렬, 위치 권한 시)
   // 실패로 목록을 비우면 순간 끊김 한 번에 '진행 중인 대회 없음'이 된다 —
@@ -57,28 +58,35 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
   // 폴링·1초 틱은 라이브 탭이 보일 때만 — 숨김 시 멈춰 백그라운드 끊김 방지(재진입 시 즉시 갱신). 실시간 구독은 이벤트 기반이라 상시 유지.
   useEffect(() => { if (!active) return; load(); const t = setInterval(load, 30000); return () => clearInterval(t); }, [active]);
   useEffect(() => subscribeRunningClocks(load), []); // 실시간: 레벨 전환·통계 즉시 반영
-  useEffect(() => { if (!active) return; const t = setInterval(() => setTick((x) => x + 1), 1000); return () => clearInterval(t); }, [active]);
 
-  const nameOf = (id: string) => venues.find((v) => v.id === id)?.name ?? '홀덤펍';
+  // [DS] MO-9B①: venues.find 선형 탐색 제거 — Map 조회(O(게임수×매장수) → O(게임수))
+  const venueById = useMemo(() => new Map(venues.map((v) => [v.id, v])), [venues]);
+  const nameOf = (id: string) => venueById.get(id)?.name ?? '홀덤펍';
 
+  // [DS] MO-9B②: 파생(Set/filter/sort)을 useMemo 로 — 시간 틱·무관 리렌더에서 재계산하지 않는다
   // 오늘 곧 시작 — 오늘 예정(승인)인데 아직 클락이 안 돌아가는 게임(손님에게 미리 노출)
-  const today = new Date().toLocaleDateString('en-CA');
-  const liveSchedIds = new Set<string>();
-  for (const g of games ?? []) { const s = matchSchedule(g, schedules); if (s) liveSchedIds.add(s.id); }
-  const upcoming = schedules
-    .filter((s) => s.approved && s.date === today && !liveSchedIds.has(s.id))
-    .sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
+  const upcoming = useMemo(() => {
+    const liveSchedIds = new Set<string>();
+    for (const g of games ?? []) { const s = matchSchedule(g, schedules); if (s) liveSchedIds.add(s.id); }
+    const today = new Date().toLocaleDateString('en-CA');
+    return schedules
+      .filter((s) => s.approved && s.date === today && !liveSchedIds.has(s.id))
+      .sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
+  }, [games, schedules]);
 
   // 정렬 — 기본(클락 순) / 남은인원 많은 순 / 시작 시간 빠른 순 / 거리순(지역 근사)
-  const aliveOf = (g: ClockState) => g.liveStats?.alive ?? Math.max(0, g.adjEntries - g.eliminations);
-  const startOf = (g: ClockState) => matchSchedule(g, schedules)?.startTime || '99:99';
-  const regionOf = (g: ClockState) => venues.find((v) => v.id === g.venueId)?.region || matchSchedule(g, schedules)?.region || '';
-  const distOf = (g: ClockState) => { if (!geo) return Infinity; const c = centroidOf(regionOf(g)); return c ? haversine(geo, c) : Infinity; };
-  const sortedGames = games ? [...games].sort((a, b) =>
-    sortBy === 'players' ? aliveOf(b) - aliveOf(a)
-      : sortBy === 'time' ? startOf(a).localeCompare(startOf(b))
-        : sortBy === 'distance' ? distOf(a) - distOf(b)
-          : 0) : games;
+  const sortedGames = useMemo(() => {
+    if (!games) return games;
+    const aliveOf = (g: ClockState) => g.liveStats?.alive ?? Math.max(0, g.adjEntries - g.eliminations);
+    const startOf = (g: ClockState) => matchSchedule(g, schedules)?.startTime || '99:99';
+    const regionOf = (g: ClockState) => venueById.get(g.venueId)?.region || matchSchedule(g, schedules)?.region || '';
+    const distOf = (g: ClockState) => { if (!geo) return Infinity; const c = centroidOf(regionOf(g)); return c ? haversine(geo, c) : Infinity; };
+    return [...games].sort((a, b) =>
+      sortBy === 'players' ? aliveOf(b) - aliveOf(a)
+        : sortBy === 'time' ? startOf(a).localeCompare(startOf(b))
+          : sortBy === 'distance' ? distOf(a) - distOf(b)
+            : 0);
+  }, [games, schedules, sortBy, geo, venueById]);
   // 거리순 선택 시 위치 권한 요청(최초 1회) — 좌표 도착하면 재정렬, 거부/미지원 시 기본으로 복귀
   const pickSort = (k: 'default' | 'players' | 'time' | 'distance') => {
     if (k === 'distance' && !geo) {
@@ -129,7 +137,19 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
         )}
 
         {games === null ? (
-          <SkeletonList rows={3} rowClassName="h-40" />
+          showSkel ? (
+            // [DS] MO-6: 실제 LiveCard 골격 복제(헤더 2행 + 스탯 박스 + 하단 행) — h-40 임의값 대체
+            <div className="space-y-card-gap" aria-hidden aria-busy="true">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="rounded-card border border-border-subtle bg-surface-low p-3">
+                  <div className="skeleton h-5 w-1/2" />
+                  <div className="skeleton mt-1 h-4 w-2/3" />
+                  <div className="skeleton mt-2 h-[72px]" />
+                  <div className="skeleton mt-2 h-4 w-3/4" />
+                </div>
+              ))}
+            </div>
+          ) : null
         ) : games.length === 0 ? (
           <EmptyState
             icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2.5 2.5" /><path d="M9 2h6" /></svg>}
@@ -156,7 +176,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
                   const g = grp.games[0]; const sched = matchSchedule(g, schedules);
                   return (
                     <ul key={grp.venueId} className="grid grid-cols-1 gap-card-gap">
-                      <LiveCard g={g} name={g.gameSeq > 1 ? `${nameOf(g.venueId)} · ${gl(g)}` : nameOf(g.venueId)} sched={sched}
+                      <LiveCard g={g} name={g.gameSeq > 1 ? `${nameOf(g.venueId)} · ${gl(g)}` : nameOf(g.venueId)} sched={sched} active={active}
                         onPoster={() => sched && onSchedule(sched)} onVenue={() => onVenue(g.venueId)} onDisplay={() => onDisplay(g.venueId, g.gameSeq)} />
                     </ul>
                   );
@@ -167,7 +187,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
                     <ul className="grid grid-cols-1 gap-card-gap">
                       {grp.games.map((g) => {
                         const sched = matchSchedule(g, schedules);
-                        return <LiveCard key={`${g.venueId}#${g.gameSeq}`} g={g} name={gl(g)} sched={sched}
+                        return <LiveCard key={`${g.venueId}#${g.gameSeq}`} g={g} name={gl(g)} sched={sched} active={active}
                           onPoster={() => sched && onSchedule(sched)} onVenue={() => onVenue(g.venueId)} onDisplay={() => onDisplay(g.venueId, g.gameSeq)} />;
                       })}
                     </ul>
@@ -200,7 +220,16 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
   );
 }
 
-function LiveCard({ g, name, sched, onPoster, onVenue, onDisplay }: { g: ClockState; name: string; sched: Schedule | null; onPoster: () => void; onVenue: () => void; onDisplay: () => void }) {
+function LiveCard({ g, name, sched, active = true, onPoster, onVenue, onDisplay }: { g: ClockState; name: string; sched: Schedule | null; active?: boolean; onPoster: () => void; onVenue: () => void; onDisplay: () => void }) {
+  // [DS] MO-9B③: 1초 틱을 카운트다운을 실제로 그리는 말단 카드로 격리 —
+  // 예전엔 부모가 초마다 setTick 으로 탭 전체(정렬·파생 포함)를 리렌더했다.
+  // 멈춘 클락(running=false)의 remaining 은 정적이라 틱 자체를 끈다.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!active || !g.running) return;
+    const t = setInterval(() => setTick((x) => x + 1), 1000);
+    return () => clearInterval(t);
+  }, [active, g.running]);
   const lvls = g.config?.levels ?? [];
   // 공개 카드도 손님 기기다 — 쓰기 권한이 없으므로 표시만 보정한다(DB 전진은 운영자 화면 책임).
   const eff = effectiveLevel(g);
@@ -291,8 +320,8 @@ function LiveCard({ g, name, sched, onPoster, onVenue, onDisplay }: { g: ClockSt
 
         {/* 등록마감 · 다음 브레이크 */}
         <div className="mt-1.5 flex items-center justify-between gap-2 text-2xs">
-          <span className="text-ink-muted">등록마감 <b className={regClose === 0 ? 'text-rose-300' : 'text-ink-secondary'}>{regClose === null ? '—' : regClose === 0 ? '마감' : hms(regClose)}</b></span>
-          <span className="text-ink-muted">다음 브레이크 <b className="text-ink-secondary">{nextBreak === null ? '—' : hms(nextBreak)}</b></span>
+          <span className="text-ink-muted">등록마감 <b className={`num ${regClose === 0 ? 'text-rose-300' : 'text-ink-secondary'}`}>{regClose === null ? '—' : regClose === 0 ? '마감' : hms(regClose)}</b></span>
+          <span className="text-ink-muted">다음 브레이크 <b className="num text-ink-secondary">{nextBreak === null ? '—' : hms(nextBreak)}</b></span>
         </div>
       </button>
       <div className="mt-1 flex gap-1">

@@ -795,7 +795,7 @@ function LevelCard({ points, championships = 0 }: { points: number; championship
       {prog.next ? (
         <div className="mt-2.5">
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-float">
-            <div className="h-full rounded-full transition-all" style={{ width: `${Math.round(prog.ratio * 100)}%`, background: t.color }} />
+            <div className="h-full rounded-full transition-[width]" style={{ width: `${Math.round(prog.ratio * 100)}%`, background: t.color }} />
           </div>
           <p className="mt-1 text-2xs text-ink-muted">다음 레벨 <b style={{ color: prog.next.color }}>{prog.next.title}</b>까지 <b className="text-ink-secondary tabular-nums">{prog.toNext.toLocaleString()}</b>점</p>
         </div>

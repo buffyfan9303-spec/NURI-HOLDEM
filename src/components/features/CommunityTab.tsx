@@ -1,5 +1,6 @@
 import { memo, useState, useMemo, useEffect, useRef, Fragment, useTransition, type ReactNode } from 'react';
 import { promptLogin } from '../../lib/requireLogin';
+import { useSkeletonGate } from '../../lib/useSkeletonGate';
 import { getActiveCommunityAds, type CommunityAd } from '../../api/ads';
 import { getEquippedMarks } from '../../api/community';
 import TitleChip from '../atoms/TitleChip';
@@ -612,7 +613,7 @@ const PostRow = memo(function PostRow({ post, onClick, hot = false, selected = f
       }}
       aria-current={selected || undefined}
       className={[
-        'cv-row-sm flex items-center gap-2 px-3 py-2 cursor-pointer border-b border-border-subtle last:border-b-0 transition-colors focus:outline-none focus-visible:bg-surface-high/60',
+        'cv-row-sm min-h-[var(--row-h-sm)] flex items-center gap-2 px-3 py-2 cursor-pointer border-b border-border-subtle last:border-b-0 transition-colors focus:outline-none focus-visible:bg-surface-high/60',
         selected ? 'bg-accent-300/10' : 'hover:bg-surface-high/60 active:bg-surface-high',
       ].join(' ')}
     >
@@ -654,7 +655,7 @@ const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, se
       }}
       aria-current={selected || undefined}
       className={[
-        'cv-row-lg py-1.5 px-3 transition-colors cursor-pointer border-b border-border-subtle last:border-b-0 focus:outline-none focus-visible:bg-surface-high/50',
+        'cv-row-lg min-h-[var(--row-h-lg)] py-1.5 px-3 transition-colors cursor-pointer border-b border-border-subtle last:border-b-0 focus:outline-none focus-visible:bg-surface-high/50',
         selected
           ? 'bg-accent-300/10 border-l-2 border-l-accent-300 -ml-px pl-[calc(0.75rem-1px)]'
           : 'hover:bg-surface-high/50 active:bg-surface-high',
@@ -942,7 +943,7 @@ function VenuesSection({
                 type="button"
                 onClick={() => onSelectVenue(venue.id)}
                 className={[
-                  'w-full text-left flex items-center gap-2.5 px-2.5 py-2 rounded-card border transition-all duration-150 cursor-pointer active:bg-surface-high',
+                  'w-full text-left flex items-center gap-2.5 px-2.5 py-2 rounded-card border transition-colors duration-150 cursor-pointer active:bg-surface-high',
                   venue.isPaidAd
                     ? 'bg-surface-low border-accent-400/50 shadow-[0_0_12px_rgba(94,106,210,0.22)] hover:border-accent-400'
                     : 'bg-surface-low border-border-default hover:border-border-strong hover:bg-surface-high',
@@ -1084,6 +1085,7 @@ function LiveWallSection() {
   const [messages, setMessages] = useState<LiveMessage[]>([]);
   const [draft,    setDraft]    = useState('');
   const [loading,  setLoading]  = useState(true);
+  const showSkel = useSkeletonGate(loading); // MO-6C: 200ms 내 도착하면 스켈레톤 생략
   const [sending,  setSending]  = useState(false);
 
   useEffect(() => {
@@ -1158,15 +1160,16 @@ function LiveWallSection() {
         </div>
       )}
 
-      {loading ? (
+      {loading && !showSkel ? null : loading ? (
         // 스켈레톤 — 텍스트 깜빡임 대신 피드 행 형태의 시머 로더
         <ul className="space-y-1" aria-hidden>
           {Array.from({ length: 6 }).map((_, i) => (
             <li key={i} className="flex items-start gap-2 px-2.5 py-1.5 rounded-input bg-surface-low border border-border-subtle">
               <div className="skeleton h-6 w-6 shrink-0 rounded-full" />
-              <div className="min-w-0 flex-1 space-y-1.5 py-0.5">
-                <div className="skeleton h-2.5 rounded" style={{ width: `${[42, 55, 48, 60, 44, 52][i]}%` }} />
-                <div className="skeleton h-2.5 rounded" style={{ width: `${[88, 72, 92, 66, 80, 76][i]}%` }} />
+              {/* [DS] MO-6: 실제 행의 줄 높이를 복제(이름행 16px + 본문행 18px) — 교체 시 높이 유지 */}
+              <div className="min-w-0 flex-1">
+                <div className="skeleton h-4 rounded" style={{ width: `${[42, 55, 48, 60, 44, 52][i]}%` }} />
+                <div className="skeleton mt-0.5 h-[18px] rounded" style={{ width: `${[88, 72, 92, 66, 80, 76][i]}%` }} />
               </div>
             </li>
           ))}
