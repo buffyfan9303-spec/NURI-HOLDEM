@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, useTransition, startTransition, Suspense, memo, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import { withViewTransition } from './lib/viewTransition';
+import { getAppSetting } from './api/settings';
 import { useToast } from './components/atoms/Toast';
 import { checkIn, getMyCheckinStreak } from './api/checkins';
 import { requestBuyin, venueTodayGames, getMyBuyinRequestsToday, subscribeMyBuyinRequests, cancelBuyinRequest, type MyBuyinRequest } from './api/ledger';
@@ -531,21 +532,53 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
   // 5칸 고정: 일정/라이브/커뮤니티/장터 + (업주·직원·관리자=내 매장 | 일반=내 정보)
   // 관리자 설정·도구는 프로필 메뉴에서 진입(탭바는 핵심 동선만)
   const hasStore = tabs.some((t) => t.id === 'my-store');
-  // 유튜브식 자동 숨김 — 아래로 스크롤하면 숨고(몰입), 위로 살짝 올리면 즉시 복귀
+  // 유튜브식 자동 숨김 — TB2 재작성(§13-A): 이벤트 델타 임계(속도 의존)가 4가지로 고장나 있었다.
+  // ①느린 끌기는 무판정 구간에 머물러 바닥까지 탭바가 안 숨고 ②문서끝 감지 부재(삼성 '맨 위로'와 겹침)
+  // ③iOS 고무줄·툴바 개폐가 가짜 음수 dy 를 만들고 ④탭 복원(behavior:'instant')의 거대 dy 가 탭바를 증발시켰다.
+  // OBS-8 킬스위치: app_settings.tabbar_autohide_v2 = 'off' → 구 동작 복구(앱 재접속만으로, 재배포 불필요).
   const [hidden, setHidden] = useState(false);
+  const [autohideV2, setAutohideV2] = useState(true);
+  useEffect(() => { getAppSetting('tabbar_autohide_v2').then((v) => { if (v === 'off') setAutohideV2(false); }).catch(() => {}); }, []);
+  // 탭 전환 억제창 — 자식 layoutEffect 가 부모(App)의 복원 스크롤보다 먼저 실행되므로
+  // 복원 이벤트 도착 전에 창이 열려 순서가 보장된다. |dy| 크기 추정은 빠른 플링(프레임당 200px+)을 삼키므로 금지.
+  const suppressUntil = useRef(0);
+  useLayoutEffect(() => { suppressUntil.current = performance.now() + 300; }, [active]);
   useEffect(() => {
-    let lastY = window.scrollY;
-    const onScroll = () => {
-      const y = window.scrollY;
-      const dy = y - lastY;
-      if (y < 80) setHidden(false);            // 최상단 근처에선 항상 표시
-      else if (dy > 14) setHidden(true);       // 아래로 — 숨김
-      else if (dy < -8) setHidden(false);      // 위로 — 즉시 복귀
-      lastY = y;
+    if (!autohideV2) {
+      // 구(레거시) 경로 — 킬스위치 off 시 그대로 복구
+      let lastY = window.scrollY;
+      const onScroll = () => {
+        const y = window.scrollY;
+        const dy = y - lastY;
+        if (y < 80) setHidden(false);
+        else if (dy > 14) setHidden(true);
+        else if (dy < -8) setHidden(false);
+        lastY = y;
+      };
+      window.addEventListener('scroll', onScroll, { passive: true });
+      return () => window.removeEventListener('scroll', onScroll);
+    }
+    let lastY = window.scrollY, acc = 0, raf = 0;
+    const apply = () => {
+      raf = 0;
+      if (performance.now() < suppressUntil.current) { lastY = window.scrollY; acc = 0; return; }
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      if (max < 200) { setHidden(false); lastY = window.scrollY; acc = 0; return; }  // 짧은 화면 — 내비 영구 소멸·깜빡임 방지
+      const cy = Math.min(Math.max(window.scrollY, 0), max);                          // 고무줄·툴바 개폐 클램프 흡수
+      const dy = cy - lastY; lastY = cy;
+      if (cy >= max - 4) { setHidden(true); acc = 0; return; }                        // 문서 끝 — 무조건 숨김(삼성 버튼과 시간축 배타)
+      if (cy < 80) { setHidden(false); acc = 0; return; }
+      acc = (dy > 0) === (acc > 0) ? acc + dy : dy;                                   // 방향 바뀌면 리셋되는 누적 — 느린 끌기도 판정
+      if (acc > 48) { setHidden(true); acc = 0; }
+      else if (acc < -24) { setHidden(false); acc = 0; }
     };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(apply); };
+    const resync = () => { lastY = window.scrollY; acc = 0; };
     window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
+    window.addEventListener('resize', resync);
+    window.visualViewport?.addEventListener('resize', resync);
+    return () => { cancelAnimationFrame(raf); window.removeEventListener('scroll', onScroll); window.removeEventListener('resize', resync); window.visualViewport?.removeEventListener('resize', resync); };
+  }, [autohideV2]);
   // 장터는 커뮤니티 서브탭으로 이동(사용 빈도 기준) — 탭바 4번째 칸은 도구
   const items: { key: string; tab?: TabId; label: string }[] = [
     { key: 'browse', tab: 'browse', label: '일정' },
