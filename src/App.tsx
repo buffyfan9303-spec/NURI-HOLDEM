@@ -40,6 +40,7 @@ import { lazyWithReload } from './lib/lazyWithReload';
 import { getRunningClocks } from './api/clock';
 import { myVisitedVenues } from './api/vouchers';
 import { haversineKm } from './lib/geo';
+import { compareByStartThenBoost } from './lib/scheduleSort';
 import { readSnap, writeSnap } from './lib/snapshot';
 import { applyScheduleSeo, applyVenueSeo, resetSeo } from './lib/seo';
 import { createUndoQueue } from './lib/undoableDelete';
@@ -1442,7 +1443,7 @@ export default function App() {
       return matchQ && matchD && matchR && matchF && matchG && matchC && matchGr && matchFollow;
     })
       // 정렬이 아예 없어서 '업주가 정한 진열 순서'로 나왔다 — 손님은 '지금 갈 수 있는 게 뭐지'를
-      // 시간순으로 훑을 수가 없었다. 상단 고정(프리미엄)은 유지하되 그 안에서는 빠른 대회부터.
+      // 시간순으로 훑을 수가 없었다. 1차 키는 날짜+시각, 부스트는 동시각 tie-break(scheduleSort.ts).
       .sort((a, b) => {
         // 📍 가까운 순 — 좌표 있는 매장이 앞, 좌표 없으면 뒤(라이트백이 채우면 자연 편입).
         if (nearSort && myPos) {
@@ -1453,8 +1454,7 @@ export default function App() {
           const dd = dOf(a) - dOf(b);
           if (dd !== 0 && Number.isFinite(dd)) return dd;
         }
-        return Number(b.isPremium) - Number(a.isPremium)
-          || (a.date + a.startTime).localeCompare(b.date + b.startTime);
+        return compareByStartThenBoost(a, b);
       });
   }, [schedules, searchState, followedOnly, followedIds, nearSort, myPos, venueById]);
   // 날짜 슬라이더 점 표시용 — 승인된 대회가 있는 날짜 집합(헛탭 방지)
