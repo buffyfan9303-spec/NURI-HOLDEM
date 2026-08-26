@@ -141,8 +141,9 @@ export default {
           '50%':      { transform: 'scale(1.15)', opacity: '0.85' },
         },
         'slide-up': {
-          from: { transform: 'translateY(8px)', opacity: '0' },
-          to:   { transform: 'translateY(0)',   opacity: '1' },
+          // 진입 blur 3px→0: 데이터 로드 커밋의 '뚝'을 뭉개는 1회성 블러(§20.4 #3 개정, 오너 지시 2026-08-27)
+          from: { transform: 'translateY(8px)', opacity: '0', filter: 'blur(3px)' },
+          to:   { transform: 'translateY(0)',   opacity: '1', filter: 'blur(0)' },
         },
         // 시트(하단 모달) 열기: 화면 아래에서 실제로 올라온다.
         // ⚠ slide-up(8px 넛지)을 쓰면 시트가 '올라오지' 않고 반투명하게 번쩍 나타난다 —
@@ -159,8 +160,8 @@ export default {
         // 0에서 시작하면 컨텐츠가 '꺼졌다 켜지는' 깜빡임으로 인지된다.
         // 0.45에서 시작해 짧게 정착 — iOS 컨텐츠 전환과 같은 '스르륵' 감각.
         'fade-in': {
-          from: { opacity: '0.45' },
-          to:   { opacity: '1' },
+          from: { opacity: '0.45', filter: 'blur(3px)' },
+          to:   { opacity: '1', filter: 'blur(0)' },
         },
         'fade-out': {
           from: { opacity: '1' },

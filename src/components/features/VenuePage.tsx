@@ -33,6 +33,7 @@ import { uploadVenueImages } from '../../lib/storage';
 import { useBackClose } from '../../lib/backstack';
 import { lockScroll, unlockScroll } from '../../lib/scrollLock';
 import VenueReviews from './VenueReviews';
+import QrScanModal from './QrScanModal';
 import SeasonPanel from './SeasonPanel';
 import { getVenuesSeasonLeaders, type SeasonLeader } from '../../api/seasons';
 import SlidingPill from '../atoms/SlidingPill';
@@ -101,6 +102,7 @@ export default function VenuePage({
   // Tier1 요약·Tier3 게이트용 내 활동(연속 출석·이 매장 방문 횟수) — 로그인 시 1회
   const [myAct, setMyAct] = useState<{ streak: number; visits: number } | null>(null);
   const [checkinBusy, setCheckinBusy] = useState(false);
+  const [qrScanOpen, setQrScanOpen] = useState(false);
   useEffect(() => {
     setMyAct(null);
     if (!user || !venue?.id) return;
@@ -177,8 +179,14 @@ export default function VenuePage({
     try { await updateVenueKakao(venue.id, url); setKakaoOverride(url.trim()); toast.show(url.trim() ? '카카오톡 링크를 저장했습니다' : '링크를 삭제했습니다', 'success'); }
     catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
   };
-  // Tier1 [QR 체크인] — 매장 비치 QR 스캔(?checkin= 딥링크)과 같은 RPC·같은 게이트(4시간 중복 방지).
-  // 매장 페이지에 이미 들어와 있다 = venueId 를 안다 — 스캔과 동일한 보안 수준이므로 바로 호출한다.
+  // Tier1 [QR 체크인] — 오너 리포트(2026-08-27): 버튼이 스캔 없이 즉시 체크인되던 결함 교정.
+  // '체크인'은 매장에 실제로 왔다는 증명 — 버튼은 스캐너 모달만 열고, 체크인 RPC(doCheckin)는
+  // 매장 비치 QR(?checkin=<venueId>) 스캔 검증 후에만 실행된다. 딥링크 자동 체크인은 App.tsx 보존.
+  const openQrScan = () => {
+    if (!user) { toast.show('로그인 후 체크인할 수 있습니다', 'error'); promptLogin(); return; }
+    if (checkinBusy) return;
+    setQrScanOpen(true);
+  };
   const doCheckin = async () => {
     if (!user) { toast.show('로그인 후 체크인할 수 있습니다', 'error'); promptLogin(); return; }
     if (checkinBusy) return;
@@ -244,6 +252,15 @@ export default function VenuePage({
         </div>
       </header>
 
+      {/* QR 스캐너 — 스캔으로 이 매장의 체크인 QR 이 확인된 뒤에만 doCheckin 실행 */}
+      <QrScanModal
+        open={qrScanOpen}
+        onClose={() => setQrScanOpen(false)}
+        venueId={venue.id}
+        venueName={venue.name}
+        onMatch={() => { setQrScanOpen(false); void doCheckin(); }}
+      />
+
       {/* ── 스크롤 컨테이너 ────────────────────────────────────────────── */}
       {/* 모바일 하단 탭바(z-50)가 이 오버레이(z-40) 위에 떠 있으므로 마지막 콘텐츠가 가려지지 않게 하단 여백 확보 */}
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto pb-[var(--tabbar-safe)] lg:pb-0">
@@ -285,7 +302,7 @@ export default function VenuePage({
             </div>
             <h2 className="text-xl font-bold text-ink-primary">{venue.name}</h2>
             {venue.address && <p className="mt-1 text-xs text-ink-muted">{venue.address}</p>}
-            {/* 카카오톡 오픈채팅 링크는 '매장 정보'(AboutPanel) — Phase 10 행동 예산 유지 */}
+            {/* 카카오톡 링크는 Tier1 행동 행 + '매장 정보'(AboutPanel) — 아이덴티티 블록은 비인터랙티브 유지 */}
           </div>
           {/* 3-스탯 행 — 팔로워 · 후기 · 오늘 대회 (아이콘 위 / 숫자 / 라벨 아래, 세로 구분선) */}
           <div className="mt-3 grid grid-cols-3 divide-x divide-border-subtle rounded-card border border-border-subtle bg-surface-low py-2.5">
@@ -304,9 +321,10 @@ export default function VenuePage({
         </div>
 
         {/* ── Tier 1: 지금 필요한 행동 (마스터 지시서 Phase 10-1) ──────────────
-            매장 상세의 물리적 최종 행동은 '도착을 알리거나(체크인)·걸거나(전화)·찾아가는(길찾기)'
-            것이다 — 이 셋이 스크롤 없이 첫 화면에 있어야 한다. PokerAtlas·러너러너·와홀덤·apis
-            4개 서비스 공통으로 최상단은 '지금 무슨 게임이 도는가'다. 존재하는 데이터만 렌더. */}
+            매장 상세의 물리적 최종 행동은 '도착을 알리거나(체크인)·걸거나(전화)·묻거나(카카오톡)·
+            찾아가는(길찾기)' 것이다 — 스크롤 없이 첫 화면에 있어야 한다. PokerAtlas·러너러너·와홀덤·apis
+            4개 서비스 공통으로 최상단은 '지금 무슨 게임이 도는가'다. 존재하는 데이터만 렌더.
+            행동 예산(venue-ia ≤6): 체크인+전화+길찾기+카카오=4 + 헤더 팔로우·공유=6 — 여기에 더 추가 금지. */}
         <div className="px-page-x py-3 border-b border-border-subtle space-y-2.5">
           {todayPosters.length > 0 && (() => {
             const t0 = todayPosters[0];
@@ -332,7 +350,7 @@ export default function VenuePage({
             );
           })()}
           <div className="flex gap-2">
-            <button type="button" onClick={doCheckin} disabled={checkinBusy} data-coach="venue-checkin"
+            <button type="button" onClick={openQrScan} disabled={checkinBusy} data-coach="venue-checkin"
               className="btn-primary h-11 flex-1 text-sm font-bold disabled:opacity-60">
               {checkinBusy ? '체크인 중…' : '📍 QR 체크인'}
             </button>
@@ -347,6 +365,13 @@ export default function VenuePage({
                 target="_blank" rel="noopener noreferrer"
                 className="inline-flex h-11 items-center gap-1 rounded-input border border-border-default bg-surface-high px-3.5 text-sm font-semibold text-ink-secondary hover:text-ink-primary transition-colors">
                 <span aria-hidden>🗺</span> 길찾기
+              </a>
+            )}
+            {/* 카카오톡 오픈채팅 — 링크가 있을 때만(전화·길찾기와 같은 규격, 브랜드 노랑은 점 하나로 절제) */}
+            {kakao && (
+              <a href={kakao} target="_blank" rel="noopener noreferrer"
+                className="inline-flex h-11 items-center gap-1.5 rounded-input border border-border-default bg-surface-high px-3.5 text-sm font-semibold text-ink-secondary hover:text-ink-primary transition-colors">
+                <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-[#FEE500]" /> 카카오톡
               </a>
             )}
           </div>

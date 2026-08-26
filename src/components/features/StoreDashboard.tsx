@@ -115,7 +115,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const [voucherOpen, setVoucherOpen] = useState(false);
   const [voucherPrefill, setVoucherPrefill] = useState(''); // 단골 행 '이용권 보내기' 프리필
   const [hasRankToday, setHasRankToday] = useState<boolean | null>(null); // 지금 할 일 카드(순위 입력 유도)
-  const [funnel, setFunnel] = useState<WeeklyFunnel | null>(null); // 주간 퍼널(조회→예약→방문)
+  const [funnel, setFunnel] = useState<WeeklyFunnel | null>(null); // 주간 흐름(조회→예약→방문) — '퍼널' 용어는 UI 에서 금지(오너: 일반인 모름)
   const [staleOpen, setStaleOpen] = useState<{ sessionDate: string; gameSeq: number; title: string | null }[]>([]); // 미마감 지난 장부
   const [pendingRanks, setPendingRanks] = useState<{ date: string }[]>([]); // 마감됐는데 순위 미입력인 지난 대회(밀린 것)
   // 다가오는 생일 단골(7일 내) — CRM 생일 필드 기반
@@ -740,12 +740,13 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         </section>
       )}
 
-      {/* 📊 주간 퍼널 — 조회→예약→방문 전환. '왜 예약이 없는지'에 데이터로 답하는 첫 카드.
-          조회수 추적(2026-08-17 신설)이 쌓이기 시작한 뒤부터 의미가 생긴다. */}
+      {/* 📊 주간 흐름(조회→예약→방문) — '왜 예약이 없는지'에 데이터로 답하는 첫 카드.
+          조회수 추적(2026-08-17 신설)이 쌓이기 시작한 뒤부터 의미가 생긴다.
+          ⚠ 카피에 '퍼널·전환율' 같은 외래 분석 용어 금지(오너 지시) — 자연스러운 한국어로 풀어 쓴다. */}
       {!loading && funnel && funnel.tournaments > 0 && (
         <section className="rounded-card border border-border-subtle bg-surface-low p-3">
           <div className="flex items-baseline justify-between gap-2">
-            <h3 className="flex items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="filter" size={13} className="shrink-0 text-ink-muted" />최근 7일 퍼널 <span className="font-normal text-ink-muted">대회 {funnel.tournaments}개</span></h3>
+            <h3 className="flex items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="filter" size={13} className="shrink-0 text-ink-muted" />최근 7일 흐름 <span className="font-normal text-ink-muted">조회→예약→방문 · 대회 {funnel.tournaments}개</span></h3>
             <button type="button" onClick={() => onGoto('stats')} className="shrink-0 text-2xs font-bold text-accent-300">통계 →</button>
           </div>
           <div className="mt-2 flex items-center gap-1.5 text-center">
@@ -758,7 +759,8 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
               <p className="text-lg font-extrabold tabular-nums text-ink-primary">
                 {funnel.reservations}
                 {funnel.views > 0 && funnel.reservations > 0 && (
-                  <span className="ml-1 text-2xs font-bold text-ink-secondary">{Math.round((funnel.reservations / funnel.views) * 100)}%</span>
+                  // '전환율' 대신 자연어 설명 — 숫자는 그대로, 뜻만 풀어준다
+                  <span className="ml-1 text-2xs font-bold text-ink-secondary" title="포스터를 본 사람 중 예약으로 이어진 비율">{Math.round((funnel.reservations / funnel.views) * 100)}%</span>
                 )}
               </p>
               <p className="text-[9px] text-ink-muted">예약</p>

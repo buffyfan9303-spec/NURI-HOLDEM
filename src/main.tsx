@@ -1,4 +1,8 @@
 import { StrictMode } from 'react';
+// 삼성 인터넷: 브라우저 자체 '맨 위로' 원형 버튼(하단 중앙)이 탭바 가운데 칸을 가린다(오너 스크린샷)
+// → html.samsung 으로 탭바를 --tabbar-lift 만큼 올려 회피(index.css).
+if (/SamsungBrowser/i.test(navigator.userAgent)) document.documentElement.classList.add('samsung');
+
 import { createRoot } from 'react-dom/client';
 import './index.css';
 import App from './App.tsx';
