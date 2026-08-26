@@ -802,7 +802,7 @@ export default function App() {
   }, []);
   // 일정탐색 기본값 — 무선택('오늘부터 앞으로'). 예전 '오늘' 기본 선택은 심야·평일 오전
   // 첫 방문을 빈 화면으로 만들었고, 프리스틴 상태가 '필터 걸림'으로 판정되는 부작용도 있었다.
-  const [searchState, setSearchState] = useState<SearchState>({ query: '', dates: [], regions: [], format: null, gtdOnly: false, competitionOnly: false, grade: null });
+  const [searchState, setSearchState] = useState<SearchState>({ query: '', dates: [], regions: [], format: null, gtdOnly: false, competitionOnly: false, grade: null, budget: null });
   // 전체 초기화 버튼을 '총 N개' 줄에 두기 위해 검색바의 clearAll 을 ref 로 끌어올림
   const searchBarRef = useRef<{ clearAll: () => void } | null>(null);
   const hasActiveSearchFilter = !!(searchState.query || searchState.dates.length || searchState.regions.length || searchState.format || searchState.gtdOnly || searchState.competitionOnly || searchState.grade);
@@ -1475,8 +1475,10 @@ export default function App() {
       const matchG = !searchState.gtdOnly || s.guaranteed === true;
       const matchC = !searchState.competitionOnly || s.isCompetition === true;
       const matchGr = !searchState.grade || s.grade === searchState.grade; // 등급 축(Phase 14)
+      // 예산 축(UX-2) — 바이인 상한(원). 금액 미입력(0)은 통과(무료·미정 대회를 숨기지 않는다)
+      const matchB = !searchState.budget || (s.buyIn?.amount ?? 0) <= searchState.budget;
       const matchFollow = !followedOnly || (!!s.venueId && followedIds.has(s.venueId));
-      return matchQ && matchD && matchR && matchF && matchG && matchC && matchGr && matchFollow;
+      return matchQ && matchD && matchR && matchF && matchG && matchC && matchGr && matchB && matchFollow;
     })
       // 정렬이 아예 없어서 '업주가 정한 진열 순서'로 나왔다 — 손님은 '지금 갈 수 있는 게 뭐지'를
       // 시간순으로 훑을 수가 없었다. 1차 키는 날짜+시각, 부스트는 동시각 tie-break(scheduleSort.ts).
@@ -1623,7 +1625,7 @@ export default function App() {
     setOpenNotice(null);
     setOpenPost(null);
     setPosterFormTarget(null);
-    setSearchState({ query: '', dates: [], regions: [], format: null, gtdOnly: false, competitionOnly: false, grade: null });
+    setSearchState({ query: '', dates: [], regions: [], format: null, gtdOnly: false, competitionOnly: false, grade: null, budget: null });
     tabScrollRef.current.set('browse', 0); // 홈 = 처음부터 — 복원 로직이 옛 위치로 되돌리지 않게
     window.scrollTo({ top: 0, behavior: 'smooth' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
