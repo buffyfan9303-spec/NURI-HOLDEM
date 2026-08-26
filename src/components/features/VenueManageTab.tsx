@@ -199,7 +199,9 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   if (manageOk) available.push({ id: 'stats',  label: '통계', group: '분석' });
   if (canPosters) available.push({ id: 'presets', label: '게임 프리셋', group: '관리' });
   if (ledgerOk) available.push({ id: 'venueRank', label: '매장 랭킹', group: '관리' });
-  if (ledgerOk) available.push({ id: 'attendance', label: '출근 관리', group: '관리' });
+  // ATT-FIX: '내 출퇴근 기록'이 장부 권한(ledgerOk)에 묶여 있어 장부 권한 없는 직원이
+  // 자기 출퇴근을 못 보던 오게이팅 — 이 탭에 들어온 소속 구성원이면 누구나
+  available.push({ id: 'attendance', label: '출근 관리', group: '관리' });
   if (manageOk || voucherView) available.push({ id: 'voucher', label: '매장이용권/QR', group: '관리' });
   if (canStaff) available.push({ id: 'page', label: '매장 꾸미기', group: '관리' });
   if (canStaff) available.push({ id: 'staff', label: '직원 관리', group: '관리' });
@@ -347,7 +349,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 </>)}
                 {visited.includes('page') && canStaff && box('page', <VenueCustomizePanelM venueId={venueId} />)}
                 {visited.includes('clock') && ledgerOk && box('clock', <TournamentClockM venueId={venueId} canManage={ledgerOk} seedSessionDate={clockSeed} seedGameSeq={clockSeedGame} active={tabActive && renderSection === 'clock'} />)}
-                {visited.includes('attendance') && ledgerOk && box('attendance', <StaffSelfAttendanceM venueId={venueId} />)}
+                {visited.includes('attendance') && box('attendance', <StaffSelfAttendanceM venueId={venueId} />)}
                 {visited.includes('staff') && canStaff && box('staff', <StaffHub venueId={venueId} />)}
                 {visited.includes('settings') && canStaff && box('settings', <>
                   <PosSettingsPanelM venueId={venueId} />
