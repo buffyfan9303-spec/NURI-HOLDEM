@@ -3,7 +3,7 @@ import { thumbUrl, thumbSrcSet } from '../../lib/imageUrl';
 import { scheduleStatus } from '../../lib/scheduleStatus';
 import type { RegInfo } from '../../lib/regStatus';
 import { fmtKm } from '../../lib/geo';
-import type { Schedule, TournamentFormat } from '../../api/schedules';
+import type { Schedule } from '../../api/schedules';
 import type { ViewMode } from '../atoms/ViewModeToggle';
 
 // ── 유틸 ─────────────────────────────────────────────────────────────────────
@@ -35,24 +35,6 @@ export function formatPrize(n: number): string {
 export function prizeMainText(s: { guaranteed: boolean; prizePool?: number; prizePercent?: number }): string {
   if (!s.guaranteed && s.prizePercent && s.prizePercent > 0) return `${s.prizePercent}%`;
   return s.prizePool ? formatPrize(s.prizePool) : '-';
-}
-
-const FORMAT_COLOR: Record<TournamentFormat, string> = {
-  MTT:     'bg-blue-500/15   text-blue-400   border-blue-500/30',
-  SNG:     'bg-purple-500/15 text-purple-400 border-purple-500/30',
-  PKO:     'bg-teal-500/15   text-teal-400   border-teal-500/30',
-  Bounty:  'bg-amber-500/15  text-amber-400  border-amber-500/30',
-  Mix:     'bg-pink-500/15   text-pink-400   border-pink-500/30',
-};
-
-// ── 서브: 포맷·GTD 배지 ─────────────────────────────────────────────────────
-
-function FormatBadge({ format }: { format: TournamentFormat }) {
-  return (
-    <span className={`inline-flex items-center rounded-badge border px-1.5 py-0.5 text-2xs font-bold tracking-wider ${FORMAT_COLOR[format]}`}>
-      {format}
-    </span>
-  );
 }
 
 // ── 서브: 포스터 영역 ───────────────────────────────────────────────────────
@@ -114,26 +96,20 @@ function PrizeBanner({ schedule, large = false }: { schedule: Schedule; large?: 
       <span className="text-2xs text-ink-muted">상금 정보 없음</span>
     );
   }
+  // 상금은 골드 하나(스파인 컬러 예산: 상금·트로피=골드), 나머지는 무채 텍스트 — 배지 제거
   return (
     <div className={[
-      'inline-flex items-baseline gap-1 rounded-input',
+      'inline-flex items-baseline gap-1.5 rounded-input',
       large ? 'text-lg' : 'text-base',
     ].join(' ')}>
-      <span className={`font-extrabold text-accent-300 tabular-nums leading-none ${large ? 'text-xl' : 'text-base'}`}>
+      <span className={`font-extrabold text-gold-300 tabular-nums leading-none ${large ? 'text-xl' : 'text-base'}`}>
         {prizeMainText(schedule)}
       </span>
-      <span className={[
-        'font-bold tracking-wider rounded-badge px-1.5 py-0.5 border text-2xs',
-        schedule.guaranteed
-          ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-          : 'bg-surface-high text-ink-muted border-border-default',
-      ].join(' ')}>
+      <span className="text-2xs font-bold tracking-wider text-ink-muted">
         {schedule.guaranteed ? 'GTD' : '예상'}
       </span>
       {schedule.buyIn?.gameType && (
-        <span className={`font-bold tracking-wider rounded-badge px-1.5 py-0.5 border bg-violet-500/15 text-violet-300 border-violet-500/30 ${large ? 'text-2xs' : 'text-2xs'}`}>
-          {schedule.buyIn.gameType}
-        </span>
+        <span className="text-2xs font-bold tracking-wider text-ink-muted">{schedule.buyIn.gameType}</span>
       )}
     </div>
   );
@@ -189,146 +165,93 @@ function liveBadge(regInfo: RegInfo | undefined): { text: string; closed: boolea
 
 function ListCard({ schedule, onVenueClick, onSelect, reserveCount, rating, priority, distanceKm, regInfo, vtActive }: CardProps) {
   const d = formatDate(schedule.date, schedule.startTime);
-  // 끝난 대회를 '예약 가능'처럼 보여주지 않기 위한 상태 표시(실제 차단은 상세·서버에서)
   const status = scheduleStatus(schedule.date, schedule.startTime);
+
+  // [DS] 리스트 행 재문법(리디자인 로드맵 §20.1 — Dice.fm 고정 4줄 + Luma 시간 우선):
+  //  1행 시간(muted 우선) · 2행 제목(bold) · 3행 매장 · 4행 가격 정보(§28 표시 유지).
+  //  '조잡함'의 원인이던 색 배지 무지개(포맷/GTD/게임타입/등급)를 전부 무채색 텍스트로
+  //  강등하고, **배지 예산 = 행당 상태 1개**만 남긴다(우선순위: 종료 > 실측 레지 > 마감임박).
+  //  빈 값은 '—'로 자리를 지켜 줄 수·순서가 절대 바뀌지 않는다.
+  const badge = (() => {
+    if (status === 'ended') return { text: '종료', cls: 'bg-surface-high text-ink-muted' };
+    if (status !== 'upcoming') {
+      const b = liveBadge(regInfo);
+      if (b.closed) return { text: '레지마감', cls: 'bg-surface-high text-ink-muted' };
+      return { text: b.text, cls: b.text === '등록가능' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-danger/15 text-danger-light' };
+    }
+    if ((reserveCount ?? 0) >= 10) return { text: '마감 임박', cls: 'bg-danger/15 text-danger-light' };
+    return null;
+  })();
+  // 오늘 예정 대회의 '시작까지' — 배지가 아니라 시간줄의 텍스트(§20.2 시각 노이즈 감소)
+  const soon = (() => {
+    if (status !== 'upcoming') return null;
+    const ms = new Date(`${schedule.date}T${schedule.startTime || '19:00'}:00+09:00`).getTime() - Date.now();
+    if (ms <= 0 || ms > 24 * 3600_000) return null;
+    const h = Math.floor(ms / 3600_000), m = Math.floor((ms % 3600_000) / 60_000);
+    return `${h > 0 ? `${h}시간 ` : ''}${m}분 후`;
+  })();
+  const grade = schedule.grade === 'daily' ? '데일리' : schedule.grade === 'satellite' ? '새틀' : schedule.grade === 'series' ? '시리즈' : null;
 
   return (
     <article
       onClick={() => onSelect(schedule)}
       className={[
-        // ⚠ transition-all 은 hover 의 box-shadow 변화까지 애니메이션해 카드마다 페인트 루프를 만든다
-        //   — 합성되는 transform + 저비용 border-color 만 명시 전환(시각 차이 없음, 페인트만 소멸)
-        'flex items-center gap-2.5 overflow-hidden rounded-card border transition-[transform,border-color] duration-300 ease-out active:duration-75',
-        'hover:-translate-y-1 cursor-pointer active:scale-[0.98] p-2',
-        schedule.isPremium
-          ? 'border-accent-400 shadow-[0_0_12px_rgba(94,106,210,0.22)] bg-surface-low'
-          : 'border-border-default shadow-card bg-surface-low hover:border-border-strong',
+        'flex cursor-pointer items-center gap-3 px-3 py-2.5 transition-colors hover:bg-surface-high/50 active:bg-surface-high',
+        // 프리미엄(TOP)은 행 틴트 + 제목 앞 마커로 차별(박스 글로우 제거 — 목록 결 유지)
+        schedule.isPremium ? 'bg-accent-300/[0.05]' : '',
       ].join(' ')}
-      // 포스터 색 글로우 — 카드 뒤로 은은하게 번지는 포스터 고유색(글라스 감성).
-      // blur 26px 는 카드 면적보다 큰 페인트 영역을 만든다 — 12px 로 줄여 비용 절반 이하(체감 동일)
-      style={!schedule.isPremium && schedule.posterColor ? { boxShadow: `0 3px 12px -8px ${schedule.posterColor}59` } : undefined}
     >
-      {/* 정사각 썸네일 (64x64) — 화면 64px이라 160px 썸네일이면 레티나까지 충분(원본 대비 90%↓) */}
       <PosterArea
         posterUrl={schedule.posterUrl}
         posterColor={schedule.posterColor}
         title={schedule.title}
-        className="w-16 h-16 shrink-0 rounded-input"
+        className="h-16 w-16 shrink-0 rounded-input"
         thumbWidth={160}
         priority={priority}
         vtName={vtActive ? 'vt-poster' : undefined}
       />
-
-      {/* 본문 — 압축 3행 */}
-      <div className="flex flex-col flex-1 min-w-0 gap-0.5">
-
-        {/* 1행: 배지 + 제목 */}
-        <div className="flex items-center gap-1 min-w-0">
-          {schedule.isPremium && (
-            <span className="shrink-0 rounded-badge bg-accent-300 px-1 py-0.5 text-2xs font-bold text-white leading-none">
-              TOP
-            </span>
+      <div className="min-w-0 flex-1">
+        {/* 1행 — 시간 우선(Luma: 유저는 일정을 시간으로 스캔한다) + 상태 배지 1개 */}
+        <div className="flex items-center justify-between gap-2">
+          <p className="min-w-0 truncate text-xs tabular-nums text-ink-muted">
+            <span className="font-semibold text-ink-secondary">{d.time || '—'}</span>
+            {' '}· {d.monthDay}({d.dow})
+            {soon && <span className="font-semibold text-accent-300"> · {soon}</span>}
+          </p>
+          {badge && (
+            <span className={`shrink-0 rounded-badge px-1.5 py-0.5 text-2xs font-bold leading-none ${badge.cls}`}>{badge.text}</span>
           )}
-          <FormatBadge format={schedule.format} />
-          <h3 className={[
-            'text-sm font-bold tracking-tight leading-tight truncate flex-1 min-w-0',
-            schedule.isPremium ? 'text-accent-300' : 'text-ink-primary',
-          ].join(' ')}>
-            {schedule.title}
-          </h3>
         </div>
-
-        {/* 2행: 매장(+별점) + 프라이즈 */}
-        <div className="flex items-center justify-between gap-2 min-w-0">
-          <span className="flex min-w-0 items-center gap-1">
-            <VenueLink
-              pubName={schedule.pubName}
-              region={schedule.region}
-              onClick={() => onVenueClick(schedule.venueId)}
-            />
-            {rating && rating.count > 0 && (
-              <span className="shrink-0 text-2xs font-bold tabular-nums text-accent-300" title={`방문 후기 ${rating.count}건 평균`}>
-                ⭐{rating.avg.toFixed(1)}<span className="font-normal text-ink-muted">({rating.count})</span>
-              </span>
-            )}
-            {distanceKm != null && (
-              <span className="shrink-0 text-2xs font-bold tabular-nums text-sky-300">📍{fmtKm(distanceKm)}</span>
-            )}
-          </span>
-          <span className="shrink-0 inline-flex items-baseline gap-1">
-            <span className="font-extrabold text-accent-300 tabular-nums text-sm leading-none">
-              {prizeMainText(schedule)}
-            </span>
-            <span className={[
-              'text-2xs font-bold tracking-wider rounded-badge px-1 py-0.5 border leading-none',
-              schedule.guaranteed
-                ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                : 'bg-surface-high text-ink-muted border-border-default',
-            ].join(' ')}>
-              {schedule.guaranteed ? 'GTD' : '엔트리'}
-            </span>
-            {schedule.buyIn?.gameType && (
-              <span className="text-2xs font-bold tracking-wider rounded-badge px-1 py-0.5 border leading-none bg-violet-500/15 text-violet-300 border-violet-500/30">
-                {schedule.buyIn.gameType}
-              </span>
-            )}
-          </span>
-        </div>
-
-        {/* 3행: 날짜 · 시간 · 바이인 (+예약 FOMO 뱃지) */}
-        <div className="flex items-center gap-1.5 text-2xs text-ink-muted">
-          {status !== 'upcoming' && (
-            <span className={[
-              'shrink-0 rounded-badge px-1.5 py-0.5 font-bold leading-none',
-              status === 'ended' || liveBadge(regInfo).closed
-                ? 'border border-border-default bg-surface-high text-ink-muted'
-                : liveBadge(regInfo).text === '등록가능' ? 'bg-emerald-500/15 text-emerald-400'
-                : 'bg-danger/15 text-danger-light',
-            ].join(' ')}>
-              {status === 'ended' ? '종료' : liveBadge(regInfo).text}
-            </span>
+        {/* 2행 — 제목 */}
+        <h3 className="truncate text-[15px] font-bold leading-snug tracking-tight text-ink-primary">
+          {schedule.isPremium && <span className="mr-1 align-middle text-2xs font-extrabold text-accent-300">TOP</span>}
+          {schedule.title}
+        </h3>
+        {/* 3행 — 매장 · 별점 · 거리 */}
+        <p className="flex min-w-0 items-center gap-1 text-xs text-ink-muted">
+          <VenueLink pubName={schedule.pubName} region={schedule.region} onClick={() => onVenueClick(schedule.venueId)} />
+          {rating && rating.count > 0 && (
+            <span className="shrink-0 tabular-nums text-gold-300" title={`방문 후기 ${rating.count}건 평균`}>★{rating.avg.toFixed(1)}</span>
           )}
-          {schedule.grade && (
-            <span className="shrink-0 rounded-badge bg-surface-high px-1.5 py-0.5 font-bold text-ink-secondary">
-              {schedule.grade === 'daily' ? '데일리' : schedule.grade === 'satellite' ? '새틀' : '시리즈'}
-            </span>
-          )}
-          <span className="text-ink-secondary tabular-nums font-medium">
-            {d.monthDay}({d.dow}) {d.time}
+          {distanceKm != null && <span className="shrink-0 tabular-nums">{fmtKm(distanceKm)}</span>}
+        </p>
+        {/* 4행 — 가격 정보(§28: 참가비·GTD 는 상품 가격이므로 유지) + 무채색 메타 */}
+        <p className="flex items-baseline gap-1.5 text-xs">
+          <span className="shrink-0 tabular-nums text-ink-secondary">바이인 {schedule.buyIn.amount > 0 ? schedule.buyIn.amount.toLocaleString() : '—'}</span>
+          <span className="shrink-0 font-bold tabular-nums text-gold-300">
+            {prizeMainText(schedule)}{schedule.guaranteed ? ' GTD' : ''}
           </span>
-          {schedule.duration && (
-            <span className="shrink-0 text-ink-muted">· {schedule.duration}</span>
-          )}
-          {/* 시작까지 남은 시간(Phase 14, apis '~까지 N분' 패턴) — 오늘 예정 대회만.
-              렌더 시점 계산(창 복귀 재조회 주기로 충분) — 초당 갱신은 과하다. */}
-          {status === 'upcoming' && (() => {
-            const ms = new Date(`${schedule.date}T${schedule.startTime || '19:00'}:00+09:00`).getTime() - Date.now();
-            if (ms <= 0 || ms > 24 * 3600_000) return null;
-            const h = Math.floor(ms / 3600_000), m = Math.floor((ms % 3600_000) / 60_000);
-            return (
-              <span className="shrink-0 rounded-badge bg-accent-300/12 px-1.5 py-0.5 font-bold tabular-nums text-accent-300">
-                ⏰ {h > 0 ? `${h}시간 ` : ''}{m}분 후
-              </span>
-            );
-          })()}
-          <span className="text-border-strong">·</span>
-          <span className="tabular-nums">바이인 {schedule.buyIn.amount.toLocaleString()}</span>
-          {/* '마감 임박'은 아직 시작 안 한 대회에서만 — 끝난 대회에 붙으면 거짓 긴박감이고,
-              라이브에서 실제로 두 달 전 대회가 이 배지를 달고 상단에 떠 있었다.
-              종료 후에는 숫자만 사실로 남긴다(참가 규모 정보로는 여전히 쓸모 있다). */}
+          <span className="min-w-0 truncate text-2xs text-ink-muted">
+            {[schedule.format, grade, schedule.buyIn?.gameType].filter(Boolean).join(' · ') || '—'}
+          </span>
           {(reserveCount ?? 0) > 0 && (
-            <span className={['ml-auto shrink-0 rounded-badge px-1.5 py-0.5 font-bold tabular-nums',
-              (reserveCount ?? 0) >= 10 && status === 'upcoming' ? 'bg-danger/15 text-danger-light' : 'bg-emerald-400/10 text-emerald-400'].join(' ')}>
-              {(reserveCount ?? 0) >= 10 && status === 'upcoming' ? `🔥 예약 ${reserveCount}명 · 마감 임박` : `예약 ${reserveCount}명`}
-            </span>
+            <span className="ml-auto shrink-0 text-2xs tabular-nums text-ink-muted">예약 {reserveCount}</span>
           )}
-        </div>
+        </p>
       </div>
     </article>
   );
 }
-
-// ── 메인: 그리드 뷰 카드 ────────────────────────────────────────────────────
 
 function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distanceKm, reserveCount, regInfo, vtActive }: CardProps) {
   const d = formatDate(schedule.date, schedule.startTime);
@@ -356,13 +279,13 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
           vtName={vtActive ? 'vt-poster' : undefined}
         />
         <div className="absolute top-2 left-2 right-2 flex items-start justify-between gap-2">
+          {/* 배지 예산: TOP(유료 노출) + 상태 1개만 — 포맷 무지개 배지는 본문 메타 텍스트로 강등 */}
           <div className="flex flex-col gap-1 items-start">
             {schedule.isPremium && (
               <span className="rounded-badge bg-accent-300 px-1.5 py-0.5 text-2xs font-bold text-white leading-none">
                 TOP
               </span>
             )}
-            <FormatBadge format={schedule.format} />
           </div>
           {/* 포스터 위 스크림이 깔린 자리라 테마 토큰 대신 고정 색을 쓴다(라이트 모드에서 안 보이는 문제 방지) */}
           {status !== 'upcoming' && (
@@ -416,6 +339,8 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
         <PrizeBanner schedule={schedule} />
 
         <div className="flex items-center gap-2 text-2xs text-ink-secondary">
+          <span className="inline-flex items-center gap-1">{schedule.format}</span>
+          <span className="text-border-strong">·</span>
           <span className="inline-flex items-center gap-1">{schedule.duration}</span>
           <span className="text-border-strong">·</span>
           <span className="inline-flex items-center gap-1">

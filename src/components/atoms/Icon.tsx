@@ -21,7 +21,10 @@ export type IconName =
   // 포커 도메인 글리프(IMG-2, 자체 제작) — 수트 4종은 채움 도형
   | 'spade' | 'heart-suit' | 'diamond' | 'club'
   | 'chip' | 'chip-stack' | 'cards' | 'dealer-button' | 'blinds'
-  | 'trophy' | 'all-in' | 'felt-table' | 'timer-poker';
+  | 'trophy' | 'all-in' | 'felt-table' | 'timer-poker'
+  // 리디자인 스파인 공통 글리프(로드맵 Phase 0 지정 — 이모지 마커 소탕용)
+  | 'comment' | 'eye' | 'bookmark' | 'flame' | 'target' | 'wallet'
+  | 'gift' | 'check-double' | 'map-pin' | 'log-out';
 
 // 각 아이콘의 path/figure children (viewBox 0 0 24 24 기준). 채움 아이콘은 fill 처리.
 const PATHS: Record<IconName, ReactElement> = {
@@ -77,6 +80,17 @@ const PATHS: Record<IconName, ReactElement> = {
   'all-in': <><path d="M12 11V3M8.5 6.5 12 3l3.5 3.5" /><ellipse cx="12" cy="16" rx="7" ry="2.6" /><path d="M5 16v2.4c0 1.44 3.13 2.6 7 2.6s7-1.16 7-2.6V16" /></>,
   'felt-table': <><ellipse cx="12" cy="12" rx="9.5" ry="6.5" /><ellipse cx="12" cy="12" rx="5.8" ry="3.3" /></>,
   'timer-poker': <><path d="M9.5 2h5" /><path d="M12 2v3" /><circle cx="12" cy="13.5" r="8" /><path d="M12 9.5v4l2.6 1.6" /></>,
+  // ── 리디자인 스파인 공통 글리프(자체 제작) ────────────────────────────────
+  comment: <path d="M21 11.5c0 4.14-4.03 7.5-9 7.5-1.06 0-2.08-.15-3.02-.44L4 20l1.16-3.48C3.82 15.19 3 13.42 3 11.5 3 7.36 7.03 4 12 4s9 3.36 9 7.5Z" />,
+  eye: <><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" /><circle cx="12" cy="12" r="3" /></>,
+  bookmark: <path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4.2L5 21V4a1 1 0 0 1 1-1Z" />,
+  flame: <path d="M12 2.5c.6 3-0.9 4.6-2.4 6.2C8.1 10.3 7 11.9 7 14a5 5 0 0 0 10 0c0-1.4-.5-2.6-1.2-3.7-.4.9-1 1.5-1.8 2 .3-2.9-.6-6.6-2-9.8Z" />,
+  target: <><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" /></>,
+  wallet: <><path d="M20 7H5a2 2 0 0 1-2-2 2 2 0 0 1 2-2h13v4" /><path d="M3 5v13a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1" /><path d="M16 13h.01" /></>,
+  gift: <><rect x="3" y="8" width="18" height="4" rx="1" /><path d="M12 8v13M5 12v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-8" /><path d="M12 8c-3.5 0-4.5-3-3-4.5C10.5 2 12 4 12 8c0-4 1.5-6 3-4.5 1.5 1.5.5 4.5-3 4.5Z" /></>,
+  'check-double': <><path d="M2.5 12.5 7 17 17 7" /><path d="m12 17 9.5-9.5" /></>,
+  'map-pin': <><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></>,
+  'log-out': <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5M21 12H9" /></>,
 };
 
 interface IconProps extends Omit<SVGProps<SVGSVGElement>, 'name'> {

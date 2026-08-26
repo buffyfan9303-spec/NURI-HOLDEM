@@ -6,8 +6,8 @@
 // 예전엔 App 쪽 래퍼가 항상 13px 를 차지한 채 스트립이 늦게 삽입되어 목록이 밀렸다.
 import { useEffect, useState } from 'react';
 import { getWeeklyMoneyinKings, type WeeklyKing } from '../../api/rankings';
+import Icon from '../atoms/Icon';
 
-const MEDAL = ['👑', '🥈', '🥉'];
 
 export default function WeeklyBestStrip({ active = true }: { active?: boolean }) {
   const [kings, setKings] = useState<WeeklyKing[]>([]);
@@ -40,10 +40,11 @@ export default function WeeklyBestStrip({ active = true }: { active?: boolean })
 
   return (
     <div className="reveal px-page-x pt-3">
-      <div className="flex items-center gap-2 overflow-hidden rounded-card border border-accent-400/25 bg-gradient-to-r from-accent-300/10 via-surface-low to-surface-low px-3 py-2">
-        <span className="shrink-0 text-xs font-extrabold tracking-wide text-accent-300">{isLastWeek ? '지난주' : '이번 주'} 머니인 킹</span>
+      {/* DAI-3·4: 그라데이션·메달 이모지 → 헤어라인 + trophy 글리프 + 순위 텍스트(골드는 상금·트로피 전용 예산) */}
+      <div className="flex items-center gap-2 overflow-hidden rounded-card border border-border-subtle bg-surface-low px-3 py-2">
+        <span className="flex shrink-0 items-center gap-1 text-xs font-extrabold tracking-wide text-gold-300"><Icon name="trophy" size={13} />{isLastWeek ? '지난주' : '이번 주'} 머니인 킹</span>
         <div key={idx} className="flex min-w-0 flex-1 animate-fade-in items-center gap-1.5">
-          <span aria-hidden className="shrink-0 text-sm leading-none">{MEDAL[idx] ?? '🏅'}</span>
+          <span aria-hidden className="shrink-0 text-2xs font-bold tabular-nums text-ink-muted">{idx + 1}위</span>
           <span className="min-w-0 truncate text-sm font-bold text-ink-primary">{k.nickname}</span>
           <span className="shrink-0 text-2xs text-ink-muted">머니인 {k.moneyinCount}회{k.bestPosition <= 3 ? ` · 최고 ${k.bestPosition}위` : ''}</span>
         </div>

@@ -2273,7 +2273,7 @@ export default function App() {
                   aria-pressed={nearSort}
                   className={['hit shrink-0 inline-flex h-9 items-center gap-1 rounded-badge border px-3 text-xs font-bold transition-colors',
                     nearSort ? 'border-accent-300 bg-accent-300/10 text-accent-300' : 'border-border-default text-ink-secondary hover:text-ink-primary'].join(' ')}>
-                  📍 가까운 순
+                  <Icon name="map-pin" size={13} /> 가까운 순
                 </button>
                 {/* 전체 초기화 — 별도 줄 차지하지 않게 '총 N개' 옆에 배치(검색바 clearAll 호출) */}
                 {hasActiveSearchFilter && (
@@ -2331,8 +2331,8 @@ export default function App() {
           {/* 공지 — 일정탐색 상단 (전체 공통 공지만) */}
           {(browseNotices.length > 0 || isAdmin || !noticesLoaded) && (
             <div className="px-page-x pt-3">
-              <section className="rounded-card border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.05] to-transparent overflow-hidden">
-                <header className="flex items-center justify-between px-3 py-2 border-b border-accent-400/20">
+              <section className="rounded-card border border-border-subtle bg-surface-low overflow-hidden">
+                <header className="flex items-center justify-between px-3 py-2 border-b border-border-subtle">
                   <button
                     type="button"
                     onClick={() => setNoticesOpen((v) => !v)}
@@ -2415,8 +2415,9 @@ export default function App() {
                     viewMode === 'grid'
                       // 그리드 뷰: 모바일 2열 → 데스크톱 4~5열
                       ? 'grid grid-cols-2 gap-card-gap sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
-                      // 리스트 뷰: 모바일 1열(가로 카드) → PC 2열(공간 활용·광고 여백 확보)
-                      : 'grid grid-cols-1 lg:grid-cols-2 gap-card-gap',
+                      // 리스트 뷰(DAI-4 rounded 도배 탈피): 행마다 박스 대신
+                      // 한 컨테이너 + 헤어라인 구분 행 — APIS·FotMob 목록 문법
+                      : 'divide-y divide-border-subtle overflow-hidden rounded-card border border-border-subtle bg-surface-low',
                   ].join(' ')}>
                     {visibleSchedules.map((s, i) => (
                       <ScheduleCard
@@ -2439,7 +2440,7 @@ export default function App() {
                 )}
                 {/* 표 모드는 PC 전용 — 모바일 폭에선 리스트로 자동 표시 */}
                 {viewMode === 'table' && visibleSchedules.length > 0 && (
-                  <div className="grid grid-cols-1 gap-card-gap md:hidden">
+                  <div className="divide-y divide-border-subtle overflow-hidden rounded-card border border-border-subtle bg-surface-low md:hidden">
                     {visibleSchedules.map((s, i) => (
                       <ScheduleCard key={s.id} mode="list" schedule={s} reserveCount={browseResCounts[s.id]} rating={venueRatings[s.venueId]} distanceKm={distanceOf(s)} regInfo={regInfoBySchedule.get(s.id)} onVenueClick={handleVenueClick} onSelect={handleScheduleSelect} vtActive={vtPosterId === s.id && !openSchedule} priority={i < 4} />
                     ))}
@@ -3043,7 +3044,7 @@ function ScheduleSkeletonGrid({ viewMode }: { viewMode: 'grid' | 'list' | 'table
   const grid = viewMode === 'grid';
   const n = grid ? 10 : 6;
   return (
-    <div className={[grid ? 'grid grid-cols-2 gap-card-gap sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5' : 'grid grid-cols-1 lg:grid-cols-2 gap-card-gap'].join(' ')} aria-busy="true">
+    <div className={[grid ? 'grid grid-cols-2 gap-card-gap sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5' : 'divide-y divide-border-subtle overflow-hidden rounded-card border border-border-subtle bg-surface-low'].join(' ')} aria-busy="true">
       {Array.from({ length: n }).map((_, i) =>
         grid ? (
           // GridCard 골격: 포스터 3/4 + 본문(p-2.5 gap-1.5: 제목 2줄 + 매장 1줄 + 구분선 + 바인 1줄)
@@ -3058,13 +3059,14 @@ function ScheduleSkeletonGrid({ viewMode }: { viewMode: 'grid' | 'list' | 'table
             </div>
           </div>
         ) : (
-          // ListCard 골격: p-2 + 64px 썸네일 + 압축 3행
-          <div key={i} className="flex min-h-[87px] items-center gap-2.5 rounded-card border border-border-subtle bg-surface-low p-2">
+          // ListCard 골격: 4줄 행 문법 복제(시간/제목/매장/가격 — 재문법과 높이 동조)
+          <div key={i} className="flex items-center gap-3 px-3 py-2.5">
             <div className="skeleton h-16 w-16 shrink-0 rounded-input" />
             <div className="flex min-w-0 flex-1 flex-col gap-1">
-              <div className="skeleton h-[17px] w-3/4" />
-              <div className="skeleton h-[17px]" />
-              <div className="skeleton h-[17px] w-1/2" />
+              <div className="skeleton h-3.5 w-1/3" />
+              <div className="skeleton h-[19px] w-3/4" />
+              <div className="skeleton h-3.5 w-1/2" />
+              <div className="skeleton h-3.5 w-2/3" />
             </div>
           </div>
         )
