@@ -11,8 +11,13 @@ import ScheduleCard from './ScheduleCard';
 import type { Schedule } from '../../api/schedules';
 import type { RegInfo } from '../../lib/regStatus';
 import { compareByStartThenBoost } from '../../lib/scheduleSort';
+import { useTrainerProgress } from '../../lib/trainerProgress';
+import type { CommunityPost } from '../../api/community';
 
 const DAYS_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
+
+const OPENNOW_SEEN = 'nuri:opennow-seen';
+const openNowSeen = () => { try { return localStorage.getItem(OPENNOW_SEEN) === '1'; } catch { return false; } };
 
 
 /** 시간대 인사 카피(APIS ⑩ 문법) — 장식이 아니라 '지금'의 맥락을 한 줄로 */
@@ -26,12 +31,17 @@ function greeting(now: Date): string {
 }
 
 export default function HomeTab({
-  schedules, loaded, liveCount, regInfoBySchedule, onSelect, onVenue, onExplore, onLive, active,
+  schedules, loaded, clocksLoaded, liveCount, regInfoBySchedule, posts, onOpenPost, onTools, onSelect, onVenue, onExplore, onLive, active,
 }: {
   schedules: Schedule[];
   loaded: boolean;
   /** 지금 클락이 돌아가는 게임 수(라이브 실측) */
   liveCount: number;
+  /** 클락 응답 도착 여부 — 도착 전 '지금 등록 가능' 자리 예약 판단 */
+  clocksLoaded: boolean;
+  posts: CommunityPost[];
+  onOpenPost: (p: CommunityPost) => void;
+  onTools: () => void;
   regInfoBySchedule: ReadonlyMap<string, RegInfo>;
   onSelect: (s: Schedule) => void;
   onVenue: (venueId: string) => void;
@@ -61,10 +71,26 @@ export default function HomeTab({
     [schedules, today, tomorrow],
   );
 
+  // 학습 이어가기 — 로컬 트레이너 진행(신규 fetch 0). 학습 이력이 있는 기기만 노출.
+  const trainer = useTrainerProgress();
+  const showTrainer = trainer.xp > 0 || trainer.today > 0 || trainer.streak > 0;
+
+  // 커뮤니티 HOT 1행 — 최근 48시간 내 좋아요 최다 글(없으면 최신 글, 그것도 없으면 숨김)
+  const hotPost = useMemo(() => {
+    const cutoff = Date.now() - 48 * 3600_000;
+    const recent = posts.filter((p) => new Date(p.createdAt).getTime() > cutoff);
+    const pool = recent.length > 0 ? recent : posts;
+    if (pool.length === 0) return null;
+    return [...pool].sort((a, b) => (b.likeCount ?? 0) - (a.likeCount ?? 0))[0];
+  }, [posts]);
+
   const fmtLeft = (ms: number) => {
     const m = Math.floor(ms / 60_000);
     return m >= 60 ? `${Math.floor(m / 60)}시간 ${m % 60}분` : `${m}분`;
   };
+  if (clocksLoaded) {
+    try { localStorage.setItem(OPENNOW_SEEN, openNow.length > 0 ? '1' : '0'); } catch { /* noop */ }
+  }
 
   return (
     <div className="pb-section">
@@ -80,8 +106,14 @@ export default function HomeTab({
         </h2>
       </div>
 
-      {/* 지금 등록 가능 — 라이브 실측이 열려 있을 때만 섹션 자체가 등장.
-          (클락 로드 완료 신호가 생기면 seen 플래그 예약으로 삽입 밀림 완화 — 후속) */}
+      {/* 지금 등록 가능 — 라이브 실측이 열려 있을 때만. 지난 방문에 열린 대회가 있던
+          기기는 클락 도착 '전'까지 자리를 예약해 삽입 밀림을 없앤다(도착하면 즉시 확정). */}
+      {!clocksLoaded && openNowSeen() && openNow.length === 0 && (
+        <section className="px-page-x pt-4" aria-hidden>
+          <div className="skeleton mb-1.5 h-[22px] w-36" />
+          <div className="skeleton h-[60px] rounded-card" />
+        </section>
+      )}
       {openNow.length > 0 && (
         <section className="px-page-x pt-4">
           <header className="flex items-baseline justify-between pb-1.5">
@@ -162,6 +194,40 @@ export default function HomeTab({
           </div>
         )}
       </section>
+
+      {/* 학습 이어가기 — 트레이너 이력 있는 기기만(도구 탭 리텐션 루프의 홈 노출) */}
+      {showTrainer && (
+        <div className="px-page-x pt-3">
+          <button type="button" onClick={onTools}
+            className="flex w-full items-center gap-2.5 rounded-card bg-surface-low px-3 py-2.5 text-left transition-colors hover:bg-surface-high/60">
+            <span className="text-gold-300"><Icon name="target" size={16} /></span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-bold text-ink-primary">
+                {trainer.goalMet ? '오늘 목표 달성 — 한 문제 더?' : `이어서 학습 — 오늘 ${trainer.today}/${trainer.goal}`}
+              </span>
+              <span className="block text-2xs tabular-nums text-ink-muted">
+                {trainer.streak > 0 ? `${trainer.streak}일 연속 · ` : ''}XP {trainer.xp.toLocaleString()}
+              </span>
+            </span>
+            <Icon name="chevron-right" size={15} className="shrink-0 text-ink-muted" />
+          </button>
+        </div>
+      )}
+
+      {/* 커뮤니티 HOT 1행 */}
+      {hotPost && (
+        <div className="px-page-x pt-3">
+          <button type="button" onClick={() => onOpenPost(hotPost)}
+            className="flex w-full items-center gap-2.5 rounded-card bg-surface-low px-3 py-2.5 text-left transition-colors hover:bg-surface-high/60">
+            <span className="text-danger-light"><Icon name="flame" size={16} /></span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-bold text-ink-primary">{hotPost.title || hotPost.content.slice(0, 40)}</span>
+              <span className="block text-2xs tabular-nums text-ink-muted">커뮤니티 인기 글{(hotPost.likeCount ?? 0) > 0 ? ` · 좋아요 ${hotPost.likeCount}` : ''}</span>
+            </span>
+            <Icon name="chevron-right" size={15} className="shrink-0 text-ink-muted" />
+          </button>
+        </div>
+      )}
 
       {/* 주간 머니인 킹(브라우즈에서 이사) — 홈의 마지막 줄 */}
       <WeeklyBestStrip active={active} />

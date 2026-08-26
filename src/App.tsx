@@ -1279,6 +1279,7 @@ export default function App() {
   const [liveCount, setLiveCount] = useState(0);
   // UX-1: 진행 중 클락 원본 — '지금 등록 되나' 판정을 browse 카드·상세로 승격(추가 네트워크 0, 기존 조회 재사용)
   const [liveClocks, setLiveClocks] = useState<ClockState[]>([]);
+  const [clocksLoaded, setClocksLoaded] = useState(false); // 홈 '지금 등록 가능' 예약 접힘 판단
   // 16-1 '이어서 하기' — 최근 방문 매장 1곳(my_visited_venues 재활용, 신규 쿼리 0)
   const [recentVenue, setRecentVenue] = useState<{ venueId: string; venueName: string | null } | null>(null);
   useEffect(() => {
@@ -1298,6 +1299,7 @@ export default function App() {
         setMarketLoaded(true);
         if (rr.status === 'fulfilled') setVenueRatings(rr.value);
         if (kr.status === 'fulfilled') { setLiveCount(kr.value.length); setLiveClocks(kr.value); }
+        setClocksLoaded(true);
       });
      
   }, []);
@@ -2252,8 +2254,12 @@ export default function App() {
           <HomeTab
             schedules={schedules}
             loaded={schedulesLoaded}
+            clocksLoaded={clocksLoaded}
             liveCount={liveClocks.length}
             regInfoBySchedule={regInfoBySchedule}
+            posts={posts}
+            onOpenPost={(pp) => { changeTab('community'); setOpenPost(pp); }}
+            onTools={() => changeTab('tools')}
             onSelect={handleScheduleSelect}
             onVenue={handleVenueClick}
             onExplore={() => changeTab('browse')}
