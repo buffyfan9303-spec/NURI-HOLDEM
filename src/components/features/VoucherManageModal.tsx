@@ -9,7 +9,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import QRCode from 'qrcode';
 import { checkinUrl } from '../../api/checkins';
 import { buyinRequestUrl } from '../../api/ledger';
-import { listVenueVouchers, issueVoucher, deleteVoucher, findUserForTransfer, findUserByPhone, voucherUsageByVenue, voucherHolderStats, isVoucherIssueApproved, voucherHolderProfiles, subscribeVenueVouchers, type Voucher, type VoucherUsage, type VoucherHolderStats, type TransferTarget, type VoucherHolderProfile, getVoucherQuota, requestVoucherCredit, myVoucherCreditRequests, type VoucherCreditRequest } from '../../api/vouchers';
+import { listVenueVouchers, issueVoucher, deleteVoucher, findUserForTransfer, findUserByPhone, voucherUsageByVenue, voucherHolderStats, isVoucherIssueApproved, voucherHolderProfiles, subscribeVenueVouchers, type Voucher, type VoucherUsage, type VoucherHolderStats, type TransferTarget, type VoucherHolderProfile, getVoucherQuota } from '../../api/vouchers';
 
 function fmtDateTime(iso: string | null): string {
   if (!iso) return '-';
@@ -46,27 +46,12 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
   const [approved, setApproved] = useState(true);
   // 발급 한도(쿼터) — null이면 구 DB(한도 미적용)라 표시 생략
   const [quota, setQuota] = useState<number | null>(null);
-  const [creditReqs, setCreditReqs] = useState<VoucherCreditRequest[]>([]);
-  const [creditOpen, setCreditOpen] = useState(false);
-  const [creditAmt, setCreditAmt] = useState(1000);
-  const [creditNote, setCreditNote] = useState('');
-  const [creditBusy, setCreditBusy] = useState(false);
+  // W2-1 VCH-1: 유상 충전 요청·조회 제거(§12-A-2) — 한도 표시는 유지
   const reloadQuota = () => {
     if (!canIssue) return;
     getVoucherQuota(venueId).then(setQuota).catch(() => {});
-    myVoucherCreditRequests(venueId).then(setCreditReqs).catch(() => {});
   };
   useEffect(reloadQuota, [venueId, canIssue]);
-  const submitCredit = async () => {
-    if (creditAmt < 1) return;
-    setCreditBusy(true);
-    try {
-      await requestVoucherCredit(venueId, creditAmt, creditNote.trim() || undefined);
-      toast.show('충전 요청을 남겼습니다 — 운영자 승인 후 한도가 충전됩니다', 'success');
-      setCreditOpen(false); setCreditNote(''); reloadQuota();
-    } catch (e) { toast.show(e instanceof Error ? e.message : '요청 실패', 'error'); }
-    setCreditBusy(false);
-  };
   const [holderQuery, setHolderQuery] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [profileMap, setProfileMap] = useState<Map<string, VoucherHolderProfile>>(new Map());
@@ -226,7 +211,7 @@ ${cards}
     } catch (e) {
       const msg = e instanceof Error ? e.message : '배포 실패';
       toast.show(msg, 'error');
-      if (msg.includes('한도가 부족') || msg.includes('충전 요청')) { setIssueOpen(true); setCreditOpen(true); }
+      if (msg.includes('한도가 부족')) setIssueOpen(true); // 한도 안내 문구가 보이도록 발급 섹션만 펼침(유상 충전 UI 는 제거됨)
       reloadQuota();
     }
     setBusy(false);
@@ -394,40 +379,12 @@ ${cards}
               <button type="button" disabled={busy || (!isAdmin && !approved)} onClick={issue} className="btn-primary w-full text-sm disabled:opacity-50">{busy ? '배포 중…' : `+ ${count}개 발급${recvDisplay ? ` → ${recvDisplay}` : ''}`}</button>
               <p className="text-2xs text-ink-muted">1회 최대 1000개 · 아이디(닉네임)로 손님 지정 시 그 회원 지갑으로. 미지정이면 매장 보관용. 손님은 ‘사용하기 → 매장 QR 스캔’으로 사용합니다. <b className="text-ink-secondary">매장이용권은 금전적 가치가 없습니다.</b></p>
 
-              {/* 발급 한도 충전(구매) 요청 — 운영진 승인 시 충전 */}
-              {quota !== null && (
-                <div className="rounded-input border border-border-subtle bg-surface-low p-2 space-y-1.5">
-                  {creditReqs.some((r) => r.status === 'pending') ? (
-                    <p className="text-2xs text-amber-300 font-semibold">⏳ 충전 요청 {creditReqs.find((r) => r.status === 'pending')?.amount.toLocaleString()}개 — 운영자 승인 대기 중</p>
-                  ) : !creditOpen ? (
-                    <button type="button" onClick={() => setCreditOpen(true)} className="btn-ghost w-full text-2xs text-accent-300">🛒 발급 한도 충전(구매) 요청 — 운영진 승인</button>
-                  ) : (
-                    <>
-                      <div className="flex items-center gap-1.5">
-                        {[500, 1000, 3000].map((n) => (
-                          <button key={n} type="button" onClick={() => setCreditAmt(n)}
-                            className={['flex-1 rounded-input border px-2 py-1.5 text-2xs font-bold transition-colors',
-                              creditAmt === n ? 'border-accent-400/50 bg-accent-300/15 text-accent-300' : 'border-border-default bg-surface-high text-ink-secondary'].join(' ')}>
-                            {n.toLocaleString()}개
-                          </button>
-                        ))}
-                        <input type="number" inputMode="numeric" min={1} max={100000} value={creditAmt || ''} onChange={(e) => setCreditAmt(Math.min(100000, Math.max(1, parseInt(e.target.value, 10) || 1)))}
-                          className="input w-20 shrink-0 text-sm tabular-nums text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" aria-label="충전 수량" />
-                      </div>
-                      <input value={creditNote} onChange={(e) => setCreditNote(e.target.value)} maxLength={80} placeholder="요청 메모 (선택 — 예: 주말 이벤트용)" className="input w-full text-sm" />
-                      <div className="flex gap-1.5">
-                        <button type="button" disabled={creditBusy} onClick={submitCredit} className="btn-primary flex-1 text-2xs disabled:opacity-50">{creditBusy ? '요청 중…' : `충전 ${creditAmt.toLocaleString()}개 요청`}</button>
-                        <button type="button" onClick={() => setCreditOpen(false)} className="btn-ghost shrink-0 px-3 text-2xs">닫기</button>
-                      </div>
-                      <p className="text-2xs text-ink-muted">운영진이 확인 후 승인하면 한도가 충전됩니다. 구매·정산은 운영진이 별도로 안내합니다.</p>
-                    </>
-                  )}
-                  {creditReqs.filter((r) => r.status !== 'pending').slice(0, 2).map((r) => (
-                    <p key={r.id} className="text-2xs text-ink-muted">
-                      {r.status === 'approved' ? '✅ 승인' : '❌ 거절'} · {r.amount.toLocaleString()}개{r.adminNote ? ` · ${r.adminNote}` : ''}
-                    </p>
-                  ))}
-                </div>
+              {/* W2-1 VCH-1: 유상 충전(구매) 요청 UI 제거 — 이용권이 '상금 재원' 성격을 갖지 않게(§12-A-2).
+                  서버(request_voucher_credit·admin_decide approve)도 봉쇄됨. 한도는 운영자 문의로만. */}
+              {quota !== null && quota < count && (
+                <p className="rounded-input border border-border-subtle bg-surface-low p-2 text-2xs text-ink-muted">
+                  발급 한도가 부족하면 <b className="text-ink-secondary">운영자에게 문의</b>해 주세요. 유상 충전은 종료되었습니다.
+                </p>
               )}
             </div>
           )}

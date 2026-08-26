@@ -139,9 +139,11 @@ function VoucherQuotaAdminCard() {
     setBusy(null);
   };
   if (reqs.length === 0) return null;
+  // W2-1 VCH-1(§12-A-2): 유상 충전 승인 경로 폐쇄 — 서버(admin_decide approve)도 raise.
+  // 잔여 pending 은 반려(정리)만 가능. 한도 조정이 필요하면 admin_grant_voucher_quota(수동 레버).
   return (
     <section className="rounded-card border border-accent-400/30 bg-accent-300/[0.04] p-3 space-y-2">
-      <h3 className="text-sm font-bold text-accent-300">🛒 이용권 충전 요청 <span className="text-2xs font-normal text-ink-muted">· 승인 시 즉시 충전</span></h3>
+      <h3 className="text-sm font-bold text-accent-300">🛒 이용권 충전 요청 <span className="text-2xs font-normal text-danger-light">· 유상 충전 폐쇄(§12-A) — 반려만 가능</span></h3>
       <ul className="space-y-1.5">
         {reqs.map((r) => (
           <li key={r.id} className="flex items-center gap-2 rounded-input border border-border-subtle bg-surface-low px-2.5 py-2">
@@ -149,8 +151,7 @@ function VoucherQuotaAdminCard() {
               <p className="text-xs font-bold text-ink-primary truncate">{r.venueName} <span className="text-accent-300">+{r.amount.toLocaleString()}개</span></p>
               <p className="text-2xs text-ink-muted truncate">{r.requester}{r.note ? ` · ${r.note}` : ''} · {new Date(r.createdAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
             </div>
-            <button type="button" disabled={busy === r.id} onClick={() => decide(r, true)} className="btn-primary shrink-0 px-3 py-1.5 text-2xs disabled:opacity-50">승인</button>
-            <button type="button" disabled={busy === r.id} onClick={() => decide(r, false)} className="btn-ghost shrink-0 px-2 py-1.5 text-2xs hover:text-danger-light">거절</button>
+            <button type="button" disabled={busy === r.id} onClick={() => decide(r, false)} className="btn-ghost shrink-0 px-2 py-1.5 text-2xs hover:text-danger-light">반려(정리)</button>
           </li>
         ))}
       </ul>
