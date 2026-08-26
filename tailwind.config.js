@@ -155,10 +155,6 @@ export default {
           from: { opacity: '1' },
           to:   { opacity: '0' },
         },
-        shimmer: {
-          '0%':   { backgroundPosition: '-200% center' },
-          '100%': { backgroundPosition: '200% center' },
-        },
       },
       animation: {
         'badge-pulse': 'badge-pulse 2s ease-in-out infinite',
@@ -169,7 +165,6 @@ export default {
         'slide-down':  'slide-down 0.2s cubic-bezier(0.32, 0.72, 0, 1) forwards',
         'fade-in':     'fade-in 0.15s cubic-bezier(0.32, 0.72, 0, 1)',
         'fade-out':    'fade-out 0.18s cubic-bezier(0.32, 0.72, 0, 1) forwards',
-        shimmer:       'shimmer 1.5s linear infinite',
       },
     },
   },

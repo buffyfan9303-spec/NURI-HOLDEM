@@ -46,7 +46,7 @@ test.describe('정적 앱 셸 — 첫 페인트', () => {
     const html = await (await page.request.get('/')).text();
     await page.goto('/');
     await page.waitForSelector('button[aria-label="통합 검색"]', { timeout: 15_000 });
-    for (const cls of ['h-header-h', 'bg-surface-mid/95 shadow-dialog backdrop-blur-md', 'rounded-card border border-border-subtle bg-surface-high']) {
+    for (const cls of ['h-header-h', 'bg-surface-mid shadow-dialog', 'rounded-card border border-border-subtle bg-surface-high']) {
       expect(html, `셸에서 '${cls}' 가 사라졌다`).toContain(cls);
       const inApp = await page.evaluate(
         (c) => document.querySelector(`[class*="${c.split(' ')[0]}"]`) != null, cls,

@@ -241,15 +241,11 @@
   }
 
   /* ── 스켈레톤 로더 ──────────────────────────────────── */
+  /* MO-5: shimmer(background-position 무한 애니 = 매 프레임 페인트 폭탄)를 pulse(opacity 전용,
+     컴포지터)로 교체 — 정적 셸·ScheduleSkeletonGrid 가 이미 pulse 라 시각 언어까지 통일(§20.5 #3). */
   .skeleton {
-    background: linear-gradient(
-      90deg,
-      theme('colors.surface.high') 25%,
-      theme('colors.surface.float') 50%,
-      theme('colors.surface.high') 75%
-    );
-    background-size: 200% 100%;
-    @apply animate-shimmer rounded;
+    background: theme('colors.surface.high');
+    @apply animate-pulse rounded;
   }
 
   /* ── 활동 점수 +N 팝업 ──────────────────────────────── */
@@ -398,7 +394,7 @@ body { overscroll-behavior-y: contain; }
   /* 진입/로딩 애니메이션은 아예 끔(0.01ms 단축이 아니라 none) — 모션 민감 사용자에게 깜빡임 0.
      framer-motion 은 main.tsx 의 MotionConfig reducedMotion="user" 가 별도로 처리. */
   .animate-fade-in, .animate-fade-out, .animate-slide-up, .animate-slide-down,
-  .tab-anim-r, .tab-anim-l, .animate-shimmer, .skeleton, .confetti, .anim-pop { animation: none !important; }
+  .tab-anim-r, .tab-anim-l, .skeleton, .confetti, .anim-pop { animation: none !important; }
 }
 
 /* ── 라이트 모드 가독 오버라이드(unlayered — utilities 레이어보다 우선) ──
