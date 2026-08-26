@@ -13,8 +13,8 @@ import type { Schedule } from '../api/schedules';
 import type { Venue } from '../api/community';
 
 const SITE = 'https://nuriholdem.com';
-const DEFAULT_TITLE = 'NHoldem | 홀덤 대회 일정 · 커뮤니티 · 중고장터';
-const DEFAULT_DESC = '전국 홀덤 대회 일정과 홀덤펍 커뮤니티, 중고장터를 한 곳에서. NURI HOLDEM.';
+const DEFAULT_TITLE = 'NHoldem | 홀덤 대회 일정 · 커뮤니티 · GTO · 매장관리';
+const DEFAULT_DESC = '전국 홀덤 대회 일정과 홀덤펍 커뮤니티, GTO 학습 도구, 매장관리를 한 곳에서. NURI HOLDEM.';
 const DEFAULT_IMAGE = `${SITE}/nuri-logo.png`;
 const JSONLD_ID = 'nuri-jsonld';
 

@@ -6,13 +6,13 @@
 //   전송 0B·PC 뭉개짐 없음), 일정 포스터는 thumbUrl(480) 서버 리사이즈 상한.
 // · 고정 슬라이드는 마감 없이 상시 게시(오너 지시) — 날짜 필터는 일정 포스터에만 적용.
 //   항상 3장 이상이 확보되므로 캐러셀은 로딩과 무관하게 즉시 그려진다(빈 상태·스켈레톤 없음).
-// · 모션: 무한 루프 마퀴(transform 전용) — 모션 헌법의 허용 예외 2종 중 '무한 루프'.
-//   호버/터치 중 일시정지, prefers-reduced-motion 은 수동 가로 스크롤로 폴백(index.css).
-//   일정 포스터가 뒤늦게 도착하면 트랙 폭이 바뀌므로 key 로 애니메이션을 재시작한다
-//   (시작 수 초 내 ~수십 px 리셋 1회 — 진행 중 폭 변경으로 인한 프레임 점프를 막는 쪽을 택함).
+// · 모션: scrollLeft 기반 자동 진행(rAF ~30px/s) + 유저 가로 스크롤 겸용(오너 지시 —
+//   "유저도 스크롤할 수 있게"). 상호작용 시 4초 일시정지 후 재개, 절반 지점 되감기 루프.
+//   prefers-reduced-motion 은 자동 진행 없이 수동 스크롤만. 폭이 뒤늦게 늘어도(일정 포스터
+//   도착) 스크롤 위치가 유지되므로 재시작 점프가 없다.
 // · 배경 없음(오너 지시 2026-08-27): 펠트 띠·패딩 없이 배너 카드만 흐른다. 속도는
 //   슬라이드 수 × 8초 — 장수가 늘어도 픽셀 속도 일정(~31px/s).
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { thumbUrl } from '../../lib/imageUrl';
 import type { Schedule } from '../../api/schedules';
 
@@ -186,17 +186,48 @@ export default function PosterCarousel({ schedules, onSelect, onBanner }: {
     </>
   );
 
+  // 자동 진행 + 유저 스크롤 겸용(오너 지시 2026-08-27: "유저도 스크롤할 수 있게 — 클릭 유도").
+  // 뷰포트가 실제 가로 스크롤러이고, rAF 가 scrollLeft 를 천천히 민다(~30px/s).
+  // 터치·휠·드래그가 감지되면 4초 쉬었다 재개. 절반(한 세트) 지나면 -절반으로 되감아 무한 루프.
+  // 스크롤 랩은 같은 픽셀의 복제 세트로 점프하므로 눈에는 이어져 보인다.
+  const vpRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const vp = vpRef.current;
+    if (!vp) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return; // 수동 스크롤만
+    let raf = 0;
+    let pauseUntil = 0;
+    let last = performance.now();
+    const tick = (t: number) => {
+      const dt = Math.min(64, t - last);
+      last = t;
+      if (t > pauseUntil && !document.hidden) {
+        const half = vp.scrollWidth / 2;
+        if (half > vp.clientWidth) {
+          vp.scrollLeft += 30 * dt / 1000;
+          if (vp.scrollLeft >= half) vp.scrollLeft -= half;
+        }
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    const pause = () => { pauseUntil = performance.now() + 4000; };
+    vp.addEventListener('touchstart', pause, { passive: true });
+    vp.addEventListener('wheel', pause, { passive: true });
+    vp.addEventListener('pointerdown', pause, { passive: true });
+    raf = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(raf);
+      vp.removeEventListener('touchstart', pause);
+      vp.removeEventListener('wheel', pause);
+      vp.removeEventListener('pointerdown', pause);
+    };
+  }, []);
+
   return (
     <div className="pt-3">
-      {/* 오너 지시(2026-08-27): 배너만 — 펠트 배경·상하 패딩(어두운 띠) 제거 */}
-      <div className="poster-marquee-viewport overflow-hidden">
-        {/* key=슬라이드 수: 일정 포스터 도착 시 1회 재시작(폭 변경 중 점프 방지).
-            속도는 슬라이드 수 비례(카드당 8초) — 장수가 늘어도 픽셀 속도가 일정하다. */}
-        <div
-          key={slides.length}
-          className="poster-marquee flex w-max"
-          style={{ animationDuration: `${slides.length * 8}s` }}
-        >
+      {/* 오너 지시(2026-08-27): 배너만 — 펠트 배경·어두운 띠 없음. 스크롤바는 숨김 */}
+      <div ref={vpRef} className="poster-marquee-viewport scrollbar-none overflow-x-auto">
+        <div className="flex w-max">
           {set(false)}
           {set(true)}
         </div>

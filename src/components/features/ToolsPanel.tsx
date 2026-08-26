@@ -5,6 +5,8 @@ import Icon from '../atoms/Icon';
 import { useToast } from '../atoms/Toast';
 import { shareOrCopy } from '../../lib/calendar';
 import { useTrainerProgress } from '../../lib/trainerProgress';
+import { useAuth } from '../../contexts/AuthContext';
+import { promptLogin } from '../../lib/requireLogin';
 import ICMCalculator from './ICMCalculator';
 import PotOddsCalc from './tools/PotOddsCalc';
 import ChipDistributor from './tools/ChipDistributor';
@@ -192,7 +194,10 @@ export default function ToolsPanel() {
   const [recent, setRecent] = useState<ToolKey[]>(() => {
     try { return JSON.parse(localStorage.getItem('nuri:tool:recent') || '[]'); } catch { return []; }
   });
+  // GTO 도구는 로그인 회원 전용(오너 지시 2026-08-27) — 카탈로그는 보이되 실행에 게이트
+  const { user } = useAuth();
   const open = (k: ToolKey) => {
+    if (!user) { promptLogin(); return; }
     setActive(k);
     try { history.replaceState(null, '', `#tool=${k}`); } catch { /* 무시 */ }
     setRecent((prev) => {
@@ -410,7 +415,14 @@ export default function ToolsPanel() {
             </button>
           </div>
           <Suspense fallback={<div className="py-10 text-center text-2xs text-ink-muted">불러오는 중…</div>}>
-            {active ? renderTool(active) : null}
+            {/* #tool= 딥링크로 비로그인 진입해도 게이트가 유지되게 실행 지점에서 한 번 더 확인 */}
+            {active ? (user ? renderTool(active) : (
+              <div className="flex flex-col items-center gap-3 py-14 text-center">
+                <p className="text-sm font-bold text-ink-primary">로그인하면 GTO 도구를 쓸 수 있어요</p>
+                <p className="text-2xs text-ink-muted">차트·트레이너·계산기 전부 무료입니다</p>
+                <button type="button" onClick={() => promptLogin()} className="btn-primary h-10 px-5 text-sm font-bold">로그인하기</button>
+              </div>
+            )) : null}
           </Suspense>
         </div>
       </Modal>

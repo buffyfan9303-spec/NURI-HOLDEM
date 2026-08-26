@@ -22,9 +22,10 @@
     /* 스프링(언더댐핑) — linear() 로 근사한 iOS 스프링. 시트 복귀·미세 바운스에 사용 */
     --spring: linear(0, 0.36 8%, 0.72 16%, 0.95 24%, 1.06 33%, 1.09 40%, 1.06 48%, 1.02 58%, 0.995 70%, 1);
     --dur-fast: 0.15s;   /* 색·배경·보더, 프레스 */
-    --dur-base: 0.2s;    /* 요소 등장/퇴장, 칩 전환 */
-    --dur-panel: 0.26s;  /* 시트·오버레이·풀스크린 */
-    --dur-tab: 0.22s;    /* 탭 전환(VT 방향성 푸시 — MO-8 소비) */
+    --dur-base: 0.22s;   /* 요소 등장/퇴장, 칩 전환 */
+    --dur-panel: 0.32s;  /* 시트·오버레이·풀스크린 */
+    --dur-tab: 0.3s;     /* 탭 전환(VT 방향성 푸시 — MO-8 소비). 오너 지시(2026-08-27):
+                            최신 폰 모션 감각으로 소폭 상향 — '휙휙' 대신 안착 */
     --press: scale(0.985);
     --press-icon: scale(0.88);
     /* ── 하단 탭바 회피 오프셋 단일 소스(W1-3 TB1a) — 8곳에 흩어졌던 5.5/5.75/6/4.75rem 통일.
@@ -32,16 +33,22 @@
        max(env, 12px): safe-area 없는 안드로이드에서도 최소 숨통 12px — 유일하게 의도된 값 변화.
        파생 규칙: 푸터 = safe + 0.5rem, 정산바 = safe − 0.75rem (임의 상수 신설 금지). */
     --tabbar-safe: calc(5.5rem + max(env(safe-area-inset-bottom), 12px));
-    --tabbar-float: calc(5.75rem + max(env(safe-area-inset-bottom), 12px));
+    --tabbar-float: calc(5.75rem + var(--tabbar-lift) + max(env(safe-area-inset-bottom), 12px));
+    /* 삼성 인터넷 전용 보정(오너 스크린샷 2026-08-27): 브라우저 자체 '맨 위로' 버튼이
+       하단 중앙에 떠 탭바 가운데 칸을 가린다 — 탭바를 그만큼 올린다(main.tsx 가 .samsung 부착) */
+    --tabbar-lift: 0px;
+  }
+  html.samsung {
+    --tabbar-lift: 2.75rem;
   }
 
   :root,
   html.dark {
-    --surface-base:  8 9 10;     /* #08090A Linear bg */
-    --surface-low:   17 18 20;   /* #111214 패널/카드 */
-    --surface-mid:   22 24 27;   /* #16181B 모달/사이드 */
-    --surface-high:  29 32 36;   /* #1D2024 인풋/호버 */
-    --surface-float: 36 40 46;   /* #24282E 드롭다운/툴팁 */
+    --surface-base:  10 9 16;    /* #0A0910 트와일라잇 퍼플 틴트(오너 컨셉 2026-08-27) */
+    --surface-low:   18 17 27;   /* #12111B 패널/카드 */
+    --surface-mid:   23 22 34;   /* #171622 모달/사이드 */
+    --surface-high:  31 30 45;   /* #1F1E2D 인풋/호버 */
+    --surface-float: 40 38 57;   /* #282639 드롭다운/툴팁 */
 
     --ink-primary:   244 245 246; /* #F4F5F6 본문 */
     /* ⚠ 보조/메타 텍스트는 앱에서 가장 많이 쓰이는데(1087곳) 대비가 부족했다.
@@ -310,9 +317,11 @@ main { max-width: 48rem; margin-inline: auto; }
    (양쪽 같은 곡선 0.3s 는 '둘이 동시에 미끄러지는' 밋밋한 평행이동으로 읽혔다)
    이동량 32px→20px: 시차 푸시는 거리보다 겹침 타이밍이 감각을 만든다 — 과한 거리는 들뜸. */
 @keyframes vt-push-out-l { to   { opacity: 0; transform: translateX(-20px); } }
-@keyframes vt-push-in-r  { from { opacity: 0; transform: translateX(20px); } }
+/* 진입 blur(오너 지시 2026-08-27) — §20.4 #3 개정: '1회성 진입 애니'에 한해 filter blur 허용.
+   데이터 로드 커밋의 뚝 끊김을 시각적으로 뭉개 부드럽게. 상시·호버 filter 는 여전히 금지. */
+@keyframes vt-push-in-r  { from { opacity: 0; transform: translateX(20px); filter: blur(6px); } to { filter: blur(0); } }
 @keyframes vt-push-out-r { to   { opacity: 0; transform: translateX(20px); } }
-@keyframes vt-push-in-l  { from { opacity: 0; transform: translateX(-20px); } }
+@keyframes vt-push-in-l  { from { opacity: 0; transform: translateX(-20px); filter: blur(6px); } to { filter: blur(0); } }
 html[data-vt-dir='forward']::view-transition-old(root) { animation: vt-push-out-l var(--dur-base) var(--ease-out) both; }
 html[data-vt-dir='forward']::view-transition-new(root) { animation: vt-push-in-r var(--dur-tab) var(--ease) both; }
 html[data-vt-dir='back']::view-transition-old(root)    { animation: vt-push-out-r var(--dur-base) var(--ease-out) both; }
@@ -387,13 +396,9 @@ body { overscroll-behavior-y: contain; }
    transform 전용·컴포지터 상주. 트랙은 2배 복제 + -50% 이동으로 이음새 없이 순환.
    (각 카드 mr-3 이라 세트 경계 간격이 내부 간격과 동일 = -50% 지점이 정확히 맞물림)
    호버·프레스 중 일시정지. reduced-motion 은 아래 블록에서 수동 스크롤로 폴백. */
-@keyframes poster-marquee-x { to { transform: translateX(-50%); } }
-.poster-marquee { animation: poster-marquee-x 36s linear infinite; }
-.poster-marquee:hover, .poster-marquee:active { animation-play-state: paused; }
-@media (prefers-reduced-motion: reduce) {
-  .poster-marquee { animation: none !important; }
-  .poster-marquee-viewport { overflow-x: auto; }
-}
+/* 오너 지시(2026-08-27): 자동 스크롤 + 유저 스크롤 겸용 — CSS transform 마퀴를 버리고
+   scrollLeft 기반(JS rAF, PosterCarousel)으로 전환. 뷰포트가 실제 스크롤러라 손으로도 넘긴다. */
+.poster-marquee-viewport { overflow-x: auto; }
 
 /* (펠트 시그니처 .felt-hero 는 오너 지시로 캐러셀에서 제거 — 2026-08-27 '배너만, 검은 띠 제거') */
 
