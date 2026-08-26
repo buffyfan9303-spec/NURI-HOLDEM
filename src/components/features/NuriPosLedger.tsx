@@ -24,6 +24,7 @@ import { getStaffSchedule, addStaffShift } from '../../api/staffSchedule';
 import { getVenueRankings } from '../../api/rankings';
 import { exportLedgerXls } from '../../lib/ledgerExport';
 import { getSchedules, type Schedule } from '../../api/schedules';
+import { clockPatchFromSchedule, clockPrizesFromSchedule } from '../../lib/gameInherit';
 import { getClockState, saveClockState, saveClockLevel, subscribeClock, defaultClockConfig, deriveClockCounts, computeLiveStats, levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, type ClockState, type ClockLevelSnapshot } from '../../api/clock';
 import { getMyVenueStaff, searchMembersForRanking, type User } from '../../api/auth';
 import { useBackClose } from '../../lib/backstack';
@@ -1618,18 +1619,21 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   const [presetOpen, setPresetOpen] = useState(false); // 프리셋 리스트 펼침
   const [autoLinked, setAutoLinked] = useState(false); // 당일 포스터 자동 연동 표시
 
+  // PL1a: 포스터 상속을 3필드(제목·바인·유형) → 전체(스택·애드온, 제출 시 클락 구조·레지레벨·상금)로 확대.
+  // 스택 setter 는 아래 '연동 클락 얼리 설정' 블록에서 선언되므로 ref 로 지연 배선한다.
+  const applySchedInheritRef = useRef<(sc: Schedule) => void>(() => {});
+  const [todayPick, setTodayPick] = useState<Schedule[]>([]); // 당일 포스터 2개+ — 침묵 대신 선택 칩(§13-B)
   // 당일 포스터 자동 연동 — 새 장부 시작 시 그 날짜 포스터가 1개면 즉시 프리필(수정 가능).
   // 포스터→장부→클락 재입력 반복을 제거(사장님 요청: 더 간단하게).
   useEffect(() => {
     if (mode !== 'open' || prefilled || autoLinked || schedId || title.trim()) return;
     const todays = schedules.filter((s) => s.date === base.sessionDate);
     if (todays.length === 1) {
-      const sc = todays[0];
       setAutoLinked(true);
-      setSchedId(sc.id);
-      setTitle(sc.title);
-      if (sc.buyIn?.amount) setCash(sc.buyIn.amount);
-      setGameType(sc.guaranteed ? 'gtd' : 'entry');
+      applySchedInheritRef.current(todays[0]);
+    } else if (todays.length >= 2) {
+      // 자동화는 항상 되거나, 왜 안 되는지 보이거나 — 침묵 금지(§13-B). 사이드 우선 정렬 대신 시각순.
+      setTodayPick([...todays].sort((a, b) => (a.startTime || '').localeCompare(b.startTime || '')));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, prefilled, schedules, base.sessionDate]);
@@ -1658,6 +1662,19 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [base.venueId]);
+
+  // PL1a: 포스터 → 폼 상속(무금액 포함 전체) — 자동연동·선택 칩·(향후 수동 선택)이 공유하는 단일 적용점
+  applySchedInheritRef.current = (sc: Schedule) => {
+    setSchedId(sc.id);
+    setTitle(sc.title);
+    if (sc.buyIn?.amount) setCash(sc.buyIn.amount);
+    setGameType(sc.guaranteed ? 'gtd' : 'entry');
+    const start = sc.buyIn?.startStack ?? sc.structure?.startingChips;
+    if (start) setStartStack(start);
+    const rebuy = sc.buyIn?.rebuyStack ?? sc.structure?.rebuyStack;
+    if (rebuy) setRebuyStack(rebuy);
+    if (sc.buyIn?.addonStack) { setIsAddon(true); setAddonStack(sc.buyIn.addonStack); }
+  };
 
   const setDisc = (i: number, patch: Partial<DiscountPreset>) =>
     setDiscs((arr) => arr.map((d, idx) => (idx === i ? { ...d, ...patch } : d)));
@@ -1705,7 +1722,13 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
     // 연동 클락 얼리 설정 저장 — 진행 중 클락은 건드리지 않음(비파괴 병합)
     if (!clockState?.running) {
       const baseCfg = clockState?.config ?? defaultClockConfig();
-      const cfg = { ...baseCfg, earlyBonus, doubleEarlyBonus, earlyDoubleLevel, earlySingleLevel, startStack, rebuyStack };
+      // PL1a+b: 연동 포스터의 구조(레벨·레지레벨·애드온)와 상금(원 정규형)을 클락에 함께 병합 —
+      // '클락 설정 단계가 일상 운영에서 사라진다'(§13-B 최고 ROI 두 곳 중 ②). 폼에서 고친 값이 우선.
+      const linkedSched = schedules.find((s) => s.id === schedId) ?? null;
+      const schedPatch = linkedSched ? clockPatchFromSchedule(linkedSched) : {};
+      const prizeRows = linkedSched ? clockPrizesFromSchedule(linkedSched) : null;
+      const cfg = { ...baseCfg, ...schedPatch, ...(prizeRows ? { prizes: prizeRows } : {}),
+        earlyBonus, doubleEarlyBonus, earlyDoubleLevel, earlySingleLevel, startStack, rebuyStack };
       const next: ClockState = clockState
         ? { ...clockState, config: cfg }
         : { venueId: base.venueId, gameSeq: base.gameSeq, sessionDate: null, title: base.title ?? '', config: cfg, currentIndex: 0, running: false, endsAt: null, remainingMs: 0, adjEntries: 0, adjRebuys: 0, adjEarlies: 0, adjAddons: 0, eliminations: 0 };
@@ -1733,7 +1756,26 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
           <h3 className="text-sm font-bold text-accent-300">장부 시작 설정</h3>
           <p className="text-2xs text-ink-muted mt-0.5">담당직원: <b className="text-ink-secondary">{operatorName}</b> · 아래 정보를 입력 후 장부에 입장합니다.</p>
           {prefilled && <p className="text-xs font-semibold text-emerald-400 mt-0.5">✅ 직전 게임 설정을 불러왔습니다 — 바로 시작하거나 수정하세요.</p>}
-          {autoLinked && <p className="text-xs font-semibold text-emerald-400 mt-0.5">✅ 오늘 포스터를 자동으로 연동했습니다 — 게임명·바인·유형이 채워졌어요(수정 가능).</p>}
+          {autoLinked && <p className="text-xs font-semibold text-emerald-400 mt-0.5">✅ 오늘 포스터를 자동으로 연동했습니다 — 게임명·바인·유형·스택이 채워졌고, 블라인드·레지 마감·상금은 시작 시 클락에 함께 적용돼요(수정 가능).</p>}
+          {/* PL1a: 당일 포스터 2개+ — 자동연동이 침묵하던 케이스에 선택 칩(§13-B '자동화는 항상 되거나, 왜 안 되는지 보이거나') */}
+          {!autoLinked && !schedId && todayPick.length >= 2 && (
+            <div className="mt-1.5">
+              <p className="text-xs font-semibold text-amber-300">오늘 포스터 {todayPick.length}개 — 어느 게임의 장부인가요?</p>
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {todayPick.map((sc) => (
+                  <button key={sc.id} type="button"
+                    onClick={() => { setAutoLinked(true); setTodayPick([]); applySchedInheritRef.current(sc); }}
+                    className="rounded-input border border-accent-400/40 bg-accent-300/10 px-2.5 py-1.5 text-2xs font-bold text-accent-300 transition-colors hover:bg-accent-300/20">
+                    {sc.startTime ? `${sc.startTime} · ` : ''}{sc.title}
+                  </button>
+                ))}
+                <button type="button" onClick={() => setTodayPick([])}
+                  className="rounded-input border border-border-default px-2.5 py-1.5 text-2xs font-bold text-ink-muted transition-colors hover:text-ink-secondary">
+                  연동 안 함
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

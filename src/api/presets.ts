@@ -12,13 +12,16 @@ export interface GamePresetData {
   addonStack?: number;       // 애드온 스택(칩)
   addonCost?: number;        // 애드온 비용(원)
   prizeType?: 'GTD' | 'ENTRY';
-  prizeAmount?: number;      // GTD 보장 상금(만원)
+  /** @deprecated 구형(만원) — 읽기는 반드시 lib/units.presetPrizeWon 폴백 경유. 쓰기는 prizeAmountWon 만. */
+  prizeAmount?: number;      // GTD 보장 상금(만원 · 구형)
+  prizeAmountWon?: number;   // GTD 보장 상금(원 · PL0 정규형)
   prizePercent?: number;     // ENTRY 프라이즈 비율(%)
   duration?: string;         // 듀레이션(블라인드 레벨 시간 등 — 자유 입력)
   blinds?: string;           // 블라인드 구조(텍스트 · 구버전 호환)
   blindLevels?: ClockLevel[]; // 블라인드 구조(구조화 — 클락/포스터 structure.levels 로 적용)
   isCompetition?: boolean;   // 대회/이벤트 분류
-  rankingPrizes?: { rank: string; amount: number; unit: string }[]; // 순위별 상금
+  /** 순위별 상금 — amountWon(원·PL0 정규형)이 있으면 우선, 구형 amount+unit 은 lib/units.rankingPrizeWon 폴백 */
+  rankingPrizes?: { rank: string; amount: number; unit: string; amountWon?: number }[];
   memo?: string;             // 메모
 }
 

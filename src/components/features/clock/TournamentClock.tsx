@@ -21,6 +21,7 @@ import {
   type LedgerBuyin, type LedgerSession, type LedgerSessionListItem,
 } from '../../../api/ledger';
 import { listGamePresets, type GamePreset } from '../../../api/presets';
+import { rankingPrizeWon } from '../../../lib/units';
 import { saveVenueRankings, prizeUnitRisk, getVenueRankings } from '../../../api/rankings';
 import LoadErrorCard from '../../atoms/LoadErrorCard';
 import { msgOf } from '../../../lib/dbError';
@@ -979,17 +980,24 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
   const set = (patch: Partial<ClockConfig>) => setCfg((c) => withDerivedEarly({ ...c, ...patch }));
   const totalLevels = countLevels(cfg.levels);
   // 게임 프리셋의 블라인드 구조(+스택)를 클락에 적용
+  // PL1a③: 4필드(레벨+스택3종)만 적용하던 것을 클락 관련 전체로 확장 — 제목·애드온·상금(원 정규형)까지.
+  // 블라인드 없는 프리셋도 '있는 것만' 부분 적용(§13-B 부분 프리셋 허용 — 가드로 거부하지 않는다).
   const applyGamePreset = (p: GamePreset) => {
-    const lv = p.data.blindLevels;
-    if (!lv || !lv.length) { toast.show('이 프리셋엔 블라인드 구조가 없습니다', 'error'); return; }
+    const d = p.data;
+    const lv = d.blindLevels;
+    const prizes = (d.rankingPrizes ?? [])
+      .filter((r) => ((r.amountWon ?? r.amount) ?? 0) > 0 && (r.unit == null || r.unit === '만원' || r.unit === '원'))
+      .map((r) => ({ place: r.rank, amount: rankingPrizeWon(r) }));
     set({
-      levels: lv,
-      ...(p.data.startStack ? { startStack: p.data.startStack } : {}),
-      ...(p.data.rebuyStack ? { rebuyStack: p.data.rebuyStack } : {}),
-      ...(p.data.addonStack ? { addonStack: p.data.addonStack } : {}),
+      ...(d.title ? { title: d.title } : {}),
+      ...(lv && lv.length ? { levels: lv } : {}),
+      ...(d.startStack ? { startStack: d.startStack } : {}),
+      ...(d.rebuyStack ? { rebuyStack: d.rebuyStack } : {}),
+      ...(d.addonStack ? { addonStack: d.addonStack, isAddon: true } : {}),
+      ...(prizes.length ? { prizes } : {}),
     });
-    setBldOpen(true);
-    toast.show(`'${p.name}' 블라인드(${countLevels(lv)}레벨)를 적용했습니다`, 'success');
+    if (lv?.length) setBldOpen(true);
+    toast.show(`'${p.name}' 프리셋 적용${lv?.length ? ` — 블라인드 ${countLevels(lv)}레벨 포함` : ' (블라인드 없음 — 나머지 항목만)'}`, 'success');
   };
   const filteredSessions = sessions.filter((s) => {
     const q = sessQuery.trim().toLowerCase();
@@ -1177,6 +1185,19 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
         </p>
       </section>
 
+      {/* PL1a③: 게임 프리셋 적용 — 접힌 섹션 안(발견 불가)에서 설정 최상단으로 승격, 전 프리셋 노출 */}
+      {gamePresets.length > 0 && (
+        <div className="rounded-input border border-accent-400/30 bg-accent-300/[0.06] p-2">
+          <p className="mb-1 text-2xs font-bold text-accent-300">📋 게임 프리셋 적용 — 제목·블라인드·스택·상금을 한 번에</p>
+          <select value="" onChange={(e) => { const p = gamePresets.find((x) => x.id === e.target.value); if (p) applyGamePreset(p); }} className="input w-full text-xs">
+            <option value="" disabled>프리셋 선택</option>
+            {gamePresets.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}{p.data.blindLevels?.length ? ` (${countLevels(p.data.blindLevels)}레벨)` : ' (블라인드 없음)'}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {/* 블라인드 구조 — 접기/펴기 */}
       <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
         <button type="button" onClick={() => setBldOpen((v) => !v)} className="w-full flex items-center justify-between py-0.5">
@@ -1185,18 +1206,6 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
         </button>
 
         {bldOpen && (<>
-        {/* 게임 프리셋에서 블라인드 불러오기 — 내 매장 > 게임 프리셋에 저장한 구조를 그대로 적용 */}
-        {gamePresets.some((p) => p.data.blindLevels?.length) && (
-          <div className="rounded-input border border-accent-400/30 bg-accent-300/[0.06] p-2">
-            <p className="mb-1 text-2xs font-bold text-accent-300">📋 게임 프리셋에서 블라인드 불러오기</p>
-            <select value="" onChange={(e) => { const p = gamePresets.find((x) => x.id === e.target.value); if (p) applyGamePreset(p); }} className="input w-full text-xs">
-              <option value="" disabled>프리셋 선택 — 블라인드 구조를 클락에 적용</option>
-              {gamePresets.filter((p) => p.data.blindLevels?.length).map((p) => (
-                <option key={p.id} value={p.id}>{p.name} ({countLevels(p.data.blindLevels!)}레벨)</option>
-              ))}
-            </select>
-          </div>
-        )}
         {/* 듀레이션 일괄 설정 */}
         <div className="rounded-input bg-surface-high border border-border-subtle p-2 space-y-1.5">
           <p className="text-2xs text-ink-muted">듀레이션 일괄 설정 · 레벨 길이(브레이크 제외)</p>
