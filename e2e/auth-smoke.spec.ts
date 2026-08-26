@@ -64,8 +64,10 @@ test.describe('인증 스모크', () => {
     await expect(page.getByRole('button', { name: '로그인' })).toHaveCount(0, { timeout: 20_000 });
     await dismissOverlays(page); // 온보딩 모달이 하단 탭바 클릭을 가로챈다
 
-    // 내 매장 탭(업주/직원/운영자만 노출) — 없으면 일반 계정이므로 통과로 간주
-    const myStore = page.getByRole('button', { name: /내 ?매장/ }).first();
+    // 내 매장 탭(업주/직원/운영자만 노출) — 없으면 일반 계정이므로 통과로 간주.
+    // ⚠ visible 필터 필수: PC 전용(lg:) 내비에도 같은 라벨이 있어 .first()가 숨은 쪽을 잡으면
+    //   클릭이 무한 대기한다(자격증명 시크릿 설정 후 처음 실행되며 드러난 결함).
+    const myStore = page.getByRole('button', { name: /내 ?매장/ }).filter({ visible: true }).first();
     if (await myStore.count() === 0) {
       test.info().annotations.push({ type: 'note', description: '내 매장 탭 없음(일반 계정) — 장부/클락 스모크 생략' });
     } else {
@@ -100,9 +102,10 @@ test.describe('인증 스모크', () => {
     await dismissOverlays(page);
 
     for (const name of [/라이브|실시간/, /커뮤니티/, /장터/, /일정|탐색/]) {
-      const tab = page.getByRole('button', { name }).first();
+      // visible 필터 + 클릭 상한: 숨은 PC 내비 매치로 무한 대기하던 결함 교정(위와 동일)
+      const tab = page.getByRole('button', { name }).filter({ visible: true }).first();
       if (await tab.count()) {
-        await tab.click().catch(() => {});
+        await tab.click({ timeout: 10_000 }).catch(() => {});
         await page.waitForTimeout(1500);
         await expect(page.locator('#root')).not.toBeEmpty();
       }
