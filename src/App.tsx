@@ -169,7 +169,12 @@ const AppHeader = memo(function AppHeader({
     let raf = 0;
     const onScroll = () => {
       if (raf) return;
-      raf = requestAnimationFrame(() => { setShrunk(window.scrollY > 48); raf = 0; });
+      // MO-3: 높이 전환이 즉시가 되면서 단일 임계값(48)은 그 부근 미세 스크롤에서
+      // 축소↔복원이 덜덜 떨린다 → 히스테리시스 밴드(내릴 때 56 넘어야 축소, 올릴 때 40 밑이어야 복원)
+      raf = requestAnimationFrame(() => {
+        setShrunk((prev) => (prev ? window.scrollY > 40 : window.scrollY > 56));
+        raf = 0;
+      });
     };
     window.addEventListener('scroll', onScroll, { passive: true });
     onScroll();
@@ -201,7 +206,9 @@ const AppHeader = memo(function AppHeader({
     >
       {/* ── 단순화된 헤더: 좌(로고) / 우(알림+유저) — 모바일은 스크롤 시 축소 ── */}
       <div className={[
-        'flex items-center justify-between px-page-x transition-[height] duration-200 ease-out',
+        // [DS] MO-3: height 트랜지션 금지 — 200ms 동안 매 프레임 문서 전체 리레이아웃(+RO 연쇄 재측정)이
+        // 스크롤과 겹쳐 얀크의 주범이었다. 즉시 전환 = 리레이아웃 1회. (§20.5 #1 height 애니 금지)
+        'flex items-center justify-between px-page-x',
         shrunk ? 'h-11 md:h-header-h' : 'h-header-h',
       ].join(' ')}>
 
@@ -1278,31 +1285,45 @@ export default function App() {
   // (토큰 추정/-1rem 보정 대신 실측값을 사용해 모바일 sticky 겹침을 방지)
   useEffect(() => {
     const headerEl = document.querySelector('[data-stack-header]');
-    const update = () => {
+    // [DS] MO-3(B-2): RO 콜백에서 직접 측정+setProperty 하면
+    //   레이아웃 변경 → RO 발화 → 측정(강제 동기 레이아웃) → CSS 변수 쓰기 → 또 레이아웃 …
+    // 의 되먹임이 프레임마다 돌았다. rAF 로 한 프레임 1회로 코얼레스하고,
+    // 값이 실제로 변했을 때만 setProperty(같은 값 재기록도 스타일 무효화를 일으킨다).
+    // (헤더 height 트랜지션 제거로 축소는 이제 1회성 이벤트 — RO 는 폰트 로드·회전 등 안전판)
+    let raf = 0;
+    let last = '';
+    const measure = () => {
+      raf = 0;
       const tabbar = document.querySelector('[data-stack-tabbar]');
+      let next: string;
       // 데스크톱: 헤더 아래 sticky 탭바까지가 상단 스택 — 탭바 고정 하단 = 필터가 붙을 지점
       if (tabbar && tabbar.getBoundingClientRect().height > 0) {
         const stickyTop = parseFloat(getComputedStyle(tabbar).top) || 56;
-        const h = stickyTop + tabbar.getBoundingClientRect().height;
-        document.documentElement.style.setProperty('--stack-top', `${Math.round(h)}px`);
-        return;
-      }
-      // 모바일: 탭바가 숨겨져 있음 → 헤더의 '현재' 하단을 그대로 사용.
-      // 헤더는 스크롤 시 축소(h-header-h→h-11)되는데, --stack-top을 미축소 높이로 한 번만 재면
-      // 축소 후 헤더 하단과 검색바 sticky top 사이에 비침 띠(gap)가 생긴다.
-      // ResizeObserver로 헤더 높이 변화(축소 애니메이션 매 프레임 포함)를 추적해 검색바가 항상 헤더 바로 아래에 붙게 한다.
-      if (headerEl) {
-        document.documentElement.style.setProperty('--stack-top', `${Math.round(headerEl.getBoundingClientRect().bottom)}px`);
+        next = `${Math.round(stickyTop + tabbar.getBoundingClientRect().height)}px`;
+      } else if (headerEl) {
+        // 모바일: 탭바가 숨겨져 있음 → 헤더의 '현재' 하단을 그대로 사용.
+        // (미축소 높이로 한 번만 재면 축소 후 헤더 하단과 검색바 sticky top 사이에 비침 띠가 생긴다)
+        next = `${Math.round(headerEl.getBoundingClientRect().bottom)}px`;
       } else {
-        document.documentElement.style.setProperty('--stack-top', '97px');
+        next = '97px';
+      }
+      if (next !== last) {
+        last = next;
+        document.documentElement.style.setProperty('--stack-top', next);
       }
     };
-    update();
-    window.addEventListener('resize', update);
+    const schedule = () => { if (!raf) raf = requestAnimationFrame(measure); };
+    measure();
+    window.addEventListener('resize', schedule);
     let ro: ResizeObserver | undefined;
-    if (headerEl && 'ResizeObserver' in window) { ro = new ResizeObserver(update); ro.observe(headerEl); }
-    const t = setTimeout(update, 300); // 폰트/레이아웃 안정화 후 재측정
-    return () => { window.removeEventListener('resize', update); ro?.disconnect(); clearTimeout(t); };
+    if (headerEl && 'ResizeObserver' in window) { ro = new ResizeObserver(schedule); ro.observe(headerEl); }
+    const t = setTimeout(schedule, 300); // 폰트/레이아웃 안정화 후 재측정
+    return () => {
+      window.removeEventListener('resize', schedule);
+      ro?.disconnect();
+      if (raf) cancelAnimationFrame(raf);
+      clearTimeout(t);
+    };
   }, [activeTab]);
 
   // #13 커뮤니티 게시글·댓글 실시간 — 다른 사용자가 올린 글/댓글이 즉시 반영(알림/일정/장부와 동일 수준).
