@@ -30,7 +30,12 @@
 | 15 | PR #4 (`chore/backup-dependabot-tooling`) 머지 여부 | backup.yml + Dependabot 활성 | **스캐폴드(CLAUDE.md·.claude/)는 이미 main에 별도 커밋 완료(d8019fe)** → 머지는 CI 활성 목적만 | ⏳ |
 
 ## 참고 — 이미 해소된 것
-- ✅ Google 로그인: Supabase provider 라이브 검증 완료. PR #5 머지만 하면 버튼 노출
+- ✅ Google 로그인: PR #5 **머지·배포 완료**(2026-08-26 새벽, 6caee45) — 로그인 모달에 버튼 노출 중
 - ✅ R2 크레덴셜 5종: GitHub Secrets 설정 완료
 - ✅ CLAUDE.md + `.claude/` 스캐폴드: main 커밋 `d8019fe` (2026-08-26)
 - ✅ 마스터 계획서: `docs/plans/nuri-master-execution-plan.md` git 추적 시작
+
+## 2026-08-26 새벽 세션 종료 시점 추가 메모
+- 실행 큐(§18) 전 웨이브 완료: MO-1~9(+8A/8B)·W5·W6·PR#5 — 배포 5회(46cab10→6caee45). 세부는 메모리 master-exec-progress 참조.
+- **신규 오너 결정 대기**: dependabot PR 7건(#6~#12) — 마이너 그룹(#9)·액션 범프는 저위험, **Tailwind v4(#11)·TypeScript 7(#10)·@types/node 26(#12)는 메이저라 CLAUDE.md 색 회귀 경고 있음. 자동 머지하지 않았음.**
+- 통신판매업 신고번호 발급되면 BusinessFooter BIZ_ROWS·LegalNotice·LegalDocsModal 3소스에 동시 추가(legalConsistency.test.ts 가 정합 감시).
