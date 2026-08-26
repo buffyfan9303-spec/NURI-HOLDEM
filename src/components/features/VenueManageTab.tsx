@@ -134,6 +134,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   // IA2 잔여(게임 선택 칩 바): 매장 수준 '현재 게임'의 정본은 기존 clockSeedGame(상태 신설 0) —
   // 클락은 seedGameSeq 배선으로 즉시 따라오고, 순위(이벤트명 기반)엔 아래 픽 신호만 얹는다.
   const [gameSel, setGameSel] = useState<GameSel | null>(null);
+  const [ledgerFollow, setLedgerFollow] = useState<{ seq: number; n: number } | null>(null); // 칩 픽 → 장부 보드 추종
   const gameSelN = useRef(0);
   const [visited, setVisited] = useState<PaneId[]>([]); // 방문 판(섹션/게임스텝, 최근순) — 마운트 유지(깜빡임 제거), 상한 초과 시 가장 오래된 판 정리(메모리 가드)
 
@@ -171,12 +172,14 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   }, [goStep]);
   // IA2 잔여 — 게임 선택 칩 바 픽: 오늘 게임(메인/사이드N) 전환을 게임 단계 상단 한 곳으로.
   // 클락은 기존 clockSeedGame 배선으로 따라오고(시드 날짜는 걷어내 '지금 그 게임 보기'로),
-  // 순위는 gameSel 신호로 오늘·해당 게임 칸으로 따라온다. 장부 보드의 게임 전환은 파일 밖
-  // (NuriPosLedger 내부 상태)이라 보드 상단 스위처가 그대로 담당한다(외부 제어 prop 없음).
+  // 순위는 gameSel 신호로, 장부 보드는 followGame 신호(NuriPosLedger 제어 prop)로
+  // 오늘·해당 게임에 함께 착지한다 — 칩 하나로 장부·클락·순위 3면이 같은 게임을 본다.
   const onPickGame = useCallback((seq: number, title?: string) => {
     setClockSeed(null);
     setClockSeedGame(seq);
-    setGameSel({ n: ++gameSelN.current, name: seq === MAIN_GAME_SEQ ? '' : ((title ?? '').trim() || `사이드${seq - 1}`) });
+    const n = ++gameSelN.current;
+    setGameSel({ n, name: seq === MAIN_GAME_SEQ ? '' : ((title ?? '').trim() || `사이드${seq - 1}`) });
+    setLedgerFollow({ seq, n });
   }, []);
   const onOpenClockFromLedger = useCallback((d: string, g: number) => {
     setClockSeed(d); setClockSeedGame(g); goStep('clock');
@@ -540,6 +543,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   onOpenLedger={ledgerOk ? onOpenLedgerFromPosters : undefined} />)}
                 {visited.includes('presets') && canPosters && box('presets', <PresetManagerM venueId={venueId} />)}
                 {visited.includes('ledger') && ledgerOk && box('ledger', <NuriPosLedgerM venueId={venueId} canManage={manageOk} active={tabActive && renderSection === 'game' && renderGameStep === 'ledger'} seed={ledgerSeed}
+                  followGame={ledgerFollow}
                   onMakeRankingDraft={onMakeRankingDraft}
                   onOpenClock={onOpenClockFromLedger}
                   onOpenStats={manageOk ? onOpenStatsCb : undefined} />)}
