@@ -2302,3 +2302,435 @@ browse 탭 카드 목록 **위**에 조건부 블록이 5개 쌓여 있고 전�
 - **큰 재작성 금지(CLAUDE.md 규약).** 라이브 서비스다. MO-1 → MO-2/MO-3 → 재측정 → MO-4/MO-5 → MO-6~9 순서로 작고 리뷰 가능한 커밋을 쌓고, 각 커밋마다 `npm run build` + `npm run test:e2e`를 돌려라. Tailwind v4 마이그레이션, 아이콘 라이브러리 설치, framer-motion 재도입은 전부 규약 위반이다.
 
 > ⚠️ **위 목록 마지막의 "framer-motion 재도입은 규약 위반" 문구는 §17 이전 기준이다.** 지금은 *금지*가 아니라 *권장하지 않음*(근거: 번들 +23%, 개별 트랜스폼 HW가속 미적용, 문제의 정체가 CLS라 라이브러리가 안 고침). 19.1의 재고 게이트를 통과하면 도입 가능하다.
+
+---
+
+# 20. 🎨 디자인 레퍼런스 + 한국 UX (2026-08-26)
+> ⚠️ **먼저 — 참조 출처 정정이 있습니다(사장님 확인 필요).** 아래 20.1을 반드시 읽을 것.
+> ⚠️ 이 조사는 **제약 해제 이전**에 착수돼 결론부 일부에 "framer-motion 금지" 등 옛 문구가 남아 있다.
+> **§17(제약 해제)과 §19(모션 결정)가 우선**한다. 여기서 취할 것은 **디자인 레퍼런스·한국 UX·추가 얀크 발견** 3가지다.
+> 모션 카드(MO-*)는 §19와 영역이 겹친다 — **§19의 MO 번호가 정본**이고, 아래 20.5의 *추가* 발견만 §19에 합류시킨다.
+
+## 20.1 참조 사이트 검증 결과 (⚠️ 출처 정정 포함)
+
+**출처 정정 먼저 — 사장님께 반드시 알려야 할 것.** dverse.ai 실제 도메인은 **라이트 테마의 AI 리서치 랩 기업 사이트**(Fraunces + DM Sans, 민트 #00E5C3, 흰 배경)다. 사장님이 보신 "AI Video Generation & Social" 다크 UI는 **Anas Ahmed Khan의 Dribbble 컨셉 2편(#27280269, #27271742)**이다. 명시 시스템은 Navy #1A1A2E + Electric Purple #8B2FC9 + Cyan #00D4FF 글래스모피즘 — **팔레트를 그대로 가져오면 안 된다.** 네온은 Linear 인디고 accent-300과 정면 충돌하고 포커 정체성(펠트·칩·밤)과도 안 맞는다. 원칙: **구조만 훔치고 컬러는 NURI 팔레트로 치환.**
+
+**4종 역할 분담 (전부 실물 확인 완료):**
+
+- **Modelfy 3D → 매장 PC 대시보드.** 1440px 실측 3층 헤더(전폭 dismissible 공지 스트립 / sticky 다크 네비 / eyebrow pill + 액센트 H1 64px)를 `StoreDashboard.tsx`에 이식. 액센트(#C5F955)를 로고·CTA·H1·활성 인디케이터에만 쓰고 나머지는 무채색 — 이 **단일 액센트 규칙**이 진짜 배울 점이다(#5E6AD2로 치환). 2단 탭 계층, 네비 인라인 배지('Pricing' 옆 SAVE 50%) → NURI는 '정산 D-2', '승인 3'.
+- **Nightingale → 커뮤니티 포스트 + KPI 타일.** 6블록 문법. 핵심은 **이름+시간 2줄 스택**으로 이름 길이와 무관하게 카드 높이가 고정된다는 것 — 현재 `CommunityTab.tsx`는 이름+TitleChip+TierBadge가 한 줄에 밀집해 줄바꿈된다. 메트릭 스트립은 라벨 없이 아이콘+tabular-nums만 좌측, 실제 액션('저장')만 우측. **'장식 차트 글리프' 메트릭 타일**은 차트 라이브러리 금지 제약을 정면 통과한다(상단 그래픽이 실데이터가 아닌 텍스처 — `Icon.tsx PATHS`에 bars/wave/dots/ring 4개 추가로 끝).
+- **Osler → 프로필 + GTO 결과.** '라벨 위 / 값 카드' 필드 행(읽기 전용인데 입력창 형태 → 수정 어포던스 + 값 길이 무관 고정 높이) → `ProfileModal.tsx`. 세로 체크리스트 타임라인(완료✓/현재●/미래○ + 연결선, 순수 CSS `::before`) → 매장 온보딩·티어 진행. 반원 게이지 + **구간 레전드** → 에퀴티%·ICM 압박, `stroke-dasharray` 한 줄. **인라인 에러 배너**(토스트 아님, CTA 바로 위, 자리 미리 확보)는 사장님 불만과 직결 — 토스트는 등장/퇴장이 상단을 밀어 또 하나의 '움직임'을 만든다.
+- **Dverse 컨셉 → 채팅·알림.** 타임스탬프를 버블 **안** 텍스트 오른쪽에 인라인('Hi! 10:32 am') → 별도 시간 행이 안 생겨 높이가 예측 가능하고 렌더 노드도 준다. 입력창 위 **고정 이모지 스트립**(롱프레스→팝오버 2단계 제거, 높이 항상 일정 → 시프트 0). 알림 행은 아바타 우하단 겹침 타입 배지 + 볼드 유저명 + 우측 40px 썸네일, 모든 행 높이 동일 → `NotificationPanel.tsx` 전면 재설계.
+
+**컨셉 인접 최고 사례 (불만에 더 직접적):**
+- **FotMob** — 5열 대칭 스코어 행. 팀 이름 길이와 무관하게 스코어가 항상 중앙, 값이 갱신돼도 좌우 무엇도 안 움직임. **이번 조사 최대 발견.** `LiveGamesTab.tsx` LiveCard와 `ScheduleTable.tsx`에 `grid-cols-[3rem_1fr_auto_1fr]`로 이식하면 라이브 갱신 시 시프트가 구조적으로 0. 날짜 네비게이터 + 필터 칩 행 + 접기 가능 그룹 헤더 3단 컨트롤도 browse에 그대로.
+- **Dice.fm** — 이미지 아래 항상 정확히 4줄. 순서와 줄 수가 절대 안 바뀜.
+- **Luma** — 시간 우선 행 + **정적 컬러 텍스트 LIVE 라벨**(애니메이션 없음). 현재 `LiveGamesTab`의 `animate-pulse` 점은 스크롤 중 지속 리페인트를 유발하는 얀크 후보.
+- **Linear** — 토큰 실측 확보(#0f1011 / #2a2e33 보더 / `inset 0 0 12px rgba(0,0,0,.2)` / active `scale(0.97)` / 포커스링 `0 0 0 3px rgba(94,106,210,.3)`). 그리고 **"스켈레톤은 들어올 데이터와 같은 모양이어야 한다"** — 이게 (b)(c) 불만의 정답이다.
+- **Raycast/Geist** — 다크 배경 letter-spacing +0.2~0.4px 보정(다크 전용 NURI에 저위험 즉효), 큰 숫자·헤딩은 반대로 음수 자간. **폰트는 바꾸지 않는다.**
+
+**채택 불가:** Dverse 네온 팔레트(정체성 충돌), Nightingale/Osler 폰트 교체(Manrope/Nunito — Pretendard 유지), 쿠팡식 다크패턴(홀덤은 1회 적발로 신뢰 전체가 탄다), 네이버 앱식 광고 오염.
+
+## 20.2 디자인 방향 확정
+
+**"조용한 운영 도구" — Linear의 밀도 + iOS의 물리 + 토스의 절제.**
+
+NURI는 랜딩이 아니라 하루에 열 번 여는 운영 도구다. 방향은 "더 예쁘게"가 아니라 **"움직임을 줄이고, 남은 움직임의 물리를 하나로 통일한다"**이다. "APK 같다"는 요구는 화려함이 아니라 (1) 손가락을 따라오는 즉각성, (2) 값이 바뀌어도 아무것도 밀리지 않는 안정감, (3) 화면이 바뀔 때 공간 인지가 끊기지 않는 연속성 — 이 셋이다.
+
+**① 표면(Surface).** Linear 벤치마크가 사실상 NURI의 상위 호환 명세서다(accent가 정확히 동일한 #5E6AD2). 다크 elevation은 드롭섀도가 아니라 `1px 보더 + inset 섀도` — 드롭섀도는 스크롤 중 리페인트 비용이 크고 다크에서 탁해진다. 라디우스 4/6/12/9999, 스페이싱 4px 배수 7단계, 순수 검정 금지. `--surface-*` CSS 변수 구조가 이미 있으므로 토큰 감사만 하면 된다. "시각 노이즈 감소"를 1번 원칙으로 — LiveCard 하나에 배지 5개(LIVE/등록가능/포맷/GTD/거리)는 그 자체가 잔더처럼 읽힌다.
+
+**② 구조(Layout).** 대칭 그리드는 CLS를 "고치는" 게 아니라 "불가능하게" 만든다. FotMob의 5열 대칭 행(`[고정폭 상태][우측정렬][고정폭 중앙][좌측정렬]`)이 최대 수확이다. LiveCard의 `flex justify-between`은 문자열 폭 변화가 곧 이웃 밀어내기다. Dice.fm식 **고정 4줄 카드**(대회명 → 요일+날짜+시각 → 매장명+거리 → 바인/GTD, 빈 값도 `—`로 자리 유지)와 Luma식 **시간 우선 행**(muted 시각 위, 볼드 제목 아래)을 일정/라이브에 일괄 적용. 유저는 일정 앱을 시간으로 스캔한다.
+
+**③ 모션.** 이미 정답에 가까우므로 **새로 만들지 말고 정밀화한다.** `--ease`(0.32,0.72,0,1)·`--spring` linear()·View Transitions 마스킹·`contain-intrinsic-size: auto Npx`·scroll-driven `@supports` 이중 가드·passive 리스너 100% — 상위 5% 설계다. **설계를 바꿔야 하는 항목은 0개**이고, 전부 구현 디테일(레이아웃 속성을 애니메이트하는 4곳, 페인트를 무한 반복하는 2곳, 높이 계약이 없는 3곳)이다.
+
+**유저(모바일 99%) vs 매장(PC 99%).** 모바일의 성공 지표는 "3초 안에 오늘 갈 대회를 정하기"다(체류 시간 아님 — 한국 스마트폰 이용시간은 전년 대비 17분 감소). 상단 3장에서 결정이 끝나게 하고, 비로그인으로 탐색·라이브·매장상세·GTO까지 전면 개방한다. PC 대시보드는 Modelfy 3층 헤더(전폭 공지 스트립 / sticky 매장 네비 / eyebrow 상태 pill + accent 큰 숫자)와 2단 탭 계층(SegmentedTabs=무엇을 보는가 / UnderlineTabs=어떤 뷰로)으로 밀도를 올린다 — 둘 다 기존 atoms로 코드 추가 없이 가능.
+
+**신뢰 레이어가 NURI만의 해자다.** QR 체크인 데이터가 있으므로 후기 카드마다 `[QR 방문 인증]·[단골 3회+]·[대회 참가자]` 배지를 붙일 수 있다(카카오맵이 2025.10에 뒤늦게 도입한 것). 별점 1축을 5축(딜러 실력/칩·테이블/구조 진행/청결·좌석/운영 투명성)으로 분해하면 "전부 5점" 어뷰징이 축 분포에서 튄다.
+
+## 20.3 한국 유저 UX 규칙 (실행 규칙)
+
+**1.** **성능 기준선은 감성이 아니라 기기다.** 'APK처럼 부드럽게'를 갤럭시 A17 5G(Exynos 1330, Speedometer 3 = 7.07 runs/min ≈ Pixel 5 프리셋 + CPU 2× 스로틀)로 번역한다. Playwright(`npm run test:e2e`)에 CPU 4× 스로틀 + 375px 프로파일을 추가하고 ①browse 첫 진입 ②browse→live 탭 전환 ③커뮤니티 무한스크롤 3구간의 long frame(blockingDuration>100ms)과 CLS를 회귀 게이트로 건다. '뚝뚝 끊긴다'가 그 순간 숫자가 된다.
+
+**2.** **한국 모바일의 30%는 Chrome이 아니다** — 웨일 15.57% + 삼성인터넷 14.41%(Statcounter 2026-07, Chrome 40.7 / Safari 27.4). 둘 다 Chromium이지만 엔진 버전이 뒤처진다. `src/index.css:315-324`의 `@supports (animation-timeline: view())` 이중 가드는 정확한 판단이므로 유지하고, **같은 가드를 View Transitions(297-304)에도 적용**해 미지원 시 '깨짐'이 아니라 '즉시 표시'로 폴백되게 보장한다. `InstallBanner.tsx`도 Chrome 전용 `beforeinstallprompt`만 믿으면 안드로이드 유저의 1/3에게 '앱처럼 쓰기' 문이 닫힌다 — 삼성인터넷·웨일 UA 분기로 각자의 '홈 화면에 추가' 경로 안내.
+
+**3.** **토스 3원칙 중 NURI가 가장 덜 지키는 건 'Value First, Cost Later'다.** 로그인 게이트와 본인인증 게이트(`VerifyGateSheet.tsx`)가 2단으로 겹쳐 있다. 재배치: 일정 탐색·라이브 조회·매장 상세·GTO 도구는 **비로그인 전면 개방** → 로그인은 예약/글쓰기/체크인에서만 → 본인인증은 돈과 좌석이 걸린 곳(대회 예약·장터 등록)에만. 소셜 로그인은 카카오 첫 번째·최대 크기(한국인 이용률 98.9%), 네이버 두 번째, 이메일 대체 경로 병행. 국내 사례 기준 가입 전환 +20~40% 구간의 레버다.
+
+**4.** **모션은 대기 시간의 서사이지 장식이 아니다(토스 Rally 원칙).** 배치 규칙 3줄: ①데이터가 이미 있는 경로(탭 재방문·keep-alive)에는 애니메이션 0 — `src/index.css:283` 무효화 규칙이 담당 ②애니메이션은 Supabase 왕복이 **확정된** 구간(CheckinModal 제출, PostFormModal 등록, NuriPosLedger 정산 커밋)에만 ③그 3곳의 표준 진입점을 `StatefulActionButton`으로 통일해 '기다림은 버튼이 말해준다'로 고정. NURI는 이미 `--ease` + SlidingPill FLIP + View Transitions라는 자체 Rally를 갖고 있다 — 새 곡선을 도입하지 말 것.
+
+**5.** **푸시는 주 1회만으로도 6%를 잃는다.** `NotificationPanel.tsx`에 카테고리 토글 3분류: [내 예약/체크인] · [내 글의 댓글] · [매장 공지·이벤트]. 세 번째는 **기본 OFF + '광고' 표기**(국내 법상 광고성 앱 푸시는 수신 동의 + 표기 필수). 유저 1인당 주간 발송 상한을 두고 초과분은 인앱 배지로 강등. 결정적으로 `AnnouncePanel.tsx` 발송 전에 운영주에게 **'이 알림은 N명에게 갑니다 · 이번 주 N번째'** 카운터를 보여줘 매장이 스스로 절제하게 만든다 — 유저 이탈을 막는 가장 싼 방법이 사장님 쪽 UX다.
+
+**6.** **뒤로가기는 한국 유저 최대 불만이고, NURI는 이미 답(`src/lib/backstack.ts` 단일 popstate + LIFO + 테스트)을 갖고 있다 — 남은 건 코드가 아니라 감사다.** `src/components/features/` 아래 모달/시트 20여 개(ScheduleDetailModal, PostDetailModal, ListingDetailModal, ProfileModal, CheckinModal, VerifyGateSheet, GlobalSearchModal, HandGtoModal …)를 전수로 훑어 등록 누락과 '중첩 모달 위 모달에서 뒤로가기 한 번 = 하나만 닫힘'을 확인한다. 그리고 **최상위 탭 전환을 히스토리에 쌓을지 명시적으로 결정**할 것 — 한국 유저는 커뮤니티→일정 이동 후 뒤로가기로 복귀를 기대하는 비율이 높다.
+
+**7.** **후기 신뢰는 '정책 안내 한 줄'이 아니라 '카드마다 보이는 인증 마크'다.** `VenueReviews.tsx:143`은 방문 인증제를 목록 상단 안내문으로만 알린다. 카드 단위로 내려 각 후기에 `[QR 방문 인증]` + '2026.08.12 방문'을 붙이고, 체크인 데이터로 `[단골 3회+]` `[대회 참가자]` 등급형 인증까지 파생시킨다(카카오맵이 2025.10에 뒤늦게 도입한 것을 NURI는 더 강하게 할 수 있다). 여기에 무신사식 **5축 분해**(딜러 실력 / 칩·테이블 상태 / 구조 진행 / 청결·좌석 / 운영 투명성)를 얹으면 '전부 5점' 어뷰징이 축 분포에서 튄다. 경쟁 앱이 복제 못 하는 해자.
+
+**8.** **신규 유저의 1차 장벽은 재미가 아니라 '여기 안전한가 / 나 뭐부터 하지'다.** 국내 홀덤펍은 참가비 기반 순수 토너먼트만 합법이고, 초행자 가이드는 '현금 환전 매장은 피하라'고 조언한다. `VenuePage.tsx`에 **신분증 → 참가비 → 칩 수령 → 닉네임 → 착석 5스텝**을 상설 블록으로 넣고 바인 범위·복장·주차·연령 제한을 정형 필드로. `VenueVerificationCard.tsx`의 인증은 '사업자 등록 확인' '참가비 토너먼트 운영' 같은 **합법성 신호**로 번역해 5축 중 '운영 투명성'과 연결. 카피에서 **'환전·현금·수익' 계열 단어는 전면 배제**하고 '참가비·상금·이용권'으로 통일 — `MarketplaceTab`·`VoucherManageModal` 전수 점검.
+
+**9.** **카피는 두 레지스터로 갈라 명시한다.** ①돈·법·기록이 걸린 곳은 무미건조하게 — `NuriPosLedger` 정산, `StaffPayroll`, 예약 취소/노쇼, `LegalDocsModal`, `ConsentGateModal`. ②탐색·커뮤니티·도구는 포커 은유로 위트 허용 — `EmptyState.tsx`, 로딩 문구, `LevelUpCelebration`, `WeeklyBestStrip`. 배민의 교훈은 '위트가 즉흥이 아니라 가이드로 관리되는 시스템'이고 명확성이 먼저라는 것. 빈 화면과 에러 카드는 한국 유저가 앱의 '사람 냄새'를 판단하는 지점이므로 카피 예산을 거기 집중하고, 정산 화면에는 절대 농담을 넣지 않는다.
+
+**10.** **타이포 위생은 이미 상위권(Pretendard 스택 + `word-break:keep-all` + `text-wrap:balance/pretty`) — 남은 갭은 셋뿐이다.** ①모바일 본문 16px 하한(KRDS 17px, 네이버 연구 16~19px) — `ScheduleTable` 셀·`CommunityTab` 목록·`StoreDashboard` 라벨에 15px 이하가 없는지 훑기 ②본문 line-height 1.5~1.55 명시(현재 Tailwind 기본 의존) ③`NuriPosLedger`·`LedgerStatsPanel`에 `tabular-nums` — 장부에서 숫자가 좌우로 떨리는 건 한국 운영주가 즉시 '허술하다'고 판단하는 지점이다. 다크 배경 letter-spacing +0.2~0.4px 보정은 저위험 즉효.
+
+**11.** **엄지 도달 영역과 하단 고정 CTA.** 하단 탭 5칸은 적정이고 safe-area도 처리돼 있다 — 점검할 것은 ①각 탭 히트 영역이 실제 44×44px 이상인지(`index.css`의 `.hit` 유틸이 있으니 부착 여부만) ②모달 닫기가 우상단에만 있으면 큰 화면에서 도달 불가 → `Modal.tsx`에 하단 스와이프-다운 또는 하단 보조 '닫기' 표준화 ③`ScheduleDetailModal`/`ListingDetailModal`의 주 CTA는 스크롤 무관 하단 고정(야놀자 패턴, `App.tsx:2736`의 탭바 회피 오프셋 토큰 재사용). 되돌릴 수 없는 지점(예약 확정·체크인)에만 확인 스텝 1개, 파괴적 액션에는 기존 `HoldToConfirmButton`.
+
+## 20.4 모션 스펙 보강 (§19.2와 병합해 읽을 것)
+
+**NURI 모션 헌법 v1 — 앱 전체의 유일한 물리 법칙. 새 곡선·새 duration·새 애니메이트 속성을 추가하려면 이 문서를 먼저 고쳐야 한다.**
+
+═══ **§1. 이징 — 곡선은 4개뿐** ═══
+`src/index.css:18-19`의 `--ease: cubic-bezier(0.32,0.72,0,1)`(iOS 시트 계열)와 `--spring: linear(0, 0.36 8%, … 1)`는 **정확한 선택이다. 값을 바꾸지 말 것.** 유일하게 빠진 건 **방향성** — 진입은 감속, 퇴장은 가속이어야 물리적으로 읽힌다.
+```css
+:root {
+  --ease:     cubic-bezier(0.32, 0.72, 0, 1);  /* 기본 = 감속. 진입·이동·정착 */
+  --ease-out: cubic-bezier(0.3, 0, 1, 1);      /* 퇴장 = 가속. 화면 밖으로 나가는 것만 */
+  --spring:   linear(0, 0.36 8%, …, 1);         /* 시트 복귀·미세 바운스. 기존 값 그대로 */
+}
+```
+- **`--ease` = 기본값.** 판단이 서지 않으면 무조건 이것.
+- **`--ease-out` = 오직 "화면 밖으로 사라지는 것"에만.** VT push-out, 시트 닫힘, 토스트 퇴장.
+- **`--spring` = 손가락이 놓인 뒤 돌아오는 것에만.** 시트 스냅백, 프레스 복귀.
+- 예외 2개(기존 주석대로): 무한 루프(spin/pulse), shake.
+- **금지:** `cubic-bezier(0.34,1.56,0.64,1)` 같은 오버슈트 곡선 신규 도입 금지(오버슈트가 필요하면 `--spring` 하나만). Material 3 값(0.2,0,0,1 계열)도 도입 금지 — 곡선 세트가 둘이 되는 순간 화면마다 물리가 달라진다.
+
+═══ **§2. Duration — 4단계 고정, 중간값 발명 금지** ═══
+`--dur-fast: 0.15s`(색·보더·프레스) / `--dur-base: 0.20s`(등장·퇴장·칩 전환·VT 탭) / `--dur-panel: 0.26s`(시트·오버레이) / `--dur-loop: 1.5s`(루프 전용). 현재 값 유지, **변경 2건:**
+1. `sheet-up` 0.32s → **0.26s(`--dur-panel`)** (tailwind.config.js:167 — 0.32는 근거 없는 고아 값).
+2. VT 방향 푸시 **0.3s → 0.2s**(index.css:301-304). 지금 292-296의 0.18s 선언을 301-304가 덮어써서 실제로는 0.3s이고, **그 300ms 동안 문서 전체가 inert다** — 탭 연타나 전환 직후 스크롤이 통째로 먹힌다. 탭바 알약은 이미 낙관적 활성(App.tsx:558-561)이라 '눌린 느낌'은 손상되지 않는다.
+
+duration은 위 4개 CSS 변수로만 참조한다(`duration-200` 유틸 신규 사용 금지 — 값이 토큰과 분리돼 표류한다).
+**이동 거리:** 진입 넛지 8px, VT 푸시 **32px → 20px**, 시트 100%. 그 외 임의 px 금지. **거리를 줄이는 것이 duration을 줄이는 것보다 '빠르다'고 지각된다.**
+
+═══ **§3. 애니메이트 허용 속성 — 화이트리스트** ═══
+**✅ 허용:** `transform`(translate/scale/rotate), `opacity`, `color`/`background-color`/`border-color`, `box-shadow`(포커스링만 — 스크롤되는 리스트 카드에는 금지).
+**❌ 레이아웃 유발 금지:** `height` `width` `top` `left` `right` `bottom` `margin-*` `padding-*` `gap` `font-size` `line-height`.
+**❌ 페인트 폭탄 금지:** `background-position` `background-size` `filter` `backdrop-filter` `clip-path` `mask-position`.
+**❌ `transition-all` 금지** (현재 19곳). 나중에 누가 height를 추가하면 자동으로 레이아웃 애니메이션이 된다 — 컴포지터 원칙을 우연에 맡기는 셈. `transition-colors` 또는 `transition-[transform,opacity]`로 좁힌다.
+
+**현재 위반 4건(실측 확인):**
+1. `App.tsx:200-202` — sticky 헤더 `transition-[height] duration-200`(59.5px↔46.75px). `sticky top-0`이라 12프레임 내내 **문서 전체** 재레이아웃.
+2. `App.tsx:2143-2145` — 당겨서새로고침 인디케이터가 흐름 안에서 `transition-[height]` + 인라인 `style={{height: ptr}}`.
+3. `SlidingPill.tsx:54,57-63` — 이름이 FLIP인데 실제로는 `width`/`height`를 px로 쓰고 트랜지션. 사용처 16곳.
+4. `index.css:234-243` + `tailwind.config.js:158-161,171` — `.skeleton`이 `background-position`을 `1.5s linear infinite`로 무한 애니메이트. 로딩 중 **모든 행에서 동시에** 매 프레임 페인트.
+
+**대체 처방:**
+- **height → transform.** 헤더는 높이 고정 + 내부 요소만 `scale`/`opacity`, 또는 `transition-none`으로 즉시 전환. PTR 인디케이터는 `position:absolute` + `translateY(ptr)`(흐름에서 제거).
+- **SlidingPill → 진짜 FLIP.** 알약 실제 크기를 기준값 하나로 고정하고 `transform: translate(x,y) scale(sx,sy)`만 전환(`sx = target.offsetWidth / baseWidth`). 배경이 단색이라 scale 왜곡이 시각적으로 문제되지 않고, 라운드 코너만 `border-radius` 역보정하거나 pill 안에 고정 라디우스 자식을 둔다.
+- **shimmer → `::after` translateX** (부모 `position:relative; overflow:hidden`). **더 싼 권장안: 그냥 `animate-pulse`(opacity만)로 교체** — `index.html` 정적 셸과 `App.tsx:2936`이 이미 pulse를 쓰고 있어 시각 언어까지 통일된다.
+- **backdrop-filter는 "떠 있는 동안만".** 모달 딤·라이트박스는 OK(21곳 중 대부분). **금지 대상은 스크롤 콘텐츠 위에 상시 떠 있는 것** — `App.tsx:576` 하단 탭바(`bg-surface-mid/95 backdrop-blur-md`), `index.html:115` 셸 동일 마크업, `App.tsx:2737` ScrollTopButton. 배경이 이미 95% 불투명이라 blur가 보이는 픽셀은 5%뿐 — **시각 손실 거의 0으로 제거 가능**하고 중저가 안드로이드에서 스크롤 프레임 예산의 큰 몫을 되찾는다.
+
+═══ **§4. CLS 0 보장법 — "고치는" 게 아니라 "불가능하게" 만든다** ═══
+**원칙: 데이터는 비동기여도 레이아웃은 비동기여선 안 된다.**
+
+**§4.1 높이 계약 단일 토큰 (핵심).** 지금 행 높이가 **세 곳에 따로** 적혀 있다: `contain-intrinsic-size`(index.css:462-464) / 스켈레톤 `rowClassName` / 실제 행 마크업. 어긋날 수밖에 없는 구조다.
+```css
+:root { --row-h-sm: 44px; --row-h-md: 83px; --row-h-lg: 106px; }
+@media (min-width: 640px) { :root { --row-h-md: 63px; } }
+.cv-row-sm { content-visibility: auto; contain-intrinsic-size: auto var(--row-h-sm); }
+/* md, lg 동일 */
+```
+실측 대비 현재 선언은 전부 틀렸다 — sm 41 vs 43.5 / lg 120 vs 106.2 / md 72 vs 83(모바일)·62.8(데스크톱, **방향이 반대**라 미디어쿼리 필수). 그리고 **스켈레톤 높이와 실제 행 `min-height`가 같은 변수를 보게 한다.** `auto` 키워드는 반드시 유지 — '첫 렌더 후 실제 크기를 기억'하게 만드는 2026 정답이고 대부분의 예제가 이걸 빼먹어 스크롤바가 널뛴다. 다만 자가 보정은 두 번째 스크롤부터이고 사용자가 느끼는 건 **첫 스크롤**이므로 초기값 정확도가 중요하다(50건 기준 현재 오차 커뮤니티 −690px / 장터 +550px).
+
+**§4.2 스켈레톤은 "회색 박스"가 아니라 "실제 컴포넌트의 높이 계약"이다.** 구현 규칙 — **실제 행 마크업을 복사해 텍스트 노드만 skeleton div로 치환한다. 새로 그리지 않는다.**
+- `App.tsx:2930-2940` 그리드 스켈레톤: `aspect-[3/4]`만 있고 본문이 없어 **카드당 +142.7px**(실측 218.8 → 361.5), 10장이면 **+713px**. `p-2.5 gap-1.5` + h-4 두 줄 + h-3 한 줄 + 구분선 + h-4 한 줄 추가.
+- 리스트 모드는 반대로 `h-24`(102px) vs 실제 87px → 행당 −15px 위로 튄다.
+- `MarketplaceTab.tsx:208-221`: 스켈레톤에 `<BoardHeader />`(228)가 통째로 빠져 데스크톱에서 헤더 행이 나중에 삽입된다. 행 높이도 64.8 vs 83.
+- `LiveGamesTab.tsx:147`의 `h-40`은 실제 카드와 대조한 흔적이 없다 — 실측 후 교체.
+- **깜빡임 방지:** `useDelayedFlag(200)` 훅으로 `loaded===false && elapsed>200ms`일 때만 렌더(80ms만 떴다 사라지는 스켈레톤은 그 자체가 시프트다).
+
+**§4.3 정적 셸 ↔ React 첫 화면 정합 (밀림 1순위).** `index.html:110-112` 셸은 헤더 바로 아래 y≈74px에서 카드를 시작하는데, React browse는 `IntegratedSearchBar`(검색 입력 + 21일 날짜 레일 + 필터 칩) + 뷰모드/총N개 행이 먼저 와서 **실측 308px**을 차지한다(`.contents` y=61→369, 리스트 top=431). 셸에 이 308px이 하나도 없다 — **데이터 지연과 무관하게 매 콜드 로드에서 100% 발생하는 300px 낙하다.** 셸에 검색 input 박스 + 2.6rem 날짜 셀 21칸 레일의 '자리'만 정적으로 복제하면 대부분 흡수된다. **셸 클래스는 소스에 이미 존재하는 문자열만** 써야 Tailwind 퍼지에 안전하다.
+
+**§4.4 비동기 조건부 블록 삽입 규칙.** browse 상단에 예약 높이 없는 비동기 블록이 **13개**(App.tsx:2033/2055/2062/2076/2123/2124/2133/2202/2232/2237/2260/2277/2290). 서로 다른 라운드트립으로 도착하므로 목록이 **계단식으로 여러 번** 내려간다.
+- **규칙 A(최선·가장 쌈):** 결과가 오기 전에는 아무 자리도 만들지 않고, 결과가 오면 **목록 아래**에 붙인다. 위쪽 스택은 절대 변하지 않는다.
+- **규칙 B:** 배너류(pushNudge·미인증·설치·직원초대)는 목록 위가 아니라 아래 또는 오버레이로.
+- **규칙 C(차선):** 로딩 중 `min-height`를 실제 높이로 잡고 '없음' 확정 시 0으로 **접는다**(접히는 건 '밀려 내려옴'이 아니다).
+- 참고: 2238/2261의 `animate-fade-in`은 `index.css:283`에 의해 `.tab-pane` 안에서 무효화되어 페이드도 없이 '툭' 삽입된다.
+
+**§4.5 숫자 지터 — `tabular-nums` 전수 강제.** 값이 변하는 모든 숫자 요소: 클락 mmss, 엔트리/생존/탈락 4칸, 매출·정산, 랭킹, 좋아요 카운트(215→216에서 옆이 밀리면 안 됨). `.num` 유틸 하나(tabular-nums + tracking 보정)로 통일. 본문 문단에는 쓰지 않는다.
+
+**§4.6 대칭 그리드(FotMob) — 구조로 시프트를 0으로.** `flex justify-between`은 문자열 폭 변화 = 이웃 밀어내기다. LiveCard/ScheduleTable을 `grid-cols-[3rem_1fr_auto_1fr]` 같은 **고정 트랙**으로 바꾸고 시간 칸에 `min-w`를 못 박는다. mmss가 9:59→10:00이 되어도, '등록가능'↔'등록마감'으로 배지가 바뀌어도 좌우 무엇도 안 움직인다.
+
+**§4.7 이미지 — 여기는 원인이 아니다(반증 완료).** PosterArea `aspect-[3/4] w-full`(ScheduleCard.tsx:336) / 리스트 `w-16 h-16 shrink-0`(200) / `Avatar.tsx:17` 인라인 box / `VenueThumb.tsx:27` 고정 h/w — 부모가 전부 박스를 확정해 실질 CLS는 0이다. **손대지 말 것.** 새 이미지 자리를 만들 때만 '부모에 aspect 또는 고정 h/w' 규칙 유지.
+
+**§4.8 폰트 — 숨은 폭탄.** `index.css:104`와 `tailwind.config.js:72`가 Pretendard Variable을 지정하지만 `@font-face`도 `<link>`도 woff2도 npm 패키지도 **전부 0건**이다 — 전 사용자가 `system-ui`로 보고 있다. **지금 CDN `<link>`만 추가하면 없던 FOUT/CLS가 새로 생기고 위 실측값이 전부 무효가 된다.** self-host 시 필수 3종: ①`font-display: optional` ②폴백 `@font-face`에 `size-adjust`(Safari가 ascent/descent-override 미지원이라 이게 주력) ③도입 직후 `--row-h-*` 3개와 스켈레톤 높이 전량 재측정.
+
+═══ **§5. 화면 전환 — 부드러움의 단일 최대 레버** ═══
+**§5.1 현 구조는 정답. 유지.** `viewTransition.ts`가 이전 화면 스냅샷을 고정하고 그 **뒤에서** `flushSync(setActiveTab)`(App.tsx:690) + `useLayoutEffect`의 `scrollTo({behavior:'instant'})`(704)로 무거운 커밋을 동기 완료한다 — 중간 과정이 화면에 노출될 수 없는 구조. 재작업 금지.
+
+**§5.2 방향성 이징 (4줄):**
+```css
+html[data-vt-dir='forward']::view-transition-old(root){ animation: vt-push-out-l .2s var(--ease-out) both }
+html[data-vt-dir='forward']::view-transition-new(root){ animation: vt-push-in-r  .2s var(--ease)     both }
+html[data-vt-dir='back']::view-transition-old(root)   { animation: vt-push-out-r .2s var(--ease-out) both }
+html[data-vt-dir='back']::view-transition-new(root)   { animation: vt-push-in-l  .2s var(--ease)     both }
+/* 키프레임 이동 거리 32px → 20px */
+```
+
+**§5.3 요소 모핑 — 웹을 APK로 보이게 하는 단일 최대 변경.** 일정 카드 포스터 `<img>`와 `ScheduleDetailModal` 포스터 `<img>` 양쪽에 `style={{ viewTransitionName: \`poster-${schedule.id}\` }}` → **카드가 그 자리에서 커져 모달이 된다**(iOS 문법). 배선은 `App.tsx:1573`이 이미 `withViewTransition`으로 감싸고 있어 끝나 있다.
+**⚠ 치명적 제약: `view-transition-name`은 문서 내 유일해야 한다.** 목록의 모든 카드에 상시 부여하면 중복이 되어 **전환 자체가 취소된다**(모션이 아예 안 나온다). 열리는 대상 id를 state로 들고 그 카드에만 조건부로 부여, 닫히면 즉시 제거.
+
+**§5.4 폴백 가드.** 한국 모바일 30%가 웨일+삼성인터넷이다. `viewTransition.ts`가 `startViewTransition` 존재 체크 + `prefers-reduced-motion` 체크를 하므로 JS는 완비 — 미지원에서 '깨짐'이 아니라 '즉시 표시'로 폴백되는지 실기 확인.
+
+═══ **§6. 스크롤** ═══
+- **`html { scroll-behavior: smooth }`(index.css:361) 전역 제거.** 앵커뿐 아니라 `scrollIntoView`/`scrollTo`/포커스 이동/스크롤 복원까지 전부 애니메이트한다 — **사장님의 '주르륵'과 표현이 정확히 겹친다.** 부드럽게 할 호출부에서만 `behavior:'smooth'` 명시(ChatPane.tsx:61, NuriPosLedger.tsx:786이 이미 그렇게 함). `App.tsx:704`의 `'instant'`는 그대로.
+- **`overscroll-behavior: contain`을 모든 내부 스크롤 컨테이너에.** 현재 body(362)와 설치형(538)에만 있다. 모달 본문·ChatPane·VenuePage 메시지 목록·가로 레일에 없으면 끝에서 계속 스와이프할 때 뒤 페이지가 딸려 움직여 '앱이 아니다'라는 인상을 준다.
+- **가로 레일에 scroll-snap.** `.scroll-fade-r`(index.css:228)에 `scroll-snap-type: x proximity` + 아이템 `scroll-snap-align: start`. JS 0줄.
+- **`-webkit-overflow-scrolling: touch` 추가 금지**(현대 브라우저 기본).
+- **스크롤 리스너 단일화.** 4개 중 rAF 스로틀은 1개뿐(App.tsx:171 ✅). 미스로틀 3개: `App.tsx:535-547`, `App.tsx:2725-2729`, `IntegratedSearchBar.tsx:263-271`. `useScrollY` 훅 하나가 rAF로 프레임당 1회 읽고 브로드캐스트. 자동숨김·맨위로는 IntersectionObserver로 대체하면 리스너 자체가 사라진다.
+- **레이아웃 스래싱 제거.** `App.tsx:1244-1266`의 RO가 `getBoundingClientRect()` **읽기 → `--stack-top` setProperty 쓰기**를 교대한다. `--stack-top`은 **루트 커스텀 프로퍼티**라 이를 소비하는 sticky `top` 전부(App.tsx:2150, 2862, AdminTab.tsx:708, VenueManageTab.tsx:302)의 스타일이 매 프레임 무효화된다. 처방: ①헤더 height 트랜지션 제거 ②RO 콜백을 rAF로 감싸 프레임당 1회 + 값이 실제 변했을 때만 `setProperty` ③최선은 `--stack-top`을 상수화하고 헤더 하단에 그 높이의 배경을 깔아 RO 자체 제거.
+
+═══ **§7. keep-alive 규약 — 이미 뚫려 있는 구멍 1개** ═══
+`.tab-pane`은 `display:none`이라 안의 CSS 진입 애니메이션이 재방문마다 처음부터 재생된다. `index.css:283` 무효화 목록이 이를 막는데 — **`.anim-pop`(index.css:436-437)이 빠져 있다.** `IntegratedSearchBar.tsx:144`의 선택된 날짜 알약이 상시 `anim-pop`을 달고 있어 탭 재방문마다 팝이 재생된다 — CLAUDE.md가 명시적으로 경고한 그 현상.
+**규칙:** 새 진입 애니메이션 클래스는 **두 목록에 동시 등록** — `index.css:283`의 `:is(...)` + `index.css:384-385`의 reduced-motion. 체크리스트를 index.css 주석에 남긴다.
+부수: `.animate-scale-in`은 tailwind.config.js 어디에도 정의가 없는 **죽은 셀렉터**다(정의는 badge-pulse/slide-up/sheet-up/slide-down/fade-in/fade-out/shimmer 7개뿐).
+`.reveal`(scroll-driven)은 진행도 기반이라 재방문 시 재생되지 않는다 — **지금은 등록 불필요.** 단 `animation-timeline` 없는 CSS 폴백을 추가하는 순간 등록 필수.
+
+═══ **§8. will-change — 3곳뿐, 확산 금지** ═══
+`press-spring`(index.css:467-469) / `SlidingPill.tsx:85`(FLIP이라 정당) / `ImageLightbox.tsx:124`(핀치줌 중이라 정당) — **현재 3곳 전부 OK, 유지.** 스타일시트에 박힌 will-change는 브라우저가 별도 컴포지터 레이어를 오래 유지하게 만들어 메모리를 먹는다(Firefox는 '문서 표면적 ×3' 예산 초과 시 무시). **'모든 버튼'에 확산하면 레이어 폭발.** 프레스 값은 Linear에 맞춰 정렬: 버튼 `scale(0.97)`, 아이콘 `scale(0.88)`, 카드 `scale(0.985)` — `--press`/`--press-icon` 토큰이 이미 있으니 값만 확인.
+
+═══ **§9. 예산 & 계측 — 추측을 끝낸다** ═══
+계측이 **0건**이다(PerformanceObserver·web-vitals·LoAF 전무, monitoring.ts는 Sentry 에러만). 라이브러리 0줄·25줄이면 된다. **§3의 위반들을 고치기 전에 먼저 켜서 순위를 확인하는 게 정석이다.**
+```js
+new PerformanceObserver(l => {
+  for (const e of l.getEntries())
+    if (e.blockingDuration > 100 && e.firstUIEventTimestamp > 0) report('perf', e);
+}).observe({ type: 'long-animation-frame', buffered: true });
+```
+LoAF(Chrome 123+)는 Long Tasks와 달리 **스타일/레이아웃/페인트까지 포함한 프레임 전체**를 잡고, `scripts[].sourceFunctionName`으로 어느 함수가 몇 ms 먹었는지, `forcedStyleAndLayoutDuration`으로 **강제 동기 레이아웃 범인**을 필드에서 알려준다. `layout-shift`(value>0.05 && !hadRecentInput)와 `event`(duration>200) 옵저버를 같은 함수에 넣고 `main.tsx:24` 옆에서 호출. 결과는 기존 `src/lib/errorLog.ts` 파이프에 'perf' 종류로 → 새 인프라 0.
+
+**목표 게이트:** INP p75 ≤ 200ms(필드) / CLS ≤ 0.05(browse 콜드 로드 — 권장 0.1보다 엄격, 일정 앱은 첫 화면이 전부) / long frame blockingDuration > 100ms 0건(CPU 4×, 375px) / 탭 전환 문서 inert ≤ 200ms.
+**진단 순서 고정:** ①LoAF로 상위 프레임의 `sourceFunctionName` 수집 → ②DevTools Performance를 **CPU 4× + Fast 4G**로 녹화 → ③빨간 프레임에서 Layout/Recalculate Style 지배적인지(레이아웃 애니메이션·스래싱) Paint/Rasterize 지배적인지(shimmer·backdrop-blur) 구분 → ④Rendering 패널의 'Paint flashing' + 'Layer borders'로 눈 확인. **테스트 기기는 반드시 중저가 안드로이드.**
+
+═══ **§10. 접근성 — 협상 불가** ═══
+`prefers-reduced-motion: reduce`에서 진입/로딩 애니메이션은 duration 단축이 아니라 **`animation: none`**(index.css:384-385가 정확히 그렇게 함 — 유지). 새 클래스는 §7의 두 목록에 동시 등록. `scroll-behavior: auto !important`도 유지.
+
+## 20.5 §19에 합류시킬 추가 얀크 발견
+
+**1.** **[얀크 #1 · 최우선] sticky 헤더 `transition-[height]` + 그 헤더를 관찰하는 ResizeObserver의 read→write 교대.** `src/App.tsx:200-202`가 `transition-[height] duration-200 ease-out` + `shrunk ? 'h-11 md:h-header-h' : 'h-header-h'`(실측: transitionProperty='height', 0.2s, 59.5px↔46.75px). 헤더는 `sticky top-0`(App.tsx:189-197)이라 height 애니메이션 12프레임 내내 **그 아래 문서 전체가 재레이아웃**된다(합성 불가 속성). 여기에 `App.tsx:1265-1266`이 같은 헤더에 ResizeObserver를 걸고, 콜백(1244-1262)이 `headerEl.getBoundingClientRect().bottom`을 **읽은 뒤** `document.documentElement.style.setProperty('--stack-top', …)`를 **쓴다** — 매 프레임 read→write 교대(layout thrash). 게다가 `--stack-top`은 루트 커스텀 프로퍼티라 이를 소비하는 sticky `top` 전부(`App.tsx:2150` 검색바, `App.tsx:2862` 사이드레일, `AdminTab.tsx:708`, `VenueManageTab.tsx:302`)의 스타일이 매 프레임 무효화된다. 트리거는 `App.tsx:169` `setShrunk(window.scrollY > 48)` — **스크롤을 시작하자마자.** '스크롤 시작하면 뚝'의 1순위 후보.
+
+**2.** **[얀크 #2] 당겨서-새로고침이 touchmove마다 App(2984줄, useState 69개) 전체를 리렌더하고 흐름 안에서 height를 애니메이트한다.** `src/App.tsx:1151-1156` `onPtrMove`가 매 touchmove에서 `window.scrollY`를 읽고 `setPtr(Math.min(110, dy*0.5))` — 모든 탭이 keep-alive로 동시 마운트된 상태에서 App 전체 element 트리 생성·diff가 매 프레임 발생(ScheduleCard는 memo라 스킵되지만 diff 비용은 그대로). 동시에 `App.tsx:2143-2145`의 인디케이터가 `ptr !== 0 &&` 조건부라 **흐름에 삽입/제거**되고 `transition-[height]` + 인라인 `style={{height: ptr}}`로 최대 110px까지 매 프레임 레이아웃을 강제한다 — 목록이 손가락을 따라 출렁인다. 첫 화면 최상단 스와이프에서 가장 잘 재현되는 지점.
+
+**3.** **[얀크 #3] `.skeleton`이 `background-position`을 무한 애니메이트 = 페인트 폭탄.** `src/index.css:234-243`(`background-size: 200% 100%` + `@apply animate-shimmer`)와 `tailwind.config.js:158-161`(keyframes shimmer: backgroundPosition '-200% center'→'200% center'), `:171`(`shimmer 1.5s linear infinite`). `background-position`은 컴포지터 속성이 아니라 **매 프레임 해당 엘리먼트를 다시 페인트**한다. 로딩 화면에는 스켈레톤이 3~6개(그 이상도) 동시에 있고 데이터를 기다리는 내내 돌아가므로, 정확히 사장님이 말한 '멈췄다가' 구간에서 메인 스레드/래스터가 갈린다.
+
+**4.** **[얀크 #4] 하단 탭바 `backdrop-blur-md`가 스크롤 콘텐츠 위 `fixed`로 상시 떠 있다.** `src/App.tsx:576` `bg-surface-mid/95 shadow-dialog backdrop-blur-md`. `backdrop-filter`는 '뒤에 있는 픽셀'을 읽어 블러하므로 뒤 콘텐츠가 스크롤로 바뀌면 **매 프레임 재샘플링·블러·합성**한다 — 중저가 안드로이드 GPU에서 스크롤 얀크 최상위 원인. 배경이 이미 95% 불투명이라 blur가 실제로 보이는 픽셀은 5%뿐이고, `App.tsx:575`의 그라데이션 커튼이 위쪽 비침을 담당하고 있어 **blur의 역할이 사실상 없다**. `index.html:115` 정적 셸에도 동일 마크업이 박혀 부팅 직후부터 적용되고, `App.tsx:2737` ScrollTopButton도 같은 문제(fixed + 스크롤 중 노출). 참고: 앱 전체 backdrop-blur 21곳 중 나머지(Modal.tsx:235/238, ImageLightbox 등)는 '떠 있는 동안만'이라 문제 없다.
+
+**5.** **[얀크 #5] `SlidingPill`이 이름과 달리 FLIP이 아니라 레이아웃 애니메이션이다.** `src/components/atoms/SlidingPill.tsx:54`가 `transition: transform …, width …, height …, opacity …`를 설정하고 `:57-63`에서 `pill.style.width/height`를 px로 직접 쓴다. width/height는 합성 불가라 세그먼트 전환마다 `--dur-base`(200ms) 동안 매 프레임 레이아웃+페인트가 발생하고, `:85`의 `will-change: transform`은 transform만 커버하므로 레이어가 매 프레임 재래스터된다. 파일 상단 주석은 '레이아웃 속성 대신 translate+width 전환'이라 적었지만 실제로는 레이아웃 속성을 쓰고 있다. 추가로 `:69-73`의 RO 콜백이 `target.offsetWidth/offsetLeft/offsetHeight`(강제 레이아웃 읽기) 후 style을 쓴다. **사용처 16곳**(SegmentedTabs, UnderlineTabs, ViewModeToggle, IntegratedSearchBar, MarketplaceTab, VenuePage, TierLeaderboard, LedgerStatsPanel, CustomerAnalytics, ScheduleDetailModal) — 탭을 누를 때마다 발생한다.
+
+**6.** **[얀크 #6] 전역 `html { scroll-behavior: smooth }`가 모든 프로그래매틱 스크롤을 애니메이션으로 만든다.** `src/index.css:361`. 앵커 이동뿐 아니라 `element.scrollIntoView()` / `window.scrollTo()` / 포커스 이동 / 스크롤 복원까지 전부 수백 ms 동안 흘러내린다 — **사장님의 '주르륵'과 표현이 정확히 겹친다.** `App.tsx:704`의 탭 스크롤 복원은 `behavior:'instant'`를 명시해 올바르게 회피하고 있지만(잘 되어 있음), `IntegratedSearchBar.tsx:117-121`의 DateTab `scrollIntoView({behavior:'smooth', block:'nearest'})`는 날짜 레일이 sticky 헤더에 일부 가려져 있으면 **페이지 세로 스크롤까지 유발**한다 — 날짜를 탭했는데 목록이 함께 움직이면 '멋대로 스크롤된다'로 지각된다. `GroupPage.tsx:271`도 같은 계열(`VenuePage.tsx:726` 주석은 이미 이 문제를 인지하고 회피해 둔 선례).
+
+**7.** **[얀크 #7] View Transition이 실제로는 0.3s이고 그동안 문서가 inert다.** `src/index.css:292-296`이 `::view-transition-old/new(root)`를 0.18s로 잡아 뒀는데 `:301-304`의 방향성 규칙이 `animation: vt-push-out-l 0.3s var(--ease) both`로 **덮어쓴다.** VT가 도는 동안 문서는 입력을 받지 않으므로 탭 연타나 전환 직후 즉시 스크롤이 300ms 통째로 먹힌다 — '반응이 늦다'로 지각된다. 이동 거리도 32px로 과하다. (커밋 경로 자체는 `viewTransition.ts:14-24` → `App.tsx:690-694 flushSync` → `:703-705 useLayoutEffect scrollTo instant`로 올바른 구조이고 이 부분은 잘 되어 있다.)
+
+**8.** **[CLS #1 · 최우선] 정적 앱 셸과 React browse 화면의 레이아웃이 아예 다르다 — 매 콜드 로드에서 화면 전체가 ~308px 낙하.** `index.html:110-112` 셸은 `<header>` 바로 아래 `px-page-x pt-3`에 h-24 스켈레톤 6개를 놓아 첫 카드가 y≈74px에서 시작한다. 그런데 `src/App.tsx:2136-2199`의 browse는 `<main className="tab-pane">` 안에 ①`IntegratedSearchBar`(검색 입력 + 21일 날짜 레일 + GTD/MTT/대회 칩 + 등급 칩 + 지역 칩) ②뷰모드/팔로우/총N개 행(2152-2198)을 먼저 렌더한다. 브라우저 실측: `main.tab-pane` 첫 자식 `.contents`가 y=61→369, 즉 **308px**. 리스트 컨테이너 top=431px. 셸에는 이 308px에 해당하는 것이 하나도 없다 — **데이터 지연과 무관하게 JS 파싱이 끝나 React가 마운트되는 순간 100% 재현되는 300px 낙하다.**
+
+**9.** **[CLS #2] 그리드 스켈레톤에 본문 블록이 없다 — 카드당 +142.7px, 10장이면 +713px이 쏟아진다.** `src/App.tsx:2930-2940` `ScheduleSkeletonGrid`는 `grid ? 'aspect-[3/4]' : 'h-24'`로 포스터 비율 박스 **하나만** 그린다. 실제 GridCard(`ScheduleCard.tsx:319-409`)는 포스터 아래에 `p-2.5 gap-1.5` 본문(제목 2줄 line-clamp + 매장/별점 행 + 구분선 + PrizeBanner + duration/바인 행)이 붙는다. 375px 2열 실측: 스켈레톤 218.8px vs 실제 361.5px. list 모드는 반대로 어긋난다 — `h-24`(102px) vs 실제 ListCard 87px = **행당 −15px**(6행이면 90px 위로 튄다).
+
+**10.** **[CLS #3] `contain-intrinsic-size` 3개 값이 전부 실측과 어긋난다 — 첫 스크롤에서 스크롤바가 널뛴다.** `src/index.css:462-464`. 실측(375px, content-visibility 강제 해제 후): `.cv-row-sm` 선언 41px vs 실측 **43.5px** / `.cv-row-lg` 선언 120px vs 실측 **106.2px** / `.cv-row-md` 선언 72px vs 모바일 실측 **83px**·6컬럼 데스크톱 **62.8px**(방향이 반대). `auto` 키워드 덕에 한 번 렌더된 행은 실측치를 기억하지만 **사용자가 느끼는 건 첫 스크롤**이다. 50건 목록이면 커뮤니티 피드는 690px 줄고 장터는 550px 늘어난다. 적용처: `CommunityTab.tsx:615`(sm), `:657`(lg), `MarketplaceTab.tsx:372`(md). **index.css 3줄이면 끝나는 최저비용·즉효 수정.**
+
+**11.** **[CLS #4] browse 상단 비동기 블록 13개가 예약 높이 없이 각자 다른 라운드트립으로 도착해 목록을 계단식으로 밀어낸다.** `<main>` 위: offline(`App.tsx:2033`), updateReady(2055), pushNudge(2062), 미인증 배너(2076 — `user.verified`는 auth 왕복 뒤 확정), PendingApprovalBanner(2123), InstallBanner(2124), StaffInviteBanner(2133). `<main>` 안: 이벤트배너(2202), WeeklyBestStrip(2232 — 래퍼는 항상 13px, `kings.length===0`이면 null이라 도착 시 ~40px 증가), 오늘예약(2237 ← `getMyReservations` 1477), 바인요청(2260 ← `getMyBuyinRequestsToday` 873), 최근매장(2277 ← `myVisitedVenues` 1203), 공지(2290, 실측 50px). 한 번에 밀리는 게 아니라 **여러 번 나눠** 내려간다. 게다가 2238/2261의 `animate-fade-in`은 `index.css:283`에 의해 `.tab-pane` 안에서 무효화되므로 페이드도 없이 '툭' 삽입된다.
+
+**12.** **[CLS #5] 장터·커뮤니티 스켈레톤 높이 불일치, 그리고 장터는 `BoardHeader`가 통째로 빠져 있다.** `MarketplaceTab.tsx:208-221` 스켈레톤 행 실측 64.8px vs 실제 ListingRow(365-452) 모바일 83px → 7행이면 128px 낙하. 더 큰 문제는 스켈레톤 블록에 `<BoardHeader />`(`:228`, `hidden sm:grid px-3 py-2 border-b`)가 없어 데이터 도착 시 데스크톱에서 **헤더 행 하나가 통째로 삽입**된다. `CommunityTab.tsx:1163-1173` 채팅 스켈레톤 실측 46.6px도 실제 메시지 행과 어긋나고, `LiveGamesTab.tsx:147`의 `SkeletonList rows={3} rowClassName="h-40"`(170px)은 실제 라이브 카드와 대조한 흔적이 없다. 근본 원인은 `atoms/Skeleton.tsx:12-21` `SkeletonList`가 `space-y-1.5` + 호출부가 임의로 넘기는 `rowClassName` 조합이라 실제 리스트(border-b 1px, 다른 gap)와 **우연히 맞을 뿐**이라는 것.
+
+**13.** **[리렌더] window scroll 리스너 4개 중 3개가 rAF 스로틀 없이 매 이벤트 레이아웃을 읽는다.** rAF 가드는 `App.tsx:165-174`(헤더 shrink) 하나뿐. ①`App.tsx:535-547` MobileTabBar 자동숨김 — 매 scroll에서 `window.scrollY` 읽고 `setHidden` 호출 ②`App.tsx:2725-2729` ScrollTopButton — `setShow(window.scrollY > 600)`, 스로틀 0, 게다가 `:2730` `if (!show) return null`이라 임계점 통과 시 `animate-fade-in` 요소가 삽입/제거 ③`IntegratedSearchBar.tsx:263-271` — 매 scroll에서 `classList.toggle` 2회. 네 개 모두 `{passive:true}`는 올바르게 지정되어 있다(이 부분은 잘 되어 있음).
+
+**14.** **[리렌더] `LiveGamesTab`이 1초마다 전체 리렌더 + 매 렌더 O(게임수×매장수) 파생 연산.** `src/components/features/LiveGamesTab.tsx:73-75`가 active일 때 1초마다 `setTick`으로 탭 전체를 리렌더한다(active 게이트 자체는 잘 되어 있음). 문제는 `:77-95`의 파생이 useMemo 없이 매번 다시 도는 것 — `nameOf`/`regionOf`가 게임마다 `venues.find()` 선형 탐색, `:81-85`에서 `new Set` + `.filter` + `.sort`, `:92-95`에서 `[...games].sort`. 라이브 탭을 스크롤하는 중 1초마다 이 작업 + 전체 리렌더가 끼어들어 **규칙적인 프레임 드롭**을 만든다. 같은 패턴: `StoreDashboard.tsx:253-257`, `NuriPosLedger.tsx:1305,1326`, `clock/TournamentClock.tsx:375`(250ms).
+
+**15.** **[롱태스크] 에퀴티 엔진이 `setTimeout(0)`으로 메인스레드에서 돈다 — Worker가 아니다.** `src/components/features/HandReplayer.tsx:86-109`가 무거운 루프를 `window.setTimeout(cb, 0)`으로 미룬다. 주석은 '무거운 루프는 렌더 밖으로'라고 되어 있지만 `setTimeout(0)`은 현재 프레임만 양보할 뿐 실행 자체는 메인스레드 롱태스크다. `gto/equityEngine.ts:145-187` 기준 프리플랍 2500 iterations × best7 2회, 플랍 잔여 2장 전수 990 조합 × 2회, 턴 44 × 2회. 마일스톤 최대 4개 → `computeEquity` 4회 + `computeOuts` 2회가 커뮤니티 글 상세에서 리플레이가 열릴 때 **한 덩어리로** 실행되어 그 순간 화면이 멈춘다. (대조군 — 문제 아님: `tools/RangeMatrix13.tsx` 13×13은 테이블 룩업이라 가볍고, `NuriPosLedger.tsx:400-460` 장부 집계는 useMemo로 잘 감싸여 있다.)
+
+**16.** **[keep-alive 규약 위반] `.anim-pop`이 `index.css:283` 무효화 목록에서 빠져 탭 재방문마다 날짜 알약이 팝한다.** `IntegratedSearchBar.tsx:144`의 선택된 날짜 알약이 `anim-pop`(`index.css:436-437`, `nuri-pop` = scale(0.6)→1, both)을 상시 렌더한다. 이 요소는 browse `.tab-pane` 안에 있고 `.fixed`가 아닌데, 무효화 목록은 `.animate-fade-in, .animate-slide-up, .animate-slide-down, .animate-scale-in` 4개뿐이다. 다른 탭에 갔다 돌아올 때마다(`display:none`→`block`) 선택된 날짜 칸이 작았다 커진다 — **CLAUDE.md가 명시적으로 경고한 '탭 재방문 깜빡임' 그 자체.** 부수 확인: 목록의 `.animate-scale-in`은 `tailwind.config.js:127-172`의 keyframes/animation 어디에도 정의가 없는 **죽은 셀렉터**다(정의는 badge-pulse/slide-up/sheet-up/slide-down/fade-in/fade-out/shimmer 7개뿐).
+
+**17.** **[숨은 폭탄 · 지금은 원인 아님] 웹폰트를 아예 받지 않고 있다 — self-host하는 순간 위 실측값이 전부 무효가 된다.** `src/index.css:104`와 `tailwind.config.js:72`가 `'Pretendard Variable','Pretendard',system-ui`를 지정하지만 `@font-face`도, `index.html`의 `<link>`도, `public/*.woff2`도, npm 패키지도 **전부 0건**이다(확인 완료). 즉 Pretendard가 로컬 설치된 기기가 아니면 전 사용자가 `system-ui`(안드로이드 Roboto/Noto Sans KR, 윈도우 맑은 고딕, iOS Apple SD Gothic Neo)로 보고 있고, 이 감사에서 잰 모든 높이(cv-row 43.5/106.2/83, ListCard 87, GridCard 361.5, 검색바 스택 308)는 **현재 폰트 기준**이다. 지금 CDN `<link>`만 추가하면 **없던 FOUT/CLS가 새로 생긴다.** `App.tsx:1267`의 `setTimeout(update, 300) // 폰트/레이아웃 안정화 후 재측정` 주석이 이미 이 위험을 전제하고 있다.
+
+**18.** **[계측 부재 — 위 모든 항목의 순위를 못 매기는 이유] PerformanceObserver·web-vitals·LoAF가 코드에 0건이다.** `src/lib/monitoring.ts`는 Sentry 에러만 다룬다. 원인을 추측으로 잡고 있다는 뜻이고, 라이브러리 없이 25줄(`long-animation-frame` + `layout-shift` + `event` 옵저버)이면 `blockingDuration`·`scripts[].sourceFunctionName`·`forcedStyleAndLayoutDuration`으로 어느 함수가 몇 ms 먹었는지 필드에서 그대로 나온다.
+
+## 20.6 디자인·모션 실행 카드 (§19 MO와 병합 대상)
+
+### [DS] MO-1 — 모션 계측 게이트 — LoAF·CLS·INP 25줄 + Playwright CPU 4× 회귀 잠금
+ effort **S** · impact **high**
+
+- **앵커:** src/lib/monitoring.ts (현재 Sentry 에러 전용 — initMotionTelemetry 신규) / src/main.tsx:24 (initMonitoring 호출부 옆) / src/lib/errorLog.ts (기존 관리자 파이프 재사용, 'perf' 종류 추가) / playwright.config.ts + tests/e2e/*.spec.ts (npm run test:e2e)
+- **접근:** 라이브러리 0줄. 순수 PerformanceObserver 3개를 한 함수에. ①`long-animation-frame`(Chrome 123+): `blockingDuration > 100 && firstUIEventTimestamp > 0`인 프레임만 수집하고 `scripts[]`의 `sourceURL`/`sourceFunctionName`/`invoker`/`forcedStyleAndLayoutDuration`을 함께 보낸다(forced가 크면 그게 곧 레이아웃 스래싱 범인 — MO-3의 `--stack-top` RO가 여기 잡힐 것으로 예상). ②`layout-shift`: `value > 0.05 && !hadRecentInput`. ③`event`: `duration > 200`(INP 후보). `buffered: true`로 초기 프레임까지 포착. 전송은 새 인프라 없이 기존 errorLog에 'perf'로. 미지원 브라우저(웨일/삼성인터넷 구버전)는 try/catch로 조용히 스킵.
+
+동시에 Playwright에 성능 프로파일 프로젝트 추가: CDP `Emulation.setCPUThrottlingRate(4)` + 375×812(갤럭시 A17 ≈ Pixel 5 + CPU 2×이므로 4×는 안전 마진). 측정 동선 3개 — ①browse 콜드 진입 ②browse→live 탭 전환 ③커뮤니티 무한스크롤 20행. 각 동선에서 long frame 개수와 누적 CLS를 assert.
+
+**이 카드를 먼저 끝낸다.** MO-3~MO-5의 얀크 후보 순위를 추측이 아니라 필드 데이터로 확정해야 나머지 작업의 효과를 증명할 수 있다.
+- **DoD:** ① `npm run build` 통과, 번들 증가 < 1KB(라이브러리 0). ② 로컬 dev에서 browse 스크롤 시 long-animation-frame 엔트리가 실제로 수집되고 `scripts[].sourceFunctionName`이 채워진다. ③ Playwright 성능 스펙 3개가 baseline 수치를 기록하고 통과(첫 실행은 baseline 확립, 임계값은 현 상태 +10% 여유로 설정 후 MO-2~MO-9 진행하며 조인다). ④ 관리자 화면에서 'perf' 종류 로그 조회. ⑤ 미지원 브라우저에서 콘솔 에러 0(try/catch 확인).
+
+### [DS] MO-2 — 모션 헌법 확립 — 방향성 이징 토큰 + 허용속성 화이트리스트 + transition-all 19곳 정리 + 전역 smooth 제거 + .anim-pop 규약 봉합
+ effort **S** · impact **high**
+
+- **앵커:** src/index.css:18-24 (토큰 블록 — --ease-out 추가) / src/index.css:361 (html scroll-behavior:smooth 제거) / src/index.css:283-285 (.tab-pane 무효화 :is() 목록 — .anim-pop 추가, 죽은 .animate-scale-in 정리) / src/index.css:384-385 (prefers-reduced-motion 목록 — .anim-pop 동시 등록) / src/components/features/IntegratedSearchBar.tsx:144 (anim-pop 사용처), :117-121 (DateTab scrollIntoView) / src/components/features/GroupPage.tsx:271 / tailwind.config.js:167 (sheet-up 0.32s → --dur-panel) / grep -rn 'transition-all' src --include=*.tsx (19건) / CLAUDE.md
+- **접근:** **전부 저위험·기계적. 시각 변화 거의 0.**
+
+① `--ease-out: cubic-bezier(0.3,0,1,1)` 토큰 추가. 값 자체는 아직 아무 데도 안 붙인다(MO-8이 소비). 기존 `--ease`/`--spring`은 **절대 손대지 않는다** — 이미 iOS 계열 정답이고 '곡선이 여러 개면 삐걱거린다'는 기존 주석의 판단이 옳다.
+
+② `html { scroll-behavior: smooth }` 전역 제거(index.css:361). 의도적으로 부드럽게 할 호출부에서만 `behavior:'smooth'` 명시 — `ChatPane.tsx:61`, `NuriPosLedger.tsx:786`은 이미 그렇게 하고 있어 영향 없다. `App.tsx:704`의 `'instant'`는 그대로. **부수 이득: VT 마스킹이 전역 smooth에 의해 무력화될 여지가 사라진다.**
+
+③ `IntegratedSearchBar.tsx:117-121` DateTab의 `scrollIntoView({block:'nearest'})`를 컨테이너 내부 스크롤로 교체 — `railEl.scrollTo({left: tab.offsetLeft - railEl.clientWidth/2 + tab.offsetWidth/2, behavior:'smooth'})`. 세로 스크롤이 물리적으로 발생하지 않는다(`VenuePage.tsx:726`의 회피 선례와 동일 처방). `GroupPage.tsx:271`도 정리.
+
+④ `.anim-pop`을 두 목록에 **동시 등록** — `index.css:283`의 `:is(...)`와 `:384-385`의 reduced-motion. CLAUDE.md 규약이 실제로 뚫려 있는 유일한 지점이다. 죽은 `.animate-scale-in`은 목록에서 제거(tailwind에 정의 없음). 그리고 **index.css 주석에 체크리스트를 남긴다**: '새 진입 애니 클래스 = 283 목록 + 384 목록 동시 등록'.
+
+⑤ `transition-all` 19곳 → `transition-colors` 또는 `transition-[transform,opacity]`. 기존 '바이낸스식 절제 — 색 전환만'(index.css:369) 방침과 방향 일치.
+
+⑥ `sheet-up` 0.32s → 0.26s(`--dur-panel`) 정렬. 0.32는 토큰 밖 고아 값.
+
+⑦ CLAUDE.md에 §모션 헌법 요약(이징 4개 / duration 4단계 / 허용속성 화이트리스트 / will-change 3곳 고정 / 새 클래스 이중 등록) 추가.
+- **DoD:** ① `npm run build` + `npm run test:e2e` 통과. ② 커뮤니티→일정 탭 왕복 시 선택된 날짜 알약이 더 이상 팝하지 않는다(수동 확인, 재현 100%였던 것). ③ 날짜 칩을 탭했을 때 페이지 세로 스크롤이 발생하지 않는다. ④ `grep -rn 'transition-all' src --include=*.tsx` 결과 0건. ⑤ `grep -n 'scroll-behavior' src/index.css`에 html 전역 선언 없음. ⑥ 시각 회귀 없음 — 시트 열림/닫힘, 탭 전환, 버튼 hover가 눈으로 동일. ⑦ CLAUDE.md에 모션 헌법 섹션 존재.
+
+### [DS] MO-3 — [얀크 1순위] sticky 헤더 height 트랜지션 제거 + --stack-top ResizeObserver 스래싱 해소
+ effort **M** · impact **high**
+
+- **앵커:** src/App.tsx:200-202 (transition-[height] duration-200 + h-11/h-header-h) / src/App.tsx:189-197 (sticky top-0) / src/App.tsx:164-174 (setShrunk(scrollY>48), rAF 가드는 이미 있음) / src/App.tsx:1242-1269 (--stack-top ResizeObserver, read→write 교대, :1267 폰트 재측정 타이머) / 소비처 4곳: src/App.tsx:2150(검색바 stickyTop), src/App.tsx:2862(사이드레일), src/components/features/AdminTab.tsx:708, src/components/features/VenueManageTab.tsx:302
+- **접근:** 두 문제가 서로를 증폭시키므로 함께 고친다.
+
+**A. 헤더 height 애니메이션 제거 (위험도 순).**
+- **A-1(권장·최소):** `transition-[height]`를 **`transition-none`**으로 바꿔 축소를 즉시 전환. 스크롤 중 헤더가 순간 줄어드는 건 오히려 네이티브 감각에 가깝고(iOS large title도 스크롤 진행도에 즉시 종속), 200ms 문서 전체 재레이아웃이 통째로 사라진다.
+- **A-2(최선·더 예쁨):** 헤더 높이를 `h-header-h`로 **고정**하고 내부 로고/타이틀만 `transform: scale()` + `opacity`로 줄인다. 레이아웃이 0이 되고 애니메이션도 유지된다. 다만 '포스터 화면이 넓어진다'는 원래 의도를 잃으므로, `md:` 이상에서만 A-2, 모바일은 A-1 분기도 가능.
+- **A-1로 먼저 배포해 LoAF 수치를 확인**하고, 시각적으로 아쉬우면 A-2로 승급.
+
+**B. `--stack-top` RO 스래싱 해소 (택1).**
+- **B-1(권장·근본):** A 적용으로 헤더 높이가 **두 값 중 하나로만 즉시** 바뀌면, `--stack-top`을 `shrunk` 상태에 따른 **상수 2개**로 계산해 `setProperty`를 스크롤당 최대 1회로 만든다. 헤더 하단에 그 높이의 배경을 깔면 비침 띠도 안 생겨 **RO를 완전히 제거**할 수 있다.
+- **B-2(안전판):** RO를 남기되 콜백을 `requestAnimationFrame`으로 감싸 프레임당 1회로 합치고, 계산값이 이전과 같으면 `setProperty`를 **건너뛴다**(`if (v !== lastRef.current)`). 루트 커스텀 프로퍼티 쓰기 = 문서 전체 스타일 무효화이므로 이 가드만으로도 대부분 회수된다.
+- `App.tsx:1267`의 `setTimeout(update, 300)`은 폰트 self-host 전까지 무해하므로 유지.
+
+**⚠ 회귀 주의:** `--stack-top`은 4곳의 sticky `top`이 소비한다. 축소 전/후 모두에서 검색바가 헤더에 겹치지도, 사이에 비침 띠가 생기지도 않는지 모바일 실기기에서 확인해야 한다(이 RO가 애초에 그 버그를 고치려고 들어온 코드다 — 주석 1254-1256 참조).
+- **DoD:** ① `npm run build` + `npm run test:e2e` 통과. ② CPU 4× + 375px에서 browse 최상단→아래 스크롤 시 LoAF `blockingDuration > 100ms` 프레임 0건(MO-1 계측으로 before/after 비교, before 수치를 기록해 개선폭을 남긴다). ③ DevTools Performance 녹화에서 스크롤 시작 200ms 구간의 'Recalculate Style'/'Layout' 막대가 사라진다. ④ **회귀 확인(필수):** 모바일 실기기에서 스크롤 축소 전·후 모두 검색바가 헤더 바로 아래에 정확히 붙고, 겹침도 비침 띠도 없다. ⑤ AdminTab·VenueManageTab의 sticky 헤더도 동일 확인. ⑥ 데스크톱(탭바 경로, 1247-1252 분기)은 영향 없음 확인.
+
+### [DS] MO-4 — [얀크 2순위] 레이아웃 애니메이션 박멸 — 당겨서새로고침 transform화 + SlidingPill 진짜 FLIP화
+ effort **M** · impact **high**
+
+- **앵커:** src/App.tsx:1148-1165 (ptr state, onPtrStart/Move/End) / src/App.tsx:2137 (핸들러 부착), :2139-2145 (인디케이터 transition-[height] + 인라인 height) / src/components/atoms/SlidingPill.tsx:54 (transition에 width/height 포함), :56-64 (measure — offsetWidth/Left 읽고 style.width/height 쓰기), :69-74 (RO 콜백), :85 (will-change) / 사용처 16곳: atoms/SegmentedTabs.tsx, atoms/UnderlineTabs.tsx, atoms/ViewModeToggle.tsx, features/IntegratedSearchBar.tsx, MarketplaceTab.tsx, VenuePage.tsx, TierLeaderboard.tsx, LedgerStatsPanel.tsx, CustomerAnalytics.tsx, ScheduleDetailModal.tsx / 참고 패턴: IntegratedSearchBar.tsx:263-268 (classList 직접 토글)
+- **접근:** **A. 당겨서-새로고침.**
+① **인디케이터를 흐름에서 빼낸다.** `position:absolute` + `transform: translateY(ptr)`(또는 고정 높이 컨테이너 + 내부 ♠만 translateY, `overflow:hidden`). `transition-[height]`와 인라인 `style={{height}}` 제거 → 레이아웃 0.
+② **`ptr`을 React state에서 뺀다.** `ref` + `el.style.setProperty('--ptr', px)`를 rAF 안에서 프레임당 1회만 직접 쓴다. App(2984줄, useState 69개, 전 탭 keep-alive) 전체 리렌더가 **0회**가 된다. `IntegratedSearchBar.tsx:263-268`이 이미 같은 패턴(classList 직접 조작)을 쓰고 있어 코드 관례상 자연스럽다.
+③ **state는 상태 전이에만.** `ptr === -1`(갱신 중) 진입/이탈 시에만 `setState` 1회 — 스피너 표시 토글용.
+④ 최소 변경으로 만족한다면: `setPtr`을 rAF 스로틀 + 값을 4px 단위로 양자화(리렌더 횟수 1/4).
+
+**B. SlidingPill 진짜 FLIP화.**
+알약의 실제 `width`/`height`를 **기준 크기 하나로 고정**하고 `transform: translate(x,y) scale(sx, sy)`만 전환한다(`sx = target.offsetWidth / baseWidth`, `sy = target.offsetHeight / baseHeight`). transition 선언에서 `width`/`height`를 **제거**해 100% 컴포지터 전용으로 만든다.
+- 배경이 단색 알약이라 scale 왜곡은 시각적으로 문제되지 않는다. 라운드 코너만 보정 — pill 안에 고정 라디우스 자식을 두거나 `border-radius`를 역스케일.
+- `underline` 모드(2px 바)는 sy가 의미 없으므로 `scaleX`만.
+- `:69-74` RO 콜백을 `requestAnimationFrame`으로 감싸 읽기/쓰기 분리(현재는 `offsetWidth` 읽고 바로 style 쓰기).
+- **라이브 서비스이므로 `SegmentedTabs` 한 곳에서 먼저 검증 후 나머지 15곳으로 확산.** 첫 배치 `transition:'none'` 로직(유령 모션 방지)은 그대로 유지.
+- **DoD:** ① `npm run build` + `npm run test:e2e` 통과. ② React DevTools Profiler에서 당겨서새로고침 제스처 중 App 리렌더 **0회**(before: touchmove당 1회). ③ 제스처 중 ♠가 손가락을 매끄럽게 따라오고 목록이 출렁이지 않는다(CPU 4× 실기기 확인). ④ 80px 이상 당기면 갱신이 정상 트리거되고 900ms 후 복귀 — 기능 회귀 0. ⑤ SegmentedTabs 전환 시 DevTools Performance에 Layout 막대 0(before: 200ms간 매 프레임). ⑥ 알약 모양이 각 세그먼트에 정확히 맞고 라운드 코너 왜곡이 눈에 띄지 않는다 — **16곳 전수 육안 확인**(특히 UnderlineTabs 2px 바, ViewModeToggle 정사각, LedgerStatsPanel 긴 라벨). ⑦ 리사이즈/회전 시 알약이 전환 없이 자리를 맞춘다(기존 동작 유지).
+
+### [DS] MO-5 — [얀크 3순위] 페인트 예산 회수 — shimmer 컴포지터화 + 스크롤 위 상시 backdrop-blur 제거
+ effort **S** · impact **high**
+
+- **앵커:** src/index.css:234-243 (.skeleton — linear-gradient + background-size 200% + @apply animate-shimmer) / tailwind.config.js:158-161 (keyframes shimmer: backgroundPosition), :171 (shimmer 1.5s linear infinite) / src/index.css:384-385 (reduced-motion 목록 — .skeleton/.animate-shimmer 이미 포함, 유지) / src/App.tsx:576 (하단 탭바 bg-surface-mid/95 shadow-dialog backdrop-blur-md), :575 (그라데이션 커튼 — blur의 실제 역할을 대신하고 있음), :569-571 (자동숨김 translate-y) / index.html:115 (정적 셸 동일 마크업) / src/App.tsx:2737 (ScrollTopButton backdrop-blur), :2936 (이미 animate-pulse 사용 — 시각 언어 참조) / 참고(문제 아님, 손대지 말 것): Modal.tsx:235,238, ImageLightbox, AdminTab.tsx:1011, NuriPosLedger.tsx:787,1945
+- **접근:** **A. shimmer — `background-position`은 컴포지터 속성이 아니다.** 로딩 중 화면에 스켈레톤이 3~6개 동시에 있고 `1.5s linear infinite`로 도는 동안 각각 매 프레임 다시 페인트된다.
+- **권장(가장 쌈):** `.skeleton`을 Tailwind 기본 `animate-pulse`(opacity만 — 컴포지터 전용)로 교체. `index.html` 정적 셸과 `App.tsx:2936`이 **이미 animate-pulse를 쓰고 있어** 시각 언어까지 통일된다. tailwind.config.js의 shimmer keyframes/animation은 사용처 0이 되면 제거.
+- **대안(shimmer 룩을 꼭 유지하려면):** `.skeleton`은 정적 `surface-high` 배경 + `position:relative; overflow:hidden`, `.skeleton::after`에 `linear-gradient(90deg, transparent, surface-float, transparent)`를 두고 `transform: translateX(-100%) → translateX(100%)`. 컴포지터 전용이 된다.
+- 어느 쪽이든 `index.css:384-385`의 reduced-motion 목록은 그대로 유효(`.skeleton` 이미 포함).
+
+**B. 스크롤 콘텐츠 위 상시 backdrop-blur 제거.** `backdrop-filter`는 뒤 픽셀을 읽어 블러하므로 뒤가 스크롤되면 매 프레임 재샘플링·블러·합성이다.
+- `App.tsx:576`: `backdrop-blur-md` **삭제** + `bg-surface-mid/95` → **`bg-surface-mid`(불투명)**. 95%라 시각 차이가 사실상 없고, `:575`의 그라데이션 커튼이 이미 위쪽 비침을 담당해 blur의 역할이 없다.
+- `index.html:115` 정적 셸도 동일하게(부팅 직후부터 적용되므로 필수).
+- `App.tsx:2737` ScrollTopButton도 같은 이유로 제거(fixed + 스크롤 중 노출).
+- **모달·라이트박스의 backdrop-blur는 건드리지 않는다** — '떠 있는 동안만'이라 비용이 유한하고 시각 가치가 크다.
+- 향후 규칙: backdrop-filter는 오버레이 수명 동안만. 상시 fixed 요소에는 금지. 정말 필요하면 `navigator.hardwareConcurrency <= 4`로 저사양 감지 후 `html.no-blur` 클래스를 붙여 CSS로 끄는 방식(`@supports`나 `prefers-reduced-transparency`는 저사양 감지 수단이 아니다).
+- **DoD:** ① `npm run build` + `npm run test:e2e` 통과. ② DevTools Rendering의 **Paint flashing** 켠 상태로 로딩 화면을 보면 스켈레톤 영역이 매 프레임 초록으로 번쩍이지 않는다(before: 전 스켈레톤 상시 번쩍). ③ **Layer borders** 켜고 스크롤할 때 하단 탭바가 별도 blur 레이어를 재래스터하지 않는다. ④ CPU 4× + 375px에서 커뮤니티 무한스크롤 20행 중 long frame 개수가 MO-1 baseline 대비 감소(수치 기록). ⑤ 육안: 탭바가 이전과 구분되지 않는다(95%→100% 불투명, 그라데이션 커튼 유지). ⑥ 로딩 스켈레톤이 여전히 '로딩 중'으로 읽힌다. ⑦ `prefers-reduced-motion: reduce`에서 스켈레톤 애니메이션이 완전히 멈춘다(none, 단축 아님).
+
+### [DS] MO-6 — [CLS 구조 해결] 높이 계약 단일 토큰(--row-h-*) + cv-row 실측 교체 + 스켈레톤 shape 일치
+ effort **M** · impact **high**
+
+- **앵커:** src/index.css:462-464 (cv-row-sm/lg/md — 선언 41/120/72, 실측 43.5/106.2/83·62.8) / 적용처: src/components/features/CommunityTab.tsx:615(sm), :657(lg), MarketplaceTab.tsx:372(md) / src/components/atoms/Skeleton.tsx:12-21 (SkeletonList — space-y-1.5 + 임의 rowClassName) / src/App.tsx:2930-2940 (ScheduleSkeletonGrid) vs src/components/features/ScheduleCard.tsx:319-409(GridCard 실측 361.5), :180-310(ListCard 실측 87) / MarketplaceTab.tsx:208-221(스켈레톤 64.8) vs :228(BoardHeader 누락) vs :365-452(ListingRow 83) / CommunityTab.tsx:1163-1173(채팅 스켈레톤 46.6) / LiveGamesTab.tsx:147 (h-40, 미검증)
+- **접근:** **핵심은 개별 수정이 아니라 구조 — 세 곳에 흩어진 행 높이를 CSS 변수 하나로 모아 불일치를 물리적으로 불가능하게 만든다.**
+
+**A. `:root`에 높이 계약 토큰 승격 + 실측값 교체.**
+```css
+:root { --row-h-sm: 44px; --row-h-md: 83px; --row-h-lg: 106px; }
+@media (min-width: 640px) { :root { --row-h-md: 63px; } }
+.cv-row-sm { content-visibility: auto; contain-intrinsic-size: auto var(--row-h-sm); }
+/* md, lg 동일 */
+```
+`auto` 키워드는 **반드시 유지**(첫 렌더 후 실제 크기를 기억하게 하는 2026 정답 — 대부분의 예제가 빼먹어 스크롤바가 널뛴다). `cv-row-md`가 모바일 83 / 데스크톱 63으로 **방향이 반대**인 게 함정이므로 미디어쿼리 필수(sm: 브레이크포인트에서 6컬럼 단일행으로 바뀌는 구조 때문). `cv-row-lg`는 제목 유무·본문 줄수로 87~106px를 오가므로 중앙값이 아니라 **가장 흔한 케이스**(106)로 잡고 주석에 실측 근거를 남긴다(기존 index.css 주석 관행).
+
+**B. 스켈레톤을 '실제 컴포넌트 마크업의 텍스트만 치환'으로 재작성.** 새로 그리지 않는다 — 이 규칙이 재발을 막는다.
+- `ScheduleSkeletonGrid`: `aspect-[3/4]` 아래에 `p-2.5 gap-1.5` + h-4 두 줄(제목) + h-3 한 줄(매장/별점) + 구분선 + h-4 한 줄(바인) → 218.8 → ~361px. list 모드는 `h-24`(102) → 실측 87px.
+- `MarketplaceTab` 스켈레톤 블록에 **`<BoardHeader />`를 그대로 넣고**(데스크톱 헤더 행 삽입 제거), 행 자리표시를 2줄 → 3줄(배지행+제목+메타행)로 늘려 83px에 맞춘다.
+- `CommunityTab` 채팅 스켈레톤, `LiveGamesTab.tsx:147` h-40 — 실제 컴포넌트를 렌더해 높이를 재고 교체.
+- 실제 행에도 `min-height: var(--row-h-*)`를 부여해 세 값이 같은 변수를 본다.
+
+**C. 스켈레톤 깜빡임 방지.** `useDelayedFlag(200)` 훅 하나로 `loaded === false && elapsed > 200ms`일 때만 렌더. `schedulesLoaded` 플래그가 이미 있어 전 화면 적용 가능.
+
+**D. `tabular-nums` 전수 감사 + `.num` 유틸.** 클락 mmss, LiveGamesTab 엔트리/생존/탈락 4칸, StoreDashboard 매출·정산, 랭킹, 좋아요 카운트. `.num`(tabular-nums + tracking 보정) 한 클래스로 통일.
+
+**⚠ 잘못된 고정값은 오히려 스크롤 점프를 만든다** — content-visibility의 최대 함정이다. 값 변경 후 반드시 실측 재확인.
+- **DoD:** ① `npm run build` + `npm run test:e2e` 통과. ② 375px 실기기/에뮬레이터에서 커뮤니티·장터 목록을 **처음** 아래로 스크롤할 때 스크롤바/콘텐츠 점프가 눈에 띄지 않는다(before: 50건 기준 커뮤니티 −690px, 장터 +550px). ③ browse 그리드에서 스켈레톤 → 실데이터 교체 순간 카드 위치가 유지된다(before: 10장 +713px 낙하) — 화면 녹화로 before/after 비교. ④ 장터 데스크톱에서 BoardHeader가 나중에 끼어들지 않는다. ⑤ MO-1 Playwright 게이트에서 browse 콜드 로드 CLS ≤ 0.05, 커뮤니티 스크롤 CLS ≤ 0.02. ⑥ 로딩이 200ms 미만으로 끝나면 스켈레톤이 아예 보이지 않는다. ⑦ index.css 주석에 실측 근거(측정 조건: 375px, html 17px, 측정일)가 남는다.
+
+### [DS] MO-7 — [CLS 최우선] 정적 셸 ↔ browse 첫 화면 308px 정합 + 비동기 블록 삽입 규칙
+ effort **M** · impact **high**
+
+- **앵커:** index.html:110-112 (정적 셸 스켈레톤 — 헤더 바로 아래 pt-3, 첫 카드 y≈74px) / src/App.tsx:2136-2199 (browse main.tab-pane 첫 자식들 — 실측 y=61→369, 308px) / src/components/features/IntegratedSearchBar.tsx (검색 input + 21일 날짜 레일 2.6rem 셀 + 필터 칩) / src/App.tsx:2152-2198 (뷰모드/팔로우/총N개 행) / 비동기 블록 13곳: App.tsx:2033, 2055, 2062, 2076, 2123, 2124, 2133, 2202, 2232-2234, 2237, 2260, 2277, 2290 / 로더: App.tsx:873(바인요청), :1203(최근매장), :1477(오늘예약), WeeklyBestStrip.tsx:14,22 / index.css:283, :384-385 (새 전환 클래스 시 이중 등록)
+- **접근:** **A. 셸에 308px 예약 (밀림 1순위 — 데이터 지연과 무관하게 매 콜드 로드 100% 재현).**
+- **권장:** 셸에 검색 input 박스 + 2.6rem 날짜 셀 21칸 레일 + 칩 행의 '자리'를 정적 HTML로 복제한다. **내용은 필요 없고 높이만 맞추면 된다.** 실제로 그럴듯하게 보이면 체감 속도까지 올라간다(Linear식 shape 일치의 연장).
+- **최소:** 셸 스켈레톤 앞에 308px spacer를 넣어 리스트가 y=431px에서 시작하게 한다. 시각적으로는 빈 공간이라 열등하지만 CLS는 동일하게 해결된다.
+- **⚠ 필수 제약:** 셸에는 **소스에 이미 존재하는 Tailwind 클래스 문자열만** 쓴다(퍼지 안전 — 셸 주석의 기존 원칙). 새 클래스가 필요하면 `style` 인라인으로.
+- 헤더 높이가 MO-3에서 바뀌면 이 값도 재측정해야 하므로 **MO-3 이후에 착수**한다.
+
+**B. 비동기 블록 삽입 규칙 확립 (계단식 밀림 제거).**
+- **규칙 A(권장·가장 쌈):** 개인화 블록(오늘예약·바인요청·최근매장·주간베스트)은 결과가 오기 전에는 **아무 자리도 만들지 않고, 결과가 오면 목록 아래에 붙인다.** 위쪽 스택이 절대 변하지 않는다.
+- **규칙 B:** 배너류(pushNudge 2062·미인증 2076·InstallBanner 2124·StaffInviteBanner 2133)를 목록 **위가 아니라 아래 또는 오버레이**로 이동. 특히 `user.verified`는 auth 왕복 뒤에야 확정되므로 상단에 두면 반드시 밀린다.
+- **규칙 C(차선):** 로딩 중 `min-height`를 실제 높이로 잡고 '없음' 확정 시 0으로 **접는다**(접히는 것은 '밀려 내려옴'으로 지각되지 않는다).
+- **⚠ 새 전환 클래스를 만들면**(예: `grid-template-rows: 0fr → 1fr`) `index.css:283`의 `:is(...)`와 `:384-385` reduced-motion 목록에 **동시 등록** — CLAUDE.md 규약(MO-2에서 체크리스트 확립).
+- 참고: 2238/2261의 `animate-fade-in`은 `.tab-pane` 안이라 이미 무효화되어 페이드 없이 '툭' 삽입되고 있다.
+
+**C. 부수 개선(같은 파일이라 함께):** browse 첫 화면에 '오늘/내일' 기본 필터를 미리 적용하고, 지난 방문의 지역·매장 선택을 localStorage로 즉시 복원(OnboardingSheet의 persona/near와 동일 계열). 무한스크롤로 붙잡기보다 **상단 3장에서 결정이 끝나게** 하는 것이 한국 유저에게 '잘 만든 앱'으로 읽힌다.
+- **DoD:** ① `npm run build` + `npm run test:e2e` 통과. ② **하드 리프레시 화면 녹화**에서 셸→React 마운트 순간 콘텐츠가 아래로 떨어지지 않는다(before: ~308px 낙하, 100% 재현). ③ 느린 네트워크(Fast 4G)에서 개인화 블록·공지·배너가 도착해도 리스트 첫 카드의 y좌표가 변하지 않는다(before: 계단식으로 여러 번 하강). ④ MO-1 Playwright 게이트에서 browse 콜드 로드 CLS ≤ 0.05. ⑤ **프로덕션 빌드**로 셸 스타일이 살아 있는지 확인(Tailwind 퍼지 — dev에서만 확인하면 놓친다). ⑥ 셸 예약 높이가 MO-3 적용 후 헤더 높이와 일치한다(재측정 완료).
+
+### [DS] MO-8 — View Transition 정밀화 — 0.2s/20px + 방향성 이징 + 포스터 view-transition-name 모핑
+ effort **M** · impact **high**
+
+- **앵커:** src/index.css:292-296 (0.18s 선언), :297-304 (방향 푸시 0.3s·32px — 292를 덮어씀) / src/lib/viewTransition.ts:14-24 (withViewTransition, dir 마커) / src/App.tsx:675-705 (changeTab + flushSync + useLayoutEffect instant 복원 — 잘 되어 있음, 유지) / src/App.tsx:558-561 (탭바 낙관적 활성) / src/App.tsx:1573 (카드→모달 withViewTransition 배선 — 이미 완료) / src/components/features/ScheduleCard.tsx:336 (그리드 포스터 img), :200 (리스트 썸네일) / src/components/features/ScheduleDetailModal.tsx (모달 포스터) / src/index.css:18-24 (--ease-out — MO-2에서 추가)
+- **접근:** **A. duration·거리·이징 정렬 (4줄 + 키프레임 2값).**
+방향 푸시를 `0.3s → 0.2s`, 이동거리 `32px → 20px`, 그리고 **나가는 것은 `--ease-out`(가속), 들어오는 것은 `--ease`(감속)**. 현재 넷 다 `var(--ease)` 하나를 써서 '밀려나감'이 물리적으로 읽히지 않는다.
+```css
+html[data-vt-dir='forward']::view-transition-old(root){ animation: vt-push-out-l .2s var(--ease-out) both }
+html[data-vt-dir='forward']::view-transition-new(root){ animation: vt-push-in-r  .2s var(--ease)     both }
+/* back 방향 동일 패턴 */
+```
+VT가 도는 동안 문서는 inert이므로 **300ms → 200ms는 입력 차단 시간을 1/3 줄인다.** 탭바 알약이 이미 낙관적 활성(`App.tsx:558-561`)이라 '눌린 느낌'은 손상되지 않는다. 292-296의 0.18s 기본 선언은 덮이지 않는 오버레이 경로용이므로 유지.
+
+**B. 포스터 요소 모핑 — '웹인데 APK 같다'를 만드는 단일 최대 변경.**
+일정 카드 포스터 `<img>`와 `ScheduleDetailModal` 포스터 `<img>` 양쪽에 `style={{ viewTransitionName: 'poster-' + schedule.id }}`를 주면 **카드가 그 자리에서 커져 모달이 된다**(iOS 문법). 배선은 `App.tsx:1573`이 이미 `withViewTransition`으로 감싸고 있어 끝나 있다.
+**⚠ 치명적 제약: `view-transition-name`은 문서 내 유일해야 한다.** 목록의 모든 카드에 상시 부여하면 중복이 되어 **전환 자체가 취소된다**(모션이 아예 안 나온다). 구현: 열리는 대상 id를 state로 들고 그 id의 카드에만 조건부로 이름을 부여, 모달이 닫히면 즉시 제거. 리스트 뷰 썸네일(`ScheduleCard.tsx:200`)도 같은 이름을 쓰면 뷰모드 무관하게 동작.
+
+**C. 브라우저 폴백 확인.** 한국 모바일 30%가 웨일+삼성인터넷이다. `viewTransition.ts`가 `startViewTransition` 존재 체크 + `prefers-reduced-motion` 체크를 하므로 JS는 완비 — **미지원에서 '깨짐'이 아니라 '즉시 표시'로 폴백되는지 실제 확인**(`fallback ?? update` 경로).
+
+**D. 적용 순서:** A를 먼저 배포해 체감 변화를 확인하고, B는 별도 배포(중복 name 사고가 나면 전환이 통째로 사라지므로 롤백 단위를 분리).
+- **DoD:** ① `npm run build` + `npm run test:e2e` 통과. ② 탭 전환 직후 즉시 스크롤/재탭이 200ms 안에 먹힌다(before: 300ms 차단) — 연타 테스트. ③ 나가는 화면이 가속으로 사라지고 들어오는 화면이 감속으로 안착하는 게 육안으로 구분된다. ④ 일정 카드를 탭하면 포스터가 **그 자리에서 커져** 모달이 되고, 닫으면 카드 자리로 돌아간다. ⑤ **중복 name 검증(필수):** 목록에 20장 이상 있는 상태에서 카드를 열어도 전환이 취소되지 않는다(열림 상태에서 `document.querySelectorAll('[style*="view-transition-name"]')`가 정확히 2개 — 카드 1 + 모달 1). ⑥ 모달을 닫은 뒤 name이 DOM에서 제거된다. ⑦ 웨일·삼성인터넷(또는 VT 미지원 강제)에서 전환 없이 즉시 표시되고 화면이 깨지지 않는다. ⑧ `prefers-reduced-motion: reduce`에서 VT 애니메이션 none.
+
+### [DS] MO-9 — 리렌더·롱태스크 정리 — 스크롤 리스너 단일화 + LiveGamesTab 1초 틱 격리 + 에퀴티 엔진 Worker화
+ effort **M** · impact **medium**
+
+- **앵커:** src/App.tsx:165-174 (rAF 가드 참조 구현 — 유일하게 잘 된 것) / 미스로틀 3곳: src/App.tsx:535-547 (MobileTabBar 자동숨김), :2725-2730 (ScrollTopButton), src/components/features/IntegratedSearchBar.tsx:259-272 (classList toggle) / src/components/features/LiveGamesTab.tsx:73-75 (1초 setTick), :77-95 (비메모 파생 — venues.find 선형탐색, new Set, filter, sort) / 동일 패턴: StoreDashboard.tsx:253-257, NuriPosLedger.tsx:1305,1326, clock/TournamentClock.tsx:251,375,530 / src/components/features/HandReplayer.tsx:86-109 (setTimeout(0) 메인스레드) / src/components/features/gto/equityEngine.ts:145-187 (computeEquity), :198-210 (computeEquityVsRange) / 대조군(문제 아님, 손대지 말 것): tools/RangeMatrix13.tsx, gto/useGtoCalculator.ts, NuriPosLedger.tsx:400-460
+- **접근:** **A. 스크롤 리스너 단일화.** `useScrollY` 훅 하나가 window scroll을 rAF로 프레임당 1회 읽고 구독자에게 브로드캐스트한다. 4개의 개별 리스너 → 1개, 프레임당 `scrollY` 읽기 4회 → 1회. `App.tsx:165-174`가 이미 참조 구현이니 그대로 일반화. 더 나아가 **탭바 자동숨김과 맨위로 버튼은 IntersectionObserver로 대체**하면 스크롤 리스너 자체가 사라진다(sentinel 요소 2개). `ScrollTopButton`의 `if (!show) return null`(2730)로 인한 fixed 요소 삽입/제거는 `opacity` + `pointer-events`로 바꿔 DOM 변동도 제거.
+
+**B. LiveGamesTab 1초 틱 격리.**
+① `venues`를 `useMemo`로 **Map** 한 번 만들어 `nameOf`/`regionOf`의 `venues.find()` 선형 탐색 제거(O(게임수×매장수) → O(게임수)).
+② `:81-95`의 파생(`new Set`/`filter`/`sort`/`[...games].sort`)을 `useMemo([games, schedules, venues, sortBy, geo])`로 감싼다 — **틱은 리스트 파생과 무관하다**(바뀌는 건 '분 전' 표시 문자열뿐).
+③ **최선:** 1초 틱을 시간 표시 말단 컴포넌트로 내려 리렌더 범위를 텍스트 노드로 좁힌다.
+④ 같은 처방을 `StoreDashboard.tsx:253-257`, `TournamentClock.tsx:375`(250ms — 더 촘촘하므로 더 중요)에도.
+⑤ 겸사겸사 `animate-pulse` LIVE 점을 **Luma식 정적 컬러 텍스트 라벨**로 바꾸는 것을 검토 — 스크롤 중 지속 리페인트 제거 + 시각 노이즈 감소(LiveCard 배지 5개 문제와 같은 맥락).
+
+**C. 에퀴티 엔진 Web Worker화.** `setTimeout(0)`은 현재 프레임만 양보할 뿐 실행은 메인스레드 롱태스크다. Vite 네이티브 문법 `new Worker(new URL('./equity.worker.ts', import.meta.url), { type: 'module' })`을 쓰면 **새 라이브러리 0**이라 CLAUDE.md 제약을 통과한다.
+- **즉시 가능한 완화책(Worker 전 단계):** ①마일스톤 4개를 한 태스크가 아니라 **하나씩 별도 태스크로 분할** ②프리플랍 iterations 2500 → 1000(표시 정밀도 0.1%p 차이는 UI에서 무의미).
+- `yieldToMain` 유틸도 함께: `(globalThis as any).scheduler?.yield?.() ?? new Promise(r => setTimeout(r, 0))` — Chrome 129+/Firefox는 우선순위를 잃지 않고 양보하고 Safari는 setTimeout 폴백. `App.tsx:1026-1028` 프리마운트 루프와 부팅 시 `setSchedules/setVenues/setNotices` 일괄 반영(1176~) 직전이 적용 후보.
+
+**⚠ 순서:** MO-1 LoAF의 `blockingDuration` 상위 프레임 `sourceFunctionName`을 보고 A/B/C 중 실제 순위를 정한 뒤 착수한다. 셋 다 할 필요가 없을 수도 있다.
+- **DoD:** ① `npm run build` + `npm run test:e2e` 통과. ② `grep -rn "addEventListener('scroll'" src --include=*.tsx` 결과가 useScrollY 훅 1곳(또는 IntersectionObserver 대체로 0곳)으로 수렴. ③ React DevTools Profiler에서 라이브 탭 1초 틱 시 리렌더 범위가 시간 표시 컴포넌트로 국한된다(before: 탭 전체). ④ CPU 4× + 라이브 탭 30초 스크롤에서 1초 주기 프레임 드롭이 사라진다(LoAF 수치 before/after 기록). ⑤ 커뮤니티 글 상세에서 핸드 리플레이어를 열 때 화면 멈춤이 체감되지 않는다 — LoAF `blockingDuration > 200ms` 프레임 0건. ⑥ 에퀴티 결과 수치가 기존과 유효자릿수 내에서 일치(iterations 축소 시 회귀 확인). ⑦ 탭바 자동숨김·맨위로 버튼 동작 회귀 0.
+
+## 20.7 하지 말 것
+
+- **framer-motion을 다시 들이지 말 것. 어떤 이유로도.** 의도적으로 제거했고 `layoutId` 13곳은 `SlidingPill`의 자체 FLIP으로 대체되어 있다. `taste-skill §3.A`가 Motion(`motion/react`)을 기본 애니메이션 라이브러리로 지정하지만 **이 프로젝트에서는 적용하지 않는다.** 새 전환이 필요하면 SlidingPill 패턴 또는 순수 CSS. 같은 맥락으로 GSAP·auto-animate·react-spring·lottie 등 어떤 애니메이션 라이브러리도 추가 금지.
+- **아이콘·차트 라이브러리를 설치하지 말 것.** `src/components/atoms/Icon.tsx`의 `PATHS` 레지스트리가 유일한 아이콘 소스다. 새 아이콘은 **PATHS에 한 줄 추가**(viewBox 24 / stroke 2 / currentColor). `taste-skill §3.C`의 'Phosphor/Hugeicons를 설치하라'는 지시는 **이 프로젝트에서 적용 금지.** 차트도 마찬가지 — Nightingale의 장식 글리프와 Osler의 `stroke-dasharray` 반원 게이지로 SVG 4~5개면 끝난다. Tailwind v4 마이그레이션, 새 폰트 패키지, web-vitals 패키지(순수 PerformanceObserver로 충분) 전부 금지. **새 import 전에 반드시 `package.json`을 먼저 확인.**
+- **이미 잘 되어 있는 것을 '개선'하지 말 것 — 이번 감사에서 재작업 판정이 난 항목은 0개다.** 손대지 말 것: `viewTransition.ts`의 스냅샷 뒤 `flushSync` 동기 커밋 구조 + `useLayoutEffect`의 `scrollTo({behavior:'instant'})` 복원(App.tsx:675-705) / `.tab-pane` 진입애니 무효화 규칙(index.css:283) / passive 스크롤 리스너 100% / `contain-intrinsic-size`의 **`auto` 키워드**(빼면 화면 밖 요소가 0px이 되어 스크롤바가 널뛴다) / scroll-driven `.reveal`의 `@supports` + `prefers-reduced-motion` 이중 가드 / `--ease`·`--spring` 값 / body::before 고정 글로우 / tier-glow 정적화 / 장부 useMemo(NuriPosLedger.tsx:400-460) / **이미지 예약**(PosterArea aspect-[3/4], Avatar 인라인 box, VenueThumb 고정 h/w — 밀림의 원인이 아님을 반증 완료) / `will-change` 3곳(press-spring·SlidingPill·ImageLightbox — 전부 정당). Skeleton.tsx의 스태거 제거 판단도 옳았다.
+- **레이아웃 속성을 애니메이트하지 말 것 — 새 코드에서 재발시키지 말 것.** `height`/`width`/`top`/`left`/`margin`/`padding`/`gap`/`font-size`는 애니메이션 금지. 그리고 **`transition-all`을 새로 쓰지 말 것** — 나중에 누가 height를 추가하면 자동으로 레이아웃 애니메이션이 된다. 항상 `transition-colors` 또는 `transition-[transform,opacity]`처럼 명시적으로 좁힌다. 같은 이유로 `background-position`/`background-size`/`filter`/`clip-path` 애니메이션도 금지(컴포지터 아님 = 페인트 폭탄).
+- **`will-change`를 습관적으로 붙이지 말 것.** 스타일시트에 박힌 `will-change`는 브라우저가 별도 컴포지터 레이어를 오래 유지하게 만들어 비디오 메모리를 먹고, Firefox는 '문서 표면적 ×3' 예산을 넘으면 아예 무시한다. `.press-spring`을 '모든 버튼'에 확산하면 레이어 폭발이다. 현재 3곳이 상한선이고, 새로 쓸 땐 200ms 안에 실제로 애니메이트될 것에만.
+- **상시 fixed 요소에 `backdrop-filter`를 쓰지 말 것.** 뒤 콘텐츠가 스크롤로 바뀌면 매 프레임 재샘플링·블러·합성이다. 모달 딤·라이트박스처럼 '떠 있는 동안만'은 OK. 그리고 이미 95% 불투명한 배경 위의 blur는 **보이는 픽셀이 5%뿐인데 비용은 100%** — 시각 가치가 없는 곳에 성능을 쓰지 말 것. `background-attachment: fixed`도 같은 이유로 이미 걷어낸 전례가 있다(index.css:101 주석).
+- **새 진입 애니메이션 클래스를 만들고 두 목록에 등록하지 않는 일 — 절대 금지.** keep-alive 탭은 `display:none → block`에서 CSS 진입 애니메이션을 처음부터 재생한다. 새 클래스는 `index.css:283`의 `:is(...)` 무효화 목록과 `:384-385`의 `prefers-reduced-motion` 목록에 **동시에** 등록해야 한다. `.anim-pop`이 지금 이 규약을 어기고 있는 유일한 지점이다. 또한 `.reveal`(scroll-driven)에 `animation-timeline` 없는 CSS 폴백을 추가하는 순간 '치직'이 즉시 재발하므로 그때는 등록이 필수가 된다.
+- **Pretendard를 CDN `<link>` 하나로 붙이지 말 것.** 현재 `@font-face`도 woff2도 npm 패키지도 0건이라 전 사용자가 `system-ui`로 보고 있고 FOUT은 0이다. **지금 링크만 추가하면 없던 CLS가 새로 생기고**, 이 감사의 모든 실측 높이(cv-row 44/83/106, ListCard 87, GridCard 361.5, 셸 308)가 무효가 된다. 도입한다면 반드시 self-host + `font-display: optional`(또는 block+preload) + 폴백 `@font-face`의 `size-adjust` 메트릭 오버라이드 3종 세트 + 도입 직후 전량 재측정. 폰트 교체(Manrope/Nunito 등)는 아예 금지 — Pretendard가 한글 포함 이미 최적이다.
+- **과한 모션·AI티 나는 장식을 넣지 말 것.** 금지 목록: 스크롤할 때마다 요소가 차례로 튀어오르는 스태거 리빌(Skeleton에서 이미 제거한 이유가 있다), 그라데이션 텍스트, 글래스모피즘 남발(Dverse 컨셉의 그것을 그대로 가져오지 말 것), 네온 글로우, 이모지 헤딩, 무의미한 카운트업, 3D 틸트/패럴랙스 카드, 마우스 추적 스포트라이트, 계속 도는 배경 그라디언트. **모션은 대기 시간의 서사이지 장식이 아니다** — 데이터가 이미 있는 경로에는 애니메이션 0, Supabase 왕복이 확정된 구간에만 배치. 그리고 `animate-pulse` LIVE 점처럼 '항상 도는 것'은 스크롤 중 지속 리페인트다.
+- **Dverse 컨셉의 컬러를 그대로 가져오지 말 것.** Navy #1A1A2E / Electric Purple #8B2FC9 / Cyan #00D4FF 네온은 NURI의 Linear 인디고 `accent-300 #5E6AD2`와 정면 충돌하고 포커 정체성(펠트·칩·밤)과도 안 맞는다. **구조만 훔치고 컬러는 NURI 팔레트로 치환.** 그리고 액센트 단일 사용 규칙을 지킬 것 — accent는 CTA·활성 탭·핵심 수치에만, 나머지는 무채색. 다크에서 대비 3.3:1 미달 회색(#62666d 계열)과 순수 검정 #000도 금지.
+- **토스트로 폼 에러를 처리하지 말 것.** 토스트는 사라져서 놓치고, 무엇보다 **등장/퇴장이 화면 상단을 밀어 사장님이 싫어하는 '움직임'을 만든다.** CTA 바로 위 인라인 배너 + `min-height`로 자리 미리 확보(시프트 0) + 복구 액션 세트. 대상: AuthModal, MarketplaceFormModal, PosterFormModal, PostFormModal. 같은 맥락으로 롱프레스→팝오버 리액션도 금지(스크롤과 충돌 + 팝오버 등장이 또 하나의 움직임) — 고정 이모지 스트립으로.
+- **다크패턴·사행성 뉘앙스는 1회로 서비스 전체를 태운다.** 금지: 자동 선택 체크박스, 취소 버튼 약화, 기본 옵션 끼워넣기(VoucherManageModal·예약 결제 흐름), browse 리스트 본문 사이 광고 끼워넣기, 하단 탭바 위 배너. 매장 노출이 필요해지면 '광고' 라벨을 붙인 별도 슬롯으로만. 그리고 **'환전·현금·수익' 계열 단어 전면 배제** → '참가비·상금·이용권'. 정산·급여·약관 화면에는 절대 농담을 넣지 말 것(위트는 EmptyState·로딩·레벨업·주간베스트에만).
+- **추측으로 최적화하지 말 것 — MO-1 계측을 먼저 켤 것.** 지금 PerformanceObserver가 0건이라 '뚝뚝 끊긴다'의 순위를 데이터로 매길 수 없다. LoAF 25줄이면 `blockingDuration`과 `scripts[].sourceFunctionName`·`forcedStyleAndLayoutDuration`으로 범인이 필드에서 그대로 나온다. 그리고 **테스트를 개발자 PC에서만 하지 말 것** — 기준 기기는 갤럭시 A17 5G(≈ Pixel 5 + CPU 2×)이고, DevTools는 모바일 CPU를 진짜로 시뮬레이션하지 못한다. 유저 99%가 모바일, 매장 99%가 PC라는 분기도 잊지 말 것(장부·정산은 라이트 모드 대비까지 실기기 확인).
+
+> ⚠️ 위 목록의 "framer-motion을 다시 들이지 말 것 / 아이콘·차트 라이브러리 설치 금지"는 **§17 이전 기준**이다. 지금은 *금지*가 아니라 *권장하지 않음*이며, 판단 근거와 재고 게이트는 §19.1에 있다. 나머지(레이아웃 속성 애니메이트 금지·will-change 남용 금지·상시 backdrop-filter 금지 등)는 **기술 제약이 아니라 성능 원칙이라 그대로 유효**하다.
