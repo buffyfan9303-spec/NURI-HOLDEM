@@ -18,13 +18,15 @@ import { PayoutCalc, EndTimeCalc, ComboCalc } from './tools/MoreCalcs';
 import { MdfCalc, AggroChart, RangeMatrix } from './tools/AdvancedCalcs';
 import PostflopTrainer, { CAT_LABEL } from './tools/PostflopTrainer';
 import BlindBuilder from './tools/BlindBuilder';
+import GlossaryPanel from './tools/GlossaryPanel';
+import DealCalc from './tools/DealCalc';
 
 // GTO 패널은 에퀴티 엔진을 포함해 무거우므로 지연 로드
 import { readSnap } from '../../lib/snapshot';
 import type { DeepGtoInit } from './gto/useDeepGto';
 const GtoDeepPanel = lazyWithReload(() => import('./gto/GtoDeepPanel'));
 
-type ToolKey = 'gto' | 'pot' | 'icm' | 'range' | 'trainer' | 'postflop' | 'mdf' | 'aggro' | 'rvr' | 'outs' | 'pushfold' | 'spr' | 'ev' | 'mzone' | 'bankroll' | 'variance' | 'blindgen' | 'chip' | 'sim' | 'payout' | 'endtime' | 'combo';
+type ToolKey = 'gto' | 'pot' | 'icm' | 'range' | 'trainer' | 'postflop' | 'mdf' | 'aggro' | 'rvr' | 'outs' | 'pushfold' | 'spr' | 'ev' | 'mzone' | 'bankroll' | 'variance' | 'blindgen' | 'chip' | 'sim' | 'payout' | 'endtime' | 'combo' | 'glossary' | 'deal';
 /** 4레인 IA — 학습 / 분석 / 계산기 / 매장운영 (로드맵 ⑥) */
 type ToolCat = 'learn' | 'analyze' | 'calc' | 'ops';
 
@@ -40,6 +42,8 @@ const TOOLS: { key: ToolKey; cat: ToolCat; name: string; desc: string; icon: Rea
     icon: <><rect x="3" y="6" width="5" height="7" rx="1" /><rect x="9.5" y="6" width="5" height="7" rx="1" /><rect x="16" y="6" width="5" height="7" rx="1" /><path d="M7 17h10" /><path d="M9 21h6" /></> },
   { key: 'aggro', cat: 'learn', name: '어그레션 차트', desc: '포지션별 권장 빈도',
     icon: <><path d="M3 17l6-6 4 4 8-8" /><path d="M14 7h7v7" /></> },
+  { key: 'glossary', cat: 'learn', name: '홀덤 용어사전', desc: '용어 74개 — 한글 설명·검색',
+    icon: <><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" /><path d="M9 7h6M9 11h4" /></> },
   // ── 분석 — 핸드·레인지 에퀴티 ──
   { key: 'gto', cat: 'analyze', name: 'GTO 핸드 분석', desc: '프리/포스트플랍 승률·전략',
     icon: <><rect x="3" y="4" width="7" height="16" rx="1.5" /><rect x="14" y="4" width="7" height="16" rx="1.5" /></> },
@@ -54,6 +58,8 @@ const TOOLS: { key: ToolKey; cat: ToolCat; name: string; desc: string; icon: Rea
     icon: <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" /><path d="M9 12l2 2 4-4" /></> },
   { key: 'icm', cat: 'calc', name: 'ICM 계산기', desc: '토너먼트 기대 상금',
     icon: <><rect x="4" y="3" width="16" height="18" rx="2" /><line x1="8" y1="7" x2="16" y2="7" /><line x1="8" y1="11" x2="16" y2="11" /><line x1="8" y1="15" x2="12" y2="15" /></> },
+  { key: 'deal', cat: 'calc', name: '딜 계산기', desc: 'ICM 딜 vs 칩찹 분배 비교',
+    icon: <><path d="M11 17a5 5 0 1 0-6-6" /><circle cx="16" cy="16" r="5" /><path d="M14.5 16l1 1 2-2" /></> },
   { key: 'spr', cat: 'calc', name: 'SPR 계산기', desc: '스택 대 팟 비율',
     icon: <><rect x="3" y="11" width="7" height="9" rx="1" /><rect x="14" y="4" width="7" height="16" rx="1" /></> },
   { key: 'ev', cat: 'calc', name: 'EV 계산기', desc: '기대값 손익 판단',
@@ -79,13 +85,17 @@ const TOOLS: { key: ToolKey; cat: ToolCat; name: string; desc: string; icon: Rea
     icon: <><circle cx="12" cy="12" r="9" /><path d="M12 8v4l3 2" /></> },
 ];
 
-/** 4레인 소제목 — 접이식 금지(로드맵 FIX: 접이 헤더는 모바일 회귀). 항상 펼쳐진 섹션. */
+/** 3레인 소제목 — 접이식 금지(로드맵 FIX: 접이 헤더는 모바일 회귀). 항상 펼쳐진 섹션.
+ *  §7 ⑥b: '매장 운영' 레인은 GTO 탭에서 빠져 내 매장(StoreToolsPanel)으로 이관 —
+ *  카탈로그에서만 숨기고 TOOLS/renderTool 에는 남겨 #tool= 딥링크·공유 하위호환을 지킨다. */
 const LANES: { id: ToolCat; label: string; desc: string }[] = [
   { id: 'learn', label: '학습', desc: '차트·트레이너로 기본기' },
   { id: 'analyze', label: '분석', desc: '핸드·레인지 에퀴티 실계산' },
   { id: 'calc', label: '계산기', desc: '실전 수치 판단' },
-  { id: 'ops', label: '매장 운영', desc: '토너먼트 운영·세팅용' },
 ];
+// eslint-disable-next-line react-refresh/only-export-components -- 이관 레지스트리 공유(§7 ⑥b)
+export const STORE_TOOL_KEYS = ['chip', 'sim', 'blindgen', 'payout', 'endtime'] as const;
+const STORE_SET = new Set<ToolKey>(STORE_TOOL_KEYS);
 
 // 트레이너류는 '퀴즈' 뉘앙스(맞히기), 나머지 계산기·차트류는 '도구' 뉘앙스로 라벨링.
 const QUIZ_KEYS = new Set<ToolKey>(['range', 'pushfold', 'trainer', 'postflop']);
@@ -153,9 +163,18 @@ function renderTool(k: ToolKey): ReactNode {
     case 'chip': return <ChipDistributor />;
     case 'sim': return <StructureSim />;
     case 'blindgen': return <BlindBuilder />;
+    case 'glossary': return <GlossaryPanel />;
+    case 'deal': return <DealCalc />;
     default: return null;
   }
 }
+
+// ── 내 매장 이관용 공개 API(§7 ⑥b) — 레지스트리·렌더러를 재사용해 중복 정의 0 ──
+export type StoreToolKey = (typeof STORE_TOOL_KEYS)[number];
+// eslint-disable-next-line react-refresh/only-export-components -- 이관 레지스트리 공유(관행: CommentThread groupThreads)
+export const getStoreTools = () => TOOLS.filter((t) => STORE_SET.has(t.key)) as { key: StoreToolKey; name: string; desc: string; icon: ReactNode }[];
+// eslint-disable-next-line react-refresh/only-export-components
+export const renderStoreTool = (k: StoreToolKey): ReactNode => renderTool(k);
 
 /** 도구 모음 — 4레인(학습/분석/계산기/매장운영) 카탈로그 + 카드형 런처.
  *  누르면 "그 카드 행 아래 인라인"이 아니라 **전체화면 페이지**로 연다.
@@ -206,7 +225,8 @@ export default function ToolsPanel() {
   const [q, setQ] = useState('');
   const [lane, setLane] = useState<ToolCat | 'all'>('all');
   const ql = q.trim().toLowerCase();
-  const hits = ql ? TOOLS.filter((t) => t.name.toLowerCase().includes(ql) || t.desc.toLowerCase().includes(ql)) : null;
+  // 검색도 카탈로그와 같은 범위(매장 운영 도구 제외 — 내 매장으로 이관, ⑥b)
+  const hits = ql ? TOOLS.filter((t) => !STORE_SET.has(t.key) && (t.name.toLowerCase().includes(ql) || t.desc.toLowerCase().includes(ql))) : null;
   // 즐겨찾기 — 레인 위에 상시 노출(최대 6개)
   const [favs, setFavs] = useState<ToolKey[]>(() => {
     try { return JSON.parse(localStorage.getItem('nuri:fav-tools') || '[]'); } catch { return []; }
@@ -216,7 +236,7 @@ export default function ToolsPanel() {
     try { localStorage.setItem('nuri:fav-tools', JSON.stringify(next)); } catch { /* quota */ }
     return next;
   });
-  const favTools = favs.map((k) => TOOLS.find((t) => t.key === k)).filter(Boolean) as typeof TOOLS;
+  const favTools = favs.map((k) => TOOLS.find((t) => t.key === k)).filter((t) => t && !STORE_SET.has(t.key)) as typeof TOOLS;
 
   // 트레이너 진행(스트릭/XP/오늘 목표) — 이미 로컬에 있는 데이터 구독(신규 fetch 0)
   const prog = useTrainerProgress();
@@ -334,7 +354,7 @@ export default function ToolsPanel() {
           <div className="flex flex-wrap gap-1.5">
             {recent.map((k) => {
               const t = TOOLS.find((x) => x.key === k);
-              if (!t) return null;
+              if (!t || STORE_SET.has(t.key)) return null;
               return (
                 <button key={k} type="button" onClick={() => open(k)}
                   className="inline-flex h-9 items-center gap-1.5 rounded-input border border-border-default bg-surface-high px-3 text-xs font-semibold text-ink-secondary transition-colors hover:text-ink-primary">
@@ -411,8 +431,9 @@ function ToolCard({ name, desc, icon, onClick, fav, onToggleFav }: {
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{icon}</svg>
         </span>
         <span className="min-w-0 flex-1">
-          {/* 이름은 절대 안 자른다 — 2줄까지 허용. 설명은 모바일에서도 노출(1줄 말줄임) */}
-          <span className="block text-xs font-bold text-ink-primary leading-tight [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] overflow-hidden">{name}</span>
+          {/* 이름은 절대 안 자른다 — 2줄까지 허용. 1줄 이름도 2줄 높이를 예약해
+              모든 칸의 높이가 같아진다(오너 지시 2026-08-27: MDF·블러프 vs ICM 칸 크기 상이). */}
+          <span className="block min-h-[2.5em] text-xs font-bold text-ink-primary leading-tight [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] overflow-hidden content-center">{name}</span>
           <span className="block truncate text-2xs text-ink-muted leading-snug mt-0.5">{desc}</span>
         </span>
       </button>

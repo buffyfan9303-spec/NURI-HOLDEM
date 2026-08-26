@@ -221,7 +221,7 @@ const AppHeader = memo(function AppHeader({
           </button>
           <span className="h-4 w-px shrink-0 bg-border-default" aria-hidden />
           <span className="min-w-0 truncate text-base font-extrabold tracking-tight text-ink-primary" aria-current="page">
-            {({ home: '홈', browse: '일정 탐색', live: '라이브', community: '커뮤니티', market: '중고장터', tools: '도구', 'my-store': '내 매장', admin: '관리자 설정' } as Record<string, string>)[activeTab ?? 'home'] ?? '홈'}
+            {({ home: '홈', browse: '일정 탐색', live: '라이브', community: '커뮤니티', market: '중고장터', tools: 'GTO', 'my-store': '내 매장', admin: '관리자 설정' } as Record<string, string>)[activeTab ?? 'home'] ?? '홈'}
           </span>
         </div>
 
@@ -587,7 +587,7 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
     { key: 'home', tab: 'home', label: '홈' },
     { key: 'live', tab: 'live', label: '라이브' },
     { key: 'community', tab: 'community', label: '커뮤니티' },
-    { key: 'tools', tab: 'tools', label: '도구' },
+    { key: 'tools', tab: 'tools', label: 'GTO' },
     hasStore ? { key: 'my-store', tab: 'my-store', label: '내 매장' } : { key: 'me', label: '내 정보' },
   ];
   // 장터 화면에선 '커뮤니티' 칸을 활성으로(장터 진입 경로가 커뮤니티)
@@ -1477,7 +1477,7 @@ export default function App() {
       { id: 'browse',    label: '일정 탐색' },
       { id: 'live',      label: '라이브' },
       { id: 'community', label: '커뮤니티' },
-      { id: 'tools',     label: '도구' },
+      { id: 'tools',     label: 'GTO' },
     ];
     if (isOwner || isStaff || isAdmin) base.push({ id: 'my-store', label: '내 매장' });
     if (isAdmin)            base.push({ id: 'admin',       label: '관리자 설정' });

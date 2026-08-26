@@ -12,6 +12,7 @@ import { getLedgerRange } from '../../api/ledger';
 import { uploadPoster } from '../../lib/storage';
 import VenueVerificationCard from './VenueVerificationCard';
 import NuriPosLedger, { type LedgerSeed } from './NuriPosLedger';
+import StoreToolsPanel from './StoreToolsPanel';
 import LedgerStatsPanel, { PosSettingsPanel } from './LedgerStatsPanel';
 import TournamentClock from './clock/TournamentClock';
 import AnnouncePanel from './AnnouncePanel';
@@ -38,7 +39,7 @@ import { rankDraftKey, readRowsDraft, writeRowsDraft, clearRowsDraft, pruneRowsD
 // IA3c: 프리셋·매장랭킹·매장꾸미기·이용권·POS설정 5개 문(門)이 '매장 설정' 하위탭으로 통합
 type Section = 'dashboard' | 'game' | 'stats' | 'staff' | 'attendance' | 'settings';
 type GameStep = 'posters' | 'ledger' | 'clock' | 'ranking';
-type SettingsTab = 'page' | 'presets' | 'pos' | 'voucher' | 'danger';
+type SettingsTab = 'page' | 'presets' | 'pos' | 'voucher' | 'optools' | 'danger';
 /** keep-alive box()·visited 의 단위 — 섹션 / 게임 스텝 / 설정 하위탭 */
 type PaneId = Exclude<Section, 'game' | 'settings'> | GameStep | SettingsTab;
 const GAME_STEPS: readonly { id: GameStep; label: string }[] = [
@@ -48,7 +49,8 @@ const GAME_STEPS: readonly { id: GameStep; label: string }[] = [
 const isGameStep = (s: string): s is GameStep => GAME_STEPS.some((g) => g.id === s);
 const SETTINGS_TABS: readonly { id: SettingsTab; label: string }[] = [
   { id: 'page', label: '매장 페이지' }, { id: 'presets', label: '게임 프리셋' },
-  { id: 'pos', label: 'POS·결제' }, { id: 'voucher', label: '이용권·QR' }, { id: 'danger', label: '위험 구역' },
+  { id: 'pos', label: 'POS·결제' }, { id: 'voucher', label: '이용권·QR' },
+  { id: 'optools', label: '운영 도구' }, { id: 'danger', label: '위험 구역' },
 ];
 const isSettingsTab = (s: string): s is SettingsTab => SETTINGS_TABS.some((t) => t.id === s);
 // IA2 잔여(게임 선택 칩 바): 순위 입력에 전달하는 '오늘 게임 선택' 신호 — n 은 같은 게임 재선택도
@@ -64,7 +66,7 @@ const DEEP_SECTION_ALIAS: Record<string, Section | GameStep | SettingsTab> = {
   dashboard: 'dashboard', posters: 'posters', presets: 'presets', ledger: 'ledger', stats: 'stats',
   ranking: 'ranking', staff: 'staff', clock: 'clock', attendance: 'attendance', game: 'ledger',
   // IA3c: 구 섹션 id → 설정 하위탭('venueRank' 는 매장 페이지 탭에 병합, 구 'settings' = POS)
-  venueRank: 'page', voucher: 'voucher', page: 'page', settings: 'pos',
+  venueRank: 'page', voucher: 'voucher', page: 'page', settings: 'pos', optools: 'optools',
   league: 'dashboard', // §12-A-1 제거 — 구 알림의 무음 실패 방지(대시보드 착지)
 };
 const normalizeDeepSection = (raw: string): Section | GameStep | SettingsTab | null => DEEP_SECTION_ALIAS[raw] ?? null;
@@ -75,6 +77,7 @@ const normalizeDeepSection = (raw: string): Section | GameStep | SettingsTab | n
 // (active 게이팅은 내부 작업만 멈출 뿐 재렌더 자체는 못 막아서 이 한 겹이 빠져 있었음.)
 const StoreDashboardM = memo(StoreDashboard);
 const NuriPosLedgerM = memo(NuriPosLedger);
+const StoreToolsPanelM = memo(StoreToolsPanel);
 const LedgerStatsPanelM = memo(LedgerStatsPanel);
 const TournamentClockM = memo(TournamentClock);
 const MyPostersTabM = memo(MyPostersTab);
@@ -561,6 +564,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 {visited.includes('staff') && canStaff && box('staff', <StaffHub venueId={venueId} />)}
                 {visited.includes('pos') && canStaff && box('pos', <PosSettingsPanelM venueId={venueId} />)}
                 {visited.includes('voucher') && (manageOk || voucherView) && box('voucher', <VoucherManagePanelM venueId={venueId} />)}
+                {/* §7 ⑥b: 운영 도구 5종 — GTO 탭에서 이관(레지스트리는 ToolsPanel 재사용) */}
+                {visited.includes('optools') && canStaff && box('optools', <StoreToolsPanelM />)}
                 {/* 위험 구역(IA1→IA3c) — 매장 영구 삭제. 설정의 전용 하위탭으로 격리(접근 2단계) */}
                 {visited.includes('danger') && isOwner && venueId && box('danger', <KillSwitch venueId={venueId} />)}
               </>);
@@ -588,8 +593,9 @@ const SECTION_DESC: Record<Section | GameStep | SettingsTab, string> = {
   voucher: '매장이용권 발행·사용 내역 + 매장 QR(이용권·출석 체크인·가입) 인쇄',
   page: '매장 페이지 꾸미기 + 시즌·랭킹 보드(탭 순서·링크·소개·칭호)',
   staff: '구성원·권한·출근 스케줄·인건비',
-  settings: '매장 페이지 · 게임 프리셋 · POS·결제 · 이용권 · 위험 구역',
+  settings: '매장 페이지 · 게임 프리셋 · POS·결제 · 이용권 · 운영 도구',
   pos: 'POS 비밀번호·결제수단·할인 프리셋',
+  optools: '토너먼트 세팅 계산기 — 칩 분배·구조·블라인드·상금·종료시간 (GTO 탭에서 이관)',
   danger: '매장 영구 삭제 — 복구할 수 없습니다. 신중하게.',
 };
 
@@ -609,6 +615,7 @@ const SECTION_ICON: Record<Section | GameStep | SettingsTab, ReactNode> = {
   attendance: ic(<><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="m9 16 2 2 4-4" /></>),
   voucher: ic(<><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" /><path d="M13 5v14" /></>),
   pos: ic(<><rect x="2" y="5" width="20" height="14" rx="2" /><line x1="2" y1="10" x2="22" y2="10" /></>),
+  optools: ic(<><rect x="4" y="2" width="16" height="20" rx="2" /><line x1="8" y1="6" x2="16" y2="6" /><line x1="8" y1="10" x2="10" y2="10" /><line x1="14" y1="10" x2="16" y2="10" /><line x1="8" y1="14" x2="10" y2="14" /><line x1="14" y1="14" x2="16" y2="14" /><line x1="8" y1="18" x2="16" y2="18" /></>),
   danger: ic(<><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></>),
   staff: ic(<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>),
   page: ic(<><path d="m12 19 7-7 3 3-7 7-3-3z" /><path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" /><path d="m2 2 7.586 7.586" /><circle cx="11" cy="11" r="2" /></>),

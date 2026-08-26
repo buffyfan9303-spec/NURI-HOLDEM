@@ -220,7 +220,7 @@ export default function PreflopTrainer() {
       <div className="flex items-center justify-between">
         <button type="button" onClick={reset} className="px-1.5 py-1.5 -my-1.5 text-2xs text-ink-muted hover:text-ink-secondary transition-colors">기록 초기화</button>
         <p className="text-2xs text-ink-muted">
-          {stats.wrong.length > 0 ? `오답 노트 ${stats.wrong.length}개 — 다음 문제에 25% 확률로 재출제` : '기록은 이 기기에 저장됩니다'}
+          {stats.wrong.length > 0 ? `오답 노트 ${stats.wrong.length}개 — 다음 문제에서 25% 확률로 다시 나옵니다` : '기록은 이 기기에 저장됩니다'}
         </p>
       </div>
     </CalcCard>
