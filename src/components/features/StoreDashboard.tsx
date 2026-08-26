@@ -99,6 +99,17 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const [dealerOpen, setDealerOpen] = useState(false);
   const [checkinOpen, setCheckinOpen] = useState(false);
   const [boostOpen, setBoostOpen] = useState(false);
+  // IA3a 대시보드 다이어트 — 기본 6카드(지금 할 일·라이브·오늘 장부·최근7일·예약·단골)만 노출,
+  // 나머지는 '더 보기' 뒤로. 카드 옷을 입은 순수 링크 5장은 제거/유틸 줄로 강등.
+  const [moreOpen, setMoreOpen] = useState(false);
+  // 운영 가이드 배너 — 베테랑 매장에도 영구 노출되던 것을 닫기 가능으로(닫으면 기억)
+  const [guideHidden, setGuideHidden] = useState(() => {
+    try { return localStorage.getItem('nuri:guide-banner-dismissed') === '1'; } catch { return false; }
+  });
+  const dismissGuide = () => {
+    setGuideHidden(true);
+    try { localStorage.setItem('nuri:guide-banner-dismissed', '1'); } catch { /* noop */ }
+  };
   const [voucherOpen, setVoucherOpen] = useState(false);
   const [voucherPrefill, setVoucherPrefill] = useState(''); // 단골 행 '이용권 보내기' 프리필
   const [hasRankToday, setHasRankToday] = useState<boolean | null>(null); // 지금 할 일 카드(순위 입력 유도)
@@ -447,7 +458,8 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       <CheckinModal open={checkinOpen} onClose={() => setCheckinOpen(false)} venueId={venueId} />
       <BoostContactModal open={boostOpen} onClose={() => setBoostOpen(false)} />
 
-      {/* 📖 업주 운영 가이드 — 슬라이드(새 탭)·PDF. 원본 docs/owner-guide, 배포 사본 public/guide */}
+      {/* 📖 업주 운영 가이드 — 슬라이드(새 탭)·PDF. 닫기 가능(IA3a) — 베테랑 매장에 영구 노출 방지 */}
+      {!guideHidden && (
       <div className="flex items-center justify-between gap-2 rounded-card border border-border-subtle bg-surface-low px-3 py-2">
         <span className="min-w-0 truncate text-xs text-ink-secondary">
           <b className="text-ink-primary">📖 운영 가이드</b><span className="hidden sm:inline"> — 포스터→장부→클락→순위→정산 한눈에</span>
@@ -465,8 +477,13 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
             className="rounded-input border border-border-default px-2.5 py-1 text-2xs font-bold text-ink-secondary hover:text-ink-primary transition-colors">
             PDF
           </a>
+          <button type="button" onClick={dismissGuide} aria-label="가이드 배너 닫기"
+            className="px-1 py-1 text-ink-muted hover:text-ink-primary transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+          </button>
         </span>
       </div>
+      )}
 
       {/* 🔴 라이브 운영 현황 — 진행 클락 + 대기 바인요청을 한 카드에. 운영 중일 때만 노출(상황 인지형 커맨드센터) */}
       {!loading && liveWidget && (
@@ -777,7 +794,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         </DashCard>
 
         {/* 클락 — 라이브 위젯이 클락을 표시 중(clockActive)이면 중복 방지 위해 숨김 */}
-        <DashCard show={caps.ledger && !clockActive} title="토너먼트 클락" onClick={() => onGoto('clock')}
+        <DashCard show={moreOpen && caps.ledger && !clockActive} title="토너먼트 클락" onClick={() => onGoto('clock')}
           badge={clockActive
             ? <span className={`rounded-badge px-1.5 py-0.5 text-2xs font-bold ${clock?.running ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-500/15 text-amber-400'}`}>{clock?.running ? '진행중' : '일시정지'}</span>
             : <span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-surface-float text-ink-muted">미실행</span>}>
@@ -843,7 +860,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         </DashCard>
 
         {/* 전주 대비(주간 비교) */}
-        <DashCard show={caps.manage} title="전주 대비" onClick={() => onGoto('stats')}
+        <DashCard show={moreOpen && caps.manage} title="전주 대비" onClick={() => onGoto('stats')}
           badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-violet-500/15 text-violet-300">주간 비교</span>}>
           {loading ? <Skeleton /> : (weekEntry === 0 && prevEntry === 0) ? (
             <p className="py-3 text-center text-2xs text-ink-muted">비교할 장부 데이터가 없습니다.</p>
@@ -900,7 +917,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         </DashCard>
 
         {/* 오늘 출근 */}
-        <DashCard show={caps.staff} title="오늘 출근" onClick={() => onGoto('staff')}
+        <DashCard show={moreOpen && caps.staff} title="오늘 출근" onClick={() => onGoto('staff')}
           badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-accent-300/15 text-accent-300">{workedStaff.length}/{shifts.length} 출근</span>}>
           {loading ? <Skeleton /> : shifts.length === 0 ? (
             <p className="py-3 text-center text-2xs text-ink-muted">오늘 배정된 직원이 없습니다.</p>
@@ -916,7 +933,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         </DashCard>
 
         {/* 인건비 요약(이번 달) */}
-        <DashCard show={caps.staff} title="인건비 요약" onClick={() => onGoto('staff')}
+        <DashCard show={moreOpen && caps.staff} title="인건비 요약" onClick={() => onGoto('staff')}
           badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-surface-float text-ink-secondary">{mr.label}</span>}>
           {loading ? <Skeleton /> : laborHours === 0 ? (
             <p className="py-3 text-center text-2xs text-ink-muted">이번 달 출퇴근 기록이 없습니다.</p>
@@ -929,7 +946,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         </DashCard>
 
         {/* 매장이용권(회수 티켓) */}
-        <DashCard show={caps.voucher} title="매장이용권" onClick={() => setVoucherOpen(true)}
+        <DashCard show={moreOpen && caps.voucher} title="매장이용권" onClick={() => setVoucherOpen(true)}
           badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-accent-300/15 text-accent-300">발급·관리 →</span>}>
           {loading ? <Skeleton /> : (
             <>
@@ -944,14 +961,8 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           )}
         </DashCard>
 
-        {/* 딜러 관리(로테이션·급여) */}
-        <DashCard show={caps.manage} title="딜러 관리" onClick={() => setDealerOpen(true)}
-          badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-accent-300/15 text-accent-300">로테이션·급여 →</span>}>
-          <p className="py-3 text-center text-2xs text-ink-muted">딜러 시프트 등록 + 월 급여 명세를 관리합니다.</p>
-        </DashCard>
-
         {/* 🎂 생일 단골(7일 내) — 단골 TOP의 고객정보에서 생일 등록 시 자동 표시 */}
-        <DashCard show={caps.manage} title="🎂 생일 단골" onClick={() => setRegOpen(true)}
+        <DashCard show={moreOpen && caps.manage} title="🎂 생일 단골" onClick={() => setRegOpen(true)}
           badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-pink-500/15 text-pink-300">7일 내 {bdays.length}명</span>}>
           {bdays.length === 0 ? (
             <p className="py-3 text-center text-2xs text-ink-muted">7일 내 생일인 단골이 없습니다.<br />생일은 단골 TOP → 고객정보에서 등록해요.</p>
@@ -971,32 +982,8 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           )}
         </DashCard>
 
-        {/* 고객 분석 — 방문 손님 전체 행동 통계 */}
-        <DashCard show={caps.manage} title="고객 분석" onClick={() => onGoto('stats')}
-          badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-accent-300/15 text-accent-300">바인·머니인·미수 →</span>}>
-          <p className="py-3 text-center text-2xs text-ink-muted">방문 손님 리스트 — 바인·머니인 비율·결제수단·방문 시간대·미수까지 한눈에.</p>
-        </DashCard>
-
-        {/* 예약·방문 체크 — 고정 QR 스캔(출석 도장) + 오늘 방문 명단(체크인·이용권) */}
-        <DashCard show={caps.manage} title="예약·방문 체크" onClick={() => setCheckinOpen(true)}
-          badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-accent-300/15 text-accent-300">방문 명단 →</span>}>
-          <p className="py-3 text-center text-2xs text-ink-muted">손님이 <b className="text-ink-secondary">고정 QR을 스캔</b>하거나 매장이용권을 결제하면 <b className="text-accent-300">방문</b>으로 표시됩니다. 오늘 방문 명단·출석 도장 실시간.</p>
-        </DashCard>
-
-        {/* ⚡ 포스터 부스트 안내 — 상단 고정 광고 문의 */}
-        <DashCard show={caps.manage} title="⚡ 포스터 상단 고정" onClick={() => setBoostOpen(true)}
-          badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-accent-300/15 text-accent-300">부스트 문의 →</span>}>
-          <p className="py-3 text-center text-2xs text-ink-muted">내 포스터를 일정탐색 맨 위에 N일 동안 고정하고 TOP 뱃지를 답니다. 눌러서 문의 방법을 확인하세요.</p>
-        </DashCard>
-
-        {/* 매장 꾸미기 — 매장 페이지 탭 순서·순위 탭·칭호 */}
-        <DashCard show={caps.manage} title="매장 꾸미기" onClick={() => onGoto('page')}
-          badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-accent-300/15 text-accent-300">탭·순위·칭호 →</span>}>
-          <p className="py-3 text-center text-2xs text-ink-muted">매장 페이지 탭 순서, 순위 탭 구성(1~2개), 1~3등 칭호·기준 점수를 설정합니다.</p>
-        </DashCard>
-
         {/* 손님 유형 비중(오늘) */}
-        <DashCard show={caps.manage} title="손님 유형" onClick={() => onGoto('stats')}
+        <DashCard show={moreOpen && caps.manage} title="손님 유형" onClick={() => onGoto('stats')}
           badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold bg-accent-300/15 text-accent-300">{playerTotal}명</span>}>
           {loading ? <Skeleton /> : playerTotal === 0 ? (
             <p className="py-3 text-center text-2xs text-ink-muted">오늘 명단이 없습니다.</p>
@@ -1015,6 +1002,25 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           )}
         </DashCard>
       </div>
+
+      {/* 더 보기 토글(IA3a) — 클락·전주 대비·직원·이용권·생일·손님 유형은 접힌 상태가 기본 */}
+      <button type="button" onClick={() => setMoreOpen((v) => !v)} aria-expanded={moreOpen}
+        className="flex w-full items-center justify-center gap-1.5 rounded-card border border-border-subtle bg-surface-low px-3 py-2 text-2xs font-bold text-ink-secondary transition-colors hover:text-ink-primary">
+        {moreOpen ? '간단히 보기' : '더 보기 — 클락 · 주간 비교 · 직원 · 이용권'}
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
+          className={['transition-transform', moreOpen ? 'rotate-180' : ''].join(' ')} aria-hidden><polyline points="6 9 12 15 18 9" /></svg>
+      </button>
+
+      {/* 유틸 줄(IA3a) — 카드 옷을 입던 순수 링크들. '그 자리에서 끝내거나, 유틸이거나' */}
+      {caps.manage && (
+        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 pb-1 text-2xs">
+          <button type="button" onClick={() => setCheckinOpen(true)} className="font-bold text-ink-muted transition-colors hover:text-accent-300">방문 체크·QR 명단</button>
+          <span className="text-border-strong" aria-hidden>·</span>
+          <button type="button" onClick={() => setDealerOpen(true)} className="font-bold text-ink-muted transition-colors hover:text-accent-300">딜러 로테이션·급여</button>
+          <span className="text-border-strong" aria-hidden>·</span>
+          <button type="button" onClick={() => setBoostOpen(true)} className="font-bold text-ink-muted transition-colors hover:text-accent-300">⚡ 포스터 상단 고정 문의</button>
+        </div>
+      )}
     </div>
   );
 }

@@ -24,13 +24,29 @@ import { VoucherManagePanel } from './VoucherManageModal';
 import { listVoucherNotes, iCanViewVouchers, getVoucherAccessUserIds, grantVoucherAccess, revokeVoucherAccess, findUserForTransfer, issueVoucher } from '../../api/vouchers';
 import MyPostersTab from './MyPostersTab';
 import VenueCustomizePanel, { VenueRankHub } from './VenueCustomizePanel';
-import LeaguePanel from './LeaguePanel';
 import SectionHeader from '../atoms/SectionHeader';
 import { getSchedules, type Schedule } from '../../api/schedules';
-import { getLedgerBuyins, getLedgerSession } from '../../api/ledger';
+import { getLedgerBuyins, getLedgerSession, kstToday, getPendingBuyinRequests, subscribeBuyinRequests } from '../../api/ledger';
+import { getVenueClocks, subscribeClock, effectiveLevel, type ClockState } from '../../api/clock';
 import { rankDraftKey, readRowsDraft, writeRowsDraft, clearRowsDraft, pruneRowsDrafts, hasRowContent, moveRankRow, type RankRow } from '../../lib/rankingDraft';
 
-type Section = 'dashboard' | 'posters' | 'presets' | 'ledger' | 'stats' | 'ranking' | 'venueRank' | 'league' | 'staff' | 'settings' | 'clock' | 'attendance' | 'voucher' | 'page';
+// 'league' 는 §12-A-1 오너 결정으로 제거(LEAGUE-FREEZE 의 클라이언트 절반 — 코드는 동결, 진입 경로만 0)
+type Section = 'dashboard' | 'posters' | 'presets' | 'ledger' | 'stats' | 'ranking' | 'venueRank' | 'staff' | 'settings' | 'clock' | 'attendance' | 'voucher' | 'page';
+// IA1: 사용 빈도 기반 3그룹 — 매일 여는 것(오늘) / 주간(분석) / 가끔(관리)
+type NavGroup = '오늘' | '분석' | '관리';
+const NAV_GROUPS: readonly NavGroup[] = ['오늘', '분석', '관리'];
+
+// LINK-MAP(선배포, §15.6 #9): 알림 딥링크 섹션 id 정규화의 단일 지점 — IA2가 섹션을 재정의하기
+// '한 배포 전'에 신·구 id 를 모두 수용하는 테이블을 먼저 심는다. 지금은 동작 변화 0.
+// 이미 발송된 푸시·SW 캐시의 구 번들이 구 id 를 계속 보내므로, IA2 는 이 테이블만 확장한다
+// (예: ledger|clock|ranking|posters → 게임 스텝). 미지 값은 null → 호출부가 대시보드 + 토스트.
+const DEEP_SECTION_ALIAS: Record<string, Section> = {
+  dashboard: 'dashboard', posters: 'posters', presets: 'presets', ledger: 'ledger', stats: 'stats',
+  ranking: 'ranking', venueRank: 'venueRank', staff: 'staff', settings: 'settings', clock: 'clock',
+  attendance: 'attendance', voucher: 'voucher', page: 'page',
+  league: 'dashboard', // §12-A-1 제거 — 구 알림의 무음 실패 방지(대시보드 착지)
+};
+const normalizeDeepSection = (raw: string): Section | null => DEEP_SECTION_ALIAS[raw] ?? null;
 
 // 메뉴 전환 잰크 제거 — 방문 섹션은 마운트 유지(display 토글)라, 부모(VenueManageTab) 재렌더 시
 // 숨겨진 무거운 섹션들이 전부 재조정(reconcile)되며 프레임을 잡아먹었다. memo 로 감싸 prop 이
@@ -43,7 +59,6 @@ const TournamentClockM = memo(TournamentClock);
 const MyPostersTabM = memo(MyPostersTab);
 const PresetManagerM = memo(PresetManager);
 const SeasonPanelM = memo(SeasonPanel);
-const LeaguePanelM = memo(LeaguePanel);
 const VenueCustomizePanelM = memo(VenueCustomizePanel);
 const VoucherManagePanelM = memo(VoucherManagePanel);
 const AnnouncePanelM = memo(AnnouncePanel);
@@ -61,6 +76,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   tabActive?: boolean;
 }) {
   const { user, refreshProfile } = useAuth();
+  const toast = useToast();
   const isOwner = user?.role === 'venue_owner';
   const isAdmin = user?.role === 'admin';
   const canStaff = isOwner || isAdmin; // 직원 관리·POS 설정 접근
@@ -124,27 +140,20 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   // 알림 딥링크("📒 장부 시작" 클릭 등) — 권한 확인이 끝나면 지정 섹션으로 1회 이동
   useEffect(() => {
     if (!deepSection || !permsLoaded) return;
-    gotoSection(deepSection);
+    // LINK-MAP 정규화 → IA1 폴백: 없는 섹션이면 무음 실패 대신 대시보드 + 안내(§15.6 #9)
+    const target = normalizeDeepSection(deepSection);
+    if (!target || !available.some((a) => a.id === target)) {
+      toast.show('요청한 메뉴를 찾을 수 없어 대시보드로 이동했어요', 'error');
+      gotoSection('dashboard');
+    } else {
+      gotoSection(target);
+    }
     onConsumeDeepSection?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deepSection, permsLoaded]);
 
-  // 메뉴 즐겨찾기 — 매장별 최대 5개를 상단 고정(★ 토글, localStorage)
-  const [favs, setFavs] = useState<Section[]>([]);
-  useEffect(() => {
-    if (!venueId) return;
-    try { setFavs(JSON.parse(localStorage.getItem(`nuri:fav-sections:${venueId}`) ?? '[]')); }
-    catch { setFavs([]); }
-  }, [venueId]);
-  const toggleFav = (id: Section) => {
-    setFavs((f) => {
-      const has = f.includes(id);
-      if (!has && f.length >= 5) return f; // 최대 5개
-      const next = has ? f.filter((x) => x !== id) : [...f, id];
-      if (venueId) localStorage.setItem(`nuri:fav-sections:${venueId}`, JSON.stringify(next));
-      return next;
-    });
-  };
+  // ★ 즐겨찾기는 IA1 에서 전량 삭제 — 5섹션 그룹 구조에선 '제품이 중요도를 못 정해 정렬을 외주 준' 장치가 무의미.
+  // 기존 localStorage(nuri:fav-sections:*) 값은 읽지 않고 방치(마이그레이션 불필요).
 
   // 운영자: 전체 매장 목록 로드(선택용)
   useEffect(() => {
@@ -190,24 +199,27 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     return () => window.removeEventListener('focus', recheck);
   }, [venueId, isAdmin]);
 
-  // 섹션 노출 규칙:
-  //  · 직원이 부여받을 수 있는 권한(장부·이용권)은 권한 없어도 '잠금' 탭으로 노출 → 클릭 시 "권한 없음" 안내(휑한 화면 방지).
+  // 섹션 노출 규칙(IA1 — 14개 평면 형제 → 사용 빈도 3그룹, 컴포넌트 마운트 이동 0):
+  //  · 직원이 부여받을 수 있는 권한(장부)은 권한 없어도 '잠금' 탭으로 노출 → 클릭 시 "권한 없음" 안내(휑한 화면 방지).
   //  · 장부에 종속된 순위·클락·출근은 장부 권한이 있을 때만 노출(중복 잠금 방지).
   //  · 업주만 가능한 섹션(포스터·통계·직원·POS)은 직원에게 아예 숨김.
-  const available: { id: Section; label: string; locked?: boolean }[] = [{ id: 'dashboard', label: '대시보드' }];
-  if (canPosters) available.push({ id: 'posters', label: '포스터·예약' });
-  if (canPosters) available.push({ id: 'presets', label: '게임 프리셋' });
-  available.push({ id: 'ledger', label: '장부', locked: !ledgerOk });
-  if (manageOk) available.push({ id: 'stats',  label: '통계' });
-  if (ledgerOk) available.push({ id: 'ranking', label: '순위 입력' });
-  if (ledgerOk) available.push({ id: 'venueRank', label: '매장 랭킹' });
-  if (ledgerOk) available.push({ id: 'league', label: '연합 리그' });
-  if (ledgerOk) available.push({ id: 'clock', label: '클락' });
-  if (ledgerOk) available.push({ id: 'attendance', label: '출근 관리' });
-  available.push({ id: 'voucher', label: '매장이용권/QR', locked: !(manageOk || voucherView) });
-  if (canStaff) available.push({ id: 'page', label: '매장 꾸미기' });
-  if (canStaff) available.push({ id: 'staff', label: '직원 관리' });
-  if (canStaff) available.push({ id: 'settings', label: '설정' });
+  //  · 이용권은 볼 수 있는 사람에게만 — 발행매장이 아니면 영원히 안 열리는 '잠금'은 거짓 약속이라 아예 비노출.
+  //  · 연합리그 제거(§12-A-1) — 잠금이 아니라 진입 경로 자체를 없앤다.
+  const available: { id: Section; label: string; group: NavGroup; locked?: boolean }[] = [{ id: 'dashboard', label: '대시보드', group: '오늘' }];
+  if (canPosters) available.push({ id: 'posters', label: '포스터·예약', group: '오늘' });
+  available.push({ id: 'ledger', label: '장부', group: '오늘', locked: !ledgerOk });
+  if (ledgerOk) available.push({ id: 'clock', label: '클락', group: '오늘' });
+  if (ledgerOk) available.push({ id: 'ranking', label: '순위 입력', group: '오늘' });
+  if (manageOk) available.push({ id: 'stats',  label: '통계', group: '분석' });
+  if (canPosters) available.push({ id: 'presets', label: '게임 프리셋', group: '관리' });
+  if (ledgerOk) available.push({ id: 'venueRank', label: '매장 랭킹', group: '관리' });
+  // ATT-FIX: '내 출퇴근 기록'이 장부 권한(ledgerOk)에 묶여 있어 장부 권한 없는 직원이
+  // 자기 출퇴근을 못 보던 오게이팅 — 이 탭에 들어온 소속 구성원이면 누구나
+  available.push({ id: 'attendance', label: '출근 관리', group: '관리' });
+  if (manageOk || voucherView) available.push({ id: 'voucher', label: '매장이용권/QR', group: '관리' });
+  if (canStaff) available.push({ id: 'page', label: '매장 꾸미기', group: '관리' });
+  if (canStaff) available.push({ id: 'staff', label: '직원 관리', group: '관리' });
+  if (canStaff) available.push({ id: 'settings', label: '설정', group: '관리' });
   const curItem = available.find((a) => a.id === section);
   // 콘텐츠 전환은 deferred — 내비(탭 하이라이트)는 즉시 반응하고, 무거운 섹션 렌더는 메인스레드를 막지 않고 양보.
   // 폰(저사양 CPU)에서 메뉴 이동 시 동기 렌더가 프레임을 막아 생기던 "치직임/끊김"을 제거.
@@ -249,14 +261,16 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
       ) : section === null ? (
         <p className="py-16 text-center text-sm text-ink-muted">이 매장에서 사용 가능한 메뉴가 없습니다.<br />업주에게 장부 권한을 요청하세요.</p>
       ) : (
+        <>
+        {/* ST1 상시 게임 바 — 통계·직원 등 어느 섹션에서도 진행 클락·대기 바인요청이 보인다.
+            대시보드는 자체 라이브 위젯이 있어 제외(중복 채널·중복 표시 방지). */}
+        {venueId && renderSection !== 'dashboard' && (
+          // 대시보드 진입 시 언마운트 → 구독도 함께 정리(중복 채널 방지)
+          <StoreLiveBar venueId={venueId} active={tabActive} onGoto={gotoSection} />
+        )}
         <div className="lg:flex lg:gap-4">
-          {available.length > 1 && (() => {
-            const sorted = [...available].sort((a, b) => {
-              const fi = (id: Section) => { const i = favs.indexOf(id); return i < 0 ? 999 : i; };
-              return fi(a.id) - fi(b.id);
-            });
-            return (<>
-              {/* 모바일: 아코디언 — 현재 메뉴만 보이고, 탭하면 전체 펼침(위로 다 몰지 않게) */}
+          {available.length > 1 && (<>
+              {/* 모바일: 아코디언 — 현재 메뉴만 보이고, 탭하면 그룹별 전체 펼침(위로 다 몰지 않게) */}
               <div className="lg:hidden">
                 <button type="button" onClick={() => setNavOpen((v) => !v)} aria-expanded={navOpen}
                   className="flex w-full items-center gap-2 rounded-card border border-accent-400/30 bg-surface-high px-3 py-2.5">
@@ -266,48 +280,50 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   <Icon name="chevron-down" size={16} className={['shrink-0 text-ink-muted transition-transform', navOpen ? 'rotate-180' : ''].join(' ')} />
                 </button>
                 {navOpen && (
-                  <>
-                    <div className="mt-1 grid grid-cols-2 gap-1 rounded-card border border-border-subtle bg-surface-high p-1 animate-slide-up">
-                      {sorted.map((a) => {
-                        const on = section === a.id;
-                        const fav = favs.includes(a.id);
-                        return (
-                          // 메뉴 이동(좌)과 즐겨찾기 토글(우 ★)을 분리된 탭 타겟으로 — 별이 항상 보여 토글 가능함이 명확
-                          <div key={a.id} className={['flex items-center rounded-input transition-colors',
-                            on ? 'bg-accent-300' : a.locked ? '' : 'hover:bg-surface-float'].join(' ')}>
-                            <button type="button" onClick={() => { gotoSection(a.id); setNavOpen(false); }}
-                              className={['flex min-w-0 flex-1 items-center gap-2 py-2.5 pl-2.5 text-xs font-bold',
-                                on ? 'text-ink-inverse' : a.locked ? 'text-ink-muted/60' : 'text-ink-secondary'].join(' ')}>
-                              <span className="shrink-0" aria-hidden>{SECTION_ICON[a.id]}</span>
-                              <span className="min-w-0 flex-1 text-left truncate">{a.label}</span>
-                              {a.locked && <Icon name="lock" size={11} className="shrink-0 opacity-70" />}
-                            </button>
-                            {!a.locked && (
-                              <button type="button" onClick={(e) => { e.stopPropagation(); toggleFav(a.id); }}
-                                aria-label={fav ? '즐겨찾기 해제' : '즐겨찾기 추가'} aria-pressed={fav}
-                                className={['shrink-0 px-2.5 py-2.5 text-base leading-none transition-colors active:scale-90',
-                                  fav ? (on ? 'text-ink-inverse' : 'text-accent-300') : (on ? 'text-ink-inverse/45' : 'text-ink-muted/40')].join(' ')}>
-                                {fav ? '★' : '☆'}
-                              </button>
-                            )}
+                  <div className="mt-1 rounded-card border border-border-subtle bg-surface-high p-1 animate-slide-up space-y-0.5">
+                    {NAV_GROUPS.map((grp) => {
+                      const items = available.filter((a) => a.group === grp);
+                      if (items.length === 0) return null;
+                      return (
+                        <div key={grp}>
+                          <p className="px-2 pb-0.5 pt-1.5 text-2xs font-bold text-ink-muted">{grp}</p>
+                          <div className="grid grid-cols-2 gap-1">
+                            {items.map((a) => {
+                              const on = section === a.id;
+                              return (
+                                <button key={a.id} type="button" onClick={() => { gotoSection(a.id); setNavOpen(false); }}
+                                  className={['flex min-w-0 items-center gap-2 rounded-input px-2.5 py-2.5 text-xs font-bold transition-colors',
+                                    on ? 'bg-accent-300 text-ink-inverse' : a.locked ? 'text-ink-muted/60' : 'text-ink-secondary hover:bg-surface-float'].join(' ')}>
+                                  <span className="shrink-0" aria-hidden>{SECTION_ICON[a.id]}</span>
+                                  <span className="min-w-0 flex-1 text-left truncate">{a.label}</span>
+                                  {a.locked && <Icon name="lock" size={11} className="shrink-0 opacity-70" />}
+                                </button>
+                              );
+                            })}
                           </div>
-                        );
-                      })}
-                    </div>
-                    <p className="mt-1 px-1 text-2xs text-ink-muted">★ 별을 누르면 즐겨찾기로 상단에 고정돼요</p>
-                  </>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
-              {/* PC: 세로 사이드바(기존) */}
-              <nav className="hidden lg:flex lg:sticky lg:top-[calc(var(--stack-top,6.0625rem)+0.75rem)] lg:w-44 lg:shrink-0 lg:flex-col lg:self-start lg:gap-1">
-                {sorted.map((a) => (
-                  <SectionBtn key={a.id} icon={SECTION_ICON[a.id]} active={section === a.id} locked={a.locked}
-                    fav={favs.includes(a.id)} onToggleFav={() => toggleFav(a.id)}
-                    onClick={() => gotoSection(a.id)}>{a.label}</SectionBtn>
-                ))}
+              {/* PC: 세로 사이드바 — 그룹 헤더 3개 + 라이브 배지 자리(IA3 에서 공급), 폭 w-44→w-52 */}
+              <nav className="hidden lg:flex lg:sticky lg:top-[calc(var(--stack-top,6.0625rem)+0.75rem)] lg:w-52 lg:shrink-0 lg:flex-col lg:self-start lg:gap-1">
+                {NAV_GROUPS.map((grp) => {
+                  const items = available.filter((a) => a.group === grp);
+                  if (items.length === 0) return null;
+                  return (
+                    <div key={grp} className="flex flex-col gap-1">
+                      <p className="px-3 pb-0.5 pt-2 text-2xs font-bold tracking-wide text-ink-muted">{grp}</p>
+                      {items.map((a) => (
+                        <SectionBtn key={a.id} icon={SECTION_ICON[a.id]} active={section === a.id} locked={a.locked}
+                          onClick={() => gotoSection(a.id)}>{a.label}</SectionBtn>
+                      ))}
+                    </div>
+                  );
+                })}
               </nav>
-            </>);
-          })()}
+            </>)}
 
           <div className="mt-3 min-w-0 flex-1 space-y-3 lg:mt-0">
             {dItem?.locked && (
@@ -352,21 +368,23 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   <SeasonPanelM venueId={venueId} canManage={manageOk} />
                   <div className="mt-5 border-t border-border-subtle pt-4"><VenueRankHubM venueId={venueId} canConfigure={manageOk} /></div>
                 </>)}
-                {visited.includes('league') && ledgerOk && box('league', <LeaguePanelM venueId={venueId} canConfigure={manageOk} />)}
                 {visited.includes('page') && canStaff && box('page', <VenueCustomizePanelM venueId={venueId} />)}
                 {visited.includes('clock') && ledgerOk && box('clock', <TournamentClockM venueId={venueId} canManage={ledgerOk} seedSessionDate={clockSeed} seedGameSeq={clockSeedGame} active={tabActive && renderSection === 'clock'} />)}
-                {visited.includes('attendance') && ledgerOk && box('attendance', <StaffSelfAttendanceM venueId={venueId} />)}
+                {visited.includes('attendance') && box('attendance', <StaffSelfAttendanceM venueId={venueId} />)}
                 {visited.includes('staff') && canStaff && box('staff', <StaffHub venueId={venueId} />)}
-                {visited.includes('settings') && canStaff && box('settings', <PosSettingsPanelM venueId={venueId} />)}
+                {visited.includes('settings') && canStaff && box('settings', <>
+                  <PosSettingsPanelM venueId={venueId} />
+                  {/* 위험 구역(IA1) — 매장 영구 삭제. 매일 여는 전 화면 하단 상시 노출에서 설정 하위로 격리(접근 2단계) */}
+                  {isOwner && venueId && <div className="mt-6 border-t border-danger/30 pt-4"><KillSwitch venueId={venueId} /></div>}
+                </>)}
                 {visited.includes('voucher') && (manageOk || voucherView) && box('voucher', <VoucherManagePanelM venueId={venueId} />)}
               </>);
             })()}
           </div>
         </div>
+        </>
       )}
 
-      {/* 위험 구역 — 매장 킬스위치(전체 영구 삭제). 매장 대표 업주에게만 노출. */}
-      {isOwner && venueId && <KillSwitch venueId={venueId} />}
     </div>
   );
 }
@@ -380,7 +398,6 @@ const SECTION_DESC: Record<Section, string> = {
   stats: '기간별 매출·엔트리·요일 분석',
   ranking: '대회 순위 등록 — 닉네임이 일치하는 회원에게 점수가 자동 반영됩니다',
   venueRank: '매장 커뮤니티 순위 탭에 노출될 랭킹 보드 설정(금전적 가치 없음)',
-  league: '여러 매장이 함께 운영하는 공동 랭킹 — 초대 → 수락 → 통합 순위',
   clock: '토너먼트 타이머 — 장부 연동 시 엔트리·생존이 자동 반영됩니다',
   attendance: '내 출퇴근 기록',
   voucher: '매장이용권 발행·사용 내역 + 매장 QR(이용권·출석 체크인·가입) 인쇄',
@@ -406,13 +423,65 @@ const SECTION_ICON: Record<Section, ReactNode> = {
   staff: ic(<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>),
   page: ic(<><path d="m12 19 7-7 3 3-7 7-3-3z" /><path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" /><path d="m2 2 7.586 7.586" /><circle cx="11" cy="11" r="2" /></>),
   venueRank: ic(<><path d="M12 2l2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.5-4.8 2.5.9-5.4L4.2 7.7l5.4-.8L12 2z" /><path d="M4 22h16" /></>),
-  league: ic(<><circle cx="6" cy="8" r="3" /><circle cx="18" cy="8" r="3" /><path d="M3 20v-1a3 3 0 0 1 3-3h0a3 3 0 0 1 3 3v1" /><path d="M15 20v-1a3 3 0 0 1 3-3h0a3 3 0 0 1 3 3v1" /><path d="M9 8h6" /></>),
   settings: ic(<><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" /></>),
 };
 
-function SectionBtn({ active, onClick, icon, children, locked, fav, onToggleFav }: {
+// ── ST1: 상시 게임 바 — 통계·직원 등 어느 섹션에서도 진행 클락·대기 바인요청이 보인다(§13-C).
+// 데이터·게이팅은 StoreDashboard의 검증된 배선을 그대로 승격: venue 스코프 조회 + active 게이트 구독
+// (전역 subscribeRunningClocks 금지 — §15.5 #9, venue 단위 채널만). 1초 틱은 이 컴포넌트로 국한.
+const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto }: {
+  venueId: string; active: boolean; onGoto: (s: Section) => void;
+}) {
+  const [clocks, setClocks] = useState<ClockState[]>([]);
+  const [pending, setPending] = useState(0);
+  const [, setTick] = useState(0);
+  const reload = useCallback(() => {
+    getVenueClocks(venueId).then(setClocks).catch(() => {});
+    getPendingBuyinRequests(venueId, kstToday()).then((r) => setPending(r.length)).catch(() => {});
+  }, [venueId]);
+  useEffect(() => { if (active) reload(); }, [active, reload]);
+  useEffect(() => { if (active) return subscribeClock(venueId, reload); }, [venueId, reload, active]);
+  useEffect(() => { if (active) return subscribeBuyinRequests(venueId, reload); }, [venueId, reload, active]);
+  const live = clocks.filter((c) => c.running || c.currentIndex > 0 || c.endsAt != null).sort((a, b) => a.gameSeq - b.gameSeq);
+  const main = live[0];
+  const mainRunning = !!main?.running;
+  // 남은 시간 1초 틱 — 바가 보이고 클락이 실제로 돌 때만(리렌더 범위 = 이 바 하나)
+  useEffect(() => {
+    if (!active || !mainRunning) return;
+    const t = window.setInterval(() => setTick((n) => n + 1), 1000);
+    return () => window.clearInterval(t);
+  }, [active, mainRunning]);
+  if (!main && pending === 0) return null;
+  const eff = main ? effectiveLevel(main) : null;
+  const lv = main && eff ? main.config.levels[eff.index] : undefined;
+  const levelNo = main && eff ? main.config.levels.slice(0, eff.index + 1).filter((l) => l.kind === 'level').length : 0;
+  const mmss = (ms: number) => { const s = Math.max(0, Math.floor(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+  const alive = main?.liveStats?.alive;
+  return (
+    <div className="mb-3 flex items-stretch gap-1.5 overflow-x-auto rounded-card border border-accent-400/30 bg-surface-low px-1.5 py-1.5 text-2xs">
+      {main && eff && (
+        <button type="button" onClick={() => onGoto('clock')}
+          className="flex shrink-0 items-center gap-2 rounded-input px-2 py-1 transition-colors hover:bg-surface-float">
+          <span className={['h-1.5 w-1.5 shrink-0 rounded-full', main.running ? 'bg-emerald-400' : 'bg-amber-400'].join(' ')} aria-hidden />
+          <span className="font-bold text-ink-primary">{lv?.kind === 'break' ? 'BREAK' : `레벨 ${levelNo}`}</span>
+          {lv && lv.kind !== 'break' && <span className="tabular-nums text-ink-secondary">{lv.sb.toLocaleString()}/{lv.bb.toLocaleString()}</span>}
+          <span className={['font-extrabold tabular-nums', main.running ? 'text-emerald-400' : 'text-amber-400'].join(' ')}>{mmss(eff.remainingMs)}</span>
+          {typeof alive === 'number' && alive > 0 && <span className="text-ink-muted">생존 <b className="tabular-nums text-accent-300">{alive}</b></span>}
+          {live.length >= 2 && <span className="text-ink-muted">+{live.length - 1}게임</span>}
+        </button>
+      )}
+      {pending > 0 && (
+        <button type="button" onClick={() => onGoto('ledger')}
+          className="flex shrink-0 items-center gap-1.5 rounded-input bg-amber-500/10 px-2 py-1 font-bold text-amber-300 transition-colors hover:bg-amber-500/20">
+          바인 대기 <b className="tabular-nums">{pending}</b>건 →
+        </button>
+      )}
+    </div>
+  );
+});
+
+function SectionBtn({ active, onClick, icon, children, locked }: {
   active: boolean; onClick: () => void; icon?: ReactNode; children: ReactNode; locked?: boolean;
-  fav?: boolean; onToggleFav?: () => void;
 }) {
   // 모바일: 가로 스크롤 칩 바 — 선택된 칩이 항상 화면 안에 오도록 부드럽게 센터링
   const ref = useRef<HTMLButtonElement | null>(null);
@@ -430,16 +499,6 @@ function SectionBtn({ active, onClick, icon, children, locked, fav, onToggleFav 
       <span className="relative shrink-0" aria-hidden>{icon}</span>
       <span className="relative">{children}</span>
       {locked && <Icon name="lock" size={11} className={['hidden lg:block ml-auto shrink-0', active ? 'text-ink-inverse/70' : 'text-ink-muted'].join(' ')} />}
-      {/* ★ 즐겨찾기 토글 — 즐겨찾기는 상시, 나머지는 PC 호버 시 표시(최대 5개 상단 고정) */}
-      {onToggleFav && !locked && (
-        <span
-          role="button" tabIndex={-1} aria-label={fav ? '즐겨찾기 해제' : '즐겨찾기 추가'}
-          onClick={(e) => { e.stopPropagation(); onToggleFav(); }}
-          className={[locked ? '' : 'lg:ml-auto', 'relative hidden lg:inline shrink-0 px-0.5 text-sm leading-none transition-opacity',
-            fav ? (active ? 'text-ink-inverse' : 'text-accent-300') + ' opacity-100'
-                : 'opacity-0 group-hover/nav:opacity-60 ' + (active ? 'text-ink-inverse' : 'text-ink-muted')].join(' ')}
-        >{fav ? '★' : '☆'}</span>
-      )}
     </button>
   );
 }
