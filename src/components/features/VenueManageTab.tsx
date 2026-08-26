@@ -36,6 +36,18 @@ type Section = 'dashboard' | 'posters' | 'presets' | 'ledger' | 'stats' | 'ranki
 type NavGroup = '오늘' | '분석' | '관리';
 const NAV_GROUPS: readonly NavGroup[] = ['오늘', '분석', '관리'];
 
+// LINK-MAP(선배포, §15.6 #9): 알림 딥링크 섹션 id 정규화의 단일 지점 — IA2가 섹션을 재정의하기
+// '한 배포 전'에 신·구 id 를 모두 수용하는 테이블을 먼저 심는다. 지금은 동작 변화 0.
+// 이미 발송된 푸시·SW 캐시의 구 번들이 구 id 를 계속 보내므로, IA2 는 이 테이블만 확장한다
+// (예: ledger|clock|ranking|posters → 게임 스텝). 미지 값은 null → 호출부가 대시보드 + 토스트.
+const DEEP_SECTION_ALIAS: Record<string, Section> = {
+  dashboard: 'dashboard', posters: 'posters', presets: 'presets', ledger: 'ledger', stats: 'stats',
+  ranking: 'ranking', venueRank: 'venueRank', staff: 'staff', settings: 'settings', clock: 'clock',
+  attendance: 'attendance', voucher: 'voucher', page: 'page',
+  league: 'dashboard', // §12-A-1 제거 — 구 알림의 무음 실패 방지(대시보드 착지)
+};
+const normalizeDeepSection = (raw: string): Section | null => DEEP_SECTION_ALIAS[raw] ?? null;
+
 // 메뉴 전환 잰크 제거 — 방문 섹션은 마운트 유지(display 토글)라, 부모(VenueManageTab) 재렌더 시
 // 숨겨진 무거운 섹션들이 전부 재조정(reconcile)되며 프레임을 잡아먹었다. memo 로 감싸 prop 이
 // 그대로면 재렌더를 건너뛴다 → 전환 시 "나가는 섹션 + 들어오는 섹션"만 재렌더(active 변경분).
@@ -128,12 +140,13 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   // 알림 딥링크("📒 장부 시작" 클릭 등) — 권한 확인이 끝나면 지정 섹션으로 1회 이동
   useEffect(() => {
     if (!deepSection || !permsLoaded) return;
-    // IA1 딥링크 폴백(§15.6 #9): nav 재편·권한으로 존재하지 않는 섹션이면 무음 실패 대신 대시보드 + 안내
-    if (!available.some((a) => a.id === deepSection)) {
+    // LINK-MAP 정규화 → IA1 폴백: 없는 섹션이면 무음 실패 대신 대시보드 + 안내(§15.6 #9)
+    const target = normalizeDeepSection(deepSection);
+    if (!target || !available.some((a) => a.id === target)) {
       toast.show('요청한 메뉴를 찾을 수 없어 대시보드로 이동했어요', 'error');
       gotoSection('dashboard');
     } else {
-      gotoSection(deepSection);
+      gotoSection(target);
     }
     onConsumeDeepSection?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
