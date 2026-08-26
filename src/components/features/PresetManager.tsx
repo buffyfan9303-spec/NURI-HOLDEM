@@ -3,10 +3,11 @@
 // PL3: 기본 생성 경로가 '지난 게임에서 만들기' — 빈 폼은 2차 진입점(§13-B 생성 경로 역전).
 import { useEffect, useState } from 'react';
 import { useToast } from '../atoms/Toast';
-import { listGamePresets, saveGamePreset, deleteGamePreset, type GamePreset, type GamePresetData } from '../../api/presets';
+import { listGamePresets, saveGamePreset, deleteGamePreset, presetBuyInWon, presetFilledCount, type GamePreset, type GamePresetData } from '../../api/presets';
 import { getSchedules, type Schedule } from '../../api/schedules';
-import { presetFromSchedule } from '../../lib/gameInherit';
-import { manToWon } from '../../lib/units';
+import { getLedgerSession, getLedgerSessionList, type LedgerSessionListItem } from '../../api/ledger';
+import { presetFromSchedule, presetFromRound } from '../../lib/gameInherit';
+import { manToWon, presetPrizeWon, wonToMan } from '../../lib/units';
 import BlindLevelsEditor from './clock/BlindLevelsEditor';
 
 const EMPTY: GamePresetData = {
@@ -25,15 +26,36 @@ export default function PresetManager({ venueId }: { venueId: string }) {
 
   // PL3: 최근 포스터(이 매장) — '지난 게임에서 만들기' 재료. 24필드가 채워진 채 열려 이름만 지으면 된다.
   const [recent, setRecent] = useState<Schedule[]>([]);
+  const [allSchedules, setAllSchedules] = useState<Schedule[]>([]); // 장부 회차의 연결 포스터 룩업용
   useEffect(() => {
     getSchedules()
-      .then((all) => setRecent(all.filter((s) => s.venueId === venueId).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 12)))
+      .then((all) => {
+        const mine = all.filter((s) => s.venueId === venueId);
+        setAllSchedules(mine);
+        setRecent([...mine].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 12));
+      })
+      .catch(() => {});
+  }, [venueId]);
+  // PL3: 최근 '마감된' 장부 회차 — 운영 중 수정까지 반영된 완성본(스냅샷)이 최우선 재료.
+  const [rounds, setRounds] = useState<LedgerSessionListItem[]>([]);
+  useEffect(() => {
+    getLedgerSessionList(venueId, 40)
+      .then((list) => setRounds(list.filter((s) => s.closed).slice(0, 6)))
       .catch(() => {});
   }, [venueId]);
 
   const startNew = () => setEditing({ name: '', data: { ...EMPTY } });
   const startFromSchedule = (sc: Schedule) =>
     setEditing({ name: sc.title, data: { ...EMPTY, ...presetFromSchedule(sc) } });
+  // 마감 회차 → 프리셋(세션 + 마감 때 캡처한 클락 설정 + 연결 포스터를 한 번에)
+  const startFromRound = async (r: LedgerSessionListItem) => {
+    try {
+      const sess = await getLedgerSession(venueId, r.sessionDate, r.gameSeq);
+      const sched = allSchedules.find((s) => s.id === sess.scheduleId) ?? null;
+      const cfg = sess.clockSnapshot?.gameSnapshot?.clockConfig ?? null;
+      setEditing({ name: sess.title || `${r.sessionDate} 게임`, data: { ...EMPTY, ...presetFromRound(sess, cfg, sched) } });
+    } catch { toast.show('회차를 불러오지 못했습니다', 'error'); }
+  };
   const startEdit = (p: GamePreset) => setEditing({ id: p.id, name: p.name, data: { ...EMPTY, ...p.data } });
 
   const save = async () => {
@@ -51,11 +73,17 @@ export default function PresetManager({ venueId }: { venueId: string }) {
 
   const set = (patch: Partial<GamePresetData>) => setEditing((e) => e ? { ...e, data: { ...e.data, ...patch } } : e);
 
-  // 프리셋 한 줄 요약
-  const summary = (d: GamePresetData) => [
-    d.gameType, d.buyIn ? `바인 ${d.buyIn.toLocaleString()}원` : '', d.startStack ? `스타팅 ${d.startStack.toLocaleString()}` : '',
-    d.prizeType === 'GTD' && d.prizeAmount ? `${d.prizeAmount}만 GTD` : '', d.duration ? `듀레이션 ${d.duration}` : '',
-  ].filter(Boolean).join(' · ') || '내용 없음';
+  // 프리셋 한 줄 요약 — 금액은 폴백 리더(buyInWon ?? buyIn · prizeAmountWon ?? prizeAmount) 경유
+  const summary = (d: GamePresetData) => {
+    const buy = presetBuyInWon(d);
+    const gtd = presetPrizeWon(d);
+    const nsCnt = presetFilledCount(d.poster) + presetFilledCount(d.ledger) + presetFilledCount(d.clock);
+    return [
+      d.gameType, buy ? `바인 ${buy.toLocaleString()}원` : '', d.startStack ? `스타팅 ${d.startStack.toLocaleString()}` : '',
+      d.prizeType === 'GTD' && gtd ? `${wonToMan(gtd).toLocaleString(undefined, { maximumFractionDigits: 1 })}만 GTD` : '',
+      d.duration ? `듀레이션 ${d.duration}` : '', nsCnt ? `전용 항목 ${nsCnt}` : '',
+    ].filter(Boolean).join(' · ') || '내용 없음';
+  };
 
   if (editing) {
     const d = editing.data;
@@ -69,7 +97,8 @@ export default function PresetManager({ venueId }: { venueId: string }) {
         <Field label="게임 제목"><input value={d.title ?? ''} onChange={(e) => set({ title: e.target.value })} placeholder="예: 데일리 토너먼트" className="input w-full text-sm" /></Field>
         <Field label="게임 종류"><input value={d.gameType ?? ''} onChange={(e) => set({ gameType: e.target.value })} placeholder="프리즈아웃 · 바운티 · 애드온 등" className="input w-full text-sm" /></Field>
         <div className="grid grid-cols-2 gap-2">
-          <Field label="바이인(원)"><NumInput v={d.buyIn} on={(n) => set({ buyIn: n })} /></Field>
+          {/* PL2a 정규형 병기: 입력은 원 그대로, 저장은 buyInWon(단위 명시)+구형 buyIn 동시 */}
+          <Field label="바이인(원)"><NumInput v={presetBuyInWon(d) || undefined} on={(n) => set({ buyIn: n, buyInWon: n })} /></Field>
           <Field label="듀레이션"><input value={d.duration ?? ''} onChange={(e) => set({ duration: e.target.value })} placeholder="예: 레벨당 20분" className="input w-full text-sm" /></Field>
           <Field label="스타팅 스택"><NumInput v={d.startStack} on={(n) => set({ startStack: n })} /></Field>
           <Field label="리바인 스택"><NumInput v={d.rebuyStack} on={(n) => set({ rebuyStack: n })} /></Field>
@@ -120,6 +149,13 @@ export default function PresetManager({ venueId }: { venueId: string }) {
         <Field label="블라인드 구조 (클락에 그대로 적용)">
           <BlindLevelsEditor levels={d.blindLevels ?? []} onChange={(lv) => set({ blindLevels: lv })} />
         </Field>
+        {/* PL2a: 단계 전용 네임스페이스 — '지난 게임에서'로 채워진 값은 그대로 보존·적용된다(여기선 개수만 표시) */}
+        {(presetFilledCount(d.poster) + presetFilledCount(d.ledger) + presetFilledCount(d.clock)) > 0 && (
+          <p className="rounded-input border border-border-subtle bg-surface-high px-2.5 py-1.5 text-2xs text-ink-muted">
+            단계 전용 항목 포함 — 포스터 {presetFilledCount(d.poster)} · 장부 {presetFilledCount(d.ledger)} · 클락 {presetFilledCount(d.clock)}
+            <span className="block text-[10px]">지난 게임에서 가져온 시각·할인·딜러·레지레벨·얼리 등이 담겨 있고, 각 폼에 불러올 때 그대로 적용됩니다.</span>
+          </p>
+        )}
         <Field label="메모"><textarea value={d.memo ?? ''} onChange={(e) => set({ memo: e.target.value })} rows={2} placeholder="기타 메모" className="input w-full resize-none text-sm" /></Field>
         <label className="flex items-center gap-2 text-2xs text-ink-secondary">
           <input type="checkbox" checked={!!d.isCompetition} onChange={(e) => set({ isCompetition: e.target.checked })} /> 대회/이벤트로 분류
@@ -138,10 +174,21 @@ export default function PresetManager({ venueId }: { venueId: string }) {
         <p className="text-2xs text-ink-muted">자주 여는 게임의 내용·듀레이션을 프리셋으로 저장해 두고 재사용하세요.</p>
         <button type="button" onClick={startNew} className="btn-ghost shrink-0 px-3 py-1 text-2xs">빈 폼으로 만들기</button>
       </div>
-      {/* PL3 생성 경로 역전 — 기본 경로는 '지난 게임에서 만들기'(내용이 채워진 채 열림, 이름만 지으면 끝) */}
-      {recent.length > 0 && (
+      {/* PL3 생성 경로 역전 — 기본 경로는 '지난 게임에서 만들기'(내용이 채워진 채 열림, 이름만 지으면 끝).
+          마감 장부 회차(운영 중 수정까지 반영된 스냅샷)가 최우선 후보, 포스터가 그다음. */}
+      {(rounds.length > 0 || recent.length > 0) && (
         <div className="rounded-card border border-accent-400/30 bg-accent-300/[0.05] p-2.5">
           <p className="mb-1.5 text-2xs font-bold text-accent-300">⚡ 지난 게임에서 프리셋 만들기 — 내용이 채워진 채 열려요</p>
+          {rounds.length > 0 && (
+            <div className="mb-1.5 flex flex-wrap gap-1.5">
+              {rounds.map((r) => (
+                <button key={`${r.sessionDate}#${r.gameSeq}`} type="button" onClick={() => startFromRound(r)}
+                  className="rounded-input border border-emerald-500/40 bg-emerald-500/[0.08] px-2.5 py-1.5 text-2xs font-bold text-emerald-300 transition-colors hover:bg-emerald-500/[0.14]">
+                  {r.sessionDate.slice(5).replace('-', '/')} · {r.title || '제목 없음'}{r.gameSeq > 1 ? ` (사이드${r.gameSeq - 1})` : ''} · 장부
+                </button>
+              ))}
+            </div>
+          )}
           <div className="flex flex-wrap gap-1.5">
             {recent.slice(0, 6).map((sc) => (
               <button key={sc.id} type="button" onClick={() => startFromSchedule(sc)}
@@ -150,6 +197,7 @@ export default function PresetManager({ venueId }: { venueId: string }) {
               </button>
             ))}
           </div>
+          {rounds.length > 0 && <p className="mt-1.5 text-2xs text-ink-muted">초록 칩(장부)은 마감 시점의 클락 설정·할인·딜러까지 담긴 완성본입니다.</p>}
         </div>
       )}
       {presets === null ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>

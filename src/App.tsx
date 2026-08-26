@@ -214,9 +214,9 @@ const AppHeader = memo(function AppHeader({
         >
           <NuriHoldemLogo />
         </button>
-        {/* 모바일: 로고 │ 현재 위치(지금 보고 있는 탭) — 로고 클릭=일정 복귀 */}
+        {/* 모바일: 로고 │ 현재 위치(지금 보고 있는 탭) — 로고 클릭=홈 복귀 */}
         <div className="lg:hidden flex min-w-0 items-center gap-2">
-          <button type="button" onClick={onHome} aria-label="일정 탐색으로" className="press-spring shrink-0">
+          <button type="button" onClick={onHome} aria-label="홈으로" className="press-spring shrink-0">
             <NuriHoldemLogo className="!h-7" />
           </button>
           <span className="h-4 w-px shrink-0 bg-border-default" aria-hidden />
@@ -1691,9 +1691,9 @@ export default function App() {
     window.setTimeout(() => setVtPosterId(null), 350); // 역모핑 종료 후 이름 해제(전환 중 제거 금지)
   }, []);
 
-  // 로고 클릭 → 메인(일정 탐색)으로 + 모든 모달/패널 닫기
+  // 로고 클릭 → 홈(메인)으로 + 모든 모달/패널 닫기 (오너 지시 2026-08-27: 일정탐색 아님)
   const handleHome = useCallback(() => {
-    changeTab('browse');
+    changeTab('home');
     setOpenSchedule(null);
     setVtPosterId(null);
     setOpenVenueId(null);
@@ -2257,13 +2257,17 @@ export default function App() {
             clocksLoaded={clocksLoaded}
             liveCount={liveClocks.length}
             regInfoBySchedule={regInfoBySchedule}
-            posts={posts}
-            onOpenPost={(pp) => { changeTab('community'); setOpenPost(pp); }}
             onTools={() => changeTab('tools')}
             onSelect={handleScheduleSelect}
             onVenue={handleVenueClick}
             onExplore={() => changeTab('browse')}
             onLive={() => changeTab('live')}
+            onRotiCommunity={() => {
+              // 캐러셀 로티아레나 배너 → 매장 커뮤니티 페이지(이름 매칭 — id 하드코딩 회피).
+              // 매장 목록 도착 전/이름 변경 시엔 커뮤니티 탭으로 폴백.
+              const roti = venues.find((v) => v.name.replace(/\s+/g, '').includes('로티아레나'));
+              if (roti) handleVenueClick(roti.id); else changeTab('community');
+            }}
             active={activeTab === 'home'}
           />
         </main>

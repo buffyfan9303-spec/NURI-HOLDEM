@@ -6,6 +6,7 @@ import type { Schedule } from '../../api/schedules';
 import { listStaleOpenSessions,
   getLedgerSession, getLedgerBuyins, getLedgerPlayers, getLedgerRange, buyinFinance, wonToMan, visitorLabel, subscribeLedger,
   getPosterOpsSummaries, getPendingBuyinRequests, subscribeBuyinRequests, approveBuyinRequest, rejectBuyinRequest,
+  getLastClosedRound, type LastClosedRound,
   type LedgerSession, type LedgerBuyin, type LedgerPlayer, type BuyinRequest,
 } from '../../api/ledger';
 import { useToast } from '../atoms/Toast';
@@ -221,6 +222,17 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
     { paid: 0, unpaid: 0, entry: 0, ticket: 0 },
   );
   const started = !!session?.openedAt;
+  // PL3①: 마지막 마감 회차 — '지난 게임 그대로 열기' 1탭(오늘 장부 미시작일 때 지금 할 일 후보)
+  const [lastRound, setLastRound] = useState<LastClosedRound | null>(null);
+  useEffect(() => {
+    if (!caps.ledger) return;
+    getLastClosedRound(venueId, d).then(setLastRound).catch(() => {});
+  }, [venueId, d, caps.ledger]);
+  // 장부 탭이 인텐트를 읽어 오늘 시작 화면에 지난 회차를 1회 자동 적용한다(파일 간 계약: nuri:last-round-intent)
+  const gotoLedgerWithLastRound = () => {
+    try { localStorage.setItem('nuri:last-round-intent', JSON.stringify({ venueId, at: Date.now() })); } catch { /* noop */ }
+    onGoto('ledger');
+  };
   const ledgerStatus = !started ? '미시작' : session?.closed ? '정산 마감' : session?.regClosed ? '레지 마감' : '진행중';
   const ledgerStatusCls = !started
     ? 'bg-surface-float text-ink-muted'
@@ -781,6 +793,15 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
             : { icon: 'clock', title: '게임 진행 중인데 클락이 꺼져 있어요', desc: `엔트리 ${Math.round(fin.entry)} · 클락을 켜면 라이브 탭에도 실시간 송출됩니다.`, cta: '클락 켜기', onClick: () => onGoto('clock'), tone: 'gold' };
         } else if (caps.ledger && !started && todayPoster) {
           todo = { icon: 'cards', title: '오늘 게임이 있어요', desc: '포스터 정보 그대로 장부를 시작할 수 있어요(게임명·바인 자동 입력).', cta: '장부 시작하기', onClick: () => onGoto('ledger'), tone: 'gold' };
+        } else if (caps.ledger && !started && !todayPoster && lastRound) {
+          // PL3①: 매일 같은 게임을 여는 매장의 기본 동선 — 지난 회차(장부+클락 설정)를 1탭으로 그대로
+          const lr = lastRound.session;
+          todo = {
+            icon: 'refresh',
+            title: `지난 게임 그대로 열기 — ${lr.sessionDate.slice(5).replace('-', '/')} ${lr.title || '제목 없음'}`,
+            desc: `단가·할인·딜러${lastRound.clockConfig ? '·블라인드·얼리' : ''}까지 한 번에 채워져요 — 날짜·담당 직원만 확인하면 끝.`,
+            cta: '그대로 열기', onClick: gotoLedgerWithLastRound, tone: 'gold',
+          };
         } else if (caps.posters && !started && !todayPoster && hour >= 12) {
           todo = { icon: 'plus', title: '오늘 등록된 게임이 없어요', desc: '포스터를 올리면 일정 탐색에 노출되고 예약을 받을 수 있어요.', cta: '게임 등록하기', onClick: onCreatePoster, tone: 'gold' };
         } else if (caps.manage && session?.closed) {

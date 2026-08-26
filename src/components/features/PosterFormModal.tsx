@@ -8,6 +8,9 @@ import { filterContent } from '../../lib/content-filter';
 import type { Schedule } from '../../api/schedules';
 import { REGION_CHIPS } from './IntegratedSearchBar';
 import { generateBlinds } from '../../api/clock';
+import { applyToPoster, presetFromPosterForm } from '../../lib/gameInherit';
+import { saveGamePreset, type GamePreset } from '../../api/presets';
+import PresetPicker from './PresetPicker';
 
 interface PosterFormModalProps {
   open: boolean;
@@ -203,6 +206,27 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
     toast.show('지난 포스터를 불러왔습니다 — 날짜만 확인하고 등록하세요', 'success');
   };
 
+  // ── PL2c: 게임 프리셋 → 포스터 폼(공용 PresetPicker + applyToPoster 어댑터) ──────
+  // 채워진 항목만 덮는다 — 부분 프리셋(클락만 있는 프리셋)은 포스터 폼을 건드리지 않는다.
+  const presetVenueId = isAdmin ? (form.venueId || '') : (user?.venueId ?? '');
+  const applyGamePreset = (p: GamePreset) => {
+    const patch = applyToPoster(p.data);
+    if (Object.keys(patch).length === 0) { toast.show(`'${p.name}' — 포스터에 적용할 항목이 없는 프리셋입니다`, 'info'); return; }
+    setForm((f) => ({ ...f, ...patch }));
+    if (patch.posterUrl) { setImgFile(null); setImgPreview(patch.posterUrl); }
+    if (patch.regCloseTime !== undefined) {
+      const rc = patch.regCloseTime ?? '';
+      const lv = rc.match(/(\d+)\s*LV/i);
+      const tm = rc.match(/(\d{1,2}:\d{2})/);
+      setRegLevel(lv ? lv[1] : '');
+      setRegTime(tm ? tm[1] : '');
+    }
+    toast.show(`'${p.name}' 프리셋 적용 — 채워진 항목만 반영했어요(수정 가능)`, 'success');
+  };
+  // PL3: 등록 직후 프리셋 저장(부산물 authoring) — 체크 시 제출과 함께 게임 프리셋으로도 저장
+  const [alsoPreset, setAlsoPreset] = useState(false);
+  useEffect(() => { if (open) setAlsoPreset(false); }, [open]);
+
   // ── 이미지 선택 ──────────────────────────────────────────────────────────
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -260,6 +284,12 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
 
     onSubmit({ ...form, regCloseTime: regClose, posterUrl });
     toast.show(isEdit ? '포스터가 수정되었습니다' : '포스터가 등록되었습니다', 'success');
+    // PL3: '이 설정을 프리셋으로도 저장' — 등록의 부산물로 프리셋이 쌓인다(실패해도 포스터 등록엔 영향 없음)
+    if (alsoPreset && presetVenueId && form.title.trim()) {
+      saveGamePreset(presetVenueId, form.title.trim(), presetFromPosterForm({ ...form, regCloseTime: regClose, posterUrl }))
+        .then(() => toast.show('게임 프리셋으로도 저장했어요 — 장부·클락에서 그대로 불러올 수 있어요', 'success'))
+        .catch((err) => toast.show(err instanceof Error ? err.message : '프리셋 저장 실패', 'error'));
+    }
     onClose();
   };
 
@@ -286,6 +316,11 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
               ))}
             </select>
           </div>
+        )}
+
+        {/* ── PL2c: 게임 프리셋 불러오기(신규 전용) — 포스터/장부/클락 공용 PresetPicker ── */}
+        {!isEdit && presetVenueId && (
+          <PresetPicker venueId={presetVenueId} scope="poster" onApply={applyGamePreset} />
         )}
 
         {/* ── 포스터 이미지 업로드 ── */}
@@ -621,6 +656,14 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
         <FieldWrap label={`시상 (${form.prizes.length}/${MAX_PRIZES})`}>
           <PrizeList prizes={form.prizes} onChange={(prizes) => update('prizes', prizes)} />
         </FieldWrap>
+
+        {/* PL3: 등록 직후 프리셋 저장 인라인 — 프리셋이 별도 작업이 아니라 등록의 부산물로 쌓이게 */}
+        {!isEdit && presetVenueId && (
+          <label className="flex items-center gap-2 rounded-input border border-border-subtle bg-surface-low px-3 py-2 text-xs text-ink-secondary">
+            <input type="checkbox" checked={alsoPreset} onChange={(e) => setAlsoPreset(e.target.checked)} className="h-4 w-4 accent-accent-300" />
+            이 설정을 <b className="text-ink-primary">게임 프리셋으로도 저장</b> — 다음 장부·클락에서 한 번에 불러와요
+          </label>
+        )}
 
         <div className="flex gap-2 pt-2">
           <button type="button" onClick={onClose} className="btn-ghost flex-1">취소</button>

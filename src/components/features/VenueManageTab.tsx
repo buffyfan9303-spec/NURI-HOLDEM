@@ -28,7 +28,7 @@ import VenueCustomizePanel, { VenueRankHub } from './VenueCustomizePanel';
 import SectionHeader from '../atoms/SectionHeader';
 import SlidingPill from '../atoms/SlidingPill';
 import { getSchedules, type Schedule } from '../../api/schedules';
-import { getLedgerBuyins, getLedgerSession, kstToday, getPendingBuyinRequests, subscribeBuyinRequests } from '../../api/ledger';
+import { getLedgerBuyins, getLedgerSession, kstToday, getPendingBuyinRequests, subscribeBuyinRequests, getLedgerGames, MAIN_GAME_SEQ, type LedgerGame } from '../../api/ledger';
 import { getVenueClocks, subscribeClock, effectiveLevel, type ClockState } from '../../api/clock';
 import { rankDraftKey, readRowsDraft, writeRowsDraft, clearRowsDraft, pruneRowsDrafts, hasRowContent, moveRankRow, type RankRow } from '../../lib/rankingDraft';
 
@@ -51,6 +51,9 @@ const SETTINGS_TABS: readonly { id: SettingsTab; label: string }[] = [
   { id: 'pos', label: 'POS·결제' }, { id: 'voucher', label: '이용권·QR' }, { id: 'danger', label: '위험 구역' },
 ];
 const isSettingsTab = (s: string): s is SettingsTab => SETTINGS_TABS.some((t) => t.id === s);
+// IA2 잔여(게임 선택 칩 바): 순위 입력에 전달하는 '오늘 게임 선택' 신호 — n 은 같은 게임 재선택도
+// 다시 적용되게 하는 단조 카운터, name 은 순위(이벤트명 기반) 칸 이름(''=메인 기본).
+type GameSel = { n: number; name: string };
 // IA1: 사용 빈도 기반 3그룹 — 매일 여는 것(오늘) / 주간(분석) / 가끔(관리)
 type NavGroup = '오늘' | '분석' | '관리';
 const NAV_GROUPS: readonly NavGroup[] = ['오늘', '분석', '관리'];
@@ -128,6 +131,10 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   const [clockSeed, setClockSeed] = useState<string | null>(null); // 장부→클락 연동 날짜
   const [clockSeedGame, setClockSeedGame] = useState(1); // 장부→클락 연동 게임(game_seq)
   const [ledgerSeed, setLedgerSeed] = useState<LedgerSeed | null>(null); // 게임관리→장부 바로가기
+  // IA2 잔여(게임 선택 칩 바): 매장 수준 '현재 게임'의 정본은 기존 clockSeedGame(상태 신설 0) —
+  // 클락은 seedGameSeq 배선으로 즉시 따라오고, 순위(이벤트명 기반)엔 아래 픽 신호만 얹는다.
+  const [gameSel, setGameSel] = useState<GameSel | null>(null);
+  const gameSelN = useRef(0);
   const [visited, setVisited] = useState<PaneId[]>([]); // 방문 판(섹션/게임스텝, 최근순) — 마운트 유지(깜빡임 제거), 상한 초과 시 가장 오래된 판 정리(메모리 가드)
 
   // 스텝 이동 공통(IA2) — 게임 섹션 안에서의 이동은 직전 스텝을 백스택에 1개 기억.
@@ -159,13 +166,24 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   }, [gotoSection]);
   // 크로스 섹션 텔레포트였던 핸들러들이 IA2 로 '게임 섹션 내부 스텝 전환'으로 강등(§13-C)
   const onMakeRankingDraft = useCallback((d: string, names: string[], ev?: string) => {
+    setGameSel(null); // 명단 초안(draft)이 우선 — 칩 픽 신호가 마운트 시 이벤트를 덮지 않게
     setRankingDraft({ date: d, names, event: ev ?? '' }); goStep('ranking');
   }, [goStep]);
+  // IA2 잔여 — 게임 선택 칩 바 픽: 오늘 게임(메인/사이드N) 전환을 게임 단계 상단 한 곳으로.
+  // 클락은 기존 clockSeedGame 배선으로 따라오고(시드 날짜는 걷어내 '지금 그 게임 보기'로),
+  // 순위는 gameSel 신호로 오늘·해당 게임 칸으로 따라온다. 장부 보드의 게임 전환은 파일 밖
+  // (NuriPosLedger 내부 상태)이라 보드 상단 스위처가 그대로 담당한다(외부 제어 prop 없음).
+  const onPickGame = useCallback((seq: number, title?: string) => {
+    setClockSeed(null);
+    setClockSeedGame(seq);
+    setGameSel({ n: ++gameSelN.current, name: seq === MAIN_GAME_SEQ ? '' : ((title ?? '').trim() || `사이드${seq - 1}`) });
+  }, []);
   const onOpenClockFromLedger = useCallback((d: string, g: number) => {
     setClockSeed(d); setClockSeedGame(g); goStep('clock');
   }, [goStep]);
   const onOpenStatsCb = useCallback(() => setSection('stats'), []);
   const onGotoRankingFromPosters = useCallback((date: string) => {
+    setGameSel(null); // 포스터가 지정한 날짜가 우선 — 칩 픽 신호가 마운트 시 오늘로 덮지 않게
     setRankingDraft({ date, names: [] }); goStep('ranking');
   }, [goStep]);
   const onOpenLedgerFromPosters = useCallback((s: Schedule, existingDate: string | null) => {
@@ -440,6 +458,12 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 <p className="text-2xs leading-relaxed text-ink-muted">이 기능은 업주가 권한을 부여해야 사용할 수 있어요.<br />매장 업주에게 <span className="font-semibold text-accent-300">장부·순위 권한</span>을 요청하세요.</p>
               </div>
             )}
+            {/* IA2 잔여 — 게임 선택 칩 바(원문: '상단에 게임 선택 칩 바, 아래에 4단계 스테퍼').
+                멀티게임(메인+사이드) 날에만 노출 — 단일 게임이면 바 자체를 그리지 않아 잡음 0 */}
+            {renderSection === 'game' && !dItem?.locked && (
+              <GameChipBar venueId={venueId} active={tabActive} step={renderGameStep} current={clockSeedGame}
+                canPosters={canPosters} onPick={onPickGame} onNewGame={onCreatePoster} />
+            )}
             {/* IA2 게임 진행 4단계 스테퍼 — 섹션을 떠나지 않고 작업판만 교체(포스터→장부→클락→순위) */}
             {renderSection === 'game' && !dItem?.locked && (
               <div role="tablist" aria-label="게임 진행 단계"
@@ -520,7 +544,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   onOpenClock={onOpenClockFromLedger}
                   onOpenStats={manageOk ? onOpenStatsCb : undefined} />)}
                 {visited.includes('stats') && manageOk && box('stats', <LedgerStatsPanelM venueId={venueId} />)}
-                {visited.includes('ranking') && ledgerOk && box('ranking', <RankingEditor venueId={venueId} canEdit={isAdmin || user.approved === true || ledgerOk} draft={rankingDraft} />)}
+                {visited.includes('ranking') && ledgerOk && box('ranking', <RankingEditor venueId={venueId} canEdit={isAdmin || user.approved === true || ledgerOk} draft={rankingDraft} gameSel={gameSel} />)}
                 {/* IA3c '매장 페이지' 탭 = 구 매장꾸미기 + 구 매장랭킹(시즌·랭킹보드) 병합 — 같은
                     venue_page_config 를 두 문에서 각자 로드/저장해 서로 낡던 문제를 한 화면으로 해소 */}
                 {visited.includes('page') && canStaff && box('page', <>
@@ -641,6 +665,53 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto }: {
   );
 });
 
+// ── IA2 잔여: 게임 선택 칩 바 — 멀티게임(메인/사이드 N) 운영 시 게임 단계(포스터·장부·클락·순위)
+// 상단에서 현재 게임을 한 곳에서 전환한다. 그동안 이 동선은 장부 GameSwitcher·클락 MultiClockOverview·
+// 순위 게임칩으로 화면마다 흩어져 있었다(각 화면 내부 장치는 보존 — 이 바는 매장 수준 전환의 정문).
+// 데이터는 오늘 장부 게임 목록(getLedgerGames) 재사용 — 구독·틱 0, active 로드 + 포커스/스텝 전환 시 갱신.
+// 단일 게임 날(사이드 0)은 바 자체를 그리지 않는다(잡음 0). 칩 문법 = browse 필터 레일과 동일(h-9·rounded-badge).
+const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, canPosters, onPick, onNewGame }: {
+  venueId: string; active: boolean; step: GameStep; current: number; canPosters: boolean;
+  onPick: (seq: number, title?: string) => void;
+  /** '+ 새 게임' = 기존 포스터 만들기(포스터 단계 헤더의 '+ 새 게임'과 같은 동작·카피) */
+  onNewGame: () => void;
+}) {
+  const [games, setGames] = useState<LedgerGame[]>([]);
+  const reload = useCallback(() => { getLedgerGames(venueId, kstToday()).then(setGames).catch(() => {}); }, [venueId]);
+  // step 은 갱신 트리거 — 장부에서 사이드를 새로 열고 다른 단계로 넘어오면 칩이 따라잡는다
+  useEffect(() => { if (active) reload(); }, [active, step, reload]);
+  useEffect(() => {
+    if (!active) return;
+    window.addEventListener('focus', reload);
+    return () => window.removeEventListener('focus', reload);
+  }, [active, reload]);
+  if (games.length <= 1) return null;
+  const label = (seq: number) => (seq === MAIN_GAME_SEQ ? '메인' : `사이드${seq - 1}`);
+  return (
+    <div role="group" aria-label="오늘 게임 선택" className="flex items-center gap-1.5 overflow-x-auto">
+      <span className="shrink-0 text-2xs font-bold text-ink-muted">오늘 게임</span>
+      {games.map((g) => {
+        const on = g.gameSeq === current;
+        return (
+          <button key={g.gameSeq} type="button" aria-pressed={on} onClick={() => onPick(g.gameSeq, g.title)}
+            className={['inline-flex h-9 shrink-0 items-center gap-1 rounded-badge px-3.5 text-xs font-bold leading-none transition-colors',
+              on ? 'bg-accent-300/15 text-accent-300' : 'bg-surface-high text-ink-secondary hover:bg-surface-float/70'].join(' ')}>
+            <span>{label(g.gameSeq)}</span>
+            {g.title && <span className="max-w-[8rem] truncate font-semibold opacity-80">· {g.title}</span>}
+            {g.closed && <span className="text-2xs opacity-70">마감</span>}
+          </button>
+        );
+      })}
+      {canPosters && (
+        <button type="button" onClick={onNewGame}
+          className="inline-flex h-9 shrink-0 items-center rounded-badge border border-dashed border-accent-400/40 px-3.5 text-xs font-bold leading-none text-accent-300 transition-colors hover:bg-accent-300/10">
+          + 새 게임
+        </button>
+      )}
+    </div>
+  );
+});
+
 function SectionBtn({ active, onClick, icon, children, locked }: {
   active: boolean; onClick: () => void; icon?: ReactNode; children: ReactNode; locked?: boolean;
 }) {
@@ -672,7 +743,11 @@ const emptyRow = (): Row => ({ nickname: '', realName: '', prize: '', voucher: '
 // 그날 열린 게임 후보 — 메인(포스터 제목) · 사이드(포스터 sideEvents) · 장부(장부만 있는 게임)
 type GameOpt = { name: string; kind: 'main' | 'side' | 'ledger' };
 
-function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: boolean; draft?: { date: string; names: string[]; event?: string } | null }) {
+function RankingEditor({ venueId, canEdit, draft, gameSel }: {
+  venueId: string; canEdit: boolean; draft?: { date: string; names: string[]; event?: string } | null;
+  /** 게임 선택 칩 바(게임 단계 상단)의 오늘 게임 픽 — 날짜·게임칩만 따라가고 명단은 건드리지 않는다 */
+  gameSel?: GameSel | null;
+}) {
   const toast = useToast();
   const today = new Date().toLocaleDateString('en-CA'); // 로컬 날짜 — UTC 자정 넘김 방지
   const [date, setDate] = useState(draft?.date ?? today);
@@ -782,6 +857,15 @@ function RankingEditor({ venueId, canEdit, draft }: { venueId: string; canEdit: 
     if (draft?.date) setDate(draft.date);
     setEventName(draft?.event ?? ''); // 사이드 마감→순위입력 시 그 사이드 title로 바로(메인은 '')
   }, [draft]);
+  // 게임 선택 칩 바(IA2 잔여)에서 고른 오늘 게임 — 순위 입력 칸도 오늘·그 게임으로 따라간다.
+  // draft(장부 마감 초안)와 달리 명단(names)은 만들지 않는다 — 저장 전 입력분은 키별 임시 초안이 지킨다.
+  // (draft 계열 진입은 부모가 gameSel 을 비워 우선순위를 보장 — 마운트 시 이 효과가 draft 를 덮지 않는다)
+  useEffect(() => {
+    if (!gameSel) return;
+    setDate(today);
+    setEventName(gameSel.name);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameSel]);
 
   useEffect(() => {
     setLoading(true);

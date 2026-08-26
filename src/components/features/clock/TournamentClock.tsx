@@ -11,18 +11,19 @@ import { getAppSetting, setAppSetting, CLOCK_AD_KEY, CLOCK_AD_SIZE_KEY } from '.
 import { uploadPoster } from '../../../lib/storage';
 import {
   type ClockConfig, type ClockLevel, type ClockPreset, type ClockState, type ClockPrizeRow,
-  defaultClockConfig, emptyClockState, deriveClockCounts, computeLiveStats, PRESET_LIMIT,
+  defaultClockConfig, emptyClockState, deriveClockCounts, computeLiveStats,
   countLevels, withDerivedEarly, generateBlinds,
   levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, type ClockLevelSnapshot,
-  getClockPresets, saveClockPreset, deleteClockPreset,
+  getClockPresets, deleteClockPreset,
   getClockState, saveClockState, clearClockState, subscribeClock, subscribeRunningClocks, getVenueClocks,
 } from '../../../api/clock';
 import {
   getLedgerBuyins, getLedgerSession, getLedgerSessionList, saveLedgerSession, subscribeLedger, getLedgerGames, openLedgerSession,
   type LedgerBuyin, type LedgerSession, type LedgerSessionListItem,
 } from '../../../api/ledger';
-import { listGamePresets, type GamePreset } from '../../../api/presets';
-import { rankingPrizeWon } from '../../../lib/units';
+import { listGamePresets, saveGamePreset, type GamePreset } from '../../../api/presets';
+import { applyToClock, presetFromClockConfig } from '../../../lib/gameInherit';
+import PresetPicker from '../PresetPicker';
 import { saveVenueRankings, prizeUnitRisk, getVenueRankings } from '../../../api/rankings';
 import LoadErrorCard from '../../atoms/LoadErrorCard';
 import { msgOf } from '../../../lib/dbError';
@@ -966,13 +967,10 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
 }) {
   const toast = useToast();
   const [cfg, setCfg] = useState<ClockConfig>(initial);
-  const [gamePresets, setGamePresets] = useState<GamePreset[]>([]); // 게임 프리셋(블라인드 포함) — 클락에 적용
-  useEffect(() => { listGamePresets(venueId).then(setGamePresets).catch(() => {}); }, [venueId]);
   const [linkDate, setLinkDate] = useState<string | null>(seedSessionDate ?? null); // 연동할 장부(null=단독)
   const [linkGameSeq, setLinkGameSeq] = useState<number>(seedGameSeq ?? 1); // 연동할 게임(game_seq)
   const [sessQuery, setSessQuery] = useState(''); // 장부 목록 검색(날짜·게임명)
   const [presetQuery, setPresetQuery] = useState(''); // 프리셋 검색
-  const [presetName, setPresetName] = useState('');
   const [bldOpen, setBldOpen] = useState(false);    // 블라인드 구조 접기/펴기
   const [bulkAll, setBulkAll] = useState(20);       // 전체 일괄 듀레이션(분)
   const [bulkFrom, setBulkFrom] = useState(initial.regCloseLevel || 9); // 구간 시작 레벨
@@ -980,25 +978,34 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
   // 모든 변경 시 얼리(레벨)→분 파생값 재계산 — 블라인드 길이가 바뀌어도 얼리 분이 항상 동기화됨.
   const set = (patch: Partial<ClockConfig>) => setCfg((c) => withDerivedEarly({ ...c, ...patch }));
   const totalLevels = countLevels(cfg.levels);
-  // 게임 프리셋의 블라인드 구조(+스택)를 클락에 적용
-  // PL1a③: 4필드(레벨+스택3종)만 적용하던 것을 클락 관련 전체로 확장 — 제목·애드온·상금(원 정규형)까지.
+  // 게임 프리셋 적용 — PL2a: 어댑터(applyToClock)로 승격. 제목·블라인드·스택·상금(원 정규형)에 더해
+  // clock 네임스페이스(레지레벨·최대레벨·얼리·바운티)까지. set() 경유라 얼리 분 파생도 재계산된다.
   // 블라인드 없는 프리셋도 '있는 것만' 부분 적용(§13-B 부분 프리셋 허용 — 가드로 거부하지 않는다).
   const applyGamePreset = (p: GamePreset) => {
-    const d = p.data;
-    const lv = d.blindLevels;
-    const prizes = (d.rankingPrizes ?? [])
-      .filter((r) => ((r.amountWon ?? r.amount) ?? 0) > 0 && (r.unit == null || r.unit === '만원' || r.unit === '원'))
-      .map((r) => ({ place: r.rank, amount: rankingPrizeWon(r) }));
-    set({
-      ...(d.title ? { title: d.title } : {}),
-      ...(lv && lv.length ? { levels: lv } : {}),
-      ...(d.startStack ? { startStack: d.startStack } : {}),
-      ...(d.rebuyStack ? { rebuyStack: d.rebuyStack } : {}),
-      ...(d.addonStack ? { addonStack: d.addonStack, isAddon: true } : {}),
-      ...(prizes.length ? { prizes } : {}),
-    });
-    if (lv?.length) setBldOpen(true);
-    toast.show(`'${p.name}' 프리셋 적용${lv?.length ? ` — 블라인드 ${countLevels(lv)}레벨 포함` : ' (블라인드 없음 — 나머지 항목만)'}`, 'success');
+    const patch = applyToClock(p.data);
+    if (Object.keys(patch).length === 0) { toast.show(`'${p.name}' — 클락에 적용할 항목이 없는 프리셋입니다`, 'info'); return; }
+    set(patch);
+    if (patch.levels?.length) setBldOpen(true);
+    toast.show(`'${p.name}' 프리셋 적용${patch.levels?.length ? ` — 블라인드 ${countLevels(patch.levels)}레벨 포함` : ' (블라인드 없음 — 나머지 항목만)'}`, 'success');
+  };
+  // PL3: 구 클락 프리셋 → 게임 프리셋 1회 변환(신규 저장 진입점은 게임 프리셋으로 일원화)
+  const [convertBusy, setConvertBusy] = useState(false);
+  const [pickerKey, setPickerKey] = useState(0); // 변환 직후 PresetPicker 재조회(remount)용
+  const convertClockPresets = async () => {
+    if (convertBusy || presets.length === 0) return;
+    setConvertBusy(true);
+    try {
+      const existing = new Set((await listGamePresets(venueId).catch(() => [] as GamePreset[])).map((g) => g.name.trim().toLowerCase()));
+      let moved = 0, skipped = 0;
+      for (const p of presets) {
+        if (existing.has(p.name.trim().toLowerCase())) { skipped++; continue; } // 재실행 안전(같은 이름은 건너뜀)
+        await saveGamePreset(venueId, p.name, presetFromClockConfig(p.config));
+        moved++;
+      }
+      toast.show(`클락 프리셋 ${moved}개를 게임 프리셋으로 가져왔습니다${skipped ? ` · ${skipped}개는 같은 이름이 있어 건너뜀` : ''}`, 'success');
+      setPickerKey((k) => k + 1); // 위 게임 프리셋 목록 즉시 갱신
+    } catch (e) { toast.show(e instanceof Error ? e.message : '변환 실패', 'error'); }
+    finally { setConvertBusy(false); }
   };
   const filteredSessions = sessions.filter((s) => {
     const q = sessQuery.trim().toLowerCase();
@@ -1041,11 +1048,6 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
   const removePrize = (i: number) => set({ prizes: cfg.prizes.filter((_, idx) => idx !== i) });
 
   const loadPreset = (p: ClockPreset) => { setCfg(p.config); toast.show(`"${p.name}" 프리셋을 불러왔습니다`, 'info'); };
-  const savePreset = async () => {
-    const name = presetName.trim() || cfg.title || '무제목';
-    try { await saveClockPreset(venueId, name, cfg); setPresetName(''); onReloadPresets(); toast.show('프리셋을 저장했습니다', 'success'); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
-  };
   const delPreset = async (p: ClockPreset) => {
     if (!confirm(`"${p.name}" 프리셋을 삭제할까요?`)) return;
     try { await deleteClockPreset(p.id); onReloadPresets(); toast.show('삭제했습니다', 'info'); }
@@ -1115,37 +1117,45 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
         )}
       </section>
 
-      {/* 프리셋 — 장부 연동과 동일 포맷(검색 + 스크롤 클릭). 잘 보이도록 골드 강조 */}
+      {/* 프리셋 — PL2c: 게임 프리셋(공용 PresetPicker)이 기본. 저장은 [내 매장 → 프리셋]으로 일원화. */}
       <section className="rounded-card border border-accent-400/30 bg-accent-300/[0.05] p-3 space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-base font-bold text-accent-300">📋 프리셋 · 클릭해 불러오기</p>
-          <span className="text-xs text-ink-muted tabular-nums shrink-0">{filteredPresets.length}/{presets.length} · 최대 {PRESET_LIMIT}</span>
-        </div>
-        {presets.length > 0 && (
-          <div className="relative">
-            <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
-            <input value={presetQuery} onChange={(e) => setPresetQuery(e.target.value)} placeholder="프리셋 검색" className="input w-full text-sm pl-8 py-2" />
-          </div>
+        <p className="text-base font-bold text-accent-300">프리셋 · 클릭해 불러오기</p>
+        <PresetPicker key={pickerKey} venueId={venueId} scope="clock" onApply={applyGamePreset}
+          note="제목·블라인드·스택·레지레벨·얼리·상금을 한 번에 채웁니다(수정 가능). 프리셋 저장·수정은 [내 매장 → 프리셋]에서." />
+        {presets.length === 0 && (
+          <p className="text-2xs text-ink-muted">프리셋 저장·관리는 [내 매장 → 프리셋]에서 — '지난 게임에서 만들기'로 1탭에 만들 수 있어요.</p>
         )}
-        {presets.length === 0 ? (
-          <p className="text-center py-2 text-xs text-ink-muted">저장된 프리셋이 없습니다. 아래에서 구성 후 저장하세요.</p>
-        ) : filteredPresets.length === 0 ? (
-          <p className="text-center py-2 text-xs text-ink-muted">"{presetQuery.trim()}" 검색 결과가 없습니다.</p>
-        ) : (
-          <div className="max-h-[13rem] overflow-y-auto rounded-input border border-border-subtle bg-surface-base divide-y divide-border-subtle">
-            {filteredPresets.map((p) => (
-              <div key={p.id} className="flex items-center gap-2 px-3 py-2.5 hover:bg-surface-high">
-                <button type="button" onClick={() => loadPreset(p)} className="flex-1 text-left text-sm font-semibold text-ink-primary truncate hover:text-accent-300">{p.name}</button>
-                <span className="text-xs text-ink-muted tabular-nums shrink-0">{countLevels(p.config.levels)}레벨</span>
-                <button type="button" onClick={() => delPreset(p)} className="text-ink-muted hover:text-danger-light text-sm px-1.5 shrink-0" aria-label="삭제">✕</button>
-              </div>
-            ))}
+        {/* 구 클락 프리셋 — 불러오기·삭제만 유지(신규 저장 진입점 0), 변환 버튼으로 게임 프리셋에 흡수 */}
+        {presets.length > 0 && (<>
+          <div className="flex items-center justify-between gap-2 pt-1">
+            <p className="text-xs font-bold text-ink-secondary">클락 프리셋(구형)</p>
+            <span className="text-xs text-ink-muted tabular-nums shrink-0">{filteredPresets.length}/{presets.length}</span>
           </div>
-        )}
-        <div className="flex gap-2">
-          <input value={presetName} onChange={(e) => setPresetName(e.target.value)} placeholder="현재 설정을 프리셋으로 저장(이름)" maxLength={30} className="input flex-1 text-sm" />
-          <button type="button" onClick={savePreset} className="btn-ghost text-xs px-3 shrink-0">저장</button>
-        </div>
+          {presets.length > 5 && (
+            <div className="relative">
+              <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+              <input value={presetQuery} onChange={(e) => setPresetQuery(e.target.value)} placeholder="프리셋 검색" className="input w-full text-sm pl-8 py-2" />
+            </div>
+          )}
+          {filteredPresets.length === 0 ? (
+            <p className="text-center py-2 text-xs text-ink-muted">"{presetQuery.trim()}" 검색 결과가 없습니다.</p>
+          ) : (
+            <div className="max-h-[13rem] overflow-y-auto rounded-input border border-border-subtle bg-surface-base divide-y divide-border-subtle">
+              {filteredPresets.map((p) => (
+                <div key={p.id} className="flex items-center gap-2 px-3 py-2.5 hover:bg-surface-high">
+                  <button type="button" onClick={() => loadPreset(p)} className="flex-1 text-left text-sm font-semibold text-ink-primary truncate hover:text-accent-300">{p.name}</button>
+                  <span className="text-xs text-ink-muted tabular-nums shrink-0">{countLevels(p.config.levels)}레벨</span>
+                  <button type="button" onClick={() => delPreset(p)} className="text-ink-muted hover:text-danger-light text-sm px-1.5 shrink-0" aria-label="삭제">✕</button>
+                </div>
+              ))}
+            </div>
+          )}
+          <button type="button" onClick={convertClockPresets} disabled={convertBusy}
+            className="w-full rounded-input border border-accent-400/40 bg-accent-300/12 py-2 text-xs font-bold text-accent-300 transition-colors hover:bg-accent-300/20 disabled:opacity-50">
+            {convertBusy ? '가져오는 중…' : `클락 프리셋 ${presets.length}개 → 게임 프리셋으로 가져오기 (1회 변환)`}
+          </button>
+          <p className="text-2xs text-ink-muted">가져오면 포스터·장부·클락 어디서든 같은 프리셋을 쓸 수 있어요. 가져온 뒤 구형 프리셋은 ✕로 정리하세요.</p>
+        </>)}
       </section>
 
       {/* 기본 정보 */}
@@ -1185,19 +1195,6 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
           {cfg.earlySingleLevel > 0 && <> · 1얼리 ≈ <b className="text-accent-300">{cfg.earlySingleMin}분</b></>} · 라이브 수기 보정 가능.
         </p>
       </section>
-
-      {/* PL1a③: 게임 프리셋 적용 — 접힌 섹션 안(발견 불가)에서 설정 최상단으로 승격, 전 프리셋 노출 */}
-      {gamePresets.length > 0 && (
-        <div className="rounded-input border border-accent-400/30 bg-accent-300/[0.06] p-2">
-          <p className="mb-1 text-2xs font-bold text-accent-300">📋 게임 프리셋 적용 — 제목·블라인드·스택·상금을 한 번에</p>
-          <select value="" onChange={(e) => { const p = gamePresets.find((x) => x.id === e.target.value); if (p) applyGamePreset(p); }} className="input w-full text-xs">
-            <option value="" disabled>프리셋 선택</option>
-            {gamePresets.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}{p.data.blindLevels?.length ? ` (${countLevels(p.data.blindLevels)}레벨)` : ' (블라인드 없음)'}</option>
-            ))}
-          </select>
-        </div>
-      )}
 
       {/* 블라인드 구조 — 접기/펴기 */}
       <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">

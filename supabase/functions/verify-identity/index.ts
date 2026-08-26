@@ -62,22 +62,22 @@ Deno.serve(async (req: Request) => {
     const age = ageFrom(birth);
     if (age === null || age < 19) return json({ error: '만 19세 이상만 이용할 수 있습니다. (생년월일 확인 불가 시 가입 제한)' }, 403);
 
+    // CI 원문은 DB 함수(verify_identity_commit) 트랜잭션 안에서 HMAC 해시로만 저장된다.
+    // 중복명의(1인 1계정)·텀스톤 판정도 DB 내부에서 수행 — 원문·페퍼가 함수 밖으로 나가지 않는다.
     const admin = createClient(SUPABASE_URL, SERVICE);
-    const { data: dup } = await admin.from('profiles').select('id').eq('ci', ci).neq('id', user.id).limit(1).maybeSingle();
-    if (dup) return json({ error: '이미 가입된 명의입니다.' }, 409);
-
-    const { error: upErr } = await admin.from('profiles').update({
-      ci,
-      real_name: vc.name ?? null,
-      phone: vc.phoneNumber ?? null,
-      birth_date: birth,
-      gender: vc.gender ?? null,
-      carrier: vc.operator ?? null,
-      verified_at: new Date().toISOString(),
-    }).eq('id', user.id);
-    if (upErr) {
-      if (upErr.code === '23505' || /duplicate|unique/i.test(upErr.message || '')) return json({ error: '이미 가입된 명의입니다.' }, 409);
-      return json({ error: '저장 실패', detail: upErr.message }, 500);
+    const { data: commit, error: cErr } = await admin.rpc('verify_identity_commit', {
+      p_uid: user.id,
+      p_ci: ci,
+      p_name: vc.name ?? null,
+      p_phone: vc.phoneNumber ?? null,
+      p_birth: birth,
+      p_gender: vc.gender ?? null,
+      p_carrier: vc.operator ?? null,
+    });
+    if (cErr) return json({ error: '저장 실패', detail: cErr.message }, 500);
+    if (!commit?.ok) {
+      if (commit?.code === 'dup') return json({ error: '이미 가입된 명의입니다.' }, 409);
+      return json({ error: '저장 실패', detail: commit?.code ?? 'unknown' }, 500);
     }
     return json({ ok: true, name: vc.name ?? null });
   } catch (e) {

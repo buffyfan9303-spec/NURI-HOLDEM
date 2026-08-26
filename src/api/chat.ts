@@ -190,6 +190,36 @@ export async function getMyChatThreads(): Promise<InboxThread[]> {
   return out;
 }
 
+// 상대 '읽음' 실시간 구독 — listing_message_reads upsert(INSERT/UPDATE)를 스레드 단위로 수신.
+// filter 는 listing_id 단일(Realtime 단일 필터 제약), buyer_id 는 콜백에서 검사(subscribeThread 와 동일 관행).
+// onStatus(true) = 구독 확립(폴링 중단 가능) · onStatus(false) = 오류/종료(폴링 폴백 신호).
+export function subscribeThreadReads(
+  listingId: string,
+  buyerId: string,
+  onRead: (r: ThreadRead) => void,
+  onStatus?: (ok: boolean) => void,
+): () => void {
+  if (IS_MOCK) return () => {};
+  const channel = supabase
+    .channel(`lmr:${listingId}:${buyerId}:${Math.random().toString(36).slice(2)}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'listing_message_reads', filter: `listing_id=eq.${listingId}` },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (payload: any) => {
+        const row = payload.new; // DELETE 이벤트는 new 가 비어 있음 — 무시
+        if (row && row.buyer_id === buyerId && row.reader_id && row.last_read_at) {
+          onRead({ readerId: row.reader_id, lastReadAt: row.last_read_at });
+        }
+      },
+    )
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') onStatus?.(true);
+      else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') onStatus?.(false);
+    });
+  return () => { supabase.removeChannel(channel); };
+}
+
 // 실시간 구독 — 해당 스레드에 새 메시지가 도착하면 콜백 (RLS로 권한 제한)
 export function subscribeThread(
   listingId: string,

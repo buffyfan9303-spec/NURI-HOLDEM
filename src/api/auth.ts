@@ -74,10 +74,11 @@ function rowToUser(row: any): User {
     activityPoints: row.activity_points ?? 0,
     badges:         row.badges ?? [],
     staffTitle:     row.staff_title ?? undefined,
-    // 인증 판정: CI(본인확인) 보유 = 인증 완료. 이 식은 서버 단일 소스 SQL 헬퍼 public.is_ci_verified(ci, verified_at)
-    // 의 클라이언트 미러다(현재 body = `ci is not null`). 약관에 본인인증 유효기간 조항이 없어 만료(재인증)는 미적용.
+    // 인증 판정: CI 해시(ci_hash, HMAC — 원문은 2026-08-27부터 저장 안 함) 보유 = 인증 완료.
+    // 이 식은 서버 단일 소스 SQL 헬퍼 public.is_ci_verified(ci_hash, verified_at)의 클라이언트 미러다
+    // (현재 body = `보유 여부`). 약관에 본인인증 유효기간 조항이 없어 만료(재인증)는 미적용.
     // ⚠️ 만료 정책 도입 시: 약관 신설 → is_ci_verified body 수정 → 이 줄도 동일 기준으로 동기화(두 곳이 짝). [[holdem-verification-policy]]
-    verified:       !!row.ci,
+    verified:       !!row.ci_hash,
     verifiedAt:     row.verified_at ?? undefined,
     realName:       row.real_name ?? undefined,
     phone:          row.phone ?? undefined,
