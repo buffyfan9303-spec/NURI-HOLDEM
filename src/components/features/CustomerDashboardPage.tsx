@@ -153,7 +153,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
         <button type="button" onClick={onClose} aria-label="닫기" className="flex h-9 w-9 items-center justify-center rounded-full text-ink-secondary hover:bg-surface-high">
           <Icon name="back" size={20} />
         </button>
-        <h1 className="text-base font-bold text-ink-primary">내 대시보드</h1>
+        <h1 className="text-lg font-bold text-ink-primary">내 대시보드</h1>
       </header>
 
       <div className="flex-1 overflow-y-auto">
@@ -161,7 +161,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
           {/* 미읽음 알림 미리보기 — 상위 3개(탭하면 해당 화면으로) */}
           {unread.length > 0 && (
             <section className="rounded-card border border-accent-400/30 bg-accent-300/[0.05] p-3">
-              <p className="mb-1.5 text-sm font-bold text-accent-300">🔔 안 읽은 알림 {unread.length > 3 ? '(' + unread.length + ')' : ''}</p>
+              <p className="mb-1.5 flex items-center gap-1.5 text-sm font-bold text-accent-300"><Icon name="bell" size={15} /> 안 읽은 알림 {unread.length > 3 ? '(' + unread.length + ')' : ''}</p>
               <ul className="space-y-1">
                 {unread.slice(0, 3).map((n) => (
                   <li key={n.id}>
@@ -179,8 +179,8 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
           {badgeStats && (
             <section className="rounded-card border border-border-default bg-surface-low p-3">
               <button type="button" onClick={() => setAchOpen((v) => !v)} className="flex w-full items-center justify-between gap-2 text-left">
-                <span className="text-sm font-bold text-ink-primary">🏅 내 업적 <span className="text-2xs font-normal text-ink-muted">{BADGES.filter((b) => b.check(badgeStats)).length}/{BADGES.length} 달성</span></span>
-                <span className="shrink-0 text-2xs text-ink-muted">{achOpen ? '접기 ▲' : '펼치기 ▼'}</span>
+                <span className="inline-flex items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="medal" size={15} /> 내 업적 <span className="text-2xs font-normal text-ink-muted">{BADGES.filter((b) => b.check(badgeStats)).length}/{BADGES.length} 달성</span></span>
+                <span className="inline-flex shrink-0 items-center gap-0.5 text-2xs text-ink-muted">{achOpen ? '접기' : '펼치기'} <Icon name={achOpen ? 'chevron-up' : 'chevron-down'} size={12} /></span>
               </button>
               {achOpen && (
                 <div className="mt-2 grid grid-cols-3 gap-1.5 sm:grid-cols-4">
@@ -216,7 +216,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
             <div className="mt-2.5 grid grid-cols-2 gap-2">
               <div className="rounded-input border border-border-subtle bg-surface-base px-2.5 py-1.5">
                 <p className="text-2xs text-ink-muted">받는 아이디</p>
-                <p className="truncate text-xs font-bold text-ink-primary">{user?.nickname ? '@' + user.nickname : <span className="text-amber-300">미설정</span>}</p>
+                <p className="truncate text-xs font-bold text-ink-primary">{user?.nickname ? '@' + user.nickname : <span className="text-danger-light">미설정</span>}</p>
               </div>
               <div className="rounded-input border border-border-subtle bg-surface-base px-2.5 py-1.5">
                 <p className="text-2xs text-ink-muted">이용권 수령</p>
@@ -224,10 +224,10 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
               </div>
             </div>
             {!user?.verified && (
-              <p className="mt-2 text-2xs leading-relaxed text-amber-300/90">⚠ 본인인증을 완료해야 매장이용권을 받을 수 있어요. 프로필에서 인증을 진행하세요.</p>
+              <p className="mt-2 flex items-start gap-1.5 text-2xs leading-relaxed text-danger-light"><Icon name="alert" size={12} className="mt-0.5 shrink-0" /> 본인인증을 완료해야 매장이용권을 받을 수 있어요. 프로필에서 인증을 진행하세요.</p>
             )}
             {user?.verified && !user?.nickname && (
-              <p className="mt-2 text-2xs leading-relaxed text-amber-300/90">⚠ 받는 아이디(닉네임)를 설정하면 업주가 더 쉽게 이용권을 보낼 수 있어요. 프로필에서 설정하세요.</p>
+              <p className="mt-2 flex items-start gap-1.5 text-2xs leading-relaxed text-ink-secondary"><Icon name="info" size={12} className="mt-0.5 shrink-0" /> 받는 아이디(닉네임)를 설정하면 업주가 더 쉽게 이용권을 보낼 수 있어요. 프로필에서 설정하세요.</p>
             )}
           </section>
 
@@ -239,14 +239,14 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
             {onOpenProfile && (
               <button type="button" onClick={onOpenProfile}
                 className="rounded-card border border-border-default bg-surface-low px-3 py-2.5 text-left hover:border-accent-400/50 transition-colors">
-                <span className="block text-sm font-bold text-ink-primary">👤 프로필 관리</span>
+                <span className="flex items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="user" size={15} /> 프로필 관리</span>
                 <span className="block text-2xs text-ink-muted mt-0.5">닉네임 · 본인인증 · 알림 설정</span>
               </button>
             )}
             {onOpenMarket && (
               <button type="button" onClick={onOpenMarket}
                 className="rounded-card border border-border-default bg-surface-low px-3 py-2.5 text-left hover:border-accent-400/50 transition-colors">
-                <span className="block text-sm font-bold text-ink-primary">🛒 내 장터 거래</span>
+                <span className="flex items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="cart" size={15} /> 내 장터 거래</span>
                 <span className="block text-2xs text-ink-muted mt-0.5">판매목록 · 채팅 · 찜</span>
               </button>
             )}
@@ -255,14 +255,14 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
           {/* 내가 쓴 글 — 커뮤니티에 흩어진 내 글을 다시 찾을 유일한 화면 */}
           {myPosts.length > 0 && onOpenPost && (
             <section className="rounded-card border border-border-default bg-surface-low p-3">
-              <h2 className="text-sm font-bold text-ink-primary">📝 내가 쓴 글 <span className="font-normal text-ink-muted">({myPosts.length})</span></h2>
+              <h2 className="flex items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="edit" size={15} /> 내가 쓴 글 <span className="font-normal text-ink-muted">({myPosts.length})</span></h2>
               <ul className="mt-2 space-y-1">
                 {myPosts.slice(0, 5).map((mp) => (
                   <li key={mp.id}>
                     <button type="button" onClick={() => onOpenPost(mp)}
                       className="w-full rounded-input px-2 py-1.5 text-left hover:bg-surface-high transition-colors">
                       <span className="block truncate text-xs font-semibold text-ink-secondary">{mp.title || (mp.content || '').replace(/\n/g, ' ').slice(0, 40) || '(내용 없음)'}</span>
-                      <span className="block text-2xs text-ink-muted tabular-nums">❤️{mp.likeCount} · 💬{mp.commentCount} · {new Date(mp.createdAt).toLocaleDateString()}</span>
+                      <span className="flex items-center gap-1 text-2xs text-ink-muted tabular-nums"><Icon name="heart" size={11} />{mp.likeCount} <Icon name="comment" size={11} className="ml-1" />{mp.commentCount} <span className="ml-1">{new Date(mp.createdAt).toLocaleDateString()}</span></span>
                     </button>
                   </li>
                 ))}
@@ -273,8 +273,8 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
           {/* 친구 초대 — 추천 링크 + 현황. 친구 가입+본인인증 시 양쪽 활동점수 */}
           <InviteSection nickname={user?.nickname ?? ''} stats={refStats} />
 
-          <div className="rounded-card border border-amber-500/40 bg-amber-500/[0.08] p-3">
-            <p className="text-sm font-bold text-amber-300">⚠️ 매장이용권은 금전적 가치가 없습니다</p>
+          <div className="rounded-card border border-border-default bg-surface-low p-3">
+            <p className="flex items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="alert" size={15} className="shrink-0 text-danger-light" /> 매장이용권은 금전적 가치가 없습니다</p>
             <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">현금·포인트가 아니며 환불·현금화·유저 간 거래가 불가합니다. 발급한 매장에서 사용(회수)만 가능합니다.</p>
           </div>
 
@@ -307,7 +307,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
                     </p>
                     <ul className="space-y-1.5">{g.stacks.map((s) => (
                       <li key={s.title} className="flex items-center gap-2 rounded-input border border-accent-400/40 bg-accent-300/[0.05] px-3 py-2">
-                        <span className="text-base" aria-hidden>🎟</span>
+                        <Icon name="ticket" size={18} className="shrink-0 text-accent-300" />
                         <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">
                           {s.title} <span className="text-2xs text-ink-muted">×{s.ids.length}</span>
                           {s.expiries[0] && (() => {
@@ -409,14 +409,14 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
                 <ul className="space-y-1.5">{ranks.slice(0, 15).map((r, i) => (
                   <li key={i} className="flex items-center gap-2.5 rounded-input border border-border-subtle bg-surface-low px-3 py-2">
                     <span className={['flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-2xs font-extrabold tabular-nums',
-                      r.position === 1 ? 'bg-gold-300 text-ink-inverse' : r.position === 2 ? 'bg-slate-300 text-ink-inverse' : r.position === 3 ? 'bg-amber-700 text-white' : 'bg-surface-float text-ink-secondary'].join(' ')}>
+                      r.position === 1 ? 'bg-gold-300 text-ink-inverse' : r.position <= 3 ? 'border border-border-default bg-surface-float text-ink-primary' : 'bg-surface-float text-ink-secondary'].join(' ')}>
                       {r.position}
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-ink-primary">{r.venueName}</p>
                       <p className="text-2xs tabular-nums text-ink-muted">{r.date}</p>
                     </div>
-                    {r.prize && <span className="shrink-0 text-xs font-bold tabular-nums text-gold-300">🏆 {parsePrizeMan(r.prize) ? parsePrizeMan(r.prize) + '만' : r.prize}</span>}
+                    {r.prize && <span className="inline-flex shrink-0 items-center gap-1 text-xs font-bold tabular-nums text-gold-300"><Icon name="trophy" size={12} /> {parsePrizeMan(r.prize) ? parsePrizeMan(r.prize) + '만' : r.prize}</span>}
                   </li>
                 ))}</ul></>}
           </section>
@@ -537,12 +537,12 @@ function RecordSummary({ rows, percentile, nickname }: { rows: MyRankingRow[]; p
   return (
     <div className="mb-2 rounded-card border border-accent-400/30 bg-accent-300/[0.05] p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="text-xs font-bold text-gold-300">🏆 내 토너먼트 전적 <span className="font-normal text-ink-muted">(기록 {n}회)</span>
+        <p className="flex flex-wrap items-center gap-1 text-xs font-bold text-gold-300"><Icon name="trophy" size={13} /> 내 토너먼트 전적 <span className="font-normal text-ink-muted">(기록 {n}회)</span>
           {percentile != null && <span className="ml-1.5 rounded-badge bg-accent-300/15 px-1.5 py-0.5 text-2xs text-accent-300">전국 상위 {percentile}%</span>}
         </p>
         <div className="flex shrink-0 gap-1">
           {kakaoConfigured() && <button type="button" onClick={doKakao} disabled={busy} className="shrink-0 rounded-badge px-2 py-1 text-2xs font-bold text-[#3C1E1E] disabled:opacity-50" style={{ background: '#FEE500' }}>카톡</button>}
-          <button type="button" onClick={doShare} disabled={busy} className="btn-ghost shrink-0 px-2.5 py-1 text-2xs disabled:opacity-50">{busy ? '생성 중…' : '📤 공유'}</button>
+          <button type="button" onClick={doShare} disabled={busy} className="btn-ghost inline-flex shrink-0 items-center gap-1 px-2.5 py-1 text-2xs disabled:opacity-50">{busy ? '생성 중…' : <><Icon name="share" size={12} /> 공유</>}</button>
         </div>
       </div>
       <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-6">
@@ -648,13 +648,13 @@ function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => 
       <div className="relative w-full max-w-md space-y-3 rounded-t-dialog border border-border-default bg-surface-mid p-4 animate-slide-up sm:rounded-dialog">
         <div className="flex items-center justify-between gap-2">
           <p className="min-w-0 truncate text-sm font-bold text-ink-primary">{stack.venueName} · {stack.title}</p>
-          <button type="button" onClick={onClose} aria-label="닫기" className="shrink-0 text-lg leading-none text-ink-muted">✕</button>
+          <button type="button" onClick={onClose} aria-label="닫기" className="shrink-0 text-ink-muted"><Icon name="close" size={18} /></button>
         </div>
         {mode === 'menu' && (<>
           <p className="text-2xs text-ink-muted">발급 매장(<b className="text-ink-secondary">{stack.venueName}</b>)에서만 사용됩니다. 방법을 선택하세요.</p>
-          <button type="button" disabled={busy} onClick={doDirect} className="btn-primary w-full text-sm disabled:opacity-50">✅ 이 매장으로 바로 전송(사용)</button>
-          <button type="button" onClick={() => setMode('qr')} className="btn-ghost w-full text-sm">📷 매장 QR 스캔해서 사용</button>
-          <button type="button" onClick={() => setMode('phone')} className="btn-ghost w-full text-sm">📞 매장 업주 전화번호로 전송</button>
+          <button type="button" disabled={busy} onClick={doDirect} className="btn-primary inline-flex w-full items-center justify-center gap-1.5 text-sm disabled:opacity-50"><Icon name="check-circle" size={16} /> 이 매장으로 바로 전송(사용)</button>
+          <button type="button" onClick={() => setMode('qr')} className="btn-ghost inline-flex w-full items-center justify-center gap-1.5 text-sm"><Icon name="qr" size={16} /> 매장 QR 스캔해서 사용</button>
+          <button type="button" onClick={() => setMode('phone')} className="btn-ghost inline-flex w-full items-center justify-center gap-1.5 text-sm"><Icon name="phone" size={16} /> 매장 업주 전화번호로 전송</button>
         </>)}
         {mode === 'qr' && (
           <div className="space-y-2">
@@ -669,7 +669,7 @@ function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => 
             <input value={phone} onChange={(e) => { setPhone(e.target.value); setPhoneTarget(null); }} inputMode="tel" autoComplete="tel" placeholder="010-0000-0000" className="input w-full text-sm" />
             {phoneTarget && (
               <div className="flex items-center gap-2 rounded-input border border-emerald-500/40 bg-emerald-500/[0.08] px-3 py-2.5">
-                <span aria-hidden>👤</span>
+                <Icon name="user" size={16} className="shrink-0 text-emerald-400" />
                 <p className="min-w-0 flex-1 text-sm font-bold text-ink-primary truncate">{phoneTarget.display}</p>
                 <span className="shrink-0 text-2xs text-emerald-400 font-bold">받는 사람 확인</span>
               </div>
@@ -677,7 +677,7 @@ function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => 
             <div className="flex gap-2">
               <button type="button" onClick={() => { setMode('menu'); setPhoneTarget(null); }} className="btn-ghost flex-1 text-sm">뒤로</button>
               {phoneTarget ? (
-                <button type="button" disabled={busy} onClick={doPhone} className="btn-primary flex-1 text-sm disabled:opacity-50">{busy ? '처리 중…' : `✓ ${phoneTarget.display}에게 사용 확정`}</button>
+                <button type="button" disabled={busy} onClick={doPhone} className="btn-primary inline-flex flex-1 items-center justify-center gap-1 text-sm disabled:opacity-50">{busy ? '처리 중…' : <><Icon name="check" size={14} /> {phoneTarget.display}에게 사용 확정</>}</button>
               ) : (
                 <button type="button" disabled={busy || phone.replace(/\D/g, '').length < 10} onClick={lookupPhone} className="btn-primary flex-1 text-sm disabled:opacity-50">{busy ? '조회 중…' : '받는 사람 확인'}</button>
               )}
@@ -712,7 +712,7 @@ function QrScanner({ onResult, onError }: { onResult: (text: string) => void; on
 function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
     <div className="rounded-input border border-border-subtle bg-surface-low p-2 text-center">
-      <p className={`text-base font-extrabold leading-none tabular-nums ${accent ? 'text-accent-300' : 'text-ink-primary'}`}>{value}</p>
+      <p className={`text-lg font-extrabold leading-none tabular-nums ${accent ? 'text-accent-300' : 'text-ink-primary'}`}>{value}</p>
       <p className="mt-1 text-2xs text-ink-muted">{label}</p>
     </div>
   );
@@ -737,8 +737,8 @@ function LevelGuideModal({ points, onClose }: { points: number; onClose: () => v
       <button type="button" aria-label="닫기" onClick={onClose} className="absolute inset-0 bg-black/70" />
       <div className="relative max-h-[85vh] w-full max-w-md overflow-y-auto rounded-t-dialog border border-border-default bg-surface-mid p-4 animate-slide-up sm:rounded-dialog">
         <div className="mb-2 flex items-center justify-between gap-2">
-          <p className="text-sm font-bold text-ink-primary">🎖 레벨 도감</p>
-          <button type="button" onClick={onClose} aria-label="닫기" className="text-lg leading-none text-ink-muted">✕</button>
+          <p className="flex items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="medal" size={15} /> 레벨 도감</p>
+          <button type="button" onClick={onClose} aria-label="닫기" className="text-ink-muted"><Icon name="close" size={18} /></button>
         </div>
         <p className="mb-3 text-2xs leading-relaxed text-ink-muted">활동점수가 쌓이면 레벨이 오릅니다. 지금은 <b className="text-accent-300">Lv {cur.level} · {cur.title}</b>.</p>
         <ul className="space-y-1.5">
@@ -756,9 +756,9 @@ function LevelGuideModal({ points, onClose }: { points: number; onClose: () => v
               </li>
             );
           })}
-          <li className="flex items-center gap-2.5 rounded-input border border-amber-400/40 bg-amber-300/[0.06] px-3 py-2">
-            <span className="text-base" aria-hidden>🅰️</span>
-            <p className="min-w-0 flex-1 text-sm font-bold text-amber-300">에이스 (AA)</p>
+          <li className="flex items-center gap-2.5 rounded-input border border-gold-400/40 bg-gold-300/[0.06] px-3 py-2">
+            <Icon name="spade" size={18} className="shrink-0 text-gold-300" />
+            <p className="min-w-0 flex-1 text-sm font-bold text-gold-300">에이스 (AA)</p>
             <span className="shrink-0 text-2xs text-ink-muted">14,000점 + 전체 상위 10위</span>
           </li>
         </ul>
@@ -787,9 +787,9 @@ function LevelCard({ points, championships = 0 }: { points: number; championship
           <p className="text-2xs text-ink-muted">활동점수 <b className="text-accent-300 tabular-nums">{points.toLocaleString()}</b>점</p>
         </div>
         {championships > 0 && (
-          <span className="shrink-0 rounded-badge border border-gold-400/40 bg-gold-300/10 px-1.5 py-1 text-2xs font-bold text-gold-300" title="시즌 우승 영구 배지">👑 {championships}</span>
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-badge border border-gold-400/40 bg-gold-300/10 px-1.5 py-1 text-2xs font-bold text-gold-300 tabular-nums" title="시즌 우승 영구 배지"><Icon name="crown" size={12} /> {championships}</span>
         )}
-        <button type="button" onClick={() => setGuide(true)} className="btn-ghost shrink-0 px-2 py-1 text-2xs">🎖 도감</button>
+        <button type="button" onClick={() => setGuide(true)} className="btn-ghost inline-flex shrink-0 items-center gap-1 px-2 py-1 text-2xs"><Icon name="medal" size={12} /> 도감</button>
       </div>
       {guide && <LevelGuideModal points={points} onClose={() => setGuide(false)} />}
       {prog.next ? (
@@ -800,7 +800,7 @@ function LevelCard({ points, championships = 0 }: { points: number; championship
           <p className="mt-1 text-2xs text-ink-muted">다음 레벨 <b style={{ color: prog.next.color }}>{prog.next.title}</b>까지 <b className="text-ink-secondary tabular-nums">{prog.toNext.toLocaleString()}</b>점</p>
         </div>
       ) : (
-        <p className="mt-2 text-2xs font-bold text-gold-300">🏆 최고 레벨 달성! 활동을 이어가 명예의 전당에 도전하세요.</p>
+        <p className="mt-2 flex items-center gap-1 text-2xs font-bold text-gold-300"><Icon name="trophy" size={12} className="shrink-0" /> 최고 레벨 달성! 활동을 이어가 명예의 전당에 도전하세요.</p>
       )}
     </section>
   );
@@ -816,8 +816,8 @@ function InviteSection({ nickname, stats }: { nickname: string; stats: ReferralS
   if (!nickname) {
     return (
       <section className="rounded-card border border-border-default bg-surface-low p-3">
-        <p className="text-sm font-bold text-ink-primary">🎁 친구 초대</p>
-        <p className="mt-1 text-2xs leading-relaxed text-amber-300/90">받는 아이디(닉네임)를 설정하면 내 초대 링크가 생깁니다. 프로필에서 설정하세요.</p>
+        <p className="flex items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="gift" size={15} /> 친구 초대</p>
+        <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">받는 아이디(닉네임)를 설정하면 내 초대 링크가 생깁니다. 프로필에서 설정하세요.</p>
       </section>
     );
   }
@@ -834,7 +834,7 @@ function InviteSection({ nickname, stats }: { nickname: string; stats: ReferralS
   return (
     <section className="rounded-card border border-accent-400/30 bg-accent-300/[0.05] p-3">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-bold text-accent-300">🎁 친구 초대</p>
+        <p className="flex items-center gap-1.5 text-sm font-bold text-accent-300"><Icon name="gift" size={15} /> 친구 초대</p>
         <span className="text-2xs text-ink-muted">초대 <b className="text-ink-secondary tabular-nums">{stats.invited}</b> · 보상 <b className="text-accent-300 tabular-nums">{stats.rewarded}</b></span>
       </div>
       <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">친구가 내 링크로 가입하고 <b className="text-ink-primary">본인인증</b>까지 마치면 <b className="text-accent-300">둘 다 활동점수</b>(나 +500 · 친구 +300)!</p>
@@ -843,9 +843,9 @@ function InviteSection({ nickname, stats }: { nickname: string; stats: ReferralS
         <div className="min-w-0 flex-1">
           <div className="truncate rounded-input border border-border-subtle bg-surface-base px-2.5 py-1.5 text-2xs text-ink-muted">{url}</div>
           <div className="mt-1.5 flex gap-1.5">
-            <button type="button" onClick={copy} className="btn-ghost flex-1 px-2 py-1 text-2xs">📋 복사</button>
+            <button type="button" onClick={copy} className="btn-ghost inline-flex flex-1 items-center justify-center gap-1 px-2 py-1 text-2xs"><Icon name="copy" size={12} /> 복사</button>
             {kakaoConfigured() && <button type="button" onClick={kakao} className="flex-1 rounded-input px-2 py-1 text-2xs font-bold text-[#3C1E1E]" style={{ background: '#FEE500' }}>카톡 공유</button>}
-            <button type="button" onClick={share} className="btn-primary flex-1 px-2 py-1 text-2xs">📤 공유</button>
+            <button type="button" onClick={share} className="btn-primary inline-flex flex-1 items-center justify-center gap-1 px-2 py-1 text-2xs"><Icon name="share" size={12} /> 공유</button>
           </div>
         </div>
       </div>

@@ -1,5 +1,6 @@
 // src/components/features/ICMCalculator.tsx
 import { useMemo, useState } from 'react';
+import { CalcCard } from './tools/calcUi';
 
 /**
  * ICM(Independent Chip Model) 계산기 — Malmuth-Harville 모델.
@@ -68,12 +69,9 @@ export default function ICMCalculator() {
   const applyBubble = () => { setStacks([40, 30, 20, 10]); setPrizes([50, 30, 20]); };
 
   return (
-    <div className="space-y-3 rounded-card border border-border-default bg-surface-low p-3">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-sm font-bold text-ink-primary">ICM 계산기</p>
-          <p className="text-2xs text-ink-muted mt-0.5">스택과 상금을 입력하면 각 플레이어의 기대 상금(ICM)을 계산합니다.</p>
-        </div>
+    // 제목은 전체화면 헤더(도구 런처)가 이미 표시 — 공통 CalcCard 로 흡수(2중 노출 제거)
+    <CalcCard desc="스택과 상금을 입력하면 각 플레이어의 기대 상금(ICM)을 계산합니다.">
+      <div className="flex justify-end">
         <button type="button" onClick={applyBubble}
           className="shrink-0 rounded-input border border-accent-400/50 bg-accent-300/10 px-2 py-1 text-2xs font-bold text-accent-300 leading-none">
           버블: 4명 · 3자리 시상
@@ -128,7 +126,7 @@ export default function ICMCalculator() {
               <input type="number" inputMode="numeric" value={v === 0 ? '' : v}
                 onChange={(e) => setStack(i, e.target.value === '' ? 0 : (parseInt(e.target.value, 10) || 0))}
                 className="input flex-1 text-sm tabular-nums" placeholder="스택" />
-              <span className="w-24 shrink-0 text-right text-sm font-extrabold text-accent-300 tabular-nums">
+              <span className="w-24 shrink-0 text-right text-base font-extrabold text-accent-300 tabular-nums">
                 {equities[i] !== undefined ? equities[i].toFixed(2) : '0'}
                 {awarded > 0 && (
                   <span className="ml-1 text-2xs font-normal text-ink-muted">
@@ -147,6 +145,6 @@ export default function ICMCalculator() {
       <p className="text-2xs text-ink-muted">
         Malmuth-Harville 모델 기준 추정치입니다. 실제 딜·체급에 따라 차이가 있을 수 있습니다.
       </p>
-    </div>
+    </CalcCard>
   );
 }

@@ -11,7 +11,7 @@ import {
   CheckCircle2, Trash2, Pencil, Star, Heart, AlertTriangle, Info, Lock, User, Users, Bell,
   QrCode, Calendar, Clock, Settings, Share2, Filter, Image, Download, ExternalLink, Menu,
   Home, RefreshCw, Copy, Send, MessageCircle, Eye, Bookmark, Flame, Target, Wallet, Gift,
-  CheckCheck, MapPin, LogOut, Trophy, type LucideIcon,
+  CheckCheck, MapPin, LogOut, Trophy, Ticket, Phone, Printer, BarChart3, Medal, ShoppingCart, Crown, type LucideIcon,
 } from 'lucide-react';
 
 export type IconName =
@@ -27,7 +27,8 @@ export type IconName =
   | 'trophy' | 'all-in' | 'felt-table' | 'timer-poker'
   // 리디자인 스파인 공통 글리프(로드맵 Phase 0 지정 — 이모지 마커 소탕용)
   | 'comment' | 'eye' | 'bookmark' | 'flame' | 'target' | 'wallet'
-  | 'gift' | 'check-double' | 'map-pin' | 'log-out';
+  | 'gift' | 'check-double' | 'map-pin' | 'log-out'
+  | 'ticket' | 'phone' | 'printer' | 'chart' | 'medal' | 'cart' | 'crown';
 
 // 각 아이콘의 path/figure children (viewBox 0 0 24 24 기준). 채움 아이콘은 fill 처리.
 const PATHS: Partial<Record<IconName, ReactElement>> = {
@@ -70,6 +71,7 @@ const LUCIDE: Partial<Record<IconName, LucideIcon>> = {
   home: Home, refresh: RefreshCw, copy: Copy, send: Send, comment: MessageCircle, eye: Eye,
   bookmark: Bookmark, flame: Flame, target: Target, wallet: Wallet, gift: Gift,
   'check-double': CheckCheck, 'map-pin': MapPin, 'log-out': LogOut, trophy: Trophy,
+  ticket: Ticket, phone: Phone, printer: Printer, chart: BarChart3, medal: Medal, cart: ShoppingCart, crown: Crown,
 };
 // 채움 변형은 lucide 원형에 fill 지정으로 표현
 const FILLED = new Set<IconName>(['star-fill', 'heart-fill']);

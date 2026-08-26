@@ -156,13 +156,13 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
 
   // 매장 비치용 인쇄 — 선택한 QR만 출력(종이가 작아 한꺼번에 불가). 3개 중 1~3개 선택.
   const QR_DEFS = [
-    { id: 'voucher', icon: '🎟', title: '매장이용권 사용', data: () => QRCode.toDataURL(`NURIV-VENUE:${venueId}`, { width: 1024, margin: 2 }), desc: '대시보드 → 이용권 → 사용하기 → ‘매장 QR 스캔’' },
-    { id: 'checkin', icon: '📍', title: '출석 체크인', data: () => QRCode.toDataURL(checkinUrl(venueId), { width: 1024, margin: 2 }), desc: 'QR 스캔 → 오늘 출석 도장(매장 점수 적립 · 출석왕 집계)' },
-    { id: 'signup', icon: '📱', title: '회원가입', data: () => QRCode.toDataURL('https://nuriholdem.com/?signup=1', { width: 1024, margin: 2 }), desc: 'QR 스캔 → 바로 회원가입' },
-    { id: 'buyin', icon: '🙋', title: '바인(참가) 요청', data: () => QRCode.toDataURL(buyinRequestUrl(venueId), { width: 1024, margin: 2 }), desc: '손님 스캔 → 참가 요청(게임 선택) → 운영자가 장부에서 원탭 승인' },
-    { id: 'buyinG1', icon: '🏆', title: '바인 요청 · 메인', data: () => QRCode.toDataURL(buyinRequestUrl(venueId, 1), { width: 1024, margin: 2 }), desc: '메인 테이블 비치 — 스캔 시 메인 게임 바로 요청' },
-    { id: 'buyinG2', icon: '🎲', title: '바인 요청 · 사이드1', data: () => QRCode.toDataURL(buyinRequestUrl(venueId, 2), { width: 1024, margin: 2 }), desc: '사이드1 테이블 비치 — 스캔 시 사이드1 바로 요청' },
-    { id: 'buyinG3', icon: '🎲', title: '바인 요청 · 사이드2', data: () => QRCode.toDataURL(buyinRequestUrl(venueId, 3), { width: 1024, margin: 2 }), desc: '사이드2 테이블 비치 — 스캔 시 사이드2 바로 요청' },
+    { id: 'voucher', title: '매장이용권 사용', data: () => QRCode.toDataURL(`NURIV-VENUE:${venueId}`, { width: 1024, margin: 2 }), desc: '대시보드 → 이용권 → 사용하기 → ‘매장 QR 스캔’' },
+    { id: 'checkin', title: '출석 체크인', data: () => QRCode.toDataURL(checkinUrl(venueId), { width: 1024, margin: 2 }), desc: 'QR 스캔 → 오늘 출석 도장(매장 점수 적립 · 출석왕 집계)' },
+    { id: 'signup', title: '회원가입', data: () => QRCode.toDataURL('https://nuriholdem.com/?signup=1', { width: 1024, margin: 2 }), desc: 'QR 스캔 → 바로 회원가입' },
+    { id: 'buyin', title: '바인(참가) 요청', data: () => QRCode.toDataURL(buyinRequestUrl(venueId), { width: 1024, margin: 2 }), desc: '손님 스캔 → 참가 요청(게임 선택) → 운영자가 장부에서 원탭 승인' },
+    { id: 'buyinG1', title: '바인 요청 · 메인', data: () => QRCode.toDataURL(buyinRequestUrl(venueId, 1), { width: 1024, margin: 2 }), desc: '메인 테이블 비치 — 스캔 시 메인 게임 바로 요청' },
+    { id: 'buyinG2', title: '바인 요청 · 사이드1', data: () => QRCode.toDataURL(buyinRequestUrl(venueId, 2), { width: 1024, margin: 2 }), desc: '사이드1 테이블 비치 — 스캔 시 사이드1 바로 요청' },
+    { id: 'buyinG3', title: '바인 요청 · 사이드2', data: () => QRCode.toDataURL(buyinRequestUrl(venueId, 3), { width: 1024, margin: 2 }), desc: '사이드2 테이블 비치 — 스캔 시 사이드2 바로 요청' },
   ] as const;
   const [printSel, setPrintSel] = useState<Record<string, boolean>>({ voucher: true, checkin: false, signup: false, buyin: false, buyinG1: false, buyinG2: false, buyinG3: false });
   const togglePrint = (id: string) => setPrintSel((m) => ({ ...m, [id]: !m[id] }));
@@ -174,8 +174,8 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
       const w = window.open('', '_blank', 'width=480,height=860');
       if (!w) { toast.show('팝업이 차단되었습니다. 팝업을 허용한 뒤 다시 시도하세요.', 'error'); return; }
       const cards = chosen.map((q, i) => {
-        const tbl = q.id.startsWith('buyinG') && q.title.includes('·') ? `<div class="table">🪑 ${q.title.split('·')[1].trim()} 테이블</div>` : '';
-        return `  <div class="card"><h2>${q.icon} ${q.title}</h2>${tbl}<img src="${imgs[i]}" alt="${q.title} QR"/><p>${q.desc}</p></div>`;
+        const tbl = q.id.startsWith('buyinG') && q.title.includes('·') ? `<div class="table">${q.title.split('·')[1].trim()} 테이블</div>` : '';
+        return `  <div class="card"><h2>${q.title}</h2>${tbl}<img src="${imgs[i]}" alt="${q.title} QR"/><p>${q.desc}</p></div>`;
       }).join('\n');
       w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>NURI HOLDEM · 매장 비치 QR</title><style>
 *{box-sizing:border-box;margin:0}body{font-family:system-ui,'Apple SD Gothic Neo',sans-serif;text-align:center;padding:28px 22px;color:#111}
@@ -233,7 +233,7 @@ ${cards}
   const holderCount = holders.filter((g) => !g.isStore && g.active.length > 0).length;
   // 표기: 실명/닉네임. 실명이 없으면 닉네임만.
   const holderLabel = (g: { key: string; name: string; isStore: boolean }) => {
-    if (g.isStore) return '🏪 매장 보관';
+    if (g.isStore) return '매장 보관';
     const p = profileMap.get(g.key);
     if (p?.realName) return `${p.realName}/${p.nickname ?? g.name}`;
     return p?.nickname ?? g.name;
@@ -252,10 +252,10 @@ ${cards}
       {/* 0) 이용 내역 — 실시간(발급·사용). 장부/이용권 권한 직원도 열람 — 기본 열림 */}
       <div className="rounded-card border border-border-default bg-surface-low p-2.5">
         <div className="mb-1.5 flex items-center justify-between gap-2">
-          <p className="text-2xs font-bold text-accent-300">🎟 이용 내역 <span className="font-normal text-ink-muted">· 실시간</span></p>
+          <p className="flex items-center gap-1.5 text-xs font-bold text-accent-300"><Icon name="ticket" size={14} /> 이용 내역 <span className="font-normal text-ink-muted">· 실시간</span></p>
           <button type="button" onClick={reload} disabled={loading}
             className="inline-flex h-7 items-center gap-1 rounded-input border border-border-subtle bg-surface-high/60 px-2 text-2xs font-bold text-ink-secondary hover:text-ink-primary disabled:opacity-50">
-            <span className={loading ? 'inline-block animate-spin' : ''} aria-hidden>↻</span> 새로고침
+            <Icon name="refresh" size={12} className={loading ? 'animate-spin' : ''} /> 새로고침
           </button>
         </div>
         {feed.length === 0 ? (
@@ -283,13 +283,13 @@ ${cards}
       {canIssue ? (
         <div className="rounded-input border border-accent-400/30 bg-accent-300/[0.05]">
           <button type="button" onClick={() => setIssueOpen((v) => !v)} className="flex w-full items-center justify-between gap-2 px-2.5 py-2">
-            <span className="text-2xs font-bold text-accent-300">매장이용권 발급 <span className="font-normal text-ink-muted">· 업주 전용</span>{quota !== null && <span className={['ml-1.5 rounded-badge px-1.5 py-0.5 font-bold', quota < 50 ? 'bg-danger/15 text-danger-light' : 'bg-surface-high text-ink-secondary'].join(' ')}>잔여 한도 {quota.toLocaleString()}개</span>}</span>
+            <span className="text-xs font-bold text-accent-300">매장이용권 발급 <span className="font-normal text-ink-muted">· 업주 전용</span>{quota !== null && <span className={['ml-1.5 rounded-badge px-1.5 py-0.5 font-bold', quota < 50 ? 'bg-danger/15 text-danger-light' : 'bg-surface-high text-ink-secondary'].join(' ')}>잔여 한도 {quota.toLocaleString()}개</span>}</span>
             <Icon name="chevron-down" size={14} className={['shrink-0 text-ink-muted transition-transform', issueOpen ? 'rotate-180' : ''].join(' ')} />
           </button>
           {issueOpen && (
             <div className="space-y-1.5 px-2.5 pb-2.5">
               {!isAdmin && !approved && (
-                <p className="rounded-input border border-amber-500/40 bg-amber-500/[0.08] px-2 py-1.5 text-2xs text-amber-300">⚠️ 운영자 승인 후 매장이용권을 발급할 수 있습니다. 운영자에게 발급 승인을 요청하세요.</p>
+                <p className="flex items-start gap-1.5 rounded-input border border-danger/40 bg-danger/[0.08] px-2 py-1.5 text-2xs text-danger-light"><Icon name="alert" size={12} className="mt-0.5 shrink-0" /> 운영자 승인 후 매장이용권을 발급할 수 있습니다. 운영자에게 발급 승인을 요청하세요.</p>
               )}
               <div className="flex gap-1.5">
                 <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="이용권 이름 (예: 데일리 1회 참가권)" className="input min-w-0 flex-1 text-sm" />
@@ -328,8 +328,8 @@ ${cards}
                       <span className="self-center text-2xs text-ink-muted">최근:</span>
                       {recentRecipients.map((r) => (
                         <button key={r.id} type="button" onClick={() => pickRecv(r)}
-                          className="rounded-full border border-accent-400/30 bg-accent-300/[0.06] px-2 py-0.5 text-[11px] text-ink-secondary hover:border-accent-400/60 hover:text-accent-300">
-                          👤 {r.display}
+                          className="inline-flex items-center gap-1 rounded-full border border-accent-400/30 bg-accent-300/[0.06] px-2 py-0.5 text-[11px] text-ink-secondary hover:border-accent-400/60 hover:text-accent-300">
+                          <Icon name="user" size={11} /> {r.display}
                         </button>
                       ))}
                     </div>
@@ -358,9 +358,9 @@ ${cards}
                           <li key={c.id} role="option" aria-selected={i === activeIdx}>
                             <button type="button" disabled={unverified} onClick={() => pickRecv(c)} onMouseEnter={() => setActiveIdx(i)}
                               className={`flex w-full items-center gap-1.5 rounded-input px-2 py-1.5 text-left ${unverified ? 'cursor-not-allowed opacity-60' : i === activeIdx ? 'bg-surface-high' : 'hover:bg-surface-high'}`}>
-                              <span aria-hidden className="shrink-0 text-2xs">👤</span>
+                              <Icon name="user" size={12} className="shrink-0 text-ink-muted" />
                               <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{c.display}</span>
-                              {unverified && <span className="shrink-0 rounded bg-red-500/15 px-1.5 py-0.5 text-2xs font-bold text-red-300">미인증 · 발급 불가</span>}
+                              {unverified && <span className="shrink-0 rounded bg-danger/15 px-1.5 py-0.5 text-2xs font-bold text-danger-light">미인증 · 발급 불가</span>}
                             </button>
                           </li>
                         );
@@ -372,8 +372,8 @@ ${cards}
                 </div>
               ) : (
                 <div className="flex gap-1.5">
-                  <button type="button" onClick={() => setRecvMode('id')} className="btn-ghost flex-1 text-2xs">👤 아이디(닉네임)로 지정</button>
-                  <button type="button" onClick={() => setRecvMode('phone')} className="btn-ghost flex-1 text-2xs">📞 전화번호로 지정</button>
+                  <button type="button" onClick={() => setRecvMode('id')} className="btn-ghost inline-flex flex-1 items-center justify-center gap-1 text-2xs"><Icon name="user" size={12} /> 아이디(닉네임)로 지정</button>
+                  <button type="button" onClick={() => setRecvMode('phone')} className="btn-ghost inline-flex flex-1 items-center justify-center gap-1 text-2xs"><Icon name="phone" size={12} /> 전화번호로 지정</button>
                 </div>
               )}
               <button type="button" disabled={busy || (!isAdmin && !approved)} onClick={issue} className="btn-primary w-full text-sm disabled:opacity-50">{busy ? '배포 중…' : `+ ${count}개 발급${recvDisplay ? ` → ${recvDisplay}` : ''}`}</button>
@@ -397,29 +397,29 @@ ${cards}
       {canIssue && qr && (
         <div className="rounded-input border border-accent-400/30 bg-accent-300/[0.05]">
           <button type="button" onClick={() => setQrOpen((v) => !v)} className="flex w-full items-center justify-between gap-2 px-2.5 py-2">
-            <span className="text-2xs font-bold text-accent-300">매장 QR <span className="font-normal text-ink-muted">· 이용권 · 출석 체크인 · 회원가입</span></span>
+            <span className="text-xs font-bold text-accent-300">매장 QR <span className="font-normal text-ink-muted">· 이용권 · 출석 체크인 · 회원가입</span></span>
             <Icon name="chevron-down" size={14} className={['shrink-0 text-ink-muted transition-transform', qrOpen ? 'rotate-180' : ''].join(' ')} />
           </button>
           {qrOpen && (
             <div className="px-3 pb-3">
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col items-center gap-1">
-                  <p className="text-center text-2xs font-bold text-accent-300">이용권 사용 QR</p>
+                  <p className="text-center text-2xs font-bold text-ink-secondary">이용권 사용 QR</p>
                   <img src={qr} alt="매장 이용권 QR" width={130} height={130} className="rounded bg-white p-1.5" />
                   <p className="text-center text-2xs leading-tight text-ink-muted">손님이 스캔해 사용 (고정)</p>
                 </div>
                 <div className="flex flex-col items-center gap-1">
-                  <p className="text-center text-2xs font-bold text-sky-300">출석 체크인 QR</p>
+                  <p className="text-center text-2xs font-bold text-ink-secondary">출석 체크인 QR</p>
                   {checkinQr && <img src={checkinQr} alt="출석 체크인 QR" width={130} height={130} className="rounded bg-white p-1.5" />}
                   <p className="text-center text-2xs leading-tight text-ink-muted">손님 스캔 → 출석 도장 · 출석왕 집계 (고정)</p>
                 </div>
                 <div className="flex flex-col items-center gap-1">
-                  <p className="text-center text-2xs font-bold text-emerald-300">회원가입 QR</p>
+                  <p className="text-center text-2xs font-bold text-ink-secondary">회원가입 QR</p>
                   {signupQr && <img src={signupQr} alt="회원가입 QR" width={130} height={130} className="rounded bg-white p-1.5" />}
                   <p className="text-center text-2xs leading-tight text-ink-muted">스캔 시 회원가입 페이지로 이동</p>
                 </div>
                 <div className="flex flex-col items-center gap-1">
-                  <p className="text-center text-2xs font-bold text-sky-300">바인 요청 QR</p>
+                  <p className="text-center text-2xs font-bold text-ink-secondary">바인 요청 QR</p>
                   {buyinQr && <img src={buyinQr} alt="바인 요청 QR" width={130} height={130} className="rounded bg-white p-1.5" />}
                   <p className="text-center text-2xs leading-tight text-ink-muted">손님 스캔 → 참가 요청 → 장부에서 승인</p>
                 </div>
@@ -434,12 +434,12 @@ ${cards}
                       <button key={q.id} type="button" onClick={() => togglePrint(q.id)}
                         className={['inline-flex items-center gap-1 rounded-badge border px-2 py-1 text-2xs font-bold transition-colors',
                           on ? 'border-accent-400/50 bg-accent-300/15 text-accent-300' : 'border-border-default bg-surface-high text-ink-muted'].join(' ')}>
-                        <span>{on ? '☑' : '☐'}</span> {q.icon} {q.title}
+                        {on && <Icon name="check" size={11} className="shrink-0" />} {q.title}
                       </button>
                     );
                   })}
                 </div>
-                <button type="button" onClick={printQr} className="btn-ghost mt-2 w-full px-3 text-2xs">🖨 선택한 QR 출력해 매장에 비치</button>
+                <button type="button" onClick={printQr} className="btn-ghost mt-2 inline-flex w-full items-center justify-center gap-1.5 px-3 text-2xs"><Icon name="printer" size={13} /> 선택한 QR 출력해 매장에 비치</button>
               </div>
             </div>
           )}
@@ -450,22 +450,21 @@ ${cards}
       {canIssue && (
         <button type="button" onClick={() => setOwnerOpen((v) => !v)} aria-expanded={ownerOpen}
           className="flex w-full items-center justify-between gap-2 rounded-input border border-border-subtle bg-surface-low px-2.5 py-2">
-          <span className="text-2xs font-bold text-ink-secondary">📊 보유자 현황·통계 <span className="font-normal text-ink-muted">· 업주 전용</span></span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
-            className={['text-ink-muted transition-transform', ownerOpen ? 'rotate-180' : ''].join(' ')} aria-hidden><polyline points="6 9 12 15 18 9" /></svg>
+          <span className="flex items-center gap-1.5 text-xs font-bold text-ink-secondary"><Icon name="chart" size={14} /> 보유자 현황·통계 <span className="font-normal text-ink-muted">· 업주 전용</span></span>
+          <Icon name="chevron-down" size={14} className={['shrink-0 text-ink-muted transition-transform', ownerOpen ? 'rotate-180' : ''].join(' ')} />
         </button>
       )}
       {canIssue && ownerOpen && stats && (
         <div className="rounded-card border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.07] via-surface-low to-surface-low p-3 space-y-2.5">
           <div className="grid grid-cols-3 gap-2">
             {([
-              ['👥', stats.holderCount, '보유 회원', 'text-accent-300'],
-              ['🎟', stats.activeCount + stats.usedCount, '활성 이용권', 'text-ink-primary'],
-              ['✨', stats.activeCount, '잔여 이용권', 'text-emerald-300'],
-            ] as const).map(([emoji, val, label, cls]) => (
+              ['users', stats.holderCount, '보유 회원', 'text-ink-primary'],
+              ['ticket', stats.activeCount + stats.usedCount, '활성 이용권', 'text-ink-primary'],
+              ['check-circle', stats.activeCount, '잔여 이용권', 'text-emerald-300'],
+            ] as const).map(([icon, val, label, cls]) => (
               <div key={label} className="rounded-input border border-border-subtle/60 bg-surface-base/60 p-2.5 text-center">
-                <p className="text-sm leading-none" aria-hidden>{emoji}</p>
-                <p className={['mt-1 text-xl font-extrabold tabular-nums leading-none', cls].join(' ')}>{val}</p>
+                <Icon name={icon} size={14} className="mx-auto text-ink-muted" />
+                <p className={['mt-1 text-2xl font-extrabold tabular-nums leading-none', cls].join(' ')}>{val}</p>
                 <p className="mt-1 text-2xs text-ink-muted">{label}</p>
               </div>
             ))}
@@ -487,7 +486,7 @@ ${cards}
 
       {canIssue && ownerOpen && usage.length > 0 && (
         <div className="rounded-input border border-border-subtle bg-surface-low p-2.5">
-          <p className="mb-1 text-2xs font-bold text-ink-secondary">사용처 TOP — 배포분이 실제 사용된 매장</p>
+          <p className="mb-1 text-xs font-bold text-ink-secondary">사용처 TOP — 배포분이 실제 사용된 매장</p>
           <ul className="space-y-1">
             {usage.slice(0, 6).map((u, i) => (
               <li key={u.usedVenueId ?? i} className="flex items-center justify-between text-2xs">
@@ -501,7 +500,7 @@ ${cards}
 
       <div className={canIssue && ownerOpen ? '' : 'hidden'}>
         <div className="mb-1 flex items-center justify-between gap-2">
-          <p className="text-2xs font-bold text-ink-secondary">보유자 현황</p>
+          <p className="text-xs font-bold text-ink-secondary">보유자 현황</p>
           <p className="text-2xs text-ink-muted">보유 인원 <b className="text-accent-300 tabular-nums">{holderCount}</b>명 · 보유 갯수 <b className="text-ink-primary tabular-nums">{active.length}</b>개</p>
         </div>
         {holders.length > 0 && (
@@ -522,7 +521,7 @@ ${cards}
                       </button>
                       <span className="shrink-0 rounded-badge bg-accent-300/15 px-2 py-0.5 text-xs font-bold text-accent-300 tabular-nums">{g.active.length}</span>
                       {!g.isStore && <button type="button" onClick={() => setExpanded(open ? null : g.key)} className="btn-ghost shrink-0 px-2 text-2xs text-ink-secondary">{open ? '닫기' : '관리'}</button>}
-                      {(isAdmin || g.isStore) && canIssue && <button type="button" disabled={busy} onClick={() => deleteGroup({ name: holderLabel(g), ids: [...g.active, ...g.used].map((v) => v.id) })} aria-label="삭제" className="shrink-0 px-1 text-xs text-ink-muted hover:text-danger-light disabled:opacity-50">✕</button>}
+                      {(isAdmin || g.isStore) && canIssue && <button type="button" disabled={busy} onClick={() => deleteGroup({ name: holderLabel(g), ids: [...g.active, ...g.used].map((v) => v.id) })} aria-label="삭제" className="shrink-0 px-1 text-ink-muted hover:text-danger-light disabled:opacity-50"><Icon name="trash" size={13} /></button>}
                     </div>
                     {open && !g.isStore && (
                       <div className="border-t border-border-subtle px-3 py-1.5">
