@@ -31,6 +31,7 @@ const STATIC_SLIDES: { src: string; alt: string; action: BannerAction; title?: s
   },
   { src: '/banners/roti-arena.webp', alt: '로티아레나 매장 커뮤니티 바로가기', action: 'roti-community' },
   { src: '/banners/tools.webp', alt: '홀덤 도구 — GTO 트레이너·ICM·타이머', action: 'tools' },
+  { src: '/banners/nuri-mind.webp', alt: '오늘의 NURI MIND — 매일 한 문제 GTO 트레이닝', action: 'tools' },
   // ⚠ alt 는 e2e 잠금 문구('전체 일정'·nav 라벨)와 겹치면 안 된다 — 마퀴는 상시 이동이라
   //    셀렉터가 이 버튼을 잡으면 안정성 대기 타임아웃으로 플레이크가 된다.
   { src: '/banners/nuri-holdem.webp', alt: 'NURI HOLDEM — 홀덤 일정 한곳에서', action: 'explore' },
@@ -49,11 +50,14 @@ export default function PosterCarousel({ schedules, onSelect, onBanner }: {
 }) {
   const slides = useMemo<Slide[]>(() => {
     const today = new Date().toLocaleDateString('en-CA');
+    // 같은 포스터의 연속 회차(기간제 게임)는 첫 회차 1장만 — 마퀴에 동일 카드 도배 방지
+    const seenPoster = new Set<string>();
     const dyn = schedules
       .filter((s) => s.approved && !!s.posterUrl && s.date >= today)
       .sort((a, b) =>
         Number(b.isPremium) - Number(a.isPremium)
         || (a.date + (a.startTime || '')).localeCompare(b.date + (b.startTime || '')))
+      .filter((s) => !seenPoster.has(s.posterUrl!) && (seenPoster.add(s.posterUrl!), true))
       .slice(0, 8)
       .map((s): Slide => {
         const d = new Date(s.date);
@@ -71,11 +75,13 @@ export default function PosterCarousel({ schedules, onSelect, onBanner }: {
     return [...fixed, ...dyn];
   }, [schedules, onSelect, onBanner]);
 
-  // 고정 슬라이드만으로도 3장 이상 — 항상 루프(2배 복제 + translateX(-50%))
-  const track = [...slides, ...slides];
+  // 고정 슬라이드만으로도 3장 이상 — 항상 루프(2배 복제 + translateX(-50%)).
+  // ⚠ 좌측 여백을 트랙의 pl-page-x 로 주면 패딩이 트랙 폭에 포함돼 -50% 지점이
+  //    패딩/2 만큼 어긋난다(랩 시 '뚝' 점프 — 오너 실기기 리포트). 여백은 세트 '안'의
+  //    스페이서로 넣어 한 세트 주기가 정확히 트랙의 절반이 되게 한다(완전 무이음).
 
-  const card = (s: Slide, i: number) => {
-    const dup = i >= slides.length; // 복제 세트는 보조기기·탭 순회에서 숨김
+  const card = (s: Slide, i: number, dup: boolean) => {
+    // 복제 세트는 보조기기·탭 순회에서 숨김
     return (
       <button
         key={`${s.key}:${dup ? 'd' : 'o'}`}
@@ -92,7 +98,10 @@ export default function PosterCarousel({ schedules, onSelect, onBanner }: {
           width={480}
           height={224}
           className="h-full w-full object-cover"
-          loading={i < 3 ? 'eager' : 'lazy'}
+          // ⚠ 마퀴 안에서 lazy 는 '빈 배너'가 된다 — transform 이동은 스크롤이 아니라
+          //    브라우저 지연 로딩 휴리스틱이 안 깨어난다(오너 실기기 리포트). 고정 슬라이드는
+          //    합계 ~150KB 라 전부 eager, 일정 포스터(thumbUrl 480)만 4장째부터 lazy.
+          loading={i < STATIC_SLIDES.length + 3 ? 'eager' : 'lazy'}
           decoding="async"
         />
         {/* 하단 스크림 — 포스터 위 고정 다크(테마 무관 가독). 자체 텍스트가 있는 브랜드 배너는 생략 */}
@@ -111,12 +120,20 @@ export default function PosterCarousel({ schedules, onSelect, onBanner }: {
     );
   };
 
+  const set = (dup: boolean) => (
+    <>
+      <span aria-hidden className="w-page-x shrink-0" />
+      {slides.map((s, i) => card(s, i, dup))}
+    </>
+  );
+
   return (
     <div className="pt-3">
       <div className="felt-hero poster-marquee-viewport overflow-hidden py-2">
         {/* key=슬라이드 수: 일정 포스터 도착 시 1회 재시작(폭 변경 중 점프 방지) */}
-        <div key={slides.length} className="poster-marquee flex w-max pl-page-x">
-          {track.map(card)}
+        <div key={slides.length} className="poster-marquee flex w-max">
+          {set(false)}
+          {set(true)}
         </div>
       </div>
     </div>
