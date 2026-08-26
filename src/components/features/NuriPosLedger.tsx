@@ -26,7 +26,6 @@ import { exportLedgerXls } from '../../lib/ledgerExport';
 import { getSchedules, type Schedule } from '../../api/schedules';
 import { getClockState, saveClockState, saveClockLevel, subscribeClock, defaultClockConfig, deriveClockCounts, computeLiveStats, levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, type ClockState, type ClockLevelSnapshot } from '../../api/clock';
 import { getMyVenueStaff, searchMembersForRanking, type User } from '../../api/auth';
-import { accrueVoucher } from '../../api/vouchers';
 import { useBackClose } from '../../lib/backstack';
 import { planBuyinApprovals } from '../../lib/buyinApproval';
 import LoadErrorCard from '../atoms/LoadErrorCard';
@@ -1215,9 +1214,8 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                     .catch((err) => toast.show(err instanceof Error ? err.message : '되돌리기 실패', 'error'));
                 } } });
               }
-              if (isNew && (session.voucherAccrualPerBin ?? 0) > 0) {
-                accrueVoucher(venueId, pn, session.voucherAccrualPerBin as number).then((n) => { if (n > 0) toast.show(`${pn}님 이용권 ${n}개 적립`, 'success'); }).catch((e) => toast.show(e instanceof Error ? e.message : '이용권 적립 실패 — 수동 발급이 필요할 수 있어요', 'error')); // #20 + 쿼터 소진 사유 표면화
-              }
+              // W2-2 VCH-1b: 바인 자동적립 중단(§12-A-3 — 문체부 '적립→입장료' 패턴 회피).
+              // ⚠ voucherAccrualPerBin 필드·DB write 는 유지 — 지우면 세션 저장 경로가 전 매장 설정을 0 으로 덮는다(§18.4).
             } catch (e) {
               if (e instanceof Error && e.message === CELL_TAKEN) { toast.show('다른 직원이 방금 이 칸을 입력했어요 — 최신 내용으로 갱신합니다', 'info'); setSelected(null); reload(); }
               else toast.show(e instanceof Error ? e.message : '저장 실패', 'error');
@@ -1236,9 +1234,8 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                     .catch((err) => toast.show(err instanceof Error ? err.message : '되돌리기 실패', 'error'));
                 } } });
               }
-              if (isNew && (session.voucherAccrualPerBin ?? 0) > 0) {
-                accrueVoucher(venueId, pn, session.voucherAccrualPerBin as number).then((n) => { if (n > 0) toast.show(`${pn}님 이용권 ${n}개 적립`, 'success'); }).catch((e) => toast.show(e instanceof Error ? e.message : '이용권 적립 실패 — 수동 발급이 필요할 수 있어요', 'error')); // #20 + 쿼터 소진 사유 표면화
-              }
+              // W2-2 VCH-1b: 바인 자동적립 중단(§12-A-3 — 문체부 '적립→입장료' 패턴 회피).
+              // ⚠ voucherAccrualPerBin 필드·DB write 는 유지 — 지우면 세션 저장 경로가 전 매장 설정을 0 으로 덮는다(§18.4).
             } catch (e) {
               if (e instanceof Error && e.message === CELL_TAKEN) { toast.show('다른 직원이 방금 이 칸을 입력했어요 — 최신 내용으로 갱신합니다', 'info'); setSelected(null); reload(); }
               else toast.show(e instanceof Error ? e.message : '저장 실패', 'error');
@@ -1605,7 +1602,8 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   const [isAddon, setIsAddon] = useState<boolean>(!!base.isAddon);
   const [addonStack, setAddonStack] = useState<number>(base.addonStack || 0);
   const [voucherIssued, setVoucherIssued] = useState<number>(base.voucherIssued ?? 0);
-  const [accrualPerBin, setAccrualPerBin] = useState<number>(base.voucherAccrualPerBin ?? 0);
+  // W2-2 VCH-1b: 자동적립 입력 UI 는 제거됐지만 값은 보존해 write — 지우면 저장 경로가 전 매장 설정을 0 으로 덮는다(§18.4)
+  const [accrualPerBin] = useState<number>(base.voucherAccrualPerBin ?? 0);
   const [event, setEvent]     = useState(base.eventMemo ?? '');
   const [dealers, setDealers] = useState(base.dealers ?? (scheduledDealers.length ? scheduledDealers.join('\n') : ''));
   const [schedId, setSchedId] = useState<string>(base.scheduleId ?? '');
@@ -1925,14 +1923,9 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
         <p className="text-2xs text-ink-muted mt-1">오늘 발행·시상한 매장이용권 수 — 대시보드 '매장이용권' 카드에 합산됩니다.</p>
       </Field>
 
-      <Field label="바인 1회당 매장이용권 적립 · 선택 (0=사용 안 함)">
-        <div className="relative w-40">
-          <input type="number" inputMode="numeric" value={accrualPerBin || ''} onChange={(e) => setAccrualPerBin(Math.min(1000, Math.max(0, parseInt(e.target.value, 10) || 0)))}
-            placeholder="0" className="input w-full text-sm pr-7 tabular-nums" />
-          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted pointer-events-none">개</span>
-        </div>
-        <p className="text-2xs text-ink-muted mt-1">바인할 때마다 그 손님에게 매장이용권을 자동 적립합니다. 닉네임/실명이 회원과 일치하면 손님 지갑으로, 아니면 매장 기록으로 들어가 매장관리에서 동기화됩니다. (운영자 발급 승인 필요)</p>
-      </Field>
+      {/* W2-2 VCH-1b: '바인 1회당 이용권 자동 적립' 입력 UI 제거 — 문체부 '적립→입장료' 패턴 회피(§12-A-3).
+          accrualPerBin state·voucherAccrualPerBin write 는 유지(제거 시 세션 저장이 전 매장 설정을 0 으로 덮는 함정 — §18.4).
+          이용권 지급은 순위/수동 발급 경로만 남는다. */}
 
       <Field label="이벤트 · 비고 · 선택">
         <textarea value={event} onChange={(e) => setEvent(e.target.value)} rows={2} placeholder="예) 1만원 추가 = 1스택 추가" maxLength={200} className="input w-full text-sm resize-none" />
