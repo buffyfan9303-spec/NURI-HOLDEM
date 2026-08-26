@@ -79,6 +79,8 @@ export default {
       // ── Typography ────────────────────────────────────────────────────────
       fontFamily: {
         sans: ['Pretendard Variable', 'Pretendard', 'system-ui', 'sans-serif'],
+        // 디스플레이(제목·히어로 숫자) 전용 — Noto Sans KR(오너 지정), 본문은 Pretendard 유지
+        display: ['"Noto Sans KR"', 'Pretendard Variable', 'Pretendard', 'system-ui', 'sans-serif'],
         mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
       },
       fontSize: {

@@ -2324,7 +2324,7 @@ export default function App() {
           <div className="px-page-x pt-3 pb-section lg:pt-4">
             {/* P2-8 섹션 헤더 패턴: 제목+개수 좌측(콘텐츠 캡션 — 삭제된 '총 N개' 띠의 대체) */}
             {schedulesLoaded && visibleSchedules.length > 0 && (
-              <p className="flex items-baseline gap-1.5 pb-2 text-lg font-bold tracking-tight text-ink-primary">
+              <p className="flex items-baseline gap-1.5 pb-2 font-display text-lg font-bold tracking-tight text-ink-primary">
                 대회 <span className="text-sm font-bold tabular-nums text-accent-300">{visibleSchedules.length}</span>
               </p>
             )}
