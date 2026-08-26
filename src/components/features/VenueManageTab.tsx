@@ -25,28 +25,37 @@ import { listVoucherNotes, iCanViewVouchers, getVoucherAccessUserIds, grantVouch
 import MyPostersTab from './MyPostersTab';
 import VenueCustomizePanel, { VenueRankHub } from './VenueCustomizePanel';
 import SectionHeader from '../atoms/SectionHeader';
+import SlidingPill from '../atoms/SlidingPill';
 import { getSchedules, type Schedule } from '../../api/schedules';
 import { getLedgerBuyins, getLedgerSession, kstToday, getPendingBuyinRequests, subscribeBuyinRequests } from '../../api/ledger';
 import { getVenueClocks, subscribeClock, effectiveLevel, type ClockState } from '../../api/clock';
 import { rankDraftKey, readRowsDraft, writeRowsDraft, clearRowsDraft, pruneRowsDrafts, hasRowContent, moveRankRow, type RankRow } from '../../lib/rankingDraft';
 
 // 'league' 는 §12-A-1 오너 결정으로 제거(LEAGUE-FREEZE 의 클라이언트 절반 — 코드는 동결, 진입 경로만 0)
-type Section = 'dashboard' | 'posters' | 'presets' | 'ledger' | 'stats' | 'ranking' | 'venueRank' | 'staff' | 'settings' | 'clock' | 'attendance' | 'voucher' | 'page';
+// IA2: 포스터·장부·클락·순위 4개 최상위 문(門)이 'game' 섹션의 4단계 스텝으로 통합 —
+// 순차 운영 제품은 객체형이 아니라 워크플로형 내비여야 한다(§13-C). 자식 컴포넌트 props 무변경.
+type Section = 'dashboard' | 'game' | 'presets' | 'stats' | 'venueRank' | 'staff' | 'settings' | 'attendance' | 'voucher' | 'page';
+type GameStep = 'posters' | 'ledger' | 'clock' | 'ranking';
+/** keep-alive box()·visited 의 단위 — 섹션 또는 게임 스텝 */
+type PaneId = Exclude<Section, 'game'> | GameStep;
+const GAME_STEPS: readonly { id: GameStep; label: string }[] = [
+  { id: 'posters', label: '포스터·예약' }, { id: 'ledger', label: '장부' },
+  { id: 'clock', label: '클락' }, { id: 'ranking', label: '순위' },
+];
+const isGameStep = (s: string): s is GameStep => GAME_STEPS.some((g) => g.id === s);
 // IA1: 사용 빈도 기반 3그룹 — 매일 여는 것(오늘) / 주간(분석) / 가끔(관리)
 type NavGroup = '오늘' | '분석' | '관리';
 const NAV_GROUPS: readonly NavGroup[] = ['오늘', '분석', '관리'];
 
-// LINK-MAP(선배포, §15.6 #9): 알림 딥링크 섹션 id 정규화의 단일 지점 — IA2가 섹션을 재정의하기
-// '한 배포 전'에 신·구 id 를 모두 수용하는 테이블을 먼저 심는다. 지금은 동작 변화 0.
-// 이미 발송된 푸시·SW 캐시의 구 번들이 구 id 를 계속 보내므로, IA2 는 이 테이블만 확장한다
-// (예: ledger|clock|ranking|posters → 게임 스텝). 미지 값은 null → 호출부가 대시보드 + 토스트.
-const DEEP_SECTION_ALIAS: Record<string, Section> = {
+// LINK-MAP(§15.6 #9): 알림 딥링크 id 정규화의 단일 지점 — 구 번들·기발송 푸시의 구 id 를 계속 수용.
+// IA2 확장 완료: ledger|clock|ranking|posters → 게임 스텝. 미지 값은 null → 호출부가 대시보드 + 토스트.
+const DEEP_SECTION_ALIAS: Record<string, Section | GameStep> = {
   dashboard: 'dashboard', posters: 'posters', presets: 'presets', ledger: 'ledger', stats: 'stats',
   ranking: 'ranking', venueRank: 'venueRank', staff: 'staff', settings: 'settings', clock: 'clock',
-  attendance: 'attendance', voucher: 'voucher', page: 'page',
+  attendance: 'attendance', voucher: 'voucher', page: 'page', game: 'ledger',
   league: 'dashboard', // §12-A-1 제거 — 구 알림의 무음 실패 방지(대시보드 착지)
 };
-const normalizeDeepSection = (raw: string): Section | null => DEEP_SECTION_ALIAS[raw] ?? null;
+const normalizeDeepSection = (raw: string): Section | GameStep | null => DEEP_SECTION_ALIAS[raw] ?? null;
 
 // 메뉴 전환 잰크 제거 — 방문 섹션은 마운트 유지(display 토글)라, 부모(VenueManageTab) 재렌더 시
 // 숨겨진 무거운 섹션들이 전부 재조정(reconcile)되며 프레임을 잡아먹었다. memo 로 감싸 prop 이
@@ -69,8 +78,8 @@ const StaffSelfAttendanceM = memo(StaffSelfAttendance);
 /** 업주/직원 전용 "매장 관리" 탭 — 장부(POS) · 통계 · 순위 입력 · (업주) 직원 관리 */
 export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster, onDeletePoster, deepSection, onConsumeDeepSection, tabActive = true }: {
   schedules: Schedule[]; onCreatePoster: () => void; onEditPoster: (id: string) => void; onDeletePoster: (id: string) => void;
-  /** 알림 딥링크 등 외부 진입 — 지정 섹션으로 바로 이동(1회 소비) */
-  deepSection?: Section | null;
+  /** 알림 딥링크 등 외부 진입 — 지정 섹션/게임스텝으로 바로 이동(1회 소비, 구 id 는 LINK-MAP 이 정규화) */
+  deepSection?: Section | GameStep | null;
   onConsumeDeepSection?: () => void;
   /** 탭 keep-alive: '내 매장' 탭이 화면에 보이는가 — 숨김이면 섹션 active 를 전부 끈다(구독·틱 정지) */
   tabActive?: boolean;
@@ -86,6 +95,18 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   // 운영자는 선택한 매장, 그 외는 본인 소속 매장
   const venueId: string | null = isAdmin ? adminVenueId : (user?.venueId ?? null);
   const [section, setSection] = useState<Section | null>(null);
+  // IA2: 게임 진행 스텝 — 마지막 사용 스텝을 기억해 착지(대시보드 '지금 할 일' CTA 는 정확한 스텝을 직접 지정)
+  const [gameStep, setGameStep] = useState<GameStep>(() => {
+    try { const v = localStorage.getItem('nuri:game-step'); if (v && isGameStep(v)) return v; } catch { /* noop */ }
+    return 'ledger';
+  });
+  useEffect(() => { try { localStorage.setItem('nuri:game-step', gameStep); } catch { /* noop */ } }, [gameStep]);
+  // 스텝 백스택(§13-C: 백버튼 스텝→섹션→탭 3단) — 직전 스텝 1개를 기억해 back 1회 흡수
+  const [stepHist, setStepHist] = useState<GameStep[]>([]);
+  const gameStepRef = useRef<GameStep>(gameStep);
+  useEffect(() => { gameStepRef.current = gameStep; }, [gameStep]);
+  const inGameRef = useRef(false);
+  useEffect(() => { inGameRef.current = section === 'game'; }, [section]);
   const [navOpen, setNavOpen] = useState(false); // 모바일 메뉴 아코디언 펼침
   const [ledgerOk, setLedgerOk] = useState(false); // 장부 접근(업주/운영자/권한직원)
   const [manageOk, setManageOk] = useState(false); // 통계·설정(업주/운영자)
@@ -95,58 +116,79 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   const [clockSeed, setClockSeed] = useState<string | null>(null); // 장부→클락 연동 날짜
   const [clockSeedGame, setClockSeedGame] = useState(1); // 장부→클락 연동 게임(game_seq)
   const [ledgerSeed, setLedgerSeed] = useState<LedgerSeed | null>(null); // 게임관리→장부 바로가기
-  const [visited, setVisited] = useState<Section[]>([]); // 방문 섹션(최근순) — 마운트 유지(깜빡임 제거), 상한 초과 시 가장 오래된 섹션 정리(메모리 가드)
+  const [visited, setVisited] = useState<PaneId[]>([]); // 방문 판(섹션/게임스텝, 최근순) — 마운트 유지(깜빡임 제거), 상한 초과 시 가장 오래된 판 정리(메모리 가드)
 
-  // 섹션 이동 공통 — 장부를 메뉴로 직접 열 땐 게임관리 시드를 지워 일반 진입으로.
-  // useCallback — memo 섹션들의 prop 안정성을 위해 참조 고정(상태 setter 는 항상 안정).
-  const gotoSection = useCallback((s: Section) => {
-    if (s === 'ledger') setLedgerSeed(null);
-    setSection(s);
+  // 스텝 이동 공통(IA2) — 게임 섹션 안에서의 이동은 직전 스텝을 백스택에 1개 기억.
+  // 장부를 메뉴/칩으로 직접 열 땐 게임관리 시드를 지워 일반 진입으로(시드 부착 진입은 keepLedgerSeed).
+  const goStep = useCallback((s: GameStep, opts?: { keepLedgerSeed?: boolean }) => {
+    if (s === 'ledger' && !opts?.keepLedgerSeed) setLedgerSeed(null);
+    if (inGameRef.current && gameStepRef.current !== s) {
+      const prev = gameStepRef.current;
+      setStepHist((h) => [...h.filter((x) => x !== prev), prev].slice(-4));
+    }
+    gameStepRef.current = s;
+    setGameStep(s);
+    setSection('game');
   }, []);
+  // 섹션 이동 공통 — 레거시 게임 스텝 id(ledger·clock·ranking·posters)도 수용(StoreDashboard·라이브바·딥링크)
+  const gotoSection = useCallback((s: Section | GameStep) => {
+    if (isGameStep(s)) { goStep(s); return; }
+    setSection(s);
+  }, [goStep]);
 
   // ── memo 섹션에 넘기는 핸들러/객체 prop 을 참조 고정(재렌더 건너뛰기 조건 충족) ──
   const caps = useMemo(() => ({ ledger: ledgerOk, manage: manageOk, voucher: manageOk || voucherView, posters: canPosters, staff: canStaff }),
     [ledgerOk, manageOk, voucherView, canPosters, canStaff]);
-  const onGotoStore = useCallback((s: string) => gotoSection(s as Section), [gotoSection]);
+  const onGotoStore = useCallback((s: string) => gotoSection(s as Section | GameStep), [gotoSection]);
+  // 크로스 섹션 텔레포트였던 핸들러들이 IA2 로 '게임 섹션 내부 스텝 전환'으로 강등(§13-C)
   const onMakeRankingDraft = useCallback((d: string, names: string[], ev?: string) => {
-    setRankingDraft({ date: d, names, event: ev ?? '' }); setSection('ranking');
-  }, []);
+    setRankingDraft({ date: d, names, event: ev ?? '' }); goStep('ranking');
+  }, [goStep]);
   const onOpenClockFromLedger = useCallback((d: string, g: number) => {
-    setClockSeed(d); setClockSeedGame(g); setSection('clock');
-  }, []);
+    setClockSeed(d); setClockSeedGame(g); goStep('clock');
+  }, [goStep]);
   const onOpenStatsCb = useCallback(() => setSection('stats'), []);
   const onGotoRankingFromPosters = useCallback((date: string) => {
-    setRankingDraft({ date, names: [] }); setSection('ranking');
-  }, []);
+    setRankingDraft({ date, names: [] }); goStep('ranking');
+  }, [goStep]);
   const onOpenLedgerFromPosters = useCallback((s: Schedule, existingDate: string | null) => {
     const schedDate = new Date(s.date).toLocaleDateString('en-CA');
     setLedgerSeed(existingDate
       ? { date: existingDate, scheduleId: s.id, isNew: false }
       : { date: schedDate, scheduleId: s.id, isNew: true, title: s.title, buyinAmount: s.buyIn?.amount ?? 0, gtd: !!s.guaranteed });
-    setSection('ledger');
-  }, []);
-  // 뒤로가기 — 비대시보드 섹션에선 먼저 대시보드로 돌아오고, 그 다음에야 탭을 빠져나가게(일정탐색으로 바로 튐 방지)
+    goStep('ledger', { keepLedgerSeed: true });
+  }, [goStep]);
+  // 뒤로가기 3단(§13-C): ①게임 스텝(직전 스텝 1회) → ②섹션(대시보드) → ③탭 이탈
   useBackClose(!!section && section !== 'dashboard', () => gotoSection('dashboard'));
-  // 방문 섹션을 최근순으로 기록 + 상한(8) 초과 시 가장 오래된 섹션 언마운트(메모리 가드).
+  useBackClose(section === 'game' && stepHist.length > 0, () => {
+    setStepHist((h) => {
+      const prev = h[h.length - 1];
+      if (prev) { gameStepRef.current = prev; setGameStep(prev); }
+      return h.slice(0, -1);
+    });
+  });
+  // 방문 판(섹션/스텝)을 최근순으로 기록 + 상한(8) 초과 시 가장 오래된 판 언마운트(메모리 가드).
   // 잰크는 active 게이팅(클락·라이브·장부)으로 이미 차단했고, 이건 순수 메모리/구독 누적 방지용.
+  const pane: PaneId | null = section === 'game' ? gameStep : section;
   useEffect(() => {
-    if (!section) return;
+    if (!pane) return;
     setVisited((v) => {
-      const next = [...v.filter((x) => x !== section), section];
+      const next = [...v.filter((x) => x !== pane), pane];
       return next.length > 8 ? next.slice(next.length - 8) : next;
     });
-  }, [section]);
+  }, [pane]);
 
   // 알림 딥링크("📒 장부 시작" 클릭 등) — 권한 확인이 끝나면 지정 섹션으로 1회 이동
   useEffect(() => {
     if (!deepSection || !permsLoaded) return;
     // LINK-MAP 정규화 → IA1 폴백: 없는 섹션이면 무음 실패 대신 대시보드 + 안내(§15.6 #9)
     const target = normalizeDeepSection(deepSection);
-    if (!target || !available.some((a) => a.id === target)) {
+    const targetSection: Section | null = target == null ? null : isGameStep(target) ? 'game' : target;
+    if (!targetSection || !available.some((a) => a.id === targetSection)) {
       toast.show('요청한 메뉴를 찾을 수 없어 대시보드로 이동했어요', 'error');
       gotoSection('dashboard');
     } else {
-      gotoSection(target);
+      gotoSection(target as Section | GameStep);
     }
     onConsumeDeepSection?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -206,10 +248,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   //  · 이용권은 볼 수 있는 사람에게만 — 발행매장이 아니면 영원히 안 열리는 '잠금'은 거짓 약속이라 아예 비노출.
   //  · 연합리그 제거(§12-A-1) — 잠금이 아니라 진입 경로 자체를 없앤다.
   const available: { id: Section; label: string; group: NavGroup; locked?: boolean }[] = [{ id: 'dashboard', label: '대시보드', group: '오늘' }];
-  if (canPosters) available.push({ id: 'posters', label: '포스터·예약', group: '오늘' });
-  available.push({ id: 'ledger', label: '장부', group: '오늘', locked: !ledgerOk });
-  if (ledgerOk) available.push({ id: 'clock', label: '클락', group: '오늘' });
-  if (ledgerOk) available.push({ id: 'ranking', label: '순위 입력', group: '오늘' });
+  // IA2: 포스터·장부·클락·순위 = '게임 진행' 한 문(門)의 4단계 스텝(권한 없으면 잠금 노출 유지)
+  available.push({ id: 'game', label: '게임 진행', group: '오늘', locked: !ledgerOk && !canPosters });
   if (manageOk) available.push({ id: 'stats',  label: '통계', group: '분석' });
   if (canPosters) available.push({ id: 'presets', label: '게임 프리셋', group: '관리' });
   if (ledgerOk) available.push({ id: 'venueRank', label: '매장 랭킹', group: '관리' });
@@ -224,6 +264,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   // 콘텐츠 전환은 deferred — 내비(탭 하이라이트)는 즉시 반응하고, 무거운 섹션 렌더는 메인스레드를 막지 않고 양보.
   // 폰(저사양 CPU)에서 메뉴 이동 시 동기 렌더가 프레임을 막아 생기던 "치직임/끊김"을 제거.
   const renderSection = useDeferredValue(section);
+  const renderGameStep = useDeferredValue(gameStep); // 스텝 전환도 deferred — 무거운 판 렌더가 칩 하이라이트를 막지 않게
   const dItem = available.find((a) => a.id === renderSection); // deferred 기준 — 헤더·잠금화면·콘텐츠가 한 번에 원자적으로 전환
 
   if (!user) return null;
@@ -333,21 +374,44 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 <p className="text-2xs leading-relaxed text-ink-muted">이 기능은 업주가 권한을 부여해야 사용할 수 있어요.<br />매장 업주에게 <span className="font-semibold text-accent-300">{dItem.id === 'voucher' ? '이용권 내역' : '장부·순위'} 권한</span>을 요청하세요.</p>
               </div>
             )}
+            {/* IA2 게임 진행 4단계 스테퍼 — 섹션을 떠나지 않고 작업판만 교체(포스터→장부→클락→순위) */}
+            {renderSection === 'game' && !dItem?.locked && (
+              <div role="tablist" aria-label="게임 진행 단계"
+                className="relative flex items-center gap-0.5 overflow-x-auto rounded-input border border-border-subtle bg-surface-high/60 p-0.5">
+                <SlidingPill activeKey={renderGameStep} className="rounded-[6px] bg-accent-300" />
+                {GAME_STEPS.filter((st) => (st.id === 'posters' ? canPosters : ledgerOk)).map((st, i) => {
+                  const on = renderGameStep === st.id;
+                  return (
+                    <button key={st.id} type="button" role="tab" aria-selected={on} data-pill-active={on || undefined}
+                      onClick={() => gotoSection(st.id)}
+                      className={['relative inline-flex h-9 shrink-0 items-center rounded-[6px] px-3 text-2xs font-bold leading-none transition-colors duration-300 focus:outline-none',
+                        on ? 'text-ink-inverse' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
+                      <span className="relative">{i + 1}. {st.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             {/* 공용 섹션 헤더 — 모든 섹션의 제목·설명·주 액션 위치/크기를 한 규격으로(콘텐츠와 함께 deferred 전환) */}
             {!dItem?.locked && (
               <SectionHeader
-                title={dItem?.label ?? ''}
-                desc={renderSection ? SECTION_DESC[renderSection] : ''}
-                action={renderSection === 'posters' && canPosters
+                title={renderSection === 'game'
+                  ? (GAME_STEPS.find((s) => s.id === renderGameStep)?.label ?? '게임 진행')
+                  : (dItem?.label ?? '')}
+                desc={renderSection === 'game' ? SECTION_DESC[renderGameStep] : renderSection ? SECTION_DESC[renderSection] : ''}
+                action={renderSection === 'game' && renderGameStep === 'posters' && canPosters
                   ? <button type="button" onClick={onCreatePoster} className="btn-primary">+ 새 게임</button>
                   : undefined}
               />
             )}
-            {/* 방문한 섹션은 마운트 유지 — display 토글만(전환 시 unmount/remount·재fetch·깜빡임 제거). 토글 기준은 deferred 섹션 */}
+            {/* 방문한 판(섹션/스텝)은 마운트 유지 — display 토글만(전환 시 unmount/remount·재fetch·깜빡임 제거). 토글 기준은 deferred */}
             {(() => {
-              const box = (s: Section, node: ReactNode) => (
-                <div key={s} style={renderSection === s && !dItem?.locked ? undefined : { display: 'none' }}>{node}</div>
-              );
+              const box = (s: PaneId, node: ReactNode) => {
+                const shown = isGameStep(s)
+                  ? renderSection === 'game' && renderGameStep === s
+                  : renderSection === s;
+                return <div key={s} style={shown && !dItem?.locked ? undefined : { display: 'none' }}>{node}</div>;
+              };
               return (<>
                 {visited.includes('dashboard') && box('dashboard', <>
                   <StoreDashboardM venueId={venueId} schedules={schedules} onGoto={onGotoStore} onCreatePoster={onCreatePoster}
@@ -358,7 +422,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   onGotoRanking={ledgerOk ? onGotoRankingFromPosters : undefined}
                   onOpenLedger={ledgerOk ? onOpenLedgerFromPosters : undefined} />)}
                 {visited.includes('presets') && canPosters && box('presets', <PresetManagerM venueId={venueId} />)}
-                {visited.includes('ledger') && ledgerOk && box('ledger', <NuriPosLedgerM venueId={venueId} canManage={manageOk} active={tabActive && renderSection === 'ledger'} seed={ledgerSeed}
+                {visited.includes('ledger') && ledgerOk && box('ledger', <NuriPosLedgerM venueId={venueId} canManage={manageOk} active={tabActive && renderSection === 'game' && renderGameStep === 'ledger'} seed={ledgerSeed}
                   onMakeRankingDraft={onMakeRankingDraft}
                   onOpenClock={onOpenClockFromLedger}
                   onOpenStats={manageOk ? onOpenStatsCb : undefined} />)}
@@ -369,7 +433,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   <div className="mt-5 border-t border-border-subtle pt-4"><VenueRankHubM venueId={venueId} canConfigure={manageOk} /></div>
                 </>)}
                 {visited.includes('page') && canStaff && box('page', <VenueCustomizePanelM venueId={venueId} />)}
-                {visited.includes('clock') && ledgerOk && box('clock', <TournamentClockM venueId={venueId} canManage={ledgerOk} seedSessionDate={clockSeed} seedGameSeq={clockSeedGame} active={tabActive && renderSection === 'clock'} />)}
+                {visited.includes('clock') && ledgerOk && box('clock', <TournamentClockM venueId={venueId} canManage={ledgerOk} seedSessionDate={clockSeed} seedGameSeq={clockSeedGame} active={tabActive && renderSection === 'game' && renderGameStep === 'clock'} />)}
                 {visited.includes('attendance') && box('attendance', <StaffSelfAttendanceM venueId={venueId} />)}
                 {visited.includes('staff') && canStaff && box('staff', <StaffHub venueId={venueId} />)}
                 {visited.includes('settings') && canStaff && box('settings', <>
@@ -390,8 +454,9 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
 }
 
 // 섹션 설명 — 공용 SectionHeader에 표시(제목·설명·액션 규격 통일)
-const SECTION_DESC: Record<Section, string> = {
+const SECTION_DESC: Record<Section | GameStep, string> = {
   dashboard: '매장 운영 현황을 한눈에 — 오늘 장부·클락·추세·단골',
+  game: '포스터 → 장부 → 클락 → 순위, 게임 하나를 단계로 진행합니다',
   posters: '게임(포스터)별 예약 관리 — 게임을 누르면 예약 리스트가 펼쳐집니다',
   presets: '게임 내용·듀레이션을 템플릿으로 저장 — 포스터/장부 없이 만들고 수정',
   ledger: '게임(세션)별 장부 — 날짜·게임명으로 검색해 열람·수정하세요',
@@ -410,7 +475,8 @@ const SECTION_DESC: Record<Section, string> = {
 const ic = (children: ReactNode) => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{children}</svg>
 );
-const SECTION_ICON: Record<Section, ReactNode> = {
+const SECTION_ICON: Record<Section | GameStep, ReactNode> = {
+  game: ic(<><polygon points="6 4 20 12 6 20 6 4" /></>),
   dashboard: ic(<><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /></>),
   posters: ic(<><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-4.5-4.5L6 21" /></>),
   presets: ic(<><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 8h6M9 12h6M9 16h4" /></>),
@@ -430,7 +496,7 @@ const SECTION_ICON: Record<Section, ReactNode> = {
 // 데이터·게이팅은 StoreDashboard의 검증된 배선을 그대로 승격: venue 스코프 조회 + active 게이트 구독
 // (전역 subscribeRunningClocks 금지 — §15.5 #9, venue 단위 채널만). 1초 틱은 이 컴포넌트로 국한.
 const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto }: {
-  venueId: string; active: boolean; onGoto: (s: Section) => void;
+  venueId: string; active: boolean; onGoto: (s: Section | GameStep) => void;
 }) {
   const [clocks, setClocks] = useState<ClockState[]>([]);
   const [pending, setPending] = useState(0);
