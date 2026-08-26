@@ -52,11 +52,13 @@ const PosSettingsPanelM = memo(PosSettingsPanel);
 const StaffSelfAttendanceM = memo(StaffSelfAttendance);
 
 /** 업주/직원 전용 "매장 관리" 탭 — 장부(POS) · 통계 · 순위 입력 · (업주) 직원 관리 */
-export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster, onDeletePoster, deepSection, onConsumeDeepSection }: {
+export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster, onDeletePoster, deepSection, onConsumeDeepSection, tabActive = true }: {
   schedules: Schedule[]; onCreatePoster: () => void; onEditPoster: (id: string) => void; onDeletePoster: (id: string) => void;
   /** 알림 딥링크 등 외부 진입 — 지정 섹션으로 바로 이동(1회 소비) */
   deepSection?: Section | null;
   onConsumeDeepSection?: () => void;
+  /** 탭 keep-alive: '내 매장' 탭이 화면에 보이는가 — 숨김이면 섹션 active 를 전부 끈다(구독·틱 정지) */
+  tabActive?: boolean;
 }) {
   const { user, refreshProfile } = useAuth();
   const isOwner = user?.role === 'venue_owner';
@@ -333,14 +335,14 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
               return (<>
                 {visited.includes('dashboard') && box('dashboard', <>
                   <StoreDashboardM venueId={venueId} schedules={schedules} onGoto={onGotoStore} onCreatePoster={onCreatePoster}
-                    active={renderSection === 'dashboard'} caps={caps} />
+                    active={tabActive && renderSection === 'dashboard'} caps={caps} />
                   {manageOk && <div className="mt-4"><AnnouncePanelM venueId={venueId} /></div>}
                 </>)}
                 {visited.includes('posters') && canPosters && box('posters', <MyPostersTabM schedules={schedules} onCreate={onCreatePoster} onEdit={onEditPoster} onDelete={onDeletePoster}
                   onGotoRanking={ledgerOk ? onGotoRankingFromPosters : undefined}
                   onOpenLedger={ledgerOk ? onOpenLedgerFromPosters : undefined} />)}
                 {visited.includes('presets') && canPosters && box('presets', <PresetManagerM venueId={venueId} />)}
-                {visited.includes('ledger') && ledgerOk && box('ledger', <NuriPosLedgerM venueId={venueId} canManage={manageOk} active={renderSection === 'ledger'} seed={ledgerSeed}
+                {visited.includes('ledger') && ledgerOk && box('ledger', <NuriPosLedgerM venueId={venueId} canManage={manageOk} active={tabActive && renderSection === 'ledger'} seed={ledgerSeed}
                   onMakeRankingDraft={onMakeRankingDraft}
                   onOpenClock={onOpenClockFromLedger}
                   onOpenStats={manageOk ? onOpenStatsCb : undefined} />)}
@@ -352,7 +354,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 </>)}
                 {visited.includes('league') && ledgerOk && box('league', <LeaguePanelM venueId={venueId} canConfigure={manageOk} />)}
                 {visited.includes('page') && canStaff && box('page', <VenueCustomizePanelM venueId={venueId} />)}
-                {visited.includes('clock') && ledgerOk && box('clock', <TournamentClockM venueId={venueId} canManage={ledgerOk} seedSessionDate={clockSeed} seedGameSeq={clockSeedGame} active={renderSection === 'clock'} />)}
+                {visited.includes('clock') && ledgerOk && box('clock', <TournamentClockM venueId={venueId} canManage={ledgerOk} seedSessionDate={clockSeed} seedGameSeq={clockSeedGame} active={tabActive && renderSection === 'clock'} />)}
                 {visited.includes('attendance') && ledgerOk && box('attendance', <StaffSelfAttendanceM venueId={venueId} />)}
                 {visited.includes('staff') && canStaff && box('staff', <StaffHub venueId={venueId} />)}
                 {visited.includes('settings') && canStaff && box('settings', <PosSettingsPanelM venueId={venueId} />)}

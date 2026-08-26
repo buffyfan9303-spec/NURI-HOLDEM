@@ -105,6 +105,7 @@ const LiveGamesTab   = lazyWithReload(() => import('./components/features/LiveGa
 const LiveGamesTabM   = memo(LiveGamesTab);
 const CommunityTabM   = memo(CommunityTab);
 const ToolsPanelM     = memo(ToolsPanel);
+const VenueManageTabM = memo(VenueManageTab); // 내 매장 keep-alive 전환에 필수 — 숨김 상태에서 App 재렌더에 끌려가지 않게
 const CustomerDashboardPage = lazyWithReload(() => import('./components/features/CustomerDashboardPage'));
 const ClockDisplay   = lazyWithReload(() => import('./components/features/clock/ClockDisplay'));
 
@@ -1007,7 +1008,8 @@ export default function App() {
         import('./components/features/PostDetailModal'),
         import('./components/features/ListingDetailModal'),
         // 역할 전용 청크 — 해당 역할일 때만(손님에게 업주 스위트를 내려보내지 않는다)
-        ...(isOwner ? [import('./components/features/VenueManageTab')] : []),
+        // 직원(venue_staff)도 내 매장 탭을 쓰므로 업주와 같은 게이트에 포함
+        ...((isOwner || isAdmin || user?.role === 'venue_staff') ? [import('./components/features/VenueManageTab')] : []),
         ...(isAdmin ? [import('./components/features/AdminTab')] : []),
       ]).then(() => {
         // 프리마운트: 청크가 데워진 뒤, 핵심 탭을 idle 마다 하나씩 숨김 마운트해 둔다.
@@ -1015,7 +1017,10 @@ export default function App() {
         // 실측에서 유일하게 잡히는 상호작용 멈칫(스로틀 4x 67~150ms·6x 최대 250ms)이었다.
         // 미리 방문 처리하면 사용자 첫 탭도 재방문(스냅샷 뒤 flushSync) 경로가 된다.
         // 한 번에 하나씩인 이유: 3개 동시 커밋은 그 자체가 idle 롱태스크가 된다.
-        const seq: TabId[] = ['live', 'community', 'tools'];
+        // 내 매장은 역할 보유자에게 최우선 프리마운트 — '다른 탭→내 매장'이 사장님 핵심 동선이자
+        // 가장 무거운 스위트(320KB+)라, 이걸 idle 에 미리 치러야 첫 진입 멈칫이 사라진다.
+        const canStore = isOwner || isAdmin || user?.role === 'venue_staff';
+        const seq: TabId[] = [...(canStore ? (['my-store'] as TabId[]) : []), 'live', 'community', 'tools'];
         const mountNext = () => {
           const t = seq.find((x) => !visitedTabs.has(x));
           if (!t) return;
@@ -1030,7 +1035,7 @@ export default function App() {
     idle(warm);
     // visitedTabs 는 안정 Set 인스턴스 — 참조 불변
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [schedulesLoaded, isOwner, isAdmin]);
+  }, [schedulesLoaded, isOwner, isAdmin, user?.role]);
   // FOMO 뱃지용 예약자 수 — 다가오는 대회만 1회 조회.
   // ⚠ [schedules] 배열 의존이면 스냅샷→네트워크 교체(내용 동일)에도 재조회·리렌더가 났다 —
   //   id 집합 문자열 키로 좁혀 '같은 대회 목록'이면 건너뛴다(PastTournaments pastKey 패턴).
@@ -1862,6 +1867,21 @@ export default function App() {
     return () => { window.removeEventListener('pagehide', flush); flush(); };
   }, [posterDeleteQ]);
 
+  // 내 매장 keep-alive(memo) 전용 — 인라인 클로저면 App 재렌더마다 새 참조라 memo 가 무력화된다
+  const handleCreatePosterFromStore = useCallback(() => {
+    // 승인 전 업주는 포스터 등록 차단(서버 RLS와 이중 방어 + 명확한 안내)
+    if (user?.role === 'venue_owner' && !user.approved) {
+      toast.show('매장 승인 완료 후 포스터를 등록할 수 있습니다', 'error');
+      return;
+    }
+    setPosterFormTarget(undefined);
+  }, [user, toast]);
+  const handleEditPosterFromStore = useCallback((id: string) => {
+    const s = schedules.find((x) => x.id === id);
+    if (s) setPosterFormTarget(s);
+  }, [schedules]);
+  const handleConsumeMyStoreDeep = useCallback(() => setMyStoreDeep(null), []);
+
   // 관리자: 포스터 승인 / 반려 — 서버 반영
   const handleApproveSchedule = useCallback((id: string) => {
     setSchedules((prev) => prev.map((s) => s.id === id ? { ...s, approved: true } : s));
@@ -2442,26 +2462,20 @@ export default function App() {
         </main>
       )}
 
-      {/* 내 매장 — 게임관리 + 매장운영 통합 허브 (업주/직원/운영자) */}
-      {activeTab === 'my-store' && (
-        <main className="px-page-x pt-3 pb-section">
+      {/* 내 매장 — 게임관리 + 매장운영 통합 허브 (업주/직원/운영자)
+          keep-alive: 가장 무거운 스위트(장부·클락·통계)를 탭 전환마다 완전 재마운트하던 것이
+          '다른 탭→내 매장' 멈칫의 근본 원인. 다른 탭과 같은 display 토글로 전환하고,
+          tabActive 로 숨김 중 구독·틱을 끈다. 역할 게이트(로그아웃 시 즉시 언마운트) 필수. */}
+      {(isOwner || isStaff || isAdmin) && (activeTab === 'my-store' || visitedTabs.has('my-store')) && (
+        <main className="tab-pane px-page-x pt-3 pb-section" style={activeTab !== 'my-store' ? { display: 'none' } : undefined}>
           <ErrorBoundary inline resetKey="my-store">
-          <VenueManageTab
+          <VenueManageTabM
             schedules={schedules}
             deepSection={myStoreDeep}
-            onConsumeDeepSection={() => setMyStoreDeep(null)}
-            onCreatePoster={() => {
-              // 승인 전 업주는 포스터 등록 차단(서버 RLS와 이중 방어 + 명확한 안내)
-              if (user?.role === 'venue_owner' && !user.approved) {
-                toast.show('매장 승인 완료 후 포스터를 등록할 수 있습니다', 'error');
-                return;
-              }
-              setPosterFormTarget(undefined);
-            }}
-            onEditPoster={(id) => {
-              const s = schedules.find((x) => x.id === id);
-              if (s) setPosterFormTarget(s);
-            }}
+            onConsumeDeepSection={handleConsumeMyStoreDeep}
+            tabActive={activeTab === 'my-store'}
+            onCreatePoster={handleCreatePosterFromStore}
+            onEditPoster={handleEditPosterFromStore}
             onDeletePoster={handleDeletePoster}
           />
           </ErrorBoundary>
