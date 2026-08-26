@@ -1663,19 +1663,32 @@ export default function App() {
   // 뒤로가기로 내 정보(지갑) 페이지 닫기 — 동일하게 App 레벨 게이트
   useBackClose(voucherWalletOpen, () => setVoucherWalletOpen(false));
 
+  // [DS] MO-8B: 포스터 모핑 — '지금 열리는' 카드 1장에만 view-transition-name 을 부여한다.
+  // 이름이 문서에 2개 이상이면 전환이 통째로 취소되므로, 열림 중에는 카드가 이름을 잃고
+  // 모달만 가진다(카드 조건: vtPosterId 일치 && 모달 닫힘). 닫힘 역모핑이 끝난 뒤에만 해제.
+  const [vtPosterId, setVtPosterId] = useState<string | null>(null);
   const handleScheduleSelect = useCallback((s: Schedule) => {
     // 포스터 상세는 전체화면 2열 모달(PC: 포스터 좌+정보 우)로 표시 — 좁은 패널보다 가독성↑
     // 마운트 비용을 스냅샷 뒤에서 치러 sheet-up 첫 프레임 드랍을 없앤다(미지원은 기존 경로)
+    flushSync(() => setVtPosterId(s.id)); // 스냅샷 전에 카드에 이름 부여(모핑 페어의 old 쪽)
     withViewTransition(
       () => flushSync(() => setOpenSchedule(s)),
       () => startTabTransition(() => setOpenSchedule(s)),
     );
+  }, []);
+  const closeSchedule = useCallback(() => {
+    withViewTransition(
+      () => flushSync(() => setOpenSchedule(null)), // new 쪽: 카드가 이름을 되찾아 역모핑
+      () => setOpenSchedule(null),
+    );
+    window.setTimeout(() => setVtPosterId(null), 350); // 역모핑 종료 후 이름 해제(전환 중 제거 금지)
   }, []);
 
   // 로고 클릭 → 메인(일정 탐색)으로 + 모든 모달/패널 닫기
   const handleHome = useCallback(() => {
     changeTab('browse');
     setOpenSchedule(null);
+    setVtPosterId(null);
     setOpenVenueId(null);
     setOpenListing(null);
     setOpenNotice(null);
@@ -2428,6 +2441,7 @@ export default function App() {
                         regInfo={regInfoBySchedule.get(s.id)}
                         onVenueClick={handleVenueClick}
                         onSelect={handleScheduleSelect}
+                        vtActive={vtPosterId === s.id && !openSchedule}
                         // ⚡ 첫 화면에 보이는 상단 카드만 포스터를 즉시 로드(LCP 단축).
                         //    그리드는 한 화면에 더 많이 보이므로 6장, 리스트는 4장.
                         priority={i < (viewMode === 'grid' ? 6 : 4)}
@@ -2439,7 +2453,7 @@ export default function App() {
                 {viewMode === 'table' && visibleSchedules.length > 0 && (
                   <div className="grid grid-cols-1 gap-card-gap md:hidden">
                     {visibleSchedules.map((s, i) => (
-                      <ScheduleCard key={s.id} mode="list" schedule={s} reserveCount={browseResCounts[s.id]} rating={venueRatings[s.venueId]} distanceKm={distanceOf(s)} regInfo={regInfoBySchedule.get(s.id)} onVenueClick={handleVenueClick} onSelect={handleScheduleSelect} priority={i < 4} />
+                      <ScheduleCard key={s.id} mode="list" schedule={s} reserveCount={browseResCounts[s.id]} rating={venueRatings[s.venueId]} distanceKm={distanceOf(s)} regInfo={regInfoBySchedule.get(s.id)} onVenueClick={handleVenueClick} onSelect={handleScheduleSelect} vtActive={vtPosterId === s.id && !openSchedule} priority={i < 4} />
                     ))}
                   </div>
                 )}
@@ -2647,7 +2661,7 @@ export default function App() {
       <ScheduleDetailModal
         open
         schedule={openSchedule}
-        onClose={() => setOpenSchedule(null)}
+        onClose={closeSchedule}
         onVenueClick={handleVenueClick}
         rating={openSchedule ? venueRatings[openSchedule.venueId] : undefined}
         regInfo={openSchedule ? regInfoBySchedule.get(openSchedule.id) : undefined}

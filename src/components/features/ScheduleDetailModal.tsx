@@ -94,9 +94,14 @@ export default function ScheduleDetailModal({
               'relative flex w-full items-center justify-center overflow-hidden',
               schedule.posterUrl ? 'bg-surface-base' : 'aspect-[16/9] sm:aspect-[2/1]',
             ].join(' ')}
-            style={schedule.posterUrl
-              ? undefined
-              : { background: `linear-gradient(135deg, ${schedule.posterColor ?? '#1a1d24'}ee 0%, #0a0c0f 100%)` }}
+            // [DS] MO-8B: 카드 포스터(같은 이름)에서 이 자리로 모핑 — 모달은 열려 있는 동안만
+            // 존재하므로 이름 중복(전환 취소) 걱정이 없다. 카드 쪽 이름은 App 이 조건부 관리.
+            style={{
+              viewTransitionName: 'vt-poster',
+              ...(schedule.posterUrl
+                ? {}
+                : { background: `linear-gradient(135deg, ${schedule.posterColor ?? '#1a1d24'}ee 0%, #0a0c0f 100%)` }),
+            }}
           >
             {schedule.posterUrl ? (
               <button
