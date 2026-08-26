@@ -34,28 +34,36 @@ import { rankDraftKey, readRowsDraft, writeRowsDraft, clearRowsDraft, pruneRowsD
 // 'league' 는 §12-A-1 오너 결정으로 제거(LEAGUE-FREEZE 의 클라이언트 절반 — 코드는 동결, 진입 경로만 0)
 // IA2: 포스터·장부·클락·순위 4개 최상위 문(門)이 'game' 섹션의 4단계 스텝으로 통합 —
 // 순차 운영 제품은 객체형이 아니라 워크플로형 내비여야 한다(§13-C). 자식 컴포넌트 props 무변경.
-type Section = 'dashboard' | 'game' | 'presets' | 'stats' | 'venueRank' | 'staff' | 'settings' | 'attendance' | 'voucher' | 'page';
+// IA3c: 프리셋·매장랭킹·매장꾸미기·이용권·POS설정 5개 문(門)이 '매장 설정' 하위탭으로 통합
+type Section = 'dashboard' | 'game' | 'stats' | 'staff' | 'attendance' | 'settings';
 type GameStep = 'posters' | 'ledger' | 'clock' | 'ranking';
-/** keep-alive box()·visited 의 단위 — 섹션 또는 게임 스텝 */
-type PaneId = Exclude<Section, 'game'> | GameStep;
+type SettingsTab = 'page' | 'presets' | 'pos' | 'voucher' | 'danger';
+/** keep-alive box()·visited 의 단위 — 섹션 / 게임 스텝 / 설정 하위탭 */
+type PaneId = Exclude<Section, 'game' | 'settings'> | GameStep | SettingsTab;
 const GAME_STEPS: readonly { id: GameStep; label: string }[] = [
   { id: 'posters', label: '포스터·예약' }, { id: 'ledger', label: '장부' },
   { id: 'clock', label: '클락' }, { id: 'ranking', label: '순위' },
 ];
 const isGameStep = (s: string): s is GameStep => GAME_STEPS.some((g) => g.id === s);
+const SETTINGS_TABS: readonly { id: SettingsTab; label: string }[] = [
+  { id: 'page', label: '매장 페이지' }, { id: 'presets', label: '게임 프리셋' },
+  { id: 'pos', label: 'POS·결제' }, { id: 'voucher', label: '이용권·QR' }, { id: 'danger', label: '위험 구역' },
+];
+const isSettingsTab = (s: string): s is SettingsTab => SETTINGS_TABS.some((t) => t.id === s);
 // IA1: 사용 빈도 기반 3그룹 — 매일 여는 것(오늘) / 주간(분석) / 가끔(관리)
 type NavGroup = '오늘' | '분석' | '관리';
 const NAV_GROUPS: readonly NavGroup[] = ['오늘', '분석', '관리'];
 
 // LINK-MAP(§15.6 #9): 알림 딥링크 id 정규화의 단일 지점 — 구 번들·기발송 푸시의 구 id 를 계속 수용.
 // IA2 확장 완료: ledger|clock|ranking|posters → 게임 스텝. 미지 값은 null → 호출부가 대시보드 + 토스트.
-const DEEP_SECTION_ALIAS: Record<string, Section | GameStep> = {
+const DEEP_SECTION_ALIAS: Record<string, Section | GameStep | SettingsTab> = {
   dashboard: 'dashboard', posters: 'posters', presets: 'presets', ledger: 'ledger', stats: 'stats',
-  ranking: 'ranking', venueRank: 'venueRank', staff: 'staff', settings: 'settings', clock: 'clock',
-  attendance: 'attendance', voucher: 'voucher', page: 'page', game: 'ledger',
+  ranking: 'ranking', staff: 'staff', clock: 'clock', attendance: 'attendance', game: 'ledger',
+  // IA3c: 구 섹션 id → 설정 하위탭('venueRank' 는 매장 페이지 탭에 병합, 구 'settings' = POS)
+  venueRank: 'page', voucher: 'voucher', page: 'page', settings: 'pos',
   league: 'dashboard', // §12-A-1 제거 — 구 알림의 무음 실패 방지(대시보드 착지)
 };
-const normalizeDeepSection = (raw: string): Section | GameStep | null => DEEP_SECTION_ALIAS[raw] ?? null;
+const normalizeDeepSection = (raw: string): Section | GameStep | SettingsTab | null => DEEP_SECTION_ALIAS[raw] ?? null;
 
 // 메뉴 전환 잰크 제거 — 방문 섹션은 마운트 유지(display 토글)라, 부모(VenueManageTab) 재렌더 시
 // 숨겨진 무거운 섹션들이 전부 재조정(reconcile)되며 프레임을 잡아먹었다. memo 로 감싸 prop 이
@@ -101,6 +109,9 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     return 'ledger';
   });
   useEffect(() => { try { localStorage.setItem('nuri:game-step', gameStep); } catch { /* noop */ } }, [gameStep]);
+  // IA3c: 설정 하위탭 상태(기본 '매장 페이지')
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>('page');
+  const renderSettingsTab = useDeferredValue(settingsTab);
   // 스텝 백스택(§13-C: 백버튼 스텝→섹션→탭 3단) — 직전 스텝 1개를 기억해 back 1회 흡수
   const [stepHist, setStepHist] = useState<GameStep[]>([]);
   const gameStepRef = useRef<GameStep>(gameStep);
@@ -130,16 +141,21 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     setGameStep(s);
     setSection('game');
   }, []);
-  // 섹션 이동 공통 — 레거시 게임 스텝 id(ledger·clock·ranking·posters)도 수용(StoreDashboard·라이브바·딥링크)
-  const gotoSection = useCallback((s: Section | GameStep) => {
+  // 섹션 이동 공통 — 레거시 게임 스텝·설정 하위탭 id 도 수용(StoreDashboard·라이브바·딥링크)
+  const gotoSection = useCallback((s: Section | GameStep | SettingsTab) => {
     if (isGameStep(s)) { goStep(s); return; }
+    if (isSettingsTab(s)) { setSettingsTab(s); setSection('settings'); return; }
     setSection(s);
   }, [goStep]);
 
   // ── memo 섹션에 넘기는 핸들러/객체 prop 을 참조 고정(재렌더 건너뛰기 조건 충족) ──
   const caps = useMemo(() => ({ ledger: ledgerOk, manage: manageOk, voucher: manageOk || voucherView, posters: canPosters, staff: canStaff }),
     [ledgerOk, manageOk, voucherView, canPosters, canStaff]);
-  const onGotoStore = useCallback((s: string) => gotoSection(s as Section | GameStep), [gotoSection]);
+  const onGotoStore = useCallback((s: string) => {
+    // StoreDashboard·라이브바가 보내는 문자열 id — LINK-MAP 정규화로 구 id(page·venueRank·settings 등)도 흡수
+    const t = normalizeDeepSection(s);
+    gotoSection(t ?? 'dashboard');
+  }, [gotoSection]);
   // 크로스 섹션 텔레포트였던 핸들러들이 IA2 로 '게임 섹션 내부 스텝 전환'으로 강등(§13-C)
   const onMakeRankingDraft = useCallback((d: string, names: string[], ev?: string) => {
     setRankingDraft({ date: d, names, event: ev ?? '' }); goStep('ranking');
@@ -169,7 +185,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   });
   // 방문 판(섹션/스텝)을 최근순으로 기록 + 상한(8) 초과 시 가장 오래된 판 언마운트(메모리 가드).
   // 잰크는 active 게이팅(클락·라이브·장부)으로 이미 차단했고, 이건 순수 메모리/구독 누적 방지용.
-  const pane: PaneId | null = section === 'game' ? gameStep : section;
+  const pane: PaneId | null = section === 'game' ? gameStep : section === 'settings' ? settingsTab : section;
   useEffect(() => {
     if (!pane) return;
     setVisited((v) => {
@@ -183,12 +199,13 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     if (!deepSection || !permsLoaded) return;
     // LINK-MAP 정규화 → IA1 폴백: 없는 섹션이면 무음 실패 대신 대시보드 + 안내(§15.6 #9)
     const target = normalizeDeepSection(deepSection);
-    const targetSection: Section | null = target == null ? null : isGameStep(target) ? 'game' : target;
+    const targetSection: Section | null = target == null ? null
+      : isGameStep(target) ? 'game' : isSettingsTab(target) ? 'settings' : target;
     if (!targetSection || !available.some((a) => a.id === targetSection)) {
       toast.show('요청한 메뉴를 찾을 수 없어 대시보드로 이동했어요', 'error');
       gotoSection('dashboard');
     } else {
-      gotoSection(target as Section | GameStep);
+      gotoSection(target as Section | GameStep | SettingsTab);
     }
     onConsumeDeepSection?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -250,16 +267,13 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   const available: { id: Section; label: string; group: NavGroup; locked?: boolean }[] = [{ id: 'dashboard', label: '대시보드', group: '오늘' }];
   // IA2: 포스터·장부·클락·순위 = '게임 진행' 한 문(門)의 4단계 스텝(권한 없으면 잠금 노출 유지)
   available.push({ id: 'game', label: '게임 진행', group: '오늘', locked: !ledgerOk && !canPosters });
-  if (manageOk) available.push({ id: 'stats',  label: '통계', group: '분석' });
-  if (canPosters) available.push({ id: 'presets', label: '게임 프리셋', group: '관리' });
-  if (ledgerOk) available.push({ id: 'venueRank', label: '매장 랭킹', group: '관리' });
+  if (manageOk) available.push({ id: 'stats',  label: '매출·손님', group: '분석' });
   // ATT-FIX: '내 출퇴근 기록'이 장부 권한(ledgerOk)에 묶여 있어 장부 권한 없는 직원이
   // 자기 출퇴근을 못 보던 오게이팅 — 이 탭에 들어온 소속 구성원이면 누구나
   available.push({ id: 'attendance', label: '출근 관리', group: '관리' });
-  if (manageOk || voucherView) available.push({ id: 'voucher', label: '매장이용권/QR', group: '관리' });
-  if (canStaff) available.push({ id: 'page', label: '매장 꾸미기', group: '관리' });
   if (canStaff) available.push({ id: 'staff', label: '직원 관리', group: '관리' });
-  if (canStaff) available.push({ id: 'settings', label: '설정', group: '관리' });
+  // IA3c: 프리셋·매장랭킹·매장꾸미기·이용권·POS 가 '매장 설정' 하위탭 5개로 통합
+  if (canStaff || voucherView) available.push({ id: 'settings', label: '매장 설정', group: '관리' });
   const curItem = available.find((a) => a.id === section);
   // 콘텐츠 전환은 deferred — 내비(탭 하이라이트)는 즉시 반응하고, 무거운 섹션 렌더는 메인스레드를 막지 않고 양보.
   // 폰(저사양 CPU)에서 메뉴 이동 시 동기 렌더가 프레임을 막아 생기던 "치직임/끊김"을 제거.
@@ -371,7 +385,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
               <div className="rounded-card border border-border-default bg-surface-low p-6 text-center space-y-2.5">
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-surface-high text-ink-muted"><Icon name="lock" size={22} /></div>
                 <p className="text-sm font-bold text-ink-primary">{dItem.label} · 접근 권한이 없습니다</p>
-                <p className="text-2xs leading-relaxed text-ink-muted">이 기능은 업주가 권한을 부여해야 사용할 수 있어요.<br />매장 업주에게 <span className="font-semibold text-accent-300">{dItem.id === 'voucher' ? '이용권 내역' : '장부·순위'} 권한</span>을 요청하세요.</p>
+                <p className="text-2xs leading-relaxed text-ink-muted">이 기능은 업주가 권한을 부여해야 사용할 수 있어요.<br />매장 업주에게 <span className="font-semibold text-accent-300">장부·순위 권한</span>을 요청하세요.</p>
               </div>
             )}
             {/* IA2 게임 진행 4단계 스테퍼 — 섹션을 떠나지 않고 작업판만 교체(포스터→장부→클락→순위) */}
@@ -392,13 +406,38 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 })}
               </div>
             )}
+            {/* IA3c 매장 설정 하위탭 — 프리셋·페이지·POS·이용권·위험구역(권한별 노출) */}
+            {renderSection === 'settings' && !dItem?.locked && (
+              <div role="tablist" aria-label="매장 설정 하위탭"
+                className="relative flex items-center gap-0.5 overflow-x-auto rounded-input border border-border-subtle bg-surface-high/60 p-0.5">
+                <SlidingPill activeKey={renderSettingsTab} className="rounded-[6px] bg-accent-300" />
+                {SETTINGS_TABS.filter((t) =>
+                  t.id === 'voucher' ? (manageOk || voucherView)
+                  : t.id === 'danger' ? (isOwner && !!venueId)
+                  : canStaff).map((t) => {
+                  const on = renderSettingsTab === t.id;
+                  return (
+                    <button key={t.id} type="button" role="tab" aria-selected={on} data-pill-active={on || undefined}
+                      onClick={() => gotoSection(t.id)}
+                      className={['relative inline-flex h-9 shrink-0 items-center rounded-[6px] px-3 text-2xs font-bold leading-none transition-colors duration-300 focus:outline-none',
+                        on ? 'text-ink-inverse' : t.id === 'danger' ? 'text-danger-light/80 hover:text-danger-light' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
+                      <span className="relative">{t.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             {/* 공용 섹션 헤더 — 모든 섹션의 제목·설명·주 액션 위치/크기를 한 규격으로(콘텐츠와 함께 deferred 전환) */}
             {!dItem?.locked && (
               <SectionHeader
                 title={renderSection === 'game'
                   ? (GAME_STEPS.find((s) => s.id === renderGameStep)?.label ?? '게임 진행')
+                  : renderSection === 'settings'
+                  ? (SETTINGS_TABS.find((t) => t.id === renderSettingsTab)?.label ?? '매장 설정')
                   : (dItem?.label ?? '')}
-                desc={renderSection === 'game' ? SECTION_DESC[renderGameStep] : renderSection ? SECTION_DESC[renderSection] : ''}
+                desc={renderSection === 'game' ? SECTION_DESC[renderGameStep]
+                  : renderSection === 'settings' ? SECTION_DESC[renderSettingsTab]
+                  : renderSection ? SECTION_DESC[renderSection] : ''}
                 action={renderSection === 'game' && renderGameStep === 'posters' && canPosters
                   ? <button type="button" onClick={onCreatePoster} className="btn-primary">+ 새 게임</button>
                   : undefined}
@@ -409,6 +448,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
               const box = (s: PaneId, node: ReactNode) => {
                 const shown = isGameStep(s)
                   ? renderSection === 'game' && renderGameStep === s
+                  : isSettingsTab(s)
+                  ? renderSection === 'settings' && renderSettingsTab === s
                   : renderSection === s;
                 return <div key={s} style={shown && !dItem?.locked ? undefined : { display: 'none' }}>{node}</div>;
               };
@@ -428,20 +469,20 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   onOpenStats={manageOk ? onOpenStatsCb : undefined} />)}
                 {visited.includes('stats') && manageOk && box('stats', <LedgerStatsPanelM venueId={venueId} />)}
                 {visited.includes('ranking') && ledgerOk && box('ranking', <RankingEditor venueId={venueId} canEdit={isAdmin || user.approved === true || ledgerOk} draft={rankingDraft} />)}
-                {visited.includes('venueRank') && ledgerOk && box('venueRank', <>
-                  <SeasonPanelM venueId={venueId} canManage={manageOk} />
-                  <div className="mt-5 border-t border-border-subtle pt-4"><VenueRankHubM venueId={venueId} canConfigure={manageOk} /></div>
+                {/* IA3c '매장 페이지' 탭 = 구 매장꾸미기 + 구 매장랭킹(시즌·랭킹보드) 병합 — 같은
+                    venue_page_config 를 두 문에서 각자 로드/저장해 서로 낡던 문제를 한 화면으로 해소 */}
+                {visited.includes('page') && canStaff && box('page', <>
+                  <VenueCustomizePanelM venueId={venueId} />
+                  {ledgerOk && <div className="mt-5 border-t border-border-subtle pt-4"><SeasonPanelM venueId={venueId} canManage={manageOk} /></div>}
+                  {ledgerOk && <div className="mt-5 border-t border-border-subtle pt-4"><VenueRankHubM venueId={venueId} canConfigure={manageOk} /></div>}
                 </>)}
-                {visited.includes('page') && canStaff && box('page', <VenueCustomizePanelM venueId={venueId} />)}
                 {visited.includes('clock') && ledgerOk && box('clock', <TournamentClockM venueId={venueId} canManage={ledgerOk} seedSessionDate={clockSeed} seedGameSeq={clockSeedGame} active={tabActive && renderSection === 'game' && renderGameStep === 'clock'} />)}
                 {visited.includes('attendance') && box('attendance', <StaffSelfAttendanceM venueId={venueId} />)}
                 {visited.includes('staff') && canStaff && box('staff', <StaffHub venueId={venueId} />)}
-                {visited.includes('settings') && canStaff && box('settings', <>
-                  <PosSettingsPanelM venueId={venueId} />
-                  {/* 위험 구역(IA1) — 매장 영구 삭제. 매일 여는 전 화면 하단 상시 노출에서 설정 하위로 격리(접근 2단계) */}
-                  {isOwner && venueId && <div className="mt-6 border-t border-danger/30 pt-4"><KillSwitch venueId={venueId} /></div>}
-                </>)}
+                {visited.includes('pos') && canStaff && box('pos', <PosSettingsPanelM venueId={venueId} />)}
                 {visited.includes('voucher') && (manageOk || voucherView) && box('voucher', <VoucherManagePanelM venueId={venueId} />)}
+                {/* 위험 구역(IA1→IA3c) — 매장 영구 삭제. 설정의 전용 하위탭으로 격리(접근 2단계) */}
+                {visited.includes('danger') && isOwner && venueId && box('danger', <KillSwitch venueId={venueId} />)}
               </>);
             })()}
           </div>
@@ -454,7 +495,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
 }
 
 // 섹션 설명 — 공용 SectionHeader에 표시(제목·설명·액션 규격 통일)
-const SECTION_DESC: Record<Section | GameStep, string> = {
+const SECTION_DESC: Record<Section | GameStep | SettingsTab, string> = {
   dashboard: '매장 운영 현황을 한눈에 — 오늘 장부·클락·추세·단골',
   game: '포스터 → 장부 → 클락 → 순위, 게임 하나를 단계로 진행합니다',
   posters: '게임(포스터)별 예약 관리 — 게임을 누르면 예약 리스트가 펼쳐집니다',
@@ -462,20 +503,21 @@ const SECTION_DESC: Record<Section | GameStep, string> = {
   ledger: '게임(세션)별 장부 — 날짜·게임명으로 검색해 열람·수정하세요',
   stats: '기간별 매출·엔트리·요일 분석',
   ranking: '대회 순위 등록 — 닉네임이 일치하는 회원에게 점수가 자동 반영됩니다',
-  venueRank: '매장 커뮤니티 순위 탭에 노출될 랭킹 보드 설정(금전적 가치 없음)',
   clock: '토너먼트 타이머 — 장부 연동 시 엔트리·생존이 자동 반영됩니다',
   attendance: '내 출퇴근 기록',
   voucher: '매장이용권 발행·사용 내역 + 매장 QR(이용권·출석 체크인·가입) 인쇄',
-  page: '매장 페이지 꾸미기 — 탭 순서·링크·소개',
+  page: '매장 페이지 꾸미기 + 시즌·랭킹 보드(탭 순서·링크·소개·칭호)',
   staff: '구성원·권한·출근 스케줄·인건비',
-  settings: 'POS 비밀번호·결제수단·할인 프리셋',
+  settings: '매장 페이지 · 게임 프리셋 · POS·결제 · 이용권 · 위험 구역',
+  pos: 'POS 비밀번호·결제수단·할인 프리셋',
+  danger: '매장 영구 삭제 — 복구할 수 없습니다. 신중하게.',
 };
 
 // 섹션 아이콘(라인 스타일 통일: 16px, stroke 1.8)
 const ic = (children: ReactNode) => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{children}</svg>
 );
-const SECTION_ICON: Record<Section | GameStep, ReactNode> = {
+const SECTION_ICON: Record<Section | GameStep | SettingsTab, ReactNode> = {
   game: ic(<><polygon points="6 4 20 12 6 20 6 4" /></>),
   dashboard: ic(<><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /></>),
   posters: ic(<><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-4.5-4.5L6 21" /></>),
@@ -486,9 +528,10 @@ const SECTION_ICON: Record<Section | GameStep, ReactNode> = {
   clock: ic(<><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>),
   attendance: ic(<><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="m9 16 2 2 4-4" /></>),
   voucher: ic(<><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" /><path d="M13 5v14" /></>),
+  pos: ic(<><rect x="2" y="5" width="20" height="14" rx="2" /><line x1="2" y1="10" x2="22" y2="10" /></>),
+  danger: ic(<><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></>),
   staff: ic(<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>),
   page: ic(<><path d="m12 19 7-7 3 3-7 7-3-3z" /><path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" /><path d="m2 2 7.586 7.586" /><circle cx="11" cy="11" r="2" /></>),
-  venueRank: ic(<><path d="M12 2l2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.5-4.8 2.5.9-5.4L4.2 7.7l5.4-.8L12 2z" /><path d="M4 22h16" /></>),
   settings: ic(<><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" /></>),
 };
 
