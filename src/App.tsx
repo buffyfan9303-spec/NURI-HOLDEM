@@ -37,6 +37,7 @@ import type { PostFormData } from './components/features/PostFormModal';
 import type { MarketplaceFormData } from './components/features/MarketplaceFormModal';
 import { rearmLayer, useBackClose, overlayJustClosed } from './lib/backstack';
 import { useVisibilityRefresh } from './lib/useVisibilityRefresh';
+import { useScrollY } from './lib/useScrollY';
 import { lazyWithReload } from './lib/lazyWithReload';
 import { getRunningClocks, type ClockState } from './api/clock';
 import { buildRegInfoMap } from './lib/regStatus';
@@ -163,23 +164,13 @@ const AppHeader = memo(function AppHeader({
   const [userMenuOpen, setUserMenu]  = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
-  // 모바일 스크롤 축소 — 내리면 헤더가 낮아져 포스터 화면이 넓어진다(rAF 스로틀)
+  // 모바일 스크롤 축소 — 내리면 헤더가 낮아져 포스터 화면이 넓어진다(useScrollY 공용 구독 — MO-9A)
+  // MO-3: 높이 전환이 즉시가 되면서 단일 임계값(48)은 그 부근 미세 스크롤에서
+  // 축소↔복원이 덜덜 떨린다 → 히스테리시스 밴드(내릴 때 56 넘어야 축소, 올릴 때 40 밑이어야 복원)
   const [shrunk, setShrunk] = useState(false);
-  useEffect(() => {
-    let raf = 0;
-    const onScroll = () => {
-      if (raf) return;
-      // MO-3: 높이 전환이 즉시가 되면서 단일 임계값(48)은 그 부근 미세 스크롤에서
-      // 축소↔복원이 덜덜 떨린다 → 히스테리시스 밴드(내릴 때 56 넘어야 축소, 올릴 때 40 밑이어야 복원)
-      raf = requestAnimationFrame(() => {
-        setShrunk((prev) => (prev ? window.scrollY > 40 : window.scrollY > 56));
-        raf = 0;
-      });
-    };
-    window.addEventListener('scroll', onScroll, { passive: true });
-    onScroll();
-    return () => { window.removeEventListener('scroll', onScroll); if (raf) cancelAnimationFrame(raf); };
-  }, []);
+  useScrollY(useCallback((y: number) => {
+    setShrunk((prev) => (prev ? y > 40 : y > 56));
+  }, []));
 
   // 프로필 드롭다운: 바깥(다른 버튼 등)을 클릭/터치하면 자동으로 닫는다.
   useEffect(() => {
@@ -550,6 +541,7 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
   // 탭 전환 억제창 — 자식 layoutEffect 가 부모(App)의 복원 스크롤보다 먼저 실행되므로
   // 복원 이벤트 도착 전에 창이 열려 순서가 보장된다. |dy| 크기 추정은 빠른 플링(프레임당 200px+)을 삼키므로 금지.
   const suppressUntil = useRef(0);
+  const tb2Ref = useRef({ lastY: 0, acc: 0 });
   useLayoutEffect(() => { suppressUntil.current = performance.now() + 300; }, [active]);
   useEffect(() => {
     if (!autohideV2) {
@@ -566,27 +558,27 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
       window.addEventListener('scroll', onScroll, { passive: true });
       return () => window.removeEventListener('scroll', onScroll);
     }
-    let lastY = window.scrollY, acc = 0, raf = 0;
-    const apply = () => {
-      raf = 0;
-      if (performance.now() < suppressUntil.current) { lastY = window.scrollY; acc = 0; return; }
-      const max = document.documentElement.scrollHeight - window.innerHeight;
-      if (max < 200) { setHidden(false); lastY = window.scrollY; acc = 0; return; }  // 짧은 화면 — 내비 영구 소멸·깜빡임 방지
-      const cy = Math.min(Math.max(window.scrollY, 0), max);                          // 고무줄·툴바 개폐 클램프 흡수
-      const dy = cy - lastY; lastY = cy;
-      if (cy >= max - 4) { setHidden(true); acc = 0; return; }                        // 문서 끝 — 무조건 숨김(삼성 버튼과 시간축 배타)
-      if (cy < 80) { setHidden(false); acc = 0; return; }
-      acc = (dy > 0) === (acc > 0) ? acc + dy : dy;                                   // 방향 바뀌면 리셋되는 누적 — 느린 끌기도 판정
-      if (acc > 48) { setHidden(true); acc = 0; }
-      else if (acc < -24) { setHidden(false); acc = 0; }
-    };
-    const onScroll = () => { if (!raf) raf = requestAnimationFrame(apply); };
-    const resync = () => { lastY = window.scrollY; acc = 0; };
-    window.addEventListener('scroll', onScroll, { passive: true });
+    // MO-9A: 공용 useScrollY 브로드캐스트에 합류(별도 리스너·rAF 가드 제거 — 훅이 프레임당 1회 보장)
+    tb2Ref.current = { lastY: window.scrollY, acc: 0 };
+    const resync = () => { tb2Ref.current = { lastY: window.scrollY, acc: 0 }; };
     window.addEventListener('resize', resync);
     window.visualViewport?.addEventListener('resize', resync);
-    return () => { cancelAnimationFrame(raf); window.removeEventListener('scroll', onScroll); window.removeEventListener('resize', resync); window.visualViewport?.removeEventListener('resize', resync); };
+    return () => { window.removeEventListener('resize', resync); window.visualViewport?.removeEventListener('resize', resync); };
   }, [autohideV2]);
+  useScrollY(useCallback((sy: number) => {
+    if (!autohideV2) return; // 킬스위치 off — 레거시 리스너가 담당
+    const st = tb2Ref.current;
+    if (performance.now() < suppressUntil.current) { st.lastY = sy; st.acc = 0; return; }
+    const max = document.documentElement.scrollHeight - window.innerHeight;
+    if (max < 200) { setHidden(false); st.lastY = sy; st.acc = 0; return; }  // 짧은 화면 — 내비 영구 소멸·깜빡임 방지
+    const cy = Math.min(Math.max(sy, 0), max);                               // 고무줄·툴바 개폐 클램프 흡수
+    const dy = cy - st.lastY; st.lastY = cy;
+    if (cy >= max - 4) { setHidden(true); st.acc = 0; return; }              // 문서 끝 — 무조건 숨김(삼성 버튼과 시간축 배타)
+    if (cy < 80) { setHidden(false); st.acc = 0; return; }
+    st.acc = (dy > 0) === (st.acc > 0) ? st.acc + dy : dy;                   // 방향 바뀌면 리셋되는 누적 — 느린 끌기도 판정
+    if (st.acc > 48) { setHidden(true); st.acc = 0; }
+    else if (st.acc < -24) { setHidden(false); st.acc = 0; }
+  }, [autohideV2]));
   // 장터는 커뮤니티 서브탭으로 이동(사용 빈도 기준) — 탭바 4번째 칸은 도구
   const items: { key: string; tab?: TabId; label: string }[] = [
     { key: 'browse', tab: 'browse', label: '일정' },
@@ -2833,19 +2825,22 @@ export default function App() {
 // ── ↑ 맨 위로 플로팅 버튼 — 무한 스크롤 보조(Reddit 문법) ───────────────────────
 function ScrollTopButton() {
   const [show, setShow] = useState(false);
-  useEffect(() => {
-    const onScroll = () => setShow(window.scrollY > 600);
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
-  if (!show) return null;
+  // MO-9A: 공용 useScrollY 구독(개별 리스너 제거) + 마운트 유지 —
+  // 예전 `return null` 은 fixed 요소를 스크롤 중에 삽입/제거해 DOM 변동을 만들었다.
+  // opacity/pointer-events 토글은 컴포지터에서 끝난다.
+  useScrollY(useCallback((y: number) => setShow(y > 600), []));
   return (
     <button
       type="button"
       aria-label="맨 위로"
+      aria-hidden={!show || undefined}
+      tabIndex={show ? undefined : -1}
       onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
       // 모바일: 하단 탭바 위로 띄움(--tabbar-float, 누락됐던 safe-area 복구) / PC: 기존 위치
-      className="fixed bottom-[var(--tabbar-float)] lg:bottom-5 right-4 z-40 flex h-10 w-10 items-center justify-center rounded-full border border-border-default bg-surface-mid text-ink-secondary shadow-dialog transition-colors hover:text-accent-300 animate-fade-in"
+      className={[
+        'fixed bottom-[var(--tabbar-float)] lg:bottom-5 right-4 z-40 flex h-10 w-10 items-center justify-center rounded-full border border-border-default bg-surface-mid text-ink-secondary shadow-dialog transition-opacity hover:text-accent-300',
+        show ? 'opacity-100' : 'pointer-events-none opacity-0',
+      ].join(' ')}
     >
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         <polyline points="18 15 12 9 6 15" />

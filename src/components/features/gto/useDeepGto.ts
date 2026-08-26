@@ -2,7 +2,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DEEP_SITUATIONS } from './gto.deep.data';
 import { canonicalizeHand, normalizeFrequency } from './useGtoCalculator';
-import { computeEquity, computeEquityVsRange, type WeightedCombo } from './equityEngine';
+import { type WeightedCombo } from './equityEngine';
+import { equityAsync, equityVsRangeAsync } from './equityClient';
 import { buildFreq, type FreqMap } from '../../../lib/ranges';
 import { RANGE_SCENARIOS } from '../../../lib/ranges.data';
 import { SUITS, type ActionFrequency, type Card, type Rank, type Suit } from './gto.types';
@@ -252,14 +253,17 @@ export function useDeepGto(init?: DeepGtoInit): UseDeepGto {
     const h = hero as Card[];
     const v = villain as Card[];
     const b = board.filter((c): c is Card => c !== null);
-    const id = setTimeout(() => {
-      const r = villainMode === 'range'
-        ? computeEquityVsRange([h[0], h[1]], villainRange.combos, b, 2500)
-        : computeEquity([h[0], h[1]], [v[0], v[1]], b, 2500);
+    // [DS] MO-9C: 몬테카를로 2500회를 워커로 위임(메인스레드 롱태스크 제거). 결과 동일.
+    let alive = true;
+    (villainMode === 'range'
+      ? equityVsRangeAsync([h[0], h[1]], villainRange.combos, b, 2500)
+      : equityAsync([h[0], h[1]], [v[0], v[1]], b, 2500)
+    ).then((r) => {
+      if (!alive) return;
       setEquity({ hero: r.hero, villain: r.villain, tie: r.tie });
       setCalculating(false);
-    }, 0);
-    return () => clearTimeout(id);
+    });
+    return () => { alive = false; };
   }, [hero, villain, board, inputReady, villainMode, villainRange]);
 
   const result = useMemo<GtoResult | null>(() => {

@@ -24,6 +24,7 @@ import {
   Fragment,
 } from 'react';
 import SlidingPill from '../atoms/SlidingPill';
+import { useScrollY } from '../../lib/useScrollY';
 
 // ── 날짜 유틸 ─────────────────────────────────────────────────────────────────
 
@@ -267,21 +268,17 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
   const stickyRef                           = useRef<HTMLDivElement>(null);
   const [, startTransition]                = useTransition();
 
-  // 고정바 구분선: 스크롤 위치에 따라 .is-stuck 토글(정지=옅게/스크롤=또렷). classList 만 만져 리렌더 0.
-  useEffect(() => {
+  // 고정바 구분선: 스크롤 위치에 따라 보더 토글(정지=옅게/스크롤=또렷). classList 만 만져 리렌더 0.
+  // MO-9A: 개별 리스너 대신 공용 useScrollY 구독(프레임당 1회 보장).
+  useScrollY(useCallback((y: number) => {
     if (!stickyTop) return;
     const el = stickyRef.current;
     if (!el) return;
-    const onScroll = () => {
-      const stuck = window.scrollY > 4;
-      // 테마 인지 Tailwind 보더 클래스 토글(정지=옅은 subtle / 스크롤=또렷한 strong). transition-colors 로 부드럽게.
-      el.classList.toggle('border-border-strong', stuck);
-      el.classList.toggle('border-border-subtle', !stuck);
-    };
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, [stickyTop]);
+    const stuck = y > 4;
+    // 테마 인지 Tailwind 보더 클래스 토글(정지=옅은 subtle / 스크롤=또렷한 strong). transition-colors 로 부드럽게.
+    el.classList.toggle('border-border-strong', stuck);
+    el.classList.toggle('border-border-subtle', !stuck);
+  }, [stickyTop]));
 
   const deferredQuery = useDeferredValue(rawQuery);
 
