@@ -26,7 +26,8 @@ import MyPostersTab from './MyPostersTab';
 import VenueCustomizePanel, { VenueRankHub } from './VenueCustomizePanel';
 import SectionHeader from '../atoms/SectionHeader';
 import { getSchedules, type Schedule } from '../../api/schedules';
-import { getLedgerBuyins, getLedgerSession } from '../../api/ledger';
+import { getLedgerBuyins, getLedgerSession, kstToday, getPendingBuyinRequests, subscribeBuyinRequests } from '../../api/ledger';
+import { getVenueClocks, subscribeClock, effectiveLevel, type ClockState } from '../../api/clock';
 import { rankDraftKey, readRowsDraft, writeRowsDraft, clearRowsDraft, pruneRowsDrafts, hasRowContent, moveRankRow, type RankRow } from '../../lib/rankingDraft';
 
 // 'league' 는 §12-A-1 오너 결정으로 제거(LEAGUE-FREEZE 의 클라이언트 절반 — 코드는 동결, 진입 경로만 0)
@@ -247,6 +248,13 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
       ) : section === null ? (
         <p className="py-16 text-center text-sm text-ink-muted">이 매장에서 사용 가능한 메뉴가 없습니다.<br />업주에게 장부 권한을 요청하세요.</p>
       ) : (
+        <>
+        {/* ST1 상시 게임 바 — 통계·직원 등 어느 섹션에서도 진행 클락·대기 바인요청이 보인다.
+            대시보드는 자체 라이브 위젯이 있어 제외(중복 채널·중복 표시 방지). */}
+        {venueId && renderSection !== 'dashboard' && (
+          // 대시보드 진입 시 언마운트 → 구독도 함께 정리(중복 채널 방지)
+          <StoreLiveBar venueId={venueId} active={tabActive} onGoto={gotoSection} />
+        )}
         <div className="lg:flex lg:gap-4">
           {available.length > 1 && (<>
               {/* 모바일: 아코디언 — 현재 메뉴만 보이고, 탭하면 그룹별 전체 펼침(위로 다 몰지 않게) */}
@@ -361,6 +369,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
             })()}
           </div>
         </div>
+        </>
       )}
 
     </div>
@@ -403,6 +412,60 @@ const SECTION_ICON: Record<Section, ReactNode> = {
   venueRank: ic(<><path d="M12 2l2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.5-4.8 2.5.9-5.4L4.2 7.7l5.4-.8L12 2z" /><path d="M4 22h16" /></>),
   settings: ic(<><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" /></>),
 };
+
+// ── ST1: 상시 게임 바 — 통계·직원 등 어느 섹션에서도 진행 클락·대기 바인요청이 보인다(§13-C).
+// 데이터·게이팅은 StoreDashboard의 검증된 배선을 그대로 승격: venue 스코프 조회 + active 게이트 구독
+// (전역 subscribeRunningClocks 금지 — §15.5 #9, venue 단위 채널만). 1초 틱은 이 컴포넌트로 국한.
+const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto }: {
+  venueId: string; active: boolean; onGoto: (s: Section) => void;
+}) {
+  const [clocks, setClocks] = useState<ClockState[]>([]);
+  const [pending, setPending] = useState(0);
+  const [, setTick] = useState(0);
+  const reload = useCallback(() => {
+    getVenueClocks(venueId).then(setClocks).catch(() => {});
+    getPendingBuyinRequests(venueId, kstToday()).then((r) => setPending(r.length)).catch(() => {});
+  }, [venueId]);
+  useEffect(() => { if (active) reload(); }, [active, reload]);
+  useEffect(() => { if (active) return subscribeClock(venueId, reload); }, [venueId, reload, active]);
+  useEffect(() => { if (active) return subscribeBuyinRequests(venueId, reload); }, [venueId, reload, active]);
+  const live = clocks.filter((c) => c.running || c.currentIndex > 0 || c.endsAt != null).sort((a, b) => a.gameSeq - b.gameSeq);
+  const main = live[0];
+  const mainRunning = !!main?.running;
+  // 남은 시간 1초 틱 — 바가 보이고 클락이 실제로 돌 때만(리렌더 범위 = 이 바 하나)
+  useEffect(() => {
+    if (!active || !mainRunning) return;
+    const t = window.setInterval(() => setTick((n) => n + 1), 1000);
+    return () => window.clearInterval(t);
+  }, [active, mainRunning]);
+  if (!main && pending === 0) return null;
+  const eff = main ? effectiveLevel(main) : null;
+  const lv = main && eff ? main.config.levels[eff.index] : undefined;
+  const levelNo = main && eff ? main.config.levels.slice(0, eff.index + 1).filter((l) => l.kind === 'level').length : 0;
+  const mmss = (ms: number) => { const s = Math.max(0, Math.floor(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+  const alive = main?.liveStats?.alive;
+  return (
+    <div className="mb-3 flex items-stretch gap-1.5 overflow-x-auto rounded-card border border-accent-400/30 bg-surface-low px-1.5 py-1.5 text-2xs">
+      {main && eff && (
+        <button type="button" onClick={() => onGoto('clock')}
+          className="flex shrink-0 items-center gap-2 rounded-input px-2 py-1 transition-colors hover:bg-surface-float">
+          <span className={['h-1.5 w-1.5 shrink-0 rounded-full', main.running ? 'bg-emerald-400' : 'bg-amber-400'].join(' ')} aria-hidden />
+          <span className="font-bold text-ink-primary">{lv?.kind === 'break' ? 'BREAK' : `레벨 ${levelNo}`}</span>
+          {lv && lv.kind !== 'break' && <span className="tabular-nums text-ink-secondary">{lv.sb.toLocaleString()}/{lv.bb.toLocaleString()}</span>}
+          <span className={['font-extrabold tabular-nums', main.running ? 'text-emerald-400' : 'text-amber-400'].join(' ')}>{mmss(eff.remainingMs)}</span>
+          {typeof alive === 'number' && alive > 0 && <span className="text-ink-muted">생존 <b className="tabular-nums text-accent-300">{alive}</b></span>}
+          {live.length >= 2 && <span className="text-ink-muted">+{live.length - 1}게임</span>}
+        </button>
+      )}
+      {pending > 0 && (
+        <button type="button" onClick={() => onGoto('ledger')}
+          className="flex shrink-0 items-center gap-1.5 rounded-input bg-amber-500/10 px-2 py-1 font-bold text-amber-300 transition-colors hover:bg-amber-500/20">
+          바인 대기 <b className="tabular-nums">{pending}</b>건 →
+        </button>
+      )}
+    </div>
+  );
+});
 
 function SectionBtn({ active, onClick, icon, children, locked }: {
   active: boolean; onClick: () => void; icon?: ReactNode; children: ReactNode; locked?: boolean;
