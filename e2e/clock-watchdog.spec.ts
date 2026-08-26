@@ -97,17 +97,18 @@ test.describe('운영자 워치독 — 클락 화면을 안 보고 있어도 전
     // ── 내 매장 → 클락 섹션(ClockLive 마운트) ──────────────────────────────
     // 워치독은 ClockLive 안에 있으므로, 한 번은 클락 섹션을 열어 마운트시켜야 한다.
     // (마운트조차 안 된 경우는 장부 리모컨 백업 워치독이 담당 — 별도 경로)
-    await page.getByRole('button', { name: /내 ?매장/ }).first().click();
+    // visible 필터 필수 — PC 전용 내비의 같은 라벨을 .first()가 잡으면 무한 대기(auth-smoke 동일 결함)
+    await page.getByRole('button', { name: /내 ?매장/ }).filter({ visible: true }).first().click();
     await page.waitForTimeout(2500);
 
-    const clockNav = page.getByRole('button', { name: /클락|타이머/ }).first();
+    const clockNav = page.getByRole('button', { name: /클락|타이머/ }).filter({ visible: true }).first();
     if (await clockNav.count()) {
       await clockNav.click();
       await page.waitForTimeout(2500);
     }
 
     // ── 장부 섹션으로 이동 = 클락은 display:none 으로 숨는다 ────────────────
-    const ledgerNav = page.getByRole('button', { name: /장부/ }).first();
+    const ledgerNav = page.getByRole('button', { name: /장부/ }).filter({ visible: true }).first();
     if (await ledgerNav.count()) {
       await ledgerNav.click();
     }
