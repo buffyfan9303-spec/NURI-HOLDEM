@@ -1270,7 +1270,7 @@ function SubPill({ active, onClick, children }: { active: boolean; onClick: () =
       type="button"
       onClick={onClick}
       className={[
-        'flex-1 inline-flex items-center justify-center gap-1 py-1.5 text-xs font-semibold rounded-[6px] transition-all focus:outline-none',
+        'flex-1 inline-flex items-center justify-center gap-1 py-1.5 text-xs font-semibold rounded-[6px] transition-colors focus:outline-none',
         active ? 'bg-accent-300 text-white' : 'text-ink-secondary hover:text-ink-primary',
       ].join(' ')}
     >

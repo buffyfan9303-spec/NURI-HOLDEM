@@ -115,9 +115,16 @@ function DateTab({ slot, selected, hasEvents, onClick }: DateTabProps) {
   const tabRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (selected) {
-      tabRef.current?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-    }
+    // MO-2③: scrollIntoView 는 날짜 레일이 sticky 헤더에 일부 가리면 '페이지 세로 스크롤'까지 유발
+    // ('날짜를 탭했는데 목록이 움직인다' — §20.5 #6). 레일 내부 가로 스크롤로만 센터링한다.
+    const el = tabRef.current;
+    if (!selected || !el) return;
+    let rail: HTMLElement | null = el.parentElement;
+    while (rail && rail.scrollWidth <= rail.clientWidth + 1) rail = rail.parentElement;
+    if (!rail) return;
+    const r = rail.getBoundingClientRect();
+    const t = el.getBoundingClientRect();
+    rail.scrollTo({ left: rail.scrollLeft + (t.left - r.left) - (r.width - t.width) / 2, behavior: 'smooth' });
   }, [selected]);
 
   const dowColor = slot.isSun ? 'text-red-400' : slot.isSat ? 'text-blue-400' : 'text-ink-muted';
@@ -351,7 +358,7 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
           className={[
             'flex items-center gap-2 px-3',
             'bg-surface-high rounded-input h-10',
-            'border transition-all duration-150',
+            'border transition-colors duration-150',
             isFocused
               ? 'border-accent-300'
               : 'border-border-default',

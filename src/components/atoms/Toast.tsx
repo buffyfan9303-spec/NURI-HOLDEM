@@ -101,7 +101,7 @@ function ToastItem({ message, variant, action, durationMs, onDismiss }: Toast & 
       className={[
         'inline-flex items-center gap-2 px-4 py-2.5 rounded-input border shadow-dialog',
         'text-sm font-medium pointer-events-auto max-w-[92vw] cursor-pointer select-none',
-        'transition-all duration-300',
+        'transition-[transform,opacity] duration-300',
         COLOR[variant],
         out ? 'opacity-0 translate-y-2' : 'opacity-100 animate-slide-up',
       ].join(' ')}

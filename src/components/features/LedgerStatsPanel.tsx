@@ -593,7 +593,7 @@ function DowStats({ dow, rangeLabel = '전체' }: { dow: Record<number, { entrie
               <li key={r.w} className="flex items-center gap-2">
                 <span className={['w-4 text-center text-xs font-bold', isBest ? 'text-emerald-400' : isWorst ? 'text-rose-400' : 'text-accent-300'].join(' ')}>{DOW[r.w]}</span>
                 <div className="flex-1 h-5 rounded bg-surface-high overflow-hidden">
-                  <div className={['h-full rounded-r transition-all duration-300', barColor].join(' ')} style={{ width: `${r.days ? Math.max(pct, 3) : 0}%` }} />
+                  <div className={['h-full rounded-r transition-[width] duration-300', barColor].join(' ')} style={{ width: `${r.days ? Math.max(pct, 3) : 0}%` }} />
                 </div>
                 <span className="w-16 text-right text-2xs tabular-nums text-ink-secondary">
                   {r.days ? (metric === 'fill' ? (r.fill !== null ? `${Math.round(r.fill)}%` : '기준없음') : metric === 'entry' ? val.toFixed(1) : `${wonToMan(val)}만`) : '휴무'}

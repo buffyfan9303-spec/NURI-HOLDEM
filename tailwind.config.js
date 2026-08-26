@@ -164,7 +164,8 @@ export default {
         'badge-pulse': 'badge-pulse 2s ease-in-out infinite',
         'slide-up':    'slide-up 0.2s cubic-bezier(0.32, 0.72, 0, 1)',
         // iOS 시트 감각 — 빠르게 출발해 부드럽게 안착(감속 위주 곡선). 0.2s 는 '툭' 끊겨 보인다.
-        'sheet-up':    'sheet-up 0.32s cubic-bezier(0.32, 0.72, 0, 1)',
+        // MO-2: 0.32s 는 토큰 밖 고아 값 — --dur-panel(0.26s)로 정렬(키프레임 이름·시작값은 e2e 잠금이라 유지)
+        'sheet-up':    'sheet-up 0.26s cubic-bezier(0.32, 0.72, 0, 1)',
         'slide-down':  'slide-down 0.2s cubic-bezier(0.32, 0.72, 0, 1) forwards',
         'fade-in':     'fade-in 0.15s cubic-bezier(0.32, 0.72, 0, 1)',
         'fade-out':    'fade-out 0.18s cubic-bezier(0.32, 0.72, 0, 1) forwards',

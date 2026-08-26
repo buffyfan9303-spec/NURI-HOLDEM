@@ -942,7 +942,7 @@ function VenuesSection({
                 type="button"
                 onClick={() => onSelectVenue(venue.id)}
                 className={[
-                  'w-full text-left flex items-center gap-2.5 px-2.5 py-2 rounded-card border transition-all duration-150 cursor-pointer active:bg-surface-high',
+                  'w-full text-left flex items-center gap-2.5 px-2.5 py-2 rounded-card border transition-colors duration-150 cursor-pointer active:bg-surface-high',
                   venue.isPaidAd
                     ? 'bg-surface-low border-accent-400/50 shadow-[0_0_12px_rgba(94,106,210,0.22)] hover:border-accent-400'
                     : 'bg-surface-low border-border-default hover:border-border-strong hover:bg-surface-high',

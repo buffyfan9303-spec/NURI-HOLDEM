@@ -205,7 +205,7 @@ export default function TierLeaderboard() {
                       )}
                     </div>
                     <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-float">
-                      <div className={['h-full rounded-full transition-all', done ? 'bg-emerald-400' : 'bg-accent-300'].join(' ')} style={{ width: `${Math.round((cur / m.goal) * 100)}%` }} />
+                      <div className={['h-full rounded-full transition-[width]', done ? 'bg-emerald-400' : 'bg-accent-300'].join(' ')} style={{ width: `${Math.round((cur / m.goal) * 100)}%` }} />
                     </div>
                   </li>
                 );
@@ -250,7 +250,7 @@ export default function TierLeaderboard() {
               </div>
               <div className="h-2 rounded-full bg-surface-high overflow-hidden">
                 <div
-                  className="h-full rounded-full bg-accent-300 transition-all"
+                  className="h-full rounded-full bg-accent-300 transition-[width]"
                   style={{ width: `${Math.round(myProg.ratio * 100)}%` }}
                 />
               </div>

@@ -852,7 +852,7 @@ function RadioCard({ checked, onClick, title, desc }: {
 }) {
   return (
     <button type="button" onClick={onClick}
-      className={['p-3 rounded-input border-2 text-left transition-all',
+      className={['p-3 rounded-input border-2 text-left transition-colors',
         checked ? 'border-accent-300 bg-accent-300/10' : 'border-border-default bg-surface-high hover:border-border-strong'].join(' ')}>
       <p className={['text-sm font-bold leading-none', checked ? 'text-accent-300' : 'text-ink-primary'].join(' ')}>{title}</p>
       <p className="text-2xs text-ink-muted mt-1">{desc}</p>

@@ -244,7 +244,7 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
                 type="button"
                 onClick={() => fileRef.current?.click()}
                 className="relative w-24 h-24 rounded-full overflow-hidden group
-                           ring-4 ring-border-default hover:ring-accent-300 transition-all"
+                           ring-4 ring-border-default hover:ring-accent-300 transition-shadow"
                 aria-label="프로필 사진 변경"
               >
                 {avatarPreview ? (
@@ -806,7 +806,7 @@ function PasswordStrength({ password }: { password: string }) {
           <div
             key={i}
             className={[
-              'flex-1 h-1 rounded-full transition-all duration-300',
+              'flex-1 h-1 rounded-full transition-[width,background-color] duration-300',
               i <= score ? level.bar : 'bg-surface-float',
             ].join(' ')}
           />

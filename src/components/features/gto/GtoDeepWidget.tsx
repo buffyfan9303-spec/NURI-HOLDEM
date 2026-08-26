@@ -23,7 +23,7 @@ export default function GtoDeepWidget() {
       <button
         type="button"
         onClick={handleOpen}
-        className="flex w-full items-center gap-3 rounded-card border border-accent-400/40 bg-gradient-to-br from-accent-300/[0.08] to-transparent p-3 text-left transition-all hover:border-accent-300 active:scale-[0.99]"
+        className="flex w-full items-center gap-3 rounded-card border border-accent-400/40 bg-gradient-to-br from-accent-300/[0.08] to-transparent p-3 text-left transition-colors hover:border-accent-300 active:scale-[0.99]"
       >
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-300/15 text-accent-300">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
