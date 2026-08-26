@@ -6,6 +6,7 @@ import { getRunningClocks, subscribeRunningClocks, effectiveLevel, type ClockSta
 import { matchClockSchedule as matchSchedule, msToRegClose } from '../../lib/regStatus';
 import { wonToMan } from '../../api/ledger';
 import { EmptyState } from '../atoms/Skeleton';
+import Icon from '../atoms/Icon';
 import { useSkeletonGate } from '../../lib/useSkeletonGate';
 import type { Venue } from '../../api/community';
 import type { Schedule } from '../../api/schedules';
@@ -158,7 +159,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
             action={
               // 빈 화면은 막다른 길이 아니라 다음 행동의 출발점(Phase 13-2)
               <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('nuri:goto-tab', { detail: 'browse' }))}
-                className="btn-primary h-10 px-4 text-sm font-bold">📅 대회 일정 보기</button>
+                className="btn-primary inline-flex h-10 items-center gap-1.5 px-4 text-sm font-bold"><Icon name="calendar" size={15} className="shrink-0" />대회 일정 보기</button>
             }
           />
         ) : (
@@ -183,7 +184,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
                 }
                 return (
                   <div key={grp.venueId} className="rounded-card border border-accent-400/25 bg-accent-300/[0.03] p-2 space-y-2">
-                    <p className="px-1 text-sm font-bold text-ink-primary">🏠 {nameOf(grp.venueId)} <span className="text-2xs font-normal text-accent-300">· {grp.games.length}게임 동시 진행</span></p>
+                    <p className="flex items-center gap-1.5 px-1 text-sm font-bold text-ink-primary"><Icon name="home" size={14} className="shrink-0 text-accent-300" /><span className="min-w-0 truncate">{nameOf(grp.venueId)}</span> <span className="shrink-0 text-2xs font-normal text-accent-300">· {grp.games.length}게임 동시 진행</span></p>
                     <ul className="grid grid-cols-1 gap-card-gap">
                       {grp.games.map((g) => {
                         const sched = matchSchedule(g, schedules);
@@ -199,15 +200,16 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
         )}
         {upcoming.length > 0 && (
           <div className="reveal space-y-1.5 pt-1">
-            <p className="px-1 text-2xs font-bold text-ink-muted">⏳ 오늘 곧 시작 <span className="text-accent-300">{upcoming.length}</span> <span className="font-normal">— 아직 클락 전</span></p>
+            <p className="flex items-center gap-1 px-1 text-2xs font-bold text-ink-muted"><Icon name="clock" size={12} className="shrink-0" />오늘 곧 시작 <span className="text-accent-300">{upcoming.length}</span> <span className="font-normal">— 아직 클락 전</span></p>
             <ul className="grid grid-cols-1 gap-1.5">
               {upcoming.map((s) => (
                 <li key={s.id}>
+                  {/* Luma 시간 우선 행 문법 — 시간(무채·tabular)이 행의 앵커, 제목이 그다음 */}
                   <button type="button" onClick={() => onSchedule(s)}
-                    className="flex w-full items-center gap-2 rounded-card border border-border-subtle bg-surface-low px-3 py-2 text-left transition-colors hover:border-accent-400/40 active:scale-[0.99]">
-                    <span className="shrink-0 rounded-badge bg-surface-high px-1.5 py-0.5 text-2xs font-bold tabular-nums text-accent-300">{s.startTime || '예정'}</span>
-                    <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{s.title}</span>
-                    <span className="shrink-0 max-w-[40%] truncate text-2xs text-ink-muted">{nameOf(s.venueId)}</span>
+                    className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-card border border-border-subtle bg-surface-low px-3 py-2 text-left transition-colors hover:border-accent-400/40 active:scale-[0.99]">
+                    <span className="text-2xs font-bold tabular-nums text-ink-secondary">{s.startTime || '예정'}</span>
+                    <span className="truncate text-xs font-semibold text-ink-primary">{s.title}</span>
+                    <span className="max-w-[40%] justify-self-end truncate text-2xs text-ink-muted">{nameOf(s.venueId)}</span>
                   </button>
                 </li>
               ))}
@@ -251,39 +253,38 @@ function LiveCard({ g, name, sched, active = true, onPoster, onVenue, onDisplay 
     <li>
       <button type="button" onClick={sched ? onPoster : onVenue}
         className="w-full rounded-card border border-accent-400/30 bg-surface-low p-3 text-left transition-colors hover:border-accent-400/60 active:scale-[0.99]">
-        <div className="flex items-center justify-between gap-2">
-          <div className="min-w-0">
-            {/* 손님이 라이브 탭을 보는 실질 질문은 '지금 가면 낄 수 있나' — 결정 정보를 최상단에 */}
-            <p className="flex min-w-0 items-center gap-1.5 text-sm font-bold text-ink-primary">
-              <span className="truncate">{name}</span>
-              {regClose !== null && (regClose === 0
-                ? <span className="shrink-0 rounded-badge border border-border-default bg-surface-high px-1.5 py-0.5 text-2xs font-bold leading-none text-ink-muted">등록마감</span>
-                : <span className="shrink-0 rounded-badge bg-emerald-500/15 px-1.5 py-0.5 text-2xs font-bold leading-none text-emerald-400">🟢 등록가능</span>)}
-            </p>
-            <p className="truncate text-2xs text-ink-muted">{g.title || g.config?.title || '토너먼트'}</p>
-            {sched && <p className="truncate text-2xs font-semibold text-accent-300/90 mt-0.5">📋 탭하면 대회 포스터로 이동</p>}
-          </div>
-          <span className={`inline-flex shrink-0 items-center gap-1 rounded-badge px-2 py-0.5 text-2xs font-bold ${g.running ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-500/15 text-amber-400'}`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${g.running ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />{g.running ? 'LIVE' : '일시정지'}
-          </span>
+        <div className="min-w-0">
+          {/* Luma 시간 우선 행 — 시간·상태(정적 컬러 텍스트)가 위, 매장·대회명(bold)이 아래.
+              손님의 실질 질문 '지금 가면 낄 수 있나'의 답(등록가능/마감)도 이 시간 행에 편입. */}
+          <p className="flex min-w-0 items-center gap-1.5 text-2xs font-bold leading-none">
+            {sched?.startTime && <span className="shrink-0 tabular-nums text-ink-muted">{sched.startTime}</span>}
+            <span className={`shrink-0 ${g.running ? 'text-emerald-400' : 'text-amber-400'}`}>{g.running ? 'LIVE' : '일시정지'}</span>
+            {regClose !== null && (regClose === 0
+              ? <span className="shrink-0 font-semibold text-ink-muted">· 등록마감</span>
+              : <span className="shrink-0 font-semibold text-emerald-400">· 등록가능</span>)}
+          </p>
+          <p className="mt-1 truncate text-sm font-bold text-ink-primary">{name}</p>
+          <p className="truncate text-2xs text-ink-muted">{g.title || g.config?.title || '토너먼트'}</p>
+          {sched && <p className="mt-0.5 flex items-center gap-1 text-2xs font-semibold text-accent-300/90"><Icon name="image" size={12} className="shrink-0" /><span className="truncate">탭하면 대회 포스터로 이동</span></p>}
         </div>
 
-        {/* 레벨 · 블라인드 · 남은 시간 */}
-        <div className="mt-2 flex items-center justify-between gap-3 rounded-input bg-surface-base/60 px-3 py-2">
+        {/* 레벨 · 블라인드 · 남은 시간 — FotMob식 고정 그리드: 오른쪽 타이머 칸은 tabular mm:ss 로
+            폭이 상수라, 블라인드 자리수가 바뀌어도 초당 갱신되는 이웃 칸이 밀리지 않는다 */}
+        <div className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-input bg-surface-base/60 px-3 py-2">
           <div className="min-w-0">
             <p className="text-2xs text-ink-muted">{isBreak ? '브레이크' : `레벨 ${levelNo}`}</p>
             {isBreak ? (
               <>
                 <p className="text-lg font-extrabold leading-tight text-sky-300">BREAK</p>
-                {g.running && remaining <= 60_000 && <p className="text-2xs font-bold text-amber-300 animate-pulse">⏰ 곧 재개</p>}
+                {g.running && remaining <= 60_000 && <p className="text-2xs font-bold text-amber-300">곧 재개</p>}
               </>
             ) : (
-              <p className="text-lg font-extrabold leading-tight text-ink-primary tabular-nums">
+              <p className="truncate text-lg font-extrabold leading-tight text-ink-primary tabular-nums">
                 {lv ? <>{lv.sb.toLocaleString()}/{lv.bb.toLocaleString()}{lv.ante > 0 && <span className="ml-1 text-2xs text-ink-muted">a{lv.ante.toLocaleString()}</span>}</> : '-'}
               </p>
             )}
           </div>
-          <div className="shrink-0 text-right">
+          <div className="text-right">
             <p className="text-2xs text-ink-muted">남은 시간</p>
             <p className={`text-2xl font-extrabold leading-none tabular-nums ${urgent ? 'text-rose-400' : 'text-accent-300'}`}>{mmss(Math.max(0, remaining))}</p>
           </div>
@@ -318,18 +319,18 @@ function LiveCard({ g, name, sched, active = true, onPoster, onVenue, onDisplay 
           <Cell label="평균 스택" value={ls.avgStack ? ls.avgStack.toLocaleString() : '-'} wide accent />
         </div>
 
-        {/* 등록마감 · 다음 브레이크 */}
-        <div className="mt-1.5 flex items-center justify-between gap-2 text-2xs">
-          <span className="text-ink-muted">등록마감 <b className={`num ${regClose === 0 ? 'text-rose-300' : 'text-ink-secondary'}`}>{regClose === null ? '—' : regClose === 0 ? '마감' : hms(regClose)}</b></span>
-          <span className="text-ink-muted">다음 브레이크 <b className="num text-ink-secondary">{nextBreak === null ? '—' : hms(nextBreak)}</b></span>
+        {/* 등록마감 · 다음 브레이크 — 반반 고정 그리드: 초당 줄어드는 hh:mm:ss 가 이웃을 밀지 않는다 */}
+        <div className="mt-1.5 grid grid-cols-2 items-center gap-2 text-2xs">
+          <span className="text-ink-muted">등록마감 <b className={`num tabular-nums ${regClose === 0 ? 'text-rose-300' : 'text-ink-secondary'}`}>{regClose === null ? '—' : regClose === 0 ? '마감' : hms(regClose)}</b></span>
+          <span className="text-right text-ink-muted">다음 브레이크 <b className="num tabular-nums text-ink-secondary">{nextBreak === null ? '—' : hms(nextBreak)}</b></span>
         </div>
       </button>
       <div className="mt-1 flex gap-1">
         <button type="button" onClick={onDisplay} title="매장 TV·빔프로젝터용 큰 화면(관전 모드)"
-          className="flex-1 rounded-input border border-accent-400/40 py-1.5 text-2xs font-bold text-accent-300 transition-colors hover:bg-accent-300/10 active:scale-[0.99]">📺 큰 화면(관전)</button>
+          className="inline-flex flex-1 items-center justify-center gap-1 rounded-input border border-accent-400/40 py-1.5 text-2xs font-bold text-accent-300 transition-colors hover:bg-accent-300/10 active:scale-[0.99]"><Icon name="eye" size={13} className="shrink-0" />큰 화면(관전)</button>
         {sched && (
           <button type="button" onClick={onVenue}
-            className="flex-1 rounded-input border border-border-subtle py-1.5 text-2xs font-semibold text-ink-muted transition-colors hover:border-accent-400/40 hover:text-accent-300">🏪 매장 페이지</button>
+            className="inline-flex flex-1 items-center justify-center gap-1 rounded-input border border-border-subtle py-1.5 text-2xs font-semibold text-ink-muted transition-colors hover:border-accent-400/40 hover:text-accent-300"><Icon name="map-pin" size={13} className="shrink-0" />매장 페이지</button>
         )}
       </div>
     </li>
@@ -337,12 +338,14 @@ function LiveCard({ g, name, sched, active = true, onPoster, onVenue, onDisplay 
 }
 
 function Cell({ label, value, sub, accent, wide }: { label: string; value: string; sub?: string; accent?: boolean; wide?: boolean }) {
+  // FotMob식 대칭 칸: 등분 그리드 안에서 각 칸 중앙 고정 + tabular-nums —
+  // 초당 갱신으로 자리수가 변해도 칸 폭(그리드 트랙)이 불변이라 이웃이 밀리지 않는다.
   return (
-    <div className="rounded-input bg-surface-base/60 px-2 py-1.5 text-center">
-      <p className={`font-extrabold leading-none tabular-nums ${wide ? 'text-base' : 'text-sm'} ${accent ? 'text-accent-300' : 'text-ink-primary'}`}>
+    <div className="min-w-0 rounded-input bg-surface-base/60 px-1 py-1.5 text-center">
+      <p className={`truncate font-extrabold leading-none tabular-nums ${wide ? 'text-base' : 'text-sm'} ${accent ? 'text-accent-300' : 'text-ink-primary'}`}>
         {value}{sub && <span className="ml-1 text-2xs font-normal text-ink-muted">{sub}</span>}
       </p>
-      <p className="mt-0.5 text-2xs text-ink-muted">{label}</p>
+      <p className="mt-0.5 truncate text-2xs text-ink-muted">{label}</p>
     </div>
   );
 }
@@ -367,7 +370,7 @@ function MyTournamentCard({ g, venueName, onDisplay }: { g: ClockState; venueNam
   return (
     <section className="rounded-card border border-accent-300/60 bg-gradient-to-br from-accent-300/[0.12] to-transparent p-3">
       <div className="flex items-center justify-between gap-2">
-        <p className="min-w-0 flex-1 truncate text-sm font-bold text-accent-300">🎯 내 토너 · <span className="text-ink-primary">{venueName}</span></p>
+        <p className="flex min-w-0 flex-1 items-center gap-1.5 text-sm font-bold text-accent-300"><Icon name="target" size={14} className="shrink-0" /><span className="truncate">내 토너 · <span className="text-ink-primary">{venueName}</span></span></p>
         <button type="button" onClick={onDisplay} className="btn-ghost shrink-0 px-2.5 py-1 text-2xs">관전 화면</button>
       </div>
       <div className="mt-2 grid grid-cols-3 gap-1.5 text-center">
