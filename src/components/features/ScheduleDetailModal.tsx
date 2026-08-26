@@ -11,6 +11,7 @@ import { getMyReservation, createReservation, cancelMyReservation, getOwnerReser
 import { prizeMainText } from './ScheduleCard';
 import type { Schedule } from '../../api/schedules';
 import { scheduleStatus } from '../../lib/scheduleStatus';
+import type { RegInfo } from '../../lib/regStatus';
 import type { Comment } from '../../api/community';
 import { generateBlinds } from '../../api/clock';
 import { promptLogin, openPostForm, ensureVerified } from '../../lib/requireLogin';
@@ -34,6 +35,8 @@ interface ScheduleDetailModalProps {
   onDeletePoster?: (id: string) => void;
   /** 데스크탑 2-pane 우측 패널로 인라인 렌더 */
   inline?: boolean;
+  /** UX-1: 라이브 클락 실측 레지 상태 — '매장에 확인해 주세요'를 실제 답으로 교체 */
+  regInfo?: RegInfo;
 }
 
 type Tab = 'info' | 'qna';
@@ -42,7 +45,7 @@ const SUITS = ['♠','♥','♦','♣'];
 const DAYS_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
 export default function ScheduleDetailModal({
-  schedule: scheduleProp, open, onClose, onVenueClick, rating, comments, onSubmitComment, onDeleteComment, onDeletePoster, inline,
+  schedule: scheduleProp, open, onClose, onVenueClick, rating, comments, onSubmitComment, onDeleteComment, onDeletePoster, inline, regInfo,
 }: ScheduleDetailModalProps) {
   const [tab, setTab] = useState<Tab>('info');
   const [lightbox, setLightbox] = useState(false);
@@ -138,9 +141,14 @@ export default function ScheduleDetailModal({
               {status !== 'upcoming' && (
                 <span className={[
                   'rounded-badge px-2 py-0.5 text-xs font-bold leading-none',
-                  status === 'ended' ? 'bg-black/70 text-white/85' : 'bg-danger text-white',
+                  status === 'ended' || (regInfo && regInfo.msLeft === 0) ? 'bg-black/70 text-white/85'
+                    : regInfo && regInfo.msLeft !== null ? 'bg-emerald-600 text-white'
+                    : 'bg-danger text-white',
                 ].join(' ')}>
-                  {status === 'ended' ? '종료' : '진행 중'}
+                  {status === 'ended' ? '종료'
+                    : regInfo && regInfo.msLeft === 0 ? '진행 중 · 레지 마감'
+                    : regInfo && regInfo.msLeft !== null ? '진행 중 · 등록 가능'
+                    : '진행 중'}
                 </span>
               )}
               {schedule.isPremium && (
@@ -299,7 +307,7 @@ export default function ScheduleDetailModal({
         {/* status 를 계산해 넘기지 않고 date/startTime 을 넘긴다 — 모달을 열어둔 채 종료 시각을
             넘길 수 있어, 클릭 시점에 다시 판정해야 하기 때문 */}
         <ReserveBox scheduleId={schedule.id} ownerId={schedule.ownerId} venueId={schedule.venueId}
-          date={schedule.date} startTime={schedule.startTime} sched={schedule} />
+          date={schedule.date} startTime={schedule.startTime} sched={schedule} regInfo={regInfo} />
 
         {/* 현장 바인(참가) 요청 — 대회 당일에만 연다. 요청이 '오늘' 장부로 들어가기 때문(위 kToday 주석)
             지난 대회에선 안내조차 띄우지 않는다 — 할 수 있는 게 없어 소음일 뿐이라. */}
@@ -645,7 +653,7 @@ function BuyinRequestBox({ venueId, eventDate }: { venueId: string; eventDate: s
   );
 }
 
-function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched }: { scheduleId: string; ownerId?: string | null; venueId?: string | null; date: string; startTime: string; sched: Schedule }) {
+function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regInfo }: { scheduleId: string; ownerId?: string | null; venueId?: string | null; date: string; startTime: string; sched: Schedule; regInfo?: RegInfo }) {
   const { user } = useAuth();
   const toast = useToast();
   const [mine, setMine] = useState<Reservation | null>(null);
@@ -787,7 +795,14 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched }: { 
       <p className="text-2xs text-ink-muted">
         {mine ? `예약자: ${mine.displayName}`
           : ended ? '이미 끝난 대회라 예약이 닫혔습니다. 다음 대회 일정을 확인해 주세요.'
-          : status === 'live' ? '이미 시작한 대회입니다 — 레이트 레지 가능 여부는 매장에 확인해 주세요.'
+          : status === 'live' ? (
+              // UX-1: 클락 실측이 있으면 '매장에 확인해 주세요' 대신 실제 답을 준다(서버는 답을 알고 있었다)
+              regInfo && regInfo.msLeft !== null
+                ? (regInfo.msLeft === 0
+                    ? '레이트 레지가 마감된 대회입니다 — 다음 일정을 확인해 주세요.'
+                    : `레이트 레지 진행 중 — 마감까지 약 ${Math.max(1, Math.round(regInfo.msLeft / 60_000))}분, 지금 등록할 수 있습니다.`)
+                : '이미 시작한 대회입니다 — 레이트 레지 가능 여부는 매장에 확인해 주세요.'
+            )
           : '같은 닉네임이 이미 있으면 예약할 수 없어요. 닉네임을 바꿔 다시 시도하세요.'}
       </p>
 

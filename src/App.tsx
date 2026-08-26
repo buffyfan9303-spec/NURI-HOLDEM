@@ -38,7 +38,8 @@ import type { MarketplaceFormData } from './components/features/MarketplaceFormM
 import { rearmLayer, useBackClose, overlayJustClosed } from './lib/backstack';
 import { useVisibilityRefresh } from './lib/useVisibilityRefresh';
 import { lazyWithReload } from './lib/lazyWithReload';
-import { getRunningClocks } from './api/clock';
+import { getRunningClocks, type ClockState } from './api/clock';
+import { buildRegInfoMap } from './lib/regStatus';
 import { myVisitedVenues } from './api/vouchers';
 import { haversineKm } from './lib/geo';
 import { compareByStartThenBoost } from './lib/scheduleSort';
@@ -1230,6 +1231,8 @@ export default function App() {
   // 탭 진입만 기다리면 매번 스켈레톤을 본다 — 둘을 합치면 양쪽 다 없다.
   // 라이브 탭 배지 — '지금 N게임 진행중'(Phase 14, PokerAtlas real-time counts).
   const [liveCount, setLiveCount] = useState(0);
+  // UX-1: 진행 중 클락 원본 — '지금 등록 되나' 판정을 browse 카드·상세로 승격(추가 네트워크 0, 기존 조회 재사용)
+  const [liveClocks, setLiveClocks] = useState<ClockState[]>([]);
   // 16-1 '이어서 하기' — 최근 방문 매장 1곳(my_visited_venues 재활용, 신규 쿼리 0)
   const [recentVenue, setRecentVenue] = useState<{ venueId: string; venueName: string | null } | null>(null);
   useEffect(() => {
@@ -1248,7 +1251,7 @@ export default function App() {
         if (lr.status === 'fulfilled') { setListings(lr.value); writeSnap('listings', lr.value); }
         setMarketLoaded(true);
         if (rr.status === 'fulfilled') setVenueRatings(rr.value);
-        if (kr.status === 'fulfilled') setLiveCount(kr.value.length);
+        if (kr.status === 'fulfilled') { setLiveCount(kr.value.length); setLiveClocks(kr.value); }
       });
      
   }, []);
@@ -1346,7 +1349,7 @@ export default function App() {
       case 'browse':
       case 'live':
       case 'my-store':
-        getRunningClocks().then((cs) => setLiveCount(cs.length)).catch(() => {});
+        getRunningClocks().then((cs) => { setLiveCount(cs.length); setLiveClocks(cs); }).catch(() => {});
         reloadSchedules(); reloadVenues(); reloadNotices();
         break;
       case 'community':
@@ -1498,6 +1501,8 @@ export default function App() {
     const v = sc.venueId ? venueById.get(sc.venueId) : undefined;
     return v && v.lat != null && v.lng != null ? haversineKm(myPos.lat, myPos.lng, v.lat, v.lng) : undefined;
   }, [nearSort, myPos, venueById]);
+  // UX-1: scheduleId → 레지 실측 상태(클락 기반). 클락 없는 대회는 맵에 없다 → 카드·모달이 기존 추정으로 폴백.
+  const regInfoBySchedule = useMemo(() => buildRegInfoMap(liveClocks, schedules), [liveClocks, schedules]);
   // 🎯 내 토너 — 오늘 승인된 내 바인의 게임 목록(라이브 탭 참가자 시점 카드)
   const myApprovedGames = useMemo(() => myBuyinReqs
     .filter((r) => r.status === 'approved')
@@ -2415,6 +2420,7 @@ export default function App() {
                         reserveCount={browseResCounts[s.id]}
                         rating={venueRatings[s.venueId]}
                         distanceKm={distanceOf(s)}
+                        regInfo={regInfoBySchedule.get(s.id)}
                         onVenueClick={handleVenueClick}
                         onSelect={handleScheduleSelect}
                         // ⚡ 첫 화면에 보이는 상단 카드만 포스터를 즉시 로드(LCP 단축).
@@ -2428,7 +2434,7 @@ export default function App() {
                 {viewMode === 'table' && visibleSchedules.length > 0 && (
                   <div className="grid grid-cols-1 gap-card-gap md:hidden">
                     {visibleSchedules.map((s, i) => (
-                      <ScheduleCard key={s.id} mode="list" schedule={s} reserveCount={browseResCounts[s.id]} rating={venueRatings[s.venueId]} distanceKm={distanceOf(s)} onVenueClick={handleVenueClick} onSelect={handleScheduleSelect} priority={i < 4} />
+                      <ScheduleCard key={s.id} mode="list" schedule={s} reserveCount={browseResCounts[s.id]} rating={venueRatings[s.venueId]} distanceKm={distanceOf(s)} regInfo={regInfoBySchedule.get(s.id)} onVenueClick={handleVenueClick} onSelect={handleScheduleSelect} priority={i < 4} />
                     ))}
                   </div>
                 )}
@@ -2581,6 +2587,7 @@ export default function App() {
         onClose={() => setOpenSchedule(null)}
         onVenueClick={handleVenueClick}
         rating={openSchedule ? venueRatings[openSchedule.venueId] : undefined}
+        regInfo={openSchedule ? regInfoBySchedule.get(openSchedule.id) : undefined}
         comments={comments}
         onSubmitComment={(content, parentId) =>
           openSchedule && handleSubmitScheduleComment(openSchedule.id, content, parentId)

@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { thumbUrl, thumbSrcSet } from '../../lib/imageUrl';
 import { scheduleStatus } from '../../lib/scheduleStatus';
+import type { RegInfo } from '../../lib/regStatus';
 import { fmtKm } from '../../lib/geo';
 import type { Schedule, TournamentFormat } from '../../api/schedules';
 import type { ViewMode } from '../atoms/ViewModeToggle';
@@ -169,9 +170,19 @@ interface CardProps {
   priority?: boolean;
   /** 📍 가까운 순이 켜져 있을 때 내 위치→매장 거리(km) — '갈까?' 판단의 핵심 변수 */
   distanceKm?: number;
+  /** UX-1: 라이브 클락 실측 레지 상태 — 있으면 LIVE 배지가 추정이 아니라 실측이 된다.
+   *  (없으면 기존 scheduleStatus 추정 폴백 — '시작+10시간 윈도'라 레지 마감 후에도 LIVE 로 뜨던 거짓 배지 문제) */
+  regInfo?: RegInfo;
 }
 
-function ListCard({ schedule, onVenueClick, onSelect, reserveCount, rating, priority, distanceKm }: CardProps) {
+/** 실측 레지 상태 → 배지 텍스트·톤. regInfo 없으면 기존 추정('LIVE') 유지. */
+function liveBadge(regInfo: RegInfo | undefined): { text: string; closed: boolean } {
+  if (regInfo && regInfo.msLeft === 0) return { text: '레지마감', closed: true };
+  if (regInfo && regInfo.msLeft !== null) return { text: '등록가능', closed: false };
+  return { text: 'LIVE', closed: false };
+}
+
+function ListCard({ schedule, onVenueClick, onSelect, reserveCount, rating, priority, distanceKm, regInfo }: CardProps) {
   const d = formatDate(schedule.date, schedule.startTime);
   // 끝난 대회를 '예약 가능'처럼 보여주지 않기 위한 상태 표시(실제 차단은 상세·서버에서)
   const status = scheduleStatus(schedule.date, schedule.startTime);
@@ -263,11 +274,12 @@ function ListCard({ schedule, onVenueClick, onSelect, reserveCount, rating, prio
           {status !== 'upcoming' && (
             <span className={[
               'shrink-0 rounded-badge px-1.5 py-0.5 font-bold leading-none',
-              status === 'ended'
+              status === 'ended' || liveBadge(regInfo).closed
                 ? 'border border-border-default bg-surface-high text-ink-muted'
+                : liveBadge(regInfo).text === '등록가능' ? 'bg-emerald-500/15 text-emerald-400'
                 : 'bg-danger/15 text-danger-light',
             ].join(' ')}>
-              {status === 'ended' ? '종료' : 'LIVE'}
+              {status === 'ended' ? '종료' : liveBadge(regInfo).text}
             </span>
           )}
           {schedule.grade && (
@@ -312,7 +324,7 @@ function ListCard({ schedule, onVenueClick, onSelect, reserveCount, rating, prio
 
 // ── 메인: 그리드 뷰 카드 ────────────────────────────────────────────────────
 
-function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distanceKm, reserveCount }: CardProps) {
+function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distanceKm, reserveCount, regInfo }: CardProps) {
   const d = formatDate(schedule.date, schedule.startTime);
   const status = scheduleStatus(schedule.date, schedule.startTime);
 
@@ -349,9 +361,11 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
           {status !== 'upcoming' && (
             <span className={[
               'shrink-0 rounded-badge px-1.5 py-0.5 text-2xs font-bold leading-none',
-              status === 'ended' ? 'bg-black/70 text-white/80' : 'bg-danger text-white',
+              status === 'ended' || liveBadge(regInfo).closed ? 'bg-black/70 text-white/80'
+                : liveBadge(regInfo).text === '등록가능' ? 'bg-emerald-600 text-white'
+                : 'bg-danger text-white',
             ].join(' ')}>
-              {status === 'ended' ? '종료' : 'LIVE'}
+              {status === 'ended' ? '종료' : liveBadge(regInfo).text}
             </span>
           )}
         </div>
