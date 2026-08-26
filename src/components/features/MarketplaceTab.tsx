@@ -8,6 +8,7 @@ import { useBlocks } from '../../contexts/BlockContext';
 import { getMyChatThreads } from '../../api/chat';
 import { MessagesModal, MyListingsModal, MyLikesModal } from './MyMarketModal';
 import SlidingPill from '../atoms/SlidingPill';
+import { useSkeletonGate } from '../../lib/useSkeletonGate';
 
 // ── 상수 ─────────────────────────────────────────────────────────────────────
 
@@ -72,6 +73,7 @@ function MarketplaceTab({
   listings, notices, onSelect, onSelectNotice, onCreate,
   canWriteNotice = false, onWriteNotice, onListingsChanged, loading = false,
 }: MarketplaceTabProps) {
+  const showSkel = useSkeletonGate(loading && listings.length === 0); // MO-6C: 200ms 내 도착하면 스켈레톤 생략
   const { user } = useAuth();
   const { isBlocked } = useBlocks();
   const [category, setCategory]       = useState<ListingCategory | 'all'>('all');
@@ -205,15 +207,19 @@ function MarketplaceTab({
       </div>
 
       {/* ── 매물 목록: 게시판(리스트) 전용 ───────────────────────── */}
-      {loading && listings.length === 0 ? (
-        // 스켈레톤 — 최초 로딩 시 빈 화면/깜빡임 대신 게시판 행 형태의 시머 로더
+      {loading && listings.length === 0 && !showSkel ? null : loading && listings.length === 0 ? (
+        // [DS] MO-6 스켈레톤 — 실제 ListingRow 골격 복제(배지행+제목+모바일 메타행, --row-h-md 계약).
+        // BoardHeader 를 스켈레톤에도 그대로 렌더 — 전엔 데이터 도착 때 데스크톱 헤더 행이
+        // 나중에 끼어들어 목록 전체가 한 번 더 밀렸다.
         <div className="rounded-card border border-border-default bg-surface-low overflow-hidden" aria-hidden>
+          <BoardHeader />
           {Array.from({ length: 7 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-3 border-b border-border-subtle px-3 py-2.5 last:border-b-0">
-              <div className="skeleton h-10 w-10 shrink-0 rounded-input" />
-              <div className="min-w-0 flex-1 space-y-1.5">
-                <div className="skeleton h-3 rounded" style={{ width: `${[70, 55, 64, 48, 60, 52, 68][i]}%` }} />
-                <div className="skeleton h-2.5 rounded" style={{ width: `${[35, 42, 30, 38, 33, 40, 36][i]}%` }} />
+            <div key={i} className="grid min-h-[var(--row-h-md)] grid-cols-[1fr_auto] items-center gap-2 border-b border-border-subtle px-3 py-2.5 last:border-b-0 sm:grid-cols-[3rem_1fr_5rem_6rem_5rem_5rem]">
+              <span className="hidden sm:block" />
+              <div className="min-w-0">
+                <div className="skeleton h-[18px] rounded" style={{ width: `${[34, 42, 30, 38, 33, 40, 36][i]}%` }} />
+                <div className="skeleton mt-0.5 h-5 rounded" style={{ width: `${[70, 55, 64, 48, 60, 52, 68][i]}%` }} />
+                <div className="skeleton mt-1 h-4 w-1/2 rounded sm:hidden" />
               </div>
               <div className="skeleton h-3.5 w-12 shrink-0 rounded" />
             </div>
@@ -369,7 +375,7 @@ function ListingRow({
   const isSold = listing.status === 'sold';
 
   return (
-    <li className="cv-row-md">
+    <li className="cv-row-md min-h-[var(--row-h-md)]">
       <button
         type="button"
         onClick={onClick}

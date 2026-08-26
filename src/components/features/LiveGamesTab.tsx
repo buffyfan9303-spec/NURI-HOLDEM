@@ -5,7 +5,8 @@ import { useEffect, useState } from 'react';
 import { getRunningClocks, subscribeRunningClocks, effectiveLevel, type ClockState, type ClockLevel } from '../../api/clock';
 import { matchClockSchedule as matchSchedule, msToRegClose } from '../../lib/regStatus';
 import { wonToMan } from '../../api/ledger';
-import { EmptyState, SkeletonList } from '../atoms/Skeleton';
+import { EmptyState } from '../atoms/Skeleton';
+import { useSkeletonGate } from '../../lib/useSkeletonGate';
 import type { Venue } from '../../api/community';
 import type { Schedule } from '../../api/schedules';
 
@@ -48,6 +49,7 @@ function msToNextBreak(s: ClockState, index: number, remaining: number): number 
 
 export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, onDisplay, active = true, myGames }: { venues: Venue[]; schedules: Schedule[]; onVenue: (id: string) => void; onSchedule: (s: Schedule) => void; onDisplay: (venueId: string, gameSeq: number) => void; active?: boolean; myGames?: { venueId: string; venueName: string; gameSeq: number | null }[] }) {
   const [games, setGames] = useState<ClockState[] | null>(null);
+  const showSkel = useSkeletonGate(games === null); // MO-6C: 200ms 내 도착하면 스켈레톤 생략
   const [, setTick] = useState(0);
   const [sortBy, setSortBy] = useState<'default' | 'players' | 'time' | 'distance'>('default'); // 진행 게임 정렬
   const [geo, setGeo] = useState<[number, number] | null>(null); // 손님 위치(거리순 정렬, 위치 권한 시)
@@ -129,7 +131,19 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
         )}
 
         {games === null ? (
-          <SkeletonList rows={3} rowClassName="h-40" />
+          showSkel ? (
+            // [DS] MO-6: 실제 LiveCard 골격 복제(헤더 2행 + 스탯 박스 + 하단 행) — h-40 임의값 대체
+            <div className="space-y-card-gap" aria-hidden aria-busy="true">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="rounded-card border border-border-subtle bg-surface-low p-3">
+                  <div className="skeleton h-5 w-1/2" />
+                  <div className="skeleton mt-1 h-4 w-2/3" />
+                  <div className="skeleton mt-2 h-[72px]" />
+                  <div className="skeleton mt-2 h-4 w-3/4" />
+                </div>
+              ))}
+            </div>
+          ) : null
         ) : games.length === 0 ? (
           <EmptyState
             icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2.5 2.5" /><path d="M9 2h6" /></svg>}
@@ -291,8 +305,8 @@ function LiveCard({ g, name, sched, onPoster, onVenue, onDisplay }: { g: ClockSt
 
         {/* 등록마감 · 다음 브레이크 */}
         <div className="mt-1.5 flex items-center justify-between gap-2 text-2xs">
-          <span className="text-ink-muted">등록마감 <b className={regClose === 0 ? 'text-rose-300' : 'text-ink-secondary'}>{regClose === null ? '—' : regClose === 0 ? '마감' : hms(regClose)}</b></span>
-          <span className="text-ink-muted">다음 브레이크 <b className="text-ink-secondary">{nextBreak === null ? '—' : hms(nextBreak)}</b></span>
+          <span className="text-ink-muted">등록마감 <b className={`num ${regClose === 0 ? 'text-rose-300' : 'text-ink-secondary'}`}>{regClose === null ? '—' : regClose === 0 ? '마감' : hms(regClose)}</b></span>
+          <span className="text-ink-muted">다음 브레이크 <b className="num text-ink-secondary">{nextBreak === null ? '—' : hms(nextBreak)}</b></span>
         </div>
       </button>
       <div className="mt-1 flex gap-1">

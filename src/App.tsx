@@ -3032,14 +3032,40 @@ const BrowseSideRail = memo(function BrowseSideRail({ posts, schedules, onSelect
 // ── 빈 상태 ─────────────────────────────────────────────────────────────────
 
 // (B1) 일정 로딩 스켈레톤 — 카드 자리(aspect-ratio 고정)를 미리 잡아 CLS·빈결과 깜빡임 방지
+// [DS] MO-6: 스켈레톤은 '실제 카드 마크업의 텍스트만 치환' — 새로 그리지 않는다.
+// 전엔 grid 가 포스터 높이(aspect-[3/4])만 있어 실데이터 교체 순간 본문 높이만큼(+713px/10장)
+// 낙하했고, list 는 임의값 h-24(96px) vs 실측 87px 로 어긋났다. 골격을 복제하면 높이가
+// 구조적으로 일치한다(list 는 실측 87px 고정 — 2026-08-25, 375px, html 17px).
 function ScheduleSkeletonGrid({ viewMode }: { viewMode: 'grid' | 'list' | 'table' }) {
   const grid = viewMode === 'grid';
   const n = grid ? 10 : 6;
   return (
     <div className={[grid ? 'grid grid-cols-2 gap-card-gap sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5' : 'grid grid-cols-1 lg:grid-cols-2 gap-card-gap'].join(' ')} aria-busy="true">
-      {Array.from({ length: n }).map((_, i) => (
-        <div key={i} className={[grid ? 'aspect-[3/4]' : 'h-24', 'animate-pulse rounded-card border border-border-subtle bg-surface-high'].join(' ')} />
-      ))}
+      {Array.from({ length: n }).map((_, i) =>
+        grid ? (
+          // GridCard 골격: 포스터 3/4 + 본문(p-2.5 gap-1.5: 제목 2줄 + 매장 1줄 + 구분선 + 바인 1줄)
+          <div key={i} className="flex flex-col overflow-hidden rounded-card border border-border-subtle bg-surface-low">
+            <div className="skeleton aspect-[3/4] w-full rounded-none" />
+            <div className="flex flex-col gap-1.5 p-2.5">
+              <div className="skeleton h-4" />
+              <div className="skeleton h-4 w-2/3" />
+              <div className="skeleton h-3 w-1/2" />
+              <div className="border-t border-border-subtle my-0.5" />
+              <div className="skeleton h-4 w-3/4" />
+            </div>
+          </div>
+        ) : (
+          // ListCard 골격: p-2 + 64px 썸네일 + 압축 3행
+          <div key={i} className="flex min-h-[87px] items-center gap-2.5 rounded-card border border-border-subtle bg-surface-low p-2">
+            <div className="skeleton h-16 w-16 shrink-0 rounded-input" />
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <div className="skeleton h-[17px] w-3/4" />
+              <div className="skeleton h-[17px]" />
+              <div className="skeleton h-[17px] w-1/2" />
+            </div>
+          </div>
+        )
+      )}
     </div>
   );
 }
