@@ -514,15 +514,24 @@ function FeedSection({
         </div>
       )}
 
-      {/* HOT — 최근 6시간 최다 조회 글 (게시판 기본 화면) */}
+      {/* HOT — 최근 6시간 최다 조회 글 (게시판 기본 화면).
+          피드(카드) 모드는 카드 스택 그대로 — HOT 배지가 이미 카드 안에 있어 이중 테두리를 만들지 않는다 */}
       {pinHot && (
-        <div className="rounded-card border border-danger/30 bg-danger/[0.04] overflow-hidden">
-          <ul>
-            {hotPosts.map((p) => view === 'compact'
-              ? <PostRow key={p.id} post={p} hot selected={p.id === selectedId} mark={authorMarks[p.userId] ?? ''} titlePts={titleOf(p.userId)} onClick={() => onSelectPost(p)} />
-              : <PostCard key={p.id} post={p} hot selected={p.id === selectedId} mark={authorMarks[p.userId] ?? ''} titlePts={titleOf(p.userId)} onLike={() => onLike(p.id)} onClick={() => onSelectPost(p)} />)}
+        view === 'compact' ? (
+          <div className="rounded-card border border-danger/30 bg-danger/[0.04] overflow-hidden">
+            <ul>
+              {hotPosts.map((p) => (
+                <PostRow key={p.id} post={p} hot selected={p.id === selectedId} mark={authorMarks[p.userId] ?? ''} titlePts={titleOf(p.userId)} onClick={() => onSelectPost(p)} />
+              ))}
+            </ul>
+          </div>
+        ) : (
+          <ul className="space-y-2">
+            {hotPosts.map((p) => (
+              <PostCard key={p.id} post={p} hot selected={p.id === selectedId} mark={authorMarks[p.userId] ?? ''} titlePts={titleOf(p.userId)} onLike={() => onLike(p.id)} onClick={() => onSelectPost(p)} />
+            ))}
           </ul>
-        </div>
+        )
       )}
 
       {/* 포스트 목록 — 게시판 형태 (조밀하게 많이 보이게) */}
@@ -538,7 +547,7 @@ function FeedSection({
           {/* 글이 없어도 광고 칸은 산다 — 게재 미리보기 겸 */}
           {ads[0] && <div className="rounded-card border border-border-default bg-surface-low overflow-hidden"><AdRow ad={ads[0]} /></div>}
         </>
-      ) : (
+      ) : view === 'compact' ? (
         <>
           <div className="rounded-card border border-border-subtle bg-surface-low overflow-hidden">
             <ul>
@@ -547,9 +556,7 @@ function FeedSection({
                 const showAd = i % 4 === 3 && !!ad; // 글 4개마다 광고 한 칸
                 return (
                   <Fragment key={p.id}>
-                    {view === 'compact'
-                      ? <PostRow post={p} mark={authorMarks[p.userId] ?? ''} titlePts={titleOf(p.userId)} selected={p.id === selectedId} onClick={() => onSelectPost(p)} />
-                      : <PostCard post={p} mark={authorMarks[p.userId] ?? ''} titlePts={titleOf(p.userId)} selected={p.id === selectedId} onLike={() => onLike(p.id)} onClick={() => onSelectPost(p)} />}
+                    <PostRow post={p} mark={authorMarks[p.userId] ?? ''} titlePts={titleOf(p.userId)} selected={p.id === selectedId} onClick={() => onSelectPost(p)} />
                     {showAd && <AdRow ad={ad} />}
                   </Fragment>
                 );
@@ -558,6 +565,26 @@ function FeedSection({
               {shown.length < 4 && ads[0] && <AdRow ad={ads[0]} />}
             </ul>
           </div>
+          {listSource.length > visible && (
+            <InfiniteSentinel onMore={() => setVisible((v) => v + 15)} remain={listSource.length - visible} />
+          )}
+        </>
+      ) : (
+        <>
+          {/* 피드(카드) 모드 — 오너 레퍼런스: 독립 라운드 카드 스택, 광고도 같은 카드 문법 */}
+          <ul className="space-y-2">
+            {shown.map((p, i) => {
+              const ad = ads[Math.floor(i / 4)];
+              const showAd = i % 4 === 3 && !!ad;
+              return (
+                <Fragment key={p.id}>
+                  <PostCard post={p} mark={authorMarks[p.userId] ?? ''} titlePts={titleOf(p.userId)} selected={p.id === selectedId} onLike={() => onLike(p.id)} onClick={() => onSelectPost(p)} />
+                  {showAd && <AdRow ad={ad} card />}
+                </Fragment>
+              );
+            })}
+            {shown.length < 4 && ads[0] && <AdRow ad={ads[0]} card />}
+          </ul>
           {listSource.length > visible && (
             <InfiniteSentinel onMore={() => setVisible((v) => v + 15)} remain={listSource.length - visible} />
           )}
@@ -586,7 +613,7 @@ function InfiniteSentinel({ onMore, remain }: { onMore: () => void; remain: numb
 }
 
 // 커뮤니티 광고 행 — 한 줄 리스트 사이 [AD] 행(운영자가 관리자 설정 → 게시물 관리에서 게재)
-function AdRow({ ad }: { ad: CommunityAd }) {
+function AdRow({ ad, card = false }: { ad: CommunityAd; card?: boolean }) {
   const href = ad.linkUrl && /^https?:\/\//.test(ad.linkUrl) ? ad.linkUrl : ad.linkUrl ? `https://${ad.linkUrl}` : '';
   const inner = (
     <>
@@ -595,7 +622,10 @@ function AdRow({ ad }: { ad: CommunityAd }) {
       {ad.advertiser && <span className="shrink-0 text-xs text-ink-muted">{ad.advertiser}</span>}
     </>
   );
-  const cls = 'flex items-center gap-2 border-b border-border-subtle bg-accent-300/[0.04] px-3 py-2 transition-colors last:border-b-0 hover:bg-accent-300/10';
+  // card: 피드(카드 스택) 모드 — 행 구분선 대신 글 카드와 같은 라운드 카드 문법
+  const cls = card
+    ? 'flex items-center gap-2 rounded-card border border-border-subtle bg-accent-300/[0.04] px-3 py-2 transition-colors hover:bg-accent-300/10'
+    : 'flex items-center gap-2 border-b border-border-subtle bg-accent-300/[0.04] px-3 py-2 transition-colors last:border-b-0 hover:bg-accent-300/10';
   return (
     <li>
       {href
@@ -690,11 +720,12 @@ const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, se
         }
       }}
       aria-current={selected || undefined}
+      // 오너 레퍼런스(2026-08-27): 피드는 독립 라운드 카드 스택 — 행 구분선 대신 카드 보더
       className={[
-        'cv-row-lg min-h-[var(--row-h-lg)] py-1.5 px-3 transition-colors cursor-pointer border-b border-border-subtle last:border-b-0 focus:outline-none focus-visible:bg-surface-high/50',
+        'cv-row-lg min-h-[var(--row-h-lg)] py-2.5 px-3 rounded-card border transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-300/60',
         selected
-          ? 'bg-accent-300/10 border-l-2 border-l-accent-300 -ml-px pl-[calc(0.75rem-1px)]'
-          : 'hover:bg-surface-high/50 active:bg-surface-high',
+          ? 'border-accent-300/60 bg-accent-300/[0.07]'
+          : 'border-border-subtle bg-surface-low hover:bg-surface-high/50 active:bg-surface-high',
       ].join(' ')}
     >
       <div className="flex items-start gap-2">
@@ -742,8 +773,9 @@ const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, se
             const shown = hero.length > 0 ? hero : villain; // 히어로 미기입 핸드는 상대 핸드로 폴백
             const board = (att.replay?.board ?? []).filter(Boolean).slice(0, 5);
             if (shown.length === 0 && board.length === 0) return null;
+            // 오너 레퍼런스: 첨부는 카드 안의 라운드 패널로 감싼다(투표 위젯 문법)
             return (
-              <span className="mt-1 flex items-center gap-1">
+              <span className="mt-1.5 inline-flex items-center gap-1 rounded-input border border-border-subtle bg-surface-high/60 px-2 py-1.5">
                 {shown.map((cd) => <MiniCard key={cd} id={cd} />)}
                 {board.length > 0 && (
                   <>
@@ -767,14 +799,20 @@ const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, se
               )}
             </div>
           )}
-          {/* 반응 푸터 — 메트릭 스트립: 라벨 없이 아이콘+tabular-nums 좌측 정렬, 좋아요만 인터랙티브 */}
-          <div className="mt-1 flex items-center gap-3 text-2xs text-ink-muted">
+          {/* 반응 푸터 — 조회 → 좋아요 → 댓글 순(오너 레퍼런스), 아이콘+tabular-nums, 좋아요만 인터랙티브 */}
+          <div className="mt-1.5 flex items-center gap-3.5 text-2xs text-ink-muted">
+            {(post.viewCount ?? 0) > 0 && (
+              <span className="inline-flex items-center gap-1" aria-label={`조회 ${post.viewCount}`}>
+                <Icon name="eye" size={13} strokeWidth={1.6} className="shrink-0" />
+                <span className="tabular-nums">{post.viewCount}</span>
+              </span>
+            )}
             <button
               type="button"
               aria-pressed={!!post.liked}
               aria-label={`좋아요 ${post.likeCount}`}
               onClick={(e) => { e.stopPropagation(); onLike(); }}
-              className={`inline-flex items-center gap-1 transition-colors ${post.liked ? 'text-accent-300' : 'hover:text-accent-300'}`}
+              className={`inline-flex items-center gap-1 transition-colors ${post.liked ? 'text-danger-light' : 'hover:text-danger-light'}`}
             >
               <Icon name={post.liked ? 'heart-fill' : 'heart'} size={13} strokeWidth={1.6} className="shrink-0" />
               <span className="tabular-nums">{post.likeCount}</span>
@@ -783,12 +821,6 @@ const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, se
               <Icon name="comment" size={13} strokeWidth={1.6} className="shrink-0" />
               <span className="tabular-nums">{post.commentCount}</span>
             </span>
-            {(post.viewCount ?? 0) > 0 && (
-              <span className="inline-flex items-center gap-1" aria-label={`조회 ${post.viewCount}`}>
-                <Icon name="eye" size={13} strokeWidth={1.6} className="shrink-0" />
-                <span className="tabular-nums">{post.viewCount}</span>
-              </span>
-            )}
           </div>
         </div>
       </div>

@@ -251,10 +251,18 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
       {tab === 'profile' && (
         <div className="p-4 space-y-5">
 
-          {/* 아이덴티티 헤더 — 아바타(등급 링) · 닉네임 · 등급 · 칭호 · 인증 마크 */}
-          <div className="flex flex-col items-center gap-3 pt-1">
+          {/* 아이덴티티 헤더 — 커버 밴드 + 오버랩 아바타(오너 레퍼런스 2026-08-27).
+              커버는 이미지 없이 등급색 틴트(개인 브랜딩 = 등급) — 새 에셋·fetch 0 */}
+          <div className="flex flex-col items-center gap-3">
+            <div className="relative h-20 w-full overflow-hidden rounded-card bg-surface-high">
+              <div
+                aria-hidden
+                className="absolute inset-0 opacity-25"
+                style={{ backgroundImage: `linear-gradient(135deg, ${ringColor}, transparent 72%)` }}
+              />
+            </div>
             <div
-              className="relative w-24 h-24 rounded-full overflow-hidden ring-4"
+              className="relative -mt-[3.75rem] w-24 h-24 rounded-full overflow-hidden ring-4"
               style={{ '--tw-ring-color': ringColor } as CSSProperties}
             >
               {avatarPreview ? (
