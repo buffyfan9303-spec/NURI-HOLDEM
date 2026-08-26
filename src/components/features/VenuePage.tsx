@@ -20,6 +20,7 @@ import { promptLogin } from '../../lib/requireLogin';
 import { checkIn, getMyCheckinStreak } from '../../api/checkins';
 import { myVisitedVenues } from '../../api/vouchers';
 import { scheduleStatus } from '../../lib/scheduleStatus';
+import { thumbUrl } from '../../lib/imageUrl';
 import CoachMark from '../atoms/CoachMark';
 import {
   getVenueRankings, getVenueRankingTotals, subscribeRankings, rankDisplay,
@@ -258,33 +259,47 @@ export default function VenuePage({
           showRotiMark={isRoti}
         />
 
-        {/* 매장 기본 정보 (히어로 밑) */}
-        <div className="px-page-x py-4 border-b border-border-subtle">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
-                <span className="inline-flex items-center px-2 py-[3px] leading-none text-2xs font-semibold rounded-badge bg-surface-high text-ink-secondary">
-                  {venue.region}
-                </span>
-                {venue.isPaidAd && (
-                  <span className="inline-flex items-center px-2 py-[3px] leading-none text-2xs font-bold rounded-badge bg-accent-300 text-white">
-                    프리미엄
-                  </span>
-                )}
-              </div>
-              <h2 className="text-xl font-bold text-ink-primary">
-                {venue.name}
-                {rating && rating.count > 0 && (
-                  <span className="ml-2 align-middle text-sm font-bold tabular-nums text-accent-300" title={`방문 후기 ${rating.count}건 평균`}>
-                    ⭐{rating.avg.toFixed(1)}<span className="font-normal text-ink-muted">({rating.count})</span>
-                  </span>
-                )}
-              </h2>
-              <p className="text-xs text-ink-muted mt-1">{venue.address}</p>
-              {/* 카카오톡 오픈채팅 링크는 '매장 정보'(AboutPanel)로 이동 — Phase 10:
-                  첫 뷰포트의 인터랙티브 요소를 '지금 필요한 행동'만 남기기 위해서다. */}
+        {/* 매장 아이덴티티 — 오버랩 로고 아바타 + 중앙 정렬 + 3-스탯 행(오너 레퍼런스 2026-08-27).
+            대표 이미지(image_url)를 원형 아바타로 재사용 — 새 fetch 0. 스탯 행은 비인터랙티브라
+            venue-ia 첫 뷰포트 행동 예산(≤6)에 셈되지 않는다. */}
+        <div className="px-page-x pb-4 border-b border-border-subtle">
+          <div className="-mt-9 mb-2 flex justify-center">
+            <div className="h-[72px] w-[72px] shrink-0 overflow-hidden rounded-full border-4 border-surface-base bg-surface-high shadow-dialog">
+              {venue.imageUrl ? (
+                <img src={thumbUrl(venue.imageUrl, 144) ?? venue.imageUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <span className="flex h-full w-full items-center justify-center text-2xl font-bold text-ink-secondary">{venue.name[0]}</span>
+              )}
             </div>
-            {/* (팔로우·링크공유는 헤더로 이동 — Phase 10) */}
+          </div>
+          <div className="flex flex-col items-center text-center">
+            <div className="mb-1.5 flex flex-wrap items-center justify-center gap-1.5">
+              <span className="inline-flex items-center px-2 py-[3px] leading-none text-2xs font-semibold rounded-badge bg-surface-high text-ink-secondary">
+                {venue.region}
+              </span>
+              {venue.isPaidAd && (
+                <span className="inline-flex items-center px-2 py-[3px] leading-none text-2xs font-bold rounded-badge bg-accent-300 text-white">
+                  프리미엄
+                </span>
+              )}
+            </div>
+            <h2 className="text-xl font-bold text-ink-primary">{venue.name}</h2>
+            {venue.address && <p className="mt-1 text-xs text-ink-muted">{venue.address}</p>}
+            {/* 카카오톡 오픈채팅 링크는 '매장 정보'(AboutPanel) — Phase 10 행동 예산 유지 */}
+          </div>
+          {/* 3-스탯 행 — 팔로워 · 후기 · 오늘 대회 (아이콘 위 / 숫자 / 라벨 아래, 세로 구분선) */}
+          <div className="mt-3 grid grid-cols-3 divide-x divide-border-subtle rounded-card border border-border-subtle bg-surface-low py-2.5">
+            {([
+              { icon: 'users' as const, value: (venue.followerCount ?? 0).toLocaleString(), label: '팔로워' },
+              { icon: 'star' as const, value: rating && rating.count > 0 ? `${rating.avg.toFixed(1)} (${rating.count})` : '—', label: '방문 후기' },
+              { icon: 'trophy' as const, value: String(todayPosters.length), label: '오늘 대회' },
+            ]).map((s) => (
+              <div key={s.label} className="flex flex-col items-center gap-0.5">
+                <Icon name={s.icon} size={15} className="text-ink-muted" />
+                <span className="text-sm font-bold tabular-nums text-ink-primary">{s.value}</span>
+                <span className="text-2xs text-ink-muted">{s.label}</span>
+              </div>
+            ))}
           </div>
         </div>
 

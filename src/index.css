@@ -395,14 +395,7 @@ body { overscroll-behavior-y: contain; }
   .poster-marquee-viewport { overflow-x: auto; }
 }
 
-/* ── 펠트 시그니처(DAI-2b·6) — 딱 한 곳(포스터 캐러셀 히어로)에만 절제 적용 ─────
-   딥 펠트 그린 라디얼 + 초미세 SVG 노이즈(data-uri) — 순수 CSS, 이미지 에셋·egress 0.
-   '밤+펠트+칩' 색 스토리의 designed 시그니처. 다른 서피스로 확산 금지(과용=소음). */
-.felt-hero {
-  background:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E"),
-    radial-gradient(120% 150% at 50% 0%, rgb(31 93 68 / 0.16), transparent 62%);
-}
+/* (펠트 시그니처 .felt-hero 는 오너 지시로 캐러셀에서 제거 — 2026-08-27 '배너만, 검은 띠 제거') */
 
 @keyframes confettiFall {
   0%   { transform: translateY(0) rotate(0deg); opacity: 1; }

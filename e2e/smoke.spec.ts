@@ -36,7 +36,7 @@ test('탭 순회 — 라이브/도구/커뮤니티 전환 중 크래시 없음',
   await nav.getByRole('button', { name: '라이브', exact: true }).click();
   await expect(page.getByText('진행 중 게임')).toBeVisible();
 
-  await nav.getByRole('button', { name: '도구', exact: true }).click();
+  await nav.getByRole('button', { name: 'GTO', exact: true }).click();
   await expect(page.locator('#root')).not.toBeEmpty();
 
   await nav.getByRole('button', { name: '커뮤니티', exact: true }).click();

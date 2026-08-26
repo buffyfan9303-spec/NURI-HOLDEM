@@ -13,7 +13,7 @@ async function gotoTools(page: import('@playwright/test').Page) {
   // 온보딩 시트는 첫 페인트 700ms '뒤에' 뜬다 — 즉시 count 체크는 레이스(홈 전환으로 부팅이
   // 빨라지며 실제로 물렸다). 지연 등장까지 기다려 걷어내는 공용 헬퍼 사용.
   await dismissOverlays(page);
-  await page.locator('button:visible').filter({ hasText: '도구' }).last().click();
+  await page.locator('nav').getByRole('button', { name: 'GTO', exact: true }).first().click();
 }
 
 test.describe('도구 탭 — 전체화면 실행', () => {

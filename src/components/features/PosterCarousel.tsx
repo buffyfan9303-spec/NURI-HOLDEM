@@ -2,15 +2,16 @@
 // APIS식 상단 포스터 오토 캐러셀 — 고정 슬라이드(브랜드 배너·대회 포스터) + 예정 대회
 // 포스터가 가로 직사각형 카드로 천천히 흐른다.
 // · 슬롯 규격(용량 규약, 오너 지시 2026-08-27): 표시 240×112(w-60 h-28) 고정.
-//   정적 에셋은 public/banners 원본 960×448 WebP·파일당 ≤120KB, 일정 포스터는
-//   thumbUrl(480) 서버 리사이즈로 같은 상한 — 슬라이드가 늘어도 전송량이 붙지 않는다.
+//   포스터 크롭 2종만 래스터(960×448 WebP ≤120KB), 브랜드 배너 4종은 DOM(CSS+실텍스트 —
+//   전송 0B·PC 뭉개짐 없음), 일정 포스터는 thumbUrl(480) 서버 리사이즈 상한.
 // · 고정 슬라이드는 마감 없이 상시 게시(오너 지시) — 날짜 필터는 일정 포스터에만 적용.
 //   항상 3장 이상이 확보되므로 캐러셀은 로딩과 무관하게 즉시 그려진다(빈 상태·스켈레톤 없음).
 // · 모션: 무한 루프 마퀴(transform 전용) — 모션 헌법의 허용 예외 2종 중 '무한 루프'.
 //   호버/터치 중 일시정지, prefers-reduced-motion 은 수동 가로 스크롤로 폴백(index.css).
 //   일정 포스터가 뒤늦게 도착하면 트랙 폭이 바뀌므로 key 로 애니메이션을 재시작한다
 //   (시작 수 초 내 ~수십 px 리셋 1회 — 진행 중 폭 변경으로 인한 프레임 점프를 막는 쪽을 택함).
-// · DAI-2b/6 시그니처: 이 한 곳에만 펠트 그린 텍스처(.felt-hero, 순수 CSS·egress 0)를 깐다.
+// · 배경 없음(오너 지시 2026-08-27): 펠트 띠·패딩 없이 배너 카드만 흐른다. 속도는
+//   슬라이드 수 × 8초 — 장수가 늘어도 픽셀 속도 일정(~31px/s).
 import { useMemo } from 'react';
 import { thumbUrl } from '../../lib/imageUrl';
 import type { Schedule } from '../../api/schedules';
@@ -19,8 +20,8 @@ const DAYS_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
 export type BannerAction = 'roti-community' | 'tools' | 'explore';
 
-/** 오너 게시 고정 슬라이드 — 에셋 규격은 파일 상단 규약 참조 */
-const STATIC_SLIDES: { src: string; alt: string; action: BannerAction; title?: string; sub?: string }[] = [
+/** 오너 게시 고정 포스터 슬라이드(래스터 — 사진성 콘텐츠라 이미지 유지) */
+const POSTER_SLIDES: { src: string; alt: string; action: BannerAction; title: string; sub: string }[] = [
   {
     src: '/banners/poster-roti-0827.webp', alt: '로티 단독 1000만 GTD 대회',
     action: 'roti-community', title: '로티 단독 1000만 GTD', sub: '8/27(목) 17:00 · 로티아레나',
@@ -29,18 +30,49 @@ const STATIC_SLIDES: { src: string; alt: string; action: BannerAction; title?: s
     src: '/banners/poster-masters-8th.webp', alt: '8th 홀덤 마스터스 20억 GTD',
     action: 'roti-community', title: '8th 홀덤 마스터스 20억 GTD', sub: '8/3–10/5 · 야자수 서울센터',
   },
-  { src: '/banners/roti-arena.webp', alt: '로티아레나 매장 커뮤니티 바로가기', action: 'roti-community' },
-  { src: '/banners/tools.webp', alt: '홀덤 도구 — GTO 트레이너·ICM·타이머', action: 'tools' },
-  { src: '/banners/nuri-mind.webp', alt: '오늘의 NURI MIND — 매일 한 문제 GTO 트레이닝', action: 'tools' },
-  // ⚠ alt 는 e2e 잠금 문구('전체 일정'·nav 라벨)와 겹치면 안 된다 — 마퀴는 상시 이동이라
-  //    셀렉터가 이 버튼을 잡으면 안정성 대기 타임아웃으로 플레이크가 된다.
-  { src: '/banners/nuri-holdem.webp', alt: 'NURI HOLDEM — 홀덤 일정 한곳에서', action: 'explore' },
 ];
 
+/** 브랜드 배너 — DOM 렌더(오너 리포트 2026-08-27: PC에서 래스터 글자가 뭉개짐 →
+ *  텍스트는 실텍스트로 그려 어떤 배율·DPR에서도 선명하게. 배경은 CSS 그라데이션 + 수트 글리프).
+ *  ⚠ 텍스트·aria-label 은 e2e 잠금 문구(nav 라벨 exact·'전체 일정')와 겹치면 안 된다 —
+ *    마퀴는 상시 이동이라 셀렉터가 이 버튼을 잡으면 안정성 대기 타임아웃으로 플레이크가 된다.
+ *    (탭 진입 스펙들은 nav 스코프 셀렉터라 innerText 'GTO' 포함은 안전.) */
+const BRAND_SLIDES: {
+  key: string; action: BannerAction; alt: string;
+  bg: string; glyph?: string; glyphColor?: string; logo?: string;
+  title: string; sub: string; titleColor: string; subColor: string;
+}[] = [
+  {
+    key: 'roti', action: 'roti-community', alt: '로티아레나 매장 커뮤니티 바로가기',
+    bg: 'radial-gradient(120% 160% at 0% 50%, #17130a 0%, #050506 62%)',
+    logo: '/banners/roti-arena-logo.webp',
+    title: '로티아레나', sub: '매장 커뮤니티 ›', titleColor: '#E8D6A0', subColor: '#C4B58A',
+  },
+  {
+    key: 'gto', action: 'tools', alt: 'GTO 도구 — 차트·계산기·트레이너',
+    bg: 'linear-gradient(180deg, #131520 0%, #0e101a 100%)', glyph: '♠', glyphColor: '#232a42',
+    title: 'GTO 도구', sub: '차트 · 계산기 · 트레이너 ›', titleColor: '#F0F2FA', subColor: '#A9B1E8',
+  },
+  {
+    key: 'mind', action: 'tools', alt: '오늘의 NURI MIND — 매일 한 문제 GTO 트레이닝',
+    bg: 'linear-gradient(180deg, #1a162e 0%, #110f20 100%)', glyph: '♥', glyphColor: '#262142',
+    title: '오늘의 NURI MIND', sub: '매일 한 문제 · GTO 트레이닝 ›', titleColor: '#EEECFA', subColor: '#B2ACEC',
+  },
+  {
+    key: 'nuri', action: 'explore', alt: 'NURI HOLDEM — 홀덤 일정 한곳에서',
+    bg: 'linear-gradient(180deg, #0a2218 0%, #06120d 100%)', glyph: '♦', glyphColor: '#1e3325',
+    title: 'NURI HOLDEM', sub: '전국 홀덤 일정, 한곳에서 ›', titleColor: '#D9B25A', subColor: '#DCE4DC',
+  },
+];
+const STATIC_COUNT = POSTER_SLIDES.length + BRAND_SLIDES.length;
+
 type Slide = {
-  key: string; src: string; alt: string;
-  title?: string; sub?: string;
+  key: string; alt: string;
   onClick: () => void;
+  /* 래스터 슬라이드(포스터) */
+  src?: string; title?: string; sub?: string;
+  /* DOM 브랜드 슬라이드 */
+  brand?: (typeof BRAND_SLIDES)[number];
 };
 
 export default function PosterCarousel({ schedules, onSelect, onBanner }: {
@@ -68,11 +100,15 @@ export default function PosterCarousel({ schedules, onSelect, onBanner }: {
           onClick: () => onSelect(s),
         };
       });
-    const fixed = STATIC_SLIDES.map((b, i): Slide => ({
-      key: `b:${i}`, src: b.src, alt: b.alt, title: b.title, sub: b.sub,
+    const posters = POSTER_SLIDES.map((b, i): Slide => ({
+      key: `p:${i}`, src: b.src, alt: b.alt, title: b.title, sub: b.sub,
       onClick: () => onBanner(b.action),
     }));
-    return [...fixed, ...dyn];
+    const brands = BRAND_SLIDES.map((b): Slide => ({
+      key: `b:${b.key}`, alt: b.alt, brand: b, onClick: () => onBanner(b.action),
+    }));
+    // 포스터 → 브랜드 순으로 섞어 배치(포스터 2 · 브랜드 4 · 일정 포스터)
+    return [posters[0], posters[1], ...brands, ...dyn];
   }, [schedules, onSelect, onBanner]);
 
   // 고정 슬라이드만으로도 3장 이상 — 항상 루프(2배 복제 + translateX(-50%)).
@@ -82,6 +118,7 @@ export default function PosterCarousel({ schedules, onSelect, onBanner }: {
 
   const card = (s: Slide, i: number, dup: boolean) => {
     // 복제 세트는 보조기기·탭 순회에서 숨김
+    const b = s.brand;
     return (
       <button
         key={`${s.key}:${dup ? 'd' : 'o'}`}
@@ -91,30 +128,52 @@ export default function PosterCarousel({ schedules, onSelect, onBanner }: {
         tabIndex={dup ? -1 : undefined}
         aria-label={dup ? undefined : s.alt}
         className="relative mr-3 h-28 w-60 shrink-0 overflow-hidden rounded-card border border-border-subtle bg-surface-mid text-left"
+        style={b ? { background: b.bg } : undefined}
       >
-        <img
-          src={s.src}
-          alt=""
-          width={480}
-          height={224}
-          className="h-full w-full object-cover"
-          // ⚠ 마퀴 안에서 lazy 는 '빈 배너'가 된다 — transform 이동은 스크롤이 아니라
-          //    브라우저 지연 로딩 휴리스틱이 안 깨어난다(오너 실기기 리포트). 고정 슬라이드는
-          //    합계 ~150KB 라 전부 eager, 일정 포스터(thumbUrl 480)만 4장째부터 lazy.
-          loading={i < STATIC_SLIDES.length + 3 ? 'eager' : 'lazy'}
-          decoding="async"
-        />
-        {/* 하단 스크림 — 포스터 위 고정 다크(테마 무관 가독). 자체 텍스트가 있는 브랜드 배너는 생략 */}
-        {s.title && (
-          <span
-            className="absolute inset-x-0 bottom-0 px-2.5 pb-1.5 pt-6"
-            style={{ background: 'linear-gradient(to top, rgba(6,8,11,0.92) 25%, transparent)' }}
-          >
-            <span className="block truncate text-xs font-bold text-white">{s.title}</span>
-            {s.sub && (
-              <span className="block truncate text-2xs tabular-nums text-white/70">{s.sub}</span>
+        {b ? (
+          <>
+            {/* DOM 브랜드 배너 — 텍스트가 래스터가 아니라 어떤 화면에서도 선명(PC 뭉개짐 해결) */}
+            {b.glyph && (
+              <span aria-hidden className="absolute -right-1 -top-5 select-none text-[100px] font-bold leading-none" style={{ color: b.glyphColor }}>
+                {b.glyph}
+              </span>
             )}
-          </span>
+            {b.logo && (
+              <img src={b.logo} alt="" width={144} height={122} loading="eager" decoding="async"
+                className="absolute left-2 top-1/2 h-[88px] w-[88px] -translate-y-1/2 object-contain" />
+            )}
+            <span className={['absolute inset-y-0 right-2.5 flex flex-col justify-center', b.logo ? 'left-[100px]' : 'left-3.5'].join(' ')}>
+              <span className="font-display text-[15px] font-extrabold leading-tight" style={{ color: b.titleColor }}>{b.title}</span>
+              <span className="mt-0.5 text-2xs font-medium" style={{ color: b.subColor }}>{b.sub}</span>
+            </span>
+          </>
+        ) : (
+          <>
+            <img
+              src={s.src}
+              alt=""
+              width={480}
+              height={224}
+              className="h-full w-full object-cover"
+              // ⚠ 마퀴 안에서 lazy 는 '빈 배너'가 된다 — transform 이동은 스크롤이 아니라
+              //    브라우저 지연 로딩 휴리스틱이 안 깨어난다(오너 실기기 리포트). 고정 슬라이드는
+              //    전부 eager, 일정 포스터(thumbUrl 480)만 4장째부터 lazy.
+              loading={i < STATIC_COUNT + 3 ? 'eager' : 'lazy'}
+              decoding="async"
+            />
+            {/* 하단 스크림 — 포스터 위 고정 다크(테마 무관 가독) */}
+            {s.title && (
+              <span
+                className="absolute inset-x-0 bottom-0 px-2.5 pb-1.5 pt-6"
+                style={{ background: 'linear-gradient(to top, rgba(6,8,11,0.92) 25%, transparent)' }}
+              >
+                <span className="block truncate text-xs font-bold text-white">{s.title}</span>
+                {s.sub && (
+                  <span className="block truncate text-2xs tabular-nums text-white/70">{s.sub}</span>
+                )}
+              </span>
+            )}
+          </>
         )}
       </button>
     );
@@ -129,9 +188,15 @@ export default function PosterCarousel({ schedules, onSelect, onBanner }: {
 
   return (
     <div className="pt-3">
-      <div className="felt-hero poster-marquee-viewport overflow-hidden py-2">
-        {/* key=슬라이드 수: 일정 포스터 도착 시 1회 재시작(폭 변경 중 점프 방지) */}
-        <div key={slides.length} className="poster-marquee flex w-max">
+      {/* 오너 지시(2026-08-27): 배너만 — 펠트 배경·상하 패딩(어두운 띠) 제거 */}
+      <div className="poster-marquee-viewport overflow-hidden">
+        {/* key=슬라이드 수: 일정 포스터 도착 시 1회 재시작(폭 변경 중 점프 방지).
+            속도는 슬라이드 수 비례(카드당 8초) — 장수가 늘어도 픽셀 속도가 일정하다. */}
+        <div
+          key={slides.length}
+          className="poster-marquee flex w-max"
+          style={{ animationDuration: `${slides.length * 8}s` }}
+        >
           {set(false)}
           {set(true)}
         </div>
