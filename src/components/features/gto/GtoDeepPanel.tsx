@@ -5,6 +5,9 @@ import { useEffect, useState } from 'react';
 import { useBackClose } from '../../../lib/backstack';
 import { useToast } from '../../atoms/Toast';
 import CardGridPicker, { SUIT_COLOR, SUIT_LABEL } from './CardGridPicker';
+import { CalcCard } from '../tools/calcUi';
+import { ACTION_COLORS } from '../../../lib/ranges.data';
+import { EQUITY_BANDS } from './equityBands';
 import { writeSnap } from '../../../lib/snapshot';
 import { useDeepGto, type CardTarget, type DeepGtoInit } from './useDeepGto';
 import { canonicalizeHand } from './useGtoCalculator';
@@ -80,10 +83,11 @@ function Section({
 }
 
 function MixBar({ action }: { action: Required<ActionFrequency> }) {
+  // 액션 빈도바 — '액션 축'이므로 ACTION_COLORS 만 쓴다(에퀴티 강도 축과 분리, 검증 #01).
   const segs = [
-    { key: 'raise', label: '레이즈', v: action.raise, color: '#EF4444' },
-    { key: 'call', label: '콜', v: action.call, color: '#22C55E' },
-    { key: 'fold', label: '폴드', v: action.fold, color: '#3B82F6' },
+    { key: 'raise', label: '레이즈', v: action.raise, color: ACTION_COLORS.raise },
+    { key: 'call', label: '콜', v: action.call, color: ACTION_COLORS.call },
+    { key: 'fold', label: '폴드', v: action.fold, color: ACTION_COLORS.fold },
   ];
   return (
     <div className="space-y-1.5">
@@ -105,24 +109,24 @@ function MixBar({ action }: { action: Required<ActionFrequency> }) {
   );
 }
 
-// 스트릿별 권장 액션 (에퀴티 기반 휴리스틱)
+// 스트릿별 권장 액션 (에퀴티 기반 휴리스틱) — 색은 EQUITY_BANDS(강도 축) 5밴드 1:1.
 interface StreetRec { label: string; color: string; note: string; }
 
 function preflopRec(eq: number): StreetRec {
   const p = Math.round(eq * 100);
-  if (eq >= 0.60) return { label: '레이즈 (밸류)', color: '#EF4444', note: `에퀴티 ${p}% — 가치 레이즈로 밸류를 키웁니다.` };
-  if (eq >= 0.52) return { label: '레이즈/콜 혼합', color: '#F59E0B', note: `에퀴티 ${p}% — 레이즈와 콜을 섞어 균형을 잡습니다.` };
-  if (eq >= 0.44) return { label: '콜', color: '#22C55E', note: `에퀴티 ${p}% — 콜로 포트에 참여할 만합니다.` };
-  if (eq >= 0.36) return { label: '콜/폴드 경계', color: '#3B82F6', note: `에퀴티 ${p}% — 포지션·오즈가 좋을 때만 콜.` };
-  return { label: '폴드', color: '#3B82F6', note: `에퀴티 ${p}% — 폴드가 정석입니다.` };
+  if (eq >= 0.60) return { label: '레이즈 (밸류)', color: EQUITY_BANDS.dominant, note: `에퀴티 ${p}% — 가치 레이즈로 밸류를 키웁니다.` };
+  if (eq >= 0.52) return { label: '레이즈/콜 혼합', color: EQUITY_BANDS.strong, note: `에퀴티 ${p}% — 레이즈와 콜을 섞어 균형을 잡습니다.` };
+  if (eq >= 0.44) return { label: '콜', color: EQUITY_BANDS.playable, note: `에퀴티 ${p}% — 콜로 포트에 참여할 만합니다.` };
+  if (eq >= 0.36) return { label: '콜/폴드 경계', color: EQUITY_BANDS.marginal, note: `에퀴티 ${p}% — 포지션·오즈가 좋을 때만 콜.` };
+  return { label: '폴드', color: EQUITY_BANDS.weak, note: `에퀴티 ${p}% — 폴드가 정석입니다.` };
 }
 function postRec(eq: number): StreetRec {
   const p = Math.round(eq * 100);
-  if (eq >= 0.62) return { label: '벳/레이즈 (밸류)', color: '#EF4444', note: `에퀴티 ${p}% — 밸류 벳으로 강하게 압박합니다.` };
-  if (eq >= 0.50) return { label: '벳 또는 체크-콜', color: '#F59E0B', note: `에퀴티 ${p}% — 상황에 따라 벳/체크-콜.` };
-  if (eq >= 0.40) return { label: '체크-콜', color: '#22C55E', note: `에퀴티 ${p}% — 포트 컨트롤 위주로 콜.` };
-  if (eq >= 0.30) return { label: '체크 (회피)', color: '#3B82F6', note: `에퀴티 ${p}% — 큰 베팅엔 폴드를 고려.` };
-  return { label: '체크-폴드', color: '#3B82F6', note: `에퀴티 ${p}% — 공격받으면 포기합니다.` };
+  if (eq >= 0.62) return { label: '벳/레이즈 (밸류)', color: EQUITY_BANDS.dominant, note: `에퀴티 ${p}% — 밸류 벳으로 강하게 압박합니다.` };
+  if (eq >= 0.50) return { label: '벳 또는 체크-콜', color: EQUITY_BANDS.strong, note: `에퀴티 ${p}% — 상황에 따라 벳/체크-콜.` };
+  if (eq >= 0.40) return { label: '체크-콜', color: EQUITY_BANDS.playable, note: `에퀴티 ${p}% — 포트 컨트롤 위주로 콜.` };
+  if (eq >= 0.30) return { label: '체크 (회피)', color: EQUITY_BANDS.marginal, note: `에퀴티 ${p}% — 큰 베팅엔 폴드를 고려.` };
+  return { label: '체크-폴드', color: EQUITY_BANDS.weak, note: `에퀴티 ${p}% — 공격받으면 포기합니다.` };
 }
 
 /** AI 액션 해설 — 비포/플랍/턴/리버 4개 스트릿 권장 액션 */
@@ -228,8 +232,9 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
   const showResult = deep.heroComplete && (rangeMode || deep.villainComplete) && deep.result && deep.normalizedAction;
 
   const na = deep.normalizedAction;
+  // 권장 액션 배지 — 액션 축이므로 ACTION_COLORS(빈도바와 동일 색)만 쓴다.
   const recommended = na
-    ? [{ label: '레이즈', v: na.raise, color: '#EF4444' }, { label: '콜', v: na.call, color: '#22C55E' }, { label: '폴드', v: na.fold, color: '#3B82F6' }]
+    ? [{ label: '레이즈', v: na.raise, color: ACTION_COLORS.raise }, { label: '콜', v: na.call, color: ACTION_COLORS.call }, { label: '폴드', v: na.fold, color: ACTION_COLORS.fold }]
         .reduce((a, b) => (b.v > a.v ? b : a))
     : null;
 
@@ -254,8 +259,8 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
 
   return (
     <div className="space-y-3">
-      {/* 카드 입력 */}
-      <div className="space-y-4 rounded-card border border-border-default bg-surface-low p-4">
+      {/* 카드 입력 — 공통 CalcCard 로 다른 계산기와 같은 카드 문법 */}
+      <CalcCard>
         {/* 빌런 입력 모드 토글 — 특정 핸드 / 레인지 프리셋 */}
         <div className="flex justify-center gap-1">
           {([['hand', '특정 핸드'], ['range', '레인지 프리셋']] as const).map(([m, label]) => (
@@ -320,11 +325,11 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
             보드 초기화
           </button>
         </div>
-      </div>
+      </CalcCard>
 
       {/* 결과 */}
       {showResult && deep.result && deep.normalizedAction ? (
-        <div className="animate-fade-in space-y-3 rounded-card border border-border-default bg-surface-low p-4">
+        <CalcCard className="animate-fade-in">
           <p className="text-center text-sm">
             <b className="text-accent-300">{heroId}</b>
             <span className="mx-2 text-ink-muted">vs</span>
@@ -413,7 +418,7 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
             </button>
           </div>
           )}
-        </div>
+        </CalcCard>
       ) : (
         <p className="rounded-card border border-border-default bg-surface-low px-3 py-4 text-center text-2xs leading-relaxed text-ink-muted">
           {rangeMode
@@ -423,7 +428,7 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
       )}
 
       {/* 카드 선택 그리드 */}
-      <div className="space-y-2 rounded-card border border-border-default bg-surface-low p-3">
+      <CalcCard>
         <div className="flex items-center justify-between">
           <div className="flex gap-1">
             {TARGET_TABS.filter(({ t }) => !(rangeMode && t === 'villain')).map(({ t, label }) => (
@@ -443,7 +448,7 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
           <button type="button" onClick={deep.clearAll} className="text-2xs font-semibold text-ink-muted hover:text-danger-light">초기화</button>
         </div>
         <CardGridPicker usedIds={deep.usedIds} onPick={deep.placeCard} />
-      </div>
+      </CalcCard>
 
       <DeepActionSheet
         open={sheetOpen}

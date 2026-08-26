@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { CalcCard } from './calcUi';
 import { useTrainerProgress, recordAnswer, setDailyGoal, GOAL_CHOICES } from '../../../lib/trainerProgress';
 
 /* 포스트플랍 트레이너 — 실전 상황 퀴즈(GTO 위자드 연습 모드 스타일).
@@ -8,7 +9,8 @@ import { useTrainerProgress, recordAnswer, setDailyGoal, GOAL_CHOICES } from '..
 type Action = '벳' | '체크' | '콜' | '레이즈' | '폴드' | '⅓팟 벳' | '⅔팟 벳' | '팟 벳' | '오버벳' | '올인';
 type Category = 'cbet' | 'defense' | 'bluffcatch' | 'sizing' | '3betpot' | 'turn' | 'river' | 'preflop';
 
-const CAT_LABEL: Record<Category, string> = {
+// eslint-disable-next-line react-refresh/only-export-components -- ToolsPanel 'For You' 추천이 약점 카테고리 라벨을 공유(단일 소스)
+export const CAT_LABEL: Record<Category, string> = {
   cbet: '시벳', defense: '수비', bluffcatch: '블러프캐치', sizing: '사이징',
   '3betpot': '3벳팟', turn: '턴', river: '리버', preflop: '프리플랍',
 };
@@ -191,12 +193,10 @@ export default function PostflopTrainer() {
   const boardCards = useMemo(() => sc.board === '(프리플랍)' ? [] : sc.board.split(' '), [sc]);
 
   return (
-    <div className="rounded-card border border-border-default bg-surface-low p-3 space-y-3">
+    // 제목은 전체화면 헤더가 이미 표시 — 공통 CalcCard 로 흡수(2중 노출 제거)
+    <CalcCard>
       <div className="flex items-start justify-between gap-2">
-        <div>
-          <h3 className="text-sm font-bold text-ink-primary">포스트플랍 트레이너</h3>
-          <p className="text-2xs text-ink-muted mt-0.5">60문항 · 카테고리별 출제 — 오답은 다음 사이클에 먼저 다시 나옵니다.</p>
-        </div>
+        <p className="text-2xs text-ink-muted">60문항 · 카테고리별 출제 — 오답은 다음 사이클에 먼저 다시 나옵니다.</p>
         <div className="shrink-0 text-right text-2xs tabular-nums">
           <p className="font-bold text-accent-300">{acc}% <span className="font-normal text-ink-muted">({stats.correct}/{stats.total})</span></p>
           <p className="text-ink-muted">연속 {stats.streak} · 최고 {stats.best}</p>
@@ -315,6 +315,6 @@ export default function PostflopTrainer() {
           )}
         </div>
       )}
-    </div>
+    </CalcCard>
   );
 }

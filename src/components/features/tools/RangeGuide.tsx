@@ -31,7 +31,8 @@ export default function RangeGuide() {
   const groupMeta = RANGE_GROUPS.find((g) => g.id === group)!;
 
   return (
-    <CalcCard title="스타팅핸드 가이드" desc="포지션·상황별 표준 프리플랍 레인지 — 셀을 누르면 핸드별 빈도">
+    // 제목은 전체화면 헤더가 이미 표시 — 카드 안은 설명만(2중 노출 제거)
+    <CalcCard desc="포지션·상황별 표준 프리플랍 레인지 — 셀을 누르면 핸드별 빈도">
       {/* 상황 그룹 */}
       <div className="flex flex-wrap gap-1">
         {RANGE_GROUPS.map((g) => {

@@ -3,11 +3,16 @@
 // 콤보 가중 %(1326 기준)가 각 차트 헤더에 표시된다 — 셀 수 %가 아니라 실제 VPIP 감각.
 import type { RangeSpec } from './ranges';
 
-/** 액션 색 — 독자 팔레트(공격=앱 인디고, 콜=에메랄드, 4벳=바이올렛). 매트릭스·범례 공용. */
+/** 액션 색 — 독자 팔레트(공격=앱 인디고, 콜=에메랄드, 4벳=바이올렛, 폴드=무채).
+ *  매트릭스·범례·액션 빈도바 공용 — '액션 축' 색은 반드시 이 상수만 쓴다.
+ *  ⚠ 색 2축 분리(검증 #01 critical): 이 액션 축과 GtoDeepPanel 의 에퀴티 강도 축
+ *  (gto/equityBands.ts EQUITY_BANDS)은 서로 다른 의미 축이므로 통일 대상이 아니다.
+ *  raise 인디고는 accent-300(#5E6AD2)과 동일값이지만 '데이터 시각화 fill 전용' 예외다. */
 export const ACTION_COLORS = {
   raise: '#5E6AD2',
   call: '#10B981',
   fourbet: '#8B5CF6',
+  fold: '#6B7280',
 } as const;
 
 export interface RangeAction {

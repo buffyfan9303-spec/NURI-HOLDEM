@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { CalcCard, Result } from './calcUi';
 import { handName, type FreqMap } from '../../../lib/ranges';
 import { type WeightedCombo } from '../gto/equityEngine';
 import { rangeVsRangeAsync } from '../gto/equityClient';
@@ -24,11 +25,8 @@ export function MdfCalc() {
   const bluffRatio = callEq;
 
   return (
-    <div className="rounded-card border border-border-default bg-surface-low p-3 space-y-3">
-      <div>
-        <h3 className="text-sm font-bold text-ink-primary">MDF · 블러프 계산기</h3>
-        <p className="text-2xs text-ink-muted mt-0.5">상대 벳에 얼마나 수비해야 하는지(MDF), 내 벳에 블러프를 몇 % 섞어야 하는지 즉시 계산합니다.</p>
-      </div>
+    // 제목은 전체화면 헤더가 이미 표시 — 공통 CalcCard 로 흡수(2중 노출 제거)
+    <CalcCard desc="상대 벳에 얼마나 수비해야 하는지(MDF), 내 벳에 블러프를 몇 % 섞어야 하는지 즉시 계산합니다.">
       <div className="grid grid-cols-2 gap-2">
         <label className="space-y-1">
           <span className="text-2xs font-semibold text-ink-secondary">팟 크기</span>
@@ -49,22 +47,16 @@ export function MdfCalc() {
         ))}
       </div>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-        <Result label="MDF (최소 수비 빈도)" value={fmtPct(mdf)} desc={`상대가 ${ratio > 0 ? `${Math.round(ratio * 100)}% 팟` : ''} 벳 시 레인지의 ${fmtPct(mdf)}는 콜/레이즈로 막아야 착취당하지 않아요.`} gold />
+        <Result label="MDF (최소 수비 빈도)" value={fmtPct(mdf)} desc={`상대가 ${ratio > 0 ? `${Math.round(ratio * 100)}% 팟` : ''} 벳 시 레인지의 ${fmtPct(mdf)}는 콜/레이즈로 막아야 착취당하지 않아요.`} accent />
         <Result label="콜에 필요한 승률" value={fmtPct(callEq)} desc="이 승률보다 핸드 에퀴티가 높으면 수학적으로 콜이 이득입니다." />
         <Result label="내 벳의 적정 블러프 비율" value={fmtPct(bluffRatio)} desc={`리버 기준 밸류 ${fmtPct(100 - bluffRatio)} : 블러프 ${fmtPct(bluffRatio)}로 섞으면 상대가 콜/폴드 어느 쪽도 착취 못 해요.`} />
       </div>
       <p className="text-2xs text-ink-muted">※ 이론(GTO) 기준 수치입니다. 상대가 과도하게 폴드/콜하면 그에 맞춰 블러프를 늘리거나 줄이세요.</p>
-    </div>
-  );
-}
-
-function Result({ label, value, desc, gold }: { label: string; value: string; desc: string; gold?: boolean }) {
-  return (
-    <div className={['rounded-input border p-2.5', gold ? 'border-accent-400/50 bg-accent-300/[0.07]' : 'border-border-subtle bg-surface-high'].join(' ')}>
-      <p className="text-2xs font-semibold text-ink-muted">{label}</p>
-      <p className={['mt-0.5 text-xl font-extrabold tabular-nums', gold ? 'text-accent-300' : 'text-ink-primary'].join(' ')}>{value}</p>
-      <p className="mt-1 text-2xs leading-snug text-ink-muted">{desc}</p>
-    </div>
+      {/* 중복 인지 제거 — '콜에 필요한 승률'은 팟 오즈 계산기와 같은 개념(딥링크, 계산 로직 불변) */}
+      <a href="#tool=pot" className="block text-2xs font-semibold text-accent-300 transition-colors hover:text-accent-200">
+        '콜에 필요한 승률'을 실제 팟·콜 금액으로 — 팟 오즈 계산기 →
+      </a>
+    </CalcCard>
   );
 }
 
@@ -81,11 +73,8 @@ const AGGRO_ROWS: { pos: string; open: number; threeBet: number; coldCall: numbe
 
 export function AggroChart() {
   return (
-    <div className="rounded-card border border-border-default bg-surface-low p-3 space-y-2.5">
-      <div>
-        <h3 className="text-sm font-bold text-ink-primary">어그레션 빈도 차트</h3>
-        <p className="text-2xs text-ink-muted mt-0.5">6맥스 · 100bb 기준 포지션별 권장 빈도(근사). 내 성향이 이 범위에서 크게 벗어나면 누수일 수 있어요.</p>
-      </div>
+    // 제목은 전체화면 헤더가 이미 표시 — 공통 CalcCard 로 흡수(2중 노출 제거)
+    <CalcCard desc="6맥스 · 100bb 기준 포지션별 권장 빈도(근사). 내 성향이 이 범위에서 크게 벗어나면 누수일 수 있어요.">
       <div className="overflow-x-auto">
         <table className="w-full min-w-[26rem] text-center text-xs">
           <thead>
@@ -111,7 +100,7 @@ export function AggroChart() {
         </table>
       </div>
       <p className="text-2xs text-ink-muted">BB 오픈 0% = 림프 팟 외 오픈 기회 없음(빅블라인드). 콜드콜 30%는 BB 디펜드 기준.</p>
-    </div>
+    </CalcCard>
   );
 }
 
@@ -207,11 +196,8 @@ export function RangeMatrix() {
   const eq = getEq(a, b);
 
   return (
-    <div className="rounded-card border border-border-default bg-surface-low p-3 space-y-3">
-      <div>
-        <h3 className="text-sm font-bold text-ink-primary">레인지 vs 레인지 에퀴티</h3>
-        <p className="text-2xs text-ink-muted mt-0.5">표준 차트 레인지를 콤보 단위로 전개해 프리플랍 승률을 실시간 계산합니다. 특정 핸드 vs 레인지는 「GTO 핸드 분석」에서.</p>
-      </div>
+    // 제목은 전체화면 헤더가 이미 표시 — 공통 CalcCard 로 흡수(2중 노출 제거)
+    <CalcCard desc="표준 차트 레인지를 콤보 단위로 전개해 프리플랍 승률을 실시간 계산합니다.">
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <label className="space-y-1">
           <span className="text-2xs font-semibold text-accent-300">내 레인지</span>
@@ -272,6 +258,10 @@ export function RangeMatrix() {
         </table>
       </div>
       <p className="text-2xs text-ink-muted">※ 몬테카를로 실계산(쌍마다 {MATRIX_ITER.toLocaleString()}회, ±1%p 오차). 레인지가 넓을수록 보드 의존도가 커집니다.</p>
-    </div>
+      {/* 중복 인지 제거 — 특정 핸드 vs 레인지는 GTO 핸드 분석으로(딥링크) */}
+      <a href="#tool=gto" className="block text-2xs font-semibold text-accent-300 transition-colors hover:text-accent-200">
+        특정 핸드 vs 레인지는 「GTO 핸드 분석」에서 →
+      </a>
+    </CalcCard>
   );
 }

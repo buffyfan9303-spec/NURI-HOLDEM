@@ -16,7 +16,8 @@ export default function OutsCalc() {
   const breakeven = exact > 0 && exact < 1 ? `${(Math.round(((1 - exact) / exact) * 10) / 10).toFixed(1)} : 1` : '-';
 
   return (
-    <CalcCard title="아웃츠 / 확률 계산기" desc="남은 아웃츠로 완성 확률과 필요한 팟 오즈를 계산">
+    // 제목은 전체화면 헤더가 이미 표시 — 카드 안은 설명만(2중 노출 제거)
+    <CalcCard desc="남은 아웃츠로 완성 확률과 필요한 팟 오즈를 계산">
       <Field label="아웃츠 (남은 도움 카드 수)">
         {/* 디스카운트 아웃츠(예: 7.5장) 입력을 위해 소수 허용 */}
         <NumIn value={outs} onChange={setOuts} suffix="장" decimal />
@@ -47,6 +48,10 @@ export default function OutsCalc() {
         <p className="text-2xs leading-relaxed text-amber-400">⚠ 한 스트리트 콜 판단은 1장 기준(2장 확률은 올인일 때만)</p>
       )}
       <p className="text-2xs leading-relaxed text-ink-muted">상대 베팅이 팟 대비 이 비율보다 작으면 콜이 이득입니다. (예: 3:1 이상이면 콜)</p>
+      {/* 중복 인지 제거 — 실제 팟·콜 금액 대입은 팟 오즈 계산기로(딥링크, 계산 로직 불변) */}
+      <a href="#tool=pot" className="block text-2xs font-semibold text-accent-300 transition-colors hover:text-accent-200">
+        실제 팟·콜 금액으로 손익 따지기 — 팟 오즈 계산기 →
+      </a>
     </CalcCard>
   );
 }

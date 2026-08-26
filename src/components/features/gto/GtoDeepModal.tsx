@@ -7,7 +7,7 @@ import type { DeepGtoInit } from './useDeepGto';
 
 export default function GtoDeepModal({ open, onClose, initialState }: { open: boolean; onClose: () => void; initialState?: DeepGtoInit }) {
   return (
-    <Modal open={open} onClose={onClose} title="GTO 검색" variant="page" maxWidth="md">
+    <Modal open={open} onClose={onClose} title="GTO 핸드 분석" variant="page" maxWidth="md">
       <div className="px-4 py-3">
         <GtoDeepPanel initialState={initialState} />
       </div>

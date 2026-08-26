@@ -43,7 +43,8 @@ export default function PushFoldChart() {
   }, [effView, k, stack, ante]);
 
   return (
-    <CalcCard title="푸시 · 폴드 차트" desc="숏스택 올인 균형 — 포지션·스택·앤티별, 콜 레인지까지">
+    // 제목은 전체화면 헤더가 이미 표시 — 카드 안은 설명만(2중 노출 제거)
+    <CalcCard desc="숏스택 올인 균형 — 포지션·스택·앤티별, 콜 레인지까지">
       {/* 포지션 */}
       <div className="grid grid-cols-4 gap-1">
         {POSITIONS.map((p) => {

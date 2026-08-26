@@ -1,13 +1,17 @@
 import { useState, type ReactNode } from 'react';
 
-/** 도구 계산기 공통 UI — 카드/필드/숫자입력/결과 */
-export function CalcCard({ title, desc, children }: { title: string; desc: string; children: ReactNode }) {
+/** 도구 계산기 공통 UI — 카드/필드/숫자입력/결과.
+ *  title 은 선택 — 도구는 전체화면 Modal 헤더가 이미 이름을 표시하므로(제목 2중 노출 제거)
+ *  카드 안에서는 보통 desc(한 줄 설명)만 쓴다. */
+export function CalcCard({ title, desc, className, children }: { title?: string; desc?: string; className?: string; children: ReactNode }) {
   return (
-    <div className="space-y-3 rounded-card border border-border-default bg-surface-low p-3">
-      <div>
-        <p className="text-sm font-bold text-ink-primary">{title}</p>
-        <p className="text-2xs text-ink-muted mt-0.5">{desc}</p>
-      </div>
+    <div className={['space-y-3 rounded-card border border-border-default bg-surface-low p-3', className ?? ''].join(' ')}>
+      {(title || desc) && (
+        <div>
+          {title && <p className="text-sm font-bold text-ink-primary">{title}</p>}
+          {desc && <p className={`text-2xs text-ink-muted ${title ? 'mt-0.5' : ''}`}>{desc}</p>}
+        </div>
+      )}
       {children}
     </div>
   );
@@ -51,11 +55,12 @@ export function NumIn({ value, onChange, suffix, placeholder, decimal }: { value
   );
 }
 
-export function Result({ label, value, accent, good, bad }: { label: string; value: string; accent?: boolean; good?: boolean; bad?: boolean }) {
+export function Result({ label, value, desc, accent, good, bad }: { label: string; value: string; desc?: string; accent?: boolean; good?: boolean; bad?: boolean }) {
   return (
-    <div className="rounded-input bg-surface-high p-2">
+    <div className={`rounded-input p-2 ${accent && desc ? 'border border-accent-400/50 bg-accent-300/[0.07]' : 'bg-surface-high'}`}>
       <p className="text-2xs text-ink-muted">{label}</p>
       <p className={`text-lg font-extrabold tabular-nums leading-tight ${bad ? 'text-danger-light' : good ? 'text-emerald-400' : accent ? 'text-accent-300' : 'text-ink-primary'}`}>{value}</p>
+      {desc && <p className="mt-1 text-2xs leading-snug text-ink-muted">{desc}</p>}
     </div>
   );
 }

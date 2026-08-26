@@ -13,7 +13,8 @@ export default function PotOddsCalc() {
   const ok = eq >= need;
 
   return (
-    <CalcCard title="팟 오즈 · 콜 오즈" desc="팟·콜 금액으로 콜에 필요한 승률(에쿼티)을 계산합니다.">
+    // 제목은 전체화면 헤더가 이미 표시 — 카드 안은 설명만(2중 노출 제거)
+    <CalcCard desc="팟·콜 금액으로 콜에 필요한 승률(에쿼티) — 콜 오즈를 계산합니다.">
       <div className="grid grid-cols-2 gap-2">
         <Field label="현재 팟"><NumIn value={pot} onChange={setPot} placeholder="100000" /></Field>
         <Field label="콜 금액"><NumIn value={call} onChange={setCall} placeholder="50000" /></Field>
@@ -28,7 +29,10 @@ export default function PotOddsCalc() {
           {ok ? '✓ 콜이 이득 (+EV)' : '✗ 콜은 손해 (−EV)'} · 손익분기 {need.toFixed(1)}%
         </p>
       </div>
-      <p className="text-2xs text-ink-muted">이 승률이 실제로 나오는지는 아웃츠/확률 계산기 도구로 확인해 보세요.</p>
+      {/* 중복 인지 제거 — 아웃츠 계산기와 같은 '필요 승률' 개념을 딥링크로 잇는다(계산 로직 불변) */}
+      <a href="#tool=outs" className="block text-2xs font-semibold text-accent-300 transition-colors hover:text-accent-200">
+        이 승률이 실제로 나오는지는 아웃츠 / 확률 계산기에서 확인 →
+      </a>
     </CalcCard>
   );
 }

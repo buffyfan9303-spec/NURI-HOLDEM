@@ -1,8 +1,10 @@
 import { useEffect, useState, Suspense, type ReactNode } from 'react';
 import { lazyWithReload } from '../../lib/lazyWithReload';
 import Modal from '../atoms/Modal';
+import Icon from '../atoms/Icon';
 import { useToast } from '../atoms/Toast';
 import { shareOrCopy } from '../../lib/calendar';
+import { useTrainerProgress } from '../../lib/trainerProgress';
 import ICMCalculator from './ICMCalculator';
 import PotOddsCalc from './tools/PotOddsCalc';
 import ChipDistributor from './tools/ChipDistributor';
@@ -14,7 +16,7 @@ import PushFoldChart from './tools/PushFoldChart';
 import { SprCalc, EvCalc, MzoneCalc, BankrollCalc, VarianceCalc } from './tools/StackCalcs';
 import { PayoutCalc, EndTimeCalc, ComboCalc } from './tools/MoreCalcs';
 import { MdfCalc, AggroChart, RangeMatrix } from './tools/AdvancedCalcs';
-import PostflopTrainer from './tools/PostflopTrainer';
+import PostflopTrainer, { CAT_LABEL } from './tools/PostflopTrainer';
 import BlindBuilder from './tools/BlindBuilder';
 
 // GTO 패널은 에퀴티 엔진을 포함해 무거우므로 지연 로드
@@ -23,73 +25,99 @@ import type { DeepGtoInit } from './gto/useDeepGto';
 const GtoDeepPanel = lazyWithReload(() => import('./gto/GtoDeepPanel'));
 
 type ToolKey = 'gto' | 'pot' | 'icm' | 'range' | 'trainer' | 'postflop' | 'mdf' | 'aggro' | 'rvr' | 'outs' | 'pushfold' | 'spr' | 'ev' | 'mzone' | 'bankroll' | 'variance' | 'blindgen' | 'chip' | 'sim' | 'payout' | 'endtime' | 'combo';
-type ToolGroup = 'ops' | 'player';
+/** 4레인 IA — 학습 / 분석 / 계산기 / 매장운영 (로드맵 ⑥) */
+type ToolCat = 'learn' | 'analyze' | 'calc' | 'ops';
 
-const TOOLS: { key: ToolKey; group: ToolGroup; name: string; desc: string; icon: ReactNode }[] = [
-  // ── 매장 운영 도구 ──
-  { key: 'chip', group: 'ops', name: '칩 분배기', desc: '스택 구성·총 칩 수',
-    icon: <><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="3" /></> },
-  { key: 'sim', group: 'ops', name: '구조 시뮬', desc: '총 칩·평균 스택 깊이',
-    icon: <><line x1="4" y1="20" x2="4" y2="11" /><line x1="10" y1="20" x2="10" y2="4" /><line x1="16" y1="20" x2="16" y2="14" /><line x1="20" y1="20" x2="20" y2="8" /></> },
-  { key: 'blindgen', group: 'ops', name: '블라인드 생성기', desc: '구조 자동 생성·표',
-    icon: <><line x1="4" y1="20" x2="4" y2="14" /><line x1="9" y1="20" x2="9" y2="9" /><line x1="14" y1="20" x2="14" y2="12" /><line x1="19" y1="20" x2="19" y2="5" /></> },
-  { key: 'payout', group: 'ops', name: '상금 분배', desc: '총 상금·인원 → 분배표',
-    icon: <><path d="M8 4h8v3a4 4 0 0 1-8 0V4z" /><path d="M12 11v4" /><path d="M9 20h6" /><path d="M10 17h4" /></> },
-  { key: 'endtime', group: 'ops', name: '종료시간 예측', desc: '레벨·브레이크 → 종료 시각',
-    icon: <><circle cx="12" cy="12" r="9" /><path d="M12 8v4l3 2" /></> },
-  // ── 플레이어 도구 ──
-  { key: 'gto', group: 'player', name: 'GTO 핸드 분석', desc: '프리/포스트플랍 승률·전략',
-    icon: <><rect x="3" y="4" width="7" height="16" rx="1.5" /><rect x="14" y="4" width="7" height="16" rx="1.5" /></> },
-  { key: 'range', group: 'player', name: '스타팅핸드 가이드', desc: '오픈·수비·3벳 표준 레인지',
+const TOOLS: { key: ToolKey; cat: ToolCat; name: string; desc: string; icon: ReactNode }[] = [
+  // ── 학습 — 차트·트레이너 ──
+  { key: 'range', cat: 'learn', name: '스타팅핸드 가이드', desc: '오픈·수비·3벳 표준 레인지',
     icon: <><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="9" y1="3" x2="9" y2="21" /></> },
-  { key: 'pushfold', group: 'player', name: '푸시 · 폴드 차트', desc: '자체 Nash — 셔브·콜 레인지',
+  { key: 'pushfold', cat: 'learn', name: '푸시 · 폴드 차트', desc: '자체 Nash — 셔브·콜 레인지',
     icon: <><path d="M12 21V4" /><path d="M5 11l7-7 7 7" /></> },
-  { key: 'trainer', group: 'player', name: '프리플랍 트레이너', desc: '오픈·셔브 맞히기, 오답 노트',
+  { key: 'trainer', cat: 'learn', name: '프리플랍 트레이너', desc: '오픈·셔브 맞히기, 오답 노트',
     icon: <><path d="M12 2v4M12 18v4M2 12h4M18 12h4" /><circle cx="12" cy="12" r="4" /></> },
-  { key: 'postflop', group: 'player', name: '포스트플랍 트레이너', desc: '실전 상황 퀴즈·해설',
+  { key: 'postflop', cat: 'learn', name: '포스트플랍 트레이너', desc: '실전 상황 퀴즈·해설',
     icon: <><rect x="3" y="6" width="5" height="7" rx="1" /><rect x="9.5" y="6" width="5" height="7" rx="1" /><rect x="16" y="6" width="5" height="7" rx="1" /><path d="M7 17h10" /><path d="M9 21h6" /></> },
-  { key: 'mdf', group: 'player', name: 'MDF · 블러프 계산기', desc: '수비 빈도·블러프 비율',
-    icon: <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" /><path d="M9 12l2 2 4-4" /></> },
-  { key: 'rvr', group: 'player', name: '레인지 vs 레인지', desc: '레인지 간 에퀴티 매트릭스',
-    icon: <><rect x="3" y="3" width="8" height="8" rx="1" /><rect x="13" y="13" width="8" height="8" rx="1" /><path d="M13 7h8M7 13v8" /></> },
-  { key: 'aggro', group: 'player', name: '어그레션 차트', desc: '포지션별 권장 빈도',
+  { key: 'aggro', cat: 'learn', name: '어그레션 차트', desc: '포지션별 권장 빈도',
     icon: <><path d="M3 17l6-6 4 4 8-8" /><path d="M14 7h7v7" /></> },
-  { key: 'pot', group: 'player', name: '팟 오즈 계산기', desc: '콜에 필요한 승률 계산',
+  // ── 분석 — 핸드·레인지 에퀴티 ──
+  { key: 'gto', cat: 'analyze', name: 'GTO 핸드 분석', desc: '프리/포스트플랍 승률·전략',
+    icon: <><rect x="3" y="4" width="7" height="16" rx="1.5" /><rect x="14" y="4" width="7" height="16" rx="1.5" /></> },
+  { key: 'rvr', cat: 'analyze', name: '레인지 vs 레인지', desc: '레인지 간 에퀴티 매트릭스',
+    icon: <><rect x="3" y="3" width="8" height="8" rx="1" /><rect x="13" y="13" width="8" height="8" rx="1" /><path d="M13 7h8M7 13v8" /></> },
+  // ── 계산기 — 수치 판단 ──
+  { key: 'pot', cat: 'calc', name: '팟 오즈 계산기', desc: '콜에 필요한 승률 계산',
     icon: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></> },
-  { key: 'icm', group: 'player', name: 'ICM 계산기', desc: '토너먼트 기대 상금',
-    icon: <><rect x="4" y="3" width="16" height="18" rx="2" /><line x1="8" y1="7" x2="16" y2="7" /><line x1="8" y1="11" x2="16" y2="11" /><line x1="8" y1="15" x2="12" y2="15" /></> },
-  { key: 'outs', group: 'player', name: '아웃츠 / 확률', desc: '완성 확률·팟 오즈',
+  { key: 'outs', cat: 'calc', name: '아웃츠 / 확률', desc: '완성 확률·팟 오즈',
     icon: <><circle cx="12" cy="12" r="9" /><path d="M8.5 12.5l2.5 2.5 4.5-4.5" /></> },
-  { key: 'spr', group: 'player', name: 'SPR 계산기', desc: '스택 대 팟 비율',
+  { key: 'mdf', cat: 'calc', name: 'MDF · 블러프 계산기', desc: '수비 빈도·블러프 비율',
+    icon: <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" /><path d="M9 12l2 2 4-4" /></> },
+  { key: 'icm', cat: 'calc', name: 'ICM 계산기', desc: '토너먼트 기대 상금',
+    icon: <><rect x="4" y="3" width="16" height="18" rx="2" /><line x1="8" y1="7" x2="16" y2="7" /><line x1="8" y1="11" x2="16" y2="11" /><line x1="8" y1="15" x2="12" y2="15" /></> },
+  { key: 'spr', cat: 'calc', name: 'SPR 계산기', desc: '스택 대 팟 비율',
     icon: <><rect x="3" y="11" width="7" height="9" rx="1" /><rect x="14" y="4" width="7" height="16" rx="1" /></> },
-  { key: 'ev', group: 'player', name: 'EV 계산기', desc: '기대값 손익 판단',
+  { key: 'ev', cat: 'calc', name: 'EV 계산기', desc: '기대값 손익 판단',
     icon: <><line x1="12" y1="3" x2="12" y2="21" /><path d="M8 7h6a3 3 0 0 1 0 6H8" /></> },
-  { key: 'combo', group: 'player', name: '콤보 계산기', desc: '핸드·레인지 콤보 수',
+  { key: 'combo', cat: 'calc', name: '콤보 계산기', desc: '핸드·레인지 콤보 수',
     icon: <><rect x="4" y="4" width="9" height="13" rx="1.5" /><rect x="11" y="7" width="9" height="13" rx="1.5" /></> },
-  { key: 'mzone', group: 'player', name: 'M존 계산기', desc: '토너 생존 압박 지수',
+  { key: 'mzone', cat: 'calc', name: 'M존 계산기', desc: '토너 생존 압박 지수',
     icon: <><circle cx="12" cy="12" r="9" /><path d="M8 15V9l4 4 4-4v6" /></> },
-  { key: 'bankroll', group: 'player', name: '뱅크롤 관리', desc: '바인 대비 자금 권장선',
+  { key: 'bankroll', cat: 'calc', name: '뱅크롤 관리', desc: '바인 대비 자금 권장선',
     icon: <><rect x="3" y="7" width="18" height="12" rx="2" /><path d="M3 11h18" /><circle cx="12" cy="15" r="1.5" /></> },
-  { key: 'variance', group: 'player', name: '분산 시뮬', desc: 'ROI·표본 → 파산 확률',
+  { key: 'variance', cat: 'calc', name: '분산 시뮬', desc: 'ROI·표본 → 파산 확률',
     icon: <><path d="M3 20c3-1 4-6 6-6s3 4 5 4 4-9 7-10" /></> },
+  // ── 매장 운영 ──
+  { key: 'chip', cat: 'ops', name: '칩 분배기', desc: '스택 구성·총 칩 수',
+    icon: <><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="3" /></> },
+  { key: 'sim', cat: 'ops', name: '구조 시뮬', desc: '총 칩·평균 스택 깊이',
+    icon: <><line x1="4" y1="20" x2="4" y2="11" /><line x1="10" y1="20" x2="10" y2="4" /><line x1="16" y1="20" x2="16" y2="14" /><line x1="20" y1="20" x2="20" y2="8" /></> },
+  { key: 'blindgen', cat: 'ops', name: '블라인드 생성기', desc: '구조 자동 생성·표',
+    icon: <><line x1="4" y1="20" x2="4" y2="14" /><line x1="9" y1="20" x2="9" y2="9" /><line x1="14" y1="20" x2="14" y2="12" /><line x1="19" y1="20" x2="19" y2="5" /></> },
+  { key: 'payout', cat: 'ops', name: '상금 분배', desc: '총 상금·인원 → 분배표',
+    icon: <><path d="M8 4h8v3a4 4 0 0 1-8 0V4z" /><path d="M12 11v4" /><path d="M9 20h6" /><path d="M10 17h4" /></> },
+  { key: 'endtime', cat: 'ops', name: '종료시간 예측', desc: '레벨·브레이크 → 종료 시각',
+    icon: <><circle cx="12" cy="12" r="9" /><path d="M12 8v4l3 2" /></> },
 ];
 
-const GROUPS: { id: ToolGroup; title: string; desc: string }[] = [
-  { id: 'player', title: '플레이어 도구', desc: '실전 플레이·전략용' },
-  { id: 'ops', title: '매장 운영 도구', desc: '토너먼트 운영·세팅용' },
+/** 4레인 소제목 — 접이식 금지(로드맵 FIX: 접이 헤더는 모바일 회귀). 항상 펼쳐진 섹션. */
+const LANES: { id: ToolCat; label: string; desc: string }[] = [
+  { id: 'learn', label: '학습', desc: '차트·트레이너로 기본기' },
+  { id: 'analyze', label: '분석', desc: '핸드·레인지 에퀴티 실계산' },
+  { id: 'calc', label: '계산기', desc: '실전 수치 판단' },
+  { id: 'ops', label: '매장 운영', desc: '토너먼트 운영·세팅용' },
 ];
 
 // 트레이너류는 '퀴즈' 뉘앙스(맞히기), 나머지 계산기·차트류는 '도구' 뉘앙스로 라벨링.
 const QUIZ_KEYS = new Set<ToolKey>(['range', 'pushfold', 'trainer', 'postflop']);
 
-/** 오늘의 추천 도구 — 날짜 해시로 플레이어 도구 하나를 결정적으로 고른다(매일 바뀜, 하루엔 고정).
+/** 오늘의 추천 도구 — 날짜 해시로 플레이어(비운영) 도구 하나를 결정적으로 고른다(매일 바뀜, 하루엔 고정).
  *  new Date().toLocaleDateString('sv') = 'YYYY-MM-DD'(로컬 자정 기준) 를 시드로. */
 function pickDailyTool(): ToolKey {
-  const players = TOOLS.filter((t) => t.group === 'player');
+  const players = TOOLS.filter((t) => t.cat !== 'ops');
   const seed = new Date().toLocaleDateString('sv');
   let h = 0;
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
   return players[h % players.length].key;
+}
+
+/** 'For You' — 트레이너 약점 데이터(로컬 스토리지)가 이미 있으면 보완 추천 1행.
+ *  신규 fetch·스키마 0 — 트레이너들이 이미 쓰는 키를 읽기만 한다. 없으면 null(행 생략). */
+function readForYou(): { key: ToolKey; name: string; reason: string } | null {
+  try {
+    const pre = JSON.parse(localStorage.getItem('nuri:trainer:preflop:v2') || 'null') as { wrong?: unknown } | null;
+    const wrong = Array.isArray(pre?.wrong) ? (pre!.wrong as unknown[]) : [];
+    if (wrong.length >= 3) return { key: 'trainer', name: '프리플랍 트레이너', reason: `오답 노트 ${wrong.length}개 — 틀린 스팟부터 다시` };
+    const post = JSON.parse(localStorage.getItem('nuri:trainer:postflop:v2') || 'null') as { byCat?: Record<string, { t: number; c: number }> } | null;
+    const weak = Object.entries(post?.byCat ?? {})
+      .filter(([, v]) => v && v.t >= 3 && (v.c / v.t) * 100 < 80)
+      .sort((a, b) => a[1].c / a[1].t - b[1].c / b[1].t)[0];
+    if (weak) {
+      const label = (CAT_LABEL as Record<string, string>)[weak[0]] ?? weak[0];
+      return { key: 'postflop', name: '포스트플랍 트레이너', reason: `${label} 정답률 ${Math.round((weak[1].c / weak[1].t) * 100)}% — 집중 보완` };
+    }
+    if (wrong.length > 0) return { key: 'trainer', name: '프리플랍 트레이너', reason: `오답 노트 ${wrong.length}개 — 틀린 스팟부터 다시` };
+  } catch { /* 파싱 실패 시 추천 생략 */ }
+  return null;
 }
 
 function renderTool(k: ToolKey): ReactNode {
@@ -129,14 +157,15 @@ function renderTool(k: ToolKey): ReactNode {
   }
 }
 
-/** 도구 모음 — 카드형 런처.
+/** 도구 모음 — 4레인(학습/분석/계산기/매장운영) 카탈로그 + 카드형 런처.
  *  누르면 "그 카드 행 아래 인라인"이 아니라 **전체화면 페이지**로 연다.
  *  (인라인 방식은 중간 카드를 누르면 위에 런처가 그대로 남아, 열린 도구를 찾아 내려가야 했다 —
- *   전체화면 Modal(page)은 헤더·닫기·뒤로가기·드래그 닫기까지 앱의 다른 상세 화면과 같은 문법.) */
+ *   전체화면 Modal(page)은 헤더·닫기·뒤로가기·드래그 닫기까지 앱의 다른 상세 화면과 같은 문법.)
+ *  레인은 접이식 금지 — 비접이 소제목 + 상단 필터 칩 행(전체/학습/분석/계산기/매장운영). */
 export default function ToolsPanel() {
   const toast = useToast();
   const [active, setActive] = useState<ToolKey | null>(() => {
-    // 딥링크: #tool=key 로 특정 도구 바로 열기(공유·재방문)
+    // 딥링크: #tool=key 로 특정 도구 바로 열기(공유·재방문) — 하위호환 계약, 변경 금지
     const m = window.location.hash.match(/^#tool=([a-z]+)/);
     return m && TOOLS.some((t) => t.key === m[1]) ? (m[1] as ToolKey) : null;
   });
@@ -173,22 +202,12 @@ export default function ToolsPanel() {
     } catch { /* 사용자가 공유 시트를 닫음 */ }
   };
 
-  // 검색 + 그룹 접기 — 첫 방문엔 플레이어 그룹을 펼쳐 "빈 화면 + 접힌 헤더 2개"를 피한다.
+  // 검색 + 레인 필터 칩 — 접이식 헤더(모바일 회귀)를 대체하는 비접이 IA.
   const [q, setQ] = useState('');
-  const [openG, setOpenG] = useState<Record<string, boolean>>(() => {
-    try {
-      const saved = localStorage.getItem('nuri:tools-open');
-      return saved ? JSON.parse(saved) : { player: true };
-    } catch { return { player: true }; }
-  });
-  const toggleG = (id: string) => setOpenG((prev) => {
-    const next = { ...prev, [id]: !prev[id] };
-    try { localStorage.setItem('nuri:tools-open', JSON.stringify(next)); } catch { /* quota */ }
-    return next;
-  });
+  const [lane, setLane] = useState<ToolCat | 'all'>('all');
   const ql = q.trim().toLowerCase();
   const hits = ql ? TOOLS.filter((t) => t.name.toLowerCase().includes(ql) || t.desc.toLowerCase().includes(ql)) : null;
-  // 즐겨찾기 — 접힌 그룹 위에 상시 노출(최대 6개)
+  // 즐겨찾기 — 레인 위에 상시 노출(최대 6개)
   const [favs, setFavs] = useState<ToolKey[]>(() => {
     try { return JSON.parse(localStorage.getItem('nuri:fav-tools') || '[]'); } catch { return []; }
   });
@@ -199,7 +218,12 @@ export default function ToolsPanel() {
   });
   const favTools = favs.map((k) => TOOLS.find((t) => t.key === k)).filter(Boolean) as typeof TOOLS;
 
-  // 다른 곳(공유 링크)에서 해시가 바뀌면 반영
+  // 트레이너 진행(스트릭/XP/오늘 목표) — 이미 로컬에 있는 데이터 구독(신규 fetch 0)
+  const prog = useTrainerProgress();
+  // 'For You' 약점 추천 — 탭 진입 시 1회 계산(트레이너 로컬 기록 기반, 없으면 생략)
+  const [forYou] = useState(readForYou);
+
+  // 다른 곳(공유 링크·도구 간 상호 딥링크)에서 해시가 바뀌면 반영
   useEffect(() => {
     const onHash = () => {
       const m = window.location.hash.match(/^#tool=([a-z]+)/);
@@ -220,45 +244,93 @@ export default function ToolsPanel() {
 
   const activeTool = active ? TOOLS.find((t) => t.key === active) : null;
 
-  // 🎲 오늘의 도구 — 날짜 결정적 추천. 트레이너류면 '퀴즈', 아니면 '도구' 뉘앙스.
+  // 오늘의 도구 — 날짜 결정적 추천. 트레이너류면 '퀴즈', 아니면 '도구' 뉘앙스.
   const dailyKey = pickDailyTool();
   const dailyTool = TOOLS.find((t) => t.key === dailyKey)!;
   const dailyIsQuiz = QUIZ_KEYS.has(dailyKey);
 
   return (
     <div className="space-y-3">
+      {/* 트레이너 진행 스트립 — 오늘 목표·스트릭·XP 상시 노출(탭하면 트레이너로) */}
+      <button type="button" onClick={() => open('trainer')} aria-label="트레이너 진행 — 프리플랍 트레이너 열기"
+        className="flex w-full items-center justify-between gap-2 rounded-card border border-border-default bg-surface-low px-3.5 py-2.5 text-left transition-colors hover:border-accent-400/40 hover:bg-surface-high">
+        <span className="flex min-w-0 items-center gap-3 text-2xs">
+          <span className="text-ink-muted">오늘 <b className="tabular-nums text-ink-primary">{prog.today}/{prog.goal}</b></span>
+          <span className="inline-flex items-center gap-1 text-ink-muted">
+            <Icon name="flame" size={12} className="text-accent-300" aria-hidden />
+            <b className="tabular-nums text-accent-200">{prog.streak}</b>일
+          </span>
+          <span className="text-ink-muted">XP <b className="tabular-nums text-ink-secondary">{prog.xp.toLocaleString()}</b></span>
+        </span>
+        <span className={['shrink-0 text-2xs font-semibold', prog.goalMet ? 'text-emerald-400' : 'text-ink-muted'].join(' ')}>
+          {prog.goalMet ? '오늘 목표 달성' : `목표까지 ${prog.remaining}문제`}
+        </span>
+      </button>
+
       {/* 도구 검색 */}
       <div className="relative">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" aria-hidden>
-          <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.5" y2="16.5" />
-        </svg>
+        <Icon name="search" size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" aria-hidden />
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="도구 검색 — 이름·기능"
           className="input w-full pl-9 text-sm" aria-label="도구 검색" />
       </div>
 
-      {/* 🎲 오늘의 도구 — 날짜 기반 추천 1개. 커뮤니티 '오늘의 퀴즈/도구' 유입 동선의 진입점. */}
+      {/* 레인 필터 칩 — 균일 h-9, aria-pressed 토글(접이식 대체) */}
+      {!hits && (
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label="도구 분류 필터">
+          {([{ id: 'all' as const, label: '전체' }, ...LANES]).map((l) => {
+            const on = lane === l.id;
+            return (
+              <button key={l.id} type="button" aria-pressed={on}
+                onClick={() => setLane(on && l.id !== 'all' ? 'all' : l.id)}
+                className={['inline-flex h-9 items-center rounded-input border px-3 text-xs font-semibold transition-colors',
+                  on ? 'border-accent-300 bg-accent-300 text-white' : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
+                {l.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* For You — 트레이너 약점 기반 보완 추천 1행(로컬 기록이 있을 때만) */}
+      {!hits && forYou && (
+        <button type="button" onClick={() => open(forYou.key)}
+          aria-label={`For You — ${forYou.name} 열기`}
+          className="group flex w-full items-center gap-3 rounded-card border border-border-default bg-surface-low px-3.5 py-2.5 text-left transition-colors hover:border-accent-400/40 hover:bg-surface-high active:scale-[0.99]">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-input bg-accent-300/15 text-accent-300" aria-hidden>
+            <Icon name="target" size={15} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-2xs font-bold text-accent-200">For You</span>
+            <span className="block truncate text-sm font-bold text-ink-primary">{forYou.name}</span>
+            <span className="block truncate text-2xs text-ink-muted">{forYou.reason}</span>
+          </span>
+          <Icon name="chevron-right" size={16} className="shrink-0 text-ink-muted transition-transform group-hover:translate-x-0.5" aria-hidden />
+        </button>
+      )}
+
+      {/* 오늘의 도구 — 날짜 기반 추천 1개. 커뮤니티 '오늘의 퀴즈/도구' 유입 동선의 진입점. */}
       {!hits && (
         <button type="button" onClick={() => open(dailyKey)}
           aria-label={`${dailyIsQuiz ? '오늘의 퀴즈' : '오늘의 도구'} — ${dailyTool.name} 열기`}
           className="group flex w-full items-center gap-3 rounded-card border border-accent-400/30 bg-accent-300/10 px-3.5 py-3 text-left transition-colors hover:border-accent-400/50 hover:bg-accent-300/15 active:scale-[0.99]">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-input bg-accent-300/20 text-lg" aria-hidden>🎲</span>
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-input bg-accent-300/20 text-accent-300" aria-hidden>
+            <Icon name="calendar" size={18} />
+          </span>
           <span className="min-w-0 flex-1">
             <span className="block text-2xs font-bold text-accent-200">{dailyIsQuiz ? '오늘의 퀴즈' : '오늘의 도구'}</span>
             <span className="block truncate text-sm font-bold text-ink-primary">{dailyTool.name}</span>
             <span className="block truncate text-2xs text-ink-muted">{dailyTool.desc}</span>
           </span>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
-            className="shrink-0 text-ink-muted transition-transform group-hover:translate-x-0.5" aria-hidden>
-            <polyline points="9 6 15 12 9 18" />
-          </svg>
+          <Icon name="chevron-right" size={18} className="shrink-0 text-ink-muted transition-transform group-hover:translate-x-0.5" aria-hidden />
         </button>
       )}
 
-      {/* 🕐 최근 사용 — 마지막으로 쓴 도구로 원탭 복귀 */}
+      {/* 최근 사용 — 마지막으로 쓴 도구로 원탭 복귀 */}
       {!hits && recent.length > 0 && (
         <section className="space-y-1.5">
-          <p className="text-2xs font-bold text-ink-muted">🕐 최근 사용</p>
+          <p className="inline-flex items-center gap-1 text-2xs font-bold text-ink-muted">
+            <Icon name="clock" size={12} aria-hidden /> 최근 사용
+          </p>
           <div className="flex flex-wrap gap-1.5">
             {recent.map((k) => {
               const t = TOOLS.find((x) => x.key === k);
@@ -274,10 +346,12 @@ export default function ToolsPanel() {
         </section>
       )}
 
-      {/* ★ 즐겨찾기 — 그룹이 접혀 있어도 항상 보이는 내 도구 */}
+      {/* 즐겨찾기 — 레인과 무관하게 항상 보이는 내 도구 */}
       {!hits && favTools.length > 0 && (
         <section className="space-y-2">
-          <p className="text-2xs font-bold text-accent-200">★ 즐겨찾기</p>
+          <p className="inline-flex items-center gap-1 text-2xs font-bold text-accent-200">
+            <Icon name="star-fill" size={12} aria-hidden /> 즐겨찾기
+          </p>
           {grid(favTools)}
         </section>
       )}
@@ -287,24 +361,17 @@ export default function ToolsPanel() {
           ? <p className="py-8 text-center text-2xs text-ink-muted">'{q.trim()}' 에 맞는 도구가 없습니다</p>
           : grid(hits)
       ) : (
-        GROUPS.map((g) => {
-          const items = TOOLS.filter((t) => t.group === g.id);
-          const opened = !!openG[g.id];
-          const preview = items.slice(0, 3).map((t) => t.name).join(' · ');
+        // 4레인 — 비접이 소제목 섹션(필터 칩이 보이는 레인을 고른다)
+        LANES.filter((l) => lane === 'all' || lane === l.id).map((l) => {
+          const items = TOOLS.filter((t) => t.cat === l.id);
           return (
-            <section key={g.id} className="rounded-card border border-border-default bg-surface-low overflow-hidden">
-              <button type="button" onClick={() => toggleG(g.id)} aria-expanded={opened}
-                className="flex w-full items-center justify-between gap-2 px-3.5 py-3 text-left hover:bg-surface-high/50 transition-colors">
-                <div className="min-w-0">
-                  <p className="text-sm font-bold text-ink-primary">{g.title} <span className="ml-1 text-2xs font-semibold text-ink-muted">{items.length}개</span></p>
-                  <p className="mt-0.5 truncate text-2xs text-ink-muted">{opened ? g.desc : `${preview} 외 ${Math.max(0, items.length - 3)}개`}</p>
-                </div>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
-                  className={['shrink-0 text-ink-muted transition-transform duration-200', opened ? 'rotate-180' : ''].join(' ')} aria-hidden>
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              </button>
-              {opened && <div className="border-t border-border-subtle p-2.5 animate-fade-in">{grid(items)}</div>}
+            <section key={l.id} className="space-y-2">
+              <div className="flex items-baseline gap-2 border-b border-border-subtle pb-1.5">
+                <h2 className="text-sm font-bold text-ink-primary">{l.label}</h2>
+                <span className="text-2xs font-semibold tabular-nums text-ink-muted">{items.length}개</span>
+                <span className="truncate text-2xs text-ink-muted">{l.desc}</span>
+              </div>
+              {grid(items)}
             </section>
           );
         })
@@ -318,10 +385,7 @@ export default function ToolsPanel() {
             <button type="button" onClick={() => active && share(active)}
               aria-label={`${activeTool?.name ?? '도구'} 링크 공유`}
               className="inline-flex h-8 items-center gap-1.5 rounded-input border border-border-default bg-surface-high px-3 text-2xs font-semibold text-ink-secondary transition-colors hover:text-ink-primary">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
-                <line x1="8.6" y1="13.5" x2="15.4" y2="17.5" /><line x1="15.4" y1="6.5" x2="8.6" y2="10.5" />
-              </svg>
+              <Icon name="share" size={14} aria-hidden />
               공유
             </button>
           </div>
@@ -347,16 +411,16 @@ function ToolCard({ name, desc, icon, onClick, fav, onToggleFav }: {
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{icon}</svg>
         </span>
         <span className="min-w-0 flex-1">
-          {/* 이름은 절대 안 자른다 — 2줄까지 허용. 설명은 칸이 넉넉한 화면에서만 */}
+          {/* 이름은 절대 안 자른다 — 2줄까지 허용. 설명은 모바일에서도 노출(1줄 말줄임) */}
           <span className="block text-xs font-bold text-ink-primary leading-tight [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] overflow-hidden">{name}</span>
-          <span className="hidden sm:block truncate text-2xs text-ink-muted leading-snug mt-0.5">{desc}</span>
+          <span className="block truncate text-2xs text-ink-muted leading-snug mt-0.5">{desc}</span>
         </span>
       </button>
       {onToggleFav && (
         <button type="button" onClick={onToggleFav} aria-label={fav ? `${name} 즐겨찾기 해제` : `${name} 즐겨찾기 추가`} aria-pressed={fav}
-          className={['absolute right-0.5 top-1/2 -translate-y-1/2 flex h-9 w-8 items-center justify-center text-sm leading-none transition-opacity',
+          className={['absolute right-0.5 top-1/2 -translate-y-1/2 flex h-9 w-8 items-center justify-center transition-opacity',
             fav ? 'text-accent-300 opacity-100' : 'text-ink-muted opacity-30 hover:opacity-70'].join(' ')}>
-          {fav ? '★' : '☆'}
+          <Icon name={fav ? 'star-fill' : 'star'} size={14} aria-hidden />
         </button>
       )}
     </div>

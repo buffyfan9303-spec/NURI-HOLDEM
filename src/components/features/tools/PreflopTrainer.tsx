@@ -127,7 +127,8 @@ export default function PreflopTrainer() {
   const verdict = useMemo(() => (quiz.freq >= 0.75 ? quiz.actionLabel : quiz.freq >= 0.25 ? `혼합 (${quiz.actionLabel} ${freqPct}%)` : '폴드'), [quiz, freqPct]);
 
   return (
-    <CalcCard title="프리플랍 트레이너" desc="가이드·Nash 차트와 같은 데이터로 채점 — 경계 핸드 집중 출제">
+    // 제목은 전체화면 헤더가 이미 표시 — 카드 안은 설명만(2중 노출 제거)
+    <CalcCard desc="가이드·Nash 차트와 같은 데이터로 채점 — 경계 핸드 집중 출제">
       {/* 모드 + 점수 */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="inline-flex rounded-input border border-border-default bg-surface-high p-0.5">
