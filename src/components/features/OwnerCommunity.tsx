@@ -14,6 +14,9 @@ export default function OwnerCommunity() {
   const [posts, setPosts] = useState<OwnerPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState('');
+  // 오너 지시: 입력 영역이 화면을 너무 차지 — 평소엔 1행(입력 1줄 + 우측 게시 버튼),
+  // 포커스하거나 쓰던 글이 있으면 자연 확장. 확장은 rows 교체(즉시 레이아웃)라 height 애니 금지 규약과 무관.
+  const [focused, setFocused] = useState(false);
   const [sending, setSending] = useState(false);
   const [showDeleted, setShowDeleted] = useState(false);
   const [tick, setTick] = useState(0);
@@ -56,27 +59,34 @@ export default function OwnerCommunity() {
     }
   };
 
-  return (
-    <div className="space-y-3">
-      <div className="rounded-input border border-accent-400/30 bg-accent-300/[0.06] px-3 py-2 text-2xs leading-relaxed text-accent-300">
-        인증 업주 전용 라운지입니다. 작성한 글은 24시간이 지나면 자동으로 사라집니다.
-      </div>
+  // 접힌 1행 ↔ 확장(포커스 중이거나 쓰던 글이 있을 때)
+  const expanded = focused || draft.trim().length > 0;
 
+  return (
+    <div className="space-y-2">
       {canPost ? (
         <form onSubmit={submit} className="flex items-end gap-2">
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
             maxLength={2000}
-            rows={2}
+            rows={expanded ? 3 : 1}
             placeholder="업주끼리 자유롭게 이야기해보세요"
-            className="input w-full flex-1 resize-none text-sm"
+            // 접힘 상태는 textarea.input 의 min-block-size(3.25rem, 비레이어 규칙이라 ! 필요)를 1행 높이로 눌러 게시 버튼(h-9)과 나란히
+            className={['input min-w-0 flex-1 resize-none text-sm leading-5', expanded ? '' : '![min-block-size:2.4rem]'].join(' ')}
           />
-          <button type="submit" disabled={sending || !draft.trim()} className="btn-primary shrink-0 self-stretch px-4 disabled:opacity-60">게시</button>
+          <button type="submit" disabled={sending || !draft.trim()} className="btn-primary h-9 shrink-0 px-4 disabled:opacity-60">게시</button>
         </form>
       ) : (
         <p className="py-1 text-center text-2xs text-ink-muted">읽기 전용입니다. 글 작성은 인증 업주만 가능합니다.</p>
       )}
+
+      {/* 안내는 큰 박스 대신 한 줄 캡션으로 축소(카피 보존) */}
+      <p className="px-1 text-2xs leading-relaxed text-ink-muted">
+        인증 업주 전용 라운지입니다. 작성한 글은 24시간이 지나면 자동으로 사라집니다.
+      </p>
 
       {isAdmin && (
         <div className="flex justify-end">

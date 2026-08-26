@@ -440,19 +440,23 @@ export default function ScheduleDetailModal({
           <section>
             <h3 className="text-sm font-semibold text-ink-primary mb-2">프로모션 / 얼리칩</h3>
             <ul className="space-y-1.5">
+              {/* 긴 detail(예: 사전예약 얼리칩 조건)이 shrink-0 한 줄 강제로 행 밖으로 삐져나가던
+                  오버플로 수정 — 배지·제목 한 줄 + 설명은 아래 전체 폭 줄바꿈 스택으로. */}
               {schedule.promotions.map((p, i) => (
                 <li
                   key={i}
-                  className="flex items-center gap-2 px-3 py-2 rounded-input border border-accent-400/30 bg-accent-300/[0.04]"
+                  className="px-3 py-2 rounded-input border border-accent-400/30 bg-accent-300/[0.04]"
                 >
-                  {p.badge && (
-                    <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-badge bg-accent-300 text-white text-2xs font-bold leading-none">
-                      {p.badge}
-                    </span>
-                  )}
-                  <span className="flex-1 text-sm text-ink-primary font-semibold">{p.title}</span>
+                  <div className="flex items-center gap-2">
+                    {p.badge && (
+                      <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-badge bg-accent-300 text-white text-2xs font-bold leading-none">
+                        {p.badge}
+                      </span>
+                    )}
+                    <span className="min-w-0 flex-1 whitespace-normal break-keep [overflow-wrap:anywhere] text-sm text-ink-primary font-semibold">{p.title}</span>
+                  </div>
                   {p.detail && (
-                    <span className="text-2xs text-ink-muted shrink-0">{p.detail}</span>
+                    <p className="mt-1 min-w-0 whitespace-normal break-keep [overflow-wrap:anywhere] text-2xs leading-relaxed text-ink-muted">{p.detail}</p>
                   )}
                 </li>
               ))}
@@ -517,10 +521,11 @@ export default function ScheduleDetailModal({
               <div>
                 <h3 className="text-sm font-semibold text-ink-primary mb-2">파트너 / 시드권 발행</h3>
                 <div className="flex flex-wrap gap-1.5">
+                  {/* max-w-full: 긴 파트너명(띄어쓰기 없는 영문 등)이 칩째로 화면 밖으로 나가지 않게 칩 안에서 줄바꿈 */}
                   {schedule.partners.map((p) => (
                     <span
                       key={p}
-                      className="inline-flex items-center px-2.5 py-1 rounded-badge bg-surface-high border border-border-default text-xs font-bold text-ink-primary tracking-wider"
+                      className="inline-flex max-w-full items-center break-keep [overflow-wrap:anywhere] px-2.5 py-1 rounded-badge bg-surface-high border border-border-default text-xs font-bold text-ink-primary tracking-wider"
                     >
                       {p}
                     </span>
@@ -536,7 +541,7 @@ export default function ScheduleDetailModal({
                   {schedule.paymentMethods.map((m) => (
                     <span
                       key={m}
-                      className="inline-flex items-center px-2.5 py-1 rounded-badge bg-emerald-500/15 border border-emerald-500/30 text-xs font-semibold text-emerald-400"
+                      className="inline-flex max-w-full items-center break-keep [overflow-wrap:anywhere] px-2.5 py-1 rounded-badge bg-emerald-500/15 border border-emerald-500/30 text-xs font-semibold text-emerald-400"
                     >
                       {m}
                     </span>

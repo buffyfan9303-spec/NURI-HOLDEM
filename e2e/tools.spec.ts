@@ -5,10 +5,16 @@
 // 이제 도구는 앱의 다른 상세 화면과 같은 전체화면 페이지(Modal page)다 — 그 계약을 잰다.
 // 데이터 게이트: 레인지·푸시폴드가 실데이터(콤보 가중 %)를 렌더하는지까지.
 import { test, expect } from '@playwright/test';
-import { stabilizeBackstack, dismissOverlays } from './_session';
+import { stabilizeBackstack, dismissOverlays, loginAs } from './_session';
+
+// GTO 도구 실행은 로그인 회원 전용이 됐다(오너 지시 2026-08-27) — 이 스펙은 로그인 후 계약을 잰다.
+const EMAIL = process.env.E2E_EMAIL;
+const PASSWORD = process.env.E2E_PASSWORD;
+test.skip(!EMAIL || !PASSWORD, 'E2E_EMAIL/E2E_PASSWORD 미설정 — GTO 도구는 로그인 전용');
 
 async function gotoTools(page: import('@playwright/test').Page) {
   await stabilizeBackstack(page);
+  await loginAs(page, EMAIL!, PASSWORD!);
   await page.goto('/');
   // 온보딩 시트는 첫 페인트 700ms '뒤에' 뜬다 — 즉시 count 체크는 레이스(홈 전환으로 부팅이
   // 빨라지며 실제로 물렸다). 지연 등장까지 기다려 걷어내는 공용 헬퍼 사용.

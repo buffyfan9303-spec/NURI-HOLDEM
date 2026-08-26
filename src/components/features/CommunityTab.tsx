@@ -26,6 +26,7 @@ import Icon from '../atoms/Icon';
 import VenueThumb from '../atoms/VenueThumb';
 import Modal from '../atoms/Modal';
 import PostDetailModal from './PostDetailModal';
+import SlidingPill from '../atoms/SlidingPill';
 import { useIsDesktop } from '../../lib/responsive';
 import { thumbUrl, thumbSrcSet } from '../../lib/imageUrl';
 
@@ -52,7 +53,7 @@ interface CommunityTabProps {
   onReloadVenues?: () => void;
 }
 
-// 커뮤니티 섹션 — 홀덤펍 / 실시간 댓글 / 게시판 / 딜러 / 랭킹 / 업주
+// 커뮤니티 섹션 — 홀덤펍 / 게시판 / 실시간 / 랭킹 / 장터 / 딜러 / 업주 (사용 빈도순 진열)
 // (홀덤 공부는 게시판으로 통합, 도구는 메인 탭으로 분리)
 type Section = 'live' | 'board' | 'venues' | 'rank' | 'dealer' | 'owner' | 'market';
 // 다른 메인 탭(중고장터 등)으로 갔다 돌아와도 커뮤니티 섹션이 유지되도록 모듈 레벨에 기억
@@ -144,7 +145,8 @@ function CommunityTab({
     const t = e.changedTouches[0];
     const dx = t.clientX - s0.x, dy = t.clientY - s0.y;
     if (Math.abs(dx) < 64 || Math.abs(dx) < Math.abs(dy) * 1.5) return; // 세로 스크롤과 구분
-    const order: Section[] = ['venues', 'live', 'board', 'dealer', 'rank', ...(marketSlot ? (['market'] as Section[]) : []), ...(canOwnerCommunity ? (['owner'] as Section[]) : [])];
+    // 탭 바 진열 순서와 동일(사용 빈도순) — 스와이프 이웃이 눈에 보이는 이웃과 어긋나면 방향감이 깨진다
+    const order: Section[] = ['venues', 'board', 'live', 'rank', ...(marketSlot ? (['market'] as Section[]) : []), 'dealer', ...(canOwnerCommunity ? (['owner'] as Section[]) : [])];
     const i = order.indexOf(shownSec);
     const next = dx < 0 ? order[i + 1] : order[i - 1];
     if (next) setSection(next);
@@ -154,6 +156,13 @@ function CommunityTab({
   const isDesktop = useIsDesktop();
   const [boardSelected, setBoardSelected] = useState<CommunityPost | null>(null);
   const canOwnerCommunity = isAdmin || (user?.role === 'venue_owner' && user?.venueVerified === true);
+
+  // 서브탭 바(가로 스크롤) — 스와이프·외부 지정으로 바뀐 활성 탭이 화면 밖이면 보이게 끌어온다
+  const secBarRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    secBarRef.current?.querySelector<HTMLElement>('[data-pill-active]')
+      ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [shownSec]);
 
   // 매장 정렬: 1) 유료광고(isPaidAd) → 2) 팔로워수 내림차순
   const sortedVenues = useMemo(() => {
@@ -187,17 +196,21 @@ function CommunityTab({
 
   return (
     <div className="space-y-3">
-      {/* 섹션 토글 — 실시간 댓글 / 게시판 / 홀덤 공부 / 홀덤펍 (Task 4) */}
+      {/* 섹션 서브탭 바 — 세계 표준 세그먼트 문법(트위터/인스타 상단 탭): 일정한 패딩·간격,
+          넘치면 가로 스크롤, 활성 표시는 공용 SlidingPill(LedgerStatsPanel 기간 바와 같은 집안 문법).
+          진열은 사용 빈도순(게시판·실시간·랭킹·장터 앞, 딜러·업주 뒤). 첫 탭은 매장 디렉터리라
+          상위 탭명과 겹치던 '커뮤니티' 라벨만 '홀덤펍'으로 명확화(기능·화면 불변).
+          ⚠ 하단 탭바의 '커뮤니티' 라벨은 e2e 잠금 — 여기(서브탭)만 바꾼다. */}
       {/* 스크롤해도 항상 보이도록 헤더+메인탭 바로 아래에 고정 */}
       <div className="sticky top-[calc(theme(spacing.header-h)+env(safe-area-inset-top)-0.5rem)] lg:top-[calc(theme(spacing.header-h)+theme(spacing.tab-h)-0.5rem)] z-30 -mx-page-x px-page-x bg-surface-base border-b border-border-subtle pt-2.5 pb-2 lg:pt-2.5 before:pointer-events-none before:absolute before:inset-x-0 before:-top-4 before:h-4 before:bg-surface-base">
-        {/* 모바일: 줄바꿈으로 전부 표시(가로 스크롤 제거) */}
-        <div className="flex flex-wrap items-center gap-1 bg-surface-high rounded-input p-0.5 lg:flex-nowrap">
-          <SectionTab active={shownSec === 'venues'} label="커뮤니티"    onClick={() => setSection('venues')} />
+        <div ref={secBarRef} className="relative flex items-center gap-1 overflow-x-auto scrollbar-none rounded-input bg-surface-high p-0.5">
+          <SlidingPill containerRef={secBarRef} activeKey={shownSec} className="rounded-[6px] bg-accent-300" />
+          <SectionTab active={shownSec === 'venues'} label="홀덤펍" onClick={() => setSection('venues')} />
+          <SectionTab active={shownSec === 'board'}  label="게시판" onClick={() => setSection('board')} />
           <SectionTab active={shownSec === 'live'}   label="실시간" onClick={() => setSection('live')} />
-          <SectionTab active={shownSec === 'board'}  label="게시판"      onClick={() => setSection('board')} />
-          <SectionTab active={shownSec === 'dealer'} label="딜러"        onClick={() => setSection('dealer')} />
-          <SectionTab active={shownSec === 'rank'}   label="랭킹"        onClick={() => setSection('rank')} />
+          <SectionTab active={shownSec === 'rank'}   label="랭킹"   onClick={() => setSection('rank')} />
           {marketSlot && <SectionTab active={shownSec === 'market'} label="장터" onClick={() => setSection('market')} />}
+          <SectionTab active={shownSec === 'dealer'} label="딜러"   onClick={() => setSection('dealer')} />
           {canOwnerCommunity && (
             <SectionTab active={shownSec === 'owner'} label="업주" onClick={() => setSection('owner')} />
           )}
@@ -280,15 +293,16 @@ function SectionTab({ active, label, onClick }: { active: boolean; label: string
     <button
       type="button"
       onClick={onClick}
+      data-pill-active={active || undefined}
       className={[
-        'relative flex-1 px-1 lg:px-2 py-2 text-xs font-semibold rounded-[6px] whitespace-nowrap',
-        'transition-colors duration-300 ease-out',
+        // flex-[1_0_auto]: 자리가 남으면 균등 분배, 좁으면 내용 폭(일정한 px-3)을 지키고 바가 가로 스크롤
+        'relative flex-[1_0_auto] px-3 py-2 text-xs font-semibold rounded-[6px] whitespace-nowrap',
+        'transition-colors',
         'focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0',
         active ? 'text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary',
       ].join(' ')}
     >
-      {/* 버튼이 독립 컴포넌트라 형제 간 공용 알약을 둘 부모가 없다 — 팝인으로 대체(framer 제거) */}
-      {active && <span aria-hidden className="absolute inset-0 rounded-[6px] bg-accent-300 animate-fade-in" />}
+      {/* 활성 배경은 부모의 공용 SlidingPill 이 미끄러지며 그린다 — 탭별 개별 팝인 제거 */}
       <span className="relative">{label}</span>
     </button>
   );
