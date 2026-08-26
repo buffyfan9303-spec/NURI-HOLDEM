@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useBackClose } from '../../lib/backstack';
+import { markAllNotificationsRead, markNotificationsRead } from '../../api/notifications';
 import type { AppNotification, NotificationType } from '../../api/notifications';
 import SegmentedTabs from '../atoms/SegmentedTabs';
 import Icon, { type IconName } from '../atoms/Icon';
@@ -73,6 +74,27 @@ export default function NotificationPanel({
   // 뒤로가기 → 알림 패널 닫기(읽음 처리 포함)
   useBackClose(open, handleClose);
 
+  // ── 부팅 딥링크형 링크('?v=' '?s=' '?tab=' '#tool=' '#gto=' …) 직접 처리 ──
+  // 왜: App 의 SPA 핸들러(onNavigate)는 '/경로' 형태만 안다 — 쿼리·해시형을 넘기면
+  // '제목 토스트' 막다른 길이 된다. 이런 링크는 앱 부팅 시에만 소비되므로(App.tsx 의
+  // deepLinked ref 1회 게이트) 전체 재진입 내비게이션으로 확실히 연다.
+  const openBootDeepLink = useCallback((n: AppNotification, link: string) => {
+    // #tool= 은 도구 탭(ToolsPanel)이 마운트돼 있어야 hashchange 를 듣는다 → ?tab=tools 로 재진입
+    const target = link.startsWith('#tool=') ? `/?tab=tools${link}` : link;
+    // 전체 리로드가 진행 중인 읽음 fetch 를 끊으므로, 서버 커밋을 마친 뒤 이동한다.
+    // (기존 '닫을 때 일괄 읽음' 계약 유지 — 스냅샷의 미읽음 전부 + 클릭한 행)
+    const ids = Array.from(new Set([n.id, ...unreadOnOpenRef.current]));
+    unreadOnOpenRef.current = [];
+    markNotificationsRead(ids).catch(() => {}).finally(() => { window.location.assign(target); });
+  }, []);
+
+  // 모두 읽음 — 로컬 상태(onMarkRead: 뱃지 즉시 감소) + 서버는 조건 update 로 50건 밖까지
+  const handleMarkAll = useCallback(() => {
+    const ids = notifications.filter((n) => !n.read).map((n) => n.id);
+    if (ids.length) { onMarkRead(ids); unreadOnOpenRef.current = []; }
+    markAllNotificationsRead().catch(() => {}); // 실패해도 onMarkRead 경로가 보이는 50건은 커밋
+  }, [notifications, onMarkRead]);
+
   if (!open) return null;
 
   const visible = filter === 'unread'
@@ -104,10 +126,19 @@ export default function NotificationPanel({
           'max-h-[calc(100vh-theme(spacing.header-h)-env(safe-area-inset-top)-1rem)] flex flex-col overflow-hidden',
         ].join(' ')}
       >
-        {/* 헤더 */}
+        {/* 헤더 — 우측: 모두 읽음(미읽음 있을 때만) + 전체/안읽음 필터 */}
         <header className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
           <h2 className="text-sm font-semibold text-ink-primary">알림</h2>
-          <div className="flex items-center gap-1 text-2xs">
+          <div className="flex items-center gap-2 text-2xs">
+            {notifications.some((n) => !n.read) && (
+              <button
+                type="button"
+                onClick={handleMarkAll}
+                className="text-2xs font-semibold text-accent-300 hover:text-accent-200 transition-colors focus:outline-none"
+              >
+                모두 읽음
+              </button>
+            )}
             <SegmentedTabs items={[{ key: 'all', label: '전체' }, { key: 'unread', label: '안읽음' }]} value={filter} onChange={setFilter} />
           </div>
         </header>
@@ -124,10 +155,19 @@ export default function NotificationPanel({
               <li
                 key={n.id}
                 onClick={() => {
-                  if (onNavigate) {
-                    onNavigate(n);
-                    handleClose();
+                  // 클릭한 그 알림은 즉시 읽음 — 뱃지가 이동 전에 바로 준다(닫힘 일괄 처리만 기다리지 않게)
+                  if (!n.read) onMarkRead([n.id]);
+                  const link = n.link ?? '';
+                  if (/^https?:\/\//.test(link)) {
+                    // 정규화(api normalizeLink) 후에도 절대 URL = 외부 도메인 — 앱을 떠나지 않고 새 탭
+                    window.open(link, '_blank', 'noopener');
+                  } else if (link.startsWith('?') || link.startsWith('#')) {
+                    openBootDeepLink(n, link); // 읽음 커밋 후 전체 재진입 — 패널 닫힘은 리로드가 대신한다
+                    return;
+                  } else if (onNavigate) {
+                    onNavigate(n); // '/경로' 형태 전부 — App 핸들러(미지 경로는 토스트 폴백 내장)
                   }
+                  handleClose();
                 }}
                 className={[
                   // 행 문법 고정: 아바타 + 텍스트(제목 1줄 + 본문 2줄 예약) + 우측 고정폭 자리
@@ -193,21 +233,7 @@ export default function NotificationPanel({
           )}
         </ul>
 
-        {/* 푸터 — 모두 읽음 */}
-        {notifications.some((n) => !n.read) && (
-          <footer className="px-4 py-2.5 border-t border-border-subtle text-center">
-            <button
-              type="button"
-              onClick={() => {
-                const ids = notifications.filter((n) => !n.read).map((n) => n.id);
-                if (ids.length) { onMarkRead(ids); unreadOnOpenRef.current = []; }
-              }}
-              className="text-xs font-semibold text-accent-300 hover:text-accent-200 transition-colors focus:outline-none"
-            >
-              모두 읽음으로 표시
-            </button>
-          </footer>
-        )}
+        {/* (푸터 '모두 읽음으로 표시'는 헤더 '모두 읽음'으로 이관 — 같은 기능 2곳 중복 방지) */}
       </div>
     </>
   );
