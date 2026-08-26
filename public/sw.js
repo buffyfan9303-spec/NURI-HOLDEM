@@ -6,7 +6,7 @@ const CACHE = 'nuri-shell-v2'; // 버전 올리면 activate 에서 옛 캐시 �
 // 60 상한이면 폰트가 앱 셸 자산을 밀어내며 캐시가 공회전하므로 상한을 함께 올린다.
 const CACHE_MAX_ENTRIES = 150; // 캐시 엔트리 상한 — 초과 시 오래된 것부터 삭제(무한 성장 방지)
 // 캐시 대상: Vite 해시 자산(/assets, 불변) + 아이콘 + 이미지/폰트(같은 출처, /fonts css 포함). HTML·API는 캐시 안 함(항상 최신).
-const CACHEABLE = /\/(assets|fonts|icon|favicon|nuri-logo|2)\b|\.(?:png|jpg|jpeg|svg|webp|gif|woff2?)$/i;
+const CACHEABLE = /\/(assets|fonts|icon|favicon|nuri-logo)\b|\.(?:png|jpg|jpeg|svg|webp|gif|woff2?)$/i;
 
 self.addEventListener('install', (event) => {
   // 오프라인 폴백 페이지 미리 캐시

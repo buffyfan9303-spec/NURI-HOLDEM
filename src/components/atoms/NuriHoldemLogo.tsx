@@ -1,11 +1,10 @@
 /**
- * NuriHoldemLogo — 플랫폼 브랜드 로고 (테마별 자동 전환)
- *  - 다크 테마 : /2.png        (흰 글자 + 투명 배경)
- *  - 라이트 테마: /nuri-logo.png (검은 글자 + 투명 배경)
- *  두 이미지는 동일한 워드마크(같은 크기·형태·여백)라 테마를 바꿔도 위치가 동일하다.
- *  배경이 투명이라 별도 칩 없이 헤더에 직접 얹어도 깔끔하게 보인다.
+ * NuriHoldemLogo — 플랫폼 브랜드 워드마크.
+ * [DS] IMG-1: PNG 2장(다크/라이트) + useTheme 분기 → 인라인 SVG(fill=currentColor) 하나.
+ * 다크/라이트는 CSS 색 상속으로 자동 해결(테마 전환 시 FOUC·이미지 재요청 0).
+ * 형태의 단일 소스는 wordmark.ts(gen-wordmark.mjs 생성) — 정적 셸·클락 워터마크와 공유.
  */
-import { useTheme } from '../../contexts/ThemeContext';
+import { WORDMARK_D, WORDMARK_VIEWBOX } from './wordmark';
 
 interface NuriHoldemLogoProps {
   className?: string;
@@ -14,24 +13,20 @@ interface NuriHoldemLogoProps {
 }
 
 export default function NuriHoldemLogo({ className = '', variant = 'compact' }: NuriHoldemLogoProps) {
-  const { theme } = useTheme();
-  const src = theme === 'dark' ? '/2.png' : '/nuri-logo.png';
+  const svg = (cls: string) => (
+    <svg viewBox={WORDMARK_VIEWBOX} className={cls} role="img" aria-label="NURI HOLDEM">
+      <path fill="currentColor" d={WORDMARK_D} />
+    </svg>
+  );
 
   if (variant === 'full') {
     return (
       <div className={`flex items-center justify-center ${className}`}>
-        <img src={src} alt="NURI HOLDEM" className="w-48 object-contain" draggable={false} />
+        {svg('w-48 text-ink-primary select-none')}
       </div>
     );
   }
 
-  // compact: 헤더 — 높이 고정, 가로 자동. 투명 배경이라 테마 무관 동일 위치.
-  return (
-    <img
-      src={src}
-      alt="NURI HOLDEM"
-      className={`h-8 w-auto object-contain select-none ${className}`}
-      draggable={false}
-    />
-  );
+  // compact: 헤더 — 높이 고정, 가로 자동. 텍스트 색을 그대로 상속받는다.
+  return svg(`h-8 w-auto text-ink-primary select-none ${className}`);
 }
