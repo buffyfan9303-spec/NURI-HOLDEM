@@ -9,8 +9,8 @@
 // ── 동작 ────────────────────────────────────────────────────────────────────
 // 버튼들의 공통 부모(relative)에 이 컴포넌트를 한 번 두고, 활성 버튼에
 // `data-pill-active` 를 표시한다. activeKey 가 바뀌면 활성 버튼을 측정해
-// left/top/width/height 를 잡고 transform 이 아닌 레이아웃 속성 대신
-// **translate+width 전환**으로 미끄러진다(전환은 --ease 단일 곡선).
+// width/height 는 즉시 최종값으로 박고, **transform(translate+scale) 전용 FLIP**으로
+// 미끄러진다(전환은 --ease 단일 곡선) — 애니메이션 구간이 전부 컴포지터에서 돈다.
 //
 //  <div ref={ref} className="relative ...">
 //    <SlidingPill containerRef={ref} activeKey={value} className="bg-accent-300/15 rounded-full" />
@@ -38,6 +38,7 @@ interface Props {
 export default function SlidingPill({ containerRef, activeKey, className = '', underline = false }: Props) {
   const pillRef = useRef<HTMLSpanElement>(null);
   const firstRef = useRef(true);
+  const prevRect = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
   const [, force] = useState(0);
 
   useLayoutEffect(() => {
@@ -47,21 +48,35 @@ export default function SlidingPill({ containerRef, activeKey, className = '', u
 
     const measure = () => {
       const target = container.querySelector<HTMLElement>('[data-pill-active]');
-      if (!target) { pill.style.opacity = '0'; return; }
+      if (!target) { pill.style.opacity = '0'; prevRect.current = null; return; }
       const first = firstRef.current;
       firstRef.current = false;
-      // 첫 배치는 전환 없이 — 어디선가 미끄러져 들어오는 유령 모션 방지
-      pill.style.transition = first ? 'none' : 'transform var(--dur-base) var(--ease), width var(--dur-base) var(--ease), height var(--dur-base) var(--ease), opacity var(--dur-fast) var(--ease)';
+      const r = underline
+        ? { x: target.offsetLeft + 8, y: target.offsetTop + target.offsetHeight - 2, w: Math.max(0, target.offsetWidth - 16), h: 2 }
+        : { x: target.offsetLeft, y: target.offsetTop, w: target.offsetWidth, h: target.offsetHeight };
+      const prev = prevRect.current;
+      prevRect.current = r;
       pill.style.opacity = '1';
-      if (underline) {
-        pill.style.width = `${Math.max(0, target.offsetWidth - 16)}px`;
-        pill.style.height = '2px';
-        pill.style.transform = `translate(${target.offsetLeft + 8}px, ${target.offsetTop + target.offsetHeight - 2}px)`;
-      } else {
-        pill.style.width = `${target.offsetWidth}px`;
-        pill.style.height = `${target.offsetHeight}px`;
-        pill.style.transform = `translate(${target.offsetLeft}px, ${target.offsetTop}px)`;
+      // [DS] MO-4 진짜 FLIP: width/height 는 즉시 최종값(레이아웃 1회)으로 박고,
+      // 미끄러짐은 transform(translate+scale) 만 — 애니메이션 구간 전체가 컴포지터에서 돈다.
+      // (예전엔 width/height 가 트랜지션에 포함돼 매 프레임 레이아웃+페인트였다)
+      pill.style.width = `${r.w}px`;
+      pill.style.height = `${r.h}px`;
+      if (first || !prev) {
+        // 첫 배치·리사이즈 보정은 전환 없이 — 어디선가 미끄러져 들어오는 유령 모션 방지
+        pill.style.transition = 'none';
+        pill.style.transform = `translate(${r.x}px, ${r.y}px)`;
+        return;
       }
+      // Invert: 새 크기의 알약을 '이전 시각 박스'로 되돌려 놓고(transform-origin 0 0 전제)
+      const sx = r.w > 0 ? prev.w / r.w : 1;
+      const sy = r.h > 0 ? prev.h / r.h : 1;
+      pill.style.transition = 'none';
+      pill.style.transform = `translate(${prev.x}px, ${prev.y}px) scale(${sx}, ${sy})`;
+      void pill.offsetWidth; // Invert 프레임 고정(의도적 강제 리플로우 1회) — 이후는 컴포지터
+      // Play: transform 만 전환
+      pill.style.transition = 'transform var(--dur-base) var(--ease), opacity var(--dur-fast) var(--ease)';
+      pill.style.transform = `translate(${r.x}px, ${r.y}px)`;
     };
     measure();
 
@@ -82,7 +97,8 @@ export default function SlidingPill({ containerRef, activeKey, className = '', u
     <span
       ref={pillRef}
       aria-hidden
-      className={['pointer-events-none absolute left-0 top-0 z-0 opacity-0 will-change-transform', className].join(' ')}
+      // origin-top-left: FLIP scale 보정의 수학이 좌상단 원점을 전제로 한다
+      className={['pointer-events-none absolute left-0 top-0 z-0 origin-top-left opacity-0 will-change-transform', className].join(' ')}
     />
   );
 }

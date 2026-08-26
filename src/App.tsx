@@ -1187,23 +1187,63 @@ export default function App() {
       .catch((e) => setSchedulesError(e))
       .finally(() => setSchedulesLoaded(true));
   }, []);
-  // 당겨서 새로고침(유튜브·당근) — 최상단에서 아래로 80px+ 당기면 갱신
-  const [ptr, setPtr] = useState(0); // 0=대기, 양수=당김(px), -1=갱신 중
+  // 당겨서 새로고침(유튜브·당근) — 최상단에서 아래로 56px+ 당기면 갱신
+  // [DS] MO-4: 드래그 값은 React 상태 밖(§20.5 #2) — 예전엔 touchmove 마다 setPtr 로
+  // App 전체가 프레임당 리렌더됐고, in-flow height 인디케이터가 리스트 전체를 매 프레임 밀었다.
+  // 이제 인디케이터는 out-of-flow(fixed) + transform/opacity 전용, 값은 ref + rAF 직접 기록.
+  // React 상태는 '갱신 중' 스피너 불리언 하나뿐이다.
+  const [ptrRefreshing, setPtrRefreshing] = useState(false);
+  const ptrRefreshingRef = useRef(false);
   const ptrStart = useRef<number | null>(null);
-  const onPtrStart = (e: React.TouchEvent) => { if (window.scrollY <= 0) ptrStart.current = e.touches[0].clientY; };
+  const ptrVal = useRef(0);
+  const ptrRaf = useRef(0);
+  const ptrBoxRef = useRef<HTMLDivElement | null>(null);
+  const ptrIconRef = useRef<HTMLSpanElement | null>(null);
+  const ptrPaint = () => {
+    ptrRaf.current = 0;
+    const box = ptrBoxRef.current, icon = ptrIconRef.current;
+    if (!box || !icon) return;
+    const v = ptrVal.current;
+    box.style.transform = `translateY(${Math.min(110, v) - 52}px)`;
+    icon.style.transform = `rotate(${v * 3}deg)`;
+    icon.style.opacity = String(Math.min(1, v / 56));
+  };
+  // 놓은 뒤 스냅백/정착 — transform 전용 트랜지션(컴포지터). 드래그 중엔 start 에서 none 으로 끈다.
+  const ptrSettle = (y: number, iconOpacity: string) => {
+    const box = ptrBoxRef.current, icon = ptrIconRef.current;
+    if (!box) return;
+    box.style.transition = 'transform 0.2s var(--ease)';
+    box.style.transform = `translateY(${y}px)`;
+    if (icon) { icon.style.transform = ''; icon.style.opacity = iconOpacity; }
+  };
+  const onPtrStart = (e: React.TouchEvent) => {
+    if (window.scrollY <= 0 && !ptrRefreshingRef.current) {
+      ptrStart.current = e.touches[0].clientY;
+      if (ptrBoxRef.current) ptrBoxRef.current.style.transition = 'none';
+    }
+  };
   const onPtrMove = (e: React.TouchEvent) => {
-    if (ptrStart.current == null || ptr === -1) return;
+    if (ptrStart.current == null || ptrRefreshingRef.current) return;
     const dy = e.touches[0].clientY - ptrStart.current;
-    setPtr(dy > 8 && window.scrollY <= 0 ? Math.min(110, dy * 0.5) : 0);
+    ptrVal.current = dy > 8 && window.scrollY <= 0 ? Math.min(110, dy * 0.5) : 0;
+    if (!ptrRaf.current) ptrRaf.current = requestAnimationFrame(ptrPaint);
   };
   const onPtrEnd = () => {
-    const pulled = ptr;
+    const pulled = ptrVal.current;
     ptrStart.current = null;
+    ptrVal.current = 0;
+    if (ptrRaf.current) { cancelAnimationFrame(ptrRaf.current); ptrRaf.current = 0; }
     if (pulled >= 56) {
-      setPtr(-1);
+      ptrRefreshingRef.current = true;
+      setPtrRefreshing(true);
+      ptrSettle(4, '1'); // 헤더 바로 아래 정착 후 스핀
       reloadSchedules();
-      setTimeout(() => setPtr(0), 900);
-    } else setPtr(0);
+      setTimeout(() => {
+        ptrRefreshingRef.current = false;
+        setPtrRefreshing(false);
+        ptrSettle(-52, '0');
+      }, 900);
+    } else ptrSettle(-52, '0');
   };
   const reloadVenues    = useCallback(() => { getVenues().then((v) => { setVenues((prev) => (sameJson(prev, v) ? prev : v)); writeSnap('venues', v); }).catch(() => {}); }, []);  
   const reloadPosts     = useCallback(() => { getPosts().then((v) => { setPosts(v); writeSnap('posts', v); }).catch(() => {}); }, []);
@@ -2196,14 +2236,16 @@ export default function App() {
       {(activeTab === 'browse' || visitedTabs.has('browse')) && (
         <main className="tab-pane" style={activeTab !== 'browse' ? { display: 'none' } : undefined}
           onTouchStart={onPtrStart} onTouchMove={onPtrMove} onTouchEnd={onPtrEnd}>
-          {/* 당겨서 새로고침 인디케이터 — ♠ 회전 */}
-          {ptr !== 0 && (
-            <div className="flex items-center justify-center overflow-hidden transition-[height] lg:hidden"
-              style={{ height: ptr === -1 ? 52 : ptr }} aria-hidden>
-              <span className={['text-2xl text-accent-300', ptr === -1 ? 'animate-spin' : ''].join(' ')}
-                style={ptr !== -1 ? { transform: `rotate(${ptr * 3}deg)`, opacity: Math.min(1, ptr / 56) } : undefined}>♠</span>
-            </div>
-          )}
+          {/* 당겨서 새로고침 인디케이터 — ♠ 회전. out-of-flow(fixed) 오버레이(MO-4):
+              헤더(z-50) 아래 z-40 에서 translateY 로 내려온다 — 콘텐츠를 밀지 않는다(리레이아웃 0).
+              대기 시 translateY(-52px)로 불투명 헤더 뒤에 숨는다. */}
+          <div ref={ptrBoxRef}
+            className="pointer-events-none fixed inset-x-0 z-40 flex h-[52px] items-center justify-center lg:hidden"
+            style={{ top: 'var(--stack-top, 97px)', transform: 'translateY(-52px)' }} aria-hidden>
+            <span ref={ptrIconRef}
+              className={['text-2xl text-accent-300', ptrRefreshing ? 'animate-spin' : ''].join(' ')}
+              style={{ opacity: 0 }}>♠</span>
+          </div>
           {/* display:contents 로 래퍼 박스를 없애 검색+날짜 sticky 가 '긴 컨텐츠 컨테이너'의 직계자식이 되도록
               (짧은 헤더 박스에 갇히면 리스트를 스크롤할 때 검색+날짜가 같이 사라짐) */}
           <div className="contents">
