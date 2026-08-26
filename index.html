@@ -111,8 +111,8 @@
           </div>
         </div>
       </header>
-      <!-- [DS] MO-7A: React browse 첫 화면의 상단 스택(검색바 55 + 날짜레일 59 + 필터 199 +
-           뷰토글 45 + 주간킹 51 + 공지 50) 자리를 정적으로 예약 — 예전엔 셸이 헤더 바로 아래
+      <!-- [DS] MO-7A: React browse 첫 화면의 상단 스택(검색바 55 + 날짜레일 59 + 필터 칩 레일 48 +
+           뷰토글 42 + 주간킹 51 + 공지 50) 자리를 정적으로 예약 — 예전엔 셸이 헤더 바로 아래
            y≈74 에서 카드를 시작해 마운트 순간 ~360px 낙하가 콜드 로드마다 100% 재현됐다.
            실측 2026-08-26 · 375px · html 17px. 클래스는 소스에 존재하는 문자열만(Tailwind 퍼지
            안전), 보정치는 인라인 style. 값이 어긋나면 App.tsx browse 상단과 함께 재측정할 것. -->
@@ -120,17 +120,10 @@
         <div class="px-page-x pt-1.5 pb-1.5"><div class="skeleton rounded-input" style="height:42.5px"></div></div>
         <div class="flex items-center gap-1.5 overflow-x-auto scrollbar-none px-page-x" style="height:58.7px"><div class="skeleton shrink-0 h-[2.6rem] w-[2.6rem]"></div><div class="skeleton shrink-0 h-[2.6rem] w-[2.6rem]"></div><div class="skeleton shrink-0 h-[2.6rem] w-[2.6rem]"></div><div class="skeleton shrink-0 h-[2.6rem] w-[2.6rem]"></div><div class="skeleton shrink-0 h-[2.6rem] w-[2.6rem]"></div><div class="skeleton shrink-0 h-[2.6rem] w-[2.6rem]"></div><div class="skeleton shrink-0 h-[2.6rem] w-[2.6rem]"></div><div class="skeleton shrink-0 h-[2.6rem] w-[2.6rem]"></div><div class="skeleton shrink-0 h-[2.6rem] w-[2.6rem]"></div><div class="skeleton shrink-0 h-[2.6rem] w-[2.6rem]"></div></div>
       </div>
-      <div class="flex flex-col gap-2 px-page-x pt-1.5 pb-0.5">
-        <div class="flex items-center gap-1.5 flex-wrap">
-          <div class="skeleton rounded-input" style="height:44.5px;width:100%"></div>
-          <div class="skeleton rounded-input" style="height:44.5px;width:100%"></div>
-          <div class="skeleton rounded-input" style="height:44.5px;width:100%"></div>
-          <div class="skeleton rounded-input" style="height:38.3px;width:60%"></div>
-        </div>
-      </div>
+      <div class="flex items-center gap-1.5 overflow-x-auto scrollbar-none px-page-x" style="height:48px"><div class="skeleton shrink-0 rounded-badge" style="height:36px;width:66px"></div><div class="skeleton shrink-0 rounded-badge" style="height:36px;width:56px"></div><div class="skeleton shrink-0 rounded-badge" style="height:36px;width:56px"></div><div class="skeleton shrink-0 rounded-badge" style="height:36px;width:56px"></div><div class="skeleton shrink-0 rounded-badge" style="height:36px;width:66px"></div><div class="skeleton shrink-0 rounded-badge" style="height:36px;width:66px"></div></div>
       <div class="flex items-center justify-between gap-2 px-page-x pt-1.5">
         <div class="skeleton" style="height:20px;width:96px"></div>
-        <div class="skeleton rounded-input" style="height:38.3px;width:150px"></div>
+        <div class="skeleton rounded-input" style="height:36px;width:150px"></div>
       </div>
       <div class="px-page-x pt-3"><div class="skeleton rounded-card" style="height:38px"></div></div>
       <div class="px-page-x pt-3">

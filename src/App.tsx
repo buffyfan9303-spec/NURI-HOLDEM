@@ -805,7 +805,7 @@ export default function App() {
   const [searchState, setSearchState] = useState<SearchState>({ query: '', dates: [], regions: [], format: null, gtdOnly: false, competitionOnly: false, grade: null, budget: null });
   // 전체 초기화 버튼을 '총 N개' 줄에 두기 위해 검색바의 clearAll 을 ref 로 끌어올림
   const searchBarRef = useRef<{ clearAll: () => void } | null>(null);
-  const hasActiveSearchFilter = !!(searchState.query || searchState.dates.length || searchState.regions.length || searchState.format || searchState.gtdOnly || searchState.competitionOnly || searchState.grade);
+  const hasActiveSearchFilter = !!(searchState.query || searchState.dates.length || searchState.regions.length || searchState.format || searchState.gtdOnly || searchState.competitionOnly || searchState.grade || searchState.budget != null);
   const [authOpen, setAuthOpen]       = useState(false);
   const [authMode, setAuthMode]       = useState<'login' | 'signup-user'>('login'); // QR 회원가입 진입용
   const [openVenueId, setOpenVenueId] = useState<string | null>(null);
@@ -2272,7 +2272,7 @@ export default function App() {
                   type="button"
                   onClick={toggleNearSort}
                   aria-pressed={nearSort}
-                  className={['hit shrink-0 -my-1.5 inline-flex h-8 items-center gap-1 rounded-badge border px-2 text-2xs font-bold transition-colors',
+                  className={['hit shrink-0 inline-flex h-9 items-center gap-1 rounded-badge border px-3 text-xs font-bold transition-colors',
                     nearSort ? 'border-accent-300 bg-accent-300/10 text-accent-300' : 'border-border-default text-ink-secondary hover:text-ink-primary'].join(' ')}>
                   📍 가까운 순
                 </button>
@@ -2283,7 +2283,7 @@ export default function App() {
                     onClick={() => searchBarRef.current?.clearAll()}
                     // 22px 였다 — 빈 화면에서 유일한 탈출구인데 9px 아이콘에 회색 글씨라
                     // 눈에도 안 띄고 손가락으로도 짚기 어려웠다. 히트영역을 키우고 대비를 올린다.
-                    className="shrink-0 -my-1.5 inline-flex h-8 items-center gap-1 rounded-badge border border-border-default px-2 text-2xs text-ink-secondary transition-colors hover:border-danger/40 hover:text-danger focus:outline-none"
+                    className="shrink-0 inline-flex h-9 items-center gap-1 rounded-badge border border-border-default px-3 text-xs text-ink-secondary transition-colors hover:border-danger/40 hover:text-danger focus:outline-none"
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 6h18M8 6V4h8v2m-1 0v14H9V6" /></svg>
                     초기화
@@ -2297,7 +2297,7 @@ export default function App() {
                     onClick={() => setFollowedOnly((v) => !v)}
                     aria-pressed={followedOnly}
                     className={[
-                      'inline-flex h-9 items-center gap-1 rounded-input border px-2.5 text-2xs font-bold leading-none transition-colors',
+                      'inline-flex h-9 items-center gap-1 rounded-badge border px-3 text-xs font-bold leading-none transition-colors',
                       followedOnly ? 'border-accent-300 bg-accent-300 text-white' : 'border-border-subtle bg-surface-high/60 text-ink-secondary hover:text-ink-primary',
                     ].join(' ')}
                   >
@@ -2404,7 +2404,8 @@ export default function App() {
                   <EmptyState
                     filtered={!!searchState.query.trim() || searchState.dates.length > 0
                       || searchState.regions.length > 0 || !!searchState.format
-                      || searchState.gtdOnly || searchState.competitionOnly}
+                      || searchState.gtdOnly || searchState.competitionOnly
+                      || !!searchState.grade || searchState.budget != null}
                     filterSummary={[
                       searchState.query.trim() && `검색어 "${searchState.query.trim()}"`,
                       searchState.dates.length > 0 && `날짜 ${searchState.dates.length}일`,
@@ -2413,6 +2414,7 @@ export default function App() {
                       searchState.grade && ({ daily: '데일리', satellite: '새틀', series: '시리즈' } as Record<string, string>)[searchState.grade],
                       searchState.gtdOnly && 'GTD',
                       searchState.competitionOnly && '대회',
+                      searchState.budget != null && `예산 ${searchState.budget / 10000}만↓`,
                     ].filter(Boolean).join(' · ')}
                     followedOnly={followedOnly}
                     onClearFilters={() => searchBarRef.current?.clearAll()}
