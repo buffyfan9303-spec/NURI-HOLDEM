@@ -10,7 +10,7 @@ import DateTimePicker from '../atoms/DateTimePicker';
 import { useAuth } from '../../contexts/AuthContext';
 import Icon from '../atoms/Icon';
 import { deleteLedgerPlayerAtomic, CELL_TAKEN, cancelMyRecentBuyin,
-  type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type LedgerSessionListItem, type DiscountPreset, type EarlyType, type LedgerGame, type ClockSnapshot, type LedgerLossSummary,
+  type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type LedgerSessionListItem, type DiscountPreset, type EarlyType, type LedgerGame, type LedgerCloseSnapshot, type LedgerLossSummary,
   visitorLabel, wonToMan, WON_PER_MAN, buyinFinance, earlyTypeOf, setBuyinEarly, MAIN_GAME_SEQ, ledgerLossSummary,
   getLedgerSession, getLedgerGames, saveLedgerSession, openLedgerSession, closeLedgerSession, reopenLedgerSession, deleteLedgerSession,
   setRegistrationClosed, getLastLedgerSettings, getLedgerSessionList, getLedgerAccessUserIds, notifyLedgerOpen,
@@ -19,13 +19,16 @@ import { deleteLedgerPlayerAtomic, CELL_TAKEN, cancelMyRecentBuyin,
   searchRegisteredPlayers, type RegisteredPlayer,
   subscribeLedger, posHasPassword, getLedgerPresets, type LedgerPreset,
   getPendingBuyinRequests, approveBuyinRequest, rejectBuyinRequest, subscribeBuyinRequests, type BuyinRequest,
+  getLastClosedRound, type LastClosedRound,
 } from '../../api/ledger';
 import { getStaffSchedule, addStaffShift } from '../../api/staffSchedule';
 import { getVenueRankings } from '../../api/rankings';
 import { exportLedgerXls } from '../../lib/ledgerExport';
 import { getSchedules, type Schedule } from '../../api/schedules';
-import { clockPatchFromSchedule, clockPrizesFromSchedule } from '../../lib/gameInherit';
-import { getClockState, saveClockState, saveClockLevel, subscribeClock, defaultClockConfig, deriveClockCounts, computeLiveStats, levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, type ClockState, type ClockLevelSnapshot } from '../../api/clock';
+import { clockPatchFromSchedule, clockPrizesFromSchedule, applyToLedger, applyToClock, presetFromRound } from '../../lib/gameInherit';
+import { saveGamePreset, type GamePreset } from '../../api/presets';
+import PresetPicker from './PresetPicker';
+import { getClockState, saveClockState, saveClockLevel, subscribeClock, defaultClockConfig, deriveClockCounts, computeLiveStats, levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, type ClockState, type ClockConfig, type ClockLevelSnapshot } from '../../api/clock';
 import { getMyVenueStaff, searchMembersForRanking, type User } from '../../api/auth';
 import { useBackClose } from '../../lib/backstack';
 import { planBuyinApprovals } from '../../lib/buyinApproval';
@@ -386,6 +389,32 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     getLastLedgerSettings(venueId, date).then(setPrefill).catch(() => {});
   }, [loading, showSetup, venueId, date, gameSeq]);
 
+  // PL3: 마지막 '마감된' 회차 — '지난 게임 그대로 열기' 1탭 재료(세션 전체 + 마감 때 캡처한 클락 설정)
+  const [lastRound, setLastRound] = useState<LastClosedRound | null>(null);
+  useEffect(() => {
+    if (!showSetup) { setLastRound(null); return; }
+    let on = true;
+    getLastClosedRound(venueId, date).then((r) => { if (on) setLastRound(r); }).catch(() => {});
+    return () => { on = false; };
+  }, [showSetup, venueId, date]);
+  // 대시보드 '지난 게임 그대로 열기' 인텐트 — 오늘 장부 시작 화면으로 이동 + 1회 자동 적용 예약.
+  // (App/VenueManageTab 를 거치지 않는 파일 내 완결 연동 — localStorage 1키, 10분 TTL, 소비 즉시 제거)
+  const [autoApplyLast, setAutoApplyLast] = useState(false);
+  useEffect(() => {
+    if (!active) return;
+    try {
+      const raw = localStorage.getItem('nuri:last-round-intent');
+      if (!raw) return;
+      localStorage.removeItem('nuri:last-round-intent'); // 1회 소비
+      const it = JSON.parse(raw) as { venueId?: string; at?: number };
+      if (it?.venueId !== venueId || Date.now() - (it.at ?? 0) > 10 * 60_000) return;
+      setDate(today()); setGameSeq(MAIN_GAME_SEQ); setSelected(null); setMode('board');
+      setAutoApplyLast(true);
+    } catch { /* noop */ }
+  }, [active, venueId]);
+  // 오늘 장부가 이미 있으면(설정 화면이 아니면) 자동 적용 예약을 폐기 — 나중에 다른 설정 화면에 오적용 방지
+  useEffect(() => { if (!loading && !showSetup && autoApplyLast) setAutoApplyLast(false); }, [loading, showSetup, autoApplyLast]);
+
   // 사이드 시작 설정일 때 — 그날 메인 게임 설정을 '복사' 버튼으로 제공(반복 입력 제거)
   useEffect(() => {
     if (showSetup && gameSeq !== MAIN_GAME_SEQ) {
@@ -499,11 +528,16 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const handleClose = async (memo: string) => {
     try {
       // C2: 클락이 이 장부에 연동돼 있으면 최종 보정 수치(엔트리/생존/아웃/얼리)를 스냅샷으로 함께 저장 → 통계 보조 표기
-      let snap: ClockSnapshot | null = null;
+      // PL3: 같은 순간의 클락 '설정'(블라인드·얼리·프라이즈)도 회차 스냅샷으로 동봉 — clock_states 는
+      // 다음 게임이 덮으므로, 마감 시점이 '지난 게임 그대로 열기'가 복원할 수 있는 유일한 캡처 기회다.
+      let snap: LedgerCloseSnapshot | null = null;
       if (clock && clock.sessionDate === date) {
         const derived = deriveClockCounts(buyins, { earlyDoubleMin: session.earlyDoubleMin, earlySingleMin: session.earlySingleMin, tournamentStart: session.tournamentStart, openedAt: session.openedAt });
         const ls = computeLiveStats(clock, derived, clock.config);
-        snap = { entries: ls.entries, alive: ls.alive, eliminations: ls.eliminations, rebuys: ls.rebuys, earlies: ls.earlies, addons: ls.addons };
+        snap = {
+          entries: ls.entries, alive: ls.alive, eliminations: ls.eliminations, rebuys: ls.rebuys, earlies: ls.earlies, addons: ls.addons,
+          gameSnapshot: { capturedAt: new Date().toISOString(), clockConfig: clock.config },
+        };
       }
       await closeLedgerSession(venueId, date, memo, gameSeq, snap);
       await reloadSession();
@@ -528,6 +562,20 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const handleReopen = async () => {
     try { await reopenLedgerSession(venueId, date, gameSeq); await reloadSession(); toast.show('마감을 해제했습니다', 'info'); }
     catch (e) { toast.show(e instanceof Error ? e.message : '해제 실패', 'error'); }
+  };
+  // PL3: 마감 직후 '이 게임을 프리셋으로 저장' — 프리셋이 별도 작업이 아니라 운영의 부산물로 쌓이게.
+  const [roundPresetState, setRoundPresetState] = useState<'idle' | 'busy' | 'done'>('idle');
+  useEffect(() => { setRoundPresetState('idle'); }, [date, gameSeq]);
+  const saveRoundPreset = async () => {
+    if (roundPresetState !== 'idle') return;
+    setRoundPresetState('busy');
+    try {
+      const sched = venueSchedules.find((s) => s.id === session.scheduleId) ?? null;
+      const cfg = (clock && clock.sessionDate === date) ? clock.config : (session.clockSnapshot?.gameSnapshot?.clockConfig ?? null);
+      await saveGamePreset(venueId, session.title?.trim() || `${date} 게임`, presetFromRound(session, cfg, sched));
+      setRoundPresetState('done');
+      toast.show('프리셋으로 저장했어요 — 포스터·장부·클락 어디서든 한 번에 불러올 수 있어요', 'success');
+    } catch (e) { setRoundPresetState('idle'); toast.show(e instanceof Error ? e.message : '프리셋 저장 실패', 'error'); }
   };
   const handleRegClose = async () => {
     try { await setRegistrationClosed(venueId, date, !regClosed, gameSeq); await reloadSession(); toast.show(!regClosed ? '레지 마감했습니다' : '레지를 다시 열었습니다', 'info'); }
@@ -753,6 +801,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
             base={{ ...session, ...(prefill ?? {}) }} mode="open" operatorName={operatorName}
             prefilled={!!prefill} schedules={venueSchedules} operatorOptions={operatorOptions}
             presets={presets} scheduledDealers={scheduledNames} copyMain={copyMain}
+            lastRound={lastRound} autoApplyLast={autoApplyLast} onLastApplied={() => setAutoApplyLast(false)}
             onSubmit={handleOpen}
           />
         )}
@@ -907,6 +956,24 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                 : <span className="text-emerald-400"> · 클락 대조 일치 ✓</span>;
             })()}
           </p>
+        </div>
+      )}
+
+      {/* PL3: 마감 직후 프리셋 저장 유도 한 줄 — 이 회차(장부+클락 설정+포스터)가 authoring 재료 */}
+      {closed && canManage && (
+        <div className="flex items-center gap-2 rounded-card border border-border-subtle bg-surface-low px-3 py-2">
+          <Icon name="copy" size={15} className="shrink-0 text-accent-300" />
+          <p className="min-w-0 flex-1 truncate text-2xs text-ink-secondary">
+            {roundPresetState === 'done'
+              ? <>프리셋으로 저장됐어요 — 다음엔 <b className="text-ink-primary">1탭</b>으로 그대로 열 수 있어요.</>
+              : <>이 게임을 <b className="text-ink-primary">프리셋으로 저장</b>할까요? 다음엔 포스터·장부·클락을 한 번에 채워요.</>}
+          </p>
+          {roundPresetState === 'done'
+            ? <span className="shrink-0 text-2xs font-bold text-emerald-400">저장됨 ✓</span>
+            : <button type="button" onClick={saveRoundPreset} disabled={roundPresetState === 'busy'}
+                className="btn-ghost shrink-0 px-2.5 py-1 text-2xs text-accent-300 disabled:opacity-50">
+                {roundPresetState === 'busy' ? '저장 중…' : '프리셋으로 저장'}
+              </button>}
         </div>
       )}
 
@@ -1589,11 +1656,16 @@ function Metric({ label, value, tone }: { label: string; value: string; tone?: '
 }
 
 // ── 세션 설정 폼 (입장/수정 공용) ─────────────────────────────────────────────
-function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, prefilled, schedules = [], operatorOptions = [], presets = [], scheduledDealers = [], copyMain = null }: {
+function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, prefilled, schedules = [], operatorOptions = [], presets = [], scheduledDealers = [], copyMain = null, lastRound = null, autoApplyLast, onLastApplied }: {
   base: LedgerSession; mode: 'open' | 'edit'; operatorName: string;
   onSubmit: (s: LedgerSession) => void; onCancel?: () => void; embedded?: boolean; prefilled?: boolean;
   schedules?: Schedule[]; operatorOptions?: { id: string; label: string }[]; presets?: LedgerPreset[]; scheduledDealers?: string[]; copyMain?: LedgerSession | null;
+  /** PL3: 마지막 마감 회차(세션+클락 설정) — '지난 게임 그대로 열기' 1탭 */
+  lastRound?: LastClosedRound | null;
+  /** 대시보드 인텐트로 진입 시 1회 자동 적용 */
+  autoApplyLast?: boolean; onLastApplied?: () => void;
 }) {
+  const formToast = useToast();
   const [title, setTitle]     = useState(base.title ?? '');
   const [cash, setCash]       = useState<number>(base.buyinAmount || 0);
   const [card, setCard]       = useState<number>(base.cardAmount ?? 0);
@@ -1716,18 +1788,91 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
     setDiscs(copyMain.discounts ?? []);
   };
 
+  // ── PL3 + PL2c: 스냅샷/프리셋에서 온 '클락 몫'은 시작 시 비파괴 병합으로 전달 ──
+  // full = 지난 회차의 완성된 클락 설정(통째), patch = 프리셋의 부분 패치. 폼에서 고친 값이 항상 이긴다.
+  const inheritClockRef = useRef<{ full: ClockConfig | null; patch: Partial<ClockConfig> | null }>({ full: null, patch: null });
+  const isoAt = (dateStr: string, hm: string): string | null => {
+    const t = new Date(`${dateStr}T${hm}:00`);
+    return Number.isNaN(t.getTime()) ? null : t.toISOString();
+  };
+  // 클락 설정 → 폼의 얼리·스택 표시값 동기화(보이는 값과 저장 값이 갈리지 않게)
+  const syncClockFields = (c: Partial<ClockConfig>) => {
+    if (c.earlyBonus != null) setEarlyBonus(c.earlyBonus);
+    if (c.doubleEarlyBonus != null) setDoubleEarlyBonus(c.doubleEarlyBonus);
+    if (c.earlyDoubleLevel != null) setEarlyDoubleLevel(c.earlyDoubleLevel);
+    if (c.earlySingleLevel != null) setEarlySingleLevel(c.earlySingleLevel);
+    if (c.startStack) setStartStack(c.startStack);
+    if (c.rebuyStack) setRebuyStack(c.rebuyStack);
+  };
+
+  // PL3①: '지난 게임 그대로 열기' — 마감 회차(세션 전체+클락 설정)를 폼에 1탭 프리필.
+  // 담당 직원(operIds)과 날짜는 건드리지 않는다(사람 입력은 그 둘만 — DoD).
+  const applyLastRound = (r: LastClosedRound) => {
+    const s = r.session;
+    setTitle(s.title ?? '');
+    setCash(s.buyinAmount || 0);
+    setCard(s.cardAmount ?? 0);
+    setGameType(s.gameType ?? 'gtd');
+    setTarget(s.targetEntries || 0);
+    setMaxEntries(s.maxEntries || 0);
+    setIsAddon(!!s.isAddon);
+    setAddonStack(s.addonStack || 0);
+    setDealers(s.dealers ?? '');
+    setEvent(s.eventMemo ?? '');
+    setDiscs(s.discounts ?? []);
+    // scheduleId 는 복사하지 않는다 — 지난 날짜의 포스터에 오늘 장부를 연결하면 통계·딥링크가 꼬인다.
+    // 스타트 시각은 '시각만' 이어받아 오늘 날짜로 재조립.
+    const hm = s.tournamentStart ? (() => { const t = new Date(s.tournamentStart!); return Number.isNaN(t.getTime()) ? null : `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`; })() : null;
+    if (hm) setStartISO(isoAt(base.sessionDate, hm));
+    inheritClockRef.current = { ...inheritClockRef.current, full: r.clockConfig ?? null };
+    if (r.clockConfig) syncClockFields(r.clockConfig);
+    formToast.show(`지난 게임(${s.sessionDate.slice(5).replace('-', '/')} ${s.title || '제목 없음'}) 설정을 그대로 불러왔어요 — 날짜·담당 직원만 확인하세요`, 'success');
+  };
+  // 대시보드 인텐트 1회 자동 적용
+  const lastAppliedRef = useRef(false);
+  useEffect(() => {
+    if (!autoApplyLast || !lastRound || mode !== 'open' || lastAppliedRef.current) return;
+    lastAppliedRef.current = true;
+    applyLastRound(lastRound);
+    onLastApplied?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoApplyLast, lastRound, mode]);
+
+  // PL2c: 게임 프리셋 → 장부 폼(어댑터 경유 · '있는 것만'). 클락 몫은 시작 시 병합.
+  const applyGamePresetToForm = (p: GamePreset) => {
+    const d = applyToLedger(p.data);
+    if (d.title !== undefined) setTitle(d.title ?? '');
+    if (d.buyinAmount !== undefined) setCash(d.buyinAmount);
+    if (d.cardAmount !== undefined) setCard(d.cardAmount ?? 0);
+    if (d.gameType !== undefined) setGameType(d.gameType);
+    if (d.targetEntries !== undefined) setTarget(d.targetEntries);
+    if (d.maxEntries !== undefined) setMaxEntries(d.maxEntries);
+    if (d.isAddon !== undefined) setIsAddon(d.isAddon);
+    if (d.addonStack !== undefined) setAddonStack(d.addonStack);
+    if (d.dealers !== undefined) setDealers(d.dealers ?? '');
+    if (d.eventMemo !== undefined) setEvent(d.eventMemo ?? '');
+    if (d.discounts !== undefined) setDiscs(d.discounts);
+    if (d.tournamentStartTime) setStartISO(isoAt(base.sessionDate, d.tournamentStartTime));
+    const cp = applyToClock(p.data);
+    inheritClockRef.current = { ...inheritClockRef.current, patch: Object.keys(cp).length ? cp : null };
+    syncClockFields(cp);
+    formToast.show(`'${p.name}' 프리셋 적용 — 채워진 항목만 반영했어요(수정 가능)`, 'success');
+  };
+
   const submit = () => {
     if (cash <= 0) return;
     const tStart = startISO;
     // 연동 클락 얼리 설정 저장 — 진행 중 클락은 건드리지 않음(비파괴 병합)
     if (!clockState?.running) {
-      const baseCfg = clockState?.config ?? defaultClockConfig();
+      // PL3: '지난 게임 그대로 열기'로 불러온 완성 클락 설정이 있으면 그게 베이스(빈 기본값보다 우선)
+      const baseCfg = inheritClockRef.current.full ?? clockState?.config ?? defaultClockConfig();
       // PL1a+b: 연동 포스터의 구조(레벨·레지레벨·애드온)와 상금(원 정규형)을 클락에 함께 병합 —
       // '클락 설정 단계가 일상 운영에서 사라진다'(§13-B 최고 ROI 두 곳 중 ②). 폼에서 고친 값이 우선.
       const linkedSched = schedules.find((s) => s.id === schedId) ?? null;
       const schedPatch = linkedSched ? clockPatchFromSchedule(linkedSched) : {};
       const prizeRows = linkedSched ? clockPrizesFromSchedule(linkedSched) : null;
       const cfg = { ...baseCfg, ...schedPatch, ...(prizeRows ? { prizes: prizeRows } : {}),
+        ...(inheritClockRef.current.patch ?? {}), // PL2c: 게임 프리셋의 클락 몫(부분 패치)
         earlyBonus, doubleEarlyBonus, earlyDoubleLevel, earlySingleLevel, startStack, rebuyStack };
       const next: ClockState = clockState
         ? { ...clockState, config: cfg }
@@ -1779,17 +1924,36 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
         </div>
       )}
 
+      {/* PL3①: 스냅샷이 최우선 후보 — 마지막 마감 회차를 1탭으로 그대로(§13-B 생성 경로 역전) */}
+      {mode === 'open' && lastRound && (
+        <button type="button" onClick={() => applyLastRound(lastRound)} data-testid="open-last-round"
+          className="flex w-full items-center gap-2 rounded-input border border-emerald-500/40 bg-emerald-500/[0.08] px-3 py-2.5 text-left transition-colors hover:bg-emerald-500/[0.14]">
+          <Icon name="refresh" size={16} className="shrink-0 text-emerald-400" />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-bold text-emerald-300">
+              지난 게임 그대로 열기 — {lastRound.session.sessionDate.slice(5).replace('-', '/')} {lastRound.session.title || '제목 없음'}
+            </span>
+            <span className="block text-2xs text-ink-muted">
+              단가·할인·딜러{lastRound.clockConfig ? '·블라인드·얼리·상금' : ''}까지 한 번에 — 날짜·담당 직원만 확인하세요
+            </span>
+          </span>
+        </button>
+      )}
       {mode === 'open' && copyMain && (base.gameSeq ?? 1) > 1 && (
         <button type="button" onClick={applyCopyMain}
           className="w-full flex items-center justify-center gap-1.5 rounded-input border border-accent-400/50 bg-accent-300/12 px-3 py-2.5 text-sm font-bold text-accent-300 transition-colors hover:bg-accent-300/20">
           📋 메인 게임 설정 그대로 복사 (단가·할인·딜러·유형)
         </button>
       )}
+      {/* PL2c: 게임 프리셋(공용 PresetPicker) — 저장된 프리셋 1개로 장부+클락 몫까지 프리필 */}
+      {mode === 'open' && (
+        <PresetPicker venueId={base.venueId} scope="ledger" onApply={applyGamePresetToForm} />
+      )}
       {mode === 'open' && presets.length > 0 && (
-        <Field label="프리셋 게임 · 클릭하면 아래 내용 자동입력(수정 가능)">
+        <Field label="최근 게임 · 클릭하면 아래 내용 자동입력(수정 가능)">
           <button type="button" onClick={() => setPresetOpen((v) => !v)}
             className="w-full flex items-center justify-between px-3.5 py-3 rounded-input border border-accent-400/40 bg-accent-300/10 text-base font-bold text-accent-300 hover:bg-accent-300/15 transition-colors">
-            <span>📋 {presetOpen ? '프리셋 닫기' : `프리셋에서 게임 불러오기 (${presets.length})`}</span>
+            <span>📋 {presetOpen ? '최근 게임 닫기' : `최근 게임에서 불러오기 (${presets.length})`}</span>
             <span className="text-sm">{presetOpen ? '▲' : '▼'}</span>
           </button>
           {presetOpen && (
@@ -1804,7 +1968,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
               ))}
             </div>
           )}
-          <p className="text-xs text-ink-muted mt-1">최근 게임 3개가 상단에 표시됩니다. 담당 직원은 프리셋과 무관하게 아래에서 선택하세요.</p>
+          <p className="text-xs text-ink-muted mt-1">최근 게임 3개가 상단에 표시됩니다. 담당 직원은 이 목록과 무관하게 아래에서 선택하세요.</p>
         </Field>
       )}
 

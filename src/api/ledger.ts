@@ -1,6 +1,7 @@
 // src/api/ledger.ts — NURI POS 장부 시스템 API
 import { supabase, IS_MOCK } from '../lib/supabase';
 import { currentUser } from './_session';
+import type { ClockConfig as ClockConfigT } from './clock'; // 타입 전용 — 런타임 순환 없음
 
 export type PaymentMethod = 'ticket' | 'cash' | 'transfer' | 'card' | 'support';
 export type EarlyType = 'double' | 'single' | 'none'; // 더블얼리 / 1얼리 / 없음
@@ -42,6 +43,16 @@ export interface LedgerBuyin {
 /** C2: 마감 시 저장하는 클락 최종 보정 수치(통계 보조 표기용). 장부 바인과 별개 기준. */
 export interface ClockSnapshot { entries: number; alive: number; eliminations: number; rebuys: number; earlies: number; addons: number }
 
+// PL3: 마감 시점 회차 스냅샷 — 그 게임 설정이 완성된 유일한 순간의 클락 설정을 함께 보존.
+// clock_states 는 (venue,game_seq)당 1행이라 다음 게임이 시작되면 덮이므로, 마감 순간에 캡처해야
+// '지난 게임 그대로 열기'가 클락(블라인드·얼리·프라이즈)까지 복원할 수 있다.
+// 저장 위치: 기존 ledger_sessions.clock_snapshot(jsonb)에 gameSnapshot 키 추가 — 스키마 마이그레이션 불필요.
+// ⚠ ClockConfig 는 타입 전용 임포트(clock.ts 가 이 파일을 런타임 임포트하므로 순환 방지).
+export interface GameRoundSnapshot { capturedAt: string; clockConfig?: ClockConfigT | null }
+/** 마감 스냅샷 = 기존 카운트(ClockSnapshot) + 선택적 회차 스냅샷. 카운트 없는 스냅샷은 쓰지 않는다
+ *  (통계 clockAgg 가 non-null 스냅샷을 게임 수로 집계 — 카운트 없는 행이 평균을 왜곡). */
+export type LedgerCloseSnapshot = ClockSnapshot & { gameSnapshot?: GameRoundSnapshot }
+
 export interface LedgerSession {
   venueId: string;
   sessionDate: string;
@@ -71,7 +82,7 @@ export interface LedgerSession {
   closeMemo?: string | null;
   voucherIssued?: number;       // 매장이용권 발행/시상 장수(당일)
   voucherAccrualPerBin?: number; // 바인 1회당 매장이용권 적립 수(0=off)
-  clockSnapshot?: ClockSnapshot | null; // C2: 마감 시 클락 최종 스냅샷(통계 보조)
+  clockSnapshot?: LedgerCloseSnapshot | null; // C2: 마감 시 클락 최종 스냅샷(통계 보조 + PL3 회차 스냅샷)
 }
 
 export interface LedgerPlayer {
@@ -249,7 +260,7 @@ const rowToSession = (venueId: string, date: string, d: any): LedgerSession => (
   tournamentStart: d?.tournament_start ?? null,
   voucherIssued: d?.voucher_issued ?? 0,
   voucherAccrualPerBin: d?.voucher_accrual_per_bin ?? 0,
-  clockSnapshot: (d?.clock_snapshot ?? null) as ClockSnapshot | null,
+  clockSnapshot: (d?.clock_snapshot ?? null) as LedgerCloseSnapshot | null,
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -498,6 +509,22 @@ export async function getLedgerPresets(venueId: string, limit = 8): Promise<Ledg
   return out;
 }
 
+/** PL3: 가장 최근 '마감된' 회차 — '지난 게임 그대로 열기' 1탭 프리필의 재료.
+ *  세션 전체 필드 + (마감 때 동봉해 둔) 클락 설정 스냅샷을 함께 돌려준다.
+ *  같은 날짜에 게임이 여럿이면 메인(game_seq 낮은 쪽)을 대표로 삼는다. */
+export interface LastClosedRound { session: LedgerSession; clockConfig: ClockConfigT | null }
+export async function getLastClosedRound(venueId: string, beforeDate: string): Promise<LastClosedRound | null> {
+  if (IS_MOCK) return null;
+  const { data } = await supabase.from('ledger_sessions')
+    .select('*')
+    .eq('venue_id', venueId).eq('closed', true).lt('session_date', beforeDate)
+    .order('session_date', { ascending: false }).order('game_seq', { ascending: true })
+    .limit(1).maybeSingle();
+  if (!data) return null;
+  const session = rowToSession(venueId, (data as { session_date: string }).session_date, data);
+  return { session, clockConfig: session.clockSnapshot?.gameSnapshot?.clockConfig ?? null };
+}
+
 /** 세션 편집 저장(단가/게임내용/이벤트/딜러/기준엔트리). 마감/담당직원 필드는 건드리지 않음. */
 export async function saveLedgerSession(s: LedgerSession): Promise<void> {
   if (IS_MOCK) return;
@@ -549,8 +576,8 @@ export async function setRegistrationClosed(venueId: string, date: string, close
   if (error) throw error;
 }
 
-/** 장부 정산 마감 — 읽기전용 스냅샷 + 마감 메모 */
-export async function closeLedgerSession(venueId: string, date: string, memo: string, gameSeq = MAIN_GAME_SEQ, clockSnapshot?: ClockSnapshot | null): Promise<void> {
+/** 장부 정산 마감 — 읽기전용 스냅샷 + 마감 메모. PL3: 스냅샷에 gameSnapshot(클락 설정) 동봉 가능. */
+export async function closeLedgerSession(venueId: string, date: string, memo: string, gameSeq = MAIN_GAME_SEQ, clockSnapshot?: LedgerCloseSnapshot | null): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.from('ledger_sessions')
     .update({ closed: true, closed_at: new Date().toISOString(), close_memo: memo || null, clock_snapshot: clockSnapshot ?? null, updated_at: new Date().toISOString() })
