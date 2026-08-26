@@ -20,18 +20,18 @@ export default function BusinessFooter({ onOpenLegal, onOpenSupport }: { onOpenL
         {/* 약관·정책 링크 */}
         <nav className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-2xs">
           {/* 업주 완전 사용설명서(공개 정적 페이지) — 회원가입부터 정산까지 전 기능 안내 */}
-          <a href="/guide/manual.html" target="_blank" rel="noopener" className="font-semibold text-accent-300/90 hover:text-accent-300">📖 사용설명서</a>
+          <a href="/guide/manual.html" target="_blank" rel="noopener" className="inline-flex items-center py-1.5 -my-1.5 font-semibold text-accent-300/90 hover:text-accent-300">사용설명서</a>
           <span className="text-border-strong" aria-hidden>·</span>
-          <button type="button" onClick={() => onOpenLegal?.('terms')} className="font-semibold text-ink-secondary hover:text-accent-300">이용약관</button>
+          <button type="button" onClick={() => onOpenLegal?.('terms')} className="inline-flex items-center py-1.5 -my-1.5 font-semibold text-ink-secondary hover:text-accent-300">이용약관</button>
           <span className="text-border-strong" aria-hidden>·</span>
-          <button type="button" onClick={() => onOpenLegal?.('privacy')} className="font-semibold text-ink-secondary hover:text-accent-300">개인정보처리방침</button>
+          <button type="button" onClick={() => onOpenLegal?.('privacy')} className="inline-flex items-center py-1.5 -my-1.5 font-semibold text-ink-secondary hover:text-accent-300">개인정보처리방침</button>
           <span className="text-border-strong" aria-hidden>·</span>
-          <button type="button" onClick={() => onOpenLegal?.('refund')} className="font-semibold text-ink-secondary hover:text-accent-300">취소·환불 정책</button>
+          <button type="button" onClick={() => onOpenLegal?.('refund')} className="inline-flex items-center py-1.5 -my-1.5 font-semibold text-ink-secondary hover:text-accent-300">취소·환불 정책</button>
           <span className="text-border-strong" aria-hidden>·</span>
-          <button type="button" onClick={() => onOpenLegal?.('location')} className="font-semibold text-ink-secondary hover:text-accent-300">위치기반서비스 이용약관</button>
+          <button type="button" onClick={() => onOpenLegal?.('location')} className="inline-flex items-center py-1.5 -my-1.5 font-semibold text-ink-secondary hover:text-accent-300">위치기반서비스 이용약관</button>
           {onOpenSupport && <>
             <span className="text-border-strong" aria-hidden>·</span>
-            <button type="button" onClick={onOpenSupport} className="font-semibold text-accent-300/90 hover:text-accent-300">고객센터 문의</button>
+            <button type="button" onClick={onOpenSupport} className="inline-flex items-center py-1.5 -my-1.5 font-semibold text-accent-300/90 hover:text-accent-300">고객센터 문의</button>
           </>}
         </nav>
 

@@ -25,7 +25,15 @@ export default function PosterCarousel({ schedules, loaded, onSelect }: {
       .slice(0, 8);
   }, [schedules]);
 
-  // 로딩 중엔 자리를 예약(도착 시 밀림 방지 — MO-7 삽입 규칙), 없음 확정 시에만 접는다
+  // 로딩 예약은 '지난 방문에 포스터가 있던 기기'만 — 포스터 0건 서비스 상태에서
+  // 스켈레톤을 예약했다 접으면 그 접힘 자체가 CLS 가 된다(perf 게이트 실측 0.43).
+  // 포스터가 생기면 최초 1회만 삽입 밀림을 허용하고, 이후 방문은 예약이 맞는다.
+  let expect = false;
+  try { expect = localStorage.getItem('nuri:carousel-seen') === '1'; } catch { /* noop */ }
+  if (loaded) {
+    try { localStorage.setItem('nuri:carousel-seen', items.length > 0 ? '1' : '0'); } catch { /* noop */ }
+  }
+  if (!loaded && !expect) return null;
   if (!loaded) {
     return (
       <div className="pt-3" aria-hidden>

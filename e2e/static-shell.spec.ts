@@ -48,8 +48,9 @@ test.describe('정적 앱 셸 — 첫 페인트', () => {
     const shellBox = await p0.locator('[class*="pb-section"]').first().boundingBox();
     await ctx.close();
     expect(shellBox, '셸 목록 컨테이너가 없다').toBeTruthy();
-    // 필터 칩 레일 재설계(세그먼트 3단 199px → 칩 한 줄 48px)로 목록 시작 y 하향 — 임계 동조정
-    expect(shellBox!.y, '셸 상단 스택 예약이 사라졌다(목록이 헤더 바로 아래서 시작)').toBeGreaterThan(300);
+    // P0 컨트롤 압축(검색 접힘·메타 띠 삭제·공지 하단 이동)으로 셸 스택이 ~234px 까지 상향 —
+    // 이 게이트의 원래 목적(예약 전무 시 ~74px 낙하 재발 방지)에 맞춰 임계 동조정
+    expect(shellBox!.y, '셸 상단 스택 예약이 사라졌다(목록이 헤더 바로 아래서 시작)').toBeGreaterThan(180);
 
     // React 마운트 후 같은 컨테이너의 y — 셸과 근접해야 '낙하 없는 교체'다.
     // (공지·주간킹 등 라이브 데이터에 따라 ±수십 px 는 정상 범위)

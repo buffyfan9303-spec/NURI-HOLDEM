@@ -2260,42 +2260,30 @@ export default function App() {
               (짧은 헤더 박스에 갇히면 리스트를 스크롤할 때 검색+날짜가 같이 사라짐) */}
           <div className="contents">
             {/* 검색바+날짜만 sticky(아래 필터·카운트는 스크롤되어 사라짐) */}
-            <IntegratedSearchBar ref={searchBarRef} onChange={setSearchState} eventDates={eventDates} stickyTop="calc(var(--stack-top, 6.0625rem) - 1px)" />
-            {/* APIS식 포스터 오토 캐러셀 — 부스트 우선, 포스터 있는 예정 대회만 */}
-            <PosterCarousel schedules={schedules} loaded={schedulesLoaded} onSelect={handleScheduleSelect} />
-            {/* 뷰 모드 토글 — 일정 탐색 컨텍스트 안에 배치 */}
-            <div className="flex items-center justify-between gap-2 px-page-x pt-1.5">
-              <div className="flex min-w-0 items-center gap-2">
-                <span className="shrink-0 text-2xs text-ink-muted">
-                  총 <span className="text-ink-secondary tabular-nums font-semibold">{visibleSchedules.length}</span>개
-                </span>
-                {/* 📍 가까운 순 — 위치 1회 요청 토글(Phase 14). 좌표 없는 매장은 뒤로. */}
+            <IntegratedSearchBar ref={searchBarRef} onChange={setSearchState} eventDates={eventDates} stickyTop="calc(var(--stack-top, 6.0625rem) - 1px)"
+              trailing={<>
+                {/* P0-1b: 정렬·초기화·뷰토글을 필터 레일 끝에 통합 — '개수+정렬+뷰토글' 띠 삭제 */}
                 <button
                   type="button"
                   onClick={toggleNearSort}
                   aria-pressed={nearSort}
-                  className={['hit shrink-0 inline-flex h-9 items-center gap-1 rounded-badge border px-3 text-xs font-bold transition-colors',
-                    nearSort ? 'border-accent-300 bg-accent-300/10 text-accent-300' : 'border-border-default text-ink-secondary hover:text-ink-primary'].join(' ')}>
+                  className={['hit inline-flex h-9 shrink-0 items-center gap-1 rounded-badge px-3 text-xs font-bold transition-colors',
+                    nearSort ? 'bg-accent-300/15 text-accent-300' : 'bg-surface-high text-ink-secondary hover:bg-surface-float/70'].join(' ')}>
                   <Icon name="map-pin" size={13} /> 가까운 순
                 </button>
-                {/* 전체 초기화 — 별도 줄 차지하지 않게 '총 N개' 옆에 배치(검색바 clearAll 호출) */}
                 {hasActiveSearchFilter && (
                   <button
                     type="button"
                     onClick={() => searchBarRef.current?.clearAll()}
-                    // 22px 였다 — 빈 화면에서 유일한 탈출구인데 9px 아이콘에 회색 글씨라
-                    // 눈에도 안 띄고 손가락으로도 짚기 어려웠다. 히트영역을 키우고 대비를 올린다.
-                    className="shrink-0 inline-flex h-9 items-center gap-1 rounded-badge border border-border-default px-3 text-xs text-ink-secondary transition-colors hover:border-danger/40 hover:text-danger focus:outline-none"
+                    className="inline-flex h-9 shrink-0 items-center gap-1 rounded-badge bg-surface-high px-3 text-xs text-ink-secondary transition-colors hover:text-danger focus:outline-none"
                   >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 6h18M8 6V4h8v2m-1 0v14H9V6" /></svg>
                     초기화
                   </button>
                 )}
-              </div>
-              {/* 팔로우 필터 토글은 오너 지시로 제거(2026-08-27) — 좁은 폭에서 좌측 그룹과
-                  겹치던 원인. 매장 팔로우 기능 자체(매장 페이지·새 게임 푸시)는 유지. */}
-              <ViewModeToggle value={viewMode} onChange={setViewMode} />
-            </div>
+                <span className="shrink-0 pr-2"><ViewModeToggle value={viewMode} onChange={setViewMode} /></span>
+              </>} />
+            {/* APIS식 포스터 오토 캐러셀 — 부스트 우선, 포스터 있는 예정 대회만 */}
+            <PosterCarousel schedules={schedules} loaded={schedulesLoaded} onSelect={handleScheduleSelect} />
           </div>
 
           {/* 🎁 오픈 이벤트 배너 — 서버(check_in 등)와 동일한 KST 날짜 게이트, 8/3 이후 자동 소멸 */}
@@ -2332,54 +2320,14 @@ export default function App() {
           <WeeklyBestStrip active={activeTab === 'browse'} />
 
           {/* 공지 — 일정탐색 상단 (전체 공통 공지만) */}
-          {(browseNotices.length > 0 || isAdmin || !noticesLoaded) && (
-            <div className="px-page-x pt-3">
-              <section className="rounded-card border border-border-subtle bg-surface-low overflow-hidden">
-                <header className="flex items-center justify-between px-3 py-2 border-b border-border-subtle">
-                  <button
-                    type="button"
-                    onClick={() => setNoticesOpen((v) => !v)}
-                    aria-expanded={noticesOpen}
-                    // 글자 높이 그대로면 17px 다. 헤더의 py-2 를 음수 마진으로 되먹여
-                    // 헤더 높이는 유지한 채 손가락이 닿는 영역만 33px 로 넓힌다.
-                    className="-my-2 py-2 -ml-1 pl-1 pr-2 flex items-center gap-1.5 text-xs font-bold text-accent-300 focus:outline-none"
-                  >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                      strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden
-                      className={['transition-transform duration-200', noticesOpen ? '' : '-rotate-90'].join(' ')}>
-                      <polyline points="6 9 12 15 18 9" />
-                    </svg>
-                    공지사항 {browseNotices.length > 0 && <span className="text-2xs text-ink-muted font-normal">({browseNotices.length})</span>}
-                  </button>
-                  {isAdmin && (
-                    <button type="button" onClick={() => setNoticeFormOpen(true)} className="-my-2 py-2 pl-2 text-2xs text-accent-300 hover:text-accent-200 font-semibold">
-                      + 공지 작성
-                    </button>
-                  )}
-                </header>
-                {noticesOpen && (browseNotices.length > 0 ? (
-                  <ul>
-                    {browseNotices.slice(0, 3).map((n) => (
-                      <li key={n.id}>
-                        <button
-                          type="button"
-                          onClick={() => setOpenNotice(n)}
-                          className="w-full text-left px-3 py-2 border-b border-border-subtle last:border-b-0 hover:bg-surface-high/50 transition-colors focus:outline-none"
-                        >
-                          <p className="text-xs font-semibold text-ink-primary truncate">{n.title}</p>
-                          {n.body && <p className="text-2xs text-ink-muted line-clamp-1 mt-0.5">{n.body}</p>}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="px-3 py-3 text-center text-2xs text-ink-muted">등록된 공지가 없습니다</p>
-                ))}
-              </section>
-            </div>
-          )}
 
           <div className="px-page-x pt-3 pb-section lg:pt-4">
+            {/* P2-8 섹션 헤더 패턴: 제목+개수 좌측(콘텐츠 캡션 — 삭제된 '총 N개' 띠의 대체) */}
+            {schedulesLoaded && visibleSchedules.length > 0 && (
+              <p className="flex items-baseline gap-1.5 pb-2 text-lg font-bold tracking-tight text-ink-primary">
+                대회 <span className="text-sm font-bold tabular-nums text-accent-300">{visibleSchedules.length}</span>
+              </p>
+            )}
             {/* PC 3컬럼: 중앙 콘텐츠 + 우측 위젯 레일(xl 이상) — 바이낸스식 정보 밀도 */}
             <div className="flex items-start gap-4">
               <div className="min-w-0 flex-1">
@@ -2388,6 +2336,23 @@ export default function App() {
                 ) : schedulesError && schedules.length === 0 ? (
                   <LoadErrorCard error={schedulesError} what="대회 목록"
                     onRetry={() => { setSchedulesLoaded(false); reloadSchedules(); }} />
+                ) : visibleSchedules.length === 0 && !hasActiveSearchFilter && !followedOnly ? (
+                  // P0-2(오너 진단): 0건 빈 일러스트가 화면 중앙을 차지하던 것 → 슬림 안내 1줄 +
+                  // '지금 진행 중' 콘텐츠 승격. 아래 지난 대회·공지가 그 자리로 올라온다.
+                  <div className="space-y-2">
+                    <p className="px-1 py-3 text-sm text-ink-muted">예정된 대회가 아직 없어요 — 아래에서 지난 대회 결과를 볼 수 있어요.</p>
+                    {liveClocks.length > 0 && (
+                      <button type="button" onClick={() => changeTab('live')}
+                        className="flex w-full items-center gap-2.5 rounded-card bg-surface-high px-3 py-3 text-left transition-colors hover:bg-surface-float/70">
+                        <span className="text-emerald-400"><Icon name="blinds" size={18} /></span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-bold text-ink-primary">지금 <span className="tabular-nums text-emerald-400">{liveClocks.length}</span>개 게임 진행 중</span>
+                          <span className="block text-2xs text-ink-muted">라이브 탭에서 실시간 현황 보기</span>
+                        </span>
+                        <Icon name="chevron-right" size={16} className="shrink-0 text-ink-muted" />
+                      </button>
+                    )}
+                  </div>
                 ) : visibleSchedules.length === 0 ? (
                   <EmptyState
                     filtered={!!searchState.query.trim() || searchState.dates.length > 0
@@ -2452,6 +2417,54 @@ export default function App() {
 
                 {/* 🏁 지난 대회 — 완료된 대회 아카이브(결과는 상세에서) */}
                 <PastTournaments schedules={schedules} onSelect={handleScheduleSelect} />
+
+                {/* P0-1c: 공지 아코디언은 매 진입 정보가 아니라 '지난 대회' 아래로(오너 진단) */}
+          {(browseNotices.length > 0 || isAdmin || !noticesLoaded) && (
+                  <div className="px-page-x pt-3">
+                    <section className="rounded-card border border-border-subtle bg-surface-low overflow-hidden">
+                      <header className="flex items-center justify-between px-3 py-2 border-b border-border-subtle">
+                        <button
+                          type="button"
+                          onClick={() => setNoticesOpen((v) => !v)}
+                          aria-expanded={noticesOpen}
+                          // 글자 높이 그대로면 17px 다. 헤더의 py-2 를 음수 마진으로 되먹여
+                          // 헤더 높이는 유지한 채 손가락이 닿는 영역만 33px 로 넓힌다.
+                          className="-my-2 py-2 -ml-1 pl-1 pr-2 flex items-center gap-1.5 text-xs font-bold text-accent-300 focus:outline-none"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden
+                            className={['transition-transform duration-200', noticesOpen ? '' : '-rotate-90'].join(' ')}>
+                            <polyline points="6 9 12 15 18 9" />
+                          </svg>
+                          공지사항 {browseNotices.length > 0 && <span className="text-2xs text-ink-muted font-normal">({browseNotices.length})</span>}
+                        </button>
+                        {isAdmin && (
+                          <button type="button" onClick={() => setNoticeFormOpen(true)} className="-my-2 py-2 pl-2 text-2xs text-accent-300 hover:text-accent-200 font-semibold">
+                            + 공지 작성
+                          </button>
+                        )}
+                      </header>
+                      {noticesOpen && (browseNotices.length > 0 ? (
+                        <ul>
+                          {browseNotices.slice(0, 3).map((n) => (
+                            <li key={n.id}>
+                              <button
+                                type="button"
+                                onClick={() => setOpenNotice(n)}
+                                className="w-full text-left px-3 py-2 border-b border-border-subtle last:border-b-0 hover:bg-surface-high/50 transition-colors focus:outline-none"
+                              >
+                                <p className="text-xs font-semibold text-ink-primary truncate">{n.title}</p>
+                                {n.body && <p className="text-2xs text-ink-muted line-clamp-1 mt-0.5">{n.body}</p>}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="px-3 py-3 text-center text-2xs text-ink-muted">등록된 공지가 없습니다</p>
+                      ))}
+                    </section>
+                  </div>
+                )}
 
                 {/* [DS] MO-7B 규칙 A — 개인화 블록(오늘예약·바인요청·이어서하기)은 auth 왕복
                     '뒤'에 도착해 목록 위에 끼어들며 매 로그인 부팅마다 계단식 밀림을 만들었다.
@@ -2889,12 +2902,12 @@ const PastTournaments = memo(function PastTournaments({ schedules, onSelect }: {
   }, [pastKey]);
   if (past.length === 0) return null;
   const day = (d: string) => ['일', '월', '화', '수', '목', '금', '토'][new Date(`${d}T00:00:00`).getDay()];
-  const medal = (p: number) => (p === 1 ? '👑' : p === 2 ? '🥈' : p === 3 ? '🥉' : null);
+  const medal = (p: number) => (p === 1 ? '1위' : p === 2 ? '2위' : p === 3 ? '3위' : null);
   return (
     <section className="reveal mt-4 overflow-hidden rounded-card border border-border-subtle bg-surface-low">
       <header className="flex items-center justify-between border-b border-border-subtle px-3 py-2">
         <h2 data-testid="past-tournaments" className="flex items-center gap-1 text-xs font-bold text-ink-secondary"><Icon name="trophy" size={13} /> 지난 대회</h2>
-        <span className="text-2xs text-ink-muted">눌러서 결과·정보 보기</span>
+        
       </header>
       <ul>
         {past.map((s) => {
@@ -2910,8 +2923,9 @@ const PastTournaments = memo(function PastTournaments({ schedules, onSelect }: {
                   {s.date.slice(5).replace('-', '/')}({day(s.date)})
                 </span>
                 <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{s.title}</span>
-                {champ && <span className="shrink-0 text-xs font-bold text-gold-300">👑 {champ.nickname}</span>}
+                {champ && <span className="flex shrink-0 items-center gap-1 text-xs font-bold text-gold-300"><Icon name="trophy" size={12} />{champ.nickname}</span>}
                 <span className="hidden shrink-0 text-xs text-ink-muted sm:inline">{s.pubName}</span>
+                <Icon name="chevron-right" size={14} className="shrink-0 text-ink-muted" />
               </button>
               {opened && entries && (
                 <div className="border-t border-border-subtle bg-surface-base/40 px-3 py-2 animate-fade-in">

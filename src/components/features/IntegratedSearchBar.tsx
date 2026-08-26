@@ -84,9 +84,10 @@ const TOUR_OPTIONS: { id: TourFilter; label: string }[] = [
 
 // ── 필터 칩 공용 문법 — 레일의 모든 칩이 같은 높이(h-9)·라운드·서체를 공유한다 ──
 // (예전 세그먼트 박스 3개가 각자 내용 폭으로 끝나 '칸이 제각각'으로 읽히던 문제의 반대 원칙)
-const CHIP_BASE = 'inline-flex h-9 shrink-0 items-center rounded-badge border px-3.5 text-xs font-bold leading-none transition-colors';
-const CHIP_ON = 'border-accent-300 bg-accent-300/15 text-accent-300';
-const CHIP_OFF = 'border-border-default bg-surface-high/60 text-ink-secondary hover:border-border-strong';
+const CHIP_BASE = 'inline-flex h-9 shrink-0 items-center rounded-badge border border-transparent px-3.5 text-xs font-bold leading-none transition-colors';
+const CHIP_ON = 'bg-accent-300/15 text-accent-300';
+// P1-5(오너 진단 '선 노이즈'): 1px 테두리 대신 배경보다 한 톤 밝은 면으로 그룹화
+const CHIP_OFF = 'bg-surface-high text-ink-secondary hover:bg-surface-float/70';
 
 // 단일선택 축(지역/등급/예산)용 드롭다운 칩 — 닫힌 칩은 짧은 라벨('지역')을, 값이 있으면
 // 값 라벨('서울')을 보여준다. 실제 입력은 투명 오버레이 <select> — 안드로이드/iOS 네이티브
@@ -162,7 +163,8 @@ function DateTab({ slot, selected, hasEvents, onClick }: DateTabProps) {
     rail.scrollTo({ left: rail.scrollLeft + (t.left - r.left) - (r.width - t.width) / 2, behavior: 'smooth' });
   }, [selected]);
 
-  const dowColor = slot.isSun ? 'text-red-400' : slot.isSat ? 'text-blue-400' : 'text-ink-muted';
+  // P1: 주말 표시는 유지하되 채도를 낮춰 액센트와 경쟁하지 않게(오너 진단 — 색 분산)
+  const dowColor = slot.isSun ? 'text-danger-light/70' : slot.isSat ? 'text-sky-400/60' : 'text-ink-muted';
 
   return (
     <button
@@ -208,18 +210,20 @@ function DateSlider({ selectedDates, onToggle, onPick, eventDates }: DateSliderP
   const slots = useRef(buildDateSlots(21)).current;
   const todayIso = slots[0].iso;
 
+  // P0-1d: 'N월' 인라인 셀이 7칸 리듬을 깨던 것 → 레일 위 캡션으로 승격
+  const months = [...new Set(slots.map((x) => x.month))];
   return (
+    <>
+    <div aria-hidden className="px-page-x pt-1 text-2xs font-bold leading-none text-ink-muted">
+      {months.map((m) => `${m}월`).join(' – ')}
+    </div>
     <div
       role="group"
       aria-label="날짜 빠른 선택 (복수 선택 가능)"
-      className="flex items-center gap-1.5 overflow-x-auto scrollbar-none scroll-fade-r px-page-x pt-0.5 pb-1.5 [-webkit-overflow-scrolling:touch] sm:gap-2"
+      className="flex items-center gap-1.5 overflow-x-auto scrollbar-none scroll-fade-r px-page-x pt-1 pb-1.5 [-webkit-overflow-scrolling:touch] sm:gap-2"
     >
       {slots.map((slot) => (
         <Fragment key={slot.iso}>
-          {/* 월 경계(매월 1일)에만 'N월' 구분 라벨 — 칸 모양은 그대로 유지 */}
-          {slot.day === 1 && (
-            <span aria-hidden className="flex shrink-0 select-none items-center pl-1 text-2xs font-bold text-ink-muted">{slot.month}월</span>
-          )}
           <DateTab
             slot={slot}
             selected={selectedDates.includes(slot.iso)}
@@ -246,7 +250,7 @@ function DateSlider({ selectedDates, onToggle, onPick, eventDates }: DateSliderP
           aria-label="날짜 직접 선택"
         />
       </label>
-    </div>
+    </div></>
   );
 }
 
@@ -274,6 +278,8 @@ interface IntegratedSearchBarProps {
   stickyTop?: string;
   /** 승인된 대회가 있는 날짜(ISO) 집합 — 날짜 슬라이더에 점(·)으로 표시해 헛탭 방지 */
   eventDates?: ReadonlySet<string>;
+  /** P0-1b: 정렬·뷰토글 등 상위 컨트롤을 필터 칩 레일 끝에 통합(별도 띠 제거) */
+  trailing?: React.ReactNode;
 }
 
 export interface SearchBarHandle { clearAll: () => void }
@@ -283,6 +289,7 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
   placeholder = '대회명, 펍 이름, 지역 검색…',
   className = '',
   stickyTop,
+  trailing,
   eventDates,
 }, ref) {
   const [rawQuery,       setRawQuery]       = useState('');
@@ -298,6 +305,10 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
   // 바이인 예산 축(UX-2) — buyIn.amount(원) 상한 단일 선택
   const [budget, setBudget] = useState<number | null>(null);
   const [isFocused,      setIsFocused]      = useState(false);
+  // P0-1a(오너 진단 '컨트롤 6단'): 검색 입력은 기본 접힘 — 레일의 돋보기 칩으로 열고,
+  // 검색어가 남아 있는 동안은 계속 보인다(기능 보존·상시 띠 제거)
+  const [searchOpen, setSearchOpen] = useState(false);
+  useEffect(() => { if (searchOpen) inputRef.current?.focus(); }, [searchOpen]);
   const inputRef                            = useRef<HTMLInputElement>(null);
   const stickyRef                           = useRef<HTMLDivElement>(null);
   const [, startTransition]                = useTransition();
@@ -388,6 +399,7 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
         style={stickyTop ? { top: stickyTop } : undefined}
       >
       {/* ── 검색창 ─────────────────────────────────────────────────────── */}
+      {(searchOpen || rawQuery.length > 0) && (
       <div className="px-page-x pt-1.5 pb-1.5">
         <form
           onSubmit={handleSubmit}
@@ -447,6 +459,7 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
           )}
         </form>
       </div>
+      )}
 
       {/* ── 날짜 슬라이더 탭 (복수 선택) ─────────────────────────────────── */}
       <DateSlider selectedDates={selectedDates} onToggle={handleDateToggle} onPick={handlePickDate} eventDates={eventDates} />
@@ -460,6 +473,15 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
            · 저빈도 단일선택(지역/등급/예산)은 네이티브 select 칩(안드로이드 네이티브 피커
              = APK 감각, 시트 구현 0줄) — 값 선택 시 칩이 값 라벨로 바뀌고 액센트 점등 */}
       <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none scroll-fade-r px-page-x pt-2 pb-1">
+        <button
+          type="button"
+          aria-label={searchOpen ? '검색 닫기' : '검색 열기'}
+          aria-expanded={searchOpen}
+          onClick={() => setSearchOpen((v) => !v)}
+          className={['w-9 justify-center px-0', CHIP_BASE, searchOpen || rawQuery ? CHIP_ON : CHIP_OFF].join(' ')}
+        >
+          <SearchIcon className="h-4 w-4" />
+        </button>
         <FilterSelectChip
           ariaLabel="지역 선택"
           value={selectedRegions[0] ?? ''}
@@ -498,6 +520,7 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
           placeholder="예산"
           options={[['', '예산 전체'], ['30000', '3만↓'], ['50000', '5만↓'], ['100000', '10만↓']]}
         />
+        {trailing}
       </div>
 
       {/* ── 활성 필터 요약 칩 — 날짜는 슬라이더에 이미 표시되므로 '복수 선택일 때만' 칩 노출
