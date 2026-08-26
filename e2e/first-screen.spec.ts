@@ -9,6 +9,9 @@ import { dismissOverlays } from './_session';
 test.describe('첫 화면 — 앱을 막 켠 사람이 보는 것', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
+    // P1: 기본 화면이 홈으로 바뀜 — 이 스펙의 대상(일정 탐색)으로 이동
+    await page.getByRole('button', { name: /전체 일정/ }).first().click().catch(() => {});
+    await page.waitForTimeout(400);
     await dismissOverlays(page);
     await page.waitForTimeout(1500);
   });

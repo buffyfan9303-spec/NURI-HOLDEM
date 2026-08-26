@@ -32,9 +32,9 @@ test.beforeEach(async ({ page }) => {
 
 const readPerf = (page: Page) => page.evaluate(() => (window as unknown as { __perf: { cls: number; longFrames: number } }).__perf);
 
-test('perf① browse 콜드 진입 — CLS·롱프레임 기록 + 상한', async ({ page }) => {
+test('perf① 홈 콜드 진입 — CLS·롱프레임 기록 + 상한', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByText('일정 탐색').first()).toBeVisible();
+  await expect(page.getByText('오늘·내일 일정').first()).toBeVisible();
   await page.waitForTimeout(3500); // 배너·개인화 블록 도착분까지 CLS 에 포함
   const p = await readPerf(page);
   console.log(`[perf-baseline] browse-cold CLS=${p.cls.toFixed(3)} longFrames=${p.longFrames}`);
@@ -50,7 +50,7 @@ test('perf② browse→live 탭 전환 — 전환 구간 롱프레임 상한', a
   const before = await readPerf(page);
   await nav.getByRole('button', { name: '라이브', exact: true }).click();
   await expect(page.getByText('진행 중 게임')).toBeVisible();
-  await nav.getByRole('button', { name: '일정', exact: true }).click();
+  await nav.getByRole('button', { name: '홈', exact: true }).click();
   await page.waitForTimeout(800);
   const after = await readPerf(page);
   const delta = after.longFrames - before.longFrames;

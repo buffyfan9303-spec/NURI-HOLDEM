@@ -15,7 +15,7 @@ test('앱 부팅 — 루트 렌더 + 제목 + 미처리 JS 예외 0', async ({ p
   await page.goto('/');
   await expect(page).toHaveTitle(/NHoldem|홀덤|NURI/);
   await expect(page.locator('#root')).not.toBeEmpty();
-  await expect(page.getByText('일정 탐색').first()).toBeVisible();
+  await expect(page.getByText('오늘·내일 일정').first()).toBeVisible(); // P1: 부팅 화면 = 홈
   expect(errors, `미처리 예외: ${errors.join(' | ')}`).toEqual([]);
 });
 
@@ -42,7 +42,10 @@ test('탭 순회 — 라이브/도구/커뮤니티 전환 중 크래시 없음',
   await nav.getByRole('button', { name: '커뮤니티', exact: true }).click();
   await expect(page.locator('#root')).not.toBeEmpty();
 
-  await nav.getByRole('button', { name: '일정', exact: true }).click();
+  await nav.getByRole('button', { name: '홈', exact: true }).click();
+  await expect(page.getByText('오늘·내일 일정').first()).toBeVisible();
+  // 홈 → '전체 일정'으로 탐색 서브 화면 진입(P1 동선)
+  await page.getByRole('button', { name: /전체 일정/ }).first().click();
   await expect(page.getByText('일정 탐색').first()).toBeVisible();
 
   expect(errors, `탭 순회 중 예외: ${errors.join(' | ')}`).toEqual([]);

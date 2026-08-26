@@ -11,8 +11,8 @@ test.describe('정적 앱 셸 — 첫 페인트', () => {
     const page = await ctx.newPage();
     await page.goto('/');
 
-    await expect(page.locator('text=일정 탐색').first(), '헤더 타이틀이 없다').toBeVisible();
-    for (const label of ['일정', '라이브', '커뮤니티', '도구', '내 정보']) {
+    await expect(page.locator('text=홈').first(), '헤더 타이틀이 없다').toBeVisible();
+    for (const label of ['홈', '라이브', '커뮤니티', '도구', '내 정보']) {
       await expect(page.locator(`nav >> text=${label}`).first(), `탭바에 ${label} 이 없다`).toBeVisible();
     }
     // MO-5 에서 셸 스켈레톤이 .skeleton(내부 @apply animate-pulse) 클래스로 통일됐다
@@ -48,9 +48,9 @@ test.describe('정적 앱 셸 — 첫 페인트', () => {
     const shellBox = await p0.locator('[class*="pb-section"]').first().boundingBox();
     await ctx.close();
     expect(shellBox, '셸 목록 컨테이너가 없다').toBeTruthy();
-    // P0 컨트롤 압축(검색 접힘·메타 띠 삭제·공지 하단 이동)으로 셸 스택이 ~234px 까지 상향 —
-    // 이 게이트의 원래 목적(예약 전무 시 ~74px 낙하 재발 방지)에 맞춰 임계 동조정
-    expect(shellBox!.y, '셸 상단 스택 예약이 사라졌다(목록이 헤더 바로 아래서 시작)').toBeGreaterThan(180);
+    // P1 홈 전환: 홈 상단 = 인사 2줄 + 섹션 라벨(~160px). 게이트 목적(예약 전무 ~74px 낙하
+    // 재발 방지)에 맞춰 임계 재보정 — 홈/React 정합은 아래 delta 검사가 담당.
+    expect(shellBox!.y, '셸 상단 스택 예약이 사라졌다(목록이 헤더 바로 아래서 시작)').toBeGreaterThan(120);
 
     // React 마운트 후 같은 컨테이너의 y — 셸과 근접해야 '낙하 없는 교체'다.
     // (공지·주간킹 등 라이브 데이터에 따라 ±수십 px 는 정상 범위)

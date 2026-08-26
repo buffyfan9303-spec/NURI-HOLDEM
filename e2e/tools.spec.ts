@@ -5,14 +5,14 @@
 // 이제 도구는 앱의 다른 상세 화면과 같은 전체화면 페이지(Modal page)다 — 그 계약을 잰다.
 // 데이터 게이트: 레인지·푸시폴드가 실데이터(콤보 가중 %)를 렌더하는지까지.
 import { test, expect } from '@playwright/test';
-import { stabilizeBackstack } from './_session';
+import { stabilizeBackstack, dismissOverlays } from './_session';
 
 async function gotoTools(page: import('@playwright/test').Page) {
   await stabilizeBackstack(page);
   await page.goto('/');
-  // 온보딩 시트가 뜨면 넘긴다
-  const skip = page.getByText('건너뛰기', { exact: true });
-  if (await skip.count().catch(() => 0)) await skip.first().click().catch(() => {});
+  // 온보딩 시트는 첫 페인트 700ms '뒤에' 뜬다 — 즉시 count 체크는 레이스(홈 전환으로 부팅이
+  // 빨라지며 실제로 물렸다). 지연 등장까지 기다려 걷어내는 공용 헬퍼 사용.
+  await dismissOverlays(page);
   await page.locator('button:visible').filter({ hasText: '도구' }).last().click();
 }
 

@@ -7,6 +7,9 @@ test('🔴 SlidingPill — 알약이 활성 버튼과 픽셀 단위로 일치한
   await page.goto('/');
   await dismissOverlays(page);
   await page.waitForTimeout(1000);
+  // P1: 뷰모드 토글은 탐색(일정) 화면으로 이동 — 홈에서 '전체 일정'로 진입
+  await page.getByRole('button', { name: /전체 일정/ }).first().click();
+  await page.waitForTimeout(600);
   // 일정탐색의 뷰모드 토글 — SlidingPill 사이트
   // (필터 레일 재설계로 토너 필터 세그먼트가 칩으로 바뀌어, 같은 화면의 다른 FLIP 사이트로 재조준 — 동커밋 규칙)
   const second = page.locator('[role="group"][aria-label="보기 방식 선택"] button').nth(1);

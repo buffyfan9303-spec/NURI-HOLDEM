@@ -11,7 +11,6 @@ import type { ViewMode } from './components/atoms/ViewModeToggle';
 import IntegratedSearchBar, { expandRegions } from './components/features/IntegratedSearchBar';
 import type { SearchState } from './components/features/IntegratedSearchBar';
 import ScheduleCard from './components/features/ScheduleCard';
-import WeeklyBestStrip from './components/features/WeeklyBestStrip';
 import ScheduleTable from './components/features/ScheduleTable';
 import { getWeeklyMoneyinKings, getRankingsBulk, parsePrizeMan, type WeeklyKing, type RankingEntry } from './api/rankings';
 import { getReservationCounts, getMyReservations, type MyReservationRow } from './api/reservations';
@@ -39,7 +38,7 @@ import type { MarketplaceFormData } from './components/features/MarketplaceFormM
 import { rearmLayer, useBackClose, overlayJustClosed } from './lib/backstack';
 import { useVisibilityRefresh } from './lib/useVisibilityRefresh';
 import { useScrollY } from './lib/useScrollY';
-import PosterCarousel from './components/features/PosterCarousel';
+import HomeTab from './components/features/HomeTab';
 import { lazyWithReload } from './lib/lazyWithReload';
 import { getRunningClocks, type ClockState } from './api/clock';
 import { buildRegInfoMap } from './lib/regStatus';
@@ -133,7 +132,8 @@ function OverlayFallback() {
 
 // ── 탭 정의 ──────────────────────────────────────────────────────────────────
 
-type TabId = 'browse' | 'live' | 'community' | 'market' | 'tools' | 'my-store' | 'admin';
+// P1(오너 승인 2026-08-27): 'home' 신설 — 기존 browse(일정 탐색)는 탭바에서 내려간 서브 화면.
+type TabId = 'home' | 'browse' | 'live' | 'community' | 'market' | 'tools' | 'my-store' | 'admin';
 interface TabDef { id: TabId; label: string; }
 
 // ── 헤더 ─────────────────────────────────────────────────────────────────────
@@ -221,7 +221,7 @@ const AppHeader = memo(function AppHeader({
           </button>
           <span className="h-4 w-px shrink-0 bg-border-default" aria-hidden />
           <span className="min-w-0 truncate text-base font-extrabold tracking-tight text-ink-primary" aria-current="page">
-            {({ browse: '일정 탐색', live: '라이브', community: '커뮤니티', market: '중고장터', tools: '도구', 'my-store': '내 매장', admin: '관리자 설정' } as Record<string, string>)[activeTab ?? 'browse'] ?? '일정 탐색'}
+            {({ home: '홈', browse: '일정 탐색', live: '라이브', community: '커뮤니티', market: '중고장터', tools: '도구', 'my-store': '내 매장', admin: '관리자 설정' } as Record<string, string>)[activeTab ?? 'home'] ?? '홈'}
           </span>
         </div>
 
@@ -441,6 +441,7 @@ const tabIcon = (children: ReactNode) => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{children}</svg>
 );
 const TAB_ICON: Record<TabId, ReactNode> = {
+  home: tabIcon(<><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" /><path d="M9 22V12h6v10" /></>),
   browse: tabIcon(<><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></>),
   live: tabIcon(<><circle cx="12" cy="12" r="2" /><path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14" /></>),
   community: tabIcon(<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5Z" />),
@@ -583,14 +584,15 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
   }, [autohideV2]));
   // 장터는 커뮤니티 서브탭으로 이동(사용 빈도 기준) — 탭바 4번째 칸은 도구
   const items: { key: string; tab?: TabId; label: string }[] = [
-    { key: 'browse', tab: 'browse', label: '일정' },
+    { key: 'home', tab: 'home', label: '홈' },
     { key: 'live', tab: 'live', label: '라이브' },
     { key: 'community', tab: 'community', label: '커뮤니티' },
     { key: 'tools', tab: 'tools', label: '도구' },
     hasStore ? { key: 'my-store', tab: 'my-store', label: '내 매장' } : { key: 'me', label: '내 정보' },
   ];
   // 장터 화면에선 '커뮤니티' 칸을 활성으로(장터 진입 경로가 커뮤니티)
-  const mappedActive: TabId = active === 'market' ? 'community' : active;
+  // 탐색 화면(browse)은 홈의 서브 화면 — 탭바에선 홈 칸을 활성으로
+  const mappedActive: TabId = active === 'market' ? 'community' : active === 'browse' ? 'home' : active;
   // 낙관적 활성 — 클릭 즉시 인디케이터가 미끄러지고, 실제 탭 커밋(transition) 후 동기화
   const [optimistic, setOptimistic] = useState<TabId | null>(null);
   useEffect(() => { setOptimistic(null); }, [active]);
@@ -687,15 +689,15 @@ export default function App() {
   const [activeTab, setActiveTab]     = useState<TabId>(() => {
     try {
       const t = new URLSearchParams(window.location.search).get('tab');
-      const valid: TabId[] = ['browse', 'live', 'community', 'market', 'tools', 'my-store', 'admin'];
+      const valid: TabId[] = ['home', 'browse', 'live', 'community', 'market', 'tools', 'my-store', 'admin'];
       if ((valid as string[]).includes(t ?? '')) return t as TabId;
       // 16-2 마지막 탭 복원 — 우선순위: 딥링크 > 마지막 탭 > 온보딩 persona 기본.
       // Phase 4-3 의 탭별 스크롤 복원과 결합되어 '어제 보던 그 자리'로 돌아간다.
       const last = localStorage.getItem('nuri:last-tab');
       if ((valid as string[]).includes(last ?? '') && last !== 'admin') return last as TabId;
       if (localStorage.getItem('nuri:persona') === 'gto') return 'tools';
-      return 'browse';
-    } catch { return 'browse'; }
+      return 'home';
+    } catch { return 'home'; }
   });
   // 탭 전환을 트랜지션으로 — lazy 청크/무거운 렌더 동안 이전 화면을 유지해
   // '이전 메뉴 → 스피너 깜빡 → 새 메뉴' 3단 플래시를 없앤다(React 공식 패턴).
@@ -706,7 +708,7 @@ export default function App() {
   // 탭별 스크롤 위치 — keep-alive 로 DOM 은 남지만 스크롤러가 window(html) 하나라
   // 탭을 오가면 위치가 섞였다. 떠날 때 저장하고 도착하면 되돌린다.
   const tabScrollRef = useRef(new Map<TabId, number>());
-  const activeTabRef = useRef<TabId>('browse');
+  const activeTabRef = useRef<TabId>('home');
   useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
   const changeTab = useCallback((t: TabId) => {
     // 탭 이동은 '화면 전환' — 떠 있는 매장 페이지 오버레이는 닫는다(탭을 눌렀는데 그대로 보이는 혼란 방지)
@@ -720,7 +722,7 @@ export default function App() {
     // 첫 방문(lazy 청크)은 Suspense 가 끼므로 기존 startTransition 유지(이전 화면 유지 효과 동일).
     if (visitedTabs.has(t)) {
       // 애플식 방향성: 탭바에서 오른쪽 탭으로 가면 새 화면이 오른쪽에서 밀려 들어온다(반대는 반대).
-      const ORDER: TabId[] = ['browse', 'live', 'community', 'tools', 'my-store', 'admin'];
+      const ORDER: TabId[] = ['home', 'browse', 'live', 'community', 'tools', 'my-store', 'admin'];
       const from = ORDER.indexOf(activeTabRef.current);
       const to = ORDER.indexOf(t);
       withViewTransition(
@@ -741,7 +743,7 @@ export default function App() {
   }, [activeTab]);
 
   // keep-alive: 한 번 방문한 핵심 탭은 언마운트하지 않고 display만 끈다 — 재방문 시 로드·마운트 비용 0(끊김 제거)
-  const [visitedTabs] = useState(() => new Set<TabId>(['browse']));
+  const [visitedTabs] = useState(() => new Set<TabId>(['home']));
   useEffect(() => { visitedTabs.add(activeTab); }, [activeTab, visitedTabs]);
   // 프리마운트 커밋 트리거 — visitedTabs 는 렌더를 못 깨우는 가변 Set 이라 상태 범프가 필요
   const [, setPremountTick] = useState(0);
@@ -992,9 +994,9 @@ export default function App() {
   const tabBackRef = useRef<() => void>(() => {});
   tabBackRef.current = () => {
     if (overlayJustClosed()) { rearmLayer(() => tabBackRef.current()); return; }
-    changeTab('browse');
+    changeTab('home'); // P1: 뒤로가기의 귀착점 = 홈(탐색 화면 포함 모든 탭에서)
   };
-  useBackClose(activeTab !== 'browse', () => tabBackRef.current());
+  useBackClose(activeTab !== 'home', () => tabBackRef.current());
 
   // ── 데이터 (Supabase에서 로드) ──────────────────────────────────────────────
   // 캐시 퍼스트(Phase 6): 직전 세션 스냅샷이 있으면 네트워크를 기다리지 않고 먼저 그린다.
@@ -1469,6 +1471,7 @@ export default function App() {
 
   const tabs: TabDef[] = useMemo(() => {
     const base: TabDef[] = [
+      { id: 'home',      label: '홈' },
       { id: 'browse',    label: '일정 탐색' },
       { id: 'live',      label: '라이브' },
       { id: 'community', label: '커뮤니티' },
@@ -1498,7 +1501,7 @@ export default function App() {
   useEffect(() => {
     if (!tabs.find((t) => t.id === activeTab)) {
       if (authLoading && (activeTab === 'my-store' || activeTab === 'admin')) return;
-      changeTab('browse');
+      changeTab('home');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabs, activeTab, authLoading]);
@@ -1768,7 +1771,7 @@ export default function App() {
     // /wallet (🎟 이용권 도착) → 내 지갑(이용권 대시보드) 바로 열기
     if (link === '/wallet') { setVoucherWalletOpen(true); return; }
     // '/' (홈 안내형 알림) → 홈 탭으로 — 제목만 다시 토스트하는 막다른 길 방지
-    if (link === '/') { changeTab('browse'); return; }
+    if (link === '/') { changeTab('home'); return; }
     toast.show(n.title, 'info');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schedules, isAdmin, toast]);
@@ -2243,6 +2246,23 @@ export default function App() {
       {/* 일정 탐색 */}
       <div className="px-page-x"><StaffInviteBanner /></div>
 
+      {/* 홈(P1) — 결정 3섹션: 지금 등록 가능 · 포스터 · 오늘·내일 일정 */}
+      {(activeTab === 'home' || visitedTabs.has('home')) && (
+        <main className="tab-pane" style={activeTab !== 'home' ? { display: 'none' } : undefined}>
+          <HomeTab
+            schedules={schedules}
+            loaded={schedulesLoaded}
+            liveCount={liveClocks.length}
+            regInfoBySchedule={regInfoBySchedule}
+            onSelect={handleScheduleSelect}
+            onVenue={handleVenueClick}
+            onExplore={() => changeTab('browse')}
+            onLive={() => changeTab('live')}
+            active={activeTab === 'home'}
+          />
+        </main>
+      )}
+
       {(activeTab === 'browse' || visitedTabs.has('browse')) && (
         <main className="tab-pane" style={activeTab !== 'browse' ? { display: 'none' } : undefined}
           onTouchStart={onPtrStart} onTouchMove={onPtrMove} onTouchEnd={onPtrEnd}>
@@ -2282,8 +2302,6 @@ export default function App() {
                 )}
                 <span className="shrink-0 pr-2"><ViewModeToggle value={viewMode} onChange={setViewMode} /></span>
               </>} />
-            {/* APIS식 포스터 오토 캐러셀 — 부스트 우선, 포스터 있는 예정 대회만 */}
-            <PosterCarousel schedules={schedules} loaded={schedulesLoaded} onSelect={handleScheduleSelect} />
           </div>
 
           {/* 🎁 오픈 이벤트 배너 — 서버(check_in 등)와 동일한 KST 날짜 게이트, 8/3 이후 자동 소멸 */}
@@ -2316,8 +2334,6 @@ export default function App() {
             );
           })()}
 
-          {/* 주간 베스트 — 이번 주 머니인 킹 TOP3 롤링 (MO-7B: 래퍼·로딩 스켈레톤 내장) */}
-          <WeeklyBestStrip active={activeTab === 'browse'} />
 
           {/* 공지 — 일정탐색 상단 (전체 공통 공지만) */}
 
