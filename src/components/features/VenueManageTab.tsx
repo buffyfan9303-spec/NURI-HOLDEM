@@ -7,7 +7,8 @@ import type { User, VenueInvite } from '../../api/auth';
 import { getMyVenueStaff, getMyVenueInvites, inviteStaffByEmail, cancelStaffInvite, removeStaff, setStaffTitle, checkNicknameAvailable, searchMembersForRanking } from '../../api/auth';
 import { getVenueRankings, saveVenueRankings, getVenuePageConfig, placementPointsOf, prizeUnitRisk, type VenuePageConfig, type RankingEntry } from '../../api/rankings';
 import { canAccessLedger, canManagePos, getLedgerAccessUserIds, grantLedgerAccess, revokeLedgerAccess } from '../../api/ledger';
-import { getAllVenues, createMyVenue, type Venue } from '../../api/community';
+import { getAllVenues, createMyVenue, getVenueStaff, type Venue } from '../../api/community';
+import { getLedgerRange } from '../../api/ledger';
 import { uploadPoster } from '../../lib/storage';
 import VenueVerificationCard from './VenueVerificationCard';
 import NuriPosLedger, { type LedgerSeed } from './NuriPosLedger';
@@ -214,6 +215,39 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   // ★ 즐겨찾기는 IA1 에서 전량 삭제 — 5섹션 그룹 구조에선 '제품이 중요도를 못 정해 정렬을 외주 준' 장치가 무의미.
   // 기존 localStorage(nuri:fav-sections:*) 값은 읽지 않고 방치(마이그레이션 불필요).
 
+  // IA3d 점진적 공개 — 성숙도 게이팅(권한 게이팅과 분리, §13-C). 숨김은 잠금이 아니라 '아예 비노출':
+  // 잠금은 '언젠가 열림'을 약속하지만 성숙도는 저절로 열리므로 설명이 필요 없다.
+  // 해금: 매출·손님 ← 장부 마감 3회(90일) / 직원 관리 ← 직원 1명+. 캐시로 재방문 깜빡임 방지.
+  const [navAll, setNavAll] = useState(false);
+  useEffect(() => {
+    if (!venueId) return;
+    try { setNavAll(localStorage.getItem(`nuri:nav-mode:${venueId}`) === 'all'); } catch { /* noop */ }
+  }, [venueId]);
+  const toggleNavAll = () => setNavAll((v) => {
+    const n = !v;
+    try { if (venueId) localStorage.setItem(`nuri:nav-mode:${venueId}`, n ? 'all' : 'auto'); } catch { /* noop */ }
+    return n;
+  });
+  const [matured, setMatured] = useState<{ insights: boolean; team: boolean }>(() => {
+    try { const v = localStorage.getItem('nuri:nav-matured'); if (v) return JSON.parse(v) as { insights: boolean; team: boolean }; } catch { /* noop */ }
+    return { insights: false, team: false };
+  });
+  useEffect(() => {
+    if (!venueId || !canStaff || isAdmin) return;
+    let alive = true;
+    const to = new Date().toLocaleDateString('en-CA');
+    const from = new Date(Date.now() - 90 * 86_400_000).toLocaleDateString('en-CA');
+    Promise.allSettled([getVenueStaff(venueId), getLedgerRange(venueId, from, to)]).then(([st, lr]) => {
+      if (!alive) return;
+      const team = st.status === 'fulfilled' && st.value.length > 0;
+      const insights = lr.status === 'fulfilled' && lr.value.sessions.filter((x) => x.closed).length >= 3;
+      const next = { insights, team };
+      setMatured((cur) => (cur.insights === next.insights && cur.team === next.team ? cur : next));
+      try { localStorage.setItem('nuri:nav-matured', JSON.stringify(next)); } catch { /* noop */ }
+    });
+    return () => { alive = false; };
+  }, [venueId, canStaff, isAdmin]);
+
   // 운영자: 전체 매장 목록 로드(선택용)
   useEffect(() => {
     if (!isAdmin) return;
@@ -274,6 +308,11 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   if (canStaff) available.push({ id: 'staff', label: '직원 관리', group: '관리' });
   // IA3c: 프리셋·매장랭킹·매장꾸미기·이용권·POS 가 '매장 설정' 하위탭 5개로 통합
   if (canStaff || voucherView) available.push({ id: 'settings', label: '매장 설정', group: '관리' });
+  // IA3d: nav 노출용 목록 — 성숙도 미달 항목 비노출(운영자·전체보기·직원 계정은 게이팅 없음).
+  // 콘텐츠 접근(curItem·dItem·딥링크)은 available 기준 유지 — 숨김은 nav 표시만 줄인다.
+  const navItems = (isAdmin || navAll || !canStaff) ? available
+    : available.filter((a) => (a.id === 'stats' ? matured.insights : a.id === 'staff' ? matured.team : true));
+  const navHiddenCount = available.length - navItems.length;
   const curItem = available.find((a) => a.id === section);
   // 콘텐츠 전환은 deferred — 내비(탭 하이라이트)는 즉시 반응하고, 무거운 섹션 렌더는 메인스레드를 막지 않고 양보.
   // 폰(저사양 CPU)에서 메뉴 이동 시 동기 렌더가 프레임을 막아 생기던 "치직임/끊김"을 제거.
@@ -337,7 +376,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 {navOpen && (
                   <div className="mt-1 rounded-card border border-border-subtle bg-surface-high p-1 animate-slide-up space-y-0.5">
                     {NAV_GROUPS.map((grp) => {
-                      const items = available.filter((a) => a.group === grp);
+                      const items = navItems.filter((a) => a.group === grp);
                       if (items.length === 0) return null;
                       return (
                         <div key={grp}>
@@ -359,13 +398,19 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                         </div>
                       );
                     })}
+                    {canStaff && !isAdmin && (navHiddenCount > 0 || navAll) && (
+                      <button type="button" onClick={toggleNavAll}
+                        className="w-full px-2 py-2 text-left text-2xs font-bold text-ink-muted transition-colors hover:text-ink-secondary">
+                        {navAll ? '기본 메뉴만 보기' : `고급 기능 모두 보기 (+${navHiddenCount})`}
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
               {/* PC: 세로 사이드바 — 그룹 헤더 3개 + 라이브 배지 자리(IA3 에서 공급), 폭 w-44→w-52 */}
               <nav className="hidden lg:flex lg:sticky lg:top-[calc(var(--stack-top,6.0625rem)+0.75rem)] lg:w-52 lg:shrink-0 lg:flex-col lg:self-start lg:gap-1">
                 {NAV_GROUPS.map((grp) => {
-                  const items = available.filter((a) => a.group === grp);
+                  const items = navItems.filter((a) => a.group === grp);
                   if (items.length === 0) return null;
                   return (
                     <div key={grp} className="flex flex-col gap-1">
@@ -377,6 +422,13 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                     </div>
                   );
                 })}
+                {/* IA3d: 성숙도로 숨긴 항목이 있으면 파워유저 탈출구 — 잠금 아이콘이 아니라 토글 */}
+                {canStaff && !isAdmin && (navHiddenCount > 0 || navAll) && (
+                  <button type="button" onClick={toggleNavAll}
+                    className="mt-2 px-3 py-1.5 text-left text-2xs font-bold text-ink-muted transition-colors hover:text-ink-secondary">
+                    {navAll ? '기본 메뉴만 보기' : `고급 기능 모두 보기 (+${navHiddenCount})`}
+                  </button>
+                )}
               </nav>
             </>)}
 
