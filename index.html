@@ -77,6 +77,11 @@
       }
     ]
     </script>
+    <!-- [DS] FONT-1: Pretendard self-host(dynamic subset, font-display: optional).
+         비차단 로드(print→all) — 콜드 방문은 폴백(system-ui)로 CLS 0, 웜 방문은 캐시 히트로 브랜드 폰트.
+         라이선스: /fonts/pretendard/OFL.txt (SIL OFL 1.1) -->
+    <link rel="stylesheet" href="/fonts/pretendard/pretendardvariable-dynamic-subset.css" media="print" onload="this.media='all'" />
+    <noscript><link rel="stylesheet" href="/fonts/pretendard/pretendardvariable-dynamic-subset.css" /></noscript>
   </head>
   <body>
     <div id="root"><!--
