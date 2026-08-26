@@ -56,9 +56,10 @@
     --border-default: 58 63 70;   /* #3A3F46 */
     --border-strong:  86 92 101;  /* #565C65 */
 
-    /* 카드 헤어라인/그림자 — PET inset 하이라이트 + 미세 섀도 */
+    /* 카드 헤어라인/그림자 — PET inset 하이라이트 + 미세 섀도.
+       그림자는 순검정 대신 배경 hue(인디고 편향) 틴트(DAI-2a ④) — 플랫 다크의 murk 제거 */
     --card-ring:   rgba(255, 255, 255, 0.05);
-    --card-shadow: rgba(0, 0, 0, 0.6);
+    --card-shadow: rgba(8, 10, 20, 0.6);
 
     /* 다크 모드 네이티브 렌더(스크롤바·폼·포커스) 정합 → 클릭 시 플래시 방지 */
     color-scheme: dark;
