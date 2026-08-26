@@ -2265,7 +2265,6 @@ export default function App() {
               <div className="flex min-w-0 items-center gap-2">
                 <span className="shrink-0 text-2xs text-ink-muted">
                   총 <span className="text-ink-secondary tabular-nums font-semibold">{visibleSchedules.length}</span>개
-                  {followedOnly && <span className="ml-1 text-accent-300">· 팔로우</span>}
                 </span>
                 {/* 📍 가까운 순 — 위치 1회 요청 토글(Phase 14). 좌표 없는 매장은 뒤로. */}
                 <button
@@ -2290,23 +2289,9 @@ export default function App() {
                   </button>
                 )}
               </div>
-              <div className="flex items-center gap-1.5">
-                {user && (
-                  <button
-                    type="button"
-                    onClick={() => setFollowedOnly((v) => !v)}
-                    aria-pressed={followedOnly}
-                    className={[
-                      'inline-flex h-9 items-center gap-1 rounded-badge border px-3 text-xs font-bold leading-none transition-colors',
-                      followedOnly ? 'border-accent-300 bg-accent-300 text-white' : 'border-border-subtle bg-surface-high/60 text-ink-secondary hover:text-ink-primary',
-                    ].join(' ')}
-                  >
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill={followedOnly ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 17.3l-5.4 3 1-6L3 9.8l6-.9L12 3.5l3 5.4 6 .9-4.6 4.5 1 6z" /></svg>
-                    팔로우{followedIds.size > 0 ? ` ${followedIds.size}` : ''}
-                  </button>
-                )}
-                <ViewModeToggle value={viewMode} onChange={setViewMode} />
-              </div>
+              {/* 팔로우 필터 토글은 오너 지시로 제거(2026-08-27) — 좁은 폭에서 좌측 그룹과
+                  겹치던 원인. 매장 팔로우 기능 자체(매장 페이지·새 게임 푸시)는 유지. */}
+              <ViewModeToggle value={viewMode} onChange={setViewMode} />
             </div>
           </div>
 
