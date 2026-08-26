@@ -5,7 +5,7 @@ import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import Icon from '../../atoms/Icon';
 import { useToast } from '../../atoms/Toast';
 import type { ChatMessage } from '../../../api/chat';
-import { getThreadMessages, sendChatMessage, subscribeThread, markThreadRead, getThreadReads } from '../../../api/chat';
+import { getThreadMessages, sendChatMessage, subscribeThread, subscribeThreadReads, markThreadRead, getThreadReads } from '../../../api/chat';
 
 const NEAR_BOTTOM_PX = 80;       // 이 안쪽이면 '하단 근처' — 새 메시지에 자동 추종
 const COMPOSER_MAX_PX = 118;     // textarea 최대 높이 ≈ 5줄(줄 20px × 5 + 패딩/보더)
@@ -50,14 +50,33 @@ export default function ChatPane({ listingId, buyerId, meId, emptyHint, onRead }
   const onReadRef = useRef(onRead);
   useEffect(() => { onReadRef.current = onRead; });
 
-  // 이 스레드를 내가 읽음 처리(열람 시 + 새 메시지 도착 시) + 상대 읽음 폴링(5초 — Realtime 전환은 오너 게이트)
+  // 이 스레드를 내가 읽음 처리(열람 시 + 새 메시지 도착 시) + 상대 읽음 실시간 구독.
+  // listing_message_reads 는 Realtime 퍼블리케이션에 포함(2026-08 서버 적용) — upsert 즉시 반영된다.
+  // 폴백: 구독 확립(SUBSCRIBED) 전과 오류/종료 시에는 기존 5초 폴링을 유지(기능 회귀 0).
+  // 채널은 스레드당 1개, 스레드 전환/언마운트 시 반드시 정리(removeChannel) — Realtime 연결 예산 보호.
   useEffect(() => {
     if (!buyerId) return;
+    let alive = true; // 정리 후 도착하는 콜백 무시(removeChannel 이 CLOSED 상태를 쏘므로 폴링 재점화 누수 방지)
     markThreadRead(listingId, buyerId).then(() => onReadRef.current?.()).catch(() => {});
     refreshReads();
-    const id = setInterval(refreshReads, 5000);
-    return () => clearInterval(id);
-  }, [listingId, buyerId, refreshReads]);
+    let pollId: number | null = window.setInterval(refreshReads, 5000);
+    const stopPoll = () => { if (pollId != null) { clearInterval(pollId); pollId = null; } };
+    const startPoll = () => { if (pollId == null) pollId = window.setInterval(refreshReads, 5000); };
+    const unsub = subscribeThreadReads(
+      listingId, buyerId,
+      (r) => {
+        if (!alive || r.readerId === meId) return;
+        const t = new Date(r.lastReadAt).getTime();
+        setCoReadAt((prev) => Math.max(prev, t)); // 읽음 시각은 단조 증가 — 역행 방지
+      },
+      (ok) => {
+        if (!alive) return;
+        if (ok) { stopPoll(); refreshReads(); } // 구독 확립 — 폴링 중단 + 공백 동안 놓친 읽음 1회 보정
+        else startPoll();                        // 오류/종료 — 폴링 폴백(자동 회복 시 다시 중단됨)
+      },
+    );
+    return () => { alive = false; stopPoll(); unsub(); };
+  }, [listingId, buyerId, meId, refreshReads]);
 
   // 스레드 전환 시 스크롤 상태 초기화
   useEffect(() => {
