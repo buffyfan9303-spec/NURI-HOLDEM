@@ -4,6 +4,7 @@
 // ⚠ 금액(원·PL1b)은 lib/units 정규형 경유 — 만원/원 혼동 오기록('1만 배' 사고)의 재발 차단.
 import type { Schedule } from '../api/schedules';
 import type { ClockConfig, ClockLevel, ClockPrizeRow } from '../api/clock';
+import type { GamePresetData } from '../api/presets';
 import { rankingPrizeWon } from './units';
 
 /** 포스터 structure.levels → 클락 levels (isBreak 플래그 → kind 판별) */
@@ -38,4 +39,30 @@ export function clockPrizesFromSchedule(sc: Schedule): ClockPrizeRow[] | null {
     .filter((r) => (r.amount ?? 0) > 0 && (r.unit == null || r.unit === '만원' || r.unit === '원'))
     .map((r) => ({ place: r.rank, amount: rankingPrizeWon(r) }));
   return rows.length > 0 ? rows : null;
+}
+
+/** PL3 생성 경로 역전 — '지난 게임(포스터)에서 프리셋 만들기'.
+ *  이미 20번 연 게임을 빈 폼에 다시 치는 구조가 프리셋 탭 방치의 원인이었다(§13-B).
+ *  금액은 전부 원 정규형(*Won)으로 적고, 구형 필드는 표시 호환용으로만 함께 채운다. */
+export function presetFromSchedule(sc: Schedule): GamePresetData {
+  const prizes = (sc.rankingPrizes ?? [])
+    .filter((r) => (r.amount ?? 0) > 0 && (r.unit == null || r.unit === '만원' || r.unit === '원'))
+    .map((r) => ({ rank: r.rank, amount: r.unit === '원' ? Math.round(r.amount / 10_000) : r.amount, unit: '만원', amountWon: rankingPrizeWon(r) }));
+  return {
+    title: sc.title,
+    gameType: sc.buyIn?.gameType ?? '',
+    buyIn: sc.buyIn?.amount ?? 0,
+    startStack: sc.buyIn?.startStack ?? sc.structure?.startingChips ?? 0,
+    rebuyStack: sc.buyIn?.rebuyStack ?? sc.structure?.rebuyStack ?? 0,
+    addonStack: sc.buyIn?.addonStack ?? 0,
+    addonCost: sc.buyIn?.addon ?? 0,
+    prizeType: sc.guaranteed ? 'GTD' : 'ENTRY',
+    prizeAmountWon: sc.guaranteed ? (sc.prizePool ?? 0) : 0,
+    prizeAmount: sc.guaranteed ? Math.round((sc.prizePool ?? 0) / 10_000) : 0, // 구형 표시 호환
+    prizePercent: !sc.guaranteed ? (sc.prizePercent ?? 0) : 0,
+    duration: sc.duration ?? '',
+    blindLevels: sc.structure?.levels?.length ? posterLevelsToClock(sc.structure.levels) : undefined,
+    isCompetition: !!sc.isCompetition,
+    rankingPrizes: prizes.length ? prizes : undefined,
+  };
 }

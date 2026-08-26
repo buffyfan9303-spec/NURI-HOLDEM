@@ -1,8 +1,12 @@
 // src/components/features/PresetManager.tsx
 // 게임 프리셋 관리 — 포스터/장부를 만들지 않고도 게임 내용(+듀레이션)을 템플릿으로 생성/수정/삭제.
+// PL3: 기본 생성 경로가 '지난 게임에서 만들기' — 빈 폼은 2차 진입점(§13-B 생성 경로 역전).
 import { useEffect, useState } from 'react';
 import { useToast } from '../atoms/Toast';
 import { listGamePresets, saveGamePreset, deleteGamePreset, type GamePreset, type GamePresetData } from '../../api/presets';
+import { getSchedules, type Schedule } from '../../api/schedules';
+import { presetFromSchedule } from '../../lib/gameInherit';
+import { manToWon } from '../../lib/units';
 import BlindLevelsEditor from './clock/BlindLevelsEditor';
 
 const EMPTY: GamePresetData = {
@@ -19,7 +23,17 @@ export default function PresetManager({ venueId }: { venueId: string }) {
   const load = () => listGamePresets(venueId).then(setPresets).catch(() => setPresets([]));
   useEffect(() => { load(); }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // PL3: 최근 포스터(이 매장) — '지난 게임에서 만들기' 재료. 24필드가 채워진 채 열려 이름만 지으면 된다.
+  const [recent, setRecent] = useState<Schedule[]>([]);
+  useEffect(() => {
+    getSchedules()
+      .then((all) => setRecent(all.filter((s) => s.venueId === venueId).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 12)))
+      .catch(() => {});
+  }, [venueId]);
+
   const startNew = () => setEditing({ name: '', data: { ...EMPTY } });
+  const startFromSchedule = (sc: Schedule) =>
+    setEditing({ name: sc.title, data: { ...EMPTY, ...presetFromSchedule(sc) } });
   const startEdit = (p: GamePreset) => setEditing({ id: p.id, name: p.name, data: { ...EMPTY, ...p.data } });
 
   const save = async () => {
@@ -70,9 +84,39 @@ export default function PresetManager({ venueId }: { venueId: string }) {
             </select>
           </Field>
           {d.prizeType === 'GTD'
-            ? <Field label="보장 상금(만원)"><NumInput v={d.prizeAmount} on={(n) => set({ prizeAmount: n })} /></Field>
+            /* PL0 정규형: 입력은 만원(한국 관행), 저장은 원(prizeAmountWon)+구형 만원 동시 — 오환산 차단 */
+            ? <Field label="보장 상금(만원)"><NumInput v={d.prizeAmount} on={(n) => set({ prizeAmount: n, prizeAmountWon: manToWon(n) })} /></Field>
             : <Field label="프라이즈 비율(%)"><NumInput v={d.prizePercent} on={(n) => set({ prizePercent: n })} /></Field>}
         </div>
+        {/* PL2b: 순위별 상금 에디터 — 죽은 필드(타입만 있고 UI 없음) 복구. 매장이 가장 자주 재입력·오기록하던 항목.
+            입력 만원 · 저장 원(amountWon)+만원(구형 호환) — 포스터·클락·순위에 올바른 단위로 주입된다. */}
+        <Field label="순위별 상금 (만원 · 포스터/클락에 그대로 적용)">
+          <div className="space-y-1.5">
+            {(d.rankingPrizes ?? []).map((r, i) => (
+              <div key={i} className="flex items-center gap-1.5">
+                <input value={r.rank} onChange={(e) => {
+                  const next = [...(d.rankingPrizes ?? [])]; next[i] = { ...next[i], rank: e.target.value };
+                  set({ rankingPrizes: next });
+                }} placeholder="1" className="input w-14 shrink-0 text-center text-sm" aria-label={`${i + 1}번째 순위`} />
+                <span className="shrink-0 text-2xs text-ink-muted">등</span>
+                <input type="number" inputMode="numeric" value={r.amount || ''} onChange={(e) => {
+                  const man = Number(e.target.value) || 0;
+                  const next = [...(d.rankingPrizes ?? [])];
+                  next[i] = { ...next[i], amount: man, unit: '만원', amountWon: manToWon(man) };
+                  set({ rankingPrizes: next });
+                }} className="input w-full text-sm tabular-nums" aria-label={`${i + 1}번째 상금(만원)`} />
+                <span className="shrink-0 text-2xs text-ink-muted">만원</span>
+                <button type="button" onClick={() => set({ rankingPrizes: (d.rankingPrizes ?? []).filter((_, x) => x !== i) })}
+                  className="shrink-0 px-1.5 text-ink-muted hover:text-danger-light" aria-label="상금 행 삭제">✕</button>
+              </div>
+            ))}
+            {(d.rankingPrizes ?? []).length < 10 && (
+              <button type="button"
+                onClick={() => set({ rankingPrizes: [...(d.rankingPrizes ?? []), { rank: String((d.rankingPrizes ?? []).length + 1), amount: 0, unit: '만원', amountWon: 0 }] })}
+                className="btn-ghost w-full py-1.5 text-2xs">+ 순위 추가</button>
+            )}
+          </div>
+        </Field>
         <Field label="블라인드 구조 (클락에 그대로 적용)">
           <BlindLevelsEditor levels={d.blindLevels ?? []} onChange={(lv) => set({ blindLevels: lv })} />
         </Field>
@@ -92,10 +136,24 @@ export default function PresetManager({ venueId }: { venueId: string }) {
     <section className="space-y-2">
       <div className="flex items-center justify-between gap-2">
         <p className="text-2xs text-ink-muted">자주 여는 게임의 내용·듀레이션을 프리셋으로 저장해 두고 재사용하세요.</p>
-        <button type="button" onClick={startNew} className="btn-primary shrink-0 px-3 py-1 text-2xs">+ 새 프리셋</button>
+        <button type="button" onClick={startNew} className="btn-ghost shrink-0 px-3 py-1 text-2xs">빈 폼으로 만들기</button>
       </div>
+      {/* PL3 생성 경로 역전 — 기본 경로는 '지난 게임에서 만들기'(내용이 채워진 채 열림, 이름만 지으면 끝) */}
+      {recent.length > 0 && (
+        <div className="rounded-card border border-accent-400/30 bg-accent-300/[0.05] p-2.5">
+          <p className="mb-1.5 text-2xs font-bold text-accent-300">⚡ 지난 게임에서 프리셋 만들기 — 내용이 채워진 채 열려요</p>
+          <div className="flex flex-wrap gap-1.5">
+            {recent.slice(0, 6).map((sc) => (
+              <button key={sc.id} type="button" onClick={() => startFromSchedule(sc)}
+                className="rounded-input border border-border-default bg-surface-high px-2.5 py-1.5 text-2xs font-bold text-ink-secondary transition-colors hover:border-accent-400/50 hover:text-accent-300">
+                {sc.date.slice(5).replace('-', '/')} · {sc.title}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       {presets === null ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
-        : presets.length === 0 ? <p className="rounded-card border border-border-subtle bg-surface-low py-6 text-center text-2xs text-ink-muted">저장된 프리셋이 없습니다. ‘새 프리셋’으로 만들어 보세요.</p>
+        : presets.length === 0 ? <p className="rounded-card border border-border-subtle bg-surface-low py-6 text-center text-2xs text-ink-muted">저장된 프리셋이 없습니다. 위 ‘지난 게임에서 만들기’가 가장 빠릅니다.</p>
           : <ul className="space-y-1.5">{presets.map((p) => (
             <li key={p.id} className="rounded-card border border-border-subtle bg-surface-low px-3 py-2.5">
               <div className="flex items-center justify-between gap-2">
