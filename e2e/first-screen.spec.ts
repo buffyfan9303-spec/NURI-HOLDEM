@@ -16,7 +16,8 @@ test.describe('첫 화면 — 앱을 막 켠 사람이 보는 것', () => {
   test('🔴 아무 조건도 안 걸린 첫 화면에 끝난 대회가 카드로 뜨지 않는다', async ({ page }) => {
     // '지난 대회' 전용 섹션(🏁)은 예외 — 거기서만 보여야 한다.
     const endedInMain = await page.evaluate(() => {
-      const past = [...document.querySelectorAll('*')].find((e) => /🏁\s*지난 대회/.test(e.textContent || '') && e.children.length < 40);
+      // ICON-1: 🏁 이모지 마커가 Icon 글리프로 바뀌어 텍스트 결합 셀렉터를 data-testid 로 교체(동커밋 규칙)
+      const past = document.querySelector('[data-testid="past-tournaments"]')?.closest('section, div');
       const out: string[] = [];
       for (const el of document.querySelectorAll('article')) {
         if (past && past.contains(el)) continue;         // 지난 대회 섹션 안은 제외

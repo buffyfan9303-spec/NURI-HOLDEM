@@ -3,6 +3,7 @@
 // 와홀덤/Roti 클락 구조를 따르되 NURI 테마로. 장부 연동 카운트 자동 산출 + 수기 보정.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useToast } from '../../atoms/Toast';
+import { WORDMARK_D, WORDMARK_VIEWBOX } from '../../atoms/wordmark';
 import { useBackClose } from '../../../lib/backstack';
 import { lockScroll, unlockScroll } from '../../../lib/scrollLock';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -762,7 +763,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
             isBreak ? 'bg-[radial-gradient(ellipse_at_center,rgba(56,120,200,0.16),transparent_72%)]'
                     : 'bg-[radial-gradient(ellipse_at_center,rgba(201,169,97,0.10),transparent_72%)]'].join(' ')}>
             {/* 누리홀덤 로고 워터마크(투명) — 트레이드마크. 클락은 항상 다크라 흰 워드마크 사용 */}
-            <img src="/2.png" alt="" aria-hidden className="pointer-events-none absolute inset-0 m-auto h-auto w-[58%] max-w-[62cqh] select-none object-contain opacity-[0.05]" />
+            <svg viewBox={WORDMARK_VIEWBOX} aria-hidden className="pointer-events-none absolute inset-0 m-auto h-auto w-[58%] max-w-[62cqh] select-none text-white opacity-[0.05]"><path fill="currentColor" d={WORDMARK_D} /></svg>
             <p className={['relative mt-1 font-bold tracking-[0.16em] uppercase',
               isBreak ? 'text-sky-300/90' : 'text-[#A8B0F0]/80',
               fs ? 'text-[min(4cqw,5cqh)]' : 'text-base sm:text-2xl'].join(' ')}>

@@ -77,6 +77,11 @@
       }
     ]
     </script>
+    <!-- [DS] FONT-1: Pretendard self-host(dynamic subset, font-display: optional).
+         비차단 로드(print→all) — 콜드 방문은 폴백(system-ui)로 CLS 0, 웜 방문은 캐시 히트로 브랜드 폰트.
+         라이선스: /fonts/pretendard/OFL.txt (SIL OFL 1.1) -->
+    <link rel="stylesheet" href="/fonts/pretendard/pretendardvariable-dynamic-subset.css" media="print" onload="this.media='all'" />
+    <noscript><link rel="stylesheet" href="/fonts/pretendard/pretendardvariable-dynamic-subset.css" /></noscript>
   </head>
   <body>
     <div id="root"><!--
@@ -84,18 +89,17 @@
       aria-hidden: 일시적 장식이라 보조기기엔 침묵 — React 마운트가 같은 픽셀의 실제 UI 로 교체.
       클래스는 전부 App.tsx 첫 렌더에서 복사(퍼지 안전: 동일 문자열이 소스에 존재).
     --><div aria-hidden="true">
-      <style>html.light .shell-dark{display:none}html:not(.light) .shell-light{display:none}</style>
+      <!-- [DS] IMG-1: 워드마크 벡터 심볼(단일 정의) — 테마별 PNG 2장·display 토글 CSS 제거, currentColor 상속 -->
+      <svg style="display:none" aria-hidden="true"><symbol id="nuri-wm" viewBox="0 0 1118 518"><path fill="currentColor" d="M322.24 10L245.26 10L245.26 167.59L242.83 167.59L135.48 10L69.85 10L69.85 303.30L146.82 303.30L146.82 144.90L148.85 144.90L257.82 303.30L322.24 303.30M553.13 10L553.13 191.49C553.13 219.85 532.88 240.10 504.12 240.10C475.76 240.10 455.50 219.85 455.50 191.49L455.50 10L378.53 10L378.53 198.38C378.53 264.82 428.76 306.95 504.12 306.95C579.47 306.95 630.11 264.82 630.11 198.38L630.11 10M686.40 303.30L763.37 303.30L763.37 205.67L793.75 205.67L845.61 303.30L929.47 303.30L869.51 193.52C901.11 178.53 919.74 149.76 919.74 109.25C919.74 47.27 876.80 10 811.17 10L686.40 10M763.37 145.31L763.37 71.58L793.35 71.58C822.52 71.58 839.13 83.33 839.13 109.25C839.13 134.77 822.52 145.31 793.35 145.31M1048.15 10L971.18 10L971.18 303.30L1048.15 303.30M59.42 507.09L95.97 507.09L95.97 452.27L147.33 452.27L147.33 507.09L184.06 507.09L184.06 367.83L147.33 367.83L147.33 422.65L95.97 422.65L95.97 367.83L59.42 367.83M372.05 437.46C372.05 391.10 342.42 365.90 304.73 365.90C266.64 365.90 237.21 391.10 237.21 437.46C237.21 483.62 266.64 509.01 304.73 509.01C342.42 509.01 372.05 483.81 372.05 437.46M334.35 437.46C334.35 463.04 323.77 477.08 304.73 477.08C285.49 477.08 274.91 463.04 274.91 437.46C274.91 411.87 285.49 397.83 304.73 397.83C323.77 397.83 334.35 411.87 334.35 437.46M425.39 507.09L518.67 507.09L518.67 477.46L461.93 477.46L461.93 367.83L425.39 367.83M622.79 507.09C665.30 507.09 692.04 480.93 692.04 437.46C692.04 393.99 665.30 367.83 622.41 367.83L569.90 367.83L569.90 507.09M606.44 475.93L606.44 398.99L620.48 398.99C642.99 398.99 655.11 408.03 655.11 437.46C655.11 466.89 642.99 475.93 621.45 475.93M745.38 507.09L844.63 507.09L844.63 477.46L781.92 477.46L781.92 452.27L839.63 452.27L839.63 422.65L781.92 422.65L781.92 397.45L844.82 397.45L844.82 367.83L745.38 367.83M899.51 367.83L899.51 507.09L935.28 507.09L935.28 424.57L936.44 424.57L967.98 506.12L989.91 506.12L1021.65 425.15L1022.80 425.15L1022.80 507.09L1058.58 507.09L1058.58 367.83L1012.99 367.83L979.91 448.80L978.18 448.80L945.09 367.83"/></symbol></svg>
       <header class="sticky top-0 z-50 bg-surface-base border-b border-border-subtle pt-[env(safe-area-inset-top)]">
         <div class="flex items-center justify-between px-page-x h-header-h">
           <div class="lg:hidden flex min-w-0 items-center gap-2">
-            <img src="/2.png" alt="" class="shell-dark h-7 w-auto object-contain" />
-            <img src="/nuri-logo.png" alt="" class="shell-light h-7 w-auto object-contain" />
+            <svg class="h-7 w-auto text-ink-primary"><use href="#nuri-wm"/></svg>
             <span class="h-4 w-px shrink-0 bg-border-default"></span>
             <span class="min-w-0 truncate text-base font-extrabold tracking-tight text-ink-primary">일정 탐색</span>
           </div>
           <div class="hidden lg:block">
-            <img src="/2.png" alt="" class="shell-dark h-8 w-auto object-contain" />
-            <img src="/nuri-logo.png" alt="" class="shell-light h-8 w-auto object-contain" />
+            <svg class="h-8 w-auto text-ink-primary"><use href="#nuri-wm"/></svg>
           </div>
           <div class="flex items-center gap-0.5">
             <span class="w-9 h-9 flex items-center justify-center rounded-full text-ink-secondary">
