@@ -1,16 +1,13 @@
 /* ============================================================================
- * [UI/UX 점검 및 자가 진단] IntegratedSearchBar (Stage 1)
- *  1) 토너먼트 필터 = [전체, MTT, GTD] 3개 라디오(상호배타).
- *     - '전체'  : format=null, gtdOnly=false  → MTT·GTD 모두 노출
- *     - 'MTT'   : format='MTT', gtdOnly=false → MTT 포맷만
- *     - 'GTD'   : format=null, gtdOnly=true   → 개런티(보장) 대회만
- *     단일 `tour` 상태에서 SearchState의 format/gtdOnly를 파생 → App.tsx
- *     visibleSchedules 로직 변경 불필요(회귀 위험 최소화).
- *  2) 지역 대분류 11종으로 교체(서울/강남/강서/경기남부/경기북부/인천/부산/
- *     대전/대구/광주/제주). 지역은 기존처럼 복수선택 유지(요구사항은 목록만 교체).
- *  3) 접근성: 라디오는 role="radiogroup"/role="radio"+aria-checked, 키보드 포커스 링.
- *  4) 자가 진단 — SearchState 키({query,dates,regions,format,gtdOnly})는 그대로라
- *     상위 컴포넌트 계약 불변. 빌드/타입체크 통과 확인 완료.
+ * IntegratedSearchBar — 검색 + 날짜 레일(sticky) + 필터 칩 레일(한 줄)
+ *  1) 필터 = 균일 칩 한 줄 레일(APIS·FotMob 문법, §20.1). 모든 칩 h-9 단일 언어.
+ *     - GTD/MTT/대회: aria-pressed 토글 칩(재탭=해제 → 전체). 단일 tour 상태에서
+ *       SearchState 의 format/gtdOnly/competitionOnly 를 파생(App 계약 불변).
+ *     - 지역/등급/예산: FilterSelectChip — 투명 오버레이 <select> 로 네이티브 피커.
+ *  2) 지역 대분류 11종(서울/강남/강서/경기남부/경기북부/인천/부산/대전/대구/광주/제주).
+ *  3) 접근성: 토글은 aria-pressed, 셀렉트는 aria-label. 포커스 링 유지.
+ *  4) SearchState 키({query,dates,regions,format,gtdOnly,competitionOnly,grade,budget})
+ *     계약 불변 — 상위(App) 필터 로직 무변경.
  * ========================================================================== */
 import {
   useState,
@@ -23,7 +20,6 @@ import {
   forwardRef,
   Fragment,
 } from 'react';
-import SlidingPill from '../atoms/SlidingPill';
 import { useScrollY } from '../../lib/useScrollY';
 
 // ── 날짜 유틸 ─────────────────────────────────────────────────────────────────
@@ -85,6 +81,44 @@ const TOUR_OPTIONS: { id: TourFilter; label: string }[] = [
   { id: 'MTT',  label: 'MTT' },
   { id: 'comp', label: '대회' },
 ];
+
+// ── 필터 칩 공용 문법 — 레일의 모든 칩이 같은 높이(h-9)·라운드·서체를 공유한다 ──
+// (예전 세그먼트 박스 3개가 각자 내용 폭으로 끝나 '칸이 제각각'으로 읽히던 문제의 반대 원칙)
+const CHIP_BASE = 'inline-flex h-9 shrink-0 items-center rounded-badge border px-3.5 text-xs font-bold leading-none transition-colors';
+const CHIP_ON = 'border-accent-300 bg-accent-300/15 text-accent-300';
+const CHIP_OFF = 'border-border-default bg-surface-high/60 text-ink-secondary hover:border-border-strong';
+
+// 단일선택 축(지역/등급/예산)용 드롭다운 칩 — 닫힌 칩은 짧은 라벨('지역')을, 값이 있으면
+// 값 라벨('서울')을 보여준다. 실제 입력은 투명 오버레이 <select> — 안드로이드/iOS 네이티브
+// 피커가 그대로 떠서 시트 구현 0줄로 APK 감각이 난다(접근성: select 가 포커스·라벨 보유).
+function FilterSelectChip({ ariaLabel, value, onChange, placeholder, options }: {
+  ariaLabel: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  options: [string, string][];
+}) {
+  const selected = options.find(([v]) => v === value && v !== '');
+  return (
+    <div className={['relative gap-1', CHIP_BASE, selected ? CHIP_ON : CHIP_OFF,
+      'focus-within:ring-2 focus-within:ring-accent-300'].join(' ')}>
+      <span className="pointer-events-none">{selected ? selected[1] : placeholder}</span>
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor"
+        strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden
+        className="pointer-events-none">
+        <path d="M2 4l3 3 3-3" />
+      </svg>
+      <select
+        aria-label={ariaLabel}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+      >
+        {options.map(([v, l]) => <option key={v || 'all'} value={v}>{l}</option>)}
+      </select>
+    </div>
+  );
+}
 
 // ── 서브컴포넌트: 검색 아이콘 ─────────────────────────────────────────────────
 
@@ -318,10 +352,15 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
   const handleRegionToggle = useCallback((r: string) => setSelectedRegions((prev) => toggleInArray(prev, r)), []);
 
   // 토너먼트 필터는 칩 자체가 하이라이트라 카운트 뱃지에서 제외(중복 표시 제거)
+  // 칩 레일은 스크롤로 화면 밖으로 사라지므로, 스크롤 후에도 sticky 검색바 배지가
+  // '필터 걸려 있음'을 알려야 한다 — 유형/등급/예산도 카운트에 포함(리뷰 확정 반영)
   const activeCount =
     (rawQuery.length > 0 ? 1 : 0) +
     selectedDates.length +
-    selectedRegions.length;
+    selectedRegions.length +
+    (tour !== 'all' ? 1 : 0) +
+    (grade !== null ? 1 : 0) +
+    (budget !== null ? 1 : 0);
 
   const hasActiveFilter = activeCount > 0;
 
@@ -413,104 +452,52 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
       <DateSlider selectedDates={selectedDates} onToggle={handleDateToggle} onPick={handlePickDate} eventDates={eventDates} />
       </div>{/* /sticky 검색+날짜 */}
 
-      {/* ── 지역(복수선택) + 토너먼트(라디오) 필터 ──────────────────────── */}
-      <div className="flex flex-col gap-2 px-page-x pt-1.5 pb-0.5">
-        {/* 토너먼트 + 지역 필터 — 한 줄(라디오 + 지역 드롭다운) */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <div
-            role="radiogroup"
-            aria-label="토너먼트 필터"
-            className="relative inline-flex items-center gap-0.5 rounded-input bg-surface-high/60 p-0.5 border border-border-subtle"
-          >
-            <SlidingPill activeKey={tour} className="rounded-[6px] bg-accent-300" />
-            {TOUR_OPTIONS.map(({ id, label }) => {
-              const active = tour === id;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  role="radio"
-                  aria-checked={active}
-                  data-pill-active={active || undefined}
-                  onClick={() => setTour(id)}
-                  className={[
-                    // ⚠ h-6(24px) 였다. 걸으면서 한 손으로 누르는 자리인데 4개가 gap-0.5 로 붙어 있어
-                    //   옆 값이 눌리고, 그때마다 목록이 갈아엎어져 스크롤 위치를 잃었다.
-                    //   같은 줄의 팔로우·뷰토글이 이미 h-9 라 오히려 이쪽이 기준에서 벗어나 있었다.
-                    'relative inline-flex items-center h-9 px-3.5 rounded-[6px] text-2xs font-bold leading-none transition-colors duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-300',
-                    active ? 'text-ink-inverse' : 'text-ink-muted hover:text-ink-secondary',
-                  ].join(' ')}
-                >
-                  <span className="relative">{label}</span>
-                </button>
-              );
-            })}
-          </div>
-          {/* 대회 등급 축(Phase 14 보류 해제) — 데일리/새틀라이트/시리즈 */}
-          <div role="radiogroup" aria-label="대회 등급"
-            className="relative inline-flex items-center gap-0.5 rounded-input bg-surface-high/60 p-0.5 border border-border-subtle">
-            <SlidingPill activeKey={grade ?? 'all'} className="rounded-[6px] bg-accent-300" />
-            {([[null, '등급 전체'], ['daily', '데일리'], ['satellite', '새틀'], ['series', '시리즈']] as const).map(([v, l]) => {
-              const on = grade === v;
-              return (
-                <button key={l} type="button" role="radio" aria-checked={on}
-                  data-pill-active={on || undefined}
-                  onClick={() => setGrade(v)}
-                  className={['relative inline-flex items-center h-9 px-3 rounded-[6px] text-2xs font-bold leading-none transition-colors duration-300 focus:outline-none',
-                    on ? 'text-ink-inverse' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
-                  <span className="relative">{l}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* 바이인 예산 축(UX-2) — '오늘 5만원짜리 뭐 있지'가 한국 유저 1차 질문. 등급 칩과 같은 문법 */}
-          <div role="radiogroup" aria-label="바이인 예산"
-            className="relative inline-flex items-center gap-0.5 rounded-input bg-surface-high/60 p-0.5 border border-border-subtle">
-            <SlidingPill activeKey={budget != null ? String(budget) : 'all'} className="rounded-[6px] bg-accent-300" />
-            {([[null, '예산 전체'], [30000, '3만↓'], [50000, '5만↓'], [100000, '10만↓']] as const).map(([v, l]) => {
-              const on = budget === v;
-              return (
-                <button key={l} type="button" role="radio" aria-checked={on}
-                  data-pill-active={on || undefined}
-                  onClick={() => setBudget(v)}
-                  className={['relative inline-flex items-center h-9 px-3 rounded-[6px] text-2xs font-bold leading-none transition-colors duration-300 focus:outline-none',
-                    on ? 'text-ink-inverse' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
-                  <span className="relative">{l}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* 지역 선택 드롭다운 (단일 선택) — 칩 대신 콤팩트한 select */}
-          <div className="relative">
-            <select
-              aria-label="지역 선택"
-              value={selectedRegions[0] ?? ''}
-              onChange={(e) => setSelectedRegions(e.target.value ? [e.target.value] : [])}
-              className={[
-                'appearance-none h-9 pl-3 pr-7 rounded-input border text-2xs font-bold leading-none cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-300',
-                selectedRegions.length > 0
-                  ? 'bg-accent-300/15 border-accent-300 text-accent-300'
-                  : 'bg-surface-high/60 border-border-subtle text-ink-secondary hover:border-border-strong',
-              ].join(' ')}
+      {/* ── 필터 칩 레일 — 균일 칩 '한 줄'(APIS·FotMob 문법, §20.1) ─────────────
+           예전엔 세그먼트 박스 3개 + 드롭다운이 flex-wrap 으로 4줄로 꺾여(각 박스가
+           내용 폭대로 제각각 끝남) 필터가 화면 2/3를 먹었다. 규칙:
+           · 모든 칩 h-9 · rounded-badge · 같은 서체/보더 — 시각 언어 하나
+           · 고빈도 이지선다(GTD/MTT/대회)는 즉시 토글 칩(탭 1회, 재탭 = 해제 → 전체)
+           · 저빈도 단일선택(지역/등급/예산)은 네이티브 select 칩(안드로이드 네이티브 피커
+             = APK 감각, 시트 구현 0줄) — 값 선택 시 칩이 값 라벨로 바뀌고 액센트 점등 */}
+      <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none scroll-fade-r px-page-x pt-2 pb-1">
+        <FilterSelectChip
+          ariaLabel="지역 선택"
+          value={selectedRegions[0] ?? ''}
+          onChange={(v) => setSelectedRegions(v ? [v] : [])}
+          placeholder="지역"
+          options={[['', '전체 지역'], ...REGION_CHIPS.map((r) => [r, r] as [string, string])]}
+        />
+        {/* 재탭=해제 토글이라 radio 가 아니라 aria-pressed 문법(DateTab 과 동일 관용구).
+            상호배타(하나 켜면 나머지 꺼짐)는 상태 파생이 보장한다. */}
+        {TOUR_OPTIONS.filter((o) => o.id !== 'all').map(({ id, label }) => {
+          const active = tour === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              aria-pressed={active}
+              onClick={() => setTour(active ? 'all' : id)}
+              className={[CHIP_BASE, 'focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-300', active ? CHIP_ON : CHIP_OFF].join(' ')}
             >
-              <option value="">전체 지역</option>
-              {REGION_CHIPS.map((r) => (
-                <option key={r} value={r}>{r}</option>
-              ))}
-            </select>
-            <svg
-              width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor"
-              strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden
-              className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-ink-muted"
-            >
-              <path d="M2 4l3 3 3-3" />
-            </svg>
-          </div>
-
-          {/* 전체 초기화는 App 의 '총 N개' 줄로 이동(여기서 한 줄 먹던 것 제거) */}
-        </div>
+              {label}
+            </button>
+          );
+        })}
+        <FilterSelectChip
+          ariaLabel="대회 등급"
+          value={grade ?? ''}
+          onChange={(v) => setGrade((v || null) as typeof grade)}
+          placeholder="등급"
+          options={[['', '등급 전체'], ['daily', '데일리'], ['satellite', '새틀'], ['series', '시리즈']]}
+        />
+        {/* 바이인 예산 축(UX-2) — '오늘 5만원짜리 뭐 있지'가 한국 유저 1차 질문 */}
+        <FilterSelectChip
+          ariaLabel="바이인 예산"
+          value={budget != null ? String(budget) : ''}
+          onChange={(v) => setBudget(v ? Number(v) : null)}
+          placeholder="예산"
+          options={[['', '예산 전체'], ['30000', '3만↓'], ['50000', '5만↓'], ['100000', '10만↓']]}
+        />
       </div>
 
       {/* ── 활성 필터 요약 칩 — 날짜는 슬라이더에 이미 표시되므로 '복수 선택일 때만' 칩 노출
