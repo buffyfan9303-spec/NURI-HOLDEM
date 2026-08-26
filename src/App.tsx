@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, useTransition, startTransition, Suspense, memo, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import { withViewTransition } from './lib/viewTransition';
+import { getAppSetting } from './api/settings';
 import { useToast } from './components/atoms/Toast';
 import { checkIn, getMyCheckinStreak } from './api/checkins';
 import { requestBuyin, venueTodayGames, getMyBuyinRequestsToday, subscribeMyBuyinRequests, cancelBuyinRequest, type MyBuyinRequest } from './api/ledger';
@@ -37,9 +38,11 @@ import type { MarketplaceFormData } from './components/features/MarketplaceFormM
 import { rearmLayer, useBackClose, overlayJustClosed } from './lib/backstack';
 import { useVisibilityRefresh } from './lib/useVisibilityRefresh';
 import { lazyWithReload } from './lib/lazyWithReload';
-import { getRunningClocks } from './api/clock';
+import { getRunningClocks, type ClockState } from './api/clock';
+import { buildRegInfoMap } from './lib/regStatus';
 import { myVisitedVenues } from './api/vouchers';
 import { haversineKm } from './lib/geo';
+import { compareByStartThenBoost } from './lib/scheduleSort';
 import { readSnap, writeSnap } from './lib/snapshot';
 import { applyScheduleSeo, applyVenueSeo, resetSeo } from './lib/seo';
 import { createUndoQueue } from './lib/undoableDelete';
@@ -105,6 +108,7 @@ const LiveGamesTab   = lazyWithReload(() => import('./components/features/LiveGa
 const LiveGamesTabM   = memo(LiveGamesTab);
 const CommunityTabM   = memo(CommunityTab);
 const ToolsPanelM     = memo(ToolsPanel);
+const VenueManageTabM = memo(VenueManageTab); // 내 매장 keep-alive 전환에 필수 — 숨김 상태에서 App 재렌더에 끌려가지 않게
 const CustomerDashboardPage = lazyWithReload(() => import('./components/features/CustomerDashboardPage'));
 const ClockDisplay   = lazyWithReload(() => import('./components/features/clock/ClockDisplay'));
 
@@ -529,21 +533,53 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
   // 5칸 고정: 일정/라이브/커뮤니티/장터 + (업주·직원·관리자=내 매장 | 일반=내 정보)
   // 관리자 설정·도구는 프로필 메뉴에서 진입(탭바는 핵심 동선만)
   const hasStore = tabs.some((t) => t.id === 'my-store');
-  // 유튜브식 자동 숨김 — 아래로 스크롤하면 숨고(몰입), 위로 살짝 올리면 즉시 복귀
+  // 유튜브식 자동 숨김 — TB2 재작성(§13-A): 이벤트 델타 임계(속도 의존)가 4가지로 고장나 있었다.
+  // ①느린 끌기는 무판정 구간에 머물러 바닥까지 탭바가 안 숨고 ②문서끝 감지 부재(삼성 '맨 위로'와 겹침)
+  // ③iOS 고무줄·툴바 개폐가 가짜 음수 dy 를 만들고 ④탭 복원(behavior:'instant')의 거대 dy 가 탭바를 증발시켰다.
+  // OBS-8 킬스위치: app_settings.tabbar_autohide_v2 = 'off' → 구 동작 복구(앱 재접속만으로, 재배포 불필요).
   const [hidden, setHidden] = useState(false);
+  const [autohideV2, setAutohideV2] = useState(true);
+  useEffect(() => { getAppSetting('tabbar_autohide_v2').then((v) => { if (v === 'off') setAutohideV2(false); }).catch(() => {}); }, []);
+  // 탭 전환 억제창 — 자식 layoutEffect 가 부모(App)의 복원 스크롤보다 먼저 실행되므로
+  // 복원 이벤트 도착 전에 창이 열려 순서가 보장된다. |dy| 크기 추정은 빠른 플링(프레임당 200px+)을 삼키므로 금지.
+  const suppressUntil = useRef(0);
+  useLayoutEffect(() => { suppressUntil.current = performance.now() + 300; }, [active]);
   useEffect(() => {
-    let lastY = window.scrollY;
-    const onScroll = () => {
-      const y = window.scrollY;
-      const dy = y - lastY;
-      if (y < 80) setHidden(false);            // 최상단 근처에선 항상 표시
-      else if (dy > 14) setHidden(true);       // 아래로 — 숨김
-      else if (dy < -8) setHidden(false);      // 위로 — 즉시 복귀
-      lastY = y;
+    if (!autohideV2) {
+      // 구(레거시) 경로 — 킬스위치 off 시 그대로 복구
+      let lastY = window.scrollY;
+      const onScroll = () => {
+        const y = window.scrollY;
+        const dy = y - lastY;
+        if (y < 80) setHidden(false);
+        else if (dy > 14) setHidden(true);
+        else if (dy < -8) setHidden(false);
+        lastY = y;
+      };
+      window.addEventListener('scroll', onScroll, { passive: true });
+      return () => window.removeEventListener('scroll', onScroll);
+    }
+    let lastY = window.scrollY, acc = 0, raf = 0;
+    const apply = () => {
+      raf = 0;
+      if (performance.now() < suppressUntil.current) { lastY = window.scrollY; acc = 0; return; }
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      if (max < 200) { setHidden(false); lastY = window.scrollY; acc = 0; return; }  // 짧은 화면 — 내비 영구 소멸·깜빡임 방지
+      const cy = Math.min(Math.max(window.scrollY, 0), max);                          // 고무줄·툴바 개폐 클램프 흡수
+      const dy = cy - lastY; lastY = cy;
+      if (cy >= max - 4) { setHidden(true); acc = 0; return; }                        // 문서 끝 — 무조건 숨김(삼성 버튼과 시간축 배타)
+      if (cy < 80) { setHidden(false); acc = 0; return; }
+      acc = (dy > 0) === (acc > 0) ? acc + dy : dy;                                   // 방향 바뀌면 리셋되는 누적 — 느린 끌기도 판정
+      if (acc > 48) { setHidden(true); acc = 0; }
+      else if (acc < -24) { setHidden(false); acc = 0; }
     };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(apply); };
+    const resync = () => { lastY = window.scrollY; acc = 0; };
     window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
+    window.addEventListener('resize', resync);
+    window.visualViewport?.addEventListener('resize', resync);
+    return () => { cancelAnimationFrame(raf); window.removeEventListener('scroll', onScroll); window.removeEventListener('resize', resync); window.visualViewport?.removeEventListener('resize', resync); };
+  }, [autohideV2]);
   // 장터는 커뮤니티 서브탭으로 이동(사용 빈도 기준) — 탭바 4번째 칸은 도구
   const items: { key: string; tab?: TabId; label: string }[] = [
     { key: 'browse', tab: 'browse', label: '일정' },
@@ -766,7 +802,7 @@ export default function App() {
   }, []);
   // 일정탐색 기본값 — 무선택('오늘부터 앞으로'). 예전 '오늘' 기본 선택은 심야·평일 오전
   // 첫 방문을 빈 화면으로 만들었고, 프리스틴 상태가 '필터 걸림'으로 판정되는 부작용도 있었다.
-  const [searchState, setSearchState] = useState<SearchState>({ query: '', dates: [], regions: [], format: null, gtdOnly: false, competitionOnly: false, grade: null });
+  const [searchState, setSearchState] = useState<SearchState>({ query: '', dates: [], regions: [], format: null, gtdOnly: false, competitionOnly: false, grade: null, budget: null });
   // 전체 초기화 버튼을 '총 N개' 줄에 두기 위해 검색바의 clearAll 을 ref 로 끌어올림
   const searchBarRef = useRef<{ clearAll: () => void } | null>(null);
   const hasActiveSearchFilter = !!(searchState.query || searchState.dates.length || searchState.regions.length || searchState.format || searchState.gtdOnly || searchState.competitionOnly || searchState.grade);
@@ -1007,7 +1043,8 @@ export default function App() {
         import('./components/features/PostDetailModal'),
         import('./components/features/ListingDetailModal'),
         // 역할 전용 청크 — 해당 역할일 때만(손님에게 업주 스위트를 내려보내지 않는다)
-        ...(isOwner ? [import('./components/features/VenueManageTab')] : []),
+        // 직원(venue_staff)도 내 매장 탭을 쓰므로 업주와 같은 게이트에 포함
+        ...((isOwner || isAdmin || user?.role === 'venue_staff') ? [import('./components/features/VenueManageTab')] : []),
         ...(isAdmin ? [import('./components/features/AdminTab')] : []),
       ]).then(() => {
         // 프리마운트: 청크가 데워진 뒤, 핵심 탭을 idle 마다 하나씩 숨김 마운트해 둔다.
@@ -1015,7 +1052,10 @@ export default function App() {
         // 실측에서 유일하게 잡히는 상호작용 멈칫(스로틀 4x 67~150ms·6x 최대 250ms)이었다.
         // 미리 방문 처리하면 사용자 첫 탭도 재방문(스냅샷 뒤 flushSync) 경로가 된다.
         // 한 번에 하나씩인 이유: 3개 동시 커밋은 그 자체가 idle 롱태스크가 된다.
-        const seq: TabId[] = ['live', 'community', 'tools'];
+        // 내 매장은 역할 보유자에게 최우선 프리마운트 — '다른 탭→내 매장'이 사장님 핵심 동선이자
+        // 가장 무거운 스위트(320KB+)라, 이걸 idle 에 미리 치러야 첫 진입 멈칫이 사라진다.
+        const canStore = isOwner || isAdmin || user?.role === 'venue_staff';
+        const seq: TabId[] = [...(canStore ? (['my-store'] as TabId[]) : []), 'live', 'community', 'tools'];
         const mountNext = () => {
           const t = seq.find((x) => !visitedTabs.has(x));
           if (!t) return;
@@ -1030,7 +1070,7 @@ export default function App() {
     idle(warm);
     // visitedTabs 는 안정 Set 인스턴스 — 참조 불변
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [schedulesLoaded, isOwner, isAdmin]);
+  }, [schedulesLoaded, isOwner, isAdmin, user?.role]);
   // FOMO 뱃지용 예약자 수 — 다가오는 대회만 1회 조회.
   // ⚠ [schedules] 배열 의존이면 스냅샷→네트워크 교체(내용 동일)에도 재조회·리렌더가 났다 —
   //   id 집합 문자열 키로 좁혀 '같은 대회 목록'이면 건너뛴다(PastTournaments pastKey 패턴).
@@ -1191,6 +1231,8 @@ export default function App() {
   // 탭 진입만 기다리면 매번 스켈레톤을 본다 — 둘을 합치면 양쪽 다 없다.
   // 라이브 탭 배지 — '지금 N게임 진행중'(Phase 14, PokerAtlas real-time counts).
   const [liveCount, setLiveCount] = useState(0);
+  // UX-1: 진행 중 클락 원본 — '지금 등록 되나' 판정을 browse 카드·상세로 승격(추가 네트워크 0, 기존 조회 재사용)
+  const [liveClocks, setLiveClocks] = useState<ClockState[]>([]);
   // 16-1 '이어서 하기' — 최근 방문 매장 1곳(my_visited_venues 재활용, 신규 쿼리 0)
   const [recentVenue, setRecentVenue] = useState<{ venueId: string; venueName: string | null } | null>(null);
   useEffect(() => {
@@ -1209,7 +1251,7 @@ export default function App() {
         if (lr.status === 'fulfilled') { setListings(lr.value); writeSnap('listings', lr.value); }
         setMarketLoaded(true);
         if (rr.status === 'fulfilled') setVenueRatings(rr.value);
-        if (kr.status === 'fulfilled') setLiveCount(kr.value.length);
+        if (kr.status === 'fulfilled') { setLiveCount(kr.value.length); setLiveClocks(kr.value); }
       });
      
   }, []);
@@ -1307,7 +1349,7 @@ export default function App() {
       case 'browse':
       case 'live':
       case 'my-store':
-        getRunningClocks().then((cs) => setLiveCount(cs.length)).catch(() => {});
+        getRunningClocks().then((cs) => { setLiveCount(cs.length); setLiveClocks(cs); }).catch(() => {});
         reloadSchedules(); reloadVenues(); reloadNotices();
         break;
       case 'community':
@@ -1433,11 +1475,13 @@ export default function App() {
       const matchG = !searchState.gtdOnly || s.guaranteed === true;
       const matchC = !searchState.competitionOnly || s.isCompetition === true;
       const matchGr = !searchState.grade || s.grade === searchState.grade; // 등급 축(Phase 14)
+      // 예산 축(UX-2) — 바이인 상한(원). 금액 미입력(0)은 통과(무료·미정 대회를 숨기지 않는다)
+      const matchB = !searchState.budget || (s.buyIn?.amount ?? 0) <= searchState.budget;
       const matchFollow = !followedOnly || (!!s.venueId && followedIds.has(s.venueId));
-      return matchQ && matchD && matchR && matchF && matchG && matchC && matchGr && matchFollow;
+      return matchQ && matchD && matchR && matchF && matchG && matchC && matchGr && matchB && matchFollow;
     })
       // 정렬이 아예 없어서 '업주가 정한 진열 순서'로 나왔다 — 손님은 '지금 갈 수 있는 게 뭐지'를
-      // 시간순으로 훑을 수가 없었다. 상단 고정(프리미엄)은 유지하되 그 안에서는 빠른 대회부터.
+      // 시간순으로 훑을 수가 없었다. 1차 키는 날짜+시각, 부스트는 동시각 tie-break(scheduleSort.ts).
       .sort((a, b) => {
         // 📍 가까운 순 — 좌표 있는 매장이 앞, 좌표 없으면 뒤(라이트백이 채우면 자연 편입).
         if (nearSort && myPos) {
@@ -1448,8 +1492,7 @@ export default function App() {
           const dd = dOf(a) - dOf(b);
           if (dd !== 0 && Number.isFinite(dd)) return dd;
         }
-        return Number(b.isPremium) - Number(a.isPremium)
-          || (a.date + a.startTime).localeCompare(b.date + b.startTime);
+        return compareByStartThenBoost(a, b);
       });
   }, [schedules, searchState, followedOnly, followedIds, nearSort, myPos, venueById]);
   // 날짜 슬라이더 점 표시용 — 승인된 대회가 있는 날짜 집합(헛탭 방지)
@@ -1460,6 +1503,8 @@ export default function App() {
     const v = sc.venueId ? venueById.get(sc.venueId) : undefined;
     return v && v.lat != null && v.lng != null ? haversineKm(myPos.lat, myPos.lng, v.lat, v.lng) : undefined;
   }, [nearSort, myPos, venueById]);
+  // UX-1: scheduleId → 레지 실측 상태(클락 기반). 클락 없는 대회는 맵에 없다 → 카드·모달이 기존 추정으로 폴백.
+  const regInfoBySchedule = useMemo(() => buildRegInfoMap(liveClocks, schedules), [liveClocks, schedules]);
   // 🎯 내 토너 — 오늘 승인된 내 바인의 게임 목록(라이브 탭 참가자 시점 카드)
   const myApprovedGames = useMemo(() => myBuyinReqs
     .filter((r) => r.status === 'approved')
@@ -1580,7 +1625,7 @@ export default function App() {
     setOpenNotice(null);
     setOpenPost(null);
     setPosterFormTarget(null);
-    setSearchState({ query: '', dates: [], regions: [], format: null, gtdOnly: false, competitionOnly: false, grade: null });
+    setSearchState({ query: '', dates: [], regions: [], format: null, gtdOnly: false, competitionOnly: false, grade: null, budget: null });
     tabScrollRef.current.set('browse', 0); // 홈 = 처음부터 — 복원 로직이 옛 위치로 되돌리지 않게
     window.scrollTo({ top: 0, behavior: 'smooth' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1861,6 +1906,21 @@ export default function App() {
     window.addEventListener('pagehide', flush);
     return () => { window.removeEventListener('pagehide', flush); flush(); };
   }, [posterDeleteQ]);
+
+  // 내 매장 keep-alive(memo) 전용 — 인라인 클로저면 App 재렌더마다 새 참조라 memo 가 무력화된다
+  const handleCreatePosterFromStore = useCallback(() => {
+    // 승인 전 업주는 포스터 등록 차단(서버 RLS와 이중 방어 + 명확한 안내)
+    if (user?.role === 'venue_owner' && !user.approved) {
+      toast.show('매장 승인 완료 후 포스터를 등록할 수 있습니다', 'error');
+      return;
+    }
+    setPosterFormTarget(undefined);
+  }, [user, toast]);
+  const handleEditPosterFromStore = useCallback((id: string) => {
+    const s = schedules.find((x) => x.id === id);
+    if (s) setPosterFormTarget(s);
+  }, [schedules]);
+  const handleConsumeMyStoreDeep = useCallback(() => setMyStoreDeep(null), []);
 
   // 관리자: 포스터 승인 / 반려 — 서버 반영
   const handleApproveSchedule = useCallback((id: string) => {
@@ -2362,6 +2422,7 @@ export default function App() {
                         reserveCount={browseResCounts[s.id]}
                         rating={venueRatings[s.venueId]}
                         distanceKm={distanceOf(s)}
+                        regInfo={regInfoBySchedule.get(s.id)}
                         onVenueClick={handleVenueClick}
                         onSelect={handleScheduleSelect}
                         // ⚡ 첫 화면에 보이는 상단 카드만 포스터를 즉시 로드(LCP 단축).
@@ -2375,7 +2436,7 @@ export default function App() {
                 {viewMode === 'table' && visibleSchedules.length > 0 && (
                   <div className="grid grid-cols-1 gap-card-gap md:hidden">
                     {visibleSchedules.map((s, i) => (
-                      <ScheduleCard key={s.id} mode="list" schedule={s} reserveCount={browseResCounts[s.id]} rating={venueRatings[s.venueId]} distanceKm={distanceOf(s)} onVenueClick={handleVenueClick} onSelect={handleScheduleSelect} priority={i < 4} />
+                      <ScheduleCard key={s.id} mode="list" schedule={s} reserveCount={browseResCounts[s.id]} rating={venueRatings[s.venueId]} distanceKm={distanceOf(s)} regInfo={regInfoBySchedule.get(s.id)} onVenueClick={handleVenueClick} onSelect={handleScheduleSelect} priority={i < 4} />
                     ))}
                   </div>
                 )}
@@ -2442,26 +2503,20 @@ export default function App() {
         </main>
       )}
 
-      {/* 내 매장 — 게임관리 + 매장운영 통합 허브 (업주/직원/운영자) */}
-      {activeTab === 'my-store' && (
-        <main className="px-page-x pt-3 pb-section">
+      {/* 내 매장 — 게임관리 + 매장운영 통합 허브 (업주/직원/운영자)
+          keep-alive: 가장 무거운 스위트(장부·클락·통계)를 탭 전환마다 완전 재마운트하던 것이
+          '다른 탭→내 매장' 멈칫의 근본 원인. 다른 탭과 같은 display 토글로 전환하고,
+          tabActive 로 숨김 중 구독·틱을 끈다. 역할 게이트(로그아웃 시 즉시 언마운트) 필수. */}
+      {(isOwner || isStaff || isAdmin) && (activeTab === 'my-store' || visitedTabs.has('my-store')) && (
+        <main className="tab-pane px-page-x pt-3 pb-section" style={activeTab !== 'my-store' ? { display: 'none' } : undefined}>
           <ErrorBoundary inline resetKey="my-store">
-          <VenueManageTab
+          <VenueManageTabM
             schedules={schedules}
             deepSection={myStoreDeep}
-            onConsumeDeepSection={() => setMyStoreDeep(null)}
-            onCreatePoster={() => {
-              // 승인 전 업주는 포스터 등록 차단(서버 RLS와 이중 방어 + 명확한 안내)
-              if (user?.role === 'venue_owner' && !user.approved) {
-                toast.show('매장 승인 완료 후 포스터를 등록할 수 있습니다', 'error');
-                return;
-              }
-              setPosterFormTarget(undefined);
-            }}
-            onEditPoster={(id) => {
-              const s = schedules.find((x) => x.id === id);
-              if (s) setPosterFormTarget(s);
-            }}
+            onConsumeDeepSection={handleConsumeMyStoreDeep}
+            tabActive={activeTab === 'my-store'}
+            onCreatePoster={handleCreatePosterFromStore}
+            onEditPoster={handleEditPosterFromStore}
             onDeletePoster={handleDeletePoster}
           />
           </ErrorBoundary>
@@ -2534,6 +2589,7 @@ export default function App() {
         onClose={() => setOpenSchedule(null)}
         onVenueClick={handleVenueClick}
         rating={openSchedule ? venueRatings[openSchedule.venueId] : undefined}
+        regInfo={openSchedule ? regInfoBySchedule.get(openSchedule.id) : undefined}
         comments={comments}
         onSubmitComment={(content, parentId) =>
           openSchedule && handleSubmitScheduleComment(openSchedule.id, content, parentId)
@@ -2719,8 +2775,8 @@ function ScrollTopButton() {
       type="button"
       aria-label="맨 위로"
       onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-      // 모바일: 하단 탭바(≈4.5rem+safe-area) 위로 띄움 / PC: 기존 위치
-      className="fixed bottom-[5.75rem] lg:bottom-5 right-4 z-40 flex h-10 w-10 items-center justify-center rounded-full border border-border-default bg-surface-mid/95 text-ink-secondary shadow-dialog backdrop-blur transition-colors hover:text-accent-300 animate-fade-in"
+      // 모바일: 하단 탭바 위로 띄움(--tabbar-float, 누락됐던 safe-area 복구) / PC: 기존 위치
+      className="fixed bottom-[var(--tabbar-float)] lg:bottom-5 right-4 z-40 flex h-10 w-10 items-center justify-center rounded-full border border-border-default bg-surface-mid/95 text-ink-secondary shadow-dialog backdrop-blur transition-colors hover:text-accent-300 animate-fade-in"
     >
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         <polyline points="18 15 12 9 6 15" />

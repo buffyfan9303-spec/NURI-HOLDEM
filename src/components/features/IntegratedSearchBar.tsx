@@ -219,6 +219,9 @@ export interface SearchState {
   competitionOnly: boolean; // '대회' 필터 — is_competition=true 만 노출 (Task 3)
   /** 대회 등급 축(데일리/새틀라이트/시리즈) — null=전체 */
   grade: 'daily' | 'satellite' | 'series' | null;
+  /** 바이인 예산 상한(원) — null=전체. 한국 유저 1차 제약은 포맷이 아니라 예산(UX-2).
+   *  §28 정합: 참가비는 상품 가격 정보라 표시·필터 대상이다. */
+  budget: number | null;
 }
 
 interface IntegratedSearchBarProps {
@@ -250,6 +253,8 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
   const [tour,           setTour]           = useState<TourFilter>('all');
   // 대회 등급 축(Phase 14 보류 해제 — schedules.grade 컬럼 신설)
   const [grade, setGrade] = useState<'daily' | 'satellite' | 'series' | null>(null);
+  // 바이인 예산 축(UX-2) — buyIn.amount(원) 상한 단일 선택
+  const [budget, setBudget] = useState<number | null>(null);
   const [isFocused,      setIsFocused]      = useState(false);
   const inputRef                            = useRef<HTMLInputElement>(null);
   const stickyRef                           = useRef<HTMLDivElement>(null);
@@ -279,9 +284,9 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
     const gtdOnly         = tour === 'GTD';
     const competitionOnly = tour === 'comp';
     startTransition(() => {
-      onChange({ query: deferredQuery, dates: selectedDates, regions: selectedRegions, format, gtdOnly, competitionOnly, grade });
+      onChange({ query: deferredQuery, dates: selectedDates, regions: selectedRegions, format, gtdOnly, competitionOnly, grade, budget });
     });
-  }, [deferredQuery, selectedDates, selectedRegions, tour, grade, onChange]);
+  }, [deferredQuery, selectedDates, selectedRegions, tour, grade, budget, onChange]);
 
   const handleQueryChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => { setRawQuery(e.target.value); },
@@ -322,6 +327,7 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
     setSelectedRegions([]);
     setTour('all');
     setGrade(null);
+    setBudget(null);
   }, []);
 
   // 전체 초기화를 부모(App)의 '총 N개' 줄에서 호출 — 필터바 안에서 한 줄 먹던 버튼 제거
@@ -446,6 +452,24 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
                 <button key={l} type="button" role="radio" aria-checked={on}
                   data-pill-active={on || undefined}
                   onClick={() => setGrade(v)}
+                  className={['relative inline-flex items-center h-9 px-3 rounded-[6px] text-2xs font-bold leading-none transition-colors duration-300 focus:outline-none',
+                    on ? 'text-ink-inverse' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
+                  <span className="relative">{l}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* 바이인 예산 축(UX-2) — '오늘 5만원짜리 뭐 있지'가 한국 유저 1차 질문. 등급 칩과 같은 문법 */}
+          <div role="radiogroup" aria-label="바이인 예산"
+            className="relative inline-flex items-center gap-0.5 rounded-input bg-surface-high/60 p-0.5 border border-border-subtle">
+            <SlidingPill activeKey={budget != null ? String(budget) : 'all'} className="rounded-[6px] bg-accent-300" />
+            {([[null, '예산 전체'], [30000, '3만↓'], [50000, '5만↓'], [100000, '10만↓']] as const).map(([v, l]) => {
+              const on = budget === v;
+              return (
+                <button key={l} type="button" role="radio" aria-checked={on}
+                  data-pill-active={on || undefined}
+                  onClick={() => setBudget(v)}
                   className={['relative inline-flex items-center h-9 px-3 rounded-[6px] text-2xs font-bold leading-none transition-colors duration-300 focus:outline-none',
                     on ? 'text-ink-inverse' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
                   <span className="relative">{l}</span>

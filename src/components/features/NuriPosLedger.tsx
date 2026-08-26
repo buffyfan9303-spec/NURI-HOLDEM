@@ -1149,7 +1149,8 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       )}
 
       {/* 정산 바 (고정) */}
-      <div className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] lg:bottom-0 left-0 right-0 z-30 mx-auto max-w-6xl bg-surface-mid border-t border-x border-border-default rounded-t-card lg:rounded-none lg:border-x-0 px-page-x py-2">
+      {/* 정산바 오프셋 = --tabbar-safe − 0.75rem (탭바에 딱 붙이는 의도적 파생값, TB1a) */}
+      <div className="fixed bottom-[calc(var(--tabbar-safe)-0.75rem)] lg:bottom-0 left-0 right-0 z-30 mx-auto max-w-6xl bg-surface-mid border-t border-x border-border-default rounded-t-card lg:rounded-none lg:border-x-0 px-page-x py-2">
         <div className="flex items-center gap-2">
           <div className="grid grid-cols-4 gap-2 flex-1 text-center">
             <Metric label="총 엔트리" value={stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} />

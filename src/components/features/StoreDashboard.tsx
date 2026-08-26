@@ -177,6 +177,13 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   }, [venueId, d]);
 
   useEffect(() => { setLoading(true); reload(); }, [reload]);
+  // 숨김(다른 섹션·다른 탭 keep-alive) 동안 구독이 꺼져 있어 이벤트를 놓친다 —
+  // 다시 보일 때(active 상승) 한 번 재검증해 마운트-당시 데이터로 굳는 것을 막는다.
+  const prevActiveRef = useRef(active);
+  useEffect(() => {
+    if (active && !prevActiveRef.current) reload();
+    prevActiveRef.current = active;
+  }, [active, reload]);
   // ⚡ 실시간 구독은 대시보드를 실제로 보고 있을 때만(active) — 숨은 탭이 채널을 물고 있지 않게.
   useEffect(() => { if (active) return subscribeLedger(venueId, reload); }, [venueId, reload, active]);
   useEffect(() => { if (active) return subscribeClock(venueId, reload); }, [venueId, reload, active]);

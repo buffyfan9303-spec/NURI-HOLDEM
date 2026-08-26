@@ -3,6 +3,7 @@
 // 레벨/블라인드/앤티·남은시간·생존/엔트리·리바인·얼리·애드온·탈락·총스택·평균스택·등록마감·다음브레이크.
 import { useEffect, useState } from 'react';
 import { getRunningClocks, subscribeRunningClocks, effectiveLevel, type ClockState, type ClockLevel } from '../../api/clock';
+import { matchClockSchedule as matchSchedule, msToRegClose } from '../../lib/regStatus';
 import { wonToMan } from '../../api/ledger';
 import { EmptyState, SkeletonList } from '../atoms/Skeleton';
 import type { Venue } from '../../api/community';
@@ -31,15 +32,7 @@ const haversine = (a: [number, number], b: [number, number]): number => {
   return 2 * R * Math.asin(Math.sqrt(h));
 };
 
-/** 라이브 클락 → 연결 포스터 매칭(공개 데이터만): 같은 매장·같은 날짜의 스케줄(여럿이면 제목 일치 우선). 없으면 null → 매장 폴백. */
-function matchSchedule(g: ClockState, schedules: Schedule[]): Schedule | null {
-  if (!g.sessionDate) return null;
-  const sameDay = schedules.filter((s) => s.venueId === g.venueId && s.date === g.sessionDate);
-  if (sameDay.length === 0) return null;
-  if (sameDay.length === 1) return sameDay[0];
-  const t = (g.title || g.config?.title || '').trim();
-  return sameDay.find((s) => (s.title ?? '').trim() === t) ?? sameDay[0];
-}
+// matchSchedule·msToRegClose 는 src/lib/regStatus.ts 로 승격(UX-1) — browse 카드·상세와 단일 소스 공유.
 
 function levelNumberAt(levels: ClockLevel[], index: number): number {
   let n = 0;
@@ -50,14 +43,6 @@ function levelNumberAt(levels: ClockLevel[], index: number): number {
 function msToNextBreak(s: ClockState, index: number, remaining: number): number | null {
   const lv = s.config?.levels ?? []; let acc = remaining;
   for (let i = index + 1; i < lv.length; i++) { if (lv[i].kind === 'break') return acc; acc += lv[i].minutes * 60_000; }
-  return null;
-}
-function msToRegClose(s: ClockState, index: number, remaining: number): number | null {
-  const lv = s.config?.levels ?? []; const target = s.config?.regCloseLevel ?? 0;
-  let acc = remaining, num = 0;
-  for (let i = 0; i <= index; i++) if (lv[i]?.kind === 'level') num++;
-  if (num >= target) return 0;
-  for (let i = index + 1; i < lv.length; i++) { if (lv[i].kind === 'level') { num++; if (num >= target) return acc; } acc += lv[i].minutes * 60_000; }
   return null;
 }
 

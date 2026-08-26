@@ -245,7 +245,7 @@ export default function VenuePage({
 
       {/* ── 스크롤 컨테이너 ────────────────────────────────────────────── */}
       {/* 모바일 하단 탭바(z-50)가 이 오버레이(z-40) 위에 떠 있으므로 마지막 콘텐츠가 가려지지 않게 하단 여백 확보 */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-0">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto pb-[var(--tabbar-safe)] lg:pb-0">
         {/* PC 에서 전체 폭으로 퍼져 공백이 과해지지 않도록 중앙 컬럼(최대 768px)으로 제한 */}
         <div className="mx-auto w-full max-w-3xl">
 
