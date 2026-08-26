@@ -60,11 +60,14 @@ function FormatBadge({ format }: { format: TournamentFormat }) {
 const SUITS = ['♠', '♥', '♦', '♣'];
 
 function PosterArea({
-  posterUrl, posterColor = '#1a1d24', title, className = '', thumbWidth = 400, priority = false,
-}: { posterUrl?: string; posterColor?: string; title: string; className?: string; thumbWidth?: number; priority?: boolean }) {
+  posterUrl, posterColor = '#1a1d24', title, className = '', thumbWidth = 400, priority = false, vtName,
+}: { posterUrl?: string; posterColor?: string; title: string; className?: string; thumbWidth?: number; priority?: boolean;
+  /** [DS] MO-8B: 열리는 카드 1장에만 부여되는 view-transition-name — 카드가 그 자리에서 커져 모달이 된다.
+   *  문서 내 유일해야 하므로(중복이면 전환 자체가 취소) App 이 열림 대상에만 조건부로 내려준다. */
+  vtName?: string }) {
   if (posterUrl) {
     return (
-      <div className={`overflow-hidden bg-surface-mid ${className}`}>
+      <div className={`overflow-hidden bg-surface-mid ${className}`} style={vtName ? { viewTransitionName: vtName } : undefined}>
         {/* 💰 목록 카드는 원본(평균 165KB) 대신 폭 맞춤 webp 썸네일(400px≈60KB) — Egress 62% 절감 */}
         {/* ⚡ 첫 화면 상단 카드(priority)는 lazy 를 쓰지 않는다 — lazy 이미지는 프리로드 스캐너가 미리
             받지 못해 LCP(가장 큰 콘텐츠 표시)가 1왕복 늦어진다. 상위 몇 장만 eager+high 로 당긴다. */}
@@ -91,7 +94,7 @@ function PosterArea({
   return (
     <div
       className={`relative overflow-hidden flex items-center justify-center ${className}`}
-      style={{ background: `linear-gradient(135deg, ${posterColor}ee 0%, #0a0c0f 100%)` }}
+      style={{ background: `linear-gradient(135deg, ${posterColor}ee 0%, #0a0c0f 100%)`, ...(vtName ? { viewTransitionName: vtName } : {}) }}
     >
       <div className="absolute inset-0 grid grid-cols-3 gap-2 p-3 opacity-[0.08] select-none pointer-events-none" aria-hidden>
         {Array.from({ length: 12 }, (_, i) => (
@@ -173,6 +176,8 @@ interface CardProps {
   /** UX-1: 라이브 클락 실측 레지 상태 — 있으면 LIVE 배지가 추정이 아니라 실측이 된다.
    *  (없으면 기존 scheduleStatus 추정 폴백 — '시작+10시간 윈도'라 레지 마감 후에도 LIVE 로 뜨던 거짓 배지 문제) */
   regInfo?: RegInfo;
+  /** [DS] MO-8B: 이 카드가 '지금 열리는 대상'일 때만 true — 포스터에 vt-poster 이름을 부여해 모달로 모핑 */
+  vtActive?: boolean;
 }
 
 /** 실측 레지 상태 → 배지 텍스트·톤. regInfo 없으면 기존 추정('LIVE') 유지. */
@@ -182,7 +187,7 @@ function liveBadge(regInfo: RegInfo | undefined): { text: string; closed: boolea
   return { text: 'LIVE', closed: false };
 }
 
-function ListCard({ schedule, onVenueClick, onSelect, reserveCount, rating, priority, distanceKm, regInfo }: CardProps) {
+function ListCard({ schedule, onVenueClick, onSelect, reserveCount, rating, priority, distanceKm, regInfo, vtActive }: CardProps) {
   const d = formatDate(schedule.date, schedule.startTime);
   // 끝난 대회를 '예약 가능'처럼 보여주지 않기 위한 상태 표시(실제 차단은 상세·서버에서)
   const status = scheduleStatus(schedule.date, schedule.startTime);
@@ -211,6 +216,7 @@ function ListCard({ schedule, onVenueClick, onSelect, reserveCount, rating, prio
         className="w-16 h-16 shrink-0 rounded-input"
         thumbWidth={160}
         priority={priority}
+        vtName={vtActive ? 'vt-poster' : undefined}
       />
 
       {/* 본문 — 압축 3행 */}
@@ -324,7 +330,7 @@ function ListCard({ schedule, onVenueClick, onSelect, reserveCount, rating, prio
 
 // ── 메인: 그리드 뷰 카드 ────────────────────────────────────────────────────
 
-function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distanceKm, reserveCount, regInfo }: CardProps) {
+function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distanceKm, reserveCount, regInfo, vtActive }: CardProps) {
   const d = formatDate(schedule.date, schedule.startTime);
   const status = scheduleStatus(schedule.date, schedule.startTime);
 
@@ -347,6 +353,7 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
           title={schedule.title}
           className="aspect-[3/4] w-full"
           priority={priority}
+          vtName={vtActive ? 'vt-poster' : undefined}
         />
         <div className="absolute top-2 left-2 right-2 flex items-start justify-between gap-2">
           <div className="flex flex-col gap-1 items-start">
