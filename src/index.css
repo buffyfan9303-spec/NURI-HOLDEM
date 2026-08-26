@@ -304,14 +304,18 @@ main { max-width: 48rem; margin-inline: auto; }
   animation-duration: 0.18s;
   animation-timing-function: var(--ease);
 }
-@keyframes vt-push-out-l { to   { opacity: 0; transform: translateX(-32px); } }
-@keyframes vt-push-in-r  { from { opacity: 0; transform: translateX(32px); } }
-@keyframes vt-push-out-r { to   { opacity: 0; transform: translateX(32px); } }
-@keyframes vt-push-in-l  { from { opacity: 0; transform: translateX(-32px); } }
-html[data-vt-dir='forward']::view-transition-old(root) { animation: vt-push-out-l 0.3s var(--ease) both; }
-html[data-vt-dir='forward']::view-transition-new(root) { animation: vt-push-in-r 0.3s var(--ease) both; }
-html[data-vt-dir='back']::view-transition-old(root)    { animation: vt-push-out-r 0.3s var(--ease) both; }
-html[data-vt-dir='back']::view-transition-new(root)    { animation: vt-push-in-l 0.3s var(--ease) both; }
+/* [DS] MO-8A 방향성 이징: 나가는 화면은 짧고 가속(--ease-out 0.2s)으로 비켜주고,
+   들어오는 화면은 감속(--ease, --dur-tab)으로 안착 — iOS 푸시의 비대칭 문법.
+   (양쪽 같은 곡선 0.3s 는 '둘이 동시에 미끄러지는' 밋밋한 평행이동으로 읽혔다)
+   이동량 32px→20px: 시차 푸시는 거리보다 겹침 타이밍이 감각을 만든다 — 과한 거리는 들뜸. */
+@keyframes vt-push-out-l { to   { opacity: 0; transform: translateX(-20px); } }
+@keyframes vt-push-in-r  { from { opacity: 0; transform: translateX(20px); } }
+@keyframes vt-push-out-r { to   { opacity: 0; transform: translateX(20px); } }
+@keyframes vt-push-in-l  { from { opacity: 0; transform: translateX(-20px); } }
+html[data-vt-dir='forward']::view-transition-old(root) { animation: vt-push-out-l var(--dur-base) var(--ease-out) both; }
+html[data-vt-dir='forward']::view-transition-new(root) { animation: vt-push-in-r var(--dur-tab) var(--ease) both; }
+html[data-vt-dir='back']::view-transition-old(root)    { animation: vt-push-out-r var(--dur-base) var(--ease-out) both; }
+html[data-vt-dir='back']::view-transition-new(root)    { animation: vt-push-in-l var(--dur-tab) var(--ease) both; }
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-old(root),
   ::view-transition-new(root) { animation: none !important; }
