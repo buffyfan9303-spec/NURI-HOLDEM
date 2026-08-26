@@ -612,14 +612,15 @@ function HeroSection({
         style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0) 30%, rgba(10,12,15,0.5) 100%)' }}
       />
 
-      {/* 좌/우 넘김 버튼 */}
+      {/* 좌/우 넘김 버튼 — PC 전용(Phase 10-1 첫 뷰포트 ≤6 행동 예산).
+          모바일은 스와이프 + 자동 슬라이드가 내비게이션을 담당하므로 버튼 2개는 소음이다. */}
       {slides.length > 1 && (
         <>
           <button
             type="button"
             onClick={() => go(safeIdx - 1)}
             aria-label="이전 사진"
-            className="absolute left-2 top-1/2 z-10 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-surface-base/55 text-ink-primary backdrop-blur transition-colors hover:bg-surface-base/80"
+            className="absolute left-2 top-1/2 z-10 -translate-y-1/2 hidden lg:flex h-8 w-8 items-center justify-center rounded-full bg-surface-base/55 text-ink-primary backdrop-blur transition-colors hover:bg-surface-base/80"
           >
             <Icon name="chevron-left" size={14} />
           </button>
@@ -627,23 +628,21 @@ function HeroSection({
             type="button"
             onClick={() => go(safeIdx + 1)}
             aria-label="다음 사진"
-            className="absolute right-2 top-1/2 z-10 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-surface-base/55 text-ink-primary backdrop-blur transition-colors hover:bg-surface-base/80"
+            className="absolute right-2 top-1/2 z-10 -translate-y-1/2 hidden lg:flex h-8 w-8 items-center justify-center rounded-full bg-surface-base/55 text-ink-primary backdrop-blur transition-colors hover:bg-surface-base/80"
           >
             <Icon name="chevron-right" size={14} />
           </button>
         </>
       )}
 
-      {/* 슬라이드 점 인디케이터 */}
+      {/* 슬라이드 점 — 상태 표시기(비인터랙티브). 이동은 스와이프(모바일)·화살표(PC)가 담당 —
+          도트를 버튼으로 두면 사진 n장 = 행동 n개가 되어 계층 예산(≤6)이 데이터에 따라 무너진다. */}
       {slides.length > 1 && (
-        <div className="absolute bottom-2.5 left-0 right-0 z-10 flex justify-center gap-1.5">
+        <div aria-hidden className="absolute bottom-2.5 left-0 right-0 z-10 flex justify-center gap-1.5">
           {slides.map((_, i) => (
-            <button
+            <span
               key={i}
-              type="button"
-              onClick={() => go(i)}
-              aria-label={`${i + 1}번째 사진 보기`}
-              className={['h-1.5 rounded-full transition-[width,background-color]', i === safeIdx ? 'w-5 bg-accent-300' : 'w-1.5 bg-white/50 hover:bg-white/80'].join(' ')}
+              className={['h-1.5 rounded-full transition-[width,background-color]', i === safeIdx ? 'w-5 bg-accent-300' : 'w-1.5 bg-white/50'].join(' ')}
             />
           ))}
         </div>

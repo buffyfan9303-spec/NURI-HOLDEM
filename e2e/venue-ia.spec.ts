@@ -39,6 +39,10 @@ test.describe('매장 페이지 — 3계층 IA', () => {
       if (!dlg) return -1;
       let n = 0;
       for (const el of dlg.querySelectorAll<HTMLElement>('button, a, [role="button"]')) {
+        // ⚠ 크기 0 필터만으로는 부족해졌다 — Chrome 148+ 는 닫힌 <details> 내부(::details-content
+        //   content-visibility:hidden)도 rect 를 반환한다(hidden=until-found 계열 변경).
+        //   checkVisibility() 가 '사용자에게 보이는가'의 정본 — 게이트 의미(보이는 행동 요소 ≤6)는 동일.
+        if (el.checkVisibility && !el.checkVisibility()) continue;
         const r = el.getBoundingClientRect();
         if (r.width === 0 || r.height === 0) continue;
         if (r.top >= 915 || r.bottom <= 0) continue;               // 첫 뷰포트 밖
