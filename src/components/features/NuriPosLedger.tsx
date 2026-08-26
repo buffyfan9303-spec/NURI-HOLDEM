@@ -83,7 +83,7 @@ export interface LedgerSeed {
   gtd?: boolean;
 }
 
-export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI POS', onMakeRankingDraft, onOpenClock, onOpenStats, seed, active = true }: {
+export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI POS', onMakeRankingDraft, onOpenClock, onOpenStats, seed, followGame, active = true }: {
   venueId: string; canManage: boolean; venueName?: string; active?: boolean;
   onMakeRankingDraft?: (date: string, names: string[], eventName?: string) => void;
   onOpenClock?: (date: string, gameSeq: number) => void;
@@ -91,6 +91,8 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   onOpenStats?: () => void;
   /** 게임관리에서 '장부' 버튼으로 진입 시 — 해당 포스터의 장부로 바로 이동/등록 */
   seed?: LedgerSeed | null;
+  /** IA2 게임 칩 바 픽 신호 — 오늘 장부의 해당 게임으로 보드 전환(n=논스, 같은 게임 재픽도 반영) */
+  followGame?: { seq: number; n: number } | null;
 }) {
   const toast = useToast();
   const { user, isAdmin } = useAuth();
@@ -107,6 +109,15 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const [splitAmts, setSplitAmts] = useState<{ cash: number; card: number; transfer: number }>({ cash: 0, card: 0, transfer: 0 });
   const [rejectFor, setRejectFor] = useState<string | null>(null); // 거절 사유 선택 중인 요청 id
   const [gameSeq, setGameSeq] = useState(MAIN_GAME_SEQ);   // 현재 보고있는 게임(1=메인, 2+=사이드)
+  // 칩 바 픽 추종(IA2 완전 통합) — 신호가 올 때 1회만 '오늘·그 게임'으로 이동.
+  // 내부 GameSwitcher·과거 날짜 탐색은 그대로 자유(신호 없는 동안 이 컴포넌트가 정본).
+  useEffect(() => {
+    if (!followGame) return;
+    setDate(today());
+    setGameSeq(followGame.seq);
+    setSelected(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [followGame?.n]);
   const [games, setGames]     = useState<LedgerGame[]>([]); // 그 날짜의 게임 목록(스위처용)
   const [loading, setLoading] = useState(true);
   // 조회 실패를 '빈 장부'와 구분하기 위한 세 번째 상태(로딩/빈값/실패)
