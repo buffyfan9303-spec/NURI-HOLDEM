@@ -236,7 +236,7 @@ function CommunityTab({
       {/* 스크롤해도 항상 보이도록 헤더+메인탭 바로 아래에 고정 */}
       <div className="sticky top-[calc(theme(spacing.header-h)+env(safe-area-inset-top)-0.5rem)] lg:top-[calc(theme(spacing.header-h)+theme(spacing.tab-h)-0.5rem)] z-30 -mx-page-x px-page-x bg-surface-base border-b border-border-subtle pt-2.5 pb-2 lg:pt-2.5 before:pointer-events-none before:absolute before:inset-x-0 before:-top-4 before:h-4 before:bg-surface-base">
         <div ref={secBarRef} className="relative flex items-center gap-1 overflow-x-auto scrollbar-none rounded-input bg-surface-high p-0.5">
-          <SlidingPill containerRef={secBarRef} activeKey={shownSec} className="rounded-[6px] bg-accent-300" />
+          <SlidingPill containerRef={secBarRef} activeKey={shownSec} className="rounded-[6px] pill-active" />
           <SectionTab active={shownSec === 'venues'} label="홀덤펍" onClick={() => setSection('venues')} />
           <SectionTab active={shownSec === 'board'}  label="게시판" onClick={() => setSection('board')} />
           <SectionTab active={shownSec === 'live'}   label="실시간" onClick={() => setSection('live')} />
@@ -353,7 +353,7 @@ function SectionTab({ active, label, onClick }: { active: boolean; label: string
         'relative flex-[1_0_auto] px-3 py-2 text-xs font-semibold rounded-[6px] whitespace-nowrap',
         'transition-colors',
         'focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0',
-        active ? 'text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary',
+        active ? 'text-white' : 'text-ink-secondary hover:text-ink-primary',
       ].join(' ')}
     >
       {/* 활성 배경은 부모의 공용 SlidingPill 이 미끄러지며 그린다 — 탭별 개별 팝인 제거 */}

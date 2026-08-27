@@ -171,7 +171,7 @@ function MarketplaceTab({
 
       {/* ── 카테고리 — 가로 스크롤(번개장터식, 줄바꿈 없음) ───────── */}
       <div className="relative flex gap-1.5 overflow-x-auto scrollbar-none [-webkit-overflow-scrolling:touch]">
-        <SlidingPill activeKey={category} className="rounded-input bg-accent-300" />
+        <SlidingPill activeKey={category} className="rounded-input pill-active" />
         {CATEGORIES.map((cat) => {
           const active = category === cat.id;
           return (
@@ -183,7 +183,7 @@ function MarketplaceTab({
               className={[
                 'relative shrink-0 h-9 px-4 rounded-input text-xs font-semibold transition-colors',
                 active
-                  ? 'text-ink-inverse'
+                  ? 'text-white'
                   : 'bg-surface-high text-ink-secondary hover:text-ink-primary border border-border-default',
               ].join(' ')}
             >

@@ -230,7 +230,7 @@ export default function ToolsPanel() {
 
 
   return (
-    <div className="space-y-3">
+    <div className="hero-aurora space-y-3">
       {/* 트레이너 진행 스트립 — 오늘 목표·스트릭·XP 상시 노출(탭하면 트레이너로) */}
       <button type="button" onClick={() => open('trainer')} aria-label="트레이너 진행 — 프리플랍 트레이너 열기"
         className="flex w-full items-center justify-between gap-2 rounded-card border border-border-default bg-surface-low px-3.5 py-2.5 text-left transition-colors hover:border-accent-400/40 hover:bg-surface-high">
@@ -338,7 +338,7 @@ function ToolCard({ name, desc, icon, onClick, fav, onToggleFav }: {
   return (
     <div className="relative">
       <button type="button" onClick={onClick}
-        className="group/tool flex w-full items-center gap-2.5 rounded-card border border-border-default bg-surface-low px-2.5 py-2 pr-8 text-left transition-colors hover:border-accent-400/40 hover:bg-surface-high active:scale-[0.98]">
+        className="card-elev group/tool flex w-full items-center gap-2.5 rounded-card border border-border-default bg-surface-low px-2.5 py-2 pr-8 text-left transition-colors hover:border-accent-400/40 hover:bg-surface-high active:scale-[0.98]">
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-input bg-accent-300/15 text-accent-300">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{icon}</svg>
         </span>

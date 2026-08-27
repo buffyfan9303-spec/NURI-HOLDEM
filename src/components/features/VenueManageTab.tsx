@@ -411,7 +411,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                               return (
                                 <button key={a.id} type="button" onClick={() => { gotoSection(a.id); setNavOpen(false); }}
                                   className={['flex min-w-0 items-center gap-2 rounded-input px-2.5 py-2.5 text-xs font-bold transition-colors',
-                                    on ? 'bg-accent-300 text-ink-inverse' : a.locked ? 'text-ink-muted/60' : 'text-ink-secondary hover:bg-surface-float'].join(' ')}>
+                                    on ? 'pill-active text-white' : a.locked ? 'text-ink-muted/60' : 'text-ink-secondary hover:bg-surface-float'].join(' ')}>
                                   <span className="shrink-0" aria-hidden>{SECTION_ICON[a.id]}</span>
                                   <span className="min-w-0 flex-1 text-left truncate">{a.label}</span>
                                   {a.locked && <Icon name="lock" size={11} className="shrink-0 opacity-70" />}
@@ -474,14 +474,14 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
             {renderSection === 'game' && !dItem?.locked && (
               <div role="tablist" aria-label="게임 진행 단계"
                 className="relative flex items-center gap-0.5 overflow-x-auto rounded-input border border-border-subtle bg-surface-high/60 p-0.5">
-                <SlidingPill activeKey={renderGameStep} className="rounded-[6px] bg-accent-300" />
+                <SlidingPill activeKey={renderGameStep} className="rounded-[6px] pill-active" />
                 {GAME_STEPS.filter((st) => (st.id === 'posters' ? canPosters : ledgerOk)).map((st, i) => {
                   const on = renderGameStep === st.id;
                   return (
                     <button key={st.id} type="button" role="tab" aria-selected={on} data-pill-active={on || undefined}
                       onClick={() => gotoSection(st.id)}
                       className={['relative inline-flex h-9 shrink-0 items-center rounded-[6px] px-3 text-2xs font-bold leading-none transition-colors duration-300 focus:outline-none',
-                        on ? 'text-ink-inverse' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
+                        on ? 'text-white' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
                       <span className="relative">{i + 1}. {st.label}</span>
                     </button>
                   );
@@ -492,7 +492,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
             {renderSection === 'settings' && !dItem?.locked && (
               <div role="tablist" aria-label="매장 설정 하위탭"
                 className="relative flex items-center gap-0.5 overflow-x-auto rounded-input border border-border-subtle bg-surface-high/60 p-0.5">
-                <SlidingPill activeKey={renderSettingsTab} className="rounded-[6px] bg-accent-300" />
+                <SlidingPill activeKey={renderSettingsTab} className="rounded-[6px] pill-active" />
                 {SETTINGS_TABS.filter((t) =>
                   t.id === 'voucher' ? (manageOk || voucherView)
                   : t.id === 'danger' ? (isOwner && !!venueId)
@@ -502,7 +502,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                     <button key={t.id} type="button" role="tab" aria-selected={on} data-pill-active={on || undefined}
                       onClick={() => gotoSection(t.id)}
                       className={['relative inline-flex h-9 shrink-0 items-center rounded-[6px] px-3 text-2xs font-bold leading-none transition-colors duration-300 focus:outline-none',
-                        on ? 'text-ink-inverse' : t.id === 'danger' ? 'text-danger-light/80 hover:text-danger-light' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
+                        on ? 'text-white' : t.id === 'danger' ? 'text-danger-light/80 hover:text-danger-light' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
                       <span className="relative">{t.label}</span>
                     </button>
                   );
@@ -737,11 +737,11 @@ function SectionBtn({ active, onClick, icon, children, locked }: {
     <button type="button" onClick={onClick} ref={ref}
       // 모바일=인라인 칩(아이콘+라벨 한 줄, 1행 가로 스크롤) / PC=세로 리스트. 글씨 13px 가독 유지
       className={['group/nav relative flex shrink-0 snap-start flex-row items-center justify-center gap-1.5 whitespace-nowrap rounded-[7px] px-3 py-2 text-xs font-semibold transition-colors duration-300 focus:outline-none touch-manipulation lg:w-full lg:shrink lg:justify-start lg:gap-2 lg:py-2.5 lg:text-[13px]',
-        active ? 'text-ink-inverse' : locked ? 'text-ink-muted/60 hover:text-ink-secondary lg:hover:bg-surface-high' : 'text-ink-secondary hover:text-ink-primary lg:hover:bg-surface-high'].join(' ')}>
-      {active && <span aria-hidden className="absolute inset-0 rounded-[7px] bg-accent-300 animate-fade-in" />}
+        active ? 'text-white' : locked ? 'text-ink-muted/60 hover:text-ink-secondary lg:hover:bg-surface-high' : 'text-ink-secondary hover:text-ink-primary lg:hover:bg-surface-high'].join(' ')}>
+      {active && <span aria-hidden className="absolute inset-0 rounded-[7px] pill-active animate-fade-in" />}
       <span className="relative shrink-0" aria-hidden>{icon}</span>
       <span className="relative">{children}</span>
-      {locked && <Icon name="lock" size={11} className={['hidden lg:block ml-auto shrink-0', active ? 'text-ink-inverse/70' : 'text-ink-muted'].join(' ')} />}
+      {locked && <Icon name="lock" size={11} className={['hidden lg:block ml-auto shrink-0', active ? 'text-white/70' : 'text-ink-muted'].join(' ')} />}
     </button>
   );
 }

@@ -326,11 +326,11 @@ export default function TierLeaderboard() {
       {/* 랭킹 리스트 — 다중 보드(활동/머니인/프라이즈) */}
       <section>
         <div className="relative flex items-center gap-1 bg-surface-high rounded-input p-0.5 mb-1.5 overflow-x-auto scrollbar-none lg:flex-wrap lg:overflow-visible">
-          <SlidingPill activeKey={board} className="rounded-[6px] bg-accent-300" />
+          <SlidingPill activeKey={board} className="rounded-[6px] pill-active" />
           {(['activity', 'league', 'hall', 'moneyin', 'domestic', 'verify', 'shop'] as Board[]).map((b) => (
             <button key={b} type="button" data-pill-active={board === b || undefined} onClick={() => setBoard(b)}
               className={['relative shrink-0 px-2 lg:px-3 py-1.5 text-[11px] lg:text-xs font-bold rounded-[6px] transition-colors duration-300',
-                board === b ? 'text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
+                board === b ? 'text-white' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
               <span className="relative">{BOARD_LABEL[b]}</span>
             </button>
           ))}
@@ -608,7 +608,7 @@ export default function TierLeaderboard() {
                 const big = place === 1;
                 const rt = tierOf(r.activityPoints);
                 return (
-                  <div key={r.id} className={['rounded-card border p-2.5 text-center', big ? 'border-accent-400/60 bg-accent-300/[0.08]' : 'border-border-subtle bg-surface-high'].join(' ')}>
+                  <div key={r.id} className={['card-elev rounded-card border p-2.5 text-center', big ? 'border-accent-400/60 bg-accent-300/[0.08]' : 'border-border-subtle bg-surface-high'].join(' ')}>
                     <p className={big ? 'text-xl leading-none' : 'text-base leading-none'}>{['🥈', '👑', '🥉'][idx]}</p>
                     <span className={['mx-auto mt-1 block rounded-full p-[2px]', big ? 'h-10 w-10' : 'h-8 w-8'].join(' ')}
                       style={{ background: `conic-gradient(from 210deg, ${rt.color}, ${rt.color}44 45%, ${rt.color}CC 70%, ${rt.color})` }}>

@@ -558,15 +558,17 @@ function LoginLanding({ onClose, hidden = false }: { onClose: () => void; hidden
         </button>
       </header>
 
-      <div className="flex-1 overflow-y-auto">
+      {/* 서피스 깊이·오로라 확장(2026-08-27): 비로그인 랜딩 상단 오로라 워시 — 정적 1회 페인트 */}
+      <div className="hero-aurora flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-md space-y-4 px-page-x py-section">
           <div>
             <h1 className="text-xl font-extrabold text-ink-primary">반갑습니다</h1>
             <p className="mt-1 text-sm text-ink-secondary">로그인하고 내 홀덤 생활을 모아보세요</p>
           </div>
 
-          {/* 가치 제안 — 헤드라인은 알림이 아니라 우리 최대 장점('전국을 한 곳에') */}
-          <section className="rounded-card border border-border-default bg-surface-low p-5 text-center">
+          {/* 가치 제안 — 헤드라인은 알림이 아니라 우리 최대 장점('전국을 한 곳에').
+              ring-conic: 정적 conic 시그니처 보더(홈 밖 1곳 규율) — border 유틸 대신 자체 1px 투명 보더 사용 */}
+          <section className="ring-conic rounded-card bg-surface-low p-5 text-center">
             <p className="text-base font-extrabold text-ink-primary">전국 홀덤을 한 곳에서</p>
             <p className="mt-1 text-xs leading-relaxed text-ink-secondary">대회 일정·매장 커뮤니티·GTO 학습까지 —<br />로그인하면 예약·이용권·전적이 모입니다</p>
             <div className="mt-4 grid grid-cols-3 gap-2">
