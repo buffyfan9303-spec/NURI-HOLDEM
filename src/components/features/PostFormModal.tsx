@@ -22,6 +22,12 @@ import { cardId } from './gto/useDeepGto';
 import type { Card } from './gto/gto.types';
 import { encodeHand, encodeReplay, type HandSel } from '../../lib/hand';
 import { MiniCard } from '../atoms/HandCards';
+import {
+  CardPicker, PollBuilder, emptyHand, emptyPoll, normalizeHand, normalizePoll,
+  type HandDraft, type PollDraft,
+} from './PostComposerExtras';
+import { saveHand, savePoll } from '../../api/postAttachments';
+import { supabase, IS_MOCK } from '../../lib/supabase';
 
 export interface PostFormData {
   category: PostCategory;
@@ -53,6 +59,25 @@ const CATEGORY_OPTIONS: { id: PostCategory; label: string }[] = [
 const MAX_IMAGES = 4;
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 
+/**
+ * 방금 등록한 글의 id 복구 — onSubmit(App.handleCreatePost)이 id 를 돌려주지 않아
+ * (시그니처가 Promise<void>, App.tsx 는 이 카드의 수정 범위 밖) 저장 직후 본인 글을 재조회한다.
+ * 1차: user_id + content 정확 일치 최신 1건(경합에도 안전) → 2차 폴백: 본인 최신 1건.
+ */
+async function findCreatedPostId(userId: string, content: string): Promise<string | null> {
+  const exact = await supabase
+    .from('community_posts').select('id')
+    .eq('user_id', userId).eq('content', content)
+    .order('created_at', { ascending: false }).limit(1).maybeSingle();
+  if (!exact.error && exact.data?.id) return exact.data.id as string;
+  const latest = await supabase
+    .from('community_posts').select('id')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false }).limit(1).maybeSingle();
+  if (!latest.error && latest.data?.id) return latest.data.id as string;
+  return null;
+}
+
 export default function PostFormModal({ open, onClose, onSubmit, defaultCategory, defaultContent }: PostFormModalProps) {
   const { user } = useAuth();
   const toast = useToast();
@@ -79,6 +104,10 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
   const [pot,        setPot]        = useState('');
   const [acts,       setActs]       = useState({ pre: '', flop: '', turn: '', river: '' });
 
+  // 어태치먼트 드래프트 (핸드 카드 · 투표 — PostComposerExtras 패키지 계약)
+  const [handDraft, setHandDraft] = useState<HandDraft>(emptyHand);
+  const [pollDraft, setPollDraft] = useState<PollDraft>(emptyPoll);
+
   // 모달 열릴 때 초기화 + 닫힐 때 objectURL 해제
   useEffect(() => {
     if (open) {
@@ -86,6 +115,7 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
       setFiles([]); setPreviews([]); setSaving(false);
       setShowHand(false); setHero([]); setVillain([]); setBoard([]); setHandTarget('hero');
       setPot(''); setActs({ pre: '', flop: '', turn: '', river: '' });
+      setHandDraft(emptyHand()); setPollDraft(emptyPoll());
     }
   }, [open, defaultCategory, defaultContent]);
 
@@ -157,7 +187,12 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
     const body = content.trim();
     if (!body) return toast.show('내용을 입력해 주세요', 'error');
 
-    const check = filterContent(`${title} ${body}`);
+    // 금칙어 필터 — 본문·제목에 더해 새 어태치먼트 텍스트(핸드 요약·투표 질문/보기)도 함께 검사
+    const extraText = [
+      handDraft.headline, handDraft.delta, handDraft.meta,
+      ...(pollDraft.enabled ? [pollDraft.question, ...pollDraft.options] : []),
+    ].join(' ');
+    const check = filterContent(`${title} ${body} ${extraText}`);
     if (check.blocked) return toast.show(check.reason!, 'error');
     if (board.length > 0 && board.length < 3) {
       return toast.show('보드는 플랍(3장) 이상 선택해야 리플레이로 저장됩니다', 'error');
@@ -178,7 +213,27 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
         encoded = encodeHand(body, hand);
       }
       await onSubmit({ category, title: title.trim(), content: encoded, images });
-      toast.show('게시글이 등록되었습니다', 'success');
+
+      // 어태치먼트 저장 — 판정은 normalize 가 단일 소스(빈 입력 → null → 저장 안 함).
+      // 여기서부터의 실패는 '글 등록 성공'을 뒤집지 않는다(부분 실패 토스트로만 안내).
+      const hand = normalizeHand(handDraft);
+      const poll = normalizePoll(pollDraft);
+      let extrasFailed = false;
+      if ((hand !== null || poll !== null) && !IS_MOCK) {
+        try {
+          const postId = await findCreatedPostId(user.id, encoded);
+          if (!postId) throw new Error('생성된 글 id 를 찾지 못했습니다');
+          await saveHand(postId, hand);
+          await savePoll(postId, poll);
+        } catch {
+          extrasFailed = true;
+        }
+      }
+
+      toast.show(
+        extrasFailed ? '글은 등록됐지만 핸드·투표 첨부 저장에 실패했습니다' : '게시글이 등록되었습니다',
+        extrasFailed ? 'error' : 'success',
+      );
       onClose();
     } catch (err) {
       toast.show(err instanceof Error ? err.message : '게시글 등록에 실패했습니다', 'error');
@@ -245,6 +300,13 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
           />
           <p className="text-right text-2xs text-ink-muted mt-1">{content.length}/4000</p>
         </div>
+
+        {/* 핸드 카드 · 투표 어태치먼트 (PostComposerExtras — 오너 패키지 이식) */}
+        {/* 표시부는 게시글당 어태치먼트 1개(핸드 우선) — 동시 첨부하면 투표가 안 보이므로 상호 배타 */}
+        <CardPicker value={handDraft} onChange={setHandDraft}
+          blockedBy={pollDraft.enabled ? '투표를 켠 글에는 핸드 카드를 함께 첨부할 수 없어요 — 투표를 끄면 다시 열립니다' : undefined} />
+        <PollBuilder value={pollDraft} onChange={setPollDraft}
+          blockedBy={normalizeHand(handDraft) !== null ? '핸드 카드를 첨부한 글에는 투표를 함께 만들 수 없어요 — 카드·요약을 지우면 다시 열립니다' : undefined} />
 
         {/* 이미지 첨부 */}
         <div>

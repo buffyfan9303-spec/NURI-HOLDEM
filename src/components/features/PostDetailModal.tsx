@@ -20,6 +20,9 @@ import Avatar from '../atoms/Avatar';
 import Icon from '../atoms/Icon';
 import ImageLightbox from '../atoms/ImageLightbox';
 import { thumbUrl, thumbSrcSet } from '../../lib/imageUrl';
+import PostAttachments from './PostAttachments';
+import { fetchAttachment, castPollVote, subscribePollResults } from '../../api/postAttachments';
+import type { Attachment, PollOption } from '../../api/postAttachments';
 
 interface PostDetailModalProps {
   post: CommunityPost | null;
@@ -90,6 +93,31 @@ export default function PostDetailModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, post?.id]);
 
+  // ── 어태치먼트(핸드 결과·투표) — DB 기반 신규 시스템(src/api/postAttachments).
+  // 로딩 중엔 아무것도 그리지 않는다(스켈레톤 금지 — 유무를 모르는 상태의 공간 예약은 없는 글에서 CLS).
+  const [attachment, setAttachment] = useState<Attachment | null>(null);
+  // 낙관 갱신 직후 리얼타임 에코 가드 — castPollVote 서버 응답이 최종이므로,
+  // 마지막 vote 후 800ms 안에 도착한 구독 콜백은 무시한다(§7-6).
+  const lastVoteAtRef = useRef(0);
+  useEffect(() => {
+    setAttachment(null);
+    if (!open || !post) return;
+    let active = true;
+    fetchAttachment(post.id).then((a) => { if (active) setAttachment(a); }).catch(() => {});
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, post?.id]);
+
+  const pollId = attachment?.kind === 'poll' ? attachment.id : null;
+  useEffect(() => {
+    if (!open || !pollId) return;
+    const unsubscribe = subscribePollResults(pollId, (options) => {
+      if (performance.now() - lastVoteAtRef.current < 800) return;
+      setAttachment((prev) => (prev && prev.kind === 'poll' && prev.id === pollId ? { ...prev, options } : prev));
+    });
+    return unsubscribe; // 닫힘/글 전환/언마운트 시 해제
+  }, [open, pollId]);
+
   if (!post) return null;
 
   // 첨부 사진(최대 4장, community_posts.images). 업로드·저장은 되고 있었는데 그리는 코드가 없어
@@ -143,6 +171,22 @@ export default function PostDetailModal({
     deleteComment(commentId) // 권한은 RLS(본인·관리자)가 강제
       .then(() => setReplies((prev) => prev.filter((c) => c.id !== commentId && c.parentId !== commentId)))
       .catch((err) => toast.show(err instanceof Error ? err.message : '삭제에 실패했습니다', 'error'));
+  };
+
+  // 투표 배선 — 서버 집계가 최종. 실패는 토스트 + rethrow(PostAttachments 가 낙관 갱신 롤백).
+  const handleVote = async (pId: string, optionId: string): Promise<PollOption[]> => {
+    lastVoteAtRef.current = performance.now(); // 비행 중 리얼타임 에코도 가드
+    try {
+      const options = await castPollVote(pId, optionId);
+      lastVoteAtRef.current = performance.now();
+      setAttachment((prev) => (prev && prev.kind === 'poll' && prev.id === pId
+        ? { ...prev, options, myOptionId: optionId }
+        : prev));
+      return options;
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : '투표에 실패했습니다', 'error');
+      throw e;
+    }
   };
 
   return (
@@ -265,6 +309,11 @@ export default function PostDetailModal({
             </div>
           );
         })()}
+
+        {/* ── 어태치먼트(핸드 결과·투표) — 본문 아래. 로딩 중엔 미표시(스켈레톤 금지). */}
+        {attachment && (
+          <PostAttachments key={post.id} attachment={attachment} onVote={handleVote} />
+        )}
 
         {/* ── 통계 + 액션 ─────────────────────────────────── */}
         <div className="flex items-center justify-between pt-2 border-t border-border-subtle text-xs">
