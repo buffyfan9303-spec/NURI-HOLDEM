@@ -703,9 +703,14 @@ img, svg { -webkit-touch-callout: none; -webkit-user-drag: none; user-select: no
 nav[aria-label="하단 내비게이션"] { view-transition-name: app-tabbar; }
 /* PC 상단 GNB(sticky 탭 스트립)도 상시 크롬 — 빠져 있어서 전환에 딸려 옆으로 밀렸다(오너 리포트) */
 [data-stack-tabbar] { view-transition-name: app-gnb; }
+/* 커뮤니티 서브탭 바(sticky)도 상시 크롬 — 서브섹션 전환(root 스냅샷)에 딸려 블러·슬라이드되던 것 제외(오너 리포트).
+   단 상시 켜두면 메인 탭 전환(커뮤니티→홈)에서 old-only 스냅샷이 전환 내내 잔상으로 얼어붙는다(실측) —
+   서브섹션 전환 동안만 CommunityTab 이 html 에 켜는 마커로 조건부 활성(vtDir 마커와 같은 조리법). */
+html[data-vt-scope='community-sec'] [data-community-secbar] { view-transition-name: community-secbar; }
 ::view-transition-old(app-header), ::view-transition-new(app-header),
 ::view-transition-old(app-tabbar), ::view-transition-new(app-tabbar),
-::view-transition-old(app-gnb), ::view-transition-new(app-gnb) { animation: none; }
+::view-transition-old(app-gnb), ::view-transition-new(app-gnb),
+::view-transition-old(community-secbar), ::view-transition-new(community-secbar) { animation: none; }
 
 /* 가로 스크롤러의 스크롤바 숨김(배너 캐러셀 등) — 기능은 그대로, 표시만 제거 */
 .scrollbar-none { scrollbar-width: none; -ms-overflow-style: none; }
