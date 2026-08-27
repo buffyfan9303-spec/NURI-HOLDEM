@@ -11,6 +11,7 @@ import ScheduleCard from './ScheduleCard';
 import type { Schedule } from '../../api/schedules';
 import type { RegInfo } from '../../lib/regStatus';
 import { compareByStartThenBoost } from '../../lib/scheduleSort';
+import { scheduleStatus } from '../../lib/scheduleStatus';
 import { useTrainerProgress } from '../../lib/trainerProgress';
 
 const DAYS_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
@@ -61,10 +62,13 @@ export default function HomeTab({
     [schedules, regInfoBySchedule],
   );
 
-  // 오늘·내일 일정(P2 승인: 홈 기본 범위) — 상단 3장에서 결정이 끝나게
+  // 오늘·내일 일정(P2 승인: 홈 기본 범위) — 상단 3장에서 결정이 끝나게.
+  // 종료 판정(시작+10h) 제외: 날짜만 보면 심야에 '오늘'의 끝난 대회가 종료 배지로 남는다
+  // (first-screen 게이트가 CI(UTC 시간대)에서 잡아낸 실버그 — browse hideEnded 와 동일 규칙).
   const upcoming = useMemo(
     () => schedules
-      .filter((s) => s.approved && (s.date === today || s.date === tomorrow))
+      .filter((s) => s.approved && (s.date === today || s.date === tomorrow)
+        && scheduleStatus(s.date, s.startTime) !== 'ended')
       .sort(compareByStartThenBoost)
       .slice(0, 8),
     [schedules, today, tomorrow],
