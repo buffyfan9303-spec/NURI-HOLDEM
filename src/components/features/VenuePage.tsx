@@ -1027,7 +1027,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
               : 'border-amber-700/50 bg-gradient-to-b from-amber-700/[0.10] to-transparent';
             const medal = rank === 1 ? 'bg-accent-300 text-white' : rank === 2 ? 'bg-slate-300 text-white' : 'bg-amber-700 text-white';
             return (
-              <div key={e.nickname} className={['flex-1 max-w-[9.5rem] rounded-card border p-2.5 text-center', ring, big ? 'pb-4 -translate-y-2 shadow-[0_0_18px_rgba(94,106,210,0.18)]' : ''].join(' ')}>
+              <div key={e.nickname} className={['flex-1 max-w-[9.5rem] rounded-card border p-2.5 text-center', ring, big ? 'pb-4 -translate-y-2 shadow-[0_0_18px_rgb(var(--accent-300)/0.18)]' : ''].join(' ')}>
                 {big && <div aria-hidden className="text-base leading-none mb-1">👑</div>}
                 <span className={['mx-auto flex items-center justify-center rounded-full font-extrabold tabular-nums', medal, big ? 'w-8 h-8 text-sm' : 'w-6 h-6 text-2xs'].join(' ')}>{rank}</span>
                 <p className={['mt-1 font-bold uppercase tracking-wide', rank === 1 ? 'text-accent-300' : 'text-ink-secondary', 'text-2xs'].join(' ')}>{titleOf(rank)}</p>

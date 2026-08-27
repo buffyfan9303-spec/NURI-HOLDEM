@@ -7,7 +7,8 @@ import type { RangeSpec } from './ranges';
  *  매트릭스·범례·액션 빈도바 공용 — '액션 축' 색은 반드시 이 상수만 쓴다.
  *  ⚠ 색 2축 분리(검증 #01 critical): 이 액션 축과 GtoDeepPanel 의 에퀴티 강도 축
  *  (gto/equityBands.ts EQUITY_BANDS)은 서로 다른 의미 축이므로 통일 대상이 아니다.
- *  raise 인디고는 accent-300(#5E6AD2)과 동일값이지만 '데이터 시각화 fill 전용' 예외다. */
+ *  raise 인디고(#5E6AD2)는 구 accent-300 과 같은 값이었으나 '데이터 시각화 fill 전용' 도메인 고정색이다 —
+ *  2026-08-27 accent 가 플럼 바이올렛으로 이동한 뒤에도 차트 fill·범례·빈도바의 의미 축은 그대로 잠근다. */
 export const ACTION_COLORS = {
   raise: '#5E6AD2',
   call: '#10B981',

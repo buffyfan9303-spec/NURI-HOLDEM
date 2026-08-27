@@ -38,7 +38,10 @@
 - Vite 8 + React 19 + TypeScript, Tailwind CSS v3.4 (`tailwind.config.js`)
 - 백엔드 Supabase, 에러추적 Sentry, 결제 PortOne, E2E Playwright (`npm run test:e2e`)
 - `tailwind.config.js`의 커스텀 디자인 시스템: surface 스케일(`rgb(var(--surface-*) / <alpha-value>)`),
-  Linear 인디고 accent(`accent-300 #5E6AD2`), `future.hoverOnlyWhenSupported`, `darkMode: 'class'`
+  바이올렛 accent — surface 와 같은 CSS 변수 문법(`rgb(var(--accent-*) / <alpha-value>)`, 정의는
+  `src/index.css` 다크 `#805FDA`/라이트 `#6946C8` 분리 · 2026-08-27 구 Linear 인디고 #5E6AD2 에서 이동.
+  단 클락 TV(`clockTheme.ts`)·GTO 차트 fill(`ranges.data.ts`)의 #5E6AD2 는 도메인 고정 스냅샷이라 앱 accent 와 무관),
+  `future.hoverOnlyWhenSupported`, `darkMode: 'class'`
 
 > Tailwind v4로 옮겨도 됩니다. 단 위 커스텀 시스템(특히 surface 알파 채널 문법)을 `@theme`로
 > **온전히 이관해야** 전 화면 색이 깨지지 않습니다. 색 회귀는 "기존 오류"에 해당합니다.

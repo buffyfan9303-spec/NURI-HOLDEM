@@ -64,6 +64,33 @@
     --border-default: 76 68 108;  /* #4C446C */
     --border-strong:  108 99 146; /* #6C6392 */
 
+    /* 액센트 — 어워드 레퍼런스 정합 바이올렛(h256 · 2026-08-27, 구 h248 #7364DB 에서 이동).
+       레퍼런스(DatawizzAI·OUTFLAME·Alice K) 공통 hue ≈258(#8B5CF6 계열)로 동조하되 명도는 제약 유지 —
+       실측(WCAG): 300 vs base 4.00 · vs low 3.71 (UI ≥3 충족) / 흰 텍스트 on 300 = 4.60 (AA)
+       / 200 텍스트 vs base 8.83 (AA 본문). 50·100 은 사용처 감사 결과 텍스트 틴트 용도
+       (text-accent-100 1곳·50 은 0곳)라 페일 톤 유지 — 딥 틴트로 바꾸면 그 텍스트가 죽는다. */
+    --accent-50:  238 233 251; /* #EEE9FB */
+    --accent-100: 216 205 246; /* #D8CDF6 */
+    --accent-200: 188 169 240; /* #BCA9F0 다크 위 액센트 텍스트 */
+    --accent-300: 128 95 218;  /* #805FDA primary */
+    --accent-400: 122 90 210;  /* #7A5AD2 hover */
+    --accent-500: 108 77 192;  /* #6C4DC0 pressed */
+    --accent-600: 85 60 153;   /* #553C99 딥 보더/배경 */
+
+    /* 브랜드 그라데이션(어워드 레퍼런스 2026-08-27) — 전부 정적 배경. 애니메이션 금지(모션 헌법 §20.4).
+       aurora: DatawizzAI 문법 — 딥 플럼 위 바이올렛 빔 + 마젠타·블루 힌트. 전 레이어 투명 종단이라
+       surface 위 어디에 얹어도 안전(px 고정 크기 → 컨테이너 높이 무관). 피크 최악 겹침 #2D2445 실측:
+       ink-muted 4.66 · ink-primary 11.9 · accent-200 6.94.
+       cta: OUTFLAME 필 문법 — 사선(135deg) 딥→프라이머리. 흰 텍스트 실측 6.07(어두운끝)~4.60(밝은끝).
+       hover/active 는 한 단계 어두운 정적 스왑(그라데이션은 transition 불가 속성). */
+    --grad-aurora:
+      radial-gradient(640px 320px at 12% -4%, rgb(var(--accent-300) / 0.11) 0%, transparent 62%),
+      radial-gradient(520px 260px at 88% -6%, rgba(224, 130, 255, 0.05) 0%, transparent 58%),
+      radial-gradient(480px 240px at 55% -8%, rgba(130, 177, 255, 0.03) 0%, transparent 60%);
+    --grad-cta:        linear-gradient(135deg, rgb(var(--accent-500)) 0%, rgb(var(--accent-300)) 100%);
+    --grad-cta-hover:  linear-gradient(135deg, rgb(var(--accent-600)) 0%, rgb(var(--accent-400)) 100%);
+    --grad-cta-active: linear-gradient(135deg, rgb(var(--accent-600)) 0%, rgb(var(--accent-500)) 100%);
+
     /* 카드 헤어라인/그림자 — PET inset 하이라이트 + 미세 섀도.
        그림자는 순검정 대신 배경 hue(인디고 편향) 틴트(DAI-2a ④) — 플랫 다크의 murk 제거 */
     --card-ring:   rgba(255, 255, 255, 0.05);
@@ -86,10 +113,31 @@
     --ink-muted:     99 108 123;  /* #636C7B — WCAG AA 보강(흰/회색 배경서 ≥4.5:1) */
     --ink-inverse:   24 26 32;    /* 골드 버튼 위 텍스트는 어둡게 유지 */
 
-    --border-subtle:  230 232 236; /* #E6E8EC PET line */
-    /* 라이트도 같은 문제(1.28:1) — 흰 배경에서 입력칸 테두리가 사실상 안 보였다 */
-    --border-default: 203 208 216; /* #CBD0D8 */
-    --border-strong:  163 170 182; /* #A3AAB6 */
+    --border-subtle:  230 232 236; /* #E6E8EC PET line — 헤어라인은 디자인 의도라 유지 */
+    /* 라이트도 같은 문제(1.28:1) — 흰 배경에서 입력칸 테두리가 사실상 안 보였다.
+       시인성 재보정(2026-08-27, 명도만·hue 218 유지): default 1.55→1.79, strong 2.34→3.13(UI 경계 ≥3:1) */
+    --border-default: 188 194 204; /* #BCC2CC */
+    --border-strong:  138 146 160; /* #8A92A0 */
+
+    /* 액센트(라이트) — h256 동조(다크와 동일 hue · 2026-08-27). 흰 배경 시인성 유지:
+       실측(WCAG): 300 vs #FFF 6.34 (≥5 목표 충족) / 400 7.61 / 500 9.10 / 600 11.35.
+       200 은 라이트에선 연한 보조(비텍스트) — 텍스트로 쓰인 곳은 아래 unlayered 오버라이드가 딥 톤 교정. */
+    --accent-50:  240 236 252; /* #F0ECFC 옅은 틴트 배경 */
+    --accent-100: 225 217 248; /* #E1D9F8 */
+    --accent-200: 178 157 236; /* #B29DEC 연한 보조(비텍스트) */
+    --accent-300: 105 70 200;  /* #6946C8 primary */
+    --accent-400: 92 60 180;   /* #5C3CB4 hover */
+    --accent-500: 80 51 158;   /* #50339E pressed */
+    --accent-600: 64 42 126;   /* #402A7E */
+
+    /* 브랜드 그라데이션(라이트) — 옅은 라벤더 워시(정적). 피크 #EFECF6 실측: ink-muted 4.55 ·
+       ink-primary 15.3. cta 흰 텍스트 실측 7.61(어두운끝)~6.34(밝은끝). */
+    --grad-aurora:
+      radial-gradient(640px 320px at 12% -4%, rgb(var(--accent-300) / 0.04) 0%, transparent 62%),
+      radial-gradient(520px 260px at 88% -6%, rgba(214, 130, 255, 0.025) 0%, transparent 58%);
+    --grad-cta:        linear-gradient(135deg, rgb(var(--accent-400)) 0%, rgb(var(--accent-300)) 100%);
+    --grad-cta-hover:  linear-gradient(135deg, rgb(var(--accent-500)) 0%, rgb(var(--accent-400)) 100%);
+    --grad-cta-active: linear-gradient(135deg, rgb(var(--accent-600)) 0%, rgb(var(--accent-500)) 100%);
 
     /* 라이트에서는 흰색 헤어라인이 보이면 안 됨 → 어두운 톤으로 교체 */
     --card-ring:   rgba(15, 18, 26, 0.08);
@@ -136,7 +184,7 @@
     inset: 0;
     z-index: -1;
     pointer-events: none;
-    background: radial-gradient(900px 460px at 50% -12%, rgba(94, 106, 210, 0.12), transparent 70%);
+    background: radial-gradient(900px 460px at 50% -12%, rgb(var(--accent-300) / 0.12), transparent 70%);
   }
 
   /* ── 줄배열 최적화(세계적 표준: Vercel·Apple·Toss) ──────────────────────────
@@ -192,7 +240,16 @@
 
   .btn-primary {
     @apply btn bg-accent-300 text-white hover:bg-accent-400 active:bg-accent-500;
+    /* 1급 CTA 필(OUTFLAME 문법, 2026-08-27) — 정적 그라데이션. bg-* 색은 폴백 겸 유지.
+       그라데이션은 transition 불가 속성 → hover/active 는 한 단계 어두운 정적 스왑(모션 헌법 준수:
+       새 이징·duration 없음, 애니메이트 없음). ⚠ 색 오버라이드 콜러(골드 등)는 !bg-none 으로
+       그라데이션을 함께 해제해야 한다(StoreDashboard 할 일 카드 참고). */
+    background-image: var(--grad-cta);
   }
+  @media (hover: hover) {
+    .btn-primary:hover { background-image: var(--grad-cta-hover); }
+  }
+  .btn-primary:active { background-image: var(--grad-cta-active); }
 
   .btn-ghost {
     @apply btn bg-transparent text-ink-secondary
@@ -203,6 +260,32 @@
 
   .btn-danger {
     @apply btn bg-danger text-white hover:bg-danger-dark;
+  }
+
+  /* ── 브랜드 그라데이션 모멘트(어워드 레퍼런스 2026-08-27) — 과용 금지: 히어로 헤드라인·1급 CTA 만 ── */
+  /* 헤드라인 텍스트 그라데이션(OUTFLAME 헤드라인 문법: 흰색→뮤트 바이올렛 사선). 정적 — 애니메이션 금지.
+     다크 양끝 실측 vs base: #fff 18.42 / accent-200 8.83 · 라이트 vs #F5F6F8: ink-primary 16.75 / accent-400 7.04 */
+  .text-grad-violet {
+    background-image: linear-gradient(135deg, #FFFFFF 30%, rgb(var(--accent-200)) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  html.light .text-grad-violet {
+    background-image: linear-gradient(135deg, rgb(var(--ink-primary)) 30%, rgb(var(--accent-400)) 100%);
+  }
+  /* 미지원 브라우저 폴백: 그라데이션 해제 → 동반 텍스트 색 유틸(text-ink-primary 등)이 그대로 보인다 */
+  @supports not ((-webkit-background-clip: text) or (background-clip: text)) {
+    .text-grad-violet { background-image: none; -webkit-text-fill-color: currentColor; }
+  }
+  /* 그라데이션 헤드라인 안에서 제 색을 지켜야 하는 강조 스팬(예: 라이브 카운트 그린) */
+  .text-grad-keep { -webkit-text-fill-color: currentColor; background: none; }
+
+  /* 홈·랜딩 히어로 오로라 워시 — --grad-aurora 사용처. 전 레이어 투명 종단 + px 고정 크기라
+     어떤 높이의 컨테이너에도 안전. 정적 1회 페인트(스크롤 리페인트 없음). */
+  .hero-aurora {
+    background-image: var(--grad-aurora);
+    background-repeat: no-repeat;
   }
 
   /* ── 입력 필드 ──────────────────────────────────────── */
@@ -448,9 +531,9 @@ html.light .text-gold-200, html.light .text-gold-300 { color: #A06D00; }
 html.light .text-gold-400 { color: #8F6200; }
 html.light .text-emerald-300, html.light .text-emerald-400 { color: #0A8F5C; }
 html.light .text-danger-light { color: #D63A4E; }
-/* 인디고 액센트 텍스트 — 라이트 배경 대비 보강(AA) */
-html.light .text-accent-200, html.light .text-accent-300 { color: #4853B8; }
-html.light .text-accent-400 { color: #3A4392; }
+/* 액센트 텍스트 — 라이트에선 100/200 변수가 연한 틴트(비텍스트)라 텍스트로 쓰인 곳만 딥 톤 교정.
+   300/400 은 변수 자체가 딥(6.78/8.09:1)이라 오버라이드 불필요 — 목록에서 제거(2026-08-27). */
+html.light .text-accent-200 { color: #6946C8; }
 /* 상태/경고용 파스텔 텍스트 — 흰 배경에서 대비가 무너지는 나머지 계열 전부 딥 톤 교정 */
   html.light .text-indigo-300, html.light .text-indigo-400 { color: #4338CA; }
 html.light .text-amber-100, html.light .text-amber-200, html.light .text-amber-300 { color: #92600A; }
@@ -474,7 +557,7 @@ html.light .text-pink-400   { color: #BE185D; }
 html.light .text-green-400  { color: #15803D; }
 html.light .text-orange-400 { color: #B45309; }
 html.light .text-emerald-200 { color: #0A8F5C; }
-html.light .text-accent-100 { color: #4853B8; }
+html.light .text-accent-100 { color: #6946C8; }
 html.light .text-gold-500   { color: #8F6200; }
 html.light .text-pink-300 { color: #BE185D; }
 
@@ -593,7 +676,7 @@ button:active:not(:disabled), [role='button']:active, a:active:not([data-no-pres
 
 /* ── PC 키보드 포커스 링(Linear) — Tab 키 순회 시에만 인디고 링, 마우스 클릭엔 안 뜸 ── */
 :focus-visible {
-  outline: 2px solid rgba(94, 106, 210, 0.9) !important;
+  outline: 2px solid rgb(var(--accent-300) / 0.9) !important;
   outline-offset: 2px;
   border-radius: 6px;
 }

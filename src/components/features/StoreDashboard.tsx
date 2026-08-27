@@ -822,7 +822,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
               <p className="mt-0.5 text-2xs leading-snug text-ink-muted">{todo.desc}</p>
             </div>
             <button type="button" onClick={todo.onClick}
-              className={todo.tone === 'warn' ? 'btn-primary shrink-0 px-3.5 py-2 text-xs !bg-gold-400 !text-ink-inverse hover:!bg-gold-500' : 'btn-primary shrink-0 px-3.5 py-2 text-xs'}>
+              className={todo.tone === 'warn' ? 'btn-primary shrink-0 px-3.5 py-2 text-xs !bg-none !bg-gold-400 !text-ink-inverse hover:!bg-gold-500' : 'btn-primary shrink-0 px-3.5 py-2 text-xs'}>
               {todo.cta}
             </button>
           </div>
