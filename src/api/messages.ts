@@ -8,6 +8,19 @@
 import { supabase, IS_MOCK } from '../lib/supabase';
 import { currentUser } from './_session';
 
+/** 상대 표시명·아바타색 조회 — profiles RLS(본인 한정) 때문에 직접 select 는 빈 결과라
+ *  전원 '회원'으로 보이던 결함의 정본 해법(2026-08-28). SECURITY DEFINER RPC 로
+ *  공개 표시용 4필드만 연다. chat.ts 도 이 헬퍼를 재사용한다. */
+export interface PublicProfile { id: string; nickname: string | null; name: string | null; avatar_color: string | null }
+export async function fetchPublicProfiles(ids: string[]): Promise<Map<string, PublicProfile>> {
+  const map = new Map<string, PublicProfile>();
+  const uniq = [...new Set(ids)].filter(Boolean);
+  if (IS_MOCK || uniq.length === 0) return map;
+  const { data } = await supabase.rpc('get_public_profiles', { p_ids: uniq });
+  (data as PublicProfile[] | null ?? []).forEach((p) => map.set(p.id, p));
+  return map;
+}
+
 export interface DirectMessage {
   id: string;
   senderId: string;
@@ -67,10 +80,7 @@ export async function listMyThreads(): Promise<MessageThread[]> {
   }
   const threads = [...map.values()];
   if (threads.length > 0) {
-    const { data: profs } = await supabase.from('profiles')
-      .select('id, nickname, name, avatar_color').in('id', threads.map((t) => t.otherId));
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const pById = new Map<string, any>(); (profs ?? []).forEach((p: any) => pById.set(p.id, p));
+    const pById = await fetchPublicProfiles(threads.map((t) => t.otherId));
     threads.forEach((t) => {
       const p = pById.get(t.otherId);
       t.otherName = p?.nickname || p?.name || '회원';
