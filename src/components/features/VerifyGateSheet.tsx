@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react';
 import Modal from '../atoms/Modal';
 import { REQUIRE_VERIFY_EVENT } from '../../lib/requireLogin';
+import { BIZ_REQUIRED } from './BusinessFooter';
 
 const BENEFITS = [
   { icon: '✍️', t: '글·댓글 작성', d: '커뮤니티에 자유롭게 참여' },
@@ -61,6 +62,10 @@ export default function VerifyGateSheet({ onStart }: { onStart: () => void }) {
           <button type="button" onClick={() => setOpen(false)} className="btn-ghost w-full py-2.5 text-xs">나중에 할게요</button>
         </div>
         <p className="text-center text-2xs text-ink-muted">인증 정보는 본인 확인 용도로만 사용되며 안전하게 보호됩니다.</p>
+        {/* PG(다날) 심사 요건: 본인인증을 진행하는 페이지에도 하단 사업자정보 고정 노출 */}
+        <p className="border-t border-border-subtle pt-2 text-center text-[10px] leading-relaxed text-ink-muted/80">
+          {BIZ_REQUIRED.map(([k, v]) => `${k} ${v}`).join(' · ')}
+        </p>
       </div>
     </Modal>
   );
