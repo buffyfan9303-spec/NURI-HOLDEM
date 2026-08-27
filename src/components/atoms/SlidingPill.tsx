@@ -86,14 +86,39 @@ export default function SlidingPill({ containerRef, activeKey, className = '', u
       measure();
     });
     ro.observe(container);
-    // full-width 컨테이너(PC GNB)는 폰트 스왑으로 라벨 폭·위치가 바뀌어도 컨테이너 박스가
-    // 불변이라 RO가 안 울린다 → 활성 타깃 자체도 관찰 + 폰트 로드 완료 시 1회 재측정.
-    // (폭은 그대로인데 위치만 밀리는 justify-center 케이스는 fonts.ready 쪽이 잡는다)
-    const target = container.querySelector<HTMLElement>('[data-pill-active]');
-    if (target) ro.observe(target);
+    // ⚠ 크기만 보면 놓치는 게 있다 — full-width·justify-center 컨테이너(PC GNB)는 폰트 스왑으로
+    //   '형제' 라벨 폭이 변하면 활성 타깃이 옆으로 밀리는데, 컨테이너도 타깃도 제 크기는 그대로라
+    //   RO 가 침묵한다(실측: 밑줄이 활성 탭에서 61px 어긋난 채 고정). 그래서 형제 전부를 관찰한다 —
+    //   누구 폭이 변하든 그게 곧 이 알약의 위치 변화이므로.
+    for (const child of Array.from(container.children)) {
+      if (child instanceof HTMLElement && child !== pill) ro.observe(child);
+    }
     let alive = true;
-    document.fonts?.ready.then(() => { if (!alive) return; firstRef.current = true; measure(); });
-    return () => { alive = false; ro.disconnect(); };
+    // ⚠ document.fonts.ready 로는 부족하다 — Pretendard 는 media="print"→onload 로 '비차단' 로드라
+    //   ready 가 이미 resolve 된 뒤에 스왑이 일어난다(실측: measure 당시 365px → 스왑 후 301px,
+    //   밑줄이 64px 어긋난 채 고정). RO 도 침묵한다: 폰트 스왑은 컨테이너·타깃의 '자기 크기'를
+    //   안 바꾸고 형제 폭만 줄여 위치를 미는 경우가 있다.
+    //   그래서 첫 배치 뒤 몇 지점에서 값이 달라졌는지 확인하고 달라졌을 때만 다시 놓는다.
+    //   (전환 없는 재배치라 시각적 점프 없음 · 타이머 3개는 마운트당 1회로 끝난다)
+    //   ⚠ 비교 기준은 '내가 계산해 둔 값(prevRect)'이 아니라 '화면에 실제로 그려진 위치'여야 한다.
+    //     View Transition 캡처 중에 measure 가 돌면 그때의 레이아웃이 prevRect 에 그대로 저장돼,
+    //     계산값끼리 비교하면 어긋난 채로 '제자리'라고 판정한다(실측: 탭 전환마다 밑줄이 한 박자
+    //     뒤처져 최대 443px 어긋남). 그려진 rect 와 타깃 rect 를 직접 대조하면 그 착시가 없다.
+    const verify = () => {
+      if (!alive) return;
+      const t = container.querySelector<HTMLElement>('[data-pill-active]');
+      if (!t) return;
+      const tr = t.getBoundingClientRect();
+      const pr = pill.getBoundingClientRect();
+      const wantX = underline ? tr.left + 8 : tr.left;
+      const wantW = underline ? Math.max(0, tr.width - 16) : tr.width;
+      if (Math.abs(pr.left - wantX) < 1 && Math.abs(pr.width - wantW) < 1) return; // 이미 제자리
+      firstRef.current = true; // 보정은 미끄러질 필요가 없다
+      measure();
+    };
+    const timers = [150, 600, 1500].map((ms) => window.setTimeout(verify, ms));
+    document.fonts?.ready.then(() => requestAnimationFrame(verify));
+    return () => { alive = false; ro.disconnect(); timers.forEach(clearTimeout); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeKey, underline]);
 

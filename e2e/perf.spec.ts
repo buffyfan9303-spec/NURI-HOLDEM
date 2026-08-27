@@ -9,7 +9,7 @@ test.describe.configure({ retries: 2 });
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
-    try { localStorage.setItem('nuri_onboarding_v1', '1'); } catch { /* noop */ }
+    // (온보딩 시트 #29 는 2026-08-28 삭제 — 'nuri_onboarding_v1' 시드는 죽은 전제라 제거)
     interface PerfBag { cls: number; longFrames: number }
     const bag: PerfBag = { cls: 0, longFrames: 0 };
     (window as unknown as { __perf: PerfBag }).__perf = bag;

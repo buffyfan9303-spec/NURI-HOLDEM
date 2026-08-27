@@ -23,8 +23,11 @@ test.describe('매장 페이지 — 3계층 IA', () => {
 
     await stabilizeBackstack(page);
     await page.goto(`/?v=${vid}`);
-    await dismissOverlays(page);
     await expect(page.getByRole('dialog', { name: /매장 페이지/ })).toBeVisible({ timeout: 15_000 });
+    // 다이얼로그가 뜬 '뒤에' 오버레이를 걷는다 — 2026-08-28 dismissOverlays 의 1.6s 선대기 제거로
+    // goto 직후 호출은 아직 안 뜬 다이얼로그에 no-op 이 됐다. 이 정리는 첫 방문 코치마크(확인 버튼)를
+    // 계수 전에 걷어내던 종전 게이트 의미를 유지한다(코치마크는 1회성 팁이지 IA 행동 요소가 아니다).
+    await dismissOverlays(page);
     await page.waitForTimeout(1200);
 
     // Tier1 프라이머리 — QR 체크인이 스크롤 없이 보인다
@@ -34,10 +37,10 @@ test.describe('매장 페이지 — 3계층 IA', () => {
     expect(box!.y, 'QR 체크인이 첫 뷰포트(915px) 밖이다 — Tier1 이 아니다').toBeLessThan(915);
 
     // 첫 뷰포트 콘텐츠 레벨 인터랙티브 ≤ 6 (뒤로가기·탭바 role=tab 제외)
-    const count = await page.evaluate(() => {
+    const { count, navShuttles } = await page.evaluate(() => {
       const dlg = document.querySelector('[role="dialog"][aria-label*="매장 페이지"]');
-      if (!dlg) return -1;
-      let n = 0;
+      if (!dlg) return { count: -1, navShuttles: 0 };
+      let n = 0, shuttles = 0;
       for (const el of dlg.querySelectorAll<HTMLElement>('button, a, [role="button"]')) {
         // ⚠ 크기 0 필터만으로는 부족해졌다 — Chrome 148+ 는 닫힌 <details> 내부(::details-content
         //   content-visibility:hidden)도 rect 를 반환한다(hidden=until-found 계열 변경).
@@ -49,10 +52,17 @@ test.describe('매장 페이지 — 3계층 IA', () => {
         if (el.getAttribute('role') === 'tab') continue;            // 내비게이션 탭
         if (el.getAttribute('aria-label') === '뒤로 가기') continue; // 내비게이션
         if (el.closest('summary')) continue;                         // 계층을 여는 손잡이 = 디스클로저(행동 아님)
+        // 페이지 '자기 탭'으로의 셔틀(예: 시즌 선두 배너 → 랭킹 탭) — 행동이 탭 전환뿐이라
+        // role=tab 제외와 동일 근거의 내비게이션 레벨. 앱이 data-nav="venue-tab" 으로 명시 선언한
+        // 요소만 제외한다(콘텐츠 행동 버튼에 이 속성을 붙이는 것은 게이트 무력화 — 금지).
+        if (el.getAttribute('data-nav') === 'venue-tab') { shuttles += 1; continue; }
         n += 1;
       }
-      return n;
+      return { count: n, navShuttles: shuttles };
     });
+    // 제외 자체에도 상한을 둔다 — 이 속성을 여기저기 붙여 게이트를 비우는 우회를 원천 차단.
+    // (탭 셔틀은 설계상 '시즌 선두 배너' 하나뿐이다)
+    expect(navShuttles, `탭 셔틀(data-nav) 이 ${navShuttles}개 — 1개를 넘으면 게이트 우회다`).toBeLessThanOrEqual(1);
     expect(count, `첫 뷰포트 행동 요소가 ${count}개 — 6개 이하여야 한다(계층이 무너짐)`).toBeLessThanOrEqual(6);
     expect(count).toBeGreaterThan(0);
 

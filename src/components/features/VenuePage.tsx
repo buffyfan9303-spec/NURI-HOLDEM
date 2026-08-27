@@ -841,7 +841,11 @@ function SeasonLeaderBanner({ venueId, onRanking }: { venueId: string; onRanking
   }, [venueId]);
   if (!leader) return null;
   return (
-    <button type="button" onClick={onRanking}
+    // data-nav="venue-tab": 이 버튼의 행동은 setTab('ranking') 하나 — 매장 페이지 '자기 탭'으로의
+    // 셔틀이라 콘텐츠 행동이 아니라 내비게이션 레벨이다(venue-ia 게이트가 role=tab 을 제외하는 것과
+    // 동일 근거). 게이트(첫 뷰포트 행동 ≤6)는 이 속성이 붙은 요소를 세지 않는다.
+    // ⚠ 이 속성은 '페이지 내부 탭 전환만 하는 요소'에만 허용 — 다른 행동 버튼에 붙이면 게이트 무력화다.
+    <button type="button" onClick={onRanking} data-nav="venue-tab"
       className="flex w-full items-center gap-2.5 rounded-card border border-accent-400/30 bg-accent-300/[0.06] px-3 py-2.5 text-left transition-colors hover:border-accent-400/50 active:scale-[0.99]">
       <span className="text-lg" aria-hidden>👑</span>
       <div className="min-w-0 flex-1">
