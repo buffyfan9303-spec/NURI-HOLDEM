@@ -273,11 +273,17 @@ function LiveCard({ g, name, sched, active = true, onPoster, onVenue, onDisplay 
             <p className={`mt-1 text-xl font-extrabold leading-none tabular-nums ${g.running ? 'text-accent-200' : 'text-amber-300'}`}>{mm}:{ss}</p>
           </div>
         </div>
-        {/* 3행: 엔트리·생존·평균 스택 메타 — 값이 있는 것만 */}
+        {/* 3행: 엔트리·생존·평균 스택 메타 — 집계 소스가 있을 때만(장부 미연동 '엔트리 0·생존 0' 무의미 노출 방지) */}
         <p className="mt-2 flex items-center gap-2.5 border-t border-border-subtle pt-1.5 text-2xs leading-none text-ink-muted tabular-nums">
-          <span>엔트리 <b className="font-bold text-ink-secondary">{entries}</b></span>
-          <span>생존 <b className="font-bold text-ink-secondary">{alive}</b></span>
-          {ls && ls.avgStack > 0 && <span>평균 스택 <b className="font-bold text-ink-secondary">{ls.avgStack.toLocaleString()}</b></span>}
+          {(ls || entries > 0) ? (
+            <>
+              <span>엔트리 <b className="font-bold text-ink-secondary">{entries}</b></span>
+              <span>생존 <b className="font-bold text-ink-secondary">{alive}</b></span>
+              {ls && ls.avgStack > 0 && <span>평균 스택 <b className="font-bold text-ink-secondary">{ls.avgStack.toLocaleString()}</b></span>}
+            </>
+          ) : (
+            <span>참가 집계 준비 중</span>
+          )}
           <span className="ml-auto inline-flex items-center gap-1 font-bold text-accent-300"><Icon name="eye" size={12} /> 관전</span>
         </p>
       </button>

@@ -1541,7 +1541,8 @@ function PostersPanel({
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-ink-primary truncate">{s.title}</p>
                       <p className="text-2xs text-ink-muted mt-0.5">
-                        {s.startTime} · 바이인 {s.buyIn.amount.toLocaleString()}
+                        {/* 바이인 미입력(0)이면 '바이인 0'(거짓 정보) 대신 세그먼트 자체를 생략 — Tier1 오늘의 대회와 동일 문법 */}
+                        {s.startTime}{s.buyIn.amount > 0 ? ` · 바이인 ${s.buyIn.amount.toLocaleString()}` : ''}
                       </p>
                     </div>
                     <span className="shrink-0 text-2xs font-bold text-accent-300 bg-accent-300/15 px-1.5 py-0.5 rounded-badge">
@@ -1576,7 +1577,7 @@ function PostersPanel({
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-ink-primary truncate">{s.title}</p>
                     <p className="text-2xs text-ink-muted mt-0.5">
-                      {s.startTime} · 바이인 {s.buyIn.amount.toLocaleString()}
+                      {s.startTime}{s.buyIn.amount > 0 ? ` · 바이인 ${s.buyIn.amount.toLocaleString()}` : ''}
                     </p>
                   </div>
                 </li>
@@ -1687,7 +1688,7 @@ function SchedulesPanel({ schedules, onSelect }: { schedules: Schedule[]; onSele
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-ink-primary truncate">{s.title}</p>
               <p className="text-2xs text-ink-muted mt-0.5">
-                {s.startTime} · {s.duration} · 바이인 {s.buyIn.amount.toLocaleString()}
+                {s.startTime} · {s.duration}{s.buyIn.amount > 0 ? ` · 바이인 ${s.buyIn.amount.toLocaleString()}` : ''}
               </p>
             </div>
             <span className={[
