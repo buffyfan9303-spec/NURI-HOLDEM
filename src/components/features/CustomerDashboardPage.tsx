@@ -72,6 +72,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
   const [badgeStats, setBadgeStats] = useState<BadgeStats | null>(null); // 내 업적(랭킹 탭에서 이전)
   const [achOpen, setAchOpen] = useState(false); // 내 업적 접기/펼치기 — 기본 닫힘
   const [myPosts, setMyPosts] = useState<CommunityPost[]>([]); // 내가 쓴 글 — 그동안 찾을 화면 자체가 없었다
+  const recordsRef = useRef<HTMLElement | null>(null); // '내 전적' 버튼 → 기존 입상 기록 섹션 앵커 스크롤
 
   useEffect(() => {
     if (!open || !user) { setMyPosts([]); return; }
@@ -159,6 +160,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
   }
   const usage = [...usageMap.values()].sort((a, b) => (b.moneyin + b.visits) - (a.moneyin + a.visits));
   // 하이라이트 — 총 머니인/누적액 + 최다 머니인(횟수) 매장 + 최다 머니인(금액) 매장
+  const totalVisits = visits.reduce((s, v) => s + v.visits, 0); // 스탯 3열용 — 이미 내려온 방문 데이터 재사용(새 fetch 0)
   const totalMoneyin = plays.reduce((s, p) => s + p.moneyinCount, 0);
   const totalSpent = plays.reduce((s, p) => s + p.totalAmount, 0);
   const topMoneyin = [...usage].filter((u) => u.moneyin > 0).sort((a, b) => b.moneyin - a.moneyin)[0] ?? null;
@@ -193,6 +195,26 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
               points={user.activityPoints ?? 0}
               isAdmin={user.role === 'admin'}
               verified={user.verified}
+              stats={[
+                { label: '활동점수', value: (user.activityPoints ?? 0).toLocaleString() },
+                { label: '내 글', value: String(myPosts.length) },
+                { label: '방문', value: `${totalVisits}회` },
+              ]}
+              actions={
+                <div className="grid w-full grid-cols-2 gap-2">
+                  {onOpenProfile ? (
+                    <button type="button" onClick={onOpenProfile}
+                      className="btn-primary inline-flex items-center justify-center gap-1.5 py-2 text-xs">
+                      <Icon name="edit" size={13} /> 프로필 편집
+                    </button>
+                  ) : <span aria-hidden />}
+                  <button type="button"
+                    onClick={() => recordsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                    className="inline-flex items-center justify-center gap-1.5 rounded-input border border-accent-400/50 py-2 text-xs font-bold text-accent-300 hover:bg-accent-300/10 transition-colors">
+                    <Icon name="trophy" size={13} /> 내 전적
+                  </button>
+                </div>
+              }
             />
           )}
           {/* 미읽음 알림 미리보기 — 상위 3개(탭하면 해당 화면으로) */}
@@ -436,8 +458,8 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
             )}
           </section>
 
-          {/* 내 입상 기록 — 매장 순위 등록에서 내 닉네임이 잡힌 이력 */}
-          <section>
+          {/* 내 입상 기록 — 매장 순위 등록에서 내 닉네임이 잡힌 이력. '내 전적' 버튼의 앵커. */}
+          <section ref={recordsRef} className="scroll-mt-4">
             <p className="mb-1.5 text-sm font-bold text-ink-primary">내 입상 기록 <span className="text-2xs font-normal text-ink-muted">(매장 순위 등록 기준)</span></p>
             {loading ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
               : !user?.nickname ? <p className="py-6 text-center text-2xs text-ink-muted">프로필에서 아이디(닉네임)를 설정하면 입상 기록이 자동 연결됩니다.</p>
@@ -944,10 +966,17 @@ function LevelCard({ points, championships = 0 }: { points: number; championship
       {guide && <LevelGuideModal points={points} onClose={() => setGuide(false)} />}
       {prog.next ? (
         <div className="mt-2.5">
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-float">
-            <div className="h-full rounded-full transition-[width]" style={{ width: `${Math.round(prog.ratio * 100)}%`, background: t.color }} />
+          {/* XP 바 — 현재 점수/다음 레벨 필요 점수 + 바 끝 다음 등급 뱃지 미리보기 */}
+          <div className="flex items-center gap-1.5">
+            <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-surface-float">
+              <div className="h-full rounded-full transition-[width]" style={{ width: `${Math.round(prog.ratio * 100)}%`, background: `linear-gradient(90deg, ${t.color}, ${prog.next.color})` }} />
+            </div>
+            <span className="shrink-0" title={`다음 레벨 ${prog.next.label} · ${prog.next.title}`}><TierBadge points={prog.next.min} size={15} /></span>
           </div>
-          <p className="mt-1 text-2xs text-ink-muted">다음 레벨 <b style={{ color: prog.next.color }}>{prog.next.title}</b>까지 <b className="text-ink-secondary tabular-nums">{prog.toNext.toLocaleString()}</b>점</p>
+          <p className="mt-1 flex items-center justify-between text-2xs text-ink-muted">
+            <span>다음 레벨 <b style={{ color: prog.next.color }}>{prog.next.title}</b>까지 <b className="text-ink-secondary tabular-nums">{prog.toNext.toLocaleString()}</b>점</span>
+            <span className="tabular-nums"><b className="text-ink-secondary">{points.toLocaleString()}</b> / {prog.next.min.toLocaleString()}</span>
+          </p>
         </div>
       ) : (
         <p className="mt-2 flex items-center gap-1 text-2xs font-bold text-gold-300"><Icon name="trophy" size={12} className="shrink-0" /> 최고 레벨 달성! 활동을 이어가 명예의 전당에 도전하세요.</p>
