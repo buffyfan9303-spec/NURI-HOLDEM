@@ -11,8 +11,9 @@
 //   구 224px 슬롯 시절의 480 상한은 폐기).
 // · 고정 슬라이드는 마감 없이 상시 게시(오너 지시) — 날짜 필터는 일정 포스터에만 적용.
 //   항상 3장 이상이 확보되므로 캐러셀은 로딩과 무관하게 즉시 그려진다(빈 상태·스켈레톤 없음).
-// · 모션: APIS식 스텝 캐러셀 — 3.2초 정지 후 카드 한 장씩 smooth 이동(연속 흐름 아님,
-//   오너 지시 3차) + 유저 가로 스크롤 겸용(상호작용 시 6초 정지, 양방향 무한 랩).
+// · 모션: APIS식 스텝 캐러셀 — 3.2초 정지 후 카드 한 장씩 rAF 트윈 이동(--ease 동일 곡선 420ms,
+//   구 UA smooth 는 프레임 제어 불가로 교체 — 오너 지시 3차·5차) + 유저 가로 스크롤 겸용
+//   (상호작용 시 6초 정지 + 트윈 즉시 취소, 양방향 무한 랩).
 //   prefers-reduced-motion 은 자동 스텝 없이 수동 스크롤만.
 // · 배경 없음(오너 지시 2026-08-27): 펠트 띠·패딩 없이 배너 카드만 흐른다.
 import { useEffect, useMemo, useRef } from 'react';
@@ -20,6 +21,37 @@ import { thumbUrl } from '../../lib/imageUrl';
 import type { Schedule } from '../../api/schedules';
 
 const DAYS_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
+
+// --ease(cubic-bezier(0.32,0.72,0,1)) 의 JS 평가 — 앱 유일 곡선(모션 헌법 §20.4)을 그대로 쓴다.
+// 기존 코드베이스에 JS 이징 헬퍼 없음(SlidingPill 은 CSS transition) — 로컬 함수로 둔다.
+// x(진행 시간 0..1) → t 를 뉴턴 5회로 풀고(발산 시 이분 20회 폴백), y(진행 거리)를 돌려준다.
+const EASE = (() => {
+  const x1 = 0.32, y1 = 0.72, x2 = 0, y2 = 1;
+  const ax = 1 - 3 * x2 + 3 * x1, bxc = 3 * x2 - 6 * x1, cx = 3 * x1;
+  const ay = 1 - 3 * y2 + 3 * y1, byc = 3 * y2 - 6 * y1, cy = 3 * y1;
+  const sampleX = (t: number) => ((ax * t + bxc) * t + cx) * t;
+  const sampleY = (t: number) => ((ay * t + byc) * t + cy) * t;
+  const slopeX = (t: number) => (3 * ax * t + 2 * bxc) * t + cx;
+  return (x: number): number => {
+    if (x <= 0) return 0;
+    if (x >= 1) return 1;
+    let t = x;
+    for (let i = 0; i < 5; i++) {
+      const d = slopeX(t);
+      if (d < 1e-6) break;
+      t -= (sampleX(t) - x) / d;
+    }
+    if (t < 0 || t > 1 || Math.abs(sampleX(t) - x) > 1e-4) {
+      let lo = 0, hi = 1;
+      for (let i = 0; i < 20; i++) { t = (lo + hi) / 2; if (sampleX(t) < x) lo = t; else hi = t; }
+    }
+    return sampleY(t);
+  };
+})();
+
+/** 자동 스텝 트윈 길이(ms) — 카드 1장 이동에 딱 맞는 짧은 감속. duration 토큰은 최대 .26s(panel)라
+ *  화면폭 이동에는 부족 — §20.4 예외가 아니라 '거리에 맞춘 스크롤 트윈'으로 오너 승인 범위(사유 보고). */
+const STEP_MS = 420;
 
 export type BannerAction = 'roti-community' | 'tools' | 'explore' | 'nurimind';
 
@@ -224,8 +256,36 @@ export default function PosterCarousel({ schedules, onSelect, onBanner }: {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       return () => vp.removeEventListener('scroll', wrap); // 자동 스텝 없이 수동만(랩은 유지)
     }
+    // 자동 스텝 = rAF 트윈(구 scrollTo smooth 교체 — 오너 리포트 2026-08-27 '프레임이 낮다').
+    // UA smooth 는 곡선·듀레이션 제어 불가 + 풀폭 960px 페인트와 겹치면 뚝뚝해 보였다.
+    // scrollLeft 를 --ease 동일 곡선으로 STEP_MS 트윈. ⚠ snap-x mandatory 컨테이너는
+    // 프로그램적 scrollLeft 대입도 '스크롤 조작'이라 UA 가 중간 프레임을 snap 경계로 되당길 수
+    // 있다(스펙상 허용) — 트윈 동안만 인라인 scroll-snap-type:none 으로 해제하고 착지 후 복원.
+    // 착지점 = 정확한 카드 경계(N×w)라 복원 순간 snap 재정착 이동 0(시각 점프 없음).
+    // (대안이던 'smooth 유지'는 원인 그 자체, '트랙 transform 트윈'은 수동 스크롤·랩과 좌표계가
+    //  갈라져 기각 — scrollLeft 트윈 + snap 일시 해제가 유일하게 랩 로직 불변으로 안전.)
+    let tweenRaf = 0;
+    const cancelTween = () => {
+      if (!tweenRaf) return;
+      cancelAnimationFrame(tweenRaf);
+      tweenRaf = 0;
+      vp.style.scrollSnapType = ''; // 수동 조작으로 넘어갈 땐 snap 즉시 복원
+    };
+    const tweenTo = (from: number, to: number) => {
+      cancelTween();
+      const t0 = performance.now();
+      vp.style.scrollSnapType = 'none';
+      const frame = (now: number) => {
+        const p = Math.min((now - t0) / STEP_MS, 1);
+        vp.scrollLeft = from + (to - from) * EASE(p);
+        if (p < 1) { tweenRaf = requestAnimationFrame(frame); return; }
+        tweenRaf = 0;
+        vp.style.scrollSnapType = ''; // 착지 = 카드 경계 — 복원해도 재정착 이동 없음
+      };
+      tweenRaf = requestAnimationFrame(frame);
+    };
     let pauseUntil = 0;
-    const pause = () => { pauseUntil = performance.now() + 6000; };
+    const pause = () => { pauseUntil = performance.now() + 6000; cancelTween(); }; // 수동 스와이프 감지 → 트윈 즉시 취소
     const step = window.setInterval(() => {
       if (document.hidden || performance.now() < pauseUntil) return;
       if (vp.scrollWidth / 2 <= vp.clientWidth) return;
@@ -234,15 +294,17 @@ export default function PosterCarousel({ schedules, onSelect, onBanner }: {
       // 유저가 손으로 어중간하게 세워도 다음 카드 '경계'로 정렬해 이동(스냅 감각).
       // ⚠ round(≠floor): snap 정착점이 경계 ±서브픽셀이라 floor 는 '경계-ε'에서
       //   같은 경계를 재타깃해 한 사이클 제자리걸음이 된다 — round 로 현재 인덱스를 잡는다.
-      //   랩 유지 위치(≤ half)에서 타깃 최대치는 half + w — 착지 직후 wrap 이 w 로 되감는다.
+      //   랩 유지 위치(≤ half)에서 타깃 최대치는 half + w — 착지 직후 wrap 이 w 로 되감는다
+      //   (트윈은 단조 증가라 중간 프레임이 half+w 임계를 먼저 건드릴 수 없다 — 랩은 착지 후에만).
       const target = (Math.round(vp.scrollLeft / w) + 1) * w;
-      vp.scrollTo({ left: target, behavior: 'smooth' });
+      tweenTo(vp.scrollLeft, target);
     }, 3200);
     vp.addEventListener('touchstart', pause, { passive: true });
     vp.addEventListener('wheel', pause, { passive: true });
     vp.addEventListener('pointerdown', pause, { passive: true });
     return () => {
       window.clearInterval(step);
+      cancelTween();
       vp.removeEventListener('scroll', wrap);
       vp.removeEventListener('touchstart', pause);
       vp.removeEventListener('wheel', pause);
@@ -253,8 +315,8 @@ export default function PosterCarousel({ schedules, onSelect, onBanner }: {
   return (
     <div className="pt-3">
       {/* 오너 지시(2026-08-27): 배너만 — 펠트 배경·어두운 띠 없음. 스크롤바는 숨김.
-          snap-x mandatory: 수동 스와이프도 1장 정렬 — 자동 스텝 scrollTo(smooth)의 타깃이
-          정확히 snap 경계(N×clientWidth)라 둘이 충돌하지 않는다(Chromium 실검증).
+          snap-x mandatory: 수동 스와이프 1장 정렬 전담 — 자동 스텝(rAF 트윈)은 트윈 동안만
+          인라인 scroll-snap-type:none 으로 해제하고 카드 경계(N×clientWidth)에 착지 후 복원(점프 0).
           lg 캡: 스크롤러 자체를 512px 중앙 정렬(≈239px 높이) — 카드 w-full 불변식 유지.
           트랙은 w-max 금지 — 카드 w-full(%)가 스크롤러 폭에 대해 확정 해석되려면
           트랙 폭 = 스크롤러 content 폭이어야 한다(w-max 면 순환 참조로 깨짐). */}
