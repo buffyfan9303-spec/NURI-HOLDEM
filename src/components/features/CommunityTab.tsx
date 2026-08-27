@@ -233,7 +233,7 @@ function CommunityTab({
           '상시 크롬'이라 전환 블러/슬라이드에 딸려 움직이면 안 된다(index.css VT 예외 블록 참조) */}
       <div data-community-secbar="" className="sticky top-[calc(theme(spacing.header-h)+env(safe-area-inset-top)-0.5rem)] lg:top-[calc(theme(spacing.header-h)+theme(spacing.tab-h)-0.5rem)] z-30 -mx-page-x px-page-x bg-surface-base border-b border-border-subtle pt-2.5 pb-2 lg:pt-2.5 before:pointer-events-none before:absolute before:inset-x-0 before:-top-4 before:h-4 before:bg-surface-base">
         <div ref={secBarRef} className="relative flex items-center gap-1 overflow-x-auto scrollbar-none rounded-input bg-surface-high p-0.5">
-          <SlidingPill containerRef={secBarRef} activeKey={shownSec} className="rounded-[6px] pill-active" />
+          <SlidingPill containerRef={secBarRef} activeKey={shownSec} underline className="rounded-full bg-accent-300" />
           <SectionTab active={shownSec === 'venues'} label="홀덤펍" onClick={() => setSection('venues')} />
           <SectionTab active={shownSec === 'board'}  label="게시판" onClick={() => setSection('board')} />
           <SectionTab active={shownSec === 'live'}   label="실시간" onClick={() => setSection('live')} />
@@ -349,7 +349,7 @@ function SectionTab({ active, label, onClick }: { active: boolean; label: string
         'relative flex-[1_0_auto] px-3 py-2 text-xs font-semibold rounded-[6px] whitespace-nowrap',
         'transition-colors',
         'focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0',
-        active ? 'text-white' : 'text-ink-secondary hover:text-ink-primary',
+        active ? 'text-ink-primary font-bold' : 'text-ink-secondary hover:text-ink-primary',
       ].join(' ')}
     >
       {/* 활성 배경은 부모의 공용 SlidingPill 이 미끄러지며 그린다 — 탭별 개별 팝인 제거 */}
@@ -537,7 +537,7 @@ function FeedSection({
             <div className="inline-flex shrink-0 overflow-hidden rounded-input border border-border-default">
               {(['new', 'popular'] as const).map((o) => (
                 <button key={o} type="button" onClick={() => setOrder(o)} aria-pressed={order === o}
-                  className={['h-9 px-2.5 text-2xs font-bold transition-colors', order === o ? 'bg-accent-300 text-white' : 'bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
+                  className={['h-9 px-2.5 text-2xs font-bold transition-colors', order === o ? 'bg-accent-300/15 text-accent-200 font-bold' : 'bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
                   {o === 'new' ? '최신' : '인기'}
                 </button>
               ))}
@@ -573,7 +573,7 @@ function FeedSection({
                   className={[
                     'shrink-0 inline-flex items-center h-8 px-3 rounded-badge text-2xs font-bold leading-none transition-colors',
                     cat === c.id
-                      ? 'bg-accent-300 text-white'
+                      ? 'bg-accent-300/15 text-accent-200 ring-1 ring-inset ring-accent-400/45'
                       : 'bg-surface-high text-ink-secondary hover:bg-surface-float/70',
                   ].join(' ')}
                 >
@@ -1070,7 +1070,7 @@ function VenuesSection({
         {VENUE_FILTERS.map((f) => (
           <button key={f.key} type="button" onClick={() => setKindFilter(f.key)}
             className={['shrink-0 whitespace-nowrap rounded-badge px-[5px] py-1 text-2xs font-bold border transition-colors',
-              kindFilter === f.key ? 'bg-accent-300 text-white border-accent-300' : 'bg-surface-high text-ink-secondary border-border-default hover:text-ink-primary'].join(' ')}>
+              kindFilter === f.key ? 'bg-accent-300/15 text-accent-200 border-accent-400/45' : 'bg-surface-high text-ink-secondary border-border-default hover:text-ink-primary'].join(' ')}>
             {f.label}
           </button>
         ))}
@@ -1209,7 +1209,7 @@ function CreateGroupModal({ onClose, onCreated }: { onClose: () => void; onCreat
             {KINDS.map((k) => (
               <button key={k} type="button" onClick={() => setKind(k)}
                 className={['rounded-badge border px-3 py-1.5 text-xs font-semibold transition-colors',
-                  kind === k ? 'bg-accent-300 text-white border-accent-300' : 'bg-surface-high text-ink-secondary border-border-default'].join(' ')}>
+                  kind === k ? 'bg-accent-300/15 text-accent-200 border-accent-400/45' : 'bg-surface-high text-ink-secondary border-border-default'].join(' ')}>
                 {GROUP_KIND_LABEL[k]}
               </button>
             ))}
