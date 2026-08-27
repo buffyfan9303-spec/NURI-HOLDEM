@@ -497,13 +497,15 @@ const TabBar = memo(function TabBar({
 });
 
 // ── 모바일 하단 탭바(Riot Mobile 스타일) — 플로팅 알약 + 아이콘/라벨 + 프레스 스프링 ──
-const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, count, onOpenMe }: {
+const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, count, onOpenMe, overlayOpen }: {
   tabs: TabDef[]; active: TabId; onChange: (t: TabId) => void;
   dot?: Partial<Record<TabId, boolean>>;
   /** 숫자 배지(예: 라이브 'N게임 진행중') — dot 보다 정보량이 높은 칸에만 */
   count?: Partial<Record<TabId, number>>;
   /** 일반 유저 5번째 칸 '내 정보'(개인 대시보드 — 비로그인이면 로그인 유도) */
   onOpenMe: () => void;
+  /** 전면 오버레이('내 정보'·매장 페이지·상세 등) 열림 여부 — 개폐 순간마다 잔존 hidden 을 리셋 */
+  overlayOpen: boolean;
 }) {
   // 5칸 고정: 일정/라이브/커뮤니티/장터 + (업주·직원·관리자=내 매장 | 일반=내 정보)
   // 관리자 설정·도구는 프로필 메뉴에서 진입(탭바는 핵심 동선만)
@@ -519,7 +521,16 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
   // 복원 이벤트 도착 전에 창이 열려 순서가 보장된다. |dy| 크기 추정은 빠른 플링(프레임당 200px+)을 삼키므로 금지.
   const suppressUntil = useRef(0);
   const tb2Ref = useRef({ lastY: 0, acc: 0 });
-  useLayoutEffect(() => { suppressUntil.current = performance.now() + 300; }, [active]);
+  // 명시적 내비 행위(탭 전환·전면 오버레이 개폐) 뒤에는 탭바가 반드시 보인다 — 잔존 hidden 리셋.
+  // 왜: hidden 은 스크롤 이벤트로만 풀리는데, 오버레이를 다녀오거나 keep-alive 탭을 오가면
+  // 스크롤 이벤트가 없어 '문서끝 숨김' 상태가 영구 잔존했다(짧은 탭 복귀는 스크롤 자체가 불가라 더 치명적).
+  // 억제창을 함께 세워 직후 복원 스크롤(behavior:'instant')의 거대 dy 오판을 막는다 — 기존 억제창 문법.
+  // 오버레이 '열림' 순간에도 리셋: 매장 페이지(z-40)는 탭바(z-50) 아래라 열려 있는 동안 탭바가 보여야 한다.
+  useLayoutEffect(() => {
+    suppressUntil.current = performance.now() + 300;
+    tb2Ref.current = { lastY: window.scrollY, acc: 0 };
+    setHidden(false);
+  }, [active, overlayOpen]);
   useEffect(() => {
     if (!autohideV2) {
       // 구(레거시) 경로 — 킬스위치 off 시 그대로 복구
@@ -2113,6 +2124,12 @@ export default function App() {
   const pcTabs = useMemo(() => tabs.filter((t) => t.id !== 'market'), [tabs]);
   const tabDot = useMemo(() => ({ community: commHasNew }), [commHasNew]);
   const tabCount = useMemo(() => ({ live: liveCount }), [liveCount]);
+  // 전면(페이지성) 오버레이 열림 여부 — MobileTabBar 가 개폐 순간 잔존 hidden 을 리셋한다.
+  // 대상 = '페이지 이동'으로 인지되는 오버레이(내 정보·매장/그룹·상세·프로필·검색·클락·법적고지·문의).
+  // 순수 입력 폼(글쓰기·공지작성 등)·소형 확인 다이얼로그는 내비가 아니라 제외 — 문서끝 숨김 계약 유지.
+  const fullOverlayOpen = voucherWalletOpen || profileOpen || supportOpen || globalSearchOpen
+    || openVenueId !== null || openSchedule !== null || openPost !== null || openListing !== null
+    || openNotice !== null || displayTarget !== null || legalDoc !== null || gtoInit !== null;
   // 비로그인도 페이지를 연다 — CustomerDashboardPage 가 user 없으면 APIS식 로그인 랜딩을 렌더(오너 레퍼런스 2026-08-27)
   // keep-alive + VT: 한 번 연 뒤에는 언마운트하지 않고(자식이 display 토글) 재열림을 스냅샷 뒤 동기 커밋으로 —
   // GTO 등 무거운 탭 위에서 '내 정보'를 열 때의 풀 마운트 프레임 드롭 제거(changeTab 과 같은 조리법).
@@ -2248,7 +2265,7 @@ export default function App() {
       <TabBar tabs={pcTabs} active={activeTab} onChange={changeTab} />
       {/* 모바일 하단 탭바(Riot Mobile 스타일) — 상단 GNB 대체 */}
       <MobileTabBar tabs={tabs} active={activeTab} onChange={changeTab} dot={tabDot} count={tabCount}
-        onOpenMe={openMeCb} />
+        onOpenMe={openMeCb} overlayOpen={fullOverlayOpen} />
 
       {/* 일정 탐색 */}
       <div className="px-page-x"><StaffInviteBanner /></div>

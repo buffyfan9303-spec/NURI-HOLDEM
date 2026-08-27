@@ -55,12 +55,12 @@ interface CommunityTabProps {
   onReloadVenues?: () => void;
 }
 
-// 커뮤니티 섹션 — 홀덤펍 / 게시판 / 실시간 / 랭킹 / 장터 / 딜러 / 업주 (사용 빈도순 진열)
+// 커뮤니티 섹션 — 홀덤펍 / 게시판 / 실시간 / 랭킹 / 장터 / 딜러 / 매장(owner, 구 '업주' 라벨) (사용 빈도순 진열)
 // (홀덤 공부는 게시판으로 통합, 도구는 메인 탭으로 분리)
 type Section = 'live' | 'board' | 'venues' | 'rank' | 'dealer' | 'owner' | 'market';
 // 다른 메인 탭(중고장터 등)으로 갔다 돌아와도 커뮤니티 섹션이 유지되도록 모듈 레벨에 기억
 let lastCommunitySection: Section = 'venues';
-// 서브탭 진열 순서 — View Transition 방향성(오른쪽 탭 = forward) 판정용. 스와이프 order 와 동일한 진열.
+// 서브탭 진열 순서 — View Transition 방향성(오른쪽 탭 = forward) 판정용.
 // market/owner 는 조건부 노출이지만 indexOf 상대 비교라 정적 전체 배열로 충분하다.
 const SEC_ORDER: Section[] = ['venues', 'board', 'live', 'rank', 'market', 'dealer', 'owner'];
 
@@ -141,11 +141,19 @@ function CommunityTab({
     if (visitedSecs.has(s)) {
       const from = SEC_ORDER.indexOf(activeSecRef.current);
       const to = SEC_ORDER.indexOf(s);
+      // 서브섹션 전환 동안만 서브탭 바를 root 스냅샷에서 제외(자기 이름의 스냅샷 — index.css 마커 참조).
+      // 상시 name 이면 메인 탭 전환(커뮤니티→홈)에서 old-only 스냅샷이 전환 내내 얼어붙는 잔상을 실측했다.
+      // 마커는 old 캡처(startViewTransition 호출 시점) 전에 켜져 있어야 하고, new 캡처가 끝난 뒤에 꺼야
+      // 하므로 전환 duration(--dur-panel .26s)보다 넉넉한 타이머로 해제한다(vtDir 마커와 같은 조리법).
+      document.documentElement.dataset.vtScope = 'community-sec';
       withViewTransition(
         () => { flushSync(() => setSectionState(s)); },
         () => startSecTransition(() => setSectionState(s)),
         to >= from ? 'forward' : 'back',
       );
+      window.setTimeout(() => {
+        if (document.documentElement.dataset.vtScope === 'community-sec') delete document.documentElement.dataset.vtScope;
+      }, 450);
     } else {
       startSecTransition(() => setSectionState(s));
     }
@@ -168,28 +176,15 @@ function CommunityTab({
   }, [setSection]);
   const [query, setQuery] = useState('');
 
-  // 스와이프 탭 전환(인스타 DM 문법) — 컨텐츠를 좌우로 쓸면 이웃 섹션으로
-  const touchRef = useRef<{ x: number; y: number } | null>(null);
-  const onSwipeStart = (e: React.TouchEvent) => { const t = e.touches[0]; touchRef.current = { x: t.clientX, y: t.clientY }; };
-  const onSwipeEnd = (e: React.TouchEvent) => {
-    const s0 = touchRef.current; touchRef.current = null;
-    if (!s0) return;
-    const t = e.changedTouches[0];
-    const dx = t.clientX - s0.x, dy = t.clientY - s0.y;
-    if (Math.abs(dx) < 64 || Math.abs(dx) < Math.abs(dy) * 1.5) return; // 세로 스크롤과 구분
-    // 탭 바 진열 순서와 동일(사용 빈도순) — 스와이프 이웃이 눈에 보이는 이웃과 어긋나면 방향감이 깨진다
-    const order: Section[] = ['venues', 'board', 'live', 'rank', ...(marketSlot ? (['market'] as Section[]) : []), 'dealer', ...(canOwnerCommunity ? (['owner'] as Section[]) : [])];
-    const i = order.indexOf(shownSec);
-    const next = dx < 0 ? order[i + 1] : order[i - 1];
-    if (next) setSection(next);
-  };
+  // (2026-08-27 오너 지시) 본문 좌우 스와이프 섹션 전환 제거 — 칩 가로 스크롤·상세 화면 넘김과
+  // 충돌해 의도치 않은 섹션 이동을 만들었다. 서브탭 전환은 탭 바 클릭만.
   const { user } = useAuth();
   // 데스크탑 게시판 2-pane: 좌측 목록 + 우측 인라인 상세. 모바일은 기존 오버레이 모달(onSelectPost) 사용.
   const isDesktop = useIsDesktop();
   const [boardSelected, setBoardSelected] = useState<CommunityPost | null>(null);
   const canOwnerCommunity = isAdmin || (user?.role === 'venue_owner' && user?.venueVerified === true);
 
-  // 서브탭 바(가로 스크롤) — 스와이프·외부 지정으로 바뀐 활성 탭이 화면 밖이면 보이게 끌어온다
+  // 서브탭 바(가로 스크롤) — 외부 지정(딥링크·대시보드 바로가기)으로 바뀐 활성 탭이 화면 밖이면 보이게 끌어온다
   const secBarRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     secBarRef.current?.querySelector<HTMLElement>('[data-pill-active]')
@@ -233,8 +228,10 @@ function CommunityTab({
           진열은 사용 빈도순(게시판·실시간·랭킹·장터 앞, 딜러·업주 뒤). 첫 탭은 매장 디렉터리라
           상위 탭명과 겹치던 '커뮤니티' 라벨만 '홀덤펍'으로 명확화(기능·화면 불변).
           ⚠ 하단 탭바의 '커뮤니티' 라벨은 e2e 잠금 — 여기(서브탭)만 바꾼다. */}
-      {/* 스크롤해도 항상 보이도록 헤더+메인탭 바로 아래에 고정 */}
-      <div className="sticky top-[calc(theme(spacing.header-h)+env(safe-area-inset-top)-0.5rem)] lg:top-[calc(theme(spacing.header-h)+theme(spacing.tab-h)-0.5rem)] z-30 -mx-page-x px-page-x bg-surface-base border-b border-border-subtle pt-2.5 pb-2 lg:pt-2.5 before:pointer-events-none before:absolute before:inset-x-0 before:-top-4 before:h-4 before:bg-surface-base">
+      {/* 스크롤해도 항상 보이도록 헤더+메인탭 바로 아래에 고정.
+          data-community-secbar: 서브섹션 View Transition(root 스냅샷)에서 제외 — 헤더·하단 탭바와 같은
+          '상시 크롬'이라 전환 블러/슬라이드에 딸려 움직이면 안 된다(index.css VT 예외 블록 참조) */}
+      <div data-community-secbar="" className="sticky top-[calc(theme(spacing.header-h)+env(safe-area-inset-top)-0.5rem)] lg:top-[calc(theme(spacing.header-h)+theme(spacing.tab-h)-0.5rem)] z-30 -mx-page-x px-page-x bg-surface-base border-b border-border-subtle pt-2.5 pb-2 lg:pt-2.5 before:pointer-events-none before:absolute before:inset-x-0 before:-top-4 before:h-4 before:bg-surface-base">
         <div ref={secBarRef} className="relative flex items-center gap-1 overflow-x-auto scrollbar-none rounded-input bg-surface-high p-0.5">
           <SlidingPill containerRef={secBarRef} activeKey={shownSec} className="rounded-[6px] pill-active" />
           <SectionTab active={shownSec === 'venues'} label="홀덤펍" onClick={() => setSection('venues')} />
@@ -244,15 +241,14 @@ function CommunityTab({
           {marketSlot && <SectionTab active={shownSec === 'market'} label="장터" onClick={() => setSection('market')} />}
           <SectionTab active={shownSec === 'dealer'} label="딜러"   onClick={() => setSection('dealer')} />
           {canOwnerCommunity && (
-            <SectionTab active={shownSec === 'owner'} label="업주" onClick={() => setSection('owner')} />
+            <SectionTab active={shownSec === 'owner'} label="매장" onClick={() => setSection('owner')} />
           )}
         </div>
       </div>
 
       {/* 섹션 콘텐츠 — 게시판은 2-pane 전체폭, 그 외 단일 컬럼은 읽기폭(max-w-3xl)으로 제한.
           keep-alive: 방문한 섹션은 언마운트하지 않고 display 토글(메인 탭과 동일) — 재방문 커밋 프레임이 가볍다 */}
-      <div onTouchStartCapture={onSwipeStart} onTouchEndCapture={onSwipeEnd}
-        className={(section === 'board' || section === 'market') ? '' : 'mx-auto w-full max-w-3xl'}>
+      <div className={(section === 'board' || section === 'market') ? '' : 'mx-auto w-full max-w-3xl'}>
       {(visitedSecs.has('live') || section === 'live') && (
         <div style={{ display: section === 'live' ? undefined : 'none' }}>
           <LiveWallSection />
@@ -518,8 +514,13 @@ function FeedSection({
       {/* 검색 + 카테고리 필터 */}
       {posts.length > 0 && (
         <div className="space-y-1.5">
+          {/* 오너 리포트(2026-08-27) '검색 옆이 잘리고 세로가 길다':
+              ① 잘림 — input 의 고유 최소폭(≈20ch)이 flex 최소폭으로 승격돼 좁은 화면에서 행이
+                우측으로 넘치며 컨트롤이 잘렸다 → 래퍼 min-w-0 로 입력이 줄어들게 해 해결.
+              ② 세로 과대 — 보더 속 보더(정렬 토글이 보기 토글 박스 안에 중첩, h-9+p-0.5+border≈42px)
+                해체 → 검색·정렬·보기 3형제를 전부 h-9 로 정합(카테고리 칩 h-8 과 같은 밀도). */}
           <div className="flex items-center gap-1.5">
-            <div className="relative flex-1">
+            <div className="relative min-w-0 flex-1">
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" aria-hidden>
                 <circle cx="6" cy="6" r="4.5" /><line x1="9.5" y1="9.5" x2="13" y2="13" />
@@ -529,31 +530,30 @@ function FeedSection({
                 value={q}
                 onChange={(e) => { setQ(e.target.value); setVisible(15); }}
                 placeholder="게시글 검색 (제목·내용·작성자)"
-                className="input w-full pl-9 text-sm"
+                className="input h-9 min-h-0 w-full py-0 pl-9 text-sm"
               />
             </div>
+            {/* 최신/인기 정렬(Phase 14) — 인기 = 좋아요순. overflow-hidden이 .hit 확장을 잘라내므로 실높이(h-9)로 탭 타깃 확보 */}
+            <div className="inline-flex shrink-0 overflow-hidden rounded-input border border-border-default">
+              {(['new', 'popular'] as const).map((o) => (
+                <button key={o} type="button" onClick={() => setOrder(o)} aria-pressed={order === o}
+                  className={['h-9 px-2.5 text-2xs font-bold transition-colors', order === o ? 'bg-accent-300 text-white' : 'bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
+                  {o === 'new' ? '최신' : '인기'}
+                </button>
+              ))}
+            </div>
             {/* 보기 모드 토글 — 한 줄 목록 / 미리보기 피드 */}
-            <div className="flex shrink-0 rounded-input border border-border-default bg-surface-high p-0.5">
-              {/* 최신/인기 정렬(Phase 14) — 인기 = 좋아요순 */}
-              <div className="mr-1 inline-flex overflow-hidden rounded-input border border-border-default">
-                {(['new', 'popular'] as const).map((o) => (
-                  <button key={o} type="button" onClick={() => setOrder(o)} aria-pressed={order === o}
-                    // 부모 overflow-hidden이 .hit 확장을 잘라내므로 .hit 대신 실높이(h-9)로 탭 타깃 확보
-                    className={['h-9 px-2.5 text-2xs font-bold transition-colors', order === o ? 'bg-accent-300 text-white' : 'bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
-                    {o === 'new' ? '최신' : '인기'}
-                  </button>
-                ))}
-              </div>
+            <div className="flex h-9 shrink-0 items-center rounded-input border border-border-default bg-surface-high p-0.5">
               <button type="button" aria-label="한 줄 목록" title="한 줄 목록"
                 onClick={() => switchView('compact')}
-                className={['rounded-[6px] px-2 py-1.5 transition-colors', view === 'compact' ? 'bg-surface-float text-accent-300' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
+                className={['flex h-8 w-8 items-center justify-center rounded-[6px] transition-colors', view === 'compact' ? 'bg-surface-float text-accent-300' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
                   <line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="18" x2="20" y2="18" />
                 </svg>
               </button>
               <button type="button" aria-label="미리보기 피드" title="미리보기 피드"
                 onClick={() => switchView('feed')}
-                className={['rounded-[6px] px-2 py-1.5 transition-colors', view === 'feed' ? 'bg-surface-float text-accent-300' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
+                className={['flex h-8 w-8 items-center justify-center rounded-[6px] transition-colors', view === 'feed' ? 'bg-surface-float text-accent-300' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
                   <rect x="3" y="4" width="18" height="7" rx="1.5" /><rect x="3" y="13" width="18" height="7" rx="1.5" />
                 </svg>
@@ -814,7 +814,7 @@ const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, se
               <p className="flex items-center gap-1 text-2xs leading-4 text-ink-muted">
                 <span className="shrink-0 tabular-nums">{relativeTime(post.createdAt)}</span>
                 <TitleChip points={titlePts} />
-                {post.userRole === 'venue_owner' && <span className="shrink-0">· 업주</span>}
+                {post.userRole === 'venue_owner' && <span className="shrink-0">· 매장</span>}
                 {post.userRole === 'admin' && <span className="shrink-0">· 운영자</span>}
               </p>
             </div>
@@ -1063,17 +1063,18 @@ function VenuesSection({
         </svg>
       </div>
 
-      {/* 종류 필터 + 그룹 만들기 */}
-      <div className="flex flex-wrap items-center gap-1.5">
+      {/* 종류 필터 + 그룹 만들기 — 오너 지시(2026-08-27): 줄바꿈 없이 한 줄.
+          칩이 넘치면 가로 스크롤 레일(게시판 카테고리 칩과 같은 문법), 만들기 버튼은 같은 줄 끝. */}
+      <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none -mx-page-x px-page-x">
         {VENUE_FILTERS.map((f) => (
           <button key={f.key} type="button" onClick={() => setKindFilter(f.key)}
-            className={['shrink-0 rounded-badge px-2.5 py-1 text-2xs font-bold border transition-colors',
+            className={['shrink-0 whitespace-nowrap rounded-badge px-2.5 py-1 text-2xs font-bold border transition-colors',
               kindFilter === f.key ? 'bg-accent-300 text-white border-accent-300' : 'bg-surface-high text-ink-secondary border-border-default hover:text-ink-primary'].join(' ')}>
             {f.label}
           </button>
         ))}
         {user && (
-          <button type="button" onClick={() => setCreateOpen(true)} className="ml-auto shrink-0 rounded-badge px-2.5 py-1 text-2xs font-bold border border-accent-400/50 text-accent-300 hover:bg-accent-300/10">+ 그룹 만들기</button>
+          <button type="button" onClick={() => setCreateOpen(true)} className="ml-auto shrink-0 whitespace-nowrap rounded-badge px-2.5 py-1 text-2xs font-bold border border-accent-400/50 text-accent-300 hover:bg-accent-300/10">+ 그룹 만들기</button>
         )}
       </div>
 
@@ -1344,7 +1345,7 @@ function LiveWallSection() {
                 <div className="flex items-center gap-1 text-2xs">
                   <span className="font-semibold text-ink-primary truncate">{m.userName}</span>
                   {m.userRole === 'venue_owner' && (
-                    <span className="font-bold text-accent-300 bg-accent-300/15 px-1 rounded-badge leading-none">업주</span>
+                    <span className="font-bold text-accent-300 bg-accent-300/15 px-1 rounded-badge leading-none">매장</span>
                   )}
                   {m.userRole === 'admin' && (
                     <span className="font-bold text-danger-light bg-danger/15 px-1 rounded-badge leading-none">운영자</span>

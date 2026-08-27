@@ -27,6 +27,9 @@ export default function StoreToolsPanel() {
           </button>
         ))}
       </div>
+      {/* ⚠ display:contents 래퍼 — GTO 탭과 동일 규격. 루트 space-y-2 의 margin-top 이
+          Modal(fixed inset-0)에 적용되면 전체화면 상단이 0.5rem 내려앉아 뒤 화면이 비친다(ToolsPanel 참고). */}
+      <div className="contents">
       <Modal open={!!activeTool} onClose={() => setActive(null)} variant="page" title={activeTool?.name} maxWidth="2xl">
         <div className="px-page-x py-3 pb-8">
           <Suspense fallback={<div className="py-10 text-center text-2xs text-ink-muted">불러오는 중…</div>}>
@@ -34,6 +37,7 @@ export default function StoreToolsPanel() {
           </Suspense>
         </div>
       </Modal>
+      </div>
     </div>
   );
 }
