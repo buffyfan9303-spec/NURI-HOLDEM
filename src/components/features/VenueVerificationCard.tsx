@@ -40,7 +40,7 @@ export default function VenueVerificationCard() {
     <div className="space-y-1 rounded-card border border-border-default bg-surface-low p-3">
       <span className="inline-block rounded-badge bg-surface-float px-2 py-0.5 text-2xs font-bold text-ink-secondary">비인증 매장</span>
       <p className="text-xs leading-relaxed text-ink-secondary">
-        운영자 인증을 받으면 포스터가 승인 없이 즉시 게시되고, 매장 목록 상단에 인증 배지와 함께 우선 노출됩니다. 인증은 운영자가 검토 후 부여합니다.
+        인증받으면 포스터 즉시 게시 · 목록 상단 우선 노출. (운영자 검토 후 부여)
       </p>
     </div>
   );

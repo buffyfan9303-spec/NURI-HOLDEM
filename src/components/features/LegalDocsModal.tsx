@@ -14,6 +14,7 @@ const BIZ = {
   ceo: '김윤혜',
   bizNo: '525-20-02937',
   addr: '경기도 남양주시 진건읍 사릉로372번길 25, 201동 1403호(주공아파트)',
+  phone: '010-7508-7689',
   contact: 'buffyfan9303@gmail.com',
   email: 'buffyfan9303@gmail.com',
   privacyOfficer: '김윤혜(대표)',

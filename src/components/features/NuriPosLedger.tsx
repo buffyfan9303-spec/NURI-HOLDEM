@@ -1910,9 +1910,9 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       {mode === 'open' && (
         <div>
           <h3 className="text-sm font-bold text-accent-300">장부 시작 설정</h3>
-          <p className="text-2xs text-ink-muted mt-0.5">담당직원: <b className="text-ink-secondary">{operatorName}</b> · 아래 정보를 입력 후 장부에 입장합니다.</p>
+          <p className="text-2xs text-ink-muted mt-0.5">담당직원: <b className="text-ink-secondary">{operatorName}</b></p>
           {prefilled && <p className="text-xs font-semibold text-emerald-400 mt-0.5">✅ 직전 게임 설정을 불러왔습니다 — 바로 시작하거나 수정하세요.</p>}
-          {autoLinked && <p className="text-xs font-semibold text-emerald-400 mt-0.5">✅ 오늘 포스터를 자동으로 연동했습니다 — 게임명·바인·유형·스택이 채워졌고, 블라인드·레지 마감·상금은 시작 시 클락에 함께 적용돼요(수정 가능).</p>}
+          {autoLinked && <p className="text-xs font-semibold text-emerald-400 mt-0.5">✅ 오늘 포스터 자동 연동 — 게임명·바인·유형·스택 입력됨, 블라인드·레지·상금은 클락에 함께 적용(수정 가능).</p>}
           {/* PL1a: 당일 포스터 2개+ — 자동연동이 침묵하던 케이스에 선택 칩(§13-B '자동화는 항상 되거나, 왜 안 되는지 보이거나') */}
           {!autoLinked && !schedId && todayPick.length >= 2 && (
             <div className="mt-1.5">
@@ -1979,7 +1979,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
               ))}
             </div>
           )}
-          <p className="text-xs text-ink-muted mt-1">최근 게임 3개가 상단에 표시됩니다. 담당 직원은 이 목록과 무관하게 아래에서 선택하세요.</p>
+          <p className="text-xs text-ink-muted mt-1">담당 직원은 아래에서 따로 선택하세요.</p>
         </Field>
       )}
 
@@ -2022,7 +2022,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
               );
             })}
           </div>
-          <p className="text-2xs text-ink-muted mt-1">선택한 담당 직원만 이 장부를 열람·운영할 수 있습니다(업주·운영자는 전체 접근). 후보는 장부 접근 권한 직원입니다.</p>
+          <p className="text-2xs text-ink-muted mt-1">담당 직원만 열람·운영 가능(업주·운영자는 전체 접근) — 후보는 장부 권한 직원.</p>
         </Field>
       )}
 
@@ -2051,14 +2051,14 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
           {discs.length < 5 && (
             <button type="button" onClick={addDisc} className="w-full py-1.5 rounded-input border border-dashed border-border-default text-2xs text-ink-secondary hover:text-accent-300 hover:border-accent-400/50 transition-colors">+ 할인 추가</button>
           )}
-          <p className="text-2xs text-ink-muted">할인액(만원)만큼 차감해 엔트리를 비례 계산합니다. 예) 10만 게임에 5만 할인 = <b className="text-accent-300">0.5 엔트리</b>, 2만 할인 = 0.8 엔트리.</p>
+          <p className="text-2xs text-ink-muted">할인액만큼 차감해 엔트리를 비례 계산 — 예) 10만 게임에 5만 할인 = <b className="text-accent-300">0.5 엔트리</b>.</p>
         </div>
       </Field>
 
       <Field label="토너먼트 스타트 시각 · 선택 (클락 연동·얼리 판정 기준)">
         <DateTimePicker value={startISO} onChange={setStartISO} defaultDate={base.sessionDate} placeholder="스타트 날짜·시각 선택" />
         <p className="text-2xs text-ink-muted mt-1 leading-relaxed">
-          얼리 구간(더블/1얼리)은 이제 <b className="text-accent-300">「클락」 설정에서 레벨 기준</b>으로 지정합니다(예: 1레벨=더블얼리, 2~4레벨=1얼리). 이 장부를 클락과 연동해 시작하면 위 스타트 시각을 기준으로 바인이 레벨→얼리로 자동 분류되며, 바인 칸에서 '없음'으로 수기 변경도 가능합니다.
+          얼리 구간은 <b className="text-accent-300">「클락」 설정의 레벨 기준</b> — 클락 연동 시 스타트 시각으로 자동 분류되고, 바인 칸에서 수기 변경도 됩니다.
           {(base.earlyDoubleMin || base.earlySingleMin) ? <span className="text-accent-300/90"> 현재 적용: 더블 ~{base.earlyDoubleMin}분 · 1얼리 ~{base.earlySingleMin}분.</span> : null}
         </p>
       </Field>
@@ -2519,7 +2519,7 @@ function DeleteSessionModal({ label, loss, lossErr, busy, onClose, onConfirm }: 
             {[0, 1, 2, 3].map((i) => <div key={i} className="h-[58px] animate-pulse rounded-input bg-surface-high" />)}
           </div>
         )}
-        <p className="text-2xs text-ink-muted">마감(읽기전용)은 업주가 다시 해제할 수 있지만, 삭제는 복구 수단이 없습니다. 보관만 원하면 삭제 대신 마감을 쓰세요.</p>
+        <p className="text-2xs text-ink-muted">마감은 해제할 수 있지만 삭제는 복구 불가 — 보관만 원하면 마감을 쓰세요.</p>
         <div className="flex gap-2">
           <button type="button" onClick={onClose} disabled={busy} className="btn-ghost text-sm flex-1 disabled:opacity-50">취소</button>
           <HoldToConfirmButton onConfirm={onConfirm} disabled={busy || (!loss && !lossErr)}

@@ -5,9 +5,12 @@ import { test, expect } from '@playwright/test';
 // 실기기(갤럭시 삼성인터넷) 검증은 오너 QA로 분리 — 이 스펙은 로직 계약만 잠근다.
 
 test.beforeEach(async ({ page }) => {
+  test.setTimeout(60_000); // 병렬 부하에서 마운트 대기(≤30s)가 기본 타임아웃을 소진한다
   await page.addInitScript(() => { try { localStorage.setItem('nuri_onboarding_v1', '1'); } catch { /* noop */ } });
   await page.goto('/');
-  await expect(page.getByRole('navigation', { name: '하단 내비게이션' })).toBeVisible();
+  // 병렬 스위트 부하에서 마운트가 늦으면 nav 대기가 기본 타임아웃을 넘긴다 — 마운트 마커로 명시 대기
+  await page.waitForSelector('button[aria-label^="알림"]', { timeout: 30_000 });
+  await expect(page.getByRole('navigation', { name: '하단 내비게이션' })).toBeVisible({ timeout: 15_000 });
   // 데이터 양과 무관하게 스크롤 공간을 보장 — 리스너는 scrollHeight 만 읽으므로 계약 검증에 유효
   await page.evaluate(() => {
     const pad = document.createElement('div');

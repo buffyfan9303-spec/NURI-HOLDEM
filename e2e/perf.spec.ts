@@ -43,9 +43,12 @@ test('perf① 홈 콜드 진입 — CLS·롱프레임 기록 + 상한', async ({
 });
 
 test('perf② browse→live 탭 전환 — 전환 구간 롱프레임 상한', async ({ page }) => {
+  test.setTimeout(60_000); // 병렬 부하에서 마운트 대기(≤30s)가 기본 타임아웃을 소진한다
   await page.goto('/');
+  // 병렬 스위트 부하에서 마운트가 늦으면 nav 대기가 기본 타임아웃을 넘긴다 — 마운트 마커로 명시 대기
+  await page.waitForSelector('button[aria-label^="알림"]', { timeout: 30_000 });
   const nav = page.getByRole('navigation', { name: '하단 내비게이션' });
-  await expect(nav).toBeVisible();
+  await expect(nav).toBeVisible({ timeout: 15_000 });
   await page.waitForTimeout(1500);
   const before = await readPerf(page);
   await nav.getByRole('button', { name: '라이브', exact: true }).click();

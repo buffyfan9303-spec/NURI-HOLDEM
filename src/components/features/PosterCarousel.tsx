@@ -1,15 +1,14 @@
 // src/components/features/PosterCarousel.tsx
 // APIS식 상단 포스터 오토 캐러셀 — 고정 슬라이드(브랜드 배너·대회 포스터) + 예정 대회
 // 포스터가 가로 직사각형 카드로 천천히 흐른다.
-// · 슬롯 규격(용량 규약, 오너 지시 2026-08-27): 표시 240×112(w-60 h-28) 고정.
+// · 슬롯 규격(용량 규약, 오너 지시 2026-08-27 3차): 표시 224×144(w-56 h-36)·카드 간 여백 0.
 //   포스터 크롭 2종만 래스터(960×448 WebP ≤120KB), 브랜드 배너 4종은 DOM(CSS+실텍스트 —
 //   전송 0B·PC 뭉개짐 없음), 일정 포스터는 thumbUrl(480) 서버 리사이즈 상한.
 // · 고정 슬라이드는 마감 없이 상시 게시(오너 지시) — 날짜 필터는 일정 포스터에만 적용.
 //   항상 3장 이상이 확보되므로 캐러셀은 로딩과 무관하게 즉시 그려진다(빈 상태·스켈레톤 없음).
-// · 모션: scrollLeft 기반 자동 진행(rAF ~30px/s) + 유저 가로 스크롤 겸용(오너 지시 —
-//   "유저도 스크롤할 수 있게"). 상호작용 시 4초 일시정지 후 재개, 절반 지점 되감기 루프.
-//   prefers-reduced-motion 은 자동 진행 없이 수동 스크롤만. 폭이 뒤늦게 늘어도(일정 포스터
-//   도착) 스크롤 위치가 유지되므로 재시작 점프가 없다.
+// · 모션: APIS식 스텝 캐러셀 — 3.8초 정지 후 카드 한 장씩 smooth 이동(연속 흐름 아님,
+//   오너 지시 3차) + 유저 가로 스크롤 겸용(상호작용 시 6초 정지, 양방향 무한 랩).
+//   prefers-reduced-motion 은 자동 스텝 없이 수동 스크롤만.
 // · 배경 없음(오너 지시 2026-08-27): 펠트 띠·패딩 없이 배너 카드만 흐른다. 속도는
 //   슬라이드 수 × 8초 — 장수가 늘어도 픽셀 속도 일정(~31px/s).
 import { useEffect, useMemo, useRef } from 'react';
@@ -127,7 +126,8 @@ export default function PosterCarousel({ schedules, onSelect, onBanner }: {
         aria-hidden={dup || undefined}
         tabIndex={dup ? -1 : undefined}
         aria-label={dup ? undefined : s.alt}
-        className="relative mr-3 h-28 w-60 shrink-0 overflow-hidden rounded-card border border-border-subtle bg-surface-mid text-left"
+        // 오너 지시(2026-08-27 3차): 세로 키움·가로 소폭 축소(224×144), 카드 사이 여백 0
+        className="relative h-36 w-56 shrink-0 overflow-hidden rounded-card border border-border-subtle bg-surface-mid text-left"
         style={b ? { background: b.bg } : undefined}
       >
         {b ? (
@@ -186,37 +186,39 @@ export default function PosterCarousel({ schedules, onSelect, onBanner }: {
     </>
   );
 
-  // 자동 진행 + 유저 스크롤 겸용(오너 지시 2026-08-27: "유저도 스크롤할 수 있게 — 클릭 유도").
-  // 뷰포트가 실제 가로 스크롤러이고, rAF 가 scrollLeft 를 천천히 민다(~30px/s).
-  // 터치·휠·드래그가 감지되면 4초 쉬었다 재개. 절반(한 세트) 지나면 -절반으로 되감아 무한 루프.
-  // 스크롤 랩은 같은 픽셀의 복제 세트로 점프하므로 눈에는 이어져 보인다.
+  // APIS식 스텝 캐러셀(오너 지시 2026-08-27 3차: "물 흐르듯 말고 잠깐 멈췄다 한 칸씩").
+  // 3.8초마다 카드 한 장 폭만큼 smooth 스크롤 + 유저 가로 스크롤 겸용(상호작용 시 6초 정지).
+  // 랩(양방향 무한): 절반 경계를 넘으면 같은 픽셀의 반대쪽 세트로 즉시 되감아 끝없이 돈다.
+  const CARD_W = 224; // w-56 — 카드 간 여백 0이라 스텝 = 카드 폭
   const vpRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const vp = vpRef.current;
     if (!vp) return;
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return; // 수동 스크롤만
-    let raf = 0;
-    let pauseUntil = 0;
-    let last = performance.now();
-    const tick = (t: number) => {
-      const dt = Math.min(64, t - last);
-      last = t;
-      if (t > pauseUntil && !document.hidden) {
-        const half = vp.scrollWidth / 2;
-        if (half > vp.clientWidth) {
-          vp.scrollLeft += 30 * dt / 1000;
-          if (vp.scrollLeft >= half) vp.scrollLeft -= half;
-        }
-      }
-      raf = requestAnimationFrame(tick);
+    const wrap = () => {
+      const half = vp.scrollWidth / 2;
+      if (half <= vp.clientWidth) return;
+      if (vp.scrollLeft >= half) vp.scrollLeft -= half;
+      else if (vp.scrollLeft <= 0) vp.scrollLeft += half;
     };
-    const pause = () => { pauseUntil = performance.now() + 4000; };
+    vp.addEventListener('scroll', wrap, { passive: true });
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      return () => vp.removeEventListener('scroll', wrap); // 자동 스텝 없이 수동만(랩은 유지)
+    }
+    let pauseUntil = 0;
+    const pause = () => { pauseUntil = performance.now() + 6000; };
+    const step = window.setInterval(() => {
+      if (document.hidden || performance.now() < pauseUntil) return;
+      if (vp.scrollWidth / 2 <= vp.clientWidth) return;
+      // 유저가 손으로 어중간하게 세워도 다음 카드 '경계'로 정렬해 이동(스냅 감각)
+      const target = (Math.floor(vp.scrollLeft / CARD_W) + 1) * CARD_W;
+      vp.scrollTo({ left: target, behavior: 'smooth' });
+    }, 3800);
     vp.addEventListener('touchstart', pause, { passive: true });
     vp.addEventListener('wheel', pause, { passive: true });
     vp.addEventListener('pointerdown', pause, { passive: true });
-    raf = requestAnimationFrame(tick);
     return () => {
-      cancelAnimationFrame(raf);
+      window.clearInterval(step);
+      vp.removeEventListener('scroll', wrap);
       vp.removeEventListener('touchstart', pause);
       vp.removeEventListener('wheel', pause);
       vp.removeEventListener('pointerdown', pause);

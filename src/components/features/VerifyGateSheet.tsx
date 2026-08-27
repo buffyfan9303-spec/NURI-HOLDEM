@@ -39,7 +39,7 @@ export default function VerifyGateSheet({ onStart }: { onStart: () => void }) {
               {reason ? `'${reason}'은(는) 본인인증이 필요해요` : '본인인증이 필요한 기능이에요'}
             </p>
             <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">
-              휴대폰 본인인증 한 번이면 아래 기능을 모두 이용할 수 있어요. 명의 도용·중복가입·노쇼를 막기 위한 1회 절차입니다.
+              명의 도용·중복가입·노쇼 방지를 위한 1회 절차예요.
             </p>
           </div>
         </div>

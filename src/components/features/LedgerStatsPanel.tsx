@@ -897,7 +897,7 @@ export function PosSettingsPanel({ venueId }: { venueId: string }) {
       {/* 사장님(공동 업주) 관리 — 업주/운영자만 */}
       {canOwner && <OwnerManageCard venueId={venueId} />}
 
-      <p className="text-2xs text-ink-muted pt-1 border-t border-border-default">통계는 업주만 볼 수 있습니다. 직원의 <span className="text-accent-300 font-semibold">장부·순위 권한과 직책</span>은 「직원 관리」 탭, 매장 페이지 탭 순서·순위 구성은 <span className="text-accent-300 font-semibold">「매장 꾸미기」</span>에서 설정하세요.</p>
+      <p className="text-2xs text-ink-muted pt-1 border-t border-border-default">통계는 업주 전용 · 직원 <span className="text-accent-300 font-semibold">권한·직책</span>은 「직원 관리」, 탭·순위 구성은 <span className="text-accent-300 font-semibold">「매장 꾸미기」</span>에서.</p>
     </section>
   );
 }
@@ -954,7 +954,7 @@ function OwnerManageCard({ venueId }: { venueId: string }) {
           placeholder="추가할 사장님 아이디(닉네임)" className="input min-w-0 flex-1 text-sm" />
         <button type="button" disabled={busy || !nick.trim()} onClick={add} className="btn-primary shrink-0 px-3 text-xs disabled:opacity-50">+ 사장님 추가</button>
       </div>
-      <p className="text-2xs text-ink-muted">초대한 회원은 <b className="text-amber-400">운영자 승인 후</b> 이 매장의 <b className="text-ink-secondary">공동 업주</b>가 되어 장부·포스터·이용권을 함께 관리합니다. 승인된 공동 사장은 <b className="text-accent-300">대표</b>로 교체할 수 있어요.</p>
+      <p className="text-2xs text-ink-muted"><b className="text-amber-400">운영자 승인 후</b> 공동 업주로 활성화 — 장부·포스터·이용권 공동 관리, <b className="text-accent-300">대표</b> 교체 가능.</p>
     </div>
   );
 }

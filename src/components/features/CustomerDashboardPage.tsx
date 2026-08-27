@@ -24,6 +24,18 @@ import { getMyChampionships } from '../../api/seasons';
 import QRCode from 'qrcode';
 import { BADGES, getMyBadgeStats, type BadgeStats } from '../../lib/loyalty';
 import TierBadge, { tierOf, tierProgress, allTiers } from '../atoms/TierBadge';
+import { ProfileIdentityHeader } from './ProfileModal'; // 통합 프로필 — 아이덴티티 헤더 정본 재사용(중복 정의 0)
+import { loginWithKakao, signInWithGoogle } from '../../api/auth'; // 비로그인 랜딩 — AuthModal 과 같은 OAuth 시작 함수 재사용
+import { promptLogin } from '../../lib/requireLogin'; // 이메일 로그인 — App 이 듣고 AuthModal(z-[60], DOM 후순위)을 위로 띄운다
+
+// ── 홈 화면 설치(A2HS) 이벤트 선점 ─────────────────────────────────────────────
+// 왜: beforeinstallprompt 는 페이지 로드 직후 1회만 발화한다 — 이 페이지가 열릴 때는 이미 지나간 뒤라
+// 모듈 로드 시점에 참조를 붙잡아 둔다(InstallBanner 와 병존 — 둘 다 같은 이벤트 참조를 저장할 뿐, prompt 는 1회만).
+interface BipEvent extends Event { prompt: () => Promise<void>; userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }> }
+let deferredInstall: BipEvent | null = null;
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredInstall = e as BipEvent; });
+}
 
 function parseVenueId(text: string): string | null {
   const t = text.trim();
@@ -89,8 +101,10 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
       })
       .catch(() => {}).finally(() => setLoading(false));
   };
+  // 왜 user?.id 의존성: 비로그인 랜딩에서 이메일 로그인(AuthModal이 이 페이지 위에 뜸) 성공 시
+  // open 은 그대로 true 라 [open]만으로는 재조회가 없다 — user 확정 순간 대시보드 데이터를 채운다.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { if (open) reload(); }, [open]);
+  useEffect(() => { if (open && user) reload(); }, [open, user?.id]);
   useEffect(() => { if (open && user) getMyBadgeStats(user.nickname ?? null, user.activityPoints ?? 0).then(setBadgeStats).catch(() => {}); }, [open, user]);
 
   // 차감 성공 전면 확인 화면 상태(Phase 15-1) — 3초 자동 닫힘.
@@ -103,6 +117,10 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
   }, [redeemDone]);
 
   if (!open) return null;
+
+  // 비로그인 — 대시보드 대신 로그인 랜딩(APIS '내 게임' 문법). 훅은 전부 위에서 이미 실행됐고
+  // 데이터 이펙트는 user 가드로 잠겨 있어 user=null 렌더가 안전하다.
+  if (!user) return <LoginLanding onClose={onClose} />;
 
   // 만료일 지난 이용권은 status 가 active 여도 사용 불가(서버 가드) — 지갑에서도 제외한다.
   const nowMs = Date.now();
@@ -154,10 +172,29 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
           <Icon name="back" size={20} />
         </button>
         <h1 className="text-lg font-bold text-ink-primary">내 대시보드</h1>
+        {/* 통합 프로필 — 설정·보안 편집은 계속 ProfileModal 담당(헤더 우측 진입) */}
+        {onOpenProfile && (
+          <button type="button" onClick={onOpenProfile}
+            className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-input px-2.5 py-1.5 text-2xs font-bold text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
+            <Icon name="settings" size={14} /> 프로필 관리
+          </button>
+        )}
       </header>
 
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-2xl space-y-4 px-page-x py-section">
+          {/* 통합 프로필 아이덴티티 헤더(오너 지시 2026-08-27) — ProfileModal '프로필' 탭과 같은 정본.
+              커버 밴드(등급색 틴트) + 오버랩 아바타(등급 링) + 닉네임·등급·칭호·인증 + 등급 진행바. */}
+          {user && (
+            <ProfileIdentityHeader
+              displayName={user.name}
+              avatarUrl={user.avatarUrl}
+              avatarColor={user.avatarColor}
+              points={user.activityPoints ?? 0}
+              isAdmin={user.role === 'admin'}
+              verified={user.verified}
+            />
+          )}
           {/* 미읽음 알림 미리보기 — 상위 3개(탭하면 해당 화면으로) */}
           {unread.length > 0 && (
             <section className="rounded-card border border-accent-400/30 bg-accent-300/[0.05] p-3">
@@ -439,6 +476,119 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
           <p className="mt-2 text-xs opacity-75">화면을 탭하면 닫힙니다</p>
         </div>
       )}
+    </div>
+  );
+}
+
+/** 비로그인 로그인 랜딩 — APIS '내 게임' 문법(타이틀 + 가치 제안 + 소셜 로그인 + 설정성 행).
+ *  왜 별도 화면: 비로그인에게 빈 대시보드 껍데기를 보여주는 대신, 로그인의 '이유'를 먼저 판다. */
+function LoginLanding({ onClose }: { onClose: () => void }) {
+  const toast = useToast();
+  // 진행 중인 소셜만 로딩 표기 + 두 버튼 동시 비활성(중복 리다이렉트 방지) — AuthModal 과 동일 패턴
+  const [busy, setBusy] = useState<'kakao' | 'google' | null>(null);
+
+  // ♠ 오늘의 운세 — NURI MIND(프리플랍 트레이너 오늘의 퀴즈) 딥링크. #tool= 은 도구 탭이
+  // 마운트돼 있어야 들리므로 ?tab=tools 재진입 경로를 쓴다(NotificationPanel 과 같은 계약).
+  const goFortune = () => { window.location.href = '/?tab=tools#tool=trainer'; };
+
+  const installApp = async () => {
+    try { if (window.matchMedia('(display-mode: standalone)').matches) { toast.show('이미 앱으로 사용 중이에요', 'info'); return; } } catch { /* noop */ }
+    if (deferredInstall) {
+      const ev = deferredInstall;
+      deferredInstall = null; // 왜: 브라우저가 이벤트당 prompt 1회만 허용 — 재클릭 시 안내 문구로 넘어가게 비운다
+      try { await ev.prompt(); } catch { /* 사용자 취소 등 무시 */ }
+      return;
+    }
+    toast.show('브라우저 메뉴에서 "홈 화면에 추가"를 선택하세요', 'info');
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex flex-col bg-surface-base pt-[env(safe-area-inset-top)]">
+      <header className="flex h-header-h shrink-0 items-center gap-2 border-b border-border-subtle px-page-x">
+        <button type="button" onClick={onClose} aria-label="닫기" className="flex h-9 w-9 items-center justify-center rounded-full text-ink-secondary hover:bg-surface-high">
+          <Icon name="back" size={20} />
+        </button>
+        {/* 우상단 칩 — 로그인 없이도 눌러볼 게 하나는 있어야 한다(가벼운 재미 → 도구 탭 유입) */}
+        <button type="button" onClick={goFortune}
+          className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full border border-accent-400/40 bg-accent-300/10 px-3 py-1.5 text-2xs font-bold text-accent-300 hover:bg-accent-300/15 transition-colors">
+          <Icon name="spade" size={13} /> 오늘의 운세
+        </button>
+      </header>
+
+      <div className="flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-md space-y-4 px-page-x py-section">
+          <div>
+            <h1 className="text-xl font-extrabold text-ink-primary">반갑습니다</h1>
+            <p className="mt-1 text-sm text-ink-secondary">로그인하고 내 홀덤 생활을 모아보세요</p>
+          </div>
+
+          {/* 가치 제안 — 헤드라인은 알림이 아니라 우리 최대 장점('전국을 한 곳에') */}
+          <section className="rounded-card border border-border-default bg-surface-low p-5 text-center">
+            <p className="text-base font-extrabold text-ink-primary">전국 홀덤을 한 곳에서</p>
+            <p className="mt-1 text-xs leading-relaxed text-ink-secondary">대회 일정·매장 커뮤니티·GTO 학습까지 —<br />로그인하면 예약·이용권·전적이 모입니다</p>
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              {([['calendar', '대회 일정'], ['users', '매장 커뮤니티'], ['target', 'GTO 학습']] as const).map(([icon, label]) => (
+                <div key={icon} className="flex flex-col items-center gap-1.5 rounded-input bg-surface-high/50 px-1 py-3">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-accent-300/15 text-accent-300"><Icon name={icon} size={17} /></span>
+                  <span className="text-2xs font-semibold text-ink-secondary">{label}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* 소셜 로그인 — AuthModal SocialLoginButtons 와 동일한 동작·스타일(같은 OAuth 함수 직접 호출) */}
+          <div className="space-y-1.5">
+            <button type="button" disabled={busy !== null}
+              onClick={() => { setBusy('kakao'); loginWithKakao().catch((e) => { toast.show(e instanceof Error ? e.message : '카카오 로그인 실패', 'error'); setBusy(null); }); }}
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-input bg-[#FEE500] text-sm font-bold text-black/85 transition active:scale-[0.99] disabled:opacity-60">
+              {/* 카카오 심볼(말풍선) — 공식 버튼 규격 색상 */}
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="#000000" aria-hidden>
+                <path d="M12 3C6.48 3 2 6.58 2 11c0 2.84 1.86 5.33 4.66 6.74-.15.52-.96 3.32-.99 3.54 0 0-.02.17.09.23.11.06.24.01.24.01.32-.04 3.66-2.4 4.24-2.81.57.08 1.16.13 1.76.13 5.52 0 10-3.58 10-8s-4.48-8-10-8Z" />
+              </svg>
+              {busy === 'kakao' ? '카카오로 이동 중…' : '카카오로 3초 만에 시작하기'}
+            </button>
+            <button type="button" disabled={busy !== null}
+              onClick={() => { setBusy('google'); signInWithGoogle().catch((e) => { toast.show(e instanceof Error ? e.message : '구글 로그인 실패', 'error'); setBusy(null); }); }}
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-input border border-border-default bg-white text-sm font-bold text-[#1f1f1f] transition active:scale-[0.99] disabled:opacity-60">
+              {/* 구글 공식 4색 G 로고(브랜드 가이드 규격) */}
+              <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden>
+                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+              </svg>
+              {busy === 'google' ? 'Google로 이동 중…' : 'Google로 계속하기'}
+            </button>
+            {/* 이메일 로그인 — AuthModal(로그인 탭)을 이 화면 위로. z-[60] 동순위지만 DOM 후순위라 위에 뜬다 */}
+            <button type="button" onClick={promptLogin}
+              className="mx-auto block px-3 py-1.5 text-xs font-semibold text-ink-secondary hover:text-ink-primary transition-colors">
+              이메일로 로그인 ›
+            </button>
+          </div>
+
+          {/* 설정성 행 — 로그인 없이도 쓸 수 있는 것들(약관은 이 화면 진입 프롭이 없어 하단 푸터에 위임) */}
+          <div className="divide-y divide-border-subtle overflow-hidden rounded-card border border-border-default bg-surface-low">
+            <button type="button" onClick={installApp}
+              className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-surface-high transition-colors">
+              <Icon name="download" size={17} className="shrink-0 text-ink-secondary" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold text-ink-primary">앱 설치</span>
+                <span className="block text-2xs text-ink-muted">홈 화면에 추가하고 앱처럼 쓰기</span>
+              </span>
+              <Icon name="chevron-right" size={15} className="shrink-0 text-ink-muted" />
+            </button>
+            <a href="mailto:buffyfan9303@gmail.com?subject=NURI%20HOLDEM%20문의"
+              className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-surface-high transition-colors">
+              <Icon name="comment" size={17} className="shrink-0 text-ink-secondary" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold text-ink-primary">고객센터 문의</span>
+                <span className="block text-2xs text-ink-muted">이메일로 문의를 보내주세요</span>
+              </span>
+              <Icon name="chevron-right" size={15} className="shrink-0 text-ink-muted" />
+            </a>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

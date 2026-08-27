@@ -174,8 +174,7 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
   // ── 아이덴티티 헤더 파생값 — 이미 내려오는 데이터만 사용(새 fetch 없음) ────
   const points    = user.activityPoints ?? 0;
   const isAdmin   = user.role === 'admin';
-  const ringColor = tierColor(points, isAdmin);
-  const prog      = tierProgress(points);
+  const ringColor = tierColor(points, isAdmin); // 설정 탭 아바타 링에도 사용
 
   // ── 아바타 선택 → 크롭 편집기 ──────────────────────────────────────────
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -251,64 +250,17 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
       {tab === 'profile' && (
         <div className="p-4 space-y-5">
 
-          {/* 아이덴티티 헤더 — 커버 밴드 + 오버랩 아바타(오너 레퍼런스 2026-08-27).
-              커버는 이미지 없이 등급색 틴트(개인 브랜딩 = 등급) — 새 에셋·fetch 0 */}
-          <div className="flex flex-col items-center gap-3">
-            <div className="relative h-20 w-full overflow-hidden rounded-card bg-surface-high">
-              <div
-                aria-hidden
-                className="absolute inset-0 opacity-25"
-                style={{ backgroundImage: `linear-gradient(135deg, ${ringColor}, transparent 72%)` }}
-              />
-            </div>
-            <div
-              className="relative -mt-[3.75rem] w-24 h-24 rounded-full overflow-hidden ring-4"
-              style={{ '--tw-ring-color': ringColor } as CSSProperties}
-            >
-              {avatarPreview ? (
-                <img src={avatarPreview} alt="프로필" className="w-full h-full object-cover" />
-              ) : (
-                <span
-                  className="w-full h-full flex items-center justify-center text-4xl font-bold text-white"
-                  style={{ background: selectedColor }}
-                >
-                  {(name || user.name)[0]?.toUpperCase()}
-                </span>
-              )}
-            </div>
-
-            {/* 닉네임 · 등급 · 칭호 · 인증 */}
-            <div className="flex flex-col items-center gap-1">
-              <div className="flex max-w-full items-center gap-1.5">
-                <span className="min-w-0 truncate text-base font-bold text-ink-primary">{name.trim() || user.name}</span>
-                <TierBadge points={points} admin={isAdmin} size={16} />
-                <TitleChip points={points} />
-              </div>
-              {user.verified && (
-                <span className="inline-flex items-center gap-1 text-2xs font-semibold text-emerald-400">
-                  <Icon name="check-circle" size={12} className="shrink-0" /> 본인인증 완료
-                </span>
-              )}
-            </div>
-
-            {/* 등급 진행 — CSS width 바 (활동 점수 기반, 새 fetch 없음) */}
-            <div className="w-full max-w-[280px]">
-              <div className="mb-1 flex items-center justify-between text-2xs text-ink-muted">
-                <span>Lv {prog.current.level} · {prog.current.title}</span>
-                <span className="tabular-nums">
-                  {prog.next ? `다음 등급까지 ${prog.toNext.toLocaleString()}점` : '최고 등급'}
-                </span>
-              </div>
-              <div className="h-1 overflow-hidden rounded-full bg-surface-float">
-                <div
-                  className="h-full rounded-full"
-                  style={{ width: `${Math.round(prog.ratio * 100)}%`, background: prog.current.color }}
-                />
-              </div>
-            </div>
-
-            <p className="text-2xs text-ink-muted">사진·닉네임 변경은 ‘설정’ 탭에서 할 수 있습니다</p>
-          </div>
+          {/* 아이덴티티 헤더 — 통합 프로필(CustomerDashboardPage)과 공유하는 정본 컴포넌트.
+              여기서는 편집 중 상태(name·avatarPreview·selectedColor)를 미리보기로 반영 */}
+          <ProfileIdentityHeader
+            displayName={name.trim() || user.name}
+            avatarUrl={avatarPreview}
+            avatarColor={selectedColor}
+            points={points}
+            isAdmin={isAdmin}
+            verified={user.verified}
+            footnote="사진·닉네임 변경은 ‘설정’ 탭에서 할 수 있습니다"
+          />
 
           {/* 내 활동 · 뱃지 진열장 */}
           <ActivityBadges points={user?.activityPoints ?? 0} visits={visitStats.visits} upcoming={visitStats.upcoming} />
@@ -643,6 +595,85 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
         />
       )}
     </Modal>
+  );
+}
+
+// ── 아이덴티티 헤더 (공용) ────────────────────────────────────────────────────
+// 커버 밴드(등급색 틴트) + 오버랩 아바타(등급 링) + 닉네임·등급·칭호·인증 + 등급 진행바.
+// ProfileModal '프로필' 탭과 CustomerDashboardPage(통합 프로필)가 같은 마크업을 공유하는 정본.
+// 새 fetch 없음 — 이미 내려온 유저 데이터만 props 로 받는다(오너 레퍼런스 2026-08-27).
+export function ProfileIdentityHeader({ displayName, avatarUrl, avatarColor, points, isAdmin, verified, footnote }: {
+  displayName: string;
+  /** 아바타 이미지 URL(없으면 배경색 + 첫 글자 폴백) */
+  avatarUrl?: string | null;
+  /** 이미지 없을 때 아바타 배경색 */
+  avatarColor?: string | null;
+  points: number;
+  isAdmin: boolean;
+  verified?: boolean;
+  /** 하단 안내 문구(모달의 '설정 탭' 힌트 등) — 없으면 미표시 */
+  footnote?: string;
+}) {
+  const ringColor = tierColor(points, isAdmin);
+  const prog = tierProgress(points);
+  return (
+    <div className="flex flex-col items-center gap-3">
+      {/* 커버 — 이미지 없이 등급색 틴트(개인 브랜딩 = 등급) — 새 에셋·fetch 0 */}
+      <div className="relative h-20 w-full overflow-hidden rounded-card bg-surface-high">
+        <div
+          aria-hidden
+          className="absolute inset-0 opacity-25"
+          style={{ backgroundImage: `linear-gradient(135deg, ${ringColor}, transparent 72%)` }}
+        />
+      </div>
+      <div
+        className="relative -mt-[3.75rem] w-24 h-24 rounded-full overflow-hidden ring-4"
+        style={{ '--tw-ring-color': ringColor } as CSSProperties}
+      >
+        {avatarUrl ? (
+          <img src={avatarUrl} alt="프로필" className="w-full h-full object-cover" />
+        ) : (
+          <span
+            className="w-full h-full flex items-center justify-center text-4xl font-bold text-white"
+            style={{ background: avatarColor || '#FFD100' }}
+          >
+            {displayName[0]?.toUpperCase()}
+          </span>
+        )}
+      </div>
+
+      {/* 닉네임 · 등급 · 칭호 · 인증 */}
+      <div className="flex flex-col items-center gap-1">
+        <div className="flex max-w-full items-center gap-1.5">
+          <span className="min-w-0 truncate text-base font-bold text-ink-primary">{displayName}</span>
+          <TierBadge points={points} admin={isAdmin} size={16} />
+          <TitleChip points={points} />
+        </div>
+        {verified && (
+          <span className="inline-flex items-center gap-1 text-2xs font-semibold text-emerald-400">
+            <Icon name="check-circle" size={12} className="shrink-0" /> 본인인증 완료
+          </span>
+        )}
+      </div>
+
+      {/* 등급 진행 — CSS width 바 (활동 점수 기반, 새 fetch 없음) */}
+      <div className="w-full max-w-[280px]">
+        <div className="mb-1 flex items-center justify-between text-2xs text-ink-muted">
+          <span>Lv {prog.current.level} · {prog.current.title}</span>
+          <span className="tabular-nums">
+            {prog.next ? `다음 등급까지 ${prog.toNext.toLocaleString()}점` : '최고 등급'}
+          </span>
+        </div>
+        <div className="h-1 overflow-hidden rounded-full bg-surface-float">
+          <div
+            className="h-full rounded-full"
+            style={{ width: `${Math.round(prog.ratio * 100)}%`, background: prog.current.color }}
+          />
+        </div>
+      </div>
+
+      {footnote && <p className="text-2xs text-ink-muted">{footnote}</p>}
+    </div>
   );
 }
 

@@ -422,8 +422,8 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
       ) : (
         <p className="rounded-card border border-border-default bg-surface-low px-3 py-4 text-center text-2xs leading-relaxed text-ink-muted">
           {rangeMode
-            ? '아래 그리드에서 Hero 2장을 선택하면 선택한 레인지 상대 실시간 에퀴티와 참고 액션이 표시됩니다. (보드는 선택)'
-            : '아래 그리드에서 Hero 2장과 Villain 2장을 선택하면 실시간 에퀴티와 참고 액션이 표시됩니다. (보드는 선택)'}
+            ? '그리드에서 Hero 2장을 고르면 레인지 상대 에퀴티·참고 액션 표시. (보드는 선택)'
+            : '그리드에서 Hero·Villain 2장씩 고르면 에퀴티·참고 액션 표시. (보드는 선택)'}
         </p>
       )}
 
