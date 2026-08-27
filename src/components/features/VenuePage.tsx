@@ -280,7 +280,9 @@ export default function VenuePage({
             대표 이미지(image_url)를 원형 아바타로 재사용 — 새 fetch 0. 스탯 행은 비인터랙티브라
             venue-ia 첫 뷰포트 행동 예산(≤6)에 셈되지 않는다. */}
         <div className="px-page-x pb-4 border-b border-border-subtle">
-          <div className="-mt-9 mb-2 flex justify-center">
+          {/* relative: HeroSection(positioned)이 static 아바타 위에 페인트돼 로고 상반이
+              히어로에 가려 반원으로 잘렸다(PC 점검 2026-08-28) — 오버랩 의도(-mt-9·border 링)대로 위로 */}
+          <div className="relative -mt-9 mb-2 flex justify-center">
             <div className="h-[72px] w-[72px] shrink-0 overflow-hidden rounded-full border-4 border-surface-base bg-surface-high shadow-dialog">
               {venue.imageUrl ? (
                 <img src={thumbUrl(venue.imageUrl, 144) ?? venue.imageUrl} alt="" className="h-full w-full object-cover" />

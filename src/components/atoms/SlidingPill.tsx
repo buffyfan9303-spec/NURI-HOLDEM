@@ -86,7 +86,14 @@ export default function SlidingPill({ containerRef, activeKey, className = '', u
       measure();
     });
     ro.observe(container);
-    return () => ro.disconnect();
+    // full-width 컨테이너(PC GNB)는 폰트 스왑으로 라벨 폭·위치가 바뀌어도 컨테이너 박스가
+    // 불변이라 RO가 안 울린다 → 활성 타깃 자체도 관찰 + 폰트 로드 완료 시 1회 재측정.
+    // (폭은 그대로인데 위치만 밀리는 justify-center 케이스는 fonts.ready 쪽이 잡는다)
+    const target = container.querySelector<HTMLElement>('[data-pill-active]');
+    if (target) ro.observe(target);
+    let alive = true;
+    document.fonts?.ready.then(() => { if (!alive) return; firstRef.current = true; measure(); });
+    return () => { alive = false; ro.disconnect(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeKey, underline]);
 

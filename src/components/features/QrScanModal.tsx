@@ -4,6 +4,7 @@
 // (/?checkin=<venueId>, checkinUrl 인쇄물)을 카메라로 확인한 뒤에만 체크인을 실행한다.
 // 딥링크(?checkin=)로 직접 진입한 경우의 자동 체크인 플로우는 App.tsx 에 그대로 보존.
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Modal from '../atoms/Modal';
 import Icon from '../atoms/Icon';
 
@@ -98,7 +99,11 @@ export default function QrScanModal({ open, onClose, venueId, venueName, onMatch
     };
   }, [open, venueId]);
 
-  return (
+  // ⚠ 포털 필수(2026-08-28 스윕): 이 모달은 VenuePage 오버레이(fixed z-40) **안에서** 렌더된다.
+  // 부모가 z-40 스태킹 컨텍스트를 만들므로 Modal의 z-[60]은 그 안에서만 유효했고,
+  // 루트의 하단 탭바(z-50)가 시트 하단 안내 문구를 덮었다(390px 실측 — 겹침).
+  // body 로 포털해 루트 컨텍스트의 z-[60]으로 올린다(다른 루트 모달과 동일한 층).
+  return createPortal(
     <Modal open={open} onClose={onClose} title="QR 체크인" maxWidth="sm" variant="sheet">
       <div className="space-y-3 p-4 pb-6">
         {(phase === 'unsupported' || phase === 'denied') ? (
@@ -135,6 +140,7 @@ export default function QrScanModal({ open, onClose, venueId, venueName, onMatch
           </>
         )}
       </div>
-    </Modal>
+    </Modal>,
+    document.body,
   );
 }

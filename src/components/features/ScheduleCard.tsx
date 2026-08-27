@@ -122,9 +122,11 @@ function VenueLink({
 }: { pubName: string; region: string; onClick?: (e: React.MouseEvent) => void }) {
   // 매장 미연결(직접입력 포스터, venueId 없음)이면 링크 문법(밑줄·hover)을 빼고 순수 텍스트로.
   // 무반응 클릭 금지 원칙 — ScheduleDetailModal의 venueId 게이트와 같은 문법(2026-08-28).
+  // min-w-0(양쪽 변형): flex 아이템의 min-width:auto 가 truncate 를 무력화해 그리드 카드에서
+  // 별점이 카드 밖으로 밀려 잘렸다(PC 점검 2026-08-28) — 매장명이 대신 말줄임된다.
   if (!onClick) {
     return (
-      <span className="inline-flex items-baseline gap-1 text-xs text-ink-muted max-w-full">
+      <span className="inline-flex min-w-0 items-baseline gap-1 text-xs text-ink-muted max-w-full">
         <span className="font-medium truncate">{pubName}</span>
         <span className="text-border-strong">·</span>
         <span className="shrink-0">{region}</span>
@@ -135,7 +137,7 @@ function VenueLink({
     <button
       type="button"
       onClick={(e) => { e.stopPropagation(); onClick(e); }}
-      className="group inline-flex items-baseline gap-1 text-xs text-ink-muted hover:text-accent-300 transition-colors max-w-full"
+      className="group inline-flex min-w-0 items-baseline gap-1 text-xs text-ink-muted hover:text-accent-300 transition-colors max-w-full"
     >
       <span className="font-medium underline decoration-dotted underline-offset-2 truncate">
         {pubName}

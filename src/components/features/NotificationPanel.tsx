@@ -146,7 +146,16 @@ export default function NotificationPanel({
         }, ...rest];
       });
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '쪽지를 보내지 못했어요', 'error');
+      // RLS 거부(미인증 발신·차단 관계)는 raw Postgres 문구("new row violates row-level security…")로
+      // 내려온다 — 영어 DB 내부 문구를 그대로 토스트하면 유저는 원인을 알 수 없다(2026-08-28 스윕).
+      // api(messages.ts)는 소유 밖이라 표시 계층에서 번역한다. 그 외 서버 메시지는 그대로 노출.
+      const raw = e instanceof Error ? e.message : '';
+      toast.show(
+        /row-level security/i.test(raw)
+          ? '쪽지를 보낼 수 없어요 — 본인인증을 완료했는지, 차단 관계가 아닌지 확인해 주세요'
+          : raw || '쪽지를 보내지 못했어요',
+        'error',
+      );
     } finally {
       setSending(false);
     }
