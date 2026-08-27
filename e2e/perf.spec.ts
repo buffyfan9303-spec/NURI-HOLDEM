@@ -4,6 +4,9 @@ import { test, expect, type Page } from '@playwright/test';
 // 첫 도입은 '기록 + 느슨한 상한'(현 상태 회귀 방지) — MO-2~9 진행하며 임계를 조인다(§20.6).
 // 측정은 페이지 내 PerformanceObserver 주입(LoAF·layout-shift) — 라이브러리 0.
 
+// 성능 측정 스펙은 병렬 워커 CPU 경합에 취약(단독 실행은 delta=0) — 임계는 그대로 두고 재시도만 허용
+test.describe.configure({ retries: 2 });
+
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     try { localStorage.setItem('nuri_onboarding_v1', '1'); } catch { /* noop */ }

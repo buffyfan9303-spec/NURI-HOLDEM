@@ -216,6 +216,11 @@ export default function TierLeaderboard() {
 
   return (
     <div className="space-y-3 animate-fade-in">
+      {/* 인플루언서·프로 기회 프레이밍(오너 지시 2026-08-27) — §28 안전 표현(금전 언급 없음) */}
+      <div className="flex items-center gap-2 rounded-card border border-gold-400/30 bg-gold-300/[0.06] px-3 py-2">
+        <span className="shrink-0 text-base leading-none" aria-hidden>🏆</span>
+        <p className="min-w-0 text-2xs font-semibold leading-relaxed text-gold-300">상위 랭커에게 프로·인플루언서 협업 기회가 열립니다</p>
+      </div>
       {/* 내 등급 카드 */}
       {user && myProg && (
         <section className="rounded-card border border-accent-400/40 bg-gradient-to-br from-accent-300/[0.07] to-transparent p-4">
@@ -246,13 +251,19 @@ export default function TierLeaderboard() {
             <div className="mt-3">
               <div className="flex items-center justify-between text-2xs text-ink-muted mb-1">
                 <span>다음 등급 <span className="font-bold text-ink-secondary">{myProg.next.label}</span></span>
-                <span className="tabular-nums">{myProg.toNext.toLocaleString()}점 남음</span>
+                <span className="tabular-nums"><b className="text-ink-secondary">{(user.activityPoints ?? 0).toLocaleString()}</b> / {myProg.next.min.toLocaleString()}점 · {myProg.toNext.toLocaleString()}점 남음</span>
               </div>
-              <div className="h-2 rounded-full bg-surface-high overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-accent-300 transition-[width]"
-                  style={{ width: `${Math.round(myProg.ratio * 100)}%` }}
-                />
+              <div className="flex items-center gap-1.5">
+                <div className="h-2 min-w-0 flex-1 rounded-full bg-surface-high overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-[width]"
+                    style={{ width: `${Math.round(myProg.ratio * 100)}%`, background: `linear-gradient(90deg, ${myProg.current.color}, ${myProg.next.color})` }}
+                  />
+                </div>
+                {/* 바 끝 = 다음 등급 뱃지 미리보기 */}
+                <span className="shrink-0" title={`다음 등급 ${myProg.next.label} · ${myProg.next.title}`}>
+                  <TierBadge points={myProg.next.min} size={16} />
+                </span>
               </div>
             </div>
           ) : myIsAce ? (
@@ -579,18 +590,32 @@ export default function TierLeaderboard() {
           <p className="text-center py-6 text-2xs text-ink-muted">랭킹 정보가 없습니다</p>
         ) : (
           <>
-          {/* TOP3 포디움 — Chess.com 리더보드 문법(2-1-3 배치) */}
+          {/* 상단 고정 '내 순위' 요약 1행 — 스크롤 없이 내 위치부터(TOP30 밖은 기존 하단 카드 유지) */}
+          {user && !isAdmin && myRank && (
+            <div className="mb-1.5 flex items-center gap-2.5 rounded-input border border-accent-400/40 bg-accent-300/[0.08] px-3 py-2">
+              <span className="shrink-0 text-2xs font-bold text-accent-300">내 순위</span>
+              <span className="shrink-0 text-sm font-extrabold tabular-nums text-ink-primary">{myRank}위</span>
+              <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-secondary">{user.nickname ?? user.name ?? '나'}</span>
+              <TierBadge points={user.activityPoints ?? 0} size={15} overallRank={myRank} />
+              <span className="shrink-0 text-xs font-bold tabular-nums text-accent-300">{(user.activityPoints ?? 0).toLocaleString()}점</span>
+            </div>
+          )}
+          {/* TOP3 포디움 — Chess.com 리더보드 문법(2-1-3 배치) + 등급색 그라데이션 링(1위 크게) */}
           {rows.length >= 3 && (
             <div className="mb-2 grid grid-cols-3 items-end gap-1.5">
               {[rows[1], rows[0], rows[2]].map((r, idx) => {
                 const place = idx === 1 ? 1 : idx === 0 ? 2 : 3;
                 const big = place === 1;
+                const rt = tierOf(r.activityPoints);
                 return (
                   <div key={r.id} className={['rounded-card border p-2.5 text-center', big ? 'border-accent-400/60 bg-accent-300/[0.08]' : 'border-border-subtle bg-surface-high'].join(' ')}>
                     <p className={big ? 'text-xl leading-none' : 'text-base leading-none'}>{['🥈', '👑', '🥉'][idx]}</p>
-                    <span className={['mx-auto mt-1 flex items-center justify-center rounded-full font-bold text-white', big ? 'h-9 w-9 text-sm' : 'h-7 w-7 text-2xs'].join(' ')}
-                      style={{ background: r.avatarColor ?? '#5A6175' }}>
-                      {r.nickname[0]}
+                    <span className={['mx-auto mt-1 block rounded-full p-[2px]', big ? 'h-10 w-10' : 'h-8 w-8'].join(' ')}
+                      style={{ background: `conic-gradient(from 210deg, ${rt.color}, ${rt.color}44 45%, ${rt.color}CC 70%, ${rt.color})` }}>
+                      <span className={['flex h-full w-full items-center justify-center rounded-full font-bold text-white', big ? 'text-sm' : 'text-2xs'].join(' ')}
+                        style={{ background: r.avatarColor ?? '#5A6175' }}>
+                        {r.nickname[0]}
+                      </span>
                     </span>
                     <p className={['mt-1 truncate font-bold', big ? 'text-sm text-accent-300' : 'text-xs text-ink-primary'].join(' ')}>{markPrefix(r)}{r.nickname}</p>
                     <p className="text-2xs tabular-nums text-ink-muted">{r.activityPoints.toLocaleString()}점</p>

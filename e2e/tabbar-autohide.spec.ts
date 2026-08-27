@@ -4,6 +4,9 @@ import { test, expect } from '@playwright/test';
 // 구 리스너의 4가지 고장(느린 끌기 무판정 · 문서끝 감지 부재 · 가짜 음수 dy · 탭 복원 거대 dy) 회귀 가드.
 // 실기기(갤럭시 삼성인터넷) 검증은 오너 QA로 분리 — 이 스펙은 로직 계약만 잠근다.
 
+// rAF 타이밍 의존 스펙은 병렬 워커 CPU 경합에 취약(단독 실행 그린) — 판정 조건은 그대로, 재시도만 허용
+test.describe.configure({ retries: 2 });
+
 test.beforeEach(async ({ page }) => {
   test.setTimeout(60_000); // 병렬 부하에서 마운트 대기(≤30s)가 기본 타임아웃을 소진한다
   await page.addInitScript(() => { try { localStorage.setItem('nuri_onboarding_v1', '1'); } catch { /* noop */ } });

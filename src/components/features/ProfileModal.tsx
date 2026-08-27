@@ -1,6 +1,6 @@
 // src/components/features/ProfileModal.tsx
 import { useState, useRef, useEffect, useCallback } from 'react';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import Modal from '../atoms/Modal';
 import UnderlineTabs from '../atoms/UnderlineTabs';
 import { useToast } from '../atoms/Toast';
@@ -602,7 +602,7 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
 // 커버 밴드(등급색 틴트) + 오버랩 아바타(등급 링) + 닉네임·등급·칭호·인증 + 등급 진행바.
 // ProfileModal '프로필' 탭과 CustomerDashboardPage(통합 프로필)가 같은 마크업을 공유하는 정본.
 // 새 fetch 없음 — 이미 내려온 유저 데이터만 props 로 받는다(오너 레퍼런스 2026-08-27).
-export function ProfileIdentityHeader({ displayName, avatarUrl, avatarColor, points, isAdmin, verified, footnote }: {
+export function ProfileIdentityHeader({ displayName, avatarUrl, avatarColor, points, isAdmin, verified, footnote, stats, actions }: {
   displayName: string;
   /** 아바타 이미지 URL(없으면 배경색 + 첫 글자 폴백) */
   avatarUrl?: string | null;
@@ -613,6 +613,10 @@ export function ProfileIdentityHeader({ displayName, avatarUrl, avatarColor, poi
   verified?: boolean;
   /** 하단 안내 문구(모달의 '설정 탭' 힌트 등) — 없으면 미표시 */
   footnote?: string;
+  /** 스탯 3열(숫자 위·라벨 아래) — 페이지가 이미 가진 데이터만 전달(새 fetch 금지) */
+  stats?: { label: string; value: string }[];
+  /** 주 버튼 행(프로필 편집·내 전적 등) — 호출부가 렌더 책임 */
+  actions?: ReactNode;
 }) {
   const ringColor = tierColor(points, isAdmin);
   const prog = tierProgress(points);
@@ -626,20 +630,23 @@ export function ProfileIdentityHeader({ displayName, avatarUrl, avatarColor, poi
           style={{ backgroundImage: `linear-gradient(135deg, ${ringColor}, transparent 72%)` }}
         />
       </div>
+      {/* 오버랩 아바타 — 등급색 그라데이션 링(샘플 문법 ①) */}
       <div
-        className="relative -mt-[3.75rem] w-24 h-24 rounded-full overflow-hidden ring-4"
-        style={{ '--tw-ring-color': ringColor } as CSSProperties}
+        className="relative -mt-[3.75rem] h-[6.5rem] w-[6.5rem] rounded-full p-1"
+        style={{ background: `conic-gradient(from 210deg, ${ringColor}, ${ringColor}44 40%, ${ringColor}CC 65%, ${ringColor})` }}
       >
-        {avatarUrl ? (
-          <img src={avatarUrl} alt="프로필" className="w-full h-full object-cover" />
-        ) : (
-          <span
-            className="w-full h-full flex items-center justify-center text-4xl font-bold text-white"
-            style={{ background: avatarColor || '#FFD100' }}
-          >
-            {displayName[0]?.toUpperCase()}
-          </span>
-        )}
+        <div className="h-full w-full overflow-hidden rounded-full border-[3px] border-surface-base">
+          {avatarUrl ? (
+            <img src={avatarUrl} alt="프로필" className="w-full h-full object-cover" />
+          ) : (
+            <span
+              className="w-full h-full flex items-center justify-center text-4xl font-bold text-white"
+              style={{ background: avatarColor || '#FFD100' }}
+            >
+              {displayName[0]?.toUpperCase()}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* 닉네임 · 등급 · 칭호 · 인증 */}
@@ -656,21 +663,58 @@ export function ProfileIdentityHeader({ displayName, avatarUrl, avatarColor, poi
         )}
       </div>
 
-      {/* 등급 진행 — CSS width 바 (활동 점수 기반, 새 fetch 없음) */}
-      <div className="w-full max-w-[280px]">
+      {/* 랭크 XP 바 — '현재 레벨 → 다음 레벨' 진행(현재 점수/필요 점수 + 남은 점수 + 다음 등급 뱃지 미리보기).
+          transition-[width]는 자기완결 소형 진행바 예외(§20.4-3). 데이터는 tier 유틸 상수만 사용. */}
+      <div className="w-full max-w-[300px]">
         <div className="mb-1 flex items-center justify-between text-2xs text-ink-muted">
-          <span>Lv {prog.current.level} · {prog.current.title}</span>
+          <span>Lv {prog.current.level} · <b style={{ color: prog.current.color }}>{prog.current.title}</b></span>
           <span className="tabular-nums">
-            {prog.next ? `다음 등급까지 ${prog.toNext.toLocaleString()}점` : '최고 등급'}
+            {prog.next
+              ? <><b className="text-ink-secondary">{Math.max(0, Math.floor(points)).toLocaleString()}</b> / {prog.next.min.toLocaleString()}점</>
+              : '최고 등급'}
           </span>
         </div>
-        <div className="h-1 overflow-hidden rounded-full bg-surface-float">
-          <div
-            className="h-full rounded-full"
-            style={{ width: `${Math.round(prog.ratio * 100)}%`, background: prog.current.color }}
-          />
+        <div className="flex items-center gap-1.5">
+          <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-surface-float">
+            <div
+              className="h-full rounded-full transition-[width]"
+              style={{
+                width: `${Math.round(prog.ratio * 100)}%`,
+                background: prog.next
+                  ? `linear-gradient(90deg, ${prog.current.color}, ${prog.next.color})`
+                  : prog.current.color,
+              }}
+            />
+          </div>
+          {/* 바 끝 = 다음 등급 뱃지 미리보기(성취 목표를 눈앞에) */}
+          {prog.next && (
+            <span className="shrink-0" title={`다음 등급 ${prog.next.label} · ${prog.next.title}`}>
+              <TierBadge points={prog.next.min} size={15} />
+            </span>
+          )}
         </div>
+        {prog.next && (
+          <p className="mt-1 text-center text-2xs text-ink-muted">
+            다음 등급 <b style={{ color: prog.next.color }}>{prog.next.title}</b>까지{' '}
+            <b className="tabular-nums text-ink-secondary">{prog.toNext.toLocaleString()}</b>점
+          </p>
+        )}
       </div>
+
+      {/* 스탯 3열(샘플 문법 ②) — 숫자 bold 위 / 라벨 아래 */}
+      {stats && stats.length > 0 && (
+        <div className="grid w-full grid-cols-3 divide-x divide-border-subtle rounded-card border border-border-subtle bg-surface-high/50">
+          {stats.map((s) => (
+            <div key={s.label} className="px-2 py-2.5 text-center">
+              <p className="text-base font-extrabold leading-none tabular-nums text-ink-primary">{s.value}</p>
+              <p className="mt-1 text-2xs text-ink-muted">{s.label}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 주 버튼 2개(샘플 문법 ③) — 호출부 주입 */}
+      {actions}
 
       {footnote && <p className="text-2xs text-ink-muted">{footnote}</p>}
     </div>

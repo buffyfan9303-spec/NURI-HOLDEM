@@ -61,7 +61,7 @@ export function StaffWageManager({ venueId }: { venueId: string }) {
           <div key={n} className="rounded-input border border-border-subtle bg-surface-base p-2.5 space-y-1.5">
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm font-bold text-ink-primary">{n}</span>
-              <button type="button" onClick={() => save(n)} className="btn-ghost text-2xs px-2.5 py-1">저장</button>
+              <button type="button" onClick={() => save(n)} className="btn-ghost text-2xs px-3 py-1.5">저장</button>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <label className="block"><span className="block text-2xs text-ink-muted mb-0.5">시급(원)</span>
@@ -116,9 +116,9 @@ export function StaffSettlement({ venueId }: { venueId: string }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-center gap-1">
-        <button type="button" onClick={() => setMonth((m) => shiftMonth(m, -1))} className="w-7 h-7 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">‹</button>
+        <button type="button" onClick={() => setMonth((m) => shiftMonth(m, -1))} className="h-9 w-9 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">‹</button>
         <span className="text-sm font-bold text-accent-300 tabular-nums w-[5rem] text-center">{month}</span>
-        <button type="button" onClick={() => setMonth((m) => shiftMonth(m, 1))} className="w-7 h-7 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">›</button>
+        <button type="button" onClick={() => setMonth((m) => shiftMonth(m, 1))} className="h-9 w-9 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">›</button>
       </div>
       <div className="grid grid-cols-2 gap-2">
         <div className="rounded-card border border-accent-400/40 bg-accent-300/[0.07] p-2.5 text-center">
@@ -136,16 +136,17 @@ export function StaffSettlement({ venueId }: { venueId: string }) {
       </div>
       {rows.length === 0 ? <p className="text-2xs text-ink-muted text-center py-3">{month} 출근 기록이 없습니다.</p> : (
         <div className="overflow-x-auto scrollbar-none">
-          <table className="w-full text-center border-separate border-spacing-0 min-w-[20rem]">
-            <thead><tr className="text-[11px] text-ink-muted"><th className="py-1 text-left pl-1">직원</th><th>출근</th><th>시간</th><th>평균 출/퇴</th><th>급여</th></tr></thead>
+          {/* 숫자 칼럼은 우측 정렬 + tabular-nums — 자릿수 비교가 세로로 맞아떨어지게 */}
+          <table className="w-full border-separate border-spacing-0 min-w-[20rem]">
+            <thead><tr className="text-[11px] text-ink-muted"><th className="py-1 text-left pl-1 font-semibold">직원</th><th className="text-right font-semibold">출근</th><th className="text-right font-semibold">시간</th><th className="text-center font-semibold">평균 출/퇴</th><th className="text-right pr-1 font-semibold">급여</th></tr></thead>
             <tbody>
               {rows.map((r) => (
                 <tr key={r.name} className="text-xs">
                   <td className="py-1.5 text-left pl-1 font-bold text-ink-primary">{r.name}</td>
-                  <td className="text-ink-secondary tabular-nums">{r.days}일</td>
-                  <td className="text-ink-secondary tabular-nums">{r.hrs.toFixed(1)}h</td>
-                  <td className="text-ink-muted tabular-nums text-[11px]">{r.avgIn}/{r.avgOut}</td>
-                  <td className="text-accent-300 tabular-nums font-bold">{r.pay.toLocaleString()}</td>
+                  <td className="text-right text-ink-secondary tabular-nums">{r.days}일</td>
+                  <td className="text-right text-ink-secondary tabular-nums">{r.hrs.toFixed(1)}h</td>
+                  <td className="text-center text-ink-muted tabular-nums text-[11px]">{r.avgIn}/{r.avgOut}</td>
+                  <td className="text-right pr-1 text-accent-300 tabular-nums font-bold">{r.pay.toLocaleString()}</td>
                 </tr>
               ))}
             </tbody>
@@ -171,9 +172,9 @@ export function StaffWorkLog({ venueId }: { venueId: string }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-center gap-1">
-        <button type="button" onClick={() => setMonth((m) => shiftMonth(m, -1))} className="w-7 h-7 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">‹</button>
+        <button type="button" onClick={() => setMonth((m) => shiftMonth(m, -1))} className="h-9 w-9 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">‹</button>
         <span className="text-sm font-bold text-accent-300 tabular-nums w-[5rem] text-center">{month}</span>
-        <button type="button" onClick={() => setMonth((m) => shiftMonth(m, 1))} className="w-7 h-7 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">›</button>
+        <button type="button" onClick={() => setMonth((m) => shiftMonth(m, 1))} className="h-9 w-9 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">›</button>
       </div>
       {sorted.length === 0 ? <p className="text-2xs text-ink-muted text-center py-3">기록이 없습니다.</p> : (
         <div className="rounded-input border border-border-subtle bg-surface-base divide-y divide-border-subtle max-h-[24rem] overflow-y-auto">
@@ -217,9 +218,9 @@ export function StaffSelfAttendance({ venueId }: { venueId: string }) {
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-bold text-ink-primary">내 출근 관리 (출퇴근 기록)</h3>
         <div className="flex items-center gap-1">
-          <button type="button" onClick={() => setMonth((m) => shiftMonth(m, -1))} className="w-7 h-7 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">‹</button>
+          <button type="button" onClick={() => setMonth((m) => shiftMonth(m, -1))} className="h-9 w-9 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">‹</button>
           <span className="text-xs font-bold text-accent-300 tabular-nums w-[4.5rem] text-center">{month}</span>
-          <button type="button" onClick={() => setMonth((m) => shiftMonth(m, 1))} className="w-7 h-7 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">›</button>
+          <button type="button" onClick={() => setMonth((m) => shiftMonth(m, 1))} className="h-9 w-9 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">›</button>
         </div>
       </div>
       {!user ? <p className="text-2xs text-ink-muted">로그인이 필요합니다.</p> : sorted.length === 0 ? (
@@ -234,8 +235,8 @@ export function StaffSelfAttendance({ venueId }: { venueId: string }) {
                   <span className="text-sm font-bold text-ink-primary">{s.date.slice(5)}{isToday ? ' (오늘)' : ''}{s.confirmed && <span className="ml-1.5 text-2xs text-emerald-400">확정</span>}</span>
                   {isToday && (
                     <div className="flex gap-1">
-                      <button type="button" onClick={() => setT(s, 'checkIn', nowHm())} className="text-2xs font-bold px-2 py-1 rounded-input bg-emerald-500/15 text-emerald-300 border border-emerald-500/40">지금 출근</button>
-                      <button type="button" onClick={() => setT(s, 'checkOut', nowHm())} className="text-2xs font-bold px-2 py-1 rounded-input bg-rose-500/15 text-rose-300 border border-rose-500/40">지금 퇴근</button>
+                      <button type="button" onClick={() => setT(s, 'checkIn', nowHm())} className="text-2xs font-bold px-2.5 py-1.5 rounded-input bg-emerald-500/15 text-emerald-300 border border-emerald-500/40">지금 출근</button>
+                      <button type="button" onClick={() => setT(s, 'checkOut', nowHm())} className="text-2xs font-bold px-2.5 py-1.5 rounded-input bg-rose-500/15 text-rose-300 border border-rose-500/40">지금 퇴근</button>
                     </div>
                   )}
                 </div>

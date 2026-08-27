@@ -104,10 +104,10 @@ export default function StaffSchedule({ venueId }: { venueId: string }) {
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h3 className="text-sm font-bold text-ink-primary">딜러 출근 스케줄</h3>
         <div className="flex items-center gap-1">
-          <button type="button" onClick={() => setMonth((m) => shiftMonth(m, -1))} className="w-7 h-7 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">‹</button>
+          <button type="button" onClick={() => setMonth((m) => shiftMonth(m, -1))} className="h-9 w-9 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">‹</button>
           <span className="text-xs font-bold text-accent-300 tabular-nums w-[4.5rem] text-center">{month}</span>
-          <button type="button" onClick={() => setMonth((m) => shiftMonth(m, 1))} className="w-7 h-7 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">›</button>
-          <button type="button" onClick={() => setMonth(thisMonth())} className="text-2xs text-ink-muted hover:text-accent-300 px-1">이번달</button>
+          <button type="button" onClick={() => setMonth((m) => shiftMonth(m, 1))} className="h-9 w-9 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">›</button>
+          <button type="button" onClick={() => setMonth(thisMonth())} className="h-9 px-2 rounded-input text-2xs text-ink-muted hover:text-accent-300">이번달</button>
         </div>
       </div>
 
