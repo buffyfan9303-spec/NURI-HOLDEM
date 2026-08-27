@@ -102,8 +102,14 @@ export async function stabilizeBackstack(page: Page): Promise<void> {
  *   기다릴 대상이 없는 죽은 대기라 제거한다(단정 완화 아님 — 앱에 부팅 시 자동 등장
  *   모달이 다시 생기면 그 지연 폭만큼의 선대기도 함께 복원할 것).
  *   현재는 '이미 떠 있는' 모달만 걷어낸다(없으면 즉시 통과).
+ *
+ * ⚠ 다만 그 1.6s 선대기는 온보딩을 기다리는 동시에 '앱 마운트 안정화' 역할도 겸하고 있었다 —
+ *   제거하자 느린 CI 러너에서 아직 마운트 전인 화면을 훑고 지나가 tools·backstack 5건이 깨졌다.
+ *   그래서 시간 대기가 아니라 '마운트 마커'를 명시적으로 기다린다(고정 지연보다 정확하고 빠르다).
  */
 export async function dismissOverlays(page: Page): Promise<void> {
+  // 앱이 실제로 붙을 때까지 — 헤더 알림 버튼이 마운트 마커(다른 스펙들과 같은 계약)
+  await page.waitForSelector('button[aria-label^="알림"]', { timeout: 20_000 }).catch(() => {});
   const dialog = page.locator('[role="dialog"]');
   for (let i = 0; i < 4; i++) {
     if (!(await dialog.count())) return;
