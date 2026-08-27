@@ -13,7 +13,7 @@ import type { Schedule } from '../api/schedules';
 import type { Venue } from '../api/community';
 
 const SITE = 'https://nuriholdem.com';
-const DEFAULT_TITLE = 'NHoldem | 홀덤 대회 일정 · 커뮤니티 · GTO · 매장관리';
+const DEFAULT_TITLE = 'NURI HOLDEM | 홀덤 대회 일정 · 커뮤니티 · GTO · 매장관리';
 const DEFAULT_DESC = '전국 홀덤 대회 일정과 홀덤펍 커뮤니티, GTO 학습 도구, 매장관리를 한 곳에서. NURI HOLDEM.';
 const DEFAULT_IMAGE = `${SITE}/nuri-logo.png`;
 const JSONLD_ID = 'nuri-jsonld';
@@ -91,7 +91,7 @@ export function applyScheduleSeo(s: Schedule): void {
   const gtd = s.guaranteed && s.prizePool ? ` · ${Math.round(s.prizePool / MAN).toLocaleString()}만 GTD` : '';
   // 제목: "오목 토너먼트 | 강남 홀덤펍 · 6/20 19:00 · 바인 10만"
   const titleBits = [s.title, where && `${where}`].filter(Boolean).join(' | ');
-  const title = `${titleBits} | NHoldem 홀덤 대회`;
+  const title = `${titleBits} | NURI HOLDEM 홀덤 대회`;
   const descBits = [
     where, `${s.date} ${s.startTime}`.trim(), s.format,
     buyMan ? `바이인 ${buyMan.toLocaleString()}만원` : '',
@@ -141,7 +141,7 @@ export function applyVenueSeo(v: Venue): void {
   const code = v.slug || v.id.slice(0, 8);
   const url = `${SITE}/?v=${code}`;
   const image = v.imageUrl || (v.images && v.images[0]) || DEFAULT_IMAGE;
-  const title = clip(`${v.name} | ${v.region || ''} 홀덤펍 | NHoldem`, 65);
+  const title = clip(`${v.name} | ${v.region || ''} 홀덤펍 | NURI HOLDEM`, 65);
   const descBits = [v.region, v.address, v.businessHours].filter(Boolean).join(' · ');
   const desc = clip(v.description ? `${v.name} — ${v.description}` : `${v.name} ${descBits} 홀덤 대회 일정·후기·예약`, 155) || DEFAULT_DESC;
 
