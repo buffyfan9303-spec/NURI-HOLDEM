@@ -1,4 +1,6 @@
-import { memo, useState, useMemo, useEffect, useRef, Fragment, useTransition, type ReactNode } from 'react';
+import { memo, useState, useMemo, useCallback, useEffect, useLayoutEffect, useRef, Fragment, useTransition, type ReactNode } from 'react';
+import { flushSync } from 'react-dom';
+import { withViewTransition } from '../../lib/viewTransition';
 import { promptLogin } from '../../lib/requireLogin';
 import { useSkeletonGate } from '../../lib/useSkeletonGate';
 import { getActiveCommunityAds, type CommunityAd } from '../../api/ads';
@@ -58,6 +60,9 @@ interface CommunityTabProps {
 type Section = 'live' | 'board' | 'venues' | 'rank' | 'dealer' | 'owner' | 'market';
 // 다른 메인 탭(중고장터 등)으로 갔다 돌아와도 커뮤니티 섹션이 유지되도록 모듈 레벨에 기억
 let lastCommunitySection: Section = 'venues';
+// 서브탭 진열 순서 — View Transition 방향성(오른쪽 탭 = forward) 판정용. 스와이프 order 와 동일한 진열.
+// market/owner 는 조건부 노출이지만 indexOf 상대 비교라 정적 전체 배열로 충분하다.
+const SEC_ORDER: Section[] = ['venues', 'board', 'live', 'rank', 'market', 'dealer', 'owner'];
 
 // 게시판 카테고리 필터
 const BOARD_CATEGORIES: { id: PostCategory | 'all'; label: string }[] = [
@@ -117,13 +122,41 @@ function CommunityTab({
   // 칩 하이라이트(알약)는 즉시, 컨텐츠 교체는 트랜지션 — 장터(lazy) 첫 진입에도 이전 화면이 유지돼 끊김이 없다
   const [shownSec, setShownSec] = useState<Section>(lastCommunitySection);
   const [, startSecTransition] = useTransition();
-  // 뒤로가기 — 게시판이 아닌 서브섹션(홀덤펍/딜러/랭킹 등)에선 먼저 게시판으로 복귀, 그 다음에야 탭을 빠져나감
-  useBackClose(section !== 'board', () => { lastCommunitySection = 'board'; setShownSec('board'); setSectionState('board'); });
-  const setSection = (s: Section) => {
+  // keep-alive — 한 번 방문한 섹션은 언마운트하지 않고 display 만 끈다(메인 탭 visitedTabs 와 같은 조리법).
+  // 재방문 마운트 비용이 0이라 전환 커밋 프레임이 가벼워지고, 스냅샷 뒤 동기 커밋(flushSync)이 가능해진다.
+  const [visitedSecs] = useState(() => new Set<Section>([section]));
+  useEffect(() => { visitedSecs.add(section); }, [section, visitedSecs]);
+  // 섹션별 스크롤 — 스크롤러가 window 하나라 섹션을 오가면 위치가 섞인다. 떠날 때 저장, 도착하면 페인트 전 복원.
+  const secScrollRef = useRef(new Map<Section, number>());
+  const activeSecRef = useRef<Section>(section);
+  useEffect(() => { activeSecRef.current = section; }, [section]);
+  // 메인 하단 탭 changeTab(App.tsx)과 동일 조리법 — 재방문(keep-alive)은 View Transition 스냅샷 뒤
+  // flushSync 동기 커밋(방향성 푸시: 오른쪽 탭 = forward), 첫 방문(lazy·초기 fetch)은 startTransition 으로
+  // 이전 화면 유지. 렌더 상태를 읽지 않아(모듈 변수·ref·안정 Set) 빈 deps 리스너의 stale closure 에도 안전.
+  const setSection = useCallback((s: Section) => {
+    if (s === lastCommunitySection && s === activeSecRef.current) return; // 같은 탭 재탭 — 무의미한 스냅샷 방지
+    secScrollRef.current.set(activeSecRef.current, window.scrollY);
     lastCommunitySection = s;
     setShownSec(s);
-    startSecTransition(() => setSectionState(s));
-  };
+    if (visitedSecs.has(s)) {
+      const from = SEC_ORDER.indexOf(activeSecRef.current);
+      const to = SEC_ORDER.indexOf(s);
+      withViewTransition(
+        () => { flushSync(() => setSectionState(s)); },
+        () => startSecTransition(() => setSectionState(s)),
+        to >= from ? 'forward' : 'back',
+      );
+    } else {
+      startSecTransition(() => setSectionState(s));
+    }
+  }, [visitedSecs]);
+  // 뒤로가기 — 게시판이 아닌 서브섹션(홀덤펍/딜러/랭킹 등)에선 먼저 게시판으로 복귀, 그 다음에야 탭을 빠져나감
+  useBackClose(section !== 'board', () => setSection('board'));
+  // 복원은 layout 단계(페인트 전) — '맨 위가 번쩍했다가 내려가는' 깜빡임 방지. keep-alive 라 DOM 높이가 이미 있다.
+  // flushSync 커밋 경로에선 스냅샷 뒤에서 실행돼 복원 비용까지 크로스페이드가 가린다.
+  useLayoutEffect(() => {
+    window.scrollTo({ top: secScrollRef.current.get(section) ?? 0, behavior: 'instant' as ScrollBehavior });
+  }, [section]);
   // 이미 마운트된 상태(keep-alive)에서 외부가 섹션을 지정할 때 — 예: 대시보드 '내 장터 거래'
   useEffect(() => {
     const h = (e: Event) => {
@@ -132,8 +165,7 @@ function CommunityTab({
     };
     window.addEventListener('nuri:community-section', h);
     return () => window.removeEventListener('nuri:community-section', h);
-     
-  }, []);
+  }, [setSection]);
   const [query, setQuery] = useState('');
 
   // 스와이프 탭 전환(인스타 DM 문법) — 컨텐츠를 좌우로 쓸면 이웃 섹션으로
@@ -217,13 +249,19 @@ function CommunityTab({
         </div>
       </div>
 
-      {/* 섹션 콘텐츠 — 게시판은 2-pane 전체폭, 그 외 단일 컬럼은 읽기폭(max-w-3xl)으로 제한 */}
+      {/* 섹션 콘텐츠 — 게시판은 2-pane 전체폭, 그 외 단일 컬럼은 읽기폭(max-w-3xl)으로 제한.
+          keep-alive: 방문한 섹션은 언마운트하지 않고 display 토글(메인 탭과 동일) — 재방문 커밋 프레임이 가볍다 */}
       <div onTouchStartCapture={onSwipeStart} onTouchEndCapture={onSwipeEnd}
         className={(section === 'board' || section === 'market') ? '' : 'mx-auto w-full max-w-3xl'}>
-      {section === 'live' && <LiveWallSection />}
+      {(visitedSecs.has('live') || section === 'live') && (
+        <div style={{ display: section === 'live' ? undefined : 'none' }}>
+          <LiveWallSection />
+        </div>
+      )}
 
-      {section === 'board' && (
-        <div className="lg:flex lg:items-start lg:gap-4">
+      {(visitedSecs.has('board') || section === 'board') && (
+        <div style={{ display: section === 'board' ? undefined : 'none' }}
+          className="lg:flex lg:items-start lg:gap-4">
           {/* 좌측: 목록(압축) */}
           <div className="min-w-0 lg:w-[19rem] lg:shrink-0">
             <FeedSection
@@ -262,8 +300,8 @@ function CommunityTab({
         </div>
       )}
 
-      {section === 'venues' && (
-        <div className="space-y-3">
+      {(visitedSecs.has('venues') || section === 'venues') && (
+        <div style={{ display: section === 'venues' ? undefined : 'none' }} className="space-y-3">
           <MyCommunitiesAction onSelectVenue={onSelectVenue} onCreated={onReloadVenues} />
           <VenuesSection
             sortedVenues={sortedVenues}
@@ -275,12 +313,28 @@ function CommunityTab({
         </div>
       )}
 
-      {section === 'rank' && <TierLeaderboard />}
+      {(visitedSecs.has('rank') || section === 'rank') && (
+        <div style={{ display: section === 'rank' ? undefined : 'none' }}>
+          <TierLeaderboard />
+        </div>
+      )}
 
-      {section === 'dealer' && <DealerCommunity />}
+      {(visitedSecs.has('dealer') || section === 'dealer') && (
+        <div style={{ display: section === 'dealer' ? undefined : 'none' }}>
+          <DealerCommunity />
+        </div>
+      )}
 
-      {section === 'owner' && canOwnerCommunity && <OwnerCommunity />}
-      {section === 'market' && marketSlot}
+      {canOwnerCommunity && (visitedSecs.has('owner') || section === 'owner') && (
+        <div style={{ display: section === 'owner' ? undefined : 'none' }}>
+          <OwnerCommunity />
+        </div>
+      )}
+      {!!marketSlot && (visitedSecs.has('market') || section === 'market') && (
+        <div style={{ display: section === 'market' ? undefined : 'none' }}>
+          {marketSlot}
+        </div>
+      )}
       </div>
     </div>
   );
@@ -1050,7 +1104,7 @@ function VenuesSection({
                 className={[
                   'w-full text-left flex items-center gap-2.5 px-2.5 py-2 rounded-card border transition-colors duration-150 cursor-pointer active:bg-surface-high',
                   venue.isPaidAd
-                    ? 'bg-surface-low border-accent-400/50 shadow-[0_0_12px_rgba(94,106,210,0.22)] hover:border-accent-400'
+                    ? 'bg-surface-low border-accent-400/50 shadow-[0_0_12px_rgb(var(--accent-300)/0.22)] hover:border-accent-400'
                     : 'bg-surface-low border-border-default hover:border-border-strong hover:bg-surface-high',
                 ].join(' ')}
               >

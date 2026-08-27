@@ -10,7 +10,7 @@ import {
   X, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Search, Plus, Minus, Check,
   CheckCircle2, Trash2, Pencil, Star, Heart, AlertTriangle, Info, Lock, User, Users, Bell,
   QrCode, Calendar, Clock, Settings, Share2, Filter, Image, Download, ExternalLink, Menu,
-  Home, RefreshCw, Copy, Send, MessageCircle, Eye, Bookmark, Flame, Target, Wallet, Gift,
+  Home, RefreshCw, Copy, Send, MessageCircle, Mail, Eye, Bookmark, Flame, Target, Wallet, Gift,
   CheckCheck, MapPin, LogOut, Trophy, Ticket, Phone, Printer, BarChart3, Medal, ShoppingCart, Crown, type LucideIcon,
 } from 'lucide-react';
 
@@ -26,7 +26,7 @@ export type IconName =
   | 'chip' | 'chip-stack' | 'cards' | 'dealer-button' | 'blinds'
   | 'trophy' | 'all-in' | 'felt-table' | 'timer-poker'
   // 리디자인 스파인 공통 글리프(로드맵 Phase 0 지정 — 이모지 마커 소탕용)
-  | 'comment' | 'eye' | 'bookmark' | 'flame' | 'target' | 'wallet'
+  | 'comment' | 'mail' | 'eye' | 'bookmark' | 'flame' | 'target' | 'wallet'
   | 'gift' | 'check-double' | 'map-pin' | 'log-out'
   | 'ticket' | 'phone' | 'printer' | 'chart' | 'medal' | 'cart' | 'crown';
 
@@ -68,7 +68,7 @@ const LUCIDE: Partial<Record<IconName, LucideIcon>> = {
   heart: Heart, alert: AlertTriangle, info: Info, lock: Lock, user: User, users: Users,
   bell: Bell, qr: QrCode, calendar: Calendar, clock: Clock, settings: Settings, share: Share2,
   filter: Filter, image: Image, download: Download, external: ExternalLink, menu: Menu,
-  home: Home, refresh: RefreshCw, copy: Copy, send: Send, comment: MessageCircle, eye: Eye,
+  home: Home, refresh: RefreshCw, copy: Copy, send: Send, comment: MessageCircle, mail: Mail, eye: Eye,
   bookmark: Bookmark, flame: Flame, target: Target, wallet: Wallet, gift: Gift,
   'check-double': CheckCheck, 'map-pin': MapPin, 'log-out': LogOut, trophy: Trophy,
   ticket: Ticket, phone: Phone, printer: Printer, chart: BarChart3, medal: Medal, cart: ShoppingCart, crown: Crown,
