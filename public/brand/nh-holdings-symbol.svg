@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-label="NH HOLDINGS 심벌">
+  <!-- NH HOLDINGS CI 심벌 정본 — N·H 공유 기둥 모노그램.
+       세 기둥 구조: 왼 기둥(N) · 가운데 공유 기둥(N의 끝이자 H의 시작) · 오른 기둥(H).
+       N의 사선과 H의 가로대가 한 형태 안에서 만난다 = 지주사와 산하 브랜드의 결합.
+       단색 사용: fill을 #2E3470 또는 currentColor로 교체 가능. -->
+  <defs>
+    <linearGradient id="nhInk" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3D468F"/>
+      <stop offset="1" stop-color="#242A5C"/>
+    </linearGradient>
+  </defs>
+  <g fill="url(#nhInk)">
+    <!-- 왼 기둥 (N 시작) -->
+    <rect x="38" y="48" width="26" height="144" rx="6"/>
+    <!-- N 사선: 왼 기둥 상단 → 가운데 기둥 하단 -->
+    <path d="M 44 48 L 70 48 L 133 178 A 13 13 0 0 1 121 192 L 110 192 Z"/>
+    <!-- 가운데 공유 기둥 (N의 끝 = H의 왼 기둥) -->
+    <rect x="107" y="48" width="26" height="144" rx="6"/>
+    <!-- H 가로대 -->
+    <rect x="130" y="107" width="48" height="26"/>
+    <!-- 오른 기둥 (H) -->
+    <rect x="176" y="48" width="26" height="144" rx="6"/>
+  </g>
+</svg>

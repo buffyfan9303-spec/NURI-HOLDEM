@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 160" role="img" aria-label="NURI HOLDEM 로고">
+  <!-- NURI HOLDEM BI 가로 조합 정본 — 심벌 + 2단 워드마크.
+       워드마크 폰트: Pretendard 800(부재 시 Arial Black 계열로 대체 렌더).
+       인쇄·외부 제작 시에는 아웃라인화 파일을 별도 요청할 것(가이드 §타이포). -->
+  <defs>
+    <linearGradient id="nuriGoldL" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#E8C97C"/>
+      <stop offset="1" stop-color="#C79A3F"/>
+    </linearGradient>
+    <mask id="nuriCutL">
+      <rect width="560" height="160" fill="#fff"/>
+      <rect x="18.7" y="78.7" width="122.6" height="6" rx="3" fill="#000"/>
+      <path d="M 64 73.3 A 16 16 0 0 1 96 73.3 L 64 73.3 Z" fill="#000"/>
+    </mask>
+  </defs>
+  <g mask="url(#nuriCutL)">
+    <path fill="url(#nuriGoldL)" transform="translate(0 0) scale(0.6667)" d="
+      M 120 18 C 96 58 40 96 40 138 C 40 172 66 190 92 184
+      C 103 181 111 175 116 167 C 112 194 100 208 84 216
+      L 156 216 C 140 208 128 194 124 167
+      C 129 175 137 181 148 184 C 174 190 200 172 200 138
+      C 200 96 144 58 120 18 Z"/>
+  </g>
+  <g font-family="Pretendard, 'Pretendard Variable', 'Arial Black', 'Malgun Gothic', sans-serif" font-weight="800">
+    <text x="176" y="76" font-size="58" letter-spacing="35" fill="#151221">NURI</text>
+    <text x="176" y="132" font-size="44" letter-spacing="10" fill="#151221">HOLDEM</text>
+  </g>
+</svg>

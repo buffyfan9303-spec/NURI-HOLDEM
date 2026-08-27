@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-label="NURI HOLDEM 심벌">
+  <!-- NURI HOLDEM BI 심벌 정본 — '누리(세상) 위로 떠오르는 스페이드'
+       스페이드 실루엣 안에 지평선 + 떠오르는 해 네거티브 스페이스.
+       단색 사용: fill을 #D9B25A(골드) 또는 currentColor로 교체 가능. -->
+  <defs>
+    <linearGradient id="nuriGold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#E8C97C"/>
+      <stop offset="1" stop-color="#C79A3F"/>
+    </linearGradient>
+    <mask id="nuriCut">
+      <rect width="240" height="240" fill="#fff"/>
+      <!-- 지평선 컷 -->
+      <rect x="28" y="118" width="184" height="9" rx="4.5" fill="#000"/>
+      <!-- 떠오르는 해(상현 반원) -->
+      <path d="M 96 110 A 24 24 0 0 1 144 110 L 96 110 Z" fill="#000"/>
+    </mask>
+  </defs>
+  <g mask="url(#nuriCut)">
+    <!-- 스페이드 본체: 상단 첨점 → 좌우 대칭 곡선 → 하단 로브 -->
+    <path fill="url(#nuriGold)" d="
+      M 120 18
+      C 96 58 40 96 40 138
+      C 40 172 66 190 92 184
+      C 103 181 111 175 116 167
+      C 112 194 100 208 84 216
+      L 156 216
+      C 140 208 128 194 124 167
+      C 129 175 137 181 148 184
+      C 174 190 200 172 200 138
+      C 200 96 144 58 120 18
+      Z"/>
+  </g>
+</svg>
