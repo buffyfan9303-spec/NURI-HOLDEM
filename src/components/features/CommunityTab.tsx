@@ -1063,18 +1063,19 @@ function VenuesSection({
         </svg>
       </div>
 
-      {/* 종류 필터 + 그룹 만들기 — 오너 지시(2026-08-27): 줄바꿈 없이 한 줄.
-          칩이 넘치면 가로 스크롤 레일(게시판 카테고리 칩과 같은 문법), 만들기 버튼은 같은 줄 끝. */}
-      <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none -mx-page-x px-page-x">
+      {/* 종류 필터 + 그룹 만들기 — 오너 지시(2026-08-28): 한 페이지 폭 안에 전부.
+          칩 패딩·간격을 글자 폭에 맞춰 최소화(6칩 합 ≈336px ≤ 375px 뷰포트) —
+          340px 미만 초소형 기기만 가로 스크롤 폴백. */}
+      <div className="flex items-center gap-1 overflow-x-auto scrollbar-none -mx-page-x px-page-x">
         {VENUE_FILTERS.map((f) => (
           <button key={f.key} type="button" onClick={() => setKindFilter(f.key)}
-            className={['shrink-0 whitespace-nowrap rounded-badge px-2.5 py-1 text-2xs font-bold border transition-colors',
+            className={['shrink-0 whitespace-nowrap rounded-badge px-[5px] py-1 text-2xs font-bold border transition-colors',
               kindFilter === f.key ? 'bg-accent-300 text-white border-accent-300' : 'bg-surface-high text-ink-secondary border-border-default hover:text-ink-primary'].join(' ')}>
             {f.label}
           </button>
         ))}
         {user && (
-          <button type="button" onClick={() => setCreateOpen(true)} className="ml-auto shrink-0 whitespace-nowrap rounded-badge px-2.5 py-1 text-2xs font-bold border border-accent-400/50 text-accent-300 hover:bg-accent-300/10">+ 그룹 만들기</button>
+          <button type="button" onClick={() => setCreateOpen(true)} className="ml-auto shrink-0 whitespace-nowrap rounded-badge px-[5px] py-1 text-2xs font-bold border border-accent-400/50 text-accent-300 hover:bg-accent-300/10">+ 그룹 만들기</button>
         )}
       </div>
 
