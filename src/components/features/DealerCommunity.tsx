@@ -187,15 +187,16 @@ export default function DealerCommunity() {
         </form>
       )}
 
-      {/* 카테고리 분리 탭 — 구인/구직/일반 각각 따로 보기 */}
-      <div className="flex items-center gap-1 rounded-input bg-surface-high p-0.5">
+      {/* 카테고리 분리 필터 — 구인/구직/일반 각각 따로 보기.
+          pill 세그먼트 → 텍스트 필터(오너 확정 문법 — 커뮤니티 홀덤펍·장터와 동일) */}
+      <div className="flex items-center gap-3">
         {([['all', '전체'], ['hiring', '구인'], ['seeking', '구직'], ['general', '일반']] as [DealerPostKind | 'all', string][]).map(([k, label]) => {
           const on = filterKind === k;
           const cnt = k === 'all' ? posts.length : posts.filter((x) => x.kind === k).length;
           return (
-            <button key={k} type="button" onClick={() => setFilterKind(k)}
-              className={['flex-1 rounded-[6px] py-1.5 text-xs font-bold leading-none transition-colors',
-                on ? 'bg-accent-300 text-white' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
+            <button key={k} type="button" onClick={() => setFilterKind(k)} aria-pressed={on}
+              className={['shrink-0 whitespace-nowrap py-1 text-xs leading-none transition-colors tabular-nums',
+                on ? 'font-bold text-accent-200' : 'font-semibold text-ink-muted hover:text-ink-primary'].join(' ')}>
               {label}{cnt > 0 ? ` ${cnt}` : ''}
             </button>
           );

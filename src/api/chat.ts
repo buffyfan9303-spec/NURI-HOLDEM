@@ -1,6 +1,7 @@
 // src/api/chat.ts — 중고장터 1:1 실시간 채팅
 import { supabase, IS_MOCK } from '../lib/supabase';
 import { currentUser } from './_session';
+import { fetchPublicProfiles } from './messages';
 
 export interface ChatMessage {
   id: string;
@@ -78,11 +79,12 @@ export async function getListingThreads(listingId: string): Promise<ChatThread[]
   const threads = Array.from(seen.values());
   const ids = threads.map((t) => t.buyerId);
   if (ids.length > 0) {
-    const { data: profs } = await supabase.from('profiles').select('id, nickname, name').in('id', ids);
-    const nameById = new Map<string, string>();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (profs ?? []).forEach((p: any) => nameById.set(p.id, p.nickname || p.name || '구매자'));
-    threads.forEach((t) => { t.buyerName = nameById.get(t.buyerId) ?? '구매자'; });
+    // profiles 직접 select 는 RLS(본인 한정)로 빈 결과 → 공개 표시용 RPC 헬퍼 사용
+    const pById = await fetchPublicProfiles(ids);
+    threads.forEach((t) => {
+      const p = pById.get(t.buyerId);
+      t.buyerName = p?.nickname || p?.name || '구매자';
+    });
   }
   return threads;
 }
@@ -161,14 +163,12 @@ export async function getMyChatThreads(): Promise<InboxThread[]> {
 
   const listingIds = [...new Set(convs.map((c) => c.listingId))];
   const buyerIds = [...new Set(convs.map((c) => c.buyerId))];
-  const [{ data: ls }, { data: profs }] = await Promise.all([
+  const [{ data: ls }, pById] = await Promise.all([
     supabase.from('marketplace_listings').select('id, title, images, price, status, seller_id, seller_name, seller_avatar_color').in('id', listingIds),
-    supabase.from('profiles').select('id, nickname, name, avatar_color').in('id', buyerIds),
+    fetchPublicProfiles(buyerIds), // profiles 직접 select 는 RLS 로 빈 결과 — 공개 RPC 헬퍼
   ]);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const lById = new Map<string, any>(); (ls ?? []).forEach((l: any) => lById.set(l.id, l));
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const pById = new Map<string, any>(); (profs ?? []).forEach((p: any) => pById.set(p.id, p));
 
   const out: InboxThread[] = [];
   for (const c of convs) {
