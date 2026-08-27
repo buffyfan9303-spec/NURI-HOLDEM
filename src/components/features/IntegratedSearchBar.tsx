@@ -185,7 +185,7 @@ function DateTab({ slot, selected, hasEvents, onClick }: DateTabProps) {
     >
       {/* 선택 시 골드 정사각 알약 — 셀과 정확히 일치(inset-0·동일 rounded) */}
       {selected && (
-        <span aria-hidden className="anim-pop absolute inset-0 rounded-[10px] bg-accent-300 shadow-[0_4px_14px_-4px_rgba(94,106,210,0.55)]" />
+        <span aria-hidden className="anim-pop absolute inset-0 rounded-[10px] bg-accent-300 shadow-[0_4px_14px_-4px_rgb(var(--accent-300)/0.55)]" />
       )}
       <span className={['relative text-2xs font-bold leading-none', selected ? 'text-ink-inverse/85' : dowColor].join(' ')}>{slot.dow}</span>
       <span className="relative mt-0.5 text-[15px] font-extrabold leading-none tabular-nums">{slot.day}</span>

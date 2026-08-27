@@ -1,4 +1,7 @@
-// PWA 아이콘 재생성 — 다크 배경 + 골드 스페이드/워드마크(홈 화면 검은 네모 수정)
+// ⛔ DEPRECATED(2026-08-27, 오너 CI 교체) — 실행 금지. 이 스크립트는 구 브랜딩(#0E1116/#FFD100)을
+//    다시 씌운다. 현재 정본은 scripts/gen-favicons.mjs (NH CI 스페이드 심벌 + #151221 다크 플럼).
+//    Icon.tsx 스페이드 형태 앵커 참조용으로만 남겨둔다.
+// (구) PWA 아이콘 재생성 — 다크 배경 + 골드 스페이드/워드마크(홈 화면 검은 네모 수정)
 // 실행: node scripts/gen-icons.mjs  → public/icon-*.png, favicon-*.png 갱신
 import sharp from 'sharp';
 import { writeFileSync } from 'node:fs';

@@ -14,7 +14,7 @@ const BG: Record<string, string> = {
   success: '#0ECB81', // 팔레트 밖 청록이던 성공색 → emerald(토스트 성공과 동일 계열)
   loading: 'rgb(var(--surface-float))',
   disabled: 'rgb(var(--surface-float))', /* 미완성: 회색 — 입력이 완성되는 순간 인디고로 살아난다(토스 패턴) */
-  idle: '#5E6AD2',
+  idle: 'rgb(var(--accent-300))', /* 테마 변수 — 다크 #805FDA / 라이트 #6946C8 (h256 어워드 정합, 2026-08-27) */
 };
 
 /** 성공 체크 — path 를 dasharray 로 그려낸다(마운트 후 dashoffset 24→0 트랜지션) */

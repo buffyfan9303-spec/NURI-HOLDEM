@@ -17,7 +17,7 @@ import type { Schedule } from '../../api/schedules';
 
 const DAYS_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
-export type BannerAction = 'roti-community' | 'tools' | 'explore';
+export type BannerAction = 'roti-community' | 'tools' | 'explore' | 'nurimind';
 
 /** 오너 게시 고정 포스터 슬라이드(래스터 — 사진성 콘텐츠라 이미지 유지) */
 const POSTER_SLIDES: { src: string; alt: string; action: BannerAction; title: string; sub: string }[] = [
@@ -47,19 +47,26 @@ const BRAND_SLIDES: {
     logo: '/banners/roti-arena-logo.webp',
     title: '로티아레나', sub: '매장 커뮤니티 ›', titleColor: '#E8D6A0', subColor: '#C4B58A',
   },
+  /* gto·mind·nuri 배경 — 어워드 레퍼런스(DatawizzAI) 오로라 문법(2026-08-27): 딥 그라운드 위
+     저채도 바이올렛 빔 + 슬라이드 고유 힌트(gto 블루 · mind 마젠타 · nuri 는 골드가 주인공이라
+     배경만 딥 플럼). 정적 CSS 그라데이션 — 애니메이션 없음. 대비 실측(피크 최악 겹침 기준):
+     gto title 10.96/sub 5.92 · mind 10.21/5.67 · nuri 6.74/10.41 — 전부 AA 이상. */
   {
     key: 'gto', action: 'tools', alt: 'GTO 도구 — 차트·계산기·트레이너',
-    bg: 'linear-gradient(180deg, #131520 0%, #0e101a 100%)', glyph: '♠', glyphColor: '#232a42',
+    bg: 'radial-gradient(140% 180% at 82% -20%, rgba(130,177,255,0.12) 0%, transparent 55%), radial-gradient(150% 200% at 8% 110%, rgba(128,95,218,0.16) 0%, transparent 60%), linear-gradient(180deg, #131520 0%, #0e101a 100%)',
+    glyph: '♠', glyphColor: '#232a42',
     title: 'GTO 도구', sub: '차트 · 계산기 · 트레이너 ›', titleColor: '#F0F2FA', subColor: '#A9B1E8',
   },
   {
-    key: 'mind', action: 'tools', alt: '오늘의 NURI MIND — 매일 한 문제 GTO 트레이닝',
-    bg: 'linear-gradient(180deg, #1a162e 0%, #110f20 100%)', glyph: '♥', glyphColor: '#262142',
+    key: 'mind', action: 'nurimind', alt: 'NURI MIND — nurimind.co.kr 바로가기',
+    bg: 'radial-gradient(140% 180% at 85% -15%, rgba(224,130,255,0.12) 0%, transparent 55%), radial-gradient(150% 200% at 8% 110%, rgba(128,95,218,0.16) 0%, transparent 60%), linear-gradient(180deg, #1a162e 0%, #110f20 100%)',
+    glyph: '♥', glyphColor: '#262142',
     title: '오늘의 NURI MIND', sub: '매일 한 문제 · GTO 트레이닝 ›', titleColor: '#EEECFA', subColor: '#B2ACEC',
   },
   {
     key: 'nuri', action: 'explore', alt: 'NURI HOLDEM — 홀덤 일정 한곳에서',
-    bg: 'linear-gradient(180deg, #0a2218 0%, #06120d 100%)', glyph: '♦', glyphColor: '#1e3325',
+    bg: 'radial-gradient(140% 180% at 85% -15%, rgba(224,130,255,0.07) 0%, transparent 55%), radial-gradient(150% 200% at 10% 110%, rgba(128,95,218,0.18) 0%, transparent 60%), linear-gradient(180deg, #151221 0%, #0d0b18 100%)',
+    glyph: '♦', glyphColor: '#2A2247',
     title: 'NURI HOLDEM', sub: '전국 홀덤 일정, 한곳에서 ›', titleColor: '#D9B25A', subColor: '#DCE4DC',
   },
 ];
@@ -212,7 +219,7 @@ export default function PosterCarousel({ schedules, onSelect, onBanner }: {
       // 유저가 손으로 어중간하게 세워도 다음 카드 '경계'로 정렬해 이동(스냅 감각)
       const target = (Math.floor(vp.scrollLeft / CARD_W) + 1) * CARD_W;
       vp.scrollTo({ left: target, behavior: 'smooth' });
-    }, 3800);
+    }, 3200);
     vp.addEventListener('touchstart', pause, { passive: true });
     vp.addEventListener('wheel', pause, { passive: true });
     vp.addEventListener('pointerdown', pause, { passive: true });

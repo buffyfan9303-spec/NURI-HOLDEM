@@ -18,7 +18,9 @@ export interface ClockTheme {
 /** 현행 ClockDisplay 하드코딩 값 — 변수 기본값의 단일 출처(스냅샷 불변 계약) */
 export const CLOCK_DEFAULTS = {
   bg: '#06080B',           // 루트 bg-[#06080B]
-  accent: '#5E6AD2',       // accent-300 (타이머·상금·강조 스탯)
+  accent: '#5E6AD2',       // 구 accent-300 스냅샷 — 도메인 고정(타이머·상금·강조 스탯).
+                           // ⚠ DB 저장값이 이 허용 목록과 대조(sanitize)되므로 값 변경 = 기존 매장 테마 무효화.
+                           //   2026-08-27 앱 accent 플럼 이동과 무관하게 TV 송출 계약(픽셀 변화 0)을 지킨다.
   timerUrgent: '#fb7185',  // rose-400 — 잠금(1분 미만 긴급)
   timerBreak: '#7dd3fc',   // sky-300 — 잠금(브레이크)
 } as const;

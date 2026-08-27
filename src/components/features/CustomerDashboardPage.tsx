@@ -2,8 +2,9 @@
 // 손님 대시보드 — 전체 페이지(모바일 포함). 헤더 🎟 버튼으로 진입.
 // 내 매장이용권(매장별) + 매장 이용내역(방문·머니인·금액). 매장이용권은 금전적 가치 없음.
 // 사용(회수) = 발급 매장 QR 스캔 또는 그 매장 업주 전화번호로만. 유저 간 전송 불가.
-import { useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { useToast } from '../atoms/Toast';
+import { lazyWithReload } from '../../lib/lazyWithReload';
 import { useAuth } from '../../contexts/AuthContext';
 import Icon from '../atoms/Icon';
 import type { Html5Qrcode } from 'html5-qrcode'; // 타입만(런타임 번들 제외) — 실제 라이브러리는 스캐너 열 때 동적 로드
@@ -46,6 +47,10 @@ function parseVenueId(text: string): string | null {
 }
 
 interface Stack { venueId: string; venueName: string; title: string; ids: string[]; expiries: (string | null)[] }
+
+// 매장(업주) 회원가입 — AuthModal 의 'signup-owner' 탭을 그대로 재사용(새 플로우 0).
+// App 과 같은 동적 임포트 경로라 청크가 공유된다(중복 번들 없음).
+const AuthModalLazy = lazyWithReload(() => import('./AuthModal'));
 
 export default function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification, onOpenPost, onOpenProfile, onOpenMarket }: {
   open: boolean; onClose: () => void;
@@ -117,11 +122,24 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
     return () => clearTimeout(t);
   }, [redeemDone]);
 
-  if (!open) return null;
+  // keep-alive(메인 탭과 같은 조리법) — 한 번 열린 뒤에는 언마운트하지 않고 display 토글만.
+  // 재열림이 '풀 마운트 + 데이터 상태 재구축' 대신 display 복원이 되어, GTO 같은 무거운 탭 위에서
+  // '내 정보'를 열 때의 마운트 커밋 프레임 드롭(확 버벅)이 사라진다. App 쪽은 VT 스냅샷 뒤 동기 커밋.
+  const everOpenedRef = useRef(false);
+  if (open) everOpenedRef.current = true; // 렌더 중 latch — 단조 증가라 안전
+  // 닫히면(숨김 유지) 진행 중이던 전면 오버레이는 정리 — RedeemSheet 언마운트가 QR 카메라도 세운다.
+  // (키 입력 상태·스크롤 등 화면 자체는 보존 — keep-alive 의 목적)
+  useEffect(() => {
+    if (!open) { setRedeem(null); setRedeemDone(null); }
+  }, [open]);
+
+  if (!open && !everOpenedRef.current) return null;
+  const hidden = !open;
 
   // 비로그인 — 대시보드 대신 로그인 랜딩(APIS '내 게임' 문법). 훅은 전부 위에서 이미 실행됐고
   // 데이터 이펙트는 user 가드로 잠겨 있어 user=null 렌더가 안전하다.
-  if (!user) return <LoginLanding onClose={onClose} />;
+  // 숨김 중 로그인이 확정되면(user 등장) 갈래 전환은 자연 리렌더로 처리된다.
+  if (!user) return <LoginLanding onClose={onClose} hidden={hidden} />;
 
   // 만료일 지난 이용권은 status 가 active 여도 사용 불가(서버 가드) — 지갑에서도 제외한다.
   const nowMs = Date.now();
@@ -168,7 +186,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
   const fmtDate = (iso: string | null) => { if (!iso) return ''; const d = new Date(iso); return `${d.getMonth() + 1}/${d.getDate()}`; };
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-surface-base pt-[env(safe-area-inset-top)]">
+    <div className="fixed inset-0 z-[60] flex flex-col bg-surface-base pt-[env(safe-area-inset-top)]" style={hidden ? { display: 'none' } : undefined}>
       <header className="flex h-header-h shrink-0 items-center gap-2 border-b border-border-subtle px-page-x">
         <button type="button" onClick={onClose} aria-label="닫기" className="flex h-9 w-9 items-center justify-center rounded-full text-ink-secondary hover:bg-surface-high">
           <Icon name="back" size={20} />
@@ -504,14 +522,17 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
 
 /** 비로그인 로그인 랜딩 — APIS '내 게임' 문법(타이틀 + 가치 제안 + 소셜 로그인 + 설정성 행).
  *  왜 별도 화면: 비로그인에게 빈 대시보드 껍데기를 보여주는 대신, 로그인의 '이유'를 먼저 판다. */
-function LoginLanding({ onClose }: { onClose: () => void }) {
+function LoginLanding({ onClose, hidden = false }: { onClose: () => void; hidden?: boolean }) {
   const toast = useToast();
   // 진행 중인 소셜만 로딩 표기 + 두 버튼 동시 비활성(중복 리다이렉트 방지) — AuthModal 과 동일 패턴
   const [busy, setBusy] = useState<'kakao' | 'google' | null>(null);
+  // 매장(업주) 회원가입 — 기존 AuthModal 'signup-owner' 탭 재사용(가입 후 운영자 승인제 그대로)
+  const [ownerSignupOpen, setOwnerSignupOpen] = useState(false);
+  // keep-alive 로 이 화면이 숨겨질 때 위에 떠 있던 가입 모달도 함께 정리(재열림 시 유령 모달 방지)
+  useEffect(() => { if (hidden) setOwnerSignupOpen(false); }, [hidden]);
 
-  // ♠ 오늘의 운세 — NURI MIND(프리플랍 트레이너 오늘의 퀴즈) 딥링크. #tool= 은 도구 탭이
-  // 마운트돼 있어야 들리므로 ?tab=tools 재진입 경로를 쓴다(NotificationPanel 과 같은 계약).
-  const goFortune = () => { window.location.href = '/?tab=tools#tool=trainer'; };
+  // ♠ 오늘의 운세 — NURI MIND(오너 개발 중인 외부 서비스 nurimind.co.kr)로 연결
+  const goFortune = () => { window.open('https://www.nurimind.co.kr', '_blank', 'noopener'); };
 
   const installApp = async () => {
     try { if (window.matchMedia('(display-mode: standalone)').matches) { toast.show('이미 앱으로 사용 중이에요', 'info'); return; } } catch { /* noop */ }
@@ -525,7 +546,7 @@ function LoginLanding({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-surface-base pt-[env(safe-area-inset-top)]">
+    <div className="fixed inset-0 z-[60] flex flex-col bg-surface-base pt-[env(safe-area-inset-top)]" style={hidden ? { display: 'none' } : undefined}>
       <header className="flex h-header-h shrink-0 items-center gap-2 border-b border-border-subtle px-page-x">
         <button type="button" onClick={onClose} aria-label="닫기" className="flex h-9 w-9 items-center justify-center rounded-full text-ink-secondary hover:bg-surface-high">
           <Icon name="back" size={20} />
@@ -608,9 +629,36 @@ function LoginLanding({ onClose }: { onClose: () => void }) {
               </span>
               <Icon name="chevron-right" size={15} className="shrink-0 text-ink-muted" />
             </a>
+            {/* 광고 문의 — 고객센터와 같은 메일 채널, 제목 프리셋으로 분류(1:1 문의 모달은 로그인 전용이라 비로그인 랜딩엔 mailto) */}
+            <a href="mailto:buffyfan9303@gmail.com?subject=%5B광고%20문의%5D%20NURI%20HOLDEM"
+              className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-surface-high transition-colors">
+              <Icon name="mail" size={17} className="shrink-0 text-ink-secondary" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold text-ink-primary">광고 문의</span>
+                <span className="block text-2xs text-ink-muted">배너·제휴 광고 제안을 보내주세요</span>
+              </span>
+              <Icon name="chevron-right" size={15} className="shrink-0 text-ink-muted" />
+            </a>
+            {/* 매장 회원가입 — AuthModal 업주 가입 탭으로 직행(가입 후 운영자 승인제) */}
+            <button type="button" onClick={() => setOwnerSignupOpen(true)}
+              className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-surface-high transition-colors">
+              <Icon name="felt-table" size={17} className="shrink-0 text-ink-secondary" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold text-ink-primary">매장 회원가입</span>
+                <span className="block text-2xs text-ink-muted">업주 가입 신청 · 운영자 승인 후 활성화</span>
+              </span>
+              <Icon name="chevron-right" size={15} className="shrink-0 text-ink-muted" />
+            </button>
           </div>
         </div>
       </div>
+
+      {/* 업주 가입 모달 — z-[60] 동순위지만 DOM 후순위(이 랜딩 내부)라 위에 뜬다. 이메일 로그인(promptLogin)과 같은 문법 */}
+      {ownerSignupOpen && (
+        <Suspense fallback={null}>
+          <AuthModalLazy open onClose={() => setOwnerSignupOpen(false)} initialMode="signup-owner" />
+        </Suspense>
+      )}
     </div>
   );
 }

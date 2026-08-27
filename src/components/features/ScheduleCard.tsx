@@ -264,7 +264,7 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
         'flex flex-col overflow-hidden rounded-card border transition-[transform,border-color] duration-300 ease-out active:duration-75',
         'hover:-translate-y-1 cursor-pointer active:scale-[0.98]',
         schedule.isPremium
-          ? 'border-accent-400 shadow-[0_0_12px_rgba(94,106,210,0.22)] bg-surface-low'
+          ? 'border-accent-400 shadow-[0_0_12px_rgb(var(--accent-300)/0.22)] bg-surface-low'
           : 'border-border-default shadow-card bg-surface-low hover:border-border-strong',
       ].join(' ')}
     >

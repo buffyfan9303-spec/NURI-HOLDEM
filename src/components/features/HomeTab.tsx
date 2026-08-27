@@ -83,15 +83,17 @@ export default function HomeTab({
   }
 
   return (
-    <div className="pb-section">
-      {/* 시간대 인사 + 라이브 맥락 — 홈의 첫 줄은 컨트롤이 아니라 '지금' */}
+    <div className="hero-aurora pb-section">
+      {/* 시간대 인사 + 라이브 맥락 — 홈의 첫 줄은 컨트롤이 아니라 '지금'.
+          hero-aurora(딥 플럼 오로라 워시)·text-grad-violet(헤드라인 그라데이션)은
+          어워드 레퍼런스 브랜드 모멘트 — 홈 히어로 1곳 한정(과용 금지). */}
       <div className="px-page-x pt-3">
         <p className="text-2xs text-ink-muted">
           {now.getMonth() + 1}/{now.getDate()}({DAYS_KO[now.getDay()]}) · {greeting(now)}
         </p>
-        <h2 className="font-display text-xl font-bold tracking-tight text-ink-primary">
+        <h2 className="font-display text-xl font-bold tracking-tight text-ink-primary text-grad-violet">
           {liveCount > 0
-            ? <>지금 <span className="tabular-nums text-emerald-400">{liveCount}</span>개 게임 진행 중</>
+            ? <>지금 <span className="tabular-nums text-emerald-400 text-grad-keep">{liveCount}</span>개 게임 진행 중</>
             : '오늘의 토너먼트를 찾아보세요'}
         </h2>
       </div>
@@ -143,7 +145,10 @@ export default function HomeTab({
       <PosterCarousel
         schedules={schedules}
         onSelect={onSelect}
-        onBanner={(a) => (a === 'tools' ? onTools() : a === 'explore' ? onExplore() : onRotiCommunity())}
+        onBanner={(a) => {
+          if (a === 'nurimind') { window.open('https://www.nurimind.co.kr', '_blank', 'noopener'); return; }
+          if (a === 'tools') onTools(); else if (a === 'explore') onExplore(); else onRotiCommunity();
+        }}
       />
 
       {/* 오늘·내일 일정 */}

@@ -59,7 +59,7 @@ export default class ErrorBoundary extends Component<Props, State> {
       <div style={{
         minHeight: '100vh', display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center', gap: '12px',
-        background: '#0A0C0F', color: '#F0F4FF', padding: '24px', textAlign: 'center',
+        background: '#151221', color: '#F0F4FF', padding: '24px', textAlign: 'center',
         fontFamily: "'Apple SD Gothic Neo','Malgun Gothic',sans-serif",
       }}>
         <p style={{ fontSize: '17px', fontWeight: 700, margin: 0 }}>일시적인 오류가 발생했습니다</p>
@@ -69,7 +69,8 @@ export default class ErrorBoundary extends Component<Props, State> {
           onClick={() => window.location.reload()}
           style={{
             marginTop: '8px', padding: '10px 22px', borderRadius: '8px',
-            background: '#5E6AD2', color: '#FFFFFF', fontWeight: 700,
+            /* CSS 미로드 대비 하드 hex — 다크 accent-300 정본(#805FDA, h256)과 동기(index.css) */
+            background: '#805FDA', color: '#FFFFFF', fontWeight: 700,
             border: 'none', cursor: 'pointer', fontSize: '14px',
           }}
         >

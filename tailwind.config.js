@@ -19,15 +19,17 @@ export default {
           high:  'rgb(var(--surface-high) / <alpha-value>)',  // 호버 영역, 입력 필드
           float: 'rgb(var(--surface-float) / <alpha-value>)', // 드롭다운, 툴팁
         },
-        // Accent: Linear 인디고 (NURI PET 시그니처) — 주요 액션·활성·링크·포커스
+        // Accent: 트와일라잇 플럼 정합 바이올렛-인디고(h≈248) — 주요 액션·활성·링크·포커스.
+        // index.css 의 CSS 변수를 참조해 다크/라이트 팔레트 분리(surface 와 동일 문법 — 알파 합성 동작).
+        // 대비 실측(2026-08-27): 다크 300 vs #151221 = 4.01, 흰 텍스트 on 300 = 4.59 / 라이트 300 vs #FFF = 6.78.
         accent: {
-          50:  '#EEF0FB',
-          100: '#D7DBF5',
-          200: '#AEB5EE', // 다크 배경 위 인디고 텍스트(PET --accent-ink)
-          300: '#5E6AD2', // primary — Linear 인디고(PET --accent)
-          400: '#525DC4', // hover
-          500: '#4853B8', // pressed(PET --accent-strong)
-          600: '#3A4392',
+          50:  'rgb(var(--accent-50) / <alpha-value>)',
+          100: 'rgb(var(--accent-100) / <alpha-value>)',
+          200: 'rgb(var(--accent-200) / <alpha-value>)', // 다크 배경 위 액센트 텍스트(PET --accent-ink 계승)
+          300: 'rgb(var(--accent-300) / <alpha-value>)', // primary(PET --accent 계승)
+          400: 'rgb(var(--accent-400) / <alpha-value>)', // hover
+          500: 'rgb(var(--accent-500) / <alpha-value>)', // pressed(PET --accent-strong 계승)
+          600: 'rgb(var(--accent-600) / <alpha-value>)',
         },
         // Gold: 바이낸스 옐로 — 상금·트로피·랭킹·프리미엄 강조 전용(인터랙션은 accent 로 이관)
         gold: {

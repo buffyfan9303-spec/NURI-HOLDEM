@@ -22,6 +22,7 @@ import { decodeSpot, readGtoHash } from './components/features/gto/gtoShare';
 import type { DeepGtoInit } from './components/features/gto/useDeepGto';
 import type { PosterFormData } from './components/features/PosterFormModal';
 import NuriHoldemLogo from './components/atoms/NuriHoldemLogo';
+import NuriMark from './components/atoms/NuriMark';
 import Icon from './components/atoms/Icon';
 import ThemeToggle from './components/atoms/ThemeToggle';
 import { useTheme } from './contexts/ThemeContext';
@@ -212,13 +213,15 @@ const AppHeader = memo(function AppHeader({
           type="button"
           onClick={onHome}
           aria-label="메인으로 이동"
-          className="hidden lg:block active:scale-95 transition-transform origin-left"
+          className="hidden lg:flex items-center gap-1.5 active:scale-95 transition-transform origin-left"
         >
+          <NuriMark uid="pc" className="h-6 w-6 shrink-0" />
           <NuriHoldemLogo />
         </button>
         {/* 모바일: 로고 │ 현재 위치(지금 보고 있는 탭) — 로고 클릭=홈 복귀 */}
         <div className="lg:hidden flex min-w-0 items-center gap-2">
-          <button type="button" onClick={onHome} aria-label="홈으로" className="press-spring shrink-0">
+          <button type="button" onClick={onHome} aria-label="홈으로" className="press-spring flex shrink-0 items-center gap-1.5">
+            <NuriMark uid="m" className="h-6 w-6 shrink-0" />
             <NuriHoldemLogo className="!h-7" />
           </button>
           <span className="h-4 w-px shrink-0 bg-border-default" aria-hidden />
@@ -252,7 +255,7 @@ const AppHeader = memo(function AppHeader({
                 : 'text-ink-secondary hover:text-ink-primary hover:bg-surface-high',
             ].join(' ')}
           >
-            <Icon name="comment" size={18} strokeWidth={1.8} />
+            <Icon name="mail" size={18} strokeWidth={1.8} />
             <UnreadBadge count={unreadCount} className="absolute -top-0.5 -right-0.5 ring-2 ring-surface-base" />
           </button>
 
@@ -334,7 +337,7 @@ const AppHeader = memo(function AppHeader({
                   <div className="lg:hidden border-b border-border-subtle">
                     <button type="button" onClick={() => { setNotifOpen(true); setUserMenu(false); }}
                       className="w-full text-left flex items-center gap-2 px-3 py-2.5 text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
-                      <Icon name="comment" size={14} />
+                      <Icon name="mail" size={14} />
                       알림{unreadCount > 0 && <span className="ml-auto rounded-badge bg-accent-300 px-1.5 py-0.5 text-2xs font-bold text-white tabular-nums">{unreadCount}</span>}
                     </button>
                     <button type="button" onClick={() => { onOpenVouchers(); setUserMenu(false); }}
@@ -507,7 +510,7 @@ const TabBar = memo(function TabBar({
       <span
         aria-hidden
         className="pointer-events-none absolute bottom-0 h-0.5 rounded-full bg-accent-300
-                   shadow-[0_0_8px_rgba(94,106,210,0.5)]
+                   shadow-[0_0_8px_rgb(var(--accent-300)/0.5)]
                    transition-[left,width] duration-300 ease-out"
         style={{ left: indicator.left, width: indicator.width }}
       />
@@ -2129,7 +2132,17 @@ export default function App() {
   const tabDot = useMemo(() => ({ community: commHasNew }), [commHasNew]);
   const tabCount = useMemo(() => ({ live: liveCount }), [liveCount]);
   // 비로그인도 페이지를 연다 — CustomerDashboardPage 가 user 없으면 APIS식 로그인 랜딩을 렌더(오너 레퍼런스 2026-08-27)
-  const openMeCb = useCallback(() => { setVoucherWalletOpen(true); }, []);
+  // keep-alive + VT: 한 번 연 뒤에는 언마운트하지 않고(자식이 display 토글) 재열림을 스냅샷 뒤 동기 커밋으로 —
+  // GTO 등 무거운 탭 위에서 '내 정보'를 열 때의 풀 마운트 프레임 드롭 제거(changeTab 과 같은 조리법).
+  const meEverOpenedRef = useRef(false);
+  if (voucherWalletOpen) meEverOpenedRef.current = true; // 렌더 중 latch(단조) — 헤더 🎟 등 모든 열림 경로를 커버
+  const openMeCb = useCallback(() => {
+    if (meEverOpenedRef.current) {
+      withViewTransition(() => flushSync(() => setVoucherWalletOpen(true)), () => startTransition(() => setVoucherWalletOpen(true)));
+    } else {
+      setVoucherWalletOpen(true); // 첫 열림 — lazy 청크 Suspense 대기가 끼므로 VT 없이 기존 경로
+    }
+  }, []);
   // ⚠ deps 에 user '객체'를 두면 부팅 중 참조 교체(로그인→일일점수)마다 콜백이 재생성돼
   //   CommunityTabM·MarketplaceTabM·marketSlot 세 곳의 memo 가 동시에 깨졌다(실측).
   //   최신 user 는 ref 로 읽고 콜백 참조는 고정한다.
@@ -2212,9 +2225,11 @@ export default function App() {
       {/* 첫 진입 온보딩(#29) — 신규 방문자 1회성 웰컴 시트(딥링크 진입 시 미표시) */}
       <OnboardingSheet />
 
-      {voucherWalletOpen && (
-        <Suspense fallback={<OverlayFallback />}>
-          <CustomerDashboardPage open={voucherWalletOpen} onClose={() => setVoucherWalletOpen(false)}
+      {/* keep-alive — 한 번 열리면 마운트 유지(자식이 display 토글), 재열림·닫힘은 VT 스냅샷 뒤 display 커밋만 */}
+      {(voucherWalletOpen || meEverOpenedRef.current) && (
+        <Suspense fallback={voucherWalletOpen ? <OverlayFallback /> : null}>
+          <CustomerDashboardPage open={voucherWalletOpen}
+            onClose={() => withViewTransition(() => flushSync(() => setVoucherWalletOpen(false)), () => setVoucherWalletOpen(false))}
             unread={notifications.filter((n) => !n.read)}
             onOpenNotification={(id) => {
               const n = notifications.find((x) => x.id === id);
