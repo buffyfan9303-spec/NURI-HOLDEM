@@ -3,16 +3,18 @@
 import type { LegalDoc } from './LegalDocsModal';
 
 // 사업자등록증(525-20-02937) 기준 — LegalDocsModal/LegalNotice 와 동일 값 유지.
-// 오너 지시(2026-08-27): 기본 노출은 최소(상호·사업자번호 1줄), 나머지는 '사업자 정보' 펼침 —
-// 전상법 §10 신원정보는 공정위 고시상 초기화면의 '연결화면(펼침·링크)' 제공이 허용된다(쿠팡·네이버 관행).
-const BIZ_SUMMARY: [string, string][] = [
+// PG(포트원/다날) 입점 심사 요건(2026-08-28 거절 사유 반영): 상호·사업자번호·대표자명·
+// 사업장 주소·전화번호 5항목은 푸터에 '상시 노출'이어야 한다(연결화면 방식 불인정).
+// 부가 정보(고객센터·호스팅)만 펼침 유지.
+// eslint-disable-next-line react-refresh/only-export-components -- 사업자 정보 단일 소스(VerifyGateSheet 재사용), 순수 상수라 HMR 무해
+export const BIZ_REQUIRED: [string, string][] = [
   ['상호', '엔에이치홀딩스'],
   ['사업자등록번호', '525-20-02937'],
+  ['대표자', '김윤혜'],
+  ['사업장 주소', '경기도 남양주시 진건읍 사릉로372번길 25, 201동 1403호'],
+  ['전화번호', '010-7508-7689'],
 ];
-const BIZ_ROWS: [string, string][] = [
-  ['대표', '김윤혜'],
-  ['소재지', '경기도 남양주시 진건읍 사릉로372번길 25, 201동 1403호'],
-  ['유선번호', '010-7508-7689'],
+const BIZ_EXTRA: [string, string][] = [
   ['고객센터', 'buffyfan9303@gmail.com'],
   // 전자상거래법 §10 표시사항 — 호스팅 서비스 제공자
   ['호스팅 제공자', 'Vercel Inc.'],
@@ -25,6 +27,9 @@ export default function BusinessFooter({ onOpenLegal, onOpenSupport }: { onOpenL
         {/* 약관·정책 링크 */}
         <nav className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-2xs">
           {/* 업주 완전 사용설명서(공개 정적 페이지) — 회원가입부터 정산까지 전 기능 안내 */}
+          {/* PG 심사 요건: '어떤 서비스를 운영하는지' 확인 가능한 소개 페이지(정적 URL) */}
+          <a href="/about.html" target="_blank" rel="noopener" className="inline-flex items-center py-1.5 -my-1.5 font-semibold text-ink-secondary hover:text-accent-300">서비스 소개</a>
+          <span className="text-border-strong" aria-hidden>·</span>
           <a href="/guide/manual.html" target="_blank" rel="noopener" className="inline-flex items-center py-1.5 -my-1.5 font-semibold text-accent-300/90 hover:text-accent-300">사용설명서</a>
           <span className="text-border-strong" aria-hidden>·</span>
           <button type="button" onClick={() => onOpenLegal?.('terms')} className="inline-flex items-center py-1.5 -my-1.5 font-semibold text-ink-secondary hover:text-accent-300">이용약관</button>
@@ -40,21 +45,21 @@ export default function BusinessFooter({ onOpenLegal, onOpenSupport }: { onOpenL
           </>}
         </nav>
 
-        {/* 사업자 정보 — 요약 1줄 상시 + 상세는 펼침(연결화면 제공 방식) */}
+        {/* 사업자 정보 — PG 심사 필수 5항목은 상시 노출, 부가 항목만 펼침 */}
+        <dl className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] leading-relaxed text-ink-muted">
+          {BIZ_REQUIRED.map(([k, v]) => (
+            <div key={k} className="flex items-center gap-1">
+              <dt className="text-ink-muted/70">{k}</dt>
+              <dd className="text-ink-secondary">{v}</dd>
+            </div>
+          ))}
+        </dl>
         <details className="group/biz text-[11px] leading-relaxed text-ink-muted">
-          <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-0.5">
-            {BIZ_SUMMARY.map(([k, v]) => (
-              <span key={k} className="inline-flex items-center gap-1">
-                <span className="text-ink-muted/70">{k}</span>
-                <span className="text-ink-secondary">{v}</span>
-              </span>
-            ))}
-            <span className="inline-flex items-center gap-0.5 text-ink-muted underline decoration-border-default underline-offset-2">
-              사업자 정보<span aria-hidden className="transition-transform group-open/biz:rotate-180">▾</span>
-            </span>
+          <summary className="inline-flex cursor-pointer list-none items-center gap-0.5 text-ink-muted underline decoration-border-default underline-offset-2">
+            추가 정보<span aria-hidden className="transition-transform group-open/biz:rotate-180">▾</span>
           </summary>
           <dl className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
-            {BIZ_ROWS.map(([k, v]) => (
+            {BIZ_EXTRA.map(([k, v]) => (
               <div key={k} className="flex items-center gap-1">
                 <dt className="text-ink-muted/70">{k}</dt>
                 <dd className="text-ink-secondary">{v}</dd>
