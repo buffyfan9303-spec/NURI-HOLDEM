@@ -18,7 +18,7 @@ import PushFoldChart from './tools/PushFoldChart';
 import { SprCalc, EvCalc, MzoneCalc, BankrollCalc, VarianceCalc } from './tools/StackCalcs';
 import { PayoutCalc, EndTimeCalc, ComboCalc } from './tools/MoreCalcs';
 import { MdfCalc, AggroChart, RangeMatrix } from './tools/AdvancedCalcs';
-import PostflopTrainer, { CAT_LABEL } from './tools/PostflopTrainer';
+import PostflopTrainer from './tools/PostflopTrainer';
 import BlindBuilder from './tools/BlindBuilder';
 import GlossaryPanel from './tools/GlossaryPanel';
 import DealCalc from './tools/DealCalc';
@@ -102,36 +102,6 @@ const STORE_SET = new Set<ToolKey>(STORE_TOOL_KEYS);
 // 트레이너류는 '퀴즈' 뉘앙스(맞히기), 나머지 계산기·차트류는 '도구' 뉘앙스로 라벨링.
 const QUIZ_KEYS = new Set<ToolKey>(['range', 'pushfold', 'trainer', 'postflop']);
 
-/** 오늘의 추천 도구 — 날짜 해시로 플레이어(비운영) 도구 하나를 결정적으로 고른다(매일 바뀜, 하루엔 고정).
- *  new Date().toLocaleDateString('sv') = 'YYYY-MM-DD'(로컬 자정 기준) 를 시드로. */
-function pickDailyTool(): ToolKey {
-  const players = TOOLS.filter((t) => t.cat !== 'ops');
-  const seed = new Date().toLocaleDateString('sv');
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
-  return players[h % players.length].key;
-}
-
-/** 'For You' — 트레이너 약점 데이터(로컬 스토리지)가 이미 있으면 보완 추천 1행.
- *  신규 fetch·스키마 0 — 트레이너들이 이미 쓰는 키를 읽기만 한다. 없으면 null(행 생략). */
-function readForYou(): { key: ToolKey; name: string; reason: string } | null {
-  try {
-    const pre = JSON.parse(localStorage.getItem('nuri:trainer:preflop:v2') || 'null') as { wrong?: unknown } | null;
-    const wrong = Array.isArray(pre?.wrong) ? (pre!.wrong as unknown[]) : [];
-    if (wrong.length >= 3) return { key: 'trainer', name: '프리플랍 트레이너', reason: `오답 노트 ${wrong.length}개 — 틀린 스팟부터 다시` };
-    const post = JSON.parse(localStorage.getItem('nuri:trainer:postflop:v2') || 'null') as { byCat?: Record<string, { t: number; c: number }> } | null;
-    const weak = Object.entries(post?.byCat ?? {})
-      .filter(([, v]) => v && v.t >= 3 && (v.c / v.t) * 100 < 80)
-      .sort((a, b) => a[1].c / a[1].t - b[1].c / b[1].t)[0];
-    if (weak) {
-      const label = (CAT_LABEL as Record<string, string>)[weak[0]] ?? weak[0];
-      return { key: 'postflop', name: '포스트플랍 트레이너', reason: `${label} 정답률 ${Math.round((weak[1].c / weak[1].t) * 100)}% — 집중 보완` };
-    }
-    if (wrong.length > 0) return { key: 'trainer', name: '프리플랍 트레이너', reason: `오답 노트 ${wrong.length}개 — 틀린 스팟부터 다시` };
-  } catch { /* 파싱 실패 시 추천 생략 */ }
-  return null;
-}
-
 function renderTool(k: ToolKey): ReactNode {
   switch (k) {
     // '결과 먼저': 빈 폼 대신 직전 입력(스냅샷) 또는 대표 데모 핸드(AKs vs QQ)로 진입 즉시 결과.
@@ -190,21 +160,12 @@ export default function ToolsPanel() {
     const m = window.location.hash.match(/^#tool=([a-z]+)/);
     return m && TOOLS.some((t) => t.key === m[1]) ? (m[1] as ToolKey) : null;
   });
-  // 최근 사용 — 재방문 시 도구 재탐색 비용 0. 최대 3개, 앞이 최신.
-  const [recent, setRecent] = useState<ToolKey[]>(() => {
-    try { return JSON.parse(localStorage.getItem('nuri:tool:recent') || '[]'); } catch { return []; }
-  });
   // GTO 도구는 로그인 회원 전용(오너 지시 2026-08-27) — 카탈로그는 보이되 실행에 게이트
   const { user } = useAuth();
   const open = (k: ToolKey) => {
     if (!user) { promptLogin(); return; }
     setActive(k);
     try { history.replaceState(null, '', `#tool=${k}`); } catch { /* 무시 */ }
-    setRecent((prev) => {
-      const r = [k, ...prev.filter((x) => x !== k)].slice(0, 3);
-      try { localStorage.setItem('nuri:tool:recent', JSON.stringify(r)); } catch { /* quota */ }
-      return r;
-    });
   };
   const close = () => {
     setActive(null);
@@ -245,8 +206,6 @@ export default function ToolsPanel() {
 
   // 트레이너 진행(스트릭/XP/오늘 목표) — 이미 로컬에 있는 데이터 구독(신규 fetch 0)
   const prog = useTrainerProgress();
-  // 'For You' 약점 추천 — 탭 진입 시 1회 계산(트레이너 로컬 기록 기반, 없으면 생략)
-  const [forYou] = useState(readForYou);
 
   // 다른 곳(공유 링크·도구 간 상호 딥링크)에서 해시가 바뀌면 반영
   useEffect(() => {
@@ -269,10 +228,6 @@ export default function ToolsPanel() {
 
   const activeTool = active ? TOOLS.find((t) => t.key === active) : null;
 
-  // 오늘의 도구 — 날짜 결정적 추천. 트레이너류면 '퀴즈', 아니면 '도구' 뉘앙스.
-  const dailyKey = pickDailyTool();
-  const dailyTool = TOOLS.find((t) => t.key === dailyKey)!;
-  const dailyIsQuiz = QUIZ_KEYS.has(dailyKey);
 
   return (
     <div className="space-y-3">
@@ -307,68 +262,13 @@ export default function ToolsPanel() {
             return (
               <button key={l.id} type="button" aria-pressed={on}
                 onClick={() => setLane(on && l.id !== 'all' ? 'all' : l.id)}
-                className={['inline-flex h-9 items-center rounded-input border px-3 text-xs font-semibold transition-colors',
-                  on ? 'border-accent-300 bg-accent-300 text-white' : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
+                className={['inline-flex h-8 items-center rounded-badge border px-2.5 text-2xs font-semibold transition-colors',
+                  on ? 'border-accent-300 bg-accent-300 text-white' : 'border-transparent bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
                 {l.label}
               </button>
             );
           })}
         </div>
-      )}
-
-      {/* For You — 트레이너 약점 기반 보완 추천 1행(로컬 기록이 있을 때만) */}
-      {!hits && forYou && (
-        <button type="button" onClick={() => open(forYou.key)}
-          aria-label={`For You — ${forYou.name} 열기`}
-          className="group flex w-full items-center gap-3 rounded-card border border-border-default bg-surface-low px-3.5 py-2.5 text-left transition-colors hover:border-accent-400/40 hover:bg-surface-high active:scale-[0.99]">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-input bg-accent-300/15 text-accent-300" aria-hidden>
-            <Icon name="target" size={15} />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-2xs font-bold text-accent-200">For You</span>
-            <span className="block truncate text-sm font-bold text-ink-primary">{forYou.name}</span>
-            <span className="block truncate text-2xs text-ink-muted">{forYou.reason}</span>
-          </span>
-          <Icon name="chevron-right" size={16} className="shrink-0 text-ink-muted transition-transform group-hover:translate-x-0.5" aria-hidden />
-        </button>
-      )}
-
-      {/* 오늘의 도구 — 날짜 기반 추천 1개. 커뮤니티 '오늘의 퀴즈/도구' 유입 동선의 진입점. */}
-      {!hits && (
-        <button type="button" onClick={() => open(dailyKey)}
-          aria-label={`${dailyIsQuiz ? '오늘의 퀴즈' : '오늘의 도구'} — ${dailyTool.name} 열기`}
-          className="group flex w-full items-center gap-3 rounded-card border border-accent-400/30 bg-accent-300/10 px-3.5 py-3 text-left transition-colors hover:border-accent-400/50 hover:bg-accent-300/15 active:scale-[0.99]">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-input bg-accent-300/20 text-accent-300" aria-hidden>
-            <Icon name="calendar" size={18} />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-2xs font-bold text-accent-200">{dailyIsQuiz ? '오늘의 퀴즈' : '오늘의 도구'}</span>
-            <span className="block truncate text-sm font-bold text-ink-primary">{dailyTool.name}</span>
-            <span className="block truncate text-2xs text-ink-muted">{dailyTool.desc}</span>
-          </span>
-          <Icon name="chevron-right" size={18} className="shrink-0 text-ink-muted transition-transform group-hover:translate-x-0.5" aria-hidden />
-        </button>
-      )}
-
-      {/* 최근 사용 — 마지막으로 쓴 도구로 원탭 복귀 */}
-      {!hits && recent.length > 0 && (
-        <section className="space-y-1.5">
-          <p className="inline-flex items-center gap-1 text-2xs font-bold text-ink-muted">
-            <Icon name="clock" size={12} aria-hidden /> 최근 사용
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {recent.map((k) => {
-              const t = TOOLS.find((x) => x.key === k);
-              if (!t || STORE_SET.has(t.key)) return null;
-              return (
-                <button key={k} type="button" onClick={() => open(k)}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-input border border-border-default bg-surface-high px-3 text-xs font-semibold text-ink-secondary transition-colors hover:text-ink-primary">
-                  {t.name}
-                </button>
-              );
-            })}
-          </div>
-        </section>
       )}
 
       {/* 즐겨찾기 — 레인과 무관하게 항상 보이는 내 도구 */}

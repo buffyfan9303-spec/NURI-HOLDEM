@@ -884,7 +884,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
       {finishRows && state.sessionDate && active && (
         <Modal open onClose={() => { setFinishRows(null); setEndAfterFinish(false); }} title="🏆 입상 순위 입력" maxWidth="md" variant="sheet">
           <div className="space-y-2 p-4">
-            <p className="text-2xs text-ink-muted">토너 종료 — 입상 순위를 저장하면 매장 순위·시즌·머니인킹에 자동 반영됩니다. 이름은 장부 참가자에서 자동완성, 상금은 만원 단위.</p>
+            <p className="text-2xs text-ink-muted">저장하면 매장 순위·시즌·머니인킹에 자동 반영 · 이름은 장부에서 자동완성 · 상금은 만원 단위.</p>
             <datalist id="clk-finish-players">
               {[...new Set(buyins.map((b) => b.playerName).filter(Boolean))].map((n) => <option key={n} value={n} />)}
             </datalist>
@@ -1112,7 +1112,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
         </div>
         {seededFromLedger && linkDate && (
           <p className="text-[11px] text-emerald-200 bg-emerald-500/12 border border-emerald-500/40 rounded-input px-2.5 py-2 leading-relaxed">
-            📒 <b>장부 {linkDate}</b> 연동 준비됨 — 게임명·얼리가 연결됐습니다. 아래에서 블라인드·프라이즈·스택을 설정하세요. 장부 수정 시 라이브에 즉시 반영됩니다.
+            📒 <b>장부 {linkDate}</b> 연동됨 — 게임명·얼리 자동 연결, 장부 수정은 라이브에 즉시 반영.
           </p>
         )}
       </section>
@@ -1154,7 +1154,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
             className="w-full rounded-input border border-accent-400/40 bg-accent-300/12 py-2 text-xs font-bold text-accent-300 transition-colors hover:bg-accent-300/20 disabled:opacity-50">
             {convertBusy ? '가져오는 중…' : `클락 프리셋 ${presets.length}개 → 게임 프리셋으로 가져오기 (1회 변환)`}
           </button>
-          <p className="text-2xs text-ink-muted">가져오면 포스터·장부·클락 어디서든 같은 프리셋을 쓸 수 있어요. 가져온 뒤 구형 프리셋은 ✕로 정리하세요.</p>
+          <p className="text-2xs text-ink-muted">가져오면 포스터·장부·클락 공용이 돼요 — 구형은 ✕로 정리.</p>
         </>)}
       </section>
 

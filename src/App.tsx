@@ -139,7 +139,7 @@ interface TabDef { id: TabId; label: string; }
 // ── 헤더 ─────────────────────────────────────────────────────────────────────
 
 const AppHeader = memo(function AppHeader({
-  unreadCount, notifications, onMarkRead, onOpenLogin, onNavigateNotification, onHome, onOpenProfile, onOpenSearch, onOpenVouchers,
+  unreadCount, notifications, onMarkRead, onOpenLogin, onNavigateNotification, onHome, onOpenProfile, onOpenVouchers,
   onGotoTab, activeTab, suppressed = false,
 }: {
   /** (미사용 — 텍스트 내비로 대체) 모바일 헤더 좌측 큰 타이틀 */
@@ -155,7 +155,6 @@ const AppHeader = memo(function AppHeader({
   onNavigateNotification: (n: AppNotification) => void;
   onHome: () => void;
   onOpenProfile: () => void;
-  onOpenSearch: () => void;
   onOpenVouchers: () => void;
   /** 매장 페이지 등 풀스크린 오버레이가 열렸을 때 메인 헤더를 가린다(레이아웃 유지, 페인트만 숨김). */
   suppressed?: boolean;
@@ -227,15 +226,8 @@ const AppHeader = memo(function AppHeader({
 
         {/* RIGHT: 테마 토글 + 알림 + 로그인/아바타 — 동일 36px 원형 버튼 클러스터 */}
         <div className="flex items-center gap-0.5">
-          {/* 통합 검색 */}
-          <button
-            type="button"
-            onClick={onOpenSearch}
-            aria-label="통합 검색"
-            className="hit w-9 h-9 flex items-center justify-center rounded-full text-ink-secondary hover:text-ink-primary hover:bg-surface-high transition-colors"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
-          </button>
+          {/* 통합 검색 버튼은 오너 지시(2026-08-27)로 제거 — 검색은 '전체 일정' 레일 돋보기가 담당.
+              GlobalSearchModal 자체는 유지(추후 재진입점 대비). */}
           {/* 라이트/다크 모드 전환 */}
           <ThemeToggle className="hidden lg:flex" />
 
@@ -2116,12 +2108,13 @@ export default function App() {
   // 헤더·탭바에 인라인 화살표를 넘기면 memo 를 걸어도 매 렌더 무효 — 참조 고정 콜백으로.
   const openLoginCb = useCallback(() => setAuthOpen(true), []);
   const openProfileCb = useCallback(() => setProfileOpen(true), []);
-  const openSearchCb = useCallback(() => setGlobalSearchOpen(true), []);
+  // 헤더 검색 버튼 제거(오너 지시) — 진입은 Cmd/Ctrl+K 단축키만 잔존
   const openVouchersCb = useCallback(() => setVoucherWalletOpen(true), []);
   const pcTabs = useMemo(() => tabs.filter((t) => t.id !== 'market'), [tabs]);
   const tabDot = useMemo(() => ({ community: commHasNew }), [commHasNew]);
   const tabCount = useMemo(() => ({ live: liveCount }), [liveCount]);
-  const openMeCb = useCallback(() => { if (userRefForGate.current) setVoucherWalletOpen(true); else setAuthOpen(true); }, []);
+  // 비로그인도 페이지를 연다 — CustomerDashboardPage 가 user 없으면 APIS식 로그인 랜딩을 렌더(오너 레퍼런스 2026-08-27)
+  const openMeCb = useCallback(() => { setVoucherWalletOpen(true); }, []);
   // ⚠ deps 에 user '객체'를 두면 부팅 중 참조 교체(로그인→일일점수)마다 콜백이 재생성돼
   //   CommunityTabM·MarketplaceTabM·marketSlot 세 곳의 memo 가 동시에 깨졌다(실측).
   //   최신 user 는 ref 로 읽고 콜백 참조는 고정한다.
@@ -2162,7 +2155,6 @@ export default function App() {
         onNavigateNotification={handleNavigateNotification}
         onHome={handleHome}
         onOpenProfile={openProfileCb}
-        onOpenSearch={openSearchCb}
         onOpenVouchers={openVouchersCb}
         suppressed={openVenueId !== null}
       />

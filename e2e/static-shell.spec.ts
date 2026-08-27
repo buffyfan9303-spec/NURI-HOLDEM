@@ -30,7 +30,7 @@ test.describe('정적 앱 셸 — 첫 페인트', () => {
   test('🔴 React 마운트가 셸을 정확히 교체한다 — 이중 헤더·셸 잔류 없음', async ({ page }) => {
     await page.goto('/');
     // React 마운트 대기: 셸에는 없는 상호작용 요소(로그인 버튼)로 판별
-    await page.waitForSelector('button[aria-label="로그인"], button[aria-label="통합 검색"]', { timeout: 15_000 });
+    await page.waitForSelector('button[aria-label="로그인"], button[aria-label^="알림"]', { timeout: 15_000 });
     await page.waitForTimeout(300);
 
     // ⚠ 'header' 전체를 세면 안 된다 — 온보딩 모달 등 다른 <header> 가 정당하게 존재한다
@@ -56,14 +56,16 @@ test.describe('정적 앱 셸 — 첫 페인트', () => {
     // (공지·주간킹 등 라이브 데이터에 따라 ±수십 px 는 정상 범위)
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto('/');
-    await page.waitForSelector('button[aria-label="로그인"], button[aria-label="통합 검색"]', { timeout: 15_000 });
+    await page.waitForSelector('button[aria-label="로그인"], button[aria-label^="알림"]', { timeout: 15_000 });
     await page.waitForTimeout(500);
     const appBox = await page.locator('main.tab-pane [class*="pb-section"]').first().boundingBox();
     expect(appBox, 'React 목록 컨테이너가 없다').toBeTruthy();
     // 캐러셀·주간킹·공지 등 데이터 의존 블록은 셸 예약과 실데이터 유무가 다를 수 있다(정당한 격차).
     // 이 게이트의 목적은 '예약 자체가 사라진 300px대 낙하' 재발 방지 — 오차는 그 아래로만 조인다.
+    // 캐러셀 카드 확대(h-28→h-36, 오너 지시)로 셸 스택이 +32px — 원 목적(예약 전무 낙하 방지)은
+    // 위의 y>120 검사가 담당하므로 정합 참고 임계만 재보정
     expect(Math.abs(appBox!.y - shellBox!.y), `셸(${shellBox!.y})↔React(${appBox!.y}) 목록 시작 y 격차`)
-      .toBeLessThan(250);
+      .toBeLessThan(300);
   });
 
   test('셸 뼈대 클래스가 React 렌더와 동일하다(단일 출처 검증)', async ({ page }) => {
@@ -72,7 +74,7 @@ test.describe('정적 앱 셸 — 첫 페인트', () => {
     // App.tsx 쪽이 리팩터링된 것이므로 index.html 셸도 함께 갱신해야 한다는 신호다.
     const html = await (await page.request.get('/')).text();
     await page.goto('/');
-    await page.waitForSelector('button[aria-label="통합 검색"]', { timeout: 15_000 });
+    await page.waitForSelector('button[aria-label^="알림"]', { timeout: 15_000 });
     // MO-7A: 셸 스켈레톤이 ListCard 골격 복제로 바뀌며 대표 클래스도 그 컨테이너로 교체
     for (const cls of ['h-header-h', 'bg-surface-mid shadow-dialog', 'rounded-card border border-border-subtle bg-surface-low']) {
       expect(html, `셸에서 '${cls}' 가 사라졌다`).toContain(cls);

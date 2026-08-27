@@ -306,9 +306,74 @@ export default function ScheduleDetailModal({
           />
         </div>
       ) : (
-      <div className="px-3.5 pt-3.5 pb-5 space-y-4">
+      <div className="px-3.5 pt-3 pb-5 space-y-3">
 
-        {/* 예약하기 (첫 페이지) */}
+        {/* ── 핵심 요약 그리드(APIS '오늘 예정' 문법) — 바이인·프라이즈·시작·레지마감·스타팅칩·
+            리엔트리를 2열 고정 행높이로 '한 화면 요약'. §28: 바이인·GTD·프라이즈풀은
+            상품 가격 정보라 표시를 유지한다. */}
+        <section className="overflow-hidden rounded-card border border-border-subtle bg-surface-high">
+          <div className="grid grid-cols-2 [&>div]:border-border-subtle [&>div:nth-child(even)]:border-l [&>div:nth-child(n+3)]:border-t">
+            <SummaryCell label="바이인" value={schedule.buyIn.amount.toLocaleString()} />
+            <SummaryCell
+              label={schedule.guaranteed ? '상금 풀' : '프라이즈'}
+              value={prizeMainText(schedule)}
+              accent
+              badge={(schedule.prizePool || schedule.prizePercent) ? (
+                <span className={[
+                  'shrink-0 rounded-badge border px-1.5 py-0.5 text-2xs font-bold leading-none tracking-wider',
+                  schedule.guaranteed
+                    ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                    : 'bg-surface-base text-ink-muted border-border-default',
+                ].join(' ')}>
+                  {schedule.guaranteed ? 'GTD' : '엔트리'}
+                </span>
+              ) : undefined}
+            />
+            <SummaryCell label="시작" value={`${d.getMonth() + 1}/${d.getDate()} (${dow}) ${schedule.startTime}`} />
+            <SummaryCell label="레지 마감" value={schedule.regCloseTime ? schedule.regCloseTime : '현장 안내'} />
+            <SummaryCell label="스타팅 칩" value={schedule.structure?.startingChips != null ? schedule.structure.startingChips.toLocaleString() : '현장 안내'} />
+            <SummaryCell label="리엔트리" value={rebuyText(schedule)} />
+          </div>
+          {schedule.guaranteed && (
+            <p className="border-t border-border-subtle px-3 py-1.5 text-2xs text-ink-muted">
+              ※ 보장 상금: 참가 인원에 관계없이 위 금액 이상이 지급됩니다
+            </p>
+          )}
+        </section>
+
+        {/* ── 순위별 상금 — APIS 문법: 상금이 핵심 정보라 접지 않고 요약 바로 아래 상시 노출 ── */}
+        {schedule.rankingPrizes && schedule.rankingPrizes.length > 0 && (
+          <section>
+            <h3 className="text-sm font-bold text-ink-primary mb-1.5">순위별 상금</h3>
+            <div className="overflow-hidden rounded-card border border-border-subtle bg-surface-high">
+              <table className="w-full text-xs">
+                <tbody>
+                  {schedule.rankingPrizes.map((rp, i) => {
+                    const isTop3 = ['1st', '2nd', '3rd'].includes(rp.rank);
+                    return (
+                      <tr key={i} className="border-b border-border-subtle last:border-b-0">
+                        <td className={[
+                          'px-3 py-1 w-20',
+                          isTop3 ? 'text-accent-300 font-bold' : 'text-ink-secondary',
+                        ].join(' ')}>
+                          {rp.rank}
+                        </td>
+                        <td className={[
+                          'px-3 py-1 text-right tabular-nums',
+                          isTop3 ? 'text-accent-300 font-extrabold text-sm' : 'text-ink-primary font-semibold',
+                        ].join(' ')}>
+                          {rp.amount.toLocaleString()}{rp.unit ?? ''}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
+        {/* 참가 예약 — 기본 접힘(한 줄 요약 + '더보기'), CTA 는 접힘 행 우측에 유지 */}
         {/* status 를 계산해 넘기지 않고 date/startTime 을 넘긴다 — 모달을 열어둔 채 종료 시각을
             넘길 수 있어, 클릭 시점에 다시 판정해야 하기 때문 */}
         <ReserveBox scheduleId={schedule.id} ownerId={schedule.ownerId} venueId={schedule.venueId}
@@ -326,109 +391,37 @@ export default function ScheduleDetailModal({
         {/* 캘린더 등록 · 공유 — 참가 결심 직후 동선 */}
         <CalendarShareRow schedule={schedule} />
 
-        {/* 프라이즈 강조 박스 */}
-        {(schedule.prizePool || schedule.prizePercent) && (
-          <section className="rounded-card border border-accent-400/50 bg-gradient-to-br from-accent-300/10 to-transparent p-4">
-            <p className="text-2xs uppercase tracking-wider text-ink-muted mb-1">{schedule.guaranteed ? '상금 풀' : '프라이즈'}</p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-extrabold text-gold-300 tabular-nums leading-none">
-                {prizeMainText(schedule)}
-              </span>
-              <span className={[
-                'text-sm font-bold tracking-wider rounded-badge px-2 py-0.5 border',
-                schedule.guaranteed
-                  ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                  : 'bg-surface-high text-ink-muted border-border-default',
-              ].join(' ')}>
-                {schedule.guaranteed ? 'GTD' : '엔트리'}
-              </span>
-            </div>
-            {schedule.guaranteed && (
-              <p className="mt-1 text-2xs text-ink-muted">
-                ※ 보장 상금: 참가 인원에 관계없이 위 금액 이상이 지급됩니다
-              </p>
-            )}
-          </section>
-        )}
-
-        {/* 핵심 정보 그리드 */}
+        {/* ── 토너먼트 정보 — 라벨/값 한 줄 콤팩트 행(헤어라인 구분). 긴 값은 줄바꿈 대신
+            가로 마퀴 루프(MarqueeText)로 옆으로 흐른다. */}
         <section>
-          <h3 className="text-sm font-semibold text-ink-primary mb-2">토너먼트 정보</h3>
-          <div className="grid grid-cols-2 gap-2">
-            <InfoCard
-              label="일정"
-              value={`${d.getMonth() + 1}/${d.getDate()} (${dow})`}
-              sub={`시작 ${schedule.startTime}`}
-            />
-            <InfoCard
-              label="레지 마감"
-              value={schedule.regCloseTime ? schedule.regCloseTime : '현장 안내'}
-              sub={schedule.regCloseTime ? '레이트 레지 마감' : undefined}
-            />
-            <InfoCard
-              label="듀레이션"
-              value={schedule.duration || '미정'}
-            />
-            <InfoCard
-              label="바이인"
-              value={schedule.buyIn.amount.toLocaleString()}
-              sub={(() => {
-                const b = schedule.buyIn; const parts: string[] = [];
-                if (b.gameType) parts.push(b.gameType);
-                if (b.rebuy !== undefined) parts.push(`리바이 ${b.rebuy.toLocaleString()}${b.rebuyLimit ? `×${b.rebuyLimit}` : ' 무제한'}`);
-                if (b.addon || b.addonStack) parts.push(`애드온${b.addon ? ` ${b.addon.toLocaleString()}원` : ''}${b.addonStack ? ` (${b.addonStack.toLocaleString()}칩)` : ''}`);
-                return parts.length ? parts.join(' · ') : '프리즈아웃';
-              })()}
-            />
-            <InfoCard
-              label="포맷"
-              value={schedule.format}
-              sub={schedule.guaranteed ? 'GTD 보장' : '예상 상금'}
-            />
-            <InfoCard
+          <h3 className="text-sm font-bold text-ink-primary mb-1">토너먼트 정보</h3>
+          <div className="divide-y divide-border-subtle border-y border-border-subtle">
+            <InfoRow label="일정" value={`${d.getMonth() + 1}/${d.getDate()} (${dow}) · 시작 ${schedule.startTime}`} />
+            <InfoRow label="레지 마감" value={schedule.regCloseTime ? `${schedule.regCloseTime} · 레이트 레지 마감` : '현장 안내'} />
+            <InfoRow label="듀레이션" value={schedule.duration || '미정'} />
+            <InfoRow label="바이인" value={buyinDetailText(schedule)} />
+            <InfoRow label="포맷" value={`${schedule.format} · ${schedule.guaranteed ? 'GTD 보장' : '예상 상금'}`} />
+            <InfoRow
               label="이벤트"
-              value={
-                schedule.sideEvents && schedule.sideEvents.length > 0
-                  ? `사이드 ${schedule.sideEvents.length}개`
-                  : '메인 토너먼트'
-              }
-              sub={
-                schedule.sideEvents && schedule.sideEvents.length > 0
-                  ? schedule.sideEvents.map((se) => se.name).slice(0, 2).join(', ')
-                  : undefined
-              }
+              value={schedule.sideEvents && schedule.sideEvents.length > 0
+                ? `사이드 ${schedule.sideEvents.length}개 · ${schedule.sideEvents.map((se) => se.name).join(', ')}`
+                : '메인 토너먼트'}
             />
+            {/* 토너먼트 구조 — 별도 가로스크롤 카드 대신 같은 행 문법으로 흡수(전항목 보존) */}
+            {schedule.structure?.startingChips != null && <InfoRow label="시작 칩" value={schedule.structure.startingChips.toLocaleString()} />}
+            {schedule.structure?.rebuyStack != null && <InfoRow label="리바인 칩" value={schedule.structure.rebuyStack.toLocaleString()} />}
+            {schedule.structure?.blindLevelMinutes != null && <InfoRow label="레벨" value={`${schedule.structure.blindLevelMinutes}분`} />}
+            {schedule.structure?.lateRegLevels !== undefined && <InfoRow label="레이트 레지" value={`${schedule.structure.lateRegLevels}레벨`} />}
           </div>
         </section>
 
-        {/* 블라인드 (선택) */}
+        {/* 블라인드 (선택) — 직접 입력 텍스트 */}
         {schedule.blinds && (
           <section>
-            <h3 className="text-sm font-semibold text-ink-primary mb-2">블라인드</h3>
-            <p className="text-sm text-ink-secondary leading-relaxed whitespace-pre-wrap rounded-input bg-surface-high border border-border-subtle p-3">
+            <h3 className="text-sm font-bold text-ink-primary mb-1.5">블라인드</h3>
+            <p className="text-xs text-ink-secondary leading-relaxed whitespace-pre-wrap rounded-input bg-surface-high border border-border-subtle px-3 py-2">
               {schedule.blinds}
             </p>
-          </section>
-        )}
-
-        {/* 토너먼트 구조 (선택) — 한 줄(가로 스크롤), 리바인칩 포함 */}
-        {schedule.structure && (schedule.structure.startingChips != null || schedule.structure.rebuyStack != null || schedule.structure.blindLevelMinutes != null) && (
-          <section>
-            <h3 className="text-sm font-semibold text-ink-primary mb-2">토너먼트 구조</h3>
-            <div className="flex gap-2 overflow-x-auto scrollbar-none snap-x snap-proximity overscroll-x-contain">
-              {schedule.structure.startingChips != null && (
-                <div className="shrink-0 w-[5.5rem] snap-start"><InfoCard label="시작 칩" value={schedule.structure.startingChips.toLocaleString()} compact /></div>
-              )}
-              {schedule.structure.rebuyStack != null && (
-                <div className="shrink-0 w-[5.5rem] snap-start"><InfoCard label="리바인 칩" value={schedule.structure.rebuyStack.toLocaleString()} compact /></div>
-              )}
-              {schedule.structure.blindLevelMinutes != null && (
-                <div className="shrink-0 w-[5.5rem] snap-start"><InfoCard label="레벨" value={`${schedule.structure.blindLevelMinutes}분`} compact /></div>
-              )}
-              {schedule.structure.lateRegLevels !== undefined && (
-                <div className="shrink-0 w-[5.5rem] snap-start"><InfoCard label="레이트 레지" value={`${schedule.structure.lateRegLevels}레벨`} compact /></div>
-              )}
-            </div>
           </section>
         )}
 
@@ -438,7 +431,7 @@ export default function ScheduleDetailModal({
         {/* 프로모션 */}
         {schedule.promotions && schedule.promotions.length > 0 && (
           <section>
-            <h3 className="text-sm font-semibold text-ink-primary mb-2">프로모션 / 얼리칩</h3>
+            <h3 className="text-sm font-bold text-ink-primary mb-1.5">프로모션 / 얼리칩</h3>
             <ul className="space-y-1.5">
               {/* 긴 detail(예: 사전예약 얼리칩 조건)이 shrink-0 한 줄 강제로 행 밖으로 삐져나가던
                   오버플로 수정 — 배지·제목 한 줄 + 설명은 아래 전체 폭 줄바꿈 스택으로. */}
@@ -467,49 +460,15 @@ export default function ScheduleDetailModal({
         {/* 사이드 이벤트 */}
         {schedule.sideEvents && schedule.sideEvents.length > 0 && (
           <section>
-            <h3 className="text-sm font-semibold text-ink-primary mb-2">사이드 이벤트</h3>
+            <h3 className="text-sm font-bold text-ink-primary mb-1.5">사이드 이벤트</h3>
             <div className="grid grid-cols-2 gap-2">
               {schedule.sideEvents.map((se, i) => (
-                <div key={i} className="rounded-input bg-surface-high border border-border-subtle p-3">
+                <div key={i} className="rounded-input bg-surface-high border border-border-subtle px-2.5 py-2">
                   <p className="text-2xs text-ink-muted mb-0.5">{se.startBefore}</p>
-                  <p className="text-base font-bold text-ink-primary">{se.name}</p>
+                  <p className="text-sm font-bold text-ink-primary">{se.name}</p>
                   {se.note && <p className="text-2xs text-ink-muted mt-0.5">{se.note}</p>}
                 </div>
               ))}
-            </div>
-          </section>
-        )}
-
-        {/* RANKING GTD */}
-        {schedule.rankingPrizes && schedule.rankingPrizes.length > 0 && (
-          <section className="reveal">
-            <h3 className="text-sm font-semibold text-ink-primary mb-2 flex items-center gap-1.5">
-              순위별 상금
-            </h3>
-            <div className="rounded-card border border-border-subtle bg-surface-high overflow-hidden">
-              <table className="w-full text-xs">
-                <tbody>
-                  {schedule.rankingPrizes.map((rp, i) => {
-                    const isTop3 = ['1st', '2nd', '3rd'].includes(rp.rank);
-                    return (
-                      <tr key={i} className="border-b border-border-subtle last:border-b-0">
-                        <td className={[
-                          'px-3 py-1.5 w-20',
-                          isTop3 ? 'text-accent-300 font-bold' : 'text-ink-secondary',
-                        ].join(' ')}>
-                          {rp.rank}
-                        </td>
-                        <td className={[
-                          'px-3 py-1.5 text-right tabular-nums',
-                          isTop3 ? 'text-accent-300 font-extrabold text-sm' : 'text-ink-primary font-semibold',
-                        ].join(' ')}>
-                          {rp.amount.toLocaleString()}{rp.unit ?? ''}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
             </div>
           </section>
         )}
@@ -519,7 +478,7 @@ export default function ScheduleDetailModal({
           <section className="reveal space-y-3">
             {schedule.partners && schedule.partners.length > 0 && (
               <div>
-                <h3 className="text-sm font-semibold text-ink-primary mb-2">파트너 / 시드권 발행</h3>
+                <h3 className="text-sm font-bold text-ink-primary mb-1.5">파트너 / 시드권 발행</h3>
                 <div className="flex flex-wrap gap-1.5">
                   {/* max-w-full: 긴 파트너명(띄어쓰기 없는 영문 등)이 칩째로 화면 밖으로 나가지 않게 칩 안에서 줄바꿈 */}
                   {schedule.partners.map((p) => (
@@ -536,7 +495,7 @@ export default function ScheduleDetailModal({
             )}
             {schedule.paymentMethods && schedule.paymentMethods.length > 0 && (
               <div>
-                <h3 className="text-sm font-semibold text-ink-primary mb-2">결제 수단</h3>
+                <h3 className="text-sm font-bold text-ink-primary mb-1.5">결제 수단</h3>
                 <div className="flex flex-wrap gap-1.5">
                   {schedule.paymentMethods.map((m) => (
                     <span
@@ -555,7 +514,7 @@ export default function ScheduleDetailModal({
         {/* 규정 */}
         {schedule.rules && schedule.rules.length > 0 && (
           <section className="reveal">
-            <h3 className="text-sm font-semibold text-ink-primary mb-2">운영 규정</h3>
+            <h3 className="text-sm font-bold text-ink-primary mb-1.5">운영 규정</h3>
             <ul className="space-y-1 text-xs text-ink-secondary">
               {schedule.rules.map((r, i) => (
                 <li key={i} className="flex items-start gap-1.5">
@@ -570,8 +529,8 @@ export default function ScheduleDetailModal({
         {/* 상세 설명 */}
         {schedule.description && (
           <section className="reveal">
-            <h3 className="text-sm font-semibold text-ink-primary mb-2">상세 설명</h3>
-            <p className="text-sm text-ink-secondary leading-relaxed whitespace-pre-wrap">
+            <h3 className="text-sm font-bold text-ink-primary mb-1.5">상세 설명</h3>
+            <p className="text-xs text-ink-secondary leading-relaxed whitespace-pre-wrap">
               {schedule.description}
             </p>
           </section>
@@ -607,7 +566,7 @@ function CalendarShareRow({ schedule }: { schedule: Schedule }) {
             window.open(googleCalendarUrl(ev), '_blank', 'noopener');
           }
         }}
-        className="flex items-center justify-center gap-1.5 rounded-input border border-border-default bg-surface-high py-3 text-sm font-bold text-ink-secondary transition-colors hover:border-accent-400/50 hover:text-accent-300">
+        className="flex items-center justify-center gap-1.5 rounded-input border border-border-default bg-surface-high py-2 text-xs font-bold text-ink-secondary transition-colors hover:border-accent-400/50 hover:text-accent-300">
         <span aria-hidden>📅</span> 내 캘린더에 추가
       </button>
       {/* 공유 링크 복사 — 이 대회로 바로 열리는 주소 */}
@@ -620,7 +579,7 @@ function CalendarShareRow({ schedule }: { schedule: Schedule }) {
             toast.show('공유 링크를 복사했습니다 — 붙여넣으면 이 대회로 바로 열려요', 'success');
           } catch { toast.show('복사에 실패했습니다', 'error'); }
         }}
-        className="flex items-center justify-center gap-1.5 rounded-input border border-border-default bg-surface-high py-3 text-sm font-bold text-ink-secondary transition-colors hover:border-accent-400/50 hover:text-accent-300">
+        className="flex items-center justify-center gap-1.5 rounded-input border border-border-default bg-surface-high py-2 text-xs font-bold text-ink-secondary transition-colors hover:border-accent-400/50 hover:text-accent-300">
         <span aria-hidden>🔗</span> 공유 링크
       </button>
     </div>
@@ -647,7 +606,7 @@ function BuyinRequestBox({ venueId, eventDate }: { venueId: string; eventDate: s
       .finally(() => setSending(false));
   };
   return (
-    <div className="flex items-center gap-3 rounded-card border border-sky-500/30 bg-sky-500/[0.05] p-3">
+    <div className="flex items-center gap-3 rounded-card border border-sky-500/30 bg-sky-500/[0.05] p-2.5">
       {qr && <img src={qr} alt="바인 요청 QR" width={72} height={72} decoding="async" className="shrink-0 rounded-input bg-white p-1" />}
       <div className="min-w-0 flex-1">
         <p className="text-sm font-bold text-ink-primary">🙋 지금 매장에서 참가 신청 <span className="font-normal text-ink-muted">· 오늘 · 현장</span></p>
@@ -667,6 +626,9 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
   const { user } = useAuth();
   const toast = useToast();
   const [mine, setMine] = useState<Reservation | null>(null);
+  // 컴팩트 재구성(오너 지시 2026-08-27) — 예약 UI 는 기본 접힘. 한 줄 요약 + '더보기'로 펼친다.
+  // CTA('예약하기')는 접힘 행 우측에 항상 노출 — 누르면 펼쳐져 닉네임 입력부터 이어진다.
+  const [expanded, setExpanded] = useState(false);
   // 예약 성공 순간 — 토스트 한 줄로 끝내지 않고 '다음 단계'(캘린더·1시간 전 알림)를 제안
   const [justReserved, setJustReserved] = useState(false);
   const [pushOn, setPushOn] = useState(false);
@@ -747,13 +709,35 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
   const fmtRes = (iso: string) => { const d = new Date(iso); const p = (n: number) => String(n).padStart(2, '0'); return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`; };
 
   return (
-    <section className="rounded-card border border-accent-400/40 bg-gradient-to-br from-accent-300/[0.08] to-transparent p-4 space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        {/* 아래 '지금 매장에서 참가 신청'과 역할이 헷갈려 손님이 잘못 누르는 사고가 있어 제목에 역할을 박아둔다 */}
-        <p className="text-sm font-bold text-accent-300">참가 예약 <span className="font-normal text-ink-muted">· 미리 자리 잡아두기</span></p>
-        {mine && <span className="text-2xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-badge">예약 완료</span>}
-        {!mine && ended && <span className="text-2xs font-bold text-ink-muted bg-surface-high border border-border-default px-2 py-0.5 rounded-badge">종료</span>}
+    <section className="rounded-card border border-accent-400/40 bg-gradient-to-br from-accent-300/[0.08] to-transparent">
+      {/* 한 줄 요약 행(기본 접힘) — 아래 '지금 매장에서 참가 신청'과 역할이 헷갈려 손님이
+          잘못 누르는 사고가 있어 제목에 역할을 박아둔다 */}
+      <div className="flex items-center gap-2 px-3 py-2">
+        <button type="button" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left">
+          <span className="shrink-0 text-sm font-bold text-accent-300">참가 예약</span>
+          <span className="min-w-0 flex-1 truncate text-2xs text-ink-muted">
+            {mine ? `예약자: ${mine.displayName}` : isManager ? `예약 ${resList.length}명` : '미리 자리 잡아두기'}
+          </span>
+          {mine && <span className="shrink-0 text-2xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-badge">예약 완료</span>}
+          {!mine && ended && <span className="shrink-0 text-2xs font-bold text-ink-muted bg-surface-high border border-border-default px-2 py-0.5 rounded-badge">종료</span>}
+          <span className="flex shrink-0 items-center gap-0.5 text-2xs font-bold text-ink-muted">
+            {expanded ? '접기' : '더보기'}
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
+              className={['transition-transform', expanded ? 'rotate-180' : ''].join(' ')} aria-hidden><polyline points="6 9 12 15 18 9" /></svg>
+          </span>
+        </button>
+        {/* 예약 CTA 는 접혀 있어도 숨기지 않는다 — 누르면 예약 UI(닉네임 입력)가 펼쳐진다 */}
+        {!mine && !ended && !expanded && (
+          <button type="button" onClick={() => setExpanded(true)}
+            className="btn-primary shrink-0 px-3 py-1.5 text-xs">
+            예약하기
+          </button>
+        )}
       </div>
+
+      {expanded && (
+      <div className="space-y-2 border-t border-accent-400/20 px-3 pb-3 pt-2 animate-fade-in">
       {!user && !ended && (
         <p className="rounded-input bg-surface-base/50 px-2.5 py-2 text-2xs leading-relaxed text-ink-muted">
           예약엔 <b className="text-ink-secondary">로그인·본인인증</b>이 필요해요 — 노쇼 방지를 위한 자리 보장 장치예요.
@@ -848,11 +832,13 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
           )}
         </div>
       )}
+      </div>
+      )}
     </section>
   );
 }
 
-// ── 정보 카드 ────────────────────────────────────────────────────────────────
+// ── 블라인드 구조 ────────────────────────────────────────────────────────────
 
 // 포스터 기본 블라인드 구조 — 로티 파이널롤백 기반 템플릿. 기본 접힘, 클릭 시 펼침. 레지 마감(기본 16LV) 이후 25LV까지 표시.
 function BlindStructure({ schedule }: { schedule: Schedule }) {
@@ -924,37 +910,85 @@ function BlindStructure({ schedule }: { schedule: Schedule }) {
   );
 }
 
-function InfoCard({
-  icon, label, value, sub, compact = false,
-}: {
-  icon?: string;
-  label: string;
-  value: React.ReactNode;
-  sub?: React.ReactNode;
-  compact?: boolean;
-}) {
+// ── 값 마퀴 — 칸 폭을 넘는 값이 줄바꿈 대신 옆으로 흐르고 무한 루프로 돌아온다 ──────
+// 내용 2회 복제 + translateX(-50%) 무한 루프(모션 헌법 §20.4 #1 '무한 루프' 허용 예외 —
+// transform 전용·컴포지터 상주). 넘치지 않으면 정적 표시(애니메이션 자체를 붙이지 않음).
+// prefers-reduced-motion 은 index.css 동작 줄이기 블록에서 truncate 폴백.
+function MarqueeText({ text, className = '' }: { text: string; className?: string }) {
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef<HTMLSpanElement>(null);
+  const [loopW, setLoopW] = useState(0); // 0 = 넘치지 않음(정적)
+  useEffect(() => {
+    const vp = viewportRef.current, ms = measureRef.current;
+    if (!vp || !ms) return;
+    const check = () => setLoopW(ms.offsetWidth > vp.clientWidth + 1 ? ms.offsetWidth : 0);
+    check();
+    const ro = new ResizeObserver(check); // 폰트 로드·회전·2-pane 리사이즈에도 재판정
+    ro.observe(vp);
+    return () => ro.disconnect();
+  }, [text]);
+  const GAP = 32; // 복제본 사이 간격(px) — pr-8 과 일치해야 -50% 지점이 정확히 맞물린다
   return (
-    <div className={[
-      'rounded-input bg-surface-high border border-border-subtle',
-      compact ? 'px-2.5 py-2' : 'p-3',
-    ].join(' ')}>
-      <div className="flex items-center gap-1 text-2xs text-ink-muted mb-0.5">
-        {icon && <span aria-hidden>{icon}</span>}{label}
-      </div>
-      <p className={[
-        'font-bold text-ink-primary tabular-nums leading-tight',
-        compact ? 'text-sm' : 'text-base',
-      ].join(' ')}>
-        {value}
-      </p>
-      {sub && (
-        <p className={[
-          'text-ink-muted mt-0.5 leading-snug',
-          compact ? 'text-2xs' : 'text-2xs',
-        ].join(' ')}>
-          {sub}
-        </p>
+    <div ref={viewportRef} className={`relative min-w-0 overflow-hidden ${className}`}>
+      {/* 측정 전용(불가시) 상주 — 마퀴 전환 뒤에도 '더는 안 넘침' 복귀 판정 가능 */}
+      <span ref={measureRef} aria-hidden className="invisible absolute left-0 top-0 whitespace-nowrap">{text}</span>
+      {loopW > 0 ? (
+        <div
+          className="marquee-loop flex w-max"
+          style={{ '--marquee-dur': `${Math.max(6, Math.round((loopW + GAP) / 28))}s` } as React.CSSProperties}
+        >
+          <span className="whitespace-nowrap pr-8">{text}</span>
+          <span className="whitespace-nowrap pr-8" aria-hidden>{text}</span>
+        </div>
+      ) : (
+        <span className="block truncate">{text}</span>
       )}
     </div>
   );
+}
+
+// 콤팩트 정보 행 — 라벨 좌 / 값 우 한 줄. 긴 값은 MarqueeText 가 옆으로 흘린다.
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center gap-3 py-1.5">
+      <span className="w-[4.5rem] shrink-0 text-2xs text-ink-muted">{label}</span>
+      <MarqueeText text={value} className="flex-1 text-xs font-semibold text-ink-primary tabular-nums text-right" />
+    </div>
+  );
+}
+
+// 상단 요약 그리드 셀 — 라벨(2xs muted) 위 / 값(sm bold) 아래, 행 높이 고정(h-14)
+function SummaryCell({ label, value, badge, accent = false }: {
+  label: string; value: string; badge?: React.ReactNode; accent?: boolean;
+}) {
+  return (
+    <div className="flex h-14 min-w-0 flex-col justify-center gap-0.5 px-3">
+      <span className="text-2xs leading-none text-ink-muted">{label}</span>
+      <div className="flex min-w-0 items-center gap-1.5">
+        <MarqueeText
+          text={value}
+          className={`min-w-0 flex-1 text-sm font-bold tabular-nums leading-tight ${accent ? 'text-gold-300' : 'text-ink-primary'}`}
+        />
+        {badge}
+      </div>
+    </div>
+  );
+}
+
+// 리엔트리 요약(요약 그리드) — 리바이 유무·한도. 정보 없으면 프리즈아웃.
+function rebuyText(s: Schedule): string {
+  const b = s.buyIn;
+  if (b.rebuy === undefined) return '프리즈아웃';
+  return `리바이 ${b.rebuy.toLocaleString()}${b.rebuyLimit ? `×${b.rebuyLimit}` : ' 무제한'}`;
+}
+
+// 바이인 상세(정보 행) — 금액 + 게임종류·리바이·애드온 한 줄(넘치면 마퀴)
+function buyinDetailText(s: Schedule): string {
+  const b = s.buyIn;
+  const parts: string[] = [b.amount.toLocaleString()];
+  if (b.gameType) parts.push(b.gameType);
+  if (b.rebuy !== undefined) parts.push(`리바이 ${b.rebuy.toLocaleString()}${b.rebuyLimit ? `×${b.rebuyLimit}` : ' 무제한'}`);
+  if (b.addon || b.addonStack) parts.push(`애드온${b.addon ? ` ${b.addon.toLocaleString()}원` : ''}${b.addonStack ? ` (${b.addonStack.toLocaleString()}칩)` : ''}`);
+  if (parts.length === 1) parts.push('프리즈아웃');
+  return parts.join(' · ');
 }

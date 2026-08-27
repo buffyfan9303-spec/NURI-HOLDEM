@@ -34,7 +34,7 @@ export default function AnnouncePanel({ venueId }: { venueId: string }) {
         <h3 className="text-sm font-bold text-ink-primary">📢 팔로워에게 알림 보내기</h3>
         <span className="text-2xs text-ink-muted">팔로워 <b className="text-accent-300">{status.followers}</b> · 오늘 {status.sentToday}/3</span>
       </div>
-      <p className="text-2xs leading-relaxed text-ink-muted">우리 매장을 팔로우한 손님에게 푸시 알림을 보냅니다. 새 대회 등록·D-1 리마인더는 자동 발송돼요. 하루 3회까지.</p>
+      <p className="text-2xs leading-relaxed text-ink-muted">새 대회 등록·D-1 리마인더는 자동 발송돼요.</p>
       <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={60} placeholder="제목 (예: 오늘 8시 GTD 500!)" className="input w-full text-sm" />
       <textarea value={message} onChange={(e) => setMessage(e.target.value)} maxLength={200} rows={2} placeholder="내용 (예: 마감 임박! 지금 예약하세요 🔥)" className="input w-full resize-none text-sm" />
       <button type="button" onClick={send} disabled={busy || remaining === 0 || status.followers === 0}

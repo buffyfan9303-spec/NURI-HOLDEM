@@ -122,7 +122,7 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
                 <>
                   <div className="rounded-card border border-danger/30 bg-danger/[0.05] p-3">
                     <p className="text-2xs font-bold text-danger">1단계 · 업주 본인 확인</p>
-                    <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">등록된 <b className="text-ink-secondary">매장 업주의 실명</b>을 입력하세요. 본인인증된 업주 본인만 진행할 수 있습니다.</p>
+                    <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">본인인증된 <b className="text-ink-secondary">업주 본인의 실명</b>을 입력하세요.</p>
                   </div>
                   <Lbl label="업주 실명">
                     <input value={ownerName} onChange={(e) => setOwnerName(e.target.value)} className="input w-full text-sm" placeholder="실명 입력" autoFocus />

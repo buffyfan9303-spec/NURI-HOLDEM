@@ -289,7 +289,7 @@ ${cards}
           {issueOpen && (
             <div className="space-y-1.5 px-2.5 pb-2.5">
               {!isAdmin && !approved && (
-                <p className="flex items-start gap-1.5 rounded-input border border-danger/40 bg-danger/[0.08] px-2 py-1.5 text-2xs text-danger-light"><Icon name="alert" size={12} className="mt-0.5 shrink-0" /> 운영자 승인 후 매장이용권을 발급할 수 있습니다. 운영자에게 발급 승인을 요청하세요.</p>
+                <p className="flex items-start gap-1.5 rounded-input border border-danger/40 bg-danger/[0.08] px-2 py-1.5 text-2xs text-danger-light"><Icon name="alert" size={12} className="mt-0.5 shrink-0" /> 운영자 승인 후 발급할 수 있습니다.</p>
               )}
               <div className="flex gap-1.5">
                 <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="이용권 이름 (예: 데일리 1회 참가권)" className="input min-w-0 flex-1 text-sm" />
@@ -383,14 +383,14 @@ ${cards}
                   서버(request_voucher_credit·admin_decide approve)도 봉쇄됨. 한도는 운영자 문의로만. */}
               {quota !== null && quota < count && (
                 <p className="rounded-input border border-border-subtle bg-surface-low p-2 text-2xs text-ink-muted">
-                  발급 한도가 부족하면 <b className="text-ink-secondary">운영자에게 문의</b>해 주세요. 유상 충전은 종료되었습니다.
+                  한도 추가는 <b className="text-ink-secondary">운영자 문의</b> (유상 충전 종료).
                 </p>
               )}
             </div>
           )}
         </div>
       ) : (
-        <p className="rounded-input border border-border-subtle bg-surface-low p-2.5 text-2xs text-ink-muted">배포·회수·삭제는 <b className="text-ink-secondary">업주</b>만 가능합니다. 인증 직원은 열람·사용 처리만 할 수 있습니다.</p>
+        <p className="rounded-input border border-border-subtle bg-surface-low p-2.5 text-2xs text-ink-muted">배포·회수·삭제는 <b className="text-ink-secondary">업주</b> 전용 — 직원은 열람·사용 처리만.</p>
       )}
 
       {/* 2) QR 코드 — 접기 */}

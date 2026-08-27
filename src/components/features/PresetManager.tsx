@@ -153,7 +153,7 @@ export default function PresetManager({ venueId }: { venueId: string }) {
         {(presetFilledCount(d.poster) + presetFilledCount(d.ledger) + presetFilledCount(d.clock)) > 0 && (
           <p className="rounded-input border border-border-subtle bg-surface-high px-2.5 py-1.5 text-2xs text-ink-muted">
             단계 전용 항목 포함 — 포스터 {presetFilledCount(d.poster)} · 장부 {presetFilledCount(d.ledger)} · 클락 {presetFilledCount(d.clock)}
-            <span className="block text-[10px]">지난 게임에서 가져온 시각·할인·딜러·레지레벨·얼리 등이 담겨 있고, 각 폼에 불러올 때 그대로 적용됩니다.</span>
+            <span className="block text-[10px]">지난 게임의 시각·할인·딜러·레지레벨·얼리 — 불러올 때 그대로 적용.</span>
           </p>
         )}
         <Field label="메모"><textarea value={d.memo ?? ''} onChange={(e) => set({ memo: e.target.value })} rows={2} placeholder="기타 메모" className="input w-full resize-none text-sm" /></Field>

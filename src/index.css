@@ -39,29 +39,30 @@
     --tabbar-lift: 0px;
   }
   html.samsung {
-    --tabbar-lift: 2.75rem;
+    /* 상시 리프트는 '탭바가 떠 있는 오류'로 보였다(오너) — 자동숨김(TB2)이 스크롤 중 겹침을 완화하므로 0 유지 */
+    --tabbar-lift: 0px;
   }
 
   :root,
   html.dark {
-    --surface-base:  10 9 16;    /* #0A0910 트와일라잇 퍼플 틴트(오너 컨셉 2026-08-27) */
-    --surface-low:   18 17 27;   /* #12111B 패널/카드 */
-    --surface-mid:   23 22 34;   /* #171622 모달/사이드 */
-    --surface-high:  31 30 45;   /* #1F1E2D 인풋/호버 */
-    --surface-float: 40 38 57;   /* #282639 드롭다운/툴팁 */
+    --surface-base:  21 18 33;   /* #151221 트와일라잇 딥 플럼(오너 컨셉 2차 강화) */
+    --surface-low:   29 25 46;   /* #1D192E 패널/카드 */
+    --surface-mid:   36 31 58;   /* #241F3A 모달/사이드 */
+    --surface-high:  45 39 71;   /* #2D2747 인풋/호버 */
+    --surface-float: 55 48 86;   /* #373056 드롭다운/툴팁 */
 
     --ink-primary:   244 245 246; /* #F4F5F6 본문 */
     /* ⚠ 보조/메타 텍스트는 앱에서 가장 많이 쓰이는데(1087곳) 대비가 부족했다.
        현장 조명이 어둡고 화면을 비스듬히 보는 상황이 기본이라, '읽을 수 있음'의 하한을 올린다.
        (#8A8F98 → #A0A6B0 / #6E747C → #868C96 — surface-base 대비 AA 확보) */
-    --ink-secondary: 160 166 176; /* #A0A6B0 보조 */
-    --ink-muted:     134 140 150; /* #868C96 메타/라벨 */
+    --ink-secondary: 178 173 203; /* #B2ADCB 보조 — 플럼 배경 대비 ≥7:1 */
+    --ink-muted:     148 142 176; /* #948EB0 메타/라벨 — 플럼 배경 대비 ≥4.5:1 */
     --ink-inverse:   24 26 32;    /* 골드(상금) 버튼 위 검정 */
 
-    --border-subtle:  28 30 34;   /* #1C1E22 — PET 흰색 헤어라인 0.07 등가(근검정 위) */
+    --border-subtle:  44 39 66;   /* #2C2742 — 플럼 위 헤어라인 등가 */
     /* 입력칸 경계가 1.28:1 이라 '칸이 어디까지인지'가 안 보였다. subtle < default < strong 위계는 유지한다. */
-    --border-default: 58 63 70;   /* #3A3F46 */
-    --border-strong:  86 92 101;  /* #565C65 */
+    --border-default: 76 68 108;  /* #4C446C */
+    --border-strong:  108 99 146; /* #6C6392 */
 
     /* 카드 헤어라인/그림자 — PET inset 하이라이트 + 미세 섀도.
        그림자는 순검정 대신 배경 hue(인디고 편향) 틴트(DAI-2a ④) — 플랫 다크의 murk 제거 */
@@ -307,6 +308,8 @@ main { max-width: 48rem; margin-inline: auto; }
    그 위에 '움직임'을 입힌다: 탭 전환은 방향성 패럴랙스 푸시(이전 화면이 밀려나가고
    새 화면이 감속 곡선으로 미끄러져 들어옴 — iOS 내비게이션 문법), 오버레이 열기는
    짧은 크로스페이드(내부 sheet-up 이 모션을 담당하므로 이중 모션 방지). */
+/* 전환 캔버스 자체를 테마색으로 — blur 진입이 흰색으로 번쩍이지 않게(오너 2026-08-27) */
+::view-transition { background-color: rgb(var(--surface-base)); }
 ::view-transition-old(root),
 ::view-transition-new(root) {
   animation-duration: 0.18s;
@@ -319,9 +322,9 @@ main { max-width: 48rem; margin-inline: auto; }
 @keyframes vt-push-out-l { to   { opacity: 0; transform: translateX(-20px); } }
 /* 진입 blur(오너 지시 2026-08-27) — §20.4 #3 개정: '1회성 진입 애니'에 한해 filter blur 허용.
    데이터 로드 커밋의 뚝 끊김을 시각적으로 뭉개 부드럽게. 상시·호버 filter 는 여전히 금지. */
-@keyframes vt-push-in-r  { from { opacity: 0; transform: translateX(20px); filter: blur(6px); } to { filter: blur(0); } }
+@keyframes vt-push-in-r  { from { opacity: 0; transform: translateX(20px); filter: blur(6px) brightness(0.9); } to { filter: blur(0) brightness(1); } }
 @keyframes vt-push-out-r { to   { opacity: 0; transform: translateX(20px); } }
-@keyframes vt-push-in-l  { from { opacity: 0; transform: translateX(-20px); filter: blur(6px); } to { filter: blur(0); } }
+@keyframes vt-push-in-l  { from { opacity: 0; transform: translateX(-20px); filter: blur(6px) brightness(0.9); } to { filter: blur(0) brightness(1); } }
 html[data-vt-dir='forward']::view-transition-old(root) { animation: vt-push-out-l var(--dur-base) var(--ease-out) both; }
 html[data-vt-dir='forward']::view-transition-new(root) { animation: vt-push-in-r var(--dur-tab) var(--ease) both; }
 html[data-vt-dir='back']::view-transition-old(root)    { animation: vt-push-out-r var(--dur-base) var(--ease-out) both; }
@@ -400,6 +403,13 @@ body { overscroll-behavior-y: contain; }
    scrollLeft 기반(JS rAF, PosterCarousel)으로 전환. 뷰포트가 실제 스크롤러라 손으로도 넘긴다. */
 .poster-marquee-viewport { overflow-x: auto; }
 
+/* ── 값 마퀴(.marquee-loop) — 대회 상세 정보 행의 긴 값이 줄바꿈 대신 옆으로 흐르고
+   무한 루프로 돌아온다(모션 헌법 §20.4 #1 '무한 루프' 허용 예외 — transform 전용·컴포지터 상주).
+   MarqueeText(ScheduleDetailModal)가 '넘칠 때만' 이 클래스를 부착: 내용 2회 복제 + -50% 이동으로
+   이음새 없이 순환(복제본 간격 pr-8 = 세트 경계 간격). reduced-motion 폴백은 아래 블록에 등록. */
+@keyframes marquee-loop { to { transform: translateX(-50%); } }
+.marquee-loop { animation: marquee-loop var(--marquee-dur, 12s) linear infinite; }
+
 /* (펠트 시그니처 .felt-hero 는 오너 지시로 캐러셀에서 제거 — 2026-08-27 '배너만, 검은 띠 제거') */
 
 @keyframes confettiFall {
@@ -419,6 +429,16 @@ body { overscroll-behavior-y: contain; }
      framer-motion 은 main.tsx 의 MotionConfig reducedMotion="user" 가 별도로 처리. */
   .animate-fade-in, .animate-fade-out, .animate-slide-up, .animate-slide-down,
   .tab-anim-r, .tab-anim-l, .skeleton, .confetti, .anim-pop, .poster-marquee { animation: none !important; }
+  /* 값 마퀴 → 정적 truncate 폴백: 트랙을 블록 말줄임으로 바꾸고 복제본은 숨긴다 */
+  .marquee-loop {
+    animation: none !important;
+    display: block !important;
+    width: 100% !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .marquee-loop > span + span { display: none !important; }
 }
 
 /* ── 라이트 모드 가독 오버라이드(unlayered — utilities 레이어보다 우선) ──
@@ -552,10 +572,10 @@ button:active:not(:disabled), [role='button']:active, a:active:not([data-no-pres
 }
 
 /* ── 탭 방향 슬라이드(모바일 전용) — 탭 순서상 오른쪽이면 오른쪽에서 8px 진입 ── */
-@keyframes tab-in-r { from { opacity: 0.55; transform: translateX(8px); }  to { opacity: 1; transform: translateX(0); } }
-@keyframes tab-in-l { from { opacity: 0.55; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
-.tab-anim-r { animation: tab-in-r 0.18s var(--ease); }
-.tab-anim-l { animation: tab-in-l 0.18s var(--ease); }
+@keyframes tab-in-r { from { opacity: 0.55; transform: translateX(8px); filter: blur(3px) brightness(0.92); }  to { opacity: 1; transform: translateX(0); filter: blur(0) brightness(1); } }
+@keyframes tab-in-l { from { opacity: 0.55; transform: translateX(-8px); filter: blur(3px) brightness(0.92); } to { opacity: 1; transform: translateX(0); filter: blur(0) brightness(1); } }
+.tab-anim-r { animation: tab-in-r var(--dur-tab) var(--ease); }
+.tab-anim-l { animation: tab-in-l var(--dur-tab) var(--ease); }
 @media (min-width: 1024px) {
   /* PC는 기존 페이드 감각 유지 — 가로 슬라이드는 모바일 제스처 문법 */
   .tab-anim-r, .tab-anim-l { animation: fade-in 0.16s var(--ease); }
@@ -593,3 +613,14 @@ img, svg { -webkit-touch-callout: none; -webkit-user-drag: none; user-select: no
   p, h1, h2, h3, h4, li, span.selectable, .select-text,
   input, textarea, [contenteditable] { -webkit-user-select: text; user-select: text; }
 }
+
+/* ── VT 예외(오너 지시): 헤더·하단 탭바는 화면 전환 블러/슬라이드에서 제외 —
+   자기 이름의 스냅샷으로 분리해 root 애니에 안 실린다(상시 크롬은 흔들리지 않아야 한다) ── */
+[data-stack-header] { view-transition-name: app-header; }
+nav[aria-label="하단 내비게이션"] { view-transition-name: app-tabbar; }
+::view-transition-old(app-header), ::view-transition-new(app-header),
+::view-transition-old(app-tabbar), ::view-transition-new(app-tabbar) { animation: none; }
+
+/* 가로 스크롤러의 스크롤바 숨김(배너 캐러셀 등) — 기능은 그대로, 표시만 제거 */
+.scrollbar-none { scrollbar-width: none; -ms-overflow-style: none; }
+.scrollbar-none::-webkit-scrollbar { display: none; }

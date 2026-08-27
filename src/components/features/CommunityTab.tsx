@@ -447,11 +447,11 @@ function FeedSection({
                       : 'cursor-default',
                   ].join(' ')}
                 >
-                  <p className="text-xs font-semibold text-ink-primary truncate">{n.title}</p>
-                  {n.body && (
-                    <p className="text-2xs text-ink-muted line-clamp-1 mt-0.5">{n.body}</p>
-                  )}
-                  <p className="text-2xs text-ink-muted mt-1">{n.authorName} · {relativeTime(n.createdAt)}</p>
+                  {/* 오너 지시(2026-08-27): 공지는 제목만 한 줄 — 본문·작성자는 눌러서 상세에서 */}
+                  <p className="flex items-center gap-2 text-xs font-semibold text-ink-primary">
+                    <span className="min-w-0 flex-1 truncate">{n.title}</span>
+                    <span className="shrink-0 text-2xs font-normal tabular-nums text-ink-muted">{relativeTime(n.createdAt)}</span>
+                  </p>
                 </li>
               ))}
             </ul>
@@ -507,17 +507,20 @@ function FeedSection({
             </div>
           </div>
           {enableCategory && (
-            <div className="flex flex-wrap gap-1.5">
+            // 오너 지시(2026-08-27): 카테고리 나열이 지저분 — 줄바꿈 없는 한 줄 스크롤 칩,
+            // 균일 높이·보더 없는 면 기반(활성만 인디고), browse 필터 레일과 같은 문법.
+            <div className="flex gap-1 overflow-x-auto scrollbar-none -mx-page-x px-page-x">
               {BOARD_CATEGORIES.map((c) => (
                 <button
                   key={c.id}
                   type="button"
+                  aria-pressed={cat === c.id}
                   onClick={() => { setCat(c.id); setVisible(15); }}
                   className={[
-                    'shrink-0 inline-flex items-center h-7 px-3 rounded-badge text-2xs font-semibold leading-none border transition-colors',
+                    'shrink-0 inline-flex items-center h-8 px-3 rounded-badge text-2xs font-bold leading-none transition-colors',
                     cat === c.id
-                      ? 'bg-accent-300/20 border-accent-300 text-accent-300'
-                      : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary',
+                      ? 'bg-accent-300 text-white'
+                      : 'bg-surface-high text-ink-secondary hover:bg-surface-float/70',
                   ].join(' ')}
                 >
                   {c.label}

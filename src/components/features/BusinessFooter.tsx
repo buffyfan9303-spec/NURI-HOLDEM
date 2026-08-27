@@ -3,11 +3,16 @@
 import type { LegalDoc } from './LegalDocsModal';
 
 // 사업자등록증(525-20-02937) 기준 — LegalDocsModal/LegalNotice 와 동일 값 유지.
-const BIZ_ROWS: [string, string][] = [
+// 오너 지시(2026-08-27): 기본 노출은 최소(상호·사업자번호 1줄), 나머지는 '사업자 정보' 펼침 —
+// 전상법 §10 신원정보는 공정위 고시상 초기화면의 '연결화면(펼침·링크)' 제공이 허용된다(쿠팡·네이버 관행).
+const BIZ_SUMMARY: [string, string][] = [
   ['상호', '엔에이치홀딩스'],
-  ['대표', '김윤혜'],
   ['사업자등록번호', '525-20-02937'],
+];
+const BIZ_ROWS: [string, string][] = [
+  ['대표', '김윤혜'],
   ['소재지', '경기도 남양주시 진건읍 사릉로372번길 25, 201동 1403호'],
+  ['유선번호', '010-7508-7689'],
   ['고객센터', 'buffyfan9303@gmail.com'],
   // 전자상거래법 §10 표시사항 — 호스팅 서비스 제공자
   ['호스팅 제공자', 'Vercel Inc.'],
@@ -35,15 +40,28 @@ export default function BusinessFooter({ onOpenLegal, onOpenSupport }: { onOpenL
           </>}
         </nav>
 
-        {/* 사업자 정보 */}
-        <dl className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] leading-relaxed text-ink-muted">
-          {BIZ_ROWS.map(([k, v]) => (
-            <div key={k} className="flex items-center gap-1">
-              <dt className="text-ink-muted/70">{k}</dt>
-              <dd className="text-ink-secondary">{v}</dd>
-            </div>
-          ))}
-        </dl>
+        {/* 사업자 정보 — 요약 1줄 상시 + 상세는 펼침(연결화면 제공 방식) */}
+        <details className="group/biz text-[11px] leading-relaxed text-ink-muted">
+          <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-0.5">
+            {BIZ_SUMMARY.map(([k, v]) => (
+              <span key={k} className="inline-flex items-center gap-1">
+                <span className="text-ink-muted/70">{k}</span>
+                <span className="text-ink-secondary">{v}</span>
+              </span>
+            ))}
+            <span className="inline-flex items-center gap-0.5 text-ink-muted underline decoration-border-default underline-offset-2">
+              사업자 정보<span aria-hidden className="transition-transform group-open/biz:rotate-180">▾</span>
+            </span>
+          </summary>
+          <dl className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+            {BIZ_ROWS.map(([k, v]) => (
+              <div key={k} className="flex items-center gap-1">
+                <dt className="text-ink-muted/70">{k}</dt>
+                <dd className="text-ink-secondary">{v}</dd>
+              </div>
+            ))}
+          </dl>
+        </details>
 
         {/* 사행성 배제 고지 */}
         <p className="text-2xs leading-relaxed text-ink-muted/80">

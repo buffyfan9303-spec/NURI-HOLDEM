@@ -1255,9 +1255,16 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
         )}
       </div>
 
-      <p className="text-2xs text-ink-muted">
-        <span className="text-accent-300 font-semibold">닉네임은 필수</span>, 실명·프라이즈는 선택입니다. 프라이즈는 <span className="text-accent-300 font-semibold">만원 단위</span>로 입력하세요 — 100만원은 <span className="text-accent-300 font-semibold">100</span>, 1,000만원은 <span className="text-accent-300 font-semibold">1000</span>(원 단위로 치면 순위 점수가 1만 배로 잘못 쌓입니다). 등수마다 <span className="text-accent-300 font-semibold">기준 점수(+N점)</span>가 자동 부여되고, 프라이즈는 <span className="text-accent-300 font-semibold">매장 커뮤니티 순위 점수</span>로만 쓰입니다(금전적 가치 없음). 손님 화면엔 <span className="text-accent-300 font-semibold">실명(닉네임) 형식</span>으로 닉네임 일부를 가려 표시됩니다(예: 누리홀덤(나*리)).
-      </p>
+      {/* 오너 지시(2026-08-27): 안내가 쓸데없이 길다 — 핵심 1줄 + 나머지는 접힘 */}
+      <details className="group/rkhelp text-2xs text-ink-muted">
+        <summary className="cursor-pointer list-none">
+          <span className="text-accent-300 font-semibold">닉네임 필수</span> · 프라이즈는 <span className="text-accent-300 font-semibold">만원 단위</span>(100만원=100)
+          <span className="ml-1 text-ink-muted underline decoration-border-default underline-offset-2 group-open/rkhelp:hidden">자세히</span>
+        </summary>
+        <p className="mt-1">
+          실명·프라이즈는 선택입니다. 1,000만원은 <span className="text-accent-300 font-semibold">1000</span>(원 단위로 치면 순위 점수가 1만 배로 잘못 쌓입니다). 등수마다 <span className="text-accent-300 font-semibold">기준 점수(+N점)</span>가 자동 부여되고, 프라이즈는 <span className="text-accent-300 font-semibold">매장 커뮤니티 순위 점수</span>로만 쓰입니다(금전적 가치 없음). 손님 화면엔 <span className="text-accent-300 font-semibold">실명(닉네임) 형식</span>으로 닉네임 일부를 가려 표시됩니다(예: 누리홀덤(나*리)).
+        </p>
+      </details>
 
       {/* 저장 전 입력분 안내 — 초안은 자동 보관되지만, 상태를 보여주지 않으면 사장님이 오탭을 눈치채지 못한다 */}
       {(drafted || restorable) && (
@@ -1282,13 +1289,14 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
         <ul className="space-y-1.5">
           {rows.map((row, i) => (
             <li key={i}
-              className={['grid grid-cols-[2.5rem_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_2rem] lg:grid-cols-[5.75rem_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_6rem_minmax(0,1.4fr)_2rem] items-center gap-1.5 rounded-input border p-1.5 transition-colors',
+              // 모바일 3행(칸 잘림·경계 어긋남 교정 — 오너 스크린샷): 닉네임·실명 / 프라이즈·이용권 / 비고
+              className={['grid grid-cols-[2.5rem_minmax(0,1fr)_minmax(0,1fr)_2rem] lg:grid-cols-[5.75rem_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_6rem_minmax(0,1.4fr)_2rem] items-center gap-1.5 rounded-input border p-1.5 transition-colors',
                 // 방금 옮긴 줄만 잠깐 물들인다 — 줄이 전부 똑같이 생겨서 어디로 갔는지 눈으로 못 쫓는다
                 moved?.i === i ? 'border-accent-400/70 bg-accent-300/[0.07]' : 'border-border-subtle bg-surface-low/40'].join(' ')}>
               {/* 등수 = 행 순서. 순서를 못 바꾸면 정정 수단이 '지우고 다시 치기'뿐이라 ▲▼를 등수에 붙인다.
                   모바일은 2줄 그리드의 비어 있던 왼쪽 아래 칸을 세로로 흡수하고(row-span-2),
                   PC는 한 줄짜리라 가로로 편다(첫 열만 넓힘). */}
-              <span className="row-span-2 lg:row-span-1 flex flex-col lg:flex-row items-center justify-center gap-0.5">
+              <span className="row-span-3 lg:row-span-1 flex flex-col lg:flex-row items-center justify-center gap-0.5">
                 <button
                   type="button" onClick={() => moveRow(i, i - 1)} disabled={i === 0}
                   aria-label={`${i + 1}위를 한 칸 위로`} title="위로 — 등수 올리기"
@@ -1312,7 +1320,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
                   <Icon name="chevron-down" size={14} />
                 </button>
               </span>
-              <div className="relative min-w-0">
+              <div className="relative min-w-0 col-start-2 row-start-1 lg:col-auto lg:row-auto">
                 <input
                   type="text" value={row.nickname} maxLength={30}
                   onChange={(e) => onNickInput(i, e.target.value)}
@@ -1367,12 +1375,12 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
                 type="text" value={row.realName} maxLength={20}
                 onChange={(e) => update(i, 'realName', e.target.value)}
                 placeholder="실명"
-                className="input w-full min-w-0 text-sm py-2"
+                className="input w-full min-w-0 text-sm py-2 col-start-3 row-start-1 lg:col-auto lg:row-auto"
               />
               {/* 프라이즈는 '만원 단위'다. 단위 표기가 없어 원 단위로 치면 매장·전국 프라이즈
                   랭킹이 1만 배로 오염되므로, 값이 지워져도 안 사라지는 고정 suffix 로 못 박는다.
                   (placeholder 만으로는 입력 시작하는 순간 단위가 화면에서 사라진다) */}
-              <div className="relative min-w-0">
+              <div className="relative min-w-0 col-start-2 row-start-2 lg:col-auto lg:row-auto">
                 <input
                   type="text" inputMode="numeric" value={row.prize} maxLength={12}
                   onChange={(e) => update(i, 'prize', e.target.value.replace(/[^\d.]/g, ''))}
@@ -1387,16 +1395,16 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
               </div>
               <button
                 type="button" onClick={() => removeRow(i)} aria-label="줄 삭제"
-                className="h-8 w-8 justify-self-center flex items-center justify-center rounded-input text-ink-muted hover:text-danger-light transition-colors lg:order-last"
+                className="h-8 w-8 justify-self-center flex items-center justify-center rounded-input text-ink-muted hover:text-danger-light transition-colors col-start-4 row-start-1 lg:col-auto lg:row-auto lg:order-last"
               >
                 <Icon name="close" size={14} />
               </button>
               {/* 모바일 2줄(고정 그리드로 칸 경계 정렬) · PC는 같은 행에 이어짐 */}
-              <div className="relative col-start-2 lg:col-start-5 lg:col-auto min-w-0 lg:w-auto">
+              <div className="relative col-start-3 row-start-2 lg:col-start-5 lg:row-auto min-w-0 lg:w-auto">
                 <input type="number" inputMode="numeric" value={row.voucher} onChange={(e) => update(i, 'voucher', e.target.value.replace(/[^\d]/g, ''))} placeholder="이용권" className="input w-full text-sm py-2 pr-7 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" />
                 <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">개</span>
               </div>
-              <input type="text" value={row.note} onChange={(e) => update(i, 'note', e.target.value)} maxLength={50} placeholder="비고" className="input col-span-2 lg:col-span-1 w-full min-w-0 text-sm py-2" />
+              <input type="text" value={row.note} onChange={(e) => update(i, 'note', e.target.value)} maxLength={50} placeholder="비고" className="input col-start-2 col-span-2 row-start-3 lg:col-auto lg:col-span-1 lg:row-auto w-full min-w-0 text-sm py-2" />
             </li>
           ))}
         </ul>

@@ -38,7 +38,7 @@ export default function SupportInquiryModal({ open, onClose }: { open: boolean; 
       <div className="space-y-4 p-4">
         {/* 접수 폼 */}
         <section className="space-y-2 rounded-card border border-border-default bg-surface-low p-3">
-          <p className="text-2xs text-ink-muted">이용 중 불편하거나 궁금한 점을 남겨주세요. 운영자가 확인 후 답변드립니다. (운영시간 내 순차 처리)</p>
+          <p className="text-2xs text-ink-muted">운영자가 확인 후 답변드립니다. (운영시간 내 순차 처리)</p>
           <div className="flex flex-wrap gap-1.5">
             {INQUIRY_CATEGORIES.map((c) => (
               <button key={c} type="button" onClick={() => setCat(c)}

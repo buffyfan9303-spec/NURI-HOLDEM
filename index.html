@@ -12,8 +12,8 @@
          (기존 #0A0C0F/#F2F3F5 는 실제 토큰 #08090A/#F5F6F8 과 미세하게 달랐다 — 통일) */
       try{var t=localStorage.getItem('nuri-theme')==='light';
         document.documentElement.classList.add(t?'light':'dark');
-        document.documentElement.style.backgroundColor=t?'#F5F6F8':'#08090A';
-      }catch(e){document.documentElement.classList.add('dark');document.documentElement.style.backgroundColor='#08090A'}
+        document.documentElement.style.backgroundColor=t?'#F5F6F8':'#151221';
+      }catch(e){document.documentElement.classList.add('dark');document.documentElement.style.backgroundColor='#151221'}
     </script>
     <!-- ⚡ 서드파티(GA·AdSense)는 여기서 로드하지 않는다 — main.tsx 가 첫 페인트 뒤 유휴에 주입한다.
          왜: 라이브 실측(모바일)에서 adsbygoogle.js 가 t=23ms, 즉 앱의 index/vendor-react/vendor-supabase 와
@@ -33,7 +33,7 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/favicon-180.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#08090A" />
+    <meta name="theme-color" content="#151221" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -123,9 +123,9 @@
       </div>
       <!-- 포스터 캐러셀 예약 — 고정 슬라이드 도입으로 상시 렌더(240×112 카드, PosterCarousel.tsx 규격과 동일·배경 없음) -->
       <div class="pt-3"><div class="overflow-hidden"><div class="flex pl-page-x">
-        <div class="skeleton mr-3 h-28 w-60 shrink-0 rounded-card"></div>
-        <div class="skeleton mr-3 h-28 w-60 shrink-0 rounded-card"></div>
-        <div class="skeleton h-28 w-60 shrink-0 rounded-card"></div>
+        <div class="skeleton h-36 w-56 shrink-0 rounded-card"></div>
+        <div class="skeleton h-36 w-56 shrink-0 rounded-card"></div>
+        <div class="skeleton h-36 w-56 shrink-0 rounded-card"></div>
       </div></div></div>
       <div class="px-page-x" style="padding-top:16px;padding-bottom:6px"><div class="skeleton" style="height:22px;width:110px"></div></div>
       <div class="px-page-x pb-section">
