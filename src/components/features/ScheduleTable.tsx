@@ -39,13 +39,19 @@ export default function ScheduleTable({ schedules, onSelect, onVenueClick }: {
                 {s.date.slice(5).replace('-', '/')}({dayLabel(s.date)}) <b className="text-ink-primary">{s.startTime}</b>
               </td>
               <td className="max-w-[10rem] px-3 py-2">
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); if (s.venueId) onVenueClick(s.venueId); }}
-                  className="block max-w-full truncate font-semibold text-ink-primary hover:text-accent-300"
-                >
-                  {s.pubName}
-                </button>
+                {/* 매장 미연결(venueId 없음)이면 버튼이 stopPropagation으로 행 클릭까지 삼켜
+                    '무반응 클릭'이 됐다 — 링크 문법을 빼고 텍스트로(행 클릭은 그대로 포스터 열림). */}
+                {s.venueId ? (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onVenueClick(s.venueId); }}
+                    className="block max-w-full truncate font-semibold text-ink-primary hover:text-accent-300"
+                  >
+                    {s.pubName}
+                  </button>
+                ) : (
+                  <span className="block max-w-full truncate font-semibold text-ink-primary">{s.pubName}</span>
+                )}
               </td>
               <td className="max-w-[16rem] px-3 py-2">
                 <span className="flex items-center gap-1.5">
@@ -55,7 +61,8 @@ export default function ScheduleTable({ schedules, onSelect, onVenueClick }: {
                 </span>
               </td>
               <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums font-semibold text-ink-primary">
-                {(s.buyIn?.amount ?? 0).toLocaleString()}
+                {/* 바이인 미입력(0)은 '0원'이 아니라 정보 없음 — ScheduleCard 목록 문법과 동일하게 '—' */}
+                {s.buyIn?.amount ? s.buyIn.amount.toLocaleString() : '—'}
               </td>
               <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-accent-300 font-semibold">
                 {s.guaranteed && s.prizePool

@@ -313,7 +313,8 @@ export default function ScheduleDetailModal({
             상품 가격 정보라 표시를 유지한다. */}
         <section className="overflow-hidden rounded-card border border-border-subtle bg-surface-high">
           <div className="grid grid-cols-2 [&>div]:border-border-subtle [&>div:nth-child(even)]:border-l [&>div:nth-child(n+3)]:border-t">
-            <SummaryCell label="바이인" value={schedule.buyIn.amount.toLocaleString()} />
+            {/* 바이인 미입력(0)은 가격 정보가 아니다 — 카드·표와 같은 '—' 문법(§28은 실제 금액에만 적용) */}
+            <SummaryCell label="바이인" value={schedule.buyIn.amount > 0 ? schedule.buyIn.amount.toLocaleString() : '—'} />
             <SummaryCell
               label={schedule.guaranteed ? '상금 풀' : '프라이즈'}
               value={prizeMainText(schedule)}
@@ -985,10 +986,13 @@ function rebuyText(s: Schedule): string {
 // 바이인 상세(정보 행) — 금액 + 게임종류·리바이·애드온 한 줄(넘치면 마퀴)
 function buyinDetailText(s: Schedule): string {
   const b = s.buyIn;
-  const parts: string[] = [b.amount.toLocaleString()];
+  const parts: string[] = [];
+  // 미입력 0은 가격 정보가 아니다 — 세그먼트 생략(카드·표의 '—' 문법과 동일 판정, 2026-08-28)
+  if (b.amount > 0) parts.push(b.amount.toLocaleString());
   if (b.gameType) parts.push(b.gameType);
   if (b.rebuy !== undefined) parts.push(`리바이 ${b.rebuy.toLocaleString()}${b.rebuyLimit ? `×${b.rebuyLimit}` : ' 무제한'}`);
   if (b.addon || b.addonStack) parts.push(`애드온${b.addon ? ` ${b.addon.toLocaleString()}원` : ''}${b.addonStack ? ` (${b.addonStack.toLocaleString()}칩)` : ''}`);
-  if (parts.length === 1) parts.push('프리즈아웃');
-  return parts.join(' · ');
+  // 프리즈아웃 추론은 기존 의미 보존: '금액만 있고 리바이 정보가 없다'일 때만
+  if (b.amount > 0 && parts.length === 1) parts.push('프리즈아웃');
+  return parts.length > 0 ? parts.join(' · ') : '—';
 }

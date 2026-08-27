@@ -7,7 +7,6 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useBlocks } from '../../contexts/BlockContext';
 import { getMyChatThreads } from '../../api/chat';
 import { MessagesModal, MyListingsModal, MyLikesModal } from './MyMarketModal';
-import SlidingPill from '../atoms/SlidingPill';
 import { useSkeletonGate } from '../../lib/useSkeletonGate';
 
 // ── 상수 ─────────────────────────────────────────────────────────────────────
@@ -170,24 +169,23 @@ function MarketplaceTab({
       </div>
 
       {/* ── 카테고리 — 가로 스크롤(번개장터식, 줄바꿈 없음) ───────── */}
-      <div className="relative flex gap-1.5 overflow-x-auto scrollbar-none [-webkit-overflow-scrolling:touch]">
-        <SlidingPill activeKey={category} className="rounded-input pill-active" />
+      {/* 오너 지시(2026-08-28): 칩(pill) 형태 제거 — 커뮤니티 홀덤펍 필터와 같은
+          배경·보더 없는 텍스트 필터(활성 = 액센트 색+굵기만). */}
+      <div className="flex items-center gap-3 overflow-x-auto scrollbar-none [-webkit-overflow-scrolling:touch]">
         {CATEGORIES.map((cat) => {
           const active = category === cat.id;
           return (
             <button
               key={cat.id}
               type="button"
-              data-pill-active={active || undefined}
+              aria-pressed={active}
               onClick={() => setCategory(cat.id)}
               className={[
-                'relative shrink-0 h-9 px-4 rounded-input text-xs font-semibold transition-colors',
-                active
-                  ? 'text-white'
-                  : 'bg-surface-high text-ink-secondary hover:text-ink-primary border border-border-default',
+                'shrink-0 whitespace-nowrap py-1 text-xs transition-colors',
+                active ? 'font-bold text-accent-200' : 'font-semibold text-ink-muted hover:text-ink-primary',
               ].join(' ')}
             >
-              <span className="relative">{cat.label}</span>
+              {cat.label}
             </button>
           );
         })}

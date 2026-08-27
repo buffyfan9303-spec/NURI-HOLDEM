@@ -326,11 +326,13 @@ export default function TierLeaderboard() {
       {/* 랭킹 리스트 — 다중 보드(활동/머니인/프라이즈) */}
       <section>
         <div className="relative flex items-center gap-1 bg-surface-high rounded-input p-0.5 mb-1.5 overflow-x-auto scrollbar-none lg:flex-wrap lg:overflow-visible">
-          <SlidingPill activeKey={board} className="rounded-[6px] pill-active" />
+          {/* 오너 지시(2026-08-28): 구 pill(그라데이션 배경) 제거 — 커뮤니티 서브탭과 같은
+              밑줄(underline) 문법. 활성은 미끄러지는 2px 밑줄 + 잉크색·굵기. */}
+          <SlidingPill activeKey={board} underline className="rounded-full bg-accent-300" />
           {(['activity', 'league', 'hall', 'moneyin', 'domestic', 'verify', 'shop'] as Board[]).map((b) => (
             <button key={b} type="button" data-pill-active={board === b || undefined} onClick={() => setBoard(b)}
-              className={['relative shrink-0 px-2 lg:px-3 py-1.5 text-[11px] lg:text-xs font-bold rounded-[6px] transition-colors duration-300',
-                board === b ? 'text-white' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
+              className={['relative shrink-0 px-2 lg:px-3 py-1.5 text-[11px] lg:text-xs font-semibold rounded-[6px] transition-colors',
+                board === b ? 'text-ink-primary font-bold' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
               <span className="relative">{BOARD_LABEL[b]}</span>
             </button>
           ))}

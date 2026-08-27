@@ -119,7 +119,18 @@ function PrizeBanner({ schedule, large = false }: { schedule: Schedule; large?: 
 
 function VenueLink({
   pubName, region, onClick,
-}: { pubName: string; region: string; onClick: (e: React.MouseEvent) => void }) {
+}: { pubName: string; region: string; onClick?: (e: React.MouseEvent) => void }) {
+  // 매장 미연결(직접입력 포스터, venueId 없음)이면 링크 문법(밑줄·hover)을 빼고 순수 텍스트로.
+  // 무반응 클릭 금지 원칙 — ScheduleDetailModal의 venueId 게이트와 같은 문법(2026-08-28).
+  if (!onClick) {
+    return (
+      <span className="inline-flex items-baseline gap-1 text-xs text-ink-muted max-w-full">
+        <span className="font-medium truncate">{pubName}</span>
+        <span className="text-border-strong">·</span>
+        <span className="shrink-0">{region}</span>
+      </span>
+    );
+  }
   return (
     <button
       type="button"
@@ -229,7 +240,7 @@ function ListCard({ schedule, onVenueClick, onSelect, reserveCount, rating, prio
         </h3>
         {/* 3행 — 매장 · 별점 · 거리 */}
         <p className="flex min-w-0 items-center gap-1 text-xs text-ink-muted">
-          <VenueLink pubName={schedule.pubName} region={schedule.region} onClick={() => onVenueClick(schedule.venueId)} />
+          <VenueLink pubName={schedule.pubName} region={schedule.region} onClick={schedule.venueId ? () => onVenueClick(schedule.venueId) : undefined} />
           {rating && rating.count > 0 && (
             <span className="shrink-0 tabular-nums text-gold-300" title={`방문 후기 ${rating.count}건 평균`}>★{rating.avg.toFixed(1)}</span>
           )}
@@ -325,7 +336,7 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
           <VenueLink
             pubName={schedule.pubName}
             region={schedule.region}
-            onClick={() => onVenueClick(schedule.venueId)}
+            onClick={schedule.venueId ? () => onVenueClick(schedule.venueId) : undefined}
           />
           {distanceKm != null ? (
             <span className="shrink-0 text-2xs font-bold tabular-nums text-sky-300">📍{fmtKm(distanceKm)}</span>
@@ -346,7 +357,8 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
           <span className="inline-flex items-center gap-1">{schedule.duration}</span>
           <span className="text-border-strong">·</span>
           <span className="inline-flex items-center gap-1">
-            {schedule.buyIn.amount.toLocaleString()}
+            {/* 바이인 미입력(0)은 가격 정보가 아니다 — 목록 카드(ListCard)와 같은 '—' 문법 */}
+            {schedule.buyIn.amount > 0 ? schedule.buyIn.amount.toLocaleString() : '—'}
           </span>
           {(reserveCount ?? 0) > 0 && (
             <span className="ml-auto shrink-0 font-bold tabular-nums text-accent-300">예약 {reserveCount}</span>

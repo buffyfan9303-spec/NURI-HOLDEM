@@ -2345,14 +2345,22 @@ export default function App() {
               <div className="px-page-x pt-3">
                 <div className="relative flex items-center gap-2.5 overflow-hidden rounded-card border border-accent-400/45 bg-gradient-to-r from-accent-300/[0.16] via-accent-300/[0.07] to-transparent px-3 py-2.5">
                   <span className="shrink-0 text-lg" aria-hidden>🎁</span>
-                  <button
-                    type="button"
-                    onClick={() => { if (evNotice) setOpenNotice(evNotice); }}
-                    className="min-w-0 flex-1 text-left focus:outline-none"
-                  >
-                    <p className="truncate text-xs font-bold text-ink-primary">오픈 이벤트 — 출석 도장 2배 · 첫 예약 +50 · 웰컴 +100</p>
-                    <p className="text-2xs text-ink-muted">8/3(월)까지 · 자세히 보기 →</p>
-                  </button>
+                  {/* 공지 글이 조회되지 않으면 '자세히 보기'가 무반응 클릭이 된다 — 공지 있을 때만 버튼 문법 */}
+                  {evNotice ? (
+                    <button
+                      type="button"
+                      onClick={() => setOpenNotice(evNotice)}
+                      className="min-w-0 flex-1 text-left focus:outline-none"
+                    >
+                      <p className="truncate text-xs font-bold text-ink-primary">오픈 이벤트 — 출석 도장 2배 · 첫 예약 +50 · 웰컴 +100</p>
+                      <p className="text-2xs text-ink-muted">8/3(월)까지 · 자세히 보기 →</p>
+                    </button>
+                  ) : (
+                    <div className="min-w-0 flex-1 text-left">
+                      <p className="truncate text-xs font-bold text-ink-primary">오픈 이벤트 — 출석 도장 2배 · 첫 예약 +50 · 웰컴 +100</p>
+                      <p className="text-2xs text-ink-muted">8/3(월)까지</p>
+                    </div>
+                  )}
                   <button
                     type="button"
                     aria-label="이벤트 배너 닫기"
@@ -2527,7 +2535,8 @@ export default function App() {
                       const sc = schedules.find((x) => x.id === r.scheduleId);
                       return (
                         <button key={r.scheduleId} type="button"
-                          onClick={() => { if (sc) setOpenSchedule(sc); }}
+                          // 일정이 목록에서 사라졌으면(매장 삭제 등) 무반응 대신 안내 — 무반응 클릭 금지
+                          onClick={() => { if (sc) setOpenSchedule(sc); else toast.show('대회 정보를 찾을 수 없습니다 — 매장에서 일정이 변경됐을 수 있어요', 'info'); }}
                           className="w-full flex items-center gap-2.5 rounded-card border border-accent-400/45 bg-gradient-to-r from-accent-300/[0.12] to-transparent px-3 py-2.5 text-left hover:border-accent-300 transition-colors">
                           <span className="shrink-0 text-accent-300" aria-hidden><Icon name="cards" size={18} /></span>
                           <span className="min-w-0 flex-1">
