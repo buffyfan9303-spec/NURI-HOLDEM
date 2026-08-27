@@ -6,6 +6,7 @@ import { useToast } from './components/atoms/Toast';
 import { checkIn, getMyCheckinStreak } from './api/checkins';
 import { requestBuyin, venueTodayGames, getMyBuyinRequestsToday, subscribeMyBuyinRequests, cancelBuyinRequest, type MyBuyinRequest } from './api/ledger';
 import UnreadBadge from './components/atoms/UnreadBadge';
+import SlidingPill from './components/atoms/SlidingPill';
 import ViewModeToggle from './components/atoms/ViewModeToggle';
 import type { ViewMode } from './components/atoms/ViewModeToggle';
 import IntegratedSearchBar, { expandRegions } from './components/features/IntegratedSearchBar';
@@ -451,26 +452,9 @@ const TabBar = memo(function TabBar({
   tabs, active, onChange,
 }: { tabs: TabDef[]; active: TabId; onChange: (t: TabId) => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const labelRefs    = useRef<Record<string, HTMLSpanElement | null>>({});
-  const [indicator, setIndicator] = useState<{ left: number; width: number }>({ left: 0, width: 0 });
 
-  // 활성 탭 '라벨'의 위치/너비를 측정 → 단일 밑줄 바를 그 위치로 슬라이드.
-  // (탭 선택 상태/onChange 로직은 일절 변경하지 않고 시각 인디케이터 레이어만 추가)
-  const measure = useCallback(() => {
-    const container = containerRef.current;
-    const labelEl   = labelRefs.current[active];
-    if (!container || !labelEl) return;
-    const c = container.getBoundingClientRect();
-    const l = labelEl.getBoundingClientRect();
-    setIndicator({ left: l.left - c.left + container.scrollLeft, width: l.width });
-  }, [active]);
-
-  useLayoutEffect(() => { measure(); }, [measure, tabs]);
-  useEffect(() => {
-    window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
-  }, [measure]);
-
+  // 활성 표시 = 그라데이션 알약(.pill-active, OUTFLAME 필 내비 문법) — 공용 SlidingPill(FLIP)이
+  // 활성 라벨 캡슐 사이를 미끄러진다. 예전의 수동 측정 밑줄 인디케이터는 필로 대체(중복 문법 금지).
   return (
     <div
       ref={containerRef}
@@ -478,6 +462,7 @@ const TabBar = memo(function TabBar({
       // 모바일은 하단 탭바(MobileTabBar)가 내비 담당 — 상단 GNB는 PC(lg+) 전용
       className="sticky top-header-h z-40 bg-surface-base relative hidden lg:flex border-b border-border-subtle overflow-x-auto scrollbar-none px-page-x sm:justify-center"
     >
+      <SlidingPill containerRef={containerRef} activeKey={active} className="pill-active rounded-full" />
       {tabs.map(({ id, label }) => {
         const isActive = active === id;
         return (
@@ -491,13 +476,15 @@ const TabBar = memo(function TabBar({
               // 모바일: flex-1로 컨테이너 폭을 균등 분배(좌측 쏠림 제거) → 라벨은 셀 정중앙.
               //   min-width:auto(기본) 유지 → 탭이 많아 좁아지면 라벨 폭 이하로 줄지 않고 가로 스크롤(겹침 방지).
               // 데스크톱(sm+): 자연폭 + 컨테이너 sm:justify-center로 중앙 정렬 그룹(과도한 벌어짐 방지).
-              'flex-1 px-2 sm:flex-none sm:px-5 py-2.5 text-sm font-medium whitespace-nowrap transition-colors duration-200 focus:outline-none touch-manipulation rounded-t-input',
-              isActive ? 'text-accent-300' : 'text-ink-muted hover:text-ink-secondary',
+              // 총 높이 40px 유지: 버튼 py-1.5(12) + 캡슐 py-1(8) + 라벨 20 — 밑줄 시절과 동일(CLS 0).
+              'flex-1 px-1 sm:flex-none sm:px-2.5 py-1.5 text-sm font-medium whitespace-nowrap transition-colors duration-200 focus:outline-none touch-manipulation rounded-t-input',
+              isActive ? 'text-white' : 'text-ink-muted hover:text-ink-secondary',
             ].join(' ')}
           >
+            {/* 알약 측정 대상 = 라벨 캡슐(px-2.5 py-1) — 셀 전체가 아니라 라벨을 감싸는 필 */}
             <span
-              ref={(el) => { labelRefs.current[id] = el; }}
-              className="relative inline-flex items-center justify-center gap-1.5"
+              data-pill-active={isActive || undefined}
+              className="relative inline-flex items-center justify-center gap-1.5 rounded-full px-2.5 py-1"
             >
               <span className="shrink-0" aria-hidden>{TAB_ICON[id]}</span>
               {label}
@@ -505,15 +492,6 @@ const TabBar = memo(function TabBar({
           </button>
         );
       })}
-
-      {/* 단일 슬라이딩 밑줄 인디케이터 — 활성 탭 라벨 폭/위치로 부드럽게 이동(중앙 정렬) */}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute bottom-0 h-0.5 rounded-full bg-accent-300
-                   shadow-[0_0_8px_rgb(var(--accent-300)/0.5)]
-                   transition-[left,width] duration-300 ease-out"
-        style={{ left: indicator.left, width: indicator.width }}
-      />
     </div>
   );
 });
@@ -620,11 +598,15 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
               className="press-spring flex min-w-0 flex-1 flex-col items-center gap-0.5 pb-1.5 pt-2 touch-manipulation focus:outline-none"
             >
               {/* 아이콘 22px · 라벨 11px — 공백 줄이고 또렷하게 */}
-              <span className={['relative flex h-7 w-12 items-center justify-center rounded-full [&_svg]:h-[21px] [&_svg]:w-[21px] transition-colors duration-200',
-                on ? 'text-accent-300 animate-tab-bounce' : 'text-ink-secondary'].join(' ')}>
-                {/* 활성 알약 — 각 칸이 자기 핀을 갖고 opacity 만 토글(transform·layout 0). 전환 시 크로스페이드 */}
+              <span className={['relative flex h-7 w-12 items-center justify-center rounded-full [&_svg]:relative [&_svg]:h-[21px] [&_svg]:w-[21px] transition-colors duration-200',
+                on ? 'text-white animate-tab-bounce' : 'text-ink-secondary'].join(' ')}>
+                {/* 활성 알약(.pill-active 그라데이션 필 — OUTFLAME 필 내비 문법) — 각 칸이 자기 핀을 갖고
+                    opacity 만 토글(transform·layout 0). SlidingPill FLIP 은 이 탭바에선 불가:
+                    버튼의 .press-spring will-change:transform 이 버튼을 offsetParent 로 만들어
+                    캡슐 측정이 버튼 기준으로 틀어진다(실측 확인) — 크로스페이드 정적 필로 대체.
+                    아이콘은 그라데이션 필 위라 흰색으로 승격(다크 4.6:1 실측) */}
                 <span aria-hidden
-                  className={['pointer-events-none absolute inset-0 rounded-full bg-accent-300/15 transition-opacity duration-200',
+                  className={['pointer-events-none absolute inset-0 rounded-full pill-active transition-opacity duration-200',
                     on ? 'opacity-100' : 'opacity-0'].join(' ')} />
                 {tab ? TAB_ICON[tab] : ME_ICON}
                 {tab && dot?.[tab] && !on && <span className="absolute right-2 top-0.5 h-1.5 w-1.5 rounded-full bg-accent-300" aria-hidden />}
@@ -2370,11 +2352,12 @@ export default function App() {
 
           {/* 공지 — 일정탐색 상단 (전체 공통 공지만) */}
 
-          <div className="px-page-x pt-3 pb-section lg:pt-4">
+          {/* 서피스 깊이·오로라 확장(2026-08-27): browse 상단 오로라 워시 — 정적 1회 페인트 */}
+          <div className="hero-aurora px-page-x pt-3 pb-section lg:pt-4">
             {/* P2-8 섹션 헤더 패턴: 제목+개수 좌측(콘텐츠 캡션 — 삭제된 '총 N개' 띠의 대체) */}
             {schedulesLoaded && visibleSchedules.length > 0 && (
-              <p className="flex items-baseline gap-1.5 pb-2 font-display text-lg font-bold tracking-tight text-ink-primary">
-                대회 <span className="text-sm font-bold tabular-nums text-accent-300">{visibleSchedules.length}</span>
+              <p className="flex items-baseline gap-1.5 pb-2 font-display text-lg font-bold tracking-tight text-ink-primary text-grad-violet">
+                대회 <span className="text-sm font-bold tabular-nums text-accent-300 text-grad-keep">{visibleSchedules.length}</span>
               </p>
             )}
             {/* PC 3컬럼: 중앙 콘텐츠 + 우측 위젯 레일(xl 이상) — 바이낸스식 정보 밀도 */}

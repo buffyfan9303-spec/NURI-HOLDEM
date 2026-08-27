@@ -523,7 +523,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       {/* ③ KPI 헤드라인 — 오늘 장부 핵심 숫자를 헤더로 격상(eyebrow 상태 pill + 큰 숫자). 탭하면 장부로. */}
       {caps.ledger && (
         <button type="button" onClick={() => onGoto('ledger')}
-          className="block w-full rounded-card border border-border-subtle bg-surface-low px-4 py-3.5 text-left transition-colors hover:border-border-default">
+          className="card-elev block w-full rounded-card border border-border-subtle bg-surface-low px-4 py-3.5 text-left transition-colors hover:border-border-default">
           <span className="flex items-center gap-2">
             <span className="text-2xs font-bold tracking-wide text-ink-muted">오늘 장부</span>
             <span className={`rounded-badge px-1.5 py-0.5 text-2xs font-bold ${ledgerStatusCls}`}>{ledgerStatus}</span>
@@ -1102,7 +1102,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
 function DashCard({ title, badge, onClick, children, show = true }: { title: string; badge?: ReactNode; onClick: () => void; children: ReactNode; show?: boolean }) {
   if (!show) return null;
   return (
-    <section className="rounded-card border border-border-subtle bg-surface-low p-3">
+    <section className="card-elev rounded-card border border-border-subtle bg-surface-low p-3">
       <button type="button" onClick={onClick} className="flex w-full items-center justify-between gap-2 mb-2 group">
         <span className="flex items-center gap-1.5 text-sm font-bold text-ink-primary">{title}</span>
         <span className="flex items-center gap-1">

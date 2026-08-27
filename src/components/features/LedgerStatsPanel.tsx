@@ -261,13 +261,13 @@ function StatsView({ venueId }: { venueId: string }) {
 
       <div className="relative flex items-center gap-1 bg-surface-high rounded-input p-0.5 overflow-x-auto scrollbar-none">
             {/* AI 기간은 그라데이션이라 알약을 공용으로 못 쓴다 — 일반 기간에만 슬라이드 */}
-            <SlidingPill activeKey={period} className="rounded-[6px] bg-accent-300" />
+            <SlidingPill activeKey={period} className="rounded-[6px] pill-active" />
         {PERIODS.map((p) => {
           const on = period === p.id;
           return (
             <button key={p.id} type="button" data-pill-active={(on && !p.ai) || undefined} onClick={() => setPeriod(p.id)}
               className={['relative flex-1 min-w-[3.6rem] py-1.5 text-xs font-bold rounded-[6px] whitespace-nowrap transition-colors duration-300 focus:outline-none',
-                on ? (p.ai ? 'text-white' : 'text-ink-inverse') : (p.ai ? 'text-violet-300' : 'text-ink-secondary hover:text-ink-primary')].join(' ')}>
+                on ? 'text-white' : (p.ai ? 'text-violet-300' : 'text-ink-secondary hover:text-ink-primary')].join(' ')}>
               {/* AI 기간(그라데이션)은 자기 배경을 직접 칠한다 — 공용 알약은 숨김 */}
               {on && p.ai && <span aria-hidden className="absolute inset-0 rounded-[6px] bg-gradient-to-r from-violet-500 to-indigo-500 shadow animate-fade-in" />}
               <span className="relative">{p.label}</span>

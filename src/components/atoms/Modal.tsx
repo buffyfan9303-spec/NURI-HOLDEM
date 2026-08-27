@@ -244,7 +244,9 @@ export default function Modal({
         aria-modal="true"
         aria-labelledby={title ? 'modal-title' : undefined}
         className={[
-          'relative w-full bg-surface-mid shadow-dialog',
+          // card-elev: 전 모달 공용 깊이(수직 광원+상단 헤어라인). box-shadow 는 캐스케이드상
+          // shadow-dialog 를 대체하지만, dim(black/80) 위에서 외부 섀도는 사실상 비가시 — 순손실 없음.
+          'card-elev relative w-full bg-surface-mid shadow-dialog',
           closing
             ? (variant === 'sheet' ? 'animate-slide-down' : 'animate-fade-out')
             // 시트는 아래에서 올라오고(sheet-up), 가운데 모달은 기존의 짧은 넛지(slide-up).

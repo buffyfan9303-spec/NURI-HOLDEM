@@ -91,13 +91,13 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
       {/* 기간 + 검색 + 정렬 */}
       <div className="flex flex-wrap items-center gap-1.5">
         <div className="relative flex items-center gap-0.5 rounded-input bg-surface-high p-0.5">
-          <SlidingPill activeKey={range} className="rounded-[6px] bg-accent-300" />
+          <SlidingPill activeKey={range} className="rounded-[6px] pill-active" />
           {([['all', '전체'], ['7', '7일'], ['30', '30일'], ['90', '90일']] as const).map(([id, label]) => {
             const on = range === id;
             return (
               <button key={id} type="button" data-pill-active={on || undefined} onClick={() => setRange(id)}
                 className={['relative rounded-[6px] px-2.5 py-1 text-2xs font-bold transition-colors duration-300 focus:outline-none',
-                  on ? 'text-ink-inverse' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
+                  on ? 'text-white' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
                 <span className="relative">{label}</span>
               </button>
             );

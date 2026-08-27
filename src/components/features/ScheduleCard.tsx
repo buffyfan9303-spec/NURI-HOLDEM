@@ -265,7 +265,9 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
         'hover:-translate-y-1 cursor-pointer active:scale-[0.98]',
         schedule.isPremium
           ? 'border-accent-400 shadow-[0_0_12px_rgb(var(--accent-300)/0.22)] bg-surface-low'
-          : 'border-border-default shadow-card bg-surface-low hover:border-border-strong',
+          // card-elev: 단색 채움 위 수직 광원+헤어라인(DatawizzAI 문법). 프리미엄(TOP)은 자체 글로우
+          // 섀도가 있어 제외 — card-elev 의 box-shadow 가 캐스케이드로 글로우를 덮어쓴다.
+          : 'card-elev border-border-default shadow-card bg-surface-low hover:border-border-strong',
       ].join(' ')}
     >
       {/* 포스터 */}

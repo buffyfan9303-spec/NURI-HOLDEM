@@ -701,9 +701,51 @@ img, svg { -webkit-touch-callout: none; -webkit-user-drag: none; user-select: no
    자기 이름의 스냅샷으로 분리해 root 애니에 안 실린다(상시 크롬은 흔들리지 않아야 한다) ── */
 [data-stack-header] { view-transition-name: app-header; }
 nav[aria-label="하단 내비게이션"] { view-transition-name: app-tabbar; }
+/* PC 상단 GNB(sticky 탭 스트립)도 상시 크롬 — 빠져 있어서 전환에 딸려 옆으로 밀렸다(오너 리포트) */
+[data-stack-tabbar] { view-transition-name: app-gnb; }
 ::view-transition-old(app-header), ::view-transition-new(app-header),
-::view-transition-old(app-tabbar), ::view-transition-new(app-tabbar) { animation: none; }
+::view-transition-old(app-tabbar), ::view-transition-new(app-tabbar),
+::view-transition-old(app-gnb), ::view-transition-new(app-gnb) { animation: none; }
 
 /* 가로 스크롤러의 스크롤바 숨김(배너 캐러셀 등) — 기능은 그대로, 표시만 제거 */
 .scrollbar-none { scrollbar-width: none; -ms-overflow-style: none; }
 .scrollbar-none::-webkit-scrollbar { display: none; }
+
+/* ── 바이올렛 룩 v2 공용 유틸(오너 레퍼런스 전면화) — 전부 정적 페인트, 애니 0 ──
+   .pill-active: 내비·세그먼트의 '활성 알약' 정본(OUTFLAME 필 내비 문법) —
+   그라데이션 필 + 액센트 글로우. SlidingPill/활성 탭 배경 클래스로 사용.
+   .card-elev: 단색 카드 위에 얹는 미묘한 수직 광원(위 밝음) + 상단 하이라이트
+   헤어라인(DatawizzAI 카드 문법). bg-surface-* 와 함께 쓴다(배경색은 그대로). */
+.pill-active {
+  background-image: var(--grad-cta);
+  box-shadow: 0 2px 10px rgb(var(--accent-300) / 0.35), inset 0 1px 0 rgb(255 255 255 / 0.14);
+}
+html.light .pill-active {
+  box-shadow: 0 2px 8px rgb(var(--accent-300) / 0.22), inset 0 1px 0 rgb(255 255 255 / 0.35);
+}
+.card-elev {
+  background-image: linear-gradient(180deg, rgb(255 255 255 / 0.035) 0%, rgb(255 255 255 / 0) 55%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);
+}
+html.light .card-elev {
+  background-image: linear-gradient(180deg, rgb(255 255 255 / 0.55) 0%, rgb(255 255 255 / 0) 60%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.8);
+}
+
+/* .ring-conic: 정적 conic 시그니처 보더(OUTFLAME 문법) — 홈 밖 1곳 규율(비로그인 랜딩 로그인 카드).
+   1px 보더 기법: 이중 배경 — 안쪽은 padding-box 로 카드색 채움, 바깥 1px 링만 border-box conic 이 비친다.
+   페인트 1회 정적(애니메이션 금지 §20.4). 내부 채움·링 모두 테마 토큰이라 라이트 전환 자동.
+   ⚠ card-elev 와 같은 요소에 병용 금지 — 둘 다 background-image 라 나중 규칙이 통째로 이긴다. */
+.ring-conic {
+  border: 1px solid transparent;
+  background-image:
+    linear-gradient(rgb(var(--surface-low)), rgb(var(--surface-low))),
+    conic-gradient(
+      rgb(var(--accent-300) / 0.5) 0deg,
+      rgb(var(--accent-300) / 0) 120deg,
+      rgb(var(--accent-300) / 0) 240deg,
+      rgb(var(--accent-300) / 0.5) 360deg
+    );
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+}

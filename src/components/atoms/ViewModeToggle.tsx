@@ -84,7 +84,7 @@ export default function ViewModeToggle({
         className,
       ].join(' ')}
     >
-      <SlidingPill containerRef={ref} activeKey={value} className="rounded-[5px] bg-accent-300 shadow-sm" />
+      <SlidingPill containerRef={ref} activeKey={value} className="rounded-[5px] pill-active" />
       {options.map(({ mode, label, Icon, desktopOnly }) => {
         const active = value === mode;
         return (
@@ -100,7 +100,7 @@ export default function ViewModeToggle({
               'relative w-8 h-full items-center justify-center rounded-[5px]',
               desktopOnly ? 'hidden md:flex' : 'flex',
               'transition-colors duration-150',
-              active ? 'text-ink-inverse' : 'text-ink-muted hover:text-ink-secondary',
+              active ? 'text-white' : 'text-ink-muted hover:text-ink-secondary',
             ].join(' ')}
           >
             <span className="relative inline-flex"><Icon /></span>

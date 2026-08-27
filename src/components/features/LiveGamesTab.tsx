@@ -104,11 +104,11 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
   };
 
   return (
-    <main className="px-page-x pt-3 pb-section">
+    <main className="hero-aurora px-page-x pt-3 pb-section">
       <div className="mx-auto w-full max-w-3xl space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
-            <h2 className="text-base font-semibold text-ink-primary">진행 중 게임 {games ? <span className="text-accent-300">{games.length}</span> : null}</h2>
+            <h2 className="text-base font-semibold text-ink-primary text-grad-violet">진행 중 게임 {games ? <span className="text-accent-300 text-grad-keep">{games.length}</span> : null}</h2>
             <p className="mt-0.5 text-2xs text-ink-muted">지금 클락이 돌아가는 대회를 실시간 확인 · 블라인드·남은인원·평균스택까지</p>
           </div>
           <div className="flex shrink-0 items-center gap-1">
@@ -252,7 +252,7 @@ function LiveCard({ g, name, sched, active = true, onPoster, onVenue, onDisplay 
   return (
     <li>
       <button type="button" onClick={sched ? onPoster : onVenue}
-        className="w-full rounded-card border border-accent-400/30 bg-surface-low p-3 text-left transition-colors hover:border-accent-400/60 active:scale-[0.99]">
+        className="card-elev w-full rounded-card border border-accent-400/30 bg-surface-low p-3 text-left transition-colors hover:border-accent-400/60 active:scale-[0.99]">
         <div className="min-w-0">
           {/* Luma 시간 우선 행 — 시간·상태(정적 컬러 텍스트)가 위, 매장·대회명(bold)이 아래.
               손님의 실질 질문 '지금 가면 낄 수 있나'의 답(등록가능/마감)도 이 시간 행에 편입. */}

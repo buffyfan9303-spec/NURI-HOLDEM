@@ -22,7 +22,7 @@ export default function SegmentedTabs<T extends string>({
   return (
     <div role="tablist" ref={ref}
       className={['relative inline-flex items-center gap-0.5 rounded-input border border-border-subtle bg-surface-high/60 p-0.5', className].join(' ')}>
-      <SlidingPill containerRef={ref} activeKey={value} className="rounded-[6px] bg-accent-300" />
+      <SlidingPill containerRef={ref} activeKey={value} className="rounded-[6px] pill-active" />
       {items.map((it) => {
         const on = it.key === value;
         return (
