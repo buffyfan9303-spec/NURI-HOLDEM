@@ -2,6 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useBackClose } from '../../lib/backstack';
 import { markAllNotificationsRead, markNotificationsRead } from '../../api/notifications';
 import type { AppNotification, NotificationType } from '../../api/notifications';
+import {
+  listMyThreads, listThread, sendMessage, markThreadRead,
+  type DirectMessage, type MessageThread,
+} from '../../api/messages';
+import { findUserForTransfer, type TransferTarget } from '../../api/vouchers';
+import { blockUser } from '../../api/blocks';
+import { useToast } from '../atoms/Toast';
 import SegmentedTabs from '../atoms/SegmentedTabs';
 import Icon, { type IconName } from '../atoms/Icon';
 
@@ -13,6 +20,8 @@ interface NotificationPanelProps {
   onMarkRead: (ids: string[]) => void;
   /** 알림 클릭 시 해당 페이지로 이동 */
   onNavigate?: (notification: AppNotification) => void;
+  /** 쪽지 미읽음 수 변동(스레드 로드·읽음 처리) → 헤더 뱃지 합산 갱신 */
+  onUnreadMessagesChange?: (n: number) => void;
 }
 
 // ── 타입 → Icon 레지스트리 글리프 매핑 (커스텀 인라인 SVG 제거, PATHS 단일 소스) ──
@@ -34,14 +43,145 @@ function relativeTime(iso: string): string {
   return `${Math.floor(diff / 86400)}일 전`;
 }
 
+// 말풍선 옆 시각 — 당일이면 HH:MM, 그 외엔 M/D
+function bubbleTime(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) {
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  }
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
+const AVATAR_FALLBACK = '#5A6175';
+
 // ── 메인 ────────────────────────────────────────────────────────────────────
 
 export default function NotificationPanel({
-  open, onClose, notifications, onMarkRead, onNavigate,
+  open, onClose, notifications, onMarkRead, onNavigate, onUnreadMessagesChange,
 }: NotificationPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const toast = useToast();
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
 
+  // ── 쪽지/알림 모드 — 헤더 아이콘이 메시지가 됐으므로 쪽지가 기본 ──
+  const [mode, setMode] = useState<'messages' | 'notifs'>('messages');
+  const [msgView, setMsgView] = useState<'list' | 'thread' | 'compose'>('list');
+  const [threads, setThreads] = useState<MessageThread[]>([]);
+  const [threadsLoading, setThreadsLoading] = useState(false);
+  const [activeOther, setActiveOther] = useState<{ id: string; name: string; color: string | null } | null>(null);
+  const [msgs, setMsgs] = useState<DirectMessage[]>([]);
+  const [msgsLoading, setMsgsLoading] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [sending, setSending] = useState(false);
+  // 새 쪽지 — 닉네임 검색
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<TransferTarget[]>([]);
+  const [searching, setSearching] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const reportUnread = useCallback((ts: MessageThread[]) => {
+    onUnreadMessagesChange?.(ts.reduce((s, t) => s + t.unread, 0));
+  }, [onUnreadMessagesChange]);
+
+  const reloadThreads = useCallback(() => {
+    setThreadsLoading(true);
+    listMyThreads()
+      .then((ts) => { setThreads(ts); reportUnread(ts); })
+      .catch(() => {})
+      .finally(() => setThreadsLoading(false));
+  }, [reportUnread]);
+
+  // 패널 열릴 때(그리고 쪽지 모드로 전환할 때) 스레드 갱신 — 뱃지의 쪽지 몫도 이때 재계산
+  useEffect(() => {
+    if (open && mode === 'messages') reloadThreads();
+  }, [open, mode, reloadThreads]);
+
+  // 패널이 닫히면 내부 화면을 목록으로 되돌린다(다음 열림이 항상 같은 곳에서 시작)
+  useEffect(() => {
+    if (!open) { setMsgView('list'); setActiveOther(null); setDraft(''); setQuery(''); setResults([]); }
+  }, [open]);
+
+  // ── 스레드 열기: 쪽지 로드 + 읽음 스탬프 + 로컬 미읽음 0 ──
+  const openThread = useCallback((other: { id: string; name: string; color: string | null }) => {
+    setActiveOther(other);
+    setMsgView('thread');
+    setMsgs([]);
+    setMsgsLoading(true);
+    listThread(other.id)
+      .then(setMsgs)
+      .catch(() => {})
+      .finally(() => setMsgsLoading(false));
+    markThreadRead(other.id).catch(() => {});
+    setThreads((prev) => {
+      const next = prev.map((t) => t.otherId === other.id ? { ...t, unread: 0 } : t);
+      reportUnread(next);
+      return next;
+    });
+  }, [reportUnread]);
+
+  // 스레드 화면: 새 쪽지가 붙을 때마다 맨 아래로
+  useEffect(() => {
+    if (msgView === 'thread' && scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [msgView, msgs]);
+
+  // ── 보내기 — 미인증/차단 거부는 서버 메시지를 그대로 토스트 ──
+  const handleSend = useCallback(async () => {
+    if (!activeOther || sending) return;
+    const body = draft.trim();
+    if (!body) return;
+    setSending(true);
+    try {
+      const sent = await sendMessage(activeOther.id, body);
+      setDraft('');
+      setMsgs((prev) => [...prev, sent]);
+      setThreads((prev) => {
+        const rest = prev.filter((t) => t.otherId !== activeOther.id);
+        const cur = prev.find((t) => t.otherId === activeOther.id);
+        return [{
+          otherId: activeOther.id, otherName: activeOther.name, otherColor: activeOther.color,
+          lastBody: sent.body, lastAt: sent.createdAt, lastMine: true, unread: cur?.unread ?? 0,
+        }, ...rest];
+      });
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : '쪽지를 보내지 못했어요', 'error');
+    } finally {
+      setSending(false);
+    }
+  }, [activeOther, draft, sending, toast]);
+
+  // ── 새 쪽지 — 닉네임 검색(기존 RPC find_user_for_transfer, 300ms 디바운스) ──
+  useEffect(() => {
+    if (msgView !== 'compose') return;
+    const q = query.trim();
+    if (q.length < 2) { setResults([]); setSearching(false); return; }
+    setSearching(true);
+    const t = setTimeout(() => {
+      findUserForTransfer(q)
+        .then(setResults)
+        .catch(() => setResults([]))
+        .finally(() => setSearching(false));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [msgView, query]);
+
+  // ── 차단 — 기존 user_blocks 재사용(피드·검색과 동일 동선) ──
+  const handleBlock = useCallback(async () => {
+    if (!activeOther) return;
+    try {
+      await blockUser(activeOther.id, activeOther.name);
+      toast.show(`${activeOther.name}님을 차단했습니다 — 이후 쪽지가 오지 않아요`, 'success');
+      setMsgView('list');
+      setActiveOther(null);
+      reloadThreads();
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : '차단하지 못했어요', 'error');
+    }
+  }, [activeOther, toast, reloadThreads]);
+
+  // ── 알림(기존 계약 그대로) ─────────────────────────────────────────────────
   // 패널이 열릴 때 unread ID를 스냅샷으로 보존 (닫을 때 읽음 처리용)
   const unreadOnOpenRef = useRef<string[]>([]);
   useEffect(() => {
@@ -71,7 +211,7 @@ export default function NotificationPanel({
     return () => { clearTimeout(t); document.removeEventListener('mousedown', onClick); };
   }, [open, handleClose]);
 
-  // 뒤로가기 → 알림 패널 닫기(읽음 처리 포함)
+  // 뒤로가기 → 패널 닫기(읽음 처리 포함)
   useBackClose(open, handleClose);
 
   // ── 부팅 딥링크형 링크('?v=' '?s=' '?tab=' '#tool=' '#gto=' …) 직접 처리 ──
@@ -101,6 +241,8 @@ export default function NotificationPanel({
     ? notifications.filter((n) => !n.read)
     : notifications;
 
+  const inSubView = mode === 'messages' && msgView !== 'list';
+
   return (
     <>
       {/* 모바일에서만 배경 dim (탭하면 닫힘) */}
@@ -126,24 +268,229 @@ export default function NotificationPanel({
           'max-h-[calc(100vh-theme(spacing.header-h)-env(safe-area-inset-top)-1rem)] flex flex-col overflow-hidden',
         ].join(' ')}
       >
-        {/* 헤더 — 우측: 모두 읽음(미읽음 있을 때만) + 전체/안읽음 필터 */}
-        <header className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
-          <h2 className="text-sm font-semibold text-ink-primary">알림</h2>
-          <div className="flex items-center gap-2 text-2xs">
-            {notifications.some((n) => !n.read) && (
+        {/* 헤더 — 좌: [쪽지|알림] 세그먼트(서브 화면에선 뒤로+제목) / 우: 모드별 액션 */}
+        <header className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border-subtle">
+          {inSubView ? (
+            <div className="flex min-w-0 items-center gap-1.5">
               <button
                 type="button"
-                onClick={handleMarkAll}
-                className="text-2xs font-semibold text-accent-300 hover:text-accent-200 transition-colors focus:outline-none"
+                onClick={() => { setMsgView('list'); setActiveOther(null); reloadThreads(); }}
+                aria-label="뒤로"
+                className="hit relative -ml-1 flex h-7 w-7 items-center justify-center rounded-full text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors"
               >
-                모두 읽음
+                <Icon name="chevron-left" size={16} />
+              </button>
+              <h2 className="min-w-0 truncate text-sm font-semibold text-ink-primary">
+                {msgView === 'compose' ? '새 쪽지' : activeOther?.name ?? '쪽지'}
+              </h2>
+            </div>
+          ) : (
+            <SegmentedTabs
+              items={[{ key: 'messages', label: '쪽지' }, { key: 'notifs', label: '알림' }]}
+              value={mode}
+              onChange={setMode}
+            />
+          )}
+
+          <div className="flex shrink-0 items-center gap-2 text-2xs">
+            {mode === 'notifs' && (
+              <>
+                {notifications.some((n) => !n.read) && (
+                  <button
+                    type="button"
+                    onClick={handleMarkAll}
+                    className="text-2xs font-semibold text-accent-300 hover:text-accent-200 transition-colors focus:outline-none"
+                  >
+                    모두 읽음
+                  </button>
+                )}
+                <SegmentedTabs items={[{ key: 'all', label: '전체' }, { key: 'unread', label: '안읽음' }]} value={filter} onChange={setFilter} />
+              </>
+            )}
+            {mode === 'messages' && msgView === 'list' && (
+              <button
+                type="button"
+                onClick={() => { setQuery(''); setResults([]); setMsgView('compose'); }}
+                className="flex items-center gap-1 rounded-input border border-border-subtle px-2 py-1.5 text-2xs font-semibold text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors"
+              >
+                <Icon name="edit" size={12} />
+                새 쪽지
               </button>
             )}
-            <SegmentedTabs items={[{ key: 'all', label: '전체' }, { key: 'unread', label: '안읽음' }]} value={filter} onChange={setFilter} />
+            {mode === 'messages' && msgView === 'thread' && activeOther && (
+              <button
+                type="button"
+                onClick={handleBlock}
+                className="text-2xs font-semibold text-ink-muted hover:text-danger-light transition-colors focus:outline-none"
+              >
+                차단
+              </button>
+            )}
           </div>
         </header>
 
-        {/* 목록 */}
+        {/* ── 쪽지: 스레드 목록 ── */}
+        {mode === 'messages' && msgView === 'list' && (
+          <ul className="flex-1 overflow-y-auto">
+            {threads.length === 0 ? (
+              <li className="flex flex-col items-center justify-center py-12 gap-2 text-ink-muted">
+                <Icon name="comment" size={32} strokeWidth={1.5} />
+                <p className="text-xs">{threadsLoading ? '쪽지를 불러오는 중…' : '주고받은 쪽지가 없습니다'}</p>
+              </li>
+            ) : (
+              threads.map((t) => (
+                <li
+                  key={t.otherId}
+                  onClick={() => openThread({ id: t.otherId, name: t.otherName, color: t.otherColor })}
+                  className={[
+                    'relative flex items-center gap-3 px-4 py-3',
+                    'border-b border-border-subtle last:border-b-0',
+                    'hover:bg-surface-high active:bg-surface-high cursor-pointer transition-colors',
+                  ].join(' ')}
+                >
+                  {/* 미읽음: 알림 행과 동일 문법 — 좌측 2px 액센트 바 */}
+                  {t.unread > 0 && (
+                    <span className="absolute left-0 top-3 bottom-3 w-0.5 rounded-full bg-accent-300" aria-label="안읽음" />
+                  )}
+                  <div
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white"
+                    style={{ background: t.otherColor || AVATAR_FALLBACK }}
+                  >
+                    <span className="text-sm font-bold leading-none">{t.otherName.slice(0, 1)}</span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <p className={[
+                        'text-xs leading-tight truncate min-w-0',
+                        t.unread > 0 ? 'font-semibold text-ink-primary' : 'font-medium text-ink-secondary',
+                      ].join(' ')}>
+                        {t.otherName}
+                      </p>
+                      <span className="text-2xs text-ink-muted shrink-0 tabular-nums">{relativeTime(t.lastAt)}</span>
+                    </div>
+                    {/* 프라이버시: 본문 미리보기는 1줄 truncate 만 */}
+                    <p className="mt-0.5 truncate text-xs leading-snug text-ink-muted">
+                      {t.lastMine ? `나: ${t.lastBody}` : t.lastBody}
+                    </p>
+                  </div>
+                  <span className="w-4 shrink-0 flex items-center justify-center" aria-hidden>
+                    {t.unread > 0
+                      ? <span className="h-2 w-2 rounded-full bg-accent-300" />
+                      : <Icon name="chevron-right" size={14} className="text-ink-muted" />}
+                  </span>
+                </li>
+              ))
+            )}
+          </ul>
+        )}
+
+        {/* ── 쪽지: 스레드 뷰(말풍선 + 입력) ── */}
+        {mode === 'messages' && msgView === 'thread' && (
+          <>
+            <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto px-4 py-3">
+              {msgs.length === 0 ? (
+                <p className="py-10 text-center text-xs text-ink-muted">
+                  {msgsLoading ? '쪽지를 불러오는 중…' : '첫 쪽지를 보내 보세요'}
+                </p>
+              ) : (
+                msgs.map((m) => (
+                  <div key={m.id} className={['flex items-end gap-1.5', m.mine ? 'justify-end' : 'justify-start'].join(' ')}>
+                    {m.mine && (
+                      <span className="shrink-0 text-2xs text-ink-muted tabular-nums">{bubbleTime(m.createdAt)}</span>
+                    )}
+                    <p className={[
+                      'max-w-[75%] whitespace-pre-wrap break-words rounded-card px-3 py-2 text-xs leading-snug',
+                      m.mine
+                        ? 'rounded-br-sm bg-accent-300 text-white'
+                        : 'rounded-bl-sm bg-surface-high text-ink-primary',
+                    ].join(' ')}>
+                      {m.body}
+                    </p>
+                    {!m.mine && (
+                      <span className="shrink-0 text-2xs text-ink-muted tabular-nums">{bubbleTime(m.createdAt)}</span>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="flex items-end gap-2 border-t border-border-subtle px-3 py-2.5">
+              <textarea
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                    e.preventDefault();
+                    handleSend();
+                  }
+                }}
+                rows={1}
+                maxLength={2000}
+                placeholder="쪽지 입력…"
+                aria-label="쪽지 입력"
+                className="min-w-0 flex-1 resize-none rounded-input border border-border-subtle bg-surface-high/60 px-3 py-2 text-xs text-ink-primary placeholder:text-ink-muted focus:border-accent-300 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={handleSend}
+                disabled={sending || !draft.trim()}
+                aria-label="보내기"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-300 text-white transition-opacity disabled:opacity-40"
+              >
+                <Icon name="send" size={14} />
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* ── 쪽지: 새 쪽지(닉네임 검색 → 수신자 선택) ── */}
+        {mode === 'messages' && msgView === 'compose' && (
+          <div className="flex-1 overflow-y-auto">
+            <div className="border-b border-border-subtle px-4 py-3">
+              <div className="relative">
+                <Icon name="search" size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted" />
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  autoFocus
+                  placeholder="받는 사람 닉네임 검색"
+                  aria-label="받는 사람 닉네임 검색"
+                  className="w-full rounded-input border border-border-subtle bg-surface-high/60 py-2 pl-8 pr-3 text-xs text-ink-primary placeholder:text-ink-muted focus:border-accent-300 focus:outline-none"
+                />
+              </div>
+            </div>
+            <ul>
+              {query.trim().length < 2 ? (
+                <li className="px-4 py-8 text-center text-xs text-ink-muted">닉네임을 2자 이상 입력해 주세요</li>
+              ) : searching ? (
+                <li className="px-4 py-8 text-center text-xs text-ink-muted">검색 중…</li>
+              ) : results.length === 0 ? (
+                <li className="px-4 py-8 text-center text-xs text-ink-muted">일치하는 회원이 없습니다</li>
+              ) : (
+                results.map((r) => (
+                  <li key={r.id}>
+                    <button
+                      type="button"
+                      onClick={() => openThread({ id: r.id, name: r.display, color: null })}
+                      className="flex w-full items-center gap-3 border-b border-border-subtle px-4 py-3 text-left hover:bg-surface-high transition-colors"
+                    >
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white" style={{ background: AVATAR_FALLBACK }}>
+                        <span className="text-xs font-bold leading-none">{r.display.slice(0, 1)}</span>
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{r.display}</span>
+                      {r.verified && (
+                        <span className="shrink-0 rounded-badge bg-emerald-500/15 px-1.5 py-0.5 text-2xs font-bold text-emerald-400">인증</span>
+                      )}
+                      <Icon name="chevron-right" size={14} className="shrink-0 text-ink-muted" />
+                    </button>
+                  </li>
+                ))
+              )}
+            </ul>
+          </div>
+        )}
+
+        {/* ── 알림 목록(기존 UI 전량 유지) ── */}
+        {mode === 'notifs' && (
         <ul className="flex-1 overflow-y-auto">
           {visible.length === 0 ? (
             <li className="flex flex-col items-center justify-center py-12 gap-2 text-ink-muted">
@@ -232,6 +579,7 @@ export default function NotificationPanel({
             ))
           )}
         </ul>
+        )}
 
         {/* (푸터 '모두 읽음으로 표시'는 헤더 '모두 읽음'으로 이관 — 같은 기능 2곳 중복 방지) */}
       </div>

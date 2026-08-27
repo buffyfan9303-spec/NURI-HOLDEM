@@ -70,6 +70,7 @@ import { useBlocks } from './contexts/BlockContext';
 import type { NoticeFormData } from './components/features/NoticeFormModal';
 import type { LegalDoc } from './components/features/LegalDocsModal';
 import { getMyNotifications, markNotificationsRead } from './api/notifications';
+import { myUnreadMessageCount } from './api/messages';
 import { supabase } from './lib/supabase';
 import type { User } from './api/auth';
 import type { Schedule } from './api/schedules';
@@ -140,7 +141,7 @@ interface TabDef { id: TabId; label: string; }
 
 const AppHeader = memo(function AppHeader({
   unreadCount, notifications, onMarkRead, onOpenLogin, onNavigateNotification, onHome, onOpenProfile, onOpenVouchers,
-  onGotoTab, activeTab, suppressed = false,
+  onGotoTab, activeTab, suppressed = false, onUnreadMessagesChange,
 }: {
   /** (미사용 — 텍스트 내비로 대체) 모바일 헤더 좌측 큰 타이틀 */
   title?: string;
@@ -158,6 +159,8 @@ const AppHeader = memo(function AppHeader({
   onOpenVouchers: () => void;
   /** 매장 페이지 등 풀스크린 오버레이가 열렸을 때 메인 헤더를 가린다(레이아웃 유지, 페인트만 숨김). */
   suppressed?: boolean;
+  /** 쪽지 미읽음 수 갱신(패널 내부 스레드 로드·읽음 처리 → 뱃지 합산 반영) */
+  onUnreadMessagesChange?: (n: number) => void;
 }) {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
@@ -231,7 +234,9 @@ const AppHeader = memo(function AppHeader({
           {/* 라이트/다크 모드 전환 */}
           <ThemeToggle className="hidden lg:flex" />
 
-          {/* 알림 벨 — 솔리드 디자인 + 명확한 클릭 영역 */}
+          {/* 쪽지+알림 메시지 버튼 — 오너 지시(2026-08-27): 벨 → 메시지 아이콘, 패널에서 [쪽지|알림] 결합.
+              ⚠ aria-label 은 '알림 N개' 패턴 유지 — e2e 마운트 마커 button[aria-label^="알림"] 잠금
+              (perf·static-shell·tabbar-autohide 스펙). N = 알림 미읽음 + 쪽지 미읽음 합산. */}
           <button
             type="button"
             onClick={() => setNotifOpen((v) => !v)}
@@ -247,12 +252,7 @@ const AppHeader = memo(function AppHeader({
                 : 'text-ink-secondary hover:text-ink-primary hover:bg-surface-high',
             ].join(' ')}
           >
-            {/* 깔끔한 라인형 종(Bell) 아이콘 (lucide 스타일) */}
-            <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-              <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-            </svg>
+            <Icon name="comment" size={18} strokeWidth={1.8} />
             <UnreadBadge count={unreadCount} className="absolute -top-0.5 -right-0.5 ring-2 ring-surface-base" />
           </button>
 
@@ -334,7 +334,7 @@ const AppHeader = memo(function AppHeader({
                   <div className="lg:hidden border-b border-border-subtle">
                     <button type="button" onClick={() => { setNotifOpen(true); setUserMenu(false); }}
                       className="w-full text-left flex items-center gap-2 px-3 py-2.5 text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></svg>
+                      <Icon name="comment" size={14} />
                       알림{unreadCount > 0 && <span className="ml-auto rounded-badge bg-accent-300 px-1.5 py-0.5 text-2xs font-bold text-white tabular-nums">{unreadCount}</span>}
                     </button>
                     <button type="button" onClick={() => { onOpenVouchers(); setUserMenu(false); }}
@@ -405,13 +405,14 @@ const AppHeader = memo(function AppHeader({
         </div>
       </div>
 
-      {/* 알림 패널 — viewport 기준 fixed 위치 */}
+      {/* 쪽지+알림 패널 — viewport 기준 fixed 위치 */}
       <NotificationPanel
         open={notifOpen}
         onClose={() => setNotifOpen(false)}
         notifications={notifications}
         onMarkRead={onMarkRead}
         onNavigate={onNavigateNotification}
+        onUnreadMessagesChange={onUnreadMessagesChange}
       />
     </header>
   );
@@ -1081,6 +1082,8 @@ export default function App() {
   const venueById = useMemo(() => new Map(venues.map((v) => [v.id, v])), [venues]);
   const [comments,      setComments]      = useState<Comment[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  // 쪽지 미읽음 — Realtime 금지(연결 예산): 90s 폴링 + 패널 열 때(NotificationPanel 이 콜백으로 갱신)
+  const [unreadMsgs,    setUnreadMsgs]    = useState(0);
   const [posts,         setPosts]         = useState<CommunityPost[]>(() => readSnap<CommunityPost[]>('posts') ?? []);
   const [listings,      setListings]      = useState<MarketplaceListing[]>(() => readSnap<MarketplaceListing[]>('listings') ?? []);
   const [marketLoaded,  setMarketLoaded]  = useState(() => readSnap<MarketplaceListing[]>('listings') != null); // 장터 첫 로딩 여부 — 스냅샷 있으면 스켈레톤 생략
@@ -1388,6 +1391,17 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
+  // 쪽지 미읽음 폴링(90s) — Realtime 대신 head 카운트 1회/주기(연결 예산 §설계).
+  // 패널을 열면 NotificationPanel 이 스레드 로드로 즉시 재계산해 콜백으로 덮어쓴다.
+  useEffect(() => {
+    if (!user) { setUnreadMsgs(0); return; }
+    const load = () => myUnreadMessageCount().then(setUnreadMsgs).catch(() => {});
+    load();
+    const t = setInterval(load, 90_000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
   // 창/탭 복귀(focus·visibility) 시 모든 주요 데이터 자동 동기화
   //  → 다른 기기·다른 사용자가 바꾼 일정·매장·게시글·댓글·장터·공지·알림이 즉시 최신화
   // ⚠ 예전엔 복귀 때마다 8종을 전부 다시 받았다. 문제는 요청 수만이 아니다 —
@@ -1453,14 +1467,15 @@ export default function App() {
   }, [isAdmin]);
 
   const unreadNotifs = notifications.filter((n) => !n.read).length;
-  // 설치형 PWA 아이콘 배지(Badging API) — 앱을 안 열어도 미읽음이 홈 화면에 보인다
+  // 설치형 PWA 아이콘 배지(Badging API) — 앱을 안 열어도 미읽음이 홈 화면에 보인다(알림+쪽지 합산, 헤더 뱃지와 동일)
   useEffect(() => {
     try {
       const nav = navigator as Navigator & { setAppBadge?: (n: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
-      if (unreadNotifs > 0) nav.setAppBadge?.(unreadNotifs);
+      const total = unreadNotifs + unreadMsgs;
+      if (total > 0) nav.setAppBadge?.(total);
       else nav.clearAppBadge?.();
     } catch { /* 미지원 무시 */ }
-  }, [unreadNotifs]);
+  }, [unreadNotifs, unreadMsgs]);
   const isStaff = user?.role === 'venue_staff';
 
   const tabs: TabDef[] = useMemo(() => {
@@ -2148,9 +2163,10 @@ export default function App() {
         title={activeTab === 'browse' ? undefined : tabs.find((t) => t.id === activeTab)?.label}
         activeTab={activeTab}
         onGotoTab={changeTab}
-        unreadCount={unreadNotifs}
+        unreadCount={unreadNotifs + unreadMsgs}
         notifications={notifications}
         onMarkRead={handleMarkRead}
+        onUnreadMessagesChange={setUnreadMsgs}
         onOpenLogin={openLoginCb}
         onNavigateNotification={handleNavigateNotification}
         onHome={handleHome}
