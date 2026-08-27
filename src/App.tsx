@@ -2487,8 +2487,8 @@ export default function App() {
                                 onClick={() => setOpenNotice(n)}
                                 className="w-full text-left px-3 py-2 border-b border-border-subtle last:border-b-0 hover:bg-surface-high/50 transition-colors focus:outline-none"
                               >
+                                {/* 커뮤니티 공지와 동일 문법: 제목만 1행 — 본문은 열어서 확인 */}
                                 <p className="text-xs font-semibold text-ink-primary truncate">{n.title}</p>
-                                {n.body && <p className="text-2xs text-ink-muted line-clamp-1 mt-0.5">{n.body}</p>}
                               </button>
                             </li>
                           ))}
