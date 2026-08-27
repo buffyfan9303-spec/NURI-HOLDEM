@@ -29,9 +29,13 @@ test.describe('모션 — 시트가 아래에서 올라오고 손끝을 따라�
 
   test('🔴 시트가 열릴 때 sheet-up 애니메이션이 걸린다', async ({ page }) => {
     await stabilizeBackstack(page);
-    // 첫 방문자에게 자동으로 뜨는 온보딩 시트를 검증 대상으로 쓴다 —
-    // 버튼을 눌러 여는 경로는 온보딩 자체가 클릭을 가로채서 불안정하다.
+    // 예전엔 '첫 방문자에게 자동으로 뜨는 온보딩 시트'를 대상으로 썼다(버튼 경로는 온보딩이
+    // 클릭을 가로채 불안정했기 때문). 온보딩(#29)이 2026-08-28 오너 지시로 삭제되며 그 전제와
+    // 가로채기 문제가 함께 사라졌다 — 이제 실제 사용자 경로인 Cmd/Ctrl+K 통합 검색
+    // (GlobalSearchModal, Modal variant="sheet")을 연다: 비로그인·데이터 무관·결정적.
     await page.goto('/');
+    await page.waitForSelector('button[aria-label^="알림"]', { timeout: 15_000 }); // 앱 마운트 마커
+    await page.keyboard.press('Control+k');
 
     const dialog = page.locator('[role="dialog"]').first();
     await expect(dialog).toBeVisible({ timeout: 10_000 });
@@ -45,8 +49,11 @@ test.describe('모션 — 시트가 아래에서 올라오고 손끝을 따라�
   test('시트에 손끝 추종용 드래그 핸들러가 배선돼 있다', async ({ page }) => {
     // 그립 핸들이 '끌 수 있다'고 말해 놓고 반응이 없으면 UI 가 거짓말을 하는 것이다.
     // 터치 제스처 자체는 자동화가 불안정하므로, 최소한 '핸들 영역이 터치를 받도록 설정됐는지'를 본다.
+    // 대상 시트는 위 테스트와 동일 — 온보딩(#29) 삭제(2026-08-28) 후 Cmd/Ctrl+K 검색 시트.
     await stabilizeBackstack(page);
     await page.goto('/');
+    await page.waitForSelector('button[aria-label^="알림"]', { timeout: 15_000 }); // 앱 마운트 마커
+    await page.keyboard.press('Control+k');
     const dialog = page.locator('[role="dialog"]').first();
     await expect(dialog).toBeVisible({ timeout: 10_000 });
 

@@ -9,7 +9,7 @@ test.describe.configure({ retries: 2 });
 
 test.beforeEach(async ({ page }) => {
   test.setTimeout(60_000); // 병렬 부하에서 마운트 대기(≤30s)가 기본 타임아웃을 소진한다
-  await page.addInitScript(() => { try { localStorage.setItem('nuri_onboarding_v1', '1'); } catch { /* noop */ } });
+  // (온보딩 시트 #29 는 2026-08-28 삭제 — 'nuri_onboarding_v1' 시드는 죽은 전제라 제거)
   await page.goto('/');
   // 병렬 스위트 부하에서 마운트가 늦으면 nav 대기가 기본 타임아웃을 넘긴다 — 마운트 마커로 명시 대기
   await page.waitForSelector('button[aria-label^="알림"]', { timeout: 30_000 });

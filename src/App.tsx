@@ -18,7 +18,6 @@ import { getReservationCounts, getMyReservations, type MyReservationRow } from '
 import { getVenueRatings } from './api/reviews';
 import NotificationPanel from './components/features/NotificationPanel';
 import VerifyGateSheet from './components/features/VerifyGateSheet';
-import OnboardingSheet from './components/features/OnboardingSheet';
 import { decodeSpot, readGtoHash } from './components/features/gto/gtoShare';
 import type { DeepGtoInit } from './components/features/gto/useDeepGto';
 import type { PosterFormData } from './components/features/PosterFormModal';
@@ -235,8 +234,10 @@ const AppHeader = memo(function AppHeader({
         <div className="flex items-center gap-0.5">
           {/* 통합 검색 버튼은 오너 지시(2026-08-27)로 제거 — 검색은 '전체 일정' 레일 돋보기가 담당.
               GlobalSearchModal 자체는 유지(추후 재진입점 대비). */}
-          {/* 라이트/다크 모드 전환 */}
-          <ThemeToggle className="hidden lg:flex" />
+          {/* 라이트/다크 모드 전환 — 오너 지시(2026-08-28): 모바일에도 노출(우편 아이콘 왼쪽).
+              배치 [테마 토글][우편][이용권][아바타] · 규격 w-9 h-9 는 이웃 우편 버튼과 동일.
+              사용자 메뉴 안 테마 항목은 접근성 경로로 유지(중복 무해). */}
+          <ThemeToggle />
 
           {/* 쪽지+알림 메시지 버튼 — 오너 지시(2026-08-27): 벨 → 메시지 아이콘, 패널에서 [쪽지|알림] 결합.
               ⚠ aria-label 은 '알림 N개' 패턴 유지 — e2e 마운트 마커 button[aria-label^="알림"] 잠금
@@ -453,8 +454,11 @@ const TabBar = memo(function TabBar({
 }: { tabs: TabDef[]; active: TabId; onChange: (t: TabId) => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // 활성 표시 = 그라데이션 알약(.pill-active, OUTFLAME 필 내비 문법) — 공용 SlidingPill(FLIP)이
-  // 활성 라벨 캡슐 사이를 미끄러진다. 예전의 수동 측정 밑줄 인디케이터는 필로 대체(중복 문법 금지).
+  // 활성 표시 = 밑줄(SlidingPill underline 모드) — 커뮤니티 서브탭과 동일 문법(오너 지시 2026-08-28).
+  // 예전 .pill-active 그라데이션 캡슐은 오정렬 시 이웃 라벨 위에 걸치고, text-white 활성 라벨이
+  // 라이트 배경에서 증발하는 사고가 있었다. 밑줄은 오정렬이 나도 2px 라 시각 피해가 최소이고
+  // 활성 라벨이 잉크색이라 어느 테마에서도 증발하지 않는다(근본 해결).
+  // 측정 타깃(data-pill-active)은 라벨 캡슐 span 유지 — 밑줄 폭이 라벨 폭을 따른다.
   return (
     <div
       ref={containerRef}
@@ -462,7 +466,7 @@ const TabBar = memo(function TabBar({
       // 모바일은 하단 탭바(MobileTabBar)가 내비 담당 — 상단 GNB는 PC(lg+) 전용
       className="sticky top-header-h z-40 bg-surface-base relative hidden lg:flex border-b border-border-subtle overflow-x-auto scrollbar-none px-page-x sm:justify-center"
     >
-      <SlidingPill containerRef={containerRef} activeKey={active} className="pill-active rounded-full" />
+      <SlidingPill containerRef={containerRef} activeKey={active} underline className="rounded-full bg-accent-300" />
       {tabs.map(({ id, label }) => {
         const isActive = active === id;
         return (
@@ -477,14 +481,18 @@ const TabBar = memo(function TabBar({
               //   min-width:auto(기본) 유지 → 탭이 많아 좁아지면 라벨 폭 이하로 줄지 않고 가로 스크롤(겹침 방지).
               // 데스크톱(sm+): 자연폭 + 컨테이너 sm:justify-center로 중앙 정렬 그룹(과도한 벌어짐 방지).
               // 총 높이 40px 유지: 버튼 py-1.5(12) + 캡슐 py-1(8) + 라벨 20 — 밑줄 시절과 동일(CLS 0).
-              'flex-1 px-1 sm:flex-none sm:px-2.5 py-1.5 text-sm font-medium whitespace-nowrap transition-colors duration-200 focus:outline-none touch-manipulation rounded-t-input',
-              isActive ? 'text-white' : 'text-ink-muted hover:text-ink-secondary',
+              'flex-1 px-1 sm:flex-none sm:px-2.5 py-1.5 text-sm whitespace-nowrap transition-colors duration-200 focus:outline-none touch-manipulation rounded-t-input',
+              // 폰트 굵기는 조건부로만 — 기본 font-medium 을 같이 두면 CSS 출력 순서상 font-bold 를 이겨
+              // 활성 굵기가 500에 머문다(헤드리스 실측으로 확인). 굵기 변화로 라벨 폭이 바뀌어도
+              // SlidingPill 은 렌더 후 재측정이라 밑줄은 어긋나지 않는다.
+              isActive ? 'text-ink-primary font-bold' : 'font-medium text-ink-secondary hover:text-ink-primary',
             ].join(' ')}
           >
-            {/* 알약 측정 대상 = 라벨 캡슐(px-2.5 py-1) — 셀 전체가 아니라 라벨을 감싸는 필 */}
+            {/* 밑줄 측정 대상 = 라벨 캡슐(px-2.5 py-1) — 셀 전체가 아니라 라벨을 감싸는 폭.
+                underline 모드가 좌우 8px 씩 안쪽으로 그리므로 밑줄 ≈ 아이콘+라벨 폭 */}
             <span
               data-pill-active={isActive || undefined}
-              className="relative inline-flex items-center justify-center gap-1.5 rounded-full px-2.5 py-1"
+              className="relative inline-flex items-center justify-center gap-1.5 px-2.5 py-1"
             >
               <span className="shrink-0" aria-hidden>{TAB_ICON[id]}</span>
               {label}
@@ -2221,8 +2229,8 @@ export default function App() {
       {/* 본인인증 게이트 안내 시트(#31) — 미인증 회원이 민감 기능 시도 시 자동 표시 */}
       <VerifyGateSheet onStart={() => setProfileOpen(true)} />
 
-      {/* 첫 진입 온보딩(#29) — 신규 방문자 1회성 웰컴 시트(딥링크 진입 시 미표시) */}
-      <OnboardingSheet />
+      {/* 첫 진입 온보딩(#29)은 오너 지시(2026-08-28)로 삭제 — localStorage 'nuri:persona' 소비처
+          (초기 탭 결정)는 기존 선택 사용자 보존을 위해 유지 */}
 
       {/* keep-alive — 한 번 열리면 마운트 유지(자식이 display 토글), 재열림·닫힘은 VT 스냅샷 뒤 display 커밋만 */}
       {(voucherWalletOpen || meEverOpenedRef.current) && (

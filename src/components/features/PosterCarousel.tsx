@@ -3,9 +3,11 @@
 // 포스터가 화면 가로를 꽉 채우는 풀폭 1장 배너로 흐른다.
 // · 슬롯 규격(오너 지시 2026-08-27 4차): 카드 폭 = 스크롤러 clientWidth(w-full — 100vw 는
 //   PC 세로 스크롤바에서 가로 오버플로라 금지), 높이 = aspect 960/448(래스터 원본 비율 그대로 —
-//   어떤 기종에서도 크롭 0), 카드 간 여백 0. PC(lg+)는 풀폭이 과대해져 '스크롤러 자체'를
+//   어떤 기종에서도 크롭 0), 카드 간 여백 0. PC 는 풀폭이 과대해져 '스크롤러 자체'를
 //   max-w-[512px] 중앙 정렬로 캡(512×448/960≈239px ≤ 240px 캡) — 카드는 여전히 w-full 이라
 //   스텝 = clientWidth 불변식이 전 기종 단일 코드로 유지되고 비율 크롭도 없다.
+//   캡 트리거 = lg ∪ (hover:hover)+(pointer:fine)(2026-08-28): 줌·배율 PC(CSS 뷰포트<1024)에서도 캡.
+// · 터치 플릭 = 시작 카드 ±1장 정착(2026-08-28): touchend 클램프 → 기존 rAF 트윈 정착.
 //   포스터 크롭 2종만 래스터(960×448 WebP ≤120KB), 브랜드 배너 4종은 DOM(CSS+실텍스트 —
 //   전송 0B·PC 뭉개짐 없음), 일정 포스터는 thumbUrl(960) 서버 리사이즈 상한(풀폭 확대에 맞춤 —
 //   구 224px 슬롯 시절의 480 상한은 폐기).
@@ -237,6 +239,9 @@ export default function PosterCarousel({ schedules, onSelect, onBanner }: {
   useEffect(() => {
     const vp = vpRef.current;
     if (!vp) return;
+    // 터치 제스처 시작 시점의 scrollLeft — 음수 = 진행 중 제스처 없음.
+    // 랩이 제스처 도중 되감으면 같은 ±half 로 동보정해 '시작 카드' 좌표를 랩 좌표계에 유지한다.
+    let touchBase = -1;
     const wrap = () => {
       const half = vp.scrollWidth / 2;
       const w = vp.clientWidth; // 카드 폭 = clientWidth(w-full) — 스크롤 이벤트 핫패스라 실측 대신 이걸 쓴다
@@ -249,13 +254,11 @@ export default function PosterCarousel({ schedules, onSelect, onBanner }: {
       //   임계를 못 건드려 진동이 원천 차단된다. 자동 스텝의 최대 타깃도 half+w 라 랩이
       //   '비행 중'이 아닌 '착지 후'에만 일어난다(smooth 취소 → snap 역행 없음). 랩 전후는
       //   복제 세트의 같은 카드라 픽셀 동일 — 텔레포트는 보이지 않는다.
-      if (vp.scrollLeft >= half + w) vp.scrollLeft -= half;
-      else if (vp.scrollLeft <= 0) vp.scrollLeft += half;
+      if (vp.scrollLeft >= half + w) { vp.scrollLeft -= half; if (touchBase >= 0) touchBase -= half; }
+      else if (vp.scrollLeft <= 0) { vp.scrollLeft += half; if (touchBase >= 0) touchBase += half; }
     };
     vp.addEventListener('scroll', wrap, { passive: true });
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      return () => vp.removeEventListener('scroll', wrap); // 자동 스텝 없이 수동만(랩은 유지)
-    }
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     // 자동 스텝 = rAF 트윈(구 scrollTo smooth 교체 — 오너 리포트 2026-08-27 '프레임이 낮다').
     // UA smooth 는 곡선·듀레이션 제어 불가 + 풀폭 960px 페인트와 겹치면 뚝뚝해 보였다.
     // scrollLeft 를 --ease 동일 곡선으로 STEP_MS 트윈. ⚠ snap-x mandatory 컨테이너는
@@ -284,9 +287,50 @@ export default function PosterCarousel({ schedules, onSelect, onBanner }: {
       };
       tweenRaf = requestAnimationFrame(frame);
     };
+
+    // ② 터치 플릭 클램프(오너 지시 2026-08-28: "미는 속도에 따라 여러 장이 넘어간다") —
+    // 손을 놓는 순간 '시작 카드 기준 ±1장'으로만 정착한다. 마우스 휠·트랙패드는 불변(터치 한정).
+    // · touchstart: 시작 scrollLeft 기록(진행 중 자동 트윈 취소는 기존 pause 가 담당).
+    // · touchend(마지막 손가락): 이동량 < 카드 폭 12% → 제자리 복귀, 이상 → 이동 방향으로 1장.
+    //   목표 인덱스는 랩 좌표계 (0, half+w] 로 사전 텔레포트(±half — 복제 세트 동일 픽셀이라
+    //   보이지 않음) 후 기존 rAF 트윈(EASE·STEP_MS)으로 정착 — 트윈 중 snap 해제·착지 후 복원은
+    //   tweenTo 문법 그대로. 프로그래매틱 scrollLeft 세트는 UA 플릭 관성 스크롤을 중단시키는
+    //   표준 동작 + 트윈이 매 프레임 scrollLeft 를 쓰므로 관성이 이길 수 없다(Chromium 터치 에뮬 실검증).
+    // · prefers-reduced-motion: 트윈 대신 instant 세트(±1 클램프 규칙은 동일).
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 1) touchBase = vp.scrollLeft; // 첫 손가락만 — 추가 손가락은 시작점 유지
+    };
+    const onTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length > 0 || touchBase < 0) return;
+      const base = touchBase;
+      touchBase = -1;
+      const half = vp.scrollWidth / 2;
+      const w = vp.querySelector<HTMLElement>('button')?.getBoundingClientRect().width || vp.clientWidth;
+      if (!w || half <= vp.clientWidth) return;
+      const delta = vp.scrollLeft - base;
+      const dir = Math.abs(delta) < w * 0.12 ? 0 : Math.sign(delta);
+      let from = vp.scrollLeft;
+      // 시작 카드에서 '다음/이전 한 장'. round 로 잡으면 시작점이 카드 경계를 벗어나 있을 때
+      // (자동 트윈 도중 잡기 등) 반올림이 진행 방향으로 한 칸 더 튄다 — 방향별 floor/ceil 이 정확하다.
+      const EPS = 0.5; // 서브픽셀 오차가 floor/ceil 을 한 칸 밀지 않도록
+      let target = dir > 0 ? (Math.floor((base + EPS) / w) + 1) * w
+        : dir < 0 ? (Math.ceil((base - EPS) / w) - 1) * w
+          : Math.round(base / w) * w;
+      // 랩 좌표계 클램프 — 트윈은 절대 좌표를 쓰므로 목표·현재를 (0, half+w] 안으로 사전 랩.
+      // (target=half+w 경계는 자동 스텝과 동일하게 허용 — 착지 후 wrap 이 w 로 되감는다.)
+      if (target <= 0) { from += half; target += half; vp.scrollLeft = from; }
+      else if (target > half + w) { from -= half; target -= half; vp.scrollLeft = from; }
+      if (reduced) { vp.scrollLeft = target; return; }
+      tweenTo(from, target);
+    };
+    vp.addEventListener('touchstart', onTouchStart, { passive: true });
+    vp.addEventListener('touchend', onTouchEnd, { passive: true });
+    vp.addEventListener('touchcancel', onTouchEnd, { passive: true });
+
     let pauseUntil = 0;
     const pause = () => { pauseUntil = performance.now() + 6000; cancelTween(); }; // 수동 스와이프 감지 → 트윈 즉시 취소
-    const step = window.setInterval(() => {
+    // 자동 스텝은 reduced-motion 이면 없음(수동 스크롤 + 플릭 클램프만 — 클램프도 instant 세트)
+    const step = reduced ? 0 : window.setInterval(() => {
       if (document.hidden || performance.now() < pauseUntil) return;
       if (vp.scrollWidth / 2 <= vp.clientWidth) return;
       const w = vp.querySelector<HTMLElement>('button')?.getBoundingClientRect().width || vp.clientWidth;
@@ -299,13 +343,18 @@ export default function PosterCarousel({ schedules, onSelect, onBanner }: {
       const target = (Math.round(vp.scrollLeft / w) + 1) * w;
       tweenTo(vp.scrollLeft, target);
     }, 3200);
-    vp.addEventListener('touchstart', pause, { passive: true });
-    vp.addEventListener('wheel', pause, { passive: true });
-    vp.addEventListener('pointerdown', pause, { passive: true });
+    if (!reduced) {
+      vp.addEventListener('touchstart', pause, { passive: true });
+      vp.addEventListener('wheel', pause, { passive: true });
+      vp.addEventListener('pointerdown', pause, { passive: true });
+    }
     return () => {
-      window.clearInterval(step);
+      if (step) window.clearInterval(step);
       cancelTween();
       vp.removeEventListener('scroll', wrap);
+      vp.removeEventListener('touchstart', onTouchStart);
+      vp.removeEventListener('touchend', onTouchEnd);
+      vp.removeEventListener('touchcancel', onTouchEnd);
       vp.removeEventListener('touchstart', pause);
       vp.removeEventListener('wheel', pause);
       vp.removeEventListener('pointerdown', pause);
@@ -317,10 +366,15 @@ export default function PosterCarousel({ schedules, onSelect, onBanner }: {
       {/* 오너 지시(2026-08-27): 배너만 — 펠트 배경·어두운 띠 없음. 스크롤바는 숨김.
           snap-x mandatory: 수동 스와이프 1장 정렬 전담 — 자동 스텝(rAF 트윈)은 트윈 동안만
           인라인 scroll-snap-type:none 으로 해제하고 카드 경계(N×clientWidth)에 착지 후 복원(점프 0).
-          lg 캡: 스크롤러 자체를 512px 중앙 정렬(≈239px 높이) — 카드 w-full 불변식 유지.
+          PC 캡: 스크롤러 자체를 512px 중앙 정렬(≈239px 높이) — 카드 w-full 불변식 유지.
+          ⚠ 캡 트리거는 lg(뷰포트 폭) '와' (hover:hover)+(pointer:fine) 둘 다(오너 리포트 2026-08-28):
+          브라우저 줌·윈도우 배율 150~250% PC 는 CSS 뷰포트가 1024px 미만(1900 물리 창 ≈ 780 CSS)이라
+          lg 가 영원히 안 걸려 모바일 풀폭(780×364)이 그려졌다 — 마우스(정밀 포인터+호버) 환경은
+          줌·배율과 무관한 PC 판별이라 이 미디어로도 동일 캡을 건다(터치 온리 대화면은 기존 lg 담당).
+          index.html 셸 예약부와 클래스 문법 동일 유지(동커밋 동조 규칙).
           트랙은 w-max 금지 — 카드 w-full(%)가 스크롤러 폭에 대해 확정 해석되려면
           트랙 폭 = 스크롤러 content 폭이어야 한다(w-max 면 순환 참조로 깨짐). */}
-      <div ref={vpRef} className="poster-marquee-viewport scrollbar-none snap-x snap-mandatory overflow-x-auto lg:mx-auto lg:max-w-[512px] lg:rounded-card">
+      <div ref={vpRef} className="poster-marquee-viewport scrollbar-none snap-x snap-mandatory overflow-x-auto lg:mx-auto lg:max-w-[512px] lg:rounded-card [@media(hover:hover)_and_(pointer:fine)]:mx-auto [@media(hover:hover)_and_(pointer:fine)]:max-w-[512px] [@media(hover:hover)_and_(pointer:fine)]:rounded-card">
         <div className="flex">
           {set(false)}
           {set(true)}
