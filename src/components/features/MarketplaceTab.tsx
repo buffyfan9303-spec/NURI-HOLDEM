@@ -309,27 +309,19 @@ function NoticeBoard({
                 <button
                   type="button"
                   onClick={() => onSelect(n)}
-                  className="w-full text-left flex items-start gap-2 px-3 py-2 hover:bg-surface-high/50 transition-colors"
+                  className="w-full text-left flex items-center gap-2 px-3 py-2 hover:bg-surface-high/50 transition-colors"
                 >
                   <span className={[
-                    'shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs',
+                    'shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-2xs',
                     style.iconBg,
                   ].join(' ')}>
                     {style.icon}
                   </span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="text-xs font-semibold text-ink-primary truncate">{n.title}</p>
-                      <span className="shrink-0 text-2xs text-ink-muted">
-                        {relativeTime(n.createdAt)}
-                      </span>
-                    </div>
-                    {n.body && (
-                      <p className="mt-0.5 text-2xs text-ink-muted line-clamp-2 leading-snug">
-                        {n.body}
-                      </p>
-                    )}
-                  </div>
+                  {/* 오너 지시(2026-08-27): 공지는 제목만 한 줄 — 본문은 눌러서 상세(커뮤니티 공지와 동일 문법) */}
+                  <p className="flex min-w-0 flex-1 items-center gap-2 text-xs font-semibold text-ink-primary">
+                    <span className="min-w-0 flex-1 truncate">{n.title}</span>
+                    <span className="shrink-0 text-2xs font-normal tabular-nums text-ink-muted">{relativeTime(n.createdAt)}</span>
+                  </p>
                 </button>
               </li>
             );

@@ -1,19 +1,15 @@
 // src/components/features/LiveGamesTab.tsx
-// 라이브 — 진행 중(클락 running) 게임 현황 보드. 클락에서 보이는 정보 전부 공개:
-// 레벨/블라인드/앤티·남은시간·생존/엔트리·리바인·얼리·애드온·탈락·총스택·평균스택·등록마감·다음브레이크.
+// 라이브 — 진행 중(클락 running) 게임 현황 보드.
+// 오너 지시(2026-08-27): 카드당 1~2줄 컴팩트 행 — 매장명·게임 라벨·현재 레벨/블라인드 + 레지마감 남은 분까지만.
+// 나머지 상세(엔트리·리바인·평균스택·다음브레이크 등)는 카드 탭 → 포스터/매장 · 관전 화면에서 그대로 제공(표면 간소화, 기능 보존).
 import { useEffect, useMemo, useState } from 'react';
 import { getRunningClocks, subscribeRunningClocks, effectiveLevel, type ClockState, type ClockLevel } from '../../api/clock';
 import { matchClockSchedule as matchSchedule, msToRegClose } from '../../lib/regStatus';
-import { wonToMan } from '../../api/ledger';
 import { EmptyState } from '../atoms/Skeleton';
 import Icon from '../atoms/Icon';
 import { useSkeletonGate } from '../../lib/useSkeletonGate';
 import type { Venue } from '../../api/community';
 import type { Schedule } from '../../api/schedules';
-
-const pad = (n: number) => String(Math.floor(n)).padStart(2, '0');
-const mmss = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return `${pad(s / 60)}:${pad(s % 60)}`; };
-const hms = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return `${pad(s / 3600)}:${pad((s % 3600) / 60)}:${pad(s % 60)}`; };
 
 // 지역 중심좌표(근사) — 정확한 주소 좌표가 없어 지역 단위로 "가까운 순" 근사. GPS와 함께 사용.
 const REGION_GEO: Record<string, [number, number]> = {
@@ -41,11 +37,10 @@ function levelNumberAt(levels: ClockLevel[], index: number): number {
   for (let i = 0; i <= index && i < levels.length; i++) if (levels[i].kind === 'level') n++;
   return n;
 }
-// index 를 받는 이유: DB 의 current_index 가 낡아 있을 수 있어 '실효 인덱스'로 계산해야 한다.
-function msToNextBreak(s: ClockState, index: number, remaining: number): number | null {
-  const lv = s.config?.levels ?? []; let acc = remaining;
-  for (let i = index + 1; i < lv.length; i++) { if (lv[i].kind === 'break') return acc; acc += lv[i].minutes * 60_000; }
-  return null;
+// 레지마감 잔여 ms → '몇 분' 라벨(오너 지정 1급 정보 — 분 단위 표기)
+function regMinLabel(ms: number): string {
+  const min = Math.max(1, Math.ceil(ms / 60_000));
+  return min >= 60 ? `${Math.floor(min / 60)}시간 ${min % 60 > 0 ? `${min % 60}분` : ''}`.trim() : `${min}분`;
 }
 
 export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, onDisplay, active = true, myGames }: { venues: Venue[]; schedules: Schedule[]; onVenue: (id: string) => void; onSchedule: (s: Schedule) => void; onDisplay: (venueId: string, gameSeq: number) => void; active?: boolean; myGames?: { venueId: string; venueName: string; gameSeq: number | null }[] }) {
@@ -109,7 +104,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
             <h2 className="text-base font-semibold text-ink-primary text-grad-violet">진행 중 게임 {games ? <span className="text-accent-300 text-grad-keep">{games.length}</span> : null}</h2>
-            <p className="mt-0.5 text-2xs text-ink-muted">지금 클락이 돌아가는 대회를 실시간 확인 · 블라인드·남은인원·평균스택까지</p>
+            <p className="mt-0.5 text-2xs text-ink-muted">지금 클락이 돌아가는 대회 · 블라인드와 레지마감을 한눈에 — 탭하면 상세</p>
           </div>
           <div className="flex shrink-0 items-center gap-1">
             {games && games.length > 1 && (
@@ -139,14 +134,15 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
 
         {games === null ? (
           showSkel ? (
-            // [DS] MO-6: 실제 LiveCard 골격 복제(헤더 2행 + 스탯 박스 + 하단 행) — h-40 임의값 대체
+            // [DS] MO-6: 컴팩트 LiveCard 골격 복제(2줄 행 + 우측 관전 버튼) — 실제 행과 같은 패딩·줄높이로 CLS 0
             <div className="space-y-card-gap" aria-hidden aria-busy="true">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="rounded-card border border-border-subtle bg-surface-low p-3">
-                  <div className="skeleton h-5 w-1/2" />
-                  <div className="skeleton mt-1 h-4 w-2/3" />
-                  <div className="skeleton mt-2 h-[72px]" />
-                  <div className="skeleton mt-2 h-4 w-3/4" />
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="flex items-stretch gap-1">
+                  <div className="min-w-0 flex-1 rounded-card border border-border-subtle bg-surface-low px-3 py-2">
+                    <div className="skeleton h-3.5" style={{ width: `${[55, 42, 60, 48][i]}%` }} />
+                    <div className="skeleton mt-1 h-2.5" style={{ width: `${[70, 58, 64, 52][i]}%` }} />
+                  </div>
+                  <div className="skeleton w-9 shrink-0 rounded-card" />
                 </div>
               ))}
             </div>
@@ -223,13 +219,12 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
 }
 
 function LiveCard({ g, name, sched, active = true, onPoster, onVenue, onDisplay }: { g: ClockState; name: string; sched: Schedule | null; active?: boolean; onPoster: () => void; onVenue: () => void; onDisplay: () => void }) {
-  // [DS] MO-9B③: 1초 틱을 카운트다운을 실제로 그리는 말단 카드로 격리 —
-  // 예전엔 부모가 초마다 setTick 으로 탭 전체(정렬·파생 포함)를 리렌더했다.
-  // 멈춘 클락(running=false)의 remaining 은 정적이라 틱 자체를 끈다.
+  // 컴팩트 행(오너 지시)은 분 단위 표기뿐이라 1초 틱이 필요 없다 — 15초 틱으로
+  // 레지마감 분·레벨 전환만 따라간다(부모 30초 폴링 사이의 보간). 멈춘 클락은 틱 자체를 끈다.
   const [, setTick] = useState(0);
   useEffect(() => {
     if (!active || !g.running) return;
-    const t = setInterval(() => setTick((x) => x + 1), 1000);
+    const t = setInterval(() => setTick((x) => x + 1), 15_000);
     return () => clearInterval(t);
   }, [active, g.running]);
   const lvls = g.config?.levels ?? [];
@@ -238,115 +233,40 @@ function LiveCard({ g, name, sched, active = true, onPoster, onVenue, onDisplay 
   const lv = lvls[eff.index];
   const levelNo = levelNumberAt(lvls, eff.index);
   const isBreak = lv?.kind === 'break';
-  const remaining = eff.remainingMs;
-  const nextBreak = msToNextBreak(g, eff.index, remaining);
-  const regClose = msToRegClose(g, eff.index, remaining);
-  const isAddon = !!g.config?.isAddon;
-  const ls = g.liveStats ?? {
-    entries: g.adjEntries, rebuys: g.adjRebuys, earlies: g.adjEarlies, addons: g.adjAddons,
-    alive: Math.max(0, g.adjEntries - g.eliminations), eliminations: g.eliminations, totalStack: 0, avgStack: 0,
-    buyInAmount: null,
-  };
-  const urgent = g.running && remaining <= 60_000 && !isBreak;
+  const regClose = msToRegClose(g, eff.index, eff.remainingMs);
+  const alive = g.liveStats?.alive ?? Math.max(0, g.adjEntries - g.eliminations);
 
   return (
     <li>
-      <button type="button" onClick={sched ? onPoster : onVenue}
-        className="card-elev w-full rounded-card border border-accent-400/30 bg-surface-low p-3 text-left transition-colors hover:border-accent-400/60 active:scale-[0.99]">
-        <div className="min-w-0">
-          {/* Luma 시간 우선 행 — 시간·상태(정적 컬러 텍스트)가 위, 매장·대회명(bold)이 아래.
-              손님의 실질 질문 '지금 가면 낄 수 있나'의 답(등록가능/마감)도 이 시간 행에 편입. */}
-          <p className="flex min-w-0 items-center gap-1.5 text-2xs font-bold leading-none">
-            {sched?.startTime && <span className="shrink-0 tabular-nums text-ink-muted">{sched.startTime}</span>}
-            <span className={`shrink-0 ${g.running ? 'text-emerald-400' : 'text-amber-400'}`}>{g.running ? 'LIVE' : '일시정지'}</span>
+      {/* 2줄 컴팩트 행 — 상세(엔트리·스택·브레이크·바인)는 카드 탭 → 포스터/매장, 우측 관전 버튼 → 전체 클락 */}
+      <div className="flex items-stretch gap-1">
+        <button type="button" onClick={sched ? onPoster : onVenue} title={sched ? '탭하면 대회 포스터로 이동' : '탭하면 매장 페이지로 이동'}
+          className="min-w-0 flex-1 rounded-card border border-accent-400/30 bg-surface-low px-3 py-2 text-left transition-colors hover:border-accent-400/60 active:scale-[0.99]">
+          {/* 1행: LIVE · 매장명(+대회명 꼬리) ── 레지마감 남은 분(오너 지정 1급 정보) */}
+          <p className="flex min-w-0 items-center gap-1.5 leading-none">
+            <span className={`shrink-0 text-2xs font-bold ${g.running ? 'text-emerald-400' : 'text-amber-400'}`}>{g.running ? 'LIVE' : '일시정지'}</span>
+            <span className="min-w-0 flex-1 truncate text-sm font-bold leading-none text-ink-primary">
+              {name}<span className="ml-1.5 text-2xs font-normal text-ink-muted">{g.title || g.config?.title || '토너먼트'}</span>
+            </span>
             {regClose !== null && (regClose === 0
-              ? <span className="shrink-0 font-semibold text-ink-muted">· 등록마감</span>
-              : <span className="shrink-0 font-semibold text-emerald-400">· 등록가능</span>)}
+              ? <span className="shrink-0 rounded-badge border border-border-default bg-surface-float px-1.5 py-0.5 text-2xs font-bold leading-none text-ink-muted">마감</span>
+              : <span className={`shrink-0 text-2xs font-bold tabular-nums ${regClose <= 5 * 60_000 ? 'text-amber-300' : 'text-emerald-400'}`}>레지 {regMinLabel(regClose)}</span>)}
           </p>
-          <p className="mt-1 truncate text-sm font-bold text-ink-primary">{name}</p>
-          <p className="truncate text-2xs text-ink-muted">{g.title || g.config?.title || '토너먼트'}</p>
-          {sched && <p className="mt-0.5 flex items-center gap-1 text-2xs font-semibold text-accent-300/90"><Icon name="image" size={12} className="shrink-0" /><span className="truncate">탭하면 대회 포스터로 이동</span></p>}
-        </div>
-
-        {/* 레벨 · 블라인드 · 남은 시간 — FotMob식 고정 그리드: 오른쪽 타이머 칸은 tabular mm:ss 로
-            폭이 상수라, 블라인드 자리수가 바뀌어도 초당 갱신되는 이웃 칸이 밀리지 않는다 */}
-        <div className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-input bg-surface-base/60 px-3 py-2">
-          <div className="min-w-0">
-            <p className="text-2xs text-ink-muted">{isBreak ? '브레이크' : `레벨 ${levelNo}`}</p>
-            {isBreak ? (
-              <>
-                <p className="text-lg font-extrabold leading-tight text-sky-300">BREAK</p>
-                {g.running && remaining <= 60_000 && <p className="text-2xs font-bold text-amber-300">곧 재개</p>}
-              </>
-            ) : (
-              <p className="truncate text-lg font-extrabold leading-tight text-ink-primary tabular-nums">
-                {lv ? <>{lv.sb.toLocaleString()}/{lv.bb.toLocaleString()}{lv.ante > 0 && <span className="ml-1 text-2xs text-ink-muted">a{lv.ante.toLocaleString()}</span>}</> : '-'}
-              </p>
-            )}
-          </div>
-          <div className="text-right">
-            <p className="text-2xs text-ink-muted">남은 시간</p>
-            <p className={`text-2xl font-extrabold leading-none tabular-nums ${urgent ? 'text-rose-400' : 'text-accent-300'}`}>{mmss(Math.max(0, remaining))}</p>
-          </div>
-        </div>
-
-        {/* 바인 금액 · 스타팅/리바인 스택 · 얼리 추가 스택 */}
-        {(ls.buyInAmount || g.config?.startStack || g.config?.rebuyStack) ? (
-          <div className="mt-2 rounded-input bg-surface-base/60 px-3 py-1.5 text-2xs text-ink-secondary space-y-0.5">
-            <p>
-              {ls.buyInAmount ? <>바인 <b className="text-accent-300">{wonToMan(ls.buyInAmount)}만</b> · </> : null}
-              스타팅 <b className="text-accent-300 tabular-nums">{(g.config?.startStack ?? 0).toLocaleString()}</b> · 리바인 <b className="text-accent-300 tabular-nums">{(g.config?.rebuyStack ?? 0).toLocaleString()}</b>
-            </p>
-            {((g.config?.earlyBonus ?? 0) > 0 || (g.config?.doubleEarlyBonus ?? 0) > 0) && (
-              <p className="text-amber-300">
-                얼리 추가{(g.config?.doubleEarlyBonus ?? 0) > 0 && <> · 더블 <b className="tabular-nums">+{(g.config!.doubleEarlyBonus).toLocaleString()}</b></>}{(g.config?.earlyBonus ?? 0) > 0 && <> · 1얼리 <b className="tabular-nums">+{(g.config!.earlyBonus).toLocaleString()}</b></>}
-              </p>
-            )}
-          </div>
-        ) : null}
-
-        {/* 엔트리(생존 부가)·리바인·얼리·애드온/탈락 */}
-        <div className="mt-2 grid grid-cols-4 gap-1.5">
-          <Cell label="엔트리" value={`${ls.entries}`} sub={`생존 ${ls.alive}`} accent />
-          <Cell label="리바인" value={`${ls.rebuys}`} />
-          <Cell label="얼리" value={`${ls.earlies}`} />
-          <Cell label={isAddon ? '애드온' : '탈락'} value={`${isAddon ? ls.addons : ls.eliminations}`} />
-        </div>
-
-        {/* 총 스택 · 평균 스택 */}
-        <div className="mt-1.5 grid grid-cols-2 gap-1.5">
-          <Cell label="총 스택" value={ls.totalStack ? ls.totalStack.toLocaleString() : '-'} wide />
-          <Cell label="평균 스택" value={ls.avgStack ? ls.avgStack.toLocaleString() : '-'} wide accent />
-        </div>
-
-        {/* 등록마감 · 다음 브레이크 — 반반 고정 그리드: 초당 줄어드는 hh:mm:ss 가 이웃을 밀지 않는다 */}
-        <div className="mt-1.5 grid grid-cols-2 items-center gap-2 text-2xs">
-          <span className="text-ink-muted">등록마감 <b className={`num tabular-nums ${regClose === 0 ? 'text-rose-300' : 'text-ink-secondary'}`}>{regClose === null ? '—' : regClose === 0 ? '마감' : hms(regClose)}</b></span>
-          <span className="text-right text-ink-muted">다음 브레이크 <b className="num tabular-nums text-ink-secondary">{nextBreak === null ? '—' : hms(nextBreak)}</b></span>
-        </div>
-      </button>
-      <div className="mt-1 flex gap-1">
-        <button type="button" onClick={onDisplay} title="매장 TV·빔프로젝터용 큰 화면(관전 모드)"
-          className="inline-flex flex-1 items-center justify-center gap-1 rounded-input border border-accent-400/40 py-1.5 text-2xs font-bold text-accent-300 transition-colors hover:bg-accent-300/10 active:scale-[0.99]"><Icon name="eye" size={13} className="shrink-0" />큰 화면(관전)</button>
-        {sched && (
-          <button type="button" onClick={onVenue}
-            className="inline-flex flex-1 items-center justify-center gap-1 rounded-input border border-border-subtle py-1.5 text-2xs font-semibold text-ink-muted transition-colors hover:border-accent-400/40 hover:text-accent-300"><Icon name="map-pin" size={13} className="shrink-0" />매장 페이지</button>
-        )}
+          {/* 2행: 레벨·블라인드(핵심) ── 생존 1토큰 */}
+          <p className="mt-1 flex min-w-0 items-center gap-1.5 text-2xs leading-none text-ink-muted">
+            <span className="shrink-0 font-semibold">{isBreak ? '브레이크' : `레벨 ${levelNo}`}</span>
+            {isBreak
+              ? <span className="shrink-0 font-bold text-sky-300">BREAK</span>
+              : <span className="min-w-0 truncate font-bold tabular-nums text-ink-secondary">{lv ? `${lv.sb.toLocaleString()}/${lv.bb.toLocaleString()}${lv.ante > 0 ? ` a${lv.ante.toLocaleString()}` : ''}` : '-'}</span>}
+            <span className="ml-auto shrink-0 tabular-nums">생존 {alive}</span>
+          </p>
+        </button>
+        <button type="button" onClick={onDisplay} title="큰 화면(관전) — 블라인드·엔트리·스택 전체 상세" aria-label="큰 화면 관전"
+          className="inline-flex w-9 shrink-0 items-center justify-center rounded-card border border-accent-400/30 text-accent-300 transition-colors hover:bg-accent-300/10 active:scale-[0.99]">
+          <Icon name="eye" size={14} />
+        </button>
       </div>
     </li>
-  );
-}
-
-function Cell({ label, value, sub, accent, wide }: { label: string; value: string; sub?: string; accent?: boolean; wide?: boolean }) {
-  // FotMob식 대칭 칸: 등분 그리드 안에서 각 칸 중앙 고정 + tabular-nums —
-  // 초당 갱신으로 자리수가 변해도 칸 폭(그리드 트랙)이 불변이라 이웃이 밀리지 않는다.
-  return (
-    <div className="min-w-0 rounded-input bg-surface-base/60 px-1 py-1.5 text-center">
-      <p className={`truncate font-extrabold leading-none tabular-nums ${wide ? 'text-base' : 'text-sm'} ${accent ? 'text-accent-300' : 'text-ink-primary'}`}>
-        {value}{sub && <span className="ml-1 text-2xs font-normal text-ink-muted">{sub}</span>}
-      </p>
-      <p className="mt-0.5 truncate text-2xs text-ink-muted">{label}</p>
-    </div>
   );
 }
 
