@@ -1634,7 +1634,15 @@ function StaffManager({ venueId }: { venueId: string }) {
           />
           <button type="submit" disabled={inviting || !email.trim()} className="btn-primary px-4 shrink-0 disabled:opacity-60">초대</button>
         </div>
-        <p className="text-2xs text-ink-muted">초대 대상은 먼저 일반 회원으로 가입돼 있어야 합니다. 가입한 이메일로 초대하면, 상대가 알림에서 수락 시 구성원이 됩니다.</p>
+        {/* 초대 절차 — 문장 나열 대신 번호 배지 스텝(순서가 의미 있는 3단계) */}
+        <ol className="flex flex-col gap-1 rounded-input border border-border-subtle bg-surface-low px-2.5 py-2 sm:flex-row sm:items-center sm:gap-3">
+          {(['상대가 일반 회원으로 가입', '가입한 이메일로 초대', '상대가 알림에서 수락 → 합류'] as const).map((t, i) => (
+            <li key={t} className="flex items-center gap-1.5 text-2xs text-ink-muted">
+              <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-accent-300/15 text-[10px] font-bold tabular-nums text-accent-300">{i + 1}</span>
+              {t}
+            </li>
+          ))}
+        </ol>
       </form>
 
       {loading ? (
@@ -1653,7 +1661,7 @@ function StaffManager({ venueId }: { venueId: string }) {
                       <span className="text-2xs text-ink-muted"> · {iv.email}</span>
                       <span className="text-2xs text-amber-400"> · 수락 대기</span>
                     </span>
-                    <button type="button" onClick={() => cancel(iv.id)} className="text-2xs px-2 py-1 rounded-input text-ink-muted hover:text-danger-light transition-colors">취소</button>
+                    <button type="button" onClick={() => cancel(iv.id)} className="text-2xs px-2.5 py-1.5 rounded-input text-ink-muted hover:text-danger-light transition-colors">취소</button>
                   </li>
                 ))}
               </ul>
@@ -1668,7 +1676,7 @@ function StaffManager({ venueId }: { venueId: string }) {
               {TITLE_SUGGEST.map((t) => <option key={t} value={t} />)}
             </datalist>
             {staff.length === 0 ? (
-              <p className="py-6 text-center text-2xs text-ink-muted">아직 구성원이 없습니다. 닉네임으로 초대해 보세요.</p>
+              <p className="py-6 text-center text-2xs text-ink-muted">아직 구성원이 없습니다. 위에서 이메일로 초대해 보세요.</p>
             ) : (
               <ul className="space-y-2">
                 {staff.map((s) => {
@@ -1686,7 +1694,7 @@ function StaffManager({ venueId }: { venueId: string }) {
                         </span>
                         <p className="text-2xs text-ink-muted truncate">{s.nickname ? `@${s.nickname}` : s.email}</p>
                       </div>
-                      <button type="button" onClick={() => remove(s)} className="text-2xs px-2 py-1 rounded-input text-ink-muted hover:text-danger-light transition-colors">제거</button>
+                      <button type="button" onClick={() => remove(s)} className="text-2xs px-2.5 py-1.5 rounded-input text-ink-muted hover:text-danger-light transition-colors">제거</button>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       <input
