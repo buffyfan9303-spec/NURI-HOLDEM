@@ -9,8 +9,12 @@ import { dismissOverlays } from './_session';
 test.describe('첫 화면 — 앱을 막 켠 사람이 보는 것', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
+    // ⚠ 온보딩 시트(첫 페인트 +700ms 지연 등장)를 '클릭 전에' 걷는다 — 클릭을 먼저 하면
+    //   goto(load 대기)가 홈 풀폭 배너 이미지(960 썸네일)로 모달 등장보다 늦게 풀리는 날
+    //   클릭이 오버레이에 가로채여 30s 행이 된다(검증 대상과 무관한 경합 — 게이트 불변).
+    await dismissOverlays(page);
     // P1: 기본 화면이 홈으로 바뀜 — 이 스펙의 대상(일정 탐색)으로 이동
-    await page.getByRole('button', { name: /전체 일정/ }).first().click().catch(() => {});
+    await page.getByRole('button', { name: /전체 일정/ }).first().click({ timeout: 10_000 }).catch(() => {});
     await page.waitForTimeout(400);
     await dismissOverlays(page);
     await page.waitForTimeout(1500);
