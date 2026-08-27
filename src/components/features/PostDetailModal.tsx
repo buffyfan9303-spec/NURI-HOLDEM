@@ -197,8 +197,11 @@ export default function PostDetailModal({
         <header className="flex items-center gap-2 pb-3 border-b border-border-subtle">
           <Avatar name={post.userName} src={post.userAvatar} color={post.userColor} size={40} />
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className="text-sm font-semibold text-ink-primary truncate">{authorMark}{post.userName}</span>
+            {/* flex-wrap(2026-08-28 스윕): 390px에서 칭호칩+역할배지+우측 공유·신고·차단 버튼이
+                폭을 다 먹어 작성자 이름이 '♣..'로 통째로 사라졌다 — 칩이 다음 줄로 내려가고
+                이름이 먼저 살아남게 줄바꿈을 허용한다(이름 자체는 max-w-full truncate 유지). */}
+            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+              <span className="max-w-full truncate text-sm font-semibold text-ink-primary">{authorMark}{post.userName}</span>
               <TitleChip points={titlePts(post.userId)} />
               {post.userRole === 'venue_owner' && (
                 <span className="text-2xs font-bold text-accent-300 bg-accent-300/15 px-1.5 py-0.5 rounded-badge">업주</span>

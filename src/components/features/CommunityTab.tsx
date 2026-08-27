@@ -258,8 +258,10 @@ function CommunityTab({
       {(visitedSecs.has('board') || section === 'board') && (
         <div style={{ display: section === 'board' ? undefined : 'none' }}
           className="lg:flex lg:items-start lg:gap-4">
-          {/* 좌측: 목록(압축) */}
-          <div className="min-w-0 lg:w-[19rem] lg:shrink-0">
+          {/* 좌측: 목록(압축) — 19rem(304px)은 PostRow 고정 메타(작성자+칭호+시간+조회 ≈368px)보다
+              좁아 제목이 0px로 뭉개지고 조회수가 행 밖으로 잘렸다(PC 1280·1536 점검 2026-08-28).
+              lg 24rem / xl 30rem: 1280 기준 우측 상세는 692px 확보(max-w-3xl 읽기폭과 근접). */}
+          <div className="min-w-0 lg:w-[24rem] lg:shrink-0 xl:w-[30rem]">
             <FeedSection
               posts={boardPosts}
               notices={notices}
@@ -757,7 +759,9 @@ const PostRow = memo(function PostRow({ post, onClick, hot = false, selected = f
         )}
         {post.commentCount > 0 && <span className="ml-1 align-middle text-xs font-bold tabular-nums text-accent-300">[{post.commentCount}]</span>}
       </span>
-      <span className="shrink-0 text-xs text-ink-muted">{mark}{post.userName}</span>
+      {/* max-w+truncate: 작성자가 shrink-0 무제한이면 좁은 2-pane 목록·긴 닉네임에서
+          flex-1 제목이 0px까지 뭉개진다 — 닉네임이 대신 말줄임(제목 우선, 에펨식 위계) */}
+      <span className="shrink-0 max-w-[7rem] truncate text-xs text-ink-muted">{mark}{post.userName}</span>
       <TitleChip points={titlePts} />
       <span className="hidden shrink-0 text-xs tabular-nums text-ink-muted sm:inline">{relativeTime(post.createdAt)}</span>
       {(post.viewCount ?? 0) > 0 && (

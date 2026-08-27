@@ -202,11 +202,13 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
               {upcoming.map((s) => (
                 <li key={s.id}>
                   {/* Luma 시간 우선 행 문법 — 시간(무채·tabular)이 행의 앵커, 제목이 그다음 */}
+                  {/* 매장명 칼럼은 fit-content(40%) — auto 트랙 안의 max-w-[40%]는 트랙 자기 폭 기준으로
+                      순환 해석돼 매장명이 '로…'(23px)로 뭉개졌다(PC 점검 2026-08-28). 트랙 정의로 상한을 옮긴다. */}
                   <button type="button" onClick={() => onSchedule(s)}
-                    className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-card border border-border-subtle bg-surface-low px-3 py-2 text-left transition-colors hover:border-accent-400/40 active:scale-[0.99]">
+                    className="grid w-full grid-cols-[auto_minmax(0,1fr)_fit-content(40%)] items-center gap-2 rounded-card border border-border-subtle bg-surface-low px-3 py-2 text-left transition-colors hover:border-accent-400/40 active:scale-[0.99]">
                     <span className="text-2xs font-bold tabular-nums text-ink-secondary">{s.startTime || '예정'}</span>
                     <span className="truncate text-xs font-semibold text-ink-primary">{s.title}</span>
-                    <span className="max-w-[40%] justify-self-end truncate text-2xs text-ink-muted">{nameOf(s.venueId)}</span>
+                    <span className="min-w-0 justify-self-end truncate text-2xs text-ink-muted">{nameOf(s.venueId)}</span>
                   </button>
                 </li>
               ))}
