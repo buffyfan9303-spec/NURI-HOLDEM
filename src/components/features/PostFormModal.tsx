@@ -244,206 +244,223 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
 
   return (
     <Modal open={open} onClose={onClose} title="글쓰기" maxWidth="md" variant="sheet">
-      <form onSubmit={handleSubmit} className="p-4 space-y-4">
-        {/* 카테고리 */}
-        <div>
-          <label className="block text-xs font-medium text-ink-secondary mb-1.5">카테고리</label>
-          <div className="grid grid-cols-3 gap-1.5">
-            {CATEGORY_OPTIONS.map((o) => (
-              <button
-                key={o.id}
-                type="button"
-                onClick={() => setCategory(o.id)}
-                className={[
-                  'min-h-[44px] px-1 inline-flex items-center justify-center text-xs font-semibold rounded-input border transition-colors focus:outline-none',
-                  category === o.id
-                    ? 'bg-accent-300/20 border-accent-300 text-accent-300'
-                    : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary',
-                ].join(' ')}
-              >
-                {o.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* 제목 */}
-        <div>
-          <label htmlFor={titleId} className="block text-xs font-medium text-ink-secondary mb-1.5">
-            제목 <span className="text-2xs text-ink-muted">(선택)</span>
-          </label>
-          <input
-            id={titleId}
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            maxLength={80}
-            placeholder="제목 (비워도 돼요)"
-            className="input"
-          />
-        </div>
-
-        {/* 내용 */}
-        <div>
-          <label htmlFor={contentId} className="block text-xs font-medium text-ink-secondary mb-1.5">
-            내용 <span className="text-danger ml-0.5">*</span>
-          </label>
-          <textarea
-            id={contentId}
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            maxLength={4000}
-            rows={6}
-            placeholder="내용을 입력하세요"
-            className="input resize-none"
-            autoFocus
-          />
-          <p className="text-right text-2xs text-ink-muted mt-1">{content.length}/4000</p>
-        </div>
-
-        {/* 핸드 카드 · 투표 어태치먼트 (PostComposerExtras — 오너 패키지 이식) */}
-        {/* 표시부는 게시글당 어태치먼트 1개(핸드 우선) — 동시 첨부하면 투표가 안 보이므로 상호 배타 */}
-        <CardPicker value={handDraft} onChange={setHandDraft}
-          blockedBy={pollDraft.enabled ? '투표를 켠 글에는 핸드 카드를 함께 첨부할 수 없어요 — 투표를 끄면 다시 열립니다' : undefined} />
-        <PollBuilder value={pollDraft} onChange={setPollDraft}
-          blockedBy={normalizeHand(handDraft) !== null ? '핸드 카드를 첨부한 글에는 투표를 함께 만들 수 없어요 — 카드·요약을 지우면 다시 열립니다' : undefined} />
-
-        {/* 이미지 첨부 */}
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <label className="text-xs font-medium text-ink-secondary">
-              이미지 <span className="text-ink-muted">({previews.length}/{MAX_IMAGES})</span>
-            </label>
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              disabled={previews.length >= MAX_IMAGES}
-              className="text-2xs font-semibold text-accent-300 hover:text-accent-200 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              + 사진 추가
-            </button>
-          </div>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={handlePickFiles}
-            className="hidden"
-          />
-          {previews.length > 0 ? (
-            <div className="grid grid-cols-4 gap-1.5">
-              {previews.map((src, i) => (
-                <div key={src} className="relative aspect-square rounded-input overflow-hidden border border-border-default group">
-                  <img src={src} alt={`첨부 이미지 ${i + 1}`} className="w-full h-full object-cover" />
-                  <button
-                    type="button"
-                    onClick={() => removeImage(i)}
-                    aria-label="이미지 제거"
-                    className="absolute top-0.5 right-0.5 w-5 h-5 flex items-center justify-center rounded-full bg-black/60 text-white text-xs hover:bg-danger transition-colors"
-                  >
-                    ✕
-                  </button>
-                </div>
+      <form onSubmit={handleSubmit}>
+        {/* 입력부 — 액션바(하단 고정)와 분리해야 sticky 가 스크롤포트 바닥에 붙는다 */}
+        <div className="p-4 space-y-4">
+          {/* 카테고리 — 1행 가로 스크롤(오너 확정안 A).
+              3열 그리드 3행(실측 168.1px)이 첫 화면의 절반을 먹어 '게시하기'를 접힘 아래로 밀어냈다.
+              문법은 목록 필터(CommunityTab 카테고리 칩)와 동일 — 같은 것은 같게 보여야 학습이 이전된다.
+              ⚠ .hit(가상요소 확장)은 overflow-x:auto 부모가 잘라내므로 터치 타깃은 **실제 높이 44px**로 만든다. */}
+          <div>
+            <label className="block text-xs font-medium text-ink-secondary mb-1.5">카테고리</label>
+            <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 scrollbar-none">
+              {CATEGORY_OPTIONS.map((o) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  aria-pressed={category === o.id}
+                  onClick={() => setCategory(o.id)}
+                  className={[
+                    'min-h-[44px] shrink-0 inline-flex items-center px-3 rounded-badge text-2xs font-bold leading-none transition-colors focus:outline-none',
+                    category === o.id
+                      ? 'bg-accent-300/15 text-accent-200 ring-1 ring-inset ring-accent-400/45'
+                      : 'bg-surface-high text-ink-secondary hover:bg-surface-float/70',
+                  ].join(' ')}
+                >
+                  {o.label}
+                </button>
               ))}
             </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              className="w-full py-6 rounded-input border border-dashed border-border-default text-2xs text-ink-muted hover:border-accent-400/50 hover:text-ink-secondary transition-colors"
-            >
-              사진을 첨부하려면 클릭하세요 (최대 {MAX_IMAGES}장 · 5MB)
-            </button>
-          )}
-        </div>
-
-        {/* 핸드 첨부 (내 핸드 / 상대 핸드) */}
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <label className="text-xs font-medium text-ink-secondary">
-              핸드 첨부 <span className="text-ink-muted">(선택)</span>
-            </label>
-            <button
-              type="button"
-              onClick={() => setShowHand((v) => !v)}
-              className="text-2xs font-semibold text-accent-300 hover:text-accent-200"
-            >
-              {showHand ? '닫기' : '+ 핸드 추가'}
-            </button>
           </div>
 
-          {showHand && (
-            <div className="space-y-2 rounded-input border border-border-default bg-surface-high/40 p-2.5 animate-slide-up">
-              {/* 슬롯 (탭하면 채울 대상 전환, 카드 탭하면 제거) — 보드(3장 이상)까지 채우면 🎬 리플레이로 저장 */}
-              <div className="grid grid-cols-3 gap-2">
-                {(['hero', 'villain', 'board'] as const).map((t) => {
-                  const cards = t === 'hero' ? hero : t === 'villain' ? villain : board;
-                  const label = t === 'hero' ? '내 핸드' : t === 'villain' ? '상대 핸드' : '보드';
-                  return (
-                    <div
-                      key={t}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setHandTarget(t)}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setHandTarget(t); }}
-                      className={[
-                        'rounded-input border p-2 cursor-pointer transition-colors focus:outline-none',
-                        handTarget === t ? 'border-accent-300 bg-accent-300/10' : 'border-border-default bg-surface-high',
-                      ].join(' ')}
-                    >
-                      <span className="block text-xs text-ink-muted mb-1">{label}</span>
-                      <div className="flex flex-wrap gap-1 min-h-[1.75rem] items-center">
-                        {cards.length === 0 ? (
-                          <span className="text-xs text-ink-muted">카드 선택</span>
-                        ) : (
-                          cards.map((c, i) => (
-                            <button
-                              key={c}
-                              type="button"
-                              aria-label={`${c} 제거`}
-                              onClick={(e) => { e.stopPropagation(); removeCard(t, i); }}
-                            >
-                              <MiniCard id={c} />
-                            </button>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <p className="text-xs text-ink-muted">
-                <span className="text-accent-300 font-semibold">{handTarget === 'hero' ? '내 핸드' : handTarget === 'villain' ? '상대 핸드' : '보드'}</span>
-                에 넣을 카드를 아래에서 선택하세요 (카드를 다시 누르면 제거) · 보드를 3장 이상 고르면 <b className="text-accent-300">🎬 단계별 리플레이</b>로 올라갑니다
-              </p>
-              <CardGridPicker usedIds={usedIds} onPick={handlePickCard} />
+          {/* 제목 */}
+          <div>
+            <label htmlFor={titleId} className="block text-xs font-medium text-ink-secondary mb-1.5">
+              제목 <span className="text-2xs text-ink-muted">(선택)</span>
+            </label>
+            <input
+              id={titleId}
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              maxLength={80}
+              placeholder="제목 (비워도 돼요)"
+              className="input"
+            />
+          </div>
 
-              {/* 보드를 채우면 리플레이 상세(팟·스트리트별 액션) 입력 노출 */}
-              {board.length >= 3 && (
-                <div className="space-y-1.5 border-t border-border-subtle pt-2 animate-fade-in">
-                  {/* 라벨 + 짧은 placeholder — 좁은 화면에서 안 잘린다(전부 선택 입력) */}
-                  <div className="grid grid-cols-[3.75rem_1fr] items-center gap-x-2 gap-y-1.5">
-                    <label htmlFor={potId} className="text-2xs font-bold text-ink-secondary">팟</label>
-                    <input id={potId} type="text" value={pot} onChange={(e) => setPot(e.target.value)} maxLength={20}
-                      placeholder="예: 12.5bb, 34만" className="input w-full text-sm" />
-                    {([['pre', '프리플랍'], ['flop', '플랍'], ['turn', '턴'], ['river', '리버']] as const).map(([k, lab]) => (
-                      <Fragment key={k}>
-                        <label htmlFor={`${actId}-${k}`} className="text-2xs font-bold text-ink-secondary">{lab}</label>
-                        <input id={`${actId}-${k}`} type="text" value={acts[k]} maxLength={80}
-                          onChange={(e) => setActs((p) => ({ ...p, [k]: e.target.value }))}
-                          placeholder="예: 내가 2.5bb 오픈, 상대 콜" className="input w-full text-sm" />
-                      </Fragment>
-                    ))}
-                  </div>
-                </div>
-              )}
+          {/* 내용 */}
+          <div>
+            <label htmlFor={contentId} className="block text-xs font-medium text-ink-secondary mb-1.5">
+              내용 <span className="text-danger ml-0.5">*</span>
+            </label>
+            <textarea
+              id={contentId}
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              maxLength={4000}
+              rows={6}
+              placeholder="내용을 입력하세요"
+              className="input resize-none"
+              autoFocus
+            />
+            <p className="text-right text-2xs text-ink-muted mt-1">{content.length}/4000</p>
+          </div>
+
+          {/* 핸드 카드 · 투표 어태치먼트 (PostComposerExtras — 오너 패키지 이식) */}
+          {/* 표시부는 게시글당 어태치먼트 1개(핸드 우선) — 동시 첨부하면 투표가 안 보이므로 상호 배타 */}
+          <CardPicker value={handDraft} onChange={setHandDraft}
+            blockedBy={pollDraft.enabled ? '투표를 켠 글에는 핸드 카드를 함께 첨부할 수 없어요 — 투표를 끄면 다시 열립니다' : undefined} />
+          <PollBuilder value={pollDraft} onChange={setPollDraft}
+            blockedBy={normalizeHand(handDraft) !== null ? '핸드 카드를 첨부한 글에는 투표를 함께 만들 수 없어요 — 카드·요약을 지우면 다시 열립니다' : undefined} />
+
+          {/* 이미지 첨부 */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-medium text-ink-secondary">
+                이미지 <span className="text-ink-muted">({previews.length}/{MAX_IMAGES})</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                disabled={previews.length >= MAX_IMAGES}
+                className="text-2xs font-semibold text-accent-200 hover:text-accent-100 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                + 사진 추가
+              </button>
             </div>
-          )}
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handlePickFiles}
+              className="hidden"
+            />
+            {previews.length > 0 ? (
+              <div className="grid grid-cols-4 gap-1.5">
+                {previews.map((src, i) => (
+                  <div key={src} className="relative aspect-square rounded-input overflow-hidden border border-border-default group">
+                    <img src={src} alt={`첨부 이미지 ${i + 1}`} className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => removeImage(i)}
+                      aria-label="이미지 제거"
+                      className="absolute top-0.5 right-0.5 w-5 h-5 flex items-center justify-center rounded-full bg-black/60 text-white text-xs hover:bg-danger transition-colors"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="w-full py-3.5 rounded-input border border-dashed border-border-strong text-2xs text-ink-muted hover:border-accent-400/50 hover:text-ink-secondary transition-colors"
+              >
+                사진을 첨부하려면 클릭하세요 (최대 {MAX_IMAGES}장 · 5MB)
+              </button>
+            )}
+          </div>
+
+          {/* 핸드 첨부 (내 핸드 / 상대 핸드) */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-medium text-ink-secondary">
+                핸드 첨부 <span className="text-ink-muted">(선택)</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowHand((v) => !v)}
+                className="text-2xs font-semibold text-accent-200 hover:text-accent-100"
+              >
+                {showHand ? '닫기' : '+ 핸드 추가'}
+              </button>
+            </div>
+
+            {showHand && (
+              <div className="card-sink space-y-2 rounded-input border border-border-default bg-surface-high p-2.5 animate-slide-up">
+                {/* 슬롯 (탭하면 채울 대상 전환, 카드 탭하면 제거) — 보드(3장 이상)까지 채우면 🎬 리플레이로 저장 */}
+                <div className="grid grid-cols-3 gap-2">
+                  {(['hero', 'villain', 'board'] as const).map((t) => {
+                    const cards = t === 'hero' ? hero : t === 'villain' ? villain : board;
+                    const label = t === 'hero' ? '내 핸드' : t === 'villain' ? '상대 핸드' : '보드';
+                    return (
+                      <div
+                        key={t}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setHandTarget(t)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setHandTarget(t); }}
+                        className={[
+                          // 패널이 불투명 surface-high 가 되면서 타일도 surface-high 면 면 차이가 0이 된다
+                          // → 타일은 한 단 내려(surface-mid) '패널 위에 파인 칸'으로 읽히게 한다.
+                          'rounded-input border p-2 cursor-pointer transition-colors focus:outline-none',
+                          handTarget === t ? 'border-accent-400 bg-accent-300/10' : 'border-border-default bg-surface-mid',
+                        ].join(' ')}
+                      >
+                        <span className="block text-xs text-ink-muted mb-1">{label}</span>
+                        <div className="flex flex-wrap gap-1 min-h-[1.75rem] items-center">
+                          {cards.length === 0 ? (
+                            <span className="text-xs text-ink-muted">카드 선택</span>
+                          ) : (
+                            cards.map((c, i) => (
+                              <button
+                                key={c}
+                                type="button"
+                                aria-label={`${c} 제거`}
+                                onClick={(e) => { e.stopPropagation(); removeCard(t, i); }}
+                              >
+                                <MiniCard id={c} />
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-ink-muted">
+                  <span className="text-accent-200 font-semibold">{handTarget === 'hero' ? '내 핸드' : handTarget === 'villain' ? '상대 핸드' : '보드'}</span>
+                  에 넣을 카드를 아래에서 선택하세요 (카드를 다시 누르면 제거) · 보드를 3장 이상 고르면 <b className="text-accent-200">🎬 단계별 리플레이</b>로 올라갑니다
+                </p>
+                {/* 52장 그리드 트레이 — CardGridPicker 의 타일은 surface-high 라(그 파일은 이 카드의 소유 밖),
+                    불투명 surface-high 패널 위에 직접 두면 타일 면이 사라진다. 한 단 내린 판을 깔아 면을 되살린다. */}
+                <div className="rounded-input bg-surface-mid p-1">
+                  <CardGridPicker usedIds={usedIds} onPick={handlePickCard} />
+                </div>
+
+                {/* 보드를 채우면 리플레이 상세(팟·스트리트별 액션) 입력 노출 */}
+                {board.length >= 3 && (
+                  <div className="space-y-1.5 border-t border-border-default pt-2 animate-fade-in">
+                    {/* 라벨 + 짧은 placeholder — 좁은 화면에서 안 잘린다(전부 선택 입력) */}
+                    <div className="grid grid-cols-[3.75rem_1fr] items-center gap-x-2 gap-y-1.5">
+                      <label htmlFor={potId} className="text-2xs font-bold text-ink-secondary">팟</label>
+                      <input id={potId} type="text" value={pot} onChange={(e) => setPot(e.target.value)} maxLength={20}
+                        placeholder="예: 12.5bb, 34만" className="input w-full bg-surface-mid text-sm" />
+                      {([['pre', '프리플랍'], ['flop', '플랍'], ['turn', '턴'], ['river', '리버']] as const).map(([k, lab]) => (
+                        <Fragment key={k}>
+                          <label htmlFor={`${actId}-${k}`} className="text-2xs font-bold text-ink-secondary">{lab}</label>
+                          <input id={`${actId}-${k}`} type="text" value={acts[k]} maxLength={80}
+                            onChange={(e) => setActs((p) => ({ ...p, [k]: e.target.value }))}
+                            placeholder="예: 내가 2.5bb 오픈, 상대 콜" className="input w-full bg-surface-mid text-sm" />
+                        </Fragment>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* 버튼 */}
-        <div className="flex gap-2 pt-1">
+        {/* 액션바 — 하단 고정(sticky). 문서 흐름 최하단에 두면 빈 폼에서도 '게시하기'가 접힘 아래로
+            밀려나(375×667 실측 165.2px 아래) 첫 화면에서 보이지 않았다.
+            문법은 앱에 이미 있는 선례를 따른다: ListingDetailModal 의 하단 고정 CTA
+            (sticky bottom-0 / border-t / 불투명 bg-surface-mid). backdrop-filter 는 쓰지 않는다 —
+            상시 노출 요소의 blur 는 스크롤 중 페인트 폭탄이다(모션 헌법 §20.4-3·5). */}
+        <div className="sticky bottom-0 z-10 flex gap-2 border-t border-border-default bg-surface-mid px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <button type="button" onClick={onClose} className="btn-ghost flex-1">취소</button>
           <button type="submit" disabled={saving} className="btn-primary flex-1 disabled:opacity-60">
             {saving ? '등록 중…' : '게시하기'}

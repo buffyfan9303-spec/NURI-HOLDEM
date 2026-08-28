@@ -161,7 +161,7 @@ export default function Modal({
     return (
       <div className="flex max-h-[calc(100vh-5rem)] flex-col overflow-hidden rounded-card border border-border-default bg-surface-mid">
         {title && (
-          <header className="flex shrink-0 items-center justify-between border-b border-border-subtle px-4 py-3">
+          <header className="flex shrink-0 items-center justify-between border-b border-border-strong px-4 py-3">
             <h2 className="text-[17px] font-bold tracking-tight text-ink-primary">{title}</h2>
             <button type="button" onClick={onClose} aria-label="닫기" className="flex h-8 w-8 items-center justify-center rounded-input text-ink-secondary hover:bg-surface-high hover:text-ink-primary">
               <Icon name="close" size={14} />
@@ -197,7 +197,7 @@ export default function Modal({
         {/* 드래그 핸들(모바일) — 시트를 끌어내려 닫기 */}
         <div aria-hidden className="lg:hidden absolute top-1.5 left-1/2 z-10 h-1 w-10 -translate-x-1/2 rounded-full bg-ink-primary/25" />
         {title && (
-          <header className="shrink-0 flex items-center justify-between px-4 h-header-h border-b border-border-subtle bg-surface-base">
+          <header className="shrink-0 flex items-center justify-between px-4 h-header-h border-b border-border-strong bg-surface-base">
             <h2 id="modal-title" className="text-[17px] font-bold tracking-tight text-ink-primary">{title}</h2>
             <button type="button" onClick={onClose} aria-label="닫기"
               className="w-11 h-11 -mr-2 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high transition-colors">
@@ -291,7 +291,11 @@ export default function Modal({
 
         {/* 헤더 */}
         {title && (
-          <header className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
+          // 헤더 경계선: border-subtle 은 다크 1.11:1 · 라이트 1.23:1 로 비텍스트 3:1 에 한참 못 미쳐
+          // '헤더가 어디서 끝나고 본문이 시작되는지'가 안 보였다. 스크롤로 본문이 헤더 밑을 지나가는
+          // 시트에서는 그 선이 유일한 단서다. border-strong 으로 승격(다크 2.88 · 라이트 3.13 —
+          // 팔레트에 이보다 강한 경계 토큰은 없다). subtle < default < strong 위계는 그대로 유지.
+          <header className="flex items-center justify-between px-4 py-3 border-b border-border-strong">
             <h2 id="modal-title" className="text-[17px] font-bold tracking-tight text-ink-primary">
               {title}
             </h2>

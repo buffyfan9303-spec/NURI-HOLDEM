@@ -34,7 +34,14 @@ export async function getStaffSchedule(venueId: string, from: string, to: string
   }));
 }
 
-/** 시프트 시각/확정 수정(부분 업데이트) — 행이 없으면 무시(먼저 배정 필요) */
+/**
+ * 시프트 시각/확정 수정(부분 업데이트, 업주 경로).
+ *
+ * ⚠ 0행 UPDATE 를 **오류로 승격**한다. PostgREST 의 PATCH 는 조건에 맞는 행이 하나도 없어도
+ *   200 + 빈 배열을 돌려준다 — 즉 "배정이 아직 없는 날짜에 시각을 입력" 같은 상황이
+ *   호출부에는 성공으로 보인다(직원 셀프 경로에서 같은 함정이 실제로 하루를 날렸다:
+ *   20260828h 참고). `.select()` 로 실제 반영 행을 받아 0건이면 던진다.
+ */
 export async function setShiftTimes(venueId: string, date: string, name: string, patch: { startHm?: string | null; checkIn?: string | null; checkOut?: string | null; confirmed?: boolean }): Promise<void> {
   if (IS_MOCK) return;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -43,9 +50,11 @@ export async function setShiftTimes(venueId: string, date: string, name: string,
   if (patch.checkIn !== undefined) p.check_in = patch.checkIn;
   if (patch.checkOut !== undefined) p.check_out = patch.checkOut;
   if (patch.confirmed !== undefined) p.confirmed = patch.confirmed;
-  const { error } = await supabase.from('staff_schedule').update(p)
-    .eq('venue_id', venueId).eq('work_date', date).eq('staff_name', name);
+  const { data, error } = await supabase.from('staff_schedule').update(p)
+    .eq('venue_id', venueId).eq('work_date', date).eq('staff_name', name)
+    .select('id');
   if (error) throw error;
+  if (!data || data.length === 0) throw new Error(`${date} ${name} 배정을 찾지 못해 시각을 저장하지 못했습니다`);
 }
 
 /** 해당 기간 스케줄 전체 확정 */
@@ -131,12 +140,18 @@ export async function removeStaffName(venueId: string, name: string): Promise<vo
   if (error) throw error;
 }
 
-/** 특정 날짜에 직원 출근 배정(중복 무시) */
-export async function addStaffShift(venueId: string, date: string, name: string): Promise<void> {
+/**
+ * 특정 날짜에 직원 출근 배정(중복 무시).
+ *
+ * staffUserId: 그 이름이 **매장 구성원 한 명으로 확정될 때만** 넘긴다(동명이인이면 넘기지 않는다).
+ *   행에 주인을 적어 두면 출퇴근 기록의 소유 판정이 이름 문자열이 아니라 계정 id 로 이뤄진다
+ *   (20260829a). 계정 없는 딜러는 예전처럼 이름만으로 배정된다 — user_id 는 NULL 로 남는다.
+ */
+export async function addStaffShift(venueId: string, date: string, name: string, staffUserId?: string | null): Promise<void> {
   if (IS_MOCK) return;
   const user = await currentUser();
   const { error } = await supabase.from('staff_schedule').upsert(
-    { venue_id: venueId, work_date: date, staff_name: name.trim(), created_by: user?.id ?? null },
+    { venue_id: venueId, work_date: date, staff_name: name.trim(), created_by: user?.id ?? null, user_id: staffUserId ?? null },
     { onConflict: 'venue_id,work_date,staff_name', ignoreDuplicates: true },
   );
   if (error) throw error;

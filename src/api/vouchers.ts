@@ -103,17 +103,60 @@ export async function redeemVoucher(voucherId: string, usedVenueId: string): Pro
   if (error) throw new Error(error.message);
 }
 
+/** 회수 — 미사용(active) 이용권만. 이미 사용·회수된 건은 서버가 사유를 들고 거절한다
+ *  (2026-08-29 이전엔 조용히 0행 UPDATE 라 화면엔 성공으로 보였다). */
 export async function revokeVoucher(voucherId: string): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.rpc('revoke_voucher', { p_voucher_id: voucherId });
   if (error) throw new Error(error.message);
 }
 
+/** 삭제 — 행 자체를 지운다. 사용 완료분은 서버가 거절한다(손님 사용 내역·장부 연동 보존). */
 export async function deleteVoucher(voucherId: string): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.rpc('delete_voucher', { p_voucher_id: voucherId });
   if (error) throw new Error(error.message);
 }
+
+/**
+ * 여러 장 일괄 처리 결과 — 성공 수 + 실패 사유(중복 제거).
+ *
+ * 왜 필요한가: 이용권은 '한 사람에게 N장'이 기본 단위라 회수·삭제도 늘 배치다.
+ *   기존 삭제는 `Promise.all(ids.map(id => deleteVoucher(id).catch(() => {})))` 뒤에
+ *   무조건 '삭제했습니다'를 띄웠다 — 권한·상태 때문에 한 장도 안 지워져도 성공으로 보였다.
+ *   실패를 세고 사유를 그대로 들고 나와야 사장님이 다음 행동을 정할 수 있다.
+ * 왜 순차인가: 같은 매장 행을 동시에 건드리면 서버가 잠금 경합을 겪고, 무엇보다
+ *   실패 사유가 뒤섞여 순서를 잃는다. 배치 크기가 수십 장이라 순차로 충분하다.
+ */
+export interface BulkResult { ok: number; failed: number; reasons: string[] }
+async function bulk(ids: string[], fn: (id: string) => Promise<void>): Promise<BulkResult> {
+  let ok = 0; const reasons: string[] = [];
+  for (const id of ids) {
+    try { await fn(id); ok += 1; }
+    catch (e) {
+      const m = e instanceof Error ? e.message : '알 수 없는 오류';
+      if (!reasons.includes(m)) reasons.push(m);
+    }
+  }
+  return { ok, failed: ids.length - ok, reasons };
+}
+/**
+ * 일괄 회수 — 서버 RPC 한 번. 손님에게 가는 '회수되었습니다' 알림도 한 통으로 묶인다.
+ * (단건 루프로 돌리면 3장 회수에 알림이 3건 갔다 — 2026-08-29 브라우저 관통 실측)
+ * RPC 미배포 DB(구버전)에서는 단건 루프로 폴백한다 — saveVenueRankings 와 같은 방식.
+ */
+export async function revokeVouchers(ids: string[]): Promise<BulkResult> {
+  if (IS_MOCK || ids.length === 0) return { ok: 0, failed: 0, reasons: [] };
+  const { data, error } = await supabase.rpc('revoke_vouchers', { p_ids: ids });
+  if (error) {
+    if (error.code === 'PGRST202') return bulk(ids, revokeVoucher); // 구 DB — 단건 폴백
+    return { ok: 0, failed: ids.length, reasons: [error.message] };
+  }
+  const r = (data ?? {}) as { ok?: number; failed?: number; reasons?: string[] };
+  return { ok: Number(r.ok) || 0, failed: Number(r.failed) || 0, reasons: r.reasons ?? [] };
+}
+/** 일괄 삭제 — 삭제는 알림이 없어 단건 루프로 충분하다(부분 성공 사유만 모은다) */
+export const deleteVouchers = (ids: string[]) => bulk(ids, deleteVoucher);
 
 // 회수(사용): 발급 매장 QR 스캔 — 그 매장에서만 사용 가능. 매장명 반환.
 export async function redeemMyVoucherByQr(voucherId: string, venueId: string): Promise<string> {
@@ -241,12 +284,14 @@ export async function myPlayHistory(): Promise<PlayHistory[]> {
 export interface VoucherCreditRequest { id: string; amount: number; note: string | null; status: 'pending' | 'approved' | 'rejected'; adminNote: string | null; createdAt: string }
 export interface AdminCreditRequest { id: string; venueId: string; venueName: string; amount: number; note: string | null; requester: string; createdAt: string }
 
-/** 잔여 발급 한도 — 쿼터 RPC 미배포(구 DB)면 null(무제한 표시 안 함) */
+/** 잔여 발급 한도 — null = 알 수 없음(쿼터 RPC 미배포 · 열람 권한 없음). 0 과 구분해야 한다.
+ *  2026-08-29: 서버가 can_view_vouchers 게이트를 통과 못하면 NULL 을 돌려준다(구버전은 누구에게나 숫자였다).
+ *  `Number(null) === 0` 으로 뭉개면 권한 없는 화면이 '한도 소진'으로 보여 발급을 포기하게 된다. */
 export async function getVoucherQuota(venueId: string): Promise<number | null> {
   if (IS_MOCK) return null;
   const { data, error } = await supabase.rpc('get_voucher_quota', { p_venue_id: venueId });
-  if (error) return null;
-  return typeof data === 'number' ? data : Number(data ?? 0);
+  if (error || data == null) return null;
+  return typeof data === 'number' ? data : Number(data);
 }
 
 /** 충전(구매) 요청 — 업주. 대기 중 요청이 있으면 서버가 거부 */

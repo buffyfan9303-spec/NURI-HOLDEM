@@ -132,7 +132,7 @@ interface CardPickerProps {
 export function CardPicker({ value, onChange, blockedBy }: CardPickerProps) {
   if (blockedBy) {
     return (
-      <section className="rounded-card border border-border-subtle bg-surface-low p-3">
+      <section className="card-sink rounded-card border border-border-default bg-surface-high p-3">
         <p className="text-xs font-bold text-ink-primary">핸드 카드 (선택)</p>
         <p className="mt-0.5 text-2xs text-ink-muted">{blockedBy}</p>
       </section>
@@ -172,7 +172,7 @@ function CardPickerBody({ value, onChange }: { value: HandDraft; onChange: (next
         <label className="text-xs font-medium text-ink-secondary">
           핸드 카드 <span className="text-ink-muted">(선택)</span>
           {attached && !open && (
-            <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded-full bg-accent-300/15 text-accent-300 text-2xs font-semibold align-middle">
+            <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded-full bg-accent-300/15 text-accent-200 text-2xs font-semibold align-middle">
               첨부됨
             </span>
           )}
@@ -180,14 +180,14 @@ function CardPickerBody({ value, onChange }: { value: HandDraft; onChange: (next
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="text-2xs font-semibold text-accent-300 hover:text-accent-200"
+          className="text-2xs font-semibold text-accent-200 hover:text-accent-100"
         >
           {open ? '닫기' : '+ 핸드 카드'}
         </button>
       </div>
 
       {open && (
-        <div className="space-y-2.5 rounded-input border border-border-default bg-surface-high/40 p-2.5 animate-slide-up">
+        <div className="card-sink space-y-2.5 rounded-input border border-border-default bg-surface-high p-2.5 animate-slide-up">
           {/* 한 줄 요약 */}
           <div>
             <label htmlFor={headlineId} className="block text-2xs font-bold text-ink-secondary mb-1">한 줄 요약</label>
@@ -198,7 +198,7 @@ function CardPickerBody({ value, onChange }: { value: HandDraft; onChange: (next
               onChange={(e) => onChange({ ...value, headline: e.target.value })}
               maxLength={24}
               placeholder="예: 리버 히어로 콜 성공"
-              className="input w-full text-sm"
+              className="input w-full bg-surface-mid text-sm"
             />
           </div>
 
@@ -217,7 +217,7 @@ function CardPickerBody({ value, onChange }: { value: HandDraft; onChange: (next
                   onClick={() => onChange({ ...value, tone })}
                   className={[
                     'min-h-[36px] px-3 rounded-full border text-2xs font-semibold transition-colors focus:outline-none',
-                    active ? activeCls : 'border-border-default bg-surface-high text-ink-muted hover:text-ink-secondary',
+                    active ? activeCls : 'border-border-default bg-surface-mid text-ink-muted hover:text-ink-secondary',
                   ].join(' ')}
                 >
                   {label}
@@ -236,7 +236,7 @@ function CardPickerBody({ value, onChange }: { value: HandDraft; onChange: (next
               onChange={(e) => onChange({ ...value, delta: e.target.value })}
               maxLength={16}
               placeholder="예: 3벳 팟 승리 (선택)"
-              className="input w-full text-sm"
+              className="input w-full bg-surface-mid text-sm"
             />
             <label htmlFor={metaId} className="text-2xs font-bold text-ink-secondary">상황 메모</label>
             <input
@@ -246,7 +246,7 @@ function CardPickerBody({ value, onChange }: { value: HandDraft; onChange: (next
               onChange={(e) => onChange({ ...value, meta: e.target.value })}
               maxLength={60}
               placeholder="예: BTN vs BB · 리버 (선택)"
-              className="input w-full text-sm"
+              className="input w-full bg-surface-mid text-sm"
             />
           </div>
 
@@ -282,7 +282,7 @@ function CardPickerBody({ value, onChange }: { value: HandDraft; onChange: (next
                 {/* 1단계 — 랭크 */}
                 <p className="text-2xs text-ink-muted mb-1">
                   {pendingRank
-                    ? <>랭크 <b className="text-accent-300">{pendingRank}</b> — 아래에서 무늬를 고르세요</>
+                    ? <>랭크 <b className="text-accent-200">{pendingRank}</b> — 아래에서 무늬를 고르세요</>
                     : '먼저 랭크를 고르세요'}
                 </p>
                 <div className="grid gap-1 mb-1.5" style={{ gridTemplateColumns: 'repeat(13, minmax(0, 1fr))' }}>
@@ -298,8 +298,8 @@ function CardPickerBody({ value, onChange }: { value: HandDraft; onChange: (next
                           'h-8 rounded-[4px] text-2xs font-bold tabular-nums select-none touch-manipulation transition-colors',
                           'active:scale-[0.9] focus:outline-none',
                           active
-                            ? 'bg-accent-300/20 border border-accent-300 text-accent-300'
-                            : 'bg-surface-high border border-border-default text-ink-primary',
+                            ? 'bg-accent-300/15 border border-accent-400 text-accent-200'
+                            : 'bg-surface-mid border border-border-default text-ink-primary',
                         ].join(' ')}
                       >
                         {rank}
@@ -362,7 +362,7 @@ interface PollBuilderProps {
 export function PollBuilder({ value, onChange, lockOptions, blockedBy }: PollBuilderProps) {
   if (blockedBy) {
     return (
-      <section className="rounded-card border border-border-subtle bg-surface-low p-3">
+      <section className="card-sink rounded-card border border-border-default bg-surface-high p-3">
         <p className="text-xs font-bold text-ink-primary">투표 (선택)</p>
         <p className="mt-0.5 text-2xs text-ink-muted">{blockedBy}</p>
       </section>
@@ -397,7 +397,7 @@ function PollBuilderBody({ value, onChange, lockOptions }: Omit<PollBuilderProps
           onClick={() => onChange({ ...value, enabled: !value.enabled })}
           className={[
             'text-2xs font-semibold transition-colors',
-            value.enabled ? 'text-ink-muted hover:text-danger' : 'text-accent-300 hover:text-accent-200',
+            value.enabled ? 'text-ink-muted hover:text-danger' : 'text-accent-200 hover:text-accent-100',
           ].join(' ')}
         >
           {value.enabled ? '제거' : '+ 투표 추가'}
@@ -405,7 +405,7 @@ function PollBuilderBody({ value, onChange, lockOptions }: Omit<PollBuilderProps
       </div>
 
       {value.enabled && (
-        <div className="space-y-2.5 rounded-input border border-border-default bg-surface-high/40 p-2.5 animate-slide-up">
+        <div className="card-sink space-y-2.5 rounded-input border border-border-default bg-surface-high p-2.5 animate-slide-up">
           {/* 질문 */}
           <div>
             <label htmlFor={questionId} className="block text-2xs font-bold text-ink-secondary mb-1">질문</label>
@@ -416,7 +416,7 @@ function PollBuilderBody({ value, onChange, lockOptions }: Omit<PollBuilderProps
               onChange={(e) => onChange({ ...value, question: e.target.value })}
               maxLength={120}
               placeholder="예: 이 스팟, 콜? 폴드?"
-              className="input w-full text-sm"
+              className="input w-full bg-surface-mid text-sm"
             />
             <p className="text-right text-2xs text-ink-muted mt-1">{value.question.length}/120</p>
           </div>
@@ -431,7 +431,7 @@ function PollBuilderBody({ value, onChange, lockOptions }: Omit<PollBuilderProps
                 <button
                   type="button"
                   onClick={addOption}
-                  className="text-2xs font-semibold text-accent-300 hover:text-accent-200"
+                  className="text-2xs font-semibold text-accent-200 hover:text-accent-100"
                 >
                   + 보기 추가
                 </button>
@@ -451,14 +451,14 @@ function PollBuilderBody({ value, onChange, lockOptions }: Omit<PollBuilderProps
                     maxLength={60}
                     placeholder={`보기 ${i + 1}`}
                     aria-label={`보기 ${i + 1}`}
-                    className="input w-full text-sm disabled:opacity-60"
+                    className="input w-full bg-surface-mid text-sm disabled:opacity-60"
                   />
                   {!lockOptions && value.options.length > MIN_OPTIONS && (
                     <button
                       type="button"
                       onClick={() => removeOption(i)}
                       aria-label={`보기 ${i + 1} 삭제`}
-                      className="w-8 h-8 shrink-0 flex items-center justify-center rounded-input border border-border-default text-ink-muted hover:text-danger transition-colors text-xs"
+                      className="w-8 h-8 shrink-0 flex items-center justify-center rounded-input border border-border-default bg-surface-mid text-ink-muted hover:text-danger transition-colors text-xs"
                     >
                       ✕
                     </button>
@@ -482,8 +482,8 @@ function PollBuilderBody({ value, onChange, lockOptions }: Omit<PollBuilderProps
                   className={[
                     'min-h-[32px] px-2.5 rounded-full border text-2xs font-semibold transition-colors focus:outline-none',
                     active
-                      ? 'bg-accent-300/20 border-accent-300 text-accent-300'
-                      : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary',
+                      ? 'bg-accent-300/15 border-accent-400 text-accent-200'
+                      : 'bg-surface-mid border-border-default text-ink-muted hover:text-ink-secondary',
                   ].join(' ')}
                 >
                   {label}

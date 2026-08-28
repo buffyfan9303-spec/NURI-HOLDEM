@@ -375,6 +375,27 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
 
           <section>
             <p className="mb-1.5 text-sm font-bold text-ink-primary">내 매장이용권 <span className="text-accent-300">{active.length}</span></p>
+            {/* 본인인증 게이트를 '사용 시점'이 아니라 '지갑을 여는 시점'에 알린다.
+                왜: 서버 트리거(trg_voucher_verified)가 status='used' 전이를 막는데,
+                예전엔 그 거절이 접수대 앞에서 토스트로만 떴다 — 손님은 이미 매장에 서 있고,
+                업주는 왜 안 되는지 모른다. 인증 전에 이미 받아 둔 이용권도 사용만 막히므로
+                (2026-08-27 게이트 도입 이전 발급분이 실제로 남아 있다) 여기서 미리 짚는다. */}
+            {!loading && !user?.verified && active.length > 0 && (
+              <div className="mb-2 rounded-card border border-danger/40 bg-danger/[0.08] p-3">
+                <p className="flex items-start gap-1.5 text-xs font-bold text-danger-deep dark:text-danger-light">
+                  <Icon name="alert" size={14} className="mt-0.5 shrink-0" />
+                  본인인증을 완료해야 이용권을 사용할 수 있어요
+                </p>
+                <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">
+                  보유하신 {active.length}장은 그대로 남아 있습니다 — 인증만 마치면 바로 사용할 수 있어요.
+                  매장에 도착하기 전에 <b className="text-ink-primary">프로필 &gt; 본인인증</b>을 먼저 끝내 주세요.
+                </p>
+                {onOpenProfile && (
+                  <button type="button" onClick={onOpenProfile}
+                    className="btn-primary mt-2 h-10 w-full text-sm">프로필에서 본인인증하기</button>
+                )}
+              </div>
+            )}
             {loading ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
               : venueGroups.length === 0 ? <p className="py-6 text-center text-2xs text-ink-muted">보유한 매장이용권이 없습니다.</p>
                 : <div className="space-y-3">{venueGroups.map((g) => (
@@ -396,7 +417,12 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
                             );
                           })()}
                         </span>
-                        <button type="button" onClick={() => setRedeem(s)} className="btn-primary shrink-0 px-3 text-2xs">사용하기</button>
+                        {/* 미인증이면 열지 않는다 — 열어 봐야 '되돌릴 수 없습니다' 확인 뒤 서버에서 막힌다 */}
+                        <button type="button" disabled={!user?.verified} onClick={() => setRedeem(s)}
+                          title={user?.verified ? undefined : '본인인증 후 사용할 수 있어요 — 프로필에서 인증을 완료해 주세요'}
+                          className="btn-primary h-9 shrink-0 px-3 text-2xs disabled:cursor-not-allowed disabled:opacity-40">
+                          {user?.verified ? '사용하기' : '인증 필요'}
+                        </button>
                       </li>
                     ))}</ul>
                   </div>

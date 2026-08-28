@@ -9,7 +9,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import QRCode from 'qrcode';
 import { checkinUrl } from '../../api/checkins';
 import { buyinRequestUrl } from '../../api/ledger';
-import { listVenueVouchers, issueVoucher, deleteVoucher, findUserForTransfer, findUserByPhone, voucherUsageByVenue, voucherHolderStats, isVoucherIssueApproved, voucherHolderProfiles, subscribeVenueVouchers, type Voucher, type VoucherUsage, type VoucherHolderStats, type TransferTarget, type VoucherHolderProfile, getVoucherQuota } from '../../api/vouchers';
+import { listVenueVouchers, issueVoucher, deleteVouchers, revokeVouchers, findUserForTransfer, findUserByPhone, voucherUsageByVenue, voucherHolderStats, isVoucherIssueApproved, voucherHolderProfiles, subscribeVenueVouchers, type Voucher, type VoucherUsage, type VoucherHolderStats, type TransferTarget, type VoucherHolderProfile, type BulkResult, getVoucherQuota } from '../../api/vouchers';
 
 function fmtDateTime(iso: string | null): string {
   if (!iso) return '-';
@@ -240,11 +240,36 @@ ${cards}
   };
   const hq = holderQuery.trim().toLowerCase();
   const shownHolders = hq ? holders.filter((g) => holderLabel(g).toLowerCase().includes(hq)) : holders;
-  const deleteGroup = async (g: { name: string; ids: string[] }) => {
-    if (!window.confirm(`${g.name}의 이용권 ${g.ids.length}개를 완전히 삭제할까요? 되돌릴 수 없습니다.`)) return;
+  // 배치 결과를 사장님 말로 옮긴다 — 부분 성공(10장 중 3장만 처리)이 실제로 흔하다.
+  const reportBulk = (verb: string, r: BulkResult) => {
+    if (r.failed === 0) { toast.show(`${r.ok}장을 ${verb}했습니다`, 'success'); return; }
+    if (r.ok === 0) { toast.show(`${verb}하지 못했습니다 — ${r.reasons[0] ?? '알 수 없는 오류'}`, 'error'); return; }
+    toast.show(`${r.ok}장 ${verb} · ${r.failed}장 실패 — ${r.reasons[0] ?? ''}`, 'error');
+  };
+
+  // 회수 — 오너 지시(2026-08-28) 여정의 마지막 칸인데 화면에 아예 없었다.
+  //   잘못 보낸 이용권을 되돌릴 수단이 없어 '삭제'(매장 보관분만 가능)로도 손댈 수 없었다.
+  // 왜 삭제가 아니라 회수인가: 삭제는 행을 지워 손님 지갑의 내역까지 없애지만,
+  //   회수는 status=revoked 로 남아 '언제 무엇을 회수했는지'가 양쪽에 남는다.
+  //   서버가 보유자에게 알림도 보낸다(지갑에서 소리 없이 사라지지 않게).
+  const revokeGroup = async (g: { name: string; ids: string[] }) => {
+    if (g.ids.length === 0) return;
+    if (!window.confirm(`${g.name}의 미사용 이용권 ${g.ids.length}장을 회수할까요?\n\n`
+      + '회수하면 손님 지갑에서 사용할 수 없게 되고, 손님에게 회수 알림이 갑니다.\n'
+      + '이미 사용된 이용권은 회수되지 않고 내역으로 남습니다.')) return;
     setBusy(true);
-    await Promise.all(g.ids.map((id) => deleteVoucher(id).catch(() => {})));
-    toast.show('삭제했습니다', 'info'); setBusy(false); reload();
+    const r = await revokeVouchers(g.ids);
+    reportBulk('회수', r); setBusy(false); reload();
+  };
+  // 삭제는 '미사용분'만 넘긴다 — 사용 완료분은 서버가 거절하고(손님 내역·장부 연동 보존),
+  // 예전엔 used 까지 함께 넘겨 사용 기록이 통째로 증발했다(2026-08-29 실측).
+  const deleteGroup = async (g: { name: string; ids: string[]; usedCount: number }) => {
+    if (g.ids.length === 0) { toast.show('삭제할 미사용 이용권이 없습니다 — 사용 완료분은 내역으로 보존됩니다', 'info'); return; }
+    if (!window.confirm(`${g.name}의 미사용 이용권 ${g.ids.length}장을 완전히 삭제할까요? 되돌릴 수 없습니다.`
+      + (g.usedCount > 0 ? `\n\n사용 완료 ${g.usedCount}장은 이용 내역이라 삭제되지 않습니다.` : ''))) return;
+    setBusy(true);
+    const r = await deleteVouchers(g.ids);
+    reportBulk('삭제', r); setBusy(false); reload();
   };
 
   return (
@@ -521,10 +546,25 @@ ${cards}
                       </button>
                       <span className="shrink-0 rounded-badge bg-accent-300/15 px-2 py-0.5 text-xs font-bold text-accent-300 tabular-nums">{g.active.length}</span>
                       {!g.isStore && <button type="button" onClick={() => setExpanded(open ? null : g.key)} className="btn-ghost shrink-0 px-2 text-2xs text-ink-secondary">{open ? '닫기' : '관리'}</button>}
-                      {(isAdmin || g.isStore) && canIssue && <button type="button" disabled={busy} onClick={() => deleteGroup({ name: holderLabel(g), ids: [...g.active, ...g.used].map((v) => v.id) })} aria-label="삭제" className="shrink-0 px-1 text-ink-muted hover:text-danger-light disabled:opacity-50"><Icon name="trash" size={13} /></button>}
+                      {(isAdmin || g.isStore) && canIssue && <button type="button" disabled={busy} onClick={() => deleteGroup({ name: holderLabel(g), ids: g.active.map((v) => v.id), usedCount: g.used.length })} aria-label="삭제" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-input text-ink-muted hover:text-danger-light disabled:opacity-50"><Icon name="trash" size={13} /></button>}
                     </div>
                     {open && !g.isStore && (
                       <div className="border-t border-border-subtle px-3 py-1.5">
+                        {/* 회수 — 잘못 보낸 이용권을 되돌리는 유일한 수단(2026-08-29 신설).
+                            미사용분에만 걸리고, 사용 완료분은 아래 내역으로 그대로 남는다. */}
+                        {canIssue && (
+                          <div className="mb-1.5 flex items-center justify-between gap-2 border-b border-border-subtle pb-1.5">
+                            <p className="min-w-0 flex-1 text-2xs leading-relaxed text-ink-muted">
+                              잘못 보냈나요? <b className="text-ink-secondary">미사용 {g.active.length}장</b>을 회수할 수 있어요
+                              {g.used.length > 0 && <> · 사용 완료 {g.used.length}장은 내역으로 보존</>}
+                            </p>
+                            <button type="button" disabled={busy || g.active.length === 0}
+                              onClick={() => revokeGroup({ name: holderLabel(g), ids: g.active.map((v) => v.id) })}
+                              className="inline-flex h-11 shrink-0 items-center rounded-input border border-danger/40 bg-danger/[0.08] px-3.5 text-2xs font-bold text-danger-deep transition-colors hover:bg-danger/15 disabled:opacity-40 dark:text-danger-light">
+                              회수
+                            </button>
+                          </div>
+                        )}
                         <p className="mb-0.5 text-2xs font-bold text-ink-muted">이 매장 이용내역{g.used.length > 0 ? ' (최근순)' : ''}</p>
                         {g.used.length === 0 ? <p className="py-1 text-[11px] text-ink-muted">사용 내역이 없습니다.</p>
                           : <ul className="space-y-0.5">

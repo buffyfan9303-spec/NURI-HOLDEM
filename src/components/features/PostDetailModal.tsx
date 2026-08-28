@@ -22,6 +22,9 @@ import ImageLightbox from '../atoms/ImageLightbox';
 import { thumbUrl, thumbSrcSet } from '../../lib/imageUrl';
 import PostAttachments from './PostAttachments';
 import { fetchAttachment, castPollVote, subscribePollResults } from '../../api/postAttachments';
+// 카테고리 라벨·pill 색은 src/lib/postCategory.ts 가 단일 출처 — 색표를 이 파일로 복사하지 않는다
+// (복사하면 목록 뱃지와 상세 뱃지가 언젠가 다른 색이 된다).
+import { categoryPillClass, postCategoryLabel } from '../../lib/postCategory';
 import type { Attachment, PollOption } from '../../api/postAttachments';
 
 interface PostDetailModalProps {
@@ -193,8 +196,34 @@ export default function PostDetailModal({
     <>
     <Modal open={open} onClose={onClose} title="게시글" maxWidth="lg" variant="sheet" inline={inline}>
       <article className="p-4 space-y-4">
+        {/* ── 제목 · 카테고리 · 조회수 ─────────────────────────
+            감사 P0: post.title 은 이 화면에서 두 번 쓰이는데 둘 다 화면 밖 용도였고
+            (라이트박스 alt · 신고 summary), category/viewCount 는 0회였다 —
+            목록에서 제목을 보고 들어온 사람이 상세에서 제목을 잃고, 어느 게시판 글인지도 사라졌다.
+            표기·값은 목록(CommunityTab 반응 푸터)과 동일하게 맞춘다.
+            제목은 선택 항목이라 없는 글에서는 h3 자체를 렌더하지 않는다(빈 줄·빈 간격 금지).
+            메타행은 카테고리가 항상 존재하므로(기본 '자유') 제목 유무와 무관하게 남는다. */}
+        <div className="space-y-1.5">
+          {post.title && (
+            <h3 className="text-lg font-bold text-ink-primary leading-snug break-words">{post.title}</h3>
+          )}
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className={['inline-flex shrink-0 items-center rounded-badge px-1.5 py-0.5 text-2xs font-semibold leading-none', categoryPillClass(post.category)].join(' ')}>
+              {postCategoryLabel(post.category)}
+            </span>
+            {(post.viewCount ?? 0) > 0 && (
+              <span className="inline-flex items-center gap-1 text-2xs text-ink-muted" aria-label={`조회 ${post.viewCount}`}>
+                <Icon name="eye" size={13} strokeWidth={1.6} className="shrink-0" />
+                <span className="tabular-nums">{post.viewCount}</span>
+              </span>
+            )}
+          </div>
+        </div>
+
         {/* ── 작성자 정보 ─────────────────────────────────── */}
-        <header className="flex items-center gap-2 pb-3 border-b border-border-subtle">
+        {/* border-subtle(다크 1.11:1 · 라이트 1.23:1)은 비텍스트 3:1 기준에서 사실상 안 보이는 선이었다
+            → 구조를 나누는 두 가로줄만 border-default(1.76 / 1.79)로 승급. */}
+        <header className="flex items-center gap-2 pb-3 border-b border-border-default">
           <Avatar name={post.userName} src={post.userAvatar} color={post.userColor} size={40} />
           <div className="flex-1 min-w-0">
             {/* flex-wrap(2026-08-28 스윕): 390px에서 칭호칩+역할배지+우측 공유·신고·차단 버튼이
@@ -204,7 +233,7 @@ export default function PostDetailModal({
               <span className="max-w-full truncate text-sm font-semibold text-ink-primary">{authorMark}{post.userName}</span>
               <TitleChip points={titlePts(post.userId)} />
               {post.userRole === 'venue_owner' && (
-                <span className="text-2xs font-bold text-accent-300 bg-accent-300/15 px-1.5 py-0.5 rounded-badge">업주</span>
+                <span className="text-2xs font-bold text-accent-200 bg-accent-300/15 px-1.5 py-0.5 rounded-badge">업주</span>
               )}
               {post.userRole === 'admin' && (
                 <span className="text-2xs font-bold text-danger-light bg-danger/15 px-1.5 py-0.5 rounded-badge">운영자</span>
@@ -215,12 +244,12 @@ export default function PostDetailModal({
             </p>
           </div>
           <button type="button" onClick={copyLink} aria-label="링크 복사"
-            className="shrink-0 inline-flex items-center gap-1 text-2xs text-ink-muted hover:text-accent-300 transition-colors px-1.5 py-1">
+            className="hit shrink-0 inline-flex items-center gap-1 text-2xs text-ink-muted hover:text-accent-200 transition-colors px-1.5 py-1">
             <Icon name="share" size={13} /> 공유
           </button>
           {user && user.id !== post.userId && (
             <button type="button" onClick={() => setReportOpen(true)}
-              className="shrink-0 text-2xs text-ink-muted hover:text-danger-light transition-colors px-1 py-1">
+              className="hit shrink-0 text-2xs text-ink-muted hover:text-danger-light transition-colors px-1 py-1">
               신고
             </button>
           )}
@@ -231,7 +260,7 @@ export default function PostDetailModal({
                 try { await block(post.userId, post.userName); toast.show('차단했습니다 — 이 사용자의 글이 숨겨집니다', 'info'); onClose(); }
                 catch (e) { toast.show(e instanceof Error ? e.message : '차단 실패', 'error'); }
               }}
-              className="shrink-0 text-2xs text-ink-muted hover:text-danger-light transition-colors px-1 py-1">
+              className="hit shrink-0 text-2xs text-ink-muted hover:text-danger-light transition-colors px-1 py-1">
               차단
             </button>
           )}
@@ -256,7 +285,7 @@ export default function PostDetailModal({
                   try { await adminSetPostBlinded(post.id, false); toast.show('숨김을 해제했습니다', 'success'); onClose(); }
                   catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
                 }}
-                className="ml-auto rounded-input border border-border-default px-2.5 py-1 text-2xs font-bold text-ink-secondary hover:text-accent-300">숨김 해제</button>
+                className="ml-auto rounded-input border border-border-default px-2.5 py-1 text-2xs font-bold text-ink-secondary hover:text-accent-200">숨김 해제</button>
             )}
           </div>
         )}
@@ -287,7 +316,7 @@ export default function PostDetailModal({
                     <li key={url}>
                       <button type="button" onClick={() => { if (performance.now() - openedAtRef.current < 400) return; setZoomIdx(i); }}
                         aria-label={`첨부 사진 ${i + 1} 확대 보기`}
-                        className={`block w-full overflow-hidden rounded-card border border-border-subtle bg-surface-high active:opacity-80 ${images.length === 1 ? 'aspect-[4/3]' : 'aspect-square'}`}>
+                        className={`block w-full overflow-hidden rounded-card border border-border-strong bg-surface-high active:opacity-80 ${images.length === 1 ? 'aspect-[4/3]' : 'aspect-square'}`}>
                         <img src={thumbUrl(url, 480)} srcSet={thumbSrcSet(url, 480)}
                           alt={`첨부 사진 ${i + 1}`} loading="lazy" decoding="async"
                           className="h-full w-full object-cover" />
@@ -303,7 +332,7 @@ export default function PostDetailModal({
                 if (heroCards.length < 2) return null;
                 return (
                   <button type="button" onClick={() => { if (performance.now() - openedAtRef.current < 400) return; setGtoHero(heroCards); }}
-                    className="inline-flex items-center gap-1.5 rounded-input border border-accent-400/40 bg-accent-300/10 px-3 py-2 text-xs font-bold text-accent-300 active:opacity-80">
+                    className="inline-flex items-center gap-1.5 rounded-input border border-accent-400/40 bg-accent-300/10 px-3 py-2 text-xs font-bold text-accent-200 active:opacity-80">
                     🎯 이 핸드 GTO 분석
                   </button>
                 );
@@ -319,7 +348,7 @@ export default function PostDetailModal({
         )}
 
         {/* ── 통계 + 액션 ─────────────────────────────────── */}
-        <div className="flex items-center justify-between pt-2 border-t border-border-subtle text-xs">
+        <div className="flex items-center justify-between pt-2 border-t border-border-default text-xs">
           <div className="flex items-center gap-3 text-ink-muted">
             <button
               type="button"
@@ -341,7 +370,7 @@ export default function PostDetailModal({
             type="button"
             onClick={() => react('goodrun')}
             className={[
-              'relative flex items-center justify-center gap-1.5 rounded-card border py-3 text-sm font-bold transition-colors active:scale-[0.98]',
+              'relative flex items-center justify-center gap-1.5 rounded-card border py-3 text-sm font-semibold transition-colors active:scale-[0.98]',
               myReaction === 'goodrun'
                 ? 'border-emerald-400 bg-emerald-500/15 text-emerald-300'
                 : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary',
@@ -353,7 +382,7 @@ export default function PostDetailModal({
             type="button"
             onClick={() => react('badbeat')}
             className={[
-              'relative flex items-center justify-center gap-1.5 rounded-card border py-3 text-sm font-bold transition-colors active:scale-[0.98]',
+              'relative flex items-center justify-center gap-1.5 rounded-card border py-3 text-sm font-semibold transition-colors active:scale-[0.98]',
               myReaction === 'badbeat'
                 ? 'border-ink-muted bg-surface-float text-ink-primary'
                 : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary',

@@ -39,17 +39,28 @@ export function postCategoryLabel(cat: PostCategory | undefined): string {
 
 const CATEGORY_TINT_FALLBACK = 'bg-surface-high text-ink-muted';
 
-// ⚠ 이 값들은 CommunityTab 에서 **그대로 옮겨온 것**이다(동작 변경 0).
-//   감사에서 `text-accent-300` 이 `accent-300/15` 틴트 위에서 다크 2.90:1 로 AA 미달인 것이
-//   확인됐지만, 여기서 함께 고치지 않았다 — gold·emerald 는 accent 와 달리 CSS 변수가 아니라
-//   **테마 고정 브랜드 색**이라(tailwind.config.js) 라이트에서 규칙이 반대다
-//   (emerald 는 300~600 이 흰 배경 텍스트로 전부 4.5 미달, 라이트 텍스트는 700 단만 유효).
-//   즉 세 계열을 한 규칙으로 못 고친다. 양 테마에서 '틴트 위' 대비를 실측한 뒤 교정할 것.
+// 2026-08-29 대비 교정. 세 계열은 **한 규칙으로 못 고친다** — accent 만 CSS 변수(테마 전환)이고
+// gold·emerald 는 테마 고정 브랜드 색이라, 라이트에서는 index.css 의 unlayered 오버라이드
+// (`html.light .text-gold-300/400 → #8F6200`, `html.light .text-emerald-300/400 → #0A8F5C`)가
+// 실제 렌더색을 바꾼다. 그래서 계열마다 결론이 다르다. 양 테마 '틴트 위' 합성면 실측(WCAG):
+//
+//   accent  틴트 #2C2448(다크·surface-low) / #E9E3F7(라이트)
+//     · text-accent-300  다크 3.14 · 모달(surface-mid) 위 2.90  → AA 미달 ❌
+//     · text-accent-200  다크 6.93 / 모달 6.40 · 라이트 5.07    → 채택 ✅
+//       (라이트의 accent-200 은 unlayered 오버라이드로 #6946C8 딥 톤이라 양 테마에서 통한다)
+//   emerald 틴트 #1B343A(다크) / #DBF7EC(라이트)
+//     · text-emerald-400  다크 6.18 ✅ / 라이트 렌더값 #0A8F5C 3.64 ❌
+//     · text-emerald-700(#067A4D, 오버라이드 없음)  라이트 4.75 ✅ / 다크 2.44 ❌
+//       → 단일 값으로는 양 테마를 못 넘긴다. dark: 분기가 유일한 해(앱 전례: LiveGamesTab·PostAttachments).
+//   gold    틴트 #3E352F(다크) / #FFF9E1(라이트)
+//     · text-gold-400  다크 6.64 ✅ / 라이트 렌더값 #8F6200 5.08 ✅ → **이미 통과, 손대지 않는다**
+//       (여기서 gold 까지 700 단 같은 걸로 밀면 다크가 2.39 로 무너진다)
+//   free    surface-high 위 ink-muted  다크 4.53 ✅ / 라이트 4.69 ✅ → 유지
 const CATEGORY_TINTS: Partial<Record<PostCategory, string>> = {
-  hand:     'bg-accent-300/15 text-accent-300',
-  study:    'bg-accent-300/15 text-accent-300',
-  question: 'bg-emerald-400/15 text-emerald-400',
-  info:     'bg-emerald-400/15 text-emerald-400',
+  hand:     'bg-accent-300/15 text-accent-200',
+  study:    'bg-accent-300/15 text-accent-200',
+  question: 'bg-emerald-400/15 text-emerald-700 dark:text-emerald-400',
+  info:     'bg-emerald-400/15 text-emerald-700 dark:text-emerald-400',
   tourney:  'bg-gold-300/15 text-gold-400',
   review:   'bg-gold-300/15 text-gold-400',
   free:     CATEGORY_TINT_FALLBACK,

@@ -7,6 +7,15 @@
 //          둘 다 없으면 null. tone win=emerald / loss=danger(정본 토큰).
 //  - poll: 투표 전 득표율 비공개 · 낙관 갱신→서버 집계 덮어쓰기 · 실패 롤백 ·
 //          마감 시 비활성 '마감됨' · 같은 선택지 연타 무시.
+//
+// ⚠ 면(surface) 계약 — 되돌리지 말 것(2026-08-29 실측):
+//   패널은 **bg-surface-high + .card-sink**, 그 안의 타일(선택지·칩·배지)은 **bg-surface-low**.
+//   근거: 라이트에서 surface-low == surface-mid == #FFFFFF 라, 예전의 bg-surface-low 패널은
+//   모달 셸과 ΔL* 0.00 — 면이 물리적으로 존재하지 않았고 1.23:1 헤어라인만 남아 있었다.
+//   라이트에서 유효한 유일한 면 차이가 surface-high(ΔL* 4.85)라 패널을 그리로 올린다.
+//   .card-elev 는 surface-high 위에서 ink-muted 를 AA 아래로 떨어뜨리므로(index.css §card-elev)
+//   깊이는 .card-sink 로 준다 — 대비가 오히려 오른다(ink-muted 다크 4.53→4.89 / 라이트 4.69→5.02).
+//   패널이 surface-high 로 올라갔으니 타일이 surface-high 면 면 차이가 0 이 된다 → 타일은 surface-low.
 import { useEffect, useId, useRef, useState } from 'react';
 import type { CSSProperties, ReactElement } from 'react';
 import type { Attachment, Card, HandAttachment, PollAttachment, PollOption, Suit } from '../../api/postAttachments';
@@ -120,25 +129,30 @@ function CardFan({ cards }: { cards: Card[] }) {
 
 // ── HandResult ──────────────────────────────────────────────────────────────
 // 톤 텍스트는 테마별 2톤 — emerald-300/danger-light 는 흰 배경에서 4.5:1 미달(1.8~2.2)이라
-// 라이트는 텍스트 전용 딥 톤(emerald-700 5.39 · danger-deep 6.20, 틴트 칩 위 4.64/5.12 실측).
+// 라이트는 텍스트 전용 딥 톤(emerald-700 · danger-deep).
+// ⚠ delta 칩의 면도 테마별로 갈린다. 라이트 틴트 칩(emerald-500/15)의 4.64:1 은 패널이
+//   surface-low(=#FFFFFF)일 때의 값이었다 — 패널이 surface-high(#F0F1F4)로 내려앉으면
+//   칩 합성면이 #D6F0E9→#CEE8E1 로 어두워져 4.49→4.18 로 AA 아래로 떨어진다(실측).
+//   라이트에서는 틴트를 걷고 위 패널 계약대로 **불투명 타일(surface-low)** 로 올린다(emerald-700 5.39 ·
+//   danger-deep 6.20). 색 정체성은 보더(500/30)와 텍스트가 그대로 진다. 다크는 손대지 않는다(6.17 실측).
 const HAND_TONE = {
   win: {
     border: 'border-emerald-500/30',
     headline: 'text-emerald-700 dark:text-emerald-300',
-    chip: 'border-emerald-500/30 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
+    chip: 'border-emerald-500/30 bg-surface-low dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
     // 글로우: blur-2xl 대신 정적 radial-gradient(§7-7 — 페인트 폭탄 회피). emerald-400 #0ECB81.
     glow: 'radial-gradient(120% 90% at 85% 12%, rgba(14,203,129,0.12), transparent 60%)',
   },
   loss: {
     border: 'border-danger/25',
     headline: 'text-danger-deep dark:text-danger-light',
-    chip: 'border-danger/30 bg-danger/15 text-danger-deep dark:text-danger-light',
+    chip: 'border-danger/30 bg-surface-low dark:bg-danger/15 text-danger-deep dark:text-danger-light',
     glow: 'radial-gradient(120% 90% at 85% 12%, rgba(246,70,93,0.10), transparent 60%)', // danger #F6465D
   },
   neutral: {
-    border: 'border-border-subtle',
+    border: 'border-border-default',
     headline: 'text-ink-primary',
-    chip: 'border-border-default bg-surface-high text-ink-secondary',
+    chip: 'border-border-default bg-surface-low text-ink-secondary',
     glow: null as string | null,
   },
 } as const;
@@ -152,7 +166,7 @@ function HandResult({ hand }: { hand: HandAttachment }) {
   const tone = hand.tone === 'win' ? HAND_TONE.win : hand.tone === 'loss' ? HAND_TONE.loss : HAND_TONE.neutral;
 
   return (
-    <div className={`relative overflow-hidden rounded-card border bg-surface-low p-4 ${tone.border}`}>
+    <div className={`card-sink relative overflow-hidden rounded-card border bg-surface-high p-4 ${tone.border}`}>
       {tone.glow && (
         <div aria-hidden className="pointer-events-none absolute inset-0" style={{ background: tone.glow }} />
       )}
@@ -233,12 +247,12 @@ function Poll({ poll, onVote }: { poll: PollAttachment; onVote?: (pollId: string
   };
 
   return (
-    <div className="rounded-card border border-border-subtle bg-surface-low p-3 space-y-2">
+    <div className="card-sink rounded-card border border-border-default bg-surface-high p-3 space-y-2">
       <div className="flex items-start gap-1.5">
-        <span className="mt-0.5 shrink-0 text-accent-300"><Icon name="chart" size={14} /></span>
+        <span className="mt-0.5 shrink-0 text-accent-200"><Icon name="chart" size={14} /></span>
         <p className="min-w-0 flex-1 text-sm font-semibold text-ink-primary break-words">{poll.question}</p>
         {closed && (
-          <span className="shrink-0 rounded-badge bg-surface-high px-2 py-0.5 text-2xs font-bold text-ink-muted">마감됨</span>
+          <span className="shrink-0 rounded-badge bg-surface-low px-2 py-0.5 text-2xs font-bold text-ink-muted">마감됨</span>
         )}
       </div>
 
@@ -257,12 +271,17 @@ function Poll({ poll, onVote }: { poll: PollAttachment; onVote?: (pollId: string
                 'relative w-full overflow-hidden rounded-input border px-3 py-2.5 text-left text-sm font-semibold transition-colors',
                 mine
                   ? 'border-accent-300 text-ink-primary'
-                  : 'border-border-default text-ink-secondary',
+                  // border-strong: 선택지는 '버튼'이라 WCAG 1.4.11(비텍스트 3:1) 대상이다.
+                  // 자기 면(surface-low) 대비 실측 다크 3.12 / 라이트 3.13 — default(1.9)로는 미달.
+                  : 'border-border-strong text-ink-secondary',
+                // 타일 면 — 패널(surface-high) 위에서 구분되는 유일한 방향:
+                // 다크는 낮추고(surface-low #1D192E) 라이트는 올린다(surface-low #FFFFFF).
+                // 예전 값(surface-high)을 그대로 두면 패널과 같은 색이라 선택지 면이 사라진다.
                 closed
-                  ? 'bg-surface-high/50 opacity-70'
+                  ? 'bg-surface-low/60 opacity-70'
                   : mine
-                    ? 'bg-accent-300/5'
-                    : 'bg-surface-high hover:border-accent-300/60 hover:text-ink-primary',
+                    ? 'bg-accent-300/10'
+                    : 'bg-surface-low hover:border-accent-300/60 hover:text-ink-primary',
               ].join(' ')}
             >
               {/* 득표 게이지 — accent α. transition-[width]는 자기완결 진행바 예외(모션 헌법 §3),
@@ -280,7 +299,7 @@ function Poll({ poll, onVote }: { poll: PollAttachment; onVote?: (pollId: string
               )}
               <span className="relative flex items-center justify-between gap-2">
                 <span className="flex min-w-0 items-center gap-1.5">
-                  {mine && <span className="shrink-0 text-accent-300"><Icon name="check" size={14} /></span>}
+                  {mine && <span className="shrink-0 text-accent-200"><Icon name="check" size={14} /></span>}
                   <span className="truncate">{o.label}</span>
                 </span>
                 {showResults && (

@@ -275,7 +275,13 @@
     @apply inline-flex items-center justify-center gap-1.5 whitespace-nowrap
            font-semibold text-sm leading-none
            rounded-input px-3 py-2 min-h-[2.4rem]
-           transition-all duration-150 ease-out active:opacity-80
+           /* §20.4 — 앱에서 가장 많이 쓰는 클래스라 여기 하나가 규약의 예외로 남아 있었다.
+              transition-all 은 나중에 누가 height/padding 을 얹는 순간 자동 레이아웃 애니가 되고,
+              duration-150·ease-out 유틸은 토큰과 분리돼 표류한다(ease-out 유틸은 --ease-out
+              토큰과 곡선 자체가 다르다). btn 파생들이 실제로 바꾸는 것은 색과 opacity 뿐이라
+              그것만 명시한다 — transform 은 어떤 파생도 쓰지 않는다(전수 확인). */
+           transition-[background-color,border-color,color,opacity]
+           duration-[var(--dur-fast)] [transition-timing-function:var(--ease)] active:opacity-80
            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-300;
   }
 

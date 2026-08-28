@@ -7,6 +7,7 @@ import {
   getStaffWages, addStaffName, removeStaffName, type StaffShift,
 } from '../../api/staffSchedule';
 import { getMyVenueStaff } from '../../api/auth';
+import { useAuth } from '../../contexts/AuthContext';
 import { msgOf } from '../../lib/dbError';
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
@@ -32,9 +33,10 @@ function hoursBetween(inHm?: string | null, outHm?: string | null): number {
 
 export default function StaffSchedule({ venueId }: { venueId: string }) {
   const toast = useToast();
+  const { user } = useAuth();
   const [month, setMonth] = useState(thisMonth);
   const [shifts, setShifts] = useState<StaffShift[]>([]);
-  const [venueStaff, setVenueStaff] = useState<string[]>([]);
+  const [venueStaff, setVenueStaff] = useState<{ id: string; name: string }[]>([]);
   const [wageNames, setWageNames] = useState<string[]>([]); // 배정 전에 이름만 등록해 둔 명부(staff_wage)
   const [extraNames, setExtraNames] = useState<string[]>([]);
   const [newName, setNewName] = useState('');
@@ -52,12 +54,29 @@ export default function StaffSchedule({ venueId }: { venueId: string }) {
   useEffect(() => subscribeStaffSchedule(venueId, reload), [venueId, from, to]); // eslint-disable-line react-hooks/exhaustive-deps
   // venueId 를 반드시 넘긴다 — 생략하면 서버가 '내가 소유한 첫 매장'으로 폴백해서
   // 운영자(admin)가 매장을 골라 들어오면 구성원 목록엔 직원이 보이는데 이 명부만 0명이 된다.
-  useEffect(() => { getMyVenueStaff(venueId).then((s) => setVenueStaff(s.map((x) => x.name))).catch(() => {}); }, [venueId]);
+  useEffect(() => { getMyVenueStaff(venueId).then((s) => setVenueStaff(s.map((x) => ({ id: x.id, name: x.name })))).catch(() => {}); }, [venueId]);
+
+  // 이름 → 계정 id. 동명이인이면 **일부러 비운다** — 잘못된 주인을 행에 못박는 것보다
+  // 이름만으로 두는 편이 안전하다(서버 판정이 동명이인을 페일클로즈로 처리한다, 20260829a).
+  const staffIdByName = useMemo(() => {
+    const count = new Map<string, number>(), id = new Map<string, string>();
+    const add = (n: string | undefined | null, uid: string) => {
+      const k = (n ?? '').trim().toLowerCase();
+      if (!k || id.get(k) === uid) return; // 같은 사람의 name·nickname 이 같으면 두 번 세지 않는다
+      count.set(k, (count.get(k) ?? 0) + 1); id.set(k, uid);
+    };
+    venueStaff.forEach((s) => add(s.name, s.id));
+    // 업주 본인은 getMyVenueStaff(venue_staff 한정)에 없다 — 자기 시프트에도 주인을 적을 수 있게 더한다.
+    if (user) { add(user.name, user.id); add(user.nickname, user.id); }
+    const m = new Map<string, string>();
+    for (const [k, n] of count) if (n === 1) m.set(k, id.get(k)!);
+    return m;
+  }, [venueStaff, user]);
   useEffect(() => { getStaffWages(venueId).then((ws) => setWageNames(ws.map((w) => w.name))).catch(() => {}); }, [venueId, tick]);
 
   const roster = useMemo(() => {
     const set = new Set<string>();
-    venueStaff.forEach((n) => set.add(n));
+    venueStaff.forEach((s) => set.add(s.name));
     wageNames.forEach((n) => set.add(n));
     shifts.forEach((s) => set.add(s.name));
     extraNames.forEach((n) => set.add(n));
@@ -99,20 +118,38 @@ export default function StaffSchedule({ venueId }: { venueId: string }) {
   const toggle = async (date: string, name: string) => {
     try {
       if (isOn(date, name)) { await removeStaffShift(venueId, date, name); setShifts((s) => s.filter((x) => !(x.date === date && x.name === name))); }
-      else { await addStaffShift(venueId, date, name); setShifts((s) => [...s, { date, name }]); }
+      else {
+        // 이름이 구성원 한 명으로 확정될 때만 주인(user_id)을 함께 적는다 — 동명이인이면 이름만.
+        await addStaffShift(venueId, date, name, staffIdByName.get(name.trim().toLowerCase()) ?? null);
+        setShifts((s) => [...s, { date, name }]);
+      }
     } catch (e) { toast.show(msgOf(e, '저장 실패'), 'error'); }
   };
+  // 실패를 삼키지 않는다 — 예전엔 catch{noop} 이라 저장이 안 돼도 입력칸엔 값이 남아
+  // '저장된 것처럼' 보였다(배정 없는 날에 시각을 넣으면 서버가 0행을 고치고 200 을 준다).
   const setTime = async (date: string, name: string, field: 'startHm' | 'checkIn' | 'checkOut', val: string) => {
+    const prev = shiftOf(date, name)?.[field] ?? null;
     setShifts((s) => s.map((x) => (x.date === date && x.name === name ? { ...x, [field]: val || null } : x)));
-    try { await setShiftTimes(venueId, date, name, { [field]: val || null }); } catch { /* noop */ }
+    try { await setShiftTimes(venueId, date, name, { [field]: val || null }); }
+    catch (e) {
+      setShifts((s) => s.map((x) => (x.date === date && x.name === name ? { ...x, [field]: prev } : x)));
+      toast.show(msgOf(e, '시각을 저장하지 못했습니다'), 'error');
+    }
   };
   const confirm = async () => {
     setSaving(true);
     try {
       await confirmSchedule(venueId, from, to);
       setShifts((s) => s.map((x) => ({ ...x, confirmed: true })));
-      const n = await notifyVenueStaff(venueId, '출근 스케줄 확정', `${month} 출근 스케줄이 확정되었습니다. 본인 일정을 확인하세요.`, '/staff-schedule').catch(() => 0);
-      toast.show(`${month} 스케줄을 확정했습니다 — 직원 ${n}명에게 알림 발송`, 'success');
+      // 링크(/staff-schedule)를 받을 핸들러가 아직 없어 클릭이 토스트로 끝난다 —
+      // 그래서 메시지가 갈 곳을 직접 말한다(알림이 지키지 못할 약속을 하지 않게).
+      const n = await notifyVenueStaff(venueId, '출근 스케줄 확정',
+        `${month} 출근 스케줄이 확정되었습니다. 「내 매장 → 출근 관리」에서 본인 일정을 확인하세요.`, '/staff-schedule').catch(() => 0);
+      // 발송 인원은 **호출자를 뺀 구성원 수**다(20260829a). 0명이면 숫자 대신 이유를 말한다 —
+      // "직원 0명에게 발송" 은 성공 문구의 얼굴을 한 막다른 길이다.
+      toast.show(n > 0
+        ? `${month} 스케줄을 확정했습니다 — 직원 ${n}명에게 알림 발송`
+        : `${month} 스케줄을 확정했습니다 — 알림 받을 매장 구성원이 아직 없습니다`, 'success');
     }
     catch (e) { toast.show(msgOf(e, '확정 실패'), 'error'); }
     finally { setSaving(false); }
@@ -146,7 +183,7 @@ export default function StaffSchedule({ venueId }: { venueId: string }) {
             <span className="text-2xs text-ink-muted mr-0.5">명부</span>
             {roster.map((n) => {
               // 구성원(계정 연동)과 배정 이력이 있는 이름은 임의로 빼지 않는다 — 집계·정산의 근거다.
-              const removable = !venueStaff.includes(n) && !shifts.some((s) => s.name === n);
+              const removable = !venueStaff.some((v) => v.name === n) && !shifts.some((s) => s.name === n);
               return (
                 <span key={n} className="inline-flex items-center gap-0.5 rounded-badge border border-border-subtle bg-surface-high pl-2 pr-1 py-0.5 text-2xs text-ink-secondary">
                   {n}

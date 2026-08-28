@@ -146,8 +146,11 @@ export function StaffSettlement({ venueId }: { venueId: string }) {
       </div>
       {rows.length === 0 ? <p className="text-2xs text-ink-muted text-center py-3">{month} 출근 기록이 없습니다.</p> : (
         <div className="overflow-x-auto scrollbar-none">
-          {/* 숫자 칼럼은 우측 정렬 + tabular-nums — 자릿수 비교가 세로로 맞아떨어지게 */}
-          <table className="w-full border-separate border-spacing-0 min-w-[20rem]">
+          {/* 숫자 칼럼은 우측 정렬 + tabular-nums — 자릿수 비교가 세로로 맞아떨어지게.
+              min-w 를 두지 않는다: 375px 에서 표가 340px 로 자라 **급여 칸이 잘렸는데**
+              컨테이너가 scrollbar-none 이라 잘렸다는 사실조차 보이지 않았다(실측 sw340/cw314).
+              가장 중요한 숫자가 조용히 사라지는 것보다 '평균 출/퇴' 가 두 줄로 접히는 게 낫다. */}
+          <table className="w-full border-separate border-spacing-0">
             <thead><tr className="text-[11px] text-ink-muted"><th className="py-1 text-left pl-1 font-semibold">직원</th><th className="text-right font-semibold">출근</th><th className="text-right font-semibold">시간</th><th className="text-center font-semibold">평균 출/퇴</th><th className="text-right pr-1 font-semibold">급여</th></tr></thead>
             <tbody>
               {rows.map((r) => (
@@ -155,7 +158,8 @@ export function StaffSettlement({ venueId }: { venueId: string }) {
                   <td className="py-1.5 text-left pl-1 font-bold text-ink-primary">{r.name}</td>
                   <td className="text-right text-ink-secondary tabular-nums">{r.days}일</td>
                   <td className="text-right text-ink-secondary tabular-nums">{r.hrs.toFixed(1)}h</td>
-                  <td className="text-center text-ink-muted tabular-nums text-[11px]">{r.avgIn}/{r.avgOut}</td>
+                  {/* 좁은 폭에서 줄바꿈 지점을 준다 — 18:00/02:30 은 공백이 없어 그대로면 안 접힌다 */}
+                  <td className="text-center text-ink-muted tabular-nums text-[11px]">{r.avgIn}/<wbr />{r.avgOut}</td>
                   <td className="text-right pr-1 text-accent-300 dark:text-accent-200 tabular-nums font-bold">{r.pay.toLocaleString()}</td>
                 </tr>
               ))}
