@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
 import { getMyStaffInvites, respondStaffInvite, type StaffInvite } from '../../api/auth';
+import { msgOf } from '../../lib/dbError';
 
 /** 로그인 회원에게 도착한 매장 구성원 초대 — 수락/거절 배너 */
 export default function StaffInviteBanner() {
@@ -27,7 +28,7 @@ export default function StaffInviteBanner() {
       toast.show(accept ? '매장 구성원으로 합류했습니다' : '초대를 거절했습니다', accept ? 'success' : 'info');
       if (accept) await refreshProfile();
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '처리에 실패했습니다', 'error');
+      toast.show(msgOf(e, '초대를 처리하지 못했습니다'), 'error');
     } finally {
       setBusy(false);
     }

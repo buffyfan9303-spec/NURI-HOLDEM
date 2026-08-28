@@ -85,6 +85,52 @@ export async function saveStaffWage(venueId: string, w: StaffWage): Promise<void
   if (error) throw error;
 }
 
+/**
+ * 직원 본인 출퇴근 기록 — check_in/check_out 만 바꾸는 전용 RPC.
+ *
+ * 왜 setShiftTimes(직접 UPDATE)를 못 쓰나: staff_schedule 의 SELECT/UPDATE 정책은
+ *   can_manage_pos/can_access_ledger 기준이라 **구성원(venue_staff)은 자기 행조차 못 읽고**,
+ *   PATCH 는 0행을 고치고도 200 을 돌려줘 조용히 실패했다(2026-08-28 실측).
+ *   UPDATE 정책을 통째로 넓히면 직원이 confirmed·start_hm 까지 바꿀 수 있어,
+ *   읽기는 정책(staff_sched_self_select)으로 열고 쓰기는 이 RPC 두 칼럼으로 좁힌다.
+ */
+export async function setMyShiftTime(venueId: string, date: string, field: 'checkIn' | 'checkOut', val: string | null): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('set_my_shift_time', {
+    p_venue_id: venueId, p_work_date: date,
+    p_field: field === 'checkIn' ? 'check_in' : 'check_out',
+    p_value: val || null,
+  });
+  if (error) throw error;
+}
+
+/**
+ * 명부에 이름만 등록(배정 전) — 인건비 설정 행을 빈 값으로 만들어 둔다.
+ *
+ * 왜 이렇게 하나: '직원 등록' 버튼이 원래 React state 에만 이름을 넣어서, 시프트를 배정하기
+ *   전에 새로고침하면 등록한 이름이 그냥 사라졌다(업주에겐 '등록했는데 없어짐'). 명부용 테이블을
+ *   새로 만드는 대신 이미 직원 단위인 staff_wage 를 쓴다 — 등록하면 「인건비 관리」에도 같은
+ *   사람이 바로 나타나 다음 할 일(시급 입력)로 이어진다.
+ */
+export async function addStaffName(venueId: string, name: string): Promise<void> {
+  if (IS_MOCK) return;
+  const n = name.trim();
+  if (!n) return;
+  const { error } = await supabase.from('staff_wage').upsert(
+    { venue_id: venueId, staff_name: n, updated_at: new Date().toISOString() },
+    { onConflict: 'venue_id,staff_name', ignoreDuplicates: true },
+  );
+  if (error) throw error;
+}
+
+/** 명부에서 이름 빼기 — 등록만 하고 배정한 적 없는 이름(오타 등) 정리용. 인건비 설정도 함께 사라진다. */
+export async function removeStaffName(venueId: string, name: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.from('staff_wage').delete()
+    .eq('venue_id', venueId).eq('staff_name', name);
+  if (error) throw error;
+}
+
 /** 특정 날짜에 직원 출근 배정(중복 무시) */
 export async function addStaffShift(venueId: string, date: string, name: string): Promise<void> {
   if (IS_MOCK) return;

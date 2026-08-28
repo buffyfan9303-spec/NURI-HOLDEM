@@ -280,7 +280,19 @@ function ListCard({
     <article
       onClick={() => onSelect(schedule)}
       className={[
-        'flex cursor-pointer items-start gap-1.5 px-3 py-2.5 transition-colors hover:bg-surface-high/50 active:bg-surface-high',
+        // cv-card-list: 화면 밖 행은 렌더를 건너뛴다(커뮤니티 행과 같은 조리법 — index.css 참조)
+        'cv-card-list',
+        // ⚠ 행 호버에 transition 을 걸지 않는다 — ScheduleTable 행과 같은 이유이고, 이쪽이 더 중요하다.
+        //   목록(list)이 **기본 뷰 모드**라 PC 유저가 실제로 가장 많이 스크롤하는 화면이다.
+        //   PC 는 커서가 제자리에 있고 행이 그 밑을 지나가므로 행마다 hover in/out 이 연달아 터지는데,
+        //   그때마다 배경색 트랜지션이 겹겹이 돈다. 여기에 cv-card-list 의 containment 가 겹치면
+        //   행이 뷰포트에 들어오는 렌더와 호버 리페인트가 같은 프레임에서 부딪힌다.
+        //   실측(2026-08-28, 프로덕션 빌드·120건·CPU 4x·실제 휠 스크롤 40회, 5회 중앙값 잰크 합):
+        //     PC1440  cv+transition 401ms / cv+transition 제거 252ms / cv 이전 238ms  → 제거해야 본전
+        //     M375    cv+transition 284ms / cv+transition 제거 234ms                  → 모바일도 -18%
+        //   호버 하이라이트 자체는 그대로 둔다(즉시 반응). §20.4 #3 의 '색 트랜지션 ≤0.15s' 도
+        //   '허용'이지 '권장'이 아니다 — 목록 행처럼 수십 개가 동시에 발화하는 자리엔 걸지 않는다.
+        'flex cursor-pointer items-start gap-1.5 px-3 py-2.5 hover:bg-surface-high/50 active:bg-surface-high',
         // 프리미엄(TOP)은 행 틴트 + 제목 앞 마커로 차별(박스 글로우 제거 — 목록 결 유지)
         schedule.isPremium ? 'bg-accent-300/[0.05]' : '',
       ].join(' ')}
@@ -381,7 +393,15 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
     <article
       onClick={() => onSelect(schedule)}
       className={[
-        'flex flex-col overflow-hidden rounded-card border transition-[transform,border-color] duration-300 ease-out active:duration-75',
+        // cv-card-grid: 화면 밖 카드의 스타일·레이아웃·페인트를 건너뛴다(index.css, 실측 근거 주석).
+        'cv-card-grid',
+        // ⚠ transition 대상에서 border-color 를 뺀 이유(2026-08-28 PC 잰크 실측):
+        //   PC 는 스크롤할 때 커서가 제자리에 있고 카드가 그 밑을 지나간다 — 카드마다
+        //   hover in/out 이 연달아 발화해 300ms 짜리 **테두리 색 트랜지션(페인트)** 이 겹겹이 돈다.
+        //   그리드 스크롤 40회 잰크 합 2353ms → transform 만 남기면 1373ms(-42%). 모바일은 hover 가
+        //   없어 영향 0. §20.4 #3 도 색 계열 트랜지션은 ≤0.15s 로 제한하므로 300ms 는 원래 위반이었다.
+        //   들어올림(transform)은 그대로 — 마우스 유저의 손맛은 잃지 않는다.
+        'flex flex-col overflow-hidden rounded-card border transition-transform duration-[var(--dur-panel)] ease-out active:duration-75',
         'hover:-translate-y-1 cursor-pointer active:scale-[0.98]',
         schedule.isPremium
           ? 'border-accent-400 shadow-[0_0_12px_rgb(var(--accent-300)/0.22)] bg-surface-low'

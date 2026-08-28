@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useToast } from '../atoms/Toast';
 import {
-  getStaffSchedule, addStaffShift, removeStaffShift, setShiftTimes, confirmSchedule, notifyVenueStaff, subscribeStaffSchedule, type StaffShift,
+  getStaffSchedule, addStaffShift, removeStaffShift, setShiftTimes, confirmSchedule, notifyVenueStaff, subscribeStaffSchedule,
+  getStaffWages, addStaffName, removeStaffName, type StaffShift,
 } from '../../api/staffSchedule';
 import { getMyVenueStaff } from '../../api/auth';
+import { msgOf } from '../../lib/dbError';
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 const ymOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -33,11 +35,13 @@ export default function StaffSchedule({ venueId }: { venueId: string }) {
   const [month, setMonth] = useState(thisMonth);
   const [shifts, setShifts] = useState<StaffShift[]>([]);
   const [venueStaff, setVenueStaff] = useState<string[]>([]);
+  const [wageNames, setWageNames] = useState<string[]>([]); // 배정 전에 이름만 등록해 둔 명부(staff_wage)
   const [extraNames, setExtraNames] = useState<string[]>([]);
   const [newName, setNewName] = useState('');
   const [selDay, setSelDay] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [tick, setTick] = useState(0); // 명부 저장 후 재조회
 
   const days = useMemo(() => monthDays(month), [month]);
   const from = days[0], to = days[days.length - 1];
@@ -46,15 +50,19 @@ export default function StaffSchedule({ venueId }: { venueId: string }) {
   useEffect(() => { setLoading(true); reload(); setSelDay(null); }, [venueId, from, to]); // eslint-disable-line react-hooks/exhaustive-deps
   // 실시간: 직원 셀프 출퇴근/배정 변경 자동 반영
   useEffect(() => subscribeStaffSchedule(venueId, reload), [venueId, from, to]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { getMyVenueStaff().then((s) => setVenueStaff(s.map((x) => x.name))).catch(() => {}); }, []);
+  // venueId 를 반드시 넘긴다 — 생략하면 서버가 '내가 소유한 첫 매장'으로 폴백해서
+  // 운영자(admin)가 매장을 골라 들어오면 구성원 목록엔 직원이 보이는데 이 명부만 0명이 된다.
+  useEffect(() => { getMyVenueStaff(venueId).then((s) => setVenueStaff(s.map((x) => x.name))).catch(() => {}); }, [venueId]);
+  useEffect(() => { getStaffWages(venueId).then((ws) => setWageNames(ws.map((w) => w.name))).catch(() => {}); }, [venueId, tick]);
 
   const roster = useMemo(() => {
     const set = new Set<string>();
     venueStaff.forEach((n) => set.add(n));
+    wageNames.forEach((n) => set.add(n));
     shifts.forEach((s) => set.add(s.name));
     extraNames.forEach((n) => set.add(n));
     return [...set];
-  }, [venueStaff, shifts, extraNames]);
+  }, [venueStaff, wageNames, shifts, extraNames]);
 
   const byDate = useMemo(() => {
     const m = new Map<string, StaffShift[]>();
@@ -71,13 +79,28 @@ export default function StaffSchedule({ venueId }: { venueId: string }) {
       .sort((a, b) => b.work - a.work);
   }, [shifts, roster, operatingDays]);
 
-  const addName = () => { const n = newName.trim(); if (!n) return; if (!roster.includes(n)) setExtraNames((a) => [...a, n]); setNewName(''); };
+  // '등록' 은 저장까지 간다 — 예전엔 state 에만 넣어서 배정 전에 새로고침하면 이름이 사라졌다.
+  const addName = async () => {
+    const n = newName.trim();
+    if (!n) { toast.show('직원 이름을 입력하세요', 'info'); return; }
+    if (roster.includes(n)) { toast.show(`${n} 은(는) 이미 명부에 있습니다`, 'info'); setNewName(''); return; }
+    setExtraNames((a) => [...a, n]); setNewName('');
+    try { await addStaffName(venueId, n); setTick((t) => t + 1); }
+    catch (e) { setExtraNames((a) => a.filter((x) => x !== n)); toast.show(msgOf(e, '직원 등록에 실패했습니다'), 'error'); }
+  };
+  // 오타로 등록한 이름이 영구히 남지 않게 — 구성원도 아니고 배정 이력도 없는 이름만 뺄 수 있다.
+  const dropName = async (n: string) => {
+    setExtraNames((a) => a.filter((x) => x !== n));
+    setWageNames((a) => a.filter((x) => x !== n));
+    try { await removeStaffName(venueId, n); }
+    catch (e) { toast.show(msgOf(e, '명부에서 제거하지 못했습니다'), 'error'); setTick((x) => x + 1); }
+  };
   const isOn = (date: string, name: string) => !!shiftOf(date, name);
   const toggle = async (date: string, name: string) => {
     try {
       if (isOn(date, name)) { await removeStaffShift(venueId, date, name); setShifts((s) => s.filter((x) => !(x.date === date && x.name === name))); }
       else { await addStaffShift(venueId, date, name); setShifts((s) => [...s, { date, name }]); }
-    } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
+    } catch (e) { toast.show(msgOf(e, '저장 실패'), 'error'); }
   };
   const setTime = async (date: string, name: string, field: 'startHm' | 'checkIn' | 'checkOut', val: string) => {
     setShifts((s) => s.map((x) => (x.date === date && x.name === name ? { ...x, [field]: val || null } : x)));
@@ -91,7 +114,7 @@ export default function StaffSchedule({ venueId }: { venueId: string }) {
       const n = await notifyVenueStaff(venueId, '출근 스케줄 확정', `${month} 출근 스케줄이 확정되었습니다. 본인 일정을 확인하세요.`, '/staff-schedule').catch(() => 0);
       toast.show(`${month} 스케줄을 확정했습니다 — 직원 ${n}명에게 알림 발송`, 'success');
     }
-    catch (e) { toast.show(e instanceof Error ? e.message : '확정 실패', 'error'); }
+    catch (e) { toast.show(msgOf(e, '확정 실패'), 'error'); }
     finally { setSaving(false); }
   };
 
@@ -105,7 +128,7 @@ export default function StaffSchedule({ venueId }: { venueId: string }) {
         <h3 className="text-sm font-bold text-ink-primary">딜러 출근 스케줄</h3>
         <div className="flex items-center gap-1">
           <button type="button" onClick={() => setMonth((m) => shiftMonth(m, -1))} className="h-9 w-9 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">‹</button>
-          <span className="text-xs font-bold text-accent-300 tabular-nums w-[4.5rem] text-center">{month}</span>
+          <span className="text-xs font-bold text-accent-300 dark:text-accent-200 tabular-nums w-[4.5rem] text-center">{month}</span>
           <button type="button" onClick={() => setMonth((m) => shiftMonth(m, 1))} className="h-9 w-9 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">›</button>
           <button type="button" onClick={() => setMonth(thisMonth())} className="h-9 px-2 rounded-input text-2xs text-ink-muted hover:text-accent-300">이번달</button>
         </div>
@@ -115,10 +138,27 @@ export default function StaffSchedule({ venueId }: { venueId: string }) {
       <div>
         <p className="text-2xs font-semibold text-ink-secondary mb-1">직원 등록 — 이름 입력(등록된 매장 직원 자동 포함)</p>
         <div className="flex gap-2">
-          <input value={newName} onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => { if (e.nativeEvent.isComposing) return; /* 한글 조합 확정 Enter 를 제출로 오인하지 않게 */ if (e.key === 'Enter') addName(); }} placeholder="직원 이름" maxLength={20} className="input flex-1 text-sm" />
-          <button type="button" onClick={addName} className="btn-ghost text-xs px-3 shrink-0">+ 추가</button>
+          <input value={newName} onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => { if (e.nativeEvent.isComposing) return; /* 한글 조합 확정 Enter 를 제출로 오인하지 않게 */ if (e.key === 'Enter') void addName(); }} placeholder="직원 이름" maxLength={20} className="input flex-1 text-sm" />
+          <button type="button" onClick={() => void addName()} className="btn-ghost text-xs px-3 shrink-0">+ 추가</button>
         </div>
-        {roster.length > 0 && <p className="text-2xs text-ink-muted mt-1">명부: {roster.join(' · ')}</p>}
+        {roster.length > 0 && (
+          <div className="mt-1.5 flex flex-wrap items-center gap-1">
+            <span className="text-2xs text-ink-muted mr-0.5">명부</span>
+            {roster.map((n) => {
+              // 구성원(계정 연동)과 배정 이력이 있는 이름은 임의로 빼지 않는다 — 집계·정산의 근거다.
+              const removable = !venueStaff.includes(n) && !shifts.some((s) => s.name === n);
+              return (
+                <span key={n} className="inline-flex items-center gap-0.5 rounded-badge border border-border-subtle bg-surface-high pl-2 pr-1 py-0.5 text-2xs text-ink-secondary">
+                  {n}
+                  {removable && (
+                    <button type="button" onClick={() => void dropName(n)} aria-label={`${n} 명부에서 제거`} title="명부에서 제거"
+                      className="px-1 leading-none text-ink-muted hover:text-danger-light">×</button>
+                  )}
+                </span>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* 월 캘린더 — 칸에 이름·출퇴근 시각 표시(가독성 확대) */}
@@ -158,7 +198,7 @@ export default function StaffSchedule({ venueId }: { venueId: string }) {
       {/* 선택 날짜 편집 — 배정 토글 + 출퇴근 시각 */}
       {selDay && (
         <div className="rounded-input border border-accent-400/40 bg-accent-300/[0.06] p-2.5 space-y-2">
-          <p className="text-xs font-bold text-accent-300">{selDay} 출근 직원 · 시각 입력</p>
+          <p className="text-xs font-bold text-accent-300 dark:text-accent-200">{selDay} 출근 직원 · 시각 입력</p>
           {roster.length === 0 ? (
             <p className="text-2xs text-ink-muted">먼저 위에서 직원을 등록하세요.</p>
           ) : roster.map((n) => {
@@ -173,7 +213,7 @@ export default function StaffSchedule({ venueId }: { venueId: string }) {
                   <>
                     <label className="flex items-center gap-1 text-2xs text-ink-muted">출근<input type="time" value={sh?.checkIn ?? sh?.startHm ?? ''} onChange={(e) => setTime(selDay, n, 'checkIn', e.target.value)} className="input text-xs py-1 w-[5.5rem]" /></label>
                     <label className="flex items-center gap-1 text-2xs text-ink-muted">퇴근<input type="time" value={sh?.checkOut ?? ''} onChange={(e) => setTime(selDay, n, 'checkOut', e.target.value)} className="input text-xs py-1 w-[5.5rem]" /></label>
-                    {sh?.checkIn && sh?.checkOut && <span className="text-2xs text-emerald-400 tabular-nums">{hoursBetween(sh.checkIn, sh.checkOut).toFixed(1)}h</span>}
+                    {sh?.checkIn && sh?.checkOut && <span className="text-2xs text-emerald-700 dark:text-emerald-400 tabular-nums">{hoursBetween(sh.checkIn, sh.checkOut).toFixed(1)}h</span>}
                   </>
                 )}
               </div>
@@ -184,23 +224,23 @@ export default function StaffSchedule({ venueId }: { venueId: string }) {
 
       {/* 확정 */}
       <button type="button" onClick={confirm} disabled={saving || shifts.length === 0}
-        className="w-full py-2 rounded-input bg-accent-300/15 text-accent-300 border border-accent-400/40 text-xs font-bold hover:bg-accent-300/25 disabled:opacity-50">
+        className="w-full py-2 rounded-input bg-accent-300/15 text-accent-300 dark:text-accent-200 border border-accent-400/40 text-xs font-bold hover:bg-accent-300/25 disabled:opacity-50">
         ✓ {month} 스케줄 확정 (등록 직원에게 공유)
       </button>
 
       {/* 직원별 출근/휴무/근무시간 집계 */}
       <div>
         <p className="text-2xs font-semibold text-ink-secondary mb-1">직원별 집계 · {month} (영업 {operatingDays}일 · 총 {totalHours.toFixed(1)}h)</p>
-        {summary.length === 0 ? (
+        {shifts.length === 0 ? (
           <p className="text-2xs text-ink-muted text-center py-2">아직 스케줄이 없습니다. 날짜를 눌러 직원을 배정하세요.</p>
         ) : (
           <div className="rounded-input border border-border-subtle bg-surface-base divide-y divide-border-subtle">
             {summary.map((r) => (
               <div key={r.name} className="flex items-center gap-2 px-2.5 py-2 text-xs">
                 <span className="flex-1 font-semibold text-ink-primary truncate">{r.name}</span>
-                <span className="text-emerald-400 tabular-nums font-bold">출근 {r.work}일</span>
+                <span className="text-emerald-700 dark:text-emerald-400 tabular-nums font-bold">출근 {r.work}일</span>
                 <span className="text-ink-muted tabular-nums">휴무 {r.off}일</span>
-                <span className="text-accent-300 tabular-nums">{r.hours.toFixed(1)}h</span>
+                <span className="text-accent-300 dark:text-accent-200 tabular-nums">{r.hours.toFixed(1)}h</span>
               </div>
             ))}
           </div>

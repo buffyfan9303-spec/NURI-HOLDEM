@@ -38,6 +38,7 @@ import type { MarketplaceFormData } from './components/features/MarketplaceFormM
 import { pushLayer, useBackClose } from './lib/backstack';
 import { useVisibilityRefresh } from './lib/useVisibilityRefresh';
 import { useScrollY } from './lib/useScrollY';
+import { useIsDesktop, useIsMdUp } from './lib/responsive';
 import HomeTab from './components/features/HomeTab';
 import { lazyWithReload } from './lib/lazyWithReload';
 import { getRunningClocks, type ClockState } from './api/clock';
@@ -529,6 +530,9 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
   // OBS-8 킬스위치: app_settings.tabbar_autohide_v2 = 'off' → 구 동작 복구(앱 재접속만으로, 재배포 불필요).
   const [hidden, setHidden] = useState(false);
   const [autohideV2, setAutohideV2] = useState(true);
+  // 이 탭바는 lg 이상에서 렌더는 되지만 화면에 없다(nav 의 lg:hidden).
+  // 스크롤 판정 자체를 PC 에서 끊기 위해 같은 브레이크포인트(1024px)의 훅을 쓴다.
+  const isDesktop = useIsDesktop();
   useEffect(() => { getAppSetting('tabbar_autohide_v2').then((v) => { if (v === 'off') setAutohideV2(false); }).catch(() => {}); }, []);
   // 탭 전환 억제창 — 자식 layoutEffect 가 부모(App)의 복원 스크롤보다 먼저 실행되므로
   // 복원 이벤트 도착 전에 창이 열려 순서가 보장된다. |dy| 크기 추정은 빠른 플링(프레임당 200px+)을 삼키므로 금지.
@@ -568,6 +572,12 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
   }, [autohideV2]);
   useScrollY(useCallback((sy: number) => {
     if (!autohideV2) return; // 킬스위치 off — 레거시 리스너가 담당
+    // PC 는 이 탭바가 애초에 안 보인다(아래 nav 의 lg:hidden). 그런데도 이 콜백이 매 스크롤
+    // 프레임마다 아래에서 scrollHeight 를 읽어 **문서 전체 강제 동기 레이아웃**을 일으켰다
+    // (계측: PC 스크롤 20스텝 = 강제 레이아웃 20회). 보이지도 않는 UI 때문에 PC 스크롤이
+    // 프레임을 흘리던 것 — 오너가 말한 "PC 에서 버벅이는 느낌"의 직접 원인 중 하나다.
+    // ⚠ 반드시 scrollHeight 읽기 **앞에서** 끊어야 의미가 있다(읽고 나서 버리면 비용은 그대로).
+    if (isDesktop) return;
     const st = tb2Ref.current;
     if (performance.now() < suppressUntil.current) { st.lastY = sy; st.acc = 0; return; }
     const max = document.documentElement.scrollHeight - window.innerHeight;
@@ -579,7 +589,10 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
     st.acc = (dy > 0) === (st.acc > 0) ? st.acc + dy : dy;                   // 방향 바뀌면 리셋되는 누적 — 느린 끌기도 판정
     if (st.acc > 48) { setHidden(true); st.acc = 0; }
     else if (st.acc < -24) { setHidden(false); st.acc = 0; }
-  }, [autohideV2]));
+  }, [autohideV2, isDesktop]));
+  // PC 폭에서 스크롤 판정을 건너뛰므로, 데스크톱→모바일로 좁힐 때 예전 hidden 이 굳은 채
+  // 남을 수 있다(탭바가 사라진 것처럼 보인다). 폭이 바뀌는 순간 한 번 되돌린다.
+  useEffect(() => { if (isDesktop) { setHidden(false); tb2Ref.current = { lastY: window.scrollY, acc: 0 }; } }, [isDesktop]);
   // 장터는 커뮤니티 서브탭으로 이동(사용 빈도 기준) — 탭바 4번째 칸은 도구
   const items: { key: string; tab?: TabId; label: string }[] = [
     { key: 'home', tab: 'home', label: '홈' },
@@ -676,6 +689,11 @@ export default function App() {
 
   // UI 상태
   const [viewMode, setViewMode]       = useState<ViewMode>('list');
+  // 표 모드는 폭에 따라 '표(md 이상)' 와 '리스트(md 미만)' 두 벌로 갈린다. 예전엔 둘 다
+  // 리액트 트리에 넣고 CSS 로만 한쪽을 감췄다 — 보이지 않는 쪽 카드 120장이 그대로 렌더되고
+  // 그 안의 priority 썸네일 4장까지 eager 로 받았다(실측 DOM 노드: 표 4587 vs 리스트 3111).
+  // 이제 폭에 맞는 쪽만 렌더한다. CSS 클래스는 리사이즈 순간의 깜빡임 방지로 남겨 둔다.
+  const isMdUp = useIsMdUp();
   // 일정탐색 FOMO — 예약자 수(예약 N명 · 마감 임박 뱃지)
   const [browseResCounts, setBrowseResCounts] = useState<Record<string, number>>({});
   // 매장 후기 별점(체크인 인증) — 카드 매장명 옆 ⭐4.8(12)
@@ -2527,9 +2545,11 @@ export default function App() {
                     upcoming={schedules.filter((s) => s.approved && scheduleStatus(s.date, s.startTime) !== 'ended').length}
                   />
                 ) : viewMode === 'table' ? (
-                  <div className="hidden md:block">
-                    <ScheduleTable schedules={visibleSchedules} onSelect={handleScheduleSelect} onVenueClick={handleVenueClick} />
-                  </div>
+                  isMdUp ? (
+                    <div className="hidden md:block">
+                      <ScheduleTable schedules={visibleSchedules} onSelect={handleScheduleSelect} onVenueClick={handleVenueClick} />
+                    </div>
+                  ) : null
                 ) : (
                   <div className={[
                     viewMode === 'grid'
@@ -2559,7 +2579,7 @@ export default function App() {
                   </div>
                 )}
                 {/* 표 모드는 PC 전용 — 모바일 폭에선 리스트로 자동 표시 */}
-                {viewMode === 'table' && visibleSchedules.length > 0 && (
+                {viewMode === 'table' && !isMdUp && visibleSchedules.length > 0 && (
                   <div className="divide-y divide-border-subtle overflow-hidden rounded-card border border-border-subtle bg-surface-low md:hidden">
                     {visibleSchedules.map((s, i) => (
                       <ScheduleCard key={s.id} mode="list" schedule={s} reserveCount={browseResCounts[s.id]} rating={venueRatings[s.venueId]} distanceKm={distanceOf(s)} regInfo={regInfoBySchedule.get(s.id)} onVenueClick={handleVenueClick} onSelect={handleScheduleSelect} vtActive={vtPosterId === s.id && !openSchedule} priority={i < 4} />

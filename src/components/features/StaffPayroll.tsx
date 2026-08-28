@@ -2,9 +2,10 @@
 // 인건비 관리(시급/급여일/휴무) · 인건비 정산(월 급여·평균출퇴근·총인건비) · 출근일지(일별 출퇴근).
 import { useEffect, useMemo, useState } from 'react';
 import { useToast } from '../atoms/Toast';
-import { getStaffSchedule, getStaffWages, saveStaffWage, setShiftTimes, subscribeStaffSchedule, type StaffShift, type StaffWage } from '../../api/staffSchedule';
+import { getStaffSchedule, getStaffWages, saveStaffWage, setMyShiftTime, subscribeStaffSchedule, type StaffShift, type StaffWage } from '../../api/staffSchedule';
 import { getMyVenueStaff } from '../../api/auth';
 import { useAuth } from '../../contexts/AuthContext';
+import { msgOf } from '../../lib/dbError';
 
 const ymOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 const thisMonth = () => ymOf(new Date());
@@ -30,11 +31,20 @@ function avgHm(list: (string | null | undefined)[]): string {
 function useRoster(venueId: string) {
   const [names, setNames] = useState<string[]>([]);
   useEffect(() => {
-    Promise.all([getMyVenueStaff(), getStaffSchedule(venueId, '2000-01-01', '2999-12-31').catch(() => [] as StaffShift[])])
-      .then(([staff, shifts]) => {
-        const set = new Set<string>(); staff.forEach((s) => set.add(s.name)); shifts.forEach((s) => set.add(s.name));
-        setNames([...set]);
-      }).catch(() => {});
+    // getMyVenueStaff 에 venueId 를 넘겨야 한다 — 생략하면 서버가 '내가 소유한 첫 매장'으로
+    // 폴백해서 운영자(admin)나 매장을 2개 이상 가진 업주에겐 명부가 통째로 비었다.
+    // staff_wage 도 명부 소스다('출근 스케줄'의 이름만 등록이 여기에 쌓인다).
+    Promise.all([
+      getMyVenueStaff(venueId).catch(() => []),
+      getStaffWages(venueId).catch(() => [] as StaffWage[]),
+      getStaffSchedule(venueId, '2000-01-01', '2999-12-31').catch(() => [] as StaffShift[]),
+    ]).then(([staff, wages, shifts]) => {
+      const set = new Set<string>();
+      staff.forEach((s) => set.add(s.name));
+      wages.forEach((w) => set.add(w.name));
+      shifts.forEach((s) => set.add(s.name));
+      setNames([...set]);
+    }).catch(() => {});
   }, [venueId]);
   return names;
 }
@@ -49,7 +59,7 @@ export function StaffWageManager({ venueId }: { venueId: string }) {
 
   const get = (n: string): StaffWage => wages[n] ?? { name: n, hourlyWage: 0, payday: 0, weeklyOff: '', memo: '' };
   const set = (n: string, patch: Partial<StaffWage>) => setWages((w) => ({ ...w, [n]: { ...get(n), ...patch } }));
-  const save = async (n: string) => { try { await saveStaffWage(venueId, get(n)); toast.show(`${n} 인건비 설정을 저장했습니다`, 'success'); } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); } };
+  const save = async (n: string) => { try { await saveStaffWage(venueId, get(n)); toast.show(`${n} 인건비 설정을 저장했습니다`, 'success'); } catch (e) { toast.show(msgOf(e, '인건비 설정 저장 실패'), 'error'); } };
   const toggleOff = (n: string, d: string) => { const cur = get(n).weeklyOff.split(',').filter(Boolean); const next = cur.includes(d) ? cur.filter((x) => x !== d) : [...cur, d]; set(n, { weeklyOff: next.join(',') }); };
 
   return (
@@ -65,7 +75,7 @@ export function StaffWageManager({ venueId }: { venueId: string }) {
             </div>
             <div className="grid grid-cols-2 gap-2">
               <label className="block"><span className="block text-2xs text-ink-muted mb-0.5">시급(원)</span>
-                <input type="number" inputMode="numeric" value={w.hourlyWage || ''} onChange={(e) => set(n, { hourlyWage: +e.target.value || 0 })} placeholder="예) 12000" className="input w-full text-sm tabular-nums" /></label>
+                <input type="number" inputMode="numeric" min="0" value={w.hourlyWage || ''} onChange={(e) => set(n, { hourlyWage: Math.max(0, +e.target.value || 0) })} placeholder="예) 12000" className="input w-full text-sm tabular-nums" /></label>
               <label className="block"><span className="block text-2xs text-ink-muted mb-0.5">급여일(매월)</span>
                 <input type="number" inputMode="numeric" min="0" max="31" value={w.payday || ''} onChange={(e) => set(n, { payday: Math.min(31, +e.target.value || 0) })} placeholder="예) 10" className="input w-full text-sm tabular-nums" /></label>
             </div>
@@ -117,7 +127,7 @@ export function StaffSettlement({ venueId }: { venueId: string }) {
     <div className="space-y-3">
       <div className="flex items-center justify-center gap-1">
         <button type="button" onClick={() => setMonth((m) => shiftMonth(m, -1))} className="h-9 w-9 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">‹</button>
-        <span className="text-sm font-bold text-accent-300 tabular-nums w-[5rem] text-center">{month}</span>
+        <span className="text-sm font-bold text-accent-300 dark:text-accent-200 tabular-nums w-[5rem] text-center">{month}</span>
         <button type="button" onClick={() => setMonth((m) => shiftMonth(m, 1))} className="h-9 w-9 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">›</button>
       </div>
       <div className="grid grid-cols-2 gap-2">
@@ -146,7 +156,7 @@ export function StaffSettlement({ venueId }: { venueId: string }) {
                   <td className="text-right text-ink-secondary tabular-nums">{r.days}일</td>
                   <td className="text-right text-ink-secondary tabular-nums">{r.hrs.toFixed(1)}h</td>
                   <td className="text-center text-ink-muted tabular-nums text-[11px]">{r.avgIn}/{r.avgOut}</td>
-                  <td className="text-right pr-1 text-accent-300 tabular-nums font-bold">{r.pay.toLocaleString()}</td>
+                  <td className="text-right pr-1 text-accent-300 dark:text-accent-200 tabular-nums font-bold">{r.pay.toLocaleString()}</td>
                 </tr>
               ))}
             </tbody>
@@ -173,17 +183,17 @@ export function StaffWorkLog({ venueId }: { venueId: string }) {
     <div className="space-y-2">
       <div className="flex items-center justify-center gap-1">
         <button type="button" onClick={() => setMonth((m) => shiftMonth(m, -1))} className="h-9 w-9 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">‹</button>
-        <span className="text-sm font-bold text-accent-300 tabular-nums w-[5rem] text-center">{month}</span>
+        <span className="text-sm font-bold text-accent-300 dark:text-accent-200 tabular-nums w-[5rem] text-center">{month}</span>
         <button type="button" onClick={() => setMonth((m) => shiftMonth(m, 1))} className="h-9 w-9 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">›</button>
       </div>
       {sorted.length === 0 ? <p className="text-2xs text-ink-muted text-center py-3">기록이 없습니다.</p> : (
         <div className="rounded-input border border-border-subtle bg-surface-base divide-y divide-border-subtle max-h-[24rem] overflow-y-auto">
           {sorted.map((s, i) => (
             <div key={`${s.date}-${s.name}-${i}`} className="flex items-center gap-2 px-2.5 py-1.5 text-xs">
-              <span className="w-14 shrink-0 text-2xs text-accent-300 tabular-nums">{s.date.slice(5)}</span>
+              <span className="w-14 shrink-0 text-2xs text-accent-300 dark:text-accent-200 tabular-nums">{s.date.slice(5)}</span>
               <span className="flex-1 font-semibold text-ink-primary truncate">{s.name}</span>
               <span className="text-ink-secondary tabular-nums">{s.checkIn || s.startHm || '—'}~{s.checkOut || '—'}</span>
-              <span className="w-12 text-right text-emerald-400 tabular-nums">{(s.checkIn && s.checkOut) ? `${hours(s.checkIn, s.checkOut).toFixed(1)}h` : ''}</span>
+              <span className="w-12 text-right text-emerald-700 dark:text-emerald-400 tabular-nums">{(s.checkIn && s.checkOut) ? `${hours(s.checkIn, s.checkOut).toFixed(1)}h` : ''}</span>
             </div>
           ))}
         </div>
@@ -209,8 +219,13 @@ export function StaffSelfAttendance({ venueId }: { venueId: string }) {
     /* eslint-disable-next-line */
   }, [venueId, from, to, user]);
   const setT = async (s: StaffShift, field: 'checkIn' | 'checkOut', val: string) => {
+    const prev = s[field] ?? null;
     setShifts((arr) => arr.map((x) => (x.date === s.date && x.name === s.name ? { ...x, [field]: val || null } : x)));
-    try { await setShiftTimes(venueId, s.date, s.name, { [field]: val || null }); } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
+    try { await setMyShiftTime(venueId, s.date, field, val || null); }
+    catch (e) {
+      setShifts((arr) => arr.map((x) => (x.date === s.date && x.name === s.name ? { ...x, [field]: prev } : x)));
+      toast.show(msgOf(e, '출퇴근 기록 저장 실패'), 'error');
+    }
   };
   const sorted = [...shifts].sort((a, b) => (a.date < b.date ? 1 : -1));
   return (
@@ -219,7 +234,7 @@ export function StaffSelfAttendance({ venueId }: { venueId: string }) {
         <h3 className="text-sm font-bold text-ink-primary">내 출근 관리 (출퇴근 기록)</h3>
         <div className="flex items-center gap-1">
           <button type="button" onClick={() => setMonth((m) => shiftMonth(m, -1))} className="h-9 w-9 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">‹</button>
-          <span className="text-xs font-bold text-accent-300 tabular-nums w-[4.5rem] text-center">{month}</span>
+          <span className="text-xs font-bold text-accent-300 dark:text-accent-200 tabular-nums w-[4.5rem] text-center">{month}</span>
           <button type="button" onClick={() => setMonth((m) => shiftMonth(m, 1))} className="h-9 w-9 rounded-input bg-surface-high text-ink-secondary hover:text-accent-300">›</button>
         </div>
       </div>
@@ -232,7 +247,7 @@ export function StaffSelfAttendance({ venueId }: { venueId: string }) {
             return (
               <div key={s.date} className={['rounded-input border p-2.5', isToday ? 'border-accent-400/50 bg-accent-300/[0.06]' : 'border-border-subtle bg-surface-base'].join(' ')}>
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-bold text-ink-primary">{s.date.slice(5)}{isToday ? ' (오늘)' : ''}{s.confirmed && <span className="ml-1.5 text-2xs text-emerald-400">확정</span>}</span>
+                  <span className="text-sm font-bold text-ink-primary">{s.date.slice(5)}{isToday ? ' (오늘)' : ''}{s.confirmed && <span className="ml-1.5 text-2xs text-emerald-700 dark:text-emerald-400">확정</span>}</span>
                   {isToday && (
                     <div className="flex gap-1">
                       <button type="button" onClick={() => setT(s, 'checkIn', nowHm())} className="text-2xs font-bold px-2.5 py-1.5 rounded-input bg-emerald-500/15 text-emerald-300 border border-emerald-500/40">지금 출근</button>
@@ -243,7 +258,7 @@ export function StaffSelfAttendance({ venueId }: { venueId: string }) {
                 <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                   <label className="flex items-center gap-1 text-2xs text-ink-muted">출근<input type="time" value={s.checkIn ?? s.startHm ?? ''} onChange={(e) => setT(s, 'checkIn', e.target.value)} className="input text-xs py-1 w-[6rem]" /></label>
                   <label className="flex items-center gap-1 text-2xs text-ink-muted">퇴근<input type="time" value={s.checkOut ?? ''} onChange={(e) => setT(s, 'checkOut', e.target.value)} className="input text-xs py-1 w-[6rem]" /></label>
-                  {s.checkIn && s.checkOut && <span className="text-2xs text-accent-300 tabular-nums font-bold">{hours(s.checkIn, s.checkOut).toFixed(1)}h</span>}
+                  {s.checkIn && s.checkOut && <span className="text-2xs text-accent-300 dark:text-accent-200 tabular-nums font-bold">{hours(s.checkIn, s.checkOut).toFixed(1)}h</span>}
                 </div>
               </div>
             );

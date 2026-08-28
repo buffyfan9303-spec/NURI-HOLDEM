@@ -658,6 +658,36 @@ html.light .text-pink-300 { color: #BE185D; }
 .cv-row-lg { content-visibility: auto; contain-intrinsic-size: auto var(--row-h-lg); }  /* 커뮤니티 피드 카드 */
 .cv-row-md { content-visibility: auto; contain-intrinsic-size: auto var(--row-h-md); }  /* 장터 행 */
 
+/* ── 일정 카드(일정탐색)에도 같은 조리법 — PC 체감 성능의 1순위(2026-08-28 실측) ─────────
+   왜 여기만 빠져 있었나: cv 는 커뮤니티·장터 행에만 붙어 있었고 일정 카드는 제외였다.
+   그런데 PC 는 같은 목록을 4~5열로 그려 한 화면에 카드가 2.7배 올라간다(실측: 1440px 그리드
+   ≈12장 / 375px ≈4.4장). 게다가 하단 탭바 자동숨김 구독이 스크롤 프레임마다
+   documentElement.scrollHeight 를 읽어 **문서 전체 레이아웃**을 강제하는데, 화면 밖 카드가
+   전부 레이아웃 대상이면 그 한 번이 그대로 비싸진다.
+   실측(프로덕션 빌드·120건·CPU 4x·GPU, 그리드 스크롤 40회 잰크 합):
+     PC 2353ms → cv 적용만으로 1088ms(-54%) / 모바일은 기준 321ms 로 이미 정상.
+
+   ⚠ cis 는 **콘텐츠 박스** 크기다(패딩·보더 제외) — --row-h-lg 가 예전에 밟은 함정.
+   아래 값은 전부 실측(2026-08-28, 프로덕션 빌드, 카드 60장):
+     grid  1024~1279 4열(카드폭 236) 콘텐츠 447 / ≥1280 5열+레일(163) 367
+     list  <640 95(매장·제목 2줄) / ≥640 81 (전 폭에서 균일)
+   `auto` 키워드 유지 필수 — 첫 렌더 후 실제 크기를 기억해 추정 오차를 스스로 지운다.
+
+   ⚠⚠ 그리드 cv 는 **lg(1024px) 이상에서만** 켠다. 모바일 2열에서 켜면 오히려 느려진다 —
+   실측(375px, 3회 중앙값, 그리드 스크롤 40회 잰크 합): 284ms → 477ms(+68%).
+   이유: 2열은 화면 밖 카드가 애초에 몇 장 없어 '건너뛰어 버는 값'이 작은 반면, 한 스텝에
+   들어오는 카드가 크고(164×371 + 포스터 디코드) 그 렌더가 스크롤 프레임 안으로 미뤄진다.
+   PC 는 4~5열이라 건너뛰는 카드가 수십 장이어서 이득이 압도한다(1415ms → 956ms, -32%).
+   목록(list) 모드는 행이 얇아 그 역전이 없어 전 폭 적용(모바일 2551 → 1353ms, -47%). */
+:root { --card-h-list: 95px; }
+@media (min-width: 640px) { :root { --card-h-list: 81px; } }
+.cv-card-list { content-visibility: auto; contain-intrinsic-size: auto var(--card-h-list); }
+@media (min-width: 1024px) {
+  :root { --card-h-grid: 447px; }
+  .cv-card-grid { content-visibility: auto; contain-intrinsic-size: auto var(--card-h-grid); }
+}
+@media (min-width: 1280px) { :root { --card-h-grid: 367px; } }
+
 /* [DS] MO-6D — 갱신되는 숫자(타이머·카운터·금액)는 tabular-nums 로 폭을 고정해
    자리수가 바뀔 때마다 옆 요소가 밀리는 미세 흔들림을 없앤다.
    신규 코드는 이 유틸을 쓰고, 기존 tailwind `tabular-nums` 사용처는 그대로 둔다(동작 동일). */
