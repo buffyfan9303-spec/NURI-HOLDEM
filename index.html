@@ -10,6 +10,8 @@
     <script>
       /* 첫 페인트 배경 + 테마 클래스 — React 이전에 정적 셸이 올바른 팔레트로 그려지게.
          (기존 #0A0C0F/#F2F3F5 는 실제 토큰 #08090A/#F5F6F8 과 미세하게 달랐다 — 통일) */
+      /* 첫 페인트 배경은 <html> 에 칠하되, CSS 가 로드되면 ThemeProvider 가 이 인라인 값을
+         걷어낸다 — html 배경이 남아 있으면 body::before(지면 결·상단 글로우)가 가려진다. */
       try{var t=localStorage.getItem('nuri-theme')==='light';
         document.documentElement.classList.add(t?'light':'dark');
         document.documentElement.style.backgroundColor=t?'#F5F6F8':'#151221';

@@ -1,6 +1,7 @@
 // src/api/rankings.ts — 매장 일일 손님 순위
 import { supabase, IS_MOCK } from '../lib/supabase';
 import { currentUser } from './_session';
+import { makeSearchCache } from '../lib/searchCache';
 
 /** 매장 순위 변경 실시간 구독 — 순위 입력/수정 시 공개 표시에 자동 반영 */
 export function subscribeRankings(venueId: string, onChange: () => void): () => void {
@@ -397,6 +398,52 @@ export async function getMyRankingHistory(nickname: string, limit = 30): Promise
     date: r.ranking_date, position: r.position, prize: r.prize ?? null,
     venueName: r.venues?.name ?? '(매장)',
   }));
+}
+
+// ── 순위 입력 자동완성 · 회원 대조 ────────────────────────────────────────────
+// 왜 여기 있나: 이 두 함수는 '순위 행의 주인이 누구인가'를 정하는 도구다. 그 답이
+//   이용권 전송 대상(user_id)을 결정하므로, 화면이 임의로 추측하지 않도록 API 경계에
+//   둔다. 예전엔 지급 직전에 find_user_for_transfer(부분일치)로 다시 찾았고,
+//   동명이인·유사닉이면 지급이 통째로 보류되거나 엉뚱한 사람에게 나갈 수 있었다.
+export interface RankMember {
+  id: string;
+  nickname: string;
+  /** 표시용 실명(업주·운영자에게만 반환) */
+  realName: string;
+  /** 본인인증(CI) 보유 — 매장이용권 지급 가능 조건과 동일한 판정 */
+  verified: boolean;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const toMember = (r: any): RankMember => ({
+  id: r.id, nickname: r.nickname ?? '', realName: r.real_name ?? '', verified: r.verified === true,
+});
+
+async function rawSearchRankingMembers(q: string): Promise<RankMember[]> {
+  if (IS_MOCK || !q.trim()) return [];
+  const { data, error } = await supabase.rpc('search_ranking_members', { p_q: q.trim() });
+  if (error) return [];
+  return (data ?? []).map(toMember);
+}
+/** 자동완성 후보(부분일치) — 이용권 검색과 같은 in-flight+20s LRU 로 중복 호출 흡수 */
+export const searchRankingMembers = makeSearchCache(rawSearchRankingMembers, (s) => s.trim().toLowerCase());
+
+/** 순위 행 이름 → 회원 후보(정확 일치). 키는 trim+소문자.
+ *  0개 = 비회원 · 1개 = 회원 확정 · 2개 이상 = 동명이인(업주가 직접 골라야 함) */
+export async function resolveRankingMembers(names: string[]): Promise<Map<string, RankMember[]>> {
+  const out = new Map<string, RankMember[]>();
+  const clean = [...new Set(names.map((n) => n.trim()).filter(Boolean))];
+  if (IS_MOCK || clean.length === 0) return out;
+  for (const n of clean) out.set(n.toLowerCase(), []); // 조회했는데 없음 = 비회원(미조회와 구분)
+  const { data, error } = await supabase.rpc('resolve_ranking_members', { p_names: clean });
+  if (error) return out;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const r of (data ?? []) as any[]) {
+    const key = String(r.q ?? '').trim().toLowerCase();
+    const arr = out.get(key);
+    if (arr) arr.push(toMember(r));
+  }
+  return out;
 }
 
 export async function saveVenueRankings(

@@ -28,10 +28,16 @@ function applyThemeClass(theme: Theme) {
   const root = document.documentElement;
   root.classList.remove('dark', 'light');
   root.classList.add(theme);
-  // 상태바/주소창·설치형 TWA 툴바 색을 테마에 맞춰 동기화(앱 느낌) + 첫 페인트 배경 갱신
-  const color = theme === 'light' ? '#F2F3F5' : '#0A0C0F';
+  // 상태바/주소창·설치형 TWA 툴바 색을 테마에 맞춰 동기화(앱 느낌).
+  // ⚠ 색은 정본 토큰과 같아야 한다 — 예전 값(#0A0C0F/#F2F3F5)은 팔레트가 트와일라잇 플럼으로
+  //   바뀌기 전 잔재라 오버스크롤 영역이 지면색과 다르게 보였다.
+  // ⚠ html 에 인라인 배경을 칠하지 않는다: html 배경이 있으면 body 배경이 캔버스로 승격되지
+  //   못하고 자기 박스로 칠해지면서 body::before(지면 그라데이션·상단 글로우)를 통째로 덮는다
+  //   (실측: 지면 ΔL* 0.00 — '죄다 단색'의 진짜 원인). 첫 페인트 배경은 index.html 인라인
+  //   스크립트가 이미 담당하고, 이후엔 body 의 bg-surface-base 가 캔버스로 올라간다.
+  const color = theme === 'light' ? '#F5F6F8' : '#151221';
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', color);
-  root.style.backgroundColor = color;
+  root.style.removeProperty('background-color');
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {

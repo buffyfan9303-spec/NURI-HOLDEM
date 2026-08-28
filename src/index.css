@@ -91,6 +91,23 @@
     --grad-cta-hover:  linear-gradient(135deg, rgb(var(--accent-600)) 0%, rgb(var(--accent-400)) 100%);
     --grad-cta-active: linear-gradient(135deg, rgb(var(--accent-600)) 0%, rgb(var(--accent-500)) 100%);
 
+    /* 지면(ground)의 결 — body::before 고정 레이어에 얹는 수직 광원(오너 지시 2026-08-28 '죄다 단색').
+       ⚠ 위를 밝히지 않고 '아래를 가라앉히는' 방향인 이유(실측 근거, 뒤집지 말 것):
+       화면 상단은 이미 두 겹이 겹쳐 있다 — body::before 의 accent/0.12 라디얼 + .hero-aurora 3레이어.
+       그 최악 겹침점(실측 합성색 #372B57)에서 ink-muted 대비가 이미 4.07:1 로 AA 미달이라, 상단에 세 번째
+       밝기 레이어를 얹으면 3.98 까지 더 내려간다(실측). 아래를 낮추면 '위가 밝다'는 지각은 같고
+       대비는 오히려 올라간다(다크 기준 하단 ink-muted 4.53→5.0+).
+       강도: 하단 최심점 ΔL* 2.12 / 100 (기준 ≤3) — 인접 단색과 붙여 봐도 띠가 보이지 않는 하한.
+       색은 --card-shadow 와 같은 배경 hue 편향(순검정 금지 — 플럼이 회색으로 죽는다). */
+    --grad-surface: linear-gradient(180deg,
+      rgb(8 6 16 / 0) 0%, rgb(8 6 16 / 0) 34%, rgb(8 6 16 / 0.42) 100%);
+    /* 상시 크롬(헤더·하단 탭바 알약)의 얕은 결 — 상시 노출이라 강도 최소.
+       62% 에서 알파 0 으로 끝나는 이유(실측 2026-08-28): ① 헤더(실측 61px)는 아래 23px 이
+       완전 평면이 되어 그 아래 GNB·본문과 이음매가 없다 ② 탭바 알약(실측 59.8px)의 라벨 밴드가
+       69.2~87.7% 라 그라데이션(~62%) 밖에 완전히 놓인다 → 11px 라벨이 밟는 배경 알파가 정확히 0,
+       활성 text-accent-300 대비 3.43:1 이 소수점까지 불변(이 값 자체는 기존 AA 미달 — 별건 리스크). */
+    --grad-bar: linear-gradient(180deg, rgb(var(--accent-300) / 0.05) 0%, rgb(var(--accent-300) / 0) 62%);
+
     /* 카드 헤어라인/그림자 — PET inset 하이라이트 + 미세 섀도.
        그림자는 순검정 대신 배경 hue(인디고 편향) 틴트(DAI-2a ④) — 플랫 다크의 murk 제거 */
     --card-ring:   rgba(255, 255, 255, 0.05);
@@ -139,6 +156,17 @@
     --grad-cta-hover:  linear-gradient(135deg, rgb(var(--accent-500)) 0%, rgb(var(--accent-400)) 100%);
     --grad-cta-active: linear-gradient(135deg, rgb(var(--accent-600)) 0%, rgb(var(--accent-500)) 100%);
 
+    /* 지면의 결(라이트) — 다크와 같은 문법(하단 침강). 라이트는 방향이 반대로 위험하다:
+       배경을 낮추면 '어두운 글자'의 대비가 **떨어진다** → 하단 알파를 다크(0.42)의 1/19 로 조인다.
+       실측: 하단 최심점에서 ink-muted(#636C7B) vs 지면 4.902 → 4.689 (AA 4.5 유지) · ΔL* 1.75.
+       ⚠ 라이트 지면(#F5F6F8)은 흰색까지 여유가 10/255 뿐이라 '위를 밝히는' 방향은
+       완전 흰색을 써도 ΔL* 3.14 가 상한 — 물리적으로 결이 안 생긴다. 그래서 양 테마 모두 하단 침강. */
+    --grad-surface: linear-gradient(180deg,
+      rgb(15 18 26 / 0) 0%, rgb(15 18 26 / 0) 34%, rgb(15 18 26 / 0.022) 100%);
+    /* 상시 크롬(라이트) — 흰쪽으로 올린다. 어두운 글자 대비는 올라가므로 안전(단조 증가).
+       탭바 알약은 surface-mid=#FFF 라 이 그라데이션이 무효 — 라이트 탭바는 보더·섀도가 이미 입체다. */
+    --grad-bar: linear-gradient(180deg, rgb(255 255 255 / 0.55) 0%, rgb(255 255 255 / 0) 62%);
+
     /* 라이트에서는 흰색 헤어라인이 보이면 안 됨 → 어두운 톤으로 교체 */
     --card-ring:   rgba(15, 18, 26, 0.08);
     --card-shadow: rgba(15, 18, 26, 0.12);
@@ -165,6 +193,9 @@
     @apply bg-surface-base text-ink-primary antialiased;
     overflow-x: clip;
     max-width: 100%;
+    /* z-index:-1 인 body::before(지면 결·상단 글로우)가 body 배경 '위'에 머물도록 자체
+       쌓임 맥락을 만든다. 이게 없으면 ::before 가 조상(html) 배경 아래로 내려가 안 보인다. */
+    isolation: isolate;
     /* PET 시그니처 상단 인디고 글로우는 body::before 고정 레이어로 —
        background-attachment:fixed 는 스크롤 프레임마다 뷰포트 전체 재페인트를 강제한다
        (2026-08-17 끊김 계측의 페인트 1순위). 고정 ::before 는 합성만 하므로 비용 0. */
@@ -177,15 +208,25 @@
     overflow-wrap: break-word;
   }
 
-  /* 상단 인디고 글로우 — 고정 레이어(스크롤 시 재페인트 없음). body 배경에서 이전. */
+  /* 상단 인디고 글로우 + 하단 침강(--grad-surface) — 둘 다 이 고정 레이어 하나에 얹는다.
+     새 DOM·새 레이어를 만들지 않으므로 페인트 비용 증분 0(이미 합성 상주하는 레이어에
+     background-image 레이어만 1장 추가). 스크롤 중 재페인트 없음은 그대로 유지.
+     순서: 침강(위)이 글로우(아래) 위에 온다 — 둘의 유효 구간(상 0~34% / 하 34~100%)이
+     겹치지 않아 실제 합성 결과는 순서 무관하지만, 의미상 '지면 위의 빛'을 아래에 둔다. */
   body::before {
     content: '';
     position: fixed;
     inset: 0;
     z-index: -1;
     pointer-events: none;
-    background: radial-gradient(900px 460px at 50% -12%, rgb(var(--accent-300) / 0.12), transparent 70%);
+    background-image:
+      var(--grad-surface),
+      radial-gradient(900px 460px at 50% -12%, rgb(var(--accent-300) / var(--glow-a, 0.12)), transparent 70%);
   }
+  /* 라이트 지면은 흰색에 가까워 같은 알파가 텍스트 대비를 잡아먹는다 — 실측(2026-08-28):
+     0.12 에서 상단 최악 합성 #E4E1F2 위 ink-muted 4.13:1(AA 미달), 0.05 에서 4.57:1 통과.
+     (다크는 지면이 어두워 글로우가 대비를 오히려 올리므로 0.12 유지) */
+  html.light body::before { --glow-a: 0.05; }
 
   /* ── 줄배열 최적화(세계적 표준: Vercel·Apple·Toss) ──────────────────────────
      제목은 여러 줄의 길이를 고르게(balance) — "한 단어만 둘째 줄" 같은 들쭉날쭉 방지.
@@ -607,7 +648,11 @@ html.light .text-pink-300 { color: #BE185D; }
    프로덕션 데이터): sm 43.5 → 44 / lg 87~106(제목·본문 줄수) → 최빈 106 /
    md 모바일 83 · sm+ 63(6컬럼 단일행으로 접혀 방향이 반대 — 미디어쿼리 필수).
    `auto` 키워드는 반드시 유지 — 첫 렌더 후 실제 크기를 기억해 추정 오차를 스스로 지운다. */
-:root { --row-h-sm: 44px; --row-h-md: 83px; --row-h-lg: 120px; } /* lg: Nightingale 2줄 헤더 재문법 후 실추정(2026-08-27) */
+:root { --row-h-sm: 44px; --row-h-md: 83px; --row-h-lg: 124px; }
+/* lg 재실측(2026-08-28, 375px/html 17px, 카드 스택 기본화 + 제목 15px·본문 13px 승격 후):
+   ⚠ contain-intrinsic-size 는 **콘텐츠 박스** 크기라 padding(21.25)+border(2)가 그 위에 더 붙는다
+   (실측: cis 100px → 카드 123.3px). 즉 토큰은 '카드 전체 높이'가 아니라 '콘텐츠 높이'로 잡아야 한다.
+   실측 콘텐츠 높이 = 본문 1줄 113.5 / 2줄 133 → 최빈 124. (구 120px 은 승격 전 값) */
 @media (min-width: 640px) { :root { --row-h-md: 63px; } }
 .cv-row-sm { content-visibility: auto; contain-intrinsic-size: auto var(--row-h-sm); }  /* 커뮤니티 한줄 행 */
 .cv-row-lg { content-visibility: auto; contain-intrinsic-size: auto var(--row-h-lg); }  /* 커뮤니티 피드 카드 */
@@ -731,16 +776,48 @@ html[data-vt-scope='community-sec'] [data-community-secbar] { view-transition-na
 html.light .pill-active {
   box-shadow: 0 2px 8px rgb(var(--accent-300) / 0.22), inset 0 1px 0 rgb(255 255 255 / 0.35);
 }
+/* ⚠ .card-elev 적용 티어 규칙(2026-08-28 실측으로 확정 — 어기면 AA 가 깨진다):
+   **bg-surface-base / bg-surface-low(또는 그 위 액센트 틴트)에만** 붙인다. bg-surface-high 금지.
+   근거: ink-muted 는 surface-high 위에서 이미 다크 4.53:1 · 라이트 4.69:1 로 헤드룸이 사실상 0이다.
+   card-elev 의 상단 워시(다크 white/0.035)를 얹으면 그 지점이 다크 4.08 / 라이트 4.24 로 AA 아래로 떨어진다.
+   surface-low 위에서는 같은 워시가 5.01 로 남아 안전하다(그래서 ToolCard·DashCard·KPI 는 전부 surface-low).
+   surface-high 타일에 깊이가 필요하면 밝히지 말고 아래 .card-sink 를 쓸 것(같은 깊이, 대비는 오히려 상승). */
 .card-elev {
   background-image: linear-gradient(180deg, rgb(255 255 255 / 0.035) 0%, rgb(255 255 255 / 0) 55%);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);
 }
-html.light .card-elev {
+/* .card-sink — card-elev 의 짝. surface-high 처럼 '밝힐 헤드룸이 없는' 타일에 깊이를 주는 유일한 방법.
+   다크는 밝히는 대신 **아래를 낮추고**(--grad-surface 와 같은 문법), 라이트는 card-elev 와 동일하게 위를 올린다.
+   두 방향 모두 그 테마의 글자색과 배경의 거리를 **넓히므로** 대비가 떨어질 수 없다(단조 안전):
+   실측 ink-muted on surface-high — 다크 4.53→4.89 / 라이트 4.69→5.02. ΔL* 다크 2.73 · 라이트 2.68(≤3).
+   상단 하이라이트 헤어라인은 양쪽 다 유지 — '위에서 빛이 온다'는 신호는 그라데이션이 아니라 이 1px 가 만든다. */
+.card-sink {
+  background-image: linear-gradient(180deg, rgb(8 6 16 / 0) 45%, rgb(8 6 16 / 0.16) 100%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05);
+}
+html.light .card-elev,
+html.light .card-sink {
   background-image: linear-gradient(180deg, rgb(255 255 255 / 0.55) 0%, rgb(255 255 255 / 0) 60%);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.8);
 }
 
-/* .ring-conic: 정적 conic 시그니처 보더(OUTFLAME 문법) — 홈 밖 1곳 규율(비로그인 랜딩 로그인 카드).
+/* ── 상시 크롬의 결(--grad-bar) — 헤더 · 모바일 하단 탭바 알약 ─────────────────
+   둘 다 background-color(bg-surface-base / bg-surface-mid)만 갖고 background-image 는 비어 있어
+   충돌 없음. 이 블록은 unlayered 라 Tailwind utilities 를 이긴다.
+   ⚠ PC GNB([data-stack-tabbar])는 일부러 제외 — 헤더 바로 아래 붙는 두 번째 바라, 여기에도
+   같은 그라데이션을 주면 헤더 끝(평면)에서 다시 밝아지는 '리셋 선'이 생긴다. 헤더+GNB 는 한 덩어리다.
+   ⚠ 탭바 셀렉터는 nav 의 두 자식 중 커튼(aria-hidden)이 아닌 쪽 = 알약. App.tsx 구조 변경 시 함께 볼 것. */
+[data-stack-header],
+nav[aria-label="하단 내비게이션"] > div:not([aria-hidden]) {
+  background-image: var(--grad-bar);
+}
+
+/* .ring-conic: 정적 conic 시그니처 보더(OUTFLAME 문법) — '앱 전체에서 손에 꼽는 곳만' 규율.
+   현재 사용처 2곳: ① 비로그인 랜딩 로그인 카드 ② 랭킹 TOP3 포디움 1위 타일(2026-08-28 오너 '포인트 1곳').
+   3곳째를 추가하려면 기존 2곳 중 하나를 내리고 오세요 — 흔해지는 순간 시그니처가 아니라 장식이 된다.
+   ⚠ 내부 채움이 rgb(var(--surface-low)) 로 고정이라, 이 클래스를 붙이는 요소의 배경색도
+   surface-low 계열이어야 한다(포디움 1위는 기존 accent-300/0.08-on-base 합성색이 #1E1830 으로
+   surface-low #1D192E 과 사실상 동일해 무보정 교체가 됐다 — 대비 3.718→3.711, 실질 불변).
    1px 보더 기법: 이중 배경 — 안쪽은 padding-box 로 카드색 채움, 바깥 1px 링만 border-box conic 이 비친다.
    페인트 1회 정적(애니메이션 금지 §20.4). 내부 채움·링 모두 테마 토큰이라 라이트 전환 자동.
    ⚠ card-elev 와 같은 요소에 병용 금지 — 둘 다 background-image 라 나중 규칙이 통째로 이긴다. */
