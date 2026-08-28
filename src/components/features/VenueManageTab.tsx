@@ -5,6 +5,7 @@ import { useBackClose } from '../../lib/backstack';
 import { useToast } from '../atoms/Toast';
 import type { User, VenueInvite } from '../../api/auth';
 import { getMyVenueStaff, getMyVenueInvites, inviteStaffByEmail, cancelStaffInvite, removeStaff, setStaffTitle } from '../../api/auth';
+import { msgOf } from '../../lib/dbError';
 import { getVenueRankings, saveVenueRankings, getVenuePageConfig, placementPointsOf, prizeUnitRisk, searchRankingMembers, resolveRankingMembers, type VenuePageConfig, type RankingEntry, type RankMember } from '../../api/rankings';
 import { canAccessLedger, canManagePos, getLedgerAccessUserIds, grantLedgerAccess, revokeLedgerAccess } from '../../api/ledger';
 import { getAllVenues, createMyVenue, getVenueStaff, type Venue } from '../../api/community';
@@ -1692,7 +1693,7 @@ function StaffHub({ venueId }: { venueId: string }) {
             <button type="button" onClick={() => setOpen(isOpen ? '' : it.id)}
               className="w-full flex items-center justify-between px-3 py-3 text-left hover:bg-surface-high transition-colors">
               <span className="text-sm font-bold text-ink-primary">{it.label}</span>
-              <span className="text-accent-300 text-xs">{isOpen ? '▲ 접기' : '▼ 펼치기'}</span>
+              <span className="text-accent-300 dark:text-accent-200 text-xs">{isOpen ? '▲ 접기' : '▼ 펼치기'}</span>
             </button>
             {isOpen && <div className="px-3 pb-3 border-t border-border-subtle pt-3">{it.node}</div>}
           </div>
@@ -1734,19 +1735,19 @@ function StaffManager({ venueId }: { venueId: string }) {
     if (title.trim() === prev.trim()) return;
     setStaff((arr) => arr.map((s) => (s.id === id ? { ...s, staffTitle: title.trim() || undefined } : s)));
     try { await setStaffTitle(id, title.trim()); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '직책 저장 실패', 'error'); reload(); }
+    catch (e) { toast.show(msgOf(e, '직책 저장 실패'), 'error'); reload(); }
   };
   const toggleAccess = async (id: string) => {
     const has = access.includes(id);
     setAccess((a) => has ? a.filter((x) => x !== id) : [...a, id]);
     try { if (has) await revokeLedgerAccess(venueId, id); else await grantLedgerAccess(venueId, id); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '권한 변경 실패', 'error'); reload(); }
+    catch (e) { toast.show(msgOf(e, '장부·순위 권한 변경 실패'), 'error'); reload(); }
   };
   const toggleVoucher = async (id: string) => {
     const has = vouch.includes(id);
     setVouch((a) => has ? a.filter((x) => x !== id) : [...a, id]);
     try { if (has) await revokeVoucherAccess(venueId, id); else await grantVoucherAccess(venueId, id); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '권한 변경 실패', 'error'); reload(); }
+    catch (e) { toast.show(msgOf(e, '이용권내역 권한 변경 실패'), 'error'); reload(); }
   };
 
   // 아이디 검색 — 기존 RPC find_user_for_transfer 재사용(쪽지·이용권 전달과 같은 동선·같은 300ms).
@@ -1775,7 +1776,9 @@ function StaffManager({ venueId }: { venueId: string }) {
       setResults([]);
       reload();
     } catch (err) {
-      toast.show(err instanceof Error ? err.message : '초대에 실패했습니다', 'error');
+      // 서버는 '이미 매장 소속 직원입니다' / '본인은 초대할 수 없습니다' 처럼 이유를 정확히 준다.
+      // 그 문장을 그대로 살린다 — 뭉개면 업주가 다시 눌러도 되는 상황인지 알 수 없다.
+      toast.show(msgOf(err, '초대에 실패했습니다'), 'error');
     } finally {
       setInviting(false);
     }
@@ -1787,12 +1790,13 @@ function StaffManager({ venueId }: { venueId: string }) {
 
   const cancel = async (id: string) => {
     try { await cancelStaffInvite(id); toast.show('초대를 취소했습니다', 'info'); reload(); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '실패했습니다', 'error'); }
+    catch (e) { toast.show(msgOf(e, '초대 취소에 실패했습니다'), 'error'); }
   };
   const remove = async (s: User) => {
-    if (!confirm(`${s.name} 구성원을 제거하시겠습니까? (일반 회원으로 전환)`)) return;
-    try { await removeStaff(s.id); toast.show('구성원을 제거했습니다', 'success'); reload(); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '실패했습니다', 'error'); }
+    if (!confirm(`${s.name} 구성원을 제거하시겠습니까?
+일반 회원으로 전환되고 장부·순위 / 이용권내역 권한도 함께 회수됩니다.`)) return;
+    try { await removeStaff(s.id); toast.show('구성원을 제거했습니다 — 장부·이용권 권한도 함께 회수됐습니다', 'success'); reload(); }
+    catch (e) { toast.show(msgOf(e, '구성원 제거에 실패했습니다'), 'error'); }
   };
 
   return (

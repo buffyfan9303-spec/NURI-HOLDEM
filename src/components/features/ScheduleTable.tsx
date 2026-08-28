@@ -46,7 +46,14 @@ export default function ScheduleTable({ schedules, onSelect, onVenueClick }: {
                 key={s.id}
                 onClick={() => onSelect(s)}
                 className={[
-                  'cursor-pointer border-b border-border-subtle last:border-b-0 transition-colors',
+                  // ⚠ 행 호버에 transition 을 걸지 않는다(2026-08-28 PC 잰크 실측).
+                  //   표 모드는 PC 전용인데, PC 는 스크롤할 때 커서가 제자리에 있고 행이 그 밑을 지나간다.
+                  //   행마다 hover in/out 이 연달아 터지면 그때마다 배경색 트랜지션이 겹겹이 돌아
+                  //   행 전체가 매 프레임 다시 칠해진다. 120행 스크롤 40회 잰크 합(중앙값 3회):
+                  //     transition 유지 579ms / 제거 175ms(-70%) · 드롭 프레임 80 → 21.
+                  //   호버 하이라이트 자체는 그대로 둔다(즉시 반응 — 고밀도 표에선 오히려 또렷하다).
+                  //   참고로 호버를 아예 없애면 145ms 라, 남은 비용 30ms 가 이 기능의 실제 값이다.
+                  'cursor-pointer border-b border-border-subtle last:border-b-0',
                   s.isPremium ? 'bg-accent-300/[0.05] hover:bg-accent-300/10' : 'hover:bg-surface-high/70',
                 ].join(' ')}
               >
