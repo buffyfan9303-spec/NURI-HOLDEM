@@ -35,6 +35,33 @@ export default class ErrorBoundary extends Component<Props, State> {
     logClientError(`[boundary${this.props.label ? `:${this.props.label}` : ''}] ${e.message}`, e.stack);
   }
 
+  // ── dev 전용: HMR 갱신이 끝나면 스스로 복구한다 ──────────────────────────────
+  // 왜: client_errors 에 남은 크래시는 **전부** localhost 개발 서버발이고 형태가 하나다
+  //   — `useRef is not defined` · `onSwipeStart is not defined` · `useScrollY is not defined`.
+  //   tsc 가 통과하는데 이런 ReferenceError 가 나는 경우는 하나뿐이다: Vite HMR 이 **저장 중간
+  //   상태의 모듈**을 주입한 것. 즉 소스 결함이 아니라 '파일을 저장하는 순간' 의 스냅샷이다.
+  //   (프로덕션 origin 에서 기록된 boundary 오류는 0건 — 빌드는 완성된 모듈만 담으므로 원리상 없다.)
+  //
+  //   문제는 그 다음이다. React 는 한 번 에러 상태가 되면 **정상 모듈이 도착해도 스스로 복구하지
+  //   않는다.** 그래서 사장님이 5173 을 띄워둔 채 작업을 지켜보면 흰 화면에 갇혀 수동 새로고침을
+  //   해야 했다 — '사이트가 완전히 튕긴다' 로 보이는 그 증상이다.
+  //   → 다음 HMR 갱신이 완료되는 순간 에러 상태를 턴다. 프로덕션에는 import.meta.hot 이
+  //     없으므로 이 블록 전체가 번들에서 사라진다(런타임 비용 0).
+  private hotOff: (() => void) | null = null;
+
+  componentDidMount() {
+    const hot = import.meta.hot;
+    if (!hot) return;
+    const onUpdate = () => { if (this.state.hasError) this.setState({ hasError: false }); };
+    hot.on('vite:afterUpdate', onUpdate);
+    this.hotOff = () => hot.off('vite:afterUpdate', onUpdate);
+  }
+
+  componentWillUnmount() {
+    this.hotOff?.();
+    this.hotOff = null;
+  }
+
   reset = () => this.setState({ hasError: false });
 
   render() {
@@ -64,6 +91,13 @@ export default class ErrorBoundary extends Component<Props, State> {
       }}>
         <p style={{ fontSize: '17px', fontWeight: 700, margin: 0 }}>일시적인 오류가 발생했습니다</p>
         <p style={{ fontSize: '13px', color: '#8B95A8', margin: 0 }}>잠시 후 다시 시도해 주세요.</p>
+        {/* dev 에서만 보이는 한 줄 — 이 화면이 '라이브 장애' 가 아니라 편집 중 스냅샷임을 알린다.
+            프로덕션 번들에서는 import.meta.hot 이 없어 통째로 사라진다. */}
+        {import.meta.hot && (
+          <p style={{ fontSize: '12px', color: '#805FDA', margin: 0 }}>
+            개발 서버(HMR) — 파일 저장이 끝나면 자동으로 복구됩니다.
+          </p>
+        )}
         <button
           type="button"
           onClick={() => window.location.reload()}

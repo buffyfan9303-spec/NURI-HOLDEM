@@ -52,12 +52,24 @@ interface Layer {
   ownerClose: CloseFn;
   /** false = 닫혔지만 history 칸이 아직 남아 있는 '죽은 꼬리' */
   live: boolean;
+  /**
+   * 이 레이어가 **실제 history 칸을 차지하고 있는가**.
+   *
+   * pushState 는 브라우저가 단시간 과다 호출을 throttle 하면 예외를 던진다(Safari 가 엄격,
+   * Chrome 도 상한이 있다 — 탭 연타로 도달 가능하다). 예전 코드는 그 예외를 삼키고도
+   * entries 에는 항목을 남겼다. 그러면 "배열 1칸 = history 1칸" 가정이 깨지고,
+   * 나중에 여러 겹을 한 번에 정리하는 go(-k) 가 **한 칸 더 뒤로 가 앱 밖으로 나간다**
+   * (= 오너가 본 '사이트가 완전히 튕김'). 칸을 못 잡았으면 되감을 것도 없다.
+   */
+  hasSlot: boolean;
 }
 
 /** history 항목과 1:1. 배열 순서 = history 순서(뒤로 갈수록 앞). */
 const entries: Layer[] = [];
 let seq = 0;
 let initialized = false;
+/** 이 세션에서 우리가 실제로 밀어 넣은 history 칸 수 — go(-k) 의 절대 상한. */
+let ownedSlots = 0;
 
 /** 현재 history 위치의 레이어 토큰(없으면 0 = 앱 루트). */
 function currentLayerId(): number {
@@ -73,6 +85,7 @@ function handlePop() {
   const cur = currentLayerId();
   while (entries.length && entries[entries.length - 1].id > cur) {
     const top = entries.pop()!;
+    if (top.hasSlot) ownedSlots = Math.max(0, ownedSlots - 1); // 그 칸은 방금 뒤로가기가 소비했다
     if (!top.live) continue; // 이미 닫힌 죽은 칸 — 소비만 하고 넘어간다
     top.live = false;
     try { top.close(); } catch { /* 닫기 콜백 오류는 무시하고 스택 정리 계속 */ }
@@ -91,9 +104,16 @@ function scheduleBalance() {
   queueMicrotask(() => {
     balanceQueued = false;
     let k = 0;
-    while (entries.length && !entries[entries.length - 1].live) { entries.pop(); k++; }
+    while (entries.length && !entries[entries.length - 1].live) {
+      // 칸을 못 잡은 항목(throttle 로 pushState 실패)은 되감을 칸이 없다 — 세지 않는다.
+      if (entries.pop()!.hasSlot) k++;
+    }
+    // 이중 방어: 우리가 실제로 소유한 칸 수를 절대 넘지 않는다.
+    // 여기서 한 칸이라도 초과하면 그 뒤로가기는 **앱 진입 이전으로 나가 사이트를 이탈**한다.
+    if (k > ownedSlots) k = ownedSlots;
     if (k > 0) {
-      try { window.history.go(-k); } catch { /* pushState 불가 환경 — 무시 */ }
+      ownedSlots -= k;
+      try { window.history.go(-k); } catch { /* history 조작 불가 환경 — 무시 */ }
     }
   });
 }
@@ -130,12 +150,20 @@ function pushEntry(layer: Layer) {
   // (정리 back + 새 push) 가 만들던 유령 칸이 아예 생기지 않는다.
   if (top && !top.live && currentLayerId() === top.id) {
     entries.pop();
+    // 죽은 칸을 물려받는다 — 칸 수는 그대로이므로 ownedSlots 도 변하지 않는다.
+    layer.hasSlot = top.hasSlot;
     entries.push(layer);
     try { window.history.replaceState({ __layer: layer.id }, ''); } catch { /* 무시 */ }
     return;
   }
   entries.push(layer);
-  try { window.history.pushState({ __layer: layer.id }, ''); } catch { /* 무시 */ }
+  // 성공했을 때만 '칸을 가졌다' 고 기록한다. 실패(throttle 등)를 삼키고 가졌다고 치면
+  // 나중 정리에서 남의 칸을 되감아 앱 밖으로 나간다.
+  try {
+    window.history.pushState({ __layer: layer.id }, '');
+    layer.hasSlot = true;
+    ownedSlots++;
+  } catch { /* 칸을 못 잡았다 — hasSlot=false 로 두면 정리 때 되감지 않는다 */ }
 }
 
 export interface PushLayerOptions {
@@ -170,7 +198,8 @@ export function pushLayer(close: CloseFn, opts?: PushLayerOptions): () => void {
 
   const id = ++seq;
   const layer: Layer = {
-    id, close, adoptable: !!opts?.adoptable, adoptedBy: null, ownerClose: close, live: true,
+    id, close, adoptable: !!opts?.adoptable, adoptedBy: null, ownerClose: close,
+    live: true, hasSlot: false,
   };
   pushEntry(layer);
 
