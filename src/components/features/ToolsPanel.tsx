@@ -1,4 +1,4 @@
-import { useEffect, useState, Suspense, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, Suspense, type ReactNode } from 'react';
 import { lazyWithReload } from '../../lib/lazyWithReload';
 import Modal from '../atoms/Modal';
 import Icon from '../atoms/Icon';
@@ -165,14 +165,33 @@ export default function ToolsPanel() {
   const open = (k: ToolKey) => {
     if (!user) { promptLogin(); return; }
     setActive(k);
-    try { history.replaceState(null, '', `#tool=${k}`); } catch { /* 무시 */ }
   };
-  const close = () => {
-    setActive(null);
-    if (window.location.hash.startsWith('#tool=')) {
-      try { history.replaceState(null, '', window.location.pathname + window.location.search); } catch { /* 무시 */ }
-    }
+  const close = () => setActive(null);
+
+  // ── 딥링크 해시(#tool=)는 **도구 자신의 history 항목**에 얹는다 ──────────────
+  // 2026-08-28 회귀 수정. 예전엔 open() 이 그 자리에서 replaceState 로 해시를 썼다.
+  //   그러면 해시가 '도구를 열기 전' 항목에 찍히고, Modal 이 그 위에 새 항목을 밀면서
+  //   URL(=해시)을 물려받는다. 닫을 때 위 항목의 해시만 지우고 backstack 이 한 칸 되돌아오면
+  //   **아래 항목의 낡은 해시가 되살아나 hashchange → 도구가 즉시 다시 열린다.**
+  //   실측 로그: replace(/) → go(-1) → popstate(/#tool=range) → hashchange → push(layer 3).
+  //   (지금까지 안 터진 이유: 예전 replaceState 가 그 항목의 __layer 토큰까지 지워서
+  //    backstack 이 균형 back 을 아예 포기했다. 토큰 보존을 고치자 이 지뢰가 드러났다.)
+  // 처방: 해시를 '도구 항목'에만 둔다.
+  //   ① 진입 항목의 해시는 layout 단계에서 걷어낸다 — Modal 의 pushState(passive effect)보다 먼저다.
+  //   ② 도구가 열린 뒤(부모 passive effect = 자식 push 이후)에 그 항목에 해시를 얹는다.
+  //   ③ 닫힐 때는 서 있는 항목의 해시만 지우면 된다 — 아래 항목엔 애초에 해시가 없다.
+  const stripToolHash = () => {
+    if (!window.location.hash.startsWith('#tool=')) return;
+    try { history.replaceState(null, '', window.location.pathname + window.location.search); } catch { /* 무시 */ }
   };
+  const activeRef = useRef<ToolKey | null>(active);
+  activeRef.current = active;
+  useLayoutEffect(() => { stripToolHash(); }, []); // 딥링크 진입 항목 정규화(1회)
+  useEffect(() => {
+    if (!active) { stripToolHash(); return; }
+    if (window.location.hash === `#tool=${active}`) return;
+    try { history.replaceState(null, '', `#tool=${active}`); } catch { /* 무시 */ }
+  }, [active]);
   // 도구 딥링크 공유 — 시스템 공유 시트(모바일) 또는 클립보드 복사(PC). #tool= 로 그 도구가 바로 열린다.
   const share = async (k: ToolKey) => {
     const t = TOOLS.find((x) => x.key === k);
@@ -211,7 +230,12 @@ export default function ToolsPanel() {
   useEffect(() => {
     const onHash = () => {
       const m = window.location.hash.match(/^#tool=([a-z]+)/);
-      if (m && TOOLS.some((t) => t.key === m[1])) setActive(m[1] as ToolKey);
+      if (!m || !TOOLS.some((t) => t.key === m[1])) return;
+      if (activeRef.current === m[1]) return;
+      // 위 ① 과 같은 이유 — 해시를 갖고 도착한 이 항목에서 해시를 걷어내고,
+      // 도구가 열린 뒤 그 도구의 항목에 다시 얹는다(닫을 때 되살아나지 않게).
+      stripToolHash();
+      setActive(m[1] as ToolKey);
     };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
@@ -231,9 +255,11 @@ export default function ToolsPanel() {
 
   return (
     <div className="hero-aurora space-y-3">
-      {/* 트레이너 진행 스트립 — 오늘 목표·스트릭·XP 상시 노출(탭하면 트레이너로) */}
+      {/* 트레이너 진행 스트립 — 오늘 목표·스트릭·XP 상시 노출(탭하면 트레이너로)
+          card-elev: 아래 ToolCard 와 같은 카드 문법으로 통일 — 이 스트립만 평면이라 '띠'로 떠 보였다.
+          surface-low 라 티어 규칙(index.css .card-elev 주석) 충족 — ink-muted 5.01:1 유지. */}
       <button type="button" onClick={() => open('trainer')} aria-label="트레이너 진행 — 프리플랍 트레이너 열기"
-        className="flex w-full items-center justify-between gap-2 rounded-card border border-border-default bg-surface-low px-3.5 py-2.5 text-left transition-colors hover:border-accent-400/40 hover:bg-surface-high">
+        className="card-elev flex w-full items-center justify-between gap-2 rounded-card border border-border-default bg-surface-low px-3.5 py-2.5 text-left transition-colors hover:border-accent-400/40 hover:bg-surface-high">
         <span className="flex min-w-0 items-center gap-3 text-2xs">
           <span className="text-ink-muted">오늘 <b className="tabular-nums text-ink-primary">{prog.today}/{prog.goal}</b></span>
           <span className="inline-flex items-center gap-1 text-ink-muted">

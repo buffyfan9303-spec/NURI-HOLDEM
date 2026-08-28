@@ -742,9 +742,11 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
 
       {/* 📊 주간 흐름(조회→예약→방문) — '왜 예약이 없는지'에 데이터로 답하는 첫 카드.
           조회수 추적(2026-08-17 신설)이 쌓이기 시작한 뒤부터 의미가 생긴다.
-          ⚠ 카피에 '퍼널·전환율' 같은 외래 분석 용어 금지(오너 지시) — 자연스러운 한국어로 풀어 쓴다. */}
+          ⚠ 카피에 '퍼널·전환율' 같은 외래 분석 용어 금지(오너 지시) — 자연스러운 한국어로 풀어 쓴다.
+          card-elev: 위아래 DashCard·KPI 헤드라인과 같은 카드 문법으로 통일(이 카드만 평면이었다).
+          surface-low 라 티어 규칙(index.css .card-elev 주석) 충족. 내부 3칸은 surface-high 라 손대지 않는다. */}
       {!loading && funnel && funnel.tournaments > 0 && (
-        <section className="rounded-card border border-border-subtle bg-surface-low p-3">
+        <section className="card-elev rounded-card border border-border-subtle bg-surface-low p-3">
           <div className="flex items-baseline justify-between gap-2">
             <h3 className="flex items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="filter" size={13} className="shrink-0 text-ink-muted" />최근 7일 흐름 <span className="font-normal text-ink-muted">조회→예약→방문 · 대회 {funnel.tournaments}개</span></h3>
             <button type="button" onClick={() => onGoto('stats')} className="shrink-0 text-2xs font-bold text-accent-300">통계 →</button>
@@ -1146,10 +1148,12 @@ function CompareRow({ label, now, prev, delta, won }: { label: string; now: numb
   );
 }
 
+// card-sink(카드 깊이) — 이 타일은 surface-high 라 card-elev 금지 티어(index.css .card-elev 주석).
+// 아래를 낮추는 방향이라 대비는 오히려 오른다(ink-secondary 6.52→7.04 실측).
 function QuickAction({ label, icon, onClick }: { label: string; icon: ReactNode; onClick: () => void }) {
   return (
     <button type="button" onClick={onClick}
-      className="flex flex-col items-center justify-center gap-1 rounded-card border border-border-default bg-surface-high py-3 text-ink-secondary hover:text-accent-300 hover:border-accent-400/50 transition-colors active:scale-[0.98]">
+      className="card-sink flex flex-col items-center justify-center gap-1 rounded-card border border-border-default bg-surface-high py-3 text-ink-secondary hover:text-accent-300 hover:border-accent-400/50 transition-colors active:scale-[0.98]">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{icon}</svg>
       <span className="text-2xs font-bold">{label}</span>
     </button>

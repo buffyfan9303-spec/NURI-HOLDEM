@@ -89,6 +89,12 @@ export async function restAs(
  */
 export async function stabilizeBackstack(page: Page): Promise<void> {
   await page.addInitScript(() => {
+    // ⚠ addInitScript 는 **모든 프레임**에서 돈다. gtag 같은 서브프레임에서 pushState 를 하면
+    //   최상위 joint history 에 '앱이 모르는 항목' 이 끼어든다. 그 항목을 소비하는 뒤로가기는
+    //   최상위 history.state 를 바꾸지 않으므로 앱 입장에선 아무 일도 안 일어난 것처럼 보이고,
+    //   '뒤로가기로 모달이 안 닫힌다' 는 간헐 실패가 된다(부하가 걸려 iframe 이 늦게 뜰 때 재현).
+    //   이 shim 이 필요한 것은 최상위 문서 하나뿐이다.
+    if (window.top !== window) return;
     try { history.pushState({ __e2e: true }, ''); } catch { /* noop */ }
   });
 }

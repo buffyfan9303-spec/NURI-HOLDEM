@@ -28,12 +28,14 @@ function makeFakeWindow() {
       entries.push(s);
       index += 1;
     },
-    replaceState(s: unknown) { entries[index] = s; },
-    back() {
-      // ⚠ 핵심: 실제 history.back() 은 즉시 반영되지 않는다. 다음 매크로태스크에 popstate 가 온다.
+    // 실제 시그니처와 같은 3인자 — 앱은 딥링크 정리 때 (state, '', url) 형태로 부른다.
+    replaceState(s: unknown, ...rest: unknown[]) { void rest; entries[index] = s; },
+    back() { history.go(-1); },
+    go(delta: number) {
+      // ⚠ 핵심: 실제 history.go() 는 즉시 반영되지 않는다. 다음 매크로태스크에 popstate 가 온다.
       //   이 지연이 바로 버그의 원인이었으므로, 가짜에서도 반드시 비동기여야 한다.
       setTimeout(() => {
-        if (index > 0) index -= 1;
+        index = Math.min(Math.max(index + delta, 0), entries.length - 1);
         popHandlers.forEach((h) => h());
       }, 0);
     },
@@ -117,5 +119,92 @@ describe('backstack — 리마운트/StrictMode 순서', () => {
       await flush();
     }
     expect(win.__index, '여닫을 때마다 항목이 쌓여 뒤로가기가 헛돈다').toBe(start);
+  });
+});
+
+// ── 2026-08-28 근치: '뒤로가기가 아무 일도 안 한다 / 홈으로 튄다' 의 실제 기전들 ──────
+describe('backstack — 항목·레이어 1:1 불변식', () => {
+  it('🔴 화면 교체(닫으면서 같은 커밋에 다른 겹 열기)에 유령 항목이 남지 않는다', async () => {
+    // 실제 경로: 포스터 상세에서 매장명을 누르면 상세를 닫고 매장 페이지를 연다(handleVenueClick).
+    // 예전 구현은 상세의 항목을 그대로 남겨서, 매장 페이지를 닫은 뒤의 뒤로가기 한 번이
+    // 통째로 죽었다('먹통'). 항목 수는 교체 전후로 같아야 한다.
+    const { pushLayer } = await freshBackstack();
+    const start = win.__index;
+
+    const closeA = vi.fn();
+    const disposeA = pushLayer(closeA);
+    expect(win.__index).toBe(start + 1);
+
+    const closeB = vi.fn();
+    disposeA();                 // 상세 닫힘(같은 커밋)
+    const disposeB = pushLayer(closeB); // 매장 페이지 열림
+    await flush();
+
+    expect(win.__index, '겹을 교체했는데 history 항목이 늘었다 — 죽은 칸이 뒤로가기를 삼킨다')
+      .toBe(start + 1);
+    expect(closeB, '교체 직후 새 겹이 스스로 닫혔다').not.toHaveBeenCalled();
+
+    disposeB();
+    await flush();
+    expect(win.__index, '교체된 겹을 닫았는데 제자리로 안 왔다').toBe(start);
+  });
+
+  it('🔴 한 커밋에 여러 겹을 닫으면 history 도 그만큼 되돌아온다', async () => {
+    // 실제 경로: 로고 클릭 = 모든 모달/패널 닫기. 겹마다 back() 을 부르던 예전 구현은
+    // 순서가 어긋나 한 칸 더 돌아가거나(앱 이탈) 덜 돌아갔다(유령 칸).
+    const { pushLayer } = await freshBackstack();
+    const start = win.__index;
+    const d1 = pushLayer(vi.fn());
+    const d2 = pushLayer(vi.fn());
+    expect(win.__index).toBe(start + 2);
+    d2(); d1();
+    await flush();
+    expect(win.__index, '두 겹을 닫았는데 history 가 두 칸 되돌아오지 않았다').toBe(start);
+  });
+
+  it('🔴 replaceState({}) 가 현재 항목의 __layer 토큰을 지우지 않는다', async () => {
+    // 실제 경로: 딥링크 정리(?tab=·#tool=·?checkin= 제거)가 `replaceState({}, '', url)` 를 부른다.
+    // 토큰이 지워지면 위치가 루트로 오인되어 다음 뒤로가기가 열린 겹을 **전부** 닫는다 → '홈으로 튐'.
+    const { pushLayer } = await freshBackstack();
+    const closeOuter = vi.fn();
+    const closeInner = vi.fn();
+    pushLayer(closeOuter);
+    // 딥링크 정리는 '지금 서 있는 항목' 의 토큰을 지운다. 피해는 그 항목으로 **되돌아올 때** 터진다.
+    win.history.replaceState({}, '', '/some/url'); // 앱 곳곳의 URL 정리와 동일한 호출
+    pushLayer(closeInner);
+
+    win.history.back(); // inner 한 겹만 닫혀야 한다
+    await flush();
+
+    expect(closeInner, '뒤로가기로 최상단이 안 닫혔다').toHaveBeenCalledTimes(1);
+    expect(closeOuter, 'replaceState 가 토큰을 지워 두 겹이 한꺼번에 닫혔다 — 홈으로 튀는 그 버그')
+      .not.toHaveBeenCalled();
+  });
+
+  it('🔴 예약(adoptable) 칸을 lazy 컴포넌트가 물려받아도 항목이 늘지 않는다', async () => {
+    // 실제 경로: App 이 openSchedule 을 커밋하는 순간 자리를 예약하고, lazy 청크가 도착해
+    // 마운트된 ScheduleDetailModal 의 useBackClose 가 그 자리를 물려받는다.
+    // 예약이 없으면 청크 로딩 동안의 뒤로가기가 아래 겹(탭)을 닫아 홈으로 튀었다.
+    const { pushLayer } = await freshBackstack();
+    const start = win.__index;
+    const ownerClose = vi.fn();
+    const childClose = vi.fn();
+
+    const disposeOwner = pushLayer(ownerClose, { adoptable: true });
+    expect(win.__index, '예약이 history 항목을 안 잡았다 — 로딩 중 뒤로가기가 아래 겹을 닫는다')
+      .toBe(start + 1);
+
+    const disposeChild = pushLayer(childClose); // 뒤늦게 마운트한 컴포넌트
+    expect(win.__index, '입양이 안 되고 항목이 하나 더 늘었다 — 뒤로가기 한 번이 죽는다')
+      .toBe(start + 1);
+
+    win.history.back();
+    await flush();
+    expect(childClose, '입양한 자식의 onClose 가 아니라 예약자의 close 가 불렸다').toHaveBeenCalledTimes(1);
+    expect(ownerClose).not.toHaveBeenCalled();
+
+    disposeChild(); disposeOwner();
+    await flush();
+    expect(win.__index, '닫은 뒤 history 가 제자리로 안 왔다').toBe(start);
   });
 });

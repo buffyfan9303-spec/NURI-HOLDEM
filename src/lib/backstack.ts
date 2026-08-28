@@ -13,124 +13,197 @@
 //   - X/ESC/배경클릭 등 프로그램적으로 닫을 때 → disposer 가 history 를 1개 정리
 //
 // 모든 오버레이는 useBackClose(open, onClose) 훅만 쓰면 된다.
+//
+// ── 2026-08-28 근치(오너 지적: "뒤로가기를 누르기 무서워") ────────────────────
+// 오너가 겪은 두 증상은 같은 뿌리에서 나온다: **history 항목과 레이어가 1:1 이 아니었다.**
+//
+//   ⓐ 유령 항목 → 뒤로가기가 '아무 일도 안 하는' 죽은 입력이 된다
+//      예전 정리 로직은 "내가 최상단일 때만 back()" 이었다. 그래서 포스터 상세를 닫으면서
+//      같은 커밋에 매장 페이지를 여는 흐름(handleVenueClick)에선 상세의 항목이 그대로 남았다.
+//      사용자에겐 '뒤로가기를 눌렀는데 화면이 그대로' 로 보인다 — 이게 '먹통' 의 절반이다.
+//      → 이제 항목 배열(entries)을 직접 들고, 죽은 꼬리는 microtask 에서 go(-k) 로 한 번에
+//        정리한다. 정리 직후 새 레이어가 오면 **그 칸을 replaceState 로 재사용**한다(칸 증식 0).
+//
+//   ⓑ __layer 토큰 유실 → 뒤로가기가 여러 겹을 한꺼번에 닫아 '홈으로' 튄다
+//      앱 곳곳이 딥링크 정리용으로 `history.replaceState({}, '', url)` 를 부르는데,
+//      그 호출은 **현재 항목의 __layer 토큰을 지워** 위치를 루트(0)로 오인하게 만든다.
+//      그러면 다음 popstate 에서 "현재 위치보다 위" 판정에 걸려 열린 겹이 전부 닫힌다.
+//      → replaceState 를 한 겹 감싸 토큰만 보존한다(URL·나머지 state 는 손대지 않는다).
+//
+//   ⓒ lazy 오버레이의 '등록 지연' → 열자마자 누른 뒤로가기가 엉뚱한 겹을 닫는다
+//      오버레이 컴포넌트는 대부분 lazy 청크다. 상태는 이미 '열림' 인데 컴포넌트가 아직
+//      마운트되지 않아 레이어가 없다 — 그 사이의 뒤로가기는 아래 겹(탭)을 닫아 홈으로 튄다.
+//      → App 이 '열림 상태' 를 커밋하는 순간 { adoptable: true } 로 자리를 **예약**하고,
+//        뒤늦게 마운트한 컴포넌트의 pushLayer 가 그 자리를 **물려받는다**(항목을 새로 밀지 않음).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useRef } from 'react';
 
 type CloseFn = () => void;
+
 interface Layer {
   id: number;
+  /** 뒤로가기/정리가 호출할 닫기 콜백 — 입양되면 자식의 onClose 로 바뀐다 */
   close: CloseFn;
+  /** App 이 '열림 상태' 커밋과 동시에 예약한 칸인가(= lazy 컴포넌트가 물려받을 수 있는가) */
+  adoptable: boolean;
+  /** 입양한 자식의 close (없으면 null) */
+  adoptedBy: CloseFn | null;
+  /** 예약자(App)의 원래 close — 자식이 언마운트하면 여기로 되돌린다 */
+  ownerClose: CloseFn;
+  /** false = 닫혔지만 history 칸이 아직 남아 있는 '죽은 꼬리' */
+  live: boolean;
 }
 
-const layers: Layer[] = [];
+/** history 항목과 1:1. 배열 순서 = history 순서(뒤로 갈수록 앞). */
+const entries: Layer[] = [];
 let seq = 0;
 let initialized = false;
-// 마지막으로 오버레이가 닫힌(dispose) 시각. 모달 닫힘이 부르는 history.back() 이
-// (탭 레이어의 pushState 가 브라우저에 throttle 되어 누락된 경우) 루트까지 되돌아가
-// 탭 back-close(예: changeTab('browse'))를 잘못 발동시키는 것을 막는 디바운스용.
-let lastDisposeAt = 0;
-/** 직전 ~ms 내에 오버레이가 닫혔으면 true — 탭 back-close 가 잘못 발동하는 것을 억제한다. */
-export function overlayJustClosed(withinMs = 600): boolean {
-  return lastDisposeAt > 0 && Date.now() - lastDisposeAt < withinMs;
-}
-// 현재 history 위치의 레이어 토큰(없으면 0 = 앱 루트).
+
+/** 현재 history 위치의 레이어 토큰(없으면 0 = 앱 루트). */
 function currentLayerId(): number {
   const st = window.history.state as { __layer?: number } | null;
   return st && typeof st.__layer === 'number' ? st.__layer : 0;
 }
 
 function handlePop() {
-  // 현재 history 위치(__layer)보다 "위에" 쌓여 있는 레이어를 전부 닫는다.
-  //  - 한 번 뒤로가기 → 최상단 한 겹만 닫힘(다음 레이어 id ≤ 현재이므로 멈춤)
+  // 현재 history 위치(__layer)보다 "위에" 쌓여 있는 항목은 전부 소비된 것이다.
+  //  - 한 번 뒤로가기 → 최상단 한 겹만 닫힘(다음 항목 id ≤ 현재이므로 멈춤)
   //  - 여러 번 빠르게 뒤로가기 → 각 popstate 마다 해당 위치까지 정리
   // history.state 토큰만 보고 판단하므로 프로그램적 back 과의 경쟁(suppress 플래그)이 없다.
   const cur = currentLayerId();
-  while (layers.length && layers[layers.length - 1].id > cur) {
-    const top = layers.pop()!;
+  while (entries.length && entries[entries.length - 1].id > cur) {
+    const top = entries.pop()!;
+    if (!top.live) continue; // 이미 닫힌 죽은 칸 — 소비만 하고 넘어간다
+    top.live = false;
     try { top.close(); } catch { /* 닫기 콜백 오류는 무시하고 스택 정리 계속 */ }
   }
-  // 스택이 비어 있으면(열린 오버레이 없음) 진짜 앱-레벨 뒤로가기이므로 그대로 둔다.
+}
+
+// 죽은 꼬리 정리는 마이크로태스크 1회로 모은다.
+//   · 한 커밋에서 여러 겹이 동시에 닫히면(예: 로고 클릭 = 전부 닫기) go(-k) 한 번으로 끝난다.
+//     겹마다 back() 을 부르면 순서가 어긋나 '한 칸 더' 돌아가는 사고가 난다.
+//   · 정리와 같은 커밋에서 새 레이어가 올라오면(StrictMode 이중 이펙트·화면 교체 전환)
+//     아래 pushEntry 가 그 칸을 재사용하므로 여기서 할 일이 없어진다.
+let balanceQueued = false;
+function scheduleBalance() {
+  if (balanceQueued) return;
+  balanceQueued = true;
+  queueMicrotask(() => {
+    balanceQueued = false;
+    let k = 0;
+    while (entries.length && !entries[entries.length - 1].live) { entries.pop(); k++; }
+    if (k > 0) {
+      try { window.history.go(-k); } catch { /* pushState 불가 환경 — 무시 */ }
+    }
+  });
 }
 
 function init() {
   if (initialized || typeof window === 'undefined') return;
   initialized = true;
   window.addEventListener('popstate', handlePop);
+
+  // ⓑ __layer 토큰 보존 — 딥링크 정리(`replaceState({}, '', url)`)가 현재 항목의 토큰을
+  //   지우면 위치가 루트로 오인되어 다음 뒤로가기가 열린 겹을 전부 닫는다('홈으로 튐').
+  //   호출자가 __layer 를 직접 주지 않는 한, 지금 항목의 토큰을 그대로 얹어 준다.
+  try {
+    const raw = window.history.replaceState.bind(window.history);
+    window.history.replaceState = function (state: unknown, unused: string, url?: string | URL | null) {
+      let next = state;
+      if (!(state && typeof state === 'object' && '__layer' in (state as object))) {
+        const cur = currentLayerId();
+        if (cur) next = { ...(state as object | null ?? {}), __layer: cur };
+      }
+      return raw(next as never, unused, url as never);
+    } as typeof window.history.replaceState;
+  } catch { /* 일부 환경에서 history 를 재정의할 수 없어도 앱은 계속 동작 */ }
+
+  // 새로고침·bfcache 복원으로 예전 세션의 __layer 토큰이 남아 있을 수 있다.
+  // 그 값보다 작은 id 로 새 레이어를 쌓으면 "현재 위치보다 위" 판정이 영영 성립하지 않아
+  // 뒤로가기가 아무것도 못 닫는다 — 시퀀스를 복원값 위에서 시작한다.
+  seq = Math.max(seq, currentLayerId());
+}
+
+function pushEntry(layer: Layer) {
+  const top = entries.length ? entries[entries.length - 1] : null;
+  // 죽은 꼬리가 바로 지금 위치라면 그 칸을 **재사용**한다 — 새 항목을 밀지 않으므로
+  // (정리 back + 새 push) 가 만들던 유령 칸이 아예 생기지 않는다.
+  if (top && !top.live && currentLayerId() === top.id) {
+    entries.pop();
+    entries.push(layer);
+    try { window.history.replaceState({ __layer: layer.id }, ''); } catch { /* 무시 */ }
+    return;
+  }
+  entries.push(layer);
+  try { window.history.pushState({ __layer: layer.id }, ''); } catch { /* 무시 */ }
+}
+
+export interface PushLayerOptions {
+  /**
+   * true = '자리 예약'. lazy 오버레이는 상태가 열린 뒤 한참 있다가 마운트되므로,
+   * App 이 상태 커밋과 동시에 이 옵션으로 칸을 잡아 둔다. 뒤늦게 마운트한 컴포넌트의
+   * pushLayer 가 이 칸을 물려받아(입양) history 항목이 두 개로 불어나지 않는다.
+   */
+  adoptable?: boolean;
 }
 
 /**
  * 오버레이 한 겹을 연다. history 항목 1개를 push 하고 스택에 등록한다.
  * @returns disposer — X/ESC 등으로 닫을 때 호출하면 history 를 균형 있게 정리한다.
  */
-export function pushLayer(close: CloseFn): () => void {
+export function pushLayer(close: CloseFn, opts?: PushLayerOptions): () => void {
   init();
-  const id = ++seq;
-  layers.push({ id, close });
-  try {
-    window.history.pushState({ __layer: id }, '');
-  } catch {
-    /* 일부 환경(파일 프로토콜 등)에서 pushState 가 막혀 있어도 앱은 계속 동작 */
+
+  // ⓒ 입양: 최상단이 '아직 주인 없는 예약 칸' 이면 새 항목을 밀지 않고 그 칸의 close 만 넘겨받는다.
+  //   칸의 수명은 예약자(App 상태)가 갖는다 — 자식이 잠시 언마운트해도 뒤로가기가 죽지 않는다.
+  const top = entries.length ? entries[entries.length - 1] : null;
+  if (!opts?.adoptable && top && top.live && top.adoptable && !top.adoptedBy) {
+    top.adoptedBy = close;
+    top.close = close;
+    let reverted = false;
+    return () => {
+      if (reverted) return;
+      reverted = true;
+      if (top.adoptedBy === close) { top.adoptedBy = null; top.close = top.ownerClose; }
+    };
   }
+
+  const id = ++seq;
+  const layer: Layer = {
+    id, close, adoptable: !!opts?.adoptable, adoptedBy: null, ownerClose: close, live: true,
+  };
+  pushEntry(layer);
+
   let disposed = false;
   return () => {
     if (disposed) return;
     disposed = true;
-    const idx = layers.findIndex((l) => l.id === id);
-    if (idx === -1) return; // 이미 Back 으로 제거됨 → 추가 정리 불필요(브라우저 back이므로 디바운스 불필요)
-    layers.splice(idx, 1);
-    // 현재 history 위치가 바로 이 레이어라면(최상단을 X/ESC/배경클릭으로 닫음)
-    // history 항목을 하나 되돌려 균형을 맞춘다. 레이어를 먼저 제거했으므로,
-    // 그로 인해 발생하는 popstate→handlePop 은 이 레이어를 중복으로 닫지 않는다.
-    if (currentLayerId() === id) {
-      // 프로그램적 close(history.back 호출)만 디바운스 대상 — 이 back이 throttle된 탭 레이어를 과열 pop해
-      // 탭 back-close(예: changeTab('browse'))를 잘못 발동시키는 것을 overlayJustClosed()로 억제.
-      lastDisposeAt = Date.now();
-      // ⚠ back() 을 여기서 바로 부르면 안 된다.
-      //   history.back() 은 **비동기**다(popstate 는 다음 태스크에 온다). 그런데 정리 직후
-      //   같은 커밋 안에서 레이어가 다시 push 되는 경우가 있다 — React StrictMode 의 이중 이펙트
-      //   (실행→정리→재실행)와 리마운트가 그렇다. 그러면 순서가 이렇게 꼬인다.
-      //     정리: back() 예약  →  재실행: pushState({__layer:2})  →  뒤늦게 back() 도착
-      //   back() 이 도착했을 때 history 최상단은 이미 새 레이어(2)이므로, 한 칸 뒤로 가면
-      //   handlePop 이 "2 는 현재 위치보다 위" 라고 판단해 **방금 연 모달을 닫아버린다.**
-      //   실제로 `{open && <Modal open/>}` 형태의 모달이 개발 모드에서 전부
-      //   '떴다가 즉시 사라지는' 증상을 보였다(프로덕션은 이중 실행이 없어 멀쩡했다).
-      //
-      //   그래서 back() 을 마이크로태스크로 미루고, 그 사이 최상단이 바뀌었으면 취소한다.
-      //   최상단이 더는 내 레이어가 아니라는 건 내가 되돌릴 항목이 이미 아래로 밀렸다는 뜻이고,
-      //   그때 back() 은 남의 레이어를 닫는 짓이 된다. 플래그·타이머 없이 토큰만으로 판정된다.
-      queueMicrotask(() => {
-        if (currentLayerId() !== id) return; // 그 사이 새 레이어가 올라왔다 → 되돌릴 것이 없다
-        try { window.history.back(); } catch { /* pushState 불가 환경 — 무시 */ }
-      });
-    }
-    // 중간 겹을 순서 어긋나게 닫은 경우: 해당 history 항목은 그대로 두되(다음 Back 때
-    // 무해하게 소비됨) 스택에서만 제거한다. 실사용에서 오버레이는 LIFO 로 닫히므로 드묾.
+    const l = entries.find((e) => e.id === id);
+    if (!l || !l.live) return; // 이미 Back 으로 소비됨 → 추가 정리 불필요
+    l.live = false;
+    scheduleBalance();
   };
-}
-
-/**
- * 가드(overlayJustClosed)에 걸려 '무반응으로 소진'된 레이어를 즉시 재적립한다.
- * 부작용 수복: 비-browse 탭에서 모달을 X로 닫고 600ms 안에 진짜 뒤로가기를 누르면
- * 탭 레이어가 아무 일도 안 하고 사라져 다음 뒤로가기에 앱이 종료되던 문제 —
- * 소진된 자리에 같은 close 를 다시 쌓아 다음 뒤로가기가 정상 동작하게 한다.
- */
-export function rearmLayer(close: CloseFn): void {
-  init();
-  const id = ++seq;
-  layers.push({ id, close });
-  try { window.history.pushState({ __layer: id }, ''); } catch { /* pushState 불가 환경 — 무시 */ }
 }
 
 /**
  * 훅: `open` 인 동안 브라우저/모바일 뒤로가기로 이 오버레이만 닫는다.
  * 모든 모달/풀스크린 페이지가 이 훅 하나로 동일하게 동작한다.
+ *
+ * @param opts.adoptable App 이 소유한 오버레이 상태에서 쓴다 — lazy 컴포넌트가 마운트되면
+ *        그 컴포넌트의 useBackClose 가 이 칸을 물려받는다(항목 중복 없음).
  */
-export function useBackClose(open: boolean, onClose: CloseFn): void {
+export function useBackClose(open: boolean, onClose: CloseFn, opts?: PushLayerOptions): void {
   const ref = useRef(onClose);
   ref.current = onClose;
+  const adoptable = !!opts?.adoptable;
   useEffect(() => {
     if (!open) return;
-    const dispose = pushLayer(() => ref.current());
+    const dispose = pushLayer(() => ref.current(), adoptable ? { adoptable: true } : undefined);
     return dispose;
-  }, [open]);
+  }, [open, adoptable]);
+}
+
+/** 테스트 전용 — 현재 살아 있는 레이어 수(항목 수가 아니라 '열린 겹'). */
+export function __liveLayerCount(): number {
+  return entries.filter((e) => e.live).length;
 }

@@ -53,6 +53,12 @@ interface CommunityTabProps {
   onDeletePost?: (postId: string) => void;
   /** 업주가 본인 홀덤펍 생성 후 목록/프로필 새로고침 */
   onReloadVenues?: () => void;
+  /**
+   * 이 탭이 지금 화면에 보이는가(App 의 keep-alive display 토글과 같은 값).
+   * 뒤로가기 겹을 **보일 때만** 등록하기 위해 필요하다 — 숨은 채 마운트만 돼 있는 탭이
+   * 겹을 들고 있으면 사용자의 뒤로가기가 아무 일도 안 하고 소진된다(먹통).
+   */
+  active?: boolean;
 }
 
 // 커뮤니티 섹션 — 홀덤펍 / 게시판 / 실시간 / 랭킹 / 장터 / 딜러 / 매장(owner, 구 '업주' 라벨) (사용 빈도순 진열)
@@ -116,6 +122,7 @@ const OwnerCommunityM      = memo(OwnerCommunity);
 function CommunityTab({
   venues, comments, posts: rawPosts, notices = [], isAdmin = false, onWriteNotice, onSelectNotice,
   onSelectVenue, onSelectPost, onOpenWrite, onLikePost, onDeletePost, onReloadVenues, marketSlot,
+  active = true,
 }: CommunityTabProps) {
   // 차단한 사용자의 글 + 신고 누적 자동 숨김(blinded) 글은 피드에서 제외(운영자·작성자는 예외)
   const { isBlocked } = useBlocks();
@@ -182,8 +189,18 @@ function CommunityTab({
       startSecTransition(() => setSectionState(s));
     }
   }, [visitedSecs]);
-  // 뒤로가기 — 게시판이 아닌 서브섹션(홀덤펍/딜러/랭킹 등)에선 먼저 게시판으로 복귀, 그 다음에야 탭을 빠져나감
-  useBackClose(section !== 'board', () => setSection('board'));
+  // 뒤로가기 — 진입 섹션이 아닌 서브섹션(딜러/랭킹/장터 등)에선 먼저 진입 섹션으로 복귀, 그 다음에야 탭을 빠져나감.
+  //
+  // ⚠ 2026-08-28 근치 — 여기가 오너가 말한 '뒤로가기가 먹통' 의 진원지 중 하나였다.
+  //   ① 기준이 'board' 로 하드코딩돼 있었는데, 이 탭이 실제로 여는 섹션은 'venues'(lastCommunitySection 기본값)다.
+  //      즉 **마운트되는 순간 조건이 항상 참**이라 겹이 하나 등록된다.
+  //   ② 게다가 이 탭은 App 의 idle 프리마운트로 **화면에 보이지도 않는 채** 미리 마운트된다.
+  //      그래서 부팅 ~10초 뒤부터 모든 사용자에게 '보이지 않는 겹' 이 하나 깔려 있었고,
+  //      뒤로가기를 누르면 화면은 그대로인 채 숨은 탭의 섹션만 바뀌며 입력이 소진됐다.
+  //      사용자 눈에는 '뒤로가기를 눌렀는데 아무 일도 안 일어남 → 한 번 더 누르니 홈' 으로 보인다.
+  //   → 기준을 '이 탭이 열린 섹션'(마운트 시점 값)으로 잡고, **보일 때만** 겹을 등록한다.
+  const [entrySection] = useState<Section>(section);
+  useBackClose(active && section !== entrySection, () => setSection(entrySection));
   // 복원은 layout 단계(페인트 전) — '맨 위가 번쩍했다가 내려가는' 깜빡임 방지. keep-alive 라 DOM 높이가 이미 있다.
   // flushSync 커밋 경로에선 스냅샷 뒤에서 실행돼 복원 비용까지 크로스페이드가 가린다.
   useLayoutEffect(() => {
@@ -467,9 +484,12 @@ function FeedSection({
   // 정렬(Phase 14, pokergosu 추천/인기 축) — 별도 게시판 신설 대신 정렬 칩으로.
   const [order, setOrder] = useState<'new' | 'popular'>('new');
   const [visible, setVisible] = useState(15);
-  // 보기 모드: compact(에펨코리아식 한 줄, 기본) / feed(미리보기 포함)
+  // 보기 모드: feed(카드 스택, **기본**) / compact(에펨코리아식 한 줄).
+  // 오너 리포트(2026-08-28) "샘플까지 줬는데 적용이 안 됐다"의 원인이 정확히 이 한 줄이었다 —
+  // PostCard(샘플 카드)는 만들어져 있었지만 기본값이 'compact'(PostRow)라 아무도 카드를 못 봤다.
+  // 저장된 선택은 그대로 존중하되(기능 보존), 미선택(=키 없음)의 기본을 카드로 뒤집는다.
   const [view, setView] = useState<'compact' | 'feed'>(() =>
-    (typeof localStorage !== 'undefined' && localStorage.getItem('nuri:board-view') === 'feed') ? 'feed' : 'compact');
+    (typeof localStorage !== 'undefined' && localStorage.getItem('nuri:board-view') === 'compact') ? 'compact' : 'feed');
   const switchView = (v: 'compact' | 'feed') => { setView(v); try { localStorage.setItem('nuri:board-view', v); } catch { /* noop */ } };
   // 커뮤니티 광고 5칸 — 게시판(enableCategory)에서만, 글 4개마다 한 칸씩 삽입
   const [ads, setAds] = useState<CommunityAd[]>([]);
@@ -594,11 +614,14 @@ function FeedSection({
       {/* 검색 + 카테고리 필터 */}
       {posts.length > 0 && (
         <div className="space-y-1.5">
-          {/* 오너 리포트(2026-08-27) '검색 옆이 잘리고 세로가 길다':
-              ① 잘림 — input 의 고유 최소폭(≈20ch)이 flex 최소폭으로 승격돼 좁은 화면에서 행이
-                우측으로 넘치며 컨트롤이 잘렸다 → 래퍼 min-w-0 로 입력이 줄어들게 해 해결.
-              ② 세로 과대 — 보더 속 보더(정렬 토글이 보기 토글 박스 안에 중첩, h-9+p-0.5+border≈42px)
-                해체 → 검색·정렬·보기 3형제를 전부 h-9 로 정합(카테고리 칩 h-8 과 같은 밀도). */}
+          {/* 오너 리포트(2026-08-28) "검색에 '게시글 검색' — 제목 뒤에는 밀려서 보이지도 않아".
+              375px 실측: 행 341px 중 정렬 85px + 보기 74px + gap 12px 을 빼면 입력은 169px,
+              pl-9(38.25)+pr(12.75) 을 다시 빼면 글자가 설 수 있는 폭은 116px 뿐이었다.
+              placeholder '게시글 검색 (제목·내용·작성자)' 는 193px → 77px 초과, 18자 중 11자만 보였다.
+              (수정 후 실측: 입력 249.7px · 글자폭 196.7px · placeholder 27.7px → 잘림 0, 한글 14자까지 통째로 보임)
+              처방 ① placeholder 를 '검색' 한 단어로(아이콘이 이미 '검색'을 말한다)
+                   ② 입력을 1행 전폭으로 올리고, 정렬은 그대로 두되 **보기 토글만** 카테고리 행으로
+                     내려보낸다 — 행 수는 2행 그대로라 오너가 지적했던 '세로가 길다'가 재발하지 않는다. */}
           <div className="flex items-center gap-1.5">
             <div className="relative min-w-0 flex-1">
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"
@@ -609,8 +632,9 @@ function FeedSection({
                 type="search" enterKeyHint="search"
                 value={q}
                 onChange={(e) => { setQ(e.target.value); setVisible(15); }}
-                placeholder="게시글 검색 (제목·내용·작성자)"
-                className="input h-9 min-h-0 w-full py-0 pl-9 text-sm"
+                placeholder="검색"
+                aria-label="게시글 검색 (제목·내용·작성자)"
+                className="input h-9 min-h-0 w-full py-0 pl-9 pr-3 text-sm"
               />
             </div>
             {/* 최신/인기 정렬(Phase 14) — 인기 = 좋아요순. overflow-hidden이 .hit 확장을 잘라내므로 실높이(h-9)로 탭 타깃 확보 */}
@@ -622,46 +646,51 @@ function FeedSection({
                 </button>
               ))}
             </div>
-            {/* 보기 모드 토글 — 한 줄 목록 / 미리보기 피드 */}
-            <div className="flex h-9 shrink-0 items-center rounded-input border border-border-default bg-surface-high p-0.5">
-              <button type="button" aria-label="한 줄 목록" title="한 줄 목록"
-                onClick={() => switchView('compact')}
-                className={['flex h-8 w-8 items-center justify-center rounded-[6px] transition-colors', view === 'compact' ? 'bg-surface-float text-accent-300' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
-                  <line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="18" x2="20" y2="18" />
-                </svg>
-              </button>
-              <button type="button" aria-label="미리보기 피드" title="미리보기 피드"
+          </div>
+          {/* 2행 — 카테고리 칩(가로 스크롤) + 보기 토글. 칩 h-8 과 토글 h-8 로 밀도 정합 */}
+          <div className="flex items-center gap-1.5">
+            {enableCategory ? (
+              // 오너 지시(2026-08-27): 카테고리 나열이 지저분 — 줄바꿈 없는 한 줄 스크롤 칩,
+              // 균일 높이·보더 없는 면 기반(활성만 인디고), browse 필터 레일과 같은 문법.
+              <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto scrollbar-none">
+                {BOARD_CATEGORIES.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    aria-pressed={cat === c.id}
+                    onClick={() => { setCat(c.id); setVisible(15); }}
+                    className={[
+                      'shrink-0 inline-flex items-center h-8 px-3 rounded-badge text-2xs font-bold leading-none transition-colors',
+                      cat === c.id
+                        ? 'bg-accent-300/15 text-accent-200 ring-1 ring-inset ring-accent-400/45'
+                        : 'bg-surface-high text-ink-secondary hover:bg-surface-float/70',
+                    ].join(' ')}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="min-w-0 flex-1" />
+            )}
+            {/* 보기 모드 토글 — 카드 스택(기본) / 한 줄 목록. 두 보기 모두 유지(기능 보존) */}
+            <div className="flex h-8 shrink-0 items-center rounded-input border border-border-default bg-surface-high p-0.5">
+              <button type="button" aria-label="카드 보기" title="카드 보기"
                 onClick={() => switchView('feed')}
-                className={['flex h-8 w-8 items-center justify-center rounded-[6px] transition-colors', view === 'feed' ? 'bg-surface-float text-accent-300' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
+                className={['flex h-7 w-7 items-center justify-center rounded-[6px] transition-colors', view === 'feed' ? 'bg-surface-float text-accent-300' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
                   <rect x="3" y="4" width="18" height="7" rx="1.5" /><rect x="3" y="13" width="18" height="7" rx="1.5" />
                 </svg>
               </button>
+              <button type="button" aria-label="한 줄 목록" title="한 줄 목록"
+                onClick={() => switchView('compact')}
+                className={['flex h-7 w-7 items-center justify-center rounded-[6px] transition-colors', view === 'compact' ? 'bg-surface-float text-accent-300' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
+                  <line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="18" x2="20" y2="18" />
+                </svg>
+              </button>
             </div>
           </div>
-          {enableCategory && (
-            // 오너 지시(2026-08-27): 카테고리 나열이 지저분 — 줄바꿈 없는 한 줄 스크롤 칩,
-            // 균일 높이·보더 없는 면 기반(활성만 인디고), browse 필터 레일과 같은 문법.
-            <div className="flex gap-1 overflow-x-auto scrollbar-none -mx-page-x px-page-x">
-              {BOARD_CATEGORIES.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  aria-pressed={cat === c.id}
-                  onClick={() => { setCat(c.id); setVisible(15); }}
-                  className={[
-                    'shrink-0 inline-flex items-center h-8 px-3 rounded-badge text-2xs font-bold leading-none transition-colors',
-                    cat === c.id
-                      ? 'bg-accent-300/15 text-accent-200 ring-1 ring-inset ring-accent-400/45'
-                      : 'bg-surface-high text-ink-secondary hover:bg-surface-float/70',
-                  ].join(' ')}
-                >
-                  {c.label}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
       )}
 
@@ -773,9 +802,9 @@ function AdRow({ ad, card = false }: { ad: CommunityAd; card?: boolean }) {
       {ad.advertiser && <span className="shrink-0 text-xs text-ink-muted">{ad.advertiser}</span>}
     </>
   );
-  // card: 피드(카드 스택) 모드 — 행 구분선 대신 글 카드와 같은 라운드 카드 문법
+  // card: 피드(카드 스택) 모드 — 행 구분선 대신 글 카드와 같은 라운드 카드 문법(보더+card-elev 동일)
   const cls = card
-    ? 'flex items-center gap-2 rounded-card border border-border-subtle bg-accent-300/[0.04] px-3 py-2 transition-colors hover:bg-accent-300/10'
+    ? 'flex items-center gap-2 card-elev shadow-card rounded-card border border-border-default bg-accent-300/[0.04] px-3 py-2 transition-colors hover:bg-accent-300/10'
     : 'flex items-center gap-2 border-b border-border-subtle bg-accent-300/[0.04] px-3 py-2 transition-colors last:border-b-0 hover:bg-accent-300/10';
   return (
     <li>
@@ -873,12 +902,17 @@ const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, se
         }
       }}
       aria-current={selected || undefined}
-      // 오너 레퍼런스(2026-08-27): 피드는 독립 라운드 카드 스택 — 행 구분선 대신 카드 보더
+      // 오너 레퍼런스(2026-08-27): 피드는 독립 라운드 카드 스택 — 행 구분선 대신 카드 보더.
+      // 오너 리포트(2026-08-28) '밋밋한 단색 배경에 경계선도 없이' →
+      // 앵커 카드(ScheduleCard)의 정본 카드 문법을 그대로 가져온다:
+      //   card-elev(정적 수직 광원+상단 하이라이트) + border-border-default + shadow-card(헤어라인 링) + bg-surface-low.
+      // 실측(다크, surface-base 대비): border-subtle 1.29:1 → border-default 2.06:1, hover strong 3.37:1.
+      // card-elev 는 background-image 라 hover 의 background-color 변화와 충돌하지 않는다.
       className={[
-        'cv-row-lg min-h-[var(--row-h-lg)] py-2.5 px-3 rounded-card border transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-300/60',
+        'cv-row-lg min-h-[var(--row-h-lg)] card-elev shadow-card py-2.5 px-3 rounded-card border transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-300/60',
         selected
           ? 'border-accent-300/60 bg-accent-300/[0.07]'
-          : 'border-border-subtle bg-surface-low hover:bg-surface-high/50 active:bg-surface-high',
+          : 'border-border-default bg-surface-low hover:border-border-strong hover:bg-surface-high/50 active:bg-surface-high',
       ].join(' ')}
     >
       <div className="flex items-start gap-2">
@@ -903,12 +937,12 @@ const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, se
             {/* 카테고리 pill — CATEGORY_TINTS 고정 팔레트 */}
             <span className={['mt-px shrink-0 rounded-badge px-1.5 py-0.5 text-2xs font-semibold leading-none', categoryPillClass(post.category)].join(' ')}>{catLabel}</span>
           </div>
-          {/* 제목 */}
+          {/* 제목 — 한 줄 목록(PostRow)과 같은 15px 위계. 카드에서 제일 먼저 읽히는 줄 */}
           {post.title && (
-            <p className="text-xs font-bold text-ink-primary mt-1 truncate">{post.title}</p>
+            <p className="mt-1 truncate text-[15px] font-bold leading-tight text-ink-primary">{post.title}</p>
           )}
-          {/* 본문 — 2줄 클램프 */}
-          <p className="text-xs text-ink-primary leading-snug line-clamp-2 mt-0.5 break-words">
+          {/* 본문 발췌 — 2줄 클램프 */}
+          <p className="text-[13px] text-ink-secondary leading-[1.5] line-clamp-2 mt-1 break-words">
             {(att.hand || att.replay) && (
               <span className="mr-1 inline-flex items-center gap-0.5 rounded-badge bg-accent-300/15 px-1 align-middle font-bold leading-none text-accent-300">
                 <Icon name={att.replay ? 'cards' : 'spade'} size={10} className="shrink-0" />
@@ -944,16 +978,24 @@ const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, se
           {/* 미디어 — 사진 첨부 글을 목록에서 바로 구분하려는 것 — 지금까진 첨부해도 목록에 아무 표시가 없어 '안 올라갔다'고 오해했다.
               88px 썸네일(=44px 레티나 2x)만 받아 목록에서 원본(최대 1200px)을 내려받지 않는다. */}
           {imgs.length > 0 && (
-            <div className="relative mt-1 h-11 w-11 overflow-hidden rounded-input border border-border-subtle bg-surface-high">
-              <img src={thumbUrl(imgs[0], 88)} srcSet={thumbSrcSet(imgs[0], 88)}
-                alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
-              {imgs.length > 1 && (
-                <span className="absolute bottom-0 right-0 bg-black/60 px-1 text-2xs font-bold leading-tight text-white">{imgs.length}</span>
-              )}
+            // 오너 레퍼런스: 첨부는 카드 안의 라운드 패널로 감싼다(핸드 프리뷰와 같은 문법).
+            // 최대 3장까지 나란히, 4장 이상은 마지막 칸에 +N — 목록에서 원본은 절대 내려받지 않는다.
+            <div className="mt-1.5 flex w-fit max-w-full gap-1 rounded-input border border-border-subtle bg-surface-high/60 p-1">
+              {imgs.slice(0, 3).map((src, i) => (
+                <div key={`${src}-${i}`} className="relative h-12 w-12 shrink-0 overflow-hidden rounded-[6px] bg-surface-float">
+                  <img src={thumbUrl(src, 96)} srcSet={thumbSrcSet(src, 96)}
+                    alt="" width={48} height={48} loading="lazy" decoding="async" className="h-full w-full object-cover" />
+                  {i === 2 && imgs.length > 3 && (
+                    <span className="absolute inset-0 flex items-center justify-center bg-black/55 text-2xs font-bold text-white">+{imgs.length - 3}</span>
+                  )}
+                </div>
+              ))}
             </div>
           )}
-          {/* 반응 푸터 — 조회 → 좋아요 → 댓글 순(오너 레퍼런스), 아이콘+tabular-nums, 좋아요만 인터랙티브 */}
-          <div className="mt-1.5 flex items-center gap-3.5 text-2xs text-ink-muted">
+          {/* 반응 푸터 — 조회 → 좋아요 → 댓글, 그리고 추천/비추천(상세와 같은 축).
+              좋아요만 인터랙티브(목록에서 바로 누를 수 있는 유일한 액션),
+              추천/비추천은 카운트 표시 전용 — 실제 투표는 상세에서(중복 투표 UX 단일화). */}
+          <div className="mt-2 flex flex-wrap items-center gap-x-3.5 gap-y-1 border-t border-border-subtle pt-1.5 text-2xs text-ink-muted">
             {(post.viewCount ?? 0) > 0 && (
               <span className="inline-flex items-center gap-1" aria-label={`조회 ${post.viewCount}`}>
                 <Icon name="eye" size={13} strokeWidth={1.6} className="shrink-0" />
@@ -974,6 +1016,19 @@ const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, se
               <Icon name="comment" size={13} strokeWidth={1.6} className="shrink-0" />
               <span className="tabular-nums">{post.commentCount}</span>
             </span>
+            {((post.goodrunCount ?? 0) > 0 || (post.badbeatCount ?? 0) > 0) && (
+              <span className="inline-flex items-center gap-2.5">
+                <span aria-hidden className="h-3 w-px bg-border-default" />
+                <span className="inline-flex items-center gap-0.5 text-emerald-400" aria-label={`추천 ${post.goodrunCount ?? 0}`}>
+                  <Icon name="chevron-up" size={13} strokeWidth={2.2} className="shrink-0" />
+                  <span className="tabular-nums font-bold">{post.goodrunCount ?? 0}</span>
+                </span>
+                <span className="inline-flex items-center gap-0.5" aria-label={`비추천 ${post.badbeatCount ?? 0}`}>
+                  <Icon name="chevron-down" size={13} strokeWidth={2.2} className="shrink-0" />
+                  <span className="tabular-nums">{post.badbeatCount ?? 0}</span>
+                </span>
+              </span>
+            )}
           </div>
         </div>
       </div>

@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect, useTransition, startTransition, Suspense, memo, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
-import { withViewTransition } from './lib/viewTransition';
+import { withViewTransition, type VTDirection } from './lib/viewTransition';
 import { getAppSetting } from './api/settings';
 import { useToast } from './components/atoms/Toast';
 import { checkIn, getMyCheckinStreak } from './api/checkins';
@@ -35,7 +35,7 @@ import { tierColor } from './components/atoms/TierBadge';
 import ConsentGateModal from './components/features/ConsentGateModal';
 import type { PostFormData } from './components/features/PostFormModal';
 import type { MarketplaceFormData } from './components/features/MarketplaceFormModal';
-import { rearmLayer, useBackClose, overlayJustClosed } from './lib/backstack';
+import { pushLayer, useBackClose } from './lib/backstack';
 import { useVisibilityRefresh } from './lib/useVisibilityRefresh';
 import { useScrollY } from './lib/useScrollY';
 import HomeTab from './components/features/HomeTab';
@@ -712,9 +712,12 @@ export default function App() {
   const tabScrollRef = useRef(new Map<TabId, number>());
   const activeTabRef = useRef<TabId>('home');
   useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
-  const changeTab = useCallback((t: TabId) => {
-    // 탭 이동은 '화면 전환' — 떠 있는 매장 페이지 오버레이는 닫는다(탭을 눌렀는데 그대로 보이는 혼란 방지)
-    closeOverlaysRef.current?.();
+  /**
+   * 탭 '커밋' 만 담당한다 — 이력(트레일) 관리는 아래 useEffect 가 맡는다.
+   * 뒤로가기로 되돌아오는 경로도 이 함수를 쓰므로 여기서 이력을 건드리면 안 된다.
+   */
+  const commitTab = useCallback((t: TabId, dir?: VTDirection) => {
+    if (t === activeTabRef.current) return;
     tabScrollRef.current.set(activeTabRef.current, window.scrollY);
     try { localStorage.setItem('nuri:last-tab', t); } catch { /* noop */ } // 16-2 재방문 복원용
     // 메이저 사이트의 '부드러움'은 전환 커밋 비용이 0이라서가 아니라, 스냅샷 크로스페이드가
@@ -730,7 +733,7 @@ export default function App() {
       withViewTransition(
         () => { flushSync(() => setActiveTab(t)); },
         () => startTabTransition(() => setActiveTab(t)),
-        to >= from ? 'forward' : 'back',
+        dir ?? (to >= from ? 'forward' : 'back'),
       );
     } else {
       startTabTransition(() => setActiveTab(t));
@@ -738,6 +741,54 @@ export default function App() {
     // visitedTabs 는 안정 Set 인스턴스(useState 초기화) — 참조 불변
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── 탭 이력(트레일) ─────────────────────────────────────────────────────
+  // 오너 지적: "뒤로가기 하면 그 전 페이지로 돌아가야 되는데 홈으로 돌아가버리니 누르기 무섭다."
+  // 예전 구현은 '홈이 아닌 모든 탭' 에 겹 **하나**만 달아 뒀다. 그래서 홈→라이브→커뮤니티로
+  // 세 단계를 들어가도 뒤로가기 한 번이면 홈이었다 — 사용자가 쌓은 맥락이 통째로 날아간다.
+  // 이제 탭을 옮길 때마다 겹을 하나씩 쌓아 **이동한 순서를 그대로 되짚는다**.
+  // 홈은 이력의 뿌리다: 홈 탭을 직접 누르면 트레일을 비운다(그 뒤 뒤로가기는 앱 밖으로 — 안드로이드 관례).
+  const tabTrailRef = useRef<{ tab: TabId; dispose: () => void }[]>([]);
+  const trailSuppressRef = useRef(false); // 뒤로가기가 유발한 탭 변경엔 이력을 쌓지 않는다
+  // 초기값을 'home' 으로 두는 이유: 마지막 탭 복원(nuri:last-tab)으로 비-홈에서 시작했을 때
+  // 첫 뒤로가기가 앱을 종료시키지 않고 홈으로 오게 만든다(기존 '앱 종료 방지' 계약 유지).
+  const prevTabRef = useRef<TabId>('home');
+  const clearTabTrail = useCallback(() => {
+    const items = tabTrailRef.current;
+    tabTrailRef.current = [];
+    for (let i = items.length - 1; i >= 0; i--) items[i].dispose();
+  }, []);
+  useEffect(() => {
+    const from = prevTabRef.current;
+    prevTabRef.current = activeTab;
+    if (from === activeTab) return;
+    if (trailSuppressRef.current) { trailSuppressRef.current = false; return; }
+    if (activeTab === 'home') { clearTabTrail(); return; }
+    // 깊이 상한 — 탭을 계속 왕복하면 history 항목이 무한정 늘어난다. 브라우저는 pushState 를
+    // 횟수로 제한하고(사파리: 30초 100회) 앞뒤 목록도 유한하다. 상한에 닿으면 새 칸을 밀지 않고
+    // **맨 위 항목의 목적지만 갱신**한다 — 항목이 안 늘고 '죽은 뒤로가기' 도 안 생긴다
+    // (대신 아주 오래된 한 단계의 정확도를 잃는다. 12단계는 실사용 세션을 훨씬 넘는 깊이다).
+    const trail = tabTrailRef.current;
+    if (trail.length >= 12) { trail[trail.length - 1].tab = from; return; }
+    // ⚠ 이 겹은 반드시 '커밋 이후'(effect)에 쌓아야 한다. 탭 이동은 떠 있던 오버레이를 함께
+    //   닫는데(closeOverlaysRef), 그 오버레이의 history 칸이 죽는 것은 같은 커밋의 정리 단계다.
+    //   effect 에서 쌓으면 backstack 이 그 죽은 칸을 그대로 재사용해 항목이 늘지 않는다.
+    const item: { tab: TabId; dispose: () => void } = { tab: from, dispose: () => {} };
+    item.dispose = pushLayer(() => {
+      const i = tabTrailRef.current.indexOf(item);
+      if (i >= 0) tabTrailRef.current.splice(i, 1);
+      trailSuppressRef.current = true;
+      commitTab(item.tab, 'back');
+    });
+    trail.push(item);
+  }, [activeTab, clearTabTrail, commitTab]);
+
+  const changeTab = useCallback((t: TabId) => {
+    // 탭 이동은 '화면 전환' — 떠 있는 매장 페이지 오버레이는 닫는다(탭을 눌렀는데 그대로 보이는 혼란 방지)
+    closeOverlaysRef.current?.();
+    if (t === 'home') clearTabTrail(); // 홈을 직접 누르면 이력의 뿌리로 — 쌓아 둔 겹을 정리
+    commitTab(t);
+  }, [clearTabTrail, commitTab]);
   // 복원은 layout 단계에서 — 페인트 전에 위치를 잡아야 '맨 위가 번쩍했다가 내려가는' 깜빡임이 없다.
   // keep-alive 라 재방문 탭의 DOM 높이는 이미 존재한다(복원 위치가 잘릴 일 없음).
   useLayoutEffect(() => {
@@ -987,18 +1038,14 @@ export default function App() {
     window.history.replaceState({}, '', url.pathname + url.search + url.hash);
   }, [pendingPostId]);
 
-  // 홈(browse) 외 탭에서 브라우저/모바일 뒤로가기 → 홈 탭으로 복귀(앱 종료 방지).
-  // 오버레이가 열려 있으면 중앙 back-stack 이 LIFO 로 그 오버레이부터 닫는다.
-  // 오버레이(모달)가 막 닫힌 직후의 잘못된 popstate 는 무시 — 모달 닫힘이 일정탐색으로
-  // 튀던 간헐 버그(탭 레이어 pushState throttle 시 history.back 과열) 방지.
-  // 모달 닫힘 직후(디바운스 창) 들어온 뒤로가기는 오발동 방지로 무시하되,
-  // 소진된 탭 레이어를 즉시 재적립(rearmLayer) — 안 그러면 다음 뒤로가기가 앱을 종료시켰다.
-  const tabBackRef = useRef<() => void>(() => {});
-  tabBackRef.current = () => {
-    if (overlayJustClosed()) { rearmLayer(() => tabBackRef.current()); return; }
-    changeTab('home'); // P1: 뒤로가기의 귀착점 = 홈(탐색 화면 포함 모든 탭에서)
-  };
-  useBackClose(activeTab !== 'home', () => tabBackRef.current());
+  // 탭 뒤로가기는 위의 '탭 이력(트레일)' 이 전담한다 — 이동마다 겹 하나씩, LIFO 로 되짚는다.
+  //
+  // 예전에 여기 있던 두 장치를 걷어냈다(둘 다 오너가 겪은 '먹통' 의 원인이었다):
+  //   · `useBackClose(activeTab !== 'home', …)` — 몇 단계를 들어갔든 뒤로가기 한 번에 홈으로.
+  //   · `overlayJustClosed()` 디바운스 — 오버레이를 X 로 닫은 뒤 600ms 안의 뒤로가기를 통째로
+  //     삼켜서(rearmLayer 로 자리만 다시 깔고 아무 일도 안 함) '눌렀는데 반응이 없는' 입력이 됐다.
+  //     그 가드는 history 항목과 겹이 1:1 이 아니어서 생기던 과열 back 을 막으려던 것인데,
+  //     backstack 이 이제 항목을 직접 들고 균형을 맞추므로(entries + go(-k)) 존재 이유가 사라졌다.
 
   // ── 데이터 (Supabase에서 로드) ──────────────────────────────────────────────
   // 캐시 퍼스트(Phase 6): 직전 세션 스냅샷이 있으면 네트워크를 기다리지 않고 먼저 그린다.
@@ -1159,6 +1206,12 @@ export default function App() {
       const code = readGtoHash(window.location.hash);
       if (!code) { setGtoInit(null); return; }
       const { hero, villain, board } = decodeSpot(code);
+      // ⚠ 해시는 '소비하는 즉시' 그 항목에서 걷어낸다(2026-08-28, ToolsPanel #tool= 과 같은 사고).
+      //   패널이 그 위에 뒤로가기 겹(history 항목)을 하나 밀기 때문에, 여기 남겨 두면
+      //   '아래 항목에 붙은 낡은 해시'가 된다. 닫을 때 backstack 이 한 칸 되돌아오는 순간
+      //   그 해시가 되살아나 hashchange → 패널이 즉시 다시 열린다(닫히지 않는 것처럼 보인다).
+      //   공유 링크는 이 해시를 읽지 않고 스팟 상태로 새로 만든다(GtoDeepPanel) — 지워도 무해.
+      try { history.replaceState(null, '', window.location.pathname + window.location.search); } catch { /* noop */ }
       setGtoInit({ hero, villain, board });
     };
     apply();
@@ -1706,6 +1759,35 @@ export default function App() {
     );
     window.setTimeout(() => setVtPosterId(null), 350); // 역모핑 종료 후 이름 해제(전환 중 제거 금지)
   }, []);
+
+  // ── 오버레이 '자리 예약'(뒤로가기 겹) ────────────────────────────────────
+  // 오너 지적: "페이지에 들어갔다가 나오면 갑자기 홈으로 가버린다."
+  // 기전: 오버레이 컴포넌트는 전부 lazy 청크다. 상태는 이미 '열림' 인데 청크가 아직 안 와서
+  //   컴포넌트가 마운트되지 않으면 **그 사이에는 뒤로가기 겹이 존재하지 않는다.**
+  //   그 창에서 뒤로가기를 누르면 아래 겹(탭)이 닫혀 홈으로 튀고, 뒤늦게 도착한 오버레이가
+  //   홈 위에 열린다. 실측(헤드리스)에서 오버레이를 열고 0~150ms 안에 누른 뒤로가기는
+  //   로그인·포스터·매장 전부에서 '아무 일도 안 하거나 엉뚱한 화면' 이었다.
+  //   지하 매장·모바일 데이터에서 청크가 수백 ms 걸리는 실사용에선 훨씬 흔하다.
+  // 처방: App 이 '열림 상태' 를 커밋하는 그 순간 겹을 예약해 둔다({ adoptable: true }).
+  //   청크가 도착해 컴포넌트가 마운트되면 그 컴포넌트의 useBackClose 가 **이 자리를 물려받아**
+  //   history 항목이 두 개로 불어나지 않는다(입양 — backstack.pushLayer 참고).
+  const ADOPT = { adoptable: true } as const;
+  useBackClose(openSchedule !== null, closeSchedule, ADOPT);
+  useBackClose(openVenueId !== null, () => setOpenVenueId(null), ADOPT);
+  useBackClose(openPost !== null, () => setOpenPost(null), ADOPT);
+  useBackClose(openListing !== null, () => setOpenListing(null), ADOPT);
+  useBackClose(openNotice !== null, () => setOpenNotice(null), ADOPT);
+  useBackClose(posterFormTarget !== null, () => setPosterFormTarget(null), ADOPT);
+  useBackClose(authOpen, () => { setAuthOpen(false); setAuthMode('login'); }, ADOPT);
+  useBackClose(profileOpen, () => setProfileOpen(false), ADOPT);
+  useBackClose(globalSearchOpen, () => setGlobalSearchOpen(false), ADOPT);
+  useBackClose(postFormOpen, () => setPostFormOpen(false), ADOPT);
+  useBackClose(noticeFormOpen, () => { setNoticeFormOpen(false); setEditingNotice(null); }, ADOPT);
+  useBackClose(legalDoc !== null, () => setLegalDoc(null), ADOPT);
+  useBackClose(supportOpen, () => setSupportOpen(false), ADOPT);
+  // 참가(바인) 게임 선택 시트는 지금까지 뒤로가기 겹이 아예 없었다 — 이 화면에서 누른
+  // 뒤로가기는 시트가 아니라 그 아래 탭을 닫아 홈으로 튀었다(순수 이득 케이스).
+  useBackClose(buyinPick !== null, () => setBuyinPick(null), ADOPT);
 
   // 로고 클릭 → 홈(메인)으로 + 모든 모달/패널 닫기 (오너 지시 2026-08-27: 일정탐색 아님)
   const handleHome = useCallback(() => {
@@ -2285,7 +2367,7 @@ export default function App() {
 
       {/* 홈(P1) — 결정 3섹션: 지금 등록 가능 · 포스터 · 오늘·내일 일정 */}
       {(activeTab === 'home' || visitedTabs.has('home')) && (
-        <main className="tab-pane" style={activeTab !== 'home' ? { display: 'none' } : undefined}>
+        <main data-tab="home" className="tab-pane" style={activeTab !== 'home' ? { display: 'none' } : undefined}>
           <HomeTab
             schedules={schedules}
             loaded={schedulesLoaded}
@@ -2309,7 +2391,7 @@ export default function App() {
       )}
 
       {(activeTab === 'browse' || visitedTabs.has('browse')) && (
-        <main className="tab-pane" style={activeTab !== 'browse' ? { display: 'none' } : undefined}
+        <main data-tab="browse" className="tab-pane" style={activeTab !== 'browse' ? { display: 'none' } : undefined}
           onTouchStart={onPtrStart} onTouchMove={onPtrMove} onTouchEnd={onPtrEnd}>
           {/* 당겨서 새로고침 인디케이터 — ♠ 회전. out-of-flow(fixed) 오버레이(MO-4):
               헤더(z-50) 아래 z-40 에서 translateY 로 내려온다 — 콘텐츠를 밀지 않는다(리레이아웃 0).
@@ -2612,7 +2694,7 @@ export default function App() {
       <Suspense fallback={<LazyFallback />}>
       {/* 라이브 — 진행 중 게임 현황 */}
       {(activeTab === 'live' || visitedTabs.has('live')) && (
-        <div className="tab-pane" style={activeTab !== 'live' ? { display: 'none' } : undefined}>
+        <div data-tab="live" className="tab-pane" style={activeTab !== 'live' ? { display: 'none' } : undefined}>
           <ErrorBoundary inline resetKey="live">
             <LiveGamesTabM venues={venues} schedules={schedules} onVenue={handleVenueClick} onSchedule={handleScheduleSelect} onDisplay={openDisplay} active={activeTab === 'live'} myGames={myApprovedGames} />
           </ErrorBoundary>
@@ -2621,9 +2703,12 @@ export default function App() {
 
       {/* 커뮤니티 */}
       {(activeTab === 'community' || visitedTabs.has('community')) && (
-        <main className="tab-pane px-page-x pb-section" style={activeTab !== 'community' ? { display: 'none' } : undefined}>
+        <main data-tab="community" className="tab-pane px-page-x pb-section" style={activeTab !== 'community' ? { display: 'none' } : undefined}>
           <ErrorBoundary inline resetKey="community">
           <CommunityTabM
+            // keep-alive 로 숨어 있는 동안에는 뒤로가기 겹을 들지 않게 한다 —
+            // 숨은 탭이 겹을 들고 있으면 사용자의 뒤로가기가 화면 변화 없이 소진된다(먹통).
+            active={activeTab === 'community' || activeTab === 'market'}
             marketSlot={marketSlot}
             venues={venues}
             comments={comments}
@@ -2647,7 +2732,7 @@ export default function App() {
 
       {/* 도구 — 매장 운영·플레이어 도구 모음 (메인 탭) */}
       {(activeTab === 'tools' || visitedTabs.has('tools')) && (
-        <main className="tab-pane px-page-x pt-3 pb-section" style={activeTab !== 'tools' ? { display: 'none' } : undefined}>
+        <main data-tab="tools" className="tab-pane px-page-x pt-3 pb-section" style={activeTab !== 'tools' ? { display: 'none' } : undefined}>
           <ErrorBoundary inline resetKey="tools">
             <ToolsPanelM />
           </ErrorBoundary>
@@ -2659,7 +2744,7 @@ export default function App() {
           '다른 탭→내 매장' 멈칫의 근본 원인. 다른 탭과 같은 display 토글로 전환하고,
           tabActive 로 숨김 중 구독·틱을 끈다. 역할 게이트(로그아웃 시 즉시 언마운트) 필수. */}
       {(isOwner || isStaff || isAdmin) && (activeTab === 'my-store' || visitedTabs.has('my-store')) && (
-        <main className="tab-pane px-page-x pt-3 pb-section" style={activeTab !== 'my-store' ? { display: 'none' } : undefined}>
+        <main data-tab="my-store" className="tab-pane px-page-x pt-3 pb-section" style={activeTab !== 'my-store' ? { display: 'none' } : undefined}>
           <ErrorBoundary inline resetKey="my-store">
           <VenueManageTabM
             schedules={schedules}

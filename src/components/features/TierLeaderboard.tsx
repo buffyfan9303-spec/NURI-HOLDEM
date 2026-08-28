@@ -411,7 +411,7 @@ export default function TierLeaderboard() {
                     const reached = me ? me.score >= t.min : false;
                     return (
                       <div key={t.key}
-                        className={['rounded-card border px-1 py-2 text-center transition-colors',
+                        className={['card-sink rounded-card border px-1 py-2 text-center transition-colors',
                           mine ? 'border-accent-400/60 bg-accent-300/10'
                             : reached ? 'border-border-subtle bg-surface-high'
                             : 'border-border-subtle bg-surface-high opacity-40'].join(' ')}>
@@ -436,7 +436,7 @@ export default function TierLeaderboard() {
                 const got = b.check(badgeStats);
                 return (
                   <div key={b.key} title={b.desc}
-                    className={['rounded-card border p-2.5 text-center transition-colors', got ? 'border-accent-400/50 bg-accent-300/[0.08]' : 'border-border-subtle bg-surface-high opacity-55'].join(' ')}>
+                    className={['card-sink rounded-card border p-2.5 text-center transition-colors', got ? 'border-accent-400/50 bg-accent-300/[0.08]' : 'border-border-subtle bg-surface-high opacity-55'].join(' ')}>
                     <p className={['text-xl leading-none', got ? '' : 'grayscale'].join(' ')}>{b.emoji}</p>
                     <p className={['mt-1 text-xs font-bold', got ? 'text-accent-300' : 'text-ink-secondary'].join(' ')}>{b.label}</p>
                     <p className="mt-0.5 text-2xs leading-tight text-ink-muted">{b.desc}</p>
@@ -520,7 +520,7 @@ export default function TierLeaderboard() {
                   const on = equippedMark === mk.key;
                   return (
                     <div key={mk.key}
-                      className={['rounded-card border p-2.5 text-center transition-colors',
+                      className={['card-sink rounded-card border p-2.5 text-center transition-colors',
                         on ? 'border-accent-300 bg-accent-300/[0.1]' : unlocked ? 'border-border-default bg-surface-high' : 'border-border-subtle bg-surface-high opacity-50'].join(' ')}>
                       <p className={['text-2xl leading-none', unlocked ? '' : 'grayscale'].join(' ')}>{mk.emoji}</p>
                       <p className="mt-1 text-xs font-bold text-ink-primary">{mk.name}</p>
@@ -550,7 +550,7 @@ export default function TierLeaderboard() {
           : (
             <div className="space-y-1.5">
               {hall.rows.map((r, i) => (
-                <div key={r.nickname} className={['flex items-center gap-3 rounded-card border p-3', i === 0 ? 'border-accent-400/60 bg-accent-300/[0.08]' : 'border-border-subtle bg-surface-high'].join(' ')}>
+                <div key={r.nickname} className={['card-sink flex items-center gap-3 rounded-card border p-3', i === 0 ? 'border-accent-400/60 bg-accent-300/[0.08]' : 'border-border-subtle bg-surface-high'].join(' ')}>
                   <span className="text-2xl leading-none">{['👑', '🥈', '🥉'][i]}</span>
                   <div className="min-w-0 flex-1">
                     <p className={['truncate font-extrabold', i === 0 ? 'text-lg text-accent-300' : 'text-sm text-ink-primary'].join(' ')}>{markPrefix(r)}{r.nickname}</p>
@@ -610,7 +610,11 @@ export default function TierLeaderboard() {
                 const big = place === 1;
                 const rt = tierOf(r.activityPoints);
                 return (
-                  <div key={r.id} className={['card-elev rounded-card border p-2.5 text-center', big ? 'border-accent-400/60 bg-accent-300/[0.08]' : 'border-border-subtle bg-surface-high'].join(' ')}>
+                  // 포인트 1곳(오너 지시 2026-08-28) — 1위만 conic 시그니처 링(.ring-conic).
+                  // 2·3위는 기존 card-elev 유지. 둘 다 background-image 라 같은 요소 병용 금지(index.css 주석).
+                  // 1위 배경이 accent-300/[0.08]→surface-low 로 바뀌지만 합성색이 #1E1830 vs #1D192E 로
+                  // 사실상 동일 — 이름(text-accent-300) 대비 3.718→3.711 로 실질 불변.
+                  <div key={r.id} className={['rounded-card border p-2.5 text-center', big ? 'ring-conic bg-surface-low' : 'card-elev border-border-subtle bg-surface-high'].join(' ')}>
                     <p className={big ? 'text-xl leading-none' : 'text-base leading-none'}>{['🥈', '👑', '🥉'][idx]}</p>
                     <span className={['mx-auto mt-1 block rounded-full p-[2px]', big ? 'h-10 w-10' : 'h-8 w-8'].join(' ')}
                       style={{ background: `conic-gradient(from 210deg, ${rt.color}, ${rt.color}44 45%, ${rt.color}CC 70%, ${rt.color})` }}>
