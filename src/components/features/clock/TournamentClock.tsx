@@ -28,6 +28,7 @@ import { saveVenueRankings, prizeUnitRisk, getVenueRankings } from '../../../api
 import LoadErrorCard from '../../atoms/LoadErrorCard';
 import { msgOf } from '../../../lib/dbError';
 import Modal from '../../atoms/Modal';
+import ClockThemePanel from './ClockThemePanel';
 
 const now = () => Date.now();
 const pad = (n: number) => String(Math.floor(n)).padStart(2, '0');
@@ -1285,6 +1286,9 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
         })()}
         <button type="button" onClick={addPrize} className="w-full py-1.5 rounded-input border border-dashed border-border-default text-2xs text-ink-secondary hover:text-accent-300">+ 프라이즈</button>
       </section>
+
+      {/* TV 송출 화면 — 테마·배경 이미지(매장 단위 설정이라 즉시 저장 · 이 폼의 '시작'과 무관) */}
+      <ClockThemePanel venueId={venueId} />
 
       {/* 시작 — 위에서 고른 방식(단독/장부)으로 */}
       <div className="flex gap-2 pb-2">

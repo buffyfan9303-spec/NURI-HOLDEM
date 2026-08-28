@@ -6,7 +6,6 @@ import { useToast } from './components/atoms/Toast';
 import { checkIn, getMyCheckinStreak } from './api/checkins';
 import { requestBuyin, venueTodayGames, getMyBuyinRequestsToday, subscribeMyBuyinRequests, cancelBuyinRequest, type MyBuyinRequest } from './api/ledger';
 import UnreadBadge from './components/atoms/UnreadBadge';
-import SlidingPill from './components/atoms/SlidingPill';
 import ViewModeToggle from './components/atoms/ViewModeToggle';
 import type { ViewMode } from './components/atoms/ViewModeToggle';
 import IntegratedSearchBar, { expandRegions } from './components/features/IntegratedSearchBar';
@@ -454,11 +453,12 @@ const TabBar = memo(function TabBar({
 }: { tabs: TabDef[]; active: TabId; onChange: (t: TabId) => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // 활성 표시 = 밑줄(SlidingPill underline 모드) — 커뮤니티 서브탭과 동일 문법(오너 지시 2026-08-28).
-  // 예전 .pill-active 그라데이션 캡슐은 오정렬 시 이웃 라벨 위에 걸치고, text-white 활성 라벨이
-  // 라이트 배경에서 증발하는 사고가 있었다. 밑줄은 오정렬이 나도 2px 라 시각 피해가 최소이고
-  // 활성 라벨이 잉크색이라 어느 테마에서도 증발하지 않는다(근본 해결).
-  // 측정 타깃(data-pill-active)은 라벨 캡슐 span 유지 — 밑줄 폭이 라벨 폭을 따른다.
+  // 활성 표시 = '활성 버튼에 직접 붙는' 밑줄(오너 지시 2026-08-28 재차: "확실하게 해결").
+  // ⚠ 왜 측정 방식(SlidingPill)을 버렸나: 이 GNB 는 View Transition 으로 탭을 바꾸는데,
+  //   VT 캡처 중 레이아웃을 읽으면 offsetLeft 가 0/구값으로 잡혀 밑줄이 '맨 왼쪽으로' 튄다.
+  //   재측정·검증을 세 겹으로 쌓아도 캡처 타이밍은 브라우저 소관이라 완전히 못 막는다.
+  //   활성 요소 자신에게 붙는 밑줄은 좌표 계산이 아예 없어 어긋날 수가 없다(구조적 해결).
+  //   대가로 '미끄러짐'을 잃지만, 오정렬 없는 확실함이 우선이라는 오너 판단.
   return (
     <div
       ref={containerRef}
@@ -466,7 +466,6 @@ const TabBar = memo(function TabBar({
       // 모바일은 하단 탭바(MobileTabBar)가 내비 담당 — 상단 GNB는 PC(lg+) 전용
       className="sticky top-header-h z-40 bg-surface-base relative hidden lg:flex border-b border-border-subtle overflow-x-auto scrollbar-none px-page-x sm:justify-center"
     >
-      <SlidingPill containerRef={containerRef} activeKey={active} underline className="rounded-full bg-accent-300" />
       {tabs.map(({ id, label }) => {
         const isActive = active === id;
         return (
@@ -491,8 +490,14 @@ const TabBar = memo(function TabBar({
             {/* 밑줄 측정 대상 = 라벨 캡슐(px-2.5 py-1) — 셀 전체가 아니라 라벨을 감싸는 폭.
                 underline 모드가 좌우 8px 씩 안쪽으로 그리므로 밑줄 ≈ 아이콘+라벨 폭 */}
             <span
-              data-pill-active={isActive || undefined}
-              className="relative inline-flex items-center justify-center gap-1.5 px-2.5 py-1"
+              className={[
+                'relative inline-flex items-center justify-center gap-1.5 px-2.5 py-1',
+                // 밑줄: 활성 캡슐 자신의 ::after — 위치 계산 0, 어긋남 불가.
+                // inset-x-2 로 라벨 좌우 8px 안쪽(구 underline 모드와 같은 인셋).
+                isActive
+                  ? "after:absolute after:inset-x-2 after:-bottom-1 after:h-0.5 after:rounded-full after:bg-accent-300 after:content-['']"
+                  : '',
+              ].join(' ')}
             >
               <span className="shrink-0" aria-hidden>{TAB_ICON[id]}</span>
               {label}

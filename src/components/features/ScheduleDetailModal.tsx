@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useMemo } from 'react';
 import Modal from '../atoms/Modal';
 import Icon from '../atoms/Icon';
 import ImageLightbox from '../atoms/ImageLightbox';
@@ -11,9 +11,12 @@ import { getMyReservation, createReservation, cancelMyReservation, getOwnerReser
 import { prizeMainText } from './ScheduleCard';
 import type { Schedule } from '../../api/schedules';
 import { scheduleStatus } from '../../lib/scheduleStatus';
-import type { RegInfo } from '../../lib/regStatus';
+import { matchClockSchedule, msToRegClose, type RegInfo } from '../../lib/regStatus';
 import type { Comment } from '../../api/community';
-import { generateBlinds } from '../../api/clock';
+import {
+  generateBlinds, getVenueClocks, subscribeClock, effectiveLevel,
+  type ClockState, type ClockLevel,
+} from '../../api/clock';
 import { promptLogin, openPostForm, ensureVerified } from '../../lib/requireLogin';
 import { googleCalendarUrl, icsDataUrl, isIOS } from '../../lib/calendar';
 import { enablePush, pushSupported } from '../../api/push';
@@ -39,17 +42,51 @@ interface ScheduleDetailModalProps {
   regInfo?: RegInfo;
 }
 
-type Tab = 'info' | 'qna';
+// APIS 상세 문법(오너 지목 벤치마크) — [메인][블라인드][프라이즈][매장정보] + 기존 Q&A.
+// Q&A 를 4탭 안에 우겨넣지 않고 5번째 칸으로 남긴 이유: 안읽음 배지('새 N')가 붙는 유일한 탭이라
+// 다른 탭 밑에 묻으면 '새 질문이 왔다'를 알 길이 사라진다(기능 손실). 나머지 4탭은 스크린샷과 동일.
+type Tab = 'main' | 'blinds' | 'prize' | 'venue' | 'qna';
+const TABS: { key: Tab; label: string }[] = [
+  { key: 'main',   label: '메인' },
+  { key: 'blinds', label: '블라인드' },
+  { key: 'prize',  label: '프라이즈' },
+  { key: 'venue',  label: '매장정보' },
+  { key: 'qna',    label: 'Q&A' },
+];
 
 const SUITS = ['♠','♥','♦','♣'];
 const DAYS_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
+// 라이브 패널 액센트 텍스트 — 다크는 accent-200(8.19:1), 라이트는 accent-300(6.37:1).
+// accent-300 단독은 다크 surface-low 위에서 3.67:1 이라 소형 텍스트 기준(4.5)을 못 넘는다.
+const ACCENT_INK = 'text-accent-300 dark:text-accent-200';
+// 진행 신호 — 라이트는 emerald-700(5.39:1, 토큰 주석의 '라이트 텍스트 전용' 단), 다크는 emerald-400(8.03:1).
+const LIVE_INK = 'text-emerald-700 dark:text-emerald-400';
+// 임박 신호 — 라이트 danger-deep(6.20:1) / 다크 danger-light(7.64:1)
+const URGENT_INK = 'text-danger-deep dark:text-danger-light';
+
+/** levels 배열 인덱스 → '몇 번째 레벨'(브레이크 제외) */
+function levelNoAt(levels: ClockLevel[], index: number): number {
+  let n = 0;
+  for (let i = 0; i <= index && i < levels.length; i++) if (levels[i].kind === 'level') n++;
+  return n;
+}
+/** 남은 ms → '23분' / '1시간 5분' (라이브 탭 regMinLabel 과 같은 표기 규칙) */
+function minLabel(ms: number): string {
+  const min = Math.max(1, Math.ceil(ms / 60_000));
+  return min >= 60 ? `${Math.floor(min / 60)}시간 ${min % 60 > 0 ? `${min % 60}분` : ''}`.trim() : `${min}분`;
+}
+const blindText = (l?: ClockLevel): string =>
+  l ? `${l.sb.toLocaleString()}/${l.bb.toLocaleString()}${l.ante > 0 ? ` (${l.ante.toLocaleString()})` : ''}` : '—';
+
 export default function ScheduleDetailModal({
   schedule: scheduleProp, open, onClose, onVenueClick, rating, comments, onSubmitComment, onDeleteComment, onDeletePoster, inline, regInfo,
 }: ScheduleDetailModalProps) {
-  const [tab, setTab] = useState<Tab>('info');
+  const [tab, setTab] = useState<Tab>('main');
   const [lightbox, setLightbox] = useState(false);
   const { user } = useAuth();
+  // 다른 대회를 열면 항상 [메인]부터 — 이전 대회에서 보던 탭이 남아 있으면 '내가 뭘 보고 있는지'가 어긋난다
+  useEffect(() => { if (scheduleProp?.id) setTab('main'); }, [scheduleProp?.id]);
 
   // 닫힘 애니메이션이 끝날 때까지 직전 일정을 유지(시트가 아래로 슬라이드되며 닫히도록)
   const [shown, setShown] = useState<Schedule | null>(scheduleProp);
@@ -72,6 +109,10 @@ export default function ScheduleDetailModal({
   const eventDate = schedule.date.slice(0, 10); // date 컬럼이지만 방어적으로 앞 10자만 비교
   const isEventToday = eventDate === kToday;
   const isPastEvent = eventDate < kToday;       // ISO(YYYY-MM-DD) 라 사전순 비교 = 날짜 비교
+  // 라이브 클락 패널을 띄울 조건. regInfo 는 App 이 '진행 중 클락 ↔ 이 포스터' 매칭에 성공했을 때만
+  // 내려온다 — 즉 클락이 실재한다는 증거다. 이걸 전제로 삼아야 (a) 포스터를 열 때마다 clock 조회를
+  // 날리지 않고 (b) 패널을 첫 페인트부터 그려 '요약 → 패널' 교체 CLS 가 아예 생기지 않는다.
+  const liveShown = !!regInfo && !!schedule.venueId && status !== 'ended';
 
   return (
     <Modal open={open} onClose={onClose} maxWidth="6xl" variant="page" inline={inline}>
@@ -208,10 +249,13 @@ export default function ScheduleDetailModal({
                 <span className="font-medium underline decoration-dotted underline-offset-2">
                   {schedule.pubName}
                 </span>
-                <span className="text-border-strong">·</span>
+                <span className="text-ink-muted">·</span>
                 <span>{schedule.region}</span>
+                {/* APIS 헤더 문법: 매장명 · 지역 · 유형 — 포스터 배지와 중복이지만 포스터를 지나쳐도 유형이 남는다 */}
+                <span className="text-ink-muted">·</span>
+                <span className="font-semibold tracking-wider">{schedule.format}</span>
                 {rating && rating.count > 0 && (
-                  <span className="shrink-0 font-bold tabular-nums text-accent-300" title={`방문 후기 ${rating.count}건 평균`}>
+                  <span className={`shrink-0 font-bold tabular-nums ${ACCENT_INK}`} title={`방문 후기 ${rating.count}건 평균`}>
                     ⭐{rating.avg.toFixed(1)}<span className="font-normal text-ink-muted">({rating.count})</span>
                   </span>
                 )}
@@ -226,10 +270,12 @@ export default function ScheduleDetailModal({
             ) : (
               <p className="mt-1.5 inline-flex items-center gap-1 text-sm text-ink-secondary">
                 <span className="font-medium">{schedule.pubName}</span>
-                <span className="text-border-strong">·</span>
+                <span className="text-ink-muted">·</span>
                 <span>{schedule.region}</span>
+                <span className="text-ink-muted">·</span>
+                <span className="font-semibold tracking-wider">{schedule.format}</span>
                 {rating && rating.count > 0 && (
-                  <span className="shrink-0 font-bold tabular-nums text-accent-300" title={`방문 후기 ${rating.count}건 평균`}>
+                  <span className={`shrink-0 font-bold tabular-nums ${ACCENT_INK}`} title={`방문 후기 ${rating.count}건 평균`}>
                     ⭐{rating.avg.toFixed(1)}<span className="font-normal text-ink-muted">({rating.count})</span>
                   </span>
                 )}
@@ -244,8 +290,10 @@ export default function ScheduleDetailModal({
             )}
           </div>
 
-      {/* ── 탭바 (정보 / Q&A) — sticky 상단 고정. PC는 우측에 닫기 통합 ──────── */}
-      <div className="relative grid grid-cols-2 border-b border-border-subtle sticky top-0 bg-surface-base z-10 lg:pr-[4.25rem]">
+      {/* ── 탭바 (메인 / 블라인드 / 프라이즈 / 매장정보 / Q&A) — sticky 상단 고정. PC는 우측에 닫기 통합 ──
+          활성 표시는 밑줄(SlidingPill underline) — UnderlineTabs 와 동일 문법을 인라인으로 쓴다.
+          왜 공용 UnderlineTabs 를 안 쓰나: label 이 string 이라 Q&A 의 개수·안읽음 배지를 붙일 수 없다. */}
+      <div role="tablist" className="relative grid grid-cols-5 border-b border-border-subtle sticky top-0 bg-surface-base z-10 lg:pr-[4.25rem]">
         <SlidingPill activeKey={tab} underline className="rounded-full bg-accent-300" />
         {/* PC 닫기 — 정보 영역 우상단(항상 보이는 sticky 탭바, 손 닿는 위치) */}
         <button
@@ -257,61 +305,55 @@ export default function ScheduleDetailModal({
           <Icon name="close" size={14} />
           <span className="text-xs font-bold">닫기</span>
         </button>
-        {(['info', 'qna'] as Tab[]).map((t) => {
-          const active = tab === t;
+        {TABS.map(({ key, label }) => {
+          const active = tab === key;
           return (
             <button
-              key={t}
+              key={key}
               type="button"
               role="tab"
               aria-selected={active}
               data-pill-active={active || undefined}
-              onClick={() => setTab(t)}
+              onClick={() => setTab(key)}
               className={[
-                'relative py-3 text-sm font-medium transition-colors text-center',
-                active ? 'text-accent-300' : 'text-ink-muted hover:text-ink-secondary',
+                'relative min-w-0 px-0.5 py-3 text-center text-xs font-semibold transition-colors sm:text-sm',
+                // 활성 탭 라벨은 accent-300 단독이면 다크 surface-base 위 4.0:1 로 소형 텍스트 기준 미달 —
+                // 다크에서만 accent-200 으로 올린다(8.8:1). 밑줄 색은 그대로 accent-300.
+                active ? ACCENT_INK : 'text-ink-muted hover:text-ink-secondary',
               ].join(' ')}
             >
-              {t === 'info' ? '대회 정보' : 'Q&A'}
-              {t === 'qna' && qnaComments.length > 0 && (
-                <span className="ml-1 text-2xs text-ink-muted tabular-nums">({qnaComments.length})</span>
-              )}
-              {t === 'qna' && schedule.unreadQnaCount > 0 && (
-                <span className="ml-1.5 text-2xs text-danger font-bold">새 {schedule.unreadQnaCount}</span>
+              <span className="block truncate">
+                {label}
+                {key === 'qna' && qnaComments.length > 0 && (
+                  <span className="ml-0.5 text-2xs font-normal text-ink-muted tabular-nums">({qnaComments.length})</span>
+                )}
+              </span>
+              {/* 안읽음은 5칸 폭에 '새 N' 텍스트가 안 들어가 점으로 압축 — 개수는 aria/title 로 보존 */}
+              {key === 'qna' && schedule.unreadQnaCount > 0 && (
+                <span aria-label={`새 질문 ${schedule.unreadQnaCount}개`} title={`새 질문 ${schedule.unreadQnaCount}개`}
+                  className="absolute right-1.5 top-2 h-1.5 w-1.5 rounded-full bg-danger" />
               )}
             </button>
           );
         })}
       </div>
 
-      {/* ── 본문 ─────────────────────────────────────────────────────── */}
-      {tab === 'qna' ? (
-        <div className="px-3.5 py-3 space-y-2.5">
-          {/* 대회 후기 쓰기 — 커뮤니티 게시판(대회 후기 카테고리)으로 바로 작성 */}
-          <button type="button"
-            onClick={() => { if (!user) { promptLogin(); return; } openPostForm('tourney'); }}
-            className="flex w-full items-center gap-2 rounded-input border border-accent-400/40 bg-accent-300/[0.06] px-3 py-2.5 text-left transition-colors hover:bg-accent-300/[0.1]">
-            <span aria-hidden>📝</span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-xs font-bold text-accent-300">이 대회 후기 쓰기</span>
-              <span className="block text-2xs text-ink-muted">참가 후기를 커뮤니티 게시판(대회 후기)에 남겨보세요 — 다른 플레이어에게 큰 도움이 됩니다.</span>
-            </span>
-            <span className="shrink-0 text-accent-300" aria-hidden>→</span>
-          </button>
-          <CommentThread
-            comments={qnaComments}
-            onSubmit={onSubmitComment}
-            onDelete={onDeleteComment}
-            emptyText="이 토너먼트에 대해 첫 질문을 남겨보세요."
-          />
-        </div>
-      ) : (
+      {/* ── 본문 — 탭 5개가 같은 패딩 컨테이너를 공유(탭 전환에 좌우 여백이 흔들리지 않게) ── */}
       <div className="px-3.5 pt-3 pb-5 space-y-3">
 
-        {/* ── 핵심 요약 그리드(APIS '오늘 예정' 문법) — 바이인·프라이즈·시작·레지마감·스타팅칩·
-            리엔트리를 2열 고정 행높이로 '한 화면 요약'. §28: 바이인·GTD·프라이즈풀은
-            상품 가격 정보라 표시를 유지한다. */}
+      {/* ══════ 메인 — 지금 상태 · 참가 행동 · 게임 정보 ══════════════════════ */}
+      {tab === 'main' && (<>
+
+        {/* 라이브 클락 3열 패널(APIS 상단) — regInfo 가 있다 = 이 대회에 매칭된 클락이 실제로
+            돌고 있다는 App 의 실측 증거다. 그래서 여기서만 클락을 읽는다(포스터 열 때마다 조회 X).
+            라이브가 아니면 기존 핵심 요약 그리드를 그대로 유지한다. */}
+        {liveShown ? (
+          <LiveClockPanel schedule={schedule} regInfo={regInfo} onSeePrize={() => setTab('prize')} />
+        ) : (
         <section className="overflow-hidden rounded-card border border-border-subtle bg-surface-high">
+          {/* ── 핵심 요약 그리드(APIS '오늘 예정' 문법) — 바이인·프라이즈·시작·레지마감·스타팅칩·
+              리엔트리를 2열 고정 행높이로 '한 화면 요약'. §28: 바이인·GTD·프라이즈풀은
+              상품 가격 정보라 표시를 유지한다. */}
           <div className="grid grid-cols-2 [&>div]:border-border-subtle [&>div:nth-child(even)]:border-l [&>div:nth-child(n+3)]:border-t">
             {/* 바이인 미입력(0)은 가격 정보가 아니다 — 카드·표와 같은 '—' 문법(§28은 실제 금액에만 적용) */}
             <SummaryCell label="바이인" value={schedule.buyIn.amount > 0 ? schedule.buyIn.amount.toLocaleString() : '—'} />
@@ -341,37 +383,6 @@ export default function ScheduleDetailModal({
             </p>
           )}
         </section>
-
-        {/* ── 순위별 상금 — APIS 문법: 상금이 핵심 정보라 접지 않고 요약 바로 아래 상시 노출 ── */}
-        {schedule.rankingPrizes && schedule.rankingPrizes.length > 0 && (
-          <section>
-            <h3 className="text-sm font-bold text-ink-primary mb-1.5">순위별 상금</h3>
-            <div className="overflow-hidden rounded-card border border-border-subtle bg-surface-high">
-              <table className="w-full text-xs">
-                <tbody>
-                  {schedule.rankingPrizes.map((rp, i) => {
-                    const isTop3 = ['1st', '2nd', '3rd'].includes(rp.rank);
-                    return (
-                      <tr key={i} className="border-b border-border-subtle last:border-b-0">
-                        <td className={[
-                          'px-3 py-1 w-20',
-                          isTop3 ? 'text-accent-300 font-bold' : 'text-ink-secondary',
-                        ].join(' ')}>
-                          {rp.rank}
-                        </td>
-                        <td className={[
-                          'px-3 py-1 text-right tabular-nums',
-                          isTop3 ? 'text-accent-300 font-extrabold text-sm' : 'text-ink-primary font-semibold',
-                        ].join(' ')}>
-                          {rp.amount.toLocaleString()}{rp.unit ?? ''}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </section>
         )}
 
         {/* 참가 예약 — 기본 접힘(한 줄 요약 + '더보기'), CTA 는 접힘 행 우측에 유지 */}
@@ -392,42 +403,33 @@ export default function ScheduleDetailModal({
         {/* 캘린더 등록 · 공유 — 참가 결심 직후 동선 */}
         <CalendarShareRow schedule={schedule} />
 
-        {/* ── 토너먼트 정보 — 라벨/값 한 줄 콤팩트 행(헤어라인 구분). 긴 값은 줄바꿈 대신
-            가로 마퀴 루프(MarqueeText)로 옆으로 흐른다. */}
+        {/* ── 게임 정보 (APIS 하단 2열 정의 리스트) — 게임명·날짜·시작 시간·유형·바이인·
+            스타팅 칩·리바이 칩·블라인드 타임. 값이 없는 선택 항목은 행 자체를 생략하고,
+            원래 폴백 문구('현장 안내'·'미정'·'메인 토너먼트')를 갖고 있던 행은 그 문구가 곧 답이라 유지한다.
+            긴 값은 줄바꿈 대신 가로 마퀴 루프(MarqueeText)로 옆으로 흐른다(기존 문법 유지). */}
         <section>
-          <h3 className="text-sm font-bold text-ink-primary mb-1">토너먼트 정보</h3>
-          <div className="divide-y divide-border-subtle border-y border-border-subtle">
-            <InfoRow label="일정" value={`${d.getMonth() + 1}/${d.getDate()} (${dow}) · 시작 ${schedule.startTime}`} />
-            <InfoRow label="레지 마감" value={schedule.regCloseTime ? `${schedule.regCloseTime} · 레이트 레지 마감` : '현장 안내'} />
-            <InfoRow label="듀레이션" value={schedule.duration || '미정'} />
+          <h3 className="text-sm font-bold text-ink-primary mb-1">게임 정보</h3>
+          <dl className="divide-y divide-border-subtle border-y border-border-subtle">
+            <InfoRow label="게임명" value={schedule.title} />
+            <InfoRow label="날짜" value={`${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()} (${dow})`} />
+            {schedule.startTime && <InfoRow label="시작 시간" value={schedule.startTime} />}
+            <InfoRow label="유형" value={`${schedule.format} · ${schedule.guaranteed ? 'GTD 보장' : '예상 상금'}`} />
             <InfoRow label="바이인" value={buyinDetailText(schedule)} />
-            <InfoRow label="포맷" value={`${schedule.format} · ${schedule.guaranteed ? 'GTD 보장' : '예상 상금'}`} />
+            <InfoRow label="리엔트리" value={rebuyText(schedule)} />
+            {schedule.structure?.startingChips != null && <InfoRow label="스타팅 칩" value={schedule.structure.startingChips.toLocaleString()} />}
+            {schedule.structure?.rebuyStack != null && <InfoRow label="리바이 칩" value={schedule.structure.rebuyStack.toLocaleString()} />}
+            {schedule.structure?.blindLevelMinutes != null && <InfoRow label="블라인드 타임" value={`${schedule.structure.blindLevelMinutes}분`} />}
+            <InfoRow label="레지 마감" value={schedule.regCloseTime ? `${schedule.regCloseTime} · 레이트 레지 마감` : '현장 안내'} />
+            {schedule.structure?.lateRegLevels !== undefined && <InfoRow label="레이트 레지" value={`${schedule.structure.lateRegLevels}레벨`} />}
+            <InfoRow label="듀레이션" value={schedule.duration || '미정'} />
             <InfoRow
               label="이벤트"
               value={schedule.sideEvents && schedule.sideEvents.length > 0
                 ? `사이드 ${schedule.sideEvents.length}개 · ${schedule.sideEvents.map((se) => se.name).join(', ')}`
                 : '메인 토너먼트'}
             />
-            {/* 토너먼트 구조 — 별도 가로스크롤 카드 대신 같은 행 문법으로 흡수(전항목 보존) */}
-            {schedule.structure?.startingChips != null && <InfoRow label="시작 칩" value={schedule.structure.startingChips.toLocaleString()} />}
-            {schedule.structure?.rebuyStack != null && <InfoRow label="리바인 칩" value={schedule.structure.rebuyStack.toLocaleString()} />}
-            {schedule.structure?.blindLevelMinutes != null && <InfoRow label="레벨" value={`${schedule.structure.blindLevelMinutes}분`} />}
-            {schedule.structure?.lateRegLevels !== undefined && <InfoRow label="레이트 레지" value={`${schedule.structure.lateRegLevels}레벨`} />}
-          </div>
+          </dl>
         </section>
-
-        {/* 블라인드 (선택) — 직접 입력 텍스트 */}
-        {schedule.blinds && (
-          <section>
-            <h3 className="text-sm font-bold text-ink-primary mb-1.5">블라인드</h3>
-            <p className="text-xs text-ink-secondary leading-relaxed whitespace-pre-wrap rounded-input bg-surface-high border border-border-subtle px-3 py-2">
-              {schedule.blinds}
-            </p>
-          </section>
-        )}
-
-        {/* 블라인드 구조 (접이식, 기본 접힘) */}
-        <BlindStructure schedule={schedule} />
 
         {/* 프로모션 */}
         {schedule.promotions && schedule.promotions.length > 0 && (
@@ -474,6 +476,153 @@ export default function ScheduleDetailModal({
           </section>
         )}
 
+        {/* 규정 — 대회 운영 규칙이라 매장 탭이 아니라 메인에 둔다 */}
+        {schedule.rules && schedule.rules.length > 0 && (
+          <section className="reveal">
+            <h3 className="text-sm font-bold text-ink-primary mb-1.5">운영 규정</h3>
+            <ul className="space-y-1 text-xs text-ink-secondary">
+              {schedule.rules.map((r, i) => (
+                <li key={i} className="flex items-start gap-1.5">
+                  <span className="text-ink-muted shrink-0 mt-0.5">·</span>
+                  <span>{r}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {/* 상세 설명 */}
+        {schedule.description && (
+          <section className="reveal">
+            <h3 className="text-sm font-bold text-ink-primary mb-1.5">상세 설명</h3>
+            <p className="text-xs text-ink-secondary leading-relaxed whitespace-pre-wrap">
+              {schedule.description}
+            </p>
+          </section>
+        )}
+      </>)}
+
+      {/* ══════ 블라인드 — 직접 입력 텍스트 + 레벨 구조 표 ═════════════════════ */}
+      {tab === 'blinds' && (<>
+        {/* 블라인드 (선택) — 직접 입력 텍스트 */}
+        {schedule.blinds && (
+          <section>
+            <h3 className="text-sm font-bold text-ink-primary mb-1.5">블라인드</h3>
+            <p className="text-xs text-ink-secondary leading-relaxed whitespace-pre-wrap rounded-input bg-surface-high border border-border-subtle px-3 py-2">
+              {schedule.blinds}
+            </p>
+          </section>
+        )}
+        {/* 블라인드 구조 — 전용 탭에서는 접지 않는다(탭 자체가 이미 '펼침'이라 한 번 더 누르게 하면 계단이 하나 는다) */}
+        <BlindStructure schedule={schedule} alwaysOpen />
+      </>)}
+
+      {/* ══════ 프라이즈 — 상금 요약 + 순위별 상금표 ═══════════════════════════ */}
+      {tab === 'prize' && (<>
+        {/* §28: 상금 풀·GTD·바이인은 상품 가격 정보라 표시를 유지한다 */}
+        <section className="overflow-hidden rounded-card border border-border-subtle bg-surface-high">
+          <div className="grid grid-cols-2 [&>div]:border-border-subtle [&>div:nth-child(even)]:border-l">
+            <SummaryCell
+              label={schedule.guaranteed ? '상금 풀' : '프라이즈'}
+              value={prizeMainText(schedule)}
+              accent
+              badge={(schedule.prizePool || schedule.prizePercent) ? (
+                <span className={[
+                  'shrink-0 rounded-badge border px-1.5 py-0.5 text-2xs font-bold leading-none tracking-wider',
+                  schedule.guaranteed
+                    ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                    : 'bg-surface-base text-ink-muted border-border-default',
+                ].join(' ')}>
+                  {schedule.guaranteed ? 'GTD' : '엔트리'}
+                </span>
+              ) : undefined}
+            />
+            <SummaryCell label="바이인" value={schedule.buyIn.amount > 0 ? schedule.buyIn.amount.toLocaleString() : '—'} />
+          </div>
+          {schedule.guaranteed && (
+            <p className="border-t border-border-subtle px-3 py-1.5 text-2xs text-ink-muted">
+              ※ 보장 상금: 참가 인원에 관계없이 위 금액 이상이 지급됩니다
+            </p>
+          )}
+        </section>
+
+        {/* ── 순위별 상금 — APIS 문법: 상금이 핵심 정보라 접지 않고 상시 노출 ── */}
+        {schedule.rankingPrizes && schedule.rankingPrizes.length > 0 ? (
+          <section>
+            <h3 className="text-sm font-bold text-ink-primary mb-1.5">순위별 상금</h3>
+            <div className="overflow-hidden rounded-card border border-border-subtle bg-surface-high">
+              <table className="w-full text-xs">
+                <tbody>
+                  {schedule.rankingPrizes.map((rp, i) => {
+                    const isTop3 = ['1st', '2nd', '3rd'].includes(rp.rank);
+                    return (
+                      <tr key={i} className="border-b border-border-subtle last:border-b-0">
+                        <td className={[
+                          'px-3 py-1 w-20',
+                          isTop3 ? `${ACCENT_INK} font-bold` : 'text-ink-secondary',
+                        ].join(' ')}>
+                          {rp.rank}
+                        </td>
+                        <td className={[
+                          'px-3 py-1 text-right tabular-nums',
+                          isTop3 ? `${ACCENT_INK} font-extrabold text-sm` : 'text-ink-primary font-semibold',
+                        ].join(' ')}>
+                          {rp.amount.toLocaleString()}{rp.unit ?? ''}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        ) : (
+          <p className="rounded-card border border-border-subtle bg-surface-high px-3 py-3 text-2xs leading-relaxed text-ink-muted">
+            순위별 상금표가 아직 등록되지 않았습니다 — 배분은 매장 현장 안내를 따릅니다.
+          </p>
+        )}
+      </>)}
+
+      {/* ══════ 매장정보 — 매장 · 위치 · 파트너 · 결제 수단 ═════════════════════ */}
+      {tab === 'venue' && (<>
+        <section className="overflow-hidden rounded-card border border-border-subtle bg-surface-high">
+          <div className="px-3 py-2.5">
+            <p className="text-2xs leading-none text-ink-muted">매장</p>
+            <p className="mt-1 break-keep text-base font-bold leading-tight text-ink-primary">{schedule.pubName}</p>
+            <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-ink-secondary">
+              <span>{schedule.region}</span>
+              {rating && rating.count > 0 && (
+                <>
+                  <span className="text-ink-muted">·</span>
+                  <span className={`font-bold tabular-nums ${ACCENT_INK}`}>
+                    ⭐{rating.avg.toFixed(1)}
+                  </span>
+                  <span className="text-ink-muted">방문 후기 {rating.count}건 평균</span>
+                </>
+              )}
+            </p>
+          </div>
+          <div className="divide-y divide-border-subtle border-t border-border-subtle">
+            {schedule.address && (
+              <a href={`https://map.kakao.com/link/search/${encodeURIComponent(schedule.address)}`}
+                target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-2 px-3 py-2.5 text-xs transition-colors hover:bg-surface-float/40">
+                <span aria-hidden className="shrink-0">🗺</span>
+                <span className="min-w-0 flex-1 break-keep text-ink-secondary">{schedule.address}</span>
+                <span className={`shrink-0 text-2xs font-bold ${ACCENT_INK}`}>지도 →</span>
+              </a>
+            )}
+            {schedule.venueId && (
+              <button type="button" onClick={() => onVenueClick(schedule.venueId!)}
+                className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs transition-colors hover:bg-surface-float/40">
+                <Icon name="home" size={14} className="shrink-0 text-ink-muted" />
+                <span className="min-w-0 flex-1 font-semibold text-ink-primary">매장 페이지 — 다른 일정 · 후기 · 위치</span>
+                <span className={`shrink-0 text-2xs font-bold ${ACCENT_INK}`}>이동 →</span>
+              </button>
+            )}
+          </div>
+        </section>
+
         {/* 파트너 & 결제 */}
         {(schedule.partners || schedule.paymentMethods) && (
           <section className="reveal space-y-3">
@@ -501,7 +650,7 @@ export default function ScheduleDetailModal({
                   {schedule.paymentMethods.map((m) => (
                     <span
                       key={m}
-                      className="inline-flex max-w-full items-center break-keep [overflow-wrap:anywhere] px-2.5 py-1 rounded-badge bg-emerald-500/15 border border-emerald-500/30 text-xs font-semibold text-emerald-400"
+                      className={`inline-flex max-w-full items-center break-keep [overflow-wrap:anywhere] px-2.5 py-1 rounded-badge bg-emerald-500/15 border border-emerald-500/30 text-xs font-semibold ${LIVE_INK}`}
                     >
                       {m}
                     </span>
@@ -511,33 +660,34 @@ export default function ScheduleDetailModal({
             )}
           </section>
         )}
+      </>)}
 
-        {/* 규정 */}
-        {schedule.rules && schedule.rules.length > 0 && (
-          <section className="reveal">
-            <h3 className="text-sm font-bold text-ink-primary mb-1.5">운영 규정</h3>
-            <ul className="space-y-1 text-xs text-ink-secondary">
-              {schedule.rules.map((r, i) => (
-                <li key={i} className="flex items-start gap-1.5">
-                  <span className="text-ink-muted shrink-0 mt-0.5">·</span>
-                  <span>{r}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
+      {/* ══════ Q&A ═══════════════════════════════════════════════════════════ */}
+      {tab === 'qna' && (<>
+        {/* 대회 후기 쓰기 — 커뮤니티 게시판(대회 후기 카테고리)으로 바로 작성 */}
+        <button type="button"
+          onClick={() => { if (!user) { promptLogin(); return; } openPostForm('tourney'); }}
+          className="flex w-full items-center gap-2 rounded-input border border-accent-400/40 bg-accent-300/[0.06] px-3 py-2.5 text-left transition-colors hover:bg-accent-300/[0.1]">
+          <span aria-hidden>📝</span>
+          <span className="min-w-0 flex-1">
+            <span className={`block text-xs font-bold ${ACCENT_INK}`}>이 대회 후기 쓰기</span>
+            <span className="block text-2xs text-ink-muted">참가 후기를 커뮤니티 게시판(대회 후기)에 남겨보세요 — 다른 플레이어에게 큰 도움이 됩니다.</span>
+          </span>
+          <span className={`shrink-0 ${ACCENT_INK}`} aria-hidden>→</span>
+        </button>
+        {/* 탭 칸(78px)에 안 들어가 점으로 압축한 '새 N' — 개수 자체는 여기서 원문 그대로 보존.
+            text-danger 단독은 라이트 surface-base 위 3.27:1 이라 소형 텍스트 기준 미달 → deep/light 쌍. */}
+        {schedule.unreadQnaCount > 0 && (
+          <p className={`text-2xs font-bold ${URGENT_INK}`}>새 {schedule.unreadQnaCount}</p>
         )}
-
-        {/* 상세 설명 */}
-        {schedule.description && (
-          <section className="reveal">
-            <h3 className="text-sm font-bold text-ink-primary mb-1.5">상세 설명</h3>
-            <p className="text-xs text-ink-secondary leading-relaxed whitespace-pre-wrap">
-              {schedule.description}
-            </p>
-          </section>
-        )}
+        <CommentThread
+          comments={qnaComments}
+          onSubmit={onSubmitComment}
+          onDelete={onDeleteComment}
+          emptyText="이 토너먼트에 대해 첫 질문을 남겨보세요."
+        />
+      </>)}
       </div>
-      )}
         </div>
       </div>
       {/* 포스터 풀스크린 라이트박스 — 핀치줌·더블탭·팬 */}
@@ -545,6 +695,150 @@ export default function ScheduleDetailModal({
         <ImageLightbox src={schedule.posterUrl} alt={`${schedule.title} 포스터`} onClose={() => setLightbox(false)} />
       )}
     </Modal>
+  );
+}
+
+// ── 라이브 클락 3열 패널(APIS 상세 상단) ──────────────────────────────────────
+// 왼: 프라이즈 요약 + 전체보기 / 가운데: LEVEL · 큰 타이머 · BLINDS · NEXT / 오른: PLAYERS 계열.
+// 데이터는 전부 기존 것만 쓴다 — clock API(getVenueClocks·effectiveLevel·subscribeClock),
+// liveStats 스냅샷, regStatus(matchClockSchedule·msToRegClose). 새 백엔드·새 컬럼 없음.
+//
+// 390px 붕괴: 타이머가 1행 전체(col-span-2), 그 아래 프라이즈|PLAYERS 2열.
+// sm 이상에서 order 로 APIS 순서(프라이즈·타이머·PLAYERS)를 복원한다 — 모바일에서 타이머를
+// 맨 위에 두는 이유는 '지금 몇 분 남았나'가 이 화면의 심장이라서다.
+function LiveClockPanel({ schedule, regInfo, onSeePrize }: {
+  schedule: Schedule; regInfo?: RegInfo; onSeePrize: () => void;
+}) {
+  const { id, venueId, date, title } = schedule;
+  // matchClockSchedule 은 Schedule[] 을 받는다 — 매칭 규칙(같은 매장·같은 날짜, 여럿이면 제목 일치)을
+  // 여기서 다시 짜면 규칙이 두 벌이 된다. 최소 필드 스텁 1개로 그 단일 소스를 그대로 호출한다.
+  const stub = useMemo(() => [{ id, venueId, date, title } as Schedule], [id, venueId, date, title]);
+  const [clock, setClock] = useState<ClockState | null>(null);
+  useEffect(() => {
+    if (!venueId) return;
+    let alive = true;
+    const load = () => getVenueClocks(venueId)
+      .then((gs) => { if (alive) setClock(gs.find((g) => matchClockSchedule(g, stub)) ?? null); })
+      // 조회 실패를 화면 상태로 승격시키지 않는다 — 패널은 직전 값을 유지하고,
+      // 아래 참가 예약 문구(regInfo 기반)가 이미 '지금 등록 되나'의 답을 들고 있다.
+      .catch(() => {});
+    load();
+    const t = window.setInterval(load, 30_000);
+    const off = subscribeClock(venueId, load); // 레벨 전환·엔트리 갱신 즉시 반영
+    return () => { alive = false; window.clearInterval(t); off(); };
+  }, [venueId, stub]);
+
+  // 1초 틱 — 모달이 열려 있는 동안(=이 컴포넌트가 마운트된 동안)만, 그리고 클락이 도는 동안만.
+  const running = !!clock?.running;
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!running) return;
+    const t = window.setInterval(() => setTick((x) => x + 1), 1_000);
+    return () => window.clearInterval(t);
+  }, [running]);
+
+  const lvls = clock?.config?.levels ?? [];
+  // 손님 기기는 쓰기 권한이 없다 — 표시만 보정한다(DB 전진은 운영자 화면 책임).
+  const eff = clock ? effectiveLevel(clock) : null;
+  const lv = eff ? lvls[eff.index] : undefined;
+  const isBreak = lv?.kind === 'break';
+  const levelNo = eff ? levelNoAt(lvls, eff.index) : 0;
+  const nextLv = eff ? lvls.slice(eff.index + 1).find((l) => l.kind === 'level') : undefined;
+  const remain = eff ? eff.remainingMs : 0;
+  const mm = String(Math.floor(remain / 60_000)).padStart(2, '0');
+  const ss = String(Math.floor((remain % 60_000) / 1000)).padStart(2, '0');
+  const regMs = clock && eff ? msToRegClose(clock, eff.index, eff.remainingMs) : (regInfo?.msLeft ?? null);
+  const regLv = clock?.config?.regCloseLevel ?? 0;
+  // 다음 브레이크까지 — 현재 레벨 잔여 + 사이 레벨들의 길이 누적
+  let breakMs: number | null = null;
+  if (eff) {
+    let acc = eff.remainingMs;
+    for (let i = eff.index + 1; i < lvls.length; i++) {
+      if (lvls[i].kind === 'break') { breakMs = acc; break; }
+      acc += (lvls[i].minutes || 0) * 60_000;
+    }
+  }
+  const ls = clock?.liveStats ?? null;
+
+  return (
+    <section className={[
+      'rounded-card border p-2',
+      running ? 'border-emerald-500/30 bg-emerald-500/[0.04]' : 'border-border-default bg-surface-high/40',
+    ].join(' ')}>
+      {/* 헤더: ● LIVE ────────────── 레지 마감 · LV8 */}
+      <div className="mb-2 flex items-center gap-2 px-1">
+        <span className={['flex shrink-0 items-center gap-1 text-2xs font-bold leading-none',
+          running ? LIVE_INK : 'text-ink-secondary'].join(' ')}>
+          <span aria-hidden>●</span>{running ? 'LIVE' : '일시정지'}
+        </span>
+        <span className="ml-auto min-w-0 truncate text-2xs font-bold leading-none">
+          {regMs === null ? (
+            <span className="text-ink-muted">레지 마감 · 현장 안내</span>
+          ) : regMs === 0 ? (
+            <span className="text-ink-muted">레지 마감{regLv > 0 ? ` · LV${regLv}` : ''} · 마감</span>
+          ) : (
+            <span className={regMs <= 5 * 60_000 ? URGENT_INK : LIVE_INK}>
+              레지 마감{regLv > 0 ? ` · LV${regLv}` : ''} · {minLabel(regMs)} 남음
+            </span>
+          )}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {/* ── 가운데(모바일 1행): LEVEL · 타이머 · BLINDS · NEXT ── */}
+        <div className="col-span-2 flex min-h-[7.5rem] flex-col items-center justify-center rounded-input border border-border-subtle bg-surface-low px-3 py-2.5 text-center sm:order-2 sm:col-span-1">
+          <p className="text-2xs font-bold leading-none tracking-wider text-ink-muted">
+            {isBreak ? 'BREAK' : `LEVEL ${levelNo || '-'}`}
+          </p>
+          {/* tabular-nums + 고정 최소 높이 = 초가 바뀌어도 폭·행높이가 흔들리지 않는다(CLS 0) */}
+          <p className="mt-1 font-display text-[2.125rem] font-extrabold leading-none tabular-nums text-ink-primary">
+            {eff ? `${mm}:${ss}` : '--:--'}
+          </p>
+          <p className="mt-2 text-2xs font-bold leading-none tracking-wider text-ink-muted">BLINDS</p>
+          <p className="mt-1 text-sm font-bold leading-none tabular-nums text-ink-primary">
+            {isBreak ? '휴식 중' : blindText(lv)}
+          </p>
+          <p className="mt-1 text-2xs leading-none tabular-nums text-ink-muted">NEXT {blindText(nextLv)}</p>
+        </div>
+
+        {/* ── 왼쪽: 프라이즈 요약 + 전체보기 ── */}
+        <div className="flex min-h-[6.5rem] flex-col rounded-input border border-border-subtle bg-surface-low px-3 py-2.5 sm:order-1">
+          <p className="text-2xs font-bold leading-none tracking-wider text-ink-muted">PRIZE</p>
+          {/* §28: 프라이즈풀·GTD 는 상품 가격 정보라 표시 유지 */}
+          <p className="mt-1.5 text-lg font-extrabold leading-none tabular-nums text-ink-primary">{prizeMainText(schedule)}</p>
+          <p className="mt-1.5 text-2xs leading-snug text-ink-muted">
+            {schedule.guaranteed ? '참가 인원과 무관한 보장 상금' : '엔트리 대비 상금'}
+          </p>
+          <button type="button" onClick={onSeePrize}
+            className={`mt-auto pt-2 text-left text-2xs font-bold ${ACCENT_INK}`}>
+            프라이즈 전체보기 →
+          </button>
+        </div>
+
+        {/* ── 오른쪽: PLAYERS · TOTAL CHIPS · AVG STACK · NEXT BREAK ── */}
+        <div className="flex min-h-[6.5rem] flex-col rounded-input border border-border-subtle bg-surface-low px-3 py-2.5 sm:order-3">
+          <p className="text-2xs font-bold leading-none tracking-wider text-ink-muted">PLAYERS</p>
+          <p className="mt-1.5 text-lg font-extrabold leading-none tabular-nums text-ink-primary">
+            {ls ? `${ls.alive}/${ls.entries}` : '—'}
+          </p>
+          <dl className="mt-1.5 space-y-1 text-2xs leading-none">
+            <StatRow label="TOTAL CHIPS" value={ls && ls.totalStack > 0 ? ls.totalStack.toLocaleString() : '—'} />
+            <StatRow label="AVG STACK" value={ls && ls.avgStack > 0 ? ls.avgStack.toLocaleString() : '—'} />
+            <StatRow label="NEXT BREAK" value={isBreak ? '휴식 중' : breakMs !== null ? minLabel(breakMs) : '없음'} />
+          </dl>
+        </div>
+      </div>
+      <p className="mt-1.5 px-1 text-2xs text-ink-muted">운영 중 클락의 공개 정보입니다 · 실시간 반영</p>
+    </section>
+  );
+}
+
+function StatRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <dt className="shrink-0 tracking-wider text-ink-muted">{label}</dt>
+      <dd className="min-w-0 truncate font-bold tabular-nums text-ink-primary">{value}</dd>
+    </div>
   );
 }
 
@@ -842,8 +1136,9 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
 // ── 블라인드 구조 ────────────────────────────────────────────────────────────
 
 // 포스터 기본 블라인드 구조 — 로티 파이널롤백 기반 템플릿. 기본 접힘, 클릭 시 펼침. 레지 마감(기본 16LV) 이후 25LV까지 표시.
-function BlindStructure({ schedule }: { schedule: Schedule }) {
+function BlindStructure({ schedule, alwaysOpen = false }: { schedule: Schedule; alwaysOpen?: boolean }) {
   const [open, setOpen] = useState(false);
+  const shown = alwaysOpen || open;
   const regClose = (() => {
     const m = String(schedule.regCloseTime ?? '').match(/\d+/);
     const n = m ? parseInt(m[0], 10) : 16;
@@ -859,6 +1154,15 @@ function BlindStructure({ schedule }: { schedule: Schedule }) {
   let levelNo = 0;
   return (
     <section>
+      {/* 요약 줄 — 전용 탭(alwaysOpen)에서는 누를 게 없으므로 버튼이 아니라 정적 헤더로 낮춘다 */}
+      {alwaysOpen ? (
+        <div className="flex w-full items-center justify-between gap-2 rounded-input border border-border-subtle bg-surface-high px-3 py-2.5">
+          <span className="flex items-center gap-2 min-w-0">
+            <span className="text-sm font-semibold text-ink-primary shrink-0">블라인드 구조</span>
+            <span className="text-2xs text-ink-muted truncate">{custom && custom.length ? `맞춤 ${custom.filter((l) => !l.isBreak).length}레벨` : `레지 ${regClose}LV 마감 · ${dur}분 · ~25LV`}</span>
+          </span>
+        </div>
+      ) : (
       <button type="button" onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center justify-between gap-2 rounded-input border border-border-subtle bg-surface-high px-3 py-2.5 text-left transition-colors hover:border-border-default">
         <span className="flex items-center gap-2 min-w-0">
@@ -868,9 +1172,12 @@ function BlindStructure({ schedule }: { schedule: Schedule }) {
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
           className={`shrink-0 text-ink-muted transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden><polyline points="6 9 12 15 18 9" /></svg>
       </button>
+      )}
 
-      {open && (
-        <div className="mt-2 overflow-hidden rounded-input border border-border-subtle animate-fade-in">
+      {shown && (
+        // 탭 전용(alwaysOpen)에서는 진입 애니를 붙이지 않는다 — 탭을 오갈 때마다 긴 표 전체에
+        // blur 필터가 다시 걸리면 그게 곧 페인트 폭탄이다(§20.4 #3).
+        <div className={`mt-2 overflow-hidden rounded-input border border-border-subtle ${alwaysOpen ? '' : 'animate-fade-in'}`}>
           <table className="w-full text-2xs tabular-nums">
             <thead>
               <tr className="bg-surface-high text-ink-muted">
@@ -948,12 +1255,15 @@ function MarqueeText({ text, className = '' }: { text: string; className?: strin
   );
 }
 
-// 콤팩트 정보 행 — 라벨 좌 / 값 우 한 줄. 긴 값은 MarqueeText 가 옆으로 흘린다.
+// 게임 정보 2열 정의 행 — 라벨(dt) 좌 / 값(dd) 우. 긴 값은 MarqueeText 가 옆으로 흘린다.
+// dl > div > dt+dd 는 HTML5 유효 구조 — 행 단위 구분선을 주려면 래퍼가 필요하다.
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center gap-3 py-1.5">
-      <span className="w-[4.5rem] shrink-0 text-2xs text-ink-muted">{label}</span>
-      <MarqueeText text={value} className="flex-1 text-xs font-semibold text-ink-primary tabular-nums text-right" />
+    <div className="grid grid-cols-[5rem_minmax(0,1fr)] items-center gap-3 py-1.5">
+      <dt className="text-2xs text-ink-muted">{label}</dt>
+      <dd className="min-w-0">
+        <MarqueeText text={value} className="text-xs font-semibold text-ink-primary tabular-nums text-right" />
+      </dd>
     </div>
   );
 }
