@@ -1,4 +1,4 @@
-import { memo, useState, useMemo, useCallback, useEffect, useLayoutEffect, useRef, Fragment, useTransition, type ReactNode } from 'react';
+import { memo, useState, useMemo, useCallback, useEffect, useLayoutEffect, useRef, Fragment, useTransition, startTransition, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import { withViewTransition } from '../../lib/viewTransition';
 import { promptLogin } from '../../lib/requireLogin';
@@ -100,6 +100,19 @@ function relativeTime(iso: string): string {
   return `${Math.floor(diff/86400)}일 전`;
 }
 
+// 섹션 루트 memo (2026-08-28) — 서브탭 전환은 section state 로 CommunityTab 을 재렌더하는데,
+// keep-alive + 유휴 프리마운트로 6개 섹션이 전부 마운트돼 있으면 그 재렌더가 전 섹션으로 번진다.
+// 실측(CPU 4×): memo 없이 프리마운트만 켰더니 첫 전환 롱프레임이 115ms → 219ms(게시판)로 악화됐다.
+// 각 섹션은 section 을 읽지 않으므로 memo 로 끊는다 — 전환 프레임에는 '숨김→표시' 레이아웃만 남는다.
+// (marketSlot 은 App 의 useMemo 로 요소 참조가 고정돼 React 가 이미 서브트리를 건너뛴다)
+const LiveWallSectionM     = memo(LiveWallSection);
+const FeedSectionM         = memo(FeedSection);
+const VenuesSectionM       = memo(VenuesSection);
+const MyCommunitiesActionM = memo(MyCommunitiesAction);
+const TierLeaderboardM     = memo(TierLeaderboard);
+const DealerCommunityM     = memo(DealerCommunity);
+const OwnerCommunityM      = memo(OwnerCommunity);
+
 function CommunityTab({
   venues, comments, posts: rawPosts, notices = [], isAdmin = false, onWriteNotice, onSelectNotice,
   onSelectVenue, onSelectPost, onOpenWrite, onLikePost, onDeletePost, onReloadVenues, marketSlot,
@@ -130,12 +143,23 @@ function CommunityTab({
   const secScrollRef = useRef(new Map<Section, number>());
   const activeSecRef = useRef<Section>(section);
   useEffect(() => { activeSecRef.current = section; }, [section]);
+  // 마지막 서브탭 전환 시각 — 유휴 프리마운트가 전환(VT .26s) 한복판에 커밋을 얹지 않도록 양보 판정용
+  const lastSwitchAtRef = useRef(0);
+  // 스크롤 복원이 실제로 필요한 전환인지 — setSection 이 판정한다. 초기값 false 라
+  // '마운트만 된' 경우(App 의 탭 프리마운트로 숨긴 채 마운트)엔 보이는 탭의 스크롤을 건드리지 않는다.
+  const needScrollRef = useRef(false);
   // 메인 하단 탭 changeTab(App.tsx)과 동일 조리법 — 재방문(keep-alive)은 View Transition 스냅샷 뒤
   // flushSync 동기 커밋(방향성 푸시: 오른쪽 탭 = forward), 첫 방문(lazy·초기 fetch)은 startTransition 으로
   // 이전 화면 유지. 렌더 상태를 읽지 않아(모듈 변수·ref·안정 Set) 빈 deps 리스너의 stale closure 에도 안전.
   const setSection = useCallback((s: Section) => {
     if (s === lastCommunitySection && s === activeSecRef.current) return; // 같은 탭 재탭 — 무의미한 스냅샷 방지
-    secScrollRef.current.set(activeSecRef.current, window.scrollY);
+    lastSwitchAtRef.current = performance.now(); // 프리마운트에게 '지금은 비켜라' 신호
+    // scrollY 는 여기서 딱 한 번 읽는다 — 레이아웃이 아직 깨끗한 시점이라 강제 리플로우가 없다.
+    const curY = window.scrollY;
+    secScrollRef.current.set(activeSecRef.current, curY);
+    // 복원할 위치가 지금과 같으면(둘 다 0인 흔한 경우) scrollTo 를 아예 부르지 않는다 —
+    // VT 콜백(flushSync) 안의 scrollTo 는 강제 동기 레이아웃을 한 번 더 유발한다.
+    needScrollRef.current = (secScrollRef.current.get(s) ?? 0) !== curY;
     lastCommunitySection = s;
     setShownSec(s);
     if (visitedSecs.has(s)) {
@@ -163,6 +187,8 @@ function CommunityTab({
   // 복원은 layout 단계(페인트 전) — '맨 위가 번쩍했다가 내려가는' 깜빡임 방지. keep-alive 라 DOM 높이가 이미 있다.
   // flushSync 커밋 경로에선 스냅샷 뒤에서 실행돼 복원 비용까지 크로스페이드가 가린다.
   useLayoutEffect(() => {
+    if (!needScrollRef.current) return;
+    needScrollRef.current = false;
     window.scrollTo({ top: secScrollRef.current.get(section) ?? 0, behavior: 'instant' as ScrollBehavior });
   }, [section]);
   // 이미 마운트된 상태(keep-alive)에서 외부가 섹션을 지정할 때 — 예: 대시보드 '내 장터 거래'
@@ -183,6 +209,8 @@ function CommunityTab({
   const isDesktop = useIsDesktop();
   const [boardSelected, setBoardSelected] = useState<CommunityPost | null>(null);
   const canOwnerCommunity = isAdmin || (user?.role === 'venue_owner' && user?.venueVerified === true);
+  // 인라인 화살표면 FeedSectionM 의 memo 가 서브탭 전환마다 깨진다 — 참조 고정
+  const openWriteFree = useCallback(() => onOpenWrite('free'), [onOpenWrite]);
 
   // 서브탭 바(가로 스크롤) — 외부 지정(딥링크·대시보드 바로가기)으로 바뀐 활성 탭이 화면 밖이면 보이게 끌어온다
   const secBarRef = useRef<HTMLDivElement>(null);
@@ -190,6 +218,56 @@ function CommunityTab({
     secBarRef.current?.querySelector<HTMLElement>('[data-pill-active]')
       ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }, [shownSec]);
+
+  // ── 유휴 프리마운트 (2026-08-28) ─────────────────────────────────────────────
+  // 오너 관찰: "하부 메뉴는 처음 들어갈 때만 뚝뚝 끊기고 두 번째 이동부터 부드럽다."
+  // 원인은 위 setSection 의 두 갈래다 —
+  //   · 미방문 섹션 → else 가지(startTransition). View Transition 이 아예 없어 크로스페이드가
+  //     붙지 않고, 첫 마운트 비용(첫 조회·목록 렌더·레이아웃)이 그대로 노출된다.
+  //   · 재방문 → VT 스냅샷 + flushSync. 같은 커밋 비용이 크로스페이드 뒤에서 치러져 '부드럽다'가 된다.
+  // 그래서 커뮤니티가 실제로 화면에 뜬 뒤, idle 마다 '하나씩' 미방문 섹션을 display:none 인 채로
+  // 미리 마운트해 사용자의 첫 이동까지 재방문(VT) 경로로 만든다. App.tsx premountTick 과 같은 사상.
+  //   · 한 번에 하나인 이유: 6개 동시 커밋은 그 자체가 idle 롱태스크가 된다.
+  //   · display:none 서브트리는 레이아웃·페인트를 건너뛰므로 프리마운트 커밋은 실제 전환보다 싸다.
+  //   · 화면에 뜬 뒤에 시작하는 이유: 커뮤니티를 열지도 않은 사용자에게 랭킹·실시간·딜러 조회를
+  //     미리 태우지 않는다(App 의 탭 프리마운트는 커뮤니티를 '숨긴 채' 마운트한다).
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [, setPremountTick] = useState(0);
+  const hasMarket = !!marketSlot;
+  useEffect(() => {
+    let cancelled = false;
+    const w = window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number };
+    const idle = (cb: () => void) => {
+      if (w.requestIdleCallback) w.requestIdleCallback(cb, { timeout: 3000 });
+      else window.setTimeout(cb, 600);
+    };
+    // 진열 순서 = 사용자가 다음에 누를 확률 순서. 조건부 섹션은 노출될 때만 태운다.
+    const seq = SEC_ORDER.filter((s) => (s === 'market' ? hasMarket : s === 'owner' ? canOwnerCommunity : true));
+    const mountNext = () => {
+      if (cancelled) return;
+      const s = seq.find((x) => !visitedSecs.has(x));
+      if (!s) return; // 전부 마운트 완료 — 체인 종료
+      // 사용자가 방금 서브탭을 눌렀다면 그 전환(VT --dur-panel .26s)이 끝날 때까지 양보한다.
+      // 사용자가 고른 섹션은 section===s 로 이미 즉시 렌더되므로 언제나 프리마운트보다 우선이다.
+      if (performance.now() - lastSwitchAtRef.current < 500) { idle(mountNext); return; }
+      visitedSecs.add(s);
+      // transition: 장터(lazy 청크)가 suspend 해도 상위 Suspense 폴백으로 교체되지 않는다
+      startTransition(() => setPremountTick((n) => n + 1));
+      idle(mountNext);
+    };
+    // 커뮤니티 페인이 display:none 이면 교차하지 않는다 — 탭이 실제로 열리는 순간 1회만 발화
+    const el = rootRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver((entries) => {
+      if (!entries.some((e) => e.isIntersecting)) return;
+      io.disconnect();
+      idle(mountNext);
+    });
+    io.observe(el);
+    return () => { cancelled = true; io.disconnect(); };
+    // visitedSecs 는 안정 Set 인스턴스(useState 초기화) — 참조 불변
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasMarket, canOwnerCommunity]);
 
   // 매장 정렬: 1) 유료광고(isPaidAd) → 2) 팔로워수 내림차순
   const sortedVenues = useMemo(() => {
@@ -222,7 +300,7 @@ function CommunityTab({
   const boardPosts = sortedPosts;
 
   return (
-    <div className="space-y-3">
+    <div ref={rootRef} className="space-y-3">
       {/* 섹션 서브탭 바 — 세계 표준 세그먼트 문법(트위터/인스타 상단 탭): 일정한 패딩·간격,
           넘치면 가로 스크롤, 활성 표시는 공용 SlidingPill(LedgerStatsPanel 기간 바와 같은 집안 문법).
           진열은 사용 빈도순(게시판·실시간·랭킹·장터 앞, 딜러·업주 뒤). 첫 탭은 매장 디렉터리라
@@ -250,25 +328,25 @@ function CommunityTab({
           keep-alive: 방문한 섹션은 언마운트하지 않고 display 토글(메인 탭과 동일) — 재방문 커밋 프레임이 가볍다 */}
       <div className={(section === 'board' || section === 'market') ? '' : 'mx-auto w-full max-w-3xl'}>
       {(visitedSecs.has('live') || section === 'live') && (
-        <div style={{ display: section === 'live' ? undefined : 'none' }}>
-          <LiveWallSection />
+        <div data-sec="live" style={{ display: section === 'live' ? undefined : 'none' }}>
+          <LiveWallSectionM />
         </div>
       )}
 
       {(visitedSecs.has('board') || section === 'board') && (
-        <div style={{ display: section === 'board' ? undefined : 'none' }}
+        <div data-sec="board" style={{ display: section === 'board' ? undefined : 'none' }}
           className="lg:flex lg:items-start lg:gap-4">
           {/* 좌측: 목록(압축) — 19rem(304px)은 PostRow 고정 메타(작성자+칭호+시간+조회 ≈368px)보다
               좁아 제목이 0px로 뭉개지고 조회수가 행 밖으로 잘렸다(PC 1280·1536 점검 2026-08-28).
               lg 24rem / xl 30rem: 1280 기준 우측 상세는 692px 확보(max-w-3xl 읽기폭과 근접). */}
           <div className="min-w-0 lg:w-[24rem] lg:shrink-0 xl:w-[30rem]">
-            <FeedSection
+            <FeedSectionM
               posts={boardPosts}
               notices={notices}
               isAdmin={isAdmin}
               onWriteNotice={onWriteNotice}
               onSelectNotice={onSelectNotice}
-              onOpenWrite={() => onOpenWrite('free')}
+              onOpenWrite={openWriteFree}
               onLike={onLikePost}
               onSelectPost={isDesktop ? setBoardSelected : onSelectPost}
               selectedId={isDesktop ? boardSelected?.id : undefined}
@@ -299,9 +377,9 @@ function CommunityTab({
       )}
 
       {(visitedSecs.has('venues') || section === 'venues') && (
-        <div style={{ display: section === 'venues' ? undefined : 'none' }} className="space-y-3">
-          <MyCommunitiesAction onSelectVenue={onSelectVenue} onCreated={onReloadVenues} />
-          <VenuesSection
+        <div data-sec="venues" style={{ display: section === 'venues' ? undefined : 'none' }} className="space-y-3">
+          <MyCommunitiesActionM onSelectVenue={onSelectVenue} onCreated={onReloadVenues} />
+          <VenuesSectionM
             sortedVenues={sortedVenues}
             query={query}
             onQuery={setQuery}
@@ -312,24 +390,24 @@ function CommunityTab({
       )}
 
       {(visitedSecs.has('rank') || section === 'rank') && (
-        <div style={{ display: section === 'rank' ? undefined : 'none' }}>
-          <TierLeaderboard />
+        <div data-sec="rank" style={{ display: section === 'rank' ? undefined : 'none' }}>
+          <TierLeaderboardM />
         </div>
       )}
 
       {(visitedSecs.has('dealer') || section === 'dealer') && (
-        <div style={{ display: section === 'dealer' ? undefined : 'none' }}>
-          <DealerCommunity />
+        <div data-sec="dealer" style={{ display: section === 'dealer' ? undefined : 'none' }}>
+          <DealerCommunityM />
         </div>
       )}
 
       {canOwnerCommunity && (visitedSecs.has('owner') || section === 'owner') && (
-        <div style={{ display: section === 'owner' ? undefined : 'none' }}>
-          <OwnerCommunity />
+        <div data-sec="owner" style={{ display: section === 'owner' ? undefined : 'none' }}>
+          <OwnerCommunityM />
         </div>
       )}
       {!!marketSlot && (visitedSecs.has('market') || section === 'market') && (
-        <div style={{ display: section === 'market' ? undefined : 'none' }}>
+        <div data-sec="market" style={{ display: section === 'market' ? undefined : 'none' }}>
           {marketSlot}
         </div>
       )}

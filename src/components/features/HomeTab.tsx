@@ -91,15 +91,36 @@ export default function HomeTab({
       {/* 시간대 인사 + 라이브 맥락 — 홈의 첫 줄은 컨트롤이 아니라 '지금'.
           hero-aurora(딥 플럼 오로라 워시)·text-grad-violet(헤드라인 그라데이션)은
           어워드 레퍼런스 브랜드 모멘트 — 홈 히어로 1곳 한정(과용 금지). */}
+      {/* 오너 지시(2026-08-28): 첫 줄(날짜·인사)은 NURI MIND 로, 헤드라인은 GTO 진입을 품는다 —
+          유저 핵심 콘텐츠가 GTO 라는 판단. 라이브가 있으면 '지금'이 먼저이므로 그 문구를 유지하고
+          GTO 유도는 아래 보조 줄이 맡는다(정보 위계 보존). */}
       <div className="px-page-x pt-3">
-        <p className="text-2xs text-ink-muted">
+        <a
+          href="https://www.nurimind.co.kr" target="_blank" rel="noopener"
+          className="inline-flex items-center gap-1 py-1 -my-1 text-2xs text-ink-muted transition-colors hover:text-accent-200"
+        >
           {now.getMonth() + 1}/{now.getDate()}({DAYS_KO[now.getDay()]}) · {greeting(now)}
-        </p>
-        <h2 className="font-display text-xl font-bold tracking-tight text-ink-primary text-grad-violet">
-          {liveCount > 0
-            ? <>지금 <span className="tabular-nums text-emerald-400 text-grad-keep">{liveCount}</span>개 게임 진행 중</>
-            : '오늘의 토너먼트를 찾아보세요'}
-        </h2>
+          <span className="font-semibold text-accent-300">· NURI MIND ›</span>
+        </a>
+        {liveCount > 0 ? (
+          <h2 className="font-display text-xl font-bold tracking-tight text-ink-primary text-grad-violet">
+            지금 <span className="tabular-nums text-emerald-400 text-grad-keep">{liveCount}</span>개 게임 진행 중
+          </h2>
+        ) : (
+          <button type="button" onClick={onTools} className="block w-full text-left">
+            <h2 className="font-display text-xl font-bold tracking-tight text-ink-primary text-grad-violet">
+              오늘 한 판, GTO로 준비하세요
+            </h2>
+            <span className="mt-0.5 inline-flex items-center gap-1 text-2xs font-semibold text-accent-300">
+              차트 · 계산기 · 트레이너 열기 ›
+            </span>
+          </button>
+        )}
+        {liveCount > 0 && (
+          <button type="button" onClick={onTools} className="mt-0.5 inline-flex items-center gap-1 py-1 -my-1 text-2xs font-semibold text-accent-300 transition-colors hover:text-accent-200">
+            GTO 도구로 준비하기 ›
+          </button>
+        )}
       </div>
 
       {/* 지금 등록 가능 — 라이브 실측이 열려 있을 때만. 지난 방문에 열린 대회가 있던

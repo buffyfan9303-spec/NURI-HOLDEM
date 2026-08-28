@@ -527,8 +527,11 @@ body { overscroll-behavior-y: contain; }
 /* ── 라이트 모드 가독 오버라이드(unlayered — utilities 레이어보다 우선) ──
    고정 브랜드색 중 흰 배경에서 대비가 무너지는 "텍스트"만 딥 톤으로 교정.
    배경·버튼의 골드/그린(bg-*)은 그대로 유지. */
-html.light .text-gold-200, html.light .text-gold-300 { color: #A06D00; }
-html.light .text-gold-400 { color: #8F6200; }
+/* gold-200/300 은 #A06D00 이었으나 흰 배경 4.49:1 로 소형 텍스트 기준(4.5)에 0.01 미달이었고,
+   surface-low 같은 살짝 틴트된 배경에선 3.97:1 까지 떨어졌다(상세 모달 '상금 풀' 값 실측).
+   이미 이 블록에 있던 gold-400 의 딥 톤(#8F6200)으로 통일 — 새 색 신설 없이 아래를 만족한다:
+   흰 배경 5.39:1 · surface-low(#F2F3F5 계열) 4.77:1. (2026-08-28 일정 표 상금 골드화로 노출 확대)*/
+html.light .text-gold-200, html.light .text-gold-300, html.light .text-gold-400 { color: #8F6200; }
 html.light .text-emerald-300, html.light .text-emerald-400 { color: #0A8F5C; }
 html.light .text-danger-light { color: #D63A4E; }
 /* 액센트 텍스트 — 라이트에선 100/200 변수가 연한 틴트(비텍스트)라 텍스트로 쓰인 곳만 딥 톤 교정.

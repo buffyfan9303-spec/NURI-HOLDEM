@@ -23,7 +23,7 @@ import StaffSchedule from './StaffSchedule';
 import { StaffWageManager, StaffSettlement, StaffWorkLog, StaffSelfAttendance } from './StaffPayroll';
 import StoreDashboard from './StoreDashboard';
 import { VoucherManagePanel } from './VoucherManageModal';
-import { listVoucherNotes, iCanViewVouchers, getVoucherAccessUserIds, grantVoucherAccess, revokeVoucherAccess, findUserForTransfer, issueVoucher } from '../../api/vouchers';
+import { listVoucherNotes, iCanViewVouchers, getVoucherAccessUserIds, grantVoucherAccess, revokeVoucherAccess, findUserForTransfer, issueVoucher, type TransferTarget } from '../../api/vouchers';
 import MyPostersTab from './MyPostersTab';
 import VenueCustomizePanel, { VenueRankHub } from './VenueCustomizePanel';
 import SectionHeader from '../atoms/SectionHeader';
@@ -1558,9 +1558,16 @@ function StaffManager({ venueId }: { venueId: string }) {
   const [access, setAccess] = useState<string[]>([]); // 장부·순위 권한 보유 직원 id
   const [vouch, setVouch] = useState<string[]>([]); // 이용권 내역 열람 권한 보유 직원 id
   const [loading, setLoading] = useState(true);
-  const [email, setEmail] = useState('');
+  // 초대 입력 하나가 두 경로를 겸한다 — '@' 가 있으면 이메일(기존 경로 그대로),
+  // 없으면 아이디(닉네임) 검색. 모드 토글을 두지 않는 이유: 업주는 상대가
+  // '이메일로 가입했는지'를 모르고, 아는 건 화면에 보이는 아이디뿐이다.
+  const [ident, setIdent] = useState('');
+  const [results, setResults] = useState<TransferTarget[]>([]);
+  const [searching, setSearching] = useState(false);
   const [inviting, setInviting] = useState(false);
   const [tick, setTick] = useState(0);
+  const identTrim = ident.trim();
+  const isEmailMode = identTrim.includes('@');
 
   useEffect(() => {
     setLoading(true);
@@ -1591,21 +1598,40 @@ function StaffManager({ venueId }: { venueId: string }) {
     catch (e) { toast.show(e instanceof Error ? e.message : '권한 변경 실패', 'error'); reload(); }
   };
 
-  const invite = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const addr = email.trim();
-    if (!addr) return;
+  // 아이디 검색 — 기존 RPC find_user_for_transfer 재사용(쪽지·이용권 전달과 같은 동선·같은 300ms).
+  // profiles 직접 select 는 RLS 로 빈 결과라 반드시 RPC 경유. 결과의 id 가 초대의 정본 키다
+  // (닉네임엔 DB unique 제약이 없어 문자열로 보내면 동명이인에서 오초대가 난다).
+  useEffect(() => {
+    if (isEmailMode || identTrim.length < 2) { setResults([]); setSearching(false); return; }
+    setSearching(true);
+    const t = setTimeout(() => {
+      findUserForTransfer(identTrim)
+        .then(setResults)
+        .catch(() => setResults([]))
+        .finally(() => setSearching(false));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [identTrim, isEmailMode]);
+
+  // 초대 실행 — 식별자는 uuid(목록에서 고름) · 이메일 · 아이디 정확일치 셋 다 서버가 해석한다.
+  const sendInvite = async (identifier: string) => {
+    if (!identifier) return;
     setInviting(true);
     try {
-      await inviteStaffByEmail(addr, venueId);
-      toast.show('초대를 보냈습니다', 'success');
-      setEmail('');
+      await inviteStaffByEmail(identifier, venueId);
+      toast.show('초대를 보냈습니다 — 상대가 알림에서 수락하면 합류합니다', 'success');
+      setIdent('');
+      setResults([]);
       reload();
     } catch (err) {
       toast.show(err instanceof Error ? err.message : '초대에 실패했습니다', 'error');
     } finally {
       setInviting(false);
     }
+  };
+  const invite = (e: React.FormEvent) => {
+    e.preventDefault();
+    void sendInvite(identTrim);
   };
 
   const cancel = async (id: string) => {
@@ -1620,23 +1646,61 @@ function StaffManager({ venueId }: { venueId: string }) {
 
   return (
     <div className="space-y-4">
-      {/* 구성원 초대 */}
+      {/* 구성원 초대 — 아이디(닉네임) 검색 또는 이메일 */}
       <form onSubmit={invite} className="space-y-1.5">
-        <label className="block text-xs font-semibold text-ink-secondary">구성원 초대</label>
+        <label htmlFor="staff-invite-ident" className="block text-xs font-semibold text-ink-secondary">구성원 초대</label>
         <div className="flex gap-2">
           <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="초대할 회원 이메일"
+            id="staff-invite-ident"
+            type="text"
+            inputMode="email"
+            value={ident}
+            onChange={(e) => setIdent(e.target.value)}
+            placeholder="아이디(닉네임) 또는 이메일"
             autoComplete="off"
+            aria-describedby="staff-invite-hint"
             className="input flex-1 text-sm"
           />
-          <button type="submit" disabled={inviting || !email.trim()} className="btn-primary px-4 shrink-0 disabled:opacity-60">초대</button>
+          <button type="submit" disabled={inviting || !identTrim} className="btn-primary px-4 shrink-0 disabled:opacity-60">초대</button>
         </div>
+
+        {/* 아이디 경로 — 디바운스 검색 후보. 선택하면 그 회원 id 로 초대해 동명이인 오초대를 막는다. */}
+        {!isEmailMode && identTrim.length >= 2 && (
+          <div className="rounded-input border border-border-subtle bg-surface-low">
+            {searching && results.length === 0 ? (
+              <p className="px-2.5 py-2 text-2xs text-ink-muted">검색 중…</p>
+            ) : results.length === 0 ? (
+              <p className="px-2.5 py-2 text-2xs text-ink-muted">
+                가입 이력이 없어요 — 이메일로 초대하거나, 먼저 일반 회원으로 가입하도록 안내해 주세요.
+              </p>
+            ) : (
+              <ul className="divide-y divide-border-subtle">
+                {results.map((u) => {
+                  const already = staff.some((s) => s.id === u.id);
+                  const pending = invites.some((iv) => iv.userId === u.id);
+                  const blocked = already || pending;
+                  return (
+                    <li key={u.id} className="flex items-center gap-2 px-2.5 py-2">
+                      <span className="flex-1 min-w-0 truncate text-sm text-ink-primary">{u.display}</span>
+                      {u.verified === false && <span className="shrink-0 text-2xs text-ink-muted">미인증</span>}
+                      {already && <span className="shrink-0 text-2xs text-ink-muted">이미 구성원</span>}
+                      {pending && <span className="shrink-0 text-2xs text-amber-400">초대 대기중</span>}
+                      <button
+                        type="button" disabled={inviting || blocked}
+                        onClick={() => void sendInvite(u.id)}
+                        className="shrink-0 text-2xs font-bold px-2.5 py-1.5 rounded-badge border border-accent-400/40 bg-accent-300/15 text-accent-300 hover:bg-accent-300/25 transition-colors disabled:opacity-40"
+                      >초대</button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        )}
+
         {/* 초대 절차 — 문장 나열 대신 번호 배지 스텝(순서가 의미 있는 3단계) */}
-        <ol className="flex flex-col gap-1 rounded-input border border-border-subtle bg-surface-low px-2.5 py-2 sm:flex-row sm:items-center sm:gap-3">
-          {(['상대가 일반 회원으로 가입', '가입한 이메일로 초대', '상대가 알림에서 수락 → 합류'] as const).map((t, i) => (
+        <ol id="staff-invite-hint" className="flex flex-col gap-1 rounded-input border border-border-subtle bg-surface-low px-2.5 py-2 sm:flex-row sm:items-center sm:gap-3">
+          {(['상대가 일반 회원으로 가입', '아이디나 이메일로 초대', '상대가 알림에서 수락 → 합류'] as const).map((t, i) => (
             <li key={t} className="flex items-center gap-1.5 text-2xs text-ink-muted">
               <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-accent-300/15 text-[10px] font-bold tabular-nums text-accent-300">{i + 1}</span>
               {t}
@@ -1676,7 +1740,7 @@ function StaffManager({ venueId }: { venueId: string }) {
               {TITLE_SUGGEST.map((t) => <option key={t} value={t} />)}
             </datalist>
             {staff.length === 0 ? (
-              <p className="py-6 text-center text-2xs text-ink-muted">아직 구성원이 없습니다. 위에서 이메일로 초대해 보세요.</p>
+              <p className="py-6 text-center text-2xs text-ink-muted">아직 구성원이 없습니다. 위에서 아이디나 이메일로 초대해 보세요.</p>
             ) : (
               <ul className="space-y-2">
                 {staff.map((s) => {
