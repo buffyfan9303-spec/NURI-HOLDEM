@@ -31,6 +31,7 @@ import PostDetailModal from './PostDetailModal';
 import SlidingPill from '../atoms/SlidingPill';
 import { useIsDesktop } from '../../lib/responsive';
 import { thumbUrl, thumbSrcSet } from '../../lib/imageUrl';
+import { BOARD_FILTER_CATEGORIES, categoryPillClass } from '../../lib/postCategory';
 
 interface CommunityTabProps {
   /** 장터 화면 임베드 슬롯 — 서브탭을 유지한 채 커뮤니티 안에서 장터를 보여준다 */
@@ -70,33 +71,10 @@ let lastCommunitySection: Section = 'venues';
 // market/owner 는 조건부 노출이지만 indexOf 상대 비교라 정적 전체 배열로 충분하다.
 const SEC_ORDER: Section[] = ['venues', 'board', 'live', 'rank', 'market', 'dealer', 'owner'];
 
-// 게시판 카테고리 필터
-const BOARD_CATEGORIES: { id: PostCategory | 'all'; label: string }[] = [
-  { id: 'all',      label: '전체' },
-  { id: 'hand',     label: '핸드 분석' },
-  { id: 'tourney',  label: '대회 후기' },
-  { id: 'question', label: '질문' },
-  { id: 'info',     label: '정보' },
-  { id: 'review',   label: '후기' },
-  { id: 'free',     label: '자유' },
-  { id: 'study',    label: '공부' },
-];
+// 게시판 카테고리 필터 — 라벨·색표는 src/lib/postCategory.ts 가 단일 출처.
+// (글보기 상세에도 같은 뱃지를 넣어야 해서 모듈로 뺐다 — 복사해 두면 언젠가 한쪽만 바뀐다)
+const BOARD_CATEGORIES = BOARD_FILTER_CATEGORIES;
 
-// 카테고리 pill 고정 팔레트(Nightingale §20.1) — 무지개 남발 금지, 15% 틴트 4계열로 고정.
-// accent(전략·분석) / emerald(정보·질문 긍정 신호) / gold(대회·후기) / 무채(자유·기본).
-const CATEGORY_TINT_FALLBACK = 'bg-surface-high text-ink-muted';
-const CATEGORY_TINTS: Partial<Record<PostCategory, string>> = {
-  hand:     'bg-accent-300/15 text-accent-300',
-  study:    'bg-accent-300/15 text-accent-300',
-  question: 'bg-emerald-400/15 text-emerald-400',
-  info:     'bg-emerald-400/15 text-emerald-400',
-  tourney:  'bg-gold-300/15 text-gold-400',
-  review:   'bg-gold-300/15 text-gold-400',
-  free:     CATEGORY_TINT_FALLBACK,
-};
-function categoryPillClass(cat: PostCategory | undefined): string {
-  return CATEGORY_TINTS[cat ?? 'free'] ?? CATEGORY_TINT_FALLBACK;
-}
 
 function relativeTime(iso: string): string {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
