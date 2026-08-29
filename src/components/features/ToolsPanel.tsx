@@ -172,11 +172,30 @@ export default function ToolsPanel() {
     return m && TOOLS.some((t) => t.key === m[1]) ? (m[1] as ToolKey) : null;
   });
   // GTO 도구는 로그인 회원 전용(오너 지시 2026-08-27) — 카탈로그는 보이되 실행에 게이트
-  const { user } = useAuth();
+  //
+  // ⚠ 2026-08-30: 예전엔 `if (!user) promptLogin()` 이었는데, 그게 **user 의 세 상태를 둘로 뭉갰다.**
+  //   Supabase 세션 복원은 비동기라 '페이지는 그려졌고 카드도 눌리는데 user 는 아직 null' 인 구간이 있다.
+  //   그 사이의 탭은 '비로그인' 으로 판정돼 도구가 안 열리고 로그인 시트가 떴다 —
+  //   **로그인했는데 로그인하라고 뜨는** 그 증상이다.
+  //   느린 기기일수록 창이 넓어진다. CI(2워커)에서 실측 12회 중 2회(약 17%) 재현됐고,
+  //   tools 스펙이 CI 에서만 다섯 번 간헐 실패하던 것의 정체가 이거였다.
+  //   → 로딩 중이면 **판정하지 말고 의도를 기억**했다가, 세션이 확정된 뒤에 연다.
+  //     확정 결과가 '비로그인' 이면 그때 로그인 시트를 띄운다(안내가 늦는 게 아니라 정확해진다).
+  const { user, loading: authLoading } = useAuth();
+  const pendingTool = useRef<ToolKey | null>(null);
   const open = (k: ToolKey) => {
+    if (authLoading) { pendingTool.current = k; return; }   // 아직 모른다 — 결론을 미룬다
     if (!user) { promptLogin(); return; }
     setActive(k);
   };
+  useEffect(() => {
+    if (authLoading) return;
+    const k = pendingTool.current;
+    if (!k) return;
+    pendingTool.current = null;
+    if (!user) { promptLogin(); return; }
+    setActive(k);
+  }, [authLoading, user]);
   const close = () => setActive(null);
 
   // ── 딥링크 해시(#tool=)는 **도구 자신의 history 항목**에 얹는다 ──────────────
