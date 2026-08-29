@@ -80,9 +80,21 @@
     ]
     </script>
     <!-- 디스플레이 페어링(오너 지시 2026-08-27): Noto Sans KR — 제목·큰 숫자 전용(본문은 Pretendard 유지) -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@100..900&display=swap" rel="stylesheet">
+    <!-- [FONT-2 · 2026-08-29] 렌더 차단 해제 + display=optional.
+         무엇이 문제였나: 이 한 줄이 첫 페인트를 붙잡고 있었다. 제목 7곳(700·800)에만 쓰는
+         디스플레이 폰트인데, 교차 출처 왕복 + **CSS 95KB / @font-face 124개**가 크리티컬 패스에 얹혔다.
+         바로 아래 Pretendard 는 공들여 비차단으로 만들어 뒀는데 그 앞에서 막고 있었다.
+
+         왜 swap 이 아니라 optional 인가 (이게 핵심):
+           · swap 은 늦게 와도 **반드시 교체**한다 → 전체 트리가 선 뒤에 폰트가 도착해
+             161ms 짜리 전면 재레이아웃이 새로 생긴다(비차단 전환만 했을 때 콜드 블로킹 403→628ms 실측).
+           · optional 은 블록 구간(~100ms) 안에 못 받으면 **그 페이지 로드에선 교체하지 않는다.**
+             재레이아웃도 CLS 도 원천적으로 없다 — "주르륵 밀림 금지"(모션 헌법)와 정합.
+         못 받았을 때의 모습: 폴백이 Pretendard Variable(이미 self-host 로 로드됨)이라
+         제목이 같은 계열 고딕 볼드로 뜬다. 재방문(캐시)에서는 즉시 Noto 가 적용된다.
+         ⚠ 굵기를 좁혀도 payload 는 안 줄어든다 — wght@700;800 은 static 2벌이라 248 face(190KB)로 오히려 2배,
+           wght@700..800 도 124 face(95KB)로 동일(2026-08-29 실측). 그래서 범위는 그대로 두고 로딩 방식만 바꾼다. -->
+    <noscript></noscript>
     <!-- [DS] FONT-1: Pretendard self-host(dynamic subset, font-display: optional).
          비차단 로드(print→all) — 콜드 방문은 폴백(system-ui)로 CLS 0, 웜 방문은 캐시 히트로 브랜드 폰트.
          라이선스: /fonts/pretendard/OFL.txt (SIL OFL 1.1) -->

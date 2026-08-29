@@ -87,8 +87,21 @@ export default {
       // ── Typography ────────────────────────────────────────────────────────
       fontFamily: {
         sans: ['Pretendard Variable', 'Pretendard', 'system-ui', 'sans-serif'],
-        // 디스플레이(제목·히어로 숫자) 전용 — Noto Sans KR(오너 지정), 본문은 Pretendard 유지
-        display: ['"Noto Sans KR"', 'Pretendard Variable', 'Pretendard', 'system-ui', 'sans-serif'],
+        // 디스플레이(제목·히어로 숫자) — 2026-08-29 Noto Sans KR 제거 후 Pretendard 로 통합.
+        //
+        // 왜: Noto 는 구글 폰트 CSS 로 왔는데 그 한 줄이 **렌더 차단 + CSS 95KB / @font-face 124개**를
+        //   크리티컬 패스에 얹고 있었다. 정작 쓰이는 곳은 제목 7군데(굵기 700·800)뿐이다.
+        //   굵기를 좁혀도 payload 는 안 줄었다(wght@700;800 은 static 2벌이라 248 face·190KB 로 오히려 2배).
+        //   비차단으로 미루는 것도 답이 아니었다 — 파싱 비용이 사라지는 게 아니라 React 렌더 한복판으로
+        //   옮겨가 블로킹이 더 늘었다(3-way 실측: 422 → 637ms).
+        //   제거하면 두 지표가 동시에 좋아진다: **FCP 388→148ms · 콜드 블로킹 422→342ms · CLS 동일.**
+        //   트레이드가 없는 유일한 선택지였다.
+        //
+        // 되돌리려면: 여기 맨 앞에 '"Noto Sans KR"' 를 다시 넣고 index.html 에 링크를 복원하면 된다.
+        //   다만 그때는 구글 CSS 대신 **self-host(dynamic subset, Pretendard 와 같은 조리법)** 로 가야 한다 —
+        //   구글 경유는 위 비용이 그대로 돌아온다.
+        // display 키는 남겨 둔다(호출부 font-display 클래스 7곳 불변). 지금은 sans 와 같은 스택이다.
+        display: ['Pretendard Variable', 'Pretendard', 'system-ui', 'sans-serif'],
         mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
       },
       fontSize: {

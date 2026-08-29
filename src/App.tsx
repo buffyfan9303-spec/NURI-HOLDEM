@@ -1736,6 +1736,24 @@ export default function App() {
     }
   }, [venues]);
 
+  // 없는 매장 링크(/s/<코드>) 안내 — 공유 링크를 받았는데 그 매장이 없을 때.
+  // 예전엔 조용히 홈이 떠서 **링크를 받은 사람이 왜 안 열리는지 몰랐다**(2026-08-29 점검).
+  // 서버(api/s.js)가 '못 찾음' 을 ?vnf= 로 알려 주면 여기서 한 번만 말하고 URL 을 정리한다.
+  // venues 로딩을 기다리지 않는다 — 판정은 이미 서버가 끝냈다.
+  const vnfShown = useRef(false);
+  useEffect(() => {
+    if (vnfShown.current) return;
+    try {
+      const code = new URLSearchParams(window.location.search).get('vnf');
+      if (!code) return;
+      vnfShown.current = true;
+      toast.show('그 주소의 매장을 찾을 수 없어요 — 링크가 바뀌었거나 문을 닫았을 수 있습니다', 'error');
+      const url = new URL(window.location.href);
+      url.searchParams.delete('vnf');
+      window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+    } catch { /* ignore */ }
+  }, [toast]);
+
   // 동적 SEO — 대회/매장 상세가 열리면 <head> 메타·canonical·JSON-LD 를 그에 맞게 갱신,
   // 둘 다 닫히면 홈 기본값으로 복원. Googlebot/네이버의 JS 렌더링이 읽어 개별 페이지 색인.
   useEffect(() => {

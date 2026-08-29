@@ -84,9 +84,24 @@ export async function getVenueRatings(): Promise<Record<string, VenueRating>> {
   // App(일정탐색 ⭐)과 CommunityTab(매장 목록)이 같은 순간 각자 부르며 5000행을 두 번 받아
   // 두 번 집계했다(실측 ×2) — 비행 중이면 합류해 왕복·파싱·집계를 한 번으로.
   return dedupe('venue-ratings', async () => {
-    const { data } = await supabase.from('venue_reviews').select('venue_id, rating').limit(5000);
+    // 2026-08-29: 집계를 서버로 내렸다(venue_rating_summary RPC).
+    //   예전엔 전 매장 후기를 통째로(limit 5000) 받아 브라우저에서 평균을 냈다 —
+    //   **응답이 리뷰 수에 선형**이라 쌓일수록 콜드 부팅이 무거워지고,
+    //   5000행에 닿는 순간 잘린 표본으로 평균을 내 **평점이 조용히 틀려진다.**
+    //   이제 응답이 '매장 수'에 비례하고 리뷰 수와 무관하다.
+    const { data, error } = await supabase.rpc('venue_rating_summary');
+    if (!error && Array.isArray(data)) {
+      const out: Record<string, VenueRating> = {};
+      for (const r of data as { venue_id: string; avg: number | string; count: number }[]) {
+        // numeric 은 PostgREST 가 문자열로 줄 수 있다(정밀도 보존) — 표시 반올림은 기존과 동일하게 0.1 단위.
+        out[r.venue_id] = { avg: Math.round(Number(r.avg) * 10) / 10, count: r.count };
+      }
+      return out;
+    }
+    // RPC 가 아직 배포되지 않은 환경(구버전 DB)에서도 화면이 비지 않게 구 경로로 폴백한다.
+    const { data: rows } = await supabase.from('venue_reviews').select('venue_id, rating').limit(5000);
     const agg = new Map<string, { sum: number; n: number }>();
-    for (const r of (data ?? []) as { venue_id: string; rating: number }[]) {
+    for (const r of (rows ?? []) as { venue_id: string; rating: number }[]) {
       const cur = agg.get(r.venue_id) ?? { sum: 0, n: 0 };
       cur.sum += r.rating; cur.n += 1;
       agg.set(r.venue_id, cur);

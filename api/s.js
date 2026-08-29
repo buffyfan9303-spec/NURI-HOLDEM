@@ -23,7 +23,10 @@ export default async function handler(req, res) {
     code = (u.searchParams.get('code') || '').slice(0, 16).replace(/[^a-zA-Z0-9-]/g, '');
   } catch { /* ignore */ }
 
-  const appUrl = code ? `${ORIGIN}/?v=${encodeURIComponent(code)}` : ORIGIN;
+  // 매장을 찾았는지 여부에 따라 목적지가 달라진다(아래에서 확정).
+  // 못 찾았는데 그냥 /?v=<code> 로 보내면 앱은 조용히 홈을 띄우고, 링크를 받은 사람은
+  // **왜 매장이 안 열리는지 영영 모른다**(2026-08-29 점검에서 발견 — 없는 슬러그도 200 + 홈).
+  let appUrl = code ? `${ORIGIN}/?v=${encodeURIComponent(code)}` : ORIGIN;
 
   // 폴백(기본) 메타 — 매장을 못 찾거나 오류일 때
   let title = 'NURI HOLDEM | 홀덤펍 커뮤니티';
@@ -49,10 +52,14 @@ export default async function handler(req, res) {
           title = `${v.name}${v.region ? ` · ${v.region}` : ''} | 홀덤펍`;
           desc = (v.description && String(v.description).slice(0, 120)) || `${v.name} — 일정·예약·순위를 확인하세요`;
           if (v.image_url) image = v.image_url;
+        } else {
+          // 조회는 됐는데 그 코드의 매장이 없다 = 폐업·링크 변경·오타.
+          // 앱이 사실대로 말할 수 있게 표식을 달아 보낸다(앱에서 토스트 1회 후 URL 정리).
+          appUrl = `${ORIGIN}/?vnf=${encodeURIComponent(code)}`;
         }
       }
     }
-  } catch { /* 폴백 메타 유지 */ }
+  } catch { /* 폴백 메타 유지 — 조회 자체가 실패한 경우는 '없음' 이 아니므로 표식을 달지 않는다 */ }
 
   const html = '<!doctype html><html lang="ko"><head><meta charset="utf-8"/>'
     + '<meta name="viewport" content="width=device-width,initial-scale=1"/>'
