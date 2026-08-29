@@ -1736,6 +1736,49 @@ export default function App() {
     }
   }, [venues]);
 
+  // ── 소셜 로그인 실패 안내 (2026-08-30) ──────────────────────────────────────
+  // 오너: "카카오 로그인이 왜 안되는지, 구글도 마찬가지"
+  // 조사 결과 auth.identities 에 kakao·google 이 **0건** — 한 번도 성공한 적이 없었다.
+  // 그런데 Supabase 쪽은 정상이었다(제공자 활성 · client_id/redirect_uri 정확 ·
+  // Site URL=nuriholdem.com · 허용목록이 외부 주소를 실제로 거부). 즉 실패는 제공자 콘솔 쪽인데,
+  // **앱이 그 사실을 하나도 보여주지 않아 원인을 알 길이 없었다.**
+  // 실패하면 Supabase 가 ?error=...&error_code=...&error_description=... 을 붙여 되돌려 보내는데
+  // 앱은 그걸 읽지 않고 그냥 홈을 띄웠다 → 유저에겐 '눌렀는데 아무 일도 안 일어남'.
+  //
+  // 여기서 그 값을 읽어 사람이 읽는 문장으로 바꾼다. 안내이자 **진단 도구**다 —
+  // 다음 시도에서 제공자가 준 정확한 코드가 화면에 뜨므로 원인이 특정된다.
+  // PKCE 는 쿼리(?error=), 암묵적 흐름은 해시(#error=)로 오므로 둘 다 본다.
+  const oauthErrShown = useRef(false);
+  useEffect(() => {
+    if (oauthErrShown.current) return;
+    try {
+      const q = new URLSearchParams(window.location.search);
+      const h = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      const code = q.get('error_code') ?? h.get('error_code') ?? '';
+      const err = q.get('error') ?? h.get('error') ?? '';
+      const desc = q.get('error_description') ?? h.get('error_description') ?? '';
+      if (!err && !code) return;
+      oauthErrShown.current = true;
+
+      // 자주 나오는 원인은 사람 말로 바꾸고, 모르는 건 원문을 그대로 보여 준다(추측 금지).
+      const raw = decodeURIComponent(desc).replace(/\+/g, ' ');
+      const known =
+        /KOE205|consent|동의/i.test(raw) ? '카카오 동의항목 설정이 필요합니다(관리자 확인 필요)'
+        : /access_denied/i.test(err) ? '로그인이 취소되었거나 앱이 아직 승인되지 않았습니다'
+        : /bad_oauth_state|state/i.test(code) ? '로그인 세션이 만료됐어요 — 다시 시도해 주세요'
+        : /redirect|uri/i.test(raw) ? '로그인 주소 설정이 맞지 않습니다(관리자 확인 필요)'
+        : '';
+      const detail = [code || err, raw].filter(Boolean).join(' · ').slice(0, 160);
+      toast.show(known ? `${known}\n(${detail})` : `로그인에 실패했습니다 — ${detail}`, 'error');
+
+      // 오류 파라미터를 URL 에서 걷어낸다 — 새로고침할 때마다 같은 토스트가 뜨지 않게.
+      const url = new URL(window.location.href);
+      ['error', 'error_code', 'error_description'].forEach((k) => url.searchParams.delete(k));
+      const cleanHash = /error/.test(url.hash) ? '' : url.hash;
+      window.history.replaceState(null, '', url.pathname + url.search + cleanHash);
+    } catch { /* ignore */ }
+  }, [toast]);
+
   // 없는 매장 링크(/s/<코드>) 안내 — 공유 링크를 받았는데 그 매장이 없을 때.
   // 예전엔 조용히 홈이 떠서 **링크를 받은 사람이 왜 안 열리는지 몰랐다**(2026-08-29 점검).
   // 서버(api/s.js)가 '못 찾음' 을 ?vnf= 로 알려 주면 여기서 한 번만 말하고 URL 을 정리한다.
