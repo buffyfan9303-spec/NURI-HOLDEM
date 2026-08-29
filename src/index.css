@@ -887,10 +887,26 @@ html[data-vt-scope='venue-tab'] [data-venue-tabbar] { view-transition-name: venu
 html[data-vt-scope='venue-tab'] [data-venue-tabpanel] { view-transition-name: venue-tabpanel; }
 html[data-vt-scope='venue-tab']::view-transition-old(root),
 html[data-vt-scope='venue-tab']::view-transition-new(root) { animation: none; }
-html[data-vt-scope='venue-tab'][data-vt-dir='forward']::view-transition-old(venue-tabpanel) { animation: vt-push-out-l var(--dur-base) var(--ease-out) both; }
-html[data-vt-scope='venue-tab'][data-vt-dir='forward']::view-transition-new(venue-tabpanel) { animation: vt-push-in-r  var(--dur-tab)  var(--ease)     both; }
-html[data-vt-scope='venue-tab'][data-vt-dir='back']::view-transition-old(venue-tabpanel)    { animation: vt-push-out-r var(--dur-base) var(--ease-out) both; }
-html[data-vt-scope='venue-tab'][data-vt-dir='back']::view-transition-new(venue-tabpanel)    { animation: vt-push-in-l  var(--dur-tab)  var(--ease)     both; }
+/* 패널 전용 키프레임 — root 용(vt-push-*)을 그대로 쓰면 안 된다(2026-08-29 오너 지적: "겹쳐서 지직 블러").
+   두 가지가 겹쳐서 생긴 문제였다:
+     ① root 전환은 `::view-transition { background-color }` 덕에 **불투명 바닥** 위에서 일어나는데,
+        이름을 준 그룹에는 그 바닥이 없다. 그래서 옛·새 스냅샷이 **둘 다 반투명인 채 20px 어긋나 겹쳐**
+        글자가 두 벌로 보였다. 전체 화면에서는 안 보이던 게 작은 패널에서는 그대로 드러난다.
+     ② vt-push-in-* 의 `filter: blur(6px)` 은 '데이터 로드 커밋의 뚝 끊김을 뭉개려고' 넣은 것이다.
+        탭 패널은 로드 없이 즉시 바뀌므로 **뭉갤 게 없고 흐림만 남는다.**
+   → 새 화면에 지면색을 깔아 **불투명하게** 만들고(섞지 않으면 겹칠 일이 없다), blur 를 빼고,
+     이동 거리도 20→10px 로 줄인다. 작은 영역에서는 거리가 클수록 어긋남이 눈에 띈다. */
+html[data-vt-scope='venue-tab']::view-transition-new(venue-tabpanel) {
+  background-color: rgb(var(--surface-base));
+}
+@keyframes vt-panel-out-l { to   { opacity: 0; transform: translateX(-10px); } }
+@keyframes vt-panel-out-r { to   { opacity: 0; transform: translateX(10px); } }
+@keyframes vt-panel-in-r  { from { transform: translateX(10px); } }
+@keyframes vt-panel-in-l  { from { transform: translateX(-10px); } }
+html[data-vt-scope='venue-tab'][data-vt-dir='forward']::view-transition-old(venue-tabpanel) { animation: vt-panel-out-l var(--dur-fast) var(--ease-out) both; }
+html[data-vt-scope='venue-tab'][data-vt-dir='forward']::view-transition-new(venue-tabpanel) { animation: vt-panel-in-r  var(--dur-tab)  var(--ease)     both; }
+html[data-vt-scope='venue-tab'][data-vt-dir='back']::view-transition-old(venue-tabpanel)    { animation: vt-panel-out-r var(--dur-fast) var(--ease-out) both; }
+html[data-vt-scope='venue-tab'][data-vt-dir='back']::view-transition-new(venue-tabpanel)    { animation: vt-panel-in-l  var(--dur-tab)  var(--ease)     both; }
 ::view-transition-old(app-header), ::view-transition-new(app-header),
 ::view-transition-old(app-tabbar), ::view-transition-new(app-tabbar),
 ::view-transition-old(app-gnb), ::view-transition-new(app-gnb),
