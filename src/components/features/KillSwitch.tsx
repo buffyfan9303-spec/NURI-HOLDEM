@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import Modal from '../atoms/Modal';
 import { useToast } from '../atoms/Toast';
 import { killSwitchIsSet, setKillPassword, killVenue } from '../../api/killswitch';
+import Icon from '../atoms/Icon';
 
 const CONFIRM_PHRASE = '영구 삭제';
 
@@ -70,7 +71,7 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
   return (
     <section className="mt-8 rounded-card border border-danger/40 bg-danger/[0.04] p-3.5">
       <div className="flex items-start gap-2.5">
-        <span className="mt-0.5 text-lg" aria-hidden>🧨</span>
+        <Icon name="bomb" size={19} className="mt-0.5 shrink-0 text-danger" />
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-bold text-danger">위험 구역 · 매장 전체 초기화(킬스위치)</h3>
           <p className="mt-0.5 text-2xs leading-relaxed text-ink-muted">
@@ -86,9 +87,9 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
         type="button"
         onClick={() => { reset(); setOpen(true); }}
         disabled={pwIsSet === null}
-        className="mt-2.5 w-full rounded-input border border-danger/50 bg-danger/10 py-2.5 text-sm font-bold text-danger transition-colors hover:bg-danger/20 disabled:opacity-50"
+        className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-input border border-danger/50 bg-danger/10 py-2.5 text-sm font-bold text-danger transition-colors hover:bg-danger/20 disabled:opacity-50"
       >
-        {pwIsSet === null ? '확인 중…' : pwIsSet ? '🧨 매장 전체 영구 삭제' : '🔐 킬스위치 비밀번호 설정'}
+        {pwIsSet === null ? '확인 중…' : <><Icon name={pwIsSet ? 'bomb' : 'lock'} size={15} className="shrink-0" />{pwIsSet ? '매장 전체 영구 삭제' : '킬스위치 비밀번호 설정'}</>}
       </button>
 
       <Modal open={open} onClose={close} title="매장 킬스위치" variant="center" maxWidth="sm" dismissOnBackdrop={false}>

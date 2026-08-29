@@ -9,7 +9,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import QRCode from 'qrcode';
 import { checkinUrl } from '../../api/checkins';
 import { buyinRequestUrl } from '../../api/ledger';
-import { listVenueVouchers, issueVoucher, deleteVouchers, revokeVouchers, findUserForTransfer, findUserByPhone, voucherUsageByVenue, voucherHolderStats, isVoucherIssueApproved, voucherHolderProfiles, subscribeVenueVouchers, type Voucher, type VoucherUsage, type VoucherHolderStats, type TransferTarget, type VoucherHolderProfile, type BulkResult, getVoucherQuota } from '../../api/vouchers';
+import { listVenueVouchers, issueVoucher, deleteVouchers, revokeVouchers, findUserForTransfer, findUserByPhone, voucherHolderStats, isVoucherIssueApproved, voucherHolderProfiles, subscribeVenueVouchers, type Voucher, type VoucherHolderStats, type TransferTarget, type VoucherHolderProfile, type BulkResult, getVoucherQuota } from '../../api/vouchers';
+import { useIdentityEnabled } from '../../lib/identityFlag'; // 본인인증·매장이용권 통합 킬스위치(2026-08-29)
 
 function fmtDateTime(iso: string | null): string {
   if (!iso) return '-';
@@ -21,11 +22,14 @@ function fmtDateTime(iso: string | null): string {
 export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: string; prefillReceiver?: string }) {
   const toast = useToast();
   const { user } = useAuth();
+  // 킬스위치(2026-08-29) — 진입점은 전부 위에서 숨겼지만, 마지막 문(門)에서도 한 번 더 막는다.
+  // 이유: 이 패널은 매장관리 하위탭과 대시보드 모달 두 곳에서 마운트되고, 마운트되는 순간
+  // 이용권 목록·보유자 프로필·실시간 구독까지 자동으로 열린다(꺼진 기능이 조용히 네트워크를 쓰는 상태).
+  const idOn = useIdentityEnabled();
   const isAdmin = user?.role === 'admin';
   const canIssue = isAdmin || (user?.role === 'venue_owner' && user?.venueId === venueId);
 
   const [list, setList] = useState<Voucher[]>([]);
-  const [usage, setUsage] = useState<VoucherUsage[]>([]);
   const [loading, setLoading] = useState(false);
   const [title, setTitle] = useState('매장이용권');
   const [count, setCount] = useState(1);
@@ -48,10 +52,10 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
   const [quota, setQuota] = useState<number | null>(null);
   // W2-1 VCH-1: 유상 충전 요청·조회 제거(§12-A-2) — 한도 표시는 유지
   const reloadQuota = () => {
-    if (!canIssue) return;
+    if (!canIssue || !idOn) return;
     getVoucherQuota(venueId).then(setQuota).catch(() => {});
   };
-  useEffect(reloadQuota, [venueId, canIssue]);
+  useEffect(reloadQuota, [venueId, canIssue, idOn]);
   const [holderQuery, setHolderQuery] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [profileMap, setProfileMap] = useState<Map<string, VoucherHolderProfile>>(new Map());
@@ -60,16 +64,18 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
   const [ownerOpen, setOwnerOpen] = useState(false); // 보유자 현황·통계(업주 전용) — 기본 접힘
 
   const reload = () => {
+    if (!idOn) return; // 킬스위치 OFF — 꺼진 기능이 조용히 조회를 돌지 않게(무료 egress 예산)
     setLoading(true);
     listVenueVouchers(venueId).then(setList).catch(() => {}).finally(() => setLoading(false));
     if (canIssue) voucherHolderStats(venueId).then(setStats).catch(() => {});
     if (canIssue) voucherHolderProfiles(venueId).then((ps) => setProfileMap(new Map(ps.map((p) => [p.userId, p])))).catch(() => {});
     isVoucherIssueApproved(venueId).then(setApproved).catch(() => {});
-    if (canIssue) voucherUsageByVenue(venueId).then(setUsage).catch(() => {});
   };
-  useEffect(() => { reload(); }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
-  // 실시간: 이 매장 이용권이 들어오면(사용/발급/회수) 즉시 갱신 — 권한은 RLS로 자동 게이트
-  useEffect(() => subscribeVenueVouchers(venueId, () => reload()), [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { reload(); }, [venueId, idOn]); // eslint-disable-line react-hooks/exhaustive-deps
+  // 실시간: 이 매장 이용권이 들어오면(사용/발급/회수) 즉시 갱신 — 권한은 RLS로 자동 게이트.
+  // ⚠ 킬스위치 OFF 에서는 채널을 열지 않는다 — Realtime 동시연결은 무료 한도의 실질 천장이라
+  //   '안 보이는 화면'이 연결을 하나 차지하면 클락 TV 구독까지 같이 열화된다.
+  useEffect(() => (idOn ? subscribeVenueVouchers(venueId, () => reload()) : undefined), [venueId, idOn]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { QRCode.toDataURL(`NURIV-VENUE:${venueId}`, { width: 240, margin: 1 }).then(setQr).catch(() => {}); }, [venueId]);
   useEffect(() => { QRCode.toDataURL('https://nuriholdem.com/?signup=1', { width: 240, margin: 1 }).then(setSignupQr).catch(() => {}); }, []);
   useEffect(() => { QRCode.toDataURL(checkinUrl(venueId), { width: 240, margin: 1 }).then(setCheckinQr).catch(() => {}); }, [venueId]);
@@ -272,6 +278,20 @@ ${cards}
     reportBulk('삭제', r); setBusy(false); reload();
   };
 
+  // 킬스위치 OFF — 진입점이 다 숨겨진 뒤에도 딥링크·구 탭 상태로 여기까지 오는 경로가 있을 수 있다.
+  // '기능이 잠시 꺼졌다'를 말해 주는 것이 빈 화면·조용한 실패보다 낫다(레코드는 그대로 보존).
+  if (!idOn) {
+    return (
+      <div className="rounded-card border border-border-default bg-surface-low p-6 text-center">
+        <Icon name="ticket" size={22} className="mx-auto text-ink-muted" />
+        <p className="mt-2 text-sm font-bold text-ink-primary">매장이용권은 현재 비활성화되어 있습니다</p>
+        <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">
+          본인인증 준비가 끝나면 다시 열립니다. 발행·보유 기록은 그대로 보관되어 있으며 삭제되지 않았습니다.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3">
       {/* 0) 이용 내역 — 실시간(발급·사용). 장부/이용권 권한 직원도 열람 — 기본 열림 */}
@@ -291,7 +311,7 @@ ${cards}
               <li key={i} className="flex items-center gap-2 rounded-input bg-surface-base/50 px-2 py-1.5 text-2xs">
                 <span className={['shrink-0 rounded-badge px-1.5 py-0.5 font-bold leading-none',
                   e.t === 'used' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-accent-300/15 text-accent-300'].join(' ')}>
-                  {e.t === 'used' ? '↘ 사용(받음)' : '↗ 발급(보냄)'}
+                  <Icon name={e.t === 'used' ? 'arrow-down-left' : 'arrow-up-right'} size={10} className="mr-0.5 inline-block align-[-1px] shrink-0" />{e.t === 'used' ? '사용(받음)' : '발급(보냄)'}
                 </span>
                 <span className="min-w-0 flex-1 truncate text-ink-secondary">
                   <b className="text-ink-primary">{e.who || '회원'}</b> · {e.title}
@@ -509,19 +529,12 @@ ${cards}
         </div>
       )}
 
-      {canIssue && ownerOpen && usage.length > 0 && (
-        <div className="rounded-input border border-border-subtle bg-surface-low p-2.5">
-          <p className="mb-1 text-xs font-bold text-ink-secondary">사용처 TOP — 배포분이 실제 사용된 매장</p>
-          <ul className="space-y-1">
-            {usage.slice(0, 6).map((u, i) => (
-              <li key={u.usedVenueId ?? i} className="flex items-center justify-between text-2xs">
-                <span className="min-w-0 flex-1 truncate text-ink-secondary">{i + 1}. {u.venueName ?? '(알수없음)'}{u.usedVenueId && u.usedVenueId !== venueId && <span className="ml-1 text-accent-300">타 매장</span>}</span>
-                <span className="shrink-0 font-bold text-ink-primary tabular-nums">{u.usedCount}건</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {/* #4(오너 지시 2026-08-29) '사용처 TOP' 제거 — 이용권은 매장마다 개별이고, 서버의 사용 경로
+          3개(redeem_my_voucher / _by_qr / _by_phone)가 모두 used_venue_id := venue_id 로 고정한다.
+          즉 이 목록은 구조적으로 '우리 매장' 한 줄뿐이고, '타 매장' 배지는 절대 켜지지 않는 죽은 분기였다
+          (라이브 실측 2026-08-29: store_vouchers 101건 중 used_venue_id <> venue_id 인 행 0건).
+          매장 간 사용이라는 없는 개념을 화면이 암시하던 유일한 자리였다.
+          사용 건수 자체는 바로 위 '활성/잔여 이용권 + 사용률' 카드가 이미 보여 준다 — 정보 손실 0. */}
 
       <div className={canIssue && ownerOpen ? '' : 'hidden'}>
         <div className="mb-1 flex items-center justify-between gap-2">

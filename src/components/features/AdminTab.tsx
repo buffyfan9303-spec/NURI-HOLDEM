@@ -10,7 +10,12 @@ import type { CommunityPost, Venue, AdminStats, VenueVerificationStatus, VenueSt
 import {
   getAdminStats, adminCreateVenue, adminUpdateVenue, setVenueVerification, deleteVenue,
   getVenueStaff, addVenueStaff, updateVenueStaff, removeVenueStaff,
-  getPendingGroups, approveGroup, GROUP_KIND_LABEL, adminListVenueOwnerRequests, adminDecideVenueOwner, type OwnerRequest } from '../../api/community';
+  getPendingGroups, approveGroup, GROUP_KIND_LABEL, adminListVenueOwnerRequests, adminDecideVenueOwner, type OwnerRequest,
+  adminListShouts, hideShout, type Shout } from '../../api/community';
+import {
+  adminListHallOfFame, adminSaveHallEntry, adminDeleteHallEntry, autoHallPrefill,
+  lastMonthPeriod, thisMonthPeriod, type HallOfFameRow,
+} from '../../lib/hallOfFame';
 import { useToast } from '../atoms/Toast';
 import { supabase } from '../../lib/supabase';
 import { getAppSetting, setAppSetting, BOOST_CONTACT_EMAIL_KEY, BOOST_CONTACT_PHONE_KEY } from '../../api/settings';
@@ -27,9 +32,14 @@ import { REGION_CHIPS } from './IntegratedSearchBar';
 import SectionHeader from '../atoms/SectionHeader';
 import NuriPosLedger from './NuriPosLedger';
 import LedgerStatsPanel from './LedgerStatsPanel';
-import { adminListRankVerifications, adminDecideRankVerification, signedVerifyUrl, type RankVerification, aiInspectVerification } from '../../api/rankverify';
+import { adminListRankVerifications, adminDecideRankVerification, signedVerifyUrl, EVENT_KIND_LABEL, type RankEventKind, type RankVerification, aiInspectVerification } from '../../api/rankverify';
 import { getAllInquiries, answerInquiry, subscribeInquiries, type SupportInquiry } from '../../api/support';
 import { aiGenerate } from '../../api/ai';
+import Icon from '../atoms/Icon';
+
+// 1·2·3위 색 — 이모지 👑🥈🥉는 OS마다 금/은/동 색조가 달라 순위 서열이 뒤집혀 보였다.
+// 아이콘 + 토큰 색으로 옮겨 서열을 앱이 통제한다(App.tsx 시상대와 같은 규약).
+const RANK_TONE = ['text-gold-300', 'text-slate-200', 'text-amber-600'] as const;
 
 interface AdminTabProps {
   schedules: Schedule[];
@@ -43,6 +53,8 @@ interface AdminTabProps {
   /** 매장 생성 후 목록 새로고침 */
   onReloadVenues?: () => void;
 }
+
+type AdminShout = Shout & { hidden: boolean };
 
 type Section = 'analytics' | 'pending' | 'reorder' | 'users' | 'venues' | 'reports' | 'support' | 'errors';
 // 노출 순서 하위 항목: 포스터(요강) / 매장
@@ -72,7 +84,7 @@ function BoostContactCard() {
   };
   return (
     <section className="rounded-card border border-accent-400/30 bg-accent-300/[0.05] p-3 space-y-2">
-      <p className="text-sm font-bold text-accent-300">⚡ 부스트 문의 연락처</p>
+      <p className="flex items-center gap-1.5 text-sm font-bold text-accent-300"><Icon name="zap" size={15} className="shrink-0" />부스트 문의 연락처</p>
       <p className="text-xs text-ink-muted">업주가 내 매장 → '포스터 상단 고정' 카드에서 보게 될 메일·전화입니다. 비워두면 "준비 중"으로 표시됩니다.</p>
       <div className="grid gap-1.5 sm:grid-cols-2">
         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={80}
@@ -106,7 +118,7 @@ function VenueOwnerRequestsCard() {
   if (reqs.length === 0) return null;
   return (
     <section className="rounded-card border border-accent-400/30 bg-accent-300/[0.04] p-3 space-y-2">
-      <h3 className="text-sm font-bold text-accent-300">👔 공동 업주(사장님) 초대 승인 <span className="text-2xs font-normal text-ink-muted">· 승인 시 공동 업주 활성</span></h3>
+      <h3 className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-accent-300"><Icon name="briefcase" size={15} className="shrink-0" />공동 업주(사장님) 초대 승인 <span className="text-2xs font-normal text-ink-muted">· 승인 시 공동 업주 활성</span></h3>
       <ul className="space-y-1.5">
         {reqs.map((r) => (
           <li key={r.venueId + r.userId} className="flex items-center gap-2 rounded-input border border-border-subtle bg-surface-low px-2.5 py-2">
@@ -143,7 +155,7 @@ function VoucherQuotaAdminCard() {
   // 잔여 pending 은 반려(정리)만 가능. 한도 조정이 필요하면 admin_grant_voucher_quota(수동 레버).
   return (
     <section className="rounded-card border border-accent-400/30 bg-accent-300/[0.04] p-3 space-y-2">
-      <h3 className="text-sm font-bold text-accent-300">🛒 이용권 충전 요청 <span className="text-2xs font-normal text-danger-light">· 유상 충전 폐쇄(§12-A) — 반려만 가능</span></h3>
+      <h3 className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-accent-300"><Icon name="cart" size={15} className="shrink-0" />이용권 충전 요청 <span className="text-2xs font-normal text-danger-light">· 유상 충전 폐쇄(§12-A) — 반려만 가능</span></h3>
       <ul className="space-y-1.5">
         {reqs.map((r) => (
           <li key={r.id} className="flex items-center gap-2 rounded-input border border-border-subtle bg-surface-low px-2.5 py-2">
@@ -166,6 +178,10 @@ function RankVerifyAdminCard() {
   // AI 검사 소견(신청 id별) — 참고용, 최종 판단은 운영자
   const [aiNotes, setAiNotes] = useState<Record<string, string>>({});
   const [aiBusy, setAiBusy] = useState<string | null>(null);
+  // 대회 구분(신청 id별) — 신청자의 자기신고를 초깃값으로 두되 승인 시 운영자가 확정한다.
+  // 'official' 로 승인해야만 국내 순위에 합산된다(오너 #7).
+  const [kinds, setKinds] = useState<Record<string, RankEventKind>>({});
+  const kindOf = (v: RankVerification): RankEventKind => kinds[v.id] ?? v.eventKind;
   const inspect = async (v: RankVerification) => {
     setAiBusy(v.id);
     try {
@@ -182,22 +198,46 @@ function RankVerifyAdminCard() {
     catch { toast.show('이미지 열람 실패', 'error'); }
   };
   const decide = async (v: RankVerification, ok: boolean) => {
+    const kind = kindOf(v);
     setBusy(v.id);
-    try { await adminDecideRankVerification(v, ok); toast.show(ok ? '승인 — 국내 순위에 합산됩니다' : '반려했습니다', 'success'); reload(); }
+    try {
+      await adminDecideRankVerification(v, ok, { eventKind: kind });
+      toast.show(
+        !ok ? '반려했습니다'
+          : kind === 'official' ? '정식 대회로 승인 — 국내 순위에 합산됩니다'
+          : '일반 펍으로 승인 — 기록만 남고 국내 순위에서는 제외됩니다',
+        'success',
+      );
+      reload();
+    }
     catch (e) { toast.show(e instanceof Error ? e.message : '처리 실패', 'error'); }
     finally { setBusy(null); }
   };
   return (
     <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
-      <p className="text-sm font-bold text-ink-primary">🏆 순위 인증 승인 <span className="text-xs font-normal text-ink-muted">— 승인/거절 시 신분증 즉시 삭제</span></p>
+      <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="trophy" size={15} className="shrink-0" />순위 인증 승인 <span className="text-xs font-normal text-ink-muted">— 승인/거절 시 신분증 즉시 삭제 · <b className="text-ink-secondary">정식 대회로 승인한 건만</b> 국내 순위에 합산(100만원당 1점)</span></p>
       {list.length === 0 ? <p className="py-2 text-center text-2xs text-ink-muted">대기 중인 신청이 없습니다.</p> : (
         <ul className="space-y-1.5">
           {list.map((v) => (
             <li key={v.id} className="flex flex-wrap items-center gap-1.5 rounded-input border border-border-subtle bg-surface-high/40 p-2 text-2xs">
               <span className="font-bold text-ink-primary">{v.nickname}</span>
-              <span className="min-w-0 flex-1 truncate text-ink-secondary">{v.eventName} · <b className="text-emerald-300 tabular-nums">{(v.amountWon / 10000).toLocaleString()}만</b></span>
+              <span className="min-w-0 flex-1 truncate text-ink-secondary">
+                {v.eventName} · <b className="text-emerald-300 tabular-nums">{(v.amountWon / 10000).toLocaleString()}만</b>
+                <span className="ml-1 text-ink-muted">신고: {EVENT_KIND_LABEL[v.eventKind]}{v.isOverseas ? '·해외' : '·국내'}</span>
+              </span>
+              {/* 운영자 확정 — 이 선택이 국내 순위 합산 여부를 결정한다 */}
+              <span className="flex shrink-0 overflow-hidden rounded-input border border-border-default">
+                {(['official', 'pub'] as RankEventKind[]).map((k) => (
+                  <button key={k} type="button" aria-pressed={kindOf(v) === k}
+                    onClick={() => setKinds((m) => ({ ...m, [v.id]: k }))}
+                    className={['px-2 py-1 font-bold',
+                      kindOf(v) === k ? 'bg-accent-300/[0.16] text-accent-200' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
+                    {EVENT_KIND_LABEL[k]}
+                  </button>
+                ))}
+              </span>
               <button type="button" onClick={() => view(v.proofPath)} className="rounded-input border border-border-default px-2 py-1 font-bold text-ink-secondary hover:text-ink-primary">증빙</button>
-              <button type="button" disabled={aiBusy === v.id} onClick={() => inspect(v)} className="rounded-input border border-sky-500/40 bg-sky-500/10 px-2 py-1 font-bold text-sky-300 disabled:opacity-50">{aiBusy === v.id ? '검사 중…' : '🤖 AI 검사'}</button>
+              <button type="button" disabled={aiBusy === v.id} onClick={() => inspect(v)} className="rounded-input border border-sky-500/40 bg-sky-500/10 px-2 py-1 font-bold text-sky-300 disabled:opacity-50">{aiBusy === v.id ? '검사 중…' : <span className="inline-flex items-center gap-1"><Icon name="sparkles" size={12} className="shrink-0" />AI 검사</span>}</button>
               <button type="button" onClick={() => view(v.idCardPath)} className="rounded-input border border-border-default px-2 py-1 font-bold text-ink-secondary hover:text-ink-primary">신분증</button>
               <button type="button" disabled={busy === v.id} onClick={() => decide(v, true)} className="btn-primary px-2.5 py-1 text-2xs disabled:opacity-50">승인</button>
               <button type="button" disabled={busy === v.id} onClick={() => decide(v, false)} className="rounded-input border border-danger/40 px-2.5 py-1 font-bold text-danger-light hover:bg-danger/10 disabled:opacity-50">반려</button>
@@ -257,7 +297,7 @@ function CommunityAdsCard() {
   const today = new Date().toLocaleDateString('en-CA');
   return (
     <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
-      <p className="text-sm font-bold text-ink-primary">📢 커뮤니티 광고 5칸 <span className="text-xs font-normal text-ink-muted">— 게시판 글 4개마다 [AD] 한 줄. ▲▼로 순서 변경 · 제목 비우면 게재 중단</span></p>
+      <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="megaphone" size={15} className="shrink-0" />커뮤니티 광고 5칸 <span className="text-xs font-normal text-ink-muted">— 게시판 글 4개마다 [AD] 한 줄. ▲▼로 순서 변경 · 제목 비우면 게재 중단</span></p>
       <ul className="space-y-1.5">
         {ads.map((ad, i) => {
           const live = !!ad.title.trim() && (!ad.expiresAt || ad.expiresAt >= today);
@@ -350,7 +390,7 @@ function MissionsAdminCard() {
 
   return (
     <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
-      <p className="text-sm font-bold text-ink-primary">🎯 주간 미션 관리 <span className="text-xs font-normal text-ink-muted">— 랭킹 &gt; 미션 보드에 노출. 매주 월요일 진행도 리셋</span></p>
+      <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="target" size={15} className="shrink-0" />주간 미션 관리 <span className="text-xs font-normal text-ink-muted">— 랭킹 &gt; 미션 보드에 노출. 매주 월요일 진행도 리셋</span></p>
       {/* 고정 미션 안내 */}
       <ul className="space-y-1">
         {MISSIONS.map((m) => (
@@ -380,7 +420,7 @@ function MissionsAdminCard() {
       </ul>
       {/* 새 미션 추가 */}
       <div className={['flex flex-wrap items-center gap-1.5 rounded-input border border-dashed p-2', editRow ? 'border-accent-400/60 bg-accent-300/[0.05]' : 'border-border-strong'].join(' ')}>
-        {editRow && <span className="w-full text-2xs font-bold text-accent-300">✏️ ‘{editRow.title}’ 수정 중 — 저장하면 덮어씁니다</span>}
+        {editRow && <span className="flex w-full items-center gap-1 text-2xs font-bold text-accent-300"><Icon name="edit" size={12} className="shrink-0" />‘{editRow.title}’ 수정 중 — 저장하면 덮어씁니다</span>}
         <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={30}
           placeholder="미션 이름 (예: 이번 주 3회 출석 도전)" className="input min-w-[11rem] flex-1 text-sm" />
         <select value={goalType} onChange={(e) => setGoalType(e.target.value as MissionGoalType)} className="input w-auto text-sm">
@@ -396,6 +436,188 @@ function MissionsAdminCard() {
         {editRow && <button type="button" onClick={resetForm} disabled={busy} className="btn-ghost px-3 py-1.5 text-xs disabled:opacity-60">취소</button>}
       </div>
       <p className="text-xs text-ink-muted">유형은 체크인·게시글·머니인 3가지 — 달성 검증은 서버(claim_mission RPC)가 자동으로 합니다.</p>
+    </section>
+  );
+}
+
+// ── 🏆 명예의 전당 등록(운영자) — 오너 #10 ──────────────────────────────────
+//
+// 자동 집계를 없애지 않고 '수동 지정이 있으면 그것, 없으면 자동 집계' 구조로 뒀다.
+//   · 자동만 두면: 매장이 순위를 안 올린 달은 화면이 통째로 빈다(오너가 본 그 화면).
+//   · 수동만 두면: 매달 손으로 채워야만 화면이 살아난다 — 한 달 걸르면 다시 빈 화면.
+//   ⇒ 개입한 달만 덮어쓰고, 안 건드리면 지금과 100% 동일하게 굴러간다.
+// 노출은 항상 '지난달 이하 중 가장 최근에 등록된 기간'이라, 이번 달 자리에 미리 채워두면
+// 다음 달 1일에 자동으로 올라간다.
+function HallOfFameAdminCard() {
+  const toast = useToast();
+  const last = lastMonthPeriod();
+  const [rows, setRows] = useState<HallOfFameRow[]>([]);
+  const [period, setPeriod] = useState(last);
+  const [busy, setBusy] = useState(false);
+  const [draft, setDraft] = useState<Record<number, { nickname: string; note: string }>>({
+    1: { nickname: '', note: '' }, 2: { nickname: '', note: '' }, 3: { nickname: '', note: '' },
+  });
+  const reload = useCallback(() => { adminListHallOfFame().then(setRows).catch(() => {}); }, []);
+  useEffect(() => { reload(); }, [reload]);
+  // 기간을 바꾸면 그 기간에 이미 등록된 값을 폼에 싣는다(없으면 빈칸)
+  useEffect(() => {
+    const cur = rows.filter((r) => r.period === period);
+    setDraft({
+      1: { nickname: cur.find((r) => r.rank === 1)?.nickname ?? '', note: cur.find((r) => r.rank === 1)?.note ?? '' },
+      2: { nickname: cur.find((r) => r.rank === 2)?.nickname ?? '', note: cur.find((r) => r.rank === 2)?.note ?? '' },
+      3: { nickname: cur.find((r) => r.rank === 3)?.nickname ?? '', note: cur.find((r) => r.rank === 3)?.note ?? '' },
+    });
+  }, [period, rows]);
+
+  const prefill = async () => {
+    setBusy(true);
+    try {
+      const auto = await autoHallPrefill();
+      if (auto.length === 0) { toast.show('지난달 자동 집계 결과가 비어 있습니다', 'info'); return; }
+      setDraft((d) => {
+        const next = { ...d };
+        auto.slice(0, 3).forEach((a, i) => { next[i + 1] = { nickname: a.nickname, note: next[i + 1]?.note ?? '' }; });
+        return next;
+      });
+      toast.show('지난달 자동 집계를 불러왔습니다 — 필요하면 고쳐서 저장하세요', 'success');
+    } catch (e) { toast.show(e instanceof Error ? e.message : '불러오기 실패', 'error'); }
+    finally { setBusy(false); }
+  };
+
+  const saveRank = async (rank: number) => {
+    const d = draft[rank];
+    if (!d?.nickname.trim()) { toast.show('닉네임을 입력해 주세요', 'error'); return; }
+    setBusy(true);
+    try {
+      await adminSaveHallEntry({ period, rank, nickname: d.nickname, note: d.note });
+      toast.show(`${period} ${rank}위를 저장했습니다 — 랭킹 > 명예의 전당에 바로 반영됩니다`, 'success');
+      reload();
+    } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
+    finally { setBusy(false); }
+  };
+
+  const removeRow = async (r: HallOfFameRow) => {
+    if (!window.confirm(`${r.period} ${r.rank}위 '${r.nickname}' 등록을 지울까요? (지우면 그 달은 자동 집계로 돌아갑니다)`)) return;
+    setBusy(true);
+    try {
+      await adminDeleteHallEntry(r.id);
+      toast.show('등록을 삭제했습니다', 'success');
+      reload();
+    } catch (e) { toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'); }
+    finally { setBusy(false); }
+  };
+
+  const periodOptions = [last, thisMonthPeriod(), ...rows.map((r) => r.period)]
+    .filter((p, i, a) => a.indexOf(p) === i).sort().reverse();
+
+  return (
+    <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
+      <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="trophy" size={15} className="shrink-0" />명예의 전당 등록 <span className="text-xs font-normal text-ink-muted">— 랭킹 &gt; 명예의 전당. 등록한 달은 자동 집계보다 우선</span></p>
+      <p className="text-xs leading-relaxed text-ink-muted">
+        노출 기준은 <b className="text-ink-secondary">직전 달</b>입니다(현재 <b className="text-ink-secondary">{last}</b>).
+        이번 달({thisMonthPeriod()}) 자리에 미리 채워두면 다음 달에 자동으로 올라갑니다.
+        아무 것도 등록하지 않으면 지금처럼 <b className="text-ink-secondary">입상 기록 자동 집계</b>가 그대로 표시됩니다.
+      </p>
+
+      <div className="flex flex-wrap items-center gap-1.5">
+        <label className="flex items-center gap-1 text-xs text-ink-muted">기간
+          <select value={period} onChange={(e) => setPeriod(e.target.value)} className="input w-auto text-sm">
+            {periodOptions.map((p) => <option key={p} value={p}>{p}{p === last ? ' (지금 노출)' : ''}</option>)}
+          </select>
+        </label>
+        <button type="button" onClick={prefill} disabled={busy || period !== last}
+          title={period === last ? '' : '자동 집계는 직전 달만 계산합니다'}
+          className="btn-ghost px-3 py-1.5 text-xs text-accent-300 disabled:opacity-40">지난달 자동 집계 불러오기</button>
+      </div>
+
+      <div className="space-y-1.5">
+        {[1, 2, 3].map((rank) => (
+          <div key={rank} className="flex flex-wrap items-center gap-1.5 rounded-input border border-border-subtle bg-surface-high/40 p-2">
+            <span className="grid w-8 shrink-0 place-items-center">
+              <Icon name={rank === 1 ? 'crown' : 'medal'} size={18}
+                className={['shrink-0', RANK_TONE[rank - 1]].join(' ')} role="img" aria-hidden={false} aria-label={`${rank}위`} />
+            </span>
+            <input value={draft[rank]?.nickname ?? ''} maxLength={30}
+              onChange={(e) => setDraft((d) => ({ ...d, [rank]: { ...d[rank], nickname: e.target.value } }))}
+              placeholder={`${rank}위 닉네임`} className="input min-w-[8rem] flex-1 text-sm" />
+            <input value={draft[rank]?.note ?? ''} maxLength={60}
+              onChange={(e) => setDraft((d) => ({ ...d, [rank]: { ...d[rank], note: e.target.value } }))}
+              placeholder="한 줄 소개 (예: ○○ 인비테이셔널 우승)" className="input min-w-[12rem] flex-[2] text-sm" />
+            <button type="button" onClick={() => saveRank(rank)} disabled={busy}
+              className="btn-primary px-3 py-1.5 text-xs disabled:opacity-60">저장</button>
+          </div>
+        ))}
+      </div>
+
+      {rows.length > 0 && (
+        <>
+          <p className="pt-1 text-xs font-bold text-ink-secondary">등록된 전당</p>
+          <ul className="space-y-1">
+            {rows.map((r) => (
+              <li key={r.id} className="flex flex-wrap items-center gap-1.5 rounded-input border border-border-subtle bg-surface-high/40 px-2 py-1.5 text-xs">
+                <span className={['rounded-badge px-1.5 py-0.5 text-2xs font-bold', r.period === last ? 'bg-accent-300 text-white' : 'bg-surface-float text-ink-muted'].join(' ')}>
+                  {r.period}{r.period === last ? ' · 노출 중' : ''}
+                </span>
+                <span className="inline-flex items-center gap-1 font-bold text-ink-primary">
+                  <Icon name={r.rank === 1 ? 'crown' : 'medal'} size={14}
+                    className={['shrink-0', RANK_TONE[r.rank - 1]].join(' ')} role="img" aria-hidden={false} aria-label={`${r.rank}위`} />
+                  {r.nickname}
+                </span>
+                {r.note && <span className="text-ink-muted">{r.note}</span>}
+                <button type="button" onClick={() => removeRow(r)} disabled={busy}
+                  className="btn-ghost ml-auto px-2 py-1 text-2xs text-danger-light disabled:opacity-60">삭제</button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </section>
+  );
+}
+
+// ── 📣 외치기 관리(운영자) — 오너 #8 ────────────────────────────────────────
+// 외침은 커뮤니티 최상단에 크게 걸리는 자리라 사후 통제 수단이 필요하다.
+// 삭제가 아니라 '내리기(숨김)'다 — 되돌릴 수 있고 구매 기록도 남는다(환급은 없음).
+function ShoutsAdminCard() {
+  const toast = useToast();
+  const [rows, setRows] = useState<AdminShout[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const reload = useCallback(() => { adminListShouts(50).then(setRows).catch(() => setRows([])); }, []);
+  useEffect(() => { reload(); }, [reload]);
+  const hide = async (s: AdminShout) => {
+    setBusy(s.id);
+    try {
+      await hideShout(s.id);
+      toast.show('외침을 내렸습니다', 'success');
+      reload();
+    } catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
+    finally { setBusy(null); }
+  };
+  const live = (s: AdminShout) => !s.hidden && new Date(s.expiresAt).getTime() > Date.now();
+  return (
+    <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
+      <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="megaphone" size={15} className="shrink-0" />외치기 관리 <span className="text-xs font-normal text-ink-muted">— 활동점수로 구매한 커뮤니티 강조 메시지. 6시간 노출 후 자동 만료</span></p>
+      {rows === null ? (
+        <ul className="space-y-1">{[0, 1, 2].map((i) => <li key={i} className="skeleton h-9 rounded-input" />)}</ul>
+      ) : rows.length === 0 ? (
+        <p className="py-3 text-center text-xs text-ink-muted">아직 구매된 외침이 없습니다</p>
+      ) : (
+        <ul className="space-y-1">
+          {rows.map((s) => (
+            <li key={s.id} className="flex flex-wrap items-center gap-1.5 rounded-input border border-border-subtle bg-surface-high/40 px-2 py-1.5 text-xs">
+              <span className={['rounded-badge px-1.5 py-0.5 text-2xs font-bold', live(s) ? 'bg-accent-300 text-white' : 'bg-surface-float text-ink-muted'].join(' ')}>
+                {s.hidden ? '내려짐' : live(s) ? '노출 중' : '만료'}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-ink-primary">{s.message}</span>
+              <span className="text-2xs text-ink-muted">{s.nickname} · {s.cost}점 · {new Date(s.createdAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+              {live(s) && (
+                <button type="button" onClick={() => hide(s)} disabled={busy === s.id}
+                  className="btn-ghost px-2 py-1 text-2xs text-danger-light disabled:opacity-60">내리기</button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }
@@ -466,7 +688,7 @@ function SupportInquiriesPanel() {
                   rows={2} placeholder={q.status === 'answered' ? '답변 수정…' : '답변 작성…'} className="input w-full resize-none text-sm" />
                 <div className="flex items-center gap-1.5">
                   <button type="button" onClick={() => send(q.id)} disabled={busy === q.id} className="btn-primary px-3 py-1.5 text-2xs disabled:opacity-50">{busy === q.id ? '등록 중…' : q.status === 'answered' ? '답변 수정' : '답변 등록'}</button>
-                  <button type="button" onClick={() => aiDraft(q)} disabled={aiBusy === q.id} className="rounded-input border border-accent-400/40 bg-accent-300/[0.06] px-2.5 py-1.5 text-2xs font-bold text-accent-300 disabled:opacity-50">{aiBusy === q.id ? '생성 중…' : '✨ AI 초안'}</button>
+                  <button type="button" onClick={() => aiDraft(q)} disabled={aiBusy === q.id} className="rounded-input border border-accent-400/40 bg-accent-300/[0.06] px-2.5 py-1.5 text-2xs font-bold text-accent-300 disabled:opacity-50">{aiBusy === q.id ? '생성 중…' : <span className="inline-flex items-center gap-1"><Icon name="sparkles" size={12} className="shrink-0" />AI 초안</span>}</button>
                 </div>
               </div>
             </li>
@@ -515,7 +737,7 @@ function ErrorLogPanel() {
       {loading ? (
         <p className="py-6 text-center text-sm text-ink-muted">불러오는 중…</p>
       ) : rows.length === 0 ? (
-        <p className="py-6 text-center text-sm text-ink-muted">수집된 오류가 없습니다 — 깨끗합니다 ✨</p>
+        <p className="py-6 text-center text-sm text-ink-muted">수집된 오류가 없습니다 — 깨끗합니다</p>
       ) : (
         <ul className="divide-y divide-border-subtle">
           {rows.map((r) => (
@@ -664,7 +886,7 @@ function PlanUsageCard() {
   return (
     <section className="rounded-card border border-border-subtle bg-surface-low p-3">
       <header className="mb-2 flex items-center justify-between gap-2">
-        <span className="text-xs font-bold text-ink-primary">💰 Supabase 무료 한도</span>
+        <span className="flex items-center gap-1.5 text-xs font-bold text-ink-primary"><Icon name="banknote" size={14} className="shrink-0" />Supabase 무료 한도</span>
         <span className={['text-2xs font-bold', worst >= 90 ? 'text-danger-light' : worst >= 70 ? 'text-amber-300' : 'text-emerald-400'].join(' ')}>
           {worst >= 90 ? '상향 검토' : worst >= 70 ? '최적화 필요' : '여유'}
         </span>
@@ -744,6 +966,8 @@ export default function AdminTab({
           <VoucherQuotaAdminCard />
           <RankVerifyAdminCard />
                     <MissionsAdminCard />
+                    <HallOfFameAdminCard />
+                    <ShoutsAdminCard />
                     <DraggableList initialItems={schedules.filter((s) => s.approved)} />
                   </>
                 )

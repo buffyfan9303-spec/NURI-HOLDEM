@@ -67,6 +67,9 @@ test.describe('매장 페이지 — 3계층 IA', () => {
     expect(count).toBeGreaterThan(0);
 
     // Tier3 '내 활동' 은 비로그인에게 DOM 자체가 없다(미렌더 원칙)
-    expect(await page.locator('text=🙋 내 활동').count(), '비로그인인데 내 활동 블록이 DOM 에 있다').toBe(0);
+    // ⚠ 종전 셀렉터는 `text=🙋 내 활동` 이었다 — 이모지에 결합돼 있어서, 아이콘 교체(ICON-2)만으로도
+    //   무조건 0건이 되어 **이 단언이 조용히 항상 통과**하게 된다(게이트 무력화). 앱이 명시 선언한
+    //   data-testid 로 옮긴다(셀렉터를 느슨하게 푸는 게 아니라 결합 지점을 바꾸는 것).
+    expect(await page.getByTestId('venue-my-activity').count(), '비로그인인데 내 활동 블록이 DOM 에 있다').toBe(0);
   });
 });

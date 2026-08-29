@@ -4,6 +4,7 @@ import RangeMatrix13, { type MatrixAction } from './RangeMatrix13';
 import { ACTION_COLORS } from '../../../lib/ranges.data';
 import { freqFromArray } from '../../../lib/ranges';
 import { HAND_ORDER, NASH_STACKS, nashRange } from '../../../lib/nash.data';
+import Icon from '../../atoms/Icon';
 
 // 푸시·폴드 차트 — 자체 계산 Nash 균형(fictitious play)로 전면 교체.
 // 예전 버전은 스택 6구간×비율 1개(총 6개 숫자)짜리 근사에 포지션 축도, 콜 레인지도 없었다.
@@ -108,7 +109,7 @@ export default function PushFoldChart() {
       </div>
 
       <p className="text-2xs leading-relaxed text-ink-secondary rounded-input bg-surface-high/60 border border-border-subtle px-2 py-1.5">
-        💡 {effView === 'shove'
+        <Icon name="lightbulb" size={12} className="mr-0.5 inline-block align-[-1px] shrink-0 text-accent-300" />{effView === 'shove'
           ? `${pos.label}(${pos.desc})에서 ${stack}bb로 첫 진입 올인하는 균형 레인지${ante ? ' — BB 앤티가 팟을 키워 더 넓게 민다' : ''}.`
           : effView === 'callBB'
             ? `${pos.label}의 ${stack}bb 올인에 BB가 콜하는 균형 레인지 — 팟오즈 덕에 생각보다 넓다${ante ? ' (앤티로 더 넓어짐)' : ''}.`

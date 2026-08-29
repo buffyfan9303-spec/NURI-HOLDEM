@@ -1,6 +1,6 @@
 /* ============================================================================
  * [UI/UX 점검 및 자가 진단] PostFormModal — 커뮤니티 글쓰기 (Stage 2)
- *  - 입력: 카테고리(필수·기본 자유) / 제목(선택) / 내용(필수) / 이미지 첨부(최대4)
+ *  - 입력: 카테고리(필수·기본 자유) / 제목(필수) / 내용(필수) / 이미지 첨부(최대4)
  *  - 예외처리:
  *     · 내용 공백 → 제출 차단 + toast. content-filter(금칙어)도 통과해야 등록.
  *     · 이미지 5MB↑ / 비이미지 → 개별 스킵 + 경고, 4장 초과분 잘림.
@@ -28,6 +28,7 @@ import {
 } from './PostComposerExtras';
 import { saveHand, savePoll } from '../../api/postAttachments';
 import { supabase, IS_MOCK } from '../../lib/supabase';
+import Icon from '../atoms/Icon';
 
 export interface PostFormData {
   category: PostCategory;
@@ -183,7 +184,11 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return toast.show('로그인이 필요합니다', 'error');
-    // 제목은 선택 — 목록은 content 앞부분 폴백 표시가 이미 있다(제출 payload 가 title.trim() 사용)
+    // 제목 필수(2026-08-29 오너 지시). 예전엔 선택이라 목록이 본문 앞부분을 제목처럼 잘라 보여줬는데,
+    // 그러면 목록에서 무슨 글인지 알 수 없고 상세 최상단 제목 블록도 빈다.
+    // 내용보다 **먼저** 검사한다 — 위에서 아래로 채우는 순서와 오류 지적 순서가 같아야 한다.
+    const head = title.trim();
+    if (!head) return toast.show('제목을 입력해 주세요', 'error');
     const body = content.trim();
     if (!body) return toast.show('내용을 입력해 주세요', 'error');
 
@@ -276,7 +281,7 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
           {/* 제목 */}
           <div>
             <label htmlFor={titleId} className="block text-xs font-medium text-ink-secondary mb-1.5">
-              제목 <span className="text-2xs text-ink-muted">(선택)</span>
+              제목 <span className="text-danger ml-0.5">*</span>
             </label>
             <input
               id={titleId}
@@ -284,7 +289,9 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               maxLength={80}
-              placeholder="제목 (비워도 돼요)"
+              required
+              aria-required="true"
+              placeholder="제목을 입력하세요"
               className="input"
             />
           </div>
@@ -423,7 +430,7 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
                 </div>
                 <p className="text-xs text-ink-muted">
                   <span className="text-accent-200 font-semibold">{handTarget === 'hero' ? '내 핸드' : handTarget === 'villain' ? '상대 핸드' : '보드'}</span>
-                  에 넣을 카드를 아래에서 선택하세요 (카드를 다시 누르면 제거) · 보드를 3장 이상 고르면 <b className="text-accent-200">🎬 단계별 리플레이</b>로 올라갑니다
+                  에 넣을 카드를 아래에서 선택하세요 (카드를 다시 누르면 제거) · 보드를 3장 이상 고르면 <b className="inline-flex items-center gap-1 align-[-2px] text-accent-200"><Icon name="clapperboard" size={13} className="shrink-0" />단계별 리플레이</b>로 올라갑니다
                 </p>
                 {/* 52장 그리드 트레이 — CardGridPicker 의 타일은 surface-high 라(그 파일은 이 카드의 소유 밖),
                     불투명 surface-high 패널 위에 직접 두면 타일 면이 사라진다. 한 단 내린 판을 깔아 면을 되살린다. */}

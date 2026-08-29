@@ -20,15 +20,9 @@ const OPENNOW_SEEN = 'nuri:opennow-seen';
 const openNowSeen = () => { try { return localStorage.getItem(OPENNOW_SEEN) === '1'; } catch { return false; } };
 
 
-/** 시간대 인사 카피(APIS ⑩ 문법) — 장식이 아니라 '지금'의 맥락을 한 줄로 */
-function greeting(now: Date): string {
-  const h = now.getHours();
-  if (h < 5) return '밤이 깊었어요';
-  if (h < 11) return '좋은 아침이에요';
-  if (h < 17) return '오후의 홀덤';
-  if (h < 21) return '오늘 저녁, 어디로 갈까요';
-  return '밤의 토너먼트가 열리는 시간';
-}
+// 시간대 인사 카피(greeting)는 2026-08-29 제거됐다 — 그 줄이 NURI MIND 링크인데
+// "좋은 아침이에요"는 눌러야 할 이유를 주지 않아서, 유도 문구로 대체했다(오너 지시).
+// 헤드라인의 라이브/일정 문구가 '지금'의 맥락은 이미 담고 있어 정보 손실이 없다.
 
 export default function HomeTab({
   schedules, loaded, clocksLoaded, liveCount, regInfoBySchedule, onTools, onSelect, onVenue, onExplore, onLive, onRotiCommunity, active,
@@ -99,7 +93,9 @@ export default function HomeTab({
           href="https://www.nurimind.co.kr" target="_blank" rel="noopener"
           className="inline-flex items-center gap-1 py-1 -my-1 text-2xs text-ink-muted transition-colors hover:text-accent-200"
         >
-          {now.getMonth() + 1}/{now.getDate()}({DAYS_KO[now.getDay()]}) · {greeting(now)}
+          {/* 2026-08-29 오너 지시: 인사말은 아무 데도 안 데려간다 — 링크인데 갈 이유를 안 준다.
+              날짜는 맥락으로 남기고, 그 자리를 NURI MIND 로 가고 싶게 만드는 문구로 바꾼다. */}
+          {now.getMonth() + 1}/{now.getDate()}({DAYS_KO[now.getDay()]}) · 오늘의 운을 점쳐보세요{' '}
           <span className="font-semibold text-accent-300">· NURI MIND ›</span>
         </a>
         {liveCount > 0 ? (

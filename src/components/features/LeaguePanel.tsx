@@ -57,7 +57,7 @@ export default function LeaguePanel({ venueId, canConfigure }: { venueId: string
                   <p className="truncate text-sm font-bold text-ink-primary">{league.name}</p>
                   <p className="text-2xs text-ink-muted">주최: {league.ownerVenueName ?? '매장'} · 시즌 {league.seasonStart}~</p>
                 </div>
-                <button type="button" disabled={!canConfigure} onClick={async () => { if (!mine) return; try { await respondLeagueInvite(mine.id, true); toast.show('초대를 수락했습니다 🎉', 'success'); reload(); } catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); } }}
+                <button type="button" disabled={!canConfigure} onClick={async () => { if (!mine) return; try { await respondLeagueInvite(mine.id, true); toast.show('초대를 수락했습니다', 'success'); reload(); } catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); } }}
                   className="btn-primary shrink-0 px-3 py-1.5 text-xs disabled:opacity-50">수락</button>
                 <button type="button" disabled={!canConfigure} onClick={async () => { if (!mine) return; try { await respondLeagueInvite(mine.id, false); toast.show('초대를 거절했습니다', 'info'); reload(); } catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); } }}
                   className="shrink-0 rounded-input border border-danger/40 px-3 py-1.5 text-xs font-semibold text-danger-light hover:bg-danger/10 disabled:opacity-50">거절</button>
@@ -144,7 +144,7 @@ function LeagueLiveBoard({ league, isOwner, members, venueId, canConfigure, onCh
   const allSettled = venues.length > 0 && venues.every((v) => statusOf(v.venueId)?.liveStatus === 'settled');
   const settleAll = async () => {
     setBusy(true);
-    try { await leagueSettleAll(league.id); toast.show('전체 정산 완료 — 파이널 매장이 확정됐어요 🎯', 'success'); reload(); onChanged(); }
+    try { await leagueSettleAll(league.id); toast.show('전체 정산 완료 — 파이널 매장이 확정됐어요', 'success'); reload(); onChanged(); }
     catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
     finally { setBusy(false); }
   };
@@ -162,7 +162,7 @@ function LeagueLiveBoard({ league, isOwner, members, venueId, canConfigure, onCh
   return (
     <div className="rounded-input border border-sky-500/25 bg-sky-500/[0.04] p-2.5 space-y-2">
       <div className="flex items-center gap-2">
-        <p className="text-2xs font-bold text-sky-300">📡 실시간 정산 현황</p>
+        <p className="flex items-center gap-1 text-2xs font-bold text-sky-300"><Icon name="radio" size={12} className="shrink-0" />실시간 정산 현황</p>
         <span className="rounded-badge bg-surface-float px-1.5 py-0.5 text-[9px] font-bold text-ink-secondary">
           {league.phase === 'idle' ? '대기' : league.phase === 'live' ? '진행 중' : league.phase === 'settled' ? '정산 완료' : '파이널'}
         </span>
@@ -178,7 +178,7 @@ function LeagueLiveBoard({ league, isOwner, members, venueId, canConfigure, onCh
           return (
             <li key={v.venueId} className="flex items-center gap-2 rounded-input bg-surface-base/50 px-2 py-1.5">
               <span className={['h-2.5 w-2.5 shrink-0 rounded-full', LIVE_DOT[ls].c].join(' ')} aria-hidden />
-              <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{v.name}{v.owner && <span className="ml-1 text-[9px] font-bold text-accent-300">리그장</span>}{v.venueId === league.finalVenueId && <span className="ml-1 text-[9px] font-bold text-sky-300">🏁 파이널</span>}</span>
+              <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{v.name}{v.owner && <span className="ml-1 text-[9px] font-bold text-accent-300">리그장</span>}{v.venueId === league.finalVenueId && <span className="ml-1 inline-flex items-center gap-0.5 text-[9px] font-bold text-sky-300"><Icon name="flag" size={9} className="shrink-0" />파이널</span>}</span>
               <span className="shrink-0 text-2xs tabular-nums text-ink-muted">엔트리 {st?.entries ?? 0}</span>
               <span className={['shrink-0 text-2xs font-bold', ls === 'settled' ? 'text-rose-300' : ls === 'running' ? 'text-emerald-300' : 'text-amber-300'].join(' ')}>{LIVE_DOT[ls].label}</span>
             </li>
@@ -191,8 +191,8 @@ function LeagueLiveBoard({ league, isOwner, members, venueId, canConfigure, onCh
         <div className="flex flex-wrap items-center gap-1.5 border-t border-sky-500/15 pt-2">
           <input value={entriesInput} onChange={(e) => setEntriesInput(e.target.value)} type="number" inputMode="numeric"
             placeholder={`엔트리(현재 ${statusOf(venueId)?.entries ?? 0})`} className="input w-28 text-xs tabular-nums" />
-          <button type="button" disabled={busy} onClick={() => report('running')} className="rounded-input border border-emerald-500/50 px-2.5 py-1.5 text-2xs font-bold text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-50">🟢 진행</button>
-          <button type="button" disabled={busy} onClick={() => report('settled')} className="rounded-input border border-rose-500/50 px-2.5 py-1.5 text-2xs font-bold text-rose-300 hover:bg-rose-500/10 disabled:opacity-50">🔴 정산완료(ITM 보고)</button>
+          <button type="button" disabled={busy} onClick={() => report('running')} className="inline-flex items-center gap-1.5 rounded-input border border-emerald-500/50 px-2.5 py-1.5 text-2xs font-bold text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-50"><span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-emerald-400" />진행</button>
+          <button type="button" disabled={busy} onClick={() => report('settled')} className="inline-flex items-center gap-1.5 rounded-input border border-rose-500/50 px-2.5 py-1.5 text-2xs font-bold text-rose-300 hover:bg-rose-500/10 disabled:opacity-50"><span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-rose-400" />정산완료(ITM 보고)</button>
           {myStatus && myStatus !== 'pending' && <button type="button" disabled={busy} onClick={() => report('pending')} className="text-2xs text-ink-muted hover:text-ink-secondary">되돌리기</button>}
         </div>
       )}
@@ -200,17 +200,17 @@ function LeagueLiveBoard({ league, isOwner, members, venueId, canConfigure, onCh
       {/* 리그장: 전체 정산 완료 */}
       {isOwner && canConfigure && league.phase !== 'settled' && league.phase !== 'final' && (
         <button type="button" disabled={busy || !allSettled} onClick={settleAll}
-          className="w-full rounded-input bg-rose-500/90 py-2 text-xs font-bold text-white disabled:opacity-40">
-          {allSettled ? '🏁 전체 정산 완료 — 파이널 매장 확정' : `전체 정산 대기 (${venues.filter((v) => statusOf(v.venueId)?.liveStatus === 'settled').length}/${venues.length} 정산)`}
+          className="flex w-full items-center justify-center gap-1.5 rounded-input bg-rose-500/90 py-2 text-xs font-bold text-white disabled:opacity-40">
+          {allSettled ? <><Icon name="flag" size={13} className="shrink-0" />전체 정산 완료 — 파이널 매장 확정</> : `전체 정산 대기 (${venues.filter((v) => statusOf(v.venueId)?.liveStatus === 'settled').length}/${venues.length} 정산)`}
         </button>
       )}
 
       {/* 정산 후: 합산 ITM + 파이널 안내 */}
       {revealItm && (
         <div className="rounded-input border border-accent-400/30 bg-accent-300/[0.05] p-2.5 space-y-1.5">
-          <p className="text-2xs font-bold text-accent-300">🎯 통합 ITM (입상권) · 총 엔트리 {statuses.reduce((a, s) => a + (s.entries || 0), 0)}</p>
+          <p className="flex items-center gap-1 text-2xs font-bold text-accent-300"><Icon name="target" size={12} className="shrink-0" />통합 ITM (입상권) · 총 엔트리 {statuses.reduce((a, s) => a + (s.entries || 0), 0)}</p>
           {finalVenueName && (
-            <p className="text-[11px] text-ink-secondary">🏁 파이널 집결 매장: <b className="text-sky-300">{finalVenueName}</b>(엔트리 최다) · 3테이블로 시작 — 통합 클락은 이 매장에서 새 클락으로 진행</p>
+            <p className="text-[11px] text-ink-secondary"><Icon name="flag" size={11} className="mr-0.5 inline-block align-[-1px] shrink-0" />파이널 집결 매장: <b className="text-sky-300">{finalVenueName}</b>(엔트리 최다) · 3테이블로 시작 — 통합 클락은 이 매장에서 새 클락으로 진행</p>
           )}
           {combinedItm.length === 0 ? (
             <p className="py-1 text-center text-2xs text-ink-muted">보고된 입상 명단이 없습니다(각 매장에서 순위 입력 후 정산완료 시 반영).</p>
@@ -227,7 +227,7 @@ function LeagueLiveBoard({ league, isOwner, members, venueId, canConfigure, onCh
             </ul>
           )}
           {isOwner && canConfigure && league.phase === 'settled' && (
-            <button type="button" onClick={doFinal} className="w-full rounded-input bg-sky-500/90 py-1.5 text-2xs font-bold text-white hover:bg-sky-500">🏁 파이널 시작(집결 매장에서 새 클락 진행)</button>
+            <button type="button" onClick={doFinal} className="flex w-full items-center justify-center gap-1.5 rounded-input bg-sky-500/90 py-1.5 text-2xs font-bold text-white hover:bg-sky-500"><Icon name="flag" size={12} className="shrink-0" />파이널 시작(집결 매장에서 새 클락 진행)</button>
           )}
         </div>
       )}
@@ -276,7 +276,7 @@ function LeagueCard({ league, isOwner, members, venueId, canConfigure, onChanged
     <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2.5">
       <div className="flex flex-wrap items-center gap-2">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-extrabold text-ink-primary">🏆 {league.name}</p>
+          <p className="flex items-center gap-1.5 text-sm font-extrabold text-ink-primary"><Icon name="trophy" size={15} className="shrink-0 text-gold-300" />{league.name}</p>
           <p className="text-2xs text-ink-muted">주최 {league.ownerVenueName ?? '매장'} · 시즌 {league.seasonStart}~ {isOwner && <span className="text-accent-300 font-bold">· 내가 리그장</span>}</p>
         </div>
         {isOwner && canConfigure && (

@@ -1,7 +1,24 @@
 // src/api/vouchers.ts — 매장이용권(store_vouchers). 모든 변경은 SECURITY DEFINER RPC로만.
+//
+// ⚠ 킬스위치(2026-08-29, app_settings.identity_voucher_enabled — src/lib/identityFlag.ts)
+//   본인인증과 한 스위치로 묶여 있고 기본값은 **비활성화**다. 화면 진입점은 전부 그 플래그로 숨겼고,
+//   여기서는 **상태를 만들거나 소비하는 4개 경로**(발급·사용 3종)만 한 번 더 막는다.
+//   왜 읽기는 안 막나: 조회를 막으면 다시 켰을 때 '빈 지갑'이 잠깐 보인다 — 데이터는 늘 사실대로.
+//   ⚠ 삭제가 아니라 비활성화다. RPC·트리거·기존 레코드는 전부 그대로 살아 있다.
+//
+// ⚠ 이용권은 **매장마다 개별**이다(오너 지시 #4, 2026-08-29). 서버의 사용 경로 3개
+//   (redeem_my_voucher / _by_qr / _by_phone)가 모두 `used_venue_id := venue_id` 로 고정하므로
+//   usedVenueId 는 구조적으로 venueId 와 같다. '어느 매장에서 썼나'는 물음 자체가 성립하지 않는다 —
+//   화면은 발급 매장(venueName)만 말한다. 필드 자체는 스키마 보존을 위해 남겨 둔다.
 import { supabase, IS_MOCK } from '../lib/supabase';
 import { currentUser } from './_session';
 import { makeSearchCache } from '../lib/searchCache';
+import { identityEnabled } from '../lib/identityFlag';
+
+/** 킬스위치 OFF 에서 상태를 바꾸려는 시도를 막는다 — 놓친 진입점이 조용히 발급하는 일이 없게. */
+function assertVoucherOn(): void {
+  if (!identityEnabled()) throw new Error('매장이용권이 현재 비활성화되어 있습니다 — 본인인증 준비가 끝나면 다시 열립니다');
+}
 
 export interface Voucher {
   id: string; venueId: string; venueName: string | null; issuedBy: string;
@@ -69,6 +86,7 @@ export async function listVoucherNotes(venueId: string, noteLike: string): Promi
 
 export async function issueVoucher(venueId: string, input: { title: string; count?: number; holderName?: string; holderUserId?: string; note?: string; expiresAt?: string | null }): Promise<void> {
   if (IS_MOCK) return;
+  assertVoucherOn();
   const { error } = await supabase.rpc('issue_voucher', {
     p_venue_id: venueId, p_title: input.title, p_count: input.count ?? 1,
     p_holder_name: input.holderName ?? null, p_holder_user_id: input.holderUserId ?? null, p_note: input.note ?? null,
@@ -161,6 +179,7 @@ export const deleteVouchers = (ids: string[]) => bulk(ids, deleteVoucher);
 // 회수(사용): 발급 매장 QR 스캔 — 그 매장에서만 사용 가능. 매장명 반환.
 export async function redeemMyVoucherByQr(voucherId: string, venueId: string): Promise<string> {
   if (IS_MOCK) return '';
+  assertVoucherOn();
   const { data, error } = await supabase.rpc('redeem_my_voucher_by_qr', { p_voucher_id: voucherId, p_venue_id: venueId });
   if (error) throw new Error(error.message);
   return (data as string) ?? '';
@@ -168,6 +187,7 @@ export async function redeemMyVoucherByQr(voucherId: string, venueId: string): P
 // 회수(사용): 발급 매장 업주 전화번호로만.
 export async function redeemMyVoucherByPhone(voucherId: string, phone: string): Promise<string> {
   if (IS_MOCK) return '';
+  assertVoucherOn();
   const { data, error } = await supabase.rpc('redeem_my_voucher_by_phone', { p_voucher_id: voucherId, p_phone: phone });
   if (error) throw new Error(error.message);
   return (data as string) ?? '';
@@ -175,6 +195,7 @@ export async function redeemMyVoucherByPhone(voucherId: string, phone: string): 
 // 회수(사용): '전송' 한 번에 발급 매장으로 바로(보유자 본인). 매장명 반환.
 export async function redeemMyVoucher(voucherId: string): Promise<string> {
   if (IS_MOCK) return '';
+  assertVoucherOn();
   const { data, error } = await supabase.rpc('redeem_my_voucher', { p_voucher_id: voucherId });
   if (error) throw new Error(error.message);
   return (data as string) ?? '';

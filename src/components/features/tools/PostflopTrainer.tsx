@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { CalcCard } from './calcUi';
 import { useTrainerProgress, recordAnswer, setDailyGoal, GOAL_CHOICES } from '../../../lib/trainerProgress';
+import Icon from '../../atoms/Icon';
 
 /* 포스트플랍 트레이너 — 실전 상황 퀴즈(GTO 위자드 연습 모드 스타일).
    시나리오를 보고 최적 액션을 고르면 정답·해설 + 정답률을 추적한다.
@@ -208,7 +209,7 @@ export default function PostflopTrainer() {
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-3 text-2xs">
             <span className="text-ink-muted">오늘 <b className="text-ink-primary tabular-nums">{prog.today}/{prog.goal}</b></span>
-            <span className="text-ink-muted" title={`스트릭 프리즈 ${prog.freezes}개 보유`}>🔥 <b className="text-accent-300 tabular-nums">{prog.streak}</b></span>
+            <span className="inline-flex items-center gap-1 text-ink-muted" title={`스트릭 프리즈 ${prog.freezes}개 보유`}><Icon name="flame" size={11} className="shrink-0" /><b className="text-accent-300 tabular-nums">{prog.streak}</b></span>
             <span className="text-ink-muted">XP <b className="text-ink-secondary tabular-nums">{prog.xp.toLocaleString()}</b></span>
           </div>
           <div className="inline-flex items-center gap-1">
@@ -222,7 +223,7 @@ export default function PostflopTrainer() {
         <div className="h-1.5 overflow-hidden rounded-full bg-surface-high">
           <div className={['h-full rounded-full', prog.goalMet ? 'bg-emerald-400' : 'bg-accent-300'].join(' ')} style={{ width: `${prog.goal ? Math.min(100, Math.round((prog.today / prog.goal) * 100)) : 0}%` }} />
         </div>
-        {prog.goalMet && <p className="text-2xs text-emerald-300">🎉 오늘 목표 달성 — 스트릭 🔥{prog.streak}일 유지 중</p>}
+        {prog.goalMet && <p className="inline-flex items-center gap-1 text-2xs text-emerald-300"><Icon name="check-circle" size={12} className="shrink-0" />오늘 목표 달성 — 스트릭 <Icon name="flame" size={11} className="shrink-0" />{prog.streak}일 유지 중</p>}
       </div>
 
       {/* 카테고리 필터 칩 */}
@@ -287,13 +288,16 @@ export default function PostflopTrainer() {
         <div className="animate-fade-in space-y-2">
           {celebrate && (
             <div className="rounded-input border border-emerald-400/50 bg-emerald-400/10 p-2.5 text-center">
-              <p className="text-sm font-extrabold text-emerald-300">🎉 오늘 목표 달성!</p>
-              <p className="mt-0.5 text-2xs text-ink-secondary">+50 XP 보너스 · 스트릭 🔥{prog.streak}일</p>
+              <p className="flex items-center justify-center gap-1.5 text-sm font-extrabold text-emerald-300"><Icon name="check-circle" size={15} className="shrink-0" />오늘 목표 달성!</p>
+              <p className="mt-0.5 inline-flex items-center gap-1 text-2xs text-ink-secondary">+50 XP 보너스 · 스트릭 <Icon name="flame" size={11} className="shrink-0" />{prog.streak}일</p>
             </div>
           )}
           <div className={['rounded-input border p-2.5 text-2xs leading-relaxed',
             isCorrect(picked) ? 'border-emerald-400/40 bg-emerald-400/[0.06] text-ink-secondary' : 'border-danger/40 bg-danger/[0.06] text-ink-secondary'].join(' ')}>
-            <p className="font-bold mb-0.5">{isCorrect(picked) ? '✅ 정답!' : `❌ 정답은 「${sc.answer}」${sc.alsoOk ? ` (「${sc.alsoOk}」도 인정)` : ''}`}</p>
+            <p className="flex items-center gap-1 font-bold mb-0.5">
+              <Icon name={isCorrect(picked) ? 'check-circle' : 'close'} size={13} className={['shrink-0', isCorrect(picked) ? 'text-emerald-400' : 'text-danger-light'].join(' ')} />
+              {isCorrect(picked) ? '정답!' : `정답은 「${sc.answer}」${sc.alsoOk ? ` (「${sc.alsoOk}」도 인정)` : ''}`}
+            </p>
             {sc.why}
           </div>
           <button type="button" onClick={next} className="btn-primary w-full py-2 text-sm">다음 문제 →</button>
@@ -311,7 +315,7 @@ export default function PostflopTrainer() {
             ))}
           </div>
           {weakCats.length > 0 && (
-            <p className="text-2xs text-amber-300">📌 보완 추천: {weakCats.map((w) => `${CAT_LABEL[w.cat]} ${w.rate}%`).join(' · ')} — 필터로 골라 집중 연습해 보세요.</p>
+            <p className="flex items-start gap-1 text-2xs text-amber-300"><Icon name="pin" size={12} className="mt-px shrink-0" />보완 추천: {weakCats.map((w) => `${CAT_LABEL[w.cat]} ${w.rate}%`).join(' · ')} — 필터로 골라 집중 연습해 보세요.</p>
           )}
         </div>
       )}

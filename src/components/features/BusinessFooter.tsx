@@ -46,7 +46,7 @@ export default function BusinessFooter({ onOpenLegal, onOpenSupport }: { onOpenL
         </nav>
 
         {/* 사업자 정보 — PG 심사 필수 5항목은 상시 노출, 부가 항목만 펼침 */}
-        <dl className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] leading-relaxed text-ink-muted">
+        <dl className="flex flex-wrap gap-x-3 gap-y-0.5 text-2xs leading-relaxed text-ink-muted">
           {BIZ_REQUIRED.map(([k, v]) => (
             <div key={k} className="flex items-center gap-1">
               <dt className="text-ink-muted/70">{k}</dt>
@@ -54,7 +54,7 @@ export default function BusinessFooter({ onOpenLegal, onOpenSupport }: { onOpenL
             </div>
           ))}
         </dl>
-        <details className="group/biz text-[11px] leading-relaxed text-ink-muted">
+        <details className="group/biz text-2xs leading-relaxed text-ink-muted">
           <summary className="inline-flex cursor-pointer list-none items-center gap-0.5 text-ink-muted underline decoration-border-default underline-offset-2">
             추가 정보<span aria-hidden className="transition-transform group-open/biz:rotate-180">▾</span>
           </summary>

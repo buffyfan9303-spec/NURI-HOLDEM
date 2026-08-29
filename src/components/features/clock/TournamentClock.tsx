@@ -28,6 +28,7 @@ import { saveVenueRankings, prizeUnitRisk, getVenueRankings } from '../../../api
 import LoadErrorCard from '../../atoms/LoadErrorCard';
 import { msgOf } from '../../../lib/dbError';
 import Modal from '../../atoms/Modal';
+import Icon from '../../atoms/Icon';
 import ClockThemePanel from './ClockThemePanel';
 
 const now = () => Date.now();
@@ -260,7 +261,7 @@ function MultiClockOverview({ venueId, sessionDate, currentGameSeq, active = tru
   const label = (g: number) => (g === 1 ? '메인' : '사이드' + (g - 1));
   return (
     <div className="rounded-card border border-accent-400/25 bg-surface-low/60 p-2 space-y-1.5">
-      <p className="text-2xs font-bold text-accent-300">⏱ 게임 클락 {seqs.length} — 탭하면 전환/시작 · ＋로 사이드 클락 추가</p>
+      <p className="flex items-center gap-1 text-2xs font-bold text-accent-300"><Icon name="timer" size={12} className="shrink-0" />게임 클락 {seqs.length} — 탭하면 전환/시작 · ＋로 사이드 클락 추가</p>
       <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
         {seqs.map((g) => {
           const c = clocks.find((x) => x.gameSeq === g);
@@ -272,7 +273,7 @@ function MultiClockOverview({ venueId, sessionDate, currentGameSeq, active = tru
               <button key={g} type="button"
                 onClick={() => { if (window.confirm(`${label(g)} 클락을 메인 설정 복사로 바로 시작할까요? (오늘 장부에 연동됩니다)`)) onQuickStart(g); }}
                 title="메인 설정 복사해 바로 시작" className={base}>
-                <div className="flex items-center justify-between gap-1"><span className="truncate text-2xs font-bold text-ink-primary">{label(g)}{on ? ' ●' : ''}</span><span className="text-[9px] font-bold text-emerald-300">▶ 바로 시작</span></div>
+                <div className="flex items-center justify-between gap-1"><span className="truncate text-2xs font-bold text-ink-primary">{label(g)}{on ? ' ●' : ''}</span><span className="flex items-center gap-0.5 text-[9px] font-bold text-emerald-300"><Icon name="play" size={10} className="shrink-0" />바로 시작</span></div>
                 <p className="mt-0.5 text-2xs text-ink-muted truncate">{gt || '메인 설정으로 시작'}</p>
               </button>
             );
@@ -518,7 +519,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
     // 2레벨 이상 한 번에 넘어갔다 = 그동안 아무도 전진을 쓰지 못했다는 뜻.
     // 조용히 넘기면 업주가 "레벨이 왜 튀지" 하고 수기로 되돌려 오히려 더 어긋난다.
     if (cu.advanced > 1) {
-      toast.show(`⏱ 레벨 자동 보정 — L${levelNumberAt(cfg, state.currentIndex)} → L${levelNumberAt(cfg, cu.toIndex)}`, 'info', { durationMs: 5000 });
+      toast.show(`레벨 자동 보정 — L${levelNumberAt(cfg, state.currentIndex)} → L${levelNumberAt(cfg, cu.toIndex)}`, 'info', { durationMs: 5000 });
     }
   }, [state, persist, playChime, canManage, cfg, toast]);
 
@@ -688,7 +689,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
       {/* 상단 바 */}
       <div className={['flex items-center gap-2', fs ? 'shrink-0 px-3 pt-2 pb-1' : ''].join(' ')}>
         {fs
-          ? <span className="text-2xs font-semibold text-ink-muted">{state.sessionDate ? `📒 장부 ${state.sessionDate} 연동` : '단독 클락'}</span>
+          ? <span className="flex items-center gap-1 text-2xs font-semibold text-ink-muted">{state.sessionDate ? <><Icon name="notebook" size={12} className="shrink-0" />{`장부 ${state.sessionDate} 연동`}</> : '단독 클락'}</span>
           : <h2 className="text-base font-bold text-ink-primary">클락</h2>}
         <div className="flex items-center gap-1.5 ml-auto">
           {isAdmin && !fs && (
@@ -711,7 +712,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
           {!fs && (
             <button type="button" onClick={() => window.open(`/?display=${state.venueId}&g=${state.gameSeq ?? 1}`, '_blank', 'noopener')}
               title="새 창으로 관전 화면(매장 TV·빔프로젝터)을 엽니다 — 그 창을 큰 화면으로 옮겨 띄워두세요"
-              className="btn-ghost text-2xs px-2.5 py-1 text-accent-300">📺 TV 송출</button>
+              className="btn-ghost inline-flex items-center gap-1 text-2xs px-2.5 py-1 text-accent-300"><Icon name="tv" size={13} className="shrink-0" />TV 송출</button>
           )}
           <button type="button" onClick={toggleFs} className="btn-ghost text-2xs px-2.5 py-1">{fs ? '⤡ 전체화면 해제' : '⤢ 전체화면'}</button>
           {canManage && !fs && <button type="button" onClick={onOpenSettings} className="btn-ghost text-2xs px-2.5 py-1">설정</button>}
@@ -772,7 +773,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
               {isBreak ? (cur.label || 'BREAK') : `LEVEL ${levelNo}`}
             </p>
             {isBreak && state.running && remaining <= 60_000 && (
-              <p className={['relative font-bold text-amber-300 animate-pulse', fs ? 'text-[min(2.6cqw,3.1cqh)]' : 'text-xs sm:text-base'].join(' ')}>⏰ 곧 재개됩니다</p>
+              <p className={['relative inline-flex items-center justify-center gap-1.5 font-bold text-amber-300 animate-pulse', fs ? 'text-[min(2.6cqw,3.1cqh)]' : 'text-xs sm:text-base'].join(' ')}><Icon name="alarm" size={fs ? 24 : 15} className="shrink-0" />곧 재개됩니다</p>
             )}
             <p className={['font-extrabold tabular-nums leading-none my-1 sm:my-2 drop-shadow-[0_3px_24px_rgba(0,0,0,0.5)]',
               fs ? 'text-[min(22cqw,32cqh)]' : 'text-6xl sm:text-8xl',
@@ -835,7 +836,8 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
             <div className="flex flex-wrap items-end justify-center gap-x-3 gap-y-2">
               <VolCtl value={volume} onChange={setVolume} onToggleMute={toggleMute} />
               <button type="button" onClick={() => playChime('level')} title="알림음 미리듣기"
-                className="self-end w-7 h-7 rounded-input bg-white/10 hover:bg-white/15 border border-border-default text-white/60 hover:text-[#8B94E8] text-sm leading-none">🔊</button>
+                aria-label="알림음 미리듣기"
+                className="self-end grid place-items-center w-7 h-7 rounded-input bg-white/10 hover:bg-white/15 border border-border-default text-white/60 hover:text-[#8B94E8]"><Icon name="volume" size={14} /></button>
               <div className="flex flex-col items-center gap-0.5">
                 <span className="text-[9px] text-white/45">10초틱</span>
                 <button type="button" onClick={() => setTickStyle((t) => t === 'beep' ? 'soft' : t === 'soft' ? 'off' : 'beep')} title="마지막 10초 카운트다운 틱 음색 — 비프/부드러움/끔(끔=레벨업음만)"
@@ -853,14 +855,14 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
                 onPlus={() => setLevel(1)} onMinus={() => setLevel(-1)} />
               {levelUndo && (
                 <button type="button" onClick={undoLevel} title="방금 레벨 이동을 취소하고 남은 시간까지 되돌립니다(TV 포함)"
-                  className="self-end h-10 px-3 rounded-input border border-amber-400/60 bg-amber-400/15 text-2xs font-extrabold text-amber-200 hover:bg-amber-400/25">↩ 레벨 되돌리기</button>
+                  className="self-end inline-flex items-center gap-1 h-10 px-3 rounded-input border border-amber-400/60 bg-amber-400/15 text-2xs font-extrabold text-amber-200 hover:bg-amber-400/25"><Icon name="undo" size={13} className="shrink-0" />레벨 되돌리기</button>
               )}
               <Stepper label="Min" onPlus={() => adjustTime(60_000)} onMinus={() => adjustTime(-60_000)} />
               <Stepper label="Sec" onPlus={() => adjustTime(1_000)} onMinus={() => adjustTime(-1_000)} />
               <button type="button" onClick={toggleRun}
-                className={['px-4 py-2 rounded-input text-xs font-bold transition-colors',
+                className={['inline-flex items-center gap-1.5 px-4 py-2 rounded-input text-xs font-bold transition-colors',
                   state.running ? 'bg-amber-500/90 text-ink-inverse hover:bg-amber-500' : 'bg-emerald-500/90 text-ink-inverse hover:bg-emerald-500'].join(' ')}>
-                {state.running ? '⏸ STOP' : '▶ START'}
+                <Icon name={state.running ? 'pause' : 'play'} size={14} className="shrink-0" />{state.running ? 'STOP' : 'START'}
               </button>
               <button type="button" onClick={resetClock} className="px-3 py-2 rounded-input text-xs font-bold bg-white/10 hover:bg-white/15 text-white/60 border border-border-default hover:text-amber-300">↺ 초기화</button>
               {fs
@@ -883,7 +885,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
              장부 같은 긴 화면이 통째로 스크롤 불능이 되고 ESC·뒤로가기도 유령 모달이 먼저 먹는다.
              finishRows 상태는 그대로 두므로 클락 섹션으로 돌아오면 정상적으로 뜬다. */}
       {finishRows && state.sessionDate && active && (
-        <Modal open onClose={() => { setFinishRows(null); setEndAfterFinish(false); }} title="🏆 입상 순위 입력" maxWidth="md" variant="sheet">
+        <Modal open onClose={() => { setFinishRows(null); setEndAfterFinish(false); }} title="입상 순위 입력" maxWidth="md" variant="sheet">
           <div className="space-y-2 p-4">
             <p className="text-2xs text-ink-muted">저장하면 매장 순위·시즌·머니인킹에 자동 반영 · 이름은 장부에서 자동완성 · 상금은 만원 단위.</p>
             <datalist id="clk-finish-players">
@@ -953,7 +955,7 @@ function VolCtl({ value, onChange, onToggleMute }: { value: number; onChange: (v
       <span className="text-[9px] text-white/45">Volume ({value})</span>
       <div className="flex items-center gap-1">
         <button type="button" onClick={onToggleMute} title={value > 0 ? '음소거' : '음소거 해제'} aria-label={value > 0 ? '음소거' : '음소거 해제'}
-          className="text-sm leading-none hover:opacity-80">{value > 0 ? '🔈' : '🔇'}</button>
+          className="grid place-items-center hover:opacity-80"><Icon name={value > 0 ? 'volume' : 'volume-off'} size={14} /></button>
         <input type="range" min={0} max={100} value={value} onChange={(e) => onChange(Number(e.target.value))} className="w-16 accent-accent-300" />
       </div>
     </div>
@@ -1074,11 +1076,11 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
         <div className="grid grid-cols-2 gap-2">
           <button type="button" onClick={() => setLinkDate(null)}
             className={['rounded-input border p-2.5 text-left transition-colors', linkDate === null ? 'border-accent-400/60 bg-accent-300/15' : 'border-border-default bg-surface-high hover:border-border-strong'].join(' ')}>
-            <p className="text-xs font-bold text-ink-primary">🎰 단독 클락</p>
+            <p className="flex items-center gap-1.5 text-xs font-bold text-ink-primary"><Icon name="timer-poker" size={14} className="shrink-0" />단독 클락</p>
             <p className="text-2xs text-ink-muted mt-0.5">장부 연동 없이 실행</p>
           </button>
           <div className={['rounded-input border p-2.5 transition-colors', linkDate !== null ? 'border-accent-400/60 bg-accent-300/15' : 'border-border-default bg-surface-high'].join(' ')}>
-            <p className="text-xs font-bold text-ink-primary">📒 장부 연동</p>
+            <p className="flex items-center gap-1.5 text-xs font-bold text-ink-primary"><Icon name="notebook" size={14} className="shrink-0" />장부 연동</p>
             <p className="text-2xs text-ink-muted mt-0.5 truncate">{linkDate ? linkDate : '아래 목록에서 선택'}</p>
           </div>
         </div>
@@ -1113,7 +1115,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
         </div>
         {seededFromLedger && linkDate && (
           <p className="text-[11px] text-emerald-200 bg-emerald-500/12 border border-emerald-500/40 rounded-input px-2.5 py-2 leading-relaxed">
-            📒 <b>장부 {linkDate}</b> 연동됨 — 게임명·얼리 자동 연결, 장부 수정은 라이브에 즉시 반영.
+            <Icon name="notebook" size={13} className="inline-block align-[-2px] mr-1 shrink-0" /><b>장부 {linkDate}</b> 연동됨 — 게임명·얼리 자동 연결, 장부 수정은 라이브에 즉시 반영.
           </p>
         )}
       </section>
@@ -1178,8 +1180,8 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
           <Field label="최대 레벨 (자동생성용)"><input type="number" inputMode="numeric" min="1" max="60" value={cfg.maxLevel || ''} onChange={(e) => set({ maxLevel: Math.max(0, +e.target.value || 0) })} className={numInput} /></Field>
           <Field label="미스터리 바운티"><input type="number" inputMode="numeric" value={cfg.mysteryBounty || ''} onChange={(e) => set({ mysteryBounty: +e.target.value || 0 })} className={numInput} /></Field>
         </div>
-        <button type="button" onClick={autoGenerate} className="w-full py-2 rounded-input bg-accent-300/12 text-accent-300 border border-accent-400/40 text-xs font-bold hover:bg-accent-300/20">
-          ⚙ 블라인드 자동 생성 — 등록마감({cfg.regCloseLevel || '-'})·최대({cfg.maxLevel || 15})레벨 기준 (마감 후 가파르게)
+        <button type="button" onClick={autoGenerate} className="w-full inline-flex items-center justify-center gap-1.5 py-2 rounded-input bg-accent-300/12 text-accent-300 border border-accent-400/40 text-xs font-bold hover:bg-accent-300/20">
+          <Icon name="settings" size={14} className="shrink-0" />블라인드 자동 생성 — 등록마감({cfg.regCloseLevel || '-'})·최대({cfg.maxLevel || 15})레벨 기준 (마감 후 가파르게)
         </button>
       </section>
 
@@ -1226,7 +1228,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
             </div>
             <button type="button" onClick={() => applyBulkFrom(bulkFrom, bulkFromMin)} className="text-2xs font-bold px-2.5 py-1.5 rounded-input bg-accent-300/15 text-accent-300 border border-accent-400/40 hover:bg-accent-300/25">적용</button>
           </div>
-          <button type="button" onClick={() => setBulkFrom(cfg.regCloseLevel || 9)} className="text-2xs text-accent-300/90 hover:text-accent-300">↩ 레지 마감 레벨({cfg.regCloseLevel || 9})부터로 설정</button>
+          <button type="button" onClick={() => setBulkFrom(cfg.regCloseLevel || 9)} className="inline-flex items-center gap-1 text-2xs text-accent-300/90 hover:text-accent-300"><Icon name="undo" size={12} className="shrink-0" />레지 마감 레벨({cfg.regCloseLevel || 9})부터로 설정</button>
           <p className="text-2xs text-ink-muted">레지 마감 후 블라인드가 길어지면, 마감 레벨부터 다른 듀레이션을 일괄 적용하세요.</p>
         </div>
         <div className="space-y-1">
@@ -1293,8 +1295,8 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
       {/* 시작 — 위에서 고른 방식(단독/장부)으로 */}
       <div className="flex gap-2 pb-2">
         {linkDate
-          ? <button type="button" onClick={() => onStart(cfg, linkDate, linkGameSeq)} className="btn-primary flex-1 text-sm">📒 장부({linkDate.slice(5)}{linkGameSeq > 1 ? ` 사이드${linkGameSeq - 1}` : ''}) 연동해 시작</button>
-          : <button type="button" onClick={() => onStart(cfg, null)} className="btn-primary flex-1 text-sm">🎰 {hasLive ? '이 설정으로 다시 시작' : '단독 클락 시작'}</button>}
+          ? <button type="button" onClick={() => onStart(cfg, linkDate, linkGameSeq)} className="btn-primary inline-flex items-center justify-center gap-1.5 flex-1 text-sm"><Icon name="notebook" size={15} className="shrink-0" />장부({linkDate.slice(5)}{linkGameSeq > 1 ? ` 사이드${linkGameSeq - 1}` : ''}) 연동해 시작</button>
+          : <button type="button" onClick={() => onStart(cfg, null)} className="btn-primary inline-flex items-center justify-center gap-1.5 flex-1 text-sm"><Icon name="timer-poker" size={15} className="shrink-0" />{hasLive ? '이 설정으로 다시 시작' : '단독 클락 시작'}</button>}
         {linkDate && <button type="button" onClick={() => onStart(cfg, null)} className="btn-ghost flex-1 text-sm">단독으로 시작</button>}
       </div>
     </div>

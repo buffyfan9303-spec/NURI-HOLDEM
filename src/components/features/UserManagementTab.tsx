@@ -4,6 +4,7 @@ import type { User, UserStatus } from '../../api/auth';
 import { adminSetNickname, adminSetShadowban } from '../../api/auth';
 import { getUserActivity, getActivityLog } from '../../api/community';
 import type { PostCategory, UserActivityItem, ActivityLogEntry } from '../../api/community';
+import Icon from '../atoms/Icon';
 
 // 게시글 관리(모더레이션)용 경량 포스트 타입 — 게시판(카테고리)별 분류 포함
 interface ModPost {
@@ -258,7 +259,7 @@ function UserRow({ user, onUpdate }: { user: User; onUpdate: (id: string, patch:
               {statusStyle.label}
             </span>
             {user.shadowbanned && (
-              <span className="text-2xs px-1.5 py-0.5 rounded-badge border font-semibold border-violet-400/40 bg-violet-500/15 text-violet-300" title="활동 랭킹에서 조용히 제외됨">🕶 섀도우밴</span>
+              <span className="inline-flex items-center gap-1 text-2xs px-1.5 py-0.5 rounded-badge border font-semibold border-violet-400/40 bg-violet-500/15 text-violet-300" title="활동 랭킹에서 조용히 제외됨"><Icon name="eye-off" size={11} className="shrink-0" />섀도우밴</span>
             )}
           </div>
           <p className="text-2xs text-ink-muted truncate">{user.email}</p>

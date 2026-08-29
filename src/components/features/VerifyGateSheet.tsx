@@ -4,14 +4,15 @@
 // REQUIRE_VERIFY_EVENT(detail.reason)를 직접 듣고 자체 상태로 열림 — App 은 onStart 만 연결.
 import { useEffect, useState } from 'react';
 import Modal from '../atoms/Modal';
+import Icon, { type IconName } from '../atoms/Icon';
 import { REQUIRE_VERIFY_EVENT } from '../../lib/requireLogin';
 import { BIZ_REQUIRED } from './BusinessFooter';
 
-const BENEFITS = [
-  { icon: '✍️', t: '글·댓글 작성', d: '커뮤니티에 자유롭게 참여' },
-  { icon: '🛒', t: '중고장터 등록', d: '안전 거래를 위한 판매자 인증' },
-  { icon: '🎟️', t: '대회 예약', d: '노쇼 방지 · 신뢰 좌석 확보' },
-  { icon: '🏆', t: '전적·랭킹 인정', d: '본인 명의로 기록이 집계' },
+const BENEFITS: { icon: IconName; t: string; d: string }[] = [
+  { icon: 'edit',   t: '글·댓글 작성', d: '커뮤니티에 자유롭게 참여' },
+  { icon: 'cart',   t: '중고장터 등록', d: '안전 거래를 위한 판매자 인증' },
+  { icon: 'ticket', t: '대회 예약', d: '노쇼 방지 · 신뢰 좌석 확보' },
+  { icon: 'trophy', t: '전적·랭킹 인정', d: '본인 명의로 기록이 집계' },
 ];
 
 export default function VerifyGateSheet({ onStart }: { onStart: () => void }) {
@@ -34,7 +35,7 @@ export default function VerifyGateSheet({ onStart }: { onStart: () => void }) {
     <Modal open={open} onClose={() => setOpen(false)} variant="sheet" maxWidth="sm" title="휴대폰 본인인증">
       <div className="space-y-4 px-4 pb-5 pt-1">
         <div className="flex flex-col items-center gap-2 pt-2 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-accent-300/[0.12] text-2xl" aria-hidden>🔒</div>
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-accent-300/[0.12] text-accent-300"><Icon name="lock" size={26} /></div>
           <div>
             <p className="text-sm font-bold text-ink-primary">
               {reason ? `'${reason}'은(는) 본인인증이 필요해요` : '본인인증이 필요한 기능이에요'}
@@ -48,7 +49,7 @@ export default function VerifyGateSheet({ onStart }: { onStart: () => void }) {
         <ul className="space-y-2">
           {BENEFITS.map((b) => (
             <li key={b.t} className="flex items-center gap-3 rounded-input border border-border-subtle bg-surface-high px-3 py-2.5">
-              <span className="text-lg" aria-hidden>{b.icon}</span>
+              <Icon name={b.icon} size={18} className="shrink-0 text-accent-300" />
               <div className="min-w-0">
                 <p className="text-xs font-bold text-ink-primary">{b.t}</p>
                 <p className="text-[11px] text-ink-muted">{b.d}</p>

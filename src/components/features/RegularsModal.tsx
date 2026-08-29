@@ -6,6 +6,7 @@ import Modal from '../atoms/Modal';
 import { getVenueRegulars, getCustomerActivity, type VenueRegular, type CustomerActivity } from '../../api/reservations';
 import { wonToMan } from '../../api/ledger';
 import { getCustomerProfile, saveCustomerProfile, getCoupons, issueCoupon, setCouponStatus, type Coupon } from '../../api/crm';
+import Icon from '../atoms/Icon';
 
 export default function RegularsModal({ open, onClose, venueId, exclude = [] }: { open: boolean; onClose: () => void; venueId: string; exclude?: string[] }) {
   const [list, setList] = useState<VenueRegular[] | null>(null);
@@ -93,7 +94,7 @@ function RegularRow({ idx, r, venueId }: { idx: number; r: VenueRegular; venueId
             </div>
             {coupons.filter((c) => c.status === 'active').map((c) => (
               <div key={c.id} className="flex items-center justify-between gap-2 rounded bg-surface-high px-2 py-1">
-                <span className="min-w-0 flex-1 truncate text-2xs text-ink-secondary">🎟 {c.title}</span>
+                <span className="flex min-w-0 flex-1 items-center gap-1 text-2xs text-ink-secondary"><Icon name="ticket" size={11} className="shrink-0" /><span className="truncate">{c.title}</span></span>
                 <button type="button" onClick={() => redeemCoupon(c.id)} className="shrink-0 text-2xs font-bold text-accent-300">사용</button>
               </div>
             ))}

@@ -13,6 +13,7 @@ import { useDeepGto, type CardTarget, type DeepGtoInit } from './useDeepGto';
 import { canonicalizeHand } from './useGtoCalculator';
 import { equityAsync } from './equityClient';
 import { encodeSpot } from './gtoShare';
+import { explainDeepSpot } from './gto.explain';
 import type { Card, ActionFrequency } from './gto.types';
 
 function comboIdOf(cards: readonly (Card | null)[]): string | null {
@@ -143,8 +144,16 @@ function DeepActionSheet({
   // → 워커 비동기로 전환(열리는 프레임이 더는 멈추지 않는다). 결과·표시는 동일.
   type ActionRow = { key: string; eq: number | null; rec: (eq: number) => { label: string; color: string; note: string } };
   const [rows, setRows] = useState<ActionRow[] | null>(null);
+  // 상태마다 독립 멤버로 쪼갠다 — 세 상태를 한 객체에 뭉치면 판별 유니온이 성립하지 않아
+  // 마지막 분기에서도 TS 가 'done' 으로 확정하지 못한다(text 접근이 컴파일 에러).
+  type AiState =
+    | { status: 'idle' }
+    | { status: 'loading' }
+    | { status: 'failed' }
+    | { status: 'done'; text: string };
+  const [aiState, setAiState] = useState<AiState>({ status: 'idle' });
   useEffect(() => {
-    if (!open) { setRows(null); return; }
+    if (!open) { setRows(null); setAiState({ status: 'idle' }); return; }
     const h = hero.filter((c): c is Card => c !== null);
     const v = villain.filter((c): c is Card => c !== null);
     if (h.length < 2 || v.length < 2) { setRows(null); return; }
@@ -162,6 +171,17 @@ function DeepActionSheet({
         { key: '턴 액션',             eq: e4, rec: postRec },
         { key: '리버 액션',           eq: e5, rec: postRec },
       ]);
+      // ── 실제 AI 해설(Gemini) — 위 표는 규칙 계산이고, 여기서만 모델이 돈다 ──
+      // 이 시트 이름이 'AI 액션 해설' 인데 정작 AI 가 없었다(2026-08-29 오너 지적).
+      // 승률 계산이 끝난 뒤에 붙여 보낸다 — 모델이 숫자를 알아야 '왜' 를 말할 수 있다.
+      // 실패해도 위 표는 그대로 남는다(AI 는 덤이지 화면의 전제가 아니다).
+      setAiState({ status: 'loading' });
+      explainDeepSpot({
+        heroCards: h, villainCards: v, board: b,
+        equities: { pre: e0, flop: e3, turn: e4, river: e5 },
+      })
+        .then((text) => { if (alive) setAiState({ status: 'done', text }); })
+        .catch(() => { if (alive) setAiState({ status: 'failed' }); });
     });
     return () => { alive = false; };
   }, [open, hero, villain, board]);
@@ -202,6 +222,22 @@ function DeepActionSheet({
                 </div>
               );
             })
+          )}
+          {/* AI 해설 — 위 표(규칙 계산)와 역할이 다르다: 표는 '무엇을', 이건 '왜'.
+              높이를 애니메이트하지 않는다(모션 헌법). 로딩 자리를 미리 잡아 도착해도 표가 밀리지 않게. */}
+          {rows && aiState.status !== 'idle' && (
+            <div className="rounded-input border border-border-default bg-surface-low p-3">
+              <p className="text-2xs font-bold text-accent-200">AI 해설</p>
+              {aiState.status === 'loading' ? (
+                <p className="mt-1 min-h-[3.75rem] text-xs leading-relaxed text-ink-muted">해설을 불러오는 중…</p>
+              ) : aiState.status === 'failed' ? (
+                <p className="mt-1 min-h-[3.75rem] text-xs leading-relaxed text-ink-muted">
+                  지금은 해설을 불러오지 못했어요 — 위 권장 액션은 그대로 사용할 수 있습니다.
+                </p>
+              ) : (
+                <p className="mt-1 min-h-[3.75rem] text-xs leading-relaxed text-ink-secondary">{aiState.text}</p>
+              )}
+            </div>
           )}
           <p className="pt-1 text-2xs text-ink-muted">학습용 참고 설명입니다. 실제 솔버 값과 차이가 있을 수 있습니다.</p>
         </div>

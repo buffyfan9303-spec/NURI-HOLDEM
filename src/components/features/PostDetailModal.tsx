@@ -278,7 +278,7 @@ export default function PostDetailModal({
         {/* 신고 누적 자동 숨김 안내(운영자·작성자만 이 글에 접근) */}
         {post.blinded && (
           <div className="mt-2 flex flex-wrap items-center gap-2 rounded-card border border-danger/40 bg-danger/[0.06] px-3 py-2">
-            <span className="text-2xs font-bold text-danger">🚫 신고 누적으로 숨김 처리된 게시글입니다</span>
+            <span className="inline-flex items-center gap-1 text-2xs font-bold text-danger"><Icon name="ban" size={12} className="shrink-0" />신고 누적으로 숨김 처리된 게시글입니다</span>
             {user?.role === 'admin' && (
               <button type="button"
                 onClick={async () => {
@@ -300,9 +300,9 @@ export default function PostDetailModal({
                   className="relative text-base text-ink-primary leading-relaxed whitespace-pre-wrap break-words">
                   {heartKey > 0 && (
                     <span key={heartKey} aria-hidden
-                      className="anim-heart pointer-events-none absolute inset-0 flex items-center justify-center text-6xl"
+                      className="anim-heart pointer-events-none absolute inset-0 flex items-center justify-center"
                       onAnimationEnd={() => setTimeout(() => setHeartKey(0), 250)}>
-                      ❤️
+                      <Icon name="heart-fill" size={60} className="text-rose-500" />
                     </span>
                   )}
                   {onVenueClick ? renderMentions(text, venues, onVenueClick) : text}
@@ -333,7 +333,7 @@ export default function PostDetailModal({
                 return (
                   <button type="button" onClick={() => { if (performance.now() - openedAtRef.current < 400) return; setGtoHero(heroCards); }}
                     className="inline-flex items-center gap-1.5 rounded-input border border-accent-400/40 bg-accent-300/10 px-3 py-2 text-xs font-bold text-accent-200 active:opacity-80">
-                    🎯 이 핸드 GTO 분석
+                    <Icon name="target" size={14} className="shrink-0" />이 핸드 GTO 분석
                   </button>
                 );
               })()}

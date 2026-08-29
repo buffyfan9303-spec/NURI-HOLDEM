@@ -21,23 +21,36 @@ async function rest(path: string): Promise<any[]> {
   return await r.json();
 }
 
+// ⚠ gemini-1.5-flash 는 은퇴했다(2026-08-29 실측: ListModels 39개 중 부재).
+//   이 함수는 실패를 조용히 삼키므로(`if (!r.ok) return null`) 주간 조언이 말없이 빠져 있었다.
+//   체인으로 시도하고, 마지막 -latest 별칭은 구글이 늘 살아 있는 모델을 가리키므로
+//   앞의 둘이 은퇴해도 이 기능은 스스로 살아남는다(같은 사고 재발 방지).
+const ADVICE_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-flash-latest'];
+
 async function geminiAdvice(stats: string): Promise<string | null> {
   const key = Deno.env.get('GEMINI_API_KEY');
   if (!key) return null;
-  try {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
+  for (const model of ADVICE_MODELS) {
+   try {
+    const generationConfig: Record<string, unknown> = { temperature: 0.7, maxOutputTokens: 100 };
+    // 2.5 계열은 사고 토큰이 출력 한도(100)를 통째로 먹어 빈 응답이 된다 — 반드시 끈다.
+    // (2.0 에 이 필드를 보내면 400 이라 계열 판정이 필요하다 — gemini 함수 v4 의 교훈)
+    if (model.startsWith('gemini-2.5')) generationConfig.thinkingConfig = { thinkingBudget: 0 };
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ role: 'user', parts: [{ text: stats }] }],
         systemInstruction: { parts: [{ text: '너는 홀덤펍 운영 컨설턴트다. 주간 데이터를 보고 사장님에게 실행 가능한 조언을 정확히 한 문장(45자 이내, 존댓말, 이모지 없이)으로만 답한다. 예: "화요일이 약해요 — 화요일 프리롤 이벤트를 추천합니다."' }] },
-        generationConfig: { temperature: 0.7, maxOutputTokens: 100 },
+        generationConfig,
       }),
     });
-    if (!r.ok) return null;
+    if (!r.ok) continue;                  // 은퇴 모델(404)·설정 거부(400) → 다음 후보
     const data = await r.json();
     const text = (data?.candidates?.[0]?.content?.parts ?? []).map((p: any) => p?.text ?? '').join('').trim();
-    return text ? text.replace(/\n/g, ' ').slice(0, 80) : null;
-  } catch { return null; }
+    if (text) return text.replace(/\n/g, ' ').slice(0, 80);
+   } catch { /* 네트워크 일시 오류 — 다음 후보로 */ }
+  }
+  return null;
 }
 
 Deno.serve(async (req: Request) => {

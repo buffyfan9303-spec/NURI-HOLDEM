@@ -16,11 +16,13 @@ export default function ConsentGateModal({ open }: { open: boolean }) {
   const [privacy,   setPrivacy]   = useState(false);
   const [anti,      setAnti]      = useState(false);
   const [marketing, setMarketing] = useState(false);
+  const [pubRank,   setPubRank]   = useState(false);
   const [saving,    setSaving]    = useState(false);
 
+  // 선택 항목(marketing·pubRank)은 allRequired 에 넣지 않는다 — 넣으면 동의 강제가 된다.
   const allRequired = age19 && terms && privacy && anti;
-  const allChecked  = allRequired && marketing;
-  const toggleAll = (v: boolean) => { setAge19(v); setTerms(v); setPrivacy(v); setAnti(v); setMarketing(v); };
+  const allChecked  = allRequired && marketing && pubRank;
+  const toggleAll = (v: boolean) => { setAge19(v); setTerms(v); setPrivacy(v); setAnti(v); setMarketing(v); setPubRank(v); };
 
   const submit = async () => {
     if (!allRequired) return toast.show('필수 항목에 모두 동의해 주세요', 'error');
@@ -29,6 +31,7 @@ export default function ConsentGateModal({ open }: { open: boolean }) {
       await updateMyConsent({
         agreedToTerms: terms, agreedToPrivacy: privacy,
         agreedToAntiGambling: anti, agreedToMarketing: marketing,
+        publicRankingConsent: pubRank,
       });
       await refreshProfile();
       toast.show('동의가 완료되었습니다', 'success');
@@ -59,6 +62,8 @@ export default function ConsentGateModal({ open }: { open: boolean }) {
           <ConsentRow checked={privacy}   onChange={setPrivacy}   required label="개인정보 수집·이용에 동의합니다. (개인정보보호법 §15)" />
           <ConsentRow checked={anti}      onChange={setAnti}      required label="불법 환전·사행성 행위 금지 서약에 동의합니다. (게임산업법)" />
           <ConsentRow checked={marketing} onChange={setMarketing}          label="마케팅 정보 수신에 동의합니다. (이벤트·할인·푸시알림)" />
+          {/* 오너 #12 — 순위표의 '자주 가는 매장' 표기 동의(선택). 미동의여도 순위·닉네임은 그대로. */}
+          <ConsentRow checked={pubRank}   onChange={setPubRank}            label="랭킹 프로필 공개에 동의합니다. (순위표에 닉네임·자주 가는 매장 표시 · 미동의 시 매장은 표시하지 않습니다)" />
         </div>
 
         <div className="flex gap-2 pt-1">

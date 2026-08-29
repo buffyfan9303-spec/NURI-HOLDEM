@@ -1,5 +1,5 @@
 // src/contexts/AuthContext.tsx
-import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import type { User, ProfilePatch } from '../api/auth';
 import {
@@ -27,6 +27,19 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+// 내용이 같은 프로필이면 **이전 참조를 그대로** 유지한다.
+// 왜: 부팅 중 프로필은 두 경로(초기 조회 + onAuthStateChange)로 들어오고, 거기에
+//   일일 접속 점수 적립 결과까지 더해져 같은 사람의 user 객체가 3~4번 새로 만들어졌다.
+//   그때마다 `[user]` 의존 이펙트(차단목록·구성원 초대·팔로우·평점)가 전부 재발화하고
+//   useAuth 소비자 전체가 다시 렌더된다(콜드 부팅 실측: REST 중복 요청 14건).
+//   값이 같으면 화면에 들어가는 것도 같으므로 참조를 유지해도 **렌더 결과는 동일**하다.
+function sameUser(a: User | null, b: User | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  try { return JSON.stringify(a) === JSON.stringify(b); } catch { return false; }
+}
+const keepIfSame = (prev: User | null, next: User | null): User | null => (sameUser(prev, next) ? prev : next);
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser]       = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -40,12 +53,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
       return;
     }
-    setUser(profile);
+    setUser((prev) => keepIfSame(prev, profile));
     if (!profile) return;
     claimDailyLoginPoint()
       .then((pts) => {
         if (typeof pts === 'number') {
-          setUser((prev) => (prev && prev.id === profile.id ? { ...prev, activityPoints: pts } : prev));
+          setUser((prev) => (prev && prev.id === profile.id ? keepIfSame(prev, { ...prev, activityPoints: pts }) : prev));
         }
       })
       .catch(() => {});
@@ -89,7 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ── 프로필 수정 / 비밀번호 변경 ──────────────────────────────────────────────
   const updateProfile = useCallback(async (patch: ProfilePatch) => {
     const updated = await updateMyProfile(patch);
-    setUser(updated);
+    setUser((prev) => keepIfSame(prev, updated));
   }, []);
 
   const changePassword = useCallback(async (currentPw: string, newPw: string) => {
@@ -97,10 +110,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshProfile = useCallback(async () => {
-    setUser(await getMyProfile());
+    const next = await getMyProfile();
+    setUser((prev) => keepIfSame(prev, next));
   }, []);
 
-  const value: AuthContextValue = {
+  // 매 렌더 새 객체를 만들면 useAuth 소비자 전체가 같이 렌더된다(값은 그대로인데도).
+  // 이 제공자는 앱 최상단이라 범위가 사실상 전체다 — 입력이 바될 때만 새 값을 낸다.
+  const value: AuthContextValue = useMemo(() => ({
     user,
     isAdmin:         user?.role === 'admin',
     isOwner:         user?.role === 'venue_owner',
@@ -111,7 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     updateProfile,
     changePassword,
     refreshProfile,
-  };
+  }), [user, loading, login, logout, updateProfile, changePassword, refreshProfile]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

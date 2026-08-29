@@ -14,6 +14,7 @@ import EmptyState from '../atoms/EmptyState';
 import HoldToConfirmButton from '../atoms/HoldToConfirmButton';
 import { getComments, logActivity } from '../../api/community';
 import { createUndoQueue } from '../../lib/undoableDelete';
+import Icon from '../atoms/Icon';
 
 // 예약 명단 CSV 내보내기 (엑셀 한글 호환)
 function exportReservationsCsv(schedule: Schedule, reservations: Reservation[]) {
@@ -99,8 +100,8 @@ export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete, on
               {dk.map((k) => { const d = new Date(k + 'T00:00:00'); return (
                 <button key={k} type="button" onClick={() => setDateFilter(k)} className={chip(dateFilter === k)}>{d.getMonth() + 1}/{d.getDate()}({dow[d.getDay()]}) {cntOf(k)}</button>
               ); })}
-              <label className="relative shrink-0 cursor-pointer rounded-input border border-dashed border-border-default px-2.5 py-1.5 text-2xs font-bold text-ink-secondary hover:border-accent-400/50">
-                📅 날짜
+              <label className="relative inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-input border border-dashed border-border-default px-2.5 py-1.5 text-2xs font-bold text-ink-secondary hover:border-accent-400/50">
+                <Icon name="calendar" size={12} className="shrink-0" />날짜
                 <input type="date" value={dateFilter || ''} onChange={(e) => setDateFilter(e.target.value)} className="absolute inset-0 cursor-pointer opacity-0" aria-label="날짜 직접 선택" />
               </label>
             </div>
@@ -130,7 +131,7 @@ function PendingApprovalView() {
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="text-amber-400" aria-hidden><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
       </div>
       <div>
-        <h2 className="text-base font-semibold text-amber-400">운영자 승인 대기 중</h2>
+        <h2 className="text-base font-bold text-amber-400">운영자 승인 대기 중</h2>
         <p className="text-xs text-ink-muted mt-1 leading-relaxed">매장 업주 가입 신청이 접수되었습니다.<br />영업일 기준 1~2일 내 승인 결과를 알려드립니다.</p>
       </div>
       <div className="text-2xs text-ink-muted px-4 py-2 rounded-input bg-surface-high">승인 후 게임 업로드 권한이 활성화됩니다</div>
@@ -271,7 +272,7 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUse
             ledger_sessions.schedule_id      → SET NULL(장부는 남고 연결만 끊김) */}
       {confirming && (
         <div className="border-t border-danger/30 bg-danger/10 px-3 py-2.5 space-y-2">
-          <p className="text-xs font-bold text-danger-light">⚠ ‘{schedule.title}’ 게임을 삭제합니다 — 되돌릴 수 없습니다</p>
+          <p className="flex items-center gap-1 text-xs font-bold text-danger-light"><Icon name="alert" size={13} className="shrink-0" />‘{schedule.title}’ 게임을 삭제합니다 — 되돌릴 수 없습니다</p>
           <ul className="space-y-0.5 text-2xs leading-relaxed text-ink-secondary">
             <li>· 예약자 <b className="text-ink-primary tabular-nums">{reservations?.length ?? resCount ?? 0}명</b>이 함께 영구 삭제됩니다 (손님에게 알림은 가지 않습니다)</li>
             <li>· 포스터 문의(Q&amp;A) <b className="text-ink-primary tabular-nums">{qnaCount === null ? '…' : `${qnaCount}건`}</b>이 함께 영구 삭제됩니다</li>
@@ -293,7 +294,7 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUse
         {ops?.closed && !ops.hasRankings && onRanking && (
           <button type="button" onClick={() => onRanking(ops.date)}
             className="flex w-full items-center justify-center gap-1 border-b border-border-subtle bg-amber-500/10 py-2 text-2xs font-bold text-amber-400 active:opacity-80">
-            ⚠ 순위 미입력 — 지금 입력하기
+            <Icon name="alert" size={12} className="shrink-0" />순위 미입력 — 지금 입력하기
           </button>
         )}
         <div className="flex items-stretch divide-x divide-border-subtle">

@@ -10,11 +10,19 @@ import {
   createVenueSeason, endVenueSeason, type VenueSeason, type SeasonStanding, type HallOfFameEntry,
 } from '../../api/seasons';
 import { subscribeRankings } from '../../api/rankings';
+import Icon from '../atoms/Icon';
 
 const today = () => new Date().toLocaleDateString('en-CA');
 const addDays = (iso: string, d: number) => { const t = new Date(iso); t.setDate(t.getDate() + d); return t.toLocaleDateString('en-CA'); };
 const daysLeft = (endsOn: string) => Math.max(0, Math.ceil((new Date(endsOn + 'T23:59:59').getTime() - Date.now()) / 86400000));
-const medal = (r: number) => (r === 1 ? 'bg-accent-300 text-white' : r === 2 ? 'bg-slate-300 text-white' : r === 3 ? 'bg-amber-700 text-white' : 'bg-surface-float text-ink-secondary');
+// 2등 배지의 흰 글자는 slate-300 위에서 대비 **1.48:1** — 사실상 안 보인다(다크·라이트 공통).
+// 밝은 은색 위에는 어두운 글자. 1등(보라)·3등(동)은 흰 글자로 4.5 이상이라 그대로 둔다.
+const medal = (r: number) => (r === 1 ? 'bg-accent-300 text-white' : r === 2 ? 'bg-slate-300 text-slate-900' : r === 3 ? 'bg-amber-700 text-white' : 'bg-surface-float text-ink-secondary');
+// ⚠ 교차검증 실측(2026-08-29, 375 다크, 매장 페이지 순위 탭): 아래 시즌명·점수의 `text-accent-300`
+// 이 다크에서 #805FDA on surface = **4.0 / 3.71:1** 로 AA(4.5) 미달이었다(B5 로 지목됐지만 남아 있던 자리).
+// `text-accent-200` 은 테마 인지 토큰이다 — 다크는 #BCA9F0(6.94:1), 라이트는 index.css 의
+// `html.light .text-accent-200 { color:#6946C8 }` 오버라이드로 **라이트 accent-300 과 완전히 동일한 값**이라
+// 라이트 렌더는 1px 도 변하지 않고 다크만 통과한다. 배경/보더의 accent-300 은 텍스트가 아니라 그대로 둔다.
 
 export default function SeasonPanel({ venueId, canManage = false, venueName }: { venueId: string; canManage?: boolean; venueName?: string }) {
   const toast = useToast();
@@ -65,14 +73,14 @@ export default function SeasonPanel({ venueId, canManage = false, venueName }: {
       <span className={['flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-2xs font-extrabold tabular-nums', medal(s.rank)].join(' ')}>{s.rank}</span>
       <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{s.nickname}{s.realName ? <span className="text-2xs font-normal text-ink-muted"> ({s.realName})</span> : null}</span>
       <span className="shrink-0 text-2xs text-ink-muted tabular-nums">{s.appearances}회 · 최고 {s.bestPosition}위</span>
-      <span className="shrink-0 text-xs font-bold tabular-nums text-accent-300">{s.points}점</span>
+      <span className="shrink-0 text-xs font-bold tabular-nums text-accent-200">{s.points}점</span>
     </li>
   );
 
   return (
     <section className="space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-sm font-bold text-ink-primary">🏆 시즌 리그</h3>
+        <h3 className="flex items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="trophy" size={15} className="shrink-0 text-gold-300" />시즌 리그</h3>
         {canManage && !active && !creating && <button type="button" onClick={() => setCreating(true)} className="btn-primary px-3 py-1 text-2xs">+ 시즌 시작</button>}
       </div>
 
@@ -97,7 +105,7 @@ export default function SeasonPanel({ venueId, canManage = false, venueName }: {
         <div className="rounded-card border border-accent-400/30 bg-accent-300/[0.04] p-3">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
-              <p className="truncate text-sm font-bold text-accent-300">{active.name}</p>
+              <p className="truncate text-sm font-bold text-accent-200">{active.name}</p>
               <p className="text-2xs text-ink-muted">{active.startsOn} ~ {active.endsOn} · <b className="text-ink-secondary">D-{daysLeft(active.endsOn)}</b></p>
             </div>
             {canManage && <button type="button" onClick={doEnd} disabled={busy} className="btn-ghost shrink-0 px-2.5 py-1 text-2xs text-amber-300 disabled:opacity-50">시즌 종료</button>}
@@ -115,16 +123,16 @@ export default function SeasonPanel({ venueId, canManage = false, venueName }: {
       {/* 🏆 역대 챔피언(명예의 전당) */}
       {hof.length > 0 && (
         <div className="rounded-card border border-accent-400/30 bg-accent-300/[0.05] p-3">
-          <p className="mb-2 text-sm font-bold text-gold-300">🏆 역대 챔피언</p>
+          <p className="mb-2 flex items-center gap-1.5 text-sm font-bold text-gold-300"><Icon name="trophy" size={15} className="shrink-0" />역대 챔피언</p>
           <ul className="space-y-1.5">
             {hof.map((h) => (
               <li key={h.seasonId} className="flex items-center gap-2.5 rounded-input border border-accent-400/20 bg-surface-low px-3 py-2">
-                <span className="shrink-0 text-base" aria-hidden>👑</span>
+                <Icon name="crown" size={17} className="shrink-0 text-gold-300" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-bold text-ink-primary">{h.nickname}{h.realName ? <span className="text-2xs font-normal text-ink-muted"> ({h.realName})</span> : null}</p>
                   <p className="truncate text-2xs text-ink-muted">{h.seasonName} · {h.endsOn}</p>
                 </div>
-                <span className="shrink-0 text-xs font-bold tabular-nums text-accent-300">{h.points}점</span>
+                <span className="shrink-0 text-xs font-bold tabular-nums text-accent-200">{h.points}점</span>
                 <button type="button" title="챔피언 카드 공유"
                   onClick={async () => {
                     const d = { nickname: h.nickname, seasonName: h.seasonName, venueName, points: h.points };
@@ -134,7 +142,7 @@ export default function SeasonPanel({ venueId, canManage = false, venueName }: {
                       toast.show(r === 'shared' ? '챔피언 카드를 공유했어요' : '챔피언 카드를 저장했어요', 'success');
                     } catch { toast.show('카드 생성 실패', 'error'); }
                   }}
-                  className="btn-ghost shrink-0 px-1.5 py-1 text-2xs">📤</button>
+                  aria-label="챔피언 카드 공유" className="btn-ghost grid shrink-0 place-items-center px-1.5 py-1"><Icon name="share" size={14} /></button>
               </li>
             ))}
           </ul>
@@ -144,7 +152,7 @@ export default function SeasonPanel({ venueId, canManage = false, venueName }: {
       {/* 지난 시즌 아카이브 */}
       {archived.length > 0 && (
         <div>
-          <p className="mb-1.5 text-2xs font-bold text-ink-muted">📚 지난 시즌</p>
+          <p className="mb-1.5 flex items-center gap-1 text-2xs font-bold text-ink-muted"><Icon name="archive" size={12} className="shrink-0" />지난 시즌</p>
           <ul className="space-y-1.5">
             {archived.map((s) => (
               <li key={s.id} className="rounded-card border border-border-subtle bg-surface-low">

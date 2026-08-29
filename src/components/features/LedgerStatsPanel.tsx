@@ -26,7 +26,7 @@ const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 type Period = 'day' | 'week' | 'month' | 'all' | 'dow' | 'ai';
 const PERIODS: { id: Period; label: string; ai?: boolean }[] = [
   { id: 'day', label: '당일' }, { id: 'week', label: '일주일' }, { id: 'month', label: '한 달' }, { id: 'all', label: '총괄' }, { id: 'dow', label: '요일별' },
-  { id: 'ai', label: '✨ AI 분석', ai: true },
+  { id: 'ai', label: 'AI 분석', ai: true },
 ];
 
 export default function LedgerStatsPanel({ venueId }: { venueId: string }) {
@@ -266,11 +266,11 @@ function StatsView({ venueId }: { venueId: string }) {
           const on = period === p.id;
           return (
             <button key={p.id} type="button" data-pill-active={(on && !p.ai) || undefined} onClick={() => setPeriod(p.id)}
-              className={['relative flex-1 min-w-[3.6rem] py-1.5 text-xs font-bold rounded-[6px] whitespace-nowrap transition-colors duration-300 focus:outline-none',
-                on ? 'text-white' : (p.ai ? 'text-violet-300' : 'text-ink-secondary hover:text-ink-primary')].join(' ')}>
+              className={['relative flex-1 min-w-[3.6rem] py-1.5 t-tab rounded-[6px] whitespace-nowrap transition-colors duration-300 focus:outline-none',
+                on ? 'font-bold text-white' : (p.ai ? 'text-violet-300' : 'text-ink-secondary hover:text-ink-primary')].join(' ')}>
               {/* AI 기간(그라데이션)은 자기 배경을 직접 칠한다 — 공용 알약은 숨김 */}
               {on && p.ai && <span aria-hidden className="absolute inset-0 rounded-[6px] bg-gradient-to-r from-violet-500 to-indigo-500 shadow animate-fade-in" />}
-              <span className="relative">{p.label}</span>
+              <span className="relative inline-flex items-center justify-center gap-1">{p.ai && <Icon name="sparkles" size={11} className="shrink-0" />}{p.label}</span>
             </button>
           );
         })}
@@ -626,7 +626,7 @@ function DowStats({ dow, rangeLabel = '전체' }: { dow: Record<number, { entrie
 
       {/* 인사이트 */}
       <p className="text-[11px] text-ink-secondary bg-surface-low/70 border border-border-default rounded-input p-2.5 leading-relaxed">
-        💡 {multi
+        <Icon name="lightbulb" size={12} className="mr-0.5 inline-block align-[-1px] shrink-0 text-accent-300" />{multi
           ? <>{DOW[worst.w]}요일이 일평균 <b className="text-rose-300">{worst.avgEntry.toFixed(1)}</b> 엔트리로 가장 저조합니다(전체 평균 {meanAvg.toFixed(1)}). 반대로 <b className="text-emerald-300">{DOW[best.w]}</b>요일이 {best.avgEntry.toFixed(1)}로 가장 활발합니다. {DOW[worst.w]}요일에 집객 이벤트(얼리버드 칩업·신규 할인·보장 토너먼트)를 배치해 보세요.</>
           : <>아직 한 요일({DOW[best.w]})만 집계됐습니다. 다른 요일도 운영되면 요일 간 비교·약한 요일 진단을 표시합니다.</>}
       </p>
@@ -780,7 +780,7 @@ h1{font-size:22px;font-weight:900}.sub{color:#777;font-size:12px;margin:4px 0 20
 .c .t{font-weight:800;font-size:14px;margin-bottom:6px;color:#6d28d9}.c .b{font-size:13px;line-height:1.7;color:#333;white-space:pre-line}
 @media print{body{padding:16px}}
 </style></head><body>
-<h1>✨ NURI AI 주간 리포트</h1><div class="sub">최근 ${days}일 누적 데이터 기반 인사이트 · nuriholdem.com</div>
+<h1>NURI AI 주간 리포트</h1><div class="sub">최근 ${days}일 누적 데이터 기반 인사이트 · nuriholdem.com</div>
 ${card('매출 및 엔트리 분석', rpt.sales)}
 ${card('리스크 & 누수 체크', rpt.risk)}
 ${card('요일별 진단', rpt.weekday)}
@@ -793,14 +793,14 @@ ${card('AI 운영 액션 플랜', rpt.actions.map((a) => '• ' + a).join('\n'))
     <div className="rounded-card border border-violet-500/40 bg-gradient-to-br from-violet-500/[0.12] to-indigo-500/[0.04] p-3 space-y-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <h4 className="text-sm font-bold text-violet-200">✨ NURI AI 주간 리포트</h4>
+          <h4 className="flex items-center gap-1.5 text-sm font-bold text-violet-200"><Icon name="sparkles" size={14} className="shrink-0" />NURI AI 주간 리포트</h4>
           <p className="text-2xs text-ink-muted mt-0.5">최근 {days}일간의 누적 데이터를 기반으로 분석된 비즈니스 인사이트입니다.</p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          {!rpt.empty && <button type="button" onClick={exportReport} className="inline-flex items-center gap-1 text-2xs font-semibold text-ink-secondary bg-surface-high border border-border-default rounded-input px-2.5 py-1.5 hover:text-ink-primary transition-colors">📄 저장</button>}
+          {!rpt.empty && <button type="button" onClick={exportReport} className="inline-flex items-center gap-1 text-2xs font-semibold text-ink-secondary bg-surface-high border border-border-default rounded-input px-2.5 py-1.5 hover:text-ink-primary transition-colors"><Icon name="printer" size={12} className="shrink-0" />저장</button>}
           <button type="button" onClick={onRefresh}
             className="inline-flex items-center gap-1 text-2xs font-semibold text-violet-200 bg-violet-500/15 border border-violet-500/40 rounded-input px-2.5 py-1.5 hover:bg-violet-500/25 transition-colors">
-            ✨ 새로고침
+            <Icon name="sparkles" size={12} className="shrink-0" />새로고침
           </button>
         </div>
       </div>
@@ -820,10 +820,10 @@ ${card('AI 운영 액션 플랜', rpt.actions.map((a) => '• ' + a).join('\n'))
 
 function ReportCard({ tone, title, body, bullets }: { tone: 'emerald' | 'rose' | 'amber' | 'sky'; title: string; body?: string; bullets?: string[] }) {
   const head = tone === 'emerald' ? 'text-emerald-300' : tone === 'rose' ? 'text-rose-300' : tone === 'sky' ? 'text-sky-300' : 'text-amber-300';
-  const mark = tone === 'emerald' ? '📈' : tone === 'rose' ? '⚠️' : tone === 'sky' ? '📅' : '💡';
+  const mark = tone === 'emerald' ? 'trending-up' : tone === 'rose' ? 'alert' : tone === 'sky' ? 'calendar' : 'lightbulb';
   return (
     <div className="rounded-input bg-surface-low/80 border border-border-default p-3">
-      <p className={['flex items-center gap-1 text-xs font-bold mb-1.5', head].join(' ')}><span>{mark}</span>{title}</p>
+      <p className={['flex items-center gap-1.5 text-xs font-bold mb-1.5', head].join(' ')}><Icon name={mark} size={13} className="shrink-0" />{title}</p>
       {body && <p className="text-2xs text-ink-secondary leading-relaxed">{body}</p>}
       {bullets && (
         <ul className="space-y-1.5">

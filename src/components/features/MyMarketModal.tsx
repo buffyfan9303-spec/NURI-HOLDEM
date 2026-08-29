@@ -12,6 +12,7 @@ import { getMyListings, getMyLikedListings, updateListingStatus, deleteListing }
 import { relativeTime, STATUS_MAP } from './MarketplaceTab';
 import ChatPane from './chat/ChatPane';
 import { thumbUrl, thumbSrcSet } from '../../lib/imageUrl';
+import Icon from '../atoms/Icon';
 
 function Thumb({ src, size = 'w-12 h-12' }: { src: string | null; size?: string }) {
   return (
@@ -114,7 +115,7 @@ export function MessagesModal({ open, onClose }: { open: boolean; onClose: () =>
                         </span>
                       </div>
                       <p className={['text-xs truncate mt-0.5', t.unread > 0 ? 'text-ink-primary font-semibold' : 'text-ink-secondary'].join(' ')}>{t.lastContent}</p>
-                      <p className="text-2xs text-ink-muted truncate mt-0.5">📦 {t.listingTitle}</p>
+                      <p className="flex items-center gap-1 text-2xs text-ink-muted mt-0.5"><Icon name="package" size={11} className="shrink-0" /><span className="truncate">{t.listingTitle}</span></p>
                     </div>
                     <Thumb src={t.listingImage} size="w-10 h-10" />
                   </button>

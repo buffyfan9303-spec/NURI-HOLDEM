@@ -255,8 +255,8 @@ export default function ScheduleDetailModal({
                 <span className="text-ink-muted">·</span>
                 <span className="font-semibold tracking-wider">{schedule.format}</span>
                 {rating && rating.count > 0 && (
-                  <span className={`shrink-0 font-bold tabular-nums ${ACCENT_INK}`} title={`방문 후기 ${rating.count}건 평균`}>
-                    ⭐{rating.avg.toFixed(1)}<span className="font-normal text-ink-muted">({rating.count})</span>
+                  <span className={`inline-flex shrink-0 items-center gap-0.5 font-bold tabular-nums ${ACCENT_INK}`} title={`방문 후기 ${rating.count}건 평균`}>
+                    <Icon name="star-fill" size={12} className="shrink-0 text-gold-300" />{rating.avg.toFixed(1)}<span className="font-normal text-ink-muted">({rating.count})</span>
                   </span>
                 )}
                 <svg
@@ -275,8 +275,8 @@ export default function ScheduleDetailModal({
                 <span className="text-ink-muted">·</span>
                 <span className="font-semibold tracking-wider">{schedule.format}</span>
                 {rating && rating.count > 0 && (
-                  <span className={`shrink-0 font-bold tabular-nums ${ACCENT_INK}`} title={`방문 후기 ${rating.count}건 평균`}>
-                    ⭐{rating.avg.toFixed(1)}<span className="font-normal text-ink-muted">({rating.count})</span>
+                  <span className={`inline-flex shrink-0 items-center gap-0.5 font-bold tabular-nums ${ACCENT_INK}`} title={`방문 후기 ${rating.count}건 평균`}>
+                    <Icon name="star-fill" size={12} className="shrink-0 text-gold-300" />{rating.avg.toFixed(1)}<span className="font-normal text-ink-muted">({rating.count})</span>
                   </span>
                 )}
               </p>
@@ -284,8 +284,8 @@ export default function ScheduleDetailModal({
             {schedule.address && (
               <a href={`https://map.kakao.com/link/search/${encodeURIComponent(schedule.address)}`}
                 target="_blank" rel="noopener noreferrer"
-                className="mt-0.5 ml-5 block text-xs text-ink-muted underline decoration-border-strong underline-offset-2 hover:text-accent-300">
-                🗺 {schedule.address}
+                className="mt-0.5 ml-5 flex items-center gap-1.5 text-xs text-ink-muted underline decoration-border-strong underline-offset-2 hover:text-accent-300">
+                <Icon name="map" size={13} className="shrink-0" />{schedule.address}
               </a>
             )}
           </div>
@@ -316,7 +316,10 @@ export default function ScheduleDetailModal({
               data-pill-active={active || undefined}
               onClick={() => setTab(key)}
               className={[
-                'relative min-w-0 px-0.5 py-3 text-center text-xs font-semibold transition-colors sm:text-sm',
+                // §T1 탭 굵기 규격: 비활성 600 / 활성 700.
+                // ⚠ font-semibold 와 font-bold 를 함께 주면 안 된다 — Tailwind 출력 순서상 semibold 가 뒤라 이긴다.
+                'relative min-w-0 px-0.5 py-3 text-center text-xs transition-colors sm:text-sm',
+                active ? 'font-bold' : 'font-semibold',
                 // 활성 탭 라벨은 accent-300 단독이면 다크 surface-base 위 4.0:1 로 소형 텍스트 기준 미달 —
                 // 다크에서만 accent-200 으로 올린다(8.8:1). 밑줄 색은 그대로 accent-300.
                 active ? ACCENT_INK : 'text-ink-muted hover:text-ink-secondary',
@@ -396,7 +399,7 @@ export default function ScheduleDetailModal({
         {schedule.venueId && isEventToday && <BuyinRequestBox venueId={schedule.venueId} eventDate={eventDate} />}
         {schedule.venueId && !isEventToday && !isPastEvent && (
           <p className="rounded-card border border-border-subtle bg-surface-high px-3 py-2 text-2xs leading-relaxed text-ink-muted">
-            🙋 <b className="text-ink-secondary">현장 참가 신청</b>은 대회 <b className="text-ink-secondary">당일</b>에 이 화면에서 열립니다. 지금은 위 <b className="text-ink-secondary">참가 예약</b>으로 자리를 잡아두세요.
+            <Icon name="hand" size={12} className="mr-0.5 inline-block align-[-1px] shrink-0" /><b className="text-ink-secondary">현장 참가 신청</b>은 대회 <b className="text-ink-secondary">당일</b>에 이 화면에서 열립니다. 지금은 위 <b className="text-ink-secondary">참가 예약</b>으로 자리를 잡아두세요.
           </p>
         )}
 
@@ -594,8 +597,8 @@ export default function ScheduleDetailModal({
               {rating && rating.count > 0 && (
                 <>
                   <span className="text-ink-muted">·</span>
-                  <span className={`font-bold tabular-nums ${ACCENT_INK}`}>
-                    ⭐{rating.avg.toFixed(1)}
+                  <span className={`inline-flex items-center gap-0.5 font-bold tabular-nums ${ACCENT_INK}`}>
+                    <Icon name="star-fill" size={12} className="shrink-0 text-gold-300" />{rating.avg.toFixed(1)}
                   </span>
                   <span className="text-ink-muted">방문 후기 {rating.count}건 평균</span>
                 </>
@@ -607,7 +610,7 @@ export default function ScheduleDetailModal({
               <a href={`https://map.kakao.com/link/search/${encodeURIComponent(schedule.address)}`}
                 target="_blank" rel="noopener noreferrer"
                 className="flex items-center gap-2 px-3 py-2.5 text-xs transition-colors hover:bg-surface-float/40">
-                <span aria-hidden className="shrink-0">🗺</span>
+                <Icon name="map" size={14} className="shrink-0 text-ink-muted" />
                 <span className="min-w-0 flex-1 break-keep text-ink-secondary">{schedule.address}</span>
                 <span className={`shrink-0 text-2xs font-bold ${ACCENT_INK}`}>지도 →</span>
               </a>
@@ -668,7 +671,7 @@ export default function ScheduleDetailModal({
         <button type="button"
           onClick={() => { if (!user) { promptLogin(); return; } openPostForm('tourney'); }}
           className="flex w-full items-center gap-2 rounded-input border border-accent-400/40 bg-accent-300/[0.06] px-3 py-2.5 text-left transition-colors hover:bg-accent-300/[0.1]">
-          <span aria-hidden>📝</span>
+          <Icon name="edit" size={15} className="shrink-0 text-accent-300" />
           <span className="min-w-0 flex-1">
             <span className={`block text-xs font-bold ${ACCENT_INK}`}>이 대회 후기 쓰기</span>
             <span className="block text-2xs text-ink-muted">참가 후기를 커뮤니티 게시판(대회 후기)에 남겨보세요 — 다른 플레이어에게 큰 도움이 됩니다.</span>
@@ -862,7 +865,7 @@ function CalendarShareRow({ schedule }: { schedule: Schedule }) {
           }
         }}
         className="flex items-center justify-center gap-1.5 rounded-input border border-border-default bg-surface-high py-2 text-xs font-bold text-ink-secondary transition-colors hover:border-accent-400/50 hover:text-accent-300">
-        <span aria-hidden>📅</span> 내 캘린더에 추가
+        <Icon name="calendar" size={14} className="shrink-0" />내 캘린더에 추가
       </button>
       {/* 공유 링크 복사 — 이 대회로 바로 열리는 주소 */}
       <button type="button"
@@ -875,7 +878,7 @@ function CalendarShareRow({ schedule }: { schedule: Schedule }) {
           } catch { toast.show('복사에 실패했습니다', 'error'); }
         }}
         className="flex items-center justify-center gap-1.5 rounded-input border border-border-default bg-surface-high py-2 text-xs font-bold text-ink-secondary transition-colors hover:border-accent-400/50 hover:text-accent-300">
-        <span aria-hidden>🔗</span> 공유 링크
+        <Icon name="link" size={14} className="shrink-0" />공유 링크
       </button>
     </div>
   );
@@ -896,7 +899,7 @@ function BuyinRequestBox({ venueId, eventDate }: { venueId: string; eventDate: s
     if (sending) return;
     setSending(true);
     requestBuyin(venueId, null, undefined, eventDate)
-      .then((name) => toast.show(`${name || '매장'} 참가(바인) 요청 전송! 운영자 승인을 기다려 주세요 🙋`, 'success'))
+      .then((name) => toast.show(`${name || '매장'} 참가(바인) 요청 전송! 운영자 승인을 기다려 주세요`, 'success'))
       .catch((e) => toast.show(e instanceof Error ? e.message : '요청 전송 실패', 'error'))
       .finally(() => setSending(false));
   };
@@ -904,13 +907,13 @@ function BuyinRequestBox({ venueId, eventDate }: { venueId: string; eventDate: s
     <div className="flex items-center gap-3 rounded-card border border-sky-500/30 bg-sky-500/[0.05] p-2.5">
       {qr && <img src={qr} alt="바인 요청 QR" width={72} height={72} decoding="async" className="shrink-0 rounded-input bg-white p-1" />}
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-bold text-ink-primary">🙋 지금 매장에서 참가 신청 <span className="font-normal text-ink-muted">· 오늘 · 현장</span></p>
+        <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="hand" size={15} className="shrink-0" />지금 매장에서 참가 신청 <span className="font-normal text-ink-muted">· 오늘 · 현장</span></p>
         <p className="mt-0.5 text-2xs leading-relaxed text-ink-muted">매장에 도착한 뒤 눌러주세요. 운영자가 승인하면 <b className="text-ink-secondary">오늘 장부 명단</b>에 바로 등록됩니다.</p>
         {/* 오발신이 곧 운영자 장부 오염 + 업주 푸시 알림이라, 스치는 탭으로는 나가지 않게 꾹 누르기
             (예약 취소와 동일 패턴 — 확인 팝업보다 빠르면서 오작동엔 더 안전) */}
         <HoldToConfirmButton onConfirm={send} disabled={sending} holdingLabel="계속 누르세요…"
           className="btn-primary mt-1.5 px-3 py-1.5 text-xs disabled:opacity-50">
-          {sending ? '전송 중…' : '🙋 꾹 눌러 참가 신청'}
+          {sending ? '전송 중…' : <span className="inline-flex items-center gap-1.5"><Icon name="hand" size={13} className="shrink-0" />꾹 눌러 참가 신청</span>}
         </HoldToConfirmButton>
       </div>
     </div>
@@ -1045,20 +1048,20 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
           리마인더는 이미 예약자 전원에게 발송되므로, 여기의 '알림 받기'는 푸시 구독만 켠다. */}
       {justReserved && mine && (
         <div className="animate-fade-in space-y-2 rounded-input border border-emerald-500/40 bg-emerald-500/[0.07] p-3">
-          <p className="text-sm font-bold text-emerald-400">🎉 예약 완료 · {ddayLabel} {startTime?.slice(0, 5)} 시작</p>
+          <p className="flex items-center gap-1.5 text-sm font-bold text-emerald-400"><Icon name="check-circle" size={15} className="shrink-0" />예약 완료 · {ddayLabel} {startTime?.slice(0, 5)} 시작</p>
           <div className="grid grid-cols-2 gap-2">
             <button type="button" onClick={addToCalendar}
-              className="rounded-input border border-border-default bg-surface-high py-2.5 text-2xs font-bold text-ink-secondary hover:border-accent-400/50 hover:text-accent-300 transition-colors">
-              📅 캘린더에 추가
+              className="flex items-center justify-center gap-1.5 rounded-input border border-border-default bg-surface-high py-2.5 text-2xs font-bold text-ink-secondary hover:border-accent-400/50 hover:text-accent-300 transition-colors">
+              <Icon name="calendar" size={13} className="shrink-0" />캘린더에 추가
             </button>
             {pushSupported() ? (
               <button type="button" onClick={enableReminderPush} disabled={pushOn}
-                className={['rounded-input border py-2.5 text-2xs font-bold transition-colors',
+                className={['flex items-center justify-center gap-1.5 rounded-input border py-2.5 text-2xs font-bold transition-colors',
                   pushOn ? 'border-emerald-500/40 text-emerald-400' : 'border-border-default bg-surface-high text-ink-secondary hover:border-accent-400/50 hover:text-accent-300'].join(' ')}>
-                {pushOn ? '🔔 알림 켜짐 ✓' : '🔔 1시간 전 알림'}
+                <Icon name="bell" size={13} className="shrink-0" />{pushOn ? '알림 켜짐 ✓' : '1시간 전 알림'}
               </button>
             ) : (
-              <span className="flex items-center justify-center rounded-input border border-border-default bg-surface-high py-2.5 text-2xs text-ink-muted">⏰ 시작 1시간 전 알림 예정</span>
+              <span className="flex items-center justify-center gap-1.5 rounded-input border border-border-default bg-surface-high py-2.5 text-2xs text-ink-muted"><Icon name="alarm" size={13} className="shrink-0" />시작 1시간 전 알림 예정</span>
             )}
           </div>
           <button type="button" onClick={() => setJustReserved(false)}

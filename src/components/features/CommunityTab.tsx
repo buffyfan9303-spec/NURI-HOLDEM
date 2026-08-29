@@ -18,6 +18,7 @@ import { useBackClose } from '../../lib/backstack';
 import OwnerCommunity from './OwnerCommunity';
 import DealerCommunity from './DealerCommunity';
 import TierLeaderboard from './TierLeaderboard';
+import CommunityShoutBar from './CommunityShoutBar';
 import { useToast } from '../atoms/Toast';
 import EmptyState from '../atoms/EmptyState';
 import { filterContent } from '../../lib/content-filter';
@@ -319,6 +320,13 @@ function CommunityTab({
         </div>
       </div>
 
+      {/* 📣 외치기(오너 #8) — 활동점수로 산 한마디를 서브탭과 무관하게 같은 자리에 건다.
+          어느 서브탭을 보든 보여야 '눈에 띄게'가 성립한다(게시판 피드 안에 넣으면 다른 탭에선 안 보인다).
+          컴포넌트가 min-h 로 자리를 미리 잡아 도착 시 아래가 밀리지 않는다. */}
+      <div className="mx-auto w-full max-w-3xl">
+        <CommunityShoutBar />
+      </div>
+
       {/* 섹션 콘텐츠 — 게시판은 2-pane 전체폭, 그 외 단일 컬럼은 읽기폭(max-w-3xl)으로 제한.
           keep-alive: 방문한 섹션은 언마운트하지 않고 display 토글(메인 탭과 동일) — 재방문 커밋 프레임이 가볍다 */}
       <div className={(section === 'board' || section === 'market') ? '' : 'mx-auto w-full max-w-3xl'}>
@@ -421,7 +429,8 @@ function SectionTab({ active, label, onClick }: { active: boolean; label: string
       data-pill-active={active || undefined}
       className={[
         // flex-[1_0_auto]: 자리가 남으면 균등 분배, 좁으면 내용 폭(일정한 px-3)을 지키고 바가 가로 스크롤
-        'relative flex-[1_0_auto] px-3 py-2 text-xs font-semibold rounded-[6px] whitespace-nowrap',
+        // §T1: 서브탭 라벨 = t-tab(12.75/600). 활성은 아래 font-bold 가 덮는다.
+        'relative flex-[1_0_auto] px-3 py-2 t-tab rounded-[6px] whitespace-nowrap',
         'transition-colors',
         'focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0',
         active ? 'text-ink-primary font-bold' : 'text-ink-secondary hover:text-ink-primary',
@@ -776,7 +785,7 @@ function AdRow({ ad, card = false }: { ad: CommunityAd; card?: boolean }) {
   const inner = (
     <>
       <span className="shrink-0 rounded-badge bg-accent-300 px-1 py-0.5 text-2xs font-extrabold leading-none text-white">AD</span>
-      <span className="min-w-0 flex-1 truncate text-[15px] font-bold text-ink-primary">{ad.title}</span>
+      <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink-primary">{ad.title}</span>
       {ad.advertiser && <span className="shrink-0 text-xs text-ink-muted">{ad.advertiser}</span>}
     </>
   );
@@ -819,7 +828,7 @@ const PostRow = memo(function PostRow({ post, onClick, hot = false, selected = f
       }}
       aria-current={selected || undefined}
       className={[
-        'cv-row-sm min-h-[var(--row-h-sm)] flex items-center gap-2 px-3 py-2 cursor-pointer border-b border-border-subtle last:border-b-0 transition-colors focus:outline-none focus-visible:bg-surface-high/60',
+        'cv-row-sm min-h-[var(--row-h-sm)] flex items-center gap-2 px-3 py-2 cursor-pointer border-b border-border-subtle last:border-b-0 focus:outline-none focus-visible:bg-surface-high/60',
         selected ? 'bg-accent-300/10' : 'hover:bg-surface-high/60 active:bg-surface-high',
       ].join(' ')}
     >
@@ -831,7 +840,7 @@ const PostRow = memo(function PostRow({ post, onClick, hot = false, selected = f
         {Date.now() - new Date(post.createdAt).getTime() < 24 * 3600_000 && (
           <span aria-label="새 글" className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-danger align-middle" />
         )}
-        <span className="text-[15px] font-bold leading-tight text-ink-primary">{post.title || post.content.slice(0, 40)}</span>
+        <span className="text-sm font-bold leading-tight text-ink-primary">{post.title || post.content.slice(0, 40)}</span>
         {(replay || hand) && (
           <span className="ml-1 align-middle text-accent-300" aria-label={replay ? '리플레이 첨부' : '핸드 첨부'}>
             <Icon name={replay ? 'cards' : 'spade'} size={12} className="inline align-[-2px]" />
@@ -887,7 +896,7 @@ const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, se
       // 실측(다크, surface-base 대비): border-subtle 1.29:1 → border-default 2.06:1, hover strong 3.37:1.
       // card-elev 는 background-image 라 hover 의 background-color 변화와 충돌하지 않는다.
       className={[
-        'cv-row-lg min-h-[var(--row-h-lg)] card-elev shadow-card py-2.5 px-3 rounded-card border transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-300/60',
+        'cv-row-lg min-h-[var(--row-h-lg)] card-elev shadow-card py-2.5 px-3 rounded-card border cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-300/60',
         selected
           ? 'border-accent-300/60 bg-accent-300/[0.07]'
           : 'border-border-default bg-surface-low hover:border-border-strong hover:bg-surface-high/50 active:bg-surface-high',
@@ -917,10 +926,11 @@ const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, se
           </div>
           {/* 제목 — 한 줄 목록(PostRow)과 같은 15px 위계. 카드에서 제일 먼저 읽히는 줄 */}
           {post.title && (
-            <p className="mt-1 truncate text-[15px] font-bold leading-tight text-ink-primary">{post.title}</p>
+            <p className="mt-1 truncate text-sm font-bold leading-tight text-ink-primary">{post.title}</p>
           )}
           {/* 본문 발췌 — 2줄 클램프 */}
-          <p className="text-[13px] text-ink-secondary leading-[1.5] line-clamp-2 mt-1 break-words">
+          {/* §T1: 13px 은 사다리 밖 — 본문 미리보기 = t-desc(12.75/19.13). */}
+          <p className="t-desc text-ink-secondary line-clamp-2 mt-1 break-words">
             {(att.hand || att.replay) && (
               <span className="mr-1 inline-flex items-center gap-0.5 rounded-badge bg-accent-300/15 px-1 align-middle font-bold leading-none text-accent-300">
                 <Icon name={att.replay ? 'cards' : 'spade'} size={10} className="shrink-0" />

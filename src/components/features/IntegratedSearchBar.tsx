@@ -188,7 +188,7 @@ function DateTab({ slot, selected, hasEvents, onClick }: DateTabProps) {
         <span aria-hidden className="anim-pop absolute inset-0 rounded-[10px] bg-accent-300 shadow-[0_4px_14px_-4px_rgb(var(--accent-300)/0.55)]" />
       )}
       <span className={['relative text-2xs font-bold leading-none', selected ? 'text-ink-inverse/85' : dowColor].join(' ')}>{slot.dow}</span>
-      <span className="relative mt-0.5 text-[15px] font-extrabold leading-none tabular-nums">{slot.day}</span>
+      <span className="relative mt-0.5 text-sm font-extrabold leading-none tabular-nums">{slot.day}</span>
       {hasEvents && !selected && (
         <span aria-hidden className="absolute bottom-[3px] left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-accent-300/85" />
       )}

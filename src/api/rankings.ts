@@ -252,17 +252,28 @@ export function placementPointsOf(position: number, cfg?: VenuePageConfig | null
   return 1;
 }
 
+/**
+ * 매장 페이지 설정 조회. **'설정 없음'(행 없음/NULL)은 null, 조회 실패는 throw.**
+ *
+ * ⚠ 예전에는 실패도 null 로 삼켰다. 그런데 set_venue_page_config 는 page_config **전체를 교체**하는
+ *   RPC 라, 저장 직전 최신을 다시 읽어 병합하는 모든 화면(매장 페이지 탭 순서·매장 랭킹·클락 테마)이
+ *   `const latest = (await getVenuePageConfig(id)) ?? {}` 형태로 이 함수를 쓴다.
+ *   즉 **읽기가 한 번 실패하면 latest 가 {} 가 되어, 저장 버튼 한 번에 탭 순서·랭킹 보드·칭호·
+ *   기준 점수·커스텀 보드·클락 테마·배경이 통째로 지워지고 성공 토스트까지 떴다**(실측 재현).
+ *   실패를 던지면 그 병합들이 전부 자기 try/catch 로 떨어져 '저장 실패' 를 띄우고 아무것도 안 쓴다.
+ *   읽기 전용 호출부(매장 페이지·클락 패널 마운트)는 이미 .catch 로 감싸고 있어 영향이 없다.
+ *   행이 없을 때 에러가 되지 않도록 single() → maybeSingle() 로 바꾼다(설정 없음 ≠ 실패).
+ */
 export async function getVenuePageConfig(venueId: string): Promise<VenuePageConfig | null> {
   if (IS_MOCK) return null;
-  const { data, error } = await supabase.from('venues').select('page_config').eq('id', venueId).single();
-  if (error) return null;
+  const { data, error } = await supabase.from('venues').select('page_config').eq('id', venueId).maybeSingle();
+  if (error) throw error;
   return (data?.page_config as VenuePageConfig) ?? null;
 }
 
 /**
- * getVenuePageConfig 의 '실패를 던지는' 판 — TV 송출(ClockDisplay) keep-last 캐시용.
- * 위 함수는 에러를 null 로 삼켜 '네트워크 실패'와 '설정 없음'을 구분할 수 없다 —
- * 송출 화면은 실패 시 직전 테마를 유지해야 하므로(기본 테마로 깜빡임 금지) 여기선 throw 한다.
+ * TV 송출(ClockDisplay) keep-last 캐시 전용 — 위 함수와 실패 정책은 같고(throw),
+ * '행이 반드시 있어야 한다'는 전제(single)만 다르다. 송출 화면은 실패 시 직전 테마를 유지한다.
  */
 export async function fetchVenuePageConfig(venueId: string): Promise<VenuePageConfig | null> {
   if (IS_MOCK) return null;
@@ -330,8 +341,16 @@ export async function getVenuePlayerCounts(venueId: string): Promise<PlayerCount
   return (data ?? []).map((r: any) => ({ name: String(r.name), buyins: Number(r.buyin_count) || 0, visits: Number(r.visit_count) || 0 }));
 }
 
-/** 전 매장 통합 랭킹(커뮤니티 랭킹) — 닉네임별 머니인 횟수·프라이즈 점수 */
-export interface GlobalRankingTotal { nickname: string; moneyinCount: number; prizePoints: number; bestPosition: number; venues: number }
+/**
+ * 전 매장 통합 랭킹(커뮤니티 랭킹) — 닉네임별 머니인 점수·횟수·프라이즈 점수.
+ *
+ * moneyinPoints 가 머니인 보드의 정렬 기준이다(오너 #6): 100만원(10T)당 1점.
+ *   계산은 서버 `public.moneyin_points()` 한 곳에만 있다 — 여기서 재계산하면 규칙이 둘로 갈린다.
+ * moneyinCount(입상 횟수)는 없애지 않고 보조 정보로 계속 내려준다.
+ */
+export interface GlobalRankingTotal {
+  nickname: string; moneyinCount: number; moneyinPoints: number; prizePoints: number; bestPosition: number; venues: number;
+}
 export async function getGlobalRankingTotals(): Promise<GlobalRankingTotal[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase.rpc('global_ranking_totals');
@@ -339,33 +358,33 @@ export async function getGlobalRankingTotals(): Promise<GlobalRankingTotal[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({
     nickname: String(r.nickname), moneyinCount: Number(r.moneyin_count) || 0,
+    moneyinPoints: Number(r.moneyin_points) || 0,
     prizePoints: Number(r.prize_points) || 0, bestPosition: Number(r.best_position) || 0, venues: Number(r.venues) || 0,
   }));
 }
 
 // ── 주간 베스트(이번 주 머니인 킹 TOP3) — 메인 상단 롤링 위젯용 ─────────────────
 // 주초라 이번 주 기록이 아직 없으면 지난주 킹으로 폴백(라벨용 isLastWeek 플래그).
-export interface WeeklyKing { nickname: string; moneyinCount: number; bestPosition: number }
+//
+// 2026-08-29(오너 #6): 예전엔 여기서 venue_rankings 를 통째로 받아 클라이언트가 행 수를 셌다.
+//   그러면 '머니인 킹'이 금액과 무관한 횟수 1위가 되어 주간리그·머니인 탭의 새 규칙과 어긋나고,
+//   같은 규칙이 서버·클라이언트 두 곳에 생긴다. 집계를 weekly_moneyin_kings RPC 로 옮겨
+//   moneyin_points() 단일 정의를 그대로 쓰게 했다(전량 전송도 함께 사라진다).
+export interface WeeklyKing { nickname: string; moneyinCount: number; moneyinPoints: number; bestPosition: number }
 export interface WeeklyKings { kings: WeeklyKing[]; isLastWeek: boolean }
 
 async function moneyinKingsBetween(fromStr: string, toStr: string | null, limit: number): Promise<WeeklyKing[]> {
-  let q = supabase.from('venue_rankings').select('nickname, position').gte('ranking_date', fromStr);
-  if (toStr) q = q.lt('ranking_date', toStr);
-  const { data, error } = await q;
+  const { data, error } = await supabase.rpc('weekly_moneyin_kings', {
+    p_from: fromStr, p_to: toStr, p_limit: limit,
+  });
   if (error) return [];
-  const map = new Map<string, WeeklyKing>();
-  for (const r of (data ?? []) as { nickname: string | null; position: number | null }[]) {
-    const nick = (r.nickname ?? '').trim();
-    if (!nick) continue;
-    const key = nick.toLowerCase();
-    const cur = map.get(key) ?? { nickname: nick, moneyinCount: 0, bestPosition: 999 };
-    cur.moneyinCount += 1;
-    if (r.position && r.position < cur.bestPosition) cur.bestPosition = r.position;
-    map.set(key, cur);
-  }
-  return [...map.values()]
-    .sort((a, b) => b.moneyinCount - a.moneyinCount || a.bestPosition - b.bestPosition)
-    .slice(0, limit);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({
+    nickname: String(r.nickname ?? ''),
+    moneyinCount: Number(r.moneyin_count) || 0,
+    moneyinPoints: Number(r.moneyin_points) || 0,
+    bestPosition: Number(r.best_position) || 0,
+  }));
 }
 
 export async function getWeeklyMoneyinKings(limit = 3): Promise<WeeklyKings> {

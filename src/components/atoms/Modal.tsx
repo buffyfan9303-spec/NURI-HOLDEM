@@ -162,7 +162,7 @@ export default function Modal({
       <div className="flex max-h-[calc(100vh-5rem)] flex-col overflow-hidden rounded-card border border-border-default bg-surface-mid">
         {title && (
           <header className="flex shrink-0 items-center justify-between border-b border-border-strong px-4 py-3">
-            <h2 className="text-[17px] font-bold tracking-tight text-ink-primary">{title}</h2>
+            <h2 className="text-base font-bold tracking-tight text-ink-primary">{title}</h2>
             <button type="button" onClick={onClose} aria-label="닫기" className="flex h-8 w-8 items-center justify-center rounded-input text-ink-secondary hover:bg-surface-high hover:text-ink-primary">
               <Icon name="close" size={14} />
             </button>
@@ -198,7 +198,7 @@ export default function Modal({
         <div aria-hidden className="lg:hidden absolute top-1.5 left-1/2 z-10 h-1 w-10 -translate-x-1/2 rounded-full bg-ink-primary/25" />
         {title && (
           <header className="shrink-0 flex items-center justify-between px-4 h-header-h border-b border-border-strong bg-surface-base">
-            <h2 id="modal-title" className="text-[17px] font-bold tracking-tight text-ink-primary">{title}</h2>
+            <h2 id="modal-title" className="text-base font-bold tracking-tight text-ink-primary">{title}</h2>
             <button type="button" onClick={onClose} aria-label="닫기"
               className="w-11 h-11 -mr-2 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high transition-colors">
               <Icon name="close" size={18} />
@@ -296,7 +296,7 @@ export default function Modal({
           // 시트에서는 그 선이 유일한 단서다. border-strong 으로 승격(다크 2.88 · 라이트 3.13 —
           // 팔레트에 이보다 강한 경계 토큰은 없다). subtle < default < strong 위계는 그대로 유지.
           <header className="flex items-center justify-between px-4 py-3 border-b border-border-strong">
-            <h2 id="modal-title" className="text-[17px] font-bold tracking-tight text-ink-primary">
+            <h2 id="modal-title" className="text-base font-bold tracking-tight text-ink-primary">
               {title}
             </h2>
             <button

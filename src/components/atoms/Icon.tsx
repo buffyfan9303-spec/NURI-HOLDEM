@@ -4,14 +4,50 @@
 // 범용 아이콘은 lucide-react 네임드 임포트(트리셰이킹 — 쓰는 것만 번들)로 렌더하고,
 // 수트·칩 등 포커 도메인 글리프만 자체 PATHS 로 유지한다(스페이드는 gen-icons.mjs 와 형태 공유).
 // 새 범용 아이콘 = LUCIDE 맵에 한 줄(https://lucide.dev 에서 이름 검색), 새 도메인 글리프 = PATHS 한 줄.
-// 라이선스: lucide-react ISC(패키지 동봉), Feather MIT 계보.
+//
+// ── 왜 이모지가 아니라 SVG 인가 (ICON-2, 오너 지시 2026-08-29) ─────────────────
+// 이모지는 **폰트 리소스**라 모양을 앱이 정하지 못한다. 같은 `🏆` 가 iOS(Apple Color Emoji)·
+// Android(Noto Color Emoji)·Windows(Segoe UI Emoji)·삼성 One UI 에서 전부 다른 그림으로 뜬다.
+// 굵기·광택·원근·채도가 제각각이고 색은 폰트에 박혀 있어 테마(다크/라이트)를 따라가지 못하며,
+// 크기도 글자 메트릭에 묶여 옆 텍스트와 베이스라인이 어긋난다. "싸구려·조잡해 보인다"는 인상은
+// 취향 문제가 아니라 **디자인 통제권이 OS 에 있다**는 구조적 결과다.
+// SVG 로 옮기면 stroke 2 / viewBox 24 / currentColor 한 규격으로 굵기·크기·색이 앱 전체에서
+// 하나로 통일되고, 테마 토큰과 accent 색을 그대로 상속한다.
+// 예외로 남기는 것: ① 카드 수트(♠♥♦♣)와 포커 도메인 표기 — 이모지가 아니라 도메인 기호다.
+// ② 랭킹 상점 마크(lib/shopMarks.ts) — 닉네임 앞에 **문자열로 결합**돼 유통되는 유저 보유 아이템이다.
+//
+// ── 라이선스 고지 ─────────────────────────────────────────────────────────────
+// 범용 글리프는 Lucide(https://lucide.dev) 아이콘을 `lucide-react` 패키지로 사용한다.
+//
+//   Lucide — ISC License
+//   Copyright (c) for portions of Lucide are held by Cole Bemis 2013-2022 as part of Feather (MIT).
+//   All other copyright (c) for Lucide are held by Lucide Contributors 2022.
+//
+//   Permission to use, copy, modify, and/or distribute this software for any purpose with or
+//   without fee is hereby granted, provided that the above copyright notice and this permission
+//   notice appear in all copies.
+//
+//   THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS
+//   SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL
+//   THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY
+//   DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF
+//   CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE
+//   OR PERFORMANCE OF THIS SOFTWARE.
+//
+// 아래 PATHS 의 포커 도메인 글리프는 누리홀덤 자체 제작이다(Lucide 원본 아님).
 import type { ReactElement, SVGProps } from 'react';
 import {
   X, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Search, Plus, Minus, Check,
   CheckCircle2, Trash2, Pencil, Star, Heart, AlertTriangle, Info, Lock, User, Users, Bell,
   QrCode, Calendar, Clock, Settings, Share2, Filter, Image, Download, ExternalLink, Menu,
   Home, RefreshCw, Copy, Send, MessageCircle, Mail, Eye, Bookmark, Flame, Target, Wallet, Gift,
-  CheckCheck, MapPin, LogOut, Trophy, Ticket, Phone, Printer, BarChart3, Medal, ShoppingCart, Crown, type LucideIcon,
+  CheckCheck, MapPin, LogOut, Trophy, Ticket, Phone, Printer, BarChart3, Medal, ShoppingCart, Crown,
+  // ICON-2 이모지 소탕분 — 매핑표에 실제로 쓰이는 것만 추가한다(미사용 아이콘 금지)
+  Lightbulb, ClipboardList, Play, Pause, Link2, Megaphone, Undo2, Map as MapIcon, Gem,
+  WifiOff, Radio, Dices, Package, Ban, Pin, Sparkles, Zap, Tv, Volume2, VolumeX,
+  TrendingUp, Store, BookOpen, Archive, Scale, Building2, Hand, Flag, EyeOff, Clapperboard,
+  Timer, AlarmClock, Banknote, Briefcase, ShieldAlert, Bomb, ArrowUpRight, ArrowDownLeft,
+  DoorOpen, CalendarCheck, Circle, NotebookText, type LucideIcon,
 } from 'lucide-react';
 
 export type IconName =
@@ -28,7 +64,14 @@ export type IconName =
   // 리디자인 스파인 공통 글리프(로드맵 Phase 0 지정 — 이모지 마커 소탕용)
   | 'comment' | 'mail' | 'eye' | 'bookmark' | 'flame' | 'target' | 'wallet'
   | 'gift' | 'check-double' | 'map-pin' | 'log-out'
-  | 'ticket' | 'phone' | 'printer' | 'chart' | 'medal' | 'cart' | 'crown';
+  | 'ticket' | 'phone' | 'printer' | 'chart' | 'medal' | 'cart' | 'crown'
+  // ICON-2 이모지 소탕 확장분(2026-08-29) — 좌측 주석의 이모지 대체 대상. 매핑표에 쓰이는 것만 있다.
+  | 'lightbulb' | 'clipboard' | 'play' | 'pause' | 'link' | 'megaphone' | 'undo' | 'map' | 'gem'
+  | 'wifi-off' | 'radio' | 'dice' | 'package' | 'ban' | 'pin' | 'sparkles' | 'zap' | 'tv'
+  | 'volume' | 'volume-off' | 'trending-up' | 'store' | 'book-open' | 'archive' | 'scale'
+  | 'building' | 'hand' | 'flag' | 'eye-off' | 'clapperboard' | 'timer' | 'alarm' | 'banknote'
+  | 'briefcase' | 'shield-alert' | 'bomb' | 'arrow-up-right' | 'arrow-down-left' | 'door'
+  | 'calendar-check' | 'circle' | 'notebook';
 
 // 각 아이콘의 path/figure children (viewBox 0 0 24 24 기준). 채움 아이콘은 fill 처리.
 const PATHS: Partial<Record<IconName, ReactElement>> = {
@@ -72,6 +115,49 @@ const LUCIDE: Partial<Record<IconName, LucideIcon>> = {
   bookmark: Bookmark, flame: Flame, target: Target, wallet: Wallet, gift: Gift,
   'check-double': CheckCheck, 'map-pin': MapPin, 'log-out': LogOut, trophy: Trophy,
   ticket: Ticket, phone: Phone, printer: Printer, chart: BarChart3, medal: Medal, cart: ShoppingCart, crown: Crown,
+  // ── ICON-2 이모지 소탕 확장분 ─────────────────────────────────────────────
+  lightbulb: Lightbulb,          // 💡 팁·코치마크
+  clipboard: ClipboardList,      // 📋 프리셋·불러오기·약관 항목
+  play: Play,                    // ▶ 클락 START·리플레이 재생 (내비 화살표는 chevron-* 를 쓴다)
+  pause: Pause,                  // ⏸ 클락 STOP·일시정지
+  link: Link2,                   // 🔗 공유 링크·회원 연결(alias)
+  megaphone: Megaphone,          // 📢📣 공지·외치기·광고 슬롯
+  undo: Undo2,                   // ↩ 레벨 되돌리기
+  map: MapIcon,                  // 🗺 길찾기·주소
+  gem: Gem,                      // 💎 리그 티어 사다리(색으로 등급 구분)
+  'wifi-off': WifiOff,           // 📡 오프라인 배너
+  radio: Radio,                  // 📡 실시간 정산 현황(리그)
+  dice: Dices,                   // 🎲 사이드 게임
+  package: Package,              // 📦 내 판매목록·거래 매물
+  ban: Ban,                      // 🚫 신고 숨김·금지 행위
+  pin: Pin,                      // 📌 보완 추천·관련 법령
+  sparkles: Sparkles,            // ✨🤖 AI 기능 마커(NURI AI 리포트·초안·점검)
+  zap: Zap,                      // ⚡ 부스트·빠른 입력(직전과 동일)
+  tv: Tv,                        // 📺 클락 TV 송출
+  volume: Volume2,               // 🔊🔈 클락 사운드 켜짐
+  'volume-off': VolumeX,         // 🔇 클락 음소거
+  'trending-up': TrendingUp,     // 📈 상승 인사이트
+  store: Store,                  // 🏪 매장 온보딩
+  'book-open': BookOpen,         // 📖 운영 가이드
+  archive: Archive,              // 📚 지난 시즌
+  scale: Scale,                  // ⚖️ 제재 기준
+  building: Building2,           // 🏢 사업자 정보
+  hand: Hand,                    // 🙋 참가(바인) 신청 — 손드는 동작
+  flag: Flag,                    // 🏁 파이널·정산 완료
+  'eye-off': EyeOff,             // 🕶 섀도우밴
+  clapperboard: Clapperboard,    // 🎬 핸드 리플레이
+  timer: Timer,                  // ⏱ 클락(스톱워치) — timer-poker 는 포커 도메인 전용 글리프
+  alarm: AlarmClock,             // ⏰ 시작 알림·곧 시작
+  banknote: Banknote,            // 💵 현금 결제수단·요금 한도
+  briefcase: Briefcase,          // 👔 공동 업주(사장님) 초대
+  'shield-alert': ShieldAlert,   // 🔞 건전 이용 안내
+  bomb: Bomb,                    // 🧨 킬스위치(매장 영구 삭제)
+  'arrow-up-right': ArrowUpRight,   // ↗ 발급(보냄)
+  'arrow-down-left': ArrowDownLeft, // ↘ 사용(받음)
+  door: DoorOpen,                // 🚪 단골 입문 배지
+  'calendar-check': CalendarCheck, // 🔥(7일 개근) 연속 출석 배지
+  circle: Circle,                // ⚪🟡 회원 상태 표식(색으로 상태 구분)
+  notebook: NotebookText,        // 📒 장부 연동
 };
 // 채움 변형은 lucide 원형에 fill 지정으로 표현
 const FILLED = new Set<IconName>(['star-fill', 'heart-fill']);

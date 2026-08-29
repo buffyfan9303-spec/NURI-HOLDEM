@@ -9,6 +9,7 @@ import { getLedgerSession, getLedgerSessionList, type LedgerSessionListItem } fr
 import { presetFromSchedule, presetFromRound } from '../../lib/gameInherit';
 import { manToWon, presetPrizeWon, wonToMan } from '../../lib/units';
 import BlindLevelsEditor from './clock/BlindLevelsEditor';
+import Icon from '../atoms/Icon';
 
 const EMPTY: GamePresetData = {
   title: '', gameType: '', buyIn: 0, startStack: 0, rebuyStack: 0, addonStack: 0, addonCost: 0,
@@ -178,7 +179,7 @@ export default function PresetManager({ venueId }: { venueId: string }) {
           마감 장부 회차(운영 중 수정까지 반영된 스냅샷)가 최우선 후보, 포스터가 그다음. */}
       {(rounds.length > 0 || recent.length > 0) && (
         <div className="rounded-card border border-accent-400/30 bg-accent-300/[0.05] p-2.5">
-          <p className="mb-1.5 text-2xs font-bold text-accent-300">⚡ 지난 게임에서 프리셋 만들기 — 내용이 채워진 채 열려요</p>
+          <p className="mb-1.5 flex items-center gap-1 text-2xs font-bold text-accent-300"><Icon name="zap" size={12} className="shrink-0" />지난 게임에서 프리셋 만들기 — 내용이 채워진 채 열려요</p>
           {rounds.length > 0 && (
             <div className="mb-1.5 flex flex-wrap gap-1.5">
               {rounds.map((r) => (
@@ -205,7 +206,7 @@ export default function PresetManager({ venueId }: { venueId: string }) {
           : <ul className="space-y-1.5">{presets.map((p) => (
             <li key={p.id} className="rounded-card border border-border-subtle bg-surface-low px-3 py-2.5">
               <div className="flex items-center justify-between gap-2">
-                <p className="min-w-0 truncate text-sm font-bold text-ink-primary">📋 {p.name}</p>
+                <p className="flex min-w-0 items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="clipboard" size={14} className="shrink-0" /><span className="truncate">{p.name}</span></p>
                 <div className="flex shrink-0 gap-1">
                   <button type="button" onClick={() => startEdit(p)} className="btn-ghost px-2 py-1 text-2xs">수정</button>
                   <button type="button" onClick={() => remove(p)} className="btn-ghost px-2 py-1 text-2xs text-danger">삭제</button>

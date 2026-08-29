@@ -17,6 +17,7 @@ import Icon from '../atoms/Icon';
 import TierBadge, { tierColor, tierProgress } from '../atoms/TierBadge';
 import TitleChip from '../atoms/TitleChip';
 import IdentityVerificationButton from './IdentityVerificationButton';
+import { useIdentityEnabled } from '../../lib/identityFlag';
 import { getMyVisitStats } from '../../api/reservations';
 import type { LegalDoc } from './LegalDocsModal';
 
@@ -55,6 +56,8 @@ function blobToBase64(blob: Blob): Promise<string> {
 export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport }: ProfileModalProps) {
   const { user, updateProfile, refreshProfile } = useAuth();
   const toast = useToast();
+  // 본인인증·매장이용권 킬스위치(2026-08-29) — 꺼져 있으면 인증 진입부와 '이용권' 프레이밍을 모두 내린다.
+  const idOn = useIdentityEnabled();
   const [visitStats, setVisitStats] = useState({ visits: 0, upcoming: 0, total: 0 });
   useEffect(() => { if (open) getMyVisitStats().then(setVisitStats).catch(() => {}); }, [open]);
 
@@ -258,7 +261,7 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
             avatarColor={selectedColor}
             points={points}
             isAdmin={isAdmin}
-            verified={user.verified}
+            verified={idOn && user.verified}
             footnote="사진·닉네임 변경은 ‘설정’ 탭에서 할 수 있습니다"
           />
 
@@ -426,7 +429,9 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
 
           {/* 받는 아이디(닉네임) — 매장이용권 수령용. 최초 1회 설정, 변경은 운영자 */}
           <div>
-            <label className="block text-xs font-medium text-ink-secondary mb-1.5">받는 아이디 <span className="text-2xs font-normal text-ink-muted">(매장이용권 수령용)</span></label>
+            {/* 킬스위치 OFF 에서도 이 아이디 자체는 살아 있다 — 순위·전적이 닉네임으로 연결되기 때문.
+                바뀌는 것은 '왜 필요한가'의 설명뿐이다(없는 기능을 근거로 설정을 요구하지 않는다). */}
+            <label className="block text-xs font-medium text-ink-secondary mb-1.5">받는 아이디 <span className="text-2xs font-normal text-ink-muted">({idOn ? '매장이용권 수령용' : '순위·전적 연결용'})</span></label>
             {user.nickname ? (
               <>
                 <div className="flex items-center justify-between gap-2 rounded-input border border-border-default bg-surface-high/60 px-3 py-2">
@@ -441,7 +446,7 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
                   <input type="text" value={recvId} onChange={(e) => setRecvId(e.target.value)} maxLength={20} placeholder="받을 아이디 (2~20자, 중복 불가)" className="input min-w-0 flex-1" />
                   <button type="button" onClick={saveRecvId} disabled={recvBusy} className="btn-primary shrink-0 px-4 text-sm disabled:opacity-60">{recvBusy ? '설정 중…' : '설정'}</button>
                 </div>
-                <p className="mt-1 text-2xs leading-relaxed text-ink-muted">매장이용권을 받을 때 쓰는 고유 아이디입니다. <b className="text-amber-400">최초 1회만 설정</b>되며, 이후 변경은 운영자를 통해서만 가능합니다.</p>
+                <p className="mt-1 text-2xs leading-relaxed text-ink-muted">{idOn ? '매장이용권을 받을 때 쓰는 고유 아이디입니다.' : '매장 순위·전적이 이 아이디로 연결됩니다.'} <b className="text-amber-400">최초 1회만 설정</b>되며, 이후 변경은 운영자를 통해서만 가능합니다.</p>
               </>
             )}
           </div>
@@ -466,8 +471,10 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
       {/* ── 보안 탭 ───────────────────────────────────────────────── */}
       {tab === 'security' && (
         <>
-        {/* 본인인증 (1인 1계정) */}
-        <div className="px-4 pt-4">
+        {/* 본인인증 (1인 1계정) — 킬스위치 OFF 면 카드 자체를 내린다.
+            왜 '완료' 배지까지 내리나: 인증이 아무 문(門)도 열지 않는 동안 상태만 남으면
+            "인증했는데 왜 아무것도 안 되지" 라는 질문만 남는다. 데이터(ci_hash)는 그대로 보존된다. */}
+        {idOn && <div className="px-4 pt-4">
           {user?.verified ? (
             <div className="flex items-center gap-2 rounded-card border border-emerald-500/30 bg-emerald-500/[0.06] px-3 py-2.5">
               <Icon name="check-circle" size={18} className="shrink-0 text-emerald-400" />
@@ -483,7 +490,7 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
               <IdentityVerificationButton onVerified={() => { refreshProfile().catch(() => {}); }} />
             </div>
           )}
-        </div>
+        </div>}
         <form onSubmit={handleConfirmChange} className="p-4 space-y-4">
 
           <div className="flex items-start gap-2 p-3 rounded-card bg-surface-high border border-border-subtle">

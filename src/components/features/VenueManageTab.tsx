@@ -1,5 +1,5 @@
 import { useEffect, useState, useDeferredValue, type ReactNode, useRef, memo, useCallback, useMemo } from 'react';
-import Icon from '../atoms/Icon';
+import Icon, { type IconName } from '../atoms/Icon';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBackClose } from '../../lib/backstack';
 import { useToast } from '../atoms/Toast';
@@ -8,7 +8,7 @@ import { getMyVenueStaff, getMyVenueInvites, inviteStaffByEmail, cancelStaffInvi
 import { msgOf } from '../../lib/dbError';
 import { getVenueRankings, saveVenueRankings, getVenuePageConfig, placementPointsOf, prizeUnitRisk, searchRankingMembers, resolveRankingMembers, type VenuePageConfig, type RankingEntry, type RankMember } from '../../api/rankings';
 import { canAccessLedger, canManagePos, getLedgerAccessUserIds, grantLedgerAccess, revokeLedgerAccess } from '../../api/ledger';
-import { getAllVenues, createMyVenue, getVenueStaff, type Venue } from '../../api/community';
+import { getAllVenues, createMyVenue, getMyVenue, getVenueStaff, type Venue } from '../../api/community';
 import { getLedgerRange } from '../../api/ledger';
 import { uploadPoster } from '../../lib/storage';
 import VenueVerificationCard from './VenueVerificationCard';
@@ -24,6 +24,7 @@ import StaffSchedule from './StaffSchedule';
 import { StaffWageManager, StaffSettlement, StaffWorkLog, StaffSelfAttendance } from './StaffPayroll';
 import StoreDashboard from './StoreDashboard';
 import { VoucherManagePanel } from './VoucherManageModal';
+import { useIdentityEnabled } from '../../lib/identityFlag'; // 본인인증·매장이용권 통합 킬스위치(2026-08-29)
 import { listVoucherNotes, iCanViewVouchers, getVoucherAccessUserIds, grantVoucherAccess, revokeVoucherAccess, findUserForTransfer, issueVoucher, isVoucherIssueApproved, getVoucherQuota, type TransferTarget } from '../../api/vouchers';
 import MyPostersTab from './MyPostersTab';
 import VenueCustomizePanel, { VenueRankHub } from './VenueCustomizePanel';
@@ -129,7 +130,11 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   const [navOpen, setNavOpen] = useState(false); // 모바일 메뉴 아코디언 펼침
   const [ledgerOk, setLedgerOk] = useState(false); // 장부 접근(업주/운영자/권한직원)
   const [manageOk, setManageOk] = useState(false); // 통계·설정(업주/운영자)
-  const [voucherView, setVoucherView] = useState(false); // 매장이용권 내역 열람(업주/권한직원)
+  const [voucherViewRaw, setVoucherView] = useState(false); // 매장이용권 내역 열람 '권한'(업주/권한직원)
+  // 킬스위치(2026-08-29). 권한(voucherViewRaw)은 서버 판정 그대로 두고 **노출만** 덮는다 —
+  // 켜는 순간 권한 재계산 없이 원래 화면이 그대로 돌아오게(비활성화이지 삭제가 아니다).
+  const idOn = useIdentityEnabled();
+  const voucherView = voucherViewRaw && idOn;
   const [permsLoaded, setPermsLoaded] = useState(false);
   const [rankingDraft, setRankingDraft] = useState<{ date: string; names: string[]; event?: string } | null>(null);
   const [clockSeed, setClockSeed] = useState<string | null>(null); // 장부→클락 연동 날짜
@@ -154,16 +159,29 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     setGameStep(s);
     setSection('game');
   }, []);
+  // IA3c 하위탭 노출 판정의 **단일 지점** — 탭 목록·딥링크 착지·판(pane) 렌더가 서로 갈리면
+  // "탭 바에는 없는 탭이 열려 있는" 빈 화면이 된다. 실제로 두 조합이 그랬다:
+  //  ① 이용권 킬스위치 OFF 인데 알림 딥링크가 voucher 를 지정 → 제목만 '이용권·QR' 인 백지
+  //  ② 이용권 열람 권한만 있는 직원(canStaff=false)이 '매장 설정' 첫 진입 → 기본값 'page' 가
+  //     권한 밖이라 백지. 볼 수 있는 탭이 하나 있는데도 아무것도 안 보인다.
+  const canSettingsTab = useCallback((t: SettingsTab) => (
+    t === 'voucher' ? (idOn && (manageOk || voucherView))
+      : t === 'danger' ? (isOwner && !!venueId)
+        : canStaff
+  ), [idOn, manageOk, voucherView, isOwner, venueId, canStaff]);
+  const firstSettingsTab = useCallback((): SettingsTab => SETTINGS_TABS.find((t) => canSettingsTab(t.id))?.id ?? 'page', [canSettingsTab]);
   // 섹션 이동 공통 — 레거시 게임 스텝·설정 하위탭 id 도 수용(StoreDashboard·라이브바·딥링크)
   const gotoSection = useCallback((s: Section | GameStep | SettingsTab) => {
     if (isGameStep(s)) { goStep(s); return; }
-    if (isSettingsTab(s)) { setSettingsTab(s); setSection('settings'); return; }
+    // 권한 밖 하위탭으로 착지 요청이 오면 백지 대신 '지금 열 수 있는 첫 탭'으로 흡수
+    if (isSettingsTab(s)) { setSettingsTab(canSettingsTab(s) ? s : firstSettingsTab()); setSection('settings'); return; }
     setSection(s);
-  }, [goStep]);
+  }, [goStep, canSettingsTab, firstSettingsTab]);
 
   // ── memo 섹션에 넘기는 핸들러/객체 prop 을 참조 고정(재렌더 건너뛰기 조건 충족) ──
-  const caps = useMemo(() => ({ ledger: ledgerOk, manage: manageOk, voucher: manageOk || voucherView, posters: canPosters, staff: canStaff }),
-    [ledgerOk, manageOk, voucherView, canPosters, canStaff]);
+  // caps.voucher = '대시보드에 이용권 카드/단골 이용권 보내기를 그릴까' — 킬스위치가 그대로 반영된다.
+  const caps = useMemo(() => ({ ledger: ledgerOk, manage: manageOk, voucher: idOn && (manageOk || voucherView), posters: canPosters, staff: canStaff }),
+    [ledgerOk, manageOk, voucherView, canPosters, canStaff, idOn]);
   const onGotoStore = useCallback((s: string) => {
     // StoreDashboard·라이브바가 보내는 문자열 id — LINK-MAP 정규화로 구 id(page·venueRank·settings 등)도 흡수
     const t = normalizeDeepSection(s);
@@ -219,6 +237,25 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
       return next.length > 8 ? next.slice(next.length - 8) : next;
     });
   }, [pane]);
+
+  // 시즌 '역대 챔피언' 카드 공유에 찍히는 매장명 — prop 이 비어 있어 카드에서 매장명 줄이 통째로
+  // 빠져 있었다. 첫 진입 비용 0 을 지키려고 '매장 설정 > 매장 페이지'를 실제로 연 뒤에만 조회한다.
+  const [venueName, setVenueName] = useState('');
+  const needVenueName = visited.includes('page');
+  useEffect(() => {
+    if (!venueId || !needVenueName) return;
+    if (isAdmin) { setVenueName(adminVenues.find((v) => v.id === venueId)?.name ?? ''); return; }
+    let alive = true;
+    getMyVenue().then((v) => { if (alive && v?.id === venueId) setVenueName(v.name); }).catch(() => { /* 이름은 장식 — 실패해도 카드는 나간다 */ });
+    return () => { alive = false; };
+  }, [venueId, isAdmin, adminVenues, needVenueName]);
+
+  // 권한 조회가 끝났거나(직원) 킬스위치가 꺼져 현재 하위탭이 사라졌으면 첫 노출 탭으로 이동.
+  // (탭 바에서 사라진 탭이 그대로 열려 있으면 판이 렌더되지 않아 백지가 된다)
+  useEffect(() => {
+    if (!permsLoaded) return;
+    if (!canSettingsTab(settingsTab)) setSettingsTab(firstSettingsTab());
+  }, [permsLoaded, settingsTab, canSettingsTab, firstSettingsTab]);
 
   // 알림 딥링크("📒 장부 시작" 클릭 등) — 권한 확인이 끝나면 지정 섹션으로 1회 이동
   useEffect(() => {
@@ -489,8 +526,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   return (
                     <button key={st.id} type="button" role="tab" aria-selected={on} data-pill-active={on || undefined}
                       onClick={() => gotoSection(st.id)}
-                      className={['relative inline-flex h-9 shrink-0 items-center rounded-[6px] px-3 text-2xs font-bold leading-none transition-colors duration-300 focus:outline-none',
-                        on ? 'text-white' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
+                      className={['relative inline-flex h-9 shrink-0 items-center rounded-[6px] px-3 t-tab leading-none transition-colors duration-300 focus:outline-none',
+                        on ? 'font-bold text-white' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
                       <span className="relative">{i + 1}. {st.label}</span>
                     </button>
                   );
@@ -502,16 +539,13 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
               <div role="tablist" aria-label="매장 설정 하위탭"
                 className="relative flex items-center gap-0.5 overflow-x-auto rounded-input border border-border-subtle bg-surface-high/60 p-0.5">
                 <SlidingPill activeKey={renderSettingsTab} className="rounded-[6px] pill-active" />
-                {SETTINGS_TABS.filter((t) =>
-                  t.id === 'voucher' ? (manageOk || voucherView)
-                  : t.id === 'danger' ? (isOwner && !!venueId)
-                  : canStaff).map((t) => {
+                {SETTINGS_TABS.filter((t) => canSettingsTab(t.id)).map((t) => {
                   const on = renderSettingsTab === t.id;
                   return (
                     <button key={t.id} type="button" role="tab" aria-selected={on} data-pill-active={on || undefined}
                       onClick={() => gotoSection(t.id)}
-                      className={['relative inline-flex h-9 shrink-0 items-center rounded-[6px] px-3 text-2xs font-bold leading-none transition-colors duration-300 focus:outline-none',
-                        on ? 'text-white' : t.id === 'danger' ? 'text-danger-light/80 hover:text-danger-light' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
+                      className={['relative inline-flex h-9 shrink-0 items-center rounded-[6px] px-3 t-tab leading-none transition-colors duration-300 focus:outline-none',
+                        on ? 'font-bold text-white' : t.id === 'danger' ? 'text-danger-light/80 hover:text-danger-light' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
                       <span className="relative">{t.label}</span>
                     </button>
                   );
@@ -553,7 +587,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 {visited.includes('posters') && canPosters && box('posters', <MyPostersTabM schedules={schedules} onCreate={onCreatePoster} onEdit={onEditPoster} onDelete={onDeletePoster}
                   onGotoRanking={ledgerOk ? onGotoRankingFromPosters : undefined}
                   onOpenLedger={ledgerOk ? onOpenLedgerFromPosters : undefined} />)}
-                {visited.includes('presets') && canPosters && box('presets', <PresetManagerM venueId={venueId} />)}
+                {visited.includes('presets') && canSettingsTab('presets') && box('presets', <PresetManagerM venueId={venueId} />)}
                 {visited.includes('ledger') && ledgerOk && box('ledger', <NuriPosLedgerM venueId={venueId} canManage={manageOk} active={tabActive && renderSection === 'game' && renderGameStep === 'ledger'} seed={ledgerSeed}
                   followGame={ledgerFollow}
                   onMakeRankingDraft={onMakeRankingDraft}
@@ -563,20 +597,20 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 {visited.includes('ranking') && ledgerOk && box('ranking', <RankingEditor venueId={venueId} canEdit={isAdmin || user.approved === true || ledgerOk} draft={rankingDraft} gameSel={gameSel} />)}
                 {/* IA3c '매장 페이지' 탭 = 구 매장꾸미기 + 구 매장랭킹(시즌·랭킹보드) 병합 — 같은
                     venue_page_config 를 두 문에서 각자 로드/저장해 서로 낡던 문제를 한 화면으로 해소 */}
-                {visited.includes('page') && canStaff && box('page', <>
+                {visited.includes('page') && canSettingsTab('page') && box('page', <>
                   <VenueCustomizePanelM venueId={venueId} />
-                  {ledgerOk && <div className="mt-5 border-t border-border-subtle pt-4"><SeasonPanelM venueId={venueId} canManage={manageOk} /></div>}
+                  {ledgerOk && <div className="mt-5 border-t border-border-subtle pt-4"><SeasonPanelM venueId={venueId} canManage={manageOk} venueName={venueName || undefined} /></div>}
                   {ledgerOk && <div className="mt-5 border-t border-border-subtle pt-4"><VenueRankHubM venueId={venueId} canConfigure={manageOk} /></div>}
                 </>)}
                 {visited.includes('clock') && ledgerOk && box('clock', <TournamentClockM venueId={venueId} canManage={ledgerOk} seedSessionDate={clockSeed} seedGameSeq={clockSeedGame} active={tabActive && renderSection === 'game' && renderGameStep === 'clock'} />)}
                 {visited.includes('attendance') && box('attendance', <StaffSelfAttendanceM venueId={venueId} />)}
                 {visited.includes('staff') && canStaff && box('staff', <StaffHub venueId={venueId} />)}
-                {visited.includes('pos') && canStaff && box('pos', <PosSettingsPanelM venueId={venueId} />)}
-                {visited.includes('voucher') && (manageOk || voucherView) && box('voucher', <VoucherManagePanelM venueId={venueId} />)}
+                {visited.includes('pos') && canSettingsTab('pos') && box('pos', <PosSettingsPanelM venueId={venueId} />)}
+                {visited.includes('voucher') && canSettingsTab('voucher') && box('voucher', <VoucherManagePanelM venueId={venueId} />)}
                 {/* §7 ⑥b: 운영 도구 5종 — GTO 탭에서 이관(레지스트리는 ToolsPanel 재사용) */}
-                {visited.includes('optools') && canStaff && box('optools', <StoreToolsPanelM />)}
+                {visited.includes('optools') && canSettingsTab('optools') && box('optools', <StoreToolsPanelM />)}
                 {/* 위험 구역(IA1→IA3c) — 매장 영구 삭제. 설정의 전용 하위탭으로 격리(접근 2단계) */}
-                {visited.includes('danger') && isOwner && venueId && box('danger', <KillSwitch venueId={venueId} />)}
+                {visited.includes('danger') && canSettingsTab('danger') && venueId && box('danger', <KillSwitch venueId={venueId} />)}
               </>);
             })()}
           </div>
@@ -600,10 +634,12 @@ const SECTION_DESC: Record<Section | GameStep | SettingsTab, string> = {
   clock: '토너먼트 타이머 — 장부 연동 시 엔트리·생존이 자동 반영됩니다',
   attendance: '내 출퇴근 기록',
   voucher: '매장이용권 발행·사용 내역 + 매장 QR(이용권·출석 체크인·가입) 인쇄',
-  page: '매장 페이지 꾸미기 + 시즌·랭킹 보드(탭 순서·링크·소개·칭호)',
+  page: '손님 화면 탭 순서 · 내 매장 링크 · 시즌 · 랭킹 보드 · 칭호 · 기준 점수 · 포인트',
   staff: '구성원·권한·출근 스케줄·인건비',
-  settings: '매장 페이지 · 게임 프리셋 · POS·결제 · 이용권 · 운영 도구',
-  pos: 'POS 비밀번호·결제수단·할인 프리셋',
+  settings: '매장 페이지 · 게임 프리셋 · POS·결제 · 운영 도구 · 위험 구역',
+  // ⚠ 설명은 '이 화면에 실제로 있는 것'만 적는다 — 결제수단·할인 프리셋은 장부(세션 설정)에 있고
+  //   여기엔 없다. 없는 것을 약속하면 사장님이 이 탭을 열고 찾다가 포기한다.
+  pos: 'POS 취소 비밀번호 · 매장 알림 수신 · 공동 사장님 관리',
   optools: '토너먼트 세팅 계산기 — 칩 분배·구조·블라인드·상금·종료시간 (GTO 탭에서 이관)',
   danger: '매장 영구 삭제 — 복구할 수 없습니다. 신중하게.',
 };
@@ -744,9 +780,10 @@ function SectionBtn({ active, onClick, icon, children, locked }: {
   }, [active]);
   return (
     <button type="button" onClick={onClick} ref={ref}
-      // 모바일=인라인 칩(아이콘+라벨 한 줄, 1행 가로 스크롤) / PC=세로 리스트. 글씨 13px 가독 유지
-      className={['group/nav relative flex shrink-0 snap-start flex-row items-center justify-center gap-1.5 whitespace-nowrap rounded-[7px] px-3 py-2 text-xs font-semibold transition-colors duration-300 focus:outline-none touch-manipulation lg:w-full lg:shrink lg:justify-start lg:gap-2 lg:py-2.5 lg:text-[13px]',
-        active ? 'text-white' : locked ? 'text-ink-muted/60 hover:text-ink-secondary lg:hover:bg-surface-high' : 'text-ink-secondary hover:text-ink-primary lg:hover:bg-surface-high'].join(' ')}>
+      // 모바일=인라인 칩(아이콘+라벨 한 줄, 1행 가로 스크롤) / PC=세로 리스트.
+      // §T1: PC 만 13px(사다리 밖)이라 모바일 12.75 와 어긋나 있었다 → t-tab 한 값으로 고정(-0.25px).
+      className={['group/nav relative flex shrink-0 snap-start flex-row items-center justify-center gap-1.5 whitespace-nowrap rounded-[7px] px-3 py-2 t-tab transition-colors duration-300 focus:outline-none touch-manipulation lg:w-full lg:shrink lg:justify-start lg:gap-2 lg:py-2.5',
+        active ? 'font-bold text-white' : locked ? 'text-ink-muted/60 hover:text-ink-secondary lg:hover:bg-surface-high' : 'text-ink-secondary hover:text-ink-primary lg:hover:bg-surface-high'].join(' ')}>
       {active && <span aria-hidden className="absolute inset-0 rounded-[7px] pill-active animate-fade-in" />}
       <span className="relative shrink-0" aria-hidden>{icon}</span>
       <span className="relative">{children}</span>
@@ -1099,6 +1136,9 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
   //   (미가입·미인증·한도부족이 전부 '미지급 N명'으로 뭉개졌고, issued===0 이면 그 표시조차
   //   사라졌다.) 한 번에 한 명이면 성공·실패가 그 줄에 그대로 남는다.
   const awardKeyBase = `AWARD:${date}:${(eventName || '메인').trim()}`;
+  // 킬스위치(2026-08-29) — 이용권이 꺼지면 이 화면에서 '순위'만 남는다.
+  // 순위 저장은 이용권과 이미 완전히 분리돼 있으므로(오너 지시 2026-08-28) 저장 경로는 무손실.
+  const vchOn = useIdentityEnabled();
   const [sendMap, setSendMap] = useState<Record<string, { status: 'busy' | 'sent' | 'error'; count?: number; msg?: string }>>({});
   // 이미 보낸 줄은 새로고침·재진입 후에도 '전송됨'으로 보여야 한다 — 중복 발급의 대부분은
   // '보냈는지 기억이 안 나서 한 번 더'였다. 발급 note 의 AWARD 마커를 되읽어 복원한다.
@@ -1107,7 +1147,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
     // 한쪽만 남으면 다른 게임의 확정 대상이 이 게임 줄에 붙는다.
     setSendMap({});
     setPickedMap({});
-    if (!canEdit) return;
+    if (!canEdit || !vchOn) return; // 이용권 OFF — 멱등 마커 조회도 불필요(조회 0)
     let alive = true;
     listVoucherNotes(venueId, awardKeyBase)
       .then((notes) => {
@@ -1123,7 +1163,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
       })
       .catch(() => { /* 조회 실패 — 전송 자체는 막지 않는다(서버가 최종 판정) */ });
     return () => { alive = false; };
-  }, [venueId, awardKeyBase, canEdit]);
+  }, [venueId, awardKeyBase, canEdit, vchOn]);
 
   // ── 매장 단위 발급 게이트(승인·잔여 한도) ──────────────────────────────────
   // 왜 필요한가: 승인 전 매장이거나 한도가 0이면 '전송'은 줄마다 눌러 봐야 서버에서
@@ -1135,12 +1175,12 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
   const [issueApproved, setIssueApproved] = useState<boolean | null>(null); // null = 확인 중
   const [quotaLeft, setQuotaLeft] = useState<number | null>(null);          // null = 알 수 없음
   useEffect(() => {
-    if (!canEdit) return;
+    if (!canEdit || !vchOn) return; // 이용권 OFF — 승인·한도는 화면에 없는 개념이라 조회하지 않는다
     let alive = true;
     isVoucherIssueApproved(venueId).then((v) => { if (alive) setIssueApproved(v); }).catch(() => { if (alive) setIssueApproved(null); });
     getVoucherQuota(venueId).then((q) => { if (alive) setQuotaLeft(q); }).catch(() => { if (alive) setQuotaLeft(null); });
     return () => { alive = false; };
-  }, [venueId, canEdit]);
+  }, [venueId, canEdit, vchOn]);
   /** 매장 차원에서 전송이 막혀 있으면 그 사유 — 줄 단위 판정보다 먼저 본다 */
   const venueSendBlock = (): string | null => {
     if (issueApproved === false) return '운영자 승인 전이라 이용권을 보낼 수 없습니다 — 순위 저장은 그대로 됩니다';
@@ -1158,7 +1198,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
     if (t === 'unknown') return { ok: false, reason: '회원 확인 중…', target: null };
     if (t === null) return { ok: false, reason: '비회원 — 가입·인증 후 지급 가능', target: null };
     if (t === 'ambiguous') return { ok: false, reason: '동명이인 — 닉네임 칸에서 받는 분을 골라 주세요', target: null };
-    if (!t.verified) return { ok: false, reason: '본인인증 전 회원 — 인증 후 지급 가능', target: null };
+    if (vchOn && !t.verified) return { ok: false, reason: '본인인증 전 회원 — 인증 후 지급 가능', target: null };
     return { ok: true, reason: '', target: t };
   };
 
@@ -1262,7 +1302,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
           <button type="button" onClick={() => setDate(today)} className="btn-ghost text-xs px-3 shrink-0">오늘</button>
         )}
         <button type="button" onClick={printPaperForm} title="공식 결과 기록지(수기 양식) 인쇄 — 인증 펍 전용"
-          className="btn-ghost min-h-11 text-xs px-3 shrink-0 text-accent-300 dark:text-accent-200">🖨 지류 양식</button>
+          className="btn-ghost inline-flex min-h-11 items-center gap-1.5 text-xs px-3 shrink-0 text-accent-300 dark:text-accent-200"><Icon name="printer" size={14} className="shrink-0" />지류 양식</button>
       </div>
 
       {/* 어떤 게임의 순위인지 — 메인(포스터)·사이드(사이드 포스터)·장부·기타로 구분해 선택 */}
@@ -1289,9 +1329,9 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
             </button>
           );
         };
-        const Section = ({ icon, label, hint, children }: { icon: string; label: string; hint: string; children: ReactNode }) => (
+        const Section = ({ icon, label, hint, children }: { icon: IconName; label: string; hint: string; children: ReactNode }) => (
           <div className="space-y-1">
-            <p className="text-2xs font-bold text-ink-muted">{icon} {label}<span className="font-normal text-ink-muted/70"> · {hint}</span></p>
+            <p className="flex items-center gap-1 text-2xs font-bold text-ink-muted"><Icon name={icon} size={12} className="shrink-0" />{label}<span className="font-normal text-ink-muted/70"> · {hint}</span></p>
             <div className="flex items-center gap-1.5 flex-wrap">{children}</div>
           </div>
         );
@@ -1299,32 +1339,32 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
         return (
           <div className="rounded-card border border-accent-400/30 bg-accent-300/[0.05] p-2.5 space-y-2.5">
             <div className="flex items-center gap-2">
-              <span className="text-2xs font-bold text-ink-muted shrink-0">🎯 입력 중인 게임</span>
+              <span className="inline-flex shrink-0 items-center gap-1 text-2xs font-bold text-ink-muted"><Icon name="target" size={12} className="shrink-0" />입력 중인 게임</span>
               <span className="min-w-0 flex-1 truncate text-sm font-extrabold text-accent-300 dark:text-accent-200">{eventName || '메인 게임(기본)'}</span>
             </div>
 
             {/* 메인 게임 — 기본 + 그날 포스터 제목 */}
-            <Section icon="🏆" label="메인 게임" hint="포스터 메인">
+            <Section icon="trophy" label="메인 게임" hint="포스터 메인">
               {chip('', 'g-main-base', '메인(기본)')}
               {mains.map((n) => chip(n, 'g-m-' + n))}
             </Section>
 
             {/* 사이드 게임 — 사이드 포스터에서 등록된 이벤트(여러 개) */}
             {sides.length > 0 && (
-              <Section icon="🎲" label="사이드 게임" hint="사이드 포스터">
+              <Section icon="dice" label="사이드 게임" hint="사이드 포스터">
                 {sides.map((n) => chip(n, 'g-s-' + n))}
               </Section>
             )}
 
             {/* 장부 게임 — 포스터 없이 장부만 있는 게임 */}
             {ledgers.length > 0 && (
-              <Section icon="📒" label="장부 게임" hint="장부에서">
+              <Section icon="notebook" label="장부 게임" hint="장부에서">
                 {ledgers.map((n) => chip(n, 'g-l-' + n))}
               </Section>
             )}
 
             {/* 기타 — 포스터·장부 없는 게임(직접 추가) */}
-            <Section icon="✏️" label="기타 게임" hint="포스터·장부 없음">
+            <Section icon="edit" label="기타 게임" hint="포스터·장부 없음">
               {extras.map((n) => chip(n, 'g-x-' + n))}
               <button type="button"
                 onClick={() => { const v = window.prompt('게임 이름 직접 입력 (예: 사이드 2, 새틀라이트, 하이롤러)'); if (v && v.trim()) setEventName(v.trim().slice(0, 40)); }}
@@ -1340,7 +1380,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
       <div className="rounded-card border border-emerald-500/25 bg-emerald-500/[0.04] overflow-hidden">
         <button type="button" onClick={() => setLedgerPanelOpen((v) => !v)}
           className="flex min-h-11 w-full items-center justify-between gap-2 px-2.5 py-2 text-left">
-          <span className="text-2xs font-bold text-emerald-300">📒 그날 장부 명단 {ledgerPlayers.length > 0 ? <span className="text-ink-secondary">({ledgerPlayers.length}명)</span> : <span className="font-normal text-ink-muted">— 연결된 장부 없음</span>}</span>
+          <span className="inline-flex items-center gap-1 text-2xs font-bold text-emerald-300"><Icon name="notebook" size={12} className="shrink-0" />그날 장부 명단 {ledgerPlayers.length > 0 ? <span className="text-ink-secondary">({ledgerPlayers.length}명)</span> : <span className="font-normal text-ink-muted">— 연결된 장부 없음</span>}</span>
           <span className="text-2xs text-ink-muted">{ledgerPanelOpen ? '접기 ▲' : '펼치기 ▼'}</span>
         </button>
         {ledgerPanelOpen && (
@@ -1384,14 +1424,15 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
         <p className="mt-1">
           실명·프라이즈는 선택입니다. 1,000만원은 <span className="text-accent-300 font-semibold">1000</span>(원 단위로 치면 순위 점수가 1만 배로 잘못 쌓입니다). 등수마다 <span className="text-accent-300 font-semibold">기준 점수(+N점)</span>가 자동 부여되고, 프라이즈는 <span className="text-accent-300 font-semibold">매장 커뮤니티 순위 점수</span>로만 쓰입니다(금전적 가치 없음). 손님 화면엔 <span className="text-accent-300 font-semibold">실명(닉네임) 형식</span>으로 닉네임 일부를 가려 표시됩니다(예: 누리홀덤(나*리)).
         </p>
-        <p className="mt-1">
+        {vchOn && <p className="mt-1">
           <b className="text-accent-300">매장이용권은 순위 저장과 따로 나갑니다.</b> 개수를 넣고 그 줄 맨 오른쪽 <b className="text-accent-300">전송</b>을 눌러야 그 한 명에게 발급됩니다 — 저장만으로는 나가지 않습니다. 비회원·본인인증 전 회원 줄은 전송 버튼이 비활성이고, 같은 닉네임 회원이 둘 이상(<span className="text-amber-300 font-semibold">중복</span>)이면 닉네임 칸 자동완성에서 받는 분을 먼저 골라 주세요.
-        </p>
+        </p>}
+        {!vchOn && <p className="mt-1">같은 닉네임 회원이 둘 이상(<span className="text-amber-300 font-semibold">중복</span>)이면 닉네임 칸 자동완성에서 기록 주인을 먼저 골라 주세요.</p>}
       </details>
 
       {/* 매장 차원 발급 게이트 — 줄마다 눌러 실패를 20번 확인하기 전에 한 번 말한다.
           순위 저장과 이용권 전송이 갈라져 있다는 사실을 여기서 다시 못 박는다(저장은 항상 된다). */}
-      {(() => {
+      {vchOn && (() => {
         const blocked = venueSendBlock();
         if (blocked) {
           return (
@@ -1437,7 +1478,13 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
           {rows.map((row, i) => (
             <li key={i}
               // 모바일 3행(칸 잘림·경계 어긋남 교정 — 오너 스크린샷): 닉네임·실명 / 프라이즈·이용권 / 비고
-              className={['grid grid-cols-[2.5rem_minmax(0,1fr)_minmax(0,1fr)_2rem] lg:grid-cols-[5.75rem_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_5rem_minmax(0,1.2fr)_5.25rem_2rem] items-center gap-1.5 rounded-input border p-1.5 transition-colors',
+              // ⚠ 이 그리드는 명시 col-start 와 자동배치가 섞여 있다 — 이용권(5)·전송(7) 칸을
+              //   숨기면서 8열 정의를 그대로 두면 비고·삭제가 빈 칸을 건너뛰어 어긋난다.
+              //   그래서 열 정의도 같은 조건으로 6열(등수·닉네임·실명·프라이즈·비고·삭제)로 줄인다.
+              className={['grid grid-cols-[2.5rem_minmax(0,1fr)_minmax(0,1fr)_2rem] items-center gap-1.5 rounded-input border p-1.5 transition-colors',
+                vchOn
+                  ? 'lg:grid-cols-[5.75rem_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_5rem_minmax(0,1.2fr)_5.25rem_2rem]'
+                  : 'lg:grid-cols-[5.75rem_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_2rem]',
                 // 방금 옮긴 줄만 잠깐 물들인다 — 줄이 전부 똑같이 생겨서 어디로 갔는지 눈으로 못 쫓는다
                 moved?.i === i ? 'border-accent-400/70 bg-accent-300/[0.07]' : 'border-border-subtle bg-surface-low/40'].join(' ')}>
               {/* 등수 = 행 순서. 순서를 못 바꾸면 정정 수단이 '지우고 다시 치기'뿐이라 ▲▼를 등수에 붙인다.
@@ -1512,9 +1559,11 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
                               <span className="shrink-0 rounded-badge bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold text-amber-300"
                                 title="같은 닉네임의 회원이 둘 이상입니다 — 실명을 보고 골라 주세요">중복</span>
                             )}
-                            {!c.verified && (
+                            {/* 킬스위치 OFF 면 '미인증' 은 아무것도 막지 않는다 — 남겨두면 존재하지 않는
+                                인증 화면으로 가라는 뜻 없는 경고가 된다(순위 기록은 원래 인증과 무관). */}
+                            {vchOn && !c.verified && (
                               <span className="shrink-0 rounded-badge bg-rose-500/15 px-1.5 py-0.5 text-[9px] font-bold text-rose-300"
-                                title="미인증 회원 — 본인인증 전이라 순위 기록은 되지만 매장이용권은 지급할 수 없어요">미인증 ⚠️</span>
+                                title="미인증 회원 — 본인인증 전이라 순위 기록은 되지만 매장이용권은 지급할 수 없어요"><Icon name="alert" size={9} className="mr-0.5 inline-block align-[-1px] shrink-0" />미인증</span>
                             )}
                             <span className="truncate font-semibold text-ink-primary">{c.nickname}{c.realName ? <span className="font-normal text-ink-muted"> · {c.realName}</span> : null}</span>
                           </button>
@@ -1528,11 +1577,17 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
                 {row.nickname.trim() !== '' && (() => {
                   const t = targetOf(row.nickname);
                   if (t === 'unknown') return null;
-                  const [icon, label] = t === 'ambiguous' ? ['⚠️', '동명이인 — 후보에서 선택 필요']
-                    : t === null ? ['⚪', '비회원']
-                      : t.verified ? ['✅', '회원(본인인증 완료)'] : ['🟡', '회원 — 본인인증 전'];
+                  // ⚠⚪✅🟡 이모지는 OS 마다 색·굵기가 달라 '회원/비회원/미인증'이 서로 구분되지 않았다.
+                  const [icon, tone, label]: [IconName, string, string] =
+                    t === 'ambiguous' ? ['alert', 'text-amber-300', '동명이인 — 후보에서 선택 필요']
+                    : t === null ? ['circle', 'text-ink-muted', '비회원']
+                      : !vchOn ? ['check-circle', 'text-emerald-400', '회원']
+                      : t.verified ? ['check-circle', 'text-emerald-400', '회원(본인인증 완료)']
+                      : ['circle', 'text-amber-300', '회원 — 본인인증 전'];
                   return (
-                    <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-sm leading-none" title={label}>{icon}</span>
+                    <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2" title={label}>
+                      <Icon name={icon} size={14} className={tone} role="img" aria-hidden={false} aria-label={label} />
+                    </span>
                   );
                 })()}
               </div>
@@ -1565,15 +1620,18 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
                 <Icon name="close" size={14} />
               </button>
               {/* 모바일 2줄(고정 그리드로 칸 경계 정렬) · PC는 같은 행에 이어짐 */}
-              <div className="relative col-start-3 row-start-2 lg:col-start-5 lg:row-auto min-w-0 lg:w-auto">
-                <input type="number" inputMode="numeric" value={row.voucher} onChange={(e) => update(i, 'voucher', e.target.value.replace(/[^\d]/g, ''))} placeholder="이용권" className="input w-full text-sm py-2 pr-7 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" />
-                <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">개</span>
-              </div>
-              <input type="text" value={row.note} onChange={(e) => update(i, 'note', e.target.value)} maxLength={50} placeholder="비고" className="input col-start-2 row-start-3 lg:col-auto lg:row-auto w-full min-w-0 text-sm py-2" />
+              {vchOn && (
+                <div className="relative col-start-3 row-start-2 lg:col-start-5 lg:row-auto min-w-0 lg:w-auto">
+                  <input type="number" inputMode="numeric" value={row.voucher} onChange={(e) => update(i, 'voucher', e.target.value.replace(/[^\d]/g, ''))} placeholder="이용권" className="input w-full text-sm py-2 pr-7 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" />
+                  <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">개</span>
+                </div>
+              )}
+              {/* 이용권 칸이 빠지면 모바일 2행 오른쪽이 비므로 비고가 그 폭을 흡수한다(빈 칸 방지) */}
+              <input type="text" value={row.note} onChange={(e) => update(i, 'note', e.target.value)} maxLength={50} placeholder="비고" className={['input row-start-3 lg:col-auto lg:row-auto w-full min-w-0 text-sm py-2', vchOn ? 'col-start-2' : 'col-start-2 col-span-2'].join(' ')} />
               {/* 맨 오른쪽 '전송' — 이 줄 한 명에게만 나간다(오너 지시 2026-08-28).
                   비회원·미인증·동명이인 줄은 아예 눌리지 않는다: 예전엔 눌러 봐야 서버에서 막혔고
                   그 실패가 '미지급 N명'으로 뭉개져 누가 왜 못 받았는지 알 수 없었다. */}
-              {(() => {
+              {vchOn && (() => {
                 const nick = row.nickname.trim();
                 const st = sendMap[nickKey(nick)];
                 const gate = sendGate(row);
@@ -1591,13 +1649,13 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
                           : canSend ? 'border-accent-400/60 bg-accent-300/10 text-accent-300 hover:bg-accent-300/20'
                             : 'border-border-subtle bg-surface-high/40 text-ink-muted'].join(' ')}
                   >
-                    {busy ? '전송 중…' : sent ? '✓ 전송됨' : '🎟 전송'}
+                    {busy ? '전송 중…' : sent ? '✓ 전송됨' : <span className="inline-flex items-center justify-center gap-1"><Icon name="ticket" size={12} className="shrink-0" />전송</span>}
                   </button>
                 );
               })()}
               {/* 행 단위 결과 — 성공은 개수까지, 실패는 서버가 준 사유 그대로. 토스트로 흘려보내면
                   20줄 중 어느 줄 얘기인지 알 수 없어 '누구에게 다시 보내야 하나'가 사라진다. */}
-              {(() => {
+              {vchOn && (() => {
                 const nick = row.nickname.trim();
                 const st = sendMap[nickKey(nick)];
                 const gate = sendGate(row);
@@ -1630,7 +1688,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
         if (bad.length === 0) return null;
         return (
           <p className="rounded-input border border-amber-400/40 bg-amber-500/10 px-2.5 py-2 text-2xs leading-relaxed text-amber-200">
-            ⚠️ <b>{bad.map((x) => `${x.no}위`).join(', ')}</b> 프라이즈가 큽니다 — 이 칸은 <b>만원 단위</b>예요.
+            <Icon name="alert" size={12} className="mr-0.5 inline-block align-[-1px] shrink-0" /><b>{bad.map((x) => `${x.no}위`).join(', ')}</b> 프라이즈가 큽니다 — 이 칸은 <b>만원 단위</b>예요.
             100만원이면 <b>100</b>, 1,000만원이면 <b>1000</b>. 원 단위로 치면 매장·전국 프라이즈 순위가 크게 왜곡됩니다.
           </p>
         );
@@ -1692,13 +1750,13 @@ function VenueCreateForm({ onCreated }: { onCreated: () => Promise<void> }) {
   return (
     <div className="mx-auto w-full max-w-xl space-y-4 py-6">
       <div className="text-center space-y-1">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-accent-300/15 text-2xl">🏪</div>
-        <h2 className="text-base font-extrabold text-ink-primary">내 매장 만들기</h2>
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-accent-300/15 text-accent-300"><Icon name="store" size={26} /></div>
+        <h2 className="text-base font-bold text-ink-primary">내 매장 만들기</h2>
         <p className="text-2xs leading-relaxed text-ink-muted">매장 정보를 입력하면 NURI HOLDEM 커뮤니티에 매장이 등록됩니다.<br />운영자 승인 후 일정탐색·커뮤니티에 공개돼요.</p>
         {/* 신규 업주 온보딩 — 운영 가이드 슬라이드로 전체 흐름 먼저 파악 */}
         <button type="button" onClick={() => window.open('/guide/owner.html', '_blank', 'noopener')}
           className="mx-auto inline-flex items-center gap-1 rounded-input border border-accent-400/40 bg-accent-300/10 px-3 py-1.5 text-2xs font-bold text-accent-300 hover:bg-accent-300/20 transition-colors">
-          📖 운영 가이드 먼저 보기 <span className="text-ink-muted font-normal">(포스터→장부→클락→정산)</span>
+          <Icon name="book-open" size={13} className="shrink-0" />운영 가이드 먼저 보기 <span className="text-ink-muted font-normal">(포스터→장부→클락→정산)</span>
         </button>
       </div>
 
@@ -1766,6 +1824,9 @@ function StaffHub({ venueId }: { venueId: string }) {
 
 function StaffManager({ venueId }: { venueId: string }) {
   const toast = useToast();
+  // 킬스위치(2026-08-29) — 이용권이 꺼진 동안 '이용권내역 권한' 토글은 아무 화면도 열지 못한다.
+  // 부여된 권한(vouch)은 서버에 그대로 남는다 — 다시 켜면 이 줄이 원래대로 돌아온다.
+  const vchOn = useIdentityEnabled();
   const [staff, setStaff] = useState<User[]>([]);
   const [invites, setInvites] = useState<VenueInvite[]>([]);
   const [access, setAccess] = useState<string[]>([]); // 장부·순위 권한 보유 직원 id
@@ -1855,8 +1916,8 @@ function StaffManager({ venueId }: { venueId: string }) {
   };
   const remove = async (s: User) => {
     if (!confirm(`${s.name} 구성원을 제거하시겠습니까?
-일반 회원으로 전환되고 장부·순위 / 이용권내역 권한도 함께 회수됩니다.`)) return;
-    try { await removeStaff(s.id); toast.show('구성원을 제거했습니다 — 장부·이용권 권한도 함께 회수됐습니다', 'success'); reload(); }
+일반 회원으로 전환되고 장부·순위${vchOn ? ' / 이용권내역' : ''} 권한도 함께 회수됩니다.`)) return;
+    try { await removeStaff(s.id); toast.show(`구성원을 제거했습니다 — 장부${vchOn ? '·이용권' : '·순위'} 권한도 함께 회수됐습니다`, 'success'); reload(); }
     catch (e) { toast.show(msgOf(e, '구성원 제거에 실패했습니다'), 'error'); }
   };
 
@@ -1989,11 +2050,13 @@ function StaffManager({ venueId }: { venueId: string }) {
                           hasAccess ? 'bg-accent-300/15 text-accent-300 dark:text-accent-200 border-accent-400/40' : 'bg-surface-float text-ink-muted border-border-default'].join(' ')}>
                         장부·순위 {hasAccess ? '권한 ✓' : '권한 없음'}
                       </button>
-                      <button type="button" onClick={() => toggleVoucher(s.id)}
-                        className={['shrink-0 text-2xs font-bold px-2.5 py-1.5 rounded-badge border transition-colors',
-                          vouch.includes(s.id) ? 'bg-accent-300/15 text-accent-300 dark:text-accent-200 border-accent-400/40' : 'bg-surface-float text-ink-muted border-border-default'].join(' ')}>
-                        이용권내역 {vouch.includes(s.id) ? '✓' : '✗'}
-                      </button>
+                      {vchOn && (
+                        <button type="button" onClick={() => toggleVoucher(s.id)}
+                          className={['shrink-0 text-2xs font-bold px-2.5 py-1.5 rounded-badge border transition-colors',
+                            vouch.includes(s.id) ? 'bg-accent-300/15 text-accent-300 dark:text-accent-200 border-accent-400/40' : 'bg-surface-float text-ink-muted border-border-default'].join(' ')}>
+                          이용권내역 {vouch.includes(s.id) ? '✓' : '✗'}
+                        </button>
+                      )}
                     </div>
                   </li>
                   );

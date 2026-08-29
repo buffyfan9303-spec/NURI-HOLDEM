@@ -21,6 +21,7 @@ import type { DraggableAttributes } from '@dnd-kit/core';
 import type { SyntheticListenerMap } from '@dnd-kit/core/dist/hooks/utilities';
 import { CSS } from '@dnd-kit/utilities';
 import { reorderSchedules, togglePremium, toggleCompetition, boostSchedule, type Schedule } from '../../api/schedules';
+import Icon from '../atoms/Icon';
 
 // ── 상태 타입 ────────────────────────────────────────────────────────────────
 
@@ -149,13 +150,13 @@ function SortableRow({ item, index, isDragging, onPremiumToggle, onCompetitionTo
           title={boostLeft > 0 ? `부스트 ${boostLabel} 남음 — 클릭해 변경` : '부스트(기간 상단 고정)'}
           onClick={() => setBoostOpen((v) => !v)}
           className={[
-            'text-2xs font-bold px-1.5 py-1 rounded-badge border transition-colors active:scale-95',
+            'inline-flex items-center gap-0.5 text-2xs font-bold px-1.5 py-1 rounded-badge border transition-colors active:scale-95',
             boostLeft > 0
               ? 'bg-accent-300/15 text-accent-300 border-accent-400/40'
               : 'bg-surface-high text-ink-muted border-border-default hover:text-ink-secondary',
           ].join(' ')}
         >
-          ⚡{boostLabel}
+          <Icon name="zap" size={12} className="shrink-0" />{boostLabel}
         </button>
         {boostOpen && (
           <span className="absolute left-0 top-full z-20 mt-1 flex items-center gap-1 rounded-card border border-border-default bg-surface-float p-1.5 shadow-card">
@@ -363,7 +364,7 @@ export default function DraggableList({ initialItems }: DraggableListProps) {
     <section className="space-y-3">
       {/* 헤더 */}
       <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold text-ink-primary">
+        <h2 className="text-base font-bold text-ink-primary">
           노출 순서 관리
           <span className="ml-2 text-sm font-normal text-ink-muted">
             ({items.length}개)

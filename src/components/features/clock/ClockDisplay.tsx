@@ -12,6 +12,7 @@ import { getAppSetting, CLOCK_AD_KEY } from '../../../api/settings';
 import { fetchVenuePageConfig } from '../../../api/rankings';
 import { readSnap, writeSnap } from '../../../lib/snapshot';
 import { clockThemeVars, sanitizeClockTheme, clockThemeSnapKey, type ClockTheme } from './clockTheme';
+import Icon from '../../atoms/Icon';
 
 const pad = (n: number) => String(Math.floor(n)).padStart(2, '0');
 const mmss = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return `${pad(s / 60)}:${pad(s % 60)}`; };
@@ -173,7 +174,7 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
     if (gSeq == null) return;
     const prev = prevElim.current.get(gSeq);
     if (prev != null && elimNow > prev) {
-      setElimMsg({ text: `💥 방금 ${elimNow - prev}명 탈락 · 남은 ${aliveNow}명`, until: Date.now() + 5000 });
+      setElimMsg({ text: `방금 ${elimNow - prev}명 탈락 · 남은 ${aliveNow}명`, until: Date.now() + 5000 });
       // 만료를 렌더 틱에만 맡기면 틱이 뜸한 화면에서 최대 수십 초 잔류 — 명시 해제
       window.setTimeout(() => setElimMsg((cur) => (cur && Date.now() >= cur.until ? null : cur)), 5200);
     }
@@ -202,13 +203,13 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
                 style={c.gameSeq === g?.gameSeq ? { background: 'var(--clk-accent, #5E6AD2)' } : undefined}
                 className={['rounded-full px-[1.6vmin] py-[0.6vmin] text-[1.8vmin] font-bold transition-colors',
                   c.gameSeq === g?.gameSeq ? 'text-black' : 'bg-white/10 text-white/70 hover:bg-white/20'].join(' ')}>
-                {gameLabel(c)}{c.running ? '' : ' ⏸'}
+                {gameLabel(c)}{!c.running && <Icon name="pause" aria-label="일시정지" className="ml-[0.6vmin] inline-block h-[1.7vmin] w-[1.7vmin] align-[-0.15em]" />}
               </button>
             ))}
             <button type="button" onClick={() => setAuto((v) => !v)} title="멀티게임 자동 순환"
               style={auto ? undefined : { color: 'var(--clk-ink-soft, rgba(255,255,255,.5))' }}
               className={['rounded-full px-[1.6vmin] py-[0.6vmin] text-[1.8vmin] font-bold transition-colors', auto ? 'bg-emerald-400/20 text-emerald-300' : 'bg-white/10 hover:bg-white/20'].join(' ')}>
-              🔄 {auto ? '자동' : '수동'}
+              <Icon name="refresh" className="mr-[0.6vmin] inline-block h-[1.7vmin] w-[1.7vmin] align-[-0.15em]" />{auto ? '자동' : '수동'}
             </button>
           </div>
         )}
@@ -244,7 +245,7 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
             <div className="flex min-h-0 flex-col justify-center gap-[1.5vmin]">
               {prizes.length > 0 && (
                 <div className="min-h-0 overflow-hidden rounded-[2vmin] border border-accent-300/25 bg-accent-300/[0.06] p-[1.8vmin]">
-                  <p className="mb-[1vmin] text-[2.4vmin] font-bold text-gold-300">🏆 상금</p>
+                  <p className="mb-[1vmin] flex items-center gap-[0.8vmin] text-[2.4vmin] font-bold text-gold-300"><Icon name="trophy" className="h-[2.4vmin] w-[2.4vmin] shrink-0" />상금</p>
                   <ul className="space-y-[0.5vmin]">
                     {prizes.slice(0, 8).map((p, i) => (
                       <li key={i} className="flex items-baseline justify-between gap-3 border-b border-white/5 pb-[0.5vmin] last:border-0">
@@ -261,7 +262,7 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
                 <div className="flex shrink-0 items-center gap-[2vmin] rounded-[2vmin] border border-emerald-400/25 bg-emerald-400/[0.06] p-[1.6vmin]">
                   <img src={qr} alt="참가 바인요청 QR" className="shrink-0 rounded-[1vmin] bg-white" style={{ width: 'clamp(72px, 13vmin, 190px)', height: 'auto' }} />
                   <div className="min-w-0">
-                    <p className="text-[2.4vmin] font-extrabold text-emerald-300">📲 스캔해서 참가</p>
+                    <p className="flex items-center gap-[0.8vmin] text-[2.4vmin] font-extrabold text-emerald-300"><Icon name="qr" className="h-[2.4vmin] w-[2.4vmin] shrink-0" />스캔해서 참가</p>
                     <p className="mt-[0.5vmin] text-[1.9vmin] leading-snug text-white/65">휴대폰으로 QR을 찍으면 {g ? gameLabel(g) : ''} 바인(참가)을 요청합니다.</p>
                   </div>
                 </div>
@@ -353,7 +354,7 @@ const CenterPanel = memo(function CenterPanel({ g }: { g: ClockState }) {
         }}>
         {mmss(Math.max(0, remaining))}
       </p>
-      {!g.running && <p className="mt-[1vmin] text-[2.6vmin] font-bold text-amber-400">⏸ 일시정지</p>}
+      {!g.running && <p className="mt-[1vmin] flex items-center justify-center gap-[0.8vmin] text-[2.6vmin] font-bold text-amber-400"><Icon name="pause" className="h-[2.6vmin] w-[2.6vmin] shrink-0" />일시정지</p>}
       {/* 다음 브레이크 · 등록마감 */}
       <div className="mt-[2vmin] flex flex-wrap items-center justify-center gap-x-[3vmin] gap-y-[1vmin] text-[2.3vmin] text-white/55">
         <span>다음 브레이크 <b className="text-white/90 tabular-nums">{nextBreak === null ? '—' : hms(nextBreak)}</b></span>

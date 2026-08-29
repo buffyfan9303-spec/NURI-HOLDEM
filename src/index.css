@@ -364,6 +364,38 @@
            rounded-badge text-2xs font-bold leading-none tabular-nums;
   }
 
+  /* ══ 타이포 스케일 §T1 — 역할 → 크기·굵기·행간 (오너 #11 "글자 크기 규격화", 2026-08-29) ══
+     왜 필요했나: PC(1440) 실측에서 같은 '탭 라벨' 역할이 11.69 / 12.75 / 13 / 14.88px 네 값으로
+     갈려 있었고, 설명문은 11.69 와 12.75 가 1px 차로 섞여 있었다. 1px 차이는 위계로 읽히지 않고
+     '대충 만든 것'으로 읽힌다. 그래서 **역할마다 값을 하나로** 고정한다.
+
+     규칙
+      1. 스케일은 tailwind fontSize 사다리(2xs·xs·sm·base·lg·xl·2xl·3xl)와 같은 값이다.
+         새 값을 만들지 않았다 — 다수파를 그대로 채택하고, 이탈한 소수만 끌어왔다.
+      2. text-[13px]·text-[15px]·text-[17px] 같은 **임의 px 신규 사용 금지**(사다리 밖 값).
+         13→xs · 15→sm · 17→base 로 스냅(각각 -0.25 / -0.125 / 0px — 눈에 안 보이는 차이다).
+      3. 유틸은 크기·행간·기본 굵기만 정한다. 활성 탭의 font-bold 처럼 굵기를 바꿔야 하면
+         Tailwind font-* 유틸을 덧붙인다(utilities 레이어가 뒤라 이긴다).
+      4. 색은 이 스케일의 관심사가 아니다 — text-ink-* 는 그대로 둔다(대비 실측 결과 보존).
+
+     역할 표 (1rem = 17px)
+      t-nav    14.88 / 600 / 21.25  1단계 내비(GNB)·페이지 주 탭·모달 탭
+      t-tab    12.75 / 600 / 17     2·3단계 서브탭·필터 탭·좌측 메뉴  ← 오너 지적 지점
+      t-title  14.88 / 700 / 21.25  섹션 제목(h2·h3 다수파 57/87)
+      t-body   14.88 / 400 / 21.25  본문
+      t-desc   12.75 / 400 / 19.13  제목·탭 바로 아래 블록 설명문, 빈 상태 힌트
+      t-meta   11.69 / 400 / 15.94  행 안 부가정보·캡션·뱃지 첨자
+     ═══════════════════════════════════════════════════════════════════════════ */
+  .t-nav   { font-size: 0.875rem;  line-height: 1.25rem;   font-weight: 600; }
+  .t-tab   { font-size: 0.75rem;   line-height: 1rem;      font-weight: 600; }
+  .t-title { font-size: 0.875rem;  line-height: 1.25rem;   font-weight: 700; }
+  .t-body  { font-size: 0.875rem;  line-height: 1.25rem;   font-weight: 400; }
+  /* 설명문 행간은 1.5배(19.13px) — 한글 2줄 블록이 붙어 보이지 않게. 2줄 예약(min-h-[2.25rem])과 정확히 맞물린다. */
+  .t-desc  { font-size: 0.75rem;   line-height: 1.125rem;  font-weight: 400; }
+  .t-meta  { font-size: 0.6875rem; line-height: 0.9375rem; font-weight: 400; }
+  /* ⚠ Tailwind 는 @layer components 안의 클래스도 **실제 사용된 것만** 번들에 넣는다.
+     아직 안 쓴 역할(t-body 등)은 빌드 CSS 에 안 보이는 게 정상이고, tsx 에 쓰는 순간 나타난다. */
+
   /* ── 반응형 유동 타이포(clamp) — 큰 제목이 모바일에서 자동 축소(Apple·Stripe식 유동 스케일) ──
      모바일(min)~데스크톱(max)을 뷰포트 폭에 따라 매끄럽게 보간. 1rem=17px(html 기준). */
   .text-fluid-lg  { font-size: clamp(1rem, 0.86rem + 0.7vw, 1.25rem);  line-height: 1.3; }
@@ -738,6 +770,53 @@ button:active:not(:disabled), [role='button']:active, a:active:not([data-no-pres
   transition-duration: 0.06s;
 }
 
+/* ⚠ 장터 목록 행 예외 — 위 프레스 규칙에서 '색 계열'만 뺀다(2026-08-29 잰크 실측).
+   PC 는 스크롤할 때 커서가 제자리에 있고 행이 그 밑을 지나간다. 행마다 hover in/out 이
+   연달아 터지는데, 여기에 content-visibility(.cv-row-md) 컨테인먼트가 겹치면
+   '뷰포트 진입 렌더' 와 '호버 색 리페인트' 가 같은 프레임에서 부딪힌다.
+
+   ⚠ 셀렉터가 커뮤니티 피드 카드(.cv-row-lg) 처방과 다른 이유 — 특이도를 반드시 따져야 한다.
+   거기는 컨테인먼트와 hover 가 **같은 요소**(div[role='button'])라 `[role='button'].cv-row-lg`
+   (0,2,0) 로 되받으면 됐다. 장터는 <li class="cv-row-md">(컨테인먼트) > <button>(hover) 로
+   부모/자식이 나뉘고, 진짜 <button> 이라 위 프레스 규칙의 `button:not([data-no-press])`
+   가르마에 걸린다 — 그 특이도는 (0,1,1) 이다. Tailwind `transition-colors`(0,1,0)를 이기므로
+   **className 에서 transition-colors 를 지우는 것만으로는 아무 효과가 없다**(cv-row-lg 에서 실측 확인).
+   `.cv-row-md > button` 은 (0,1,1) 로 동점이라 소스 순서에만 기대게 된다 — 누가 이 블록을
+   위로 옮기면 조용히 무효가 된다. 그래서 :not([data-no-press]) 를 붙여 (0,2,1) 로 올려 확실히
+   이긴다(탈출구 의미도 프레스 규칙과 같이 유지된다).
+
+   실측(프로덕션 빌드·120행·CPU 4x·실제 휠 40스텝·커서를 목록 위에 고정, 5회 중앙값).
+   같은 빌드·같은 세션에서 이 규칙만 되돌린 조건과 교대 실행해 비교한다(빌드·세션 드리프트 제거):
+     PC1440  rAF 초과분 367ms → 1ms · RecalcStyle 95ms → 39ms(-59%) · Task 764ms → 655ms(-14%)
+     M375    rAF 초과분 500ms → 17ms · RecalcStyle 130ms → 63ms(-52%) · Task 838ms → 675ms(-19%)
+   분포가 겹치지 않는다: 되돌린 조건 PC [499,367,350,333,417] vs 이 규칙 [1,1,1,1,17].
+   대조군으로 커서만 목록 밖에 두면(=hover 미발화) rAF 초과분이 PC 1ms · M375 18ms 로
+   이 규칙을 켠 값과 사실상 같다 — 비용의 출처가 '호버 색 트랜지션' 하나임이 분리 확인된다.
+   ※ 롱프레임(>50ms) 합은 CPU 4x 에선 양쪽 0 이라 판별력이 없다(LoAF 는 50ms 문턱 지표).
+     그래서 rAF 프레임 간격 초과분과 CDP RecalcStyleDuration 을 본다.
+   ※ 라이브 DB 의 marketplace_listings 는 현재 0건이라 120행은 page.route 응답 재작성으로
+     합성했다(DB 미변경). 렌더 필드 밀도는 실물과 같게 맞췄다(등급·예약중 배지·지역·가격·판매자·시간).
+
+   opacity/transform 은 남긴다 — 누를 때의 scale(0.97)·감광 손맛은 그대로다.
+   data-no-press 탈출구를 쓰지 않은 이유가 이것이다(그건 누름 애니까지 같이 죽인다).
+   호버 하이라이트(hover:bg-surface-high) 자체도 그대로 둔다 — 트랜지션만 빠져 즉시 반응이 된다.
+   §20.4 #3 의 '색 계열 ≤0.15s' 는 '허용' 이지 '권장' 이 아니다 — 목록 행처럼 수십 개가
+   동시에 발화하는 자리엔 걸지 않는다. */
+.cv-row-md > button:not([data-no-press]) { transition-property: opacity, transform; }
+
+/* 같은 함정의 나머지 두 자리 — 커뮤니티 피드 카드(lg)와 압축 보기 한 줄(sm).
+   셋 다 전역 프레스 규칙([role='button']:not([data-no-press]), 특이도 0,2,0)이
+   Tailwind 의 transition-colors(0,1,0)를 이기기 때문에 **className 에서 유틸을 지우는 것만으로는
+   효과가 0**이다. 같은 특이도로 되받아야 한다(세 세션이 각각 독립 실측으로 도달한 결론).
+   실측(프로덕션 빌드·CPU 4x·휠 40스텝·커서를 목록 위에 고정, 5회 중앙값):
+     압축(sm)  rAF 초과분 PC1440 1231ms → 84ms · M375 882ms → 67ms
+     피드(lg)  rAF 초과분 PC1440  300ms → 34ms
+   두 경우 모두 수정 후 값이 '커서를 목록 밖에 둔' 대조군 바닥값과 같다
+   — 호버 비용이 준 게 아니라 사라졌다는 뜻이다.
+   opacity/transform 은 남긴다 — 누를 때의 손맛(scale·감광)은 그대로다. */
+[role='button'].cv-row-lg { transition-property: opacity, transform; }
+[role='button'].cv-row-sm { transition-property: opacity, transform; }
+
 /* ── 탭 방향 슬라이드(모바일 전용) — 탭 순서상 오른쪽이면 오른쪽에서 8px 진입 ── */
 @keyframes tab-in-r { from { opacity: 0.55; transform: translateX(8px); filter: blur(3px) brightness(0.92); }  to { opacity: 1; transform: translateX(0); filter: blur(0) brightness(1); } }
 @keyframes tab-in-l { from { opacity: 0.55; transform: translateX(-8px); filter: blur(3px) brightness(0.92); } to { opacity: 1; transform: translateX(0); filter: blur(0) brightness(1); } }
@@ -791,10 +870,15 @@ nav[aria-label="하단 내비게이션"] { view-transition-name: app-tabbar; }
    단 상시 켜두면 메인 탭 전환(커뮤니티→홈)에서 old-only 스냅샷이 전환 내내 잔상으로 얼어붙는다(실측) —
    서브섹션 전환 동안만 CommunityTab 이 html 에 켜는 마커로 조건부 활성(vtDir 마커와 같은 조리법). */
 html[data-vt-scope='community-sec'] [data-community-secbar] { view-transition-name: community-secbar; }
+/* 매장 페이지 탭바(매장소개·순위·포스터·일정·커뮤니티)도 같은 조리법 — 전환 동안만 자기 이름을 갖게 해
+   본문만 크로스페이드되고 탭바는 제자리에 고정된다(2026-08-29 오너 지적: 소메뉴에 모션이 없다).
+   상시 name 을 주면 매장 페이지를 닫을 때 old-only 스냅샷이 얼어붙는다 — 커뮤니티 서브탭에서 실측한 그 함정. */
+html[data-vt-scope='venue-tab'] [data-venue-tabbar] { view-transition-name: venue-tabbar; }
 ::view-transition-old(app-header), ::view-transition-new(app-header),
 ::view-transition-old(app-tabbar), ::view-transition-new(app-tabbar),
 ::view-transition-old(app-gnb), ::view-transition-new(app-gnb),
-::view-transition-old(community-secbar), ::view-transition-new(community-secbar) { animation: none; }
+::view-transition-old(community-secbar), ::view-transition-new(community-secbar),
+::view-transition-old(venue-tabbar), ::view-transition-new(venue-tabbar) { animation: none; }
 
 /* 가로 스크롤러의 스크롤바 숨김(배너 캐러셀 등) — 기능은 그대로, 표시만 제거 */
 .scrollbar-none { scrollbar-width: none; -ms-overflow-style: none; }

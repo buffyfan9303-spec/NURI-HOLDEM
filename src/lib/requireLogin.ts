@@ -1,6 +1,8 @@
 // src/lib/requireLogin.ts
 // 비로그인 사용자가 쓰기(글·댓글·반응·채팅·예약 등)를 시도하면 로그인 모달을 띄우도록
 // 앱 어디서든 호출할 수 있는 전역 신호. App.tsx가 이 이벤트를 듣고 AuthModal을 연다.
+import { identityEnabled } from './identityFlag';
+
 export const REQUIRE_LOGIN_EVENT = 'nuri:require-login';
 
 /** 로그인 모달을 띄운다. 비로그인 상태에서 쓰기 시도 시 호출. */
@@ -36,9 +38,16 @@ export function promptVerify(reason?: string): void {
  * 본인인증 가드. 비로그인이면 로그인 모달, 미인증이면 본인인증 안내를 띄우고 false 반환(호출부는 즉시 return).
  * @param reason 차단된 기능명 — 안내 시트 맥락 문구에 사용.
  * @returns 로그인 + 본인인증 완료면 true.
+ *
+ * ⚠ 본인인증 킬스위치(2026-08-29, identityFlag): 인증이 꺼져 있으면 **로그인 가드만** 남는다.
+ *   왜 여기가 정본인가: 게이트를 끄는 일은 곧 '이 함수가 false 를 돌려주지 않는 것'이다.
+ *   호출부(글쓰기·중고장터 등록·대회 예약)를 하나씩 고치면 빠뜨린 한 곳이 영원히 막힌 기능이 되고,
+ *   인증 UI 가 사라진 상태에서 막히면 사용자가 풀 방법이 아예 없다.
+ *   REQUIRE_VERIFY_EVENT 를 안 쏘므로 VerifyGateSheet 도 자동으로 뜨지 않는다(안내 시트 = 인증 유도).
  */
 export function ensureVerified(user: { verified?: boolean } | null | undefined, reason?: string): boolean {
   if (!user) { promptLogin(); return false; }
+  if (!identityEnabled()) return true; // 본인인증 비활성화 — 인증을 전제하던 흐름은 그대로 통과
   if (!user.verified) { promptVerify(reason); return false; }
   return true;
 }

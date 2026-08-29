@@ -10,6 +10,7 @@ import ReportModal from './ReportModal';
 import type { ChatThread } from '../../api/chat';
 import { getListingThreads } from '../../api/chat';
 import ChatPane from './chat/ChatPane';
+import Icon from '../atoms/Icon';
 
 interface ListingDetailModalProps {
   /** 본인 매물 상태 변경 직후 — 목록·열린 매물 동기화(팔린 물건이 '판매중'으로 남는 헛문의 방지) */
@@ -208,7 +209,7 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
             가격 협상·상태 문의는 아래 <b className="text-accent-300">판매자에게 문의</b> 버튼으로<br />1:1 채팅에서 바로 대화할 수 있어요.
           </p>
           <p className="mt-2 rounded-input bg-amber-500/[0.08] px-2 py-1.5 text-2xs leading-relaxed text-amber-300">
-            ⚠️ 안전거래: 선입금 요구는 거절하세요 — 직거래·대면 확인을 권장하고, 의심되면 신고해 주세요.
+            <Icon name="alert" size={12} className="mr-0.5 inline-block align-[-1px] shrink-0" />안전거래: 선입금 요구는 거절하세요 — 직거래·대면 확인을 권장하고, 의심되면 신고해 주세요.
           </p>
         </section>
       </div>

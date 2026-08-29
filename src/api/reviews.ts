@@ -2,6 +2,7 @@
 import { supabase, IS_MOCK } from '../lib/supabase';
 import { currentUser } from './_session';
 import { aiGenerate } from './ai';
+import { dedupe } from '../lib/inflight';
 
 export interface VenueReview {
   id: string;
@@ -80,16 +81,20 @@ export async function saveVenueReview(venueId: string, rating: number, content: 
 export interface VenueRating { avg: number; count: number }
 export async function getVenueRatings(): Promise<Record<string, VenueRating>> {
   if (IS_MOCK) return {};
-  const { data } = await supabase.from('venue_reviews').select('venue_id, rating').limit(5000);
-  const agg = new Map<string, { sum: number; n: number }>();
-  for (const r of (data ?? []) as { venue_id: string; rating: number }[]) {
-    const cur = agg.get(r.venue_id) ?? { sum: 0, n: 0 };
-    cur.sum += r.rating; cur.n += 1;
-    agg.set(r.venue_id, cur);
-  }
-  const out: Record<string, VenueRating> = {};
-  for (const [k, v] of agg) out[k] = { avg: Math.round((v.sum / v.n) * 10) / 10, count: v.n };
-  return out;
+  // App(일정탐색 ⭐)과 CommunityTab(매장 목록)이 같은 순간 각자 부르며 5000행을 두 번 받아
+  // 두 번 집계했다(실측 ×2) — 비행 중이면 합류해 왕복·파싱·집계를 한 번으로.
+  return dedupe('venue-ratings', async () => {
+    const { data } = await supabase.from('venue_reviews').select('venue_id, rating').limit(5000);
+    const agg = new Map<string, { sum: number; n: number }>();
+    for (const r of (data ?? []) as { venue_id: string; rating: number }[]) {
+      const cur = agg.get(r.venue_id) ?? { sum: 0, n: 0 };
+      cur.sum += r.rating; cur.n += 1;
+      agg.set(r.venue_id, cur);
+    }
+    const out: Record<string, VenueRating> = {};
+    for (const [k, v] of agg) out[k] = { avg: Math.round((v.sum / v.n) * 10) / 10, count: v.n };
+    return out;
+  });
 }
 
 /** 후기 삭제(본인 또는 운영자). */

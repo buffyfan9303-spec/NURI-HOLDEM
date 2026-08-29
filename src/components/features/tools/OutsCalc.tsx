@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { CalcCard, Field, NumIn, Result } from './calcUi';
+import Icon from '../../atoms/Icon';
 
 // 아웃츠 → 완성 확률(정확/간이) + 브레이크이븐 팟 오즈.
 export default function OutsCalc() {
@@ -45,7 +46,7 @@ export default function OutsCalc() {
       </div>
       <Result label="브레이크이븐 팟 오즈" value={breakeven} />
       {street === 'flop' && (
-        <p className="text-2xs leading-relaxed text-amber-400">⚠ 한 스트리트 콜 판단은 1장 기준(2장 확률은 올인일 때만)</p>
+        <p className="flex items-start gap-1 text-2xs leading-relaxed text-amber-400"><Icon name="alert" size={12} className="mt-px shrink-0" />한 스트리트 콜 판단은 1장 기준(2장 확률은 올인일 때만)</p>
       )}
       <p className="text-2xs leading-relaxed text-ink-muted">상대 베팅이 팟 대비 이 비율보다 작으면 콜이 이득입니다. (예: 3:1 이상이면 콜)</p>
       {/* 중복 인지 제거 — 실제 팟·콜 금액 대입은 팟 오즈 계산기로(딥링크, 계산 로직 불변) */}

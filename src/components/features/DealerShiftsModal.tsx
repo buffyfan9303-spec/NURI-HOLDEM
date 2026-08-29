@@ -4,6 +4,7 @@ import Modal from '../atoms/Modal';
 import { useToast } from '../atoms/Toast';
 import { getDealerShifts, addDealerShift, removeDealerShift, shiftHours, type DealerShift } from '../../api/dealerShifts';
 import { wonToMan } from '../../api/ledger';
+import Icon from '../atoms/Icon';
 
 const ym = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 const monthRange = (key: string) => {
@@ -53,9 +54,9 @@ export default function DealerShiftsModal({ open, onClose, venueId, monthKey }: 
       <div className="space-y-3 p-4">
         {/* 월 이동 */}
         <div className="flex items-center justify-between">
-          <button type="button" onClick={() => shiftMonth(-1)} className="btn-ghost px-3 text-xs">◀ 이전</button>
+          <button type="button" onClick={() => shiftMonth(-1)} className="btn-ghost inline-flex items-center gap-1 px-3 text-xs"><Icon name="chevron-left" size={13} className="shrink-0" />이전</button>
           <span className="text-sm font-bold text-ink-primary tabular-nums">{month.replace('-', '. ')}</span>
-          <button type="button" onClick={() => shiftMonth(1)} className="btn-ghost px-3 text-xs">다음 ▶</button>
+          <button type="button" onClick={() => shiftMonth(1)} className="btn-ghost inline-flex items-center gap-1 px-3 text-xs">다음<Icon name="chevron-right" size={13} className="shrink-0" /></button>
         </div>
 
         {/* 추가 폼 */}

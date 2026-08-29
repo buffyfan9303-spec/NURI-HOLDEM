@@ -12,6 +12,7 @@ import ICMCalculator from './ICMCalculator';
 import NoticeDetailModal from './NoticeDetailModal';
 import { getNotices, type MarketplaceNotice } from '../../api/marketplace';
 import SegmentedTabs from '../atoms/SegmentedTabs';
+import Icon from '../atoms/Icon';
 
 const KIND_LABEL: Record<DealerPostKind, string> = { hiring: '구인', seeking: '구직', general: '일반' };
 const KIND_STYLE: Record<DealerPostKind, string> = {
@@ -103,7 +104,7 @@ export default function DealerCommunity() {
     <div className="space-y-3">
       <div className="rounded-input border border-sky-400/30 bg-sky-500/[0.06] px-3 py-2 text-2xs leading-relaxed text-sky-300">
         딜러 구인·구직 · 정보 공유 <span className="text-ink-muted">(누구나 열람 가능)</span>.{' '}
-        <span className="font-semibold text-danger-light">⚠ 불법 사행성·환전·도박 알선 관련 구인·구직은 강제 탈퇴 및 처벌 대상</span>{notices.length > 0 ? ' — 자세한 규정은 아래 공지를 확인하세요.' : '입니다.'}
+        <span className="font-semibold text-danger-light"><Icon name="alert" size={12} className="mr-0.5 inline-block align-[-1px] shrink-0" />불법 사행성·환전·도박 알선 관련 구인·구직은 강제 탈퇴 및 처벌 대상</span>{notices.length > 0 ? ' — 자세한 규정은 아래 공지를 확인하세요.' : '입니다.'}
       </div>
 
       {notices.length > 0 && (

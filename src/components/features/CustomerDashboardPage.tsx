@@ -28,6 +28,7 @@ import TierBadge, { tierOf, tierProgress, allTiers } from '../atoms/TierBadge';
 import { ProfileIdentityHeader } from './ProfileModal'; // 통합 프로필 — 아이덴티티 헤더 정본 재사용(중복 정의 0)
 import { loginWithKakao, signInWithGoogle } from '../../api/auth'; // 비로그인 랜딩 — AuthModal 과 같은 OAuth 시작 함수 재사용
 import { promptLogin } from '../../lib/requireLogin'; // 이메일 로그인 — App 이 듣고 AuthModal(z-[60], DOM 후순위)을 위로 띄운다
+import { useIdentityEnabled } from '../../lib/identityFlag'; // 본인인증·매장이용권 통합 킬스위치(2026-08-29)
 
 // ── 홈 화면 설치(A2HS) 이벤트 선점 ─────────────────────────────────────────────
 // 왜: beforeinstallprompt 는 페이지 로드 직후 1회만 발화한다 — 이 페이지가 열릴 때는 이미 지나간 뒤라
@@ -64,6 +65,9 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
 }) {
   const { user } = useAuth();
   const toast = useToast();
+  // 본인인증·매장이용권 킬스위치. OFF 면 지갑(이용권) 전체와 인증 유도가 이 화면에서 사라진다.
+  // 훅이므로 조건부 return 들보다 위 — 아래 everOpenedRef / LoginLanding 분기보다 반드시 먼저 실행돼야 한다.
+  const idOn = useIdentityEnabled();
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
   const [visits, setVisits] = useState<VisitedVenue[]>([]);
   const [plays, setPlays] = useState<PlayHistory[]>([]);
@@ -88,7 +92,8 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
   const reload = () => {
     setLoading(true);
     Promise.all([
-      listMyVouchers(), myVisitedVenues(), myPlayHistory(),
+      // 킬스위치 OFF — 지갑을 안 그리므로 조회도 하지 않는다(무료 egress 예산). 레코드는 그대로 남아 있다.
+      idOn ? listMyVouchers() : Promise.resolve([] as Voucher[]), myVisitedVenues(), myPlayHistory(),
       getMyReservations().catch(() => [] as MyReservationRow[]),
       user?.nickname ? getMyRankingHistory(user.nickname, 200).catch(() => [] as MyRankingRow[]) : Promise.resolve([] as MyRankingRow[]),
       user?.nickname ? getGlobalRankingTotals().catch(() => []) : Promise.resolve([]),
@@ -110,7 +115,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
   // 왜 user?.id 의존성: 비로그인 랜딩에서 이메일 로그인(AuthModal이 이 페이지 위에 뜸) 성공 시
   // open 은 그대로 true 라 [open]만으로는 재조회가 없다 — user 확정 순간 대시보드 데이터를 채운다.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { if (open && user) reload(); }, [open, user?.id]);
+  useEffect(() => { if (open && user) reload(); }, [open, user?.id, idOn]);
   useEffect(() => { if (open && user) getMyBadgeStats(user.nickname ?? null, user.activityPoints ?? 0).then(setBadgeStats).catch(() => {}); }, [open, user]);
 
   // 차감 성공 전면 확인 화면 상태(Phase 15-1) — 3초 자동 닫힘.
@@ -212,7 +217,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
               avatarColor={user.avatarColor}
               points={user.activityPoints ?? 0}
               isAdmin={user.role === 'admin'}
-              verified={user.verified}
+              verified={idOn && user.verified}
               stats={[
                 { label: '활동점수', value: (user.activityPoints ?? 0).toLocaleString() },
                 { label: '내 글', value: String(myPosts.length) },
@@ -266,7 +271,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
                     return (
                       <div key={b.key} title={b.desc}
                         className={['rounded-card border p-2.5 text-center transition-colors', got ? 'border-accent-400/50 bg-accent-300/[0.08]' : 'border-border-subtle bg-surface-high opacity-55'].join(' ')}>
-                        <p className={['text-xl leading-none', got ? '' : 'grayscale'].join(' ')}>{b.emoji}</p>
+                        <Icon name={b.icon} size={22} className={['mx-auto', got ? b.tone : 'text-ink-muted'].join(' ')} />
                         <p className={['mt-1 text-xs font-bold', got ? 'text-accent-300' : 'text-ink-secondary'].join(' ')}>{b.label}</p>
                         <p className="mt-0.5 text-2xs leading-tight text-ink-muted">{b.desc}</p>
                       </div>
@@ -276,7 +281,9 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
               )}
             </section>
           )}
-          {/* 내 계정 — 받는 아이디 · 본인인증(매장이용권 수령 조건) */}
+          {/* 내 계정 — 받는 아이디 · 본인인증(매장이용권 수령 조건).
+              킬스위치 OFF: 인증 배지/이용권 수령 칸/인증 독촉이 모두 빠지고 '받는 아이디'만 남는다
+              (아이디는 순위·전적 연결에 계속 쓰이므로 기능 자체를 없애지 않는다). */}
           <section className="rounded-card border border-border-default bg-surface-low p-3">
             <div className="flex items-center gap-3">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-400/15 text-base font-bold text-accent-300">
@@ -286,25 +293,29 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
                 <p className="truncate text-sm font-bold text-ink-primary">{user?.nickname ?? user?.name ?? '회원'}</p>
                 <p className="truncate text-2xs text-ink-muted">{user?.verified && user?.realName ? user.realName : '플레이어'}</p>
               </div>
-              {user?.verified
+              {idOn && (user?.verified
                 ? <span className="shrink-0 rounded-full bg-emerald-500/15 px-2 py-0.5 text-2xs font-bold text-emerald-300">본인인증 완료</span>
-                : <span className="shrink-0 rounded-full bg-danger/15 px-2 py-0.5 text-2xs font-bold text-danger">미인증</span>}
+                : <span className="shrink-0 rounded-full bg-danger/15 px-2 py-0.5 text-2xs font-bold text-danger">미인증</span>)}
             </div>
-            <div className="mt-2.5 grid grid-cols-2 gap-2">
+            <div className={['mt-2.5 grid gap-2', idOn ? 'grid-cols-2' : 'grid-cols-1'].join(' ')}>
               <div className="rounded-input border border-border-subtle bg-surface-base px-2.5 py-1.5">
                 <p className="text-2xs text-ink-muted">받는 아이디</p>
                 <p className="truncate text-xs font-bold text-ink-primary">{user?.nickname ? '@' + user.nickname : <span className="text-danger-light">미설정</span>}</p>
               </div>
-              <div className="rounded-input border border-border-subtle bg-surface-base px-2.5 py-1.5">
-                <p className="text-2xs text-ink-muted">이용권 수령</p>
-                <p className={`truncate text-xs font-bold ${user?.verified ? 'text-emerald-300' : 'text-danger'}`}>{user?.verified ? '가능' : '인증 필요'}</p>
-              </div>
+              {idOn && (
+                <div className="rounded-input border border-border-subtle bg-surface-base px-2.5 py-1.5">
+                  <p className="text-2xs text-ink-muted">이용권 수령</p>
+                  <p className={`truncate text-xs font-bold ${user?.verified ? 'text-emerald-300' : 'text-danger'}`}>{user?.verified ? '가능' : '인증 필요'}</p>
+                </div>
+              )}
             </div>
-            {!user?.verified && (
+            {idOn && !user?.verified && (
               <p className="mt-2 flex items-start gap-1.5 text-2xs leading-relaxed text-danger-light"><Icon name="alert" size={12} className="mt-0.5 shrink-0" /> 본인인증을 완료해야 매장이용권을 받을 수 있어요. 프로필에서 인증을 진행하세요.</p>
             )}
-            {user?.verified && !user?.nickname && (
-              <p className="mt-2 flex items-start gap-1.5 text-2xs leading-relaxed text-ink-secondary"><Icon name="info" size={12} className="mt-0.5 shrink-0" /> 받는 아이디(닉네임)를 설정하면 업주가 더 쉽게 이용권을 보낼 수 있어요. 프로필에서 설정하세요.</p>
+            {(idOn ? user?.verified : true) && !user?.nickname && (
+              <p className="mt-2 flex items-start gap-1.5 text-2xs leading-relaxed text-ink-secondary"><Icon name="info" size={12} className="mt-0.5 shrink-0" /> {idOn
+                ? '받는 아이디(닉네임)를 설정하면 업주가 더 쉽게 이용권을 보낼 수 있어요. 프로필에서 설정하세요.'
+                : '받는 아이디(닉네임)를 설정하면 매장에서 등록한 순위·전적이 자동으로 연결돼요. 프로필에서 설정하세요.'}</p>
             )}
           </section>
 
@@ -317,7 +328,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
               <button type="button" onClick={onOpenProfile}
                 className="rounded-card border border-border-default bg-surface-low px-3 py-2.5 text-left hover:border-accent-400/50 transition-colors">
                 <span className="flex items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="user" size={15} /> 프로필 관리</span>
-                <span className="block text-2xs text-ink-muted mt-0.5">닉네임 · 본인인증 · 알림 설정</span>
+                <span className="block text-2xs text-ink-muted mt-0.5">닉네임 · {idOn ? '본인인증 · ' : ''}알림 설정</span>
               </button>
             )}
             {onOpenMarket && (
@@ -347,19 +358,27 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
             </section>
           )}
 
-          {/* 친구 초대 — 추천 링크 + 현황. 친구 가입+본인인증 시 양쪽 활동점수 */}
-          <InviteSection nickname={user?.nickname ?? ''} stats={refStats} />
+          {/* 친구 초대 — 추천 링크 + 현황. 친구 가입+본인인증 시 양쪽 활동점수.
+              ⚠ 보상 지급은 서버 트리거 trg_referral_reward_on_verify(after update of profiles.ci_hash)다 —
+                 본인인증이 꺼진 동안에는 **새 보상이 나가지 않는다**(초대 기록 referrals 는 그대로 쌓이고,
+                 인증이 다시 열리면 그때 인증하는 친구 건부터 정상 지급된다). 문구가 이 사실을 말하게 한다. */}
+          <InviteSection nickname={user?.nickname ?? ''} stats={refStats} idOn={idOn} />
 
-          <div className="rounded-card border border-border-default bg-surface-low p-3">
-            <p className="flex items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="alert" size={15} className="shrink-0 text-danger-light" /> 매장이용권은 금전적 가치가 없습니다</p>
-            <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">현금·포인트가 아니며 환불·현금화·유저 간 거래가 불가합니다. 발급한 매장에서 사용(회수)만 가능합니다.</p>
-          </div>
+          {idOn && (
+            <div className="rounded-card border border-border-default bg-surface-low p-3">
+              <p className="flex items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="alert" size={15} className="shrink-0 text-danger-light" /> 매장이용권은 금전적 가치가 없습니다</p>
+              <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">현금·포인트가 아니며 환불·현금화·유저 간 거래가 불가합니다. 발급한 매장에서 사용(회수)만 가능합니다.</p>
+            </div>
+          )}
 
-          {/* 하이라이트 요약 — 보유 이용권·방문·머니인·최다 머니인 매장/금액 */}
-          {!loading && (usage.length > 0 || active.length > 0) && (
+          {/* 하이라이트 요약 — 방문·머니인·최다 머니인 매장/금액
+              ⚠ '보유 이용권' 통합 스탯 제거(오너 지시 #4, 2026-08-29):
+                 이용권은 **매장마다 개별 매장이용권**만 존재한다. 매장을 가로질러 합산한 'N장'은
+                 그 전제와 어긋나는 수치다(어느 매장에서 쓸 수 있는 N장인지 답이 없다).
+                 매장별 보유는 아래 '내 매장이용권' 섹션이 매장 단위로 그대로 보여 준다 — 정보 손실 0. */}
+          {!loading && usage.length > 0 && (
             <section className="space-y-2">
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                <Stat label="보유 이용권" value={`${active.length}장`} accent />
+              <div className="grid grid-cols-3 gap-2">
                 <Stat label="방문 매장" value={`${usage.length}곳`} />
                 <Stat label="총 머니인" value={`${totalMoneyin}회`} />
                 <Stat label="누적 머니인액" value={totalSpent ? wonToMan(totalSpent) + '만' : '-'} accent />
@@ -373,7 +392,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
             </section>
           )}
 
-          <section>
+          {idOn && <section>
             <p className="mb-1.5 text-sm font-bold text-ink-primary">내 매장이용권 <span className="text-accent-300">{active.length}</span></p>
             {/* 본인인증 게이트를 '사용 시점'이 아니라 '지갑을 여는 시점'에 알린다.
                 왜: 서버 트리거(trg_voucher_verified)가 status='used' 전이를 막는데,
@@ -427,17 +446,19 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
                     ))}</ul>
                   </div>
                 ))}</div>}
-          </section>
+          </section>}
 
           {/* 이용권 사용 내역(Phase 15-1) — '모든 차감은 즉시 이 리스트에 나타나야 한다'.
               와홀덤 '사용 내역 자동 기록'과 같은 신뢰 장치: 언제·어디서·무엇이 차감됐는지. */}
-          {usedHistory.length > 0 && (
+          {idOn && usedHistory.length > 0 && (
             <section>
               <p className="mb-1.5 text-sm font-bold text-ink-primary">이용권 사용 내역</p>
               <ul className="space-y-1">{usedHistory.map((v) => (
                 <li key={v.id} className="flex items-center gap-2 rounded-input border border-border-subtle bg-surface-low px-3 py-2 text-2xs">
                   <span className="shrink-0 text-ink-muted tabular-nums">{fmtDate(v.usedAt!)}</span>
-                  <span className="min-w-0 flex-1 truncate text-ink-secondary">{v.usedVenueName ?? v.venueName ?? '-'} · {v.title}</span>
+                  {/* #4: 이용권은 발급 매장에서만 쓸 수 있다(서버 redeem_* 3경로 모두 used_venue_id := venue_id).
+                      usedVenueName 을 앞세우면 '다른 매장에서 썼을 수도 있다'는 없는 개념을 암시한다. */}
+                  <span className="min-w-0 flex-1 truncate text-ink-secondary">{v.venueName ?? '-'} · {v.title}</span>
                   <span className="shrink-0 font-bold text-danger-light tabular-nums">-1장</span>
                 </li>
               ))}</ul>
@@ -526,7 +547,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
         </div>
       </div>
 
-      {redeem && <RedeemSheet stack={redeem} onClose={() => setRedeem(null)}
+      {idOn && redeem && <RedeemSheet stack={redeem} onClose={() => setRedeem(null)}
         onDone={(used) => { setRedeem(null); setRedeemDone(used); reload(); }} />}
       {/* 차감 성공 전면 확인(Phase 15-1) — 직원과 고객이 한 화면을 같이 확인하는 것이
           실제 사용 장면이다. 큰 체크 + 수량 + 남은 잔량, 3초 뒤 자동 닫힘. */}
@@ -978,6 +999,7 @@ function HiCard({ title, name, detail }: { title: string; name: string; detail: 
 
 /** 레벨 도감 — 전체 12레벨·칭호·필요 점수 + 현재 레벨 강조 + 점수 올리는 법. */
 function LevelGuideModal({ points, onClose }: { points: number; onClose: () => void }) {
+  const idOn = useIdentityEnabled(); // 못 받는 보상을 '받는다'고 적어 두지 않기 위해
   const tiers = allTiers();
   const cur = tierOf(points);
   return (
@@ -1013,7 +1035,7 @@ function LevelGuideModal({ points, onClose }: { points: number; onClose: () => v
         <div className="mt-3 rounded-card border border-border-subtle bg-surface-low p-2.5 text-2xs leading-relaxed text-ink-secondary">
           <b className="text-ink-primary">점수 올리는 법</b><br />
           · 접속 +1 · 글쓰기 +3 · 댓글 +1<br />
-          · 친구 초대(본인인증) +500 · 추천 가입 +300<br />
+          · 친구 초대(본인인증) +500 · 추천 가입 +300{!idOn && <span className="text-ink-muted"> — 본인인증 준비 중이라 잠시 중단</span>}<br />
           · 시즌 1·2·3위 +1,000 / +500 / +300
         </div>
       </div>
@@ -1062,7 +1084,7 @@ function LevelCard({ points, championships = 0 }: { points: number; championship
 }
 
 /** 친구 초대 — 추천 링크(닉네임 코드) + 현황. 친구 가입+본인인증 시 양쪽 활동점수(+500/+300). */
-function InviteSection({ nickname, stats }: { nickname: string; stats: ReferralStats }) {
+function InviteSection({ nickname, stats, idOn }: { nickname: string; stats: ReferralStats; idOn: boolean }) {
   const toast = useToast();
   const [qr, setQr] = useState<string | null>(null);
   const url = nickname ? inviteUrl(nickname) : '';
@@ -1078,12 +1100,14 @@ function InviteSection({ nickname, stats }: { nickname: string; stats: ReferralS
   }
   const copy = async () => { try { await navigator.clipboard.writeText(url); toast.show('초대 링크를 복사했어요', 'success'); } catch { toast.show('복사 실패', 'error'); } };
   const share = async () => {
-    const text = 'NURI HOLDEM 같이 해요! 내 링크로 가입하고 본인인증하면 둘 다 활동점수 받아요 🎁';
+    const text = idOn
+      ? 'NURI HOLDEM 같이 해요! 내 링크로 가입하고 본인인증하면 둘 다 활동점수 받아요 🎁'
+      : 'NURI HOLDEM 같이 해요! 내 링크로 가입하고 함께 대회 일정·전적을 챙겨요 🎁';
     if (navigator.share) { try { await navigator.share({ title: 'NURI HOLDEM 초대', text, url }); return; } catch { return; } }
     copy();
   };
   const kakao = async () => {
-    const ok = await kakaoShareLink({ title: 'NURI HOLDEM 초대 🎁', description: '내 링크로 가입하고 본인인증하면 둘 다 활동점수를 받아요!', link: url });
+    const ok = await kakaoShareLink({ title: 'NURI HOLDEM 초대 🎁', description: idOn ? '내 링크로 가입하고 본인인증하면 둘 다 활동점수를 받아요!' : '내 링크로 가입하고 함께 대회 일정·전적을 챙겨요!', link: url });
     if (!ok) { toast.show('카카오 공유가 미설정이라 링크를 복사했어요', 'info'); copy(); }
   };
   return (
@@ -1092,7 +1116,9 @@ function InviteSection({ nickname, stats }: { nickname: string; stats: ReferralS
         <p className="flex items-center gap-1.5 text-sm font-bold text-accent-300"><Icon name="gift" size={15} /> 친구 초대</p>
         <span className="text-2xs text-ink-muted">초대 <b className="text-ink-secondary tabular-nums">{stats.invited}</b> · 보상 <b className="text-accent-300 tabular-nums">{stats.rewarded}</b></span>
       </div>
-      <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">친구가 내 링크로 가입하고 <b className="text-ink-primary">본인인증</b>까지 마치면 <b className="text-accent-300">둘 다 활동점수</b>(나 +500 · 친구 +300)!</p>
+      <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">{idOn
+        ? <>친구가 내 링크로 가입하고 <b className="text-ink-primary">본인인증</b>까지 마치면 <b className="text-accent-300">둘 다 활동점수</b>(나 +500 · 친구 +300)!</>
+        : <>초대 기록은 계속 쌓입니다. <b className="text-accent-300">활동점수 보상</b>(나 +500 · 친구 +300)은 본인인증이 다시 열리면 지급돼요.</>}</p>
       <div className="mt-2 flex items-center gap-2.5">
         {qr && <img src={qr} alt="초대 QR" className="h-16 w-16 shrink-0 rounded bg-white p-0.5" />}
         <div className="min-w-0 flex-1">

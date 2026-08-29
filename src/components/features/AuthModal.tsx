@@ -32,24 +32,26 @@ const MODE_LABEL: Record<Mode, string> = {
 
 // ── 동의 상태 훅 ──────────────────────────────────────────────────────────────
 
-type ConsentKey = 'age19' | 'terms' | 'privacy' | 'antiGambling' | 'marketing';
+type ConsentKey = 'age19' | 'terms' | 'privacy' | 'antiGambling' | 'marketing' | 'publicRanking';
 type ConsentState = Record<ConsentKey, boolean>;
 
 const CONSENT_INIT: ConsentState = {
-  age19: false, terms: false, privacy: false, antiGambling: false, marketing: false,
+  age19: false, terms: false, privacy: false, antiGambling: false, marketing: false, publicRanking: false,
 };
 
 function useConsent() {
   const [c, setC] = useState<ConsentState>(CONSENT_INIT);
 
+  // publicRanking(랭킹 공개)은 절대 allRequired 에 들어가면 안 된다 — 선택 동의를 필수로
+  // 묶으면 동의하지 않은 사람의 가입을 막게 된다(개인정보보호법 §22⑤ 동의 강제 금지).
   const allRequired = c.age19 && c.terms && c.privacy && c.antiGambling;
-  const allChecked  = allRequired && c.marketing;
+  const allChecked  = allRequired && c.marketing && c.publicRanking;
 
   const set = (k: ConsentKey, v: boolean) =>
     setC((prev) => ({ ...prev, [k]: v }));
 
   const toggleAll = (v: boolean) =>
-    setC({ age19: v, terms: v, privacy: v, antiGambling: v, marketing: v });
+    setC({ age19: v, terms: v, privacy: v, antiGambling: v, marketing: v, publicRanking: v });
 
   return { c, allRequired, allChecked, set, toggleAll };
 }
@@ -85,7 +87,7 @@ function LegalSheet({ doc, onClose }: { doc: LegalDoc | null; onClose: () => voi
         {/* (그립 핸들 제거 — 드래그 핸들러가 없는 장식 핸들은 '끌어서 닫힘' 기대만 만든다) */}
         {/* 헤더 */}
         <header className="flex items-center justify-between px-4 py-3 border-b border-border-subtle shrink-0">
-          <h2 className="text-base font-semibold text-ink-primary">{LEGAL_TITLES[doc]}</h2>
+          <h2 className="text-base font-bold text-ink-primary">{LEGAL_TITLES[doc]}</h2>
           <button
             type="button"
             onClick={onClose}
@@ -215,6 +217,13 @@ function ConsentSection({ c, allChecked, set, toggleAll, onView }: ConsentSectio
         <CheckRow
           checked={c.marketing} onChange={(v) => set('marketing', v)}
           label="마케팅 정보 수신에 동의합니다. (이벤트·할인·푸시알림)"
+        />
+        {/* 오너 #12 — 순위표에 '자주 가는 매장'을 붙이려면 이동·방문 패턴 공개 동의가 필요하다.
+            동의하지 않아도 순위·닉네임은 그대로 집계·표시된다(랭킹에서 빼면 순위가 왜곡된다). */}
+        <CheckRow
+          checked={c.publicRanking} onChange={(v) => set('publicRanking', v)}
+          label="랭킹 프로필 공개에 동의합니다. (순위표에 닉네임·자주 가는 매장 표시 · 미동의 시 매장은 표시하지 않습니다)"
+          doc="privacy"
         />
       </div>
     </div>
@@ -474,6 +483,7 @@ function SignupUserForm({ onDone }: { onDone: () => void }) {
         agreedToPrivacy:      c.privacy,
         agreedToAntiGambling: c.antiGambling,
         agreedToMarketing:    c.marketing,
+        publicRankingConsent: c.publicRanking,
       });
       toast.show('가입 완료! 로그인 후 휴대폰 본인인증을 진행해 주세요.', 'success');
       onDone();
@@ -494,7 +504,7 @@ function SignupUserForm({ onDone }: { onDone: () => void }) {
         <Field label="비밀번호 확인"  type="password" autoComplete="new-password" placeholder="••••••••"        required value={confirm}  onChange={(e) => setConfirm(e.target.value)} />
 
         <p className="rounded-input border border-border-subtle bg-surface-high px-2.5 py-2 text-2xs leading-relaxed text-ink-muted">
-          🔒 가입 후 첫 로그인 시 <b className="text-ink-secondary">휴대폰 본인인증</b>이 필요합니다 (1인 1계정·안전거래).
+          <Icon name="lock" size={12} className="mr-1 inline-block align-[-1px] shrink-0" />가입 후 첫 로그인 시 <b className="text-ink-secondary">휴대폰 본인인증</b>이 필요합니다 (1인 1계정·안전거래).
         </p>
 
         <ConsentSection
@@ -553,6 +563,7 @@ function SignupOwnerForm({ onDone }: { onDone: () => void }) {
         agreedToPrivacy:      c.privacy,
         agreedToAntiGambling: c.antiGambling,
         agreedToMarketing:    c.marketing,
+        publicRankingConsent: c.publicRanking,
         venueName, region, address, phone, businessNumber: bizNum,
       });
       toast.show('업주 가입 신청 완료. 로그인 후 휴대폰 본인인증·운영자 승인을 거쳐 포스터 업로드가 활성화됩니다.', 'success');
@@ -599,7 +610,7 @@ function SignupOwnerForm({ onDone }: { onDone: () => void }) {
             <Field label="상세 주소"      type="text" placeholder="서울시 강남구 …" required value={address} onChange={(e) => setAddress(e.target.value)} />
             <Field label="사업자등록번호" type="text" placeholder="000-00-00000"       required value={bizNum}  onChange={(e) => setBizNum(e.target.value)} />
             <p className="rounded-input border border-border-subtle bg-surface-high px-2.5 py-2 text-2xs leading-relaxed text-ink-muted">
-              🔒 가입·승인 후 첫 로그인 시 <b className="text-ink-secondary">대표자 휴대폰 본인인증</b>이 필요합니다 (1인 1계정).
+              <Icon name="lock" size={12} className="mr-1 inline-block align-[-1px] shrink-0" />가입·승인 후 첫 로그인 시 <b className="text-ink-secondary">대표자 휴대폰 본인인증</b>이 필요합니다 (1인 1계정).
             </p>
           </div>
         </section>

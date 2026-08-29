@@ -5,6 +5,7 @@ import { findUserForTransfer, type TransferTarget } from '../../api/vouchers';
 import { useToast } from '../atoms/Toast';
 import { toCsv, downloadCsv } from '../../lib/csv';
 import SlidingPill from '../atoms/SlidingPill';
+import Icon from '../atoms/Icon';
 
 type Range = 'all' | '7' | '30' | '90';
 
@@ -96,8 +97,8 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
             const on = range === id;
             return (
               <button key={id} type="button" data-pill-active={on || undefined} onClick={() => setRange(id)}
-                className={['relative rounded-[6px] px-2.5 py-1 text-2xs font-bold transition-colors duration-300 focus:outline-none',
-                  on ? 'text-white' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
+                className={['relative rounded-[6px] px-2.5 py-1 t-tab transition-colors duration-300 focus:outline-none',
+                  on ? 'font-bold text-white' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
                 <span className="relative">{label}</span>
               </button>
             );
@@ -127,7 +128,7 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
                   {r.name}
                   {r.buyins >= 5 && <span className="ml-1.5 rounded-badge bg-accent-300/15 px-1.5 py-0.5 text-2xs font-bold text-accent-300">단골</span>}
                   {r.unpaidCount > 0 && <span className="ml-1 rounded-badge bg-danger/15 px-1.5 py-0.5 text-2xs font-bold text-danger-light">미수 {r.unpaidCount}</span>}
-                  {aliases[r.name.trim().toLowerCase()] && <span className="ml-1 rounded-badge bg-emerald-500/15 px-1.5 py-0.5 text-2xs font-bold text-emerald-300">🔗 {aliases[r.name.trim().toLowerCase()].display}</span>}
+                  {aliases[r.name.trim().toLowerCase()] && <span className="ml-1 rounded-badge bg-emerald-500/15 px-1.5 py-0.5 inline-flex items-center gap-0.5 text-2xs font-bold text-emerald-300"><Icon name="link" size={11} className="shrink-0" />{aliases[r.name.trim().toLowerCase()].display}</span>}
                 </p>
                 {r.lastVisit && <span className="shrink-0 text-2xs tabular-nums text-ink-muted">최근 {r.lastVisit.slice(5)}</span>}
               </div>
@@ -143,7 +144,7 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
               {(() => {
                 const linked = aliases[r.name.trim().toLowerCase()];
                 if (linked) return (
-                  <button type="button" onClick={() => doUnlink(r.name.trim())} className="mt-1 text-2xs text-ink-muted hover:text-danger-light">🔗 {linked.display} · 연결 해제</button>
+                  <button type="button" onClick={() => doUnlink(r.name.trim())} className="mt-1 inline-flex items-center gap-1 text-2xs text-ink-muted hover:text-danger-light"><Icon name="link" size={11} className="shrink-0" />{linked.display} · 연결 해제</button>
                 );
                 if (linking === r.name) return (
                   <div className="mt-1.5 space-y-1">
@@ -156,7 +157,7 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
                         {mcands.map((c) => (
                           <li key={c.id}>
                             <button type="button" disabled={busy} onClick={() => doLink(r.name.trim(), c)} className="flex w-full items-center gap-1.5 rounded-input px-2 py-1 text-left text-xs text-ink-primary hover:bg-surface-high disabled:opacity-50">
-                              <span aria-hidden>👤</span><span className="truncate font-semibold">{c.display}</span>
+                              <Icon name="user" size={13} className="shrink-0 text-ink-muted" /><span className="truncate font-semibold">{c.display}</span>
                             </button>
                           </li>
                         ))}
@@ -165,7 +166,7 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
                   </div>
                 );
                 return (
-                  <button type="button" onClick={() => { setLinking(r.name); setMq(''); setMcands([]); }} className="mt-1 text-2xs text-accent-300 hover:underline">🔗 회원 연결</button>
+                  <button type="button" onClick={() => { setLinking(r.name); setMq(''); setMcands([]); }} className="mt-1 inline-flex items-center gap-1 text-2xs text-accent-300 hover:underline"><Icon name="link" size={11} className="shrink-0" />회원 연결</button>
                 );
               })()}
             </li>

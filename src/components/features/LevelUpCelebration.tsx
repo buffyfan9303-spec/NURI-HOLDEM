@@ -50,7 +50,7 @@ export function LevelUpCelebration({ points, onClose }: { points: number; onClos
         <div className="my-3 flex justify-center"><TierBadge points={points} size={56} /></div>
         <p className="text-3xl font-extrabold leading-none text-ink-primary">Lv {t.level}</p>
         <p className="mt-1.5 text-lg font-bold" style={{ color: t.color }}>{t.title}</p>
-        <p className="mt-2 text-2xs text-ink-muted">활동점수 {points.toLocaleString()}점 달성! 🎉</p>
+        <p className="mt-2 text-2xs text-ink-muted">활동점수 {points.toLocaleString()}점 달성!</p>
         <button type="button" onClick={onClose} className="btn-primary mt-4 w-full text-sm">확인</button>
       </div>
     </div>

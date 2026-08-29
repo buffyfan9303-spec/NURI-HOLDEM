@@ -342,7 +342,7 @@ function ListCard({
         </div>
 
         {/* 2행 — 게임명(최대 2줄) */}
-        <h3 className="mt-1 line-clamp-2 text-[15px] font-bold leading-snug tracking-tight text-ink-primary">
+        <h3 className="mt-1 line-clamp-2 text-sm font-bold leading-snug tracking-tight text-ink-primary">
           {schedule.isPremium && <span className="mr-1 align-middle text-2xs font-extrabold text-accent-200">TOP</span>}
           {schedule.title}
         </h3>
@@ -369,7 +369,7 @@ function ListCard({
       {/* ── 우: BUY-IN 열 — §28 참가비는 상품 가격 정보라 표시 유지 ────────── */}
       <div className="shrink-0 pt-0.5 text-right">
         <p className="text-2xs font-bold leading-none tracking-wider text-ink-muted">BUY-IN</p>
-        <p className="mt-1 text-[15px] font-extrabold tabular-nums leading-none text-ink-primary">
+        <p className="mt-1 text-sm font-extrabold tabular-nums leading-none text-ink-primary">
           {schedule.buyIn.amount > 0 ? schedule.buyIn.amount.toLocaleString() : '—'}
         </p>
         <p className={`mt-1.5 whitespace-nowrap text-2xs font-bold leading-none ${sub ? 'text-gold-300' : 'text-ink-muted'}`}>
@@ -471,10 +471,10 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
             onClick={schedule.venueId ? () => onVenueClick(schedule.venueId) : undefined}
           />
           {distanceKm != null ? (
-            <span className="shrink-0 text-2xs font-bold tabular-nums text-sky-300">📍{fmtKm(distanceKm)}</span>
+            <span className="inline-flex shrink-0 items-center gap-0.5 text-2xs font-bold tabular-nums text-sky-300"><Icon name="map-pin" size={11} className="shrink-0" />{fmtKm(distanceKm)}</span>
           ) : rating && rating.count > 0 ? (
-            <span className="shrink-0 text-2xs font-bold tabular-nums text-accent-200" title={`방문 후기 ${rating.count}건 평균`}>
-              ⭐{rating.avg.toFixed(1)}<span className="font-normal text-ink-muted">({rating.count})</span>
+            <span className="inline-flex shrink-0 items-center gap-0.5 text-2xs font-bold tabular-nums text-accent-200" title={`방문 후기 ${rating.count}건 평균`}>
+              <Icon name="star-fill" size={11} className="shrink-0 text-gold-300" />{rating.avg.toFixed(1)}<span className="font-normal text-ink-muted">({rating.count})</span>
             </span>
           ) : null}
         </div>

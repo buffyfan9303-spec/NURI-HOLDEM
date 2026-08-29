@@ -7,6 +7,7 @@ import type { ReplayData } from '../../lib/hand';
 import { type OutsResult } from './gto/equityEngine';
 import { equityAsync, outsAsync } from './gto/equityClient';
 import type { Card, Rank, Suit } from './gto/gto.types';
+import Icon from '../atoms/Icon';
 
 const STREET_ACT = [['pre', '프리플랍'], ['flop', '플랍'], ['turn', '턴'], ['river', '리버']] as const;
 
@@ -120,7 +121,7 @@ export default function HandReplayer({ replay }: { replay: ReplayData }) {
   return (
     <div className="w-full max-w-md rounded-card border border-border-subtle bg-surface-low p-3 space-y-3 sm:p-4">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-2xs font-extrabold tracking-wide text-accent-300">🎬 핸드 리뷰</span>
+        <span className="inline-flex items-center gap-1 text-2xs font-extrabold tracking-wide text-accent-300"><Icon name="clapperboard" size={12} className="shrink-0" />핸드 리뷰</span>
         <span className="flex items-center gap-2">
           {replay.pot && <span className="text-2xs text-ink-muted">팟 {replay.pot}</span>}
           {hasBoard && total > 0 && (
@@ -146,8 +147,8 @@ export default function HandReplayer({ replay }: { replay: ReplayData }) {
           {on(riverAt) && <CardRow label="리버" cards={river} />}
           {!showAll && step < total && (
             <button type="button" onClick={() => setStep((s) => s + 1)}
-              className="w-full rounded-input border border-accent-400/50 bg-accent-300/10 py-2 text-xs font-bold text-accent-300 hover:bg-accent-300/20 transition-colors">
-              ▶ {nextLabel} — 너라면 어떻게?
+              className="flex w-full items-center justify-center gap-1.5 rounded-input border border-accent-400/50 bg-accent-300/10 py-2 text-xs font-bold text-accent-300 hover:bg-accent-300/20 transition-colors">
+              <Icon name="play" size={13} className="shrink-0" />{nextLabel} — 너라면 어떻게?
             </button>
           )}
           {!showAll && step > 0 && step >= total && (
@@ -201,8 +202,8 @@ export default function HandReplayer({ replay }: { replay: ReplayData }) {
             <div className={['rounded-input border px-2.5 py-2 space-y-1.5',
               outsIsHero ? 'border-emerald-400/25 bg-emerald-500/[0.06]' : 'border-danger/25 bg-danger/[0.06]'].join(' ')}>
               <p className="text-2xs font-bold">
-                <span className={outsIsHero ? 'text-emerald-300' : 'text-danger-light'}>
-                  {outsIsHero ? '🎯 내 아웃츠' : '⚠ 상대 아웃츠'} {showOuts.outs}장
+                <span className={['inline-flex items-center gap-1', outsIsHero ? 'text-emerald-300' : 'text-danger-light'].join(' ')}>
+                  <Icon name={outsIsHero ? 'target' : 'alert'} size={12} className="shrink-0" />{outsIsHero ? '내 아웃츠' : '상대 아웃츠'} {showOuts.outs}장
                 </span>
                 <span className="font-normal text-ink-muted"> · {showOuts.total}장 중 · 다음 {showOuts.next === 'river' ? '리버' : '턴'} 확률 {(showOuts.prob * 100).toFixed(1)}%</span>
               </p>

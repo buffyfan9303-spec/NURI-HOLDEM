@@ -1,5 +1,6 @@
 import Modal from '../atoms/Modal';
 import type { MarketplaceNotice, NoticeType } from '../../api/marketplace';
+import Icon from '../atoms/Icon';
 
 interface NoticeDetailModalProps {
   notice: MarketplaceNotice | null;
@@ -68,8 +69,8 @@ export default function NoticeDetailModal({ notice, open, onClose, isAdmin, onEd
         <div className="pt-2 space-y-2">
           {isAdmin && (onEdit || onDelete) && (
             <div className="flex gap-2">
-              {onEdit && <button type="button" onClick={onEdit} className="btn-ghost flex-1 text-accent-300">✏️ 수정</button>}
-              {onDelete && <button type="button" onClick={() => { if (window.confirm('이 공지사항을 삭제할까요?')) onDelete(); }} className="btn-ghost flex-1 hover:text-danger-light">🗑 삭제</button>}
+              {onEdit && <button type="button" onClick={onEdit} className="btn-ghost inline-flex flex-1 items-center justify-center gap-1.5 text-accent-300"><Icon name="edit" size={14} className="shrink-0" />수정</button>}
+              {onDelete && <button type="button" onClick={() => { if (window.confirm('이 공지사항을 삭제할까요?')) onDelete(); }} className="btn-ghost inline-flex flex-1 items-center justify-center gap-1.5 hover:text-danger-light"><Icon name="trash" size={14} className="shrink-0" />삭제</button>}
             </div>
           )}
           <button type="button" onClick={onClose} className="btn-primary w-full">

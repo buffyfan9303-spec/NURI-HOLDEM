@@ -22,7 +22,7 @@ import type { DeepGtoInit } from './components/features/gto/useDeepGto';
 import type { PosterFormData } from './components/features/PosterFormModal';
 import NuriHoldemLogo from './components/atoms/NuriHoldemLogo';
 import NuriMark from './components/atoms/NuriMark';
-import Icon from './components/atoms/Icon';
+import Icon, { type IconName } from './components/atoms/Icon';
 import ThemeToggle from './components/atoms/ThemeToggle';
 import { useTheme } from './contexts/ThemeContext';
 import { PORTONE_CONFIGURED } from './components/features/IdentityVerificationButton';
@@ -543,9 +543,20 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
   // 스크롤 이벤트가 없어 '문서끝 숨김' 상태가 영구 잔존했다(짧은 탭 복귀는 스크롤 자체가 불가라 더 치명적).
   // 억제창을 함께 세워 직후 복원 스크롤(behavior:'instant')의 거대 dy 오판을 막는다 — 기존 억제창 문법.
   // 오버레이 '열림' 순간에도 리셋: 매장 페이지(z-40)는 탭바(z-50) 아래라 열려 있는 동안 탭바가 보여야 한다.
-  useLayoutEffect(() => {
+  // ⚡ 2026-08-29 계측: 이 이펙트가 **모든 국면의 1위 병목**이었다 —
+  //   모바일 콜드 마운트 207ms · 탭 전환 회당 27ms(PC 110ms / 14ms).
+  //   원인은 useLayoutEffect(= 커밋 직후, 레이아웃이 가장 오염된 시점)에서 window.scrollY 를
+  //   읽어 문서 전체 레이아웃을 그 자리에서 강제한 것이다.
+  //
+  //   페인트 전에 해야 할 일이 실제로 없다:
+  //     · lastY 는 바로 아래 300ms 억제창 때문에 그 사이 어차피 쓰이지 않고,
+  //       첫 스크롤 콜백이 도착하면 즉시 실제 값으로 덮인다 → 0 으로 시작해도 판정이 달라지지 않는다.
+  //     · setHidden(false) 는 탭바를 transform 으로 되돌리는 것이라 한 프레임 뒤여도 눈에 띄지 않는다
+  //       (레이아웃이 아니라 합성 속성이다).
+  //   → useEffect 로 내리고 scrollY 읽기를 없앤다. 동작·연출은 그대로.
+  useEffect(() => {
     suppressUntil.current = performance.now() + 300;
-    tb2Ref.current = { lastY: window.scrollY, acc: 0 };
+    tb2Ref.current = { lastY: 0, acc: 0 };
     setHidden(false);
   }, [active, overlayOpen]);
   useEffect(() => {
@@ -934,11 +945,11 @@ export default function App() {
       .then(async (name) => {
         const streak = await getMyCheckinStreak().catch(() => 0);
         const bonus = streak > 0 && streak % 7 === 0 ? ` · 7일 연속 보너스 +10점!` : '';
-        const fire = streak >= 2 ? ` 🔥 ${streak}일 연속` : '';
+        const fire = streak >= 2 ? ` · ${streak}일 연속` : '';
         // 🎁 오픈 이벤트(~2026-08-03): 출석 도장 2배 — 서버(check_in)와 동일한 KST 날짜 게이트
         const kstToday = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
         const eventOn = kstToday >= '2026-07-20' && kstToday <= '2026-08-03';
-        toast.show(`${name || '매장'} 체크인 완료! 출석 도장 +${eventOn ? '6점 (오픈 이벤트 2배!)' : '3점'}${fire}${bonus} 🎉`, 'success');
+        toast.show(`${name || '매장'} 체크인 완료! 출석 도장 +${eventOn ? '6점 (오픈 이벤트 2배!)' : '3점'}${fire}${bonus}`, 'success');
         // 매장 QR 스캔은 '그 매장에 와 있다'는 뜻 — 홈이 아니라 그 매장 페이지(오늘 대회·내 활동)에 착지
         setOpenVenueId(cv);
       })
@@ -964,7 +975,7 @@ export default function App() {
     url.searchParams.delete('buyin'); url.searchParams.delete('game');
     window.history.replaceState({}, '', url.pathname + url.search + url.hash);
     const submitDirect = (g: number | null) => requestBuyin(bv, g)
-      .then((name) => { toast.show(`${name || '매장'} 참가(바인) 요청 전송! 운영자 승인을 기다려 주세요 🙋`, 'success'); getMyBuyinRequestsToday().then(setMyBuyinReqs).catch(() => {}); })
+      .then((name) => { toast.show(`${name || '매장'} 참가(바인) 요청 전송! 운영자 승인을 기다려 주세요`, 'success'); getMyBuyinRequestsToday().then(setMyBuyinReqs).catch(() => {}); })
       .catch((e) => toast.show(e instanceof Error ? e.message : '요청 전송 실패', 'error'));
     const gNum = gm ? parseInt(gm, 10) : NaN;
     if (Number.isFinite(gNum) && gNum > 0) { submitDirect(gNum); return; } // 게임 지정 QR → 바로 요청
@@ -2281,7 +2292,7 @@ export default function App() {
       {/* 오프라인 배너(Phase 17-5) — 토스트(z-100)와 층 분리, 헤더 위 상시 고정 */}
       {offline && (
         <div role="status" className="sticky top-0 z-[60] flex items-center justify-center gap-1.5 bg-amber-500/95 px-3 py-1.5 text-xs font-bold text-black">
-          <span aria-hidden>📡</span> 오프라인 — 저장된 정보를 보여드려요. 연결되면 자동으로 새로고침합니다.
+          <Icon name="wifi-off" size={14} className="shrink-0" /> 오프라인 — 저장된 정보를 보여드려요. 연결되면 자동으로 새로고침합니다.
         </div>
       )}
       <AppHeader
@@ -2304,7 +2315,7 @@ export default function App() {
       {updateReady && (
         <button type="button" onClick={() => location.reload()}
           className="sticky top-0 z-[59] flex w-full items-center justify-center gap-2 bg-accent-300 px-3 py-2 text-xs font-bold text-white active:opacity-80">
-          🔄 새 버전이 있어요 — 탭하여 새로고침
+          <Icon name="refresh" size={14} className="mr-1 inline-block align-[-2px] shrink-0" />새 버전이 있어요 — 탭하여 새로고침
         </button>
       )}
       {/* 🔔 운영자 푸시 온보딩(설치형·1회) — 새 바인요청 폰 알림 */}
@@ -2317,7 +2328,7 @@ export default function App() {
               : <>예약한 대회 <b className="text-accent-300">1시간 전 리마인더</b>와 이용권 도착을 폰으로 받으세요.</>}
           </p>
           <button type="button" onClick={doEnablePush} className="btn-primary shrink-0 px-3 py-1.5 text-2xs">알림 켜기</button>
-          <button type="button" onClick={dismissPushNudge} aria-label="닫기" className="hit relative shrink-0 px-1 text-ink-muted hover:text-ink-secondary">✕</button>
+          <button type="button" onClick={dismissPushNudge} aria-label="닫기" className="hit relative shrink-0 px-1 text-ink-muted hover:text-ink-secondary"><Icon name="close" size={14} /></button>
         </div>
       )}
 
@@ -2457,7 +2468,7 @@ export default function App() {
             return (
               <div className="px-page-x pt-3">
                 <div className="relative flex items-center gap-2.5 overflow-hidden rounded-card border border-accent-400/45 bg-gradient-to-r from-accent-300/[0.16] via-accent-300/[0.07] to-transparent px-3 py-2.5">
-                  <span className="shrink-0 text-lg" aria-hidden>🎁</span>
+                  <Icon name="gift" size={20} className="shrink-0" />
                   {/* 공지 글이 조회되지 않으면 '자세히 보기'가 무반응 클릭이 된다 — 공지 있을 때만 버튼 문법 */}
                   {evNotice ? (
                     <button
@@ -2811,7 +2822,7 @@ export default function App() {
       {buyinPick && (() => {
         const submit = (g: number | null) => {
           const v = buyinPick.venueId; setBuyinPick(null);
-          requestBuyin(v, g).then((name) => { toast.show(`${name || '매장'} 참가(바인) 요청 전송! 🙋`, 'success'); getMyBuyinRequestsToday().then(setMyBuyinReqs).catch(() => {}); }).catch((e) => toast.show(e instanceof Error ? e.message : '요청 실패', 'error'));
+          requestBuyin(v, g).then((name) => { toast.show(`${name || '매장'} 참가(바인) 요청 전송!`, 'success'); getMyBuyinRequestsToday().then(setMyBuyinReqs).catch(() => {}); }).catch((e) => toast.show(e instanceof Error ? e.message : '요청 실패', 'error'));
         };
         return (
           <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4" onClick={() => setBuyinPick(null)}>
@@ -2822,7 +2833,7 @@ export default function App() {
                 {buyinPick.games.map((g) => (
                   <button key={g.gameSeq} type="button" onClick={() => submit(g.gameSeq)}
                     className="w-full rounded-input border border-accent-400/40 bg-accent-300/[0.06] px-3 py-2.5 text-left text-sm font-bold text-ink-primary hover:bg-accent-300/15">
-                    {g.gameSeq === 1 ? '🏆' : '🎲'} {g.title}
+                    <Icon name={g.gameSeq === 1 ? 'trophy' : 'dice'} size={14} className="mr-1 inline-block align-[-2px] shrink-0" />{g.title}
                   </button>
                 ))}
                 <button type="button" onClick={() => submit(null)}
@@ -3148,7 +3159,13 @@ const BrowseSideRail = memo(function BrowseSideRail({ posts, schedules, onSelect
     .filter((p) => !isBlocked(p.userId) && !p.blinded && (p.viewCount ?? 0) > 0 && Date.now() - new Date(p.createdAt).getTime() < 6 * 3600 * 1000)
     .sort((a, b) => (b.viewCount ?? 0) - (a.viewCount ?? 0))
     .slice(0, 3);
-  const medal = ['👑', '🥈', '🥉'];
+  // 순위 표식 — 이모지는 OS 마다 그림이 달라 1·2·3위의 위계가 기기별로 뒤집혀 보였다.
+  // 색(금·은·동)으로 위계를 주고 글리프는 하나로 통일한다.
+  const medal: { name: IconName; tone: string }[] = [
+    { name: 'crown', tone: 'text-gold-300' },
+    { name: 'medal', tone: 'text-slate-200' },
+    { name: 'medal', tone: 'text-amber-600' },
+  ];
   // 곧 시작 — 오늘 이후 가장 가까운 대회 3개(날짜→시간 순)
   const upcoming = [...schedules]
     .filter((s) => s.approved && s.date >= today)
@@ -3165,7 +3182,7 @@ const BrowseSideRail = memo(function BrowseSideRail({ posts, schedules, onSelect
       {/* 곧 시작하는 대회 — 시간 임박 순 3개 */}
       {upcoming.length > 0 && (
         <section className="reveal overflow-hidden rounded-card border border-border-subtle bg-surface-low">
-          <header className="border-b border-border-subtle px-3 py-2 text-xs font-bold text-ink-secondary">⏰ 곧 시작</header>
+          <header className="flex items-center gap-1 border-b border-border-subtle px-3 py-2 text-xs font-bold text-ink-secondary"><Icon name="alarm" size={13} className="shrink-0" />곧 시작</header>
           <ul>
             {upcoming.map((s) => (
               <li key={s.id} className="border-b border-border-subtle last:border-b-0">
@@ -3190,7 +3207,7 @@ const BrowseSideRail = memo(function BrowseSideRail({ posts, schedules, onSelect
           <ul>
             {kings.map((k, i) => (
               <li key={k.nickname} className="flex items-center gap-2 border-b border-border-subtle px-3 py-2 last:border-b-0">
-                <span aria-hidden className="shrink-0 text-sm leading-none">{medal[i] ?? '🏅'}</span>
+                <Icon name={medal[i]?.name ?? 'medal'} size={15} className={['shrink-0', medal[i]?.tone ?? 'text-ink-muted'].join(' ')} />
                 <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink-primary">{k.nickname}</span>
                 <span className="shrink-0 text-xs tabular-nums text-ink-muted">{k.moneyinCount}회</span>
               </li>
@@ -3202,14 +3219,14 @@ const BrowseSideRail = memo(function BrowseSideRail({ posts, schedules, onSelect
       {/* HOT 게시글 */}
       {hot.length > 0 && (
         <section className="reveal rounded-card border border-danger/25 bg-surface-low overflow-hidden">
-          <header className="border-b border-border-subtle px-3 py-2 text-xs font-bold text-danger-light">🔥 지금 HOT</header>
+          <header className="flex items-center gap-1 border-b border-border-subtle px-3 py-2 text-xs font-bold text-danger-light"><Icon name="flame" size={13} className="shrink-0" />지금 HOT</header>
           <ul>
             {hot.map((p) => (
               <li key={p.id}>
                 <button type="button" onClick={() => onSelectPost(p)}
                   className="flex w-full items-center gap-2 border-b border-border-subtle px-3 py-2 text-left transition-colors last:border-b-0 hover:bg-surface-high/60">
                   <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{p.title || p.content.slice(0, 30)}</span>
-                  <span className="shrink-0 text-xs tabular-nums text-ink-muted">👁{p.viewCount}</span>
+                  <span className="flex shrink-0 items-center gap-0.5 text-xs tabular-nums text-ink-muted"><Icon name="eye" size={12} />{p.viewCount}</span>
                 </button>
               </li>
             ))}
@@ -3219,7 +3236,7 @@ const BrowseSideRail = memo(function BrowseSideRail({ posts, schedules, onSelect
 
       {/* 광고 자리 — 비어 있을 땐 문의 안내(수익 슬롯) */}
       <section className="reveal rounded-card border border-dashed border-border-default bg-surface-low/60 px-3 py-3 text-center">
-        <p className="text-xs font-bold text-ink-secondary">📢 광고 자리</p>
+        <p className="flex items-center gap-1 text-xs font-bold text-ink-secondary"><Icon name="megaphone" size={13} className="shrink-0" />광고 자리</p>
         <p className="mt-0.5 text-2xs leading-relaxed text-ink-muted">이 자리에 매장·브랜드 광고를 게재할 수 있습니다.<br />내 매장 → 포스터 상단 고정 카드에서 문의하세요.</p>
       </section>
     </aside>

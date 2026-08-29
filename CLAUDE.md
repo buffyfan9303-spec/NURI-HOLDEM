@@ -111,12 +111,34 @@ press-spring · `prefers-reduced-motion` 블록 다수
 
 ---
 
-## 디자인 스킬 사용 지침
-- 홀덤 화면 대부분은 **일정 목록·장부·데이터 테이블·다단계 운영 UI**입니다.
-- `redesign-skill`이 이 프로젝트에 맞습니다(감사 후 저위험 순서로 적용: 폰트 → 컬러 → hover/active →
-  레이아웃·여백 → 진부한 컴포넌트 → loading/empty/error → 타이포 스케일).
-- `output-skill`은 제약 없이 병용 가능합니다(코드 생략 방지).
+## 디자인 스킬 사용 지침 (2026-08-29 갱신 — 설치 스킬 전수 확인 후)
+
+홀덤 화면 대부분은 **일정 목록·장부·데이터 테이블·다단계 운영 UI**입니다. 이 성격이 어떤 스킬을
+쓸지를 결정합니다.
+
+### 이 프로젝트에 쓰는 것
+| 스킬 | 언제 |
+|---|---|
+| **`redesign-skill`** | **기본값.** 기존 화면 개선 전반. 감사 후 저위험 순서로: 폰트 → 컬러 → hover/active → 레이아웃·여백 → 진부한 컴포넌트 → loading/empty/error → 타이포 스케일 |
+| **`output-skill`** | 항상 병용 가능. 코드 생략·`// ...나머지 동일` 류 차단 |
+| **`frontend-design`**(공식) | 프런트엔드 일반 지침이 필요할 때 |
+| **`image-to-code-skill`** | **사장님이 스크린샷·목업을 주셨을 때.** 이미지를 먼저 깊이 분석하고 그에 맞춰 구현하는 흐름 — 이 프로젝트는 지시가 대부분 스크린샷으로 오므로 적중률이 높다 |
+| **`brandkit`** | 브랜드 보드·로고 시스템·아이덴티티 덱이 필요할 때(제품 UI 아님) |
+
+### ⚠️ 쓰면 안 되는 것
+- **`taste-skill`** — 스킬 자신이 적용 범위를 이렇게 못박고 있습니다:
+  *"Landing pages, portfolios, and redesigns. **Not dashboards, not data tables, not multi-step
+  product UI.**"* 우리 화면은 정확히 그 "쓰지 말라"는 쪽입니다(일정 표·장부·클락 설정·순위 입력).
+  랜딩 페이지나 소개 페이지를 새로 만들 때만 꺼내세요. 제품 UI에 쓰면 데이터 밀도를 해칩니다.
+- `stitch-skill`은 Google Stitch용 DESIGN.md 생성기라 우리 파이프라인과 무관합니다.
+
+### 스킬보다 먼저인 것
+이 문서의 **모션 헌법(§20.4)과 디자인 토큰이 스킬 지침을 이깁니다.** 스킬이 새 이징·새 duration·
+`transition-all`·상시 `will-change`를 제안하면 그건 따르지 않습니다. 색도 마찬가지로 하드 hex 대신
+`tailwind.config.js`의 토큰을 씁니다(gold·emerald는 테마 고정색이라 라이트에서 규칙이 반대라는 점 주의).
+
 - 새 라이브러리를 import하기 전 `package.json`을 먼저 확인하세요(중복 도입 방지).
+- 라이브러리 문서가 필요하면 **`context7` MCP**(2026-08-29 추가)로 조회할 수 있습니다.
 
 ## 검증
 UI를 바꿨으면 `npm run build`와 `npm run test:e2e`(Playwright 스모크)를 돌립니다.

@@ -2,6 +2,7 @@
 import { supabase, IS_MOCK } from '../lib/supabase';
 import { currentUser } from './_session';
 import { makeSearchCache } from '../lib/searchCache';
+import { dedupe } from '../lib/inflight';
 
 export type UserRole   = 'user' | 'venue_owner' | 'venue_staff' | 'admin';
 // 'withdrawn' = 강제 탈퇴(Stage 3). 정지(suspended)/영구정지(banned)와 구분.
@@ -33,6 +34,9 @@ export interface User {
   realName?: string;        // 인증된 실명(표시명/닉네임과 분리 저장)
   phone?: string;           // 인증된 전화번호
   shadowbanned?: boolean;   // 섀도우밴 — 콘텐츠는 정상이나 활동 랭킹에서만 조용히 제외(운영자 전용)
+  /** 랭킹 프로필 공개 동의(선택). null = 아직 물어본 적 없음(기존 회원·소셜 가입) → 기본 비공개.
+   *  false(거부)와 null(미응답)을 구분해야 나중에 재요청 안내를 거부자에게 다시 띄우지 않는다. */
+  publicRankingConsent?: boolean | null;
 }
 
 export interface LoginPayload { email: string; password: string; }
@@ -43,6 +47,10 @@ export interface ConsentPayload {
   agreedToPrivacy: boolean;      // [필수] 개인정보 수집·이용
   agreedToAntiGambling: boolean; // [필수] 불법 환전·사행성 금지 서약
   agreedToMarketing: boolean;    // [선택] 마케팅 정보 수신
+  /** [선택] 랭킹 프로필 공개 — 닉네임과 '자주 가는 매장'을 순위표에 표시.
+   *  필수로 만들면 안 된다(가입 자체를 막는 동의 강제 = 개인정보보호법 §22⑤ 위반).
+   *  생략(undefined) = 물어보지 않음 → DB 에 NULL(미응답)로 남는다. */
+  publicRankingConsent?: boolean;
 }
 
 export interface SignupUserPayload  extends LoginPayload, ConsentPayload { name: string; nickname: string; }
@@ -83,6 +91,8 @@ function rowToUser(row: any): User {
     realName:       row.real_name ?? undefined,
     phone:          row.phone ?? undefined,
     shadowbanned:   row.shadowbanned === true,
+    // ?? null 로 받는다 — undefined 로 뭉개면 '미응답'과 '컬럼 없음'이 구분되지 않는다.
+    publicRankingConsent: row.public_ranking_consent ?? null,
   };
 }
 
@@ -106,9 +116,13 @@ export async function signIn(email: string, password: string): Promise<User> {
 // 반환: 적립 후(또는 이미 적립된) 활동 점수 총합. 비로그인/실패 시 null.
 export async function claimDailyLoginPoint(): Promise<number | null> {
   if (IS_MOCK) return null;
-  const { data, error } = await supabase.rpc('claim_daily_login_point');
-  if (error) return null;
-  return typeof data === 'number' ? data : null;
+  // 부팅 시 프로필이 두 경로(직접 조회 + onAuthStateChange)로 적용돼 실측 ×2 로 나갔다.
+  // RPC 자체가 KST 하루 1회 멱등 이라 결과는 같지만, 왕복 1회를 아끼고 경합도 없앤다.
+  return dedupe('daily-login-point', async () => {
+    const { data, error } = await supabase.rpc('claim_daily_login_point');
+    if (error) return null;
+    return typeof data === 'number' ? data : null;
+  });
 }
 
 // ── 닉네임 중복 검사 ──────────────────────────────────────────────────────────
@@ -170,6 +184,8 @@ export async function signUpUser(payload: SignupUserPayload): Promise<void> {
       agreed_to_privacy:       payload.agreedToPrivacy,
       agreed_to_anti_gambling: payload.agreedToAntiGambling,
       agreed_to_marketing:     payload.agreedToMarketing,
+      // 선택 동의 — 체크 안 하면 명시적 false(거부). 트리거가 그대로 프로필에 옮긴다.
+      public_ranking_consent:  payload.publicRankingConsent === true,
     } },
   });
   if (error) throw error;
@@ -194,6 +210,7 @@ export async function signUpOwner(payload: SignupOwnerPayload): Promise<void> {
       agreed_to_privacy:       payload.agreedToPrivacy,
       agreed_to_anti_gambling: payload.agreedToAntiGambling,
       agreed_to_marketing:     payload.agreedToMarketing,
+      public_ranking_consent:  payload.publicRankingConsent === true,
       venue_name:      payload.venueName,
       region:          payload.region,
       address:         payload.address,
@@ -250,10 +267,13 @@ export async function setStaffTitle(staffId: string, title: string): Promise<voi
 // 초대받은 회원: 내 대기중 초대 / 수락·거절
 export async function getMyStaffInvites(): Promise<StaffInvite[]> {
   if (IS_MOCK) return [];
-  const { data, error } = await supabase.rpc('get_my_staff_invites');
-  if (error) throw error;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((r: any) => ({ id: r.id, venueId: r.venue_id, venueName: r.venue_name, createdAt: r.created_at }));
+  // 부팅 중 user 참조가 갈릴 때마다 배너가 재조회해 실측 ×4 로 나갔다 — 비행 중이면 합류(lib/inflight)
+  return dedupe('staff-invites', async () => {
+    const { data, error } = await supabase.rpc('get_my_staff_invites');
+    if (error) throw error;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (data ?? []).map((r: any) => ({ id: r.id, venueId: r.venue_id, venueName: r.venue_name, createdAt: r.created_at })) as StaffInvite[];
+  });
 }
 export async function respondStaffInvite(inviteId: string, accept: boolean): Promise<void> {
   if (IS_MOCK) return;
@@ -274,15 +294,19 @@ export async function getMyProfile(): Promise<User | null> {
   const user = await currentUser();
   if (!user) return null;
 
-  const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-  if (!data) return null;
-  const u = rowToUser(data);
-  if (u.role === 'venue_owner') {
-    const { data: v } = await supabase
-      .from('venues').select('verification_status').eq('owner_id', user.id).limit(1).maybeSingle();
-    u.venueVerified = (v as { verification_status?: string } | null)?.verification_status === 'verified';
-  }
-  return u;
+  // 부팅 경로가 둘(초기 조회 + onAuthStateChange)이라 profiles·venues 가 각각 ×2 로 나갔다.
+  // 겹치는 동안에만 합류 — 응답이 오면 키를 버리므로 이후 refreshProfile 은 그대로 새로 조회된다.
+  return dedupe('my-profile:' + user.id, async () => {
+    const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+    if (!data) return null;
+    const u = rowToUser(data);
+    if (u.role === 'venue_owner') {
+      const { data: v } = await supabase
+        .from('venues').select('verification_status').eq('owner_id', user.id).limit(1).maybeSingle();
+      u.venueVerified = (v as { verification_status?: string } | null)?.verification_status === 'verified';
+    }
+    return u;
+  });
 }
 
 // ── 관리자: 전체 회원 목록 ────────────────────────────────────────────────────
@@ -478,6 +502,20 @@ export async function updateMyConsent(consent: ConsentPayload): Promise<void> {
     terms_agreed_at:         consent.agreedToTerms ? new Date().toISOString() : null,
   }).eq('id', user.id);
   if (error) throw error;
+  // 랭킹 공개는 선택 동의라 '물어봤을 때만' 기록한다. 이 게이트를 안 거친 호출부까지
+  // false 로 덮으면 미응답(null)이 거부(false)로 굳어 나중에 다시 물어볼 수 없다.
+  if (typeof consent.publicRankingConsent === 'boolean') {
+    await setMyPublicRankingConsent(consent.publicRankingConsent);
+  }
+}
+
+// ── 랭킹 프로필 공개 동의(선택) — 가입 후 언제든 켜고 끌 수 있는 경로 ─────────
+/** on=true 동의 / false 철회·거부 / null 미응답으로 되돌리기.
+ *  동의 시각은 서버(set_my_public_ranking_consent)가 찍는다 — 분쟁 시 증거라 클라가 쓰지 않는다. */
+export async function setMyPublicRankingConsent(on: boolean | null): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('set_my_public_ranking_consent', { p_on: on });
+  if (error) throw new Error(error.message);
 }
 
 async function rawSearchMembersForRanking(q: string): Promise<{ nickname: string; realName: string; verified: boolean }[]> {

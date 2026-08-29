@@ -3,6 +3,7 @@
 // + 레벨/브레이크 추가 + 자동 생성. 클락(ClockConfig.levels)·프리셋·포스터(structure.levels)에 공통으로 쓰는 ClockLevel[] 생성.
 import { useState } from 'react';
 import { type ClockLevel, generateBlinds, countLevels } from '../../../api/clock';
+import Icon from '../../atoms/Icon';
 
 // index i 까지의 레벨 번호(브레이크 제외)
 function levelNoAt(levels: ClockLevel[], i: number): number {
@@ -66,7 +67,7 @@ export default function BlindLevelsEditor({ levels, onChange }: { levels: ClockL
           <span className="text-2xs text-ink-muted">자동 생성 · 최대</span>
           <input type="number" inputMode="numeric" min="1" max="60" value={genMax || ''} onChange={(e) => setGenMax(+e.target.value || 0)} className="input w-14 text-center text-xs tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
           <span className="text-2xs text-ink-muted">레벨</span>
-          <button type="button" onClick={autoGen} className="rounded-input border border-border-default px-2 py-1 text-2xs font-bold text-ink-secondary hover:text-accent-300">⚙ 자동 생성</button>
+          <button type="button" onClick={autoGen} className="inline-flex items-center gap-1 rounded-input border border-border-default px-2 py-1 text-2xs font-bold text-ink-secondary hover:text-accent-300"><Icon name="settings" size={12} className="shrink-0" />자동 생성</button>
         </div>
       </div>
 

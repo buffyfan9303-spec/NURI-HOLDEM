@@ -20,6 +20,7 @@ import {
   updateVenueImages,
 } from '../../api/community';
 import { uploadVenueImages } from '../../lib/storage';
+import Icon from '../atoms/Icon';
 
 export default function GroupPage({ group, open, onClose }: { group: Venue | null; open: boolean; onClose: () => void }) {
   const { user } = useAuth();
@@ -232,7 +233,7 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
           {/* 멤버 전용 영역 */}
           {!isMember ? (
             <div className="px-page-x py-12 text-center">
-              <p className="text-3xl mb-2">🔒</p>
+              <Icon name="lock" size={34} className="mx-auto mb-2 text-ink-muted" />
               <p className="text-sm font-semibold text-ink-primary">멤버 전용 공간</p>
               <p className="text-2xs text-ink-muted mt-1">가입 후 실시간 채팅과 게시판을 이용할 수 있습니다</p>
             </div>

@@ -2,16 +2,24 @@
 // 미션/뱃지는 코드 규칙(서버 검증은 claim_mission RPC), 리그·전당은 집계 조회.
 import { supabase, IS_MOCK } from './supabase';
 import { currentUser } from '../api/_session';
+import type { IconName } from '../components/atoms/Icon';
+
+// ── 티어·뱃지 글리프를 이모지 → 아이콘으로 (ICON-2, 2026-08-29) ────────────────
+// 이모지는 폰트라 OS 마다 그림이 달라 '사다리'가 무너졌다: 🥈🥇 는 애플에선 금·은이 또렷한데
+// Segoe 에선 둘 다 회색 원반이고, ⚪🟤 는 크기·광택이 제각각이라 등급 서열이 읽히지 않았다.
+// 아이콘 + 토큰 색(tone)으로 옮기면 서열을 앱이 통제한다.
+// ⚠ SHOP_MARKS(상점 마크)만은 이모지를 유지한다 — 닉네임 앞에 **문자열로 결합**돼 유통되는
+//   유저 보유 아이템이라, 글리프를 바꾸면 이미 산 아이템이 다른 물건이 된다.
 
 // ── 주간 리그 ────────────────────────────────────────────────────────────────
 export interface LeagueRow { userId: string; nickname: string; score: number; checkins: number; placements: number }
-export interface LeagueTier { key: string; label: string; emoji: string; min: number }
+export interface LeagueTier { key: string; label: string; icon: IconName; tone: string; min: number }
 export const LEAGUE_TIERS: LeagueTier[] = [
-  { key: 'diamond',  label: '다이아', emoji: '💎', min: 100 },
-  { key: 'platinum', label: '플래티넘', emoji: '🥈', min: 50 },
-  { key: 'goldT',    label: '골드', emoji: '🥇', min: 25 },
-  { key: 'silver',   label: '실버', emoji: '⚪', min: 10 },
-  { key: 'bronze',   label: '브론즈', emoji: '🟤', min: 1 },
+  { key: 'diamond',  label: '다이아',   icon: 'gem',    tone: 'text-sky-300',     min: 100 },
+  { key: 'platinum', label: '플래티넘', icon: 'medal',  tone: 'text-slate-200',   min: 50 },
+  { key: 'goldT',    label: '골드',     icon: 'medal',  tone: 'text-gold-300',    min: 25 },
+  { key: 'silver',   label: '실버',     icon: 'circle', tone: 'text-slate-400',   min: 10 },
+  { key: 'bronze',   label: '브론즈',   icon: 'circle', tone: 'text-amber-700',   min: 1 },
 ];
 export function leagueTierOf(score: number): LeagueTier | null {
   return LEAGUE_TIERS.find((t) => score >= t.min) ?? null;
@@ -105,21 +113,22 @@ export async function claimMission(key: string): Promise<string> {
 }
 
 // ── 업적 뱃지(자동 산출 — 조건 충족 시 즉시 표시) ─────────────────────────────
-export interface BadgeDef { key: string; emoji: string; label: string; desc: string; check: (s: BadgeStats) => boolean }
+export interface BadgeDef { key: string; icon: IconName; tone: string; label: string; desc: string; check: (s: BadgeStats) => boolean }
 export interface BadgeStats { moneyin: number; bestPosition: number; visits: number; streak: number; points: number }
 export const BADGES: BadgeDef[] = [
-  { key: 'first_moneyin', emoji: '🎯', label: '첫 머니인', desc: '대회 순위에 처음 입상', check: (s) => s.moneyin >= 1 },
-  { key: 'moneyin5', emoji: '🔥', label: '머니인 5회', desc: '입상 5회 달성', check: (s) => s.moneyin >= 5 },
-  { key: 'moneyin20', emoji: '⚡', label: '머니인 20회', desc: '입상 20회 달성', check: (s) => s.moneyin >= 20 },
-  { key: 'champion', emoji: '👑', label: '챔피언', desc: '대회 우승(1위) 경험', check: (s) => s.bestPosition === 1 },
-  { key: 'visit5', emoji: '🚪', label: '단골 입문', desc: '매장 체크인 5회', check: (s) => s.visits >= 5 },
-  { key: 'visit20', emoji: '🏠', label: '진성 단골', desc: '매장 체크인 20회', check: (s) => s.visits >= 20 },
-  { key: 'visit50', emoji: '🏆', label: '매장의 기둥', desc: '매장 체크인 50회', check: (s) => s.visits >= 50 },
-  { key: 'streak7', emoji: '🔥', label: '7일 개근', desc: '7일 연속 체크인', check: (s) => s.streak >= 7 },
-  { key: 'streak30', emoji: '🌋', label: '한 달 개근', desc: '30일 연속 체크인', check: (s) => s.streak >= 30 },
-  { key: 'pts1000', emoji: '⭐', label: '활동가', desc: '활동점수 1,000점', check: (s) => s.points >= 1000 },
-  { key: 'pts5000', emoji: '🌟', label: '헤비유저', desc: '활동점수 5,000점', check: (s) => s.points >= 5000 },
-  { key: 'pts14000', emoji: '💫', label: '레전드', desc: '활동점수 14,000점(K)', check: (s) => s.points >= 14000 },
+  // 같은 계열은 같은 글리프 + 다른 tone 으로 '사다리'를 만든다(개근 2단, 활동점수 3단).
+  { key: 'first_moneyin', icon: 'target',         tone: 'text-accent-300',  label: '첫 머니인', desc: '대회 순위에 처음 입상', check: (s) => s.moneyin >= 1 },
+  { key: 'moneyin5',      icon: 'flame',          tone: 'text-danger-light',label: '머니인 5회', desc: '입상 5회 달성', check: (s) => s.moneyin >= 5 },
+  { key: 'moneyin20',     icon: 'zap',            tone: 'text-amber-300',   label: '머니인 20회', desc: '입상 20회 달성', check: (s) => s.moneyin >= 20 },
+  { key: 'champion',      icon: 'crown',          tone: 'text-gold-300',    label: '챔피언', desc: '대회 우승(1위) 경험', check: (s) => s.bestPosition === 1 },
+  { key: 'visit5',        icon: 'door',           tone: 'text-sky-300',     label: '단골 입문', desc: '매장 체크인 5회', check: (s) => s.visits >= 5 },
+  { key: 'visit20',       icon: 'home',           tone: 'text-emerald-300', label: '진성 단골', desc: '매장 체크인 20회', check: (s) => s.visits >= 20 },
+  { key: 'visit50',       icon: 'store',          tone: 'text-gold-300',    label: '매장의 기둥', desc: '매장 체크인 50회', check: (s) => s.visits >= 50 },
+  { key: 'streak7',       icon: 'calendar-check', tone: 'text-sky-300',     label: '7일 개근', desc: '7일 연속 체크인', check: (s) => s.streak >= 7 },
+  { key: 'streak30',      icon: 'calendar-check', tone: 'text-gold-300',    label: '한 달 개근', desc: '30일 연속 체크인', check: (s) => s.streak >= 30 },
+  { key: 'pts1000',       icon: 'star',           tone: 'text-accent-300',  label: '활동가', desc: '활동점수 1,000점', check: (s) => s.points >= 1000 },
+  { key: 'pts5000',       icon: 'star-fill',      tone: 'text-accent-200',  label: '헤비유저', desc: '활동점수 5,000점', check: (s) => s.points >= 5000 },
+  { key: 'pts14000',      icon: 'sparkles',       tone: 'text-gold-300',    label: '레전드', desc: '활동점수 14,000점(K)', check: (s) => s.points >= 14000 },
 ];
 export async function getMyBadgeStats(nickname: string | null, points: number): Promise<BadgeStats> {
   const empty: BadgeStats = { moneyin: 0, bestPosition: 9999, visits: 0, streak: 0, points };
@@ -169,6 +178,7 @@ export async function getMonthlyHall(): Promise<{ label: string; rows: HallRow[]
 }
 
 // ── 포인트 상점(코스메틱 마크) — 활동점수 '도달'로 해금(차감 없음 → 등급 영향 없음) ──
+// 상점 마크만 이모지 유지 — 닉네임에 문자열로 결합돼 유통되는 유저 보유 아이템이다(위 주석 참조).
 export interface ShopMark { key: string; emoji: string; name: string; need: number; desc: string }
 export const SHOP_MARKS: ShopMark[] = [
   { key: 'spade_white', emoji: '♤', name: '화이트 스페이드', need: 100,   desc: '첫 걸음 — 100점 도달' },
@@ -197,6 +207,15 @@ export async function setEquippedMark(key: string | null): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
-/** 마크 키 → 이모지(없으면 빈 문자열) */
+/**
+ * 마크 키 → 이모지(없으면 빈 문자열)
+ *
+ * ⚠ 이 함수를 새로 쓰지 마라 — `src/lib/shopMarks.ts` 의 `markEmoji` 를 쓸 것.
+ *   상점 마크가 6종에서 16종으로 늘어나면서 소비처가 전부 shopMarks 로 옮겨갔는데,
+ *   이 함수는 여기 있는 **기존 6종만** 안다. 확장 마크(10종)를 넘기면 예외 없이
+ *   **빈 문자열을 돌려줘 마크가 조용히 사라진다** — 유저에겐 '산 게 없어진' 것으로 보인다.
+ *   지금 소비처가 0이라 지우는 게 맞지만, 되돌릴 수 있게 남겨 두고 경고만 박아 둔다.
+ *   (2026-08-29 검증에서 발견)
+ */
 export const markEmojiOf = (key?: string | null): string =>
   key ? (SHOP_MARKS.find((m) => m.key === key)?.emoji ?? '') : '';

@@ -14,7 +14,8 @@ function json(obj: unknown, status = 200): Response {
   return new Response(JSON.stringify(obj), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 }
 
-const MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+// v6: 체인 끝에 -latest 별칭 추가 — 앞의 둘이 은퇴해도 스스로 살아남게(1.5 은퇴 사고 재발 방지).
+const MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-flash-latest'];
 
 interface ImgPart { mime: string; data: string }
 

@@ -11,6 +11,7 @@ import { generateBlinds } from '../../api/clock';
 import { applyToPoster, presetFromPosterForm } from '../../lib/gameInherit';
 import { saveGamePreset, type GamePreset } from '../../api/presets';
 import PresetPicker from './PresetPicker';
+import Icon from '../atoms/Icon';
 
 interface PosterFormModalProps {
   open: boolean;
@@ -300,7 +301,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
         {/* ── 지난 포스터 불러오기(신규 전용) — 전 필드 자동 채움, 날짜만 새로 ── */}
         {!isEdit && loadCandidates.length > 0 && (
           <div className="rounded-card border border-accent-400/30 bg-accent-300/[0.06] p-3">
-            <label htmlFor={pastPosterId} className="mb-1.5 block text-sm font-bold text-accent-300">📋 지난 포스터 불러오기</label>
+            <label htmlFor={pastPosterId} className="mb-1.5 flex items-center gap-1.5 text-sm font-bold text-accent-300"><Icon name="clipboard" size={15} className="shrink-0" />지난 포스터 불러오기</label>
             <select
               id={pastPosterId}
               value=""

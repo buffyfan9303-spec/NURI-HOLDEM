@@ -192,7 +192,7 @@ export default function PosterCarousel({ schedules, onSelect, onBanner }: {
             )}
             <span className={['absolute inset-y-0 right-5 flex flex-col justify-center', b.logo ? 'left-[150px]' : 'left-6'].join(' ')}>
               <span className="font-display text-xl font-extrabold leading-tight" style={{ color: b.titleColor }}>{b.title}</span>
-              <span className="mt-1 text-[13px] font-medium" style={{ color: b.subColor }}>{b.sub}</span>
+              <span className="mt-1 t-desc font-medium" style={{ color: b.subColor }}>{b.sub}</span>
             </span>
           </>
         ) : (
@@ -215,7 +215,7 @@ export default function PosterCarousel({ schedules, onSelect, onBanner }: {
                 className="absolute inset-x-0 bottom-0 px-4 pb-2.5 pt-8"
                 style={{ background: 'linear-gradient(to top, rgba(6,8,11,0.92) 25%, transparent)' }}
               >
-                <span className="block truncate text-[15px] font-bold text-white">{s.title}</span>
+                <span className="block truncate text-sm font-bold text-white">{s.title}</span>
                 {s.sub && (
                   <span className="block truncate text-xs tabular-nums text-white/70">{s.sub}</span>
                 )}
@@ -242,9 +242,51 @@ export default function PosterCarousel({ schedules, onSelect, onBanner }: {
     // 터치 제스처 시작 시점의 scrollLeft — 음수 = 진행 중 제스처 없음.
     // 랩이 제스처 도중 되감으면 같은 ±half 로 동보정해 '시작 카드' 좌표를 랩 좌표계에 유지한다.
     let touchBase = -1;
+
+    // ── 기하 캐시(2026-08-29 실측) — scrollWidth·clientWidth 를 스크롤 핫패스에서 걷어낸다 ──
+    // wrap 은 **캐러셀 스크롤 이벤트마다** scrollWidth/clientWidth 를 읽었다. 자동 트윈이 매
+    // 프레임 scrollLeft 를 '쓰고' 그 직후 스크롤 이벤트가 같은 프레임에서 scrollWidth 를 '읽으니'
+    // 전형적인 write→read 스래싱이다(계측: 탭 전환 구간 트윈 프레임 자체 39.5ms/모바일 375 CPU4x).
+    //
+    // 그래서 '변한 적이 있을 때만' 다시 잰다(geoDirty). 값 자체는 예전과 같은 수치라
+    // 랩 임계·스텝 타깃·플릭 클램프 계산은 한 글자도 안 바뀐다.
+    //
+    // ⚠ 관찰자 콜백 '안에서' 재기하지 않는다 — 1차 시도에서 MutationObserver 콜백(마이크로태스크,
+    //   커밋 직후라 레이아웃이 가장 더러운 순간)에서 clientWidth 를 읽었더니 콜드 마운트 강제
+    //   레이아웃이 모바일 209→252ms 로 **역전**됐다. 관찰자는 플래그만 세우고, 실제 측정은
+    //   예전과 같은 자리(스텝 틱·wrap·touchend)에서 지연 실행한다 → 읽기 횟수가 예전 이하로만 간다.
+    const track = vp.firstElementChild as HTMLElement | null;
+    let vpW = 0;      // = 예전 vp.clientWidth
+    let trackW = 0;   // = 예전 vp.scrollWidth
+    let cardW = 0;    // = 예전 vp.querySelector('button').getBoundingClientRect().width
+    let geoDirty = true;
+    const markGeoDirty = () => { geoDirty = true; };
+    const geo = () => {
+      if (!geoDirty) return;
+      geoDirty = false;
+      vpW = vp.clientWidth;
+      trackW = vp.scrollWidth;
+      cardW = vp.querySelector<HTMLElement>('button')?.getBoundingClientRect().width || 0;
+    };
+    // 스크롤러 크기 변화(리사이즈·회전·PC 캡 전환·탭 keep-alive 로 0↔실폭) → RO.
+    // ⚠ 트랙은 flex 오버플로라 슬라이드가 늘어도 자기 박스 크기는 안 변한다 → RO 로는 못 잡는다.
+    //   슬라이드 개수 변화(포스터 도착)는 MutationObserver(childList)로 잡는다.
+    let ro: ResizeObserver | undefined;
+    if ('ResizeObserver' in window) {
+      ro = new ResizeObserver(markGeoDirty);
+      ro.observe(vp);
+    }
+    let mo: MutationObserver | undefined;
+    if (track && 'MutationObserver' in window) {
+      mo = new MutationObserver(markGeoDirty);
+      mo.observe(track, { childList: true });
+    }
+    window.addEventListener('resize', markGeoDirty);
+
     const wrap = () => {
-      const half = vp.scrollWidth / 2;
-      const w = vp.clientWidth; // 카드 폭 = clientWidth(w-full) — 스크롤 이벤트 핫패스라 실측 대신 이걸 쓴다
+      geo();
+      const half = trackW / 2;
+      const w = vpW; // 카드 폭 = clientWidth(w-full) — 스크롤 이벤트 핫패스라 실측 대신 이걸 쓴다
       if (half <= w) return;
       // ⚠ 우측 랩 임계 = half + 카드 1장 — 풀폭 전환으로 half 가 정확히 카드·snap 경계가 되면서
       //   구식 (>=half → −half) ↔ (<=0 → +half) 짝은 0↔half 를 서로 되던지는 무한 스크롤 이벤트
@@ -304,9 +346,10 @@ export default function PosterCarousel({ schedules, onSelect, onBanner }: {
       if (e.touches.length > 0 || touchBase < 0) return;
       const base = touchBase;
       touchBase = -1;
-      const half = vp.scrollWidth / 2;
-      const w = vp.querySelector<HTMLElement>('button')?.getBoundingClientRect().width || vp.clientWidth;
-      if (!w || half <= vp.clientWidth) return;
+      geo();
+      const half = trackW / 2;
+      const w = cardW || vpW;
+      if (!w || half <= vpW) return;
       const delta = vp.scrollLeft - base;
       const dir = Math.abs(delta) < w * 0.12 ? 0 : Math.sign(delta);
       let from = vp.scrollLeft;
@@ -332,8 +375,9 @@ export default function PosterCarousel({ schedules, onSelect, onBanner }: {
     // 자동 스텝은 reduced-motion 이면 없음(수동 스크롤 + 플릭 클램프만 — 클램프도 instant 세트)
     const step = reduced ? 0 : window.setInterval(() => {
       if (document.hidden || performance.now() < pauseUntil) return;
-      if (vp.scrollWidth / 2 <= vp.clientWidth) return;
-      const w = vp.querySelector<HTMLElement>('button')?.getBoundingClientRect().width || vp.clientWidth;
+      geo();
+      if (trackW / 2 <= vpW) return;
+      const w = cardW || vpW;
       if (!w) return; // 탭 keep-alive 로 display:none 인 동안은 0 — 스텝 무의미
       // 유저가 손으로 어중간하게 세워도 다음 카드 '경계'로 정렬해 이동(스냅 감각).
       // ⚠ round(≠floor): snap 정착점이 경계 ±서브픽셀이라 floor 는 '경계-ε'에서
@@ -351,6 +395,9 @@ export default function PosterCarousel({ schedules, onSelect, onBanner }: {
     return () => {
       if (step) window.clearInterval(step);
       cancelTween();
+      ro?.disconnect();
+      mo?.disconnect();
+      window.removeEventListener('resize', markGeoDirty);
       vp.removeEventListener('scroll', wrap);
       vp.removeEventListener('touchstart', onTouchStart);
       vp.removeEventListener('touchend', onTouchEnd);

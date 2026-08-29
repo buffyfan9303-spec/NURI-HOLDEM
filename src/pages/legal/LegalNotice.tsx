@@ -1,15 +1,17 @@
 // src/pages/legal/LegalNotice.tsx
 // 사행성 배제 및 건전 이용 공지 — 게임산업진흥에 관한 법률 §32 반영
 
+import Icon, { type IconName } from '../../components/atoms/Icon';
+
 const EFFECTIVE_DATE = '2026년 6월 15일';
 
 function Section({ icon, title, children }: {
-  icon: string; title: string; children: React.ReactNode;
+  icon: IconName; title: string; children: React.ReactNode;
 }) {
   return (
     <section className="mb-5">
       <h3 className="flex items-center gap-2 text-sm font-bold text-accent-300 mb-2">
-        <span aria-hidden>{icon}</span>{title}
+        <Icon name={icon} size={15} className="shrink-0" />{title}
       </h3>
       <div className="space-y-2 text-xs text-ink-secondary leading-relaxed">{children}</div>
     </section>
@@ -77,7 +79,7 @@ export default function LegalNotice() {
 
       {/* 서비스 성격 명시 */}
       <div className="mb-5 p-3 rounded-input bg-accent-300/10 border border-accent-400/30">
-        <p className="text-xs text-accent-300 font-semibold mb-1">📋 NURI HOLDEM 서비스 성격</p>
+        <p className="flex items-center gap-1.5 text-xs text-accent-300 font-semibold mb-1"><Icon name="clipboard" size={14} className="shrink-0" />NURI HOLDEM 서비스 성격</p>
         <p className="text-xs text-ink-secondary leading-relaxed">
           본 서비스는 <strong className="text-ink-primary">전국 홀덤 토너먼트 일정 정보 제공 플랫폼</strong>입니다.
           홀덤 포커는 「국민체육진흥법」상 마인드 스포츠로, 등록된 홀덤 펍에서의 합법적 토너먼트
@@ -85,7 +87,7 @@ export default function LegalNotice() {
         </p>
       </div>
 
-      <Section icon="🚫" title="금지 행위 (위반 시 즉시 제재)">
+      <Section icon="ban" title="금지 행위 (위반 시 즉시 제재)">
         <BanList items={[
           {
             label: '불법 현금 환전 (칩·시트권·게임머니)',
@@ -106,7 +108,7 @@ export default function LegalNotice() {
         ]} />
       </Section>
 
-      <Section icon="⚖️" title="위반 행위 제재 기준">
+      <Section icon="scale" title="위반 행위 제재 기준">
         <p>위반 행위 적발 시 아래 기준에 따라 제재가 적용됩니다.</p>
         <PenaltyTable />
         <p className="text-ink-muted mt-2">
@@ -114,7 +116,7 @@ export default function LegalNotice() {
         </p>
       </Section>
 
-      <Section icon="🔞" title="건전 이용 안내">
+      <Section icon="shield-alert" title="건전 이용 안내">
         <ul className="space-y-1 text-ink-muted">
           {[
             '본 서비스는 만 19세 미만 청소년은 이용할 수 없습니다.',
@@ -129,7 +131,7 @@ export default function LegalNotice() {
         </ul>
       </Section>
 
-      <Section icon="📞" title="신고 및 문의">
+      <Section icon="phone" title="신고 및 문의">
         <p>
           불법 환전 시도, 사행 행위 의심 게시물, 피해 사례 등을 발견하신 경우
           아래 채널을 통해 즉시 신고해 주세요. 신고자의 신원은 철저히 보호됩니다.
@@ -146,7 +148,7 @@ export default function LegalNotice() {
         </div>
       </Section>
 
-      <Section icon="📌" title="관련 법령 근거">
+      <Section icon="pin" title="관련 법령 근거">
         <ul className="space-y-1 text-ink-muted">
           {[
             '게임산업진흥에 관한 법률 제28조, 제32조, 제44조',
@@ -162,7 +164,7 @@ export default function LegalNotice() {
         </ul>
       </Section>
 
-      <Section icon="🏢" title="사업자 정보">
+      <Section icon="building" title="사업자 정보">
         <div className="p-3 rounded-input bg-surface-high border border-border-default space-y-1">
           {[
             ['상호', '엔에이치홀딩스'],

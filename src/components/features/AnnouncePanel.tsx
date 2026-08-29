@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useToast } from '../atoms/Toast';
 import { getVenueAnnounceStatus, sendVenueAnnouncement, type AnnounceStatus } from '../../api/announcements';
+import Icon from '../atoms/Icon';
 
 export default function AnnouncePanel({ venueId }: { venueId: string }) {
   const toast = useToast();
@@ -31,15 +32,16 @@ export default function AnnouncePanel({ venueId }: { venueId: string }) {
   return (
     <section className="rounded-card border border-border-default bg-surface-low p-4 space-y-2.5">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-sm font-bold text-ink-primary">📢 팔로워에게 알림 보내기</h3>
+        <h3 className="flex items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="megaphone" size={15} className="shrink-0" />팔로워에게 알림 보내기</h3>
         <span className="text-2xs text-ink-muted">팔로워 <b className="text-accent-300">{status.followers}</b> · 오늘 {status.sentToday}/3</span>
       </div>
       <p className="text-2xs leading-relaxed text-ink-muted">새 대회 등록·D-1 리마인더는 자동 발송돼요.</p>
       <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={60} placeholder="제목 (예: 오늘 8시 GTD 500!)" className="input w-full text-sm" />
-      <textarea value={message} onChange={(e) => setMessage(e.target.value)} maxLength={200} rows={2} placeholder="내용 (예: 마감 임박! 지금 예약하세요 🔥)" className="input w-full resize-none text-sm" />
+      <textarea value={message} onChange={(e) => setMessage(e.target.value)} maxLength={200} rows={2} placeholder="내용 (예: 마감 임박! 지금 예약하세요)" className="input w-full resize-none text-sm" />
       <button type="button" onClick={send} disabled={busy || remaining === 0 || status.followers === 0}
         className="btn-primary w-full text-sm disabled:opacity-50">
-        {status.followers === 0 ? '아직 팔로워가 없어요' : remaining === 0 ? '오늘 발송 한도 소진(3/3)' : busy ? '발송 중…' : `📤 ${status.followers}명에게 발송 · ${remaining}회 남음`}
+        {status.followers === 0 ? '아직 팔로워가 없어요' : remaining === 0 ? '오늘 발송 한도 소진(3/3)' : busy ? '발송 중…'
+          : <span className="inline-flex items-center gap-1.5"><Icon name="send" size={15} className="shrink-0" />{`${status.followers}명에게 발송 · ${remaining}회 남음`}</span>}
       </button>
     </section>
   );

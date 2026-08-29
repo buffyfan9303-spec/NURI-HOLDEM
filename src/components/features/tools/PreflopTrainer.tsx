@@ -11,6 +11,7 @@ import { RANGE_SCENARIOS } from '../../../lib/ranges.data';
 import { HAND_ORDER, nashRange } from '../../../lib/nash.data';
 import { freqFromArray } from '../../../lib/ranges';
 import { useTrainerProgress, recordAnswer, setDailyGoal, GOAL_CHOICES } from '../../../lib/trainerProgress';
+import Icon from '../../atoms/Icon';
 
 type Mode = 'rfi' | 'push';
 const PUSH_POS: { k: number; label: string }[] = [
@@ -149,7 +150,7 @@ export default function PreflopTrainer() {
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-3 text-2xs">
             <span className="text-ink-muted">오늘 <b className="text-ink-primary tabular-nums">{prog.today}/{prog.goal}</b></span>
-            <span className="text-ink-muted" title={`스트릭 프리즈 ${prog.freezes}개 보유`}>🔥 <b className="text-accent-200 tabular-nums">{prog.streak}</b></span>
+            <span className="inline-flex items-center gap-1 text-ink-muted" title={`스트릭 프리즈 ${prog.freezes}개 보유`}><Icon name="flame" size={11} className="shrink-0" /><b className="text-accent-200 tabular-nums">{prog.streak}</b></span>
             <span className="text-ink-muted">XP <b className="text-ink-secondary tabular-nums">{prog.xp.toLocaleString()}</b></span>
           </div>
           <div className="inline-flex items-center gap-1">
@@ -163,7 +164,7 @@ export default function PreflopTrainer() {
         <div className="h-1.5 overflow-hidden rounded-full bg-surface-high">
           <div className={['h-full rounded-full', prog.goalMet ? 'bg-emerald-400' : 'bg-accent-300'].join(' ')} style={{ width: `${prog.goal ? Math.min(100, Math.round((prog.today / prog.goal) * 100)) : 0}%` }} />
         </div>
-        {prog.goalMet && <p className="text-2xs text-emerald-300">🎉 오늘 목표 달성 — 스트릭 🔥{prog.streak}일 유지 중</p>}
+        {prog.goalMet && <p className="inline-flex items-center gap-1 text-2xs text-emerald-300"><Icon name="check-circle" size={12} className="shrink-0" />오늘 목표 달성 — 스트릭 <Icon name="flame" size={11} className="shrink-0" />{prog.streak}일 유지 중</p>}
       </div>
 
       {/* 문제 카드 */}
@@ -192,13 +193,13 @@ export default function PreflopTrainer() {
         <div className="space-y-2">
           {celebrate && (
             <div className="animate-fade-in rounded-card border border-emerald-400/50 bg-emerald-500/10 p-3 text-center">
-              <p className="text-base font-extrabold text-emerald-300">🎉 오늘 목표 달성!</p>
-              <p className="mt-0.5 text-2xs text-ink-secondary">+50 XP 보너스 · 스트릭 🔥{prog.streak}일</p>
+              <p className="flex items-center justify-center gap-1.5 text-base font-extrabold text-emerald-300"><Icon name="check-circle" size={17} className="shrink-0" />오늘 목표 달성!</p>
+              <p className="mt-0.5 inline-flex items-center gap-1 text-2xs text-ink-secondary">+50 XP 보너스 · 스트릭 <Icon name="flame" size={11} className="shrink-0" />{prog.streak}일</p>
             </div>
           )}
           <div className={['rounded-card border p-3 text-center', result.correct ? 'border-emerald-400/50 bg-emerald-500/10' : 'border-danger/50 bg-danger/10'].join(' ')}>
-            <p className={['text-base font-extrabold', result.correct ? 'text-emerald-300' : 'text-danger-light'].join(' ')}>
-              {result.correct ? '✅ 정답!' : '❌ 아쉬워요'}
+            <p className={['flex items-center justify-center gap-1.5 text-base font-extrabold', result.correct ? 'text-emerald-300' : 'text-danger-light'].join(' ')}>
+              <Icon name={result.correct ? 'check-circle' : 'close'} size={17} className="shrink-0" />{result.correct ? '정답!' : '아쉬워요'}
             </p>
             <p className="mt-1 text-xs text-ink-secondary">
               {quiz.posLabel} <b className="text-ink-primary">{quiz.hand}</b> 권장:{' '}

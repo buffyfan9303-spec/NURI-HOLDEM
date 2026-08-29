@@ -2,6 +2,7 @@
 import { supabase, IS_MOCK } from '../lib/supabase';
 import { currentUser } from './_session';
 import type { UserRole } from './auth';
+import { dedupe } from '../lib/inflight';
 
 // 매장 상태 (관리자 게시물 관리) — active 외에는 공개 목록에서 숨김. 모두 active로 복구 가능.
 export type VenueStatus = 'active' | 'inactive' | 'suspended' | 'hidden';
@@ -1092,10 +1093,12 @@ export async function getMyFollowedVenueIds(): Promise<string[]> {
   if (IS_MOCK) return [];
   const user = await currentUser();
   if (!user) return [];
-  const { data, error } = await supabase.from('venue_follows').select('venue_id').eq('user_id', user.id);
-  if (error) throw error;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((r: any) => r.venue_id);
+  return dedupe('followed-venues:' + user.id, async () => {
+    const { data, error } = await supabase.from('venue_follows').select('venue_id').eq('user_id', user.id);
+    if (error) throw error;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (data ?? []).map((r: any) => r.venue_id) as string[];
+  });
 }
 export async function followVenue(venueId: string): Promise<void> {
   if (IS_MOCK) return;
@@ -1194,11 +1197,12 @@ export async function getEquippedMarks(userIds: string[]): Promise<Record<string
   if (IS_MOCK || userIds.length === 0) return {};
   const { data, error } = await supabase.rpc('get_equipped_marks', { p_ids: userIds });
   if (error) return {};
-  const { SHOP_MARKS } = await import('../lib/loyalty');
+  // 확장 마크(shopMarks.ALL_MARKS)까지 인식해야 새 마크가 닉네임 앞에 표시된다
+  const { ALL_MARKS } = await import('../lib/shopMarks');
   const out: Record<string, string> = {};
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const r of (data ?? []) as any[]) {
-    const emoji = SHOP_MARKS.find((m) => m.key === r.equipped_mark)?.emoji;
+    const emoji = ALL_MARKS.find((m) => m.key === r.equipped_mark)?.emoji;
     if (emoji) out[r.id] = emoji + ' ';
   }
   return out;
@@ -1238,4 +1242,101 @@ export async function addVenueOwner(venueId: string, nickname: string): Promise<
 export async function removeVenueOwner(venueId: string, userId: string): Promise<void> {
   const { error } = await supabase.rpc('remove_venue_owner', { p_venue_id: venueId, p_user_id: userId });
   if (error) throw new Error(error.message);
+}
+
+// ── 외치기(Shout) — 활동점수로 사는 커뮤니티 강조 메시지 (오너 #8) ───────────
+//
+// 설계 요약(자세한 근거는 supabase/migrations/20260829h_community_shouts.sql 주석):
+//  · 차감 대상은 activity_points 가 아니라 spent_points 다.
+//    activity_points 는 등급·활동 순위·상점 마크 해금의 기준이라 깎으면 '샀는데 등급이 내려가고
+//    장착 중이던 마크가 다시 잠기는' 회귀가 생긴다. 그래서 누적은 보존하고 사용액만 쌓는다.
+//    사용 가능 점수 = activity_points - spent_points.
+//  · 차감과 게시는 buy_shout() RPC 한 트랜잭션에서 함께 일어난다(둘 중 하나만 되는 상태가 없다).
+//  · 중복 클릭·잔액 부족·도배는 전부 서버가 막는다(프로필 행 잠금 + 쿨다운 + 하루 상한).
+
+export interface Shout {
+  id: string; userId: string; nickname: string; message: string;
+  cost: number; createdAt: string; expiresAt: string;
+}
+export interface ShoutRules {
+  cost: number; cooldownMinutes: number; dailyCap: number;
+  maxLen: number; minLen: number; ttlHours: number;
+}
+export interface PointBalance { total: number; spent: number; available: number }
+
+/** 외치기 규칙(가격·쿨다운·길이 한도) — 서버가 단일 출처, 클라이언트는 표시만 한다 */
+export async function getShoutRules(): Promise<ShoutRules> {
+  // ⚠ 서버 shout_rules() 와 반드시 같은 값이어야 한다. 폴백이 낮으면 화면은 30점이라 말하고
+  //   서버는 200점을 걷는다 — 유저에게 거짓말이 된다. 가격을 바꿀 땐 여기까지 같이 바꿀 것.
+  //   (2026-08-29 오너 지시로 30 → 200: 하루 획득량 실측 ≈45~50점 기준 '나흘치')
+  const fallback: ShoutRules = { cost: 200, cooldownMinutes: 10, dailyCap: 3, maxLen: 60, minLen: 2, ttlHours: 6 };
+  if (IS_MOCK) return fallback;
+  const { data, error } = await supabase.rpc('shout_rules');
+  const r = Array.isArray(data) ? data[0] : data;
+  if (error || !r) return fallback;
+  return {
+    cost: r.cost ?? fallback.cost,
+    cooldownMinutes: r.cooldown_minutes ?? fallback.cooldownMinutes,
+    dailyCap: r.daily_cap ?? fallback.dailyCap,
+    maxLen: r.max_len ?? fallback.maxLen,
+    minLen: r.min_len ?? fallback.minLen,
+    ttlHours: r.ttl_hours ?? fallback.ttlHours,
+  };
+}
+
+/** 내 활동점수 잔액(누적/사용/사용 가능) */
+export async function getMyPointBalance(): Promise<PointBalance | null> {
+  if (IS_MOCK) return null;
+  const { data, error } = await supabase.rpc('my_point_balance');
+  const r = Array.isArray(data) ? data[0] : data;
+  if (error || !r) return null;
+  return { total: r.total ?? 0, spent: r.spent ?? 0, available: r.available ?? 0 };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mapShout = (r: any): Shout => ({
+  id: r.id, userId: r.user_id, nickname: r.nickname ?? '회원', message: r.message ?? '',
+  cost: r.cost ?? 0, createdAt: r.created_at, expiresAt: r.expires_at,
+});
+
+/** 지금 살아있는 외침(만료·숨김 제외) — 최신순 */
+export async function getLiveShouts(limit = 10): Promise<Shout[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase
+    .from('community_shouts')
+    .select('id, user_id, nickname, message, cost, created_at, expires_at')
+    .eq('hidden', false)
+    .gt('expires_at', new Date().toISOString())
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) return [];
+  return (data ?? []).map(mapShout);
+}
+
+/** 구매 = 차감 + 게시(원자적). 실패 사유는 서버 메시지를 그대로 올린다. */
+export async function buyShout(message: string): Promise<Shout> {
+  const { data, error } = await supabase.rpc('buy_shout', { p_message: message });
+  if (error) throw new Error(error.message);
+  const r = Array.isArray(data) ? data[0] : data;
+  if (!r) throw new Error('외치기에 실패했습니다');
+  return mapShout(r);
+}
+
+/** 내리기 — 작성자 본인 또는 운영자(환급 없음) */
+export async function hideShout(id: string): Promise<void> {
+  const { error } = await supabase.rpc('hide_shout', { p_id: id });
+  if (error) throw new Error(error.message);
+}
+
+/** 운영자 — 만료·숨김 포함 최근 외침(RLS 가 admin 에게만 전량 노출) */
+export async function adminListShouts(limit = 50): Promise<(Shout & { hidden: boolean })[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase
+    .from('community_shouts')
+    .select('id, user_id, nickname, message, cost, created_at, expires_at, hidden')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(error.message);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({ ...mapShout(r), hidden: r.hidden === true }));
 }

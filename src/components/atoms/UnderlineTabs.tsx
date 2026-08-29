@@ -26,9 +26,11 @@ export default function UnderlineTabs<T extends string>({
             data-pill-active={on || undefined}
             onClick={() => onChange(it.key)}
             className={[
-              'relative flex-1 font-medium transition-colors focus:outline-none',
-              size === 'md' ? 'py-3 text-sm' : 'py-2 text-xs',
-              on ? 'text-accent-300' : 'text-ink-muted hover:text-ink-secondary',
+              'relative flex-1 transition-colors focus:outline-none',
+              // §T1 타이포 스케일: md=1단계 내비(t-nav) / sm=서브탭(t-tab)
+              size === 'md' ? 'py-3 t-nav' : 'py-2 t-tab',
+              // §T1 탭 굵기 규격: 비활성 600(t-* 기본) / 활성 700
+              on ? 'font-bold text-accent-300' : 'text-ink-muted hover:text-ink-secondary',
             ].join(' ')}
           >
             {it.label}

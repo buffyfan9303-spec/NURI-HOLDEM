@@ -5,6 +5,7 @@ import Modal from '../atoms/Modal';
 import type { Venue, CommunityPost } from '../../api/community';
 import type { Schedule } from '../../api/schedules';
 import type { MarketplaceListing, MarketplaceNotice } from '../../api/marketplace';
+import Icon from '../atoms/Icon';
 
 interface Props {
   open: boolean;
@@ -78,8 +79,8 @@ export default function GlobalSearchModal({ open, onClose, venues, schedules, po
               <ul className="space-y-1">{recents.map((r) => (
                 <li key={r} className="flex items-center gap-1">
                   <button type="button" onClick={() => setQ(r)}
-                    className="min-w-0 flex-1 truncate rounded-input px-2.5 py-2 text-left text-sm text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
-                    🕐 {r}
+                    className="flex min-w-0 flex-1 items-center gap-1.5 rounded-input px-2.5 py-2 text-left text-sm text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
+                    <Icon name="clock" size={14} className="shrink-0 text-ink-muted" /><span className="truncate">{r}</span>
                   </button>
                   <button type="button" onClick={() => removeRecent(r)} aria-label={`'${r}' 삭제`}
                     className="hit h-9 w-9 shrink-0 rounded-input text-ink-muted hover:text-danger-light transition-colors">✕</button>

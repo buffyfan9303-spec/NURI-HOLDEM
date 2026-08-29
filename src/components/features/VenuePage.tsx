@@ -1,4 +1,6 @@
-import { useState, useEffect, useRef, useMemo, type ReactNode } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, type ReactNode } from 'react';
+import { flushSync } from 'react-dom';
+import { withViewTransition } from '../../lib/viewTransition';
 import { Map, MapMarker, useKakaoLoader } from 'react-kakao-maps-sdk';
 import CommentThread from './CommentThread';
 import RotiArenaLogo from '../atoms/RotiArenaLogo';
@@ -83,7 +85,7 @@ export default function VenuePage({
   onSubmitComment, onDeleteComment, onUpdateDescription, onUpdateImage, onUpdateImages,
   onSelectSchedule, onOpenWallet,
 }: VenuePageProps) {
-  const [tab, setTab] = useState<Tab>('about');
+  const [tab, setTabState] = useState<Tab>('about');
   const { user, isApprovedOwner } = useAuth();
   const toast = useToast();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -131,6 +133,32 @@ export default function VenuePage({
     return () => { alive = false; };
   }, [venue?.id]);
   const orderedTabs = tabOrder ?? TABS;
+
+  /**
+   * 탭 전환에 방향성 View Transition 을 건다(2026-08-29 오너 지적:
+   * "대메뉴 아래 소메뉴들에 부드러운 모션이 아무것도 적용이 안 되어 있다").
+   * 여태 setTab 만 불러서 내용이 즉시 갈아끼워졌다 — 대메뉴·커뮤니티 서브탭과 문법이 달랐다.
+   *
+   * 조리법은 CommunityTab.setSection 과 동일하게 맞춘다:
+   *   ① 진열 순서로 forward/back 을 정해 밀리는 방향이 손가락 방향과 맞게 하고
+   *   ② 전환 동안만 탭바에 자기 스냅샷 이름을 줘(vtScope) 본문만 크로스페이드되게 한다.
+   *      상시 name 이면 페이지를 닫을 때 탭바 스냅샷이 얼어붙는 잔상이 생긴다(실측된 함정).
+   *   ③ 마커 해제는 전환 duration(--dur-panel)보다 넉넉히 뒤에서 — new 캡처가 끝난 뒤여야 한다.
+   */
+  const setTab = useCallback((next: Tab) => {
+    if (next === tab) return;                       // 같은 탭 재탭 — 무의미한 스냅샷 방지
+    const from = orderedTabs.indexOf(tab);
+    const to = orderedTabs.indexOf(next);
+    document.documentElement.dataset.vtScope = 'venue-tab';
+    withViewTransition(
+      () => { flushSync(() => setTabState(next)); },
+      () => setTabState(next),                      // 미지원·모션축소 — 즉시 전환(기존 동작)
+      to >= from ? 'forward' : 'back',
+    );
+    window.setTimeout(() => {
+      if (document.documentElement.dataset.vtScope === 'venue-tab') delete document.documentElement.dataset.vtScope;
+    }, 450);
+  }, [tab, orderedTabs]);
 
   // 배경 스크롤 잠금 (페이지가 열려있는 동안) — 뷰포트 스크롤러는 html이라 공용 유틸 사용
   useEffect(() => {
@@ -194,10 +222,13 @@ export default function VenuePage({
     try {
       const name = await checkIn(venue!.id);
       const streak = await getMyCheckinStreak().catch(() => 0);
-      const fire = streak >= 2 ? ` 🔥 ${streak}일 연속` : '';
+      // ICON-2(오너 지시 2026-08-29): 토스트는 문자열만 받으므로 아이콘을 넣을 수 없다 →
+      // 이모지를 그냥 뺀다. 'success' 톤(초록)이 이미 축하 신호라 🎉 는 중복이었고,
+      // 🔥 는 OS 마다 다른 그림으로 떠서 통제가 안 됐다(같은 이유로 본문 전역에서 제거).
+      const fire = streak >= 2 ? ` · ${streak}일 연속` : '';
       const bonus = streak > 0 && streak % 7 === 0 ? ' · 7일 연속 보너스 +10점!' : '';
       // 16-4 성공 = 다음 여정의 출발점: 오늘 대회가 있으면 바로 열어볼 수 있게.
-      toast.show(`${name || venue!.name} 체크인 완료! 출석 도장 +3점${fire}${bonus} 🎉`, 'success',
+      toast.show(`${name || venue!.name} 체크인 완료! 출석 도장 +3점${fire}${bonus}`, 'success',
         todayPosters.length > 0 ? { action: { label: '오늘 대회 보기', onClick: () => onSelectSchedule?.(todayPosters[0]) } } : undefined);
       setMyAct((cur) => (cur ? { ...cur, streak } : { streak, visits: 0 }));
     } catch (e) { toast.show(e instanceof Error ? e.message : '체크인 실패', 'error'); }
@@ -222,7 +253,11 @@ export default function VenuePage({
       style={{ animationDuration: '0.25s' }}
     >
       {/* ── 최상단: 뒤로가기 헤더 ──────────────────────────────────────── */}
-      <header className="shrink-0 sticky top-0 z-30 flex items-center h-header-h px-page-x bg-surface-base border-b border-border-subtle">
+      {/* 헤더 배경·구분선은 전폭(상시 크롬), 내용물은 본문과 같은 중앙 컬럼(max-w-3xl)에 정렬한다.
+          PC 실측 2026-08-29: 헤더만 full-bleed 라 1440 에서 [뒤로]는 화면 맨 왼쪽, [팔로우·공유]는
+          맨 오른쪽, 본문은 가운데 768px — 시선이 세 갈래로 찢어졌다. 폭만 맞추면 한 축으로 모인다. */}
+      <header className="shrink-0 sticky top-0 z-30 h-header-h bg-surface-base border-b border-border-subtle">
+        <div className="mx-auto flex h-full w-full max-w-3xl items-center px-page-x">
         <button
           type="button"
           onClick={onClose}
@@ -242,13 +277,13 @@ export default function VenuePage({
         {/* Phase 10: 팔로우·공유를 헤더로 — 히어로는 '지금 필요한 행동' 4개만 남긴다 */}
         <div className="ml-auto flex shrink-0 items-center gap-1">
           <FollowButton venueId={venue.id} followerCount={venue.followerCount} compact />
+          {/* 공유 글리프는 손으로 그린 인라인 SVG(stroke 1.9)였다 — 옆 아이콘(stroke 2)과 굵기가
+              갈려 '아이콘이 섞여 보이는' 원인이었다. 레지스트리 share 로 통일(ICON-2). */}
           <button type="button" onClick={shareVenue} aria-label="매장 링크 공유"
             className="hit w-9 h-9 flex items-center justify-center rounded-full text-ink-secondary hover:text-ink-primary hover:bg-surface-high transition-colors">
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
-              <path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4" />
-            </svg>
+            <Icon name="share" size={17} />
           </button>
+        </div>
         </div>
       </header>
 
@@ -279,11 +314,12 @@ export default function VenuePage({
         {/* 매장 아이덴티티 — 오버랩 로고 아바타 + 중앙 정렬 + 3-스탯 행(오너 레퍼런스 2026-08-27).
             대표 이미지(image_url)를 원형 아바타로 재사용 — 새 fetch 0. 스탯 행은 비인터랙티브라
             venue-ia 첫 뷰포트 행동 예산(≤6)에 셈되지 않는다. */}
-        <div className="px-page-x pb-4 border-b border-border-subtle">
+        <div className="px-page-x pb-3 border-b border-border-subtle">
           {/* relative: HeroSection(positioned)이 static 아바타 위에 페인트돼 로고 상반이
-              히어로에 가려 반원으로 잘렸다(PC 점검 2026-08-28) — 오버랩 의도(-mt-9·border 링)대로 위로 */}
-          <div className="relative -mt-9 mb-2 flex justify-center">
-            <div className="h-[72px] w-[72px] shrink-0 overflow-hidden rounded-full border-4 border-surface-base bg-surface-high shadow-dialog">
+              히어로에 가려 반원으로 잘렸다(PC 점검 2026-08-28) — 오버랩 의도(-mt-8·border 링)대로 위로.
+              72→64px: 375×667 실측에서 Tier1 행동 행이 하단 탭바에 덮여 있었다(아래 주석 참조). */}
+          <div className="relative -mt-8 mb-1.5 flex justify-center">
+            <div className="h-16 w-16 shrink-0 overflow-hidden rounded-full border-4 border-surface-base bg-surface-high shadow-dialog">
               {venue.imageUrl ? (
                 <img src={thumbUrl(venue.imageUrl, 144) ?? venue.imageUrl} alt="" className="h-full w-full object-cover" />
               ) : (
@@ -292,7 +328,7 @@ export default function VenuePage({
             </div>
           </div>
           <div className="flex flex-col items-center text-center">
-            <div className="mb-1.5 flex flex-wrap items-center justify-center gap-1.5">
+            <div className="mb-1 flex flex-wrap items-center justify-center gap-1.5">
               <span className="inline-flex items-center px-2 py-[3px] leading-none text-2xs font-semibold rounded-badge bg-surface-high text-ink-secondary">
                 {venue.region}
               </span>
@@ -303,20 +339,34 @@ export default function VenuePage({
               )}
             </div>
             <h2 className="text-xl font-bold text-ink-primary">{venue.name}</h2>
-            {venue.address && <p className="mt-1 text-xs text-ink-muted">{venue.address}</p>}
+            {/* 주소·영업시간은 '갈까 말까'의 1차 판단 재료다 — muted(보조 톤)에서 secondary 로 올리고,
+                여태 AboutPanel 접힌 섹션에만 있던 **영업시간을 첫 화면으로 승격**한다.
+                (실측 2026-08-29: 손님은 '지금 문 열었나'를 탭 이동 + 아코디언 펼치기 2단계 뒤에야 알 수 있었다.
+                 데이터는 기존 venue.businessHours 그대로 — 새 fetch 0, 없는 매장은 줄 자체가 안 생긴다.) */}
+            {venue.address && <p className="mt-1 text-xs text-ink-secondary">{venue.address}</p>}
+            {venue.businessHours && (
+              <p className="mt-0.5 inline-flex items-center gap-1 text-2xs text-ink-muted">
+                <Icon name="clock" size={12} className="shrink-0" />
+                <span className="whitespace-pre-line">{venue.businessHours}</span>
+              </p>
+            )}
             {/* 카카오톡 링크는 Tier1 행동 행 + '매장 정보'(AboutPanel) — 아이덴티티 블록은 비인터랙티브 유지 */}
           </div>
-          {/* 3-스탯 행 — 팔로워 · 후기 · 오늘 대회 (아이콘 위 / 숫자 / 라벨 아래, 세로 구분선) */}
-          <div className="mt-3 grid grid-cols-3 divide-x divide-border-subtle rounded-card border border-border-subtle bg-surface-low py-2.5">
+          {/* 3-스탯 행 — 팔로워 · 후기 · 오늘 대회.
+              아이콘을 숫자 위에서 **숫자 옆으로** 옮겨 3줄(53px)을 2줄(34px)로 접었다. 정보는 동일하고
+              세로만 줄어든다 — 그 19px 이 아래 Tier1 행동 행을 하단 탭바 위로 끌어올리는 데 쓰인다. */}
+          <div className="mt-2.5 grid grid-cols-3 divide-x divide-border-subtle rounded-card border border-border-subtle bg-surface-low py-2">
             {([
               { icon: 'users' as const, value: (venue.followerCount ?? 0).toLocaleString(), label: '팔로워' },
               { icon: 'star' as const, value: rating && rating.count > 0 ? `${rating.avg.toFixed(1)} (${rating.count})` : '—', label: '방문 후기' },
               { icon: 'trophy' as const, value: String(todayPosters.length), label: '오늘 대회' },
             ]).map((s) => (
-              <div key={s.label} className="flex flex-col items-center gap-0.5">
-                <Icon name={s.icon} size={15} className="text-ink-muted" />
-                <span className="text-sm font-bold tabular-nums text-ink-primary">{s.value}</span>
-                <span className="text-2xs text-ink-muted">{s.label}</span>
+              <div key={s.label} className="flex flex-col items-center">
+                <span className="flex items-center gap-1">
+                  <Icon name={s.icon} size={13} className="text-ink-muted" />
+                  <span className="text-sm font-bold tabular-nums text-ink-primary">{s.value}</span>
+                </span>
+                <span className="mt-0.5 text-2xs text-ink-muted">{s.label}</span>
               </div>
             ))}
           </div>
@@ -327,16 +377,19 @@ export default function VenuePage({
             찾아가는(길찾기)' 것이다 — 스크롤 없이 첫 화면에 있어야 한다. PokerAtlas·러너러너·와홀덤·apis
             4개 서비스 공통으로 최상단은 '지금 무슨 게임이 도는가'다. 존재하는 데이터만 렌더.
             행동 예산(venue-ia ≤6): 체크인+전화+길찾기+카카오=4 + 헤더 팔로우·공유=6 — 여기에 더 추가 금지. */}
-        <div className="px-page-x py-3 border-b border-border-subtle space-y-2.5">
+        <div className="px-page-x py-2.5 border-b border-border-subtle space-y-2">
           {todayPosters.length > 0 && (() => {
             const t0 = todayPosters[0];
             const st = scheduleStatus(t0.date, t0.startTime);
             return (
               <button type="button" onClick={() => onSelectSchedule?.(t0)}
                 className="w-full flex items-center gap-2.5 rounded-card border border-accent-400/30 bg-accent-300/[0.06] px-3 py-2.5 text-left hover:bg-accent-300/10 transition-colors">
-                <span className="shrink-0 text-lg" aria-hidden>🔥</span>
+                <Icon name="flame" size={18} className="shrink-0 text-accent-200" />
                 <span className="min-w-0 flex-1">
-                  <span className="block text-2xs font-bold text-accent-300">
+                  {/* 다크에서 accent-300(#805FDA) 은 surface-base 대비 4.0:1 로 AA 미달이었다(실측).
+                      accent-200 은 다크 6.94 · 라이트 5.87 로 양 테마를 통과한다(index.css 의
+                      html.light .text-accent-200 오버라이드가 라이트에서 같은 보라를 유지). */}
+                  <span className="block text-2xs font-bold text-accent-200">
                     오늘의 대회{todayPosters.length > 1 ? ` 외 ${todayPosters.length - 1}건` : ''}
                   </span>
                   <span className="block truncate text-sm font-bold text-ink-primary">{t0.title}</span>
@@ -351,44 +404,83 @@ export default function VenuePage({
               </button>
             );
           })()}
-          <div className="flex gap-2">
+          {/* ⚠ 375·390 실측(2026-08-29): 이 행은 `flex gap-2` 한 줄이었는데 4개 버튼의 최소 폭 합이
+              438px 이라 375 뷰포트에서 scrollWidth 457 > clientWidth 375 — **카카오톡 버튼이 화면 밖으로
+              잘려 나가 있었다**(오너가 직접 지목한 행이다). 버튼을 줄이거나 라벨을 깎는 대신
+              위계대로 2행으로 쌓는다: 프라이머리(QR 체크인)는 전폭, 보조 3개는 균등 분할.
+              행동 개수는 그대로 4개 — 행동 예산(체크인·전화·길찾기·카카오 + 헤더 팔로우·공유 = 6)은 불변.
+              보조 행은 `flex` + `flex-1` 이라 전화·주소가 없는 매장에서도 남은 것끼리 자동 균등이 된다
+              (grid-cols-3 고정이면 빈 칸이 생긴다). */}
+          <div className="space-y-2">
             <button type="button" onClick={openQrScan} disabled={checkinBusy} data-coach="venue-checkin"
-              className="btn-primary h-11 flex-1 text-sm font-bold disabled:opacity-60">
-              {checkinBusy ? '체크인 중…' : '📍 QR 체크인'}
+              className="btn-primary h-11 w-full text-sm font-bold disabled:opacity-60">
+              <Icon name="map-pin" size={16} className="-mt-px" />
+              {checkinBusy ? '체크인 중…' : 'QR 체크인'}
             </button>
+            <div className="flex gap-2">
             {venue.contactPhone && (
               <a href={`tel:${venue.contactPhone}`}
-                className="inline-flex h-11 items-center gap-1 rounded-input border border-border-default bg-surface-high px-3.5 text-sm font-semibold text-ink-secondary hover:text-ink-primary transition-colors">
-                <span aria-hidden>📞</span> 전화
+                className="inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-input border border-border-default bg-surface-high px-2 text-sm font-semibold text-ink-secondary hover:text-ink-primary transition-colors">
+                <Icon name="phone" size={16} className="shrink-0" /> 전화
               </a>
             )}
             {venue.address && (
               <a href={`https://map.kakao.com/link/search/${encodeURIComponent(venue.address)}`}
                 target="_blank" rel="noopener noreferrer"
-                className="inline-flex h-11 items-center gap-1 rounded-input border border-border-default bg-surface-high px-3.5 text-sm font-semibold text-ink-secondary hover:text-ink-primary transition-colors">
-                <span aria-hidden>🗺</span> 길찾기
+                className="inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-input border border-border-default bg-surface-high px-2 text-sm font-semibold text-ink-secondary hover:text-ink-primary transition-colors">
+                <Icon name="map" size={16} className="shrink-0" /> 길찾기
               </a>
             )}
-            {/* 카카오톡 오픈채팅 — 링크가 있을 때만(전화·길찾기와 같은 규격, 브랜드 노랑은 점 하나로 절제) */}
-            {kakao && (
+            {/* 카카오톡 — 2026-08-29 오너 지시로 **링크가 없어도 항상 보인다**.
+                예전엔 링크가 있을 때만 렌더해서, 등록하지 않은 매장에선 버튼이 통째로 사라졌다
+                → 업주는 그런 기능이 있는 줄 모르고, 손님은 자리가 비어 행동 4개 정렬이 무너졌다.
+                이제 자리는 늘 지키고 상태만 달라진다:
+                  · 링크 있음        → 새 탭으로 채팅방
+                  · 없음 + 업주 본인 → 바로 등록 프롬프트(발견 → 설정이 한 번에)
+                  · 없음 + 손님      → 왜 못 여는지 말해 준다(무반응 클릭 금지)
+
+                ⚠ 2026-08-29 손님 케이스를 버튼 → **비인터랙티브 칩**으로 바꿨다. 종전에는 눌러야
+                  '아직 등록 안 했어요' 토스트가 떴다 — 즉 손님에게 이 버튼은 눌러도 아무 데도 못 가는,
+                  '없다'는 사실만 알려 주는 컨트롤이었다. 그건 행동이 아니라 상태다. 라벨에 '미등록'을
+                  적으면 **누르기 전에** 같은 사실을 알 수 있어 '무반응 클릭 금지' 의도에 더 충실하고,
+                  첫 뷰포트 행동 예산(≤6, venue-ia 게이트)도 가짜 행동으로 채우지 않게 된다.
+                  자리(오너 지시의 핵심)는 그대로 지킨다 — 업주 본인에게는 여전히 등록 버튼이다. */}
+            {kakao ? (
               <a href={kakao} target="_blank" rel="noopener noreferrer"
-                className="inline-flex h-11 items-center gap-1.5 rounded-input border border-border-default bg-surface-high px-3.5 text-sm font-semibold text-ink-secondary hover:text-ink-primary transition-colors">
+                className="inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-input border border-border-default bg-surface-high px-2 text-sm font-semibold text-ink-secondary hover:text-ink-primary transition-colors">
                 <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-[#FEE500]" /> 카카오톡
               </a>
+            ) : isMyVenue ? (
+              <button
+                type="button"
+                onClick={editKakao}
+                aria-label="카카오톡 채팅방 링크 등록"
+                className="inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-input border border-dashed border-accent-400/50 bg-accent-300/[0.06] px-2 text-sm font-semibold text-accent-200 transition-colors hover:bg-accent-300/10">
+                <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-[#FEE500]" /> 카카오톡 등록
+              </button>
+            ) : (
+              <span
+                className="inline-flex h-11 min-w-0 flex-1 flex-col items-center justify-center rounded-input border border-dashed border-border-default bg-surface-high/60 px-2 text-center leading-none text-ink-muted">
+                <span className="inline-flex items-center gap-1.5 text-sm font-semibold">
+                  <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-[#FEE500]/45" />카카오톡
+                </span>
+                <span className="mt-0.5 text-2xs">미등록</span>
+              </span>
             )}
+            </div>
           </div>
           <CoachMark id="venue-checkin">체크인하면 출석 도장 · 전적 인정 · 방문 후기가 열려요 — 하루 한 번이면 충분해요.</CoachMark>
           {user && myAct && (myAct.streak > 0 || myAct.visits > 0) && (
-            <p className="text-2xs text-ink-muted tabular-nums">
-              {myAct.streak > 0 && <>🔥 연속 출석 <b className="text-ink-secondary">{myAct.streak}일</b></>}
-              {myAct.streak > 0 && myAct.visits > 0 && ' · '}
+            <p className="flex items-center gap-1 text-2xs text-ink-muted tabular-nums">
+              {myAct.streak > 0 && <><Icon name="flame" size={13} className="shrink-0" />연속 출석 <b className="text-ink-secondary">{myAct.streak}일</b></>}
+              {myAct.streak > 0 && myAct.visits > 0 && <span aria-hidden>·</span>}
               {myAct.visits > 0 && <>이 매장 방문 <b className="text-ink-secondary">{myAct.visits}회</b></>}
             </p>
           )}
         </div>
 
         {/* ── Sticky 탭바 ─────────────────────────────────────────── */}
-        <div className="sticky top-0 z-20 bg-surface-base border-b border-border-subtle">
+        <div data-venue-tabbar className="sticky top-0 z-20 bg-surface-base border-b border-border-subtle">
           <div className="relative grid grid-cols-5 lg:flex">
             <SlidingPill activeKey={tab} underline className="rounded-full bg-accent-300" />
             {orderedTabs.map((t) => {
@@ -402,8 +494,11 @@ export default function VenuePage({
                   data-pill-active={active || undefined}
                   role="tab"
                   className={[
-                    'lg:flex-1 whitespace-nowrap px-0.5 lg:px-2 py-3 text-[13px] lg:text-sm font-medium transition-colors text-center relative',
-                    active ? 'text-accent-300' : 'text-ink-muted hover:text-ink-secondary',
+                    // §T1: 모바일 13px 는 사다리 밖 → text-xs(12.75). PC 는 페이지 주 탭이라 text-sm 유지.
+                    'lg:flex-1 whitespace-nowrap px-0.5 lg:px-2 py-3 text-xs lg:text-sm transition-colors text-center relative',
+                    // §T1 탭 굵기 규격: 비활성 600 / 활성 700. 굵기는 한쪽만 준다(semibold+bold 동시 지정 시 semibold 가 이긴다).
+                    // 활성 색 accent-300 → accent-200: 다크에서 4.0:1(AA 미달)이던 것이 6.94:1 로 올라간다(실측).
+                    active ? 'font-bold text-accent-200' : 'font-semibold text-ink-muted hover:text-ink-secondary',
                   ].join(' ')}
                 >
                   {TAB_LABEL[t]}
@@ -445,18 +540,24 @@ export default function VenuePage({
                   처음 온 사용자는 이 블록 자체가 DOM 에 없다(display:none 이 아니라 미렌더).
                   게이트: 로그인 + 활동 이력(연속출석 또는 이 매장 방문 기록). */}
               {user && myAct && (myAct.streak > 0 || myAct.visits > 0) && (
-                <details className="reveal group rounded-card border border-border-subtle overflow-hidden">
-                  <summary className="cursor-pointer list-none flex items-center justify-between px-3 py-2.5 text-sm font-semibold text-ink-primary hover:bg-surface-high/50 transition-colors">
-                    <span>🙋 내 활동</span><span className="text-xs text-ink-muted transition-transform group-open:rotate-180" aria-hidden>▾</span>
+                // data-testid: 이 블록의 존재 여부를 e2e(venue-ia)가 확인한다. 종전 셀렉터는
+                // `text=🙋 내 활동` 으로 **이모지에 결합**돼 있었다 — 아이콘으로 바꾸는 순간
+                // 항상 0건이 되어 게이트가 조용히 무력화된다. 같은 커밋에서 testid 로 교체(규약).
+                <details data-testid="venue-my-activity" className="reveal group rounded-card border border-border-subtle overflow-hidden">
+                  <summary className="cursor-pointer list-none flex items-center justify-between gap-2 px-3 py-3 text-sm font-semibold text-ink-primary hover:bg-surface-high/50 transition-colors">
+                    <span className="inline-flex items-center gap-1.5"><Icon name="hand" size={16} className="text-ink-muted" />내 활동</span>
+                    <Icon name="chevron-down" size={16} className="shrink-0 text-ink-muted transition-transform group-open:rotate-180" />
                   </summary>
                   <div className="border-t border-border-subtle divide-y divide-border-subtle">
                     <button type="button" onClick={onOpenWallet}
-                      className="w-full flex items-center justify-between px-3 py-2.5 text-sm text-ink-secondary hover:text-ink-primary hover:bg-surface-high/50 transition-colors">
-                      <span>🎟 이용권 · 포인트 관리</span><span className="text-ink-muted" aria-hidden>›</span>
+                      className="w-full flex items-center justify-between gap-2 px-3 py-3 text-sm text-ink-secondary hover:text-ink-primary hover:bg-surface-high/50 transition-colors">
+                      <span className="inline-flex items-center gap-1.5"><Icon name="ticket" size={16} className="text-ink-muted" />이용권 · 포인트 관리</span>
+                      <Icon name="chevron-right" size={16} className="shrink-0 text-ink-muted" />
                     </button>
                     <button type="button" onClick={() => setTab('ranking')}
-                      className="w-full flex items-center justify-between px-3 py-2.5 text-sm text-ink-secondary hover:text-ink-primary hover:bg-surface-high/50 transition-colors">
-                      <span>🏅 시즌 순위 · 명예의 전당</span><span className="text-ink-muted" aria-hidden>›</span>
+                      className="w-full flex items-center justify-between gap-2 px-3 py-3 text-sm text-ink-secondary hover:text-ink-primary hover:bg-surface-high/50 transition-colors">
+                      <span className="inline-flex items-center gap-1.5"><Icon name="medal" size={16} className="text-ink-muted" />시즌 순위 · 명예의 전당</span>
+                      <Icon name="chevron-right" size={16} className="shrink-0 text-ink-muted" />
                     </button>
                   </div>
                 </details>
@@ -589,9 +690,12 @@ function HeroSection({
     setIdx(0);
   };
 
+  // 히어로 높이 176→144px(모바일). 375×667 실측에서 첫 화면 세로 예산의 28%를 히어로가 먹었고,
+  // 그 결과 Tier1 행동 행(QR 체크인·전화·길찾기·카카오)이 하단 탭바 뒤로 밀려 가려져 있었다.
+  // 사진의 존재감이 유지되는 최소선까지만 줄인다(sm 이상은 화면이 크므로 완만하게).
   return (
     <div
-      className="relative w-full overflow-hidden h-44 sm:h-52 md:h-60"
+      className="relative w-full overflow-hidden h-36 sm:h-48 md:h-56"
       onTouchStart={slides.length > 1 ? onTouchStart : undefined}
       onTouchEnd={slides.length > 1 ? onTouchEnd : undefined}
     >
@@ -738,7 +842,7 @@ function VenueCommunitySection({ venueId, canManage, board }: { venueId: string;
       <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5">
         {(['chat', 'board'] as const).map((t) => (
           <button key={t} type="button" onClick={() => setSub(t)}
-            className={['flex-1 py-1.5 text-xs font-bold rounded-[6px] transition-colors',
+            className={['hit flex-1 py-1.5 text-xs font-bold rounded-[6px] transition-colors',
               sub === t ? 'bg-accent-300 text-white' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
             {t === 'chat' ? '실시간 채팅' : '게시판'}
           </button>
@@ -784,7 +888,7 @@ function VenueChat({ venueId, canManage }: { venueId: string; canManage: boolean
   return (
     <div className="space-y-2">
       <ul ref={listRef} className="space-y-1.5 max-h-[55vh] overflow-y-auto">
-        {messages.length === 0 ? <p className="py-8 text-center text-2xs text-ink-muted">이 매장의 첫 메시지를 남겨보세요</p> : messages.map((m) => (
+        {messages.length === 0 ? <li className="py-8 text-center text-2xs text-ink-muted">이 매장의 첫 메시지를 남겨보세요</li> : messages.map((m) => (
           <li key={m.id} className="flex items-start gap-2">
             <Avatar name={m.userName} color={m.userColor} size={24} className="mt-0.5" />
             <div className="flex-1 min-w-0">
@@ -792,7 +896,7 @@ function VenueChat({ venueId, canManage }: { venueId: string; canManage: boolean
                 <span className="font-semibold text-ink-primary truncate">{m.userName}</span>
                 <span className="text-ink-muted ml-auto shrink-0">{relativeTime(m.createdAt)}</span>
                 {(canManage || m.userId === user?.id) && (
-                  <button type="button" onClick={() => deleteVenueMessage(m.id).then(() => setMessages((p) => p.filter((x) => x.id !== m.id))).catch(() => {})} aria-label="삭제" className="shrink-0 text-ink-muted hover:text-danger-light">×</button>
+                  <button type="button" onClick={() => deleteVenueMessage(m.id).then(() => setMessages((p) => p.filter((x) => x.id !== m.id))).catch(() => {})} aria-label="삭제" className="hit shrink-0 text-ink-muted hover:text-danger-light"><Icon name="close" size={12} /></button>
                 )}
               </div>
               <p className="text-xs text-ink-primary leading-snug mt-0.5 break-words whitespace-pre-wrap">{m.content}</p>
@@ -847,13 +951,15 @@ function SeasonLeaderBanner({ venueId, onRanking }: { venueId: string; onRanking
     // ⚠ 이 속성은 '페이지 내부 탭 전환만 하는 요소'에만 허용 — 다른 행동 버튼에 붙이면 게이트 무력화다.
     <button type="button" onClick={onRanking} data-nav="venue-tab"
       className="flex w-full items-center gap-2.5 rounded-card border border-accent-400/30 bg-accent-300/[0.06] px-3 py-2.5 text-left transition-colors hover:border-accent-400/50 active:scale-[0.99]">
-      <span className="text-lg" aria-hidden>👑</span>
+      {/* 종전엔 👑 과 🏆 두 이모지가 같은 카드에 겹쳐 있었다(같은 뜻을 두 번). 왕관 하나만 아이콘으로
+          남기고 헤드라인의 트로피는 뺀다 — gold 톤이 이미 '1등'을 말한다. */}
+      <Icon name="crown" size={20} className="shrink-0 text-gold-300" />
       <div className="min-w-0 flex-1">
-        <p className="text-2xs font-bold text-gold-300">🏆 현 시즌 선두 · {leader.seasonName}</p>
+        <p className="text-2xs font-bold text-gold-300">현 시즌 선두 · {leader.seasonName}</p>
         <p className="truncate text-sm font-bold text-ink-primary">{leader.nickname}{leader.realName ? <span className="text-2xs font-normal text-ink-muted"> ({leader.realName})</span> : null}</p>
       </div>
-      <span className="shrink-0 text-sm font-bold tabular-nums text-accent-300">{leader.points}점</span>
-      <span className="shrink-0 text-2xs text-ink-muted" aria-hidden>›</span>
+      <span className="shrink-0 text-sm font-bold tabular-nums text-accent-200">{leader.points}점</span>
+      <Icon name="chevron-right" size={14} className="shrink-0 text-ink-muted" />
     </button>
   );
 }
@@ -1009,14 +1115,14 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
         <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5">
           {metrics.map((id) => (
             <button key={id} type="button" onClick={() => setMetric(id)}
-              className={['flex-1 py-1.5 text-xs font-bold rounded-[6px] transition-colors',
+              className={['hit flex-1 py-1.5 text-xs font-bold rounded-[6px] transition-colors',
                 cur === id ? 'bg-accent-300 text-white' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
               {boardLabel(id, cfg)}
             </button>
           ))}
         </div>
       ) : (
-        <p className="text-sm font-bold text-accent-300">{boardLabel(cur, cfg)} 순위</p>
+        <p className="text-sm font-bold text-accent-200">{boardLabel(cur, cfg)} 순위</p>
       )}
       <p className="text-2xs text-ink-muted">{boardDesc(cur, cfg)} · 매장 커뮤니티 순위용 점수(금전적 가치 없음)</p>
 
@@ -1031,15 +1137,17 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
             const ring = rank === 1 ? 'border-accent-300/80 bg-gradient-to-b from-accent-300/[0.14] to-transparent'
               : rank === 2 ? 'border-slate-300/50 bg-gradient-to-b from-slate-300/[0.08] to-transparent'
               : 'border-amber-700/50 bg-gradient-to-b from-amber-700/[0.10] to-transparent';
-            const medal = rank === 1 ? 'bg-accent-300 text-white' : rank === 2 ? 'bg-slate-300 text-white' : 'bg-amber-700 text-white';
+            // 2등 메달은 `bg-slate-300 text-white` 였다 — 흰 글자 대비 **1.48:1**(다크·라이트 공통, AA 근처도 못 감).
+            // 밝은 은색 배지 위 숫자는 어두운 글자여야 읽힌다. 1등(보라)·3등(동)은 흰 글자로 4.5 이상이라 유지.
+            const medal = rank === 1 ? 'bg-accent-300 text-white' : rank === 2 ? 'bg-slate-300 text-slate-900' : 'bg-amber-700 text-white';
             return (
               <div key={e.nickname} className={['flex-1 max-w-[9.5rem] rounded-card border p-2.5 text-center', ring, big ? 'pb-4 -translate-y-2 shadow-[0_0_18px_rgb(var(--accent-300)/0.18)]' : ''].join(' ')}>
-                {big && <div aria-hidden className="text-base leading-none mb-1">👑</div>}
+                {big && <Icon name="crown" size={16} className="mx-auto mb-1 text-gold-300" />}
                 <span className={['mx-auto flex items-center justify-center rounded-full font-extrabold tabular-nums', medal, big ? 'w-8 h-8 text-sm' : 'w-6 h-6 text-2xs'].join(' ')}>{rank}</span>
-                <p className={['mt-1 font-bold uppercase tracking-wide', rank === 1 ? 'text-accent-300' : 'text-ink-secondary', 'text-2xs'].join(' ')}>{titleOf(rank)}</p>
+                <p className={['mt-1 font-bold uppercase tracking-wide', rank === 1 ? 'text-accent-200' : 'text-ink-secondary', 'text-2xs'].join(' ')}>{titleOf(rank)}</p>
                 <p className={['font-extrabold text-ink-primary truncate', big ? 'text-base' : 'text-sm'].join(' ')}>{rMain}</p>
                 {rSub && <p className="text-2xs text-ink-muted">({rSub})</p>}
-                <p className={['font-bold tabular-nums', big ? 'text-sm text-accent-300' : 'text-xs text-ink-secondary'].join(' ')}>{fmtVal(e.value)}</p>
+                <p className={['font-bold tabular-nums', big ? 'text-sm text-accent-200' : 'text-xs text-ink-secondary'].join(' ')}>{fmtVal(e.value)}</p>
               </div>
             );
           })}
@@ -1056,7 +1164,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
               <span className="min-w-0 truncate text-sm font-semibold text-ink-primary">{rMain}</span>
               {rSub && <span className="shrink-0 text-2xs text-ink-muted">({rSub})</span>}
               <span className="ml-auto shrink-0 text-right">
-                <span className="text-sm font-bold tabular-nums text-accent-300">{fmtVal(e.value)}</span>
+                <span className="text-sm font-bold tabular-nums text-accent-200">{fmtVal(e.value)}</span>
                 {e.appearances > 0 && <span className="block text-xs leading-tight text-ink-muted">{e.appearances}회{e.bestPosition > 0 && e.bestPosition < 9999 ? ` · 최고 ${e.bestPosition}등` : ''}</span>}
               </span>
             </li>
@@ -1073,7 +1181,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
             const multi = evs.length > 1;
             return (
               <div key={ev || '_main'} className={multi ? 'mb-1.5' : ''}>
-                {multi && <p className="text-2xs font-bold text-accent-300 mb-1">{ev || '메인'}</p>}
+                {multi && <p className="text-2xs font-bold text-accent-200 mb-1">{ev || '메인'}</p>}
                 <div className="flex flex-wrap gap-1.5">
                   {group.map((e) => {
                     const { main: rMain, sub: rSub } = rankDisplay(e);
@@ -1128,9 +1236,10 @@ function FollowButton({ venueId, followerCount, compact }: { venueId: string; fo
       aria-pressed={following}
       aria-label={following ? '팔로우 해제' : '매장 팔로우'}
       className={[
-        // compact: 헤더용 — 높이만 헤더 아이콘(36px)에 맞추고 라벨은 유지(팔로워 수는 숨김)
+        // compact: 헤더용 — 높이만 헤더 아이콘(36px)에 맞추고 라벨은 유지(팔로워 수는 숨김).
+        // hit: 실측 62×38 로 44px 최소 터치타깃 미달이었다 — 옆 공유 버튼과 달리 .hit 이 빠져 있었다.
         compact
-          ? 'shrink-0 inline-flex items-center justify-center gap-1 px-2.5 h-9 rounded-full text-xs font-semibold transition-colors disabled:opacity-60'
+          ? 'hit shrink-0 inline-flex items-center justify-center gap-1 px-2.5 h-9 rounded-full text-xs font-semibold transition-colors disabled:opacity-60'
           : 'shrink-0 inline-flex items-center justify-center gap-1 px-3 h-9 rounded-input text-xs font-semibold transition-colors disabled:opacity-60',
         following
           ? 'bg-accent-300 text-white'
@@ -1184,7 +1293,7 @@ function AboutPanel({
             <button
               type="button"
               onClick={() => { setDraft(venue.description ?? ''); setEditing(true); }}
-              className="text-2xs text-ink-muted hover:text-accent-300"
+              className="text-2xs text-ink-muted hover:text-accent-200"
             >
               편집
             </button>
@@ -1219,7 +1328,7 @@ function AboutPanel({
             <p className="text-sm text-ink-secondary leading-relaxed whitespace-pre-wrap">{venue.description}</p>
           ) : editable ? (
             <button type="button" onClick={() => { setDraft(venue.description ?? ''); setEditing(true); }}
-              className="inline-flex h-9 items-center gap-1.5 rounded-input border border-dashed border-accent-400/40 bg-accent-300/[0.06] px-3.5 text-xs font-bold text-accent-300 hover:bg-accent-300/10 transition-colors">
+              className="inline-flex h-9 items-center gap-1.5 rounded-input border border-dashed border-accent-400/40 bg-accent-300/[0.06] px-3.5 text-xs font-bold text-accent-200 hover:bg-accent-300/10 transition-colors">
               + 소개 쓰기
             </button>
           ) : (
@@ -1230,18 +1339,25 @@ function AboutPanel({
 
       <div className="border-t border-border-subtle" />
 
-      {/* 계층 2(Phase 10): 위치·연락처·영업시간 상세는 접힌 채 —
-          '가는 행동' 자체는 Tier1(전화/길찾기)이 이미 담당하므로 여기는 참고 정보다. */}
+      {/* 계층 2(Phase 10): 위치·연락처·영업시간 상세 — 손님에게는 접힌 채로 시작한다(기존 유지).
+          ⚠ 2026-08-29 실측: 이 섹션 안에만 있던 **영업시간**은 [매장 소개] 탭 이동 + 아코디언 펼치기
+          두 단계를 거쳐야 보였다. '지금 문 열었나'는 갈까 말까의 1차 판단 재료인데 두 번 숨어 있었다.
+          → 요약(주소·영업시간)은 첫 화면 아이덴티티 블록으로 승격했고(위), 여기는 '확인·복사·지도'
+            계층으로 남긴다. 기본 펼침도 검토했으나 그러면 주소 복사 버튼이 첫 뷰포트로 올라와
+            행동 예산(≤6, venue-ia)을 넘긴다 — 정보는 올리고 컨트롤은 계층 2에 두는 쪽이 맞다.
+          손잡이(summary)는 44px 히트영역을 갖도록 py-1 → py-3. */}
       <details className="group/vinfo" open={editable || undefined}>
-        <summary className="cursor-pointer list-none flex items-center justify-between py-1">
-          <h3 className="text-sm font-semibold text-ink-primary">📍 위치 · 연락처 · 영업시간</h3>
-          <span className="text-xs text-ink-muted transition-transform group-open/vinfo:rotate-180" aria-hidden>▾</span>
+        <summary className="cursor-pointer list-none flex items-center justify-between gap-2 py-3">
+          <h3 className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink-primary">
+            <Icon name="map-pin" size={15} className="text-ink-muted" />위치 · 연락처 · 영업시간
+          </h3>
+          <Icon name="chevron-down" size={16} className="shrink-0 text-ink-muted transition-transform group-open/vinfo:rotate-180" />
         </summary>
       <section className="space-y-2 pt-1.5">
         {editable && !infoEditing && (
           <div className="flex justify-end">
             <button type="button" onClick={openInfoEdit}
-              className="text-2xs text-ink-muted hover:text-accent-300">정보 편집</button>
+              className="text-2xs text-ink-muted hover:text-accent-200">정보 편집</button>
           </div>
         )}
         {infoEditing ? (
@@ -1273,7 +1389,7 @@ function AboutPanel({
             <AddressRow address={addr} />
             {phone ? <PhoneRow phone={phone} /> : editable && (
               <button type="button" onClick={openInfoEdit}
-                className="inline-flex h-8 items-center gap-1.5 rounded-input border border-dashed border-accent-400/40 bg-accent-300/[0.06] px-3 text-2xs font-bold text-accent-300 hover:bg-accent-300/10 transition-colors">
+                className="inline-flex h-8 items-center gap-1.5 rounded-input border border-dashed border-accent-400/40 bg-accent-300/[0.06] px-3 text-2xs font-bold text-accent-200 hover:bg-accent-300/10 transition-colors">
                 + 전화번호 등록
               </button>
             )}
@@ -1286,11 +1402,11 @@ function AboutPanel({
             {kakao && (
               <a href={kakao} target="_blank" rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input bg-[#FEE500] text-[#3A1D1D] text-xs font-bold hover:brightness-95 transition-[transform,filter] active:scale-95">
-                <span aria-hidden>💬</span> 카카오톡 오픈채팅
+                <Icon name="comment" size={14} /> 카카오톡 오픈채팅
               </a>
             )}
             {editable && (
-              <button type="button" onClick={onEditKakao} className="text-2xs text-ink-muted hover:text-accent-300">
+              <button type="button" onClick={onEditKakao} className="text-2xs text-ink-muted hover:text-accent-200">
                 {kakao ? '카톡링크 수정' : '+ 카톡링크 등록'}
               </button>
             )}
@@ -1344,12 +1460,10 @@ function AddressRow({ address }: { address: string }) {
             카카오맵/네이버지도 링크는 지도 임베드 하단으로 이동 — Tier1 [길찾기]와
             같은 목적지를 첫 화면에 세 번 반복하지 않기 위해서다(기능은 전부 보존). */}
         <button type="button" onClick={copy} title="탭하면 주소가 복사됩니다"
-          className="group flex w-full items-start gap-1.5 text-left text-ink-secondary hover:text-ink-primary transition-colors">
+          className="hit group flex w-full items-start gap-1.5 py-1 text-left text-ink-secondary hover:text-ink-primary transition-colors">
           <span className="whitespace-pre-line">{address}</span>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden
-            className="mt-0.5 shrink-0 text-ink-muted group-hover:text-accent-300">
-            <rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-          </svg>
+          {/* 손으로 그린 복사 SVG(stroke 2.2)였다 — 레지스트리 규격(stroke 2)과 굵기가 갈렸다(ICON-2) */}
+          <Icon name="copy" size={12} className="mt-0.5 shrink-0 text-ink-muted group-hover:text-accent-200" />
         </button>
       </dd>
     </div>
@@ -1377,7 +1491,7 @@ function PhoneRow({ phone }: { phone: string }) {
                 toast.show(`${n} 복사됨`, 'success');
               } catch { /* 복사 실패 → tel: 링크 그대로 실행 */ }
             }}
-            className="inline-flex h-8 items-center rounded-input border border-border-default bg-surface-high px-3 text-2xs font-semibold text-ink-secondary transition-colors hover:border-border-strong hover:text-ink-primary tabular-nums"
+            className="hit inline-flex h-8 items-center rounded-input border border-border-default bg-surface-high px-3 text-2xs font-semibold text-ink-secondary transition-colors hover:border-border-strong hover:text-ink-primary tabular-nums"
           >
             {n}
           </a>
@@ -1452,9 +1566,9 @@ function KakaoMap({ address, name, onCoords }: { address: string; name: string; 
         href={`https://map.kakao.com/link/search/${encodeURIComponent(address)}`}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex items-center gap-1 text-2xs text-ink-muted hover:text-accent-300 transition-colors"
+        className="inline-flex items-center gap-1 text-2xs text-ink-muted hover:text-accent-200 transition-colors"
       >
-        카카오맵에서 보기 ↗
+        카카오맵에서 보기 <Icon name="external" size={12} />
       </a>
     </section>
   );
@@ -1493,19 +1607,17 @@ function PostersPanel({
           aria-expanded={open}
           className="w-full flex items-center justify-between px-3 py-2.5 bg-gradient-to-br from-accent-300/[0.08] to-transparent hover:from-accent-300/[0.12] transition-colors focus:outline-none"
         >
-          <span className="inline-flex items-center gap-1.5 text-sm font-bold text-accent-300">
+          <span className="inline-flex items-center gap-1.5 text-sm font-bold text-accent-200">
             금일 포스터
             <span className="text-2xs text-ink-muted font-normal">({todayPosters.length})</span>
           </span>
-          {/* 펼침/접힘 화살표 */}
-          <svg
-            width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor"
-            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-            className={['text-ink-secondary transition-transform duration-200', open ? 'rotate-180' : ''].join(' ')}
-            aria-hidden
-          >
-            <polyline points="4 6 8 10 12 6" />
-          </svg>
+          {/* 펼침/접힘 화살표 — 손그림 SVG(viewBox 16)를 레지스트리 글리프(viewBox 24)로 통일.
+              duration-200 유틸은 모션 헌법 §20.4 #2 위반(토큰과 분리돼 표류) → --dur-base 토큰으로. */}
+          <Icon
+            name="chevron-down"
+            size={16}
+            className={['text-ink-secondary transition-transform duration-[var(--dur-base)] [transition-timing-function:var(--ease)]', open ? 'rotate-180' : ''].join(' ')}
+          />
         </button>
 
         {/* 아코디언 본문 — 공지글 + 금일 포스터 */}
@@ -1528,7 +1640,7 @@ function PostersPanel({
 
             {/* 금일 포스터 목록 */}
             {todayPosters.length === 0 ? (
-              <p className="text-center py-4 text-xs text-ink-muted">오늘 진행되는 포스터가 없습니다.</p>
+              <p className="text-center py-4 text-xs text-ink-muted">오늘 진행되는 포스터가 없습니다. 아래 예정 포스터를 확인해 보세요.</p>
             ) : (
               <ul className="space-y-2">
                 {todayPosters.map((s) => (
@@ -1551,7 +1663,7 @@ function PostersPanel({
                         {s.startTime}{s.buyIn.amount > 0 ? ` · 바이인 ${s.buyIn.amount.toLocaleString()}` : ''}
                       </p>
                     </div>
-                    <span className="shrink-0 text-2xs font-bold text-accent-300 bg-accent-300/15 px-1.5 py-0.5 rounded-badge">
+                    <span className="shrink-0 text-2xs font-bold text-accent-200 bg-accent-300/15 px-1.5 py-0.5 rounded-badge">
                       TODAY
                     </span>
                   </li>
@@ -1565,8 +1677,10 @@ function PostersPanel({
       {/* ── 예정 포스터 ─────────────────────────────────────────── */}
       <div className="reveal space-y-2">
         <p className="text-2xs font-bold text-ink-muted px-0.5">예정 포스터 ({upcoming.length})</p>
+        {/* 빈 상태를 회색 한 줄에서 공용 EmptyState 로 — 카피는 보존하고 '그래서 뭘 하면 되는지'를 덧댄다.
+            (순위 탭은 이미 EmptyState 를 쓰고 있었다 — 탭마다 빈 화면의 문법이 달랐던 것을 맞춘다) */}
         {upcoming.length === 0 ? (
-          <p className="text-center py-6 text-xs text-ink-muted">예정된 포스터가 없습니다.</p>
+          <EmptyState title="예정된 포스터가 없습니다." hint="매장을 팔로우하면 새 대회 포스터가 올라올 때 알려드려요." />
         ) : (
           <ul className="space-y-2">
             {upcoming.map((s) => {
@@ -1577,7 +1691,7 @@ function PostersPanel({
                   className="flex items-center gap-3 p-3 rounded-input bg-surface-high border border-border-subtle cursor-pointer hover:border-accent-400/40 focus:outline-none focus-visible:border-accent-300 transition-colors">
                   <div className="text-center shrink-0">
                     <p className="text-2xs text-ink-muted">{dows[d.getDay()]}</p>
-                    <p className="text-lg font-bold text-accent-300 tabular-nums leading-none">{d.getDate()}</p>
+                    <p className="text-lg font-bold text-accent-200 tabular-nums leading-none">{d.getDate()}</p>
                     <p className="text-2xs text-ink-muted">{d.getMonth() + 1}월</p>
                   </div>
                   <div className="flex-1 min-w-0">
@@ -1629,11 +1743,11 @@ function VenueNoticeBoard({ venueId, canManage }: { venueId: string; canManage: 
   return (
     <section className="rounded-card border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.06] to-transparent overflow-hidden">
       <header className="flex items-center justify-between px-3 py-2 border-b border-accent-400/20">
-        <h3 className="inline-flex items-center gap-1.5 text-xs font-bold text-accent-300">
+        <h3 className="inline-flex items-center gap-1.5 text-xs font-bold text-accent-200">
           매장 공지 <span className="text-2xs text-ink-muted font-normal">({notices.length})</span>
         </h3>
         {canManage && (
-          <button type="button" onClick={() => setOpen((v) => !v)} className="text-2xs text-accent-300 hover:text-accent-200 font-semibold">
+          <button type="button" onClick={() => setOpen((v) => !v)} className="text-2xs text-accent-200 hover:text-accent-100 font-semibold">
             {open ? '닫기' : '+ 공지 작성'}
           </button>
         )}
@@ -1675,7 +1789,7 @@ function VenueNoticeBoard({ venueId, canManage }: { venueId: string; canManage: 
 
 function SchedulesPanel({ schedules, onSelect }: { schedules: Schedule[]; onSelect?: (s: Schedule) => void }) {
   if (schedules.length === 0) {
-    return <p className="text-center py-8 text-xs text-ink-muted">예정된 토너먼트가 없습니다.</p>;
+    return <EmptyState title="예정된 토너먼트가 없습니다." hint="매장을 팔로우하면 새 일정이 등록될 때 알려드려요." />;
   }
   const dows = ['일','월','화','수','목','금','토'];
   return (
@@ -1688,7 +1802,7 @@ function SchedulesPanel({ schedules, onSelect }: { schedules: Schedule[]; onSele
             className="flex items-center gap-3 p-3 rounded-input bg-surface-high border border-border-subtle cursor-pointer hover:border-accent-400/40 focus:outline-none focus-visible:border-accent-300 transition-colors">
             <div className="text-center shrink-0">
               <p className="text-2xs text-ink-muted">{dows[d.getDay()]}</p>
-              <p className="text-lg font-bold text-accent-300 tabular-nums leading-none">{d.getDate()}</p>
+              <p className="text-lg font-bold text-accent-200 tabular-nums leading-none">{d.getDate()}</p>
               <p className="text-2xs text-ink-muted">{d.getMonth() + 1}월</p>
             </div>
             <div className="flex-1 min-w-0">

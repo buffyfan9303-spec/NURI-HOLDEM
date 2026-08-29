@@ -15,6 +15,7 @@ import {
   getAllVenues, updateVenueStatus, setVenueAd, deleteVenue, logActivity, setVenueVerification, reorderVenues,
 } from '../../api/community';
 import type { Venue, VenueStatus, VenueVerificationStatus } from '../../api/community';
+import Icon from '../atoms/Icon';
 
 const STATUS_LABEL: Record<VenueStatus, { label: string; cls: string }> = {
   active:    { label: '활성',   cls: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
@@ -218,7 +219,7 @@ function RowContent({ venue: v, order, handlers, dragHandle }: {
         <span className="shrink-0 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-badge bg-surface-high border border-border-default text-2xs font-bold text-ink-secondary tabular-nums">{order}</span>
         <span className="text-sm font-semibold text-ink-primary truncate">{v.name}</span>
         <span className={['text-2xs px-1.5 py-0.5 rounded-badge border font-semibold', st.cls].join(' ')}>{st.label}</span>
-        {v.isPaidAd && <span className="text-2xs px-1.5 py-0.5 rounded-badge bg-accent-300 text-white font-bold">⭐ 프리미엄</span>}
+        {v.isPaidAd && <span className="inline-flex items-center gap-0.5 text-2xs px-1.5 py-0.5 rounded-badge bg-accent-300 text-white font-bold"><Icon name="star-fill" size={10} className="shrink-0" />프리미엄</span>}
         {v.verificationStatus === 'verified' && <span className="text-2xs px-1.5 py-0.5 rounded-badge bg-accent-300/15 text-accent-300 border border-accent-400/40 font-bold">인증</span>}
         {v.verificationStatus === 'pending' && <span className="text-2xs px-1.5 py-0.5 rounded-badge bg-amber-500/15 text-amber-400 border border-amber-500/30 font-semibold">인증 심사중</span>}
         {!v.approved && <span className="text-2xs px-1.5 py-0.5 rounded-badge bg-amber-500/15 text-amber-400 border border-amber-500/30 font-semibold">미승인</span>}

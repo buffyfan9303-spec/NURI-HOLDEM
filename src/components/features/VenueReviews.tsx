@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getVenueReviews, canReviewVenue, saveVenueReview, deleteVenueReview, replyToReview, aiDraftReviewReply, type VenueReview } from '../../api/reviews';
 import { useToast } from '../atoms/Toast';
+import Icon from '../atoms/Icon';
 
 interface Props {
   venueId: string;
@@ -194,12 +195,12 @@ export default function VenueReviews({ venueId, userId, nickname, isAdmin, canRe
                       rows={2} maxLength={300} placeholder="답글…" className="input w-full resize-none text-sm" />
                     <div className="flex items-center gap-1.5">
                       <button type="button" onClick={() => doReply(r)} disabled={replyBusy === r.id} className="btn-primary px-3 py-1 text-2xs disabled:opacity-50">{replyBusy === r.id ? '등록 중…' : '답글 등록'}</button>
-                      <button type="button" onClick={() => doAiDraft(r)} disabled={aiBusy === r.id} className="rounded-input border border-accent-400/40 bg-accent-300/[0.06] px-2.5 py-1 text-2xs font-bold text-accent-300 disabled:opacity-50">{aiBusy === r.id ? '생성 중…' : '✨ AI 초안'}</button>
+                      <button type="button" onClick={() => doAiDraft(r)} disabled={aiBusy === r.id} className="rounded-input border border-accent-400/40 bg-accent-300/[0.06] px-2.5 py-1 text-2xs font-bold text-accent-300 disabled:opacity-50">{aiBusy === r.id ? '생성 중…' : <span className="inline-flex items-center gap-1"><Icon name="sparkles" size={11} className="shrink-0" />AI 초안</span>}</button>
                       <button type="button" onClick={() => setReplyOpen(null)} className="text-2xs text-ink-muted">취소</button>
                     </div>
                   </div>
                 ) : (
-                  <button type="button" onClick={() => setReplyOpen(r.id)} className="mt-1 text-2xs text-accent-300 hover:underline">{r.ownerReply ? '답글 수정' : '🗨 답글 달기'}</button>
+                  <button type="button" onClick={() => setReplyOpen(r.id)} className="mt-1 inline-flex items-center gap-1 text-2xs text-accent-300 hover:underline">{r.ownerReply ? '답글 수정' : <><Icon name="comment" size={11} className="shrink-0" />답글 달기</>}</button>
                 )
               )}
             </li>
