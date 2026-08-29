@@ -493,7 +493,10 @@ html[data-vt-dir='back']::view-transition-old(root)    { animation: vt-push-out-
 html[data-vt-dir='back']::view-transition-new(root)    { animation: vt-push-in-l var(--dur-tab) var(--ease) both; }
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-old(root),
-  ::view-transition-new(root) { animation: none !important; }
+  ::view-transition-new(root),
+  /* 이름 있는 스냅샷도 함께 꺼야 한다 — root 만 끄면 매장 탭 패널은 계속 밀린다(§20.4). */
+  ::view-transition-old(venue-tabpanel),
+  ::view-transition-new(venue-tabpanel) { animation: none !important; }
 }
 
 /* ── 모션 2단계 — 애플 웹의 '등장감'과 손맛 ─────────────────────────────────
@@ -874,6 +877,20 @@ html[data-vt-scope='community-sec'] [data-community-secbar] { view-transition-na
    본문만 크로스페이드되고 탭바는 제자리에 고정된다(2026-08-29 오너 지적: 소메뉴에 모션이 없다).
    상시 name 을 주면 매장 페이지를 닫을 때 old-only 스냅샷이 얼어붙는다 — 커뮤니티 서브탭에서 실측한 그 함정. */
 html[data-vt-scope='venue-tab'] [data-venue-tabbar] { view-transition-name: venue-tabbar; }
+
+/* 매장 페이지 탭 전환 — **탭바 아래만 움직인다**(2026-08-29 오너 지적).
+   방향 애니(vt-push-*)는 root 에 걸려 있어서, 이름을 주지 않으면 헤더·히어로·행동 버튼까지
+   페이지 전체가 통째로 밀린다. 커뮤니티 서브탭은 바가 화면 최상단이라 티가 안 났지만
+   매장 페이지는 위에 큰 블록이 있어 그대로 드러났다.
+   → 콘텐츠에 자기 스냅샷 이름을 줘 root 에서 분리하고, root 의 기본 연출은 끈다.
+     그러면 위쪽은 정지한 채 이 영역만 좌우로 밀린다. */
+html[data-vt-scope='venue-tab'] [data-venue-tabpanel] { view-transition-name: venue-tabpanel; }
+html[data-vt-scope='venue-tab']::view-transition-old(root),
+html[data-vt-scope='venue-tab']::view-transition-new(root) { animation: none; }
+html[data-vt-scope='venue-tab'][data-vt-dir='forward']::view-transition-old(venue-tabpanel) { animation: vt-push-out-l var(--dur-base) var(--ease-out) both; }
+html[data-vt-scope='venue-tab'][data-vt-dir='forward']::view-transition-new(venue-tabpanel) { animation: vt-push-in-r  var(--dur-tab)  var(--ease)     both; }
+html[data-vt-scope='venue-tab'][data-vt-dir='back']::view-transition-old(venue-tabpanel)    { animation: vt-push-out-r var(--dur-base) var(--ease-out) both; }
+html[data-vt-scope='venue-tab'][data-vt-dir='back']::view-transition-new(venue-tabpanel)    { animation: vt-push-in-l  var(--dur-tab)  var(--ease)     both; }
 ::view-transition-old(app-header), ::view-transition-new(app-header),
 ::view-transition-old(app-tabbar), ::view-transition-new(app-tabbar),
 ::view-transition-old(app-gnb), ::view-transition-new(app-gnb),

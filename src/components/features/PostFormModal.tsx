@@ -289,7 +289,11 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               maxLength={80}
-              required
+              // ⚠ HTML `required` 는 쓰지 않는다(2026-08-29 검증에서 잡힘).
+              //   그걸 달면 브라우저 기본 검증이 submit 을 가로채 handleSubmit 이 아예 실행되지 않고,
+              //   바로 아래 '내용'(textarea, required 없음)은 앱 토스트로 안내되므로
+              //   **같은 폼의 인접 두 필드가 서로 다른 오류 언어**를 쓰게 된다.
+              //   필수 여부는 aria-required 로 보조기술에 알리고, 판정·문구는 handleSubmit 이 단독으로 맡는다.
               aria-required="true"
               placeholder="제목을 입력하세요"
               className="input"

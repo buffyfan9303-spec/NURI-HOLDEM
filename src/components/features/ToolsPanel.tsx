@@ -5,6 +5,7 @@ import Icon from '../atoms/Icon';
 import { useToast } from '../atoms/Toast';
 import { shareOrCopy } from '../../lib/calendar';
 import { useTrainerProgress } from '../../lib/trainerProgress';
+import { useDrillPlan } from './tools/drillPlan';
 import { useAuth } from '../../contexts/AuthContext';
 import { promptLogin } from '../../lib/requireLogin';
 import ICMCalculator from './ICMCalculator';
@@ -22,18 +23,23 @@ import PostflopTrainer from './tools/PostflopTrainer';
 import BlindBuilder from './tools/BlindBuilder';
 import GlossaryPanel from './tools/GlossaryPanel';
 import DealCalc from './tools/DealCalc';
+import DailyDrill from './tools/DailyDrill';
 
-// GTO 패널은 에퀴티 엔진을 포함해 무거우므로 지연 로드
+// GTO 패널·핸드 리플레이어는 에퀴티 엔진을 포함해 무거우므로 지연 로드
 import { readSnap } from '../../lib/snapshot';
 import type { DeepGtoInit } from './gto/useDeepGto';
+import type { HandReviewInit } from './gto/HandReviewTool';
 const GtoDeepPanel = lazyWithReload(() => import('./gto/GtoDeepPanel'));
+const HandReviewTool = lazyWithReload(() => import('./gto/HandReviewTool'));
 
-type ToolKey = 'gto' | 'pot' | 'icm' | 'range' | 'trainer' | 'postflop' | 'mdf' | 'aggro' | 'rvr' | 'outs' | 'pushfold' | 'spr' | 'ev' | 'mzone' | 'bankroll' | 'variance' | 'blindgen' | 'chip' | 'sim' | 'payout' | 'endtime' | 'combo' | 'glossary' | 'deal';
+type ToolKey = 'drill' | 'gto' | 'replay' | 'pot' | 'icm' | 'range' | 'trainer' | 'postflop' | 'mdf' | 'aggro' | 'rvr' | 'outs' | 'pushfold' | 'spr' | 'ev' | 'mzone' | 'bankroll' | 'variance' | 'blindgen' | 'chip' | 'sim' | 'payout' | 'endtime' | 'combo' | 'glossary' | 'deal';
 /** 4레인 IA — 학습 / 분석 / 계산기 / 매장운영 (로드맵 ⑥) */
 type ToolCat = 'learn' | 'analyze' | 'calc' | 'ops';
 
 const TOOLS: { key: ToolKey; cat: ToolCat; name: string; desc: string; icon: ReactNode }[] = [
   // ── 학습 — 차트·트레이너 ──
+  { key: 'drill', cat: 'learn', name: '오늘의 드릴', desc: '약점 기반 하루 5문제',
+    icon: <><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M8 2v4M16 2v4M3 10h18" /><path d="M9 15l2 2 4-4" /></> },
   { key: 'range', cat: 'learn', name: '스타팅핸드 가이드', desc: '오픈·수비·3벳 표준 레인지',
     icon: <><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="9" y1="3" x2="9" y2="21" /></> },
   { key: 'pushfold', cat: 'learn', name: '푸시 · 폴드 차트', desc: '자체 Nash — 셔브·콜 레인지',
@@ -47,6 +53,8 @@ const TOOLS: { key: ToolKey; cat: ToolCat; name: string; desc: string; icon: Rea
   { key: 'glossary', cat: 'learn', name: '홀덤 용어사전', desc: '용어 74개 — 한글 설명·검색',
     icon: <><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" /><path d="M9 7h6M9 11h4" /></> },
   // ── 분석 — 핸드·레인지 에퀴티 ──
+  { key: 'replay', cat: 'analyze', name: '핸드 리플레이어', desc: '그 핸드 복기 — 승률 추이·아웃',
+    icon: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M10 9l5 3-5 3V9Z" /></> },
   { key: 'gto', cat: 'analyze', name: 'GTO 핸드 분석', desc: '프리/포스트플랍 승률·전략',
     icon: <><rect x="3" y="4" width="7" height="16" rx="1.5" /><rect x="14" y="4" width="7" height="16" rx="1.5" /></> },
   { key: 'rvr', cat: 'analyze', name: '레인지 vs 레인지', desc: '레인지 간 에퀴티 매트릭스',
@@ -54,7 +62,7 @@ const TOOLS: { key: ToolKey; cat: ToolCat; name: string; desc: string; icon: Rea
   // ── 계산기 — 수치 판단 ──
   { key: 'pot', cat: 'calc', name: '팟 오즈 계산기', desc: '콜에 필요한 승률 계산',
     icon: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></> },
-  { key: 'outs', cat: 'calc', name: '아웃츠 / 확률', desc: '완성 확률·팟 오즈',
+  { key: 'outs', cat: 'calc', name: '아웃츠 / 확률', desc: '카드만 넣으면 아웃 자동 계산',
     icon: <><circle cx="12" cy="12" r="9" /><path d="M8.5 12.5l2.5 2.5 4.5-4.5" /></> },
   { key: 'mdf', cat: 'calc', name: 'MDF · 블러프 계산기', desc: '수비 빈도·블러프 비율',
     icon: <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" /><path d="M9 12l2 2 4-4" /></> },
@@ -100,7 +108,7 @@ export const STORE_TOOL_KEYS = ['chip', 'sim', 'blindgen', 'payout', 'endtime'] 
 const STORE_SET = new Set<ToolKey>(STORE_TOOL_KEYS);
 
 // 트레이너류는 '퀴즈' 뉘앙스(맞히기), 나머지 계산기·차트류는 '도구' 뉘앙스로 라벨링.
-const QUIZ_KEYS = new Set<ToolKey>(['range', 'pushfold', 'trainer', 'postflop']);
+const QUIZ_KEYS = new Set<ToolKey>(['drill', 'range', 'pushfold', 'trainer', 'postflop']);
 
 function renderTool(k: ToolKey): ReactNode {
   switch (k) {
@@ -114,6 +122,9 @@ function renderTool(k: ToolKey): ReactNode {
       };
       return <GtoDeepPanel initialState={hasSaved ? saved! : demo} />;
     }
+    // 핸드 리플레이어도 같은 문법 — 직전 복기(스냅샷)가 있으면 그 핸드로, 없으면 도구 자체의 데모 핸드로.
+    case 'replay': return <HandReviewTool initial={readSnap<HandReviewInit>('tool:replay') ?? undefined} />;
+    case 'drill': return <DailyDrill />;
     case 'pot': return <PotOddsCalc />;
     case 'icm': return <ICMCalculator />;
     case 'range': return <RangeGuide />;
@@ -206,6 +217,21 @@ export default function ToolsPanel() {
     } catch { /* 사용자가 공유 시트를 닫음 */ }
   };
 
+  // 도구 사이 상호 링크(<a href="#tool=key">) — **열린 상태에서 갈아끼운다**.
+  // 2026-08-29 실측 버그: 예전엔 앵커가 그냥 해시를 밀었고, 그러면 backstack 이 자기 것이 아닌
+  // history 항목을 보고 '사용자가 나갔다'로 판정해 **도구가 통째로 닫혔다**(팟 오즈 링크가 그랬다 —
+  // 아웃츠 → 팟 오즈로 가는 대신 런처로 튕겼다). history 를 건드려 고치려 들면 위 ①②③ 지뢰밭에
+  // 다시 들어가야 한다. 그래서 아예 **네비게이션을 만들지 않는다** — 클릭을 가로채 active 만 바꾸고,
+  // 해시는 기존 [active] 이펙트가 같은 항목에 replaceState 로 얹는다(항목 수 불변).
+  const swapToolOnLinkClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const a = (e.target as HTMLElement).closest?.('a[href^="#tool="]');
+    if (!a) return;
+    const k = (a.getAttribute('href') ?? '').slice('#tool='.length);
+    if (!TOOLS.some((t) => t.key === k)) return;
+    e.preventDefault();
+    open(k as ToolKey);
+  };
+
   // 검색 + 레인 필터 칩 — 접이식 헤더(모바일 회귀)를 대체하는 비접이 IA.
   const [q, setQ] = useState('');
   const [lane, setLane] = useState<ToolCat | 'all'>('all');
@@ -225,6 +251,14 @@ export default function ToolsPanel() {
 
   // 트레이너 진행(스트릭/XP/오늘 목표) — 이미 로컬에 있는 데이터 구독(신규 fetch 0)
   const prog = useTrainerProgress();
+  // 오늘의 드릴 편성·진행 — 같은 로컬 기록에서 파생(서버 왕복 0)
+  const drill = useDrillPlan();
+  const drillTotal = drill.items.length;
+  const drillDone = Math.min(drill.idx, drillTotal);
+  const drillFinished = drillDone >= drillTotal;
+  const drillHint = drillFinished
+    ? `오늘 완료 · ${drill.correct}/${drillTotal} 정답`
+    : (drill.items[drill.idx]?.reason ?? '약점에 맞춰 편성했습니다');
 
   // 다른 곳(공유 링크·도구 간 상호 딥링크)에서 해시가 바뀌면 반영
   useEffect(() => {
@@ -255,21 +289,51 @@ export default function ToolsPanel() {
 
   return (
     <div className="hero-aurora space-y-3">
-      {/* 트레이너 진행 스트립 — 오늘 목표·스트릭·XP 상시 노출(탭하면 트레이너로)
-          card-elev: 아래 ToolCard 와 같은 카드 문법으로 통일 — 이 스트립만 평면이라 '띠'로 떠 보였다.
-          surface-low 라 티어 규칙(index.css .card-elev 주석) 충족 — ink-muted 5.01:1 유지. */}
-      <button type="button" onClick={() => open('trainer')} aria-label="트레이너 진행 — 프리플랍 트레이너 열기"
-        className="card-elev flex w-full items-center justify-between gap-2 rounded-card border border-border-default bg-surface-low px-3.5 py-2.5 text-left transition-colors hover:border-accent-400/40 hover:bg-surface-high">
-        <span className="flex min-w-0 items-center gap-3 text-2xs">
-          <span className="text-ink-muted">오늘 <b className="tabular-nums text-ink-primary">{prog.today}/{prog.goal}</b></span>
-          <span className="inline-flex items-center gap-1 text-ink-muted">
-            <Icon name="flame" size={12} className="text-accent-300" aria-hidden />
-            <b className="tabular-nums text-accent-200">{prog.streak}</b>일
+      {/* 오늘의 드릴 — GTO 탭 최상단(로드맵 ③).
+          예전엔 이 자리가 "오늘 0/20" 진행 스트립뿐이라 **숙제만 내고 무엇을 풀지는 유저가 골랐다** —
+          초보가 이탈하는 지점이었다. 이제 약점 카테고리(포스트플랍 정답률)와 오답 노트(프리플랍 큐)로
+          편성한 5문제를 여기서 바로 시작한다. 기존 지표(오늘 N/목표 · 스트릭 · XP · 목표까지 N문제)는
+          아래 줄에 그대로 남겼다 — 없어진 정보 0.
+          card-elev: 아래 ToolCard 와 같은 카드 문법으로 통일(surface-low 라 ink-muted 5.01:1 유지).
+          ⚠ button 안에는 phrasing content 만 — 자식은 전부 span 이다(div 중첩 금지). */}
+      <button type="button" onClick={() => open('drill')}
+        aria-label={`오늘의 드릴 — ${drillTotal}문제 중 ${drillDone}문제 완료. 열기`}
+        className="card-elev block w-full space-y-2 rounded-card border border-border-default bg-surface-low px-3.5 py-3 text-left transition-colors hover:border-accent-400/40 hover:bg-surface-high">
+        <span className="flex items-center justify-between gap-2">
+          <span className="inline-flex min-w-0 items-center gap-1.5">
+            <Icon name="target" size={14} className="shrink-0 text-accent-300" aria-hidden />
+            <b className="truncate text-xs font-bold text-ink-primary">오늘의 드릴</b>
+            <span className="shrink-0 text-2xs font-bold tabular-nums text-accent-200">{drillDone}/{drillTotal}</span>
           </span>
-          <span className="text-ink-muted">XP <b className="tabular-nums text-ink-secondary">{prog.xp.toLocaleString()}</b></span>
+          <span className="shrink-0 text-2xs font-bold text-accent-200">
+            {drillFinished ? '복습하기' : drillDone > 0 ? '이어서 풀기 →' : '시작하기 →'}
+          </span>
         </span>
-        <span className={['shrink-0 text-2xs font-semibold', prog.goalMet ? 'text-emerald-400' : 'text-ink-muted'].join(' ')}>
-          {prog.goalMet ? '오늘 목표 달성' : `목표까지 ${prog.remaining}문제`}
+
+        {/* 진행 점 + 다음 문제를 낸 이유(약점 보완 · 오답 노트 …) */}
+        <span className="flex items-center gap-2">
+          <span className="flex shrink-0 items-center gap-1">
+            {drill.items.map((_, i) => (
+              <span key={i} className={['h-1.5 w-1.5 rounded-full',
+                i < drillDone ? 'bg-accent-300' : i === drillDone && !drillFinished ? 'bg-accent-300/40 ring-1 ring-accent-400/60' : 'bg-surface-high'].join(' ')} />
+            ))}
+          </span>
+          <span className="min-w-0 truncate text-2xs text-ink-muted">{drillHint}</span>
+        </span>
+
+        {/* 기존 진행 스트립의 지표를 그대로 보존 */}
+        <span className="flex items-center justify-between gap-2">
+          <span className="flex min-w-0 items-center gap-3 text-2xs">
+            <span className="text-ink-muted">오늘 <b className="tabular-nums text-ink-primary">{prog.today}/{prog.goal}</b></span>
+            <span className="inline-flex items-center gap-1 text-ink-muted">
+              <Icon name="flame" size={12} className="text-accent-300" aria-hidden />
+              <b className="tabular-nums text-accent-200">{prog.streak}</b>일
+            </span>
+            <span className="text-ink-muted">XP <b className="tabular-nums text-ink-secondary">{prog.xp.toLocaleString()}</b></span>
+          </span>
+          <span className={['shrink-0 text-2xs font-semibold', prog.goalMet ? 'text-emerald-400' : 'text-ink-muted'].join(' ')}>
+            {prog.goalMet ? '오늘 목표 달성' : `목표까지 ${prog.remaining}문제`}
+          </span>
         </span>
       </button>
 
@@ -335,7 +399,9 @@ export default function ToolsPanel() {
           만들지 않아 margin 이 무효가 되고, 다이얼로그는 space-y 의 직계 자식에서 벗어난다. */}
       <div className="contents">
       <Modal open={!!activeTool} onClose={close} variant="page" title={activeTool?.name} maxWidth="2xl">
-        <div className="px-page-x py-3 pb-8">
+        {/* onClick 은 앵커 클릭 위임 전용 — 이 div 자체는 인터랙티브가 아니다.
+            앵커는 키보드 Enter 도 click 으로 오므로 별도 키 핸들러가 필요 없다. */}
+        <div className="px-page-x py-3 pb-8" onClick={swapToolOnLinkClick}>
           {/* 공유 — 이 도구 딥링크(#tool=key)를 시스템 공유 시트/클립보드로. 커뮤니티 유입 동선. */}
           <div className="mb-2 flex justify-end">
             <button type="button" onClick={() => active && share(active)}

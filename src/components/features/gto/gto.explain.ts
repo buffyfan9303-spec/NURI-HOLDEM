@@ -48,3 +48,96 @@ export async function explainDeepSpot(input: DeepExplainInput): Promise<string> 
   if (!text) throw new Error('빈 응답');
   return text;
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+   트레이너 오답 해설 (2026-08-29) — 같은 'gto-explain' 함수를 **서버 변경 0** 으로 재사용한다.
+   엣지 함수는 두 형태를 이미 받는다:
+     · heroCards.length >= 2  → 심화(보드·핸드 구조·아웃츠·블로커) 프롬프트
+     · comboId                → 프리플랍(포지션·레인지·GTO 빈도) 프롬프트
+   포스트플랍 문항은 앞의 형태, 프리플랍 문항은 뒤의 형태에 그대로 들어맞는다.
+   ⚠ 호출 조건은 호출부가 지킨다 — **오답일 때 · 버튼을 눌렀을 때만**(자동 호출 금지).
+     여기서는 같은 문항의 중복 호출만 막는다(세션 캐시 + 진행 중 요청 공유).
+   ──────────────────────────────────────────────────────────────────────────── */
+
+export type QuizExplainInput =
+  | {
+      kind: 'postflop';
+      /** 'A♠ K♦' — 트레이너 문항의 hand 문자열 그대로 */
+      hand: string;
+      /** 'K♥ 7♣ 2♦ / 5♠' 또는 '(프리플랍)' — 슬래시는 스트릿 구분자라 걸러 보낸다 */
+      board: string;
+      /** 캐시 식별용(문항 id) */
+      id: number | string;
+    }
+  | {
+      kind: 'preflop';
+      /** 'A5s' 같은 콤보 라벨 */
+      hand: string;
+      /** 'CO 오픈' 등 포지션 라벨 */
+      posLabel: string;
+      /** 유효 스택(bb) — RFI 는 100, 푸시폴드는 해당 스택 */
+      stackBb: number;
+      /** 정답 액션 빈도 0..1 */
+      freq: number;
+      /** 캐시 식별용(문제 키) */
+      id: number | string;
+    };
+
+// 세션 캐시 — 같은 문항을 다시 만나도 재호출하지 않는다(비용 관리).
+// 진행 중 Promise 를 그대로 담아 두어 더블탭에도 요청이 두 번 나가지 않는다.
+const quizCache = new Map<string, Promise<string>>();
+
+const cardsOf = (s: string): string[] => s.split(/\s+/).filter((c) => c && c !== '/' && c !== '(프리플랍)');
+
+/** 'A5s' → 'suited' · 'AKo' → 'offsuit' · '77' → 'pair' (엣지 함수 프롬프트의 comboKind) */
+function comboKind(hand: string): string {
+  if (hand.endsWith('s')) return 'suited';
+  if (hand.endsWith('o')) return 'offsuit';
+  return 'pair';
+}
+
+async function invokeExplain(body: Record<string, unknown>): Promise<string> {
+  const { data, error } = await supabase.functions.invoke('gto-explain', { body });
+  if (error) throw error;
+  const text = (data as { text?: string } | null)?.text?.trim();
+  if (!text) throw new Error('빈 응답');
+  return text;
+}
+
+/**
+ * 트레이너에서 틀린 문항의 심화 해설. **실패하면 throw** 한다 —
+ * 호출부는 기존 규칙 기반 해설을 그대로 둔 채 안내 한 줄만 바꾼다(AI 는 덤, 화면의 전제가 아니다).
+ */
+export function explainQuizMiss(input: QuizExplainInput): Promise<string> {
+  const cacheKey = `${input.kind}:${input.id}`;
+  const hit = quizCache.get(cacheKey);
+  if (hit) return hit;
+
+  const run = (async () => {
+    if (IS_MOCK) throw new Error('데모 모드');
+    if (input.kind === 'postflop') {
+      const board = cardsOf(input.board);
+      return invokeExplain({
+        heroCards: cardsOf(input.hand),
+        // 트레이너 문항은 상대 카드가 특정되지 않는다 — 빈 배열을 보내면 프롬프트가 "상대 핸드: " 로
+        // 비어 이상해지므로, 레인지 대결임을 한 줄로 알린다(서버 프롬프트는 그대로 join 한다).
+        villainCards: ['(비공개 · 상대 레인지 전체)'],
+        board,
+        equities: {}, // 트레이너는 특정 매치업이 아니라 레인지 대결이라 승률 수치를 보내지 않는다
+      });
+    }
+    return invokeExplain({
+      comboId: input.hand,
+      comboKind: comboKind(input.hand),
+      scenarioLabel: `${input.posLabel} · 첫 진입`,
+      heroPosition: input.posLabel,
+      stackDepthBb: input.stackBb,
+      frequency: { raise: input.freq, call: 0, fold: 1 - input.freq },
+    });
+  })();
+
+  // 실패는 캐시하지 않는다 — 일시 오류 뒤 '다시 시도'가 먹혀야 한다.
+  run.catch(() => { quizCache.delete(cacheKey); });
+  quizCache.set(cacheKey, run);
+  return run;
+}

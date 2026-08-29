@@ -4,6 +4,7 @@ import { handName, type FreqMap } from '../../../lib/ranges';
 import { type WeightedCombo } from '../gto/equityEngine';
 import { rangeVsRangeAsync } from '../gto/equityClient';
 import { expandFreqToCombos, scenarioActionCombos } from '../gto/useDeepGto';
+import Term from './Term';
 
 /* GTO 위자드형 보조 도구 3종 — MDF/블러프 계산기 · 어그레션 빈도 차트 · 레인지 vs 레인지 에퀴티(실계산) */
 
@@ -26,7 +27,12 @@ export function MdfCalc() {
 
   return (
     // 제목은 전체화면 헤더가 이미 표시 — 공통 CalcCard 로 흡수(2중 노출 제거)
-    <CalcCard desc="상대 벳에 얼마나 수비해야 하는지(MDF), 내 벳에 블러프를 몇 % 섞어야 하는지 즉시 계산합니다.">
+    <CalcCard>
+      {/* CalcCard 의 desc 프롭과 같은 위치·같은 클래스로 직접 렌더 — 'MDF'에 용어 툴팁을 달기 위한
+          JSX 화(카피·레이아웃 무변경). 이 도구에서 초보가 가장 먼저 막히는 단어가 MDF 다. */}
+      <p className="text-2xs text-ink-muted">
+        {'상대 벳에 얼마나 수비해야 하는지('}<Term name="MDF">MDF</Term>{'), 내 벳에 블러프를 몇 % 섞어야 하는지 즉시 계산합니다.'}
+      </p>
       <div className="grid grid-cols-2 gap-2">
         <label className="space-y-1">
           <span className="text-2xs font-semibold text-ink-secondary">팟 크기</span>
@@ -51,7 +57,7 @@ export function MdfCalc() {
         <Result label="콜에 필요한 승률" value={fmtPct(callEq)} desc="이 승률보다 핸드 에퀴티가 높으면 수학적으로 콜이 이득입니다." />
         <Result label="내 벳의 적정 블러프 비율" value={fmtPct(bluffRatio)} desc={`리버 기준 밸류 ${fmtPct(100 - bluffRatio)} : 블러프 ${fmtPct(bluffRatio)}로 섞으면 상대가 콜/폴드 어느 쪽도 착취 못 해요.`} />
       </div>
-      <p className="text-2xs text-ink-muted">※ 이론(GTO) 기준 수치입니다. 상대가 과도하게 폴드/콜하면 그에 맞춰 블러프를 늘리거나 줄이세요.</p>
+      <p className="text-2xs text-ink-muted">{'※ 이론('}<Term name="GTO">GTO</Term>{') 기준 수치입니다. 상대가 과도하게 폴드/콜하면 그에 맞춰 블러프를 늘리거나 줄이세요.'}</p>
       {/* 중복 인지 제거 — '콜에 필요한 승률'은 팟 오즈 계산기와 같은 개념(딥링크, 계산 로직 불변) */}
       <a href="#tool=pot" className="block text-2xs font-semibold text-accent-300 transition-colors hover:text-accent-200">
         '콜에 필요한 승률'을 실제 팟·콜 금액으로 — 팟 오즈 계산기 →
@@ -81,7 +87,7 @@ export function AggroChart() {
             <tr className="text-2xs text-ink-muted">
               <th className="py-1.5 px-2 text-left font-semibold">포지션</th>
               <th className="py-1.5 px-2 font-semibold">오픈레이즈</th>
-              <th className="py-1.5 px-2 font-semibold">3벳</th>
+              <th className="py-1.5 px-2 font-semibold"><Term name="3벳">3벳</Term></th>
               <th className="py-1.5 px-2 font-semibold">콜드콜</th>
               <th className="py-1.5 px-2 font-semibold">3벳에 폴드</th>
             </tr>
@@ -99,7 +105,7 @@ export function AggroChart() {
           </tbody>
         </table>
       </div>
-      <p className="text-2xs text-ink-muted">BB 오픈 0% = 림프 팟 외 오픈 기회 없음(빅블라인드). 콜드콜 30%는 BB 디펜드 기준.</p>
+      <p className="text-2xs text-ink-muted">{'BB 오픈 0% = '}<Term name="림프">림프</Term>{' 팟 외 오픈 기회 없음(빅블라인드). 콜드콜 30%는 BB 디펜드 기준.'}</p>
     </CalcCard>
   );
 }
@@ -197,7 +203,11 @@ export function RangeMatrix() {
 
   return (
     // 제목은 전체화면 헤더가 이미 표시 — 공통 CalcCard 로 흡수(2중 노출 제거)
-    <CalcCard desc="표준 차트 레인지를 콤보 단위로 전개해 프리플랍 승률을 실시간 계산합니다.">
+    <CalcCard>
+      {/* CalcCard 의 desc 프롭과 같은 위치·같은 클래스로 직접 렌더 — '레인지'·'콤보'에 용어 툴팁(카피 무변경). */}
+      <p className="text-2xs text-ink-muted">
+        {'표준 차트 '}<Term name="레인지">레인지</Term>{'를 '}<Term name="콤보">콤보</Term>{' 단위로 전개해 프리플랍 승률을 실시간 계산합니다.'}
+      </p>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <label className="space-y-1">
           <span className="text-2xs font-semibold text-accent-300">내 레인지</span>

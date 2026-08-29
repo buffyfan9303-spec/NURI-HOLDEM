@@ -1,48 +1,14 @@
 // src/components/features/tools/DealCalc.tsx
 // GKR-5 — 딜 계산기. 파이널에서 딜을 논의할 때 ICM 딜(순위 확률 기반)과
 // 칩찹(스택 비례 단순 분배)을 한 표에서 비교한다. 결과 먼저 원칙 — 데모 값으로 진입 즉시 표가 보인다.
-// icmEquity 는 ICMCalculator(features/ICMCalculator.tsx)와 동일한 Malmuth-Harville 비트마스크
-// 메모이제이션 구현 — 그 파일이 export 하지 않아 로컬로 재구현했다(§28: 상금 단위는 중립 숫자).
+// icmEquity 는 src/lib/icm.ts 단일 소스 — 예전엔 ICMCalculator 와 이 파일에 두 벌로 복제돼
+// 있었다(한쪽만 고치면 두 화면 숫자가 갈린다). §28: 상금 단위는 중립 숫자.
 import { useMemo, useState } from 'react';
 import { CalcCard } from './calcUi';
+import { icmEquity } from '../../../lib/icm';
 
 const MAX_PLAYERS = 9;
 const MAX_PRIZES = 9;
-
-/** Malmuth-Harville ICM — '남은 플레이어 비트마스크'로 서브게임을 메모이제이션.
- *  자리(상금 인덱스)는 n − popcount(mask) 로 유일하므로 키는 mask 하나면 충분하다. */
-function icmEquity(stacks: number[], prizes: number[]): number[] {
-  const n = stacks.length;
-  const result = new Array<number>(n).fill(0);
-  if (prizes.length === 0 || n === 0) return result;
-  if (stacks.reduce((a, b) => a + b, 0) <= 0) return result;
-
-  const memo = new Map<number, Float64Array>();
-  const solve = (mask: number): Float64Array => {
-    const cached = memo.get(mask);
-    if (cached) return cached;
-    const res = new Float64Array(n);
-    const idx: number[] = [];
-    let sum = 0;
-    for (let k = 0; k < n; k++) if (mask & (1 << k)) { idx.push(k); sum += stacks[k]; }
-    const prize = prizes[n - idx.length] ?? 0;
-    if (idx.length === 1) { res[idx[0]] = prize; memo.set(mask, res); return res; }
-    if (sum <= 0) { memo.set(mask, res); return res; }
-    for (const i of idx) {
-      const pFirst = stacks[i] / sum;
-      if (pFirst <= 0) continue;
-      res[i] += pFirst * prize;
-      const sub = solve(mask & ~(1 << i));
-      for (const k of idx) if (k !== i) res[k] += pFirst * sub[k];
-    }
-    memo.set(mask, res);
-    return res;
-  };
-
-  const full = solve((1 << n) - 1);
-  for (let i = 0; i < n; i++) result[i] = full[i];
-  return result;
-}
 
 const fmt = (n: number) => Math.round(n).toLocaleString('ko-KR');
 

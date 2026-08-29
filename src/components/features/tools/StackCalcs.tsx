@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { CalcCard, Field, NumIn, Result } from './calcUi';
+import Term from './Term';
 
 // 소형 계산기 모음 — SPR / M-zone / EV / 뱅크롤 / 변동성. 모두 calcUi 카드 UI 사용.
 
@@ -13,7 +14,13 @@ export function SprCalc() {
     : spr < 6 ? '중간 — 오버페어·강한 드로우로 스택 투입 고려'
     : '깊음 — 넛 지향, 마진 핸드는 팟 컨트롤';
   return (
-    <CalcCard title="SPR 계산기" desc="유효 스택 ÷ 팟 = 커밋 판단 기준">
+    <CalcCard>
+      {/* CalcCard 의 title/desc 프롭과 같은 위치·같은 클래스로 직접 렌더 —
+          'SPR' 자체가 이 도구에서 초보를 막는 단어인데 문자열 프롭에는 툴팁을 못 단다(카피·레이아웃 무변경). */}
+      <div>
+        <p className="text-sm font-bold text-ink-primary"><Term name="SPR">SPR</Term> 계산기</p>
+        <p className="text-2xs text-ink-muted mt-0.5">유효 스택 ÷ 팟 = 커밋 판단 기준</p>
+      </div>
       <div className="grid grid-cols-2 gap-2">
         <Field label="유효 스택"><NumIn value={stack} onChange={setStack} /></Field>
         <Field label="현재 팟"><NumIn value={pot} onChange={setPot} /></Field>
@@ -84,7 +91,7 @@ export function EvCalc() {
         <Field label="폴드 시 얻는 팟"><NumIn value={pot} onChange={setPot} /></Field>
       </div>
       <Result label={f > 0 ? `기대값 (EV) · 폴드 ${foldPct}% 반영` : '기대값 (EV)'} value={`${ev >= 0 ? '+' : ''}${Math.round(ev).toLocaleString()}`} good={ev > 0} bad={ev < 0} />
-      <p className="text-2xs text-ink-muted">EV = 승률×이득 − (1−승률)×손실. 폴드 확률 F를 넣으면 EV = F×팟 + (1−F)×쇼다운EV로 세미블러프를 판단합니다.</p>
+      <p className="text-2xs text-ink-muted"><Term name="EV">EV</Term>{' = 승률×이득 − (1−승률)×손실. 폴드 확률 F를 넣으면 EV = F×팟 + (1−F)×쇼다운EV로 '}<Term name="세미블러프">세미블러프</Term>{'를 판단합니다.'}</p>
     </CalcCard>
   );
 }

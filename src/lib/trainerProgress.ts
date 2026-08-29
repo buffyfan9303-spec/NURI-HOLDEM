@@ -145,6 +145,14 @@ export function recordAnswer(correct: boolean): RecordResult {
   return { justHitGoal, xpGained };
 }
 
+/** 보너스 XP 지급 — '오늘의 드릴' 완주처럼 문제 1건 단위가 아닌 성취에 쓴다.
+ *  오늘 카운트·스트릭은 건드리지 않는다(그건 recordAnswer 의 몫). 중복 지급 방지는 호출부 책임. */
+export function awardXp(n: number): void {
+  reconcile();
+  if (!Number.isFinite(n) || n <= 0) return;
+  commit({ ...cache, xp: cache.xp + Math.round(n) });
+}
+
 /** 일일 목표 변경(10/20/50만 허용). */
 export function setDailyGoal(n: number): void {
   reconcile();

@@ -186,6 +186,25 @@ export default function VenuePage({
     () => (venue ? schedules.filter((s) => s.venueId === venue.id && s.approved) : []),
     [venue, schedules],
   );
+
+  /**
+   * 배너(히어로 슬라이드) 탭 → 그 사진이 포스터인 대회 상세로.
+   * 매장 배너는 실제로 대회 포스터다 — venue.images 의 URL 이 schedules.poster_url 과
+   * 같은 값으로 들어 있다. 그래서 사진 하나가 곧 대회 하나를 가리킨다.
+   * 같은 포스터를 여러 회차가 쓰는 경우가 있어(로티 1000GTD 는 5회차가 공유) **가장 임박한
+   * 진행 예정 회차**를 고른다 — 지난 회차로 보내면 유저가 '끝난 대회'를 보게 된다.
+   * 매칭이 없으면(로고 사진 등) 아무 일도 하지 않는다 — 없는 곳으로 보내는 것보다 낫다.
+   */
+  const openScheduleByPoster = useCallback((src: string) => {
+    if (!src || !onSelectSchedule) return;
+    const same = venueSchedules.filter((s) => s.posterUrl === src);
+    if (same.length === 0) return;
+    const now = Date.now();
+    const upcoming = same
+      .filter((s) => new Date(`${s.date}T${s.startTime || '00:00'}`).getTime() >= now)
+      .sort((a, b) => `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`));
+    onSelectSchedule(upcoming[0] ?? same[same.length - 1]);
+  }, [venueSchedules, onSelectSchedule]);
   const venueComments = useMemo(
     () => (venue ? comments.filter((c) => c.venueId === venue.id) : []),
     [venue, comments],
@@ -309,6 +328,7 @@ export default function VenuePage({
           onUpdateImage={onUpdateImage}
           onUpdateImages={onUpdateImages}
           showRotiMark={isRoti}
+          onSlideTap={openScheduleByPoster}
         />
 
         {/* 매장 아이덴티티 — 오버랩 로고 아바타 + 중앙 정렬 + 3-스탯 행(오너 레퍼런스 2026-08-27).
@@ -509,7 +529,11 @@ export default function VenuePage({
         </div>
 
         {/* ── 탭 컨텐츠 ──────────────────────────────────────────── */}
-        <div className="px-page-x py-4 min-h-[50vh]">
+        {/* data-venue-tabpanel: 전환 때 **이 영역만** 밀리게 하는 표식(index.css).
+            어제 붙인 전환은 방향 애니가 root 에 걸려 있어 헤더·히어로·행동 버튼까지 통째로
+            움직였다(오너 지적). 이 컨테이너에 자기 스냅샷 이름을 주면 root 에서 분리돼
+            위쪽은 정지하고 여기만 슬라이드한다. */}
+        <div data-venue-tabpanel className="px-page-x py-4 min-h-[50vh]">
           {tab === 'about' && (
             <div className="space-y-4">
               <SeasonLeaderBanner venueId={venue.id} onRanking={() => setTab('ranking')} />
@@ -603,13 +627,20 @@ export default function VenuePage({
 // ── 히어로 (배경 이미지 업로드 가능) ──────────────────────────────────────
 
 function HeroSection({
-  venue, editable, onUpdateImage, onUpdateImages, showRotiMark,
+  venue, editable, onUpdateImage, onUpdateImages, showRotiMark, onSlideTap,
 }: {
   venue: Venue;
   editable?: boolean;
   onUpdateImage?: (id: string, dataUrl: string) => void;
   onUpdateImages?: (id: string, urls: string[]) => void;
   showRotiMark?: boolean;
+  /**
+   * 배너를 탭했을 때(2026-08-29 오너 지시: "해당 사진의 게시판으로 갈 수 있게").
+   * 매장 배너는 실제로 **대회 포스터**다 — venue.images 의 URL 이 schedules.poster_url 과
+   * 같은 값으로 들어 있다(로티아레나 실측). 그래서 '그 사진의 글' = 그 대회 상세다.
+   * 매칭되는 대회가 없는 사진(로고 등)이면 호출부가 아무것도 하지 않는다.
+   */
+  onSlideTap?: (src: string) => void;
 }) {
   const bgInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
@@ -651,7 +682,10 @@ function HeroSection({
     if (!s) return;
     const t = e.changedTouches[0];
     const dx = t.clientX - s.x, dy = t.clientY - s.y;
-    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) go(safeIdx + (dx < 0 ? 1 : -1));
+    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) { go(safeIdx + (dx < 0 ? 1 : -1)); return; }
+    // 거의 안 움직였으면 스와이프가 아니라 **탭**이다 — 그 배너가 가리키는 대회로 보낸다.
+    // (click 이벤트를 따로 듣지 않는 이유: 스와이프 끝에도 click 이 따라와 오작동한다.)
+    if (Math.abs(dx) < 10 && Math.abs(dy) < 10) onSlideTap?.(slides[safeIdx]);
   };
 
   // 단일 배경 업로드(레거시 — 갤러리 없을 때만 노출)
@@ -760,6 +794,18 @@ function HeroSection({
 
       {/* 좌/우 넘김 버튼 — PC 전용(Phase 10-1 첫 뷰포트 ≤6 행동 예산).
           모바일은 스와이프 + 자동 슬라이드가 내비게이션을 담당하므로 버튼 2개는 소음이다. */}
+      {/* 배너 활성화 — 터치는 onTouchEnd 의 '탭' 판정이 처리하고, 여기는 **마우스·키보드** 몫이다.
+          슬라이드마다 버튼을 두면 사진 n장 = 버튼 n개가 되어 보조기술에 n개로 읽힌다.
+          한 장만 화면에 있으므로 **버튼 하나**가 현재 슬라이드를 활성화하는 구조로 둔다.
+          좌우 화살표(z-10)보다 아래(z-0)에 깔아 화살표 클릭을 가로채지 않는다. */}
+      {onSlideTap && (
+        <button
+          type="button"
+          onClick={() => onSlideTap(slides[safeIdx])}
+          aria-label={`${venue.name} 배너 — 이 대회 자세히 보기`}
+          className="absolute inset-0 z-0 hidden lg:block cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-300"
+        />
+      )}
       {slides.length > 1 && (
         <>
           <button
@@ -783,12 +829,21 @@ function HeroSection({
 
       {/* 슬라이드 점 — 상태 표시기(비인터랙티브). 이동은 스와이프(모바일)·화살표(PC)가 담당 —
           도트를 버튼으로 두면 사진 n장 = 행동 n개가 되어 계층 예산(≤6)이 데이터에 따라 무너진다. */}
+      {/* 인디케이터 — 하단 **오른쪽**. 예전엔 하단 중앙이었는데, 히어로 아래 원형 로고 아바타가
+          가운데에서 위로 겹쳐 올라오기(-mt-8) 때문에 도트가 아바타에 정면으로 깔렸다
+          (2026-08-29 오너 지적: "동그라미 프로필에 겹쳐 스크롤바가 있다").
+          아바타는 가운데 정렬이 고정이므로 도트를 옆으로 비키는 게 맞다 — 아바타를 옮기면
+          아이덴티티 블록의 중앙 정렬이 깨진다.
+          읽힘을 위해 얇은 알약 배경을 깐다(사진이 밝으면 흰 점이 사라져 몇 장인지 알 수 없었다). */}
       {slides.length > 1 && (
-        <div aria-hidden className="absolute bottom-2.5 left-0 right-0 z-10 flex justify-center gap-1.5">
+        <div
+          aria-hidden
+          className="absolute bottom-2.5 right-3 z-10 flex items-center gap-1.5 rounded-full bg-black/35 px-2 py-1"
+        >
           {slides.map((_, i) => (
             <span
               key={i}
-              className={['h-1.5 rounded-full transition-[width,background-color]', i === safeIdx ? 'w-5 bg-accent-300' : 'w-1.5 bg-white/50'].join(' ')}
+              className={['h-1.5 rounded-full transition-[width,background-color]', i === safeIdx ? 'w-5 bg-accent-300' : 'w-1.5 bg-white/60'].join(' ')}
             />
           ))}
         </div>

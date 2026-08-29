@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { CalcCard, Field, NumIn, Result } from './calcUi';
+import Term from './Term';
 
 // 추가 계산기 — 상금 분배 / 종료시간 예측(운영) + 콤보(플레이어). 모두 calcUi 카드 UI.
 
@@ -141,7 +142,7 @@ export function EndTimeCalc() {
         <Result label="총 소요시간" value={`${h}시간 ${m}분`} />
         <Result label={`예상 종료${overnight ? ' (익일)' : ''}`} value={`${pad(endH)}:${pad(endM)}`} accent />
       </div>
-      <p className="text-2xs text-ink-muted">레지 마감 전 탈락·딜레이는 미반영. 브레이크 {numBreaks}회 포함.</p>
+      <p className="text-2xs text-ink-muted"><Term name="레지">레지</Term>{' 마감 전 탈락·딜레이는 미반영. 브레이크 '}{numBreaks}회 포함.</p>
     </CalcCard>
   );
 }
@@ -192,7 +193,7 @@ export function ComboCalc() {
         <div className="rounded-input bg-surface-high p-2"><p className="text-2xs text-ink-muted">수딧</p><p className="text-sm font-bold text-ink-primary">4</p></div>
         <div className="rounded-input bg-surface-high p-2"><p className="text-2xs text-ink-muted">오프수트</p><p className="text-sm font-bold text-ink-primary">12</p></div>
       </div>
-      <p className="text-2xs text-ink-muted">블로커(내 카드·보드)가 있으면 실제 콤보는 더 줄어듭니다.</p>
+      <p className="text-2xs text-ink-muted"><Term name="블로커">블로커</Term>{'(내 카드·보드)가 있으면 실제 '}<Term name="콤보">콤보</Term>{'는 더 줄어듭니다.'}</p>
     </CalcCard>
   );
 }

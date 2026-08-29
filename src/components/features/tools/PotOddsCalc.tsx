@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { CalcCard, Field, NumIn, Result } from './calcUi';
+import Term from './Term';
 
 /** 팟 오즈 · 콜 오즈 계산기 — 콜에 필요한 승률(에쿼티) 산출 */
 export default function PotOddsCalc() {
@@ -14,7 +15,12 @@ export default function PotOddsCalc() {
 
   return (
     // 제목은 전체화면 헤더가 이미 표시 — 카드 안은 설명만(2중 노출 제거)
-    <CalcCard desc="팟·콜 금액으로 콜에 필요한 승률(에쿼티) — 콜 오즈를 계산합니다.">
+    <CalcCard>
+      {/* CalcCard 의 desc 프롭과 같은 위치·같은 클래스로 직접 렌더한다 —
+          '에쿼티'에 용어 툴팁을 붙이려면 문자열 프롭이 아니라 JSX 여야 하기 때문(카피·레이아웃 무변경). */}
+      <p className="text-2xs text-ink-muted">
+        {'팟·콜 금액으로 콜에 필요한 승률('}<Term name="에퀴티">에쿼티</Term>{') — 콜 오즈를 계산합니다.'}
+      </p>
       <div className="grid grid-cols-2 gap-2">
         <Field label="현재 팟"><NumIn value={pot} onChange={setPot} placeholder="100000" /></Field>
         <Field label="콜 금액"><NumIn value={call} onChange={setCall} placeholder="50000" /></Field>
@@ -26,7 +32,7 @@ export default function PotOddsCalc() {
       <div className="rounded-input border border-border-default bg-surface-high p-2.5 space-y-2">
         <Field label="내 예상 승률(%)"><NumIn value={eq} onChange={setEq} suffix="%" /></Field>
         <p className={`text-xs font-bold ${ok ? 'text-emerald-400' : 'text-danger-light'}`}>
-          {ok ? '✓ 콜이 이득 (+EV)' : '✗ 콜은 손해 (−EV)'} · 손익분기 {need.toFixed(1)}%
+          {ok ? '✓ 콜이 이득 (+' : '✗ 콜은 손해 (−'}<Term name="EV">EV</Term>{') · 손익분기 '}{need.toFixed(1)}%
         </p>
       </div>
       {/* 중복 인지 제거 — 아웃츠 계산기와 같은 '필요 승률' 개념을 딥링크로 잇는다(계산 로직 불변) */}
