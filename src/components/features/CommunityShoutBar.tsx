@@ -9,9 +9,20 @@
 //  · 지속 시간 = 6시간(서버 shout_rules 단일 출처). 커뮤니티 방문이 하루 1~2회라
 //    6시간이면 대부분의 활성 사용자에게 최소 한 번은 걸리고, 하루를 넘기지 않아
 //    지난 외침이 상단을 계속 점유하지 않는다.
-//  · 진열 = **최신 1건만 크게**, 나머지는 '+N개' 펼치기. 자동 순환(마퀴·캐러셀)을 쓰지 않는다 —
-//    상시 움직이는 배너는 오너가 가장 싫어하는 '끊김/주르륵'의 주범이고 모션 헌법의
-//    무한 루프 예외를 새로 만들 이유가 없다. 등장 애니는 없고 공간은 항상 예약돼 있다(CLS 0).
+//  · 진열 = **한 번에 하나, 1회 20초씩 대기열 순환**(오너 지시 2026-08-30).
+//    종전에는 '최신 1건만 크게, 나머지는 +N개 접기' 였는데 그 규칙에는 결함이 있었다 —
+//    2,000점짜리 전광판을 산 사람이 **뒤에 올라온 200점 외침 하나에 그대로 묻혔다.**
+//    돈을 더 낸 쪽이 덜 보이는 구조라 등급 자체가 무의미했다. 이제 살아 있는 외침은 전부
+//    같은 자리를 20초씩 돌아가며 쓴다. 등급이 사는 것은 '독점'이 아니라
+//    **대기열에 남아 있는 기간(6/12/24시간)과 겉모습**이다.
+//  · 순번은 **벽시계에서 유도**한다(floor(now/20s) % n) — 타이머 누적 오차가 없고,
+//    탭을 오래 숨겼다 돌아와도 어긋나지 않으며, **모든 사람이 같은 순간에 같은 외침을 본다**
+//    (전광판이라는 말 그대로). 로컬 타이머로 돌리면 사람마다 다른 걸 보게 된다.
+//  · 전환은 마퀴가 아니라 **20초에 한 번의 opacity 크로스페이드**다. 상시 움직이는 배너가 아니라
+//    모션 헌법의 무한 루프 예외를 새로 만들지 않는다. animation 이 아니라 transition 을 쓰는데,
+//    display 토글(탭 keep-alive)로 **재생이 되살아나지 않기 때문**이다 — animation 이면
+//    탭 재방문마다 다시 재생돼 .tab-pane 무효화 목록에 등록해야 하고, 그러면 아예 안 보인다.
+//    공간은 항상 예약돼 있다(CLS 0).
 //
 // ── 안전장치(전부 서버가 최종 판정) ──────────────────────────────────────────
 //  차감·게시 원자성(buy_shout RPC 한 트랜잭션) · 프로필 행 잠금으로 중복 클릭 직렬화 ·
@@ -56,6 +67,33 @@ const tierSkin = (t?: ShoutTier) => TIER_SKIN[t ?? 'basic'] ?? TIER_SKIN.basic;
 const tierOfSku = (key: string): ShoutTier => (key.replace(/^shout_/, '') as ShoutTier);
 
 const durLabel = (h: number): string => (h >= 24 && h % 24 === 0 ? `${h / 24}일` : `${h}시간`);
+
+/** 외침 1회 노출 = 20초(오너 지시 2026-08-30). 대기열이 있으면 이 간격으로 다음 차례가 온다. */
+const SHOUT_TURN_MS = 20_000;
+
+/**
+ * 지금이 몇 번째 차례인가 — **벽시계에서 유도**한다.
+ * setInterval 로 인덱스를 누적하면 (a) 탭이 백그라운드일 때 브라우저가 타이머를 죽여 어긋나고
+ * (b) 사람마다 시작 시점이 달라 각자 다른 외침을 본다. 시계에서 뽑으면 둘 다 없다.
+ * 타이머는 '언제 다시 계산할지' 를 알리는 용도로만 쓰고, 경계에 맞춰 재무장한다.
+ */
+function useShoutTurn(n: number): number {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (n <= 1) return;                       // 대기열이 없으면 돌 필요가 없다
+    let id: number | undefined;
+    const arm = () => {
+      if (document.hidden) return;            // 안 보이는 화면에서 타이머를 돌리지 않는다
+      const wait = SHOUT_TURN_MS - (Date.now() % SHOUT_TURN_MS);
+      id = window.setTimeout(() => { tick((v) => v + 1); arm(); }, wait + 20);
+    };
+    const onVis = () => { if (id) { clearTimeout(id); id = undefined; } tick((v) => v + 1); arm(); };
+    arm();
+    document.addEventListener('visibilitychange', onVis);
+    return () => { if (id) clearTimeout(id); document.removeEventListener('visibilitychange', onVis); };
+  }, [n]);
+  return n > 0 ? Math.floor(Date.now() / SHOUT_TURN_MS) % n : 0;
+}
 
 function remainLabel(expiresAt: string): string {
   const ms = new Date(expiresAt).getTime() - Date.now();
@@ -106,7 +144,7 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
     setBusy(true);
     try {
       const s = await buyShout(trimmed, tier);
-      toast.show(`외쳤습니다! ${s.cost}점 사용 · ${ttlHours}시간 노출`, 'success');
+      toast.show(`외쳤습니다! ${s.cost}점 사용 · ${ttlHours}시간 대기열 순환`, 'success');
       onPosted?.(s);
       await refreshProfile?.();
       onClose();
@@ -119,7 +157,8 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
     <Modal open={open} onClose={onClose} title="외치기" variant="sheet" maxWidth="md" dismissOnBackdrop={false}>
       <div className="space-y-3 p-4">
         <p className="text-2xs leading-relaxed text-ink-muted">
-          커뮤니티 맨 위에 <b className="text-ink-secondary">{ttlHours}시간</b> 동안 크게 걸립니다.
+          커뮤니티 맨 위 대기열에 <b className="text-ink-secondary">{ttlHours}시간</b> 동안 올라가,
+          <b className="text-ink-secondary">한 번에 20초씩</b> 돌아가며 노출됩니다.
           활동점수 <b className="text-accent-300">{cost}점</b>이 사용되며, 등급 점수(누적)는 줄지 않아요.
         </p>
 
@@ -245,8 +284,24 @@ export default function CommunityShoutBar({ className }: { className?: string })
   };
 
   const list = shouts ?? [];
-  const top = list[0];
-  const rest = list.slice(1);
+  const turn = useShoutTurn(list.length);
+  // 크로스페이드 — 순번이 바뀌면 먼저 흐려지고 그다음 내용을 바꾼다(150ms = --dur-fast 와 같은 값).
+  //   모션 축소 설정이면 페이드 없이 즉시 교체한다(움직임을 아예 만들지 않는다).
+  const [shown, setShown] = useState(0);
+  const [vis, setVis] = useState(true);
+  useEffect(() => {
+    const next = list.length ? turn % list.length : 0;
+    if (next === shown) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { setShown(next); return; }
+    setVis(false);
+    const t = window.setTimeout(() => { setShown(next); setVis(true); }, 150);
+    return () => clearTimeout(t);
+  }, [turn, shown, list.length]);
+
+  // 목록이 줄어드는 순간(만료·내리기) 인덱스가 범위를 벗어나 화면이 비는 것을 막는다.
+  const idx = list.length ? Math.min(shown, list.length - 1) : 0;
+  const top = list[idx];
+  const rest = list.filter((_, i) => i !== idx);
 
   return (
     // min-h 로 자리를 미리 잡는다 — 로딩→도착에서 아래 콘텐츠가 밀리지 않게(CLS 0)
@@ -258,10 +313,12 @@ export default function CommunityShoutBar({ className }: { className?: string })
         <div className={['rounded-card border px-3 py-2.5', tierSkin(top.tier).box].join(' ')}>
           <div className="flex items-start gap-2">
             <Icon name="megaphone" size={16} className={['mt-0.5 shrink-0', tierSkin(top.tier).icon].join(' ')} />
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1"
+                 style={{ transition: 'opacity var(--dur-base) var(--ease)', opacity: vis ? 1 : 0 }}>
               <p className={['break-words font-bold leading-snug text-ink-primary', tierSkin(top.tier).text].join(' ')}>{top.message}</p>
               <p className="mt-0.5 text-2xs text-ink-muted">
                 {top.nickname} · {remainLabel(top.expiresAt)}
+                {list.length > 1 && <> · 대기열 {idx + 1}/{list.length}</>}
               </p>
             </div>
             {(isAdmin || user?.id === top.userId) && (
@@ -280,7 +337,7 @@ export default function CommunityShoutBar({ className }: { className?: string })
             <>
               <button type="button" onClick={() => setExpanded((v) => !v)}
                 className="mt-1.5 text-2xs font-bold text-accent-300 hover:text-accent-200">
-                {expanded ? '접기' : `다른 외침 ${rest.length}개 보기`}
+                {expanded ? '접기' : `대기열 ${rest.length}개 보기`}
               </button>
               {expanded && (
                 <ul className="mt-1 space-y-1 border-t border-border-subtle pt-1.5">

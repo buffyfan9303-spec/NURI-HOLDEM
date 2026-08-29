@@ -18,3 +18,15 @@ export const EQUITY_BANDS = {
   /** 밴드 5 — 열세(폴드·체크-폴드 구간) — 밴드 4와 동일 색(기존 값 1:1 보존) */
   weak: '#3B82F6',
 } as const;
+
+/** 에퀴티 강도 축 **텍스트 전용** 색. 위 EQUITY_BANDS 는 차트 fill 용 고정 스냅샷이라
+ *  글자로 재사용하면 대비가 무너진다(실측: 라이트 strong 2.15:1 · playable 2.28:1 · dominant 3.76:1 — AA 미달).
+ *  밴드 5개의 '의미 매핑'은 1:1 그대로다(weak 는 marginal 과 같은 색이라는 기존 성질도 보존).
+ *  값 정의는 src/index.css `--gto-txt-*`. */
+export const EQUITY_BAND_TEXT = {
+  dominant: 'var(--gto-txt-dominant)',
+  strong: 'var(--gto-txt-strong)',
+  playable: 'var(--gto-txt-playable)',
+  marginal: 'var(--gto-txt-marginal)',
+  weak: 'var(--gto-txt-marginal)',
+} as const;

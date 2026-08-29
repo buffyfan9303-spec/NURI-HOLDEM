@@ -261,14 +261,12 @@ export default function PostDetailModal({
             헤더 우측 4버튼이 폭을 먹어 이름+칩이 3줄로 접히던 원인이었다).
             여기 남는 신고·차단·삭제는 '가끔 쓰는 관리 동작'이라 한 덩어리로 묶어 우측에 둔다. */}
         <header className="mt-3 flex items-center gap-2.5 border-b border-border-default pb-3">
-          {/* !object-contain — 레거시 아바타(크롭 도입 전 업로드분)는 정사각이 아니다.
-              실측: 이 글 작성자 아바타는 256×151 로고인데 object-cover 가 가운데 59% 만 남기고
-              잘라내 원 안에 글자 토막만 보였다('로고가 잘려 보인다'의 원인).
-              업로드 경로는 이제 정사각 크롭을 강제하므로(ProfileModal handleCropApply)
-              정사각 사진에서는 cover 와 결과가 동일하고, 비정사각 레거시만 온전히 살아난다.
-              Avatar.tsx 가 object-cover 를 하드코딩하고 있어(소유 밖) ! 로 덮는다 — 근본 수정은 그 파일에서. */}
+          {/* 2026-08-30: 여기 있던 `!object-contain` 땜질을 제거했다 — Avatar 의 기본값이 contain 이 됐다.
+              (근거 실측은 유지: 이 글 작성자 아바타가 256×151 로고인데 object-cover 가 가로 59% 만 남겨
+               원 안에 글자 토막만 보였다. 정사각 사진에서는 cover 와 결과가 동일해 회귀가 없다.)
+              꽉 채우는 크롭이 필요해지면 `fit="cover"` 로 명시할 것 — ! 유틸을 다시 붙이지 말 것. */}
           <Avatar name={post.userName} src={post.userAvatar} color={post.userColor} size={40}
-            className="!object-contain border border-border-default" />
+            className="border border-border-default" />
           <div className="flex-1 min-w-0">
             {/* flex-wrap(2026-08-28 스윕): 390px에서 우측 버튼들이 폭을 다 먹어 작성자 이름이
                 '♣..'로 통째로 사라졌다 — 칩이 다음 줄로 내려가고 이름이 먼저 살아남게 줄바꿈을

@@ -11,6 +11,7 @@ import type { ChatThread } from '../../api/chat';
 import { getListingThreads } from '../../api/chat';
 import ChatPane from './chat/ChatPane';
 import Icon from '../atoms/Icon';
+import { onColorInkClass } from '../../lib/color';
 
 interface ListingDetailModalProps {
   /** 본인 매물 상태 변경 직후 — 목록·열린 매물 동기화(팔린 물건이 '판매중'으로 남는 헛문의 방지) */
@@ -166,7 +167,7 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
           <h3 className="text-sm font-semibold text-ink-primary mb-2">판매자</h3>
           <div className="flex items-center gap-3 p-3 rounded-card bg-surface-high border border-border-subtle">
             <div
-              className="w-12 h-12 shrink-0 rounded-full flex items-center justify-center text-base font-bold text-white"
+              className={['w-12 h-12 shrink-0 rounded-full flex items-center justify-center text-base font-bold', onColorInkClass(listing.sellerAvatarColor)].join(' ')}
               style={{ background: listing.sellerAvatarColor }}
             >
               {listing.sellerName[0]}
@@ -347,7 +348,7 @@ function SellerChatModal({
           </button>
         )}
         <div
-          className="w-10 h-10 shrink-0 rounded-full flex items-center justify-center text-sm font-bold text-white"
+          className={['w-10 h-10 shrink-0 rounded-full flex items-center justify-center text-sm font-bold', onColorInkClass(listing.sellerAvatarColor)].join(' ')}
           style={{ background: listing.sellerAvatarColor }}
         >
           {headerName[0]}

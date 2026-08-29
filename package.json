@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "node scripts/gen-sitemap.mjs && tsc -b && vite build",
     "sitemap": "node scripts/gen-sitemap.mjs",
+    "bundle:budget": "node scripts/bundle-budget.mjs",
+    "bundle:budget:update": "node scripts/bundle-budget.mjs --update",
     "lint": "eslint .",
     "preview": "vite preview",
     "test:e2e": "npm run test:e2e:main && npm run test:e2e:boot",
@@ -15,6 +17,7 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
     "test": "vitest run",
+    "test:mutation": "node scripts/mutation-check.mjs",
     "test:watch": "vitest"
   },
   "dependencies": {

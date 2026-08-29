@@ -62,7 +62,9 @@ export default function UnreadBadge({
       className={[
         // 기본 형태
         'inline-flex items-center justify-center',
-        'bg-danger font-bold text-white leading-none select-none',
+        // bg-danger(#F6465D) 위 흰 글자는 실측 3.53:1 로 두 테마 모두 AA 미달이었다(고정 hex라 테마 무관).
+        // danger-dark(#CF304A)로 내려 5.03:1 확보 — Toast 의 error 톤과 같은 계열이라 새 색 신설도 없다.
+        'bg-danger-dark font-bold text-white leading-none select-none',
         'shadow-badge pointer-events-none',
         // dot vs 숫자 모드 크기 분기
         dot

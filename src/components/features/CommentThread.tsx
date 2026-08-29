@@ -110,7 +110,7 @@ function CommentItem({ marks = {}, titleOf,
   return (
     <div className="space-y-2">
       <div className="flex gap-2">
-        <Avatar name={comment.userName} src={comment.userAvatar} color={comment.isOwner ? '#FFD100' : '#5A6175'} size={32} className="!object-contain" />
+        <Avatar name={comment.userName} src={comment.userAvatar} color={comment.isOwner ? '#FFD100' : '#5A6175'} size={32} />
         <div className="flex-1 min-w-0">
           {/* 배지 정책은 게시글 상세(PostDetailModal)와 같다 — 색은 하나만.
               · '매장 답글' 은 댓글의 **의미를 바꾸는** 표식이라 유일하게 accent 를 유지하되
@@ -218,7 +218,7 @@ export default function CommentThread({ comments, onSubmit, onDelete, moderator 
       {/* 입력창 */}
       {user ? (
         <form onSubmit={submit} className="flex gap-2 py-2">
-          <Avatar name={user.name} src={user.avatarUrl} color={user.avatarColor} size={32} className="!object-contain" />
+          <Avatar name={user.name} src={user.avatarUrl} color={user.avatarColor} size={32} />
           <input
             type="text"
             value={content}

@@ -13,6 +13,7 @@ import NoticeDetailModal from './NoticeDetailModal';
 import { getNotices, type MarketplaceNotice } from '../../api/marketplace';
 import SegmentedTabs from '../atoms/SegmentedTabs';
 import Icon from '../atoms/Icon';
+import { onColorInkClass } from '../../lib/color';
 
 const KIND_LABEL: Record<DealerPostKind, string> = { hiring: '구인', seeking: '구직', general: '일반' };
 const KIND_STYLE: Record<DealerPostKind, string> = {
@@ -233,7 +234,7 @@ export default function DealerCommunity() {
                 )}
                 <p className="mt-1.5 whitespace-pre-wrap break-words text-sm text-ink-primary line-clamp-3">{p.content}</p>
                 <div className="mt-1.5 flex items-center gap-2">
-                  <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white" style={{ background: p.authorColor ?? '#5A6175' }}>
+                  <div className={['flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold', onColorInkClass(p.authorColor ?? '#5A6175')].join(' ')} style={{ background: p.authorColor ?? '#5A6175' }}>
                     {p.authorName[0]}
                   </div>
                   <span className="text-2xs text-ink-muted">{p.authorName}</span>
@@ -329,7 +330,7 @@ function DealerPostBody({ post, isAdmin, userId, userName }: {
 
       {/* 작성자 */}
       <div className="flex items-center gap-2 pt-1 border-t border-border-subtle">
-        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-2xs font-bold text-white" style={{ background: post.authorColor ?? '#5A6175' }}>{post.authorName[0]}</div>
+        <div className={['flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-2xs font-bold', onColorInkClass(post.authorColor ?? '#5A6175')].join(' ')} style={{ background: post.authorColor ?? '#5A6175' }}>{post.authorName[0]}</div>
         <span className="text-xs text-ink-secondary">{post.authorName}</span>
       </div>
 

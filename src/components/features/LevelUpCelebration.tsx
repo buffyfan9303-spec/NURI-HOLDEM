@@ -3,7 +3,7 @@
 //   LevelUpWatcher 를 App 루트에 마운트하면 user.activityPoints 변동 즉시 감지(대시보드 진입 불필요).
 //   localStorage 'nuri:level-seen' 로 1회만, 같은 레벨 중복 방지.
 import { useEffect, useRef, useState } from 'react';
-import TierBadge, { tierOf } from '../atoms/TierBadge';
+import TierBadge, { tierOf, tierCss } from '../atoms/TierBadge';
 
 const SEEN_KEY = 'nuri:level-seen';
 
@@ -49,7 +49,7 @@ export function LevelUpCelebration({ points, onClose }: { points: number; onClos
         <p className="text-2xs font-extrabold uppercase tracking-[0.3em] text-accent-300">LEVEL UP</p>
         <div className="my-3 flex justify-center"><TierBadge points={points} size={56} /></div>
         <p className="text-3xl font-extrabold leading-none text-ink-primary">Lv {t.level}</p>
-        <p className="mt-1.5 text-lg font-bold" style={{ color: t.color }}>{t.title}</p>
+        <p className="mt-1.5 text-lg font-bold" style={{ color: tierCss(t.colorVar) }}>{t.title}</p>
         <p className="mt-2 text-2xs text-ink-muted">활동점수 {points.toLocaleString()}점 달성!</p>
         <button type="button" onClick={onClose} className="btn-primary mt-4 w-full text-sm">확인</button>
       </div>

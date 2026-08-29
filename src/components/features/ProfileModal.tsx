@@ -14,12 +14,13 @@ import { pushSupported, isPushSubscribed, enablePush, disablePush } from '../../
 import AvatarCropper from './AvatarCropper';
 import ActivityBadges from '../atoms/ActivityBadges';
 import Icon from '../atoms/Icon';
-import TierBadge, { tierColor, tierProgress } from '../atoms/TierBadge';
+import TierBadge, { tierProgress, tierCss, tierVividVar } from '../atoms/TierBadge';
 import TitleChip from '../atoms/TitleChip';
 import IdentityVerificationButton from './IdentityVerificationButton';
 import { useIdentityEnabled } from '../../lib/identityFlag';
 import { getMyVisitStats } from '../../api/reservations';
 import type { LegalDoc } from './LegalDocsModal';
+import { onColorInkClass } from '../../lib/color';
 
 interface ProfileModalProps {
   open: boolean;
@@ -177,7 +178,8 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
   // ── 아이덴티티 헤더 파생값 — 이미 내려오는 데이터만 사용(새 fetch 없음) ────
   const points    = user.activityPoints ?? 0;
   const isAdmin   = user.role === 'admin';
-  const ringColor = tierColor(points, isAdmin); // 설정 탭 아바타 링에도 사용
+  // 아바타 링은 장식 — 라이트에서도 채도를 유지하는 vivid 토큰(3:1 기준)
+  const ringColor = tierCss(tierVividVar(points, isAdmin)); // 설정 탭 아바타 링에도 사용
 
   // ── 아바타 선택 → 크롭 편집기 ──────────────────────────────────────────
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -340,11 +342,13 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
                 style={{ '--tw-ring-color': ringColor } as CSSProperties}
                 aria-label="프로필 사진 변경"
               >
+                {/* 이니셜 글자색은 배경 상대휘도로 자동 전환한다(src/lib/color.ts).
+                    팔레트 10색 중 9색이 흰 글자로 AA(4.5:1) 미달이었다 — #FFD100 은 1.46:1. */}
                 {avatarPreview ? (
                   <img src={avatarPreview} alt="프로필" className="w-full h-full object-cover" />
                 ) : (
                   <span
-                    className="w-full h-full flex items-center justify-center text-4xl font-bold text-white"
+                    className={['w-full h-full flex items-center justify-center text-4xl font-bold', onColorInkClass(selectedColor)].join(' ')}
                     style={{ background: selectedColor }}
                   >
                     {(name || user.name)[0]?.toUpperCase()}
@@ -625,7 +629,8 @@ export function ProfileIdentityHeader({ displayName, avatarUrl, avatarColor, poi
   /** 주 버튼 행(프로필 편집·내 전적 등) — 호출부가 렌더 책임 */
   actions?: ReactNode;
 }) {
-  const ringColor = tierColor(points, isAdmin);
+  const ringVar   = tierVividVar(points, isAdmin); // 커버·링 그라데이션은 장식급 토큰
+  const ringColor = tierCss(ringVar);
   const prog = tierProgress(points);
   return (
     <div className="flex flex-col items-center gap-3">
@@ -640,14 +645,14 @@ export function ProfileIdentityHeader({ displayName, avatarUrl, avatarColor, poi
       {/* 오버랩 아바타 — 등급색 그라데이션 링(샘플 문법 ①) */}
       <div
         className="relative -mt-[3.75rem] h-[6.5rem] w-[6.5rem] rounded-full p-1"
-        style={{ background: `conic-gradient(from 210deg, ${ringColor}, ${ringColor}44 40%, ${ringColor}CC 65%, ${ringColor})` }}
+        style={{ background: `conic-gradient(from 210deg, ${ringColor}, ${tierCss(ringVar, 0.267)} 40%, ${tierCss(ringVar, 0.8)} 65%, ${ringColor})` }}
       >
         <div className="h-full w-full overflow-hidden rounded-full border-[3px] border-surface-base">
           {avatarUrl ? (
             <img src={avatarUrl} alt="프로필" className="w-full h-full object-cover" />
           ) : (
             <span
-              className="w-full h-full flex items-center justify-center text-4xl font-bold text-white"
+              className={['w-full h-full flex items-center justify-center text-4xl font-bold', onColorInkClass(avatarColor || '#FFD100')].join(' ')}
               style={{ background: avatarColor || '#FFD100' }}
             >
               {displayName[0]?.toUpperCase()}
@@ -674,7 +679,7 @@ export function ProfileIdentityHeader({ displayName, avatarUrl, avatarColor, poi
           transition-[width]는 자기완결 소형 진행바 예외(§20.4-3). 데이터는 tier 유틸 상수만 사용. */}
       <div className="w-full max-w-[300px]">
         <div className="mb-1 flex items-center justify-between text-2xs text-ink-muted">
-          <span>Lv {prog.current.level} · <b style={{ color: prog.current.color }}>{prog.current.title}</b></span>
+          <span>Lv {prog.current.level} · <b style={{ color: tierCss(prog.current.colorVar) }}>{prog.current.title}</b></span>
           <span className="tabular-nums">
             {prog.next
               ? <><b className="text-ink-secondary">{Math.max(0, Math.floor(points)).toLocaleString()}</b> / {prog.next.min.toLocaleString()}점</>
@@ -688,8 +693,8 @@ export function ProfileIdentityHeader({ displayName, avatarUrl, avatarColor, poi
               style={{
                 width: `${Math.round(prog.ratio * 100)}%`,
                 background: prog.next
-                  ? `linear-gradient(90deg, ${prog.current.color}, ${prog.next.color})`
-                  : prog.current.color,
+                  ? `linear-gradient(90deg, ${tierCss(prog.current.vividVar)}, ${tierCss(prog.next.vividVar)})`
+                  : tierCss(prog.current.vividVar),
               }}
             />
           </div>
@@ -702,7 +707,7 @@ export function ProfileIdentityHeader({ displayName, avatarUrl, avatarColor, poi
         </div>
         {prog.next && (
           <p className="mt-1 text-center text-2xs text-ink-muted">
-            다음 등급 <b style={{ color: prog.next.color }}>{prog.next.title}</b>까지{' '}
+            다음 등급 <b style={{ color: tierCss(prog.next.colorVar) }}>{prog.next.title}</b>까지{' '}
             <b className="tabular-nums text-ink-secondary">{prog.toNext.toLocaleString()}</b>점
           </p>
         )}

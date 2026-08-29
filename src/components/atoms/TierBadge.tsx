@@ -18,37 +18,67 @@ export interface Tier {
   rank: number;
   /** 진입 최소 점수 */
   min: number;
-  /** 강조 색 */
+  /** 강조 색 — 다크 기준 6자리 hex. canvas(프로필 카드)처럼 CSS 변수를 못 읽는 곳 전용. */
   color: string;
+  /** 텍스트용 등급색 CSS 변수명(테마 인지) — tierCss() 로 감싸 쓴다. WCAG 4.5:1 보장. */
+  colorVar: string;
+  /** 장식용(글로우·그라데이션·테두리) 등급색 CSS 변수명 — 라이트에서도 채도 유지. */
+  vividVar: string;
   /** 레벨 (1~12, rank+1) */
   level: number;
   /** 한글 칭호 */
   title: string;
 }
 
-interface TierDef { rank: string; min: number; color: string; title: string; }
+interface TierDef { rank: string; min: number; color: string; token: string; title: string; }
+
+/**
+ * 등급 색 CSS 값. surface 스케일과 같은 `rgb(var(--x) / a)` 문법으로 통일한다
+ * (color-mix 는 computed 가 color(srgb ...) 로 갈려 섞이면 그게 다음 회귀다).
+ * @param varName `--tier-blue` 같은 토큰명
+ * @param alpha   0~1. 생략 시 불투명
+ */
+export function tierCss(varName: string, alpha?: number): string {
+  return alpha == null ? `rgb(var(${varName}))` : `rgb(var(${varName}) / ${alpha})`;
+}
+
+/** AA(상대평가)·SS(운영자) 등급색 토큰 — RANK_THRESHOLDS 밖이라 별도 상수 */
+export const ACE_VAR         = '--tier-ace';
+export const ACE_VIVID_VAR   = '--tier-ace-vivid';
+export const ADMIN_VAR       = '--tier-admin';
+export const ADMIN_VIVID_VAR = '--tier-admin-vivid';
+
+/** TierDef -> Tier (색 토큰 결합 지점 일원화) */
+function toTier(d: TierDef, idx: number): Tier {
+  return {
+    key: d.rank, label: d.rank, rank: idx, min: d.min, color: d.color,
+    colorVar: `--tier-${d.token}`, vividVar: `--tier-${d.token}-vivid`,
+    level: idx + 1, title: d.title,
+  };
+}
 
 // 점수로 도달 가능한 최대 등급은 K. A 는 상대평가(별도)로만 부여.
 // 색상은 등급군별로 구분(회색→블루→그린→퍼플→오렌지→레드→골드). title=레벨별 한글 칭호.
 const RANK_THRESHOLDS: readonly TierDef[] = [
-  { rank: '22',   min: 0,     color: '#7C8696', title: '홀덤 입문' },
-  { rank: '33',   min: 20,    color: '#7C8696', title: '뉴비' },
-  { rank: '44',   min: 60,    color: '#94A0B5', title: '루키' },
-  { rank: '55',   min: 150,   color: '#5FA8FF', title: '레귤러' },
-  { rank: '66',   min: 300,   color: '#5FA8FF', title: '그라인더' },
-  { rank: '77',   min: 600,   color: '#4FCB98', title: '세미프로' },
-  { rank: '88',   min: 1200,  color: '#4FCB98', title: '프로' },
-  { rank: '99',   min: 2500,  color: '#B388FF', title: '하이롤러' },
-  { rank: '1010', min: 4000,  color: '#B388FF', title: '샤크' },
-  { rank: 'JJ',   min: 7000,  color: '#FF9F45', title: '레전드' },
-  { rank: 'QQ',   min: 10000, color: '#FF7A8A', title: '챔피언' },
-  { rank: 'KK',   min: 14000, color: '#FFD100', title: '홀덤 마스터' },
+  { rank: '22',   min: 0,     color: '#7C8696', token: 'slate',    title: '홀덤 입문' },
+  { rank: '33',   min: 20,    color: '#7C8696', token: 'slate',    title: '뉴비' },
+  { rank: '44',   min: 60,    color: '#94A0B5', token: 'steel',    title: '루키' },
+  { rank: '55',   min: 150,   color: '#5FA8FF', token: 'blue',     title: '레귤러' },
+  { rank: '66',   min: 300,   color: '#5FA8FF', token: 'blue',     title: '그라인더' },
+  { rank: '77',   min: 600,   color: '#4FCB98', token: 'green',    title: '세미프로' },
+  { rank: '88',   min: 1200,  color: '#4FCB98', token: 'green',    title: '프로' },
+  { rank: '99',   min: 2500,  color: '#B388FF', token: 'purple',   title: '하이롤러' },
+  { rank: '1010', min: 4000,  color: '#B388FF', token: 'purple',   title: '샤크' },
+  { rank: 'JJ',   min: 7000,  color: '#FF9F45', token: 'orange',   title: '레전드' },
+  { rank: 'QQ',   min: 10000, color: '#FF7A8A', token: 'rose',     title: '챔피언' },
+  { rank: 'KK',   min: 14000, color: '#FFD100', token: 'gold',     title: '홀덤 마스터' },
 ] as const;
 
 // A(Ace) 부여 조건 — 상대평가
 export const ACE_MIN_POINTS = 14000;
 export const ACE_TOP_RANK   = 10;
-const ACE_COLOR = '#FFD700';
+/** SS(운영자) 다크 기준 hex — tierColor() 의 hex 반환 계약 유지용(App.tsx·canvas). */
+const ADMIN_HEX = '#FF4D6D';
 
 /** 활동 점수 -> 등급(2~K) */
 export function tierOf(points: number): Tier {
@@ -57,13 +87,28 @@ export function tierOf(points: number): Tier {
   for (let i = 0; i < RANK_THRESHOLDS.length; i++) {
     if (p >= RANK_THRESHOLDS[i].min) idx = i; else break;
   }
-  const d = RANK_THRESHOLDS[idx];
-  return { key: d.rank, label: d.rank, rank: idx, min: d.min, color: d.color, level: idx + 1, title: d.title };
+  return toTier(RANK_THRESHOLDS[idx], idx);
 }
 
-/** 등급 강조색 — 아바타 테두리 등에 사용. 운영자=빨강, 그 외 점수 등급색. */
+/**
+ * 등급 강조색(6자리 hex, 다크 기준) — 운영자=빨강, 그 외 점수 등급색.
+ * ⚠ 반환 계약(6자리 hex)을 바꾸지 말 것: 소비처가 `${tierColor(...)}aa` 처럼 알파를 문자열로
+ *   결합한다(App.tsx 아바타 링 — 오케스트레이터 소유 파일). 또 canvas 2D(profileCard.ts)는
+ *   CSS 변수를 해석하지 못해 hex 가 필요하다.
+ * 테마를 따라야 하는 곳은 아래 tierColorVar/tierVividVar + tierCss 를 쓴다.
+ */
 export function tierColor(points: number, admin = false): string {
-  return admin ? '#FF4D6D' : tierOf(points).color;
+  return admin ? ADMIN_HEX : tierOf(points).color;
+}
+
+/** 등급 강조색 — 텍스트용 CSS 변수명(테마 인지). 운영자 포함. */
+export function tierColorVar(points: number, admin = false): string {
+  return admin ? ADMIN_VAR : tierOf(points).colorVar;
+}
+
+/** 등급 강조색 — 장식용 CSS 변수명(테마 인지, 채도 유지). 운영자 포함. */
+export function tierVividVar(points: number, admin = false): string {
+  return admin ? ADMIN_VIVID_VAR : tierOf(points).vividVar;
 }
 
 /** A 등급 자격 여부(상대평가): K(14,000점) 달성 + 전체 순위 10위 이내 */
@@ -100,8 +145,7 @@ export function tierProgress(points: number): TierProgress {
   if (current.rank >= RANK_THRESHOLDS.length - 1) {
     return { current, next: null, ratio: 1, toNext: 0 };
   }
-  const nd = RANK_THRESHOLDS[current.rank + 1];
-  const next: Tier = { key: nd.rank, label: nd.rank, rank: current.rank + 1, min: nd.min, color: nd.color, level: current.rank + 2, title: nd.title };
+  const next: Tier = toTier(RANK_THRESHOLDS[current.rank + 1], current.rank + 1);
   const span = next.min - current.min;
   const done = p - current.min;
   return {
@@ -114,11 +158,8 @@ export function tierProgress(points: number): TierProgress {
 
 /** 전체 등급 목록(낮은→높은) — 안내/범례용 (2~K) */
 export function allTiers(): Tier[] {
-  return RANK_THRESHOLDS.map((d, i) => ({ key: d.rank, label: d.rank, rank: i, min: d.min, color: d.color, level: i + 1, title: d.title }));
+  return RANK_THRESHOLDS.map(toTier);
 }
-
-// 운영자(관리자) 전용 최상위 등급. 랭킹에는 집계하지 않는다.
-const ADMIN_TIER_COLOR = '#FF4D6D';
 
 interface Props {
   points: number;
@@ -137,7 +178,9 @@ export default function TierBadge({ points, showLabel = false, size = 14, admin 
   const ace = !admin && isAceRank(points, overallRank);
   const t = tierOf(points);
   const label = admin ? 'SS' : ace ? 'AA' : t.label;
-  const color = admin ? ADMIN_TIER_COLOR : ace ? ACE_COLOR : t.color;
+  // 텍스트는 --tier-*(4.5:1 보장), 테두리·글로우는 --tier-*-vivid(3:1 기준 · 채도 유지)
+  const inkVar   = admin ? ADMIN_VAR       : ace ? ACE_VAR       : t.colorVar;
+  const vividVar = admin ? ADMIN_VIVID_VAR : ace ? ACE_VIVID_VAR : t.vividVar;
   const glow = admin || ace || t.rank >= 11;
   const fontSize = Math.max(8, Math.round(size * 0.62));
 
@@ -152,10 +195,10 @@ export default function TierBadge({ points, showLabel = false, size = 14, admin 
       }
     : {
         height: size, minWidth: size, padding: '0 2px', fontSize,
-        color,
-        border: `1px solid ${color}66`,
+        color: tierCss(inkVar),
+        border: `1px solid ${tierCss(vividVar, 0.4)}`,
         background: 'rgb(var(--surface-base) / 0.9)', // 토큰 — 라이트 모드에서도 자동 대응
-        boxShadow: glow ? `0 0 6px ${color}99` : undefined,
+        boxShadow: glow ? `0 0 6px ${tierCss(vividVar, 0.6)}` : undefined,
       };
 
   return (
@@ -176,7 +219,7 @@ export default function TierBadge({ points, showLabel = false, size = 14, admin 
         {label}
       </span>
       {showLabel && (
-        <span className="text-2xs font-bold" style={{ color: ace ? ACE_COLOR : color }}>
+        <span className="text-2xs font-bold" style={{ color: tierCss(inkVar) }}>
           {label} 등급
         </span>
       )}

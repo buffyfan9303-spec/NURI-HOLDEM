@@ -1,10 +1,17 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useToast } from '../atoms/Toast';
 import type { User, UserStatus } from '../../api/auth';
 import { adminSetNickname, adminSetShadowban } from '../../api/auth';
-import { getUserActivity, getActivityLog } from '../../api/community';
-import type { PostCategory, UserActivityItem, ActivityLogEntry } from '../../api/community';
+import {
+  getUserActivity, getActivityLog,
+  adminPointSummary, adminListPurchases, adminRefundPurchase, adminListGrants, adminGrantPoints,
+} from '../../api/community';
+import type {
+  PostCategory, UserActivityItem, ActivityLogEntry,
+  PointBalance, PointPurchase, PointGrant,
+} from '../../api/community';
 import Icon from '../atoms/Icon';
+import { onColorInkClass } from '../../lib/color';
 
 // 게시글 관리(모더레이션)용 경량 포스트 타입 — 게시판(카테고리)별 분류 포함
 interface ModPost {
@@ -153,6 +160,8 @@ function UserRow({ user, onUpdate }: { user: User; onUpdate: (id: string, patch:
   const [logs, setLogs]             = useState<ActivityLogEntry[]>([]);
   const [actLoading, setActLoading] = useState(false);
   const [actLoaded, setActLoaded]   = useState(false);
+  // 활동점수 패널(잔액 · 구매/환불 · 지급 기록)
+  const [ptOpen, setPtOpen]         = useState(false);
 
   const toggleActivity = async () => {
     const next = !actOpen;
@@ -234,7 +243,7 @@ function UserRow({ user, onUpdate }: { user: User; onUpdate: (id: string, patch:
     <li className="rounded-card border border-border-default bg-surface-low overflow-hidden">
       <div className="flex items-center gap-2 p-2.5">
         <div
-          className="w-9 h-9 shrink-0 rounded-full flex items-center justify-center text-sm font-bold text-white"
+          className={['w-9 h-9 shrink-0 rounded-full flex items-center justify-center text-sm font-bold', onColorInkClass(user.avatarColor ?? '#5A6175')].join(' ')}
           style={{ background: user.avatarColor ?? '#5A6175' }}
         >
           {(user.nickname ?? user.name)[0]}
@@ -284,6 +293,13 @@ function UserRow({ user, onUpdate }: { user: User; onUpdate: (id: string, patch:
             className="btn-ghost text-xs px-2 py-1"
           >
             {actOpen ? '활동닫기' : '활동'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setPtOpen((v) => !v)}
+            className="btn-ghost text-xs px-2 py-1"
+          >
+            {ptOpen ? '포인트닫기' : '포인트'}
           </button>
           <button
             type="button"
@@ -391,7 +407,209 @@ function UserRow({ user, onUpdate }: { user: User; onUpdate: (id: string, patch:
           )}
         </div>
       )}
+
+      {/* 활동점수 패널 — 잔액 · 구매 내역(환불) · 지급 기록 */}
+      {ptOpen && <PointsPanel userId={user.id} userName={user.nickname ?? user.name} />}
     </li>
+  );
+}
+
+// ── 활동점수 패널 ──────────────────────────────────────────────────────────
+//
+// 왜 회원 관리 안에 두는가: 환불은 "이 회원의 구매를 되돌린다"는 회원 단위 행동이고,
+// 관리자 내비를 하나 더 늘리지 않으면서 admin_grant_points 의 UI 부재도 같은 자리에서 해소된다.
+//
+// ⚠ 환불액은 서버가 준 refundEstimate 를 **그대로** 표시한다. 여기서 다시 계산하지 않는다
+//    (화면이 계산하면 서버 판정과 어긋나 "1,100점 환불"이라 말하고 380점만 돌아온다).
+function PointsPanel({ userId, userName }: { userId: string; userName: string }) {
+  const toast = useToast();
+  const [balance, setBalance]   = useState<PointBalance | null>(null);
+  const [purchases, setPurch]   = useState<PointPurchase[] | null>(null);
+  const [grants, setGrants]     = useState<PointGrant[] | null>(null);
+  // 환불 사유 입력 단계(제재 흐름과 같은 문법: 액션 선택 → 사유 → 확정)
+  const [refundTarget, setRefundTarget] = useState<PointPurchase | null>(null);
+  const [refundReason, setRefundReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  // 지급/회수 폼
+  const [grantAmount, setGrantAmount] = useState('');
+  const [grantReason, setGrantReason] = useState('');
+
+  const reload = useCallback(async () => {
+    try {
+      const [b, p, g] = await Promise.all([
+        adminPointSummary(userId), adminListPurchases(userId), adminListGrants(userId),
+      ]);
+      setBalance(b); setPurch(p); setGrants(g);
+    } catch (e) {
+      setPurch([]); setGrants([]);
+      toast.show(e instanceof Error ? e.message : '활동점수 정보를 불러오지 못했습니다', 'error');
+    }
+  }, [userId, toast]);
+
+  useEffect(() => { void reload(); }, [reload]);
+
+  const confirmRefund = async () => {
+    if (!refundTarget) return;
+    const r = refundReason.trim();
+    if (r.length < 4) { toast.show('환불 사유를 4자 이상 남겨 주세요', 'error'); return; }
+    setBusy(true);
+    try {
+      const res = await adminRefundPurchase(refundTarget.id, r);
+      toast.show(`${refundTarget.label} 환불 — ${res.refunded.toLocaleString()}점 반환 (사용 가능 ${res.available.toLocaleString()}점)`, 'success');
+      setRefundTarget(null); setRefundReason('');
+      await reload();
+    } catch (e) { toast.show(e instanceof Error ? e.message : '환불에 실패했습니다', 'error'); }
+    finally { setBusy(false); }
+  };
+
+  const submitGrant = async (sign: 1 | -1) => {
+    const n = Math.abs(parseInt(grantAmount, 10));
+    if (!Number.isFinite(n) || n <= 0) { toast.show('점수를 1 이상 입력해 주세요', 'error'); return; }
+    const r = grantReason.trim();
+    if (r.length < 4) { toast.show('사유를 4자 이상 남겨 주세요', 'error'); return; }
+    setBusy(true);
+    try {
+      const after = await adminGrantPoints(userId, sign * n, r);
+      toast.show(`${userName} ${sign > 0 ? '+' : '−'}${n.toLocaleString()}점 — 누적 ${after.toLocaleString()}점`, 'success');
+      setGrantAmount(''); setGrantReason('');
+      await reload();
+    } catch (e) { toast.show(e instanceof Error ? e.message : '처리에 실패했습니다', 'error'); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="px-2.5 py-2 border-t border-border-subtle bg-surface-mid space-y-2.5 animate-slide-up">
+      {/* 잔액 3종 — 사용 가능 = 누적 − 사용 */}
+      <div className="grid grid-cols-3 gap-1.5 text-center">
+        <BalanceTile label="누적" value={balance?.total} />
+        <BalanceTile label="사용" value={balance?.spent} />
+        <BalanceTile label="사용 가능" value={balance?.available} accent />
+      </div>
+
+      {/* 구매 내역 + 환불 */}
+      <p className="flex items-center gap-1 text-2xs font-semibold text-ink-secondary">
+        <Icon name="wallet" size={11} className="shrink-0" />구매 내역
+      </p>
+      {purchases === null ? (
+        <ul className="space-y-1">{[0, 1].map((i) => <li key={i} className="skeleton h-8 rounded-input" />)}</ul>
+      ) : purchases.length === 0 ? (
+        <p className="text-2xs text-ink-muted">활동점수로 구매한 내역이 없습니다</p>
+      ) : (
+        <ul className="space-y-1">
+          {purchases.map((p) => (
+            <li key={p.id} className="rounded-input border border-border-subtle bg-surface-high/40 px-2 py-1.5">
+              <div className="flex flex-wrap items-center gap-1.5 text-2xs">
+                <span className={[
+                  'rounded-badge px-1.5 py-0.5 font-bold shrink-0',
+                  p.refundedAt ? 'bg-surface-float text-ink-muted' : 'bg-accent-300 text-white',
+                ].join(' ')}>
+                  {p.refundedAt ? '환불됨' : p.kind === 'shout' ? '외치기' : '기간 마크'}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-ink-primary">{p.label}</span>
+                <span className="text-ink-muted shrink-0 tabular-nums">
+                  {p.cost.toLocaleString()}점 · {relativeTime(p.createdAt)}
+                </span>
+              </div>
+              {p.refundedAt ? (
+                <p className="mt-1 text-2xs text-ink-muted truncate">
+                  {p.refundPoints.toLocaleString()}점 반환{p.refundReason ? ` · 사유: ${p.refundReason}` : ''}
+                </p>
+              ) : refundTarget?.id === p.id ? (
+                // ── 사유 입력 단계 ──
+                <div className="mt-1.5 space-y-1.5">
+                  <textarea
+                    value={refundReason}
+                    onChange={(e) => setRefundReason(e.target.value)}
+                    rows={2}
+                    maxLength={300}
+                    autoFocus
+                    placeholder="환불 사유 (4자 이상 · 기록으로 남습니다)"
+                    className="input resize-none text-xs"
+                  />
+                  <div className="flex gap-1.5 justify-end">
+                    <button type="button" onClick={() => { setRefundTarget(null); setRefundReason(''); }}
+                      className="btn-ghost text-2xs px-2.5 py-1">뒤로</button>
+                    <button type="button" onClick={confirmRefund} disabled={busy}
+                      className="text-2xs font-semibold px-2.5 py-1 rounded-badge border bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 border-amber-500/30 transition-colors disabled:opacity-60">
+                      {p.refundEstimate.toLocaleString()}점 환불 확정
+                    </button>
+                  </div>
+                </div>
+              ) : p.refundable ? (
+                <div className="mt-1 flex justify-end">
+                  <button type="button" onClick={() => { setRefundTarget(p); setRefundReason(''); }}
+                    className="inline-flex items-center gap-1 text-2xs font-semibold px-2.5 py-1 rounded-badge border bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 border-amber-500/30 transition-colors">
+                    <Icon name="undo" size={11} className="shrink-0" />
+                    환불 {p.refundEstimate.toLocaleString()}점
+                  </button>
+                </div>
+              ) : (
+                <p className="mt-1 text-2xs text-ink-muted">{p.refundBlock ?? '환불할 수 없습니다'}</p>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* 지급 · 회수 — 환불과 목적이 다르다(보상/사과성 지급 vs 오구매 되돌리기) */}
+      <p className="text-2xs font-semibold text-ink-secondary pt-0.5">활동점수 지급 · 회수</p>
+      <div className="space-y-1.5">
+        <div className="flex gap-1.5">
+          <input
+            type="number" inputMode="numeric" min={1}
+            value={grantAmount}
+            onChange={(e) => setGrantAmount(e.target.value)}
+            placeholder="점수"
+            className="input text-xs w-24 shrink-0"
+          />
+          <input
+            type="text"
+            value={grantReason}
+            onChange={(e) => setGrantReason(e.target.value)}
+            maxLength={200}
+            placeholder="사유 (4자 이상 · 기록됩니다)"
+            className="input text-xs flex-1 min-w-0"
+          />
+        </div>
+        <div className="flex gap-1.5 justify-end">
+          <button type="button" onClick={() => submitGrant(-1)} disabled={busy}
+            className="text-2xs font-semibold px-2.5 py-1 rounded-badge border bg-danger/15 text-danger-light hover:bg-danger/25 border-danger/30 transition-colors disabled:opacity-60">회수</button>
+          <button type="button" onClick={() => submitGrant(1)} disabled={busy}
+            className="text-2xs font-semibold px-2.5 py-1 rounded-badge border bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 border-emerald-500/30 transition-colors disabled:opacity-60">지급</button>
+        </div>
+      </div>
+
+      {grants && grants.length > 0 && (
+        <ul className="space-y-1">
+          {grants.map((g) => (
+            <li key={g.id} className="flex items-center gap-1.5 text-2xs">
+              <span className={[
+                'px-1 py-0.5 rounded-badge border shrink-0 font-semibold tabular-nums',
+                g.delta >= 0
+                  ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                  : 'bg-danger/15 text-danger-light border-danger/30',
+              ].join(' ')}>
+                {g.delta >= 0 ? '+' : '−'}{Math.abs(g.delta).toLocaleString()}
+              </span>
+              <span className="text-ink-secondary truncate flex-1">{g.reason}</span>
+              <span className="text-ink-muted shrink-0">{relativeTime(g.createdAt)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function BalanceTile({ label, value, accent }: { label: string; value?: number; accent?: boolean }) {
+  return (
+    <div className={[
+      'rounded-input border bg-surface-high py-1.5',
+      accent ? 'border-accent-300/40 text-accent-300' : 'border-border-default text-ink-primary',
+    ].join(' ')}>
+      <p className="text-sm font-bold tabular-nums">{value == null ? '—' : value.toLocaleString()}</p>
+      <p className="text-2xs text-ink-muted">{label}</p>
+    </div>
   );
 }
 

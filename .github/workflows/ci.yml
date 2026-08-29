@@ -44,6 +44,14 @@ jobs:
       - name: Build (타입체크 + 번들 + sitemap 생성)
         run: npm run build
 
+      # 번들 예산 — 이 프로젝트가 실제로 밟은 함정 3개를 규칙으로 박은 것(scripts/bundle-budget.mjs 주석 참고).
+      #   ① 구글 폰트 CSS 가 임계 경로로 돌아오는 것(실측 422→637ms 로 걷어냈던 그것)
+      #   ② 낡은 dist 를 재고 "포함됐다"고 오판하는 것
+      #   ③ 청크가 조용히 불어나는 것
+      # 의도한 증가면 `npm run bundle:budget:update` 로 올리고 **왜 올렸는지 커밋에 남긴다.**
+      - name: 번들 예산
+        run: npm run bundle:budget
+
       - name: Install Playwright (chromium)
         run: npx playwright install --with-deps chromium
 

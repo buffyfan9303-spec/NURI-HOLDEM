@@ -31,7 +31,16 @@ import TierCelebration from './components/features/TierCelebration';
 import ErrorBoundary from './components/atoms/ErrorBoundary';
 import InstallBanner from './components/atoms/InstallBanner';
 import { promptLogin, REQUIRE_LOGIN_EVENT, OPEN_POST_FORM_EVENT, ensureVerified } from './lib/requireLogin';
-import { tierColor } from './components/atoms/TierBadge';
+import { tierCss, tierOf, ADMIN_VIVID_VAR } from './components/atoms/TierBadge';
+import { onColorInkClass } from './lib/color';
+
+/**
+ * 헤더 아바타의 '등급 링'에 쓸 장식 토큰 이름.
+ * 선택 규칙은 종전 tierColor(points, admin) 와 동일하다 — 운영자 우선, 그 외는 점수 등급.
+ * 바뀐 것은 **출처뿐**이다: 다크 기준 hex 한 벌 → 테마별로 정의된 --tier-*-vivid.
+ */
+const ringVarOf = (u: { activityPoints?: number | null; role?: string | null }): string =>
+  u.role === 'admin' ? ADMIN_VIVID_VAR : tierOf(u.activityPoints ?? 0).vividVar;
 import ConsentGateModal from './components/features/ConsentGateModal';
 import type { PostFormData } from './components/features/PostFormModal';
 import type { MarketplaceFormData } from './components/features/MarketplaceFormModal';
@@ -289,15 +298,22 @@ const AppHeader = memo(function AppHeader({
                 {/* 알림 벨이 모바일에서도 보이므로(숫자 배지 포함) 아바타 점은 제거 */}
                 {/* 보이는 아바타 32px(이미지/이니셜) — 터치영역은 44px 유지(WCAG) */}
                 {/* 아바타 테두리 = 활동 등급색(운영자=빨강). 별도 22 배지 대신 테두리로 표현 */}
+                {/* 등급 → 장식 토큰. 선택 규칙은 기존 tierColor() 와 동일(운영자 우선, 그 외 점수 등급) */}
                 <span
                   className={`relative w-8 h-8 rounded-full overflow-hidden flex items-center justify-center
                              select-none transition-transform group-hover:scale-105 group-active:scale-90 ${
                                user.role === 'admin' ? 'tier-glow-admin' : (user.activityPoints ?? 0) >= 14000 ? 'tier-glow-ace' : ''
                              }`}
-                  style={{ background: user.avatarColor ?? '#5A6175', boxShadow: `0 0 0 2px ${tierColor(user.activityPoints ?? 0, user.role === 'admin')}, 0 0 10px ${tierColor(user.activityPoints ?? 0, user.role === 'admin')}aa` }}
+                  // 2026-08-30: 링 색을 hex 에서 토큰으로 옮겼다. tierColor() 는 다크 기준 hex 한 벌만
+                  //   돌려주는 문자열 API 라(다른 호출부가 `${...}aa` 로 알파를 문자열 결합해 계약을 못 바꾼다)
+                  //   라이트에서 이 링이 지면에 묻혔다. 이 링은 별도 배지 없이 **등급을 알리는 유일한 표시**라
+                  //   안 보이면 기능이 사라진 것과 같다 → 장식용 --tier-*-vivid 토큰(테마별 정의)으로 직접 참조.
+                  style={{ background: user.avatarColor ?? '#5A6175', boxShadow: `0 0 0 2px ${tierCss(ringVarOf(user))}, 0 0 10px ${tierCss(ringVarOf(user), 0.667)}` }}
                   title="내 등급"
                 >
-                  <span className="text-xs font-bold text-white">{user.name[0]}</span>
+                  {/* 이니셜 잉크는 배경 휘도로 정한다 — 아바타 배경은 유저가 고른 색이라
+                      흰 글씨로 고정하면 밝은 색(#FFD100 등)에서 1.46:1 까지 떨어진다(실측). */}
+                  <span className={`text-xs font-bold ${onColorInkClass(user.avatarColor ?? '#5A6175')}`}>{user.name[0]}</span>
                   {user.avatarUrl && (
                     <img src={user.avatarUrl} alt={user.name}
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
@@ -320,7 +336,7 @@ const AppHeader = memo(function AppHeader({
                                hover:bg-surface-high transition-colors focus:outline-none"
                   >
                     <div
-                      className="relative w-8 h-8 rounded-full overflow-hidden shrink-0 flex items-center justify-center text-xs font-bold text-white"
+                      className={`relative w-8 h-8 rounded-full overflow-hidden shrink-0 flex items-center justify-center text-xs font-bold ${onColorInkClass(user.avatarColor ?? '#5A6175')}`}
                       style={{ background: user.avatarColor ?? '#5A6175' }}
                     >
                       <span>{user.name[0]}</span>

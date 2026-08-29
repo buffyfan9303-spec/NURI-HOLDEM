@@ -9,6 +9,7 @@ import { getMyChatThreads } from '../../api/chat';
 import { MessagesModal, MyListingsModal, MyLikesModal } from './MyMarketModal';
 import { useSkeletonGate } from '../../lib/useSkeletonGate';
 import Icon from '../atoms/Icon';
+import { onColorInkClass } from '../../lib/color';
 
 // ── 상수 ─────────────────────────────────────────────────────────────────────
 
@@ -436,7 +437,7 @@ function ListingRow({
         </span>
         <span className="hidden sm:flex items-center gap-1 text-xs">
           <span
-            className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold text-white shrink-0"
+            className={['w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold shrink-0', onColorInkClass(listing.sellerAvatarColor)].join(' ')}
             style={{ background: listing.sellerAvatarColor }}
           >
             {listing.sellerName[0]}

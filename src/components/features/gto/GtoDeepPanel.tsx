@@ -6,8 +6,8 @@ import { useBackClose } from '../../../lib/backstack';
 import { useToast } from '../../atoms/Toast';
 import CardGridPicker, { SUIT_COLOR, SUIT_LABEL } from './CardGridPicker';
 import { CalcCard } from '../tools/calcUi';
-import { ACTION_COLORS } from '../../../lib/ranges.data';
-import { EQUITY_BANDS } from './equityBands';
+import { ACTION_COLORS, ACTION_TEXT_COLORS } from '../../../lib/ranges.data';
+import { EQUITY_BANDS, EQUITY_BAND_TEXT } from './equityBands';
 import { writeSnap } from '../../../lib/snapshot';
 import { useDeepGto, type CardTarget, type DeepGtoInit } from './useDeepGto';
 import { canonicalizeHand } from './useGtoCalculator';
@@ -111,23 +111,24 @@ function MixBar({ action }: { action: Required<ActionFrequency> }) {
 }
 
 // 스트릿별 권장 액션 (에퀴티 기반 휴리스틱) — 색은 EQUITY_BANDS(강도 축) 5밴드 1:1.
-interface StreetRec { label: string; color: string; note: string; }
+// color = 차트/틴트용 고정 fill(도메인 스냅샷) · textColor = 글자용 대비 보정색. 둘을 섞지 않는다.
+interface StreetRec { label: string; color: string; textColor: string; note: string; }
 
 function preflopRec(eq: number): StreetRec {
   const p = Math.round(eq * 100);
-  if (eq >= 0.60) return { label: '레이즈 (밸류)', color: EQUITY_BANDS.dominant, note: `에퀴티 ${p}% — 가치 레이즈로 밸류를 키웁니다.` };
-  if (eq >= 0.52) return { label: '레이즈/콜 혼합', color: EQUITY_BANDS.strong, note: `에퀴티 ${p}% — 레이즈와 콜을 섞어 균형을 잡습니다.` };
-  if (eq >= 0.44) return { label: '콜', color: EQUITY_BANDS.playable, note: `에퀴티 ${p}% — 콜로 포트에 참여할 만합니다.` };
-  if (eq >= 0.36) return { label: '콜/폴드 경계', color: EQUITY_BANDS.marginal, note: `에퀴티 ${p}% — 포지션·오즈가 좋을 때만 콜.` };
-  return { label: '폴드', color: EQUITY_BANDS.weak, note: `에퀴티 ${p}% — 폴드가 정석입니다.` };
+  if (eq >= 0.60) return { label: '레이즈 (밸류)', color: EQUITY_BANDS.dominant, textColor: EQUITY_BAND_TEXT.dominant, note: `에퀴티 ${p}% — 가치 레이즈로 밸류를 키웁니다.` };
+  if (eq >= 0.52) return { label: '레이즈/콜 혼합', color: EQUITY_BANDS.strong, textColor: EQUITY_BAND_TEXT.strong, note: `에퀴티 ${p}% — 레이즈와 콜을 섞어 균형을 잡습니다.` };
+  if (eq >= 0.44) return { label: '콜', color: EQUITY_BANDS.playable, textColor: EQUITY_BAND_TEXT.playable, note: `에퀴티 ${p}% — 콜로 포트에 참여할 만합니다.` };
+  if (eq >= 0.36) return { label: '콜/폴드 경계', color: EQUITY_BANDS.marginal, textColor: EQUITY_BAND_TEXT.marginal, note: `에퀴티 ${p}% — 포지션·오즈가 좋을 때만 콜.` };
+  return { label: '폴드', color: EQUITY_BANDS.weak, textColor: EQUITY_BAND_TEXT.weak, note: `에퀴티 ${p}% — 폴드가 정석입니다.` };
 }
 function postRec(eq: number): StreetRec {
   const p = Math.round(eq * 100);
-  if (eq >= 0.62) return { label: '벳/레이즈 (밸류)', color: EQUITY_BANDS.dominant, note: `에퀴티 ${p}% — 밸류 벳으로 강하게 압박합니다.` };
-  if (eq >= 0.50) return { label: '벳 또는 체크-콜', color: EQUITY_BANDS.strong, note: `에퀴티 ${p}% — 상황에 따라 벳/체크-콜.` };
-  if (eq >= 0.40) return { label: '체크-콜', color: EQUITY_BANDS.playable, note: `에퀴티 ${p}% — 포트 컨트롤 위주로 콜.` };
-  if (eq >= 0.30) return { label: '체크 (회피)', color: EQUITY_BANDS.marginal, note: `에퀴티 ${p}% — 큰 베팅엔 폴드를 고려.` };
-  return { label: '체크-폴드', color: EQUITY_BANDS.weak, note: `에퀴티 ${p}% — 공격받으면 포기합니다.` };
+  if (eq >= 0.62) return { label: '벳/레이즈 (밸류)', color: EQUITY_BANDS.dominant, textColor: EQUITY_BAND_TEXT.dominant, note: `에퀴티 ${p}% — 밸류 벳으로 강하게 압박합니다.` };
+  if (eq >= 0.50) return { label: '벳 또는 체크-콜', color: EQUITY_BANDS.strong, textColor: EQUITY_BAND_TEXT.strong, note: `에퀴티 ${p}% — 상황에 따라 벳/체크-콜.` };
+  if (eq >= 0.40) return { label: '체크-콜', color: EQUITY_BANDS.playable, textColor: EQUITY_BAND_TEXT.playable, note: `에퀴티 ${p}% — 포트 컨트롤 위주로 콜.` };
+  if (eq >= 0.30) return { label: '체크 (회피)', color: EQUITY_BANDS.marginal, textColor: EQUITY_BAND_TEXT.marginal, note: `에퀴티 ${p}% — 큰 베팅엔 폴드를 고려.` };
+  return { label: '체크-폴드', color: EQUITY_BANDS.weak, textColor: EQUITY_BAND_TEXT.weak, note: `에퀴티 ${p}% — 공격받으면 포기합니다.` };
 }
 
 /** AI 액션 해설 — 비포/플랍/턴/리버 4개 스트릿 권장 액션 */
@@ -142,7 +143,7 @@ function DeepActionSheet({
 }) {
   // [DS] MO-9C: 시트 열림 시 3000회 × 4스트릿 동기 계산이 useMemo(렌더 중) 롱태스크였다
   // → 워커 비동기로 전환(열리는 프레임이 더는 멈추지 않는다). 결과·표시는 동일.
-  type ActionRow = { key: string; eq: number | null; rec: (eq: number) => { label: string; color: string; note: string } };
+  type ActionRow = { key: string; eq: number | null; rec: (eq: number) => { label: string; color: string; textColor: string; note: string } };
   const [rows, setRows] = useState<ActionRow[] | null>(null);
   // 상태마다 독립 멤버로 쪼갠다 — 세 상태를 한 객체에 뭉치면 판별 유니온이 성립하지 않아
   // 마지막 분기에서도 TS 가 'done' 으로 확정하지 못한다(text 접근이 컴파일 에러).
@@ -211,7 +212,7 @@ function DeepActionSheet({
                   <div className="flex items-center justify-between">
                     <span className="text-2xs font-bold text-ink-secondary">{key}</span>
                     {r ? (
-                      <span className="text-sm font-extrabold" style={{ color: r.color }}>{r.label}</span>
+                      <span className="text-sm font-extrabold" style={{ color: r.textColor }}>{r.label}</span>
                     ) : (
                       <span className="text-2xs text-ink-muted">보드 미입력</span>
                     )}
@@ -270,7 +271,7 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
   const na = deep.normalizedAction;
   // 권장 액션 배지 — 액션 축이므로 ACTION_COLORS(빈도바와 동일 색)만 쓴다.
   const recommended = na
-    ? [{ label: '레이즈', v: na.raise, color: ACTION_COLORS.raise }, { label: '콜', v: na.call, color: ACTION_COLORS.call }, { label: '폴드', v: na.fold, color: ACTION_COLORS.fold }]
+    ? [{ label: '레이즈', v: na.raise, color: ACTION_COLORS.raise, textColor: ACTION_TEXT_COLORS.raise }, { label: '콜', v: na.call, color: ACTION_COLORS.call, textColor: ACTION_TEXT_COLORS.call }, { label: '폴드', v: na.fold, color: ACTION_COLORS.fold, textColor: ACTION_TEXT_COLORS.fold }]
         .reduce((a, b) => (b.v > a.v ? b : a))
     : null;
 
@@ -405,9 +406,10 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
             const win = Math.max(0, deep.equity.hero - tie / 2);
             const lose = Math.max(0, deep.equity.villain - tie / 2);
             const cells = [
-              { k: '승', v: win, color: '#22C55E' },
-              { k: '무', v: tie, color: '#94A3B8' },
-              { k: '패', v: lose, color: '#EF4444' },
+              // 숫자는 '글자'라 fill 스냅샷 hex 를 쓰면 안 된다(라이트 실측 승 2.02 · 무 2.27 · 패 3.33:1).
+              { k: '승', v: win, color: 'var(--gto-txt-playable)' },
+              { k: '무', v: tie, color: 'var(--gto-txt-tie)' },
+              { k: '패', v: lose, color: 'var(--gto-txt-dominant)' },
             ];
             return (
               <div>
@@ -432,7 +434,7 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
               style={{ borderColor: `${recommended.color}66`, background: `${recommended.color}14` }}
             >
               <span className="text-2xs text-ink-muted">권장 액션</span>
-              <span className="text-sm font-extrabold" style={{ color: recommended.color }}>
+              <span className="text-sm font-extrabold" style={{ color: recommended.textColor }}>
                 {recommended.label} {Math.round(recommended.v * 100)}%
               </span>
             </div>

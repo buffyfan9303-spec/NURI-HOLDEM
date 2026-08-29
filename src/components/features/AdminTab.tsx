@@ -11,7 +11,7 @@ import {
   getAdminStats, adminCreateVenue, adminUpdateVenue, setVenueVerification, deleteVenue,
   getVenueStaff, addVenueStaff, updateVenueStaff, removeVenueStaff,
   getPendingGroups, approveGroup, GROUP_KIND_LABEL, adminListVenueOwnerRequests, adminDecideVenueOwner, type OwnerRequest,
-  adminListShouts, hideShout, type Shout } from '../../api/community';
+  adminListShouts, hideShout, adminShoutRefunds, adminRefundPurchase, type Shout } from '../../api/community';
 import {
   adminListHallOfFame, adminSaveHallEntry, adminDeleteHallEntry, autoHallPrefill,
   lastMonthPeriod, thisMonthPeriod, type HallOfFameRow,
@@ -575,14 +575,24 @@ function HallOfFameAdminCard() {
   );
 }
 
-// ── 📣 외치기 관리(운영자) — 오너 #8 ────────────────────────────────────────
+// ── 외치기 관리(운영자) — 오너 #8 ──────────────────────────────────────────
 // 외침은 커뮤니티 최상단에 크게 걸리는 자리라 사후 통제 수단이 필요하다.
-// 삭제가 아니라 '내리기(숨김)'다 — 되돌릴 수 있고 구매 기록도 남는다(환급은 없음).
+// '내리기'는 삭제가 아니라 숨김 — 되돌릴 수 있고 구매 기록도 남는다(점수 환급 없음).
+// '환불'은 내리기 + 점수 복원이 한 트랜잭션(2026-08-30). 회원 단위 화면은
+// 회원 관리 > 포인트 패널에 있고, 여기는 커뮤니티를 보다 그 자리에서 처리하는 동선이다.
+// ⚠ 환불액은 서버(refund_quote)가 준 값만 표시한다 — 화면에서 다시 계산하지 않는다.
 function ShoutsAdminCard() {
   const toast = useToast();
   const [rows, setRows] = useState<AdminShout[] | null>(null);
+  const [refunds, setRefunds] = useState<Record<string, { purchaseId: number; estimate: number; block: string | null }>>({});
   const [busy, setBusy] = useState<string | null>(null);
-  const reload = useCallback(() => { adminListShouts(50).then(setRows).catch(() => setRows([])); }, []);
+  // 환불 사유 입력 단계(회원 관리 패널과 같은 문법: 선택 → 사유 → 확정)
+  const [refundId, setRefundId] = useState<string | null>(null);
+  const [reason, setReason] = useState('');
+  const reload = useCallback(() => {
+    adminListShouts(50).then(setRows).catch(() => setRows([]));
+    adminShoutRefunds(50).then(setRefunds).catch(() => setRefunds({}));
+  }, []);
   useEffect(() => { reload(); }, [reload]);
   const hide = async (s: AdminShout) => {
     setBusy(s.id);
@@ -591,6 +601,20 @@ function ShoutsAdminCard() {
       toast.show('외침을 내렸습니다', 'success');
       reload();
     } catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
+    finally { setBusy(null); }
+  };
+  const refund = async (s: AdminShout) => {
+    const info = refunds[s.id];
+    if (!info) return;
+    const r = reason.trim();
+    if (r.length < 4) { toast.show('환불 사유를 4자 이상 남겨 주세요', 'error'); return; }
+    setBusy(s.id);
+    try {
+      const res = await adminRefundPurchase(info.purchaseId, r);
+      toast.show(`외침을 내리고 ${res.refunded.toLocaleString()}점을 돌려줬습니다`, 'success');
+      setRefundId(null); setReason('');
+      reload();
+    } catch (e) { toast.show(e instanceof Error ? e.message : '환불에 실패했습니다', 'error'); }
     finally { setBusy(null); }
   };
   const live = (s: AdminShout) => !s.hidden && new Date(s.expiresAt).getTime() > Date.now();
@@ -604,15 +628,47 @@ function ShoutsAdminCard() {
       ) : (
         <ul className="space-y-1">
           {rows.map((s) => (
-            <li key={s.id} className="flex flex-wrap items-center gap-1.5 rounded-input border border-border-subtle bg-surface-high/40 px-2 py-1.5 text-xs">
-              <span className={['rounded-badge px-1.5 py-0.5 text-2xs font-bold', live(s) ? 'bg-accent-300 text-white' : 'bg-surface-float text-ink-muted'].join(' ')}>
-                {s.hidden ? '내려짐' : live(s) ? '노출 중' : '만료'}
-              </span>
-              <span className="min-w-0 flex-1 truncate text-ink-primary">{s.message}</span>
-              <span className="text-2xs text-ink-muted">{s.nickname} · {s.cost}점 · {new Date(s.createdAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-              {live(s) && (
-                <button type="button" onClick={() => hide(s)} disabled={busy === s.id}
-                  className="btn-ghost px-2 py-1 text-2xs text-danger-light disabled:opacity-60">내리기</button>
+            <li key={s.id} className="rounded-input border border-border-subtle bg-surface-high/40 px-2 py-1.5 text-xs">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className={['rounded-badge px-1.5 py-0.5 text-2xs font-bold', live(s) ? 'bg-accent-300 text-white' : 'bg-surface-float text-ink-muted'].join(' ')}>
+                  {s.hidden ? '내려짐' : live(s) ? '노출 중' : '만료'}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-ink-primary">{s.message}</span>
+                <span className="text-2xs text-ink-muted">{s.nickname} · {s.cost}점 · {new Date(s.createdAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                {live(s) && refundId !== s.id && (
+                  <>
+                    {refunds[s.id] && !refunds[s.id].block && (
+                      <button type="button" onClick={() => { setRefundId(s.id); setReason(''); }} disabled={busy === s.id}
+                        className="btn-ghost inline-flex items-center gap-1 px-2 py-1 text-2xs text-amber-400 disabled:opacity-60">
+                        <Icon name="undo" size={11} className="shrink-0" />환불 {refunds[s.id].estimate.toLocaleString()}점
+                      </button>
+                    )}
+                    <button type="button" onClick={() => hide(s)} disabled={busy === s.id}
+                      className="btn-ghost px-2 py-1 text-2xs text-danger-light disabled:opacity-60">내리기</button>
+                  </>
+                )}
+              </div>
+              {live(s) && refundId === s.id && (
+                // ── 사유 입력 단계 — 사유 없는 환불은 서버가 거부한다(기록이 남아야 한다) ──
+                <div className="mt-1.5 space-y-1.5">
+                  <input
+                    type="text" value={reason} onChange={(e) => setReason(e.target.value)}
+                    maxLength={200} autoFocus
+                    placeholder="환불 사유 (4자 이상 · 기록으로 남습니다)"
+                    className="input text-xs"
+                  />
+                  <div className="flex justify-end gap-1.5">
+                    <button type="button" onClick={() => { setRefundId(null); setReason(''); }}
+                      className="btn-ghost px-2.5 py-1 text-2xs">뒤로</button>
+                    <button type="button" onClick={() => refund(s)} disabled={busy === s.id}
+                      className="rounded-badge border border-amber-500/30 bg-amber-500/15 px-2.5 py-1 text-2xs font-semibold text-amber-400 transition-colors hover:bg-amber-500/25 disabled:opacity-60">
+                      내리고 {refunds[s.id]?.estimate.toLocaleString() ?? 0}점 환불
+                    </button>
+                  </div>
+                </div>
+              )}
+              {live(s) && refunds[s.id]?.block && refundId !== s.id && (
+                <p className="mt-1 text-2xs text-ink-muted">{refunds[s.id].block}</p>
               )}
             </li>
           ))}
@@ -813,7 +869,7 @@ const ADMIN_DESC: Record<Section, string> = {
   analytics: '플랫폼 핵심 지표 — 회원·매장·대회·체크인·추천·푸시 한눈에',
   pending: '업주가 등록한 포스터 검수 — 승인하면 일정 탐색에 노출됩니다',
   reorder: '노출 순서 · 부스트 · 커뮤니티 광고 · 주간 미션 관리',
-  users: '회원 검색 · 등급 · 제재',
+  users: '회원 검색 · 등급 · 제재 · 활동점수(구매 환불 · 지급)',
   venues: '매장 생성 · 인증 · 그룹 승인',
   reports: '신고 접수 처리',
   support: '고객센터 1:1 문의 답변',

@@ -16,6 +16,17 @@ export const ACTION_COLORS = {
   fold: '#6B7280',
 } as const;
 
+/** 액션 축 **텍스트 전용** 색. 위 ACTION_COLORS 는 차트 fill 용 도메인 고정 스냅샷이라
+ *  글자로 재사용하면 대비가 무너진다(실측: 다크 raise 3.63:1 · fold 3.53:1, 라이트 call 2.54:1 — AA 미달).
+ *  fill 은 그대로 두고 '글자로 쓰이는 지점'만 이 변수로 분리한다. hue·채도는 보존, 명도만 테마별 보정.
+ *  값 정의는 src/index.css `--gto-txt-*`(다크 기본 + html.light 오버라이드). */
+export const ACTION_TEXT_COLORS = {
+  raise: 'var(--gto-txt-raise)',
+  call: 'var(--gto-txt-call)',
+  fourbet: 'var(--gto-txt-fourbet)',
+  fold: 'var(--gto-txt-fold)',
+} as const;
+
 export interface RangeAction {
   key: 'raise' | 'call' | 'allin' | 'fourbet';
   label: string;

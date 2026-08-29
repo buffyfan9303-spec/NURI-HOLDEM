@@ -1418,3 +1418,126 @@ export async function adminListShouts(limit = 50): Promise<(Shout & { hidden: bo
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({ ...mapShout(r), hidden: r.hidden === true }));
 }
+
+// ── 운영자 — 활동점수 원장 · 환불 (2026-08-30 환불 경로) ──────────────────────
+//
+// 설계 근거는 supabase/migrations/20260830c_refund.sql 헤더에 있다. 화면 쪽 규약만 옮기면:
+//  · **환불액을 프런트에서 계산하지 않는다.** refundEstimate(지금 누르면 몇 점)와
+//    refundBlock(왜 못 하나)은 서버 refund_quote() 가 유일한 출처다. 화면이 자체 계산하면
+//    "1,100점 환불"이라 말하고 380점만 돌아오는 사고가 난다(shoutCost 폴백 30 vs 서버 200 과 같은 함정).
+//  · 환불은 spent_points 를 낮춰 되돌린다. activity_points 는 건드리지 않는다
+//    (등급·활동순위·도달마크 해금 기준이라 올리면 마크가 환불 때문에 해금된다).
+//  · 사유 4자 이상 필수 — 서버가 최종 판정하지만 화면에서도 먼저 막아 왕복을 줄인다.
+
+export interface PointPurchase {
+  id: number;
+  kind: 'shout' | 'mark_rent';
+  skuKey: string;
+  /** 상품 라벨(shop_skus.label). 가격표가 바뀌어도 과거 기록의 이름은 서버가 준 값 그대로 */
+  label: string;
+  markKey: string | null;
+  shoutId: string | null;
+  cost: number;
+  createdAt: string;
+  refundedAt: string | null;
+  refundPoints: number;
+  refundReason: string | null;
+  refundable: boolean;
+  /** 서버 계산값. 버튼 라벨에 그대로 박는다 — 화면이 다시 계산하지 않는다 */
+  refundEstimate: number;
+  /** 환불 불가 사유(한국어). null 이면 환불 가능 */
+  refundBlock: string | null;
+}
+
+export interface PointGrant {
+  id: number; delta: number; reason: string; createdAt: string;
+}
+
+/** 운영자 — 회원 활동점수 잔액(누적/사용/사용 가능) */
+export async function adminPointSummary(userId: string): Promise<PointBalance | null> {
+  if (IS_MOCK) return null;
+  const { data, error } = await supabase.rpc('admin_point_summary', { p_user: userId });
+  const r = Array.isArray(data) ? data[0] : data;
+  if (error || !r) return null;
+  return { total: r.total ?? 0, spent: r.spent ?? 0, available: r.available ?? 0 };
+}
+
+/** 운영자 — 회원의 활동점수 구매 내역(환불 견적·불가 사유 포함, 전부 서버 계산값) */
+export async function adminListPurchases(userId: string, limit = 30): Promise<PointPurchase[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.rpc('admin_list_purchases', { p_user: userId, p_limit: limit });
+  if (error) throw new Error(error.message);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({
+    id: Number(r.id), kind: r.kind, skuKey: r.sku_key, label: r.label ?? r.sku_key,
+    markKey: r.mark_key ?? null, shoutId: r.shout_id ?? null,
+    cost: Number(r.cost) || 0, createdAt: r.created_at,
+    refundedAt: r.refunded_at ?? null, refundPoints: Number(r.refund_points) || 0,
+    refundReason: r.refund_reason ?? null,
+    refundable: r.refundable === true, refundEstimate: Number(r.refund_estimate) || 0,
+    refundBlock: r.refund_block ?? null,
+  }));
+}
+
+/**
+ * 운영자 환불 — 원장 1행당 1회, 구매 후 24시간 이내, 사유 4자 이상.
+ * 반환값은 실제 반환된 점수와 회원의 사용 가능 점수(둘 다 서버 계산값).
+ */
+export async function adminRefundPurchase(
+  purchaseId: number, reason: string,
+): Promise<{ refunded: number; available: number }> {
+  const { data, error } = await supabase.rpc('admin_refund_purchase', {
+    p_purchase_id: purchaseId, p_reason: reason,
+  });
+  if (error) throw new Error(error.message);
+  const r = Array.isArray(data) ? data[0] : data;
+  if (!r) throw new Error('환불에 실패했습니다');
+  return { refunded: Number(r.refunded) || 0, available: Number(r.available) || 0 };
+}
+
+/** 운영자 — 외침별 원장 id·환불 견적(외치기 관리 카드가 회원이 아니라 외침 단위로 보기 때문) */
+export async function adminShoutRefunds(
+  limit = 50,
+): Promise<Record<string, { purchaseId: number; estimate: number; block: string | null }>> {
+  if (IS_MOCK) return {};
+  const { data, error } = await supabase.rpc('admin_shout_refunds', { p_limit: limit });
+  if (error) return {};
+  const map: Record<string, { purchaseId: number; estimate: number; block: string | null }> = {};
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const r of (data ?? []) as any[]) {
+    if (r.shout_id) map[r.shout_id] = {
+      purchaseId: Number(r.purchase_id), estimate: Number(r.refund_estimate) || 0,
+      block: r.refund_block ?? null,
+    };
+  }
+  return map;
+}
+
+/** 운영자 — 회원의 수기 지급/회수 기록(point_grants). RLS 가 운영자에게만 전량 노출한다. */
+export async function adminListGrants(userId: string, limit = 20): Promise<PointGrant[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase
+    .from('point_grants')
+    .select('id, delta, reason, created_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({
+    id: Number(r.id), delta: Number(r.delta) || 0, reason: r.reason ?? '', createdAt: r.created_at,
+  }));
+}
+
+/**
+ * 운영자 활동점수 지급/회수 — 사유 필수, point_grants 에 기록된다.
+ * 환불(구매 되돌리기)과 목적이 다르다: 이쪽은 보상·사과성 지급과 오지급 회수용이다.
+ * 반환값은 지급 후 누적 활동점수.
+ */
+export async function adminGrantPoints(userId: string, delta: number, reason: string): Promise<number> {
+  const { data, error } = await supabase.rpc('admin_grant_points', {
+    p_user: userId, p_delta: delta, p_reason: reason,
+  });
+  if (error) throw new Error(error.message);
+  return Number(data) || 0;
+}

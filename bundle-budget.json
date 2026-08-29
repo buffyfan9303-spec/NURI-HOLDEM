@@ -1,0 +1,8 @@
+{
+  "_주석": "번들 예산(gzip KB). 올릴 때는 왜 올리는지 커밋 메시지에 남길 것. --update 로 재작성.",
+  "totalJsGzipKb": 844,
+  "totalCssGzipKb": 26,
+  "entryGzipKb": 255,
+  "largestChunkGzipKb": 114,
+  "externalStylesheets": 0
+}

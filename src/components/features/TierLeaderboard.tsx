@@ -7,13 +7,14 @@ import {
   EVENT_KIND_LABEL, type RankEventKind, type RankVerification, type DomesticRow,
 } from '../../api/rankverify';
 import { useAuth } from '../../contexts/AuthContext';
-import TierBadge, { tierOf, tierProgress, allTiers, isAceRank, ACE_TOP_RANK, ACE_MIN_POINTS } from '../atoms/TierBadge';
+import TierBadge, { tierOf, tierProgress, allTiers, isAceRank, ACE_TOP_RANK, ACE_MIN_POINTS, tierCss, ACE_VAR } from '../atoms/TierBadge';
 import {
   getActivityLeaderboard, getMyPointBalance, getShoutRules,
   getShopSkus, getMyMarkRental, buyMarkRental,
   type LeaderboardEntry, type PointBalance, type ShopSku, type MarkRental,
 } from '../../api/community';
 import { getGlobalRankingTotals, type GlobalRankingTotal } from '../../api/rankings';
+import { onColorInkClass } from '../../lib/color';
 import { useToast } from '../atoms/Toast';
 import EmptyState from '../atoms/EmptyState';
 import Icon from '../atoms/Icon';
@@ -74,14 +75,23 @@ function shoutTierHint(skus: ShopSku[]): string {
 
 function RankNum({ n }: { n: number }) {
   const top = n <= 3;
-  const colors = ['#FFD100', '#C0C8D8', '#E0945A'];
+  // 1~3위 메달색은 금·은·동이라는 도메인 기호(등급 팔레트가 아님)라 고정 스냅샷으로 둔다.
+  // 잉크만 --ink-on-bright 로 옮긴다 — 세 배경 모두 밝아 어두운 잉크가 정답이고, 값이 토큰과 갈리면 안 된다.
+  const medals = ['#FFD100', '#C0C8D8', '#E0945A'];
   return (
     <span
       className="inline-flex items-center justify-center w-6 h-6 rounded-full text-2xs font-extrabold tabular-nums shrink-0"
       style={
         top
-          ? { background: colors[n - 1], color: '#0a0c0f' }
-          : { background: 'transparent', color: '#7C8696', border: '1px solid #2a2f3a' }
+          ? { background: medals[n - 1], color: 'rgb(var(--ink-on-bright))' }
+          : {
+              background: 'transparent',
+              // 4위 이하 순위 숫자. 구 리터럴 #7C8696 은 surface-high 위 다크 3.82 · 라이트 3.26 으로
+              // 양쪽 AA 미달이었다. 텍스트용 토큰 --tier-slate(장식용 -vivid 아님)로 5.40 / 5.70.
+              color: tierCss('--tier-slate'),
+              // 구 리터럴 #2a2f3a 는 다크 전용이라 라이트에서 11.87:1 의 새까만 테두리가 됐다.
+              border: '1px solid rgb(var(--border-default))',
+            }
       }
     >
       {n}
@@ -438,7 +448,7 @@ export default function TierLeaderboard() {
                 <div className="h-2 min-w-0 flex-1 rounded-full bg-surface-high overflow-hidden">
                   <div
                     className="h-full rounded-full transition-[width]"
-                    style={{ width: `${Math.round(myProg.ratio * 100)}%`, background: `linear-gradient(90deg, ${myProg.current.color}, ${myProg.next.color})` }}
+                    style={{ width: `${Math.round(myProg.ratio * 100)}%`, background: `linear-gradient(90deg, ${tierCss(myProg.current.vividVar)}, ${tierCss(myProg.next.vividVar)})` }}
                   />
                 </div>
                 {/* 바 끝 = 다음 등급 뱃지 미리보기 */}
@@ -940,8 +950,8 @@ export default function TierLeaderboard() {
                     <Icon name={idx === 1 ? 'crown' : 'medal'} size={big ? 22 : 17}
                       className={['mx-auto', PODIUM_TONE[idx]].join(' ')} role="img" aria-hidden={false} aria-label={`${idx === 1 ? 1 : idx === 0 ? 2 : 3}위`} />
                     <span className={['mx-auto mt-1 block rounded-full p-[2px]', big ? 'h-10 w-10' : 'h-8 w-8'].join(' ')}
-                      style={{ background: `conic-gradient(from 210deg, ${rt.color}, ${rt.color}44 45%, ${rt.color}CC 70%, ${rt.color})` }}>
-                      <span className={['flex h-full w-full items-center justify-center rounded-full font-bold text-white', big ? 'text-sm' : 'text-2xs'].join(' ')}
+                      style={{ background: `conic-gradient(from 210deg, ${tierCss(rt.vividVar)}, ${tierCss(rt.vividVar, 0.267)} 45%, ${tierCss(rt.vividVar, 0.8)} 70%, ${tierCss(rt.vividVar)})` }}>
+                      <span className={['flex h-full w-full items-center justify-center rounded-full font-bold', onColorInkClass(r.avatarColor ?? '#5A6175'), big ? 'text-sm' : 'text-2xs'].join(' ')}
                         style={{ background: r.avatarColor ?? '#5A6175' }}>
                         {r.nickname[0]}
                       </span>
@@ -964,13 +974,13 @@ export default function TierLeaderboard() {
                 return (
                   <li key={r.id} className="border-y border-accent-400/40 bg-accent-300/[0.08] px-3 py-3 last:border-b-0">
                     <div className="flex items-center gap-3">
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-base font-extrabold text-white"
+                      <span className={['flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-base font-extrabold', onColorInkClass(r.avatarColor ?? '#5A6175')].join(' ')}
                         style={{ background: r.avatarColor ?? '#5A6175' }}>
                         {r.nickname[0]}
                       </span>
                       <div className="min-w-0 flex-1">
                         <p className="text-xs font-bold text-accent-300">{i + 1}위 · {r.nickname} <span className="font-semibold text-ink-muted">(나)</span></p>
-                        <p className="text-2xl font-extrabold leading-tight tabular-nums" style={{ color: rowAce ? '#FFD700' : t.color }}>
+                        <p className="text-2xl font-extrabold leading-tight tabular-nums" style={{ color: tierCss(rowAce ? ACE_VAR : t.colorVar) }}>
                           {r.activityPoints.toLocaleString()}<span className="ml-0.5 text-xs font-bold text-ink-muted">점</span>
                         </p>
                       </div>
@@ -986,7 +996,7 @@ export default function TierLeaderboard() {
                 >
                   <RankNum n={i + 1} />
                   <span
-                    className="w-7 h-7 shrink-0 rounded-full flex items-center justify-center text-2xs font-bold text-white"
+                    className={['w-7 h-7 shrink-0 rounded-full flex items-center justify-center text-2xs font-bold', onColorInkClass(r.avatarColor ?? '#5A6175')].join(' ')}
                     style={{ background: r.avatarColor ?? '#5A6175' }}
                   >
                     {r.nickname[0]}
@@ -998,7 +1008,7 @@ export default function TierLeaderboard() {
                     </div>
                   </div>
                   <TierBadge points={r.activityPoints} size={16} overallRank={i + 1} />
-                  <span className="w-14 text-right text-xs font-bold tabular-nums" style={{ color: rowAce ? '#FFD700' : t.color }}>
+                  <span className="w-14 text-right text-xs font-bold tabular-nums" style={{ color: tierCss(rowAce ? ACE_VAR : t.colorVar) }}>
                     {r.activityPoints.toLocaleString()}
                   </span>
                 </li>

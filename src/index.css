@@ -58,6 +58,11 @@
     --ink-secondary: 178 173 203; /* #B2ADCB 보조 — 플럼 배경 대비 ≥7:1 */
     --ink-muted:     148 142 176; /* #948EB0 메타/라벨 — 플럼 배경 대비 ≥4.5:1 */
     --ink-inverse:   24 26 32;    /* 골드(상금) 버튼 위 검정 */
+    /* 유저가 고른 '밝은' 배경(아바타 이니셜 등) 위 글자. 테마 무관 고정값 —
+       배경이 지면이 아니라 유저 데이터라 다크/라이트로 갈릴 이유가 없다.
+       #030405: 흰색의 AA 상한(L≤0.1833)과 이 색의 AA 하한(L≥0.1803)이 겹쳐
+       임계 하나(src/lib/color.ts)로 전 색역 4.5:1 이 보장된다. 더 밝히면 사각지대가 생긴다. */
+    --ink-on-bright: 3 4 5;
 
     --border-subtle:  44 39 66;   /* #2C2742 — 플럼 위 헤어라인 등가 */
     /* 입력칸 경계가 1.28:1 이라 '칸이 어디까지인지'가 안 보였다. subtle < default < strong 위계는 유지한다. */
@@ -76,6 +81,54 @@
     --accent-400: 122 90 210;  /* #7A5AD2 hover */
     --accent-500: 108 77 192;  /* #6C4DC0 pressed */
     --accent-600: 85 60 153;   /* #553C99 딥 보더/배경 */
+
+    /* ── 등급 색(2~K · A · 운영자) — 테마 인지 토큰 ─────────────────────────────
+       왜 두 벌인가: 같은 등급색이 '글자'와 '장식'에서 요구 기준이 다르다.
+         --tier-*        텍스트용. 칩 배경(같은 색 알파 0.102)과 합성한 뒤에도 WCAG 4.5:1.
+         --tier-*-vivid  등급을 '색으로만' 알리는 비텍스트 지점(3:1) + 순수 장식 공용.
+
+       ⚠ vivid 의 3:1 기준선은 **surface-float** 다(2026-08-30 정정). 그 전 값은
+       surface-low(라이트=#FFFFFF) 한 지면에서만 3.06~3.09 로 턱걸이였고, 나머지 네 지면에서는
+       10색 중 9색이 미달이었다(base 2.83 · high 2.71 · float 2.49). 라이트 다섯 지면 중
+       float(#E6E8EC)이 가장 어두워 '어두운 전경색'에는 최악 조건이므로, 여기서 3:1 을 넘기면
+       base/low/mid/high 는 자동으로 넘는다. 그래서 기준 지면을 float 으로 고정한다.
+
+       왜 전량(9색)을 손봤나 — 정보/장식이 토큰이 아니라 **알파**로 갈린다:
+         알파 1.0 = 정보  · 헤더/설정 아바타 등급 링(App.tsx · ProfileModal) — 이 링 말고
+                           등급을 알리는 표시가 없다 / XP 진행바 fill 3곳(트랙이 surface-float·high
+                           라 채움과 트랙의 경계가 바로 이 대비다) → 토큰 값이 그대로 실효 대비.
+         알파 <1  = 장식  · TierBadge 테두리 .4 / 글로우 .6 · TitleChip 테두리 .251 ·
+                           포디움·프로필 conic 링 중간 스톱 .267/.8 · 커버 그라데이션 opacity .25
+                           → 합성 때문에 어떤 값을 넣어도 3:1 이 물리적으로 불가능하고, 필요도 없다.
+       즉 토큰 하나가 두 역할을 겸하므로 '정보 쪽'을 맞추려면 값 자체를 올려야 한다. 대신
+       **hue 는 소수점까지 고정, HSV 채도도 불변**(sRGB 곱셈 스케일)이고 명도만 ΔL*≈7.2 내렸다 —
+       장식 쪽은 알파 합성 뒤라 눈에 띄는 변화가 없고, 라이트 지면에서 오히려 또렷해진다.
+       화려함(채도)은 그대로 두고 '한 톤 깊은 같은 색'이 된 것이다.
+
+       다크 vivid 는 전 지면 통과라 손대지 않았다(최저 slate/float 3.32 · 최고 ace/base 13.13)
+       = 현행 다크 화면 무변경. 다크 텍스트는 미달 4색만 상향
+       (surface-high 칩 실측: slate 3.36→4.55 · steel 4.50→6.99 · purple 4.46→4.57 · admin 3.89→4.60).
+       surface 스케일과 같은 공백 RGB 문법이라 rgb(var(--tier-x) / 0.4) 로 알파 결합이 된다. */
+    --tier-slate:        153 161 173; /* #99A1AD  22 홀덤 입문 · 33 뉴비 */
+    --tier-slate-vivid:  124 134 150; /* #7C8696 */
+    --tier-steel:        198 206 219; /* #C6CEDB  44 루키 */
+    --tier-steel-vivid:  148 160 181; /* #94A0B5 */
+    --tier-blue:          95 168 255; /* #5FA8FF  55 레귤러 · 66 그라인더 */
+    --tier-blue-vivid:    95 168 255; /* #5FA8FF */
+    --tier-green:         79 203 152; /* #4FCB98  77 세미프로 · 88 프로 */
+    --tier-green-vivid:   79 203 152; /* #4FCB98 */
+    --tier-purple:       181 139 255; /* #B58BFF  99 하이롤러 · 1010 샤크 */
+    --tier-purple-vivid: 179 136 255; /* #B388FF */
+    --tier-orange:       255 159  69; /* #FF9F45  JJ 레전드 */
+    --tier-orange-vivid: 255 159  69; /* #FF9F45 */
+    --tier-rose:         255 122 138; /* #FF7A8A  QQ 챔피언 */
+    --tier-rose-vivid:   255 122 138; /* #FF7A8A */
+    --tier-gold:         255 209   0; /* #FFD100  KK 홀덤 마스터 */
+    --tier-gold-vivid:   255 209   0; /* #FFD100 */
+    --tier-ace:          255 215   0; /* #FFD700  AA(상대평가 상위 10) */
+    --tier-ace-vivid:    255 215   0; /* #FFD700 */
+    --tier-admin:        255 114 140; /* #FF728C  SS 운영자 */
+    --tier-admin-vivid:  255  77 109; /* #FF4D6D */
 
     /* 브랜드 그라데이션(어워드 레퍼런스 2026-08-27) — 전부 정적 배경. 애니메이션 금지(모션 헌법 §20.4).
        aurora: DatawizzAI 문법 — 딥 플럼 위 바이올렛 빔 + 마젠타·블루 힌트. 전 레이어 투명 종단이라
@@ -129,6 +182,7 @@
     --ink-secondary: 91 97 110;   /* #5B616E PET tx2 */
     --ink-muted:     99 108 123;  /* #636C7B — WCAG AA 보강(흰/회색 배경서 ≥4.5:1) */
     --ink-inverse:   24 26 32;    /* 골드 버튼 위 텍스트는 어둡게 유지 */
+    --ink-on-bright: 3 4 5;       /* 다크와 동일 — 근거는 위 블록 주석 */
 
     --border-subtle:  230 232 236; /* #E6E8EC PET line — 헤어라인은 디자인 의도라 유지 */
     /* 라이트도 같은 문제(1.28:1) — 흰 배경에서 입력칸 테두리가 사실상 안 보였다.
@@ -146,6 +200,39 @@
     --accent-400: 92 60 180;   /* #5C3CB4 hover */
     --accent-500: 80 51 158;   /* #50339E pressed */
     --accent-600: 64 42 126;   /* #402A7E */
+
+    /* 등급 색(라이트) — 위 다크 블록의 설명 참조. hue 는 원색 그대로, 명도만 낮췄다.
+       라이트에선 '높은 등급 = 더 어두움'으로 위계가 뒤집힌다(흰 지면에선 어두움이 강조를 담당).
+       이미 gold/emerald 오버라이드가 쓰는 규칙과 같다. 텍스트 실측(흰 카드 위 칩 합성 후)
+       1.40~3.31 → 5.53~8.04. 골드 KK 가 올리브(#6C5F00)가 되는 것은 노랑의 물리적 한계이며,
+       화려함은 --tier-gold-vivid 가 글로우·그라데이션 쪽에서 담당한다.
+
+       vivid(2026-08-30 재보정) — 기준 지면 surface-float(#E6E8EC) 실측 2.49~2.52 → 3.20~3.22.
+       slate 만 이미 3.44 라 값 그대로 뒀다(불필요하게 어둡히지 않는다).
+       ⚠ admin 만은 되돌린 것이다: 직전 웨이브가 #FF4D6D → #FF5775 로 '밝히면서' 라이트 세 지면이
+       모두 후퇴했다(float 2.62→2.49 · high 2.85→2.71 · base 2.97→2.83 — 10색 중 유일한 악화).
+       #DE4C66 은 그 원본(#FF4D6D)보다도 전 지면에서 높다(float 2.62→3.21). 다시 밝히지 말 것.
+       값 산출: sRGB 곱셈 스케일(hue·HSV채도 불변) 후 float 대비 ≥3.20 이 되는 최대 명도. */
+    --tier-slate:         86  95 111; /* #565F6F */
+    --tier-slate-vivid:  113 124 142; /* #717C8E */
+    --tier-steel:         59  70  91; /* #3B465B */
+    --tier-steel-vivid:  117 129 150; /* #758196 */
+    --tier-blue:           0  89 196; /* #0059C4 */
+    --tier-blue-vivid:    51 129 223; /* #3381DF */
+    --tier-green:         10 108  68; /* #0A6C44 */
+    --tier-green-vivid:   43 145 103; /* #2B9167 */
+    --tier-purple:       106  22 255; /* #6A16FF */
+    --tier-purple-vivid: 148 105 223; /* #9469DF */
+    --tier-orange:       161  64   0; /* #A14000 */
+    --tier-orange-vivid: 204  98   0; /* #CC6200 */
+    --tier-rose:         187   0  23; /* #BB0017 */
+    --tier-rose-vivid:   222  77  94; /* #DE4D5E */
+    --tier-gold:         108  95   0; /* #6C5F00 */
+    --tier-gold-vivid:   153 126   0; /* #997E00 */
+    --tier-ace:          111  94   0; /* #6F5E00 */
+    --tier-ace-vivid:    150 127   0; /* #967F00 */
+    --tier-admin:        146   0  26; /* #92001A */
+    --tier-admin-vivid:  222  76 102; /* #DE4C66 */
 
     /* 브랜드 그라데이션(라이트) — 옅은 라벤더 워시(정적). 피크 #EFECF6 실측: ink-muted 4.55 ·
        ink-primary 15.3. cta 흰 텍스트 실측 7.61(어두운끝)~6.34(밝은끝). */
@@ -621,6 +708,47 @@ html.light .text-danger-light { color: #D63A4E; }
 /* 액센트 텍스트 — 라이트에선 100/200 변수가 연한 틴트(비텍스트)라 텍스트로 쓰인 곳만 딥 톤 교정.
    300/400 은 변수 자체가 딥(6.78/8.09:1)이라 오버라이드 불필요 — 목록에서 제거(2026-08-27). */
 html.light .text-accent-200 { color: #6946C8; }
+
+/* ── 하단 탭바 활성 라벨(TXT-NAV) ─────────────────────────────
+   활성 라벨은 '지금 어느 탭인지'를 알려주는 유일한 텍스트 신호인데, 다크에서
+   text-accent-300(#805FDA) on surface-mid(#241F3A) = 3.43:1 로 AA 미달이었다
+   (위 --grad-bar 주석이 이미 '별건 리스크'로 남겨둔 바로 그 값).
+   라벨 렌더는 src/App.tsx(오케스트레이터 소유)라 마크업을 건드리지 않고 CSS 로만 승격한다:
+   같은 accent 계열의 텍스트용 단계 accent-200(#BCA9F0) → 7.56:1.
+   라이트는 accent-300 이 이미 딥(#6946C8 on #FFF = 6.34:1)이라 그대로 둔다. */
+html:not(.light) nav[aria-label='하단 내비게이션'] .text-accent-300 { color: rgb(var(--accent-200)); }
+
+/* ── GTO 텍스트 전용 색(TXT-GTO) ──────────────────────────────
+   ACTION_COLORS(src/lib/ranges.data.ts)·EQUITY_BANDS(src/components/features/gto/equityBands.ts)의
+   hex 는 GTO 차트 fill 의 도메인 고정 스냅샷이다(CLAUDE.md). fill 은 절대 건드리지 않는다.
+   문제는 그 값을 '글자'로 재사용한 지점 — 카드는 bg-surface-low/high 라 테마를 따라가는데
+   글자만 안 따라가서 대비가 무너졌다. 실측(AA 4.5 기준):
+     다크  raise 3.63 · fourbet 4.03 · fold 3.53 · 패 3.74
+     라이트 call 2.54 · strong 2.15 · playable 2.28 · dominant 3.76 · 승 2.02 · 무 2.27 · 패 3.33
+   아래는 hue·채도를 보존한 채 명도만 테마별로 옮긴 텍스트 전용 값이다(전 지면 ≥5.0:1:
+   surface-low·surface-high·surface-mid, 그리고 권장 액션 배지의 8%(=14) 틴트 합성색까지 포함). */
+:root {
+  --gto-txt-raise:    #8C95DF; /* fill #5E6AD2 → 5.00 */
+  --gto-txt-call:     #10B981; /* fill 과 동일 — 다크에선 이미 5.55 */
+  --gto-txt-fourbet:  #A987F8; /* fill #8B5CF6 → 5.02 */
+  --gto-txt-fold:     #959AA6; /* fill #6B7280 → 5.00 */
+  --gto-txt-dominant: #F37373; /* band #EF4444 → 5.03 */
+  --gto-txt-strong:   #F59E0B; /* band 과 동일 — 6.55 */
+  --gto-txt-playable: #22C55E; /* band 과 동일 — 6.17 */
+  --gto-txt-marginal: #629BF8; /* band #3B82F6 → 5.06 (weak 도 이 값 — 기존 동색 성질 보존) */
+  --gto-txt-tie:      #94A3B8; /* 승/무/패의 '무' — 다크는 원값 그대로 5.49 */
+}
+html.light {
+  --gto-txt-raise:    #4E5BCE; /* 5.00 */
+  --gto-txt-call:     #0A7552; /* 5.03 */
+  --gto-txt-fourbet:  #743BF4; /* 5.06 */
+  --gto-txt-fold:     #616774; /* 5.02 */
+  --gto-txt-dominant: #CE1212; /* 5.01 */
+  --gto-txt-strong:   #8E5B06; /* 5.07 */
+  --gto-txt-playable: #147739; /* 5.01 */
+  --gto-txt-marginal: #0A5DE3; /* 5.05 */
+  --gto-txt-tie:      #566882; /* 5.02 */
+}
 /* 상태/경고용 파스텔 텍스트 — 흰 배경에서 대비가 무너지는 나머지 계열 전부 딥 톤 교정 */
   html.light .text-indigo-300, html.light .text-indigo-400 { color: #4338CA; }
 html.light .text-amber-100, html.light .text-amber-200, html.light .text-amber-300 { color: #92600A; }

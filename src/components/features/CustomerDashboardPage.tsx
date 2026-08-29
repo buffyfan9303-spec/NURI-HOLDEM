@@ -24,7 +24,7 @@ import { getMyReferralStats, inviteUrl, type ReferralStats } from '../../api/ref
 import { getMyChampionships } from '../../api/seasons';
 import QRCode from 'qrcode';
 import { BADGES, getMyBadgeStats, type BadgeStats } from '../../lib/loyalty';
-import TierBadge, { tierOf, tierProgress, allTiers } from '../atoms/TierBadge';
+import TierBadge, { tierOf, tierProgress, allTiers, tierCss } from '../atoms/TierBadge';
 import { ProfileIdentityHeader } from './ProfileModal'; // 통합 프로필 — 아이덴티티 헤더 정본 재사용(중복 정의 0)
 import { loginWithKakao, signInWithGoogle } from '../../api/auth'; // 비로그인 랜딩 — AuthModal 과 같은 OAuth 시작 함수 재사용
 import { promptLogin } from '../../lib/requireLogin'; // 이메일 로그인 — App 이 듣고 AuthModal(z-[60], DOM 후순위)을 위로 띄운다
@@ -849,23 +849,27 @@ function RankTrendChart({ rows }: { rows: MyRankingRow[] }) {
         <p className="text-xs font-bold text-ink-secondary">순위 추이 <span className="font-normal text-ink-muted">(최근 {pts.length}회 · 위로 갈수록 높은 순위)</span></p>
         <p className="text-2xs text-ink-muted">최고 <b className="text-accent-300">{best}위</b> · 평균 <b className="text-ink-secondary">{avg}위</b></p>
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="mt-1 w-full" role="img" aria-label="내 순위 추이 그래프">
+      {/* 색은 전부 토큰 — 예전엔 다크 팔레트 hex 를 그대로 박아 라이트에서 그림만 안 따라왔다
+          (라이트 실측: 추이선 #FCD535 1.43:1 · 가이드선 #2B3139 13.12:1 로 반전, 축 라벨 3.32:1).
+          추이선/1위 점은 골드(순위·상금 도메인색)라 text-gold-300 + currentColor 로 받아
+          index.css 의 `html.light .text-gold-300 → #8F6200` 라이트 보정을 그대로 탄다. */}
+      <svg viewBox={`0 0 ${W} ${H}`} className="mt-1 w-full text-gold-300" role="img" aria-label="내 순위 추이 그래프">
         {/* 가이드선: 1위/중간/하단 */}
         {[1, Math.ceil(maxPos / 2), maxPos].map((g) => (
           <g key={g}>
-            <line x1={PAD_X} y1={y(g)} x2={W - PAD_X} y2={y(g)} stroke="#2B3139" strokeWidth="1" strokeDasharray={g === 1 ? '' : '3 4'} />
-            <text x={PAD_X - 5} y={y(g) + 3.5} textAnchor="end" fontSize="10" fill="#848E9C">{g}위</text>
+            <line x1={PAD_X} y1={y(g)} x2={W - PAD_X} y2={y(g)} stroke="rgb(var(--border-strong))" strokeWidth="1" strokeDasharray={g === 1 ? '' : '3 4'} />
+            <text x={PAD_X - 5} y={y(g) + 3.5} textAnchor="end" fontSize="10" fill="rgb(var(--ink-muted))">{g}위</text>
           </g>
         ))}
-        <path d={path} fill="none" stroke="#FCD535" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+        <path d={path} fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
         {pts.map((p, i) => (
           <g key={i}>
             <circle cx={x(i)} cy={y(p.position)} r={p.position <= 3 ? 4.5 : 3.5}
-              fill={p.position === 1 ? '#FCD535' : p.position <= 3 ? '#B7BDC6' : '#474D57'}
-              stroke="#181A20" strokeWidth="1.5" />
+              fill={p.position === 1 ? 'currentColor' : p.position <= 3 ? 'rgb(var(--ink-secondary))' : 'rgb(var(--border-strong))'}
+              stroke="rgb(var(--surface-low))" strokeWidth="1.5" />
             {/* 라벨은 표본이 적을 때만 전부, 많으면 듬성듬성(겹침 방지) */}
             {(pts.length <= 8 || i % 2 === 0 || i === pts.length - 1) && (
-              <text x={x(i)} y={H - 6} textAnchor="middle" fontSize="9.5" fill="#848E9C">{md(p.date)}</text>
+              <text x={x(i)} y={H - 6} textAnchor="middle" fontSize="9.5" fill="rgb(var(--ink-muted))">{md(p.date)}</text>
             )}
           </g>
         ))}
@@ -1018,7 +1022,7 @@ function LevelGuideModal({ points, onClose }: { points: number; onClose: () => v
             return (
               <li key={t.key} className={['flex items-center gap-2.5 rounded-input border px-3 py-2', isCur ? 'border-accent-400/60 bg-accent-300/10' : reached ? 'border-border-subtle bg-surface-low' : 'border-border-subtle bg-surface-low opacity-50'].join(' ')}>
                 <TierBadge points={t.min} size={24} />
-                <p className="min-w-0 flex-1 text-sm font-bold" style={{ color: reached ? t.color : undefined }}>
+                <p className="min-w-0 flex-1 text-sm font-bold" style={{ color: reached ? tierCss(t.colorVar) : undefined }}>
                   Lv {t.level} · {t.title}
                   {isCur && <span className="ml-1.5 rounded-badge bg-accent-300 px-1.5 py-0.5 align-middle text-2xs font-bold text-white">현재</span>}
                 </p>
@@ -1053,7 +1057,7 @@ function LevelCard({ points, championships = 0 }: { points: number; championship
       <div className="flex items-center gap-2">
         <TierBadge points={points} size={28} />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold text-ink-primary">Lv {t.level} · <span style={{ color: t.color }}>{t.title}</span></p>
+          <p className="text-sm font-bold text-ink-primary">Lv {t.level} · <span style={{ color: tierCss(t.colorVar) }}>{t.title}</span></p>
           <p className="text-2xs text-ink-muted">활동점수 <b className="text-accent-300 tabular-nums">{points.toLocaleString()}</b>점</p>
         </div>
         {championships > 0 && (
@@ -1067,12 +1071,12 @@ function LevelCard({ points, championships = 0 }: { points: number; championship
           {/* XP 바 — 현재 점수/다음 레벨 필요 점수 + 바 끝 다음 등급 뱃지 미리보기 */}
           <div className="flex items-center gap-1.5">
             <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-surface-float">
-              <div className="h-full rounded-full transition-[width]" style={{ width: `${Math.round(prog.ratio * 100)}%`, background: `linear-gradient(90deg, ${t.color}, ${prog.next.color})` }} />
+              <div className="h-full rounded-full transition-[width]" style={{ width: `${Math.round(prog.ratio * 100)}%`, background: `linear-gradient(90deg, ${tierCss(t.vividVar)}, ${tierCss(prog.next.vividVar)})` }} />
             </div>
             <span className="shrink-0" title={`다음 레벨 ${prog.next.label} · ${prog.next.title}`}><TierBadge points={prog.next.min} size={15} /></span>
           </div>
           <p className="mt-1 flex items-center justify-between text-2xs text-ink-muted">
-            <span>다음 레벨 <b style={{ color: prog.next.color }}>{prog.next.title}</b>까지 <b className="text-ink-secondary tabular-nums">{prog.toNext.toLocaleString()}</b>점</span>
+            <span>다음 레벨 <b style={{ color: tierCss(prog.next.colorVar) }}>{prog.next.title}</b>까지 <b className="text-ink-secondary tabular-nums">{prog.toNext.toLocaleString()}</b>점</span>
             <span className="tabular-nums"><b className="text-ink-secondary">{points.toLocaleString()}</b> / {prog.next.min.toLocaleString()}</span>
           </p>
         </div>

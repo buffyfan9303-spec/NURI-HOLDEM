@@ -11,6 +11,7 @@ import { blockUser } from '../../api/blocks';
 import { useToast } from '../atoms/Toast';
 import SegmentedTabs from '../atoms/SegmentedTabs';
 import Icon, { type IconName } from '../atoms/Icon';
+import { onColorInkClass } from '../../lib/color';
 
 interface NotificationPanelProps {
   open: boolean;
@@ -362,7 +363,7 @@ export default function NotificationPanel({
                     <span className="absolute left-0 top-3 bottom-3 w-0.5 rounded-full bg-accent-300" aria-label="안읽음" />
                   )}
                   <div
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white"
+                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${onColorInkClass(t.otherColor || AVATAR_FALLBACK)}`}
                     style={{ background: t.otherColor || AVATAR_FALLBACK }}
                   >
                     <span className="text-sm font-bold leading-none">{t.otherName.slice(0, 1)}</span>
@@ -546,7 +547,8 @@ export default function NotificationPanel({
                   <div
                     className={[
                       'w-9 h-9 rounded-full flex items-center justify-center',
-                      n.avatarColor ? 'text-white' : 'bg-surface-high text-ink-secondary',
+                      // 발신자 아바타 배경은 유저 데이터(avatarColor)라 흰 글씨를 고정할 수 없다 — 휘도로 잉크 전환.
+                      n.avatarColor ? onColorInkClass(n.avatarColor) : 'bg-surface-high text-ink-secondary',
                     ].join(' ')}
                     style={n.avatarColor ? { background: n.avatarColor } : undefined}
                   >

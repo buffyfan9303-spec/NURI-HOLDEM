@@ -13,6 +13,7 @@ import { relativeTime, STATUS_MAP } from './MarketplaceTab';
 import ChatPane from './chat/ChatPane';
 import { thumbUrl, thumbSrcSet } from '../../lib/imageUrl';
 import Icon from '../atoms/Icon';
+import { onColorInkClass } from '../../lib/color';
 
 function Thumb({ src, size = 'w-12 h-12' }: { src: string | null; size?: string }) {
   return (
@@ -62,7 +63,7 @@ export function MessagesModal({ open, onClose }: { open: boolean; onClose: () =>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><polyline points="10,3 5,8 10,13" /></svg>
           </button>
         )}
-        {active && <div className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-xs font-bold text-white" style={{ background: active.counterpartyColor }}>{active.counterpartyName[0]}</div>}
+        {active && <div className={['w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-xs font-bold', onColorInkClass(active.counterpartyColor)].join(' ')} style={{ background: active.counterpartyColor }}>{active.counterpartyName[0]}</div>}
         <div className="flex-1 min-w-0">
           <p className="text-sm font-bold text-ink-primary truncate">{active ? active.counterpartyName : '메시지'}</p>
           {active && <p className="text-2xs text-ink-muted truncate">{active.role === 'seller' ? '구매 문의' : '판매자'} · {active.listingTitle}</p>}
@@ -102,7 +103,7 @@ export function MessagesModal({ open, onClose }: { open: boolean; onClose: () =>
                   <button type="button" onClick={() => setActive(t)}
                     className="w-full text-left flex items-center gap-3 p-2.5 rounded-card hover:bg-surface-high active:bg-surface-float transition-colors">
                     <div className="relative shrink-0">
-                      <div className="w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold text-white" style={{ background: t.counterpartyColor }}>{t.counterpartyName[0]}</div>
+                      <div className={['w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold', onColorInkClass(t.counterpartyColor)].join(' ')} style={{ background: t.counterpartyColor }}>{t.counterpartyName[0]}</div>
                       <span className={['absolute -bottom-1 -right-1 text-[8px] font-bold px-1 py-px rounded-badge ring-2 ring-surface-mid',
                         t.role === 'seller' ? 'bg-emerald-500 text-white' : 'bg-sky-500 text-white'].join(' ')}>{t.role === 'seller' ? '판매' : '구매'}</span>
                     </div>

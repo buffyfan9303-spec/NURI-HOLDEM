@@ -34,6 +34,7 @@ import { getSchedules, type Schedule } from '../../api/schedules';
 import { getLedgerBuyins, getLedgerSession, kstToday, getPendingBuyinRequests, subscribeBuyinRequests, getLedgerGames, MAIN_GAME_SEQ, type LedgerGame } from '../../api/ledger';
 import { getVenueClocks, subscribeClock, effectiveLevel, type ClockState } from '../../api/clock';
 import { rankDraftKey, readRowsDraft, writeRowsDraft, clearRowsDraft, pruneRowsDrafts, hasRowContent, moveRankRow, type RankRow } from '../../lib/rankingDraft';
+import { onColorInkClass } from '../../lib/color';
 
 // 'league' 는 §12-A-1 오너 결정으로 제거(LEAGUE-FREEZE 의 클라이언트 절반 — 코드는 동결, 진입 경로만 0)
 // IA2: 포스터·장부·클락·순위 4개 최상위 문(門)이 'game' 섹션의 4단계 스텝으로 통합 —
@@ -2025,7 +2026,7 @@ function StaffManager({ venueId }: { venueId: string }) {
                   return (
                   <li key={s.id} className="p-3 rounded-card bg-surface-low border border-border-subtle space-y-2">
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 shrink-0 rounded-full flex items-center justify-center text-xs font-bold text-white"
+                      <div className={['w-9 h-9 shrink-0 rounded-full flex items-center justify-center text-xs font-bold', onColorInkClass(s.avatarColor ?? '#5A6175')].join(' ')}
                         style={{ background: s.avatarColor ?? '#5A6175' }}>
                         {s.name[0]}
                       </div>

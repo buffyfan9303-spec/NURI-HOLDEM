@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
 import { getOwnerPosts, createOwnerPost, deleteOwnerPost, type OwnerPost } from '../../api/community';
 import { relativeTime } from './MarketplaceTab';
+import { onColorInkClass } from '../../lib/color';
 
 /** 업주 전용 라운지 — 작성 1일 후 자동 만료, 삭제/만료글은 관리자만 열람 */
 export default function OwnerCommunity() {
@@ -112,7 +113,7 @@ export default function OwnerCommunity() {
           {posts.map((p) => (
             <li key={p.id} className="rounded-card border border-border-subtle bg-surface-low p-3">
               <div className="flex items-center gap-2">
-                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-2xs font-bold text-white" style={{ background: p.authorColor ?? '#5A6175' }}>
+                <div className={['flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-2xs font-bold', onColorInkClass(p.authorColor ?? '#5A6175')].join(' ')} style={{ background: p.authorColor ?? '#5A6175' }}>
                   {p.authorName[0]}
                 </div>
                 <span className="text-xs font-semibold text-ink-primary">{p.authorName}</span>

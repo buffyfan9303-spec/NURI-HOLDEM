@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import { withViewTransition } from '../../lib/viewTransition';
+import { onColorInkClass } from '../../lib/color';
 import { Map, MapMarker, useKakaoLoader } from 'react-kakao-maps-sdk';
 import CommentThread from './CommentThread';
 import RotiArenaLogo from '../atoms/RotiArenaLogo';
@@ -775,7 +776,7 @@ function HeroSection({
           ) : (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 select-none pointer-events-none">
               <div
-                className="flex h-14 w-14 items-center justify-center rounded-2xl text-2xl font-extrabold text-white shadow-lg ring-1 ring-white/10"
+                className={`flex h-14 w-14 items-center justify-center rounded-2xl text-2xl font-extrabold shadow-lg ring-1 ring-white/10 ${onColorInkClass(venue.themeColor ?? '#3A4253')}`}
                 style={{ background: venue.themeColor ?? '#3A4253' }}
               >
                 {venue.name[0]}

@@ -75,6 +75,8 @@ export default {
           secondary: 'rgb(var(--ink-secondary) / <alpha-value>)',
           muted:     'rgb(var(--ink-muted) / <alpha-value>)',
           inverse:   'rgb(var(--ink-inverse) / <alpha-value>)',
+          // 유저 지정 밝은 배경(아바타 이니셜 등) 위 글자 — src/lib/color.ts onColorInk 가 고른다
+          onBright:  'rgb(var(--ink-on-bright) / <alpha-value>)',
         },
         // Border scale — CSS 변수 기반 (테마 전환)
         border: {
