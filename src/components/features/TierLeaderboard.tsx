@@ -1,12 +1,18 @@
 // src/components/features/TierLeaderboard.tsx
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
+import { withViewTransition } from '../../lib/viewTransition';
 import {
   getDomesticRankings, myRankVerifications, submitRankVerification,
   EVENT_KIND_LABEL, type RankEventKind, type RankVerification, type DomesticRow,
 } from '../../api/rankverify';
 import { useAuth } from '../../contexts/AuthContext';
 import TierBadge, { tierOf, tierProgress, allTiers, isAceRank, ACE_TOP_RANK, ACE_MIN_POINTS } from '../atoms/TierBadge';
-import { getActivityLeaderboard, getMyPointBalance, getShoutRules, type LeaderboardEntry, type PointBalance } from '../../api/community';
+import {
+  getActivityLeaderboard, getMyPointBalance, getShoutRules,
+  getShopSkus, getMyMarkRental, buyMarkRental,
+  type LeaderboardEntry, type PointBalance, type ShopSku, type MarkRental,
+} from '../../api/community';
 import { getGlobalRankingTotals, type GlobalRankingTotal } from '../../api/rankings';
 import { useToast } from '../atoms/Toast';
 import EmptyState from '../atoms/EmptyState';
@@ -14,7 +20,10 @@ import Icon from '../atoms/Icon';
 import CountUp from '../atoms/CountUp';
 import SlidingPill from '../atoms/SlidingPill';
 import { ShoutComposer } from './CommunityShoutBar';
-import { ALL_MARKS } from '../../lib/shopMarks';
+import {
+  loadShopMarks, earnMarks, rentMarks, markEmoji, markOf, FALLBACK_CATALOG,
+  type CatalogMark,
+} from '../../lib/shopMarks';
 import { getHallOfFame, type HallBoard } from '../../lib/hallOfFame';
 import {
   getWeeklyLeague, leagueTierOf, LEAGUE_TIERS, type LeagueRow,
@@ -30,6 +39,9 @@ const PODIUM_TONE = ['text-slate-200', 'text-gold-300', 'text-amber-600'] as con
 
 // 통합 랭킹 허브 — 활동/머니인/프라이즈 + 주간 리그·업적·미션·명예의 전당(충성도)
 type Board = 'activity' | 'moneyin' | 'prize' | 'league' | 'badges' | 'missions' | 'hall' | 'shop' | 'domestic' | 'verify';
+// 탭바에 실제로 보이는 순서 — 전환 방향(좌/우)이 이 순서에서 나온다.
+// map 과 방향 계산이 각자 배열을 들면 언젠가 어긋나므로 하나만 둔다.
+const RANK_TABS: Board[] = ['activity', 'league', 'hall', 'moneyin', 'domestic', 'verify', 'shop'];
 const BOARD_LABEL: Record<Board, string> = {
   activity: '활동 순위', moneyin: '머니인', prize: '프라이즈', shop: '상점', domestic: '국내 순위', verify: '순위 인증',
   league: '주간 리그', badges: '업적', missions: '미션', hall: '명예의 전당',
@@ -37,7 +49,7 @@ const BOARD_LABEL: Record<Board, string> = {
 const BOARD_DESC: Record<Board, string> = {
   domestic: '정식 대회(해외 포함) 입상만 인정 — 운영자가 승인한 건에 한해 100만원(10T)당 1점으로 합산합니다.',
   verify: '대회 입상 증빙 2장(머니인·신분증)을 올려 운영자 승인을 받으면 국내 순위에 합산됩니다. 정식 대회만 인정되며 100만원(10T)당 1점입니다.',
-  shop: '마크는 활동점수 도달로 해금(차감 없음), 외치기는 사용 가능 점수로 구매합니다. 누적 점수(등급 기준)는 줄지 않습니다.',
+  shop: '모으는 마크는 활동점수 도달로 영구 해금(차감 없음)이고, 기간 마크와 외치기는 사용 가능 점수로 삽니다. 무엇을 사도 누적 점수(등급 기준)는 줄지 않습니다.',
   activity: '접속·글쓰기·댓글 활동 점수 — 등급(2·3~AA)과 연동. 아래 주간 미션을 달성하면 점수를 바로 받아요.',
   moneyin: '전국 매장 머니인 점수 — 100만원(10T)당 1점으로 합산합니다(임계 미만은 점수 없음).',
   prize: '전국 매장 프라이즈 점수 합산(금전적 가치 없음).',
@@ -46,6 +58,19 @@ const BOARD_DESC: Record<Board, string> = {
   missions: '이번 주 미션 — 달성하면 활동점수 보상을 바로 받아요. 월요일 리셋.',
   hall: '지난달 가장 빛난 플레이어 TOP3 — 운영자가 직접 선정하며, 선정이 없는 달은 입상 기록으로 자동 집계됩니다.',
 };
+
+/** 기간 마크 잔여 — 하루 미만은 시간으로(만료가 임박했다는 게 재구매의 신호다) */
+function remainDays(expiresAt: string): string {
+  const ms = new Date(expiresAt).getTime() - Date.now();
+  if (ms <= 0) return '만료됨';
+  const h = Math.floor(ms / 3_600_000);
+  return h >= 24 ? `${Math.floor(h / 24)}일 남음` : `${Math.max(1, h)}시간 남음`;
+}
+
+/** 외치기 카드 부제 — 등급 이름을 서버 가격표에서 그대로 읽어 잇는다('기본 · 하이라이트 · 전광판') */
+function shoutTierHint(skus: ShopSku[]): string {
+  return skus.filter((s) => s.kind === 'shout').sort((a, b) => a.sort - b.sort).map((s) => s.label).join(' · ');
+}
 
 function RankNum({ n }: { n: number }) {
   const top = n <= 3;
@@ -121,6 +146,24 @@ export default function TierLeaderboard() {
   const [loading, setLoading] = useState(true);
   const [showLadder, setShowLadder] = useState(false);
   const [board, setBoard] = useState<Board>('activity');
+  /**
+   * 랭킹 세부 탭 전환 — 매장 서브탭(VenuePage)과 같은 방향성 푸시.
+   * 탭바는 전환 중 자기 스냅샷 이름을 가져 제자리에 고정되고, 아래 본문만 밀린다.
+   * (상시 name 을 주면 화면을 떠날 때 탭바 잔상이 얼어붙는다 — VenuePage 에서 실측된 함정.)
+   */
+  const goBoard = useCallback((next: Board) => {
+    if (next === board) return;                   // 같은 탭 재탭 — 무의미한 스냅샷 방지
+    const from = RANK_TABS.indexOf(board), to = RANK_TABS.indexOf(next);
+    document.documentElement.dataset.vtScope = 'rank-tab';
+    withViewTransition(
+      () => { flushSync(() => setBoard(next)); },
+      () => setBoard(next),                       // 미지원·모션축소 — 즉시 전환
+      to >= from ? 'forward' : 'back',
+    );
+    window.setTimeout(() => {
+      if (document.documentElement.dataset.vtScope === 'rank-tab') delete document.documentElement.dataset.vtScope;
+    }, 450);
+  }, [board]);
   const [global, setGlobal] = useState<GlobalRankingTotal[]>([]);
   const [globalLoaded, setGlobalLoaded] = useState(false);
   // 충성도 허브 — 주간 리그/업적/미션/명예의 전당(보드 진입 시 1회 로드)
@@ -129,10 +172,29 @@ export default function TierLeaderboard() {
   const [badgeStats, setBadgeStats] = useState<BadgeStats | null>(null);
   const [equippedMark, setEquippedMark] = useState<string | null | undefined>(undefined); // 상점: 장착 마크(undefined=미로드)
   const [equipBusy, setEquipBusy] = useState<string | null>(null);
-  // 상점 소비형 상품(외치기) — 누적 점수는 그대로 두고 '사용 가능 점수'만 깎는다(§spent_points)
+  // 상점 소비형 상품 — 누적 점수는 그대로 두고 '사용 가능 점수'만 깎는다(§spent_points).
+  // 2026-08-30: 소비처가 외치기 하나뿐이라 보통 유저의 첫 소비가 14일 뒤였다.
+  // 기간 마크(1일 50 / 7일 300 / 30일 1,100)를 더해 첫 소비를 나흘로 당기고 반복 소비를 만든다.
   const [balance, setBalance] = useState<PointBalance | null>(null);
-  const [shoutCost, setShoutCost] = useState(30);
+  // ⚠ 초기값은 서버 shop_skus.shout_basic 과 같아야 한다. 낮게 두면 응답이 오기 전 한 프레임 동안
+  //   화면은 '30점'이라 말하고 서버는 200점을 걷는다 — 유저에게 거짓말이 되는 값이다.
+  const [shoutCost, setShoutCost] = useState(200);
   const [shoutOpen, setShoutOpen] = useState(false);
+  const [skus, setSkus] = useState<ShopSku[]>([]);
+  const [rental, setRental] = useState<MarkRental | null>(null);
+  const [earnList, setEarnList] = useState<CatalogMark[]>(() => FALLBACK_CATALOG.filter((m) => m.kind === 'earn'));
+  const [rentList, setRentList] = useState<CatalogMark[]>(() => FALLBACK_CATALOG.filter((m) => m.kind === 'rent'));
+  const [pickMark, setPickMark] = useState<string | null>(null);   // 기간 마크 선택(구매 대상)
+  const [buying, setBuying] = useState<string | null>(null);       // 구매 중인 SKU 키
+  // 선택된 기간 마크 — **하이라이트와 결제 대상이 반드시 같은 값**이어야 한다.
+  //   종전엔 하이라이트가 `pickMark ?? rental?.markKey ?? rentList[0]`, 결제는 `pickMark ?? rentList[0]` 이라
+  //   이미 마크를 쓰는 중인 사람이 아무것도 안 누르고 바로 사면 화면은 '드래곤'을 켜 둔 채
+  //   결제는 '네잎클로버'로 나갔다. 서버는 다른 마크면 기간을 이어 붙이지 않고 now() 부터 다시 세므로
+  //   (buy_mark_rental §5) **남아 있던 기간까지 사라진다** — 점수를 내고 손해를 보는 경로였다.
+  //   목록에 없는 키(카탈로그에서 내려간 마크)는 서버가 거절하므로 여기서 미리 걸러 첫 항목으로 떨어뜨린다.
+  const selectedRentKey =
+    [pickMark, rental?.markKey].find((k) => k && rentList.some((m) => m.key === k))
+    ?? rentList[0]?.key ?? null;
   const reloadBalance = useRef(() => { getMyPointBalance().then(setBalance).catch(() => {}); }).current;
   const [domestic, setDomestic] = useState<DomesticRow[] | null>(null);
   const [myVerifs, setMyVerifs] = useState<RankVerification[] | null>(null);
@@ -141,10 +203,12 @@ export default function TierLeaderboard() {
   const [vProof, setVProof] = useState<File | null>(null);
   const [vIdCard, setVIdCard] = useState<File | null>(null);
   const [vBusy, setVBusy] = useState(false);
-  // 행 닉네임 앞 장착 마크 — equippedMark 없는 행 타입(주간 리그 등)도 안전
+  // 행 닉네임 앞 장착 마크 — equippedMark 없는 행 타입(주간 리그 등)도 안전.
+  // 만료·강등된 마크는 서버(get_activity_leaderboard)가 이미 null 로 지워서 준다.
   const markPrefix = (r: unknown): string => {
     const k = (r as { equippedMark?: string | null }).equippedMark;
-    return k ? ((ALL_MARKS.find((m) => m.key === k)?.emoji ?? '') + ' ') : '';
+    const e = markEmoji(k);
+    return e ? e + ' ' : '';
   };
   const submitVerify = async () => {
     if (!user || vBusy) return;
@@ -162,6 +226,24 @@ export default function TierLeaderboard() {
     } catch { /* 실패 시 입력 유지 */ }
     finally { setVBusy(false); }
   };
+  // 기간 마크 구매 — 차감·지급·장착이 서버 한 트랜잭션이라 여기서는 결과만 반영한다.
+  // 중복 클릭은 buying 으로 한 번 더 막지만, 최종 판정은 프로필 행 잠금을 쥔 서버가 한다.
+  const handleBuyRental = async (sku: ShopSku) => {
+    const key = selectedRentKey;
+    if (!key || buying !== null) return;
+    setBuying(sku.key);
+    try {
+      const r = await buyMarkRental(sku.key, key);
+      setRental(r);
+      setEquippedMark(r.markKey);           // 서버가 구매 즉시 장착까지 끝냈다
+      reloadBalance();
+      await refreshProfile?.();
+      toast.show(`${markOf(r.markKey)?.name ?? '마크'} 장착! ${sku.label} · ${sku.price.toLocaleString()}점 사용`, 'success');
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : '구매에 실패했습니다', 'error');
+    } finally { setBuying(null); }
+  };
+
   const handleEquip = async (key: string | null) => {
     if (equipBusy !== null) return;
     setEquipBusy(key ?? '');
@@ -196,6 +278,10 @@ export default function TierLeaderboard() {
     if (board === 'shop' && user) {
       reloadBalance();
       getShoutRules().then((r) => setShoutCost(r.cost)).catch(() => {});
+      // 카탈로그·가격표는 서버가 단일 출처다. 응답 전에는 폴백으로 그려 두므로 화면이 비지 않는다.
+      loadShopMarks().then(() => { setEarnList(earnMarks()); setRentList(rentMarks()); }).catch(() => {});
+      getShopSkus().then(setSkus).catch(() => {});
+      getMyMarkRental().then(setRental).catch(() => {});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [board, user?.id]);
@@ -420,18 +506,19 @@ export default function TierLeaderboard() {
 
       {/* 랭킹 리스트 — 다중 보드(활동/머니인/프라이즈) */}
       <section>
-        <div className="relative flex items-center gap-1 bg-surface-high rounded-input p-0.5 mb-1.5 overflow-x-auto scrollbar-none lg:flex-wrap lg:overflow-visible">
+        <div data-rank-tabbar className="relative flex items-center gap-1 bg-surface-high rounded-input p-0.5 mb-1.5 overflow-x-auto scrollbar-none lg:flex-wrap lg:overflow-visible">
           {/* 오너 지시(2026-08-28): 구 pill(그라데이션 배경) 제거 — 커뮤니티 서브탭과 같은
               밑줄(underline) 문법. 활성은 미끄러지는 2px 밑줄 + 잉크색·굵기. */}
           <SlidingPill activeKey={board} underline className="rounded-full bg-accent-300" />
-          {(['activity', 'league', 'hall', 'moneyin', 'domestic', 'verify', 'shop'] as Board[]).map((b) => (
-            <button key={b} type="button" data-pill-active={board === b || undefined} onClick={() => setBoard(b)}
+          {RANK_TABS.map((b) => (
+            <button key={b} type="button" data-pill-active={board === b || undefined} onClick={() => goBoard(b)}
               className={['relative shrink-0 px-2 lg:px-3 py-1.5 t-tab rounded-[6px] transition-colors',
                 board === b ? 'text-ink-primary font-bold' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
               <span className="relative">{BOARD_LABEL[b]}</span>
             </button>
           ))}
         </div>
+        <div data-rank-panel>
         {/* 보드 설명 — 1행/2행이 섞이면 탭을 옮길 때마다 아래가 통째로 밀린다. 2행분을 예약. */}
         <p className="mb-2 min-h-[2.25rem] t-desc text-ink-muted">{BOARD_DESC[board]}</p>
 
@@ -658,22 +745,75 @@ export default function TierLeaderboard() {
                 </span>
               </div>
 
-              {/* ── 소비형 상품: 외치기 (오너 #8) ─────────────────────────────
-                  마크는 '도달 해금'(차감 없음)이라 등급에 영향이 없다. 외치기는 유일한 소비형이라
-                  누적 점수는 두고 사용액(spent_points)만 쌓는다 — 등급·마크 해금이 절대 되돌아가지 않게. */}
+              {/* ── 소비형 ① 기간 마크 ────────────────────────────────────────
+                  왜 도달 마크를 구매형으로 돌리지 않았나: 이미 해금해 장착 중인 마크가
+                  '사야 하는 것'이 되면 산 걸 빼앗는 회귀다(spent_points 를 분리한 이유가 그것이었다).
+                  도달 마크 = 버는 이유 · 기간 마크 = 쓰는 이유. 겹치지 않게 분리하고,
+                  **만료**가 곧 반복 소비다(일회성만 있으면 한 번 사고 경제가 멈춘다). */}
+              <div className="rounded-card border border-border-subtle bg-surface-high p-3">
+                <div className="flex items-baseline justify-between gap-2">
+                  <p className="text-xs font-bold text-ink-primary">기간 마크 <span className="font-normal text-ink-muted">— 골라서 걸치는 꾸미기</span></p>
+                  {rental && (
+                    <p className="shrink-0 text-2xs font-semibold text-accent-300">
+                      {markEmoji(rental.markKey)} {remainDays(rental.expiresAt)}
+                    </p>
+                  )}
+                </div>
+
+                <div className="mt-2 grid grid-cols-3 gap-1.5 sm:grid-cols-6">
+                  {rentList.map((mk) => {
+                    const on = selectedRentKey === mk.key;
+                    return (
+                      <button key={mk.key} type="button" onClick={() => setPickMark(mk.key)}
+                        aria-pressed={on} title={mk.desc}
+                        className={['rounded-card border px-1 py-2 text-center transition-colors',
+                          on ? 'border-accent-300 bg-accent-300/[0.10]' : 'border-border-subtle bg-surface-float hover:border-accent-400/50'].join(' ')}>
+                        <span className="block text-xl leading-none">{mk.emoji}</span>
+                        <span className={['mt-1 block text-2xs font-bold leading-tight', on ? 'text-accent-300' : 'text-ink-secondary'].join(' ')}>{mk.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-2 grid grid-cols-3 gap-1.5">
+                  {skus.filter((s) => s.kind === 'mark_rent').map((s) => {
+                    const poor = balance !== null && balance.available < s.price;
+                    return (
+                      <button key={s.key} type="button" disabled={buying !== null || poor}
+                        onClick={() => handleBuyRental(s)} title={s.descr}
+                        className={['rounded-card border px-2 py-2 text-center transition-colors disabled:opacity-50',
+                          'border-accent-400/40 hover:border-accent-300 hover:bg-accent-300/[0.06]'].join(' ')}>
+                        <span className="block text-xs font-bold text-ink-primary">{s.label}</span>
+                        <span className="mt-0.5 block text-2xs font-extrabold tabular-nums text-accent-300">
+                          {buying === s.key ? '구매 중…' : `${s.price.toLocaleString()}점`}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-1.5 text-2xs leading-relaxed text-ink-muted">
+                  같은 마크를 다시 사면 기간이 이어지고, 다른 마크를 사면 바로 바뀝니다.
+                  기간이 끝나면 마크만 사라지고 <b className="text-ink-secondary">누적 점수·등급은 그대로</b>예요.
+                </p>
+              </div>
+
+              {/* ── 소비형 ② 외치기 (오너 #8, 2026-08-30 등급 3단) ───────────── */}
               <button type="button" onClick={() => setShoutOpen(true)}
                 className="flex w-full items-center gap-2.5 rounded-card border border-accent-400/50 bg-gradient-to-r from-accent-300/[0.1] to-transparent px-3 py-2.5 text-left transition-colors hover:border-accent-300">
                 <Icon name="megaphone" size={20} className="shrink-0 text-accent-300" />
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-bold text-ink-primary">외치기</span>
-                  <span className="block text-2xs leading-tight text-ink-muted">커뮤니티 맨 위에 내 한마디를 6시간 동안 크게 · 하루 3번까지</span>
+                  <span className="block text-2xs leading-tight text-ink-muted">
+                    커뮤니티 맨 위에 내 한마디를 크게 · 하루 3번까지
+                    {shoutTierHint(skus) && <> · {shoutTierHint(skus)}</>}
+                  </span>
                 </span>
-                <span className="shrink-0 rounded-badge bg-accent-300/15 px-2 py-1 text-2xs font-extrabold text-accent-300">{shoutCost}점</span>
+                <span className="shrink-0 rounded-badge bg-accent-300/15 px-2 py-1 text-2xs font-extrabold text-accent-300">{shoutCost.toLocaleString()}점~</span>
               </button>
 
-              <p className="pt-0.5 text-2xs font-bold text-ink-secondary">마크 <span className="font-normal text-ink-muted">— 점수에 도달하면 해금(차감 없음)</span></p>
+              <p className="pt-0.5 text-2xs font-bold text-ink-secondary">모으는 마크 <span className="font-normal text-ink-muted">— 점수에 도달하면 영구 해금(차감 없음)</span></p>
               <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-                {ALL_MARKS.map((mk) => {
+                {earnList.map((mk) => {
                   const pts = user.activityPoints ?? 0;
                   const unlocked = pts >= mk.need;
                   const on = equippedMark === mk.key;
@@ -699,7 +839,7 @@ export default function TierLeaderboard() {
                 })}
               </div>
               {equippedMark && (
-                <p className="text-center text-2xs text-ink-muted">미리보기: <span className="font-bold text-ink-primary">{ALL_MARKS.find((m2) => m2.key === equippedMark)?.emoji} {user.nickname ?? '닉네임'}</span></p>
+                <p className="text-center text-2xs text-ink-muted">미리보기: <span className="font-bold text-ink-primary">{markEmoji(equippedMark)} {user.nickname ?? '닉네임'}</span></p>
               )}
               <ShoutComposer open={shoutOpen} onClose={() => setShoutOpen(false)} onPosted={() => reloadBalance()} />
             </div>
@@ -893,6 +1033,7 @@ export default function TierLeaderboard() {
             </div>
           </>
         )}
+        </div>
       </section>
     </div>
   );

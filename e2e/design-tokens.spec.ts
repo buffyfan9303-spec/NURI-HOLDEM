@@ -96,11 +96,11 @@ test.describe('전역 토큰 — 규칙이 실제로 걸려 있는가', () => {
     //   그 미디어쿼리가 거짓이라, 계산된 스타일만 재면 규칙을 지워도 테스트가 통과한다
     //   (실제로 회귀 주입 실험에서 이 테스트만 못 잡았다 — '통과하는데 아무것도 안 지키는' 상태였다).
     //   그래서 계산 스타일이 아니라 **스타일시트 규칙 자체**를 검사한다.
-    const rule = await page.evaluate(() => {
+    const collect = () => page.evaluate(() => {
       const hit: string[] = [];
       for (const sheet of Array.from(document.styleSheets)) {
         let rules: CSSRuleList;
-        try { rules = sheet.cssRules; } catch { continue; } // 교차출처 시트는 접근 불가
+        try { rules = sheet.cssRules; } catch { continue; } // 교차출처·미로딩 시트는 접근 불가
         const walk = (list: CSSRuleList) => {
           for (const r of Array.from(list)) {
             if (r instanceof CSSMediaRule) {
@@ -118,7 +118,20 @@ test.describe('전역 토큰 — 규칙이 실제로 걸려 있는가', () => {
       }
       return hit;
     });
-    expect(rule.length, '설치형 예외 규칙(user-select:text)을 찾지 못했다 — 규칙이 사라졌거나 조건이 바뀌었다').toBeGreaterThan(0);
+
+    // ⚠ 이 검사는 링크된 스타일시트가 **파싱된 뒤**라야 성립한다. beforeEach 의 고정 800ms 는
+    //   워커 2개(CI 조건)에서 가끔 모자랐고, 그러면 시트가 아직 로딩 중이라 sheet.cssRules 가
+    //   던져 continue 로 빠지고 hit=0 이 된다 → '규칙이 사라졌다'는 **오탐**이 난다
+    //   (2026-08-30 CI 재현에서 flaky 1건으로 관측. dist CSS 에는 규칙이 그대로 있었다).
+    //   고정 대기를 늘리는 대신 조건이 성립할 때까지 기다린다 — 단언 자체는 그대로다.
+    //   규칙이 진짜로 사라지면 폴링이 만료되고 **같은 실패**가 난다(게이트 완화 아님).
+    await expect
+      .poll(async () => (await collect()).length, {
+        message: '설치형 예외 규칙(user-select:text)을 찾지 못했다 — 규칙이 사라졌거나 조건이 바뀌었다',
+        timeout: 10_000,
+      })
+      .toBeGreaterThan(0);
+    const rule = await collect();
     const joined = rule.join(' ');
     for (const sel of ['input', 'textarea', 'contenteditable']) {
       expect(joined, `설치형 예외 목록에 ${sel} 이 없다 — 설치형 PWA 에서 붙여넣기가 막힌다:\n${joined}`).toContain(sel);

@@ -193,6 +193,7 @@ export default function Modal({
           : dragY > 0
             ? { transform: `translateY(${dragY}px)`, transition: 'none' }
             : { transition: 'transform 0.5s var(--spring)' }}
+        data-scroll-lock
         className={['fixed inset-0 z-[55] bg-surface-base flex flex-col pt-[env(safe-area-inset-top)]', closing ? 'animate-fade-out' : 'animate-fade-in'].join(' ')}>
         {/* 드래그 핸들(모바일) — 시트를 끌어내려 닫기 */}
         <div aria-hidden className="lg:hidden absolute top-1.5 left-1/2 z-10 h-1 w-10 -translate-x-1/2 rounded-full bg-ink-primary/25" />
@@ -214,7 +215,7 @@ export default function Modal({
 
   return (
     // z-[60]: 전체화면 page 변형(z-[55]) 위에도 항상 뜨도록 — 예: 포스터 상세에서 '대회 후기 쓰기' 글쓰기 모달
-    <div className={['fixed inset-0 z-[60] flex', closing ? 'animate-fade-out' : 'animate-fade-in'].join(' ')}
+    <div data-scroll-lock className={['fixed inset-0 z-[60] flex', closing ? 'animate-fade-out' : 'animate-fade-in'].join(' ')}
       style={{
         alignItems: variant === 'sheet' ? 'flex-end' : 'center',
         justifyContent: 'center',

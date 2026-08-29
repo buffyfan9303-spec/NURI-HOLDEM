@@ -1192,17 +1192,24 @@ export async function getActivityLeaderboard(limit = 20): Promise<LeaderboardEnt
   }));
 }
 
-/** 작성자 장착 마크 일괄 조회 — userId → 마크 이모지(상점 코스메틱) */
+/**
+ * 작성자 장착 마크 일괄 조회 — userId → 마크 이모지(상점 코스메틱)
+ *
+ * 서버 get_equipped_marks 가 **만료·강등된 마크를 이미 걸러서** 준다
+ * (기간 마크는 잔여 기간, 도달 마크는 activity_points 재확인). 여기서는 글리프만 붙인다.
+ */
 export async function getEquippedMarks(userIds: string[]): Promise<Record<string, string>> {
   if (IS_MOCK || userIds.length === 0) return {};
   const { data, error } = await supabase.rpc('get_equipped_marks', { p_ids: userIds });
   if (error) return {};
-  // 확장 마크(shopMarks.ALL_MARKS)까지 인식해야 새 마크가 닉네임 앞에 표시된다
-  const { ALL_MARKS } = await import('../lib/shopMarks');
+  // 서버 카탈로그(도달 16 + 기간 6)를 먼저 확보한다 — 폴백에 없는 새 마크가
+  // 빈 문자열로 떨어져 '산 게 조용히 사라지는' 사고를 막는다.
+  const { loadShopMarks, markEmoji } = await import('../lib/shopMarks');
+  await loadShopMarks();
   const out: Record<string, string> = {};
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const r of (data ?? []) as any[]) {
-    const emoji = ALL_MARKS.find((m) => m.key === r.equipped_mark)?.emoji;
+    const emoji = markEmoji(r.equipped_mark);
     if (emoji) out[r.id] = emoji + ' ';
   }
   return out;
@@ -1254,9 +1261,14 @@ export async function removeVenueOwner(venueId: string, userId: string): Promise
 //  · 차감과 게시는 buy_shout() RPC 한 트랜잭션에서 함께 일어난다(둘 중 하나만 되는 상태가 없다).
 //  · 중복 클릭·잔액 부족·도배는 전부 서버가 막는다(프로필 행 잠금 + 쿨다운 + 하루 상한).
 
+/** 외치기 등급 — 서버 shop_skus 의 shout_* 키에서 접두사를 뗀 값 */
+export type ShoutTier = 'basic' | 'gold' | 'board';
+
 export interface Shout {
   id: string; userId: string; nickname: string; message: string;
   cost: number; createdAt: string; expiresAt: string;
+  /** 구매 등급. tierRank 가 클수록 위에 진열된다(가격표가 바뀌어도 과거 게시물 자리는 고정) */
+  tier: ShoutTier; tierRank: number;
 }
 export interface ShoutRules {
   cost: number; cooldownMinutes: number; dailyCap: number;
@@ -1297,29 +1309,95 @@ export async function getMyPointBalance(): Promise<PointBalance | null> {
 const mapShout = (r: any): Shout => ({
   id: r.id, userId: r.user_id, nickname: r.nickname ?? '회원', message: r.message ?? '',
   cost: r.cost ?? 0, createdAt: r.created_at, expiresAt: r.expires_at,
+  tier: (r.tier ?? 'basic') as ShoutTier, tierRank: r.tier_rank ?? 1,
 });
 
-/** 지금 살아있는 외침(만료·숨김 제외) — 최신순 */
+/** 지금 살아있는 외침(만료·숨김 제외) — 상위 등급 먼저, 같으면 최신순 */
 export async function getLiveShouts(limit = 10): Promise<Shout[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase
     .from('community_shouts')
-    .select('id, user_id, nickname, message, cost, created_at, expires_at')
+    .select('id, user_id, nickname, message, cost, tier, tier_rank, created_at, expires_at')
     .eq('hidden', false)
     .gt('expires_at', new Date().toISOString())
+    .order('tier_rank', { ascending: false })
     .order('created_at', { ascending: false })
     .limit(limit);
   if (error) return [];
   return (data ?? []).map(mapShout);
 }
 
-/** 구매 = 차감 + 게시(원자적). 실패 사유는 서버 메시지를 그대로 올린다. */
-export async function buyShout(message: string): Promise<Shout> {
-  const { data, error } = await supabase.rpc('buy_shout', { p_message: message });
+/**
+ * 구매 = 차감 + 게시(원자적). 실패 사유는 서버 메시지를 그대로 올린다.
+ * 등급별 가격·노출시간은 서버 shop_skus 가 단일 출처다 — 여기서 값을 보내지 않는다.
+ */
+export async function buyShout(message: string, tier: ShoutTier = 'basic'): Promise<Shout> {
+  const { data, error } = await supabase.rpc('buy_shout', { p_message: message, p_tier: tier });
   if (error) throw new Error(error.message);
   const r = Array.isArray(data) ? data[0] : data;
   if (!r) throw new Error('외치기에 실패했습니다');
   return mapShout(r);
+}
+
+// ── 소비형 상품 가격표 · 기간 마크 (2026-08-30 소비 경제 재설계) ──────────────
+//
+// 왜 소비처를 늘렸나(근거는 supabase/migrations/20260830a_point_sink_economy.sql 헤더):
+//  · 소비처가 외치기 200점 하나뿐이라 **보통 유저의 첫 소비가 14일 뒤**였다.
+//    2주 동안 '점수는 쓰는 것'을 배울 기회가 없으면 점수는 그냥 장식이 된다.
+//  · 일회성만 있으면 한 번 사고 경제가 멈춘다 → 만료되는 기간 상품으로 **반복 소비**를 만든다.
+//  · 가격 단위는 하루 50점(획득 상한을 다 채운 하루의 실측치).
+//    50=하루 · 200=나흘 · 300=6일 · 600=12일 · 1,100=22일 · 2,000=40일.
+//  · 전부 꾸미기·표현이다. 참가·상금·순위에 이점을 주는 상품은 넣지 않았다(§28).
+
+export interface ShopSku {
+  key: string;
+  kind: 'mark_rent' | 'shout';
+  label: string;
+  descr: string;
+  price: number;
+  durationHours: number;
+  tierRank: number;
+  sort: number;
+}
+
+/** 가격표(서버 단일 출처). 실패 시 빈 배열 — 화면은 '상품 없음'으로 안전하게 접힌다. */
+export async function getShopSkus(): Promise<ShopSku[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase
+    .from('shop_skus')
+    .select('key, kind, label, descr, price, duration_hours, tier_rank, sort')
+    .eq('active', true)
+    .order('sort');
+  if (error) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({
+    key: r.key, kind: r.kind, label: r.label, descr: r.descr ?? '',
+    price: Number(r.price) || 0, durationHours: Number(r.duration_hours) || 0,
+    tierRank: Number(r.tier_rank) || 1, sort: Number(r.sort) || 0,
+  }));
+}
+
+export interface MarkRental { markKey: string; expiresAt: string }
+
+/** 내 기간 마크(만료 전만). 없으면 null. */
+export async function getMyMarkRental(): Promise<MarkRental | null> {
+  if (IS_MOCK) return null;
+  const { data, error } = await supabase.rpc('my_mark_rental');
+  const r = Array.isArray(data) ? data[0] : data;
+  if (error || !r) return null;
+  return { markKey: r.mark_key, expiresAt: r.expires_at };
+}
+
+/**
+ * 기간 마크 구매 — 차감·지급·장착이 서버 한 트랜잭션에서 일어난다(buy_shout 과 같은 규약).
+ * 같은 마크를 다시 사면 기간이 이어 붙고, 다른 마크를 사면 교체된다(최대 1년치).
+ */
+export async function buyMarkRental(sku: string, markKey: string): Promise<MarkRental> {
+  const { data, error } = await supabase.rpc('buy_mark_rental', { p_sku: sku, p_mark_key: markKey });
+  if (error) throw new Error(error.message);
+  const r = Array.isArray(data) ? data[0] : data;
+  if (!r) throw new Error('구매에 실패했습니다');
+  return { markKey: r.mark_key, expiresAt: r.expires_at };
 }
 
 /** 내리기 — 작성자 본인 또는 운영자(환급 없음) */
@@ -1333,7 +1411,7 @@ export async function adminListShouts(limit = 50): Promise<(Shout & { hidden: bo
   if (IS_MOCK) return [];
   const { data, error } = await supabase
     .from('community_shouts')
-    .select('id, user_id, nickname, message, cost, created_at, expires_at, hidden')
+    .select('id, user_id, nickname, message, cost, tier, tier_rank, created_at, expires_at, hidden')
     .order('created_at', { ascending: false })
     .limit(limit);
   if (error) throw new Error(error.message);

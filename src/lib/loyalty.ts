@@ -198,12 +198,19 @@ export async function getMyEquippedMark(): Promise<string | null> {
   return (data?.equipped_mark as string | null) ?? null;
 }
 
-/** 마크 장착/해제(null) — 본인 프로필만(RLS) */
+/**
+ * 마크 장착/해제(null) — **서버 RPC 전용**(2026-08-30).
+ *
+ * 종전에는 여기서 profiles.equipped_mark 를 직접 UPDATE 했다. 해금 여부는 화면(TierLeaderboard)이
+ * `pts >= need` 로만 봤기 때문에, API 를 직접 부르면 **0점으로도 아무 마크나 장착**됐다.
+ * 코스메틱이던 시절엔 티가 안 났지만 기간 마크가 유료가 되면서 그건 곧 결제 우회다.
+ * 이제 set_equipped_mark() 가 도달 점수(earn)·잔여 기간(rent)을 서버에서 최종 판정하고,
+ * profiles 직접 UPDATE 는 guard_profile_privileged_cols 가 막는다.
+ */
 export async function setEquippedMark(key: string | null): Promise<void> {
   const u = await currentUser();
-  const uid = u?.id;
-  if (!uid) throw new Error('로그인이 필요합니다');
-  const { error } = await supabase.from('profiles').update({ equipped_mark: key }).eq('id', uid);
+  if (!u?.id) throw new Error('로그인이 필요합니다');
+  const { error } = await supabase.rpc('set_equipped_mark', { p_key: key });
   if (error) throw new Error(error.message);
 }
 

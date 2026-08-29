@@ -102,6 +102,8 @@ export default function ImageLightbox({ src, alt, onClose }: Props) {
 
   return (
     <div
+      // data-scroll-lock: 스크롤 잠금 소유자 표식(scrollLock.ts 의 sweep 이 미아 잠금을 골라낸다)
+      data-scroll-lock
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 animate-fade-in"
       role="dialog" aria-modal="true" aria-label={`${alt} 확대 보기`}
       onWheel={onWheel}

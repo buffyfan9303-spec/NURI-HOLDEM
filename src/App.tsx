@@ -39,6 +39,7 @@ import { pushLayer, useBackClose } from './lib/backstack';
 import { useVisibilityRefresh } from './lib/useVisibilityRefresh';
 import { useScrollY } from './lib/useScrollY';
 import { useIsDesktop, useIsMdUp } from './lib/responsive';
+import { sweepScrollLocks } from './lib/scrollLock';
 import HomeTab from './components/features/HomeTab';
 import { lazyWithReload } from './lib/lazyWithReload';
 import { getRunningClocks, type ClockState } from './api/clock';
@@ -556,7 +557,14 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
   //   → useEffect 로 내리고 scrollY 읽기를 없앤다. 동작·연출은 그대로.
   useEffect(() => {
     suppressUntil.current = performance.now() + 300;
-    tb2Ref.current = { lastY: 0, acc: 0 };
+    // ⚠ 2026-08-30 정정: 한때 여기를 `lastY: 0` 으로 뒀는데 **과교정이었다.**
+    //   원래 문제는 값이 아니라 **읽는 시점**이었다 — useLayoutEffect(페인트 전, 레이아웃이 가장
+    //   오염된 순간)에서 scrollY 를 읽어 문서 전체 강제 레이아웃이 났다(모바일 콜드 207ms).
+    //   useEffect 로 내린 것만으로 그 비용은 사라진다(페인트 후라 레이아웃이 이미 깨끗하다).
+    //   0 으로 두면 대신 **기준점이 거짓**이 된다: 스크롤된 상태에서 탭을 바꾸거나 오버레이를 닫고
+    //   억제창(300ms) 안에 스크롤 이벤트가 안 오면, 그 뒤 첫 이벤트의 dy 가 '현재 위치 - 0' 이라
+    //   1px 만 움직여도 임계(48)를 넘겨 탭바가 즉시 숨는다.
+    tb2Ref.current = { lastY: window.scrollY, acc: 0 };
     setHidden(false);
   }, [active, overlayOpen]);
   useEffect(() => {
@@ -827,6 +835,11 @@ export default function App() {
   // keep-alive: 한 번 방문한 핵심 탭은 언마운트하지 않고 display만 끈다 — 재방문 시 로드·마운트 비용 0(끊김 제거)
   const [visitedTabs] = useState(() => new Set<TabId>(['home']));
   useEffect(() => { visitedTabs.add(activeTab); }, [activeTab, visitedTabs]);
+  // keep-alive 의 대가 — 오버레이(Modal·ImageLightbox)는 포털을 안 써서 자기 탭 pane 안에 렌더된다.
+  // 열린 채로 탭이 display:none 되면 정리 함수가 돌지 않아 **스크롤 잠금이 미아로 남고**,
+  // 화면엔 아무 단서도 없이 앱 전체가 굳는다(새로고침 외엔 사용자가 못 푼다).
+  // 탭 전환 = 그 상태가 만들어지는 순간이자 체감되는 순간 — 여기서 모순만 골라 되돌린다.
+  useEffect(() => { sweepScrollLocks(); }, [activeTab]);
   // 프리마운트 커밋 트리거 — visitedTabs 는 렌더를 못 깨우는 가변 Set 이라 상태 범프가 필요
   const [, setPremountTick] = useState(0);
 

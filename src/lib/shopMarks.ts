@@ -1,21 +1,34 @@
-// src/lib/shopMarks.ts — 랭킹 상점 마크 레지스트리(확장분 포함).
+// src/lib/shopMarks.ts — 랭킹 상점 마크 레지스트리.
 //
-// 오너 #8 "상점에 더 많은 아이콘들을 추가해줘".
+// 2026-08-30 소비 경제 재설계로 **카탈로그의 출처가 서버(public.shop_marks)로 옮겨졌다.**
+// 여기 있는 배열은 이제 '정의'가 아니라 **폴백 사본**이다(오프라인·최초 렌더용).
+//   · 왜 옮겼나: 마크 해금을 화면에서만 검사하고 있었다 —
+//     클라이언트가 profiles.equipped_mark 를 직접 UPDATE 했으므로 API 를 직접 부르면
+//     0점으로도 크라운을 달 수 있었다. 마크가 유료가 되는 순간 그건 결제 우회다.
+//     이제 장착은 set_equipped_mark() RPC 만이 하고, 서버가 도달 점수·렌탈 기간을 최종 판정한다.
+//   · 그래서 need/가격을 여기서 고치면 **아무 효과가 없다.** 서버 표를 고쳐야 한다.
 //
-// 기존 6종(loyalty.SHOP_MARKS)은 그대로 두고 여기서 **덧붙이기만** 한다.
-//   · loyalty.ts 를 고치지 않는 이유: 이번 웨이브의 소유 파일이 아니다(병렬 편집 충돌 회피).
-//   · 마크가 '이모지 문자'인 이유: 장착 마크는 닉네임 앞에 **텍스트로** 붙는다
-//     (getEquippedMarks → '♠ 닉네임'). SVG 아이콘으로 바꾸면 목록·댓글·리더보드의
-//     문자열 결합 경로가 전부 깨진다. 그래서 표기는 이모지로 유지하고,
-//     화면 크롬(외치기 배너 등)에만 아이콘/이모지를 쓴다.
-//
-// 해금 방식도 기존과 동일한 **'도달'**이다(차감 없음) — 활동점수를 깎으면 등급이 내려가고
-// 이미 장착한 마크가 다시 잠긴다. 소비형 상품은 외치기(spent_points)로 분리했다.
+// 마크가 '이모지 문자'인 이유(종전과 동일): 장착 마크는 닉네임 앞에 **텍스트로** 붙는다
+// (getEquippedMarks → '♠ 닉네임'). SVG 로 바꾸면 목록·댓글·리더보드의 문자열 결합이 전부 깨진다.
+import { supabase, IS_MOCK } from './supabase';
 import { SHOP_MARKS as BASE_MARKS, type ShopMark } from './loyalty';
 
 export type { ShopMark };
 
-/** 추가 마크 — 기존 6종 사이사이를 메워 다음 목표가 항상 가까이 보이게 배치 */
+/** 카탈로그 한 줄 — 도달(earn)과 기간제(rent)를 한 타입으로 다룬다 */
+export interface CatalogMark {
+  key: string;
+  emoji: string;
+  name: string;
+  desc: string;
+  /** earn = 활동점수 도달로 영구 해금(차감 없음) · rent = 기간제 구매(만료) */
+  kind: 'earn' | 'rent';
+  /** earn 전용 도달 점수. rent 는 0. */
+  need: number;
+  sort: number;
+}
+
+/** 도달 마크 추가분 — 기존 6종 사이사이를 메워 다음 목표가 항상 가까이 보이게 배치 */
 export const EXTRA_MARKS: ShopMark[] = [
   { key: 'chip_stack',  emoji: '🪙', name: '첫 스택',      need: 250,   desc: '판에 앉았다 — 250점' },
   { key: 'joker',       emoji: '🃏', name: '조커',         need: 800,   desc: '변수의 카드 — 800점' },
@@ -29,9 +42,80 @@ export const EXTRA_MARKS: ShopMark[] = [
   { key: 'champion',    emoji: '🏆', name: '챔피언',       need: 20000, desc: 'KK 너머 — 20,000점' },
 ];
 
-/** 기존 + 확장 = 상점에 진열되는 전체 마크(해금 점수 오름차순) */
+/** 도달 마크 16종(=서버 shop_marks.kind='earn' 과 같은 값). 해금 방식은 종전과 동일한 '도달'. */
 export const ALL_MARKS: ShopMark[] = [...BASE_MARKS, ...EXTRA_MARKS].sort((a, b) => a.need - b.need);
 
-/** 마크 키 → 이모지(없으면 빈 문자열) — 확장분까지 인식 */
+/**
+ * 기간 마크 6종(폴백 사본) — 활동점수로 **사서 걸치는** 마크다.
+ *
+ * 도달 마크를 구매형으로 돌리지 않은 이유: 이미 해금해 장착 중인 마크가 '사야 하는 것'이 되면
+ * 산 걸 빼앗는 회귀가 된다(spent_points 를 따로 둔 이유가 바로 그것이었다).
+ * 도달 마크는 '버는 이유', 기간 마크는 '쓰는 이유' — 둘을 겹치지 않게 분리한다.
+ * 만료가 곧 반복 소비다(일회성 상품만 있으면 한 번 사고 경제가 멈춘다).
+ */
+export const RENT_MARKS: CatalogMark[] = [
+  { key: 'rent_clover',    emoji: '🍀', name: '네잎클로버', desc: '오늘의 행운을 걸치고 다닌다', kind: 'rent', need: 0, sort: 210 },
+  { key: 'rent_wave',      emoji: '🌊', name: '웨이브',     desc: '흐름을 타는 중',              kind: 'rent', need: 0, sort: 220 },
+  { key: 'rent_dragon',    emoji: '🐉', name: '드래곤',     desc: '판을 삼킬 기세',              kind: 'rent', need: 0, sort: 230 },
+  { key: 'rent_moon',      emoji: '🌙', name: '초승달',     desc: '조용히 오래 남는 사람',       kind: 'rent', need: 0, sort: 240 },
+  { key: 'rent_butterfly', emoji: '🦋', name: '나비',       desc: '가볍게, 그러나 눈에 띄게',    kind: 'rent', need: 0, sort: 250 },
+  { key: 'rent_note',      emoji: '🎵', name: '리듬',       desc: '내 페이스대로',               kind: 'rent', need: 0, sort: 260 },
+];
+
+const asCatalog = (m: ShopMark, i: number): CatalogMark =>
+  ({ key: m.key, emoji: m.emoji, name: m.name, desc: m.desc, kind: 'earn', need: m.need, sort: (i + 1) * 10 });
+
+/** 폴백 전체 목록(도달 16 + 기간 6) */
+export const FALLBACK_CATALOG: CatalogMark[] = [...ALL_MARKS.map(asCatalog), ...RENT_MARKS];
+
+// ── 서버 카탈로그 캐시 ───────────────────────────────────────────────────────
+// markEmoji() 는 목록 렌더 중에 **동기로** 불린다(닉네임 앞 글리프). 그래서 async 로 바꿀 수 없고,
+// 대신 폴백으로 먼저 그린 뒤 서버 응답이 오면 캐시를 갈아 끼운다.
+// 서버에 새 마크가 추가돼도 폴백에 없으면 잠깐 빈 문자열이 되는데, 그건 '조용히 사라짐'이라
+// loyalty.markEmojiOf 가 겪은 함정과 같다 — 그래서 캐시는 **덮어쓰기가 아니라 병합**한다.
+let catalog: CatalogMark[] = FALLBACK_CATALOG;
+let inflight: Promise<CatalogMark[]> | null = null;
+
+/** 지금 알고 있는 카탈로그(동기) — 서버 응답 전에는 폴백 */
+export const getCatalog = (): CatalogMark[] => catalog;
+
+/** 서버 카탈로그 로드(1회 캐시). 실패하면 폴백을 그대로 쓴다 — 상점이 비어 보이지 않게. */
+export async function loadShopMarks(): Promise<CatalogMark[]> {
+  if (IS_MOCK) return catalog;
+  if (inflight) return inflight;
+  inflight = (async () => {
+    const { data, error } = await supabase
+      .from('shop_marks')
+      .select('key, emoji, name, descr, kind, need, sort')
+      .eq('active', true)
+      .order('sort');
+    if (error || !data?.length) return catalog;
+    const rows: CatalogMark[] = data.map((r) => ({
+      key: String(r.key), emoji: String(r.emoji), name: String(r.name),
+      desc: String(r.descr ?? ''), kind: r.kind === 'rent' ? 'rent' : 'earn',
+      need: Number(r.need) || 0, sort: Number(r.sort) || 0,
+    }));
+    // 병합 — 서버에 없는 폴백 키도 남겨 둔다(마크가 조용히 사라지는 사고 방지).
+    const byKey = new Map(catalog.map((m) => [m.key, m]));
+    for (const r of rows) byKey.set(r.key, r);
+    catalog = [...byKey.values()].sort((a, b) => a.sort - b.sort);
+    return catalog;
+  })().catch(() => catalog)
+    .finally(() => { inflight = null; });
+  return inflight;
+}
+
+/** 도달 마크만(상점 '모으기' 구역) */
+export const earnMarks = (): CatalogMark[] =>
+  catalog.filter((m) => m.kind === 'earn').sort((a, b) => a.need - b.need);
+
+/** 기간 마크만(상점 '구매' 구역) */
+export const rentMarks = (): CatalogMark[] => catalog.filter((m) => m.kind === 'rent');
+
+/** 마크 키 → 이모지(없으면 빈 문자열) — 도달·기간 마크 모두 인식 */
 export const markEmoji = (key?: string | null): string =>
-  key ? (ALL_MARKS.find((m) => m.key === key)?.emoji ?? '') : '';
+  key ? (catalog.find((m) => m.key === key)?.emoji ?? '') : '';
+
+/** 마크 키 → 카탈로그 행 */
+export const markOf = (key?: string | null): CatalogMark | undefined =>
+  key ? catalog.find((m) => m.key === key) : undefined;

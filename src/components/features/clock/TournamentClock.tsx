@@ -683,7 +683,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
   };
 
   return (
-    <div ref={wrapRef} className={fs ? 'fixed inset-0 z-[70] bg-[#06080c] flex items-center justify-center overflow-hidden' : ''}>
+    <div ref={wrapRef} data-scroll-lock className={fs ? 'fixed inset-0 z-[70] bg-[#06080c] flex items-center justify-center overflow-hidden' : ''}>
       {/* 풀스크린은 16:9 고정 박스(레터박스) + container-type:size — cqw/cqh로 모든 모니터(16:9·21:9·세로) 동일 비율 */}
       <div className={fs ? 'flex flex-col w-full aspect-[16/9] max-w-[177.78vh] max-h-screen [container-type:size]' : 'space-y-2'}>
       {/* 상단 바 */}

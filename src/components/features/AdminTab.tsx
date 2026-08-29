@@ -1232,7 +1232,7 @@ function AdminVenuePos({ venueId, venueName, onClose }: { venueId: string; venue
   useBackClose(true, onClose);
 
   return (
-    <div className="fixed inset-0 z-[60] bg-surface-base overflow-y-auto transform-gpu animate-fade-in">
+    <div data-scroll-lock className="fixed inset-0 z-[60] bg-surface-base overflow-y-auto transform-gpu animate-fade-in">
       <header className="sticky top-0 z-10 h-header-h px-page-x flex items-center gap-2 bg-surface-base/95 backdrop-blur-md border-b border-border-subtle">
         <button type="button" onClick={onClose} className="text-sm font-semibold text-ink-secondary hover:text-ink-primary">← 닫기</button>
         <span className="text-sm font-bold text-ink-primary truncate">{venueName} · 장부/통계</span>

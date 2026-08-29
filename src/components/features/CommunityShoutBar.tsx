@@ -25,12 +25,37 @@ import { useAuth } from '../../contexts/AuthContext';
 import { promptLogin } from '../../lib/requireLogin';
 import { filterContent } from '../../lib/content-filter';
 import {
-  getLiveShouts, buyShout, hideShout, getShoutRules, getMyPointBalance,
-  type Shout, type ShoutRules, type PointBalance,
+  getLiveShouts, buyShout, hideShout, getShoutRules, getMyPointBalance, getShopSkus,
+  type Shout, type ShoutRules, type PointBalance, type ShopSku, type ShoutTier,
 } from '../../api/community';
 
 // ⚠ 서버 shout_rules() 와 동기. 낮게 두면 표시가가 실제 청구가보다 싸 보인다(2026-08-29: 30 → 200).
 const DEFAULT_RULES: ShoutRules = { cost: 200, cooldownMinutes: 10, dailyCap: 3, maxLen: 60, minLen: 2, ttlHours: 6 };
+
+// ── 등급별 겉모습 ───────────────────────────────────────────────────────────
+// 값(가격·노출시간)은 전부 서버(shop_skus)에서 오고, 여기 있는 건 **색뿐이다.**
+// gold 계열은 이미 명예의 전당·시즌 우승 배지가 쓰는 조합을 그대로 재사용한다
+// (border-gold-400/40 + bg-gold-300/[0.06] + text-gold-300) — 새 색 규칙을 만들지 않기 위해서.
+const TIER_SKIN: Record<ShoutTier, { box: string; icon: string; text: string }> = {
+  basic: {
+    box:  'border-accent-400/50 bg-gradient-to-r from-accent-300/[0.12] to-transparent',
+    icon: 'text-accent-300', text: 'text-sm',
+  },
+  gold: {
+    box:  'border-gold-400/50 bg-gradient-to-r from-gold-300/[0.10] to-transparent',
+    icon: 'text-gold-300', text: 'text-sm',
+  },
+  board: {
+    box:  'border-gold-400 bg-gradient-to-r from-gold-300/[0.16] via-accent-300/[0.06] to-transparent',
+    icon: 'text-gold-300', text: 'text-base',
+  },
+};
+const tierSkin = (t?: ShoutTier) => TIER_SKIN[t ?? 'basic'] ?? TIER_SKIN.basic;
+
+/** 'shout_gold' → 'gold' */
+const tierOfSku = (key: string): ShoutTier => (key.replace(/^shout_/, '') as ShoutTier);
+
+const durLabel = (h: number): string => (h >= 24 && h % 24 === 0 ? `${h / 24}일` : `${h}시간`);
 
 function remainLabel(expiresAt: string): string {
   const ms = new Date(expiresAt).getTime() - Date.now();
@@ -47,19 +72,30 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
   const [busy, setBusy] = useState(false);
   const [rules, setRules] = useState<ShoutRules>(DEFAULT_RULES);
   const [balance, setBalance] = useState<PointBalance | null>(null);
+  // 등급 목록·가격은 서버 shop_skus 가 단일 출처다. 화면은 읽어서 보여주기만 한다.
+  const [tiers, setTiers] = useState<ShopSku[]>([]);
+  const [tier, setTier] = useState<ShoutTier>('basic');
 
   useEffect(() => {
     if (!open) return;
     getShoutRules().then(setRules).catch(() => {});
     getMyPointBalance().then(setBalance).catch(() => {});
+    getShopSkus()
+      .then((all) => setTiers(all.filter((s) => s.kind === 'shout').sort((a, b) => a.sort - b.sort)))
+      .catch(() => {});
   }, [open]);
-  useEffect(() => { if (open) setText(''); }, [open]);
+  useEffect(() => { if (open) { setText(''); setTier('basic'); } }, [open]);
+
+  const sel = tiers.find((s) => tierOfSku(s.key) === tier);
+  // 서버 목록이 아직 없으면 기본 등급은 shout_rules() 값으로 버틴다(가격이 '—'로 비지 않게).
+  const cost = sel?.price ?? (tier === 'basic' ? rules.cost : 0);
+  const ttlHours = sel?.durationHours ?? (tier === 'basic' ? rules.ttlHours : 0);
 
   const trimmed = text.trim();
   const tooShort = trimmed.length < rules.minLen;
   const tooLong = trimmed.length > rules.maxLen;
   const hasLink = /https?:\/\/|www\./i.test(trimmed);
-  const poor = balance !== null && balance.available < rules.cost;
+  const poor = balance !== null && cost > 0 && balance.available < cost;
 
   const submit = async () => {
     if (busy || tooShort || tooLong) return;
@@ -69,8 +105,8 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
     if (hasLink) { toast.show('외침에는 링크를 넣을 수 없어요', 'error'); return; }
     setBusy(true);
     try {
-      const s = await buyShout(trimmed);
-      toast.show(`외쳤습니다! ${rules.cost}점 사용 · ${rules.ttlHours}시간 노출`, 'success');
+      const s = await buyShout(trimmed, tier);
+      toast.show(`외쳤습니다! ${s.cost}점 사용 · ${ttlHours}시간 노출`, 'success');
       onPosted?.(s);
       await refreshProfile?.();
       onClose();
@@ -83,9 +119,33 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
     <Modal open={open} onClose={onClose} title="외치기" variant="sheet" maxWidth="md" dismissOnBackdrop={false}>
       <div className="space-y-3 p-4">
         <p className="text-2xs leading-relaxed text-ink-muted">
-          커뮤니티 맨 위에 <b className="text-ink-secondary">{rules.ttlHours}시간</b> 동안 크게 걸립니다.
-          활동점수 <b className="text-accent-300">{rules.cost}점</b>이 사용되며, 등급 점수(누적)는 줄지 않아요.
+          커뮤니티 맨 위에 <b className="text-ink-secondary">{ttlHours}시간</b> 동안 크게 걸립니다.
+          활동점수 <b className="text-accent-300">{cost}점</b>이 사용되며, 등급 점수(누적)는 줄지 않아요.
         </p>
+
+        {/* 등급 — 가격·노출시간은 서버 가격표(shop_skus)에서 그대로 읽어 보여준다.
+            자리를 항상 3칸으로 예약해 목록이 늦게 와도 아래가 밀리지 않는다(CLS 0). */}
+        {tiers.length > 0 && (
+          <div className="grid grid-cols-3 gap-1.5">
+            {tiers.map((s) => {
+              const k = tierOfSku(s.key);
+              const on = k === tier;
+              return (
+                <button
+                  key={s.key} type="button" onClick={() => setTier(k)}
+                  aria-pressed={on}
+                  className={['rounded-card border px-2 py-2 text-center transition-colors',
+                    on ? 'border-accent-300 bg-accent-300/[0.10]' : 'border-border-subtle bg-surface-high hover:border-accent-400/50'].join(' ')}
+                >
+                  <span className={['block text-xs font-bold', on ? 'text-accent-300' : 'text-ink-primary'].join(' ')}>{s.label}</span>
+                  <span className="mt-0.5 block text-2xs font-extrabold tabular-nums text-ink-secondary">{s.price.toLocaleString()}점</span>
+                  <span className="block text-2xs text-ink-muted">{durLabel(s.durationHours)}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {sel && <p className="text-2xs leading-relaxed text-ink-muted">{sel.descr}</p>}
 
         {/* 잔액 — 자리 고정(로딩 중에도 같은 높이) */}
         <div className="flex items-center justify-between rounded-card border border-border-subtle bg-surface-high px-3 py-2">
@@ -115,18 +175,18 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
           </div>
         </div>
 
-        {/* 미리보기 — 실제 배너와 같은 문법 */}
-        <div className="rounded-card border border-accent-400/50 bg-gradient-to-r from-accent-300/[0.12] to-transparent px-3 py-2.5">
-          <p className="text-2xs font-bold text-accent-300">미리보기</p>
-          <p className="mt-0.5 break-words text-sm font-bold leading-snug text-ink-primary">
-            <Icon name="megaphone" size={15} className="mr-1 inline-block align-[-2px] shrink-0 text-accent-300" />{trimmed || '여기에 외칠 내용이 표시됩니다'}
+        {/* 미리보기 — 실제 배너와 **같은 스킨**을 쓴다. 고른 등급이 어떻게 보일지가 곧 가격의 근거다. */}
+        <div className={['rounded-card border px-3 py-2.5', tierSkin(tier).box].join(' ')}>
+          <p className={['text-2xs font-bold', tierSkin(tier).icon].join(' ')}>미리보기</p>
+          <p className={['mt-0.5 break-words font-bold leading-snug text-ink-primary', tierSkin(tier).text].join(' ')}>
+            <Icon name="megaphone" size={15} className={['mr-1 inline-block align-[-2px] shrink-0', tierSkin(tier).icon].join(' ')} />{trimmed || '여기에 외칠 내용이 표시됩니다'}
           </p>
           <p className="mt-0.5 text-2xs text-ink-muted">{user?.nickname ?? '나'} · 방금 전</p>
         </div>
 
         {poor && (
           <p className="rounded-input border border-danger/30 bg-danger/10 px-3 py-2 text-2xs font-semibold text-danger-light">
-            사용 가능 점수가 {rules.cost}점보다 적어요 — 접속·글쓰기·댓글·주간 미션으로 모아보세요.
+            사용 가능 점수가 {cost.toLocaleString()}점보다 적어요 — 접속·글쓰기·댓글·주간 미션으로 모아보세요.
           </p>
         )}
 
@@ -137,7 +197,7 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
             disabled={busy || tooShort || tooLong || hasLink || poor}
             className="btn-primary flex-1 py-2.5 text-sm disabled:opacity-50"
           >
-            {busy ? '외치는 중…' : `${rules.cost}점으로 외치기`}
+            {busy ? '외치는 중…' : `${cost.toLocaleString()}점으로 외치기`}
           </button>
         </div>
       </div>
@@ -192,11 +252,14 @@ export default function CommunityShoutBar({ className }: { className?: string })
     // min-h 로 자리를 미리 잡는다 — 로딩→도착에서 아래 콘텐츠가 밀리지 않게(CLS 0)
     <div ref={rootRef} className={['min-h-[3.25rem]', className ?? ''].join(' ')}>
       {top ? (
-        <div className="rounded-card border border-accent-400/50 bg-gradient-to-r from-accent-300/[0.12] to-transparent px-3 py-2.5">
+        // 진열 순서는 서버가 정한다(tier_rank desc, created_at desc) — 상위 등급이 맨 위다.
+        // 자동 순환(마퀴·캐러셀)은 쓰지 않는다: 상시 움직이는 배너는 모션 헌법의 무한 루프 예외를
+        // 새로 만들 이유가 없고, 오너가 가장 싫어하는 '끊김'의 주범이다.
+        <div className={['rounded-card border px-3 py-2.5', tierSkin(top.tier).box].join(' ')}>
           <div className="flex items-start gap-2">
-            <Icon name="megaphone" size={16} className="mt-0.5 shrink-0 text-accent-300" />
+            <Icon name="megaphone" size={16} className={['mt-0.5 shrink-0', tierSkin(top.tier).icon].join(' ')} />
             <div className="min-w-0 flex-1">
-              <p className="break-words text-sm font-bold leading-snug text-ink-primary">{top.message}</p>
+              <p className={['break-words font-bold leading-snug text-ink-primary', tierSkin(top.tier).text].join(' ')}>{top.message}</p>
               <p className="mt-0.5 text-2xs text-ink-muted">
                 {top.nickname} · {remainLabel(top.expiresAt)}
               </p>

@@ -110,28 +110,34 @@ function CommentItem({ marks = {}, titleOf,
   return (
     <div className="space-y-2">
       <div className="flex gap-2">
-        <Avatar name={comment.userName} src={comment.userAvatar} color={comment.isOwner ? '#FFD100' : '#5A6175'} size={32} />
+        <Avatar name={comment.userName} src={comment.userAvatar} color={comment.isOwner ? '#FFD100' : '#5A6175'} size={32} className="!object-contain" />
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 mb-0.5">
+          {/* 배지 정책은 게시글 상세(PostDetailModal)와 같다 — 색은 하나만.
+              · '매장 답글' 은 댓글의 **의미를 바꾸는** 표식이라 유일하게 accent 를 유지하되
+                틴트 채움을 걷고 아웃라인으로 무게를 낮춘다.
+                accent-300 → accent-200: 300 은 다크 틴트 위 3.14:1 로 AA 미달이었다(정본: postCategory.ts).
+                200 은 라이트에서 index.css 오버라이드(#6946C8)로 딥 톤이 되어 양 테마를 통과한다.
+              · '운영자' 는 danger 틴트(빨강)여서 경고처럼 읽혔다 — 작성자 메타데이터일 뿐이라 중립 아웃라인으로. */}
+          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mb-0.5">
             <span className="text-xs font-semibold text-ink-primary">{marks[comment.userId] ?? ''}{comment.userName}</span>
             <TitleChip points={titleOf?.(comment.userId)} />
             {comment.isOwner && (
-              <span className="text-2xs font-bold text-accent-300 bg-accent-300/15 px-1.5 py-0.5 rounded-badge">매장 답글</span>
+              <span className="shrink-0 rounded-badge border border-accent-300/50 px-1.5 py-0.5 text-2xs font-semibold leading-none text-accent-200">매장 답글</span>
             )}
             {comment.userRole === 'admin' && (
-              <span className="text-2xs font-bold text-danger-light bg-danger/15 px-1.5 py-0.5 rounded-badge">운영자</span>
+              <span className="shrink-0 rounded-badge border border-border-strong px-1.5 py-0.5 text-2xs font-semibold leading-none text-ink-secondary">운영자</span>
             )}
             <span className="text-2xs text-ink-muted">· {relativeTime(comment.createdAt)}</span>
           </div>
           <p className="text-sm text-ink-primary leading-relaxed whitespace-pre-wrap break-words">
-            {mention && <span className="font-semibold text-accent-300">@{mention} </span>}
+            {mention && <span className="font-semibold text-accent-200">@{mention} </span>}
             {comment.content}
           </p>
           <div className="mt-1 flex items-center gap-3">
             <button
               type="button"
               onClick={() => { if (!loggedIn) { promptLogin(); return; } setShowReplyBox((v) => !v); }}
-              className="text-2xs text-ink-muted hover:text-accent-300 transition-colors"
+              className="hit text-2xs text-ink-muted transition-colors hover:text-accent-200"
             >
               {showReplyBox ? '취소' : '답글'}
             </button>
@@ -142,7 +148,7 @@ function CommentItem({ marks = {}, titleOf,
                 onClick={() => {
                   if (confirm('이 댓글을 삭제하시겠습니까?')) onDelete(comment.id);
                 }}
-                className="text-2xs text-ink-muted hover:text-danger-light transition-colors"
+                className="hit text-2xs text-ink-muted transition-colors hover:text-danger-light"
               >
                 삭제
               </button>
@@ -166,9 +172,12 @@ function CommentItem({ marks = {}, titleOf,
         </form>
       )}
 
-      {/* 답글 목록 — 루트 아래 전체 하위 트리 평탄 수집(3레벨+ 유실 방지, 검증 #05) */}
+      {/* 답글 목록 — 루트 아래 전체 하위 트리 평탄 수집(3레벨+ 유실 방지, 검증 #05).
+          스레드 선: border-subtle 2px 는 다크 1.11:1 · 라이트 1.23:1 로 **있으나 마나 한 선**이었다
+          (모달 헤더 구분선을 border-strong 으로 올린 것과 같은 이유 — 어느 댓글이 어느 답글인지
+          알려주는 유일한 단서가 이 선이다). 굵기를 1px 로 줄이고 값을 올린다: 2.88 / 3.13. */}
       {replies.length > 0 && (
-        <div className="ml-10 space-y-3 border-l-2 border-border-subtle pl-3">
+        <div className="ml-10 space-y-3 border-l border-border-strong pl-3">
           {replies.map(({ comment: r, mentionOf }) => (
             <CommentItem key={r.id} marks={marks} titleOf={titleOf} comment={r} mention={mentionOf} replies={[]} composeParentId={composeParentId} onReply={onReply} onDelete={onDelete} canDelete={canDelete} loggedIn={loggedIn} />
           ))}
@@ -209,7 +218,7 @@ export default function CommentThread({ comments, onSubmit, onDelete, moderator 
       {/* 입력창 */}
       {user ? (
         <form onSubmit={submit} className="flex gap-2 py-2">
-          <Avatar name={user.name} src={user.avatarUrl} color={user.avatarColor} size={32} />
+          <Avatar name={user.name} src={user.avatarUrl} color={user.avatarColor} size={32} className="!object-contain" />
           <input
             type="text"
             value={content}
@@ -223,14 +232,14 @@ export default function CommentThread({ comments, onSubmit, onDelete, moderator 
         </form>
       ) : (
         <button type="button" onClick={() => promptLogin()}
-          className="w-full rounded-input bg-surface-high p-3 text-center text-xs text-ink-secondary transition-colors hover:bg-surface-high/70 hover:text-accent-300">
-          로그인하면 댓글을 작성할 수 있어요 — <b className="text-accent-300">로그인하기 →</b>
+          className="w-full rounded-input border border-border-strong bg-surface-high p-3 text-center text-xs text-ink-secondary transition-colors hover:border-accent-300/60 hover:text-ink-primary">
+          로그인하면 댓글을 작성할 수 있어요 — <b className="text-accent-200">로그인하기 →</b>
         </button>
       )}
 
       {/* 목록 */}
       {threads.length === 0 ? (
-        <p className="text-center py-8 text-xs text-ink-muted">{emptyText}</p>
+        <p className="rounded-card border border-dashed border-border-default py-6 text-center text-xs text-ink-muted">{emptyText}</p>
       ) : (
         <div className="space-y-4">
           {threads.map(({ root, replies }) => (
