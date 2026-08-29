@@ -102,10 +102,24 @@ function onInputDown(e: Event) {
 function onClickCapture(e: MouseEvent) {
   const r = rescue;
   rescue = null;
-  if (!r) return;
-  if (performance.now() - r.at > 700) return;      // 같은 탭이 아니다
-  if (!wasSwallowed(e.target)) return;             // 브라우저가 제대로 전달했다 — 손대지 않는다
-  const el = document.elementFromPoint(r.x, r.y);
+  // 브라우저가 제대로 전달했으면 손대지 않는다. <html>/<body> 로 떨어졌다는 건 먹혔다는 증거다.
+  if (!wasSwallowed(e.target)) return;
+
+  // ⚠ 2026-08-29: 예전엔 `if (!r) return;` 이라 **pointerdown 시점에 이미 전환이 돌고 있을 때만**
+  //   구조했다. 그런데 순서가 반대인 경우가 실재한다 —
+  //   pointerdown 은 멀쩡히 들어가고, 그 직후 탭 전환이 시작돼 **click 만 삼켜지는** 것이다.
+  //   그때 r 이 null 이라 여기서 그냥 돌아갔고, 그 탭은 아무 데도 닿지 않은 채 사라졌다.
+  //   느린 기기·부하 상황에서만 순서가 이렇게 갈리므로 빠른 기기에서는 재현되지 않는다
+  //   (CI 2워커에서만 tools 스펙이 간헐 실패하던 것의 정체 — 실패 순간 화면이 런처 그대로였다).
+  //   → r 이 없으면 click 자신의 좌표로 구조한다. 클릭 이벤트도 화면 좌표를 들고 있다.
+  //   전환이 아직 돌고 있을 수 있으니 히트테스트부터 되살린다(스냅샷은 연출일 뿐 입력의 주인이 아니다).
+  endActive();
+  const fresh = r && performance.now() - r.at <= 700;
+  const x = fresh ? r!.x : e.clientX;
+  const y = fresh ? r!.y : e.clientY;
+  if (typeof x !== 'number' || typeof y !== 'number') return;
+
+  const el = document.elementFromPoint(x, y);
   const target = el?.closest(RESCUE_TARGETS) as HTMLElement | null;
   if (!target) return;
   e.stopPropagation(); // 먹힌 원본은 여기서 끝내고, 아래에서 진짜 대상에게 다시 보낸다
