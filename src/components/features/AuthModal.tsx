@@ -246,8 +246,16 @@ interface AuthModalProps {
 export default function AuthModal({ open, onClose, initialMode = 'login' }: AuthModalProps) {
   const [mode, setMode] = useState<Mode>(initialMode);
 
+  // 끌어내려 닫기 — **로그인·비밀번호 찾기에서만** 켠다(오너 제보 2026-08-30: 로그인창이 안 내려간다).
+  //   왜 가입 탭은 빼는가: 이 모달은 닫히면 언마운트돼(App 의 조건부 렌더 + key={authMode})
+  //   **입력이 통째로 사라진다.** 로그인은 2칸이고 대부분 자동완성이라 다시 열면 그만이지만,
+  //   가입은 닉네임·매장명·주소·동의까지 채운 뒤라 한 번의 실수 스와이프가 그걸 다 날린다.
+  //   (Modal 은 input/textarea/select/[contenteditable] 위에서 시작한 손짓을 이미 걸러내지만,
+  //    그 사이 여백에서 시작하면 닫힌다 — 긴 폼일수록 그 여백이 넓다.)
+  const canDragClose = mode === 'login' || mode === 'forgot';
+
   return (
-    <Modal open={open} onClose={onClose} title={MODE_LABEL[mode]} maxWidth="md">
+    <Modal open={open} onClose={onClose} title={MODE_LABEL[mode]} maxWidth="md" dragToClose={canDragClose}>
       {/* 탭 */}
       <div className="grid grid-cols-3 border-b border-border-subtle">
         {(['login', 'signup-user', 'signup-owner'] as Mode[]).map((m) => (
