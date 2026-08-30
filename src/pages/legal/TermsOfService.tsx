@@ -21,7 +21,9 @@
 // 조문 번호는 앱 다른 곳에서 참조하지 않는다(2026-08-30 전수 grep 확인). 다만 기존 제1~7조는
 // 번호·취지를 유지한 채 '보강'만 했고, 신설 조항은 제8조 이후에 붙였다 — 기존 동의의 동일성 보존.
 
-const EFFECTIVE_DATE = '2026년 6월 15일';
+// 시행일·개정 이력은 src/lib/legalVersion.ts 단일 소스에서 온다 — 문서마다 날짜를 박으면 어긋난다.
+import { LEGAL_EFFECTIVE_DATE, LEGAL_NOTICE_DATE, LEGAL_PREV_EFFECTIVE_DATE } from '../../lib/legalVersion';
+import { PendingRevisionNotice, RevisionHistory } from './RevisionBlocks';
 
 function Article({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
@@ -69,11 +71,13 @@ export default function TermsOfService() {
     <div className="px-4 pb-6">
       {/* 헤더 */}
       <div className="py-4 border-b border-border-subtle mb-4">
-        <p className="text-2xs text-ink-muted">시행일: {EFFECTIVE_DATE}</p>
+        <p className="text-2xs text-ink-muted">시행일: {LEGAL_EFFECTIVE_DATE} · 개정 공지일: {LEGAL_NOTICE_DATE} · 직전판 시행일: {LEGAL_PREV_EFFECTIVE_DATE}</p>
         <p className="text-2xs text-ink-muted mt-0.5">
           본 약관은 NURI HOLDEM 서비스 이용에 관한 기본적인 사항을 규정합니다.
         </p>
       </div>
+
+      <PendingRevisionNotice />
 
       <Article n={1} title="목적">
         <Para>
@@ -327,8 +331,10 @@ export default function TermsOfService() {
         ]} />
       </Article>
 
+      <RevisionHistory doc="terms" />
+
       <p className="text-2xs text-ink-muted text-center pt-2 border-t border-border-subtle">
-        본 약관은 {EFFECTIVE_DATE}부터 시행됩니다.
+        본 약관은 {LEGAL_EFFECTIVE_DATE}부터 시행됩니다. 시행일 전까지는 {LEGAL_PREV_EFFECTIVE_DATE}부터 시행된 직전판이 적용됩니다.
       </p>
     </div>
   );

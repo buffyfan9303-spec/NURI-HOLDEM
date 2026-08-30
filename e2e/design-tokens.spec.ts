@@ -298,6 +298,16 @@ const TIER_CONTRACTS: readonly TierContract[] = [
     surfaces: ['base', 'low', 'mid', 'high', 'float'], min: 4.5,
   },
   {
+    // 닉네임 색(상점 600점 · 20260830n) — 유저가 **산** 색이라 되돌릴 수 없는 약속이다.
+    // 지면: 커뮤니티 카드(low) · 글 상세/댓글(mid) · 순위표 행(high) · 목록 바탕(base) ·
+    //       드롭다운/시트 안의 작성자 줄(float).
+    // 칩 배경이 없는 **불투명 텍스트**라 위 RankNum 계약과 수식은 같지만, 지점을 따로 적는 이유는
+    // '누가 이 지면을 쓰는가'가 달라서다 — 나중에 닉네임 색을 새 지면(예: 틴트 칩 위)으로 옮기면
+    // 여기 surfaces 를 고쳐야 하고, 그 순간 임계를 다시 재게 된다.
+    where: '닉네임 색(글·댓글·순위표)', kind: 'text',
+    surfaces: ['base', 'low', 'mid', 'high', 'float'], min: 4.5,
+  },
+  {
     // --tier-*-vivid 가 '정보'를 나르는 지점(알파 1.0): 헤더·프로필 아바타 등급 링,
     // XP 진행바 fill(트랙이 surface-float·high). 등급을 색으로만 알리므로 비텍스트 3:1.
     // 알파<1 인 장식 용도(테두리 .4 / 글로우 .6 / conic 중간 스톱)는 합성상 3:1 이 물리적으로
@@ -335,6 +345,22 @@ test.describe('등급 토큰 20종 — 실제 지면 위 대비 계약', () => {
     // 프로브가 만드는 변수명이 존재하지 않는 이름이 되고, 아래 '빈 값' 가드가 잡는다.
     expect(tierBadge, '등급 토큰 네이밍(--tier-*/-vivid)이 바뀌었다 — TIER_FAMILIES 를 다시 맞춰라')
       .toMatch(/colorVar:\s*`--tier-\$\{d\.token\}`/);
+
+    // ── 닉네임 색(상점 600점 · 20260830n) ────────────────────────────────────
+    // 이 상품의 유일한 안전장치는 '새 팔레트를 만들지 않는다'이다. 색을 하나라도 --tier-* 밖에서
+    // 가져오면 그 색은 라이트/다크 대비 실측을 통과한 적이 없고, 위 프로브는 --tier-* 만 재므로
+    // **아무것도 모르고 초록불**이 난다. 그래서 결합 지점과 화이트리스트를 소스에서 직접 확인한다.
+    const cosmetics = readFileSync(
+      fileURLToPath(new URL('../src/lib/cosmetics.ts', import.meta.url)), 'utf8');
+    expect(cosmetics, '닉네임 색이 --tier-<token> 결합을 떠났다 — 새 색은 대비 실측부터 다시 하라')
+      .toMatch(/`--tier-\$\{token\}`/);
+    const listed = (cosmetics.match(/export const NICK_COLOR_TOKENS = \[([^\]]*)\]/)?.[1] ?? '')
+      .split(',').map((t) => t.trim().replace(/^'|'$/g, '')).filter(Boolean);
+    expect(listed.length, 'NICK_COLOR_TOKENS 를 못 읽었다 — 배열 형태가 바뀌었으면 이 가드부터 고쳐라')
+      .toBeGreaterThan(0);
+    expect(listed.filter((t) => !(TIER_FAMILIES as readonly string[]).includes(t)),
+      '닉네임 색에 --tier-* 밖의 토큰이 들어왔다 — 그 색은 라이트/다크 대비 계약을 통과한 적이 없다')
+      .toEqual([]);
   });
 
   // ⚠ 2026-08-30: 아래 대비 검사만으로는 **토큰이 사라진 것을 못 잡는다.**

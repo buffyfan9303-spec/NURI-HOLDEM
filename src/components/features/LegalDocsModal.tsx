@@ -10,8 +10,17 @@
 //       '고객에게 부당하게 불리한 재판관할의 합의 조항'을 무효로 한다. 전국 이용자를 상대로 남양주
 //       소재지 법원을 합의관할로 두면 무효 소지가 크고, 무효 조항은 아무 보호도 하지 못한다.
 //       → 민사소송법의 일반 관할 + 소비자분쟁조정 안내로 바꿔 집행 가능성을 확보했다.
+//
+// 2026-08-30 — 시행일을 이 파일에 박지 않는다. src/lib/legalVersion.ts 가 단일 소스이고,
+//   이용약관·처리방침은 이번 개정 대상(제2판)이라 새 시행일을, 위치기반·환불 정책은 이번에
+//   내용이 바뀌지 않았으므로 직전판 시행일을 그대로 쓴다. 안 바뀐 문서의 시행일을 같이 올리면
+//   "바뀌지도 않았는데 새로 시행된 문서"가 되어 그 자체가 사실과 다른 고지다.
 import { useState } from 'react';
 import Modal from '../atoms/Modal';
+import {
+  LEGAL_EFFECTIVE_ISO, LEGAL_EFFECTIVE_DATE, LEGAL_NOTICE_DATE,
+  LEGAL_PREV_EFFECTIVE_ISO, LEGAL_PREV_EFFECTIVE_DATE,
+} from '../../lib/legalVersion';
 import UnderlineTabs from '../atoms/UnderlineTabs';
 import { goSubTab } from '../../lib/subTabTransition';
 
@@ -28,8 +37,23 @@ const BIZ = {
   contact: 'buffyfan9303@gmail.com',
   email: 'buffyfan9303@gmail.com',
   privacyOfficer: '김윤혜(대표)',
-  effective: '2026-06-15',
+  /** 이번 개정 대상 문서(이용약관·개인정보처리방침)의 시행일. */
+  effective: LEGAL_EFFECTIVE_ISO,
+  /** 이번 개정에서 내용이 바뀌지 않은 문서(위치기반·환불)의 시행일. */
+  effectivePrev: LEGAL_PREV_EFFECTIVE_ISO,
 };
+
+// 개정 부칙 — 이용약관·처리방침 두 문서에 공통으로 붙는다.
+const REVISION_NOTE = `부칙 및 개정 이력
+1. 제1판은 ${LEGAL_PREV_EFFECTIVE_DATE}부터 시행되었습니다.
+2. 제2판은 ${LEGAL_NOTICE_DATE}에 공지하여 ${LEGAL_EFFECTIVE_DATE}부터 시행합니다. 시행일 전까지는 제1판이 적용됩니다.
+3. 제2판의 변경 내용
+   - 이용약관 제5조제3항: 이용 가능 연령을 만 19세 미만 이용 불가로 통일했습니다(구 문안 만 18세 미만).
+   - 이용약관 제11조: 회사 소재지 법원 합의관할 조항을 삭제하고 「민사소송법」이 정한 관할과 소비자분쟁조정 안내로 대체했습니다(「약관의 규제에 관한 법률」 제14조).
+   - 개인정보처리방침: 개인정보의 국외 이전 대상 5개사(Vercel·Cloudflare·Sentry·Resend·Google)와 이전 항목·목적·보유기간·거부 방법을 명시했습니다.
+   - 개인정보처리방침: 본인확인 시 주민등록번호를 수집·저장하지 않고 연계정보(CI)·중복가입확인정보(DI)만 처리한다는 점을 명시했습니다.
+   - 순위표 공개 항목과 선택 동의(자주 가는 매장 표기)에 관한 조항을 신설했습니다.
+4. 회원에게 불리한 변경이 포함되어 있어 적용일 30일 전에 공지합니다. 개정 내용에 동의하지 않으시는 경우 시행일 전까지 이용계약을 해지하실 수 있습니다.`;
 
 const TERMS = `제1조(목적)
 이 약관은 ${BIZ.service}(이하 "회사")가 제공하는 홀덤 대회 일정·커뮤니티·중고장터·매장운영 관련 서비스(이하 "서비스")의 이용과 관련하여 회사와 회원의 권리·의무 및 책임사항을 규정함을 목적으로 합니다.
@@ -77,8 +101,7 @@ const TERMS = `제1조(목적)
 제11조(분쟁해결 및 준거법)
 본 약관은 대한민국 법령에 따라 해석되며, 서비스 이용과 관련하여 분쟁이 발생한 경우 회사와 회원은 성실히 협의하여 해결합니다. 협의가 이루어지지 아니한 경우 「민사소송법」이 정한 관할 법원에 소를 제기하며, 회원은 한국소비자원 또는 소비자분쟁조정위원회에 분쟁의 조정을 신청할 수도 있습니다.
 
-부칙
-본 약관은 ${BIZ.effective}부터 시행합니다.
+${REVISION_NOTE}
 
 [회사] ${BIZ.company} · 대표 ${BIZ.ceo} · 사업자등록번호 ${BIZ.bizNo}
 [주소] ${BIZ.addr} · [문의] ${BIZ.contact} / ${BIZ.email}`;
@@ -140,7 +163,9 @@ const PRIVACY = `${BIZ.service}(이하 "회사")는 「개인정보 보호법」
 10. 고지의 의무
 - 본 방침의 변경 시 시행 7일 전(중요한 변경은 30일 전)부터 서비스 내 공지합니다.
 
-시행일: ${BIZ.effective}`;
+시행일: ${BIZ.effective}
+
+${REVISION_NOTE}`;
 
 const LOCATION = `제1조(목적)
 이 약관은 ${BIZ.service}(이하 "회사")가 제공하는 위치기반서비스와 관련하여 회사와 이용자의 권리·의무를 규정합니다.
@@ -164,7 +189,7 @@ const LOCATION = `제1조(목적)
 
 [위치기반서비스사업자] ${BIZ.company} · 대표 ${BIZ.ceo}
 [문의] ${BIZ.contact} / ${BIZ.email}
-시행일: ${BIZ.effective}`;
+시행일: ${BIZ.effectivePrev} (${LEGAL_NOTICE_DATE} 개정에서 본 약관은 변경되지 않았습니다)`;
 
 const REFUND = `${BIZ.service}(이하 "회사")의 유료 서비스 결제 취소 및 환불에 관한 기준은 다음과 같습니다. 본 정책은 「전자상거래 등에서의 소비자보호에 관한 법률」을 따릅니다.
 
@@ -193,7 +218,7 @@ const REFUND = `${BIZ.service}(이하 "회사")의 유료 서비스 결제 취�
 - 본 서비스는 금전을 베팅하는 도박·환전·사행성 서비스를 제공하지 않으며, 그러한 명목의 환불 요청에는 응하지 않습니다.
 
 [문의] ${BIZ.company} 고객센터 · ${BIZ.contact}
-시행일: ${BIZ.effective}`;
+시행일: ${BIZ.effectivePrev} (${LEGAL_NOTICE_DATE} 개정에서 본 정책은 변경되지 않았습니다)`;
 
 const DOCS: Record<LegalDoc, { label: string; body: string }> = {
   terms:    { label: '이용약관',            body: TERMS },

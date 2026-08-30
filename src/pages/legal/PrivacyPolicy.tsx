@@ -12,7 +12,9 @@
 //
 // 수집 항목을 늘릴 때는 §16(필요최소한 수집)을 먼저 통과해야 한다. "나중에 쓸지 몰라서" 는 근거가 아니다.
 
-const EFFECTIVE_DATE = '2026년 6월 15일';
+// 시행일·개정 이력은 src/lib/legalVersion.ts 단일 소스에서 온다 — 문서마다 날짜를 박으면 어긋난다.
+import { LEGAL_EFFECTIVE_DATE, LEGAL_NOTICE_DATE, LEGAL_PREV_EFFECTIVE_DATE } from '../../lib/legalVersion';
+import { PendingRevisionNotice, RevisionHistory } from './RevisionBlocks';
 
 function Article({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
@@ -62,11 +64,13 @@ export default function PrivacyPolicy() {
     <div className="px-4 pb-6">
       {/* 헤더 */}
       <div className="py-4 border-b border-border-subtle mb-4">
-        <p className="text-2xs text-ink-muted">시행일: {EFFECTIVE_DATE}</p>
+        <p className="text-2xs text-ink-muted">시행일: {LEGAL_EFFECTIVE_DATE} · 개정 공지일: {LEGAL_NOTICE_DATE} · 직전판 시행일: {LEGAL_PREV_EFFECTIVE_DATE}</p>
         <p className="text-2xs text-ink-muted mt-0.5">
           NURI HOLDEM은 「개인정보 보호법」 제30조에 따라 아래와 같이 개인정보처리방침을 수립·공개합니다.
         </p>
       </div>
+
+      <PendingRevisionNotice />
 
       <Article n={1} title="개인정보의 처리 목적">
         <p>
@@ -241,11 +245,19 @@ export default function PrivacyPolicy() {
             제2항에 따른 제공의 내용은 다음과 같습니다.
             <SubItems items={[
               '제공받는 자: 회원이 예약·참가를 신청한 해당 매장(홀덤펍)의 운영주체',
-              '제공 항목: 닉네임, 예약 일시 및 인원, 연락처(회원이 제공한 경우에 한합니다)',
-              '제공 목적: 예약의 확인·좌석 배정·변경 및 취소 안내, 대회 진행에 관한 연락',
-              '보유·이용기간: 해당 예약 또는 대회의 종료 후 분쟁 대응에 필요한 기간까지(관계 법령에 보존 의무가 있는 경우 그 기간)',
+              '제공 항목: 닉네임, 이름(실명) — 본인확인을 마친 회원에 한합니다, 회원이 입력한 예약명, 예약 일시 및 접수 순서, 해당 대회 당일의 매장 체크인 여부',
+              '제공 목적: 예약자 본인의 확인, 좌석 배정, 예약의 변경·취소 안내, 대회 진행에 관한 안내',
+              '보유·이용기간: 해당 예약 또는 대회의 종료 후 분쟁 대응에 필요한 기간까지(관계 법령에 보존 의무가 있는 경우 그 기간). 회원이 예약을 취소하면 해당 예약 정보는 매장에 표시되는 명단에서 즉시 삭제됩니다',
             ]} />
           </>,
+          /* 과다 고지의 정정(2026-08-30). 직전 문안은 '연락처(회원이 제공한 경우에 한합니다)'를 제공
+             항목으로 적었으나, 실제 구현에서 매장에 전달되는 항목에 휴대전화번호는 **없다**
+             (schedule_reservations_for_owner 는 display_name·nickname·real_name·created_at·visited 만 반환).
+             실제보다 넓게 적힌 고지는 그 자체로 회원을 오인시키므로(전자상거래법 §21①1) 삭제하고,
+             대신 '제공하지 않는다'를 명시한다. 반대로 이름(실명)은 실제로 전달되고 있었는데 항목에서
+             빠져 있었다 — 과소 고지는 곧 동의 없는 제3자 제공이라 제3항 항목에 추가했다. */
+          '회사는 회원의 휴대전화번호를 매장에 제공하지 않습니다. 회원과 매장 사이의 연락은 서비스 내 알림과 매장이 공개한 연락처를 통하여 이루어집니다.',
+          '회사는 제2항에 따라 개인정보를 제공받은 매장이 그 제공 목적의 범위를 넘어 개인정보를 이용하거나 제3자에게 다시 제공할 수 없음을 매장에 고지하며(「개인정보 보호법」 제19조), 이를 위반한 사실을 확인한 경우 해당 매장에 대한 제공을 중단합니다.',
           '회사는 수사기관이 「형사소송법」 등 법령이 정한 적법한 절차에 따라 요청하는 경우에 한하여 개인정보를 제공하며, 임의로 제공하지 않습니다.',
           '회사는 정보주체의 개인정보를 판매하거나 광고 목적으로 제3자에게 제공하지 않습니다.',
         ]} />
@@ -300,8 +312,10 @@ export default function PrivacyPolicy() {
         ]} />
       </Article>
 
+      <RevisionHistory doc="privacy" />
+
       <p className="text-2xs text-ink-muted text-center pt-2 border-t border-border-subtle">
-        본 방침은 {EFFECTIVE_DATE}부터 적용됩니다.
+        본 방침은 {LEGAL_EFFECTIVE_DATE}부터 적용됩니다. 시행일 전까지는 {LEGAL_PREV_EFFECTIVE_DATE}부터 시행된 직전판이 적용됩니다.
       </p>
     </div>
   );

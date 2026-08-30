@@ -105,7 +105,17 @@ export interface CommunityPost {
   goodrunCount?: number;    // 나이스런(Good Run) 수
   blinded?: boolean;        // 신고 누적 자동 숨김(운영자/작성자만 열람)
   liked?: boolean;          // 현재 사용자가 좋아요했는지(post_likes 기준) — 토글 UI용
+  /** 받은 응원 수(30점 소비형). 서버 community_posts.cheer_count 비정규화 값 */
+  cheerCount?: number;
+  /** 끌올 만료 시각(ISO). now 보다 크면 목록 상단 고정 — 판정은 isBumped() 하나로 */
+  bumpedUntil?: string | null;
+  /** 끌올 누적 횟수(표시용) */
+  bumpCount?: number;
 }
+
+/** 이 글이 지금 끌올 중인가 — 만료 판정을 화면마다 다시 쓰지 않게 한 곳에 둔다 */
+export const isBumped = (p: Pick<CommunityPost, 'bumpedUntil'>): boolean =>
+  !!p.bumpedUntil && new Date(p.bumpedUntil).getTime() > Date.now();
 
 export type ReactionType = 'badbeat' | 'goodrun';
 
@@ -148,6 +158,10 @@ const rowToPost = (r: any): CommunityPost => ({
   title:    r.title ?? undefined,
   images:   Array.isArray(r.images) ? r.images : undefined,
   blinded:  r.blinded ?? false,
+  // 20260830m 추가분 — 컬럼이 없던 시절 응답(캐시 스냅샷 포함)에서도 0/null 로 안전하게 접힌다
+  cheerCount:  r.cheer_count ?? 0,
+  bumpedUntil: r.bumped_until ?? null,
+  bumpCount:   r.bump_count ?? 0,
 });
 
 /** 내가 쓴 글 — 개인 허브('내 대시보드')용. 목록 50건 제한과 무관하게 본인 글만 조회 */
@@ -360,7 +374,20 @@ export async function getPosts(): Promise<CommunityPost[]> {
   }
   const postsRes = await supabase.from('community_posts').select('*').order('created_at', { ascending: false }).limit(50);
   if (postsRes.error) throw postsRes.error;
-  const rows = postsRes.data ?? [];
+  // 끌올(100점)한 글은 최신 50건 밖으로 밀려나 있어도 **반드시** 목록에 있어야 한다.
+  // 이 한 번의 추가 조회가 없으면 오래된 글을 끌올한 사람은 돈을 내고 아무것도 못 얻는다
+  // (동시 끌올 상한이 3자리라 최대 3행 — 부하는 무시할 수 있다).
+  // 컬럼이 아직 없는 환경(마이그레이션 지연)에서는 조용히 건너뛴다 — 목록 자체가 죽으면 안 된다.
+  const bumpedRes = await supabase.from('community_posts').select('*')
+    .gt('bumped_until', new Date().toISOString())
+    .order('bumped_until', { ascending: false }).limit(10);
+  const rows = [...(postsRes.data ?? [])];
+  if (!bumpedRes.error) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const seen = new Set(rows.map((r: any) => r.id as string));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const r of (bumpedRes.data ?? []) as any[]) if (!seen.has(r.id)) rows.push(r);
+  }
   // #10 내 좋아요는 '노출된 50글'로 한정(전건 로드 방지). RLS 가 본인 것만 반환(미로그인 0건).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const ids = rows.map((r: any) => r.id as string);
@@ -1362,7 +1389,20 @@ export async function removeVenueOwner(venueId: string, userId: string): Promise
  *   그래도 타입에서 지우지 않는다 — 과거 구매 내역·관리자 목록에 tier='board' 인 행이 남아 있고,
  *   지우면 그 기록들이 'basic' 으로 둔갑하거나 렌더에서 터진다.
  */
-export type ShoutTier = 'basic' | 'gold' | 'board';
+export type ShoutTier = 'basic' | 'gold' | 'long' | 'reserve' | 'board';
+
+/**
+ * 2026-08-30(20260830n) 상위 티어 2종.
+ *  · long    = **40초 연속** 1회(120점). 20초짜리를 두 번 사서 이어 붙이려 해도 사이에 남의 외침이
+ *              끼므로 **연속성 자체가 값**이다. 그래서 기본 2개(100점)보다 비싸다.
+ *  · reserve = 20초 1회를 **원하는 시각에**(200점). 외칠 이유는 대부분 시각이 정해져 있는데
+ *              (‘20시 바운티 시작’) 대기열 순서로는 언제 나갈지 알 수 없었다.
+ * 색은 여전히 하이라이트에서만 고른다 — 서버가 다른 등급에 색을 실어 보내면 거절한다.
+ */
+export const RESERVABLE_TIER: ShoutTier = 'reserve';
+/** 예약 가능 범위 — 서버 buy_shout 의 RESERVE_MIN_LEAD / RESERVE_MAX_LEAD 와 같은 값 */
+export const RESERVE_MIN_LEAD_MIN = 5;
+export const RESERVE_MAX_LEAD_DAYS = 7;
 
 /**
  * 하이라이트 등급에서 고를 수 있는 색.
@@ -1479,9 +1519,11 @@ export async function buyShout(
   message: string,
   tier: ShoutTier = 'basic',
   color?: ShoutColor | null,
+  /** 예약 등급 전용 방송 시각(ISO). 다른 등급에 실어 보내면 서버가 거절한다. */
+  playsAt?: string | null,
 ): Promise<Shout> {
   const { data, error } = await supabase.rpc('buy_shout', {
-    p_message: message, p_tier: tier, p_color: color ?? null,
+    p_message: message, p_tier: tier, p_color: color ?? null, p_plays_at: playsAt ?? null,
   });
   if (error) throw new Error(error.message);
   const r = Array.isArray(data) ? data[0] : data;
@@ -1504,10 +1546,11 @@ export interface ShopSku {
   /**
    * mark = 영구 소장 마크(2026-08-30 전환 · SKU `mark_own`) ·
    * shout = 20초 슬롯 외침 ·
+   * cheer = 응원 보내기(글·댓글, 30점) · bump = 글 끌올(3시간 상단, 100점) ·
    * mark_rent = **판매 중지된 기간권**(서버가 active=false 로 내려서 목록에 오지 않는다.
    *   타입을 지우지 않는 이유: 과거 구매 기록(point_purchases.kind)이 이 값을 그대로 들고 있다).
    */
-  kind: 'mark_rent' | 'shout' | 'mark';
+  kind: 'mark_rent' | 'shout' | 'mark' | 'cheer' | 'bump' | 'cosmetic' | 'season_badge' | 'service';
   label: string;
   descr: string;
   price: number;
@@ -1596,6 +1639,100 @@ export async function buyMark(markKey: string): Promise<string> {
   return typeof r === 'string' ? r : String((r as { mark_key?: string }).mark_key ?? markKey);
 }
 
+// ── 반복 소비형 ① 응원 보내기 · ② 글 끌올 (2026-08-30 · 20260830m) ──────────
+//
+// 왜 이 둘인가(근거는 supabase/migrations/20260830m_cheer_bump_and_pricing.sql 헤더):
+//  · 실측에서 **구매 0건 · 총 소비 0점**이었다. 상품이 없어서가 아니라 가격이 획득률의 40배였다.
+//    마크를 800점으로 내리고(하루 최대치 16일), 그 아래에 30점 칸을 만든다.
+//  · 현 상점에는 '나를 꾸미는 것'만 있고 **'남에게 쓰는 것'이 없었다.** 소액·고빈도·사회적 동기가
+//    경제를 도는 엔진이고, 홀덤펍 커뮤니티는 축하할 일이 매일 생긴다.
+//  · ⚠ 응원은 **받는 사람에게 점수를 주지 않는다.** 유저 간 포인트 이전은 게임산업법 §32①7
+//    (환전 알선) 위험이라 설계에서 배제됐다 — 점수는 소각되고 표시·알림만 남는다.
+//    이 성질을 바꾸는 변경(받는 사람 지급)을 절대 넣지 말 것.
+
+/**
+ * 응원 하루 한도 — **아이템 구매 10회 상한과 별개다.**
+ * 합산하면 30점짜리 소액 상품이 그날의 외치기·마크 구매를 잠가 버린다(싼 것이 비싼 것을 막는 역전).
+ * ⚠ 서버 send_cheer 의 CHEER_DAILY_CAP 과 같은 값이어야 한다.
+ */
+export const CHEER_DAILY_CAP = 10;
+/** 동시 끌올 자리 — 서버 bump_post 의 BUMP_SLOTS 와 같은 값 */
+export const BUMP_SLOTS = 3;
+
+/** 응원 결과 — 전부 서버 계산값(화면이 다시 세지 않는다) */
+export interface CheerResult { cheers: number; available: number; remainingToday: number }
+
+/**
+ * 응원 보내기 — 글 또는 댓글 **하나**에. 가격은 서버 shop_skus.cheer 가 단일 출처라 보내지 않는다.
+ * 자기 글 금지·같은 대상 1회·20초 쿨다운·하루 10회는 전부 서버가 최종 판정한다.
+ */
+export async function sendCheer(target: { postId?: string; commentId?: string }): Promise<CheerResult> {
+  const { data, error } = await supabase.rpc('send_cheer', {
+    p_post_id: target.postId ?? null, p_comment_id: target.commentId ?? null,
+  });
+  if (error) throw new Error(error.message);
+  const r = Array.isArray(data) ? data[0] : data;
+  if (!r) throw new Error('응원에 실패했습니다');
+  return {
+    cheers: Number(r.cheers) || 0,
+    available: Number(r.available) || 0,
+    remainingToday: Number(r.remaining_today) || 0,
+  };
+}
+
+/** 응원 현황 — 대상 id → 받은 수, 그리고 내가 이미 응원한 대상 집합 */
+export interface CheerState { counts: Record<string, number>; mine: Set<string> }
+
+/**
+ * 글 1건 + 그 댓글들의 응원 현황.
+ *
+ * 글의 응원 수는 community_posts.cheer_count(비정규화)가 있지만 **댓글은 없다** —
+ * comments 에는 본인 UPDATE 정책(comments_update_self)이 열려 있어서, 거기에 카운터를 두면
+ * 유저가 PostgREST 로 자기 댓글의 응원 수를 위조할 수 있다(유료 신호의 위조 = 발권과 같은 급).
+ * 그래서 댓글 응원은 원장(post_cheers)을 그대로 센다. 댓글 수는 글당 수십 건이라 부하가 없다.
+ */
+export async function getCheerState(postId: string, commentIds: string[] = []): Promise<CheerState> {
+  const empty: CheerState = { counts: {}, mine: new Set() };
+  if (IS_MOCK) return empty;
+  // ⚠ supabase.auth.getUser() 금지 — 매번 인증 왕복이 붙는다(src/api/_session.ts 헤더 참조)
+  const me = (await currentUser())?.id ?? null;
+  let q = supabase.from('post_cheers').select('post_id, comment_id, sender_id').limit(500);
+  q = commentIds.length > 0
+    ? q.or(`post_id.eq.${postId},comment_id.in.(${commentIds.join(',')})`)
+    : q.eq('post_id', postId);
+  const { data, error } = await q;
+  if (error) return empty;
+  const counts: Record<string, number> = {};
+  const mine = new Set<string>();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const r of (data ?? []) as any[]) {
+    const key = (r.comment_id ?? r.post_id) as string | null;
+    if (!key) continue;
+    counts[key] = (counts[key] ?? 0) + 1;
+    if (me && r.sender_id === me) mine.add(key);
+  }
+  return { counts, mine };
+}
+
+/** 끌올 결과 — 만료 시각·잔액·현재 사용 중인 자리 수(전부 서버 계산값) */
+export interface BumpResult { untilAt: string; available: number; activeSlots: number }
+
+/**
+ * 글 끌올 — 내 글을 3시간 동안 목록 맨 위로. 자기 글·동시 자리 상한·하루 10회는 서버가 판정한다.
+ * 기간(3시간)과 가격(100점)의 출처도 서버 shop_skus.bump 다 — 화면에 숫자를 박지 않는다.
+ */
+export async function bumpPost(postId: string): Promise<BumpResult> {
+  const { data, error } = await supabase.rpc('bump_post', { p_post_id: postId });
+  if (error) throw new Error(error.message);
+  const r = Array.isArray(data) ? data[0] : data;
+  if (!r) throw new Error('끌올에 실패했습니다');
+  return {
+    untilAt: String(r.until_at),
+    available: Number(r.available) || 0,
+    activeSlots: Number(r.active_slots) || 0,
+  };
+}
+
 /** 내리기 — 작성자 본인 또는 운영자(환급 없음) */
 export async function hideShout(id: string): Promise<void> {
   const { error } = await supabase.rpc('hide_shout', { p_id: id });
@@ -1627,11 +1764,14 @@ export async function adminListShouts(limit = 50): Promise<(Shout & { hidden: bo
 
 export interface PointPurchase {
   id: number;
-  kind: 'shout' | 'mark_rent' | 'mark_own';
+  kind: 'shout' | 'mark_rent' | 'mark_own' | 'cheer' | 'bump'
+      | 'cosmetic' | 'season_badge' | 'nick_change';
   skuKey: string;
   /** 상품 라벨(shop_skus.label). 가격표가 바뀌어도 과거 기록의 이름은 서버가 준 값 그대로 */
   label: string;
   markKey: string | null;
+  /** 코스메틱 키 또는 시즌 뱃지의 season_id(20260830n). 환불 회수 대상을 특정한다. */
+  itemKey: string | null;
   shoutId: string | null;
   cost: number;
   createdAt: string;
@@ -1666,7 +1806,7 @@ export async function adminListPurchases(userId: string, limit = 30): Promise<Po
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({
     id: Number(r.id), kind: r.kind, skuKey: r.sku_key, label: r.label ?? r.sku_key,
-    markKey: r.mark_key ?? null, shoutId: r.shout_id ?? null,
+    markKey: r.mark_key ?? null, itemKey: r.item_key ?? null, shoutId: r.shout_id ?? null,
     cost: Number(r.cost) || 0, createdAt: r.created_at,
     refundedAt: r.refunded_at ?? null, refundPoints: Number(r.refund_points) || 0,
     refundReason: r.refund_reason ?? null,
@@ -1736,4 +1876,151 @@ export async function adminGrantPoints(userId: string, delta: number, reason: st
   });
   if (error) throw new Error(error.message);
   return Number(data) || 0;
+}
+
+// ── 소유물형·상위 티어 상품 (2026-08-30 · 20260830n) ──────────────────────────
+//
+// 앞 단계(20260830m)가 가격 사다리의 아랫칸(응원 30 · 끌올 100)을 만들었고, 이 묶음은 그 위다:
+//   길게 외치기 120 · 예약 외치기 200 · 시즌 뱃지 300 · 프레임 400 · 즉시 변경권 250 · 닉네임 색 600.
+// 기준은 같다 — **하루 최대 획득 50점**.
+//
+// ⚠ 여기 있는 것은 전부 **표현·소유·편의**뿐이다. 확률형(뽑기)·포인트 베팅·유저 간 포인트 선물·
+//   포인트↔이용권 교환·참가비 대납은 **설계에서 배제**했다. 점수가 값을 갖는 순간
+//   게임산업법 §32①7(환전 알선) 위험이고, 이 서비스의 '환금성 없음' 방어선(약관 제10조)이 무너진다.
+//   응원이 '받는 사람에게 점수를 주지 않는' 것과 같은 선이다 — 이 성질을 바꾸는 변경을 넣지 말 것.
+
+/** 대기열 안내 — '지금 사면 언제 나가나'. 서버 shout_queue_info() 가 단일 출처다. */
+export interface ShoutQueueInfo { nextFreeAt: string | null; waiting: number }
+
+/**
+ * 지금 사면 방송이 시작되는 시각.
+ *
+ * ⚠ 예전 화면은 max(expires_at) 으로 유추했다. 예약(20260830n)이 생기면 그 값은 며칠 뒤가 될 수
+ *   있어 '내 차례 3일 뒤'라는 거짓말이 된다 — 실제로는 그 앞의 빈 자리에 들어간다.
+ *   빈 자리 계산은 서버 shout_next_free_slot() 하나뿐이므로 여기서 다시 세지 않는다.
+ * @param seconds 사려는 상품의 슬롯 길이(기본 20 · 길게 40)
+ */
+export async function getShoutQueueInfo(seconds = SHOUT_SLOT_SECONDS): Promise<ShoutQueueInfo> {
+  if (IS_MOCK) return { nextFreeAt: null, waiting: 0 };
+  const { data, error } = await supabase.rpc('shout_queue_info', { p_seconds: seconds });
+  const r = Array.isArray(data) ? data[0] : data;
+  if (error || !r) return { nextFreeAt: null, waiting: 0 };
+  return { nextFreeAt: r.next_free_at ?? null, waiting: Number(r.waiting) || 0 };
+}
+
+/** 코스메틱 소장 한 줄 — 서버 my_cosmetics() 가 소유·장착 판정을 이미 끝내서 준다 */
+export interface OwnedCosmetic { kind: 'card_frame' | 'nick_color'; itemKey: string; equipped: boolean }
+
+/** 내가 가진 프레임·닉네임 색 전량 + 지금 장착 중인지 */
+export async function getMyCosmetics(): Promise<OwnedCosmetic[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.rpc('my_cosmetics');
+  if (error || !Array.isArray(data)) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data as any[])
+    .filter((r) => r.kind === 'card_frame' || r.kind === 'nick_color')
+    .map((r) => ({ kind: r.kind, itemKey: String(r.item_key), equipped: r.equipped === true }));
+}
+
+/**
+ * 코스메틱 영구 소장 구매 — 차감·소장·장착이 서버 한 트랜잭션이다(buyMark 와 같은 규약).
+ * 가격은 서버 shop_skus(card_frame 400 / nick_color 600)가 유일한 출처라 여기서 보내지 않는다.
+ */
+export async function buyCosmetic(kind: OwnedCosmetic['kind'], key: string): Promise<string> {
+  const { data, error } = await supabase.rpc('buy_cosmetic', { p_kind: kind, p_key: key });
+  if (error) throw new Error(error.message);
+  const r = Array.isArray(data) ? data[0] : data;
+  if (!r) throw new Error('구매에 실패했습니다');
+  return String(r);
+}
+
+/** 장착·해제(null=해제). 소유 판정은 서버가 최종적으로 한다 — 화면 판정만 믿으면 공짜 장착이 된다. */
+export async function setEquippedCosmetic(
+  kind: OwnedCosmetic['kind'], key: string | null,
+): Promise<string | null> {
+  const { data, error } = await supabase.rpc('set_equipped_cosmetic', { p_kind: kind, p_key: key });
+  if (error) throw new Error(error.message);
+  const r = Array.isArray(data) ? data[0] : data;
+  return r == null ? null : String(r);
+}
+
+/**
+ * 작성자 닉네임 색 일괄 조회 — userId → 등급 토큰명(`blue`·`gold` 등).
+ *
+ * getEquippedMarks 와 **같은 결합 지점**이다(닉네임 앞 글리프 ↔ 닉네임 글자색).
+ * 서버가 소장·판매 상태를 이미 걸러서 주므로 화면은 받은 것만 칠하면 된다.
+ * 반환값은 토큰명이지 색이 아니다 — 실제 색은 `--tier-<token>` 이라 테마를 따라간다.
+ */
+export async function getNickColors(userIds: string[]): Promise<Record<string, string>> {
+  if (IS_MOCK || userIds.length === 0) return {};
+  const { data, error } = await supabase.rpc('get_nick_colors', { p_ids: userIds });
+  if (error || !Array.isArray(data)) return {};
+  const out: Record<string, string> = {};
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const r of data as any[]) if (r.id && r.token) out[r.id] = String(r.token);
+  return out;
+}
+
+/** 살 수 있는 시즌 뱃지 한 줄 — 내가 단골이고, 진행 중이고, 아직 안 산 시즌만 서버가 골라 준다 */
+export interface BuyableSeasonBadge {
+  venueId: string; venueName: string; seasonId: string; seasonName: string; endsOn: string;
+}
+/** 내가 가진 시즌 뱃지 — 끝난 시즌도 함께(그 시즌 단골이었다는 기록이라 사라지지 않는다) */
+export interface OwnedSeasonBadge {
+  seasonId: string; seasonName: string; venueId: string; venueName: string;
+  endsOn: string; ongoing: boolean;
+}
+
+export async function getBuyableSeasonBadges(): Promise<BuyableSeasonBadge[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.rpc('my_buyable_season_badges');
+  if (error || !Array.isArray(data)) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data as any[]).map((r) => ({
+    venueId: r.venue_id, venueName: r.venue_name ?? '(매장)',
+    seasonId: r.season_id, seasonName: r.season_name ?? '시즌', endsOn: r.ends_on,
+  }));
+}
+
+export async function getMySeasonBadges(): Promise<OwnedSeasonBadge[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.rpc('my_season_badges');
+  if (error || !Array.isArray(data)) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data as any[]).map((r) => ({
+    seasonId: r.season_id, seasonName: r.season_name ?? '시즌',
+    venueId: r.venue_id, venueName: r.venue_name ?? '(매장)',
+    endsOn: r.ends_on, ongoing: r.ongoing === true,
+  }));
+}
+
+/**
+ * 단골 시즌 뱃지 구매(300점/시즌). **팔로우한 매장의 진행 중 시즌만** 살 수 있다 —
+ * 뱃지가 '내가 이 매장 사람'이라는 표시라, 아무 매장이나 살 수 있으면 의미가 증발한다.
+ * 어느 시즌인지는 서버가 고른다(화면이 시즌 id 를 만들어 보내지 않는다).
+ */
+export async function buySeasonBadge(venueId: string): Promise<{
+  seasonId: string; seasonName: string; venueName: string; available: number;
+}> {
+  const { data, error } = await supabase.rpc('buy_season_badge', { p_venue_id: venueId });
+  if (error) throw new Error(error.message);
+  const r = Array.isArray(data) ? data[0] : data;
+  if (!r) throw new Error('구매에 실패했습니다');
+  return {
+    seasonId: String(r.season_id), seasonName: r.season_name ?? '시즌',
+    venueName: r.venue_name ?? '(매장)', available: Number(r.available) || 0,
+  };
+}
+
+/**
+ * 닉네임 즉시 변경권(250점) — 파는 것은 기능이 아니라 **기다림 면제**다.
+ * 닉네임 변경 자체는 계속 무료이고, 30일 쿨다운이 걸려 있지 않으면 서버가
+ * '이 권한은 필요하지 않습니다'로 거절한다(아무것도 주지 않고 점수만 받는 일이 없게).
+ * @returns 구매 후 사용 가능 점수(서버 계산값)
+ */
+export async function buyNicknameReset(): Promise<number> {
+  const { data, error } = await supabase.rpc('buy_nickname_reset');
+  if (error) throw new Error(error.message);
+  const r = Array.isArray(data) ? data[0] : data;
+  return Number(r?.available) || 0;
 }

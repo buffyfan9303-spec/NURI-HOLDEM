@@ -1073,6 +1073,36 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
             className="w-full py-1 text-center text-2xs font-bold text-ink-muted hover:text-ink-secondary">확인</button>
         </div>
       )}
+      {/* 개인정보 제3자 제공 고지 — 예약을 누르는 순간 매장에 회원의 **이름(실명)** 이 실제로 전달된다
+          (RPC schedule_reservations_for_owner 가 profiles.real_name 을 업주에게 반환한다. 아래
+           '예약 내역'이 그걸 그대로 그리고 있다). 매장은 자기 사업을 위해 그 정보를 쓰므로 수탁자가
+          아니라 **별도의 개인정보처리자**로 보는 것이 안전하고, 그렇다면 이건 제3자 제공이다.
+          ⚠ 개보법 §17① 은 제3자 제공에 원칙적으로 동의를 요구하고, §17①2 가 열거하는 예외에
+            §15①4(계약의 이행)는 **포함되지 않는다** — "예약이라는 계약을 이행하려면 필요하다"만으로는
+            정당화되지 않는다. 그래서 '무엇을·누구에게·왜·언제까지'를 CTA 바로 위에서 전부 밝히고,
+            그 상태에서 누르는 예약을 동의의 의사표시로 본다(처리방침 제9조와 항목이 일치해야 한다).
+          접지 않는 이유: 접힌 고지는 고지가 아니다. 여기만은 '더보기' 뒤로 숨기지 않는다. */}
+      {!mine && !ended && (
+        <div className="rounded-input border border-border-default bg-surface-base/50 px-2.5 py-2">
+          <p className="flex items-start gap-1.5 text-2xs font-bold leading-relaxed text-ink-secondary">
+            <Icon name="lock" size={12} className="mt-0.5 shrink-0" />
+            <span>예약하면 이 매장에 <b className="text-accent-300">이름(실명)과 닉네임</b>이 전달됩니다</span>
+          </p>
+          <ul className="mt-1 space-y-0.5 text-2xs leading-relaxed text-ink-muted">
+            <li>· 전달 항목: 닉네임, 이름(실명 — 본인인증을 마친 회원), 입력한 예약명, 예약 일시, 대회 당일 매장 체크인 여부</li>
+            <li>· 받는 곳: {sched.pubName || '이 대회를 여는 매장'}의 운영주체(업주·매장 운영자)</li>
+            <li>· 이용 목적: 예약자 본인 확인, 좌석 배정, 변경·취소 및 대회 진행 안내</li>
+            <li>· 보유 기간: 대회 종료 후 분쟁 대응에 필요한 기간까지 — 예약을 취소하면 매장 명단에서 곧바로 지워집니다</li>
+            <li>· 휴대전화번호는 매장에 전달되지 않습니다</li>
+          </ul>
+          <p className="mt-1 text-2xs leading-relaxed text-ink-muted">
+            아래 <b className="text-ink-secondary">예약하기</b>를 누르면 위 제공에 동의하는 것으로 봅니다.{' '}
+            <a href="/legal/privacy.html" target="_blank" rel="noopener"
+              className="font-semibold text-accent-300 underline underline-offset-2">개인정보처리방침 제9조</a>
+          </p>
+        </div>
+      )}
+
       {/* 취소는 종료 후에도 열어둔다 — 막는 건 '새 예약'이지 이미 남긴 기록의 정리가 아니다 */}
       {mine ? (
         <HoldToConfirmButton onConfirm={act} disabled={busy} holdingLabel="취소하는 중…"
@@ -1132,6 +1162,14 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
                     </li>
                   ))}
                 </ul>
+          )}
+          {/* 받는 쪽에도 한 줄 — 개보법 §19(제공받은 자의 이용·제공 제한): 제공받은 개인정보는
+              제공 목적 외로 이용하거나 제3자에게 다시 제공할 수 없다. 손님 화면의 고지와 짝을 이룬다. */}
+          {resOpen && (
+            <p className="mt-1.5 text-2xs leading-relaxed text-ink-muted">
+              예약자의 이름·닉네임은 <b className="text-ink-secondary">이 대회의 예약 운영</b>을 위해서만 이용할 수 있습니다.
+              다른 목적으로 쓰거나 외부에 다시 제공하는 것은 「개인정보 보호법」 제19조 위반입니다.
+            </p>
           )}
         </div>
       )}

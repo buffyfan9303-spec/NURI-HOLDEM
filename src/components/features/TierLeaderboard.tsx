@@ -1,5 +1,5 @@
 // src/components/features/TierLeaderboard.tsx
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { flushSync } from 'react-dom';
 import { withViewTransition } from '../../lib/viewTransition';
 import {
@@ -7,12 +7,20 @@ import {
   EVENT_KIND_LABEL, type RankVerification, type DomesticRow,
 } from '../../api/rankverify';
 import { useAuth } from '../../contexts/AuthContext';
-import TierBadge, { tierOf, tierProgress, allTiers, isAceRank, ACE_TOP_RANK, ACE_MIN_POINTS, tierCss, ACE_VAR } from '../atoms/TierBadge';
+import TierBadge, { tierOf, tierColor, tierProgress, allTiers, isAceRank, ACE_TOP_RANK, ACE_MIN_POINTS, tierCss, ACE_VAR } from '../atoms/TierBadge';
 import {
   getActivityLeaderboard, getMyPointBalance, getShoutRules,
-  getShopSkus, getMyOwnedMarks, buyMark, SHOUT_SLOT_SECONDS,
+  getShopSkus, getMyOwnedMarks, buyMark, SHOUT_SLOT_SECONDS, CHEER_DAILY_CAP, BUMP_SLOTS,
+  getMyCosmetics, buyCosmetic, setEquippedCosmetic, getNickColors,
+  getBuyableSeasonBadges, getMySeasonBadges, buySeasonBadge, buyNicknameReset,
   type LeaderboardEntry, type PointBalance, type ShopSku, type OwnedMark,
+  type OwnedCosmetic, type BuyableSeasonBadge, type OwnedSeasonBadge,
 } from '../../api/community';
+import {
+  loadCosmetics, frameCosmetics, nickColorCosmetics, nickColorVar,
+  FALLBACK_COSMETICS, type Cosmetic,
+} from '../../lib/cosmetics';
+import { drawProfileCard, downloadProfileCard } from '../../lib/profileCard';
 import { getGlobalRankingTotals, type GlobalRankingTotal } from '../../api/rankings';
 import { onColorInkClass } from '../../lib/color';
 import { useToast } from '../atoms/Toast';
@@ -50,7 +58,7 @@ const BOARD_LABEL: Record<Board, string> = {
 const BOARD_DESC: Record<Board, string> = {
   domestic: '대회(토너먼트) 입상만 인정 — 해외 대회도 포함하며, 운영자가 승인한 건에 한해 100만원(10T)당 1점으로 합산합니다. 일반 펍 정기 게임은 포함되지 않습니다.',
   verify: '대회 입상 증빙 2장(머니인·신분증)을 올려 운영자 승인을 받으면 국내 순위에 합산됩니다. 대회만 인정되며(일반 펍 제외) 100만원(10T)당 1점입니다.',
-  shop: '모으는 마크는 활동점수 도달로 영구 해금(차감 없음)이고, 꾸미기 마크와 외치기는 사용 가능 점수로 삽니다. 꾸미기 마크는 한 번 사면 영구 소장이며, 무엇을 사도 누적 점수(등급 기준)는 줄지 않습니다.',
+  shop: '모으는 마크는 활동점수 도달로 영구 해금(차감 없음)이고, 나머지(꾸미기 마크·프레임·닉네임 색·시즌 뱃지·외치기·응원·끌올)는 사용 가능 점수로 삽니다. 소장한 것은 영구히 남고, 무엇을 사도 누적 점수(등급 기준)는 줄지 않습니다.',
   activity: '접속·글쓰기·댓글 활동 점수 — 등급(2·3~AA)과 연동. 아래 주간 미션을 달성하면 점수를 바로 받아요.',
   moneyin: '전국 매장 머니인 점수 — 100만원(10T)당 1점으로 합산합니다(임계 미만은 점수 없음).',
   prize: '전국 매장 프라이즈 점수 합산(금전적 가치 없음).',
@@ -182,6 +190,8 @@ export default function TierLeaderboard() {
       if (document.documentElement.dataset.vtScope === 'rank-tab') delete document.documentElement.dataset.vtScope;
     }, 450);
   }, [board]);
+  // 순위표 행의 닉네임 색 — rows 가 바뀔 때만 일괄 조회한다(행마다 부르지 않는다).
+  const [rowNickTokens, setRowNickTokens] = useState<Record<string, string>>({});
   const [global, setGlobal] = useState<GlobalRankingTotal[]>([]);
   const [globalLoaded, setGlobalLoaded] = useState(false);
   // 충성도 허브 — 주간 리그/업적/미션/명예의 전당(보드 진입 시 1회 로드)
@@ -208,6 +218,25 @@ export default function TierLeaderboard() {
   const [earnList, setEarnList] = useState<CatalogMark[]>(() => FALLBACK_CATALOG.filter((m) => m.kind === 'earn'));
   const [shopList, setShopList] = useState<CatalogMark[]>(() => FALLBACK_CATALOG.filter((m) => m.kind === 'rent'));
   const [buying, setBuying] = useState<string | null>(null);       // 구매 중인 마크 키
+  // ── 소유물형 상품(2026-08-30 · 20260830n) ──────────────────────────────────
+  //   프레임 400 · 닉네임 색 600 · 시즌 뱃지 300 · 즉시 변경권 250.
+  //   전부 **표현·소유·편의**뿐이다. 확률형(뽑기)·포인트 베팅·유저 간 포인트 선물·
+  //   포인트↔이용권 교환·참가비 대납은 설계에서 배제했다 — 점수가 값을 갖는 순간
+  //   게임산업법 §32①7(환전 알선) 위험이고 '환금성 없음' 방어선(약관 제10조)이 무너진다.
+  const [cosmetics, setCosmetics] = useState<Cosmetic[]>(FALLBACK_COSMETICS);
+  const [myCosmetics, setMyCosmetics] = useState<OwnedCosmetic[] | null>(null);
+  const [seasonBuyable, setSeasonBuyable] = useState<BuyableSeasonBadge[] | null>(null);
+  const [seasonOwned, setSeasonOwned] = useState<OwnedSeasonBadge[] | null>(null);
+  const [nickResetBusy, setNickResetBusy] = useState(false);
+  // 프로필 카드 미리보기 — 고른 프레임이 실제로 어떻게 굽히는지가 곧 400점의 근거다.
+  //
+  // ⚠ ref 객체(useRef)가 아니라 **콜백 ref + state** 다. 이유는 실측으로 잡힌 버그다:
+  //   캔버스는 `{frameSku && ...}` 안에 있고 frameSku 는 서버 가격표(getShopSkus)가 도착해야 생긴다.
+  //   상점 탭에 들어온 첫 렌더에는 캔버스가 **없으므로** 그리기 이펙트가 ref.current === null 로
+  //   그냥 빠져나가고, 가격표가 도착해 캔버스가 마운트될 때는 이펙트의 의존성이 하나도 바뀌지 않아
+  //   **다시 돌지 않는다** → 카드가 영원히 빈 사각형으로 남는다(런타임 프로브에서 전 픽셀 alpha=0).
+  //   노드를 state 로 들면 '마운트'가 곧 의존성 변화라 그 순간 그려진다.
+  const [cardEl, setCardEl] = useState<HTMLCanvasElement | null>(null);
   // 키 → 보유 상태. own 이 rent 를 이긴다(서버 my_owned_marks 가 이미 그렇게 정렬해 주지만,
   // 화면에서도 같은 우선순위를 박아 둔다 — 소장한 마크에 '3일 남음'이 뜨면 거짓말이 된다).
   const ownedBy = useMemo(() => {
@@ -218,8 +247,35 @@ export default function TierLeaderboard() {
   // 마크 가격 — 서버 shop_skus.mark_own 이 단일 출처다. **화면에 하드코딩하지 않는다**
   // (가격표가 바뀌면 화면은 옛 값을 말하고 서버는 새 값을 걷는다 — shoutCost 폴백 30 vs 서버 200 과 같은 함정).
   const markSku = skus.find((s) => s.kind === 'mark') ?? null;
+  // 반복 소비형 2종(2026-08-30) — 상점은 가격만 보여 주고, 구매는 대상이 있는 커뮤니티에서 한다.
+  const cheerSku = skus.find((s) => s.kind === 'cheer') ?? null;
+  const bumpSku = skus.find((s) => s.kind === 'bump') ?? null;
   // 판매 중지된 기간권 — 서버가 active=false 로 이미 빼 주지만, 되살아나도 살 수 없게 화면에서도 막는다.
   const deadRentSkus = skus.filter((s) => s.kind === 'mark_rent');
+  // 소유물형 SKU — 가격은 전부 서버가 출처다(화면에 숫자를 박지 않는다).
+  const frameSku  = skus.find((s) => s.key === 'card_frame') ?? null;
+  const nickSku   = skus.find((s) => s.key === 'nick_color') ?? null;
+  const seasonSku = skus.find((s) => s.key === 'season_badge') ?? null;
+  const nickChangeSku = skus.find((s) => s.key === 'nick_change') ?? null;
+  const frameList = useMemo(() => cosmetics.filter((c) => c.kind === 'card_frame'), [cosmetics]);
+  const nickList  = useMemo(() => cosmetics.filter((c) => c.kind === 'nick_color'), [cosmetics]);
+  // 키 → 소장/장착. 소유 판정은 서버 my_cosmetics() 가 이미 끝냈다(화면이 다시 하지 않는다).
+  const cosmeticBy = useMemo(() => {
+    const m = new Map<string, OwnedCosmetic>();
+    for (const c of myCosmetics ?? []) m.set(c.itemKey, c);
+    return m;
+  }, [myCosmetics]);
+  const equippedFrame = (myCosmetics ?? []).find((c) => c.kind === 'card_frame' && c.equipped)?.itemKey ?? null;
+  // ⚠ 닉네임 30일 쿨다운 판정은 서버 enforce_nickname_cooldown 트리거와 **같은 식**이어야 한다.
+  //   갈리면 '샀는데 못 바꾸는' 또는 '안 사도 되는데 사게 되는' 둘 중 하나가 된다.
+  //   (최종 판정은 서버 buy_nickname_reset 이 한다 — 여기는 버튼을 보여줄지 정할 뿐이다.)
+  const nickLocked = (() => {
+    if (!user || user.role === 'admin' || !user.nameChangedAt) return false;
+    return Date.now() - new Date(user.nameChangedAt).getTime() < 30 * 24 * 3600_000;
+  })();
+  const nickFreeAt = user?.nameChangedAt
+    ? new Date(new Date(user.nameChangedAt).getTime() + 30 * 24 * 3600_000).toLocaleDateString('ko-KR')
+    : '';
   const reloadBalance = useRef(() => { getMyPointBalance().then(setBalance).catch(() => {}); }).current;
   const [domestic, setDomestic] = useState<DomesticRow[] | null>(null);
   const [myVerifs, setMyVerifs] = useState<RankVerification[] | null>(null);
@@ -236,6 +292,19 @@ export default function TierLeaderboard() {
     const k = (r as { equippedMark?: string | null }).equippedMark;
     const e = markEmoji(k);
     return e ? e + ' ' : '';
+  };
+  /**
+   * 행 닉네임 색(상점 600점 · 20260830n) — 마크와 **같은 결합 지점**이다.
+   * 소장·판매 판정은 서버 get_nick_colors 가 이미 끝냈고, 여기서는 토큰명을 CSS 변수로 잇기만 한다.
+   * 색이 없는 행은 undefined 를 돌려 종전 클래스 색(등급색·ink-primary)을 그대로 둔다.
+   */
+  const nickStyle = (r: unknown): CSSProperties | undefined => {
+    // 보드마다 회원 id 를 담는 키가 다르다(활동 순위 = id · 주간 리그 = userId ·
+    // 매장 통합 집계 = 닉네임만). 둘 다 없으면 색을 칠하지 않는다 — 종전 그대로다.
+    const row = r as { id?: string | null; userId?: string | null };
+    const id = row?.id ?? row?.userId ?? null;
+    const v = id ? nickColorVar(rowNickTokens[id]) : null;
+    return v ? { color: tierCss(v) } : undefined;
   };
   const submitVerify = async () => {
     if (!user || vBusy) return;
@@ -285,6 +354,79 @@ export default function TierLeaderboard() {
     } catch { /* 실패 시 기존 유지 */ }
     finally { setEquipBusy(null); }
   };
+
+  // ── 소유물형 구매·장착 (2026-08-30 · 20260830n) ───────────────────────────
+  // 마크와 **같은 규약**: 차감·소장·장착이 서버 한 트랜잭션이라 화면은 결과만 반영한다.
+  const handleBuyCosmetic = async (c: Cosmetic) => {
+    const sku = c.kind === 'card_frame' ? frameSku : nickSku;
+    if (buying !== null || !sku) return;
+    setBuying(c.key);
+    try {
+      const key = await buyCosmetic(c.kind, c.key);
+      // 산 즉시 장착이므로 같은 kind 의 다른 항목은 장착이 풀린다 — 서버 상태와 같게 맞춘다.
+      setMyCosmetics((prev) => [
+        ...(prev ?? []).filter((o) => o.itemKey !== key)
+          .map((o) => (o.kind === c.kind ? { ...o, equipped: false } : o)),
+        { kind: c.kind, itemKey: key, equipped: true },
+      ]);
+      reloadBalance();
+      toast.show(`${c.label} 소장! ${sku.price.toLocaleString()}점 사용 — 바로 적용됐어요`, 'success');
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : '구매에 실패했습니다', 'error');
+    } finally { setBuying(null); }
+  };
+
+  const handleEquipCosmetic = async (c: Cosmetic, on: boolean) => {
+    if (equipBusy !== null) return;
+    setEquipBusy(on ? '' : c.key);
+    try {
+      const key = await setEquippedCosmetic(c.kind, on ? null : c.key);
+      setMyCosmetics((prev) => (prev ?? []).map((o) =>
+        o.kind === c.kind ? { ...o, equipped: key !== null && o.itemKey === key } : o));
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : '적용에 실패했습니다', 'error');
+    } finally { setEquipBusy(null); }
+  };
+
+  const handleBuySeasonBadge = async (b: BuyableSeasonBadge) => {
+    if (buying !== null || !seasonSku) return;
+    setBuying(b.seasonId);
+    try {
+      const r = await buySeasonBadge(b.venueId);
+      setSeasonBuyable((prev) => (prev ?? []).filter((x) => x.seasonId !== r.seasonId));
+      getMySeasonBadges().then(setSeasonOwned).catch(() => {});
+      reloadBalance();
+      toast.show(`${r.venueName} ${r.seasonName} 뱃지를 받았어요 — ${seasonSku.price.toLocaleString()}점 사용`, 'success');
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : '구매에 실패했습니다', 'error');
+    } finally { setBuying(null); }
+  };
+
+  // 파는 것은 기능이 아니라 **기다림 면제**다. 닉네임 변경 자체는 계속 무료이고,
+  // 쿨다운이 안 걸려 있으면 서버가 '이 권한은 필요하지 않습니다'로 거절한다.
+  const handleBuyNickReset = async () => {
+    if (nickResetBusy || !nickChangeSku) return;
+    setNickResetBusy(true);
+    try {
+      await buyNicknameReset();
+      reloadBalance();
+      await refreshProfile?.();
+      toast.show('이제 설정 탭에서 닉네임을 바로 바꿀 수 있어요', 'success');
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : '구매에 실패했습니다', 'error');
+    } finally { setNickResetBusy(false); }
+  };
+
+  const handleSaveCard = () => {
+    if (!user) return;
+    downloadProfileCard({
+      nickname: user.nickname ?? user.name ?? '회원',
+      tierLabel: isAdmin ? 'SS' : myIsAce ? 'AA' : tierOf(user.activityPoints ?? 0).label,
+      tierColor: tierColor(user.activityPoints ?? 0, isAdmin),
+      points: user.activityPoints ?? 0,
+      frame: equippedFrame,
+    });
+  };
   const [missions, setMissions] = useState<MissionProgress[] | null>(null);
   const [missionDefs, setMissionDefs] = useState<Mission[]>(MISSIONS);
   const [hall, setHall] = useState<HallBoard | null>(null);
@@ -314,6 +456,11 @@ export default function TierLeaderboard() {
       loadShopMarks().then(() => { setEarnList(earnMarks()); setShopList(ownableMarks()); }).catch(() => {});
       getShopSkus().then(setSkus).catch(() => {});
       getMyOwnedMarks().then(setOwned).catch(() => setOwned([]));
+      // 소유물형(20260830n) — 카탈로그·소장 목록·시즌 뱃지. 실패해도 폴백으로 그려 화면이 비지 않는다.
+      loadCosmetics().then(() => setCosmetics([...frameCosmetics(), ...nickColorCosmetics()])).catch(() => {});
+      getMyCosmetics().then(setMyCosmetics).catch(() => setMyCosmetics([]));
+      getBuyableSeasonBadges().then(setSeasonBuyable).catch(() => setSeasonBuyable([]));
+      getMySeasonBadges().then(setSeasonOwned).catch(() => setSeasonOwned([]));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [board, user?.id]);
@@ -344,7 +491,14 @@ export default function TierLeaderboard() {
   useEffect(() => {
     let active = true;
     getActivityLeaderboard(30)
-      .then((r) => { if (active) { setRows(r); if (r.length) rememberRowCount(r.length >= 3 ? r.length - 3 : r.length); } })
+      .then((r) => {
+        if (!active) return;
+        setRows(r);
+        if (r.length) rememberRowCount(r.length >= 3 ? r.length - 3 : r.length);
+        // 닉네임 색은 순위표가 도착한 뒤 한 번만 — 행 렌더 중에 부르면 30회 왕복이 된다.
+        const ids = r.map((x) => x.id).filter(Boolean);
+        if (ids.length) getNickColors(ids).then((m) => { if (active) setRowNickTokens(m); }).catch(() => {});
+      })
       .catch(() => {})
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
@@ -378,6 +532,21 @@ export default function TierLeaderboard() {
   }, [rows, user]);
   // A(에이스) = K(14,000점) 달성 + 전체 상위 10위 이내(상대평가)
   const myIsAce = !isAdmin && isAceRank(user?.activityPoints ?? 0, myRank);
+
+  // 프로필 카드 미리보기 — 저장 버튼이 만드는 것과 **같은 그림**을 같은 함수로 굽는다.
+  // (미리보기와 결과가 다르면 그건 미리보기가 아니라 다른 그림이다.)
+  // ⚠ 이 훅은 isAdmin·myIsAce 정의 뒤에 있어야 한다 — 의존성 배열은 렌더 중에 평가되므로
+  //   위로 올리면 TDZ 로 터진다.
+  useEffect(() => {
+    if (!cardEl || !user) return;
+    drawProfileCard(cardEl, {
+      nickname: user.nickname ?? user.name ?? '회원',
+      tierLabel: isAdmin ? 'SS' : myIsAce ? 'AA' : tierOf(user.activityPoints ?? 0).label,
+      tierColor: tierColor(user.activityPoints ?? 0, isAdmin),
+      points: user.activityPoints ?? 0,
+      frame: equippedFrame,
+    });
+  }, [cardEl, user, isAdmin, myIsAce, equippedFrame]);
 
   // 주간 미션 블록 — '활동 순위' 보드 하단에 함께 표시(미션 보드 병합)
   const missionsBlock = (
@@ -591,7 +760,7 @@ export default function TierLeaderboard() {
                               {r.nickname.slice(0, 1)}
                             </div>
                             <div className="min-w-0 flex-1">
-                              <p className="text-xs font-bold text-accent-300">{myRank}위 · {markPrefix(r)}{r.nickname} <span className="text-ink-muted font-semibold">(나)</span></p>
+                              <p className="text-xs font-bold text-accent-300">{myRank}위 · <span style={nickStyle(r)}>{markPrefix(r)}{r.nickname}</span> <span className="text-ink-muted font-semibold">(나)</span></p>
                               <p className="text-2xl font-extrabold leading-tight tabular-nums text-ink-primary">
                                 {r.score}<span className="ml-0.5 text-xs font-bold text-ink-muted">점</span>
                               </p>
@@ -610,7 +779,7 @@ export default function TierLeaderboard() {
                       <li key={r.userId} className="flex items-center gap-2.5 border-b border-border-subtle px-3 py-2 last:border-b-0">
                         <RankNum n={i + 1} />
                         <div className="min-w-0 flex-1">
-                          <span className="text-sm font-semibold text-ink-primary truncate">{markPrefix(r)}{r.nickname}</span>
+                          <span className="text-sm font-semibold text-ink-primary truncate" style={nickStyle(r)}>{markPrefix(r)}{r.nickname}</span>
                           <span className="block text-2xs text-ink-muted">체크인 {r.checkins}회 · 입상 {r.placements}회</span>
                         </div>
                         {t && <span className="inline-flex shrink-0 items-center gap-1 rounded-badge bg-surface-float px-1.5 py-0.5 text-2xs font-bold text-ink-secondary"><Icon name={t.icon} size={11} className={['shrink-0', t.tone].join(' ')} />{t.label}</span>}
@@ -858,6 +1027,218 @@ export default function TierLeaderboard() {
                 </p>
               </div>
 
+              {/* ── 소유물형 ① 프로필 카드 프레임 (2026-08-30 · 20260830n) ────────
+                  프로필 카드는 유저가 앱 **밖으로 내보내는** 산출물인데 디자인이 하나뿐이었다.
+                  ⚠ 캔버스는 CSS 변수를 못 읽어 프레임 색은 hex 상수이고 카드는 **다크 고정**이다
+                    (라이트 테마에서 저장해도 카드는 어둡게 나간다 — 공유 이미지는 보는 사람의 테마와
+                     무관하게 같아야 하므로 그게 정답이다). 근거는 src/lib/profileCard.ts 헤더. */}
+              {frameSku && (
+                <div className="rounded-card border border-border-subtle bg-surface-high p-3">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className="text-xs font-bold text-ink-primary">
+                      {frameSku.label} <span className="font-normal text-ink-muted">— 공유 카드 테두리 · 영구 소장</span>
+                    </p>
+                    <p className="shrink-0 rounded-badge bg-accent-300/15 px-2 py-0.5 text-2xs font-extrabold tabular-nums text-accent-300">
+                      {frameSku.price.toLocaleString()}점
+                    </p>
+                  </div>
+
+                  {/* 미리보기 — 실제로 저장될 그림 그대로. 고른 프레임이 어떻게 굽히는지가 곧 가격의 근거다.
+                      캔버스 픽셀은 640x880 고정이고 CSS 로만 줄여 그린다(공간이 미리 잡혀 있어 CLS 0). */}
+                  <div className="mt-2 flex items-start gap-3">
+                    <canvas ref={setCardEl} width={640} height={880} aria-label="프로필 공유 카드 미리보기"
+                            className="h-[13.75rem] w-40 shrink-0 rounded-card border border-border-subtle" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-2xs leading-relaxed text-ink-muted">
+                        인스타·카톡에 올릴 수 있는 이미지로 저장합니다. 프레임을 사면 바로 적용되고,
+                        소장한 프레임은 언제든 바꿔 달 수 있어요.
+                      </p>
+                      <button type="button" onClick={handleSaveCard}
+                        className="btn-primary mt-2 w-full py-2 text-xs">
+                        <span className="inline-flex items-center gap-1"><Icon name="download" size={13} className="shrink-0" />카드 이미지 저장</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+                    {frameList.map((c) => {
+                      const own = cosmeticBy.get(c.key);
+                      const on = own?.equipped === true;
+                      const poor = !own && balance !== null && balance.available < frameSku.price;
+                      return (
+                        <div key={c.key}
+                          className={['card-sink rounded-card border p-2.5 text-center transition-colors',
+                            on ? 'border-accent-300 bg-accent-300/[0.1]'
+                               : own ? 'border-border-default bg-surface-high'
+                                     : 'border-border-subtle bg-surface-high'].join(' ')}>
+                          <p className="text-xs font-bold text-ink-primary">{c.label}</p>
+                          <p className="mt-0.5 text-2xs leading-tight text-ink-muted">{c.desc}</p>
+                          {own ? (
+                            <button type="button" disabled={equipBusy !== null}
+                              onClick={() => handleEquipCosmetic(c, on)}
+                              className={['mt-1.5 w-full rounded-input px-2 py-1.5 text-2xs font-bold transition-colors',
+                                on ? 'bg-accent-300 text-white' : 'border border-accent-400/40 text-accent-300 hover:bg-accent-300/10'].join(' ')}>
+                              {equipPending(c.key, on) ? '적용 중…' : on ? '✓ 적용 중 — 해제' : '소장 중 — 적용'}
+                            </button>
+                          ) : (
+                            <button type="button" disabled={buying !== null || poor}
+                              onClick={() => handleBuyCosmetic(c)}
+                              className="mt-1.5 inline-flex w-full items-center justify-center gap-1 rounded-input border border-accent-400/40 px-2 py-1.5 text-2xs font-bold tabular-nums text-accent-300 transition-colors hover:bg-accent-300/10 disabled:opacity-50">
+                              {buying === c.key ? '구매 중…'
+                                : poor ? `${frameSku.price.toLocaleString()}점 부족` : `${frameSku.price.toLocaleString()}점 소장`}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* ── 소유물형 ② 닉네임 색 ───────────────────────────────────────
+                  마크와 **결합 지점이 완전히 같다**(닉네임 앞 글리프 ↔ 닉네임 글자색) —
+                  유통 경로가 이미 검증돼 있다. 마크는 이모지라 기기마다 다른 그림이 뜨지만
+                  **색은 앱이 100% 통제**한다.
+                  ⚠ 새 팔레트를 만들지 않는다: 라이트/다크 양쪽 4.5:1 을 이미 통과한 --tier-* 6종을
+                    그대로 쓰고, '닉네임 색' 지점이 e2e/design-tokens.spec.ts 대비 계약에 들어가 있다. */}
+              {nickSku && (
+                <div className="rounded-card border border-border-subtle bg-surface-high p-3">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className="text-xs font-bold text-ink-primary">
+                      {nickSku.label} <span className="font-normal text-ink-muted">— 글·댓글의 내 이름에 · 영구 소장</span>
+                    </p>
+                    <p className="shrink-0 rounded-badge bg-accent-300/15 px-2 py-0.5 text-2xs font-extrabold tabular-nums text-accent-300">
+                      {nickSku.price.toLocaleString()}점
+                    </p>
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+                    {nickList.map((c) => {
+                      const own = cosmeticBy.get(c.key);
+                      const on = own?.equipped === true;
+                      const poor = !own && balance !== null && balance.available < nickSku.price;
+                      const v = nickColorVar(c.token);
+                      return (
+                        <div key={c.key}
+                          className={['card-sink rounded-card border p-2.5 text-center transition-colors',
+                            on ? 'border-accent-300 bg-accent-300/[0.1]'
+                               : own ? 'border-border-default bg-surface-high'
+                                     : 'border-border-subtle bg-surface-high'].join(' ')}>
+                          {/* 미리보기는 '내 닉네임을 그 색으로' 보여준다 — 색 동그라미보다 정확하다 */}
+                          <p className="truncate text-sm font-extrabold"
+                             style={v ? { color: tierCss(v) } : undefined}>
+                            {markEmoji(equippedMark)}{markEmoji(equippedMark) ? ' ' : ''}{user.nickname ?? user.name ?? '닉네임'}
+                          </p>
+                          <p className="mt-0.5 text-2xs font-bold text-ink-primary">{c.label}</p>
+                          {own ? (
+                            <button type="button" disabled={equipBusy !== null}
+                              onClick={() => handleEquipCosmetic(c, on)}
+                              className={['mt-1.5 w-full rounded-input px-2 py-1.5 text-2xs font-bold transition-colors',
+                                on ? 'bg-accent-300 text-white' : 'border border-accent-400/40 text-accent-300 hover:bg-accent-300/10'].join(' ')}>
+                              {equipPending(c.key, on) ? '적용 중…' : on ? '✓ 적용 중 — 해제' : '소장 중 — 적용'}
+                            </button>
+                          ) : (
+                            <button type="button" disabled={buying !== null || poor}
+                              onClick={() => handleBuyCosmetic(c)}
+                              className="mt-1.5 inline-flex w-full items-center justify-center gap-1 rounded-input border border-accent-400/40 px-2 py-1.5 text-2xs font-bold tabular-nums text-accent-300 transition-colors hover:bg-accent-300/10 disabled:opacity-50">
+                              {buying === c.key ? '구매 중…'
+                                : poor ? `${nickSku.price.toLocaleString()}점 부족` : `${nickSku.price.toLocaleString()}점 소장`}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* ── 소유물형 ③ 단골 시즌 뱃지 ──────────────────────────────────
+                  시즌 단위라 만료가 '잃는 일'이 아니라 **'이번 시즌 것'**으로 읽힌다 —
+                  기간권(1일/7일/30일)이 밟은 지뢰를 피하는 지점이다. 지난 시즌 뱃지도 그대로 남는다.
+                  단골(팔로우)한 매장만 살 수 있다: 아무 매장이나 살 수 있으면 표시의 의미가 증발한다. */}
+              {seasonSku && (
+                <div className="rounded-card border border-border-subtle bg-surface-high p-3">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className="text-xs font-bold text-ink-primary">
+                      {seasonSku.label} <span className="font-normal text-ink-muted">— 단골 매장의 이번 시즌</span>
+                    </p>
+                    <p className="shrink-0 rounded-badge bg-accent-300/15 px-2 py-0.5 text-2xs font-extrabold tabular-nums text-accent-300">
+                      {seasonSku.price.toLocaleString()}점
+                    </p>
+                  </div>
+                  {(seasonOwned?.length ?? 0) > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {(seasonOwned ?? []).map((b) => (
+                        <span key={b.seasonId}
+                          className={['inline-flex items-center gap-1 rounded-badge border px-2 py-1 text-2xs font-bold',
+                            b.ongoing ? 'border-accent-400/50 bg-accent-300/[0.10] text-accent-300'
+                                      : 'border-border-subtle bg-surface-float text-ink-secondary'].join(' ')}>
+                          <Icon name="medal" size={11} className="shrink-0" />
+                          {b.venueName} · {b.seasonName}
+                          {!b.ongoing && <span className="font-normal text-ink-muted">(지난 시즌)</span>}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {seasonBuyable === null ? (
+                    <div className="skeleton mt-2 h-9 rounded-input" aria-hidden />
+                  ) : seasonBuyable.length === 0 ? (
+                    <p className="mt-2 text-2xs leading-relaxed text-ink-muted">
+                      지금 살 수 있는 시즌 뱃지가 없어요 — 매장을 <b className="text-ink-secondary">단골(팔로우)</b>로 담고,
+                      그 매장이 시즌을 진행 중일 때 이 자리에 나타납니다.
+                    </p>
+                  ) : (
+                    <ul className="mt-2 space-y-1.5">
+                      {seasonBuyable.map((b) => {
+                        const poor = balance !== null && balance.available < seasonSku.price;
+                        return (
+                          <li key={b.seasonId} className="flex items-center gap-2.5 rounded-input border border-border-subtle bg-surface-float px-3 py-2">
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-xs font-bold text-ink-primary">{b.venueName}</span>
+                              <span className="block text-2xs text-ink-muted">{b.seasonName} · {b.endsOn} 종료</span>
+                            </span>
+                            <button type="button" disabled={buying !== null || poor}
+                              onClick={() => handleBuySeasonBadge(b)}
+                              className="shrink-0 rounded-input border border-accent-400/40 px-2.5 py-1.5 text-2xs font-bold tabular-nums text-accent-300 transition-colors hover:bg-accent-300/10 disabled:opacity-50">
+                              {buying === b.seasonId ? '구매 중…'
+                                : poor ? `${seasonSku.price.toLocaleString()}점 부족` : `${seasonSku.price.toLocaleString()}점 받기`}
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              )}
+
+              {/* ── 편의 ④ 닉네임 즉시 변경권 ─────────────────────────────────
+                  파는 것은 기능이 아니라 **기다림 면제**다. 닉네임 변경 자체는 계속 무료이고,
+                  쿨다운이 안 걸려 있으면 아예 팔지 않는다(아무것도 주지 않고 점수만 받는 일이 없게).
+                  그래서 잠겨 있지 않을 때는 '지금 바로 바꿀 수 있다'고만 알린다. */}
+              {nickChangeSku && (
+                <div className="flex items-center gap-2.5 rounded-card border border-border-subtle bg-surface-high px-3 py-2.5">
+                  <Icon name="edit" size={18} className="shrink-0 text-accent-300" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-xs font-bold text-ink-primary">{nickChangeSku.label}</span>
+                    <span className="block text-2xs leading-tight text-ink-muted">
+                      {nickLocked
+                        ? <>지금은 <b className="text-ink-secondary">{nickFreeAt}</b>부터 바꿀 수 있어요 — 기다리지 않고 바로 바꿉니다</>
+                        : '지금은 기다리지 않고 바로 바꿀 수 있어요 · 변경은 원래 무료입니다'}
+                    </span>
+                  </span>
+                  {nickLocked ? (
+                    <button type="button" disabled={nickResetBusy || (balance !== null && balance.available < nickChangeSku.price)}
+                      onClick={handleBuyNickReset}
+                      className="shrink-0 rounded-input border border-accent-400/40 px-2.5 py-1.5 text-2xs font-bold tabular-nums text-accent-300 transition-colors hover:bg-accent-300/10 disabled:opacity-50">
+                      {nickResetBusy ? '적용 중…'
+                        : balance !== null && balance.available < nickChangeSku.price
+                          ? `${nickChangeSku.price.toLocaleString()}점 부족` : `${nickChangeSku.price.toLocaleString()}점`}
+                    </button>
+                  ) : (
+                    <span className="shrink-0 rounded-badge bg-surface-float px-2 py-1 text-2xs font-bold text-ink-muted">필요 없음</span>
+                  )}
+                </div>
+              )}
+
               {/* ── 소비형 ② 외치기 (오너 #8 · 2026-08-30 20초 슬롯 1회로 전환) ───── */}
               <button type="button" onClick={() => setShoutOpen(true)}
                 className="flex w-full items-center gap-2.5 rounded-card border border-accent-400/50 bg-gradient-to-r from-accent-300/[0.1] to-transparent px-3 py-2.5 text-left transition-colors hover:border-accent-300">
@@ -871,6 +1252,47 @@ export default function TierLeaderboard() {
                 </span>
                 <span className="shrink-0 rounded-badge bg-accent-300/15 px-2 py-1 text-2xs font-extrabold text-accent-300">{shoutCost.toLocaleString()}점~</span>
               </button>
+
+              {/* ── 소비형 ③④ 응원 · 끌올 (2026-08-30 · 20260830m) ─────────────
+                  여기서 **사지 않는다.** 둘 다 '어느 글/댓글에' 를 골라야 성립하는 상품이라
+                  구매 버튼을 상점에 두면 대상 없는 결제가 된다. 상점은 가격 사다리를 보여 주는
+                  자리이고(30 → 100 → 50/150 → 800), 실제 구매는 커뮤니티 글에서 일어난다.
+                  가격은 서버 shop_skus 가 출처라 화면에 숫자를 박지 않는다. */}
+              {(cheerSku || bumpSku) && (
+                <div className="grid gap-1.5 sm:grid-cols-2">
+                  {cheerSku && (
+                    <div className="flex items-center gap-2.5 rounded-card border border-border-subtle bg-surface-high px-3 py-2.5">
+                      <Icon name="chip-stack" size={18} className="shrink-0 text-accent-300" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-xs font-bold text-ink-primary">{cheerSku.label}</span>
+                        <span className="block text-2xs leading-tight text-ink-muted">
+                          커뮤니티 글·댓글에서 보냅니다 · 하루 {CHEER_DAILY_CAP}번까지
+                        </span>
+                      </span>
+                      <span className="shrink-0 rounded-badge bg-accent-300/15 px-2 py-1 text-2xs font-extrabold tabular-nums text-accent-300">
+                        {cheerSku.price.toLocaleString()}점
+                      </span>
+                    </div>
+                  )}
+                  {bumpSku && (
+                    <div className="flex items-center gap-2.5 rounded-card border border-border-subtle bg-surface-high px-3 py-2.5">
+                      <Icon name="zap" size={18} className="shrink-0 text-accent-300" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-xs font-bold text-ink-primary">{bumpSku.label}</span>
+                        <span className="block text-2xs leading-tight text-ink-muted">
+                          내 글에서 누르면 {bumpSku.durationHours}시간 상단 · 동시 {BUMP_SLOTS}자리
+                        </span>
+                      </span>
+                      <span className="shrink-0 rounded-badge bg-accent-300/15 px-2 py-1 text-2xs font-extrabold tabular-nums text-accent-300">
+                        {bumpSku.price.toLocaleString()}점
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+              <p className="text-2xs leading-relaxed text-ink-muted">
+                응원은 <b className="text-ink-secondary">받는 사람에게 점수가 가지 않습니다</b> — 표시와 알림만 남고 점수는 소멸해요.
+              </p>
 
               {/* ── 버는 이유 — 여기 있는 16종은 **살 수 없다.** 점수로만 열린다.
                   위(쓰는 이유)와 시각적으로 갈라 두지 않으면 '해금한 마크를 또 사야 하나'로 읽힌다. */}
@@ -961,7 +1383,7 @@ export default function TierLeaderboard() {
                 <li key={r.nickname} className="flex items-center gap-2.5 px-3 py-2 border-b border-border-subtle last:border-b-0">
                   <RankNum n={i + 1} />
                   <div className="flex-1 min-w-0">
-                    <span className="text-sm font-semibold text-ink-primary truncate">{markPrefix(r)}{r.nickname}</span>
+                    <span className="text-sm font-semibold text-ink-primary truncate" style={nickStyle(r)}>{markPrefix(r)}{r.nickname}</span>
                     <span className="block text-2xs text-ink-muted">매장 {r.venues}곳 · 최고 {r.bestPosition}등</span>
                   </div>
                   <span className="text-right">
@@ -1015,7 +1437,7 @@ export default function TierLeaderboard() {
                         {r.nickname[0]}
                       </span>
                     </span>
-                    <p className={['mt-1 truncate font-bold', big ? 'text-sm text-accent-300' : 'text-xs text-ink-primary'].join(' ')}>{markPrefix(r)}{r.nickname}</p>
+                    <p className={['mt-1 truncate font-bold', big ? 'text-sm text-accent-300' : 'text-xs text-ink-primary'].join(' ')} style={nickStyle(r)}>{markPrefix(r)}{r.nickname}</p>
                     <p className="text-2xs tabular-nums text-ink-muted">{r.activityPoints.toLocaleString()}점</p>
                   </div>
                 );
@@ -1062,7 +1484,7 @@ export default function TierLeaderboard() {
                   </span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-sm font-semibold text-ink-primary truncate">{markPrefix(r)}{r.nickname}</span>
+                      <span className="text-sm font-semibold text-ink-primary truncate" style={nickStyle(r)}>{markPrefix(r)}{r.nickname}</span>
                       {isMe && <span className="text-2xs font-bold text-accent-300">나</span>}
                     </div>
                   </div>

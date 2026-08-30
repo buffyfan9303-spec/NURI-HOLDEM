@@ -4,8 +4,10 @@ import { withViewTransition } from '../../lib/viewTransition';
 import { promptLogin } from '../../lib/requireLogin';
 import { useSkeletonGate } from '../../lib/useSkeletonGate';
 import { getActiveCommunityAds, type CommunityAd } from '../../api/ads';
-import { getEquippedMarks } from '../../api/community';
+import { getEquippedMarks, getNickColors, isBumped } from '../../api/community';
 import TitleChip from '../atoms/TitleChip';
+import { tierCss } from '../atoms/TierBadge';
+import { nickColorVar } from '../../lib/cosmetics';
 import { useTitlePoints } from '../../lib/useTitles';
 import { getVenueRatings, type VenueRating } from '../../api/reviews';
 import type { Venue, Comment, CommunityPost, LiveMessage, PostCategory, GroupKind, JoinedGroup } from '../../api/community';
@@ -482,10 +484,14 @@ function FeedSection({
   const [ads, setAds] = useState<CommunityAd[]>([]);
   // 작성자 장착 마크(상점) — posts의 userId 일괄 조회(닉네임 옆 이모지)
   const [authorMarks, setAuthorMarks] = useState<Record<string, string>>({});
+  // 작성자 닉네임 색(상점 600점 · 20260830n) — 마크와 **같은 결합 지점**이라 같은 자리에서 함께 받는다.
+  // 값은 색이 아니라 등급 토큰명('blue' 등)이다 → 실제 색은 --tier-<token> 이라 테마를 따라간다.
+  const [authorColors, setAuthorColors] = useState<Record<string, string>>({});
   useEffect(() => {
     const ids = [...new Set(posts.map((p) => p.userId).filter(Boolean))];
-    if (ids.length === 0) { setAuthorMarks({}); return; }
+    if (ids.length === 0) { setAuthorMarks({}); setAuthorColors({}); return; }
     getEquippedMarks(ids).then(setAuthorMarks).catch(() => {});
+    getNickColors(ids).then(setAuthorColors).catch(() => {});
   }, [posts]);
   // 작성자 칭호(활동점수) — posts의 userId 일괄 조회(닉네임 옆 칭호)
   const titleOf = useTitlePoints(posts.map((p) => p.userId));
@@ -512,9 +518,19 @@ function FeedSection({
       return true;
     });
     // 인기 정렬(Phase 14, pokergosu 추천 축) — 별도 게시판 대신 정렬 칩. 동률은 최신순.
-    return order === 'popular'
-      ? [...base].sort((a, b) => (b.likeCount - a.likeCount) || (new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()))
-      : base;
+    if (order === 'popular') {
+      return [...base].sort((a, b) => (b.likeCount - a.likeCount) || (new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+    }
+    // 끌올(100점) — 최신순에서만 상단으로 올린다. '인기'는 읽는 사람이 고른 축이라
+    // 거기까지 돈으로 뒤집으면 정렬 칩이 거짓말이 된다(끌올이 산 것은 '목록 맨 위'다).
+    // Array.prototype.sort 는 안정 정렬이라 끌올끼리·나머지끼리의 기존 순서(최신순)는 보존된다.
+    const bumped = base.filter((p) => isBumped(p));
+    if (bumped.length === 0) return base;
+    const bumpedIds = new Set(bumped.map((p) => p.id));
+    return [
+      ...bumped.sort((a, b) => new Date(b.bumpedUntil ?? 0).getTime() - new Date(a.bumpedUntil ?? 0).getTime()),
+      ...base.filter((p) => !bumpedIds.has(p.id)),
+    ];
   }, [posts, q, cat, enableCategory, order]);
 
   const pinHot = enableCategory && cat === 'all' && !q.trim() && order === 'new' && hotPosts.length > 0;
@@ -695,7 +711,7 @@ function FeedSection({
         ) : (
           <ul className="space-y-2">
             {hotPosts.map((p) => (
-              <PostCard key={p.id} post={p} hot selected={p.id === selectedId} mark={authorMarks[p.userId] ?? ''} titlePts={titleOf(p.userId)} onLike={() => onLike(p.id)} onClick={() => onSelectPost(p)} />
+              <PostCard key={p.id} post={p} hot selected={p.id === selectedId} mark={authorMarks[p.userId] ?? ''} nickToken={authorColors[p.userId]} titlePts={titleOf(p.userId)} onLike={() => onLike(p.id)} onClick={() => onSelectPost(p)} />
             ))}
           </ul>
         )
@@ -745,7 +761,7 @@ function FeedSection({
               const showAd = i % 4 === 3 && !!ad;
               return (
                 <Fragment key={p.id}>
-                  <PostCard post={p} mark={authorMarks[p.userId] ?? ''} titlePts={titleOf(p.userId)} selected={p.id === selectedId} onLike={() => onLike(p.id)} onClick={() => onSelectPost(p)} />
+                  <PostCard post={p} mark={authorMarks[p.userId] ?? ''} nickToken={authorColors[p.userId]} titlePts={titleOf(p.userId)} selected={p.id === selectedId} onLike={() => onLike(p.id)} onClick={() => onSelectPost(p)} />
                   {showAd && <AdRow ad={ad} card />}
                 </Fragment>
               );
@@ -832,6 +848,12 @@ const PostRow = memo(function PostRow({ post, onClick, hot = false, selected = f
         selected ? 'bg-accent-300/10' : 'hover:bg-surface-high/60 active:bg-surface-high',
       ].join(' ')}
     >
+      {/* 끌올(100점)은 카테고리 자리를 뺏지 않는다 — 앞에 한 칸을 더 쓴다.
+          돈을 낸 표시를 지우면 '올라가긴 했는데 왜 위에 있는지'가 안 보이고, 카테고리를 지우면
+          있던 정보가 사라진다(둘 다 남긴다). */}
+      {isBumped(post) && (
+        <span className="shrink-0 rounded-badge bg-accent-300/15 px-1 text-2xs font-extrabold leading-none tracking-wide text-accent-200">끌올</span>
+      )}
       {hot
         ? <span className="shrink-0 rounded-badge bg-danger/15 px-1 text-2xs font-extrabold leading-none tracking-wide text-danger-light">HOT</span>
         : <span className={['shrink-0 rounded-badge px-1 py-0.5 text-2xs font-semibold leading-none', categoryPillClass(post.category)].join(' ')}>{catLabel}</span>}
@@ -852,6 +874,11 @@ const PostRow = memo(function PostRow({ post, onClick, hot = false, selected = f
           </span>
         )}
         {post.commentCount > 0 && <span className="ml-1 align-middle text-xs font-bold tabular-nums text-accent-300">[{post.commentCount}]</span>}
+        {(post.cheerCount ?? 0) > 0 && (
+          <span className="ml-1 align-middle text-2xs font-bold tabular-nums text-accent-200" aria-label={`응원 ${post.cheerCount}`}>
+            <Icon name="chip-stack" size={11} className="inline align-[-1px]" />{post.cheerCount}
+          </span>
+        )}
       </span>
       {/* max-w+truncate: 작성자가 shrink-0 무제한이면 좁은 2-pane 목록·긴 닉네임에서
           flex-1 제목이 0px까지 뭉개진다 — 닉네임이 대신 말줄임(제목 우선, 에펨식 위계) */}
@@ -867,7 +894,7 @@ const PostRow = memo(function PostRow({ post, onClick, hot = false, selected = f
   );
 }, samePostProps);
 
-const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, selected = false, mark = '', titlePts }: { post: CommunityPost; onLike: () => void; onClick: () => void; hot?: boolean; selected?: boolean; mark?: string; titlePts?: number }) {
+const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, selected = false, mark = '', nickToken, titlePts }: { post: CommunityPost; onLike: () => void; onClick: () => void; hot?: boolean; selected?: boolean; mark?: string; /** 작성자가 장착한 닉네임 색의 등급 토큰명(--tier-<token>) */ nickToken?: string | null; titlePts?: number }) {
   // Nightingale 카드 문법(§20.1) — 헤더(이름/시간 2줄 스택)·제목·본문 2줄 클램프·미디어·반응 푸터 순서 고정.
   // 미디어는 첫 장만 44px 썸네일(88px=레티나 2x 요청)로, 2장 이상은 장수 배지 — 목록에서 원본을 내려받지 않는다.
   const imgs = post.images ?? [];
@@ -909,10 +936,19 @@ const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, se
           <div className="flex items-start gap-1.5">
             <div className="min-w-0 flex-1">
               <p className="flex items-center gap-1 text-2xs leading-4">
+                {isBumped(post) && (
+                  <span className="shrink-0 inline-flex items-center rounded-badge bg-accent-300/15 px-1 font-extrabold leading-none tracking-wide text-accent-200">끌올</span>
+                )}
                 {hot && (
                   <span className="shrink-0 inline-flex items-center font-extrabold text-danger-light bg-danger/15 px-1 rounded-badge leading-none tracking-wide">HOT</span>
                 )}
-                <span className="min-w-0 truncate font-bold text-ink-primary">{mark}{post.userName}</span>
+                {/* 닉네임 색(상점 600점) — 텍스트용 --tier-* 를 쓴다. 장식용 -vivid 가 아니다:
+                    닉네임은 '읽는 글자'라 라이트·다크 양쪽에서 4.5:1 을 지켜야 하고, 그 계약이
+                    e2e/design-tokens.spec.ts '닉네임 색' 항목으로 잠겨 있다. */}
+                <span className="min-w-0 truncate font-bold text-ink-primary"
+                      style={nickColorVar(nickToken) ? { color: tierCss(nickColorVar(nickToken)!) } : undefined}>
+                  {mark}{post.userName}
+                </span>
               </p>
               <p className="flex items-center gap-1 text-2xs leading-4 text-ink-muted">
                 <span className="shrink-0 tabular-nums">{relativeTime(post.createdAt)}</span>
@@ -1004,6 +1040,13 @@ const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, se
               <Icon name="comment" size={13} strokeWidth={1.6} className="shrink-0" />
               <span className="tabular-nums">{post.commentCount}</span>
             </span>
+            {/* 응원(30점) — 0이면 그리지 않는다. 유료 신호라 '받은 글'에서만 눈에 띄어야 의미가 산다. */}
+            {(post.cheerCount ?? 0) > 0 && (
+              <span className="inline-flex items-center gap-1 text-accent-200" aria-label={`응원 ${post.cheerCount}`}>
+                <Icon name="chip-stack" size={13} strokeWidth={1.6} className="shrink-0" />
+                <span className="tabular-nums font-bold">{post.cheerCount}</span>
+              </span>
+            )}
             {((post.goodrunCount ?? 0) > 0 || (post.badbeatCount ?? 0) > 0) && (
               <span className="inline-flex items-center gap-2.5">
                 <span aria-hidden className="h-3 w-px bg-border-default" />

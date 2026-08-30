@@ -1,11 +1,13 @@
 import { useRef, useState, useEffect } from 'react';
-import { getEquippedMarks } from '../../api/community';
+import { getEquippedMarks, getNickColors } from '../../api/community';
+import { tierCss } from '../atoms/TierBadge';
+import { nickColorVar } from '../../lib/cosmetics';
 import Modal from '../atoms/Modal';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBlocks } from '../../contexts/BlockContext';
 import { useToast } from '../atoms/Toast';
 import type { CommunityPost, ReactionType, Comment } from '../../api/community';
-import { reactToPost, removeReaction, getMyReaction, incrementPostView, adminSetPostBlinded, getComments, addComment, deleteComment } from '../../api/community';
+import { reactToPost, removeReaction, getMyReaction, incrementPostView, adminSetPostBlinded, getComments, addComment, deleteComment, sendCheer, bumpPost, getCheerState, getShopSkus, isBumped, BUMP_SLOTS } from '../../api/community';
 import CommentThread from './CommentThread';
 import ReportModal from './ReportModal';
 import { parseAttachments } from '../../lib/hand';
@@ -85,10 +87,16 @@ export default function PostDetailModal({
   // 더블탭 좋아요(인스타) — 본문을 빠르게 두 번 탭하면 좋아요 + 하트 팝
   const [heartKey, setHeartKey] = useState(0);
   const [authorMark, setAuthorMark] = useState('');
+  // 작성자 닉네임 색(상점 600점 · 20260830n) — 마크와 같은 자리에서 함께 받는다.
+  const [authorNickToken, setAuthorNickToken] = useState<string | null>(null);
   const titlePts = useTitlePoints([post?.userId]); // 작성자 칭호(활동점수)
   useEffect(() => {
     setAuthorMark('');
-    if (post?.userId) getEquippedMarks([post.userId]).then((m) => setAuthorMark(m[post.userId] ?? '')).catch(() => {});
+    setAuthorNickToken(null);
+    if (post?.userId) {
+      getEquippedMarks([post.userId]).then((m) => setAuthorMark(m[post.userId] ?? '')).catch(() => {});
+      getNickColors([post.userId]).then((m) => setAuthorNickToken(m[post.userId] ?? null)).catch(() => {});
+    }
   }, [post?.userId]);
   const doubleLike = () => {
     if (!user || !post) return;
@@ -101,11 +109,31 @@ export default function PostDetailModal({
   const [myReaction, setMyReaction] = useState<ReactionType | null>(null);
   const [bb, setBb] = useState(0);
   const [gr, setGr] = useState(0);
+  // ── 응원(30점) · 끌올(100점) — 2026-08-30 반복 소비형 2종
+  //   상태를 bb/gr 과 **같은 방식**으로 둔다: 글이 바뀔 때만 props 로 재시드하고,
+  //   그 뒤로는 서버가 돌려준 값만 믿는다. (App 이 posts 갱신마다 openPost 를 갈아끼우므로
+  //    props 를 매 렌더 신뢰하면 방금 보낸 응원이 한 프레임 뒤에 되돌아간 것처럼 보인다.)
+  const [cheerN, setCheerN] = useState(0);
+  const [cheered, setCheered] = useState(false);
+  const [cheerBusy, setCheerBusy] = useState(false);
+  /** 댓글별 응원 수 · 내가 응원한 댓글 — 원장(post_cheers)이 단일 출처 */
+  const [cCheers, setCCheers] = useState<Record<string, number>>({});
+  const [cMine, setCMine] = useState<Set<string>>(new Set());
+  const [bumpUntil, setBumpUntil] = useState<string | null>(null);
+  const [bumpBusy, setBumpBusy] = useState(false);
+  // 가격은 서버 shop_skus 가 유일한 출처다 — 화면에 30/100 을 박지 않는다.
+  // (박아 두면 가격표를 바꾼 날 화면은 옛 값을 말하고 서버는 새 값을 걷는다.)
+  const [cheerPrice, setCheerPrice] = useState<number | null>(null);
+  const [bumpSku, setBumpSku] = useState<{ price: number; hours: number } | null>(null);
 
   useEffect(() => {
     if (!open || !post) return;
     setBb(post.badbeatCount ?? 0);
     setGr(post.goodrunCount ?? 0);
+    setCheerN(post.cheerCount ?? 0);
+    setCheered(false);
+    setCCheers({}); setCMine(new Set());
+    setBumpUntil(post.bumpedUntil ?? null);
     setMyReaction(null);
     setZoomIdx(null); // 2-pane 은 같은 인스턴스로 글만 갈아끼우므로 이전 글의 확대 뷰가 남는다
     openedAtRef.current = performance.now();
@@ -115,11 +143,36 @@ export default function PostDetailModal({
     // 댓글 실제 조회 — 이전에는 로컬 state에만 쌓여 새로고침 시 사라졌다(저장 안 됨).
     setReplies([]);
     getComments({ postId: post.id })
-      .then((cs) => { if (active) setReplies(cs); })
+      .then((cs) => {
+        if (!active) return;
+        setReplies(cs);
+        // 댓글이 도착한 뒤에야 '어떤 댓글의 응원을 세야 하는지'를 안다 — 그래서 여기서 잇는다.
+        return getCheerState(post.id, cs.map((c) => c.id));
+      })
+      .then((st) => {
+        if (!active || !st) return;
+        setCCheers(st.counts);
+        setCMine(st.mine);
+        setCheered(st.mine.has(post.id));
+      })
       .catch(() => { /* 조회 실패 시 빈 목록 유지 */ });
     return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, post?.id]);
+
+  // 가격표(서버 단일 출처) — 응원·끌올 버튼 라벨이 여기서 나온다. 열릴 때 1회.
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    getShopSkus().then((list) => {
+      if (!active) return;
+      const c = list.find((s) => s.kind === 'cheer');
+      const b = list.find((s) => s.kind === 'bump');
+      setCheerPrice(c ? c.price : null);
+      setBumpSku(b ? { price: b.price, hours: b.durationHours } : null);
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [open]);
 
   // ── 어태치먼트(핸드 결과·투표) — DB 기반 신규 시스템(src/api/postAttachments).
   // 로딩 중엔 아무것도 그리지 않는다(스켈레톤 금지 — 유무를 모르는 상태의 공간 예약은 없는 글에서 CLS).
@@ -182,6 +235,49 @@ export default function PostDetailModal({
     } catch (e) {
       toast.show(e instanceof Error ? e.message : '처리에 실패했습니다', 'error');
     }
+  };
+
+  // ── 응원 보내기 — 차감·기록·알림이 서버 한 트랜잭션이라 화면은 결과만 반영한다.
+  //   낙관 갱신을 하지 않는 이유: 유료 동작이라 '숫자가 올랐다가 되돌아가는' 그림이
+  //   곧 '점수가 빠졌나?'라는 불안이 된다. 서버가 준 최종 수만 그린다.
+  const handleCheer = async (target: { commentId?: string }) => {
+    if (!user) { toast.show('로그인 후 이용할 수 있습니다', 'error'); promptLogin(); return; }
+    if (cheerBusy) return;
+    setCheerBusy(true);
+    try {
+      const key = target.commentId ?? post.id;
+      const r = await sendCheer(target.commentId ? { commentId: target.commentId } : { postId: post.id });
+      if (target.commentId) {
+        setCCheers((prev) => ({ ...prev, [target.commentId as string]: r.cheers }));
+        setCMine((prev) => new Set(prev).add(key));
+      } else {
+        setCheerN(r.cheers);
+        setCheered(true);
+      }
+      toast.show(`응원을 보냈어요 — 오늘 ${r.remainingToday}번 더 보낼 수 있어요`, 'success');
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : '응원에 실패했습니다', 'error');
+    } finally { setCheerBusy(false); }
+  };
+
+  // ── 끌올 — 내 글만. 자리 상한·중복은 서버가 최종 판정하고, 화면은 결과만 반영한다.
+  const handleBump = async () => {
+    if (!user || bumpBusy) return;
+    setBumpBusy(true);
+    try {
+      const r = await bumpPost(post.id);
+      setBumpUntil(r.untilAt);
+      toast.show(`끌올했어요 — ${bumpSku?.hours ?? 3}시간 동안 목록 맨 위에 올라갑니다`, 'success');
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : '끌올에 실패했습니다', 'error');
+    } finally { setBumpBusy(false); }
+  };
+
+  const bumpActive = isBumped({ bumpedUntil: bumpUntil });
+  const bumpRemain = (): string => {
+    if (!bumpUntil) return '';
+    const m = Math.max(1, Math.ceil((new Date(bumpUntil).getTime() - Date.now()) / 60000));
+    return m >= 60 ? `${Math.floor(m / 60)}시간 ${m % 60}분 남음` : `${m}분 남음`;
   };
 
   // 댓글 작성 — CommentThread(답글 parentId 지원) 계약. 저장 성공분만 반영(임시행 롤백 불필요).
@@ -273,7 +369,9 @@ export default function PostDetailModal({
                 허용한다(이름 자체는 max-w-full truncate 유지). 역할배지를 메타 줄로 내린 지금은
                 실제로 접히는 일이 거의 없지만, 긴 닉네임 방어로 남긴다. */}
             <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-              <span className="max-w-full truncate text-sm font-semibold text-ink-primary">{authorMark}{post.userName}</span>
+              {/* 닉네임 색 — 텍스트용 --tier-*(4.5:1 계약). 색이 없으면 종전 ink-primary 그대로다. */}
+              <span className="max-w-full truncate text-sm font-semibold text-ink-primary"
+                    style={nickColorVar(authorNickToken) ? { color: tierCss(nickColorVar(authorNickToken)!) } : undefined}>{authorMark}{post.userName}</span>
               <TitleChip points={titlePts(post.userId)} />
             </div>
             {/* 역할 배지는 이름 줄이 아니라 **메타 줄**(작성 시각과 같은 층)로 내린다.
@@ -465,6 +563,59 @@ export default function PostDetailModal({
           </button>
         </div>
 
+        {/* ── 응원(칩 던지기) ───────────────────────────────────────────────
+            반응 알약(좋아요·추천·비추천) 옆에 끼워 넣지 않는다. 저 셋은 공짜고 이건 **유료**다 —
+            같은 모양으로 나란히 두면 값을 치르는 동작이 무료 카운터로 오독된다(375px 실측에서
+            네 알약이 이미 한 줄을 넘겼던 것도 같은 자리의 문제였다).
+            그래서 자기 줄에 두고, 값을 **버튼 라벨에 박아** 누르기 전에 가격을 읽게 한다
+            (상점의 '800점 소장' 버튼과 같은 규약 — 값은 서버 shop_skus.cheer 가 출처다). */}
+        <div className="mt-2 flex items-center gap-2 rounded-input border border-border-default bg-surface-high px-3 py-2 dark:bg-surface-low">
+          <Icon name="chip-stack" size={16} strokeWidth={1.8} className="shrink-0 text-accent-300" />
+          <span className="min-w-0 flex-1 text-2xs leading-tight text-ink-secondary">
+            <b className="text-ink-primary">응원</b>
+            <span className="ml-1 tabular-nums text-accent-200">{cheerN}</span>
+            <span className="ml-1.5 text-ink-muted">— 점수는 상대에게 가지 않아요</span>
+          </span>
+          {user?.id === post.userId ? (
+            <span className="shrink-0 text-2xs text-ink-muted">내 글</span>
+          ) : cheered ? (
+            <span className="shrink-0 inline-flex items-center gap-1 rounded-badge border border-accent-300 bg-accent-300/15 px-2 py-1 text-2xs font-bold text-accent-200">
+              <Icon name="check" size={12} strokeWidth={2.4} className="shrink-0" />
+              응원함
+            </span>
+          ) : (
+            <button type="button" disabled={cheerBusy || cheerPrice === null}
+              onClick={() => handleCheer({})}
+              className="hit shrink-0 rounded-badge border border-accent-400/50 px-2.5 py-1 text-2xs font-bold tabular-nums text-accent-300 transition-colors hover:bg-accent-300/10 disabled:opacity-50">
+              {cheerBusy ? '보내는 중…' : cheerPrice === null ? '준비 중' : `${cheerPrice.toLocaleString()}점 응원`}
+            </button>
+          )}
+        </div>
+
+        {/* ── 끌올 — 작성자 본인에게만. 남의 글에서는 아예 그리지 않는다(살 수 없는 버튼은 소음이다). */}
+        {user?.id === post.userId && (
+          <div className="mt-1.5 flex items-center gap-2 rounded-input border border-border-default bg-surface-high px-3 py-2 dark:bg-surface-low">
+            <Icon name="zap" size={16} strokeWidth={1.8} className="shrink-0 text-accent-300" />
+            <span className="min-w-0 flex-1 text-2xs leading-tight text-ink-secondary">
+              <b className="text-ink-primary">끌올</b>
+              <span className="ml-1.5 text-ink-muted">
+                {bumpActive
+                  ? `목록 맨 위 — ${bumpRemain()}`
+                  : `${bumpSku?.hours ?? 3}시간 동안 목록 맨 위로 · 동시 ${BUMP_SLOTS}자리`}
+              </span>
+            </span>
+            {bumpActive ? (
+              <span className="shrink-0 rounded-badge border border-accent-300 bg-accent-300/15 px-2 py-1 text-2xs font-bold text-accent-200">끌올 중</span>
+            ) : (
+              <button type="button" disabled={bumpBusy || bumpSku === null}
+                onClick={handleBump}
+                className="hit shrink-0 rounded-badge border border-accent-400/50 px-2.5 py-1 text-2xs font-bold tabular-nums text-accent-300 transition-colors hover:bg-accent-300/10 disabled:opacity-50">
+                {bumpBusy ? '올리는 중…' : bumpSku === null ? '준비 중' : `${bumpSku.price.toLocaleString()}점 끌올`}
+              </button>
+            )}
+          </div>
+        )}
+
         {/* ── 댓글 — CommentThread 재사용: 답글(대댓글)·칭호칩·삭제까지 게시판에도 동일하게.
             예전 자체 flat 목록은 답글 버튼이 없어 '너라면 어떻게?' 대화가 이어지질 못했다. */}
         {/* 댓글은 '이 글' 이 아니라 그 다음 층이라 유일하게 가로줄로 끊는다.
@@ -482,6 +633,13 @@ export default function PostDetailModal({
             onDelete={handleDeleteComment}
             moderator={user?.role === 'admin'}
             emptyText="첫 댓글을 남겨보세요"
+            /* 응원은 커뮤니티 글 댓글에만 배선한다 — 요강 Q&A·매장 댓글은 이 props 를 안 받아
+               종전 화면 그대로다(서버 send_cheer 도 post_id 없는 댓글은 거절한다). */
+            cheers={cCheers}
+            myCheers={cMine}
+            onCheer={(commentId) => handleCheer({ commentId })}
+            cheerPrice={cheerPrice}
+            cheerBusy={cheerBusy}
           />
         </section>
       </article>

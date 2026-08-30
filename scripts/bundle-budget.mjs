@@ -73,6 +73,20 @@ const extStyles = [...html.matchAll(/<link\b[^>]*>/g)]
   .map((m) => m[0])
   .filter((tag) => /rel=["']?stylesheet/i.test(tag) && /href=["']https?:/i.test(tag));
 
+// ⚠ 2026-08-30: 위 검사는 **정적 <link> 태그만** 본다. 스타일시트를 JS 로 주입하면
+//   (createElement('link') + l.href = 어떤_변수) 이 정규식에 안 걸린다.
+//   하필 이 게이트가 존재하는 이유가 폰트인데(구글 폰트 CDN 으로 실측 회귀 422→637ms),
+//   폰트 지연 주입을 도입하면서 **과거 사고가 났던 바로 그 자리에서 게이트가 눈을 감았다.**
+//   회귀 주입으로 확인: HREF 를 https://fonts.googleapis.com/... 로 바꿔도 종료코드 0 이었다.
+//   → 인라인 스크립트 안의 외부 스타일시트 주입도 함께 잡는다.
+const inlineScripts = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)].map((m) => m[1]);
+const injectedExt = inlineScripts.flatMap((code) => {
+  // rel 을 stylesheet 로 세팅하는 스크립트 안에서 절대 URL 리터럴이 보이면 외부 주입으로 본다.
+  if (!/rel\s*=\s*["']stylesheet["']/i.test(code)) return [];
+  return [...code.matchAll(/["'`](https?:\/\/[^"'`]+)["'`]/g)].map((m) => `JS 주입: ${m[1]}`);
+});
+extStyles.push(...injectedExt);
+
 const actual = {
   totalJsGzipKb: kb(totalJs),
   totalCssGzipKb: kb(totalCss),

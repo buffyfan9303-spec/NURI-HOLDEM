@@ -1,3 +1,28 @@
+/* ── 랭킹 상점 마크 글리프 전용 폰트 (2026-08-30, 오너 #4 위임 판단) ───────────────
+   문제: 상점 마크(🍀🐉🏆…)는 닉네임 앞에 **문자열로 결합**돼 유통되는 유저 보유 아이템이라
+     SVG 아이콘으로 못 바꾼다(getEquippedMarks → '🍀 닉네임'). 그런데 이모지는 폰트 리소스라
+     ① 같은 글자가 iOS·Android·Windows·삼성에서 전부 다른 그림으로 뜨고
+     ② 색이 폰트에 박혀 있어 다크/라이트 토큰을 못 따라간다
+        (실측: 🃏 다크 대비 10.05 → 라이트 **1.65** — 흰 배경에 흰 카드).
+   해법: **Noto Emoji(흑백)** 를 마크 16글자만 서브셋해 self-host 하고, unicode-range 로
+     그 코드포인트에만 적용한다. 흑백이라 `currentColor` 를 따라가므로 ②가 사라지고,
+     self-host 라 모든 기기에서 같은 그림이 되어 ①도 사라진다.
+     **키·코드포인트를 하나도 안 바꾸므로 '산 것이 바뀌는' 일이 없다.**
+   비용: 15KB. unicode-range 덕에 마크가 실제로 화면에 나올 때만 받는다.
+   ⚠ CDN 링크가 아니라 self-host 인 이유: 번들 예산 게이트가 외부 스타일시트를 막는다
+     (구글 폰트 CSS 가 임계 경로를 막아 실측으로 걷어낸 전례 — index.html FONT-2 주석 참고).
+   라이선스: /fonts/nuri-marks/OFL.txt (SIL OFL 1.1, Google Noto Emoji)
+   ⚠ 마크를 추가하면 이 unicode-range 와 서브셋 파일을 **함께** 갱신해야 한다.
+     빠뜨리면 새 마크만 기기 폰트로 떨어져 나머지와 다른 그림이 된다. */
+@font-face {
+  font-family: 'NuriMarks';
+  src: url('/fonts/nuri-marks/nuri-marks.woff2') format('woff2');
+  font-display: swap;
+  unicode-range: U+26A1, U+1F0CF, U+1F30A, U+1F319, U+1F31F, U+1F340, U+1F3AF,
+                 U+1F3B5, U+1F3C6, U+1F409, U+1F48E, U+1F525, U+1F680, U+1F988,
+                 U+1F98B, U+1FA99;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -286,7 +311,7 @@
     /* PET 시그니처 상단 인디고 글로우는 body::before 고정 레이어로 —
        background-attachment:fixed 는 스크롤 프레임마다 뷰포트 전체 재페인트를 강제한다
        (2026-08-17 끊김 계측의 페인트 1순위). 고정 ::before 는 합성만 하므로 비용 0. */
-    font-family: 'Pretendard Variable', 'Pretendard', system-ui, sans-serif;
+    font-family: 'Pretendard Variable', 'Pretendard', 'NuriMarks', system-ui, sans-serif;
     /* iOS 탭 하이라이트 제거 */
     -webkit-tap-highlight-color: transparent;
     /* 한글 줄바꿈: 어절(단어) 단위로 끊어 "글자 하나만 다음 줄로 내려가는" 어색함 방지.

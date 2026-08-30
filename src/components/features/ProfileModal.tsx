@@ -475,9 +475,12 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
               className="input disabled:opacity-60 disabled:cursor-not-allowed"
             />
             <div className="mt-1 flex items-start justify-between gap-2">
+              {/* 잠긴 순간이 곧 '즉시 변경권'(상점 250점)이 필요한 순간이다 — 여기서 알려주지 않으면
+                  상품이 있는 줄도 모르고 30일을 기다린다. 파는 것은 기능이 아니라 대기 시간 면제라
+                  '변경은 원래 무료'라는 사실을 같이 적는다(있던 기능을 뺏은 것처럼 읽히면 안 된다). */}
               <p className={['text-2xs leading-relaxed', nicknameLocked ? 'text-amber-400' : 'text-ink-muted'].join(' ')}>
                 {nicknameLocked
-                  ? `30일에 한 번만 변경 가능 · 다음 변경 가능일 ${nextNameDateStr}`
+                  ? `30일에 한 번만 변경 가능 · 다음 변경 가능일 ${nextNameDateStr} · 기다리지 않으려면 랭킹 › 상점의 '닉네임 즉시 변경권'`
                   : '닉네임은 변경 후 30일간 다시 바꿀 수 없습니다'}
               </p>
               <p className="text-2xs text-ink-muted shrink-0">{name.length} / 20</p>

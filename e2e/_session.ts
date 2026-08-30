@@ -123,6 +123,25 @@ export async function dismissOverlays(page: Page): Promise<void> {
   const dialog = page.locator('[role="dialog"]');
   for (let i = 0; i < 4; i++) {
     if (!(await dialog.count())) return;
+
+    // ── 약관 동의 게이트(ConsentGateModal) ─────────────────────────────────
+    // 2026-08-30 약관 개정으로 **재동의 게이트**가 생겼다. 이건 '건너뛰기' 가 없는 차단형이라
+    // 아래 스킵 루프로는 못 닫히고, Modal z-[60] 오버레이가 모든 클릭을 가로채
+    // 관계없는 스펙 10건이 통째로 실패한다(합본 트리에서 실측).
+    // ⚠ '전체 동의' 를 누르면 **선택 동의(마케팅·랭킹 공개)까지 켜진다** — 테스트가 계정의
+    //   선택 동의 상태를 조용히 바꾸면 안 되므로 **필수 4개만** 체크한다.
+    const agree = dialog.getByRole('button', { name: /동의하고 (시작|계속)/ }).first();
+    if (await agree.count()) {
+      for (const label of [/만 19세 이상/, /서비스 이용약관/, /개인정보 수집·이용/, /불법 환전·사행성/]) {
+        const row = dialog.locator('label').filter({ hasText: label }).first();
+        const box = row.locator('input[type="checkbox"]').first();
+        if (await box.count()) await box.check({ timeout: 3_000 }).catch(() => {});
+      }
+      await agree.click({ timeout: 5_000 }).catch(() => {});
+      await page.waitForTimeout(900);
+      continue;
+    }
+
     const skip = dialog.getByRole('button', { name: /건너뛰기|닫기|시작하기|확인/ }).first();
     if (!(await skip.count())) return;
     await skip.click({ timeout: 5_000 }).catch(() => {});

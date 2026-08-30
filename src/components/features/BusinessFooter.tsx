@@ -1,6 +1,8 @@
 // src/components/features/BusinessFooter.tsx
 // 전 화면 하단 상시 노출 푸터 — 사업자 정보(전자상거래법 표시의무) + 약관/정책 링크 + 사행성 배제 고지.
 import type { LegalDoc } from './LegalDocsModal';
+// 약관 시행일은 src/lib/legalVersion.ts 단일 소스 — 푸터에 날짜를 박으면 개정 때 여기만 남는다.
+import { LEGAL_EFFECTIVE_DATE, LEGAL_NOTICE_DATE, LEGAL_PREV_EFFECTIVE_DATE } from '../../lib/legalVersion';
 
 // 사업자등록증(525-20-02937) 기준 — LegalDocsModal/LegalNotice 와 동일 값 유지.
 // PG(포트원/다날) 입점 심사 요건(2026-08-28 거절 사유 반영): 상호·사업자번호·대표자명·
@@ -72,6 +74,8 @@ export default function BusinessFooter({ onOpenLegal, onOpenSupport }: { onOpenL
         <p className="text-2xs leading-relaxed text-ink-muted/80">
           NURI HOLDEM은 「국민체육진흥법」상 마인드 스포츠인 홀덤의 합법적 토너먼트 정보 제공 플랫폼이며, 어떠한 형태의 도박·환전·사행행위와도 무관합니다.
           <br />만 19세 미만은 이용할 수 없습니다 · 도박문제 상담 1336(24시간·무료)
+          {/* 약관 개정 사전 고지 — 비로그인 방문자에게도 보여야 '서비스 내 공지'가 성립한다. */}
+          <br />약관·개인정보처리방침 개정 안내: {LEGAL_NOTICE_DATE} 공지 · {LEGAL_EFFECTIVE_DATE} 시행 (시행 전까지는 {LEGAL_PREV_EFFECTIVE_DATE} 시행판 적용)
           <br />© {`2026`} 엔에이치홀딩스. All rights reserved.
         </p>
       </div>

@@ -3,7 +3,9 @@
 // AuthModal 의 '[선택] 마케팅 정보 수신에 동의합니다' 체크박스가 가리키는 문서이며,
 // 동일 텍스트가 scripts/gen-legal.mjs 로 /legal/marketing.html 에 정적 발행된다(두 벌 금지).
 
-const EFFECTIVE_DATE = '2026년 6월 15일';
+// 시행일·개정 이력은 src/lib/legalVersion.ts 단일 소스에서 온다 — 문서마다 날짜를 박으면 어긋난다.
+import { LEGAL_EFFECTIVE_DATE, LEGAL_NOTICE_DATE } from '../../lib/legalVersion';
+import { PendingRevisionNotice, RevisionHistory } from './RevisionBlocks';
 
 function Article({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
@@ -45,12 +47,15 @@ export default function MarketingConsent() {
     <div className="px-4 pb-6">
       {/* 헤더 */}
       <div className="py-4 border-b border-border-subtle mb-4">
-        <p className="text-2xs text-ink-muted">시행일: {EFFECTIVE_DATE}</p>
+        {/* 이 문서는 제정판이라 '직전판'이 없다 — 다른 3문서와 달리 직전 시행일을 적지 않는다. */}
+        <p className="text-2xs text-ink-muted">시행일: {LEGAL_EFFECTIVE_DATE} · 공지일: {LEGAL_NOTICE_DATE}</p>
         <p className="text-2xs text-ink-muted mt-0.5">
           본 동의는 <strong className="text-ink-primary">선택 사항</strong>입니다. 동의하지 않아도 NURI HOLDEM 회원가입과
           모든 서비스 이용에 어떠한 제한도 없습니다.
         </p>
       </div>
+
+      <PendingRevisionNotice />
 
       <Article n={1} title="동의의 성격">
         <Items items={[
@@ -156,8 +161,10 @@ export default function MarketingConsent() {
         </p>
       </Article>
 
+      <RevisionHistory doc="marketing" />
+
       <p className="text-2xs text-ink-muted text-center pt-2 border-t border-border-subtle">
-        본 동의 안내는 {EFFECTIVE_DATE}부터 적용됩니다.
+        본 동의 안내는 {LEGAL_EFFECTIVE_DATE}부터 적용됩니다.
       </p>
     </div>
   );

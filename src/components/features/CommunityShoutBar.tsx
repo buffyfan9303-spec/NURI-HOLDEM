@@ -54,7 +54,9 @@ import { promptLogin } from '../../lib/requireLogin';
 import { filterContent } from '../../lib/content-filter';
 import {
   getLiveShouts, buyShout, hideShout, getShoutRules, getMyPointBalance, getShopSkus,
+  getShoutQueueInfo,
   SHOUT_COLORS, SHOUT_SLOT_SECONDS, DAILY_PURCHASE_CAP,
+  RESERVE_MIN_LEAD_MIN, RESERVE_MAX_LEAD_DAYS,
   type Shout, type ShoutRules, type PointBalance, type ShopSku, type ShoutTier, type ShoutColor,
 } from '../../api/community';
 
@@ -122,6 +124,18 @@ const TIER_SKIN: Record<ShoutTier, { box: string; icon: string; text: string }> 
     box:  'border-gold-400/50 bg-gradient-to-r from-gold-300/[0.10] to-transparent',
     icon: 'text-gold-300', text: 'text-sm',
   },
+  // 2026-08-30(20260830n) 상위 티어 2종.
+  // ⚠ 새 팔레트를 끌어오지 않는다(기본 Tailwind 의 sky 같은 색은 이 앱의 디자인 시스템에 없다).
+  //   겉모습의 기본값은 basic 과 같게 두고, 색은 아래 TIER_VAR 의 **등급 토큰으로 인라인 덮어쓰기**한다
+  //   — 하이라이트의 색 선택이 쓰는 것과 정확히 같은 경로다(colorBoxStyle/colorIconStyle).
+  long: {
+    box:  'border-accent-400/50 bg-gradient-to-r from-accent-300/[0.12] to-transparent',
+    icon: 'text-accent-300', text: 'text-sm',
+  },
+  reserve: {
+    box:  'border-accent-400/50 bg-gradient-to-r from-accent-300/[0.12] to-transparent',
+    icon: 'text-accent-300', text: 'text-sm',
+  },
   board: {
     box:  'border-gold-400 bg-gradient-to-r from-gold-300/[0.16] via-accent-300/[0.06] to-transparent',
     icon: 'text-gold-300', text: 'text-base',
@@ -142,12 +156,28 @@ const COLOR_LABEL: Record<ShoutColor, string> = {
 };
 
 /**
+ * 등급 자체가 색을 갖는 경우(2026-08-30 · 20260830n).
+ * 길게 = 그린('오래 머무는 것') · 예약 = 블루('약속된 시각'). 둘 다 색 선택이 쓰는 것과 같은
+ * --tier-*-vivid 토큰이라, 새 색을 만들지 않고도 세 등급이 한눈에 갈린다.
+ */
+const TIER_VAR: Partial<Record<ShoutTier, string>> = {
+  long:    '--tier-green-vivid',
+  reserve: '--tier-blue-vivid',
+};
+
+/**
+ * 이 외침을 칠할 토큰 하나. 우선순위는 **고른 색 > 등급 고유색 > 없음**이다 —
+ * 색은 하이라이트에서만 고를 수 있으므로 둘이 동시에 있을 일은 없지만, 규칙을 한 곳에 못 박아 둔다.
+ */
+const shoutVar = (tier?: ShoutTier | null, color?: ShoutColor | null): string | undefined =>
+  (color ? COLOR_VAR[color] : undefined) ?? (tier ? TIER_VAR[tier] : undefined);
+
+/**
  * 색은 등급 스킨 '위에' 얹는다 — 테두리·배경 두 지점만 덮어쓴다.
  * 클래스(TIER_SKIN.box)를 그대로 두고 인라인으로 덮으므로, 색이 없으면 등급 기본 겉모습이 남는다.
  */
-function colorBoxStyle(color?: ShoutColor | null): CSSProperties | undefined {
-  if (!color) return undefined;
-  const v = COLOR_VAR[color];
+function colorBoxStyle(tier?: ShoutTier | null, color?: ShoutColor | null): CSSProperties | undefined {
+  const v = shoutVar(tier, color);
   if (!v) return undefined;
   return {
     borderColor: tierCss(v, 0.55),
@@ -155,8 +185,8 @@ function colorBoxStyle(color?: ShoutColor | null): CSSProperties | undefined {
   };
 }
 /** 아이콘은 '색으로만 등급을 알리는' 비텍스트 지점이라 vivid 를 알파 없이 쓴다(3:1 기준). */
-function colorIconStyle(color?: ShoutColor | null): CSSProperties | undefined {
-  const v = color ? COLOR_VAR[color] : undefined;
+function colorIconStyle(tier?: ShoutTier | null, color?: ShoutColor | null): CSSProperties | undefined {
+  const v = shoutVar(tier, color);
   return v ? { color: tierCss(v) } : undefined;
 }
 
@@ -264,9 +294,13 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
   const [tiers, setTiers] = useState<ShopSku[]>([]);
   const [tier, setTier] = useState<ShoutTier>('basic');
   const [color, setColor] = useState<ShoutColor>('gold');
-  // 지금 사면 언제 나가는가 — 대기열 맨 뒤 방송 종료 시각(비어 있으면 null = 지금 바로).
-  const [queueEndsAt, setQueueEndsAt] = useState<number | null>(null);
+  // 지금 사면 언제 나가는가 — **서버가 계산한 다음 빈 자리**다(null = 아직 못 받음).
+  // ⚠ 예전에는 max(expires_at) 으로 유추했다. 예약(20260830n)이 생기면 그 값은 며칠 뒤가 될 수
+  //   있어 '내 차례 3일 뒤'라는 거짓말이 된다 — 실제로는 그 앞의 빈 자리에 들어간다.
+  const [nextFreeAt, setNextFreeAt] = useState<number | null>(null);
   const [queueLen, setQueueLen] = useState(0);
+  // 예약 등급 전용 — datetime-local 값('YYYY-MM-DDTHH:mm', 로컬 시각)
+  const [reserveAt, setReserveAt] = useState('');
 
   useEffect(() => {
     if (!open) return;
@@ -278,30 +312,51 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
       .then((all) => setTiers(all.filter((s) => s.kind === 'shout' && s.key !== 'shout_board').sort((a, b) => a.sort - b.sort)))
       .catch(() => {});
     // 대기열 길이 — '내 차례가 언제인지'를 **사기 전에** 보여주기 위해서다.
-    getLiveShouts(50)
-      .then((v) => {
-        setQueueLen(v.length);
-        setQueueEndsAt(v.length ? Math.max(...v.map((s) => ms(s.expiresAt))) : null);
-      })
-      .catch(() => { setQueueLen(0); setQueueEndsAt(null); });
+    getLiveShouts(50).then((v) => setQueueLen(v.length)).catch(() => setQueueLen(0));
   }, [open]);
-  useEffect(() => { if (open) { setText(''); setTier('basic'); setColor('gold'); } }, [open]);
+  useEffect(() => {
+    if (open) { setText(''); setTier('basic'); setColor('gold'); setReserveAt(''); }
+  }, [open]);
 
   const sel = tiers.find((s) => tierOfSku(s.key) === tier);
   // 서버 목록이 아직 없으면 기본 등급은 shout_rules() 값으로 버틴다(가격이 '—'로 비지 않게).
   const cost = sel?.price ?? (tier === 'basic' ? rules.cost : 0);
   const slotSec = sel?.durationSeconds || SHOUT_SLOT_SECONDS;
+  const isReserve = tier === 'reserve';
+
+  // 슬롯 길이가 등급마다 다르므로(20초/40초) 빈 자리 조회도 길이를 실어 보낸다.
+  // 예약 등급에서는 '대기열의 다음 자리'가 의미 없어 조회하지 않는다(시각을 직접 고른다).
+  useEffect(() => {
+    if (!open || isReserve) return;
+    let live = true;
+    getShoutQueueInfo(slotSec)
+      .then((q) => { if (live) setNextFreeAt(q.nextFreeAt ? ms(q.nextFreeAt) : null); })
+      .catch(() => { if (live) setNextFreeAt(null); });
+    return () => { live = false; };
+  }, [open, isReserve, slotSec]);
 
   const trimmed = text.trim();
   const tooShort = trimmed.length < rules.minLen;
   const tooLong = trimmed.length > rules.maxLen;
   const hasLink = /https?:\/\/|www\./i.test(trimmed);
   const poor = balance !== null && cost > 0 && balance.available < cost;
-  // 내 차례 예상 — 대기열 맨 뒤 방송이 끝나는 순간이 곧 내 시작이다(서버 buy_shout 과 같은 계산).
-  const myTurnLabel = queueEndsAt === null ? '지금 바로' : waitLabel(queueEndsAt - Date.now());
+  // 내 차례 예상 — 서버가 준 '다음 빈 자리'. 예약된 창은 이미 건너뛴 값이다.
+  const myTurnLabel = nextFreeAt === null ? '지금 바로' : waitLabel(nextFreeAt - Date.now());
+  // 예약 입력 경계 — 서버 buy_shout 의 RESERVE_MIN_LEAD / RESERVE_MAX_LEAD 와 같은 값.
+  // datetime-local 은 **로컬 시각 문자열**이라 toISOString(UTC)을 넣으면 안 된다 — 시차만큼 어긋난다.
+  const localInput = (t: number) => {
+    const d = new Date(t - new Date(t).getTimezoneOffset() * 60_000);
+    return d.toISOString().slice(0, 16);
+  };
+  const reserveMin = localInput(Date.now() + RESERVE_MIN_LEAD_MIN * 60_000);
+  const reserveMax = localInput(Date.now() + RESERVE_MAX_LEAD_DAYS * 86_400_000);
+  const reserveMs = reserveAt ? new Date(reserveAt).getTime() : NaN;
+  const reserveBad = isReserve && (!reserveAt || !Number.isFinite(reserveMs)
+    || reserveMs < Date.now() + RESERVE_MIN_LEAD_MIN * 60_000
+    || reserveMs > Date.now() + RESERVE_MAX_LEAD_DAYS * 86_400_000);
 
   const submit = async () => {
-    if (busy || tooShort || tooLong) return;
+    if (busy || tooShort || tooLong || reserveBad) return;
     // 클라이언트 선검사 — 기존 금칙어 필터를 그대로 재사용(최종 판정은 서버)
     const f = filterContent(trimmed);
     if (f.blocked) { toast.show(f.reason ?? '게시할 수 없는 표현입니다', 'error'); return; }
@@ -309,8 +364,18 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
     setBusy(true);
     try {
       // ⚠ 색은 하이라이트에서만 보낸다. 기본에 색을 실어 보내면 서버가 거절한다(조용히 무시하지 않는다).
-      const s = await buyShout(trimmed, tier, tier === 'gold' ? color : null);
-      toast.show(`외쳤습니다! ${s.cost}점 사용 · ${airLabel(s.playsAt)} (${slotSec}초)`, 'success');
+      // ⚠ 예약 시각은 **ISO(UTC)** 로 보낸다. datetime-local 값은 로컬 시각 문자열이라
+      //   그대로 보내면 서버가 UTC 로 읽어 시차만큼 어긋난 자리에 잡힌다.
+      const s = await buyShout(
+        trimmed, tier,
+        tier === 'gold' ? color : null,
+        isReserve ? new Date(reserveMs).toISOString() : null,
+      );
+      toast.show(
+        isReserve
+          ? `예약했습니다! ${s.cost}점 사용 · ${new Date(s.playsAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}에 ${slotSec}초 방송`
+          : `외쳤습니다! ${s.cost}점 사용 · ${airLabel(s.playsAt)} (${slotSec}초)`,
+        'success');
       onPosted?.(s);
       await refreshProfile?.();
       onClose();
@@ -324,16 +389,18 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
       <div className="space-y-3 p-4">
         <p className="text-2xs leading-relaxed text-ink-muted">
           커뮤니티 맨 위에서 <b className="text-ink-secondary">{slotSec}초 동안 한 번</b> 방송됩니다.
-          {queueLen > 0
-            ? <> 지금 앞에 <b className="text-ink-secondary">{queueLen}개</b>가 있어 <b className="text-accent-300">{myTurnLabel}</b> 내 차례예요.</>
-            : <> 대기열이 비어 있어 <b className="text-accent-300">지금 바로</b> 방송돼요.</>}
+          {isReserve
+            ? <> 예약은 <b className="text-accent-300">고른 시각</b>에 그 자리를 미리 잡아 둡니다 — 대기열을 기다리지 않아요.</>
+            : queueLen > 0
+              ? <> 지금 앞에 <b className="text-ink-secondary">{queueLen}개</b>가 있어 <b className="text-accent-300">{myTurnLabel}</b> 내 차례예요.</>
+              : <> 대기열이 비어 있어 <b className="text-accent-300">지금 바로</b> 방송돼요.</>}
           {' '}활동점수 <b className="text-accent-300">{cost.toLocaleString()}점</b>이 사용되며, 등급 점수(누적)는 줄지 않아요.
         </p>
 
         {/* 등급 — 가격은 서버 가격표(shop_skus)에서 그대로 읽어 보여준다.
             전광판이 빠져 두 칸이므로 칸 수를 목록 길이에서 뽑는다(빈 칸이 남지 않게). */}
         {tiers.length > 0 && (
-          <div className={['grid gap-1.5', tiers.length >= 3 ? 'grid-cols-3' : 'grid-cols-2'].join(' ')}>
+          <div className={['grid gap-1.5', tiers.length === 3 ? 'grid-cols-3' : 'grid-cols-2'].join(' ')}>
             {tiers.map((s) => {
               const k = tierOfSku(s.key);
               const on = k === tier;
@@ -356,6 +423,26 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
 
         {/* 색 — 하이라이트에서만. 자리를 비워 두지 않고 조건부로 넣는다(기본 등급엔 고를 게 없다). */}
         {tier === 'gold' && <ColorPicker value={color} onChange={setColor} />}
+
+        {/* 예약 시각 — 예약 등급에서만. 같은 이유로 조건부다(다른 등급엔 고를 게 없다).
+            ⚠ 여기가 예약 상품의 전부다. 시각을 못 고르면 '대기열 순서대로'와 같아져 200점의 근거가 사라진다.
+            겹치는 시각은 서버가 최종 판정하고 **가장 빠른 빈 시각까지 알려 준다**(막기만 하면 다시 누르게 된다). */}
+        {isReserve && (
+          <div>
+            <label htmlFor="shout-reserve-at" className="text-2xs font-bold text-ink-secondary">방송할 시각</label>
+            <input
+              id="shout-reserve-at" data-testid="shout-reserve-at" type="datetime-local"
+              value={reserveAt} min={reserveMin} max={reserveMax}
+              onChange={(e) => setReserveAt(e.target.value)}
+              className="input mt-1 w-full text-sm"
+            />
+            <p className={['mt-1 text-2xs leading-relaxed', reserveAt && reserveBad ? 'font-bold text-danger-light' : 'text-ink-muted'].join(' ')}>
+              {reserveAt && reserveBad
+                ? `지금부터 ${RESERVE_MIN_LEAD_MIN}분 뒤 ~ ${RESERVE_MAX_LEAD_DAYS}일 이내로 골라 주세요`
+                : `지금부터 ${RESERVE_MIN_LEAD_MIN}분 뒤부터 ${RESERVE_MAX_LEAD_DAYS}일 이내 · 분 단위로 잡힙니다`}
+            </p>
+          </div>
+        )}
 
         {/* 잔액 — 자리 고정(로딩 중에도 같은 높이) */}
         <div className="flex items-center justify-between rounded-card border border-border-subtle bg-surface-high px-3 py-2">
@@ -390,14 +477,18 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
         {/* 미리보기 — 실제 배너와 **같은 스킨**을 쓴다. 고른 등급·색이 어떻게 보일지가 곧 가격의 근거다. */}
         <div data-testid="shout-preview"
              className={['rounded-card border px-3 py-2.5', tierSkin(tier).box].join(' ')}
-             style={colorBoxStyle(tier === 'gold' ? color : null)}>
+             style={colorBoxStyle(tier, tier === 'gold' ? color : null)}>
           <p className={['text-2xs font-bold', tierSkin(tier).icon].join(' ')}
-             style={colorIconStyle(tier === 'gold' ? color : null)}>미리보기</p>
+             style={colorIconStyle(tier, tier === 'gold' ? color : null)}>미리보기</p>
           <p className={['mt-0.5 break-words font-bold leading-snug text-ink-primary', tierSkin(tier).text].join(' ')}>
             <Icon name="megaphone" size={15} className={['mr-1 inline-block align-[-2px] shrink-0', tierSkin(tier).icon].join(' ')}
-                  style={colorIconStyle(tier === 'gold' ? color : null)} />{trimmed || '여기에 외칠 내용이 표시됩니다'}
+                  style={colorIconStyle(tier, tier === 'gold' ? color : null)} />{trimmed || '여기에 외칠 내용이 표시됩니다'}
           </p>
-          <p className="mt-0.5 text-2xs text-ink-muted">{user?.nickname ?? '나'} · {slotSec}초 방송</p>
+          <p className="mt-0.5 text-2xs text-ink-muted">
+            {user?.nickname ?? '나'} · {slotSec}초 방송
+            {isReserve && Number.isFinite(reserveMs) && !reserveBad
+              && ` · ${new Date(reserveMs).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 예약`}
+          </p>
         </div>
 
         {poor && (
@@ -410,7 +501,7 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
           <button type="button" onClick={onClose} className="btn-ghost flex-1 py-2.5 text-sm">취소</button>
           <button
             type="button" onClick={submit}
-            disabled={busy || tooShort || tooLong || hasLink || poor}
+            disabled={busy || tooShort || tooLong || hasLink || poor || reserveBad}
             className="btn-primary flex-1 py-2.5 text-sm disabled:opacity-50"
           >
             {busy ? '외치는 중…' : `${cost.toLocaleString()}점으로 외치기`}
@@ -547,12 +638,12 @@ export default function CommunityShoutBar({ className }: { className?: string })
         data-testid={drawShout ? 'shout-live' : 'shout-idle'}
         className={['rounded-card border px-3 py-2.5',
           skin ? skin.box : 'border-dashed border-border-strong bg-surface-high'].join(' ')}
-        style={drawShout ? colorBoxStyle(drawShout.color) : undefined}
+        style={drawShout ? colorBoxStyle(drawShout.tier, drawShout.color) : undefined}
       >
         <div className="flex items-start gap-2">
           <Icon name="megaphone" size={16}
                 className={['mt-0.5 shrink-0', skin ? skin.icon : 'text-accent-300'].join(' ')}
-                style={drawShout ? colorIconStyle(drawShout.color) : undefined} />
+                style={drawShout ? colorIconStyle(drawShout.tier, drawShout.color) : undefined} />
           {/* min-h = 본문 두 줄. 20초마다 문구가 갈릴 때 카드 높이가 들썩이지 않게 **공간을 미리 예약**한다
               (모션 헌법: CLS 는 진입 애니가 아니라 공간 예약으로만 해결한다). height 를 애니메이트하지
               않는 이유도 같다 — 레이아웃 애니는 화이트리스트 밖이다. */}

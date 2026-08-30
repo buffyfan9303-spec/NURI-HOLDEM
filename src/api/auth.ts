@@ -3,6 +3,7 @@ import { supabase, IS_MOCK, setKeepSignedIn, clearAuthStorage } from '../lib/sup
 import { currentUser } from './_session';
 import { makeSearchCache } from '../lib/searchCache';
 import { dedupe } from '../lib/inflight';
+import { LEGAL_VERSION } from '../lib/legalVersion';
 
 export type UserRole   = 'user' | 'venue_owner' | 'venue_staff' | 'admin';
 // 'withdrawn' = 강제 탈퇴(Stage 3). 정지(suspended)/영구정지(banned)와 구분.
@@ -22,6 +23,12 @@ export interface User {
   suspendedUntil?: string;
   sanctionReason?: string; // 관리자 제재 사유 (Stage 3)
   agreedToTerms?: boolean;  // 법적 동의 여부 — 구글 OAuth 동의 게이트 판별용
+  /** [선택] 마케팅 수신 동의 현재값. 재동의 화면의 프리필에 쓴다 —
+   *  프리필하지 않으면 재동의 한 번에 기존 수신 동의가 조용히 철회된다(사용자는 철회한 적이 없다). */
+  agreedToMarketing?: boolean;
+  /** 동의한 약관 판(版). null/undefined = 제1판 이전(미상) → 재동의 대상.
+   *  boolean 하나로는 '언제 것에 동의했는지'를 알 수 없어 2026-08-30 개정에서 추가했다. */
+  consentedLegalVersion?: number | null;
   joinedAt?: string;
   lastSeenAt?: string;      // 최근 접속 시각 (관리자 회원관리 표시용)
   nameChangedAt?: string;   // 닉네임(name) 마지막 변경 시각 — 30일 쿨다운 판별
@@ -76,6 +83,9 @@ function rowToUser(row: any): User {
     suspendedUntil: row.suspended_until,
     sanctionReason: row.sanction_reason ?? undefined,
     agreedToTerms:  row.agreed_to_terms ?? undefined,
+    agreedToMarketing: row.agreed_to_marketing ?? undefined,
+    // ?? null — undefined 로 뭉개면 '미상'과 '컬럼 미선택'이 구분되지 않는다.
+    consentedLegalVersion: row.consented_legal_version ?? null,
     joinedAt:       row.joined_at,
     lastSeenAt:     row.last_seen_at ?? undefined,
     nameChangedAt:  row.name_changed_at ?? undefined,
@@ -505,24 +515,50 @@ export async function signInWithGoogle(keepSignedIn?: boolean): Promise<void> {
   if (error) throw error;
 }
 
-// ── 동의 갱신 (구글 가입자 등 동의 미이행 사용자용 게이트) ────────────────────
-export async function updateMyConsent(consent: ConsentPayload): Promise<void> {
+// ── 동의 갱신 (구글 가입자 등 동의 미이행 사용자 + 약관 개정 재동의) ──────────
+/**
+ * 2026-08-30 개정: 직접 UPDATE 를 걷어내고 record_my_legal_consent RPC 로 옮겼다.
+ *   왜: ① 동의 **시각**을 클라이언트가 쓰면 분쟁에서 증거로서 약하다(서버가 찍어야 한다).
+ *       ② 동의한 **약관 판 번호**를 함께 남겨야 '언제 것에 동의했는지'가 특정된다.
+ *       ③ append-only 이력(legal_consents)에 한 행이 같은 트랜잭션에서 쌓인다.
+ * @param source 'gate'=재동의/최초 동의 게이트 · 'settings'=설정 화면에서 변경
+ */
+export async function updateMyConsent(consent: ConsentPayload, source: 'gate' | 'settings' = 'gate'): Promise<void> {
   if (IS_MOCK) return;
-  const user = await currentUser();
-  if (!user) throw new Error('로그인이 필요합니다');
-  const { error } = await supabase.from('profiles').update({
-    agreed_to_terms:         consent.agreedToTerms,
-    agreed_to_privacy:       consent.agreedToPrivacy,
-    agreed_to_anti_gambling: consent.agreedToAntiGambling,
-    agreed_to_marketing:     consent.agreedToMarketing,
-    terms_agreed_at:         consent.agreedToTerms ? new Date().toISOString() : null,
-  }).eq('id', user.id);
-  if (error) throw error;
+  const { error } = await supabase.rpc('record_my_legal_consent', {
+    p_version:   LEGAL_VERSION,
+    p_terms:     consent.agreedToTerms,
+    p_privacy:   consent.agreedToPrivacy,
+    p_anti:      consent.agreedToAntiGambling,
+    p_marketing: consent.agreedToMarketing,
+    p_source:    source,
+  });
+  if (error) throw new Error(error.message);
   // 랭킹 공개는 선택 동의라 '물어봤을 때만' 기록한다. 이 게이트를 안 거친 호출부까지
   // false 로 덮으면 미응답(null)이 거부(false)로 굳어 나중에 다시 물어볼 수 없다.
   if (typeof consent.publicRankingConsent === 'boolean') {
     await setMyPublicRankingConsent(consent.publicRankingConsent);
   }
+}
+
+/** 내 약관 동의 이력(최신순). 정보주체의 열람권(개인정보보호법 §35)과
+ *  광고성 정보 수신 동의 상태 확인(정보통신망법 §50⑦)의 근거 데이터다.
+ *  RLS 가 본인 행만 내보내므로 별도 필터가 필요 없다. */
+export interface LegalConsentRecord {
+  id: string; legalVersion: number; agreedAt: string; source: string;
+  terms: boolean; privacy: boolean; antiGambling: boolean; marketing: boolean;
+}
+export async function getMyLegalConsents(limit = 20): Promise<LegalConsentRecord[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase
+    .from('legal_consents').select('*').order('agreed_at', { ascending: false }).limit(limit);
+  if (error) throw new Error(error.message);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({
+    id: r.id, legalVersion: r.legal_version, agreedAt: r.agreed_at, source: r.source,
+    terms: r.agreed_to_terms === true, privacy: r.agreed_to_privacy === true,
+    antiGambling: r.agreed_to_anti_gambling === true, marketing: r.agreed_to_marketing === true,
+  }));
 }
 
 // ── 랭킹 프로필 공개 동의(선택) — 가입 후 언제든 켜고 끌 수 있는 경로 ─────────

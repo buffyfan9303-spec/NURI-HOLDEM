@@ -95,10 +95,142 @@
          ⚠ 굵기를 좁혀도 payload 는 안 줄어든다 — wght@700;800 은 static 2벌이라 248 face(190KB)로 오히려 2배,
            wght@700..800 도 124 face(95KB)로 동일(2026-08-29 실측). 그래서 범위는 그대로 두고 로딩 방식만 바꾼다. -->
     <noscript></noscript>
-    <!-- [DS] FONT-1: Pretendard self-host(dynamic subset, font-display: optional).
-         비차단 로드(print→all) — 콜드 방문은 폴백(system-ui)로 CLS 0, 웜 방문은 캐시 히트로 브랜드 폰트.
-         라이선스: /fonts/pretendard/OFL.txt (SIL OFL 1.1) -->
-    <link rel="stylesheet" href="/fonts/pretendard/pretendardvariable-dynamic-subset.css" media="print" onload="this.media='all'" />
+    <!-- [DS] FONT-1/FONT-3: Pretendard self-host(dynamic subset, font-display: optional).
+         라이선스: /fonts/pretendard/OFL.txt (SIL OFL 1.1)
+
+         [FONT-3 · 2026-08-30] 콜드 방문의 임계 경로에서 폰트를 통째로 걷어낸다.
+
+         실측 조리법: 프로덕션 빌드 · gzip 정적 서버 · 1.6Mbps/150ms · CPU 4x ·
+           375/412 교대 · 5회 중앙값 · 같은 세션 안에서 조건 교대 · 콜드 캐시.
+           (전송량은 **서버측**으로 셌다 — 서비스워커가 대신 낸 요청은 page CDP 에 안 잡혀
+            폰트 바이트가 0 으로 보고된다. 그 함정에 한 번 빠졌다.)
+
+         ※ 아래 수치는 **적대적 검증자가 독립 재측정한 값**이다(구현자 최초 보고는 LCP 개선폭을
+           약 50% 과대, 콜드 전송량을 '변화 없음' 으로 잘못 적었다 — 그대로 두면 다음 사람이
+           틀린 기준선과 비교하게 되므로 재측정값으로 갈아 끼웠다).
+           조리법: 1.6Mbps/150ms · CPU rate 4 · 375·412 교대 · 5회 중앙값 · 회차마다 순서 뒤집기.
+
+                              이전        이후      폰트 전면차단(상한)
+           LCP 375           3,684ms    2,944ms      2,928ms   (-740 / -20.1%)
+           LCP 412           3,684ms    2,940ms      2,924ms   (-744 / -20.2%)
+             └ 회차 스프레드 ±25ms — 개선폭이 분산의 30배라 노이즈가 아니다.
+           CLS 콜드          0.0587     0.0587         —       (375 기준, 변화 없음)
+           콜드 전송          780KB      973KB        558KB    (+193KB / +24.8%)
+           콜드 폰트 적용      0/10       0/10          —
+           재방문 적용률       9/12      12/12          —
+
+         ⚠ 전송량은 **늘었다** — '변화 없음' 이 아니다. 이유:
+           dynamic-subset 은 **그 순간 화면에 그려진 글자가 속한 서브셋만** 받는다.
+           이전엔 CSS 가 head 에서 일찍 켜져 정적 셸 텍스트만 있을 때 매칭돼 5개(129KB)만 받았고,
+           이후엔 앱이 다 그려진 뒤 켜지므로 13개(321KB)가 전부 매칭된다.
+           **누적으로는 같다**(이전도 v1 에서 나머지 8개를 받는다) — 첫 방문에 앞당겨질 뿐이고,
+           그 다운로드는 LCP **뒤**에서 일어나 화면을 막지 않는다.
+           그래도 콜드 첫 방문의 모바일 데이터가 25% 늘어나는 것은 사실이라 여기 남긴다.
+
+         읽는 법 — 이 표의 핵심은 '콜드 폰트 적용 0/10' 한 칸이다.
+           font-display:optional 은 블록 구간(~100ms) 안에 폰트가 **이미 준비돼** 있지 않으면
+           그 로드에서 교체하지 않는다. media=print→all 뒤집기는 첫 렌더보다 늦으므로
+           콜드에선 구조적으로 항상 늦는다. 즉 321KB 를 임계 경로에 얹고도 얻는 픽셀이 0 이었다.
+           폰트를 전면 차단한 대조군과 화면이 **완전히 동일**하고 LCP 만 0.74초 빨랐다.
+         그래서 콜드에서는 첫 페인트·부팅이 끝난 뒤 유휴에 받아 캐시만 데우고,
+         '캐시에 있다'가 실측으로 확인된 웜 방문에서만 head 에서 즉시 적용한다(로컬 읽기라 공짜).
+         부수 효과로 재방문 적용률이 9/12 → 12/12 가 됐다 — 브랜드 폰트를 **덜** 보여주는 게 아니라
+         **더** 보여주면서 콜드가 0.74초 빨라진 것이다.
+
+         커버리지 손실 0 — 서브셋 구성·글자 범위는 손대지 않았다(한글 폴백 없음).
+         회귀 게이트: e2e/font-coverage.spec.ts (한글 1,016자 층화 표본 + 라이브 DB 실측 인벤토리를
+         픽셀 해시로 검사 — 서브셋을 좁히면 즉시 실패한다. 92→7 축소 변이로 실패 확인 완료).
+
+         최악의 경우도 재 뒀다: 플래그는 '캐시 있음'인데 실제 캐시가 비었을 때(축출) LCP 3,400ms —
+         **이전과 같은 수준까지만** 나빠지고, verify() 가 플래그를 지워 다음 방문에 스스로 돌아온다.
+
+         ⚠ 과거 함정 반복 금지: font-display 를 swap 으로 바꾸면 늦게 도착한 폰트가 전면
+           재레이아웃을 일으킨다(모션 헌법 "주르륵 밀림 금지"). optional 을 유지하는 이유다. -->
+    <script>
+      (function () {
+        var HREF = '/fonts/pretendard/pretendardvariable-dynamic-subset.css';
+        var KEY = 'nuri-font-cached';
+        var warm = false;
+        try { warm = localStorage.getItem(KEY) === '1'; } catch (e) { /* storage 차단 웹뷰 */ }
+
+        function inject(blocking) {
+          if (document.querySelector('link[data-nuri-font]')) return;
+          var l = document.createElement('link');
+          l.rel = 'stylesheet';
+          l.href = HREF;
+          l.setAttribute('data-nuri-font', '');
+          // 비차단 로드(print→all): 콜드 경로에서 CSS 파싱이 렌더 앞을 막지 않게.
+          if (!blocking) { l.media = 'print'; l.onload = function () { this.media = 'all'; }; }
+          document.head.appendChild(l);
+        }
+
+        // 다음 방문의 경로를 '추측'이 아니라 '실측'으로 정한다 —
+        // 이번 로드에서 Pretendard 가 실제 픽셀로 적용됐다면 캐시가 더워진 것이고,
+        // 아니라면(캐시 축출·용량 회수) 플래그를 지워 스스로 콜드 경로로 되돌아간다.
+        function verify() {
+          var check = function () {
+            // body 가 아직 없으면 '측정 불가'다 — 그때 플래그를 지우면 멀쩡한 캐시를 두고
+            // 다음 방문을 콜드 경로로 되돌린다. 판단이 안 서면 아무것도 바꾸지 않는다.
+            if (!document.body) return;
+            var ok = false;
+            try {
+              var mk = function (fam) {
+                var s = document.createElement('span');
+                s.style.cssText = 'position:absolute;left:-9999px;top:0;font-size:64px;white-space:pre;font-family:' + fam;
+                s.textContent = '오늘 내일 일정';
+                document.body.appendChild(s);
+                var w = s.getBoundingClientRect().width;
+                s.parentNode.removeChild(s);
+                return w;
+              };
+              ok = Math.abs(mk("'Pretendard Variable'") - mk('__nuri_no_font__,system-ui')) > 0.5;
+            } catch (e) { ok = false; }
+            try { if (ok) localStorage.setItem(KEY, '1'); else localStorage.removeItem(KEY); } catch (e) { /* noop */ }
+          };
+          var run = function () { setTimeout(check, 1200); };
+          if (document.fonts && document.fonts.ready) document.fonts.ready.then(run, run);
+          else setTimeout(run, 3000);
+        }
+
+        if (warm) {
+          // 웜: CSS 도 woff2 도 서비스워커 캐시/디스크 캐시에서 나온다 — 네트워크 왕복이 없다.
+          // head 에서 바로 적용해야 optional 의 블록 구간 안에 들어가 결정적으로 교체된다.
+          inject(true);
+          verify();
+          return;
+        }
+
+        // 콜드: 첫 페인트 + 앱 부팅이 끝나고 브라우저가 한가해진 뒤에만 받는다.
+        // (서드파티 지연 주입과 같은 사유 — <head> 에 두면 앱 번들과 '같은 순간' 출발한다.)
+        var fired = false;
+        var go = function () {
+          if (fired) return;
+          fired = true;
+          var start = function () {
+            inject(false);
+            // ⚠ 여기서 verify() 를 부르면 안 된다(2026-08-30 실측으로 잡은 함정).
+            //   콜드에서는 optional 이 구조적으로 항상 늦어 verify() 가 false 를 보고
+            //   플래그를 지운다 → 다음 방문(v1)도 콜드 경로를 탄다. 그런데 v1 엔 폰트가
+            //   **이미 캐시에 있어** optional 이 즉시 교체하고, 그건 '다 그려진 화면 위에서'
+            //   일어나므로 늦은 레이아웃 시프트가 난다(실측 CLS 0.0046, 로드 2.5s 이후 구간).
+            //   캐시가 더워진 것은 추측이 아니라 **사실**이다 — 방금 받았으니까.
+            //   그래서 로드 완료 시점에 플래그를 세워 v1 이 곧장 웜 경로(head 즉시 적용 =
+            //   optional 블록 구간 안 교체)를 타게 한다. 축출 감지는 웜 경로의 verify() 가 한다.
+            var l = document.querySelector('link[data-nuri-font]');
+            if (l) {
+              l.addEventListener('load', function () {
+                try { localStorage.setItem(KEY, '1'); } catch (e) { /* storage 차단 웹뷰 */ }
+              }, { once: true });
+            }
+          };
+          if (window.requestIdleCallback) window.requestIdleCallback(start, { timeout: 6000 });
+          else setTimeout(start, 2500);
+        };
+        var onLoad = function () { setTimeout(go, 1500); };
+        if (document.readyState === 'complete') onLoad();
+        else window.addEventListener('load', onLoad, { once: true });
+      })();
+    </script>
     <noscript><link rel="stylesheet" href="/fonts/pretendard/pretendardvariable-dynamic-subset.css" /></noscript>
   </head>
   <body>
