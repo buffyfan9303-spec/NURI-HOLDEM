@@ -29,7 +29,7 @@ export default function CheckinModal({ open, onClose, venueId, venueName }: { op
   const fmt = (iso: string) => { const d = new Date(iso); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 
   return (
-    <Modal open={open} onClose={onClose} title="예약·방문 체크" maxWidth="md" variant="sheet">
+    <Modal open={open} onClose={onClose} title="예약·방문 체크" maxWidth="md" variant="sheet" dragToClose>
       <div className="space-y-3 p-4">
         <div className="flex flex-col items-center gap-2 rounded-card border border-border-subtle bg-surface-low p-4">
           {qr

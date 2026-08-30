@@ -34,7 +34,12 @@ function CardRow({ label, cards, hidden }: { label: string; cards: string[]; hid
       {hidden ? (
         <div className="flex flex-wrap gap-1.5">
           {cards.map((c, i) => (
-            <span key={c + i} aria-hidden className="flex h-9 w-7 items-center justify-center rounded-[5px] border border-border-default bg-surface-high text-xs text-ink-muted">🂠</span>
+            // ICON-3(2026-08-30): 종전엔 🂠(U+1F0A0 '카드 뒷면')를 글자로 찍었다. 이 코드포인트는
+            // 어느 컬러 이모지 폰트에도 없어서(실측: 색수 1 = 단색 폰트 폴백) OS 의 기호 폰트에
+            // 얹혀 살고, 그 폰트가 없는 기기에서는 통째로 두부(□)가 된다 — 유저의 99% 가 모바일이다.
+            // 게다가 다크·라이트 양쪽 대비가 2.2~2.6 로 미달이었다. 상자 자체가 이미 '카드'이므로
+            // 안쪽 글리프는 '아직 안 보임'만 말하면 된다.
+            <span key={c + i} aria-hidden className="flex h-9 w-7 items-center justify-center rounded-[5px] border border-border-default bg-surface-high text-ink-muted"><Icon name="eye-off" size={13} /></span>
           ))}
         </div>
       ) : (

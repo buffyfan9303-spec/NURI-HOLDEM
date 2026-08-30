@@ -14,6 +14,11 @@ import { getNotices, type MarketplaceNotice } from '../../api/marketplace';
 import SegmentedTabs from '../atoms/SegmentedTabs';
 import Icon from '../atoms/Icon';
 import { onColorInkClass } from '../../lib/color';
+import { goSubTab } from '../../lib/subTabTransition';
+
+/** 구인/구직 필터 칩 — 진열 순서가 곧 하위 탭 전환 방향(forward/back)의 기준. */
+const KIND_FILTERS: [DealerPostKind | 'all', string][] = [['all', '전체'], ['hiring', '구인'], ['seeking', '구직'], ['general', '일반']];
+const KIND_FILTER_ORDER = KIND_FILTERS.map(([k]) => k);
 
 const KIND_LABEL: Record<DealerPostKind, string> = { hiring: '구인', seeking: '구직', general: '일반' };
 const KIND_STYLE: Record<DealerPostKind, string> = {
@@ -191,12 +196,12 @@ export default function DealerCommunity() {
 
       {/* 카테고리 분리 필터 — 구인/구직/일반 각각 따로 보기.
           pill 세그먼트 → 텍스트 필터(오너 확정 문법 — 커뮤니티 홀덤펍·장터와 동일) */}
-      <div className="flex items-center gap-3">
-        {([['all', '전체'], ['hiring', '구인'], ['seeking', '구직'], ['general', '일반']] as [DealerPostKind | 'all', string][]).map(([k, label]) => {
+      <div data-dealer-kindbar="" className="flex items-center gap-3">
+        {KIND_FILTERS.map(([k, label]) => {
           const on = filterKind === k;
           const cnt = k === 'all' ? posts.length : posts.filter((x) => x.kind === k).length;
           return (
-            <button key={k} type="button" onClick={() => setFilterKind(k)} aria-pressed={on}
+            <button key={k} type="button" onClick={() => goSubTab('dealer-kind', KIND_FILTER_ORDER, filterKind, k, () => setFilterKind(k))} aria-pressed={on}
               className={['shrink-0 whitespace-nowrap py-1 text-xs leading-none transition-colors tabular-nums',
                 on ? 'font-bold text-accent-200' : 'font-semibold text-ink-muted hover:text-ink-primary'].join(' ')}>
               {label}{cnt > 0 ? ` ${cnt}` : ''}
@@ -205,6 +210,8 @@ export default function DealerCommunity() {
         })}
       </div>
 
+      {/* 목록 — 필터 전환의 본문(방향성 푸시 대상). 위 필터 바는 제자리. */}
+      <div data-dealer-panel="">
       {(() => { const shown = filterKind === 'all' ? posts : posts.filter((x) => x.kind === filterKind); return (
       loading ? (
         <p className="py-8 text-center text-2xs text-ink-muted">불러오는 중…</p>
@@ -252,6 +259,7 @@ export default function DealerCommunity() {
           ))}
         </ul>
       )); })()}
+      </div>
 
       <NoticeDetailModal notice={openNotice} open={openNotice !== null} onClose={() => setOpenNotice(null)} />
 

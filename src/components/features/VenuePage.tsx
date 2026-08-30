@@ -1,17 +1,21 @@
-import { useState, useEffect, useRef, useMemo, useCallback, type ReactNode } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, useSyncExternalStore, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import { withViewTransition } from '../../lib/viewTransition';
 import { onColorInkClass } from '../../lib/color';
 import { Map, MapMarker, useKakaoLoader } from 'react-kakao-maps-sdk';
+import {
+  naverMapConfigured, naverMapState, onNaverMapState, loadNaverMaps, naverMaps, geocodeAddress, probeNaverAuth,
+  type NaverMapState,
+} from '../../lib/naverMap';
 import CommentThread from './CommentThread';
 import RotiArenaLogo from '../atoms/RotiArenaLogo';
 import Icon from '../atoms/Icon';
 import { useToast } from '../atoms/Toast';
-import type { Venue, Comment } from '../../api/community';
+import type { Venue, Comment, VenueContact } from '../../api/community';
 import type { Schedule } from '../../api/schedules';
 import type { MarketplaceNotice } from '../../api/marketplace';
 import { useAuth } from '../../contexts/AuthContext';
-import { setVenueCoords, followVenue, unfollowVenue, getMyFollowedVenueIds, updateVenueContact, updateVenueKakao } from '../../api/community';
+import { setVenueCoords, followVenue, unfollowVenue, getMyFollowedVenueIds, updateVenueContact, updateVenueKakao, venueContacts } from '../../api/community';
 import { getVenueNotices, createVenueNotice, deleteVenueNotice, type VenueNotice } from '../../api/community';
 import { getVenueRatings } from '../../api/reviews';
 import { getVenueMessages, sendVenueMessage, deleteVenueMessage, subscribeVenueMessages, type VenueMessage } from '../../api/community';
@@ -26,7 +30,7 @@ import { scheduleStatus } from '../../lib/scheduleStatus';
 import { thumbUrl } from '../../lib/imageUrl';
 import CoachMark from '../atoms/CoachMark';
 import {
-  getVenueRankings, getVenueRankingTotals, subscribeRankings, rankDisplay,
+  getVenueRankings, getVenueRankingTotals, subscribeRankings, rankDisplay, getVenueRealNameOptIns,
   getVenuePageConfig, getScoreEntries, getVenuePlayerCounts,
   boardLabel, boardDesc, boardUnit, isCustomBoard, customKeyOf, boardPeriodStart,
   type RankingEntry, type RankingTotal, type VenuePageConfig, type RankBoardId, type ScoreEntry, type PlayerCounts,
@@ -36,6 +40,9 @@ import { uploadVenueImages } from '../../lib/storage';
 import { useBackClose } from '../../lib/backstack';
 import { lockScroll, unlockScroll } from '../../lib/scrollLock';
 import VenueReviews from './VenueReviews';
+import { PhoneActionButton, KakaoActionButton, KakaoChatRow, ContactRows } from './ContactActions';
+import ContactListEditor from './VenueContactFields';
+import { cleanContacts, ensureOneContact } from '../../lib/venueContacts';
 import QrScanModal from './QrScanModal';
 import SeasonPanel from './SeasonPanel';
 import { getVenuesSeasonLeaders, type SeasonLeader } from '../../api/seasons';
@@ -439,12 +446,8 @@ export default function VenuePage({
               {checkinBusy ? '체크인 중…' : 'QR 체크인'}
             </button>
             <div className="flex gap-2">
-            {venue.contactPhone && (
-              <a href={`tel:${venue.contactPhone}`}
-                className="inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-input border border-border-default bg-surface-high px-2 text-sm font-semibold text-ink-secondary hover:text-ink-primary transition-colors">
-                <Icon name="phone" size={16} className="shrink-0" /> 전화
-              </a>
-            )}
+            {/* 대표 번호 = 다중 연락처의 첫 항목(신 필드 우선, 없으면 기존 contactPhone 폴백) */}
+            <PhoneActionButton phone={venueContacts(venue)[0]?.phone} />
             {venue.address && (
               <a href={`https://map.kakao.com/link/search/${encodeURIComponent(venue.address)}`}
                 target="_blank" rel="noopener noreferrer"
@@ -466,28 +469,7 @@ export default function VenuePage({
                   적으면 **누르기 전에** 같은 사실을 알 수 있어 '무반응 클릭 금지' 의도에 더 충실하고,
                   첫 뷰포트 행동 예산(≤6, venue-ia 게이트)도 가짜 행동으로 채우지 않게 된다.
                   자리(오너 지시의 핵심)는 그대로 지킨다 — 업주 본인에게는 여전히 등록 버튼이다. */}
-            {kakao ? (
-              <a href={kakao} target="_blank" rel="noopener noreferrer"
-                className="inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-input border border-border-default bg-surface-high px-2 text-sm font-semibold text-ink-secondary hover:text-ink-primary transition-colors">
-                <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-[#FEE500]" /> 카카오톡
-              </a>
-            ) : isMyVenue ? (
-              <button
-                type="button"
-                onClick={editKakao}
-                aria-label="카카오톡 채팅방 링크 등록"
-                className="inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-input border border-dashed border-accent-400/50 bg-accent-300/[0.06] px-2 text-sm font-semibold text-accent-200 transition-colors hover:bg-accent-300/10">
-                <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-[#FEE500]" /> 카카오톡 등록
-              </button>
-            ) : (
-              <span
-                className="inline-flex h-11 min-w-0 flex-1 flex-col items-center justify-center rounded-input border border-dashed border-border-default bg-surface-high/60 px-2 text-center leading-none text-ink-muted">
-                <span className="inline-flex items-center gap-1.5 text-sm font-semibold">
-                  <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-[#FEE500]/45" />카카오톡
-                </span>
-                <span className="mt-0.5 text-2xs">미등록</span>
-              </span>
-            )}
+            <KakaoActionButton kakao={kakao} canEdit={isMyVenue} onEdit={editKakao} />
             </div>
           </div>
           <CoachMark id="venue-checkin">체크인하면 출석 도장 · 전적 인정 · 방문 후기가 열려요 — 하루 한 번이면 충분해요.</CoachMark>
@@ -994,9 +976,14 @@ function writeRankCache(venueId: string, e: RankPanelCache) {
 /** 현 시즌 선두 위젯 — 매장 페이지 상단. 진행 시즌의 1위(닉네임·점수). 탭하면 시즌 랭킹으로. */
 function SeasonLeaderBanner({ venueId, onRanking }: { venueId: string; onRanking: () => void }) {
   const [leader, setLeader] = useState<SeasonLeader | null>(null);
+  // 오너 #14 — 여기도 순위표다. 실명은 본인이 '실명'을 고른 경우에만 붙인다(기본은 닉네임).
+  //   빈 Set 으로 시작하는 게 안전한 기본값이다: 응답 전에는 실명이 아예 그려지지 않는다.
+  //   조회는 순위 패널과 같은 캐시를 타므로 매장 페이지당 요청은 1건이다.
+  const [optIns, setOptIns] = useState<ReadonlySet<string>>(() => new Set<string>());
   useEffect(() => {
     let alive = true;
     getVenuesSeasonLeaders([venueId]).then((m) => { if (alive) setLeader(m[venueId] ?? null); }).catch(() => {});
+    getVenueRealNameOptIns(venueId).then((s) => { if (alive) setOptIns(s); }).catch(() => {});
     return () => { alive = false; };
   }, [venueId]);
   if (!leader) return null;
@@ -1012,7 +999,7 @@ function SeasonLeaderBanner({ venueId, onRanking }: { venueId: string; onRanking
       <Icon name="crown" size={20} className="shrink-0 text-gold-300" />
       <div className="min-w-0 flex-1">
         <p className="text-2xs font-bold text-gold-300">현 시즌 선두 · {leader.seasonName}</p>
-        <p className="truncate text-sm font-bold text-ink-primary">{leader.nickname}{leader.realName ? <span className="text-2xs font-normal text-ink-muted"> ({leader.realName})</span> : null}</p>
+        <p className="truncate text-sm font-bold text-ink-primary">{leader.nickname}{leader.realName && optIns.has(leader.nickname.trim().toLowerCase()) ? <span className="text-2xs font-normal text-ink-muted"> ({leader.realName})</span> : null}</p>
       </div>
       <span className="shrink-0 text-sm font-bold tabular-nums text-accent-200">{leader.points}점</span>
       <Icon name="chevron-right" size={14} className="shrink-0 text-ink-muted" />
@@ -1031,6 +1018,11 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
   const [latest, setLatest] = useState<{ date: string | null; entries: RankingEntry[] }>(cached0?.latest ?? { date: null, entries: [] });
   const [loading, setLoading] = useState(!cached0); // 캐시 있으면 스켈레톤 없이 바로 표시(깜빡임 제거)
 
+  // 오너 #14 — 이 매장 순위표에서 '실명 표시'를 본인이 고른 닉네임(소문자 키).
+  //   RankPanelCache 에 넣지 않는다: Set 은 JSON 직렬화가 안 되고, 무엇보다 **캐시된 동의는 위험하다** —
+  //   유저가 실명 공개를 껐는데 localStorage 가 옛 답을 들고 있으면 끈 뒤에도 실명이 계속 뜬다.
+  //   매번 새로 받고, 받기 전/실패 시에는 빈 집합 = 전원 닉네임(덜 공개하는 쪽이 안전한 기본값).
+  const [realNameOptIns, setRealNameOptIns] = useState<ReadonlySet<string>>(() => new Set<string>());
   const [playerCounts, setPlayerCounts] = useState<PlayerCounts[]>(cached0?.playerCounts ?? []);
   const [checkinRows, setCheckinRows] = useState<{ name: string; count: number }[]>(cached0?.checkinRows ?? []); // QR 출석 집계
   useEffect(() => {
@@ -1040,10 +1032,11 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
         const c = await getVenuePageConfig(venueId).catch(() => null);
         const ms = c?.rankMetrics ?? [];
         const wantsCounts = ms.includes('moneyin_rate') || ms.includes('buyin_count') || ms.includes('visit_count');
-        const [t, d, m] = await Promise.all([
+        const [t, d, m, optIns] = await Promise.all([
           getVenueRankingTotals(venueId, c),
           getVenueRankings(venueId),
           getScoreEntries(venueId).catch(() => [] as ScoreEntry[]),
+          getVenueRealNameOptIns(venueId).catch(() => new Set<string>()),
         ]);
         const pc: PlayerCounts[] = wantsCounts ? await getVenuePlayerCounts(venueId).catch(() => []) : [];
         const bc: Record<string, number> = {};
@@ -1065,6 +1058,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
         }
         if (!active) return;
         setCfg(c); setTotals(t); setLatest(d); setManual(m); setBuyinCounts(bc); setPlayerCounts(pc); setCheckinRows(ck);
+        setRealNameOptIns(optIns);
         setMetric((cur) => cur ?? (c?.rankMetrics?.[0] ?? 'score'));
         writeRankCache(venueId, { cfg: c, totals: t, manual: m, buyinCounts: bc, latest: d, playerCounts: pc, checkinRows: ck, metric: rankPanelCache.get(venueId)?.metric ?? (c?.rankMetrics?.[0] ?? 'score') });
       } catch { /* noop */ }
@@ -1188,7 +1182,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
           {[podium[1], podium[0], podium[2]].map((e, slot) => {
             if (!e) return <div key={slot} className="flex-1" />;
             const rank = slot === 1 ? 1 : slot === 0 ? 2 : 3;
-            const { main: rMain, sub: rSub } = rankDisplay(e);
+            const { main: rMain, sub: rSub } = rankDisplay(e, realNameOptIns);
             const big = rank === 1;
             const ring = rank === 1 ? 'border-accent-300/80 bg-gradient-to-b from-accent-300/[0.14] to-transparent'
               : rank === 2 ? 'border-slate-300/50 bg-gradient-to-b from-slate-300/[0.08] to-transparent'
@@ -1213,7 +1207,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
       {/* 4등~ 리스트 — 바이낸스 표 문법(구분선·행 40px대·숫자 우측 tabular) */}
       <ol className="reveal overflow-hidden rounded-input border border-border-subtle bg-surface-high divide-y divide-border-subtle">
         {rest.map((e, i) => {
-          const { main: rMain, sub: rSub } = rankDisplay(e);
+          const { main: rMain, sub: rSub } = rankDisplay(e, realNameOptIns);
           return (
             <li key={e.nickname} className="flex items-center gap-2.5 px-2.5 py-2 transition-colors hover:bg-surface-float/50">
               <span className="w-6 shrink-0 text-center text-xs font-bold tabular-nums text-ink-muted">{i + 4}</span>
@@ -1240,7 +1234,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
                 {multi && <p className="text-2xs font-bold text-accent-200 mb-1">{ev || '메인'}</p>}
                 <div className="flex flex-wrap gap-1.5">
                   {group.map((e) => {
-                    const { main: rMain, sub: rSub } = rankDisplay(e);
+                    const { main: rMain, sub: rSub } = rankDisplay(e, realNameOptIns);
                     return (
                       <span key={`${ev}-${e.position}`} className="text-2xs px-2 py-0.5 rounded-badge bg-surface-float text-ink-primary">
                         {e.position}. {rMain}{rSub ? `(${rSub})` : ''}{e.prize ? ` · ${e.prize}점` : ''}
@@ -1317,23 +1311,28 @@ function AboutPanel({
   const [draft, setDraft]     = useState(venue.description ?? '');
   // 매장 정보(주소·전화·영업시간) 통합 편집
   const [addr, setAddr]       = useState(venue.address);
-  const [phone, setPhone]     = useState(venue.contactPhone ?? '');
+  // 연락처는 배열이 진실이다(오너 #17). 신 필드가 비어 있으면 venueContacts 가 기존 contactPhone 을 승격한다.
+  const [contacts, setContacts] = useState<VenueContact[]>(() => venueContacts(venue));
   const [hours, setHours]     = useState(venue.businessHours ?? '');
   const [infoEditing, setInfoEditing] = useState(false);
   const [addrDraft, setAddrDraft]     = useState(venue.address);
-  const [phoneDraft, setPhoneDraft]   = useState(venue.contactPhone ?? '');
+  const [contactsDraft, setContactsDraft] = useState<VenueContact[]>(() => ensureOneContact(venueContacts(venue)));
   const [hoursDraft, setHoursDraft]   = useState(venue.businessHours ?? '');
   const [infoSaving, setInfoSaving]   = useState(false);
   const toast = useToast();
 
   const openInfoEdit = () => {
-    setAddrDraft(addr); setPhoneDraft(phone); setHoursDraft(hours); setInfoEditing(true);
+    setAddrDraft(addr); setContactsDraft(ensureOneContact(contacts)); setHoursDraft(hours); setInfoEditing(true);
   };
   const saveInfo = async () => {
+    const next = cleanContacts(contactsDraft);
+    // '1개 필수' — 서버는 0개도 받지만(주소만 고치는 매장이 인질이 되면 안 된다) 이 편집기는
+    // 오너 지시대로 최소 1개를 요구한다. 지우고 싶으면 그 의도가 드러나야 한다.
+    if (next.length === 0) { toast.show('연락처는 1개 이상 입력해 주세요', 'error'); return; }
     setInfoSaving(true);
     try {
-      await updateVenueContact(venue.id, { address: addrDraft, phone: phoneDraft, hours: hoursDraft });
-      setAddr(addrDraft.trim()); setPhone(phoneDraft.trim()); setHours(hoursDraft.trim());
+      await updateVenueContact(venue.id, { address: addrDraft, hours: hoursDraft, contacts: next });
+      setAddr(addrDraft.trim()); setContacts(next); setHours(hoursDraft.trim());
       setInfoEditing(false);
       toast.show('매장 정보가 저장되었습니다', 'success');
     } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
@@ -1409,7 +1408,15 @@ function AboutPanel({
           </h3>
           <Icon name="chevron-down" size={16} className="shrink-0 text-ink-muted transition-transform group-open/vinfo:rotate-180" />
         </summary>
-      <section className="space-y-2 pt-1.5">
+      {/* ── 간격 스케일(오너 #17) ─────────────────────────────────────────────
+          실측(375·412): 여기는 세 덩어리(정보 dl · 지도 · 지도 링크)가 서로 다른 규칙으로
+          붙어 있었다. dl 행 간 6px(space-y-1.5) = 연락처 칩 사이 6px 라 '행'과 '칩'이 같은
+          간격이어서 위계가 뭉갰고, section→지도 0px · 지도→지도칩줄 0px 로 덩어리 경계가
+          아예 없었다(0 / 8 / 0 의 뒤죽박죽).
+          → 스케일을 셋으로 고정한다:  칩 사이 6px < 행 사이 8px < 덩어리 사이 12px.
+             같은 위계는 같은 값만 쓴다. */}
+      <div className="space-y-3 pt-1.5">
+      <section className="space-y-2">
         {editable && !infoEditing && (
           <div className="flex justify-end">
             <button type="button" onClick={openInfoEdit}
@@ -1423,11 +1430,12 @@ function AboutPanel({
               <input value={addrDraft} onChange={(e) => setAddrDraft(e.target.value)} maxLength={120}
                 placeholder="도로명 주소" className="input w-full text-sm" autoFocus />
             </label>
-            <label className="block">
-              <span className="mb-0.5 block text-2xs font-semibold text-ink-secondary">전화번호</span>
-              <input value={phoneDraft} onChange={(e) => setPhoneDraft(e.target.value)} maxLength={40}
-                inputMode="tel" placeholder="예: 010-1234-5678" className="input w-full text-sm" />
-            </label>
+            <div>
+              <span className="mb-1 block text-2xs font-semibold text-ink-secondary">
+                연락처 <span className="font-normal text-ink-muted">(1개 필수 · [+]로 추가)</span>
+              </span>
+              <ContactListEditor contacts={contactsDraft} onChange={setContactsDraft} idPrefix="venue-about" />
+            </div>
             <label className="block">
               <span className="mb-0.5 block text-2xs font-semibold text-ink-secondary">영업시간</span>
               <input value={hoursDraft} onChange={(e) => setHoursDraft(e.target.value)} maxLength={60}
@@ -1441,9 +1449,9 @@ function AboutPanel({
             </div>
           </div>
         ) : (
-          <dl className="space-y-1.5">
+          <dl className="space-y-2">
             <AddressRow address={addr} />
-            {phone ? <PhoneRow phone={phone} /> : editable && (
+            {contacts.length > 0 ? <ContactRows contacts={contacts} /> : editable && (
               <button type="button" onClick={openInfoEdit}
                 className="inline-flex h-8 items-center gap-1.5 rounded-input border border-dashed border-accent-400/40 bg-accent-300/[0.06] px-3 text-2xs font-bold text-accent-200 hover:bg-accent-300/10 transition-colors">
                 + 전화번호 등록
@@ -1452,26 +1460,15 @@ function AboutPanel({
             {hours && <Row dt="영업시간" dd={hours} />}
           </dl>
         )}
-        {/* 카카오톡 오픈채팅 — 첫 화면(Tier1)에서 매장 정보로 이동(Phase 10) */}
-        {(kakao || editable) && (
-          <div className="flex items-center gap-2 pt-1 flex-wrap">
-            {kakao && (
-              <a href={kakao} target="_blank" rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input bg-[#FEE500] text-[#3A1D1D] text-xs font-bold hover:brightness-95 transition-[transform,filter] active:scale-95">
-                <Icon name="comment" size={14} /> 카카오톡 오픈채팅
-              </a>
-            )}
-            {editable && (
-              <button type="button" onClick={onEditKakao} className="text-2xs text-ink-muted hover:text-accent-200">
-                {kakao ? '카톡링크 수정' : '+ 카톡링크 등록'}
-              </button>
-            )}
-          </div>
-        )}
       </section>
 
+      {/* 카카오톡 오픈채팅 — 첫 화면(Tier1)에서 매장 정보로 이동(Phase 10).
+          정보 행(dl)과 다른 덩어리라 12px 자리로 내려 세운다(예전엔 section 안 pt-1 로 8+4=12px 를
+          우연히 맞추고 있었다 — 같은 값이라도 규칙이 없으면 다음 사람이 깬다). */}
+      <KakaoChatRow kakao={kakao} canEdit={editable} onEdit={onEditKakao} />
+
       {/* 카카오맵 위치 + 외부 지도 링크(주소 행에서 재배치) */}
-      <KakaoMap address={addr} name={venue.name} onCoords={onCoords} />
+      <VenueLocationMap address={addr} name={venue.name} lat={venue.lat} lng={venue.lng} onCoords={onCoords} />
       <div className="flex gap-1.5">
         <a href={`https://map.kakao.com/link/search/${encodeURIComponent(addr)}`} target="_blank" rel="noopener noreferrer" className={MAP_CHIP}>
           <span aria-hidden className="h-2 w-2 rounded-full bg-[#FEE500]" /> 카카오맵에서 보기
@@ -1479,6 +1476,7 @@ function AboutPanel({
         <a href={`https://map.naver.com/v5/search/${encodeURIComponent(addr)}`} target="_blank" rel="noopener noreferrer" className={MAP_CHIP}>
           <span aria-hidden className="h-2 w-2 rounded-full bg-[#03C75A]" /> 네이버지도
         </a>
+      </div>
       </div>
       </details>
     </div>
@@ -1521,37 +1519,6 @@ function AddressRow({ address }: { address: string }) {
           {/* 손으로 그린 복사 SVG(stroke 2.2)였다 — 레지스트리 규격(stroke 2)과 굵기가 갈렸다(ICON-2) */}
           <Icon name="copy" size={12} className="mt-0.5 shrink-0 text-ink-muted group-hover:text-accent-200" />
         </button>
-      </dd>
-    </div>
-  );
-}
-
-// 전화 — 클릭하면 tel: 링크 또는 복사
-function PhoneRow({ phone }: { phone: string }) {
-  const toast = useToast();
-  const numbers = phone.split('/').map((s) => s.trim()).filter(Boolean);
-  return (
-    <div className="flex items-start gap-2 text-xs">
-      <dt className="w-14 shrink-0 text-ink-muted">연락처</dt>
-      <dd className="flex-1 flex flex-wrap gap-1.5">
-        {numbers.map((n) => (
-          <a
-            key={n}
-            href={`tel:${n.replace(/[^0-9+]/g, '')}`}
-            onClick={async (e) => {
-              // 클립보드 복사 성공 시 tel: 링크 막고 토스트 표시
-              // 실패 시 기본 tel: 링크 실행
-              try {
-                await navigator.clipboard.writeText(n);
-                e.preventDefault();
-                toast.show(`${n} 복사됨`, 'success');
-              } catch { /* 복사 실패 → tel: 링크 그대로 실행 */ }
-            }}
-            className="hit inline-flex h-8 items-center rounded-input border border-border-default bg-surface-high px-3 text-2xs font-semibold text-ink-secondary transition-colors hover:border-border-strong hover:text-ink-primary tabular-nums"
-          >
-            {n}
-          </a>
-        ))}
       </dd>
     </div>
   );
@@ -1627,6 +1594,164 @@ function KakaoMap({ address, name, onCoords }: { address: string; name: string; 
         카카오맵에서 보기 <Icon name="external" size={12} />
       </a>
     </section>
+  );
+}
+
+
+// ── 네이버 지도 v3 ───────────────────────────────────────────────────────────
+//
+// 왜 카카오를 지우지 않고 '분기'인가:
+//   카카오 지도는 코드가 멀쩡한데 **키(VITE_KAKAO_MAP_KEY)만 비어 있어** 안 뜬다.
+//   코드를 지우면 키가 생겼을 때 되돌릴 수단이 사라진다. 그래서 아래 우선순위로 고른다.
+//     ① VITE_NAVER_MAP_KEY 있음  → 네이버(오너 지시 공급자)
+//     ② 없고 VITE_KAKAO_MAP_KEY 있음 → 기존 카카오 경로 그대로(무회귀 롤백 경로)
+//     ③ 둘 다 없음               → **'위치 정보 준비 중' 대체 UI**(조용한 빈 화면 금지)
+//   네이버 키가 채워지면 ①이 이기므로 전환에 코드 변경이 필요 없다.
+
+/** 로더 상태 구독 — 인증 실패가 ready 뒤에 늦게 와도 화면이 따라간다. */
+function useNaverMapState(): NaverMapState {
+  const state = useSyncExternalStore(onNaverMapState, naverMapState, naverMapState);
+  useEffect(() => { loadNaverMaps(); }, []);
+  return state;
+}
+
+/** 지도 자리 공통 껍데기 — 지도가 못 떠도 '위치' 섹션과 외부 지도 링크는 남는다. */
+function MapShell({ address, children }: { address: string; children: ReactNode }) {
+  return (
+    <section className="reveal space-y-2">
+      <h3 className="text-sm font-semibold text-ink-primary">위치</h3>
+      <div className="rounded-card overflow-hidden border border-border-subtle" style={{ height: 200 }}>
+        {children}
+      </div>
+      <a
+        href={`https://map.naver.com/p/search/${encodeURIComponent(address)}`}
+        target="_blank" rel="noopener noreferrer"
+        className="inline-flex items-center gap-1 text-2xs text-ink-muted hover:text-accent-200 transition-colors"
+      >
+        네이버 지도에서 보기 <Icon name="external" size={12} />
+      </a>
+    </section>
+  );
+}
+
+function MapSpinner() {
+  return (
+    <div className="w-full h-full flex items-center justify-center bg-surface-high">
+      <span className="w-5 h-5 rounded-full border-2 border-accent-300 border-t-transparent animate-spin" />
+    </div>
+  );
+}
+
+/** 지도를 못 띄우는 모든 경우의 **보이는** 안내. 빈 화면으로 남기지 않는 것이 이 컴포넌트의 목적이다. */
+function MapNotice({ icon, title, desc }: { icon: 'map-pin' | 'alert'; title: string; desc: string }) {
+  return (
+    <div className="w-full h-full flex flex-col items-center justify-center gap-1 bg-surface-high px-4 text-center">
+      <Icon name={icon} size={18} className="text-ink-muted" />
+      <p className="text-xs font-semibold text-ink-secondary">{title}</p>
+      <p className="text-2xs leading-relaxed text-ink-muted">{desc}</p>
+    </div>
+  );
+}
+
+const escapeHtml = (s: string) =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+function NaverVenueMap({
+  address, name, lat, lng, onCoords,
+}: { address: string; name: string; lat?: number | null; lng?: number | null; onCoords?: (lat: number, lng: number) => void }) {
+  const state = useNaverMapState();
+  const onCoordsRef = useRef(onCoords);
+  onCoordsRef.current = onCoords;
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(
+    lat != null && lng != null ? { lat, lng } : null,
+  );
+  const [geoFailed, setGeoFailed] = useState(false);
+
+  // 매장이 바뀌면(주소/DB좌표 변경) 좌표를 다시 잡는다 — 이전 매장 좌표가 남아 엉뚱한 위치를 찍는 것 방지.
+  useEffect(() => {
+    setCoords(lat != null && lng != null ? { lat, lng } : null);
+    setGeoFailed(false);
+  }, [address, lat, lng]);
+
+  // DB 좌표가 없을 때만 지오코딩(네트워크·쿼터 절약).
+  useEffect(() => {
+    if (state !== 'ready' || coords) return;
+    let alive = true;
+    geocodeAddress(address).then((c) => {
+      if (!alive) return;
+      // 좌표 실패의 원인이 '주소'인지 '키'인지 가른다 — 틀린 안내를 내보내지 않기 위해.
+      if (!c) { setGeoFailed(true); probeNaverAuth(); return; }
+      setCoords(c);
+      // 좌표 라이트백(거리순 정렬의 데이터 공급) — 저장 권한 게이트는 부모가 쥔다.
+      onCoordsRef.current?.(c.lat, c.lng);
+    });
+    return () => { alive = false; };
+  }, [state, address, coords]);
+
+  // 지도 인스턴스 생성/파기.
+  useEffect(() => {
+    const maps = naverMaps();
+    const el = boxRef.current;
+    if (state !== 'ready' || !maps || !coords || !el) return;
+    const center = new maps.LatLng(coords.lat, coords.lng);
+    const map = new maps.Map(el, {
+      center,
+      zoom: 16,
+      scaleControl: false,
+      logoControl: true,
+      mapDataControl: false,
+      zoomControl: false,
+    });
+    const marker = new maps.Marker({
+      position: center,
+      map,
+      title: name,
+      icon: {
+        content:
+          '<div style="transform:translate(-50%,-100%);white-space:nowrap;pointer-events:none">'
+          + `<span class="inline-block rounded-badge bg-accent-400 px-2 py-0.5 text-2xs font-bold text-white shadow-lg">${escapeHtml(name)}</span>`
+          + '<span class="mx-auto mt-0.5 block h-2.5 w-2.5 rounded-full bg-accent-400 ring-2 ring-white"></span>'
+          + '</div>',
+        anchor: new maps.Point(0, 0),
+      },
+    });
+    return () => { marker.setMap(null); map.destroy?.(); };
+  }, [state, coords, name]);
+
+  return (
+    <MapShell address={address}>
+      {state === 'auth-failed' ? (
+        <MapNotice icon="alert" title="지도 인증에 실패했습니다"
+          desc="지도 서비스 키 또는 도메인 설정을 확인해 주세요. 아래 링크로 위치를 볼 수 있어요." />
+      ) : state === 'error' ? (
+        <MapNotice icon="alert" title="지도를 불러올 수 없습니다"
+          desc="네트워크 상태를 확인한 뒤 다시 시도해 주세요." />
+      ) : geoFailed ? (
+        <MapNotice icon="map-pin" title="지도 위치를 찾지 못했습니다"
+          desc={address} />
+      ) : state !== 'ready' || !coords ? (
+        <MapSpinner />
+      ) : (
+        <div ref={boxRef} className="w-full h-full" />
+      )}
+    </MapShell>
+  );
+}
+
+/** 공급자 선택 진입점 — 키 유무로만 갈린다(코드 삭제 없음). */
+function VenueLocationMap({
+  address, name, lat, lng, onCoords,
+}: { address: string; name: string; lat?: number | null; lng?: number | null; onCoords?: (lat: number, lng: number) => void }) {
+  if (naverMapConfigured()) {
+    return <NaverVenueMap address={address} name={name} lat={lat} lng={lng} onCoords={onCoords} />;
+  }
+  if (KAKAO_KEY) return <KakaoMap address={address} name={name} onCoords={onCoords} />;
+  return (
+    <MapShell address={address}>
+      <MapNotice icon="map-pin" title="위치 정보 준비 중"
+        desc="지도 서비스 준비 중입니다. 아래 링크로 위치와 길찾기를 확인할 수 있어요." />
+    </MapShell>
   );
 }
 

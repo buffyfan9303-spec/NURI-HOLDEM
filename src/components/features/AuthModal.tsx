@@ -6,6 +6,8 @@ import { useBackClose } from '../../lib/backstack';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
 import StatefulActionButton from '../atoms/StatefulActionButton';
+import AutoLoginCheckbox from '../atoms/AutoLoginCheckbox';
+import { isKeepSignedIn, setKeepSignedIn } from '../../lib/supabase';
 import { loginWithKakao, signInWithGoogle,
   signUpUser, signUpOwner, checkNicknameAvailable,
   requestPasswordReset, verifyPasswordResetOtp, setNewPassword,
@@ -13,14 +15,16 @@ import { loginWithKakao, signInWithGoogle,
 import TermsOfService   from '../../pages/legal/TermsOfService';
 import PrivacyPolicy    from '../../pages/legal/PrivacyPolicy';
 import LegalNotice      from '../../pages/legal/LegalNotice';
+import MarketingConsent from '../../pages/legal/MarketingConsent';
 
 type Mode     = 'login' | 'signup-user' | 'signup-owner' | 'forgot';
-type LegalDoc = 'terms' | 'privacy' | 'anti-gambling';
+type LegalDoc = 'terms' | 'privacy' | 'anti-gambling' | 'marketing';
 
 const LEGAL_TITLES: Record<LegalDoc, string> = {
   'terms':          '서비스 이용약관',
   'privacy':        '개인정보처리방침',
   'anti-gambling':  '사행성 배제 및 건전 이용 공지',
+  'marketing':      '마케팅 정보 수신 동의 [선택]',
 };
 
 const MODE_LABEL: Record<Mode, string> = {
@@ -103,6 +107,7 @@ function LegalSheet({ doc, onClose }: { doc: LegalDoc | null; onClose: () => voi
           {doc === 'terms'         && <TermsOfService />}
           {doc === 'privacy'       && <PrivacyPolicy />}
           {doc === 'anti-gambling' && <LegalNotice />}
+          {doc === 'marketing'     && <MarketingConsent />}
         </div>
 
         {/* 하단 닫기 버튼 */}
@@ -216,7 +221,7 @@ function ConsentSection({ c, allChecked, set, toggleAll, onView }: ConsentSectio
         />
         <CheckRow
           checked={c.marketing} onChange={(v) => set('marketing', v)}
-          label="마케팅 정보 수신에 동의합니다. (이벤트·할인·푸시알림)"
+          label="마케팅 정보 수신에 동의합니다. (이벤트·할인·푸시알림)" doc="marketing"
         />
         {/* 오너 #12 — 순위표에 '자주 가는 매장'을 붙이려면 이동·방문 패턴 공개 동의가 필요하다.
             동의하지 않아도 순위·닉네임은 그대로 집계·표시된다(랭킹에서 빼면 순위가 왜곡된다). */}
@@ -272,13 +277,13 @@ export default function AuthModal({ open, onClose, initialMode = 'login' }: Auth
 
 // ── 로그인 폼 ─────────────────────────────────────────────────────────────────
 
-function SocialLoginButtons({ onError }: { onError: (msg: string) => void }) {
+function SocialLoginButtons({ onError, keepSignedIn }: { onError: (msg: string) => void; keepSignedIn: boolean }) {
   // 진행 중인 소셜만 로딩 표기 + 두 버튼 동시 비활성(중복 리다이렉트 방지)
   const [busy, setBusy] = useState<'kakao' | 'google' | null>(null);
   return (
     <div className="space-y-1.5">
       <button type="button" disabled={busy !== null}
-        onClick={() => { setBusy('kakao'); loginWithKakao().catch((e) => { onError(e instanceof Error ? e.message : '카카오 로그인 실패'); setBusy(null); }); }}
+        onClick={() => { setBusy('kakao'); loginWithKakao(keepSignedIn).catch((e) => { onError(e instanceof Error ? e.message : '카카오 로그인 실패'); setBusy(null); }); }}
         className="flex h-12 w-full items-center justify-center gap-2 rounded-input bg-[#FEE500] text-sm font-bold text-black/85 transition active:scale-[0.99] disabled:opacity-60">
         {/* 카카오 심볼(말풍선) — 공식 버튼 규격 색상 */}
         <svg width="18" height="18" viewBox="0 0 24 24" fill="#000000" aria-hidden>
@@ -288,7 +293,7 @@ function SocialLoginButtons({ onError }: { onError: (msg: string) => void }) {
       </button>
 
       <button type="button" disabled={busy !== null}
-        onClick={() => { setBusy('google'); signInWithGoogle().catch((e) => { onError(e instanceof Error ? e.message : '구글 로그인 실패'); setBusy(null); }); }}
+        onClick={() => { setBusy('google'); signInWithGoogle(keepSignedIn).catch((e) => { onError(e instanceof Error ? e.message : '구글 로그인 실패'); setBusy(null); }); }}
         className="flex h-12 w-full items-center justify-center gap-2 rounded-input border border-border-default bg-white text-sm font-bold text-[#1f1f1f] transition active:scale-[0.99] disabled:opacity-60">
         {/* 구글 공식 4색 G 로고(브랜드 가이드 규격) */}
         <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden>
@@ -318,6 +323,12 @@ function LoginForm({ onClose, onForgot }: { onClose: () => void; onForgot: () =>
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
   const [error,    setError]    = useState('');
+  // 지난번 선택을 초기값으로 되살린다(국내 관행). 미선택 이력이면 켜짐 — AutoLoginCheckbox 주석의 근거 참고.
+  const [keepSignedIn, setKeep] = useState(() => isKeepSignedIn());
+
+  // 소셜 로그인은 리다이렉트로 페이지를 떠나므로 '제출 시점에 저장'이 통하지 않는다.
+  // 체크를 만질 때 즉시 플래그에 반영해 두면 이메일·소셜 어느 경로로 나가도 같은 값이 적용된다.
+  const changeKeep = (v: boolean) => { setKeep(v); setKeepSignedIn(v); };
 
   const btnRef = useRef<HTMLButtonElement>(null);
   // 엔터 제출은 상태 버튼 클릭으로 위임 — Idle→Loading→Success 모핑이 항상 한 곳에서 일어난다
@@ -325,7 +336,7 @@ function LoginForm({ onClose, onForgot }: { onClose: () => void; onForgot: () =>
   const doLogin = async () => {
     setError('');
     try {
-      await login(email.trim(), password);
+      await login(email.trim(), password, keepSignedIn);
       toast.show('로그인되었습니다', 'success');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : '';
@@ -340,11 +351,13 @@ function LoginForm({ onClose, onForgot }: { onClose: () => void; onForgot: () =>
 
   return (
     <form onSubmit={submit} className="space-y-3">
-      <SocialLoginButtons onError={(m) => setError(m)} />
+      <SocialLoginButtons onError={(m) => setError(m)} keepSignedIn={keepSignedIn} />
       <Field label="이메일" type="email" required autoComplete="email"
         value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
       <Field label="비밀번호" type="password" required autoComplete="current-password"
         value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
+
+      <AutoLoginCheckbox checked={keepSignedIn} onChange={changeKeep} />
 
       <div className="text-right -mt-1">
         <button type="button" onClick={onForgot} className="text-2xs text-ink-muted hover:text-accent-300 transition-colors">

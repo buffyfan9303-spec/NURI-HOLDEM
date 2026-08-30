@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useToast } from '../atoms/Toast';
 import {
   type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type VisitorType,
-  wonToMan, buyinFinance, getLedgerRange, getLedgerPlayers, getBuyinRequestStats, type BuyinReqStats,
+  wonToMan, buyinFinance, discountAmountOf, getLedgerRange, getLedgerPlayers, getBuyinRequestStats, type BuyinReqStats,
   posHasPassword, setPosCancelPassword, subscribeLedger,
 } from '../../api/ledger';
 import { toCsv, downloadCsv } from '../../lib/csv';
@@ -126,7 +126,7 @@ function StatsView({ venueId }: { venueId: string }) {
   const m = useMemo(() => {
     const src = (period === 'day' && excludeTypes.size > 0) ? buyins.filter((b) => !excludeTypes.has(playerType.get(b.playerName) ?? 'none')) : buyins;
     const fin = (b: LedgerBuyin) => buyinFinance(b, sessionByKey.get(bkey(b)) ?? { buyinAmount: 0, cardAmount: null, discounts: [] });
-    let revenue = 0, unpaid = 0, support = 0, ticket = 0, ticketUnpaid = 0, entries = 0, underEntries = 0, discountCnt = 0;
+    let revenue = 0, unpaid = 0, support = 0, ticket = 0, ticketUnpaid = 0, entries = 0, underEntries = 0, discountCnt = 0, discountWon = 0;
     let mainEntries = 0, mainRev = 0, sideEntries = 0, sideRev = 0; const sideGames = new Set<string>();
     const revByDate: Record<string, { mainRev: number; sideRev: number; mainE: number; sideE: number; players: Set<string> }> = {}; // 일자별 추세(매출·엔트리·인원)
     const byMethod: Record<PaymentMethod, number> = { ticket: 0, cash: 0, transfer: 0, card: 0, support: 0 };
@@ -144,7 +144,12 @@ function StatsView({ venueId }: { venueId: string }) {
       if (b.gameSeq > 1) { rd.sideRev += f.paid; rd.sideE += f.entry; } else { rd.mainRev += f.paid; rd.mainE += f.entry; }
       rd.players.add(b.playerName);
       if (f.entry > 0 && f.entry < 1) underEntries++; // 참고용
-      if (b.discountIndex > 0) discountCnt++; // 할인 이벤트가 적용된 바인(분납 포함 — discountIndex로 일원화)
+      // 할인 이벤트가 적용된 바인(분납 포함 — discountIndex로 일원화).
+      // #20: 건수만으론 '얼마를 덜 받았나'를 못 본다 — 그 회차 세션의 프리셋 금액으로 합계도 함께 쌓는다.
+      if (b.discountIndex > 0) {
+        const dw = discountAmountOf(sessionByKey.get(bkey(b)) ?? { discounts: [] }, b.discountIndex);
+        if (dw > 0) { discountCnt++; discountWon += dw; }
+      }
       ticket += f.ticketPaid; ticketUnpaid += f.ticketUnpaid;
       byMethod[b.paymentMethod]++;
       byPlayer[b.playerName] = (byPlayer[b.playerName] ?? 0) + 1;
@@ -183,7 +188,7 @@ function StatsView({ venueId }: { venueId: string }) {
       dayCount, visitor, dow,
       avgEntryPerDay: dayCount ? entries / dayCount : 0,
       avgRevenuePerDay: dayCount ? revenue / dayCount : 0,
-      discountCnt, discountRatio: src.length > 0 ? (discountCnt / src.length) * 100 : 0, // 전체 바인 중 할인 적용 비율
+      discountCnt, discountWon, discountRatio: src.length > 0 ? (discountCnt / src.length) * 100 : 0, // 전체 바인 중 할인 적용 비율
       cardRatio: cashLike > 0 ? (byMethod.card / cashLike) * 100 : 0,   // 현금성 결제 중 카드 비중
       unpaidRatio: revenue > 0 ? (unpaid / revenue) * 100 : 0,
     };
@@ -315,8 +320,8 @@ function StatsView({ venueId }: { venueId: string }) {
           {/* 주요 지표 — 아이콘 카드 */}
           <div className="grid grid-cols-3 gap-2">
             <StatCard label="총 엔트리" value={m.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} icon="users" />
-            <StatCard label="할인 바인" value={`${m.discountCnt}건`} sub="할인 적용 바인" icon="down" />
-            <StatCard label="할인 비율" value={`${m.discountRatio.toFixed(1)}%`} sub="전체 바인 중 할인" icon="percent" gold />
+            <StatCard label="할인 엔트리" value={`${m.discountCnt}건`} sub={`전체 바인 중 ${m.discountRatio.toFixed(1)}%`} icon="down" />
+            <StatCard label="총 할인액" value={`${m.discountWon.toLocaleString()} 원`} sub={m.discountWon > 0 ? `할인 없었다면 ${(m.revenue + m.discountWon).toLocaleString()}원` : '적용된 할인 없음'} icon="percent" gold />
           </div>
           <div className="grid grid-cols-3 gap-2">
             <StatCard label="완납 매출액" value={`${m.revenue.toLocaleString()} 원`} icon="wallet" emerald />
@@ -439,11 +444,11 @@ function StatsView({ venueId }: { venueId: string }) {
                 </div>
                 <div className="rounded-input bg-surface-high border border-border-default py-1.5 text-center">
                   <p className="text-base font-bold text-amber-300 tabular-nums">{clockAgg.earlies}</p>
-                  <p className="text-[11px] text-ink-muted">얼리</p>
+                  <p className="text-[11px] text-ink-muted">얼리(칩단위)</p>
                 </div>
               </div>
               <p className="text-2xs text-ink-muted mt-1.5 leading-relaxed">
-                마감 시 클락에서 손보정된 최종 수치(생존·아웃 포함)입니다. <b className="text-ink-secondary">장부 총 엔트리({m.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })})는 바인 기록 기준</b>이라 다를 수 있어요 — 통계·정산은 장부 기준, 이 값은 운영 참고용입니다.{clockAgg.games > 1 ? ` (게임 ${clockAgg.games}개 합산)` : ''}
+                마감 시 클락에서 손보정된 최종 수치(생존·아웃 포함)입니다. <b className="text-ink-secondary">장부 총 엔트리({m.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })})는 바인 기록 기준</b>이라 다를 수 있어요 — 통계·정산은 장부 기준, 이 값은 운영 참고용입니다. 얼리는 <b className="text-ink-secondary">기준칩 배수 합</b>(더블얼리 1명 = 2)이며, 2026-08-30 이전 마감분은 인원 수로 기록돼 있어 그대로 표시됩니다.{clockAgg.games > 1 ? ` (게임 ${clockAgg.games}개 합산)` : ''}
               </p>
             </Section>
           )}

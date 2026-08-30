@@ -6,10 +6,13 @@
 import { test, expect } from '@playwright/test';
 import { stabilizeBackstack, dismissOverlays, SUPABASE_URL, ANON_KEY } from './_session';
 
-/** 공개 매장 하나를 익명 REST 로 가져온다(테스트가 데이터에 결혼하지 않게) */
+/** 공개 **매장** 하나를 익명 REST 로 가져온다(테스트가 데이터에 결혼하지 않게).
+ *  ⚠ kind=eq.venue 는 필수다. venues 테이블에는 딜러팀·동호회 같은 커뮤니티 그룹도 같이 산다 —
+ *    그걸 뽑으면 `/?v=` 는 VenuePage 가 아니라 GroupPage 를 열고, 이 게이트는 '매장 페이지 없음'
+ *    으로 조용히 실패한다(2026-08-30 실제로 그렇게 깨졌다). 셀렉터를 푸는 게 아니라 좁히는 수정이다. */
 async function anyVenueId(): Promise<string | null> {
   const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/venues?select=id&approved=eq.true&status=eq.active&limit=1`,
+    `${SUPABASE_URL}/rest/v1/venues?select=id&approved=eq.true&status=eq.active&kind=eq.venue&limit=1`,
     { headers: { apikey: ANON_KEY } },
   );
   const rows = (await res.json()) as { id: string }[];

@@ -14,8 +14,10 @@ interface AuthContextValue {
   isOwner: boolean;
   isApprovedOwner: boolean;
   loading: boolean;
-  /** 이메일/비밀번호 로그인 (Supabase Auth) */
-  login: (email: string, password: string) => Promise<void>;
+  /** 이메일/비밀번호 로그인 (Supabase Auth).
+   *  keepSignedIn: 자동 로그인(로그인 상태 유지) — true=브라우저를 닫아도 유지 / false=탭을 닫으면 해제.
+   *  생략하면 이 브라우저의 직전 선택을 그대로 따른다(lib/supabase 의 KEEP_KEY). */
+  login: (email: string, password: string, keepSignedIn?: boolean) => Promise<void>;
   logout: () => Promise<void>;
   /** 프로필(이름·아바타·색상) 수정 */
   updateProfile: (patch: ProfilePatch) => Promise<void>;
@@ -89,8 +91,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [applyProfileWithDailyPoint]);
 
   // ── 로그인 / 로그아웃 ────────────────────────────────────────────────────────
-  const login = useCallback(async (email: string, password: string) => {
-    const u = await signIn(email, password);
+  const login = useCallback(async (email: string, password: string, keepSignedIn?: boolean) => {
+    const u = await signIn(email, password, keepSignedIn);
     applyProfileWithDailyPoint(u);
   }, [applyProfileWithDailyPoint]);
 

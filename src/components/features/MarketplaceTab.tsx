@@ -10,6 +10,7 @@ import { MessagesModal, MyListingsModal, MyLikesModal } from './MyMarketModal';
 import { useSkeletonGate } from '../../lib/useSkeletonGate';
 import Icon from '../atoms/Icon';
 import { onColorInkClass } from '../../lib/color';
+import { goSubTab } from '../../lib/subTabTransition';
 
 // ── 상수 ─────────────────────────────────────────────────────────────────────
 
@@ -23,6 +24,11 @@ const CATEGORIES: { id: ListingCategory | 'all'; label: string }[] = [
   { id: 'item',      label: '아이템' },
   { id: 'etc',       label: '기타'   },
 ];
+
+/** 카테고리 칩 진열 순서 — 하위 탭 전환 방향(forward/back) 기준. */
+const CAT_ORDER = CATEGORIES.map((c) => c.id);
+/** 정렬 칩 진열 순서 — 카테고리와 같은 스코프(목록 하나가 갈리는 같은 전환이다). */
+const SORT_ORDER = ['recent', 'popular'] as const;
 
 const CONDITION_COLOR: Record<ListingCondition, string> = {
   S: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
@@ -173,7 +179,7 @@ function MarketplaceTab({
       {/* ── 카테고리 — 가로 스크롤(번개장터식, 줄바꿈 없음) ───────── */}
       {/* 오너 지시(2026-08-28): 칩(pill) 형태 제거 — 커뮤니티 홀덤펍 필터와 같은
           배경·보더 없는 텍스트 필터(활성 = 액센트 색+굵기만). */}
-      <div className="flex items-center gap-3 overflow-x-auto scrollbar-none [-webkit-overflow-scrolling:touch]">
+      <div data-market-catbar="" className="flex items-center gap-3 overflow-x-auto scrollbar-none [-webkit-overflow-scrolling:touch]">
         {CATEGORIES.map((cat) => {
           const active = category === cat.id;
           return (
@@ -181,7 +187,7 @@ function MarketplaceTab({
               key={cat.id}
               type="button"
               aria-pressed={active}
-              onClick={() => setCategory(cat.id)}
+              onClick={() => goSubTab('market-cat', CAT_ORDER, category, cat.id, () => setCategory(cat.id))}
               className={[
                 'shrink-0 whitespace-nowrap py-1 text-xs transition-colors',
                 active ? 'font-bold text-accent-200' : 'font-semibold text-ink-muted hover:text-ink-primary',
@@ -196,8 +202,8 @@ function MarketplaceTab({
       {/* ── 정렬·필터 바 ────────────────────────────────────────────── */}
       <div className="flex items-center justify-between gap-2 text-2xs">
         <div className="flex items-center gap-1">
-          <SortPill active={sortBy === 'recent'}  onClick={() => setSortBy('recent')}  label="최신순"   />
-          <SortPill active={sortBy === 'popular'} onClick={() => setSortBy('popular')} label="조회수순" />
+          <SortPill active={sortBy === 'recent'}  onClick={() => goSubTab('market-cat', SORT_ORDER, sortBy, 'recent',  () => setSortBy('recent'))}  label="최신순"   />
+          <SortPill active={sortBy === 'popular'} onClick={() => goSubTab('market-cat', SORT_ORDER, sortBy, 'popular', () => setSortBy('popular'))} label="조회수순" />
           <span className="ml-2 text-ink-muted">
             <input
               id="includeSold"
@@ -212,7 +218,9 @@ function MarketplaceTab({
         <span className="text-ink-muted tabular-nums">총 {visible.length}건</span>
       </div>
 
-      {/* ── 매물 목록: 게시판(리스트) 전용 ───────────────────────── */}
+      {/* ── 매물 목록: 게시판(리스트) 전용 ─────────────────────────
+          data-market-panel: 카테고리·정렬 전환의 본문(방향성 푸시 대상). 위 바들은 제자리. */}
+      <div data-market-panel="">
       {loading && listings.length === 0 && !showSkel ? null : loading && listings.length === 0 ? (
         // [DS] MO-6 스켈레톤 — 실제 ListingRow 골격 복제(배지행+제목+모바일 메타행, --row-h-md 계약).
         // BoardHeader 를 스켈레톤에도 그대로 렌더 — 전엔 데이터 도착 때 데스크톱 헤더 행이
@@ -250,6 +258,7 @@ function MarketplaceTab({
           </ul>
         </div>
       )}
+      </div>
 
       {visible.length > limit && (
         <button

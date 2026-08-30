@@ -10,6 +10,13 @@ import { matchClockSchedule as matchSchedule, msToRegClose } from '../../lib/reg
 import { EmptyState } from '../atoms/Skeleton';
 import Icon from '../atoms/Icon';
 import { useSkeletonGate } from '../../lib/useSkeletonGate';
+import { goSubTab } from '../../lib/subTabTransition';
+
+/** 진행 게임 정렬 칩 — 진열 순서가 곧 하위 탭 전환 방향(forward/back)의 기준이다. */
+const LIVE_SORT_ORDER = ['default', 'players', 'time', 'distance'] as const;
+const LIVE_SORT_LABEL: Record<(typeof LIVE_SORT_ORDER)[number], string> = {
+  default: '기본', players: '인원', time: '시간', distance: '거리',
+};
 import { getMyFollowedVenueIds, type Venue } from '../../api/community';
 import type { Schedule } from '../../api/schedules';
 
@@ -153,10 +160,10 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
           </div>
           <div className="flex shrink-0 items-center gap-1">
             {games && games.length > 1 && (
-              <div className="flex items-center gap-0.5 rounded-input bg-surface-high p-0.5">
-                {([['default', '기본'], ['players', '인원'], ['time', '시간'], ['distance', '거리']] as const).map(([k, l]) => (
-                  <button key={k} type="button" onClick={() => pickSort(k)} title={k === 'players' ? '남은 인원 많은 순' : k === 'time' ? '시작 시간 빠른 순' : k === 'distance' ? '내 위치 기준 가까운 지역 먼저(위치 권한 필요)' : '기본 순'}
-                    className={['h-7 rounded-[5px] px-2 text-2xs font-bold transition-colors', sortBy === k ? 'bg-accent-300 text-white' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>{l}</button>
+              <div data-live-sortbar="" className="flex items-center gap-0.5 rounded-input bg-surface-high p-0.5">
+                {LIVE_SORT_ORDER.map((k) => (
+                  <button key={k} type="button" onClick={() => goSubTab('live-sort', LIVE_SORT_ORDER, sortBy, k, () => pickSort(k))} title={k === 'players' ? '남은 인원 많은 순' : k === 'time' ? '시작 시간 빠른 순' : k === 'distance' ? '내 위치 기준 가까운 지역 먼저(위치 권한 필요)' : '기본 순'}
+                    className={['h-7 rounded-[5px] px-2 text-2xs font-bold transition-colors', sortBy === k ? 'bg-accent-300 text-white' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>{LIVE_SORT_LABEL[k]}</button>
                 ))}
               </div>
             )}
@@ -177,6 +184,8 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
           </div>
         )}
 
+        {/* 진행 게임 목록 — 정렬 전환의 본문(방향성 푸시 대상). 위 헤더·정렬 바는 제자리. */}
+        <div data-live-panel="">
         {games === null ? (
           showSkel ? (
             // [DS] MO-6: LiveCard 3열 골격 복제 — 같은 패딩·같은 min-h(3.5rem)라 도착해도 높이가 안 변한다(CLS 0).
@@ -258,6 +267,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
             })()}
           </div>
         )}
+        </div>
         {upcoming.length > 0 && (
           <div className="reveal space-y-1.5 pt-1">
             <p className="flex items-center gap-1 px-1 text-2xs font-bold text-ink-muted"><Icon name="clock" size={12} className="shrink-0" />오늘 곧 시작 <span className="text-accent-300">{upcoming.length}</span> <span className="font-normal">— 아직 클락 전</span></p>

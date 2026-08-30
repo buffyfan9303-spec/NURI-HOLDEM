@@ -5,11 +5,22 @@ import { currentUser } from './_session';
 import { resizeImage } from '../lib/storage';
 import { aiInspectImages } from './ai';
 
-/** 대회 구분 — 'official'=정식 대회(해외 포함, 국내 순위 인정) / 'pub'=일반 펍(기록만) */
+/**
+ * 대회 구분 — 'official'=대회(토너먼트, 해외 포함) / 'pub'=일반 펍(정기 게임).
+ *
+ * ⚠ 2026-08-30(오너 #11) "일반펍은 순위인증에 포함하지 않음. 대회만 포함."
+ *   'pub' 은 **과거 행을 읽어 표시하기 위해서만** 남아 있는 값이다. 신규 신청·승인 경로에는
+ *   더 이상 존재하지 않는다(신청 폼의 구분 선택 제거 + RLS `event_kind = 'official'` +
+ *   `rank_verifications_approved_official_chk`). 타입에서 'pub' 을 지우면 과거 행이
+ *   런타임에 타입 밖 값이 되어 라벨이 빈칸으로 뜬다 — 그래서 타입은 그대로 둔다.
+ */
 export type RankEventKind = 'official' | 'pub';
 export const EVENT_KIND_LABEL: Record<RankEventKind, string> = {
-  official: '정식 대회', pub: '일반 펍',
+  official: '대회', pub: '일반 펍(구 기록)',
 };
+
+/** 신규 신청·승인이 가질 수 있는 유일한 구분(오너 #11). 서버 RLS·CHECK 와 같은 값이다. */
+export const VERIFIABLE_EVENT_KIND: RankEventKind = 'official';
 
 /** 국내 순위 인정 임계 — 100만원(10T)당 1점. 계산 자체는 서버(moneyin_points)에만 있다. */
 export const MONEYIN_UNIT_WON = 1_000_000;
@@ -33,10 +44,17 @@ const mapRow = (r: any): RankVerification => ({
   proofPath: r.proof_url, idCardPath: r.id_card_path ?? null, userId: r.user_id,
 });
 
-/** 인증 신청 — 증빙·신분증 업로드 후 pending 등록 */
+/**
+ * 인증 신청 — 증빙·신분증 업로드 후 pending 등록.
+ *
+ * event_kind 는 더 이상 신청자가 고르지 않는다(오너 #11). 항상 '대회'로만 접수되고,
+ * 그것이 실제 대회인지는 운영자가 증빙을 보고 판정한다(승인=대회 확정 / 반려=대회 아님).
+ * 서버 RLS 도 event_kind='official' 이외의 INSERT 를 거부하므로, 여기서 값을 열어 두면
+ * 화면만 통과하고 저장에서 실패하는 어긋남이 생긴다.
+ */
 export async function submitRankVerification(input: {
   nickname: string; eventName: string; amountWon: number; proof: File; idCard: File;
-  eventKind?: RankEventKind; isOverseas?: boolean;
+  isOverseas?: boolean;
 }): Promise<void> {
   if (IS_MOCK) return;
   const uid = (await currentUser())?.id;
@@ -54,7 +72,7 @@ export async function submitRankVerification(input: {
   const { error } = await supabase.from('rank_verifications').insert({
     user_id: uid, nickname: input.nickname, event_name: input.eventName.trim(),
     amount_won: Math.round(input.amountWon), proof_url: proofPath, id_card_path: idPath,
-    event_kind: input.eventKind ?? 'official', is_overseas: input.isOverseas ?? false,
+    event_kind: VERIFIABLE_EVENT_KIND, is_overseas: input.isOverseas ?? false,
   });
   if (error) throw new Error(error.message);
 }
@@ -70,8 +88,9 @@ export async function myRankVerifications(): Promise<RankVerification[]> {
 }
 
 /**
- * 국내 순위 — '운영자 승인' + '정식 대회(해외 포함)' + 금액 임계를 모두 통과한 건만.
+ * 국내 순위 — '운영자 승인' + '대회(해외 포함)' + 금액 임계를 모두 통과한 건만.
  * points 는 서버의 moneyin_points()(100만원당 1점)가 계산한다 — 여기서 재계산하지 않는다.
+ * 오너 #11 이후 일반 펍은 애초에 승인될 수 없으므로 이 목록에는 대회만 남는다.
  */
 export interface DomesticRow {
   nickname: string; points: number; totalWon: number; wins: number; overseas: number;
@@ -104,19 +123,22 @@ export async function signedVerifyUrl(path: string): Promise<string> {
 /**
  * (운영자) 승인/거절 — 어느 쪽이든 신분증은 즉시 삭제(개인정보 최소 보관).
  *
- * eventKind: 승인 시 대회 구분을 운영자가 확정한다. 신청자의 자기신고를 그대로 믿지 않는다 —
- *   'official' 로 승인해야만 국내 순위에 합산되고, 'pub' 으로 승인하면 기록은 남되 순위에서 빠진다.
- *   (오너 #7 "관리자 설정에서 이를 승인한 경우에만 순위에 등록이 가능")
+ * 오너 #11 이후 승인의 의미가 하나로 줄었다: **승인 = 대회로 확정**.
+ *   예전엔 '일반 펍으로 승인'(기록만 남기고 순위 제외)이라는 제3의 결말이 있었는데,
+ *   그게 곧 "일반 펍도 순위 인증에 들어와 있다"는 상태였다. 이제 대회가 아니면 반려다.
+ *   승인 시 event_kind 를 'official' 로 못 박는 이유: 구버전 화면에서 'pub' 으로 접수된
+ *   대기 건이 남아 있을 수 있고, 그대로 승인하면 서버 CHECK 에 걸려 승인 자체가 실패한다.
+ *   (반려는 신고값을 그대로 둔다 — 반려 사유를 나중에 읽을 때 원래 신고가 필요하다.)
  */
 export async function adminDecideRankVerification(
   v: RankVerification,
   approve: boolean,
-  opts?: { note?: string; eventKind?: RankEventKind },
+  opts?: { note?: string },
 ): Promise<void> {
   const { error } = await supabase.from('rank_verifications').update({
     status: approve ? 'approved' : 'rejected',
     admin_note: opts?.note ?? null,
-    event_kind: opts?.eventKind ?? v.eventKind,
+    event_kind: approve ? VERIFIABLE_EVENT_KIND : v.eventKind,
     decided_at: new Date().toISOString(),
     id_card_path: null,
   }).eq('id', v.id);

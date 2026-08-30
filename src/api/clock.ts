@@ -1,6 +1,6 @@
 // src/api/clock.ts — 토너먼트 클락(블라인드 타이머) API
 import { supabase, IS_MOCK } from '../lib/supabase';
-import { earlyTypeOf, type LedgerBuyin } from './ledger';
+import { earlyTypeOf, type EarlyType, type LedgerBuyin } from './ledger';
 
 /** 얼리 판정에 필요한 세션 정보 */
 export interface EarlyWindow { earlyDoubleMin?: number; earlySingleMin?: number; tournamentStart?: string | null; openedAt?: string | null }
@@ -107,6 +107,47 @@ export function cumulativeMinutesThroughLevel(levels: ClockLevel[], levelNo: num
     if (l.kind === 'level') { count++; if (count >= levelNo) return mins; }
   }
   return mins;
+}
+
+/** 스타트 후 경과분 → '그때 진행 중이던 레벨 번호'(1-based, 브레이크 구간은 직전 레벨 번호를 유지).
+ *  오너 규칙(#21): 5시 스타트·20분 듀레이션이면 5시 20분 '전'에 온 손님은 1레벨이다.
+ *  ⚠ 경계는 반열림 [누적시작, 누적끝) — 정확히 20분에 온 손님은 2레벨이다(레벨2가 그 순간 시작하므로).
+ *  경과가 음수면 0(스타트 전), 구조를 다 소진하면 마지막 레벨 번호. */
+export function levelNoAtMinutes(levels: ClockLevel[], mins: number): number {
+  if (!levels.length || !(mins >= 0)) return 0;
+  let acc = 0, no = 0;
+  for (const l of levels) {
+    if (l.kind === 'level') no++;
+    acc += l.minutes || 0;
+    if (mins < acc) return Math.max(1, no);
+  }
+  return Math.max(1, no);
+}
+
+/** 지금 진행 중인 레벨 번호(1-based) — 낡은 행이어도 effectiveLevel 보정을 거쳐 '진짜 지금'을 준다.
+ *  왜 여기 있나: 장부(바인 시점 얼리·할인 확정)와 클락이 같은 레벨 번호를 봐야 한다.
+ *  각자 인라인으로 세면 브레이크 한 칸 차이로 얼리가 갈린다. */
+export function currentLevelNo(
+  s: Pick<ClockState, 'config' | 'running' | 'currentIndex' | 'endsAt' | 'remainingMs'>, nowMs = Date.now(),
+): number {
+  const lv = s.config?.levels ?? [];
+  if (!lv.length) return 0;
+  const { index } = effectiveLevel(s, nowMs);
+  let no = 0;
+  for (let i = 0; i <= index && i < lv.length; i++) if (lv[i].kind === 'level') no++;
+  return Math.max(1, no);
+}
+
+/** 레벨 번호 → 얼리 유형. null = 이 게임은 얼리를 안 쓴다(자동판정에 맡김). */
+export function earlyTypeAtLevel(
+  cfg: Pick<ClockConfig, 'earlyDoubleLevel' | 'earlySingleLevel'>, levelNo: number,
+): EarlyType | null {
+  const d = cfg.earlyDoubleLevel ?? 0, sg = cfg.earlySingleLevel ?? 0;
+  if (d <= 0 && sg <= 0) return null;
+  if (levelNo <= 0) return null;
+  if (d > 0 && levelNo <= d) return 'double';
+  if (sg > 0 && levelNo <= sg) return 'single';
+  return 'none';
 }
 
 /** earlyDoubleLevel/earlySingleLevel(레벨) → earlyDoubleMin/earlySingleMin(분, 파생) 재계산.
@@ -218,22 +259,12 @@ export async function saveClockLevel(
 //   · levelCatchUp   : 실제 전진 패치(쓰기). 쓰기 권한(can_access_ledger) 있는 운영자 화면만 호출한다.
 // 같은 while 보정이 이미 MultiClockOverview·ClockRemoteBar 에 복붙돼 있어 3벌째가 되기 전에 단일소스로 뺀다.
 
-/** 표시용 실효 레벨 — running 인데 endsAt 이 지났으면 경과분만큼 인덱스를 전진시켜 계산.
- *  drifted=true = DB 행이 낡았다(아직 아무도 전진을 쓰지 못했다). */
-export interface ClockEffective { index: number; remainingMs: number; drifted: boolean }
-
-export function effectiveLevel(
-  s: Pick<ClockState, 'config' | 'running' | 'currentIndex' | 'endsAt' | 'remainingMs'>, nowMs = Date.now(),
-): ClockEffective {
-  const lv = s.config?.levels ?? [];
-  const last = Math.max(0, lv.length - 1);
-  const from = Math.max(0, Math.min(s.currentIndex, last));
-  let idx = from;
-  let rem = s.running && s.endsAt ? new Date(s.endsAt).getTime() - nowMs : s.remainingMs;
-  // idx < last 가드가 핵심 — 없으면 종료된 토너의 인덱스가 무한히 커진다(브레이크는 levels 원소라 자연히 지나간다).
-  while (s.running && rem < 0 && idx < last) { idx++; rem += (lv[idx].minutes || 0) * 60_000; }
-  return { index: idx, remainingMs: Math.max(0, rem), drifted: idx !== from };
-}
+// effectiveLevel 은 순수 계산이라 lib/clockLevel.ts 로 내렸다 — 그래야
+// App → lib/regStatus → api/clock → api/ledger 정적 사슬이 끊겨 업주용 장부 청크가
+// 첫 화면 임계 경로에서 빠진다(그 파일 상단 주석 참고). 여기서 **재수출**하므로
+// `from '../api/clock'` 로 쓰던 기존 임포트는 한 줄도 바꿀 필요가 없다.
+import { effectiveLevel } from '../lib/clockLevel';
+export { effectiveLevel, type ClockEffective } from '../lib/clockLevel';
 
 /** 자동 전진 결과. advanced=한 번에 넘어간 레벨 수(2 이상이면 '밀렸다가 따라잡은' 보정),
  *  finished=마지막 레벨까지 소진해 토너가 끝난 경우. */
@@ -390,11 +421,46 @@ export function deriveClockCounts(buyins: LedgerBuyin[], early: EarlyWindow): De
   return { entries: players.size, rebuys, earlies, doubleEarlies, totalBuyins: buyins.length };
 }
 
+// ── 얼리 '카운트' 산정(#21) ────────────────────────────────────────────────────
+// 오너 규칙: "기준이 5천이라 치고 1레벨 얼리가 1만이면 1레벨 바인 3명 → 클락 얼리 6,
+//            2레벨 얼리가 5천이고 2레벨 바인 1명 → 총 7."
+// 즉 클락의 '얼리'는 **사람 수가 아니라 기준칩 배수의 합**이다. 예전엔 사람 수(=4)를 올려서
+// 실물 클락과 숫자가 달랐고, 운영자가 매번 수기 보정(adjEarlies)으로 메우고 있었다.
+
+/** 얼리 카운트 1단위(칩) = 설정된 얼리 보너스 중 가장 작은 값 = 오너가 말한 '기준'.
+ *  둘 다 0(얼리 미설정)이면 0 — 이때는 구 동작(1건=1)으로 떨어진다. */
+export function earlyUnitChips(cfg: Pick<ClockConfig, 'earlyBonus' | 'doubleEarlyBonus'>): number {
+  const pos = [Math.max(0, cfg.earlyBonus ?? 0), Math.max(0, cfg.doubleEarlyBonus ?? 0)].filter((n) => n > 0);
+  return pos.length ? Math.min(...pos) : 0;
+}
+
+/** 얼리 1건이 올리는 카운트. 더블얼리 보너스가 비어 있으면 1얼리 보너스로 대체(0 증발 방지). */
+export function earlyUnitsOf(cfg: Pick<ClockConfig, 'earlyBonus' | 'doubleEarlyBonus'>, t: EarlyType): number {
+  if (t === 'none') return 0;
+  const unit = earlyUnitChips(cfg);
+  if (unit <= 0) return 1; // 보너스 미설정 게임 = 예전처럼 '1건 = 얼리 1'
+  const single = Math.max(0, cfg.earlyBonus ?? 0);
+  const dbl = Math.max(0, cfg.doubleEarlyBonus ?? 0);
+  const chips = t === 'double' ? (dbl > 0 ? dbl : single) : (single > 0 ? single : 0);
+  return chips > 0 ? Math.round(chips / unit) : 0;
+}
+
+/** 장부 집계 → 클락에 올라갈 얼리 카운트(수기 보정 제외). */
+export function earlyUnitTotal(
+  d: Pick<DerivedCounts, 'earlies' | 'doubleEarlies'>,
+  cfg: Pick<ClockConfig, 'earlyBonus' | 'doubleEarlyBonus'>,
+): number {
+  const dbl = Math.max(0, d.doubleEarlies);
+  const sgl = Math.max(0, d.earlies - d.doubleEarlies);
+  return dbl * earlyUnitsOf(cfg, 'double') + sgl * earlyUnitsOf(cfg, 'single');
+}
+
 /** 라이브 통계 스냅샷 계산(클락 디스플레이 + 라이브 보드 공통). */
 export function computeLiveStats(st: ClockState, derived: DerivedCounts, cfg: ClockConfig): ClockLiveStats {
   const entries = derived.entries + st.adjEntries;
   const rebuys = derived.rebuys + st.adjRebuys;
-  const earlies = derived.earlies + st.adjEarlies;
+  // ⚠ 얼리는 인원이 아니라 기준칩 배수의 합(#21). 수기 보정은 그대로 '단위' 가산이다.
+  const earlies = Math.max(0, earlyUnitTotal(derived, cfg) + st.adjEarlies);
   const addons = st.adjAddons;
   const alive = Math.max(0, entries - st.eliminations);
   const dEarly = derived.doubleEarlies;

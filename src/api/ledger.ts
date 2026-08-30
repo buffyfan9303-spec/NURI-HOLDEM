@@ -5,7 +5,11 @@ import type { ClockConfig as ClockConfigT } from './clock'; // 타입 전용 —
 
 export type PaymentMethod = 'ticket' | 'cash' | 'transfer' | 'card' | 'support';
 export type EarlyType = 'double' | 'single' | 'none'; // 더블얼리 / 1얼리 / 없음
-export interface DiscountPreset { label: string; amount: number } // amount: 원
+/** 할인 프리셋. amount: 원.
+ *  level: 이 할인이 '자동 적용'되는 마감 레벨(1-based, 0/미지정=자동 적용 없음).
+ *  예) 「1레벨 5만 할인」 = { label:'1레벨', amount:50_000, level:1 } — 1레벨 안에 바인하면 자동 선택.
+ *  ⚠ jsonb 컬럼이라 필드 추가에 마이그레이션이 필요 없다. 기존 행은 level 없음 = 수기 선택(구 동작). */
+export interface DiscountPreset { label: string; amount: number; level?: number }
 /** 고정 유형 코드 + 그 외(기타/직접입력)는 자유 텍스트로 저장 */
 export type VisitorType = 'new' | 'regular' | 'staff' | 'other';
 const VISITOR_KNOWN: Record<string, string> = { new: '신규방문', regular: '기존손님', staff: '관계자', other: '기타' };
@@ -178,6 +182,42 @@ export function nonSplitSnapshot(method: PaymentMethod, discountIndex: number,
 /** 할인 적용 후 표시용 금액(원). */
 export function discountAmountOf(s: { discounts?: DiscountPreset[] }, idx: number): number {
   return (s.discounts && idx > 0 && s.discounts[idx - 1]) ? s.discounts[idx - 1].amount : 0;
+}
+
+/** 바인 시점 레벨에 자동 적용할 할인 프리셋 자리번호(1-based, 0=없음) — #20.
+ *  규칙: level 이 붙은 프리셋 중 `levelNo <= level` 인 것들 가운데 **가장 좁은(작은) level** 이 이긴다.
+ *  예) 1레벨 5만 · 2레벨 3만 → 1레벨 바인은 5만, 2레벨 바인은 3만, 3레벨 바인은 할인 없음.
+ *  왜 '가장 작은 level' 인가: 얼리(더블→1얼리)와 같은 계단 규칙이라 운영자가 두 번 배우지 않아도 된다.
+ *  ⚠ 자동은 어디까지나 초기값이다 — 결제 모달에서 언제든 다른 할인/없음으로 바꿀 수 있어야 한다(오너 #20). */
+export function autoDiscountIndex(discounts: DiscountPreset[] | undefined, levelNo: number): number {
+  if (!discounts?.length || levelNo <= 0) return 0;
+  let best = 0, bestLv = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < discounts.length; i++) {
+    const d = discounts[i];
+    const lv = d?.level ?? 0;
+    if (lv <= 0 || (d?.amount ?? 0) <= 0) continue;
+    if (levelNo > lv) continue;
+    if (lv < bestLv) { bestLv = lv; best = i + 1; }
+  }
+  return best;
+}
+
+/** 금일 할인 집계(#20) — 마감정산에 '할인 엔트리 수 · 총 할인액'을 띄우기 위한 단일 소스.
+ *  count  = 할인이 걸린 바인(=할인 엔트리) 건수
+ *  total  = 그 할인액의 합(원)
+ *  entryLoss = 할인으로 깎인 엔트리 환산량(10만 게임 5만 할인 = 0.5)
+ *  ⚠ 분납도 discountIndex 로 일원화돼 있어 동일하게 잡힌다(2026-07 '레벨 할인' 사건의 교훈). */
+export interface DiscountSummary { count: number; total: number; entryLoss: number }
+export function discountSummary(
+  buyins: LedgerBuyin[],
+  s: { buyinAmount: number; discounts?: DiscountPreset[] },
+): DiscountSummary {
+  let count = 0, total = 0;
+  for (const b of buyins) {
+    const amt = discountAmountOf(s, b.discountIndex);
+    if (b.discountIndex > 0 && amt > 0) { count++; total += amt; }
+  }
+  return { count, total, entryLoss: s.buyinAmount > 0 ? total / s.buyinAmount : 0 };
 }
 
 export interface LedgerLossSummary { buyins: number; people: number; revenue: number; unpaid: number }

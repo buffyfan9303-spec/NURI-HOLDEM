@@ -32,7 +32,7 @@ export default function NoticeDetailModal({ notice, open, onClose, isAdmin, onEd
   const style = TYPE_STYLE[notice.type];
 
   return (
-    <Modal open={open} onClose={onClose} title="공지사항" maxWidth="md" variant="sheet">
+    <Modal open={open} onClose={onClose} title="공지사항" maxWidth="md" variant="sheet" dragToClose>
       <div className="p-4 space-y-4">
         {/* 유형 배지 */}
         <span className={[

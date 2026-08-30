@@ -1,5 +1,5 @@
 ﻿// src/api/auth.ts
-import { supabase, IS_MOCK } from '../lib/supabase';
+import { supabase, IS_MOCK, setKeepSignedIn, clearAuthStorage } from '../lib/supabase';
 import { currentUser } from './_session';
 import { makeSearchCache } from '../lib/searchCache';
 import { dedupe } from '../lib/inflight';
@@ -97,8 +97,15 @@ function rowToUser(row: any): User {
 }
 
 // ── 이메일/비밀번호 로그인 ────────────────────────────────────────────────────
-export async function signIn(email: string, password: string): Promise<User> {
+/**
+ * @param keepSignedIn 자동 로그인(로그인 상태 유지). true=localStorage(브라우저를 닫아도 유지) /
+ *   false=sessionStorage(탭을 닫으면 해제). 생략하면 직전 선택을 그대로 따른다.
+ *
+ * ⚠ 저장소 결정은 **토큰이 기록되기 전에** 끝나야 한다 — 그래서 signInWithPassword 보다 먼저 쓴다.
+ */
+export async function signIn(email: string, password: string, keepSignedIn?: boolean): Promise<User> {
   if (IS_MOCK) throw new Error('Mock mode: use loginDemo');
+  if (typeof keepSignedIn === 'boolean') setKeepSignedIn(keepSignedIn);
 
   const { data: authData, error: authError } =
     await supabase.auth.signInWithPassword({ email, password });
@@ -284,8 +291,15 @@ export async function respondStaffInvite(inviteId: string, accept: boolean): Pro
 // ── 로그아웃 ──────────────────────────────────────────────────────────────────
 export async function signOut(): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.auth.signOut();
-  if (error) throw error;
+  try {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+  } finally {
+    // 성공/실패와 무관하게 두 저장소의 인증 잔재를 걷어낸다.
+    // 자동 로그인 도입으로 토큰이 들어갈 수 있는 곳이 두 곳이 됐다 — 한쪽이라도 남으면
+    // 다음 부팅 때 그 세션으로 되살아나 '로그아웃했는데 다시 로그인됨' 이 된다.
+    clearAuthStorage();
+  }
 }
 
 // ── 현재 세션에서 프로필 조회 ─────────────────────────────────────────────────
@@ -480,8 +494,10 @@ export async function setNewPassword(newPassword: string): Promise<void> {
 }
 
 // ── 구글 OAuth 로그인 ─────────────────────────────────────────────────────────
-export async function signInWithGoogle(): Promise<void> {
+/** @param keepSignedIn 자동 로그인 여부 — 리다이렉트 전에 정해야 PKCE 검증자·토큰이 같은 저장소로 간다. */
+export async function signInWithGoogle(keepSignedIn?: boolean): Promise<void> {
   if (IS_MOCK) throw new Error('데모 모드에서는 구글 로그인을 사용할 수 없습니다');
+  if (typeof keepSignedIn === 'boolean') setKeepSignedIn(keepSignedIn);
   const { error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: { redirectTo: window.location.origin },
@@ -532,8 +548,9 @@ export const searchMembersForRanking = makeSearchCache(rawSearchMembersForRankin
 
 /** 카카오 로그인 — Supabase OAuth(kakao). 리다이렉트 후 detectSessionInUrl 이 세션을 잡고
  *  onAuthStateChange → 프로필 로드로 이어진다. 신규 유저 프로필은 handle_new_user 트리거가 생성. */
-export async function loginWithKakao(): Promise<void> {
+export async function loginWithKakao(keepSignedIn?: boolean): Promise<void> {
   if (IS_MOCK) throw new Error('환경 설정 후 이용할 수 있습니다');
+  if (typeof keepSignedIn === 'boolean') setKeepSignedIn(keepSignedIn);
   const { error } = await supabase.auth.signInWithOAuth({
     provider: 'kakao',
     options: { redirectTo: window.location.origin },

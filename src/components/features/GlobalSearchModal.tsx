@@ -88,7 +88,13 @@ export default function GlobalSearchModal({ open, onClose, venues, schedules, po
               ))}</ul>
             </div>
           ) : (
-            <p className="py-8 text-center text-2xs text-ink-muted">매장 · 대회 · 게시글을 한 번에 검색하세요. (단축키 ⌘K / Ctrl+K)</p>
+            // ICON-3: ⌘(U+2318)는 컬러 이모지 폰트에 없는 단색 기호라 OS 폰트 유무에 그림이 좌우된다
+            // (안드로이드 두부 위험 — 유저의 99% 가 모바일이다). 뜻은 그대로 두고 글리프만 Icon 으로 옮긴다.
+            <p className="flex flex-wrap items-center justify-center gap-x-1 py-8 text-center text-2xs text-ink-muted">
+              매장 · 대회 · 게시글을 한 번에 검색하세요. (단축키
+              <span className="inline-flex items-center gap-0.5"><Icon name="command" size={11} />K</span>
+              / Ctrl+K)
+            </p>
           )
         ) : empty ? (
           <div className="space-y-3 py-8 text-center">

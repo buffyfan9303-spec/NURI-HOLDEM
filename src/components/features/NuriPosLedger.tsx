@@ -12,6 +12,7 @@ import Icon from '../atoms/Icon';
 import { deleteLedgerPlayerAtomic, CELL_TAKEN, cancelMyRecentBuyin,
   type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type LedgerSessionListItem, type DiscountPreset, type EarlyType, type LedgerGame, type LedgerCloseSnapshot, type LedgerLossSummary,
   visitorLabel, wonToMan, WON_PER_MAN, buyinFinance, earlyTypeOf, setBuyinEarly, MAIN_GAME_SEQ, ledgerLossSummary,
+  cardUnit, discountAmountOf, autoDiscountIndex, discountSummary, type DiscountSummary,
   getLedgerSession, getLedgerGames, saveLedgerSession, openLedgerSession, closeLedgerSession, reopenLedgerSession, deleteLedgerSession,
   setRegistrationClosed, getLastLedgerSettings, getLedgerSessionList, getLedgerAccessUserIds, notifyLedgerOpen,
   getLedgerBuyins, upsertBuyin, upsertBuyinSplit, cancelBuyin,
@@ -28,7 +29,7 @@ import { getSchedules, type Schedule } from '../../api/schedules';
 import { clockPatchFromSchedule, clockPrizesFromSchedule, applyToLedger, applyToClock, presetFromRound } from '../../lib/gameInherit';
 import { saveGamePreset, type GamePreset } from '../../api/presets';
 import PresetPicker from './PresetPicker';
-import { getClockState, saveClockState, saveClockLevel, subscribeClock, defaultClockConfig, deriveClockCounts, computeLiveStats, levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, type ClockState, type ClockConfig, type ClockLevelSnapshot } from '../../api/clock';
+import { getClockState, saveClockState, saveClockLevel, subscribeClock, defaultClockConfig, deriveClockCounts, computeLiveStats, levelSnapshot, levelMovePatch, levelUndoPatch, levelCatchUp, currentLevelNo, earlyTypeAtLevel, withDerivedEarly, type ClockState, type ClockConfig, type ClockLevelSnapshot } from '../../api/clock';
 import { getMyVenueStaff, searchMembersForRanking, type User } from '../../api/auth';
 import { useBackClose } from '../../lib/backstack';
 import { planBuyinApprovals } from '../../lib/buyinApproval';
@@ -339,23 +340,18 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const clockLinked = !!clock && clock.sessionDate === date;
   // 바인 추가 시점의 얼리 유형 — 클락의 "현재 레벨"을 earlyDouble/SingleLevel과 직접 비교해 확정 기록.
   // 클락 화면이 닫혀 전진 못 한 경우(endsAt 경과)는 경과분만큼 레벨을 전진시켜 판정.
-  const clockEarlyNow = useCallback((): EarlyType | null => {
-    if (!clock || clock.sessionDate !== date) return null;
-    const cfg = clock.config;
-    const dLv = cfg.earlyDoubleLevel ?? 0, sLv = cfg.earlySingleLevel ?? 0;
-    if (dLv <= 0 && sLv <= 0) return null;
-    const lv = cfg.levels;
-    let idx = Math.max(0, Math.min(clock.currentIndex, lv.length - 1));
-    if (clock.running && clock.endsAt) {
-      let over = Date.now() - new Date(clock.endsAt).getTime();
-      while (over > 0 && idx < lv.length - 1) { idx++; over -= (lv[idx].minutes || 0) * 60_000; }
-    }
-    let no = 0;
-    for (let i = 0; i <= idx && i < lv.length; i++) if (lv[i].kind === 'level') no++;
-    if (dLv > 0 && no <= dLv) return 'double';
-    if (sLv > 0 && no <= sLv) return 'single';
-    return 'none';
+  // ⚠ 레벨 세는 로직을 여기 인라인으로 두면 클락 화면과 한 칸씩 어긋난다(브레이크 처리 차이).
+  //   currentLevelNo(api/clock)로 단일화 — 얼리(#21)와 레벨 할인(#20)이 같은 레벨 번호를 본다.
+  /** 연동 클락의 '지금 레벨'(1-based). 0 = 클락 미연동 또는 블라인드 구조 없음. */
+  const clockLevelNow = useCallback((): number => {
+    if (!clock || clock.sessionDate !== date) return 0;
+    return currentLevelNo(clock);
   }, [clock, date]);
+  const clockEarlyNow = useCallback((): EarlyType | null => {
+    const no = clockLevelNow();
+    if (no <= 0 || !clock) return null;
+    return earlyTypeAtLevel(clock.config, no);
+  }, [clock, clockLevelNow]);
   // 리모컨 → 클락 상태 직접 저장(클락 화면은 realtime 구독으로 즉시 동기)
   const patchClock = useCallback((patch: Partial<ClockState>) => {
     setClock((cur) => {
@@ -487,7 +483,9 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       revenue += f.paid; unpaid += f.unpaid; entries += f.entry;
       ticket += f.ticketPaid; ticketUnpaid += f.ticketUnpaid; support += f.support;
     }
-    return { totalBuyins, entries, ticket, ticketUnpaid, revenue, unpaid, support };
+    // #20: 할인 엔트리 수 · 금일 총 할인액 — 마감정산/요약바가 같은 계산(discountSummary)을 쓴다.
+    const discount = discountSummary(buyins, session);
+    return { totalBuyins, entries, ticket, ticketUnpaid, revenue, unpaid, support, discount };
   }, [buyins, session]);
 
   // 플레이어별 총 바이인/미수(금액) — 행마다 buyins 전체를 훑던 것(O(행×바인))을
@@ -557,7 +555,9 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       const fins = buyins.map((b) => buyinFinance(b, session));
       const rev = fins.reduce((s, f) => s + f.paid, 0);
       const unpaidCnt = fins.filter((f) => f.unpaid > 0 || f.ticketUnpaid > 0).length;
-      let closeMsg = `마감 완료 — 오늘 바인 ${buyins.length} · 매출 ${wonToMan(rev)}만${unpaidCnt ? ` · 미수 ${unpaidCnt}건` : ' · 미수 없음'}`;
+      // #20: 할인은 '덜 받은 돈'이라 마감 한 줄에도 같이 선다 — 매출만 보면 왜 덜 들어왔는지 알 수 없다.
+      const dsum = discountSummary(buyins, session);
+      let closeMsg = `마감 완료 — 오늘 바인 ${buyins.length} · 매출 ${wonToMan(rev)}만${dsum.count ? ` · 할인 ${dsum.count}엔트리 −${wonToMan(dsum.total)}만` : ''}${unpaidCnt ? ` · 미수 ${unpaidCnt}건` : ' · 미수 없음'}`;
       // 클락 연동 마감 시: 클락 최종 인원 vs 장부 인원 차이(정산 누수 조기 경보)
       // ⚠(경고 이모지)를 메시지에 심고 includes('⚠')로 분기하던 코드였다 — 문자열이 곧 제어 플래그라
       // 이모지 한 글자만 지워도 error 토스트가 조용히 success 로 바뀐다. 불리언으로 분리한다.
@@ -1257,8 +1257,10 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
             ) : <span className="text-2xs text-accent-300 text-center font-bold px-3 py-1">마감됨</span>}
           </div>
         </div>
-        {(stats.support > 0 || stats.ticketUnpaid > 0) && (
+        {(stats.support > 0 || stats.ticketUnpaid > 0 || stats.discount.count > 0) && (
           <p className="text-2xs text-center mt-0.5">
+            {stats.discount.count > 0 && <span className="text-accent-300">할인 {stats.discount.count}엔트리 · −{wonToMan(stats.discount.total)}만</span>}
+            {stats.discount.count > 0 && (stats.ticketUnpaid > 0 || stats.support > 0) && <span className="text-ink-muted"> · </span>}
             {stats.ticketUnpaid > 0 && <span className="text-danger-light">티켓 미수 {stats.ticketUnpaid}장</span>}
             {stats.ticketUnpaid > 0 && stats.support > 0 && <span className="text-ink-muted"> · </span>}
             {stats.support > 0 && <span className="text-indigo-300">가게지원 {stats.support}건</span>}
@@ -1270,6 +1272,9 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       {selected && (
         <PaymentModal
           cell={selected} hasPw={hasPw} session={session}
+          levelNo={clockLevelNow()}
+          autoDiscIdx={autoDiscountIndex(session.discounts, clockLevelNow())}
+          autoEarly={selected.entryNo === 1 ? clockEarlyNow() : 'none'}
           lastPick={(() => {
             // 신규 기록일 때만 — 그 손님의 직전 바인과 동일하게 원탭 반복(하룻밤 100+ 바인의 왕복 절감)
             if (selected.buyin) return null;
@@ -1471,6 +1476,11 @@ function ClockRemoteBar({ clock, onPatch, onOpenClock, active = true }: {
   const ls = clock.liveStats;
   const entries = ls ? (ls.entries ?? 0) : 0;
   const alive = ls?.alive != null ? ls.alive : Math.max(0, entries - clock.eliminations);
+  // ⚠ liveStats.earlies 는 이미 adjEarlies 를 더한 '최종값'이다(computeLiveStats).
+  //   여기서 adjEarlies 를 또 더하면 보정이 두 번 반영돼, +1 을 누를 때마다 표시가 2씩 뛴다.
+  //   '자동'은 최종값에서 보정을 되빼야 나온다. (얼리 단위 = 기준칩 배수 — §#21)
+  const earlyTotal = ls?.earlies ?? 0;
+  const earlyAuto = earlyTotal - (clock.adjEarlies ?? 0);
   const out = (d: number) => onPatch({ eliminations: Math.max(0, clock.eliminations + d) });
   const adjEarly = (d: number) => onPatch({ adjEarlies: Math.max(-9999, (clock.adjEarlies ?? 0) + d) });
   const stepBtn = 'h-10 w-10 shrink-0 rounded-input border border-border-default text-ink-secondary text-base font-bold flex items-center justify-center active:bg-surface-high disabled:opacity-35';
@@ -1529,10 +1539,10 @@ function ClockRemoteBar({ clock, onPatch, onOpenClock, active = true }: {
       {/* 3행: 보정 스테퍼 — 얼리(수기 가감). 클락이 자동 집계한 값에 ± */}
       <div className="flex items-center gap-2 rounded-input bg-surface-base/40 px-2.5 py-1.5">
         <span className="text-2xs font-semibold text-ink-muted shrink-0">얼리 보정</span>
-        <span className="text-2xs text-ink-muted/70">자동 {ls?.earlies ?? 0}{(clock.adjEarlies ?? 0) !== 0 ? ` ${(clock.adjEarlies ?? 0) > 0 ? '+' : ''}${clock.adjEarlies}` : ''}</span>
+        <span className="text-2xs text-ink-muted/70">자동 {earlyAuto}{(clock.adjEarlies ?? 0) !== 0 ? ` ${(clock.adjEarlies ?? 0) > 0 ? '+' : ''}${clock.adjEarlies}` : ''}</span>
         <span className="flex-1" />
         <button type="button" onClick={() => adjEarly(-1)} aria-label="얼리 −1" className={stepBtn}>−</button>
-        <span className="w-7 text-center text-sm font-extrabold text-accent-300 tabular-nums">{(ls?.earlies ?? 0) + (clock.adjEarlies ?? 0)}</span>
+        <span className="w-7 text-center text-sm font-extrabold text-accent-300 tabular-nums">{earlyTotal}</span>
         <button type="button" onClick={() => adjEarly(1)} aria-label="얼리 +1" className={stepBtn}>+</button>
       </div>
     </div>
@@ -1767,14 +1777,14 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
 
   const setDisc = (i: number, patch: Partial<DiscountPreset>) =>
     setDiscs((arr) => arr.map((d, idx) => (idx === i ? { ...d, ...patch } : d)));
-  const addDisc = () => setDiscs((arr) => (arr.length < 5 ? [...arr, { label: '', amount: 0 }] : arr));
+  const addDisc = () => setDiscs((arr) => (arr.length < 5 ? [...arr, { label: '', amount: 0, level: 0 }] : arr));
   // ⚠ 바인은 discountIndex(1-based 자리번호)로 할인을 참조한다 → 중간 칸을 배열에서 빼면
   //   그 뒤 할인을 쓰던 기존 바인이 한 칸씩 당겨져 '다른 금액'으로 계산된다(과거 금액 오류 원인).
   //   마지막 칸만 실제로 줄이고, 중간 칸은 자리를 남긴 채 비운다(계산은 0원 · 선택 목록에선 숨김).
   const removeDisc = (i: number) => setDiscs((arr) => (
     i === arr.length - 1
       ? arr.slice(0, -1)
-      : arr.map((d, idx) => (idx === i ? { label: '', amount: 0 } : d))
+      : arr.map((d, idx) => (idx === i ? { label: '', amount: 0, level: 0 } : d))
   ));
 
   // 프리셋 게임 클릭 → 아래 내용 자동입력(수정 가능). 담당직원(operId)은 프리셋과 무관 → 그대로 유지.
@@ -1879,6 +1889,11 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   const submit = () => {
     if (cash <= 0) return;
     const tStart = startISO;
+    // #21: 장부에 적은 얼리 '레벨'을 세션의 얼리 '분'으로 환산해 함께 저장한다.
+    //   왜: 지금까지 이 환산은 클락 화면을 실제로 연 사람만 했다(TournamentClock). 클락을 안 열면
+    //   세션의 earlyDoubleMin/earlySingleMin 이 0 인 채로 남아, 바인 시각 자동판정이 전부 '없음'이 되고
+    //   마감 스냅샷의 얼리도 0 으로 굳었다 — 설정은 적혀 있는데 숫자만 안 올라가는 상태.
+    let earlyDMin = base.earlyDoubleMin ?? 0, earlySMin = base.earlySingleMin ?? 0;
     // 연동 클락 얼리 설정 저장 — 진행 중 클락은 건드리지 않음(비파괴 병합)
     if (!clockState?.running) {
       // PL3: '지난 게임 그대로 열기'로 불러온 완성 클락 설정이 있으면 그게 베이스(빈 기본값보다 우선)
@@ -1888,9 +1903,11 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       const linkedSched = schedules.find((s) => s.id === schedId) ?? null;
       const schedPatch = linkedSched ? clockPatchFromSchedule(linkedSched) : {};
       const prizeRows = linkedSched ? clockPrizesFromSchedule(linkedSched) : null;
-      const cfg = { ...baseCfg, ...schedPatch, ...(prizeRows ? { prizes: prizeRows } : {}),
+      // withDerivedEarly 경유 필수 — 레벨→분 파생을 안 돌리면 블라인드 길이가 바뀌어도 얼리 분이 옛값에 묶인다.
+      const cfg = withDerivedEarly({ ...baseCfg, ...schedPatch, ...(prizeRows ? { prizes: prizeRows } : {}),
         ...(inheritClockRef.current.patch ?? {}), // PL2c: 게임 프리셋의 클락 몫(부분 패치)
-        earlyBonus, doubleEarlyBonus, earlyDoubleLevel, earlySingleLevel, startStack, rebuyStack };
+        earlyBonus, doubleEarlyBonus, earlyDoubleLevel, earlySingleLevel, startStack, rebuyStack });
+      earlyDMin = cfg.earlyDoubleMin; earlySMin = cfg.earlySingleMin;
       const next: ClockState = clockState
         ? { ...clockState, config: cfg }
         : { venueId: base.venueId, gameSeq: base.gameSeq, sessionDate: null, title: base.title ?? '', config: cfg, currentIndex: 0, running: false, endsAt: null, remainingMs: 0, adjEntries: 0, adjRebuys: 0, adjEarlies: 0, adjAddons: 0, eliminations: 0 };
@@ -1906,8 +1923,9 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       // ⚠ 압축 금지 — 바인은 discountIndex(1-based 자리번호)로 할인을 참조한다.
       //   filter로 빈 칸을 없애면 3번 할인을 쓰던 기존 바인이 2번 금액으로 바뀌거나 할인이 증발한다.
       //   빈 칸은 amount 0으로 자리만 남겨 두고(계산은 0원), 선택 목록에서만 감춘다.
-      discounts: discs.map((d) => ({ label: d.label ?? '', amount: d.amount > 0 ? d.amount : 0 })),
-      earlyDoubleMin: base.earlyDoubleMin ?? 0, earlySingleMin: base.earlySingleMin ?? 0, tournamentStart: tStart,
+      //   level(자동 적용 레벨)도 함께 보존한다 — 떨어뜨리면 세션 수정 한 번에 자동 적용이 조용히 꺼진다(#20).
+      discounts: discs.map((d) => ({ label: d.label ?? '', amount: d.amount > 0 ? d.amount : 0, level: d.level && d.level > 0 ? d.level : 0 })),
+      earlyDoubleMin: earlyDMin, earlySingleMin: earlySMin, tournamentStart: tStart,
     });
   };
 
@@ -2045,19 +2063,27 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
         <div className="space-y-1.5">
           {discs.map((d, i) => (
             <div key={i} className="flex items-center gap-1.5">
-              <span className="text-2xs text-accent-300 font-bold w-9 shrink-0">할인{i + 1}</span>
-              <input value={d.label} onChange={(e) => setDisc(i, { label: e.target.value })} maxLength={20} placeholder="예) 1레벨" className="input flex-1 min-w-0 text-sm" />
-              <div className="relative w-24 shrink-0">
-                <input type="number" inputMode="decimal" step="0.1" min="0" value={manVal(d.amount)} onChange={(e) => setDisc(i, { amount: parseMan(e.target.value) })} placeholder="할인액" className="input w-full text-sm pr-6 tabular-nums" />
+              <span className="w-9 shrink-0 text-2xs font-bold text-accent-300">할인{i + 1}</span>
+              <input value={d.label} onChange={(e) => setDisc(i, { label: e.target.value })} maxLength={20} placeholder="예) 1레벨" className="input min-w-0 flex-1 text-sm" />
+              <div className="relative w-20 shrink-0">
+                <input type="number" inputMode="decimal" step="0.1" min="0" value={manVal(d.amount)} onChange={(e) => setDisc(i, { amount: parseMan(e.target.value) })} placeholder="할인액" className="input w-full pr-6 text-sm tabular-nums" />
                 <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">만</span>
               </div>
-              <button type="button" onClick={() => removeDisc(i)} className="h-9 w-9 flex items-center justify-center text-ink-muted hover:text-danger-light text-xs shrink-0">✕</button>
+              {/* #20: 이 칸이 '자동 적용'의 전부다. 비워 두면 예전과 똑같이 수기 선택 전용으로 남는다. */}
+              <div className="relative w-16 shrink-0">
+                <input type="number" inputMode="numeric" min="0" max="60" value={d.level || ''} onChange={(e) => setDisc(i, { level: Math.max(0, Math.min(60, parseInt(e.target.value, 10) || 0)) })} placeholder="자동" className="input w-full pr-6 text-sm tabular-nums" />
+                <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">LV</span>
+              </div>
+              <button type="button" onClick={() => removeDisc(i)} aria-label={`할인${i + 1} 비우기`} className="flex h-9 w-9 shrink-0 items-center justify-center text-xs text-ink-muted hover:text-danger-light">✕</button>
             </div>
           ))}
           {discs.length < 5 && (
-            <button type="button" onClick={addDisc} className="w-full py-1.5 rounded-input border border-dashed border-border-default text-2xs text-ink-secondary hover:text-accent-300 hover:border-accent-400/50 transition-colors">+ 할인 추가</button>
+            <button type="button" onClick={addDisc} className="w-full rounded-input border border-dashed border-border-default py-1.5 text-2xs text-ink-secondary transition-colors hover:border-accent-400/50 hover:text-accent-300">+ 할인 추가</button>
           )}
-          <p className="text-2xs text-ink-muted">할인액만큼 차감해 엔트리를 비례 계산 — 예) 10만 게임에 5만 할인 = <b className="text-accent-300">0.5 엔트리</b>.</p>
+          <p className="text-2xs leading-relaxed text-ink-muted">
+            할인액만큼 차감해 엔트리를 비례 계산 — 예) 10만 게임에 5만 할인 = <b className="text-accent-300">0.5 엔트리</b>.<br />
+            <b className="text-accent-300">LV</b> 칸에 레벨을 적으면 <b className="text-accent-300">그 레벨까지 들어온 바인에 자동 적용</b>됩니다(예: 1LV 5만 · 2LV 3만 → 1레벨 5만, 2레벨 3만, 3레벨부터 없음). 결제창에서 언제든 바꿀 수 있습니다.
+          </p>
         </div>
       </Field>
 
@@ -2210,8 +2236,14 @@ function Overlay({ title, onClose, children }: { title: string; onClose: () => v
 // ── 2-Tap 결제 입력 모달 ──────────────────────────────────────────────────────
 interface SplitInput { cashAmount: number; cardAmount: number; transferAmount: number; ticketCount: number; unpaidAmount: number; discountIndex: number; }
 
-function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCancelBuyin, onSetEarly, lastPick, busy = false }: {
+function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCancelBuyin, onSetEarly, lastPick, busy = false, levelNo = 0, autoDiscIdx = 0, autoEarly = null }: {
   cell: SelectedCell; hasPw: boolean; session: LedgerSession;
+  /** 연동 클락의 지금 레벨(1-based, 0=미연동) — 얼리·할인 자동 적용의 근거를 화면에 밝힌다 */
+  levelNo?: number;
+  /** 그 레벨에서 자동 적용될 할인 자리번호(0=없음). 신규 기록의 초기값일 뿐 — 언제든 바꿀 수 있다(#20) */
+  autoDiscIdx?: number;
+  /** 신규 기록이 지금 저장되면 확정될 얼리 유형(null=클락 미연동 → 시각 자동판정에 맡김) */
+  autoEarly?: EarlyType | null;
   onClose: () => void;
   /** 저장 처리 중 — 모든 기록 버튼 비활성(더블탭 이중 기록 방지) */
   busy?: boolean;
@@ -2226,11 +2258,25 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
   const [pw, setPw] = useState('');
   // 분납 셀도 저장된 할인 이벤트를 그대로 복원한다.
   // ⚠ 과거엔 분납이면 무조건 0으로 시작해, 금액만 고쳐 재저장할 때마다 할인 기록이 지워졌다.
-  const [discIdx, setDiscIdx] = useState<number>(cell.buyin ? cell.buyin.discountIndex : 0);
+  // #20: 신규 기록은 '지금 레벨의 할인'을 미리 골라 둔다(자동 적용). 기존 기록은 저장값이 정본.
+  const [discIdx, setDiscIdx] = useState<number>(cell.buyin ? cell.buyin.discountIndex : autoDiscIdx);
+  // 자동으로 골라준 값을 사람이 그대로 두고 있는가 — 배지 문구를 '자동/직접'으로 정직하게 가른다.
+  const autoKept = !cell.buyin && autoDiscIdx > 0 && discIdx === autoDiscIdx;
   const discs = session.discounts ?? [];
-  const dualMethods: { key: PaymentMethod; label: string }[] = [
-    { key: 'cash', label: '현금' }, { key: 'transfer', label: '이체' }, { key: 'card', label: '카드' },
+  // 수납 상태(완납/미수)를 먼저 고르고 수단을 누른다 — 8버튼 격자를 4+토글로 접는다(#22).
+  // 티켓·가게지원까지 같은 규칙 아래 모여, '이 조합이 가능한가'를 매번 외우지 않아도 된다.
+  const [unpaidMode, setUnpaidMode] = useState<boolean>(cell.buyin?.isUnpaid ?? false);
+  const payMethods: { key: PaymentMethod; label: string }[] = [
+    { key: 'cash', label: '현금' }, { key: 'card', label: '카드' },
+    { key: 'transfer', label: '이체' }, { key: 'ticket', label: '티켓' },
   ];
+  const discWon = discountAmountOf(session, discIdx);
+  /** 그 수단으로 실제 받게 될 금액(원) — 티켓/지원은 현금 수납이 아니라 null */
+  const dueOf = (m: PaymentMethod): number | null => {
+    if (m === 'ticket' || m === 'support') return null;
+    const unit = m === 'card' ? cardUnit(session) : session.buyinAmount;
+    return Math.max(0, unit - discWon);
+  };
 
   // 분납/할인 상세
   const init = cell.buyin?.isSplit ? cell.buyin : null;
@@ -2265,6 +2311,37 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
         </header>
 
         <div className="p-3 space-y-2">
+          {/* 상태 요약 — '지금 무엇이 적용된 상태인가'를 먼저 보여준다.
+              #22: 예전엔 얼리·할인 배지가 버튼 사이에 흩어져 있어, 8개 버튼 중 하나를 누르는 순간
+              무슨 금액이 기록되는지 누르기 전엔 알 수 없었다. 결과를 먼저, 조작을 나중에. */}
+          <div className="rounded-input border border-border-subtle bg-surface-low px-2.5 py-2">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xs">
+              {levelNo > 0 && <span className="rounded-badge bg-surface-float px-1.5 py-0.5 font-bold text-ink-secondary tabular-nums">LV {levelNo}</span>}
+              <span className="font-bold text-amber-300">
+                얼리 {(() => {
+                  const t = cell.buyin ? earlyTypeOf(cell.buyin, session) : autoEarly;
+                  return t === 'double' ? '더블' : t === 'single' ? '1얼리' : t === 'none' ? '없음' : '—';
+                })()}
+              </span>
+              {discs.some((d) => d.amount > 0) && (
+                <>
+                  <span className="text-border-strong">·</span>
+                  <span className={discIdx > 0 ? 'font-bold text-accent-300' : 'text-ink-muted'}>
+                    할인 {discIdx > 0 ? `${discs[discIdx - 1]?.label || '할인' + discIdx} −${wonToMan(discWon)}만` : '없음'}
+                  </span>
+                </>
+              )}
+            </div>
+            {session.buyinAmount > 0 && (
+              <p className="mt-1 text-2xs text-ink-muted">
+                받을 금액 — 현금 <b className="tabular-nums text-ink-primary">{wonToMan(dueOf('cash') ?? 0)}만</b>
+                {cardUnit(session) !== session.buyinAmount && <> · 카드 <b className="tabular-nums text-ink-primary">{wonToMan(dueOf('card') ?? 0)}만</b></>}
+                {discIdx > 0 && <span className="text-accent-300"> · 이 바인 {(Math.max(0, session.buyinAmount - discWon) / session.buyinAmount).toLocaleString(undefined, { maximumFractionDigits: 2 })} 엔트리</span>}
+              </p>
+            )}
+          </div>
+
+          {/* 얼리 — 자동 판정을 그대로 두거나(자동), 이 바인만 수기로 확정한다 */}
           {cell.buyin && (
             <div className="flex items-center gap-1.5 flex-wrap pb-2 mb-1 border-b border-border-subtle">
               <span className="text-2xs text-ink-muted">얼리</span>
@@ -2277,37 +2354,39 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
                 );
               })}
               <span className="text-[10px] text-ink-muted w-full">
-                현재 {(() => { const t = earlyTypeOf(cell.buyin, session); return t === 'double' ? '더블얼리' : t === 'single' ? '1얼리' : '없음'; })()} · {cell.buyin.earlyOverride ? '확정(클락/수기)' : '시각 자동'}
+                {cell.buyin.earlyOverride
+                  ? '수기 확정 — 시각·레벨이 바뀌어도 이 값이 유지됩니다.'
+                  : '시각 자동 — 바인 시각을 레벨로 환산해 판정합니다.'}
               </span>
             </div>
           )}
           {!splitMode ? (
             <>
-              {/* 할인 선택 (세션 프리셋) */}
-              {discs.length > 0 && (
+              {/* 할인 — 세션에 등록된 프리셋. 레벨이 붙은 할인은 신규 기록에 자동 선택되고(#20),
+                  운영자는 여기서 언제든 다른 할인/없음으로 바꿀 수 있다(임의 수정 보장). */}
+              {discs.some((d) => d.amount > 0) && (
                 <div className="pb-2 mb-1 border-b border-border-subtle space-y-1.5">
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-xs text-ink-muted">할인:</span>
+                    <span className="text-xs text-ink-muted">할인</span>
                     <button type="button" onClick={() => setDiscIdx(0)}
-                      className={['text-xs font-bold px-2.5 py-1.5 rounded-badge border', discIdx === 0 ? 'bg-surface-float text-ink-primary border-border-strong' : 'text-ink-muted border-border-default'].join(' ')}>없음</button>
+                      className={['text-xs font-bold px-2.5 py-1.5 min-h-[2.2rem] rounded-badge border transition-colors',
+                        discIdx === 0 ? 'bg-surface-float text-ink-primary border-border-strong' : 'text-ink-muted border-border-default hover:text-ink-secondary'].join(' ')}>없음</button>
                     {/* 비운 자리(0원)는 감추되 인덱스는 그대로 둔다 — 자리번호가 바인 계산의 기준이라 재배열 불가 */}
                     {discs.map((d, i) => (d.amount <= 0 ? null : (
                       <button key={i} type="button" onClick={() => setDiscIdx(i + 1)}
-                        className={['text-xs font-bold px-2.5 py-1.5 rounded-badge border', discIdx === i + 1 ? 'bg-accent-300/15 text-accent-300 border-accent-400/40' : 'text-ink-muted border-border-default'].join(' ')}>
-                        {d.label || `할인${i + 1}`} ({wonToMan(d.amount)}만)
+                        className={['text-xs font-bold px-2.5 py-1.5 min-h-[2.2rem] rounded-badge border transition-colors',
+                          discIdx === i + 1 ? 'bg-accent-300/15 text-accent-300 border-accent-400/40' : 'text-ink-muted border-border-default hover:text-ink-secondary'].join(' ')}>
+                        {d.label || `할인${i + 1}`} −{wonToMan(d.amount)}만{d.level ? ` · ${d.level}LV` : ''}
                       </button>
                     )))}
                   </div>
-                  {discIdx > 0 && session.buyinAmount > 0 && (() => {
-                    const da = discs[discIdx - 1]?.amount ?? 0;
-                    const ent = Math.max(0, session.buyinAmount - da) / session.buyinAmount;
-                    return (
-                      <p className="text-2xs text-accent-300">
-                        할인 적용 → 이 바인 <b className="text-sm">{ent.toLocaleString(undefined, { maximumFractionDigits: 2 })} 엔트리</b>
-                        <span className="text-ink-muted"> = ({wonToMan(session.buyinAmount)}만 − {wonToMan(da)}만) / {wonToMan(session.buyinAmount)}만</span>
-                      </p>
-                    );
-                  })()}
+                  <p className="text-2xs text-ink-muted">
+                    {autoKept
+                      ? <span className="text-accent-300">LV {levelNo} 자동 적용 — 다른 할인이나 ‘없음’으로 바꿔도 됩니다.</span>
+                      : (autoDiscIdx > 0 && !cell.buyin)
+                        ? <>자동 적용({discs[autoDiscIdx - 1]?.label || `할인${autoDiscIdx}`})을 직접 바꿨습니다.</>
+                        : '할인액만큼 차감해 엔트리를 비례 계산합니다.'}
+                  </p>
                 </div>
               )}
 
@@ -2318,36 +2397,43 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
                   <Icon name="zap" size={15} className="shrink-0" />직전과 동일 — {lastPick.label}
                 </button>
               )}
-              {/* 티켓: 완납·미수(가불) */}
+
+              {/* 수납 상태 먼저(완납/미수) → 수단 하나.
+                  #22: 완납·미수 × 4수단 = 8버튼 격자가 화면 절반을 먹고 티켓만 따로 떨어져 있어
+                  '티켓 미수'가 되는지조차 매번 헷갈렸다. 상태를 축으로 접으면 오조작 표면이 절반이 된다. */}
+              <div className="grid grid-cols-2 gap-1.5 rounded-input bg-surface-low p-1">
+                {([[false, '완납'], [true, '미수']] as const).map(([v, label]) => (
+                  <button key={label} type="button" onClick={() => setUnpaidMode(v)}
+                    className={['h-9 rounded-input text-xs font-extrabold border transition-colors',
+                      unpaidMode === v
+                        ? (v ? 'bg-danger/15 text-danger-light border-danger/50' : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40')
+                        : 'text-ink-muted border-transparent hover:text-ink-secondary'].join(' ')}>
+                    {label}
+                  </button>
+                ))}
+              </div>
               <div className="grid grid-cols-2 gap-2">
-                <button type="button" disabled={busy} onClick={() => onPick('ticket', false, discIdx)}
-                  className="h-12 rounded-input border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 font-bold text-sm active:scale-95 transition hover:bg-emerald-500/20 disabled:opacity-50 disabled:pointer-events-none">
-                  티켓 완납{discIdx > 0 ? ' ·할인' : ''}
-                </button>
-                <button type="button" disabled={busy} onClick={() => onPick('ticket', true, discIdx)}
-                  className="h-12 rounded-input border border-danger/50 bg-danger/10 text-danger-light font-bold text-sm active:scale-95 transition hover:bg-danger/20 disabled:opacity-50 disabled:pointer-events-none">
-                  티켓 미수{discIdx > 0 ? ' ·할인' : ''}
-                </button>
+                {payMethods.map((m) => {
+                  const due = dueOf(m.key);
+                  return (
+                    <button key={m.key} type="button" disabled={busy} onClick={() => onPick(m.key, unpaidMode, discIdx)}
+                      className={['h-14 rounded-input border font-bold text-sm active:scale-95 transition disabled:opacity-50 disabled:pointer-events-none',
+                        unpaidMode
+                          ? 'border-danger/50 bg-danger/10 text-danger-light hover:bg-danger/20'
+                          : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'].join(' ')}>
+                      <span className="block leading-tight">{m.label} {unpaidMode ? '미수' : '완납'}</span>
+                      <span className="block text-2xs font-semibold opacity-70 tabular-nums">
+                        {due === null ? '티켓 1장' : `${wonToMan(due)}만`}{discIdx > 0 ? ' ·할인' : ''}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
 
-              {/* 현금/이체/카드: 완납·미수 */}
-              {dualMethods.map((m) => (
-                <div key={m.key} className="grid grid-cols-2 gap-2">
-                  <button type="button" disabled={busy} onClick={() => onPick(m.key, false, discIdx)}
-                    className="h-12 rounded-input border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 font-bold text-sm active:scale-95 transition hover:bg-emerald-500/20 disabled:opacity-50 disabled:pointer-events-none">
-                    {m.label} 완납{discIdx > 0 ? ' ·할인' : ''}
-                  </button>
-                  <button type="button" disabled={busy} onClick={() => onPick(m.key, true, discIdx)}
-                    className="h-12 rounded-input border border-danger/50 bg-danger/10 text-danger-light font-bold text-sm active:scale-95 transition hover:bg-danger/20 disabled:opacity-50 disabled:pointer-events-none">
-                    {m.label} 미수{discIdx > 0 ? ' ·할인' : ''}
-                  </button>
-                </div>
-              ))}
-
-              {/* 가게지원 */}
+              {/* 가게지원 — 수납이 없으므로 완납/미수 축 밖에 둔다(할인도 무의미) */}
               <button type="button" disabled={busy} onClick={() => onPick('support', false, 0)}
-                className="w-full h-12 rounded-input border border-indigo-400/50 bg-indigo-500/10 text-indigo-300 font-bold text-sm active:scale-95 transition hover:bg-indigo-500/20 disabled:opacity-50 disabled:pointer-events-none">
-                가게지원
+                className="w-full h-11 rounded-input border border-indigo-400/50 bg-indigo-500/10 text-indigo-300 font-bold text-sm active:scale-95 transition hover:bg-indigo-500/20 disabled:opacity-50 disabled:pointer-events-none">
+                가게지원 <span className="text-2xs font-semibold opacity-70">· 수납 없음</span>
               </button>
 
               {/* 분납/할인 상세 */}
@@ -2443,7 +2529,7 @@ function AmountRow({ label, value, set, danger }: { label: string; value: number
 
 // ── 장부 마감 모달 ────────────────────────────────────────────────────────────
 function CloseModal({ stats, unpaidPlayers, onClose, onConfirm }: {
-  stats: { totalBuyins: number; entries: number; ticket: number; revenue: number; unpaid: number; support: number };
+  stats: { totalBuyins: number; entries: number; ticket: number; ticketUnpaid: number; revenue: number; unpaid: number; support: number; discount: DiscountSummary };
   unpaidPlayers: { name: string; unpaid: number }[];
   onClose: () => void; onConfirm: (memo: string) => void;
 }) {
@@ -2459,6 +2545,33 @@ function CloseModal({ stats, unpaidPlayers, onClose, onConfirm }: {
           <SummaryStat label="회수 티켓" value={`${stats.ticket}장`} />
           <SummaryStat label="가게지원" value={`${stats.support}건`} />
         </div>
+
+        {/* #20: 할인은 '덜 받은 돈'이라 매출 옆에 같이 서야 한다.
+            예전엔 마감정산 어디에도 없어서, 5만 할인 20건(=100만)이 그냥 매출 미달로만 보였다.
+            할인 엔트리 수와 총 할인액을 같이 세워야 '왜 덜 들어왔는가'가 그 자리에서 끝난다. */}
+        <div className="rounded-input border border-accent-400/30 bg-accent-300/[0.06] p-2.5">
+          <p className="mb-1.5 flex items-center gap-1 text-2xs font-bold text-accent-300">
+            <Icon name="gift" size={12} className="shrink-0" />금일 할인
+          </p>
+          {stats.discount.count === 0 ? (
+            <p className="py-1 text-center text-2xs text-ink-muted">적용된 할인이 없습니다</p>
+          ) : (
+            <>
+              <div className="grid grid-cols-3 gap-2">
+                <SummaryStat label="할인 엔트리" value={`${stats.discount.count}건`} />
+                <SummaryStat label="총 할인액" value={`${wonToMan(stats.discount.total)}만원`} tone="danger" />
+                <SummaryStat label="엔트리 차감" value={`−${stats.discount.entryLoss.toLocaleString(undefined, { maximumFractionDigits: 2 })}`} />
+              </div>
+              <p className="mt-1.5 text-2xs text-ink-muted">
+                할인이 없었다면 완납 매출은 <b className="tabular-nums text-ink-secondary">{wonToMan(stats.revenue + stats.discount.total)}만원</b>입니다.
+              </p>
+            </>
+          )}
+        </div>
+
+        {stats.ticketUnpaid > 0 && (
+          <p className="text-2xs font-semibold text-danger-light">티켓 미수 {stats.ticketUnpaid}장 — 회수 티켓 집계에서 빠져 있습니다.</p>
+        )}
 
         {/* 미수자 리스트 */}
         <div className="rounded-input border border-danger/30 bg-danger/[0.05] p-2.5">

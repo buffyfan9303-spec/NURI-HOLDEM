@@ -6,8 +6,11 @@ import { useToast } from '../atoms/Toast';
 import { toCsv, downloadCsv } from '../../lib/csv';
 import SlidingPill from '../atoms/SlidingPill';
 import Icon from '../atoms/Icon';
+import { goSubTab } from '../../lib/subTabTransition';
 
 type Range = 'all' | '7' | '30' | '90';
+/** 기간 칩 진열 순서 — 하위 탭 전환 방향(forward/back) 기준. */
+const RANGE_ORDER: Range[] = ['all', '7', '30', '90'];
 
 /**
  * 고객 분석 — 방문 손님 전체 리스트(장부 기준).
@@ -91,12 +94,13 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
 
       {/* 기간 + 검색 + 정렬 */}
       <div className="flex flex-wrap items-center gap-1.5">
-        <div className="relative flex items-center gap-0.5 rounded-input bg-surface-high p-0.5">
+        <div data-crm-rangebar="" className="relative flex items-center gap-0.5 rounded-input bg-surface-high p-0.5">
           <SlidingPill activeKey={range} className="rounded-[6px] pill-active" />
           {([['all', '전체'], ['7', '7일'], ['30', '30일'], ['90', '90일']] as const).map(([id, label]) => {
             const on = range === id;
             return (
-              <button key={id} type="button" data-pill-active={on || undefined} onClick={() => setRange(id)}
+              <button key={id} type="button" data-pill-active={on || undefined}
+                onClick={() => goSubTab('crm-range', RANGE_ORDER, range, id, () => setRange(id))}
                 className={['relative rounded-[6px] px-2.5 py-1 t-tab transition-colors duration-300 focus:outline-none',
                   on ? 'font-bold text-white' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
                 <span className="relative">{label}</span>
@@ -115,6 +119,8 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
         </select>
       </div>
 
+      {/* 명단 — 기간 전환의 본문(방향성 푸시 대상). 위 기간·검색 바는 제자리. */}
+      <div data-crm-panel="">
       {loading ? (
         <p className="py-8 text-center text-2xs text-ink-muted">불러오는 중…</p>
       ) : filtered.length === 0 ? (
@@ -174,6 +180,7 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
           {filtered.length > 200 && <li className="py-1 text-center text-2xs text-ink-muted">상위 200명까지 표시 — 검색으로 좁혀보세요.</li>}
         </ul>
       )}
+      </div>
     </section>
   );
 }

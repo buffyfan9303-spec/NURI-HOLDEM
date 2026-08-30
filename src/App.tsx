@@ -4,7 +4,18 @@ import { withViewTransition, type VTDirection } from './lib/viewTransition';
 import { getAppSetting } from './api/settings';
 import { useToast } from './components/atoms/Toast';
 import { checkIn, getMyCheckinStreak } from './api/checkins';
-import { requestBuyin, venueTodayGames, getMyBuyinRequestsToday, subscribeMyBuyinRequests, cancelBuyinRequest, type MyBuyinRequest } from './api/ledger';
+import type { MyBuyinRequest } from './api/ledger';
+
+/**
+ * 장부(업주용) 모듈을 **첫 화면 임계 경로에서 뺀다.**
+ * App.tsx 가 정적 import 하면 index.html 의 modulepreload 에 ledger 청크(실측 20.5KB)가 실려
+ * **비로그인 모바일 손님에게도** 내려간다 — 그 손님은 바인 요청을 할 일이 없다.
+ * 이 파일의 ledger 호출은 전부 핸들러·이펙트 안이라 첫 사용 시점에 받아오면 된다.
+ * (모바일 실측: 이 앱의 체감은 CPU 가 아니라 **내려보내는 바이트**가 지배한다 —
+ *  1.6Mbps 에서 LCP 3,612ms vs 무제한망 672ms, 5.4배)
+ * `type MyBuyinRequest` 는 타입 전용 import 라 런타임 코드를 만들지 않는다.
+ */
+const ledgerMod = () => import('./api/ledger');
 import UnreadBadge from './components/atoms/UnreadBadge';
 import ViewModeToggle from './components/atoms/ViewModeToggle';
 import type { ViewMode } from './components/atoms/ViewModeToggle';
@@ -51,7 +62,11 @@ import { useIsDesktop, useIsMdUp } from './lib/responsive';
 import { sweepScrollLocks } from './lib/scrollLock';
 import HomeTab from './components/features/HomeTab';
 import { lazyWithReload } from './lib/lazyWithReload';
-import { getRunningClocks, type ClockState } from './api/clock';
+import type { ClockState } from './api/clock';
+// 클락 모듈도 지연 로드한다 — api/clock 이 api/ledger 를 물고 있어, 정적으로 두면
+// **ledger 청크까지 첫 화면 임계 경로로 딸려 온다**(실측: index.html modulepreload 에 ledger 20.5KB).
+// getRunningClocks 는 지연 로드 구간과 탭 전환 핸들러에서만 쓰여 부팅 경로에 있을 이유가 없다.
+const clockMod = () => import('./api/clock');
 import { buildRegInfoMap } from './lib/regStatus';
 import { myVisitedVenues } from './api/vouchers';
 import { haversineKm } from './lib/geo';
@@ -1003,13 +1018,13 @@ export default function App() {
     const url = new URL(window.location.href);
     url.searchParams.delete('buyin'); url.searchParams.delete('game');
     window.history.replaceState({}, '', url.pathname + url.search + url.hash);
-    const submitDirect = (g: number | null) => requestBuyin(bv, g)
-      .then((name) => { toast.show(`${name || '매장'} 참가(바인) 요청 전송! 운영자 승인을 기다려 주세요`, 'success'); getMyBuyinRequestsToday().then(setMyBuyinReqs).catch(() => {}); })
+    const submitDirect = (g: number | null) => ledgerMod().then((m) => m.requestBuyin(bv, g))
+      .then((name) => { toast.show(`${name || '매장'} 참가(바인) 요청 전송! 운영자 승인을 기다려 주세요`, 'success'); ledgerMod().then((m) => m.getMyBuyinRequestsToday()).then(setMyBuyinReqs).catch(() => {}); })
       .catch((e) => toast.show(e instanceof Error ? e.message : '요청 전송 실패', 'error'));
     const gNum = gm ? parseInt(gm, 10) : NaN;
     if (Number.isFinite(gNum) && gNum > 0) { submitDirect(gNum); return; } // 게임 지정 QR → 바로 요청
     (async () => {
-      const games = await venueTodayGames(bv).catch(() => [] as { gameSeq: number; title: string }[]);
+      const games = await ledgerMod().then((m) => m.venueTodayGames(bv)).catch(() => [] as { gameSeq: number; title: string }[]);
       if (games.length > 1) { setBuyinPick({ venueId: bv, games }); return; } // 게임 여러 개면 선택 모달
       submitDirect(games[0]?.gameSeq ?? null);
     })();
@@ -1019,11 +1034,18 @@ export default function App() {
   // 손님: 오늘 내가 보낸 바인 요청 상태(배너) — 로그인 시 로드 + 창 포커스 시 갱신(운영자 승인 반영)
   useEffect(() => {
     if (!user) { setMyBuyinReqs([]); return; }
-    const load = () => getMyBuyinRequestsToday().then(setMyBuyinReqs).catch(() => {});
+    const load = () => ledgerMod().then((m) => m.getMyBuyinRequestsToday()).then(setMyBuyinReqs).catch(() => {});
     load();
     window.addEventListener('focus', load);
-    const unsub = subscribeMyBuyinRequests(user.id, load); // 운영자 승인/거절 즉시 반영
-    return () => { window.removeEventListener('focus', load); unsub(); };
+    // 모듈이 지연 로드라 구독 해제 함수가 **나중에** 온다. 그 사이 언마운트되면 구독이 미아로 남으므로
+    // cancelled 플래그로 늦게 도착한 구독을 즉시 되돌린다.
+    let unsub: (() => void) | undefined;
+    let cancelled = false;
+    ledgerMod().then((m) => {
+      if (cancelled) return;
+      unsub = m.subscribeMyBuyinRequests(user.id, load); // 운영자 승인/거절 즉시 반영
+    }).catch(() => {});
+    return () => { cancelled = true; window.removeEventListener('focus', load); unsub?.(); };
     // (A3) user.id 로만 의존 — user 객체 참조 변경(일일점수 갱신 등)마다 채널 재구독되던 churn 방지
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
@@ -1406,7 +1428,7 @@ export default function App() {
     if (deferredLoadedRef.current) return;
     deferredLoadedRef.current = true;
     // 5개 응답을 한 콜백에서 일괄 반영(5렌더→1렌더) — 부팅 리렌더 폭풍 계측의 직접 조치
-    Promise.allSettled([getPosts(), getComments({}), getListings(), getVenueRatings(), getRunningClocks()])
+    Promise.allSettled([getPosts(), getComments({}), getListings(), getVenueRatings(), clockMod().then((m) => m.getRunningClocks())])
       .then(([pr, cr, lr, rr, kr]) => {
         if (pr.status === 'fulfilled') { setPosts(pr.value); writeSnap('posts', pr.value); }
         if (cr.status === 'fulfilled') setComments(cr.value);
@@ -1537,7 +1559,7 @@ export default function App() {
       case 'browse':
       case 'live':
       case 'my-store':
-        getRunningClocks().then((cs) => { setLiveCount(cs.length); setLiveClocks(cs); }).catch(() => {});
+        clockMod().then((m) => m.getRunningClocks()).then((cs) => { setLiveCount(cs.length); setLiveClocks(cs); }).catch(() => {});
         reloadSchedules(); reloadVenues(); reloadNotices();
         break;
       case 'community':
@@ -2776,7 +2798,7 @@ export default function App() {
                         r.status === 'approved' ? 'border-emerald-500/40 bg-emerald-500/[0.07]' : r.status === 'rejected' ? 'border-border-default bg-surface-low' : 'border-sky-500/40 bg-sky-500/[0.07]'].join(' ')}>
                         <span className={['shrink-0', r.status === 'approved' ? 'text-emerald-400' : r.status === 'rejected' ? 'text-ink-muted' : 'text-sky-400'].join(' ')} aria-hidden><Icon name={r.status === 'approved' ? 'check-circle' : r.status === 'rejected' ? 'close' : 'clock'} size={15} /></span>
                         <span className="min-w-0 flex-1 truncate text-ink-secondary"><b className="text-ink-primary">{r.venueName}</b>{(() => { const n = r.status === 'approved' ? r.gameSeq : r.requestedGameSeq; return n != null ? ` · ${n === 1 ? '메인' : '사이드' + (n - 1)}` : ''; })()} {r.status === 'approved' ? '참가 승인 — 입장하세요! 🎉' : r.status === 'rejected' ? `요청 거절됨${r.rejectReason ? ` — ${r.rejectReason}` : ''}` : '바인 요청 대기중'}</span>
-                        {r.status === 'pending' && <button type="button" onClick={() => cancelBuyinRequest(r.id).then(() => getMyBuyinRequestsToday().then(setMyBuyinReqs)).catch((e) => toast.show(e instanceof Error ? e.message : '취소 실패', 'error'))} className="shrink-0 rounded-input border border-border-default px-2 py-1 text-2xs font-bold text-ink-muted hover:text-danger-light hover:border-danger/40">취소</button>}
+                        {r.status === 'pending' && <button type="button" onClick={() => ledgerMod().then((m) => m.cancelBuyinRequest(r.id).then(() => m.getMyBuyinRequestsToday().then(setMyBuyinReqs))).catch((e) => toast.show(e instanceof Error ? e.message : '취소 실패', 'error'))} className="shrink-0 rounded-input border border-border-default px-2 py-1 text-2xs font-bold text-ink-muted hover:text-danger-light hover:border-danger/40">취소</button>}
                       </div>
                     ))}
                   </div>
@@ -2912,7 +2934,7 @@ export default function App() {
       {buyinPick && (() => {
         const submit = (g: number | null) => {
           const v = buyinPick.venueId; setBuyinPick(null);
-          requestBuyin(v, g).then((name) => { toast.show(`${name || '매장'} 참가(바인) 요청 전송!`, 'success'); getMyBuyinRequestsToday().then(setMyBuyinReqs).catch(() => {}); }).catch((e) => toast.show(e instanceof Error ? e.message : '요청 실패', 'error'));
+          ledgerMod().then((m) => m.requestBuyin(v, g).then((name) => { toast.show(`${name || '매장'} 참가(바인) 요청 전송!`, 'success'); m.getMyBuyinRequestsToday().then(setMyBuyinReqs).catch(() => {}); })).catch((e) => toast.show(e instanceof Error ? e.message : '요청 실패', 'error'));
         };
         return (
           <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4" onClick={() => setBuyinPick(null)}>

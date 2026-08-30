@@ -1,9 +1,19 @@
 // src/components/features/LegalDocsModal.tsx
-// 법적 문서 3종 — 이용약관 / 개인정보처리방침 / 위치기반서비스 이용약관.
+// 법적 문서 4종 — 이용약관 / 개인정보처리방침 / 위치기반서비스 이용약관 / 취소·환불 정책.
 // [대괄호] 항목은 사업자 정보 확정 후 실제 값으로 교체할 플레이스홀더입니다.
+//
+// ⚠ src/pages/legal/*.tsx (가입 동의 화면 + /legal/*.html 공개본)와 **병존**하는 두 번째 약관 세트다.
+//   같은 사실을 두 곳에 적고 있으므로 한쪽만 고치면 모순 고지가 된다. 2026-08-30 정합 점검에서
+//   실제로 두 건이 어긋나 있어 이쪽을 맞췄다.
+//     · 제5조3항 연령: 구 문안 '만 18세 미만' → 앱 전역·푸터·사행성 공지의 '만 19세 미만 이용 불가'로 통일.
+//     · 제11조 관할: 구 문안 '회사 소재지 관할 법원 합의관할' → 「약관의 규제에 관한 법률」 제14조는
+//       '고객에게 부당하게 불리한 재판관할의 합의 조항'을 무효로 한다. 전국 이용자를 상대로 남양주
+//       소재지 법원을 합의관할로 두면 무효 소지가 크고, 무효 조항은 아무 보호도 하지 못한다.
+//       → 민사소송법의 일반 관할 + 소비자분쟁조정 안내로 바꿔 집행 가능성을 확보했다.
 import { useState } from 'react';
 import Modal from '../atoms/Modal';
 import UnderlineTabs from '../atoms/UnderlineTabs';
+import { goSubTab } from '../../lib/subTabTransition';
 
 export type LegalDoc = 'terms' | 'privacy' | 'location' | 'refund';
 
@@ -40,7 +50,7 @@ const TERMS = `제1조(목적)
 제5조(회원가입 및 계정)
 1. 이용계약은 가입신청자가 약관에 동의하고 회사가 이를 승낙함으로써 성립합니다.
 2. 회원은 계정 정보를 정확히 유지하여야 하며, 타인의 계정을 부정 사용해서는 안 됩니다.
-3. 만 18세 미만 청소년의 사행성 콘텐츠 이용은 제한될 수 있습니다.
+3. 만 19세 미만인 사람은 서비스를 이용할 수 없으며, 회사는 가입 시 만 19세 이상 여부를 확인합니다.
 
 제6조(회원의 의무 및 금지행위)
 회원은 다음 행위를 하여서는 안 됩니다.
@@ -65,7 +75,7 @@ const TERMS = `제1조(목적)
 2. 회사는 회원 간 또는 회원과 제3자(매장 등) 간에 발생한 분쟁에 개입할 의무가 없으며, 이로 인한 손해를 배상할 책임이 없습니다.
 
 제11조(분쟁해결 및 준거법)
-본 약관은 대한민국 법령에 따라 해석되며, 서비스 이용과 관련한 분쟁에 대해 회사 소재지를 관할하는 법원을 합의관할로 합니다.
+본 약관은 대한민국 법령에 따라 해석되며, 서비스 이용과 관련하여 분쟁이 발생한 경우 회사와 회원은 성실히 협의하여 해결합니다. 협의가 이루어지지 아니한 경우 「민사소송법」이 정한 관할 법원에 소를 제기하며, 회원은 한국소비자원 또는 소비자분쟁조정위원회에 분쟁의 조정을 신청할 수도 있습니다.
 
 부칙
 본 약관은 ${BIZ.effective}부터 시행합니다.
@@ -197,12 +207,16 @@ export default function LegalDocsModal({
 }: { open: boolean; onClose: () => void; initial?: LegalDoc }) {
   const [tab, setTab] = useState<LegalDoc>(initial);
   const doc = DOCS[tab];
+  /** 문서 진열 순서 — 하위 탭 전환 방향(forward/back) 기준. DOCS 나열 그대로. */
+  const order = Object.keys(DOCS) as LegalDoc[];
   return (
-    <Modal open={open} onClose={onClose} title="약관 및 정책" maxWidth="md" variant="sheet">
-      <UnderlineTabs
-        items={(Object.keys(DOCS) as LegalDoc[]).map((k) => ({ key: k, label: DOCS[k].label }))}
-        value={tab} onChange={setTab} size="sm" />
-      <div className="max-h-[65vh] overflow-y-auto p-4">
+    <Modal open={open} onClose={onClose} title="약관 및 정책" maxWidth="md" variant="sheet" dragToClose>
+      <div data-legal-tabbar="">
+        <UnderlineTabs
+          items={order.map((k) => ({ key: k, label: DOCS[k].label }))}
+          value={tab} onChange={(v) => goSubTab('legal-tab', order, tab, v, () => setTab(v))} size="sm" />
+      </div>
+      <div data-legal-panel="" className="max-h-[65vh] overflow-y-auto p-4">
         <p className="whitespace-pre-wrap text-2xs leading-relaxed text-ink-secondary">{doc.body}</p>
       </div>
     </Modal>

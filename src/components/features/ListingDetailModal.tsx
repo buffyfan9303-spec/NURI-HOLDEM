@@ -86,7 +86,7 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
 
   return (
     <>
-    <Modal open={open} onClose={onClose} maxWidth="lg" variant="sheet">
+    <Modal open={open} onClose={onClose} maxWidth="lg" variant="sheet" dragToClose>
       {/* ── 헤더 (이미지가 있으면 이미지, 없으면 슬림 헤더) ───────── */}
       {hasImage ? (
         <div className="relative">

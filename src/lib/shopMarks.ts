@@ -21,9 +21,14 @@ export interface CatalogMark {
   emoji: string;
   name: string;
   desc: string;
-  /** earn = 활동점수 도달로 영구 해금(차감 없음) · rent = 기간제 구매(만료) */
+  /**
+   * earn = 활동점수 도달로 영구 해금(차감 없음) ·
+   * rent = **점수로 사는 꾸미기 마크**.
+   * ⚠ 'rent' 라는 이름은 2026-08-30 영구 소장 전환 뒤에도 **서버 shop_marks.kind 의 값 그대로**다.
+   *   여기서 이름만 바꾸면 서버 값과 갈려 카탈로그가 통째로 어긋난다 — 의미는 '구매형'으로 읽을 것.
+   */
   kind: 'earn' | 'rent';
-  /** earn 전용 도달 점수. rent 는 0. */
+  /** earn 전용 도달 점수. 구매형은 0(가격은 shop_skus.mark_own 이 단일 출처). */
   need: number;
   sort: number;
 }
@@ -32,7 +37,9 @@ export interface CatalogMark {
 export const EXTRA_MARKS: ShopMark[] = [
   { key: 'chip_stack',  emoji: '🪙', name: '첫 스택',      need: 250,   desc: '판에 앉았다 — 250점' },
   { key: 'joker',       emoji: '🃏', name: '조커',         need: 800,   desc: '변수의 카드 — 800점' },
-  { key: 'hot_streak',  emoji: '🔥', name: '핫 스트릭',    need: 1200,  desc: '달아오른 흐름 — 1,200점' },
+  // 오너 #9(2026-08-30): 이름만 '핫 스트릭' → '핫'. key·emoji 는 그대로 —
+  // key 는 profiles.equipped_mark 에 문자열로 박혀 있어 바꾸면 이미 보유한 사람의 마크가 사라진다.
+  { key: 'hot_streak',  emoji: '🔥', name: '핫',           need: 1200,  desc: '달아오른 흐름 — 1,200점' },
   { key: 'bullseye',    emoji: '🎯', name: '타겟',         need: 2200,  desc: '노린 자리는 놓치지 않는다 — 2,200점' },
   { key: 'rush',        emoji: '🚀', name: '러시',         need: 3000,  desc: '수직 상승 — 3,000점' },
   { key: 'star_player', emoji: '🌟', name: '스타 플레이어', need: 5000,  desc: '눈에 띄는 사람 — 5,000점' },
@@ -46,12 +53,16 @@ export const EXTRA_MARKS: ShopMark[] = [
 export const ALL_MARKS: ShopMark[] = [...BASE_MARKS, ...EXTRA_MARKS].sort((a, b) => a.need - b.need);
 
 /**
- * 기간 마크 6종(폴백 사본) — 활동점수로 **사서 걸치는** 마크다.
+ * 꾸미기 마크 6종(폴백 사본) — 활동점수로 **사서 영구 소장**하는 마크다.
  *
  * 도달 마크를 구매형으로 돌리지 않은 이유: 이미 해금해 장착 중인 마크가 '사야 하는 것'이 되면
  * 산 걸 빼앗는 회귀가 된다(spent_points 를 따로 둔 이유가 바로 그것이었다).
- * 도달 마크는 '버는 이유', 기간 마크는 '쓰는 이유' — 둘을 겹치지 않게 분리한다.
- * 만료가 곧 반복 소비다(일회성 상품만 있으면 한 번 사고 경제가 멈춘다).
+ * 도달 마크는 '버는 이유', 꾸미기 마크는 '쓰는 이유' — 둘을 겹치지 않게 분리한다.
+ *
+ * 2026-08-30: 기간권(1일/7일/30일)을 접고 2,000점 영구 소장으로 옮겼다.
+ * 만료로 반복 소비를 만들려던 설계였지만, 만료는 유저에게 '산 걸 잃는 일'이라 살 이유가 아니라
+ * 안 살 이유가 됐다. 반복 소비는 외치기(20초 슬롯)가 맡는다 — 그쪽은 만료가 상품의 본질이다.
+ * 배열 이름과 key 접두사 `rent_` 는 **서버 shop_marks 의 값 그대로**라 바꾸지 않는다.
  */
 export const RENT_MARKS: CatalogMark[] = [
   { key: 'rent_clover',    emoji: '🍀', name: '네잎클로버', desc: '오늘의 행운을 걸치고 다닌다', kind: 'rent', need: 0, sort: 210 },
@@ -109,8 +120,12 @@ export async function loadShopMarks(): Promise<CatalogMark[]> {
 export const earnMarks = (): CatalogMark[] =>
   catalog.filter((m) => m.kind === 'earn').sort((a, b) => a.need - b.need);
 
-/** 기간 마크만(상점 '구매' 구역) */
-export const rentMarks = (): CatalogMark[] => catalog.filter((m) => m.kind === 'rent');
+/** 구매형 마크만(상점 '꾸미기' 구역) — 2,000점 영구 소장 대상 */
+export const ownableMarks = (): CatalogMark[] =>
+  catalog.filter((m) => m.kind === 'rent').sort((a, b) => a.sort - b.sort);
+
+/** @deprecated 이름이 기간권 시절 잔재다. 같은 목록을 주는 {@link ownableMarks} 를 쓸 것. */
+export const rentMarks = ownableMarks;
 
 /** 마크 키 → 이모지(없으면 빈 문자열) — 도달·기간 마크 모두 인식 */
 export const markEmoji = (key?: string | null): string =>

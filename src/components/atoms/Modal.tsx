@@ -18,7 +18,19 @@ interface ModalProps {
   inline?: boolean;
   /** false면 배경(공백) 클릭으로 닫히지 않음 — 작성 폼에서 실수로 닫힘 방지(X·ESC는 유지). 기본 true. */
   dismissOnBackdrop?: boolean;
+  /**
+   * 본문을 **아래로 끌어 닫기**(GTO 도구 전체화면과 같은 문법).
+   *  · `page` 변형은 예전부터 항상 켜져 있다 — 이 값과 무관하게 유지된다(동작 보존).
+   *  · `sheet` 변형은 **명시적으로 켤 때만** 동작한다. 기본값이 false 인 이유:
+   *    시트의 절대다수가 글쓰기·신고·문의·설정 폼이라, 기본 ON 이면 한 곳만 빠뜨려도
+   *    "쓰던 글이 스와이프 한 번에 날아가는" 사고가 난다(오너 지시의 필수 제외 조건).
+   *    조회 전용 화면에서만 켠다.
+   */
+  dragToClose?: boolean;
 }
+
+/** 텍스트를 편집 중인 컨트롤 — 여기서 시작한 손짓은 절대 '닫기'로 해석하지 않는다. */
+const EDITABLE_SEL = 'input,textarea,select,[contenteditable=""],[contenteditable="true"],[data-no-drag-close]';
 
 const MAX_W: Record<NonNullable<ModalProps['maxWidth']>, string> = {
   sm: 'max-w-sm',
@@ -32,7 +44,10 @@ const MAX_W: Record<NonNullable<ModalProps['maxWidth']>, string> = {
 
 export default function Modal({
   open, onClose, title, children, variant = 'sheet', maxWidth = 'md', fillHeight = false, inline = false, dismissOnBackdrop = true,
+  dragToClose = false,
 }: ModalProps) {
+  // page 는 기존 동작 유지(항상 켜짐), sheet 는 opt-in.
+  const bodyDrag = variant === 'page' || (variant === 'sheet' && dragToClose);
   // ESC 키로 닫기 + 바디 스크롤 잠금
   useEffect(() => { if (open) { setDragY(0); setFlingOut(false); } }, [open]);
   useEffect(() => {
@@ -64,16 +79,37 @@ export default function Modal({
   // 접근성: 모달 내부 포커스 트랩 + 열릴 때 첫 포커스(키보드 내비)
   const contentRef = useRef<HTMLDivElement>(null);
   // 드래그 시트(page·모바일) — 컨텐츠가 맨 위일 때 아래로 끌면 시트가 따라오고, 120px 넘으면 닫힌다(애플 지도 문법)
-  const pageScrollRef = useRef<HTMLDivElement>(null);
   const [dragY, setDragY] = useState(0);
   const [flingOut, setFlingOut] = useState(false); // 드래그 퇴장 중(감속 트랜지션 유지)
   const sheetStart = useRef<number | null>(null);
-  // ⚠ `?? 1` 이면 시트에서 드래그가 시작조차 안 된다 — pageScrollRef 는 page 변형에만 붙어 있어
-  //   시트에서는 항상 null 이고, 1 <= 0 이 거짓이라 매번 무시됐다(그래서 그립 핸들이 죽어 있었다).
-  //   ref 가 없다 = 추적할 스크롤 영역이 없다(핸들을 직접 잡았다) = 맨 위로 간주하는 게 맞다.
+  const dragFrom = useRef<Element | null>(null); // 이번 제스처가 시작된 노드(이동 중 재판정에 쓴다)
+  // ⚠ 과거 교훈: 이 판정을 'page 변형에만 붙은 ref 하나' 로 하면 시트에서는 그 ref 가 항상 null 이라
+  //   드래그가 아예 시작되지 않았고, 그립 핸들이 '끌릴 수 있다' 고 말해 놓고 죽어 있었다.
+  //   그래서 특정 ref 가 아니라 **만진 지점의 조상**을 본다 — 스크롤러가 없으면 자연히 '맨 위' 가 된다.
+  //
+  // ── '맨 위인가' 를 **중첩 스크롤러까지** 본다(2026-08-30, 오너 #13 전량 적용) ───────────
+  // 예전엔 pageScrollRef 한 개만 봤다. page 변형은 스크롤러가 실제로 하나뿐이라 맞았지만,
+  // 시트에는 본문 안에 자체 `overflow-y-auto` 리스트를 둔 것들이 있다(내 판매목록·찜한 매물 등).
+  // 거기서는 바깥 스크롤러가 영원히 0 이라 **리스트를 훑는 손짓마다 시트가 끌려 내려간다**.
+  // 그래서 만진 지점에서 시트 루트까지 올라가며 하나라도 위로 스크롤돼 있으면 드래그를 시작하지 않는다.
+  const anyScrolled = (from: Element | null): boolean => {
+    const root = contentRef.current;
+    let n: Element | null = from;
+    while (n) {
+      if (n.scrollTop > 0) return true;
+      if (n === root) break;
+      n = n.parentElement;
+    }
+    return false;
+  };
   const onSheetStart = (e: React.TouchEvent) => {
     if (window.innerWidth >= 1024) return;
-    if ((pageScrollRef.current?.scrollTop ?? 0) <= 0) sheetStart.current = e.touches[0].clientY;
+    const t = e.target as Element | null;
+    // 입력 컨트롤 위에서 시작한 손짓은 닫기가 아니다 — 쓰던 내용이 날아가는 유일한 경로를 막는다.
+    if (t?.closest?.(EDITABLE_SEL)) return;
+    if (anyScrolled(t)) return;
+    dragFrom.current = t;
+    sheetStart.current = e.touches[0].clientY;
   };
   // 플릭 속도 추적 — 마지막 두 이동 샘플로 px/ms 를 구한다(짧게 튕겨도 닫히는 iOS 감각)
   const velSample = useRef<{ t: number; y: number } | null>(null);
@@ -81,7 +117,7 @@ export default function Modal({
   const onSheetMove = (e: React.TouchEvent) => {
     if (sheetStart.current == null) return;
     const dy = e.touches[0].clientY - sheetStart.current;
-    if ((pageScrollRef.current?.scrollTop ?? 0) > 0) { sheetStart.current = null; setDragY(0); return; }
+    if (anyScrolled(dragFrom.current)) { sheetStart.current = null; dragFrom.current = null; setDragY(0); return; }
     const now = e.timeStamp;
     if (velSample.current) {
       const dt = now - velSample.current.t;
@@ -95,6 +131,7 @@ export default function Modal({
     const pulled = dragY;
     const v = velocity.current;
     sheetStart.current = null;
+    dragFrom.current = null;
     velSample.current = null;
     velocity.current = 0;
     // 거리(120px) 또는 속도(0.6px/ms 플릭) — 짧게 튕겨도 닫힌다
@@ -187,7 +224,8 @@ export default function Modal({
         aria-labelledby={title ? 'modal-title' : undefined}
         // 제목이 없는 전체화면은 이름이 없어 그냥 '대화상자' 로만 읽힌다 — 최소한의 이름을 준다.
         aria-label={title ? undefined : '전체화면 보기'}
-        onTouchStart={onSheetStart} onTouchMove={onSheetMove} onTouchEnd={onSheetEnd}
+        {...(bodyDrag ? { onTouchStart: onSheetStart, onTouchMove: onSheetMove, onTouchEnd: onSheetEnd } : {})}
+        data-drag-close={bodyDrag ? '' : undefined}
         style={flingOut
           ? { transform: `translateY(${dragY}px)`, transition: 'transform 0.2s var(--ease)' }
           : dragY > 0
@@ -206,7 +244,7 @@ export default function Modal({
             </button>
           </header>
         )}
-        <div ref={pageScrollRef} className="flex-1 overflow-y-auto overscroll-contain">
+        <div className="flex-1 overflow-y-auto overscroll-contain">
           <div className={['mx-auto w-full', MAX_W[maxWidth]].join(' ')}>{children}</div>
         </div>
       </div>
@@ -312,8 +350,12 @@ export default function Modal({
           </header>
         )}
 
-        {/* 본문 (스크롤) */}
-        <div className="flex-1 overflow-y-auto">{children}</div>
+        {/* 본문 (스크롤) — dragToClose 인 **조회 전용** 시트에서만 맨 위에서 아래로 끌면 시트가 따라온다.
+            (GTO 도구 전체화면 page 변형과 정확히 같은 핸들러다 — 문법을 하나로 유지한다.
+             글쓰기·신고·문의·설정 시트는 이 값을 켜지 않으므로 예전 그대로 스크롤만 한다.) */}
+        <div className="flex-1 overflow-y-auto"
+          {...(bodyDrag ? { onTouchStart: onSheetStart, onTouchMove: onSheetMove, onTouchEnd: onSheetEnd } : {})}
+          data-drag-close={bodyDrag ? '' : undefined}>{children}</div>
       </div>
     </div>
   );

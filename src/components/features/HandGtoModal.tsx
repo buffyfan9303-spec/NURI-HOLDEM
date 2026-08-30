@@ -10,7 +10,7 @@ export default function HandGtoModal({ hero, onClose }: { hero: string[]; onClos
   const pctRank = label ? Math.round((RANK_PCT.get(label) ?? 1) * 100) : 0;
 
   return (
-    <Modal open onClose={onClose} title="GTO 프리플랍 분석" maxWidth="sm">
+    <Modal open onClose={onClose} title="GTO 프리플랍 분석" maxWidth="sm" dragToClose>
       {!label ? (
         <p className="p-6 text-center text-sm text-ink-muted">내 홀카드 2장이 있어야 분석할 수 있어요.<br />핸드를 첨부한 글에서 사용하세요.</p>
       ) : (

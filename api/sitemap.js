@@ -14,6 +14,12 @@ export default async function handler(req, res) {
   const today = new Date().toISOString().slice(0, 10);
   const urls = [
     { loc: `${ORIGIN}/`, changefreq: 'daily', priority: '1.0', lastmod: today },
+    // 정적 공개 페이지(약관 4종 + 서비스 소개) — scripts/gen-sitemap.mjs 의 STATIC_PAGES 와 동일 목록.
+    { loc: `${ORIGIN}/legal/terms.html`, changefreq: 'monthly', priority: '0.5', lastmod: today },
+    { loc: `${ORIGIN}/legal/privacy.html`, changefreq: 'monthly', priority: '0.5', lastmod: today },
+    { loc: `${ORIGIN}/legal/anti-gambling.html`, changefreq: 'monthly', priority: '0.5', lastmod: today },
+    { loc: `${ORIGIN}/legal/marketing.html`, changefreq: 'monthly', priority: '0.4', lastmod: today },
+    { loc: `${ORIGIN}/about.html`, changefreq: 'monthly', priority: '0.5', lastmod: today },
   ];
 
   try {

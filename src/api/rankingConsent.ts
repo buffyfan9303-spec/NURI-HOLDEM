@@ -9,6 +9,14 @@
 //
 // 왜 rankings.ts 가 아니라 새 파일인가: 같은 웨이브의 다른 작업이 rankings.ts 를
 // 수정 중이라 충돌 면적을 만들지 않으려고 분리했다. 안정되면 rankings.ts 로 합쳐도 된다.
+//
+// ⚠ 2026-08-30(오너 #15) 현재 **호출부가 없다.** 머니인 킹 스트립의 괄호가
+//   '자주 방문한 매장' → '가장 점수를 많이 딴 매장'(weekly_moneyin_kings.top_venue)으로
+//   바뀌었기 때문이다. 그렇다고 지우지 않는다 —
+//   · 동의 컬럼(profiles.public_ranking_consent)과 RPC(ranking_top_venues)는 서버에 그대로 살아 있고,
+//   · '자주 가는 매장'은 매장 페이지·개인 프로필에서 다시 쓸 자리가 분명하며,
+//   · 되돌리려면 WeeklyBestStrip 한 곳에서 이 함수를 다시 부르면 된다.
+//   기능을 없애는 대신 '연결만 끊어 둔' 상태이고, 그 사실을 여기 적어 둔다.
 import { supabase, IS_MOCK } from '../lib/supabase';
 
 /**

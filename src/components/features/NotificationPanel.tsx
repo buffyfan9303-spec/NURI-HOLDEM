@@ -12,6 +12,12 @@ import { useToast } from '../atoms/Toast';
 import SegmentedTabs from '../atoms/SegmentedTabs';
 import Icon, { type IconName } from '../atoms/Icon';
 import { onColorInkClass } from '../../lib/color';
+import { goSubTab } from '../../lib/subTabTransition';
+
+/** 쪽지 → 알림 진열 순서 — 하위 탭 전환 방향(forward/back) 기준. */
+const NOTIF_MODE_ORDER = ['messages', 'notifs'] as const;
+/** 알림 필터(전체·안읽음) — 같은 목록이 갈리는 같은 전환이라 스코프를 공유한다. */
+const NOTIF_FILTER_ORDER = ['all', 'unread'] as const;
 
 interface NotificationPanelProps {
   open: boolean;
@@ -295,11 +301,13 @@ export default function NotificationPanel({
               </h2>
             </div>
           ) : (
-            <SegmentedTabs
-              items={[{ key: 'messages', label: '쪽지' }, { key: 'notifs', label: '알림' }]}
-              value={mode}
-              onChange={setMode}
-            />
+            <div data-notif-tabbar="">
+              <SegmentedTabs
+                items={[{ key: 'messages', label: '쪽지' }, { key: 'notifs', label: '알림' }]}
+                value={mode}
+                onChange={(v) => goSubTab('notif-tab', NOTIF_MODE_ORDER, mode, v, () => setMode(v))}
+              />
+            </div>
           )}
 
           <div className="flex shrink-0 items-center gap-2 text-2xs">
@@ -314,7 +322,8 @@ export default function NotificationPanel({
                     모두 읽음
                   </button>
                 )}
-                <SegmentedTabs items={[{ key: 'all', label: '전체' }, { key: 'unread', label: '안읽음' }]} value={filter} onChange={setFilter} />
+                <SegmentedTabs items={[{ key: 'all', label: '전체' }, { key: 'unread', label: '안읽음' }]} value={filter}
+                  onChange={(v) => goSubTab('notif-tab', NOTIF_FILTER_ORDER, filter, v, () => setFilter(v))} />
               </>
             )}
             {mode === 'messages' && msgView === 'list' && (
@@ -341,7 +350,7 @@ export default function NotificationPanel({
 
         {/* ── 쪽지: 스레드 목록 ── */}
         {mode === 'messages' && msgView === 'list' && (
-          <ul className="flex-1 overflow-y-auto">
+          <ul data-notif-panel="" className="flex-1 overflow-y-auto">
             {threads.length === 0 ? (
               <li className="flex flex-col items-center justify-center py-12 gap-2 text-ink-muted">
                 <Icon name="comment" size={32} strokeWidth={1.5} />
@@ -501,7 +510,7 @@ export default function NotificationPanel({
 
         {/* ── 알림 목록(기존 UI 전량 유지) ── */}
         {mode === 'notifs' && (
-        <ul className="flex-1 overflow-y-auto">
+        <ul data-notif-panel="" className="flex-1 overflow-y-auto">
           {visible.length === 0 ? (
             <li className="flex flex-col items-center justify-center py-12 gap-2 text-ink-muted">
               <Icon name="bell" size={32} strokeWidth={1.5} />

@@ -4,6 +4,7 @@ import VenueManagement from './VenueManagement';
 import ReportQueue from './ReportQueue';
 import UserManagementTab from './UserManagementTab';
 import SegmentedTabs from '../atoms/SegmentedTabs';
+import { goSubTab } from '../../lib/subTabTransition';
 import type { Schedule } from '../../api/schedules';
 import type { User } from '../../api/auth';
 import type { CommunityPost, Venue, AdminStats, VenueVerificationStatus, VenueStaff } from '../../api/community';
@@ -32,7 +33,7 @@ import { REGION_CHIPS } from './IntegratedSearchBar';
 import SectionHeader from '../atoms/SectionHeader';
 import NuriPosLedger from './NuriPosLedger';
 import LedgerStatsPanel from './LedgerStatsPanel';
-import { adminListRankVerifications, adminDecideRankVerification, signedVerifyUrl, EVENT_KIND_LABEL, type RankEventKind, type RankVerification, aiInspectVerification } from '../../api/rankverify';
+import { adminListRankVerifications, adminDecideRankVerification, signedVerifyUrl, EVENT_KIND_LABEL, type RankVerification, aiInspectVerification } from '../../api/rankverify';
 import { getAllInquiries, answerInquiry, subscribeInquiries, type SupportInquiry } from '../../api/support';
 import { aiGenerate } from '../../api/ai';
 import Icon from '../atoms/Icon';
@@ -178,10 +179,9 @@ function RankVerifyAdminCard() {
   // AI 검사 소견(신청 id별) — 참고용, 최종 판단은 운영자
   const [aiNotes, setAiNotes] = useState<Record<string, string>>({});
   const [aiBusy, setAiBusy] = useState<string | null>(null);
-  // 대회 구분(신청 id별) — 신청자의 자기신고를 초깃값으로 두되 승인 시 운영자가 확정한다.
-  // 'official' 로 승인해야만 국내 순위에 합산된다(오너 #7).
-  const [kinds, setKinds] = useState<Record<string, RankEventKind>>({});
-  const kindOf = (v: RankVerification): RankEventKind => kinds[v.id] ?? v.eventKind;
+  // 오너 #11(2026-08-30): 대회 구분 선택을 없앴다. 승인 = '대회로 확정', 대회가 아니면 반려다.
+  //   예전엔 '일반 펍으로 승인'(기록만 남기고 순위 제외)이라는 제3의 결말이 있었는데,
+  //   그 결말이 존재하는 한 일반 펍은 여전히 순위 인증 절차 안에 있는 셈이었다.
   const inspect = async (v: RankVerification) => {
     setAiBusy(v.id);
     try {
@@ -198,16 +198,10 @@ function RankVerifyAdminCard() {
     catch { toast.show('이미지 열람 실패', 'error'); }
   };
   const decide = async (v: RankVerification, ok: boolean) => {
-    const kind = kindOf(v);
     setBusy(v.id);
     try {
-      await adminDecideRankVerification(v, ok, { eventKind: kind });
-      toast.show(
-        !ok ? '반려했습니다'
-          : kind === 'official' ? '정식 대회로 승인 — 국내 순위에 합산됩니다'
-          : '일반 펍으로 승인 — 기록만 남고 국내 순위에서는 제외됩니다',
-        'success',
-      );
+      await adminDecideRankVerification(v, ok);
+      toast.show(ok ? '대회로 승인 — 국내 순위에 합산됩니다' : '반려했습니다', 'success');
       reload();
     }
     catch (e) { toast.show(e instanceof Error ? e.message : '처리 실패', 'error'); }
@@ -215,7 +209,7 @@ function RankVerifyAdminCard() {
   };
   return (
     <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
-      <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="trophy" size={15} className="shrink-0" />순위 인증 승인 <span className="text-xs font-normal text-ink-muted">— 승인/거절 시 신분증 즉시 삭제 · <b className="text-ink-secondary">정식 대회로 승인한 건만</b> 국내 순위에 합산(100만원당 1점)</span></p>
+      <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="trophy" size={15} className="shrink-0" />순위 인증 승인 <span className="text-xs font-normal text-ink-muted">— <b className="text-ink-secondary">대회(토너먼트) 입상만 승인</b>합니다. 일반 펍 정기 게임 증빙은 <b className="text-ink-secondary">반려</b>하세요 · 승인/거절 시 신분증 즉시 삭제 · 승인분은 100만원당 1점으로 국내 순위 합산</span></p>
       {list.length === 0 ? <p className="py-2 text-center text-2xs text-ink-muted">대기 중인 신청이 없습니다.</p> : (
         <ul className="space-y-1.5">
           {list.map((v) => (
@@ -223,18 +217,11 @@ function RankVerifyAdminCard() {
               <span className="font-bold text-ink-primary">{v.nickname}</span>
               <span className="min-w-0 flex-1 truncate text-ink-secondary">
                 {v.eventName} · <b className="text-emerald-300 tabular-nums">{(v.amountWon / 10000).toLocaleString()}만</b>
-                <span className="ml-1 text-ink-muted">신고: {EVENT_KIND_LABEL[v.eventKind]}{v.isOverseas ? '·해외' : '·국내'}</span>
-              </span>
-              {/* 운영자 확정 — 이 선택이 국내 순위 합산 여부를 결정한다 */}
-              <span className="flex shrink-0 overflow-hidden rounded-input border border-border-default">
-                {(['official', 'pub'] as RankEventKind[]).map((k) => (
-                  <button key={k} type="button" aria-pressed={kindOf(v) === k}
-                    onClick={() => setKinds((m) => ({ ...m, [v.id]: k }))}
-                    className={['px-2 py-1 font-bold',
-                      kindOf(v) === k ? 'bg-accent-300/[0.16] text-accent-200' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
-                    {EVENT_KIND_LABEL[k]}
-                  </button>
-                ))}
+                <span className="ml-1 text-ink-muted">{v.isOverseas ? '해외' : '국내'}</span>
+                {/* 구버전 화면에서 '일반 펍'으로 접수된 대기 건 — 승인 대상이 아니라는 표시(오너 #11) */}
+                {v.eventKind !== 'official' && (
+                  <span className="ml-1 rounded-badge bg-amber-500/15 px-1.5 py-0.5 font-bold text-amber-300">{EVENT_KIND_LABEL[v.eventKind]} 신고 · 대회 아니면 반려</span>
+                )}
               </span>
               <button type="button" onClick={() => view(v.proofPath)} className="rounded-input border border-border-default px-2 py-1 font-bold text-ink-secondary hover:text-ink-primary">증빙</button>
               <button type="button" disabled={aiBusy === v.id} onClick={() => inspect(v)} className="rounded-input border border-sky-500/40 bg-sky-500/10 px-2 py-1 font-bold text-sky-300 disabled:opacity-50">{aiBusy === v.id ? '검사 중…' : <span className="inline-flex items-center gap-1"><Icon name="sparkles" size={12} className="shrink-0" />AI 검사</span>}</button>
@@ -617,10 +604,14 @@ function ShoutsAdminCard() {
     } catch (e) { toast.show(e instanceof Error ? e.message : '환불에 실패했습니다', 'error'); }
     finally { setBusy(null); }
   };
+  // 2026-08-30 슬롯 전환: '노출 중'이 두 상태로 갈렸다 — 지금 20초를 쓰고 있는 것(방송 중)과
+  // 아직 차례가 오지 않은 것(대기 중). 환불·내리기가 가능한 범위는 둘 다이므로 live() 는 그대로 두고
+  // 라벨만 나눈다(운영자가 '지금 화면에 떠 있는 것'을 골라 내릴 수 있어야 한다).
   const live = (s: AdminShout) => !s.hidden && new Date(s.expiresAt).getTime() > Date.now();
+  const airing = (s: AdminShout) => live(s) && new Date(s.playsAt).getTime() <= Date.now();
   return (
     <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
-      <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="megaphone" size={15} className="shrink-0" />외치기 관리 <span className="text-xs font-normal text-ink-muted">— 활동점수로 구매한 커뮤니티 강조 메시지. 6시간 노출 후 자동 만료</span></p>
+      <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="megaphone" size={15} className="shrink-0" />외치기 관리 <span className="text-xs font-normal text-ink-muted">— 활동점수로 구매한 커뮤니티 강조 메시지. 대기열 순서대로 20초씩 1회 방송</span></p>
       {rows === null ? (
         <ul className="space-y-1">{[0, 1, 2].map((i) => <li key={i} className="skeleton h-9 rounded-input" />)}</ul>
       ) : rows.length === 0 ? (
@@ -631,7 +622,7 @@ function ShoutsAdminCard() {
             <li key={s.id} className="rounded-input border border-border-subtle bg-surface-high/40 px-2 py-1.5 text-xs">
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className={['rounded-badge px-1.5 py-0.5 text-2xs font-bold', live(s) ? 'bg-accent-300 text-white' : 'bg-surface-float text-ink-muted'].join(' ')}>
-                  {s.hidden ? '내려짐' : live(s) ? '노출 중' : '만료'}
+                  {s.hidden ? '내려짐' : airing(s) ? '방송 중' : live(s) ? '대기 중' : '종료'}
                 </span>
                 <span className="min-w-0 flex-1 truncate text-ink-primary">{s.message}</span>
                 <span className="text-2xs text-ink-muted">{s.nickname} · {s.cost}점 · {new Date(s.createdAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
@@ -887,6 +878,9 @@ const ADMIN_SECTIONS: { id: Section; label: string; icon: ReactNode }[] = [
   { id: 'errors', label: '오류 로그', icon: aic(<><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></>) },
 ];
 
+/** 섹션 진열 순서 — 하위 탭 전환 방향(forward/back)의 기준. ADMIN_SECTIONS 의 나열 그대로. */
+const ADMIN_ORDER = ADMIN_SECTIONS.map((a) => a.id);
+
 function AdminNavBtn({ active, onClick, icon, badge, children }: { active: boolean; onClick: () => void; icon: ReactNode; badge?: number; children: ReactNode }) {
   return (
     <button type="button" onClick={onClick}
@@ -984,13 +978,13 @@ export default function AdminTab({
     <div className="space-y-3 mx-auto w-full max-w-5xl">
       <StatsPanel />
       <div className="lg:flex lg:gap-4">
-        <nav className="flex gap-1 overflow-x-auto scrollbar-none rounded-input bg-surface-high p-0.5 lg:sticky lg:top-[calc(var(--stack-top,6.0625rem)+0.75rem)] lg:w-44 lg:shrink-0 lg:flex-col lg:self-start lg:overflow-visible lg:bg-transparent lg:p-0">
+        <nav data-admin-secbar="" className="flex gap-1 overflow-x-auto scrollbar-none rounded-input bg-surface-high p-0.5 lg:sticky lg:top-[calc(var(--stack-top,6.0625rem)+0.75rem)] lg:w-44 lg:shrink-0 lg:flex-col lg:self-start lg:overflow-visible lg:bg-transparent lg:p-0">
           {ADMIN_SECTIONS.map((a) => (
-            <AdminNavBtn key={a.id} icon={a.icon} active={section === a.id} onClick={() => setSection(a.id)} badge={a.id === 'pending' && pending.length > 0 ? pending.length : undefined}>{a.label}</AdminNavBtn>
+            <AdminNavBtn key={a.id} icon={a.icon} active={section === a.id} onClick={() => goSubTab('admin-sec', ADMIN_ORDER, section, a.id, () => setSection(a.id))} badge={a.id === 'pending' && pending.length > 0 ? pending.length : undefined}>{a.label}</AdminNavBtn>
           ))}
         </nav>
 
-        <div className="mt-3 min-w-0 flex-1 space-y-3 lg:mt-0">
+        <div data-admin-secpanel="" className="mt-3 min-w-0 flex-1 space-y-3 lg:mt-0">
           {/* 공용 섹션 헤더 — 내 매장과 동일 규격(17px 제목+12px 설명+헤어라인) */}
           <SectionHeader
             title={ADMIN_SECTIONS.find((a) => a.id === section)?.label ?? ''}
@@ -1276,6 +1270,8 @@ function VenueAdminRow({ venue, candidates, onChanged }: { venue: Venue; candida
 }
 
 // ── 운영자: 임의 매장 장부/통계 전체 열람 (실시간) ────────────────────────────
+/** 통계 → 장부 진열 순서 — 하위 탭 전환 방향 기준. */
+const ADMINPOS_ORDER = ['stats', 'ledger'] as const;
 function AdminVenuePos({ venueId, venueName, onClose }: { venueId: string; venueName: string; onClose: () => void }) {
   const [tab, setTab] = useState<'stats' | 'ledger'>('stats');
   useEffect(() => {
@@ -1295,12 +1291,16 @@ function AdminVenuePos({ venueId, venueName, onClose }: { venueId: string; venue
         <span className="ml-auto shrink-0 text-2xs font-bold text-accent-300 bg-accent-300/15 px-2 py-0.5 rounded-badge">운영자 전체 접근</span>
       </header>
       <div className="max-w-6xl mx-auto px-page-x py-3">
-        <SegmentedTabs grow size="md" className="w-full mb-3"
-          items={[{ key: 'stats', label: '통계' }, { key: 'ledger', label: '장부 (실시간)' }]}
-          value={tab} onChange={setTab} />
-        {tab === 'stats'
-          ? <LedgerStatsPanel venueId={venueId} />
-          : <NuriPosLedger venueId={venueId} canManage venueName={venueName} />}
+        <div data-adminpos-tabbar="" className="mb-3">
+          <SegmentedTabs grow size="md" className="w-full"
+            items={[{ key: 'stats', label: '통계' }, { key: 'ledger', label: '장부 (실시간)' }]}
+            value={tab} onChange={(v) => goSubTab('adminpos-tab', ADMINPOS_ORDER, tab, v, () => setTab(v))} />
+        </div>
+        <div data-adminpos-panel="">
+          {tab === 'stats'
+            ? <LedgerStatsPanel venueId={venueId} />
+            : <NuriPosLedger venueId={venueId} canManage venueName={venueName} />}
+        </div>
       </div>
     </div>
   );

@@ -8,7 +8,9 @@ import {
   type VenuePageConfig, type RankBoardId, type CustomBoard, type ScoreEntry, type PlayerCounts,
 } from '../../api/rankings';
 import { searchRegisteredPlayers, type RegisteredPlayer } from '../../api/ledger';
-import { getVenueSlug, isSlugAvailable, setVenueSlug } from '../../api/community';
+import { getVenueSlug, isSlugAvailable, setVenueSlug, getVenueContactInfo, updateVenueContact, type VenueContact } from '../../api/community';
+import ContactListEditor from './VenueContactFields';
+import { cleanContacts, ensureOneContact } from '../../lib/venueContacts';
 
 // 매장 페이지 탭(VenuePage와 동일 키)
 const PAGE_TABS: { key: string; label: string }[] = [
@@ -20,7 +22,16 @@ const PAGE_TABS: { key: string; label: string }[] = [
 ];
 // 웹 데이터로 자동 산출되는 기본 보드 6종
 const BUILTIN_METRICS: RankBoardId[] = ['score', 'prize', 'moneyin_count', 'moneyin_rate', 'buyin_count', 'visit_count'];
-const MAX_CUSTOM_BOARDS = 3;
+// 커스텀 보드 상한 — 오너 #18("포인트 지급/차감 메뉴를 더 추가"). 그 드롭다운의 항목이 곧
+// 이 보드들이라, 상한 3 이 메뉴 길이의 상한이었다. 6 으로 올린다(보드 종류 선택은 여전히 2개까지).
+const MAX_CUSTOM_BOARDS = 6;
+
+// 순위 배점 — 서버 placement_points() 가 [0,100] 으로 죈다(20260830b_cap_point_minting).
+// 화면이 그보다 큰 값을 저장하게 두면 **저장은 되는데 지급은 100** 이라 운영자가 속는다.
+// 그래서 같은 상한을 입력단에서도 건다(+ 왜 그런지 화면에 적는다).
+const PLACEMENT_POINT_MAX = 100;
+// 등수 행 상한 — 오너 #18: 5등을 넘어서까지 [+]로 추가. 30등이면 어지간한 대회를 덮는다.
+const MAX_PLACEMENT_ROWS = 30;
 
 /** 매장 꾸미기 — 매장 페이지 탭 순서. (순위 보드·칭호·점수는 「매장 랭킹」 탭) */
 export default function VenueCustomizePanel({ venueId }: { venueId: string }) {
@@ -91,6 +102,9 @@ export default function VenueCustomizePanel({ venueId }: { venueId: string }) {
         </ul>
       </section>
 
+      {/* 위치·연락처·영업시간 — 매장 페이지 「매장 소개」에 그대로 나가는 값(오너 #17) */}
+      <VenueContactSection venueId={venueId} />
+
       {/* 내 매장 링크(커스텀 슬러그) — nuriholdem.com/s/<원하는이름> */}
       <SlugEditor venueId={venueId} />
 
@@ -103,6 +117,82 @@ export default function VenueCustomizePanel({ venueId }: { venueId: string }) {
         {saving ? '저장 중…' : '탭 순서 저장'}
       </button>
     </div>
+  );
+}
+
+/**
+ * 위치 · 연락처 · 영업시간 (오너 #17)
+ *
+ * 왜 여기인가: 손님 화면(매장 페이지)의 인라인 편집만 있으면, 운영자는 '내 가게 정보를 고치러'
+ * 손님 화면으로 나갔다 와야 한다. 운영주는 PC 99% 이고 설정은 설정 자리에 있어야 한다.
+ * 두 문은 같은 편집기(ContactListEditor)와 같은 저장 경로(update_venue_contacts)를 쓴다.
+ */
+function VenueContactSection({ venueId }: { venueId: string }) {
+  const toast = useToast();
+  const [loaded, setLoaded] = useState(false);
+  const [addr, setAddr] = useState('');
+  const [hours, setHours] = useState('');
+  const [contacts, setContacts] = useState<VenueContact[]>([{ label: '', phone: '' }]);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    setLoaded(false);
+    getVenueContactInfo(venueId)
+      .then((v) => {
+        if (!alive) return;
+        setAddr(v.address); setHours(v.hours); setContacts(ensureOneContact(v.contacts));
+      })
+      .catch(() => {})
+      .finally(() => { if (alive) setLoaded(true); });
+    return () => { alive = false; };
+  }, [venueId]);
+
+  const save = async () => {
+    const next = cleanContacts(contacts);
+    // 오너 지시: 연락처 1개는 필수. (서버는 0개도 허용한다 — 전화 없는 매장이 주소조차
+    // 저장 못 하는 상태를 만들지 않기 위해서다. 필수 강제는 이 화면의 책임이다.)
+    if (next.length === 0) { toast.show('연락처는 1개 이상 입력해 주세요', 'error'); return; }
+    setSaving(true);
+    try {
+      await updateVenueContact(venueId, { address: addr, hours, contacts: next });
+      setContacts(ensureOneContact(next));
+      toast.show('위치 · 연락처 · 영업시간을 저장했습니다', 'success');
+    } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-3">
+      <div className="space-y-1">
+        <h3 className="text-sm font-bold text-ink-primary">위치 · 연락처 · 영업시간</h3>
+        <p className="text-2xs text-ink-muted">매장 페이지 「매장 소개」에 그대로 나갑니다. 연락처는 <span className="font-semibold text-accent-300">1개 필수 · 최대 5개</span>이며, 손님 화면에서 번호마다 따로 전화가 걸립니다.</p>
+      </div>
+      {!loaded ? (
+        <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
+      ) : (<>
+        <label className="block space-y-1">
+          <span className="block text-2xs font-semibold text-ink-secondary">주소</span>
+          <input value={addr} onChange={(e) => setAddr(e.target.value)} maxLength={120}
+            placeholder="도로명 주소" className="input w-full text-sm" />
+        </label>
+        <div className="space-y-1">
+          <span className="block text-2xs font-semibold text-ink-secondary">
+            연락처 <span className="font-normal text-ink-muted">(용도 라벨 + 번호 · [연락처 추가]로 2개 이상)</span>
+          </span>
+          <ContactListEditor contacts={contacts} onChange={setContacts} idPrefix="venue-settings" />
+        </div>
+        <label className="block space-y-1">
+          <span className="block text-2xs font-semibold text-ink-secondary">영업시간</span>
+          <input value={hours} onChange={(e) => setHours(e.target.value)} maxLength={60}
+            placeholder="예: 매일 18:00 ~ 익일 04:00" className="input w-full text-sm" />
+        </label>
+        <button type="button" onClick={save} disabled={saving}
+          className="btn-primary w-full py-2.5 text-sm disabled:opacity-50">
+          {saving ? '저장 중…' : '위치 · 연락처 · 영업시간 저장'}
+        </button>
+      </>)}
+    </section>
   );
 }
 
@@ -237,8 +327,19 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
   const points = cfg.placementPoints?.length ? cfg.placementPoints : DEFAULT_PLACEMENT_POINTS;
   const setPoint = (i: number, v: number) => {
     const next = [...points];
-    next[i] = Math.max(0, Math.min(9999, Math.round(v) || 0));
+    next[i] = Math.max(0, Math.min(PLACEMENT_POINT_MAX, Math.round(v) || 0));
     setCfg((c) => ({ ...c, placementPoints: next }));
+  };
+  // [+] 등수 추가 — 마지막 값 이하로 시작해야 '아래 등수가 더 높은' 배점이 기본값으로 생기지 않는다.
+  const addPlacement = () => {
+    if (points.length >= MAX_PLACEMENT_ROWS) return;
+    const last = points[points.length - 1] ?? 1;
+    setCfg((c) => ({ ...c, placementPoints: [...points, Math.max(1, Math.min(PLACEMENT_POINT_MAX, last)) ] }));
+  };
+  // 마지막 등수 삭제 — 최소 1행(1등)은 남긴다. 지운 등수는 서버 기본값(1점)으로 돌아간다.
+  const removePlacement = (i: number) => {
+    if (points.length <= 1) return;
+    setCfg((c) => ({ ...c, placementPoints: points.filter((_, idx) => idx !== i) }));
   };
 
   // 전체 교체 RPC 라 마운트 시점 cfg 를 그대로 보내면 다른 화면에서 바뀐 키(클락 테마·배경 등)가
@@ -343,19 +444,36 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
           </div>
         </section>
 
-        {/* ④ 기준 점수 */}
+        {/* ④ 기준 점수 — 오너 #18: 5등 고정이었던 것을 [+]로 원하는 등수까지 */}
         <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
-          <h3 className="text-sm font-bold text-ink-primary">기준 점수 <span className="text-2xs font-normal text-ink-muted">(순위 등록 시 등수별 부여 점수 · 그 외 등수는 1점)</span></h3>
+          <h3 className="text-sm font-bold text-ink-primary">기준 점수 <span className="text-2xs font-normal text-ink-muted">(순위 등록 시 등수별 부여 점수 · 설정하지 않은 등수는 1점)</span></h3>
           <div className="grid grid-cols-5 gap-1.5">
             {points.map((p, i) => (
               <label key={i} className="space-y-0.5 text-center">
-                <span className="text-2xs font-semibold text-ink-muted">{i + 1}등</span>
-                <input type="number" inputMode="numeric" value={p}
+                <span className="flex items-center justify-center gap-1 text-2xs font-semibold text-ink-muted">
+                  {i + 1}등
+                  {/* 마지막 행만 지울 수 있다 — 가운데를 지우면 등수가 통째로 한 칸씩 당겨진다 */}
+                  {points.length > 1 && i === points.length - 1 && (
+                    <button type="button" onClick={() => removePlacement(i)} aria-label={`${i + 1}등 삭제`}
+                      className="text-ink-muted transition-colors hover:text-danger-light"><Icon name="close" size={11} /></button>
+                  )}
+                </span>
+                <input type="number" inputMode="numeric" min={0} max={PLACEMENT_POINT_MAX} value={p}
                   onChange={(e) => setPoint(i, Number(e.target.value))}
                   className="input w-full text-center text-sm tabular-nums" />
               </label>
             ))}
+            {points.length < MAX_PLACEMENT_ROWS && (
+              <button type="button" onClick={addPlacement} aria-label="등수 추가"
+                className="mt-[1.05rem] inline-flex h-9 items-center justify-center gap-1 rounded-input border border-dashed border-accent-400/40 bg-accent-300/[0.06] text-2xs font-bold text-accent-200 transition-colors hover:bg-accent-300/10">
+                <Icon name="plus" size={13} />{points.length + 1}등
+              </button>
+            )}
           </div>
+          <p className="text-2xs text-ink-muted">
+            한 등수당 <span className="font-semibold text-accent-300">최대 {PLACEMENT_POINT_MAX}점</span>입니다 — 서버가 지급 순간에 같은 상한으로 잘라내기 때문에,
+            더 큰 값을 저장해 두면 <span className="font-semibold">저장은 되는데 실제 지급은 {PLACEMENT_POINT_MAX}점</span>이 됩니다. 등수는 최대 {MAX_PLACEMENT_ROWS}등까지 정할 수 있어요.
+          </p>
           <button type="button" onClick={() => setCfg((c) => ({ ...c, placementPoints: [...DEFAULT_PLACEMENT_POINTS] }))} className="btn-ghost text-2xs px-2">기본값(10·7·5·3·2)으로</button>
         </section>
 
@@ -376,6 +494,21 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
   );
 }
 
+/**
+ * 지급/차감 사유 메뉴 (오너 #18 "메뉴를 더 추가").
+ *
+ * 왜 프리셋인가: 사유는 여태 자유 입력 한 칸이었고 '(선택)' 이었다. 그래서 절반은 비어 있고,
+ * 채워진 절반도 '이벤트' / '이벤트보상' / '이벤 보상' 처럼 매장·직원마다 다른 문자열이 쌓인다.
+ * 포인트는 **발권**이라 나중에 반드시 "이 점수 왜 나갔나"를 되짚게 되는데, 그때 문자열이
+ * 갈라져 있으면 집계가 불가능하다. 고정 메뉴 + 자유 보충이 감사 추적의 최소 조건이다.
+ *
+ * 항목은 매장이 실제로 포인트를 움직이는 사유만 넣었다(가짜 선택지는 오히려 오분류를 만든다):
+ *  지급 — 대회 입상 / 이벤트 참여 / 미션·출석 보상 / 후기·홍보 감사 / 지인 추천 / 단골 감사
+ *  차감 — 노쇼·예약 부도 / 규정 위반 제재 / 입력 오류 정정 / 포인트 사용(교환)
+ */
+const GRANT_REASONS = ['대회 입상', '이벤트 참여', '미션·출석 보상', '후기·홍보 감사', '지인 추천', '단골 감사'] as const;
+const DEDUCT_REASONS = ['노쇼·예약 부도', '규정 위반 제재', '입력 오류 정정', '포인트 사용(교환)'] as const;
+
 /** 포인트 지급/차감 — 보드별 자유 점수 입력(기본=매장 포인트 합산, 커스텀=해당 보드 전용). */
 export function ScorePointsPanel({ venueId, customBoards = [] }: { venueId: string; customBoards?: CustomBoard[] }) {
   const toast = useToast();
@@ -386,6 +519,7 @@ export function ScorePointsPanel({ venueId, customBoards = [] }: { venueId: stri
   const [date, setDate] = useState(today);  // 매일매일 기록 — 지난 날짜 소급 입력 가능
   const [points, setPoints] = useState('');
   const [reason, setReason] = useState('');
+  const [reasonPreset, setReasonPreset] = useState(''); // '' = 직접 입력
   const [busy, setBusy] = useState(false);
   // 닉네임 자동완성(가입 회원 연동) — 오타로 명단이 갈라지는 것 방지
   const [suggest, setSuggest] = useState<RegisteredPlayer[]>([]);
@@ -410,10 +544,12 @@ export function ScorePointsPanel({ venueId, customBoards = [] }: { venueId: stri
     const p = Math.abs(Math.round(Number(points)));
     if (!name.trim()) return toast.show('이름(닉네임)을 입력하세요', 'error');
     if (!p) return toast.show('포인트를 입력하세요', 'error');
+    // 사유는 이제 필수다 — 기록이 남지 않는 발권/회수는 나중에 되짚을 수 없다.
+    if (!reason.trim()) return toast.show('사유를 선택하거나 입력해 주세요', 'error');
     setBusy(true);
     try {
       await addScoreEntry(venueId, { name, points: sign * p, reason, boardKey: board || null, entryDate: date || undefined });
-      setName(''); setPoints(''); setReason(''); setSuggest([]);
+      setName(''); setPoints(''); setReason(''); setReasonPreset(''); setSuggest([]);
       toast.show(sign > 0 ? `「${boardName(board || null)}」에 지급했습니다 (${date})` : `「${boardName(board || null)}」에서 차감했습니다 (${date})`, 'success');
       reload();
     } catch (e) { toast.show(e instanceof Error ? e.message : '실패했습니다', 'error'); }
@@ -429,7 +565,7 @@ export function ScorePointsPanel({ venueId, customBoards = [] }: { venueId: stri
     <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-3">
       <div>
         <h3 className="text-sm font-bold text-ink-primary">포인트 지급 · 차감</h3>
-        <p className="text-2xs text-ink-muted mt-0.5">이벤트·미션 보상 등 자유 점수를 <span className="font-semibold text-accent-300">날짜·보드별</span>로 매일 기록합니다. 커스텀 보드는 여기서 입력한 명단으로만 순위가 만들어집니다.</p>
+        <p className="text-2xs text-ink-muted mt-0.5">이벤트·미션 보상 등 자유 점수를 <span className="font-semibold text-accent-300">날짜·보드별</span>로 매일 기록합니다. 커스텀 보드는 여기서 입력한 명단으로만 순위가 만들어집니다. <span className="font-semibold text-accent-300">사유는 필수</span>입니다 — 나중에 "이 점수 왜 나갔나"를 되짚는 유일한 단서예요.</p>
       </div>
       <div className="flex flex-wrap gap-1.5">
         <select value={board} onChange={(e) => setBoard(e.target.value)} className="input w-full text-sm sm:w-auto sm:min-w-[10rem]">
@@ -438,7 +574,7 @@ export function ScorePointsPanel({ venueId, customBoards = [] }: { venueId: stri
         </select>
         <input type="date" value={date} max={today} onChange={(e) => setDate(e.target.value || today)}
           className="input w-auto shrink-0 text-sm tabular-nums" aria-label="기록 날짜" />
-        <div className="relative min-w-0 flex-1">
+        <div className="relative min-w-[9rem] flex-1">
           <input value={name}
             onChange={(e) => { setName(e.target.value); setSuggestOpen(true); }}
             onFocus={() => setSuggestOpen(true)}
@@ -465,7 +601,20 @@ export function ScorePointsPanel({ venueId, customBoards = [] }: { venueId: stri
           )}
         </div>
         <input value={points} onChange={(e) => setPoints(e.target.value)} type="number" inputMode="numeric" placeholder="포인트" className="input w-24 text-sm tabular-nums" />
-        <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="사유(선택)" maxLength={60} className="input min-w-0 flex-1 text-sm" />
+        {/* 사유 메뉴 — 고르면 아래 칸이 채워지고, 그 위에 상세를 덧붙일 수 있다 */}
+        <select value={reasonPreset} aria-label="사유 선택"
+          onChange={(e) => { const v = e.target.value; setReasonPreset(v); setReason(v); }}
+          className="input w-full text-sm sm:w-auto sm:min-w-[9rem]">
+          <option value="">사유 선택…</option>
+          <optgroup label="지급">
+            {GRANT_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+          </optgroup>
+          <optgroup label="차감">
+            {DEDUCT_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+          </optgroup>
+        </select>
+        <input value={reason} onChange={(e) => { setReason(e.target.value); setReasonPreset(''); }}
+          placeholder="사유(필수 · 기록에 남습니다)" maxLength={60} className="input min-w-[10rem] flex-1 text-sm" />
         <button type="button" disabled={busy} onClick={() => add(1)} className="btn-primary shrink-0 px-3 text-xs disabled:opacity-50">지급</button>
         <button type="button" disabled={busy} onClick={() => add(-1)} className="shrink-0 rounded-input border border-danger/40 px-3 text-xs font-semibold text-danger-light hover:bg-danger/10 disabled:opacity-50">차감</button>
       </div>

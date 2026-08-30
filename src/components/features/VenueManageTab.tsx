@@ -94,6 +94,11 @@ const PosSettingsPanelM = memo(PosSettingsPanel);
 const StaffSelfAttendanceM = memo(StaffSelfAttendance);
 
 /** 업주/직원 전용 "매장 관리" 탭 — 장부(POS) · 통계 · 순위 입력 · (업주) 직원 관리 */
+// PC 밀도 규약(오너 #5, 2026-08-30) — 내 매장 셸(사이드바·섹션 헤더·라이브 바·순위 입력·직원 허브)의
+//  간격은 4단만 쓴다. 1rem = 17px(index.css html) 이라 실제 렌더값은 괄호 안 값이다.
+//   gap-1 (4.25px) 아이콘↔글자·라벨↔값 / gap-2 (8.5) 요소 그룹 /
+//   gap-3 (12.75) 카드 패딩·카드 사이·블록 사이 / gap-5 (21.25) 그룹·섹션 경계
+//  행간은 §T1 역할표(index.css) — 설명문 t-desc(12.75/19.13)+break-keep, 메타 text-2xs(11.69/15.94).
 export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster, onDeletePoster, deepSection, onConsumeDeepSection, tabActive = true }: {
   schedules: Schedule[]; onCreatePoster: () => void; onEditPoster: (id: string) => void; onDeletePoster: (id: string) => void;
   /** 알림 딥링크 등 외부 진입 — 지정 섹션/게임스텝으로 바로 이동(1회 소비, 구 id 는 LINK-MAP 이 정규화) */
@@ -406,7 +411,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     <div className="space-y-3 mx-auto w-full max-w-5xl">
       {/* 운영자: 전 매장 접근 — 관리할 매장 선택 */}
       {isAdmin && (
-        <div className="rounded-card border border-accent-400/40 bg-accent-300/[0.06] p-2.5 space-y-1.5">
+        <div className="space-y-2 rounded-card border border-accent-400/40 bg-accent-300/[0.06] p-3">
           <p className="text-2xs font-bold text-accent-300">운영자 전체 접근 · 관리할 매장 선택</p>
           <select value={venueId ?? ''} onChange={(e) => setAdminVenueId(e.target.value || null)} className="input text-sm">
             {adminVenues.length === 0 && <option value="">불러오는 중…</option>}
@@ -433,7 +438,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
           // 대시보드 진입 시 언마운트 → 구독도 함께 정리(중복 채널 방지)
           <StoreLiveBar venueId={venueId} active={tabActive} onGoto={gotoSection} />
         )}
-        <div className="lg:flex lg:gap-4">
+        <div className="lg:flex lg:gap-5">
           {available.length > 1 && (<>
               {/* 모바일: 아코디언 — 현재 메뉴만 보이고, 탭하면 그룹별 전체 펼침(위로 다 몰지 않게) */}
               <div className="lg:hidden">
@@ -445,13 +450,13 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   <Icon name="chevron-down" size={16} className={['shrink-0 text-ink-muted transition-transform', navOpen ? 'rotate-180' : ''].join(' ')} />
                 </button>
                 {navOpen && (
-                  <div className="mt-1 rounded-card border border-border-subtle bg-surface-high p-1 animate-slide-up space-y-0.5">
+                  <div className="mt-1 animate-slide-up space-y-2 rounded-card border border-border-subtle bg-surface-high p-2">
                     {NAV_GROUPS.map((grp) => {
                       const items = navItems.filter((a) => a.group === grp);
                       if (items.length === 0) return null;
                       return (
                         <div key={grp}>
-                          <p className="px-2 pb-0.5 pt-1.5 text-2xs font-bold text-ink-muted">{grp}</p>
+                          <p className="px-2 pb-1 text-2xs font-bold text-ink-muted">{grp}</p>
                           <div className="grid grid-cols-2 gap-1">
                             {items.map((a) => {
                               const on = section === a.id;
@@ -471,7 +476,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                     })}
                     {canStaff && !isAdmin && (navHiddenCount > 0 || navAll) && (
                       <button type="button" onClick={toggleNavAll}
-                        className="w-full px-2 py-2 text-left text-2xs font-bold text-ink-muted transition-colors hover:text-ink-secondary">
+                        className="w-full px-2 py-1 text-left text-2xs font-bold text-ink-muted transition-colors hover:text-ink-secondary">
                         {navAll ? '기본 메뉴만 보기' : `고급 기능 모두 보기 (+${navHiddenCount})`}
                       </button>
                     )}
@@ -479,13 +484,13 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 )}
               </div>
               {/* PC: 세로 사이드바 — 그룹 헤더 3개 + 라이브 배지 자리(IA3 에서 공급), 폭 w-44→w-52 */}
-              <nav className="hidden lg:flex lg:sticky lg:top-[calc(var(--stack-top,6.0625rem)+0.75rem)] lg:w-52 lg:shrink-0 lg:flex-col lg:self-start lg:gap-1">
+              <nav className="hidden lg:flex lg:sticky lg:top-[calc(var(--stack-top,6.0625rem)+0.75rem)] lg:w-52 lg:shrink-0 lg:flex-col lg:self-start lg:gap-5">
                 {NAV_GROUPS.map((grp) => {
                   const items = navItems.filter((a) => a.group === grp);
                   if (items.length === 0) return null;
                   return (
-                    <div key={grp} className="flex flex-col gap-1">
-                      <p className="px-3 pb-0.5 pt-2 text-2xs font-bold tracking-wide text-ink-muted">{grp}</p>
+                    <div key={grp} className="flex flex-col gap-0.5">
+                      <p className="px-3 pb-1 text-2xs font-bold tracking-wide text-ink-muted">{grp}</p>
                       {items.map((a) => (
                         <SectionBtn key={a.id} icon={SECTION_ICON[a.id]} active={section === a.id} locked={a.locked}
                           onClick={() => gotoSection(a.id)}>{a.label}</SectionBtn>
@@ -496,7 +501,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 {/* IA3d: 성숙도로 숨긴 항목이 있으면 파워유저 탈출구 — 잠금 아이콘이 아니라 토글 */}
                 {canStaff && !isAdmin && (navHiddenCount > 0 || navAll) && (
                   <button type="button" onClick={toggleNavAll}
-                    className="mt-2 px-3 py-1.5 text-left text-2xs font-bold text-ink-muted transition-colors hover:text-ink-secondary">
+                    className="px-3 py-1 text-left text-2xs font-bold text-ink-muted transition-colors hover:text-ink-secondary">
                     {navAll ? '기본 메뉴만 보기' : `고급 기능 모두 보기 (+${navHiddenCount})`}
                   </button>
                 )}
@@ -505,10 +510,10 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
 
           <div className="mt-3 min-w-0 flex-1 space-y-3 lg:mt-0">
             {dItem?.locked && (
-              <div className="rounded-card border border-border-default bg-surface-low p-6 text-center space-y-2.5">
+              <div className="space-y-2 rounded-card border border-border-default bg-surface-low p-5 text-center">
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-surface-high text-ink-muted"><Icon name="lock" size={22} /></div>
                 <p className="text-sm font-bold text-ink-primary">{dItem.label} · 접근 권한이 없습니다</p>
-                <p className="text-2xs leading-relaxed text-ink-muted">이 기능은 업주가 권한을 부여해야 사용할 수 있어요.<br />매장 업주에게 <span className="font-semibold text-accent-300">장부·순위 권한</span>을 요청하세요.</p>
+                <p className="t-desc break-keep text-ink-muted">이 기능은 업주가 권한을 부여해야 사용할 수 있어요.<br />매장 업주에게 <span className="font-semibold text-accent-300">장부·순위 권한</span>을 요청하세요.</p>
               </div>
             )}
             {/* IA2 잔여 — 게임 선택 칩 바(원문: '상단에 게임 선택 칩 바, 아래에 4단계 스테퍼').
@@ -583,7 +588,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 {visited.includes('dashboard') && box('dashboard', <>
                   <StoreDashboardM venueId={venueId} schedules={schedules} onGoto={onGotoStore} onCreatePoster={onCreatePoster}
                     active={tabActive && renderSection === 'dashboard'} caps={caps} />
-                  {manageOk && <div className="mt-4"><AnnouncePanelM venueId={venueId} /></div>}
+                  {manageOk && <div className="mt-5"><AnnouncePanelM venueId={venueId} /></div>}
                 </>)}
                 {visited.includes('posters') && canPosters && box('posters', <MyPostersTabM schedules={schedules} onCreate={onCreatePoster} onEdit={onEditPoster} onDelete={onDeletePoster}
                   onGotoRanking={ledgerOk ? onGotoRankingFromPosters : undefined}
@@ -600,8 +605,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                     venue_page_config 를 두 문에서 각자 로드/저장해 서로 낡던 문제를 한 화면으로 해소 */}
                 {visited.includes('page') && canSettingsTab('page') && box('page', <>
                   <VenueCustomizePanelM venueId={venueId} />
-                  {ledgerOk && <div className="mt-5 border-t border-border-subtle pt-4"><SeasonPanelM venueId={venueId} canManage={manageOk} venueName={venueName || undefined} /></div>}
-                  {ledgerOk && <div className="mt-5 border-t border-border-subtle pt-4"><VenueRankHubM venueId={venueId} canConfigure={manageOk} /></div>}
+                  {ledgerOk && <div className="mt-5 border-t border-border-subtle pt-5"><SeasonPanelM venueId={venueId} canManage={manageOk} venueName={venueName || undefined} /></div>}
+                  {ledgerOk && <div className="mt-5 border-t border-border-subtle pt-5"><VenueRankHubM venueId={venueId} canConfigure={manageOk} /></div>}
                 </>)}
                 {visited.includes('clock') && ledgerOk && box('clock', <TournamentClockM venueId={venueId} canManage={ledgerOk} seedSessionDate={clockSeed} seedGameSeq={clockSeedGame} active={tabActive && renderSection === 'game' && renderGameStep === 'clock'} />)}
                 {visited.includes('attendance') && box('attendance', <StaffSelfAttendanceM venueId={venueId} />)}
@@ -700,7 +705,7 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto }: {
   const mmss = (ms: number) => { const s = Math.max(0, Math.floor(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
   const alive = main?.liveStats?.alive;
   return (
-    <div className="mb-3 flex items-stretch gap-1.5 overflow-x-auto rounded-card border border-accent-400/30 bg-surface-low px-1.5 py-1.5 text-2xs">
+    <div className="flex items-stretch gap-2 overflow-x-auto rounded-card border border-accent-400/30 bg-surface-low px-2 py-1 text-2xs">
       {main && eff && (
         <button type="button" onClick={() => onGoto('clock')}
           className="flex shrink-0 items-center gap-2 rounded-input px-2 py-1 transition-colors hover:bg-surface-float">
@@ -714,7 +719,7 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto }: {
       )}
       {pending > 0 && (
         <button type="button" onClick={() => onGoto('ledger')}
-          className="flex shrink-0 items-center gap-1.5 rounded-input bg-amber-500/10 px-2 py-1 font-bold text-amber-300 transition-colors hover:bg-amber-500/20">
+          className="flex shrink-0 items-center gap-2 rounded-input bg-amber-500/10 px-2 py-1 font-bold text-amber-300 transition-colors hover:bg-amber-500/20">
           바인 대기 <b className="tabular-nums">{pending}</b>건 →
         </button>
       )}
@@ -745,7 +750,7 @@ const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, 
   if (games.length <= 1) return null;
   const label = (seq: number) => (seq === MAIN_GAME_SEQ ? '메인' : `사이드${seq - 1}`);
   return (
-    <div role="group" aria-label="오늘 게임 선택" className="flex items-center gap-1.5 overflow-x-auto">
+    <div role="group" aria-label="오늘 게임 선택" className="flex items-center gap-2 overflow-x-auto">
       <span className="shrink-0 text-2xs font-bold text-ink-muted">오늘 게임</span>
       {games.map((g) => {
         const on = g.gameSeq === current;
@@ -783,7 +788,7 @@ function SectionBtn({ active, onClick, icon, children, locked }: {
     <button type="button" onClick={onClick} ref={ref}
       // 모바일=인라인 칩(아이콘+라벨 한 줄, 1행 가로 스크롤) / PC=세로 리스트.
       // §T1: PC 만 13px(사다리 밖)이라 모바일 12.75 와 어긋나 있었다 → t-tab 한 값으로 고정(-0.25px).
-      className={['group/nav relative flex shrink-0 snap-start flex-row items-center justify-center gap-1.5 whitespace-nowrap rounded-[7px] px-3 py-2 t-tab transition-colors duration-300 focus:outline-none touch-manipulation lg:w-full lg:shrink lg:justify-start lg:gap-2 lg:py-2.5',
+      className={['group/nav relative flex shrink-0 snap-start flex-row items-center justify-center gap-2 whitespace-nowrap rounded-[7px] px-3 py-2 t-tab transition-colors duration-300 focus:outline-none touch-manipulation lg:w-full lg:shrink lg:justify-start lg:py-2',
         active ? 'font-bold text-white' : locked ? 'text-ink-muted/60 hover:text-ink-secondary lg:hover:bg-surface-high' : 'text-ink-secondary hover:text-ink-primary lg:hover:bg-surface-high'].join(' ')}>
       {active && <span aria-hidden className="absolute inset-0 rounded-[7px] pill-active animate-fade-in" />}
       <span className="relative shrink-0" aria-hidden>{icon}</span>
@@ -1303,7 +1308,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
           <button type="button" onClick={() => setDate(today)} className="btn-ghost text-xs px-3 shrink-0">오늘</button>
         )}
         <button type="button" onClick={printPaperForm} title="공식 결과 기록지(수기 양식) 인쇄 — 인증 펍 전용"
-          className="btn-ghost inline-flex min-h-11 items-center gap-1.5 text-xs px-3 shrink-0 text-accent-300 dark:text-accent-200"><Icon name="printer" size={14} className="shrink-0" />지류 양식</button>
+          className="btn-ghost inline-flex min-h-11 shrink-0 items-center gap-2 px-3 text-xs text-accent-300 dark:text-accent-200"><Icon name="printer" size={14} className="shrink-0" />지류 양식</button>
       </div>
 
       {/* 어떤 게임의 순위인지 — 메인(포스터)·사이드(사이드 포스터)·장부·기타로 구분해 선택 */}
@@ -1333,12 +1338,12 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
         const Section = ({ icon, label, hint, children }: { icon: IconName; label: string; hint: string; children: ReactNode }) => (
           <div className="space-y-1">
             <p className="flex items-center gap-1 text-2xs font-bold text-ink-muted"><Icon name={icon} size={12} className="shrink-0" />{label}<span className="font-normal text-ink-muted/70"> · {hint}</span></p>
-            <div className="flex items-center gap-1.5 flex-wrap">{children}</div>
+            <div className="flex flex-wrap items-center gap-2">{children}</div>
           </div>
         );
 
         return (
-          <div className="rounded-card border border-accent-400/30 bg-accent-300/[0.05] p-2.5 space-y-2.5">
+          <div className="space-y-3 rounded-card border border-accent-400/30 bg-accent-300/[0.05] p-3">
             <div className="flex items-center gap-2">
               <span className="inline-flex shrink-0 items-center gap-1 text-2xs font-bold text-ink-muted"><Icon name="target" size={12} className="shrink-0" />입력 중인 게임</span>
               <span className="min-w-0 flex-1 truncate text-sm font-extrabold text-accent-300 dark:text-accent-200">{eventName || '메인 게임(기본)'}</span>
@@ -1372,7 +1377,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
                 className="inline-flex min-h-9 items-center text-xs font-bold px-2.5 py-1.5 rounded-input border bg-surface-float text-accent-300 dark:text-accent-200 border-dashed border-accent-400/40 hover:bg-accent-300/10">+ 직접 추가</button>
             </Section>
 
-            <p className="text-2xs leading-relaxed text-ink-muted">하루에 게임이 여러 개면 <b className="text-ink-secondary">게임마다 따로</b> 골라 입력하세요. 메인·사이드·기타를 선택해 순위를 넣으면 그 게임 순위만 따로 저장·표시됩니다. <b className="text-accent-300 dark:text-accent-200">✓</b> 표시는 이미 입력된 게임입니다.</p>
+            <p className="t-desc break-keep text-ink-muted">하루에 게임이 여러 개면 <b className="text-ink-secondary">게임마다 따로</b> 골라 입력하세요. 메인·사이드·기타를 선택해 순위를 넣으면 그 게임 순위만 따로 저장·표시됩니다. <b className="text-accent-300 dark:text-accent-200">✓</b> 표시는 이미 입력된 게임입니다.</p>
           </div>
         );
       })()}
@@ -1380,21 +1385,21 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
       {/* 그날 장부 명단 — 펼쳐서 참고하며 순위 입력(장부↔순위 직접 연동) */}
       <div className="rounded-card border border-emerald-500/25 bg-emerald-500/[0.04] overflow-hidden">
         <button type="button" onClick={() => setLedgerPanelOpen((v) => !v)}
-          className="flex min-h-11 w-full items-center justify-between gap-2 px-2.5 py-2 text-left">
+          className="flex min-h-11 w-full items-center justify-between gap-2 px-3 py-2 text-left">
           <span className="inline-flex items-center gap-1 text-2xs font-bold text-emerald-300"><Icon name="notebook" size={12} className="shrink-0" />그날 장부 명단 {ledgerPlayers.length > 0 ? <span className="text-ink-secondary">({ledgerPlayers.length}명)</span> : <span className="font-normal text-ink-muted">— 연결된 장부 없음</span>}</span>
           <span className="text-2xs text-ink-muted">{ledgerPanelOpen ? '접기 ▲' : '펼치기 ▼'}</span>
         </button>
         {ledgerPanelOpen && (
-          <div className="space-y-1.5 border-t border-emerald-500/20 p-2">
+          <div className="space-y-2 border-t border-emerald-500/20 p-3">
             {ledgerPlayers.length === 0 ? (
-              <p className="py-1.5 text-center text-2xs text-ink-muted">이 날짜에 연결된 장부 바인 명단이 없습니다. 장부에서 바인을 먼저 기록하면 여기에 손님 명단이 뜹니다.</p>
+              <p className="t-desc break-keep py-2 text-center text-ink-muted">이 날짜에 연결된 장부 바인 명단이 없습니다. 장부에서 바인을 먼저 기록하면 여기에 손님 명단이 뜹니다.</p>
             ) : (
               <>
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-2xs text-ink-muted">장부에 바인한 손님 — <b className="text-emerald-300">＋</b>로 순위에 추가</p>
                   <button type="button" onClick={addAllFromLedger} className="rounded-input border border-emerald-500/40 px-2 py-1 text-2xs font-bold text-emerald-300 hover:bg-emerald-500/10">전체 추가</button>
                 </div>
-                <ul className="flex flex-wrap gap-1.5">
+                <ul className="flex flex-wrap gap-2">
                   {ledgerPlayers.map((p) => {
                     const added = rows.some((row) => row.nickname.trim() === p.name);
                     return (
@@ -1417,7 +1422,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
       </div>
 
       {/* 오너 지시(2026-08-27): 안내가 쓸데없이 길다 — 핵심 1줄 + 나머지는 접힘 */}
-      <details className="group/rkhelp text-2xs text-ink-muted">
+      <details className="group/rkhelp t-desc break-keep text-ink-muted">
         <summary className="cursor-pointer list-none">
           <span className="text-accent-300 dark:text-accent-200 font-semibold">닉네임 필수</span> · 프라이즈는 <span className="text-accent-300 dark:text-accent-200 font-semibold">만원 단위</span>(100만원=100)
           <span className="ml-1 text-ink-muted underline decoration-border-default underline-offset-2 group-open/rkhelp:hidden">자세히</span>
@@ -1437,7 +1442,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
         const blocked = venueSendBlock();
         if (blocked) {
           return (
-            <p className="flex items-start gap-1.5 rounded-input border border-danger/40 bg-danger/[0.08] px-2.5 py-2 text-2xs leading-relaxed text-danger-deep dark:text-danger-light">
+            <p className="t-desc break-keep flex items-start gap-2 rounded-input border border-danger/40 bg-danger/[0.08] px-3 py-2 text-danger-deep dark:text-danger-light">
               <Icon name="alert" size={13} className="mt-0.5 shrink-0" />
               <span><b>이용권 전송이 잠겨 있습니다</b> — {blocked}</span>
             </p>
@@ -1446,7 +1451,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
         // 한도가 얼마 안 남았으면 미리 보여 준다 — 20줄을 다 치고 나서 3줄째에 막히는 게 최악이다
         if (quotaLeft !== null && quotaLeft <= 50) {
           return (
-            <p className="flex items-start gap-1.5 rounded-input border border-amber-400/40 bg-amber-500/10 px-2.5 py-2 text-2xs leading-relaxed text-amber-200">
+            <p className="t-desc break-keep flex items-start gap-2 rounded-input border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-amber-200">
               <Icon name="alert" size={13} className="mt-0.5 shrink-0" />
               <span>남은 발급 한도 <b className="tabular-nums">{quotaLeft.toLocaleString()}개</b> — 시상 전에 확인해 주세요. 한도 추가는 운영자 문의.</span>
             </p>
@@ -1457,7 +1462,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
 
       {/* 저장 전 입력분 안내 — 초안은 자동 보관되지만, 상태를 보여주지 않으면 사장님이 오탭을 눈치채지 못한다 */}
       {(drafted || restorable) && (
-        <div className="flex items-center gap-2 rounded-input border border-amber-500/30 bg-amber-500/[0.06] px-2.5 py-1.5">
+        <div className="flex items-center gap-2 rounded-input border border-amber-500/30 bg-amber-500/[0.06] px-3 py-2">
           {restorable ? (
             <>
               <span className="min-w-0 flex-1 text-2xs text-amber-200">저장하지 않고 나갔던 입력분이 있어요({restorable.length}줄). 지금 화면은 <b>저장된 순위</b>입니다.</span>
@@ -1475,7 +1480,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
       {loading ? (
         <p className="text-center py-8 text-2xs text-ink-muted">불러오는 중…</p>
       ) : (
-        <ul className="space-y-1.5">
+        <ul className="space-y-1">
           {rows.map((row, i) => (
             <li key={i}
               // 모바일 3행(칸 잘림·경계 어긋남 교정 — 오너 스크린샷): 닉네임·실명 / 프라이즈·이용권 / 비고
@@ -1505,7 +1510,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
                   className="flex min-h-9 min-w-9 shrink-0 flex-col items-center justify-center px-0.5 text-center leading-none">
                   <span className="block text-sm font-bold text-accent-300 dark:text-accent-200 tabular-nums">{i + 1}</span>
                   {/* 등수→점수 미리보기(매장 꾸미기 '기준 점수' 반영) */}
-                  <span className="block text-[9px] font-semibold text-ink-muted tabular-nums">+{placementPointsOf(i + 1, cfg)}점</span>
+                  <span className="block text-2xs font-semibold tabular-nums text-ink-muted">+{placementPointsOf(i + 1, cfg)}점</span>
                 </button>
                 <button
                   type="button" onClick={() => moveRow(i, i + 1)} disabled={i === rows.length - 1}
@@ -1539,7 +1544,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
                         <li key={'l' + n}>
                           <button type="button" onMouseDown={(e) => { e.preventDefault(); pickSuggestion(i, 'ledger', n); }}
                             className="flex w-full items-center gap-2 px-2.5 py-2 text-left text-xs hover:bg-surface-high">
-                            <span className="shrink-0 rounded-badge bg-accent-300/15 px-1.5 py-0.5 text-[9px] font-bold text-accent-300">장부</span>
+                            <span className="shrink-0 rounded-badge bg-accent-300/15 px-1.5 py-0.5 text-2xs font-bold text-accent-300">장부</span>
                             <span className="truncate font-semibold text-ink-primary">{n}</span>
                           </button>
                         </li>
@@ -1547,7 +1552,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
                       <li>
                         <button type="button" onMouseDown={(e) => { e.preventDefault(); pickSuggestion(i, 'guest', row.nickname.trim()); }}
                           className="flex w-full items-center gap-2 px-2.5 py-2 text-left text-xs hover:bg-surface-high">
-                          <span className="shrink-0 rounded-badge bg-surface-high px-1.5 py-0.5 text-[9px] font-bold text-ink-muted">비회원</span>
+                          <span className="shrink-0 rounded-badge bg-surface-high px-1.5 py-0.5 text-2xs font-bold text-ink-muted">비회원</span>
                           <span className="truncate text-ink-secondary">'{row.nickname.trim()}' 비회원으로 등록</span>
                         </button>
                       </li>
@@ -1555,15 +1560,15 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
                         <li key={'m' + c.id}>
                           <button type="button" onMouseDown={(e) => { e.preventDefault(); pickSuggestion(i, 'member', c.nickname, c); }}
                             className="flex w-full items-center gap-2 px-2.5 py-2 text-left text-xs hover:bg-surface-high">
-                            <span className="shrink-0 rounded-badge bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-bold text-emerald-300">회원</span>
+                            <span className="shrink-0 rounded-badge bg-emerald-500/15 px-1.5 py-0.5 text-2xs font-bold text-emerald-300">회원</span>
                             {dupNicks.has(c.nickname.trim().toLowerCase()) && (
-                              <span className="shrink-0 rounded-badge bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold text-amber-300"
+                              <span className="shrink-0 rounded-badge bg-amber-500/15 px-1.5 py-0.5 text-2xs font-bold text-amber-300"
                                 title="같은 닉네임의 회원이 둘 이상입니다 — 실명을 보고 골라 주세요">중복</span>
                             )}
                             {/* 킬스위치 OFF 면 '미인증' 은 아무것도 막지 않는다 — 남겨두면 존재하지 않는
                                 인증 화면으로 가라는 뜻 없는 경고가 된다(순위 기록은 원래 인증과 무관). */}
                             {vchOn && !c.verified && (
-                              <span className="shrink-0 rounded-badge bg-rose-500/15 px-1.5 py-0.5 text-[9px] font-bold text-rose-300"
+                              <span className="shrink-0 rounded-badge bg-rose-500/15 px-1.5 py-0.5 text-2xs font-bold text-rose-300"
                                 title="미인증 회원 — 본인인증 전이라 순위 기록은 되지만 매장이용권은 지급할 수 없어요"><Icon name="alert" size={9} className="mr-0.5 inline-block align-[-1px] shrink-0" />미인증</span>
                             )}
                             <span className="truncate font-semibold text-ink-primary">{c.nickname}{c.realName ? <span className="font-normal text-ink-muted"> · {c.realName}</span> : null}</span>
@@ -1670,7 +1675,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
                       : null;
                 if (!msg) return null;
                 return (
-                  <p className={['col-start-2 col-span-2 row-start-4 lg:col-start-2 lg:col-span-6 min-w-0 truncate text-2xs leading-relaxed',
+                  <p className={['col-start-2 col-span-2 row-start-4 lg:col-start-2 lg:col-span-6 min-w-0 truncate text-2xs',
                     msg.tone === 'ok' ? 'text-emerald-300' : msg.tone === 'err' ? 'text-rose-300' : 'text-amber-200'].join(' ')}
                     title={msg.text}>
                     {msg.tone === 'ok' ? '✓ ' : msg.tone === 'err' ? '✕ ' : '· '}{msg.text}
@@ -1688,7 +1693,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
         const bad = rows.map((r, i) => ({ no: i + 1, risk: prizeUnitRisk(r.prize) })).filter((x) => x.risk !== 'ok');
         if (bad.length === 0) return null;
         return (
-          <p className="rounded-input border border-amber-400/40 bg-amber-500/10 px-2.5 py-2 text-2xs leading-relaxed text-amber-200">
+          <p className="t-desc break-keep rounded-input border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-amber-200">
             <Icon name="alert" size={12} className="mr-0.5 inline-block align-[-1px] shrink-0" /><b>{bad.map((x) => `${x.no}위`).join(', ')}</b> 프라이즈가 큽니다 — 이 칸은 <b>만원 단위</b>예요.
             100만원이면 <b>100</b>, 1,000만원이면 <b>1000</b>. 원 단위로 치면 매장·전국 프라이즈 순위가 크게 왜곡됩니다.
           </p>
@@ -1753,10 +1758,10 @@ function VenueCreateForm({ onCreated }: { onCreated: () => Promise<void> }) {
       <div className="text-center space-y-1">
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-accent-300/15 text-accent-300"><Icon name="store" size={26} /></div>
         <h2 className="text-base font-bold text-ink-primary">내 매장 만들기</h2>
-        <p className="text-2xs leading-relaxed text-ink-muted">매장 정보를 입력하면 NURI HOLDEM 커뮤니티에 매장이 등록됩니다.<br />운영자 승인 후 일정탐색·커뮤니티에 공개돼요.</p>
+        <p className="t-desc break-keep text-ink-muted">매장 정보를 입력하면 NURI HOLDEM 커뮤니티에 매장이 등록됩니다.<br />운영자 승인 후 일정탐색·커뮤니티에 공개돼요.</p>
         {/* 신규 업주 온보딩 — 운영 가이드 슬라이드로 전체 흐름 먼저 파악 */}
         <button type="button" onClick={() => window.open('/guide/owner.html', '_blank', 'noopener')}
-          className="mx-auto inline-flex items-center gap-1 rounded-input border border-accent-400/40 bg-accent-300/10 px-3 py-1.5 text-2xs font-bold text-accent-300 hover:bg-accent-300/20 transition-colors">
+          className="mx-auto inline-flex items-center gap-1 rounded-input border border-accent-400/40 bg-accent-300/10 px-3 py-2 text-2xs font-bold text-accent-300 transition-colors hover:bg-accent-300/20">
           <Icon name="book-open" size={13} className="shrink-0" />운영 가이드 먼저 보기 <span className="text-ink-muted font-normal">(포스터→장부→클락→정산)</span>
         </button>
       </div>
@@ -1785,7 +1790,7 @@ function VenueCreateForm({ onCreated }: { onCreated: () => Promise<void> }) {
         <button type="button" disabled={!ready || busy} onClick={submit} className="btn-primary w-full py-3 text-sm font-bold disabled:opacity-50">
           {busy ? '생성 중…' : '+ 매장 생성하기'}
         </button>
-        <p className="text-2xs text-ink-muted">* 표시는 필수입니다. 생성 후 ‘매장 꾸미기·설정’에서 추가 정보(갤러리·테마·블라인드 등)를 채울 수 있어요.</p>
+        <p className="t-desc break-keep text-ink-muted">* 표시는 필수입니다. 생성 후 ‘매장 꾸미기·설정’에서 추가 정보(갤러리·테마·블라인드 등)를 채울 수 있어요.</p>
       </div>
     </div>
   );
@@ -1805,13 +1810,13 @@ function StaffHub({ venueId }: { venueId: string }) {
     { id: 'log',      label: '직원 출근일지',                node: <StaffWorkLog venueId={venueId} /> },
   ];
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {items.map((it) => {
         const isOpen = open === it.id;
         return (
           <div key={it.id} className="rounded-card border border-border-default bg-surface-low overflow-hidden">
             <button type="button" onClick={() => setOpen(isOpen ? '' : it.id)}
-              className="w-full flex items-center justify-between px-3 py-3 text-left hover:bg-surface-high transition-colors">
+              className="flex w-full items-center justify-between p-3 text-left transition-colors hover:bg-surface-high">
               <span className="text-sm font-bold text-ink-primary">{it.label}</span>
               <span className="text-accent-300 dark:text-accent-200 text-xs">{isOpen ? '▲ 접기' : '▼ 펼치기'}</span>
             </button>
@@ -1977,10 +1982,10 @@ function StaffManager({ venueId }: { venueId: string }) {
         )}
 
         {/* 초대 절차 — 문장 나열 대신 번호 배지 스텝(순서가 의미 있는 3단계) */}
-        <ol id="staff-invite-hint" className="flex flex-col gap-1 rounded-input border border-border-subtle bg-surface-low px-2.5 py-2 sm:flex-row sm:items-center sm:gap-3">
+        <ol id="staff-invite-hint" className="flex flex-col gap-1 rounded-input border border-border-subtle bg-surface-low px-3 py-2 sm:flex-row sm:items-center sm:gap-3">
           {(['상대가 일반 회원으로 가입', '아이디나 이메일로 초대', '상대가 알림에서 수락 → 합류'] as const).map((t, i) => (
-            <li key={t} className="flex items-center gap-1.5 text-2xs text-ink-muted">
-              <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-accent-300/15 text-[10px] font-bold tabular-nums text-accent-300 dark:text-accent-200">{i + 1}</span>
+            <li key={t} className="flex items-center gap-2 text-2xs text-ink-muted">
+              <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-accent-300/15 text-2xs font-bold leading-none tabular-nums text-accent-300 dark:text-accent-200">{i + 1}</span>
               {t}
             </li>
           ))}

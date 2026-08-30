@@ -131,8 +131,7 @@ export async function buildChampionCardBlob(d: ChampionCardData): Promise<Blob> 
   x.fillText('♠ NURI HOLDEM', S / 2, 110);
 
   // 왕관 + 시즌 챔피언
-  x.font = '700 150px sans-serif';
-  x.fillText('👑', S / 2, 320);
+  drawCrown(x, S / 2, 185, 150); // 종전 fillText('👑', S/2, 320) 의 글리프 상자와 같은 자리(185~335)
   x.fillStyle = GOLD; x.font = '800 64px sans-serif';
   x.fillText('시즌 챔피언', S / 2, 420);
 
@@ -180,6 +179,33 @@ export async function shareChampionCard(d: ChampionCardData): Promise<'shared' |
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   return 'downloaded';
+}
+
+// ICON-3(2026-08-30): 종전엔 챔피언 카드의 왕관을 `fillText('👑')` 로 찍었다.
+// 캔버스에 찍는 이모지는 **기기에 깔린 이모지 폰트 그대로** 구워진다 — 같은 공유 카드가
+// iOS·안드로이드·삼성에서 서로 다른 왕관으로 나가고, 폰트가 없으면 두부(□)가 PNG 에 박힌다.
+// 되돌릴 수 없는 산출물(이미지)이라 UI 이모지보다 더 나쁘다. 앱 아이콘(lucide `crown`,
+// ISC — Icon.tsx 고지 참조)과 같은 패스를 그려 기기와 무관하게 한 그림으로 고정한다.
+const CROWN_D =
+  'M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519'
+  + 'l-2.834 10.246a1 1 0 0 1-.956.734H5.81a1 1 0 0 1-.957-.734L2.02 6.02a.5.5 0 0 1 .798-.519'
+  + 'l4.276 3.664a1 1 0 0 0 1.516-.294z M5 21h14';
+// Path2D 는 모듈 평가 시점이 아니라 그릴 때 만든다 — 이 파일이 캔버스 없는 환경에서
+// 임포트되기만 해도 터지는 일을 막는다(테스트·툴체인).
+let crownPath: Path2D | null = null;
+/** 왕관을 (cx, cy) 를 좌우 중앙·상단 기준으로 size px 크기로 그린다(원본 viewBox 24). */
+function drawCrown(x: CanvasRenderingContext2D, cx: number, cy: number, size: number) {
+  crownPath ??= new Path2D(CROWN_D);
+  const k = size / 24;
+  x.save();
+  x.translate(cx - size / 2, cy);
+  x.scale(k, k);
+  x.strokeStyle = GOLD;
+  x.lineWidth = 2;
+  x.lineJoin = 'round';
+  x.lineCap = 'round';
+  x.stroke(crownPath);
+  x.restore();
 }
 
 function roundRect(x: CanvasRenderingContext2D, px: number, py: number, w: number, h: number, r: number) {

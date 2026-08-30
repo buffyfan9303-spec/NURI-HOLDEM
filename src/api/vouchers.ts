@@ -64,6 +64,16 @@ export function subscribeVenueVouchers(venueId: string, onChange: () => void): (
   return () => { supabase.removeChannel(ch); };
 }
 
+/** 내가 보유한 이용권의 발급 매장명 — venues 의 RLS(approved 게이트)를 우회해 보유자에게만 이름을 돌려준다.
+ *  (20260830i_my_voucher_venues.sql · SECURITY DEFINER) */
+export async function myVoucherVenues(): Promise<Map<string, string>> {
+  if (IS_MOCK) return new Map();
+  const { data, error } = await supabase.rpc('my_voucher_venues');
+  if (error) return new Map(); // 구 DB(RPC 미배포) — 임베드로 얻은 이름만 쓴다
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return new Map((data ?? []).map((r: any) => [r.venue_id as string, (r.venue_name as string) ?? '']));
+}
+
 /** 내가 보유한 이용권 (손님) */
 export async function listMyVouchers(): Promise<Voucher[]> {
   if (IS_MOCK) return [];
@@ -72,7 +82,21 @@ export async function listMyVouchers(): Promise<Voucher[]> {
   const { data } = await supabase.from('store_vouchers')
     .select('*, venue:venue_id(name), used_venue:used_venue_id(name)')
     .eq('holder_user_id', uid).order('created_at', { ascending: false });
-  return (data ?? []).map(mapRow);
+  const rows = (data ?? []).map(mapRow);
+  // 매장명 보강 — venues_select 는 `approved = true or owner or admin` 이라
+  // **미승인 매장이 발급한 이용권**은 위 임베드에서 venue 가 통째로 null 로 온다(2026-08-30 기준 미승인 2곳 실재).
+  // '어느 매장이 준 것인가'(오너 지시 #19)가 그 경우에만 조용히 사라지므로, 빈 이름이 있을 때만 한 번 더 묻는다.
+  // 왜 조건부인가: 정상 경로(승인 매장)에서는 왕복이 0회 — 지갑 진입 비용을 늘리지 않는다.
+  if (rows.some((v) => !v.venueName)) {
+    const names = await myVoucherVenues();
+    if (names.size > 0) {
+      for (const v of rows) {
+        if (!v.venueName) v.venueName = names.get(v.venueId) ?? null;
+        if (!v.usedVenueName && v.usedVenueId) v.usedVenueName = names.get(v.usedVenueId) ?? null;
+      }
+    }
+  }
+  return rows;
 }
 
 /** 시상 멱등 키 조회 — note 에 AWARD:{date}:{event}:{nick} 마커가 있는 발급분(중복 발급 차단용) */

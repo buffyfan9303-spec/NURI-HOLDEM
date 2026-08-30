@@ -1,7 +1,11 @@
 // UX-1(W1-6): '지금 등록 되나?' — 라이브 클락의 레지 판정을 browse 카드·상세로 승격하는 단일 소스.
 // 기존에는 이 판정이 LiveGamesTab 내부에만 갇혀 있어, 정작 대회를 '고르는' 화면에서는
 // 서버가 답을 알면서도 유저에게 "매장에 확인해 주세요"라고 말하고 있었다(§15.2 #6).
-import { effectiveLevel, type ClockState } from '../api/clock';
+// ⚠ effectiveLevel 은 **반드시 lib/clockLevel 에서** 가져온다.
+//   '../api/clock' 에서 가져오면 그 모듈이 api/ledger 를 물고 있어 업주 전용 장부 청크가
+//   첫 화면 임계 경로로 딸려 온다(실측으로 잡은 회귀). ClockState 는 타입이라 안전하다.
+import { effectiveLevel } from './clockLevel';
+import type { ClockState } from '../api/clock';
 import type { Schedule } from '../api/schedules';
 
 /** 라이브 클락 → 연결 포스터 매칭(공개 데이터만): 같은 매장·같은 날짜의 스케줄(여럿이면 제목 일치 우선). */

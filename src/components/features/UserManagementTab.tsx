@@ -12,6 +12,10 @@ import type {
 } from '../../api/community';
 import Icon from '../atoms/Icon';
 import { onColorInkClass } from '../../lib/color';
+import { goSubTab } from '../../lib/subTabTransition';
+
+/** 회원 → 게시글 진열 순서 — 하위 탭 전환 방향(forward/back) 기준. */
+const USERMGMT_ORDER = ['users', 'posts'] as const;
 
 // 게시글 관리(모더레이션)용 경량 포스트 타입 — 게시판(카테고리)별 분류 포함
 interface ModPost {
@@ -78,12 +82,14 @@ export default function UserManagementTab({
 
   return (
     <div className="space-y-3">
-      {/* 섹션 토글 */}
-      <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5">
-        <SectionPill active={section === 'users'} onClick={() => setSection('users')} label="회원 관리" count={users.length} />
-        <SectionPill active={section === 'posts'} onClick={() => setSection('posts')} label="게시글 관리" count={posts.length} />
+      {/* 섹션 토글 — 하위 탭 전환(방향성 푸시). 탭바는 제자리, 아래 본문만 밀린다. */}
+      <div data-usermgmt-secbar="" className="flex items-center gap-1 bg-surface-high rounded-input p-0.5">
+        <SectionPill active={section === 'users'} onClick={() => goSubTab('usermgmt-sec', USERMGMT_ORDER, section, 'users', () => setSection('users'))} label="회원 관리" count={users.length} />
+        <SectionPill active={section === 'posts'} onClick={() => goSubTab('usermgmt-sec', USERMGMT_ORDER, section, 'posts', () => setSection('posts'))} label="게시글 관리" count={posts.length} />
       </div>
 
+      {/* 본문 — space-y-3 을 그대로 물려받도록 같은 간격의 래퍼를 쓴다(간격 회귀 방지) */}
+      <div data-usermgmt-panel="" className="space-y-3">
       {section === 'users' ? (
         <>
           {/* 요약 카운트 */}
@@ -131,6 +137,7 @@ export default function UserManagementTab({
       ) : (
         <PostModeration posts={posts} onDelete={onDeletePost} />
       )}
+      </div>
     </div>
   );
 }

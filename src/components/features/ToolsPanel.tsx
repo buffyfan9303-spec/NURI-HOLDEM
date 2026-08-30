@@ -8,6 +8,7 @@ import { useTrainerProgress } from '../../lib/trainerProgress';
 import { useDrillPlan } from './tools/drillPlan';
 import { useAuth } from '../../contexts/AuthContext';
 import { promptLogin } from '../../lib/requireLogin';
+import { goSubTab } from '../../lib/subTabTransition';
 import ICMCalculator from './ICMCalculator';
 import PotOddsCalc from './tools/PotOddsCalc';
 import ChipDistributor from './tools/ChipDistributor';
@@ -24,6 +25,7 @@ import BlindBuilder from './tools/BlindBuilder';
 import GlossaryPanel from './tools/GlossaryPanel';
 import DealCalc from './tools/DealCalc';
 import DailyDrill from './tools/DailyDrill';
+import { RANGE_GROUPS, RANGE_SCENARIOS, type RangeScenario } from '../../lib/ranges.data';
 
 // GTO 패널·핸드 리플레이어는 에퀴티 엔진을 포함해 무거우므로 지연 로드
 import { readSnap } from '../../lib/snapshot';
@@ -106,11 +108,15 @@ const LANES: { id: ToolCat; label: string; desc: string }[] = [
 // eslint-disable-next-line react-refresh/only-export-components -- 이관 레지스트리 공유(§7 ⑥b)
 export const STORE_TOOL_KEYS = ['chip', 'sim', 'blindgen', 'payout', 'endtime'] as const;
 const STORE_SET = new Set<ToolKey>(STORE_TOOL_KEYS);
+/** 레인 칩 진열 순서 — 하위 탭 전환 방향(forward/back) 기준. 화면에 놓인 차례 그대로. */
+const LANE_ORDER = ['all', ...LANES.map((l) => l.id)] as (ToolCat | 'all')[];
 
 // 트레이너류는 '퀴즈' 뉘앙스(맞히기), 나머지 계산기·차트류는 '도구' 뉘앙스로 라벨링.
 const QUIZ_KEYS = new Set<ToolKey>(['drill', 'range', 'pushfold', 'trainer', 'postflop']);
 
-function renderTool(k: ToolKey): ReactNode {
+/** opts.rangeGroup — GTO 탭 상단 '프리플랍 레인지 차트' 카드에서 그룹을 지정해 열 때만 쓴다.
+ *  (도구를 새로 만들지 않고 **기존 차트를 그 상황으로 열어준다** — 같은 화면이 두 개가 되면 그게 곧 버그다.) */
+function renderTool(k: ToolKey, opts?: { rangeGroup?: RangeScenario['group'] }): ReactNode {
   switch (k) {
     // '결과 먼저': 빈 폼 대신 직전 입력(스냅샷) 또는 대표 데모 핸드(AKs vs QQ)로 진입 즉시 결과.
     case 'gto': {
@@ -127,7 +133,8 @@ function renderTool(k: ToolKey): ReactNode {
     case 'drill': return <DailyDrill />;
     case 'pot': return <PotOddsCalc />;
     case 'icm': return <ICMCalculator />;
-    case 'range': return <RangeGuide />;
+    // key — 그룹을 바꿔 다시 열면 초기 선택이 새로 잡히게(useState 초기값은 마운트에만 반영)
+    case 'range': return <RangeGuide key={opts?.rangeGroup ?? 'default'} initialGroup={opts?.rangeGroup} />;
     case 'trainer': return <PreflopTrainer />;
     case 'postflop': return <PostflopTrainer />;
     case 'mdf': return <MdfCalc />;
@@ -183,7 +190,11 @@ export default function ToolsPanel() {
   //     확정 결과가 '비로그인' 이면 그때 로그인 시트를 띄운다(안내가 늦는 게 아니라 정확해진다).
   const { user, loading: authLoading } = useAuth();
   const pendingTool = useRef<ToolKey | null>(null);
-  const open = (k: ToolKey) => {
+  // 레인지 차트를 '어느 상황으로' 열지 — 상단 차트 카드의 바로가기 칩에서만 지정한다.
+  // 지정 없이(카드·딥링크) 열면 undefined 라 차트 자신의 기본 그룹(6맥스 오픈)으로 뜬다.
+  const [rangeGroup, setRangeGroup] = useState<RangeScenario['group'] | undefined>(undefined);
+  const open = (k: ToolKey, rg?: RangeScenario['group']) => {
+    setRangeGroup(rg);
     if (authLoading) { pendingTool.current = k; return; }   // 아직 모른다 — 결론을 미룬다
     if (!user) { promptLogin(); return; }
     setActive(k);
@@ -288,6 +299,10 @@ export default function ToolsPanel() {
       // 위 ① 과 같은 이유 — 해시를 갖고 도착한 이 항목에서 해시를 걷어내고,
       // 도구가 열린 뒤 그 도구의 항목에 다시 얹는다(닫을 때 되살아나지 않게).
       stripToolHash();
+      // 해시에는 그룹 정보가 없다 — 그런데 예전엔 setActive 만 불러 **직전 칩으로 연 그룹이 남았다**
+      // (칩으로 'vs 3벳'을 열고 닫은 뒤 #tool=range 로 들어오면 vs 3벳이 떴다).
+      // open() 의 계약("지정 없이 열면 차트 기본 그룹")과 어긋나므로 여기서도 같이 초기화한다.
+      setRangeGroup(undefined);
       setActive(m[1] as ToolKey);
     };
     window.addEventListener('hashchange', onHash);
@@ -356,6 +371,47 @@ export default function ToolsPanel() {
         </span>
       </button>
 
+      {/* 프리플랍 레인지 차트 — GTO 탭 편입(오너 지시 2026-08-30).
+          "차트가 GTO 탭에 없다"가 아니라 **찾기 어렵다**가 실제 문제였다(이 탭이 곧 GTO 탭이고
+          차트는 학습 레인 카드 하나로만 들어갈 수 있었다). 그래서 전용 뷰를 새로 만들지 않는다 —
+          같은 169셀 렌더러가 두 벌이 되면 그게 곧 유지보수 분기다. 대신 탭 상단에 상시 진입점을 두고
+          상황(오픈·수비·3벳·vs 3벳)별 바로가기를 얹어 **기존 차트를 그 그룹으로 연다**.
+          학습 레인의 '스타팅핸드 가이드' 카드와 #tool=range 딥링크는 그대로 살아 있다(기능 소실 0). */}
+      <section className="card-elev space-y-2 rounded-card border border-border-default bg-surface-low px-3.5 py-3">
+        <button type="button" onClick={() => open('range')}
+          aria-label={`프리플랍 레인지 차트 — 스팟 ${RANGE_SCENARIOS.length}개. 열기`}
+          className="flex w-full items-center gap-2.5 text-left">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-input bg-accent-300/15 text-accent-300">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              {TOOLS.find((t) => t.key === 'range')!.icon}
+            </svg>
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center gap-1.5">
+              <b className="truncate text-xs font-bold text-ink-primary">프리플랍 레인지 차트</b>
+              <span className="shrink-0 text-2xs font-bold tabular-nums text-accent-200">{RANGE_SCENARIOS.length}개 스팟</span>
+            </span>
+            {/* truncate 금지 — 375px 에서 "오픈 · 블라인드 수비 · 3…" 로 잘려 무슨 표인지 사라졌다.
+                두 줄까지 허용(카드 높이 예약이 바뀌지 않게 line-clamp 로 상한만 둔다). */}
+            <span className="mt-0.5 block text-2xs leading-snug text-ink-muted line-clamp-2">오픈 · 블라인드 수비 · 3벳 · vs 3벳 — 포지션으로 좁혀 보는 13×13</span>
+          </span>
+          <span className="shrink-0 text-2xs font-bold text-accent-200">열기 →</span>
+        </button>
+        {/* 상황 바로가기 — **가로 스크롤 금지, 줄바꿈**(2026-08-30 회귀 수정).
+            예전엔 overflow-x-auto + scrollbar-none 이었다. 375px 에서 실측 scrollWidth 408 / clientWidth 309 —
+            뒤쪽 두 개('3벳'·'vs 3벳')가 화면 밖에 있는데 스크롤바가 숨겨져 있어 단서가 0이었다.
+            유저 99%가 모바일이므로 진입점 다섯 중 둘이 '존재를 모르는' 상태였다는 뜻이다.
+            페이드 힌트는 '있는 걸 알려주는' 처방이라 여전히 스와이프를 요구한다 — 5개뿐이니 두 행으로 다 보인다. */}
+        <div className="flex flex-wrap gap-1" role="group" aria-label="레인지 차트 상황 바로가기">
+          {RANGE_GROUPS.map((g) => (
+            <button key={g.id} type="button" onClick={() => open('range', g.id)}
+              className="h-8 shrink-0 rounded-badge border border-transparent bg-surface-high px-2.5 text-2xs font-semibold text-ink-secondary transition-colors hover:text-ink-primary">
+              {g.label}
+            </button>
+          ))}
+        </div>
+      </section>
+
       {/* 도구 검색 */}
       <div className="relative">
         <Icon name="search" size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" aria-hidden />
@@ -365,12 +421,12 @@ export default function ToolsPanel() {
 
       {/* 레인 필터 칩 — 균일 h-9, aria-pressed 토글(접이식 대체) */}
       {!hits && (
-        <div className="flex flex-wrap gap-1.5" role="group" aria-label="도구 분류 필터">
+        <div data-tools-lanebar="" className="flex flex-wrap gap-1.5" role="group" aria-label="도구 분류 필터">
           {([{ id: 'all' as const, label: '전체' }, ...LANES]).map((l) => {
             const on = lane === l.id;
             return (
               <button key={l.id} type="button" aria-pressed={on}
-                onClick={() => setLane(on && l.id !== 'all' ? 'all' : l.id)}
+                onClick={() => { const next = on && l.id !== 'all' ? 'all' : l.id; goSubTab('tools-lane', LANE_ORDER, lane, next, () => setLane(next)); }}
                 className={['inline-flex h-8 items-center rounded-badge border px-2.5 text-2xs font-semibold transition-colors',
                   on ? 'border-accent-300 bg-accent-300 text-white' : 'border-transparent bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
                 {l.label}
@@ -390,6 +446,8 @@ export default function ToolsPanel() {
         </section>
       )}
 
+      {/* 도구 목록 — 레인 전환의 본문(방향성 푸시 대상). 루트 space-y-3 를 그대로 물려받는다. */}
+      <div data-tools-lanepanel="" className="space-y-3">
       {hits ? (
         hits.length === 0
           ? <p className="py-8 text-center text-2xs text-ink-muted">'{q.trim()}' 에 맞는 도구가 없습니다</p>
@@ -410,6 +468,7 @@ export default function ToolsPanel() {
           );
         })
       )}
+      </div>
 
       {/* 도구 실행 — 전체화면 페이지(헤더·뒤로가기·드래그 닫기 = 앱 공통 문법).
           ⚠ display:contents 래퍼 필수 — 루트가 space-y-3 이라 Modal(fixed inset-0)이 직계 자식이면
@@ -432,7 +491,7 @@ export default function ToolsPanel() {
           </div>
           <Suspense fallback={<div className="py-10 text-center text-2xs text-ink-muted">불러오는 중…</div>}>
             {/* #tool= 딥링크로 비로그인 진입해도 게이트가 유지되게 실행 지점에서 한 번 더 확인 */}
-            {active ? (user ? renderTool(active) : (
+            {active ? (user ? renderTool(active, { rangeGroup }) : (
               <div className="flex flex-col items-center gap-3 py-14 text-center">
                 <p className="text-sm font-bold text-ink-primary">로그인하면 GTO 도구를 쓸 수 있어요</p>
                 <p className="text-2xs text-ink-muted">차트·트레이너·계산기 전부 무료입니다</p>

@@ -22,7 +22,33 @@ export interface Venue {
   lat?: number | null; lng?: number | null;
   joinApproval?: boolean;// 비-매장 그룹: 가입 시 개설자 승인 필요 여부
   slug?: string | null;  // 커스텀 공유 링크(/s/<slug>) — 업주 설정, 전역 유니크
+  /** 다중 연락처(오너 #17). 신 필드 우선, 없으면 contactPhone 폴백 — venueContacts() 를 쓸 것 */
+  contacts?: VenueContact[];
 }
+
+/** 연락처 1건 — 라벨(대표/예약/담당자…)이 있어야 손님이 '어디로 걸지'를 고르지 않는다 */
+export interface VenueContact { label: string; phone: string }
+
+export const MAX_VENUE_CONTACTS = 5;
+
+/**
+ * 매장의 실효 연락처 목록. **신 필드(contact_phones) 우선, 없으면 기존 contactPhone 폴백.**
+ * 폴백은 구 표기 관습('/' 구분)을 그대로 살린다 — 마이그레이션 이전 데이터/구버전 응답에서도
+ * 번호가 사라지지 않아야 한다(오너 #17: "기존 매장의 번호가 사라지면 안 된다").
+ */
+export function venueContacts(v: Pick<Venue, 'contacts' | 'contactPhone'>): VenueContact[] {
+  const list = (v.contacts ?? []).filter((c) => c.phone.trim() !== '');
+  if (list.length > 0) return list;
+  return (v.contactPhone ?? '').split('/').map((s) => s.trim()).filter(Boolean)
+    .map((phone) => ({ label: '', phone }));
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const rowToContacts = (raw: any): VenueContact[] => (Array.isArray(raw) ? raw : [])
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  .map((c: any) => ({ label: String(c?.label ?? '').trim(), phone: String(c?.phone ?? '').trim() }))
+  .filter((c) => c.phone !== '')
+  .slice(0, MAX_VENUE_CONTACTS);
 
 // 현재 설정된 매장 슬러그 조회
 export async function getVenueSlug(venueId: string): Promise<string | null> {
@@ -99,6 +125,7 @@ const rowToVenue = (r: any): Venue => ({
   kind: r.kind ?? 'venue',
   joinApproval: r.join_approval ?? true,
   slug: r.slug ?? null,
+  contacts: rowToContacts(r.contact_phones),
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -218,14 +245,48 @@ export async function setVenueCoords(venueId: string, lat: number, lng: number):
   if (error) throw new Error(error.message);
 }
 
+/**
+ * 업주/운영자: 매장 주소·연락처·영업시간 저장.
+ *
+ * 시그니처 확장 규칙: `phone`(단일)만 넘기는 **기존 호출부는 그대로 동작**한다.
+ * `contacts`(다중, 오너 #17)를 넘기면 새 RPC update_venue_contacts 로 간다 —
+ * 서버가 앞 5개만 남기고 첫 번호를 contact_phone 에 미러링하므로 구 컬럼도 최신을 유지한다.
+ */
 export async function updateVenueContact(
-  venueId: string, input: { address: string; phone: string; hours: string },
+  venueId: string,
+  input: { address: string; hours: string; phone?: string; contacts?: VenueContact[] },
 ): Promise<void> {
   if (IS_MOCK) return;
+  if (input.contacts) {
+    const payload = input.contacts
+      .map((c) => ({ label: c.label.trim().slice(0, 10), phone: c.phone.trim().slice(0, 40) }))
+      .filter((c) => c.phone !== '')
+      .slice(0, MAX_VENUE_CONTACTS);
+    const { error } = await supabase.rpc('update_venue_contacts', {
+      p_venue_id: venueId, p_address: input.address, p_contacts: payload, p_hours: input.hours,
+    });
+    if (error) throw new Error(error.message);
+    return;
+  }
   const { error } = await supabase.rpc('update_venue_contact', {
-    p_venue_id: venueId, p_address: input.address, p_phone: input.phone, p_hours: input.hours,
+    p_venue_id: venueId, p_address: input.address, p_phone: input.phone ?? '', p_hours: input.hours,
   });
   if (error) throw new Error(error.message);
+}
+
+/** 매장 설정 화면용 — 주소·연락처(다중)·영업시간 현재값 */
+export async function getVenueContactInfo(
+  venueId: string,
+): Promise<{ address: string; hours: string; contacts: VenueContact[] }> {
+  if (IS_MOCK) return { address: '', hours: '', contacts: [] };
+  const { data, error } = await supabase.from('venues')
+    .select('address, business_hours, contact_phone, contact_phones').eq('id', venueId).maybeSingle();
+  if (error) throw new Error(error.message);
+  return {
+    address: data?.address ?? '',
+    hours: data?.business_hours ?? '',
+    contacts: venueContacts({ contacts: rowToContacts(data?.contact_phones), contactPhone: data?.contact_phone ?? undefined }),
+  };
 }
 
 // ── Comments ──────────────────────────────────────────────────────────────────
@@ -879,6 +940,40 @@ export async function deleteGroupPost(id: string): Promise<void> {
   if (error) throw error;
 }
 
+// ── 그룹 프로필(팀 소개 · 전화 · 카카오톡) ────────────────────────────────────
+/**
+ * 그룹 매니저/개설자/운영자만. 매장의 update_venue_contact 는 can_manage_venue(=승인된
+ * venue_owner) 게이트라 딜러팀을 만든 일반 회원이 영원히 통과할 수 없다 — 그래서 전용 RPC.
+ */
+export async function updateGroupProfile(
+  groupId: string, input: { description: string; phone: string; kakaoUrl: string },
+): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('update_group_profile', {
+    p_group: groupId, p_description: input.description, p_phone: input.phone, p_kakao: input.kakaoUrl,
+  });
+  if (error) throw new Error(error.message);
+}
+
+// ── 팀 활동 순위 ──────────────────────────────────────────────────────────────
+/** 그룹 멤버의 활동 기여도. 게시글 3점 + 채팅 1점 — 금전적 가치 없는 활동 점수(§28). */
+export interface GroupRankRow {
+  userId: string; name: string; color?: string; role: string;
+  posts: number; messages: number; score: number; joinedAt: string;
+}
+export async function getGroupActivityRanking(groupId: string): Promise<GroupRankRow[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.rpc('group_activity_ranking', { p_group: groupId });
+  if (error) throw new Error(error.message);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return ((data ?? []) as any[]).map((r) => ({
+    userId: r.user_id, name: r.member_name ?? '회원', color: r.member_color ?? undefined,
+    role: r.member_role ?? 'member',
+    posts: Number(r.post_count ?? 0), messages: Number(r.message_count ?? 0),
+    score: Number(r.score ?? 0), joinedAt: r.joined_at,
+  }));
+}
+
 // ── 운영자: 그룹 개설 승인 ────────────────────────────────────────────────────
 export async function getPendingGroups(): Promise<Venue[]> {
   if (IS_MOCK) return [];
@@ -1261,18 +1356,51 @@ export async function removeVenueOwner(venueId: string, userId: string): Promise
 //  · 차감과 게시는 buy_shout() RPC 한 트랜잭션에서 함께 일어난다(둘 중 하나만 되는 상태가 없다).
 //  · 중복 클릭·잔액 부족·도배는 전부 서버가 막는다(프로필 행 잠금 + 쿨다운 + 하루 상한).
 
-/** 외치기 등급 — 서버 shop_skus 의 shout_* 키에서 접두사를 뗀 값 */
+/**
+ * 외치기 등급 — 서버 shop_skus 의 shout_* 키에서 접두사를 뗀 값.
+ * ⚠ 'board'(전광판)는 **판매 중지**(20260830e: shop_skus.active = false)라 구매 화면에 뜨지 않는다.
+ *   그래도 타입에서 지우지 않는다 — 과거 구매 내역·관리자 목록에 tier='board' 인 행이 남아 있고,
+ *   지우면 그 기록들이 'basic' 으로 둔갑하거나 렌더에서 터진다.
+ */
 export type ShoutTier = 'basic' | 'gold' | 'board';
+
+/**
+ * 하이라이트 등급에서 고를 수 있는 색.
+ * 앱이 이미 라이트/다크 양쪽으로 정의해 둔 --tier-*-vivid 다섯 개와 1:1 대응한다
+ * (새 팔레트를 만들지 않는다 — 이 값들은 테마별 대비 실측을 통과한 것들이다).
+ * 서버 community_shouts_color_chk 와 반드시 같은 집합이어야 한다.
+ */
+export type ShoutColor = 'gold' | 'blue' | 'green' | 'purple' | 'rose';
+export const SHOUT_COLORS: readonly ShoutColor[] = ['gold', 'blue', 'green', 'purple', 'rose'];
+
+/** 외침 1회 방송 길이(초). 서버 buy_shout 의 SLOT constant(interval '20 seconds') 와 같은 값. */
+export const SHOUT_SLOT_SECONDS = 20;
+
+/**
+ * 1일 구매 한도 — 상품 종류 무관 합산(서버 daily_purchase_count() + buy_shout/buy_mark 의 `>= 10`).
+ * ⚠ 서버가 RPC 로 내주지 않는 값이라 여기 상수로 둔다. 서버를 바꾸면 여기도 같이 바꿀 것.
+ *   (shout_rules().daily_cap 은 구 3회 규칙의 잔재라 **더 이상 강제되지 않는다** — 화면이 그걸
+ *    믿고 '하루 3번'이라 쓰면 유저에게 거짓말이 된다.)
+ */
+export const DAILY_PURCHASE_CAP = 10;
 
 export interface Shout {
   id: string; userId: string; nickname: string; message: string;
-  cost: number; createdAt: string; expiresAt: string;
+  cost: number; createdAt: string;
+  /** 방송 시작 시각 — 서버가 '앞사람 방송 끝'으로 찍는다. 대기열 순서의 유일한 출처. */
+  playsAt: string;
+  /** 방송 종료 시각 = playsAt + 20초 */
+  expiresAt: string;
   /** 구매 등급. tierRank 가 클수록 위에 진열된다(가격표가 바뀌어도 과거 게시물 자리는 고정) */
   tier: ShoutTier; tierRank: number;
+  /** 하이라이트에서 고른 색. 기본 등급은 항상 null. */
+  color: ShoutColor | null;
 }
 export interface ShoutRules {
   cost: number; cooldownMinutes: number; dailyCap: number;
-  maxLen: number; minLen: number; ttlHours: number;
+  maxLen: number; minLen: number;
+  /** @deprecated 슬롯 전환(20260830e)으로 항상 0 — 노출 길이는 SHOUT_SLOT_SECONDS 다. */
+  ttlHours: number;
 }
 export interface PointBalance { total: number; spent: number; available: number }
 
@@ -1280,8 +1408,10 @@ export interface PointBalance { total: number; spent: number; available: number 
 export async function getShoutRules(): Promise<ShoutRules> {
   // ⚠ 서버 shout_rules() 와 반드시 같은 값이어야 한다. 폴백이 낮으면 화면은 30점이라 말하고
   //   서버는 200점을 걷는다 — 유저에게 거짓말이 된다. 가격을 바꿀 땐 여기까지 같이 바꿀 것.
-  //   (2026-08-29 오너 지시로 30 → 200: 하루 획득량 실측 ≈45~50점 기준 '나흘치')
-  const fallback: ShoutRules = { cost: 200, cooldownMinutes: 10, dailyCap: 3, maxLen: 60, minLen: 2, ttlHours: 6 };
+  //   (2026-08-29 30 → 200 / 2026-08-30 슬롯 전환으로 200 → 50: '기간'이 아니라 20초 1회라
+  //    하루치 획득량 실측 50점으로 내렸다. shop_skus.shout_basic.price 가 출처.)
+  //   ttlHours 는 shop_skus.shout_basic.duration_hours = 0 이 그대로 온다(슬롯 전환).
+  const fallback: ShoutRules = { cost: 50, cooldownMinutes: 10, dailyCap: 3, maxLen: 60, minLen: 2, ttlHours: 0 };
   if (IS_MOCK) return fallback;
   const { data, error } = await supabase.rpc('shout_rules');
   const r = Array.isArray(data) ? data[0] : data;
@@ -1308,20 +1438,30 @@ export async function getMyPointBalance(): Promise<PointBalance | null> {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mapShout = (r: any): Shout => ({
   id: r.id, userId: r.user_id, nickname: r.nickname ?? '회원', message: r.message ?? '',
-  cost: r.cost ?? 0, createdAt: r.created_at, expiresAt: r.expires_at,
+  cost: r.cost ?? 0, createdAt: r.created_at,
+  // plays_at 은 20260830e 에서 추가됐다. 그 이전 행은 값이 없을 수 있어 created_at 으로 떨어뜨린다
+  // (마이그레이션이 backfill 하지만, 캐시된 응답·목 데이터까지 감싸 두는 편이 안전하다).
+  playsAt: r.plays_at ?? r.created_at,
+  expiresAt: r.expires_at,
   tier: (r.tier ?? 'basic') as ShoutTier, tierRank: r.tier_rank ?? 1,
+  color: (r.color ?? null) as ShoutColor | null,
 });
 
-/** 지금 살아있는 외침(만료·숨김 제외) — 상위 등급 먼저, 같으면 최신순 */
-export async function getLiveShouts(limit = 10): Promise<Shout[]> {
+/**
+ * 대기열 — 아직 방송이 끝나지 않은 외침(숨김 제외)을 **방송 순서대로** 준다.
+ *
+ * ⚠ 정렬이 plays_at 오름차순인 것이 이 화면의 전부다. 종전 tier_rank desc 정렬은
+ *   '누가 먼저 방송되는가'와 아무 상관이 없어서, 서버가 찍어 준 방송 시각과 화면 순서가 엇갈렸다.
+ *   지금 방송 중 = plays_at <= now < expires_at, 그 뒤가 곧 대기 순번이다.
+ */
+export async function getLiveShouts(limit = 30): Promise<Shout[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase
     .from('community_shouts')
-    .select('id, user_id, nickname, message, cost, tier, tier_rank, created_at, expires_at')
+    .select('id, user_id, nickname, message, cost, tier, tier_rank, color, created_at, plays_at, expires_at')
     .eq('hidden', false)
     .gt('expires_at', new Date().toISOString())
-    .order('tier_rank', { ascending: false })
-    .order('created_at', { ascending: false })
+    .order('plays_at', { ascending: true })
     .limit(limit);
   if (error) return [];
   return (data ?? []).map(mapShout);
@@ -1329,10 +1469,20 @@ export async function getLiveShouts(limit = 10): Promise<Shout[]> {
 
 /**
  * 구매 = 차감 + 게시(원자적). 실패 사유는 서버 메시지를 그대로 올린다.
- * 등급별 가격·노출시간은 서버 shop_skus 가 단일 출처다 — 여기서 값을 보내지 않는다.
+ * 가격·방송 시각은 서버가 단일 출처다 — 여기서 값을 보내지 않는다(색과 등급만 보낸다).
+ *
+ * · tier 는 'basic' | 'gold' 만 받는다(전광판은 판매 중지 — 보내면 서버가 거절한다).
+ * · color 는 gold 에서만. basic 에 색을 보내면 서버가 거절하므로 호출부에서 걸러 보낼 것.
+ *   gold 인데 색을 안 보내면 서버가 'gold' 로 채운다.
  */
-export async function buyShout(message: string, tier: ShoutTier = 'basic'): Promise<Shout> {
-  const { data, error } = await supabase.rpc('buy_shout', { p_message: message, p_tier: tier });
+export async function buyShout(
+  message: string,
+  tier: ShoutTier = 'basic',
+  color?: ShoutColor | null,
+): Promise<Shout> {
+  const { data, error } = await supabase.rpc('buy_shout', {
+    p_message: message, p_tier: tier, p_color: color ?? null,
+  });
   if (error) throw new Error(error.message);
   const r = Array.isArray(data) ? data[0] : data;
   if (!r) throw new Error('외치기에 실패했습니다');
@@ -1351,11 +1501,19 @@ export async function buyShout(message: string, tier: ShoutTier = 'basic'): Prom
 
 export interface ShopSku {
   key: string;
-  kind: 'mark_rent' | 'shout';
+  /**
+   * mark = 영구 소장 마크(2026-08-30 전환 · SKU `mark_own`) ·
+   * shout = 20초 슬롯 외침 ·
+   * mark_rent = **판매 중지된 기간권**(서버가 active=false 로 내려서 목록에 오지 않는다.
+   *   타입을 지우지 않는 이유: 과거 구매 기록(point_purchases.kind)이 이 값을 그대로 들고 있다).
+   */
+  kind: 'mark_rent' | 'shout' | 'mark';
   label: string;
   descr: string;
   price: number;
   durationHours: number;
+  /** 슬롯형 상품의 노출 길이(초). 외치기 = 20. 기간형(구 mark_rent)은 0. */
+  durationSeconds: number;
   tierRank: number;
   sort: number;
 }
@@ -1365,7 +1523,7 @@ export async function getShopSkus(): Promise<ShopSku[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase
     .from('shop_skus')
-    .select('key, kind, label, descr, price, duration_hours, tier_rank, sort')
+    .select('key, kind, label, descr, price, duration_hours, duration_seconds, tier_rank, sort')
     .eq('active', true)
     .order('sort');
   if (error) return [];
@@ -1373,6 +1531,7 @@ export async function getShopSkus(): Promise<ShopSku[]> {
   return (data ?? []).map((r: any) => ({
     key: r.key, kind: r.kind, label: r.label, descr: r.descr ?? '',
     price: Number(r.price) || 0, durationHours: Number(r.duration_hours) || 0,
+    durationSeconds: Number(r.duration_seconds) || 0,
     tierRank: Number(r.tier_rank) || 1, sort: Number(r.sort) || 0,
   }));
 }
@@ -1389,8 +1548,9 @@ export async function getMyMarkRental(): Promise<MarkRental | null> {
 }
 
 /**
- * 기간 마크 구매 — 차감·지급·장착이 서버 한 트랜잭션에서 일어난다(buy_shout 과 같은 규약).
- * 같은 마크를 다시 사면 기간이 이어 붙고, 다른 마크를 사면 교체된다(최대 1년치).
+ * @deprecated 기간권(1일/7일/30일)은 2026-08-30 **판매 중지**됐다(shop_skus.kind='mark_rent' 전부 active=false).
+ * 호출하면 서버가 '판매 중인 상품이 아닙니다' 로 거절한다. 함수를 지우지 않는 이유:
+ * 이미 산 사람의 잔여 기간(my_mark_rental)과 24시간 내 환불 경로가 아직 이 개념 위에 서 있다.
  */
 export async function buyMarkRental(sku: string, markKey: string): Promise<MarkRental> {
   const { data, error } = await supabase.rpc('buy_mark_rental', { p_sku: sku, p_mark_key: markKey });
@@ -1398,6 +1558,42 @@ export async function buyMarkRental(sku: string, markKey: string): Promise<MarkR
   const r = Array.isArray(data) ? data[0] : data;
   if (!r) throw new Error('구매에 실패했습니다');
   return { markKey: r.mark_key, expiresAt: r.expires_at };
+}
+
+// ── 영구 소장 마크 (2026-08-30 기간권 → 소장 전환) ────────────────────────────
+//
+// 왜 바꿨나: 기간권은 '만료'로 반복 소비를 만들려던 설계였는데, 만료가 곧 **산 것을 잃는 일**이라
+// 유저 입장에선 꾸미기를 살 이유가 아니라 안 살 이유가 됐다. 2,000점 한 번으로 영구히 갖고
+// 6종을 자유롭게 바꿔 다는 쪽이 '점수를 쓰는 이유'로 더 정직하다.
+// 반복 소비는 외치기(20초 슬롯)가 맡는다 — 그쪽은 만료가 상품의 본질이라 손해로 읽히지 않는다.
+
+/** 내가 가진 마크 한 줄. own = 영구 소장(until 없음) · rent = 판매 중지된 예전 기간권의 잔여분 */
+export interface OwnedMark { markKey: string; source: 'own' | 'rent'; until: string | null }
+
+/** 내가 가진 마크 전량(소장 + 아직 살아 있는 예전 렌탈). 서버 my_owned_marks() 가 단일 출처. */
+export async function getMyOwnedMarks(): Promise<OwnedMark[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.rpc('my_owned_marks');
+  if (error || !Array.isArray(data)) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data as any[]).map((r) => ({
+    markKey: String(r.mark_key),
+    source: r.source === 'rent' ? 'rent' : 'own',
+    until: r.until ?? null,
+  }));
+}
+
+/**
+ * 마크 영구 소장 구매 — 차감·소장·장착이 서버 한 트랜잭션이다(buy_shout 과 같은 규약).
+ * 가격은 서버 shop_skus.mark_own 이 유일한 출처라 **여기서 값을 보내지 않는다.**
+ * 도달(earn) 마크는 점수로 여는 것이라 서버가 거절하고, 이미 소장한 마크도 거절한다.
+ */
+export async function buyMark(markKey: string): Promise<string> {
+  const { data, error } = await supabase.rpc('buy_mark', { p_mark_key: markKey });
+  if (error) throw new Error(error.message);
+  const r = Array.isArray(data) ? data[0] : data;
+  if (!r) throw new Error('구매에 실패했습니다');
+  return typeof r === 'string' ? r : String((r as { mark_key?: string }).mark_key ?? markKey);
 }
 
 /** 내리기 — 작성자 본인 또는 운영자(환급 없음) */
@@ -1411,7 +1607,7 @@ export async function adminListShouts(limit = 50): Promise<(Shout & { hidden: bo
   if (IS_MOCK) return [];
   const { data, error } = await supabase
     .from('community_shouts')
-    .select('id, user_id, nickname, message, cost, tier, tier_rank, created_at, expires_at, hidden')
+    .select('id, user_id, nickname, message, cost, tier, tier_rank, color, created_at, plays_at, expires_at, hidden')
     .order('created_at', { ascending: false })
     .limit(limit);
   if (error) throw new Error(error.message);
@@ -1431,7 +1627,7 @@ export async function adminListShouts(limit = 50): Promise<(Shout & { hidden: bo
 
 export interface PointPurchase {
   id: number;
-  kind: 'shout' | 'mark_rent';
+  kind: 'shout' | 'mark_rent' | 'mark_own';
   skuKey: string;
   /** 상품 라벨(shop_skus.label). 가격표가 바뀌어도 과거 기록의 이름은 서버가 준 값 그대로 */
   label: string;

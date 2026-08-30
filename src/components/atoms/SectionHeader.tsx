@@ -15,7 +15,11 @@ export default function SectionHeader({ title, desc, action }: Props) {
     <header className="flex items-end justify-between gap-3 border-b border-border-subtle pb-3">
       <div className="min-w-0">
         <h2 className="text-fluid-lg font-bold leading-tight tracking-tight text-ink-primary">{title}</h2>
-        {desc && <p className="mt-1 text-xs leading-snug text-ink-muted">{desc}</p>}
+        {/* 설명문 행간은 §T1 t-desc(12.75/19.13 = 1.5배) 한 값으로.
+            leading-snug(17.53px)는 한글 두 줄이 붙어 보였고, 같은 12.75px 설명문이
+            화면마다 17 / 17.53 두 값으로 갈려 있었다(1440 실측). break-keep 은
+            '매장 운영 현황을 한눈에' 같은 어절이 줄 끝에서 쪼개지는 것을 막는다. */}
+        {desc && <p className="mt-1 t-desc break-keep text-ink-muted">{desc}</p>}
       </div>
       {action && (
         // 자식 버튼 규격 강제: 높이 38px·글자 12px·패딩 통일 — 섹션마다 버튼 크기가 달라지는 것 방지

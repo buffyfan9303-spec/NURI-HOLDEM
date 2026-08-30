@@ -30,17 +30,61 @@ export function maskRealName(name: string): string {
   return `${n[0]}${'*'.repeat(n.length - 2)}${n[n.length - 1]}`;
 }
 
-// 공개 표시 문자열: 실명(마스킹닉네임) — 실명 앞 전체, 닉네임 뒤 마스킹. 예: 누리홀덤(나*리). 실명 없으면 닉네임만.
-export function rankingLabel(e: RankingEntry): string {
+// ── 순위표 표시 이름 (오너 #14) ───────────────────────────────────────────────
+// 예전 규칙: 실명이 있으면 **실명을 앞에** 두고 닉네임을 마스킹해 뒤에 붙였다('홍길동(나*리)').
+//   매장이 순위를 입력할 때 적은 실명이 그대로 공개면에 떴다는 뜻이다.
+// 새 규칙: **기본은 닉네임**. 실명은 본인이 프로필에서 '실명'을 고른 경우에만 쓴다.
+//   개인정보보호법상 실명 공개는 사전·명시적 선택이어야 하므로 기본값이 실명일 수 없다.
+//   판정은 서버(profiles.ranking_name_pref)가 하고, 화면은 그 결과 집합만 받는다
+//   — 클라이언트가 '이 사람은 실명 써도 되겠지'를 추측하면 그게 곧 개인정보 유출이다.
+//
+// optIns: `getVenueRealNameOptIns()` 가 준 **소문자 닉네임 집합**. 넘기지 않으면(=아직 로딩 중,
+//   조회 실패, 비회원 목록) 전원 닉네임 — '모르면 덜 공개한다'가 안전한 기본값이다.
+export type RealNameOptIns = ReadonlySet<string>;
+const wantsRealName = (nickname: string, optIns?: RealNameOptIns): boolean =>
+  !!optIns && optIns.has(nickname.trim().toLowerCase());
+
+// 표시 분리: 메인(닉네임 — 실명 선택자만 실명) + 서브(실명 선택자의 마스킹 닉네임).
+// 닉네임이 비어 있는 과거 행(실명만 입력)은 실명을 마스킹해 쓴다 — 빈 칸으로 두면 누구인지 사라진다.
+export function rankDisplay(
+  e: { nickname: string; realName?: string },
+  optIns?: RealNameOptIns,
+): { main: string; sub: string } {
+  const nick = (e.nickname ?? '').trim();
   const rn = (e.realName ?? '').trim();
-  if (!rn) return e.nickname;
-  return `${rn}(${maskRealName(e.nickname)})`;
+  if (!nick) return { main: rn ? maskRealName(rn) : '', sub: '' };
+  if (rn && wantsRealName(nick, optIns)) return { main: rn, sub: maskRealName(nick) };
+  return { main: nick, sub: '' };
 }
 
-// 표시 분리: 메인(실명 또는 닉네임) + 서브(마스킹닉네임 — 실명 있을 때만). 실명 앞·닉네임 뒤 구조.
-export function rankDisplay(e: { nickname: string; realName?: string }): { main: string; sub: string } {
-  const rn = (e.realName ?? '').trim();
-  return rn ? { main: rn, sub: maskRealName(e.nickname) } : { main: e.nickname, sub: '' };
+// 공개 표시 문자열 — rankDisplay 와 같은 규칙을 한 줄 문자열로. 규칙을 두 번 쓰지 않는다.
+export function rankingLabel(e: RankingEntry, optIns?: RealNameOptIns): string {
+  const { main, sub } = rankDisplay(e, optIns);
+  return sub ? `${main}(${sub})` : main;
+}
+
+/**
+ * 이 매장 순위표에서 **실명 표시를 본인이 고른** 닉네임 집합(소문자 키).
+ *
+ * 서버 집계인 이유: 누적 순위표는 닉네임이 수백 개까지 늘어난다. 닉네임 배열을 올려 보내면
+ *   요청 크기가 참가자 수에 선형이 되고, 화면이 목록을 자르는 순간 가려진 사람의 표기가
+ *   조용히 틀린다. venue_id 하나로 서버가 집계하면 호출 1회로 끝난다
+ *   (venue_rating_summary 를 서버 집계로 옮긴 것과 같은 이유).
+ * 실패하면 빈 집합 — 즉 전원 닉네임 표시로 안전하게 떨어진다.
+ */
+async function rawVenueRealNameOptIns(venueId: string): Promise<string[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.rpc('venue_ranking_real_name_optins', { p_venue_id: venueId });
+  if (error) return []; // RPC 미배포·권한 등 어떤 실패든 '실명 없음'으로 수렴
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => String(r.nickname_key ?? '').trim().toLowerCase()).filter(Boolean);
+}
+// 한 매장 페이지 안에서 순위 패널과 시즌 선두 배너가 같은 답을 필요로 한다 → in-flight 합치기 + 60s LRU.
+// (자동완성 캐시와 같은 도구를 쓴다 — 캐시 규칙이 두 개면 언젠가 한쪽만 고쳐진다.)
+const cachedVenueRealNameOptIns = makeSearchCache(rawVenueRealNameOptIns, (s) => s.trim().toLowerCase(), { ttlMs: 60_000, max: 10 });
+
+export async function getVenueRealNameOptIns(venueId: string): Promise<Set<string>> {
+  return new Set(await cachedVenueRealNameOptIns(venueId));
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -370,7 +414,11 @@ export async function getGlobalRankingTotals(): Promise<GlobalRankingTotal[]> {
 //   그러면 '머니인 킹'이 금액과 무관한 횟수 1위가 되어 주간리그·머니인 탭의 새 규칙과 어긋나고,
 //   같은 규칙이 서버·클라이언트 두 곳에 생긴다. 집계를 weekly_moneyin_kings RPC 로 옮겨
 //   moneyin_points() 단일 정의를 그대로 쓰게 했다(전량 전송도 함께 사라진다).
-export interface WeeklyKing { nickname: string; moneyinCount: number; moneyinPoints: number; bestPosition: number }
+// 2026-08-30(오너 #15): 닉네임 옆에 '그 주에 가장 점수를 많이 딴 매장'을 괄호로 붙인다.
+//   집계는 weekly_moneyin_kings 안에서 같은 CTE 로 한다 — 매장을 따로 조회하면 왕복이 2회가 되고
+//   두 응답의 주간 창이 갈릴 수 있다. 같은 쿼리에서 뽑으면 '이 점수를 어디서 벌었나'가 정의상 일치한다.
+//   승인·활성 매장이 하나도 없으면 undefined — 화면은 괄호를 아예 그리지 않는다(빈 괄호 금지).
+export interface WeeklyKing { nickname: string; moneyinCount: number; moneyinPoints: number; bestPosition: number; topVenue?: string }
 export interface WeeklyKings { kings: WeeklyKing[]; isLastWeek: boolean }
 
 async function moneyinKingsBetween(fromStr: string, toStr: string | null, limit: number): Promise<WeeklyKing[]> {
@@ -384,6 +432,7 @@ async function moneyinKingsBetween(fromStr: string, toStr: string | null, limit:
     moneyinCount: Number(r.moneyin_count) || 0,
     moneyinPoints: Number(r.moneyin_points) || 0,
     bestPosition: Number(r.best_position) || 0,
+    topVenue: String(r.top_venue ?? '').trim() || undefined,
   }));
 }
 

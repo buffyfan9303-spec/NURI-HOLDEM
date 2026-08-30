@@ -11,6 +11,7 @@ import { checkinUrl } from '../../api/checkins';
 import { buyinRequestUrl } from '../../api/ledger';
 import { listVenueVouchers, issueVoucher, deleteVouchers, revokeVouchers, findUserForTransfer, findUserByPhone, voucherHolderStats, isVoucherIssueApproved, voucherHolderProfiles, subscribeVenueVouchers, type Voucher, type VoucherHolderStats, type TransferTarget, type VoucherHolderProfile, type BulkResult, getVoucherQuota } from '../../api/vouchers';
 import { useIdentityEnabled } from '../../lib/identityFlag'; // 본인인증·매장이용권 통합 킬스위치(2026-08-29)
+import { voucherGroupLabel, stripVenuePrefix } from '../../lib/voucherLabel'; // 손님 지갑 표기 규칙(오너 지시 #19)과 같은 함수로 미리보기
 
 function fmtDateTime(iso: string | null): string {
   if (!iso) return '-';
@@ -31,6 +32,8 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
 
   const [list, setList] = useState<Voucher[]>([]);
   const [loading, setLoading] = useState(false);
+  // 이 매장의 이름 — 이미 불러온 이용권 행의 조인 값에서 읽는다(추가 조회 0). 첫 발급 전에는 null 이라 미리보기를 내린다.
+  const venueName = list.find((v) => v.venueName)?.venueName ?? null;
   const [title, setTitle] = useState('매장이용권');
   const [count, setCount] = useState(1);
   // 만료일(선택) — 비우면 무기한. 서버는 KST 자정 직전으로 저장돼 그날까지 사용 가능.
@@ -346,6 +349,16 @@ ${cards}
                   <span className="self-center pl-0.5 text-2xs text-ink-muted">개</span>
                 </div>
               </div>
+              {/* 손님 화면 미리보기(오너 지시 #19) — 매장명은 **자동으로 붙는다**.
+                  왜 필요한가: 라이브 데이터 101장 중 100장의 제목에 업주가 '로티아레나'를 손으로 타이핑해
+                  두었다. 이제 그럴 필요가 없고, 그렇게 해도 중복은 표시 단계에서 걷힌다는 걸 여기서 보여 준다.
+                  매장명은 이 매장이 이미 발급한 이용권에서 읽는다(새 네트워크 0) — 모르면 줄 자체를 내린다. */}
+              {venueName && (
+                <p className="flex items-start gap-1.5 rounded-input bg-surface-high px-2 py-1.5 text-2xs leading-relaxed text-ink-muted">
+                  <Icon name="eye" size={12} className="mt-0.5 shrink-0 text-accent-300" />
+                  <span className="min-w-0 break-keep">손님 지갑에는 <b className="text-ink-primary">{voucherGroupLabel(venueName)}</b> 묶음 안에 <b className="text-ink-primary">{stripVenuePrefix(title, venueName)}</b> 로 보입니다 — 이름에 매장명을 다시 넣지 않아도 됩니다.</span>
+                </p>
+              )}
               {/* 유효기간(선택) — 비우면 무기한. 만료 이용권은 사용 RPC 가 서버에서 거부하고
                   손님 지갑에서도 자동 제외된다(스키마 확장 2026-08-17). */}
               <label className="flex items-center gap-2 text-2xs text-ink-secondary">

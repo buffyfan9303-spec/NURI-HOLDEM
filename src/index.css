@@ -1060,6 +1060,170 @@ html[data-vt-scope='rank-tab'][data-vt-dir='back']::view-transition-new(rank-pan
 ::view-transition-old(community-secbar), ::view-transition-new(community-secbar),
 ::view-transition-old(venue-tabbar), ::view-transition-new(venue-tabbar) { animation: none; }
 
+/* ── 하위 탭 전수 적용(오너 #10, 2026-08-30) ─────────────────────────────────────
+   "하위탭들 이동시 기존에 정해놨던 부드러운 모션을 빠짐없이."
+   위 venue-tab · rank-tab 과 **같은 레시피**다 — 새 이징·새 duration·새 키프레임 0.
+   vt-panel-*(불투명 새 화면 · blur 없음 · 10px)를 공유하고 스코프 이름만 화면마다 다르다.
+
+   ⚠ 왜 화면마다 이름을 나누나: 이 화면들은 **동시에 DOM 에 살아 있다**(App 은 방문한 최상위
+     탭을 언마운트하지 않고 display 토글로 유지하고, 모달은 그 위에 겹친다). 같은
+     view-transition-name 이 둘 이상 잡히면 캡처 시점에 전환이 통째로 실패한다.
+   ⚠ 이름은 전환이 도는 동안에만 존재한다(스코프 마커 아래에서만 부여) — 상시 name 은 화면을
+     떠날 때 old-only 스냅샷을 얼어붙게 만든다(커뮤니티 서브탭에서 실측된 함정).
+   ⚠ 아래 방향 규칙에 스코프 셀렉터를 다시 붙이지 않는 이유: 패널 이름은 자기 스코프에서만
+     생기므로 이름 하나로 이미 유일하다. 다시 붙이면 같은 뜻의 셀렉터가 4배로 늘 뿐이다
+     (CSS 예산 여유가 4% 다 — scripts/bundle-budget.mjs).
+   호출측은 src/lib/subTabTransition.ts 의 goSubTab(scope, order, from, to, commit) 하나뿐. */
+/* 관리자 8섹션 내비 */
+html[data-vt-scope='admin-sec'] [data-admin-secbar] { view-transition-name: admin-secbar; }
+html[data-vt-scope='admin-sec'] [data-admin-secpanel] { view-transition-name: admin-secpanel; }
+html[data-vt-scope='admin-sec']::view-transition-old(root),
+html[data-vt-scope='admin-sec']::view-transition-new(root) { animation: none; }
+/* 운영자 매장 장부/통계 2탭 */
+html[data-vt-scope='adminpos-tab'] [data-adminpos-tabbar] { view-transition-name: adminpos-tabbar; }
+html[data-vt-scope='adminpos-tab'] [data-adminpos-panel] { view-transition-name: adminpos-panel; }
+html[data-vt-scope='adminpos-tab']::view-transition-old(root),
+html[data-vt-scope='adminpos-tab']::view-transition-new(root) { animation: none; }
+/* 회원 관리 / 게시글 관리 */
+html[data-vt-scope='usermgmt-sec'] [data-usermgmt-secbar] { view-transition-name: usermgmt-secbar; }
+html[data-vt-scope='usermgmt-sec'] [data-usermgmt-panel] { view-transition-name: usermgmt-panel; }
+html[data-vt-scope='usermgmt-sec']::view-transition-old(root),
+html[data-vt-scope='usermgmt-sec']::view-transition-new(root) { animation: none; }
+/* 도구 탭 레인 필터 */
+html[data-vt-scope='tools-lane'] [data-tools-lanebar] { view-transition-name: tools-lanebar; }
+html[data-vt-scope='tools-lane'] [data-tools-lanepanel] { view-transition-name: tools-lanepanel; }
+html[data-vt-scope='tools-lane']::view-transition-old(root),
+html[data-vt-scope='tools-lane']::view-transition-new(root) { animation: none; }
+/* 장터 카테고리 + 정렬 */
+html[data-vt-scope='market-cat'] [data-market-catbar] { view-transition-name: market-catbar; }
+html[data-vt-scope='market-cat'] [data-market-panel] { view-transition-name: market-panel; }
+html[data-vt-scope='market-cat']::view-transition-old(root),
+html[data-vt-scope='market-cat']::view-transition-new(root) { animation: none; }
+/* 라이브 진행 게임 정렬 */
+html[data-vt-scope='live-sort'] [data-live-sortbar] { view-transition-name: live-sortbar; }
+html[data-vt-scope='live-sort'] [data-live-panel] { view-transition-name: live-panel; }
+html[data-vt-scope='live-sort']::view-transition-old(root),
+html[data-vt-scope='live-sort']::view-transition-new(root) { animation: none; }
+/* 딜러 커뮤니티 구인·구직·일반 */
+html[data-vt-scope='dealer-kind'] [data-dealer-kindbar] { view-transition-name: dealer-kindbar; }
+html[data-vt-scope='dealer-kind'] [data-dealer-panel] { view-transition-name: dealer-panel; }
+html[data-vt-scope='dealer-kind']::view-transition-old(root),
+html[data-vt-scope='dealer-kind']::view-transition-new(root) { animation: none; }
+/* 그룹(모임) 채팅·게시판·순위 */
+html[data-vt-scope='group-tab'] [data-group-tabbar] { view-transition-name: group-tabbar; }
+html[data-vt-scope='group-tab'] [data-group-panel] { view-transition-name: group-panel; }
+html[data-vt-scope='group-tab']::view-transition-old(root),
+html[data-vt-scope='group-tab']::view-transition-new(root) { animation: none; }
+/* 프로필 모달 프로필·설정·보안 */
+html[data-vt-scope='profile-tab'] [data-profile-tabbar] { view-transition-name: profile-tabbar; }
+html[data-vt-scope='profile-tab'] [data-profile-panel] { view-transition-name: profile-panel; }
+html[data-vt-scope='profile-tab']::view-transition-old(root),
+html[data-vt-scope='profile-tab']::view-transition-new(root) { animation: none; }
+/* 대회 상세 5탭 */
+html[data-vt-scope='sched-tab'] [data-sched-tabbar] { view-transition-name: sched-tabbar; }
+html[data-vt-scope='sched-tab'] [data-sched-panel] { view-transition-name: sched-panel; }
+html[data-vt-scope='sched-tab']::view-transition-old(root),
+html[data-vt-scope='sched-tab']::view-transition-new(root) { animation: none; }
+/* 알림 패널 쪽지·알림 */
+html[data-vt-scope='notif-tab'] [data-notif-tabbar] { view-transition-name: notif-tabbar; }
+html[data-vt-scope='notif-tab'] [data-notif-panel] { view-transition-name: notif-panel; }
+html[data-vt-scope='notif-tab']::view-transition-old(root),
+html[data-vt-scope='notif-tab']::view-transition-new(root) { animation: none; }
+/* 약관·정책 문서 탭 */
+html[data-vt-scope='legal-tab'] [data-legal-tabbar] { view-transition-name: legal-tabbar; }
+html[data-vt-scope='legal-tab'] [data-legal-panel] { view-transition-name: legal-panel; }
+html[data-vt-scope='legal-tab']::view-transition-old(root),
+html[data-vt-scope='legal-tab']::view-transition-new(root) { animation: none; }
+/* 고객 분석 기간(전체·7·30·90일) */
+html[data-vt-scope='crm-range'] [data-crm-rangebar] { view-transition-name: crm-rangebar; }
+html[data-vt-scope='crm-range'] [data-crm-panel] { view-transition-name: crm-panel; }
+html[data-vt-scope='crm-range']::view-transition-old(root),
+html[data-vt-scope='crm-range']::view-transition-new(root) { animation: none; }
+
+/* 새 화면에 지면색 — 두 스냅샷이 반투명으로 겹쳐 글자가 두 벌로 보이던 문제(venue-tab 실측)의 해법. */
+::view-transition-new(admin-secpanel),
+::view-transition-new(adminpos-panel),
+::view-transition-new(usermgmt-panel),
+::view-transition-new(tools-lanepanel),
+::view-transition-new(market-panel),
+::view-transition-new(live-panel),
+::view-transition-new(dealer-panel),
+::view-transition-new(group-panel),
+::view-transition-new(profile-panel),
+::view-transition-new(sched-panel),
+::view-transition-new(notif-panel),
+::view-transition-new(legal-panel),
+::view-transition-new(crm-panel) { background-color: rgb(var(--surface-base)); }
+
+/* 방향성 푸시 — venue-tab·rank-tab 과 완전히 같은 키프레임·토큰. */
+html[data-vt-dir='forward']::view-transition-old(admin-secpanel),
+html[data-vt-dir='forward']::view-transition-old(adminpos-panel),
+html[data-vt-dir='forward']::view-transition-old(usermgmt-panel),
+html[data-vt-dir='forward']::view-transition-old(tools-lanepanel),
+html[data-vt-dir='forward']::view-transition-old(market-panel),
+html[data-vt-dir='forward']::view-transition-old(live-panel),
+html[data-vt-dir='forward']::view-transition-old(dealer-panel),
+html[data-vt-dir='forward']::view-transition-old(group-panel),
+html[data-vt-dir='forward']::view-transition-old(profile-panel),
+html[data-vt-dir='forward']::view-transition-old(sched-panel),
+html[data-vt-dir='forward']::view-transition-old(notif-panel),
+html[data-vt-dir='forward']::view-transition-old(legal-panel),
+html[data-vt-dir='forward']::view-transition-old(crm-panel) { animation: vt-panel-out-l var(--dur-fast) var(--ease-out) both; }
+html[data-vt-dir='forward']::view-transition-new(admin-secpanel),
+html[data-vt-dir='forward']::view-transition-new(adminpos-panel),
+html[data-vt-dir='forward']::view-transition-new(usermgmt-panel),
+html[data-vt-dir='forward']::view-transition-new(tools-lanepanel),
+html[data-vt-dir='forward']::view-transition-new(market-panel),
+html[data-vt-dir='forward']::view-transition-new(live-panel),
+html[data-vt-dir='forward']::view-transition-new(dealer-panel),
+html[data-vt-dir='forward']::view-transition-new(group-panel),
+html[data-vt-dir='forward']::view-transition-new(profile-panel),
+html[data-vt-dir='forward']::view-transition-new(sched-panel),
+html[data-vt-dir='forward']::view-transition-new(notif-panel),
+html[data-vt-dir='forward']::view-transition-new(legal-panel),
+html[data-vt-dir='forward']::view-transition-new(crm-panel) { animation: vt-panel-in-r var(--dur-tab) var(--ease) both; }
+html[data-vt-dir='back']::view-transition-old(admin-secpanel),
+html[data-vt-dir='back']::view-transition-old(adminpos-panel),
+html[data-vt-dir='back']::view-transition-old(usermgmt-panel),
+html[data-vt-dir='back']::view-transition-old(tools-lanepanel),
+html[data-vt-dir='back']::view-transition-old(market-panel),
+html[data-vt-dir='back']::view-transition-old(live-panel),
+html[data-vt-dir='back']::view-transition-old(dealer-panel),
+html[data-vt-dir='back']::view-transition-old(group-panel),
+html[data-vt-dir='back']::view-transition-old(profile-panel),
+html[data-vt-dir='back']::view-transition-old(sched-panel),
+html[data-vt-dir='back']::view-transition-old(notif-panel),
+html[data-vt-dir='back']::view-transition-old(legal-panel),
+html[data-vt-dir='back']::view-transition-old(crm-panel) { animation: vt-panel-out-r var(--dur-fast) var(--ease-out) both; }
+html[data-vt-dir='back']::view-transition-new(admin-secpanel),
+html[data-vt-dir='back']::view-transition-new(adminpos-panel),
+html[data-vt-dir='back']::view-transition-new(usermgmt-panel),
+html[data-vt-dir='back']::view-transition-new(tools-lanepanel),
+html[data-vt-dir='back']::view-transition-new(market-panel),
+html[data-vt-dir='back']::view-transition-new(live-panel),
+html[data-vt-dir='back']::view-transition-new(dealer-panel),
+html[data-vt-dir='back']::view-transition-new(group-panel),
+html[data-vt-dir='back']::view-transition-new(profile-panel),
+html[data-vt-dir='back']::view-transition-new(sched-panel),
+html[data-vt-dir='back']::view-transition-new(notif-panel),
+html[data-vt-dir='back']::view-transition-new(legal-panel),
+html[data-vt-dir='back']::view-transition-new(crm-panel) { animation: vt-panel-in-l var(--dur-tab) var(--ease) both; }
+
+/* 탭바는 제자리 고정 — 스냅샷만 뜨고 움직이지 않는다(venue-tabbar 와 같은 처리). */
+::view-transition-old(admin-secbar), ::view-transition-new(admin-secbar),
+::view-transition-old(adminpos-tabbar), ::view-transition-new(adminpos-tabbar),
+::view-transition-old(usermgmt-secbar), ::view-transition-new(usermgmt-secbar),
+::view-transition-old(tools-lanebar), ::view-transition-new(tools-lanebar),
+::view-transition-old(market-catbar), ::view-transition-new(market-catbar),
+::view-transition-old(live-sortbar), ::view-transition-new(live-sortbar),
+::view-transition-old(dealer-kindbar), ::view-transition-new(dealer-kindbar),
+::view-transition-old(group-tabbar), ::view-transition-new(group-tabbar),
+::view-transition-old(profile-tabbar), ::view-transition-new(profile-tabbar),
+::view-transition-old(sched-tabbar), ::view-transition-new(sched-tabbar),
+::view-transition-old(notif-tabbar), ::view-transition-new(notif-tabbar),
+::view-transition-old(legal-tabbar), ::view-transition-new(legal-tabbar),
+::view-transition-old(crm-rangebar), ::view-transition-new(crm-rangebar) { animation: none; }
+
 /* 가로 스크롤러의 스크롤바 숨김(배너 캐러셀 등) — 기능은 그대로, 표시만 제거 */
 .scrollbar-none { scrollbar-width: none; -ms-overflow-style: none; }
 .scrollbar-none::-webkit-scrollbar { display: none; }

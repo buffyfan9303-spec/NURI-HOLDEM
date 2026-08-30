@@ -27,8 +27,11 @@ import { BADGES, getMyBadgeStats, type BadgeStats } from '../../lib/loyalty';
 import TierBadge, { tierOf, tierProgress, allTiers, tierCss } from '../atoms/TierBadge';
 import { ProfileIdentityHeader } from './ProfileModal'; // 통합 프로필 — 아이덴티티 헤더 정본 재사용(중복 정의 0)
 import { loginWithKakao, signInWithGoogle } from '../../api/auth'; // 비로그인 랜딩 — AuthModal 과 같은 OAuth 시작 함수 재사용
+import AutoLoginCheckbox from '../atoms/AutoLoginCheckbox'; // 자동 로그인 — AuthModal 로그인 탭과 같은 원자·같은 플래그
+import { isKeepSignedIn, setKeepSignedIn } from '../../lib/supabase';
 import { promptLogin } from '../../lib/requireLogin'; // 이메일 로그인 — App 이 듣고 AuthModal(z-[60], DOM 후순위)을 위로 띄운다
 import { useIdentityEnabled } from '../../lib/identityFlag'; // 본인인증·매장이용권 통합 킬스위치(2026-08-29)
+import { stripVenuePrefix, voucherGroupLabel, voucherLineLabel } from '../../lib/voucherLabel'; // "어느 매장이 준 것인가" 표기 규칙(오너 지시 #19)
 
 // ── 홈 화면 설치(A2HS) 이벤트 선점 ─────────────────────────────────────────────
 // 왜: beforeinstallprompt 는 페이지 로드 직후 1회만 발화한다 — 이 페이지가 열릴 때는 이미 지나간 뒤라
@@ -47,7 +50,9 @@ function parseVenueId(text: string): string | null {
   return null;
 }
 
-interface Stack { venueId: string; venueName: string; title: string; ids: string[]; expiries: (string | null)[] }
+// venueName 이 nullable 인 이유: 매장명을 **모르는 상태**와 '기타 매장'이라는 이름을 구분해야
+// 머리글이 '기타 매장 매장이용권' 같은 가짜 매장명을 만들어 내지 않는다(voucherGroupLabel 참조).
+interface Stack { venueId: string; venueName: string | null; title: string; ids: string[]; expiries: (string | null)[] }
 
 // 매장(업주) 회원가입 — AuthModal 의 'signup-owner' 탭을 그대로 재사용(새 플로우 0).
 // App 과 같은 동적 임포트 경로라 청크가 공유된다(중복 번들 없음).
@@ -120,7 +125,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
 
   // 차감 성공 전면 확인 화면 상태(Phase 15-1) — 3초 자동 닫힘.
   // ⚠ 훅은 조건부 return 보다 반드시 위에 — 순서가 흔들리면 React 가 상태를 잃는다.
-  const [redeemDone, setRedeemDone] = useState<{ title: string; venueName: string; remain: number } | null>(null);
+  const [redeemDone, setRedeemDone] = useState<{ title: string; venueName: string | null; remain: number } | null>(null);
   useEffect(() => {
     if (!redeemDone) return;
     const t = setTimeout(() => setRedeemDone(null), 3000);
@@ -154,9 +159,12 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
     .filter((v) => v.status === 'used' && v.usedAt)
     .sort((a, b) => new Date(b.usedAt!).getTime() - new Date(a.usedAt!).getTime())
     .slice(0, 20);
-  const venueMap = new Map<string, { name: string; stacks: Map<string, Stack> }>();
+  // 매장별 묶음 — 이용권은 '매장마다 개별'이라(오너 지시 #4) 발급 매장이 곧 이용권의 정체성이다.
+  // 묶어 두면 매장명을 그룹 머리글에서 한 번만 크게 말하면 되고(375px 에서 줄마다 반복하면 제목이 밀린다),
+  // 서로 다른 매장 이용권을 손님이 한 덩어리로 착각하지 않는다.
+  const venueMap = new Map<string, { name: string | null; stacks: Map<string, Stack> }>();
   for (const v of active) {
-    const vid = v.venueId; const vname = v.venueName ?? '기타 매장';
+    const vid = v.venueId; const vname = v.venueName;
     if (!venueMap.has(vid)) venueMap.set(vid, { name: vname, stacks: new Map() });
     const g = venueMap.get(vid)!;
     if (!g.stacks.has(v.title)) g.stacks.set(v.title, { venueId: vid, venueName: vname, title: v.title, ids: [], expiries: [] });
@@ -171,8 +179,9 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
     st.ids.splice(ins, 0, v.id);
     st.expiries.splice(ins, 0, v.expiresAt);
   }
-  const venueGroups = [...venueMap.entries()].map(([vid, g]) => ({ vid, name: g.name, stacks: [...g.stacks.values()] }))
-    .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+  const venueGroups = [...venueMap.entries()]
+    .map(([vid, g]) => ({ vid, name: g.name, label: voucherGroupLabel(g.name), count: [...g.stacks.values()].reduce((n, s) => n + s.ids.length, 0), stacks: [...g.stacks.values()] }))
+    .sort((a, b) => a.label.localeCompare(b.label, 'ko'));
 
   const usageMap = new Map<string, { name: string; visits: number; moneyin: number; amount: number; lastAt: string | null }>();
   for (const x of visits) usageMap.set(x.venueId, { name: x.venueName ?? '매장', visits: x.visits, moneyin: 0, amount: 0, lastAt: null });
@@ -419,14 +428,22 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
               : venueGroups.length === 0 ? <p className="py-6 text-center text-2xs text-ink-muted">보유한 매장이용권이 없습니다.</p>
                 : <div className="space-y-3">{venueGroups.map((g) => (
                   <div key={g.vid} className="rounded-card border border-border-default bg-surface-low p-3">
-                    <p className="mb-2 flex items-center gap-1.5 text-sm font-bold text-ink-primary">
-                      <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-accent-300" /><span className="min-w-0 truncate">{g.name}</span>
+                    {/* 머리글이 '{매장명} 매장이용권'을 통째로 말한다(오너 지시 #19).
+                        truncate 가 아니라 줄바꿈인 이유: 375px 에서 긴 매장명을 한 줄로 자르면
+                        정체성(매장명)이 잘려 나간다 — 잘라야 할 것은 매장명이 아니다.
+                        break-keep 은 한글을 어절 단위로 접어 낱글자가 갈라지는 절단을 막는다. */}
+                    <p className="mb-2 flex items-start gap-1.5 text-sm font-bold text-ink-primary">
+                      <span className="mt-[7px] inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-accent-300" />
+                      <span className="min-w-0 flex-1 break-keep [overflow-wrap:anywhere]">{g.label}</span>
+                      <span className="mt-0.5 shrink-0 text-2xs font-bold tabular-nums text-accent-300">{g.count}장</span>
                     </p>
                     <ul className="space-y-1.5">{g.stacks.map((s) => (
                       <li key={s.title} className="flex items-center gap-2 rounded-input border border-accent-400/40 bg-accent-300/[0.05] px-3 py-2">
                         <Icon name="ticket" size={18} className="shrink-0 text-accent-300" />
                         <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">
-                          {s.title} <span className="text-2xs text-ink-muted">×{s.ids.length}</span>
+                          {/* 머리글이 이미 매장명을 말했다. 업주가 제목에 손으로 박아 둔 매장명까지 그대로 두면
+                              '로티아레나 로티아레나 매장이용권'이 된다(라이브 101장 중 100장이 그 형태). */}
+                          {stripVenuePrefix(s.title, g.name)} <span className="text-2xs text-ink-muted">×{s.ids.length}</span>
                           {s.expiries[0] && (() => {
                             const d = Math.ceil((new Date(s.expiries[0]!).getTime() - Date.now()) / 86400000);
                             return (
@@ -458,7 +475,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
                   <span className="shrink-0 text-ink-muted tabular-nums">{fmtDate(v.usedAt!)}</span>
                   {/* #4: 이용권은 발급 매장에서만 쓸 수 있다(서버 redeem_* 3경로 모두 used_venue_id := venue_id).
                       usedVenueName 을 앞세우면 '다른 매장에서 썼을 수도 있다'는 없는 개념을 암시한다. */}
-                  <span className="min-w-0 flex-1 truncate text-ink-secondary">{v.venueName ?? '-'} · {v.title}</span>
+                  <span className="min-w-0 flex-1 truncate text-ink-secondary">{voucherLineLabel(v.title, v.venueName)}</span>
                   <span className="shrink-0 font-bold text-danger-light tabular-nums">-1장</span>
                 </li>
               ))}</ul>
@@ -558,7 +575,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
             <circle cx="12" cy="12" r="10" opacity="0.35" /><path d="M7 12.5l3.2 3.2L17 9" />
           </svg>
           <p className="text-2xl font-extrabold">이용권 1장 사용 완료</p>
-          <p className="text-sm font-semibold opacity-90">{redeemDone.venueName} · {redeemDone.title}</p>
+          <p className="text-sm font-semibold opacity-90">{voucherLineLabel(redeemDone.title, redeemDone.venueName)}</p>
           <p className="text-4xl font-extrabold tabular-nums">남은 이용권 {redeemDone.remain}장</p>
           <p className="mt-2 text-xs opacity-75">화면을 탭하면 닫힙니다</p>
         </div>
@@ -573,6 +590,10 @@ function LoginLanding({ onClose, hidden = false }: { onClose: () => void; hidden
   const toast = useToast();
   // 진행 중인 소셜만 로딩 표기 + 두 버튼 동시 비활성(중복 리다이렉트 방지) — AuthModal 과 동일 패턴
   const [busy, setBusy] = useState<'kakao' | 'google' | null>(null);
+  // 자동 로그인 — 이 랜딩은 소셜(리다이렉트)뿐이라 '제출 시 저장'이 불가능하다.
+  // 체크를 만지는 즉시 플래그에 쓰고, OAuth 시작 함수에도 같은 값을 넘긴다(둘 다 같은 결과, 순서 무관).
+  const [keepSignedIn, setKeep] = useState(() => isKeepSignedIn());
+  const changeKeep = (v: boolean) => { setKeep(v); setKeepSignedIn(v); };
   // 매장(업주) 회원가입 — 기존 AuthModal 'signup-owner' 탭 재사용(가입 후 운영자 승인제 그대로)
   const [ownerSignupOpen, setOwnerSignupOpen] = useState(false);
   // keep-alive 로 이 화면이 숨겨질 때 위에 떠 있던 가입 모달도 함께 정리(재열림 시 유령 모달 방지)
@@ -630,8 +651,9 @@ function LoginLanding({ onClose, hidden = false }: { onClose: () => void; hidden
 
           {/* 소셜 로그인 — AuthModal SocialLoginButtons 와 동일한 동작·스타일(같은 OAuth 함수 직접 호출) */}
           <div className="space-y-1.5">
+            <AutoLoginCheckbox checked={keepSignedIn} onChange={changeKeep} disabled={busy !== null} />
             <button type="button" disabled={busy !== null}
-              onClick={() => { setBusy('kakao'); loginWithKakao().catch((e) => { toast.show(e instanceof Error ? e.message : '카카오 로그인 실패', 'error'); setBusy(null); }); }}
+              onClick={() => { setBusy('kakao'); loginWithKakao(keepSignedIn).catch((e) => { toast.show(e instanceof Error ? e.message : '카카오 로그인 실패', 'error'); setBusy(null); }); }}
               className="flex h-12 w-full items-center justify-center gap-2 rounded-input bg-[#FEE500] text-sm font-bold text-black/85 transition active:scale-[0.99] disabled:opacity-60">
               {/* 카카오 심볼(말풍선) — 공식 버튼 규격 색상 */}
               <svg width="18" height="18" viewBox="0 0 24 24" fill="#000000" aria-hidden>
@@ -640,7 +662,7 @@ function LoginLanding({ onClose, hidden = false }: { onClose: () => void; hidden
               {busy === 'kakao' ? '카카오로 이동 중…' : '카카오로 3초 만에 시작하기'}
             </button>
             <button type="button" disabled={busy !== null}
-              onClick={() => { setBusy('google'); signInWithGoogle().catch((e) => { toast.show(e instanceof Error ? e.message : '구글 로그인 실패', 'error'); setBusy(null); }); }}
+              onClick={() => { setBusy('google'); signInWithGoogle(keepSignedIn).catch((e) => { toast.show(e instanceof Error ? e.message : '구글 로그인 실패', 'error'); setBusy(null); }); }}
               className="flex h-12 w-full items-center justify-center gap-2 rounded-input border border-border-default bg-white text-sm font-bold text-[#1f1f1f] transition active:scale-[0.99] disabled:opacity-60">
               {/* 구글 공식 4색 G 로고(브랜드 가이드 규격) */}
               <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden>
@@ -878,7 +900,7 @@ function RankTrendChart({ rows }: { rows: MyRankingRow[] }) {
   );
 }
 
-function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => void; onDone: (used: { title: string; venueName: string; remain: number }) => void }) {
+function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => void; onDone: (used: { title: string; venueName: string | null; remain: number }) => void }) {
   const toast = useToast();
   const [mode, setMode] = useState<'menu' | 'qr' | 'phone'>('menu');
   const [phone, setPhone] = useState('');
@@ -886,7 +908,7 @@ function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => 
   const vid = stack.ids[0];
 
   const doDirect = async () => {
-    if (!window.confirm(`'${stack.venueName}'에서 이용권을 사용(전송)할까요? 되돌릴 수 없습니다.`)) return;
+    if (!window.confirm(`'${stack.venueName ?? '발급 매장'}'에서 이용권을 사용(전송)할까요? 되돌릴 수 없습니다.`)) return;
     setBusy(true);
     try { await redeemMyVoucher(vid); onDone({ title: stack.title, venueName: stack.venueName, remain: stack.ids.length - 1 }); }
     catch (e) { toast.show(e instanceof Error ? e.message : '사용 실패', 'error'); setBusy(false); }
@@ -920,11 +942,11 @@ function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => 
       <button type="button" aria-label="닫기" onClick={onClose} className="absolute inset-0 bg-black/70" />
       <div className="relative w-full max-w-md space-y-3 rounded-t-dialog border border-border-default bg-surface-mid p-4 animate-slide-up sm:rounded-dialog">
         <div className="flex items-center justify-between gap-2">
-          <p className="min-w-0 truncate text-sm font-bold text-ink-primary">{stack.venueName} · {stack.title}</p>
+          <p className="min-w-0 break-keep text-sm font-bold text-ink-primary [overflow-wrap:anywhere]">{voucherLineLabel(stack.title, stack.venueName)}</p>
           <button type="button" onClick={onClose} aria-label="닫기" className="shrink-0 text-ink-muted"><Icon name="close" size={18} /></button>
         </div>
         {mode === 'menu' && (<>
-          <p className="text-2xs text-ink-muted">발급 매장(<b className="text-ink-secondary">{stack.venueName}</b>)에서만 사용됩니다. 방법을 선택하세요.</p>
+          <p className="text-2xs text-ink-muted">발급 매장(<b className="text-ink-secondary">{stack.venueName ?? '확인 중'}</b>)에서만 사용됩니다. 방법을 선택하세요.</p>
           <button type="button" disabled={busy} onClick={doDirect} className="btn-primary inline-flex w-full items-center justify-center gap-1.5 text-sm disabled:opacity-50"><Icon name="check-circle" size={16} /> 이 매장으로 바로 전송(사용)</button>
           <button type="button" onClick={() => setMode('qr')} className="btn-ghost inline-flex w-full items-center justify-center gap-1.5 text-sm"><Icon name="qr" size={16} /> 매장 QR 스캔해서 사용</button>
           <button type="button" onClick={() => setMode('phone')} className="btn-ghost inline-flex w-full items-center justify-center gap-1.5 text-sm"><Icon name="phone" size={16} /> 매장 업주 전화번호로 전송</button>

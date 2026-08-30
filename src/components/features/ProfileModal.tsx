@@ -9,7 +9,11 @@ import { useAuth } from '../../contexts/AuthContext';
 import { supabase, IS_MOCK } from '../../lib/supabase';
 import { useBlocks } from '../../contexts/BlockContext';
 import { resizeImage } from '../../lib/storage';
-import { requestPasswordChangeCode, changeMyPasswordWithCode, setMyNickname, withdrawMyAccount, verifyMyPassword, getMyAccountSummary } from '../../api/auth';
+import { requestPasswordChangeCode, changeMyPasswordWithCode, setMyNickname, withdrawMyAccount, verifyMyPassword, getMyAccountSummary, setMyPublicRankingConsent } from '../../api/auth';
+import {
+  getMyRankingDisplaySettings, setMyRankingNamePref,
+  type RankingNamePref, type RankingDisplaySettings,
+} from '../../api/rankingDisplay';
 import { pushSupported, isPushSubscribed, enablePush, disablePush } from '../../api/push';
 import AvatarCropper from './AvatarCropper';
 import ActivityBadges from '../atoms/ActivityBadges';
@@ -21,6 +25,7 @@ import { useIdentityEnabled } from '../../lib/identityFlag';
 import { getMyVisitStats } from '../../api/reservations';
 import type { LegalDoc } from './LegalDocsModal';
 import { onColorInkClass } from '../../lib/color';
+import { goSubTab } from '../../lib/subTabTransition';
 
 interface ProfileModalProps {
   open: boolean;
@@ -30,6 +35,8 @@ interface ProfileModalProps {
 }
 
 type Tab = 'profile' | 'settings' | 'security';
+/** 3탭 진열 순서 — 하위 탭 전환 방향(forward/back) 기준. */
+const PROFILE_TAB_ORDER: Tab[] = ['profile', 'settings', 'security'];
 
 const ROLE_LABELS: Record<string, string> = {
   user:        '일반 회원',
@@ -63,6 +70,47 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
   useEffect(() => { if (open) getMyVisitStats().then(setVisitStats).catch(() => {}); }, [open]);
 
   const [tab, setTab] = useState<Tab>('profile');
+
+  // ── 랭킹 공개 설정(오너 #14) ────────────────────────────────────────────
+  // 두 항목은 서로 다른 것을 가린다 — 합치지 않는다:
+  //   namePref            = 순위표에 쓸 '이름'(닉네임/실명). 기본은 닉네임.
+  //   publicProfileConsent= 순위 옆 '자주 가는 매장' 같은 부가 프로필 공개 동의(3-state).
+  // 저장은 각각 즉시 반영한다(아래 '저장하기'는 이름·색·사진 폼 전용이라, 여기 묶으면
+  // 저장 버튼을 안 누른 사용자가 '껐다고 생각했는데 안 꺼진' 상태가 된다).
+  const [rankDisp, setRankDisp] = useState<RankingDisplaySettings | null>(null);
+  const [rankDispBusy, setRankDispBusy] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    getMyRankingDisplaySettings().then((r) => { if (alive) setRankDisp(r); }).catch(() => {});
+    return () => { alive = false; };
+  }, [open]);
+  const saveNamePref = async (pref: RankingNamePref) => {
+    if (rankDispBusy || !rankDisp || rankDisp.namePref === pref) return;
+    const prev = rankDisp;
+    setRankDisp({ ...prev, namePref: pref });   // 낙관 갱신 — 실패하면 되돌린다
+    setRankDispBusy(true);
+    try {
+      await setMyRankingNamePref(pref);
+      toast.show(pref === 'real_name' ? '순위표에 실명이 표시됩니다' : '순위표에 닉네임이 표시됩니다', 'success');
+    } catch (e) {
+      setRankDisp(prev);
+      toast.show(e instanceof Error ? e.message : '설정 저장 실패', 'error');
+    } finally { setRankDispBusy(false); }
+  };
+  const saveRankConsent = async (on: boolean) => {
+    if (rankDispBusy || !rankDisp) return;
+    const prev = rankDisp;
+    setRankDisp({ ...prev, publicProfileConsent: on });
+    setRankDispBusy(true);
+    try {
+      await setMyPublicRankingConsent(on);
+      toast.show(on ? '랭킹 부가 정보 공개에 동의했습니다' : '랭킹 부가 정보를 공개하지 않습니다', 'success');
+    } catch (e) {
+      setRankDisp(prev);
+      toast.show(e instanceof Error ? e.message : '설정 저장 실패', 'error');
+    } finally { setRankDispBusy(false); }
+  };
 
   // ── 기본 정보 상태 ─────────────────────────────────────────────────────
   const [name,          setName]         = useState('');
@@ -243,13 +291,18 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
   return (
     <Modal open={open} onClose={() => { sessionStorage.removeItem('nh_pw_otp'); onClose(); }} title="프로필 관리" maxWidth="sm" variant="sheet">
       {/* ── 탭 바 (골드 밑줄 스프링 슬라이드) ─────────────────────────── */}
-      <UnderlineTabs
-        items={[
-          { key: 'profile',  label: '프로필' },
-          { key: 'settings', label: '설정' },
-          { key: 'security', label: '보안' },
-        ]}
-        value={tab} onChange={setTab} />
+      <div data-profile-tabbar="">
+        <UnderlineTabs
+          items={[
+            { key: 'profile',  label: '프로필' },
+            { key: 'settings', label: '설정' },
+            { key: 'security', label: '보안' },
+          ]}
+          value={tab} onChange={(v) => goSubTab('profile-tab', PROFILE_TAB_ORDER, tab, v, () => setTab(v))} />
+      </div>
+
+      {/* 본문 — 탭 전환의 방향성 푸시 대상(탭바는 제자리 고정) */}
+      <div data-profile-panel="">
 
       {/* ── 프로필 탭 (대시보드 — 읽기 전용) ─────────────────────── */}
       {tab === 'profile' && (
@@ -455,6 +508,47 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
             )}
           </div>
 
+          {/* ── 랭킹 공개 설정(오너 #14) ─────────────────────────────────
+              순위표(머니인 킹·매장 순위·시즌 선두)에 뜨는 내 이름과 부가 정보를 여기서 정한다.
+              기본값은 '닉네임' + '부가 정보 비공개' — 실명 공개는 반드시 본인이 골라야 한다. */}
+          {rankDisp && (
+            <div className="rounded-card border border-border-default bg-surface-high/60 p-3">
+              <p className="flex items-center gap-1.5 text-xs font-bold text-ink-primary">
+                <Icon name="trophy" size={13} className="shrink-0 text-accent-300" />랭킹 공개 설정
+              </p>
+
+              <label className="mt-2 block text-2xs font-medium text-ink-secondary">순위표 표시 이름</label>
+              <div className="mt-1 grid grid-cols-2 gap-1.5">
+                {([['nickname', '닉네임', '기본값 · 권장'], ['real_name', '실명', '본명이 공개됩니다']] as const).map(([k, label, hint]) => (
+                  <button key={k} type="button" disabled={rankDispBusy}
+                    aria-pressed={rankDisp.namePref === k}
+                    onClick={() => saveNamePref(k)}
+                    className={['rounded-input border px-2 py-2 text-2xs font-bold disabled:opacity-60',
+                      rankDisp.namePref === k
+                        ? 'border-accent-400/60 bg-accent-300/[0.12] text-accent-200'
+                        : 'border-border-default bg-surface-float text-ink-secondary'].join(' ')}>
+                    {label}
+                    <span className="block font-normal text-ink-muted">{hint}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1 text-2xs leading-relaxed text-ink-muted">
+                매장이 순위를 입력할 때 적은 실명은 <b className="text-ink-secondary">기본적으로 공개되지 않습니다</b>. ‘실명’을 직접 고른 경우에만 순위표에 실명이 뜹니다.
+              </p>
+
+              <label className="mt-3 flex items-center justify-between gap-2 rounded-input border border-border-default px-3 py-2 text-2xs">
+                <span className="min-w-0 text-ink-secondary">
+                  랭킹 부가 정보 공개
+                  <span className="block font-normal text-ink-muted">순위 옆에 자주 가는 매장 등을 함께 표시</span>
+                </span>
+                <input type="checkbox" disabled={rankDispBusy}
+                  checked={rankDisp.publicProfileConsent === true}
+                  onChange={(e) => saveRankConsent(e.target.checked)}
+                  className="h-4 w-4 shrink-0 accent-current text-accent-300" />
+              </label>
+            </div>
+          )}
+
           {/* 버튼 */}
           <div className="flex gap-2 pt-1">
             <button type="button" onClick={onClose} className="btn-ghost flex-1">
@@ -597,6 +691,8 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
         <WithdrawAccountSection />
         </>
       )}
+
+      </div>
 
       {cropFile && (
         <AvatarCropper

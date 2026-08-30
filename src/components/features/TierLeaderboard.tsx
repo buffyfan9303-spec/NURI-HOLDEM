@@ -4,14 +4,14 @@ import { flushSync } from 'react-dom';
 import { withViewTransition } from '../../lib/viewTransition';
 import {
   getDomesticRankings, myRankVerifications, submitRankVerification,
-  EVENT_KIND_LABEL, type RankEventKind, type RankVerification, type DomesticRow,
+  EVENT_KIND_LABEL, type RankVerification, type DomesticRow,
 } from '../../api/rankverify';
 import { useAuth } from '../../contexts/AuthContext';
 import TierBadge, { tierOf, tierProgress, allTiers, isAceRank, ACE_TOP_RANK, ACE_MIN_POINTS, tierCss, ACE_VAR } from '../atoms/TierBadge';
 import {
   getActivityLeaderboard, getMyPointBalance, getShoutRules,
-  getShopSkus, getMyMarkRental, buyMarkRental,
-  type LeaderboardEntry, type PointBalance, type ShopSku, type MarkRental,
+  getShopSkus, getMyOwnedMarks, buyMark, SHOUT_SLOT_SECONDS,
+  type LeaderboardEntry, type PointBalance, type ShopSku, type OwnedMark,
 } from '../../api/community';
 import { getGlobalRankingTotals, type GlobalRankingTotal } from '../../api/rankings';
 import { onColorInkClass } from '../../lib/color';
@@ -22,7 +22,7 @@ import CountUp from '../atoms/CountUp';
 import SlidingPill from '../atoms/SlidingPill';
 import { ShoutComposer } from './CommunityShoutBar';
 import {
-  loadShopMarks, earnMarks, rentMarks, markEmoji, markOf, FALLBACK_CATALOG,
+  loadShopMarks, earnMarks, ownableMarks, markEmoji, markOf, FALLBACK_CATALOG,
   type CatalogMark,
 } from '../../lib/shopMarks';
 import { getHallOfFame, type HallBoard } from '../../lib/hallOfFame';
@@ -48,9 +48,9 @@ const BOARD_LABEL: Record<Board, string> = {
   league: '주간 리그', badges: '업적', missions: '미션', hall: '명예의 전당',
 };
 const BOARD_DESC: Record<Board, string> = {
-  domestic: '정식 대회(해외 포함) 입상만 인정 — 운영자가 승인한 건에 한해 100만원(10T)당 1점으로 합산합니다.',
-  verify: '대회 입상 증빙 2장(머니인·신분증)을 올려 운영자 승인을 받으면 국내 순위에 합산됩니다. 정식 대회만 인정되며 100만원(10T)당 1점입니다.',
-  shop: '모으는 마크는 활동점수 도달로 영구 해금(차감 없음)이고, 기간 마크와 외치기는 사용 가능 점수로 삽니다. 무엇을 사도 누적 점수(등급 기준)는 줄지 않습니다.',
+  domestic: '대회(토너먼트) 입상만 인정 — 해외 대회도 포함하며, 운영자가 승인한 건에 한해 100만원(10T)당 1점으로 합산합니다. 일반 펍 정기 게임은 포함되지 않습니다.',
+  verify: '대회 입상 증빙 2장(머니인·신분증)을 올려 운영자 승인을 받으면 국내 순위에 합산됩니다. 대회만 인정되며(일반 펍 제외) 100만원(10T)당 1점입니다.',
+  shop: '모으는 마크는 활동점수 도달로 영구 해금(차감 없음)이고, 꾸미기 마크와 외치기는 사용 가능 점수로 삽니다. 꾸미기 마크는 한 번 사면 영구 소장이며, 무엇을 사도 누적 점수(등급 기준)는 줄지 않습니다.',
   activity: '접속·글쓰기·댓글 활동 점수 — 등급(2·3~AA)과 연동. 아래 주간 미션을 달성하면 점수를 바로 받아요.',
   moneyin: '전국 매장 머니인 점수 — 100만원(10T)당 1점으로 합산합니다(임계 미만은 점수 없음).',
   prize: '전국 매장 프라이즈 점수 합산(금전적 가치 없음).',
@@ -60,7 +60,10 @@ const BOARD_DESC: Record<Board, string> = {
   hall: '지난달 가장 빛난 플레이어 TOP3 — 운영자가 직접 선정하며, 선정이 없는 달은 입상 기록으로 자동 집계됩니다.',
 };
 
-/** 기간 마크 잔여 — 하루 미만은 시간으로(만료가 임박했다는 게 재구매의 신호다) */
+/**
+ * 예전 기간권의 잔여 — 하루 미만은 시간으로.
+ * 기간권은 판매 중지됐지만 **이미 산 사람의 남은 기간은 그대로 인정**한다(서버 my_owned_marks source='rent').
+ */
 function remainDays(expiresAt: string): string {
   const ms = new Date(expiresAt).getTime() - Date.now();
   if (ms <= 0) return '만료됨';
@@ -68,9 +71,14 @@ function remainDays(expiresAt: string): string {
   return h >= 24 ? `${Math.floor(h / 24)}일 남음` : `${Math.max(1, h)}시간 남음`;
 }
 
-/** 외치기 카드 부제 — 등급 이름을 서버 가격표에서 그대로 읽어 잇는다('기본 · 하이라이트 · 전광판') */
+/**
+ * 외치기 카드 부제 — 등급 이름을 서버 가격표에서 그대로 읽어 잇는다('외치기 · 하이라이트').
+ * ⚠ 전광판(shout_board)은 판매 중지라 여기 뜨면 안 된다. 서버가 active=false 로 이미 빼 주지만
+ *   화면에서도 한 번 더 막는다(ShoutComposer 의 등급 목록과 같은 규약).
+ */
 function shoutTierHint(skus: ShopSku[]): string {
-  return skus.filter((s) => s.kind === 'shout').sort((a, b) => a.sort - b.sort).map((s) => s.label).join(' · ');
+  return skus.filter((s) => s.kind === 'shout' && s.key !== 'shout_board')
+    .sort((a, b) => a.sort - b.sort).map((s) => s.label).join(' · ');
 }
 
 function RankNum({ n }: { n: number }) {
@@ -183,33 +191,42 @@ export default function TierLeaderboard() {
   const [equippedMark, setEquippedMark] = useState<string | null | undefined>(undefined); // 상점: 장착 마크(undefined=미로드)
   const [equipBusy, setEquipBusy] = useState<string | null>(null);
   // 상점 소비형 상품 — 누적 점수는 그대로 두고 '사용 가능 점수'만 깎는다(§spent_points).
-  // 2026-08-30: 소비처가 외치기 하나뿐이라 보통 유저의 첫 소비가 14일 뒤였다.
-  // 기간 마크(1일 50 / 7일 300 / 30일 1,100)를 더해 첫 소비를 나흘로 당기고 반복 소비를 만든다.
+  // 2026-08-30: 꾸미기 마크를 기간권에서 **2,000점 영구 소장**으로 옮겼다.
+  // 만료로 반복 소비를 만들려던 설계였지만 만료는 '산 걸 잃는 일'이라 살 이유가 아니라 안 살 이유였다.
+  // 반복 소비는 외치기(20초 슬롯)가 맡는다 — 그쪽은 만료가 상품의 본질이라 손해로 읽히지 않는다.
   const [balance, setBalance] = useState<PointBalance | null>(null);
   // ⚠ 초기값은 서버 shop_skus.shout_basic 과 같아야 한다. 낮게 두면 응답이 오기 전 한 프레임 동안
-  //   화면은 '30점'이라 말하고 서버는 200점을 걷는다 — 유저에게 거짓말이 되는 값이다.
-  const [shoutCost, setShoutCost] = useState(200);
+  //   화면은 '30점'이라 말하고 서버는 실제 가격을 걷는다 — 유저에게 거짓말이 되는 값이다.
+  //   2026-08-30 슬롯 전환(기간 → 20초 1회)으로 200 → 50.
+  const [shoutCost, setShoutCost] = useState(50);
   const [shoutOpen, setShoutOpen] = useState(false);
   const [skus, setSkus] = useState<ShopSku[]>([]);
-  const [rental, setRental] = useState<MarkRental | null>(null);
+  // 내가 가진 꾸미기 마크 — own(영구 소장) + rent(판매 중지된 예전 기간권의 잔여분).
+  // 두 갈래를 한 목록으로 받는 이유: 장착 가능 여부의 판정을 화면이 다시 하지 않기 위해서다
+  // (서버 set_equipped_mark 가 같은 세 갈래로 최종 판정한다 — 화면이 자체 판정하면 언젠가 갈린다).
+  const [owned, setOwned] = useState<OwnedMark[] | null>(null);
   const [earnList, setEarnList] = useState<CatalogMark[]>(() => FALLBACK_CATALOG.filter((m) => m.kind === 'earn'));
-  const [rentList, setRentList] = useState<CatalogMark[]>(() => FALLBACK_CATALOG.filter((m) => m.kind === 'rent'));
-  const [pickMark, setPickMark] = useState<string | null>(null);   // 기간 마크 선택(구매 대상)
-  const [buying, setBuying] = useState<string | null>(null);       // 구매 중인 SKU 키
-  // 선택된 기간 마크 — **하이라이트와 결제 대상이 반드시 같은 값**이어야 한다.
-  //   종전엔 하이라이트가 `pickMark ?? rental?.markKey ?? rentList[0]`, 결제는 `pickMark ?? rentList[0]` 이라
-  //   이미 마크를 쓰는 중인 사람이 아무것도 안 누르고 바로 사면 화면은 '드래곤'을 켜 둔 채
-  //   결제는 '네잎클로버'로 나갔다. 서버는 다른 마크면 기간을 이어 붙이지 않고 now() 부터 다시 세므로
-  //   (buy_mark_rental §5) **남아 있던 기간까지 사라진다** — 점수를 내고 손해를 보는 경로였다.
-  //   목록에 없는 키(카탈로그에서 내려간 마크)는 서버가 거절하므로 여기서 미리 걸러 첫 항목으로 떨어뜨린다.
-  const selectedRentKey =
-    [pickMark, rental?.markKey].find((k) => k && rentList.some((m) => m.key === k))
-    ?? rentList[0]?.key ?? null;
+  const [shopList, setShopList] = useState<CatalogMark[]>(() => FALLBACK_CATALOG.filter((m) => m.kind === 'rent'));
+  const [buying, setBuying] = useState<string | null>(null);       // 구매 중인 마크 키
+  // 키 → 보유 상태. own 이 rent 를 이긴다(서버 my_owned_marks 가 이미 그렇게 정렬해 주지만,
+  // 화면에서도 같은 우선순위를 박아 둔다 — 소장한 마크에 '3일 남음'이 뜨면 거짓말이 된다).
+  const ownedBy = useMemo(() => {
+    const m = new Map<string, OwnedMark>();
+    for (const o of owned ?? []) if (o.source === 'own' || !m.has(o.markKey)) m.set(o.markKey, o);
+    return m;
+  }, [owned]);
+  // 마크 가격 — 서버 shop_skus.mark_own 이 단일 출처다. **화면에 하드코딩하지 않는다**
+  // (가격표가 바뀌면 화면은 옛 값을 말하고 서버는 새 값을 걷는다 — shoutCost 폴백 30 vs 서버 200 과 같은 함정).
+  const markSku = skus.find((s) => s.kind === 'mark') ?? null;
+  // 판매 중지된 기간권 — 서버가 active=false 로 이미 빼 주지만, 되살아나도 살 수 없게 화면에서도 막는다.
+  const deadRentSkus = skus.filter((s) => s.kind === 'mark_rent');
   const reloadBalance = useRef(() => { getMyPointBalance().then(setBalance).catch(() => {}); }).current;
   const [domestic, setDomestic] = useState<DomesticRow[] | null>(null);
   const [myVerifs, setMyVerifs] = useState<RankVerification[] | null>(null);
-  const [vForm, setVForm] = useState<{ event: string; amount: string; kind: RankEventKind; overseas: boolean }>(
-    { event: '', amount: '', kind: 'official', overseas: false });
+  // 오너 #11(2026-08-30): 대회 구분 선택 제거 — 순위 인증은 '대회'만 받는다.
+  //   일반 펍(정기 게임)은 인증 대상이 아니고, 서버 RLS 도 event_kind='official' 만 통과시킨다.
+  const [vForm, setVForm] = useState<{ event: string; amount: string; overseas: boolean }>(
+    { event: '', amount: '', overseas: false });
   const [vProof, setVProof] = useState<File | null>(null);
   const [vIdCard, setVIdCard] = useState<File | null>(null);
   const [vBusy, setVBusy] = useState(false);
@@ -229,30 +246,35 @@ export default function TierLeaderboard() {
         nickname: user.nickname ?? user.name ?? '회원',
         eventName: vForm.event, amountWon: Number(vForm.amount.replace(/[^\d]/g, '')) || 0,
         proof: vProof, idCard: vIdCard,
-        eventKind: vForm.kind, isOverseas: vForm.overseas,
+        isOverseas: vForm.overseas,
       });
-      setVForm({ event: '', amount: '', kind: 'official', overseas: false }); setVProof(null); setVIdCard(null);
+      setVForm({ event: '', amount: '', overseas: false }); setVProof(null); setVIdCard(null);
       setMyVerifs(null); myRankVerifications().then(setMyVerifs).catch(() => {});
     } catch { /* 실패 시 입력 유지 */ }
     finally { setVBusy(false); }
   };
-  // 기간 마크 구매 — 차감·지급·장착이 서버 한 트랜잭션이라 여기서는 결과만 반영한다.
+  // 마크 영구 소장 구매 — 차감·소장·장착이 서버 한 트랜잭션이라 여기서는 결과만 반영한다.
   // 중복 클릭은 buying 으로 한 번 더 막지만, 최종 판정은 프로필 행 잠금을 쥔 서버가 한다.
-  const handleBuyRental = async (sku: ShopSku) => {
-    const key = selectedRentKey;
-    if (!key || buying !== null) return;
-    setBuying(sku.key);
+  const handleBuyMark = async (mk: CatalogMark) => {
+    if (buying !== null || !markSku) return;
+    setBuying(mk.key);
     try {
-      const r = await buyMarkRental(sku.key, key);
-      setRental(r);
-      setEquippedMark(r.markKey);           // 서버가 구매 즉시 장착까지 끝냈다
+      const key = await buyMark(mk.key);
+      setOwned((prev) => [...(prev ?? []).filter((o) => o.markKey !== key), { markKey: key, source: 'own', until: null }]);
+      setEquippedMark(key);                 // 서버가 구매 즉시 장착까지 끝냈다
       reloadBalance();
       await refreshProfile?.();
-      toast.show(`${markOf(r.markKey)?.name ?? '마크'} 장착! ${sku.label} · ${sku.price.toLocaleString()}점 사용`, 'success');
+      toast.show(`${markOf(key)?.name ?? '마크'} 소장! ${markSku.price.toLocaleString()}점 사용 — 이제 계속 쓸 수 있어요`, 'success');
     } catch (e) {
       toast.show(e instanceof Error ? e.message : '구매에 실패했습니다', 'error');
     } finally { setBuying(null); }
   };
+
+  // 장착/해제 진행 표시 — handleEquip 이 equipBusy 에 넣는 값과 **정확히 같은 규칙**으로 되물어야 한다.
+  // 종전 식 `equipBusy === (on ? null : mk.key)` 는 장착 중인 카드에서 equipBusy(null) === null 이
+  // 항상 참이라, 아무것도 누르지 않았는데도 '적용 중…' 이 영구히 박혀 있었다
+  // (장착한 마크의 '해제' 버튼이 통째로 사라진 셈 — 2026-08-30 런타임 프로브가 잡았다).
+  const equipPending = (key: string, on: boolean) => equipBusy !== null && equipBusy === (on ? '' : key);
 
   const handleEquip = async (key: string | null) => {
     if (equipBusy !== null) return;
@@ -289,9 +311,9 @@ export default function TierLeaderboard() {
       reloadBalance();
       getShoutRules().then((r) => setShoutCost(r.cost)).catch(() => {});
       // 카탈로그·가격표는 서버가 단일 출처다. 응답 전에는 폴백으로 그려 두므로 화면이 비지 않는다.
-      loadShopMarks().then(() => { setEarnList(earnMarks()); setRentList(rentMarks()); }).catch(() => {});
+      loadShopMarks().then(() => { setEarnList(earnMarks()); setShopList(ownableMarks()); }).catch(() => {});
       getShopSkus().then(setSkus).catch(() => {});
-      getMyMarkRental().then(setRental).catch(() => {});
+      getMyOwnedMarks().then(setOwned).catch(() => setOwned([]));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [board, user?.id]);
@@ -649,7 +671,7 @@ export default function TierLeaderboard() {
           : domestic.length === 0 ? (
             <EmptyState
               title="아직 인증된 입상이 없어요"
-              hint="'순위 인증' 탭에서 정식 대회 입상 증빙을 올리면 이 순위에 합산됩니다"
+              hint="'순위 인증' 탭에서 대회 입상 증빙을 올리면 이 순위에 합산됩니다"
               icon={<Icon name="trophy" />}
               action={<button type="button" onClick={() => setBoard('verify')} className="btn-primary px-4 py-2 text-xs">순위 인증하러 가기</button>}
             />
@@ -662,7 +684,7 @@ export default function TierLeaderboard() {
                   <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">
                     {r.nickname}
                     <span className="block text-2xs font-normal text-ink-muted tabular-nums">
-                      정식 대회 {r.wins}회{r.overseas > 0 ? ` · 해외 ${r.overseas}회` : ''} · 누적 {(r.totalWon / 10000).toLocaleString()}만
+                      대회 {r.wins}회{r.overseas > 0 ? ` · 해외 ${r.overseas}회` : ''} · 누적 {(r.totalWon / 10000).toLocaleString()}만
                     </span>
                   </span>
                   <span className="shrink-0 text-sm font-extrabold tabular-nums text-emerald-300">{r.points.toLocaleString()}점</span>
@@ -682,20 +704,13 @@ export default function TierLeaderboard() {
                     placeholder="머니인 금액(원)" className="input w-full text-sm pr-8 tabular-nums" />
                   <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">원</span>
                 </div>
-                {/* 대회 구분 — 국내 순위는 '정식 대회'만 인정(오너 #7). 최종 확정은 운영자 승인. */}
-                <div className="grid grid-cols-2 gap-1.5">
-                  {(['official', 'pub'] as RankEventKind[]).map((k) => (
-                    <button key={k} type="button" onClick={() => setVForm((f) => ({ ...f, kind: k }))}
-                      aria-pressed={vForm.kind === k}
-                      className={['rounded-input border px-2 py-2 text-2xs font-bold',
-                        vForm.kind === k
-                          ? 'border-accent-400/60 bg-accent-300/[0.12] text-accent-200'
-                          : 'border-border-default bg-surface-float text-ink-secondary'].join(' ')}>
-                      {EVENT_KIND_LABEL[k]}
-                      <span className="block font-normal text-ink-muted">{k === 'official' ? '순위 인정' : '기록만 · 순위 제외'}</span>
-                    </button>
-                  ))}
-                </div>
+                {/* 오너 #11 — 구분 선택을 없앴다. 인증 대상은 '대회'뿐이고, 일반 펍 정기 게임은
+                    신청 자체가 성립하지 않는다(서버 RLS 도 official 만 받는다). 선택지를 남겨 두면
+                    '내면 뭐라도 남겠지'라는 기대가 생겨 반려만 늘어난다 — 조건을 먼저 말한다. */}
+                <p className="flex items-start gap-1.5 rounded-input border border-accent-400/40 bg-accent-300/[0.08] px-2.5 py-2 text-2xs leading-relaxed text-ink-secondary">
+                  <Icon name="trophy" size={13} className="mt-px shrink-0 text-accent-300" />
+                  <span><b className="text-accent-200">대회(토너먼트) 입상만 인증됩니다.</b> 매장 정기 게임(일반 펍) 기록은 순위 인증 대상이 아니며, 제출해도 반려됩니다.</span>
+                </p>
                 <label className="flex items-center justify-between gap-2 rounded-input border border-border-default px-3 py-2 text-2xs">
                   <span className="text-ink-secondary">해외 대회입니다 <span className="text-ink-muted">— 해외도 정식 대회면 인정돼요</span></span>
                   <input type="checkbox" checked={vForm.overseas} className="h-4 w-4 shrink-0 accent-current text-accent-300"
@@ -715,7 +730,7 @@ export default function TierLeaderboard() {
                   onClick={submitVerify}
                   className="btn-primary w-full disabled:opacity-50">{vBusy ? '제출 중…' : '인증 요청'}</button>
                 <p className="text-2xs leading-relaxed text-ink-muted">
-                  운영자가 <b className="text-ink-secondary">정식 대회로 승인한 건</b>만 국내 순위에 합산되며, <b className="text-ink-secondary">100만원(10T)당 1점</b>입니다(임계 미만은 점수 없음). 대회 구분은 운영자 검토 시 최종 확정됩니다. <b className="text-ink-secondary">신분증 이미지는 승인·거절 즉시 삭제</b>되며 다른 용도로 사용되지 않습니다. AI 생성·조작 이미지는 반려됩니다.
+                  운영자가 <b className="text-ink-secondary">대회 입상으로 승인한 건</b>만 국내 순위에 합산되며, <b className="text-ink-secondary">100만원(10T)당 1점</b>입니다(임계 미만은 점수 없음). 대회 여부는 증빙을 보고 운영자가 최종 판정합니다. <b className="text-ink-secondary">신분증 이미지는 승인·거절 즉시 삭제</b>되며 다른 용도로 사용되지 않습니다. AI 생성·조작 이미지는 반려됩니다.
                 </p>
               </div>
               {myVerifs && myVerifs.length > 0 && (
@@ -755,73 +770,117 @@ export default function TierLeaderboard() {
                 </span>
               </div>
 
-              {/* ── 소비형 ① 기간 마크 ────────────────────────────────────────
-                  왜 도달 마크를 구매형으로 돌리지 않았나: 이미 해금해 장착 중인 마크가
-                  '사야 하는 것'이 되면 산 걸 빼앗는 회귀다(spent_points 를 분리한 이유가 그것이었다).
-                  도달 마크 = 버는 이유 · 기간 마크 = 쓰는 이유. 겹치지 않게 분리하고,
-                  **만료**가 곧 반복 소비다(일회성만 있으면 한 번 사고 경제가 멈춘다). */}
+              {/* ── 쓰는 이유 ─────────────────────────────────────────────────
+                  '버는 이유(도달 마크)'와 '쓰는 이유(구매 상품)'를 절대 섞지 않는다.
+                  섞이면 이미 해금해 장착 중인 마크가 '사야 하는 것'으로 보여 산 걸 빼앗는 회귀가 된다
+                  (spent_points 를 activity_points 와 분리한 이유가 정확히 그것이었다). */}
+              <div className="flex items-center gap-1.5 pt-1">
+                <Icon name="wallet" size={13} className="shrink-0 text-accent-300" />
+                <p className="shrink-0 text-2xs font-extrabold text-accent-300">쓰는 이유</p>
+                <p className="shrink-0 text-2xs text-ink-muted">— 사용 가능 점수로 삽니다</p>
+                <span className="h-px flex-1 bg-border-subtle" />
+              </div>
+
+              {/* ── 소비형 ① 꾸미기 마크 (2026-08-30 기간권 → 영구 소장) ─────────
+                  기간권을 접은 이유: 만료로 반복 소비를 만들려던 설계였지만, 유저에겐 만료가
+                  '산 걸 잃는 일'이라 살 이유가 아니라 안 살 이유였다. 반복 소비는 외치기가 맡는다.
+                  가격은 서버 shop_skus.mark_own 이 유일한 출처다 — 화면에 숫자를 박지 않는다. */}
               <div className="rounded-card border border-border-subtle bg-surface-high p-3">
                 <div className="flex items-baseline justify-between gap-2">
-                  <p className="text-xs font-bold text-ink-primary">기간 마크 <span className="font-normal text-ink-muted">— 골라서 걸치는 꾸미기</span></p>
-                  {rental && (
-                    <p className="shrink-0 text-2xs font-semibold text-accent-300">
-                      {markEmoji(rental.markKey)} {remainDays(rental.expiresAt)}
+                  <p className="text-xs font-bold text-ink-primary">
+                    꾸미기 마크 <span className="font-normal text-ink-muted">— 한 번 사면 영구 소장</span>
+                  </p>
+                  {markSku && (
+                    <p className="shrink-0 rounded-badge bg-accent-300/15 px-2 py-0.5 text-2xs font-extrabold tabular-nums text-accent-300">
+                      {markSku.price.toLocaleString()}점
                     </p>
                   )}
                 </div>
 
-                <div className="mt-2 grid grid-cols-3 gap-1.5 sm:grid-cols-6">
-                  {rentList.map((mk) => {
-                    const on = selectedRentKey === mk.key;
+                <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+                  {shopList.map((mk) => {
+                    const own = ownedBy.get(mk.key);
+                    const on = equippedMark === mk.key;
+                    const price = markSku?.price ?? 0;
+                    const poor = !own && balance !== null && balance.available < price;
                     return (
-                      <button key={mk.key} type="button" onClick={() => setPickMark(mk.key)}
-                        aria-pressed={on} title={mk.desc}
-                        className={['rounded-card border px-1 py-2 text-center transition-colors',
-                          on ? 'border-accent-300 bg-accent-300/[0.10]' : 'border-border-subtle bg-surface-float hover:border-accent-400/50'].join(' ')}>
-                        <span className="block text-xl leading-none">{mk.emoji}</span>
-                        <span className={['mt-1 block text-2xs font-bold leading-tight', on ? 'text-accent-300' : 'text-ink-secondary'].join(' ')}>{mk.name}</span>
-                      </button>
+                      <div key={mk.key}
+                        className={['card-sink rounded-card border p-2.5 text-center transition-colors',
+                          on ? 'border-accent-300 bg-accent-300/[0.1]'
+                            : own ? 'border-border-default bg-surface-high'
+                              : 'border-border-subtle bg-surface-high'].join(' ')}>
+                        <p className="text-2xl leading-none">{mk.emoji}</p>
+                        <p className="mt-1 text-xs font-bold text-ink-primary">{mk.name}</p>
+                        <p className="mt-0.5 text-2xs leading-tight text-ink-muted">{mk.desc}</p>
+                        {/* 판매 중지된 기간권의 잔여분 — 산 것을 뺏지 않는다는 표시라 절대 지우지 않는다 */}
+                        {own?.source === 'rent' && own.until && (
+                          <p className="mt-1 text-2xs font-semibold text-accent-300">기간권 {remainDays(own.until)}</p>
+                        )}
+                        {own ? (
+                          <button type="button" disabled={equipBusy !== null}
+                            onClick={() => handleEquip(on ? null : mk.key)}
+                            className={['mt-1.5 w-full rounded-input px-2 py-1.5 text-2xs font-bold transition-colors',
+                              on ? 'bg-accent-300 text-white' : 'border border-accent-400/40 text-accent-300 hover:bg-accent-300/10'].join(' ')}>
+                            {equipPending(mk.key, on)
+                              ? '적용 중…' : on ? '✓ 장착 중 — 해제' : own.source === 'own' ? '소장 중 — 장착' : '장착하기'}
+                          </button>
+                        ) : (
+                          <button type="button" disabled={buying !== null || poor || !markSku}
+                            onClick={() => handleBuyMark(mk)} title={markSku?.descr}
+                            className="mt-1.5 inline-flex w-full items-center justify-center gap-1 rounded-input border border-accent-400/40 px-2 py-1.5 text-2xs font-bold tabular-nums text-accent-300 transition-colors hover:bg-accent-300/10 disabled:opacity-50">
+                            {buying === mk.key ? '구매 중…'
+                              : !markSku ? '판매 준비 중'
+                                : poor ? `${price.toLocaleString()}점 부족` : `${price.toLocaleString()}점 소장`}
+                          </button>
+                        )}
+                      </div>
                     );
                   })}
                 </div>
 
-                <div className="mt-2 grid grid-cols-3 gap-1.5">
-                  {skus.filter((s) => s.kind === 'mark_rent').map((s) => {
-                    const poor = balance !== null && balance.available < s.price;
-                    return (
-                      <button key={s.key} type="button" disabled={buying !== null || poor}
-                        onClick={() => handleBuyRental(s)} title={s.descr}
-                        className={['rounded-card border px-2 py-2 text-center transition-colors disabled:opacity-50',
-                          'border-accent-400/40 hover:border-accent-300 hover:bg-accent-300/[0.06]'].join(' ')}>
-                        <span className="block text-xs font-bold text-ink-primary">{s.label}</span>
-                        <span className="mt-0.5 block text-2xs font-extrabold tabular-nums text-accent-300">
-                          {buying === s.key ? '구매 중…' : `${s.price.toLocaleString()}점`}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
+                {/* 기간권 1일/7일/30일 — 판매 중지. 서버가 active=false 로 이미 빼 주지만
+                    되살아나도 살 수 없게 화면에서도 비활성 상태로만 진열한다. */}
+                {deadRentSkus.length > 0 && (
+                  <div className="mt-2 grid grid-cols-3 gap-1.5" aria-hidden="false">
+                    {deadRentSkus.map((s) => (
+                      <div key={s.key}
+                        className="rounded-card border border-border-subtle bg-surface-float px-2 py-2 text-center opacity-50">
+                        <span className="block text-xs font-bold text-ink-secondary line-through">{s.label}</span>
+                        <span className="mt-0.5 block text-2xs font-bold text-ink-muted">판매 중지</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <p className="mt-1.5 text-2xs leading-relaxed text-ink-muted">
-                  같은 마크를 다시 사면 기간이 이어지고, 다른 마크를 사면 바로 바뀝니다.
-                  기간이 끝나면 마크만 사라지고 <b className="text-ink-secondary">누적 점수·등급은 그대로</b>예요.
+                  기간권(1일·7일·30일)은 판매를 종료했습니다 — <b className="text-ink-secondary">이미 구매한 기간은 그대로 유지</b>되고,
+                  끝나도 소장한 마크는 사라지지 않아요. 소장한 마크는 언제든 바꿔 달 수 있고,
+                  무엇을 사도 <b className="text-ink-secondary">누적 점수·등급은 그대로</b>입니다.
                 </p>
               </div>
 
-              {/* ── 소비형 ② 외치기 (오너 #8, 2026-08-30 등급 3단) ───────────── */}
+              {/* ── 소비형 ② 외치기 (오너 #8 · 2026-08-30 20초 슬롯 1회로 전환) ───── */}
               <button type="button" onClick={() => setShoutOpen(true)}
                 className="flex w-full items-center gap-2.5 rounded-card border border-accent-400/50 bg-gradient-to-r from-accent-300/[0.1] to-transparent px-3 py-2.5 text-left transition-colors hover:border-accent-300">
                 <Icon name="megaphone" size={20} className="shrink-0 text-accent-300" />
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-bold text-ink-primary">외치기</span>
                   <span className="block text-2xs leading-tight text-ink-muted">
-                    커뮤니티 맨 위에 내 한마디를 크게 · 하루 3번까지
+                    커뮤니티 맨 위에서 {SHOUT_SLOT_SECONDS}초 1회 방송 · 대기열 순서대로
                     {shoutTierHint(skus) && <> · {shoutTierHint(skus)}</>}
                   </span>
                 </span>
                 <span className="shrink-0 rounded-badge bg-accent-300/15 px-2 py-1 text-2xs font-extrabold text-accent-300">{shoutCost.toLocaleString()}점~</span>
               </button>
 
-              <p className="pt-0.5 text-2xs font-bold text-ink-secondary">모으는 마크 <span className="font-normal text-ink-muted">— 점수에 도달하면 영구 해금(차감 없음)</span></p>
+              {/* ── 버는 이유 — 여기 있는 16종은 **살 수 없다.** 점수로만 열린다.
+                  위(쓰는 이유)와 시각적으로 갈라 두지 않으면 '해금한 마크를 또 사야 하나'로 읽힌다. */}
+              <div className="flex items-center gap-1.5 pt-2">
+                <Icon name="trending-up" size={13} className="shrink-0 text-emerald-300" />
+                <p className="shrink-0 text-2xs font-extrabold text-emerald-300">버는 이유</p>
+                <p className="shrink-0 text-2xs text-ink-muted">— 활동으로만 열립니다 · 살 수 없어요</p>
+                <span className="h-px flex-1 bg-border-subtle" />
+              </div>
+              <p className="text-2xs font-bold text-ink-secondary">모으는 마크 <span className="font-normal text-ink-muted">— 점수에 도달하면 영구 해금(차감 없음)</span></p>
               <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
                 {earnList.map((mk) => {
                   const pts = user.activityPoints ?? 0;
@@ -839,7 +898,7 @@ export default function TierLeaderboard() {
                           onClick={() => handleEquip(on ? null : mk.key)}
                           className={['mt-1.5 w-full rounded-input px-2 py-1.5 text-2xs font-bold transition-colors',
                             on ? 'bg-accent-300 text-white' : 'border border-accent-400/40 text-accent-300 hover:bg-accent-300/10'].join(' ')}>
-                          {equipBusy === (on ? null : mk.key) || (equipBusy === '' && on) ? '적용 중…' : on ? '✓ 장착 중 — 해제' : '장착하기'}
+                          {equipPending(mk.key, on) ? '적용 중…' : on ? '✓ 장착 중 — 해제' : '장착하기'}
                         </button>
                       ) : (
                         <p className="mt-1.5 inline-flex w-full items-center justify-center gap-1 rounded-input bg-surface-float px-2 py-1.5 text-2xs font-bold text-ink-muted"><Icon name="lock" size={11} className="shrink-0" />{mk.need.toLocaleString()}점</p>

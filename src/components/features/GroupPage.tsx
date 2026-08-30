@@ -1,8 +1,10 @@
 // src/components/features/GroupPage.tsx
 // 가입제 그룹 커뮤니티(딜러팀·동호회·유튜버) 페이지.
-//  - 공개: 기본정보 + 이미지 + 공지
-//  - 멤버 전용(승인된 멤버만): 실시간 채팅 · 게시판 2탭
-//  - 매니저: 가입 승인/거절, 멤버 추방, 이미지·공지 관리
+//  - 공개: 기본정보 + 이미지 + 팀 소개 + 전화·카카오톡 + 공지
+//  - 멤버 전용(승인된 멤버만): 실시간 채팅 · 게시판 · 활동 순위 3탭
+//  - 매니저: 가입 승인/거절, 멤버 추방, 이미지·공지 관리, 팀 프로필(소개·전화·카톡) 설정
+// 오너 #16: 매장 커뮤니티에 있는 것(소개·순위·전화·카카오톡)을 일반 커뮤니티에도.
+//   포스터·진행정보는 오너가 명시적으로 제외 — 그룹은 대회를 열지 않는다.
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
@@ -17,10 +19,17 @@ import {
   getGroupMessages, sendGroupMessage, subscribeGroupMessages, deleteGroupMessage,
   getGroupPosts, createGroupPost, deleteGroupPost,
   getVenueNotices, createVenueNotice, deleteVenueNotice, type VenueNotice,
-  updateVenueImages,
+  updateVenueImages, updateGroupProfile, getGroupActivityRanking, type GroupRankRow,
 } from '../../api/community';
 import { uploadVenueImages } from '../../lib/storage';
 import Icon from '../atoms/Icon';
+import EmptyState from '../atoms/EmptyState';
+import { PhoneActionButton, KakaoActionButton, PhoneRow } from './ContactActions';
+
+import { goSubTab } from '../../lib/subTabTransition';
+
+/** 그룹 3탭 진열 순서 — 하위 탭 전환 방향(forward/back) 기준. */
+const GROUP_TAB_ORDER = ['chat', 'board', 'ranking'] as const;
 
 export default function GroupPage({ group, open, onClose }: { group: Venue | null; open: boolean; onClose: () => void }) {
   const { user } = useAuth();
@@ -29,8 +38,11 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
   const [membership, setMembership] = useState<GroupMember | null>(null);
   const [members, setMembers] = useState<GroupMember[]>([]);
   const [notices, setNotices] = useState<VenueNotice[]>([]);
-  const [tab, setTab] = useState<'chat' | 'board'>('chat');
+  const [tab, setTab] = useState<'chat' | 'board' | 'ranking'>('chat');
   const [managePanel, setManagePanel] = useState(false);
+  // 팀 프로필(소개·전화·카톡) — 저장 직후 상위 목록이 갱신되기 전까지 이 화면에 즉시 반영할 오버라이드
+  const [profile, setProfile] = useState<{ description: string; phone: string; kakao: string } | null>(null);
+  const [profileEditing, setProfileEditing] = useState(false);
 
   const isAdmin = user?.role === 'admin';
   const isManager = !!group && (isAdmin || group.ownerId === user?.id || membership?.role === 'manager');
@@ -48,7 +60,7 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
 
   useEffect(() => {
     if (!open || !group) return;
-    setMembership(null); setMembers([]); setTab('chat');
+    setMembership(null); setMembers([]); setTab('chat'); setProfile(null); setProfileEditing(false);
     getVenueNotices(group.id).then(setNotices).catch(() => {});
     if (user) getMyMembership(group.id).then(setMembership).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -60,6 +72,10 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
   if (!open || !group) return null;
 
   const kindLabel = GROUP_KIND_LABEL[group.kind ?? 'other'];
+  const desc  = profile?.description ?? group.description ?? '';
+  const phone = profile?.phone ?? group.contactPhone ?? '';
+  const kakao = profile?.kakao ?? group.kakaoUrl ?? '';
+  const openProfileEdit = () => setProfileEditing(true);
   const approvedMembers = members.filter((m) => m.status === 'approved');
   const pendingMembers = members.filter((m) => m.status === 'pending');
 
@@ -143,7 +159,6 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
               <span className="text-2xs text-ink-muted">· 멤버 {isMember ? approvedMembers.length : (group.followerCount ?? 0)}명</span>
             </div>
             <h2 className="text-xl font-bold text-ink-primary">{group.name}</h2>
-            {group.description && <p className="text-sm text-ink-secondary mt-1 whitespace-pre-wrap leading-relaxed">{group.description}</p>}
 
             {/* 가입 상태 / 버튼 */}
             <div className="mt-3">
@@ -159,6 +174,46 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
                 <button type="button" onClick={doJoin} className="btn-primary text-sm px-5">{group.joinApproval ? '가입 신청' : '가입하기'}</button>
               )}
             </div>
+
+            {/* 연락 수단 — 매장 페이지와 **같은 컨트롤**을 쓴다(ContactActions 공용).
+                한 벌 더 만들면 매장 쪽에만 반영된 오너 지시(링크 미설정이어도 카카오톡 자리는
+                지킨다)가 여기에는 따라오지 않는다. 그룹은 주소가 없으므로 길찾기·체크인은 없다. */}
+            <div className="mt-3 flex gap-2">
+              <PhoneActionButton phone={phone} canEdit={isManager} onEdit={openProfileEdit} />
+              <KakaoActionButton kakao={kakao} canEdit={isManager} onEdit={openProfileEdit} />
+            </div>
+          </div>
+
+          {/* 팀 소개 — 매장의 [매장 소개]에 대응. 개설 때 받은 소개를 이후에 고칠 데가 없었다. */}
+          <div className="px-page-x py-3 border-b border-border-subtle">
+            <div className="mb-1.5 flex items-center justify-between">
+              <h3 className="text-xs font-bold text-ink-primary">{kindLabel} 소개</h3>
+              {isManager && !profileEditing && (
+                <button type="button" onClick={openProfileEdit} className="text-2xs text-ink-muted hover:text-accent-200">정보 편집</button>
+              )}
+            </div>
+            {profileEditing ? (
+              <GroupProfileForm
+                groupId={group.id}
+                initial={{ description: desc, phone, kakao }}
+                onCancel={() => setProfileEditing(false)}
+                onSaved={(v) => { setProfile(v); setProfileEditing(false); }}
+              />
+            ) : (
+              <>
+                {desc ? (
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink-secondary">{desc}</p>
+                ) : isManager ? (
+                  <button type="button" onClick={openProfileEdit}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-input border border-dashed border-accent-400/40 bg-accent-300/[0.06] px-3.5 text-xs font-bold text-accent-200 transition-colors hover:bg-accent-300/10">
+                    + 소개 쓰기
+                  </button>
+                ) : (
+                  <p className="text-sm text-ink-muted">아직 등록된 소개가 없습니다.</p>
+                )}
+                {phone && <dl className="mt-2"><PhoneRow phone={phone} /></dl>}
+              </>
+            )}
           </div>
 
           {/* 공지 (공개) */}
@@ -235,16 +290,20 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
             <div className="px-page-x py-12 text-center">
               <Icon name="lock" size={34} className="mx-auto mb-2 text-ink-muted" />
               <p className="text-sm font-semibold text-ink-primary">멤버 전용 공간</p>
-              <p className="text-2xs text-ink-muted mt-1">가입 후 실시간 채팅과 게시판을 이용할 수 있습니다</p>
+              <p className="text-2xs text-ink-muted mt-1">가입 후 실시간 채팅 · 게시판 · 활동 순위를 이용할 수 있습니다</p>
             </div>
           ) : (
             <>
-              {/* 2탭 — 골드 밑줄 스프링 슬라이드 */}
-              <UnderlineTabs className="sticky top-0 z-20 bg-surface-base"
-                items={[{ key: 'chat', label: '실시간 채팅' }, { key: 'board', label: '게시판' }]}
-                value={tab} onChange={setTab} />
-              <div className="px-page-x py-3 min-h-[40vh]">
-                {tab === 'chat' ? <GroupChat groupId={group.id} canManage={isManager} /> : <GroupBoard groupId={group.id} canManage={isManager} />}
+              {/* 3탭 — 골드 밑줄 스프링 슬라이드. '순위'는 뒤에 붙여 기본 탭(chat)을 흔들지 않는다. */}
+              <div data-group-tabbar="" className="sticky top-0 z-20 bg-surface-base">
+                <UnderlineTabs
+                  items={[{ key: 'chat', label: '실시간 채팅' }, { key: 'board', label: '게시판' }, { key: 'ranking', label: '순위' }]}
+                  value={tab} onChange={(v) => goSubTab('group-tab', GROUP_TAB_ORDER, tab, v, () => setTab(v))} />
+              </div>
+              <div data-group-panel="" className="px-page-x py-3 min-h-[40vh]">
+                {tab === 'chat' ? <GroupChat groupId={group.id} canManage={isManager} />
+                  : tab === 'board' ? <GroupBoard groupId={group.id} canManage={isManager} />
+                  : <GroupRanking groupId={group.id} />}
               </div>
             </>
           )}
@@ -369,6 +428,111 @@ function GroupBoard({ groupId, canManage }: { groupId: string; canManage: boolea
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+// ── 팀 프로필 편집(매니저 전용) ───────────────────────────────────────────────
+// 소개·전화·카카오톡을 한 폼에서 저장한다. 서버(update_group_profile)가 is_group_manager 로
+// 다시 검사하므로 이 UI 게이트는 편의일 뿐 보안 경계가 아니다.
+function GroupProfileForm({ groupId, initial, onSaved, onCancel }: {
+  groupId: string;
+  initial: { description: string; phone: string; kakao: string };
+  onSaved: (v: { description: string; phone: string; kakao: string }) => void;
+  onCancel: () => void;
+}) {
+  const toast = useToast();
+  const [description, setDescription] = useState(initial.description);
+  const [phone, setPhone] = useState(initial.phone);
+  const [kakao, setKakao] = useState(initial.kakao);
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await updateGroupProfile(groupId, { description, phone, kakaoUrl: kakao });
+      onSaved({ description: description.trim(), phone: phone.trim(), kakao: kakao.trim() });
+      toast.show('팀 정보가 저장되었습니다', 'success');
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : '저장에 실패했습니다', 'error');
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="space-y-2">
+      <label className="block">
+        <span className="mb-0.5 block text-2xs font-semibold text-ink-secondary">소개</span>
+        <textarea value={description} onChange={(e) => setDescription(e.target.value)} maxLength={1000} rows={5}
+          placeholder="어떤 팀인지, 어떤 사람을 찾는지 적어주세요" className="input w-full resize-none text-sm" />
+      </label>
+      <label className="block">
+        <span className="mb-0.5 block text-2xs font-semibold text-ink-secondary">전화번호</span>
+        <input value={phone} onChange={(e) => setPhone(e.target.value)} maxLength={40} inputMode="tel"
+          placeholder="예: 010-1234-5678 (여러 개는 / 로 구분)" className="input w-full text-sm" />
+      </label>
+      <label className="block">
+        <span className="mb-0.5 block text-2xs font-semibold text-ink-secondary">카카오톡 오픈채팅 링크</span>
+        <input value={kakao} onChange={(e) => setKakao(e.target.value)} maxLength={300} inputMode="url"
+          placeholder="https://open.kakao.com/..." className="input w-full text-sm" />
+      </label>
+      <div className="flex justify-end gap-2">
+        <button type="button" onClick={onCancel} className="btn-ghost text-xs px-3">취소</button>
+        <button type="button" onClick={save} disabled={saving} className="btn-primary px-4 text-xs disabled:opacity-60">
+          {saving ? '저장 중…' : '저장'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── 팀 활동 순위 ──────────────────────────────────────────────────────────────
+// 무엇의 순위인가: **팀 안에서의 활동 기여도**다.
+//  · 그룹에는 대회·정산 데이터가 없다 — 포스터·진행정보는 오너가 이번 지시에서 명시적으로 제외했고,
+//    매장 순위(SeasonPanel/VenueRankingPanel)는 장부·시즌 랭킹 입력을 전제로 한다. 딜러팀은 그걸 안 쓴다.
+//  · 그룹이 실제로 만들어 내는 멤버 단위 기록은 게시판 글과 채팅뿐이다. 그래서 그 둘로 매긴다.
+//  · 가중치 게시글 3 : 채팅 1 — 남는 기록이 흘러가는 기록보다 팀에 더 기여한다.
+// §28: 금전적 가치 없는 활동 점수다(상금·수익 프레이밍 금지).
+function GroupRanking({ groupId }: { groupId: string }) {
+  const [rows, setRows] = useState<GroupRankRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    getGroupActivityRanking(groupId)
+      .then((r) => { if (alive) setRows(r); })
+      .catch(() => { if (alive) setRows([]); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [groupId]);
+
+  if (loading) return <p className="py-8 text-center text-2xs text-ink-muted">불러오는 중…</p>;
+  if (rows.length === 0) {
+    return <EmptyState title="아직 활동 기록이 없어요" hint="채팅과 게시판에 글이 쌓이면 활동 순위가 자동으로 집계됩니다." />;
+  }
+
+  return (
+    <div className="space-y-2">
+      <p className="text-2xs leading-relaxed text-ink-muted">
+        게시판 글(3점) · 채팅(1점) 기여도로 매기는 팀 활동 순위입니다. 커뮤니티 활동 점수이며 금전적 가치는 없습니다.
+      </p>
+      <ol className="space-y-1.5">
+        {rows.map((r, i) => (
+          <li key={r.userId} className="flex items-center gap-2 rounded-input border border-border-subtle bg-surface-low px-2.5 py-2">
+            <span className={['w-6 shrink-0 text-center text-xs font-bold tabular-nums',
+              i < 3 ? 'text-accent-200' : 'text-ink-muted'].join(' ')}>{i + 1}</span>
+            <Avatar name={r.name} color={r.color} size={26} />
+            <span className="min-w-0 flex-1">
+              <span className="flex items-center gap-1">
+                <span className="truncate text-xs font-semibold text-ink-primary">{r.name}</span>
+                {r.role === 'manager' && <span className="shrink-0 text-2xs font-bold text-accent-300">매니저</span>}
+              </span>
+              <span className="block text-2xs text-ink-muted tabular-nums">글 {r.posts} · 채팅 {r.messages}</span>
+            </span>
+            <span className="shrink-0 text-sm font-bold text-ink-primary tabular-nums">{r.score.toLocaleString()}<span className="ml-0.5 text-2xs font-semibold text-ink-muted">점</span></span>
+          </li>
+        ))}
+      </ol>
     </div>
   );
 }

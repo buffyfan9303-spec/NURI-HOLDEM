@@ -23,6 +23,7 @@ import { enablePush, pushSupported } from '../../api/push';
 import QRCode from 'qrcode';
 import { requestBuyin, buyinRequestUrl, kstToday } from '../../api/ledger';
 import SlidingPill from '../atoms/SlidingPill';
+import { goSubTab } from '../../lib/subTabTransition';
 
 interface ScheduleDetailModalProps {
   schedule: Schedule | null;
@@ -46,6 +47,8 @@ interface ScheduleDetailModalProps {
 // Q&A 를 4탭 안에 우겨넣지 않고 5번째 칸으로 남긴 이유: 안읽음 배지('새 N')가 붙는 유일한 탭이라
 // 다른 탭 밑에 묻으면 '새 질문이 왔다'를 알 길이 사라진다(기능 손실). 나머지 4탭은 스크린샷과 동일.
 type Tab = 'main' | 'blinds' | 'prize' | 'venue' | 'qna';
+/** 5탭 진열 순서 — 하위 탭 전환 방향(forward/back) 기준. TABS 나열 그대로. */
+const TAB_ORDER: Tab[] = ['main', 'blinds', 'prize', 'venue', 'qna'];
 const TABS: { key: Tab; label: string }[] = [
   { key: 'main',   label: '메인' },
   { key: 'blinds', label: '블라인드' },
@@ -293,7 +296,7 @@ export default function ScheduleDetailModal({
       {/* ── 탭바 (메인 / 블라인드 / 프라이즈 / 매장정보 / Q&A) — sticky 상단 고정. PC는 우측에 닫기 통합 ──
           활성 표시는 밑줄(SlidingPill underline) — UnderlineTabs 와 동일 문법을 인라인으로 쓴다.
           왜 공용 UnderlineTabs 를 안 쓰나: label 이 string 이라 Q&A 의 개수·안읽음 배지를 붙일 수 없다. */}
-      <div role="tablist" className="relative grid grid-cols-5 border-b border-border-subtle sticky top-0 bg-surface-base z-10 lg:pr-[4.25rem]">
+      <div data-sched-tabbar="" role="tablist" className="relative grid grid-cols-5 border-b border-border-subtle sticky top-0 bg-surface-base z-10 lg:pr-[4.25rem]">
         <SlidingPill activeKey={tab} underline className="rounded-full bg-accent-300" />
         {/* PC 닫기 — 정보 영역 우상단(항상 보이는 sticky 탭바, 손 닿는 위치) */}
         <button
@@ -314,7 +317,7 @@ export default function ScheduleDetailModal({
               role="tab"
               aria-selected={active}
               data-pill-active={active || undefined}
-              onClick={() => setTab(key)}
+              onClick={() => goSubTab('sched-tab', TAB_ORDER, tab, key, () => setTab(key))}
               className={[
                 // §T1 탭 굵기 규격: 비활성 600 / 활성 700.
                 // ⚠ font-semibold 와 font-bold 를 함께 주면 안 된다 — Tailwind 출력 순서상 semibold 가 뒤라 이긴다.
@@ -342,7 +345,7 @@ export default function ScheduleDetailModal({
       </div>
 
       {/* ── 본문 — 탭 5개가 같은 패딩 컨테이너를 공유(탭 전환에 좌우 여백이 흔들리지 않게) ── */}
-      <div className="px-3.5 pt-3 pb-5 space-y-3">
+      <div data-sched-panel="" className="px-3.5 pt-3 pb-5 space-y-3">
 
       {/* ══════ 메인 — 지금 상태 · 참가 행동 · 게임 정보 ══════════════════════ */}
       {tab === 'main' && (<>
@@ -351,7 +354,7 @@ export default function ScheduleDetailModal({
             돌고 있다는 App 의 실측 증거다. 그래서 여기서만 클락을 읽는다(포스터 열 때마다 조회 X).
             라이브가 아니면 기존 핵심 요약 그리드를 그대로 유지한다. */}
         {liveShown ? (
-          <LiveClockPanel schedule={schedule} regInfo={regInfo} onSeePrize={() => setTab('prize')} />
+          <LiveClockPanel schedule={schedule} regInfo={regInfo} onSeePrize={() => goSubTab('sched-tab', TAB_ORDER, tab, 'prize', () => setTab('prize'))} />
         ) : (
         <section className="overflow-hidden rounded-card border border-border-subtle bg-surface-high">
           {/* ── 핵심 요약 그리드(APIS '오늘 예정' 문법) — 바이인·프라이즈·시작·레지마감·스타팅칩·
@@ -1035,7 +1038,9 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
       </div>
 
       {expanded && (
-      <div className="space-y-2 border-t border-accent-400/20 px-3 pb-3 pt-2 animate-fade-in">
+      // data-no-drag-close: 이 안에서 시작한 손짓은 전체화면 시트의 '끓어 닫기' 로 해석하지 않는다 —
+      //   닉네임을 적다가 실수로 내려서 포스터 상세가 통째로 닫히면 입력이 통째로 사라진다(오너 필수 제외 조건).
+      <div data-no-drag-close className="space-y-2 border-t border-accent-400/20 px-3 pb-3 pt-2 animate-fade-in">
       {!user && !ended && (
         <p className="rounded-input bg-surface-base/50 px-2.5 py-2 text-2xs leading-relaxed text-ink-muted">
           예약엔 <b className="text-ink-secondary">로그인·본인인증</b>이 필요해요 — 노쇼 방지를 위한 자리 보장 장치예요.

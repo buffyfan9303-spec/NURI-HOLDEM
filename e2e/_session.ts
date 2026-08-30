@@ -4,8 +4,12 @@
 //  · 로그인 모달의 배경 오버레이가 헤더 버튼을 덮어 클릭이 가로채인다(실제로 auth-smoke 가 이 문제로 깨져 있었다).
 //  · 로그인 UI 가 바뀔 때마다 '검증하려는 것과 무관한' 테스트가 깨진다.
 //  · 매 테스트가 폼을 거치면 느리다.
-// supabase-js v2 는 세션을 localStorage 의 `sb-<ref>-auth-token` 한 곳에만 둔다 —
-// 앱이 로드되기 전에 그 값을 심으면 앱은 정상 로그인 상태로 시작한다.
+// supabase-js v2 는 세션을 `sb-<ref>-auth-token` 한 키에 둔다 — 앱이 로드되기 전에 그 값을 심으면
+// 앱은 정상 로그인 상태로 시작한다.
+// ⚠ 2026-08-30 '자동 로그인'(오너 #8) 이후 그 키가 들어가는 곳이 둘이다: 자동 로그인 ON=localStorage /
+//   OFF=sessionStorage (판정 키 `nuri:keep-signed-in`, 값이 없으면 ON). Playwright 컨텍스트는 매번
+//   빈 저장소로 시작해 판정 키가 없으므로 여기 localStorage 주입이 그대로 유효하다 —
+//   다만 그 키를 '0' 으로 심는 테스트를 쓴다면 주입도 sessionStorage 로 옮겨야 한다.
 import type { Page } from '@playwright/test';
 
 export const SUPABASE_URL = process.env.E2E_SUPABASE_URL ?? 'https://idsxiqspecrucvfvtgbw.supabase.co';

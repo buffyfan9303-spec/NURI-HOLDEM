@@ -24,6 +24,16 @@ function env(name) {
 const URL_BASE = env('VITE_SUPABASE_URL');
 const ANON = env('VITE_SUPABASE_ANON_KEY');
 
+// 정적 공개 페이지 — 네이버 로그인 심사·크롤링·아카이빙 대상(scripts/gen-legal.mjs 가 생성).
+// 대회·매장과 달리 DB 를 타지 않으므로 여기 하드코딩한다(목록은 gen-legal.mjs 의 DOCS 와 1:1).
+const STATIC_PAGES = [
+  ['/legal/terms.html', '0.5'],
+  ['/legal/privacy.html', '0.5'],
+  ['/legal/anti-gambling.html', '0.5'],
+  ['/legal/marketing.html', '0.4'],
+  ['/about.html', '0.5'],
+];
+
 const today = new Date().toISOString().slice(0, 10);
 const xmlEsc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
@@ -51,6 +61,7 @@ async function main() {
   ]);
 
   const entries = [urlEntry(`${SITE}/`, today, 'daily', '1.0')];
+  for (const [path, prio] of STATIC_PAGES) entries.push(urlEntry(`${SITE}${path}`, today, 'monthly', prio));
   for (const s of schedules) {
     if (!s.id) continue;
     const lm = /^\d{4}-\d{2}-\d{2}$/.test(s.date || '') ? s.date : today;

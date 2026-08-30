@@ -160,7 +160,7 @@ export function MyListingsModal({ open, onClose, onOpenListing, onChanged }: {
   };
 
   return (
-    <Modal open={open} onClose={onClose} maxWidth="md" variant="sheet">
+    <Modal open={open} onClose={onClose} maxWidth="md" variant="sheet" dragToClose>
       <div className="flex items-center gap-2 px-4 py-3 border-b border-border-subtle">
         <p className="flex-1 text-sm font-bold text-ink-primary">내 판매목록 {items.length > 0 && <span className="text-ink-muted font-normal">({items.length})</span>}</p>
         <button type="button" onClick={onClose} aria-label="닫기" className="w-8 h-8 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high">
@@ -225,7 +225,7 @@ export function MyLikesModal({ open, onClose, onOpenListing }: {
   if (!user) return <LoginRequired open={open} onClose={onClose} />;
 
   return (
-    <Modal open={open} onClose={onClose} maxWidth="md" variant="sheet">
+    <Modal open={open} onClose={onClose} maxWidth="md" variant="sheet" dragToClose>
       <div className="flex items-center gap-2 px-4 py-3 border-b border-border-subtle">
         <p className="flex-1 text-sm font-bold text-ink-primary">찜한 매물 {items.length > 0 && <span className="text-ink-muted font-normal">({items.length})</span>}</p>
         <button type="button" onClick={onClose} aria-label="닫기" className="w-8 h-8 flex items-center justify-center rounded-input text-ink-secondary hover:text-ink-primary hover:bg-surface-high">

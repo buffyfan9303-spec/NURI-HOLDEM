@@ -1,0 +1,2 @@
+# 생성물(scripts/gen-legal.mjs) — 재생성 결과와 바이트 비교하는 게이트가 있어 줄끝을 고정한다.
+public/legal/*.html eol=lf

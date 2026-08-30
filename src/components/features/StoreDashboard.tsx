@@ -48,6 +48,20 @@ const monthRange = () => {
 };
 const hhmm = (s?: string | null) => { if (!s) return null; const [h, m] = s.split(':').map(Number); return h * 60 + (m || 0); };
 
+// PC 밀도 규약(오너 #5, 2026-08-30) — 이 파일의 모든 간격은 아래 4단만 쓴다.
+//  1rem = 17px(index.css html) 이라 실제 렌더값은 괄호 안 값이다.
+//   gap-1 / mt-1   (4.25px)  라벨↔값 · 아이콘↔글자 · 리스트 행 사이
+//   gap-2          (8.5px)   카드 안 요소 그룹 사이
+//   gap-3 / p-3    (12.75px) 카드 패딩 · 카드 사이 · 최상위 블록 사이
+//   gap-5 / p-5    (21.25px) 섹션 경계 · 빈 상태 박스
+//  0.5(2.125) · 1.5(6.375) · 2.5(10.625) · 3.5(14.875) 는 블록 간격으로 쓰지 않는다 —
+//  같은 위계가 6.375 와 8.5 로 갈리던 것이 '지저분함'의 정체였다(1440 실측).
+//  행간은 §T1 역할표(index.css)를 따른다:
+//   설명문·빈 상태 안내 = t-desc(12.75/19.13) + break-keep(한글 어절 중간 줄바꿈 방지)
+//   행 안 메타·캡션·뱃지 = text-2xs 기본(11.69/15.94) — leading-* 를 덧붙이지 않는다
+//  text-[8px]/[9px]/[11px] 같은 사다리 밖 임의 px 금지(§T1 규칙 2).
+//  예외 1가지: rounded-badge 의 내부 패딩(px-1.5 py-0.5)은 뱃지 토큰이라 이 4단의 대상이 아니다
+//  — 블록 사이·카드 패딩만 4단으로 통제한다.
 export interface DashCaps { ledger: boolean; manage: boolean; voucher: boolean; posters: boolean; staff: boolean }
 
 interface Props {
@@ -458,9 +472,9 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const anyCap = caps.ledger || caps.manage || caps.voucher || caps.posters || caps.staff;
   if (!anyCap) {
     return (
-      <div className="rounded-card border border-border-default bg-surface-low p-6 text-center space-y-2">
+      <div className="rounded-card border border-border-default bg-surface-low p-5 text-center space-y-2">
         <p className="text-sm font-bold text-ink-primary">아직 부여된 권한이 없습니다</p>
-        <p className="text-2xs leading-relaxed text-ink-muted">업주에게 <span className="font-semibold text-ink-primary">장부·순위</span> 또는 <span className="font-semibold text-ink-primary">이용권 내역</span> 권한을 요청하면<br />이 매장의 운영 화면을 이용할 수 있습니다.</p>
+        <p className="t-desc break-keep text-ink-muted">업주에게 <span className="font-semibold text-ink-primary">장부·순위</span> 또는 <span className="font-semibold text-ink-primary">이용권 내역</span> 권한을 요청하면<br />이 매장의 운영 화면을 이용할 수 있습니다.</p>
       </div>
     );
   }
@@ -474,23 +488,26 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       <BoostContactModal open={boostOpen} onClose={() => setBoostOpen(false)} />
 
       {/* ① 공지 스트립 — 업주 운영 가이드(전폭·dismissible). 슬라이드(새 탭)·PDF. 닫으면 기억(IA3a) */}
+      {/* ⚠ 375 에서 라벨이 '운영 가이'로 잘려 있었다 — 버튼 3개가 shrink-0 이라 라벨 폭이 먼저 죽는다.
+          한 줄에 못 담으면 버튼 줄이 아래로 내려가게(flex-wrap) 바꿔 글자가 잘리지 않게 한다.
+          PC(1280·1440)는 폭이 남아 예전과 똑같이 한 줄이다. */}
       {!guideHidden && (
-      <div className="flex items-center justify-between gap-2 rounded-card border border-border-subtle bg-surface-low px-3 py-2">
-        <span className="flex min-w-0 items-center gap-1.5 truncate text-xs text-ink-secondary">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-card border border-border-subtle bg-surface-low px-3 py-2">
+        <span className="flex min-w-0 items-center gap-2 text-xs text-ink-secondary">
           <Icon name="bookmark" size={13} className="shrink-0 text-ink-muted" />
           <b className="text-ink-primary">운영 가이드</b><span className="hidden sm:inline"> — 포스터→장부→클락→순위→정산 한눈에</span>
         </span>
-        <span className="flex shrink-0 items-center gap-1.5">
+        <span className="ml-auto flex shrink-0 items-center gap-2">
           <button type="button" onClick={() => window.open('/guide/manual.html', '_blank', 'noopener')}
-            className="rounded-input border border-accent-400/40 bg-accent-300/10 px-2.5 py-1 text-2xs font-bold text-accent-300 hover:bg-accent-300/20 transition-colors">
+            className="rounded-input border border-accent-400/40 bg-accent-300/10 px-3 py-1 text-2xs font-bold text-accent-300 transition-colors hover:bg-accent-300/20">
             사용설명서
           </button>
           <button type="button" onClick={() => window.open('/guide/owner.html', '_blank', 'noopener')}
-            className="rounded-input border border-border-default px-2.5 py-1 text-2xs font-bold text-ink-secondary hover:text-ink-primary transition-colors">
+            className="rounded-input border border-border-default px-3 py-1 text-2xs font-bold text-ink-secondary transition-colors hover:text-ink-primary">
             슬라이드
           </button>
           <a href="/guide/owner.pdf" download="NURI-HOLDEM-업주가이드.pdf"
-            className="rounded-input border border-border-default px-2.5 py-1 text-2xs font-bold text-ink-secondary hover:text-ink-primary transition-colors">
+            className="rounded-input border border-border-default px-3 py-1 text-2xs font-bold text-ink-secondary transition-colors hover:text-ink-primary">
             PDF
           </a>
           <button type="button" onClick={dismissGuide} aria-label="가이드 배너 닫기"
@@ -523,7 +540,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       {/* ③ KPI 헤드라인 — 오늘 장부 핵심 숫자를 헤더로 격상(eyebrow 상태 pill + 큰 숫자). 탭하면 장부로. */}
       {caps.ledger && (
         <button type="button" onClick={() => onGoto('ledger')}
-          className="card-elev block w-full rounded-card border border-border-subtle bg-surface-low px-4 py-3.5 text-left transition-colors hover:border-border-default">
+          className="card-elev block w-full rounded-card border border-border-subtle bg-surface-low p-3 text-left transition-colors hover:border-border-default">
           <span className="flex items-center gap-2">
             <span className="text-2xs font-bold tracking-wide text-ink-muted">오늘 장부</span>
             <span className={`rounded-badge px-1.5 py-0.5 text-2xs font-bold ${ledgerStatusCls}`}>{ledgerStatus}</span>
@@ -531,28 +548,28 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           {loading ? <div className="mt-2"><Skeleton /></div> : !started ? (
             <p className="mt-2 text-sm text-ink-muted">오늘 장부가 아직 시작되지 않았습니다.</p>
           ) : (
-            <span className="mt-2.5 flex flex-wrap items-end gap-x-6 gap-y-2">
+            <span className="mt-2 flex flex-wrap items-end gap-x-5 gap-y-3">
               <span className="block">
                 <span className="block text-2xs text-ink-muted">완납 매출</span>
-                <span className="block text-3xl font-extrabold leading-none tabular-nums text-gold-300">
+                <span className="mt-1 block text-3xl font-extrabold leading-none tabular-nums text-gold-300">
                   {wonToMan(fin.paid)}<span className="ml-1 text-sm font-semibold text-ink-muted">만원</span>
                 </span>
               </span>
               <span className="block">
                 <span className="block text-2xs text-ink-muted">총 엔트리</span>
-                <span className="block text-2xl font-extrabold leading-none tabular-nums text-ink-primary">
+                <span className="mt-1 block text-2xl font-extrabold leading-none tabular-nums text-ink-primary">
                   <CountUp value={Math.round(fin.entry)} /><span className="ml-1 text-sm font-semibold text-ink-muted">엔트리</span>
                 </span>
               </span>
               <span className="block">
                 <span className="block text-2xs text-ink-muted">미수금</span>
-                <span className={`block text-2xl font-extrabold leading-none tabular-nums ${fin.unpaid > 0 ? 'text-danger-light' : 'text-ink-primary'}`}>
+                <span className={`mt-1 block text-2xl font-extrabold leading-none tabular-nums ${fin.unpaid > 0 ? 'text-danger-light' : 'text-ink-primary'}`}>
                   {wonToMan(fin.unpaid)}<span className="ml-1 text-sm font-semibold text-ink-muted">만원</span>
                 </span>
               </span>
               <span className="block">
                 <span className="block text-2xs text-ink-muted">회수 티켓</span>
-                <span className="block text-2xl font-extrabold leading-none tabular-nums text-ink-primary">
+                <span className="mt-1 block text-2xl font-extrabold leading-none tabular-nums text-ink-primary">
                   {fin.ticket}<span className="ml-1 text-sm font-semibold text-ink-muted">장</span>
                 </span>
               </span>
@@ -565,7 +582,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       {!loading && liveWidget && (
         <section className="overflow-hidden rounded-card border border-accent-400/40 bg-gradient-to-br from-accent-300/[0.07] to-transparent">
           <div className="flex items-center justify-between gap-2 border-b border-border-subtle px-3 py-2">
-            <span className="flex items-center gap-1.5 text-sm font-bold text-ink-primary">
+            <span className="flex items-center gap-2 text-sm font-bold text-ink-primary">
               <span className="relative flex h-2 w-2" aria-hidden>
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
@@ -576,7 +593,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           </div>
           {/* 멀티게임 탭 — 메인+사이드 동시 진행 시 게임 전환 */}
           {activeClocks.length >= 2 && (
-            <div className="flex items-center gap-1 overflow-x-auto border-b border-border-subtle px-2 py-1.5">
+            <div className="flex items-center gap-1 overflow-x-auto border-b border-border-subtle px-2 py-2">
               {activeClocks.map((c) => {
                 const on = c.gameSeq === widgetGame;
                 return (
@@ -590,9 +607,9 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           )}
           <div className="grid grid-cols-1 divide-y divide-border-subtle sm:grid-cols-2 sm:divide-x sm:divide-y-0">
             {/* 진행 클락(선택 게임) */}
-            <button type="button" onClick={() => onGoto('clock')} className="flex items-center justify-between gap-3 px-3 py-3 text-left transition-colors hover:bg-white/[0.02]">
+            <button type="button" onClick={() => onGoto('clock')} className="flex items-center justify-between gap-3 p-3 text-left transition-colors hover:bg-white/[0.02]">
               <div className="min-w-0">
-                <p className="mb-0.5 text-2xs text-ink-muted">{activeClocks.length >= 2 ? (widgetGame <= 1 ? '메인' : `사이드${widgetGame - 1}`) + ' 클락' : '토너먼트 클락'}{wActive ? (wClock?.running ? ' · 진행' : ' · 일시정지') : ''}</p>
+                <p className="mb-1 text-2xs text-ink-muted">{activeClocks.length >= 2 ? (widgetGame <= 1 ? '메인' : `사이드${widgetGame - 1}`) + ' 클락' : '토너먼트 클락'}{wActive ? (wClock?.running ? ' · 진행' : ' · 일시정지') : ''}</p>
                 {wActive && wLvl ? (
                   wLvl.kind === 'break' ? (
                     <p className="text-2xl font-extrabold leading-none text-ink-primary">BREAK</p>
@@ -609,12 +626,12 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
               {wActive && (
                 <div className="shrink-0 text-right">
                   <p className={`text-3xl font-extrabold leading-none tabular-nums ${wClock?.running ? 'text-emerald-400' : 'text-gold-300'}`}>{fmtClock(clockRemainMs)}</p>
-                  <p className="mt-1.5 text-2xs text-ink-muted">남은 인원 <b className="tabular-nums text-ink-primary">{survivors}</b></p>
+                  <p className="mt-1 text-2xs text-ink-muted">남은 인원 <b className="tabular-nums text-ink-primary">{survivors}</b></p>
                 </div>
               )}
             </button>
             {/* 대기 바인요청 — 위젯에서 바로 ✓승인 / ✕거절(장부로 안 넘어감) */}
-            <div className="flex flex-col px-3 py-3">
+            <div className="flex flex-col p-3">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-2xs text-ink-muted">대기중 바인 요청</p>
                 <span className={`rounded-badge px-1.5 py-0.5 text-2xs font-bold ${pendingReqs.length > 0 ? 'bg-danger/15 text-danger-light' : 'bg-surface-float text-ink-muted'}`}>{pendingReqs.length}건</span>
@@ -623,9 +640,9 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                 <button type="button" onClick={() => onGoto('ledger')} className="flex-1 py-3 text-center text-2xs text-ink-muted hover:text-ink-secondary">대기중인 요청이 없습니다.</button>
               ) : (
                 <>
-                  <ul className="mt-1.5 space-y-1">
+                  <ul className="mt-2 space-y-1">
                     {pendingReqs.slice(0, 3).map((r) => (
-                      <li key={r.id} className="relative flex items-center gap-1.5 text-xs">
+                      <li key={r.id} className="relative flex items-center gap-2 text-xs">
                         <span className="min-w-0 flex-1 truncate text-ink-secondary">{r.playerName}</span>
                         <span className="shrink-0 text-2xs tabular-nums text-ink-muted">{timeAgo(r.createdAt)}</span>
                         <span className="shrink-0 rounded-badge bg-surface-float px-1 py-0.5 text-2xs text-ink-muted">{gameLabel(r.requestedGameSeq)}</span>
@@ -642,7 +659,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                         <button type="button" disabled={reqBusy === r.id} onClick={() => quickReject(r)} title="거절" aria-label="거절"
                           className="shrink-0 -my-2 ml-2 flex h-10 min-w-[2.5rem] items-center justify-center rounded-input bg-danger/15 text-danger-light hover:bg-danger/25 active:scale-95 disabled:opacity-40"><Icon name="close" size={15} strokeWidth={2.6} /></button>
                         {payFor === r.id && (
-                          <div className="absolute right-0 top-full z-30 mt-1 w-52 space-y-1.5 rounded-input border border-border-default bg-surface-float p-2 shadow-dialog">
+                          <div className="absolute right-0 top-full z-30 mt-1 w-52 space-y-2 rounded-input border border-border-default bg-surface-float p-2 shadow-dialog">
                             {/* 바인 금액 직접 수정(리바인·할인) */}
                             <div className="flex items-center gap-1">
                               <span className="shrink-0 text-2xs text-ink-muted">바인</span>
@@ -664,9 +681,9 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                                 <div className="grid grid-cols-3 gap-1">
                                   {(['cash', 'card', 'transfer'] as const).map((m) => (
                                     <label key={m} className="flex flex-col gap-0.5">
-                                      <span className="text-[9px] text-ink-muted">{PM_LABEL[m]}</span>
+                                      <span className="text-2xs text-ink-muted">{PM_LABEL[m]}</span>
                                       <input type="number" inputMode="numeric" value={splitVals[m] || ''} onChange={(e) => setSplitVals((s) => ({ ...s, [m]: Math.max(0, Number(e.target.value) || 0) }))}
-                                        className="w-full rounded-[5px] border border-border-default bg-surface-high px-1 py-1 text-[11px] tabular-nums text-ink-primary" placeholder="0" />
+                                        className="w-full rounded-[5px] border border-border-default bg-surface-high px-1 py-1 text-2xs tabular-nums text-ink-primary" placeholder="0" />
                                     </label>
                                   ))}
                                 </div>
@@ -684,7 +701,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                       </li>
                     ))}
                   </ul>
-                  <button type="button" onClick={() => onGoto('ledger')} className="mt-auto pt-1.5 text-left text-2xs font-bold text-accent-300 hover:text-accent-200">{pendingReqs.length > 3 ? `외 ${pendingReqs.length - 3}건 · ` : ''}장부에서 전체 관리 →</button>
+                  <button type="button" onClick={() => onGoto('ledger')} className="mt-auto pt-2 text-left text-2xs font-bold text-accent-300 hover:text-accent-200">{pendingReqs.length > 3 ? `외 ${pendingReqs.length - 3}건 · ` : ''}장부에서 전체 관리 →</button>
                 </>
               )}
             </div>
@@ -704,17 +721,17 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                 const bars = [...dowStats.weeks, { label: '오늘', entries: todayEntries }];
                 const max = Math.max(1, ...bars.map((b) => b.entries));
                 return (
-                  <div className="px-3 pb-2.5">
-                    <p className="mb-1 text-2xs text-ink-muted">최근 {DOW[todayDow]}요일 엔트리 추이</p>
+                  <div className="px-3 pb-3">
+                    <p className="mb-2 text-2xs text-ink-muted">최근 {DOW[todayDow]}요일 엔트리 추이</p>
                     {/* 막대 트랙(h-16) + 4주 평균 점선 오버레이 */}
                     <div className="relative h-16">
                       {sameDowAvg != null && sameDowAvg > 0 && (
                         <div className="pointer-events-none absolute inset-x-0 z-10" style={{ bottom: `${Math.min(98, (sameDowAvg / max) * 100)}%` }}>
                           <div className="border-t border-dashed border-ink-secondary/60" />
-                          <span className="absolute -top-2 right-0 bg-surface-low/85 px-0.5 text-[8px] tabular-nums text-ink-secondary">평균 {sameDowAvg}</span>
+                          <span className="absolute -top-2 right-0 bg-surface-low/85 px-1 text-2xs tabular-nums text-ink-secondary">평균 {sameDowAvg}</span>
                         </div>
                       )}
-                      <div className="flex h-full items-end justify-between gap-1.5">
+                      <div className="flex h-full items-end justify-between gap-2">
                         {bars.map((b, i) => {
                           const isToday = i === bars.length - 1;
                           return (
@@ -726,12 +743,12 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                       </div>
                     </div>
                     {/* 라벨(날짜·엔트리) */}
-                    <div className="mt-0.5 flex justify-between gap-1.5">
+                    <div className="mt-1 flex justify-between gap-2">
                       {bars.map((b, i) => (
-                        <span key={i} className={['flex-1 text-center text-[9px] leading-tight tabular-nums', i === bars.length - 1 ? 'font-bold text-ink-primary' : 'text-ink-muted'].join(' ')}>{b.label}<br />{b.entries}</span>
+                        <span key={i} className={['flex-1 text-center text-2xs tabular-nums', i === bars.length - 1 ? 'font-bold text-ink-primary' : 'text-ink-muted'].join(' ')}>{b.label}<br />{b.entries}</span>
                       ))}
                     </div>
-                    <button type="button" onClick={() => onGoto('stats')} className="mt-1.5 text-2xs font-bold text-accent-300 hover:text-accent-200">통계에서 자세히 →</button>
+                    <button type="button" onClick={() => onGoto('stats')} className="mt-2 text-2xs font-bold text-accent-300 hover:text-accent-200">통계에서 자세히 →</button>
                   </div>
                 );
               })()}
@@ -748,13 +765,13 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       {!loading && funnel && funnel.tournaments > 0 && (
         <section className="card-elev rounded-card border border-border-subtle bg-surface-low p-3">
           <div className="flex items-baseline justify-between gap-2">
-            <h3 className="flex items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="filter" size={13} className="shrink-0 text-ink-muted" />최근 7일 흐름 <span className="font-normal text-ink-muted">조회→예약→방문 · 대회 {funnel.tournaments}개</span></h3>
+            <h3 className="flex items-center gap-2 text-sm font-bold text-ink-primary"><Icon name="filter" size={13} className="shrink-0 text-ink-muted" />최근 7일 흐름 <span className="font-normal text-ink-muted">조회→예약→방문 · 대회 {funnel.tournaments}개</span></h3>
             <button type="button" onClick={() => onGoto('stats')} className="shrink-0 text-2xs font-bold text-accent-300">통계 →</button>
           </div>
-          <div className="mt-2 flex items-center gap-1.5 text-center">
+          <div className="mt-2 flex items-center gap-2 text-center">
             <div className="min-w-0 flex-1 rounded-input bg-surface-high px-1 py-2">
               <p className="text-lg font-extrabold tabular-nums text-ink-primary">{funnel.views}</p>
-              <p className="text-[9px] text-ink-muted">포스터 조회</p>
+              <p className="mt-1 text-2xs text-ink-muted">포스터 조회</p>
             </div>
             <span aria-hidden className="shrink-0 text-ink-muted">→</span>
             <div className="min-w-0 flex-1 rounded-input bg-surface-high px-1 py-2">
@@ -765,16 +782,16 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                   <span className="ml-1 text-2xs font-bold text-ink-secondary" title="포스터를 본 사람 중 예약으로 이어진 비율">{Math.round((funnel.reservations / funnel.views) * 100)}%</span>
                 )}
               </p>
-              <p className="text-[9px] text-ink-muted">예약</p>
+              <p className="mt-1 text-2xs text-ink-muted">예약</p>
             </div>
             <span aria-hidden className="shrink-0 text-ink-muted">→</span>
             <div className="min-w-0 flex-1 rounded-input bg-surface-high px-1 py-2">
               <p className="text-lg font-extrabold tabular-nums text-ink-primary">{funnel.checkins}</p>
-              <p className="text-[9px] text-ink-muted">방문 체크인</p>
+              <p className="mt-1 text-2xs text-ink-muted">방문 체크인</p>
             </div>
           </div>
           {funnel.views === 0 && (
-            <p className="mt-1.5 text-2xs text-ink-muted">조회수는 손님이 포스터 상세를 열 때부터 쌓입니다 — 이번 주부터 집계가 시작됐어요.</p>
+            <p className="mt-2 t-desc break-keep text-ink-muted">조회수는 손님이 포스터 상세를 열 때부터 쌓입니다 — 이번 주부터 집계가 시작됐어요.</p>
           )}
         </section>
       )}
@@ -817,14 +834,14 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           : todo.tone === 'ok' ? 'border-emerald-500/40 bg-emerald-500/[0.06]' : 'border-accent-400/40 bg-accent-300/[0.06]';
         const iconCls = todo.tone === 'warn' ? 'text-gold-300' : todo.tone === 'ok' ? 'text-emerald-400' : 'text-ink-secondary';
         return (
-          <div className={`flex items-center gap-3 rounded-card border px-3 py-3 ${toneCls}`}>
+          <div className={`flex items-center gap-3 rounded-card border p-3 ${toneCls}`}>
             <Icon name={todo.icon} size={22} className={`shrink-0 ${iconCls}`} />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-bold text-ink-primary">{todo.title}</p>
-              <p className="mt-0.5 text-2xs leading-snug text-ink-muted">{todo.desc}</p>
+              <p className="mt-1 t-desc break-keep text-ink-muted">{todo.desc}</p>
             </div>
             <button type="button" onClick={todo.onClick}
-              className={todo.tone === 'warn' ? 'btn-primary shrink-0 px-3.5 py-2 text-xs !bg-none !bg-gold-400 !text-ink-inverse hover:!bg-gold-500' : 'btn-primary shrink-0 px-3.5 py-2 text-xs'}>
+              className={todo.tone === 'warn' ? 'btn-primary shrink-0 px-4 py-2 text-xs !bg-none !bg-gold-400 !text-ink-inverse hover:!bg-gold-500' : 'btn-primary shrink-0 px-4 py-2 text-xs'}>
               {todo.cta}
             </button>
           </div>
@@ -834,20 +851,20 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       {/* 밀린 순위 미입력 대회 — 마감했지만 순위가 비어 있는 지난 대회(오늘 외) */}
       {caps.ledger && pendingRanks.length > 0 && (
         <button type="button" onClick={() => onGoto('ranking')}
-          className="flex w-full items-center gap-3 rounded-card border border-gold-400/40 bg-gold-400/[0.06] px-3 py-2.5 text-left transition-colors hover:bg-gold-400/[0.1]">
+          className="flex w-full items-center gap-3 rounded-card border border-gold-400/40 bg-gold-400/[0.06] p-3 text-left transition-colors hover:bg-gold-400/[0.1]">
           <Icon name="trophy" size={20} className="shrink-0 text-gold-300" />
           <div className="min-w-0 flex-1">
             <p className="text-sm font-bold text-ink-primary">순위 미입력 대회 {pendingRanks.length}개</p>
-            <p className="mt-0.5 truncate text-2xs text-ink-muted">{pendingRanks.slice(0, 4).map((p) => p.date.slice(5).replace('-', '/')).join(', ')}{pendingRanks.length > 4 ? ' 외' : ''} — 마감했지만 순위가 비어 있어요. 입력하면 랭킹·아카이브에 반영됩니다.</p>
+            <p className="mt-1 truncate text-2xs text-ink-muted">{pendingRanks.slice(0, 4).map((p) => p.date.slice(5).replace('-', '/')).join(', ')}{pendingRanks.length > 4 ? ' 외' : ''} — 마감했지만 순위가 비어 있어요. 입력하면 랭킹·아카이브에 반영됩니다.</p>
           </div>
-          <span className="shrink-0 rounded-input bg-gold-400 px-3 py-1.5 text-xs font-bold text-ink-inverse">순위 입력</span>
+          <span className="shrink-0 rounded-input bg-gold-400 px-3 py-2 text-xs font-bold text-ink-inverse">순위 입력</span>
         </button>
       )}
 
       {/* 미수·리스크 알림 (장부 권한) */}
       {caps.ledger && started && fin.unpaid > 0 && (
         <button type="button" onClick={() => onGoto('ledger')}
-          className="flex w-full items-center gap-2 rounded-card border border-danger/40 bg-danger/[0.08] px-3 py-2.5 text-left hover:bg-danger/[0.12] transition-colors">
+          className="flex w-full items-center gap-2 rounded-card border border-danger/40 bg-danger/[0.08] p-3 text-left hover:bg-danger/[0.12] transition-colors">
           <Icon name="alert" size={18} className="shrink-0 text-danger-light" />
           <span className="text-xs text-danger-light">오늘 <b className="tabular-nums">{wonToMan(fin.unpaid)}만원</b> 미수금이 있습니다 — 장부에서 확인하세요.</span>
         </button>
@@ -855,7 +872,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
 
       {/* 빠른 작업 — 권한 있는 항목만 */}
       {(caps.posters || caps.ledger) && (
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-4 gap-3">
           {caps.posters && <QuickAction label="새 게임" onClick={onCreatePoster}
             icon={<><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></>} />}
           {caps.ledger && <QuickAction label="장부" onClick={() => onGoto('ledger')}
@@ -867,7 +884,9 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+      {/* 카드 사이 간격을 8.5 → 12.75 로. 카드도 최상위 블록과 같은 위계인데
+          블록 사이만 12.75, 카드 사이는 8.5 로 갈려 있었다(1440 실측) — 한 값으로 맞춘다. */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {/* 오늘 장부 카드는 ③ KPI 헤드라인으로 격상(내용 동일 — 총 엔트리·완납 매출·미수금·회수 티켓) */}
         {/* 클락 — 라이브 위젯이 클락을 표시 중(clockActive)이면 중복 방지 위해 숨김 */}
         <DashCard show={moreOpen && caps.ledger && !clockActive} title="토너먼트 클락" onClick={() => onGoto('clock')}
@@ -879,7 +898,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           ) : lvl.kind === 'break' ? (
             <div className="py-2 text-center">
               <p className="text-lg font-extrabold text-ink-primary">BREAK</p>
-              <p className="text-2xs text-ink-muted mt-0.5">휴식 시간</p>
+              <p className="mt-1 text-2xs text-ink-muted">휴식 시간</p>
             </div>
           ) : (
             <div className="flex items-end justify-between gap-2">
@@ -903,30 +922,30 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
             <p className="py-3 text-center text-2xs text-ink-muted">최근 7일 장부 데이터가 없습니다.</p>
           ) : (
             <>
-              <div className="flex items-end justify-between gap-1 h-14 mb-1.5">
+              <div className="mb-2 flex h-14 items-end justify-between gap-1">
                 {perDay.map((x) => (
-                  <div key={x.day} className="flex flex-1 flex-col items-center justify-end gap-0.5 h-full">
+                  <div key={x.day} className="flex h-full flex-1 flex-col items-center justify-end gap-1">
                     <div className="w-full max-w-[18px] rounded-sm bg-accent-300/80" style={{ height: `${Math.max(4, (x.entry / maxEntry) * 100)}%` }} title={`${x.dow} ${x.entry}엔트리`} />
-                    <span className={`text-[9px] ${x.day === d ? 'text-ink-primary font-bold' : 'text-ink-muted'}`}>{x.dow}</span>
+                    <span className={`text-2xs ${x.day === d ? 'text-ink-primary font-bold' : 'text-ink-muted'}`}>{x.dow}</span>
                   </div>
                 ))}
               </div>
-              <div className="flex items-center justify-between text-2xs border-t border-border-subtle pt-1.5">
+              <div className="flex items-center justify-between border-t border-border-subtle pt-2 text-2xs">
                 <span className="text-ink-muted">7일 합계</span>
                 <span className="text-ink-secondary tabular-nums"><b className="text-ink-primary">{weekEntry}</b>엔트리 · <b className="text-gold-300">{wonToMan(weekPaid)}</b>만</span>
               </div>
-              <div className="flex items-center justify-between text-2xs mt-1">
+              <div className="mt-1 flex items-center justify-between text-2xs">
                 <span className="text-ink-muted">평균 객단가</span>
                 <span className="text-ink-secondary tabular-nums"><b className="text-gold-300">{wonToMan(avgSpend)}</b>만 / 엔트리{bestDay.entry > 0 && <> · 활발 <b className="text-ink-primary">{bestDay.dow}</b></>}</span>
               </div>
               <div className="mt-2 border-t border-border-subtle pt-2">
                 {aiSummary ? (
-                  <p className="text-2xs leading-relaxed text-ink-secondary whitespace-pre-wrap">{aiSummary}</p>
+                  <p className="t-desc whitespace-pre-wrap break-keep text-ink-secondary">{aiSummary}</p>
                 ) : aiErr ? (
-                  <p className="text-2xs text-danger-light leading-relaxed">{aiErr}</p>
+                  <p className="t-desc break-keep text-danger-light">{aiErr}</p>
                 ) : null}
                 <button type="button" onClick={runAi} disabled={aiBusy}
-                  className="mt-1.5 inline-flex items-center gap-1 text-2xs font-bold text-accent-300 hover:text-accent-200 disabled:opacity-50">
+                  className="mt-2 inline-flex items-center gap-1 text-2xs font-bold text-accent-300 hover:text-accent-200 disabled:opacity-50">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4z" /></svg>
                   {aiBusy ? 'AI 분석 중…' : aiSummary ? 'AI 다시 요약' : 'AI 운영 요약 생성'}
                 </button>
@@ -954,7 +973,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           {loading ? <Skeleton /> : upcoming.length === 0 ? (
             <p className="py-3 text-center text-2xs text-ink-muted">예정된 게임이 없습니다.</p>
           ) : (
-            <ul className="space-y-1.5">
+            <ul className="space-y-1">
               {upcoming.map((g) => (
                 <li key={g.id} className="flex items-center justify-between gap-2 text-xs">
                   <span className="truncate text-ink-secondary"><span className="text-2xs text-ink-muted tabular-nums mr-1">{g.date.slice(5).replace('-', '/')}</span>{g.title}</span>
@@ -971,7 +990,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           {loading ? <Skeleton /> : topRegulars.length === 0 ? (
             <p className="py-3 text-center text-2xs text-ink-muted">장부 바인 데이터가 아직 없습니다.</p>
           ) : (
-            <ul className="space-y-1.5">
+            <ul className="space-y-1">
               {topRegulars.map((r, i) => (
                 <li key={r.name} className="flex items-center gap-2 text-xs">
                   <span className={`w-4 shrink-0 text-center text-2xs font-bold tabular-nums ${i === 0 ? 'text-gold-300' : 'text-ink-muted'}`}>{i + 1}</span>
@@ -998,7 +1017,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           {loading ? <Skeleton /> : shifts.length === 0 ? (
             <p className="py-3 text-center text-2xs text-ink-muted">오늘 배정된 직원이 없습니다.</p>
           ) : (
-            <ul className="flex flex-wrap gap-1.5">
+            <ul className="flex flex-wrap gap-2">
               {shifts.map((s) => (
                 <li key={s.name} className={`inline-flex items-center gap-0.5 rounded-badge px-2 py-0.5 text-2xs font-semibold ${s.checkIn ? 'bg-emerald-500/15 text-emerald-400' : 'bg-surface-float text-ink-secondary'}`}>
                   {s.checkIn && <Icon name="check" size={10} strokeWidth={3} />}{s.name}
@@ -1032,7 +1051,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                 <Stat label="7일 회수" value={`${weekTicket}`} unit="장" />
                 <Stat label="오늘 회수" value={`${fin.ticket}`} unit="장" />
               </div>
-              <p className="mt-1.5 text-2xs text-ink-muted">발행=장부에서 입력한 발급/시상 · 회수=티켓으로 바인한 합계.</p>
+              <p className="mt-2 t-desc break-keep text-ink-muted">발행=장부에서 입력한 발급/시상 · 회수=티켓으로 바인한 합계.</p>
             </>
           )}
         </DashCard>
@@ -1041,9 +1060,9 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         <DashCard show={moreOpen && caps.manage} title="생일 단골" onClick={() => setRegOpen(true)}
           badge={<span className="rounded-badge px-1.5 py-0.5 text-2xs font-bold tabular-nums bg-surface-float text-ink-secondary">7일 내 {bdays.length}명</span>}>
           {bdays.length === 0 ? (
-            <p className="py-3 text-center text-2xs text-ink-muted">7일 내 생일인 단골이 없습니다.<br />생일은 단골 TOP → 고객정보에서 등록해요.</p>
+            <p className="t-desc break-keep py-3 text-center text-ink-muted">7일 내 생일인 단골이 없습니다.<br />생일은 단골 TOP → 고객정보에서 등록해요.</p>
           ) : (
-            <ul className="space-y-1.5">
+            <ul className="space-y-1">
               {bdays.slice(0, 5).map((b) => (
                 <li key={b.name} className="flex items-center gap-2 text-2xs">
                   <span className="min-w-0 flex-1 truncate font-semibold text-ink-primary">{b.name}</span>
@@ -1064,7 +1083,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           {loading ? <Skeleton /> : playerTotal === 0 ? (
             <p className="py-3 text-center text-2xs text-ink-muted">오늘 명단이 없습니다.</p>
           ) : (
-            <ul className="space-y-1.5">
+            <ul className="space-y-1">
               {typeEntries.map(([k, n]) => (
                 <li key={k} className="flex items-center gap-2 text-2xs">
                   <span className="w-14 shrink-0 text-ink-secondary">{k}</span>
@@ -1081,7 +1100,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
 
       {/* 더 보기 토글(IA3a) — 클락·전주 대비·직원·이용권·생일·손님 유형은 접힌 상태가 기본 */}
       <button type="button" onClick={() => setMoreOpen((v) => !v)} aria-expanded={moreOpen}
-        className="flex w-full items-center justify-center gap-1.5 rounded-card border border-border-subtle bg-surface-low px-3 py-2 text-2xs font-bold text-ink-secondary transition-colors hover:text-ink-primary">
+        className="flex w-full items-center justify-center gap-2 rounded-card border border-border-subtle bg-surface-low px-3 py-2 text-2xs font-bold text-ink-secondary transition-colors hover:text-ink-primary">
         {moreOpen ? '간단히 보기' : '더 보기 — 클락 · 주간 비교 · 직원 · 이용권'}
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
           className={['transition-transform', moreOpen ? 'rotate-180' : ''].join(' ')} aria-hidden><polyline points="6 9 12 15 18 9" /></svg>
@@ -1089,7 +1108,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
 
       {/* 유틸 줄(IA3a) — 카드 옷을 입던 순수 링크들. '그 자리에서 끝내거나, 유틸이거나' */}
       {caps.manage && (
-        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 pb-1 text-2xs">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pb-1 text-2xs">
           <button type="button" onClick={() => setCheckinOpen(true)} className="font-bold text-ink-muted transition-colors hover:text-accent-300">방문 체크·QR 명단</button>
           <span className="text-border-strong" aria-hidden>·</span>
           <button type="button" onClick={() => setDealerOpen(true)} className="font-bold text-ink-muted transition-colors hover:text-accent-300">딜러 로테이션·급여</button>
@@ -1106,7 +1125,7 @@ function DashCard({ title, badge, onClick, children, show = true }: { title: str
   return (
     <section className="card-elev rounded-card border border-border-subtle bg-surface-low p-3">
       <button type="button" onClick={onClick} className="flex w-full items-center justify-between gap-2 mb-2 group">
-        <span className="flex items-center gap-1.5 text-sm font-bold text-ink-primary">{title}</span>
+        <span className="flex items-center gap-2 text-sm font-bold text-ink-primary">{title}</span>
         <span className="flex items-center gap-1">
           {badge}
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-ink-muted group-hover:text-accent-300 transition-colors" aria-hidden><polyline points="9 18 15 12 9 6" /></svg>
@@ -1135,7 +1154,7 @@ function CompareRow({ label, now, prev, delta, won }: { label: string; now: numb
   return (
     <div className="flex items-center justify-between gap-2">
       <span className="shrink-0 text-2xs text-ink-muted">{label}</span>
-      <span className="flex items-baseline gap-1.5 tabular-nums">
+      <span className="flex items-baseline gap-2 tabular-nums">
         <span className="text-sm font-bold text-ink-primary">{fmt(now)}</span>
         <span className="text-2xs text-ink-muted">전주 {fmt(prev)}</span>
         {delta != null && (
@@ -1174,7 +1193,7 @@ function BoostContactModal({ open, onClose }: { open: boolean; onClose: () => vo
   return (
     <Modal open={open} onClose={onClose} title="포스터 상단 고정(부스트)" maxWidth="sm" variant="sheet">
       <div className="space-y-3 p-4">
-        <div className="rounded-card border border-accent-400/30 bg-accent-300/[0.06] p-3 space-y-1.5">
+        <div className="rounded-card border border-accent-400/30 bg-accent-300/[0.06] p-3 space-y-2">
           <p className="text-sm font-bold text-accent-300">이런 효과가 있어요</p>
           <ul className="space-y-1 text-sm leading-relaxed text-ink-secondary">
             <li>· 내 포스터가 일정탐색 <b className="text-ink-primary">맨 위에 고정</b>됩니다</li>
@@ -1185,22 +1204,22 @@ function BoostContactModal({ open, onClose }: { open: boolean; onClose: () => vo
         <div className="rounded-card border border-border-subtle bg-surface-low p-3 space-y-2">
           <p className="text-sm font-bold text-ink-primary">문의 방법</p>
           {hasContact ? (
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               {email.trim() && (
-                <a href={`mailto:${email.trim()}`} className="btn flex items-center gap-2 rounded-input border border-border-default bg-surface-high px-3 py-2.5 text-sm font-semibold text-ink-primary">
+                <a href={`mailto:${email.trim()}`} className="btn flex items-center gap-2 rounded-input border border-border-default bg-surface-high p-3 text-sm font-semibold text-ink-primary">
                   <Icon name="send" size={15} className="shrink-0 text-ink-muted" /> <span className="min-w-0 flex-1 truncate">{email.trim()}</span>
                   <span className="shrink-0 text-2xs text-accent-300">메일 보내기 →</span>
                 </a>
               )}
               {phone.trim() && (
-                <a href={`tel:${phone.replace(/[^0-9+]/g, '')}`} className="btn flex items-center gap-2 rounded-input border border-border-default bg-surface-high px-3 py-2.5 text-sm font-semibold text-ink-primary">
+                <a href={`tel:${phone.replace(/[^0-9+]/g, '')}`} className="btn flex items-center gap-2 rounded-input border border-border-default bg-surface-high p-3 text-sm font-semibold text-ink-primary">
                   <Icon name="comment" size={15} className="shrink-0 text-ink-muted" /> <span className="min-w-0 flex-1 truncate">{phone.trim()}</span>
                   <span className="shrink-0 text-2xs text-accent-300">전화 걸기 →</span>
                 </a>
               )}
             </div>
           ) : (
-            <p className="py-2 text-center text-sm text-ink-muted">문의 연락처를 준비하고 있습니다.<br />곧 이 자리에서 바로 연락하실 수 있어요.</p>
+            <p className="py-2 text-center text-sm leading-relaxed text-ink-muted">문의 연락처를 준비하고 있습니다.<br />곧 이 자리에서 바로 연락하실 수 있어요.</p>
           )}
           <p className="text-xs text-ink-muted">문의 주시면 기간·비용 안내 후, 확인되는 대로 포스터를 상단에 올려드립니다.</p>
         </div>

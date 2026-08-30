@@ -34,8 +34,13 @@
 //   CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE
 //   OR PERFORMANCE OF THIS SOFTWARE.
 //
+//   Heroicons — MIT License
+//   Copyright (c) Tailwind Labs, Inc. (https://github.com/tailwindlabs/heroicons)
+//   채운 아이콘(solid)만 사용한다 — 아웃라인은 굵기가 갈리지 않게 lucide 로 통일.
+//
 // 아래 PATHS 의 포커 도메인 글리프는 누리홀덤 자체 제작이다(Lucide 원본 아님).
-import type { ReactElement, SVGProps } from 'react';
+import type { ComponentType, ReactElement, SVGProps } from 'react';
+import { StarIcon as StarSolid, HeartIcon as HeartSolid } from '@heroicons/react/24/solid';
 import {
   X, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Search, Plus, Minus, Check,
   CheckCircle2, Trash2, Pencil, Star, Heart, AlertTriangle, Info, Lock, User, Users, Bell,
@@ -47,7 +52,9 @@ import {
   WifiOff, Radio, Dices, Package, Ban, Pin, Sparkles, Zap, Tv, Volume2, VolumeX,
   TrendingUp, Store, BookOpen, Archive, Scale, Building2, Hand, Flag, EyeOff, Clapperboard,
   Timer, AlarmClock, Banknote, Briefcase, ShieldAlert, Bomb, ArrowUpRight, ArrowDownLeft,
-  DoorOpen, CalendarCheck, Circle, NotebookText, type LucideIcon,
+  DoorOpen, CalendarCheck, Circle, NotebookText,
+  // ICON-3(2026-08-30) 이모지 전수 점검 소탕분
+  Command, type LucideIcon,
 } from 'lucide-react';
 
 export type IconName =
@@ -71,7 +78,9 @@ export type IconName =
   | 'volume' | 'volume-off' | 'trending-up' | 'store' | 'book-open' | 'archive' | 'scale'
   | 'building' | 'hand' | 'flag' | 'eye-off' | 'clapperboard' | 'timer' | 'alarm' | 'banknote'
   | 'briefcase' | 'shield-alert' | 'bomb' | 'arrow-up-right' | 'arrow-down-left' | 'door'
-  | 'calendar-check' | 'circle' | 'notebook';
+  | 'calendar-check' | 'circle' | 'notebook'
+  // ICON-3 이모지 전수 점검 소탕분(2026-08-30)
+  | 'command';
 
 // 각 아이콘의 path/figure children (viewBox 0 0 24 24 기준). 채움 아이콘은 fill 처리.
 const PATHS: Partial<Record<IconName, ReactElement>> = {
@@ -158,10 +167,27 @@ const LUCIDE: Partial<Record<IconName, LucideIcon>> = {
   'calendar-check': CalendarCheck, // 🔥(7일 개근) 연속 출석 배지
   circle: Circle,                // ⚪🟡 회원 상태 표식(색으로 상태 구분)
   notebook: NotebookText,        // 📒 장부 연동
+  // ── ICON-3 이모지 전수 점검 소탕분(2026-08-30) ────────────────────────────
+  // ⌘(U+2318)은 컬러 이모지 폰트에 없는 '기타 기술 기호'다. 실측(e2e/emoji-glyphs.spec.ts)에서
+  // 색수 1 = 단색 폰트 폴백으로 확인됐고, 그 폰트는 OS 마다 있고 없고가 갈린다(안드로이드에서
+  // 두부로 떨어질 수 있다 — 유저의 99% 가 모바일이다). 뜻은 그대로 두고 글리프만 SVG 로 옮긴다.
+  command: Command,              // ⌘ 검색 단축키 표기
 };
 // 채움 변형은 lucide 원형에 fill 지정으로 표현
-const FILLED = new Set<IconName>(['star-fill', 'heart-fill']);
-const FILL_BASE: Partial<Record<IconName, LucideIcon>> = { 'star-fill': Star, 'heart-fill': Heart };
+// ── 채운 아이콘 = heroicons solid (2026-08-30, 오너 지시로 heroicons 도입) ──────
+// 종전에는 lucide 아웃라인에 fill="currentColor" 를 먹여 채운 척했다. 그런데 lucide 는
+// stroke 2 가 도형 **바깥 가장자리**에 얹히는 구조라, 채우는 순간 같은 글리프의 아웃라인 판보다
+// 2px 뚱뚱해지고 모서리가 뭉갠다(별 뾰족한 끝·하트 골이 특히 심하다).
+// heroicons solid 는 처음부터 채움용으로 그린 단일 패스라 stroke 가 없다 — 여기가 제자리다.
+//
+// ⛔ 두 팩을 아무 데나 섞지 마라. lucide 는 stroke 2 / heroicons outline 은 1.5 라
+//    같은 화면에 나란히 두면 굵기가 갈려 조잡해진다(2026-08-29 에 이모지 300곳을 SVG 로
+//    통일한 이유가 정확히 그것이다). 그래서 **아웃라인은 lucide 로 통일**하고,
+//    heroicons 는 stroke 가 아예 없는 solid 만 쓴다 — 굵기가 갈릴 여지 자체를 없앤다.
+const HERO_SOLID: Partial<Record<IconName, ComponentType<SVGProps<SVGSVGElement>>>> = {
+  'star-fill': StarSolid,
+  'heart-fill': HeartSolid,
+};
 
 interface IconProps extends Omit<SVGProps<SVGSVGElement>, 'name'> {
   name: IconName;
@@ -169,9 +195,10 @@ interface IconProps extends Omit<SVGProps<SVGSVGElement>, 'name'> {
 }
 
 export default function Icon({ name, size = 20, strokeWidth = 2, className, ...rest }: IconProps) {
-  const Filled = FILL_BASE[name];
-  if (Filled && FILLED.has(name)) {
-    return <Filled size={size} strokeWidth={strokeWidth} fill="currentColor" className={className} aria-hidden {...rest} />;
+  const Solid = HERO_SOLID[name];
+  if (Solid) {
+    // solid 는 stroke 가 없다 — strokeWidth 를 넘기지 않는다(넘기면 도형이 다시 뚱뚱해진다).
+    return <Solid width={size} height={size} className={className} aria-hidden {...rest} />;
   }
   const L = LUCIDE[name];
   if (L) {

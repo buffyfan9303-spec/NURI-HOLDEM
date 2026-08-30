@@ -9,7 +9,7 @@ import {
   listVenueSeasons, getCurrentSeasonStandings, getSeasonResults, getVenueHallOfFame,
   createVenueSeason, endVenueSeason, type VenueSeason, type SeasonStanding, type HallOfFameEntry,
 } from '../../api/seasons';
-import { subscribeRankings } from '../../api/rankings';
+import { subscribeRankings, getVenueRealNameOptIns } from '../../api/rankings';
 import Icon from '../atoms/Icon';
 
 const today = () => new Date().toLocaleDateString('en-CA');
@@ -37,10 +37,17 @@ export default function SeasonPanel({ venueId, canManage = false, venueName }: {
   const [startsOn, setStartsOn] = useState(today());
   const [endsOn, setEndsOn] = useState(addDays(today(), 90));
 
+  // 오너 #14 — 시즌 리그·역대 챔피언도 순위표다. 실명은 본인이 '실명'을 고른 경우에만 붙인다.
+  //   기본값은 빈 집합(=전원 닉네임)이라 응답 전에도, 조회가 실패해도 실명이 새지 않는다.
+  //   조회는 매장 페이지의 순위 패널과 같은 캐시를 타므로 요청이 늘지 않는다.
+  const [realNameOptIns, setRealNameOptIns] = useState<ReadonlySet<string>>(() => new Set<string>());
+  const showsRealName = (nickname: string) => realNameOptIns.has(nickname.trim().toLowerCase());
+
   const load = () => {
     listVenueSeasons(venueId).then(setSeasons).catch(() => setSeasons([]));
     getCurrentSeasonStandings(venueId).then(setStandings).catch(() => {});
     getVenueHallOfFame(venueId).then(setHof).catch(() => {});
+    getVenueRealNameOptIns(venueId).then(setRealNameOptIns).catch(() => {});
   };
   // 순위 입력(venue_rankings 변경) 시 시즌 standings·HOF 즉시 갱신(실시간). 퍼블리케이션 등록 완료.
   useEffect(() => { load(); return subscribeRankings(venueId, load); }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -71,7 +78,7 @@ export default function SeasonPanel({ venueId, canManage = false, venueName }: {
   const Row = ({ s }: { s: SeasonStanding }) => (
     <li className="flex items-center gap-2.5 rounded-input border border-border-subtle bg-surface-low px-3 py-2">
       <span className={['flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-2xs font-extrabold tabular-nums', medal(s.rank)].join(' ')}>{s.rank}</span>
-      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{s.nickname}{s.realName ? <span className="text-2xs font-normal text-ink-muted"> ({s.realName})</span> : null}</span>
+      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{s.nickname}{s.realName && showsRealName(s.nickname) ? <span className="text-2xs font-normal text-ink-muted"> ({s.realName})</span> : null}</span>
       <span className="shrink-0 text-2xs text-ink-muted tabular-nums">{s.appearances}회 · 최고 {s.bestPosition}위</span>
       <span className="shrink-0 text-xs font-bold tabular-nums text-accent-200">{s.points}점</span>
     </li>
@@ -129,7 +136,7 @@ export default function SeasonPanel({ venueId, canManage = false, venueName }: {
               <li key={h.seasonId} className="flex items-center gap-2.5 rounded-input border border-accent-400/20 bg-surface-low px-3 py-2">
                 <Icon name="crown" size={17} className="shrink-0 text-gold-300" />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold text-ink-primary">{h.nickname}{h.realName ? <span className="text-2xs font-normal text-ink-muted"> ({h.realName})</span> : null}</p>
+                  <p className="truncate text-sm font-bold text-ink-primary">{h.nickname}{h.realName && showsRealName(h.nickname) ? <span className="text-2xs font-normal text-ink-muted"> ({h.realName})</span> : null}</p>
                   <p className="truncate text-2xs text-ink-muted">{h.seasonName} · {h.endsOn}</p>
                 </div>
                 <span className="shrink-0 text-xs font-bold tabular-nums text-accent-200">{h.points}점</span>
