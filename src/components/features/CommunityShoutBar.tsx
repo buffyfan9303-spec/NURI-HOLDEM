@@ -408,7 +408,7 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
                 <button
                   key={s.key} type="button" onClick={() => setTier(k)}
                   aria-pressed={on}
-                  className={['rounded-card border px-2 py-2 text-center transition-colors',
+                  className={['rounded-aura border px-2 py-2 text-center transition-colors',
                     on ? 'border-accent-300 bg-accent-300/[0.10]' : 'border-border-subtle bg-surface-high hover:border-accent-400/50'].join(' ')}
                 >
                   <span className={['block text-xs font-bold', on ? 'text-accent-300' : 'text-ink-primary'].join(' ')}>{s.label}</span>
@@ -445,7 +445,7 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
         )}
 
         {/* 잔액 — 자리 고정(로딩 중에도 같은 높이) */}
-        <div className="flex items-center justify-between rounded-card border border-border-subtle bg-surface-high px-3 py-2">
+        <div className="flex items-center justify-between rounded-aura border border-border-subtle bg-surface-high px-3 py-2">
           <span className="text-xs text-ink-secondary">사용 가능 점수</span>
           <span className="text-sm font-extrabold tabular-nums text-accent-300">
             {balance ? `${balance.available.toLocaleString()}점` : '—'}
@@ -476,7 +476,7 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
 
         {/* 미리보기 — 실제 배너와 **같은 스킨**을 쓴다. 고른 등급·색이 어떻게 보일지가 곧 가격의 근거다. */}
         <div data-testid="shout-preview"
-             className={['rounded-card border px-3 py-2.5', tierSkin(tier).box].join(' ')}
+             className={['rounded-aura border px-3 py-2.5', tierSkin(tier).box].join(' ')}
              style={colorBoxStyle(tier, tier === 'gold' ? color : null)}>
           <p className={['text-2xs font-bold', tierSkin(tier).icon].join(' ')}
              style={colorIconStyle(tier, tier === 'gold' ? color : null)}>미리보기</p>
@@ -636,7 +636,7 @@ export default function CommunityShoutBar({ className }: { className?: string })
           무한 루프 예외를 새로 만들 이유가 없고, 오너가 가장 싫어하는 '끊김'의 주범이다. */}
       <div
         data-testid={drawShout ? 'shout-live' : 'shout-idle'}
-        className={['rounded-card border px-3 py-2.5',
+        className={['rounded-aura border px-3 py-2.5',
           skin ? skin.box : 'border-dashed border-border-strong bg-surface-high'].join(' ')}
         style={drawShout ? colorBoxStyle(drawShout.tier, drawShout.color) : undefined}
       >

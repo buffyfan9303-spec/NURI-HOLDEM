@@ -373,7 +373,7 @@ function CommunityTab({
                 onVenueClick={(vid) => { setBoardSelected(null); onSelectVenue(vid); }}
               />
             ) : (
-              <div className="flex h-72 items-center justify-center rounded-card border border-dashed border-border-default px-4 text-center text-2xs text-ink-muted">
+              <div className="flex h-72 items-center justify-center rounded-aura border border-dashed border-border-default px-4 text-center text-2xs text-ink-muted">
                 왼쪽에서 게시글을 선택하면<br />여기에 상세가 표시됩니다.
               </div>
             )}
@@ -563,7 +563,7 @@ function FeedSection({
 
       {/* ── 관리자 공지 (게시판 맨 위) ───────────────────────── */}
       {(notices && notices.length > 0) || isAdmin ? (
-        <section className="rounded-card border border-accent-400/40 bg-gradient-to-br from-accent-300/[0.06] to-transparent overflow-hidden">
+        <section className="rounded-aura border border-accent-400/40 bg-gradient-to-br from-accent-300/[0.06] to-transparent overflow-hidden">
           <header className="flex items-center justify-between px-3 py-2 border-b border-accent-400/20">
             <h2 className="inline-flex items-center gap-1.5 text-xs font-bold text-accent-300">
               공지사항
@@ -665,7 +665,7 @@ function FeedSection({
                     className={[
                       'shrink-0 inline-flex items-center h-8 px-3 rounded-badge text-2xs font-bold leading-none transition-colors',
                       cat === c.id
-                        ? 'bg-accent-300/15 text-accent-200 ring-1 ring-inset ring-accent-400/45'
+                        ? 'bg-aura-300/10 text-aura-300 ring-1 ring-inset ring-aura-300/50'
                         : 'bg-surface-high text-ink-secondary hover:bg-surface-float/70',
                     ].join(' ')}
                   >
@@ -701,7 +701,7 @@ function FeedSection({
           피드(카드) 모드는 카드 스택 그대로 — HOT 배지가 이미 카드 안에 있어 이중 테두리를 만들지 않는다 */}
       {pinHot && (
         view === 'compact' ? (
-          <div className="rounded-card border border-danger/30 bg-danger/[0.04] overflow-hidden">
+          <div className="rounded-aura border border-danger/30 bg-danger/[0.04] overflow-hidden">
             <ul>
               {hotPosts.map((p) => (
                 <PostRow key={p.id} post={p} hot selected={p.id === selectedId} mark={authorMarks[p.userId] ?? ''} titlePts={titleOf(p.userId)} onClick={() => onSelectPost(p)} />
@@ -722,17 +722,17 @@ function FeedSection({
         <>
           <p className="text-center py-12 text-xs text-ink-muted">{emptyText}</p>
           {/* 글이 없어도 광고 칸은 산다 — 게재 미리보기 겸 */}
-          {ads[0] && <div className="rounded-card border border-border-default bg-surface-low overflow-hidden"><AdRow ad={ads[0]} /></div>}
+          {ads[0] && <div className="rounded-aura border card-aura overflow-hidden"><AdRow ad={ads[0]} /></div>}
         </>
       ) : listSource.length === 0 ? (
         <>
           <p className="text-center py-12 text-xs text-ink-muted">{pinHot ? '다른 글이 없습니다' : '검색 결과가 없습니다'}</p>
           {/* 글이 없어도 광고 칸은 산다 — 게재 미리보기 겸 */}
-          {ads[0] && <div className="rounded-card border border-border-default bg-surface-low overflow-hidden"><AdRow ad={ads[0]} /></div>}
+          {ads[0] && <div className="rounded-aura border card-aura overflow-hidden"><AdRow ad={ads[0]} /></div>}
         </>
       ) : view === 'compact' ? (
         <>
-          <div className="rounded-card border border-border-subtle bg-surface-low overflow-hidden">
+          <div className="rounded-aura border card-aura overflow-hidden">
             <ul>
               {shown.map((p, i) => {
                 const ad = ads[Math.floor(i / 4)];
@@ -807,7 +807,7 @@ function AdRow({ ad, card = false }: { ad: CommunityAd; card?: boolean }) {
   );
   // card: 피드(카드 스택) 모드 — 행 구분선 대신 글 카드와 같은 라운드 카드 문법(보더+card-elev 동일)
   const cls = card
-    ? 'flex items-center gap-2 card-elev shadow-card rounded-card border border-border-default bg-accent-300/[0.04] px-3 py-2 transition-colors hover:bg-accent-300/10'
+    ? 'flex items-center gap-2 rounded-aura border card-aura px-3 py-2 transition-colors hover:bg-accent-300/10'
     : 'flex items-center gap-2 border-b border-border-subtle bg-accent-300/[0.04] px-3 py-2 transition-colors last:border-b-0 hover:bg-accent-300/10';
   return (
     <li>
@@ -923,10 +923,11 @@ const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, se
       // 실측(다크, surface-base 대비): border-subtle 1.29:1 → border-default 2.06:1, hover strong 3.37:1.
       // card-elev 는 background-image 라 hover 의 background-color 변화와 충돌하지 않는다.
       className={[
-        'cv-row-lg min-h-[var(--row-h-lg)] card-elev shadow-card py-2.5 px-3 rounded-card border cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-300/60',
+        // v2 아우라 카드(2026-09-02): card-elev+단색 → card-aura(반투명 면·6% 헤어라인·상단 하이라이트). 선택 상태는 바이올렛 틴트가 덮는다.
+        'cv-row-lg min-h-[var(--row-h-lg)] card-aura py-2.5 px-3 rounded-aura border cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-300/60',
         selected
           ? 'border-accent-300/60 bg-accent-300/[0.07]'
-          : 'border-border-default bg-surface-low hover:border-border-strong hover:bg-surface-high/50 active:bg-surface-high',
+          : 'hover:border-border-strong hover:bg-surface-high/50 active:bg-surface-high',
       ].join(' ')}
     >
       <div className="flex items-start gap-2">
@@ -1114,7 +1115,7 @@ function MyCommunitiesAction({ onSelectVenue, onCreated }: {
   };
 
   return (
-    <div className="rounded-card border border-accent-400/40 bg-gradient-to-br from-accent-300/[0.08] to-transparent">
+    <div className="rounded-aura border border-accent-400/40 bg-gradient-to-br from-accent-300/[0.08] to-transparent">
       <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left">
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-input bg-accent-300/15 text-accent-300">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" /></svg>
@@ -1274,7 +1275,7 @@ function VenuesSection({
                 type="button"
                 onClick={() => onSelectVenue(venue.id)}
                 className={[
-                  'w-full text-left flex items-center gap-2.5 px-2.5 py-2 rounded-card border transition-colors duration-150 cursor-pointer active:bg-surface-high',
+                  'w-full text-left flex items-center gap-2.5 px-2.5 py-2 rounded-aura border transition-colors duration-150 cursor-pointer active:bg-surface-high',
                   venue.isPaidAd
                     ? 'bg-surface-low border-accent-400/50 shadow-[0_0_12px_rgb(var(--accent-300)/0.22)] hover:border-accent-400'
                     : 'bg-surface-low border-border-default hover:border-border-strong hover:bg-surface-high',

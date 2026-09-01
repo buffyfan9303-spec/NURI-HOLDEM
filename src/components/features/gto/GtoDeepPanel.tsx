@@ -458,7 +458,7 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
           )}
         </CalcCard>
       ) : (
-        <p className="rounded-card border border-border-default bg-surface-low px-3 py-4 text-center text-2xs leading-relaxed text-ink-muted">
+        <p className="rounded-aura border card-aura px-3 py-4 text-center text-2xs leading-relaxed text-ink-muted">
           {rangeMode
             ? '그리드에서 Hero 2장을 고르면 레인지 상대 에퀴티·참고 액션 표시. (보드는 선택)'
             : '그리드에서 Hero·Villain 2장씩 고르면 에퀴티·참고 액션 표시. (보드는 선택)'}

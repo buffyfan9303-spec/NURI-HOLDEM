@@ -359,7 +359,7 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
           {/* 고객센터 1:1 문의 */}
           {onOpenSupport && (
             <button type="button" onClick={() => { onClose(); onOpenSupport(); }}
-              className="flex w-full items-center gap-2 rounded-card border border-border-default bg-surface-high px-3 py-2.5 text-left transition-colors hover:border-accent-400/40">
+              className="flex w-full items-center gap-2 rounded-aura border border-border-default bg-surface-high px-3 py-2.5 text-left transition-colors hover:border-accent-400/40">
               <Icon name="comment" size={16} className="shrink-0 text-ink-muted" />
               <span className="flex-1 text-sm font-semibold text-ink-primary">고객센터 1:1 문의</span>
               <span className="text-2xs text-ink-muted">문의·답변 확인 →</span>
@@ -515,7 +515,7 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
               순위표(머니인 킹·매장 순위·시즌 선두)에 뜨는 내 이름과 부가 정보를 여기서 정한다.
               기본값은 '닉네임' + '부가 정보 비공개' — 실명 공개는 반드시 본인이 골라야 한다. */}
           {rankDisp && (
-            <div className="rounded-card border border-border-default bg-surface-high/60 p-3">
+            <div className="rounded-aura border border-border-default bg-surface-high/60 p-3">
               <p className="flex items-center gap-1.5 text-xs font-bold text-ink-primary">
                 <Icon name="trophy" size={13} className="shrink-0 text-accent-300" />랭킹 공개 설정
               </p>
@@ -577,7 +577,7 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
             "인증했는데 왜 아무것도 안 되지" 라는 질문만 남는다. 데이터(ci_hash)는 그대로 보존된다. */}
         {idOn && <div className="px-4 pt-4">
           {user?.verified ? (
-            <div className="flex items-center gap-2 rounded-card border border-emerald-500/30 bg-emerald-500/[0.06] px-3 py-2.5">
+            <div className="flex items-center gap-2 rounded-aura border border-emerald-500/30 bg-emerald-500/[0.06] px-3 py-2.5">
               <Icon name="check-circle" size={18} className="shrink-0 text-emerald-400" />
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-emerald-300">본인인증 완료</p>
@@ -585,7 +585,7 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
               </div>
             </div>
           ) : (
-            <div className="space-y-1.5 rounded-card border border-accent-400/30 bg-accent-300/[0.06] p-3">
+            <div className="space-y-1.5 rounded-aura border border-accent-400/30 bg-accent-300/[0.06] p-3">
               <p className="text-sm font-semibold text-accent-300">휴대폰 본인인증</p>
               <p className="text-2xs text-ink-muted leading-relaxed">안전한 거래와 1인 1계정을 위해 휴대폰 실명인증이 필요합니다. 매장이용권 등 일부 기능에 사용됩니다.</p>
               <IdentityVerificationButton onVerified={() => { refreshProfile().catch(() => {}); }} />
@@ -594,7 +594,7 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
         </div>}
         <form onSubmit={handleConfirmChange} className="p-4 space-y-4">
 
-          <div className="flex items-start gap-2 p-3 rounded-card bg-surface-high border border-border-subtle">
+          <div className="flex items-start gap-2 p-3 rounded-aura bg-surface-high border border-border-subtle">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
               strokeWidth="2" strokeLinecap="round" className="shrink-0 mt-0.5 text-ink-muted" aria-hidden>
               <circle cx="12" cy="12" r="10"/>
@@ -734,7 +734,7 @@ export function ProfileIdentityHeader({ displayName, avatarUrl, avatarColor, poi
   return (
     <div className="flex flex-col items-center gap-3">
       {/* 커버 — 이미지 없이 등급색 틴트(개인 브랜딩 = 등급) — 새 에셋·fetch 0 */}
-      <div className="relative h-20 w-full overflow-hidden rounded-card bg-surface-high">
+      <div className="relative h-20 w-full overflow-hidden rounded-aura bg-surface-high">
         <div
           aria-hidden
           className="absolute inset-0 opacity-25"
@@ -814,7 +814,7 @@ export function ProfileIdentityHeader({ displayName, avatarUrl, avatarColor, poi
 
       {/* 스탯 3열(샘플 문법 ②) — 숫자 bold 위 / 라벨 아래 */}
       {stats && stats.length > 0 && (
-        <div className="grid w-full grid-cols-3 divide-x divide-border-subtle rounded-card border border-border-subtle bg-surface-high/50">
+        <div className="grid w-full grid-cols-3 divide-x divide-border-subtle rounded-aura border border-border-subtle bg-surface-high/50">
           {stats.map((s) => (
             <div key={s.label} className="px-2 py-2.5 text-center">
               <p className="text-base font-extrabold leading-none tabular-nums text-ink-primary">{s.value}</p>
@@ -855,7 +855,7 @@ function PushNotificationSetting() {
   return (
     <div className="px-4 pb-5 -mt-1">
       <h3 className="text-xs font-semibold text-ink-secondary mb-2">알림</h3>
-      <div className="flex items-center gap-3 p-3 rounded-card bg-surface-high border border-border-subtle">
+      <div className="flex items-center gap-3 p-3 rounded-aura bg-surface-high border border-border-subtle">
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-ink-primary">푸시 알림</p>
           <p className="text-2xs text-ink-muted mt-0.5 leading-relaxed">
@@ -901,11 +901,11 @@ function BlockListSection() {
     <div className="px-4 pb-4 -mt-1">
       <h3 className="mb-2 text-xs font-semibold text-ink-secondary">차단한 사용자 {blocks.length > 0 && <span className="text-ink-muted">({blocks.length})</span>}</h3>
       {blocks.length === 0 ? (
-        <p className="rounded-card border border-border-subtle bg-surface-high px-3 py-3 text-2xs text-ink-muted">차단한 사용자가 없습니다. 글·매물에서 ‘차단’을 누르면 그 사용자의 글이 보이지 않게 됩니다.</p>
+        <p className="rounded-aura border border-border-subtle bg-surface-high px-3 py-3 text-2xs text-ink-muted">차단한 사용자가 없습니다. 글·매물에서 ‘차단’을 누르면 그 사용자의 글이 보이지 않게 됩니다.</p>
       ) : (
         <ul className="space-y-1.5">
           {blocks.map((b) => (
-            <li key={b.blockedId} className="flex items-center gap-2 rounded-card border border-border-subtle bg-surface-high px-3 py-2">
+            <li key={b.blockedId} className="flex items-center gap-2 rounded-aura border border-border-subtle bg-surface-high px-3 py-2">
               <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{b.name}</span>
               <button type="button" onClick={() => doUnblock(b.blockedId, b.name)} disabled={busy === b.blockedId}
                 className="shrink-0 rounded-input border border-border-default px-2.5 py-1 text-2xs font-bold text-ink-secondary hover:text-accent-300 disabled:opacity-50">
@@ -943,7 +943,7 @@ function LogoutSection({ onDone }: { onDone: () => void }) {
         type="button"
         onClick={doLogout}
         disabled={busy}
-        className="flex w-full items-center gap-2 rounded-card border border-border-default bg-surface-high px-3 py-2.5 text-left transition-colors hover:border-danger/40 disabled:opacity-50"
+        className="flex w-full items-center gap-2 rounded-aura border border-border-default bg-surface-high px-3 py-2.5 text-left transition-colors hover:border-danger/40 disabled:opacity-50"
       >
         <Icon name="log-out" size={16} className="shrink-0 text-ink-muted" />
         <span className="flex-1 text-sm font-semibold text-ink-primary">{busy ? '로그아웃 중…' : '로그아웃'}</span>
@@ -1001,12 +1001,12 @@ function WithdrawAccountSection() {
       <h3 className="mb-2 text-xs font-semibold text-ink-secondary">회원 탈퇴</h3>
       {!open ? (
         <button type="button" onClick={start}
-          className="w-full rounded-card border border-danger/30 bg-danger/[0.04] px-3 py-2.5 text-left">
+          className="w-full rounded-aura border border-danger/30 bg-danger/[0.04] px-3 py-2.5 text-left">
           <p className="text-sm font-bold text-danger">회원 탈퇴하기</p>
           <p className="mt-0.5 text-2xs leading-relaxed text-ink-muted">계정을 폐쇄하고 개인정보(실명·연락처·본인인증 정보 등)를 파기합니다. 되돌릴 수 없습니다.</p>
         </button>
       ) : (
-        <div className="space-y-2.5 rounded-card border border-danger/40 bg-danger/[0.05] p-3">
+        <div className="space-y-2.5 rounded-aura border border-danger/40 bg-danger/[0.05] p-3">
           <p className="text-2xs leading-relaxed text-ink-secondary">
             탈퇴 시 <b className="text-danger">실명·전화번호·본인인증 정보·생년월일 등 개인정보가 즉시 파기</b>되고 계정이 폐쇄되며, <b className="text-ink-primary">다시 로그인할 수 없습니다.</b> 보유 중인 매장이용권 등은 함께 사라집니다.
             <br />매장 대표는 매장을 먼저 정리(삭제/양도)한 뒤 탈퇴할 수 있습니다.

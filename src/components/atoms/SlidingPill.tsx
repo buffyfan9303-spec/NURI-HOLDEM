@@ -75,7 +75,8 @@ export default function SlidingPill({ containerRef, activeKey, className = '', u
       pill.style.transform = `translate(${prev.x}px, ${prev.y}px) scale(${sx}, ${sy})`;
       void pill.offsetWidth; // Invert 프레임 고정(의도적 강제 리플로우 1회) — 이후는 컴포지터
       // Play: transform 만 전환
-      pill.style.transition = 'transform var(--dur-base) var(--ease), opacity var(--dur-fast) var(--ease)';
+      // v2: 화면 안에서 자리를 옮기는 것은 --ease-move(양끝 감속) — 출발이 급한 감속 곡선은 '튀어나가는' 느낌을 준다(헌법 §1)
+      pill.style.transition = 'transform var(--dur-base) var(--ease-move), opacity var(--dur-fast) var(--ease)';
       pill.style.transform = `translate(${r.x}px, ${r.y}px)`;
     };
     measure();

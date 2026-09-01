@@ -383,7 +383,7 @@ export default function VenuePage({
           {/* 3-스탯 행 — 팔로워 · 후기 · 오늘 대회.
               아이콘을 숫자 위에서 **숫자 옆으로** 옮겨 3줄(53px)을 2줄(34px)로 접었다. 정보는 동일하고
               세로만 줄어든다 — 그 19px 이 아래 Tier1 행동 행을 하단 탭바 위로 끌어올리는 데 쓰인다. */}
-          <div className="mt-2.5 grid grid-cols-3 divide-x divide-border-subtle rounded-card border border-border-subtle bg-surface-low py-2">
+          <div className="mt-2.5 grid grid-cols-3 divide-x divide-border-subtle rounded-aura border card-aura py-2">
             {([
               { icon: 'users' as const, value: (venue.followerCount ?? 0).toLocaleString(), label: '팔로워' },
               { icon: 'star' as const, value: rating && rating.count > 0 ? `${rating.avg.toFixed(1)} (${rating.count})` : '—', label: '방문 후기' },
@@ -411,7 +411,7 @@ export default function VenuePage({
             const st = scheduleStatus(t0.date, t0.startTime);
             return (
               <button type="button" onClick={() => onSelectSchedule?.(t0)}
-                className="w-full flex items-center gap-2.5 rounded-card border border-accent-400/30 bg-accent-300/[0.06] px-3 py-2.5 text-left hover:bg-accent-300/10 transition-colors">
+                className="w-full flex items-center gap-2.5 rounded-aura border border-accent-400/30 bg-accent-300/[0.06] px-3 py-2.5 text-left hover:bg-accent-300/10 transition-colors">
                 <Icon name="flame" size={18} className="shrink-0 text-accent-200" />
                 <span className="min-w-0 flex-1">
                   {/* 다크에서 accent-300(#805FDA) 은 surface-base 대비 4.0:1 로 AA 미달이었다(실측).
@@ -550,7 +550,7 @@ export default function VenuePage({
                 // data-testid: 이 블록의 존재 여부를 e2e(venue-ia)가 확인한다. 종전 셀렉터는
                 // `text=🙋 내 활동` 으로 **이모지에 결합**돼 있었다 — 아이콘으로 바꾸는 순간
                 // 항상 0건이 되어 게이트가 조용히 무력화된다. 같은 커밋에서 testid 로 교체(규약).
-                <details data-testid="venue-my-activity" className="reveal group rounded-card border border-border-subtle overflow-hidden">
+                <details data-testid="venue-my-activity" className="reveal group rounded-aura border border-border-subtle overflow-hidden">
                   <summary className="cursor-pointer list-none flex items-center justify-between gap-2 px-3 py-3 text-sm font-semibold text-ink-primary hover:bg-surface-high/50 transition-colors">
                     <span className="inline-flex items-center gap-1.5"><Icon name="hand" size={16} className="text-ink-muted" />내 활동</span>
                     <Icon name="chevron-down" size={16} className="shrink-0 text-ink-muted transition-transform group-open:rotate-180" />
@@ -993,7 +993,7 @@ function SeasonLeaderBanner({ venueId, onRanking }: { venueId: string; onRanking
     // 동일 근거). 게이트(첫 뷰포트 행동 ≤6)는 이 속성이 붙은 요소를 세지 않는다.
     // ⚠ 이 속성은 '페이지 내부 탭 전환만 하는 요소'에만 허용 — 다른 행동 버튼에 붙이면 게이트 무력화다.
     <button type="button" onClick={onRanking} data-nav="venue-tab"
-      className="flex w-full items-center gap-2.5 rounded-card border border-accent-400/30 bg-accent-300/[0.06] px-3 py-2.5 text-left transition-colors hover:border-accent-400/50 active:scale-[0.99]">
+      className="flex w-full items-center gap-2.5 rounded-aura border border-accent-400/30 bg-accent-300/[0.06] px-3 py-2.5 text-left transition-colors hover:border-accent-400/50 active:scale-[0.99]">
       {/* 종전엔 👑 과 🏆 두 이모지가 같은 카드에 겹쳐 있었다(같은 뜻을 두 번). 왕관 하나만 아이콘으로
           남기고 헤드라인의 트로피는 뺀다 — gold 톤이 이미 '1등'을 말한다. */}
       <Icon name="crown" size={20} className="shrink-0 text-gold-300" />
@@ -1191,7 +1191,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
             // 밝은 은색 배지 위 숫자는 어두운 글자여야 읽힌다. 1등(보라)·3등(동)은 흰 글자로 4.5 이상이라 유지.
             const medal = rank === 1 ? 'bg-accent-300 text-white' : rank === 2 ? 'bg-slate-300 text-slate-900' : 'bg-amber-700 text-white';
             return (
-              <div key={e.nickname} className={['flex-1 max-w-[9.5rem] rounded-card border p-2.5 text-center', ring, big ? 'pb-4 -translate-y-2 shadow-[0_0_18px_rgb(var(--accent-300)/0.18)]' : ''].join(' ')}>
+              <div key={e.nickname} className={['flex-1 max-w-[9.5rem] rounded-aura border p-2.5 text-center', ring, big ? 'pb-4 -translate-y-2 shadow-[0_0_18px_rgb(var(--accent-300)/0.18)]' : ''].join(' ')}>
                 {big && <Icon name="crown" size={16} className="mx-auto mb-1 text-gold-300" />}
                 <span className={['mx-auto flex items-center justify-center rounded-full font-extrabold tabular-nums', medal, big ? 'w-8 h-8 text-sm' : 'w-6 h-6 text-2xs'].join(' ')}>{rank}</span>
                 <p className={['mt-1 font-bold uppercase tracking-wide', rank === 1 ? 'text-accent-200' : 'text-ink-secondary', 'text-2xs'].join(' ')}>{titleOf(rank)}</p>
@@ -1562,7 +1562,7 @@ function KakaoMap({ address, name, onCoords }: { address: string; name: string; 
   return (
     <section className="reveal space-y-2">
       <h3 className="text-sm font-semibold text-ink-primary">위치</h3>
-      <div className="rounded-card overflow-hidden border border-border-subtle" style={{ height: 200 }}>
+      <div className="rounded-aura overflow-hidden border border-border-subtle" style={{ height: 200 }}>
         {loading || geocoding ? (
           <div className="w-full h-full flex items-center justify-center bg-surface-high">
             <span className="w-5 h-5 rounded-full border-2 border-accent-300 border-t-transparent animate-spin" />
@@ -1620,7 +1620,7 @@ function MapShell({ address, children }: { address: string; children: ReactNode 
   return (
     <section className="reveal space-y-2">
       <h3 className="text-sm font-semibold text-ink-primary">위치</h3>
-      <div className="rounded-card overflow-hidden border border-border-subtle" style={{ height: 200 }}>
+      <div className="rounded-aura overflow-hidden border border-border-subtle" style={{ height: 200 }}>
         {children}
       </div>
       <a
@@ -1781,7 +1781,7 @@ function PostersPanel({
   return (
     <div className="space-y-4">
       {/* ── 금일 포스터 아코디언 ───────────────────────────────── */}
-      <section className="rounded-card border border-accent-400/40 overflow-hidden">
+      <section className="rounded-aura border border-accent-400/40 overflow-hidden">
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
@@ -1922,7 +1922,7 @@ function VenueNoticeBoard({ venueId, canManage }: { venueId: string; canManage: 
   if (notices.length === 0 && !canManage) return null;
 
   return (
-    <section className="rounded-card border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.06] to-transparent overflow-hidden">
+    <section className="rounded-aura border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.06] to-transparent overflow-hidden">
       <header className="flex items-center justify-between px-3 py-2 border-b border-accent-400/20">
         <h3 className="inline-flex items-center gap-1.5 text-xs font-bold text-accent-200">
           매장 공지 <span className="text-2xs text-ink-muted font-normal">({notices.length})</span>

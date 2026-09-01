@@ -356,7 +356,7 @@ export default function ScheduleDetailModal({
         {liveShown ? (
           <LiveClockPanel schedule={schedule} regInfo={regInfo} onSeePrize={() => goSubTab('sched-tab', TAB_ORDER, tab, 'prize', () => setTab('prize'))} />
         ) : (
-        <section className="overflow-hidden rounded-card border border-border-subtle bg-surface-high">
+        <section className="overflow-hidden rounded-aura border border-border-subtle bg-surface-high">
           {/* ── 핵심 요약 그리드(APIS '오늘 예정' 문법) — 바이인·프라이즈·시작·레지마감·스타팅칩·
               리엔트리를 2열 고정 행높이로 '한 화면 요약'. §28: 바이인·GTD·프라이즈풀은
               상품 가격 정보라 표시를 유지한다. */}
@@ -401,7 +401,7 @@ export default function ScheduleDetailModal({
             지난 대회에선 안내조차 띄우지 않는다 — 할 수 있는 게 없어 소음일 뿐이라. */}
         {schedule.venueId && isEventToday && <BuyinRequestBox venueId={schedule.venueId} eventDate={eventDate} />}
         {schedule.venueId && !isEventToday && !isPastEvent && (
-          <p className="rounded-card border border-border-subtle bg-surface-high px-3 py-2 text-2xs leading-relaxed text-ink-muted">
+          <p className="rounded-aura border border-border-subtle bg-surface-high px-3 py-2 text-2xs leading-relaxed text-ink-muted">
             <Icon name="hand" size={12} className="mr-0.5 inline-block align-[-1px] shrink-0" /><b className="text-ink-secondary">현장 참가 신청</b>은 대회 <b className="text-ink-secondary">당일</b>에 이 화면에서 열립니다. 지금은 위 <b className="text-ink-secondary">참가 예약</b>으로 자리를 잡아두세요.
           </p>
         )}
@@ -526,7 +526,7 @@ export default function ScheduleDetailModal({
       {/* ══════ 프라이즈 — 상금 요약 + 순위별 상금표 ═══════════════════════════ */}
       {tab === 'prize' && (<>
         {/* §28: 상금 풀·GTD·바이인은 상품 가격 정보라 표시를 유지한다 */}
-        <section className="overflow-hidden rounded-card border border-border-subtle bg-surface-high">
+        <section className="overflow-hidden rounded-aura border border-border-subtle bg-surface-high">
           <div className="grid grid-cols-2 [&>div]:border-border-subtle [&>div:nth-child(even)]:border-l">
             <SummaryCell
               label={schedule.guaranteed ? '상금 풀' : '프라이즈'}
@@ -556,7 +556,7 @@ export default function ScheduleDetailModal({
         {schedule.rankingPrizes && schedule.rankingPrizes.length > 0 ? (
           <section>
             <h3 className="text-sm font-bold text-ink-primary mb-1.5">순위별 상금</h3>
-            <div className="overflow-hidden rounded-card border border-border-subtle bg-surface-high">
+            <div className="overflow-hidden rounded-aura border border-border-subtle bg-surface-high">
               <table className="w-full text-xs">
                 <tbody>
                   {schedule.rankingPrizes.map((rp, i) => {
@@ -583,7 +583,7 @@ export default function ScheduleDetailModal({
             </div>
           </section>
         ) : (
-          <p className="rounded-card border border-border-subtle bg-surface-high px-3 py-3 text-2xs leading-relaxed text-ink-muted">
+          <p className="rounded-aura border border-border-subtle bg-surface-high px-3 py-3 text-2xs leading-relaxed text-ink-muted">
             순위별 상금표가 아직 등록되지 않았습니다 — 배분은 매장 현장 안내를 따릅니다.
           </p>
         )}
@@ -591,7 +591,7 @@ export default function ScheduleDetailModal({
 
       {/* ══════ 매장정보 — 매장 · 위치 · 파트너 · 결제 수단 ═════════════════════ */}
       {tab === 'venue' && (<>
-        <section className="overflow-hidden rounded-card border border-border-subtle bg-surface-high">
+        <section className="overflow-hidden rounded-aura border border-border-subtle bg-surface-high">
           <div className="px-3 py-2.5">
             <p className="text-2xs leading-none text-ink-muted">매장</p>
             <p className="mt-1 break-keep text-base font-bold leading-tight text-ink-primary">{schedule.pubName}</p>
@@ -768,7 +768,7 @@ function LiveClockPanel({ schedule, regInfo, onSeePrize }: {
 
   return (
     <section className={[
-      'rounded-card border p-2',
+      'rounded-aura border p-2',
       running ? 'border-emerald-500/30 bg-emerald-500/[0.04]' : 'border-border-default bg-surface-high/40',
     ].join(' ')}>
       {/* 헤더: ● LIVE ────────────── 레지 마감 · LV8 */}
@@ -907,7 +907,7 @@ function BuyinRequestBox({ venueId, eventDate }: { venueId: string; eventDate: s
       .finally(() => setSending(false));
   };
   return (
-    <div className="flex items-center gap-3 rounded-card border border-sky-500/30 bg-sky-500/[0.05] p-2.5">
+    <div className="flex items-center gap-3 rounded-aura border border-sky-500/30 bg-sky-500/[0.05] p-2.5">
       {qr && <img src={qr} alt="바인 요청 QR" width={72} height={72} decoding="async" className="shrink-0 rounded-input bg-white p-1" />}
       <div className="min-w-0 flex-1">
         <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="hand" size={15} className="shrink-0" />지금 매장에서 참가 신청 <span className="font-normal text-ink-muted">· 오늘 · 현장</span></p>
@@ -1010,7 +1010,7 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
   const fmtRes = (iso: string) => { const d = new Date(iso); const p = (n: number) => String(n).padStart(2, '0'); return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`; };
 
   return (
-    <section className="rounded-card border border-accent-400/40 bg-gradient-to-br from-accent-300/[0.08] to-transparent">
+    <section className="rounded-aura border border-accent-400/40 bg-gradient-to-br from-accent-300/[0.08] to-transparent">
       {/* 한 줄 요약 행(기본 접힘) — 아래 '지금 매장에서 참가 신청'과 역할이 헷갈려 손님이
           잘못 누르는 사고가 있어 제목에 역할을 박아둔다 */}
       <div className="flex items-center gap-2 px-3 py-2">

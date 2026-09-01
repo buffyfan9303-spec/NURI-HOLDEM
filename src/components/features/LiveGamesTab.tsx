@@ -191,7 +191,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
             // [DS] MO-6: LiveCard 3열 골격 복제 — 같은 패딩·같은 min-h(3.5rem)라 도착해도 높이가 안 변한다(CLS 0).
             <div className="space-y-card-gap" aria-hidden aria-busy="true">
               {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="rounded-card border border-border-subtle bg-surface-low px-3.5 py-2.5">
+                <div key={i} className="rounded-aura border card-aura px-3.5 py-2.5">
                   <div className="flex min-h-[4.25rem] items-stretch gap-2">
                     <div className="flex w-[3.2rem] shrink-0 flex-col items-center justify-center gap-1.5">
                       <div className="skeleton h-5 w-10" />
@@ -249,7 +249,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
                 // 묶음 헤더가 매장 정체성(이름·지역·♥)을 이미 말하므로, 안쪽 카드는 '메인/사이드N'만 반복하지 않는다.
                 const grpRegion = regionShort(venueById.get(grp.venueId)?.region);
                 return (
-                  <div key={grp.venueId} className="rounded-card border border-accent-400/25 bg-accent-300/[0.03] p-2 space-y-2">
+                  <div key={grp.venueId} className="rounded-aura border border-accent-400/25 bg-accent-300/[0.03] p-2 space-y-2">
                     <p className="flex items-center gap-1.5 px-1 text-sm font-bold text-ink-primary"><Icon name="home" size={14} className="shrink-0 text-accent-300" /><span className="min-w-0 truncate">{nameOf(grp.venueId)}</span>
                       {grpRegion && <span className="shrink-0 text-2xs font-normal text-ink-muted" title={venueById.get(grp.venueId)?.region}>{grpRegion}</span>}
                       {favIds.has(grp.venueId) && <><Icon name="heart-fill" size={12} className="shrink-0 text-danger" /><span className="sr-only">즐겨찾기</span></>}
@@ -278,7 +278,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
                   {/* 매장명 칼럼은 fit-content(40%) — auto 트랙 안의 max-w-[40%]는 트랙 자기 폭 기준으로
                       순환 해석돼 매장명이 '로…'(23px)로 뭉개졌다(PC 점검 2026-08-28). 트랙 정의로 상한을 옮긴다. */}
                   <button type="button" onClick={() => onSchedule(s)}
-                    className="grid w-full grid-cols-[auto_minmax(0,1fr)_fit-content(40%)] items-center gap-2 rounded-card border border-border-subtle bg-surface-low px-3 py-2 text-left transition-colors hover:border-accent-400/40 active:scale-[0.99]">
+                    className="grid w-full grid-cols-[auto_minmax(0,1fr)_fit-content(40%)] items-center gap-2 rounded-aura border card-aura px-3 py-2 text-left transition-colors hover:border-accent-400/40 active:scale-[0.99]">
                     <span className="text-2xs font-bold tabular-nums text-ink-secondary">{s.startTime || '예정'}</span>
                     <span className="truncate text-xs font-semibold text-ink-primary">{s.title}</span>
                     <span className="min-w-0 justify-self-end truncate text-2xs text-ink-muted">{nameOf(s.venueId)}</span>
@@ -351,7 +351,7 @@ function LiveCard({ g, name, sched, region, fav = false, active = true, onPoster
   return (
     <li>
       <button type="button" onClick={onDisplay} title="탭하면 관전 클락(블라인드·엔트리·스택 전체)"
-        className="card-elev block w-full rounded-card border border-accent-400/30 bg-surface-low px-3.5 py-2.5 text-left transition-colors hover:border-accent-400/60 active:scale-[0.99]">
+        className="card-elev block w-full rounded-aura border border-accent-400/30 bg-surface-low px-3.5 py-2.5 text-left transition-colors hover:border-accent-400/60 active:scale-[0.99]">
         {/* min-h 고정 = 열 조합(집계 없음·포스터 없음)이 달라도 카드 높이가 같다 → 스켈레톤과 동조(CLS 0).
             좌/우 열은 고정 폭 + overflow-hidden — 긴 값이 중앙 열의 폭을 갉아먹지 못하게 막는다. */}
         <div className="flex min-h-[4.25rem] items-stretch gap-2">
@@ -451,7 +451,7 @@ function MyTournamentCard({ g, venueName, onDisplay }: { g: ClockState; venueNam
   const vsAvg = avg > 0 && stack > 0 ? Math.round((stack / avg) * 100) : null;
   const tone = vsAvg == null ? '' : vsAvg >= 100 ? 'text-emerald-400' : vsAvg >= 50 ? 'text-amber-300' : 'text-rose-400';
   return (
-    <section className="rounded-card border border-accent-300/60 bg-gradient-to-br from-accent-300/[0.12] to-transparent p-3">
+    <section className="rounded-aura border border-accent-300/60 bg-gradient-to-br from-accent-300/[0.12] to-transparent p-3">
       <div className="flex items-center justify-between gap-2">
         <p className="flex min-w-0 flex-1 items-center gap-1.5 text-sm font-bold text-accent-300"><Icon name="target" size={14} className="shrink-0" /><span className="truncate">내 토너 · <span className="text-ink-primary">{venueName}</span></span></p>
         <button type="button" onClick={onDisplay} className="btn-ghost shrink-0 px-2.5 py-1 text-2xs">관전 화면</button>

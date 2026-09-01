@@ -120,13 +120,13 @@ export default function OutsFromCards({ onCounted }: { onCounted?: (outs: number
       </CalcCard>
 
       {!ready ? (
-        <p className="rounded-card border border-border-default bg-surface-low px-3 py-4 text-center text-2xs leading-relaxed text-ink-muted">
+        <p className="rounded-aura border card-aura px-3 py-4 text-center text-2xs leading-relaxed text-ink-muted">
           내 핸드 2장 · 상대 핸드 2장 · 보드 3~4장을 고르면 앱이 아웃을 셉니다.
           <br />
           상대 카드를 모르면 위 <b className="text-ink-secondary">직접 입력</b> 모드를 쓰세요.
         </p>
       ) : busy ? (
-        <p className="flex items-center justify-center gap-1.5 rounded-card border border-border-default bg-surface-low py-6 text-2xs text-ink-muted">
+        <p className="flex items-center justify-center gap-1.5 rounded-aura border card-aura py-6 text-2xs text-ink-muted">
           <span aria-hidden className="h-3 w-3 animate-spin rounded-full border-2 border-accent-300 border-t-transparent" />
           아웃 세는 중…
         </p>
@@ -140,7 +140,7 @@ export default function OutsFromCards({ onCounted }: { onCounted?: (outs: number
           {/* 아웃 카드 — '몇 장'보다 '어떤 카드'가 학습이다.
               색은 '내 아웃/상대 아웃'이 아니라 **나에게 좋은 소식인가**로 정한다:
               드로잉 데드(내 아웃 0)는 초록이면 안 되고, 상대 아웃 0(잠긴 승리)은 빨강이면 안 된다. */}
-          <div className={['rounded-card border px-3 py-2.5 space-y-1.5',
+          <div className={['rounded-aura border px-3 py-2.5 space-y-1.5',
             goodNews ? 'border-emerald-500/25 bg-emerald-500/[0.06]' : 'border-danger/25 bg-danger/[0.06]'].join(' ')}>
             <p className={['flex items-center gap-1 text-2xs font-bold', goodNews ? 'text-emerald-700 dark:text-emerald-300' : 'text-danger-deep dark:text-danger-light'].join(' ')}>
               <Icon name={goodNews ? 'target' : 'alert'} size={12} className="shrink-0" />

@@ -219,7 +219,10 @@ const AppHeader = memo(function AppHeader({
       data-stack-header
       aria-hidden={suppressed || undefined}
       className={[
-        'sticky top-0 z-50 bg-surface-base border-b border-border-subtle',
+        // v2 유리 크롬(헌법 §5 측정 게이트) — 내용이 헤더 밑을 지나며 서리처럼 흐려진다.
+        // ⚠ glass-strong(요소 자체에 필터)이 아니라 glass-chrome(::before 레이어): 헤더 안 알림 스크림이 fixed 라
+        //   필터가 헤더를 컨테이닝 블록으로 만들면 스크림이 헤더 안에 갇힌다(index.css 주석·backstack.spec 실측).
+        'sticky top-0 z-50 glass-chrome border-b border-border-subtle',
         // PWA(노치 기기): 상태바 영역까지 헤더 배경으로 덮음 — 스크롤 시 위로 컨텐츠 비침 방지
         'pt-[env(safe-area-inset-top)]',
         suppressed ? 'invisible pointer-events-none' : '',
@@ -676,8 +679,8 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
       {/* 탭바 밖(좌우·아래) 틈으로 스크롤 컨텐츠가 비치지 않게 — 알약 뒤는 **불투명** 커튼, 그 위 12px 만 짧게 페이드.
           예전엔 '아래 불투명 → 위 완전 투명' 한 장이라 상단 30px 가 거의 유리였고 푸터 글자가 그대로 비쳐
           "뒤쪽 배경이 보인다"(오너 2026-09-02 내 매장 모바일)로 읽혔다. */}
-      <div aria-hidden className="absolute inset-0 bg-surface-base" />
-      <div aria-hidden className="absolute inset-x-0 -top-3 h-3 bg-gradient-to-t from-surface-base to-transparent" />
+      <div aria-hidden className="absolute inset-0 glass-strong" />
+      <div aria-hidden className="absolute inset-x-0 -top-3 h-3 bg-gradient-to-t from-surface-base/80 to-transparent" />
       <div className="pointer-events-auto mx-2.5 mb-[calc(0.5rem+var(--tabbar-lift))] flex rounded-2xl border border-border-default bg-surface-mid shadow-dialog">
         {items.map(({ key, tab, label }) => {
           const on = tab ? shown === tab : false;
@@ -2406,7 +2409,9 @@ export default function App() {
 
   return (
     // 모바일: 폭 그대로(full). 데스크톱: 중앙 정렬 + 최대폭으로 무한 확장 방지 + 프레임.
-    <div className="min-h-screen bg-surface-base mx-auto w-full max-w-6xl xl:border-x xl:border-border-subtle">
+    <div className="relative z-[1] min-h-screen mx-auto w-full max-w-6xl xl:border-x xl:border-border-subtle">
+      {/* 아우라 후광(정적) — body 배경 위, 콘텐츠(z-1) 아래. 이 래퍼의 bg-surface-base 를 걷어낸 이유: 불투명이면 후광이 안 보인다 */}
+      <div aria-hidden className="aura-bg" />
       {/* 오프라인 배너(Phase 17-5) — 토스트(z-100)와 층 분리, 헤더 위 상시 고정 */}
       {offline && (
         <div role="status" className="sticky top-0 z-[60] flex items-center justify-center gap-1.5 bg-amber-500/95 px-3 py-1.5 text-xs font-bold text-black">
@@ -2562,7 +2567,7 @@ export default function App() {
                   onClick={toggleNearSort}
                   aria-pressed={nearSort}
                   className={['hit inline-flex h-9 shrink-0 items-center gap-1 rounded-badge px-3 text-xs font-bold transition-colors',
-                    nearSort ? 'bg-accent-300/15 text-accent-300' : 'bg-surface-high text-ink-secondary hover:bg-surface-float/70'].join(' ')}>
+                    nearSort ? 'bg-aura-300/10 text-aura-300 ring-1 ring-inset ring-aura-300/50' : 'bg-surface-high text-ink-secondary hover:bg-surface-float/70'].join(' ')}>
                   <Icon name="map-pin" size={13} /> 가까운 순
                 </button>
                 {hasActiveSearchFilter && (
@@ -2585,7 +2590,7 @@ export default function App() {
             const evNotice = browseNotices.find((n) => n.title.includes('오픈 기념 이벤트'));
             return (
               <div className="px-page-x pt-3">
-                <div className="relative flex items-center gap-2.5 overflow-hidden rounded-card border border-accent-400/45 bg-gradient-to-r from-accent-300/[0.16] via-accent-300/[0.07] to-transparent px-3 py-2.5">
+                <div className="relative flex items-center gap-2.5 overflow-hidden rounded-aura border border-accent-400/45 bg-gradient-to-r from-accent-300/[0.16] via-accent-300/[0.07] to-transparent px-3 py-2.5">
                   <Icon name="gift" size={20} className="shrink-0" />
                   {/* 공지 글이 조회되지 않으면 '자세히 보기'가 무반응 클릭이 된다 — 공지 있을 때만 버튼 문법 */}
                   {evNotice ? (
@@ -2642,7 +2647,7 @@ export default function App() {
                     <p className="px-1 py-3 text-sm text-ink-muted">예정된 대회가 아직 없어요 — 아래에서 지난 대회 결과를 볼 수 있어요.</p>
                     {liveClocks.length > 0 && (
                       <button type="button" onClick={() => changeTab('live')}
-                        className="flex w-full items-center gap-2.5 rounded-card bg-surface-high px-3 py-3 text-left transition-colors hover:bg-surface-float/70">
+                        className="flex w-full items-center gap-2.5 rounded-aura bg-surface-high px-3 py-3 text-left transition-colors hover:bg-surface-float/70">
                         <span className="text-emerald-400"><Icon name="blinds" size={18} /></span>
                         <span className="min-w-0 flex-1">
                           <span className="block text-sm font-bold text-ink-primary">지금 <span className="tabular-nums text-emerald-400">{liveClocks.length}</span>개 게임 진행 중</span>
@@ -2686,7 +2691,7 @@ export default function App() {
                       ? 'grid grid-cols-2 gap-card-gap sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
                       // 리스트 뷰(DAI-4 rounded 도배 탈피): 행마다 박스 대신
                       // 한 컨테이너 + 헤어라인 구분 행 — APIS·FotMob 목록 문법
-                      : 'divide-y divide-border-subtle overflow-hidden rounded-card border border-border-subtle bg-surface-low',
+                      : 'divide-y divide-border-subtle overflow-hidden rounded-aura border card-aura',
                   ].join(' ')}>
                     {visibleSchedules.map((s, i) => (
                       <ScheduleCard
@@ -2709,7 +2714,7 @@ export default function App() {
                 )}
                 {/* 표 모드는 PC 전용 — 모바일 폭에선 리스트로 자동 표시 */}
                 {viewMode === 'table' && !isMdUp && visibleSchedules.length > 0 && (
-                  <div className="divide-y divide-border-subtle overflow-hidden rounded-card border border-border-subtle bg-surface-low md:hidden">
+                  <div className="divide-y divide-border-subtle overflow-hidden rounded-aura border card-aura md:hidden">
                     {visibleSchedules.map((s, i) => (
                       <ScheduleCard key={s.id} mode="list" schedule={s} reserveCount={browseResCounts[s.id]} rating={venueRatings[s.venueId]} distanceKm={distanceOf(s)} regInfo={regInfoBySchedule.get(s.id)} onVenueClick={handleVenueClick} onSelect={handleScheduleSelect} vtActive={vtPosterId === s.id && !openSchedule} priority={i < 4} />
                     ))}
@@ -2722,7 +2727,7 @@ export default function App() {
                 {/* P0-1c: 공지 아코디언은 매 진입 정보가 아니라 '지난 대회' 아래로(오너 진단) */}
           {(browseNotices.length > 0 || isAdmin || !noticesLoaded) && (
                   <div className="px-page-x pt-3">
-                    <section className="rounded-card border border-border-subtle bg-surface-low overflow-hidden">
+                    <section className="rounded-aura border card-aura overflow-hidden">
                       <header className="flex items-center justify-between px-3 py-2 border-b border-border-subtle">
                         <button
                           type="button"
@@ -2781,7 +2786,7 @@ export default function App() {
                         <button key={r.scheduleId} type="button"
                           // 일정이 목록에서 사라졌으면(매장 삭제 등) 무반응 대신 안내 — 무반응 클릭 금지
                           onClick={() => { if (sc) setOpenSchedule(sc); else toast.show('대회 정보를 찾을 수 없습니다 — 매장에서 일정이 변경됐을 수 있어요', 'info'); }}
-                          className="w-full flex items-center gap-2.5 rounded-card border border-accent-400/45 bg-gradient-to-r from-accent-300/[0.12] to-transparent px-3 py-2.5 text-left hover:border-accent-300 transition-colors">
+                          className="w-full flex items-center gap-2.5 rounded-aura border border-accent-400/45 bg-gradient-to-r from-accent-300/[0.12] to-transparent px-3 py-2.5 text-left hover:border-accent-300 transition-colors">
                           <span className="shrink-0 text-accent-300" aria-hidden><Icon name="cards" size={18} /></span>
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-sm font-bold text-ink-primary">{r.title}</span>
@@ -2800,7 +2805,7 @@ export default function App() {
                   <div className="animate-fade-in overflow-hidden px-page-x pt-3 space-y-1.5">
                     <p className="flex items-center gap-1 px-1 text-2xs font-bold text-ink-secondary"><Icon name="chip" size={13} /> 내 참가 게임 · 바인 요청</p>
                     {myBuyinReqs.map((r) => (
-                      <div key={r.id} className={['flex items-center gap-2 rounded-card border px-3 py-2 text-xs',
+                      <div key={r.id} className={['flex items-center gap-2 rounded-aura border px-3 py-2 text-xs',
                         r.status === 'approved' ? 'border-emerald-500/40 bg-emerald-500/[0.07]' : r.status === 'rejected' ? 'border-border-default bg-surface-low' : 'border-sky-500/40 bg-sky-500/[0.07]'].join(' ')}>
                         <span className={['shrink-0', r.status === 'approved' ? 'text-emerald-400' : r.status === 'rejected' ? 'text-ink-muted' : 'text-sky-400'].join(' ')} aria-hidden><Icon name={r.status === 'approved' ? 'check-circle' : r.status === 'rejected' ? 'close' : 'clock'} size={15} /></span>
                         <span className="min-w-0 flex-1 truncate text-ink-secondary"><b className="text-ink-primary">{r.venueName}</b>{(() => { const n = r.status === 'approved' ? r.gameSeq : r.requestedGameSeq; return n != null ? ` · ${n === 1 ? '메인' : '사이드' + (n - 1)}` : ''; })()} {r.status === 'approved' ? '참가 승인 — 입장하세요! 🎉' : r.status === 'rejected' ? `요청 거절됨${r.rejectReason ? ` — ${r.rejectReason}` : ''}` : '바인 요청 대기중'}</span>
@@ -2815,7 +2820,7 @@ export default function App() {
                 {recentVenue && (
                   <div className="px-page-x pt-3">
                     <button type="button" onClick={() => handleVenueClick(recentVenue.venueId)}
-                      className="w-full flex items-center gap-2.5 rounded-card border border-border-default bg-surface-low px-3 py-2.5 text-left hover:border-accent-400/50 transition-colors">
+                      className="w-full flex items-center gap-2.5 rounded-aura border card-aura px-3 py-2.5 text-left hover:border-accent-400/50 transition-colors">
                       <span className="shrink-0 text-accent-300" aria-hidden><Icon name="refresh" size={18} /></span>
                       <span className="min-w-0 flex-1">
                         <span className="block text-2xs font-bold text-ink-muted">이어서 하기</span>

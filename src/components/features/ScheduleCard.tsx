@@ -401,13 +401,14 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
         //   그리드 스크롤 40회 잰크 합 2353ms → transform 만 남기면 1373ms(-42%). 모바일은 hover 가
         //   없어 영향 0. §20.4 #3 도 색 계열 트랜지션은 ≤0.15s 로 제한하므로 300ms 는 원래 위반이었다.
         //   들어올림(transform)은 그대로 — 마우스 유저의 손맛은 잃지 않는다.
-        'flex flex-col overflow-hidden rounded-card border transition-transform duration-[var(--dur-panel)] ease-out active:duration-75',
+        'flex flex-col overflow-hidden rounded-aura border transition-transform duration-[var(--dur-panel)] ease-out active:duration-75',
         'hover:-translate-y-1 cursor-pointer active:scale-[0.98]',
         schedule.isPremium
           ? 'border-accent-400 shadow-[0_0_12px_rgb(var(--accent-300)/0.22)] bg-surface-low'
           // card-elev: 단색 채움 위 수직 광원+헤어라인(DatawizzAI 문법). 프리미엄(TOP)은 자체 글로우
           // 섀도가 있어 제외 — card-elev 의 box-shadow 가 캐스케이드로 글로우를 덮어쓴다.
-          : 'card-elev border-border-default shadow-card bg-surface-low hover:border-border-strong',
+          // v2 아우라 카드(2026-09-02): 반투명 면 + 6% 헤어라인 + 상단 하이라이트 (index.css .card-aura)
+          : 'card-aura hover:border-border-strong',
       ].join(' ')}
     >
       {/* 포스터 */}

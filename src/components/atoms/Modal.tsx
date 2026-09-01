@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useBackClose } from '../../lib/backstack';
 import { lockScroll, unlockScroll } from '../../lib/scrollLock';
+import { springTo, presentationY, project, rubberband, releaseVelocity, type VelSample } from '../../lib/spring';
 import Icon from './Icon';
 
 interface ModalProps {
@@ -49,7 +50,9 @@ export default function Modal({
   // page 는 기존 동작 유지(항상 켜짐), sheet 는 opt-in.
   const bodyDrag = variant === 'page' || (variant === 'sheet' && dragToClose);
   // ESC 키로 닫기 + 바디 스크롤 잠금
-  useEffect(() => { if (open) { setDragY(0); setFlingOut(false); } }, [open]);
+  // 드래그로 닫혔으면 닫힘 키프레임을 다시 돌리지 않는다(이미 화면 밖 — 되감아 올라왔다 다시 내려가는 이중 퇴장 방지)
+  const [dragClosed, setDragClosed] = useState(false);
+  useEffect(() => { if (open) setDragClosed(false); }, [open]);
   useEffect(() => {
     if (!open || inline) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -78,10 +81,15 @@ export default function Modal({
 
   // 접근성: 모달 내부 포커스 트랩 + 열릴 때 첫 포커스(키보드 내비)
   const contentRef = useRef<HTMLDivElement>(null);
-  // 드래그 시트(page·모바일) — 컨텐츠가 맨 위일 때 아래로 끌면 시트가 따라오고, 120px 넘으면 닫힌다(애플 지도 문법)
-  const [dragY, setDragY] = useState(0);
-  const [flingOut, setFlingOut] = useState(false); // 드래그 퇴장 중(감속 트랜지션 유지)
-  const sheetStart = useRef<number | null>(null);
+  // ── Apple 시트 제스처 (모션 헌법 v2 §3 · apple-design 스킬 §2~§6, 2026-09-02) ──────────────────
+  // 손가락 1:1 추종 → 손 뗀 **속도를 이어받고** → **운동량을 투영**해 착지점을 정하고 → **언제든 잡아 되돌린다**.
+  // 예전(터치 이벤트 + React 상태 + CSS 트랜지션)은 ① 이동마다 리렌더 ② 손을 뗀 속도가 버려져
+  // 드래그와 애니메이션 사이에 '이음매' 가 보였고 ③ 되돌아가는 시트를 다시 잡으면 목표값에서 튀었다.
+  // transform 은 요소에 직접 쓴다(Emil: 부모 CSS 변수로 자식 transform 을 돌리지 말 것). 스프링은 src/lib/spring.ts(WAAPI).
+  const sheetStart = useRef<number | null>(null);   // pointerdown 의 clientY
+  const startOffset = useRef(0);                    // 잡은 순간 이미 내려와 있던 양(되돌아가는 중 재개)
+  const samples = useRef<VelSample[]>([]);          // 최근 이동 샘플 — 손 뗀 속도
+  const dragging = useRef(false);                   // 히스테리시스(8px) 를 넘겨 '드래그' 로 확정됐는가
   const dragFrom = useRef<Element | null>(null); // 이번 제스처가 시작된 노드(이동 중 재판정에 쓴다)
   // ⚠ 과거 교훈: 이 판정을 'page 변형에만 붙은 ref 하나' 로 하면 시트에서는 그 ref 가 항상 null 이라
   //   드래그가 아예 시작되지 않았고, 그립 핸들이 '끌릴 수 있다' 고 말해 놓고 죽어 있었다.
@@ -102,48 +110,73 @@ export default function Modal({
     }
     return false;
   };
+  const resetGesture = () => { sheetStart.current = null; dragFrom.current = null; samples.current = []; dragging.current = false; };
+  // ⚠ 왜 Pointer Events 가 아니라 Touch Events 인가(2026-09-02 실측): 본문 스크롤러 위에서 손가락을 끌면 Chrome 은
+  //   스크롤 제스처로 판정하는 순간 pointercancel 을 보내 포인터 스트림을 끊는다(맨 위에서 아래로 끌어도).
+  //   그립(touch-none)에서는 됐지만 본문에서는 시트가 0.85px 만 움직였다(drag-close.spec). 터치 이벤트는 네이티브
+  //   스크롤 중에도 계속 온다 — 예전 구현이 터치였던 이유. Apple 의 원칙(1:1·속도 이어받기·투영·중단)은 그대로다.
   const onSheetStart = (e: React.TouchEvent) => {
     if (window.innerWidth >= 1024) return;
     const t = e.target as Element | null;
     // 입력 컨트롤 위에서 시작한 손짓은 닫기가 아니다 — 쓰던 내용이 날아가는 유일한 경로를 막는다.
     if (t?.closest?.(EDITABLE_SEL)) return;
     if (anyScrolled(t)) return;
+    const el = contentRef.current;
+    if (!el) return;
+    // 되돌아가는 중이면 **보이는 값**에서 이어받는다 — 목표값에서 시작하면 튄다(Apple §3 중단 가능성의 핵심)
+    startOffset.current = presentationY(el);
+    for (const a of el.getAnimations()) a.cancel(); // 진입 키프레임·되돌림 스프링 모두 취소(취소된 CSS 애니는 재시작하지 않는다)
+    if (startOffset.current) el.style.transform = `translateY(${startOffset.current}px)`;
     dragFrom.current = t;
     sheetStart.current = e.touches[0].clientY;
+    samples.current = [{ t: e.timeStamp, y: startOffset.current }];
+    dragging.current = false;
   };
-  // 플릭 속도 추적 — 마지막 두 이동 샘플로 px/ms 를 구한다(짧게 튕겨도 닫히는 iOS 감각)
-  const velSample = useRef<{ t: number; y: number } | null>(null);
-  const velocity = useRef(0);
   const onSheetMove = (e: React.TouchEvent) => {
     if (sheetStart.current == null) return;
+    const el = contentRef.current;
+    if (!el) return;
     const dy = e.touches[0].clientY - sheetStart.current;
-    if (anyScrolled(dragFrom.current)) { sheetStart.current = null; dragFrom.current = null; setDragY(0); return; }
-    const now = e.timeStamp;
-    if (velSample.current) {
-      const dt = now - velSample.current.t;
-      if (dt > 0) velocity.current = (dy - velSample.current.y) / dt;
+    if (!dragging.current) {
+      if (Math.abs(dy) < 8) return;                                   // 히스테리시스 — 탭과 드래그를 가른다(Apple §10)
+      if (dy < 0 && anyScrolled(dragFrom.current)) { resetGesture(); return; } // 위로 = 스크롤에 양보
+      dragging.current = true;
     }
-    velSample.current = { t: now, y: dy };
-    // 1:1 추종 — 손가락에 정확히 붙어야 '내가 쥐고 있다'는 감각이 난다(iOS 시트).
-    setDragY(dy > 0 ? dy : 0);
+    if (anyScrolled(dragFrom.current)) { onSheetCancel(); return; }   // 브라우저 스크롤이 이겼다 — 시트를 놓는다
+    const y = startOffset.current + dy;
+    // 1:1 추종 — 손가락에 정확히 붙어야 '내가 쥐고 있다'는 감각이 난다. 위로는 고무줄(Apple §9): 딱 멈추면 '얼었다' 고 읽힌다.
+    const shown = y < 0 ? rubberband(y, el.offsetHeight || window.innerHeight) : y;
+    el.style.transform = `translateY(${shown}px)`;
+    samples.current.push({ t: e.timeStamp, y });
+    if (samples.current.length > 8) samples.current.shift();
   };
   const onSheetEnd = () => {
-    const pulled = dragY;
-    const v = velocity.current;
-    sheetStart.current = null;
-    dragFrom.current = null;
-    velSample.current = null;
-    velocity.current = 0;
-    // 거리(120px) 또는 속도(0.6px/ms 플릭) — 짧게 튕겨도 닫힌다
-    if (pulled > 120 || (pulled > 24 && v > 0.6)) {
-      // 끌던 방향 그대로 감속하며 화면 밖으로(예전엔 transition:none 이라 순간이동으로 사라졌다)
-      setFlingOut(true);
-      setDragY(window.innerHeight);
-      window.setTimeout(onClose, 180);
+    if (sheetStart.current == null) return;
+    const el = contentRef.current;
+    const wasDragging = dragging.current;
+    const v = releaseVelocity(samples.current);   // px/s — 아래가 양
+    resetGesture();
+    if (!el || !wasDragging) return;
+    const y = presentationY(el);
+    // 투영(Apple §6): 이 속도로 놓으면 어디까지 미끄러지나 → 그 착지점으로 판단한다. 놓은 위치가 아니라 **가려던 곳**.
+    const landing = y + project(v);
+    if (v > 600 || (v >= 0 && landing > 120)) {
+      // 끌던 방향 그대로, 손 뗀 속도 그대로 화면 밖으로 — 감쇠 1.0(바운스 없음). 이음매가 없어야 '던졌다' 가 된다.
+      setDragClosed(true);
+      void springTo(el, window.innerHeight, { damping: 1, response: 0.3, velocity: Math.max(v, 300) }).then(onClose);
       return;
     }
-    setDragY(0); // 임계 미만 — 스프링(--spring)으로 제자리 복귀
+    // 제자리 — 운동량이 실린 손짓(플릭 되돌림)일 때만 살짝 바운스(Apple §4: 던진 것만 튄다)
+    void springTo(el, 0, { damping: Math.abs(v) > 400 ? 0.8 : 1, response: 0.35, velocity: v });
   };
+  const onSheetCancel = () => {
+    const el = contentRef.current;
+    resetGesture();
+    if (el && presentationY(el) !== 0) void springTo(el, 0, { damping: 1, response: 0.3 });
+  };
+  const dragHandlers = bodyDrag
+    ? { onTouchStart: onSheetStart, onTouchMove: onSheetMove, onTouchEnd: onSheetEnd, onTouchCancel: onSheetCancel }
+    : {};
   useEffect(() => {
     if (!open || inline) return;
     const el = contentRef.current;
@@ -224,15 +257,11 @@ export default function Modal({
         aria-labelledby={title ? 'modal-title' : undefined}
         // 제목이 없는 전체화면은 이름이 없어 그냥 '대화상자' 로만 읽힌다 — 최소한의 이름을 준다.
         aria-label={title ? undefined : '전체화면 보기'}
-        {...(bodyDrag ? { onTouchStart: onSheetStart, onTouchMove: onSheetMove, onTouchEnd: onSheetEnd } : {})}
+        {...dragHandlers}
         data-drag-close={bodyDrag ? '' : undefined}
-        style={flingOut
-          ? { transform: `translateY(${dragY}px)`, transition: 'transform 0.2s var(--ease)' }
-          : dragY > 0
-            ? { transform: `translateY(${dragY}px)`, transition: 'none' }
-            : { transition: 'transform 0.5s var(--spring)' }}
         data-scroll-lock
-        className={['fixed inset-0 z-[55] bg-surface-base flex flex-col pt-[env(safe-area-inset-top)]', closing ? 'animate-fade-out' : 'animate-fade-in'].join(' ')}>
+        className={['fixed inset-0 z-[55] bg-surface-base flex flex-col pt-[env(safe-area-inset-top)]',
+          closing ? (dragClosed ? '' : 'animate-fade-out') : 'animate-fade-in'].join(' ')}>
         {/* 드래그 핸들(모바일) — 시트를 끌어내려 닫기 */}
         <div aria-hidden className="lg:hidden absolute top-1.5 left-1/2 z-10 h-1 w-10 -translate-x-1/2 rounded-full bg-ink-primary/25" />
         {title && (
@@ -287,7 +316,7 @@ export default function Modal({
           // shadow-dialog 를 대체하지만, dim(black/80) 위에서 외부 섀도는 사실상 비가시 — 순손실 없음.
           'card-elev relative w-full bg-surface-mid shadow-dialog',
           closing
-            ? (variant === 'sheet' ? 'animate-slide-down' : 'animate-fade-out')
+            ? (dragClosed ? '' : variant === 'sheet' ? 'animate-slide-down' : 'animate-fade-out')
             // 시트는 아래에서 올라오고(sheet-up), 가운데 모달은 기존의 짧은 넛지(slide-up).
             // 열림과 닫힘이 같은 문법을 쓰게 맞춘 것 — 예전엔 닫힘만 100% 이동이라 짝이 안 맞았다.
             : (variant === 'sheet' ? 'animate-sheet-up' : 'animate-slide-up'),
@@ -302,15 +331,7 @@ export default function Modal({
           maxHeight: variant === 'sheet' ? '88vh' : '85vh',
           // fillHeight: 콘텐츠 양과 무관하게 높이 고정 (탭 전환 시 크기 변동 방지)
           height: fillHeight ? (variant === 'sheet' ? '88vh' : '85vh') : undefined,
-          // 손끝 추종 — 끄는 동안엔 트랜지션을 끄고(지연 없이 손가락을 따라옴),
-          // 손을 떼면 트랜지션으로 부드럽게 제자리 또는 화면 밖으로. 이 둘을 섞으면 '고무줄'이 된다.
-          ...(variant === 'sheet' && flingOut
-            ? { transform: `translateY(${dragY}px)`, transition: 'transform 0.2s var(--ease)', animation: 'none' }
-            : variant === 'sheet' && dragY > 0
-              ? { transform: `translateY(${dragY}px)`, transition: 'none', animation: 'none' }
-              : variant === 'sheet'
-                ? { transition: 'transform 0.5s var(--spring)' }
-                : {}),
+          // 손끝 추종·복귀·퇴장은 전부 WAAPI 스프링(onSheet*)이 요소 transform 에 직접 쓴다 — 여기서 트랜지션을 섞지 않는다.
         }}
       >
         {/* 그립 핸들 (sheet 전용) — 실제로 끌어서 닫을 수 있다.
@@ -323,6 +344,7 @@ export default function Modal({
             onTouchStart={onSheetStart}
             onTouchMove={onSheetMove}
             onTouchEnd={onSheetEnd}
+            onTouchCancel={onSheetCancel}
           >
             <div className="w-10 h-1 rounded-full bg-border-strong" aria-hidden />
           </div>
@@ -354,7 +376,7 @@ export default function Modal({
             (GTO 도구 전체화면 page 변형과 정확히 같은 핸들러다 — 문법을 하나로 유지한다.
              글쓰기·신고·문의·설정 시트는 이 값을 켜지 않으므로 예전 그대로 스크롤만 한다.) */}
         <div className="flex-1 overflow-y-auto"
-          {...(bodyDrag ? { onTouchStart: onSheetStart, onTouchMove: onSheetMove, onTouchEnd: onSheetEnd } : {})}
+          {...dragHandlers}
           data-drag-close={bodyDrag ? '' : undefined}>{children}</div>
       </div>
     </div>

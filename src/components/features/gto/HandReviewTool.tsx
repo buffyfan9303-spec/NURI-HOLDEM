@@ -123,7 +123,7 @@ export default function HandReviewTool({ initial }: { initial?: HandReviewInit }
             <HandReplayer key={`${heroKey}|${villainKey}|${boardKey}`} replay={replay} />
           </div>
         ) : (
-          <p className="rounded-card border border-border-default bg-surface-low px-3 py-6 text-center text-2xs leading-relaxed text-ink-muted">
+          <p className="rounded-aura border card-aura px-3 py-6 text-center text-2xs leading-relaxed text-ink-muted">
             내 핸드 2장부터 골라 보세요. 상대 핸드까지 넣으면 스트리트별 승률 추이와 아웃 카드가 함께 나옵니다.
           </p>
         )}
@@ -147,7 +147,7 @@ export default function HandReviewTool({ initial }: { initial?: HandReviewInit }
         <p className="text-2xs leading-relaxed text-ink-muted">액션 메모는 선택입니다 — 비워두면 카드만 재생됩니다.</p>
       </CalcCard>
 
-      <div className="space-y-2 rounded-card border border-border-default bg-surface-low p-3">
+      <div className="space-y-2 rounded-aura border card-aura p-3">
         <button
           type="button"
           disabled={!canAttach}

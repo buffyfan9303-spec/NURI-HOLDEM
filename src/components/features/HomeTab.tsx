@@ -124,7 +124,7 @@ export default function HomeTab({
       {!clocksLoaded && openNowSeen() && openNow.length === 0 && (
         <section className="px-page-x pt-4" aria-hidden>
           <div className="skeleton mb-1.5 h-[22px] w-36" />
-          <div className="skeleton h-[60px] rounded-card" />
+          <div className="skeleton h-[60px] rounded-aura" />
         </section>
       )}
       {openNow.length > 0 && (
@@ -137,7 +137,7 @@ export default function HomeTab({
               라이브 <Icon name="chevron-right" size={13} />
             </button>
           </header>
-          <div className="divide-y divide-border-subtle overflow-hidden rounded-card bg-surface-low">
+          <div className="divide-y divide-border-subtle overflow-hidden rounded-aura border card-aura">
             {openNow.map((s) => {
               const reg = regInfoBySchedule.get(s.id);
               return (
@@ -181,7 +181,7 @@ export default function HomeTab({
           </button>
         </header>
         {!loaded ? (
-          <div className="divide-y divide-border-subtle overflow-hidden rounded-card border border-border-subtle bg-surface-low" aria-busy="true">
+          <div className="divide-y divide-border-subtle overflow-hidden rounded-aura border card-aura" aria-busy="true">
             {Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="flex items-center gap-3 px-3 py-2.5">
                 <div className="skeleton h-16 w-16 shrink-0 rounded-input" />
@@ -195,7 +195,7 @@ export default function HomeTab({
             ))}
           </div>
         ) : upcoming.length === 0 ? (
-          <div className="rounded-card bg-surface-low px-3 py-4">
+          <div className="rounded-aura border card-aura px-3 py-4">
             <p className="text-sm text-ink-muted">오늘·내일 예정 대회가 아직 없어요.</p>
             <button type="button" onClick={onExplore}
               className="mt-2 inline-flex items-center gap-1 rounded-badge bg-surface-high px-3 py-2 text-xs font-bold text-ink-secondary transition-colors hover:bg-surface-float/70">
@@ -203,7 +203,7 @@ export default function HomeTab({
             </button>
           </div>
         ) : (
-          <div className="divide-y divide-border-subtle overflow-hidden rounded-card border border-border-subtle bg-surface-low">
+          <div className="divide-y divide-border-subtle overflow-hidden rounded-aura border card-aura">
             {upcoming.map((s, i) => (
               <ScheduleCard key={s.id} mode="list" schedule={s}
                 regInfo={regInfoBySchedule.get(s.id)}
@@ -219,7 +219,7 @@ export default function HomeTab({
       {showTrainer && (
         <div className="px-page-x pt-3">
           <button type="button" onClick={onTools}
-            className="flex w-full items-center gap-2.5 rounded-card bg-surface-low px-3 py-2.5 text-left transition-colors hover:bg-surface-high/60">
+            className="flex w-full items-center gap-2.5 rounded-aura border card-aura px-3 py-2.5 text-left transition-colors hover:bg-surface-high/60">
             <span className="text-gold-300"><Icon name="target" size={16} /></span>
             <span className="min-w-0 flex-1">
               <span className="block text-sm font-bold text-ink-primary">

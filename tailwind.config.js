@@ -12,6 +12,12 @@ export default {
       colors: {
         // Surface scale — index.css 의 CSS 변수를 참조해 라이트/다크 테마 전환 지원
         // rgb(var(--x) / <alpha-value>) 형태라 bg-surface-base/95 같은 알파 합성도 동작
+        // 아우라 신호색(틸) — index.css --aura-* 참조. 브랜드 주색은 accent(바이올렛) 그대로.
+        aura: {
+          200: 'rgb(var(--aura-200) / <alpha-value>)',
+          300: 'rgb(var(--aura-300) / <alpha-value>)',
+          400: 'rgb(var(--aura-400) / <alpha-value>)',
+        },
         surface: {
           base:  'rgb(var(--surface-base) / <alpha-value>)',  // 앱 최하위 배경
           low:   'rgb(var(--surface-low) / <alpha-value>)',   // 카드 배경
@@ -129,7 +135,8 @@ export default {
 
       // ── Border Radius ─────────────────────────────────────────────────────
       borderRadius: {
-        card:   '0.625rem', // 바이낸스 밀도: 12px → 10px대
+        card:   '0.625rem', // 바이낸스 밀도: 12px → 10px대 (내 매장·장부 PC 밀도는 유지)
+        aura:   '1.25rem',  // 유저 화면 카드(시안 20~24px) — 2026-09-02 아우라 테마
         badge:  '9999px',
         input:  '0.5rem',
         dialog: '0.75rem', // 바이낸스 모달 라운드
@@ -141,6 +148,7 @@ export default {
         card:   '0 0 0 1px var(--card-ring)', // 바이낸스식 플랫 — 떠있는 그림자 제거, 헤어라인만
 
         gold:   '0 0 10px rgba(252,213,53,0.30)',
+        aura:   '0 0 0 1px rgb(var(--aura-300) / 0.35), 0 0 18px rgb(var(--aura-300) / 0.22)', // 활성 외곽선 칩·링 후광
         dialog: '0 -4px 32px var(--card-shadow)',
         badge:  '0 0 6px rgba(229,62,62,0.6)',
       },

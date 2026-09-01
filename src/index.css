@@ -44,6 +44,11 @@
     /* MO-2: 퇴장 전용 가속 곡선 — '화면 밖으로 사라지는 것'(VT push-out·시트 닫힘·토스트 퇴장)에만.
        진입은 감속(--ease), 퇴장은 가속이어야 물리적으로 읽힌다(§20.4 §1). */
     --ease-out: cubic-bezier(0.3, 0, 1, 1);
+    /* 모션 헌법 v2(2026-09-02) 추가 2개 — Emil Kowalski 표준값(easing.dev). 손으로 만든 곡선 아님.
+       --ease-out-ui: 작은 UI(드롭다운·툴팁·토스트·칩)의 등장/퇴장 — 내장 ease-out 보다 훨씬 강한 감속
+       --ease-move:   화면 안에서 자리를 옮기는 것(SlidingPill FLIP·재정렬) — 양끝 감속 */
+    --ease-out-ui: cubic-bezier(0.23, 1, 0.32, 1);
+    --ease-move: cubic-bezier(0.77, 0, 0.175, 1);
     /* 스프링(언더댐핑) — linear() 로 근사한 iOS 스프링. 시트 복귀·미세 바운스에 사용 */
     --spring: linear(0, 0.36 8%, 0.72 16%, 0.95 24%, 1.06 33%, 1.09 40%, 1.06 48%, 1.02 58%, 0.995 70%, 1);
     --dur-fast: 0.15s;   /* 색·배경·보더, 프레스 */
@@ -51,7 +56,7 @@
     --dur-panel: 0.32s;  /* 시트·오버레이·풀스크린 */
     --dur-tab: 0.3s;     /* 탭 전환(VT 방향성 푸시 — MO-8 소비). 오너 지시(2026-08-27):
                             최신 폰 모션 감각으로 소폭 상향 — '휙휙' 대신 안착 */
-    --press: scale(0.985);
+    --press: scale(0.97);  /* v2: Apple/Emil 표준 0.97 (0.985 는 '반응했나?' 싶을 만큼 미약했다) */
     --press-icon: scale(0.88);
     /* ── 하단 탭바 회피 오프셋 단일 소스(W1-3 TB1a) — 8곳에 흩어졌던 5.5/5.75/6/4.75rem 통일.
        safe: 스크롤 콘텐츠의 하단 패딩 기준 / float: 탭바 위에 떠 있는 요소(토스트·배너·버튼) 기준.
@@ -75,6 +80,59 @@
   html[data-tabbar-hidden] .scroll-top-fab { transform: translateY(calc(4.5rem + var(--tabbar-lift))); }
   @media (min-width: 1024px) { html[data-tabbar-hidden] .scroll-top-fab { transform: none; } }
   @media (prefers-reduced-motion: reduce) { .scroll-top-fab { transition: opacity var(--dur-fast) var(--ease); } }
+
+  /* ══ 아우라 테마 유틸 (모션 헌법 v2 §5·§6 · 오너 참조 'Aura Health AI' 2026-09-02) ═══════════════
+     .glass / .glass-strong — 유리 크롬. 상시 fixed 요소(헤더·탭바)에 허용하되 조건 넷:
+       ① backdrop-filter 미지원·reduced-transparency 에선 **불투명 폴백**(아래) ② 유리 위에 유리를 겹치지 않는다
+       ③ perf.spec 롱프레임 상한이 게이트 ④ backdrop-filter 자체는 애니메이트하지 않는다.
+     .aura-bg — 정적 후광 한 겹. 흐르지 않는다(Apple §14 전정계). blur 가 아니라 radial-gradient(싸다).
+     .card-aura — 시안의 카드: 반투명 어두운 면 + 6% 흰 헤어라인 + 위 모서리 하이라이트 + 큰 라운드.
+     .t-micro — 시안의 대문자 마이크로 라벨("RECOVERY SCORE"): 틸 · 자간 넓게 · 굵게. */
+  .glass, .glass-strong {
+    background-color: rgb(var(--surface-base) / 0.72);
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+    backdrop-filter: blur(20px) saturate(160%);
+  }
+  .glass-strong { background-color: rgb(var(--surface-base) / 0.82); }
+  /* .glass-chrome — **자손에 fixed 요소가 있는 크롬(헤더)** 전용. backdrop-filter 가 걸린 요소는 position:fixed 자손의
+     컨테이닝 블록이 된다 — 헤더에 직접 걸었더니 헤더 안 알림 스크림(fixed inset-0)이 68px 헤더 안에 갇혀
+     바깥 클릭이 안 닿았다(backstack.spec 실측 2026-09-02). 필터를 ::before 레이어에 두면 헤더는 평범한 sticky 로 남는다.
+     (sticky + z-index 가 스태킹 컨텍스트를 만들어 z:-1 레이어가 배경 위·내용 아래에 깔린다) */
+  .glass-chrome { background-color: transparent; }
+  .glass-chrome::before {
+    content: ''; position: absolute; inset: 0; z-index: -1;
+    background-color: rgb(var(--surface-base) / 0.82);
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+    backdrop-filter: blur(20px) saturate(160%);
+  }
+  @supports not (backdrop-filter: blur(1px)) {
+    .glass, .glass-strong, .glass-chrome::before { background-color: rgb(var(--surface-base)); }
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    .glass, .glass-strong, .glass-chrome::before { background-color: rgb(var(--surface-base)); -webkit-backdrop-filter: none; backdrop-filter: none; }
+    .aura-bg { display: none; }
+  }
+  .aura-bg {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background-image:
+      radial-gradient(60vmax 40vmax at 15% -10%, rgb(var(--aura-glow) / var(--aura-a1)), transparent 62%),
+      radial-gradient(50vmax 36vmax at 100% 42%, rgb(var(--accent-300) / var(--aura-a2)), transparent 62%),
+      radial-gradient(46vmax 30vmax at -5% 100%, rgb(var(--aura-glow) / var(--aura-a3)), transparent 62%);
+  }
+  .card-aura {
+    background-color: rgb(var(--surface-low) / 0.72);
+    border-color: rgb(255 255 255 / 0.06);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 8px 24px -12px rgb(0 0 0 / 0.45);
+  }
+  html.light .card-aura {
+    background-color: rgb(var(--surface-low) / 0.85);
+    border-color: rgb(var(--border-default) / 0.7);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.9), 0 8px 24px -14px rgb(20 22 26 / 0.18);
+  }
+  .t-micro {
+    font-size: 0.625rem; line-height: 1; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+    color: rgb(var(--aura-300));
+  }
 
   :root,
   html.dark {
@@ -114,6 +172,17 @@
     --accent-400: 122 90 210;  /* #7A5AD2 hover */
     --accent-500: 108 77 192;  /* #6C4DC0 pressed */
     --accent-600: 85 60 153;   /* #553C99 딥 보더/배경 */
+
+    /* ── 아우라(Aura) 신호색 — 틸(청록). 오너 참조 시안 'Aura Health AI'(2026-09-02).
+       역할 분담: 바이올렛(accent)은 **브랜드 주색**(채운 버튼·활성 탭) 그대로, 틸은 **신호·데이터·후광** —
+       글로우 블룸 · 링/바 데이터 · 대문자 마이크로 라벨 · 활성 외곽선 칩 · 라이브 펄스.
+       시안에서 틸이 실제로 쓰이는 방식이 정확히 이것이고, 채운 버튼까지 틸로 바꾸면 흰 글자가 AA 를 못 넘긴다.
+       실측(WCAG): 300 #2DD4BF vs base 9.2 · vs low 8.5 (AA 본문) / 400 #14B8A6 vs base 6.9. */
+    --aura-200: 94 234 212;  /* #5EEAD4 연한 틴트(비텍스트·글로우 하이라이트) */
+    --aura-300: 45 212 191;  /* #2DD4BF primary — 텍스트·외곽선·링 */
+    --aura-400: 20 184 166;  /* #14B8A6 hover/딥 */
+    --aura-glow: 45 212 191; /* 방사형 블룸 색 */
+    --aura-a1: 0.22; --aura-a2: 0.20; --aura-a3: 0.14; /* 블룸 3개의 알파 — 다크는 또렷하게(첫 촬영 0.16은 소심했다) */
 
     /* ── 등급 색(2~K · A · 운영자) — 테마 인지 토큰 ─────────────────────────────
        왜 두 벌인가: 같은 등급색이 '글자'와 '장식'에서 요구 기준이 다르다.
@@ -233,6 +302,16 @@
     --accent-400: 92 60 180;   /* #5C3CB4 hover */
     --accent-500: 80 51 158;   /* #50339E pressed */
     --accent-600: 64 42 126;   /* #402A7E */
+
+    /* 아우라(라이트) — 흰 지면에선 틸을 어둡혀야 글자가 산다.
+       ⚠ 첫 값 #0D9488 은 순백 기준 4.55 였지만 실제 지면 surface-base #F5F6F8 위에선 **3.46** —
+       design-tokens.spec 아우라 게이트가 잡았다(2026-09-02). 한 단계 어둡힌 #0F766E: base 5.2 · low(#FFF) 5.6.
+       블룸은 라이트에서 훨씬 옅게 — 밝은 지면 위 채도 높은 후광은 '얼룩' 으로 읽힌다. */
+    --aura-200: 13 148 136;  /* #0D9488 비텍스트 틴트 */
+    --aura-300: 15 118 110;  /* #0F766E primary(텍스트 AA — base 5.2) */
+    --aura-400: 17 94 89;    /* #115E59 hover/딥 */
+    --aura-glow: 15 118 110;
+    --aura-a1: 0.10; --aura-a2: 0.08; --aura-a3: 0.06;
 
     /* 등급 색(라이트) — 위 다크 블록의 설명 참조. hue 는 원색 그대로, 명도만 낮췄다.
        라이트에선 '높은 등급 = 더 어두움'으로 위계가 뒤집힌다(흰 지면에선 어두움이 강조를 담당).

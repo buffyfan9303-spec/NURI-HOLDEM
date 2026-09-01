@@ -62,23 +62,41 @@
 > 단 **카드 수트(♠♥♦♣)는 도메인 기호라 그대로 씁니다**(교체하면 오히려 나빠집니다).
 > ✅ ISC 라이선스 고지는 `Icon.tsx` 상단에 반영 완료(과거 지적 해소).
 
-## 모션 헌법 v1 (§20.4 — 앱 전체의 유일한 물리 법칙)
+## 모션 헌법 v2 (§20.4 — 앱 전체의 유일한 물리 법칙) — 2026-09-02 개정
 
-새 곡선·duration·애니메이트 속성을 추가하려면 이 절을 먼저 고친다.
+오너 지시(2026-09-02): "Aura Health AI" 시안을 적극 참조한 전체 테마 + Apple 모션 전면 적용, **실측 게이트 하에 헌법 전부 개방**.
+v1 의 금지들은 아래처럼 **'금지' → '측정 조건부 허용'** 으로 바뀌었다. v1 이 왜 막았는지는 "과거 교훈" 절에 남아 있다.
+새 곡선·duration·애니메이트 속성을 추가하려면 여전히 이 절을 먼저 고친다.
 
-1. **이징 4개뿐**: `--ease`(기본·감속 — 판단 안 서면 무조건 이것) · `--ease-out`(오직 '화면 밖으로
-   사라지는 것') · `--spring`(손 뗀 뒤 복귀) · 예외 2개(무한 루프, shake). 오버슈트 베지어·Material 값 신규 도입 금지.
-2. **duration 토큰 4단**: `--dur-fast .15s / --dur-base .2s / --dur-panel .26s / --dur-tab .22s`.
-   `duration-200` 류 유틸 신규 사용 금지(토큰과 분리돼 표류). 거리를 줄이는 게 duration 줄이기보다 빠르게 지각된다.
-3. **애니메이트 화이트리스트**: `transform`/`opacity`(+색 계열은 ≤0.15s hover·press 한정).
-   ❌ `height width top left margin padding gap font-size` ❌ `background-position background-size filter backdrop-filter`(페인트 폭탄)
-   ❌ **`transition-all` 신규 금지**(2026-08-26 전수 0건 달성 — 나중에 누가 height 를 추가하면 자동 레이아웃 애니가 된다).
+1. **이징 토큰 6개** (`src/index.css :root`):
+   `--ease`(iOS 드로어 곡선 0.32,0.72,0,1 — 시트·탭 푸시·큰 면의 이동) ·
+   `--ease-out-ui`(0.23,1,0.32,1 — 드롭다운·툴팁·토스트·칩 등 **작은 UI 의 등장/퇴장**, Emil Kowalski 표준) ·
+   `--ease-move`(0.77,0,0.175,1 — **화면 안에서 자리를 옮기는 것**: SlidingPill FLIP·재정렬) ·
+   `--ease-out`(0.3,0,1,1 — 가속 퇴장. **VT 푸시아웃의 대칭 짝으로만**. Apple §7 '들어온 길로 나간다') ·
+   `--spring`(linear() 근사 — CSS 만으로 되는 프레스 복귀) · 예외 2개(무한 루프, shake).
+   ❌ `ease-in` 을 UI 에 쓰지 않는다(사용자가 보는 순간을 늦춘다). ❌ 손으로 만든 베지어 신규 도입 금지 — easing.dev 값만.
+2. **duration 토큰 4단 유지**: `--dur-fast .15s / --dur-base .22s / --dur-panel .32s / --dur-tab .3s`.
+   UI 는 300ms 를 넘지 않는다(시트·풀스크린만 예외). `duration-*` 유틸 신규 사용 금지 — 기존 33곳은 토큰으로 수렴시킨다.
+3. **스프링 전면 개방 — 단, 라이브러리 없이.** 손이 닿는 모든 것(시트·드래그·플릭)은 `src/lib/spring.ts` 의
+   WAAPI 스프링을 쓴다: 감쇠비 1.0 기본(오버슈트 없음) · 손짓에 운동량이 실렸을 때만 0.8(살짝 바운스) ·
+   응답 0.3~0.4s · **손을 뗀 속도를 그대로 이어받고**(velocity handoff) · **투영**(`project(v, 0.998)`)으로 착지점을 정한 뒤 ·
+   **언제든 잡아 되돌릴 수 있다**(presentation 값에서 재시작). Apple 스킬 §3~§6 그대로.
+   `motion` 패키지는 WAAPI 로 안 되는 것(레이아웃 애니·exit 조율)이 실제로 나올 때만 동적 로드로 재논의. 스크롤 하이재킹은 여전히 금지.
+4. **애니메이트 화이트리스트**: `transform`/`opacity`(+색 계열은 ≤0.15s hover·press) + `clip-path`(리빌 한정).
+   ❌ `height width top left margin padding gap font-size` ❌ `background-position background-size` ❌ **`transition-all`**.
+   `filter: blur ≤ 6px` 는 **크로스페이드 마스킹**(VT 푸시·탭 진입)에만 — 이미 그렇게 쓰고 있다.
    예외: SlidingPill(absolute 격리) · 자기완결 소형 진행바의 `transition-[width]` · `grid-template-rows 0fr→1fr` 단일 요소.
-4. **새 진입 애니 클래스 = 두 목록 동시 등록**: `index.css` `.tab-pane :is(...)` 무효화 목록 + `prefers-reduced-motion` 목록.
-5. **will-change 상시 부착 금지**(현 3곳이 상한) · 상시 fixed 요소에 backdrop-filter 금지 ·
-   토스트로 폼 에러 금지(등장·퇴장이 또 하나의 '움직임') · CLS 는 진입 애니가 아니라 **공간 예약**으로만 해결.
-6. **모션 라이브러리 재고 게이트**(§19.1): MO-1 계측 후 실기기 INP p75 > 200ms + 제스처 특정 + CSS 재현 불가 판정 시에만
-   `LazyMotion+m+domAnimation` 동적 로드 한정 재논의. 스크롤 하이재킹(Lenis·ScrollSmoother)은 무조건 금지.
+5. **유리(backdrop-filter) 조건부 허용 — '측정 게이트'.** 상시 fixed 크롬(헤더·하단 탭바·시트)에 `.glass`/`.glass-strong` 를 쓸 수 있다. 조건:
+   ① `@supports (backdrop-filter)` + `prefers-reduced-transparency` 에서 **불투명 폴백** 필수(index.css 유틸이 처리) ·
+   ② 반투명 면 위에 반투명 면을 **겹치지 않는다**(Apple §12 — 탭바 알약은 불투명 유지) ·
+   ③ `perf.spec` 롱프레임 상한(콜드 <40 · 커뮤니티 스크롤 <20)을 **넘기면 즉시 되돌린다** — 이 스펙이 게이트다 ·
+   ④ backdrop-filter 자체를 **애니메이트하지 않는다**(등장은 opacity/transform 만).
+6. **아우라 배경 = 정적.** `.aura-bg` 한 겹(fixed · radial-gradient 2~3개 · pointer-events:none)만. **흐르는 배경·느린 루프 금지**
+   (Apple §14 전정계 지침) · `filter: blur()` 로 만들지 않는다(그라데이션은 싸고 blur 는 비싸다) · reduced-transparency 에서 숨긴다.
+7. **새 진입 애니 클래스 = 두 목록 동시 등록**: `index.css` `.tab-pane :is(...)` 무효화 목록 + `prefers-reduced-motion` 목록.
+   reduced-motion 은 '없음' 이 아니라 '짧은 페이드' 다 — 이해를 돕는 opacity 전환은 남긴다.
+8. **will-change 상시 부착 금지**(현 3곳이 상한) · 토스트로 폼 에러 금지 · CLS 는 진입 애니가 아니라 **공간 예약**으로만 해결 ·
+   프레스 피드백은 **pointer-down 즉시**(`:active` `--press: scale(0.97)` · `--dur-fast` · `--ease-out-ui`), 절대 release 에서.
 
 ## 애니메이션 — 자유. 단 아래 함정은 그대로 존재
 과거 framer-motion을 제거하고 `layoutId` 기반 슬라이딩 인디케이터 13곳을
@@ -113,6 +131,17 @@
 `--ease: cubic-bezier(0.32, 0.72, 0, 1)`(iOS 계열) · View Transitions 방향성 푸시 ·
 scroll-driven `reveal-up`(`animation-timeline: view()`) · `content-visibility` + `contain-intrinsic-size` ·
 press-spring · `prefers-reduced-motion` 블록 다수
+
+### 유리(backdrop-filter)와 시트 제스처의 함정 (2026-09-02 테마 v2 실측)
+- **`backdrop-filter`(·`filter`·`transform`)가 걸린 요소는 `position: fixed` 자손의 컨테이닝 블록이 된다.**
+  헤더에 `.glass-strong` 을 직접 걸자 헤더 안 알림 스크림(`fixed inset-0`)이 68px 헤더 안에 갇혀 바깥 클릭이 안 닿았다
+  (backstack.spec '알림 패널' 실패). fixed 자손이 있을 수 있는 크롬에는 **`.glass-chrome`(::before 레이어)** 만 쓴다.
+- **스크롤되는 시트 본문 위의 제스처는 Pointer Events 로 잡을 수 없다.** Chrome 이 스크롤 제스처로 판정하는 순간
+  `pointercancel` 로 스트림을 끊는다(맨 위에서 아래로 끌어도). 그립(`touch-none`)에선 되고 본문에선 0.85px 만 움직였다.
+  본문 드래그는 **Touch Events** 로 받는다(네이티브 스크롤 중에도 계속 온다). 스프링·투영·중단은 `src/lib/spring.ts` 그대로.
+- **라이트 틸은 순백이 아니라 실제 지면(surface-base #F5F6F8)으로 대비를 재라.** #0D9488 은 순백 4.55 · base 3.46 —
+  design-tokens.spec 아우라 게이트가 잡았다. 토큰 값을 고르면 반드시 그 스펙을 돌린다.
+- **아우라 후광은 정적(radial-gradient) 한 겹.** `filter: blur()` 로 만들지 않고, 흐르게 하지 않는다(Apple §14 전정계·페인트 비용).
 
 ### 플랫폼 분리 (2026-08-25 확정)
 - **유저 = 모바일 99%** — browse·live·community·GTO·profile은 모바일 퍼스트(하단 탭바·엄지 영역)

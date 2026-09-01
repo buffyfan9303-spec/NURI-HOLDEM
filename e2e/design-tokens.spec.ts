@@ -474,3 +474,33 @@ test.describe('등급 토큰 20종 — 실제 지면 위 대비 계약', () => {
     });
   }
 });
+
+// ── 아우라 신호색(--aura-*) 회귀 게이트 (2026-09-02 테마 v2) ─────────────────────────────────
+// 틸은 텍스트(마이크로 라벨·활성 칩 글자)로 쓰이므로 두 지면(base·low) 위에서 AA(4.5) 를 지켜야 한다.
+// 라이트에서 틸을 밝히면(#14B8A6) 흰 지면 위 2.9:1 로 즉시 무너진다 — 그 실수를 여기서 잡는다.
+// 존재 검사도 같이 한다: 토큰이 지워지면 rgb(var(--aura-300)) 은 unset 이 되어 부모 색을 상속하고 대비 검사는 통과해 버린다.
+test.describe('아우라 토큰 — 존재 + 텍스트 대비', () => {
+  for (const mode of ['dark', 'light'] as const) {
+    test(`[${mode}] --aura-300 이 존재하고 base·low 지면 위 AA 를 지킨다`, async ({ page }) => {
+      await page.goto('/');
+      await dismissOverlays(page);
+      const r = await page.evaluate((m) => {
+        document.documentElement.classList.toggle('light', m === 'light');
+        document.documentElement.classList.toggle('dark', m === 'dark');
+        const cs = getComputedStyle(document.documentElement);
+        const trip = (v: string) => cs.getPropertyValue(v).trim();
+        const rgb = (t: string) => `rgb(${t.split(/\s+/).join(',')})`;
+        const aura = trip('--aura-300');
+        return {
+          present: /^\d+\s+\d+\s+\d+$/.test(aura),
+          fg: aura ? rgb(aura) : '',
+          base: rgb(trip('--surface-base')),
+          low: rgb(trip('--surface-low')),
+        };
+      }, mode);
+      expect(r.present, `[${mode}] --aura-300 이 없거나 형식이 깨졌다("${r.fg}") — 틸 글자가 부모 색을 상속한다`).toBe(true);
+      expect(contrast(r.fg, r.base), `[${mode}] --aura-300 ${r.fg} on surface-base ${r.base}`).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(r.fg, r.low), `[${mode}] --aura-300 ${r.fg} on surface-low ${r.low}`).toBeGreaterThanOrEqual(4.5);
+    });
+  }
+});
