@@ -67,6 +67,14 @@
     /* 상시 리프트는 '탭바가 떠 있는 오류'로 보였다(오너) — 자동숨김(TB2)이 스크롤 중 겹침을 완화하므로 0 유지 */
     --tabbar-lift: 0px;
   }
+  /* '맨 위로' FAB — 탭바가 자동 숨김되면(html[data-tabbar-hidden], App.tsx) 같이 내려간다.
+     bottom 은 --tabbar-float 그대로 두고 transform 으로만 움직인다(모션 헌법 화이트리스트).
+     내려가는 거리 = 탭바 위 위치(5.75rem + lift) − 모서리 여백(1.25rem). safe-area 는 양쪽에 같아 상쇄.
+     예전엔 탭바가 사라진 뒤에도 탭바 높이만큼 떠 있어 폼 입력창·푸터 글자를 덮었다(오너 2026-09-02). */
+  .scroll-top-fab { transition: opacity var(--dur-fast) var(--ease), transform var(--dur-panel) var(--ease); }
+  html[data-tabbar-hidden] .scroll-top-fab { transform: translateY(calc(4.5rem + var(--tabbar-lift))); }
+  @media (min-width: 1024px) { html[data-tabbar-hidden] .scroll-top-fab { transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .scroll-top-fab { transition: opacity var(--dur-fast) var(--ease); } }
 
   :root,
   html.dark {

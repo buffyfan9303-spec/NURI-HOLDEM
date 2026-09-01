@@ -598,6 +598,9 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
     tb2Ref.current = { lastY: window.scrollY, acc: 0 };
     setHidden(false);
   }, [active, overlayOpen]);
+  // 숨김 상태를 문서에 알린다 — '맨 위로' FAB 가 CSS 만으로 같이 내려간다(index.css .scroll-top-fab).
+  // 예전엔 탭바가 사라진 뒤에도 FAB 가 탭바 높이만큼 떠 있어 폼 입력창·푸터 글자를 덮었다(오너 2026-09-02).
+  useEffect(() => { document.documentElement.toggleAttribute('data-tabbar-hidden', hidden); }, [hidden]);
   useEffect(() => {
     if (!autohideV2) {
       // 구(레거시) 경로 — 킬스위치 off 시 그대로 복구
@@ -670,8 +673,11 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
       style={{ paddingBottom: 'env(safe-area-inset-bottom)', transitionTimingFunction: 'var(--ease)' }}
       aria-label="하단 내비게이션"
     >
-      {/* 탭바 밖(좌우·아래) 틈으로 스크롤 컨텐츠가 비치지 않게 — 베이스색 그라데이션 커튼 */}
-      <div aria-hidden className="absolute inset-x-0 -top-3 bottom-0 bg-gradient-to-t from-surface-base via-surface-base/90 to-transparent" />
+      {/* 탭바 밖(좌우·아래) 틈으로 스크롤 컨텐츠가 비치지 않게 — 알약 뒤는 **불투명** 커튼, 그 위 12px 만 짧게 페이드.
+          예전엔 '아래 불투명 → 위 완전 투명' 한 장이라 상단 30px 가 거의 유리였고 푸터 글자가 그대로 비쳐
+          "뒤쪽 배경이 보인다"(오너 2026-09-02 내 매장 모바일)로 읽혔다. */}
+      <div aria-hidden className="absolute inset-0 bg-surface-base" />
+      <div aria-hidden className="absolute inset-x-0 -top-3 h-3 bg-gradient-to-t from-surface-base to-transparent" />
       <div className="pointer-events-auto mx-2.5 mb-[calc(0.5rem+var(--tabbar-lift))] flex rounded-2xl border border-border-default bg-surface-mid shadow-dialog">
         {items.map(({ key, tab, label }) => {
           const on = tab ? shown === tab : false;
@@ -3156,7 +3162,7 @@ function ScrollTopButton() {
       onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
       // 모바일: 하단 탭바 위로 띄움(--tabbar-float, 누락됐던 safe-area 복구) / PC: 기존 위치
       className={[
-        'fixed bottom-[var(--tabbar-float)] lg:bottom-5 right-4 z-40 flex h-10 w-10 items-center justify-center rounded-full border border-border-default bg-surface-mid text-ink-secondary shadow-dialog transition-opacity hover:text-accent-300',
+        'scroll-top-fab fixed bottom-[var(--tabbar-float)] lg:bottom-5 right-4 z-40 flex h-10 w-10 items-center justify-center rounded-full border border-border-default bg-surface-mid text-ink-secondary shadow-dialog hover:text-accent-300',
         show ? 'opacity-100' : 'pointer-events-none opacity-0',
       ].join(' ')}
     >

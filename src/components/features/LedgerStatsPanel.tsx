@@ -956,7 +956,7 @@ function OwnerManageCard({ venueId }: { venueId: string }) {
       )}
       <div className="flex gap-1.5">
         <input value={nick} onChange={(e) => setNick(e.target.value)} onKeyDown={(e) => { if (e.nativeEvent.isComposing) return; /* 한글 조합 확정 Enter 를 제출로 오인하지 않게 */ if (e.key === 'Enter') add(); }}
-          placeholder="추가할 사장님 아이디(닉네임)" className="input min-w-0 flex-1 text-sm" />
+          placeholder="아이디(닉네임)" className="input min-w-0 flex-1 text-sm" />
         <button type="button" disabled={busy || !nick.trim()} onClick={add} className="btn-primary shrink-0 px-3 text-xs disabled:opacity-50">+ 사장님 추가</button>
       </div>
       <p className="text-2xs text-ink-muted"><b className="text-amber-400">운영자 승인 후</b> 공동 업주로 활성화 — 장부·포스터·이용권 공동 관리, <b className="text-accent-300">대표</b> 교체 가능.</p>

@@ -56,6 +56,66 @@ const SETTINGS_TABS: readonly { id: SettingsTab; label: string }[] = [
   { id: 'optools', label: '운영 도구' }, { id: 'danger', label: '위험 구역' },
 ];
 const isSettingsTab = (s: string): s is SettingsTab => SETTINGS_TABS.some((t) => t.id === s);
+
+/**
+ * 매장 설정 하위탭 — 6개라 모바일(412px)에서 가로로 넘친다(스크롤 컨테이너).
+ * 오너 제보(2026-09-02 내 매장 모바일): ① '위험 구역' 을 누르면 **활성 탭이 화면 밖**에 있어 어느 탭인지
+ * 안 보였고 ② 오른쪽에 더 있다는 힌트가 없어 '위' 로 잘린 글자가 '깨진 UI' 로 읽혔다.
+ * · 활성 탭은 전환마다 시야로 끌어온다 — scrollIntoView 는 페이지를 세로로 끌어당길 수 있어 scrollLeft 를 직접 계산.
+ * · 넘친 쪽에만 페이드 힌트를 얹는다(pointer-events-none 이라 탭을 가리지 않는다).
+ */
+function SettingsTabBar({ tabs, active, onPick }: {
+  tabs: readonly { id: SettingsTab; label: string }[]; active: SettingsTab; onPick: (t: SettingsTab) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [edge, setEdge] = useState<'none' | 'left' | 'right' | 'both'>('none');
+  useEffect(() => {
+    const el = ref.current;
+    const t = el?.querySelector<HTMLElement>(`[data-tab-id="${active}"]`);
+    if (!el || !t) return;
+    const left = t.offsetLeft - (el.clientWidth - t.offsetWidth) / 2;
+    el.scrollTo({ left: Math.max(0, left), behavior: 'auto' });
+  }, [active]);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const update = () => {
+      const l = el.scrollLeft > 2;
+      const r = el.scrollLeft + el.clientWidth < el.scrollWidth - 2;
+      setEdge(l && r ? 'both' : r ? 'right' : l ? 'left' : 'none');
+    };
+    update();
+    el.addEventListener('scroll', update, { passive: true });
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => { el.removeEventListener('scroll', update); ro.disconnect(); };
+  }, []);
+  return (
+    <div className="relative">
+      <div ref={ref} role="tablist" aria-label="매장 설정 하위탭"
+        className="relative flex items-center gap-0.5 overflow-x-auto rounded-input border border-border-subtle bg-surface-high/60 p-0.5 [scrollbar-width:none]">
+        <SlidingPill activeKey={active} className="rounded-[6px] pill-active" />
+        {tabs.map((t) => {
+          const on = active === t.id;
+          return (
+            <button key={t.id} type="button" role="tab" aria-selected={on} data-pill-active={on || undefined} data-tab-id={t.id}
+              onClick={() => onPick(t.id)}
+              className={['relative inline-flex h-9 shrink-0 items-center rounded-[6px] px-3 t-tab leading-none transition-colors duration-300 focus:outline-none',
+                on ? 'font-bold text-white' : t.id === 'danger' ? 'text-danger-light/80 hover:text-danger-light' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
+              <span className="relative">{t.label}</span>
+            </button>
+          );
+        })}
+      </div>
+      {(edge === 'right' || edge === 'both') && (
+        <div aria-hidden className="pointer-events-none absolute inset-y-0.5 right-0.5 w-9 rounded-r-input bg-gradient-to-l from-surface-high via-surface-high/70 to-transparent" />
+      )}
+      {(edge === 'left' || edge === 'both') && (
+        <div aria-hidden className="pointer-events-none absolute inset-y-0.5 left-0.5 w-9 rounded-l-input bg-gradient-to-r from-surface-high via-surface-high/70 to-transparent" />
+      )}
+    </div>
+  );
+}
 // IA2 잔여(게임 선택 칩 바): 순위 입력에 전달하는 '오늘 게임 선택' 신호 — n 은 같은 게임 재선택도
 // 다시 적용되게 하는 단조 카운터, name 은 순위(이벤트명 기반) 칸 이름(''=메인 기본).
 type GameSel = { n: number; name: string };
@@ -542,21 +602,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
             )}
             {/* IA3c 매장 설정 하위탭 — 프리셋·페이지·POS·이용권·위험구역(권한별 노출) */}
             {renderSection === 'settings' && !dItem?.locked && (
-              <div role="tablist" aria-label="매장 설정 하위탭"
-                className="relative flex items-center gap-0.5 overflow-x-auto rounded-input border border-border-subtle bg-surface-high/60 p-0.5">
-                <SlidingPill activeKey={renderSettingsTab} className="rounded-[6px] pill-active" />
-                {SETTINGS_TABS.filter((t) => canSettingsTab(t.id)).map((t) => {
-                  const on = renderSettingsTab === t.id;
-                  return (
-                    <button key={t.id} type="button" role="tab" aria-selected={on} data-pill-active={on || undefined}
-                      onClick={() => gotoSection(t.id)}
-                      className={['relative inline-flex h-9 shrink-0 items-center rounded-[6px] px-3 t-tab leading-none transition-colors duration-300 focus:outline-none',
-                        on ? 'font-bold text-white' : t.id === 'danger' ? 'text-danger-light/80 hover:text-danger-light' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
-                      <span className="relative">{t.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
+              <SettingsTabBar tabs={SETTINGS_TABS.filter((t) => canSettingsTab(t.id))} active={renderSettingsTab} onPick={gotoSection} />
             )}
             {/* 공용 섹션 헤더 — 모든 섹션의 제목·설명·주 액션 위치/크기를 한 규격으로(콘텐츠와 함께 deferred 전환) */}
             {!dItem?.locked && (
