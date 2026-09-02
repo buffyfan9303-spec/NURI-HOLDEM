@@ -103,21 +103,15 @@ export default function HomeTab({
             지금 <span className="tabular-nums stat-emerald">{liveCount}</span>개 게임 <span className="text-grad-violet text-grad-glow">진행 중</span>
           </h2>
         ) : (
-          // 오너 피드백(2026-09-02): 헤드라인이 "눌러도 아무것도 안 나올 것 같다" — 글자만 있는 버튼은 버튼으로 안 읽힌다.
-          // 눌리는 것의 표식 셋: 카드 면(card-aura) · 우측 원형 화살표 · 누르면 살짝 눌리는 press. 문구는 그대로.
-          <button type="button" onClick={onTools}
-            className="mt-1 flex w-full items-center gap-3 rounded-aura border card-aura px-4 py-3 text-left transition-transform active:scale-[0.985]">
-            <span className="min-w-0 flex-1">
-              {/* v6 aura-ui.com 문법: 헤드라인은 흰색, 핵심 구절 하나만 채도 높은 그라데이션 */}
-              <h2 className="font-display text-2xl font-extrabold tracking-tight text-ink-primary">
-                오늘 한 판, <span className="text-grad-violet text-grad-glow mr-[0.15em]">GTO</span>로 준비하세요
-              </h2>
-              <span className="mt-1 inline-flex items-center gap-1 text-2xs font-semibold text-accent-200">
-                차트 · 계산기 · 트레이너 열기
-              </span>
-            </span>
-            <span aria-hidden className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-accent-300/15 text-accent-200 shadow-glow">
-              <Icon name="chevron-right" size={18} />
+          // 오너 지시(2026-09-02 v6.4): 카드 프레임 없이 **글자만** — 아우라 링·카드는 아래 배너가 맡는다(한 화면에 프레임 하나).
+          // 클릭 어포던스는 부제 끝 화살표(라이브 분기의 'GTO 도구로 준비하기 ›' 와 같은 문법) + press 로만.
+          <button type="button" onClick={onTools} className="mt-1 block w-full text-left transition-opacity active:opacity-80">
+            {/* v6 aura-ui.com 문법: 헤드라인은 흰색, 핵심 구절 하나만 채도 높은 그라데이션 */}
+            <h2 className="font-display text-2xl font-extrabold tracking-tight text-ink-primary">
+              오늘 한 판, <span className="text-grad-violet text-grad-glow mr-[0.15em]">GTO</span>로 준비하세요
+            </h2>
+            <span className="mt-1.5 inline-flex items-center gap-0.5 text-2xs font-semibold text-accent-200">
+              차트 · 계산기 · 트레이너 열기 <Icon name="chevron-right" size={12} aria-hidden />
             </span>
           </button>
         )}
