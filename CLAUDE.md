@@ -46,6 +46,12 @@
   **v4(같은 날, 오너 지시 "aura-ui.com 이 좋은 샘플")**: 주색 딥 퍼플 → **Aura UI 인디고 #5850EC**(라이트 #4F46E5), 시안은 네온 → **cyan-500 #06B6D4**,
   헤드라인 그라데이션 흰→인디고→바이올렛→푸시아, 카드는 불투명+white 5% 헤어라인+겹친 소프트 섀도(+PC hover 2px 리프트), 글로우는 3px 링 20%.
   원칙('Vibrant Depth'): 미묘한 그라데이션·겹친 그림자·유리 패널·의도된 마이크로 모션 — **네온·강한 테두리·큰 글로우 금지**(v3 가 조잡했던 이유).
+  **v6(2026-09-02, 오너 "아직도 너무 다르다" → aura-ui.com 을 브라우저로 열어 computed style 실측)**: 배경 블룸 3색 `--bloom-1/2/3`
+  = violet-500 #8B5CF6 · indigo-500 #6366F1 · fuchsia-500 #D946EF(알파 다크 .16/.20/.11 · 라이트 .10/.12/.08, 500px 안팎 원 — 실측은 blur-3xl 원이지만
+  우리는 radial-gradient 로 그린다), 헤드라인은 **흰색 + 핵심 구절 하나만** `.text-grad-violet`(500 계열 채도, 흰색 시작 금지) + `.text-grad-glow`,
+  CTA `--grad-cta` = violet-700→indigo-800 + violet-500/25 틴트 그림자, 카드 테두리 `border-strong` 55%(보이는 헤어라인), 곡률 card 12 · aura 16 · btn 8 · chip 8,
+  `.chip-aura`(indigo 틴트 칩) · `.ring-aura`(mask xor 그라데이션 헤어라인, 히어로·피처 카드 한두 곳만) · `shadow-glow` = 3px 링 .25 + 20px .125.
+  글자 네온은 레퍼런스에 text-shadow 0곳 — 후광은 구절 span 의 정적 drop-shadow 로만.
   단 클락 TV(`clockTheme.ts`)·GTO 차트 fill(`ranges.data.ts`)의 #5E6AD2 는 도메인 고정 스냅샷이라 앱 accent 와 무관),
   `future.hoverOnlyWhenSupported`, `darkMode: 'class'`
 
