@@ -22,6 +22,10 @@ test('표 모드 — 1440/900/375 어디서도 일정이 화면에 보인다', a
   await tableBtn.click();
   await page.waitForTimeout(600);
 
+  // 데이터 의존: 예정 대회가 0건인 날엔 '행이 사라졌는가' 를 잴 수 없다 — 빈 상태 문구가 보이면 skip
+  if (await page.getByText(/예정 대회가 아직 없|일정이 없/).first().isVisible().catch(() => false)) {
+    test.skip(true, '표시할 일정 0건 — 라이브 데이터 의존');
+  }
   for (const w of [1440, 900, 375, 1200, 375]) {
     await page.setViewportSize({ width: w, height: 820 });
     await page.waitForTimeout(500);

@@ -1,0 +1,19 @@
+# gitleaks 허용 목록 — 여기 적힌 것은 전부 **공개 키**다(번들·마이그레이션에 원래 박혀 있는 값).
+# 서비스 롤·Resend·Gemini·Vault 값은 절대 여기 넣지 않는다. 그런 게 잡히면 로테이션이 답이다.
+title = "NURI HOLDEM"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "공개 anon JWT(role=anon) · publishable 키 · 테스트 픽스처"
+regexes = [
+  '''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlkc3hpcXNwZWNydWN2ZnZ0Z2J3Iiwicm9sZSI6ImFub24i[A-Za-z0-9_.\-]*''',
+  '''sb_publishable_[A-Za-z0-9_\-]+''',
+]
+paths = [
+  '''node_modules/''',
+  '''dist/''',
+  '''public/fonts/''',
+  '''package-lock\.json''',
+]

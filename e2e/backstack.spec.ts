@@ -123,7 +123,12 @@ const CASES: OverlayCase[] = [
   },
   {
     name: '포스터 상세',
-    open: async (p) => { await p.locator('[data-tab="home"] article').first().click(); },
+    // 데이터 의존: 홈 '오늘·내일' 카드(article)가 0건인 날엔 열 것이 없다 — 실패가 아니라 skip(CI 가 이걸로 상시 빨갛던 2026-08-30~09-02)
+    open: async (p) => {
+      const card = p.locator('[data-tab="home"] article').first();
+      if (await card.count() === 0) test.skip(true, '홈에 오늘·내일 일정 카드 0건 — 라이브 데이터 의존');
+      await card.click();
+    },
     marker: (p) => p.locator('[role="dialog"][aria-label="전체화면 보기"]'),
     close: async (p) => { await p.keyboard.press('Escape'); },
   },

@@ -52,6 +52,9 @@ jobs:
       - name: 번들 예산
         run: npm run bundle:budget
 
+      # 러너에 컬러 이모지·CJK 폰트가 없어 emoji-glyphs / font-coverage 게이트가 환경 때문에 빨갛던 것(2026-08-30~) — 폰트를 깐다
+      - name: Fonts (color emoji · CJK)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-color-emoji fonts-noto-cjk
       - name: Install Playwright (chromium)
         run: npx playwright install --with-deps chromium
 
