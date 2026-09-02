@@ -20,7 +20,7 @@ import type { PostCategory } from '../../api/community';
 import CardGridPicker from './gto/CardGridPicker';
 import { cardId } from './gto/useDeepGto';
 import type { Card } from './gto/gto.types';
-import { encodeHand, encodeReplay, type HandSel } from '../../lib/hand';
+import { encodeHand, encodeReplay, type HandSel, type ReplayData } from '../../lib/hand';
 import { MiniCard } from '../atoms/HandCards';
 import {
   CardPicker, PollBuilder, emptyHand, emptyPoll, normalizeHand, normalizePoll,
@@ -45,6 +45,8 @@ interface PostFormModalProps {
   defaultCategory?: PostCategory;
   /** 열릴 때 본문 프리필(공유 타깃 — 다른 앱에서 공유받은 텍스트/링크) */
   defaultContent?: string;
+  /** 열릴 때 핸드 첨부 프리필(핸드 리플레이어 '커뮤니티에 질문') — 코드가 아니라 카드 슬롯에 첨부된 채로 보인다 */
+  defaultReplay?: ReplayData | null;
 }
 
 const CATEGORY_OPTIONS: { id: PostCategory; label: string }[] = [
@@ -79,7 +81,7 @@ async function findCreatedPostId(userId: string, content: string): Promise<strin
   return null;
 }
 
-export default function PostFormModal({ open, onClose, onSubmit, defaultCategory, defaultContent }: PostFormModalProps) {
+export default function PostFormModal({ open, onClose, onSubmit, defaultCategory, defaultContent, defaultReplay }: PostFormModalProps) {
   const { user } = useAuth();
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -114,13 +116,20 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
     if (open) {
       setCategory(defaultCategory ?? 'free'); setTitle(''); setContent(defaultContent ?? '');
       setFiles([]); setPreviews([]); setSaving(false);
-      setShowHand(false); setHero([]); setVillain([]); setBoard([]); setHandTarget('hero');
-      setPot(''); setActs({ pre: '', flop: '', turn: '', river: '' });
+      // 리플레이어에서 넘어온 핸드는 기존 핸드 첨부 슬롯에 그대로 앉힌다 — 제출 시 같은 encodeReplay 경로로 마커가 붙는다.
+      const r = defaultReplay;
+      setShowHand(!!r); setHero(r?.hero ?? []); setVillain(r?.villain ?? []); setBoard(r?.board ?? []); setHandTarget('hero');
+      setPot(r?.pot ?? '');
+      setActs({ pre: r?.actions.pre ?? '', flop: r?.actions.flop ?? '', turn: r?.actions.turn ?? '', river: r?.actions.river ?? '' });
       setHandDraft(emptyHand()); setPollDraft(emptyPoll());
+      if (r) toast.show('핸드를 첨부한 글쓰기를 열었어요', 'success');
     }
-  }, [open, defaultCategory, defaultContent]);
+  }, [open, defaultCategory, defaultContent, defaultReplay, toast]);
 
   const usedIds = new Set<string>([...hero, ...villain, ...board]);
+  // 리플레이로 저장할지 — 보드 3장 이상이거나, 팟·스트리트 액션이 하나라도 있으면(리플레이어의 '프리플랍 올인' 질문처럼
+  // 보드 0장 리플레이) 마커에 실어야 입력이 안 사라진다. parseAttachments·HandReplayer 는 보드 0장 리플레이를 이미 처리한다.
+  const asReplay = board.length >= 3 || !!pot.trim() || Object.values(acts).some((v) => v.trim());
   const handlePickCard = (card: Card) => {
     const id = cardId(card);
     if (usedIds.has(id)) return;
@@ -209,9 +218,9 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
       if (files.length > 0) {
         images = await uploadCommunityImages(user.id, files, MAX_IMAGES);
       }
-      // 보드까지 채웠으면 리플레이로, 핸드만 골랐으면 기존 핸드 첨부로 저장
+      // 보드·팟·액션이 있으면 리플레이로, 핸드만 골랐으면 기존 핸드 첨부로 저장
       let encoded = body;
-      if (board.length >= 3) {
+      if (asReplay) {
         encoded = encodeReplay(body, { hero, villain, board, pot, actions: acts });
       } else {
         const hand: HandSel | null = (hero.length > 0 || villain.length > 0) ? { hero, villain } : null;
@@ -391,7 +400,7 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
             </div>
 
             {showHand && (
-              <div className="card-sink space-y-2 rounded-input border border-border-default bg-surface-high p-2.5 animate-slide-up">
+              <div data-testid="post-form-hand" className="card-sink space-y-2 rounded-input border border-border-default bg-surface-high p-2.5 animate-slide-up">
                 {/* 슬롯 (탭하면 채울 대상 전환, 카드 탭하면 제거) — 보드(3장 이상)까지 채우면 🎬 리플레이로 저장 */}
                 <div className="grid grid-cols-3 gap-2">
                   {(['hero', 'villain', 'board'] as const).map((t) => {
@@ -442,8 +451,8 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
                   <CardGridPicker usedIds={usedIds} onPick={handlePickCard} />
                 </div>
 
-                {/* 보드를 채우면 리플레이 상세(팟·스트리트별 액션) 입력 노출 */}
-                {board.length >= 3 && (
+                {/* 보드를 채우거나 팟·액션이 넘어와 있으면 리플레이 상세(팟·스트리트별 액션) 입력 노출 — 값이 있는데 숨기면 못 본 채 저장된다 */}
+                {asReplay && (
                   <div className="space-y-1.5 border-t border-border-default pt-2 animate-fade-in">
                     {/* 라벨 + 짧은 placeholder — 좁은 화면에서 안 잘린다(전부 선택 입력) */}
                     <div className="grid grid-cols-[3.75rem_1fr] items-center gap-x-2 gap-y-1.5">
