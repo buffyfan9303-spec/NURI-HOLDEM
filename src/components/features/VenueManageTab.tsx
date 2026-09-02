@@ -1836,7 +1836,7 @@ function VenueCreateForm({ onCreated }: { onCreated: () => Promise<void> }) {
         <button type="button" disabled={!ready || busy} onClick={submit} className="btn-primary w-full py-3 text-sm font-bold disabled:opacity-50">
           {busy ? '생성 중…' : '+ 매장 생성하기'}
         </button>
-        <p className="t-desc break-keep text-ink-muted">* 표시는 필수입니다. 생성 후 ‘매장 꾸미기·설정’에서 추가 정보(갤러리·테마·블라인드 등)를 채울 수 있어요.</p>
+        <p className="t-desc break-keep text-ink-muted">* 표시는 필수예요. 생성 후 ‘매장 꾸미기·설정’에서 추가 정보(갤러리·테마·블라인드 등)를 채울 수 있어요.</p>
       </div>
     </div>
   );

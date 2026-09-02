@@ -140,6 +140,7 @@ const ToolsPanelM     = memo(ToolsPanel);
 const VenueManageTabM = memo(VenueManageTab); // 내 매장 keep-alive 전환에 필수 — 숨김 상태에서 App 재렌더에 끌려가지 않게
 const CustomerDashboardPage = lazyWithReload(() => import('./components/features/CustomerDashboardPage'));
 const ClockDisplay   = lazyWithReload(() => import('./components/features/clock/ClockDisplay'));
+const ClockRemote    = lazyWithReload(() => import('./components/features/clock/ClockRemote'));
 
 // 지연 로딩 폴백 — 청크 받아오는 짧은 순간의 로더(레이아웃 점프 최소화)
 function LazyFallback() {
@@ -1874,9 +1875,17 @@ export default function App() {
     displayDeepLinked.current = true;
     const sp = new URLSearchParams(window.location.search);
     const vid = sp.get('display');
-    if (!vid) return;
-    setDisplayTarget({ venueId: vid, gameSeq: Number(sp.get('g') || '1') || 1 });
+    if (vid) setDisplayTarget({ venueId: vid, gameSeq: Number(sp.get('g') || '1') || 1 });
+    // ?remote=<venueId>&g=<seq> — 휴대폰 리모컨(오너 #6 2026-09-02). 같은 파싱 규칙, 다른 화면.
+    const rid = sp.get('remote');
+    if (rid) setRemoteTarget({ venueId: rid, gameSeq: Number(sp.get('g') || '1') || 1 });
   }, []);
+  const [remoteTarget, setRemoteTarget] = useState<{ venueId: string; gameSeq: number } | null>(null);
+  const closeRemote = useCallback(() => {
+    setRemoteTarget(null);
+    try { const url = new URL(window.location.href); url.searchParams.delete('remote'); url.searchParams.delete('g'); window.history.replaceState(null, '', url.pathname + url.search + url.hash); } catch { /* noop */ }
+  }, []);
+  useBackClose(remoteTarget !== null, closeRemote);
 
   // 관전 디스플레이 열기(라이브 카드/운영자 클락에서) — 같은 탭에서 풀스크린 오버레이로
   const openDisplay = useCallback((venueId: string, gameSeq = 1) => setDisplayTarget({ venueId, gameSeq }), []);
@@ -2499,6 +2508,14 @@ export default function App() {
           <ClockDisplay venueId={displayTarget.venueId} gameSeq={displayTarget.gameSeq}
             venueName={venues.find((v) => v.id === displayTarget.venueId)?.name}
             onClose={closeDisplay} />
+        </Suspense>
+      )}
+      {/* 휴대폰 리모컨(?remote=) — 운영자·직원이 플로어에서 클락을 조작 */}
+      {remoteTarget && (
+        <Suspense fallback={<OverlayFallback />}>
+          <ClockRemote onLogin={() => setAuthOpen(true)} venueId={remoteTarget.venueId} gameSeq={remoteTarget.gameSeq}
+            venueName={venues.find((v) => v.id === remoteTarget.venueId)?.name}
+            onClose={closeRemote} />
         </Suspense>
       )}
 

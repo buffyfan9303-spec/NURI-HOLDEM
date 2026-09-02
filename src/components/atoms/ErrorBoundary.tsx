@@ -89,7 +89,7 @@ export default class ErrorBoundary extends Component<Props, State> {
         background: '#151221', color: '#F0F4FF', padding: '24px', textAlign: 'center',
         fontFamily: "'Apple SD Gothic Neo','Malgun Gothic',sans-serif",
       }}>
-        <p style={{ fontSize: '17px', fontWeight: 700, margin: 0 }}>일시적인 오류가 발생했습니다</p>
+        <p style={{ fontSize: '17px', fontWeight: 700, margin: 0 }}>잠시 문제가 생겼어요</p>
         <p style={{ fontSize: '13px', color: '#8B95A8', margin: 0 }}>잠시 후 다시 시도해 주세요.</p>
         {/* dev 에서만 보이는 한 줄 — 이 화면이 '라이브 장애' 가 아니라 편집 중 스냅샷임을 알린다.
             프로덕션 번들에서는 import.meta.hot 이 없어 통째로 사라진다. */}

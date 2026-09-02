@@ -43,7 +43,7 @@ import type { ComponentType, ReactElement, SVGProps } from 'react';
 import { StarIcon as StarSolid, HeartIcon as HeartSolid } from '@heroicons/react/24/solid';
 import {
   X, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Search, Plus, Minus, Check,
-  CheckCircle2, Trash2, Pencil, Star, Heart, AlertTriangle, Info, Lock, User, Users, Bell,
+  CheckCircle2, Trash2, Pencil, Star, Heart, AlertTriangle, Info, Lock, Smartphone, User, Users, Bell,
   QrCode, Calendar, Clock, Settings, Share2, Filter, Image, Download, ExternalLink, Menu,
   Home, RefreshCw, Copy, Send, MessageCircle, Mail, Eye, Bookmark, Flame, Target, Wallet, Gift,
   CheckCheck, MapPin, LogOut, Trophy, Ticket, Phone, Printer, BarChart3, Medal, ShoppingCart, Crown,
@@ -61,7 +61,7 @@ export type IconName =
   | 'close' | 'back' | 'chevron-left' | 'chevron-right' | 'chevron-down' | 'chevron-up'
   | 'search' | 'plus' | 'minus' | 'check' | 'check-circle'
   | 'trash' | 'edit' | 'star' | 'star-fill' | 'heart' | 'heart-fill'
-  | 'alert' | 'info' | 'lock' | 'user' | 'users' | 'bell'
+  | 'alert' | 'info' | 'lock' | 'smartphone' | 'user' | 'users' | 'bell'
   | 'qr' | 'calendar' | 'clock' | 'settings' | 'share' | 'filter'
   | 'image' | 'download' | 'external' | 'menu' | 'home' | 'refresh' | 'copy' | 'send'
   // 포커 도메인 글리프(IMG-2, 자체 제작) — 수트 4종은 채움 도형
@@ -117,7 +117,7 @@ const LUCIDE: Partial<Record<IconName, LucideIcon>> = {
   close: X, back: ChevronLeft, 'chevron-left': ChevronLeft, 'chevron-right': ChevronRight,
   'chevron-down': ChevronDown, 'chevron-up': ChevronUp, search: Search, plus: Plus, minus: Minus,
   check: Check, 'check-circle': CheckCircle2, trash: Trash2, edit: Pencil, star: Star,
-  heart: Heart, alert: AlertTriangle, info: Info, lock: Lock, user: User, users: Users,
+  heart: Heart, alert: AlertTriangle, info: Info, lock: Lock, smartphone: Smartphone, user: User, users: Users,
   bell: Bell, qr: QrCode, calendar: Calendar, clock: Clock, settings: Settings, share: Share2,
   filter: Filter, image: Image, download: Download, external: ExternalLink, menu: Menu,
   home: Home, refresh: RefreshCw, copy: Copy, send: Send, comment: MessageCircle, mail: Mail, eye: Eye,

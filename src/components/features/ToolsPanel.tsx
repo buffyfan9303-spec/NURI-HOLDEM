@@ -35,22 +35,24 @@ const GtoDeepPanel = lazyWithReload(() => import('./gto/GtoDeepPanel'));
 const HandReviewTool = lazyWithReload(() => import('./gto/HandReviewTool'));
 
 type ToolKey = 'drill' | 'gto' | 'replay' | 'pot' | 'icm' | 'range' | 'trainer' | 'postflop' | 'mdf' | 'aggro' | 'rvr' | 'outs' | 'pushfold' | 'spr' | 'ev' | 'mzone' | 'bankroll' | 'variance' | 'blindgen' | 'chip' | 'sim' | 'payout' | 'endtime' | 'combo' | 'glossary' | 'deal';
-/** 4레인 IA — 학습 / 분석 / 계산기 / 매장운영 (로드맵 ⑥) */
-type ToolCat = 'learn' | 'analyze' | 'calc' | 'ops';
+/** 5레인 IA — 차트 / 트레이닝 / 분석 / 계산기 / 매장운영.
+ *  오너 피드백(2026-09-02): "차트를 보고 싶은데 문제가 나온다" — 예전엔 '학습' 한 레인에 차트와 퀴즈가 섞여
+ *  첫 카드가 '오늘의 드릴'(퀴즈)이었다. 보는 것(차트)과 푸는 것(트레이닝)을 레인으로 갈라 차트를 맨 앞에 둔다. */
+type ToolCat = 'chart' | 'learn' | 'analyze' | 'calc' | 'ops';
 
 const TOOLS: { key: ToolKey; cat: ToolCat; name: string; desc: string; icon: ReactNode }[] = [
   // ── 학습 — 차트·트레이너 ──
   { key: 'drill', cat: 'learn', name: '오늘의 드릴', desc: '약점 기반 하루 5문제',
     icon: <><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M8 2v4M16 2v4M3 10h18" /><path d="M9 15l2 2 4-4" /></> },
-  { key: 'range', cat: 'learn', name: '스타팅핸드 가이드', desc: '오픈·수비·3벳 표준 레인지',
+  { key: 'range', cat: 'chart', name: '프리플랍 레인지 차트', desc: '9인·6맥스 포지션별 오픈·3벳·수비·vs 3벳',
     icon: <><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="9" y1="3" x2="9" y2="21" /></> },
-  { key: 'pushfold', cat: 'learn', name: '푸시 · 폴드 차트', desc: '자체 Nash · 셔브·콜 레인지',
+  { key: 'pushfold', cat: 'chart', name: '푸시 · 폴드 차트', desc: '자체 Nash · 셔브·콜 레인지',
     icon: <><path d="M12 21V4" /><path d="M5 11l7-7 7 7" /></> },
   { key: 'trainer', cat: 'learn', name: '프리플랍 트레이너', desc: '오픈·셔브 맞히기, 오답 노트',
     icon: <><path d="M12 2v4M12 18v4M2 12h4M18 12h4" /><circle cx="12" cy="12" r="4" /></> },
   { key: 'postflop', cat: 'learn', name: '포스트플랍 트레이너', desc: '실전 상황 퀴즈·해설',
     icon: <><rect x="3" y="6" width="5" height="7" rx="1" /><rect x="9.5" y="6" width="5" height="7" rx="1" /><rect x="16" y="6" width="5" height="7" rx="1" /><path d="M7 17h10" /><path d="M9 21h6" /></> },
-  { key: 'aggro', cat: 'learn', name: '어그레션 차트', desc: '포지션별 권장 빈도',
+  { key: 'aggro', cat: 'chart', name: '어그레션 차트', desc: '포지션별 권장 빈도',
     icon: <><path d="M3 17l6-6 4 4 8-8" /><path d="M14 7h7v7" /></> },
   { key: 'glossary', cat: 'learn', name: '홀덤 용어사전', desc: '용어 74개 · 한글 설명·검색',
     icon: <><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" /><path d="M9 7h6M9 11h4" /></> },
@@ -101,7 +103,8 @@ const TOOLS: { key: ToolKey; cat: ToolCat; name: string; desc: string; icon: Rea
  *  §7 ⑥b: '매장 운영' 레인은 GTO 탭에서 빠져 내 매장(StoreToolsPanel)으로 이관 —
  *  카탈로그에서만 숨기고 TOOLS/renderTool 에는 남겨 #tool= 딥링크·공유 하위호환을 지킨다. */
 const LANES: { id: ToolCat; label: string; desc: string }[] = [
-  { id: 'learn', label: '학습', desc: '차트·트레이너로 기본기' },
+  { id: 'chart', label: '차트', desc: '보고 외우는 표준 레인지' },
+  { id: 'learn', label: '트레이닝', desc: '퀴즈로 맞히고 오답 노트' },
   { id: 'analyze', label: '분석', desc: '핸드·레인지 에퀴티 실계산' },
   { id: 'calc', label: '계산기', desc: '실전 수치 판단' },
 ];

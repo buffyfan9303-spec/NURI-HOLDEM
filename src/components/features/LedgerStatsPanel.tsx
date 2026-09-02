@@ -810,7 +810,7 @@ ${card('AI 운영 액션 플랜', rpt.actions.map((a) => '• ' + a).join('\n'))
         </div>
       </div>
       {rpt.empty ? (
-        <p className="text-center py-8 text-2xs text-ink-muted">최근 {days}일간 데이터가 부족합니다.<br />장부를 작성하면 인사이트가 표시됩니다.</p>
+        <p className="text-center py-8 text-2xs text-ink-muted">최근 {days}일간 데이터가 부족합니다.<br />장부를 작성하면 통계가 표시됩니다.</p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <ReportCard tone="emerald" title="매출 및 엔트리 분석" body={rpt.sales} />

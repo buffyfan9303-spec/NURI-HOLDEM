@@ -1307,7 +1307,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
               // W2-2 VCH-1b: 바인 자동적립 중단(§12-A-3 — 문체부 '적립→입장료' 패턴 회피).
               // ⚠ voucherAccrualPerBin 필드·DB write 는 유지 — 지우면 세션 저장 경로가 전 매장 설정을 0 으로 덮는다(§18.4).
             } catch (e) {
-              if (e instanceof Error && e.message === CELL_TAKEN) { toast.show('다른 직원이 방금 이 칸을 입력했어요. 최신 내용으로 갱신합니다', 'info'); setSelected(null); reload(); }
+              if (e instanceof Error && e.message === CELL_TAKEN) { toast.show('다른 직원이 방금 이 칸을 입력했어요. 최신 내용으로 바꿨어요', 'info'); setSelected(null); reload(); }
               else toast.show(e instanceof Error ? e.message : '저장 실패', 'error');
             } finally { setPayBusy(false); }
           }}
@@ -1327,7 +1327,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
               // W2-2 VCH-1b: 바인 자동적립 중단(§12-A-3 — 문체부 '적립→입장료' 패턴 회피).
               // ⚠ voucherAccrualPerBin 필드·DB write 는 유지 — 지우면 세션 저장 경로가 전 매장 설정을 0 으로 덮는다(§18.4).
             } catch (e) {
-              if (e instanceof Error && e.message === CELL_TAKEN) { toast.show('다른 직원이 방금 이 칸을 입력했어요. 최신 내용으로 갱신합니다', 'info'); setSelected(null); reload(); }
+              if (e instanceof Error && e.message === CELL_TAKEN) { toast.show('다른 직원이 방금 이 칸을 입력했어요. 최신 내용으로 바꿨어요', 'info'); setSelected(null); reload(); }
               else toast.show(e instanceof Error ? e.message : '저장 실패', 'error');
             } finally { setPayBusy(false); }
           }}

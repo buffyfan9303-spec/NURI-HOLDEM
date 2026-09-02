@@ -16,12 +16,25 @@ export interface ClockTheme {
   background?: { kind: 'solid' | 'gradient' | 'felt'; preset: string; image?: string };
 }
 
-/** 현행 ClockDisplay 하드코딩 값 — 변수 기본값의 단일 출처(스냅샷 불변 계약) */
+/** 아우라 골드(기본 테마 v2, 2026-09-02 오너 지시) — 순흑 + 금빛 보케(정적 radial-gradient 9겹 · 이미지·애니 없음).
+ *  참조: APIS 클락 화면(검정 바탕 · 금색 보케 · 흰 대형 타이머 · 금색 레벨/블라인드). 매장 TV 라 페인트 1회 후 정적. */
+export const AURA_GOLD_BG =
+  'radial-gradient(9vmin 9vmin at 12% 78%, rgba(224,169,78,.22) 0%, transparent 70%), ' +
+  'radial-gradient(5vmin 5vmin at 22% 92%, rgba(224,169,78,.18) 0%, transparent 70%), ' +
+  'radial-gradient(7vmin 7vmin at 34% 84%, rgba(224,169,78,.14) 0%, transparent 70%), ' +
+  'radial-gradient(4vmin 4vmin at 44% 95%, rgba(224,169,78,.20) 0%, transparent 70%), ' +
+  'radial-gradient(8vmin 8vmin at 62% 88%, rgba(224,169,78,.16) 0%, transparent 70%), ' +
+  'radial-gradient(5vmin 5vmin at 74% 80%, rgba(224,169,78,.20) 0%, transparent 70%), ' +
+  'radial-gradient(10vmin 10vmin at 88% 90%, rgba(224,169,78,.14) 0%, transparent 70%), ' +
+  'radial-gradient(6vmin 6vmin at 95% 72%, rgba(224,169,78,.12) 0%, transparent 70%), ' +
+  'radial-gradient(140% 55% at 50% 112%, rgba(120,84,20,.45) 0%, transparent 60%), #030303';
+
+/** 기본 룩 — 변수 기본값의 단일 출처. 2026-09-02 딥 인디고 → 아우라 골드(오너 지시 "클락 기본 테마를 아우라 기반으로").
+ *  ⚠ 기존 매장 테마(DB 저장값)는 프리셋 id 로 대조되므로 그대로 유효 — 바뀌는 것은 '테마 없음' 매장의 기본 룩뿐이다. */
 export const CLOCK_DEFAULTS = {
-  bg: '#06080B',           // 루트 bg-[#06080B]
-  accent: '#5E6AD2',       // 구 accent-300 스냅샷 — 도메인 고정(타이머·상금·강조 스탯).
-                           // ⚠ DB 저장값이 이 허용 목록과 대조(sanitize)되므로 값 변경 = 기존 매장 테마 무효화.
-                           //   2026-08-27 앱 accent 플럼 이동과 무관하게 TV 송출 계약(픽셀 변화 0)을 지킨다.
+  bg: AURA_GOLD_BG,
+  accent: '#E0A94E',       // 샴페인 골드(허용 스와치) — 레벨·블라인드·PLAYERS·상금 강조. 순흑 위 8.9:1
+  timer: '#FFFFFF',        // 타이머는 순백(참조 화면) — accent 를 고른 매장은 타이머도 그 색(구 동작 유지)
   timerUrgent: '#fb7185',  // rose-400 — 잠금(1분 미만 긴급)
   timerBreak: '#7dd3fc',   // sky-300 — 잠금(브레이크)
   // 보조 라벨 2단 — 기본값은 현행 text-white/45 · text-white/50 과 1:1(배경 이미지 없으면 픽셀 변화 0).
@@ -69,11 +82,14 @@ export interface ClockThemePreset {
   bg: string;
   /** 프리셋 기본 accent(스와치에서 별도 선택 시 대체) */
   accent: string;
+  /** 타이머 색 — 없으면 accent(구 동작). 아우라 골드는 순백 타이머 */
+  timer?: string;
 }
 
-// 6종 — 전부 다크. deep-indigo 는 현행 룩과 동일(기본).
+// 7종 — 전부 다크. aura-gold 가 기본(2026-09-02), deep-indigo 는 구 기본 룩으로 남긴다.
 export const CLOCK_THEME_PRESETS: ClockThemePreset[] = [
-  { id: 'deep-indigo', label: '딥 인디고(기본)', kind: 'solid', bg: CLOCK_DEFAULTS.bg, accent: CLOCK_DEFAULTS.accent },
+  { id: 'aura-gold', label: '아우라 골드(기본)', kind: 'gradient', bg: AURA_GOLD_BG, accent: CLOCK_DEFAULTS.accent, timer: CLOCK_DEFAULTS.timer },
+  { id: 'deep-indigo', label: '딥 인디고', kind: 'solid', bg: '#06080B', accent: '#5E6AD2' },
   {
     id: 'midnight-felt', label: '미드나잇 펠트', kind: 'felt',
     bg: 'radial-gradient(120% 90% at 50% 18%, #0E3524 0%, #081711 60%, #04080A 100%)',
@@ -98,7 +114,7 @@ export const CLOCK_THEME_PRESETS: ClockThemePreset[] = [
   },
 ];
 
-export const DEFAULT_CLOCK_PRESET_ID = 'deep-indigo';
+export const DEFAULT_CLOCK_PRESET_ID = 'aura-gold';
 
 export function clockPresetById(id: string | undefined | null): ClockThemePreset | null {
   if (!id) return null;
@@ -189,9 +205,10 @@ export function clockBgImageOf(theme: ClockTheme | null | undefined): string | n
 export function clockThemeVars(theme: ClockTheme | null | undefined): Record<string, string> {
   const t = sanitizeClockTheme(theme);
   const p = t ? clockPresetById(t.background?.preset ?? t.palette?.preset) : null;
-  const accent = t?.palette?.accent && isAllowedAccent(t.palette.accent)
-    ? t.palette.accent
-    : (p?.accent ?? CLOCK_DEFAULTS.accent);
+  const customAccent = t?.palette?.accent && isAllowedAccent(t.palette.accent) ? t.palette.accent : null;
+  const accent = customAccent ?? (p?.accent ?? CLOCK_DEFAULTS.accent);
+  // 타이머: 매장이 스와치를 골랐으면 그 색(구 동작), 아니면 프리셋 timer(아우라 골드=순백) → 없으면 accent
+  const timer = customAccent ?? (p ? (p.timer ?? p.accent) : CLOCK_DEFAULTS.timer);
   const base = p?.bg ?? CLOCK_DEFAULTS.bg;
   const img = clockBgImageOf(t);
   // 배경 이미지: 스크림(맨 위) → 사진 → 프리셋 배경(맨 아래) 3층 합성.
@@ -200,7 +217,7 @@ export function clockThemeVars(theme: ClockTheme | null | undefined): Record<str
   return {
     '--clk-bg': img ? `${CLOCK_BG_SCRIM}, url("${img}") center/cover no-repeat, ${base}` : base,
     '--clk-accent': accent,
-    '--clk-timer': accent,
+    '--clk-timer': timer,
     '--clk-timer-urgent': CLOCK_DEFAULTS.timerUrgent, // 잠금
     '--clk-timer-break': CLOCK_DEFAULTS.timerBreak,   // 잠금
     '--clk-ink-dim': img ? CLOCK_BG_INK.dim : CLOCK_DEFAULTS.inkDim,

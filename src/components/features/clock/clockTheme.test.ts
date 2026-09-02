@@ -44,7 +44,7 @@ describe('clockThemeVars · 배경 유무에 따른 변수', () => {
   it('테마 없음 = 현행 하드코딩 값 1:1(픽셀 변화 0)', () => {
     const v = clockThemeVars(null);
     expect(v['--clk-bg']).toBe(CLOCK_DEFAULTS.bg);
-    expect(v['--clk-timer']).toBe(CLOCK_DEFAULTS.accent);
+    expect(v['--clk-timer']).toBe(CLOCK_DEFAULTS.timer); // 2026-09-02 아우라 골드: 타이머는 순백, accent 는 골드
     expect(v['--clk-ink-dim']).toBe(CLOCK_DEFAULTS.inkDim);
     expect(v['--clk-ink-soft']).toBe(CLOCK_DEFAULTS.inkSoft);
     // 긴급·브레이크는 어떤 테마도 덮지 못하는 잠금값

@@ -791,7 +791,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
             </div>
           </div>
           {funnel.views === 0 && (
-            <p className="mt-2 t-desc break-keep text-ink-muted">조회수는 손님이 포스터 상세를 열 때부터 쌓입니다. 이번 주부터 집계가 시작됐어요.</p>
+            <p className="mt-2 t-desc break-keep text-ink-muted">조회수는 손님이 포스터 상세를 열 때부터 쌓여요. 이번 주부터 집계를 시작했어요.</p>
           )}
         </section>
       )}

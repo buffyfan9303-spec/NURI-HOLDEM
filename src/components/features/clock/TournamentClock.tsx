@@ -28,6 +28,7 @@ import { saveVenueRankings, prizeUnitRisk, getVenueRankings } from '../../../api
 import LoadErrorCard from '../../atoms/LoadErrorCard';
 import { msgOf } from '../../../lib/dbError';
 import Modal from '../../atoms/Modal';
+import QRCode from 'qrcode';
 import Icon from '../../atoms/Icon';
 import ClockThemePanel from './ClockThemePanel';
 
@@ -324,6 +325,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
   const [tickStyle, setTickStyle] = useState<'beep' | 'soft' | 'off'>(() => { try { const v = localStorage.getItem('nuri:clock-tick'); return v === 'soft' || v === 'off' ? v : 'beep'; } catch { return 'beep'; } });
   useEffect(() => { try { localStorage.setItem('nuri:clock-tick', tickStyle); } catch { /* quota */ } }, [tickStyle]);
   const [fs, setFs] = useState(false);
+  const [remoteQr, setRemoteQr] = useState<string | null>(null); // 휴대폰 리모컨 QR(data URL)
   // 전체 클락 공통 광고 이미지(운영자 설정) — 모든 클락 상단에 표시
   const [adImg, setAdImg] = useState<string | null>(null);
   const [adSize, setAdSize] = useState<'sm' | 'md' | 'lg'>('sm'); // 운영자 조절(기본 작게)
@@ -714,10 +716,28 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
               title="새 창으로 관전 화면(매장 TV·빔프로젝터)을 엽니다. 그 창을 큰 화면으로 옮겨 띄워두세요"
               className="btn-ghost inline-flex items-center gap-1 text-2xs px-2.5 py-1 text-accent-300"><Icon name="tv" size={13} className="shrink-0" />TV 송출</button>
           )}
+          {!fs && (
+            <button type="button"
+              onClick={() => { QRCode.toDataURL(`${window.location.origin}/?remote=${state.venueId}&g=${state.gameSeq ?? 1}`, { width: 320, margin: 1 }).then(setRemoteQr).catch(() => toast.show('QR 생성에 실패했습니다', 'error')); }}
+              title="휴대폰으로 QR을 찍으면 이 클락을 손안에서 조작할 수 있습니다(매장 계정 로그인 필요)"
+              className="btn-ghost inline-flex items-center gap-1 text-2xs px-2.5 py-1 text-accent-300"><Icon name="smartphone" size={13} className="shrink-0" />휴대폰 리모컨</button>
+          )}
           <button type="button" onClick={toggleFs} className="btn-ghost text-2xs px-2.5 py-1">{fs ? '⤡ 전체화면 해제' : '⤢ 전체화면'}</button>
           {canManage && !fs && <button type="button" onClick={onOpenSettings} className="btn-ghost text-2xs px-2.5 py-1">설정</button>}
         </div>
       </div>
+
+      {remoteQr && (
+        <Modal open onClose={() => setRemoteQr(null)} title="휴대폰 리모컨" maxWidth="sm">
+          <div className="flex flex-col items-center gap-3 p-4 text-center">
+            <img src={remoteQr} alt="리모컨 QR" width={240} height={240} className="rounded-card bg-white p-2" />
+            <p className="t-body text-ink-secondary">휴대폰 카메라로 찍으면 이 클락의 시작·정지, 레벨 이동, 탈락·리바이 입력을 손안에서 할 수 있습니다.<br />매장 계정으로 로그인한 휴대폰만 조작할 수 있습니다.</p>
+            <button type="button" className="btn-ghost text-2xs px-2.5 py-1 inline-flex items-center gap-1"
+              onClick={() => { navigator.clipboard?.writeText(`${window.location.origin}/?remote=${state.venueId}&g=${state.gameSeq ?? 1}`).then(() => toast.show('링크를 복사했습니다', 'info')).catch(() => {}); }}>
+              <Icon name="link" size={13} />링크 복사</button>
+          </div>
+        </Modal>
+      )}
 
       {/* 디스플레이 */}
       <div className={['overflow-hidden border border-border-default shadow-[0_10px_50px_rgba(0,0,0,0.45)] bg-gradient-to-b from-[#161b25] to-[#090c12]',

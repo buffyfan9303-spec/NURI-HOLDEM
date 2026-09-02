@@ -205,6 +205,17 @@ const DOMINANCE_EXCEPTIONS: Record<string, string[]> = {
   // sb_vs_bb3bet 은 예외 0 — 콜에 A9s~A6s 가 0.5 로 있어 A5s(4벳 0.5)가 아무도 넘지 않는다.
   co_vs_sb3bet: ['A5s'], hj_vs_bb3bet: ['A5s'], hj_vs_btn3bet: ['A5s', 'A4s'],
   // bb_vs_* 는 예외 0 — BB 는 3벳 혼합의 잔여를 전부 콜로 받아 continue 가 100% 다.
+  // ── 9인 보강(2026-09-02) — 9인 오픈 후기 5자리는 6맥스 표를 공유하므로 예외도 같다
+  rfi_lj9: ['A5s', 'A4s', 'A3s', 'A2s'], rfi_hj9: ['A5s', 'A4s', 'A3s', 'A2s'], rfi_sb9: ['A5o'],
+  // 3벳 vs 얼리 — 블러프 휠 에이스(A6s~ 는 접는다). wide 0 = A5s A4s · wide 1/2 = +A3s
+  utg1_3bet_utg: ['A5s', 'A4s'], mp_3bet_utg: ['A5s', 'A4s'], lj_3bet_utg: ['A5s', 'A4s'], hj_3bet_utg: ['A5s', 'A4s'],
+  co_3bet_utg: ['A5s', 'A4s', 'A3s'], btn_3bet_utg: ['A5s', 'A4s', 'A3s'],
+  mp_3bet_utg1: ['A5s', 'A4s'], lj_3bet_utg1: ['A5s', 'A4s'], hj_3bet_utg1: ['A5s', 'A4s', 'A3s'],
+  co_3bet_utg1: ['A5s', 'A4s', 'A3s'], btn_3bet_utg1: ['A5s', 'A4s', 'A3s'],
+  lj_3bet_mp: ['A5s', 'A4s', 'A3s'], hj_3bet_mp: ['A5s', 'A4s', 'A3s'], co_3bet_mp: ['A5s', 'A4s', 'A3s'], btn_3bet_mp: ['A5s', 'A4s', 'A3s'],
+  // SB 3벳-or-폴드 vs 얼리 · 얼리 vs 3벳 4벳 블러프. BB vs 얼리는 콜에 A6s+ 0.5 라 예외 0.
+  sb_vs_utg: ['A5s', 'A4s'], sb_vs_utg1: ['A5s', 'A4s'], sb_vs_mp: ['A5s', 'A4s'],
+  utg1_vs_3bet: ['A5s'], mp_vs_3bet: ['A5s', 'A4s'],
 };
 
 // ⚠ 예외 목록은 **게이트의 뒷문**이다 — 진짜 데이터 오류도 여기 한 줄만 넣으면 통과한다.
@@ -289,9 +300,10 @@ describe('ranges.data 확장 스팟(2026-08-30)', () => {
     return rangeComboPct(buildFreq(a.spec));
   };
 
-  it('34개 · id 중복 없음 · 신규 11개가 전부 존재', () => {
-    expect(RANGE_SCENARIOS).toHaveLength(34);
-    expect(new Set(RANGE_SCENARIOS.map((s) => s.id)).size).toBe(34);
+  it('63개 · id 중복 없음 · 신규 11개가 전부 존재', () => {
+    // 2026-09-02 9인 확장: 34 → 63 (오픈 후반 5 · 얼리 3벳 15 · 얼리 수비 6 · 얼리 vs 3벳 3)
+    expect(RANGE_SCENARIOS).toHaveLength(63);
+    expect(new Set(RANGE_SCENARIOS.map((s) => s.id)).size).toBe(63);
     for (const id of ['sb_vs_lj', 'sb_vs_hj', 'sb_vs_co', 'hj_3bet_lj', 'co_3bet_hj', 'btn_3bet_hj',
       'sb_vs_bb3bet', 'co_vs_bb3bet', 'co_vs_sb3bet', 'hj_vs_bb3bet', 'hj_vs_btn3bet']) {
       expect(byId(id), id).toBeTruthy();
@@ -397,7 +409,9 @@ describe('ranges.data 확장 스팟(2026-08-30)', () => {
   it('🔴 vs 3벳 MDF: continue ÷ 오픈 비율이 전 노드 23~39%', () => {
     for (const s of RANGE_SCENARIOS.filter((x) => x.group === 'vs3bet')) {
       const cont = s.actions.reduce((t, a) => t + rangeComboPct(buildFreq(a.spec)), 0);
-      const open = rangeComboPct(buildFreq(byId(`rfi_${s.hero.toLowerCase()}`).actions[0].spec));
+      // 9인 얼리 히어로의 오픈은 9인 표(rfi_utg9·rfi_utg1·rfi_mp9)에서 찾는다
+      const OPEN_ID: Record<string, string> = { UTG: 'rfi_utg9', 'UTG+1': 'rfi_utg1', MP: 'rfi_mp9' };
+      const open = rangeComboPct(buildFreq(byId(OPEN_ID[s.hero] ?? `rfi_${s.hero.toLowerCase()}`).actions[0].spec));
       const ratio = (100 * cont) / open;
       expect(ratio, `${s.id} continue/오픈`).toBeGreaterThan(23);
       expect(ratio, `${s.id} continue/오픈`).toBeLessThan(39);
@@ -436,16 +450,16 @@ describe('ranges.data 확장 스팟(2026-08-30)', () => {
     for (const s of RANGE_SCENARIOS) {
       expect(POS, s.id).toContain(s.hero);
       if (s.vs) expect(POS, s.id).toContain(s.vs);
-      // RFI 는 상대가 특정되지 않는다 / 매치업 표는 lj_vs_3bet(제네릭)만 예외
+      // RFI 는 상대가 특정되지 않는다 / 매치업 표는 제네릭 vs 3벳(lj·utg·utg1·mp)만 예외
       if (s.group === 'rfi6' || s.group === 'rfi9') expect(s.vs, s.id).toBeUndefined();
-      else if (s.id !== 'lj_vs_3bet') expect(s.vs, s.id).toBeTruthy();
-      // 2단 선택 UI 의 전제 — 한 행의 칩이 5개를 넘지 않는다
+      else if (!/^(lj|utg|utg1|mp)_vs_3bet$/.test(s.id)) expect(s.vs, s.id).toBeTruthy();
+      // 2단 선택 UI 의 전제 — 칩 행은 가로 스크롤(RangeGuide overflow-x-auto)이라 포지션 수(9)까지만 허용
     }
     for (const g of ['rfi6', 'rfi9', 'defend', 'threebet', 'vs3bet'] as const) {
       const inG = RANGE_SCENARIOS.filter((s) => s.group === g);
-      expect(new Set(inG.map((s) => s.hero)).size, `${g} hero 행`).toBeLessThanOrEqual(5);
+      expect(new Set(inG.map((s) => s.hero)).size, `${g} hero 행`).toBeLessThanOrEqual(9);
       for (const h of new Set(inG.map((s) => s.hero))) {
-        expect(inG.filter((s) => s.hero === h).length, `${g}/${h} 상대 행`).toBeLessThanOrEqual(5);
+        expect(inG.filter((s) => s.hero === h).length, `${g}/${h} 상대 행`).toBeLessThanOrEqual(9);
       }
     }
   });
@@ -458,8 +472,8 @@ describe('ranges.data 확장 스팟(2026-08-30)', () => {
       expect(s, id).toBeTruthy();
       expect(s!.actions.some((a) => a.key === key), `${id}:${key}`).toBe(true);
     }
-    // preflopQuiz RFI_LIST — 확장이 트레이너 출제 분포를 흔들지 않았는지(6맥스 5 + 9인 3)
+    // preflopQuiz RFI_LIST — 확장이 트레이너 출제 분포를 흔들지 않았는지(6맥스 5 + 9인 8 · 2026-09-02 후반 5 추가)
     expect(RANGE_SCENARIOS.filter((s) => s.group === 'rfi6')).toHaveLength(5);
-    expect(RANGE_SCENARIOS.filter((s) => s.group === 'rfi9')).toHaveLength(3);
+    expect(RANGE_SCENARIOS.filter((s) => s.group === 'rfi9')).toHaveLength(8);
   });
 });

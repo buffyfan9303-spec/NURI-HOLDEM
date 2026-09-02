@@ -520,12 +520,103 @@ const VS3BET: RangeScenario[] = [
   },
 ];
 
-export const RANGE_SCENARIOS: RangeScenario[] = [...RFI6, ...RFI9, ...DEFEND, ...THREEBET, ...VS3BET];
+// ── 9인 풀 테이블 보강(오너 지시 2026-09-02: "국내 라이브는 9인인데 3자리만 나온다 · 3벳 포함 세분화") ──
+// ① 9인 오픈은 얼리 3자리만 있고 나머지는 "6맥스와 동일" 이라는 말로 숨어 있었다 — 유저는 9인 그룹에서
+//    LJ/HJ/CO/BTN/SB 를 찾을 수 없었다. 같은 표를 9인 그룹에도 **그 이름으로** 올린다(스펙 공유 · 중복 서술 없음).
+// ② 얼리(UTG·UTG+1·MP) 오픈에 대한 3벳·수비·vs 3벳이 통째로 없었다. 9인에서 가장 자주 서는 스팟이다.
+//    원칙: 얼리 오픈은 좁으니 3벳은 밸류 위주 + 휠 에이스 블러프 소량, 뒤 포지션일수록 조금씩 넓힌다.
+const LATE_LABEL: Record<string, string> = { LJ: 'LJ (9인)', HJ: 'HJ (9인)', CO: 'CO (9인)', BTN: 'BTN (9인)', SB: 'SB (9인)' };
+const RFI9_LATE: RangeScenario[] = RFI6.map((s) => ({
+  ...s,
+  id: `${s.id}9`,
+  group: 'rfi9',
+  label: LATE_LABEL[s.hero] ?? s.label,
+  desc: `9인 테이블 ${s.hero} · ${s.desc.replace(/^6맥스 첫 포지션 · /, '')}`,
+  note: s.note ? `${s.note} (6맥스와 같은 표 — 앞에서 다 접고 나에게 왔다면 남은 인원이 같다)` : '앞에서 다 접고 나에게 왔다면 6맥스와 같은 상황 — 같은 표를 쓴다.',
+}));
+
+// 3벳 vs 얼리 오픈 — 오픈 포지션 3단(UTG 12% · UTG+1 13% · MP 15%) × 내 포지션. 폭은 오픈이 넓을수록·내가 뒤일수록 조금 넓게.
+const early3bet = (hero: TablePos, vs: TablePos, wide: 0 | 1 | 2): RangeScenario => {
+  const spec = wide === 0
+    ? { '1': 'QQ+ AKs AKo', '0.5': 'JJ AQs A5s A4s' }
+    : wide === 1
+      ? { '1': 'JJ+ AKs AKo AQs', '0.5': 'TT AQo AJs KQs A5s A4s A3s' }
+      : { '1': 'TT+ AKs AKo AQs', '0.5': '99 AQo AJs KQs A5s A4s A3s' };
+  const vsName = vs === 'UTG' ? 'UTG(12%)' : vs === 'UTG+1' ? 'UTG+1(13%)' : 'MP(15%)';
+  return {
+    id: `${hero.toLowerCase().replace('+', '')}_3bet_${vs.toLowerCase().replace('+', '')}`,
+    group: 'threebet', hero, vs,
+    label: `${hero} 3벳 vs ${vs}`,
+    desc: `9인 · ${vsName} 오픈에 ${hero}에서 리레이즈`,
+    actions: [{ key: 'raise', label: '3벳', spec }],
+    note: wide === 0
+      ? '얼리 오픈은 좁다 — 3벳은 밸류(QQ+·AK) 위주, 블러프는 A 블로커 휠 에이스만 소량. AQo·TT 로 3벳하면 도미네이트당한다.'
+      : '오픈이 조금 넓어졌거나 내가 뒤라 3벳 폭도 한 단계 넓힌다. 그래도 얼리 상대에겐 JJ·AQs 까지가 밸류의 하한이다.',
+  };
+};
+const THREEBET_EARLY: RangeScenario[] = [
+  // vs UTG
+  early3bet('UTG+1', 'UTG', 0), early3bet('MP', 'UTG', 0), early3bet('LJ', 'UTG', 0), early3bet('HJ', 'UTG', 0),
+  early3bet('CO', 'UTG', 1), early3bet('BTN', 'UTG', 1),
+  // vs UTG+1
+  early3bet('MP', 'UTG+1', 0), early3bet('LJ', 'UTG+1', 0), early3bet('HJ', 'UTG+1', 1),
+  early3bet('CO', 'UTG+1', 1), early3bet('BTN', 'UTG+1', 1),
+  // vs MP
+  early3bet('LJ', 'MP', 1), early3bet('HJ', 'MP', 1), early3bet('CO', 'MP', 2), early3bet('BTN', 'MP', 2),
+];
+
+// 블라인드 수비 vs 얼리 오픈 — BB 는 3벳+콜(콜은 A6s+ 를 0.5 로 받아 휠 에이스 블러프가 지배 역전을 만들지 않는다),
+// SB 는 3벳-or-폴드(레이크·포지션 불리로 콜 없음).
+const bbVsEarly = (vs: TablePos, wide: boolean): RangeScenario => ({
+  id: `bb_vs_${vs.toLowerCase().replace('+', '')}`, group: 'defend', hero: 'BB', vs,
+  label: `BB 수비 vs ${vs}`, desc: `9인 · ${vs} 오픈(2.5x)에 BB 에서 3벳·콜`,
+  actions: [
+    { key: 'raise', label: '3벳', spec: wide
+      ? { '1': 'QQ+ AKs AKo', '0.5': 'JJ AQs A5s A4s A3s' }
+      : { '1': 'QQ+ AKs AKo', '0.5': 'JJ AQs A5s A4s' } },
+    { key: 'call', label: '콜', spec: wide
+      ? { '1': 'TT-22 AQo AJs ATs KQs KJs KTs QJs QTs JTs T9s 98s 87s 76s 65s 54s', '0.5': 'JJ AQs A9s A8s A7s A6s AJo KQo J9s T8s 97s' }
+      : { '1': 'TT-22 AQo AJs ATs KQs KJs QJs JTs T9s 98s 87s 76s', '0.5': 'JJ AQs A9s A8s A7s A6s KTs QTs 65s' } },
+  ],
+  note: '얼리 오픈엔 BB 도 콜 폭을 줄인다 — 수딧 커넥터·중간 페어는 남기고 오프수트 브로드웨이는 접는다. 3벳 블러프는 휠 에이스만.',
+});
+const sbVsEarly = (vs: TablePos): RangeScenario => ({
+  id: `sb_vs_${vs.toLowerCase().replace('+', '')}`, group: 'defend', hero: 'SB', vs,
+  label: `SB 수비 vs ${vs}`, desc: `9인 · ${vs} 오픈에 SB 는 3벳 아니면 폴드`,
+  actions: [{ key: 'raise', label: '3벳', spec: { '1': 'JJ+ AKs AKo AQs', '0.5': 'TT AQo AJs KQs A5s A4s' } }],
+  note: 'SB 콜은 포지션·레이크 둘 다 불리 — 얼리 오픈엔 3벳-or-폴드. 밸류 JJ+·AK·AQs, 블러프 휠 에이스.',
+});
+const DEFEND_EARLY: RangeScenario[] = [
+  bbVsEarly('UTG', false), bbVsEarly('UTG+1', false), bbVsEarly('MP', true),
+  sbVsEarly('UTG'), sbVsEarly('UTG+1'), sbVsEarly('MP'),
+];
+
+// 얼리 오픈이 3벳을 맞았을 때 — 오픈이 좁아 4벳 밸류가 두텁고(KK+·AKs), 콜은 QQ/AKo 잔여 + 중간 페어·AQs.
+// width 0 = UTG(KQs 폴드·AJs 반만 — 상대 3벳이 QQ+·AK 중심이라 지배당한다. 블러프 4벳 없음: 10% 오픈은 밸류만으로 MDF 를 채운다)
+//       1 = UTG+1 · 2 = MP
+const earlyVs3bet = (hero: TablePos, width: 0 | 1 | 2): RangeScenario => ({
+  id: `${hero.toLowerCase().replace('+', '')}_vs_3bet`, group: 'vs3bet', hero,
+  label: `${hero} vs 3벳`, desc: `9인 · 내 ${hero} 오픈이 3벳을 맞았을 때 · 4벳·콜`,
+  actions: [
+    { key: 'fourbet', label: '4벳', spec: width === 2 ? { '1': 'KK+ AKs', '0.5': 'QQ AKo A5s A4s' } : width === 1 ? { '1': 'KK+ AKs', '0.5': 'QQ AKo A5s' } : { '1': 'KK+ AKs', '0.5': 'QQ AKo' } },
+    { key: 'call', label: '콜', spec: width === 2
+      ? { '1': 'JJ TT 99 AQs AJs ATs KQs KJs', '0.5': 'QQ AKo' }
+      : width === 1 ? { '1': 'JJ TT AQs AJs KQs', '0.5': 'QQ AKo' } : { '1': 'JJ TT AQs', '0.5': 'QQ AKo AJs' } },
+  ],
+  note: width === 0
+    ? '10% 오픈은 이미 프리미엄이라 4벳은 밸류만(KK+·AKs). QQ·AKo 는 4벳·콜 반반, 상대 3벳이 QQ+·AK 중심이라 KQs 는 접고 AJs 는 반만 콜.'
+    : '얼리 오픈은 이미 프리미엄이라 4벳 밸류가 두텁다(KK+·AKs). QQ·AKo 는 4벳·콜 반반, 블러프 4벳은 A 블로커 휠 에이스만.',
+});
+const VS3BET_EARLY: RangeScenario[] = [earlyVs3bet('UTG', 0), earlyVs3bet('UTG+1', 1), earlyVs3bet('MP', 2)];
+
+export const RANGE_SCENARIOS: RangeScenario[] = [
+  ...RFI6, ...RFI9, ...RFI9_LATE, ...DEFEND, ...DEFEND_EARLY, ...THREEBET, ...THREEBET_EARLY, ...VS3BET, ...VS3BET_EARLY,
+];
 
 export const RANGE_GROUPS: { id: RangeScenario['group']; label: string; desc: string }[] = [
-  { id: 'rfi6', label: '오픈 (6맥스)', desc: '앞에 아무도 없을 때 · 포지션별 오픈 레이즈' },
-  { id: 'rfi9', label: '오픈 (9인 얼리)', desc: '9인 테이블 추가 얼리 3자리 (이후는 6맥스와 동일)' },
-  { id: 'defend', label: '블라인드 수비', desc: '상대 오픈에 BB·SB의 3벳·콜 (전 포지션)' },
-  { id: 'threebet', label: '3벳', desc: '상대 오픈에 리레이즈 · 직선형 vs 양극형' },
-  { id: 'vs3bet', label: 'vs 3벳', desc: '내 오픈이 3벳을 맞았을 때 · 4벳·콜' },
+  { id: 'rfi9', label: '오픈 (9인)', desc: '국내 라이브 표준 · UTG부터 SB까지 8자리 오픈 레이즈' },
+  { id: 'rfi6', label: '오픈 (6맥스)', desc: '온라인·숏핸드 · LJ부터 SB까지' },
+  { id: 'threebet', label: '3벳', desc: '상대 오픈에 리레이즈 · 얼리(UTG·UTG+1·MP) 오픈 포함' },
+  { id: 'defend', label: '블라인드 수비', desc: '상대 오픈에 BB·SB의 3벳·콜 · 얼리 오픈 포함' },
+  { id: 'vs3bet', label: 'vs 3벳', desc: '내 오픈이 3벳을 맞았을 때 · 4벳·콜 · 얼리 포함' },
 ];

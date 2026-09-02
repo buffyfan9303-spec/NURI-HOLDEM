@@ -143,11 +143,19 @@
   /* 네온 링/게이지 — 진행 스트로크에만(정적 필터, 애니메이트하지 않는다 §4) */
   .ring-glow { filter: drop-shadow(0 0 6px rgb(var(--aura-300) / 0.8)); }
   html.light .ring-glow { filter: none; }
+  /* v5 라이트 '종이와 잉크'(2026-09-02): 카드는 불투명 순백 + 잉크 6% 헤어라인 + 2겹 그림자(접촉 1px · 확산 32px).
+     반투명(0.85)+굵은 테두리는 지면과 섞여 '회색 상자'로 읽혔다 — 밝은 지면에서 깊이는 선이 아니라 그림자가 만든다
+     (Atlassian elevation · Linear 라이트: tinted neutral 지면 + 흰 표면 + 옅은 layered shadow). */
   html.light .card-aura {
-    background-color: rgb(var(--surface-low) / 0.85);
-    border-color: rgb(var(--border-default) / 0.7);
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.9), 0 8px 24px -14px rgb(20 22 26 / 0.18);
+    background-color: rgb(255 255 255);
+    border-color: rgb(11 18 32 / 0.06);
+    box-shadow: inset 0 1px 0 rgb(255 255 255), 0 1px 2px rgb(11 18 32 / 0.04), 0 12px 32px -16px rgb(11 18 32 / 0.18);
   }
+  @media (hover: hover) and (pointer: fine) {
+    html.light .card-aura:hover { border-color: rgb(11 18 32 / 0.12); box-shadow: inset 0 1px 0 rgb(255 255 255), 0 2px 4px rgb(11 18 32 / 0.05), 0 20px 40px -18px rgb(11 18 32 / 0.22); }
+  }
+  /* 라이트 크롬(헤더·탭바)은 지면색(#F5F7FB) 반투명이 아니라 순백 78% — 스크롤 콘텐츠가 비치되 글자는 흰 종이 위에 남는다 */
+  html.light .glass-chrome::before, html.light .glass-strong { background-color: rgb(255 255 255 / 0.78); }
   .t-micro {
     /* v3 스펙: text-xs font-semibold tracking-widest cyan — 영문 대문자 라벨(PLAYERS·BUY-IN·REG)에만. 한글엔 쓰지 않는다 */
     font-size: 0.6875rem; line-height: 1; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
@@ -317,7 +325,7 @@
     --ink-inverse:   24 26 32;    /* 골드 버튼 위 텍스트는 어둡게 유지 */
     --ink-on-bright: 3 4 5;       /* 다크와 동일 — 근거는 위 블록 주석 */
 
-    --border-subtle:  227 232 240; /* #E3E8F0 헤어라인(쿨) */
+    --border-subtle:  231 235 242; /* #E7EBF2 헤어라인(쿨) — v5(2026-09-02): 종이 위 선은 더 옅게, 깊이는 그림자가 맡는다 */
     /* 라이트도 같은 문제(1.28:1) — 흰 배경에서 입력칸 테두리가 사실상 안 보였다.
        시인성 재보정(2026-08-27, 명도만·hue 218 유지): default 1.55→1.79, strong 2.34→3.13(UI 경계 ≥3:1) */
     --border-default: 185 195 214; /* #B9C3D6 — base 1.65 */
@@ -344,7 +352,7 @@
     --aura-300: 14 116 144;  /* #0E7490 primary(텍스트 AA) */
     --aura-400: 21 94 117;   /* #155E75 딥 */
     --aura-glow: 14 116 144;
-    --aura-a1: 0.06; --aura-a2: 0.05; --aura-a3: 0.04;
+    --aura-a1: 0.08; --aura-a2: 0.07; --aura-a3: 0.05; /* v5: 흰 종이 위 후광은 '느껴질 만큼만' — 0.10 부터 얼룩으로 읽혔다 */
     --chart-blue: 37 99 235;    /* #2563EB */
     --chart-orange: 234 88 12;  /* #EA580C */
 
@@ -461,7 +469,7 @@
   /* 라이트 지면은 흰색에 가까워 같은 알파가 텍스트 대비를 잡아먹는다 — 실측(2026-08-28):
      0.12 에서 상단 최악 합성 #E4E1F2 위 ink-muted 4.13:1(AA 미달), 0.05 에서 4.57:1 통과.
      (다크는 지면이 어두워 글로우가 대비를 오히려 올리므로 0.12 유지) */
-  html.light body::before { --glow-a: 0.05; }
+  html.light body::before { --glow-a: 0.08; }
 
   /* ── 줄배열 최적화(세계적 표준: Vercel·Apple·Toss) ──────────────────────────
      제목은 여러 줄의 길이를 고르게(balance) — "한 단어만 둘째 줄" 같은 들쭉날쭉 방지.
@@ -629,7 +637,7 @@
   .t-nav   { font-size: 0.875rem;  line-height: 1.25rem;   font-weight: 600; }
   .t-tab   { font-size: 0.75rem;   line-height: 1rem;      font-weight: 600; }
   .t-title { font-size: 0.875rem;  line-height: 1.25rem;   font-weight: 700; }
-  .t-body  { font-size: 0.875rem;  line-height: 1.25rem;   font-weight: 400; }
+  .t-body  { font-size: 0.875rem;  line-height: 1.375rem;  font-weight: 400; } /* 한글 본문 행간 1.57 — 1.43 은 빽빽했다(오너 #8, 국내 UX 관례 1.5~1.6) */
   /* 설명문 행간은 1.5배(19.13px) — 한글 2줄 블록이 붙어 보이지 않게. 2줄 예약(min-h-[2.25rem])과 정확히 맞물린다. */
   .t-desc  { font-size: 0.75rem;   line-height: 1.125rem;  font-weight: 400; }
   .t-meta  { font-size: 0.6875rem; line-height: 0.9375rem; font-weight: 400; }

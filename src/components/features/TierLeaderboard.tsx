@@ -1222,7 +1222,7 @@ export default function TierLeaderboard() {
                     <span className="block text-2xs leading-tight text-ink-muted">
                       {nickLocked
                         ? <>지금은 <b className="text-ink-secondary">{nickFreeAt}</b>부터 바꿀 수 있어요. 기다리지 않고 바로 바꿉니다</>
-                        : '지금은 기다리지 않고 바로 바꿀 수 있어요 · 변경은 원래 무료입니다'}
+                        : '지금은 기다리지 않고 바로 바꿀 수 있어요 · 변경은 원래 무료예요'}
                     </span>
                   </span>
                   {nickLocked ? (

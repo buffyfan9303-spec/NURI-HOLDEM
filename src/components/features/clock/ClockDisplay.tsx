@@ -3,7 +3,11 @@
 //   큰 타이머 + 레벨/블라인드/앤티 + 다음 브레이크·등록마감 + 라이브 통계(엔트리·생존·평균스택) + 상금 보드.
 // 진입: 라이브 카드 '📺 큰 화면' / 운영자 클락 'TV 송출' / 딥링크 ?display=<venueId>&g=<gameSeq>.
 // 실시간: subscribeClock 으로 레벨 전환·통계 즉시 반영 + 1초 로컬 틱(숨김/복귀해도 endsAt 기준 정확).
-// 읽기전용(컨트롤 없음) — 운영은 운영자 클락 화면에서. 화면 항상 켜둠(Wake Lock, 베스트에포트).
+// 읽기전용(컨트롤 없음) — 운영은 운영자 클락 화면·휴대폰 리모컨(?remote=)에서. 화면 항상 켜둠(Wake Lock, 베스트에포트).
+//
+// 2026-09-02 레이아웃 v2(오너 지시 · 참조 APIS 클락): 3열 — 좌 PRIZE POOL · 중앙 LEVEL/타이머/블라인드/ANTE/NEXT BREAK ·
+//   우 PLAYERS/BUY-IN/REBUY/ENTRIES/REG CLOSE, 하단 TOTAL CHIPS/AVG STACK/NEXT BREAK, 헤더 RUNNING TIME.
+//   라벨은 국내 매장 관례(APIS)대로 영문 대문자. 타이머는 순백, 강조는 테마 accent(기본 아우라 골드).
 import { memo, useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { getVenueClocks, subscribeClock, effectiveLevel, type ClockState, type ClockLevel } from '../../../api/clock';
@@ -17,6 +21,15 @@ import Icon from '../../atoms/Icon';
 const pad = (n: number) => String(Math.floor(n)).padStart(2, '0');
 const mmss = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return `${pad(s / 60)}:${pad(s % 60)}`; };
 const hms = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return s >= 3600 ? `${pad(s / 3600)}:${pad((s % 3600) / 60)}:${pad(s % 60)}` : `${pad(s / 60)}:${pad(s % 60)}`; };
+/** 경과 시간 라벨 — '5시간 50분' / '48분' */
+const runningLabel = (ms: number) => { const m = Math.max(0, Math.floor(ms / 60_000)); return m >= 60 ? `${Math.floor(m / 60)}시간 ${m % 60}분` : `${m}분`; };
+/** 금액 축약 — 값이 바뀌지 않을 때만 축약(§28 참가비·상금은 가격 고지). 50000→'5만' · 55000→'5.5만' · 1억 */
+function fmtWon(n: number): string {
+  const unit = (div: number, suffix: string) => { const r = Math.round((n / div) * 100) / 100; return Math.abs(r * div - n) < 0.5 ? `${r}${suffix}` : null; };
+  if (n >= 100_000_000) { const s = unit(100_000_000, '억'); if (s) return s; }
+  if (n >= 10_000) { const s = unit(10_000, '만'); if (s) return s; }
+  return n.toLocaleString();
+}
 
 function levelNumberAt(levels: ClockLevel[], index: number): number {
   let n = 0;
@@ -37,7 +50,17 @@ function msToRegClose(s: ClockState, index: number, remaining: number): number |
   for (let i = index + 1; i < lv.length; i++) { if (lv[i].kind === 'level') { num++; if (num >= target) return acc; } acc += lv[i].minutes * 60_000; }
   return null;
 }
+/** 경과(RUNNING TIME) — 지난 레벨 합 + 현재 레벨에서 흐른 시간. 레벨 길이를 모르면 null */
+function elapsedMs(s: ClockState, index: number, remaining: number): number | null {
+  const lv = s.config?.levels ?? []; if (!lv[index]) return null;
+  let acc = 0;
+  for (let i = 0; i < index; i++) acc += (lv[i]?.minutes ?? 0) * 60_000;
+  return acc + Math.max(0, lv[index].minutes * 60_000 - remaining);
+}
 const gameLabel = (g: ClockState) => (g.gameSeq > 1 ? `사이드${g.gameSeq - 1}` : '메인');
+
+/** 영문 대문자 라벨(국내 매장 클락 관례 · APIS) — 흐린 흰색·넓은 자간 */
+const LABEL = 'font-bold uppercase tracking-[0.22em]';
 
 export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose }: {
   venueId: string; gameSeq?: number; venueName?: string; onClose: () => void;
@@ -45,25 +68,23 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
   const [clocks, setClocks] = useState<ClockState[] | null>(null);
   const [sel, setSel] = useState(gameSeq);
 
-  // 클락 테마 v1 — page_config.clockTheme → 루트 CSS 변수(모든 변수 기본값 = 현행 하드코딩 1:1).
-  // 배경 이미지가 설정돼 있으면 --clk-bg 가 '스크림 + 사진 + 프리셋색' 3층 합성으로 바뀌고,
-  // 보조 라벨 2단(--clk-ink-dim/soft)이 함께 올라간다(clockTheme.ts 대비 계약). 배경이 없으면 픽셀 변화 0.
+  // 클락 테마 — page_config.clockTheme → 루트 CSS 변수(기본 = 아우라 골드).
+  // 배경 이미지가 설정돼 있으면 --clk-bg 가 '스크림 + 사진 + 프리셋색' 3층 합성으로 바뀌고 보조 라벨 2단이 함께 올라간다.
   // 캐시 퍼스트(readSnap) + 실패 시 keep-last: 네트워크 블립에 기본 테마로 깜빡이면 안 되는 매장 TV 화면.
   const [clkVars, setClkVars] = useState<Record<string, string>>(
     () => clockThemeVars(readSnap<ClockTheme | null>(clockThemeSnapKey(venueId))),
   );
   useEffect(() => {
     let alive = true;
-    // venue 전환 시 그 venue 의 캐시로 즉시 페인트(없으면 기본 룩)
     setClkVars(clockThemeVars(readSnap<ClockTheme | null>(clockThemeSnapKey(venueId))));
     fetchVenuePageConfig(venueId)
       .then((c) => {
         if (!alive) return;
-        const t = sanitizeClockTheme(c?.clockTheme); // 성공 응답의 '테마 없음(null)'도 정답 — 캐시에 반영
+        const t = sanitizeClockTheme(c?.clockTheme);
         writeSnap(clockThemeSnapKey(venueId), t);
         setClkVars(clockThemeVars(t));
       })
-      .catch(() => { /* keep-last — 직전 테마 유지 */ });
+      .catch(() => { /* keep-last */ });
     return () => { alive = false; };
   }, [venueId]);
 
@@ -76,27 +97,21 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
   const gamesRef = useRef<ClockState[]>([]);
   const prevElim = useRef<Map<number, number>>(new Map());
 
-  // ⚠ 실패 시 setClocks([]) 로 비우면 순간 끊김 한 번에 매장 TV 가 통째로 빈 화면이 된다.
-  //   이 화면은 손님이 보는 읽기전용 TV 라 '다시 시도' 버튼을 띄워도 누를 사람이 없다 —
-  //   여기서 옳은 답은 실패를 드러내는 게 아니라 '마지막으로 알던 상태를 계속 보여주는 것'이다.
-  //   (아직 한 번도 못 받았을 때만 빈 배열로 확정해 로딩 문구가 영원히 남지 않게 한다)
+  // ⚠ 실패 시 setClocks([]) 로 비우면 순간 끊김 한 번에 매장 TV 가 통째로 빈 화면이 된다 — 마지막 상태를 유지한다.
   const load = () => getVenueClocks(venueId).then(setClocks).catch(() => setClocks((cur) => cur ?? []));
   useEffect(() => { load(); }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => subscribeClock(venueId, load), [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
-  // 실시간 구독이 조용히 끊기면(대회장 와이파이·지하 매장에서 흔하다) 복구 수단이 없었다.
-  // 라이브 탭이 이미 쓰고 있는 30초 폴링 + 복귀 재조회를 그대로 이식한다.
+  // 실시간 구독이 조용히 끊기면(대회장 와이파이) 복구 수단이 없었다 — 30초 폴링 + 복귀 재조회.
   useEffect(() => {
     const t = setInterval(load, 30_000);
     const onVis = () => { if (document.visibilityState === 'visible') load(); };
     document.addEventListener('visibilitychange', onVis);
     return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVis); };
   }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
-  // (초당 틱은 CenterPanel 내부로 격리 — 아래 CenterPanel 주석 참고)
 
-  // 스폰서 배너 — 운영자가 등록한 전역 클락 광고 이미지(app_settings) 재사용
   useEffect(() => { getAppSetting(CLOCK_AD_KEY).then(setSponsor).catch(() => {}); }, []);
 
-  // 화면 꺼짐 방지(Wake Lock) — TV/태블릿에 띄워두면 절전으로 꺼지지 않게(미지원 시 무시)
+  // 화면 꺼짐 방지(Wake Lock) — 미지원 시 무시
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let lock: any = null;
@@ -108,7 +123,6 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
     return () => { document.removeEventListener('visibilitychange', onVis); try { lock?.release?.(); } catch { /* noop */ } };
   }, []);
 
-  // 브라우저 네이티브 풀스크린 토글(진짜 TV 풀스크린)
   useEffect(() => {
     const onFs = () => setFs(!!document.fullscreenElement);
     document.addEventListener('fullscreenchange', onFs);
@@ -118,8 +132,6 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
     if (!document.fullscreenElement) rootRef.current?.requestFullscreen?.().catch(() => {});
     else document.exitFullscreen?.().catch(() => {});
   };
-
-  // ESC 로 닫기(풀스크린은 브라우저가 먼저 소비하므로 그다음 ESC 가 닫음)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !document.fullscreenElement) onClose(); };
     window.addEventListener('keydown', onKey);
@@ -130,11 +142,7 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
   const g = games.find((c) => c.gameSeq === sel) ?? games.find((c) => c.running) ?? games[0] ?? null;
 
   const lvls = g?.config?.levels ?? [];
-  // DB 행이 낡아 있어도(운영자 기기가 아무도 전진을 쓰지 못한 상태) '지금 진짜 레벨'을 계산해 표시한다.
-  // 왜 여기서 DB를 고치지 않나: 이 화면은 손님 기기(매장 TV·?display= 딥링크)라 clock_states 쓰기 권한
-  // (RLS can_access_ledger)이 없고, 있어서도 안 된다. 표시는 여기서, DB 전진은 운영자 화면이 책임진다.
-  // (레벨·타이머·카운트다운 파생값은 CenterPanel 내부로 이사 — 초당 틱 격리.
-  //  부모에는 BB 병기 계산에 쓰는 curIdx 만 남긴다: 30초 폴링·실시간 갱신 주기로 충분한 값이다.)
+  // 손님 기기라 DB 를 고치지 않고 '지금 진짜 레벨' 을 계산해 표시한다(DB 전진은 운영자 화면 책임).
   const eff = g ? effectiveLevel(g) : null;
   const curIdx = eff ? eff.index : 0;
   const ls = g?.liveStats ?? (g ? {
@@ -142,18 +150,17 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
     alive: Math.max(0, g.adjEntries - g.eliminations), eliminations: g.eliminations, totalStack: 0, avgStack: 0, buyInAmount: null,
   } : null);
   const prizes = (g?.config?.prizes ?? []).filter((p) => p.amount > 0);
-  // 집계 소스 유무 — 장부 미연동(liveStats 없음) + 수동 보정 전부 0 이면 '생존 0 / 엔트리 0'은
-  // 항상 무의미한 표시다(라이브 카드 '생존 0' 결함과 같은 계열). 이때만 카운터를 '—'로 대체.
   const hasCounts = !!g?.liveStats
     || (!!ls && (ls.entries > 0 || ls.alive > 0 || ls.rebuys > 0 || ls.earlies > 0 || ls.addons > 0 || ls.eliminations > 0));
   const gSeq = g?.gameSeq ?? null;
   const aliveNow = ls?.alive ?? 0;
   const elimNow = g ? (g.liveStats?.eliminations ?? g.eliminations) : 0;
+  // BB 병기 — 브레이크 중엔 직전 플레이 레벨의 BB
+  let curBB = 0;
+  for (let i = curIdx; i >= 0; i--) { const l = lvls[i]; if (l && l.kind === 'level' && l.bb > 0) { curBB = l.bb; break; } }
 
-  // 최신 games 를 ref 에 동기화(인터벌 콜백에서 stale 없이 참조) — 렌더 중 수정 금지라 effect 로
   useEffect(() => { gamesRef.current = games; }, [games]);
 
-  // 멀티게임 자동 순환 — auto && 게임 2개+ 일 때 15초마다 다음 게임으로
   useEffect(() => {
     if (!auto || games.length < 2) return;
     const t = setInterval(() => {
@@ -163,61 +170,57 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
     return () => clearInterval(t);
   }, [auto, games.length]);
 
-  // 참가(바인요청) QR — 선택 게임 기준 ?buyin=<venue>&game=<seq>. 손님이 스캔 → 운영자 승인 대기
   useEffect(() => {
     if (gSeq == null) { setQr(null); return; }
     QRCode.toDataURL(buyinRequestUrl(venueId, gSeq), { width: 360, margin: 1 }).then(setQr).catch(() => setQr(null));
   }, [venueId, gSeq]);
 
-  // 탈락 티커 — 선택 게임의 eliminations 가 늘면 5초간 배너(게임별 이전값 추적으로 전환 시 오발동 방지)
   useEffect(() => {
     if (gSeq == null) return;
     const prev = prevElim.current.get(gSeq);
     if (prev != null && elimNow > prev) {
       setElimMsg({ text: `방금 ${elimNow - prev}명 탈락 · 남은 ${aliveNow}명`, until: Date.now() + 5000 });
-      // 만료를 렌더 틱에만 맡기면 틱이 뜸한 화면에서 최대 수십 초 잔류 — 명시 해제
       window.setTimeout(() => setElimMsg((cur) => (cur && Date.now() >= cur.until ? null : cur)), 5200);
     }
     prevElim.current.set(gSeq, elimNow);
   }, [gSeq, elimNow, aliveNow]);
 
   const showElim = !!elimMsg && Date.now() < elimMsg.until;
+  const buyIn = ls?.buyInAmount ?? 0;
+  const regLevel = g?.config?.regCloseLevel ?? 0;
 
   return (
-    // 배경·강조색은 테마 변수 — 기본값이 곧 기존 하드코딩(bg-[#06080B] · accent-300)이라 무테마 룩 불변
     <div ref={rootRef} className="fixed inset-0 z-[80] flex flex-col text-white select-none"
-      style={{ ...clkVars, background: 'var(--clk-bg, #06080B)' }}>
-      {/* 상단 바 — 매장/게임 + 컨트롤(읽기전용 컨트롤만: 게임전환·풀스크린·닫기) */}
-      <header className="flex shrink-0 items-center gap-2 px-[2.5vmin] py-[1.5vmin]">
-        <span className="flex h-2.5 w-2.5 shrink-0 items-center justify-center">
-          <span className={`h-2.5 w-2.5 rounded-full ${g?.running ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
-        </span>
-        <p className="min-w-0 truncate text-[2.6vmin] font-bold tracking-tight" style={{ maxWidth: '52vw' }}>
+      style={{ ...clkVars, background: 'var(--clk-bg, #030303)' }}>
+      {/* ── 헤더: 매장·게임 타이틀 / RUNNING TIME / 컨트롤(게임 전환·풀스크린·닫기) ── */}
+      <header className="flex shrink-0 items-center gap-[1.5vmin] px-[3vmin] pt-[2vmin] pb-[1vmin]">
+        <span className={`h-[1.2vmin] w-[1.2vmin] shrink-0 rounded-full ${g?.running ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} aria-hidden />
+        <p className="min-w-0 truncate text-[2.8vmin] font-extrabold tracking-tight" style={{ maxWidth: '50vw' }}>
           {venueName || '홀덤 라이브'}
-          <span className="ml-2 font-normal text-white/55">{g?.title || g?.config?.title || ''}</span>
+          {(g?.title || g?.config?.title) && <span className="ml-[1.2vmin] font-semibold text-white/60">{g?.title || g?.config?.title}</span>}
         </p>
         {games.length > 1 && (
-          <div className="ml-2 flex shrink-0 items-center gap-1">
+          <div className="ml-[1vmin] flex shrink-0 items-center gap-1">
             {games.map((c) => (
               <button key={c.gameSeq} type="button" onClick={() => { setSel(c.gameSeq); setAuto(false); }}
-                style={c.gameSeq === g?.gameSeq ? { background: 'var(--clk-accent, #5E6AD2)' } : undefined}
-                className={['rounded-full px-[1.6vmin] py-[0.6vmin] text-[1.8vmin] font-bold transition-colors',
+                style={c.gameSeq === g?.gameSeq ? { background: 'var(--clk-accent, #E0A94E)' } : undefined}
+                className={['rounded-[1vmin] px-[1.6vmin] py-[0.6vmin] text-[1.8vmin] font-bold transition-colors',
                   c.gameSeq === g?.gameSeq ? 'text-black' : 'bg-white/10 text-white/70 hover:bg-white/20'].join(' ')}>
                 {gameLabel(c)}{!c.running && <Icon name="pause" aria-label="일시정지" className="ml-[0.6vmin] inline-block h-[1.7vmin] w-[1.7vmin] align-[-0.15em]" />}
               </button>
             ))}
             <button type="button" onClick={() => setAuto((v) => !v)} title="멀티게임 자동 순환"
-              style={auto ? undefined : { color: 'var(--clk-ink-soft, rgba(255,255,255,.5))' }}
-              className={['rounded-full px-[1.6vmin] py-[0.6vmin] text-[1.8vmin] font-bold transition-colors', auto ? 'bg-emerald-400/20 text-emerald-300' : 'bg-white/10 hover:bg-white/20'].join(' ')}>
+              className={['rounded-[1vmin] px-[1.6vmin] py-[0.6vmin] text-[1.8vmin] font-bold transition-colors', auto ? 'bg-emerald-400/20 text-emerald-300' : 'bg-white/10 text-white/50'].join(' ')}>
               <Icon name="refresh" className="mr-[0.6vmin] inline-block h-[1.7vmin] w-[1.7vmin] align-[-0.15em]" />{auto ? '자동' : '수동'}
             </button>
           </div>
         )}
-        <div className="ml-auto flex shrink-0 items-center gap-1.5">
+        <div className="ml-auto flex shrink-0 items-center gap-[2vmin]">
+          {g && <RunningTime g={g} />}
           <button type="button" onClick={toggleFs} title="전체화면" aria-label="전체화면"
-            className="rounded-lg bg-white/10 px-[1.6vmin] py-[0.8vmin] text-[1.8vmin] font-bold text-white/80 hover:bg-white/20">{fs ? '⤢ 해제' : '⛶ 전체화면'}</button>
+            className="rounded-[1vmin] bg-white/10 px-[1.6vmin] py-[0.8vmin] text-[1.8vmin] font-bold text-white/80 hover:bg-white/20">{fs ? '⤢ 해제' : '⛶ 전체화면'}</button>
           <button type="button" onClick={onClose} title="닫기" aria-label="닫기"
-            className="rounded-lg bg-white/10 px-[1.6vmin] py-[0.8vmin] text-[1.8vmin] font-bold text-white/80 hover:bg-white/20">✕</button>
+            className="rounded-[1vmin] bg-white/10 px-[1.6vmin] py-[0.8vmin] text-[1.8vmin] font-bold text-white/80 hover:bg-white/20">✕</button>
         </div>
       </header>
 
@@ -226,84 +229,97 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
       ) : !g ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-[2vmin] text-center">
           <p className="text-[4vmin] font-bold text-white/80">진행 중인 클락이 없습니다</p>
-          <p className="text-[2.4vmin]" style={{ color: 'var(--clk-ink-dim, rgba(255,255,255,.45))' }}>운영자가 이 매장의 클락을 시작하면 자동으로 표시됩니다.</p>
+          <p className="text-[2.4vmin]" style={{ color: 'var(--clk-ink-dim, rgba(255,255,255,.45))' }}>운영자가 이 매장의 클락을 시작하면 자동으로 표시됩니다</p>
         </div>
       ) : (
         <>
-          {/* 탈락 티커 — eliminations 증가 시 5초 플래시 배너 */}
           {showElim && (
-            <div className="pointer-events-none absolute left-1/2 top-[8vh] z-10 -translate-x-1/2 whitespace-nowrap rounded-full bg-rose-500/90 px-[3vmin] py-[1.1vmin] text-[2.8vmin] font-extrabold text-white shadow-2xl animate-fade-in">
+            <div className="pointer-events-none absolute left-1/2 top-[8vh] z-10 -translate-x-1/2 whitespace-nowrap rounded-full bg-rose-500/90 px-[3vmin] py-[1.1vmin] text-[2.4vmin] font-extrabold text-white shadow-dialog">
               {elimMsg!.text}
             </div>
           )}
-          {/* 본문 — 좌: 레벨/타이머(주역), 우: 상금 보드 + 참가 QR */}
-          <div className="grid min-h-0 flex-1 grid-cols-1 gap-[2vmin] px-[2.5vmin] lg:grid-cols-[1.7fr_1fr]">
-            {/* 타이머 영역 — 초당 틱은 CenterPanel 안에 격리(타이머 외 리렌더 0) */}
-            <CenterPanel g={g} />
 
-            {/* 우측: 상금 보드(리더보드) + 참가 QR */}
-            <div className="flex min-h-0 flex-col justify-center gap-[1.5vmin]">
+          {/* ── 본문 3열: PRIZE POOL · 타이머 · 스탯 ── */}
+          <div className="grid min-h-0 flex-1 grid-cols-1 gap-[2vmin] px-[3vmin] md:grid-cols-[1fr_2.3fr_1fr]">
+            {/* 좌: PRIZE POOL — 15위까지, 1위 강조 · 없으면 참가 QR 만 */}
+            <div className="hidden min-h-0 flex-col justify-center gap-[1.5vmin] md:flex">
               {prizes.length > 0 && (
-                <div className="min-h-0 overflow-hidden rounded-[2vmin] border border-accent-300/25 bg-accent-300/[0.06] p-[1.8vmin]">
-                  <p className="mb-[1vmin] flex items-center gap-[0.8vmin] text-[2.4vmin] font-bold text-gold-300"><Icon name="trophy" className="h-[2.4vmin] w-[2.4vmin] shrink-0" />상금</p>
-                  <ul className="space-y-[0.5vmin]">
-                    {prizes.slice(0, 8).map((p, i) => (
-                      <li key={i} className="flex items-baseline justify-between gap-3 border-b border-white/5 pb-[0.5vmin] last:border-0">
-                        <span className="text-[2.5vmin] font-bold text-white/85">{p.place}</span>
-                        {/* 원 단위 오입력(1,000,000)도 '만' 기준으로 환산 표시 — 순위 자동채움과 동일 휴리스틱 */}
-                        <span className="text-[2.7vmin] font-extrabold tabular-nums" style={{ color: 'var(--clk-accent, #5E6AD2)' }}>{(p.amount >= 10000 ? Math.round(p.amount / 10000) : p.amount).toLocaleString()}<span className="text-[1.7vmin] font-bold" style={{ color: 'var(--clk-ink-soft, rgba(255,255,255,.5))' }}>만</span></span>
+                <div className="min-h-0">
+                  <p className={`${LABEL} mb-[1vmin] flex items-center gap-[0.8vmin] text-[1.9vmin]`} style={{ color: 'var(--clk-ink-soft, rgba(255,255,255,.5))' }}>
+                    <span className="h-[0.7vmin] w-[0.7vmin] rounded-full" style={{ background: 'var(--clk-accent, #E0A94E)' }} aria-hidden />PRIZE POOL
+                  </p>
+                  <ul className="space-y-[0.35vmin]">
+                    {prizes.slice(0, 15).map((p, i) => (
+                      <li key={i} className="flex items-baseline gap-[1.6vmin] text-[2.3vmin] leading-tight">
+                        <span className="w-[3vmin] shrink-0 text-right tabular-nums font-semibold" style={{ color: 'var(--clk-ink-dim, rgba(255,255,255,.45))' }}>{p.place}</span>
+                        <span className={`font-extrabold tabular-nums ${i === 0 ? '' : 'text-white/90'}`} style={i === 0 ? { color: 'var(--clk-accent, #E0A94E)' } : undefined}>
+                          {fmtWon(p.amount)}
+                        </span>
                       </li>
                     ))}
                   </ul>
                 </div>
               )}
-              {/* 참가 QR — 손님이 스캔하면 이 게임 바인(참가) 요청 → 운영자 승인 */}
               {qr && (
-                <div className="flex shrink-0 items-center gap-[2vmin] rounded-[2vmin] border border-emerald-400/25 bg-emerald-400/[0.06] p-[1.6vmin]">
-                  <img src={qr} alt="참가 바인요청 QR" className="shrink-0 rounded-[1vmin] bg-white" style={{ width: 'clamp(72px, 13vmin, 190px)', height: 'auto' }} />
+                <div className="flex shrink-0 items-center gap-[1.4vmin]">
+                  <img src={qr} alt="참가 바인요청 QR" className="shrink-0 rounded-[0.8vmin] bg-white" style={{ width: 'clamp(56px, 9vmin, 140px)', height: 'auto' }} />
                   <div className="min-w-0">
-                    <p className="flex items-center gap-[0.8vmin] text-[2.4vmin] font-extrabold text-emerald-300"><Icon name="qr" className="h-[2.4vmin] w-[2.4vmin] shrink-0" />스캔해서 참가</p>
-                    <p className="mt-[0.5vmin] text-[1.9vmin] leading-snug text-white/65">휴대폰으로 QR을 찍으면 {g ? gameLabel(g) : ''} 바인(참가)을 요청합니다.</p>
+                    <p className={`${LABEL} text-[1.6vmin] text-emerald-300`}>BUY-IN QR</p>
+                    <p className="mt-[0.4vmin] text-[1.7vmin] leading-snug text-white/60">휴대폰으로 찍으면 {gameLabel(g)} 바인을 요청합니다</p>
                   </div>
                 </div>
               )}
             </div>
-          </div>
 
-          {/* 하단 통계 스트립 — 관전자 1순위 질문은 '몇 명 남았나'다. 탈락 티커 5초로만
-              스치던 생존/엔트리를 첫 칸·강조로 상시 표시(운영자 클락 PLAYERS hero와 동일 사상). */}
-          <div className="grid shrink-0 grid-cols-3 gap-px bg-white/5 px-[2.5vmin] py-[1.5vmin] sm:grid-cols-5">
-            <BigStat label="생존 / 엔트리" value={hasCounts ? `${ls?.alive ?? 0} / ${ls?.entries ?? 0}` : '—'} accent />
-            <BigStat label="리바인" value={hasCounts ? `${ls?.rebuys ?? 0}` : '—'} />
-            <BigStat label="얼리" value={hasCounts ? `${ls?.earlies ?? 0}` : '—'} />
-            <BigStat label="평균 스택" value={ls?.avgStack ? `${ls.avgStack.toLocaleString()}${(() => {
-              // BB 병기(실물 ②·④) — 브레이크 중엔 직전 플레이 레벨의 BB
-              for (let i = curIdx; i >= 0; i--) { const l = lvls[i]; if (l && l.kind === 'level' && l.bb > 0) return ` (${Math.round((ls.avgStack) / l.bb)}BB)`; }
-              return '';
-            })()}` : '-'} accent />
-            <BigStat label="총 스택" value={ls?.totalStack ? ls.totalStack.toLocaleString() : '-'} />
-          </div>
+            {/* 중앙 — 초당 틱은 CenterPanel 안에 격리 */}
+            <CenterPanel g={g} />
 
-          {/* 스폰서 배너 — 운영자 등록 광고 이미지(있을 때만) */}
-          {sponsor && (
-            <div className="flex shrink-0 items-center justify-center border-t border-white/5 bg-black/40 py-[0.8vmin]">
-              <img src={sponsor} alt="스폰서" className="w-auto object-contain" style={{ maxHeight: '9vh' }} />
+            {/* 우: PLAYERS · BUY-IN · REBUY · ENTRIES · REG CLOSE */}
+            <div className="hidden min-h-0 flex-col justify-center gap-[1.6vmin] md:flex">
+              <StatRow label="PLAYERS" big value={hasCounts ? String(ls?.alive ?? 0) : '—'} sub={hasCounts ? `/ ${ls?.entries ?? 0}` : undefined} accent />
+              <StatRow label="BUY-IN" value={buyIn > 0 ? fmtWon(buyIn) : '—'} />
+              <StatRow label="REBUY" value={hasCounts ? String(ls?.rebuys ?? 0) : '—'} />
+              <StatRow label="ENTRIES" value={hasCounts ? String(ls?.entries ?? 0) : '—'} />
+              <RegCloseRow g={g} regLevel={regLevel} />
             </div>
-          )}
+          </div>
+
+          {/* ── 하단 스트립: TOTAL CHIPS · AVG STACK · NEXT BREAK (+ 모바일 폭에선 PLAYERS·REG CLOSE 도 여기로) ── */}
+          <div className="grid shrink-0 grid-cols-3 gap-[1vmin] border-t border-white/[0.06] px-[3vmin] py-[1.4vmin] md:grid-cols-3">
+            <BottomStat label="TOTAL CHIPS" value={ls?.totalStack ? ls.totalStack.toLocaleString() : '—'} />
+            <BottomStat label="AVG STACK" value={ls?.avgStack ? ls.avgStack.toLocaleString() : '—'} sub={ls?.avgStack && curBB > 0 ? `${Math.round(ls.avgStack / curBB)}BB` : undefined} />
+            <NextBreakStat g={g} />
+          </div>
+
+          {/* ── 푸터: 매장명 · 스폰서 ── */}
+          <div className="flex shrink-0 items-center justify-between gap-[2vmin] px-[3vmin] pb-[1.6vmin] pt-[0.4vmin]">
+            <p className="min-w-0 truncate text-[2vmin] font-semibold" style={{ color: 'var(--clk-ink-soft, rgba(255,255,255,.5))' }}>{venueName || ''}</p>
+            {sponsor
+              ? <img src={sponsor} alt="스폰서" className="w-auto object-contain" style={{ maxHeight: '7vh' }} />
+              : <p className={`${LABEL} text-[1.5vmin]`} style={{ color: 'var(--clk-ink-dim, rgba(255,255,255,.45))' }}>Powered by NURI HOLDEM</p>}
+          </div>
         </>
       )}
     </div>
   );
 }
 
+/** 헤더 우측 RUNNING TIME — 초당 틱은 필요 없다(분 단위 표기). 부모 30초 폴링·실시간 갱신 주기면 충분 */
+function RunningTime({ g }: { g: ClockState }) {
+  const eff = effectiveLevel(g);
+  const ms = elapsedMs(g, eff.index, eff.remainingMs);
+  if (ms === null) return null;
+  return (
+    <p className="hidden items-baseline gap-[1vmin] md:flex">
+      <span className={`${LABEL} text-[1.6vmin]`} style={{ color: 'var(--clk-ink-dim, rgba(255,255,255,.45))' }}>Running time</span>
+      <span className="text-[2.2vmin] font-extrabold tabular-nums" style={{ color: 'var(--clk-accent, #E0A94E)' }}>{runningLabel(ms)}</span>
+    </p>
+  );
+}
+
 /**
- * CenterPanel — 레벨·블라인드·대형 타이머·브레이크/등록마감 카운트다운.
- *
- * 초당 setInterval 틱을 이 컴포넌트 **안에** 가둔다(마스터 지시서 Phase 11 검증:
- * "1분 방치 → 타이머 노드 외 리렌더 0회"). 예전엔 부모(ClockDisplay 전체)가 1초마다
- * 다시 그려져 헤더·상금 보드·QR·스탯·스폰서까지 초당 재렌더됐다 — 몇 시간씩 켜 두는
- * 매장 TV 화면이라 격리 이득이 가장 큰 자리다. memo: 부모가 30초 폴링·실시간 구독으로
- * 다시 그려질 때 g 참조가 같으면 이 패널은 그마저 건너뛴다.
+ * CenterPanel — LEVEL · 대형 타이머 · 블라인드 · ANTE · NEXT BREAK TIME.
+ * 초당 setInterval 틱을 이 컴포넌트 안에 가둔다(1분 방치 → 타이머 노드 외 리렌더 0회). memo: g 참조가 같으면 건너뛴다.
  */
 const CenterPanel = memo(function CenterPanel({ g }: { g: ClockState }) {
   const [, setTick] = useState(0);
@@ -317,60 +333,110 @@ const CenterPanel = memo(function CenterPanel({ g }: { g: ClockState }) {
   const remaining = eff.remainingMs;
   const urgent = !!g.running && remaining <= 60_000 && !isBreak;
   const nextBreak = msToNextBreak(g, curIdx, remaining);
-  const regClose = msToRegClose(g, curIdx, remaining);
+  const next = (() => { for (let i = curIdx + 1; i < lvls.length; i++) if (lvls[i].kind === 'level') return lvls[i]; return null; })();
   return (
-    <div className="flex min-h-0 flex-col items-center justify-center">
-      <p className="text-[3vmin] font-bold uppercase tracking-[0.3em] text-white/55">
+    <div className="flex min-h-0 flex-col items-center justify-center text-center">
+      {/* LEVEL 알약 — 참조 화면의 금색 테두리 알약 */}
+      <p className={`${LABEL} rounded-full border px-[3.2vmin] py-[1vmin] text-[3vmin]`}
+        style={{ color: 'var(--clk-accent, #E0A94E)', borderColor: 'color-mix(in srgb, var(--clk-accent, #E0A94E) 45%, transparent)', background: 'rgba(0,0,0,.35)' }}>
         {isBreak ? 'BREAK' : `LEVEL ${levelNo}`}
       </p>
-      {isBreak ? (
-        <>
-          <p className="leading-none text-sky-300" style={{ fontSize: 'clamp(40px, 9vmin, 160px)', fontWeight: 800 }}>휴식</p>
-          {/* 돌아오면 블라인드가 얼마인지 — 브레이크 중 관전자·참가자의 1순위 질문(운영자 클락 NEXT와 동일) */}
-          {(() => {
-            for (let i = curIdx + 1; i < lvls.length; i++) {
-              const n = lvls[i];
-              if (n.kind === 'level') return (
-                <p className="mt-[0.8vmin] font-bold tabular-nums text-white/60" style={{ fontSize: 'clamp(14px, 2.8vmin, 44px)' }}>
-                  NEXT {n.sb.toLocaleString()}/{n.bb.toLocaleString()}{n.ante > 0 ? ` (${n.ante.toLocaleString()})` : ''}
-                </p>
-              );
-            }
-            return null;
-          })()}
-        </>
-      ) : (
-        <p className="mt-[1vmin] text-center font-extrabold leading-none tabular-nums text-white"
-          style={{ fontSize: 'clamp(28px, 8.5vmin, 150px)' }}>
-          {lv ? <>{lv.sb.toLocaleString()}<span className="text-white/40"> / </span>{lv.bb.toLocaleString()}</> : '-'}
-          {lv && lv.ante > 0 && <span className="ml-[1.5vmin] align-middle" style={{ fontSize: 'clamp(16px, 3.5vmin, 60px)', color: 'var(--clk-ink-dim, rgba(255,255,255,.45))' }}>ante {lv.ante.toLocaleString()}</span>}
-        </p>
-      )}
-      {/* 타이머 3상태색 분리(검증 #04) — 긴급 rose·브레이크 sky 는 테마가 못 덮는 잠금 변수, 평시만 테마 accent */}
-      <p className={`mt-[1vmin] font-extrabold leading-none tabular-nums ${urgent ? 'animate-pulse' : ''}`}
+      {/* 타이머 — 순백(참조) · 긴급 rose · 브레이크 sky 는 테마가 못 덮는 잠금 */}
+      <p className={`mt-[1.2vmin] font-black leading-none tabular-nums ${urgent ? 'animate-pulse' : ''}`}
         style={{
-          fontSize: 'clamp(72px, 24vmin, 360px)',
-          color: urgent ? 'var(--clk-timer-urgent, #fb7185)' : isBreak ? 'var(--clk-timer-break, #7dd3fc)' : 'var(--clk-timer, #5E6AD2)',
+          fontSize: 'clamp(84px, 27vmin, 420px)', letterSpacing: '-0.02em',
+          color: urgent ? 'var(--clk-timer-urgent, #fb7185)' : isBreak ? 'var(--clk-timer-break, #7dd3fc)' : 'var(--clk-timer, #FFFFFF)',
         }}>
         {mmss(Math.max(0, remaining))}
       </p>
-      {!g.running && <p className="mt-[1vmin] flex items-center justify-center gap-[0.8vmin] text-[2.6vmin] font-bold text-amber-400"><Icon name="pause" className="h-[2.6vmin] w-[2.6vmin] shrink-0" />일시정지</p>}
-      {/* 다음 브레이크 · 등록마감 */}
-      <div className="mt-[2vmin] flex flex-wrap items-center justify-center gap-x-[3vmin] gap-y-[1vmin] text-[2.3vmin] text-white/55">
-        <span>다음 브레이크 <b className="text-white/90 tabular-nums">{nextBreak === null ? '—' : hms(nextBreak)}</b></span>
-        {/* 실물 ①의 '레벨+남은시간 복합 표기' — '언제까지'를 두 축으로(Phase 11) */}
-        <span>등록마감 <b className={`tabular-nums ${regClose === 0 ? 'text-rose-300' : 'text-white/90'}`}>{regClose === null ? ' · ' : regClose === 0 ? '마감' :`LV${g.config.regCloseLevel} · ${hms(regClose)}`}</b></span>
-      </div>
+      {isBreak ? (
+        <>
+          <p className="mt-[1vmin] font-extrabold leading-none text-sky-300" style={{ fontSize: 'clamp(28px, 7vmin, 120px)' }}>휴식</p>
+          {next && (
+            <p className="mt-[1.2vmin] font-bold tabular-nums text-white/60" style={{ fontSize: 'clamp(14px, 2.8vmin, 44px)' }}>
+              NEXT {next.sb.toLocaleString()} / {next.bb.toLocaleString()}{next.ante > 0 ? `  ·  ANTE ${next.ante.toLocaleString()}` : ''}
+            </p>
+          )}
+        </>
+      ) : (
+        <>
+          <p className="mt-[1.6vmin] font-extrabold leading-none tabular-nums" style={{ fontSize: 'clamp(30px, 8.5vmin, 150px)', color: 'var(--clk-accent, #E0A94E)' }}>
+            {lv ? <>{lv.sb.toLocaleString()}<span className="text-white/30"> / </span>{lv.bb.toLocaleString()}</> : '-'}
+          </p>
+          {lv && lv.ante > 0 && (
+            <p className="mt-[1.4vmin] flex items-baseline gap-[1.4vmin] leading-none">
+              <span className={`${LABEL} text-[2.6vmin]`} style={{ color: 'var(--clk-ink-dim, rgba(255,255,255,.45))' }}>Ante</span>
+              <span className="font-extrabold tabular-nums text-white" style={{ fontSize: 'clamp(20px, 4.6vmin, 80px)' }}>{lv.ante.toLocaleString()}</span>
+            </p>
+          )}
+        </>
+      )}
+      {!g.running && (
+        <p className="mt-[1.6vmin] flex items-center justify-center gap-[0.8vmin] text-[2.6vmin] font-bold text-amber-400">
+          <Icon name="pause" className="h-[2.6vmin] w-[2.6vmin]" aria-hidden />일시정지
+        </p>
+      )}
+      {nextBreak !== null && !isBreak && (
+        <p className={`${LABEL} mt-[2.4vmin] text-[2.6vmin] text-rose-400`}>Next break time</p>
+      )}
     </div>
   );
 });
 
-function BigStat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+function StatRow({ label, value, sub, big, accent }: { label: string; value: string; sub?: string; big?: boolean; accent?: boolean }) {
   return (
-    <div className="px-1 text-center">
-      <p className={`font-extrabold leading-none tabular-nums ${accent ? '' : 'text-white'}`}
-        style={{ fontSize: 'clamp(20px, 4vmin, 64px)', ...(accent ? { color: 'var(--clk-accent, #5E6AD2)' } : null) }}>{value}</p>
-      <p className="mt-[0.6vmin] text-[1.7vmin]" style={{ color: 'var(--clk-ink-dim, rgba(255,255,255,.45))' }}>{label}</p>
+    <div className="flex items-baseline justify-between gap-[1.4vmin] border-b border-white/[0.06] pb-[1.2vmin]">
+      <span className={`${LABEL} text-[1.9vmin]`} style={{ color: 'var(--clk-ink-soft, rgba(255,255,255,.5))' }}>{label}</span>
+      <span className="flex items-baseline gap-[0.8vmin]">
+        <span className="font-extrabold tabular-nums leading-none" style={{ fontSize: big ? 'clamp(28px, 6vmin, 96px)' : 'clamp(18px, 3.4vmin, 56px)', color: accent ? 'var(--clk-accent, #E0A94E)' : '#FFFFFF' }}>{value}</span>
+        {sub && <span className="text-[2.2vmin] font-semibold tabular-nums" style={{ color: 'var(--clk-ink-dim, rgba(255,255,255,.45))' }}>{sub}</span>}
+      </span>
+    </div>
+  );
+}
+
+/** REG CLOSE — 마감 레벨 + 남은 시간(초록) · 마감이면 CLOSED(적) · 미설정이면 행 생략 */
+function RegCloseRow({ g, regLevel }: { g: ClockState; regLevel: number }) {
+  const [, setTick] = useState(0);
+  useEffect(() => { const t = setInterval(() => setTick((x) => x + 1), 1000); return () => clearInterval(t); }, []);
+  if (regLevel <= 0) return null;
+  const eff = effectiveLevel(g);
+  const ms = msToRegClose(g, eff.index, eff.remainingMs);
+  const closed = ms === 0;
+  return (
+    <div className="flex items-baseline justify-between gap-[1.4vmin]">
+      <span className={`${LABEL} text-[1.9vmin]`} style={{ color: 'var(--clk-ink-soft, rgba(255,255,255,.5))' }}>Reg close</span>
+      <span className={`font-extrabold tabular-nums leading-none ${closed ? 'text-rose-400' : 'text-emerald-400'}`} style={{ fontSize: 'clamp(16px, 2.8vmin, 44px)' }}>
+        {ms === null ? '—' : closed ? 'CLOSED' : `Lv${regLevel} · ${hms(ms)}`}
+      </span>
+    </div>
+  );
+}
+
+function BottomStat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="text-center">
+      <p className={`${LABEL} text-[1.6vmin]`} style={{ color: 'var(--clk-ink-dim, rgba(255,255,255,.45))' }}>{label}</p>
+      <p className="mt-[0.6vmin] flex items-baseline justify-center gap-[0.8vmin]">
+        <span className="font-extrabold tabular-nums leading-none text-white" style={{ fontSize: 'clamp(18px, 3.8vmin, 60px)' }}>{value}</span>
+        {sub && <span className="text-[2vmin] font-semibold tabular-nums" style={{ color: 'var(--clk-ink-dim, rgba(255,255,255,.45))' }}>· {sub}</span>}
+      </p>
+    </div>
+  );
+}
+
+/** NEXT BREAK 카운트다운(적) — 초당 틱은 이 셀 안에만 */
+function NextBreakStat({ g }: { g: ClockState }) {
+  const [, setTick] = useState(0);
+  useEffect(() => { const t = setInterval(() => setTick((x) => x + 1), 1000); return () => clearInterval(t); }, []);
+  const eff = effectiveLevel(g);
+  const ms = msToNextBreak(g, eff.index, eff.remainingMs);
+  return (
+    <div className="text-center">
+      <p className={`${LABEL} text-[1.6vmin]`} style={{ color: 'var(--clk-ink-dim, rgba(255,255,255,.45))' }}>Next break</p>
+      <p className={`mt-[0.6vmin] font-extrabold tabular-nums leading-none ${ms === null ? 'text-white/40' : 'text-rose-400'}`} style={{ fontSize: 'clamp(18px, 3.8vmin, 60px)' }}>
+        {ms === null ? '—' : hms(ms)}
+      </p>
     </div>
   );
 }
