@@ -102,29 +102,30 @@ test.describe('도구 탭 — 전체화면 실행', () => {
     expect(JSON.parse(saved!).total).toBeGreaterThan(0);
   });
 
-  // 모드 확장(2026-09-03): 블라인드 수비·vs 3벳은 3택(폴드 + 3벳/4벳 + 콜). 오답 키 접두('def|')가 새 모드로 저장되는지까지.
-  test('프리플랍 트레이너 — 수비 모드는 3택이고 답하면 새 접두 키로 기록된다', async ({ page }) => {
+  // 모드 확장(2026-09-03): 블라인드 수비·vs 3벳은 3택(폴드 + 3벳/4벳 + 콜). 오답 키 접두('v3b|')가 새 모드로 저장되는지까지.
+  // 수비 모드는 SB vs 얼리 스팟이 3벳 단독(2택)이라 비결정 — 10스팟 전부 4벳·콜인 vs 3벳 모드로 검사한다.
+  test('프리플랍 트레이너 — vs 3벳 모드는 3택이고 답하면 새 접두 키로 기록된다', async ({ page }) => {
     await gotoTools(page);
     await page.getByRole('button', { name: /프리플랍 트레이너/ }).first().click();
     const dialog = page.locator('[role="dialog"]').filter({ hasText: '프리플랍 트레이너' }).first();
     await expect(dialog).toBeVisible();
 
-    await dialog.getByTestId('preflop-mode').getByRole('button', { name: '수비', exact: true }).click();
+    await dialog.getByTestId('preflop-mode').getByRole('button', { name: 'vs 3벳', exact: true }).click();
     const answers = dialog.getByTestId('preflop-quiz-answers');
     await expect(answers.getByRole('button')).toHaveCount(3);
-    await expect(answers.getByRole('button', { name: '3벳', exact: true })).toBeVisible();
+    await expect(answers.getByRole('button', { name: '4벳', exact: true })).toBeVisible();
     await expect(answers.getByRole('button', { name: '콜', exact: true })).toBeVisible();
 
     await answers.getByRole('button', { name: '콜', exact: true }).click();
     await expect(dialog.locator('text=/정답!|아쉬워요/')).toBeVisible();
-    // 액션별 게이지 2줄(3벳·콜)
+    // 액션별 게이지 2줄(4벳·콜)
     const gauges = dialog.getByTestId('preflop-quiz-gauge');
     await expect(gauges).toHaveCount(2);
-    await expect(gauges.nth(0)).toContainText('3벳');
+    await expect(gauges.nth(0)).toContainText('4벳');
     await expect(gauges.nth(1)).toContainText('콜');
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('nuri:trainer:preflop:v2') || '{}') as { total: number; wrong: string[] });
     expect(saved.total).toBeGreaterThan(0);
-    for (const k of saved.wrong) expect(k).toMatch(/^def\|/); // 오답이면 새 접두로 큐에 들어간다(오답 노트·드릴·SRS 승계)
+    for (const k of saved.wrong) expect(k).toMatch(/^v3b\|/); // 오답이면 새 접두로 큐에 들어간다(오답 노트·드릴·SRS 승계)
   });
 });
 

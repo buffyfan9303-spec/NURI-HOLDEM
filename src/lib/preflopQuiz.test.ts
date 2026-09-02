@@ -2,6 +2,7 @@
 // 모드 확장(2026-09-03): 6모드 문제 생성 · 채점 경계(0.25) · 키 왕복.
 import { describe, it, expect } from 'vitest';
 import { FOLD, MODES, gradePreflop, makeQuiz, modeOfKey, verdictOf, wrongPickOf, type Quiz, type QuizAct } from './preflopQuiz';
+import { RANGE_SCENARIOS } from './ranges.data';
 
 const q = (acts: QuizAct[] | number, actionLabel = '오픈'): Quiz => ({
   mode: 'rfi', key: 'rfi|x|AKs', posLabel: 'CO', situ: '', hand: 'AKs', cards: [] as unknown as Quiz['cards'], stackBb: 100,
@@ -46,7 +47,8 @@ describe('makeQuiz(mode) · 6모드 문제 생성', () => {
     expect(fresh.mode).toBe(mode);
     expect(modeOfKey(fresh.key)).toBe(mode);
     expect(fresh.hand).toMatch(/^[2-9TJQKA]{2}[so]?$/);
-    expect(fresh.acts.length).toBe(mode === 'defend' || mode === 'vs3bet' ? 2 : 1);
+    // 차트 모드는 뽑힌 스팟의 actions 수와 같다(수비는 SB vs 얼리 스팟만 3벳 단독) · Nash 모드는 1
+    expect(fresh.acts.length).toBe(RANGE_SCENARIOS.find((s) => s.id === fresh.key.split('|')[1])?.actions.length ?? 1);
     for (const a of fresh.acts) { expect(a.freq).toBeGreaterThanOrEqual(0); expect(a.freq).toBeLessThanOrEqual(1); }
     expect(fresh.acts.reduce((s, a) => s + a.freq, 0)).toBeLessThanOrEqual(1.0001);
   });
