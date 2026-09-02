@@ -14,13 +14,13 @@ interface ThemeContextValue {
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
-/** 저장값 → 시스템 설정 순으로 초기 테마 결정 (기본 다크 유지) */
+/** 초기 테마 = 저장값, 없으면 **다크**(오너 지시 2026-09-02: 기본 테마는 다크).
+ *  OS 의 prefers-color-scheme 는 더 이상 보지 않는다 — index.html 첫 페인트 스크립트와 같은 규칙이라 첫 프레임 색 점프도 없다.
+ *  라이트는 사용자가 헤더 토글로 고른 경우(localStorage 'nuri-theme'='light')에만. */
 function resolveInitialTheme(): Theme {
   if (typeof window === 'undefined') return 'dark';
   const saved = localStorage.getItem(STORAGE_KEY) as Theme | null;
-  if (saved === 'light' || saved === 'dark') return saved;
-  // 저장값이 없으면 OS 선호도 반영, 그래도 없으면 다크
-  return window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  return saved === 'light' ? 'light' : 'dark';
 }
 
 /** <html> 클래스(.dark/.light)를 실제 DOM에 반영 */
