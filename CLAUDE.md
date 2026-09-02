@@ -52,6 +52,10 @@
   CTA `--grad-cta` = violet-700→indigo-800 + violet-500/25 틴트 그림자, 카드 테두리 `border-strong` 55%(보이는 헤어라인), 곡률 card 12 · aura 16 · btn 8 · chip 8,
   `.chip-aura`(indigo 틴트 칩) · `.ring-aura`(mask xor 그라데이션 헤어라인, 히어로·피처 카드 한두 곳만) · `shadow-glow` = 3px 링 .25 + 20px .125.
   글자 네온은 레퍼런스에 text-shadow 0곳 — 후광은 구절 span 의 정적 drop-shadow 로만.
+  **글로우 배치 규칙(v6.5, 2026-09-02 워크플로 검증)**: `.ring-aura-glow`(soft) 는 **화면(탭·페이지)당 최대 1곳, 그 화면의 주인공 면에만** —
+  현재 홈 배너 · GTO 피처 카드 · 라이브 '내 토너'(정확히 1장일 때) 3곳. 반복 카드·광고·모달/시트·빈/로딩 상태·서브카드·sticky/absolute 크롬·
+  overflow/contain/content-visibility 조상 아래·같은 뷰포트에 다른 강조(accent 프레임·btn-primary·shadow-glow 칩·ring-conic)가 있는 곳은 금지.
+  주인공이 없는 화면은 0곳이 정답(커뮤니티·장터·내 매장·매장 페이지는 그래서 0). 안쪽 후광만 필요하면 `.ring-aura` 까지(클락 리모컨).
   단 클락 TV(`clockTheme.ts`)·GTO 차트 fill(`ranges.data.ts`)의 #5E6AD2 는 도메인 고정 스냅샷이라 앱 accent 와 무관),
   `future.hoverOnlyWhenSupported`, `darkMode: 'class'`
 

@@ -134,8 +134,8 @@ export default function ClockRemote({ venueId, gameSeq = 1, venueName, onClose, 
 
   return (
     <Shell venueName={venueName} onClose={onClose} game={state.gameSeq > 1 ? `사이드${state.gameSeq - 1}` : '메인'}>
-      {/* 현재 상태 — 큰 타이머 한 눈에 */}
-      <section className="rounded-aura border card-aura px-4 py-4 text-center">
+      {/* 현재 상태 — 큰 타이머 한 눈에. ring-aura 헤어라인+안쪽 후광까지만 — 바깥 글로우는 12px 아래 START(에메랄드 80px)와 색 경쟁 */}
+      <section className="rounded-aura border card-aura ring-aura px-4 py-4 text-center">
         <p className="t-micro">{isBreak ? '휴식' : `레벨 ${levelNo}`}</p>
         <p className={`mt-1 font-black leading-none tabular-nums ${state.running ? 'text-ink-primary' : 'text-amber-400'}`} style={{ fontSize: 'clamp(56px, 18vw, 96px)', letterSpacing: '-0.02em' }}>
           {mmss(remaining)}

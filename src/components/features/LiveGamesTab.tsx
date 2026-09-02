@@ -150,6 +150,16 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
     setSortBy(k);
   };
 
+  // 내 토너: 승인된 내 게임 중 지금 진행 중인 것만, venue:gameSeq 로 중복 제거(리엔트리 중복 카드·중복 key 방지)
+  const myLive = (() => {
+    const seen = new Set<string>(); const out: { m: NonNullable<typeof myGames>[number]; g: ClockState }[] = [];
+    for (const m of myGames ?? []) {
+      const g = (games ?? []).find((x) => x.venueId === m.venueId && (m.gameSeq == null || x.gameSeq === m.gameSeq));
+      if (!g) continue;
+      const k = `${g.venueId}:${g.gameSeq ?? 0}`; if (seen.has(k)) continue; seen.add(k); out.push({ m, g });
+    }
+    return out;
+  })();
   return (
     <main className="hero-aurora px-page-x pt-3 pb-section">
       <div className="mx-auto w-full max-w-3xl space-y-3">
@@ -173,14 +183,13 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
 
         {/* 🎯 내 토너 — 바인 승인 후 참가자 시점이 어디에도 없던 격차. 승인된 내 게임이
             진행 중이면 블라인드·평균스택 + 스택 자가입력 → BB·평균 대비 %를 맨 위에. */}
-        {myGames && myGames.length > 0 && (games ?? []).length > 0 && (
+        {myLive.length > 0 && (
           <div className="space-y-card-gap">
-            {myGames.map((m) => {
-              const g = (games ?? []).find((x) => x.venueId === m.venueId && (m.gameSeq == null || x.gameSeq === m.gameSeq));
-              if (!g) return null;
-              return <MyTournamentCard key={`${m.venueId}:${m.gameSeq ?? 0}`} g={g} venueName={m.venueName}
-                onDisplay={() => onDisplay(g.venueId, g.gameSeq ?? 1)} />;
-            })}
+            {/* v6.5: 실제로 뛰는 내 게임이 정확히 1장일 때만 글로우(주인공이 둘이면 아무도 빛나지 않는다 — CLAUDE.md 글로우 배치 규칙) */}
+            {myLive.map(({ m, g }) => (
+              <MyTournamentCard key={`${g.venueId}:${g.gameSeq ?? 0}`} g={g} venueName={m.venueName} hero={myLive.length === 1}
+                onDisplay={() => onDisplay(g.venueId, g.gameSeq ?? 1)} />
+            ))}
           </div>
         )}
 
@@ -447,7 +456,7 @@ function LiveCard({ g, name, sched, region, fav = false, active = true, onPoster
   );
 }
 
-function MyTournamentCard({ g, venueName, onDisplay }: { g: ClockState; venueName: string; onDisplay: () => void }) {
+function MyTournamentCard({ g, venueName, onDisplay, hero = false }: { g: ClockState; venueName: string; onDisplay: () => void; hero?: boolean }) {
   const lvls = g.config?.levels ?? [];
   const eff = effectiveLevel(g);
   const lv = lvls[eff.index];
@@ -464,7 +473,9 @@ function MyTournamentCard({ g, venueName, onDisplay }: { g: ClockState; venueNam
   const vsAvg = avg > 0 && stack > 0 ? Math.round((stack / avg) * 100) : null;
   const tone = vsAvg == null ? '' : vsAvg >= 100 ? 'text-emerald-400' : vsAvg >= 50 ? 'text-amber-300' : 'text-rose-400';
   return (
-    <section className="rounded-aura border border-accent-300/60 bg-gradient-to-br from-accent-300/[0.12] to-transparent p-3">
+    <section className={['rounded-aura border bg-gradient-to-br from-accent-300/[0.12] to-transparent p-3',
+      // hero: 링 헤어라인이 테두리를 대신하므로 accent 테두리는 절반으로(3중선 방지)
+      hero ? 'border-accent-300/30 ring-aura ring-aura-glow' : 'border-accent-300/60'].join(' ')}>
       <div className="flex items-center justify-between gap-2">
         <p className="flex min-w-0 flex-1 items-center gap-1.5 text-sm font-bold text-accent-300"><Icon name="target" size={14} className="shrink-0" /><span className="truncate">내 토너 · <span className="text-ink-primary">{venueName}</span></span></p>
         <button type="button" onClick={onDisplay} className="btn-ghost shrink-0 px-2.5 py-1 text-2xs">관전 화면</button>
