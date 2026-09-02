@@ -210,7 +210,7 @@ export function WeaknessReport() {
       )}
       <p className="text-2xs text-ink-muted">
         프리플랍 오답 노트 <b className="text-ink-secondary tabular-nums">{wrongCount}개</b>
-        {wrongCount > 0 ? '내일 드릴에 우선 편성됩니다.' : '오답이 쌓이면 드릴이 먼저 물어봅니다.'}
+        {' · '}{wrongCount > 0 ? '내일 드릴에 우선 편성됩니다.' : '오답이 쌓이면 드릴이 먼저 물어봅니다.'}
       </p>
     </div>
   );
