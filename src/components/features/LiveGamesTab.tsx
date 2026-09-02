@@ -464,8 +464,10 @@ function MyTournamentCard({ g, venueName, onDisplay, hero = false }: { g: ClockS
   const eff = effectiveLevel(g);
   const lv = lvls[eff.index];
   // 브레이크 중엔 직전 플레이 레벨의 BB 로 환산(클락 AVG BB 병기와 동일 규칙)
+  // ref = 그 플레이 레벨 객체 — 브레이크 레벨은 sb·bb·ante 가 전부 0 이라 M·앤티 판정도 이걸 기준으로 한다.
   let bb = 0;
-  for (let i = eff.index; i >= 0; i--) { const l = lvls[i]; if (l && l.kind === 'level' && l.bb > 0) { bb = l.bb; break; } }
+  let ref: typeof lv | undefined;
+  for (let i = eff.index; i >= 0; i--) { const l = lvls[i]; if (l && l.kind === 'level' && l.bb > 0) { bb = l.bb; ref = l; break; } }
   const ls = g.liveStats;
   const avg = ls?.avgStack ?? 0;
   // 스택은 게임·날짜 단위로 기억 — 토너 중 앱을 들락여도 유지, 다음 날엔 초기화
@@ -474,13 +476,13 @@ function MyTournamentCard({ g, venueName, onDisplay, hero = false }: { g: ClockS
   const update = (n: number) => { setStack(n); try { localStorage.setItem(storeKey, String(n)); } catch { /* noop */ } };
   const myBB = bb > 0 && stack > 0 ? Math.round((stack / bb) * 10) / 10 : null;
   const vsAvg = avg > 0 && stack > 0 ? Math.round((stack / avg) * 100) : null;
-  // 내 bb 구간 → 차트 딥링크(GKR 잔여분, 2026-09-03). 브레이크 중엔 직전 레벨 bb 만 있고 sb·앤티는 없어 M 은 bb 기준 근사.
+  // 내 bb 구간 → 차트 딥링크(GKR 잔여분, 2026-09-03). ref 가 없으면 bb=0 → myBB=null → zone=null 이라 cost 는 쓰이지 않는다.
   // 클락 기본 구조가 BB 앤티(ante=bb)라 한 바퀴 비용 = sb+bb+ante (StackCalcs 의 인원 곱은 개별 앤티 가정 — 여기선 쓰지 않는다).
-  const cost = lv && lv.kind === 'level' ? lv.sb + lv.bb + lv.ante : bb * 1.5;
+  const cost = ref ? ref.sb + ref.bb + ref.ante : 0;
   const zone = myBB != null ? stackZone(myBB, cost > 0 ? stack / cost : 0) : null;
   const goZone = () => {
     if (!zone) return;
-    if (zone.tool === 'pushfold') writeSnap('tool:pushfold', { stack: zone.stack, ante: (lv?.ante ?? 0) > 0 } satisfies PushJump);
+    if (zone.tool === 'pushfold') writeSnap('tool:pushfold', { stack: zone.stack, ante: (ref?.ante ?? 0) > 0 } satisfies PushJump);
     // 순서: 탭 전환 → (도구 pane 이 보인 뒤) 해시. 탭 트레일 history 항목이 먼저 쌓여야 도구 겹이 그 위에 올라
     // 뒤로가기 1회 = 도구 닫기 · 2회 = 라이브 복귀가 된다(해시를 먼저 얹으면 순서가 뒤집혀 숨은 pane 에 도구가 남는다 — 실측).
     // ToolsPanel 은 미마운트면 마운트 시 해시를 읽고(useState 초기화), 이미 마운트(keep-alive)면 hashchange 로 연다.
