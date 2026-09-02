@@ -145,8 +145,8 @@ export default function OutsFromCards({ onCounted }: { onCounted?: (outs: number
             <p className={['flex items-center gap-1 text-2xs font-bold', goodNews ? 'text-emerald-700 dark:text-emerald-300' : 'text-danger-deep dark:text-danger-light'].join(' ')}>
               <Icon name={goodNews ? 'target' : 'alert'} size={12} className="shrink-0" />
               {mine
-                ? (o === 0 ? '역전 카드가 없습니다 — 드로잉 데드입니다' : '이 카드가 뜨면 내가 앞섭니다')
-                : (o === 0 ? '이미 앞서 있고, 다음 카드로는 뒤집히지 않습니다' : '이미 내가 앞서 있습니다 — 이 카드가 뜨면 역전당합니다')}
+                ? (o === 0 ? '역전 카드가 없습니다. 드로잉 데드입니다' : '이 카드가 뜨면 내가 앞섭니다')
+                : (o === 0 ? '이미 앞서 있고, 다음 카드로는 뒤집히지 않습니다' : '이미 내가 앞서 있습니다. 이 카드가 뜨면 역전당합니다')}
             </p>
             {o > 0 && (
               <div className="flex flex-wrap gap-1">
@@ -168,7 +168,7 @@ export default function OutsFromCards({ onCounted }: { onCounted?: (outs: number
               </div>
               {onFlop && (
                 <Result label="간이 (4·2 법칙 · 2장 기준)" value={`≈${rule}%`}
-                  desc={`정확값은 ${(twoCard * 100).toFixed(1)}% — 4·2 법칙은 아웃이 많을수록 실제보다 크게 나옵니다.`} />
+                  desc={`정확값은 ${(twoCard * 100).toFixed(1)}%. 4·2 법칙은 아웃이 많을수록 실제보다 크게 나옵니다.`} />
               )}
               <Result label="브레이크이븐 팟 오즈" value={breakeven} desc="다음 1장 기준" />
               {onFlop && (

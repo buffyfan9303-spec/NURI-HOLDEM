@@ -56,16 +56,16 @@ const BOARD_LABEL: Record<Board, string> = {
   league: '주간 리그', badges: '업적', missions: '미션', hall: '명예의 전당',
 };
 const BOARD_DESC: Record<Board, string> = {
-  domestic: '대회(토너먼트) 입상만 인정 — 해외 대회도 포함하며, 운영자가 승인한 건에 한해 100만원(10T)당 1점으로 합산합니다. 일반 펍 정기 게임은 포함되지 않습니다.',
+  domestic: '대회(토너먼트) 입상만 인정. 해외 대회도 포함하며, 운영자가 승인한 건에 한해 100만원(10T)당 1점으로 합산합니다. 일반 펍 정기 게임은 포함되지 않습니다.',
   verify: '대회 입상 증빙 2장(머니인·신분증)을 올려 운영자 승인을 받으면 국내 순위에 합산됩니다. 대회만 인정되며(일반 펍 제외) 100만원(10T)당 1점입니다.',
   shop: '모으는 마크는 활동점수 도달로 영구 해금(차감 없음)이고, 나머지(꾸미기 마크·프레임·닉네임 색·시즌 뱃지·외치기·응원·끌올)는 사용 가능 점수로 삽니다. 소장한 것은 영구히 남고, 무엇을 사도 누적 점수(등급 기준)는 줄지 않습니다.',
-  activity: '접속·글쓰기·댓글 활동 점수 — 등급(2·3~AA)과 연동. 아래 주간 미션을 달성하면 점수를 바로 받아요.',
-  moneyin: '전국 매장 머니인 점수 — 100만원(10T)당 1점으로 합산합니다(임계 미만은 점수 없음).',
+  activity: '접속·글쓰기·댓글 활동 점수. 등급(2·3~AA)과 연동. 아래 주간 미션을 달성하면 점수를 바로 받아요.',
+  moneyin: '전국 매장 머니인 점수. 100만원(10T)당 1점으로 합산합니다(임계 미만은 점수 없음).',
   prize: '전국 매장 프라이즈 점수 합산(금전적 가치 없음).',
-  league: '이번 주 활약(체크인 ×3 + 머니인 점수) — 머니인은 100만원(10T)당 1점. 월요일마다 새로 시작!',
-  badges: '조건을 달성하면 자동으로 열리는 업적 뱃지 — 모아서 프로필을 채우세요.',
-  missions: '이번 주 미션 — 달성하면 활동점수 보상을 바로 받아요. 월요일 리셋.',
-  hall: '지난달 가장 빛난 플레이어 TOP3 — 운영자가 직접 선정하며, 선정이 없는 달은 입상 기록으로 자동 집계됩니다.',
+  league: '이번 주 활약(체크인 ×3 + 머니인 점수). 머니인은 100만원(10T)당 1점. 월요일마다 새로 시작!',
+  badges: '조건을 달성하면 자동으로 열리는 업적 뱃지. 모아서 프로필을 채우세요.',
+  missions: '이번 주 미션. 달성하면 활동점수 보상을 바로 받아요. 월요일 리셋.',
+  hall: '지난달 가장 빛난 플레이어 TOP3. 운영자가 직접 선정하며, 선정이 없는 달은 입상 기록으로 자동 집계됩니다.',
 };
 
 /**
@@ -333,7 +333,7 @@ export default function TierLeaderboard() {
       setEquippedMark(key);                 // 서버가 구매 즉시 장착까지 끝냈다
       reloadBalance();
       await refreshProfile?.();
-      toast.show(`${markOf(key)?.name ?? '마크'} 소장! ${markSku.price.toLocaleString()}점 사용 — 이제 계속 쓸 수 있어요`, 'success');
+      toast.show(`${markOf(key)?.name ?? '마크'} 소장! ${markSku.price.toLocaleString()}점 사용. 이제 계속 쓸 수 있어요`, 'success');
     } catch (e) {
       toast.show(e instanceof Error ? e.message : '구매에 실패했습니다', 'error');
     } finally { setBuying(null); }
@@ -370,7 +370,7 @@ export default function TierLeaderboard() {
         { kind: c.kind, itemKey: key, equipped: true },
       ]);
       reloadBalance();
-      toast.show(`${c.label} 소장! ${sku.price.toLocaleString()}점 사용 — 바로 적용됐어요`, 'success');
+      toast.show(`${c.label} 소장! ${sku.price.toLocaleString()}점 사용. 바로 적용됐어요`, 'success');
     } catch (e) {
       toast.show(e instanceof Error ? e.message : '구매에 실패했습니다', 'error');
     } finally { setBuying(null); }
@@ -396,7 +396,7 @@ export default function TierLeaderboard() {
       setSeasonBuyable((prev) => (prev ?? []).filter((x) => x.seasonId !== r.seasonId));
       getMySeasonBadges().then(setSeasonOwned).catch(() => {});
       reloadBalance();
-      toast.show(`${r.venueName} ${r.seasonName} 뱃지를 받았어요 — ${seasonSku.price.toLocaleString()}점 사용`, 'success');
+      toast.show(`${r.venueName} ${r.seasonName} 뱃지를 받았어요. ${seasonSku.price.toLocaleString()}점 사용`, 'success');
     } catch (e) {
       toast.show(e instanceof Error ? e.message : '구매에 실패했습니다', 'error');
     } finally { setBuying(null); }
@@ -744,7 +744,7 @@ export default function TierLeaderboard() {
                   <div className="rounded-card border border-accent-400/30 bg-accent-300/10 px-3 py-2 text-center text-xs font-semibold text-accent-300">
                     {nextTier
                       ? <span className="inline-flex flex-wrap items-center justify-center gap-1">{`${nextTier.min - me.score}점만 더 모으면`}<Icon name={nextTier.icon} size={13} className={['shrink-0', nextTier.tone].join(' ')} />{`${nextTier.label} 티어로 승급해요`}</span>
-                      : <span className="inline-flex items-center justify-center gap-1"><Icon name="gem" size={13} className="shrink-0 text-sky-300" />최고 티어 — 이번 주 왕좌를 지키세요!</span>}
+                      : <span className="inline-flex items-center justify-center gap-1"><Icon name="gem" size={13} className="shrink-0 text-sky-300" />최고 티어. 이번 주 왕좌를 지키세요!</span>}
                   </div>
                 )}
                 <ul className="overflow-hidden rounded-card border border-border-subtle bg-surface-high">
@@ -881,17 +881,17 @@ export default function TierLeaderboard() {
                   <span><b className="text-accent-200">대회(토너먼트) 입상만 인증됩니다.</b> 매장 정기 게임(일반 펍) 기록은 순위 인증 대상이 아니며, 제출해도 반려됩니다.</span>
                 </p>
                 <label className="flex items-center justify-between gap-2 rounded-input border border-border-default px-3 py-2 text-2xs">
-                  <span className="text-ink-secondary">해외 대회입니다 <span className="text-ink-muted">— 해외도 정식 대회면 인정돼요</span></span>
+                  <span className="text-ink-secondary">해외 대회입니다 <span className="text-ink-muted">해외도 정식 대회면 인정돼요</span></span>
                   <input type="checkbox" checked={vForm.overseas} className="h-4 w-4 shrink-0 accent-current text-accent-300"
                     onChange={(e) => setVForm((f) => ({ ...f, overseas: e.target.checked }))} />
                 </label>
                 <label className="flex items-center justify-between gap-2 rounded-input border border-dashed border-border-default px-3 py-2 text-2xs">
-                  <span className={vProof ? 'text-emerald-300 font-bold' : 'text-ink-secondary'}>1. 머니인 증빙 {vProof ? '✓ 첨부됨' : '— 이름·순위·금액이 보여야 해요'}</span>
+                  <span className={vProof ? 'text-emerald-300 font-bold' : 'text-ink-secondary'}>1. 머니인 증빙 {vProof ? '✓ 첨부됨' : '이름·순위·금액이 보여야 해요'}</span>
                   <input type="file" accept="image/*" className="hidden" onChange={(e) => setVProof(e.target.files?.[0] ?? null)} />
                   <span className="shrink-0 rounded-input bg-surface-float px-2 py-1 font-bold text-ink-secondary">선택</span>
                 </label>
                 <label className="flex items-center justify-between gap-2 rounded-input border border-dashed border-border-default px-3 py-2 text-2xs">
-                  <span className={vIdCard ? 'text-emerald-300 font-bold' : 'text-ink-secondary'}>2. 신분증 {vIdCard ? '✓ 첨부됨' : '— 이름·주민번호 앞자리만 보이게 가리고 촬영'}</span>
+                  <span className={vIdCard ? 'text-emerald-300 font-bold' : 'text-ink-secondary'}>2. 신분증 {vIdCard ? '✓ 첨부됨' : '이름·주민번호 앞자리만 보이게 가리고 촬영'}</span>
                   <input type="file" accept="image/*" className="hidden" onChange={(e) => setVIdCard(e.target.files?.[0] ?? null)} />
                   <span className="shrink-0 rounded-input bg-surface-float px-2 py-1 font-bold text-ink-secondary">선택</span>
                 </label>
@@ -946,7 +946,7 @@ export default function TierLeaderboard() {
               <div className="flex items-center gap-1.5 pt-1">
                 <Icon name="wallet" size={13} className="shrink-0 text-accent-300" />
                 <p className="shrink-0 text-2xs font-extrabold text-accent-300">쓰는 이유</p>
-                <p className="shrink-0 text-2xs text-ink-muted">— 사용 가능 점수로 삽니다</p>
+                <p className="shrink-0 text-2xs text-ink-muted">사용 가능 점수로 삽니다</p>
                 <span className="h-px flex-1 bg-border-subtle" />
               </div>
 
@@ -957,7 +957,7 @@ export default function TierLeaderboard() {
               <div className="rounded-card border border-border-subtle bg-surface-high p-3">
                 <div className="flex items-baseline justify-between gap-2">
                   <p className="text-xs font-bold text-ink-primary">
-                    꾸미기 마크 <span className="font-normal text-ink-muted">— 한 번 사면 영구 소장</span>
+                    꾸미기 마크 <span className="font-normal text-ink-muted">한 번 사면 영구 소장</span>
                   </p>
                   {markSku && (
                     <p className="shrink-0 rounded-badge bg-accent-300/15 px-2 py-0.5 text-2xs font-extrabold tabular-nums text-accent-300">
@@ -991,7 +991,7 @@ export default function TierLeaderboard() {
                             className={['mt-1.5 w-full rounded-input px-2 py-1.5 text-2xs font-bold transition-colors',
                               on ? 'bg-accent-300 text-white' : 'border border-accent-400/40 text-accent-300 hover:bg-accent-300/10'].join(' ')}>
                             {equipPending(mk.key, on)
-                              ? '적용 중…' : on ? '✓ 장착 중 — 해제' : own.source === 'own' ? '소장 중 — 장착' : '장착하기'}
+                              ? '적용 중…' : on ? '✓ 장착 중 · 해제' : own.source === 'own' ? '소장 중 · 장착' : '장착하기'}
                           </button>
                         ) : (
                           <button type="button" disabled={buying !== null || poor || !markSku}
@@ -1036,7 +1036,7 @@ export default function TierLeaderboard() {
                 <div className="rounded-card border border-border-subtle bg-surface-high p-3">
                   <div className="flex items-baseline justify-between gap-2">
                     <p className="text-xs font-bold text-ink-primary">
-                      {frameSku.label} <span className="font-normal text-ink-muted">— 공유 카드 테두리 · 영구 소장</span>
+                      {frameSku.label} <span className="font-normal text-ink-muted">공유 카드 테두리 · 영구 소장</span>
                     </p>
                     <p className="shrink-0 rounded-badge bg-accent-300/15 px-2 py-0.5 text-2xs font-extrabold tabular-nums text-accent-300">
                       {frameSku.price.toLocaleString()}점
@@ -1078,7 +1078,7 @@ export default function TierLeaderboard() {
                               onClick={() => handleEquipCosmetic(c, on)}
                               className={['mt-1.5 w-full rounded-input px-2 py-1.5 text-2xs font-bold transition-colors',
                                 on ? 'bg-accent-300 text-white' : 'border border-accent-400/40 text-accent-300 hover:bg-accent-300/10'].join(' ')}>
-                              {equipPending(c.key, on) ? '적용 중…' : on ? '✓ 적용 중 — 해제' : '소장 중 — 적용'}
+                              {equipPending(c.key, on) ? '적용 중…' : on ? '✓ 적용 중 · 해제' : '소장 중 · 적용'}
                             </button>
                           ) : (
                             <button type="button" disabled={buying !== null || poor}
@@ -1105,7 +1105,7 @@ export default function TierLeaderboard() {
                 <div className="rounded-card border border-border-subtle bg-surface-high p-3">
                   <div className="flex items-baseline justify-between gap-2">
                     <p className="text-xs font-bold text-ink-primary">
-                      {nickSku.label} <span className="font-normal text-ink-muted">— 글·댓글의 내 이름에 · 영구 소장</span>
+                      {nickSku.label} <span className="font-normal text-ink-muted">글·댓글의 내 이름에 · 영구 소장</span>
                     </p>
                     <p className="shrink-0 rounded-badge bg-accent-300/15 px-2 py-0.5 text-2xs font-extrabold tabular-nums text-accent-300">
                       {nickSku.price.toLocaleString()}점
@@ -1134,7 +1134,7 @@ export default function TierLeaderboard() {
                               onClick={() => handleEquipCosmetic(c, on)}
                               className={['mt-1.5 w-full rounded-input px-2 py-1.5 text-2xs font-bold transition-colors',
                                 on ? 'bg-accent-300 text-white' : 'border border-accent-400/40 text-accent-300 hover:bg-accent-300/10'].join(' ')}>
-                              {equipPending(c.key, on) ? '적용 중…' : on ? '✓ 적용 중 — 해제' : '소장 중 — 적용'}
+                              {equipPending(c.key, on) ? '적용 중…' : on ? '✓ 적용 중 · 해제' : '소장 중 · 적용'}
                             </button>
                           ) : (
                             <button type="button" disabled={buying !== null || poor}
@@ -1159,7 +1159,7 @@ export default function TierLeaderboard() {
                 <div className="rounded-card border border-border-subtle bg-surface-high p-3">
                   <div className="flex items-baseline justify-between gap-2">
                     <p className="text-xs font-bold text-ink-primary">
-                      {seasonSku.label} <span className="font-normal text-ink-muted">— 단골 매장의 이번 시즌</span>
+                      {seasonSku.label} <span className="font-normal text-ink-muted">단골 매장의 이번 시즌</span>
                     </p>
                     <p className="shrink-0 rounded-badge bg-accent-300/15 px-2 py-0.5 text-2xs font-extrabold tabular-nums text-accent-300">
                       {seasonSku.price.toLocaleString()}점
@@ -1221,7 +1221,7 @@ export default function TierLeaderboard() {
                     <span className="block text-xs font-bold text-ink-primary">{nickChangeSku.label}</span>
                     <span className="block text-2xs leading-tight text-ink-muted">
                       {nickLocked
-                        ? <>지금은 <b className="text-ink-secondary">{nickFreeAt}</b>부터 바꿀 수 있어요 — 기다리지 않고 바로 바꿉니다</>
+                        ? <>지금은 <b className="text-ink-secondary">{nickFreeAt}</b>부터 바꿀 수 있어요. 기다리지 않고 바로 바꿉니다</>
                         : '지금은 기다리지 않고 바로 바꿀 수 있어요 · 변경은 원래 무료입니다'}
                     </span>
                   </span>
@@ -1299,10 +1299,10 @@ export default function TierLeaderboard() {
               <div className="flex items-center gap-1.5 pt-2">
                 <Icon name="trending-up" size={13} className="shrink-0 text-emerald-300" />
                 <p className="shrink-0 text-2xs font-extrabold text-emerald-300">버는 이유</p>
-                <p className="shrink-0 text-2xs text-ink-muted">— 활동으로만 열립니다 · 살 수 없어요</p>
+                <p className="shrink-0 text-2xs text-ink-muted">활동으로만 열립니다 · 살 수 없어요</p>
                 <span className="h-px flex-1 bg-border-subtle" />
               </div>
-              <p className="text-2xs font-bold text-ink-secondary">모으는 마크 <span className="font-normal text-ink-muted">— 점수에 도달하면 영구 해금(차감 없음)</span></p>
+              <p className="text-2xs font-bold text-ink-secondary">모으는 마크 <span className="font-normal text-ink-muted">점수에 도달하면 영구 해금(차감 없음)</span></p>
               <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
                 {earnList.map((mk) => {
                   const pts = user.activityPoints ?? 0;
@@ -1320,7 +1320,7 @@ export default function TierLeaderboard() {
                           onClick={() => handleEquip(on ? null : mk.key)}
                           className={['mt-1.5 w-full rounded-input px-2 py-1.5 text-2xs font-bold transition-colors',
                             on ? 'bg-accent-300 text-white' : 'border border-accent-400/40 text-accent-300 hover:bg-accent-300/10'].join(' ')}>
-                          {equipPending(mk.key, on) ? '적용 중…' : on ? '✓ 장착 중 — 해제' : '장착하기'}
+                          {equipPending(mk.key, on) ? '적용 중…' : on ? '✓ 장착 중 · 해제' : '장착하기'}
                         </button>
                       ) : (
                         <p className="mt-1.5 inline-flex w-full items-center justify-center gap-1 rounded-input bg-surface-float px-2 py-1.5 text-2xs font-bold text-ink-muted"><Icon name="lock" size={11} className="shrink-0" />{mk.need.toLocaleString()}점</p>
@@ -1344,7 +1344,7 @@ export default function TierLeaderboard() {
           : hall.rows.length === 0 ? (
             <EmptyState
               title="아직 전당에 오른 사람이 없어요"
-              hint="지난달 입상 기록이 없습니다 — 대회에 참가해 이번 달의 주인공이 되어보세요"
+              hint="지난달 입상 기록이 없습니다. 대회에 참가해 이번 달의 주인공이 되어보세요"
               icon={<Icon name="trophy" />}
             />
           )

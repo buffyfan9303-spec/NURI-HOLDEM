@@ -69,7 +69,7 @@ export default function RangeGuide({ initialGroup }: { initialGroup?: RangeScena
 
   return (
     // 제목은 전체화면 헤더가 이미 표시 — 카드 안은 설명만(2중 노출 제거)
-    <CalcCard desc={`포지션·상황별 표준 프리플랍 레인지 ${RANGE_SCENARIOS.length}개 — 셀을 누르면 핸드별 빈도`}>
+    <CalcCard desc={`포지션·상황별 표준 프리플랍 레인지 ${RANGE_SCENARIOS.length}개 · 셀을 누르면 핸드별 빈도`}>
       {/* ① 상황 그룹 */}
       <div className="flex flex-wrap gap-1">
         {RANGE_GROUPS.map((g) => (

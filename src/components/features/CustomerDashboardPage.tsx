@@ -455,7 +455,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
                         </span>
                         {/* 미인증이면 열지 않는다 — 열어 봐야 '되돌릴 수 없습니다' 확인 뒤 서버에서 막힌다 */}
                         <button type="button" disabled={!user?.verified} onClick={() => setRedeem(s)}
-                          title={user?.verified ? undefined : '본인인증 후 사용할 수 있어요 — 프로필에서 인증을 완료해 주세요'}
+                          title={user?.verified ? undefined : '본인인증 후 사용할 수 있어요. 프로필에서 인증을 완료해 주세요'}
                           className="btn-primary h-9 shrink-0 px-3 text-2xs disabled:cursor-not-allowed disabled:opacity-40">
                           {user?.verified ? '사용하기' : '인증 필요'}
                         </button>
@@ -545,7 +545,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
             <p className="mb-1.5 text-sm font-bold text-ink-primary">내 입상 기록 <span className="text-2xs font-normal text-ink-muted">(매장 순위 등록 기준)</span></p>
             {loading ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
               : !user?.nickname ? <p className="py-6 text-center text-2xs text-ink-muted">프로필에서 아이디(닉네임)를 설정하면 입상 기록이 자동 연결됩니다.</p>
-              : ranks.length === 0 ? <p className="py-6 text-center text-2xs text-ink-muted">아직 입상 기록이 없습니다 — 매장에서 순위가 등록되면 자동으로 표시됩니다.</p>
+              : ranks.length === 0 ? <p className="py-6 text-center text-2xs text-ink-muted">아직 입상 기록이 없습니다. 매장에서 순위가 등록되면 자동으로 표시됩니다.</p>
                 : <><RecordSummary rows={ranks} percentile={percentile} nickname={user?.nickname ?? ''} /><RankTrendChart rows={ranks} />
                 <ul className="space-y-1.5">{ranks.slice(0, 15).map((r, i) => (
                   <li key={i} className="flex items-center gap-2.5 rounded-input border border-border-subtle bg-surface-low px-3 py-2">
@@ -638,7 +638,7 @@ function LoginLanding({ onClose, hidden = false }: { onClose: () => void; hidden
               ring-conic: 정적 conic 시그니처 보더(홈 밖 1곳 규율) — border 유틸 대신 자체 1px 투명 보더 사용 */}
           <section className="ring-conic rounded-card bg-surface-low p-5 text-center">
             <p className="text-base font-extrabold text-ink-primary">전국 홀덤을 한 곳에서</p>
-            <p className="mt-1 text-xs leading-relaxed text-ink-secondary">대회 일정·매장 커뮤니티·GTO 학습까지 —<br />로그인하면 예약·이용권·전적이 모입니다</p>
+            <p className="mt-1 text-xs leading-relaxed text-ink-secondary">대회 일정·매장 커뮤니티·GTO 학습까지<br />로그인하면 예약·이용권·전적이 모입니다</p>
             <div className="mt-4 grid grid-cols-3 gap-2">
               {([['calendar', '대회 일정'], ['users', '매장 커뮤니티'], ['target', 'GTO 학습']] as const).map(([icon, label]) => (
                 <div key={icon} className="flex flex-col items-center gap-1.5 rounded-input bg-surface-high/50 px-1 py-3">
@@ -773,7 +773,7 @@ function SwipeCancelRow({ cancelable, onCancel, children }: { cancelable: boolea
       )}
       <div
         className={[
-          'relative bg-surface-low px-3 py-2 transition-transform duration-150 ease-out',
+          'relative bg-surface-low px-3 py-2 transition-transform duration-[var(--dur-fast)] ease-out',
           // PC: 호버 시 살짝 밀려 취소 버튼이 보인다(터치 불가 환경 대응)
           cancelable ? 'md:group-hover:-translate-x-[76px]' : '',
         ].join(' ')}
@@ -832,7 +832,7 @@ function RecordSummary({ rows, percentile, nickname }: { rows: MyRankingRow[]; p
           {percentile != null && <span className="ml-1.5 rounded-badge bg-accent-300/15 px-1.5 py-0.5 text-2xs text-accent-300">전국 상위 {percentile}%</span>}
         </p>
         <div className="flex shrink-0 gap-1">
-          {kakaoConfigured() && <button type="button" onClick={doKakao} disabled={busy} className="shrink-0 rounded-badge px-2 py-1 text-2xs font-bold text-[#3C1E1E] disabled:opacity-50" style={{ background: '#FEE500' }}>카톡</button>}
+          {kakaoConfigured() && <button type="button" onClick={doKakao} disabled={busy} className="shrink-0 rounded-chip px-2 py-1 text-2xs font-bold text-[#3C1E1E] disabled:opacity-50" style={{ background: '#FEE500' }}>카톡</button>}
           <button type="button" onClick={doShare} disabled={busy} className="btn-ghost inline-flex shrink-0 items-center gap-1 px-2.5 py-1 text-2xs disabled:opacity-50">{busy ? '생성 중…' : <><Icon name="share" size={12} /> 공유</>}</button>
         </div>
       </div>
@@ -927,7 +927,7 @@ function RedeemSheet({ stack, onClose, onDone }: { stack: Stack; onClose: () => 
     setBusy(true);
     try {
       const t = (await findUserByPhone(phone))[0] ?? null; // 후보 배열 — 첫 일치를 확인 카드로
-      if (!t) { toast.show('해당 번호의 회원을 찾지 못했어요 — 번호를 다시 확인해 주세요', 'error'); setBusy(false); return; }
+      if (!t) { toast.show('해당 번호의 회원을 찾지 못했어요. 번호를 다시 확인해 주세요', 'error'); setBusy(false); return; }
       setPhoneTarget(t); setBusy(false);
     } catch (e) { toast.show(e instanceof Error ? e.message : '조회 실패', 'error'); setBusy(false); }
   };
@@ -1061,7 +1061,7 @@ function LevelGuideModal({ points, onClose }: { points: number; onClose: () => v
         <div className="mt-3 rounded-card border border-border-subtle bg-surface-low p-2.5 text-2xs leading-relaxed text-ink-secondary">
           <b className="text-ink-primary">점수 올리는 법</b><br />
           · 접속 +1 · 글쓰기 +3 · 댓글 +1<br />
-          · 친구 초대(본인인증) +500 · 추천 가입 +300{!idOn && <span className="text-ink-muted"> — 본인인증 준비 중이라 잠시 중단</span>}<br />
+          · 친구 초대(본인인증) +500 · 추천 가입 +300{!idOn && <span className="text-ink-muted">본인인증 준비 중이라 잠시 중단</span>}<br />
           · 시즌 1·2·3위 +1,000 / +500 / +300
         </div>
       </div>
@@ -1127,8 +1127,8 @@ function InviteSection({ nickname, stats, idOn }: { nickname: string; stats: Ref
   const copy = async () => { try { await navigator.clipboard.writeText(url); toast.show('초대 링크를 복사했어요', 'success'); } catch { toast.show('복사 실패', 'error'); } };
   const share = async () => {
     const text = idOn
-      ? 'NURI HOLDEM 같이 해요! 내 링크로 가입하고 본인인증하면 둘 다 활동점수 받아요 🎁'
-      : 'NURI HOLDEM 같이 해요! 내 링크로 가입하고 함께 대회 일정·전적을 챙겨요 🎁';
+      ? 'NURI HOLDEM 같이 해요! 내 링크로 가입하고 본인인증하면 둘 다 활동점수 받아요'
+      : 'NURI HOLDEM 같이 해요! 내 링크로 가입하고 함께 대회 일정·전적을 챙겨요';
     if (navigator.share) { try { await navigator.share({ title: 'NURI HOLDEM 초대', text, url }); return; } catch { return; } }
     copy();
   };

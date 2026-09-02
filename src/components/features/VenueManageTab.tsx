@@ -100,7 +100,7 @@ function SettingsTabBar({ tabs, active, onPick }: {
           return (
             <button key={t.id} type="button" role="tab" aria-selected={on} data-pill-active={on || undefined} data-tab-id={t.id}
               onClick={() => onPick(t.id)}
-              className={['relative inline-flex h-9 shrink-0 items-center rounded-[6px] px-3 t-tab leading-none transition-colors duration-300 focus:outline-none',
+              className={['relative inline-flex h-9 shrink-0 items-center rounded-[6px] px-3 t-tab leading-none transition-colors duration-[var(--dur-fast)] focus:outline-none',
                 on ? 'font-bold text-white' : t.id === 'danger' ? 'text-danger-light/80 hover:text-danger-light' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
               <span className="relative">{t.label}</span>
             </button>
@@ -592,7 +592,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   return (
                     <button key={st.id} type="button" role="tab" aria-selected={on} data-pill-active={on || undefined}
                       onClick={() => gotoSection(st.id)}
-                      className={['relative inline-flex h-9 shrink-0 items-center rounded-[6px] px-3 t-tab leading-none transition-colors duration-300 focus:outline-none',
+                      className={['relative inline-flex h-9 shrink-0 items-center rounded-[6px] px-3 t-tab leading-none transition-colors duration-[var(--dur-fast)] focus:outline-none',
                         on ? 'font-bold text-white' : 'text-ink-muted hover:text-ink-secondary'].join(' ')}>
                       <span className="relative">{i + 1}. {st.label}</span>
                     </button>
@@ -676,14 +676,14 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
 
 // 섹션 설명 — 공용 SectionHeader에 표시(제목·설명·액션 규격 통일)
 const SECTION_DESC: Record<Section | GameStep | SettingsTab, string> = {
-  dashboard: '매장 운영 현황을 한눈에 — 오늘 장부·클락·추세·단골',
+  dashboard: '매장 운영 현황을 한눈에 · 오늘 장부·클락·추세·단골',
   game: '포스터 → 장부 → 클락 → 순위, 게임 하나를 단계로 진행합니다',
-  posters: '게임(포스터)별 예약 관리 — 게임을 누르면 예약 리스트가 펼쳐집니다',
-  presets: '게임 내용·듀레이션을 템플릿으로 저장 — 포스터/장부 없이 만들고 수정',
-  ledger: '게임(세션)별 장부 — 날짜·게임명으로 검색해 열람·수정하세요',
+  posters: '게임(포스터)별 예약 관리. 게임을 누르면 예약 리스트가 펼쳐집니다',
+  presets: '게임 내용·듀레이션을 템플릿으로 저장 · 포스터/장부 없이 만들고 수정',
+  ledger: '게임(세션)별 장부. 날짜·게임명으로 검색해 열람·수정하세요',
   stats: '기간별 매출·엔트리·요일 분석',
-  ranking: '대회 순위 등록 — 닉네임이 일치하는 회원에게 점수가 자동 반영됩니다',
-  clock: '토너먼트 타이머 — 장부 연동 시 엔트리·생존이 자동 반영됩니다',
+  ranking: '대회 순위 등록. 닉네임이 일치하는 회원에게 점수가 자동 반영됩니다',
+  clock: '토너먼트 타이머. 장부 연동 시 엔트리·생존이 자동 반영됩니다',
   attendance: '내 출퇴근 기록',
   voucher: '매장이용권 발행·사용 내역 + 매장 QR(이용권·출석 체크인·가입) 인쇄',
   page: '손님 화면 탭 순서 · 내 매장 링크 · 시즌 · 랭킹 보드 · 칭호 · 기준 점수 · 포인트',
@@ -692,8 +692,8 @@ const SECTION_DESC: Record<Section | GameStep | SettingsTab, string> = {
   // ⚠ 설명은 '이 화면에 실제로 있는 것'만 적는다 — 결제수단·할인 프리셋은 장부(세션 설정)에 있고
   //   여기엔 없다. 없는 것을 약속하면 사장님이 이 탭을 열고 찾다가 포기한다.
   pos: 'POS 취소 비밀번호 · 매장 알림 수신 · 공동 사장님 관리',
-  optools: '토너먼트 세팅 계산기 — 칩 분배·구조·블라인드·상금·종료시간 (GTO 탭에서 이관)',
-  danger: '매장 영구 삭제 — 복구할 수 없습니다. 신중하게.',
+  optools: '토너먼트 세팅 계산기 · 칩 분배·구조·블라인드·상금·종료시간 (GTO 탭에서 이관)',
+  danger: '매장 영구 삭제. 복구할 수 없습니다. 신중하게.',
 };
 
 // 섹션 아이콘(라인 스타일 통일: 16px, stroke 1.8)
@@ -834,7 +834,7 @@ function SectionBtn({ active, onClick, icon, children, locked }: {
     <button type="button" onClick={onClick} ref={ref}
       // 모바일=인라인 칩(아이콘+라벨 한 줄, 1행 가로 스크롤) / PC=세로 리스트.
       // §T1: PC 만 13px(사다리 밖)이라 모바일 12.75 와 어긋나 있었다 → t-tab 한 값으로 고정(-0.25px).
-      className={['group/nav relative flex shrink-0 snap-start flex-row items-center justify-center gap-2 whitespace-nowrap rounded-[7px] px-3 py-2 t-tab transition-colors duration-300 focus:outline-none touch-manipulation lg:w-full lg:shrink lg:justify-start lg:py-2',
+      className={['group/nav relative flex shrink-0 snap-start flex-row items-center justify-center gap-2 whitespace-nowrap rounded-[7px] px-3 py-2 t-tab transition-colors duration-[var(--dur-fast)] focus:outline-none touch-manipulation lg:w-full lg:shrink lg:justify-start lg:py-2',
         active ? 'font-bold text-white' : locked ? 'text-ink-muted/60 hover:text-ink-secondary lg:hover:bg-surface-high' : 'text-ink-secondary hover:text-ink-primary lg:hover:bg-surface-high'].join(' ')}>
       {active && <span aria-hidden className="absolute inset-0 rounded-[7px] pill-active animate-fade-in" />}
       <span className="relative shrink-0" aria-hidden>{icon}</span>
@@ -942,7 +942,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
   <div class="logo">NURI <span class="h">HOLDEM</span></div>
   <div class="sub">OFFICIAL RESULT SLIP</div>
   <div class="venue">${esc(venueName) || '매장명'}</div>
-  <div class="note">NURI HOLDEM 인증 펍 전용 양식 — 인증 펍 외 사용·발급은 무효입니다.</div>
+  <div class="note">NURI HOLDEM 인증 펍 전용 양식. 인증 펍 외 사용·발급은 무효입니다.</div>
 </div>
 <div class="fs">
   ${field('NAME', '성명')}
@@ -1235,8 +1235,8 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
   }, [venueId, canEdit, vchOn]);
   /** 매장 차원에서 전송이 막혀 있으면 그 사유 — 줄 단위 판정보다 먼저 본다 */
   const venueSendBlock = (): string | null => {
-    if (issueApproved === false) return '운영자 승인 전이라 이용권을 보낼 수 없습니다 — 순위 저장은 그대로 됩니다';
-    if (quotaLeft !== null && quotaLeft <= 0) return '발급 한도가 0개입니다 — 운영자에게 문의해 주세요 (순위 저장은 그대로 됩니다)';
+    if (issueApproved === false) return '운영자 승인 전이라 이용권을 보낼 수 없습니다. 순위 저장은 그대로 됩니다';
+    if (quotaLeft !== null && quotaLeft <= 0) return '발급 한도가 0개입니다. 운영자에게 문의해 주세요 (순위 저장은 그대로 됩니다)';
     return null;
   };
 
@@ -1248,9 +1248,9 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
     if (!nick) return { ok: false, reason: '닉네임을 먼저 입력해 주세요', target: null };
     const t = targetOf(nick);
     if (t === 'unknown') return { ok: false, reason: '회원 확인 중…', target: null };
-    if (t === null) return { ok: false, reason: '비회원 — 가입·인증 후 지급 가능', target: null };
-    if (t === 'ambiguous') return { ok: false, reason: '동명이인 — 닉네임 칸에서 받는 분을 골라 주세요', target: null };
-    if (vchOn && !t.verified) return { ok: false, reason: '본인인증 전 회원 — 인증 후 지급 가능', target: null };
+    if (t === null) return { ok: false, reason: '비회원 · 가입·인증 후 지급 가능', target: null };
+    if (t === 'ambiguous') return { ok: false, reason: '동명이인. 닉네임 칸에서 받는 분을 골라 주세요', target: null };
+    if (vchOn && !t.verified) return { ok: false, reason: '본인인증 전 회원 · 인증 후 지급 가능', target: null };
     return { ok: true, reason: '', target: t };
   };
 
@@ -1295,7 +1295,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
     const wrongUnit = clean.filter((r) => prizeUnitRisk(r.prize) === 'impossible');
     if (wrongUnit.length > 0 && !window.confirm(
       `프라이즈가 원 단위로 입력된 것 같습니다 (${wrongUnit.map((r) => r.prize).join(', ')}).\n\n`
-      + '이 칸은 만원 단위입니다 — 100만원이면 100, 1,000만원이면 1000.\n\n'
+      + '이 칸은 만원 단위입니다. 100만원이면 100, 1,000만원이면 1000.\n\n'
       + '이대로 저장하면 매장·전국 프라이즈 순위가 크게 왜곡됩니다. 그래도 저장할까요?',
     )) return;
     setSaving(true);
@@ -1320,8 +1320,8 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
       }).length;
       toast.show(
         pending > 0
-          ? `순위 저장 완료 — 이용권 ${pending}줄은 아직 전송 전입니다. 줄 오른쪽 '전송'을 눌러 주세요`
-          : '순위 저장 완료 — 닉네임이 일치하는 회원에게 포인트가 반영됩니다',
+          ? `순위 저장 완료. 이용권 ${pending}줄은 아직 전송 전입니다. 줄 오른쪽 '전송'을 눌러 주세요`
+          : '순위 저장 완료. 닉네임이 일치하는 회원에게 포인트가 반영됩니다',
         pending > 0 ? 'info' : 'success',
       );
     } catch (e) {
@@ -1353,7 +1353,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
         {date !== today && (
           <button type="button" onClick={() => setDate(today)} className="btn-ghost text-xs px-3 shrink-0">오늘</button>
         )}
-        <button type="button" onClick={printPaperForm} title="공식 결과 기록지(수기 양식) 인쇄 — 인증 펍 전용"
+        <button type="button" onClick={printPaperForm} title="공식 결과 기록지(수기 양식) 인쇄 · 인증 펍 전용"
           className="btn-ghost inline-flex min-h-11 shrink-0 items-center gap-2 px-3 text-xs text-accent-300 dark:text-accent-200"><Icon name="printer" size={14} className="shrink-0" />지류 양식</button>
       </div>
 
@@ -1432,7 +1432,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
       <div className="rounded-card border border-emerald-500/25 bg-emerald-500/[0.04] overflow-hidden">
         <button type="button" onClick={() => setLedgerPanelOpen((v) => !v)}
           className="flex min-h-11 w-full items-center justify-between gap-2 px-3 py-2 text-left">
-          <span className="inline-flex items-center gap-1 text-2xs font-bold text-emerald-300"><Icon name="notebook" size={12} className="shrink-0" />그날 장부 명단 {ledgerPlayers.length > 0 ? <span className="text-ink-secondary">({ledgerPlayers.length}명)</span> : <span className="font-normal text-ink-muted">— 연결된 장부 없음</span>}</span>
+          <span className="inline-flex items-center gap-1 text-2xs font-bold text-emerald-300"><Icon name="notebook" size={12} className="shrink-0" />그날 장부 명단 {ledgerPlayers.length > 0 ? <span className="text-ink-secondary">({ledgerPlayers.length}명)</span> : <span className="font-normal text-ink-muted">연결된 장부 없음</span>}</span>
           <span className="text-2xs text-ink-muted">{ledgerPanelOpen ? '접기 ▲' : '펼치기 ▼'}</span>
         </button>
         {ledgerPanelOpen && (
@@ -1442,7 +1442,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
             ) : (
               <>
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-2xs text-ink-muted">장부에 바인한 손님 — <b className="text-emerald-300">＋</b>로 순위에 추가</p>
+                  <p className="text-2xs text-ink-muted">장부에 바인한 손님 · <b className="text-emerald-300">＋</b>로 순위에 추가</p>
                   <button type="button" onClick={addAllFromLedger} className="rounded-input border border-emerald-500/40 px-2 py-1 text-2xs font-bold text-emerald-300 hover:bg-emerald-500/10">전체 추가</button>
                 </div>
                 <ul className="flex flex-wrap gap-2">
@@ -1477,7 +1477,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
           실명·프라이즈는 선택입니다. 1,000만원은 <span className="text-accent-300 font-semibold">1000</span>(원 단위로 치면 순위 점수가 1만 배로 잘못 쌓입니다). 등수마다 <span className="text-accent-300 font-semibold">기준 점수(+N점)</span>가 자동 부여되고, 프라이즈는 <span className="text-accent-300 font-semibold">매장 커뮤니티 순위 점수</span>로만 쓰입니다(금전적 가치 없음). 손님 화면엔 <span className="text-accent-300 font-semibold">실명(닉네임) 형식</span>으로 닉네임 일부를 가려 표시됩니다(예: 누리홀덤(나*리)).
         </p>
         {vchOn && <p className="mt-1">
-          <b className="text-accent-300">매장이용권은 순위 저장과 따로 나갑니다.</b> 개수를 넣고 그 줄 맨 오른쪽 <b className="text-accent-300">전송</b>을 눌러야 그 한 명에게 발급됩니다 — 저장만으로는 나가지 않습니다. 비회원·본인인증 전 회원 줄은 전송 버튼이 비활성이고, 같은 닉네임 회원이 둘 이상(<span className="text-amber-300 font-semibold">중복</span>)이면 닉네임 칸 자동완성에서 받는 분을 먼저 골라 주세요.
+          <b className="text-accent-300">매장이용권은 순위 저장과 따로 나갑니다.</b> 개수를 넣고 그 줄 맨 오른쪽 <b className="text-accent-300">전송</b>을 눌러야 그 한 명에게 발급됩니다. 저장만으로는 나가지 않습니다. 비회원·본인인증 전 회원 줄은 전송 버튼이 비활성이고, 같은 닉네임 회원이 둘 이상(<span className="text-amber-300 font-semibold">중복</span>)이면 닉네임 칸 자동완성에서 받는 분을 먼저 골라 주세요.
         </p>}
         {!vchOn && <p className="mt-1">같은 닉네임 회원이 둘 이상(<span className="text-amber-300 font-semibold">중복</span>)이면 닉네임 칸 자동완성에서 기록 주인을 먼저 골라 주세요.</p>}
       </details>
@@ -1499,7 +1499,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
           return (
             <p className="t-desc break-keep flex items-start gap-2 rounded-input border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-amber-200">
               <Icon name="alert" size={13} className="mt-0.5 shrink-0" />
-              <span>남은 발급 한도 <b className="tabular-nums">{quotaLeft.toLocaleString()}개</b> — 시상 전에 확인해 주세요. 한도 추가는 운영자 문의.</span>
+              <span>남은 발급 한도 <b className="tabular-nums">{quotaLeft.toLocaleString()}개</b>시상 전에 확인해 주세요. 한도 추가는 운영자 문의.</span>
             </p>
           );
         }
@@ -1518,7 +1518,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
                 className="shrink-0 text-2xs text-ink-muted hover:text-ink-secondary">버리기</button>
             </>
           ) : (
-            <span className="min-w-0 flex-1 text-2xs text-amber-200">✎ 저장 전 임시 보관 중 — 날짜·게임을 바꿔도 되돌아오면 그대로 있어요. 마무리하려면 아래 <b>순위 저장</b>을 눌러 주세요.</span>
+            <span className="min-w-0 flex-1 text-2xs text-amber-200">✎ 저장 전 임시 보관 중 · 날짜·게임을 바꿔도 되돌아오면 그대로 있어요. 마무리하려면 아래<b>순위 저장</b>을 눌러 주세요.</span>
           )}
         </div>
       )}
@@ -1545,14 +1545,14 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
               <span className="row-span-3 lg:row-span-1 flex flex-col lg:flex-row items-center justify-center gap-0.5">
                 <button
                   type="button" onClick={() => moveRow(i, i - 1)} disabled={i === 0}
-                  aria-label={`${i + 1}위를 한 칸 위로`} title="위로 — 등수 올리기"
+                  aria-label={`${i + 1}위를 한 칸 위로`} title="위로 · 등수 올리기"
                   className="flex h-9 w-full shrink-0 items-center justify-center rounded-input text-ink-muted transition-colors hover:bg-surface-high hover:text-accent-300 active:scale-95 disabled:pointer-events-none disabled:opacity-20 lg:h-7 lg:w-6"
                 >
                   <Icon name="chevron-up" size={14} />
                 </button>
                 {/* 숫자 자체가 '등수 직접 지정' 버튼 — ▲만으로는 20위를 1위로 올리는 데 19번을 눌러야 한다 */}
                 <button type="button" onClick={() => promptMoveTo(i)}
-                  aria-label={`${i + 1}위 — 등수 직접 지정`} title="등수 직접 지정 — 몇 위로 옮길지 입력"
+                  aria-label={`${i + 1}위 · 등수 직접 지정`} title="등수 직접 지정 · 몇 위로 옮길지 입력"
                   className="flex min-h-9 min-w-9 shrink-0 flex-col items-center justify-center px-0.5 text-center leading-none">
                   <span className="block text-sm font-bold text-accent-300 dark:text-accent-200 tabular-nums">{i + 1}</span>
                   {/* 등수→점수 미리보기(매장 꾸미기 '기준 점수' 반영) */}
@@ -1560,7 +1560,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
                 </button>
                 <button
                   type="button" onClick={() => moveRow(i, i + 1)} disabled={i === rows.length - 1}
-                  aria-label={`${i + 1}위를 한 칸 아래로`} title="아래로 — 등수 내리기"
+                  aria-label={`${i + 1}위를 한 칸 아래로`} title="아래로 · 등수 내리기"
                   className="flex h-9 w-full shrink-0 items-center justify-center rounded-input text-ink-muted transition-colors hover:bg-surface-high hover:text-accent-300 active:scale-95 disabled:pointer-events-none disabled:opacity-20 lg:h-7 lg:w-6"
                 >
                   <Icon name="chevron-down" size={14} />
@@ -1609,13 +1609,13 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
                             <span className="shrink-0 rounded-badge bg-emerald-500/15 px-1.5 py-0.5 text-2xs font-bold text-emerald-300">회원</span>
                             {dupNicks.has(c.nickname.trim().toLowerCase()) && (
                               <span className="shrink-0 rounded-badge bg-amber-500/15 px-1.5 py-0.5 text-2xs font-bold text-amber-300"
-                                title="같은 닉네임의 회원이 둘 이상입니다 — 실명을 보고 골라 주세요">중복</span>
+                                title="같은 닉네임의 회원이 둘 이상입니다. 실명을 보고 골라 주세요">중복</span>
                             )}
                             {/* 킬스위치 OFF 면 '미인증' 은 아무것도 막지 않는다 — 남겨두면 존재하지 않는
                                 인증 화면으로 가라는 뜻 없는 경고가 된다(순위 기록은 원래 인증과 무관). */}
                             {vchOn && !c.verified && (
                               <span className="shrink-0 rounded-badge bg-rose-500/15 px-1.5 py-0.5 text-2xs font-bold text-rose-300"
-                                title="미인증 회원 — 본인인증 전이라 순위 기록은 되지만 매장이용권은 지급할 수 없어요"><Icon name="alert" size={9} className="mr-0.5 inline-block align-[-1px] shrink-0" />미인증</span>
+                                title="미인증 회원. 본인인증 전이라 순위 기록은 되지만 매장이용권은 지급할 수 없어요"><Icon name="alert" size={9} className="mr-0.5 inline-block align-[-1px] shrink-0" />미인증</span>
                             )}
                             <span className="truncate font-semibold text-ink-primary">{c.nickname}{c.realName ? <span className="font-normal text-ink-muted"> · {c.realName}</span> : null}</span>
                           </button>
@@ -1631,11 +1631,11 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
                   if (t === 'unknown') return null;
                   // ⚠⚪✅🟡 이모지는 OS 마다 색·굵기가 달라 '회원/비회원/미인증'이 서로 구분되지 않았다.
                   const [icon, tone, label]: [IconName, string, string] =
-                    t === 'ambiguous' ? ['alert', 'text-amber-300', '동명이인 — 후보에서 선택 필요']
+                    t === 'ambiguous' ? ['alert', 'text-amber-300', '동명이인. 후보에서 선택 필요']
                     : t === null ? ['circle', 'text-ink-muted', '비회원']
                       : !vchOn ? ['check-circle', 'text-emerald-400', '회원']
                       : t.verified ? ['check-circle', 'text-emerald-400', '회원(본인인증 완료)']
-                      : ['circle', 'text-amber-300', '회원 — 본인인증 전'];
+                      : ['circle', 'text-amber-300', '회원 · 본인인증 전'];
                   return (
                     <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2" title={label}>
                       <Icon name={icon} size={14} className={tone} role="img" aria-hidden={false} aria-label={label} />
@@ -1659,7 +1659,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
                   onKeyDown={(e) => { if (e.nativeEvent.isComposing) return; /* 한글 조합 확정 Enter 를 제출로 오인하지 않게 */ if (e.key === 'Enter' && i === rows.length - 1) addRow(); }}
                   placeholder="프라이즈"
                   aria-label="프라이즈 (만원 단위)"
-                  title="만원 단위 — 100만원이면 100, 1,000만원이면 1000"
+                  title="만원 단위 · 100만원이면 100, 1,000만원이면 1000"
                   className={['input w-full min-w-0 text-sm py-2 pr-7',
                     prizeUnitRisk(row.prize) !== 'ok' ? 'border-amber-400/70 focus:border-amber-400 focus:ring-amber-400' : ''].join(' ')}
                 />
@@ -1694,7 +1694,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
                 return (
                   <button
                     type="button" onClick={() => sendVoucher(i)} disabled={!canSend}
-                    title={gate.ok ? (sent ? '이미 보냈습니다 — 다시 누르면 추가 발급됩니다' : '이 줄의 이용권을 지금 전송') : gate.reason}
+                    title={gate.ok ? (sent ? '이미 보냈습니다. 다시 누르면 추가 발급됩니다' : '이 줄의 이용권을 지금 전송') : gate.reason}
                     className={['col-start-3 row-start-3 lg:col-start-7 lg:row-auto h-9 w-full rounded-input border px-2 text-2xs font-bold transition-colors disabled:cursor-not-allowed',
                       sent ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
                         : st?.status === 'error' ? 'border-rose-500/40 bg-rose-500/10 text-rose-300'
@@ -1740,7 +1740,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
         if (bad.length === 0) return null;
         return (
           <p className="t-desc break-keep rounded-input border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-amber-200">
-            <Icon name="alert" size={12} className="mr-0.5 inline-block align-[-1px] shrink-0" /><b>{bad.map((x) => `${x.no}위`).join(', ')}</b> 프라이즈가 큽니다 — 이 칸은 <b>만원 단위</b>예요.
+            <Icon name="alert" size={12} className="mr-0.5 inline-block align-[-1px] shrink-0" /><b>{bad.map((x) => `${x.no}위`).join(', ')}</b> 프라이즈가 큽니다. 이 칸은<b>만원 단위</b>예요.
             100만원이면 <b>100</b>, 1,000만원이면 <b>1000</b>. 원 단위로 치면 매장·전국 프라이즈 순위가 크게 왜곡됩니다.
           </p>
         );
@@ -1793,7 +1793,7 @@ function VenueCreateForm({ onCreated }: { onCreated: () => Promise<void> }) {
         name: name.trim(), region: region.trim(), address: address.trim(), phone: phone.trim(),
         imageUrl, kakaoUrl: kakao.trim() || undefined, description: desc.trim() || undefined, businessHours: hours.trim() || undefined,
       });
-      toast.show('매장이 생성되었습니다 — 운영자 승인 후 일정탐색·커뮤니티에 공개됩니다', 'success');
+      toast.show('매장이 생성되었습니다. 운영자 승인 후 일정탐색·커뮤니티에 공개됩니다', 'success');
       await onCreated();
     } catch (e) { toast.show(e instanceof Error ? e.message : '매장 생성 실패', 'error'); }
     setBusy(false);
@@ -1945,7 +1945,7 @@ function StaffManager({ venueId }: { venueId: string }) {
     setInviting(true);
     try {
       await inviteStaffByEmail(identifier, venueId);
-      toast.show('초대를 보냈습니다 — 상대가 알림에서 수락하면 합류합니다', 'success');
+      toast.show('초대를 보냈습니다. 상대가 알림에서 수락하면 합류합니다', 'success');
       setIdent('');
       setResults([]);
       reload();
@@ -1969,7 +1969,7 @@ function StaffManager({ venueId }: { venueId: string }) {
   const remove = async (s: User) => {
     if (!confirm(`${s.name} 구성원을 제거하시겠습니까?
 일반 회원으로 전환되고 장부·순위${vchOn ? ' / 이용권내역' : ''} 권한도 함께 회수됩니다.`)) return;
-    try { await removeStaff(s.id); toast.show(`구성원을 제거했습니다 — 장부${vchOn ? '·이용권' : '·순위'} 권한도 함께 회수됐습니다`, 'success'); reload(); }
+    try { await removeStaff(s.id); toast.show(`구성원을 제거했습니다. 장부${vchOn ? '·이용권' : '·순위'} 권한도 함께 회수됐습니다`, 'success'); reload(); }
     catch (e) { toast.show(msgOf(e, '구성원 제거에 실패했습니다'), 'error'); }
   };
 

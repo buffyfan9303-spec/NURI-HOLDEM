@@ -204,7 +204,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
     const tm = rc.match(/(\d{1,2}:\d{2})/);
     setRegLevel(lv ? lv[1] : '');
     setRegTime(tm ? tm[1] : '');
-    toast.show('지난 포스터를 불러왔습니다 — 날짜만 확인하고 등록하세요', 'success');
+    toast.show('지난 포스터를 불러왔습니다. 날짜만 확인하고 등록하세요', 'success');
   };
 
   // ── PL2c: 게임 프리셋 → 포스터 폼(공용 PresetPicker + applyToPoster 어댑터) ──────
@@ -212,7 +212,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
   const presetVenueId = isAdmin ? (form.venueId || '') : (user?.venueId ?? '');
   const applyGamePreset = (p: GamePreset) => {
     const patch = applyToPoster(p.data);
-    if (Object.keys(patch).length === 0) { toast.show(`'${p.name}' — 포스터에 적용할 항목이 없는 프리셋입니다`, 'info'); return; }
+    if (Object.keys(patch).length === 0) { toast.show(`'${p.name}'. 포스터에 적용할 항목이 없는 프리셋입니다`, 'info'); return; }
     setForm((f) => ({ ...f, ...patch }));
     if (patch.posterUrl) { setImgFile(null); setImgPreview(patch.posterUrl); }
     if (patch.regCloseTime !== undefined) {
@@ -222,7 +222,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
       setRegLevel(lv ? lv[1] : '');
       setRegTime(tm ? tm[1] : '');
     }
-    toast.show(`'${p.name}' 프리셋 적용 — 채워진 항목만 반영했어요(수정 가능)`, 'success');
+    toast.show(`'${p.name}' 프리셋 적용 · 채워진 항목만 반영했어요(수정 가능)`, 'success');
   };
   // PL3: 등록 직후 프리셋 저장(부산물 authoring) — 체크 시 제출과 함께 게임 프리셋으로도 저장
   const [alsoPreset, setAlsoPreset] = useState(false);
@@ -258,7 +258,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
     if (!regClose)              return failAt(regLevelId, '레지마감은 레벨 또는 시간 중 하나 이상 입력해 주세요');
     // 과거 날짜 가드 — 신규 등록이 어제로 잡히면 첫 화면에서 '종료'로 시작한다(오타 사고 방지)
     if (form.date && form.date < new Date().toLocaleDateString('en-CA')
-        && !window.confirm(`날짜가 과거(${form.date})입니다 — 등록하면 바로 '종료' 처리됩니다. 그래도 등록할까요?`)) {
+        && !window.confirm(`날짜가 과거(${form.date})입니다. 등록하면 바로 '종료' 처리됩니다. 그래도 등록할까요?`)) {
       return failAt(dateId, '날짜를 확인해 주세요');
     }
 
@@ -288,7 +288,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
     // PL3: '이 설정을 프리셋으로도 저장' — 등록의 부산물로 프리셋이 쌓인다(실패해도 포스터 등록엔 영향 없음)
     if (alsoPreset && presetVenueId && form.title.trim()) {
       saveGamePreset(presetVenueId, form.title.trim(), presetFromPosterForm({ ...form, regCloseTime: regClose, posterUrl }))
-        .then(() => toast.show('게임 프리셋으로도 저장했어요 — 장부·클락에서 그대로 불러올 수 있어요', 'success'))
+        .then(() => toast.show('게임 프리셋으로도 저장했어요. 장부·클락에서 그대로 불러올 수 있어요', 'success'))
         .catch((err) => toast.show(err instanceof Error ? err.message : '프리셋 저장 실패', 'error'));
     }
     onClose();
@@ -550,7 +550,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
             {form.buyIn > 0 && (
               <p className={['mt-1 text-2xs tabular-nums', form.buyIn < 1000 ? 'font-bold text-amber-400' : 'text-ink-muted'].join(' ')}>
                 = {form.buyIn >= 10000 ? `${(form.buyIn / 10000).toLocaleString()}만원` : `${form.buyIn.toLocaleString()}원`}
-                {form.buyIn < 1000 && ' — 만원 단위로 적으셨나요? 이 칸은 원 단위입니다'}
+                {form.buyIn < 1000 && '만원 단위로 적으셨나요? 이 칸은 원 단위입니다'}
               </p>
             )}
           </FieldWrap>
@@ -558,7 +558,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
         {form.prizeType === 'GTD' && form.prizeAmount > 0 && (
           <p className={['-mt-1 text-2xs tabular-nums', form.prizeAmount >= 100000 ? 'font-bold text-amber-400' : 'text-ink-muted'].join(' ')}>
             보장 상금 = {form.prizeAmount >= 10000 ? `${(form.prizeAmount / 10000).toLocaleString()}억원` : `${form.prizeAmount.toLocaleString()}만원`}
-            {form.prizeAmount >= 100000 && ' — 원 단위로 적으셨나요? 이 칸은 만원 단위입니다'}
+            {form.prizeAmount >= 100000 && '원 단위로 적으셨나요? 이 칸은 만원 단위입니다'}
           </p>
         )}
 

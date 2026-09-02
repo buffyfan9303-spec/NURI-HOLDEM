@@ -1,7 +1,8 @@
 {
   "_주석": "번들 예산(gzip KB). 올릴 때는 왜 올리는지 커밋 메시지에 남길 것. --update 로 재작성.",
-  "totalJsGzipKb": 844,
-  "totalCssGzipKb": 26,
+  "_속도와의 관계": "속도를 좌우하는 것은 entryGzipKb(첫 화면이 실제로 받는 것)와 largestChunkGzipKb(한 화면을 열 때 받는 최대 덩어리)다. totalJsGzipKb 는 77개 지연 청크의 '합' 이라 한 사용자가 한 번에 받는 양이 아니다 — 열지 않는 화면의 코드는 내려오지 않는다. 그래서 2026-09-02 총량 상한만 1000 으로 올렸고(오너 지시: 속도와 무관하게 여유 확보), 속도 상한 둘은 그대로 둔다. CSS 는 entry 에 이미 포함돼 이중 계산이라 32 로 완화.",
+  "totalJsGzipKb": 1000,
+  "totalCssGzipKb": 32,
   "entryGzipKb": 255,
   "largestChunkGzipKb": 114,
   "externalStylesheets": 0

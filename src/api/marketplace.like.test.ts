@@ -4,7 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import { nextLikeState } from './marketplace';
 
-describe('nextLikeState — 장터 찜 낙관적 토글', () => {
+describe('nextLikeState · 장터 찜 낙관적 토글', () => {
   it('찜 안 한 상태에서 누르면 liked=true, 카운트 +1', () => {
     expect(nextLikeState({ liked: false, likeCount: 3 })).toEqual({ liked: true, likeCount: 4 });
   });
@@ -17,7 +17,7 @@ describe('nextLikeState — 장터 찜 낙관적 토글', () => {
     expect(nextLikeState({ liked: true, likeCount: 0 })).toEqual({ liked: false, likeCount: 0 });
   });
 
-  it('🔴 두 번 누르면 원상복구 — 실패 시 되돌리기가 항상 성립한다', () => {
+  it('🔴 두 번 누르면 원상복구. 실패 시 되돌리기가 항상 성립한다', () => {
     const start = { liked: false, likeCount: 7 };
     expect(nextLikeState(nextLikeState(start))).toEqual(start);
   });

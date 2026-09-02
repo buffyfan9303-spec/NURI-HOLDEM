@@ -77,10 +77,10 @@ const scanFile = (p: string) =>
 const BASELINE: Record<string, Record<string, number>> = {
   // ── 다른 웨이브가 점유 중이라 이번 커밋에서 손대지 못한 파일 ──
   //    (교체 방법은 이 웨이브의 인수인계 `left` 에 파일:줄 단위로 적어 두었다)
-  'App.tsx': { '1F389': 1 },                                   // 🎉 바인 승인 문구 — App.tsx 수정 금지 규약
+  // 'App.tsx' 🎉 바인 승인 문구 — 2026-09-02 문구 점검(AI 티 제거)에서 이모지를 뺐다. 부채 0.
   'components/features/clock/ClockDisplay.tsx': { '26F6': 1, '2922': 1 },   // ⛶ ⤢ 전체화면 토글
   'components/features/clock/TournamentClock.tsx': { '2921': 2, '2922': 1 }, // ⤡ ⤢ 전체화면 토글
-  'components/features/CustomerDashboardPage.tsx': { '1F381': 3 },          // 🎁 카카오 공유 문구
+  'components/features/CustomerDashboardPage.tsx': { '1F381': 1 },          // 🎁 카카오 공유 문구 — 2026-09-02 3→1(문구 점검)
   'components/features/VenueManageTab.tsx': { '270E': 1 },                  // ✎ 순위 초안 배너
 
   // ── 화면 밖으로 나가는 문자열(앱 UI 아님) ──
@@ -96,7 +96,7 @@ const BASELINE: Record<string, Record<string, number>> = {
 describe('UI 이모지 규약', () => {
   const files = walk(SRC);
 
-  it('스캐너가 살아 있다 — 예외를 뺀 이모지를 실제로 잡는다(프로브 유효성)', () => {
+  it('스캐너가 살아 있다. 예외를 뺀 이모지를 실제로 잡는다(프로브 유효성)', () => {
     // 이 검사가 없으면 스캐너가 통째로 고장 나도 "이상 없음"으로 조용히 통과한다.
     expect(isPolicyEmoji(0x1f389)).toBe(true);   // 🎉
     expect(isPolicyEmoji(0x1f0a0)).toBe(true);   // 🂠 카드 뒷면
@@ -150,7 +150,7 @@ describe('UI 이모지 규약', () => {
     ).toBe('');
   });
 
-  it('기준선이 실물보다 헐겁지 않다 — 고친 부채는 목록에서도 빠져야 한다', () => {
+  it('기준선이 실물보다 헐겁지 않다. 고친 부채는 목록에서도 빠져야 한다', () => {
     // 이게 없으면 이모지를 지운 뒤에도 기준선이 남아, 같은 이모지가 되돌아와도 통과한다.
     const stale: string[] = [];
     for (const [name, counts] of Object.entries(BASELINE)) {
@@ -164,7 +164,7 @@ describe('UI 이모지 규약', () => {
       }
       for (const [cp, n] of Object.entries(counts)) {
         if ((actual[cp] ?? 0) < n) {
-          stale.push(`${name}: U+${cp} 기준선 ${n}개인데 실제 ${actual[cp] ?? 0}개 — 기준선을 줄여라`);
+          stale.push(`${name}: U+${cp} 기준선 ${n}개인데 실제 ${actual[cp] ?? 0}개 · 기준선을 줄여라`);
         }
       }
     }

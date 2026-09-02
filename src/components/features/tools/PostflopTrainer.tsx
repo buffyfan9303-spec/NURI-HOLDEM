@@ -113,7 +113,7 @@ export default function PostflopTrainer() {
         <div className="h-1.5 overflow-hidden rounded-full bg-surface-high">
           <div className={['h-full rounded-full', prog.goalMet ? 'bg-emerald-400' : 'bg-accent-300'].join(' ')} style={{ width: `${prog.goal ? Math.min(100, Math.round((prog.today / prog.goal) * 100)) : 0}%` }} />
         </div>
-        {prog.goalMet && <p className="inline-flex items-center gap-1 text-2xs text-emerald-300"><Icon name="check-circle" size={12} className="shrink-0" />오늘 목표 달성 — 스트릭 <Icon name="flame" size={11} className="shrink-0" />{prog.streak}일 유지 중</p>}
+        {prog.goalMet && <p className="inline-flex items-center gap-1 text-2xs text-emerald-300"><Icon name="check-circle" size={12} className="shrink-0" />오늘 목표 달성 · 스트릭 <Icon name="flame" size={11} className="shrink-0" />{prog.streak}일 유지 중</p>}
       </div>
 
       {/* 카테고리 필터 칩 */}

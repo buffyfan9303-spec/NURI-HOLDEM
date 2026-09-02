@@ -56,7 +56,7 @@ export function AiExplainBlock({ input }: { input: QuizExplainInput }) {
       {st.s === 'done' && (
         <>
           <p className="whitespace-pre-line text-2xs leading-relaxed text-ink-secondary">{st.text}</p>
-          <p className="mt-1.5 text-2xs text-ink-muted">AI 가 생성한 학습 참고용 설명입니다 — 위 해설이 기준입니다.</p>
+          <p className="mt-1.5 text-2xs text-ink-muted">AI 가 생성한 학습 참고용 설명입니다. 위 해설이 기준입니다.</p>
         </>
       )}
       {st.s === 'err' && (

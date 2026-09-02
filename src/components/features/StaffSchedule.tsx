@@ -148,8 +148,8 @@ export default function StaffSchedule({ venueId }: { venueId: string }) {
       // 발송 인원은 **호출자를 뺀 구성원 수**다(20260829a). 0명이면 숫자 대신 이유를 말한다 —
       // "직원 0명에게 발송" 은 성공 문구의 얼굴을 한 막다른 길이다.
       toast.show(n > 0
-        ? `${month} 스케줄을 확정했습니다 — 직원 ${n}명에게 알림 발송`
-        : `${month} 스케줄을 확정했습니다 — 알림 받을 매장 구성원이 아직 없습니다`, 'success');
+        ? `${month} 스케줄을 확정했습니다. 직원 ${n}명에게 알림 발송`
+        : `${month} 스케줄을 확정했습니다. 알림 받을 매장 구성원이 아직 없습니다`, 'success');
     }
     catch (e) { toast.show(msgOf(e, '확정 실패'), 'error'); }
     finally { setSaving(false); }
@@ -173,7 +173,7 @@ export default function StaffSchedule({ venueId }: { venueId: string }) {
 
       {/* 직원 등록 */}
       <div>
-        <p className="text-2xs font-semibold text-ink-secondary mb-1">직원 등록 — 이름 입력(등록된 매장 직원 자동 포함)</p>
+        <p className="text-2xs font-semibold text-ink-secondary mb-1">직원 등록 · 이름 입력(등록된 매장 직원 자동 포함)</p>
         <div className="flex gap-2">
           <input value={newName} onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => { if (e.nativeEvent.isComposing) return; /* 한글 조합 확정 Enter 를 제출로 오인하지 않게 */ if (e.key === 'Enter') void addName(); }} placeholder="직원 이름" maxLength={20} className="input flex-1 text-sm" />
           <button type="button" onClick={() => void addName()} className="btn-ghost text-xs px-3 shrink-0">+ 추가</button>

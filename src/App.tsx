@@ -277,7 +277,7 @@ const AppHeader = memo(function AppHeader({
             aria-expanded={notifOpen}
             className={[
               'relative w-9 h-9 flex items-center justify-center rounded-full',
-              'transition-colors duration-200 ease-out active:scale-90',
+              'transition-colors duration-[var(--dur-fast)] ease-out active:scale-90',
               notifOpen
                 ? 'bg-surface-high text-accent-300'
                 : unreadCount > 0
@@ -516,7 +516,7 @@ const TabBar = memo(function TabBar({
               //   min-width:auto(기본) 유지 → 탭이 많아 좁아지면 라벨 폭 이하로 줄지 않고 가로 스크롤(겹침 방지).
               // 데스크톱(sm+): 자연폭 + 컨테이너 sm:justify-center로 중앙 정렬 그룹(과도한 벌어짐 방지).
               // 총 높이 40px 유지: 버튼 py-1.5(12) + 캡슐 py-1(8) + 라벨 20 — 밑줄 시절과 동일(CLS 0).
-              'flex-1 px-1 sm:flex-none sm:px-2.5 py-1.5 text-sm whitespace-nowrap transition-colors duration-200 focus:outline-none touch-manipulation rounded-t-input',
+              'flex-1 px-1 sm:flex-none sm:px-2.5 py-1.5 text-sm whitespace-nowrap transition-colors duration-[var(--dur-fast)] focus:outline-none touch-manipulation rounded-t-input',
               // 폰트 굵기는 조건부로만 — 기본 font-medium 을 같이 두면 CSS 출력 순서상 font-bold 를 이겨
               // 활성 굵기가 500에 머문다(헤드리스 실측으로 확인). 굵기 변화로 라벨 폭이 바뀌어도
               // SlidingPill 은 렌더 후 재측정이라 밑줄은 어긋나지 않는다.
@@ -671,7 +671,7 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
   );
   return (
     <nav
-      className={['fixed inset-x-0 bottom-0 z-50 lg:hidden pointer-events-none transition-transform duration-300',
+      className={['fixed inset-x-0 bottom-0 z-50 lg:hidden pointer-events-none transition-transform duration-[var(--dur-panel)]',
         hidden ? 'translate-y-[120%]' : 'translate-y-0'].join(' ')}
       style={{ paddingBottom: 'env(safe-area-inset-bottom)', transitionTimingFunction: 'var(--ease)' }}
       aria-label="하단 내비게이션"
@@ -694,7 +694,7 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
               className="press-spring flex min-w-0 flex-1 flex-col items-center gap-0.5 pb-1.5 pt-2 touch-manipulation focus:outline-none"
             >
               {/* 아이콘 22px · 라벨 11px — 공백 줄이고 또렷하게 */}
-              <span className={['relative flex h-7 w-12 items-center justify-center rounded-full [&_svg]:relative [&_svg]:h-[21px] [&_svg]:w-[21px] transition-colors duration-200',
+              <span className={['relative flex h-7 w-12 items-center justify-center rounded-full [&_svg]:relative [&_svg]:h-[21px] [&_svg]:w-[21px] transition-colors duration-[var(--dur-fast)]',
                 on ? 'text-white animate-tab-bounce' : 'text-ink-secondary'].join(' ')}>
                 {/* 활성 알약(.pill-active 그라데이션 필 — OUTFLAME 필 내비 문법) — 각 칸이 자기 핀을 갖고
                     opacity 만 토글(transform·layout 0). SlidingPill FLIP 은 이 탭바에선 불가:
@@ -702,7 +702,7 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
                     캡슐 측정이 버튼 기준으로 틀어진다(실측 확인) — 크로스페이드 정적 필로 대체.
                     아이콘은 그라데이션 필 위라 흰색으로 승격(다크 4.6:1 실측) */}
                 <span aria-hidden
-                  className={['pointer-events-none absolute inset-0 rounded-full pill-active transition-opacity duration-200',
+                  className={['pointer-events-none absolute inset-0 rounded-full pill-active transition-opacity duration-[var(--dur-base)]',
                     on ? 'opacity-100' : 'opacity-0'].join(' ')} />
                 {tab ? TAB_ICON[tab] : ME_ICON}
                 {tab && dot?.[tab] && !on && <span className="absolute right-2 top-0.5 h-1.5 w-1.5 rounded-full bg-accent-300" aria-hidden />}
@@ -713,7 +713,7 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
                   </span>
                 )}
               </span>
-              <span className={['text-[11px] font-bold leading-none transition-colors duration-200',
+              <span className={['text-[11px] font-bold leading-none transition-colors duration-[var(--dur-fast)]',
                 on ? 'text-accent-300' : 'text-ink-secondary'].join(' ')}>
                 {label}
               </span>
@@ -926,7 +926,7 @@ export default function App() {
     isPushSubscribed().then((sub) => { if (!sub) setPushNudge(true); }).catch(() => {});
   }, [user, isOwner, isAdmin]);
   const doEnablePush = async () => {
-    try { await enablePush(); setPushNudge(false); toast.show('알림을 켰습니다 — 중요한 소식을 폰으로 받습니다', 'success'); }
+    try { await enablePush(); setPushNudge(false); toast.show('알림을 켰습니다. 중요한 소식을 폰으로 받습니다', 'success'); }
     catch (e) { toast.show(e instanceof Error ? e.message : '알림 설정 실패', 'error'); }
   };
   const dismissPushNudge = () => { setPushNudge(false); try { localStorage.setItem('nuri:push-nudge-dismissed', '1'); } catch { /* noop */ } };
@@ -978,10 +978,10 @@ export default function App() {
   const toggleNearSort = () => {
     if (nearSort) { setNearSort(false); return; }
     if (myPos) { setNearSort(true); return; }
-    if (!('geolocation' in navigator)) { toast.show('이 기기에서 위치를 사용할 수 없어요 — 지역 필터를 이용해 주세요', 'error'); return; }
+    if (!('geolocation' in navigator)) { toast.show('이 기기에서 위치를 사용할 수 없어요. 지역 필터를 이용해 주세요', 'error'); return; }
     navigator.geolocation.getCurrentPosition(
       (pos) => { setMyPos({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setNearSort(true); },
-      () => toast.show('위치 권한이 거부되었어요 — 지역 필터로 좁혀 보세요', 'error'),
+      () => toast.show('위치 권한이 거부되었어요. 지역 필터로 좁혀 보세요', 'error'),
       { timeout: 8000, maximumAge: 300_000 },
     );
   };
@@ -1028,7 +1028,7 @@ export default function App() {
     url.searchParams.delete('buyin'); url.searchParams.delete('game');
     window.history.replaceState({}, '', url.pathname + url.search + url.hash);
     const submitDirect = (g: number | null) => ledgerMod().then((m) => m.requestBuyin(bv, g))
-      .then((name) => { toast.show(`${name || '매장'} 참가(바인) 요청 전송! 운영자 승인을 기다려 주세요`, 'success'); ledgerMod().then((m) => m.getMyBuyinRequestsToday()).then(setMyBuyinReqs).catch(() => {}); })
+      .then((name) => { toast.show(`${name || '매장'} 참가(바인) 요청을 보냈어요. 운영자 승인을 기다려 주세요`, 'success'); ledgerMod().then((m) => m.getMyBuyinRequestsToday()).then(setMyBuyinReqs).catch(() => {}); })
       .catch((e) => toast.show(e instanceof Error ? e.message : '요청 전송 실패', 'error'));
     const gNum = gm ? parseInt(gm, 10) : NaN;
     if (Number.isFinite(gNum) && gNum > 0) { submitDirect(gNum); return; } // 게임 지정 QR → 바로 요청
@@ -1825,11 +1825,11 @@ export default function App() {
       const known =
         /KOE205|consent|동의/i.test(raw) ? '카카오 동의항목 설정이 필요합니다(관리자 확인 필요)'
         : /access_denied/i.test(err) ? '로그인이 취소되었거나 앱이 아직 승인되지 않았습니다'
-        : /bad_oauth_state|state/i.test(code) ? '로그인 세션이 만료됐어요 — 다시 시도해 주세요'
+        : /bad_oauth_state|state/i.test(code) ? '로그인 세션이 만료됐어요. 다시 시도해 주세요'
         : /redirect|uri/i.test(raw) ? '로그인 주소 설정이 맞지 않습니다(관리자 확인 필요)'
         : '';
       const detail = [code || err, raw].filter(Boolean).join(' · ').slice(0, 160);
-      toast.show(known ? `${known}\n(${detail})` : `로그인에 실패했습니다 — ${detail}`, 'error');
+      toast.show(known ? `${known}\n(${detail})` : `로그인에 실패했습니다. ${detail}`, 'error');
 
       // 오류 파라미터를 URL 에서 걷어낸다 — 새로고침할 때마다 같은 토스트가 뜨지 않게.
       const url = new URL(window.location.href);
@@ -1850,7 +1850,7 @@ export default function App() {
       const code = new URLSearchParams(window.location.search).get('vnf');
       if (!code) return;
       vnfShown.current = true;
-      toast.show('그 주소의 매장을 찾을 수 없어요 — 링크가 바뀌었거나 문을 닫았을 수 있습니다', 'error');
+      toast.show('그 주소의 매장을 찾을 수 없어요. 링크가 바뀌었거나 문을 닫았을 수 있습니다', 'error');
       const url = new URL(window.location.href);
       url.searchParams.delete('vnf');
       window.history.replaceState(null, '', url.pathname + url.search + url.hash);
@@ -2089,7 +2089,7 @@ export default function App() {
       sellerName: user.name,
       sellerAvatarColor: user.avatarColor ?? '#5A6175',
       sellerTradeCount: 0,
-      sellerVerified: !!user.verified, // '본인 인증 ✓'가 업주 여부로 찍히던 가짜 신호 — CI 인증 기준으로 정직화
+      sellerVerified: !!user.verified, // '본인 인증 완료'가 업주 여부로 찍히던 가짜 신호 — CI 인증 기준으로 정직화
     });
     setListings((prev) => [saved, ...prev]);
   }, [user]);
@@ -2447,7 +2447,7 @@ export default function App() {
           <span className="text-accent-300" aria-hidden><Icon name="bell" size={18} /></span>
           <p className="min-w-0 flex-1 text-2xs leading-snug text-ink-secondary">
             {(isOwner || isAdmin || user?.role === 'venue_staff')
-              ? <>새 <b className="text-accent-300">바인요청</b>을 폰 알림으로 받으세요 — 게임 중에도 놓치지 않아요.</>
+              ? <>새 <b className="text-accent-300">바인요청</b>을 폰 알림으로 받으세요. 게임 중에도 놓치지 않아요.</>
               : <>예약한 대회 <b className="text-accent-300">1시간 전 리마인더</b>와 이용권 도착을 폰으로 받으세요.</>}
           </p>
           <button type="button" onClick={doEnablePush} className="btn-primary shrink-0 px-3 py-1.5 text-2xs">알림 켜기</button>
@@ -2460,7 +2460,7 @@ export default function App() {
         <button type="button" onClick={() => setProfileOpen(true)}
           className="w-full flex items-center gap-2 bg-accent-300/[0.08] border-b border-accent-400/30 px-page-x py-2 text-left hover:bg-accent-300/[0.12] transition-colors">
           <span className="text-accent-300" aria-hidden><Icon name="lock" size={14} /></span>
-          <span className="flex-1 text-2xs text-accent-300">휴대폰 본인인증이 필요합니다 — 안전한 이용을 위해 인증해 주세요.</span>
+          <span className="flex-1 text-2xs text-accent-300">휴대폰 본인인증이 필요합니다. 안전한 이용을 위해 인증해 주세요.</span>
           <span className="shrink-0 text-2xs font-bold text-accent-300">인증하기 →</span>
         </button>
       )}
@@ -2566,15 +2566,15 @@ export default function App() {
                   type="button"
                   onClick={toggleNearSort}
                   aria-pressed={nearSort}
-                  className={['hit inline-flex h-9 shrink-0 items-center gap-1 rounded-badge px-3 text-xs font-bold transition-colors',
-                    nearSort ? 'bg-aura-300/10 text-aura-300 ring-1 ring-inset ring-aura-300/50' : 'bg-surface-high text-ink-secondary hover:bg-surface-float/70'].join(' ')}>
+                  className={['hit inline-flex h-9 shrink-0 items-center gap-1 rounded-chip px-3 text-xs font-bold transition-colors',
+                    nearSort ? 'bg-accent-300/15 text-accent-200 ring-1 ring-inset ring-accent-400/45 shadow-glow' : 'bg-surface-high text-ink-secondary hover:bg-surface-float/70'].join(' ')}>
                   <Icon name="map-pin" size={13} /> 가까운 순
                 </button>
                 {hasActiveSearchFilter && (
                   <button
                     type="button"
                     onClick={() => searchBarRef.current?.clearAll()}
-                    className="inline-flex h-9 shrink-0 items-center gap-1 rounded-badge bg-surface-high px-3 text-xs text-ink-secondary transition-colors hover:text-danger focus:outline-none"
+                    className="inline-flex h-9 shrink-0 items-center gap-1 rounded-chip bg-surface-high px-3 text-xs text-ink-secondary transition-colors hover:text-danger focus:outline-none"
                   >
                     초기화
                   </button>
@@ -2599,12 +2599,12 @@ export default function App() {
                       onClick={() => setOpenNotice(evNotice)}
                       className="min-w-0 flex-1 text-left focus:outline-none"
                     >
-                      <p className="truncate text-xs font-bold text-ink-primary">오픈 이벤트 — 출석 도장 2배 · 첫 예약 +50 · 웰컴 +100</p>
+                      <p className="truncate text-xs font-bold text-ink-primary">오픈 이벤트 · 출석 도장 2배 · 첫 예약 +50 · 웰컴 +100</p>
                       <p className="text-2xs text-ink-muted">8/3(월)까지 · 자세히 보기 →</p>
                     </button>
                   ) : (
                     <div className="min-w-0 flex-1 text-left">
-                      <p className="truncate text-xs font-bold text-ink-primary">오픈 이벤트 — 출석 도장 2배 · 첫 예약 +50 · 웰컴 +100</p>
+                      <p className="truncate text-xs font-bold text-ink-primary">오픈 이벤트 · 출석 도장 2배 · 첫 예약 +50 · 웰컴 +100</p>
                       <p className="text-2xs text-ink-muted">8/3(월)까지</p>
                     </div>
                   )}
@@ -2644,7 +2644,7 @@ export default function App() {
                   // P0-2(오너 진단): 0건 빈 일러스트가 화면 중앙을 차지하던 것 → 슬림 안내 1줄 +
                   // '지금 진행 중' 콘텐츠 승격. 아래 지난 대회·공지가 그 자리로 올라온다.
                   <div className="space-y-2">
-                    <p className="px-1 py-3 text-sm text-ink-muted">예정된 대회가 아직 없어요 — 아래에서 지난 대회 결과를 볼 수 있어요.</p>
+                    <p className="px-1 py-3 text-sm text-ink-muted">예정된 대회가 아직 없어요. 아래에서 지난 대회 결과를 볼 수 있어요.</p>
                     {liveClocks.length > 0 && (
                       <button type="button" onClick={() => changeTab('live')}
                         className="flex w-full items-center gap-2.5 rounded-aura bg-surface-high px-3 py-3 text-left transition-colors hover:bg-surface-float/70">
@@ -2739,7 +2739,7 @@ export default function App() {
                         >
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden
-                            className={['transition-transform duration-200', noticesOpen ? '' : '-rotate-90'].join(' ')}>
+                            className={['transition-transform duration-[var(--dur-base)]', noticesOpen ? '' : '-rotate-90'].join(' ')}>
                             <polyline points="6 9 12 15 18 9" />
                           </svg>
                           공지사항 {browseNotices.length > 0 && <span className="text-2xs text-ink-muted font-normal">({browseNotices.length})</span>}
@@ -2785,7 +2785,7 @@ export default function App() {
                       return (
                         <button key={r.scheduleId} type="button"
                           // 일정이 목록에서 사라졌으면(매장 삭제 등) 무반응 대신 안내 — 무반응 클릭 금지
-                          onClick={() => { if (sc) setOpenSchedule(sc); else toast.show('대회 정보를 찾을 수 없습니다 — 매장에서 일정이 변경됐을 수 있어요', 'info'); }}
+                          onClick={() => { if (sc) setOpenSchedule(sc); else toast.show('대회 정보를 찾을 수 없습니다. 매장에서 일정이 변경됐을 수 있어요', 'info'); }}
                           className="w-full flex items-center gap-2.5 rounded-aura border border-accent-400/45 bg-gradient-to-r from-accent-300/[0.12] to-transparent px-3 py-2.5 text-left hover:border-accent-300 transition-colors">
                           <span className="shrink-0 text-accent-300" aria-hidden><Icon name="cards" size={18} /></span>
                           <span className="min-w-0 flex-1">
@@ -2808,7 +2808,7 @@ export default function App() {
                       <div key={r.id} className={['flex items-center gap-2 rounded-aura border px-3 py-2 text-xs',
                         r.status === 'approved' ? 'border-emerald-500/40 bg-emerald-500/[0.07]' : r.status === 'rejected' ? 'border-border-default bg-surface-low' : 'border-sky-500/40 bg-sky-500/[0.07]'].join(' ')}>
                         <span className={['shrink-0', r.status === 'approved' ? 'text-emerald-400' : r.status === 'rejected' ? 'text-ink-muted' : 'text-sky-400'].join(' ')} aria-hidden><Icon name={r.status === 'approved' ? 'check-circle' : r.status === 'rejected' ? 'close' : 'clock'} size={15} /></span>
-                        <span className="min-w-0 flex-1 truncate text-ink-secondary"><b className="text-ink-primary">{r.venueName}</b>{(() => { const n = r.status === 'approved' ? r.gameSeq : r.requestedGameSeq; return n != null ? ` · ${n === 1 ? '메인' : '사이드' + (n - 1)}` : ''; })()} {r.status === 'approved' ? '참가 승인 — 입장하세요! 🎉' : r.status === 'rejected' ? `요청 거절됨${r.rejectReason ? ` — ${r.rejectReason}` : ''}` : '바인 요청 대기중'}</span>
+                        <span className="min-w-0 flex-1 truncate text-ink-secondary"><b className="text-ink-primary">{r.venueName}</b>{(() => { const n = r.status === 'approved' ? r.gameSeq : r.requestedGameSeq; return n != null ? ` · ${n === 1 ? '메인' : '사이드' + (n - 1)}` : ''; })()} {r.status === 'approved' ? '참가 승인 · 입장하세요' : r.status === 'rejected' ? `요청 거절됨${r.rejectReason ? ` · ${r.rejectReason}` :''}` : '바인 요청 대기중'}</span>
                         {r.status === 'pending' && <button type="button" onClick={() => ledgerMod().then((m) => m.cancelBuyinRequest(r.id).then(() => m.getMyBuyinRequestsToday().then(setMyBuyinReqs))).catch((e) => toast.show(e instanceof Error ? e.message : '취소 실패', 'error'))} className="shrink-0 rounded-input border border-border-default px-2 py-1 text-2xs font-bold text-ink-muted hover:text-danger-light hover:border-danger/40">취소</button>}
                       </div>
                     ))}
@@ -2945,12 +2945,12 @@ export default function App() {
       {buyinPick && (() => {
         const submit = (g: number | null) => {
           const v = buyinPick.venueId; setBuyinPick(null);
-          ledgerMod().then((m) => m.requestBuyin(v, g).then((name) => { toast.show(`${name || '매장'} 참가(바인) 요청 전송!`, 'success'); m.getMyBuyinRequestsToday().then(setMyBuyinReqs).catch(() => {}); })).catch((e) => toast.show(e instanceof Error ? e.message : '요청 실패', 'error'));
+          ledgerMod().then((m) => m.requestBuyin(v, g).then((name) => { toast.show(`${name || '매장'} 참가(바인) 요청을 보냈어요`, 'success'); m.getMyBuyinRequestsToday().then(setMyBuyinReqs).catch(() => {}); })).catch((e) => toast.show(e instanceof Error ? e.message : '요청 실패', 'error'));
         };
         return (
           <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4" onClick={() => setBuyinPick(null)}>
             <div className="w-full max-w-xs rounded-card border border-border-default bg-surface-high p-4 space-y-2" onClick={(e) => e.stopPropagation()}>
-              <p className="text-sm font-bold text-ink-primary">참가(바인) 요청 — 게임 선택</p>
+              <p className="text-sm font-bold text-ink-primary">참가(바인) 요청 · 게임 선택</p>
               <p className="text-2xs text-ink-muted">참가할 게임을 고르면 운영자에게 요청이 전송됩니다.</p>
               <div className="space-y-1.5 pt-1">
                 {buyinPick.games.map((g) => (
@@ -3438,7 +3438,7 @@ function EmptyState({ filtered, followedOnly, onClearFilters, onClearFollow, upc
       ) : filtered ? (
         <>
           <p className="text-sm">조건에 맞는 대회가 없어요</p>
-          {filterSummary && <p className="max-w-xs text-center text-2xs text-ink-muted">걸린 조건: <b className="text-ink-secondary">{filterSummary}</b> — 검색바에서 하나만 풀어도 달라져요</p>}
+          {filterSummary && <p className="max-w-xs text-center text-2xs text-ink-muted">걸린 조건: <b className="text-ink-secondary">{filterSummary}</b>검색바에서 하나만 풀어도 달라져요</p>}
           <p className="text-xs">{upcoming > 0 ? `조건을 풀면 예정 대회 ${upcoming}개를 볼 수 있어요` : '조건을 바꿔 다시 찾아보세요'}</p>
           <button type="button" onClick={onClearFilters} className="btn-primary px-4 py-2 text-xs">조건 초기화</button>
         </>

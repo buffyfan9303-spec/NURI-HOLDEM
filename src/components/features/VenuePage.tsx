@@ -472,7 +472,7 @@ export default function VenuePage({
             <KakaoActionButton kakao={kakao} canEdit={isMyVenue} onEdit={editKakao} />
             </div>
           </div>
-          <CoachMark id="venue-checkin">체크인하면 출석 도장 · 전적 인정 · 방문 후기가 열려요 — 하루 한 번이면 충분해요.</CoachMark>
+          <CoachMark id="venue-checkin">체크인하면 출석 도장 · 전적 인정 · 방문 후기가 열려요. 하루 한 번이면 충분해요.</CoachMark>
           {user && myAct && (myAct.streak > 0 || myAct.visits > 0) && (
             <p className="flex items-center gap-1 text-2xs text-ink-muted tabular-nums">
               {myAct.streak > 0 && <><Icon name="flame" size={13} className="shrink-0" />연속 출석 <b className="text-ink-secondary">{myAct.streak}일</b></>}
@@ -719,7 +719,7 @@ function HeroSection({
       {slides.length > 0 ? (
         // 슬라이드 트랙(자동 + 스와이프)
         <div
-          className="absolute inset-0 flex transition-transform duration-500 ease-out touch-pan-y select-none"
+          className="absolute inset-0 flex transition-transform duration-[var(--dur-panel)] ease-out touch-pan-y select-none"
           style={{ transform: `translateX(-${safeIdx * 100}%)` }}
         >
           {slides.map((src, i) => (
@@ -785,7 +785,7 @@ function HeroSection({
         <button
           type="button"
           onClick={() => onSlideTap(slides[safeIdx])}
-          aria-label={`${venue.name} 배너 — 이 대회 자세히 보기`}
+          aria-label={`${venue.name} 배너 · 이 대회 자세히 보기`}
           className="absolute inset-0 z-0 hidden lg:block cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-300"
         />
       )}
@@ -1270,7 +1270,7 @@ function FollowButton({ venueId, followerCount, compact }: { venueId: string; fo
     setFollowing(next); setBusy(true);
     try {
       if (next) await followVenue(venueId); else await unfollowVenue(venueId);
-      toast.show(next ? '팔로우 완료 — 새 대회 포스터가 올라오면 알려드려요' : '팔로우를 해제했습니다', next ? 'success' : 'info');
+      toast.show(next ? '팔로우 완료. 새 대회 포스터가 올라오면 알려드려요' : '팔로우를 해제했습니다', next ? 'success' : 'info');
     } catch (e) {
       setFollowing(!next);
       toast.show(e instanceof Error ? e.message : '처리에 실패했습니다', 'error');
@@ -1750,7 +1750,7 @@ function VenueLocationMap({
   return (
     <MapShell address={address}>
       <MapNotice icon="map-pin" title="위치 정보 준비 중"
-        desc="지도 서비스 준비 중입니다. 아래 링크로 위치와 길찾기를 확인할 수 있어요." />
+        desc="지도를 준비하고 있어요. 아래 링크에서 위치와 길찾기를 볼 수 있어요." />
     </MapShell>
   );
 }

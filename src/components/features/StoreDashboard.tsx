@@ -495,7 +495,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-card border border-border-subtle bg-surface-low px-3 py-2">
         <span className="flex min-w-0 items-center gap-2 text-xs text-ink-secondary">
           <Icon name="bookmark" size={13} className="shrink-0 text-ink-muted" />
-          <b className="text-ink-primary">운영 가이드</b><span className="hidden sm:inline"> — 포스터→장부→클락→순위→정산 한눈에</span>
+          <b className="text-ink-primary">운영 가이드</b><span className="hidden sm:inline">포스터→장부→클락→순위→정산 한눈에</span>
         </span>
         <span className="ml-auto flex shrink-0 items-center gap-2">
           <button type="button" onClick={() => window.open('/guide/manual.html', '_blank', 'noopener')}
@@ -542,7 +542,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         <button type="button" onClick={() => onGoto('ledger')}
           className="card-elev block w-full rounded-card border border-border-subtle bg-surface-low p-3 text-left transition-colors hover:border-border-default">
           <span className="flex items-center gap-2">
-            <span className="text-2xs font-bold tracking-wide text-ink-muted">오늘 장부</span>
+            <span className="text-2xs font-bold text-ink-muted">오늘 장부</span>
             <span className={`rounded-badge px-1.5 py-0.5 text-2xs font-bold ${ledgerStatusCls}`}>{ledgerStatus}</span>
           </span>
           {loading ? <div className="mt-2"><Skeleton /></div> : !started ? (
@@ -620,7 +620,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                     </>
                   )
                 ) : (
-                  <p className="text-sm font-bold text-ink-secondary">클락 꺼짐 <span className="text-2xs font-normal text-ink-muted">— 눌러서 켜기</span></p>
+                  <p className="text-sm font-bold text-ink-secondary">클락 꺼짐 <span className="text-2xs font-normal text-ink-muted">눌러서 켜기</span></p>
                 )}
               </div>
               {wActive && (
@@ -791,7 +791,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
             </div>
           </div>
           {funnel.views === 0 && (
-            <p className="mt-2 t-desc break-keep text-ink-muted">조회수는 손님이 포스터 상세를 열 때부터 쌓입니다 — 이번 주부터 집계가 시작됐어요.</p>
+            <p className="mt-2 t-desc break-keep text-ink-muted">조회수는 손님이 포스터 상세를 열 때부터 쌓입니다. 이번 주부터 집계가 시작됐어요.</p>
           )}
         </section>
       )}
@@ -805,12 +805,12 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         if (caps.ledger && staleOpen.length > 0) {
           // 미마감 = 순위→시즌→머니인킹→전적 하류 전체 정지. 실제 라이브에서 두 달치가 쌓여 있었다.
           const list = staleOpen.slice(0, 3).map((x) => x.sessionDate.slice(5)).join(' · ');
-          todo = { icon: 'alert', title: `지난 장부 ${staleOpen.length}건이 미마감이에요`, desc: `${list} — 마감해야 순위·시즌·전적에 반영되고 정산이 확정됩니다.`, cta: '장부에서 마감하기', onClick: () => onGoto('ledger'), tone: 'warn' };
+          todo = { icon: 'alert', title: `지난 장부 ${staleOpen.length}건이 미마감이에요`, desc: `${list} · 마감해야 순위·시즌·전적에 반영되고 정산이 확정됩니다.`, cta:'장부에서 마감하기', onClick: () => onGoto('ledger'), tone: 'warn' };
         } else if (caps.ledger && session?.closed && hasRankToday === false) {
-          todo = { icon: 'trophy', title: '순위 입력이 비어 있어요', desc: '마감한 장부의 참가자 명단으로 바로 채울 수 있어요 — 입상 점수·아카이브에 반영됩니다.', cta: '순위 입력하기', onClick: () => onGoto('ranking'), tone: 'warn' };
+          todo = { icon: 'trophy', title: '순위 입력이 비어 있어요', desc: '마감한 장부의 참가자 명단으로 바로 채울 수 있어요. 입상 점수·아카이브에 반영됩니다.', cta: '순위 입력하기', onClick: () => onGoto('ranking'), tone: 'warn' };
         } else if (caps.ledger && started && !session?.closed) {
           todo = clockActive
-            ? { icon: 'cards', title: `게임 진행 중 — 엔트리 ${Math.round(fin.entry)}`, desc: '바인 입력은 장부에서, 타이머·블라인드는 클락에서.', cta: '장부 보기', onClick: () => onGoto('ledger'), tone: 'gold' }
+            ? { icon: 'cards', title: `게임 진행 중 · 엔트리 ${Math.round(fin.entry)}`, desc:'바인 입력은 장부에서, 타이머·블라인드는 클락에서.', cta: '장부 보기', onClick: () => onGoto('ledger'), tone: 'gold' }
             : { icon: 'clock', title: '게임 진행 중인데 클락이 꺼져 있어요', desc: `엔트리 ${Math.round(fin.entry)} · 클락을 켜면 라이브 탭에도 실시간 송출됩니다.`, cta: '클락 켜기', onClick: () => onGoto('clock'), tone: 'gold' };
         } else if (caps.ledger && !started && todayPoster) {
           todo = { icon: 'cards', title: '오늘 게임이 있어요', desc: '포스터 정보 그대로 장부를 시작할 수 있어요(게임명·바인 자동 입력).', cta: '장부 시작하기', onClick: () => onGoto('ledger'), tone: 'gold' };
@@ -819,14 +819,14 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           const lr = lastRound.session;
           todo = {
             icon: 'refresh',
-            title: `지난 게임 그대로 열기 — ${lr.sessionDate.slice(5).replace('-', '/')} ${lr.title || '제목 없음'}`,
-            desc: `단가·할인·딜러${lastRound.clockConfig ? '·블라인드·얼리' : ''}까지 한 번에 채워져요 — 날짜·담당 직원만 확인하면 끝.`,
+            title: `지난 게임 그대로 열기 · ${lr.sessionDate.slice(5).replace('-', '/')} ${lr.title || '제목 없음'}`,
+            desc: `단가·할인·딜러${lastRound.clockConfig ? '·블라인드·얼리' : ''}까지 한 번에 채워져요. 날짜·담당 직원만 확인하면 끝.`,
             cta: '그대로 열기', onClick: gotoLedgerWithLastRound, tone: 'gold',
           };
         } else if (caps.posters && !started && !todayPoster && hour >= 12) {
           todo = { icon: 'plus', title: '오늘 등록된 게임이 없어요', desc: '포스터를 올리면 일정 탐색에 노출되고 예약을 받을 수 있어요.', cta: '게임 등록하기', onClick: onCreatePoster, tone: 'gold' };
         } else if (caps.manage && session?.closed) {
-          todo = { icon: 'check-circle', title: '오늘 운영 완료', desc: '수고하셨습니다 — 주간 추세와 요일 분석을 확인해 보세요.', cta: '주간 리포트', onClick: () => onGoto('stats'), tone: 'ok' };
+          todo = { icon: 'check-circle', title: '오늘 운영 완료', desc: '수고하셨습니다. 주간 추세와 요일 분석을 확인해 보세요.', cta: '주간 리포트', onClick: () => onGoto('stats'), tone: 'ok' };
         }
         if (!todo) return null;
         const toneCls = todo.tone === 'warn'
@@ -866,7 +866,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         <button type="button" onClick={() => onGoto('ledger')}
           className="flex w-full items-center gap-2 rounded-card border border-danger/40 bg-danger/[0.08] p-3 text-left hover:bg-danger/[0.12] transition-colors">
           <Icon name="alert" size={18} className="shrink-0 text-danger-light" />
-          <span className="text-xs text-danger-light">오늘 <b className="tabular-nums">{wonToMan(fin.unpaid)}만원</b> 미수금이 있습니다 — 장부에서 확인하세요.</span>
+          <span className="text-xs text-danger-light">오늘 <b className="tabular-nums">{wonToMan(fin.unpaid)}만원</b> 미수금이 있습니다. 장부에서 확인하세요.</span>
         </button>
       )}
 
@@ -1101,7 +1101,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       {/* 더 보기 토글(IA3a) — 클락·전주 대비·직원·이용권·생일·손님 유형은 접힌 상태가 기본 */}
       <button type="button" onClick={() => setMoreOpen((v) => !v)} aria-expanded={moreOpen}
         className="flex w-full items-center justify-center gap-2 rounded-card border border-border-subtle bg-surface-low px-3 py-2 text-2xs font-bold text-ink-secondary transition-colors hover:text-ink-primary">
-        {moreOpen ? '간단히 보기' : '더 보기 — 클락 · 주간 비교 · 직원 · 이용권'}
+        {moreOpen ? '간단히 보기' : '더 보기 · 클락 · 주간 비교 · 직원 · 이용권'}
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
           className={['transition-transform', moreOpen ? 'rotate-180' : ''].join(' ')} aria-hidden><polyline points="6 9 12 15 18 9" /></svg>
       </button>

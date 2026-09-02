@@ -213,12 +213,12 @@ const DOMINANCE_EXCEPTIONS: Record<string, string[]> = {
 const ALLOWED_EXCEPTIONS = new Set(['A5s', 'A4s', 'A3s', 'A2s', 'A5o', 'A4o']);
 
 describe('🔴 도미네이션 단조성(전 34 시나리오)', () => {
-  it('예외로 올릴 수 있는 핸드는 휠 에이스뿐이다 — 예외 한 줄로 오류를 덮지 못하게', () => {
+  it('예외로 올릴 수 있는 핸드는 휠 에이스뿐이다. 예외 한 줄로 오류를 덮지 못하게', () => {
     const bad: string[] = [];
     for (const [id, hands] of Object.entries(DOMINANCE_EXCEPTIONS)) {
       for (const h of hands) if (!ALLOWED_EXCEPTIONS.has(h)) bad.push(`${id}: ${h}`);
     }
-    expect(bad, `휠 에이스가 아닌 예외 ${bad.length}건 — 예외로 덮지 말고 데이터를 고쳐라`).toEqual([]);
+    expect(bad, `휠 에이스가 아닌 예외 ${bad.length}건 · 예외로 덮지 말고 데이터를 고쳐라`).toEqual([]);
   });
 
   const contMap = (s: (typeof RANGE_SCENARIOS)[number]) => {
@@ -238,7 +238,7 @@ describe('🔴 도미네이션 단조성(전 34 시나리오)', () => {
       //   면제 사유가 사라진다. 이 한 줄이 1차 버그(A5s 를 콜에도 적어 continue 100%)를 직접 잡는다.
       for (const h of allow) {
         const fc = call.get(h) ?? 0;
-        if (fc > 0) bad.push(`${s.id}: 예외 ${h} 가 콜에도 ${fc} 있다 — 블로커 예외는 공격 빈도까지만이다`);
+        if (fc > 0) bad.push(`${s.id}: 예외 ${h} 가 콜에도 ${fc} 있다. 블로커 예외는 공격 빈도까지만이다`);
       }
       for (const [b, fb] of cont) {
         if (allow.has(b)) continue;
@@ -265,7 +265,7 @@ describe('🔴 도미네이션 단조성(전 34 시나리오)', () => {
     expect(stale, `더 이상 역전을 만들지 않는 예외 ${stale.length}건`).toEqual([]);
   });
 
-  it('지배 판정 자체의 계약 — 한 축만 다른 쌍만 비교한다', () => {
+  it('지배 판정 자체의 계약. 한 축만 다른 쌍만 비교한다', () => {
     expect(dominates('QQ', 'JJ')).toBe(true);
     expect(dominates('JJ', 'QQ')).toBe(false);
     expect(dominates('AKs', 'AQs')).toBe(true);
@@ -366,7 +366,7 @@ describe('ranges.data 확장 스팟(2026-08-30)', () => {
   //   1차: A5s 를 콜에도 적어 블러프가 100% continue → "블러프가 절대 안 접힌다".
   //   2차: 그걸 고치려고 4벳 스펙 전부를 콜에서 뺐다 → QQ·AK 가 50% 인데 77·87s 는 100%.
   //   두 라운드가 같은 불변식을 반대 방향으로 깼다. 그래서 규약을 둘로 쪼개 각각 잠근다.
-  it('🔴 밸류 4벳(QQ·AKs·AKo)의 잔여는 콜 — continue 100%', () => {
+  it('🔴 밸류 4벳(QQ·AKs·AKo)의 잔여는 콜 · continue 100%', () => {
     for (const s of RANGE_SCENARIOS.filter((x) => x.group === 'vs3bet')) {
       const four = buildFreq(s.actions.find((a) => a.key === 'fourbet')!.spec);
       const call = buildFreq(s.actions.find((a) => a.key === 'call')!.spec);
@@ -378,13 +378,13 @@ describe('ranges.data 확장 스팟(2026-08-30)', () => {
     }
   });
 
-  it('🔴 블러프 4벳(휠 에이스)의 잔여는 폴드 — 콜 스펙에 없다', () => {
+  it('🔴 블러프 4벳(휠 에이스)의 잔여는 폴드. 콜 스펙에 없다', () => {
     for (const s of RANGE_SCENARIOS.filter((x) => x.group === 'vs3bet')) {
       const four = buildFreq(s.actions.find((a) => a.key === 'fourbet')!.spec);
       const call = buildFreq(s.actions.find((a) => a.key === 'call')!.spec);
       for (const n of four.keys()) {
         if (!BLUFF_4BET.has(n)) continue;
-        expect(call.has(n), `${s.id}: 블러프 4벳 ${n} 이 콜에도 있다 — 잔여는 폴드다`).toBe(false);
+        expect(call.has(n), `${s.id}: 블러프 4벳 ${n} 이 콜에도 있다. 잔여는 폴드다`).toBe(false);
       }
     }
   });
@@ -450,7 +450,7 @@ describe('ranges.data 확장 스팟(2026-08-30)', () => {
     }
   });
 
-  it('🔴 외부 소비 id 보존 — 리네임하면 프리셋·오답큐가 조용히 빈다', () => {
+  it('🔴 외부 소비 id 보존. 리네임하면 프리셋·오답큐가 조용히 빈다', () => {
     // useDeepGto VILLAIN_RANGE_PRESETS · AdvancedCalcs MATRIX_PRESETS 가 id 로 조회한다.
     for (const [id, key] of [['rfi_lj', 'raise'], ['rfi_hj', 'raise'], ['rfi_co', 'raise'], ['rfi_btn', 'raise'],
       ['rfi_sb', 'raise'], ['bb_vs_btn', 'call'], ['sb_3bet_btn', 'raise']] as const) {

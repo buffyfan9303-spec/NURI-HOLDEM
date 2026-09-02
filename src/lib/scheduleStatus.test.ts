@@ -9,7 +9,7 @@ import { scheduleStatus, startAtMs, TOURNEY_OPEN_HOURS } from './scheduleStatus'
 /** KST 기준 시각을 epoch ms 로 — 테스트가 실행 기기 시간대에 영향받지 않게 */
 const kst = (iso: string) => Date.parse(`${iso}+09:00`);
 
-describe('startAtMs — 시작 시각 파싱', () => {
+describe('startAtMs · 시작 시각 파싱', () => {
   it('HH:MM:SS(DB time 컬럼)도 앞 HH:MM 만 읽는다', () => {
     expect(startAtMs('2026-07-26', '19:30:00')).toBe(kst('2026-07-26T19:30:00'));
   });
@@ -18,12 +18,12 @@ describe('startAtMs — 시작 시각 파싱', () => {
     expect(startAtMs('2026-07-26', null)).toBe(kst('2026-07-26T19:00:00'));
   });
 
-  it('날짜가 깨지면 null — 판정 불가를 명확히 알린다', () => {
+  it('날짜가 깨지면 null. 판정 불가를 명확히 알린다', () => {
     expect(startAtMs('그냥문자열', '19:30')).toBeNull();
   });
 });
 
-describe('scheduleStatus — 예정/진행중/종료', () => {
+describe('scheduleStatus · 예정/진행중/종료', () => {
   const D = '2026-07-26';
   const S = '19:30';
 
@@ -31,17 +31,17 @@ describe('scheduleStatus — 예정/진행중/종료', () => {
     expect(scheduleStatus(D, S, kst('2026-07-26T18:00:00'))).toBe('upcoming');
   });
 
-  it('시작 직후는 live — 예약을 계속 받아야 한다', () => {
+  it('시작 직후는 live. 예약을 계속 받아야 한다', () => {
     expect(scheduleStatus(D, S, kst('2026-07-26T19:31:00'))).toBe('live');
   });
 
-  it('🔴 자정을 넘겨도 레이트 레지 시간대면 live — 여기서 막으면 정상 매출이 죽는다', () => {
+  it('🔴 자정을 넘겨도 레이트 레지 시간대면 live. 여기서 막으면 정상 매출이 죽는다', () => {
     // 실데이터 대회의 레지 마감이 '16LV 01:44'(익일 새벽)였다
     expect(scheduleStatus(D, S, kst('2026-07-27T01:44:00'))).toBe('live');
     expect(scheduleStatus(D, S, kst('2026-07-27T05:29:00'))).toBe('live');
   });
 
-  it('🔴 시작 + 10시간을 넘기면 ended — 다음날 낮에 지난 포스터로 예약하는 걸 막는다', () => {
+  it('🔴 시작 + 10시간을 넘기면 ended. 다음날 낮에 지난 포스터로 예약하는 걸 막는다', () => {
     expect(scheduleStatus(D, S, kst('2026-07-27T05:30:00'))).toBe('ended');
     expect(scheduleStatus(D, S, kst('2026-07-27T12:00:00'))).toBe('ended');
   });
@@ -57,7 +57,7 @@ describe('scheduleStatus — 예정/진행중/종료', () => {
     expect(scheduleStatus(D, S, edge)).toBe('ended');
   });
 
-  it('판정 불가(날짜 깨짐)는 upcoming 으로 열어둔다 — 화면이 잠그기보다 서버 게이트에 맡긴다', () => {
+  it('판정 불가(날짜 깨짐)는 upcoming 으로 열어둔다. 화면이 잠그기보다 서버 게이트에 맡긴다', () => {
     expect(scheduleStatus('', '19:30', Date.now())).toBe('upcoming');
   });
 });

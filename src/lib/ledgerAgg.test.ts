@@ -34,7 +34,7 @@ function session(over: Partial<LedgerSession> = {}): LedgerSession {
   } as LedgerSession;
 }
 
-describe('분납 티켓 — 엔트리·티켓 집계 (critical 회귀 방지)', () => {
+describe('분납 티켓 · 엔트리·티켓 집계 (critical 회귀 방지)', () => {
   const S = session();
 
   it('🔴 티켓 1장만으로 분납 저장 시 엔트리 1 (0이면 안 된다)', () => {
@@ -48,7 +48,7 @@ describe('분납 티켓 — 엔트리·티켓 집계 (critical 회귀 방지)', 
     expect(f.ticketPaid).toBe(1);
   });
 
-  it('티켓은 현금 매출이 아니다 — paid 0', () => {
+  it('티켓은 현금 매출이 아니다. paid 0', () => {
     expect(buyinFinance(buyin({ isSplit: true, ticketCount: 1 }), S).paid).toBe(0);
   });
 
@@ -77,7 +77,7 @@ describe('분납 티켓 — 엔트리·티켓 집계 (critical 회귀 방지)', 
   });
 });
 
-describe('세션 페어링 — 사이드 게임 있는 날 (critical 회귀 방지)', () => {
+describe('세션 페어링 · 사이드 게임 있는 날 (critical 회귀 방지)', () => {
   // 같은 날: 메인 10만 게임 + 사이드 3만 게임
   const main = session({ gameSeq: 1, buyinAmount: 100_000 });
   const side = session({ gameSeq: 2, buyinAmount: 30_000 });
@@ -112,7 +112,7 @@ describe('세션 페어링 — 사이드 게임 있는 날 (critical 회귀 방�
     expect(r.entry).toBe(2);
   });
 
-  it('🔴 날짜-only 매핑은 매출을 깎아먹는다 — 두 방식이 달라야 함(같아지면 버그 재발)', () => {
+  it('🔴 날짜-only 매핑은 매출을 깎아먹는다. 두 방식이 달라야 함(같아지면 버그 재발)', () => {
     const good = aggByGame();
     const bad = aggByDateOnly();
     // 메인 10만 바인이 사이드 단가(3만)로 계산돼 매출이 7만 증발한다.
@@ -129,7 +129,7 @@ describe('세션 페어링 — 사이드 게임 있는 날 (critical 회귀 방�
   });
 });
 
-describe('화면 간 합계 일치 — 장부·통계·엑셀이 같은 규칙을 쓴다', () => {
+describe('화면 간 합계 일치. 장부·통계·엑셀이 같은 규칙을 쓴다', () => {
   const S = session({ discounts: [{ label: '1레벨', amount: 50_000 }] });
   const rows = [
     buyin({ paymentMethod: 'cash' }),                     // 10만
@@ -167,7 +167,7 @@ describe('화면 간 합계 일치 — 장부·통계·엑셀이 같은 규칙�
 
 // 할인 프리셋은 '자리번호(discountIndex)'로 참조된다 — 배열을 압축하면 과거 바인의 금액이 바뀐다.
 // 세션 설정에서 중간 할인을 지웠을 때 뒤 항목이 당겨지면, 이미 저장된 바인이 조용히 다른 금액이 된다.
-describe('할인 프리셋 자리번호 — 중간 삭제 시 기존 바인 금액 보존', () => {
+describe('할인 프리셋 자리번호 · 중간 삭제 시 기존 바인 금액 보존', () => {
   const presets = [
     { label: '1레벨', amount: 50_000 },
     { label: '첫바인', amount: 30_000 },
@@ -201,7 +201,7 @@ describe('할인 프리셋 자리번호 — 중간 삭제 시 기존 바인 금�
 // 삭제 확인창의 '잃는 양'은 마감 모달과 반드시 같은 규칙이어야 한다.
 // 왜: 확인창 숫자가 실제 장부보다 작게 나오면 사용자는 "별거 없네" 하고 지운다.
 //     경고가 거짓말이 되는 순간 확인 UI 자체가 무의미해지므로, 규칙 공유를 테스트로 못 박는다.
-describe('삭제 확인 요약 — 마감 모달과 같은 숫자를 말한다', () => {
+describe('삭제 확인 요약. 마감 모달과 같은 숫자를 말한다', () => {
   const S = session({ discounts: [{ label: '1레벨', amount: 50_000 }] });
   const rows = [
     buyin({ playerName: 'A', entryNo: 1, paymentMethod: 'cash' }),                     // 10만
@@ -224,7 +224,7 @@ describe('삭제 확인 요약 — 마감 모달과 같은 숫자를 말한다',
     expect(ledgerLossSummary(rows, [], S).buyins).toBe(4);
   });
 
-  it('🔴 인원 = 명단 ∪ 바인 이름 — 명단에서 빠진 바인만 있는 손님도 세야 한다', () => {
+  it('🔴 인원 = 명단 ∪ 바인 이름. 명단에서 빠진 바인만 있는 손님도 세야 한다', () => {
     // 보드는 명단에 없는 바인 기록도 행으로 보여준다. 확인창이 명단만 세면 잃는 인원을 과소 표시한다.
     expect(ledgerLossSummary(rows, [{ name: 'A' }], S).people).toBe(3);
   });

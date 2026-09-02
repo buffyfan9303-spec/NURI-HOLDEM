@@ -91,12 +91,12 @@ export default function HandReviewTool({ initial }: { initial?: HandReviewInit }
     try {
       await navigator.clipboard.writeText(code);
       setFallbackCode(null);
-      toast.show('핸드를 복사했어요 — 글 본문 맨 끝에 붙여넣으면 리플레이로 올라갑니다', 'success');
+      toast.show('핸드를 복사했어요. 글 본문 맨 끝에 붙여넣으면 리플레이로 올라갑니다', 'success');
     } catch {
       // 복사 실패(비-HTTPS 웹뷰 등) — 코드를 화면에 꺼내고 글쓰기 폼은 열지 않는다.
       // 여기서 폼을 열면 그 폼이 코드를 덮어 사용자가 복사할 방법이 사라진다.
       setFallbackCode(code);
-      toast.show('복사가 막혀 있어요 — 아래 코드를 직접 복사한 뒤 다시 눌러주세요', 'error');
+      toast.show('복사가 막혀 있어요. 아래 코드를 직접 복사한 뒤 다시 눌러주세요', 'error');
       return;
     }
     openPostForm('hand');
@@ -111,7 +111,7 @@ export default function HandReviewTool({ initial }: { initial?: HandReviewInit }
 
   return (
     <div className="space-y-3">
-      <CalcCard desc="그 핸드를 카드로 놓고 스트리트별로 다시 돌려봅니다 — 승률 추이와 아웃 카드는 앱이 계산합니다">
+      <CalcCard desc="그 핸드를 카드로 놓고 스트리트별로 다시 돌려봅니다. 승률 추이와 아웃 카드는 앱이 계산합니다">
         <HandBoardPicker hb={hb} hint={<>보드는 플랍 3장부터 리버 5장까지</>} />
       </CalcCard>
 
@@ -144,7 +144,7 @@ export default function HandReviewTool({ initial }: { initial?: HandReviewInit }
             </Fragment>
           ))}
         </div>
-        <p className="text-2xs leading-relaxed text-ink-muted">액션 메모는 선택입니다 — 비워두면 카드만 재생됩니다.</p>
+        <p className="text-2xs leading-relaxed text-ink-muted">액션 메모는 선택입니다. 비워두면 카드만 재생됩니다.</p>
       </CalcCard>
 
       <div className="space-y-2 rounded-aura border card-aura p-3">
@@ -165,7 +165,7 @@ export default function HandReviewTool({ initial }: { initial?: HandReviewInit }
             readOnly
             value={fallbackCode}
             onFocus={(e) => e.currentTarget.select()}
-            aria-label="핸드 코드 — 길게 눌러 복사하세요"
+            aria-label="핸드 코드. 길게 눌러 복사하세요"
             className="input w-full text-2xs tabular-nums"
           />
         )}

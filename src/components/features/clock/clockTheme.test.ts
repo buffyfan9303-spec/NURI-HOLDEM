@@ -40,7 +40,7 @@ describe('배경 이미지 URL 허용목록', () => {
   });
 });
 
-describe('clockThemeVars — 배경 유무에 따른 변수', () => {
+describe('clockThemeVars · 배경 유무에 따른 변수', () => {
   it('테마 없음 = 현행 하드코딩 값 1:1(픽셀 변화 0)', () => {
     const v = clockThemeVars(null);
     expect(v['--clk-bg']).toBe(CLOCK_DEFAULTS.bg);

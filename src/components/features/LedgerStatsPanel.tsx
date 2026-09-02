@@ -271,7 +271,7 @@ function StatsView({ venueId }: { venueId: string }) {
           const on = period === p.id;
           return (
             <button key={p.id} type="button" data-pill-active={(on && !p.ai) || undefined} onClick={() => setPeriod(p.id)}
-              className={['relative flex-1 min-w-[3.6rem] py-1.5 t-tab rounded-[6px] whitespace-nowrap transition-colors duration-300 focus:outline-none',
+              className={['relative flex-1 min-w-[3.6rem] py-1.5 t-tab rounded-[6px] whitespace-nowrap transition-colors duration-[var(--dur-fast)] focus:outline-none',
                 on ? 'font-bold text-white' : (p.ai ? 'text-violet-300' : 'text-ink-secondary hover:text-ink-primary')].join(' ')}>
               {/* AI 기간(그라데이션)은 자기 배경을 직접 칠한다 — 공용 알약은 숨김 */}
               {on && p.ai && <span aria-hidden className="absolute inset-0 rounded-[6px] bg-gradient-to-r from-violet-500 to-indigo-500 shadow animate-fade-in" />}
@@ -350,7 +350,7 @@ function StatsView({ venueId }: { venueId: string }) {
                 <div className="rounded-input bg-surface-high border border-border-default py-1.5"><p className="text-base font-bold text-ink-primary tabular-nums">{reqStats.total}</p><p className="text-[11px] text-ink-muted">요청</p></div>
                 <div className="rounded-input bg-surface-high border border-border-default py-1.5"><p className="text-base font-bold text-emerald-400 tabular-nums">{reqStats.approved}</p><p className="text-[11px] text-ink-muted">승인</p></div>
                 <div className="rounded-input bg-surface-high border border-border-default py-1.5"><p className="text-base font-bold text-accent-300 tabular-nums">{reqStats.approveRate}%</p><p className="text-[11px] text-ink-muted">승인율</p></div>
-                <div className="rounded-input bg-surface-high border border-border-default py-1.5"><p className="text-base font-bold text-ink-primary tabular-nums">{reqStats.avgWaitMin != null ? reqStats.avgWaitMin + '분' : '—'}</p><p className="text-[11px] text-ink-muted">평균 대기</p></div>
+                <div className="rounded-input bg-surface-high border border-border-default py-1.5"><p className="text-base font-bold text-ink-primary tabular-nums">{reqStats.avgWaitMin != null ? reqStats.avgWaitMin + '분' : ' · '}</p><p className="text-[11px] text-ink-muted">평균 대기</p></div>
               </div>
             </Section>
           )}
@@ -448,7 +448,7 @@ function StatsView({ venueId }: { venueId: string }) {
                 </div>
               </div>
               <p className="text-2xs text-ink-muted mt-1.5 leading-relaxed">
-                마감 시 클락에서 손보정된 최종 수치(생존·아웃 포함)입니다. <b className="text-ink-secondary">장부 총 엔트리({m.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })})는 바인 기록 기준</b>이라 다를 수 있어요 — 통계·정산은 장부 기준, 이 값은 운영 참고용입니다. 얼리는 <b className="text-ink-secondary">기준칩 배수 합</b>(더블얼리 1명 = 2)이며, 2026-08-30 이전 마감분은 인원 수로 기록돼 있어 그대로 표시됩니다.{clockAgg.games > 1 ? ` (게임 ${clockAgg.games}개 합산)` : ''}
+                마감 시 클락에서 손보정된 최종 수치(생존·아웃 포함)입니다. <b className="text-ink-secondary">장부 총 엔트리({m.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })})는 바인 기록 기준</b>이라 다를 수 있어요. 통계·정산은 장부 기준, 이 값은 운영 참고용입니다. 얼리는 <b className="text-ink-secondary">기준칩 배수 합</b>(더블얼리 1명 = 2)이며, 2026-08-30 이전 마감분은 인원 수로 기록돼 있어 그대로 표시됩니다.{clockAgg.games > 1 ? ` (게임 ${clockAgg.games}개 합산)` : ''}
               </p>
             </Section>
           )}
@@ -598,7 +598,7 @@ function DowStats({ dow, rangeLabel = '전체' }: { dow: Record<number, { entrie
               <li key={r.w} className="flex items-center gap-2">
                 <span className={['w-4 text-center text-xs font-bold', isBest ? 'text-emerald-400' : isWorst ? 'text-rose-400' : 'text-accent-300'].join(' ')}>{DOW[r.w]}</span>
                 <div className="flex-1 h-5 rounded bg-surface-high overflow-hidden">
-                  <div className={['h-full rounded-r transition-[width] duration-300', barColor].join(' ')} style={{ width: `${r.days ? Math.max(pct, 3) : 0}%` }} />
+                  <div className={['h-full rounded-r transition-[width] duration-[var(--dur-panel)]', barColor].join(' ')} style={{ width: `${r.days ? Math.max(pct, 3) : 0}%` }} />
                 </div>
                 <span className="w-16 text-right text-2xs tabular-nums text-ink-secondary">
                   {r.days ? (metric === 'fill' ? (r.fill !== null ? `${Math.round(r.fill)}%` : '기준없음') : metric === 'entry' ? val.toFixed(1) : `${wonToMan(val)}만`) : '휴무'}
@@ -729,8 +729,8 @@ function buildAiReport(m: StatsAgg, days = 7): { empty: boolean; sales: string; 
   const totalRev = m.mainRev + m.sideRev;
   const sideShare = totalRev > 0 ? (m.sideRev / totalRev) * 100 : 0;
   const sideLine = m.sideGameCount > 0
-    ? ` 또한 사이드 게임 ${m.sideGameCount}종이 전체 매출의 약 ${Math.round(sideShare)}%(${man(m.sideRev)}만 원·${m.sideEntries.toFixed(0)} 엔트리)를 책임집니다 — ${sideShare >= 30 ? '사이드가 핵심 수익원이니 라인업을 더 늘려보세요' : sideShare >= 10 ? '사이드가 메인 매출을 잘 보완하고 있습니다' : '사이드 비중이 낮아 시간대·홍보를 조정할 여지가 있습니다'}.`
-    : ' 아직 사이드 게임 기록이 없습니다 — 새틀라이트·하이롤러 같은 사이드를 1~2종 추가하면 객단가를 끌어올릴 수 있습니다.';
+    ? ` 또한 사이드 게임 ${m.sideGameCount}종이 전체 매출의 약 ${Math.round(sideShare)}%(${man(m.sideRev)}만 원·${m.sideEntries.toFixed(0)} 엔트리)를 책임집니다. ${sideShare >= 30 ? '사이드가 핵심 수익원이니 라인업을 더 늘려보세요' : sideShare >= 10 ? '사이드가 메인 매출을 잘 보완하고 있습니다' : '사이드 비중이 낮아 시간대·홍보를 조정할 여지가 있습니다'}.`
+    : ' 아직 사이드 게임 기록이 없습니다. 새틀라이트·하이롤러 같은 사이드를 1~2종 추가하면 객단가를 끌어올릴 수 있습니다.';
 
   // 요일별 진단(안좋은 날)
   let weekday: string;
@@ -738,8 +738,8 @@ function buildAiReport(m: StatsAgg, days = 7): { empty: boolean; sales: string; 
     weekday = '아직 요일별 비교에 충분한 데이터가 없습니다. 며칠 더 운영되면 요일 패턴(약한 요일)을 진단해 드립니다.';
   } else {
     const sideDays = dows.filter((d) => d.sideAvg > 0).sort((a, b) => b.sideAvg - a.sideAvg);
-    const sidePat = sideDays.length ? ` 사이드 게임은 ${DOW[sideDays[0].w]}요일에 가장 활발합니다(평균 ${sideDays[0].sideAvg.toFixed(1)} 엔트리) — 그날 사이드 라인업을 강화해 보세요.` : '';
-    weekday = `${DOW[worst!.w]}요일이 가장 부진합니다 — 평균 ${worst!.avg.toFixed(1)} 엔트리 · 매출 ${man(worst!.rev)}만 원. ` +
+    const sidePat = sideDays.length ? ` 사이드 게임은 ${DOW[sideDays[0].w]}요일에 가장 활발합니다(평균 ${sideDays[0].sideAvg.toFixed(1)} 엔트리). 그날 사이드 라인업을 강화해 보세요.` : '';
+    weekday = `${DOW[worst!.w]}요일이 가장 부진합니다. 평균 ${worst!.avg.toFixed(1)} 엔트리 · 매출 ${man(worst!.rev)}만 원.` +
       `반대로 ${DOW[best.w]}요일이 가장 활발(평균 ${best.avg.toFixed(1)} 엔트리)합니다. ` +
       `${weak.length ? weak.join('·') + '요일' : DOW[worst!.w] + '요일'}에 집객 이벤트(얼리버드 칩업·신규 할인·보장 토너먼트)를 배치해 약한 요일을 끌어올리세요.` + sidePat;
   }
@@ -760,7 +760,7 @@ function buildAiReport(m: StatsAgg, days = 7): { empty: boolean; sales: string; 
   if (weak.length) actions.push(`매출이 저조한 ${weak.join('·')} 요일에 '얼리버드 칩업' 이벤트를 커뮤니티에 공지해보세요.`);
   if (top.length) actions.push(`상위 바인 유저인 ${top.join(', ')} 님에게 회수된 티켓(${m.ticket}장) 중 일부를 리워드로 제공하여 VIP 이탈을 방지하세요.`);
   if (m.unpaidRatio >= 25) actions.push(`미수금 ${man(m.unpaid)}만 원 회수를 위해 다음 방문 시 정산을 유도하세요.`);
-  if (m.sideGameCount > 0 && sideShare >= 30) actions.push(`사이드 매출 비중이 ${Math.round(sideShare)}%로 높습니다 — 인기 사이드(${m.sideGameCount}종)의 시작 시간대를 고정 편성해 단골의 재방문 동선을 만드세요.`);
+  if (m.sideGameCount > 0 && sideShare >= 30) actions.push(`사이드 매출 비중이 ${Math.round(sideShare)}%로 높습니다. 인기 사이드(${m.sideGameCount}종)의 시작 시간대를 고정 편성해 단골의 재방문 동선을 만드세요.`);
   else if (m.sideGameCount === 0 && m.total >= 10) actions.push('메인 외 사이드 게임(예: 새틀라이트·하이롤러)을 추가해 체류시간과 객단가를 높여보세요.');
   if (!actions.length) actions.push('현재 운영 지표가 안정적입니다. 단골 고객 대상 리워드로 재방문을 유도해보세요.');
 
@@ -918,7 +918,7 @@ function OwnerManageCard({ venueId }: { venueId: string }) {
   const add = async () => {
     if (!nick.trim()) return;
     setBusy(true);
-    try { await addVenueOwner(venueId, nick.trim()); toast.show('공동 사장님을 초대했습니다 — 운영자 승인 후 활성화됩니다', 'success'); setNick(''); load(); }
+    try { await addVenueOwner(venueId, nick.trim()); toast.show('공동 사장님을 초대했습니다. 운영자 승인 후 활성화됩니다', 'success'); setNick(''); load(); }
     catch (e) { toast.show(e instanceof Error ? e.message : '초대 실패', 'error'); }
     setBusy(false);
   };
@@ -959,7 +959,7 @@ function OwnerManageCard({ venueId }: { venueId: string }) {
           placeholder="아이디(닉네임)" className="input min-w-0 flex-1 text-sm" />
         <button type="button" disabled={busy || !nick.trim()} onClick={add} className="btn-primary shrink-0 px-3 text-xs disabled:opacity-50">+ 사장님 추가</button>
       </div>
-      <p className="text-2xs text-ink-muted"><b className="text-amber-400">운영자 승인 후</b> 공동 업주로 활성화 — 장부·포스터·이용권 공동 관리, <b className="text-accent-300">대표</b> 교체 가능.</p>
+      <p className="text-2xs text-ink-muted"><b className="text-amber-400">운영자 승인 후</b> 공동 업주로 활성화 · 장부·포스터·이용권 공동 관리, <b className="text-accent-300">대표</b> 교체 가능.</p>
     </div>
   );
 }

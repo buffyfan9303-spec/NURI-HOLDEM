@@ -304,7 +304,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     setPendingReqs((prev) => prev.filter((x) => x.id !== r.id));
     setPayPick(null); setSplitFor(null);
     return approveBuyinRequest(r.id, target, withBuyin, payMethod, split)
-      .then(() => { toast.show(`${r.playerName} 승인 — ${gLabel(target)} 명단 추가${r.voucherId ? ' + 티켓 기록(이용권)' : withBuyin ? (split ? ' + 분할 바인 기록' : ` + ${payMethod === 'card' ? '카드' : payMethod === 'transfer' ? '이체' : '현금'} 바인 기록`) : ''}`, 'success'); loadPending(); })
+      .then(() => { toast.show(`${r.playerName} 승인 · ${gLabel(target)} 명단 추가${r.voucherId ? ' + 티켓 기록(이용권)' : withBuyin ? (split ? ' + 분할 바인 기록' :` + ${payMethod === 'card' ? '카드' : payMethod === 'transfer' ? '이체' : '현금'} 바인 기록`) : ''}`, 'success'); loadPending(); })
       .catch((e) => { toast.show(e instanceof Error ? e.message : '승인 실패', 'error'); loadPending(); });
   };
   const doReject = (r: BuyinRequest, reason?: string) => {
@@ -319,7 +319,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     // 요청 게임별로 나눠 승인 — 전원을 현재 게임에 몰아넣던 동작이 명단·정산을 조용히 틀어놨다.
     const plan = planBuyinApprovals(pendingReqs, gameSeq, openSeqs);
     const flat = plan.groups.flatMap((g) => g.items.map((r) => ({ id: r.id, seq: g.gameSeq })));
-    if (!flat.length) { toast.show('요청한 게임이 아직 열리지 않았습니다 — 게임을 먼저 여세요', 'error'); return; }
+    if (!flat.length) { toast.show('요청한 게임이 아직 열리지 않았습니다. 게임을 먼저 여세요', 'error'); return; }
     // 확인은 게임이 섞였을 때만 — 접수대에서 반복되는 조작이라 같은 게임뿐이면 그냥 승인한다.
     if (plan.mixed && !window.confirm(`${plan.groups.map((g) => `${gLabel(g.gameSeq)} ${g.items.length}명`).join(' / ')}으로 나눠 승인합니다.\n계속할까요?`)) return;
     const n = flat.length;
@@ -327,7 +327,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     Promise.all(flat.map((x) => approveBuyinRequest(x.id, x.seq).catch(() => null)))
       .then(() => {
         const spread = plan.groups.map((g) => `${gLabel(g.gameSeq)} ${g.items.length}`).join(' · ');
-        toast.show(`${n}건 승인 — ${spread}${plan.skipped.length ? ` · ${plan.skipped.length}건 보류(게임 미개설)` : ''}`, 'success');
+        toast.show(`${n}건 승인. ${spread}${plan.skipped.length ?` · ${plan.skipped.length}건 보류(게임 미개설)` : ''}`, 'success');
         loadPending();
       });
   };
@@ -357,7 +357,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     setClock((cur) => {
       if (!cur) return cur;
       const next = { ...cur, ...patch };
-      saveClockState(next).catch(() => toast.show('클락 제어 실패 — 네트워크를 확인하세요', 'error'));
+      saveClockState(next).catch(() => toast.show('클락 제어 실패. 네트워크를 확인하세요', 'error'));
       return next;
     });
   }, [toast]);
@@ -557,7 +557,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       const unpaidCnt = fins.filter((f) => f.unpaid > 0 || f.ticketUnpaid > 0).length;
       // #20: 할인은 '덜 받은 돈'이라 마감 한 줄에도 같이 선다 — 매출만 보면 왜 덜 들어왔는지 알 수 없다.
       const dsum = discountSummary(buyins, session);
-      let closeMsg = `마감 완료 — 오늘 바인 ${buyins.length} · 매출 ${wonToMan(rev)}만${dsum.count ? ` · 할인 ${dsum.count}엔트리 −${wonToMan(dsum.total)}만` : ''}${unpaidCnt ? ` · 미수 ${unpaidCnt}건` : ' · 미수 없음'}`;
+      let closeMsg = `마감 완료. 오늘 바인 ${buyins.length} · 매출 ${wonToMan(rev)}만${dsum.count ?` · 할인 ${dsum.count}엔트리 −${wonToMan(dsum.total)}만` : ''}${unpaidCnt ? ` · 미수 ${unpaidCnt}건` : ' · 미수 없음'}`;
       // 클락 연동 마감 시: 클락 최종 인원 vs 장부 인원 차이(정산 누수 조기 경보)
       // ⚠(경고 이모지)를 메시지에 심고 includes('⚠')로 분기하던 코드였다 — 문자열이 곧 제어 플래그라
       // 이모지 한 글자만 지워도 error 토스트가 조용히 success 로 바뀐다. 불리언으로 분리한다.
@@ -591,7 +591,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       const cfg = (clock && clock.sessionDate === date) ? clock.config : (session.clockSnapshot?.gameSnapshot?.clockConfig ?? null);
       await saveGamePreset(venueId, session.title?.trim() || `${date} 게임`, presetFromRound(session, cfg, sched));
       setRoundPresetState('done');
-      toast.show('프리셋으로 저장했어요 — 포스터·장부·클락 어디서든 한 번에 불러올 수 있어요', 'success');
+      toast.show('프리셋으로 저장했어요. 포스터·장부·클락 어디서든 한 번에 불러올 수 있어요', 'success');
     } catch (e) { setRoundPresetState('idle'); toast.show(e instanceof Error ? e.message : '프리셋 저장 실패', 'error'); }
   };
   const handleRegClose = async () => {
@@ -605,7 +605,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       await addLedgerPlayer({ venueId, sessionDate: date, gameSeq, name: n, visitorType: newType, sortOrder: players.length });
       // 개장 러시: 손님 10~20명이 줄 선다 — 폼을 유지하고 입력만 비워 연속 등록(닫기는 ✕로)
       setNewName(''); setNewType('regular'); setSuggest([]); reload();
-      toast.show(`${n} 추가됨 — 이어서 입력하세요`, 'success');
+      toast.show(`${n} 추가됨. 이어서 입력하세요`, 'success');
     } catch (e) { toast.show(e instanceof Error ? e.message : '추가 실패', 'error'); }
   };
   // 가입자 검색(디바운스) — 순위입력과 동일 메커니즘: 매장 방문 가입자 + 전체 회원(닉네임/실명) 병합
@@ -625,7 +625,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     try {
       await addLedgerPlayer({ venueId, sessionDate: date, gameSeq, name: label, visitorType: newType, sortOrder: players.length });
       setNewName(''); setSuggest([]); setMemSuggest([]); setNewType('regular'); reload();
-      toast.show(`${label} 추가됨 — 이어서 입력하세요`, 'success');
+      toast.show(`${label} 추가됨. 이어서 입력하세요`, 'success');
     } catch (e) { toast.show(e instanceof Error ? e.message : '추가 실패', 'error'); }
   };
   // 가입자 선택 → 실명(닉네임)으로 장부 기록(강제 아님, 그냥 추가하면 입력값 그대로)
@@ -634,7 +634,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     try {
       await addLedgerPlayer({ venueId, sessionDate: date, gameSeq, name: label, visitorType: newType, sortOrder: players.length });
       setNewName(''); setSuggest([]); setNewType('regular'); reload();
-      toast.show(`${label} 추가됨 — 이어서 입력하세요`, 'success');
+      toast.show(`${label} 추가됨. 이어서 입력하세요`, 'success');
     } catch (e) { toast.show(e instanceof Error ? e.message : '추가 실패', 'error'); }
   };
   const savePlayer = async (id: string, patch: { visitorType?: string | null; note?: string | null; name?: string }) => {
@@ -982,7 +982,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
           <Icon name="copy" size={15} className="shrink-0 text-accent-300" />
           <p className="min-w-0 flex-1 truncate text-2xs text-ink-secondary">
             {roundPresetState === 'done'
-              ? <>프리셋으로 저장됐어요 — 다음엔 <b className="text-ink-primary">1탭</b>으로 그대로 열 수 있어요.</>
+              ? <>프리셋으로 저장됐어요. 다음엔<b className="text-ink-primary">1탭</b>으로 그대로 열 수 있어요.</>
               : <>이 게임을 <b className="text-ink-primary">프리셋으로 저장</b>할까요? 다음엔 포스터·장부·클락을 한 번에 채워요.</>}
           </p>
           {roundPresetState === 'done'
@@ -1210,7 +1210,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                           // sticky 셀에서 바로 다음 회차 결제 모달을 연다('직전과 동일'과 짝)
                           <button type="button" disabled={closed}
                             onClick={() => setSelected({ playerName: (r.player as LedgerPlayer).name, entryNo: maxEntryOf((r.player as LedgerPlayer).name) + 1, buyin: null })}
-                            title="+1 바인 — 결제수단 선택"
+                            title="+1 바인 · 결제수단 선택"
                             className="block w-full rounded-input px-0.5 py-0.5 text-left leading-tight transition-colors hover:bg-accent-300/10 disabled:cursor-default disabled:hover:bg-transparent">
                             <b className="text-accent-200">{cnt}회{closed ? '' : ' +'}</b>
                             <span className="block text-ink-secondary">{wonToMan(tot.paid + tot.unpaid)}만</span>
@@ -1307,7 +1307,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
               // W2-2 VCH-1b: 바인 자동적립 중단(§12-A-3 — 문체부 '적립→입장료' 패턴 회피).
               // ⚠ voucherAccrualPerBin 필드·DB write 는 유지 — 지우면 세션 저장 경로가 전 매장 설정을 0 으로 덮는다(§18.4).
             } catch (e) {
-              if (e instanceof Error && e.message === CELL_TAKEN) { toast.show('다른 직원이 방금 이 칸을 입력했어요 — 최신 내용으로 갱신합니다', 'info'); setSelected(null); reload(); }
+              if (e instanceof Error && e.message === CELL_TAKEN) { toast.show('다른 직원이 방금 이 칸을 입력했어요. 최신 내용으로 갱신합니다', 'info'); setSelected(null); reload(); }
               else toast.show(e instanceof Error ? e.message : '저장 실패', 'error');
             } finally { setPayBusy(false); }
           }}
@@ -1327,7 +1327,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
               // W2-2 VCH-1b: 바인 자동적립 중단(§12-A-3 — 문체부 '적립→입장료' 패턴 회피).
               // ⚠ voucherAccrualPerBin 필드·DB write 는 유지 — 지우면 세션 저장 경로가 전 매장 설정을 0 으로 덮는다(§18.4).
             } catch (e) {
-              if (e instanceof Error && e.message === CELL_TAKEN) { toast.show('다른 직원이 방금 이 칸을 입력했어요 — 최신 내용으로 갱신합니다', 'info'); setSelected(null); reload(); }
+              if (e instanceof Error && e.message === CELL_TAKEN) { toast.show('다른 직원이 방금 이 칸을 입력했어요. 최신 내용으로 갱신합니다', 'info'); setSelected(null); reload(); }
               else toast.show(e instanceof Error ? e.message : '저장 실패', 'error');
             } finally { setPayBusy(false); }
           }}
@@ -1517,7 +1517,7 @@ function ClockRemoteBar({ clock, onPatch, onOpenClock, active = true }: {
       {levelUndo && (
         <button type="button" onClick={undoGo} aria-label="레벨 이동 되돌리기"
           className="flex w-full items-center justify-center gap-1.5 rounded-input border border-amber-400/60 bg-amber-400/12 py-2 text-2xs font-extrabold text-amber-300 active:bg-amber-400/20">
-          <Icon name="undo" size={13} className="shrink-0" />레벨 이동 되돌리기 <span className="font-normal text-amber-300">— 남은 시간까지 복원</span>
+          <Icon name="undo" size={13} className="shrink-0" />레벨 이동 되돌리기 <span className="font-normal text-amber-300">남은 시간까지 복원</span>
         </button>
       )}
 
@@ -1574,7 +1574,7 @@ function PlayerEditModal({ player, recordCount, hasPw, onClose, onSave, onDelete
     <Overlay title={`${player.name} · 플레이어 수정`} onClose={onClose}>
       <div className="space-y-3">
         <div>
-          <p className="text-2xs text-ink-muted mb-1">이름 (오기 수정 — 바인 기록도 함께 변경됩니다)</p>
+          <p className="text-2xs text-ink-muted mb-1">이름 (오기 수정 · 바인 기록도 함께 변경됩니다)</p>
           <input value={name} onChange={(e) => setName(e.target.value)} maxLength={30}
             placeholder="플레이어 이름" className="input w-full text-sm" />
         </div>
@@ -1853,7 +1853,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
     if (hm) setStartISO(isoAt(base.sessionDate, hm));
     inheritClockRef.current = { ...inheritClockRef.current, full: r.clockConfig ?? null };
     if (r.clockConfig) syncClockFields(r.clockConfig);
-    formToast.show(`지난 게임(${s.sessionDate.slice(5).replace('-', '/')} ${s.title || '제목 없음'}) 설정을 그대로 불러왔어요 — 날짜·담당 직원만 확인하세요`, 'success');
+    formToast.show(`지난 게임(${s.sessionDate.slice(5).replace('-', '/')} ${s.title || '제목 없음'}) 설정을 그대로 불러왔어요. 날짜·담당 직원만 확인하세요`, 'success');
   };
   // 대시보드 인텐트 1회 자동 적용
   const lastAppliedRef = useRef(false);
@@ -1883,7 +1883,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
     const cp = applyToClock(p.data);
     inheritClockRef.current = { ...inheritClockRef.current, patch: Object.keys(cp).length ? cp : null };
     syncClockFields(cp);
-    formToast.show(`'${p.name}' 프리셋 적용 — 채워진 항목만 반영했어요(수정 가능)`, 'success');
+    formToast.show(`'${p.name}' 프리셋 적용 · 채워진 항목만 반영했어요(수정 가능)`, 'success');
   };
 
   const submit = () => {
@@ -1935,8 +1935,8 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
         <div>
           <h3 className="text-sm font-bold text-accent-300">장부 시작 설정</h3>
           <p className="text-2xs text-ink-muted mt-0.5">담당직원: <b className="text-ink-secondary">{operatorName}</b></p>
-          {prefilled && <p className="flex items-start gap-1.5 text-xs font-semibold text-emerald-400 mt-0.5"><Icon name="check-circle" size={14} className="shrink-0 mt-px" />직전 게임 설정을 불러왔습니다 — 바로 시작하거나 수정하세요.</p>}
-          {autoLinked && <p className="flex items-start gap-1.5 text-xs font-semibold text-emerald-400 mt-0.5"><Icon name="check-circle" size={14} className="shrink-0 mt-px" />오늘 포스터 자동 연동 — 게임명·바인·유형·스택 입력됨, 블라인드·레지·상금은 클락에 함께 적용(수정 가능).</p>}
+          {prefilled && <p className="flex items-start gap-1.5 text-xs font-semibold text-emerald-400 mt-0.5"><Icon name="check-circle" size={14} className="shrink-0 mt-px" />직전 게임 설정을 불러왔습니다. 바로 시작하거나 수정하세요.</p>}
+          {autoLinked && <p className="flex items-start gap-1.5 text-xs font-semibold text-emerald-400 mt-0.5"><Icon name="check-circle" size={14} className="shrink-0 mt-px" />오늘 포스터 자동 연동. 게임명·바인·유형·스택 입력됨, 블라인드·레지·상금은 클락에 함께 적용(수정 가능).</p>}
           {/* PL1a: 당일 포스터 2개+ — 자동연동이 침묵하던 케이스에 선택 칩(§13-B '자동화는 항상 되거나, 왜 안 되는지 보이거나') */}
           {!autoLinked && !schedId && todayPick.length >= 2 && (
             <div className="mt-1.5">
@@ -2046,7 +2046,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
               );
             })}
           </div>
-          <p className="text-2xs text-ink-muted mt-1">담당 직원만 열람·운영 가능(업주·운영자는 전체 접근) — 후보는 장부 권한 직원.</p>
+          <p className="text-2xs text-ink-muted mt-1">담당 직원만 열람·운영 가능(업주·운영자는 전체 접근). 후보는 장부 권한 직원.</p>
         </Field>
       )}
 
@@ -2100,7 +2100,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
           <EarlyNum label="스타팅 스택" value={startStack} onChange={setStartStack} suffix="칩" disabled={!!clockState?.running} />
           <EarlyNum label="리바인 스택" value={rebuyStack} onChange={setRebuyStack} suffix="칩" disabled={!!clockState?.running} />
         </div>
-        <p className="text-2xs text-ink-muted mt-1 leading-relaxed">첫 바인은 스타팅 스택(+얼리 추가스택), 2번째부터는 리바인 스택을 받습니다 — 평균 스택·라이브 보드에 반영됩니다.</p>
+        <p className="text-2xs text-ink-muted mt-1 leading-relaxed">첫 바인은 스타팅 스택(+얼리 추가스택), 2번째부터는 리바인 스택을 받습니다. 평균 스택·라이브 보드에 반영됩니다.</p>
       </Field>
 
       <Field label="얼리 설정 · 연동 클락 (추가 스택 · 레벨)">
@@ -2169,7 +2169,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
             placeholder="0" className="input w-full text-sm pr-7 tabular-nums" />
           <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted pointer-events-none">장</span>
         </div>
-        <p className="text-2xs text-ink-muted mt-1">오늘 발행·시상한 매장이용권 수 — 대시보드 '매장이용권' 카드에 합산됩니다.</p>
+        <p className="text-2xs text-ink-muted mt-1">오늘 발행·시상한 매장이용권 수. 대시보드 '매장이용권' 카드에 합산됩니다.</p>
       </Field>
 
       {/* W2-2 VCH-1b: '바인 1회당 이용권 자동 적립' 입력 UI 제거 — 문체부 '적립→입장료' 패턴 회피(§12-A-3).
@@ -2355,8 +2355,8 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
               })}
               <span className="text-[10px] text-ink-muted w-full">
                 {cell.buyin.earlyOverride
-                  ? '수기 확정 — 시각·레벨이 바뀌어도 이 값이 유지됩니다.'
-                  : '시각 자동 — 바인 시각을 레벨로 환산해 판정합니다.'}
+                  ? '수기 확정. 시각·레벨이 바뀌어도 이 값이 유지됩니다.'
+                  : '시각 자동. 바인 시각을 레벨로 환산해 판정합니다.'}
               </span>
             </div>
           )}
@@ -2535,7 +2535,7 @@ function CloseModal({ stats, unpaidPlayers, onClose, onConfirm }: {
 }) {
   const [memo, setMemo] = useState('');
   return (
-    <Overlay title="정산 마감 — 금일 통계" onClose={onClose}>
+    <Overlay title="정산 마감 · 금일 통계" onClose={onClose}>
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-2">
           <SummaryStat label="총 바인" value={`${stats.totalBuyins}회`} />
@@ -2638,7 +2638,7 @@ function DeleteSessionModal({ label, loss, lossErr, busy, onClose, onConfirm }: 
             {[0, 1, 2, 3].map((i) => <div key={i} className="h-[58px] animate-pulse rounded-input bg-surface-high" />)}
           </div>
         )}
-        <p className="text-2xs text-ink-muted">마감은 해제할 수 있지만 삭제는 복구 불가 — 보관만 원하면 마감을 쓰세요.</p>
+        <p className="text-2xs text-ink-muted">마감은 해제할 수 있지만 삭제는 복구 불가. 보관만 원하면 마감을 쓰세요.</p>
         <div className="flex gap-2">
           <button type="button" onClick={onClose} disabled={busy} className="btn-ghost text-sm flex-1 disabled:opacity-50">취소</button>
           <HoldToConfirmButton onConfirm={onConfirm} disabled={busy || (!loss && !lossErr)}

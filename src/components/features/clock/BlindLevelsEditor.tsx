@@ -44,7 +44,7 @@ export default function BlindLevelsEditor({ levels, onChange }: { levels: ClockL
     <div className="space-y-2">
       {/* 일괄 듀레이션 */}
       <div className="rounded-input border border-border-subtle bg-surface-high p-2 space-y-1.5">
-        <p className="text-2xs text-ink-muted">듀레이션 일괄 설정 — 예: 전체 25분 후, 16레벨부터 15분</p>
+        <p className="text-2xs text-ink-muted">듀레이션 일괄 설정 · 예: 전체 25분 후, 16레벨부터 15분</p>
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="w-8 shrink-0 text-2xs text-ink-secondary">전체</span>
           <div className="relative w-16">

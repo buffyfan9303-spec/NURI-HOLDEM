@@ -622,7 +622,7 @@ export default function ScheduleDetailModal({
               <button type="button" onClick={() => onVenueClick(schedule.venueId!)}
                 className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs transition-colors hover:bg-surface-float/40">
                 <Icon name="home" size={14} className="shrink-0 text-ink-muted" />
-                <span className="min-w-0 flex-1 font-semibold text-ink-primary">매장 페이지 — 다른 일정 · 후기 · 위치</span>
+                <span className="min-w-0 flex-1 font-semibold text-ink-primary">매장 페이지 · 다른 일정 · 후기 · 위치</span>
                 <span className={`shrink-0 text-2xs font-bold ${ACCENT_INK}`}>이동 →</span>
               </button>
             )}
@@ -677,7 +677,7 @@ export default function ScheduleDetailModal({
           <Icon name="edit" size={15} className="shrink-0 text-accent-300" />
           <span className="min-w-0 flex-1">
             <span className={`block text-xs font-bold ${ACCENT_INK}`}>이 대회 후기 쓰기</span>
-            <span className="block text-2xs text-ink-muted">참가 후기를 커뮤니티 게시판(대회 후기)에 남겨보세요 — 다른 플레이어에게 큰 도움이 됩니다.</span>
+            <span className="block text-2xs text-ink-muted">참가 후기를 커뮤니티 게시판(대회 후기)에 남겨보세요. 다른 플레이어에게 큰 도움이 됩니다.</span>
           </span>
           <span className={`shrink-0 ${ACCENT_INK}`} aria-hidden>→</span>
         </button>
@@ -877,7 +877,7 @@ function CalendarShareRow({ schedule }: { schedule: Schedule }) {
             // /p/<id> = 카톡·페북 봇에 대회별 OG 카드(포스터·바이인)를 주는 프리렌더 경로.
             // 사람은 자동으로 /?s=<id> (앱 포스터 상세)로 리다이렉트된다.
             await navigator.clipboard.writeText(`https://nuriholdem.com/p/${schedule.id}`);
-            toast.show('공유 링크를 복사했습니다 — 붙여넣으면 이 대회로 바로 열려요', 'success');
+            toast.show('공유 링크를 복사했습니다. 붙여넣으면 이 대회로 바로 열려요', 'success');
           } catch { toast.show('복사에 실패했습니다', 'error'); }
         }}
         className="flex items-center justify-center gap-1.5 rounded-input border border-border-default bg-surface-high py-2 text-xs font-bold text-ink-secondary transition-colors hover:border-accent-400/50 hover:text-accent-300">
@@ -902,7 +902,7 @@ function BuyinRequestBox({ venueId, eventDate }: { venueId: string; eventDate: s
     if (sending) return;
     setSending(true);
     requestBuyin(venueId, null, undefined, eventDate)
-      .then((name) => toast.show(`${name || '매장'} 참가(바인) 요청 전송! 운영자 승인을 기다려 주세요`, 'success'))
+      .then((name) => toast.show(`${name || '매장'} 참가(바인) 요청을 보냈어요. 운영자 승인을 기다려 주세요`, 'success'))
       .catch((e) => toast.show(e instanceof Error ? e.message : '요청 전송 실패', 'error'))
       .finally(() => setSending(false));
   };
@@ -1004,7 +1004,7 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
     }
   };
   const enableReminderPush = async () => {
-    try { await enablePush(); setPushOn(true); toast.show('알림을 켰습니다 — 시작 1시간 전에 알려드려요', 'success'); }
+    try { await enablePush(); setPushOn(true); toast.show('알림을 켰습니다. 시작 1시간 전에 알려드려요', 'success'); }
     catch (e) { toast.show(e instanceof Error ? e.message : '알림 설정 실패', 'error'); }
   };
   const fmtRes = (iso: string) => { const d = new Date(iso); const p = (n: number) => String(n).padStart(2, '0'); return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`; };
@@ -1063,7 +1063,7 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
               <button type="button" onClick={enableReminderPush} disabled={pushOn}
                 className={['flex items-center justify-center gap-1.5 rounded-input border py-2.5 text-2xs font-bold transition-colors',
                   pushOn ? 'border-emerald-500/40 text-emerald-400' : 'border-border-default bg-surface-high text-ink-secondary hover:border-accent-400/50 hover:text-accent-300'].join(' ')}>
-                <Icon name="bell" size={13} className="shrink-0" />{pushOn ? '알림 켜짐 ✓' : '1시간 전 알림'}
+                <Icon name="bell" size={13} className="shrink-0" />{pushOn ? '알림 켜짐' : '1시간 전 알림'}
               </button>
             ) : (
               <span className="flex items-center justify-center gap-1.5 rounded-input border border-border-default bg-surface-high py-2.5 text-2xs text-ink-muted"><Icon name="alarm" size={13} className="shrink-0" />시작 1시간 전 알림 예정</span>
@@ -1089,10 +1089,10 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
             <span>예약하면 이 매장에 <b className="text-accent-300">이름(실명)과 닉네임</b>이 전달됩니다</span>
           </p>
           <ul className="mt-1 space-y-0.5 text-2xs leading-relaxed text-ink-muted">
-            <li>· 전달 항목: 닉네임, 이름(실명 — 본인인증을 마친 회원), 입력한 예약명, 예약 일시, 대회 당일 매장 체크인 여부</li>
+            <li>· 전달 항목: 닉네임, 이름(실명 · 본인인증을 마친 회원), 입력한 예약명, 예약 일시, 대회 당일 매장 체크인 여부</li>
             <li>· 받는 곳: {sched.pubName || '이 대회를 여는 매장'}의 운영주체(업주·매장 운영자)</li>
             <li>· 이용 목적: 예약자 본인 확인, 좌석 배정, 변경·취소 및 대회 진행 안내</li>
-            <li>· 보유 기간: 대회 종료 후 분쟁 대응에 필요한 기간까지 — 예약을 취소하면 매장 명단에서 곧바로 지워집니다</li>
+            <li>· 보유 기간: 대회 종료 후 분쟁 대응에 필요한 기간까지. 예약을 취소하면 매장 명단에서 곧바로 지워집니다</li>
             <li>· 휴대전화번호는 매장에 전달되지 않습니다</li>
           </ul>
           <p className="mt-1 text-2xs leading-relaxed text-ink-muted">
@@ -1126,9 +1126,9 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
               // UX-1: 클락 실측이 있으면 '매장에 확인해 주세요' 대신 실제 답을 준다(서버는 답을 알고 있었다)
               regInfo && regInfo.msLeft !== null
                 ? (regInfo.msLeft === 0
-                    ? '레이트 레지가 마감된 대회입니다 — 다음 일정을 확인해 주세요.'
-                    : `레이트 레지 진행 중 — 마감까지 약 ${Math.max(1, Math.round(regInfo.msLeft / 60_000))}분, 지금 등록할 수 있습니다.`)
-                : '이미 시작한 대회입니다 — 레이트 레지 가능 여부는 매장에 확인해 주세요.'
+                    ? '레이트 레지가 마감된 대회입니다. 다음 일정을 확인해 주세요.'
+                    : `레이트 레지 진행 중. 마감까지 약 ${Math.max(1, Math.round(regInfo.msLeft / 60_000))}분, 지금 등록할 수 있습니다.`)
+                : '이미 시작한 대회입니다. 레이트 레지 가능 여부는 매장에 확인해 주세요.'
             )
           : '같은 닉네임이 이미 있으면 예약할 수 없어요. 닉네임을 바꿔 다시 시도하세요.'}
       </p>
@@ -1151,7 +1151,7 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
                           <span className="truncate">{r.realName ? `${r.realName}(${r.nickname ?? '-'})` : (r.nickname ?? '비회원')}</span>
                           {/* 예약→방문 전환 표시 — 당일 체크인 있으면 ✓, 종료 후에도 없으면 노쇼 */}
                           {r.visited
-                            ? <span className="shrink-0 rounded-badge bg-emerald-500/15 px-1 py-0.5 text-2xs font-bold leading-none text-emerald-400">방문 ✓</span>
+                            ? <span className="shrink-0 rounded-badge bg-emerald-500/15 px-1 py-0.5 text-2xs font-bold leading-none text-emerald-400">방문 완료</span>
                             : ended
                               ? <span className="shrink-0 rounded-badge border border-border-default bg-surface-high px-1 py-0.5 text-2xs font-bold leading-none text-ink-muted">노쇼</span>
                               : null}

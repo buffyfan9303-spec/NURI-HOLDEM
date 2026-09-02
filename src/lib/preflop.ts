@@ -61,13 +61,13 @@ export type PreAction = 'open' | '3bet';
 export type StackBB = 12 | 20 | 40 | 100;
 export const STACKS: { bb: StackBB; label: string; hint: string; openLabel: string; threeBetLabel: string }[] = [
   { bb: 12, label: '12bb', openLabel: '오픈(≈올인)', threeBetLabel: '3벳(올인)',
-    hint: '푸시/폴드 구간 — 오픈은 사실상 올인. 레이트 포지션은 과감하게 넓히고, 콜은 프리미엄만.' },
+    hint: '푸시/폴드 구간. 오픈은 사실상 올인. 레이트 포지션은 과감하게 넓히고, 콜은 프리미엄만.' },
   { bb: 20, label: '20bb', openLabel: '오픈(미니레이즈)', threeBetLabel: '3벳(올인)',
-    hint: '숏스택 — 레이즈/폴드 단순화. 3벳은 대부분 올인이라 한 단계 타이트하게.' },
+    hint: '숏스택. 레이즈/폴드 단순화. 3벳은 대부분 올인이라 한 단계 타이트하게.' },
   { bb: 40, label: '40bb', openLabel: '오픈', threeBetLabel: '3벳',
-    hint: '미들스택 — 표준에 가깝지만 스택오프 기준이 낮아 도미네이트 당하는 콜 주의.' },
+    hint: '미들스택. 표준에 가깝지만 스택오프 기준이 낮아 도미네이트 당하는 콜 주의.' },
   { bb: 100, label: '100bb', openLabel: '오픈', threeBetLabel: '3벳',
-    hint: '딥스택 — 표준 레인지. 수딧 커넥터·작은 페어의 임플라이드 가치가 올라간다.' },
+    hint: '딥스택. 표준 레인지. 수딧 커넥터·작은 페어의 임플라이드 가치가 올라간다.' },
 ];
 function stackMul(bb: StackBB, act: PreAction): number {
   // 오픈: 12bb 푸시 레인지는 넓게, 100bb는 스펙 핸드 소폭 추가. 3벳: 올인 구간은 타이트.
@@ -78,10 +78,10 @@ function stackMul(bb: StackBB, act: PreAction): number {
 // ── 시나리오 보정 — 멀티웨이 / vs 림프 / PKO(프로그레시브 KO) ──
 export type Scenario = 'std' | 'multiway' | 'limp' | 'pko';
 export const SCENARIOS: { id: Scenario; label: string; hint: string }[] = [
-  { id: 'std', label: '표준', hint: '오픈 폴드 한 바퀴 — 기본 오픈/3벳 레인지.' },
-  { id: 'multiway', label: '멀티웨이', hint: '이미 여러 명이 들어온 팟 — 블러프성 핸드(약한 브로드웨이·약한 Ax)는 줄이고 수딧 커넥터·포켓 페어·수딧 Ax처럼 넛 잠재력 있는 핸드 위주로. 도미네이트 위험이 커 레인지를 한 단계 타이트하게.' },
-  { id: 'limp', label: 'vs 림프', hint: '앞에 림퍼가 있으면 아이솔 레이즈로 압박 — 가치 핸드를 평소보다 넓게 레이즈해 헤즈업을 유도(특히 포지션 있을 때). 림퍼 뒤 약한 핸드 오버콜은 피한다.' },
-  { id: 'pko', label: 'PKO', hint: '바운티($EV)가 칩 EV에 더해져 공격성을 높임 — 숏스택을 커버할 땐 콜·올인 레인지를 넓혀 바운티를 노린다. 반대로 내가 숏이면 무리한 콜은 자제.' },
+  { id: 'std', label: '표준', hint: '오픈 폴드 한 바퀴. 기본 오픈/3벳 레인지.' },
+  { id: 'multiway', label: '멀티웨이', hint: '이미 여러 명이 들어온 팟. 블러프성 핸드(약한 브로드웨이·약한 Ax)는 줄이고 수딧 커넥터·포켓 페어·수딧 Ax처럼 넛 잠재력 있는 핸드 위주로. 도미네이트 위험이 커 레인지를 한 단계 타이트하게.' },
+  { id: 'limp', label: 'vs 림프', hint: '앞에 림퍼가 있으면 아이솔 레이즈로 압박. 가치 핸드를 평소보다 넓게 레이즈해 헤즈업을 유도(특히 포지션 있을 때). 림퍼 뒤 약한 핸드 오버콜은 피한다.' },
+  { id: 'pko', label: 'PKO', hint: '바운티($EV)가 칩 EV에 더해져 공격성을 높임. 숏스택을 커버할 땐 콜·올인 레인지를 넓혀 바운티를 노린다. 반대로 내가 숏이면 무리한 콜은 자제.' },
 ];
 function scenarioMul(s: Scenario): number {
   return s === 'multiway' ? 0.82 : s === 'limp' ? 1.15 : s === 'pko' ? 1.18 : 1;

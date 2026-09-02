@@ -72,12 +72,13 @@ const rowToHand = (r: any): HandAttachment => ({
     : null,
 });
 
-/** 집계 뷰에서 보기별 득표 조회(idx 순). 실패 시 null — 호출부가 '어태치먼트 없음'으로 처리. */
+/** 보기별 득표 조회(idx 순). 실패 시 null — 호출부가 '어태치먼트 없음'으로 처리.
+ *  2026-09-02: 집계 뷰(post_poll_results, SECURITY DEFINER 뷰 → 어드바이저 ERROR) 대신 같은 집계를 돌려주는
+ *  RPC poll_results 로. 개별 투표자 비노출은 그대로다(함수가 집계 행만 반환). */
 async function fetchPollResults(pollId: string): Promise<PollOption[] | null> {
-  const { data, error } = await supabase
-    .from('post_poll_results').select('*').eq('poll_id', pollId).order('idx');
+  const { data, error } = await supabase.rpc('poll_results', { p_poll_id: pollId });
   if (error) return null;
-  return (data ?? []).map(rowToOption);
+  return ((data ?? []) as Record<string, unknown>[]).map(rowToOption);
 }
 
 /** 내 표(post_poll_votes 는 RLS 로 본인 행만 노출). 비로그인·실패는 조용히 null. */

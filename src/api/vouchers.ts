@@ -17,7 +17,7 @@ import { identityEnabled } from '../lib/identityFlag';
 
 /** 킬스위치 OFF 에서 상태를 바꾸려는 시도를 막는다 — 놓친 진입점이 조용히 발급하는 일이 없게. */
 function assertVoucherOn(): void {
-  if (!identityEnabled()) throw new Error('매장이용권이 현재 비활성화되어 있습니다 — 본인인증 준비가 끝나면 다시 열립니다');
+  if (!identityEnabled()) throw new Error('매장이용권이 현재 비활성화되어 있습니다. 본인인증 준비가 끝나면 다시 열립니다');
 }
 
 export interface Voucher {

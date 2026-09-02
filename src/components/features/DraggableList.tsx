@@ -89,7 +89,7 @@ function SortableRow({ item, index, isDragging, onPremiumToggle, onCompetitionTo
       className={[
         'flex items-center gap-3 px-3 py-3',
         'bg-surface-low border border-border-subtle rounded-card',
-        'transition-shadow duration-150',
+        'transition-shadow duration-[var(--dur-fast)]',
         isSelfDragging
           ? 'opacity-0'                               // 원본은 투명 처리 (Overlay가 대신 표시)
           : isDragging
@@ -147,7 +147,7 @@ function SortableRow({ item, index, isDragging, onPremiumToggle, onCompetitionTo
         <button
           type="button"
           aria-label="부스트 설정"
-          title={boostLeft > 0 ? `부스트 ${boostLabel} 남음 — 클릭해 변경` : '부스트(기간 상단 고정)'}
+          title={boostLeft > 0 ? `부스트 ${boostLabel} 남음 · 클릭해 변경` : '부스트(기간 상단 고정)'}
           onClick={() => setBoostOpen((v) => !v)}
           className={[
             'inline-flex items-center gap-0.5 text-2xs font-bold px-1.5 py-1 rounded-badge border transition-colors active:scale-95',

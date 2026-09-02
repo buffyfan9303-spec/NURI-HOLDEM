@@ -35,18 +35,18 @@ export interface CatalogMark {
 
 /** 도달 마크 추가분 — 기존 6종 사이사이를 메워 다음 목표가 항상 가까이 보이게 배치 */
 export const EXTRA_MARKS: ShopMark[] = [
-  { key: 'chip_stack',  emoji: '🪙', name: '첫 스택',      need: 250,   desc: '판에 앉았다 — 250점' },
-  { key: 'joker',       emoji: '🃏', name: '조커',         need: 800,   desc: '변수의 카드 — 800점' },
+  { key: 'chip_stack',  emoji: '🪙', name: '첫 스택',      need: 250,   desc: '판에 앉았다. 250점' },
+  { key: 'joker',       emoji: '🃏', name: '조커',         need: 800,   desc: '변수의 카드 · 800점' },
   // 오너 #9(2026-08-30): 이름만 '핫 스트릭' → '핫'. key·emoji 는 그대로 —
   // key 는 profiles.equipped_mark 에 문자열로 박혀 있어 바꾸면 이미 보유한 사람의 마크가 사라진다.
-  { key: 'hot_streak',  emoji: '🔥', name: '핫',           need: 1200,  desc: '달아오른 흐름 — 1,200점' },
-  { key: 'bullseye',    emoji: '🎯', name: '타겟',         need: 2200,  desc: '노린 자리는 놓치지 않는다 — 2,200점' },
-  { key: 'rush',        emoji: '🚀', name: '러시',         need: 3000,  desc: '수직 상승 — 3,000점' },
-  { key: 'star_player', emoji: '🌟', name: '스타 플레이어', need: 5000,  desc: '눈에 띄는 사람 — 5,000점' },
-  { key: 'gem_hand',    emoji: '💎', name: '다이아 핸드',   need: 6500,  desc: '쥐면 놓지 않는다 — 6,500점' },
-  { key: 'turbo',       emoji: '⚡', name: '터보',         need: 10000, desc: '레벨업이 빠르다 — 10,000점' },
-  { key: 'shark',       emoji: '🦈', name: '샤크',         need: 12000, desc: '테이블의 포식자 — 12,000점' },
-  { key: 'champion',    emoji: '🏆', name: '챔피언',       need: 20000, desc: 'KK 너머 — 20,000점' },
+  { key: 'hot_streak',  emoji: '🔥', name: '핫',           need: 1200,  desc: '달아오른 흐름 · 1,200점' },
+  { key: 'bullseye',    emoji: '🎯', name: '타겟',         need: 2200,  desc: '노린 자리는 놓치지 않는다. 2,200점' },
+  { key: 'rush',        emoji: '🚀', name: '러시',         need: 3000,  desc: '수직 상승 · 3,000점' },
+  { key: 'star_player', emoji: '🌟', name: '스타 플레이어', need: 5000,  desc: '눈에 띄는 사람 · 5,000점' },
+  { key: 'gem_hand',    emoji: '💎', name: '다이아 핸드',   need: 6500,  desc: '쥐면 놓지 않는다. 6,500점' },
+  { key: 'turbo',       emoji: '⚡', name: '터보',         need: 10000, desc: '레벨업이 빠르다. 10,000점' },
+  { key: 'shark',       emoji: '🦈', name: '샤크',         need: 12000, desc: '테이블의 포식자 · 12,000점' },
+  { key: 'champion',    emoji: '🏆', name: '챔피언',       need: 20000, desc: 'KK 너머 · 20,000점' },
 ];
 
 /** 도달 마크 16종(=서버 shop_marks.kind='earn' 과 같은 값). 해금 방식은 종전과 동일한 '도달'. */

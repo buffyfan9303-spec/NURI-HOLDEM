@@ -34,7 +34,7 @@ export default function LeaguePanel({ venueId, canConfigure }: { venueId: string
   const create = async () => {
     if (!name.trim()) return toast.show('리그 이름을 입력하세요', 'error');
     setBusy(true);
-    try { await createLeague(venueId, name); setName(''); toast.show('연합 리그를 만들었습니다 — 매장을 초대해 보세요', 'success'); reload(); }
+    try { await createLeague(venueId, name); setName(''); toast.show('연합 리그를 만들었습니다. 매장을 초대해 보세요', 'success'); reload(); }
     catch (e) { toast.show(e instanceof Error ? e.message : '생성 실패', 'error'); }
     finally { setBusy(false); }
   };
@@ -80,7 +80,7 @@ export default function LeaguePanel({ venueId, canConfigure }: { venueId: string
       )}
 
       {loading ? <SkeletonList rows={3} rowClassName="h-24" /> : active.length === 0 && invites.length === 0 ? (
-        <p className="py-8 text-center text-2xs text-ink-muted">아직 참여 중인 연합 리그가 없습니다 — 리그를 만들어 이웃 매장을 초대해 보세요.</p>
+        <p className="py-8 text-center text-2xs text-ink-muted">아직 참여 중인 연합 리그가 없습니다. 리그를 만들어 이웃 매장을 초대해 보세요.</p>
       ) : (
         active.map(({ league, myStatus, members }) => (
           <LeagueCard key={league.id} league={league} isOwner={myStatus === 'owner'} members={members}
@@ -135,7 +135,7 @@ function LeagueLiveBoard({ league, isOwner, members, venueId, canConfigure, onCh
           .map((e: any) => ({ name: e.nickname || e.realName || '참가자', place: e.position, prize: e.prize || undefined }));
       }
       await setLeagueStatus(league.id, venueId, status, entries, itm);
-      toast.show(status === 'running' ? '진행 중으로 표시했습니다' : status === 'settled' ? `정산 완료 — 입상 ${itm?.length ?? 0}명 보고됨` : '시작 전으로 되돌렸습니다', 'success');
+      toast.show(status === 'running' ? '진행 중으로 표시했습니다' : status === 'settled' ? `정산 완료 · 입상 ${itm?.length ?? 0}명 보고됨` :'시작 전으로 되돌렸습니다', 'success');
       reload(); onChanged();
     } catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
     finally { setBusy(false); }
@@ -144,7 +144,7 @@ function LeagueLiveBoard({ league, isOwner, members, venueId, canConfigure, onCh
   const allSettled = venues.length > 0 && venues.every((v) => statusOf(v.venueId)?.liveStatus === 'settled');
   const settleAll = async () => {
     setBusy(true);
-    try { await leagueSettleAll(league.id); toast.show('전체 정산 완료 — 파이널 매장이 확정됐어요', 'success'); reload(); onChanged(); }
+    try { await leagueSettleAll(league.id); toast.show('전체 정산 완료. 파이널 매장이 확정됐어요', 'success'); reload(); onChanged(); }
     catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
     finally { setBusy(false); }
   };
@@ -201,7 +201,7 @@ function LeagueLiveBoard({ league, isOwner, members, venueId, canConfigure, onCh
       {isOwner && canConfigure && league.phase !== 'settled' && league.phase !== 'final' && (
         <button type="button" disabled={busy || !allSettled} onClick={settleAll}
           className="flex w-full items-center justify-center gap-1.5 rounded-input bg-rose-500/90 py-2 text-xs font-bold text-white disabled:opacity-40">
-          {allSettled ? <><Icon name="flag" size={13} className="shrink-0" />전체 정산 완료 — 파이널 매장 확정</> : `전체 정산 대기 (${venues.filter((v) => statusOf(v.venueId)?.liveStatus === 'settled').length}/${venues.length} 정산)`}
+          {allSettled ? <><Icon name="flag" size={13} className="shrink-0" />전체 정산 완료 · 파이널 매장 확정</> : `전체 정산 대기 (${venues.filter((v) => statusOf(v.venueId)?.liveStatus === 'settled').length}/${venues.length} 정산)`}
         </button>
       )}
 
@@ -210,7 +210,7 @@ function LeagueLiveBoard({ league, isOwner, members, venueId, canConfigure, onCh
         <div className="rounded-input border border-accent-400/30 bg-accent-300/[0.05] p-2.5 space-y-1.5">
           <p className="flex items-center gap-1 text-2xs font-bold text-accent-300"><Icon name="target" size={12} className="shrink-0" />통합 ITM (입상권) · 총 엔트리 {statuses.reduce((a, s) => a + (s.entries || 0), 0)}</p>
           {finalVenueName && (
-            <p className="text-[11px] text-ink-secondary"><Icon name="flag" size={11} className="mr-0.5 inline-block align-[-1px] shrink-0" />파이널 집결 매장: <b className="text-sky-300">{finalVenueName}</b>(엔트리 최다) · 3테이블로 시작 — 통합 클락은 이 매장에서 새 클락으로 진행</p>
+            <p className="text-[11px] text-ink-secondary"><Icon name="flag" size={11} className="mr-0.5 inline-block align-[-1px] shrink-0" />파이널 집결 매장: <b className="text-sky-300">{finalVenueName}</b>(엔트리 최다) · 3테이블로 시작 · 통합 클락은 이 매장에서 새 클락으로 진행</p>
           )}
           {combinedItm.length === 0 ? (
             <p className="py-1 text-center text-2xs text-ink-muted">보고된 입상 명단이 없습니다(각 매장에서 순위 입력 후 정산완료 시 반영).</p>
@@ -258,7 +258,7 @@ function LeagueCard({ league, isOwner, members, venueId, canConfigure, onChanged
   const invite = async () => {
     if (!inviteId) return;
     setBusy(true);
-    try { await inviteLeagueMember(league.id, inviteId); setInviteId(''); toast.show('초대를 보냈습니다 — 상대 매장에 알림이 전송됐어요', 'success'); onChanged(); }
+    try { await inviteLeagueMember(league.id, inviteId); setInviteId(''); toast.show('초대를 보냈습니다. 상대 매장에 알림이 전송됐어요', 'success'); onChanged(); }
     catch (e) { toast.show(e instanceof Error ? e.message : '초대 실패', 'error'); }
     finally { setBusy(false); }
   };
@@ -268,7 +268,7 @@ function LeagueCard({ league, isOwner, members, venueId, canConfigure, onChanged
     if (!pName.trim() || !p) return toast.show('이름과 포인트를 입력하세요', 'error');
     setBusy(true);
     try { await addLeagueEntry(league.id, venueId, { name: pName, points: p }); setPName(''); setPPts(''); toast.show('리그 포인트를 기록했습니다', 'success'); reloadEntries(); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '기록 실패 — 멤버 수락 상태와 장부 권한을 확인하세요', 'error'); }
+    catch (e) { toast.show(e instanceof Error ? e.message : '기록 실패. 멤버 수락 상태와 장부 권한을 확인하세요', 'error'); }
     finally { setBusy(false); }
   };
 
@@ -316,7 +316,7 @@ function LeagueCard({ league, isOwner, members, venueId, canConfigure, onChanged
       <div className="rounded-input border border-accent-400/25 bg-accent-300/[0.04] p-2.5">
         <p className="mb-1.5 text-2xs font-bold text-accent-300">통합 순위 (TOP 10 · 시즌 {league.seasonStart}~)</p>
         {standings.length === 0 ? (
-          <p className="py-2 text-center text-2xs text-ink-muted">아직 기록이 없습니다 — 아래에서 포인트를 입력하면 모든 멤버 매장 합산 순위가 만들어져요.</p>
+          <p className="py-2 text-center text-2xs text-ink-muted">아직 기록이 없습니다. 아래에서 포인트를 입력하면 모든 멤버 매장 합산 순위가 만들어져요.</p>
         ) : (
           <ol className="grid grid-cols-1 gap-x-4 gap-y-0.5 sm:grid-cols-2">
             {standings.slice(0, 10).map((s, i) => (

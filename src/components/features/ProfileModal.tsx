@@ -506,7 +506,7 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
                   <input type="text" value={recvId} onChange={(e) => setRecvId(e.target.value)} maxLength={20} placeholder="받을 아이디 (2~20자, 중복 불가)" className="input min-w-0 flex-1" />
                   <button type="button" onClick={saveRecvId} disabled={recvBusy} className="btn-primary shrink-0 px-4 text-sm disabled:opacity-60">{recvBusy ? '설정 중…' : '설정'}</button>
                 </div>
-                <p className="mt-1 text-2xs leading-relaxed text-ink-muted">{idOn ? '매장이용권을 받을 때 쓰는 고유 아이디입니다.' : '매장 순위·전적이 이 아이디로 연결됩니다.'} <b className="text-amber-400">최초 1회만 설정</b>되며, 이후 변경은 운영자를 통해서만 가능합니다.</p>
+                <p className="mt-1 text-2xs leading-relaxed text-ink-muted">{idOn ? '매장이용권을 받을 때 쓰는 고유 아이디입니다.' : '매장 순위·전적이 이 아이디로 연결됩니다.'} <b className="text-amber-400">최초 1회만 설정</b>되며, 이후에는 운영자만 바꿀 수 있습니다.</p>
               </>
             )}
           </div>
@@ -1019,7 +1019,7 @@ function WithdrawAccountSection() {
           )}
           <label className="block">
             <span className="mb-1 block text-2xs font-semibold text-ink-secondary">
-              {social ? "본인 확인 — '영구 삭제' 를 입력하세요 (카카오 계정은 비밀번호가 없어요)" : '본인 확인 — 현재 비밀번호를 입력하세요'}
+              {social ? "본인 확인 · '영구 삭제' 를 입력하세요 (카카오 계정은 비밀번호가 없어요)" : '본인 확인. 현재 비밀번호를 입력하세요'}
             </span>
             <input type={social ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)}
               autoComplete={social ? 'off' : 'current-password'} placeholder={social ? '영구 삭제' : '현재 비밀번호'}
@@ -1109,7 +1109,7 @@ function PasswordStrength({ password }: { password: string }) {
           <div
             key={i}
             className={[
-              'flex-1 h-1 rounded-full transition-[width,background-color] duration-300',
+              'flex-1 h-1 rounded-full transition-[width,background-color] duration-[var(--dur-panel)]',
               i <= score ? level.bar : 'bg-surface-float',
             ].join(' ')}
           />

@@ -19,7 +19,7 @@ export default function PotOddsCalc() {
       {/* CalcCard 의 desc 프롭과 같은 위치·같은 클래스로 직접 렌더한다 —
           '에쿼티'에 용어 툴팁을 붙이려면 문자열 프롭이 아니라 JSX 여야 하기 때문(카피·레이아웃 무변경). */}
       <p className="text-2xs text-ink-muted">
-        {'팟·콜 금액으로 콜에 필요한 승률('}<Term name="에퀴티">에쿼티</Term>{') — 콜 오즈를 계산합니다.'}
+        {'팟·콜 금액으로 콜에 필요한 승률('}<Term name="에퀴티">에쿼티</Term>{'). 콜 오즈를 계산합니다.'}
       </p>
       <div className="grid grid-cols-2 gap-2">
         <Field label="현재 팟"><NumIn value={pot} onChange={setPot} placeholder="100000" /></Field>

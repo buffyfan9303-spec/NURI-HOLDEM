@@ -169,9 +169,9 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
     { id: 'checkin', title: '출석 체크인', data: () => QRCode.toDataURL(checkinUrl(venueId), { width: 1024, margin: 2 }), desc: 'QR 스캔 → 오늘 출석 도장(매장 점수 적립 · 출석왕 집계)' },
     { id: 'signup', title: '회원가입', data: () => QRCode.toDataURL('https://nuriholdem.com/?signup=1', { width: 1024, margin: 2 }), desc: 'QR 스캔 → 바로 회원가입' },
     { id: 'buyin', title: '바인(참가) 요청', data: () => QRCode.toDataURL(buyinRequestUrl(venueId), { width: 1024, margin: 2 }), desc: '손님 스캔 → 참가 요청(게임 선택) → 운영자가 장부에서 원탭 승인' },
-    { id: 'buyinG1', title: '바인 요청 · 메인', data: () => QRCode.toDataURL(buyinRequestUrl(venueId, 1), { width: 1024, margin: 2 }), desc: '메인 테이블 비치 — 스캔 시 메인 게임 바로 요청' },
-    { id: 'buyinG2', title: '바인 요청 · 사이드1', data: () => QRCode.toDataURL(buyinRequestUrl(venueId, 2), { width: 1024, margin: 2 }), desc: '사이드1 테이블 비치 — 스캔 시 사이드1 바로 요청' },
-    { id: 'buyinG3', title: '바인 요청 · 사이드2', data: () => QRCode.toDataURL(buyinRequestUrl(venueId, 3), { width: 1024, margin: 2 }), desc: '사이드2 테이블 비치 — 스캔 시 사이드2 바로 요청' },
+    { id: 'buyinG1', title: '바인 요청 · 메인', data: () => QRCode.toDataURL(buyinRequestUrl(venueId, 1), { width: 1024, margin: 2 }), desc: '메인 테이블 비치 · 스캔 시 메인 게임 바로 요청' },
+    { id: 'buyinG2', title: '바인 요청 · 사이드1', data: () => QRCode.toDataURL(buyinRequestUrl(venueId, 2), { width: 1024, margin: 2 }), desc: '사이드1 테이블 비치 · 스캔 시 사이드1 바로 요청' },
+    { id: 'buyinG3', title: '바인 요청 · 사이드2', data: () => QRCode.toDataURL(buyinRequestUrl(venueId, 3), { width: 1024, margin: 2 }), desc: '사이드2 테이블 비치 · 스캔 시 사이드2 바로 요청' },
   ] as const;
   const [printSel, setPrintSel] = useState<Record<string, boolean>>({ voucher: true, checkin: false, signup: false, buyin: false, buyinG1: false, buyinG2: false, buyinG3: false });
   const togglePrint = (id: string) => setPrintSel((m) => ({ ...m, [id]: !m[id] }));
@@ -252,8 +252,8 @@ ${cards}
   // 배치 결과를 사장님 말로 옮긴다 — 부분 성공(10장 중 3장만 처리)이 실제로 흔하다.
   const reportBulk = (verb: string, r: BulkResult) => {
     if (r.failed === 0) { toast.show(`${r.ok}장을 ${verb}했습니다`, 'success'); return; }
-    if (r.ok === 0) { toast.show(`${verb}하지 못했습니다 — ${r.reasons[0] ?? '알 수 없는 오류'}`, 'error'); return; }
-    toast.show(`${r.ok}장 ${verb} · ${r.failed}장 실패 — ${r.reasons[0] ?? ''}`, 'error');
+    if (r.ok === 0) { toast.show(`${verb}하지 못했습니다. ${r.reasons[0] ?? '알 수 없는 오류'}`, 'error'); return; }
+    toast.show(`${r.ok}장 ${verb} · ${r.failed}장 실패 · ${r.reasons[0] ?? ''}`, 'error');
   };
 
   // 회수 — 오너 지시(2026-08-28) 여정의 마지막 칸인데 화면에 아예 없었다.
@@ -273,7 +273,7 @@ ${cards}
   // 삭제는 '미사용분'만 넘긴다 — 사용 완료분은 서버가 거절하고(손님 내역·장부 연동 보존),
   // 예전엔 used 까지 함께 넘겨 사용 기록이 통째로 증발했다(2026-08-29 실측).
   const deleteGroup = async (g: { name: string; ids: string[]; usedCount: number }) => {
-    if (g.ids.length === 0) { toast.show('삭제할 미사용 이용권이 없습니다 — 사용 완료분은 내역으로 보존됩니다', 'info'); return; }
+    if (g.ids.length === 0) { toast.show('삭제할 미사용 이용권이 없습니다. 사용 완료분은 내역으로 보존됩니다', 'info'); return; }
     if (!window.confirm(`${g.name}의 미사용 이용권 ${g.ids.length}장을 완전히 삭제할까요? 되돌릴 수 없습니다.`
       + (g.usedCount > 0 ? `\n\n사용 완료 ${g.usedCount}장은 이용 내역이라 삭제되지 않습니다.` : ''))) return;
     setBusy(true);
@@ -307,7 +307,7 @@ ${cards}
           </button>
         </div>
         {feed.length === 0 ? (
-          <p className="py-3 text-center text-2xs text-ink-muted">아직 내역이 없습니다 — 발급·사용되면 즉시 표시됩니다.</p>
+          <p className="py-3 text-center text-2xs text-ink-muted">아직 내역이 없습니다. 발급·사용되면 즉시 표시됩니다.</p>
         ) : (
           <ul className="max-h-56 space-y-1 overflow-y-auto">
             {feed.map((e, i) => (
@@ -356,7 +356,7 @@ ${cards}
               {venueName && (
                 <p className="flex items-start gap-1.5 rounded-input bg-surface-high px-2 py-1.5 text-2xs leading-relaxed text-ink-muted">
                   <Icon name="eye" size={12} className="mt-0.5 shrink-0 text-accent-300" />
-                  <span className="min-w-0 break-keep">손님 지갑에는 <b className="text-ink-primary">{voucherGroupLabel(venueName)}</b> 묶음 안에 <b className="text-ink-primary">{stripVenuePrefix(title, venueName)}</b> 로 보입니다 — 이름에 매장명을 다시 넣지 않아도 됩니다.</span>
+                  <span className="min-w-0 break-keep">손님 지갑에는 <b className="text-ink-primary">{voucherGroupLabel(venueName)}</b> 묶음 안에 <b className="text-ink-primary">{stripVenuePrefix(title, venueName)}</b> 로 보입니다. 이름에 매장명을 다시 넣지 않아도 됩니다.</span>
                 </p>
               )}
               {/* 유효기간(선택) — 비우면 무기한. 만료 이용권은 사용 RPC 가 서버에서 거부하고
@@ -405,7 +405,7 @@ ${cards}
                         else if (e.key === 'Escape') { setCands([]); setActiveIdx(-1); }
                       }}
                       inputMode={recvMode === 'phone' ? 'numeric' : 'text'}
-                      placeholder={recvMode === 'phone' ? '전화번호 입력 — 자동완성 (↑/↓·Enter)' : '이름·아이디(닉네임) 입력 — 자동완성 (↑/↓·Enter)'} className="input min-w-0 flex-1 text-sm" />
+                      placeholder={recvMode === 'phone' ? '전화번호 입력 · 자동완성 (↑/↓·Enter)' : '이름·아이디(닉네임) 입력 · 자동완성 (↑/↓·Enter)'} className="input min-w-0 flex-1 text-sm" />
                     <button type="button" onClick={() => { setRecvMode('none'); setCands([]); setIdInput(''); setActiveIdx(-1); }} className="shrink-0 rounded-input border border-border-default bg-surface-high px-3 text-2xs font-bold text-ink-muted hover:text-ink-secondary">취소</button>
                   </div>
                   {cands.length > 0 ? (
@@ -448,7 +448,7 @@ ${cards}
           )}
         </div>
       ) : (
-        <p className="rounded-input border border-border-subtle bg-surface-low p-2.5 text-2xs text-ink-muted">배포·회수·삭제는 <b className="text-ink-secondary">업주</b> 전용 — 직원은 열람·사용 처리만.</p>
+        <p className="rounded-input border border-border-subtle bg-surface-low p-2.5 text-2xs text-ink-muted">배포·회수·삭제는 <b className="text-ink-secondary">업주</b> 전용. 직원은 열람·사용 처리만.</p>
       )}
 
       {/* 2) QR 코드 — 접기 */}
@@ -464,22 +464,22 @@ ${cards}
                 <div className="flex flex-col items-center gap-1">
                   <p className="text-center text-2xs font-bold text-ink-secondary">이용권 사용 QR</p>
                   <img src={qr} alt="매장 이용권 QR" width={130} height={130} className="rounded bg-white p-1.5" />
-                  <p className="text-center text-2xs leading-tight text-ink-muted">손님이 스캔해 사용 (고정)</p>
+                  <p className="text-center text-2xs leading-snug text-ink-muted">손님이 스캔해 사용 (고정)</p>
                 </div>
                 <div className="flex flex-col items-center gap-1">
                   <p className="text-center text-2xs font-bold text-ink-secondary">출석 체크인 QR</p>
                   {checkinQr && <img src={checkinQr} alt="출석 체크인 QR" width={130} height={130} className="rounded bg-white p-1.5" />}
-                  <p className="text-center text-2xs leading-tight text-ink-muted">손님 스캔 → 출석 도장 · 출석왕 집계 (고정)</p>
+                  <p className="text-center text-2xs leading-snug text-ink-muted">손님 스캔 → 출석 도장 · 출석왕 집계 (고정)</p>
                 </div>
                 <div className="flex flex-col items-center gap-1">
                   <p className="text-center text-2xs font-bold text-ink-secondary">회원가입 QR</p>
                   {signupQr && <img src={signupQr} alt="회원가입 QR" width={130} height={130} className="rounded bg-white p-1.5" />}
-                  <p className="text-center text-2xs leading-tight text-ink-muted">스캔 시 회원가입 페이지로 이동</p>
+                  <p className="text-center text-2xs leading-snug text-ink-muted">스캔 시 회원가입 페이지로 이동</p>
                 </div>
                 <div className="flex flex-col items-center gap-1">
                   <p className="text-center text-2xs font-bold text-ink-secondary">바인 요청 QR</p>
                   {buyinQr && <img src={buyinQr} alt="바인 요청 QR" width={130} height={130} className="rounded bg-white p-1.5" />}
-                  <p className="text-center text-2xs leading-tight text-ink-muted">손님 스캔 → 참가 요청 → 장부에서 승인</p>
+                  <p className="text-center text-2xs leading-snug text-ink-muted">손님 스캔 → 참가 요청 → 장부에서 승인</p>
                 </div>
               </div>
               {/* 인쇄할 QR 선택 — 종이가 작아 한꺼번에 안 됨. 1~3개 선택 */}
@@ -534,7 +534,7 @@ ${cards}
                 <span className="font-bold tabular-nums text-accent-300">{Math.round((stats.usedCount / (stats.activeCount + stats.usedCount)) * 100)}%</span>
               </div>
               <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-high">
-                <div className="h-full rounded-full bg-gradient-to-r from-accent-400 to-accent-300 transition-[width] duration-500"
+                <div className="h-full rounded-full bg-gradient-to-r from-accent-400 to-accent-300 transition-[width] duration-[var(--dur-panel)]"
                   style={{ width: `${Math.round((stats.usedCount / (stats.activeCount + stats.usedCount)) * 100)}%` }} />
               </div>
             </div>

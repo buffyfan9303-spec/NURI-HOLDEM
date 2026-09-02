@@ -47,7 +47,7 @@ export default function PreflopTrainer() {
 
   return (
     // 제목은 전체화면 헤더가 이미 표시 — 카드 안은 설명만(2중 노출 제거)
-    <CalcCard desc="가이드·Nash 차트와 같은 데이터로 채점 — 경계 핸드 집중 출제">
+    <CalcCard desc="가이드·Nash 차트와 같은 데이터로 채점 · 경계 핸드 집중 출제">
       {/* 모드 + 점수 */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="inline-flex rounded-input border border-border-default bg-surface-high p-0.5">
@@ -82,7 +82,7 @@ export default function PreflopTrainer() {
         <div className="h-1.5 overflow-hidden rounded-full bg-surface-high">
           <div className={['h-full rounded-full', prog.goalMet ? 'bg-emerald-400' : 'bg-accent-300'].join(' ')} style={{ width: `${prog.goal ? Math.min(100, Math.round((prog.today / prog.goal) * 100)) : 0}%` }} />
         </div>
-        {prog.goalMet && <p className="inline-flex items-center gap-1 text-2xs text-emerald-300"><Icon name="check-circle" size={12} className="shrink-0" />오늘 목표 달성 — 스트릭 <Icon name="flame" size={11} className="shrink-0" />{prog.streak}일 유지 중</p>}
+        {prog.goalMet && <p className="inline-flex items-center gap-1 text-2xs text-emerald-300"><Icon name="check-circle" size={12} className="shrink-0" />오늘 목표 달성 · 스트릭 <Icon name="flame" size={11} className="shrink-0" />{prog.streak}일 유지 중</p>}
       </div>
 
       {/* 문제 · 피드백 — '오늘의 드릴'과 같은 공용 카드 */}
@@ -102,7 +102,7 @@ export default function PreflopTrainer() {
       <div className="flex items-center justify-between">
         <button type="button" onClick={reset} className="px-1.5 py-1.5 -my-1.5 text-2xs text-ink-muted hover:text-ink-secondary transition-colors">기록 초기화</button>
         <p className="text-2xs text-ink-muted">
-          {stats.wrong.length > 0 ? `오답 노트 ${stats.wrong.length}개 — 다음 문제에서 25% 확률로 다시 나옵니다` : '기록은 이 기기에 저장됩니다'}
+          {stats.wrong.length > 0 ? `오답 노트 ${stats.wrong.length}개. 다음 문제에서 25% 확률로 다시 나옵니다` : '기록은 이 기기에 저장됩니다'}
         </p>
       </div>
     </CalcCard>

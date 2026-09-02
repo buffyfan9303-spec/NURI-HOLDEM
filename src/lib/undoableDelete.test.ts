@@ -13,7 +13,7 @@ import { createUndoQueue } from './undoableDelete';
 beforeEach(() => { vi.useFakeTimers(); });
 afterEach(() => { vi.useRealTimers(); });
 
-describe('유예 — 시간이 지나야 실제로 나간다', () => {
+describe('유예. 시간이 지나야 실제로 나간다', () => {
   it('예약 직후에는 아직 서버로 안 나간다', () => {
     const run = vi.fn();
     createUndoQueue(5000).schedule('a', run);
@@ -31,7 +31,7 @@ describe('유예 — 시간이 지나야 실제로 나간다', () => {
   });
 });
 
-describe('되돌리기 — 반환값이 곧 사용자에게 할 말이다', () => {
+describe('되돌리기. 반환값이 곧 사용자에게 할 말이다', () => {
   it('🔴 유예 중 취소하면 서버로 아무것도 안 나간다', () => {
     const run = vi.fn();
     const q = createUndoQueue(5000);
@@ -41,7 +41,7 @@ describe('되돌리기 — 반환값이 곧 사용자에게 할 말이다', () =
     expect(run).not.toHaveBeenCalled();
   });
 
-  it('🔴 이미 나간 뒤의 취소는 false — 화면이 "되돌렸다"고 거짓말하면 안 된다', () => {
+  it('🔴 이미 나간 뒤의 취소는 false. 화면이 "되돌렸다"고 거짓말하면 안 된다', () => {
     const run = vi.fn();
     const q = createUndoQueue(5000);
     q.schedule('a', run);
@@ -80,7 +80,7 @@ describe('같은 대상을 다시 지우면 타이머가 겹치지 않는다', (
   });
 });
 
-describe('flushAll — 화면을 벗어날 때 "지웠는데 안 지워짐"을 막는다', () => {
+describe('flushAll. 화면을 벗어날 때 "지웠는데 안 지워짐"을 막는다', () => {
   it('대기 중인 것들을 즉시 전부 내보낸다', () => {
     const a = vi.fn(); const b = vi.fn();
     const q = createUndoQueue(5000);

@@ -20,7 +20,7 @@ const sched = (over: Record<string, unknown> = {}): Schedule => ({
   ...over,
 } as unknown as Schedule);
 
-describe('msToRegClose — 실효 index/remaining 기준 마감까지 남은 ms', () => {
+describe('msToRegClose · 실효 index/remaining 기준 마감까지 남은 ms', () => {
   it('브레이크를 포함해 마감 레벨 시작까지 누적한다 (L1 잔여5분 + L2 20 + 브레이크 10 + L3 20 = 55분)', () => {
     expect(msToRegClose(clock(), 0, 5 * 60_000)).toBe(55 * 60_000);
   });
@@ -35,7 +35,7 @@ describe('msToRegClose — 실효 index/remaining 기준 마감까지 남은 ms'
   });
 });
 
-describe('matchClockSchedule — 같은 매장·같은 날짜, 여럿이면 제목 일치 우선', () => {
+describe('matchClockSchedule · 같은 매장·같은 날짜, 여럿이면 제목 일치 우선', () => {
   it('단일 매칭', () => {
     expect(matchClockSchedule(clock(), [sched()])?.id).toBe('s1');
   });
@@ -50,7 +50,7 @@ describe('matchClockSchedule — 같은 매장·같은 날짜, 여럿이면 제�
   });
 });
 
-describe('buildRegInfoMap — scheduleId → 레지 실측 상태', () => {
+describe('buildRegInfoMap · scheduleId → 레지 실측 상태', () => {
   it('일시정지 클락에서 msLeft·running 이 결정적으로 매핑된다', () => {
     const map = buildRegInfoMap([clock()], [sched()], 0);
     expect(map.get('s1')).toEqual({ msLeft: 55 * 60_000, running: false });

@@ -156,7 +156,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
             <h2 className="text-fluid-lg font-bold text-ink-primary text-grad-violet">진행 중 게임 {games ? <span className="text-accent-300 text-grad-keep">{games.length}</span> : null}</h2>
-            <p className="mt-0.5 t-desc text-ink-muted">지금 클락이 돌아가는 대회 · 블라인드와 레지마감을 한눈에 — 탭하면 상세</p>
+            <p className="mt-0.5 t-desc text-ink-muted">지금 클락이 돌아가는 대회 · 블라인드와 레지마감을 한눈에 · 탭하면 상세</p>
           </div>
           <div className="flex shrink-0 items-center gap-1">
             {games && games.length > 1 && (
@@ -270,7 +270,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
         </div>
         {upcoming.length > 0 && (
           <div className="reveal space-y-1.5 pt-1">
-            <p className="flex items-center gap-1 px-1 text-2xs font-bold text-ink-muted"><Icon name="clock" size={12} className="shrink-0" />오늘 곧 시작 <span className="text-accent-300">{upcoming.length}</span> <span className="font-normal">— 아직 클락 전</span></p>
+            <p className="flex items-center gap-1 px-1 text-2xs font-bold text-ink-muted"><Icon name="clock" size={12} className="shrink-0" />오늘 곧 시작 <span className="text-accent-300">{upcoming.length}</span> <span className="font-normal">아직 클락 전</span></p>
             <ul className="grid grid-cols-1 gap-1.5">
               {upcoming.map((s) => (
                 <li key={s.id}>
@@ -318,6 +318,9 @@ function LiveCard({ g, name, sched, region, fav = false, active = true, onPoster
   const remain = Math.max(0, eff.remainingMs);
   const mm = String(Math.floor(remain / 60_000)).padStart(2, '0');
   const ss = String(Math.floor((remain % 60_000) / 1000)).padStart(2, '0');
+  // 현재 레벨 진행률(0~100) — 아우라 데이터 링. 레벨 길이를 모르면(0) 링은 비워 둔다.
+  const levelMs = (lv?.minutes ?? 0) * 60_000;
+  const progress = levelMs > 0 ? Math.min(100, Math.max(0, 100 - (remain / levelMs) * 100)) : 0;
 
   // REG 배지 — APIS 는 '마감 레벨'을 말하고 우리는 '남은 분'을 말해 왔다. 둘 다 산다:
   //   1시간 밖이면 구조적 사실(REG ~ Lv8), 1시간 안이면 행동 가능한 사실(REG 45분)로 자동 전환.
@@ -361,7 +364,8 @@ function LiveCard({ g, name, sched, region, fav = false, active = true, onPoster
               <p className="text-xl font-extrabold leading-none tabular-nums text-ink-primary">
                 <span className="sr-only">생존 </span>{alive}<span aria-hidden>/</span><span className="sr-only">, 엔트리 </span>{entries}
               </p>
-              <p className="mt-1.5 text-2xs font-bold leading-none tracking-wide text-ink-muted">PLAYERS</p>
+              {/* 아우라 마이크로 라벨(실제 데이터 라벨에만) — 시안 'RECOVERY SCORE' 문법: 틸·대문자·자간. 라틴 라벨이라 자간이 산다 */}
+              <p className="t-micro mt-1.5 leading-none">PLAYERS</p>
               {/* 평균 스택 — 기존 카드의 값. 같은 '필드 통계'라 이 열에 붙이면 폭·높이 추가 비용이 0이다 */}
               {ls && ls.avgStack > 0 && <p className="mt-1 max-w-full truncate text-2xs leading-none tabular-nums text-ink-muted">평균 {stackShort(ls.avgStack)}</p>}
             </div>
@@ -385,8 +389,17 @@ function LiveCard({ g, name, sched, region, fav = false, active = true, onPoster
               <span className="min-w-0 truncate text-xs font-semibold leading-none text-ink-secondary">{g.title || g.config?.title || '토너먼트'}</span>
               {/* 미니 클락의 심장(오너 2026-08-28) — 현재 레벨 잔여. 3행(레벨·블라인드·REG)은 오너 지정 문법이라
                   건드리지 않고, 폭 여유가 가장 큰 게임명 줄 끝에 둔다. 라벨 없이 읽히는 게 클락 관습이라 aria 로만 보강. */}
-              <span className={`ml-auto shrink-0 text-2xs font-bold leading-none tabular-nums ${g.running ? 'text-accent-200' : 'text-amber-400'}`}
-                aria-label={`${isBreak ? '재개' : '레벨 종료'}까지 ${mm}분 ${ss}초`}>{mm}:{ss}</span>
+              <span className="ml-auto flex shrink-0 items-center gap-1" aria-label={`${isBreak ? '재개' : '레벨 종료'}까지 ${mm}분 ${ss}초`}>
+                {/* 레벨 진행 링 — 아우라 데이터 링(시안 'RECOVERY SCORE' 문법). 1초 틱마다 stroke-dashoffset 만 바뀐다:
+                    14px SVG 페인트라 값싸고, 정속 진행이라 linear(헌법 §1 '일정 속도 = linear'). pathLength=100 → 오프셋 = 남은 % */}
+                <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden className="shrink-0 -rotate-90">
+                  <circle cx="8" cy="8" r="6" fill="none" strokeWidth="2" className="stroke-border-default" />
+                  <circle cx="8" cy="8" r="6" fill="none" strokeWidth="2" strokeLinecap="round" pathLength={100}
+                    strokeDasharray={100} strokeDashoffset={100 - progress}
+                    className={g.running ? 'stroke-aura-300 ring-glow' : 'stroke-amber-400'} style={{ transition: 'stroke-dashoffset 1s linear' }} />
+                </svg>
+                <span className={`text-2xs font-bold leading-none tabular-nums ${g.running ? 'text-accent-200' : 'text-amber-400'}`}>{mm}:{ss}</span>
+              </span>
             </p>
             <p className="flex min-w-0 items-center gap-1 overflow-hidden leading-none">
               {isBreak ? (
@@ -419,7 +432,7 @@ function LiveCard({ g, name, sched, region, fav = false, active = true, onPoster
               {startTime && <p className="max-w-full truncate text-2xs leading-none tabular-nums text-ink-muted">시작 {startTime}</p>}
               {buyIn > 0 && (
                 <>
-                  <p className="text-2xs font-bold leading-none tracking-wide text-ink-muted">BUY-IN</p>
+                  <p className="t-micro leading-none">BUY-IN</p>
                   <p className="max-w-full truncate text-base font-extrabold leading-none tabular-nums text-ink-primary">{wonShort(buyIn)}</p>
                 </>
               )}

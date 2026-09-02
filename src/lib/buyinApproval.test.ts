@@ -10,7 +10,7 @@ import { planBuyinApprovals } from './buyinApproval';
 const req = (id: string, requestedGameSeq: number | null) => ({ id, requestedGameSeq });
 
 describe('요청 게임 우선', () => {
-  it('각자 원한 게임으로 나뉜다 — 현재 게임에 몰아넣지 않는다', () => {
+  it('각자 원한 게임으로 나뉜다. 현재 게임에 몰아넣지 않는다', () => {
     const p = planBuyinApprovals([req('a', 1), req('b', 2), req('c', 1)], 2, [1, 2]);
     expect(p.groups).toEqual([
       { gameSeq: 1, items: [req('a', 1), req('c', 1)] },

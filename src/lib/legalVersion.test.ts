@@ -33,7 +33,7 @@ describe('약관 버전·시행일 (LEGAL-3)', () => {
     expect(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`).toBe(LEGAL_EFFECTIVE_ISO);
   });
 
-  it('재동의 3-state — 시행일 경계에서 notice → required 로 바뀐다', () => {
+  it('재동의 3-state. 시행일 경계에서 notice → required 로 바뀐다', () => {
     // 구판(또는 미상) 동의자
     expect(legalConsentStage(null, at('2026-08-30'))).toBe('notice');
     expect(legalConsentStage(1,    at('2026-09-28'))).toBe('notice');
@@ -98,8 +98,8 @@ describe('약관 버전·시행일 (LEGAL-3)', () => {
     const gate = read('src/components/features/ConsentGateModal.tsx');
     const m = gate.match(/const allRequired = ([^;]+);/);
     expect(m, 'allRequired 정의를 찾지 못했다').toBeTruthy();
-    expect(m![1], '선택 동의(마케팅)가 필수 조건에 들어갔다 — 위법').not.toMatch(/marketing/i);
-    expect(m![1], '선택 동의(랭킹 공개)가 필수 조건에 들어갔다 — 위법').not.toMatch(/pubRank/i);
+    expect(m![1], '선택 동의(마케팅)가 필수 조건에 들어갔다. 위법').not.toMatch(/marketing/i);
+    expect(m![1], '선택 동의(랭킹 공개)가 필수 조건에 들어갔다. 위법').not.toMatch(/pubRank/i);
     // 서버도 같은 규칙이어야 한다 — 마케팅 false 를 거절하면 클라만 지켜도 소용없다.
     const sql = read('supabase/migrations/20260830m_legal_consent_versioning.sql');
     const guard = sql.match(/if p_terms is not true[^;]*;/);

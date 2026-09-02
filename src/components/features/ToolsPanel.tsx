@@ -44,7 +44,7 @@ const TOOLS: { key: ToolKey; cat: ToolCat; name: string; desc: string; icon: Rea
     icon: <><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M8 2v4M16 2v4M3 10h18" /><path d="M9 15l2 2 4-4" /></> },
   { key: 'range', cat: 'learn', name: '스타팅핸드 가이드', desc: '오픈·수비·3벳 표준 레인지',
     icon: <><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="9" y1="3" x2="9" y2="21" /></> },
-  { key: 'pushfold', cat: 'learn', name: '푸시 · 폴드 차트', desc: '자체 Nash — 셔브·콜 레인지',
+  { key: 'pushfold', cat: 'learn', name: '푸시 · 폴드 차트', desc: '자체 Nash · 셔브·콜 레인지',
     icon: <><path d="M12 21V4" /><path d="M5 11l7-7 7 7" /></> },
   { key: 'trainer', cat: 'learn', name: '프리플랍 트레이너', desc: '오픈·셔브 맞히기, 오답 노트',
     icon: <><path d="M12 2v4M12 18v4M2 12h4M18 12h4" /><circle cx="12" cy="12" r="4" /></> },
@@ -52,10 +52,10 @@ const TOOLS: { key: ToolKey; cat: ToolCat; name: string; desc: string; icon: Rea
     icon: <><rect x="3" y="6" width="5" height="7" rx="1" /><rect x="9.5" y="6" width="5" height="7" rx="1" /><rect x="16" y="6" width="5" height="7" rx="1" /><path d="M7 17h10" /><path d="M9 21h6" /></> },
   { key: 'aggro', cat: 'learn', name: '어그레션 차트', desc: '포지션별 권장 빈도',
     icon: <><path d="M3 17l6-6 4 4 8-8" /><path d="M14 7h7v7" /></> },
-  { key: 'glossary', cat: 'learn', name: '홀덤 용어사전', desc: '용어 74개 — 한글 설명·검색',
+  { key: 'glossary', cat: 'learn', name: '홀덤 용어사전', desc: '용어 74개 · 한글 설명·검색',
     icon: <><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" /><path d="M9 7h6M9 11h4" /></> },
   // ── 분석 — 핸드·레인지 에퀴티 ──
-  { key: 'replay', cat: 'analyze', name: '핸드 리플레이어', desc: '그 핸드 복기 — 승률 추이·아웃',
+  { key: 'replay', cat: 'analyze', name: '핸드 리플레이어', desc: '그 핸드 복기 · 승률 추이·아웃',
     icon: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M10 9l5 3-5 3V9Z" /></> },
   { key: 'gto', cat: 'analyze', name: 'GTO 핸드 분석', desc: '프리/포스트플랍 승률·전략',
     icon: <><rect x="3" y="4" width="7" height="16" rx="1.5" /><rect x="14" y="4" width="7" height="16" rx="1.5" /></> },
@@ -331,7 +331,7 @@ export default function ToolsPanel() {
           card-elev: 아래 ToolCard 와 같은 카드 문법으로 통일(surface-low 라 ink-muted 5.01:1 유지).
           ⚠ button 안에는 phrasing content 만 — 자식은 전부 span 이다(div 중첩 금지). */}
       <button type="button" onClick={() => open('drill')}
-        aria-label={`오늘의 드릴 — ${drillTotal}문제 중 ${drillDone}문제 완료. 열기`}
+        aria-label={`오늘의 드릴 · ${drillTotal}문제 중 ${drillDone}문제 완료. 열기`}
         className="card-elev block w-full space-y-2 rounded-card border border-border-default bg-surface-low px-3.5 py-3 text-left transition-colors hover:border-accent-400/40 hover:bg-surface-high">
         <span className="flex items-center justify-between gap-2">
           <span className="inline-flex min-w-0 items-center gap-1.5">
@@ -379,7 +379,7 @@ export default function ToolsPanel() {
           학습 레인의 '스타팅핸드 가이드' 카드와 #tool=range 딥링크는 그대로 살아 있다(기능 소실 0). */}
       <section className="card-elev space-y-2 rounded-card border border-border-default bg-surface-low px-3.5 py-3">
         <button type="button" onClick={() => open('range')}
-          aria-label={`프리플랍 레인지 차트 — 스팟 ${RANGE_SCENARIOS.length}개. 열기`}
+          aria-label={`프리플랍 레인지 차트 · 스팟 ${RANGE_SCENARIOS.length}개. 열기`}
           className="flex w-full items-center gap-2.5 text-left">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-input bg-accent-300/15 text-accent-300">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -393,7 +393,7 @@ export default function ToolsPanel() {
             </span>
             {/* truncate 금지 — 375px 에서 "오픈 · 블라인드 수비 · 3…" 로 잘려 무슨 표인지 사라졌다.
                 두 줄까지 허용(카드 높이 예약이 바뀌지 않게 line-clamp 로 상한만 둔다). */}
-            <span className="mt-0.5 block text-2xs leading-snug text-ink-muted line-clamp-2">오픈 · 블라인드 수비 · 3벳 · vs 3벳 — 포지션으로 좁혀 보는 13×13</span>
+            <span className="mt-0.5 block text-2xs leading-snug text-ink-muted line-clamp-2">오픈 · 블라인드 수비 · 3벳 · vs 3벳 · 포지션으로 좁혀 보는 13×13</span>
           </span>
           <span className="shrink-0 text-2xs font-bold text-accent-200">열기 →</span>
         </button>
@@ -415,7 +415,7 @@ export default function ToolsPanel() {
       {/* 도구 검색 */}
       <div className="relative">
         <Icon name="search" size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" aria-hidden />
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="도구 검색 — 이름·기능"
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="도구 검색 · 이름·기능"
           className="input w-full pl-9 text-sm" aria-label="도구 검색" />
       </div>
 

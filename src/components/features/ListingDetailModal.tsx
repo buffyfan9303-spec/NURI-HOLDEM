@@ -75,7 +75,7 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
     try {
       await updateListingStatus(listing.id, next);
       onStatusChanged?.(listing.id, next);
-      toast.show(next === 'sold' ? '거래완료로 변경 — 목록에서 판매중 표시가 내려갑니다' : next === 'reserved' ? '예약중으로 변경했습니다' : '판매중으로 변경했습니다', 'success');
+      toast.show(next === 'sold' ? '거래완료로 변경. 목록에서 판매중 표시가 내려갑니다' : next === 'reserved' ? '예약중으로 변경했습니다' : '판매중으로 변경했습니다', 'success');
     } catch (e) { toast.show(e instanceof Error ? e.message : '상태 변경 실패', 'error'); }
     finally { setStatusBusy(false); }
   };
@@ -137,7 +137,7 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
             <button type="button"
               onClick={async () => {
                 if (!confirm(`'${listing.sellerName}'님을 차단할까요?\n이 판매자의 매물·글이 보이지 않게 됩니다.`)) return;
-                try { await block(listing.sellerId, listing.sellerName); toast.show('차단했습니다 — 이 판매자의 매물이 숨겨집니다', 'info'); onClose(); }
+                try { await block(listing.sellerId, listing.sellerName); toast.show('차단했습니다. 이 판매자의 매물이 숨겨집니다', 'info'); onClose(); }
                 catch (e) { toast.show(e instanceof Error ? e.message : '차단 실패', 'error'); }
               }}
               className="text-ink-muted hover:text-danger-light transition-colors">차단</button>
@@ -158,7 +158,7 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
           <div className="space-y-1.5">
             <OptionRow ok={listing.shippingAvailable} label="택배 발송 가능" />
             <OptionRow ok={!listing.pickupOnly}       label="비대면 거래 가능" />
-            <OptionRow ok={true}                       label={`직거래 — ${listing.region}`} />
+            <OptionRow ok={true}                       label={`직거래 · ${listing.region}`} />
           </div>
         </section>
 
@@ -218,7 +218,7 @@ export default function ListingDetailModal({ listing, open, onClose, onDelete, o
       {/* ── 하단 고정 CTA ─────────────────────────────────────────── */}
       {mine ? (
         <div className="sticky bottom-0 border-t border-border-default bg-surface-mid px-4 py-3">
-          <p className="mb-1.5 text-2xs font-bold text-ink-muted">내 매물 상태 — 채팅으로 확정되면 바로 바꿔주세요</p>
+          <p className="mb-1.5 text-2xs font-bold text-ink-muted">내 매물 상태. 채팅으로 확정되면 바로 바꿔주세요</p>
           <div className="flex items-center gap-2">
             {([['on_sale', '판매중'], ['reserved', '예약중'], ['sold', '거래완료']] as const).map(([k, l]) => (
               <button key={k} type="button" disabled={statusBusy}

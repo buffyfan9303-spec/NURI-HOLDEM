@@ -390,7 +390,7 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
         <p className="text-2xs leading-relaxed text-ink-muted">
           커뮤니티 맨 위에서 <b className="text-ink-secondary">{slotSec}초 동안 한 번</b> 방송됩니다.
           {isReserve
-            ? <> 예약은 <b className="text-accent-300">고른 시각</b>에 그 자리를 미리 잡아 둡니다 — 대기열을 기다리지 않아요.</>
+            ? <> 예약은 <b className="text-accent-300">고른 시각</b>에 그 자리를 미리 잡아 둡니다. 대기열을 기다리지 않아요.</>
             : queueLen > 0
               ? <> 지금 앞에 <b className="text-ink-secondary">{queueLen}개</b>가 있어 <b className="text-accent-300">{myTurnLabel}</b> 내 차례예요.</>
               : <> 대기열이 비어 있어 <b className="text-accent-300">지금 바로</b> 방송돼요.</>}

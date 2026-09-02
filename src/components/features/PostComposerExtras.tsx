@@ -282,7 +282,7 @@ function CardPickerBody({ value, onChange }: { value: HandDraft; onChange: (next
                 {/* 1단계 — 랭크 */}
                 <p className="text-2xs text-ink-muted mb-1">
                   {pendingRank
-                    ? <>랭크 <b className="text-accent-200">{pendingRank}</b> — 아래에서 무늬를 고르세요</>
+                    ? <>랭크 <b className="text-accent-200">{pendingRank}</b>아래에서 무늬를 고르세요</>
                     : '먼저 랭크를 고르세요'}
                 </p>
                 <div className="grid gap-1 mb-1.5" style={{ gridTemplateColumns: 'repeat(13, minmax(0, 1fr))' }}>

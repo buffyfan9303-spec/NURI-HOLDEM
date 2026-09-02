@@ -79,7 +79,7 @@ beforeEach(() => {
 });
 afterEach(() => { vi.unstubAllGlobals(); });
 
-describe('backstack — 리마운트/StrictMode 순서', () => {
+describe('backstack · 리마운트/StrictMode 순서', () => {
   it('🔴 정리 직후 같은 태스크에서 다시 열면, 새로 연 레이어가 닫히지 않는다', async () => {
     const { pushLayer } = await freshBackstack();
     const closeA = vi.fn();
@@ -102,11 +102,11 @@ describe('backstack — 리마운트/StrictMode 순서', () => {
     const start = win.__index;
 
     const dispose = pushLayer(vi.fn());
-    expect(win.__index, '열 때 history 항목을 안 밀어넣었다 — 뒤로가기로 못 닫는다').toBe(start + 1);
+    expect(win.__index, '열 때 history 항목을 안 밀어넣었다. 뒤로가기로 못 닫는다').toBe(start + 1);
 
     dispose();
     await flush();
-    expect(win.__index, '닫았는데 history 가 제자리로 안 왔다 — 다음 뒤로가기가 헛돈다').toBe(start);
+    expect(win.__index, '닫았는데 history 가 제자리로 안 왔다. 다음 뒤로가기가 헛돈다').toBe(start);
   });
 
   it('뒤로가기는 최상단 한 겹만 닫는다(LIFO)', async () => {
@@ -136,7 +136,7 @@ describe('backstack — 리마운트/StrictMode 순서', () => {
 });
 
 // ── 2026-08-28 근치: '뒤로가기가 아무 일도 안 한다 / 홈으로 튄다' 의 실제 기전들 ──────
-describe('backstack — 항목·레이어 1:1 불변식', () => {
+describe('backstack · 항목·레이어 1:1 불변식', () => {
   it('🔴 화면 교체(닫으면서 같은 커밋에 다른 겹 열기)에 유령 항목이 남지 않는다', async () => {
     // 실제 경로: 포스터 상세에서 매장명을 누르면 상세를 닫고 매장 페이지를 연다(handleVenueClick).
     // 예전 구현은 상세의 항목을 그대로 남겨서, 매장 페이지를 닫은 뒤의 뒤로가기 한 번이
@@ -153,7 +153,7 @@ describe('backstack — 항목·레이어 1:1 불변식', () => {
     const disposeB = pushLayer(closeB); // 매장 페이지 열림
     await flush();
 
-    expect(win.__index, '겹을 교체했는데 history 항목이 늘었다 — 죽은 칸이 뒤로가기를 삼킨다')
+    expect(win.__index, '겹을 교체했는데 history 항목이 늘었다. 죽은 칸이 뒤로가기를 삼킨다')
       .toBe(start + 1);
     expect(closeB, '교체 직후 새 겹이 스스로 닫혔다').not.toHaveBeenCalled();
 
@@ -190,7 +190,7 @@ describe('backstack — 항목·레이어 1:1 불변식', () => {
     await flush();
 
     expect(closeInner, '뒤로가기로 최상단이 안 닫혔다').toHaveBeenCalledTimes(1);
-    expect(closeOuter, 'replaceState 가 토큰을 지워 두 겹이 한꺼번에 닫혔다 — 홈으로 튀는 그 버그')
+    expect(closeOuter, 'replaceState 가 토큰을 지워 두 겹이 한꺼번에 닫혔다. 홈으로 튀는 그 버그')
       .not.toHaveBeenCalled();
   });
 
@@ -204,11 +204,11 @@ describe('backstack — 항목·레이어 1:1 불변식', () => {
     const childClose = vi.fn();
 
     const disposeOwner = pushLayer(ownerClose, { adoptable: true });
-    expect(win.__index, '예약이 history 항목을 안 잡았다 — 로딩 중 뒤로가기가 아래 겹을 닫는다')
+    expect(win.__index, '예약이 history 항목을 안 잡았다. 로딩 중 뒤로가기가 아래 겹을 닫는다')
       .toBe(start + 1);
 
     const disposeChild = pushLayer(childClose); // 뒤늦게 마운트한 컴포넌트
-    expect(win.__index, '입양이 안 되고 항목이 하나 더 늘었다 — 뒤로가기 한 번이 죽는다')
+    expect(win.__index, '입양이 안 되고 항목이 하나 더 늘었다. 뒤로가기 한 번이 죽는다')
       .toBe(start + 1);
 
     win.history.back();
@@ -230,8 +230,8 @@ describe('backstack — 항목·레이어 1:1 불변식', () => {
 // 그러면 나중에 여러 겹이 한꺼번에 정리될 때(홈 클릭 = 쌓인 탭 겹 전부 dispose) go(-k) 의
 // k 가 실제 소유한 칸보다 커진다. 한 칸만 초과해도 앱 진입 이전으로 나가 **사이트를 이탈**한다.
 // 오차가 누적되지 않고 곧바로 이탈로 나타나므로 증상이 '갑자기 튕김' 이다.
-describe('backstack — history 칸 회계(사이트 이탈 방지)', () => {
-  it('🔴 pushState 가 throttle 로 실패한 겹은 되감지 않는다 — 앱 밖으로 나가면 안 된다', async () => {
+describe('backstack · history 칸 회계(사이트 이탈 방지)', () => {
+  it('🔴 pushState 가 throttle 로 실패한 겹은 되감지 않는다. 앱 밖으로 나가면 안 된다', async () => {
     const { pushLayer } = await freshBackstack();
 
     // 정상적으로 칸을 잡은 겹 2개(탭 이동으로 쌓인 것)
@@ -243,7 +243,7 @@ describe('backstack — history 칸 회계(사이트 이탈 방지)', () => {
     win.__throttlePush(true);
     const d3 = pushLayer(vi.fn());
     const d4 = pushLayer(vi.fn());
-    expect(win.__index, 'throttle 중인데 칸이 늘었다 — 가짜 history 가 실제와 다르다').toBe(2);
+    expect(win.__index, 'throttle 중인데 칸이 늘었다. 가짜 history 가 실제와 다르다').toBe(2);
     win.__throttlePush(false);
 
     // 홈 클릭 = 쌓인 겹을 한 커밋에 전부 정리(오너가 튕김을 본 바로 그 동작)
@@ -266,7 +266,7 @@ describe('backstack — history 칸 회계(사이트 이탈 방지)', () => {
     dispose();            // 컴포넌트 언마운트가 뒤늦게 정리를 부른다
     await flush();
 
-    expect(win.__overshoot, '이미 소비된 칸을 한 번 더 되감았다 — 한 칸씩 밀려 결국 이탈한다').toBe(0);
+    expect(win.__overshoot, '이미 소비된 칸을 한 번 더 되감았다. 한 칸씩 밀려 결국 이탈한다').toBe(0);
     expect(win.__index).toBe(0);
   });
 

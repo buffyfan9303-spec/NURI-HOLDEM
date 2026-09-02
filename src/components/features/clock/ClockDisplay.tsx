@@ -359,7 +359,7 @@ const CenterPanel = memo(function CenterPanel({ g }: { g: ClockState }) {
       <div className="mt-[2vmin] flex flex-wrap items-center justify-center gap-x-[3vmin] gap-y-[1vmin] text-[2.3vmin] text-white/55">
         <span>다음 브레이크 <b className="text-white/90 tabular-nums">{nextBreak === null ? '—' : hms(nextBreak)}</b></span>
         {/* 실물 ①의 '레벨+남은시간 복합 표기' — '언제까지'를 두 축으로(Phase 11) */}
-        <span>등록마감 <b className={`tabular-nums ${regClose === 0 ? 'text-rose-300' : 'text-white/90'}`}>{regClose === null ? '—' : regClose === 0 ? '마감' : `LV${g.config.regCloseLevel} · ${hms(regClose)}`}</b></span>
+        <span>등록마감 <b className={`tabular-nums ${regClose === 0 ? 'text-rose-300' : 'text-white/90'}`}>{regClose === null ? ' · ' : regClose === 0 ? '마감' :`LV${g.config.regCloseLevel} · ${hms(regClose)}`}</b></span>
       </div>
     </div>
   );

@@ -254,7 +254,7 @@ export default function PostDetailModal({
         setCheerN(r.cheers);
         setCheered(true);
       }
-      toast.show(`응원을 보냈어요 — 오늘 ${r.remainingToday}번 더 보낼 수 있어요`, 'success');
+      toast.show(`응원을 보냈어요. 오늘 ${r.remainingToday}번 더 보낼 수 있어요`, 'success');
     } catch (e) {
       toast.show(e instanceof Error ? e.message : '응원에 실패했습니다', 'error');
     } finally { setCheerBusy(false); }
@@ -267,7 +267,7 @@ export default function PostDetailModal({
     try {
       const r = await bumpPost(post.id);
       setBumpUntil(r.untilAt);
-      toast.show(`끌올했어요 — ${bumpSku?.hours ?? 3}시간 동안 목록 맨 위에 올라갑니다`, 'success');
+      toast.show(`끌올했어요. ${bumpSku?.hours ?? 3}시간 동안 목록 맨 위에 올라갑니다`, 'success');
     } catch (e) {
       toast.show(e instanceof Error ? e.message : '끌올에 실패했습니다', 'error');
     } finally { setBumpBusy(false); }
@@ -353,7 +353,7 @@ export default function PostDetailModal({
         {/* ── 작성자 정보 ─────────────────────────────────── */}
         {/* border-subtle(다크 1.11:1 · 라이트 1.23:1)은 비텍스트 3:1 기준에서 사실상 안 보이는 선이었다
             → 구조를 나누는 두 가로줄만 border-default(1.76 / 1.79)로 승급.
-            2026-08-30: 공유는 아래 반응 줄로 내렸다(같은 '이 글에 대한 동작' 가족이고,
+            2026-08-30: 공유는 아래 반응 줄로 내렸다(같은 '이 글 메뉴' 가족이고,
             헤더 우측 4버튼이 폭을 먹어 이름+칩이 3줄로 접히던 원인이었다).
             여기 남는 신고·차단·삭제는 '가끔 쓰는 관리 동작'이라 한 덩어리로 묶어 우측에 둔다. */}
         <header className="mt-3 flex items-center gap-2.5 border-b border-border-default pb-3">
@@ -406,7 +406,7 @@ export default function PostDetailModal({
               <button type="button"
                 onClick={async () => {
                   if (!confirm(`'${post.userName}'님을 차단할까요?\n이 사용자의 글·댓글이 보이지 않게 됩니다.`)) return;
-                  try { await block(post.userId, post.userName); toast.show('차단했습니다 — 이 사용자의 글이 숨겨집니다', 'info'); onClose(); }
+                  try { await block(post.userId, post.userName); toast.show('차단했습니다. 이 사용자의 글이 숨겨집니다', 'info'); onClose(); }
                   catch (e) { toast.show(e instanceof Error ? e.message : '차단 실패', 'error'); }
                 }}
                 className="hit shrink-0 rounded-input px-1.5 py-1 text-2xs text-ink-muted transition-colors hover:text-danger-light">
@@ -551,7 +551,7 @@ export default function PostDetailModal({
               비추천 <span className="tabular-nums min-w-[1.5ch] text-right">{bb}</span>
             </button>
           </div>
-          {/* 공유 — 헤더에서 내려온 자리. 같은 '이 글에 대한 동작'이라 반응과 한 줄이 맞고,
+          {/* 공유 — 헤더에서 내려온 자리. 같은 '이 글 메뉴'이라 반응과 한 줄이 맞고,
               헤더는 그만큼 작성자 정보만 남아 375px에서 3줄 → 2줄로 접힘이 사라졌다.
               단 **알약이 아니다**: 셋과 달리 숫자가 없는 동작이라 같은 테두리를 주면
               '네 번째 카운터'로 오독되고, 375px에서 네 알약 합이 347px > 343px 라 줄도 접혔다.
@@ -574,7 +574,7 @@ export default function PostDetailModal({
           <span className="min-w-0 flex-1 text-2xs leading-tight text-ink-secondary">
             <b className="text-ink-primary">응원</b>
             <span className="ml-1 tabular-nums text-accent-200">{cheerN}</span>
-            <span className="ml-1.5 text-ink-muted">— 점수는 상대에게 가지 않아요</span>
+            <span className="ml-1.5 text-ink-muted">점수는 상대에게 가지 않아요</span>
           </span>
           {user?.id === post.userId ? (
             <span className="shrink-0 text-2xs text-ink-muted">내 글</span>
@@ -600,7 +600,7 @@ export default function PostDetailModal({
               <b className="text-ink-primary">끌올</b>
               <span className="ml-1.5 text-ink-muted">
                 {bumpActive
-                  ? `목록 맨 위 — ${bumpRemain()}`
+                  ? `목록 맨 위 · ${bumpRemain()}`
                   : `${bumpSku?.hours ?? 3}시간 동안 목록 맨 위로 · 동시 ${BUMP_SLOTS}자리`}
               </span>
             </span>

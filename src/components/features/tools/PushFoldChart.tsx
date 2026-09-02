@@ -45,7 +45,7 @@ export default function PushFoldChart() {
 
   return (
     // 제목은 전체화면 헤더가 이미 표시 — 카드 안은 설명만(2중 노출 제거)
-    <CalcCard desc="숏스택 올인 균형 — 포지션·스택·앤티별, 콜 레인지까지">
+    <CalcCard desc="숏스택 올인 균형 · 포지션·스택·앤티별, 콜 레인지까지">
       {/* 포지션 */}
       <div className="grid grid-cols-4 gap-1">
         {POSITIONS.map((p) => {
@@ -110,10 +110,10 @@ export default function PushFoldChart() {
 
       <p className="text-2xs leading-relaxed text-ink-secondary rounded-input bg-surface-high/60 border border-border-subtle px-2 py-1.5">
         <Icon name="lightbulb" size={12} className="mr-0.5 inline-block align-[-1px] shrink-0 text-accent-300" />{effView === 'shove'
-          ? `${pos.label}(${pos.desc})에서 ${stack}bb로 첫 진입 올인하는 균형 레인지${ante ? ' — BB 앤티가 팟을 키워 더 넓게 민다' : ''}.`
+          ? `${pos.label}(${pos.desc})에서 ${stack}bb로 첫 진입 올인하는 균형 레인지${ante ? '. BB 앤티가 팟을 키워 더 넓게 민다' : ''}.`
           : effView === 'callBB'
-            ? `${pos.label}의 ${stack}bb 올인에 BB가 콜하는 균형 레인지 — 팟오즈 덕에 생각보다 넓다${ante ? ' (앤티로 더 넓어짐)' : ''}.`
-            : `${pos.label}의 ${stack}bb 올인에 SB가 콜하는 균형 레인지 — 뒤에 BB가 남아 BB 콜보다 타이트하다.`}
+            ? `${pos.label}의 ${stack}bb 올인에 BB가 콜하는 균형 레인지. 팟오즈 덕에 생각보다 넓다${ante ? ' (앤티로 더 넓어짐)' : ''}.`
+            : `${pos.label}의 ${stack}bb 올인에 SB가 콜하는 균형 레인지. 뒤에 BB가 남아 BB 콜보다 타이트하다.`}
       </p>
 
       <RangeMatrix13 actions={actions} />

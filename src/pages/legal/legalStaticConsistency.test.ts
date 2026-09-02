@@ -20,7 +20,7 @@ describe('공개 약관 정적 발행 (LEGAL-2)', () => {
   it('4개 공개 URL 파일이 존재한다', () => {
     for (const slug of SLUGS) {
       const p = path.join(ROOT, 'public', 'legal', `${slug}.html`);
-      expect(existsSync(p), `public/legal/${slug}.html 없음 — npm run legal 로 생성하라`).toBe(true);
+      expect(existsSync(p), `public/legal/${slug}.html 없음 · npm run legal 로 생성하라`).toBe(true);
     }
   });
 
@@ -34,7 +34,7 @@ describe('공개 약관 정적 발행 (LEGAL-2)', () => {
     )).not.toThrow();
   }, 120_000);
 
-  it('JS 없이도 본문이 보인다(정적 HTML — 심사자 환경에서 번들 실패해도 열려야 한다)', () => {
+  it('JS 없이도 본문이 보인다(정적 HTML · 심사자 환경에서 번들 실패해도 열려야 한다)', () => {
     for (const slug of SLUGS) {
       const src = html(slug);
       expect(src, `${slug}: <script> 가 들어가면 JS 의존이 생긴다`).not.toContain('<script');
@@ -78,14 +78,14 @@ describe('공개 약관 정적 발행 (LEGAL-2)', () => {
     }
   });
 
-  it('§28 — 환금성 프레이밍 단어가 마케팅 문서 본문에 들어오지 않는다', () => {
+  it('§28. 환금성 프레이밍 단어가 마케팅 문서 본문에 들어오지 않는다', () => {
     // '환전·현금'은 그 행위를 **금지한다고 서술**하는 맥락(사행성 공지·이용약관)에서만 허용된다.
     // 마케팅 문서 본문에는 그 맥락이 없으므로 등장해서는 안 된다.
     // (푸터·문서 목록의 '불법 환전…금지 서약' 링크 제목은 다른 문서의 제목이므로 본문만 검사한다.)
     const body = html('marketing').split('<main class="doc">')[1].split('</main>')[0];
     expect(body.length).toBeGreaterThan(3000); // 슬라이스가 실패해 빈 문자열을 검사하는 무효 프로브 방지
     for (const w of ['환전', '현금', '수익']) {
-      expect(body, `마케팅 문서 본문에 '${w}' 등장 — §28 위반`).not.toContain(w);
+      expect(body, `마케팅 문서 본문에 '${w}' 등장 · §28 위반`).not.toContain(w);
     }
   });
 

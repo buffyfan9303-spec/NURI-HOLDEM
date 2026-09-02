@@ -106,7 +106,7 @@ function ToastItem({ message, variant, action, durationMs, onDismiss }: Toast & 
         // max-w: 모바일은 화면의 92%, PC 는 읽기 좋은 28rem 상한(끝없이 옆으로 길어지는 것 방지)
         'inline-flex items-center gap-2 px-4 py-2.5 rounded-input border shadow-dialog',
         'text-sm font-medium pointer-events-auto max-w-[92vw] sm:max-w-md cursor-pointer select-none',
-        'transition-[transform,opacity] duration-300',
+        'transition-[transform,opacity] duration-[var(--dur-panel)]',
         COLOR[variant],
         out ? 'opacity-0 translate-y-2' : 'opacity-100 animate-slide-up',
       ].join(' ')}

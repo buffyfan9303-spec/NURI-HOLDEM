@@ -118,7 +118,7 @@ export default function SeasonPanel({ venueId, canManage = false, venueName }: {
             {canManage && <button type="button" onClick={doEnd} disabled={busy} className="btn-ghost shrink-0 px-2.5 py-1 text-2xs text-amber-300 disabled:opacity-50">시즌 종료</button>}
           </div>
           {standings.length === 0 ? (
-            <p className="py-4 text-center text-2xs text-ink-muted">아직 시즌 순위 기록이 없습니다 — 순위가 등록되면 집계됩니다.</p>
+            <p className="py-4 text-center text-2xs text-ink-muted">아직 시즌 순위 기록이 없습니다. 순위가 등록되면 집계됩니다.</p>
           ) : (
             <ul className="mt-2 space-y-1.5">{standings.slice(0, 20).map((s) => <Row key={s.rank} s={s} />)}</ul>
           )}

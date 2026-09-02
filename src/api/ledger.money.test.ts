@@ -32,13 +32,13 @@ function buyin(over: Partial<LedgerBuyin> = {}): LedgerBuyin {
   } as LedgerBuyin;
 }
 
-describe('단순 결제 — 할인 없음', () => {
+describe('단순 결제 · 할인 없음', () => {
   it('현금 완납 = 매출 10만, 미수 0, 엔트리 1', () => {
     const f = buyinFinance(buyin({ paymentMethod: 'cash' }), SESSION);
     expect(f).toMatchObject({ paid: 100_000, unpaid: 0, entry: 1 });
   });
 
-  it('현금 미수 = 매출 0, 미수 10만 (엔트리는 그대로 1 — 참가는 했으므로)', () => {
+  it('현금 미수 = 매출 0, 미수 10만 (엔트리는 그대로 1 · 참가는 했으므로)', () => {
     const f = buyinFinance(buyin({ paymentMethod: 'cash', isUnpaid: true }), SESSION);
     expect(f).toMatchObject({ paid: 0, unpaid: 100_000, entry: 1 });
   });
@@ -59,7 +59,7 @@ describe('단순 결제 — 할인 없음', () => {
     expect(f).toMatchObject({ paid: 0, unpaid: 0, entry: 1, support: 1 });
   });
 
-  it('티켓(이용권)은 현금 매출이 아니다 — 매출 0, 티켓 1장 회수', () => {
+  it('티켓(이용권)은 현금 매출이 아니다. 매출 0, 티켓 1장 회수', () => {
     const f = buyinFinance(buyin({ paymentMethod: 'ticket' }), SESSION);
     expect(f).toMatchObject({ paid: 0, ticketPaid: 1, ticketUnpaid: 0, entry: 1 });
   });
@@ -130,7 +130,7 @@ describe('분납 (결제수단 쪼개기)', () => {
     expect(f.paid).toBe(60_000);
   });
 
-  it('할인 적용 분납(5만만 받음) = 엔트리 0.5 — 덜 받은 만큼만 참가 지분', () => {
+  it('할인 적용 분납(5만만 받음) = 엔트리 0.5 · 덜 받은 만큼만 참가 지분', () => {
     const f = buyinFinance(buyin({ isSplit: true, cashAmount: 50_000, discountIndex: 1 }), SESSION);
     expect(f.paid).toBe(50_000);
     expect(f.entry).toBe(0.5);
@@ -144,7 +144,7 @@ describe('분납 (결제수단 쪼개기)', () => {
 });
 
 describe('경계값', () => {
-  it('단가 0(미설정) 세션 — 0으로 나누지 않는다', () => {
+  it('단가 0(미설정) 세션. 0으로 나누지 않는다', () => {
     const s = { buyinAmount: 0, cardAmount: null };
     const f = buyinFinance(buyin({ paymentMethod: 'cash' }), s);
     expect(Number.isFinite(f.entry)).toBe(true);
@@ -161,14 +161,14 @@ describe('경계값', () => {
     expect(buyinFinance(buyin({ isSplit: true }), s).entry).toBe(0);
   });
 
-  it('wonToMan 표시 — 만원 단위 변환', () => {
+  it('wonToMan 표시 · 만원 단위 변환', () => {
     expect(wonToMan(100_000)).toBe('10');
     expect(wonToMan(77_000)).toBe('7.7');
     expect(wonToMan(0)).toBe('0');
   });
 });
 
-describe('합계 정합성 — 여러 바인의 매출 합이 기대와 일치', () => {
+describe('합계 정합성 · 여러 바인의 매출 합이 기대와 일치', () => {
   it('현금완납 + 5만할인 + 미수 + 티켓 + 지원 = 매출 15만 · 미수 10만 · 티켓 1 · 엔트리 3.5', () => {
     const rows = [
       buyin({ paymentMethod: 'cash' }),                          // 10만 매출, 엔트리 1

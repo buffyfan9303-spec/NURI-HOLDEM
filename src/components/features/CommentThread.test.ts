@@ -17,7 +17,7 @@ const c = (id: string, parentId: string | undefined, userName: string): Comment 
   createdAt: '2026-08-01T00:00:00.000Z',
 });
 
-describe('groupThreads — 3레벨+ 대댓글 유실 0', () => {
+describe('groupThreads · 3레벨+ 대댓글 유실 0', () => {
   // 픽스처: 루트1 아래 4레벨 체인 + 루트2 아래 1레벨
   //   r1 ← a(2레벨) ← b(3레벨) ← d(4레벨)
   //   r2 ← e(2레벨)

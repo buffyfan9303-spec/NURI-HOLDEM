@@ -159,7 +159,7 @@ export default function NotificationPanel({
       const raw = e instanceof Error ? e.message : '';
       toast.show(
         /row-level security/i.test(raw)
-          ? '쪽지를 보낼 수 없어요 — 본인인증을 완료했는지, 차단 관계가 아닌지 확인해 주세요'
+          ? '쪽지를 보낼 수 없어요. 본인인증을 완료했는지, 차단 관계가 아닌지 확인해 주세요'
           : raw || '쪽지를 보내지 못했어요',
         'error',
       );
@@ -188,7 +188,7 @@ export default function NotificationPanel({
     if (!activeOther) return;
     try {
       await blockUser(activeOther.id, activeOther.name);
-      toast.show(`${activeOther.name}님을 차단했습니다 — 이후 쪽지가 오지 않아요`, 'success');
+      toast.show(`${activeOther.name}님을 차단했습니다. 이후 쪽지가 오지 않아요`, 'success');
       setMsgView('list');
       setActiveOther(null);
       reloadThreads();

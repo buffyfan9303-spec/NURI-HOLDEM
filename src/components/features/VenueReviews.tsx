@@ -95,7 +95,7 @@ export default function VenueReviews({ venueId, userId, nickname, isAdmin, canRe
     setSaving(true);
     try {
       await saveVenueReview(venueId, rating, content, nickname ?? '회원');
-      toast.show(mine ? '후기를 수정했습니다' : '후기를 남겼습니다 — 감사합니다!', 'success');
+      toast.show(mine ? '후기를 수정했습니다' : '후기를 남겼습니다. 감사합니다!', 'success');
       setWriting(false);
       setReviews(await getVenueReviews(venueId));
     } catch (e) {
@@ -168,7 +168,7 @@ export default function VenueReviews({ venueId, userId, nickname, isAdmin, canRe
       {reviews === null ? (
         <p className="py-3 text-center text-2xs text-ink-muted">불러오는 중…</p>
       ) : reviews.length === 0 ? (
-        <p className="py-3 text-center text-2xs text-ink-muted">아직 후기가 없어요 — 체크인하고 첫 후기를 남겨보세요!</p>
+        <p className="py-3 text-center text-2xs text-ink-muted">아직 후기가 없어요. 체크인하고 첫 후기를 남겨보세요!</p>
       ) : (
         <ul className="space-y-1.5">
           {reviews.map((r) => (

@@ -169,7 +169,7 @@ export default function ChatPane({ listingId, buyerId, meId, emptyHint, onRead }
       {/* 사기 방지 고정 안내 — 대화가 시작되는 바로 그 지점에 상시 노출(장터 신뢰 장치) */}
       <p className="shrink-0 flex items-center gap-1.5 border-b border-border-subtle bg-amber-500/[0.07] px-4 py-1.5 text-2xs leading-snug text-amber-300">
         <Icon name="alert" size={12} className="shrink-0" />
-        <span>선입금 요구는 거절하세요 — 직거래·대면 확인 권장, 의심 시 매물 화면에서 신고</span>
+        <span>선입금 요구는 거절하세요. 직거래·대면 확인 권장, 의심 시 매물 화면에서 신고</span>
       </p>
       <div className="relative flex-1 min-h-[200px] flex flex-col">
         <div ref={scrollRef} onScroll={handleScroll} role="log" aria-live="polite"

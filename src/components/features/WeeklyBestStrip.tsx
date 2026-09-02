@@ -59,7 +59,7 @@ export default function WeeklyBestStrip({ active = true }: { active?: boolean })
     <div className="reveal px-page-x pt-3">
       {/* DAI-3·4: 그라데이션·메달 이모지 → 헤어라인 + trophy 글리프 + 순위 텍스트(골드는 상금·트로피 전용 예산) */}
       <div className="flex items-center gap-2 overflow-hidden rounded-card border border-border-subtle bg-surface-low px-3 py-2">
-        <span className="flex shrink-0 items-center gap-1 text-xs font-extrabold tracking-wide text-gold-300"><Icon name="trophy" size={13} />{isLastWeek ? '지난주' : '이번 주'} 머니인 킹</span>
+        <span className="flex shrink-0 items-center gap-1 text-xs font-extrabold text-gold-300"><Icon name="trophy" size={13} />{isLastWeek ? '지난주' : '이번 주'} 머니인 킹</span>
         <div key={idx} className="flex min-w-0 flex-1 animate-fade-in items-center gap-1.5">
           <span aria-hidden className="shrink-0 text-2xs font-bold tabular-nums text-ink-muted">{idx + 1}위</span>
           {/* 닉네임(가장 점수를 많이 딴 매장) — 한 덩어리로 truncate 한다. 두 span 을 각각 줄이면

@@ -99,7 +99,7 @@ export default function ViewModeToggle({
             className={[
               'relative w-8 h-full items-center justify-center rounded-[5px]',
               desktopOnly ? 'hidden md:flex' : 'flex',
-              'transition-colors duration-150',
+              'transition-colors duration-[var(--dur-fast)]',
               active ? 'text-white' : 'text-ink-muted hover:text-ink-secondary',
             ].join(' ')}
           >

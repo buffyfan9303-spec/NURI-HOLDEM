@@ -32,7 +32,7 @@ function usedScopes(): Set<string> {
   return scopes;
 }
 
-describe('하위 탭 전환 — 스코프와 CSS 규칙의 1:1', () => {
+describe('하위 탭 전환 · 스코프와 CSS 규칙의 1:1', () => {
   const scopes = [...usedScopes()].sort();
 
   it('스코프가 실제로 여럿 등록돼 있다(전수 적용의 최소 증거)', () => {
@@ -53,7 +53,7 @@ describe('하위 탭 전환 — 스코프와 CSS 규칙의 1:1', () => {
     expect(names.length, `${scope}: view-transition-name 부여 규칙이 2개(탭바·본문) 필요하다`).toBe(2);
 
     // ② root 기본 연출 정지 — 탭바 위쪽(헤더·히어로)이 통째로 밀리지 않게.
-    expect(text, `${scope}: root 정지 규칙이 없다 — 페이지 전체가 밀린다`).toMatch(/::view-transition-old\(root\)/);
+    expect(text, `${scope}: root 정지 규칙이 없다. 페이지 전체가 밀린다`).toMatch(/::view-transition-old\(root\)/);
     expect(text).toMatch(/::view-transition-new\(root\)/);
 
     // ③ 앞뒤 4방향 — 손가락이 고른 방향으로 밀려야 한다.
@@ -72,7 +72,7 @@ describe('하위 탭 전환 — 스코프와 CSS 규칙의 1:1', () => {
     }
   });
 
-  it('모션 헌법 §20.4 — 새 이징·새 duration 을 들이지 않았다', () => {
+  it('모션 헌법 §20.4. 새 이징·새 duration 을 들이지 않았다', () => {
     // 하위 탭 블록이 쓰는 값은 토큰 4단과 이징 3종뿐이어야 한다.
     const block = CSS.slice(CSS.indexOf("html[data-vt-scope='admin-sec']"));
     const anims = [...block.matchAll(/animation:\s*([^;]+);/g)].map((m) => m[1]);

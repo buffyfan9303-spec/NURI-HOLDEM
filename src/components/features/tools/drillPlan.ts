@@ -92,8 +92,8 @@ function composePlan(date: string): DrillPlan {
   const preSlots = queue.length >= 2 ? 2 : 1;
   for (let i = 0; i < preSlots; i++) {
     const key = queue[i];
-    if (key) items.push({ kind: 'preflop', key, reason: '오답 노트 — 틀렸던 핸드' });
-    else items.push({ kind: 'preflop', key: makeQuiz(rnd() < 0.5 ? 'rfi' : 'push').key, reason: '경계 핸드 — 헷갈리는 구간' });
+    if (key) items.push({ kind: 'preflop', key, reason: '오답 노트 · 틀렸던 핸드' });
+    else items.push({ kind: 'preflop', key: makeQuiz(rnd() < 0.5 ? 'rfi' : 'push').key, reason: '경계 핸드 · 헷갈리는 구간' });
   }
 
   // ② 포스트플랍 — 약한 카테고리부터

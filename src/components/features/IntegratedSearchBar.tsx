@@ -84,7 +84,8 @@ const TOUR_OPTIONS: { id: TourFilter; label: string }[] = [
 
 // ── 필터 칩 공용 문법 — 레일의 모든 칩이 같은 높이(h-9)·라운드·서체를 공유한다 ──
 // (예전 세그먼트 박스 3개가 각자 내용 폭으로 끝나 '칸이 제각각'으로 읽히던 문제의 반대 원칙)
-const CHIP_BASE = 'inline-flex h-9 shrink-0 items-center rounded-badge border border-transparent px-3.5 text-xs font-bold leading-none transition-colors';
+// v4.1(오너): 알약(rounded-badge)은 안이 답답해 보인다 → 클릭 칩은 10px(rounded-chip). 카운트 배지(아래)는 알약 유지.
+const CHIP_BASE = 'inline-flex h-9 shrink-0 items-center rounded-chip border border-transparent px-3.5 text-xs font-bold leading-none transition-colors';
 const CHIP_ON = 'bg-accent-300/15 text-accent-300';
 // P1-5(오너 진단 '선 노이즈'): 1px 테두리 대신 배경보다 한 톤 밝은 면으로 그룹화
 const CHIP_OFF = 'bg-surface-high text-ink-secondary hover:bg-surface-float/70';
@@ -395,7 +396,7 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
         ref={stickyRef}
         // before:* = '브리지' — 검색바 위로 불투명 surface-base 띠를 깔아, 스크롤 시 헤더 축소로 생길 수 있는
         // 헤더-검색바 사이 틈으로 뒤 컨텐츠가 비치는 현상을 어떤 상태에서도 가린다(JS 측정 의존 없이 확실).
-        className={stickyTop ? "relative sticky z-30 bg-surface-base border-b border-border-subtle transition-colors duration-200 before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-4 before:bg-surface-base before:content-['']" : ''}
+        className={stickyTop ? "relative sticky z-30 bg-surface-base border-b border-border-subtle transition-colors duration-[var(--dur-fast)] before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-4 before:bg-surface-base before:content-['']" : ''}
         style={stickyTop ? { top: stickyTop } : undefined}
       >
       {/* ── 검색창 ─────────────────────────────────────────────────────── */}
@@ -405,8 +406,8 @@ const IntegratedSearchBar = forwardRef<SearchBarHandle, IntegratedSearchBarProps
           onSubmit={handleSubmit}
           className={[
             'flex items-center gap-2 px-3',
-            'bg-surface-high rounded-input h-10',
-            'border transition-colors duration-150',
+            'bg-surface-high rounded-[12px] h-10', // v4.1: 알약 → 12px(오너: 알약은 안이 답답해 보인다)
+            'border transition-colors duration-[var(--dur-fast)]',
             isFocused
               ? 'border-accent-300'
               : 'border-border-default',

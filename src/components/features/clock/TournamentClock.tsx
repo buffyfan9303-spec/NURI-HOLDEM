@@ -76,7 +76,7 @@ function levelNumberAt(cfg: ClockConfig, index: number): number {
 function nextPlayableLabel(cfg: ClockConfig, index: number): string {
   const lv = cfg.levels;
   const nx = lv[index + 1];
-  if (!nx) return '— 마지막 레벨 —';
+  if (!nx) return '마지막 레벨';
   if (nx.kind === 'break') return nx.label || 'BREAK';
   return `NEXT LEVEL ${levelNumberAt(cfg, index + 1)}  ${nx.sb.toLocaleString()}/${nx.bb.toLocaleString()}(${nx.ante.toLocaleString()})`;
 }
@@ -172,7 +172,7 @@ export default function TournamentClock({ venueId, canManage, seedSessionDate, s
     const ended = state?.gameSeq ?? curGameSeqRef.current;
     try {
       await clearClockState(venueId, ended);
-      if (ended > 1) { toast.show('사이드 클락 종료 — 메인 클락으로 이동', 'info'); switchGame(1); } // 빈 슬롯 정돈: 메인으로 복귀
+      if (ended > 1) { toast.show('사이드 클락 종료 · 메인 클락으로 이동', 'info'); switchGame(1); } // 빈 슬롯 정돈: 메인으로 복귀
       else { setState(null); setView('settings'); toast.show('클락을 종료했습니다', 'info'); }
     } catch (e) { toast.show(e instanceof Error ? e.message : '종료 실패', 'error'); }
   };
@@ -476,7 +476,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
     const wrongUnit = entries.filter((e) => prizeUnitRisk(e.prize) === 'impossible');
     if (wrongUnit.length > 0 && !window.confirm(
       `상금이 원 단위로 입력된 것 같습니다 (${wrongUnit.map((e) => e.prize).join(', ')}).\n\n`
-      + '이 칸은 만원 단위입니다 — 100만원이면 100.\n\n이대로 저장하면 매장·전국 프라이즈 순위가 크게 왜곡됩니다. 그래도 저장할까요?',
+      + '이 칸은 만원 단위입니다. 100만원이면 100.\n\n이대로 저장하면 매장·전국 프라이즈 순위가 크게 왜곡됩니다. 그래도 저장할까요?',
     )) return;
     setFinishBusy(true);
     try {
@@ -488,7 +488,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
         setFinishBusy(false); return;
       }
       await saveVenueRankings(state.venueId, state.sessionDate, entries, evName);
-      toast.show(`입상 ${entries.length}명 순위 저장 완료 — 매장 순위·시즌·머니인킹에 반영됩니다`, 'success');
+      toast.show(`입상 ${entries.length}명 순위 저장 완료. 매장 순위·시즌·머니인킹에 반영됩니다`, 'success');
       setFinishRows(null);
       if (endAfterFinish) { setEndAfterFinish(false); onEnd(); } // END 경로였으면 이어서 종료(최종 확인은 onEnd 의 confirm)
     } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
@@ -519,7 +519,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
     // 2레벨 이상 한 번에 넘어갔다 = 그동안 아무도 전진을 쓰지 못했다는 뜻.
     // 조용히 넘기면 업주가 "레벨이 왜 튀지" 하고 수기로 되돌려 오히려 더 어긋난다.
     if (cu.advanced > 1) {
-      toast.show(`레벨 자동 보정 — L${levelNumberAt(cfg, state.currentIndex)} → L${levelNumberAt(cfg, cu.toIndex)}`, 'info', { durationMs: 5000 });
+      toast.show(`레벨 자동 보정 · L${levelNumberAt(cfg, state.currentIndex)} → L${levelNumberAt(cfg, cu.toIndex)}`, 'info', { durationMs: 5000 });
     }
   }, [state, persist, playChime, canManage, cfg, toast]);
 
@@ -569,7 +569,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
     if (state.running) {
       const frozen = Math.max(0, remaining);
       persist({ running: false, remainingMs: frozen, endsAt: null });
-      toast.show('클락을 일시정지했어요 — 손님 화면에도 바로 반영됩니다', 'info', {
+      toast.show('클락을 일시정지했어요. 손님 화면에도 바로 반영됩니다', 'info', {
         durationMs: 5000,
         action: { label: '실행취소', onClick: () => persist({ running: true, endsAt: new Date(now() + frozen).toISOString() }) },
       });
@@ -594,7 +594,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
     persist(levelUndoPatch(levelUndo)); // 같은 저장 경로 → realtime 으로 TV(?display=)까지 함께 복원
     setLevelUndo(null);
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
-    toast.show('레벨 이동을 되돌렸습니다 — 남은 시간까지 복원', 'info');
+    toast.show('레벨 이동을 되돌렸습니다. 남은 시간까지 복원', 'info');
   };
   const setLevel = (delta: number) => {
     const patch = levelMovePatch(state, state.currentIndex, delta);
@@ -711,7 +711,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
           )}
           {!fs && (
             <button type="button" onClick={() => window.open(`/?display=${state.venueId}&g=${state.gameSeq ?? 1}`, '_blank', 'noopener')}
-              title="새 창으로 관전 화면(매장 TV·빔프로젝터)을 엽니다 — 그 창을 큰 화면으로 옮겨 띄워두세요"
+              title="새 창으로 관전 화면(매장 TV·빔프로젝터)을 엽니다. 그 창을 큰 화면으로 옮겨 띄워두세요"
               className="btn-ghost inline-flex items-center gap-1 text-2xs px-2.5 py-1 text-accent-300"><Icon name="tv" size={13} className="shrink-0" />TV 송출</button>
           )}
           <button type="button" onClick={toggleFs} className="btn-ghost text-2xs px-2.5 py-1">{fs ? '⤡ 전체화면 해제' : '⤢ 전체화면'}</button>
@@ -840,7 +840,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
                 className="self-end grid place-items-center w-7 h-7 rounded-input bg-white/10 hover:bg-white/15 border border-border-default text-white/60 hover:text-[#8B94E8]"><Icon name="volume" size={14} /></button>
               <div className="flex flex-col items-center gap-0.5">
                 <span className="text-[9px] text-white/45">10초틱</span>
-                <button type="button" onClick={() => setTickStyle((t) => t === 'beep' ? 'soft' : t === 'soft' ? 'off' : 'beep')} title="마지막 10초 카운트다운 틱 음색 — 비프/부드러움/끔(끔=레벨업음만)"
+                <button type="button" onClick={() => setTickStyle((t) => t === 'beep' ? 'soft' : t === 'soft' ? 'off' : 'beep')} title="마지막 10초 카운트다운 틱 음색 · 비프/부드러움/끔(끔=레벨업음만)"
                   className="h-7 px-2 rounded-input bg-white/10 hover:bg-white/15 border border-border-default text-2xs font-bold text-white/60 hover:text-[#8B94E8]">
                   {tickStyle === 'beep' ? '비프' : tickStyle === 'soft' ? '부드러움' : '끔'}
                 </button>
@@ -986,10 +986,10 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
   // 블라인드 없는 프리셋도 '있는 것만' 부분 적용(§13-B 부분 프리셋 허용 — 가드로 거부하지 않는다).
   const applyGamePreset = (p: GamePreset) => {
     const patch = applyToClock(p.data);
-    if (Object.keys(patch).length === 0) { toast.show(`'${p.name}' — 클락에 적용할 항목이 없는 프리셋입니다`, 'info'); return; }
+    if (Object.keys(patch).length === 0) { toast.show(`'${p.name}'. 클락에 적용할 항목이 없는 프리셋입니다`, 'info'); return; }
     set(patch);
     if (patch.levels?.length) setBldOpen(true);
-    toast.show(`'${p.name}' 프리셋 적용${patch.levels?.length ? ` — 블라인드 ${countLevels(patch.levels)}레벨 포함` : ' (블라인드 없음 — 나머지 항목만)'}`, 'success');
+    toast.show(`'${p.name}' 프리셋 적용${patch.levels?.length ? ` — 블라인드 ${countLevels(patch.levels)}레벨 포함` : ' (블라인드 없음 · 나머지 항목만)'}`, 'success');
   };
   // PL3: 구 클락 프리셋 → 게임 프리셋 1회 변환(신규 저장 진입점은 게임 프리셋으로 일원화)
   const [convertBusy, setConvertBusy] = useState(false);
@@ -1086,7 +1086,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
         </div>
         <div>
           <div className="flex items-center justify-between mb-1 gap-2">
-            <p className="text-2xs text-ink-muted min-w-0 truncate">장부(게임) 목록 — 연동하면 게임명·엔트리·얼리 자동 반영</p>
+            <p className="text-2xs text-ink-muted min-w-0 truncate">장부(게임) 목록 · 연동하면 게임명·엔트리·얼리 자동 반영</p>
             <span className="text-2xs text-ink-muted tabular-nums shrink-0">{filteredSessions.length}/{sessions.length}</span>
           </div>
           <div className="relative mb-1">
@@ -1126,7 +1126,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
         <PresetPicker key={pickerKey} venueId={venueId} scope="clock" onApply={applyGamePreset}
           note="제목·블라인드·스택·레지레벨·얼리·상금을 한 번에 채웁니다(수정 가능). 프리셋 저장·수정은 [내 매장 → 프리셋]에서." />
         {presets.length === 0 && (
-          <p className="text-2xs text-ink-muted">프리셋 저장·관리는 [내 매장 → 프리셋]에서 — '지난 게임에서 만들기'로 1탭에 만들 수 있어요.</p>
+          <p className="text-2xs text-ink-muted">프리셋 저장·관리는 [내 매장 → 프리셋]에서. '지난 게임에서 만들기'로 1탭에 만들 수 있어요.</p>
         )}
         {/* 구 클락 프리셋 — 불러오기·삭제만 유지(신규 저장 진입점 0), 변환 버튼으로 게임 프리셋에 흡수 */}
         {presets.length > 0 && (<>
@@ -1157,7 +1157,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
             className="w-full rounded-input border border-accent-400/40 bg-accent-300/12 py-2 text-xs font-bold text-accent-300 transition-colors hover:bg-accent-300/20 disabled:opacity-50">
             {convertBusy ? '가져오는 중…' : `클락 프리셋 ${presets.length}개 → 게임 프리셋으로 가져오기 (1회 변환)`}
           </button>
-          <p className="text-2xs text-ink-muted">가져오면 포스터·장부·클락 공용이 돼요 — 구형은 ✕로 정리.</p>
+          <p className="text-2xs text-ink-muted">가져오면 포스터·장부·클락 공용이 돼요. 구형은 ✕로 정리.</p>
         </>)}
       </section>
 

@@ -25,7 +25,7 @@ function st(over: Partial<ClockState> = {}): ClockState {
   };
 }
 
-describe('levelCatchUp — 경과 전진', () => {
+describe('levelCatchUp · 경과 전진', () => {
   it('경계 전이면 아무것도 하지 않는다', () => {
     expect(levelCatchUp(st(), T0 + 10 * MIN)).toBeNull();
   });
@@ -34,7 +34,7 @@ describe('levelCatchUp — 경과 전진', () => {
     expect(levelCatchUp(st({ running: false, endsAt: null }), T0 + 999 * MIN)).toBeNull();
   });
 
-  it('1레벨 경과 — endsAt 은 절대시각으로 누적된다(now 로 리셋하지 않는다)', () => {
+  it('1레벨 경과 · endsAt 은 절대시각으로 누적된다(now 로 리셋하지 않는다)', () => {
     const cu = levelCatchUp(st(), T0 + 20 * MIN + 1000)!;
     expect(cu.advanced).toBe(1);
     expect(cu.toIndex).toBe(1);
@@ -51,7 +51,7 @@ describe('levelCatchUp — 경과 전진', () => {
     expect(cu.patch.remainingMs).toBe(18 * MIN);
   });
 
-  it('멱등 — 계산 시각이 달라도 같은 행이면 endsAt/인덱스가 같다(기기 경합 안전)', () => {
+  it('멱등 · 계산 시각이 달라도 같은 행이면 endsAt/인덱스가 같다(기기 경합 안전)', () => {
     const a = levelCatchUp(st(), T0 + 50 * MIN)!;
     const b = levelCatchUp(st(), T0 + 50 * MIN + 700)!; // 다른 기기가 0.7초 늦게 계산
     expect(a.patch.endsAt).toBe(b.patch.endsAt);
@@ -75,14 +75,14 @@ describe('levelCatchUp — 경과 전진', () => {
   });
 });
 
-describe('effectiveLevel — 표시 보정(쓰기 없음)', () => {
+describe('effectiveLevel · 표시 보정(쓰기 없음)', () => {
   it('안 밀렸으면 그대로', () => {
     const e = effectiveLevel(st(), T0 + 5 * MIN);
     expect(e).toMatchObject({ index: 0, drifted: false });
     expect(e.remainingMs).toBe(15 * MIN);
   });
 
-  it('밀렸으면 실효 레벨과 실제 잔여시간을 돌려준다 — 00:00 에 얼지 않는다', () => {
+  it('밀렸으면 실효 레벨과 실제 잔여시간을 돌려준다. 00:00 에 얼지 않는다', () => {
     const e = effectiveLevel(st(), T0 + 50 * MIN);
     expect(e).toMatchObject({ index: 3, drifted: true });
     expect(e.remainingMs).toBe(18 * MIN);

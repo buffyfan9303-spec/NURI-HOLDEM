@@ -156,7 +156,7 @@ function VoucherQuotaAdminCard() {
   // 잔여 pending 은 반려(정리)만 가능. 한도 조정이 필요하면 admin_grant_voucher_quota(수동 레버).
   return (
     <section className="rounded-card border border-accent-400/30 bg-accent-300/[0.04] p-3 space-y-2">
-      <h3 className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-accent-300"><Icon name="cart" size={15} className="shrink-0" />이용권 충전 요청 <span className="text-2xs font-normal text-danger-light">· 유상 충전 폐쇄(§12-A) — 반려만 가능</span></h3>
+      <h3 className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-accent-300"><Icon name="cart" size={15} className="shrink-0" />이용권 충전 요청 <span className="text-2xs font-normal text-danger-light">· 유상 충전 폐쇄(§12-A) · 반려만 가능</span></h3>
       <ul className="space-y-1.5">
         {reqs.map((r) => (
           <li key={r.id} className="flex items-center gap-2 rounded-input border border-border-subtle bg-surface-low px-2.5 py-2">
@@ -201,7 +201,7 @@ function RankVerifyAdminCard() {
     setBusy(v.id);
     try {
       await adminDecideRankVerification(v, ok);
-      toast.show(ok ? '대회로 승인 — 국내 순위에 합산됩니다' : '반려했습니다', 'success');
+      toast.show(ok ? '대회로 승인. 국내 순위에 합산됩니다' : '반려했습니다', 'success');
       reload();
     }
     catch (e) { toast.show(e instanceof Error ? e.message : '처리 실패', 'error'); }
@@ -284,7 +284,7 @@ function CommunityAdsCard() {
   const today = new Date().toLocaleDateString('en-CA');
   return (
     <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
-      <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="megaphone" size={15} className="shrink-0" />커뮤니티 광고 5칸 <span className="text-xs font-normal text-ink-muted">— 게시판 글 4개마다 [AD] 한 줄. ▲▼로 순서 변경 · 제목 비우면 게재 중단</span></p>
+      <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="megaphone" size={15} className="shrink-0" />커뮤니티 광고 5칸 <span className="text-xs font-normal text-ink-muted">게시판 글 4개마다 [AD] 한 줄. ▲▼로 순서 변경 · 제목 비우면 게재 중단</span></p>
       <ul className="space-y-1.5">
         {ads.map((ad, i) => {
           const live = !!ad.title.trim() && (!ad.expiresAt || ad.expiresAt >= today);
@@ -314,7 +314,7 @@ function CommunityAdsCard() {
           );
         })}
       </ul>
-      <p className="text-xs text-ink-muted">가격 운영 예: 3일 10만 / 7일 20만 — 만료일만 맞춰 입력하면 끝나는 날 자동으로 내려갑니다.</p>
+      <p className="text-xs text-ink-muted">가격 운영 예: 3일 10만 / 7일 20만. 만료일만 맞춰 입력하면 끝나는 날 자동으로 내려갑니다.</p>
     </section>
   );
 }
@@ -347,7 +347,7 @@ function MissionsAdminCard() {
       await adminSaveCustomMission(editRow
         ? { ...editRow, title, goal_type: goalType, goal, reward }
         : { title, goal_type: goalType, goal, reward });
-      toast.show(editRow ? '미션을 수정했습니다 — 랭킹 보드에 바로 반영됩니다' : '미션을 추가했습니다 — 랭킹 > 미션 보드에 바로 노출됩니다', 'success');
+      toast.show(editRow ? '미션을 수정했습니다. 랭킹 보드에 바로 반영됩니다' : '미션을 추가했습니다. 랭킹 > 미션 보드에 바로 노출됩니다', 'success');
       resetForm(); reload();
     } catch (e) {
       toast.show(e instanceof Error ? e.message : (editRow ? '수정 실패' : '추가 실패'), 'error');
@@ -377,7 +377,7 @@ function MissionsAdminCard() {
 
   return (
     <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
-      <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="target" size={15} className="shrink-0" />주간 미션 관리 <span className="text-xs font-normal text-ink-muted">— 랭킹 &gt; 미션 보드에 노출. 매주 월요일 진행도 리셋</span></p>
+      <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="target" size={15} className="shrink-0" />주간 미션 관리 <span className="text-xs font-normal text-ink-muted">랭킹 &gt; 미션 보드에 노출. 매주 월요일 진행도 리셋</span></p>
       {/* 고정 미션 안내 */}
       <ul className="space-y-1">
         {MISSIONS.map((m) => (
@@ -422,7 +422,7 @@ function MissionsAdminCard() {
         <button type="button" onClick={save} disabled={busy} className="btn-primary px-3 py-1.5 text-xs disabled:opacity-60">{editRow ? '수정 저장' : '+ 추가'}</button>
         {editRow && <button type="button" onClick={resetForm} disabled={busy} className="btn-ghost px-3 py-1.5 text-xs disabled:opacity-60">취소</button>}
       </div>
-      <p className="text-xs text-ink-muted">유형은 체크인·게시글·머니인 3가지 — 달성 검증은 서버(claim_mission RPC)가 자동으로 합니다.</p>
+      <p className="text-xs text-ink-muted">유형은 체크인·게시글·머니인 3가지. 달성 검증은 서버(claim_mission RPC)가 자동으로 합니다.</p>
     </section>
   );
 }
@@ -466,7 +466,7 @@ function HallOfFameAdminCard() {
         auto.slice(0, 3).forEach((a, i) => { next[i + 1] = { nickname: a.nickname, note: next[i + 1]?.note ?? '' }; });
         return next;
       });
-      toast.show('지난달 자동 집계를 불러왔습니다 — 필요하면 고쳐서 저장하세요', 'success');
+      toast.show('지난달 자동 집계를 불러왔습니다. 필요하면 고쳐서 저장하세요', 'success');
     } catch (e) { toast.show(e instanceof Error ? e.message : '불러오기 실패', 'error'); }
     finally { setBusy(false); }
   };
@@ -477,7 +477,7 @@ function HallOfFameAdminCard() {
     setBusy(true);
     try {
       await adminSaveHallEntry({ period, rank, nickname: d.nickname, note: d.note });
-      toast.show(`${period} ${rank}위를 저장했습니다 — 랭킹 > 명예의 전당에 바로 반영됩니다`, 'success');
+      toast.show(`${period} ${rank}위를 저장했습니다. 랭킹 > 명예의 전당에 바로 반영됩니다`, 'success');
       reload();
     } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
     finally { setBusy(false); }
@@ -499,7 +499,7 @@ function HallOfFameAdminCard() {
 
   return (
     <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
-      <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="trophy" size={15} className="shrink-0" />명예의 전당 등록 <span className="text-xs font-normal text-ink-muted">— 랭킹 &gt; 명예의 전당. 등록한 달은 자동 집계보다 우선</span></p>
+      <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="trophy" size={15} className="shrink-0" />명예의 전당 등록 <span className="text-xs font-normal text-ink-muted">랭킹 &gt; 명예의 전당. 등록한 달은 자동 집계보다 우선</span></p>
       <p className="text-xs leading-relaxed text-ink-muted">
         노출 기준은 <b className="text-ink-secondary">직전 달</b>입니다(현재 <b className="text-ink-secondary">{last}</b>).
         이번 달({thisMonthPeriod()}) 자리에 미리 채워두면 다음 달에 자동으로 올라갑니다.
@@ -611,7 +611,7 @@ function ShoutsAdminCard() {
   const airing = (s: AdminShout) => live(s) && new Date(s.playsAt).getTime() <= Date.now();
   return (
     <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
-      <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="megaphone" size={15} className="shrink-0" />외치기 관리 <span className="text-xs font-normal text-ink-muted">— 활동점수로 구매한 커뮤니티 강조 메시지. 대기열 순서대로 20초씩 1회 방송</span></p>
+      <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="megaphone" size={15} className="shrink-0" />외치기 관리 <span className="text-xs font-normal text-ink-muted">활동점수로 구매한 커뮤니티 강조 메시지. 대기열 순서대로 20초씩 1회 방송</span></p>
       {rows === null ? (
         <ul className="space-y-1">{[0, 1, 2].map((i) => <li key={i} className="skeleton h-9 rounded-input" />)}</ul>
       ) : rows.length === 0 ? (
@@ -784,7 +784,7 @@ function ErrorLogPanel() {
       {loading ? (
         <p className="py-6 text-center text-sm text-ink-muted">불러오는 중…</p>
       ) : rows.length === 0 ? (
-        <p className="py-6 text-center text-sm text-ink-muted">수집된 오류가 없습니다 — 깨끗합니다</p>
+        <p className="py-6 text-center text-sm text-ink-muted">수집된 오류가 없습니다. 깨끗합니다</p>
       ) : (
         <ul className="divide-y divide-border-subtle">
           {rows.map((r) => (
@@ -857,8 +857,8 @@ const aic = (children: ReactNode) => (
 );
 // 섹션 설명 — 공용 SectionHeader(내 매장과 동일 규격)
 const ADMIN_DESC: Record<Section, string> = {
-  analytics: '플랫폼 핵심 지표 — 회원·매장·대회·체크인·추천·푸시 한눈에',
-  pending: '업주가 등록한 포스터 검수 — 승인하면 일정 탐색에 노출됩니다',
+  analytics: '플랫폼 핵심 지표 · 회원·매장·대회·체크인·추천·푸시 한눈에',
+  pending: '업주가 등록한 포스터 검수. 승인하면 일정 탐색에 노출됩니다',
   reorder: '노출 순서 · 부스트 · 커뮤니티 광고 · 주간 미션 관리',
   users: '회원 검색 · 등급 · 제재 · 활동점수(구매 환불 · 지급)',
   venues: '매장 생성 · 인증 · 그룹 승인',

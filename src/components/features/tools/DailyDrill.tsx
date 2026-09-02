@@ -86,7 +86,7 @@ export default function DailyDrill() {
   const nextBtn = <button type="button" onClick={next} className="btn-primary w-full py-2 text-sm">{plan.idx + 1 >= total ? '드릴 마치기 →' : '다음 문제 →'}</button>;
 
   return (
-    <CalcCard desc="약점 카테고리와 오답 노트를 섞어 매일 5문제를 자동 편성합니다 — 오늘 편성은 하루 동안 고정입니다.">
+    <CalcCard desc="약점 카테고리와 오답 노트를 섞어 매일 5문제를 자동 편성합니다. 오늘 편성은 하루 동안 고정입니다.">
       {/* 진행 — 점 5개(고정 높이, 도착해도 밀리지 않음) */}
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs font-bold text-ink-primary">오늘의 드릴 <span className="tabular-nums text-accent-200">{done}/{total}</span></p>
@@ -210,11 +210,11 @@ function WeaknessReport() {
           ))}
         </div>
       ) : (
-        <p className="text-2xs text-ink-muted">아직 기록이 없습니다 — 오늘 5문제를 풀면 카테고리별 정답률이 여기에 쌓입니다.</p>
+        <p className="text-2xs text-ink-muted">아직 기록이 없습니다. 오늘 5문제를 풀면 카테고리별 정답률이 여기에 쌓입니다.</p>
       )}
       <p className="text-2xs text-ink-muted">
         프리플랍 오답 노트 <b className="text-ink-secondary tabular-nums">{wrongCount}개</b>
-        {wrongCount > 0 ? ' — 내일 드릴에 우선 편성됩니다.' : ' — 오답이 쌓이면 드릴이 먼저 물어봅니다.'}
+        {wrongCount > 0 ? '내일 드릴에 우선 편성됩니다.' : '오답이 쌓이면 드릴이 먼저 물어봅니다.'}
       </p>
     </div>
   );

@@ -16,7 +16,7 @@ const WHITE = '#FFFFFF';
 /** index.css --ink-on-bright: 3 4 5 와 반드시 같아야 한다 */
 const ON_BRIGHT = '#030405';
 
-describe('relativeLuminance — 파싱', () => {
+describe('relativeLuminance · 파싱', () => {
   it('#RRGGBB · #RGB · rgb() · rgba() 를 모두 읽는다', () => {
     expect(relativeLuminance('#000000')).toBeCloseTo(0, 6);
     expect(relativeLuminance('#FFFFFF')).toBeCloseTo(1, 6);
@@ -34,7 +34,7 @@ describe('relativeLuminance — 파싱', () => {
   });
 });
 
-describe('onColorInk — 전 색역 WCAG AA(4.5:1) 보장', () => {
+describe('onColorInk · 전 색역 WCAG AA(4.5:1) 보장', () => {
   // ProfileModal COLOR_PALETTE 10색 + 라이브 profiles.avatar_color 실측값 + Avatar 기본값
   const USED = ['#FFD100', '#22C55E', '#E879F9', '#14B8A6', '#0EA5E9', '#F97316',
     '#EC4899', '#EF4444', '#A855F7', '#64748B', '#6B7280', '#5A6175'];
@@ -52,7 +52,7 @@ describe('onColorInk — 전 색역 WCAG AA(4.5:1) 보장', () => {
     expect(ratio('#FFD100', WHITE)).toBeLessThan(1.5); // 등급 골드 = 1.46:1
   });
 
-  it('회색조 전 구간(0~255)에서 사각지대가 없다 — 임계값이 두 안전구간의 교집합 안에 있다', () => {
+  it('회색조 전 구간(0~255)에서 사각지대가 없다. 임계값이 두 안전구간의 교집합 안에 있다', () => {
     for (let v = 0; v <= 255; v++) {
       const bg = '#' + v.toString(16).padStart(2, '0').repeat(3).toUpperCase();
       const ink = onColorInk(bg) === 'dark' ? ON_BRIGHT : WHITE;
@@ -70,7 +70,7 @@ describe('onColorInk — 전 색역 WCAG AA(4.5:1) 보장', () => {
     expect(worst).toBeGreaterThanOrEqual(4.5);
   });
 
-  it('--ink-on-bright 를 밝히면 사각지대가 생긴다 — 토큰을 못 밝히는 이유의 고정', () => {
+  it('--ink-on-bright 를 밝히면 사각지대가 생긴다. 토큰을 못 밝히는 이유의 고정', () => {
     // 조사 단계에서 제안됐던 #0A0B0D 는 L 0.1833~0.190 구간에서 어느 쪽으로도 4.5 를 못 넘는다
     const gap = '#777777'; // L=0.1845 — 정확히 그 사각지대(흰색 4.478 · #0A0B0D 4.397 둘 다 미달)
     expect(ratio(gap, WHITE)).toBeLessThan(4.5);

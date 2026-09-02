@@ -38,7 +38,7 @@ export function isOffline(e: unknown): boolean {
  */
 export function msgOf(e: unknown, fallback = '요청을 처리하지 못했습니다'): string {
   if (e == null) return fallback;
-  if (isOffline(e)) return '네트워크가 끊겼습니다 — 연결을 확인하고 다시 시도해 주세요';
+  if (isOffline(e)) return '네트워크가 끊겼습니다. 연결을 확인하고 다시 시도해 주세요';
 
   const r = asRecord(e);
   const code = str(r.code);
@@ -49,7 +49,7 @@ export function msgOf(e: unknown, fallback = '요청을 처리하지 못했습�
     case 'P0001':
       return raw || fallback;
     case '42501':
-      return '권한이 없습니다 — 매장 담당자 계정인지 확인해 주세요';
+      return '권한이 없습니다. 매장 담당자 계정인지 확인해 주세요';
     case '23505':
       return '이미 등록된 값입니다';
     case '23503':
@@ -59,10 +59,10 @@ export function msgOf(e: unknown, fallback = '요청을 처리하지 못했습�
     case '22P02':
       return '입력 형식이 올바르지 않습니다';
     case 'PGRST301':
-      return '로그인이 만료되었습니다 — 다시 로그인해 주세요';
+      return '로그인이 만료되었습니다. 다시 로그인해 주세요';
     case 'PGRST202':
       // 앱 버전과 서버 함수가 어긋난 상태. 사용자가 할 수 있는 건 새로고침뿐이다.
-      return '앱이 최신이 아닙니다 — 새로고침 후 다시 시도해 주세요';
+      return '앱이 최신이 아닙니다. 새로고침 후 다시 시도해 주세요';
     default:
       break;
   }

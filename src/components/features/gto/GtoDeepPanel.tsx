@@ -94,7 +94,7 @@ function MixBar({ action }: { action: Required<ActionFrequency> }) {
     <div className="space-y-1.5">
       <div className="flex h-7 w-full overflow-hidden rounded-input bg-surface-high">
         {segs.map((s) => (s.v > 0 ? (
-          <div key={s.key} style={{ width: `${s.v * 100}%`, background: s.color }} className="transition-[width] duration-500" />
+          <div key={s.key} style={{ width: `${s.v * 100}%`, background: s.color }} className="transition-[width] duration-[var(--dur-panel)]" />
         ) : null))}
       </div>
       <div className="flex items-center justify-between">
@@ -116,19 +116,19 @@ interface StreetRec { label: string; color: string; textColor: string; note: str
 
 function preflopRec(eq: number): StreetRec {
   const p = Math.round(eq * 100);
-  if (eq >= 0.60) return { label: '레이즈 (밸류)', color: EQUITY_BANDS.dominant, textColor: EQUITY_BAND_TEXT.dominant, note: `에퀴티 ${p}% — 가치 레이즈로 밸류를 키웁니다.` };
-  if (eq >= 0.52) return { label: '레이즈/콜 혼합', color: EQUITY_BANDS.strong, textColor: EQUITY_BAND_TEXT.strong, note: `에퀴티 ${p}% — 레이즈와 콜을 섞어 균형을 잡습니다.` };
-  if (eq >= 0.44) return { label: '콜', color: EQUITY_BANDS.playable, textColor: EQUITY_BAND_TEXT.playable, note: `에퀴티 ${p}% — 콜로 포트에 참여할 만합니다.` };
-  if (eq >= 0.36) return { label: '콜/폴드 경계', color: EQUITY_BANDS.marginal, textColor: EQUITY_BAND_TEXT.marginal, note: `에퀴티 ${p}% — 포지션·오즈가 좋을 때만 콜.` };
-  return { label: '폴드', color: EQUITY_BANDS.weak, textColor: EQUITY_BAND_TEXT.weak, note: `에퀴티 ${p}% — 폴드가 정석입니다.` };
+  if (eq >= 0.60) return { label: '레이즈 (밸류)', color: EQUITY_BANDS.dominant, textColor: EQUITY_BAND_TEXT.dominant, note: `에퀴티 ${p}%. 가치 레이즈로 밸류를 키웁니다.` };
+  if (eq >= 0.52) return { label: '레이즈/콜 혼합', color: EQUITY_BANDS.strong, textColor: EQUITY_BAND_TEXT.strong, note: `에퀴티 ${p}%. 레이즈와 콜을 섞어 균형을 잡습니다.` };
+  if (eq >= 0.44) return { label: '콜', color: EQUITY_BANDS.playable, textColor: EQUITY_BAND_TEXT.playable, note: `에퀴티 ${p}%. 콜로 포트에 참여할 만합니다.` };
+  if (eq >= 0.36) return { label: '콜/폴드 경계', color: EQUITY_BANDS.marginal, textColor: EQUITY_BAND_TEXT.marginal, note: `에퀴티 ${p}%. 포지션·오즈가 좋을 때만 콜.` };
+  return { label: '폴드', color: EQUITY_BANDS.weak, textColor: EQUITY_BAND_TEXT.weak, note: `에퀴티 ${p}%. 폴드가 정석입니다.` };
 }
 function postRec(eq: number): StreetRec {
   const p = Math.round(eq * 100);
-  if (eq >= 0.62) return { label: '벳/레이즈 (밸류)', color: EQUITY_BANDS.dominant, textColor: EQUITY_BAND_TEXT.dominant, note: `에퀴티 ${p}% — 밸류 벳으로 강하게 압박합니다.` };
-  if (eq >= 0.50) return { label: '벳 또는 체크-콜', color: EQUITY_BANDS.strong, textColor: EQUITY_BAND_TEXT.strong, note: `에퀴티 ${p}% — 상황에 따라 벳/체크-콜.` };
-  if (eq >= 0.40) return { label: '체크-콜', color: EQUITY_BANDS.playable, textColor: EQUITY_BAND_TEXT.playable, note: `에퀴티 ${p}% — 포트 컨트롤 위주로 콜.` };
-  if (eq >= 0.30) return { label: '체크 (회피)', color: EQUITY_BANDS.marginal, textColor: EQUITY_BAND_TEXT.marginal, note: `에퀴티 ${p}% — 큰 베팅엔 폴드를 고려.` };
-  return { label: '체크-폴드', color: EQUITY_BANDS.weak, textColor: EQUITY_BAND_TEXT.weak, note: `에퀴티 ${p}% — 공격받으면 포기합니다.` };
+  if (eq >= 0.62) return { label: '벳/레이즈 (밸류)', color: EQUITY_BANDS.dominant, textColor: EQUITY_BAND_TEXT.dominant, note: `에퀴티 ${p}%. 밸류 벳으로 강하게 압박합니다.` };
+  if (eq >= 0.50) return { label: '벳 또는 체크-콜', color: EQUITY_BANDS.strong, textColor: EQUITY_BAND_TEXT.strong, note: `에퀴티 ${p}%. 상황에 따라 벳/체크-콜.` };
+  if (eq >= 0.40) return { label: '체크-콜', color: EQUITY_BANDS.playable, textColor: EQUITY_BAND_TEXT.playable, note: `에퀴티 ${p}%. 포트 컨트롤 위주로 콜.` };
+  if (eq >= 0.30) return { label: '체크 (회피)', color: EQUITY_BANDS.marginal, textColor: EQUITY_BAND_TEXT.marginal, note: `에퀴티 ${p}%. 큰 베팅엔 폴드를 고려.` };
+  return { label: '체크-폴드', color: EQUITY_BANDS.weak, textColor: EQUITY_BAND_TEXT.weak, note: `에퀴티 ${p}%. 공격받으면 포기합니다.` };
 }
 
 /** AI 액션 해설 — 비포/플랍/턴/리버 4개 스트릿 권장 액션 */
@@ -385,7 +385,7 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
             ) : (
               <>
                 <div className="flex h-5 overflow-hidden rounded-input bg-surface-high">
-                  <div style={{ width: `${deep.equity.hero * 100}%` }} className="bg-accent-300 transition-[width] duration-500" />
+                  <div style={{ width: `${deep.equity.hero * 100}%` }} className="bg-accent-300 transition-[width] duration-[var(--dur-panel)]" />
                 </div>
                 <div className="mt-1 flex justify-between text-2xs">
                   <span className="font-bold text-accent-300">Hero {Math.round(deep.equity.hero * 100)}%</span>
@@ -398,7 +398,7 @@ export default function GtoDeepPanel({ initialState }: { initialState?: DeepGtoI
           <div>
             <p className="mb-1 text-2xs font-semibold text-ink-secondary">참고 액션 가이드</p>
             <MixBar action={deep.normalizedAction} />
-            <p className="mt-1.5 text-2xs text-ink-muted">※ 에퀴티·팟오즈 기반 근사(솔버 아님) — 실제 GTO 솔버 값과 다를 수 있습니다.</p>
+            <p className="mt-1.5 text-2xs text-ink-muted">※ 에퀴티·팟오즈 기반 근사(솔버 아님). 실제 GTO 솔버 값과 다를 수 있습니다.</p>
           </div>
 
           {deep.equity && !deep.calculating && (() => {

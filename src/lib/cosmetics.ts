@@ -45,8 +45,8 @@ export const nickColorVar = (token?: string | null): string | null =>
  */
 export const FRAME_FALLBACK: Cosmetic[] = [
   { key: 'frame_gold',  kind: 'card_frame', label: '골드 라인', desc: '기본 카드의 정통 골드 테두리를 두 겹으로',     token: null, sort: 10 },
-  { key: 'frame_neon',  kind: 'card_frame', label: '네온',      desc: '보라 네온 글로우 — 어두운 배경에서 가장 밝게', token: null, sort: 20 },
-  { key: 'frame_felt',  kind: 'card_frame', label: '그린 펠트', desc: '테이블 천의 초록 — 홀덤 그 자체',              token: null, sort: 30 },
+  { key: 'frame_neon',  kind: 'card_frame', label: '네온',      desc: '보라 네온 글로우 · 어두운 배경에서 가장 밝게', token: null, sort: 20 },
+  { key: 'frame_felt',  kind: 'card_frame', label: '그린 펠트', desc: '테이블 천의 초록 · 홀덤 그 자체',              token: null, sort: 30 },
   { key: 'frame_chip',  kind: 'card_frame', label: '칩 트랙',   desc: '테두리를 따라 칩이 도는 트랙',                 token: null, sort: 40 },
   { key: 'frame_royal', kind: 'card_frame', label: '로열',      desc: '깊은 남색 바탕에 은빛 이중선',                 token: null, sort: 50 },
 ];

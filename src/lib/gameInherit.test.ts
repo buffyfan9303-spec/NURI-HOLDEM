@@ -26,7 +26,7 @@ const sched = (over: Record<string, unknown> = {}): Schedule => ({
   ...over,
 } as unknown as Schedule);
 
-describe('gameInherit — 포스터 → 장부/클락 상속(PL1)', () => {
+describe('gameInherit · 포스터 → 장부/클락 상속(PL1)', () => {
   it('levels 변환: isBreak → kind, ante 기본 0', () => {
     const lv = posterLevelsToClock(sched().structure!.levels!);
     expect(lv[0]).toEqual({ kind: 'level', minutes: 20, sb: 100, bb: 200, ante: 0 });
@@ -45,14 +45,14 @@ describe('gameInherit — 포스터 → 장부/클락 상속(PL1)', () => {
     expect(p.isAddon).toBe(true);
   });
 
-  it('구조 없는 포스터는 빈 패치에 가깝다(있는 것만 상속 — 부분 상속 허용)', () => {
+  it('구조 없는 포스터는 빈 패치에 가깝다(있는 것만 상속 · 부분 상속 허용)', () => {
     const p = clockPatchFromSchedule(sched({ structure: undefined, buyIn: { amount: 30_000 } }));
     expect(p.levels).toBeUndefined();
     expect(p.startStack).toBeUndefined();
     expect(p.isAddon).toBeUndefined();
   });
 
-  it('금액 상속(PL1b): 만원→원 정규화 · 원 그대로 · %·0 제외 — 1만 배 오기록 차단', () => {
+  it('금액 상속(PL1b): 만원→원 정규화 · 원 그대로 · %·0 제외 · 1만 배 오기록 차단', () => {
     const prizes = clockPrizesFromSchedule(sched());
     expect(prizes).toEqual([
       { place: '1', amount: 1_000_000 },
@@ -90,7 +90,7 @@ const fullPreset = (): GamePresetData => ({
   clock: { regCloseLevel: 9, maxLevel: 18, earlyBonus: 5_000, doubleEarlyBonus: 10_000, earlyDoubleLevel: 1, earlySingleLevel: 4 },
 });
 
-describe('applyToClock — 프리셋 → 클락(PL2a)', () => {
+describe('applyToClock · 프리셋 → 클락(PL2a)', () => {
   it('공용 + clock 네임스페이스 전체 적용, 순위상금은 원 정규화(1만 배 오기록 차단)', () => {
     const p = applyToClock(fullPreset());
     expect(p.title).toBe('데일리 6만');
@@ -115,8 +115,8 @@ describe('applyToClock — 프리셋 → 클락(PL2a)', () => {
   });
 });
 
-describe('applyToPoster — 프리셋 → 포스터 폼(PL2a)', () => {
-  it('GTD 원 → 만원(폼 단위), 순위상금 amountWon → 만원, 비화폐 행 원문 유지 — 1/10,000 회귀', () => {
+describe('applyToPoster · 프리셋 → 포스터 폼(PL2a)', () => {
+  it('GTD 원 → 만원(폼 단위), 순위상금 amountWon → 만원, 비화폐 행 원문 유지 · 1/10,000 회귀', () => {
     const p = applyToPoster(fullPreset());
     expect(p.buyIn).toBe(60_000);                 // 폼 바이인=원 그대로
     expect(p.prizeAmount).toBe(100);              // 1,000,000원 → 100만원 (1_000_000 이 아니어야 함)
@@ -127,7 +127,7 @@ describe('applyToPoster — 프리셋 → 포스터 폼(PL2a)', () => {
     expect(p.region).toBe('서울 강남');
     expect(p.blindLevels?.[1].isBreak).toBe(true);
   });
-  it('구형 프리셋(buyIn 만·prizeAmount 만원) 폴백 — 마이그레이션 없이 그대로 열림', () => {
+  it('구형 프리셋(buyIn 만·prizeAmount 만원) 폴백 · 마이그레이션 없이 그대로 열림', () => {
     const p = applyToPoster({ buyIn: 30_000, prizeType: 'GTD', prizeAmount: 500 });
     expect(p.buyIn).toBe(30_000);      // buyInWon 없음 → buyIn(원) 폴백
     expect(p.prizeAmount).toBe(500);   // 500만원(구형) → 5,000,000원 → 500만원 왕복 무손실
@@ -137,7 +137,7 @@ describe('applyToPoster — 프리셋 → 포스터 폼(PL2a)', () => {
   });
 });
 
-describe('applyToLedger — 프리셋 → 장부 세션(PL2a)', () => {
+describe('applyToLedger · 프리셋 → 장부 세션(PL2a)', () => {
   it('원 정규형 그대로 통과 + ledger 네임스페이스(카드단가·할인·딜러)', () => {
     const p = applyToLedger(fullPreset());
     expect(p.buyinAmount).toBe(60_000);
@@ -154,7 +154,7 @@ describe('applyToLedger — 프리셋 → 장부 세션(PL2a)', () => {
   });
 });
 
-describe('PL3 변환기 — 클락 프리셋·회차 스냅샷 → 프리셋', () => {
+describe('PL3 변환기 · 클락 프리셋·회차 스냅샷 → 프리셋', () => {
   const cfg: ClockConfig = {
     title: '터보 10만', startStack: 30_000, rebuyStack: 30_000, addonStack: 0, isAddon: false,
     earlyBonus: 3_000, doubleEarlyBonus: 6_000, regCloseLevel: 8, maxLevel: 15,
@@ -195,7 +195,7 @@ describe('PL3 변환기 — 클락 프리셋·회차 스냅샷 → 프리셋', (
   });
 });
 
-describe('presetFromSchedule / presetFromPosterForm — 왕복 단위 무손실(1/10,000 회귀)', () => {
+describe('presetFromSchedule / presetFromPosterForm · 왕복 단위 무손실(1/10,000 회귀)', () => {
   it('presetFromSchedule: 포스터 네임스페이스 + 정규형 병기', () => {
     const d = presetFromSchedule(sched({ startTime: '19:00', region: '서울', paymentMethods: ['현금'] } as unknown as Record<string, unknown>));
     expect(d.buyInWon).toBe(60_000);

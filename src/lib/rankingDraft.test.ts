@@ -32,7 +32,7 @@ beforeEach(() => {
   [K(''), K('사이드1'), K('사이드2')].forEach(clearRowsDraft);
 });
 
-describe('키 — 무엇을 입력 중인지가 (매장·날짜·게임)으로 정의된다', () => {
+describe('키. 무엇을 입력 중인지가 (매장·날짜·게임)으로 정의된다', () => {
   it('게임이 다르면 다른 초안이다(칩을 바꿔도 서로 안 섞인다)', () => {
     writeRowsDraft(K(''), [row({ nickname: '메인선수' })]);
     writeRowsDraft(K('사이드1'), [row({ nickname: '사이드선수' })]);
@@ -70,7 +70,7 @@ describe('무엇을 초안으로 남기는가', () => {
   });
 });
 
-describe('TTL — 낡은 초안이 저장된 순위를 덮어쓰지 않게', () => {
+describe('TTL · 낡은 초안이 저장된 순위를 덮어쓰지 않게', () => {
   const t0 = Date.parse('2026-07-26T12:00:00Z');
 
   it('48시간 안이면 살아 있다', () => {
@@ -78,7 +78,7 @@ describe('TTL — 낡은 초안이 저장된 순위를 덮어쓰지 않게', () 
     expect(readRowsDraft(K(''), t0 + RANK_DRAFT_TTL_MS - 1)).not.toBeNull();
   });
 
-  it('🔴 48시간을 넘기면 되살아나지 않는다 — 저장은 (날짜+게임) 전체 교체라 위험하다', () => {
+  it('🔴 48시간을 넘기면 되살아나지 않는다. 저장은 (날짜+게임) 전체 교체라 위험하다', () => {
     writeRowsDraft(K(''), [row({ nickname: 'a' })], t0);
     expect(readRowsDraft(K(''), t0 + RANK_DRAFT_TTL_MS + 1)).toBeNull();
   });
@@ -90,7 +90,7 @@ describe('TTL — 낡은 초안이 저장된 순위를 덮어쓰지 않게', () 
   });
 });
 
-describe('정리 — 키가 매장·날짜·게임마다 쌓인다', () => {
+describe('정리. 키가 매장·날짜·게임마다 쌓인다', () => {
   const t0 = Date.parse('2026-07-26T12:00:00Z');
 
   it('만료된 것만 지우고 살아있는 초안은 남긴다', () => {
@@ -101,7 +101,7 @@ describe('정리 — 키가 매장·날짜·게임마다 쌓인다', () => {
     expect(readRowsDraft(K('사이드1'), t0 + RANK_DRAFT_TTL_MS + 1)).not.toBeNull();
   });
 
-  it('깨진 값도 정리 대상 — 파싱 실패로 영원히 남지 않게', () => {
+  it('깨진 값도 정리 대상 · 파싱 실패로 영원히 남지 않게', () => {
     localStorage.setItem(K('사이드2'), '{{{깨진 JSON');
     expect(pruneRowsDrafts(t0)).toBe(1);
     expect(localStorage.getItem(K('사이드2'))).toBeNull();
@@ -123,7 +123,7 @@ describe('스토리지가 막힌 환경(사파리 프라이빗 등)에서도 죽
 
 // 재배치는 초안과 한 몸이다 — 이동 방식이 조금만 달라져도(행 객체 재생성 등)
 // '되돌리면 초안이 스스로 지워진다'는 성질이 깨져 배너가 영영 남는다. 그 경계를 여기서 고정한다.
-describe('등수 재배치 — 배열 순서가 곧 등수다', () => {
+describe('등수 재배치. 배열 순서가 곧 등수다', () => {
   const three = () => [row({ nickname: 'a' }), row({ nickname: 'b' }), row({ nickname: 'c' })];
 
   it('한 칸 위로 = 앞 줄과 자리를 바꾼다', () => {
@@ -134,14 +134,14 @@ describe('등수 재배치 — 배열 순서가 곧 등수다', () => {
     expect(moveRankRow(three(), 2, 0).map((r) => r.nickname)).toEqual(['c', 'a', 'b']);
   });
 
-  it('경계 밖·제자리 이동은 같은 배열을 그대로 돌려준다 — 헛 커밋으로 초안이 갱신되면 안 된다', () => {
+  it('경계 밖·제자리 이동은 같은 배열을 그대로 돌려준다. 헛 커밋으로 초안이 갱신되면 안 된다', () => {
     const r0 = three();
     expect(moveRankRow(r0, 0, -1)).toBe(r0);
     expect(moveRankRow(r0, 0, 3)).toBe(r0);
     expect(moveRankRow(r0, 1, 1)).toBe(r0);
   });
 
-  it('🔴 행 객체를 새로 만들지 않는다 — 원래 순서로 되돌리면 기준선(JSON)과 정확히 같아져 초안이 지워진다', () => {
+  it('🔴 행 객체를 새로 만들지 않는다. 원래 순서로 되돌리면 기준선(JSON)과 정확히 같아져 초안이 지워진다', () => {
     const r0 = three();
     const base = JSON.stringify(r0);
     const back = moveRankRow(moveRankRow(r0, 0, 2), 2, 0);

@@ -235,7 +235,7 @@ export function RangeMatrix() {
             <span className="font-bold text-ink-secondary">상대 {(100 - eq).toFixed(1)}%</span>
           </div>
           <div className="mt-1 flex h-2.5 overflow-hidden rounded-full bg-surface-high">
-            <div className="h-full bg-accent-300 transition-[width] duration-300" style={{ width: `${eq}%` }} />
+            <div className="h-full bg-accent-300 transition-[width] duration-[var(--dur-panel)]" style={{ width: `${eq}%` }} />
           </div>
         </div>
       )}

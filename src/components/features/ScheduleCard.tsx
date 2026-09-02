@@ -401,7 +401,7 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
         //   그리드 스크롤 40회 잰크 합 2353ms → transform 만 남기면 1373ms(-42%). 모바일은 hover 가
         //   없어 영향 0. §20.4 #3 도 색 계열 트랜지션은 ≤0.15s 로 제한하므로 300ms 는 원래 위반이었다.
         //   들어올림(transform)은 그대로 — 마우스 유저의 손맛은 잃지 않는다.
-        'flex flex-col overflow-hidden rounded-aura border transition-transform duration-[var(--dur-panel)] ease-out active:duration-75',
+        'flex flex-col overflow-hidden rounded-aura border transition-transform duration-[var(--dur-panel)] ease-out active:duration-[var(--dur-fast)]',
         'hover:-translate-y-1 cursor-pointer active:scale-[0.98]',
         schedule.isPremium
           ? 'border-accent-400 shadow-[0_0_12px_rgb(var(--accent-300)/0.22)] bg-surface-low'

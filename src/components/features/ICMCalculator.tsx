@@ -119,7 +119,7 @@ export default function ICMCalculator() {
       ))}
     </div>
     <p className="mt-1 text-2xs text-ink-muted">
-      {looksPct ? '합계 ≈100 — % 상금 구조로 입력됨(결과도 % 단위)' : '합계가 100이 아니므로 금액 단위 그대로 계산됩니다'}
+      {looksPct ? '합계 ≈100 · % 상금 구조로 입력됨(결과도 % 단위)' : '합계가 100이 아니므로 금액 단위 그대로 계산됩니다'}
     </p>
   </div>
   );
@@ -294,7 +294,7 @@ export default function ICMCalculator() {
       </p>
       <p className="text-2xs text-ink-muted">
         Malmuth-Harville 모델 기준 추정치입니다. 실제 딜·체급에 따라 차이가 있을 수 있습니다.
-        {mode === 'pressure' && ' 판정 예시는 학습용 기준선 — 상대 레인지 추정이 틀리면 결론도 달라집니다.'}
+        {mode === 'pressure' && ' 판정 예시는 학습용 기준선. 상대 레인지 추정이 틀리면 결론도 달라집니다.'}
       </p>
     </CalcCard>
   );

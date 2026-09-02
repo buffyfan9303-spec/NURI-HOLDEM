@@ -62,19 +62,19 @@ function state(over: Partial<ClockState> = {}): ClockState {
 }
 
 // ── #21 ①: 시각 → 레벨 판정 ───────────────────────────────────────────────────
-describe('levelNoAtMinutes — 바인 시각을 레벨로 환산', () => {
+describe('levelNoAtMinutes · 바인 시각을 레벨로 환산', () => {
   it('5시 스타트·20분 듀레이션이면 5시 20분 전 바인은 1레벨', () => {
     expect(levelNoAtMinutes(LEVELS20, 0)).toBe(1);
     expect(levelNoAtMinutes(LEVELS20, 19.999)).toBe(1);
   });
 
-  it('정확히 20분은 2레벨 시작점 — 반열림 경계 [0,20)', () => {
+  it('정확히 20분은 2레벨 시작점 · 반열림 경계 [0,20)', () => {
     expect(levelNoAtMinutes(LEVELS20, 20)).toBe(2);
     expect(levelNoAtMinutes(LEVELS20, 39)).toBe(2);
     expect(levelNoAtMinutes(LEVELS20, 40)).toBe(3);
   });
 
-  it('브레이크는 자기 번호를 갖지 않는다 — 직전 레벨 번호를 유지', () => {
+  it('브레이크는 자기 번호를 갖지 않는다. 직전 레벨 번호를 유지', () => {
     const withBreak = [L(20), L(20), L(8, 'break'), L(20)]; // L1 L2 BREAK L3
     expect(levelNoAtMinutes(withBreak, 41)).toBe(2);  // 40~48 = 브레이크 → 여전히 2
     expect(levelNoAtMinutes(withBreak, 47)).toBe(2);
@@ -88,7 +88,7 @@ describe('levelNoAtMinutes — 바인 시각을 레벨로 환산', () => {
   });
 });
 
-describe('currentLevelNo — 낡은 클락 행에서도 지금 레벨', () => {
+describe('currentLevelNo · 낡은 클락 행에서도 지금 레벨', () => {
   const T0 = Date.parse(START);
   it('정지 중이면 currentIndex 그대로', () => {
     expect(currentLevelNo(state({ currentIndex: 2 }), T0)).toBe(3);
@@ -104,7 +104,7 @@ describe('currentLevelNo — 낡은 클락 행에서도 지금 레벨', () => {
 });
 
 // ── #21 ②: 얼리 유형 판정 ─────────────────────────────────────────────────────
-describe('earlyTypeAtLevel — 레벨 → 얼리 유형', () => {
+describe('earlyTypeAtLevel · 레벨 → 얼리 유형', () => {
   it('더블 1LV · 1얼리 2LV 설정에서 레벨별 판정', () => {
     expect(earlyTypeAtLevel(CFG, 1)).toBe('double');
     expect(earlyTypeAtLevel(CFG, 2)).toBe('single');
@@ -116,7 +116,7 @@ describe('earlyTypeAtLevel — 레벨 → 얼리 유형', () => {
   });
 });
 
-describe('earlyTypeOf — 시각 자동판정(기존 규칙 유지)', () => {
+describe('earlyTypeOf · 시각 자동판정(기존 규칙 유지)', () => {
   const S = { earlyDoubleMin: 20, earlySingleMin: 40, tournamentStart: START };
   it('1레벨 안 = 더블얼리 · 2레벨 안 = 1얼리 · 그 뒤 = 없음', () => {
     expect(earlyTypeOf(at(5, 'a'), S)).toBe('double');
@@ -192,7 +192,7 @@ describe('얼리 카운트 = 기준칩 배수의 합 (오너 예시 6 → 7)', (
     expect(earlyUnitTotal({ earlies: 4, doubleEarlies: 3 }, noBonus)).toBe(4);
   });
 
-  it('더블 보너스만 설정된 게임 — 더블 1, 1얼리 0', () => {
+  it('더블 보너스만 설정된 게임 · 더블 1, 1얼리 0', () => {
     const dOnly = { ...CFG, earlyBonus: 0, doubleEarlyBonus: 10_000 };
     expect(earlyUnitsOf(dOnly, 'double')).toBe(1);
     expect(earlyUnitsOf(dOnly, 'single')).toBe(0);
@@ -200,7 +200,7 @@ describe('얼리 카운트 = 기준칩 배수의 합 (오너 예시 6 → 7)', (
 });
 
 // ── #20: 레벨 연동 할인 자동 적용 + 정산 반영 ──────────────────────────────────
-describe('autoDiscountIndex — 포스터/장부에 적힌 레벨 할인의 자동 적용', () => {
+describe('autoDiscountIndex · 포스터/장부에 적힌 레벨 할인의 자동 적용', () => {
   const DISCS: DiscountPreset[] = [
     { label: '1레벨', amount: 50_000, level: 1 },
     { label: '2레벨', amount: 30_000, level: 2 },
@@ -225,16 +225,16 @@ describe('autoDiscountIndex — 포스터/장부에 적힌 레벨 할인의 자�
   });
 });
 
-describe('discountSummary — 마감정산의 할인 엔트리 · 총 할인액', () => {
+describe('discountSummary · 마감정산의 할인 엔트리 · 총 할인액', () => {
   const S = { buyinAmount: 100_000, cardAmount: null, discounts: [
     { label: '1레벨', amount: 50_000, level: 1 },
     { label: '2레벨', amount: 30_000, level: 2 },
   ] };
-  it('오너 예시 — 5만 할인 1건이 들어가면 할인 엔트리 1 · 총 할인 5만', () => {
+  it('오너 예시 · 5만 할인 1건이 들어가면 할인 엔트리 1 · 총 할인 5만', () => {
     const r = discountSummary([buyin({ discountIndex: 1 }), buyin({ playerName: 'q' })], S);
     expect(r).toEqual({ count: 1, total: 50_000, entryLoss: 0.5 });
   });
-  it('여러 건 합산 — 5만 + 5만 + 3만 = 13만 / 3건', () => {
+  it('여러 건 합산 · 5만 + 5만 + 3만 = 13만 / 3건', () => {
     const r = discountSummary(
       [buyin({ discountIndex: 1 }), buyin({ discountIndex: 1 }), buyin({ discountIndex: 2 })], S);
     expect(r.count).toBe(3);

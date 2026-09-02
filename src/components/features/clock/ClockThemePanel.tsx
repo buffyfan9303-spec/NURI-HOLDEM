@@ -61,7 +61,7 @@ export default function ClockThemePanel({ venueId }: { venueId: string }) {
 
   const pickPreset = async (id: string) => {
     if (await persist(makeClockTheme(id, curAccentSel, curImage))) {
-      toast.show('클락 화면 테마를 저장했습니다 — TV 송출에 바로 반영됩니다', 'success');
+      toast.show('클락 화면 테마를 저장했습니다. TV 송출에 바로 반영됩니다', 'success');
     }
   };
   const pickAccent = async (v: string) => {
@@ -77,7 +77,7 @@ export default function ClockThemePanel({ venueId }: { venueId: string }) {
       const url = await uploadClockBg(venueId, file);
       setStage('저장 중…');
       const ok = await persist(makeClockTheme(curPresetId, curAccentSel, url), curImage);
-      if (ok) toast.show('배경 이미지를 등록했습니다 — 글자가 잘 보이도록 자동으로 어둡게 처리됩니다', 'success');
+      if (ok) toast.show('배경 이미지를 등록했습니다. 글자가 잘 보이도록 자동으로 어둡게 처리됩니다', 'success');
       else void deleteClockBg(url); // 저장 실패분은 고아로 남기지 않는다
     } catch (e) {
       toast.show(e instanceof Error ? e.message : '업로드 실패', 'error');
@@ -127,7 +127,7 @@ export default function ClockThemePanel({ venueId }: { venueId: string }) {
 
       {/* 배경 이미지 — 업로드 / 교체 / 제거 */}
       <div className="rounded-input border border-border-subtle bg-surface-high p-2.5 space-y-1.5">
-        <p className="text-2xs font-semibold text-ink-secondary">배경 이미지 <span className="font-normal text-ink-muted">(매장 사진·로고 — 선택)</span></p>
+        <p className="text-2xs font-semibold text-ink-secondary">배경 이미지 <span className="font-normal text-ink-muted">(매장 사진·로고 · 선택)</span></p>
         <div className="flex flex-wrap items-center gap-1.5">
           <label className={['btn-ghost text-2xs px-3 py-1.5', busy ? 'pointer-events-none opacity-50' : 'cursor-pointer'].join(' ')}>
             {stage ?? (curImage ? '이미지 변경' : '이미지 올리기')}

@@ -20,7 +20,7 @@ function isSubmitKey(e: { key: string; nativeEvent: { isComposing: boolean } }):
 const ev = (key: string, isComposing = false) => ({ key, nativeEvent: { isComposing } });
 
 describe('IME 조합 가드', () => {
-  it('🔴 조합 중 Enter 는 제출이 아니다 — 이게 없어서 이름이 두 번 들어갔다', () => {
+  it('🔴 조합 중 Enter 는 제출이 아니다. 이게 없어서 이름이 두 번 들어갔다', () => {
     expect(isSubmitKey(ev('Enter', true))).toBe(false);
   });
 

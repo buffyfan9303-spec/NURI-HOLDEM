@@ -245,8 +245,8 @@ function SlugEditor({ venueId }: { venueId: string }) {
         <button type="button" onClick={save} disabled={busy || (slug !== '' && check !== 'ok') || slug === (saved ?? '')}
           className="btn-primary shrink-0 px-3 text-xs disabled:opacity-50">저장</button>
       </div>
-      {check === 'ok' && <p className="text-2xs font-semibold text-emerald-400">✓ 사용할 수 있는 링크입니다 — 저장을 누르세요.</p>}
-      {check === 'taken' && <p className="text-2xs font-semibold text-danger-light">✕ 이미 사용 중인 링크입니다 — 다른 이름을 시도하세요.</p>}
+      {check === 'ok' && <p className="text-2xs font-semibold text-emerald-400">✓ 사용할 수 있는 링크입니다. 저장을 누르세요.</p>}
+      {check === 'taken' && <p className="text-2xs font-semibold text-danger-light">✕ 이미 사용 중인 링크입니다. 다른 이름을 시도하세요.</p>}
       {check === 'invalid' && <p className="text-2xs font-semibold text-danger-light">✕ 영문 소문자·숫자·하이픈(-)으로 2~20자여야 합니다.</p>}
       <p className="text-2xs text-ink-muted">
         {saved ? <>현재 링크: <span className="font-bold text-accent-300">nuriholdem.com/s/{saved}</span> · 비우고 저장하면 기본 링크로 돌아갑니다.</>
@@ -305,7 +305,7 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
     const seasonStart = nbPeriod === 'season' ? new Date().toLocaleDateString('en-CA') : undefined;
     setCfg((c) => ({ ...c, customBoards: [...(c.customBoards ?? []), { key, name, unit: nbUnit.trim() || undefined, period: nbPeriod, seasonStart }] }));
     setNbName(''); setNbUnit(''); setNbPeriod('all');
-    toast.show('커스텀 보드를 추가했습니다 — 저장을 눌러 반영하세요', 'info');
+    toast.show('커스텀 보드를 추가했습니다. 저장을 눌러 반영하세요', 'info');
   };
   const removeBoard = (key: string) => {
     setCfg((c) => ({
@@ -321,7 +321,7 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
       ...c,
       customBoards: (c.customBoards ?? []).map((b) => (b.key === key ? { ...b, seasonStart: today } : b)),
     }));
-    toast.show('시즌 시작일을 오늘로 리셋했습니다 — 저장을 눌러 반영하세요', 'info');
+    toast.show('시즌 시작일을 오늘로 리셋했습니다. 저장을 눌러 반영하세요', 'info');
   };
 
   const points = cfg.placementPoints?.length ? cfg.placementPoints : DEFAULT_PLACEMENT_POINTS;
@@ -357,7 +357,7 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
       };
       await setVenuePageConfig(venueId, next);
       setCfg(next);
-      toast.show('매장 랭킹 설정을 저장했습니다 — 매장 커뮤니티 순위 탭에 바로 반영됩니다', 'success');
+      toast.show('매장 랭킹 설정을 저장했습니다. 매장 커뮤니티 순위 탭에 바로 반영됩니다', 'success');
     } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
     finally { setSaving(false); }
   };
@@ -408,7 +408,7 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
                     {BOARD_PERIOD_LABEL[b.period ?? 'all']}{b.period === 'season' && b.seasonStart ? ` · ${b.seasonStart.slice(5)}~` : ''}
                   </span>
                   {b.period === 'season' && (
-                    <button type="button" onClick={() => resetSeason(b.key)} className="shrink-0 rounded-badge border border-accent-400/40 px-1.5 py-0.5 text-[9px] font-bold text-accent-300 hover:bg-accent-300/10">시즌 리셋</button>
+                    <button type="button" onClick={() => resetSeason(b.key)} className="shrink-0 rounded-chip border border-accent-400/40 px-1.5 py-0.5 text-[9px] font-bold text-accent-300 hover:bg-accent-300/10">시즌 리셋</button>
                   )}
                   <button type="button" onClick={() => removeBoard(b.key)} aria-label="보드 삭제" className="shrink-0 text-ink-muted hover:text-danger-light"><Icon name="close" size={13} /></button>
                 </li>
@@ -565,7 +565,7 @@ export function ScorePointsPanel({ venueId, customBoards = [] }: { venueId: stri
     <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-3">
       <div>
         <h3 className="text-sm font-bold text-ink-primary">포인트 지급 · 차감</h3>
-        <p className="text-2xs text-ink-muted mt-0.5">이벤트·미션 보상 등 자유 점수를 <span className="font-semibold text-accent-300">날짜·보드별</span>로 매일 기록합니다. 커스텀 보드는 여기서 입력한 명단으로만 순위가 만들어집니다. <span className="font-semibold text-accent-300">사유는 필수</span>입니다 — 나중에 "이 점수 왜 나갔나"를 되짚는 유일한 단서예요.</p>
+        <p className="text-2xs text-ink-muted mt-0.5">이벤트·미션 보상 등 자유 점수를 <span className="font-semibold text-accent-300">날짜·보드별</span>로 매일 기록합니다. 커스텀 보드는 여기서 입력한 명단으로만 순위가 만들어집니다. <span className="font-semibold text-accent-300">사유는 필수</span>입니다. 나중에"이 점수 왜 나갔나"를 되짚는 유일한 단서예요.</p>
       </div>
       <div className="flex flex-wrap gap-1.5">
         <select value={board} onChange={(e) => setBoard(e.target.value)} className="input w-full text-sm sm:w-auto sm:min-w-[10rem]">
@@ -728,7 +728,7 @@ export function ScoreCalendar({ venueId, customBoards = [] }: { venueId: string;
         <div className="rounded-input border border-border-subtle bg-surface-high p-2.5">
           <p className="mb-1.5 text-2xs font-bold text-ink-secondary">{sel} 기록 {selEntries.length ? `(${selEntries.length}건)` : ''}</p>
           {selEntries.length === 0 ? (
-            <p className="py-2 text-center text-2xs text-ink-muted">이 날짜의 기록이 없습니다 — 위 「포인트 지급 · 차감」에서 날짜를 골라 입력하세요.</p>
+            <p className="py-2 text-center text-2xs text-ink-muted">이 날짜의 기록이 없습니다. 위 「포인트 지급 · 차감」에서 날짜를 골라 입력하세요.</p>
           ) : (
             <ul className="max-h-48 space-y-1 overflow-y-auto pr-1">
               {selEntries.map((r) => (
@@ -829,7 +829,7 @@ function RankBoardPreview({ venueId, cfg }: { venueId: string; cfg: VenuePageCon
         </select>
       </div>
       {loading ? <p className="py-4 text-center text-2xs text-ink-muted">불러오는 중…</p>
-        : rows.length === 0 ? <p className="py-4 text-center text-2xs text-ink-muted">데이터가 없습니다 — 순위 입력·장부 기록·포인트 입력이 쌓이면 표시됩니다.</p>
+        : rows.length === 0 ? <p className="py-4 text-center text-2xs text-ink-muted">데이터가 없습니다. 순위 입력·장부 기록·포인트 입력이 쌓이면 표시됩니다.</p>
         : (
           <ol className="grid grid-cols-1 gap-x-4 gap-y-0.5 sm:grid-cols-2">
             {rows.map((b, i) => (

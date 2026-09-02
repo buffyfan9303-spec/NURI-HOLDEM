@@ -5,7 +5,7 @@ import type { Card } from './gto.types';
 
 const C = (rank: string, suit: string): Card => ({ rank: rank as Card['rank'], suit: suit as Card['suit'] });
 
-describe('computeOuts — 리버 클린 아웃(턴 보드 4장)', () => {
+describe('computeOuts · 리버 클린 아웃(턴 보드 4장)', () => {
   // Hero AA vs Villain KK, 보드 2♦7♣9♠5♥ — 무해한 보드. 빌런은 오직 리버 K(K♠·K♥) 2장만 승리.
   const hero: [Card, Card] = [C('A', 's'), C('A', 'h')];
   const vill: [Card, Card] = [C('K', 'd'), C('K', 'c')];
@@ -33,7 +33,7 @@ describe('computeOuts — 리버 클린 아웃(턴 보드 4장)', () => {
   });
 });
 
-describe('computeOuts — 플랍(보드 3장)은 턴 우세 전환 카드', () => {
+describe('computeOuts · 플랍(보드 3장)은 턴 우세 전환 카드', () => {
   // Hero A♠K♠ 넛플러시 드로 vs Villain Q♥Q♦(오버페어), 보드 2♠7♠9♦
   const hero: [Card, Card] = [C('A', 's'), C('K', 's')];
   const vill: [Card, Card] = [C('Q', 'h'), C('Q', 'd')];
@@ -55,7 +55,7 @@ describe('computeOuts — 플랍(보드 3장)은 턴 우세 전환 카드', () =
   });
 });
 
-describe('computeOuts — 경계', () => {
+describe('computeOuts · 경계', () => {
   it('보드 0/1/2/5 장이면 null(다음 카드 없음/미지원)', () => {
     const hero: [Card, Card] = [C('A', 's'), C('A', 'h')];
     const vill: [Card, Card] = [C('K', 'd'), C('K', 'c')];

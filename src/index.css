@@ -114,40 +114,63 @@
   }
   .aura-bg {
     position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    /* v3: 상단 시안 글로우는 body::before 가 이미 그린다 — 여기는 우측 퍼플 + 좌하단 시안 두 겹만(겹침 방지) */
     background-image:
-      radial-gradient(60vmax 40vmax at 15% -10%, rgb(var(--aura-glow) / var(--aura-a1)), transparent 62%),
       radial-gradient(50vmax 36vmax at 100% 42%, rgb(var(--accent-300) / var(--aura-a2)), transparent 62%),
       radial-gradient(46vmax 30vmax at -5% 100%, rgb(var(--aura-glow) / var(--aura-a3)), transparent 62%);
   }
   .card-aura {
-    background-color: rgb(var(--surface-low) / 0.72);
-    border-color: rgb(255 255 255 / 0.06);
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 8px 24px -12px rgb(0 0 0 / 0.45);
+    /* v4 'Vibrant Depth'(aura-ui.com): 불투명 카드 + **거의 안 보이는** 헤어라인(white 5%) + 겹친 부드러운 그림자(Aura UI shadow-lg)
+       + 상단 1px 하이라이트. v3 의 7% 테두리·반투명은 '선이 도드라지는' 조잡함의 원인이었다. */
+    background-color: rgb(var(--surface-low));
+    border-color: rgb(255 255 255 / 0.05);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04), 0 10px 15px rgb(0 0 0 / 0.08), 0 4px 6px rgb(0 0 0 / 0.04);
   }
+  /* 호버 가능한 카드(Aura UI 'Hoverable Cards Grid'): 포인터가 있는 기기에서만 테두리가 살짝 밝아지고 2px 떠오른다.
+     transform/색만(헌법 화이트리스트) · --dur-fast · 터치 기기는 hover 가 없어 영향 0 */
+  @media (hover: hover) and (pointer: fine) {
+    .card-aura { transition: transform var(--dur-fast) var(--ease-out-ui), border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease); }
+    .card-aura:hover { border-color: rgb(255 255 255 / 0.10); transform: translateY(-2px);
+      box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 20px 25px rgb(0 0 0 / 0.10), 0 8px 10px rgb(0 0 0 / 0.04), 0 0 0 3px rgb(var(--accent-300) / 0.10); }
+  }
+  @media (prefers-reduced-motion: reduce) { .card-aura:hover { transform: none; } }
+  /* 카드 속 카드(시안 Sub-Card #151C30) — 수면 분석 캡슐처럼 한 단계 밝은 면 + 4% 헤어라인 */
+  .card-aura-sub {
+    background-color: rgb(var(--surface-mid));
+    border-color: rgb(255 255 255 / 0.04);
+  }
+  html.light .card-aura-sub { background-color: rgb(var(--surface-high)); border-color: rgb(var(--border-subtle)); }
+  /* 네온 링/게이지 — 진행 스트로크에만(정적 필터, 애니메이트하지 않는다 §4) */
+  .ring-glow { filter: drop-shadow(0 0 6px rgb(var(--aura-300) / 0.8)); }
+  html.light .ring-glow { filter: none; }
   html.light .card-aura {
     background-color: rgb(var(--surface-low) / 0.85);
     border-color: rgb(var(--border-default) / 0.7);
     box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.9), 0 8px 24px -14px rgb(20 22 26 / 0.18);
   }
   .t-micro {
-    font-size: 0.625rem; line-height: 1; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+    /* v3 스펙: text-xs font-semibold tracking-widest cyan — 영문 대문자 라벨(PLAYERS·BUY-IN·REG)에만. 한글엔 쓰지 않는다 */
+    font-size: 0.6875rem; line-height: 1; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
     color: rgb(var(--aura-300));
   }
 
   :root,
   html.dark {
-    --surface-base:  21 18 33;   /* #151221 트와일라잇 딥 플럼(오너 컨셉 2차 강화) */
-    --surface-low:   29 25 46;   /* #1D192E 패널/카드 */
-    --surface-mid:   36 31 58;   /* #241F3A 모달/사이드 */
-    --surface-high:  45 39 71;   /* #2D2747 인풋/호버 */
-    --surface-float: 55 48 86;   /* #373056 드롭다운/툴팁 */
+    /* ── 아우라 v3(2026-09-02 오너 승인): 딥 플럼 → 시안 'Aura Health AI' 의 딥 네이비 블랙.
+       바탕 #06080F · 카드 #0E1322 · 서브카드 #151C30. 블루 언더톤이 전 지면에 깔린다. ── */
+    --surface-base:  6 8 15;     /* #06080F 딥 네이비 블랙 */
+    --surface-low:   14 19 34;   /* #0E1322 카드 */
+    --surface-mid:   21 28 48;   /* #151C30 서브카드/모달 */
+    --surface-high:  27 36 60;   /* #1B243C 인풋/호버 */
+    --surface-float: 34 45 74;   /* #222D4A 드롭다운/툴팁 */
 
-    --ink-primary:   244 245 246; /* #F4F5F6 본문 */
+    --ink-primary:   255 255 255; /* #FFFFFF 헤드라인·주요 수치(v3: 순백 100%) */
     /* ⚠ 보조/메타 텍스트는 앱에서 가장 많이 쓰이는데(1087곳) 대비가 부족했다.
        현장 조명이 어둡고 화면을 비스듬히 보는 상황이 기본이라, '읽을 수 있음'의 하한을 올린다.
        (#8A8F98 → #A0A6B0 / #6E747C → #868C96 — surface-base 대비 AA 확보) */
-    --ink-secondary: 178 173 203; /* #B2ADCB 보조 — 플럼 배경 대비 ≥7:1 */
-    --ink-muted:     148 142 176; /* #948EB0 메타/라벨 — 플럼 배경 대비 ≥4.5:1 */
+    --ink-secondary: 139 155 180; /* #8B9BB4 본문·부제목 — 시안의 쿨 그레이(눈부심 방지). base 6.5 · 카드 6.2 */
+    /* 시안의 3차 #526079 는 base 3.6:1 로 AA 미달 — 메타 글자 1087곳이 이 토큰이라 #74849E 로 올린다(base 5.3 · 카드 4.9) */
+    --ink-muted:     116 132 158; /* #74849E 메타/라벨 */
     --ink-inverse:   24 26 32;    /* 골드(상금) 버튼 위 검정 */
     /* 유저가 고른 '밝은' 배경(아바타 이니셜 등) 위 글자. 테마 무관 고정값 —
        배경이 지면이 아니라 유저 데이터라 다크/라이트로 갈릴 이유가 없다.
@@ -155,34 +178,41 @@
        임계 하나(src/lib/color.ts)로 전 색역 4.5:1 이 보장된다. 더 밝히면 사각지대가 생긴다. */
     --ink-on-bright: 3 4 5;
 
-    --border-subtle:  44 39 66;   /* #2C2742 — 플럼 위 헤어라인 등가 */
+    --border-subtle:  24 28 43;   /* #181C2B — 시안 sub-border(white 4%) 를 카드 위에 합성한 값 */
     /* 입력칸 경계가 1.28:1 이라 '칸이 어디까지인지'가 안 보였다. subtle < default < strong 위계는 유지한다. */
-    --border-default: 76 68 108;  /* #4C446C */
-    --border-strong:  108 99 146; /* #6C6392 */
+    --border-default: 38 45 64;   /* #262D40 — white 7%(시안 default) 보다 한 단계 밝게: base 1.46 (게이트 >1.35) */
+    --border-strong:  84 96 128;  /* #546080 — base 3.2 (UI 경계 ≥3) */
 
     /* 액센트 — 어워드 레퍼런스 정합 바이올렛(h256 · 2026-08-27, 구 h248 #7364DB 에서 이동).
        레퍼런스(DatawizzAI·OUTFLAME·Alice K) 공통 hue ≈258(#8B5CF6 계열)로 동조하되 명도는 제약 유지 —
        실측(WCAG): 300 vs base 4.00 · vs low 3.71 (UI ≥3 충족) / 흰 텍스트 on 300 = 4.60 (AA)
        / 200 텍스트 vs base 8.83 (AA 본문). 50·100 은 사용처 감사 결과 텍스트 틴트 용도
        (text-accent-100 1곳·50 은 0곳)라 페일 톤 유지 — 딥 틴트로 바꾸면 그 텍스트가 죽는다. */
-    --accent-50:  238 233 251; /* #EEE9FB */
-    --accent-100: 216 205 246; /* #D8CDF6 */
-    --accent-200: 188 169 240; /* #BCA9F0 다크 위 액센트 텍스트 */
-    --accent-300: 128 95 218;  /* #805FDA primary */
-    --accent-400: 122 90 210;  /* #7A5AD2 hover */
-    --accent-500: 108 77 192;  /* #6C4DC0 pressed */
-    --accent-600: 85 60 153;   /* #553C99 딥 보더/배경 */
+    /* v4(2026-09-02 오너 지시 'aura-ui.com 기준'): 주색 = Aura UI primary 인디고 계열. v3 딥 퍼플은 시안·골드와 겹쳐 조잡했다.
+       #6366F1 은 흰 글자 4.45 로 AA 에 아슬하게 미달 → 한 톤 깊은 #5850EC 를 primary 로(흰 글자 5.6 · base 3.6 · 카드 3.3).
+       200 텍스트 틴트 #A5B4FC vs base 9.9. hover/pressed 는 Aura UI 600/700 그대로. */
+    --accent-50:  224 231 255; /* #E0E7FF 텍스트 틴트 */
+    --accent-100: 199 210 254; /* #C7D2FE */
+    --accent-200: 165 180 252; /* #A5B4FC 다크 위 액센트 텍스트 */
+    --accent-300: 88 80 236;   /* #5850EC primary */
+    --accent-400: 79 70 229;   /* #4F46E5 hover (Aura UI 600) */
+    --accent-500: 67 56 202;   /* #4338CA pressed (700) */
+    --accent-600: 55 48 163;   /* #3730A3 딥 보더/배경 (800) */
 
     /* ── 아우라(Aura) 신호색 — 틸(청록). 오너 참조 시안 'Aura Health AI'(2026-09-02).
        역할 분담: 바이올렛(accent)은 **브랜드 주색**(채운 버튼·활성 탭) 그대로, 틸은 **신호·데이터·후광** —
        글로우 블룸 · 링/바 데이터 · 대문자 마이크로 라벨 · 활성 외곽선 칩 · 라이브 펄스.
        시안에서 틸이 실제로 쓰이는 방식이 정확히 이것이고, 채운 버튼까지 틸로 바꾸면 흰 글자가 AA 를 못 넘긴다.
        실측(WCAG): 300 #2DD4BF vs base 9.2 · vs low 8.5 (AA 본문) / 400 #14B8A6 vs base 6.9. */
-    --aura-200: 94 234 212;  /* #5EEAD4 연한 틴트(비텍스트·글로우 하이라이트) */
-    --aura-300: 45 212 191;  /* #2DD4BF primary — 텍스트·외곽선·링 */
-    --aura-400: 20 184 166;  /* #14B8A6 hover/딥 */
-    --aura-glow: 45 212 191; /* 방사형 블룸 색 */
-    --aura-a1: 0.22; --aura-a2: 0.20; --aura-a3: 0.14; /* 블룸 3개의 알파 — 다크는 또렷하게(첫 촬영 0.16은 소심했다) */
+    /* v4: 네온(#00F2FE)은 인디고·골드와 겹치면 조잡 — Aura UI secondary(cyan-500 #06B6D4)로 절제. 텍스트 대비 base 8.2 */
+    --aura-200: 34 211 238;  /* #22D3EE 연한 틴트(비텍스트·글로우 하이라이트) */
+    --aura-300: 6 182 212;   /* #06B6D4 primary — 라벨·링·데이터 강조 */
+    --aura-400: 8 145 178;   /* #0891B2 딥 */
+    --aura-glow: 6 182 212;  /* 방사형 블룸 색 */
+    --aura-a1: 0.10; --aura-a2: 0.12; --aura-a3: 0.07; /* 블룸 3개의 알파 — 시안은 0.08 이 기준, 오른쪽 퍼플만 조금 더 */
+    /* 시안의 상태색 — 차트 블루·리커버리 오렌지(순수 SVG 게이지/차트용) */
+    --chart-blue: 59 130 246;   /* #3B82F6 */
+    --chart-orange: 255 140 66; /* #FF8C42 */
 
     /* ── 등급 색(2~K · A · 운영자) — 테마 인지 토큰 ─────────────────────────────
        왜 두 벌인가: 같은 등급색이 '글자'와 '장식'에서 요구 기준이 다르다.
@@ -274,44 +304,49 @@
 
   /* 라이트 테마 — NURI PET 라이트(화이트 패널·옅은 회색 보더) */
   html.light {
-    --surface-base:  245 246 248; /* #F5F6F8 PET bg */
+    /* v3 라이트 — 다크의 블루 언더톤을 그대로 물려받은 쿨 화이트(시안은 다크 전용이라 제가 유도) */
+    --surface-base:  245 247 251; /* #F5F7FB 쿨 화이트 */
     --surface-low:   255 255 255;
     --surface-mid:   255 255 255;
-    --surface-high:  240 241 244; /* #F0F1F4 인풋/호버 */
-    --surface-float: 230 232 236; /* #E6E8EC */
+    --surface-high:  238 242 248; /* #EEF2F8 인풋/호버 */
+    --surface-float: 228 233 242; /* #E4E9F2 */
 
-    --ink-primary:   20 22 26;    /* #14161A PET tx */
-    --ink-secondary: 91 97 110;   /* #5B616E PET tx2 */
-    --ink-muted:     99 108 123;  /* #636C7B — WCAG AA 보강(흰/회색 배경서 ≥4.5:1) */
+    --ink-primary:   11 18 32;    /* #0B1220 네이비 블랙 글자 */
+    --ink-secondary: 74 88 120;   /* #4A5878 쿨 그레이 — base 6.7 */
+    --ink-muted:     92 107 138;  /* #5C6B8A — base 5.0 · 흰 카드 5.4 */
     --ink-inverse:   24 26 32;    /* 골드 버튼 위 텍스트는 어둡게 유지 */
     --ink-on-bright: 3 4 5;       /* 다크와 동일 — 근거는 위 블록 주석 */
 
-    --border-subtle:  230 232 236; /* #E6E8EC PET line — 헤어라인은 디자인 의도라 유지 */
+    --border-subtle:  227 232 240; /* #E3E8F0 헤어라인(쿨) */
     /* 라이트도 같은 문제(1.28:1) — 흰 배경에서 입력칸 테두리가 사실상 안 보였다.
        시인성 재보정(2026-08-27, 명도만·hue 218 유지): default 1.55→1.79, strong 2.34→3.13(UI 경계 ≥3:1) */
-    --border-default: 188 194 204; /* #BCC2CC */
-    --border-strong:  138 146 160; /* #8A92A0 */
+    --border-default: 185 195 214; /* #B9C3D6 — base 1.65 */
+    --border-strong:  127 140 166; /* #7F8CA6 — base 3.2 */
 
     /* 액센트(라이트) — h256 동조(다크와 동일 hue · 2026-08-27). 흰 배경 시인성 유지:
        실측(WCAG): 300 vs #FFF 6.34 (≥5 목표 충족) / 400 7.61 / 500 9.10 / 600 11.35.
        200 은 라이트에선 연한 보조(비텍스트) — 텍스트로 쓰인 곳은 아래 unlayered 오버라이드가 딥 톤 교정. */
-    --accent-50:  240 236 252; /* #F0ECFC 옅은 틴트 배경 */
-    --accent-100: 225 217 248; /* #E1D9F8 */
-    --accent-200: 178 157 236; /* #B29DEC 연한 보조(비텍스트) */
-    --accent-300: 105 70 200;  /* #6946C8 primary */
-    --accent-400: 92 60 180;   /* #5C3CB4 hover */
-    --accent-500: 80 51 158;   /* #50339E pressed */
-    --accent-600: 64 42 126;   /* #402A7E */
+    /* v4 인디고(라이트) — Aura UI 600 을 primary 로(흰 글자 6.3 · 흰 지면 6.3) */
+    --accent-50:  238 242 255; /* #EEF2FF 옅은 틴트 배경 */
+    --accent-100: 224 231 255; /* #E0E7FF */
+    --accent-200: 129 140 248; /* #818CF8 연한 보조(비텍스트) */
+    --accent-300: 79 70 229;   /* #4F46E5 primary */
+    --accent-400: 67 56 202;   /* #4338CA hover */
+    --accent-500: 55 48 163;   /* #3730A3 pressed */
+    --accent-600: 49 46 129;   /* #312E81 */
 
     /* 아우라(라이트) — 흰 지면에선 틸을 어둡혀야 글자가 산다.
        ⚠ 첫 값 #0D9488 은 순백 기준 4.55 였지만 실제 지면 surface-base #F5F6F8 위에선 **3.46** —
        design-tokens.spec 아우라 게이트가 잡았다(2026-09-02). 한 단계 어둡힌 #0F766E: base 5.2 · low(#FFF) 5.6.
        블룸은 라이트에서 훨씬 옅게 — 밝은 지면 위 채도 높은 후광은 '얼룩' 으로 읽힌다. */
-    --aura-200: 13 148 136;  /* #0D9488 비텍스트 틴트 */
-    --aura-300: 15 118 110;  /* #0F766E primary(텍스트 AA — base 5.2) */
-    --aura-400: 17 94 89;    /* #115E59 hover/딥 */
-    --aura-glow: 15 118 110;
-    --aura-a1: 0.10; --aura-a2: 0.08; --aura-a3: 0.06;
+    /* v3 라이트 시안 — 흰 지면에선 어둡혀야 산다: 300 #0E7490 base 5.0 */
+    --aura-200: 6 182 212;   /* #06B6D4 비텍스트 틴트 */
+    --aura-300: 14 116 144;  /* #0E7490 primary(텍스트 AA) */
+    --aura-400: 21 94 117;   /* #155E75 딥 */
+    --aura-glow: 14 116 144;
+    --aura-a1: 0.06; --aura-a2: 0.05; --aura-a3: 0.04;
+    --chart-blue: 37 99 235;    /* #2563EB */
+    --chart-orange: 234 88 12;  /* #EA580C */
 
     /* 등급 색(라이트) — 위 다크 블록의 설명 참조. hue 는 원색 그대로, 명도만 낮췄다.
        라이트에선 '높은 등급 = 더 어두움'으로 위계가 뒤집힌다(흰 지면에선 어두움이 강조를 담당).
@@ -420,7 +455,8 @@
     pointer-events: none;
     background-image:
       var(--grad-surface),
-      radial-gradient(900px 460px at 50% -12%, rgb(var(--accent-300) / var(--glow-a, 0.12)), transparent 70%);
+      /* v3: 상단 중앙 글로우는 시안(시안의 히어로 뒤 후광). 퍼플·좌하단 시안은 .aura-bg 가 맡는다 — 세 겹이 겹치지 않게 역할 분담 */
+      radial-gradient(900px 460px at 50% -12%, rgb(var(--aura-glow) / var(--glow-a, 0.12)), transparent 70%);
   }
   /* 라이트 지면은 흰색에 가까워 같은 알파가 텍스트 대비를 잡아먹는다 — 실측(2026-08-28):
      0.12 에서 상단 최악 합성 #E4E1F2 위 ink-muted 4.13:1(AA 미달), 0.05 에서 4.57:1 통과.
@@ -473,7 +509,7 @@
   .btn {
     @apply inline-flex items-center justify-center gap-1.5 whitespace-nowrap
            font-semibold text-sm leading-none
-           rounded-input px-3 py-2 min-h-[2.4rem]
+           rounded-[12px] px-3.5 py-2 min-h-[2.4rem] /* v4.1(오너): 알약은 안이 답답해 보인다 → Aura UI radius-lg 12px */
            /* §20.4 — 앱에서 가장 많이 쓰는 클래스라 여기 하나가 규약의 예외로 남아 있었다.
               transition-all 은 나중에 누가 height/padding 을 얹는 순간 자동 레이아웃 애니가 되고,
               duration-150·ease-out 유틸은 토큰과 분리돼 표류한다(ease-out 유틸은 --ease-out
@@ -507,18 +543,23 @@
   .btn-danger {
     @apply btn bg-danger text-white hover:bg-danger-dark;
   }
+  /* v4.1: 검색 인풋 12px(알약은 안이 답답해 보인다는 오너 피드백). 일반 폼 필드는 그대로 */
+  .input[type="search"] { @apply rounded-[12px] pl-10; }
 
   /* ── 브랜드 그라데이션 모멘트(어워드 레퍼런스 2026-08-27) — 과용 금지: 히어로 헤드라인·1급 CTA 만 ── */
   /* 헤드라인 텍스트 그라데이션(OUTFLAME 헤드라인 문법: 흰색→뮤트 바이올렛 사선). 정적 — 애니메이션 금지.
      다크 양끝 실측 vs base: #fff 18.42 / accent-200 8.83 · 라이트 vs #F5F6F8: ink-primary 16.75 / accent-400 7.04 */
   .text-grad-violet {
-    background-image: linear-gradient(135deg, #FFFFFF 30%, rgb(var(--accent-200)) 100%);
+    /* v4: Aura UI 'Vibrant Depth' 헤드라인 — 흰색에서 시작해 인디고→바이올렛→푸시아로 흐르는 정적 그라데이션.
+       가장 어두운 끝(푸시아-400 #E879F9) vs base 8.1 · 인디고-300 #A5B4FC 9.9 — 어디서 잘려도 AA */
+    background-image: linear-gradient(135deg, #FFFFFF 0%, #A5B4FC 40%, #C084FC 70%, #E879F9 100%);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
   }
   html.light .text-grad-violet {
-    background-image: linear-gradient(135deg, rgb(var(--ink-primary)) 30%, rgb(var(--accent-400)) 100%);
+    /* 라이트: 잉크 → 인디고-600 → 푸시아-700(#A21CAF vs 흰 지면 5.9) */
+    background-image: linear-gradient(135deg, rgb(var(--ink-primary)) 0%, #4F46E5 55%, #A21CAF 100%);
   }
   /* 미지원 브라우저 폴백: 그라데이션 해제 → 동반 텍스트 색 유틸(text-ink-primary 등)이 그대로 보인다 */
   @supports not ((-webkit-background-clip: text) or (background-clip: text)) {

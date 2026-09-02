@@ -34,7 +34,7 @@ export default function GlossaryPanel() {
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="용어 검색 — 한글·영문·설명"
+          placeholder="용어 검색 · 한글·영문·설명"
           className="input w-full pl-9 text-sm"
           aria-label="용어 검색"
         />

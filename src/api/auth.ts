@@ -593,7 +593,7 @@ export async function loginWithKakao(keepSignedIn?: boolean): Promise<void> {
   });
   if (error) {
     throw new Error(/provider is not enabled|unsupported provider/i.test(error.message)
-      ? '카카오 로그인 준비 중입니다 — 잠시 후 다시 시도해 주세요'
+      ? '카카오 로그인 준비 중입니다. 잠시 후 다시 시도해 주세요'
       : error.message);
   }
 }

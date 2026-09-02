@@ -10,9 +10,9 @@ export function SprCalc() {
   const [pot, setPot] = useState(20000);
   const spr = pot > 0 ? stack / pot : 0;
   const guide = spr <= 0 ? '-'
-    : spr < 3 ? '커밋 구간 — 강한 탑페어+ 면 올인 각오'
-    : spr < 6 ? '중간 — 오버페어·강한 드로우로 스택 투입 고려'
-    : '깊음 — 넛 지향, 마진 핸드는 팟 컨트롤';
+    : spr < 3 ? '커밋 구간 · 강한 탑페어+ 면 올인 각오'
+    : spr < 6 ? '중간 · 오버페어·강한 드로우로 스택 투입 고려'
+    : '깊음 · 넛 지향, 마진 핸드는 팟 컨트롤';
   return (
     <CalcCard>
       {/* CalcCard 의 title/desc 프롭과 같은 위치·같은 클래스로 직접 렌더 —
@@ -40,11 +40,11 @@ export function MzoneCalc() {
   const [players, setPlayers] = useState(9);
   const cost = sb + bb + ante * Math.max(1, players);
   const m = cost > 0 ? stack / cost : 0;
-  const zone = m >= 20 ? { l: '그린 — 여유', c: '#22C55E' }
-    : m >= 10 ? { l: '옐로 — 주의', c: '#EAB308' }
-    : m >= 6 ? { l: '오렌지 — 압박', c: '#F97316' }
-    : m >= 1 ? { l: '레드 — 위험(푸시/폴드)', c: '#EF4444' }
-    : { l: '데드 — 즉시 올인', c: '#94A3B8' };
+  const zone = m >= 20 ? { l: '그린 · 여유', c: '#22C55E' }
+    : m >= 10 ? { l: '옐로 · 주의', c: '#EAB308' }
+    : m >= 6 ? { l: '오렌지 · 압박', c: '#F97316' }
+    : m >= 1 ? { l: '레드 · 위험(푸시/폴드)', c: '#EF4444' }
+    : { l: '데드 · 즉시 올인', c: '#94A3B8' };
   return (
     <CalcCard title="M-zone 스택 코치" desc="한 바퀴 비용 대비 스택(M)으로 전략 존 판단">
       <div className="grid grid-cols-2 gap-2">

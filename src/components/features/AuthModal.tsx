@@ -420,7 +420,7 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
       toast.show('비밀번호가 재설정되었습니다. 새 비밀번호로 로그인해 주세요.', 'success');
       onBack();
     } catch (err) {
-      toast.show(err instanceof Error ? err.message : '재설정 실패 — 인증번호를 확인해 주세요', 'error');
+      toast.show(err instanceof Error ? err.message : '재설정 실패. 인증번호를 확인해 주세요', 'error');
     } finally { setLoading(false); }
   };
 
@@ -611,7 +611,7 @@ function SignupOwnerForm({ onDone }: { onDone: () => void }) {
         </div>
 
         <section>
-          <p className="text-2xs font-semibold uppercase tracking-wider text-ink-secondary mb-2">계정 정보</p>
+          <p className="text-2xs font-semibold text-ink-secondary mb-2">계정 정보</p>
           <div className="space-y-3">
             <Field label="대표자명"  type="text"     placeholder="홍길동"          required value={name}     onChange={(e) => setName(e.target.value)} />
             <NicknameField value={nick.value} status={nick.status} onChange={nick.setValue} />
@@ -621,7 +621,7 @@ function SignupOwnerForm({ onDone }: { onDone: () => void }) {
         </section>
 
         <section className="pt-2 border-t border-border-subtle">
-          <p className="text-2xs font-semibold uppercase tracking-wider text-ink-secondary mb-2 mt-2">매장 정보</p>
+          <p className="text-2xs font-semibold text-ink-secondary mb-2 mt-2">매장 정보</p>
           <div className="space-y-3">
             <Field label="매장명"        type="text" placeholder="OO 홀덤펍"           required value={venueName} onChange={(e) => setVenueName(e.target.value)} />
             <div className="grid grid-cols-2 gap-2">
@@ -707,7 +707,7 @@ function NicknameField({
   const hint: Record<NickStatus, { text: string; cls: string } | null> = {
     idle:      null,
     checking:  { text: '확인 중…',              cls: 'text-ink-muted' },
-    available: { text: '✓ 사용 가능한 닉네임입니다', cls: 'text-emerald-400' },
+    available: { text: '사용 가능한 닉네임입니다', cls: 'text-emerald-400' },
     taken:     { text: '✗ 이미 사용 중인 닉네임입니다', cls: 'text-danger' },
     invalid:   { text: '2~16자 한글·영문·숫자·_- 만 가능', cls: 'text-amber-400' },
   };

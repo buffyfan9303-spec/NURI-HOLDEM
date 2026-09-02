@@ -206,7 +206,7 @@ export function verdictLine(reqIcm: number, rangeId: ShoveRangeId): string {
   const ladder = handLadder(reqIcm, rangeId);
   const calls = ladder.filter((e) => e.call);
   const folds = ladder.filter((e) => !e.call);
-  if (calls.length === 0) return `${ladder[0].hand}조차 승률이 모자란다 — 이 자리는 전부 폴드`;
-  if (folds.length === 0) return `${ladder[ladder.length - 1].hand}까지 전부 콜 — 압박이 거의 없는 자리`;
+  if (calls.length === 0) return `${ladder[0].hand}조차 승률이 모자란다. 이 자리는 전부 폴드`;
+  if (folds.length === 0) return `${ladder[ladder.length - 1].hand}까지 전부 콜 · 압박이 거의 없는 자리`;
   return `${calls[calls.length - 1].hand}까지 콜 · ${folds[0].hand}부터 폴드`;
 }

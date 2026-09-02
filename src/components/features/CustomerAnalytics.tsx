@@ -101,7 +101,7 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
             return (
               <button key={id} type="button" data-pill-active={on || undefined}
                 onClick={() => goSubTab('crm-range', RANGE_ORDER, range, id, () => setRange(id))}
-                className={['relative rounded-[6px] px-2.5 py-1 t-tab transition-colors duration-300 focus:outline-none',
+                className={['relative rounded-[6px] px-2.5 py-1 t-tab transition-colors duration-[var(--dur-fast)] focus:outline-none',
                   on ? 'font-bold text-white' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
                 <span className="relative">{label}</span>
               </button>
@@ -177,7 +177,7 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
               })()}
             </li>
           ))}
-          {filtered.length > 200 && <li className="py-1 text-center text-2xs text-ink-muted">상위 200명까지 표시 — 검색으로 좁혀보세요.</li>}
+          {filtered.length > 200 && <li className="py-1 text-center text-2xs text-ink-muted">상위 200명까지 표시. 검색으로 좁혀보세요.</li>}
         </ul>
       )}
       </div>

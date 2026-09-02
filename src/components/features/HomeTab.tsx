@@ -223,7 +223,7 @@ export default function HomeTab({
             <span className="text-gold-300"><Icon name="target" size={16} /></span>
             <span className="min-w-0 flex-1">
               <span className="block text-sm font-bold text-ink-primary">
-                {trainer.goalMet ? '오늘 목표 달성 — 한 문제 더?' : `이어서 학습 — 오늘 ${trainer.today}/${trainer.goal}`}
+                {trainer.goalMet ? '오늘 목표 달성. 한 문제 더?' : `이어서 학습 · 오늘 ${trainer.today}/${trainer.goal}`}
               </span>
               <span className="block text-2xs tabular-nums text-ink-muted">
                 {trainer.streak > 0 ? `${trainer.streak}일 연속 · ` : ''}XP {trainer.xp.toLocaleString()}

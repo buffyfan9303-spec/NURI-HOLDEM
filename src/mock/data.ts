@@ -37,7 +37,7 @@ export const MOCK_VENUES: Venue[] = [
     region: '남양주',
     address: '경기 남양주시 다산동 6087 한강플라자 4층',
     description:
-      '🏆 ROTI ARENA — 헤럴드 컨셉의 프리미엄 홀덤 아레나\n\n' +
+      '🏆 ROTI ARENA · 헤럴드 컨셉의 프리미엄 홀덤 아레나\n\n' +
       '· NPC · K-STAR · S-ENT · JOPT · SPT 파트너 시드권 운영\n' +
       '· 로티 단독 파이널롤백 시리즈 정기 호스팅\n' +
       '· 첫 방문 50% 할인 / 매장이용권·대회초대권 교차 지급\n' +
@@ -50,7 +50,7 @@ export const MOCK_VENUES: Venue[] = [
     businessHours:
       '매일 17:00 OPEN\n' +
       '정기 토너먼트: 17시 START (레지마감 16LV, 약 00:12)\n' +
-      '사전예약 얼리칩 EVENT — 오픈 채팅 17:00 이전 예약자 한정',
+      '사전예약 얼리칩 EVENT · 오픈 채팅 17:00 이전 예약자 한정',
     followerCount: 3284,
     isPaidAd: true,
   },
@@ -102,10 +102,10 @@ export const MOCK_SCHEDULES: Schedule[] = [
     buyIn: { amount: 100000, rebuy: 100000 },  // Re-Entry 70,000 chips
     structure: { startingChips: 50_000, blindLevelMinutes: 25, lateRegLevels: 16 },
     description:
-      '로티 단독 — 파이널롤백20 1100 GTD 메인이벤트.\n' +
+      '로티 단독 · 파이널롤백20 1100 GTD 메인이벤트.\n' +
       'BUY-IN 100,000 (VAT 포함, 현장결제 or Roti GP).\n' +
       'Starting 50,000 / Re-Entry 70,000 / Blind 25M(1~16LV) → 15M(17LV~) / 레지마감 16LV.\n\n' +
-      '※ 첫 방문자는 언제든 50% 할인 — 1LV 바인시 단 5만원에 1100 GTD 참가 가능.\n' +
+      '※ 첫 방문자는 언제든 50% 할인 · 1LV 바인시 단 5만원에 1100 GTD 참가 가능.\n' +
       '※ 첫 바인은 무조건 7만원 대동단결.',
 
     // 포스터에서 가져온 풍부한 정보 ─────────
@@ -322,7 +322,7 @@ export const MOCK_COMMUNITY_POSTS: CommunityPost[] = [
     content: '이번 주 토요일 강남 쪽에서 같이 가실 분 구합니다!',
     createdAt: now(340), likeCount: 4, commentCount: 11 },
   { id: 'p8', userId: 'o1', userName: 'ROTI ARENA', userRole: 'venue_owner', userColor: '#C9A961',
-    content: '🎁 첫 방문자 50% 할인 — 1LV 바인 시 5만원에 1100GTD 참가 가능!',
+    content: '🎁 첫 방문자 50% 할인. 1LV 바인 시 5만원에 1100GTD 참가 가능!',
     createdAt: now(420), likeCount: 64, commentCount: 21 },
   { id: 'p9', userId: 'u1', userName: '하트킹', userRole: 'user', userColor: '#06B6D4',
     content: '오늘 첫 챔피언 됐습니다 🏆 다들 응원 감사해요!',
@@ -352,7 +352,7 @@ export const MOCK_NOTICES: MarketplaceNotice[] = [
   {
     id: 'nt2',
     type: 'event',
-    title: 'ROTI ARENA 매장 단체 처분 — 칩셋·테이블 다수 등록',
+    title: 'ROTI ARENA 매장 단체 처분 · 칩셋·테이블 다수 등록',
     body: '리뉴얼 진행에 따라 ROTI ARENA에서 보유 중인 일부 칩셋·테이블을 정리합니다. 본 매장 방문 후 직거래 가능.',
     authorName: 'ROTI ARENA',
     createdAt: now(60 * 8),

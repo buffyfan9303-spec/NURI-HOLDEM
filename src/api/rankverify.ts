@@ -159,7 +159,7 @@ export async function aiInspectVerification(v: RankVerification): Promise<string
   });
   const prompt = [
     `포커 토너먼트 입상(머니인) 증빙 이미지를 검사해 주세요.`,
-    `신청 내용 — 닉네임: ${v.nickname} / 대회: ${v.eventName} / 신고 상금: ${(v.amountWon / 10000).toLocaleString()}만원`,
+    `신청 내용 · 닉네임: ${v.nickname} / 대회: ${v.eventName} / 신고 상금: ${(v.amountWon / 10000).toLocaleString()}만원`,
     `신고 구분: ${EVENT_KIND_LABEL[v.eventKind]}${v.isOverseas ? ' · 해외' : ' · 국내'}`,
     '',
     '다음을 분석:',
@@ -167,7 +167,7 @@ export async function aiInspectVerification(v: RankVerification): Promise<string
     '2) 합성/편집 흔적(글꼴 불일치, 경계 부자연, 해상도 차이, 그림자/조명 모순)',
     '3) 일반적인 입상 증빙(트로피·시상 화면·정산표·공식 포스팅)으로 보이는지',
     '',
-    '형식: 첫 줄에 결론 — [의심 신호 없음] / [주의 필요] / [위조 의심] 중 하나. 이어서 근거 3~5줄(각 줄 "- "로 시작). 한국어, 평문.',
+    '형식: 첫 줄에 결론. [의심 신호 없음] / [주의 필요] / [위조 의심] 중 하나. 이어서 근거 3~5줄(각 줄 "- "로 시작). 한국어, 평문.',
   ].join('\n');
   return aiInspectImages(prompt, [dataUrl], '너는 이미지 포렌식 보조 분석가다. 과신하지 말고 보이는 근거만 말한다. 최종 판단은 운영자가 한다.');
 }

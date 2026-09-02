@@ -268,7 +268,7 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
                   className={[
                     'min-h-[44px] shrink-0 inline-flex items-center px-3 rounded-badge text-2xs font-bold leading-none transition-colors focus:outline-none',
                     category === o.id
-                      ? 'bg-aura-300/10 text-aura-300 ring-1 ring-inset ring-aura-300/50'
+                      ? 'bg-accent-300/15 text-accent-200 ring-1 ring-inset ring-accent-400/45 shadow-glow'
                       : 'bg-surface-high text-ink-secondary hover:bg-surface-float/70',
                   ].join(' ')}
                 >
@@ -321,9 +321,9 @@ export default function PostFormModal({ open, onClose, onSubmit, defaultCategory
           {/* 핸드 카드 · 투표 어태치먼트 (PostComposerExtras — 오너 패키지 이식) */}
           {/* 표시부는 게시글당 어태치먼트 1개(핸드 우선) — 동시 첨부하면 투표가 안 보이므로 상호 배타 */}
           <CardPicker value={handDraft} onChange={setHandDraft}
-            blockedBy={pollDraft.enabled ? '투표를 켠 글에는 핸드 카드를 함께 첨부할 수 없어요 — 투표를 끄면 다시 열립니다' : undefined} />
+            blockedBy={pollDraft.enabled ? '투표를 켠 글에는 핸드 카드를 함께 첨부할 수 없어요. 투표를 끄면 다시 열립니다' : undefined} />
           <PollBuilder value={pollDraft} onChange={setPollDraft}
-            blockedBy={normalizeHand(handDraft) !== null ? '핸드 카드를 첨부한 글에는 투표를 함께 만들 수 없어요 — 카드·요약을 지우면 다시 열립니다' : undefined} />
+            blockedBy={normalizeHand(handDraft) !== null ? '핸드 카드를 첨부한 글에는 투표를 함께 만들 수 없어요. 카드·요약을 지우면 다시 열립니다' : undefined} />
 
           {/* 이미지 첨부 */}
           <div>

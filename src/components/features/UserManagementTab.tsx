@@ -217,7 +217,7 @@ function UserRow({ user, onUpdate }: { user: User; onUpdate: (id: string, patch:
     try {
       await adminSetShadowban(user.id, next);
       onUpdate(user.id, { shadowbanned: next });
-      toast.show(next ? `${user.name} 섀도우밴 — 활동 랭킹에서 제외됨` : `${user.name} 섀도우밴 해제`, next ? 'info' : 'success');
+      toast.show(next ? `${user.name} 섀도우밴 · 활동 랭킹에서 제외됨` : `${user.name} 섀도우밴 해제`, next ? 'info' : 'success');
       close();
     } catch (e) { toast.show(e instanceof Error ? e.message : '변경 실패', 'error'); }
   };
@@ -231,13 +231,13 @@ function UserRow({ user, onUpdate }: { user: User; onUpdate: (id: string, patch:
     if (pending.type === 'suspend') {
       const until = new Date(Date.now() + pending.days * 24 * 60 * 60 * 1000).toISOString();
       onUpdate(user.id, { status: 'suspended', suspendedUntil: until, sanctionReason: r });
-      toast.show(`${user.name} ${pending.days}일 정지 — 안내 메일 발송`, 'info');
+      toast.show(`${user.name} ${pending.days}일 정지 · 안내 메일 발송`, 'info');
     } else if (pending.type === 'ban') {
       onUpdate(user.id, { status: 'banned', suspendedUntil: undefined, sanctionReason: r });
-      toast.show(`${user.name} 영구 정지 — 안내 메일 발송`, 'error');
+      toast.show(`${user.name} 영구 정지 · 안내 메일 발송`, 'error');
     } else {
       onUpdate(user.id, { status: 'withdrawn', suspendedUntil: undefined, sanctionReason: r });
-      toast.show(`${user.name} 강제 탈퇴 — 안내 메일 발송`, 'error');
+      toast.show(`${user.name} 강제 탈퇴 · 안내 메일 발송`, 'error');
     }
     close();
   };
@@ -348,7 +348,7 @@ function UserRow({ user, onUpdate }: { user: User; onUpdate: (id: string, patch:
           ) : (
             // ── 액션 선택 단계 ──
             <div className="flex flex-wrap gap-1.5">
-              <button type="button" onClick={changeNick} className="text-2xs font-semibold px-2.5 py-1 rounded-badge border border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary transition-colors">아이디 변경</button>
+              <button type="button" onClick={changeNick} className="text-2xs font-semibold px-2.5 py-1 rounded-chip border border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary transition-colors">아이디 변경</button>
               <button type="button" onClick={toggleShadowban}
                 className={['text-2xs font-semibold px-2.5 py-1 rounded-badge border transition-colors',
                   user.shadowbanned
@@ -462,7 +462,7 @@ function PointsPanel({ userId, userName }: { userId: string; userName: string })
     setBusy(true);
     try {
       const res = await adminRefundPurchase(refundTarget.id, r);
-      toast.show(`${refundTarget.label} 환불 — ${res.refunded.toLocaleString()}점 반환 (사용 가능 ${res.available.toLocaleString()}점)`, 'success');
+      toast.show(`${refundTarget.label} 환불 · ${res.refunded.toLocaleString()}점 반환 (사용 가능 ${res.available.toLocaleString()}점)`, 'success');
       setRefundTarget(null); setRefundReason('');
       await reload();
     } catch (e) { toast.show(e instanceof Error ? e.message : '환불에 실패했습니다', 'error'); }
@@ -477,7 +477,7 @@ function PointsPanel({ userId, userName }: { userId: string; userName: string })
     setBusy(true);
     try {
       const after = await adminGrantPoints(userId, sign * n, r);
-      toast.show(`${userName} ${sign > 0 ? '+' : '−'}${n.toLocaleString()}점 — 누적 ${after.toLocaleString()}점`, 'success');
+      toast.show(`${userName} ${sign > 0 ? '+' : '−'}${n.toLocaleString()}점 · 누적 ${after.toLocaleString()}점`, 'success');
       setGrantAmount(''); setGrantReason('');
       await reload();
     } catch (e) { toast.show(e instanceof Error ? e.message : '처리에 실패했습니다', 'error'); }

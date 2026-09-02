@@ -85,7 +85,7 @@ export default function QrScanModal({ open, onClose, venueId, venueName, onMatch
             const scanned = checkinIdOf(raw);
             if (scanned === venueId) { matched = true; onMatchRef.current(); return; }
             // 남의 매장 QR·무관한 QR — 체크인하지 않고 계속 스캔(같은 문자열 setState 는 재렌더 없음)
-            setWarn(scanned ? '이 매장의 QR이 아닙니다' : '체크인 QR이 아니에요 — 매장에 비치된 체크인 QR을 비춰 주세요');
+            setWarn(scanned ? '이 매장의 QR이 아닙니다' : '체크인 QR이 아니에요. 매장에 비치된 체크인 QR을 비춰 주세요');
           } catch { /* 프레임 미준비 등 일시 실패 — 다음 틱에 재시도 */ }
         }, 350);
       })

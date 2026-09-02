@@ -53,7 +53,7 @@ describe('법적 텍스트 정합 (LEGAL-1)', () => {
     expect(market).toContain('통신판매중개자로서 거래의 당사자가 아닙니다');
   });
 
-  it('위치 약관 — 개인위치정보 비저장 문구가 유지된다(LAW-3)', () => {
+  it('위치 약관 · 개인위치정보 비저장 문구가 유지된다(LAW-3)', () => {
     expect(modal).toContain('상시 수집·보관하지 않습니다');
     expect(modal).toContain('별도로 저장되지 않습니다');
   });

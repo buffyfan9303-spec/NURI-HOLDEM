@@ -38,8 +38,14 @@
 - Vite 8 + React 19 + TypeScript, Tailwind CSS v3.4 (`tailwind.config.js`)
 - 백엔드 Supabase, 에러추적 Sentry, 결제 PortOne, E2E Playwright (`npm run test:e2e`)
 - `tailwind.config.js`의 커스텀 디자인 시스템: surface 스케일(`rgb(var(--surface-*) / <alpha-value>)`),
-  바이올렛 accent — surface 와 같은 CSS 변수 문법(`rgb(var(--accent-*) / <alpha-value>)`, 정의는
-  `src/index.css` 다크 `#805FDA`/라이트 `#6946C8` 분리 · 2026-08-27 구 Linear 인디고 #5E6AD2 에서 이동.
+  accent — surface 와 같은 CSS 변수 문법(`rgb(var(--accent-*) / <alpha-value>)`), 정의는 `src/index.css`.
+  **2026-09-02 아우라 v3(오너 승인)**: 바탕 딥 플럼 #151221 → **딥 네이비 블랙 #06080F**(카드 #0E1322 · 서브 #151C30),
+  accent 바이올렛 #805FDA → **딥 퍼플 #9D4EDD**(라이트 #7C3AED · CTA/활성 탭 전용), **네온 시안 `--aura-*` #00F2FE**(라이트 #0E7490)는
+  라벨·활성 칩·링·글로우·강조 전용. 글자 3단 #FFF / #8B9BB4 / #74849E(시안 3차 #526079 는 AA 미달이라 상향).
+  참조 시안 'Aura Health AI'(sina maleki). 폰 목업·타인 연락처·Inter 폰트는 적용 제외(오너 승인).
+  **v4(같은 날, 오너 지시 "aura-ui.com 이 좋은 샘플")**: 주색 딥 퍼플 → **Aura UI 인디고 #5850EC**(라이트 #4F46E5), 시안은 네온 → **cyan-500 #06B6D4**,
+  헤드라인 그라데이션 흰→인디고→바이올렛→푸시아, 카드는 불투명+white 5% 헤어라인+겹친 소프트 섀도(+PC hover 2px 리프트), 글로우는 3px 링 20%.
+  원칙('Vibrant Depth'): 미묘한 그라데이션·겹친 그림자·유리 패널·의도된 마이크로 모션 — **네온·강한 테두리·큰 글로우 금지**(v3 가 조잡했던 이유).
   단 클락 TV(`clockTheme.ts`)·GTO 차트 fill(`ranges.data.ts`)의 #5E6AD2 는 도메인 고정 스냅샷이라 앱 accent 와 무관),
   `future.hoverOnlyWhenSupported`, `darkMode: 'class'`
 

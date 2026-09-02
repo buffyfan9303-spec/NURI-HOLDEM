@@ -119,7 +119,7 @@ export default function DealCalc() {
       </div>
 
       <p className="text-2xs text-ink-muted">ICM 딜은 순위 확률 기반, 칩찹은 스택 비례 단순 분배입니다.</p>
-      <p className="text-2xs text-ink-muted">차이(+)는 칩찹보다 ICM 딜이 유리한 플레이어 — 보통 숏스택이 ICM 딜에서 더 받습니다.</p>
+      <p className="text-2xs text-ink-muted">차이(+)는 칩찹보다 ICM 딜이 유리한 플레이어. 보통 숏스택이 ICM 딜에서 더 받습니다.</p>
     </CalcCard>
   );
 }

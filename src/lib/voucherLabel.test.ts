@@ -15,7 +15,7 @@ describe('stripVenuePrefix', () => {
   it('다른 매장명이 앞에 있으면 건드리지 않는다(오표기를 조용히 지우지 않는다)', () => {
     expect(stripVenuePrefix('강남홀덤 매장이용권', '로티아레나')).toBe('강남홀덤 매장이용권');
   });
-  it('제목이 매장명뿐이면 기본 명칭으로 되돌린다 — 빈 줄 금지', () => {
+  it('제목이 매장명뿐이면 기본 명칭으로 되돌린다. 빈 줄 금지', () => {
     expect(stripVenuePrefix('로티아레나', '로티아레나')).toBe('매장이용권');
     expect(stripVenuePrefix('로티아레나 ·', '로티아레나')).toBe('매장이용권');
   });
@@ -42,7 +42,7 @@ describe('voucherGroupLabel', () => {
 });
 
 describe('voucherLineLabel', () => {
-  it('한 줄 안에서 매장 · 이용권 — 중복 접두사 제거 후 합성', () => {
+  it('한 줄 안에서 매장 · 이용권 · 중복 접두사 제거 후 합성', () => {
     expect(voucherLineLabel('로티아레나 매장이용권', '로티아레나')).toBe('로티아레나 · 매장이용권');
   });
   it('매장명이 없으면 제목만', () => {

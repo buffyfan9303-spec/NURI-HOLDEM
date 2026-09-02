@@ -46,7 +46,7 @@ describe('icmEquity', () => {
     expect(dealScreen.map((v) => Math.round(v))).toEqual([384, 328, 289]);
   });
 
-  it('손계산 대조 — 5000/3000/2000, 상금 40/24/15', () => {
+  it('손계산 대조 · 5000/3000/2000, 상금 40/24/15', () => {
     // P1: 0.5·40 + (0.3·5/7 + 0.2·5/8)·24 + 나머지·15 = 30.553571…
     const e = icmEquity([5000, 3000, 2000], [40, 24, 15]);
     expect(Math.abs(e[0] - 30.5535714285714) < 1e-10).toBe(true);
@@ -86,7 +86,7 @@ describe('callPressure', () => {
     expect(Math.abs(r.riskPremium) < 1e-12).toBe(true);
   });
 
-  it('손계산 3인 — 스택 50/30/20, 상금 60/30/10, 팟 5', () => {
+  it('손계산 3인 · 스택 50/30/20, 상금 60/30/10, 팟 5', () => {
     const r = callPressure({ stacks: [50, 30, 20], prizes: [60, 30, 10], heroIndex: 1, villainIndex: 2, pot: 5 });
     expect(r.callAmount).toBe(20);
     expect(r.winAmount).toBe(25);
@@ -98,7 +98,7 @@ describe('callPressure', () => {
     expect(Math.abs(r.bubbleFactor - 1.154493) < 1e-5).toBe(true);
   });
 
-  it('버블 4인 3자리 — 세 시나리오 지분을 독립 구현으로 재검산', () => {
+  it('버블 4인 3자리 · 세 시나리오 지분을 독립 구현으로 재검산', () => {
     const r = callPressure({ stacks: [40, 30, 20, 10], prizes: [50, 30, 20], heroIndex: 1, villainIndex: 2, pot: 4 });
     const f = icmBrute([40, 30, 24, 10], [50, 30, 20])[1];
     const w = icmBrute([40, 54, 0, 10], [50, 30, 20])[1];
@@ -110,7 +110,7 @@ describe('callPressure', () => {
     expect(r.reqIcm).toBeGreaterThan(r.reqChip); // 버블이면 반드시 더 요구한다
   });
 
-  it('하드 버블(숏스택 1명 대기) — 프리미엄이 두 자릿수 %p', () => {
+  it('하드 버블(숏스택 1명 대기) · 프리미엄이 두 자릿수 %p', () => {
     const r = callPressure({ stacks: [100, 90, 80, 10], prizes: [50, 30, 20], heroIndex: 1, villainIndex: 2, pot: 6 });
     expect(r.riskPremium).toBeGreaterThan(0.1);
     expect(r.bubbleFactor).toBeGreaterThan(1.5);
@@ -135,7 +135,7 @@ describe('callPressure', () => {
     }
   });
 
-  it('입력 방어 — 같은 자리 / 0칩 / 상금 없음 / 인원', () => {
+  it('입력 방어 · 같은 자리 / 0칩 / 상금 없음 / 인원', () => {
     expect(callPressure({ stacks: [10, 10], prizes: [100], heroIndex: 0, villainIndex: 0, pot: 0 }).reason).toBe('seat');
     expect(callPressure({ stacks: [10, 0], prizes: [100], heroIndex: 0, villainIndex: 1, pot: 0 }).reason).toBe('stacks');
     expect(callPressure({ stacks: [10, 10], prizes: [], heroIndex: 0, villainIndex: 1, pot: 0 }).reason).toBe('prizes');
@@ -159,7 +159,7 @@ describe('판정 예시', () => {
     }
   });
 
-  it('한 줄 결론 — 경계·양극단', () => {
+  it('한 줄 결론 · 경계·양극단', () => {
     expect(verdictLine(0.55, 'mid')).toContain('까지 콜');
     expect(verdictLine(0.99, 'mid')).toContain('전부 폴드');
     expect(verdictLine(0.01, 'mid')).toContain('전부 콜');

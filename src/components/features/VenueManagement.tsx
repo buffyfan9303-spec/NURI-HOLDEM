@@ -253,7 +253,7 @@ function Btn({ onClick, variant, children }: {
     gold:    'bg-accent-300/15 text-accent-300 border-accent-400/30 hover:bg-accent-300/25',
   }[variant];
   return (
-    <button type="button" onClick={onClick} className={`text-2xs font-semibold px-2 py-1 rounded-badge border transition-colors active:scale-95 ${cls}`}>
+    <button type="button" onClick={onClick} className={`text-2xs font-semibold px-2 py-1 rounded-chip border transition-colors active:scale-95 ${cls}`}>
       {children}
     </button>
   );

@@ -115,7 +115,7 @@ export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete, on
                   onRanking={onGotoRanking}
                   gameDates={myPosters.filter((q) => q.title.trim() === p.title.trim()).map((q) => ({ id: q.id, date: isoOf(q) })).sort((a, b) => a.date.localeCompare(b.date))} />
               ))}
-              {shown.length === 0 && <li className="py-6 text-center text-2xs text-ink-muted">그 날짜에 등록된 게임이 없습니다 — 다른 날짜를 선택하세요</li>}
+              {shown.length === 0 && <li className="py-6 text-center text-2xs text-ink-muted">그 날짜에 등록된 게임이 없습니다. 다른 날짜를 선택하세요</li>}
             </ul>
           </>
         );
@@ -248,7 +248,7 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUse
           )}
           {ops?.closed && !ops.hasRankings && onRanking && (
             <button type="button" onClick={() => onRanking(ops.date)}
-              title="장부는 마감됐는데 순위가 아직 없어요 — 입력하면 랭킹·아카이브에 바로 반영됩니다"
+              title="장부는 마감됐는데 순위가 아직 없어요. 입력하면 랭킹·아카이브에 바로 반영됩니다"
               className="rounded-badge border border-amber-500/40 bg-amber-500/15 px-2 py-1 text-2xs font-bold text-amber-400 active:opacity-80">
               순위 미입력
             </button>
@@ -276,7 +276,7 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUse
           <ul className="space-y-0.5 text-2xs leading-relaxed text-ink-secondary">
             <li>· 예약자 <b className="text-ink-primary tabular-nums">{reservations?.length ?? resCount ?? 0}명</b>이 함께 영구 삭제됩니다 (손님에게 알림은 가지 않습니다)</li>
             <li>· 포스터 문의(Q&amp;A) <b className="text-ink-primary tabular-nums">{qnaCount === null ? '…' : `${qnaCount}건`}</b>이 함께 영구 삭제됩니다</li>
-            <li>{ledgerDate ? '· 연결된 장부와 매출은 지워지지 않습니다 — 이 게임과의 연결만 끊깁니다' : '· 연결된 장부는 없습니다'}</li>
+            <li>{ledgerDate ? '· 연결된 장부와 매출은 지워지지 않습니다. 이 게임과의 연결만 끊깁니다' : '· 연결된 장부는 없습니다'}</li>
           </ul>
           <div className="flex items-center gap-2">
             <button type="button" onClick={() => setConfirming(false)}
@@ -420,7 +420,7 @@ function ReservationItem({ idx, res, venueId, visited, regular, reserveCount, on
       {/* 예약자 삭제 확인 — 버튼과 다른 줄(다른 좌표)에 펼친다. 삭제해도 손님에게 알림이 가지 않으므로 그 사실을 적는다. */}
       {ask && (
         <div className="flex items-center gap-2 border-t border-danger/30 bg-danger/10 px-2.5 py-2">
-          <p className="flex-1 min-w-0 text-2xs leading-relaxed text-ink-secondary"><b className="text-danger-light">{res.displayName}</b> 님의 예약을 삭제합니다 — 손님에게 알림은 가지 않습니다</p>
+          <p className="flex-1 min-w-0 text-2xs leading-relaxed text-ink-secondary"><b className="text-danger-light">{res.displayName}</b> 님의 예약을 삭제합니다. 손님에게 알림은 가지 않습니다</p>
           <button type="button" onClick={() => setAsk(false)} className="shrink-0 rounded-input border border-border-default px-2 py-1 text-2xs font-semibold text-ink-secondary active:opacity-80">취소</button>
           <button type="button" onClick={() => { setAsk(false); onDelete(); }} className="shrink-0 rounded-input border border-danger/50 bg-danger/20 px-2 py-1 text-2xs font-bold text-danger-light active:opacity-80">삭제</button>
         </div>

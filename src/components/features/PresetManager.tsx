@@ -154,7 +154,7 @@ export default function PresetManager({ venueId }: { venueId: string }) {
         {(presetFilledCount(d.poster) + presetFilledCount(d.ledger) + presetFilledCount(d.clock)) > 0 && (
           <p className="rounded-input border border-border-subtle bg-surface-high px-2.5 py-1.5 text-2xs text-ink-muted">
             단계 전용 항목 포함 — 포스터 {presetFilledCount(d.poster)} · 장부 {presetFilledCount(d.ledger)} · 클락 {presetFilledCount(d.clock)}
-            <span className="block text-[10px]">지난 게임의 시각·할인·딜러·레지레벨·얼리 — 불러올 때 그대로 적용.</span>
+            <span className="block text-[10px]">지난 게임의 시각·할인·딜러·레지레벨·얼리. 불러올 때 그대로 적용.</span>
           </p>
         )}
         <Field label="메모"><textarea value={d.memo ?? ''} onChange={(e) => set({ memo: e.target.value })} rows={2} placeholder="기타 메모" className="input w-full resize-none text-sm" /></Field>
@@ -179,7 +179,7 @@ export default function PresetManager({ venueId }: { venueId: string }) {
           마감 장부 회차(운영 중 수정까지 반영된 스냅샷)가 최우선 후보, 포스터가 그다음. */}
       {(rounds.length > 0 || recent.length > 0) && (
         <div className="rounded-card border border-accent-400/30 bg-accent-300/[0.05] p-2.5">
-          <p className="mb-1.5 flex items-center gap-1 text-2xs font-bold text-accent-300"><Icon name="zap" size={12} className="shrink-0" />지난 게임에서 프리셋 만들기 — 내용이 채워진 채 열려요</p>
+          <p className="mb-1.5 flex items-center gap-1 text-2xs font-bold text-accent-300"><Icon name="zap" size={12} className="shrink-0" />지난 게임에서 프리셋 만들기. 내용이 채워진 채 열려요</p>
           {rounds.length > 0 && (
             <div className="mb-1.5 flex flex-wrap gap-1.5">
               {rounds.map((r) => (

@@ -126,7 +126,7 @@ export default function HandReplayer({ replay }: { replay: ReplayData }) {
   return (
     <div className="w-full max-w-md rounded-card border border-border-subtle bg-surface-low p-3 space-y-3 sm:p-4">
       <div className="flex items-center justify-between gap-2">
-        <span className="inline-flex items-center gap-1 text-2xs font-extrabold tracking-wide text-accent-300"><Icon name="clapperboard" size={12} className="shrink-0" />핸드 리뷰</span>
+        <span className="inline-flex items-center gap-1 text-2xs font-extrabold text-accent-300"><Icon name="clapperboard" size={12} className="shrink-0" />핸드 리뷰</span>
         <span className="flex items-center gap-2">
           {replay.pot && <span className="text-2xs text-ink-muted">팟 {replay.pot}</span>}
           {hasBoard && total > 0 && (

@@ -35,7 +35,7 @@ export function RevisionHistory({ doc }: { doc: LegalDocKey }) {
   const rows = LEGAL_HISTORY[doc];
   return (
     <section className="mb-5">
-      <h3 className="text-sm font-bold text-accent-300 mb-2">부칙 — 개정 이력</h3>
+      <h3 className="text-sm font-bold text-accent-300 mb-2">부칙 · 개정 이력</h3>
       <div className="space-y-3 text-xs text-ink-secondary leading-relaxed">
         {rows.map((r) => (
           <div key={r.version} className="p-3 rounded-input bg-surface-high border border-border-default space-y-1">

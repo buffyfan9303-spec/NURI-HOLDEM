@@ -90,19 +90,19 @@ const BRAND_SLIDES: {
      배경만 딥 플럼). 정적 CSS 그라데이션 — 애니메이션 없음. 대비 실측(피크 최악 겹침 기준):
      gto title 10.96/sub 5.92 · mind 10.21/5.67 · nuri 6.74/10.41 — 전부 AA 이상. */
   {
-    key: 'gto', action: 'tools', alt: 'GTO 도구 — 차트·계산기·트레이너',
+    key: 'gto', action: 'tools', alt: 'GTO 도구 · 차트·계산기·트레이너',
     bg: 'radial-gradient(140% 180% at 82% -20%, rgba(130,177,255,0.12) 0%, transparent 55%), radial-gradient(150% 200% at 8% 110%, rgba(128,95,218,0.16) 0%, transparent 60%), linear-gradient(180deg, #131520 0%, #0e101a 100%)',
     glyph: '♠', glyphColor: '#232a42',
     title: 'GTO 도구', sub: '차트 · 계산기 · 트레이너 ›', titleColor: '#F0F2FA', subColor: '#A9B1E8',
   },
   {
-    key: 'mind', action: 'nurimind', alt: 'NURI MIND — nurimind.co.kr 바로가기',
+    key: 'mind', action: 'nurimind', alt: 'NURI MIND · nurimind.co.kr 바로가기',
     bg: 'radial-gradient(140% 180% at 85% -15%, rgba(224,130,255,0.12) 0%, transparent 55%), radial-gradient(150% 200% at 8% 110%, rgba(128,95,218,0.16) 0%, transparent 60%), linear-gradient(180deg, #1a162e 0%, #110f20 100%)',
     glyph: '♥', glyphColor: '#262142',
     title: '오늘의 NURI MIND', sub: '매일 한 문제 · GTO 트레이닝 ›', titleColor: '#EEECFA', subColor: '#B2ACEC',
   },
   {
-    key: 'nuri', action: 'explore', alt: 'NURI HOLDEM — 홀덤 일정 한곳에서',
+    key: 'nuri', action: 'explore', alt: 'NURI HOLDEM · 홀덤 일정 한곳에서',
     bg: 'radial-gradient(140% 180% at 85% -15%, rgba(224,130,255,0.07) 0%, transparent 55%), radial-gradient(150% 200% at 10% 110%, rgba(128,95,218,0.18) 0%, transparent 60%), linear-gradient(180deg, #151221 0%, #0d0b18 100%)',
     glyph: '♦', glyphColor: '#2A2247',
     title: 'NURI HOLDEM', sub: '전국 홀덤 일정, 한곳에서 ›', titleColor: '#D9B25A', subColor: '#DCE4DC',

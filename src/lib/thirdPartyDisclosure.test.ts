@@ -28,7 +28,7 @@ const ownerGetsRealName = /interface OwnerReservation[\s\S]*?realName/.test(RESE
 describe('예약 시 매장 제공 고지 (LEGAL-4)', () => {
   it('실명이 매장으로 가면 예약 화면이 그 사실을 구체적으로 고지한다', () => {
     if (!ownerGetsRealName) return; // 실명을 안 넘기면 고지 의무도 없다
-    expect(RESERVE_UI, '예약 화면에 실명 전달 고지가 없다 — 동의 없는 제3자 제공')
+    expect(RESERVE_UI, '예약 화면에 실명 전달 고지가 없다. 동의 없는 제3자 제공')
       .toContain('이름(실명)과 닉네임');
     // 무엇을·누구에게·왜·언제까지가 모두 보여야 고지다. 하나라도 빠지면 '알렸다'고 할 수 없다.
     for (const k of ['전달 항목', '받는 곳', '이용 목적', '보유 기간']) {
@@ -39,11 +39,11 @@ describe('예약 시 매장 제공 고지 (LEGAL-4)', () => {
   it('처리방침 제9조의 제공 항목이 실제 제공 내용과 일치한다', () => {
     const article9 = PRIVACY.slice(PRIVACY.indexOf('개인정보의 제3자 제공'));
     if (ownerGetsRealName) {
-      expect(article9, '제9조 제공 항목에 실명이 빠졌다 — 과소 고지').toContain('이름(실명)');
+      expect(article9, '제9조 제공 항목에 실명이 빠졌다. 과소 고지').toContain('이름(실명)');
     }
     // 과다 고지도 위법 소지다(전자상거래법 §21①1). 매장에 넘기지 않는 항목을 넘긴다고 적지 않는다.
     const sendsPhone = /interface OwnerReservation[\s\S]*?\bphone\b/.test(RESERVATIONS);
-    expect(sendsPhone, '예약 응답에 전화번호가 생겼다 — 고지 문안을 함께 고쳐야 한다').toBe(false);
+    expect(sendsPhone, '예약 응답에 전화번호가 생겼다. 고지 문안을 함께 고쳐야 한다').toBe(false);
     expect(article9, '전화번호를 제공하지 않는다는 명시가 사라졌다')
       .toContain('휴대전화번호를 매장에 제공하지 않습니다');
   });

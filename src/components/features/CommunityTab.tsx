@@ -663,9 +663,9 @@ function FeedSection({
                     aria-pressed={cat === c.id}
                     onClick={() => { setCat(c.id); setVisible(15); }}
                     className={[
-                      'shrink-0 inline-flex items-center h-8 px-3 rounded-badge text-2xs font-bold leading-none transition-colors',
+                      'shrink-0 inline-flex items-center h-8 px-3 rounded-chip text-2xs font-bold leading-none transition-colors',
                       cat === c.id
-                        ? 'bg-aura-300/10 text-aura-300 ring-1 ring-inset ring-aura-300/50'
+                        ? 'bg-accent-300/15 text-accent-200 ring-1 ring-inset ring-accent-400/45 shadow-glow'
                         : 'bg-surface-high text-ink-secondary hover:bg-surface-float/70',
                     ].join(' ')}
                   >
@@ -852,7 +852,7 @@ const PostRow = memo(function PostRow({ post, onClick, hot = false, selected = f
           돈을 낸 표시를 지우면 '올라가긴 했는데 왜 위에 있는지'가 안 보이고, 카테고리를 지우면
           있던 정보가 사라진다(둘 다 남긴다). */}
       {isBumped(post) && (
-        <span className="shrink-0 rounded-badge bg-accent-300/15 px-1 text-2xs font-extrabold leading-none tracking-wide text-accent-200">끌올</span>
+        <span className="shrink-0 rounded-badge bg-accent-300/15 px-1 text-2xs font-extrabold leading-none text-accent-200">끌올</span>
       )}
       {hot
         ? <span className="shrink-0 rounded-badge bg-danger/15 px-1 text-2xs font-extrabold leading-none tracking-wide text-danger-light">HOT</span>
@@ -938,7 +938,7 @@ const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, se
             <div className="min-w-0 flex-1">
               <p className="flex items-center gap-1 text-2xs leading-4">
                 {isBumped(post) && (
-                  <span className="shrink-0 inline-flex items-center rounded-badge bg-accent-300/15 px-1 font-extrabold leading-none tracking-wide text-accent-200">끌올</span>
+                  <span className="shrink-0 inline-flex items-center rounded-badge bg-accent-300/15 px-1 font-extrabold leading-none text-accent-200">끌올</span>
                 )}
                 {hot && (
                   <span className="shrink-0 inline-flex items-center font-extrabold text-danger-light bg-danger/15 px-1 rounded-badge leading-none tracking-wide">HOT</span>
@@ -1124,7 +1124,7 @@ function MyCommunitiesAction({ onSelectVenue, onCreated }: {
           <span className="block text-sm font-bold text-ink-primary leading-tight">내 커뮤니티 관리</span>
           <span className="block text-2xs text-ink-muted">내가 운영 {owned.length} · 가입한 그룹 {joined.length}</span>
         </span>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={['shrink-0 text-accent-300 transition-transform duration-200', open ? 'rotate-180' : ''].join(' ')} aria-hidden><polyline points="6 9 12 15 18 9" /></svg>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={['shrink-0 text-accent-300 transition-transform duration-[var(--dur-base)]', open ? 'rotate-180' : ''].join(' ')} aria-hidden><polyline points="6 9 12 15 18 9" /></svg>
       </button>
       {open && (
         <div className="px-3 pb-3 space-y-3">
@@ -1275,7 +1275,7 @@ function VenuesSection({
                 type="button"
                 onClick={() => onSelectVenue(venue.id)}
                 className={[
-                  'w-full text-left flex items-center gap-2.5 px-2.5 py-2 rounded-aura border transition-colors duration-150 cursor-pointer active:bg-surface-high',
+                  'w-full text-left flex items-center gap-2.5 px-2.5 py-2 rounded-aura border transition-colors duration-[var(--dur-fast)] cursor-pointer active:bg-surface-high',
                   venue.isPaidAd
                     ? 'bg-surface-low border-accent-400/50 shadow-[0_0_12px_rgb(var(--accent-300)/0.22)] hover:border-accent-400'
                     : 'bg-surface-low border-border-default hover:border-border-strong hover:bg-surface-high',
