@@ -8,11 +8,13 @@ describe('validatePassword — 8자 이상 · 대문자 · 소문자 · 숫자 �
   });
 
   it('미충족 항목을 순서대로 알려 준다', () => {
-    expect(validatePassword('abc')).toEqual({ ok: false, reasons: ['8자 이상', '대문자 포함', '숫자 포함', '특수문자 포함'] });
-    expect(validatePassword('ABCDEF1!')).toEqual({ ok: false, reasons: ['소문자 포함'] });
+    expect(validatePassword('abc')).toEqual({ ok: false, reasons: ['8자 이상', '숫자 포함', '특수문자 포함'] });
+    expect(validatePassword('ABCDEF1!')).toEqual({ ok: true, reasons: [] }); // 대소문자 구분 없음 — 대문자만 있어도 통과
+    expect(validatePassword('abcdef1!')).toEqual({ ok: true, reasons: [] });
+    expect(validatePassword('12345678!')).toEqual({ ok: false, reasons: ['영문 포함'] });
     expect(validatePassword('Holdem!pass')).toEqual({ ok: false, reasons: ['숫자 포함'] }); // 숫자 없으면 서버가 거부하므로 여기서도 막는다
     expect(validatePassword('Abcdefgh1')).toEqual({ ok: false, reasons: ['특수문자 포함'] }); // 숫자는 특수문자가 아니다
-    expect(validatePassword('')).toEqual({ ok: false, reasons: ['8자 이상', '대문자 포함', '소문자 포함', '숫자 포함', '특수문자 포함'] });
+    expect(validatePassword('')).toEqual({ ok: false, reasons: ['8자 이상', '영문 포함', '숫자 포함', '특수문자 포함'] });
   });
 
   it('길이는 7자면 실패, 8자면 통과', () => {
