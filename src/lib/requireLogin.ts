@@ -2,6 +2,7 @@
 // 비로그인 사용자가 쓰기(글·댓글·반응·채팅·예약 등)를 시도하면 로그인 모달을 띄우도록
 // 앱 어디서든 호출할 수 있는 전역 신호. App.tsx가 이 이벤트를 듣고 AuthModal을 연다.
 import { identityEnabled } from './identityFlag';
+import type { ReplayData } from './hand';
 
 export const REQUIRE_LOGIN_EVENT = 'nuri:require-login';
 
@@ -20,10 +21,11 @@ export function ensureLogin(user: unknown): boolean {
   return false;
 }
 
-// 커뮤니티 글쓰기 모달을 어디서든 열기 — 예: 포스터 상세 '대회 후기 쓰기'(defaultCategory='tourney').
+// 커뮤니티 글쓰기 모달을 어디서든 열기 — 예: 포스터 상세 '대회 후기 쓰기'(defaultCategory='tourney'),
+// 핸드 리플레이어 '커뮤니티에 질문'(replay 를 넘기면 폼에 핸드가 첨부된 채로 열린다).
 export const OPEN_POST_FORM_EVENT = 'nuri:open-post-form';
-export function openPostForm(category?: string): void {
-  try { window.dispatchEvent(new CustomEvent(OPEN_POST_FORM_EVENT, { detail: { category } })); } catch { /* noop */ }
+export function openPostForm(category?: string, replay?: ReplayData): void {
+  try { window.dispatchEvent(new CustomEvent(OPEN_POST_FORM_EVENT, { detail: { category, replay } })); } catch { /* noop */ }
 }
 
 // ── 본인인증 게이트 ──────────────────────────────────────────────────────────

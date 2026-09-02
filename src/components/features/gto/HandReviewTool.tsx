@@ -8,14 +8,13 @@
 // 새로 만든 것: 카드 입력 + 팟·액션 메모뿐이다. 재생·에퀴티 추이·아웃 카드 목록은
 // 기존 HandReplayer 를 그대로 재사용한다(표시 로직 이중화 금지 — 글과 도구가 같은 화면이어야 한다).
 //
-// 커뮤니티 연결: 새 스키마를 만들지 않는다. lib/hand.encodeReplay 가 뱉는 기존 [[REPLAY:...]]
-// 마커를 그대로 복사해 글쓰기 폼으로 넘긴다 — 붙여넣으면 글 상세에서 같은 리플레이가 뜬다.
+// 커뮤니티 연결: 새 스키마를 만들지 않는다. ReplayData 를 글쓰기 폼(openPostForm)에 그대로 넘겨
+// 폼의 기존 핸드 첨부 슬롯에 앉힌다 — 제출 시 lib/hand.encodeReplay 의 기존 [[REPLAY:...]] 마커로 저장된다.
 import { Fragment, useEffect, useId, useMemo, useRef, useState } from 'react';
 import HandReplayer from '../HandReplayer';
 import { CalcCard } from '../tools/calcUi';
 import Icon from '../../atoms/Icon';
-import { useToast } from '../../atoms/Toast';
-import { encodeReplay, type ReplayData } from '../../../lib/hand';
+import { type ReplayData } from '../../../lib/hand';
 import { openPostForm } from '../../../lib/requireLogin';
 import { writeSnap } from '../../../lib/snapshot';
 import HandBoardPicker from './HandBoardPicker';
@@ -42,7 +41,6 @@ const DEMO: HandReviewInit = {
 const STREETS = [['pre', '프리플랍'], ['flop', '플랍'], ['turn', '턴'], ['river', '리버']] as const;
 
 export default function HandReviewTool({ initial }: { initial?: HandReviewInit }) {
-  const toast = useToast();
   const potId = useId();
   const actId = useId();
   const init = useMemo(() => (initial && (initial.hero?.length ?? 0) > 0 ? initial : DEMO), [initial]);
@@ -53,8 +51,6 @@ export default function HandReviewTool({ initial }: { initial?: HandReviewInit }
     pre: init.actions?.pre ?? '', flop: init.actions?.flop ?? '',
     turn: init.actions?.turn ?? '', river: init.actions?.river ?? '',
   });
-  /** 클립보드가 막힌 환경(비-HTTPS 웹뷰 등) 폴백 — 코드를 눈에 보이게 꺼내 직접 복사하게 한다 */
-  const [fallbackCode, setFallbackCode] = useState<string | null>(null);
 
   const heroKey = hb.ids.hero.join(',');
   const villainKey = hb.ids.villain.join(',');
@@ -85,28 +81,13 @@ export default function HandReviewTool({ initial }: { initial?: HandReviewInit }
   const hasHand = hb.heroCards.length > 0 || hb.boardCards.length > 0;
   const canAttach = hb.heroCards.length === 2 || hb.boardCards.length >= 3;
 
-  // 커뮤니티로 — 기존 마커를 복사하고 글쓰기 폼(핸드 분석)을 연다. 새 저장 경로를 만들지 않는다.
-  const toCommunity = async () => {
-    const code = encodeReplay('', replay).trim();
-    try {
-      await navigator.clipboard.writeText(code);
-      setFallbackCode(null);
-      toast.show('핸드를 복사했어요. 글 본문 맨 끝에 붙여넣으면 리플레이로 올라갑니다', 'success');
-    } catch {
-      // 복사 실패(비-HTTPS 웹뷰 등) — 코드를 화면에 꺼내고 글쓰기 폼은 열지 않는다.
-      // 여기서 폼을 열면 그 폼이 코드를 덮어 사용자가 복사할 방법이 사라진다.
-      setFallbackCode(code);
-      toast.show('복사가 막혀 있어요. 아래 코드를 직접 복사한 뒤 다시 눌러주세요', 'error');
-      return;
-    }
-    openPostForm('hand');
-  };
+  // 커뮤니티로 — 글쓰기 폼(핸드 분석)을 핸드가 첨부된 채로 연다. 로그인·본인인증 게이트는 App 의 수신부가 맡는다.
+  const toCommunity = () => openPostForm('hand', replay);
 
   const resetAll = () => {
     hb.clear();
     setPot('');
     setActs({ pre: '', flop: '', turn: '', river: '' });
-    setFallbackCode(null);
   };
 
   return (
@@ -158,17 +139,8 @@ export default function HandReviewTool({ initial }: { initial?: HandReviewInit }
           이 핸드로 글쓰기 — 커뮤니티에 물어보기
         </button>
         <p className="text-2xs leading-relaxed text-ink-muted">
-          핸드가 클립보드에 복사되고 글쓰기 폼이 열립니다. <b className="text-ink-secondary">본문 맨 끝에 붙여넣으면</b> 글에서도 같은 리플레이가 재생됩니다.
+          이 핸드가 <b className="text-ink-secondary">첨부된 채로 글쓰기 폼이 열립니다.</b> 본문만 쓰면 글에서도 같은 리플레이가 재생됩니다.
         </p>
-        {fallbackCode && (
-          <input
-            readOnly
-            value={fallbackCode}
-            onFocus={(e) => e.currentTarget.select()}
-            aria-label="핸드 코드. 길게 눌러 복사하세요"
-            className="input w-full text-2xs tabular-nums"
-          />
-        )}
         <div className="flex justify-end">
           <button type="button" onClick={resetAll} className="text-2xs font-semibold text-ink-muted transition-colors hover:text-danger-light">
             전부 초기화

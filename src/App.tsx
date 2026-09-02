@@ -54,6 +54,7 @@ const ringVarOf = (u: { activityPoints?: number | null; role?: string | null }):
   u.role === 'admin' ? ADMIN_VIVID_VAR : tierOf(u.activityPoints ?? 0).vividVar;
 import ConsentGateModal from './components/features/ConsentGateModal';
 import type { PostFormData } from './components/features/PostFormModal';
+import type { ReplayData } from './lib/hand';
 import type { MarketplaceFormData } from './components/features/MarketplaceFormModal';
 import { pushLayer, useBackClose } from './lib/backstack';
 import { useVisibilityRefresh } from './lib/useVisibilityRefresh';
@@ -1112,8 +1113,9 @@ export default function App() {
   useEffect(() => {
     const h = (e: Event) => {
       if (!ensureVerified(user, '글쓰기')) return;
-      const cat = (e as CustomEvent).detail?.category as PostCategory | undefined;
-      setPostFormCategory(cat ?? 'free');
+      const detail = (e as CustomEvent).detail as { category?: PostCategory; replay?: ReplayData } | undefined;
+      setPostFormCategory(detail?.category ?? 'free');
+      setPostFormReplay(detail?.replay ?? null);
       setPostFormOpen(true);
     };
     window.addEventListener(OPEN_POST_FORM_EVENT, h);
@@ -1276,6 +1278,7 @@ export default function App() {
   const [editingNotice, setEditingNotice] = useState<MarketplaceNotice | null>(null); // 있으면 공지 수정 모드
   const [postFormOpen, setPostFormOpen]     = useState(false);   // 커뮤니티 글쓰기
   const [postFormCategory, setPostFormCategory] = useState<PostCategory>('free'); // 글쓰기 기본 카테고리(공부 탭=study)
+  const [postFormReplay, setPostFormReplay] = useState<ReplayData | null>(null); // 핸드 리플레이어에서 넘어온 첨부 핸드 — 닫히면 비운다
   const [shareText, setShareText] = useState(''); // 공유 타깃(share_target) 프리필 본문
   // PWA 공유 타깃 — 다른 앱에서 NURI로 공유하면 ?text/url을 받아 커뮤니티 글쓰기 프리필
   useEffect(() => {
@@ -3132,10 +3135,11 @@ export default function App() {
       {postFormOpen && (
       <PostFormModal
         open
-        onClose={() => setPostFormOpen(false)}
+        onClose={() => { setPostFormOpen(false); setPostFormReplay(null); }}
         onSubmit={handleCreatePost}
         defaultCategory={postFormCategory}
         defaultContent={shareText}
+        defaultReplay={postFormReplay}
       />
       )}
 
