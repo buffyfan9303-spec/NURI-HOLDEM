@@ -4,6 +4,7 @@ import { currentUser } from './_session';
 import { makeSearchCache } from '../lib/searchCache';
 import { dedupe } from '../lib/inflight';
 import { LEGAL_VERSION } from '../lib/legalVersion';
+import { isValidDisplayName } from '../lib/displayName';
 
 export type UserRole   = 'user' | 'venue_owner' | 'venue_staff' | 'admin';
 // 'withdrawn' = 강제 탈퇴(Stage 3). 정지(suspended)/영구정지(banned)와 구분.
@@ -163,6 +164,17 @@ export async function checkEmailAvailable(email: string): Promise<boolean> {
   if (!EMAIL_RE.test(trimmed)) return false;
   if (IS_MOCK) return true;
   const { data, error } = await supabase.rpc('is_email_available', { p_email: trimmed });
+  if (error) throw error;
+  return data === true;
+}
+
+// ── 닉네임(profiles.name = 표시 이름) 중복 검사 ───────────────────────────────
+// is_name_available RPC(security definer)로 대소문자·공백 무시 중복 여부 확인. 로그인 상태면 본인 행은 제외.
+// 반환: true=사용 가능 / false=사용 중 또는 형식 위반(공백 정리 후 2~20자 밖).
+export async function checkNameAvailable(name: string): Promise<boolean> {
+  if (!isValidDisplayName(name)) return false;
+  if (IS_MOCK) return true;
+  const { data, error } = await supabase.rpc('is_name_available', { p_name: name.trim() });
   if (error) throw error;
   return data === true;
 }
@@ -460,7 +472,8 @@ export async function updateMyProfile(patch: ProfilePatch): Promise<User> {
     .eq('id', authUser.id)
     .select('*')
     .single();
-  if (error) throw error;
+  // name 은 profiles_name_lower_uidx(20260903c)로 유니크 — 경합으로 사전 검사를 통과해도 여기서 막힌다.
+  if (error) throw error.code === '23505' ? new Error('이미 사용 중인 닉네임입니다') : error;
   return rowToUser(data);
 }
 

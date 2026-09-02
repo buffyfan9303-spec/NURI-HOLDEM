@@ -1,5 +1,5 @@
 // src/components/features/AuthModal.tsx
-import { useState, useEffect, useRef, useId } from 'react';
+import { useState, useRef, useId } from 'react';
 import Modal from '../atoms/Modal';
 import Icon from '../atoms/Icon';
 import { useBackClose } from '../../lib/backstack';
@@ -9,10 +9,12 @@ import StatefulActionButton from '../atoms/StatefulActionButton';
 import AutoLoginCheckbox from '../atoms/AutoLoginCheckbox';
 import { isKeepSignedIn, setKeepSignedIn } from '../../lib/supabase';
 import { loginWithKakao, signInWithGoogle,
-  signUpUser, signUpOwner, checkNicknameAvailable, checkEmailAvailable, EMAIL_RE,
+  signUpUser, signUpOwner, checkNicknameAvailable, checkNameAvailable, checkEmailAvailable, EMAIL_RE,
   requestPasswordReset, verifyPasswordResetOtp, setNewPassword,
 } from '../../api/auth';
 import { validatePassword, PASSWORD_RULE_HINT, PASSWORD_PLACEHOLDER } from '../../lib/password';
+import AvailabilityField, { useAvailabilityCheck } from '../atoms/AvailabilityField';
+import { isValidDisplayName } from '../../lib/displayName';
 import TermsOfService   from '../../pages/legal/TermsOfService';
 import PrivacyPolicy    from '../../pages/legal/PrivacyPolicy';
 import LegalNotice      from '../../pages/legal/LegalNotice';
@@ -478,7 +480,7 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
 function SignupUserForm({ onDone }: { onDone: () => void }) {
   const toast = useToast();
   const [loading, setLoading] = useState(false);
-  const [name,     setName]     = useState('');
+  const nameChk = useNameCheck();
   const nick = useNicknameCheck();
   const mail = useEmailCheck();
   const [password, setPassword] = useState('');
@@ -489,8 +491,8 @@ function SignupUserForm({ onDone }: { onDone: () => void }) {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     // 모든 항목 필수 — 하나라도 비면 가입 불가
-    if (!name.trim())      return toast.show('이름을 입력해 주세요.', 'error');
-    if (nick.status !== 'available') return toast.show('사용 가능한 닉네임을 입력해 주세요.', 'error');
+    if (nameChk.status !== 'available') return toast.show('사용 가능한 닉네임을 입력해 주세요.', 'error');
+    if (nick.status !== 'available') return toast.show('사용 가능한 받는 아이디를 입력해 주세요.', 'error');
     if (mail.status !== 'available') return toast.show('사용 가능한 이메일을 입력해 주세요.', 'error');
     if (!validatePassword(password).ok) return toast.show(`비밀번호 규칙: ${PASSWORD_RULE_HINT}`, 'error');
     if (!confirm.trim())   return toast.show('비밀번호 확인을 입력해 주세요.', 'error');
@@ -503,7 +505,7 @@ function SignupUserForm({ onDone }: { onDone: () => void }) {
     setLoading(true);
     try {
       await signUpUser({
-        email: mail.value.trim(), password, name, nickname: nick.value.trim(),
+        email: mail.value.trim(), password, name: nameChk.value.trim(), nickname: nick.value.trim(),
         agreedToTerms:        c.terms,
         agreedToPrivacy:      c.privacy,
         agreedToAntiGambling: c.antiGambling,
@@ -522,7 +524,7 @@ function SignupUserForm({ onDone }: { onDone: () => void }) {
   return (
     <>
       <form onSubmit={submit} className="space-y-3">
-        <Field label="이름"           type="text"     placeholder="홍길동"          required value={name}     onChange={(e) => setName(e.target.value)} />
+        <NameField value={nameChk.value} status={nameChk.status} onChange={nameChk.setValue} />
         <NicknameField value={nick.value} status={nick.status} onChange={nick.setValue} />
         <EmailField value={mail.value} status={mail.status} onChange={mail.setValue} />
         <div>
@@ -544,8 +546,8 @@ function SignupUserForm({ onDone }: { onDone: () => void }) {
         <button
           type="submit"
           disabled={
-            loading || !allRequired || nick.status !== 'available'
-            || !name.trim() || mail.status !== 'available' || !validatePassword(password).ok || password !== confirm
+            loading || !allRequired || nameChk.status !== 'available' || nick.status !== 'available'
+            || mail.status !== 'available' || !validatePassword(password).ok || password !== confirm
           }
           className="btn-primary w-full mt-2 disabled:opacity-60"
         >
@@ -563,7 +565,7 @@ function SignupUserForm({ onDone }: { onDone: () => void }) {
 function SignupOwnerForm({ onDone }: { onDone: () => void }) {
   const toast = useToast();
   const [loading,   setLoading]   = useState(false);
-  const [name,      setName]      = useState('');
+  const nameChk = useNameCheck();
   const nick = useNicknameCheck();
   const mail = useEmailCheck();
   const [password,  setPassword]  = useState('');
@@ -581,14 +583,15 @@ function SignupOwnerForm({ onDone }: { onDone: () => void }) {
     if (!c.terms)        return toast.show('서비스 이용약관에 동의해 주세요.', 'error');
     if (!c.privacy)      return toast.show('개인정보 수집·이용에 동의해 주세요.', 'error');
     if (!c.antiGambling) return toast.show('불법 환전·사행성 금지 서약에 동의해 주세요.', 'error');
-    if (nick.status !== 'available') return toast.show('사용 가능한 닉네임을 입력해 주세요.', 'error');
+    if (nameChk.status !== 'available') return toast.show('사용 가능한 닉네임을 입력해 주세요.', 'error');
+    if (nick.status !== 'available') return toast.show('사용 가능한 받는 아이디를 입력해 주세요.', 'error');
     if (mail.status !== 'available') return toast.show('사용 가능한 이메일을 입력해 주세요.', 'error');
     if (!validatePassword(password).ok) return toast.show(`비밀번호 규칙: ${PASSWORD_RULE_HINT}`, 'error');
 
     setLoading(true);
     try {
       await signUpOwner({
-        name, email: mail.value.trim(), password, nickname: nick.value.trim(),
+        name: nameChk.value.trim(), email: mail.value.trim(), password, nickname: nick.value.trim(),
         agreedToTerms:        c.terms,
         agreedToPrivacy:      c.privacy,
         agreedToAntiGambling: c.antiGambling,
@@ -622,7 +625,7 @@ function SignupOwnerForm({ onDone }: { onDone: () => void }) {
         <section>
           <p className="text-2xs font-semibold text-ink-secondary mb-2">계정 정보</p>
           <div className="space-y-3">
-            <Field label="대표자명"  type="text"     placeholder="홍길동"          required value={name}     onChange={(e) => setName(e.target.value)} />
+            <NameField value={nameChk.value} status={nameChk.status} onChange={nameChk.setValue} subLabel="(대표자 표시 이름)" />
             <NicknameField value={nick.value} status={nick.status} onChange={nick.setValue} />
             <EmailField value={mail.value} status={mail.status} onChange={mail.setValue} />
             <div>
@@ -656,7 +659,7 @@ function SignupOwnerForm({ onDone }: { onDone: () => void }) {
 
         <button
           type="submit"
-          disabled={loading || !allRequired || nick.status !== 'available' || mail.status !== 'available' || !validatePassword(password).ok}
+          disabled={loading || !allRequired || nameChk.status !== 'available' || nick.status !== 'available' || mail.status !== 'available' || !validatePassword(password).ok}
           className="btn-primary w-full mt-3 disabled:opacity-60"
         >
           {loading ? '처리 중…' : '업주 가입 신청'}
@@ -668,122 +671,38 @@ function SignupOwnerForm({ onDone }: { onDone: () => void }) {
   );
 }
 
-// ── 닉네임 필드 (실시간 중복검사) ─────────────────────────────────────────────
-
-type NickStatus = 'idle' | 'checking' | 'available' | 'taken' | 'invalid';
+// ── 닉네임(name)·받는 아이디(nickname) 필드 — 실시간 중복검사 ─────────────────
+// 훅·필드 본체는 atoms/AvailabilityField(프로필 설정과 공용). 여기서는 두 컬럼의 규칙만 고정한다.
+//  · 닉네임(profiles.name)          = 표시 이름(랭킹·글 작성자명). 공백 정리 후 2~20자, is_name_available.
+//  · 받는 아이디(profiles.nickname) = 이용권 수령·전적 연결용. 2~16자 한글·영문·숫자·_-, is_nickname_available.
 
 const NICK_RE = /^[가-힣a-zA-Z0-9_-]{2,16}$/;
+const isValidNick = (v: string) => NICK_RE.test(v);
 
-/**
- * 입력 + 디바운스 중복검사 훅(닉네임 350ms · 이메일 600ms).
- * 동기 상태(idle/invalid/checking)는 onChange 시점에 즉시 결정하고,
- * effect 는 'checking' 일 때만 디바운스된 비동기 RPC 를 수행한다.
- * (effect 내 동기 setState 회피 — 권장 패턴)
- * status === 'available' 일 때만 가입 허용(상위 폼에서 disabled 처리).
- * 형식(re)을 통과한 뒤에만 RPC 를 부른다 — 이메일은 열거 위험을 줄이기 위한 조건(20260903b 주석).
- */
-function useAvailabilityCheck(re: RegExp, check: (v: string) => Promise<boolean>, delayMs: number) {
-  const [value, setValueRaw] = useState('');
-  const [status, setStatus]  = useState<NickStatus>('idle');
-  const reqIdRef = useRef(0);
+type FieldProps = Omit<React.ComponentProps<typeof AvailabilityField>, 'label' | 'invalidText'>;
 
-  const setValue = (raw: string) => {
-    setValueRaw(raw);
-    const v = raw.trim();
-    if (v.length === 0)      setStatus('idle');
-    else if (!re.test(v))    setStatus('invalid');
-    else                     setStatus('checking'); // effect 가 RPC 수행
-  };
+const useNameCheck     = () => useAvailabilityCheck(checkNameAvailable, isValidDisplayName);
+const useNicknameCheck = () => useAvailabilityCheck(checkNicknameAvailable, isValidNick);
 
-  // 'checking' 상태일 때만 디바운스 RPC 실행
-  useEffect(() => {
-    if (status !== 'checking') return;
-    const v = value.trim();
-    const myReq = ++reqIdRef.current;
-    const timer = setTimeout(async () => {
-      try {
-        const ok = await check(v);
-        if (myReq === reqIdRef.current) setStatus(ok ? 'available' : 'taken');
-      } catch {
-        if (myReq === reqIdRef.current) setStatus('idle'); // 검사 실패 시 서버 유니크가 최종 방어
-      }
-    }, delayMs);
-    return () => clearTimeout(timer);
-  }, [status, value, re, check, delayMs]);
-  return { value, setValue, status };
+function NameField(props: FieldProps) {
+  return <AvailabilityField label="닉네임" placeholder="2~20자 (랭킹·글에 표시)" maxLength={20} invalidText="2~20자로 입력해 주세요" {...props} />;
 }
-const useNicknameCheck = () => useAvailabilityCheck(NICK_RE, checkNicknameAvailable, 350);
-const useEmailCheck    = () => useAvailabilityCheck(EMAIL_RE, checkEmailAvailable, 600);
-
-function NicknameField({
-  value, status, onChange,
-}: { value: string; status: NickStatus; onChange: (v: string) => void }) {
-  const hint: Record<NickStatus, { text: string; cls: string } | null> = {
-    idle:      null,
-    checking:  { text: '확인 중…',              cls: 'text-ink-muted' },
-    available: { text: '사용 가능한 닉네임입니다', cls: 'text-emerald-400' },
-    taken:     { text: '✗ 이미 사용 중인 닉네임입니다', cls: 'text-danger' },
-    invalid:   { text: '2~16자 한글·영문·숫자·_- 만 가능', cls: 'text-amber-400' },
-  };
-  const h = hint[status];
+function NicknameField(props: FieldProps) {
   return (
-    <div>
-      <label className="block text-xs font-medium text-ink-secondary mb-1">
-        닉네임 <span className="text-danger">*</span>
-      </label>
-      <input
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="2~16자 (한글/영문/숫자)"
-        maxLength={16}
-        required
-        className={[
-          'input',
-          status === 'taken' || status === 'invalid' ? 'border-danger/50' :
-          status === 'available' ? 'border-emerald-500/50' : '',
-        ].join(' ')}
-      />
-      {h && <p className={`mt-1 text-2xs ${h.cls}`} aria-live="polite">{h.text}</p>}
-    </div>
+    <AvailabilityField label="받는 아이디" noun="아이디" subLabel="(이용권 수령·전적 연결용)" placeholder="2~16자 (한글/영문/숫자)" maxLength={16}
+      invalidText="2~16자 한글·영문·숫자·_- 만 가능" {...props} />
   );
 }
 
-// ── 이메일(아이디) 필드 (실시간 중복검사) ─────────────────────────────────────
+// ── 이메일(아이디) 필드 — 실시간 중복검사(600ms · 형식 통과 후에만 RPC, 열거 위험 완화 20260903b) ──
 
-function EmailField({
-  value, status, onChange,
-}: { value: string; status: NickStatus; onChange: (v: string) => void }) {
-  const hint: Record<NickStatus, { text: string; cls: string } | null> = {
-    idle:      null,
-    checking:  { text: '확인 중…',                                       cls: 'text-ink-muted' },
-    available: { text: '사용 가능한 이메일입니다',                        cls: 'text-emerald-400' },
-    taken:     { text: '이미 가입된 이메일입니다 — 로그인하거나 비밀번호 찾기를 이용해 주세요', cls: 'text-danger' },
-    invalid:   { text: '이메일 형식을 확인해 주세요',                     cls: 'text-amber-400' },
-  };
-  const h = hint[status];
+const isValidEmail  = (v: string) => EMAIL_RE.test(v);
+const useEmailCheck = () => useAvailabilityCheck(checkEmailAvailable, isValidEmail, undefined, 600);
+
+function EmailField(props: FieldProps) {
   return (
-    <div>
-      <label className="block text-xs font-medium text-ink-secondary mb-1">
-        이메일 <span className="text-danger">*</span>
-      </label>
-      <input
-        type="email"
-        autoComplete="email"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="you@example.com"
-        maxLength={254}
-        required
-        data-testid="signup-email"
-        className={[
-          'input',
-          status === 'taken' || status === 'invalid' ? 'border-danger/50' :
-          status === 'available' ? 'border-emerald-500/50' : '',
-        ].join(' ')}
-      />
-      {h && <p className={`mt-1 text-2xs ${h.cls}`} aria-live="polite">{h.text}</p>}
-    </div>
+    <AvailabilityField label="이메일" type="email" autoComplete="email" testId="signup-email" placeholder="you@example.com" maxLength={254}
+      invalidText="이메일 형식을 확인해 주세요" takenText="이미 가입된 이메일입니다 — 로그인하거나 비밀번호 찾기를 이용해 주세요" {...props} />
   );
 }
 
