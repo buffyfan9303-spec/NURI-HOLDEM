@@ -914,6 +914,30 @@ export default function App() {
     return () => window.removeEventListener('nuri:goto-tab', h);
   }, [changeTab]);
 
+  // 다른 탭에서 도구 열기(내 토너 카드 → 차트 딥링크, detail = ToolKey). e2e 도 이 이벤트로 검증한다.
+  // 순서: 탭 전환 → (도구 pane 이 보인 뒤) 해시. 탭 트레일 history 항목이 먼저 쌓여야 도구 겹이 그 위에 올라
+  // 뒤로가기 1회 = 도구 닫기 · 2회 = 이전 탭 복귀가 된다(해시를 먼저 얹으면 순서가 뒤집혀 숨은 pane 에 도구가 남는다 — 실측).
+  // ToolsPanel 은 미마운트면 마운트 시 해시를 읽고(useState 초기화), 마운트돼 있으면 hashchange 로 연다
+  // (리스너는 layout 이펙트 — pane 이 보이는 커밋에 이미 붙어 있어 첫 방문·keep-alive 모두 결정적).
+  // push 가 아니라 replaceState — 해시는 도구 자신의 history 항목에만 남긴다(2026-08-28 backstack 지뢰).
+  useEffect(() => {
+    const h = (e: Event) => {
+      const tool = (e as CustomEvent).detail as string;
+      if (!tool) return;
+      changeTab('tools');
+      let tries = 0;
+      const arm = () => {
+        const pane = document.querySelector<HTMLElement>('main[data-tab="tools"]');
+        if ((!pane || pane.style.display === 'none') && tries++ < 120) { requestAnimationFrame(arm); return; } // 최대 ~2s
+        try { history.replaceState(null, '', `#tool=${tool}`); } catch { /* noop */ }
+        window.dispatchEvent(new HashChangeEvent('hashchange'));
+      };
+      requestAnimationFrame(arm);
+    };
+    window.addEventListener('nuri:open-tool', h);
+    return () => window.removeEventListener('nuri:open-tool', h);
+  }, [changeTab]);
+
   // 새 버전(배포) 감지(main.tsx의 SW updatefound) → 새로고침 배너
   useEffect(() => {
     const onUpd = () => setUpdateReady(true);

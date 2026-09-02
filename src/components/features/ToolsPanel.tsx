@@ -301,8 +301,12 @@ export default function ToolsPanel() {
     ? `오늘 완료 · ${drill.correct}/${drillTotal} 정답`
     : (drill.items[drill.idx]?.reason ?? '약점에 맞춰 편성했습니다');
 
-  // 다른 곳(공유 링크·도구 간 상호 딥링크)에서 해시가 바뀌면 반영
-  useEffect(() => {
+  // 다른 곳(공유 링크·도구 간 상호 딥링크·nuri:open-tool)에서 해시가 바뀌면 반영.
+  // ⚠ layout 이펙트인 이유(2026-09-03 실측): 다른 탭에서 이 패널을 처음 마운트시키며 여는 경로는
+  //   'pane 이 보이는 첫 rAF' 에 hashchange 를 쏜다. 그 rAF 는 커밋(=layout 단계) 뒤·passive 이펙트 앞에
+  //   낄 수 있어, passive 로 붙이면 리스너가 없는 채로 이벤트가 지나가고 이어 도는 [active](null) 이펙트가
+  //   해시까지 걷어냈다(GTO 카탈로그만 뜸). 커밋 시점에 붙여야 'pane 이 보인다 ⇒ 리스너가 있다' 가 성립한다.
+  useLayoutEffect(() => {
     const onHash = () => {
       const m = window.location.hash.match(/^#tool=([a-z]+)/);
       if (!m || !TOOLS.some((t) => t.key === m[1])) return;

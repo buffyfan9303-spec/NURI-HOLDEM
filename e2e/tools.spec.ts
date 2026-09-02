@@ -102,3 +102,37 @@ test.describe('도구 탭 — 전체화면 실행', () => {
     expect(JSON.parse(saved!).total).toBeGreaterThan(0);
   });
 });
+
+// 다른 탭에서 도구 열기 계약(nuri:open-tool) — 내 토너 카드의 차트 딥링크가 쓰는 실제 코드 경로.
+// 내 토너 계정 없이도 검증되도록 이벤트를 직접 쏜다. 핵심은 '도구 탭 미방문' 상태:
+// 2026-09-03 실측 회귀 — 첫 마운트 커밋의 layout 단계 뒤·passive 이펙트 앞에 hashchange 가 도착하면
+// 리스너가 아직 없어 카탈로그만 떴다(프로덕션 빌드 x1·x4·x8 모두). keep-alive 만 재면 절대 못 잡는다.
+test.describe('도구 딥링크 — 다른 탭에서 열기', () => {
+  test('🔴 도구 탭 미방문 상태에서 nuri:open-tool → 차트가 열리고, 뒤로가기 1회 = 닫기 · 2회 = 이전 탭', async ({ page }) => {
+    await stabilizeBackstack(page);
+    // 프리마운트(idle 마다 live→community→tools 숨김 마운트)가 '미방문' 전제를 깨지 않도록 idle 을 5s 폴백으로 미룬다.
+    await page.addInitScript(() => { if (window.top === window) delete (window as unknown as Record<string, unknown>).requestIdleCallback; });
+    await loginAs(page, EMAIL!, PASSWORD!);
+    await page.goto('/');
+    await dismissOverlays(page);
+    await page.locator('nav').getByRole('button', { name: '라이브', exact: true }).first().click();
+    await expect(page.locator('[data-tab="live"]')).toBeVisible();
+    // 전제: 도구 pane 이 아직 없다(첫 방문 경로)
+    await expect(page.locator('[data-tab="tools"]')).toHaveCount(0);
+
+    await page.evaluate(() => window.dispatchEvent(new CustomEvent('nuri:open-tool', { detail: 'pushfold' })));
+    const dialog = page.locator('[role="dialog"]').filter({ hasText: '푸시 · 폴드 차트' }).first();
+    await expect(dialog).toBeVisible({ timeout: 10_000 });
+    await expect.poll(() => page.evaluate(() => window.location.hash)).toContain('tool=pushfold');
+
+    // 뒤로가기 1회 = 도구 닫기(도구 탭 런처에 머문다)
+    await page.goBack();
+    await expect(dialog).not.toBeVisible({ timeout: 5_000 });
+    await expect(page.locator('[data-tab="tools"]')).toBeVisible();
+    await expect.poll(() => page.evaluate(() => window.location.hash)).not.toContain('tool=');
+    // 뒤로가기 2회 = 이전 탭(라이브) 복귀
+    await page.goBack();
+    await expect(page.locator('[data-tab="live"]')).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator('[data-tab="tools"]')).toBeHidden();
+  });
+});

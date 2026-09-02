@@ -482,21 +482,10 @@ function MyTournamentCard({ g, venueName, onDisplay, hero = false }: { g: ClockS
   const zone = myBB != null ? stackZone(myBB, cost > 0 ? stack / cost : 0) : null;
   const goZone = () => {
     if (!zone) return;
+    // 스택·앤티 스냅샷은 도구가 실제로 열리는 시점(PushFoldChart 렌더)에만 소비된다.
     if (zone.tool === 'pushfold') writeSnap('tool:pushfold', { stack: zone.stack, ante: (ref?.ante ?? 0) > 0 } satisfies PushJump);
-    // 순서: 탭 전환 → (도구 pane 이 보인 뒤) 해시. 탭 트레일 history 항목이 먼저 쌓여야 도구 겹이 그 위에 올라
-    // 뒤로가기 1회 = 도구 닫기 · 2회 = 라이브 복귀가 된다(해시를 먼저 얹으면 순서가 뒤집혀 숨은 pane 에 도구가 남는다 — 실측).
-    // ToolsPanel 은 미마운트면 마운트 시 해시를 읽고(useState 초기화), 이미 마운트(keep-alive)면 hashchange 로 연다.
-    // push 가 아니라 replaceState — 해시는 도구 자신의 history 항목에만 남긴다(2026-08-28 backstack 지뢰).
-    const tool = zone.tool;
-    window.dispatchEvent(new CustomEvent('nuri:goto-tab', { detail: 'tools' }));
-    let tries = 0;
-    const arm = () => {
-      const pane = document.querySelector<HTMLElement>('main[data-tab="tools"]');
-      if ((!pane || pane.style.display === 'none') && tries++ < 120) { requestAnimationFrame(arm); return; } // 최대 ~2s
-      try { history.replaceState(null, '', `#tool=${tool}`); } catch { /* noop */ }
-      window.dispatchEvent(new HashChangeEvent('hashchange'));
-    };
-    requestAnimationFrame(arm);
+    // 탭 전환 → 도구 열기 시퀀스는 App 의 nuri:open-tool 리스너가 맡는다(항상 마운트 · e2e 도 같은 계약으로 검증).
+    window.dispatchEvent(new CustomEvent('nuri:open-tool', { detail: zone.tool }));
   };
   const tone = vsAvg == null ? '' : vsAvg >= 100 ? 'text-emerald-400' : vsAvg >= 50 ? 'text-amber-300' : 'text-rose-400';
   return (
