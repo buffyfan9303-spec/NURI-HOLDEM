@@ -17,6 +17,7 @@ import {
   applyPreflopAnswer, gradePreflop, loadPreflopStats, makeQuiz, modeOfKey, savePreflopStats,
 } from '../../../lib/preflopQuiz';
 import { recordAnswer, useTrainerProgress } from '../../../lib/trainerProgress';
+import { postSrsKey, recordSrs } from '../../../lib/srs';
 import { DRILL_BONUS_XP, recordDrillAnswer, restartTodayDrill, useDrillPlan } from './drillPlan';
 
 export default function DailyDrill() {
@@ -48,6 +49,7 @@ export default function DailyDrill() {
     if (recordAnswer(ok).justHitGoal) setCelebrate(true);
     // 트레이너에서 푼 것과 완전히 동일하게 반영(정답률·약점·오답 노트)
     savePostflopStats(applyPostflopAnswer(loadPostflopStats(), sc, ok));
+    recordSrs(postSrsKey(sc.id), ok); // 간격 반복 — 틀리면 내일, 맞히면 3·7·14·30일 뒤
   };
 
   const answerPreflop = (chose: 'act' | 'fold') => {
@@ -57,6 +59,7 @@ export default function DailyDrill() {
     if (recordAnswer(ok).justHitGoal) setCelebrate(true);
     // 맞히면 오답 큐에서 빠지고, 틀리면 큐 맨 뒤로 — 트레이너에서 푼 것과 완전히 동일하게 반영된다.
     savePreflopStats(applyPreflopAnswer(loadPreflopStats(), quiz.key, ok));
+    recordSrs(quiz.key, ok);
   };
 
   const next = () => {

@@ -48,7 +48,8 @@ export interface RecordResult {
   xpGained: number;     // 이 답으로 얻은 XP(정답 10 + 달성 50)
 }
 
-const todayStr = (): string => new Date().toLocaleDateString('sv'); // 'YYYY-MM-DD'
+/** 로컬 날짜 'YYYY-MM-DD' — 드릴·SRS 도 이 규칙 하나를 쓴다. */
+export const todayStr = (): string => new Date().toLocaleDateString('sv');
 
 // 두 날짜 문자열('YYYY-MM-DD') 사이의 일수 차(b - a). 파싱 실패 시 0.
 function diffDays(a: string, b: string): number {

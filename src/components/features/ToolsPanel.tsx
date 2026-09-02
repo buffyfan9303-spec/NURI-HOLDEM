@@ -300,6 +300,7 @@ export default function ToolsPanel() {
   const drillHint = drillFinished
     ? `오늘 완료 · ${drill.correct}/${drillTotal} 정답`
     : (drill.items[drill.idx]?.reason ?? '약점에 맞춰 편성했습니다');
+  const drillReview = drill.items.filter((it) => it.review).length; // 간격 반복 복습 문항 수(srs.ts)
 
   // 다른 곳(공유 링크·도구 간 상호 딥링크·nuri:open-tool)에서 해시가 바뀌면 반영.
   // ⚠ layout 이펙트인 이유(2026-09-03 실측): 다른 탭에서 이 패널을 처음 마운트시키며 여는 경로는
@@ -381,6 +382,10 @@ export default function ToolsPanel() {
             <Icon name="target" size={14} className="shrink-0 text-accent-300" aria-hidden />
             <b className="truncate text-xs font-bold text-ink-primary">오늘의 드릴</b>
             <span className="shrink-0 text-2xs font-bold tabular-nums text-accent-200">{drillDone}/{drillTotal}</span>
+            {/* 복습 배지 — 있을 때만. h-4 = 제목 줄(text-xs 16px)과 같아 카드 높이가 변하지 않는다. */}
+            {drillReview > 0 && (
+              <span data-testid="drill-review-badge" className="chip-aura inline-flex h-4 shrink-0 items-center rounded-chip px-1.5 text-2xs font-bold leading-none tabular-nums">복습 {drillReview}개</span>
+            )}
           </span>
           <span className="shrink-0 text-2xs font-bold text-accent-200">
             {drillFinished ? '복습하기' : drillDone > 0 ? '이어서 풀기 →' : '시작하기 →'}

@@ -11,6 +11,7 @@ import {
   EMPTY_PREFLOP_STATS, type Mode, type PreflopStats, type Quiz,
 } from '../../../lib/preflopQuiz';
 import { useTrainerProgress, recordAnswer, setDailyGoal, GOAL_CHOICES } from '../../../lib/trainerProgress';
+import { recordSrs } from '../../../lib/srs';
 import Icon from '../../atoms/Icon';
 import { PreflopQuizCard } from './quizCards';
 
@@ -30,6 +31,7 @@ export default function PreflopTrainer() {
     setResult({ correct });
     if (recordAnswer(correct).justHitGoal) setCelebrate(true); // 오늘 목표 달성 순간 감지
     saveStats(applyPreflopAnswer(stats, quiz.key, correct));
+    recordSrs(quiz.key, correct); // 간격 반복 — 오늘의 드릴이 due 날짜에 다시 낸다
   };
 
   const next = () => {

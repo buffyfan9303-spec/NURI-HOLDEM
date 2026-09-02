@@ -22,6 +22,7 @@ import {
   type Quiz,
 } from '../../../lib/preflopQuiz';
 import { recordAnswer } from '../../../lib/trainerProgress';
+import { postSrsKey, recordSrs } from '../../../lib/srs';
 import { writeSnap } from '../../../lib/snapshot';
 
 /** 차트 점프 파라미터 — renderTool 이 같은 이름의 스냅샷을 읽어 prop 으로 넘긴다(읽은 뒤 즉시 삭제) */
@@ -64,6 +65,7 @@ export default function WrongNote() {
     recordAnswer(ok);
     const next = applyPreflopAnswer(loadPreflopStats(), solving.quiz.key, ok);
     savePreflopStats(next);
+    recordSrs(solving.quiz.key, ok);
     setPre(next);
     setVer((v) => v + 1);
   };
@@ -74,6 +76,7 @@ export default function WrongNote() {
     recordAnswer(ok);
     const next = applyPostflopAnswer(loadPostflopStats(), solving.sc, ok);
     savePostflopStats(next);
+    recordSrs(postSrsKey(solving.sc.id), ok);
     setPost(next);
     setVer((v) => v + 1);
   };

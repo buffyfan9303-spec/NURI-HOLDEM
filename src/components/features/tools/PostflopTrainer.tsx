@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { CalcCard } from './calcUi';
 import { useTrainerProgress, recordAnswer, setDailyGoal, GOAL_CHOICES } from '../../../lib/trainerProgress';
+import { postSrsKey, recordSrs } from '../../../lib/srs';
 import Icon from '../../atoms/Icon';
 import { ScenarioQuizCard } from './quizCards';
 import {
@@ -41,6 +42,7 @@ export default function PostflopTrainer() {
     const ok = isScenarioCorrect(sc, a);
     if (recordAnswer(ok).justHitGoal) setCelebrate(true); // 오늘 목표 달성 순간 감지
     saveStats(applyPostflopAnswer(stats, sc, ok));
+    recordSrs(postSrsKey(sc.id), ok); // 간격 반복 — 오늘의 드릴이 due 날짜에 다시 낸다
   };
 
   const next = () => {

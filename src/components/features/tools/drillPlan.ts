@@ -7,8 +7,10 @@
 //     ② PreflopTrainer 의 **오답 재출제 큐**(nuri:trainer:preflop:v2 의 wrong)
 //   서버 변경 0 · 신규 스키마 0. 새로 저장하는 건 '오늘 편성한 5문제와 진행' 한 덩어리뿐이다.
 //
-// 편성 규칙(5문제)
-//   · 프리플랍 슬롯: 오답 큐가 2개 이상이면 2문제, 아니면 1문제(큐가 비면 경계 핸드 새 문제).
+// 편성 규칙(5문제) — 2026-09-03 간격 반복(src/lib/srs.ts) 얹음
+//   · **오늘 복습(due) 문제가 최우선**: 라이트너 박스에서 due 가 오늘 이하인 키를 오래된 순으로 최대 4개.
+//     프리·포스트 가리지 않고 앞에 놓는다(그래서 2:3 비율은 due 수에 따라 유연하다). 복원 안 되는 키는 SRS 에서 지운다.
+//   · 프리플랍 슬롯: 오답 큐가 2개 이상이면 2문제, 아니면 1문제(큐가 비면 경계 핸드 새 문제). 복습으로 이미 든 만큼 줄인다.
 //     — 오답 큐는 **최근 것부터** 꺼낸다(잊기 직전에 다시 만나는 게 효과가 크다).
 //   · 나머지(3~4문제)는 포스트플랍. 카테고리를 '약한 순'으로 세워 위에서부터 하나씩 배정한다.
 //       약점(3문항 이상 풀었고 정답률 80% 미만) → 미탐색(아직 0문항) → 나머지 낮은 정답률 순.
@@ -16,8 +18,9 @@
 //   · 동점(예: 신규 유저는 전부 미탐색)은 **날짜 시드**로 섞어 매일 다른 카테고리가 나오게 한다.
 //
 // 편성 결과는 그날 하루 고정이다(새로고침해도 같은 5문제) — 도중에 나갔다 와도 이어서 푼다.
-import { awardXp } from '../../../lib/trainerProgress';
+import { awardXp, todayStr } from '../../../lib/trainerProgress';
 import { loadPreflopStats, makeQuiz, modeOfKey } from '../../../lib/preflopQuiz';
+import { daysSinceAnswered, dropSrs, dueKeys, loadSrs } from '../../../lib/srs';
 import { ALL_CATS, CAT_LABEL, SCENARIOS, loadPostflopStats, type Category } from './postflop.data';
 import { useSyncExternalStore } from 'react';
 
@@ -28,8 +31,8 @@ const KEY = 'nuri:trainer:drill:v1';
 const EVENT = 'nuri:trainer:drill';
 
 export type DrillItem =
-  | { kind: 'postflop'; id: number; reason: string }
-  | { kind: 'preflop'; key: string; reason: string };
+  | { kind: 'postflop'; id: number; reason: string; review?: true }
+  | { kind: 'preflop'; key: string; reason: string; review?: true }; // review = 간격 반복 복습 문항
 
 export interface DrillPlan {
   date: string;      // 'YYYY-MM-DD'(로컬)
@@ -38,9 +41,6 @@ export interface DrillPlan {
   correct: number;   // 맞힌 수
   awarded: boolean;  // 완주 보너스 XP 지급 여부(중복 지급 방지)
 }
-
-// trainerProgress 와 같은 로컬 날짜 규칙(스웨덴 로캘 = 'YYYY-MM-DD')
-const todayStr = (): string => new Date().toLocaleDateString('sv');
 
 /* 날짜 시드 난수 — 같은 날이면 같은 순서. mulberry32(작고 충분히 고르다) */
 function seededRandom(seedStr: string): () => number {
@@ -81,15 +81,36 @@ function rankCategories(rnd: () => number): CatRank[] {
   return rows.sort((a, b) => a.score - b.score);
 }
 
-/** 오늘의 5문제를 편성한다(저장은 호출부). */
-function composePlan(date: string): DrillPlan {
+const MAX_REVIEW = 4; // 복습이 5문제를 다 먹지 않게 — 새 문제 최소 1개
+
+/** 오늘의 5문제를 편성한다(저장은 호출부). date 가 곧 시드이자 '오늘'(테스트 고정용). */
+export function composePlan(date: string): DrillPlan {
   const rnd = seededRandom(date);
   const items: DrillItem[] = [];
 
-  // ① 프리플랍 — 오답 큐 우선
-  const pre = loadPreflopStats();
-  const queue = [...pre.wrong].reverse().filter((k) => modeOfKey(k)); // 최근 오답부터
-  const preSlots = queue.length >= 2 ? 2 : 1;
+  // ⓪ 간격 반복 — 오늘 due 인 복습 문항(오래된 순). 복원 실패(데이터 개편)는 조용히 건너뛰고 SRS 에서 제거.
+  const srs = loadSrs();
+  const gone: string[] = [];
+  const used = new Set<number>();
+  for (const key of dueKeys(srs, date)) {
+    if (items.length >= MAX_REVIEW) break;
+    const reason = `복습 · ${daysSinceAnswered(srs[key], date)}일 만에`;
+    const mode = modeOfKey(key);
+    if (mode) {
+      if (makeQuiz(mode, key).key === key) items.push({ kind: 'preflop', key, reason, review: true });
+      else gone.push(key);
+    } else {
+      const id = Number(key.split('|')[1]);
+      if (key.startsWith('post|') && SCENARIOS.some((s) => s.id === id)) { used.add(id); items.push({ kind: 'postflop', id, reason, review: true }); }
+      else gone.push(key);
+    }
+  }
+  dropSrs(gone);
+
+  // ① 프리플랍 — 오답 큐 우선(복습으로 이미 든 키는 제외, 슬롯도 그만큼 줄인다)
+  const taken = new Set(items.flatMap((it) => (it.kind === 'preflop' ? [it.key] : [])));
+  const queue = [...loadPreflopStats().wrong].reverse().filter((k) => modeOfKey(k) && !taken.has(k)); // 최근 오답부터
+  const preSlots = Math.min(DRILL_SIZE - items.length, Math.max(0, (queue.length >= 2 ? 2 : 1) - taken.size));
   for (let i = 0; i < preSlots; i++) {
     const key = queue[i];
     if (key) items.push({ kind: 'preflop', key, reason: '오답 노트 · 틀렸던 핸드' });
@@ -98,7 +119,6 @@ function composePlan(date: string): DrillPlan {
 
   // ② 포스트플랍 — 약한 카테고리부터
   const ranked = rankCategories(rnd);
-  const used = new Set<number>();
   for (let i = 0; items.length < DRILL_SIZE; i++) {
     const r = ranked[i % ranked.length];
     const pool = SCENARIOS.filter((s) => s.cat === r.cat && !used.has(s.id));
