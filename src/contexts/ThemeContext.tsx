@@ -35,7 +35,7 @@ function applyThemeClass(theme: Theme) {
   //   못하고 자기 박스로 칠해지면서 body::before(지면 그라데이션·상단 글로우)를 통째로 덮는다
   //   (실측: 지면 ΔL* 0.00 — '죄다 단색'의 진짜 원인). 첫 페인트 배경은 index.html 인라인
   //   스크립트가 이미 담당하고, 이후엔 body 의 bg-surface-base 가 캔버스로 올라간다.
-  const color = theme === 'light' ? '#F5F6F8' : '#151221';
+  const color = theme === 'light' ? '#F5F7FB' : '#06080F'; // v6.2: 토큰(surface-base)과 동일 — 첫 프레임 색 점프 방지
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', color);
   root.style.removeProperty('background-color');
 }

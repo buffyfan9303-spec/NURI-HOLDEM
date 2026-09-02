@@ -100,7 +100,7 @@ export default function HomeTab({
         </a>
         {liveCount > 0 ? (
           <h2 className="font-display text-2xl font-extrabold tracking-tight text-ink-primary">
-            지금 <span className="tabular-nums text-emerald-400">{liveCount}</span>개 게임 <span className="text-grad-violet text-grad-glow">진행 중</span>
+            지금 <span className="tabular-nums stat-emerald">{liveCount}</span>개 게임 <span className="text-grad-violet text-grad-glow">진행 중</span>
           </h2>
         ) : (
           // 오너 피드백(2026-09-02): 헤드라인이 "눌러도 아무것도 안 나올 것 같다" — 글자만 있는 버튼은 버튼으로 안 읽힌다.
@@ -140,7 +140,7 @@ export default function HomeTab({
         <section className="px-page-x pt-4">
           <header className="flex items-baseline justify-between pb-1.5">
             <h3 className="font-display text-lg font-bold tracking-tight text-ink-primary">
-              지금 등록 가능 <span className="text-sm tabular-nums text-emerald-400">{openNow.length}</span>
+              지금 등록 가능 <span className="text-sm tabular-nums stat-emerald">{openNow.length}</span>
             </h3>
             <button type="button" onClick={onLive} className="flex items-center gap-0.5 py-2 -my-2 text-xs font-semibold text-ink-muted hover:text-ink-secondary">
               라이브 <Icon name="chevron-right" size={13} />
@@ -157,7 +157,7 @@ export default function HomeTab({
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-bold text-ink-primary">{s.title}</span>
                     <span className="block truncate text-xs text-ink-muted">
-                      {s.pubName} · <span className="text-emerald-400">등록 가능</span>
+                      {s.pubName} · <span className="stat-emerald">등록 가능</span>
                       {reg?.msLeft != null && reg.msLeft > 0 && reg.msLeft < 86400_000 && (
                         <span className="tabular-nums"> · 마감까지 {fmtLeft(reg.msLeft)}</span>
                       )}
