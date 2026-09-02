@@ -432,9 +432,10 @@ function SectionTab({ active, label, onClick }: { active: boolean; label: string
       onClick={onClick}
       data-pill-active={active || undefined}
       className={[
-        // flex-[1_0_auto]: 자리가 남으면 균등 분배, 좁으면 내용 폭(일정한 px-3)을 지키고 바가 가로 스크롤
+        // flex-[1_0_auto]: 자리가 남으면 균등 분배, 좁으면 내용 폭(일정한 px-2)을 지키고 바가 가로 스크롤
         // §T1: 서브탭 라벨 = t-tab(12.75/600). 활성은 아래 font-bold 가 덮는다.
-        'relative flex-[1_0_auto] px-3 py-2 t-tab rounded-[6px] whitespace-nowrap',
+        // 오너 승인(2026-09-03): px-3 → px-2 — 360px 실측 바 326px 에 6탭(px-2.5 는 344px 로 딜러가 잘렸다 → px-2 ≈ 318px).
+        'relative flex-[1_0_auto] px-2 py-2 t-tab rounded-[6px] whitespace-nowrap',
         'transition-colors',
         'focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0',
         active ? 'text-ink-primary font-bold' : 'text-ink-secondary hover:text-ink-primary',
@@ -662,21 +663,26 @@ function FeedSection({
             {enableCategory ? (
               // 오너 지시(2026-08-27): 카테고리 나열이 지저분 — 줄바꿈 없는 한 줄 스크롤 칩,
               // 균일 높이·보더 없는 면 기반(활성만 인디고), browse 필터 레일과 같은 문법.
-              <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto scrollbar-none">
+              // 44px 탭 타깃(오너 승인 2026-09-03): overflow-x-auto 레일 안에서는 .tap-y-44 의 ::before(-6px) 가
+              // 세로 스크롤 오버플로를 만들므로, 버튼을 h-11 투명 컨테이너로 두고 안의 span 이 32px 시각 칩을 그린다.
+              // 레일은 -my-1.5 로 행 높이 32 유지(레이아웃 변화 0).
+              <div className="-my-1.5 flex min-w-0 flex-1 gap-1 overflow-x-auto scrollbar-none">
                 {BOARD_CATEGORIES.map((c) => (
                   <button
                     key={c.id}
                     type="button"
                     aria-pressed={cat === c.id}
                     onClick={() => { setCat(c.id); setVisible(15); }}
-                    className={[
-                      'shrink-0 inline-flex items-center h-8 px-3 rounded-chip border text-2xs font-bold leading-none transition-colors',
+                    className="shrink-0 inline-flex h-11 items-center"
+                  >
+                    <span className={[
+                      'inline-flex items-center h-8 px-3 rounded-chip border text-2xs font-bold leading-none transition-colors',
                       cat === c.id
                         ? 'border-accent-300 bg-accent-300 text-white'
                         : 'border-transparent bg-surface-high text-ink-secondary hover:text-ink-primary',
-                    ].join(' ')}
-                  >
-                    {c.label}
+                    ].join(' ')}>
+                      {c.label}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -1250,17 +1256,21 @@ function VenuesSection({
           340px 미만 초소형 기기만 가로 스크롤 폴백. */}
       {/* 오너 지시(2026-08-28): 칩(pill) 형태 제거 — 배경·보더 없는 텍스트 필터.
           활성은 액센트 색+굵기만으로 표시(정렬 안내줄과 같은 텍스트 문법). */}
-      <div className="flex items-center gap-3 overflow-x-auto scrollbar-none -mx-page-x px-page-x">
+      {/* 44px 탭 타깃(오너 승인 2026-09-03): 버튼 h-11, 레일 -my-2.5 로 원래 24px 행 높이 유지.
+          부모 space-y-3 이 자식 margin 을 덮어쓰므로 h-6 래퍼 안에서 상쇄한다. */}
+      <div className="h-6">
+      <div className="-my-2.5 flex items-center gap-3 overflow-x-auto scrollbar-none -mx-page-x px-page-x">
         {VENUE_FILTERS.map((f) => (
           <button key={f.key} type="button" onClick={() => setKindFilter(f.key)}
-            className={['shrink-0 whitespace-nowrap py-1 text-xs transition-colors',
+            className={['shrink-0 inline-flex h-11 items-center whitespace-nowrap text-xs transition-colors',
               kindFilter === f.key ? 'font-bold text-accent-200' : 'font-semibold text-ink-muted hover:text-ink-primary'].join(' ')}>
             {f.label}
           </button>
         ))}
         {user && (
-          <button type="button" onClick={() => setCreateOpen(true)} className="ml-auto shrink-0 whitespace-nowrap py-1 text-xs font-bold text-accent-300 hover:text-accent-200">+ 그룹 만들기</button>
+          <button type="button" onClick={() => setCreateOpen(true)} className="ml-auto inline-flex h-11 shrink-0 items-center whitespace-nowrap text-xs font-bold text-accent-300 hover:text-accent-200">+ 그룹 만들기</button>
         )}
+      </div>
       </div>
 
       {/* 섹션 헤더 — GTO 레인 헤더 문법(ToolsPanel): 현재 필터 라벨 + N개 | 정렬 안내, 2행 설명. 카피 3종 원문 그대로 */}

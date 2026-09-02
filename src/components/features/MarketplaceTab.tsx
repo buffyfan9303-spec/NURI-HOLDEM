@@ -180,7 +180,10 @@ function MarketplaceTab({
       {/* ── 카테고리 — 가로 스크롤(번개장터식, 줄바꿈 없음) ───────── */}
       {/* 오너 지시(2026-08-28): 칩(pill) 형태 제거 — 커뮤니티 홀덤펍 필터와 같은
           배경·보더 없는 텍스트 필터(활성 = 액센트 색+굵기만). */}
-      <div data-market-catbar="" className="flex items-center gap-3 overflow-x-auto scrollbar-none [-webkit-overflow-scrolling:touch]">
+      {/* 44px 탭 타깃(오너 승인 2026-09-03): 버튼 h-11, 레일 -my-2.5 로 원래 24px 행 높이 유지.
+          부모 space-y-3 이 자식 margin 을 덮어쓰므로 h-6 래퍼 안에서 상쇄한다(data-market-catbar 는 그대로). */}
+      <div className="h-6">
+      <div data-market-catbar="" className="-my-2.5 flex items-center gap-3 overflow-x-auto scrollbar-none [-webkit-overflow-scrolling:touch]">
         {CATEGORIES.map((cat) => {
           const active = category === cat.id;
           return (
@@ -190,7 +193,7 @@ function MarketplaceTab({
               aria-pressed={active}
               onClick={() => goSubTab('market-cat', CAT_ORDER, category, cat.id, () => setCategory(cat.id))}
               className={[
-                'shrink-0 whitespace-nowrap py-1 text-xs transition-colors',
+                'shrink-0 inline-flex h-11 items-center whitespace-nowrap text-xs transition-colors',
                 active ? 'font-bold text-accent-200' : 'font-semibold text-ink-muted hover:text-ink-primary',
               ].join(' ')}
             >
@@ -198,6 +201,7 @@ function MarketplaceTab({
             </button>
           );
         })}
+      </div>
       </div>
 
       {/* ── 정렬·필터 바 ────────────────────────────────────────────── */}

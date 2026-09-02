@@ -123,8 +123,13 @@ export default function DealerCommunity() {
             {notices.slice(0, 5).map((n) => (
               <li key={n.id} className="border-b border-border-subtle last:border-b-0">
                 <button type="button" onClick={() => setOpenNotice(n)} className="w-full text-left px-3 py-2 hover:bg-surface-high/50 transition-colors">
-                  <p className="text-xs font-semibold text-ink-primary">{n.title}</p>
-                  {n.body && <p className="mt-0.5 text-2xs text-ink-muted line-clamp-2 leading-snug">{n.body}</p>}
+                  {/* 오너 결정 2026-09-03: 게시판 공지 행과 같은 '제목 · 날짜' 한 줄 — 본문은 눌러서 상세(NoticeDetailModal)에서.
+                      되돌릴 때는 아래 미리보기 블록을 복구:
+                      {n.body && <p className="mt-0.5 text-2xs text-ink-muted line-clamp-2 leading-snug">{n.body}</p>} */}
+                  <p className="flex items-center gap-2 text-xs font-semibold text-ink-primary">
+                    <span className="min-w-0 flex-1 truncate">{n.title}</span>
+                    <span className="shrink-0 text-2xs font-normal tabular-nums text-ink-muted">{relativeTime(n.createdAt)}</span>
+                  </p>
                 </button>
               </li>
             ))}
@@ -137,7 +142,7 @@ export default function DealerCommunity() {
         <button type="button" onClick={() => setShowIcm((v) => !v)}
           className="flex items-center justify-center gap-1.5 rounded-input border border-border-default bg-surface-high px-3 py-2.5 text-xs font-semibold text-ink-secondary hover:text-ink-primary transition-colors">
           <span className="inline-flex items-center gap-1"><span className="text-accent-300">ICM</span> 계산기</span>
-          <span className="text-2xs text-ink-muted">{showIcm ? '▲' : '▼'}</span>
+          <Icon name={showIcm ? 'chevron-up' : 'chevron-down'} size={12} className="shrink-0 text-ink-muted" />
         </button>
         {canPost ? (
           <button type="button" onClick={() => setOpen((v) => !v)} className="btn-primary text-xs">
@@ -203,7 +208,7 @@ export default function DealerCommunity() {
           const cnt = k === 'all' ? posts.length : posts.filter((x) => x.kind === k).length;
           return (
             <button key={k} type="button" onClick={() => goSubTab('dealer-kind', KIND_FILTER_ORDER, filterKind, k, () => setFilterKind(k))} aria-pressed={on}
-              className={['shrink-0 whitespace-nowrap py-1 text-xs leading-none transition-colors tabular-nums',
+              className={['shrink-0 inline-flex h-11 -my-3 items-center whitespace-nowrap text-xs leading-none transition-colors tabular-nums',
                 on ? 'font-bold text-accent-200' : 'font-semibold text-ink-muted hover:text-ink-primary'].join(' ')}>
               {label}{cnt > 0 ? ` ${cnt}` : ''}
             </button>

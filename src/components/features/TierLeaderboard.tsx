@@ -713,7 +713,7 @@ export default function TierLeaderboard() {
           <SlidingPill activeKey={board} underline className="rounded-full bg-accent-300" />
           {RANK_TABS.map((b) => (
             <button key={b} type="button" data-pill-active={board === b || undefined} onClick={() => goBoard(b)}
-              className={['relative shrink-0 px-2 lg:px-3 py-1.5 t-tab rounded-[6px] transition-colors',
+              className={['relative shrink-0 px-2 lg:px-3 py-2 t-tab rounded-[6px] transition-colors',
                 board === b ? 'text-ink-primary font-bold' : 'text-ink-secondary hover:text-ink-primary'].join(' ')}>
               <span className="relative">{BOARD_LABEL[b]}</span>
             </button>
