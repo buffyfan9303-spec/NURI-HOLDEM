@@ -9,7 +9,10 @@ import { useAuth } from '../../contexts/AuthContext';
 import { supabase, IS_MOCK } from '../../lib/supabase';
 import { useBlocks } from '../../contexts/BlockContext';
 import { resizeImage } from '../../lib/storage';
-import { requestPasswordChangeCode, changeMyPasswordWithCode, setMyNickname, withdrawMyAccount, verifyMyPassword, getMyAccountSummary, setMyPublicRankingConsent } from '../../api/auth';
+import { requestPasswordChangeCode, changeMyPasswordWithCode, setMyNickname, withdrawMyAccount, verifyMyPassword, getMyAccountSummary, setMyPublicRankingConsent, checkNameAvailable } from '../../api/auth';
+import { useAvailabilityCheck, availabilityHint } from '../atoms/AvailabilityField';
+import { isValidDisplayName } from '../../lib/displayName';
+import { msgOf } from '../../lib/dbError';
 import {
   getMyRankingDisplaySettings, setMyRankingNamePref,
   type RankingNamePref, type RankingDisplaySettings,
@@ -113,7 +116,9 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
   };
 
   // ── 기본 정보 상태 ─────────────────────────────────────────────────────
-  const [name,          setName]         = useState('');
+  // 닉네임(name) — 바꿀 때만 실시간 중복검사(현재 값과 같으면 idle). 저장 직전에 한 번 더 확인한다.
+  const nameChk = useAvailabilityCheck(checkNameAvailable, isValidDisplayName, user?.name);
+  const name = nameChk.value, setName = nameChk.setValue;
   const [recvId,        setRecvId]       = useState(''); // 받는 아이디(닉네임) 최초 설정용
   const [recvBusy,      setRecvBusy]     = useState(false);
   const [selectedColor, setColor]        = useState('#FFD100');
@@ -222,6 +227,7 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
   const nextNameChange = lastNameChange + COOLDOWN_MS;
   const nicknameLocked = user.role !== 'admin' && lastNameChange > 0 && Date.now() < nextNameChange;
   const nextNameDateStr = new Date(nextNameChange).toLocaleDateString('ko-KR');
+  const nameHint = availabilityHint(nameChk.status, '닉네임', '2~20자로 입력해 주세요');
 
   // ── 아이덴티티 헤더 파생값 — 이미 내려오는 데이터만 사용(새 fetch 없음) ────
   const points    = user.activityPoints ?? 0;
@@ -255,11 +261,18 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
   const handleProfileSave = async () => {
     if (!name.trim()) return toast.show('닉네임을 입력해 주세요', 'error');
     if (name.trim().length < 2) return toast.show('닉네임은 2자 이상이어야 합니다', 'error');
-    if (nicknameLocked && name.trim() !== user.name) {
+    const nameChanged = name.trim() !== user.name;
+    if (nicknameLocked && nameChanged) {
       return toast.show(`닉네임은 ${nextNameDateStr} 이후에 변경할 수 있습니다`, 'error');
     }
+    if (nameChanged && nameChk.status === 'taken') return toast.show('이미 사용 중인 닉네임입니다', 'error');
     setSaving(true);
     try {
+      // 디바운스 검사가 아직 안 끝났거나 실패했을 수 있다 — 저장 직전 서버에 한 번 더 묻는다.
+      if (nameChanged && !(await checkNameAvailable(name))) {
+        toast.show('이미 사용 중인 닉네임입니다', 'error');
+        return;
+      }
       let avatarUrl = avatarPreview || undefined;
 
       if (avatarFile) {
@@ -282,7 +295,8 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
       toast.show('프로필이 저장되었습니다', 'success');
       onClose();
     } catch (err) {
-      toast.show(err instanceof Error ? err.message : '저장 실패', 'error');
+      // PostgrestError 는 평범한 객체라 instanceof Error 가 false — 쿨다운 트리거 문장·유니크 위반이 '저장 실패'로 뭉개졌다
+      toast.show(msgOf(err, '저장 실패'), 'error');
     } finally {
       setSaving(false);
     }
@@ -472,8 +486,13 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
               maxLength={20}
               placeholder="닉네임 입력 (2~20자)"
               disabled={nicknameLocked}
-              className="input disabled:opacity-60 disabled:cursor-not-allowed"
+              className={[
+                'input disabled:opacity-60 disabled:cursor-not-allowed',
+                nameChk.status === 'taken' || nameChk.status === 'invalid' ? 'border-danger/50' :
+                nameChk.status === 'available' ? 'border-emerald-500/50' : '',
+              ].join(' ')}
             />
+            {nameHint && <p className={`mt-1 text-2xs ${nameHint.cls}`} aria-live="polite">{nameHint.text}</p>}
             <div className="mt-1 flex items-start justify-between gap-2">
               {/* 잠긴 순간이 곧 '즉시 변경권'(상점 250점)이 필요한 순간이다 — 여기서 알려주지 않으면
                   상품이 있는 줄도 모르고 30일을 기다린다. 파는 것은 기능이 아니라 대기 시간 면제라
