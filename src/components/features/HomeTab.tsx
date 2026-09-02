@@ -110,7 +110,7 @@ export default function HomeTab({
             <span className="min-w-0 flex-1">
               {/* v6 aura-ui.com 문법: 헤드라인은 흰색, 핵심 구절 하나만 채도 높은 그라데이션 */}
               <h2 className="font-display text-2xl font-extrabold tracking-tight text-ink-primary">
-                오늘 한 판, <span className="text-grad-violet text-grad-glow">GTO</span>로 준비하세요
+                오늘 한 판, <span className="text-grad-violet text-grad-glow mr-[0.15em]">GTO</span>로 준비하세요
               </h2>
               <span className="mt-1 inline-flex items-center gap-1 text-2xs font-semibold text-accent-200">
                 차트 · 계산기 · 트레이너 열기
