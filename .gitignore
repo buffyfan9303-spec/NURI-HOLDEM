@@ -36,3 +36,12 @@ dist-ssr
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+
+# 비밀·키 파일(2026-09-02 보안 패스) — 실수 커밋 차단. 공개 저장소라 한 번 새면 즉시 공개다.
+*.pem
+*.key
+*.p12
+*.pfx
+service-account*.json
+*.dump
+*.sql.gz

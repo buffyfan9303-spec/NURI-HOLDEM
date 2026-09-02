@@ -196,3 +196,27 @@ dev 서버는 포트 **5173**(`.claude/launch.json`의 `holdem-dev`). E2E는 프
 ## 마스터 실행 계획
 `docs/plans/nuri-master-execution-plan.md` (§0~§16) · `BLOCKED.md`(오너 결정) · `backlog.md`(범위 밖).
 **§15가 §1~§14를 이깁니다.** 읽는 순서: §15 → §12(결정) → 해당 카드.
+
+---
+
+## 보안 코딩 표준 (2026-09-02 보안 패스 — 코드 생성 시 기본 반영)
+
+공개 GitHub 저장소 + Supabase(RLS) + 엣지 함수 구조다. 아래는 제안이 아니라 **기본값**이다. 점검은 `/security-audit`.
+
+1. **비밀은 코드·저장소에 없다.** `.env.local`(로컬)·GitHub Secrets(CI)·Supabase Vault/`secret_settings`(런타임)만.
+   `VITE_*` 는 번들에 박히는 **공개 값**이다 — anon 키·지도 JS 키(도메인 제한)·PortOne 채널 키·Sentry DSN 만 허용, 서비스 롤·API 비밀 절대 금지.
+   pre-commit(secretlint)이 막지만, 새면 **키 로테이션이 먼저**다(공개 저장소는 이력이 곧 공개).
+2. **인가는 서버(DB)가 한다.** 클라이언트의 `user.role`·`verified` 판정은 UI 분기용일 뿐이다. 모든 권한은 RLS 정책 또는
+   SECURITY DEFINER RPC 안의 `auth.uid()`·`my_role()` 검사로 강제한다. NULL-safe 비교(`IS DISTINCT FROM`) — `<>` 는 비로그인에서 가드가 열린다.
+3. **RPC 권한 기본값**: 변이(mutation) RPC 는 `revoke execute … from public, anon` + `grant … to authenticated, service_role`.
+   `from anon` 만으로는 무효(PUBLIC 기본 GRANT). 트리거·크론·`_` 내부 함수는 anon·authenticated 모두 회수. 읽기 RPC 만 anon 허용.
+   SECURITY DEFINER 는 `set search_path = public, pg_temp` 고정. `CREATE OR REPLACE` 는 ACL 을 초기화하므로 REVOKE/GRANT 를 다시 쓴다.
+4. **엣지 함수는 첫 분기에서 호출자를 증명한다.** `verify_jwt=true` 는 anon 키 JWT 도 통과시키므로 게이트가 아니다:
+   유저 기능은 `auth.getUser(token)`, 관리자 기능은 `profiles.role = 'admin'`, 크론·트리거는 Vault 공유 시크릿 헤더(타이밍 안전 비교).
+   외부 API(Gemini·Resend)를 부르는 함수는 유저별 일일 상한(`consume_ai_quota`)이나 시크릿 게이트 없이 열지 않는다(과금 남용 = 보안 사고).
+5. **쿼리는 PostgREST/RPC 파라미터로만.** 문자열 조합 SQL·`execute format` 에 사용자 입력 직접 삽입 금지(`%I`/`%L` 또는 파라미터).
+   클라이언트가 만든 필터 값은 서버에서 화이트리스트 검증(정렬 컬럼·enum·id 형식).
+6. **응답에 민감 컬럼을 싣지 않는다.** `profiles` 의 `ci_hash`·`verified_at`·`role`·이메일·전화는 본인/관리자 RPC 에서만.
+   공개 RPC 는 필요한 컬럼만 `select` 한다(`select *` 금지). 에러 메시지에 내부 식별자·SQL 을 노출하지 않는다.
+7. **HTML 주입 금지**: `dangerouslySetInnerHTML`·`innerHTML =`·`eval`·`new Function` 사용 금지(현재 0곳). 이메일 템플릿은 `escapeHtml` 을 거친다.
+8. **의존성**: `npm audit --omit=dev` 의 high/critical 은 즉시. 새 패키지는 주간 다운로드·라이선스·최근 갱신을 확인하고 `npm view` 로 실체를 본 뒤 도입.

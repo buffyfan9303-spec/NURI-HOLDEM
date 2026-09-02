@@ -1,9 +1,12 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from 'npm:@supabase/supabase-js@2';
 
 // NURI HOLDEM — Gemini 프록시. 키는 서버 시크릿(GEMINI_API_KEY)에서만 읽는다(클라이언트 노출 방지).
 // v3: gemini-1.5-flash 폐기 대응 — 현행 모델 + 폴백 체인(2.5-flash → 2.0-flash).
 // v4: 2.5-flash thinking 토큰 소모 수정(thinkingBudget 0 + 한도 2048) + 빈 응답 폴백.
 // v5: 이미지 입력(inline_data) 지원 — 순위 인증 증빙 AI 검사용(운영자). images: base64/dataURL 배열(최대 2장).
+// v7(2026-09-02 보안): **로그인 유저만** + 유저별 일일 상한(consume_ai_quota). 이전엔 공개 anon 키만으로
+//   누구나 호출 가능해 Gemini 과금 남용 통로였다(verify_jwt 관문은 anon 키 JWT 도 통과시킨다).
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -16,6 +19,33 @@ function json(obj: unknown, status = 200): Response {
 
 // v6: 체인 끝에 -latest 별칭 추가 — 앞의 둘이 은퇴해도 스스로 살아남게(1.5 은퇴 사고 재발 방지).
 const MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-flash-latest'];
+const DAILY_LIMIT = 60; // 유저·일 — 포스터 판독·증빙 검사는 운영자 작업이라 하루 60회면 충분하다
+
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
+const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+
+/** Authorization: Bearer <user jwt> → 유저 id. anon 키 JWT·부재·만료는 전부 null(fail-closed). */
+async function requireUser(req: Request): Promise<string | null> {
+  const auth = req.headers.get('Authorization') ?? '';
+  if (!auth.startsWith('Bearer ')) return null;
+  const token = auth.slice(7).trim();
+  if (!token) return null;
+  const client = createClient(SUPABASE_URL, ANON_KEY);
+  const { data, error } = await client.auth.getUser(token);
+  if (error || !data?.user?.id) return null;
+  return data.user.id;
+}
+
+/** 일일 상한 — DB 가 세고 판정한다(consume_ai_quota, service_role 전용). RPC 장애는 fail-closed(비용 보호가 목적). */
+async function consumeQuota(userId: string, kind: string, limit: number): Promise<{ ok: boolean; used: number }> {
+  const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
+  const { data, error } = await admin.rpc('consume_ai_quota', { p_user_id: userId, p_kind: kind, p_limit: limit });
+  if (error || !data) return { ok: false, used: -1 };
+  // deno-lint-ignore no-explicit-any
+  const d = data as any;
+  return { ok: !!d.ok, used: Number(d.used ?? 0) };
+}
 
 interface ImgPart { mime: string; data: string }
 
@@ -56,6 +86,12 @@ Deno.serve(async (req: Request) => {
   try {
     const key = Deno.env.get('GEMINI_API_KEY');
     if (!key) return json({ error: 'AI 미설정: GEMINI_API_KEY 시크릿을 등록하세요.' }, 503);
+
+    const userId = await requireUser(req);
+    if (!userId) return json({ error: '로그인이 필요합니다.' }, 401);
+    const quota = await consumeQuota(userId, 'gemini', DAILY_LIMIT);
+    if (!quota.ok) return json({ error: quota.used < 0 ? 'AI 사용량 확인에 실패했습니다. 잠시 후 다시 시도해 주세요.' : `오늘 AI 사용 한도(${DAILY_LIMIT}회)를 다 썼습니다. 내일 다시 이용해 주세요.` }, 429);
+
     const bodyIn = await req.json().catch(() => ({} as Record<string, unknown>));
     const prompt = typeof bodyIn.prompt === 'string' ? bodyIn.prompt : '';
     const system = typeof bodyIn.system === 'string' ? bodyIn.system : '';

@@ -3,6 +3,7 @@ import globals from 'globals'
 import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 import tseslint from 'typescript-eslint'
+import security from 'eslint-plugin-security'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
@@ -29,11 +30,15 @@ export default defineConfig([
       tseslint.configs.recommended,
       reactHooks.configs.flat.recommended,
       reactRefresh.configs.vite,
+      // 2026-09-02 보안 패스: eval·비리터럴 require·정규식 DoS·타이밍 비교 등 표면화(경고). 게이트를 죽이지 않고 리뷰에서 본다.
+      security.configs.recommended,
     ],
     languageOptions: {
       globals: globals.browser,
     },
     rules: {
+      // obj[key] 전수 경고는 신호가 아니라 소음(React 코드베이스 수천 곳) — 입력이 흐르는 곳은 리뷰로 본다
+      'security/detect-object-injection': 'off',
       // react-hooks v7 신규(React Compiler 기반) 진단 룰: 기존 코드에 소급 적용하려면
       // setState/컴포넌트 구조 리팩토링이 필요해 동작 변경 위험이 큼 → 게이트에서 제외(점진 도입 대상)
       'react-hooks/set-state-in-effect': 'off',

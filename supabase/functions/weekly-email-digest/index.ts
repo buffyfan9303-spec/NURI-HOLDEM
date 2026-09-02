@@ -1,13 +1,37 @@
 // 주간 이메일 다이제스트 — 팔로우 매장의 향후 7일 대회 요약을 Resend 로 발송.
-// 호출: 크론(금 10:30 KST, anon Bearer) 또는 수동 테스트({"test_to":"..."}).
+// 호출: 크론(금 10:30 KST — public.cron_weekly_email_digest() 가 Vault 공유 시크릿을 x-nuri-cron-secret 로 동봉)
+//       또는 수동 테스트({"test_to":"..."}, 같은 헤더 필요).
+// 2026-09-02 보안: 이전엔 공개 anon Bearer 만으로 열려 있어 인터넷 어디서든 전 회원 발송을 트리거할 수 있었다.
+//   send-push 와 같은 시크릿(get_push_shared_secret, service_role 전용 RPC)을 대조한다 — 부재·불일치 전부 401(fail-closed).
 // 키는 secret_settings(RLS 잠김·service_role 전용)에서 읽는다 — 코드에 하드코딩 금지.
 import { createClient } from 'npm:@supabase/supabase-js@2';
+
+let expectedSecret = '';
+// deno-lint-ignore no-explicit-any
+async function loadExpectedSecret(admin: any): Promise<string> {
+  if (expectedSecret) return expectedSecret;
+  const { data } = await admin.rpc('get_push_shared_secret');
+  if (typeof data === 'string' && data.length > 0) expectedSecret = data;
+  return expectedSecret;
+}
+function timingSafeEq(a: string, b: string): boolean {
+  const ab = new TextEncoder().encode(a);
+  const bb = new TextEncoder().encode(b);
+  if (ab.length !== bb.length) return false;
+  let diff = 0;
+  for (let i = 0; i < ab.length; i++) diff |= ab[i] ^ bb[i];
+  return diff === 0;
+}
 
 Deno.serve(async (req: Request) => {
   const admin = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   );
+
+  const provided = req.headers.get('x-nuri-cron-secret') ?? '';
+  const expected = await loadExpectedSecret(admin);
+  if (!expected || !provided || !timingSafeEq(provided, expected)) return json({ error: 'unauthorized' }, 401);
 
   const { data: secrets, error: sErr } = await admin
     .from('secret_settings').select('key,value').in('key', ['RESEND_API_KEY', 'RESEND_FROM']);

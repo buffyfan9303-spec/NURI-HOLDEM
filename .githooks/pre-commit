@@ -1,0 +1,15 @@
+#!/bin/sh
+# NURI HOLDEM pre-commit — 스테이징된 파일에서 비밀(API 키·토큰·개인키) 검사.
+# 설치: `npm install` 이 prepare 스크립트로 core.hooksPath 를 .githooks 로 잡는다(husky 불필요).
+# 공개 저장소라 한 번 새면 즉시 공개 — 커밋 단계에서 막는 것이 마지막 로컬 방어선이다.
+# 우회가 꼭 필요하면 `git commit --no-verify` 대신 .secretlintrc.json 의 allows 에 '왜 공개키인지' 적고 넣어라.
+files=$(git diff --cached --name-only --diff-filter=ACMR | grep -vE '^(node_modules|dist|test-results|playwright-report)/' || true)
+[ -z "$files" ] && exit 0
+echo "$files" | xargs npx --no-install secretlint --format compact
+status=$?
+if [ $status -ne 0 ]; then
+  echo ""
+  echo "✖ secretlint: 비밀로 보이는 문자열이 스테이징돼 있습니다. 값을 .env.local / Supabase Vault 로 옮기고 다시 커밋하세요."
+  exit $status
+fi
+exit 0

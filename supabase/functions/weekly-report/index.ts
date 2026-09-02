@@ -6,6 +6,8 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 // ⚠️ 운영 메모(2026-06-23 감사): 현재 weekly-venue-reports cron 은 SQL 함수
 //    public.send_weekly_venue_reports() 를 호출하며 이 엣지함수는 호출하지 않음(미사용).
 //    Gemini 조언을 쓰려면 cron 을 net.http_post 로 이 함수에 연결하거나, 아니면 이 함수를 폐기할 것.
+// 2026-09-02 보안: 미사용인데도 공개 anon 키로 호출 가능했다(전 업주 알림 + Gemini 과금 트리거).
+//    크론 공유 시크릿(x-nuri-cron-secret = Vault push_shared_secret)이 없으면 401 — 연결할 때 cron 함수가 헤더를 동봉하면 된다.
 
 const SB = Deno.env.get('SUPABASE_URL')!;
 const SRK = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -19,6 +21,24 @@ async function rest(path: string): Promise<any[]> {
   const r = await fetch(`${SB}/rest/v1/${path}`, { headers: H });
   if (!r.ok) return [];
   return await r.json();
+}
+
+let expectedSecret = '';
+async function loadExpectedSecret(): Promise<string> {
+  if (expectedSecret) return expectedSecret;
+  const r = await fetch(`${SB}/rest/v1/rpc/get_push_shared_secret`, { method: 'POST', headers: H, body: '{}' });
+  if (!r.ok) return '';
+  const v = await r.json().catch(() => '');
+  if (typeof v === 'string' && v.length > 0) expectedSecret = v;
+  return expectedSecret;
+}
+function timingSafeEq(a: string, b: string): boolean {
+  const ab = new TextEncoder().encode(a);
+  const bb = new TextEncoder().encode(b);
+  if (ab.length !== bb.length) return false;
+  let diff = 0;
+  for (let i = 0; i < ab.length; i++) diff |= ab[i] ^ bb[i];
+  return diff === 0;
 }
 
 // ⚠ gemini-1.5-flash 는 은퇴했다(2026-08-29 실측: ListModels 39개 중 부재).
@@ -55,6 +75,11 @@ async function geminiAdvice(stats: string): Promise<string | null> {
 
 Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') return new Response('POST only', { status: 405 });
+  const provided = req.headers.get('x-nuri-cron-secret') ?? '';
+  const expected = await loadExpectedSecret();
+  if (!expected || !provided || !timingSafeEq(provided, expected)) {
+    return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+  }
   const now = kstNow();
   // 지난주 월~일 (KST)
   const dow = (now.getUTCDay() + 6) % 7; // 월=0

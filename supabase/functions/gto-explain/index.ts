@@ -1,6 +1,10 @@
 // @ts-nocheck
 // gto-explain — GTO 프리플랍 스팟을 Gemini 로 해설 (교육용)
 // secret 필요: GEMINI_API_KEY  (Google AI Studio 키 — 서버 시크릿에만 존재, 클라이언트 미노출)
+// 2026-09-02 보안: **로그인 유저만** + 유저별 일일 상한(consume_ai_quota). 이전엔 공개 anon 키만으로
+//   누구나 호출 가능해 Gemini 과금 남용 통로였다. 앱은 실패 시 규칙 요약으로 폴백하므로 401/429 도 UI 를 깨지 않는다.
+import { createClient } from 'npm:@supabase/supabase-js@2';
+
 const cors = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -10,6 +14,26 @@ const json = (body, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 
 const GEMINI_KEY = Deno.env.get('GEMINI_API_KEY') ?? '';
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
+const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+const DAILY_LIMIT = 100; // 유저·일 — 학습 도구라 넉넉히, 그러나 무한은 아니다
+
+async function requireUser(req) {
+  const auth = req.headers.get('Authorization') ?? '';
+  if (!auth.startsWith('Bearer ')) return null;
+  const token = auth.slice(7).trim();
+  if (!token) return null;
+  const { data, error } = await createClient(SUPABASE_URL, ANON_KEY).auth.getUser(token);
+  if (error || !data?.user?.id) return null;
+  return data.user.id;
+}
+async function consumeQuota(userId, kind, limit) {
+  const { data, error } = await createClient(SUPABASE_URL, SERVICE_ROLE)
+    .rpc('consume_ai_quota', { p_user_id: userId, p_kind: kind, p_limit: limit });
+  if (error || !data) return { ok: false, used: -1 };
+  return { ok: !!data.ok, used: Number(data.used ?? 0) };
+}
 
 // ⚠ 모델 이름은 만료된다. gemini-1.5-flash 는 은퇴했고(2026-08-29 실측: ListModels 39개 중 부재),
 //   이 함수는 그걸 계속 물고 있어서 **키가 멀쩡한데도 404** 로 죽어 있었다.
@@ -74,6 +98,11 @@ function buildPrompt(b) {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (!GEMINI_KEY) return json({ error: 'GEMINI_API_KEY 시크릿이 설정되지 않았습니다' }, 503);
+
+  const userId = await requireUser(req);
+  if (!userId) return json({ error: '로그인이 필요합니다' }, 401);
+  const quota = await consumeQuota(userId, 'gto', DAILY_LIMIT);
+  if (!quota.ok) return json({ error: quota.used < 0 ? 'quota_unavailable' : 'quota_exceeded', limit: DAILY_LIMIT }, 429);
 
   let b = {};
   try { b = await req.json(); } catch { return json({ error: 'invalid json' }, 400); }
