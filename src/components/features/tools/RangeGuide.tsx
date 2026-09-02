@@ -34,9 +34,16 @@ const chipCls = (on: boolean) =>
 
 const firstOfGroup = (g: RangeScenario['group']) => RANGE_SCENARIOS.find((s) => s.group === g)!;
 
-export default function RangeGuide({ initialGroup }: { initialGroup?: RangeScenario['group'] } = {}) {
+export default function RangeGuide({ initialGroup, initialScenId, highlight }: {
+  initialGroup?: RangeScenario['group'];
+  /** 오답 노트 '차트에서 보기' — 그 시나리오·그 셀로 바로 진입(없는 id 면 기본 그룹) */
+  initialScenId?: string;
+  highlight?: string;
+} = {}) {
   // 기본 그룹 = 9인 오픈(2026-09-02): 국내 홀덤펍은 9인 테이블이 기본이라 6맥스보다 먼저 보여야 한다
-  const [scenId, setScenId] = useState<string>(() => firstOfGroup(initialGroup ?? 'rfi9').id);
+  const [scenId, setScenId] = useState<string>(
+    () => (initialScenId && RANGE_SCENARIOS.some((s) => s.id === initialScenId) ? initialScenId : firstOfGroup(initialGroup ?? 'rfi9').id),
+  );
   const scen = RANGE_SCENARIOS.find((s) => s.id === scenId) ?? RANGE_SCENARIOS[0];
   const group = scen.group;
 
@@ -116,7 +123,7 @@ export default function RangeGuide({ initialGroup }: { initialGroup?: RangeScena
       </div>
       <p className="text-2xs text-ink-muted">{scen.desc}</p>
 
-      <RangeMatrix13 actions={actions} />
+      <RangeMatrix13 actions={actions} initialSel={highlight} />
 
       {scen.note && (
         <p className="text-2xs leading-relaxed text-accent-200 rounded-input bg-accent-300/[0.06] border border-accent-400/20 px-2 py-1.5"><Icon name="target" size={12} className="mr-0.5 inline-block align-[-1px] shrink-0" />{scen.note}</p>

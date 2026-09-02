@@ -40,7 +40,7 @@ export const SCENARIOS: Scenario[] = [
   { id: 8, cat: 'river', spot: 'BTN 오픈 → BB 콜. 플랍 시벳 콜, 턴 시벳 콜, 리버', hand: 'K♠ K♦', board: 'Q♥ 8♦ 3♣ / 5♠ / A♦', pot: '팟 40bb · 유효 60bb', options: ['벳', '체크'], answer: '체크', why: '리버 A는 BB의 콜 레인지(Ax)를 전부 살려주는 최악의 역전 카드입니다. KK가 벳하면 이기는 핸드는 접고 지는 Ax만 콜. 체크한 뒤 벳이 나오면 블러프캐처로 콜 여부를 판단합니다.' },
   { id: 9, cat: 'preflop', spot: 'MP 오픈에 BTN인 나', hand: 'A♦ J♦', board: '(프리플랍)', pot: '오픈 2.5bb · 유효 100bb', options: ['콜', '레이즈', '폴드'], answer: '레이즈', alsoOk: '콜', why: 'AJs는 BTN에서 3벳(밸류+A 블로커) 또는 콜을 혼합하는 핸드입니다. 포지션·플레이아빌리티 모두 최상급이라 폴드만 명확한 손해입니다.' },
   { id: 10, cat: 'turn', spot: 'BB 디펜드. 플랍 체크 → 상대 체크. 턴', hand: 'T♠ 9♠', board: '8♠ 5♦ 2♣ / J♥', pot: '팟 5.5bb', options: ['벳', '체크'], answer: '벳', why: '상대의 플랍 체크백으로 레인지가 캡됐고, J 턴은 내 콜 레인지에 유리한 카드입니다. 양차까지 있으니 프로브 벳으로 폴드 에퀴티+에퀴티를 동시에 노립니다(프로브 벳 개념).' },
-  { id: 11, cat: 'preflop', spot: 'CO 오픈 → BTN 3벳, 나(CO)', hand: 'K♣ Q♣', board: '(프리플랍)', pot: '3벳 9bb · 유효 100bb', options: ['콜', '레이즈', '폴드'], answer: '콜', why: 'KQs는 3벳에 수익적으로 콜할 수 있는 대표 핸드. 포지션이 불리해도 플레이아빌리티가 최상입니다. 4벳은 과격하고 폴드는 과소 수비입니다.' },
+  { id: 11, cat: 'preflop', spot: 'CO 오픈 → BTN 3벳, 나(CO)', hand: 'K♣ Q♣', board: '(프리플랍)', pot: '3벳 9bb · 유효 100bb', options: ['콜', '레이즈', '폴드'], answer: '콜', why: 'KQs는 3벳에 기대값상 콜할 수 있는 대표 핸드. 포지션이 불리해도 플레이아빌리티가 최상입니다. 4벳은 과격하고 폴드는 과소 수비입니다.' },
   { id: 12, cat: 'defense', spot: 'BTN 오픈 → BB 콜. 플랍 ⅓ 시벳 → 상대 체크레이즈', hand: '7♦ 7♠', board: 'Q♠ 7♥ 2♣', pot: '레이즈 후 팟 16bb', options: ['콜', '레이즈', '폴드'], answer: '레이즈', alsoOk: '콜', why: '미들셋. 드라이 보드라 슬로플레이(콜)도 혼합이지만, 체크레이즈 레인지엔 Qx 밸류가 많아 3벳의 밸류가 큽니다. 셋은 상대 밸류에게서 스택을 뽑아야 하는 핸드입니다.' },
   { id: 13, cat: 'bluffcatch', spot: 'BB vs BTN 오픈. 플랍 시벳에 콜, 턴 더블배럴(¾팟)', hand: 'A♥ 9♥', board: 'K♦ 9♣ 4♥ / 2♠', pot: '벳 9bb · 벳 후 팟 21bb', options: ['콜', '레이즈', '폴드'], answer: '콜', why: '미들페어+오버카드+백도어. MDF상 접기엔 너무 강하고 레이즈할 밸류는 아닙니다. 상대의 미스드 드로우·에어까지 합치면 필요 승률 30%(9/30)를 충족하는 표준 블러프캐처 콜입니다.' },
   { id: 14, cat: 'preflop', spot: 'UTG 오픈에 BB인 나', hand: 'J♠ T♠', board: '(프리플랍)', pot: '오픈 2.5bb', options: ['콜', '레이즈', '폴드'], answer: '콜', why: 'JTs는 어떤 오픈에도 BB에서 디펜드하는 핸드입니다(액션을 마감하는 자리의 팟 오즈+플레이아빌리티). 3벳은 UTG의 강한 레인지 상대로는 비효율입니다.' },
@@ -65,7 +65,7 @@ export const SCENARIOS: Scenario[] = [
   { id: 29, cat: 'defense', spot: 'BTN 오픈에 BB로 콜. 플랍에서 내가 먼저 액션', hand: '9♠ 8♠', board: '9♦ 5♣ 2♥', pot: '팟 5.5bb · 유효 97bb', options: ['벳', '체크'], answer: '체크', why: '콜러는 레인지 열세라 동크벳(OOP 선제 벳)은 이론상 거의 0빈도. 벳하면 내 체크 레인지가 캡되고 레이즈에 시달립니다. 탑페어도 체크 후 콜/체크레이즈로 플레이하는 동크벳 억제 원칙입니다.' },
   { id: 30, cat: 'defense', spot: 'BTN(나) 오픈 → BB 콜. 내가 ⅓팟 시벳 → 상대 체크레이즈(3배)', hand: 'K♦ Q♣', board: 'K♠ 9♦ 4♣', pot: '레이즈 후 팟 16bb · 유효 90bb', options: ['콜', '레이즈', '폴드'], answer: '콜', why: '드라이 K하이 체크레이즈에 탑페어 굿키커를 접으면 MDF에 크게 미달. 체크레이즈 블러프에 무한 익스플로잇당합니다. 3벳(리레이즈)은 밸류(셋·투페어)에게만 액션 받는 역선택이라 콜로 팟 통제가 표준입니다.' },
   { id: 31, cat: 'defense', spot: 'BB 디펜드, 플랍 ⅓팟 콜. 턴에서 상대 ¾팟 배럴', hand: 'A♦ 5♦', board: 'K♠ Q♦ 7♣ / 2♥', pot: '벳 9bb · 팟 12bb (¾팟)', options: ['콜', '폴드'], answer: '폴드', why: '¾팟 벳의 MDF는 57%지만, MDF는 「전부 콜」이 아니라 에퀴티·개선 가능성 순으로 레인지 상위부터 채우는 개념입니다. 노페어·노드로 A하이는 수비 레인지 하단 밖. 표준 폴드입니다.' },
-  { id: 32, cat: 'defense', spot: 'BB 디펜드. 플랍 콜, 턴 상대 하프팟 배럴', hand: '9♥ 8♥', board: 'Q♥ 7♥ 3♦ / 2♣', pot: '벳 6bb · 팟 12bb (하프팟)', options: ['콜', '레이즈', '폴드'], answer: '콜', why: '플러시 드로우 9아웃은 리버 한 장 기준 약 20%. 하프팟 벳의 필요 승률 25%엔 못 미치지만, 플러시 완성 시 추가 수익(임플라이드 오즈)이 그 차이를 메웁니다. 레이즈는 이미 한 번 콜한 턴에선 신뢰도가 낮습니다.' },
+  { id: 32, cat: 'defense', spot: 'BB 디펜드. 플랍 콜, 턴 상대 하프팟 배럴', hand: '9♥ 8♥', board: 'Q♥ 7♥ 3♦ / 2♣', pot: '벳 6bb · 팟 12bb (하프팟)', options: ['콜', '레이즈', '폴드'], answer: '콜', why: '플러시 드로우 9아웃은 리버 한 장 기준 약 20%. 하프팟 벳의 필요 승률 25%엔 못 미치지만, 플러시 완성 시 추가로 얻을 몫(임플라이드 오즈)이 그 차이를 메웁니다. 레이즈는 이미 한 번 콜한 턴에선 신뢰도가 낮습니다.' },
   { id: 33, cat: 'defense', spot: 'SB 오픈 → BB 콜(나). 플랍 상대 팟 벳', hand: '8♦ 8♣', board: 'K♦ T♠ 6♠', pot: '팟 벳 5.5bb · 벳 후 팟 11bb', options: ['콜', '폴드'], answer: '폴드', why: '팟 벳의 MDF는 50%. Kx·Tx·플러시 드로우·스트레이트 드로우만으로 절반이 채워져, 아웃 2개뿐인 언더포켓은 수비 레인지에서 밀려납니다. 턴·리버 배럴까지 감안하면 콜은 명확한 마이너스입니다.' },
 
   /* ── 신규: 블러프캐치 (블로커·팟 오즈) ───────────────────── */
@@ -150,13 +150,18 @@ export const SCENARIOS: Scenario[] = [
 /* 기록(localStorage) — 총계 + 카테고리별 정답률로 약점 추적.
    키·형태는 기존 그대로다(마이그레이션 0). '오늘의 드릴'이 이 byCat 을 읽어 약점 카테고리를 고른다. */
 export interface CatStat { t: number; c: number }
-export interface PostflopStats { total: number; correct: number; streak: number; best: number; byCat: Partial<Record<Category, CatStat>> }
+export interface PostflopStats {
+  total: number; correct: number; streak: number; best: number;
+  byCat: Partial<Record<Category, CatStat>>;
+  /** 오답 노트 — 틀린 문항 id(최근 40). 옛 기록엔 없던 필드라 load 의 스프레드 기본값 `wrong: []` 로 채운다(마이그레이션 0). */
+  wrong: number[];
+}
 export const POSTFLOP_STAT_KEY = 'nuri:trainer:postflop:v2';
-export const EMPTY_POSTFLOP_STATS: PostflopStats = { total: 0, correct: 0, streak: 0, best: 0, byCat: {} };
+export const EMPTY_POSTFLOP_STATS: PostflopStats = { total: 0, correct: 0, streak: 0, best: 0, byCat: {}, wrong: [] };
 
 export const loadPostflopStats = (): PostflopStats => {
-  try { return { ...EMPTY_POSTFLOP_STATS, byCat: {}, ...JSON.parse(localStorage.getItem(POSTFLOP_STAT_KEY) || '{}') }; }
-  catch { return { ...EMPTY_POSTFLOP_STATS, byCat: {} }; }
+  try { return { ...EMPTY_POSTFLOP_STATS, byCat: {}, wrong: [], ...JSON.parse(localStorage.getItem(POSTFLOP_STAT_KEY) || '{}') }; }
+  catch { return { ...EMPTY_POSTFLOP_STATS, byCat: {}, wrong: [] }; }
 };
 export const savePostflopStats = (s: PostflopStats): void => {
   try { localStorage.setItem(POSTFLOP_STAT_KEY, JSON.stringify(s)); } catch { /* quota */ }
@@ -164,3 +169,22 @@ export const savePostflopStats = (s: PostflopStats): void => {
 
 /** 시나리오 1건 채점 — 정답 또는 혼합 허용답이면 정답. 트레이너·드릴 공용(채점 규칙 단일 소스). */
 export const isScenarioCorrect = (sc: Scenario, a: Action): boolean => a === sc.answer || a === sc.alsoOk;
+
+/**
+ * 답 1건을 기록에 반영한 다음 상태를 만든다(순수 함수 — 저장은 호출부). applyPreflopAnswer 와 같은 꼴.
+ * 총계·연속·카테고리별 정답률을 올리고, 정답이면 오답 노트에서 빼고 오답이면 맨 뒤로(중복 없이) 넣는다.
+ * 트레이너·드릴·오답 노트 공용.
+ */
+export function applyPostflopAnswer(s: PostflopStats, sc: Scenario, ok: boolean): PostflopStats {
+  const streak = ok ? s.streak + 1 : 0;
+  const cur = s.byCat[sc.cat] ?? { t: 0, c: 0 };
+  const rest = s.wrong.filter((id) => id !== sc.id);
+  return {
+    total: s.total + 1,
+    correct: s.correct + (ok ? 1 : 0),
+    streak,
+    best: Math.max(s.best, streak),
+    byCat: { ...s.byCat, [sc.cat]: { t: cur.t + 1, c: cur.c + (ok ? 1 : 0) } },
+    wrong: ok ? rest : [...rest, sc.id].slice(-40),
+  };
+}

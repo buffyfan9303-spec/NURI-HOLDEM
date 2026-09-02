@@ -13,8 +13,12 @@ export interface MatrixAction {
   freq: FreqMap;
 }
 
-export default function RangeMatrix13({ actions, foldLabel = '폴드' }: { actions: MatrixAction[]; foldLabel?: string }) {
-  const [sel, setSel] = useState<string | null>(null);
+export default function RangeMatrix13({ actions, foldLabel = '폴드', initialSel }: {
+  actions: MatrixAction[]; foldLabel?: string;
+  /** 처음부터 선택(링 강조 + 하단 상세)해 둘 핸드 — 오답 노트 '차트에서 보기' 진입용 */
+  initialSel?: string | null;
+}) {
+  const [sel, setSel] = useState<string | null>(initialSel ?? null);
 
   // 셀별 액션 빈도 합성(최대 1로 클램프) — 배경은 아래→위 스택 채움
   const cellStyle = (name: string): { bg?: string; total: number } => {

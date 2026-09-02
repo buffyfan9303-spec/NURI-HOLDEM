@@ -10,7 +10,7 @@ import { CalcCard } from './calcUi';
 import Icon from '../../atoms/Icon';
 import { PreflopQuizCard, ScenarioQuizCard } from './quizCards';
 import {
-  ALL_CATS, CAT_LABEL, SCENARIOS, isScenarioCorrect, loadPostflopStats, savePostflopStats,
+  ALL_CATS, CAT_LABEL, SCENARIOS, applyPostflopAnswer, isScenarioCorrect, loadPostflopStats, savePostflopStats,
   type Action,
 } from './postflop.data';
 import {
@@ -46,16 +46,8 @@ export default function DailyDrill() {
     const ok = isScenarioCorrect(sc, a);
     setAns({ picked: a, ok });
     if (recordAnswer(ok).justHitGoal) setCelebrate(true);
-    const st = loadPostflopStats();
-    const streak = ok ? st.streak + 1 : 0;
-    const cur = st.byCat[sc.cat] ?? { t: 0, c: 0 };
-    savePostflopStats({
-      total: st.total + 1,
-      correct: st.correct + (ok ? 1 : 0),
-      streak,
-      best: Math.max(st.best, streak),
-      byCat: { ...st.byCat, [sc.cat]: { t: cur.t + 1, c: cur.c + (ok ? 1 : 0) } },
-    });
+    // 트레이너에서 푼 것과 완전히 동일하게 반영(정답률·약점·오답 노트)
+    savePostflopStats(applyPostflopAnswer(loadPostflopStats(), sc, ok));
   };
 
   const answerPreflop = (chose: 'act' | 'fold') => {
@@ -173,8 +165,9 @@ function ReasonRow({ text, step, total }: { text: string; step: number; total: n
 /**
  * 약점 리포트 — 포스트플랍 8카테고리 정답률 + 프리플랍 오답 노트 개수.
  * 새 집계를 만들지 않는다: 두 트레이너가 이미 쌓고 있는 로컬 기록을 그대로 읽어 정렬만 한다.
+ * '오답 노트'(WrongNote) 상단에도 그대로 얹는다(export).
  */
-function WeaknessReport() {
+export function WeaknessReport() {
   const rows = useMemo(() => {
     const post = loadPostflopStats();
     return ALL_CATS

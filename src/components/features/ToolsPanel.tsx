@@ -25,16 +25,17 @@ import BlindBuilder from './tools/BlindBuilder';
 import GlossaryPanel from './tools/GlossaryPanel';
 import DealCalc from './tools/DealCalc';
 import DailyDrill from './tools/DailyDrill';
+import WrongNote, { type PushJump, type RangeJump } from './tools/WrongNote';
 import { RANGE_SCENARIOS } from '../../lib/ranges.data';
 
 // GTO 패널·핸드 리플레이어는 에퀴티 엔진을 포함해 무거우므로 지연 로드
-import { readSnap } from '../../lib/snapshot';
+import { clearSnap, readSnap } from '../../lib/snapshot';
 import type { DeepGtoInit } from './gto/useDeepGto';
 import type { HandReviewInit } from './gto/HandReviewTool';
 const GtoDeepPanel = lazyWithReload(() => import('./gto/GtoDeepPanel'));
 const HandReviewTool = lazyWithReload(() => import('./gto/HandReviewTool'));
 
-type ToolKey = 'drill' | 'gto' | 'replay' | 'pot' | 'icm' | 'range' | 'trainer' | 'postflop' | 'mdf' | 'aggro' | 'rvr' | 'outs' | 'pushfold' | 'spr' | 'ev' | 'mzone' | 'bankroll' | 'variance' | 'blindgen' | 'chip' | 'sim' | 'payout' | 'endtime' | 'combo' | 'glossary' | 'deal';
+type ToolKey = 'drill' | 'gto' | 'replay' | 'pot' | 'icm' | 'range' | 'trainer' | 'postflop' | 'wrongnote' | 'mdf' | 'aggro' | 'rvr' | 'outs' | 'pushfold' | 'spr' | 'ev' | 'mzone' | 'bankroll' | 'variance' | 'blindgen' | 'chip' | 'sim' | 'payout' | 'endtime' | 'combo' | 'glossary' | 'deal';
 /** 5레인 IA — 차트 / 트레이닝 / 분석 / 계산기 / 매장운영.
  *  오너 피드백(2026-09-02): "차트를 보고 싶은데 문제가 나온다" — 예전엔 '학습' 한 레인에 차트와 퀴즈가 섞여
  *  첫 카드가 '오늘의 드릴'(퀴즈)이었다. 보는 것(차트)과 푸는 것(트레이닝)을 레인으로 갈라 차트를 맨 앞에 둔다. */
@@ -53,6 +54,9 @@ const TOOLS: { key: ToolKey; cat: ToolCat; name: string; desc: string; keywords?
     icon: <><path d="M12 2v4M12 18v4M2 12h4M18 12h4" /><circle cx="12" cy="12" r="4" /></> },
   { key: 'postflop', cat: 'learn', name: '포스트플랍 트레이너', desc: '실전 상황 퀴즈와 해설', keywords: '실전 상황 퀴즈·해설',
     icon: <><rect x="3" y="6" width="5" height="7" rx="1" /><rect x="9.5" y="6" width="5" height="7" rx="1" /><rect x="16" y="6" width="5" height="7" rx="1" /><path d="M7 17h10" /><path d="M9 21h6" /></> },
+  // 오답 노트(2026-09-03, GKR-2 잔여분) — 두 트레이너의 오답 큐를 목록으로. 아이콘 = lucide book-x
+  { key: 'wrongnote', cat: 'learn', name: '오답 노트', desc: '틀린 핸드 모아 다시 풀기', keywords: '오답 목록 · 차트에서 보기 · 다시 풀기',
+    icon: <><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20" /><path d="m14.5 7-5 5" /><path d="m9.5 7 5 5" /></> },
   { key: 'aggro', cat: 'chart', name: '어그레션 차트', desc: '포지션별 공격 권장 빈도', keywords: '포지션별 권장 빈도',
     icon: <><path d="M3 17l6-6 4 4 8-8" /><path d="M14 7h7v7" /></> },
   { key: 'glossary', cat: 'learn', name: '홀덤 용어사전', desc: '74개 용어 검색과 뜻풀이', keywords: '용어 74개 · 한글 설명·검색',
@@ -116,7 +120,7 @@ const STORE_SET = new Set<ToolKey>(STORE_TOOL_KEYS);
 const LANE_ORDER = ['all', ...LANES.map((l) => l.id)] as (ToolCat | 'all')[];
 
 // 트레이너류는 '퀴즈' 뉘앙스(맞히기), 나머지 계산기·차트류는 '도구' 뉘앙스로 라벨링.
-const QUIZ_KEYS = new Set<ToolKey>(['drill', 'range', 'pushfold', 'trainer', 'postflop']);
+const QUIZ_KEYS = new Set<ToolKey>(['drill', 'range', 'pushfold', 'trainer', 'postflop', 'wrongnote']);
 
 function renderTool(k: ToolKey): ReactNode {
   switch (k) {
@@ -137,14 +141,17 @@ function renderTool(k: ToolKey): ReactNode {
     case 'icm': return <ICMCalculator />;
     // 2026-09-03 오너 지시로 상단 바로가기 칩 제거 — 그룹 선택은 차트 안(RangeGuide 의 RANGE_GROUPS 칩)에 그대로 있어 기능 소실 0.
     // RangeGuide 의 initialGroup prop(기본 rfi9)은 손대지 않았다 — 다시 필요하면 여기 한 줄.
-    case 'range': return <RangeGuide />;
+    // 오답 노트 '차트에서 보기' 는 tool:range / tool:pushfold 스냅샷으로 시나리오·셀을 넘긴다 — 1회성이라
+    // 열린 뒤 이펙트가 지운다(tool:gto 와 달리 24h 동안 강조가 들러붙으면 안 된다). 아래 ToolsPanel 의 [active] 이펙트 참고.
+    case 'range': { const j = readSnap<RangeJump>('tool:range'); return <RangeGuide initialScenId={j?.scenId} highlight={j?.hand} />; }
     case 'trainer': return <PreflopTrainer />;
     case 'postflop': return <PostflopTrainer />;
+    case 'wrongnote': return <WrongNote />;
     case 'mdf': return <MdfCalc />;
     case 'aggro': return <AggroChart />;
     case 'rvr': return <RangeMatrix />;
     case 'outs': return <OutsCalc />;
-    case 'pushfold': return <PushFoldChart />;
+    case 'pushfold': { const j = readSnap<PushJump>('tool:pushfold'); return <PushFoldChart initialK={j?.k} initialStack={j?.stack} highlight={j?.hand} />; }
     case 'spr': return <SprCalc />;
     case 'ev': return <EvCalc />;
     case 'mzone': return <MzoneCalc />;
@@ -231,6 +238,11 @@ export default function ToolsPanel() {
     if (!active) { stripToolHash(); return; }
     if (window.location.hash === `#tool=${active}`) return;
     try { history.replaceState(null, '', `#tool=${active}`); } catch { /* 무시 */ }
+  }, [active]);
+  // 차트 점프 파라미터는 1회성 — 렌더(useState 초기화)가 읽은 뒤 커밋 후에 지운다.
+  // 렌더 중에 지우면 StrictMode 이중 렌더의 두 번째 호출이 null 을 읽는다.
+  useEffect(() => {
+    if (active === 'range' || active === 'pushfold') clearSnap(`tool:${active}`);
   }, [active]);
   // 도구 딥링크 공유 — 시스템 공유 시트(모바일) 또는 클립보드 복사(PC). #tool= 로 그 도구가 바로 열린다.
   const share = async (k: ToolKey) => {

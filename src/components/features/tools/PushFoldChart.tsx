@@ -23,9 +23,12 @@ const POSITIONS: { k: number; label: string; desc: string }[] = [
 
 type View = 'shove' | 'callBB' | 'callSB';
 
-export default function PushFoldChart() {
-  const [k, setK] = useState(2); // BTN 기본 — 가장 자주 찾는 자리
-  const [stack, setStack] = useState(10);
+export default function PushFoldChart({ initialK, initialStack, highlight }: {
+  /** 오답 노트 '차트에서 보기' — 그 포지션·스택·셀로 바로 진입 */
+  initialK?: number; initialStack?: number; highlight?: string;
+} = {}) {
+  const [k, setK] = useState(POSITIONS.some((p) => p.k === initialK) ? initialK! : 2); // BTN 기본 — 가장 자주 찾는 자리
+  const [stack, setStack] = useState((NASH_STACKS as readonly number[]).includes(initialStack ?? -1) ? initialStack! : 10);
   const [ante, setAnte] = useState(false);
   const [view, setView] = useState<View>('shove');
   const pos = POSITIONS.find((p) => p.k === k)!;
@@ -116,7 +119,7 @@ export default function PushFoldChart() {
             : `${pos.label}의 ${stack}bb 올인에 SB가 콜하는 균형 레인지. 뒤에 BB가 남아 BB 콜보다 타이트하다.`}
       </p>
 
-      <RangeMatrix13 actions={actions} />
+      <RangeMatrix13 actions={actions} initialSel={highlight} />
 
       <p className="text-2xs text-ink-muted text-center leading-relaxed">
         ※ 자체 계산 Nash 균형(fictitious play, 첫 진입 올인·단일 콜러 모델) — 몬테카를로 에퀴티 4만회/쌍 기반.

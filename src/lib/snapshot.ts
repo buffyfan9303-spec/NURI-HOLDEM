@@ -31,6 +31,11 @@ export function readSnap<T>(name: string, version = 1): T | null {
   } catch { return null; }
 }
 
+/** 스냅샷 삭제 — 1회성 전달(도구 간 점프 파라미터)을 읽은 뒤 지울 때. 실패해도 조용히 */
+export function clearSnap(name: string, version = 1): void {
+  try { localStorage.removeItem(`${PREFIX}${name}:v${version}`); } catch { /* 차단 환경 */ }
+}
+
 /** 스냅샷 쓰기 — 크면 버리고, 실패해도 조용히 넘어간다 */
 export function writeSnap(name: string, data: unknown, version = 1): void {
   try {

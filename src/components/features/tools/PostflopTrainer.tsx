@@ -4,7 +4,7 @@ import { useTrainerProgress, recordAnswer, setDailyGoal, GOAL_CHOICES } from '..
 import Icon from '../../atoms/Icon';
 import { ScenarioQuizCard } from './quizCards';
 import {
-  ALL_CATS, CAT_LABEL, SCENARIOS, isScenarioCorrect, loadPostflopStats, savePostflopStats,
+  ALL_CATS, CAT_LABEL, SCENARIOS, applyPostflopAnswer, isScenarioCorrect, loadPostflopStats, savePostflopStats,
   type Action, type CatStat, type Category, type PostflopStats, type Scenario,
 } from './postflop.data';
 
@@ -12,7 +12,9 @@ import {
    시나리오를 보고 최적 액션을 고르면 정답·해설 + 정답률을 추적한다.
    v2: 카테고리 필터 · 사이클마다 재셔플(오답 우선 배치) · localStorage 기록(카테고리별 약점 → 보완 추천).
    v3(2026-08-29): 문항 60→80. 문항 데이터는 postflop.data, 문제 표시는 quizCards 로 분리해
-     '오늘의 드릴'(DailyDrill)이 **같은 문항·같은 카드·같은 기록**을 쓴다(사본 0). */
+     '오늘의 드릴'(DailyDrill)이 **같은 문항·같은 카드·같은 기록**을 쓴다(사본 0).
+   v4(2026-09-03): 오답이 세션 state 라 화면을 닫으면 사라졌다 → stats.wrong(localStorage) 으로 영속.
+     '오답 노트' 도구가 같은 큐를 목록으로 보여 준다. */
 
 const shuffle = <T,>(arr: T[]): T[] => {
   const a = [...arr];
@@ -25,8 +27,7 @@ export default function PostflopTrainer() {
   const [order, setOrder] = useState<Scenario[]>(() => shuffle(SCENARIOS));
   const [idx, setIdx] = useState(0);
   const [picked, setPicked] = useState<Action | null>(null);
-  const [wrongIds, setWrongIds] = useState<number[]>([]); // 이번 사이클 오답 → 다음 사이클 앞쪽 배치
-  const [stats, setStats] = useState<PostflopStats>(loadPostflopStats);
+  const [stats, setStats] = useState<PostflopStats>(loadPostflopStats); // stats.wrong = 오답 노트 → 다음 사이클 앞쪽 배치
   const prog = useTrainerProgress();            // 게이미피케이션 진행(로컬 공용 — 별도 키)
   const [celebrate, setCelebrate] = useState(false); // 목표 달성 순간 인라인 배너 1회
 
@@ -39,27 +40,17 @@ export default function PostflopTrainer() {
     setPicked(a);
     const ok = isScenarioCorrect(sc, a);
     if (recordAnswer(ok).justHitGoal) setCelebrate(true); // 오늘 목표 달성 순간 감지
-    if (!ok) setWrongIds((w) => (w.includes(sc.id) ? w : [...w, sc.id]));
-    const streak = ok ? stats.streak + 1 : 0;
-    const cur = stats.byCat[sc.cat] ?? { t: 0, c: 0 };
-    saveStats({
-      total: stats.total + 1,
-      correct: stats.correct + (ok ? 1 : 0),
-      streak,
-      best: Math.max(stats.best, streak),
-      byCat: { ...stats.byCat, [sc.cat]: { t: cur.t + 1, c: cur.c + (ok ? 1 : 0) } },
-    });
+    saveStats(applyPostflopAnswer(stats, sc, ok));
   };
 
   const next = () => {
     setPicked(null);
     setCelebrate(false);
     if (idx + 1 >= order.length) {
-      // 사이클 종료 — 재셔플하되 오답 문항을 앞쪽에 우선 배치(같은 순서 반복 금지)
-      const wrong = order.filter((s) => wrongIds.includes(s.id));
-      const rest = order.filter((s) => !wrongIds.includes(s.id));
+      // 사이클 종료 — 재셔플하되 오답 노트 문항을 앞쪽에 우선 배치(같은 순서 반복 금지)
+      const wrong = order.filter((s) => stats.wrong.includes(s.id));
+      const rest = order.filter((s) => !stats.wrong.includes(s.id));
       setOrder([...shuffle(wrong), ...shuffle(rest)]);
-      setWrongIds([]);
       setIdx(0);
     } else setIdx(idx + 1);
   };
@@ -70,7 +61,6 @@ export default function PostflopTrainer() {
     setOrder(shuffle(f === 'all' ? SCENARIOS : SCENARIOS.filter((s) => s.cat === f)));
     setIdx(0);
     setPicked(null);
-    setWrongIds([]);
     setCelebrate(false);
   };
 

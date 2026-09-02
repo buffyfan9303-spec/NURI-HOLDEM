@@ -103,6 +103,14 @@ export const gradePreflop = (freq: number, chose: 'act' | 'fold'): boolean =>
 export const verdictOf = (q: Quiz): string =>
   q.freq >= 0.75 ? q.actionLabel : q.freq >= 0.25 ? `혼합 (${q.actionLabel} ${Math.round(q.freq * 100)}%)` : '폴드';
 
+/**
+ * 오답 노트에 보여 줄 '내 답' — 큐에는 키만 있고 무엇을 골랐는지는 저장돼 있지 않다.
+ * 그러나 오답은 순수 구간에서만 생기므로(gradePreflop: 혼합 25~75% 는 어느 쪽이든 정답)
+ * 권장의 반대가 곧 내 답이다. 혼합 구간(오답이 날 수 없는 문제)이면 null.
+ */
+export const wrongPickOf = (q: Quiz): string | null =>
+  q.freq >= 0.75 ? '폴드' : q.freq <= 0.25 ? q.actionLabel : null;
+
 /* 기록(localStorage) — 키·형태 기존 그대로(마이그레이션 0). wrong = 오답 재출제 큐(최근 40개). */
 export interface PreflopStats { total: number; correct: number; streak: number; best: number; wrong: string[] }
 export const PREFLOP_STAT_KEY = 'nuri:trainer:preflop:v2';
