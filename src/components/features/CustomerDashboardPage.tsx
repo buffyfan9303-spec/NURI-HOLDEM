@@ -343,7 +343,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
             {onOpenMarket && (
               <button type="button" onClick={onOpenMarket}
                 className="rounded-card border border-border-default bg-surface-low px-3 py-2.5 text-left hover:border-accent-400/50 transition-colors">
-                <span className="flex items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="cart" size={15} /> 내 장터 거래</span>
+                <span className="flex items-center gap-2 text-sm font-bold text-ink-primary"><span className="flex h-6 w-6 items-center justify-center rounded-[6px] tile-grad tile-grad-cyan"><Icon name="cart" size={13} /></span> 내 장터 거래</span>
                 <span className="block text-2xs text-ink-muted mt-0.5">판매목록 · 채팅 · 찜</span>
               </button>
             )}

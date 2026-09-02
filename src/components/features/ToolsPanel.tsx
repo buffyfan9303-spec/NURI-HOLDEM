@@ -315,7 +315,7 @@ export default function ToolsPanel() {
   const grid = (items: typeof TOOLS) => (
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
       {items.map((t) => (
-        <ToolCard key={t.key} testId={`tool-${t.key}`} name={t.name} desc={t.desc} icon={t.icon} onClick={() => open(t.key)}
+        <ToolCard key={t.key} testId={`tool-${t.key}`} tone={LANE_TONE[t.cat]} name={t.name} desc={t.desc} icon={t.icon} onClick={() => open(t.key)}
           fav={favs.includes(t.key)} onToggleFav={() => toggleFav(t.key)} />
       ))}
     </div>
@@ -509,8 +509,11 @@ export default function ToolsPanel() {
   );
 }
 
-function ToolCard({ name, desc, icon, onClick, fav, onToggleFav, testId }: {
-  name: string; desc: string; icon: ReactNode; onClick: () => void; testId?: string;
+type TileTone = 'violet' | 'indigo' | 'fuchsia' | 'cyan';
+/** 레인 → 타일 색(v6.3): 차트 violet · 트레이닝 fuchsia · 분석 cyan · 계산기 indigo (emerald 는 라이브 신호색이라 제외) */
+const LANE_TONE: Record<string, TileTone> = { chart: 'violet', learn: 'fuchsia', analyze: 'cyan', calc: 'indigo', ops: 'indigo' };
+function ToolCard({ name, desc, icon, onClick, fav, onToggleFav, testId, tone = 'violet' }: {
+  name: string; desc: string; icon: ReactNode; onClick: () => void; testId?: string; tone?: TileTone;
   fav?: boolean; onToggleFav?: () => void;
 }) {
   // 버튼 안에 role="button" 스팬(중첩 인터랙티브 위반) 대신 형제 버튼 2개 — 키보드로도 별을 켤 수 있다.
@@ -518,7 +521,7 @@ function ToolCard({ name, desc, icon, onClick, fav, onToggleFav, testId }: {
     <div className="relative">
       <button type="button" onClick={onClick} data-testid={testId}
         className="card-elev group/tool flex w-full items-center gap-2.5 rounded-card border border-border-default bg-surface-low px-2.5 py-2 pr-8 text-left transition-colors hover:border-accent-400/40 hover:bg-surface-high active:scale-[0.98]">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-input tile-grad">
+        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-input tile-grad tile-grad-${tone}`}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{icon}</svg>
         </span>
         <span className="min-w-0 flex-1">

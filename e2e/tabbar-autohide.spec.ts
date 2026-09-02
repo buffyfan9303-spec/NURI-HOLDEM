@@ -65,7 +65,7 @@ test('③ 깊은 스크롤 상태로 탭 전환해도 탭바가 증발하지 않
   }
   await expect(nav(page)).toHaveClass(/translate-y-0/);
   // 라이브(스크롤 0) → 일정(깊은 위치 복원): 구 리스너는 복원 거대 dy 로 탭바가 사라졌다
-  await nav(page).getByRole('button', { name: '라이브', exact: true }).click();
+  await nav(page).getByRole('button', { name: /^라이브/ /* 진행 중 게임이 있으면 배지 숫자가 접근성 이름에 붙는다('라이브 1') — exact 는 저녁마다 깨진다 */ }).click();
   await page.waitForTimeout(400);
   await nav(page).getByRole('button', { name: '홈', exact: true }).click();
   await page.waitForTimeout(400);

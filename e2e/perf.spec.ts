@@ -54,7 +54,7 @@ test('perf② browse→live 탭 전환 — 전환 구간 롱프레임 상한', a
   await expect(nav).toBeVisible({ timeout: 15_000 });
   await page.waitForTimeout(1500);
   const before = await readPerf(page);
-  await nav.getByRole('button', { name: '라이브', exact: true }).click();
+  await nav.getByRole('button', { name: /^라이브/ /* 진행 중 게임이 있으면 배지 숫자가 접근성 이름에 붙는다('라이브 1') — exact 는 저녁마다 깨진다 */ }).click();
   await expect(page.getByText('진행 중 게임')).toBeVisible();
   await nav.getByRole('button', { name: '홈', exact: true }).click();
   await page.waitForTimeout(800);

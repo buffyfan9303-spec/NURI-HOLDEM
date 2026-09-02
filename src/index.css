@@ -588,6 +588,17 @@
   /* 아이콘 그라데이션 타일(레퍼런스 #features): 135deg 두 톤 + 같은 색 그림자, 흰 아이콘. 카드 안 유일한 채도 포인트 */
   .tile-grad { color: #fff; background-image: linear-gradient(135deg, #7C3AED 0%, #4F46E5 100%); box-shadow: 0 6px 12px -4px rgb(124 58 237 / 0.35); }
   html.light .tile-grad { box-shadow: 0 6px 12px -4px rgb(124 58 237 / 0.28); }
+  /* 레인별 타일 색(v6.3, 워크플로 critic 배정): 차트/새 게임=violet · 계산기/장부=indigo · 트레이닝/순위=fuchsia · 분석/클락/장터=cyan
+     · emerald 는 앱의 '라이브/진행 중' 신호색이라 타일에 쓰지 않는다. 그림자 1겹(툴 그리드 ~20타일). 아이콘 전용(흰 글자 금지: cyan 3.7). */
+  .tile-grad-indigo  { background-image: linear-gradient(135deg, #6366F1 0%, #4338CA 100%); box-shadow: 0 6px 12px -4px rgb(99 102 241 / 0.35); }
+  .tile-grad-fuchsia { background-image: linear-gradient(135deg, #C026D3 0%, #A21CAF 100%); box-shadow: 0 6px 12px -4px rgb(217 70 239 / 0.35); }
+  .tile-grad-cyan    { background-image: linear-gradient(135deg, #0891B2 0%, #0E7490 100%); box-shadow: 0 6px 12px -4px rgb(6 182 212 / 0.35); }
+  html.light .tile-grad-indigo { box-shadow: 0 6px 12px -4px rgb(99 102 241 / 0.28); }
+  html.light .tile-grad-fuchsia { box-shadow: 0 6px 12px -4px rgb(217 70 239 / 0.28); }
+  html.light .tile-grad-cyan { box-shadow: 0 6px 12px -4px rgb(6 182 212 / 0.28); }
+  /* 섹션 밴드(레퍼런스 bg-gray-50 교차 밴드) — PC 대시보드 KPI 밴드 1곳 한정. 모바일 피드에는 붙이지 않는다(3중 선). */
+  .section-alt { background-color: rgb(var(--surface-low) / 0.5); border: 1px solid rgb(255 255 255 / 0.06); }
+  html.light .section-alt { background-color: rgb(255 255 255 / 0.6); border-color: rgb(11 18 32 / 0.06); }
   /* 네온 텍스트(v6, 오너 '글자 네온') — 그라데이션 구절 뒤에 같은 색의 부드러운 후광. 정적 filter(애니 없음), 짧은 span 에만. */
   .text-grad-glow { filter: drop-shadow(0 0 10px rgb(139 92 246 / 0.45)) drop-shadow(0 0 22px rgb(217 70 239 / 0.22)); }
   html.light .text-grad-glow { filter: drop-shadow(0 0 8px rgb(109 40 217 / 0.22)); }
@@ -597,6 +608,10 @@
   /* 통계 숫자 색(v6.2): emerald-400 은 라이트 흰 지면 위 1.79 — 테마별로 뒤집는다(다크 #34D399 6.9 · 라이트 #047857 5.1) */
   .stat-emerald { color: #34D399; }
   html.light .stat-emerald { color: #047857; }
+  /* 통계 숫자 색(레퍼런스 violet/indigo/fuchsia — 다크 400 · 라이트 700). base/low 위 실측: 다크 7.35/6.71/8.13 · 라이트 6.62/7.37/5.90 */
+  .stat-violet  { color: #A78BFA; }  html.light .stat-violet  { color: #6D28D9; }
+  .stat-indigo  { color: #818CF8; }  html.light .stat-indigo  { color: #4338CA; }
+  .stat-fuchsia { color: #E879F9; }  html.light .stat-fuchsia { color: #A21CAF; }
   .chip-aura { background-color: rgb(99 102 241 / 0.10); border: 1px solid rgb(99 102 241 / 0.22); color: rgb(var(--accent-200)); }
   html.light .chip-aura { background-color: rgb(99 102 241 / 0.08); border-color: rgb(99 102 241 / 0.25); color: #4338CA; }
   @media (hover: hover) { .chip-aura:hover { background-color: rgb(99 102 241 / 0.16); border-color: rgb(99 102 241 / 0.35); } }

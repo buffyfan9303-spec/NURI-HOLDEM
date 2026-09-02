@@ -540,7 +540,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       {/* ③ KPI 헤드라인 — 오늘 장부 핵심 숫자를 헤더로 격상(eyebrow 상태 pill + 큰 숫자). 탭하면 장부로. */}
       {caps.ledger && (
         <button type="button" onClick={() => onGoto('ledger')}
-          className="card-elev block w-full rounded-card border border-border-subtle bg-surface-low p-3 text-left transition-colors hover:border-border-default">
+          className="section-alt block w-full rounded-card p-3 text-left transition-colors hover:border-border-default">{/* v6.3 KPI 밴드(레퍼런스 교차 밴드) — 대시보드 1곳 한정 */}
           <span className="flex items-center gap-2">
             <span className="text-2xs font-bold text-ink-muted">오늘 장부</span>
             <span className={`rounded-badge px-1.5 py-0.5 text-2xs font-bold ${ledgerStatusCls}`}>{ledgerStatus}</span>
@@ -557,7 +557,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
               </span>
               <span className="block">
                 <span className="block text-2xs text-ink-muted">총 엔트리</span>
-                <span className="mt-1 block text-2xl font-extrabold leading-none tabular-nums text-ink-primary">
+                <span className="mt-1 block text-2xl font-extrabold leading-none tabular-nums stat-indigo">
                   <CountUp value={Math.round(fin.entry)} /><span className="ml-1 text-sm font-semibold text-ink-muted">엔트리</span>
                 </span>
               </span>
@@ -569,7 +569,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
               </span>
               <span className="block">
                 <span className="block text-2xs text-ink-muted">회수 티켓</span>
-                <span className="mt-1 block text-2xl font-extrabold leading-none tabular-nums text-ink-primary">
+                <span className="mt-1 block text-2xl font-extrabold leading-none tabular-nums stat-fuchsia">
                   {fin.ticket}<span className="ml-1 text-sm font-semibold text-ink-muted">장</span>
                 </span>
               </span>
@@ -873,13 +873,13 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       {/* 빠른 작업 — 권한 있는 항목만 */}
       {(caps.posters || caps.ledger) && (
         <div className="grid grid-cols-4 gap-3">
-          {caps.posters && <QuickAction label="새 게임" onClick={onCreatePoster}
+          {caps.posters && <QuickAction label="새 게임" tone="violet" onClick={onCreatePoster}
             icon={<><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></>} />}
-          {caps.ledger && <QuickAction label="장부" onClick={() => onGoto('ledger')}
+          {caps.ledger && <QuickAction label="장부" tone="indigo" onClick={() => onGoto('ledger')}
             icon={<><path d="M4 4h12a2 2 0 0 1 2 2v14l-3-2-3 2-3-2-3 2V6a2 2 0 0 1 2-2Z" /></>} />}
-          {caps.ledger && <QuickAction label="클락" onClick={() => onGoto('clock')}
+          {caps.ledger && <QuickAction label="클락" tone="cyan" onClick={() => onGoto('clock')}
             icon={<><circle cx="12" cy="13" r="7" /><path d="M12 10v3l2 2" /><line x1="9" y1="2" x2="15" y2="2" /></>} />}
-          {caps.ledger && <QuickAction label="순위·포인트" onClick={() => onGoto('ranking')}
+          {caps.ledger && <QuickAction label="순위·포인트" tone="fuchsia" onClick={() => onGoto('ranking')}
             icon={<><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" /><path d="M4 22h16" /><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" /></>} />}
         </div>
       )}
@@ -1169,11 +1169,14 @@ function CompareRow({ label, now, prev, delta, won }: { label: string; now: numb
 
 // card-sink(카드 깊이) — 이 타일은 surface-high 라 card-elev 금지 티어(index.css .card-elev 주석).
 // 아래를 낮추는 방향이라 대비는 오히려 오른다(ink-secondary 6.52→7.04 실측).
-function QuickAction({ label, icon, onClick }: { label: string; icon: ReactNode; onClick: () => void }) {
+function QuickAction({ label, icon, onClick, tone = 'violet' }: { label: string; icon: ReactNode; onClick: () => void; tone?: 'violet' | 'indigo' | 'fuchsia' | 'cyan' }) {
   return (
     <button type="button" onClick={onClick}
       className="card-sink flex flex-col items-center justify-center gap-1 rounded-card border border-border-default bg-surface-high py-3 text-ink-secondary hover:text-accent-300 hover:border-accent-400/50 transition-colors active:scale-[0.98]">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{icon}</svg>
+      {/* v6.3 아이콘 그라데이션 타일(레퍼런스 #features) — 흰 아이콘, 레인 색 */}
+      <span className={`flex h-9 w-9 items-center justify-center rounded-input tile-grad tile-grad-${tone}`}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{icon}</svg>
+      </span>
       <span className="text-2xs font-bold">{label}</span>
     </button>
   );
