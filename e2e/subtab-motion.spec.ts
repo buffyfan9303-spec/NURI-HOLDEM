@@ -84,6 +84,9 @@ ${joined}`).toEqual([]);
 ${joined}`).toEqual([]);
 }
 
+// CI 러너(공유 vCPU)에서는 VT/스프링 프레임 타이밍이 흔들려 간헐 실패한다(2026-09-02 실측: 로컬 14/14 통과·CI 1회 실패 후 재실행 통과).
+// 임계는 그대로, 재시도만 CI 에서 2회 — perf.spec 과 같은 규약.
+test.describe.configure({ retries: process.env.CI ? 2 : 0 });
 test.describe('하위 탭 — 방향성 푸시가 실제로 돈다', () => {
   test.skip(!EMAIL || !PASSWORD, 'E2E_EMAIL/E2E_PASSWORD 미설정 — 로그인 화면들을 잴 수 없다');
 

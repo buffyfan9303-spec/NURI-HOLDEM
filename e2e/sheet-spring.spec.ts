@@ -21,6 +21,9 @@ async function swipe(page: Page, x: number, y: number, dist: number, ms: number)
   await cdp.detach();
 }
 
+// CI 러너(공유 vCPU)에서는 VT/스프링 프레임 타이밍이 흔들려 간헐 실패한다(2026-09-02 실측: 로컬 14/14 통과·CI 1회 실패 후 재실행 통과).
+// 임계는 그대로, 재시도만 CI 에서 2회 — perf.spec 과 같은 규약.
+test.describe.configure({ retries: process.env.CI ? 2 : 0 });
 test('🔴 시트 스프링 — 짧게 끌면 WAAPI 스프링으로 복귀, 플릭하면 투영이 닫는다', async ({ page }) => {
   await stabilizeBackstack(page);
   await page.goto('/');
