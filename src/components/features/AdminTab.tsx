@@ -832,7 +832,8 @@ function NoticesAdminPanel({ onChanged }: { onChanged?: () => void }) {
   const [busy, setBusy] = useState(false);
   const load = useCallback(() => { getNotices().then(setRows).catch(() => setRows([])); }, []);
   useEffect(() => { load(); }, [load]);
-  // ▲▼ — 화면 순서대로 n-1..0 을 다시 매긴다(기본값 0 끼리는 교환해도 순서가 안 바뀌므로 재번호가 필요).
+  // ▲▼ — 화면 순서대로 0..-(n-1) 을 다시 매긴다(기본값 0 끼리는 교환해도 순서가 안 바뀌므로 재번호가 필요).
+  // 맨 위 = 0 이라 새 공지(기본값 0)가 맨 위와 동률 → created_at desc 로 위에 선다. 양수로 매기면 새 공지가 맨 아래로 간다.
   // ponytail: 값이 바뀐 행만 저장(첫 이동 때 전체, 이후엔 보통 2행). 공지는 수십 건이라 충분하다.
   const move = async (i: number, dir: -1 | 1) => {
     if (!rows) return;
@@ -840,7 +841,7 @@ function NoticesAdminPanel({ onChanged }: { onChanged?: () => void }) {
     if (j < 0 || j >= rows.length) return;
     const next = [...rows];
     [next[i], next[j]] = [next[j], next[i]];
-    const renum = next.map((n, idx) => ({ ...n, sortOrder: next.length - 1 - idx }));
+    const renum = next.map((n, idx) => ({ ...n, sortOrder: -idx }));
     const prev = new Map(rows.map((r) => [r.id, r.sortOrder ?? 0]));
     setBusy(true);
     try {
