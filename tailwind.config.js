@@ -140,13 +140,13 @@ export default {
 
       // ── Border Radius ─────────────────────────────────────────────────────
       borderRadius: {
-        card:   '1rem',     // v3(오너 승인 2026-09-02 전체 적용): 시안 서브카드 2xl=16px — 내 매장 PC 카드도 이 값
-        aura:   '1.5rem',   // 시안 메인 카드 3xl=24px — 유저 화면 카드
+        card:   '0.75rem',  // v6 aura-ui.com 실측 rounded-aura-lg = 12px(카드). v3 의 16px 에서 한 단계 각지게
+        aura:   '1rem',     // 큰 히어로 카드 16px(실측 rounded-2xl 모달 급)
         dialog: '1.5rem',   // 시트·모달도 메인 카드 곡률로 통일
         badge:  '9999px',   // 라벨용 배지(AD·인증·등급)는 알약 유지
-        chip:   '0.625rem', // v4.1: 클릭하는 칩(필터·정렬)은 10px — 알약은 안이 답답해 보인다(오너 2026-09-02)
+        chip:   '0.5rem',   // v6: 실측 버튼 8px 과 통일(v4.1 의 10px)
         input:  '0.5rem',
-        dialog: '0.75rem', // 바이낸스 모달 라운드
+        dialog: '1rem',    // v6: 실측 rounded-2xl(16px) 모달
       },
 
       // ── Box Shadow ────────────────────────────────────────────────────────
@@ -156,7 +156,7 @@ export default {
 
         gold:   '0 0 10px rgba(252,213,53,0.30)',
         aura:   '0 0 0 1px rgb(var(--aura-300) / 0.5), 0 0 15px rgb(var(--aura-300) / 0.25)', // (v3 네온 — 데이터 링 전용으로 남김)
-        glow:   '0 0 0 3px rgb(var(--accent-300) / 0.20)', // v4 Aura UI --aura-glow-primary: 절제된 3px 링 글로우(활성 칩·포커스)
+        glow:   '0 0 0 3px rgb(129 140 248 / 0.25), 0 0 20px rgb(129 140 248 / 0.125)', // v6 실측 --aura-glow-primary(다크): 3px 링 + 20px 블룸
         dialog: '0 -4px 32px var(--card-shadow)',
         badge:  '0 0 6px rgba(229,62,62,0.6)',
       },

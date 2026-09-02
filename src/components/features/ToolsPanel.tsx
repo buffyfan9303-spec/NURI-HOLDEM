@@ -380,7 +380,7 @@ export default function ToolsPanel() {
           같은 169셀 렌더러가 두 벌이 되면 그게 곧 유지보수 분기다. 대신 탭 상단에 상시 진입점을 두고
           상황(오픈·수비·3벳·vs 3벳)별 바로가기를 얹어 **기존 차트를 그 그룹으로 연다**.
           학습 레인의 '스타팅핸드 가이드' 카드와 #tool=range 딥링크는 그대로 살아 있다(기능 소실 0). */}
-      <section className="card-elev space-y-2 rounded-card border border-border-default bg-surface-low px-3.5 py-3">
+      <section className="card-aura ring-aura space-y-2 rounded-card border bg-surface-low px-3.5 py-3">
         <button type="button" onClick={() => open('range')}
           aria-label={`프리플랍 레인지 차트 · 스팟 ${RANGE_SCENARIOS.length}개. 열기`}
           className="flex w-full items-center gap-2.5 text-left">
@@ -408,7 +408,7 @@ export default function ToolsPanel() {
         <div className="flex flex-wrap gap-1" role="group" aria-label="레인지 차트 상황 바로가기">
           {RANGE_GROUPS.map((g) => (
             <button key={g.id} type="button" onClick={() => open('range', g.id)}
-              className="h-8 shrink-0 rounded-badge border border-transparent bg-surface-high px-2.5 text-2xs font-semibold text-ink-secondary transition-colors hover:text-ink-primary">
+              className="h-8 shrink-0 rounded-chip chip-aura px-2.5 text-2xs font-semibold transition-colors">
               {g.label}
             </button>
           ))}
