@@ -28,6 +28,7 @@ import { saveVenueRankings, prizeUnitRisk, getVenueRankings } from '../../../api
 import LoadErrorCard from '../../atoms/LoadErrorCard';
 import { msgOf } from '../../../lib/dbError';
 import Modal from '../../atoms/Modal';
+import { AURA_BG } from './clockTheme';
 import QRCode from 'qrcode';
 import Icon from '../../atoms/Icon';
 import ClockThemePanel from './ClockThemePanel';
@@ -78,8 +79,8 @@ function nextPlayableLabel(cfg: ClockConfig, index: number): string {
   const lv = cfg.levels;
   const nx = lv[index + 1];
   if (!nx) return '마지막 레벨';
-  if (nx.kind === 'break') return nx.label || 'BREAK';
-  return `NEXT LEVEL ${levelNumberAt(cfg, index + 1)}  ${nx.sb.toLocaleString()}/${nx.bb.toLocaleString()}(${nx.ante.toLocaleString()})`;
+  if (nx.kind === 'break') return `다음 · ${nx.label || '휴식'}`;
+  return `다음 레벨 ${levelNumberAt(cfg, index + 1)} · ${nx.sb.toLocaleString()} / ${nx.bb.toLocaleString()}${nx.ante > 0 ? ` · ANTE ${nx.ante.toLocaleString()}` : ''}`;
 }
 
 // ── 메인: 설정 ↔ 라이브 ─────────────────────────────────────────────────────────
@@ -740,106 +741,109 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
       )}
 
       {/* 디스플레이 */}
-      <div className={['overflow-hidden border border-border-default shadow-[0_10px_50px_rgba(0,0,0,0.45)] bg-gradient-to-b from-[#161b25] to-[#090c12]',
-        fs ? 'flex-1 flex flex-col min-h-0 rounded-none border-x-0 border-t-0' : 'rounded-card'].join(' ')}>
+      <div className={['overflow-hidden border border-white/[0.08] text-white shadow-[0_10px_50px_rgba(0,0,0,0.45)]',
+        fs ? 'flex-1 flex flex-col min-h-0 rounded-none border-x-0 border-t-0' : 'rounded-card'].join(' ')}
+        style={{ background: AURA_BG }}>
+        {/* 2026-09-02 v3 'NURI 아우라'(오너 승인) — TV(ClockDisplay)와 같은 정보 위계·색 체계. 라벨 한국어(ANTE 만 영문),
+            골드는 프라이즈 금액에만, 레벨/블라인드 인디고, 타이머 순백. 조작부(아래 컨트롤 행)는 그대로. */}
 
-        {/* 타이틀 바 */}
         {/* 전체 클락 공통 광고(운영자 등록) — 최상단 */}
         {adImg && (
-          <div className="shrink-0 border-b border-accent-400/20 bg-black">
+          <div className="shrink-0 border-b border-white/[0.08] bg-black">
             <img src={adImg} alt="광고" className={['mx-auto w-full object-contain',
               adSize === 'sm' ? (fs ? 'max-h-[7cqh]' : 'max-h-16') : adSize === 'lg' ? (fs ? 'max-h-[13cqh]' : 'max-h-48') : (fs ? 'max-h-[10cqh]' : 'max-h-28')].join(' ')} />
           </div>
         )}
 
-        <div className="shrink-0 bg-gradient-to-r from-accent-400/15 via-accent-300/[0.06] to-accent-400/15 border-b border-accent-400/25 px-4 py-2 text-center">
-          <p className={['font-extrabold tracking-wide text-[#A8B0F0] truncate', fs ? 'text-[min(3.4cqw,4cqh)]' : 'text-sm sm:text-lg'].join(' ')}>{title}</p>
+        {/* 타이틀 바 */}
+        <div className="shrink-0 border-b border-white/[0.08] px-4 py-2 text-center">
+          <p className={['truncate font-extrabold tracking-tight text-white', fs ? 'text-[min(3.2cqw,3.8cqh)]' : 'text-sm sm:text-lg'].join(' ')}>{title}</p>
         </div>
 
-        {/* 본문 3열 */}
-        <div className={['grid grid-cols-[minmax(76px,0.85fr)_2.6fr_minmax(90px,1fr)]', fs ? 'flex-1 min-h-0 overflow-hidden' : ''].join(' ')}>
-          {/* 좌: 프라이즈 */}
-          <div className="flex flex-col p-2 sm:p-3 border-r border-white/5 bg-black/20">
-            <p className={['text-[#8B94E8]/70 font-bold tracking-[0.18em] mb-1', fs ? 'text-[min(1.5cqw,1.8cqh)]' : 'text-[9px] sm:text-2xs'].join(' ')}>PRIZE</p>
-            <ul className="space-y-0.5 overflow-hidden">
-              {cfg.prizes.map((p, i) => (
-                <li key={i} className={['flex items-center justify-between gap-1 text-white/60', fs ? 'text-[min(1.8cqw,2.1cqh)]' : 'text-2xs sm:text-xs'].join(' ')}>
-                  <span className="truncate opacity-80">{p.place}</span><span className="tabular-nums font-semibold text-white">{p.amount.toLocaleString()}</span>
-                </li>
-              ))}
-            </ul>
-            {cfg.mysteryBounty > 0 && (
-              <div className="mt-2 pt-2 border-t border-white/5">
-                <p className={['text-[#8B94E8] font-semibold leading-tight', fs ? 'text-[min(1.5cqw,1.8cqh)]' : 'text-[9px] sm:text-2xs'].join(' ')}>Mystery Bounty</p>
-                <p className={['text-white tabular-nums', fs ? 'text-[min(1.9cqw,2.2cqh)]' : 'text-2xs sm:text-xs'].join(' ')}>{cfg.mysteryBounty.toLocaleString()}</p>
+        {/* 본문 — 프라이즈(있을 때만) · 타이머 · 스탯 */}
+        <div className={['grid', cfg.prizes.length > 0 ? 'grid-cols-[minmax(76px,0.85fr)_2.6fr_minmax(90px,1fr)]' : 'grid-cols-[2.6fr_minmax(90px,1fr)]',
+          fs ? 'flex-1 min-h-0 overflow-hidden' : ''].join(' ')}>
+          {cfg.prizes.length > 0 && (
+            <div className="flex flex-col border-r border-white/[0.06] p-2 sm:p-3">
+              <p className={['mb-1 font-bold tracking-[0.08em] text-white/50', fs ? 'text-[min(1.5cqw,1.8cqh)]' : 'text-[9px] sm:text-2xs'].join(' ')}>프라이즈</p>
+              <ul className="space-y-0.5 overflow-hidden">
+                {cfg.prizes.map((p, i) => (
+                  <li key={i} className={['flex items-center justify-between gap-1', fs ? 'text-[min(1.8cqw,2.1cqh)]' : 'text-2xs sm:text-xs'].join(' ')}>
+                    <span className="truncate text-white/50">{/^\d+$/.test(p.place) ? `${p.place}위` : p.place}</span>
+                    <span className="font-bold tabular-nums text-[#F5C451]">{p.amount.toLocaleString()}</span>
+                  </li>
+                ))}
+              </ul>
+              {cfg.mysteryBounty > 0 && (
+                <div className="mt-2 border-t border-white/[0.08] pt-2">
+                  <p className={['font-bold tracking-[0.08em] text-white/50', fs ? 'text-[min(1.5cqw,1.8cqh)]' : 'text-[9px] sm:text-2xs'].join(' ')}>미스터리 바운티</p>
+                  <p className={['tabular-nums text-white', fs ? 'text-[min(1.9cqw,2.2cqh)]' : 'text-2xs sm:text-xs'].join(' ')}>{cfg.mysteryBounty.toLocaleString()}</p>
+                </div>
+              )}
+              <div className="mt-auto border-t border-white/[0.08] pt-2">
+                <p className={['font-bold tracking-[0.08em] text-white/50', fs ? 'text-[min(1.4cqw,1.7cqh)]' : 'text-[9px] sm:text-2xs'].join(' ')}>총 프라이즈</p>
+                <p className={['font-extrabold leading-tight tabular-nums text-[#F5C451]', fs ? 'text-[min(2.7cqw,3.1cqh)]' : 'text-sm sm:text-lg'].join(' ')}>{totalPrize.toLocaleString()}</p>
               </div>
-            )}
-            <div className="mt-auto pt-2 border-t border-white/5">
-              <p className={['text-white/45 tracking-wide', fs ? 'text-[min(1.4cqw,1.7cqh)]' : 'text-[9px] sm:text-2xs'].join(' ')}>TOTAL PRIZE</p>
-              <p className={['font-extrabold text-[#8B94E8] tabular-nums leading-tight', fs ? 'text-[min(2.7cqw,3.1cqh)]' : 'text-sm sm:text-lg'].join(' ')}>{totalPrize.toLocaleString()}</p>
             </div>
-          </div>
+          )}
 
           {/* 중앙: 타이머 */}
-          <div className={['relative flex flex-col items-center justify-center text-center overflow-hidden',
-            fs ? 'py-2' : 'py-6 sm:py-10',
-            isBreak ? 'bg-[radial-gradient(ellipse_at_center,rgba(56,120,200,0.16),transparent_72%)]'
-                    : 'bg-[radial-gradient(ellipse_at_center,rgba(201,169,97,0.10),transparent_72%)]'].join(' ')}>
+          <div className={['relative flex flex-col items-center justify-center overflow-hidden text-center', fs ? 'py-2' : 'py-6 sm:py-10'].join(' ')}>
             {/* 누리홀덤 로고 워터마크(투명) — 트레이드마크. 클락은 항상 다크라 흰 워드마크 사용 */}
             <svg viewBox={WORDMARK_VIEWBOX} aria-hidden className="pointer-events-none absolute inset-0 m-auto h-auto w-[58%] max-w-[62cqh] select-none text-white opacity-[0.05]"><path fill="currentColor" d={WORDMARK_D} /></svg>
-            <p className={['relative mt-1 font-bold tracking-[0.16em] uppercase',
-              isBreak ? 'text-sky-300/90' : 'text-[#A8B0F0]/80',
-              fs ? 'text-[min(4cqw,5cqh)]' : 'text-base sm:text-2xl'].join(' ')}>
-              {isBreak ? (cur.label || 'BREAK') : `LEVEL ${levelNo}`}
+            <p className={['relative mt-1 inline-block rounded-full border font-extrabold tracking-[0.18em]',
+              isBreak ? 'border-sky-300/40 bg-sky-300/10 text-sky-300' : 'border-[#818CF8]/55 bg-[#5850EC]/15 text-[#A5B4FC]',
+              fs ? 'px-[2.4cqw] py-[0.5cqh] text-[min(2.6cqw,3.2cqh)]' : 'px-3 py-0.5 text-xs sm:text-lg'].join(' ')}>
+              {isBreak ? (cur.label || '휴식') : `레벨 ${levelNo}`}
             </p>
             {isBreak && state.running && remaining <= 60_000 && (
-              <p className={['relative inline-flex items-center justify-center gap-1.5 font-bold text-amber-300 animate-pulse', fs ? 'text-[min(2.6cqw,3.1cqh)]' : 'text-xs sm:text-base'].join(' ')}><Icon name="alarm" size={fs ? 24 : 15} className="shrink-0" />곧 재개됩니다</p>
+              <p className={['relative mt-1 font-bold text-amber-300 animate-pulse', fs ? 'text-[min(2.6cqw,3.1cqh)]' : 'text-xs sm:text-base'].join(' ')}>휴식 종료 1분 전</p>
             )}
-            <p className={['font-extrabold tabular-nums leading-none my-1 sm:my-2 drop-shadow-[0_3px_24px_rgba(0,0,0,0.5)]',
+            <p className={['my-1 font-extrabold leading-none tabular-nums drop-shadow-[0_3px_24px_rgba(88,80,236,0.35)] sm:my-2',
               fs ? 'text-[min(22cqw,32cqh)]' : 'text-6xl sm:text-8xl',
               urgent ? 'text-rose-400 animate-pulse' : isBreak ? 'text-sky-200' : 'text-white'].join(' ')}>
               {mmss(Math.max(0, remaining))}
             </p>
             {!isBreak && (
-              <div className={['flex items-center justify-center', fs ? 'gap-[7cqw]' : 'gap-8 sm:gap-16'].join(' ')}>
+              <div className={['flex items-end justify-center', fs ? 'gap-[7cqw]' : 'gap-8 sm:gap-16'].join(' ')}>
                 <div>
-                  <p className={['text-white/60 tracking-widest', fs ? 'text-[min(2cqw,2.4cqh)]' : 'text-2xs sm:text-sm'].join(' ')}>BLINDS</p>
-                  <p className={['font-bold text-white tabular-nums', fs ? 'text-[min(4.8cqw,5.8cqh)]' : 'text-base sm:text-2xl'].join(' ')}>{cur.sb.toLocaleString()}/{cur.bb.toLocaleString()}</p>
+                  <p className={['font-bold tracking-[0.08em] text-white/50', fs ? 'text-[min(2cqw,2.4cqh)]' : 'text-2xs sm:text-sm'].join(' ')}>블라인드</p>
+                  <p className={['font-extrabold tabular-nums text-[#A5B4FC]', fs ? 'text-[min(4.8cqw,5.8cqh)]' : 'text-base sm:text-2xl'].join(' ')}>{cur.sb.toLocaleString()}<span className="text-white/25"> / </span>{cur.bb.toLocaleString()}</p>
                 </div>
-                <div>
-                  <p className={['text-white/60 tracking-widest', fs ? 'text-[min(2cqw,2.4cqh)]' : 'text-2xs sm:text-sm'].join(' ')}>ANTE</p>
-                  <p className={['font-bold text-white tabular-nums', fs ? 'text-[min(4.8cqw,5.8cqh)]' : 'text-base sm:text-2xl'].join(' ')}>{cur.ante.toLocaleString()}</p>
-                </div>
+                {cur.ante > 0 && (
+                  <div>
+                    <p className={['font-bold uppercase tracking-[0.18em] text-white/50', fs ? 'text-[min(2cqw,2.4cqh)]' : 'text-2xs sm:text-sm'].join(' ')}>Ante</p>
+                    <p className={['font-extrabold tabular-nums text-white', fs ? 'text-[min(4.8cqw,5.8cqh)]' : 'text-base sm:text-2xl'].join(' ')}>{cur.ante.toLocaleString()}</p>
+                  </div>
+                )}
               </div>
             )}
-            <p className={['mt-3 font-bold text-[#8B94E8]', fs ? 'text-[min(3.3cqw,3.9cqh)]' : 'text-sm sm:text-2xl'].join(' ')}>{nextPlayableLabel(cfg, state.currentIndex)}</p>
-            {!state.running && <span className={['absolute font-bold text-rose-200 bg-rose-950/60 rounded-badge', fs ? 'top-3 right-3 text-[min(2cqw,2.4cqh)] px-3 py-1' : 'top-2 right-2 text-[9px] sm:text-2xs px-2 py-0.5'].join(' ')}>일시정지</span>}
+            <p className={['mt-3 font-semibold text-white/55', fs ? 'text-[min(2.6cqw,3.1cqh)]' : 'text-xs sm:text-lg'].join(' ')}>{nextPlayableLabel(cfg, state.currentIndex)}</p>
+            {!state.running && <span className={['absolute rounded-badge bg-amber-400/15 font-bold text-amber-300', fs ? 'top-3 right-3 text-[min(2cqw,2.4cqh)] px-3 py-1' : 'top-2 right-2 text-[9px] sm:text-2xs px-2 py-0.5'].join(' ')}>일시정지</span>}
           </div>
 
-          {/* 우: 스탯 — 실물 4종 공통 순서: PLAYERS(히어로) → RE-BUY/EARLY → REG CLOSE → NEXT BREAK.
-              운영자 풀스크린에 생존/엔트리 '표시'가 없어(조작 스테퍼만) 손님이 물어봐야 했다 — 신설. */}
-          <div className="flex flex-col justify-center gap-2 sm:gap-3 p-2 sm:p-3 border-l border-white/5 bg-black/20">
-            <Stat fs={fs} label="PLAYERS" value={`${alive} / ${entries}`} hero />
-            <Stat fs={fs} label="RE-BUY / EARLY" value={`${rebuys} / ${earlies}`} />
-            {cfg.isAddon && <Stat fs={fs} label="ADD-ON" value={`${addons}`} />}
-            {/* ⚠ 예전 표기는 null(마감 레벨 미설정)을 '마감'으로 보여줬다 — 0(진짜 마감)과 정반대.
-                실물 ①홀덤마스터스의 'LV·남은시간 복합 표기'(언제까지를 두 축으로) 채택. */}
-            <Stat fs={fs} label="REG CLOSE"
-              value={regClose === null ? '—' : regClose === 0 ? '마감' : `LV${cfg.regCloseLevel} · ${hms(regClose)}`}
+          {/* 우: 스탯 — 생존/엔트리(히어로) → 리바이/얼리 → 애드온 → 레지 마감 → 휴식까지 */}
+          <div className="flex flex-col justify-center gap-2 border-l border-white/[0.06] p-2 sm:gap-3 sm:p-3">
+            <Stat fs={fs} label="생존 / 엔트리" value={`${alive} / ${entries}`} hero />
+            <Stat fs={fs} label="리바이 / 얼리" value={`${rebuys} / ${earlies}`} />
+            {cfg.isAddon && <Stat fs={fs} label="애드온" value={`${addons}`} />}
+            {/* ⚠ null(마감 레벨 미설정)은 '—', 0 이 진짜 마감 — 예전엔 둘을 뒤집어 보여줬다 */}
+            <Stat fs={fs} label="레지 마감"
+              value={regClose === null ? '—' : regClose === 0 ? '마감' : `Lv ${cfg.regCloseLevel} · ${hms(regClose)}`}
               tone={regClose === null ? 'muted' : 'rose'} />
-            <Stat fs={fs} label="NEXT BREAK" value={nextBreak !== null ? hms(nextBreak) : '—'} tone="rose" />
+            <Stat fs={fs} label="휴식까지" value={nextBreak !== null ? hms(nextBreak) : '—'} tone="rose" />
           </div>
         </div>
 
-        {/* 칩 스탯 — TOTAL / AVG STACK 강조(전체 폭) */}
-        <div className="shrink-0 grid grid-cols-2 border-t border-accent-400/25 bg-gradient-to-r from-accent-400/[0.07] via-transparent to-accent-400/[0.07]">
-          <div className="text-center border-r border-white/5 py-2 sm:py-2.5">
-            <p className={['text-[#8B94E8]/70 font-bold tracking-[0.18em]', fs ? 'text-[min(1.9cqw,2.2cqh)]' : 'text-2xs sm:text-xs'].join(' ')}>TOTAL STACK</p>
-            <p className={['font-extrabold text-[#A8B0F0] tabular-nums leading-tight', fs ? 'text-[min(4.6cqw,5.6cqh)]' : 'text-xl sm:text-3xl'].join(' ')}>{totalStack.toLocaleString()}</p>
+        {/* 칩 스탯 — 총 칩 / 평균 스택(BB 병기) */}
+        <div className="shrink-0 grid grid-cols-2 border-t border-white/[0.08]">
+          <div className="border-r border-white/[0.06] py-2 text-center sm:py-2.5">
+            <p className={['font-bold tracking-[0.08em] text-white/50', fs ? 'text-[min(1.9cqw,2.2cqh)]' : 'text-2xs sm:text-xs'].join(' ')}>총 칩</p>
+            <p className={['font-extrabold leading-tight tabular-nums text-white', fs ? 'text-[min(4.6cqw,5.6cqh)]' : 'text-xl sm:text-3xl'].join(' ')}>{totalStack.toLocaleString()}</p>
           </div>
-          <div className="text-center py-2 sm:py-2.5">
-            <p className={['text-white/60 font-bold tracking-[0.18em]', fs ? 'text-[min(1.9cqw,2.2cqh)]' : 'text-2xs sm:text-xs'].join(' ')}>AVG STACK</p>
-            <p className={['font-extrabold text-white tabular-nums leading-tight', fs ? 'text-[min(4.6cqw,5.6cqh)]' : 'text-xl sm:text-3xl'].join(' ')}>
+          <div className="py-2 text-center sm:py-2.5">
+            <p className={['font-bold tracking-[0.08em] text-white/50', fs ? 'text-[min(1.9cqw,2.2cqh)]' : 'text-2xs sm:text-xs'].join(' ')}>평균 스택</p>
+            <p className={['font-extrabold leading-tight tabular-nums text-white', fs ? 'text-[min(4.6cqw,5.6cqh)]' : 'text-xl sm:text-3xl'].join(' ')}>
               {avgStack.toLocaleString()}
               {curBB > 0 && avgStack > 0 && (
                 <span className={['ml-1.5 font-bold text-white/55', fs ? 'text-[min(2.4cqw,2.9cqh)]' : 'text-xs sm:text-base'].join(' ')}>
@@ -849,7 +853,6 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
             </p>
           </div>
         </div>
-
         {/* 하단 컨트롤(운영자) */}
         {canManage && (
           <div className="shrink-0 border-t border-white/5 bg-black/30 px-2 py-2">

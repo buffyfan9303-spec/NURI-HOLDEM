@@ -71,8 +71,9 @@ test.describe('TV 디스플레이 — 낡은 클락 행에서도 실효 레벨�
     session = await loginAs(page, EMAIL!, PASSWORD!);
     VENUE = await seedStaleClock(session);
     await page.goto(`/?display=${VENUE}&g=${GAME_SEQ}`);
-    await expect(page.locator('body'), 'TV 화면에 클락이 안 뜬다 — 픽스처 심기가 실패했을 수 있다')
-      .toContainText(/LEVEL/i, { timeout: 20_000 });
+    // 2026-09-02 라벨이 '레벨 N'(한국어)으로 바뀌며 텍스트 결합을 끊었다 — data-testid 앵커(clk-level · clk-timer)
+    await expect(page.getByTestId('clk-level'), 'TV 화면에 클락이 안 뜬다 — 픽스처 심기가 실패했을 수 있다')
+      .toBeVisible({ timeout: 20_000 });
   });
 
   test.afterEach(async () => {
@@ -99,14 +100,14 @@ test.describe('TV 디스플레이 — 낡은 클락 행에서도 실효 레벨�
     //      셋업~실행 사이에 흐른 시간만큼 기대값이 달라진다(시간 의존 테스트가 된다).
     //      전진 계산의 정확성은 고정 타임스탬프를 쓰는 유닛테스트(api/clock.level.test.ts)가 못 박고,
     //      여기서는 '그 계산이 손님 화면까지 도달하는가'만 본다 — 그게 이 E2E 의 유일한 존재 이유다.
-    const levelMatch = text.match(/LEVEL\s*(\d+)/i);
-    expect(levelMatch, `LEVEL 표기를 찾지 못함. 화면: ${text.slice(0, 400)}`).toBeTruthy();
+    const levelMatch = (await page.getByTestId('clk-level').innerText()).match(/(\d+)/);
+    expect(levelMatch, `레벨 표기를 찾지 못함. 화면: ${text.slice(0, 400)}`).toBeTruthy();
     const level = Number(levelMatch![1]);
     expect(level, `DB 는 LEVEL 1 인데 화면도 1 이면 표시 보정이 안 걸린 것(실제 ${level})`).toBeGreaterThan(1);
     expect(level, `레벨 수(8)를 넘어 전진하면 무한 전진 가드가 깨진 것(실제 ${level})`).toBeLessThanOrEqual(8);
 
     // ② 타이머가 00:00 에 얼어 있으면 안 된다
-    const mmss = text.match(/\b(\d{1,2}):(\d{2})\b/);
+    const mmss = (await page.getByTestId('clk-timer').innerText()).match(/\b(\d{1,2}):(\d{2})\b/);
     expect(mmss, `타이머 표기를 찾지 못함. 화면: ${text.slice(0, 400)}`).toBeTruthy();
     const secs = Number(mmss![1]) * 60 + Number(mmss![2]);
     expect(secs, '00:00 으로 얼어 있으면 안 된다(표시 보정 미작동)').toBeGreaterThan(0);
@@ -115,7 +116,7 @@ test.describe('TV 디스플레이 — 낡은 클락 행에서도 실효 레벨�
     // ③ 1초 뒤 실제로 카운트다운이 흐르는가(정지 화면이 아님)
     const before = secs;
     await page.waitForTimeout(2200);
-    const after2 = (await body.innerText()).replace(/\s+/g, ' ').match(/\b(\d{1,2}):(\d{2})\b/);
+    const after2 = (await page.getByTestId('clk-timer').innerText()).match(/\b(\d{1,2}):(\d{2})\b/);
     expect(after2).toBeTruthy();
     const secs2 = Number(after2![1]) * 60 + Number(after2![2]);
     // 레벨 경계를 넘었으면 값이 커질 수 있으므로 '변했다'만 본다
@@ -136,7 +137,7 @@ test.describe('TV 디스플레이 — 낡은 클락 행에서도 실효 레벨�
     });
 
     await page.goto(`/?display=${VENUE}&g=${GAME_SEQ}`);
-    await expect(page.locator('body')).toContainText(/LEVEL/i, { timeout: 20_000 });
+    await expect(page.getByTestId('clk-level')).toBeVisible({ timeout: 20_000 });
     await page.waitForTimeout(3000); // 워치독 주기(1초)보다 충분히 길게
 
     expect(writes, `TV 화면이 clock_states 에 쓰기를 시도했다: ${writes.join(' | ')}`).toHaveLength(0);

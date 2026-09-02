@@ -29,12 +29,19 @@ export const AURA_GOLD_BG =
   'radial-gradient(6vmin 6vmin at 95% 72%, rgba(224,169,78,.12) 0%, transparent 70%), ' +
   'radial-gradient(140% 55% at 50% 112%, rgba(120,84,20,.45) 0%, transparent 60%), #030303';
 
-/** 기본 룩 — 변수 기본값의 단일 출처. 2026-09-02 딥 인디고 → 아우라 골드(오너 지시 "클락 기본 테마를 아우라 기반으로").
+/** 아우라(기본 테마 v3 — 2026-09-02 오너 승인 'A · NURI 아우라') — 앱과 같은 딥 네이비(#06080F) + 인디고·시안 후광 2겹(정적).
+ *  골드 보케(AURA_GOLD_BG)는 APIS 복제라는 판정으로 기본에서 내리고 프리셋 'aura-gold' 로만 남긴다. */
+export const AURA_BG =
+  'radial-gradient(60vmax 40vmax at 8% -5%, rgba(88,80,236,.22) 0%, transparent 62%), ' +
+  'radial-gradient(50vmax 34vmax at 100% 105%, rgba(6,182,212,.12) 0%, transparent 62%), #06080F';
+
+/** 기본 룩 — 변수 기본값의 단일 출처. 2026-09-02 딥 인디고 → 아우라 골드 → **아우라(인디고)**(오너 승인).
  *  ⚠ 기존 매장 테마(DB 저장값)는 프리셋 id 로 대조되므로 그대로 유효 — 바뀌는 것은 '테마 없음' 매장의 기본 룩뿐이다. */
 export const CLOCK_DEFAULTS = {
-  bg: AURA_GOLD_BG,
-  accent: '#E0A94E',       // 샴페인 골드(허용 스와치) — 레벨·블라인드·PLAYERS·상금 강조. 순흑 위 8.9:1
-  timer: '#FFFFFF',        // 타이머는 순백(참조 화면) — accent 를 고른 매장은 타이머도 그 색(구 동작 유지)
+  bg: AURA_BG,
+  accent: '#818CF8',       // 인디고 400 — 레벨 알약·블라인드 강조. #06080F 위 6.9:1
+  timer: '#FFFFFF',        // 타이머는 순백 — accent 를 고른 매장은 타이머도 그 색(구 동작 유지)
+  prize: '#F5C451',        // 골드는 프라이즈 금액에만(잠금 — 테마가 못 덮는다). #06080F 위 12.6:1
   timerUrgent: '#fb7185',  // rose-400 — 잠금(1분 미만 긴급)
   timerBreak: '#7dd3fc',   // sky-300 — 잠금(브레이크)
   // 보조 라벨 2단 — 기본값은 현행 text-white/45 · text-white/50 과 1:1(배경 이미지 없으면 픽셀 변화 0).
@@ -86,9 +93,10 @@ export interface ClockThemePreset {
   timer?: string;
 }
 
-// 7종 — 전부 다크. aura-gold 가 기본(2026-09-02), deep-indigo 는 구 기본 룩으로 남긴다.
+// 8종 — 전부 다크. aura(인디고)가 기본(2026-09-02 오너 승인), aura-gold(APIS풍)·deep-indigo(구 기본)는 프리셋으로 남긴다.
 export const CLOCK_THEME_PRESETS: ClockThemePreset[] = [
-  { id: 'aura-gold', label: '아우라 골드(기본)', kind: 'gradient', bg: AURA_GOLD_BG, accent: CLOCK_DEFAULTS.accent, timer: CLOCK_DEFAULTS.timer },
+  { id: 'aura', label: '아우라(기본)', kind: 'gradient', bg: AURA_BG, accent: CLOCK_DEFAULTS.accent, timer: CLOCK_DEFAULTS.timer },
+  { id: 'aura-gold', label: '아우라 골드', kind: 'gradient', bg: AURA_GOLD_BG, accent: '#E0A94E', timer: '#FFFFFF' },
   { id: 'deep-indigo', label: '딥 인디고', kind: 'solid', bg: '#06080B', accent: '#5E6AD2' },
   {
     id: 'midnight-felt', label: '미드나잇 펠트', kind: 'felt',
@@ -114,7 +122,7 @@ export const CLOCK_THEME_PRESETS: ClockThemePreset[] = [
   },
 ];
 
-export const DEFAULT_CLOCK_PRESET_ID = 'aura-gold';
+export const DEFAULT_CLOCK_PRESET_ID = 'aura';
 
 export function clockPresetById(id: string | undefined | null): ClockThemePreset | null {
   if (!id) return null;
@@ -219,6 +227,7 @@ export function clockThemeVars(theme: ClockTheme | null | undefined): Record<str
     '--clk-accent': accent,
     '--clk-timer': timer,
     '--clk-timer-urgent': CLOCK_DEFAULTS.timerUrgent, // 잠금
+    '--clk-prize': CLOCK_DEFAULTS.prize,              // 잠금 — 골드는 프라이즈 금액에만
     '--clk-timer-break': CLOCK_DEFAULTS.timerBreak,   // 잠금
     '--clk-ink-dim': img ? CLOCK_BG_INK.dim : CLOCK_DEFAULTS.inkDim,
     '--clk-ink-soft': img ? CLOCK_BG_INK.soft : CLOCK_DEFAULTS.inkSoft,

@@ -136,12 +136,12 @@ export default function ClockRemote({ venueId, gameSeq = 1, venueName, onClose, 
     <Shell venueName={venueName} onClose={onClose} game={state.gameSeq > 1 ? `사이드${state.gameSeq - 1}` : '메인'}>
       {/* 현재 상태 — 큰 타이머 한 눈에 */}
       <section className="rounded-aura border card-aura px-4 py-4 text-center">
-        <p className="t-micro">{isBreak ? 'Break' : `Level ${levelNo}`}</p>
+        <p className="t-micro">{isBreak ? '휴식' : `레벨 ${levelNo}`}</p>
         <p className={`mt-1 font-black leading-none tabular-nums ${state.running ? 'text-ink-primary' : 'text-amber-400'}`} style={{ fontSize: 'clamp(56px, 18vw, 96px)', letterSpacing: '-0.02em' }}>
           {mmss(remaining)}
         </p>
         <p className="mt-2 text-lg font-extrabold tabular-nums text-aura-300">
-          {isBreak ? '휴식' : lv ? `${lv.sb.toLocaleString()} / ${lv.bb.toLocaleString()}${lv.ante > 0 ? `  ·  앤티 ${lv.ante.toLocaleString()}` : ''}` : '-'}
+          {isBreak ? '휴식' : lv ? `${lv.sb.toLocaleString()} / ${lv.bb.toLocaleString()}${lv.ante > 0 ? `  ·  ANTE ${lv.ante.toLocaleString()}` : ''}` : '-'}
         </p>
         <p className="mt-1 text-xs text-ink-muted">{state.running ? '진행 중' : '일시정지'} · 생존 <b className="text-ink-primary tabular-nums">{stats.alive}</b> / 엔트리 <b className="text-ink-primary tabular-nums">{stats.entries}</b></p>
         {readOnly && <p className="mt-2 rounded-chip bg-danger/10 px-2 py-1 text-2xs font-semibold text-danger-light">권한이 없어 보기만 가능해요</p>}
