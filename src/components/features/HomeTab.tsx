@@ -106,7 +106,7 @@ export default function HomeTab({
           // 오너 피드백(2026-09-02): 헤드라인이 "눌러도 아무것도 안 나올 것 같다" — 글자만 있는 버튼은 버튼으로 안 읽힌다.
           // 눌리는 것의 표식 셋: 카드 면(card-aura) · 우측 원형 화살표 · 누르면 살짝 눌리는 press. 문구는 그대로.
           <button type="button" onClick={onTools}
-            className="mt-1 flex w-full items-center gap-3 rounded-aura border card-aura ring-aura px-4 py-3 text-left transition-transform active:scale-[0.985]">
+            className="mt-1 flex w-full items-center gap-3 rounded-aura border card-aura px-4 py-3 text-left transition-transform active:scale-[0.985]">
             <span className="min-w-0 flex-1">
               {/* v6 aura-ui.com 문법: 헤드라인은 흰색, 핵심 구절 하나만 채도 높은 그라데이션 */}
               <h2 className="font-display text-2xl font-extrabold tracking-tight text-ink-primary">

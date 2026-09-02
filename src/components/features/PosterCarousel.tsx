@@ -174,7 +174,7 @@ export default function PosterCarousel({ schedules, onSelect, onBanner }: {
         aria-label={dup ? undefined : s.alt}
         // 오너 지시(2026-08-27 4차): 풀폭 1장 — w-full(=스크롤러 clientWidth) × aspect 960/448.
         // 풀블리드 배너라 rounded 는 카드가 아니라 lg 캡 상태의 뷰포트에만(모바일은 모서리 없음).
-        className="relative aspect-[960/448] w-full shrink-0 snap-start overflow-hidden border border-border-subtle bg-surface-mid text-left"
+        className="relative aspect-[960/448] w-full shrink-0 snap-start overflow-hidden bg-surface-mid text-left"
         style={b ? { background: b.bg } : undefined}
       >
         {b ? (
@@ -421,10 +421,14 @@ export default function PosterCarousel({ schedules, onSelect, onBanner }: {
           index.html 셸 예약부와 클래스 문법 동일 유지(동커밋 동조 규칙).
           트랙은 w-max 금지 — 카드 w-full(%)가 스크롤러 폭에 대해 확정 해석되려면
           트랙 폭 = 스크롤러 content 폭이어야 한다(w-max 면 순환 참조로 깨짐). */}
-      <div ref={vpRef} className="poster-marquee-viewport scrollbar-none snap-x snap-mandatory overflow-x-auto lg:mx-auto lg:max-w-[512px] lg:rounded-card [@media(hover:hover)_and_(pointer:fine)]:mx-auto [@media(hover:hover)_and_(pointer:fine)]:max-w-[512px] [@media(hover:hover)_and_(pointer:fine)]:rounded-card">
-        <div className="flex">
-          {set(false)}
-          {set(true)}
+      {/* v6.4(오너 2026-09-02): 풀블리드 직각 배너가 카드 사이에서 "네모칸"으로 튀었다 → 카드 문법(여백·16px·그라데이션 헤어라인).
+          히어로 카드의 링은 여기로 옮겼다(한 화면에 링은 하나). 골격(index.html)도 같은 프레임 클래스로 높이 예약 — 동커밋 동조. */}
+      <div className="poster-frame mx-page-x overflow-hidden rounded-aura border card-aura ring-aura lg:mx-auto lg:max-w-[512px] [@media(hover:hover)_and_(pointer:fine)]:mx-auto [@media(hover:hover)_and_(pointer:fine)]:max-w-[512px]">
+        <div ref={vpRef} className="poster-marquee-viewport scrollbar-none snap-x snap-mandatory overflow-x-auto rounded-[inherit]">
+          <div className="flex">
+            {set(false)}
+            {set(true)}
+          </div>
         </div>
       </div>
     </div>
