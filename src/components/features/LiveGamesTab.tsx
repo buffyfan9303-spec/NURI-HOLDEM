@@ -11,6 +11,9 @@ import { EmptyState } from '../atoms/Skeleton';
 import Icon from '../atoms/Icon';
 import { useSkeletonGate } from '../../lib/useSkeletonGate';
 import { goSubTab } from '../../lib/subTabTransition';
+import { writeSnap } from '../../lib/snapshot';
+import { stackZone } from '../../lib/stackZone';
+import type { PushJump } from './tools/WrongNote';
 
 /** 진행 게임 정렬 칩 — 진열 순서가 곧 하위 탭 전환 방향(forward/back)의 기준이다. */
 const LIVE_SORT_ORDER = ['default', 'players', 'time', 'distance'] as const;
@@ -471,6 +474,28 @@ function MyTournamentCard({ g, venueName, onDisplay, hero = false }: { g: ClockS
   const update = (n: number) => { setStack(n); try { localStorage.setItem(storeKey, String(n)); } catch { /* noop */ } };
   const myBB = bb > 0 && stack > 0 ? Math.round((stack / bb) * 10) / 10 : null;
   const vsAvg = avg > 0 && stack > 0 ? Math.round((stack / avg) * 100) : null;
+  // 내 bb 구간 → 차트 딥링크(GKR 잔여분, 2026-09-03). 브레이크 중엔 직전 레벨 bb 만 있고 sb·앤티는 없어 M 은 bb 기준 근사.
+  // 클락 기본 구조가 BB 앤티(ante=bb)라 한 바퀴 비용 = sb+bb+ante (StackCalcs 의 인원 곱은 개별 앤티 가정 — 여기선 쓰지 않는다).
+  const cost = lv && lv.kind === 'level' ? lv.sb + lv.bb + lv.ante : bb * 1.5;
+  const zone = myBB != null ? stackZone(myBB, cost > 0 ? stack / cost : 0) : null;
+  const goZone = () => {
+    if (!zone) return;
+    if (zone.tool === 'pushfold') writeSnap('tool:pushfold', { stack: zone.stack, ante: (lv?.ante ?? 0) > 0 } satisfies PushJump);
+    // 순서: 탭 전환 → (도구 pane 이 보인 뒤) 해시. 탭 트레일 history 항목이 먼저 쌓여야 도구 겹이 그 위에 올라
+    // 뒤로가기 1회 = 도구 닫기 · 2회 = 라이브 복귀가 된다(해시를 먼저 얹으면 순서가 뒤집혀 숨은 pane 에 도구가 남는다 — 실측).
+    // ToolsPanel 은 미마운트면 마운트 시 해시를 읽고(useState 초기화), 이미 마운트(keep-alive)면 hashchange 로 연다.
+    // push 가 아니라 replaceState — 해시는 도구 자신의 history 항목에만 남긴다(2026-08-28 backstack 지뢰).
+    const tool = zone.tool;
+    window.dispatchEvent(new CustomEvent('nuri:goto-tab', { detail: 'tools' }));
+    let tries = 0;
+    const arm = () => {
+      const pane = document.querySelector<HTMLElement>('main[data-tab="tools"]');
+      if ((!pane || pane.style.display === 'none') && tries++ < 120) { requestAnimationFrame(arm); return; } // 최대 ~2s
+      try { history.replaceState(null, '', `#tool=${tool}`); } catch { /* noop */ }
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+    };
+    requestAnimationFrame(arm);
+  };
   const tone = vsAvg == null ? '' : vsAvg >= 100 ? 'text-emerald-400' : vsAvg >= 50 ? 'text-amber-300' : 'text-rose-400';
   return (
     <section className={['rounded-aura border bg-gradient-to-br from-accent-300/[0.12] to-transparent p-3',
@@ -509,6 +534,16 @@ function MyTournamentCard({ g, venueName, onDisplay, hero = false }: { g: ClockS
           )}
         </div>
       </div>
+      {/* 구간별 차트 한 줄 — 높이 고정(h-7)이라 스택 입력 전후 레이아웃 점프 0 */}
+      {zone ? (
+        <button type="button" onClick={goZone} data-testid="live-stack-hint"
+          className="mt-2 flex h-7 w-full items-center justify-between rounded-input bg-surface-base/60 px-2 text-2xs font-bold text-accent-300">
+          <span className="truncate">{zone.label}</span>
+          <Icon name="chevron-right" size={14} className="shrink-0" />
+        </button>
+      ) : (
+        <p className="mt-2 flex h-7 items-center px-2 text-2xs text-ink-muted" data-testid="live-stack-hint">스택을 입력하면 구간별 차트를 추천해요</p>
+      )}
     </section>
   );
 }

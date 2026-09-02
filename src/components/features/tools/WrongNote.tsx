@@ -26,7 +26,7 @@ import { writeSnap } from '../../../lib/snapshot';
 
 /** 차트 점프 파라미터 — renderTool 이 같은 이름의 스냅샷을 읽어 prop 으로 넘긴다(읽은 뒤 즉시 삭제) */
 export type RangeJump = { scenId: string; hand: string };
-export type PushJump = { k: number; stack: number; hand: string };
+export type PushJump = { k?: number; stack: number; hand?: string; ante?: boolean }; // ante: 라이브 탭 내 토너 카드(stackZone) 가 넘긴다
 
 /** 키('rfi|<scenId>|<hand>' · 'push|<k>-<stack>|<hand>')에서 점프 파라미터를 꺼내 스냅샷에 둔다 */
 function stageJump(q: Quiz): void {

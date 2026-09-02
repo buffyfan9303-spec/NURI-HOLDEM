@@ -151,7 +151,7 @@ function renderTool(k: ToolKey): ReactNode {
     case 'aggro': return <AggroChart />;
     case 'rvr': return <RangeMatrix />;
     case 'outs': return <OutsCalc />;
-    case 'pushfold': { const j = readSnap<PushJump>('tool:pushfold'); return <PushFoldChart initialK={j?.k} initialStack={j?.stack} highlight={j?.hand} />; }
+    case 'pushfold': { const j = readSnap<PushJump>('tool:pushfold'); return <PushFoldChart initialK={j?.k} initialStack={j?.stack} initialAnte={j?.ante} highlight={j?.hand} />; }
     case 'spr': return <SprCalc />;
     case 'ev': return <EvCalc />;
     case 'mzone': return <MzoneCalc />;

@@ -23,13 +23,13 @@ const POSITIONS: { k: number; label: string; desc: string }[] = [
 
 type View = 'shove' | 'callBB' | 'callSB';
 
-export default function PushFoldChart({ initialK, initialStack, highlight }: {
-  /** 오답 노트 '차트에서 보기' — 그 포지션·스택·셀로 바로 진입 */
-  initialK?: number; initialStack?: number; highlight?: string;
+export default function PushFoldChart({ initialK, initialStack, initialAnte, highlight }: {
+  /** 오답 노트 '차트에서 보기' — 그 포지션·스택·셀로 바로 진입. initialAnte 는 라이브 탭 내 토너 카드(현재 레벨 앤티 유무) */
+  initialK?: number; initialStack?: number; initialAnte?: boolean; highlight?: string;
 } = {}) {
   const [k, setK] = useState(POSITIONS.some((p) => p.k === initialK) ? initialK! : 2); // BTN 기본 — 가장 자주 찾는 자리
   const [stack, setStack] = useState((NASH_STACKS as readonly number[]).includes(initialStack ?? -1) ? initialStack! : 10);
-  const [ante, setAnte] = useState(false);
+  const [ante, setAnte] = useState(initialAnte ?? false);
   const [view, setView] = useState<View>('shove');
   const pos = POSITIONS.find((p) => p.k === k)!;
 
