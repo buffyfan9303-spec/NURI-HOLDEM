@@ -692,6 +692,9 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
               // 예전엔 무조건 맨 위로 튕겨서, 목록을 한참 내려 보다 다른 탭을 잠깐 다녀오면 위치를 전부 잃었다.
               onClick={() => { if (tab) { if (tab === shown) { window.scrollTo({ top: 0, behavior: 'smooth' }); } else { setOptimistic(tab); onChange(tab); } } else onOpenMe(); }}
               aria-current={on ? 'page' : undefined}
+              // 접근성 이름을 버튼에 고정 — 배지 span 의 aria-label 이 DOM 순서상 라벨보다 앞이라 이름이
+              // '진행 중 2게임 라이브' 로 뒤집혔다(게임이 돌 때마다 e2e /^라이브/ 가 깨지던 원인). 이름 = '라이브, 진행 중 2게임'.
+              aria-label={tab && (count?.[tab] ?? 0) > 0 ? `${label}, 진행 중 ${count![tab]}게임` : label}
               className="press-spring flex min-w-0 flex-1 flex-col items-center gap-0.5 pb-1.5 pt-2 touch-manipulation focus:outline-none"
             >
               {/* 아이콘 22px · 라벨 11px — 공백 줄이고 또렷하게 */}
@@ -708,7 +711,7 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
                 {tab ? TAB_ICON[tab] : ME_ICON}
                 {tab && dot?.[tab] && !on && <span className="absolute right-2 top-0.5 h-1.5 w-1.5 rounded-full bg-accent-300" aria-hidden />}
                 {tab && (count?.[tab] ?? 0) > 0 && (
-                  <span aria-label={`진행 중 ${count![tab]}게임`}
+                  <span aria-hidden
                     className="absolute -top-0.5 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[9px] font-extrabold tabular-nums text-white ring-2 ring-surface-mid">
                     {count![tab]}
                   </span>
