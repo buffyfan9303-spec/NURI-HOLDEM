@@ -15,7 +15,7 @@ import type { Venue, Comment, VenueContact } from '../../api/community';
 import type { Schedule } from '../../api/schedules';
 import type { MarketplaceNotice } from '../../api/marketplace';
 import { useAuth } from '../../contexts/AuthContext';
-import { setVenueCoords, followVenue, unfollowVenue, getMyFollowedVenueIds, updateVenueContact, updateVenueKakao, venueContacts } from '../../api/community';
+import { setVenueCoords, followVenue, unfollowVenue, getMyFollowedVenueIds, updateVenueContact, venueContacts } from '../../api/community';
 import { getVenueNotices, createVenueNotice, deleteVenueNotice, type VenueNotice } from '../../api/community';
 import { getVenueRatings } from '../../api/reviews';
 import { getVenueMessages, sendVenueMessage, deleteVenueMessage, subscribeVenueMessages, type VenueMessage } from '../../api/community';
@@ -97,8 +97,6 @@ export default function VenuePage({
   const { user, isApprovedOwner } = useAuth();
   const toast = useToast();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [kakaoOverride, setKakaoOverride] = useState<string | null>(null);
-  useEffect(() => { setKakaoOverride(null); }, [venue?.id]);
   // 매장 별점(방문 후기 평균) — 매장명 옆 ⭐
   const [rating, setRating] = useState<{ avg: number; count: number } | null>(null);
   useEffect(() => {
@@ -227,13 +225,8 @@ export default function VenuePage({
 
   const isMyVenue = isApprovedOwner && user?.venueId === venue.id;
   const isRoti    = venue.id === 'v_roti';
-  const kakao     = (kakaoOverride ?? venue.kakaoUrl ?? '').trim();
-  const editKakao = async () => {
-    const url = window.prompt('카카오톡 오픈채팅/단톡방 링크 (비우면 삭제)', kakao);
-    if (url === null) return;
-    try { await updateVenueKakao(venue.id, url); setKakaoOverride(url.trim()); toast.show(url.trim() ? '카카오톡 링크를 저장했습니다' : '링크를 삭제했습니다', 'success'); }
-    catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
-  };
+  // 카카오톡 링크의 정본은 「내 매장 → 매장 설정 → 매장 페이지」(VenueCustomizePanel). 예전 window.prompt 편집은 제거.
+  const kakao     = (venue.kakaoUrl ?? '').trim();
   // Tier1 [QR 체크인] — 오너 리포트(2026-08-27): 버튼이 스캔 없이 즉시 체크인되던 결함 교정.
   // '체크인'은 매장에 실제로 왔다는 증명 — 버튼은 스캐너 모달만 열고, 체크인 RPC(doCheckin)는
   // 매장 비치 QR(?checkin=<venueId>) 스캔 검증 후에만 실행된다. 딥링크 자동 체크인은 App.tsx 보존.
@@ -471,7 +464,7 @@ export default function VenuePage({
                   적으면 **누르기 전에** 같은 사실을 알 수 있어 '무반응 클릭 금지' 의도에 더 충실하고,
                   첫 뷰포트 행동 예산(≤6, venue-ia 게이트)도 가짜 행동으로 채우지 않게 된다.
                   자리(오너 지시의 핵심)는 그대로 지킨다 — 업주 본인에게는 여전히 등록 버튼이다. */}
-            <KakaoActionButton kakao={kakao} canEdit={isMyVenue} onEdit={editKakao} />
+            <KakaoActionButton kakao={kakao} />
             </div>
           </div>
           <CoachMark id="venue-checkin">체크인하면 출석 도장 · 전적 인정 · 방문 후기가 열려요. 하루 한 번이면 충분해요.</CoachMark>
@@ -527,7 +520,6 @@ export default function VenuePage({
                 editable={isMyVenue}
                 onUpdateDescription={onUpdateDescription}
                 kakao={kakao}
-                onEditKakao={editKakao}
                 onCoords={(la, ln) => {
                   // 매장 관리자(또는 admin) 기기이고 좌표 미보유일 때만 조용히 저장 — 거리순 데이터 자급.
                   if ((isMyVenue || user?.role === 'admin') && venue.lat == null) {
@@ -1307,8 +1299,8 @@ function FollowButton({ venueId, followerCount, compact }: { venueId: string; fo
 // ── About 패널 ───────────────────────────────────────────────────────────────
 
 function AboutPanel({
-  venue, editable, onUpdateDescription, kakao, onEditKakao, onCoords,
-}: { venue: Venue; editable?: boolean; onUpdateDescription?: (id: string, desc: string) => void; kakao?: string; onEditKakao?: () => void; onCoords?: (lat: number, lng: number) => void }) {
+  venue, editable, onUpdateDescription, kakao, onCoords,
+}: { venue: Venue; editable?: boolean; onUpdateDescription?: (id: string, desc: string) => void; kakao?: string; onCoords?: (lat: number, lng: number) => void }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft]     = useState(venue.description ?? '');
   // 매장 정보(주소·전화·영업시간) 통합 편집
@@ -1467,7 +1459,7 @@ function AboutPanel({
       {/* 카카오톡 오픈채팅 — 첫 화면(Tier1)에서 매장 정보로 이동(Phase 10).
           정보 행(dl)과 다른 덩어리라 12px 자리로 내려 세운다(예전엔 section 안 pt-1 로 8+4=12px 를
           우연히 맞추고 있었다 — 같은 값이라도 규칙이 없으면 다음 사람이 깬다). */}
-      <KakaoChatRow kakao={kakao} canEdit={editable} onEdit={onEditKakao} />
+      <KakaoChatRow kakao={kakao} />
 
       {/* 카카오맵 위치 + 외부 지도 링크(주소 행에서 재배치) */}
       <VenueLocationMap address={addr} name={venue.name} lat={venue.lat} lng={venue.lng} onCoords={onCoords} />

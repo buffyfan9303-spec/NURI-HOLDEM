@@ -8,9 +8,9 @@ import {
   type VenuePageConfig, type RankBoardId, type CustomBoard, type ScoreEntry, type PlayerCounts,
 } from '../../api/rankings';
 import { searchRegisteredPlayers, type RegisteredPlayer } from '../../api/ledger';
-import { getVenueSlug, isSlugAvailable, setVenueSlug, getVenueContactInfo, updateVenueContact, type VenueContact } from '../../api/community';
+import { getVenueSlug, isSlugAvailable, setVenueSlug, getVenueContactInfo, updateVenueContact, updateVenueKakao, type VenueContact } from '../../api/community';
 import ContactListEditor from './VenueContactFields';
-import { cleanContacts, ensureOneContact } from '../../lib/venueContacts';
+import { cleanContacts, ensureOneContact, normalizeKakaoUrl } from '../../lib/venueContacts';
 
 // 매장 페이지 탭(VenuePage와 동일 키)
 const PAGE_TABS: { key: string; label: string }[] = [
@@ -133,6 +133,10 @@ function VenueContactSection({ venueId }: { venueId: string }) {
   const [addr, setAddr] = useState('');
   const [hours, setHours] = useState('');
   const [contacts, setContacts] = useState<VenueContact[]>([{ label: '', phone: '' }]);
+  // 카카오톡 오픈채팅/단톡방 링크 — 예전엔 손님용 매장 페이지의 window.prompt 로만 열려 있던 숨은 기능.
+  // 여기가 정본이다(오너: "매장 설정에 카카오톡 링크 추가 기능이 없어"). 저장 경로는 기존 updateVenueKakao.
+  const [kakao, setKakao] = useState('');
+  const [savedKakao, setSavedKakao] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -142,6 +146,7 @@ function VenueContactSection({ venueId }: { venueId: string }) {
       .then((v) => {
         if (!alive) return;
         setAddr(v.address); setHours(v.hours); setContacts(ensureOneContact(v.contacts));
+        setKakao(v.kakao); setSavedKakao(v.kakao);
       })
       .catch(() => {})
       .finally(() => { if (alive) setLoaded(true); });
@@ -153,11 +158,14 @@ function VenueContactSection({ venueId }: { venueId: string }) {
     // 오너 지시: 연락처 1개는 필수. (서버는 0개도 허용한다 — 전화 없는 매장이 주소조차
     // 저장 못 하는 상태를 만들지 않기 위해서다. 필수 강제는 이 화면의 책임이다.)
     if (next.length === 0) { toast.show('연락처는 1개 이상 입력해 주세요', 'error'); return; }
+    const nextKakao = normalizeKakaoUrl(kakao);
+    if (nextKakao === null) { toast.show('카카오톡 링크는 https://open.kakao.com/… 형식의 주소여야 합니다', 'error'); return; }
     setSaving(true);
     try {
       await updateVenueContact(venueId, { address: addr, hours, contacts: next });
+      if (nextKakao !== savedKakao) { await updateVenueKakao(venueId, nextKakao); setSavedKakao(nextKakao); setKakao(nextKakao); }
       setContacts(ensureOneContact(next));
-      toast.show('위치 · 연락처 · 영업시간을 저장했습니다', 'success');
+      toast.show('위치 · 연락처 · 영업시간 · 카카오톡 링크를 저장했습니다', 'success');
     } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
     finally { setSaving(false); }
   };
@@ -165,7 +173,7 @@ function VenueContactSection({ venueId }: { venueId: string }) {
   return (
     <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-3">
       <div className="space-y-1">
-        <h3 className="text-sm font-bold text-ink-primary">위치 · 연락처 · 영업시간</h3>
+        <h3 className="text-sm font-bold text-ink-primary">위치 · 연락처 · 영업시간 · 카카오톡</h3>
         <p className="text-2xs text-ink-muted">매장 페이지 「매장 소개」에 그대로 나갑니다. 연락처는 <span className="font-semibold text-accent-300">1개 필수 · 최대 5개</span>이며, 손님 화면에서 번호마다 따로 전화가 걸립니다.</p>
       </div>
       {!loaded ? (
@@ -187,9 +195,17 @@ function VenueContactSection({ venueId }: { venueId: string }) {
           <input value={hours} onChange={(e) => setHours(e.target.value)} maxLength={60}
             placeholder="예: 매일 18:00 ~ 익일 04:00" className="input w-full text-sm" />
         </label>
+        <label className="block space-y-1">
+          <span className="block text-2xs font-semibold text-ink-secondary">
+            카카오톡 오픈채팅/단톡방 링크 <span className="font-normal text-ink-muted">(선택 · 비우고 저장하면 삭제)</span>
+          </span>
+          <input value={kakao} onChange={(e) => setKakao(e.target.value)} maxLength={300} inputMode="url"
+            placeholder="https://open.kakao.com/o/…" className="input w-full text-sm" />
+          <span className="block text-2xs text-ink-muted">손님 매장 페이지 위쪽 「카카오톡」 버튼이 이 주소로 열립니다.</span>
+        </label>
         <button type="button" onClick={save} disabled={saving}
           className="btn-primary w-full py-2.5 text-sm disabled:opacity-50">
-          {saving ? '저장 중…' : '위치 · 연락처 · 영업시간 저장'}
+          {saving ? '저장 중…' : '위치 · 연락처 · 영업시간 · 카카오톡 저장'}
         </button>
       </>)}
     </section>
