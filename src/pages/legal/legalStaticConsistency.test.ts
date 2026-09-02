@@ -14,7 +14,7 @@ const ROOT = path.join(__dirname, '../../..');
 const read = (p: string) => readFileSync(path.join(ROOT, p), 'utf-8');
 const html = (slug: string) => read(`public/legal/${slug}.html`);
 
-const SLUGS = ['terms', 'privacy', 'anti-gambling', 'marketing'] as const;
+const SLUGS = ['terms', 'privacy', 'anti-gambling', 'marketing', 'refund'] as const; // refund = 동의 아님·고지(PG 심사용 공개 URL)
 
 describe('공개 약관 정적 발행 (LEGAL-2)', () => {
   it('4개 공개 URL 파일이 존재한다', () => {

@@ -5,3 +5,4 @@ export { default as terms } from '../src/pages/legal/TermsOfService';
 export { default as privacy } from '../src/pages/legal/PrivacyPolicy';
 export { default as antiGambling } from '../src/pages/legal/LegalNotice';
 export { default as marketing } from '../src/pages/legal/MarketingConsent';
+export { default as refund } from '../src/pages/legal/RefundPolicy';
