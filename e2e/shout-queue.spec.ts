@@ -23,6 +23,10 @@ import { loginAs, stabilizeBackstack, dismissOverlays, type E2ESession } from '.
 const EMAIL = process.env.E2E_EMAIL;
 const PASSWORD = process.env.E2E_PASSWORD;
 
+// 20초 슬롯 창을 요청 시각 기준으로 만드는 스펙이라 느린 CI 러너에선 슬롯 경계를 넘겨 순번·시트 상태가 어긋난다
+// (2026-09-03 CI 1차 실패 → 재실행 통과). sheet-spring·subtab-motion 과 같은 CI 전용 재시도.
+test.describe.configure({ retries: process.env.CI ? 2 : 0 });
+
 const iso = (msFromNow: number) => new Date(Date.now() + msFromNow).toISOString();
 const json = (route: Route, body: unknown) =>
   route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
