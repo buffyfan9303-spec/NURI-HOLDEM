@@ -98,11 +98,11 @@ test.describe('끌어 내려 닫기 — 적용 화면', () => {
     await dismissOverlays(page);
     await page.locator('nav').getByRole('button', { name: 'GTO', exact: true }).first().click();
 
-    const card = page.getByRole('button', { name: /스타팅핸드 가이드/ }).first();
+    const card = page.getByTestId('tool-range');
     await expect(card).toBeVisible({ timeout: 10_000 });
     await card.click();
 
-    const dialog = page.locator('[role="dialog"]').filter({ hasText: '스타팅핸드 가이드' }).first();
+    const dialog = page.locator('[role="dialog"]').filter({ has: page.getByTestId('range-guide') }).first();
     await expect(dialog).toBeVisible();
 
     const { x, y } = await bodyPoint(page);

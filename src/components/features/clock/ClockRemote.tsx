@@ -175,7 +175,7 @@ export default function ClockRemote({ venueId, gameSeq = 1, venueName, onClose, 
         <Counter label="애드온" value={stats.addons} onMinus={() => adj('adjAddons', -1)} onPlus={() => adj('adjAddons', 1)} disabled={disabled} />
       </section>
       <p className="px-1 text-center text-2xs text-ink-muted">
-        {state.sessionDate ? `장부(${state.sessionDate}) 연동 중 — 엔트리·리바이는 장부에서 자동 반영, 여기 값은 보정입니다.` : '장부 미연동 — 여기서 누른 값이 그대로 TV에 표시됩니다.'}
+        {state.sessionDate ? `장부(${state.sessionDate}) 연동 중 · 엔트리·리바이는 장부에서 자동 반영되고, 여기 값은 보정입니다.` : '장부 미연동 — 여기서 누른 값이 그대로 TV에 표시됩니다.'}
       </p>
     </Shell>
   );

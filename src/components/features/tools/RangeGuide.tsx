@@ -35,7 +35,8 @@ const chipCls = (on: boolean) =>
 const firstOfGroup = (g: RangeScenario['group']) => RANGE_SCENARIOS.find((s) => s.group === g)!;
 
 export default function RangeGuide({ initialGroup }: { initialGroup?: RangeScenario['group'] } = {}) {
-  const [scenId, setScenId] = useState<string>(() => firstOfGroup(initialGroup ?? 'rfi6').id);
+  // 기본 그룹 = 9인 오픈(2026-09-02): 국내 홀덤펍은 9인 테이블이 기본이라 6맥스보다 먼저 보여야 한다
+  const [scenId, setScenId] = useState<string>(() => firstOfGroup(initialGroup ?? 'rfi9').id);
   const scen = RANGE_SCENARIOS.find((s) => s.id === scenId) ?? RANGE_SCENARIOS[0];
   const group = scen.group;
 
@@ -71,7 +72,7 @@ export default function RangeGuide({ initialGroup }: { initialGroup?: RangeScena
     // 제목은 전체화면 헤더가 이미 표시 — 카드 안은 설명만(2중 노출 제거)
     <CalcCard desc={`포지션·상황별 표준 프리플랍 레인지 ${RANGE_SCENARIOS.length}개 · 셀을 누르면 핸드별 빈도`}>
       {/* ① 상황 그룹 */}
-      <div className="flex flex-wrap gap-1">
+      <div data-testid="range-guide" className="flex flex-wrap gap-1">
         {RANGE_GROUPS.map((g) => (
           <button key={g.id} type="button" onClick={() => pickGroup(g.id)} aria-pressed={g.id === group} className={chipCls(g.id === group)}>
             {g.label}

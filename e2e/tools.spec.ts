@@ -26,12 +26,12 @@ test.describe('도구 탭 — 전체화면 실행', () => {
   test('🔴 도구 카드를 누르면 전체화면 페이지로 열리고, 닫으면 런처로 돌아온다', async ({ page }) => {
     await gotoTools(page);
     // 플레이어 그룹은 첫 방문 기본 펼침 — 카드가 바로 보여야 한다
-    const card = page.getByRole('button', { name: /스타팅핸드 가이드/ }).first();
+    const card = page.getByTestId('tool-range');
     await expect(card).toBeVisible({ timeout: 10_000 });
     await card.click();
 
     // 전체화면 페이지(role=dialog, 제목 = 도구 이름)
-    const dialog = page.locator('[role="dialog"]').filter({ hasText: '스타팅핸드 가이드' }).first();
+    const dialog = page.locator('[role="dialog"]').filter({ has: page.getByTestId('range-guide') }).first();
     await expect(dialog).toBeVisible();
     // 딥링크 해시가 걸린다
     await expect.poll(() => page.evaluate(() => window.location.hash)).toContain('tool=range');
@@ -43,10 +43,10 @@ test.describe('도구 탭 — 전체화면 실행', () => {
     await expect(card).toBeVisible();
   });
 
-  test('🔴 스타팅핸드 가이드 — 13x13 매트릭스와 콤보 가중 %가 실제로 렌더된다', async ({ page }) => {
+  test('🔴 프리플랍 레인지 차트 — 13x13 매트릭스와 콤보 가중 %가 실제로 렌더된다', async ({ page }) => {
     await gotoTools(page);
-    await page.getByRole('button', { name: /스타팅핸드 가이드/ }).first().click();
-    const dialog = page.locator('[role="dialog"]').filter({ hasText: '스타팅핸드 가이드' }).first();
+    await page.getByTestId('tool-range').click();
+    const dialog = page.locator('[role="dialog"]').filter({ has: page.getByTestId('range-guide') }).first();
     await expect(dialog).toBeVisible();
 
     // 169셀 — AA와 72o가 다 있다
