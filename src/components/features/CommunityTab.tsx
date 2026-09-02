@@ -1278,7 +1278,7 @@ function VenuesSection({
             <span className="text-ink-secondary">팔로워순</span>
           </span>
         </div>
-        <p className="mt-0.5 text-2xs text-ink-muted">홀덤펍·딜러팀·동호회·유튜버 그룹을 선택해 커뮤니티를 이용하세요</p>
+        <p className="mt-0.5 text-2xs text-ink-secondary">홀덤펍·딜러팀·동호회·유튜버 그룹을 선택해 커뮤니티를 이용하세요</p>
       </div>
 
       {/* 리스트 */}
