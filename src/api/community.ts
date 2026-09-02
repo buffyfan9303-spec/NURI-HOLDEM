@@ -291,14 +291,15 @@ export async function updateVenueContact(
 /** 매장 설정 화면용 — 주소·연락처(다중)·영업시간 현재값 */
 export async function getVenueContactInfo(
   venueId: string,
-): Promise<{ address: string; hours: string; contacts: VenueContact[] }> {
-  if (IS_MOCK) return { address: '', hours: '', contacts: [] };
+): Promise<{ address: string; hours: string; contacts: VenueContact[]; kakao: string }> {
+  if (IS_MOCK) return { address: '', hours: '', contacts: [], kakao: '' };
   const { data, error } = await supabase.from('venues')
-    .select('address, business_hours, contact_phone, contact_phones').eq('id', venueId).maybeSingle();
+    .select('address, business_hours, contact_phone, contact_phones, kakao_url').eq('id', venueId).maybeSingle();
   if (error) throw new Error(error.message);
   return {
     address: data?.address ?? '',
     hours: data?.business_hours ?? '',
+    kakao: data?.kakao_url ?? '',
     contacts: venueContacts({ contacts: rowToContacts(data?.contact_phones), contactPhone: data?.contact_phone ?? undefined }),
   };
 }
