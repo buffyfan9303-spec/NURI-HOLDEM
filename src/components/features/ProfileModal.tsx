@@ -1100,7 +1100,7 @@ const STRENGTH_LEVELS = [
 function PasswordStrength({ password }: { password: string }) {
   // 규칙은 src/lib/password.ts 한 곳(가입·재설정·변경 게이트와 동일)
   const checks = PASSWORD_RULES.map((r) => ({ label: r.label, ok: r.test(password) }));
-  const score = Math.max(0, checks.filter((c) => c.ok).length - 1); // 0~3
+  const score = Math.max(0, checks.filter((c) => c.ok).length - 2); // 규칙 5개 → 0~3(모두 충족해야 '강함')
   const level = STRENGTH_LEVELS[score];
 
   return (
