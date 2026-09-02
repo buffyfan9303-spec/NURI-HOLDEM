@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, Suspense, type ReactNode } from 'react';
 import { lazyWithReload } from '../../lib/lazyWithReload';
 import Modal from '../atoms/Modal';
-import Icon from '../atoms/Icon';
+import Icon, { type IconName } from '../atoms/Icon';
 import { useToast } from '../atoms/Toast';
 import { shareOrCopy } from '../../lib/calendar';
 import { useTrainerProgress } from '../../lib/trainerProgress';
@@ -40,74 +40,51 @@ type ToolKey = 'drill' | 'gto' | 'replay' | 'pot' | 'icm' | 'range' | 'trainer' 
  *  첫 카드가 '오늘의 드릴'(퀴즈)이었다. 보는 것(차트)과 푸는 것(트레이닝)을 레인으로 갈라 차트를 맨 앞에 둔다. */
 type ToolCat = 'chart' | 'learn' | 'analyze' | 'calc' | 'ops';
 
-/** desc = 카드 한 줄(≤13자 완결형 명사구, 2026-09-03 개고) · keywords = 개고 전 설명(검색 재현율 보존용, 화면엔 안 그림) */
-const TOOLS: { key: ToolKey; cat: ToolCat; name: string; desc: string; keywords?: string; icon: ReactNode }[] = [
+/** desc = 카드 한 줄(≤13자 완결형 명사구, 2026-09-03 개고) · keywords = 개고 전 설명(검색 재현율 보존용, 화면엔 안 그림)
+ *  icon = lucide 팩 이름(2026-09-03 오너 "아이콘팩에서 최대한 잘 맞는 걸로" — 손그림 SVG 26개를 Icon 아톰으로 통일).
+ *  ⚠ 26개 도구는 서로 다른 아이콘이어야 한다 — ToolsPanel.icons.test.ts 가 게이트. */
+const TOOLS: { key: ToolKey; cat: ToolCat; name: string; desc: string; keywords?: string; icon: IconName }[] = [
   // ── 학습 — 차트·트레이너 ──
-  { key: 'drill', cat: 'learn', name: '오늘의 드릴', desc: '약한 부분만 하루 5문제', keywords: '약점 기반 하루 5문제',
-    icon: <><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M8 2v4M16 2v4M3 10h18" /><path d="M9 15l2 2 4-4" /></> },
-  { key: 'range', cat: 'chart', name: '프리플랍 레인지 차트', desc: '포지션별 시작 핸드 기준표', keywords: '9인·6맥스 포지션별 오픈·3벳·수비·vs 3벳',
-    icon: <><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="9" y1="3" x2="9" y2="21" /></> },
-  { key: 'pushfold', cat: 'chart', name: '푸시 · 폴드 차트', desc: '칩 적을 때 올인 기준표', keywords: '자체 Nash · 셔브·콜 레인지',
-    icon: <><path d="M12 21V4" /><path d="M5 11l7-7 7 7" /></> },
-  { key: 'trainer', cat: 'learn', name: '프리플랍 트레이너', desc: '오픈과 올인 판단 연습', keywords: '오픈·셔브 맞히기, 오답 노트',
-    icon: <><path d="M12 2v4M12 18v4M2 12h4M18 12h4" /><circle cx="12" cy="12" r="4" /></> },
-  { key: 'postflop', cat: 'learn', name: '포스트플랍 트레이너', desc: '실전 상황 퀴즈와 해설', keywords: '실전 상황 퀴즈·해설',
-    icon: <><rect x="3" y="6" width="5" height="7" rx="1" /><rect x="9.5" y="6" width="5" height="7" rx="1" /><rect x="16" y="6" width="5" height="7" rx="1" /><path d="M7 17h10" /><path d="M9 21h6" /></> },
-  { key: 'aggro', cat: 'chart', name: '어그레션 차트', desc: '포지션별 공격 권장 빈도', keywords: '포지션별 권장 빈도',
-    icon: <><path d="M3 17l6-6 4 4 8-8" /><path d="M14 7h7v7" /></> },
-  { key: 'glossary', cat: 'learn', name: '홀덤 용어사전', desc: '74개 용어 검색과 뜻풀이', keywords: '용어 74개 · 한글 설명·검색',
-    icon: <><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" /><path d="M9 7h6M9 11h4" /></> },
+  { key: 'drill', cat: 'learn', name: '오늘의 드릴', desc: '약한 부분만 하루 5문제', keywords: '약점 기반 하루 5문제', icon: 'target' },
+  { key: 'range', cat: 'chart', name: '프리플랍 레인지 차트', desc: '포지션별 시작 핸드 기준표', keywords: '9인·6맥스 포지션별 오픈·3벳·수비·vs 3벳', icon: 'grid-3x3' },
+  { key: 'pushfold', cat: 'chart', name: '푸시 · 폴드 차트', desc: '칩 적을 때 올인 기준표', keywords: '자체 Nash · 셔브·콜 레인지', icon: 'arrow-up-from-line' },
+  { key: 'trainer', cat: 'learn', name: '프리플랍 트레이너', desc: '오픈과 올인 판단 연습', keywords: '오픈·셔브 맞히기, 오답 노트', icon: 'dumbbell' },
+  { key: 'postflop', cat: 'learn', name: '포스트플랍 트레이너', desc: '실전 상황 퀴즈와 해설', keywords: '실전 상황 퀴즈·해설', icon: 'brain' },
+  { key: 'aggro', cat: 'chart', name: '어그레션 차트', desc: '포지션별 공격 권장 빈도', keywords: '포지션별 권장 빈도', icon: 'swords' },
+  { key: 'glossary', cat: 'learn', name: '홀덤 용어사전', desc: '74개 용어 검색과 뜻풀이', keywords: '용어 74개 · 한글 설명·검색', icon: 'book-a' },
   // ── 분석 — 핸드·레인지 에퀴티 ──
-  { key: 'replay', cat: 'analyze', name: '핸드 리플레이어', desc: '지난 판 복기와 승률 흐름', keywords: '그 핸드 복기 · 승률 추이·아웃',
-    icon: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M10 9l5 3-5 3V9Z" /></> },
-  { key: 'gto', cat: 'analyze', name: 'GTO 핸드 분석', desc: '내 패 승률과 최선의 선택', keywords: '프리/포스트플랍 승률·전략',
-    icon: <><rect x="3" y="4" width="7" height="16" rx="1.5" /><rect x="14" y="4" width="7" height="16" rx="1.5" /></> },
-  { key: 'rvr', cat: 'analyze', name: '레인지 vs 레인지', desc: '양쪽 패 범위의 승률 비교', keywords: '레인지 간 에퀴티 매트릭스',
-    icon: <><rect x="3" y="3" width="8" height="8" rx="1" /><rect x="13" y="13" width="8" height="8" rx="1" /><path d="M13 7h8M7 13v8" /></> },
+  { key: 'replay', cat: 'analyze', name: '핸드 리플레이어', desc: '지난 판 복기와 승률 흐름', keywords: '그 핸드 복기 · 승률 추이·아웃', icon: 'clapperboard' },
+  { key: 'gto', cat: 'analyze', name: 'GTO 핸드 분석', desc: '내 패 승률과 최선의 선택', keywords: '프리/포스트플랍 승률·전략', icon: 'scan-search' },
+  { key: 'rvr', cat: 'analyze', name: '레인지 vs 레인지', desc: '양쪽 패 범위의 승률 비교', keywords: '레인지 간 에퀴티 매트릭스', icon: 'git-compare' },
   // ── 계산기 — 수치 판단 ──
-  { key: 'pot', cat: 'calc', name: '팟 오즈 계산기', desc: '콜에 필요한 최소 승률', keywords: '콜에 필요한 승률 계산',
-    icon: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></> },
-  { key: 'outs', cat: 'calc', name: '아웃츠 / 확률', desc: '카드만 넣으면 완성될 확률', keywords: '카드만 넣으면 아웃 자동 계산',
-    icon: <><circle cx="12" cy="12" r="9" /><path d="M8.5 12.5l2.5 2.5 4.5-4.5" /></> },
-  { key: 'mdf', cat: 'calc', name: 'MDF · 블러프 계산기', desc: '벳 크기별 최소 방어 비율', keywords: '수비 빈도·블러프 비율',
-    icon: <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" /><path d="M9 12l2 2 4-4" /></> },
-  { key: 'icm', cat: 'calc', name: 'ICM 계산기', desc: '지금 내 칩의 상금 가치', keywords: '토너먼트 기대 상금',
-    icon: <><rect x="4" y="3" width="16" height="18" rx="2" /><line x1="8" y1="7" x2="16" y2="7" /><line x1="8" y1="11" x2="16" y2="11" /><line x1="8" y1="15" x2="12" y2="15" /></> },
-  { key: 'deal', cat: 'calc', name: '딜 계산기', desc: '남은 사람끼리 상금 분배', keywords: 'ICM 딜 vs 칩찹 분배 비교',
-    icon: <><path d="M11 17a5 5 0 1 0-6-6" /><circle cx="16" cy="16" r="5" /><path d="M14.5 16l1 1 2-2" /></> },
-  { key: 'spr', cat: 'calc', name: 'SPR 계산기', desc: '팟 대비 내 칩 비율', keywords: '스택 대 팟 비율',
-    icon: <><rect x="3" y="11" width="7" height="9" rx="1" /><rect x="14" y="4" width="7" height="16" rx="1" /></> },
-  { key: 'ev', cat: 'calc', name: 'EV 계산기', desc: '이 선택의 장기 기대값', keywords: '기대값 손익 판단',
-    icon: <><line x1="12" y1="3" x2="12" y2="21" /><path d="M8 7h6a3 3 0 0 1 0 6H8" /></> },
-  { key: 'combo', cat: 'calc', name: '콤보 계산기', desc: '그 패가 나올 경우의 수', keywords: '핸드·레인지 콤보 수',
-    icon: <><rect x="4" y="4" width="9" height="13" rx="1.5" /><rect x="11" y="7" width="9" height="13" rx="1.5" /></> },
-  { key: 'mzone', cat: 'calc', name: 'M존 계산기', desc: '내 칩으로 버틸 바퀴 수', keywords: '토너 생존 압박 지수',
-    icon: <><circle cx="12" cy="12" r="9" /><path d="M8 15V9l4 4 4-4v6" /></> },
-  { key: 'bankroll', cat: 'calc', name: '뱅크롤 관리', desc: '게임별 권장 참가비 배수', keywords: '바인 대비 자금 권장선',
-    icon: <><rect x="3" y="7" width="18" height="12" rx="2" /><path d="M3 11h18" /><circle cx="12" cy="15" r="1.5" /></> },
-  { key: 'variance', cat: 'calc', name: '분산 시뮬', desc: '운 나쁠 때 잃을 폭 예측', keywords: 'ROI·표본 → 파산 확률',
-    icon: <><path d="M3 20c3-1 4-6 6-6s3 4 5 4 4-9 7-10" /></> },
+  { key: 'pot', cat: 'calc', name: '팟 오즈 계산기', desc: '콜에 필요한 최소 승률', keywords: '콜에 필요한 승률 계산', icon: 'percent' },
+  { key: 'outs', cat: 'calc', name: '아웃츠 / 확률', desc: '카드만 넣으면 완성될 확률', keywords: '카드만 넣으면 아웃 자동 계산', icon: 'dice' },
+  { key: 'mdf', cat: 'calc', name: 'MDF · 블러프 계산기', desc: '벳 크기별 최소 방어 비율', keywords: '수비 빈도·블러프 비율', icon: 'shield-check' },
+  { key: 'icm', cat: 'calc', name: 'ICM 계산기', desc: '지금 내 칩의 상금 가치', keywords: '토너먼트 기대 상금', icon: 'trophy' },
+  { key: 'deal', cat: 'calc', name: '딜 계산기', desc: '남은 사람끼리 상금 분배', keywords: 'ICM 딜 vs 칩찹 분배 비교', icon: 'handshake' },
+  { key: 'spr', cat: 'calc', name: 'SPR 계산기', desc: '팟 대비 내 칩 비율', keywords: '스택 대 팟 비율', icon: 'scale' },
+  { key: 'ev', cat: 'calc', name: 'EV 계산기', desc: '이 선택의 장기 기대값', keywords: '기대값 손익 판단', icon: 'sigma' },
+  { key: 'combo', cat: 'calc', name: '콤보 계산기', desc: '그 패가 나올 경우의 수', keywords: '핸드·레인지 콤보 수', icon: 'layers' },
+  { key: 'mzone', cat: 'calc', name: 'M존 계산기', desc: '내 칩으로 버틸 바퀴 수', keywords: '토너 생존 압박 지수', icon: 'gauge' },
+  { key: 'bankroll', cat: 'calc', name: '뱅크롤 관리', desc: '게임별 권장 참가비 배수', keywords: '바인 대비 자금 권장선', icon: 'piggy-bank' },
+  { key: 'variance', cat: 'calc', name: '분산 시뮬', desc: '운 나쁠 때 잃을 폭 예측', keywords: 'ROI·표본 → 파산 확률', icon: 'trending-up-down' },
   // ── 매장 운영 ──
-  { key: 'chip', cat: 'ops', name: '칩 분배기', desc: '1인 스택 구성과 총 칩 수', keywords: '스택 구성·총 칩 수',
-    icon: <><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="3" /></> },
-  { key: 'sim', cat: 'ops', name: '구조 시뮬', desc: '레벨별 평균 스택 깊이', keywords: '총 칩·평균 스택 깊이',
-    icon: <><line x1="4" y1="20" x2="4" y2="11" /><line x1="10" y1="20" x2="10" y2="4" /><line x1="16" y1="20" x2="16" y2="14" /><line x1="20" y1="20" x2="20" y2="8" /></> },
-  { key: 'blindgen', cat: 'ops', name: '블라인드 생성기', desc: '레지 마감에 맞춘 레벨표', keywords: '구조 자동 생성·표',
-    icon: <><line x1="4" y1="20" x2="4" y2="14" /><line x1="9" y1="20" x2="9" y2="9" /><line x1="14" y1="20" x2="14" y2="12" /><line x1="19" y1="20" x2="19" y2="5" /></> },
-  { key: 'payout', cat: 'ops', name: '상금 분배', desc: '인원 넣으면 등수별 배분표', keywords: '총 상금·인원 → 분배표',
-    icon: <><path d="M8 4h8v3a4 4 0 0 1-8 0V4z" /><path d="M12 11v4" /><path d="M9 20h6" /><path d="M10 17h4" /></> },
-  { key: 'endtime', cat: 'ops', name: '종료시간 예측', desc: '브레이크 포함 끝나는 시각', keywords: '레벨·브레이크 → 종료 시각',
-    icon: <><circle cx="12" cy="12" r="9" /><path d="M12 8v4l3 2" /></> },
+  { key: 'chip', cat: 'ops', name: '칩 분배기', desc: '1인 스택 구성과 총 칩 수', keywords: '스택 구성·총 칩 수', icon: 'coins' },
+  { key: 'sim', cat: 'ops', name: '구조 시뮬', desc: '레벨별 평균 스택 깊이', keywords: '총 칩·평균 스택 깊이', icon: 'chart' },
+  { key: 'blindgen', cat: 'ops', name: '블라인드 생성기', desc: '레지 마감에 맞춘 레벨표', keywords: '구조 자동 생성·표', icon: 'list-ordered' },
+  { key: 'payout', cat: 'ops', name: '상금 분배', desc: '인원 넣으면 등수별 배분표', keywords: '총 상금·인원 → 분배표', icon: 'chart-pie' },
+  { key: 'endtime', cat: 'ops', name: '종료시간 예측', desc: '브레이크 포함 끝나는 시각', keywords: '레벨·브레이크 → 종료 시각', icon: 'hourglass' },
 ];
 
 /** 3레인 소제목 — 접이식 금지(로드맵 FIX: 접이 헤더는 모바일 회귀). 항상 펼쳐진 섹션.
  *  §7 ⑥b: '매장 운영' 레인은 GTO 탭에서 빠져 내 매장(StoreToolsPanel)으로 이관 —
- *  카탈로그에서만 숨기고 TOOLS/renderTool 에는 남겨 #tool= 딥링크·공유 하위호환을 지킨다. */
-const LANES: { id: ToolCat; label: string; desc: string }[] = [
-  { id: 'chart', label: '차트', desc: '보고 외우는 표준 레인지' },
-  { id: 'learn', label: '트레이닝', desc: '퀴즈로 맞히고 오답 노트' },
-  { id: 'analyze', label: '분석', desc: '핸드·레인지 에퀴티 실계산' },
-  { id: 'calc', label: '계산기', desc: '실전 수치 판단' },
+ *  카탈로그에서만 숨기고 TOOLS/renderTool 에는 남겨 #tool= 딥링크·공유 하위호환을 지킨다.
+ *  icon = 섹션 소제목 앞 글리프(즐겨찾기 헤더의 star-fill 과 같은 문법) — 도구 아이콘과 겹치지 않는 이름. */
+const LANES: { id: ToolCat; label: string; desc: string; icon: IconName }[] = [
+  { id: 'chart', label: '차트', desc: '보고 외우는 표준 레인지', icon: 'table' },
+  { id: 'learn', label: '트레이닝', desc: '퀴즈로 맞히고 오답 노트', icon: 'graduation-cap' },
+  { id: 'analyze', label: '분석', desc: '핸드·레인지 에퀴티 실계산', icon: 'microscope' },
+  { id: 'calc', label: '계산기', desc: '실전 수치 판단', icon: 'calculator' },
 ];
 // eslint-disable-next-line react-refresh/only-export-components -- 이관 레지스트리 공유(§7 ⑥b)
 export const STORE_TOOL_KEYS = ['chip', 'sim', 'blindgen', 'payout', 'endtime'] as const;
@@ -165,7 +142,7 @@ function renderTool(k: ToolKey): ReactNode {
 // ── 내 매장 이관용 공개 API(§7 ⑥b) — 레지스트리·렌더러를 재사용해 중복 정의 0 ──
 export type StoreToolKey = (typeof STORE_TOOL_KEYS)[number];
 // eslint-disable-next-line react-refresh/only-export-components -- 이관 레지스트리 공유(관행: CommentThread groupThreads)
-export const getStoreTools = () => TOOLS.filter((t) => STORE_SET.has(t.key)) as { key: StoreToolKey; name: string; desc: string; icon: ReactNode }[];
+export const getStoreTools = () => TOOLS.filter((t) => STORE_SET.has(t.key)) as { key: StoreToolKey; name: string; desc: string; icon: IconName }[];
 // eslint-disable-next-line react-refresh/only-export-components
 export const renderStoreTool = (k: StoreToolKey): ReactNode => renderTool(k);
 
@@ -331,9 +308,7 @@ export default function ToolsPanel() {
         aria-label={`프리플랍 레인지 차트 · 스팟 ${RANGE_SCENARIOS.length}개. 열기`}
         className="card-aura ring-aura ring-aura-glow flex w-full items-center gap-2.5 rounded-card border bg-surface-low px-3.5 py-3 text-left">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-input tile-grad">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            {TOOLS.find((t) => t.key === 'range')!.icon}
-          </svg>
+          <Icon name={TOOLS.find((t) => t.key === 'range')!.icon} size={18} strokeWidth={1.8} aria-hidden />
         </span>
         <span className="min-w-0 flex-1">
           {/* 제목은 절대 안 자른다 — 폭이 모자라면 배지가 다음 줄로 내려간다(flex-wrap). */}
@@ -451,7 +426,9 @@ export default function ToolsPanel() {
           return (
             <section key={l.id} className="space-y-2">
               <div className="flex items-baseline gap-2 border-b border-border-subtle pb-1.5">
-                <h2 className="text-sm font-bold text-ink-primary">{l.label}</h2>
+                <h2 className="inline-flex items-center gap-1 text-sm font-bold text-ink-primary">
+                  <Icon name={l.icon} size={13} className="text-accent-300" aria-hidden /> {l.label}
+                </h2>
                 <span className="text-2xs font-semibold tabular-nums text-ink-muted">{items.length}개</span>
                 <span className="truncate text-2xs text-ink-secondary">{l.desc}</span>
               </div>
@@ -502,7 +479,7 @@ type TileTone = 'violet' | 'indigo' | 'fuchsia' | 'cyan';
 /** 레인 → 타일 색(v6.3): 차트 violet · 트레이닝 fuchsia · 분석 cyan · 계산기 indigo (emerald 는 라이브 신호색이라 제외) */
 const LANE_TONE: Record<string, TileTone> = { chart: 'violet', learn: 'fuchsia', analyze: 'cyan', calc: 'indigo', ops: 'indigo' };
 function ToolCard({ name, desc, icon, onClick, fav, onToggleFav, testId, tone = 'violet' }: {
-  name: string; desc: string; icon: ReactNode; onClick: () => void; testId?: string; tone?: TileTone;
+  name: string; desc: string; icon: IconName; onClick: () => void; testId?: string; tone?: TileTone;
   fav?: boolean; onToggleFav?: () => void;
 }) {
   // 버튼 안에 role="button" 스팬(중첩 인터랙티브 위반) 대신 형제 버튼 2개 — 키보드로도 별을 켤 수 있다.
@@ -514,7 +491,7 @@ function ToolCard({ name, desc, icon, onClick, fav, onToggleFav, testId, tone = 
       <button type="button" onClick={onClick} data-testid={testId}
         className="card-elev flex h-full w-full flex-col items-start gap-2 rounded-card border border-border-default bg-surface-low px-2.5 py-2.5 text-left hover:border-accent-400/40">
         <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-input tile-grad tile-grad-${tone}`}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{icon}</svg>
+          <Icon name={icon} size={16} strokeWidth={1.8} aria-hidden />
         </span>
         <span className="block min-w-0 w-full">
           <span className="line-clamp-2 text-xs font-bold leading-tight text-ink-primary">{name}</span>

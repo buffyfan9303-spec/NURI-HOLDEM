@@ -54,7 +54,12 @@ import {
   Timer, AlarmClock, Banknote, Briefcase, ShieldAlert, Bomb, ArrowUpRight, ArrowDownLeft,
   DoorOpen, CalendarCheck, Circle, NotebookText,
   // ICON-3(2026-08-30) 이모지 전수 점검 소탕분
-  Command, type LucideIcon,
+  Command,
+  // GTO 탭 도구 카탈로그(2026-09-03, 오너 "아이콘팩에서 최대한 잘 맞는 걸로") — ToolsPanel TOOLS/LANES 전용
+  Grid3x3, ArrowUpFromLine, Swords, Dumbbell, Brain, BookA, ScanSearch, GitCompare, Percent,
+  ShieldCheck, Handshake, Sigma, Layers, Gauge, PiggyBank, TrendingUpDown, Coins, ListOrdered,
+  ChartPie, Hourglass, Table, GraduationCap, Microscope, Calculator,
+  type LucideIcon,
 } from 'lucide-react';
 
 export type IconName =
@@ -80,7 +85,12 @@ export type IconName =
   | 'briefcase' | 'shield-alert' | 'bomb' | 'arrow-up-right' | 'arrow-down-left' | 'door'
   | 'calendar-check' | 'circle' | 'notebook'
   // ICON-3 이모지 전수 점검 소탕분(2026-08-30)
-  | 'command';
+  | 'command'
+  // GTO 탭 도구 카탈로그(2026-09-03) — 도구 26종은 서로 다른 아이콘(ToolsPanel.icons.test.ts 가 게이트)
+  | 'grid-3x3' | 'arrow-up-from-line' | 'swords' | 'dumbbell' | 'brain' | 'book-a' | 'scan-search'
+  | 'git-compare' | 'percent' | 'shield-check' | 'handshake' | 'sigma' | 'layers' | 'gauge' | 'piggy-bank'
+  | 'trending-up-down' | 'coins' | 'list-ordered' | 'chart-pie' | 'hourglass'
+  | 'table' | 'graduation-cap' | 'microscope' | 'calculator';
 
 // 각 아이콘의 path/figure children (viewBox 0 0 24 24 기준). 채움 아이콘은 fill 처리.
 const PATHS: Partial<Record<IconName, ReactElement>> = {
@@ -172,6 +182,31 @@ const LUCIDE: Partial<Record<IconName, LucideIcon>> = {
   // 색수 1 = 단색 폰트 폴백으로 확인됐고, 그 폰트는 OS 마다 있고 없고가 갈린다(안드로이드에서
   // 두부로 떨어질 수 있다 — 유저의 99% 가 모바일이다). 뜻은 그대로 두고 글리프만 SVG 로 옮긴다.
   command: Command,              // ⌘ 검색 단축키 표기
+  // ── GTO 탭 도구 카탈로그(2026-09-03) — 도구 아이콘은 ToolsPanel TOOLS 에서 이름으로 참조 ────
+  'grid-3x3': Grid3x3,                 // 프리플랍 레인지 차트(13×13 매트릭스)
+  'arrow-up-from-line': ArrowUpFromLine, // 푸시·폴드 차트(라인에서 올인으로 밀어 올림)
+  swords: Swords,                      // 어그레션 차트(공격 빈도)
+  dumbbell: Dumbbell,                  // 프리플랍 트레이너(반복 훈련)
+  brain: Brain,                        // 포스트플랍 트레이너(상황 판단 퀴즈)
+  'book-a': BookA,                     // 홀덤 용어사전(사전 = 책 + A)
+  'scan-search': ScanSearch,           // GTO 핸드 분석(내 패 정밀 스캔)
+  'git-compare': GitCompare,           // 레인지 vs 레인지(양쪽 비교)
+  percent: Percent,                    // 팟 오즈(필요 승률 %)
+  'shield-check': ShieldCheck,         // MDF·블러프(최소 방어)
+  handshake: Handshake,                // 딜 계산기(남은 사람끼리 합의)
+  sigma: Sigma,                        // EV 계산기(기대값 Σ)
+  layers: Layers,                      // 콤보 계산기(경우의 수 겹)
+  gauge: Gauge,                        // M존 계산기(압박 지수 게이지)
+  'piggy-bank': PiggyBank,             // 뱅크롤 관리(자금 — 'wallet' 은 이용권 지갑이라 분리)
+  'trending-up-down': TrendingUpDown,  // 분산 시뮬(오르내리는 폭)
+  coins: Coins,                        // 칩 분배기(칩 = 코인)
+  'list-ordered': ListOrdered,         // 블라인드 생성기(레벨 번호표)
+  'chart-pie': ChartPie,               // 상금 분배(파이 나누기)
+  hourglass: Hourglass,                // 종료시간 예측(남은 시간)
+  table: Table,                        // 레인 '차트'(보고 외우는 표)
+  'graduation-cap': GraduationCap,     // 레인 '트레이닝'
+  microscope: Microscope,              // 레인 '분석'
+  calculator: Calculator,              // 레인 '계산기'
 };
 // 채움 변형은 lucide 원형에 fill 지정으로 표현
 // ── 채운 아이콘 = heroicons solid (2026-08-30, 오너 지시로 heroicons 도입) ──────
