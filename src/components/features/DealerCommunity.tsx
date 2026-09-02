@@ -13,6 +13,7 @@ import NoticeDetailModal from './NoticeDetailModal';
 import { getNotices, type MarketplaceNotice } from '../../api/marketplace';
 import SegmentedTabs from '../atoms/SegmentedTabs';
 import Icon from '../atoms/Icon';
+import EmptyState from '../atoms/EmptyState';
 import { onColorInkClass } from '../../lib/color';
 import { goSubTab } from '../../lib/subTabTransition';
 
@@ -108,20 +109,20 @@ export default function DealerCommunity() {
 
   return (
     <div className="space-y-3">
-      <div className="rounded-input border border-sky-400/30 bg-sky-500/[0.06] px-3 py-2 text-2xs leading-relaxed text-sky-300">
+      <div className="rounded-aura border card-aura px-3 py-2.5 text-2xs leading-relaxed text-ink-secondary">
         딜러 구인·구직 · 정보 공유 <span className="text-ink-muted">(누구나 열람 가능)</span>.{' '}
         <span className="font-semibold text-danger-light"><Icon name="alert" size={12} className="mr-0.5 inline-block align-[-1px] shrink-0" />불법 사행성·환전·도박 알선 관련 구인·구직은 강제 탈퇴 및 처벌 대상</span>{notices.length > 0 ? '자세한 규정은 아래 공지를 확인하세요.' : '입니다.'}
       </div>
 
       {notices.length > 0 && (
-        <section className="rounded-card border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.05] to-transparent overflow-hidden">
-          <header className="px-3 py-2 border-b border-accent-400/20">
-            <h3 className="text-xs font-bold text-accent-300">공지사항</h3>
+        <section className="rounded-aura border card-aura overflow-hidden">
+          <header className="px-3 py-2 border-b border-border-subtle">
+            <h3 className="text-sm font-bold text-ink-primary">공지사항</h3>
           </header>
           <ul>
             {notices.slice(0, 5).map((n) => (
               <li key={n.id} className="border-b border-border-subtle last:border-b-0">
-                <button type="button" onClick={() => setOpenNotice(n)} className="w-full text-left px-3 py-2 hover:bg-accent-300/[0.06] transition-colors">
+                <button type="button" onClick={() => setOpenNotice(n)} className="w-full text-left px-3 py-2 hover:bg-surface-high/50 transition-colors">
                   <p className="text-xs font-semibold text-ink-primary">{n.title}</p>
                   {n.body && <p className="mt-0.5 text-2xs text-ink-muted line-clamp-2 leading-snug">{n.body}</p>}
                 </button>
@@ -216,7 +217,7 @@ export default function DealerCommunity() {
       loading ? (
         <p className="py-8 text-center text-2xs text-ink-muted">불러오는 중…</p>
       ) : shown.length === 0 ? (
-        <p className="py-10 text-center text-xs text-ink-muted">{filterKind === 'all' ? '아직 글이 없습니다. 첫 구인·구직 글을 남겨보세요.' : `${filterKind === 'hiring' ? '구인' : filterKind === 'seeking' ? '구직' : '일반'} 글이 아직 없습니다.`}</p>
+        <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="briefcase" />} title={filterKind === 'all' ? '아직 글이 없습니다. 첫 구인·구직 글을 남겨보세요.' : `${filterKind === 'hiring' ? '구인' : filterKind === 'seeking' ? '구직' : '일반'} 글이 아직 없습니다.`} /></div>
       ) : (
         <ul className="space-y-2">
           {shown.map((p) => (

@@ -605,7 +605,7 @@ export default function TierLeaderboard() {
       </div>
       {/* 내 등급 카드 */}
       {user && myProg && (
-        <section className="rounded-card border border-accent-400/40 bg-gradient-to-br from-accent-300/[0.07] to-transparent p-4">
+        <section className="rounded-aura border card-aura p-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <TierBadge points={user.activityPoints ?? 0} size={30} admin={isAdmin} overallRank={myRank} />
@@ -619,10 +619,10 @@ export default function TierLeaderboard() {
             </div>
             <div className="text-right">
               <p className="text-2xs text-ink-muted">활동 점수</p>
-              <p className="text-lg font-extrabold text-accent-300 tabular-nums leading-tight">
+              <p className="text-lg font-extrabold stat-violet tabular-nums leading-tight">
                 <CountUp value={user.activityPoints ?? 0} />
               </p>
-              {!isAdmin && myRank && <p className="text-2xs text-ink-muted">전체 {myRank}위</p>}
+              {!isAdmin && myRank && <p className="text-2xs text-ink-muted">전체 <b className="text-xs font-extrabold tabular-nums text-ink-primary">{myRank}위</b></p>}
             </div>
           </div>
 
@@ -1424,10 +1424,10 @@ export default function TierLeaderboard() {
                 const rt = tierOf(r.activityPoints);
                 return (
                   // 포인트 1곳(오너 지시 2026-08-28) — 1위만 conic 시그니처 링(.ring-conic).
-                  // 2·3위는 기존 card-elev 유지. 둘 다 background-image 라 같은 요소 병용 금지(index.css 주석).
+                  // 2·3위는 card-aura(아우라 v6 불투명 카드). ring-conic 은 background-image 라 card-elev 와 같은 요소 병용 금지(index.css 주석) — card-aura 는 무관.
                   // 1위 배경이 accent-300/[0.08]→surface-low 로 바뀌지만 합성색이 #1E1830 vs #1D192E 로
                   // 사실상 동일 — 이름(text-accent-300) 대비 3.718→3.711 로 실질 불변.
-                  <div key={r.id} className={['rounded-card border p-2.5 text-center', big ? 'ring-conic bg-surface-low' : 'card-elev border-border-subtle bg-surface-high'].join(' ')}>
+                  <div key={r.id} className={['rounded-aura border p-2.5 text-center', big ? 'ring-conic bg-surface-low' : 'card-aura'].join(' ')}>
                     <Icon name={idx === 1 ? 'crown' : 'medal'} size={big ? 22 : 17}
                       className={['mx-auto', PODIUM_TONE[idx]].join(' ')} role="img" aria-hidden={false} aria-label={`${idx === 1 ? 1 : idx === 0 ? 2 : 3}위`} />
                     <span className={['mx-auto mt-1 block rounded-full p-[2px]', big ? 'h-10 w-10' : 'h-8 w-8'].join(' ')}

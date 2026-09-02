@@ -9,6 +9,7 @@ import { getMyChatThreads } from '../../api/chat';
 import { MessagesModal, MyListingsModal, MyLikesModal } from './MyMarketModal';
 import { useSkeletonGate } from '../../lib/useSkeletonGate';
 import Icon from '../atoms/Icon';
+import EmptyState from '../atoms/EmptyState';
 import { onColorInkClass } from '../../lib/color';
 import { goSubTab } from '../../lib/subTabTransition';
 
@@ -240,8 +241,8 @@ function MarketplaceTab({
           ))}
         </div>
       ) : visible.length === 0 ? (
-        <div className="rounded-card border border-border-default bg-surface-low py-16 text-center text-xs text-ink-muted">
-          조건에 맞는 글이 없습니다
+        <div className="rounded-aura border card-aura">
+          <EmptyState icon={<Icon name="package" />} title="조건에 맞는 글이 없습니다" />
         </div>
       ) : (
         <div className="rounded-card border border-border-default bg-surface-low overflow-hidden">
@@ -291,11 +292,11 @@ function NoticeBoard({
   onSelect: (n: MarketplaceNotice) => void;
 }) {
   return (
-    <section className="rounded-card border border-accent-400/30 bg-gradient-to-br from-accent-300/[0.05] to-transparent overflow-hidden">
-      <header className="flex items-center justify-between px-3 py-2 border-b border-accent-400/20">
-        <h2 className="inline-flex items-center gap-1.5 text-xs font-bold text-accent-300">
+    <section className="rounded-aura border card-aura overflow-hidden">
+      <header className="flex items-center justify-between px-3 py-2 border-b border-border-subtle">
+        <h2 className="inline-flex items-center gap-1.5 text-sm font-bold text-ink-primary">
           공지사항
-          <span className="text-2xs text-ink-muted font-normal">({notices.length})</span>
+          <span className="text-2xs font-semibold tabular-nums text-ink-muted">({notices.length})</span>
         </h2>
         {canWrite && (
           <button

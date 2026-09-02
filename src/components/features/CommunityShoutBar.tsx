@@ -637,7 +637,7 @@ export default function CommunityShoutBar({ className }: { className?: string })
       <div
         data-testid={drawShout ? 'shout-live' : 'shout-idle'}
         className={['rounded-aura border px-3 py-2.5',
-          skin ? skin.box : 'border-dashed border-border-strong bg-surface-high'].join(' ')}
+          skin ? skin.box : 'card-aura'].join(' ')}
         style={drawShout ? colorBoxStyle(drawShout.tier, drawShout.color) : undefined}
       >
         <div className="flex items-start gap-2">
@@ -663,12 +663,12 @@ export default function CommunityShoutBar({ className }: { className?: string })
           </div>
           {drawShout && (isAdmin || user?.id === drawShout.userId) && (
             <button type="button" onClick={() => onHide(drawShout.id)}
-              className="shrink-0 rounded-input px-2 py-1 text-2xs font-semibold text-ink-muted hover:text-danger-light">
+              className="tap-y-44 inline-flex h-8 shrink-0 items-center rounded-input px-2 text-2xs font-semibold text-ink-muted hover:text-danger-light">
               내리기
             </button>
           )}
           <button type="button" onClick={openComposer}
-            className="shrink-0 rounded-input border border-accent-400/50 px-2 py-1 text-2xs font-bold text-accent-300 hover:bg-accent-300/10">
+            className="tap-y-44 inline-flex h-8 shrink-0 items-center rounded-input border border-accent-400/50 px-2 text-2xs font-bold text-accent-300 hover:bg-accent-300/10">
             외치기{!drawShout && <span className="ml-1 font-extrabold tabular-nums">{cost}점</span>}
           </button>
         </div>
