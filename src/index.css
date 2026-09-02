@@ -1464,11 +1464,12 @@ html[data-vt-dir='back']::view-transition-new(crm-panel) { animation: vt-panel-i
    헤어라인(DatawizzAI 카드 문법). bg-surface-* 와 함께 쓴다(배경색은 그대로). */
 .pill-active {
   background-image: linear-gradient(180deg, rgb(255 255 255 / 0.12) 0%, rgb(255 255 255 / 0) 55%), var(--grad-cta); /* v6.1 광택 한 겹 */
-  /* v6 실측 --aura-glow-primary(다크): 0 0 0 3px indigo-400/.25 + 0 0 20px indigo-400/.125 */
-  box-shadow: 0 0 0 3px rgb(129 140 248 / 0.25), 0 0 20px rgb(129 140 248 / 0.125), inset 0 1px 0 rgb(255 255 255 / 0.14);
+  /* v6 실측 --aura-glow-primary 는 '3px 스프레드 링 + 20px 블룸' 이었으나, 우리 네이비 지면에선 3px 링(반지름이 알약보다 3px 커진 띠)이
+     알약 뒤의 '두 번째 판'처럼 보였다(오너 지적 2026-09-02, 탭바·사이드바·칩 공통). v6.5: 스프레드 링 제거, 부드러운 블룸 한 겹만. */
+  box-shadow: 0 0 18px rgb(129 140 248 / 0.28), inset 0 1px 0 rgb(255 255 255 / 0.14);
 }
 html.light .pill-active {
-  box-shadow: 0 0 0 3px rgb(99 102 241 / 0.15), 0 0 15px rgb(99 102 241 / 0.075), inset 0 1px 0 rgb(255 255 255 / 0.35); /* 실측 라이트 intensity .15 */
+  box-shadow: 0 0 14px rgb(99 102 241 / 0.14), inset 0 1px 0 rgb(255 255 255 / 0.35);
 }
 /* ⚠ .card-elev 적용 티어 규칙(2026-08-28 실측으로 확정 — 어기면 AA 가 깨진다):
    **bg-surface-base / bg-surface-low(또는 그 위 액센트 틴트)에만** 붙인다. bg-surface-high 금지.

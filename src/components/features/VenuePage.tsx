@@ -411,7 +411,9 @@ export default function VenuePage({
             const st = scheduleStatus(t0.date, t0.startTime);
             return (
               <button type="button" onClick={() => onSelectSchedule?.(t0)}
-                className="w-full flex items-center gap-2.5 rounded-aura border border-accent-400/30 bg-accent-300/[0.06] px-3 py-2.5 text-left hover:bg-accent-300/10 transition-colors">
+                className={['w-full flex items-center gap-2.5 rounded-aura border bg-accent-300/[0.06] px-3 py-2.5 text-left hover:bg-accent-300/10 transition-colors',
+                  // v6.5 글로우 = '지금 진행 중' 신호(오너 승인 2026-09-02) — live 일 때만. 링 헤어라인이 테두리를 대신하므로 accent 테두리는 낮춘다
+                  st === 'live' ? 'border-accent-400/15 ring-aura ring-aura-glow' : 'border-accent-400/30'].join(' ')}>
                 <Icon name="flame" size={18} className="shrink-0 text-accent-200" />
                 <span className="min-w-0 flex-1">
                   {/* 다크에서 accent-300(#805FDA) 은 surface-base 대비 4.0:1 로 AA 미달이었다(실측).

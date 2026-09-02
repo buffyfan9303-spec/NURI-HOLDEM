@@ -156,7 +156,7 @@ export default {
 
         gold:   '0 0 10px rgba(252,213,53,0.30)',
         aura:   '0 0 0 1px rgb(var(--aura-300) / 0.5), 0 0 15px rgb(var(--aura-300) / 0.25)', // (v3 네온 — 데이터 링 전용으로 남김)
-        glow:   '0 0 0 3px rgb(129 140 248 / 0.25), 0 0 20px rgb(129 140 248 / 0.125)', // v6 실측 --aura-glow-primary(다크): 3px 링 + 20px 블룸
+        glow:   '0 0 16px rgb(129 140 248 / 0.28)', // v6.5: 3px 스프레드 링 제거(칩 뒤 '두 번째 판' 착시) — 블룸 한 겹. 활성 칩은 ring-1 inset 이 테두리를 맡는다
         dialog: '0 -4px 32px var(--card-shadow)',
         badge:  '0 0 6px rgba(229,62,62,0.6)',
       },
