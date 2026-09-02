@@ -9,7 +9,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { supabase, IS_MOCK } from '../../lib/supabase';
 import { useBlocks } from '../../contexts/BlockContext';
 import { resizeImage } from '../../lib/storage';
-import { requestPasswordChangeCode, changeMyPasswordWithCode, setMyNickname, withdrawMyAccount, verifyMyPassword, getMyAccountSummary, setMyPublicRankingConsent } from '../../api/auth';
+import { requestPasswordChangeCode, changeMyPasswordWithCode, setMyNickname, checkNicknameAvailable, withdrawMyAccount, verifyMyPassword, getMyAccountSummary, setMyPublicRankingConsent } from '../../api/auth';
+import { PASSWORD_RULES, PASSWORD_RULE_HINT, PASSWORD_PLACEHOLDER, validatePassword } from '../../lib/password';
 import {
   getMyRankingDisplaySettings, setMyRankingNamePref,
   type RankingNamePref, type RankingDisplaySettings,
@@ -167,7 +168,7 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
   // ── 비밀번호 변경 = 이메일 인증 OTP (useCallback은 early return 전에 선언) ──
   // 1) 새 비밀번호 입력 후 가입 이메일로 인증코드 발송
   const handleSendCode = useCallback(async () => {
-    if (newPw.length < 8)    return toast.show('새 비밀번호는 8자 이상이어야 합니다', 'error');
+    if (!validatePassword(newPw).ok) return toast.show(`비밀번호 규칙: ${PASSWORD_RULE_HINT}`, 'error');
     if (newPw !== confirmPw) return toast.show('새 비밀번호가 일치하지 않습니다', 'error');
     setSendingCode(true);
     try {
@@ -205,6 +206,8 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
     if (v.length < 2) { toast.show('아이디(닉네임)는 2자 이상이어야 합니다', 'error'); return; }
     setRecvBusy(true);
     try {
+      // 중복 체크 필수(오너 2026-09-03) — 서버 RPC 도 같은 검사를 하지만 원인을 먼저 알려 준다
+      if (!(await checkNicknameAvailable(v))) { toast.show('이미 사용 중인 아이디(닉네임)입니다', 'error'); return; }
       await setMyNickname(v);
       toast.show('받는 아이디(닉네임)를 설정했습니다', 'success');
       await refreshProfile().catch(() => {});
@@ -614,7 +617,7 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
             onChange={setNewPw}
             show={showNew}
             onToggle={() => setShowNew((v) => !v)}
-            placeholder="8자 이상 입력"
+            placeholder={PASSWORD_PLACEHOLDER}
             autoComplete="new-password"
           />
 
@@ -643,7 +646,7 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
             <button
               type="button"
               onClick={handleSendCode}
-              disabled={sendingCode || !newPw || newPw !== confirmPw || newPw.length < 8}
+              disabled={sendingCode || !newPw || newPw !== confirmPw || !validatePassword(newPw).ok}
               className="btn-primary w-full disabled:opacity-60"
             >
               {sendingCode ? '인증코드 발송 중…' : '이메일로 인증코드 받기'}
@@ -1092,12 +1095,8 @@ const STRENGTH_LEVELS = [
 ];
 
 function PasswordStrength({ password }: { password: string }) {
-  const checks = [
-    { label: '8자 이상',      ok: password.length >= 8 },
-    { label: '영문 포함',     ok: /[a-zA-Z]/.test(password) },
-    { label: '숫자 포함',     ok: /\d/.test(password) },
-    { label: '특수문자 포함', ok: /[!@#$%^&*\-_=+]/.test(password) },
-  ];
+  // 규칙은 src/lib/password.ts 한 곳(가입·재설정·변경 게이트와 동일)
+  const checks = PASSWORD_RULES.map((r) => ({ label: r.label, ok: r.test(password) }));
   const score = Math.max(0, checks.filter((c) => c.ok).length - 1); // 0~3
   const level = STRENGTH_LEVELS[score];
 

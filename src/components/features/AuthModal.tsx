@@ -9,9 +9,10 @@ import StatefulActionButton from '../atoms/StatefulActionButton';
 import AutoLoginCheckbox from '../atoms/AutoLoginCheckbox';
 import { isKeepSignedIn, setKeepSignedIn } from '../../lib/supabase';
 import { loginWithKakao, signInWithGoogle,
-  signUpUser, signUpOwner, checkNicknameAvailable,
+  signUpUser, signUpOwner, checkNicknameAvailable, checkEmailAvailable, EMAIL_RE,
   requestPasswordReset, verifyPasswordResetOtp, setNewPassword,
 } from '../../api/auth';
+import { validatePassword, PASSWORD_RULE_HINT, PASSWORD_PLACEHOLDER } from '../../lib/password';
 import TermsOfService   from '../../pages/legal/TermsOfService';
 import PrivacyPolicy    from '../../pages/legal/PrivacyPolicy';
 import LegalNotice      from '../../pages/legal/LegalNotice';
@@ -411,7 +412,7 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
   const reset = async (e: React.FormEvent) => {
     e.preventDefault();
     if (code.trim().length < 6) return toast.show('인증번호를 입력해 주세요', 'error');
-    if (newPw.length < 8)       return toast.show('새 비밀번호는 8자 이상이어야 합니다', 'error');
+    if (!validatePassword(newPw).ok) return toast.show(`비밀번호 규칙: ${PASSWORD_RULE_HINT}`, 'error');
     if (newPw !== confirmPw)    return toast.show('새 비밀번호가 일치하지 않습니다', 'error');
     setLoading(true);
     try {
@@ -454,8 +455,11 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
           className="input text-center font-bold tracking-[0.3em]" autoFocus
         />
       </div>
-      <Field label="새 비밀번호" type="password" required autoComplete="new-password"
-        value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="8자 이상" />
+      <div>
+        <Field label="새 비밀번호" type="password" required autoComplete="new-password" minLength={8}
+          value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder={PASSWORD_PLACEHOLDER} />
+        <PasswordHint value={newPw} />
+      </div>
       <Field label="새 비밀번호 확인" type="password" required autoComplete="new-password"
         value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} placeholder="새 비밀번호 재입력" />
       <button type="submit" disabled={loading} className="btn-primary w-full disabled:opacity-60">
@@ -476,7 +480,7 @@ function SignupUserForm({ onDone }: { onDone: () => void }) {
   const [loading, setLoading] = useState(false);
   const [name,     setName]     = useState('');
   const nick = useNicknameCheck();
-  const [email,    setEmail]    = useState('');
+  const mail = useEmailCheck();
   const [password, setPassword] = useState('');
   const [confirm,  setConfirm]  = useState('');
   const [legalDoc, setLegalDoc] = useState<LegalDoc | null>(null);
@@ -487,8 +491,8 @@ function SignupUserForm({ onDone }: { onDone: () => void }) {
     // 모든 항목 필수 — 하나라도 비면 가입 불가
     if (!name.trim())      return toast.show('이름을 입력해 주세요.', 'error');
     if (nick.status !== 'available') return toast.show('사용 가능한 닉네임을 입력해 주세요.', 'error');
-    if (!email.trim())     return toast.show('이메일을 입력해 주세요.', 'error');
-    if (password.length < 8) return toast.show('비밀번호는 8자 이상이어야 합니다.', 'error');
+    if (mail.status !== 'available') return toast.show('사용 가능한 이메일을 입력해 주세요.', 'error');
+    if (!validatePassword(password).ok) return toast.show(`비밀번호 규칙: ${PASSWORD_RULE_HINT}`, 'error');
     if (!confirm.trim())   return toast.show('비밀번호 확인을 입력해 주세요.', 'error');
     if (password !== confirm) return toast.show('비밀번호가 일치하지 않습니다.', 'error');
     if (!c.age19)          return toast.show('만 19세 이상만 가입할 수 있습니다.', 'error');
@@ -499,7 +503,7 @@ function SignupUserForm({ onDone }: { onDone: () => void }) {
     setLoading(true);
     try {
       await signUpUser({
-        email, password, name, nickname: nick.value.trim(),
+        email: mail.value.trim(), password, name, nickname: nick.value.trim(),
         agreedToTerms:        c.terms,
         agreedToPrivacy:      c.privacy,
         agreedToAntiGambling: c.antiGambling,
@@ -520,8 +524,11 @@ function SignupUserForm({ onDone }: { onDone: () => void }) {
       <form onSubmit={submit} className="space-y-3">
         <Field label="이름"           type="text"     placeholder="홍길동"          required value={name}     onChange={(e) => setName(e.target.value)} />
         <NicknameField value={nick.value} status={nick.status} onChange={nick.setValue} />
-        <Field label="이메일"         type="email"    autoComplete="email" placeholder="you@example.com" required value={email}    onChange={(e) => setEmail(e.target.value)} />
-        <Field label="비밀번호"       type="password" autoComplete="new-password" placeholder="8자 이상"        required value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} />
+        <EmailField value={mail.value} status={mail.status} onChange={mail.setValue} />
+        <div>
+          <Field label="비밀번호"     type="password" autoComplete="new-password" placeholder={PASSWORD_PLACEHOLDER} required value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} />
+          <PasswordHint value={password} />
+        </div>
         <Field label="비밀번호 확인"  type="password" autoComplete="new-password" placeholder="••••••••"        required value={confirm}  onChange={(e) => setConfirm(e.target.value)} />
 
         <p className="rounded-input border border-border-subtle bg-surface-high px-2.5 py-2 text-2xs leading-relaxed text-ink-muted">
@@ -538,7 +545,7 @@ function SignupUserForm({ onDone }: { onDone: () => void }) {
           type="submit"
           disabled={
             loading || !allRequired || nick.status !== 'available'
-            || !name.trim() || !email.trim() || password.length < 8 || password !== confirm
+            || !name.trim() || mail.status !== 'available' || !validatePassword(password).ok || password !== confirm
           }
           className="btn-primary w-full mt-2 disabled:opacity-60"
         >
@@ -558,7 +565,7 @@ function SignupOwnerForm({ onDone }: { onDone: () => void }) {
   const [loading,   setLoading]   = useState(false);
   const [name,      setName]      = useState('');
   const nick = useNicknameCheck();
-  const [email,     setEmail]     = useState('');
+  const mail = useEmailCheck();
   const [password,  setPassword]  = useState('');
   const [venueName, setVenueName] = useState('');
   const [region,    setRegion]    = useState('');
@@ -575,11 +582,13 @@ function SignupOwnerForm({ onDone }: { onDone: () => void }) {
     if (!c.privacy)      return toast.show('개인정보 수집·이용에 동의해 주세요.', 'error');
     if (!c.antiGambling) return toast.show('불법 환전·사행성 금지 서약에 동의해 주세요.', 'error');
     if (nick.status !== 'available') return toast.show('사용 가능한 닉네임을 입력해 주세요.', 'error');
+    if (mail.status !== 'available') return toast.show('사용 가능한 이메일을 입력해 주세요.', 'error');
+    if (!validatePassword(password).ok) return toast.show(`비밀번호 규칙: ${PASSWORD_RULE_HINT}`, 'error');
 
     setLoading(true);
     try {
       await signUpOwner({
-        name, email, password, nickname: nick.value.trim(),
+        name, email: mail.value.trim(), password, nickname: nick.value.trim(),
         agreedToTerms:        c.terms,
         agreedToPrivacy:      c.privacy,
         agreedToAntiGambling: c.antiGambling,
@@ -615,8 +624,11 @@ function SignupOwnerForm({ onDone }: { onDone: () => void }) {
           <div className="space-y-3">
             <Field label="대표자명"  type="text"     placeholder="홍길동"          required value={name}     onChange={(e) => setName(e.target.value)} />
             <NicknameField value={nick.value} status={nick.status} onChange={nick.setValue} />
-            <Field label="이메일"    type="email"    autoComplete="email" placeholder="you@example.com"  required value={email}    onChange={(e) => setEmail(e.target.value)} />
-            <Field label="비밀번호"  type="password" autoComplete="new-password" placeholder="8자 이상"         required value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} />
+            <EmailField value={mail.value} status={mail.status} onChange={mail.setValue} />
+            <div>
+              <Field label="비밀번호" type="password" autoComplete="new-password" placeholder={PASSWORD_PLACEHOLDER} required value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} />
+              <PasswordHint value={password} />
+            </div>
           </div>
         </section>
 
@@ -644,7 +656,7 @@ function SignupOwnerForm({ onDone }: { onDone: () => void }) {
 
         <button
           type="submit"
-          disabled={loading || !allRequired || nick.status !== 'available'}
+          disabled={loading || !allRequired || nick.status !== 'available' || mail.status !== 'available' || !validatePassword(password).ok}
           className="btn-primary w-full mt-3 disabled:opacity-60"
         >
           {loading ? '처리 중…' : '업주 가입 신청'}
@@ -663,13 +675,14 @@ type NickStatus = 'idle' | 'checking' | 'available' | 'taken' | 'invalid';
 const NICK_RE = /^[가-힣a-zA-Z0-9_-]{2,16}$/;
 
 /**
- * 닉네임 입력 + 디바운스(350ms) 중복검사 훅.
+ * 입력 + 디바운스 중복검사 훅(닉네임 350ms · 이메일 600ms).
  * 동기 상태(idle/invalid/checking)는 onChange 시점에 즉시 결정하고,
  * effect 는 'checking' 일 때만 디바운스된 비동기 RPC 를 수행한다.
  * (effect 내 동기 setState 회피 — 권장 패턴)
  * status === 'available' 일 때만 가입 허용(상위 폼에서 disabled 처리).
+ * 형식(re)을 통과한 뒤에만 RPC 를 부른다 — 이메일은 열거 위험을 줄이기 위한 조건(20260903b 주석).
  */
-function useNicknameCheck() {
+function useAvailabilityCheck(re: RegExp, check: (v: string) => Promise<boolean>, delayMs: number) {
   const [value, setValueRaw] = useState('');
   const [status, setStatus]  = useState<NickStatus>('idle');
   const reqIdRef = useRef(0);
@@ -678,7 +691,7 @@ function useNicknameCheck() {
     setValueRaw(raw);
     const v = raw.trim();
     if (v.length === 0)      setStatus('idle');
-    else if (!NICK_RE.test(v)) setStatus('invalid');
+    else if (!re.test(v))    setStatus('invalid');
     else                     setStatus('checking'); // effect 가 RPC 수행
   };
 
@@ -689,17 +702,18 @@ function useNicknameCheck() {
     const myReq = ++reqIdRef.current;
     const timer = setTimeout(async () => {
       try {
-        const ok = await checkNicknameAvailable(v);
+        const ok = await check(v);
         if (myReq === reqIdRef.current) setStatus(ok ? 'available' : 'taken');
       } catch {
         if (myReq === reqIdRef.current) setStatus('idle'); // 검사 실패 시 서버 유니크가 최종 방어
       }
-    }, 350);
+    }, delayMs);
     return () => clearTimeout(timer);
-  }, [status, value]);
-
+  }, [status, value, re, check, delayMs]);
   return { value, setValue, status };
 }
+const useNicknameCheck = () => useAvailabilityCheck(NICK_RE, checkNicknameAvailable, 350);
+const useEmailCheck    = () => useAvailabilityCheck(EMAIL_RE, checkEmailAvailable, 600);
 
 function NicknameField({
   value, status, onChange,
@@ -733,6 +747,54 @@ function NicknameField({
       {h && <p className={`mt-1 text-2xs ${h.cls}`} aria-live="polite">{h.text}</p>}
     </div>
   );
+}
+
+// ── 이메일(아이디) 필드 (실시간 중복검사) ─────────────────────────────────────
+
+function EmailField({
+  value, status, onChange,
+}: { value: string; status: NickStatus; onChange: (v: string) => void }) {
+  const hint: Record<NickStatus, { text: string; cls: string } | null> = {
+    idle:      null,
+    checking:  { text: '확인 중…',                                       cls: 'text-ink-muted' },
+    available: { text: '사용 가능한 이메일입니다',                        cls: 'text-emerald-400' },
+    taken:     { text: '이미 가입된 이메일입니다 — 로그인하거나 비밀번호 찾기를 이용해 주세요', cls: 'text-danger' },
+    invalid:   { text: '이메일 형식을 확인해 주세요',                     cls: 'text-amber-400' },
+  };
+  const h = hint[status];
+  return (
+    <div>
+      <label className="block text-xs font-medium text-ink-secondary mb-1">
+        이메일 <span className="text-danger">*</span>
+      </label>
+      <input
+        type="email"
+        autoComplete="email"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="you@example.com"
+        maxLength={254}
+        required
+        data-testid="signup-email"
+        className={[
+          'input',
+          status === 'taken' || status === 'invalid' ? 'border-danger/50' :
+          status === 'available' ? 'border-emerald-500/50' : '',
+        ].join(' ')}
+      />
+      {h && <p className={`mt-1 text-2xs ${h.cls}`} aria-live="polite">{h.text}</p>}
+    </div>
+  );
+}
+
+// ── 비밀번호 규칙 안내(입력 아래 한 줄) ───────────────────────────────────────
+
+function PasswordHint({ value }: { value: string }) {
+  const { ok, reasons } = validatePassword(value);
+  if (!value) return <p className="mt-1 text-2xs text-ink-muted">{PASSWORD_RULE_HINT}</p>;
+  return ok
+    ? <p className="mt-1 text-2xs text-emerald-400" aria-live="polite">비밀번호 규칙을 모두 충족했습니다</p>
+    : <p className="mt-1 text-2xs text-danger" aria-live="polite">아직 부족해요: {reasons.join(' · ')}</p>;
 }
 
 // ── 폼 필드 헬퍼 ──────────────────────────────────────────────────────────────
