@@ -70,7 +70,7 @@ test.describe('TV 디스플레이 — 낡은 클락 행에서도 실효 레벨�
   test.beforeEach(async ({ page }) => {
     session = await loginAs(page, EMAIL!, PASSWORD!);
     VENUE = await seedStaleClock(session);
-    await page.goto(`/?display=${VENUE}&g=${GAME_SEQ}`);
+    await page.goto(`/?display=${VENUE}&g=${GAME_SEQ}&auto=0`);
     // 2026-09-02 라벨이 '레벨 N'(한국어)으로 바뀌며 텍스트 결합을 끊었다 — data-testid 앵커(clk-level · clk-timer)
     await expect(page.getByTestId('clk-level'), 'TV 화면에 클락이 안 뜬다 — 픽스처 심기가 실패했을 수 있다')
       .toBeVisible({ timeout: 20_000 });
@@ -136,7 +136,7 @@ test.describe('TV 디스플레이 — 낡은 클락 행에서도 실효 레벨�
       if (u.includes('/rest/v1/clock_states') && r.method() !== 'GET') writes.push(`${r.method()} ${u}`);
     });
 
-    await page.goto(`/?display=${VENUE}&g=${GAME_SEQ}`);
+    await page.goto(`/?display=${VENUE}&g=${GAME_SEQ}&auto=0`);
     await expect(page.getByTestId('clk-level')).toBeVisible({ timeout: 20_000 });
     await page.waitForTimeout(3000); // 워치독 주기(1초)보다 충분히 길게
 

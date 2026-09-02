@@ -77,7 +77,8 @@ export default function ClockDisplay({ venueId, gameSeq = 1, venueName, onClose 
   }, [venueId]);
 
   const [fs, setFs] = useState(false);
-  const [auto, setAuto] = useState(true);          // 멀티게임 자동 순환
+  // 멀티게임 자동 순환 — ?auto=0 이면 URL 의 게임에 고정(운영자가 특정 게임만 송출할 때 · e2e 결정성)
+  const [auto, setAuto] = useState(() => { try { return new URLSearchParams(window.location.search).get('auto') !== '0'; } catch { return true; } });
   const [qr, setQr] = useState<string | null>(null); // 참가(바인요청) QR
   const [sponsor, setSponsor] = useState<string | null>(null); // 스폰서 배너(app_settings 광고)
   const rootRef = useRef<HTMLDivElement>(null);

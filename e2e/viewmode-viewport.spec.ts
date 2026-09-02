@@ -22,14 +22,20 @@ test('표 모드 — 1440/900/375 어디서도 일정이 화면에 보인다', a
   await tableBtn.click();
   await page.waitForTimeout(600);
 
-  // 데이터 의존: 예정 대회가 0건인 날엔 '행이 사라졌는가' 를 잴 수 없다 — 빈 상태 문구가 보이면 skip
-  if (await page.getByText(/예정 대회가 아직 없|일정이 없/).first().isVisible().catch(() => false)) {
-    test.skip(true, '표시할 일정 0건 — 라이브 데이터 의존');
-  }
+  // 표(td) 든 리스트 카드든 '보이는' 일정 행 수
+  const countRows = () => page.evaluate(() => {
+    const seen = new Set<string>();
+    for (const el of document.querySelectorAll('table tbody tr, [class*="divide-y"] > *')) {
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0 && (el.textContent || '').trim().length > 4) seen.add((el.textContent || '').trim().slice(0, 24));
+    }
+    return seen.size;
+  });
+  // 데이터 의존: 예정 대회가 0건인 날엔 '행이 사라졌는가' 를 잴 수 없다 — 시작 폭에서 0행이면 skip(실패가 아니라 전제 미충족)
+  if ((await countRows()) === 0) test.skip(true, '표시할 일정 0건 — 라이브 데이터 의존');
   for (const w of [1440, 900, 375, 1200, 375]) {
     await page.setViewportSize({ width: w, height: 820 });
     await page.waitForTimeout(500);
-    // 표(td) 든 리스트 카드든, '보이는' 일정 행이 최소 1개는 있어야 한다
     const visibleRows = await page.evaluate(() => {
       const seen = new Set<string>();
       for (const el of document.querySelectorAll('table tbody tr, [class*="divide-y"] > *')) {
