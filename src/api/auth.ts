@@ -154,6 +154,19 @@ export async function checkNicknameAvailable(nickname: string): Promise<boolean>
   return data === true;
 }
 
+// ── 이메일(아이디) 중복 검사 ──────────────────────────────────────────────────
+// is_email_available RPC(security definer, auth.users 기준). 가입 전 화면이라 anon 호출.
+// 왜 필요한가: 이메일 확인이 켜진 Supabase 는 중복 이메일 signUp 을 오류 없이 성공처럼 응답한다(열거 방지).
+export const EMAIL_RE = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i; // 중첩 수량자 없음(ReDoS 회피) · 서버 RPC 와 동일
+export async function checkEmailAvailable(email: string): Promise<boolean> {
+  const trimmed = email.trim();
+  if (!EMAIL_RE.test(trimmed)) return false;
+  if (IS_MOCK) return true;
+  const { data, error } = await supabase.rpc('is_email_available', { p_email: trimmed });
+  if (error) throw error;
+  return data === true;
+}
+
 // 본인 닉네임(받는 아이디) 최초 설정 — 설정 후 잠김(변경은 운영자). 중복 시 에러.
 export async function setMyNickname(nickname: string): Promise<void> {
   const { error } = await supabase.rpc('set_my_nickname', { p_nickname: nickname.trim() });
