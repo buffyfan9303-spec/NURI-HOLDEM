@@ -18,7 +18,7 @@ import {
   type Action, type Scenario,
 } from './postflop.data';
 import {
-  applyPreflopAnswer, gradePreflop, loadPreflopStats, makeQuiz, modeOfKey, savePreflopStats, verdictOf, wrongPickOf,
+  applyPreflopAnswer, foldFreq, gradePreflop, loadPreflopStats, makeQuiz, modeOfKey, savePreflopStats, verdictOf, wrongPickOf,
   type Quiz,
 } from '../../../lib/preflopQuiz';
 import { recordAnswer } from '../../../lib/trainerProgress';
@@ -27,12 +27,19 @@ import { writeSnap } from '../../../lib/snapshot';
 
 /** 차트 점프 파라미터 — renderTool 이 같은 이름의 스냅샷을 읽어 prop 으로 넘긴다(읽은 뒤 즉시 삭제) */
 export type RangeJump = { scenId: string; hand: string };
-export type PushJump = { k?: number; stack: number; hand?: string; ante?: boolean }; // ante: 라이브 탭 내 토너 카드(stackZone) 가 넘긴다
+export type PushJump = { k?: number; stack: number; hand?: string; ante?: boolean; view?: 'callBB' | 'callSB' }; // ante: 라이브 탭 내 토너 카드(stackZone) 가 넘긴다 · view: 올인 콜 오답은 콜 표로
 
-/** 키('rfi|<scenId>|<hand>' · 'push|<k>-<stack>|<hand>')에서 점프 파라미터를 꺼내 스냅샷에 둔다 */
+const isNash = (q: Quiz) => q.mode === 'push' || q.mode === 'call';
+
+/** 키('<prefix>|<scenId>|<hand>' · 'push|<k>-<stack>|<hand>' · 'call|<seat>-<k>-<stack>|<hand>')에서 점프 파라미터를 꺼내 스냅샷에 둔다 */
 function stageJump(q: Quiz): void {
   const situ = q.key.split('|')[1] ?? '';
-  if (q.mode === 'rfi') { writeSnap('tool:range', { scenId: situ, hand: q.hand } satisfies RangeJump); return; }
+  if (!isNash(q)) { writeSnap('tool:range', { scenId: situ, hand: q.hand } satisfies RangeJump); return; }
+  if (q.mode === 'call') {
+    const [seat, k, stack] = situ.split('-');
+    writeSnap('tool:pushfold', { k: Number(k), stack: Number(stack), hand: q.hand, view: seat === 'sb' ? 'callSB' : 'callBB' } satisfies PushJump);
+    return;
+  }
   const [k, stack] = situ.split('-').map(Number);
   writeSnap('tool:pushfold', { k, stack, hand: q.hand } satisfies PushJump);
 }
@@ -58,9 +65,9 @@ export default function WrongNote() {
   );
 
   /* 답 1건 = 게이미피케이션 + 해당 트레이너 기록(트레이너에서 푼 것과 동일). 맞히면 큐에서 빠진다. */
-  const answerPreflop = (chose: 'act' | 'fold') => {
+  const answerPreflop = (chose: string) => {
     if (solving?.kind !== 'preflop' || preAns) return;
-    const ok = gradePreflop(solving.quiz.freq, chose);
+    const ok = gradePreflop(solving.quiz, chose);
     setPreAns({ correct: ok });
     recordAnswer(ok);
     const next = applyPreflopAnswer(loadPreflopStats(), solving.quiz.key, ok);
@@ -138,13 +145,13 @@ export default function WrongNote() {
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-2xs text-ink-secondary">{q.posLabel} · {q.situ}</span>
                         <span className="block truncate text-2xs text-ink-muted">
-                          권장 <b className={q.freq < 0.25 ? 'text-ink-secondary' : 'text-accent-200'}>{verdictOf(q)}</b>
+                          권장 <b className={foldFreq(q) > 0.75 ? 'text-ink-secondary' : 'text-accent-200'}>{verdictOf(q)}</b>
                           {my && <> · 내 답 <b className="text-danger-light">{my}</b></>}
                         </span>
                       </span>
                       <Icon name="chevron-right" size={14} className="shrink-0 text-ink-muted" aria-hidden />
                     </button>
-                    <a href={q.mode === 'rfi' ? '#tool=range' : '#tool=pushfold'} onClick={() => stageJump(q)}
+                    <a href={isNash(q) ? '#tool=pushfold' : '#tool=range'} onClick={() => stageJump(q)}
                       aria-label={`${q.posLabel} ${q.hand} 차트에서 보기`}
                       className="inline-flex shrink-0 flex-col items-center justify-center gap-0.5 rounded-input border border-accent-400/40 bg-accent-300/10 px-2 text-2xs font-bold text-accent-200 transition-colors hover:bg-accent-300/20">
                       <Icon name="eye" size={13} className="shrink-0" aria-hidden />차트

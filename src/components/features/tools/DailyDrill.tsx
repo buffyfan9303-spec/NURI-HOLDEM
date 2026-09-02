@@ -52,9 +52,9 @@ export default function DailyDrill() {
     recordSrs(postSrsKey(sc.id), ok); // 간격 반복 — 틀리면 내일, 맞히면 3·7·14·30일 뒤
   };
 
-  const answerPreflop = (chose: 'act' | 'fold') => {
+  const answerPreflop = (chose: string) => {
     if (!quiz || preAns) return;
-    const ok = gradePreflop(quiz.freq, chose);
+    const ok = gradePreflop(quiz, chose);
     setPreAns({ ok });
     if (recordAnswer(ok).justHitGoal) setCelebrate(true);
     // 맞히면 오답 큐에서 빠지고, 틀리면 큐 맨 뒤로 — 트레이너에서 푼 것과 완전히 동일하게 반영된다.

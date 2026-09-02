@@ -73,12 +73,16 @@ export type QuizExplainInput =
       kind: 'preflop';
       /** 'A5s' 같은 콤보 라벨 */
       hand: string;
-      /** 'CO 오픈' 등 포지션 라벨 */
+      /** 'CO' · 'BB vs BTN 오픈' 등 포지션 라벨 */
       posLabel: string;
-      /** 유효 스택(bb) — RFI 는 100, 푸시폴드는 해당 스택 */
+      /** 상황 한 줄 — 'BB vs BTN 오픈 · 버튼이 2.5bb 오픈 …'. 모드마다 다르므로 여기서 '첫 진입'을 가정하지 않는다 */
+      scenarioLabel: string;
+      /** 상대(오픈·3벳·올인한 사람) — 없으면 엣지 함수가 RFI(첫 오픈)로 서술한다 */
+      villain?: { position: string; sizingBb: number };
+      /** 유효 스택(bb) — 차트 모드는 100, 푸시폴드·올인 콜은 해당 스택 */
       stackBb: number;
-      /** 정답 액션 빈도 0..1 */
-      freq: number;
+      /** GTO 빈도 0..1 — 3벳·4벳·오픈·올인은 raise 로 접는다 */
+      frequency: { raise: number; call: number; fold: number };
       /** 캐시 식별용(문제 키) */
       id: number | string;
     };
@@ -129,10 +133,11 @@ export function explainQuizMiss(input: QuizExplainInput): Promise<string> {
     return invokeExplain({
       comboId: input.hand,
       comboKind: comboKind(input.hand),
-      scenarioLabel: `${input.posLabel} · 첫 진입`,
+      scenarioLabel: input.scenarioLabel,
       heroPosition: input.posLabel,
+      villain: input.villain,
       stackDepthBb: input.stackBb,
-      frequency: { raise: input.freq, call: 0, fold: 1 - input.freq },
+      frequency: input.frequency,
     });
   })();
 

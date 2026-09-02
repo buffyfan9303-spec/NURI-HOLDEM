@@ -23,14 +23,14 @@ const POSITIONS: { k: number; label: string; desc: string }[] = [
 
 type View = 'shove' | 'callBB' | 'callSB';
 
-export default function PushFoldChart({ initialK, initialStack, initialAnte, highlight }: {
-  /** 오답 노트 '차트에서 보기' — 그 포지션·스택·셀로 바로 진입. initialAnte 는 라이브 탭 내 토너 카드(현재 레벨 앤티 유무) */
-  initialK?: number; initialStack?: number; initialAnte?: boolean; highlight?: string;
+export default function PushFoldChart({ initialK, initialStack, initialAnte, initialView, highlight }: {
+  /** 오답 노트 '차트에서 보기' — 그 포지션·스택·셀(올인 콜 오답은 콜 표)로 바로 진입. initialAnte 는 라이브 탭 내 토너 카드(현재 레벨 앤티 유무) */
+  initialK?: number; initialStack?: number; initialAnte?: boolean; initialView?: View; highlight?: string;
 } = {}) {
   const [k, setK] = useState(POSITIONS.some((p) => p.k === initialK) ? initialK! : 2); // BTN 기본 — 가장 자주 찾는 자리
   const [stack, setStack] = useState((NASH_STACKS as readonly number[]).includes(initialStack ?? -1) ? initialStack! : 10);
   const [ante, setAnte] = useState(initialAnte ?? false);
-  const [view, setView] = useState<View>('shove');
+  const [view, setView] = useState<View>(initialView ?? 'shove');
   const pos = POSITIONS.find((p) => p.k === k)!;
 
   // SB 콜 레인지는 SB 가 콜러인 상황(k>=2)에서만 존재(k=1 은 SB 가 셔버 본인)

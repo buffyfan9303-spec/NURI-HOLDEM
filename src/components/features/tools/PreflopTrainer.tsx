@@ -1,4 +1,4 @@
-// 프리플랍 트레이너 — 표준 차트(100bb 오픈)·자체 Nash(푸시폴드) 기준 채점.
+// 프리플랍 트레이너 — 표준 차트(오픈·3벳·블라인드 수비·vs 3벳)·자체 Nash(푸시폴드·올인 콜) 기준 채점.
 // 문제 생성·채점·기록은 lib/preflopQuiz, 문제 표시는 quizCards 로 분리했다(2026-08-29) —
 // '오늘의 드릴'이 **같은 생성기·같은 카드·같은 오답 큐**를 쓰기 위해서다(사본 0).
 //
@@ -7,8 +7,8 @@
 import { useState } from 'react';
 import { CalcCard } from './calcUi';
 import {
-  applyPreflopAnswer, gradePreflop, loadPreflopStats, makeQuiz, savePreflopStats,
-  EMPTY_PREFLOP_STATS, type Mode, type PreflopStats, type Quiz,
+  applyPreflopAnswer, gradePreflop, loadPreflopStats, makeQuiz, modeOfKey, savePreflopStats,
+  EMPTY_PREFLOP_STATS, MODES, type Mode, type PreflopStats, type Quiz,
 } from '../../../lib/preflopQuiz';
 import { useTrainerProgress, recordAnswer, setDailyGoal, GOAL_CHOICES } from '../../../lib/trainerProgress';
 import { recordSrs } from '../../../lib/srs';
@@ -25,9 +25,9 @@ export default function PreflopTrainer() {
 
   const saveStats = (s: PreflopStats) => { setStats(s); savePreflopStats(s); };
 
-  const answer = (chose: 'act' | 'fold') => {
+  const answer = (chose: string) => {
     if (result) return;
-    const correct = gradePreflop(quiz.freq, chose);
+    const correct = gradePreflop(quiz, chose);
     setResult({ correct });
     if (recordAnswer(correct).justHitGoal) setCelebrate(true); // 오늘 목표 달성 순간 감지
     saveStats(applyPreflopAnswer(stats, quiz.key, correct));
@@ -38,7 +38,7 @@ export default function PreflopTrainer() {
     // 오답 큐 재출제(25%) — 틀린 문제를 잊기 전에 다시 만난다
     const retry = stats.wrong.length > 0 && Math.random() < 0.25
       ? stats.wrong[Math.floor(Math.random() * stats.wrong.length)] : undefined;
-    setQuiz(makeQuiz(mode, retry && retry.startsWith(mode) ? retry : undefined));
+    setQuiz(makeQuiz(mode, retry && modeOfKey(retry) === mode ? retry : undefined));
     setResult(null);
     setCelebrate(false);
   };
@@ -52,9 +52,9 @@ export default function PreflopTrainer() {
     <CalcCard desc="가이드·Nash 차트와 같은 데이터로 채점 · 경계 핸드 집중 출제">
       {/* 모드 + 점수 */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="inline-flex rounded-input border border-border-default bg-surface-high p-0.5">
-          {([{ id: 'rfi' as const, label: '100bb 오픈' }, { id: 'push' as const, label: '푸시폴드' }]).map((m) => (
-            <button key={m.id} type="button" onClick={() => switchMode(m.id)}
+        <div className="inline-flex flex-wrap rounded-input border border-border-default bg-surface-high p-0.5" data-testid="preflop-mode">
+          {MODES.map((m) => (
+            <button key={m.id} type="button" onClick={() => switchMode(m.id)} aria-pressed={mode === m.id}
               className={['h-7 px-2.5 rounded-[6px] text-2xs font-bold leading-none transition-colors', mode === m.id ? 'bg-accent-300 text-white' : 'text-ink-muted'].join(' ')}>{m.label}</button>
           ))}
         </div>

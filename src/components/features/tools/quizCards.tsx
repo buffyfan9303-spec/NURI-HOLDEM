@@ -8,7 +8,7 @@ import { useState, type ReactNode } from 'react';
 import Icon from '../../atoms/Icon';
 import { explainQuizMiss, type QuizExplainInput } from '../gto/gto.explain';
 import { isScenarioCorrect, type Action, type Scenario } from './postflop.data';
-import { verdictOf, type Quiz } from '../../../lib/preflopQuiz';
+import { FOLD, foldFreq, verdictOf, type Quiz } from '../../../lib/preflopQuiz';
 
 const suitColor = (s: string) => (s.includes('♥') || s.includes('♦') ? 'text-red-400' : 'text-ink-primary');
 
@@ -160,17 +160,26 @@ export function ScenarioQuizCard({ sc, picked, onPick, badge, banner, footer }: 
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
-   프리플랍 문제 카드 — 포지션·핸드 / 폴드·액션 / 빈도 게이지.
+   프리플랍 문제 카드 — 상황·포지션·핸드 / 폴드 + 액션 N개 / 액션별 빈도 게이지.
+   액션이 1개(오픈·올인·콜)면 기존 2버튼 화면 그대로, 2개(3벳·콜 / 4벳·콜)면 3버튼.
    ────────────────────────────────────────────────────────────────────────── */
 export function PreflopQuizCard({ quiz, result, onAnswer, banner, footer }: {
   quiz: Quiz;
   result: { correct: boolean } | null;
-  onAnswer: (chose: 'act' | 'fold') => void;
+  /** chose = 버튼 라벨('폴드' 또는 quiz.acts[].label) */
+  onAnswer: (chose: string) => void;
   banner?: ReactNode;
   footer?: ReactNode;
 }) {
-  const freqPct = Math.round(quiz.freq * 100);
-  const stackBb = quiz.mode === 'push' ? Number(quiz.key.split('|')[1]?.split('-')[1]) || 10 : 100;
+  const fold = foldFreq(quiz);
+  // AI 해설 문맥 — 엣지 함수 프롬프트의 raise/call/fold 축으로 접는다(3벳·4벳·오픈·올인 = raise)
+  const callFreq = quiz.acts.find((a) => a.label === '콜')?.freq ?? 0;
+  const explainInput: QuizExplainInput = {
+    kind: 'preflop', id: quiz.key, hand: quiz.hand, posLabel: quiz.posLabel, stackBb: quiz.stackBb,
+    scenarioLabel: `${quiz.posLabel} · ${quiz.situ}`,
+    villain: quiz.vs ? { position: quiz.vs.label, sizingBb: quiz.vs.bb } : undefined,
+    frequency: { raise: Math.max(0, 1 - fold - callFreq), call: callFreq, fold },
+  };
 
   return (
     <>
@@ -190,11 +199,13 @@ export function PreflopQuizCard({ quiz, result, onAnswer, banner, footer }: {
 
       {/* 답 / 피드백 */}
       {!result ? (
-        <div className="grid grid-cols-2 gap-2">
-          <button type="button" onClick={() => onAnswer('fold')}
-            className="rounded-card border border-border-default bg-surface-high py-3.5 text-sm font-extrabold text-ink-secondary hover:text-ink-primary hover:border-ink-muted/50 transition-colors active:scale-[0.98]">폴드</button>
-          <button type="button" onClick={() => onAnswer('act')}
-            className="rounded-card border border-accent-400/50 bg-accent-300/15 py-3.5 text-sm font-extrabold text-accent-200 hover:bg-accent-300/25 transition-colors active:scale-[0.98]">{quiz.actionLabel}</button>
+        <div className={['grid gap-2', quiz.acts.length > 1 ? 'grid-cols-3' : 'grid-cols-2'].join(' ')} data-testid="preflop-quiz-answers">
+          <button type="button" onClick={() => onAnswer(FOLD)}
+            className="rounded-card border border-border-default bg-surface-high py-3.5 text-sm font-extrabold text-ink-secondary hover:text-ink-primary hover:border-ink-muted/50 transition-colors active:scale-[0.98]">{FOLD}</button>
+          {quiz.acts.map((a) => (
+            <button key={a.label} type="button" onClick={() => onAnswer(a.label)}
+              className="rounded-card border border-accent-400/50 bg-accent-300/15 py-3.5 text-sm font-extrabold text-accent-200 hover:bg-accent-300/25 transition-colors active:scale-[0.98]">{a.label}</button>
+          ))}
         </div>
       ) : (
         <div className="space-y-2">
@@ -205,22 +216,25 @@ export function PreflopQuizCard({ quiz, result, onAnswer, banner, footer }: {
             </p>
             <p className="mt-1 text-xs text-ink-secondary">
               {quiz.posLabel} <b className="text-ink-primary">{quiz.hand}</b> 권장:{' '}
-              <b className={quiz.freq < 0.25 ? 'text-ink-muted' : 'text-accent-200'}>{verdictOf(quiz)}</b>
+              <b className={fold > 0.75 ? 'text-ink-muted' : 'text-accent-200'}>{verdictOf(quiz)}</b>
             </p>
-            {/* 빈도 게이지 — "정답/오답"이 아니라 빈도를 몸에 익히게 */}
-            <div className="mx-auto mt-2 flex max-w-[240px] items-center gap-2">
-              <span className="text-2xs text-ink-muted shrink-0">{quiz.actionLabel}</span>
-              <div className="h-2 flex-1 overflow-hidden rounded-full bg-surface-base">
-                <div className="h-full rounded-full bg-accent-300" style={{ width: `${freqPct}%` }} />
-              </div>
-              <span className="text-2xs font-bold tabular-nums text-ink-primary shrink-0">{freqPct}%</span>
-            </div>
+            {/* 빈도 게이지(액션별) — "정답/오답"이 아니라 빈도를 몸에 익히게 */}
+            {quiz.acts.map((a) => {
+              const pct = Math.round(a.freq * 100);
+              return (
+                <div key={a.label} data-testid="preflop-quiz-gauge" className="mx-auto mt-2 flex max-w-[240px] items-center gap-2">
+                  <span className="w-8 text-right text-2xs text-ink-muted shrink-0">{a.label}</span>
+                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-surface-base">
+                    <div className="h-full rounded-full bg-accent-300" style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="text-2xs font-bold tabular-nums text-ink-primary shrink-0">{pct}%</span>
+                </div>
+              );
+            })}
           </div>
           {footer}
           {/* 오답일 때만 AI 해설 진입점을 연다(비용 관리) */}
-          {!result.correct && (
-            <AiExplainBlock input={{ kind: 'preflop', id: quiz.key, hand: quiz.hand, posLabel: quiz.posLabel, stackBb, freq: quiz.freq }} />
-          )}
+          {!result.correct && <AiExplainBlock input={explainInput} />}
         </div>
       )}
     </>
