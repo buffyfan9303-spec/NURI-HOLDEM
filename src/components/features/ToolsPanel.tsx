@@ -318,7 +318,39 @@ export default function ToolsPanel() {
 
   return (
     <div className="hero-aurora space-y-3">
-      {/* 오늘의 드릴 — GTO 탭 최상단(로드맵 ③).
+      {/* 프리플랍 레인지 차트 — GTO 탭 편입(오너 지시 2026-08-30).
+          "차트가 GTO 탭에 없다"가 아니라 **찾기 어렵다**가 실제 문제였다(이 탭이 곧 GTO 탭이고
+          차트는 학습 레인 카드 하나로만 들어갈 수 있었다). 그래서 전용 뷰를 새로 만들지 않는다 —
+          같은 169셀 렌더러가 두 벌이 되면 그게 곧 유지보수 분기다. 대신 탭 상단에 상시 진입점을 둔다.
+          2026-09-03 오너 지시: 상황 바로가기 칩 5개 제거 — 그룹 선택은 차트 안(RangeGuide 의 칩, data-testid=range-guide)에
+          그대로 있어 기능 소실 0. 칩이 빠지면서 section+button 이중 구조를 **버튼 하나**로 접었다(드릴 카드와 같은 문법 —
+          패딩 띠까지 눌리고 전역 프레스 규칙을 탄다). 제목 sm·타일 h-9·설명 xs 로 아래 ToolCard(xs·h-8·2xs)보다 한 단 크게 —
+          글로우 말고도 '카탈로그 카드가 아니라 진입점' 으로 읽히게. 차트 레인 카드(tool-range)와 #tool=range 딥링크는 그대로.
+          v6.5 글로우: GTO 탭의 주인공(탭당 1곳 규칙, CLAUDE.md). ⚠ button 안에는 phrasing content(span)만. */}
+      <button type="button" onClick={() => open('range')}
+        aria-label={`프리플랍 레인지 차트 · 스팟 ${RANGE_SCENARIOS.length}개. 열기`}
+        className="card-aura ring-aura ring-aura-glow flex w-full items-center gap-2.5 rounded-card border bg-surface-low px-3.5 py-3 text-left">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-input tile-grad">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            {TOOLS.find((t) => t.key === 'range')!.icon}
+          </svg>
+        </span>
+        <span className="min-w-0 flex-1">
+          {/* 제목은 절대 안 자른다 — 폭이 모자라면 배지가 다음 줄로 내려간다(flex-wrap). */}
+          <span className="flex flex-wrap items-baseline gap-x-1.5">
+            <b className="text-sm font-bold text-ink-primary">프리플랍 레인지 차트</b>
+            <span className="shrink-0 text-2xs font-bold tabular-nums text-accent-200">{RANGE_SCENARIOS.length}개 스팟</span>
+          </span>
+          {/* truncate 금지 — 375px 에서 "오픈 · 블라인드 수비 · 3…" 로 잘려 무슨 표인지 사라졌다.
+              두 줄까지 허용(카드 높이 예약이 바뀌지 않게 line-clamp 로 상한만 둔다). */}
+          <span className="mt-0.5 block text-xs leading-snug text-ink-muted line-clamp-2">오픈 · 블라인드 수비 · 3벳 · vs 3벳 · 포지션으로 좁혀 보는 13×13</span>
+        </span>
+        {/* CTA — chip-aura 알약(index.css '선택형·바로가기 칩의 정본', 방금 걷어낸 칩과 같은 어휘).
+            btn-primary 는 보라 틴트 그림자가 글로우 카드 위에 글로우를 겹쳐(v3 실패 사유) 쓰지 않는다. */}
+        <span className="chip-aura inline-flex h-8 shrink-0 items-center rounded-chip px-2.5 text-2xs font-bold">열기 →</span>
+      </button>
+
+      {/* 오늘의 드릴 — 레인지 차트 카드 바로 아래(2026-09-03 오너 결정: 탭의 주인공 카드가 먼저, 드릴은 둘째 — 로드맵 ③ '최상단' 갱신).
           예전엔 이 자리가 "오늘 0/20" 진행 스트립뿐이라 **숙제만 내고 무엇을 풀지는 유저가 골랐다** —
           초보가 이탈하는 지점이었다. 이제 약점 카테고리(포스트플랍 정답률)와 오답 노트(프리플랍 큐)로
           편성한 5문제를 여기서 바로 시작한다. 기존 지표(오늘 N/목표 · 스트릭 · XP · 목표까지 N문제)는
@@ -366,46 +398,15 @@ export default function ToolsPanel() {
         </span>
       </button>
 
-      {/* 프리플랍 레인지 차트 — GTO 탭 편입(오너 지시 2026-08-30).
-          "차트가 GTO 탭에 없다"가 아니라 **찾기 어렵다**가 실제 문제였다(이 탭이 곧 GTO 탭이고
-          차트는 학습 레인 카드 하나로만 들어갈 수 있었다). 그래서 전용 뷰를 새로 만들지 않는다 —
-          같은 169셀 렌더러가 두 벌이 되면 그게 곧 유지보수 분기다. 대신 탭 상단에 상시 진입점을 둔다.
-          2026-09-03 오너 지시: 상황 바로가기 칩 5개 제거 — 그룹 선택은 차트 안(RangeGuide 의 칩, data-testid=range-guide)에
-          그대로 있어 기능 소실 0. 칩이 빠지면서 section+button 이중 구조를 **버튼 하나**로 접었다(드릴 카드와 같은 문법 —
-          패딩 띠까지 눌리고 전역 프레스 규칙을 탄다). 제목 sm·타일 h-9·설명 xs 로 아래 ToolCard(xs·h-8·2xs)보다 한 단 크게 —
-          글로우 말고도 '카탈로그 카드가 아니라 진입점' 으로 읽히게. 차트 레인 카드(tool-range)와 #tool=range 딥링크는 그대로.
-          v6.5 글로우: GTO 탭의 주인공(탭당 1곳 규칙, CLAUDE.md). ⚠ button 안에는 phrasing content(span)만. */}
-      <button type="button" onClick={() => open('range')}
-        aria-label={`프리플랍 레인지 차트 · 스팟 ${RANGE_SCENARIOS.length}개. 열기`}
-        className="card-aura ring-aura ring-aura-glow flex w-full items-center gap-2.5 rounded-card border bg-surface-low px-3.5 py-3 text-left">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-input tile-grad">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            {TOOLS.find((t) => t.key === 'range')!.icon}
-          </svg>
-        </span>
-        <span className="min-w-0 flex-1">
-          {/* 제목은 절대 안 자른다 — 폭이 모자라면 배지가 다음 줄로 내려간다(flex-wrap). */}
-          <span className="flex flex-wrap items-baseline gap-x-1.5">
-            <b className="text-sm font-bold text-ink-primary">프리플랍 레인지 차트</b>
-            <span className="shrink-0 text-2xs font-bold tabular-nums text-accent-200">{RANGE_SCENARIOS.length}개 스팟</span>
-          </span>
-          {/* truncate 금지 — 375px 에서 "오픈 · 블라인드 수비 · 3…" 로 잘려 무슨 표인지 사라졌다.
-              두 줄까지 허용(카드 높이 예약이 바뀌지 않게 line-clamp 로 상한만 둔다). */}
-          <span className="mt-0.5 block text-xs leading-snug text-ink-muted line-clamp-2">오픈 · 블라인드 수비 · 3벳 · vs 3벳 · 포지션으로 좁혀 보는 13×13</span>
-        </span>
-        {/* CTA — chip-aura 알약(index.css '선택형·바로가기 칩의 정본', 방금 걷어낸 칩과 같은 어휘).
-            btn-primary 는 보라 틴트 그림자가 글로우 카드 위에 글로우를 겹쳐(v3 실패 사유) 쓰지 않는다. */}
-        <span className="chip-aura inline-flex h-8 shrink-0 items-center rounded-chip px-2.5 text-2xs font-bold">열기 →</span>
-      </button>
-
       {/* 도구 검색 */}
       <div className="relative">
-        <Icon name="search" size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" aria-hidden />
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="도구 검색 · 이름·기능"
-          className="input w-full pl-9 text-sm" aria-label="도구 검색" />
+        <Icon name="search" size={15} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-muted" aria-hidden />
+        {/* type=search: 네이티브 지우기(×) 버튼 + 모바일 '검색' 키(enterKeyHint). .input[type=search] 가 12px 라운드·pl-10 을 준다 */}
+        <input type="search" enterKeyHint="search" autoComplete="off" value={q} onChange={(e) => setQ(e.target.value)} placeholder="도구 검색 · 이름·기능"
+          className="input w-full text-sm" aria-label="도구 검색" />
       </div>
 
-      {/* 레인 필터 칩 — 균일 h-9, aria-pressed 토글(접이식 대체) */}
+      {/* 레인 필터 칩 — 보이는 높이 32px, 탭 타깃 44px(::before 로 위아래 6px 확장 · 가로는 gap 6px 라 확장하지 않음), aria-pressed 토글 */}
       {!hits && (
         <div data-tools-lanebar="" className="flex flex-wrap gap-1.5" role="group" aria-label="도구 분류 필터">
           {([{ id: 'all' as const, label: '전체' }, ...LANES]).map((l) => {
@@ -413,7 +414,7 @@ export default function ToolsPanel() {
             return (
               <button key={l.id} type="button" aria-pressed={on}
                 onClick={() => { const next = on && l.id !== 'all' ? 'all' : l.id; goSubTab('tools-lane', LANE_ORDER, lane, next, () => setLane(next)); }}
-                className={['inline-flex h-8 items-center rounded-badge border px-2.5 text-2xs font-semibold transition-colors',
+                className={['tap-y-44 inline-flex h-8 items-center rounded-badge border px-2.5 text-2xs font-semibold transition-colors',
                   on ? 'border-accent-300 bg-accent-300 text-white' : 'border-transparent bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
                 {l.label}
               </button>

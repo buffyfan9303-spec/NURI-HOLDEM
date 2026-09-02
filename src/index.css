@@ -621,6 +621,10 @@
   .stat-indigo  { color: #818CF8; }  html.light .stat-indigo  { color: #4338CA; }
   .stat-fuchsia { color: #E879F9; }  html.light .stat-fuchsia { color: #A21CAF; }
   .chip-aura { background-color: rgb(99 102 241 / 0.10); border: 1px solid rgb(99 102 241 / 0.22); color: rgb(var(--accent-200)); }
+  /* 탭 타깃 확장 — 보이는 높이는 그대로(32px 칩), 누르는 영역만 위아래 6px 씩 늘려 44px(WCAG 2.5.5 / Apple HIG).
+     가로는 늘리지 않는다(칩 사이 gap 6px 라 겹친다). Tailwind before:content-[''] 는 JSX 문자열 이스케이프 때문에 추출기가 못 잡아 유틸로 둔다. */
+  .tap-y-44 { position: relative; }
+  .tap-y-44::before { content: ''; position: absolute; inset: -6px 0; }
   html.light .chip-aura { background-color: rgb(99 102 241 / 0.08); border-color: rgb(99 102 241 / 0.25); color: #4338CA; }
   @media (hover: hover) { .chip-aura:hover { background-color: rgb(99 102 241 / 0.16); border-color: rgb(99 102 241 / 0.35); } }
   .text-grad-violet {
