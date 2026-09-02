@@ -107,6 +107,9 @@ test.describe('외치기 — 20초 슬롯 대기열', () => {
 
     await page.goto('/');
     await dismissOverlays(page);
+    // 세션이 실제로 붙은 뒤에만 진행 — 아직이면 '외치기' 가 구매 시트 대신 로그인 모달을 열어
+    // '하이라이트 버튼 없음' 으로 실패했다(2026-09-03 로컬 재현 스크린샷 = 로그인 모달). clock-watchdog 과 같은 마커.
+    await expect(page.getByRole('button', { name: '로그인' })).toHaveCount(0, { timeout: 20_000 });
     await page.getByRole('navigation', { name: '하단 내비게이션' })
       .getByRole('button', { name: '커뮤니티', exact: true }).click();
     await expect.poll(() => fetches, { timeout: 15_000 }).toBeGreaterThan(0);

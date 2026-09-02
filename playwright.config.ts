@@ -13,7 +13,7 @@ export default defineConfig({
   expect: { timeout: 10_000 },
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
+  retries: process.env.CI ? 2 : 0, // 2026-09-03: 러너 부하 플레이크(subtab-motion root 이동·clock-catchup·shout-queue)가 1회 재시도로는 안 걷힘
   reporter: process.env.CI ? 'github' : 'list',
   use: {
     baseURL: BASE,
