@@ -155,7 +155,7 @@ export default function LiveGamesTab({ venues, schedules, onVenue, onSchedule, o
       <div className="mx-auto w-full max-w-3xl space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
-            <h2 className="text-fluid-lg font-bold text-ink-primary text-grad-violet">진행 중 게임 {games ? <span className="text-accent-300 text-grad-keep">{games.length}</span> : null}</h2>
+            <h2 className="text-fluid-lg font-bold text-ink-primary text-grad-violet">진행 중 게임 {games ? <span className="text-accent-200 text-grad-keep">{games.length}</span> : null}</h2>
             <p className="mt-0.5 t-desc text-ink-muted">지금 클락이 돌아가는 대회 · 블라인드와 레지마감을 한눈에 · 탭하면 상세</p>
           </div>
           <div className="flex shrink-0 items-center gap-1">

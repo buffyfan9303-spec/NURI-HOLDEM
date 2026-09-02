@@ -99,7 +99,7 @@ export default function HomeTab({
           <span className="font-semibold text-accent-300">· NURI MIND ›</span>
         </a>
         {liveCount > 0 ? (
-          <h2 className="font-display text-xl font-bold tracking-tight text-ink-primary">
+          <h2 className="font-display text-2xl font-extrabold tracking-tight text-ink-primary">
             지금 <span className="tabular-nums text-emerald-400">{liveCount}</span>개 게임 <span className="text-grad-violet text-grad-glow">진행 중</span>
           </h2>
         ) : (
@@ -109,7 +109,7 @@ export default function HomeTab({
             className="mt-1 flex w-full items-center gap-3 rounded-aura border card-aura ring-aura px-4 py-3 text-left transition-transform active:scale-[0.985]">
             <span className="min-w-0 flex-1">
               {/* v6 aura-ui.com 문법: 헤드라인은 흰색, 핵심 구절 하나만 채도 높은 그라데이션 */}
-              <h2 className="font-display text-xl font-bold tracking-tight text-ink-primary">
+              <h2 className="font-display text-2xl font-extrabold tracking-tight text-ink-primary">
                 오늘 한 판, <span className="text-grad-violet text-grad-glow">GTO</span>로 준비하세요
               </h2>
               <span className="mt-1 inline-flex items-center gap-1 text-2xs font-semibold text-accent-200">

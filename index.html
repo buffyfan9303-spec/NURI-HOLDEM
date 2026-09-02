@@ -14,8 +14,8 @@
          걷어낸다 — html 배경이 남아 있으면 body::before(지면 결·상단 글로우)가 가려진다. */
       try{var t=localStorage.getItem('nuri-theme')==='light';
         document.documentElement.classList.add(t?'light':'dark');
-        document.documentElement.style.backgroundColor=t?'#F5F6F8':'#151221';
-      }catch(e){document.documentElement.classList.add('dark');document.documentElement.style.backgroundColor='#151221'}
+        document.documentElement.style.backgroundColor=t?'#F5F7FB':'#06080F';
+      }catch(e){document.documentElement.classList.add('dark');document.documentElement.style.backgroundColor='#06080F'}
     </script>
     <!-- ⚡ 서드파티(GA·AdSense)는 여기서 로드하지 않는다 — main.tsx 가 첫 페인트 뒤 유휴에 주입한다.
          왜: 라이브 실측(모바일)에서 adsbygoogle.js 가 t=23ms, 즉 앱의 index/vendor-react/vendor-supabase 와
@@ -35,7 +35,7 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/favicon-180.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#151221" />
+    <meta name="theme-color" content="#06080F" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />

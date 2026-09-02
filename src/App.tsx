@@ -223,7 +223,7 @@ const AppHeader = memo(function AppHeader({
         // v2 유리 크롬(헌법 §5 측정 게이트) — 내용이 헤더 밑을 지나며 서리처럼 흐려진다.
         // ⚠ glass-strong(요소 자체에 필터)이 아니라 glass-chrome(::before 레이어): 헤더 안 알림 스크림이 fixed 라
         //   필터가 헤더를 컨테이닝 블록으로 만들면 스크림이 헤더 안에 갇힌다(index.css 주석·backstack.spec 실측).
-        'sticky top-0 z-50 glass-chrome border-b border-border-subtle',
+        'sticky top-0 z-50 glass-chrome border-b border-border-default/60', /* v6.1: subtle(1.18:1)은 유리 크롬과 본문이 한 덩어리로 보였다 */
         // PWA(노치 기기): 상태바 영역까지 헤더 배경으로 덮음 — 스크롤 시 위로 컨텐츠 비침 방지
         'pt-[env(safe-area-inset-top)]',
         suppressed ? 'invisible pointer-events-none' : '',

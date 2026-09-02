@@ -384,7 +384,7 @@ export default function ToolsPanel() {
         <button type="button" onClick={() => open('range')}
           aria-label={`프리플랍 레인지 차트 · 스팟 ${RANGE_SCENARIOS.length}개. 열기`}
           className="flex w-full items-center gap-2.5 text-left">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-input bg-accent-300/15 text-accent-300">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-input tile-grad">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               {TOOLS.find((t) => t.key === 'range')!.icon}
             </svg>
@@ -518,7 +518,7 @@ function ToolCard({ name, desc, icon, onClick, fav, onToggleFav, testId }: {
     <div className="relative">
       <button type="button" onClick={onClick} data-testid={testId}
         className="card-elev group/tool flex w-full items-center gap-2.5 rounded-card border border-border-default bg-surface-low px-2.5 py-2 pr-8 text-left transition-colors hover:border-accent-400/40 hover:bg-surface-high active:scale-[0.98]">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-input bg-accent-300/15 text-accent-300">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-input tile-grad">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{icon}</svg>
         </span>
         <span className="min-w-0 flex-1">
