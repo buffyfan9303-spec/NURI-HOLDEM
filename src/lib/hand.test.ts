@@ -18,6 +18,13 @@ describe('encodeReplay ↔ parseAttachments', () => {
     expect(parsed.replay).toEqual(replay);
   });
 
+  it('보드 0장(프리플랍 질문)도 팟·프리플랍 액션을 잃지 않고 왕복한다', () => {
+    const replay: ReplayData = { hero: ['Ah', 'Kd'], villain: [], board: [], pot: '40bb', actions: { pre: '상대 3벳, 내가 올인' } };
+    const parsed = parseAttachments(encodeReplay('콜이 맞나요?', replay));
+    expect(parsed.text).toBe('콜이 맞나요?');
+    expect(parsed.replay).toEqual(replay);
+  });
+
   it('카드가 하나도 없으면 마커를 붙이지 않는다', () => {
     const r: ReplayData = { hero: [], villain: [], board: [], actions: {} };
     expect(encodeReplay('본문', r)).toBe('본문');

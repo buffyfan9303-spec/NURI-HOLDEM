@@ -1279,6 +1279,8 @@ export default function App() {
   const [postFormOpen, setPostFormOpen]     = useState(false);   // 커뮤니티 글쓰기
   const [postFormCategory, setPostFormCategory] = useState<PostCategory>('free'); // 글쓰기 기본 카테고리(공부 탭=study)
   const [postFormReplay, setPostFormReplay] = useState<ReplayData | null>(null); // 핸드 리플레이어에서 넘어온 첨부 핸드 — 닫히면 비운다
+  // 닫힘 경로는 둘(onClose · 뒤로가기 useBackClose) — 어느 쪽이든 첨부 핸드를 함께 비워 다음 글쓰기에 남지 않게 한다.
+  const closePostForm = () => { setPostFormOpen(false); setPostFormReplay(null); };
   const [shareText, setShareText] = useState(''); // 공유 타깃(share_target) 프리필 본문
   // PWA 공유 타깃 — 다른 앱에서 NURI로 공유하면 ?text/url을 받아 커뮤니티 글쓰기 프리필
   useEffect(() => {
@@ -1946,7 +1948,7 @@ export default function App() {
   useBackClose(authOpen, () => { setAuthOpen(false); setAuthMode('login'); }, ADOPT);
   useBackClose(profileOpen, () => setProfileOpen(false), ADOPT);
   useBackClose(globalSearchOpen, () => setGlobalSearchOpen(false), ADOPT);
-  useBackClose(postFormOpen, () => setPostFormOpen(false), ADOPT);
+  useBackClose(postFormOpen, closePostForm, ADOPT);
   useBackClose(noticeFormOpen, () => { setNoticeFormOpen(false); setEditingNotice(null); }, ADOPT);
   useBackClose(legalDoc !== null, () => setLegalDoc(null), ADOPT);
   useBackClose(supportOpen, () => setSupportOpen(false), ADOPT);
@@ -3135,7 +3137,7 @@ export default function App() {
       {postFormOpen && (
       <PostFormModal
         open
-        onClose={() => { setPostFormOpen(false); setPostFormReplay(null); }}
+        onClose={closePostForm}
         onSubmit={handleCreatePost}
         defaultCategory={postFormCategory}
         defaultContent={shareText}
