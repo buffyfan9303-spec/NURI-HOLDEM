@@ -5,6 +5,8 @@ import { promptLogin } from '../../lib/requireLogin';
 import { useSkeletonGate } from '../../lib/useSkeletonGate';
 import { getActiveCommunityAds, type CommunityAd } from '../../api/ads';
 import { getEquippedMarks, getNickColors, isBumped } from '../../api/community';
+import { getAppSetting, COMMUNITY_ADS_EVERY_KEY, COMMUNITY_ADS_EVERY_DEFAULT, parseAdsEvery } from '../../api/settings';
+import { pinnedFirst } from '../../lib/pinnedFirst';
 import TitleChip from '../atoms/TitleChip';
 import { tierCss } from '../atoms/TierBadge';
 import { nickColorVar } from '../../lib/cosmetics';
@@ -482,6 +484,8 @@ function FeedSection({
   const switchView = (v: 'compact' | 'feed') => { setView(v); try { localStorage.setItem('nuri:board-view', v); } catch { /* noop */ } };
   // 커뮤니티 광고 5칸 — 게시판(enableCategory)에서만, 글 4개마다 한 칸씩 삽입
   const [ads, setAds] = useState<CommunityAd[]>([]);
+  // 광고 빈도 '글 N개마다 1줄' — app_settings community_ads_every(관리자 → 노출 관리). 실패·없음 = 4
+  const [adsEvery, setAdsEvery] = useState(COMMUNITY_ADS_EVERY_DEFAULT);
   // 작성자 장착 마크(상점) — posts의 userId 일괄 조회(닉네임 옆 이모지)
   const [authorMarks, setAuthorMarks] = useState<Record<string, string>>({});
   // 작성자 닉네임 색(상점 600점 · 20260830n) — 마크와 **같은 결합 지점**이라 같은 자리에서 함께 받는다.
@@ -496,7 +500,9 @@ function FeedSection({
   // 작성자 칭호(활동점수) — posts의 userId 일괄 조회(닉네임 옆 칭호)
   const titleOf = useTitlePoints(posts.map((p) => p.userId));
   useEffect(() => {
-    if (enableCategory) getActiveCommunityAds().then(setAds).catch(() => {});
+    if (!enableCategory) return;
+    getActiveCommunityAds().then(setAds).catch(() => {});
+    getAppSetting(COMMUNITY_ADS_EVERY_KEY).then((v) => setAdsEvery(parseAdsEvery(v))).catch(() => {});
   }, [enableCategory]);
 
   // HOT: 최근 6시간 내 조회수 상위 2개 (검색·카테고리 미적용 상태에서만 핀 고정)
@@ -517,20 +523,21 @@ function FeedSection({
       if (kw && !(p.content.toLowerCase().includes(kw) || (p.title?.toLowerCase().includes(kw) ?? false) || p.userName.toLowerCase().includes(kw))) return false;
       return true;
     });
+    // 관리자 고정(20260903a)은 정렬 축과 무관하게 항상 맨 위 — 마지막에 pinnedFirst 로 감싼다.
     // 인기 정렬(Phase 14, pokergosu 추천 축) — 별도 게시판 대신 정렬 칩. 동률은 최신순.
     if (order === 'popular') {
-      return [...base].sort((a, b) => (b.likeCount - a.likeCount) || (new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+      return pinnedFirst([...base].sort((a, b) => (b.likeCount - a.likeCount) || (new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())));
     }
     // 끌올(100점) — 최신순에서만 상단으로 올린다. '인기'는 읽는 사람이 고른 축이라
     // 거기까지 돈으로 뒤집으면 정렬 칩이 거짓말이 된다(끌올이 산 것은 '목록 맨 위'다).
     // Array.prototype.sort 는 안정 정렬이라 끌올끼리·나머지끼리의 기존 순서(최신순)는 보존된다.
     const bumped = base.filter((p) => isBumped(p));
-    if (bumped.length === 0) return base;
+    if (bumped.length === 0) return pinnedFirst(base);
     const bumpedIds = new Set(bumped.map((p) => p.id));
-    return [
+    return pinnedFirst([
       ...bumped.sort((a, b) => new Date(b.bumpedUntil ?? 0).getTime() - new Date(a.bumpedUntil ?? 0).getTime()),
       ...base.filter((p) => !bumpedIds.has(p.id)),
-    ];
+    ]);
   }, [posts, q, cat, enableCategory, order]);
 
   const pinHot = enableCategory && cat === 'all' && !q.trim() && order === 'new' && hotPosts.length > 0;
@@ -735,8 +742,8 @@ function FeedSection({
           <div className="rounded-aura border card-aura overflow-hidden">
             <ul>
               {shown.map((p, i) => {
-                const ad = ads[Math.floor(i / 4)];
-                const showAd = i % 4 === 3 && !!ad; // 글 4개마다 광고 한 칸
+                const ad = ads[Math.floor(i / adsEvery)];
+                const showAd = i % adsEvery === adsEvery - 1 && !!ad; // 글 N개마다 광고 한 칸(관리자 설정)
                 return (
                   <Fragment key={p.id}>
                     <PostRow post={p} mark={authorMarks[p.userId] ?? ''} titlePts={titleOf(p.userId)} selected={p.id === selectedId} onClick={() => onSelectPost(p)} />
@@ -744,8 +751,8 @@ function FeedSection({
                   </Fragment>
                 );
               })}
-              {/* 글이 적어도 광고 1칸은 보이게 — 4개 미만이면 리스트 끝에 첫 광고 */}
-              {shown.length < 4 && ads[0] && <AdRow ad={ads[0]} />}
+              {/* 글이 적어도 광고 1칸은 보이게 — N개 미만이면 리스트 끝에 첫 광고 */}
+              {shown.length < adsEvery && ads[0] && <AdRow ad={ads[0]} />}
             </ul>
           </div>
           {listSource.length > visible && (
@@ -757,8 +764,8 @@ function FeedSection({
           {/* 피드(카드) 모드 — 오너 레퍼런스: 독립 라운드 카드 스택, 광고도 같은 카드 문법 */}
           <ul className="space-y-2">
             {shown.map((p, i) => {
-              const ad = ads[Math.floor(i / 4)];
-              const showAd = i % 4 === 3 && !!ad;
+              const ad = ads[Math.floor(i / adsEvery)];
+              const showAd = i % adsEvery === adsEvery - 1 && !!ad;
               return (
                 <Fragment key={p.id}>
                   <PostCard post={p} mark={authorMarks[p.userId] ?? ''} nickToken={authorColors[p.userId]} titlePts={titleOf(p.userId)} selected={p.id === selectedId} onLike={() => onLike(p.id)} onClick={() => onSelectPost(p)} />
@@ -766,7 +773,7 @@ function FeedSection({
                 </Fragment>
               );
             })}
-            {shown.length < 4 && ads[0] && <AdRow ad={ads[0]} card />}
+            {shown.length < adsEvery && ads[0] && <AdRow ad={ads[0]} card />}
           </ul>
           {listSource.length > visible && (
             <InfiniteSentinel onMore={() => setVisible((v) => v + 15)} remain={listSource.length - visible} />
@@ -851,6 +858,9 @@ const PostRow = memo(function PostRow({ post, onClick, hot = false, selected = f
       {/* 끌올(100점)은 카테고리 자리를 뺏지 않는다 — 앞에 한 칸을 더 쓴다.
           돈을 낸 표시를 지우면 '올라가긴 했는데 왜 위에 있는지'가 안 보이고, 카테고리를 지우면
           있던 정보가 사라진다(둘 다 남긴다). */}
+      {post.pinnedAt && (
+        <span className="shrink-0 rounded-badge bg-gold-400/15 px-1 text-2xs font-extrabold leading-none text-gold-400">고정</span>
+      )}
       {isBumped(post) && (
         <span className="shrink-0 rounded-badge bg-accent-300/15 px-1 text-2xs font-extrabold leading-none text-accent-200">끌올</span>
       )}
@@ -937,6 +947,9 @@ const PostCard = memo(function PostCard({ post, onLike, onClick, hot = false, se
           <div className="flex items-start gap-1.5">
             <div className="min-w-0 flex-1">
               <p className="flex items-center gap-1 text-2xs leading-4">
+                {post.pinnedAt && (
+                  <span className="shrink-0 inline-flex items-center rounded-badge bg-gold-400/15 px-1 font-extrabold leading-none text-gold-400">고정</span>
+                )}
                 {isBumped(post) && (
                   <span className="shrink-0 inline-flex items-center rounded-badge bg-accent-300/15 px-1 font-extrabold leading-none text-accent-200">끌올</span>
                 )}

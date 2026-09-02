@@ -111,6 +111,8 @@ export interface CommunityPost {
   bumpedUntil?: string | null;
   /** 끌올 누적 횟수(표시용) */
   bumpCount?: number;
+  /** 관리자 상단 고정 시각(ISO). null = 미고정. 정렬은 src/lib/pinnedFirst.ts */
+  pinnedAt?: string | null;
 }
 
 /** 이 글이 지금 끌올 중인가 — 만료 판정을 화면마다 다시 쓰지 않게 한 곳에 둔다 */
@@ -162,6 +164,7 @@ const rowToPost = (r: any): CommunityPost => ({
   cheerCount:  r.cheer_count ?? 0,
   bumpedUntil: r.bumped_until ?? null,
   bumpCount:   r.bump_count ?? 0,
+  pinnedAt:    r.pinned_at ?? null,
 });
 
 /** 내가 쓴 글 — 개인 허브('내 대시보드')용. 목록 50건 제한과 무관하게 본인 글만 조회 */
@@ -189,6 +192,13 @@ export async function getPostById(postId: string): Promise<CommunityPost | null>
 export async function adminSetPostBlinded(postId: string, blinded: boolean): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.rpc('admin_set_post_blinded', { p_post_id: postId, p_blinded: blinded });
+  if (error) throw new Error(error.message);
+}
+
+/** 운영자: 게시글 상단 고정/해제(pinned_at). 20260903a admin_set_post_pinned — 블라인드와 같은 꼴 */
+export async function adminSetPostPinned(postId: string, pinned: boolean): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('admin_set_post_pinned', { p_post_id: postId, p_pinned: pinned });
   if (error) throw new Error(error.message);
 }
 
@@ -381,12 +391,17 @@ export async function getPosts(): Promise<CommunityPost[]> {
   const bumpedRes = await supabase.from('community_posts').select('*')
     .gt('bumped_until', new Date().toISOString())
     .order('bumped_until', { ascending: false }).limit(10);
+  // 관리자 고정 글도 같은 이유로 50건 밖에서 건져 온다(20260903a pinned_at — 컬럼 없으면 조용히 건너뜀).
+  const pinnedRes = await supabase.from('community_posts').select('*')
+    .not('pinned_at', 'is', null)
+    .order('pinned_at', { ascending: false }).limit(10);
   const rows = [...(postsRes.data ?? [])];
-  if (!bumpedRes.error) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const seen = new Set(rows.map((r: any) => r.id as string));
+  for (const res of [bumpedRes, pinnedRes]) {
+    if (res.error) continue;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const seen = new Set(rows.map((r: any) => r.id as string));
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    for (const r of (bumpedRes.data ?? []) as any[]) if (!seen.has(r.id)) rows.push(r);
+    for (const r of (res.data ?? []) as any[]) if (!seen.has(r.id)) { seen.add(r.id); rows.push(r); }
   }
   // #10 내 좋아요는 '노출된 50글'로 한정(전건 로드 방지). RLS 가 본인 것만 반환(미로그인 0건).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1736,6 +1751,13 @@ export async function bumpPost(postId: string): Promise<BumpResult> {
 /** 내리기 — 작성자 본인 또는 운영자(환급 없음) */
 export async function hideShout(id: string): Promise<void> {
   const { error } = await supabase.rpc('hide_shout', { p_id: id });
+  if (error) throw new Error(error.message);
+}
+
+/** 운영자 — 대기 중 외침을 맨 앞으로(plays_at = now(), 방송 길이 보존). 20260903a admin_shout_bump */
+export async function adminShoutBump(id: string): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('admin_shout_bump', { p_id: id });
   if (error) throw new Error(error.message);
 }
 

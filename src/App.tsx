@@ -2947,6 +2947,7 @@ export default function App() {
             onUpdateUser={handleUpdateUser}
             onDeletePost={handleDeletePost}
             onReloadVenues={() => { reloadVenues(); if (isAdmin) listAllUsers().then(setUsers).catch(() => {}); }}
+            onReloadNotices={reloadNotices}
           />
           </ErrorBoundary>
         </main>
