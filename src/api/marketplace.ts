@@ -24,6 +24,8 @@ export type NoticeBoard = 'all' | 'community' | 'market' | 'dealer';
 export interface MarketplaceNotice {
   id: string; type: NoticeType; title: string; body?: string;
   authorName: string; createdAt: string; board?: NoticeBoard;
+  /** 관리자 노출 순서(클수록 위, 기본 0). 20260903a */
+  sortOrder?: number;
 }
 
 // ── DB 변환 ──────────────────────────────────────────────────────────────────
@@ -45,6 +47,7 @@ const rowToNotice = (r: any): MarketplaceNotice => ({
   id: r.id, type: r.type, title: r.title, body: r.body,
   authorName: r.author_name, createdAt: r.created_at,
   board: (r.board ?? 'all') as NoticeBoard,
+  sortOrder: r.sort_order ?? 0,
 });
 
 // ── Listings ──────────────────────────────────────────────────────────────────
@@ -179,9 +182,18 @@ export async function getNotices(): Promise<MarketplaceNotice[]> {
     const { MOCK_NOTICES } = await import('../mock/data');
     return MOCK_NOTICES;
   }
-  const { data, error } = await supabase.from('marketplace_notices').select('*').order('created_at', { ascending: false });
+  // 관리자 순서(sort_order desc) 우선, 같은 값은 최신순 — 20260903a
+  const { data, error } = await supabase.from('marketplace_notices').select('*')
+    .order('sort_order', { ascending: false }).order('created_at', { ascending: false });
   if (error) throw error;
   return (data ?? []).map(rowToNotice);
+}
+
+/** 관리자: 공지 노출 순서 저장 — RLS notices_admin_upd(my_role()='admin')가 강제. */
+export async function setNoticeOrder(id: string, sortOrder: number): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.from('marketplace_notices').update({ sort_order: sortOrder }).eq('id', id);
+  if (error) throw error;
 }
 
 // 공지 작성 — RLS 정책(notices_admin_all)이 관리자(my_role()='admin')만 CUD 허용.

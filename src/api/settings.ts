@@ -20,3 +20,11 @@ export const CLOCK_AD_SIZE_KEY = 'clock_ad_size'; // 'sm' | 'md' | 'lg'
 // 부스트(포스터 상단 고정) 문의 연락처 — 관리자 설정 → 게시물 관리에서 입력
 export const BOOST_CONTACT_EMAIL_KEY = 'boost_contact_email';
 export const BOOST_CONTACT_PHONE_KEY = 'boost_contact_phone';
+// 게시판 광고 빈도 — '글 N개마다 광고 1줄'(기본 4, 2~10). 관리자 → 노출 관리 → 광고
+export const COMMUNITY_ADS_EVERY_KEY = 'community_ads_every';
+export const COMMUNITY_ADS_EVERY_DEFAULT = 4;
+/** 저장값 → 2~10 정수. 없거나 깨졌으면 기본 4. */
+export const parseAdsEvery = (v: string | null | undefined): number => {
+  const n = Number.parseInt(v ?? '', 10);
+  return Number.isFinite(n) && n >= 2 && n <= 10 ? n : COMMUNITY_ADS_EVERY_DEFAULT;
+};

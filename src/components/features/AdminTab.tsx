@@ -12,14 +12,17 @@ import {
   getAdminStats, adminCreateVenue, adminUpdateVenue, setVenueVerification, deleteVenue,
   getVenueStaff, addVenueStaff, updateVenueStaff, removeVenueStaff,
   getPendingGroups, approveGroup, GROUP_KIND_LABEL, adminListVenueOwnerRequests, adminDecideVenueOwner, type OwnerRequest,
-  adminListShouts, hideShout, adminShoutRefunds, adminRefundPurchase, type Shout } from '../../api/community';
+  adminListShouts, hideShout, adminShoutRefunds, adminRefundPurchase, adminShoutBump,
+  adminSetPostBlinded, adminSetPostPinned, type Shout, type PostCategory } from '../../api/community';
+import { getNotices, deleteNotice, setNoticeOrder, type MarketplaceNotice } from '../../api/marketplace';
+import { BOARD_FILTER_CATEGORIES, postCategoryLabel } from '../../lib/postCategory';
 import {
   adminListHallOfFame, adminSaveHallEntry, adminDeleteHallEntry, autoHallPrefill,
   lastMonthPeriod, thisMonthPeriod, type HallOfFameRow,
 } from '../../lib/hallOfFame';
 import { useToast } from '../atoms/Toast';
 import { supabase } from '../../lib/supabase';
-import { getAppSetting, setAppSetting, BOOST_CONTACT_EMAIL_KEY, BOOST_CONTACT_PHONE_KEY } from '../../api/settings';
+import { getAppSetting, setAppSetting, BOOST_CONTACT_EMAIL_KEY, BOOST_CONTACT_PHONE_KEY, COMMUNITY_ADS_EVERY_KEY, COMMUNITY_ADS_EVERY_DEFAULT, parseAdsEvery } from '../../api/settings';
 import { getAdminPlatformStats, getFreePlanUsage, type PlatformStats, type PlanUsageRow } from '../../api/adminStats';
 import { getAllCommunityAds, saveCommunityAd, type CommunityAd } from '../../api/ads';
 import {
@@ -53,13 +56,17 @@ interface AdminTabProps {
   onDeletePost: (id: string) => void;
   /** 매장 생성 후 목록 새로고침 */
   onReloadVenues?: () => void;
+  /** 공지 순서·삭제 후 App 의 notices 새로고침 */
+  onReloadNotices?: () => void;
 }
 
 type AdminShout = Shout & { hidden: boolean };
 
-type Section = 'analytics' | 'pending' | 'reorder' | 'users' | 'venues' | 'reports' | 'support' | 'errors';
+type Section = 'analytics' | 'pending' | 'reorder' | 'exposure' | 'users' | 'venues' | 'reports' | 'support' | 'errors';
 // 노출 순서 하위 항목: 포스터(요강) / 매장
 type ReorderTarget = 'posters' | 'venues';
+// 노출 관리 하위 항목(2026-09-03 오너): 광고 / 외치기 / 게시물 / 공지
+type ExposureTarget = 'ads' | 'shouts' | 'posts' | 'notices';
 
 // ── ⚡ 부스트 문의 연락처(운영자) — 업주 '포스터 상단 고정' 카드에 표시될 메일·전화 ──
 function BoostContactCard() {
@@ -270,8 +277,8 @@ function CommunityAdsCard() {
     const j = i + dir;
     if (i < 0 || j < 0 || j >= sorted.length) return;
     const a = sorted[i], b = sorted[j];
-    const aNew: CommunityAd = { slot: a.slot, title: b.title, linkUrl: b.linkUrl, advertiser: b.advertiser, expiresAt: b.expiresAt };
-    const bNew: CommunityAd = { slot: b.slot, title: a.title, linkUrl: a.linkUrl, advertiser: a.advertiser, expiresAt: a.expiresAt };
+    const aNew: CommunityAd = { ...b, slot: a.slot };
+    const bNew: CommunityAd = { ...a, slot: b.slot };
     setSavingSlot(a.slot);
     try {
       await Promise.all([saveCommunityAd(aNew), saveCommunityAd(bNew)]);
@@ -281,35 +288,89 @@ function CommunityAdsCard() {
       toast.show(e instanceof Error ? e.message : '순서 변경 실패', 'error');
     } finally { setSavingSlot(null); }
   };
+  // 노출 토글 — 내용은 그대로 두고 active 만 뒤집어 즉시 저장
+  const toggleActive = async (ad: CommunityAd) => {
+    const next = { ...ad, active: !ad.active };
+    patch(ad.slot, { active: next.active });
+    setSavingSlot(ad.slot);
+    try {
+      await saveCommunityAd(next);
+      toast.show(next.active ? `광고 ${ad.slot}번 칸을 켰습니다` : `광고 ${ad.slot}번 칸을 껐습니다 (내용은 유지)`, 'success');
+    } catch (e) {
+      patch(ad.slot, { active: ad.active });
+      toast.show(e instanceof Error ? e.message : '저장 실패', 'error');
+    } finally { setSavingSlot(null); }
+  };
+  // 게시판 광고 빈도(글 N개마다 1줄) — app_settings community_ads_every
+  const [every, setEvery] = useState(COMMUNITY_ADS_EVERY_DEFAULT);
+  const [savingEvery, setSavingEvery] = useState(false);
+  useEffect(() => { getAppSetting(COMMUNITY_ADS_EVERY_KEY).then((v) => setEvery(parseAdsEvery(v))).catch(() => {}); }, []);
+  const saveEvery = async () => {
+    const n = parseAdsEvery(String(every));
+    setEvery(n);
+    setSavingEvery(true);
+    try {
+      await setAppSetting(COMMUNITY_ADS_EVERY_KEY, String(n));
+      toast.show(`게시판 글 ${n}개마다 광고 1줄로 저장했습니다`, 'success');
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : '저장 실패', 'error');
+    } finally { setSavingEvery(false); }
+  };
   const today = new Date().toLocaleDateString('en-CA');
+  // 상태 배지 — 노출 조건(getActiveCommunityAds)과 같은 판정: 켜짐 AND 제목 AND 미만료
+  const statusOf = (ad: CommunityAd): { label: string; on: boolean } => {
+    if (!ad.title.trim()) return { label: '비어있음', on: false };
+    if (ad.expiresAt && ad.expiresAt < today) return { label: '만료', on: false };
+    if (!ad.active) return { label: '꺼짐', on: false };
+    return { label: '게재중', on: true };
+  };
   return (
     <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
-      <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="megaphone" size={15} className="shrink-0" />커뮤니티 광고 5칸 <span className="text-xs font-normal text-ink-muted">게시판 글 4개마다 [AD] 한 줄. ▲▼로 순서 변경 · 제목 비우면 게재 중단</span></p>
+      <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="megaphone" size={15} className="shrink-0" />커뮤니티 광고 5칸 <span className="text-xs font-normal text-ink-muted">게시판 글 N개마다 [AD] 한 줄. ▲▼로 순서 변경 · '노출' 로 켜고 끔 · 제목 비우면 게재 중단</span></p>
+      <div className="flex flex-wrap items-center gap-1.5 rounded-input border border-border-subtle bg-surface-high/40 p-1.5 text-xs">
+        <label htmlFor="ads-every" className="text-ink-secondary">게시판 글</label>
+        <input id="ads-every" type="number" inputMode="numeric" min={2} max={10} value={every}
+          onChange={(e) => setEvery(Number(e.target.value) || COMMUNITY_ADS_EVERY_DEFAULT)}
+          className="input w-16 text-sm tabular-nums" />
+        <span className="text-ink-secondary">개마다 광고 1줄 (2~10)</span>
+        <button type="button" onClick={saveEvery} disabled={savingEvery} className="btn-primary px-3 py-1.5 text-xs disabled:opacity-60">저장</button>
+      </div>
       <ul className="space-y-1.5">
         {ads.map((ad, i) => {
-          const live = !!ad.title.trim() && (!ad.expiresAt || ad.expiresAt >= today);
+          const st = statusOf(ad);
           return (
-            <li key={ad.slot} className="flex flex-wrap items-center gap-1.5 rounded-input border border-border-subtle bg-surface-high/40 p-1.5">
-              <span className="flex shrink-0 flex-col gap-0.5">
-                <button type="button" onClick={() => move(ad.slot, -1)} disabled={i === 0 || savingSlot !== null} aria-label="위로 이동"
-                  className="leading-none px-1 rounded border border-border-default text-2xs text-ink-secondary hover:text-accent-300 hover:border-accent-400/50 disabled:opacity-25 transition-colors">▲</button>
-                <button type="button" onClick={() => move(ad.slot, 1)} disabled={i === ads.length - 1 || savingSlot !== null} aria-label="아래로 이동"
-                  className="leading-none px-1 rounded border border-border-default text-2xs text-ink-secondary hover:text-accent-300 hover:border-accent-400/50 disabled:opacity-25 transition-colors">▼</button>
-              </span>
-              <span className={['shrink-0 rounded-badge px-1.5 py-0.5 text-2xs font-bold', live ? 'bg-accent-300 text-white' : 'bg-surface-float text-ink-muted'].join(' ')}>{ad.slot}번 {live ? '게재중' : '비어있음'}</span>
-              <input value={ad.title} onChange={(e) => patch(ad.slot, { title: e.target.value })} maxLength={40}
-                placeholder="광고 문구" className="input min-w-[10rem] flex-1 text-sm" />
-              <input value={ad.linkUrl} onChange={(e) => patch(ad.slot, { linkUrl: e.target.value })} maxLength={200}
-                placeholder="링크(선택)" className="input w-40 text-sm" />
-              <input value={ad.advertiser} onChange={(e) => patch(ad.slot, { advertiser: e.target.value })} maxLength={20}
-                placeholder="광고주" className="input w-28 text-sm" />
-              <input type="date" value={ad.expiresAt ?? ''} onChange={(e) => patch(ad.slot, { expiresAt: e.target.value || null })}
-                className="input w-36 text-sm" title="만료일(지나면 자동 내림)" />
-              <button type="button" onClick={() => save(ad)} disabled={savingSlot === ad.slot}
-                className="btn-primary px-3 py-1.5 text-xs disabled:opacity-60">저장</button>
-              <button type="button" disabled={savingSlot === ad.slot || !live && !ad.title}
-                onClick={() => { const empty = { ...ad, title: '', linkUrl: '', advertiser: '', expiresAt: null }; patch(ad.slot, empty); void save(empty); }}
-                className="px-2.5 py-1.5 rounded-input border border-danger/40 text-xs font-bold text-danger-light hover:bg-danger/10 transition-colors disabled:opacity-40">삭제</button>
+            <li key={ad.slot} className="space-y-1.5 rounded-input border border-border-subtle bg-surface-high/40 p-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="flex shrink-0 gap-0.5">
+                  <button type="button" onClick={() => move(ad.slot, -1)} disabled={i === 0 || savingSlot !== null} aria-label="위로 이동"
+                    className="min-h-8 min-w-8 rounded border border-border-default text-2xs text-ink-secondary hover:text-accent-300 hover:border-accent-400/50 disabled:opacity-25 transition-colors">▲</button>
+                  <button type="button" onClick={() => move(ad.slot, 1)} disabled={i === ads.length - 1 || savingSlot !== null} aria-label="아래로 이동"
+                    className="min-h-8 min-w-8 rounded border border-border-default text-2xs text-ink-secondary hover:text-accent-300 hover:border-accent-400/50 disabled:opacity-25 transition-colors">▼</button>
+                </span>
+                <span className={['shrink-0 rounded-badge px-1.5 py-0.5 text-2xs font-bold', st.on ? 'bg-accent-300 text-white' : 'bg-surface-float text-ink-muted'].join(' ')}>{ad.slot}번 {st.label}</span>
+                <button type="button" aria-pressed={ad.active} onClick={() => toggleActive(ad)} disabled={savingSlot === ad.slot}
+                  className={['min-h-8 rounded-input border px-2.5 text-xs font-bold transition-colors disabled:opacity-60',
+                    ad.active ? 'border-accent-400/50 bg-accent-300/15 text-accent-200' : 'border-border-default text-ink-muted hover:text-ink-primary'].join(' ')}>
+                  노출 {ad.active ? '켜짐' : '꺼짐'}
+                </button>
+              </div>
+              <div className="grid gap-1.5 sm:grid-cols-2">
+                <input value={ad.title} onChange={(e) => patch(ad.slot, { title: e.target.value })} maxLength={40}
+                  placeholder="광고 문구" className="input w-full min-w-0 text-sm sm:col-span-2" />
+                <input value={ad.linkUrl} onChange={(e) => patch(ad.slot, { linkUrl: e.target.value })} maxLength={200}
+                  placeholder="링크(선택)" className="input w-full min-w-0 text-sm" />
+                <input value={ad.advertiser} onChange={(e) => patch(ad.slot, { advertiser: e.target.value })} maxLength={20}
+                  placeholder="광고주" className="input w-full min-w-0 text-sm" />
+                <input type="date" value={ad.expiresAt ?? ''} onChange={(e) => patch(ad.slot, { expiresAt: e.target.value || null })}
+                  className="input w-full min-w-0 text-sm" title="만료일(지나면 자동 내림)" />
+                <div className="flex gap-1.5">
+                  <button type="button" onClick={() => save(ad)} disabled={savingSlot === ad.slot}
+                    className="btn-primary flex-1 px-3 py-1.5 text-xs disabled:opacity-60">저장</button>
+                  <button type="button" disabled={savingSlot === ad.slot || !ad.title}
+                    onClick={() => { const empty = { ...ad, title: '', linkUrl: '', advertiser: '', expiresAt: null }; patch(ad.slot, empty); void save(empty); }}
+                    className="px-2.5 py-1.5 rounded-input border border-danger/40 text-xs font-bold text-danger-light hover:bg-danger/10 transition-colors disabled:opacity-40">삭제</button>
+                </div>
+              </div>
             </li>
           );
         })}
@@ -609,6 +670,19 @@ function ShoutsAdminCard() {
   // 라벨만 나눈다(운영자가 '지금 화면에 떠 있는 것'을 골라 내릴 수 있어야 한다).
   const live = (s: AdminShout) => !s.hidden && new Date(s.expiresAt).getTime() > Date.now();
   const airing = (s: AdminShout) => live(s) && new Date(s.playsAt).getTime() <= Date.now();
+  // 대기 순번 — 살아있는 외침을 plays_at 오름차순으로 세운 인덱스(방송 중이 0번, 그 다음이 1번…)
+  const queueNo: Record<string, number> = {};
+  (rows ?? []).filter(live).sort((a, b) => new Date(a.playsAt).getTime() - new Date(b.playsAt).getTime())
+    .forEach((s, i) => { queueNo[s.id] = i; });
+  const bump = async (s: AdminShout) => {
+    setBusy(s.id);
+    try {
+      await adminShoutBump(s.id);
+      toast.show('외침을 맨 앞으로 보냈습니다', 'success');
+      reload();
+    } catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
+    finally { setBusy(null); }
+  };
   return (
     <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
       <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="megaphone" size={15} className="shrink-0" />외치기 관리 <span className="text-xs font-normal text-ink-muted">활동점수로 구매한 커뮤니티 강조 메시지. 대기열 순서대로 20초씩 1회 방송</span></p>
@@ -622,8 +696,14 @@ function ShoutsAdminCard() {
             <li key={s.id} className="rounded-input border border-border-subtle bg-surface-high/40 px-2 py-1.5 text-xs">
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className={['rounded-badge px-1.5 py-0.5 text-2xs font-bold', live(s) ? 'bg-accent-300 text-white' : 'bg-surface-float text-ink-muted'].join(' ')}>
-                  {s.hidden ? '내려짐' : airing(s) ? '방송 중' : live(s) ? '대기 중' : '종료'}
+                  {s.hidden ? '내려짐' : airing(s) ? '방송 중' : live(s) ? `대기 ${queueNo[s.id] ?? 0}번` : '종료'}
                 </span>
+                {live(s) && !airing(s) && refundId !== s.id && (
+                  <button type="button" onClick={() => bump(s)} disabled={busy === s.id}
+                    className="btn-ghost inline-flex min-h-8 items-center gap-1 px-2 py-1 text-2xs text-accent-200 disabled:opacity-60">
+                    <Icon name="chevron-up" size={11} className="shrink-0" />맨 앞으로
+                  </button>
+                )}
                 <span className="min-w-0 flex-1 truncate text-ink-primary">{s.message}</span>
                 <span className="text-2xs text-ink-muted">{s.nickname} · {s.cost}점 · {new Date(s.createdAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                 {live(s) && refundId !== s.id && (
@@ -661,6 +741,150 @@ function ShoutsAdminCard() {
               {live(s) && refunds[s.id]?.block && refundId !== s.id && (
                 <p className="mt-1 text-2xs text-ink-muted">{refunds[s.id].block}</p>
               )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+// ── 게시물 노출(운영자) — 최근 글 고정/블라인드. posts 는 App 의 최신 50건(+끌올·고정) ─────
+function PostsAdminPanel({ posts }: { posts: CommunityPost[] }) {
+  const toast = useToast();
+  const [cat, setCat] = useState<PostCategory | 'all'>('all');
+  // 낙관 반영 — App 은 realtime(subscribePosts)으로 곧 따라오지만, 그 사이 버튼이 거짓말하지 않게 로컬로 덮는다
+  const [patch, setPatch] = useState<Record<string, { pinnedAt?: string | null; blinded?: boolean }>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const list = posts
+    .map((p) => ({ ...p, ...patch[p.id] }))
+    .filter((p) => cat === 'all' || (p.category ?? 'free') === cat)
+    .slice(0, 50);
+  const run = async (p: CommunityPost, kind: 'pin' | 'blind') => {
+    setBusy(p.id);
+    try {
+      if (kind === 'pin') {
+        const next = !p.pinnedAt;
+        await adminSetPostPinned(p.id, next);
+        setPatch((m) => ({ ...m, [p.id]: { ...m[p.id], pinnedAt: next ? new Date().toISOString() : null } }));
+        toast.show(next ? '게시판 맨 위에 고정했습니다' : '고정을 해제했습니다', 'success');
+      } else {
+        const next = !p.blinded;
+        await adminSetPostBlinded(p.id, next);
+        setPatch((m) => ({ ...m, [p.id]: { ...m[p.id], blinded: next } }));
+        toast.show(next ? '블라인드 처리했습니다' : '블라인드를 해제했습니다', 'success');
+      }
+    } catch (e) { toast.show(e instanceof Error ? e.message : '실패', 'error'); }
+    finally { setBusy(null); }
+  };
+  return (
+    <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
+      <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="pin" size={15} className="shrink-0" />게시물 노출 <span className="text-xs font-normal text-ink-muted">최근 50개. 고정 = 게시판 맨 위 · 블라인드 = 작성자·운영자만 열람</span></p>
+      <div className="flex gap-1 overflow-x-auto scrollbar-none">
+        {BOARD_FILTER_CATEGORIES.map((c) => (
+          <button key={c.id} type="button" onClick={() => setCat(c.id)} aria-pressed={cat === c.id}
+            className={['shrink-0 whitespace-nowrap rounded-badge border px-2.5 py-1.5 text-xs font-semibold transition-colors',
+              cat === c.id ? 'border-accent-400/50 bg-accent-300/15 text-accent-200' : 'border-border-default text-ink-secondary hover:text-ink-primary'].join(' ')}>
+            {c.label}
+          </button>
+        ))}
+      </div>
+      {list.length === 0 ? (
+        <p className="py-3 text-center text-xs text-ink-muted">해당 글이 없습니다</p>
+      ) : (
+        <ul className="space-y-1">
+          {list.map((p) => (
+            <li key={p.id} className="space-y-1 rounded-input border border-border-subtle bg-surface-high/40 px-2 py-1.5 text-xs">
+              <p className="flex items-center gap-1 min-w-0">
+                {p.pinnedAt && <span className="shrink-0 rounded-badge bg-gold-400/15 px-1 text-2xs font-extrabold leading-none text-gold-400">고정</span>}
+                {p.blinded && <span className="shrink-0 rounded-badge bg-surface-float px-1 text-2xs font-extrabold leading-none text-ink-muted">블라인드</span>}
+                <span className="min-w-0 flex-1 truncate font-bold text-ink-primary">{p.title || p.content.split('\n')[0]}</span>
+              </p>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="min-w-0 flex-1 truncate text-2xs text-ink-muted">
+                  {p.userName} · {postCategoryLabel(p.category)} · {new Date(p.createdAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </span>
+                <button type="button" onClick={() => run(p, 'pin')} disabled={busy === p.id}
+                  className={['min-h-8 rounded-input border px-2.5 text-2xs font-bold transition-colors disabled:opacity-60',
+                    p.pinnedAt ? 'border-gold-400/40 text-gold-400 hover:bg-gold-400/10' : 'border-border-default text-ink-secondary hover:text-ink-primary'].join(' ')}>
+                  {p.pinnedAt ? '고정 해제' : '고정'}
+                </button>
+                <button type="button" onClick={() => run(p, 'blind')} disabled={busy === p.id}
+                  className={['min-h-8 rounded-input border px-2.5 text-2xs font-bold transition-colors disabled:opacity-60',
+                    p.blinded ? 'border-border-default text-ink-secondary hover:text-ink-primary' : 'border-danger/40 text-danger-light hover:bg-danger/10'].join(' ')}>
+                  {p.blinded ? '블라인드 해제' : '블라인드'}
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+// ── 공지 노출(운영자) — 순서 ▲▼·삭제. 작성은 커뮤니티 탭의 '공지 쓰기'(onWriteNotice) 그대로 ─────
+const NOTICE_TYPE_LABEL: Record<MarketplaceNotice['type'], string> = { pinned: '공지', event: '이벤트', caution: '주의' };
+const NOTICE_BOARD_LABEL: Record<NonNullable<MarketplaceNotice['board']>, string> = { all: '전체', community: '게시판', market: '장터', dealer: '딜러' };
+function NoticesAdminPanel({ onChanged }: { onChanged?: () => void }) {
+  const toast = useToast();
+  const [rows, setRows] = useState<MarketplaceNotice[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(() => { getNotices().then(setRows).catch(() => setRows([])); }, []);
+  useEffect(() => { load(); }, [load]);
+  // ▲▼ — 화면 순서대로 0..-(n-1) 을 다시 매긴다(기본값 0 끼리는 교환해도 순서가 안 바뀌므로 재번호가 필요).
+  // 맨 위 = 0 이라 새 공지(기본값 0)가 맨 위와 동률 → created_at desc 로 위에 선다. 양수로 매기면 새 공지가 맨 아래로 간다.
+  // ponytail: 값이 바뀐 행만 저장(첫 이동 때 전체, 이후엔 보통 2행). 공지는 수십 건이라 충분하다.
+  const move = async (i: number, dir: -1 | 1) => {
+    if (!rows) return;
+    const j = i + dir;
+    if (j < 0 || j >= rows.length) return;
+    const next = [...rows];
+    [next[i], next[j]] = [next[j], next[i]];
+    const renum = next.map((n, idx) => ({ ...n, sortOrder: -idx }));
+    const prev = new Map(rows.map((r) => [r.id, r.sortOrder ?? 0]));
+    setBusy(true);
+    try {
+      await Promise.all(renum.filter((n) => prev.get(n.id) !== n.sortOrder).map((n) => setNoticeOrder(n.id, n.sortOrder)));
+      setRows(renum);
+      onChanged?.();
+    } catch (e) { toast.show(e instanceof Error ? e.message : '순서 변경 실패', 'error'); load(); }
+    finally { setBusy(false); }
+  };
+  const remove = async (n: MarketplaceNotice) => {
+    if (!window.confirm(`공지 "${n.title}" 를 삭제할까요?`)) return;
+    setBusy(true);
+    try {
+      await deleteNotice(n.id);
+      setRows((r) => (r ?? []).filter((x) => x.id !== n.id));
+      toast.show('공지를 삭제했습니다', 'success');
+      onChanged?.();
+    } catch (e) { toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'); }
+    finally { setBusy(false); }
+  };
+  return (
+    <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
+      <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="megaphone" size={15} className="shrink-0" />공지 노출 순서 <span className="text-xs font-normal text-ink-muted">▲▼로 순서 변경. 작성·수정은 커뮤니티 탭의 공지 쓰기에서</span></p>
+      {rows === null ? (
+        <ul className="space-y-1">{[0, 1].map((i) => <li key={i} className="skeleton h-9 rounded-input" />)}</ul>
+      ) : rows.length === 0 ? (
+        <p className="py-3 text-center text-xs text-ink-muted">등록된 공지가 없습니다</p>
+      ) : (
+        <ul className="space-y-1">
+          {rows.map((n, i) => (
+            <li key={n.id} className="flex items-center gap-1.5 rounded-input border border-border-subtle bg-surface-high/40 px-2 py-1.5 text-xs">
+              <span className="flex shrink-0 gap-0.5">
+                <button type="button" onClick={() => move(i, -1)} disabled={i === 0 || busy} aria-label="위로 이동"
+                  className="min-h-8 min-w-8 rounded border border-border-default text-2xs text-ink-secondary hover:text-accent-300 hover:border-accent-400/50 disabled:opacity-25 transition-colors">▲</button>
+                <button type="button" onClick={() => move(i, 1)} disabled={i === rows.length - 1 || busy} aria-label="아래로 이동"
+                  className="min-h-8 min-w-8 rounded border border-border-default text-2xs text-ink-secondary hover:text-accent-300 hover:border-accent-400/50 disabled:opacity-25 transition-colors">▼</button>
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-bold text-ink-primary">{n.title}</span>
+                <span className="block truncate text-2xs text-ink-muted">{NOTICE_TYPE_LABEL[n.type]} · {NOTICE_BOARD_LABEL[n.board ?? 'all']} · {n.authorName} · {new Date(n.createdAt).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' })}</span>
+              </span>
+              <button type="button" onClick={() => remove(n)} disabled={busy}
+                className="min-h-8 shrink-0 rounded-input border border-danger/40 px-2.5 text-2xs font-bold text-danger-light hover:bg-danger/10 transition-colors disabled:opacity-40">삭제</button>
             </li>
           ))}
         </ul>
@@ -859,7 +1083,8 @@ const aic = (children: ReactNode) => (
 const ADMIN_DESC: Record<Section, string> = {
   analytics: '플랫폼 핵심 지표 · 회원·매장·대회·체크인·추천·푸시 한눈에',
   pending: '업주가 등록한 포스터 검수. 승인하면 일정 탐색에 노출됩니다',
-  reorder: '노출 순서 · 부스트 · 커뮤니티 광고 · 주간 미션 관리',
+  reorder: '노출 순서 · 부스트 · 주간 미션 관리',
+  exposure: '커뮤니티 광고 노출·순서 · 외치기 대기열 · 게시물 고정·블라인드 · 공지 순서',
   users: '회원 검색 · 등급 · 제재 · 활동점수(구매 환불 · 지급)',
   venues: '매장 생성 · 인증 · 그룹 승인',
   reports: '신고 접수 처리',
@@ -871,6 +1096,8 @@ const ADMIN_SECTIONS: { id: Section; label: string; icon: ReactNode }[] = [
   { id: 'analytics', label: '운영 분석', icon: aic(<><path d="M3 3v18h18" /><path d="m7 14 4-4 3 3 5-6" /></>) },
   { id: 'pending', label: '포스터 승인', icon: aic(<><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><path d="m9 11 3 3L22 4" /></>) },
   { id: 'reorder', label: '게시물 관리', icon: aic(<><path d="m12 2 9 5-9 5-9-5 9-5Z" /><path d="m3 12 9 5 9-5" /><path d="m3 17 9 5 9-5" /></>) },
+  // lucide eye 경로(Icon.tsx LUCIDE 와 같은 글리프)
+  { id: 'exposure', label: '노출 관리', icon: aic(<><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" /><circle cx="12" cy="12" r="3" /></>) },
   { id: 'users', label: '회원 관리', icon: aic(<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>) },
   { id: 'venues', label: '매장', icon: aic(<><path d="M3 9.5 5 4h14l2 5.5" /><path d="M4 9.5V20a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9.5" /><path d="M9 21v-6h6v6" /></>) },
   { id: 'reports', label: '신고', icon: aic(<><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></>) },
@@ -965,12 +1192,13 @@ function PlanUsageCard() {
 }
 
 export default function AdminTab({
-  schedules, venues, users, posts, onApproveSchedule, onRejectSchedule, onUpdateUser, onDeletePost, onReloadVenues,
+  schedules, venues, users, posts, onApproveSchedule, onRejectSchedule, onUpdateUser, onDeletePost, onReloadVenues, onReloadNotices,
 }: AdminTabProps) {
   const [section, setSection] = useState<Section>('analytics');
   // 뒤로가기 — 비기본 섹션에선 먼저 기본(운영분석)으로 돌아오고, 그 다음에야 탭을 빠져나가게(일정탐색으로 바로 튐 방지)
   useBackClose(section !== 'analytics', () => setSection('analytics'));
   const [reorderTarget, setReorderTarget] = useState<ReorderTarget>('posters');
+  const [exposureTarget, setExposureTarget] = useState<ExposureTarget>('ads');
 
   const pending = schedules.filter((s) => !s.approved);
 
@@ -1011,17 +1239,29 @@ export default function AdminTab({
                 ? (
                   <>
                     <BoostContactCard />
-                    <CommunityAdsCard />
-          <VenueOwnerRequestsCard />
-          <VoucherQuotaAdminCard />
-          <RankVerifyAdminCard />
+                    <VenueOwnerRequestsCard />
+                    <VoucherQuotaAdminCard />
+                    <RankVerifyAdminCard />
                     <MissionsAdminCard />
                     <HallOfFameAdminCard />
-                    <ShoutsAdminCard />
                     <DraggableList initialItems={schedules.filter((s) => s.approved)} />
                   </>
                 )
                 : <VenueManagement />}
+            </div>
+          )}
+          {section === 'exposure' && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5">
+                <SubPill active={exposureTarget === 'ads'} onClick={() => setExposureTarget('ads')}>광고</SubPill>
+                <SubPill active={exposureTarget === 'shouts'} onClick={() => setExposureTarget('shouts')}>외치기</SubPill>
+                <SubPill active={exposureTarget === 'posts'} onClick={() => setExposureTarget('posts')}>게시물</SubPill>
+                <SubPill active={exposureTarget === 'notices'} onClick={() => setExposureTarget('notices')}>공지</SubPill>
+              </div>
+              {exposureTarget === 'ads' && <CommunityAdsCard />}
+              {exposureTarget === 'shouts' && <ShoutsAdminCard />}
+              {exposureTarget === 'posts' && <PostsAdminPanel posts={posts} />}
+              {exposureTarget === 'notices' && <NoticesAdminPanel onChanged={onReloadNotices} />}
             </div>
           )}
           {section === 'users' && (
