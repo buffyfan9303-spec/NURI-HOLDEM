@@ -31,6 +31,7 @@ const STATIC_PAGES = [
   ['/legal/privacy.html', '0.5'],
   ['/legal/anti-gambling.html', '0.5'],
   ['/legal/marketing.html', '0.4'],
+  ['/legal/refund.html', '0.4'], // 취소·환불 정책(고지 문서 · PG 심사용 공개 URL)
   ['/about.html', '0.5'],
 ];
 

@@ -19,6 +19,7 @@ export default async function handler(req, res) {
     { loc: `${ORIGIN}/legal/privacy.html`, changefreq: 'monthly', priority: '0.5', lastmod: today },
     { loc: `${ORIGIN}/legal/anti-gambling.html`, changefreq: 'monthly', priority: '0.5', lastmod: today },
     { loc: `${ORIGIN}/legal/marketing.html`, changefreq: 'monthly', priority: '0.4', lastmod: today },
+    { loc: `${ORIGIN}/legal/refund.html`, changefreq: 'monthly', priority: '0.4', lastmod: today },
     { loc: `${ORIGIN}/about.html`, changefreq: 'monthly', priority: '0.5', lastmod: today },
   ];
 
