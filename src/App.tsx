@@ -725,19 +725,32 @@ export default function App() {
   const [updateReady, setUpdateReady] = useState(false); // 새 버전(SW) 감지 → 새로고침 배너
   const [pushNudge, setPushNudge] = useState(false); // 운영자 푸시 권한 온보딩 배너(설치형·1회)
   // 시작 탭 — PWA 바로가기(?tab=)·딥링크 지원(앱 아이콘 길게 누르기 메뉴)
+  //
+  // 2026-09-04 오너 지시: "다른 웹페이지 갔다가 돌아오면 홈이 나와야 되는데 다른 메뉴가 나온다".
+  //   원인은 버그가 아니라 기능이었다 — 16-2 '마지막 탭 복원'(localStorage `nuri:last-tab`)이
+  //   직전 탭으로 시작시켰고, 마지막이 홈이었던 날만 홈이 떠서 **간헐적으로 보였을 뿐 결정적**이었다.
+  //   옛 온보딩 잔재(`nuri:persona === 'gto'` → 도구 탭)도 같은 증상을 냈다.
+  //   둘 다 제거하고 진입점을 홈 하나로 고정한다. 딥링크(?tab=)만 예외다.
+  //   탭별 스크롤 복원(tabScrollRef)은 세션 메모리라 이 변경과 무관하게 그대로 동작한다.
   const [activeTab, setActiveTab]     = useState<TabId>(() => {
     try {
       const t = new URLSearchParams(window.location.search).get('tab');
       const valid: TabId[] = ['home', 'browse', 'live', 'community', 'market', 'tools', 'my-store', 'admin'];
       if ((valid as string[]).includes(t ?? '')) return t as TabId;
-      // 16-2 마지막 탭 복원 — 우선순위: 딥링크 > 마지막 탭 > 온보딩 persona 기본.
-      // Phase 4-3 의 탭별 스크롤 복원과 결합되어 '어제 보던 그 자리'로 돌아간다.
-      const last = localStorage.getItem('nuri:last-tab');
-      if ((valid as string[]).includes(last ?? '') && last !== 'admin') return last as TabId;
-      if (localStorage.getItem('nuri:persona') === 'gto') return 'tools';
       return 'home';
     } catch { return 'home'; }
   });
+  // `?tab=` 은 **1회성 진입**이다 — v/venue 딥링크와 같은 문법(아래 1780행대).
+  // 이걸 안 지우면 PWA 바로가기·알림 패널(NotificationPanel)로 들어온 사용자는 URL 에 ?tab= 이 박힌 채
+  // 남아, 새로고침·복귀 때마다 계속 그 탭으로 부팅된다 — 위 '항상 홈' 규칙이 그 사용자에게만 무력화된다.
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href);
+      if (!url.searchParams.has('tab')) return;
+      url.searchParams.delete('tab');
+      window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+    } catch { /* ignore */ }
+  }, []);
   // 탭 전환을 트랜지션으로 — lazy 청크/무거운 렌더 동안 이전 화면을 유지해
   // '이전 메뉴 → 스피너 깜빡 → 새 메뉴' 3단 플래시를 없앤다(React 공식 패턴).
   const [, startTabTransition] = useTransition();
@@ -756,7 +769,6 @@ export default function App() {
   const commitTab = useCallback((t: TabId, dir?: VTDirection) => {
     if (t === activeTabRef.current) return;
     tabScrollRef.current.set(activeTabRef.current, window.scrollY);
-    try { localStorage.setItem('nuri:last-tab', t); } catch { /* noop */ } // 16-2 재방문 복원용
     // 메이저 사이트의 '부드러움'은 전환 커밋 비용이 0이라서가 아니라, 스냅샷 크로스페이드가
     // 무거운 프레임을 가리기 때문이다(View Transition). 재방문 탭(keep-alive)은 동기 커밋이
     // 가능하므로 flushSync 를 트랜지션 콜백 안에서 돌려 display 토글·스크롤 복원 비용 전부를
@@ -787,8 +799,8 @@ export default function App() {
   // 홈은 이력의 뿌리다: 홈 탭을 직접 누르면 트레일을 비운다(그 뒤 뒤로가기는 앱 밖으로 — 안드로이드 관례).
   const tabTrailRef = useRef<{ tab: TabId; dispose: () => void }[]>([]);
   const trailSuppressRef = useRef(false); // 뒤로가기가 유발한 탭 변경엔 이력을 쌓지 않는다
-  // 초기값을 'home' 으로 두는 이유: 마지막 탭 복원(nuri:last-tab)으로 비-홈에서 시작했을 때
-  // 첫 뒤로가기가 앱을 종료시키지 않고 홈으로 오게 만든다(기존 '앱 종료 방지' 계약 유지).
+  // 초기값 'home' — 이제 시작 탭도 항상 홈이라 둘이 일치한다(딥링크 ?tab= 만 예외).
+  // 딥링크로 비-홈에서 시작해도 첫 뒤로가기가 앱을 종료시키지 않고 홈으로 온다('앱 종료 방지' 계약 유지).
   const prevTabRef = useRef<TabId>('home');
   const clearTabTrail = useCallback(() => {
     const items = tabTrailRef.current;
@@ -1731,6 +1743,8 @@ export default function App() {
 
   const handleVenueClick = useCallback((venueId: string) => {
     if (!venueId) return; // 직접입력 포스터 등 매장 미연결 시 무시
+    // 스냅샷 전에 동기적으로 — 매장 페이지도 전면 오버레이라 크롬 스냅샷이 위에 얹힌다(openMeCb 와 같은 이유).
+    document.documentElement.setAttribute('data-overlay', '');
     // 풀페이지 마운트(지도 임베드 포함)를 스냅샷 뒤에서 끝낸다 — 포스터→매장 전환도 크로스페이드
     withViewTransition(() => flushSync(() => {
       setOpenSchedule(null);   // 일정 모달이 열려있으면 닫고 매장으로 전환
@@ -2368,12 +2382,27 @@ export default function App() {
   const fullOverlayOpen = voucherWalletOpen || supportOpen || globalSearchOpen
     || openVenueId !== null || openSchedule !== null || openPost !== null || openListing !== null
     || openNotice !== null || displayTarget !== null || legalDoc !== null || gtoInit !== null;
+  // 전면 오버레이가 떠 있는 동안 상시 크롬의 VT 스냅샷 이름을 끈다(index.css `html:not([data-overlay])`).
+  // 이름이 붙은 크롬은 top layer 의 ::view-transition-group 으로 그려져, top layer 가 아닌
+  // 오버레이(fixed z-[60]) **위**에 얹힌다 — PC '내 정보' 겹침의 원인.
+  // 이 effect 는 VT 없이 열리는 나머지 오버레이(검색·법적고지·문의 등)를 한 번에 덮는 **보조**다.
+  // VT 로 여는 경로(openMeCb·handleVenueClick)는 스냅샷보다 먼저 켜야 하므로 각자 동기적으로 세운다.
+  useEffect(() => {
+    const el = document.documentElement;
+    if (fullOverlayOpen) el.setAttribute('data-overlay', '');
+    else el.removeAttribute('data-overlay');
+  }, [fullOverlayOpen]);
   // 비로그인도 페이지를 연다 — CustomerDashboardPage 가 user 없으면 APIS식 로그인 랜딩을 렌더(오너 레퍼런스 2026-08-27)
   // keep-alive + VT: 한 번 연 뒤에는 언마운트하지 않고(자식이 display 토글) 재열림을 스냅샷 뒤 동기 커밋으로 —
   // GTO 등 무거운 탭 위에서 '내 정보'를 열 때의 풀 마운트 프레임 드롭 제거(changeTab 과 같은 조리법).
   const meEverOpenedRef = useRef(false);
   if (voucherWalletOpen) meEverOpenedRef.current = true; // 렌더 중 latch(단조) — 헤더 🎟 등 모든 열림 경로를 커버
   const openMeCb = useCallback((tab: MeTab = 'dashboard') => {
+    // ⚠ 이 한 줄은 **startViewTransition 보다 먼저, 동기적으로** 실행돼야 한다.
+    //   old 스냅샷은 전환 시작 시점에 찍히므로, effect·상태로 미루면 이미 이름이 붙은 크롬이
+    //   캡처돼 오버레이 위에 그대로 겹친다(실측). 같은 조리법의 전례가 아래 포스터 모핑
+    //   (handleScheduleSelect 의 `flushSync(() => setVtPosterId(...))` 를 withViewTransition 앞에 두기)이다.
+    document.documentElement.setAttribute('data-overlay', '');
     setMeTab(tab);
     if (meEverOpenedRef.current) {
       withViewTransition(() => flushSync(() => setVoucherWalletOpen(true)), () => startTransition(() => setVoucherWalletOpen(true)));
@@ -2461,14 +2490,19 @@ export default function App() {
       {/* 본인인증 게이트 안내 시트(#31) — 미인증 회원이 민감 기능 시도 시 자동 표시 */}
       <VerifyGateSheet onStart={() => openMeCb('security')} />
 
-      {/* 첫 진입 온보딩(#29)은 오너 지시(2026-08-28)로 삭제 — localStorage 'nuri:persona' 소비처
-          (초기 탭 결정)는 기존 선택 사용자 보존을 위해 유지 */}
+      {/* 첫 진입 온보딩(#29)은 오너 지시(2026-08-28)로 삭제. 마지막 남은 소비처였던
+          'nuri:persona' 기반 초기 탭 결정도 2026-09-04 오너 지시로 제거됐다(진입은 항상 홈). */}
 
       {/* keep-alive — 한 번 열리면 마운트 유지(자식이 display 토글), 재열림·닫힘은 VT 스냅샷 뒤 display 커밋만 */}
       {(voucherWalletOpen || meEverOpenedRef.current) && (
         <Suspense fallback={voucherWalletOpen ? <OverlayFallback /> : null}>
           <CustomerDashboardPage open={voucherWalletOpen}
-            onClose={() => withViewTransition(() => flushSync(() => setVoucherWalletOpen(false)), () => setVoucherWalletOpen(false))}
+            onClose={() => withViewTransition(
+              // 닫힐 때는 커밋 콜백 안에서 마커를 내린다 — new 스냅샷에 이름 붙은 크롬이 들어가야
+              // 헤더·GNB 가 root 애니(블러·슬라이드)에 딸려가지 않는다('상시 크롬은 흔들리지 않는다' 계약).
+              () => { document.documentElement.removeAttribute('data-overlay'); flushSync(() => setVoucherWalletOpen(false)); },
+              () => { document.documentElement.removeAttribute('data-overlay'); setVoucherWalletOpen(false); },
+            )}
             unread={notifications.filter((n) => !n.read)}
             onOpenNotification={(id) => {
               const n = notifications.find((x) => x.id === id);

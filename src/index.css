@@ -1228,10 +1228,18 @@ img, svg { -webkit-touch-callout: none; -webkit-user-drag: none; user-select: no
 
 /* ── VT 예외(오너 지시): 헤더·하단 탭바는 화면 전환 블러/슬라이드에서 제외 —
    자기 이름의 스냅샷으로 분리해 root 애니에 안 실린다(상시 크롬은 흔들리지 않아야 한다) ── */
-[data-stack-header] { view-transition-name: app-header; }
-nav[aria-label="하단 내비게이션"] { view-transition-name: app-tabbar; }
+/* ⚠ `html:not([data-overlay])` 가 핵심이다 — 이 세 줄이 **조건 없이** 켜져 있어서
+   PC 에서 '내 정보' 위에 메인 헤더·GNB 가 겹쳐 보였다(2026-09-04 오너 리포트, 격리 재현 완료).
+   이름이 붙은 요소는 root 스냅샷에서 분리돼 자기 ::view-transition-group 으로 **top layer** 에 그려지는데,
+   '내 정보'(CustomerDashboardPage)는 top layer 가 아닌 평범한 `fixed inset-0 z-[60]` 이라 root 스냅샷 안에 있다.
+   → 전환이 도는 동안 크롬이 오버레이 **위**에 얹힌다. 게다가 아래 1290행대가 이 셋을 `animation:none` 으로
+   못 박아 둬서 페이드조차 없는 완전 불투명 띠가 된다. PC 에서만 보인 건 GNB 가 `hidden lg:flex` 이고
+   앱 루트가 `max-w-6xl` 이라 전폭 오버레이 한가운데 1152px 띠로 얹히기 때문(메커니즘은 모바일에도 동일).
+   바로 아래 community-secbar·venue-tabbar 주석이 경고하는 '상시 name = old-only 잔상' 함정과 같은 뿌리다. */
+html:not([data-overlay]) [data-stack-header] { view-transition-name: app-header; }
+html:not([data-overlay]) nav[aria-label="하단 내비게이션"] { view-transition-name: app-tabbar; }
 /* PC 상단 GNB(sticky 탭 스트립)도 상시 크롬 — 빠져 있어서 전환에 딸려 옆으로 밀렸다(오너 리포트) */
-[data-stack-tabbar] { view-transition-name: app-gnb; }
+html:not([data-overlay]) [data-stack-tabbar] { view-transition-name: app-gnb; }
 /* 커뮤니티 서브탭 바(sticky)도 상시 크롬 — 서브섹션 전환(root 스냅샷)에 딸려 블러·슬라이드되던 것 제외(오너 리포트).
    단 상시 켜두면 메인 탭 전환(커뮤니티→홈)에서 old-only 스냅샷이 전환 내내 잔상으로 얼어붙는다(실측) —
    서브섹션 전환 동안만 CommunityTab 이 html 에 켜는 마커로 조건부 활성(vtDir 마커와 같은 조리법). */
