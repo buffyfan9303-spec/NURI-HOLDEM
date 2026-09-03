@@ -73,10 +73,14 @@ Deno.serve(async (req: Request) => {
       p_birth: birth,
       p_gender: vc.gender ?? null,
       p_carrier: vc.operator ?? null,
+      // 인증 ID 일회성(20260904a) — 원문이 아니라 함수 안에서 HMAC 해시로 기록된다.
+      // 같은 사용자의 재시도는 멱등 통과, 타인이 탈취해 재사용하면 code=reused 로 거절.
+      p_idv: idv,
     });
     if (cErr) return json({ error: '저장 실패', detail: cErr.message }, 500);
     if (!commit?.ok) {
       if (commit?.code === 'dup') return json({ error: '이미 가입된 명의입니다.' }, 409);
+      if (commit?.code === 'reused') return json({ error: '이미 사용된 인증입니다. 본인인증을 다시 진행해 주세요.' }, 409);
       return json({ error: '저장 실패', detail: commit?.code ?? 'unknown' }, 500);
     }
     return json({ ok: true, name: vc.name ?? null });

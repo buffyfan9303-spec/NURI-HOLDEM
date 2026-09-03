@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
     if (error || !profile?.email) return json({ error: '회원 이메일을 찾을 수 없습니다' }, 404);
 
     const resendKey = Deno.env.get('RESEND_API_KEY');
-    const from = Deno.env.get('SANCTION_FROM') ?? 'NURI HOLDEM <onboarding@resend.dev>';
+    const from = Deno.env.get('SANCTION_FROM') ?? 'NURI HOLDEM <noreply@nuriholdem.com>';
     if (!resendKey) return json({ sent: false, reason: 'RESEND_API_KEY 미설정' }, 200);
 
     const display = escapeHtml(profile.nickname ?? profile.name ?? '회원');
@@ -79,10 +79,10 @@ Deno.serve(async (req) => {
       const end = suspendedUntil ? new Date(suspendedUntil) : null;
       const days = end ? Math.max(1, Math.ceil((end.getTime() - Date.now()) / 86400000)) : null;
       const endTxt = end ? end.toLocaleString('ko-KR', { dateStyle: 'long', timeStyle: 'short' }) : '별도 안내';
-      subject = '[누리 홀덴] 서비스 이용 정지 안내';
+      subject = '[누리 홀덤] 서비스 이용 정지 안내';
       inner = `${pill('이용 정지', C.gold)}<h1 style="color:${C.text};font-size:21px;margin:0 0 12px;font-weight:800;">서비스 이용 정지 안내</h1><p style="color:${C.sub};font-size:14px;line-height:1.75;margin:0;"><b style="color:${C.text};">${display}</b>님, 운영원칙 위반으로 회원님의 계정이 아래와 같이 일시 정지되었음을 안내드립니다.</p>${infoBox(row('처리 내용', '이용 정지') + row('정지 기간', days ? `${days}일 · ${endTxt}까지` : endTxt) + row('상세 사유', safeReason))}<p style="color:${C.sub};font-size:13px;line-height:1.75;margin:0;">정지 기간 동안 서비스 이용이 제한되며, 기간 만료 후 자동으로 해제됩니다.</p>`;
     } else {
-      subject = '[누리 홀덴] 서비스 강제 탈퇴 및 이용 제한 안내';
+      subject = '[누리 홀덤] 서비스 강제 탈퇴 및 이용 제한 안내';
       inner = `${pill('강제 탈퇴 · 영구 제한', C.red)}<h1 style="color:${C.text};font-size:21px;margin:0 0 12px;font-weight:800;">서비스 강제 탈퇴 안내</h1><p style="color:${C.sub};font-size:14px;line-height:1.75;margin:0;"><b style="color:${C.text};">${display}</b>님, 심각한 운영원칙 위반으로 회원님의 계정이 강제 탈퇴 처리되었음을 안내드립니다.</p>${infoBox(row('처리 내용', '강제 탈퇴 / 영구 이용 제한', C.red) + row('상세 사유', safeReason))}<p style="color:${C.sub};font-size:13px;line-height:1.75;margin:0;">관련 법령 및 서비스 이용약관에 따라 본 조치 이후 <b style="color:${C.text};">동일인의 재가입이 제한</b>됩니다. 불법 환전·사행성 행위 등 중대한 위반은 관계 법령에 따라 처리될 수 있습니다.</p>`;
     }
 

@@ -37,7 +37,7 @@ Deno.serve(async (req: Request) => {
     .from('secret_settings').select('key,value').in('key', ['RESEND_API_KEY', 'RESEND_FROM']);
   if (sErr) return json({ error: 'secrets: ' + sErr.message }, 500);
   const apiKey = secrets?.find((s) => s.key === 'RESEND_API_KEY')?.value;
-  const from = secrets?.find((s) => s.key === 'RESEND_FROM')?.value ?? 'NURI HOLDEM <onboarding@resend.dev>';
+  const from = secrets?.find((s) => s.key === 'RESEND_FROM')?.value ?? 'NURI HOLDEM <noreply@nuriholdem.com>';
   if (!apiKey) return json({ error: 'RESEND_API_KEY not set' }, 500);
 
   const send = async (to: string, subject: string, html: string) => {
@@ -52,7 +52,7 @@ Deno.serve(async (req: Request) => {
 
   const payload = await req.json().catch(() => ({} as Record<string, unknown>));
 
-  // 수동 테스트 — 도메인 인증 전에는 Resend 계정 소유자 주소로만 도달한다(onboarding 발신)
+  // 수동 테스트 — 2026-09-04 nuriholdem.com 도메인 인증 완료(DKIM·SPF·MX). 이제 임의 수신자에게 도달한다.
   if (typeof payload.test_to === 'string' && payload.test_to) {
     const r = await send(
       payload.test_to,
