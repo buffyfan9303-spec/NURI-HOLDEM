@@ -1,8 +1,8 @@
 // src/components/features/ProfileModal.tsx
+// 2026-09-04 통합 '내 정보'(오너 지시): 독립 모달이 아니라 CustomerDashboardPage 의 [프로필·설정·보안] 탭 패널이다.
+// 탭 바·뒤로가기 겹·스크롤 컨테이너는 페이지가 갖고, 여기는 패널 본문(폼·상태 로직)만 — 기능·카피 소실 0.
 import { useState, useRef, useEffect, useCallback } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import Modal from '../atoms/Modal';
-import UnderlineTabs from '../atoms/UnderlineTabs';
 import { useToast } from '../atoms/Toast';
 // (프로필 카드 이미지 저장 기능 제거 — 2026-06-15 사장님 요청)
 import { useAuth } from '../../contexts/AuthContext';
@@ -29,18 +29,20 @@ import { useIdentityEnabled } from '../../lib/identityFlag';
 import { getMyVisitStats } from '../../api/reservations';
 import type { LegalDoc } from './LegalDocsModal';
 import { onColorInkClass } from '../../lib/color';
-import { goSubTab } from '../../lib/subTabTransition';
 
-interface ProfileModalProps {
+interface ProfilePanelsProps {
+  /** 통합 페이지 열림 — 열리는 순간에만 폼을 초기화한다(keep-alive 페이지의 display 토글과 같은 신호) */
   open: boolean;
+  /** '완료' 신호(저장·취소·로그아웃) — 페이지가 닫는다(예전 모달 닫힘과 같은 결과) */
   onClose: () => void;
   onOpenLegal?: (d: LegalDoc) => void;
   onOpenSupport?: () => void;
+  /** 현재 패널 — 탭 상태는 페이지(CustomerDashboardPage)가 소유한다 */
+  tab: ProfileTab;
+  onTabChange: (t: ProfileTab) => void;
 }
 
-type Tab = 'profile' | 'settings' | 'security';
-/** 3탭 진열 순서 — 하위 탭 전환 방향(forward/back) 기준. */
-const PROFILE_TAB_ORDER: Tab[] = ['profile', 'settings', 'security'];
+export type ProfileTab = 'profile' | 'settings' | 'security';
 
 const ROLE_LABELS: Record<string, string> = {
   user:        '일반 회원',
@@ -65,15 +67,13 @@ function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
-export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport }: ProfileModalProps) {
+export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSupport, tab, onTabChange }: ProfilePanelsProps) {
   const { user, updateProfile, refreshProfile } = useAuth();
   const toast = useToast();
   // 본인인증·매장이용권 킬스위치(2026-08-29) — 꺼져 있으면 인증 진입부와 '이용권' 프레이밍을 모두 내린다.
   const idOn = useIdentityEnabled();
   const [visitStats, setVisitStats] = useState({ visits: 0, upcoming: 0, total: 0 });
   useEffect(() => { if (open) getMyVisitStats().then(setVisitStats).catch(() => {}); }, [open]);
-
-  const [tab, setTab] = useState<Tab>('profile');
 
   // ── 랭킹 공개 설정(오너 #14) ────────────────────────────────────────────
   // 두 항목은 서로 다른 것을 가린다 — 합치지 않는다:
@@ -161,14 +161,13 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
     const pending = sessionStorage.getItem('nh_pw_otp');
     const fresh = pending && Date.now() - Number(pending) < 5 * 60 * 1000;
     if (fresh) {
-      setTab('security');
+      onTabChange('security');
       setCodeSent(true);
     } else {
       sessionStorage.removeItem('nh_pw_otp');
-      setTab('profile');
       setCodeSent(false);
     }
-  }, [open, user]);
+  }, [open, user, onTabChange]);
 
   // ── 비밀번호 변경 = 이메일 인증 OTP (useCallback은 early return 전에 선언) ──
   // 1) 새 비밀번호 입력 후 가입 이메일로 인증코드 발송
@@ -309,22 +308,8 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
   };
 
   return (
-    <Modal open={open} onClose={() => { sessionStorage.removeItem('nh_pw_otp'); onClose(); }} title="프로필 관리" maxWidth="sm" variant="sheet">
-      {/* ── 탭 바 (골드 밑줄 스프링 슬라이드) ─────────────────────────── */}
-      <div data-profile-tabbar="">
-        <UnderlineTabs
-          items={[
-            { key: 'profile',  label: '프로필' },
-            { key: 'settings', label: '설정' },
-            { key: 'security', label: '보안' },
-          ]}
-          value={tab} onChange={(v) => goSubTab('profile-tab', PROFILE_TAB_ORDER, tab, v, () => setTab(v))} />
-      </div>
-
-      {/* 본문 — 탭 전환의 방향성 푸시 대상(탭바는 제자리 고정) */}
-      <div data-profile-panel="">
-
-      {/* ── 프로필 탭 (대시보드 — 읽기 전용) ─────────────────────── */}
+    <>
+      {/* ── 프로필 탭 (읽기 전용) ─────────────────────── */}
       {tab === 'profile' && (
         <div className="p-4 space-y-5">
 
@@ -620,11 +605,7 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
         <form onSubmit={handleConfirmChange} className="p-4 space-y-4">
 
           <div className="flex items-start gap-2 p-3 rounded-aura bg-surface-high border border-border-subtle">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              strokeWidth="2" strokeLinecap="round" className="shrink-0 mt-0.5 text-ink-muted" aria-hidden>
-              <circle cx="12" cy="12" r="10"/>
-              <line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-            </svg>
+            <Icon name="info" size={16} className="shrink-0 mt-0.5 text-ink-muted" />
             <p className="text-xs text-ink-muted leading-relaxed">
               {IS_MOCK
                 ? '데모 모드에서는 비밀번호 변경이 시뮬레이션됩니다.'
@@ -720,8 +701,6 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
         </>
       )}
 
-      </div>
-
       {cropFile && (
         <AvatarCropper
           file={cropFile}
@@ -729,7 +708,7 @@ export default function ProfileModal({ open, onClose, onOpenLegal, onOpenSupport
           onApply={handleCropApply}
         />
       )}
-    </Modal>
+    </>
   );
 }
 

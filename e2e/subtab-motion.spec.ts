@@ -142,11 +142,11 @@ test.describe('하위 탭 — 방향성 푸시가 실제로 돈다', () => {
     expectPanelPush(samples, 'rank-panel', 'rank-tabbar');
   });
 
-  test('🔴 프로필 모달 탭(profile-tab)', async ({ page }) => {
+  test('🔴 내 정보 통합 페이지 탭(profile-tab)', async ({ page }) => {
     await boot(page);
-    // 헤더 아바타 → 사용자 메뉴 → '프로필 관리' (앱의 실제 동선)
+    // 헤더 아바타 → 사용자 메뉴 → '내 정보'(2026-09-04 통합: 대시보드·프로필·설정·보안 4탭 — 앱의 실제 동선)
     await page.locator('button[aria-label$="메뉴"]').first().click();
-    await page.getByRole('button', { name: '프로필 관리 열기' }).click();
+    await page.getByRole('button', { name: '내 정보 열기' }).click();
     const bar = page.locator('[data-profile-tabbar]');
     await expect(bar).toBeVisible({ timeout: 15_000 });
     const samples = await probe(page, bar.getByRole('tab', { name: '설정', exact: true }));

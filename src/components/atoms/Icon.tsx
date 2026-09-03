@@ -59,6 +59,8 @@ import {
   Grid3x3, ArrowUpFromLine, Swords, Dumbbell, Brain, BookA, BookX, ScanSearch, GitCompare, Percent,
   ShieldCheck, Handshake, Sigma, Layers, Gauge, PiggyBank, TrendingUpDown, Coins, ListOrdered,
   ChartPie, Hourglass, Table, GraduationCap, Microscope, Calculator,
+  // 내 정보 통합(2026-09-04) — 헤더 유저 메뉴의 수제 SVG 5종을 팩으로 교체
+  CircleUserRound, Wrench, Shield, Sun, Moon,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -90,7 +92,9 @@ export type IconName =
   | 'grid-3x3' | 'arrow-up-from-line' | 'swords' | 'dumbbell' | 'brain' | 'book-a' | 'book-x' | 'scan-search'
   | 'git-compare' | 'percent' | 'shield-check' | 'handshake' | 'sigma' | 'layers' | 'gauge' | 'piggy-bank'
   | 'trending-up-down' | 'coins' | 'list-ordered' | 'chart-pie' | 'hourglass'
-  | 'table' | 'graduation-cap' | 'microscope' | 'calculator';
+  | 'table' | 'graduation-cap' | 'microscope' | 'calculator'
+  // 내 정보 통합(2026-09-04) — 헤더 유저 메뉴
+  | 'circle-user' | 'wrench' | 'shield' | 'sun' | 'moon';
 
 // 각 아이콘의 path/figure children (viewBox 0 0 24 24 기준). 채움 아이콘은 fill 처리.
 const PATHS: Partial<Record<IconName, ReactElement>> = {
@@ -208,6 +212,8 @@ const LUCIDE: Partial<Record<IconName, LucideIcon>> = {
   'graduation-cap': GraduationCap,     // 레인 '트레이닝'
   microscope: Microscope,              // 레인 '분석'
   calculator: Calculator,              // 레인 '계산기'
+  // 내 정보 통합(2026-09-04) — 헤더 유저 메뉴(내 정보·도구·관리자 설정·테마)
+  'circle-user': CircleUserRound, wrench: Wrench, shield: Shield, sun: Sun, moon: Moon,
 };
 // 채움 변형은 lucide 원형에 fill 지정으로 표현
 // ── 채운 아이콘 = heroicons solid (2026-08-30, 오너 지시로 heroicons 도입) ──────

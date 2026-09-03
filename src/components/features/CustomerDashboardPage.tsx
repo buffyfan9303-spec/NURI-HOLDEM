@@ -1,12 +1,18 @@
 // src/components/features/CustomerDashboardPage.tsx
-// 손님 대시보드 — 전체 페이지(모바일 포함). 헤더 🎟 버튼으로 진입.
+// '내 정보' 통합 페이지(오너 지시 2026-09-03) — [대시보드 · 프로필 · 설정 · 보안] 4탭.
+//   대시보드 = 이 파일 본문, 프로필/설정/보안 = ProfilePanels(구 ProfileModal) 패널 그대로.
+//   진입점은 헤더 아바타 메뉴('내 정보')·모바일 탭바 5칸·/wallet 딥링크·본인인증 배너(보안 탭) 뿐이다.
 // 내 매장이용권(매장별) + 매장 이용내역(방문·머니인·금액). 매장이용권은 금전적 가치 없음.
 // 사용(회수) = 발급 매장 QR 스캔 또는 그 매장 업주 전화번호로만. 유저 간 전송 불가.
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useToast } from '../atoms/Toast';
 import { lazyWithReload } from '../../lib/lazyWithReload';
 import { useAuth } from '../../contexts/AuthContext';
-import Icon from '../atoms/Icon';
+import Icon, { type IconName } from '../atoms/Icon';
+import UnderlineTabs from '../atoms/UnderlineTabs';
+import EmptyState from '../atoms/EmptyState';
+import { goSubTab } from '../../lib/subTabTransition';
+import type { LegalDoc } from './LegalDocsModal';
 import type { Html5Qrcode } from 'html5-qrcode'; // 타입만(런타임 번들 제외) — 실제 라이브러리는 스캐너 열 때 동적 로드
 import {
   listMyVouchers, myVisitedVenues, myPlayHistory,
@@ -25,7 +31,7 @@ import { getMyChampionships } from '../../api/seasons';
 import QRCode from 'qrcode';
 import { BADGES, getMyBadgeStats, type BadgeStats } from '../../lib/loyalty';
 import TierBadge, { tierOf, tierProgress, allTiers, tierCss } from '../atoms/TierBadge';
-import { ProfileIdentityHeader } from './ProfileModal'; // 통합 프로필 — 아이덴티티 헤더 정본 재사용(중복 정의 0)
+import ProfilePanels, { ProfileIdentityHeader, type ProfileTab } from './ProfileModal'; // 프로필·설정·보안 패널 + 아이덴티티 헤더 정본(중복 정의 0)
 import { loginWithKakao, signInWithGoogle } from '../../api/auth'; // 비로그인 랜딩 — AuthModal 과 같은 OAuth 시작 함수 재사용
 import AutoLoginCheckbox from '../atoms/AutoLoginCheckbox'; // 자동 로그인 — AuthModal 로그인 탭과 같은 원자·같은 플래그
 import { isKeepSignedIn, setKeepSignedIn } from '../../lib/supabase';
@@ -58,15 +64,29 @@ interface Stack { venueId: string; venueName: string | null; title: string; ids:
 // App 과 같은 동적 임포트 경로라 청크가 공유된다(중복 번들 없음).
 const AuthModalLazy = lazyWithReload(() => import('./AuthModal'));
 
-export default function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification, onOpenPost, onOpenProfile, onOpenMarket }: {
+/** 통합 페이지 탭 — 하위 탭 전환 방향(forward/back)은 이 진열 순서 기준(goSubTab). */
+export type MeTab = 'dashboard' | ProfileTab;
+const ME_TAB_ORDER: MeTab[] = ['dashboard', 'profile', 'settings', 'security'];
+const ME_TABS: { key: MeTab; label: string }[] = [
+  { key: 'dashboard', label: '대시보드' },
+  { key: 'profile',   label: '프로필' },
+  { key: 'settings',  label: '설정' },
+  { key: 'security',  label: '보안' },
+];
+
+export default function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification, onOpenPost, onOpenMarket, initialTab = 'dashboard', onOpenLegal, onOpenSupport }: {
   open: boolean; onClose: () => void;
   /** 미읽음 알림 미리보기(상위 3개) — 프로필 메뉴까지 안 가도 되게 */
   unread?: { id: string; title: string; message: string; createdAt: string }[];
   onOpenNotification?: (id: string) => void;
   /** '내 것' 허브 — 흩어져 있던 내 글·내 거래·프로필을 이 화면에서 잇는다 */
   onOpenPost?: (p: CommunityPost) => void;
-  onOpenProfile?: () => void;
   onOpenMarket?: () => void;
+  /** 열릴 때 보여줄 탭(본인인증 배너·비밀번호 OTP 복귀 → 'security') — 열림마다 이 값으로 리셋 */
+  initialTab?: MeTab;
+  /** 프로필 탭 하단 약관·고객센터(구 ProfileModal props 그대로) */
+  onOpenLegal?: (d: LegalDoc) => void;
+  onOpenSupport?: () => void;
 }) {
   const { user } = useAuth();
   const toast = useToast();
@@ -87,6 +107,11 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
   const [achOpen, setAchOpen] = useState(false); // 내 업적 접기/펼치기 — 기본 닫힘
   const [myPosts, setMyPosts] = useState<CommunityPost[]>([]); // 내가 쓴 글 — 그동안 찾을 화면 자체가 없었다
   const recordsRef = useRef<HTMLElement | null>(null); // '내 전적' 버튼 → 기존 입상 기록 섹션 앵커 스크롤
+  // 4탭 상태 — 페이지가 소유(ProfilePanels 는 controlled). 열릴 때마다 initialTab 으로 리셋(keep-alive 재열림 포함).
+  const [tab, setTab] = useState<MeTab>(initialTab);
+  useEffect(() => { if (open) setTab(initialTab); }, [open, initialTab]);
+  // 하위 탭 전환 = 방향성 푸시(data-profile-tabbar 제자리 · data-profile-panel 만 밀림) — 커뮤니티·GTO 와 같은 조리법
+  const goTab = useCallback((v: MeTab) => goSubTab('profile-tab', ME_TAB_ORDER, tab, v, () => setTab(v)), [tab]);
 
   useEffect(() => {
     if (!open || !user) { setMyPosts([]); return; }
@@ -201,21 +226,25 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
 
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-surface-base pt-[env(safe-area-inset-top)]" style={hidden ? { display: 'none' } : undefined}>
-      <header className="flex h-header-h shrink-0 items-center gap-2 border-b border-border-subtle px-page-x">
-        <button type="button" onClick={onClose} aria-label="닫기" className="flex h-9 w-9 items-center justify-center rounded-full text-ink-secondary hover:bg-surface-high">
+      <header className="flex h-header-h shrink-0 items-center gap-2 px-page-x">
+        <button type="button" onClick={() => { sessionStorage.removeItem('nh_pw_otp'); onClose(); }} aria-label="닫기" className="flex h-9 w-9 items-center justify-center rounded-full text-ink-secondary hover:bg-surface-high">
           <Icon name="back" size={20} />
         </button>
-        <h1 className="text-lg font-bold text-ink-primary">내 대시보드</h1>
-        {/* 통합 프로필 — 설정·보안 편집은 계속 ProfileModal 담당(헤더 우측 진입) */}
-        {onOpenProfile && (
-          <button type="button" onClick={onOpenProfile}
-            className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-input px-2.5 py-1.5 text-2xs font-bold text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
-            <Icon name="settings" size={14} /> 프로필 관리
-          </button>
-        )}
+        <h1 className="text-lg font-bold text-ink-primary">내 정보</h1>
       </header>
+      {/* 탭 바 — view-transition 이름(profile-tabbar)은 index.css 의 data-vt-scope='profile-tab' 규칙이 준다. 탭 44px(py-3 + t-nav) */}
+      <div data-profile-tabbar="" className="shrink-0 px-page-x">
+        <UnderlineTabs items={ME_TABS} value={tab} onChange={goTab} />
+      </div>
 
       <div className="flex-1 overflow-y-auto">
+        {/* 본문 — 탭 전환의 방향성 푸시 대상(탭바는 제자리 고정) */}
+        <div data-profile-panel="">
+        {tab !== 'dashboard' ? (
+          <div className="mx-auto w-full max-w-md">
+            <ProfilePanels open={open} tab={tab} onTabChange={goTab} onClose={onClose} onOpenLegal={onOpenLegal} onOpenSupport={onOpenSupport} />
+          </div>
+        ) : (
         <div className="mx-auto w-full max-w-2xl space-y-4 px-page-x py-section">
           {/* 통합 프로필 아이덴티티 헤더(오너 지시 2026-08-27) — ProfileModal '프로필' 탭과 같은 정본.
               커버 밴드(등급색 틴트) + 오버랩 아바타(등급 링) + 닉네임·등급·칭호·인증 + 등급 진행바. */}
@@ -234,12 +263,10 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
               ]}
               actions={
                 <div className="grid w-full grid-cols-2 gap-2">
-                  {onOpenProfile ? (
-                    <button type="button" onClick={onOpenProfile}
-                      className="btn-primary inline-flex items-center justify-center gap-1.5 py-2 text-xs">
-                      <Icon name="edit" size={13} /> 프로필 편집
-                    </button>
-                  ) : <span aria-hidden />}
+                  <button type="button" onClick={() => goTab('settings')}
+                    className="btn-primary inline-flex items-center justify-center gap-1.5 py-2 text-xs">
+                    <Icon name="edit" size={13} /> 프로필 편집
+                  </button>
                   <button type="button"
                     onClick={() => recordsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
                     className="inline-flex items-center justify-center gap-1.5 rounded-input border border-accent-400/50 py-2 text-xs font-bold text-accent-300 hover:bg-accent-300/10 transition-colors">
@@ -251,9 +278,9 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
           )}
           {/* 미읽음 알림 미리보기 — 상위 3개(탭하면 해당 화면으로) */}
           {unread.length > 0 && (
-            <section className="rounded-card border border-accent-400/30 bg-accent-300/[0.05] p-3">
-              <p className="mb-1.5 flex items-center gap-1.5 text-sm font-bold text-accent-300"><Icon name="bell" size={15} /> 안 읽은 알림 {unread.length > 3 ? '(' + unread.length + ')' : ''}</p>
-              <ul className="space-y-1">
+            <section className="rounded-aura border card-aura p-3">
+              <Head icon="bell" tone="indigo" title="안 읽은 알림" count={unread.length} />
+              <ul className="mt-2 space-y-1">
                 {unread.slice(0, 3).map((n) => (
                   <li key={n.id}>
                     <button type="button" onClick={() => onOpenNotification?.(n.id)}
@@ -268,10 +295,12 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
           )}
           {/* 업적 — 기본 닫힘, 헤더 클릭으로 펼침 */}
           {badgeStats && (
-            <section className="rounded-card border border-border-default bg-surface-low p-3">
-              <button type="button" onClick={() => setAchOpen((v) => !v)} className="flex w-full items-center justify-between gap-2 text-left">
-                <span className="inline-flex items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="medal" size={15} /> 내 업적 <span className="text-2xs font-normal text-ink-muted">{BADGES.filter((b) => b.check(badgeStats)).length}/{BADGES.length} 달성</span></span>
-                <span className="inline-flex shrink-0 items-center gap-0.5 text-2xs text-ink-muted">{achOpen ? '접기' : '펼치기'} <Icon name={achOpen ? 'chevron-up' : 'chevron-down'} size={12} /></span>
+            <section className="rounded-aura border card-aura p-3">
+              <button type="button" onClick={() => setAchOpen((v) => !v)} aria-expanded={achOpen} className="flex w-full items-center gap-2 text-left">
+                <Tile icon="medal" tone="violet" />
+                <h2 className="text-sm font-bold text-ink-primary">내 업적</h2>
+                <span className="text-2xs font-semibold tabular-nums text-ink-muted">{BADGES.filter((b) => b.check(badgeStats)).length}/{BADGES.length} 달성</span>
+                <span className="ml-auto inline-flex shrink-0 items-center gap-0.5 text-2xs text-ink-muted">{achOpen ? '접기' : '펼치기'} <Icon name={achOpen ? 'chevron-up' : 'chevron-down'} size={12} /></span>
               </button>
               {achOpen && (
                 <div className="mt-2 grid grid-cols-3 gap-1.5 sm:grid-cols-4">
@@ -293,7 +322,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
           {/* 내 계정 — 받는 아이디 · 본인인증(매장이용권 수령 조건).
               킬스위치 OFF: 인증 배지/이용권 수령 칸/인증 독촉이 모두 빠지고 '받는 아이디'만 남는다
               (아이디는 순위·전적 연결에 계속 쓰이므로 기능 자체를 없애지 않는다). */}
-          <section className="rounded-card border border-border-default bg-surface-low p-3">
+          <section className="rounded-aura border card-aura p-3">
             <div className="flex items-center gap-3">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-400/15 text-base font-bold text-accent-300">
                 {(user?.nickname ?? user?.name ?? '?').slice(0, 1)}
@@ -333,16 +362,14 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
 
           {/* 내 것 바로가기 — 프로필·장터 내 거래가 각각 다른 구석에 살아서 늘 헤맸다 */}
           <div className="grid grid-cols-2 gap-2">
-            {onOpenProfile && (
-              <button type="button" onClick={onOpenProfile}
-                className="rounded-card border border-border-default bg-surface-low px-3 py-2.5 text-left hover:border-accent-400/50 transition-colors">
-                <span className="flex items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="user" size={15} /> 프로필 관리</span>
-                <span className="block text-2xs text-ink-muted mt-0.5">닉네임 · {idOn ? '본인인증 · ' : ''}알림 설정</span>
-              </button>
-            )}
+            <button type="button" onClick={() => goTab('settings')}
+              className="rounded-aura border card-aura px-3 py-2.5 text-left">
+              <span className="flex items-center gap-2 text-sm font-bold text-ink-primary"><span className="flex h-6 w-6 items-center justify-center rounded-[6px] tile-grad"><Icon name="user" size={13} /></span> 프로필 관리</span>
+              <span className="block text-2xs text-ink-muted mt-0.5">닉네임 · {idOn ? '본인인증 · ' : ''}알림 설정</span>
+            </button>
             {onOpenMarket && (
               <button type="button" onClick={onOpenMarket}
-                className="rounded-card border border-border-default bg-surface-low px-3 py-2.5 text-left hover:border-accent-400/50 transition-colors">
+                className="rounded-aura border card-aura px-3 py-2.5 text-left">
                 <span className="flex items-center gap-2 text-sm font-bold text-ink-primary"><span className="flex h-6 w-6 items-center justify-center rounded-[6px] tile-grad tile-grad-cyan"><Icon name="cart" size={13} /></span> 내 장터 거래</span>
                 <span className="block text-2xs text-ink-muted mt-0.5">판매목록 · 채팅 · 찜</span>
               </button>
@@ -351,8 +378,8 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
 
           {/* 내가 쓴 글 — 커뮤니티에 흩어진 내 글을 다시 찾을 유일한 화면 */}
           {myPosts.length > 0 && onOpenPost && (
-            <section className="rounded-card border border-border-default bg-surface-low p-3">
-              <h2 className="flex items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="edit" size={15} /> 내가 쓴 글 <span className="font-normal text-ink-muted">({myPosts.length})</span></h2>
+            <section className="rounded-aura border card-aura p-3">
+              <Head icon="edit" tone="fuchsia" title="내가 쓴 글" count={myPosts.length} />
               <ul className="mt-2 space-y-1">
                 {myPosts.slice(0, 5).map((mp) => (
                   <li key={mp.id}>
@@ -374,7 +401,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
           <InviteSection nickname={user?.nickname ?? ''} stats={refStats} idOn={idOn} />
 
           {idOn && (
-            <div className="rounded-card border border-border-default bg-surface-low p-3">
+            <div className="rounded-aura border card-aura p-3">
               <p className="flex items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="alert" size={15} className="shrink-0 text-danger-light" /> 매장이용권은 금전적 가치가 없습니다</p>
               <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">현금·포인트가 아니며 환불·현금화·유저 간 거래가 불가합니다. 발급한 매장에서 사용(회수)만 가능합니다.</p>
             </div>
@@ -401,8 +428,8 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
             </section>
           )}
 
-          {idOn && <section>
-            <p className="mb-1.5 text-sm font-bold text-ink-primary">내 매장이용권 <span className="text-accent-300">{active.length}</span></p>
+          {idOn && <section className="space-y-2">
+            <Head icon="ticket" tone="cyan" title="내 매장이용권" count={active.length} unit="장" />
             {/* 본인인증 게이트를 '사용 시점'이 아니라 '지갑을 여는 시점'에 알린다.
                 왜: 서버 트리거(trg_voucher_verified)가 status='used' 전이를 막는데,
                 예전엔 그 거절이 접수대 앞에서 토스트로만 떴다 — 손님은 이미 매장에 서 있고,
@@ -418,16 +445,14 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
                   보유하신 {active.length}장은 그대로 남아 있습니다 — 인증만 마치면 바로 사용할 수 있어요.
                   매장에 도착하기 전에 <b className="text-ink-primary">프로필 &gt; 본인인증</b>을 먼저 끝내 주세요.
                 </p>
-                {onOpenProfile && (
-                  <button type="button" onClick={onOpenProfile}
-                    className="btn-primary mt-2 h-10 w-full text-sm">프로필에서 본인인증하기</button>
-                )}
+                <button type="button" onClick={() => goTab('security')}
+                  className="btn-primary mt-2 h-10 w-full text-sm">프로필에서 본인인증하기</button>
               </div>
             )}
             {loading ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
-              : venueGroups.length === 0 ? <p className="py-6 text-center text-2xs text-ink-muted">보유한 매장이용권이 없습니다.</p>
+              : venueGroups.length === 0 ? <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="ticket" />} title="보유한 매장이용권이 없습니다." /></div>
                 : <div className="space-y-3">{venueGroups.map((g) => (
-                  <div key={g.vid} className="rounded-card border border-border-default bg-surface-low p-3">
+                  <div key={g.vid} className="rounded-aura border card-aura p-3">
                     {/* 머리글이 '{매장명} 매장이용권'을 통째로 말한다(오너 지시 #19).
                         truncate 가 아니라 줄바꿈인 이유: 375px 에서 긴 매장명을 한 줄로 자르면
                         정체성(매장명)이 잘려 나간다 — 잘라야 할 것은 매장명이 아니다.
@@ -468,8 +493,8 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
           {/* 이용권 사용 내역(Phase 15-1) — '모든 차감은 즉시 이 리스트에 나타나야 한다'.
               와홀덤 '사용 내역 자동 기록'과 같은 신뢰 장치: 언제·어디서·무엇이 차감됐는지. */}
           {idOn && usedHistory.length > 0 && (
-            <section>
-              <p className="mb-1.5 text-sm font-bold text-ink-primary">이용권 사용 내역</p>
+            <section className="space-y-2">
+              <Head icon="ticket" tone="cyan" title="이용권 사용 내역" count={usedHistory.length} unit="건" />
               <ul className="space-y-1">{usedHistory.map((v) => (
                 <li key={v.id} className="flex items-center gap-2 rounded-input border border-border-subtle bg-surface-low px-3 py-2 text-2xs">
                   <span className="shrink-0 text-ink-muted tabular-nums">{fmtDate(v.usedAt!)}</span>
@@ -482,10 +507,10 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
             </section>
           )}
 
-          <section>
-            <p className="mb-1.5 text-sm font-bold text-ink-primary">매장 이용·참가 내역</p>
+          <section className="space-y-2">
+            <Head icon="store" tone="cyan" title="매장 이용·참가 내역" count={usage.length} unit="곳" />
             {loading ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
-              : usage.length === 0 ? <p className="py-6 text-center text-2xs text-ink-muted">방문·머니인 기록이 아직 없습니다.</p>
+              : usage.length === 0 ? <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="store" />} title="방문·머니인 기록이 아직 없습니다." /></div>
                 : <ul className="space-y-1.5">{usage.map((u, i) => (
                   <li key={i} className="rounded-input border border-border-subtle bg-surface-low px-3 py-2">
                     <div className="flex items-center justify-between gap-2">
@@ -502,10 +527,10 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
           </section>
 
           {/* 대회 참가(예약) 내역 — 내가 예약했던 대회들 */}
-          <section>
-            <p className="mb-1.5 text-sm font-bold text-ink-primary">대회 참가 내역 <span className="text-2xs font-normal text-ink-muted">(참가 예약 기준)</span></p>
+          <section className="space-y-2">
+            <Head icon="calendar-check" tone="indigo" title="대회 참가 내역" count={resv.length} unit="건" desc="참가 예약 기준" />
             {loading ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
-              : resv.length === 0 ? <p className="py-6 text-center text-2xs text-ink-muted">아직 참가 예약한 대회가 없습니다.</p>
+              : resv.length === 0 ? <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="calendar-check" />} title="아직 참가 예약한 대회가 없습니다." /></div>
                 : <ul className="space-y-1.5">{resv.slice(0, 15).map((r) => {
                   const upcoming = r.date >= new Date().toLocaleDateString('en-CA');
                   return (
@@ -541,11 +566,11 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
           </section>
 
           {/* 내 입상 기록 — 매장 순위 등록에서 내 닉네임이 잡힌 이력. '내 전적' 버튼의 앵커. */}
-          <section ref={recordsRef} className="scroll-mt-4">
-            <p className="mb-1.5 text-sm font-bold text-ink-primary">내 입상 기록 <span className="text-2xs font-normal text-ink-muted">(매장 순위 등록 기준)</span></p>
+          <section ref={recordsRef} className="scroll-mt-4 space-y-2">
+            <Head icon="trophy" tone="violet" title="내 입상 기록" count={ranks.length} unit="회" desc="매장 순위 등록 기준" />
             {loading ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
-              : !user?.nickname ? <p className="py-6 text-center text-2xs text-ink-muted">프로필에서 아이디(닉네임)를 설정하면 입상 기록이 자동 연결됩니다.</p>
-              : ranks.length === 0 ? <p className="py-6 text-center text-2xs text-ink-muted">아직 입상 기록이 없습니다. 매장에서 순위가 등록되면 자동으로 표시됩니다.</p>
+              : !user?.nickname ? <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="trophy" />} title="프로필에서 아이디(닉네임)를 설정하면 입상 기록이 자동 연결됩니다." action={<button type="button" onClick={() => goTab('settings')} className="btn-ghost px-3 py-1.5 text-2xs">아이디 설정하기</button>} /></div>
+              : ranks.length === 0 ? <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="trophy" />} title="아직 입상 기록이 없습니다." hint="매장에서 순위가 등록되면 자동으로 표시됩니다." /></div>
                 : <><RecordSummary rows={ranks} percentile={percentile} nickname={user?.nickname ?? ''} /><RankTrendChart rows={ranks} />
                 <ul className="space-y-1.5">{ranks.slice(0, 15).map((r, i) => (
                   <li key={i} className="flex items-center gap-2.5 rounded-input border border-border-subtle bg-surface-low px-3 py-2">
@@ -561,6 +586,8 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
                   </li>
                 ))}</ul></>}
           </section>
+        </div>
+        )}
         </div>
       </div>
 
@@ -681,7 +708,7 @@ function LoginLanding({ onClose, hidden = false }: { onClose: () => void; hidden
           </div>
 
           {/* 설정성 행 — 로그인 없이도 쓸 수 있는 것들(약관은 이 화면 진입 프롭이 없어 하단 푸터에 위임) */}
-          <div className="divide-y divide-border-subtle overflow-hidden rounded-card border border-border-default bg-surface-low">
+          <div className="divide-y divide-border-subtle overflow-hidden rounded-aura border card-aura">
             <button type="button" onClick={installApp}
               className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-surface-high transition-colors">
               <Icon name="download" size={17} className="shrink-0 text-ink-secondary" />
@@ -826,7 +853,7 @@ function RecordSummary({ rows, percentile, nickname }: { rows: MyRankingRow[]; p
   };
 
   return (
-    <div className="mb-2 rounded-card border border-accent-400/30 bg-accent-300/[0.05] p-3">
+    <div className="mb-2 rounded-aura border card-aura p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
         <p className="flex flex-wrap items-center gap-1 text-xs font-bold text-gold-300"><Icon name="trophy" size={13} /> 내 토너먼트 전적 <span className="font-normal text-ink-muted">(기록 {n}회)</span>
           {percentile != null && <span className="ml-1.5 rounded-badge bg-accent-300/15 px-1.5 py-0.5 text-2xs text-accent-300">전국 상위 {percentile}%</span>}
@@ -866,7 +893,7 @@ function RankTrendChart({ rows }: { rows: MyRankingRow[] }) {
   const best = Math.min(...pts.map((p) => p.position));
   const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
   return (
-    <div className="mb-2 rounded-card border border-border-subtle bg-surface-low p-3">
+    <div className="mb-2 rounded-aura border card-aura p-3">
       <div className="flex items-baseline justify-between">
         <p className="text-xs font-bold text-ink-secondary">순위 추이 <span className="font-normal text-ink-muted">(최근 {pts.length}회 · 위로 갈수록 높은 순위)</span></p>
         <p className="text-2xs text-ink-muted">최고 <b className="text-accent-300">{best}위</b> · 평균 <b className="text-ink-secondary">{avg}위</b></p>
@@ -1004,10 +1031,33 @@ function QrScanner({ onResult, onError }: { onResult: (text: string) => void; on
   return <div id="nuri-qr-reader" className="mx-auto w-full max-w-[280px] overflow-hidden rounded-input bg-black" style={{ minHeight: 220 }} />;
 }
 
+/** 섹션 아이콘 타일 — 아우라 v6 문법(tile-grad · 예약=indigo · 이용권=cyan · 전적=violet · 내 글=fuchsia). 글로우 0. */
+function Tile({ icon, tone }: { icon: IconName; tone: 'violet' | 'indigo' | 'fuchsia' | 'cyan' }) {
+  return (
+    <span className={['flex h-7 w-7 shrink-0 items-center justify-center rounded-input tile-grad', tone === 'violet' ? '' : `tile-grad-${tone}`].join(' ')} aria-hidden>
+      <Icon name={icon} size={14} />
+    </span>
+  );
+}
+
+/** 섹션 헤더 — h2 text-sm font-bold + 'N개' ink-muted + 설명 ink-secondary + 헤어라인(border-b pb-1.5). 커뮤니티·GTO 와 같은 문법. */
+function Head({ icon, tone, title, count, unit = '개', desc }: { icon: IconName; tone: 'violet' | 'indigo' | 'fuchsia' | 'cyan'; title: string; count?: number; unit?: string; desc?: string }) {
+  return (
+    <div className="flex items-center gap-2 border-b border-border-subtle pb-1.5">
+      <Tile icon={icon} tone={tone} />
+      <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 gap-y-0">
+        <h2 className="text-sm font-bold text-ink-primary">{title}</h2>
+        {count != null && <span className="text-2xs font-semibold tabular-nums text-ink-muted">{count}{unit}</span>}
+        {desc && <span className="text-2xs text-ink-secondary">{desc}</span>}
+      </div>
+    </div>
+  );
+}
+
 function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
     <div className="rounded-input border border-border-subtle bg-surface-low p-2 text-center">
-      <p className={`text-lg font-extrabold leading-none tabular-nums ${accent ? 'text-accent-300' : 'text-ink-primary'}`}>{value}</p>
+      <p className={`text-lg font-extrabold leading-none tabular-nums ${accent ? 'stat-violet' : 'text-ink-primary'}`}>{value}</p>
       <p className="mt-1 text-2xs text-ink-muted">{label}</p>
     </div>
   );
@@ -1015,8 +1065,8 @@ function Stat({ label, value, accent }: { label: string; value: string; accent?:
 
 function HiCard({ title, name, detail }: { title: string; name: string; detail: string }) {
   return (
-    <div className="rounded-card border border-accent-400/30 bg-accent-300/[0.05] p-3">
-      <p className="text-2xs font-bold text-accent-300">{title}</p>
+    <div className="rounded-aura border card-aura p-3">
+      <p className="text-2xs font-bold stat-violet">{title}</p>
       <p className="mt-0.5 truncate text-sm font-bold text-ink-primary">{name}</p>
       <p className="text-2xs text-ink-muted">{detail}</p>
     </div>
@@ -1075,12 +1125,12 @@ function LevelCard({ points, championships = 0 }: { points: number; championship
   const prog = tierProgress(points);
   const [guide, setGuide] = useState(false);
   return (
-    <section className="rounded-card border border-border-default bg-surface-low p-3">
+    <section className="rounded-aura border card-aura p-3">
       <div className="flex items-center gap-2">
         <TierBadge points={points} size={28} />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold text-ink-primary">Lv {t.level} · <span style={{ color: tierCss(t.colorVar) }}>{t.title}</span></p>
-          <p className="text-2xs text-ink-muted">활동점수 <b className="text-accent-300 tabular-nums">{points.toLocaleString()}</b>점</p>
+          <p className="text-2xs text-ink-muted">활동점수 <b className="stat-violet tabular-nums">{points.toLocaleString()}</b>점</p>
         </div>
         {championships > 0 && (
           <span className="inline-flex shrink-0 items-center gap-1 rounded-badge border border-gold-400/40 bg-gold-300/10 px-1.5 py-1 text-2xs font-bold text-gold-300 tabular-nums" title="시즌 우승 영구 배지"><Icon name="crown" size={12} /> {championships}</span>
@@ -1118,9 +1168,9 @@ function InviteSection({ nickname, stats, idOn }: { nickname: string; stats: Ref
 
   if (!nickname) {
     return (
-      <section className="rounded-card border border-border-default bg-surface-low p-3">
-        <p className="flex items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="gift" size={15} /> 친구 초대</p>
-        <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">받는 아이디(닉네임)를 설정하면 내 초대 링크가 생깁니다. 프로필에서 설정하세요.</p>
+      <section className="rounded-aura border card-aura p-3">
+        <div className="flex items-center gap-2"><Tile icon="gift" tone="fuchsia" /><h2 className="text-sm font-bold text-ink-primary">친구 초대</h2></div>
+        <p className="mt-1.5 text-2xs leading-relaxed text-ink-secondary">받는 아이디(닉네임)를 설정하면 내 초대 링크가 생깁니다. 프로필에서 설정하세요.</p>
       </section>
     );
   }
@@ -1137,12 +1187,13 @@ function InviteSection({ nickname, stats, idOn }: { nickname: string; stats: Ref
     if (!ok) { toast.show('카카오 공유가 미설정이라 링크를 복사했어요', 'info'); copy(); }
   };
   return (
-    <section className="rounded-card border border-accent-400/30 bg-accent-300/[0.05] p-3">
-      <div className="flex items-center justify-between gap-2">
-        <p className="flex items-center gap-1.5 text-sm font-bold text-accent-300"><Icon name="gift" size={15} /> 친구 초대</p>
-        <span className="text-2xs text-ink-muted">초대 <b className="text-ink-secondary tabular-nums">{stats.invited}</b> · 보상 <b className="text-accent-300 tabular-nums">{stats.rewarded}</b></span>
+    <section className="rounded-aura border card-aura p-3">
+      <div className="flex items-center gap-2">
+        <Tile icon="gift" tone="fuchsia" />
+        <h2 className="text-sm font-bold text-ink-primary">친구 초대</h2>
+        <span className="ml-auto shrink-0 text-2xs text-ink-muted">초대 <b className="text-ink-secondary tabular-nums">{stats.invited}</b> · 보상 <b className="stat-fuchsia tabular-nums">{stats.rewarded}</b></span>
       </div>
-      <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">{idOn
+      <p className="mt-1.5 text-2xs leading-relaxed text-ink-secondary">{idOn
         ? <>친구가 내 링크로 가입하고 <b className="text-ink-primary">본인인증</b>까지 마치면 <b className="text-accent-300">둘 다 활동점수</b>(나 +500 · 친구 +300)!</>
         : <>초대 기록은 계속 쌓입니다. <b className="text-accent-300">활동점수 보상</b>(나 +500 · 친구 +300)은 본인인증이 다시 열리면 지급돼요.</>}</p>
       <div className="mt-2 flex items-center gap-2.5">

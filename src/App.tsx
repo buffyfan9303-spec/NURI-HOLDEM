@@ -34,6 +34,7 @@ import type { PosterFormData } from './components/features/PosterFormModal';
 import NuriHoldemLogo from './components/atoms/NuriHoldemLogo';
 import NuriMark from './components/atoms/NuriMark';
 import Icon, { type IconName } from './components/atoms/Icon';
+import Avatar from './components/atoms/Avatar';
 import ThemeToggle from './components/atoms/ThemeToggle';
 import { useTheme } from './contexts/ThemeContext';
 import { PORTONE_CONFIGURED } from './components/features/IdentityVerificationButton';
@@ -43,7 +44,6 @@ import ErrorBoundary from './components/atoms/ErrorBoundary';
 import InstallBanner from './components/atoms/InstallBanner';
 import { promptLogin, REQUIRE_LOGIN_EVENT, OPEN_POST_FORM_EVENT, ensureVerified } from './lib/requireLogin';
 import { tierCss, tierOf, ADMIN_VIVID_VAR } from './components/atoms/TierBadge';
-import { onColorInkClass } from './lib/color';
 
 /**
  * 헤더 아바타의 '등급 링'에 쓸 장식 토큰 이름.
@@ -115,7 +115,6 @@ const PostDetailModal      = lazyWithReload(() => import('./components/features/
 const ListingDetailModal   = lazyWithReload(() => import('./components/features/ListingDetailModal'));
 const NoticeDetailModal    = lazyWithReload(() => import('./components/features/NoticeDetailModal'));
 const PosterFormModal      = lazyWithReload(() => import('./components/features/PosterFormModal'));
-const ProfileModal         = lazyWithReload(() => import('./components/features/ProfileModal'));
 const GlobalSearchModal    = lazyWithReload(() => import('./components/features/GlobalSearchModal'));
 const NoticeFormModal      = lazyWithReload(() => import('./components/features/NoticeFormModal'));
 const LegalDocsModal       = lazyWithReload(() => import('./components/features/LegalDocsModal'));
@@ -140,6 +139,7 @@ const CommunityTabM   = memo(CommunityTab);
 const ToolsPanelM     = memo(ToolsPanel);
 const VenueManageTabM = memo(VenueManageTab); // 내 매장 keep-alive 전환에 필수 — 숨김 상태에서 App 재렌더에 끌려가지 않게
 const CustomerDashboardPage = lazyWithReload(() => import('./components/features/CustomerDashboardPage'));
+import type { MeTab } from './components/features/CustomerDashboardPage'; // 타입만(런타임 0)
 const ClockDisplay   = lazyWithReload(() => import('./components/features/clock/ClockDisplay'));
 const ClockRemote    = lazyWithReload(() => import('./components/features/clock/ClockRemote'));
 
@@ -168,7 +168,7 @@ interface TabDef { id: TabId; label: string; }
 // ── 헤더 ─────────────────────────────────────────────────────────────────────
 
 const AppHeader = memo(function AppHeader({
-  unreadCount, notifications, onMarkRead, onOpenLogin, onNavigateNotification, onHome, onOpenProfile, onOpenVouchers,
+  unreadCount, notifications, onMarkRead, onOpenLogin, onNavigateNotification, onHome, onOpenMe,
   onGotoTab, activeTab, suppressed = false, onUnreadMessagesChange,
 }: {
   /** (미사용 — 텍스트 내비로 대체) 모바일 헤더 좌측 큰 타이틀 */
@@ -183,8 +183,8 @@ const AppHeader = memo(function AppHeader({
   onOpenLogin: () => void;
   onNavigateNotification: (n: AppNotification) => void;
   onHome: () => void;
-  onOpenProfile: () => void;
-  onOpenVouchers: () => void;
+  /** 내 정보(대시보드·프로필·설정·보안 통합 페이지) — 메뉴 헤더 행·'내 정보' 항목 모두 대시보드 탭으로 */
+  onOpenMe: () => void;
   /** 매장 페이지 등 풀스크린 오버레이가 열렸을 때 메인 헤더를 가린다(레이아웃 유지, 페인트만 숨김). */
   suppressed?: boolean;
   /** 쪽지 미읽음 수 갱신(패널 내부 스레드 로드·읽음 처리 → 뱃지 합산 반영) */
@@ -291,18 +291,6 @@ const AppHeader = memo(function AppHeader({
             <UnreadBadge count={unreadCount} className="absolute -top-0.5 -right-0.5 ring-2 ring-surface-base" />
           </button>
 
-          {/* 내 매장이용권 지갑 */}
-          {user && (
-            <button
-              type="button"
-              onClick={onOpenVouchers}
-              aria-label="내 대시보드 (예약·이용권·전적)"
-              className="w-9 h-9 flex items-center justify-center rounded-full text-ink-secondary hover:text-accent-300 hover:bg-surface-high transition-colors"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" /><path d="M13 5v14" /></svg>
-            </button>
-          )}
-
           {/* 로그인 / 유저 메뉴 */}
           {user ? (
             <div ref={userMenuRef} className="relative">
@@ -328,17 +316,12 @@ const AppHeader = memo(function AppHeader({
                   //   돌려주는 문자열 API 라(다른 호출부가 `${...}aa` 로 알파를 문자열 결합해 계약을 못 바꾼다)
                   //   라이트에서 이 링이 지면에 묻혔다. 이 링은 별도 배지 없이 **등급을 알리는 유일한 표시**라
                   //   안 보이면 기능이 사라진 것과 같다 → 장식용 --tier-*-vivid 토큰(테마별 정의)으로 직접 참조.
-                  style={{ background: user.avatarColor ?? '#5A6175', boxShadow: `0 0 0 2px ${tierCss(ringVarOf(user))}, 0 0 10px ${tierCss(ringVarOf(user), 0.667)}` }}
+                  style={{ boxShadow: `0 0 0 2px ${tierCss(ringVarOf(user))}, 0 0 10px ${tierCss(ringVarOf(user), 0.667)}` }}
                   title="내 등급"
                 >
-                  {/* 이니셜 잉크는 배경 휘도로 정한다 — 아바타 배경은 유저가 고른 색이라
-                      흰 글씨로 고정하면 밝은 색(#FFD100 등)에서 1.46:1 까지 떨어진다(실측). */}
-                  <span className={`text-xs font-bold ${onColorInkClass(user.avatarColor ?? '#5A6175')}`}>{user.name[0]}</span>
-                  {user.avatarUrl && (
-                    <img src={user.avatarUrl} alt={user.name}
-                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                      className="absolute inset-0 w-full h-full object-cover" />
-                  )}
+                  {/* 2026-09-04: 이니셜 위에 img 를 absolute 로 얹던 패턴 제거 — contain 이미지(로고형)에서
+                      이니셜 글자가 이미지 뒤로 비쳤다(오너 지적). Avatar 아톰은 이미지·이니셜 중 하나만 그린다. */}
+                  <Avatar name={user.name} src={user.avatarUrl} color={user.avatarColor} size={32} />
                 </span>
               </button>
 
@@ -350,73 +333,50 @@ const AppHeader = memo(function AppHeader({
                   {/* 사용자 정보 헤더 — 행 전체가 클릭/터치 영역(빈 여백 포함)이 되도록 button으로 확장 */}
                   <button
                     type="button"
-                    onClick={() => { onOpenProfile(); setUserMenu(false); }}
-                    aria-label="프로필 관리 열기"
+                    onClick={() => { onOpenMe(); setUserMenu(false); }}
+                    aria-label="내 정보 열기"
                     className="w-full text-left flex items-center gap-2.5 px-3 py-2.5 border-b border-border-subtle
                                hover:bg-surface-high transition-colors focus:outline-none"
                   >
-                    <div
-                      className={`relative w-8 h-8 rounded-full overflow-hidden shrink-0 flex items-center justify-center text-xs font-bold ${onColorInkClass(user.avatarColor ?? '#5A6175')}`}
-                      style={{ background: user.avatarColor ?? '#5A6175' }}
-                    >
-                      <span>{user.name[0]}</span>
-                      {user.avatarUrl && (
-                        <img src={user.avatarUrl} alt=""
-                          onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                          className="absolute inset-0 w-full h-full object-cover" />
-                      )}
-                    </div>
+                    <Avatar name={user.name} src={user.avatarUrl} color={user.avatarColor} size={32} />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-ink-primary truncate">{user.name}</p>
                       <p className="text-2xs text-ink-muted truncate">{user.email}</p>
                     </div>
                   </button>
 
-                  {/* 모바일 전용 — 헤더에서 빠진 알림/이용권/테마를 메뉴로 제공 */}
-                  <div className="lg:hidden border-b border-border-subtle">
+                  {/* 내 정보 — 대시보드·프로필·설정·보안 통합 페이지(오너 지시 2026-09-03: 진입점 1개) */}
+                  <button type="button" onClick={() => { onOpenMe(); setUserMenu(false); }}
+                    className="w-full text-left flex items-center gap-2 px-3 py-2.5 text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
+                    <Icon name="circle-user" size={14} />
+                    내 정보 <span className="text-ink-muted">(대시보드·프로필·설정)</span>
+                  </button>
+
+                  {/* 모바일 전용 — 헤더에서 빠진 알림/도구/테마를 메뉴로 제공 */}
+                  <div className="lg:hidden border-y border-border-subtle">
                     <button type="button" onClick={() => { setNotifOpen(true); setUserMenu(false); }}
                       className="w-full text-left flex items-center gap-2 px-3 py-2.5 text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
                       <Icon name="mail" size={14} />
                       알림{unreadCount > 0 && <span className="ml-auto rounded-badge bg-accent-300 px-1.5 py-0.5 text-2xs font-bold text-white tabular-nums">{unreadCount}</span>}
                     </button>
-                    <button type="button" onClick={() => { onOpenVouchers(); setUserMenu(false); }}
-                      className="w-full text-left flex items-center gap-2 px-3 py-2.5 text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" /><path d="M13 5v14" /></svg>
-                      내 대시보드 <span className="text-ink-muted">(예약·이용권·전적)</span>
-                    </button>
                     <button type="button" onClick={() => { onGotoTab?.('tools'); setUserMenu(false); }}
                       className="w-full text-left flex items-center gap-2 px-3 py-2.5 text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.8-.7-.7-2.8 2.5-2.5Z" /></svg>
+                      <Icon name="wrench" size={14} />
                       도구
                     </button>
                     {user.role === 'admin' && (
                       <button type="button" onClick={() => { onGotoTab?.('admin'); setUserMenu(false); }}
                         className="w-full text-left flex items-center gap-2 px-3 py-2.5 text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" /></svg>
+                        <Icon name="shield" size={14} />
                         관리자 설정
                       </button>
                     )}
                     <button type="button" onClick={() => { toggleTheme(); }}
                       className="w-full text-left flex items-center gap-2 px-3 py-2.5 text-xs text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" /></svg>
+                      <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={14} />
                       {theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환'}
                     </button>
                   </div>
-
-                  {/* 프로필 관리 */}
-                  <button
-                    type="button"
-                    onClick={() => { onOpenProfile(); setUserMenu(false); }}
-                    className="w-full text-left flex items-center gap-2 px-3 py-2.5 text-xs
-                               text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                      stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
-                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                      <circle cx="12" cy="7" r="4"/>
-                    </svg>
-                    프로필 관리
-                  </button>
 
                   {/* 로그아웃 */}
                   <button
@@ -424,14 +384,9 @@ const AppHeader = memo(function AppHeader({
                     onClick={() => { logout(); setUserMenu(false); }}
                     className="w-full text-left flex items-center gap-2 px-3 py-2.5 text-xs
                                text-ink-secondary hover:bg-surface-high hover:text-ink-primary transition-colors
-                               border-t border-border-subtle"
+                               lg:border-t border-border-subtle"
                   >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                      stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
-                      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-                      <polyline points="16 17 21 12 16 7"/>
-                      <line x1="21" y1="12" x2="9" y2="12"/>
-                    </svg>
+                    <Icon name="log-out" size={14} />
                     로그아웃
                   </button>
                 </div>
@@ -1209,7 +1164,6 @@ export default function App() {
         import('./components/features/ScheduleDetailModal'),
         import('./components/features/CustomerDashboardPage'),
         import('./components/features/AuthModal'),
-        import('./components/features/ProfileModal'),
         import('./components/features/GlobalSearchModal'),
         import('./components/features/PostDetailModal'),
         import('./components/features/ListingDetailModal'),
@@ -1288,15 +1242,16 @@ export default function App() {
     setPendingPostId(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingPostId, posts]);
-  const [profileOpen, setProfileOpen]   = useState(false);
   const [legalDoc, setLegalDoc] = useState<LegalDoc | null>(null); // 약관·정책 모달
   const [supportOpen, setSupportOpen] = useState(false); // 1:1 고객센터 문의
   const [voucherWalletOpen, setVoucherWalletOpen] = useState(false);
+  // 통합 '내 정보' 페이지(2026-09-04: 대시보드+프로필 관리 합침)의 진입 탭 — 열 때마다 이 값으로 리셋된다
+  const [meTab, setMeTab] = useState<MeTab>('dashboard');
   // 비밀번호 변경 OTP 진행 중 페이지가 리로드되면(모바일에서 메일 앱을 다녀온 경우)
   // 프로필 모달을 다시 열어 코드 입력 화면으로 복귀시킨다.
   useEffect(() => {
     const pending = sessionStorage.getItem('nh_pw_otp');
-    if (pending && Date.now() - Number(pending) < 5 * 60 * 1000) setProfileOpen(true);
+    if (pending && Date.now() - Number(pending) < 5 * 60 * 1000) { setMeTab('security'); setVoucherWalletOpen(true); }
   }, []);
   const [noticeFormOpen, setNoticeFormOpen] = useState(false);
   const [editingNotice, setEditingNotice] = useState<MarketplaceNotice | null>(null); // 있으면 공지 수정 모드
@@ -1970,7 +1925,6 @@ export default function App() {
   useBackClose(openNotice !== null, () => setOpenNotice(null), ADOPT);
   useBackClose(posterFormTarget !== null, () => setPosterFormTarget(null), ADOPT);
   useBackClose(authOpen, () => { setAuthOpen(false); setAuthMode('login'); }, ADOPT);
-  useBackClose(profileOpen, () => setProfileOpen(false), ADOPT);
   useBackClose(globalSearchOpen, () => setGlobalSearchOpen(false), ADOPT);
   useBackClose(postFormOpen, closePostForm, ADOPT);
   useBackClose(noticeFormOpen, () => { setNoticeFormOpen(false); setEditingNotice(null); }, ADOPT);
@@ -2404,16 +2358,14 @@ export default function App() {
   const handleWriteNotice = useCallback(() => setNoticeFormOpen(true), []);
   // 헤더·탭바에 인라인 화살표를 넘기면 memo 를 걸어도 매 렌더 무효 — 참조 고정 콜백으로.
   const openLoginCb = useCallback(() => setAuthOpen(true), []);
-  const openProfileCb = useCallback(() => setProfileOpen(true), []);
   // 헤더 검색 버튼 제거(오너 지시) — 진입은 Cmd/Ctrl+K 단축키만 잔존
-  const openVouchersCb = useCallback(() => setVoucherWalletOpen(true), []);
   const pcTabs = useMemo(() => tabs.filter((t) => t.id !== 'market'), [tabs]);
   const tabDot = useMemo(() => ({ community: commHasNew }), [commHasNew]);
   const tabCount = useMemo(() => ({ live: liveCount }), [liveCount]);
   // 전면(페이지성) 오버레이 열림 여부 — MobileTabBar 가 개폐 순간 잔존 hidden 을 리셋한다.
   // 대상 = '페이지 이동'으로 인지되는 오버레이(내 정보·매장/그룹·상세·프로필·검색·클락·법적고지·문의).
   // 순수 입력 폼(글쓰기·공지작성 등)·소형 확인 다이얼로그는 내비가 아니라 제외 — 문서끝 숨김 계약 유지.
-  const fullOverlayOpen = voucherWalletOpen || profileOpen || supportOpen || globalSearchOpen
+  const fullOverlayOpen = voucherWalletOpen || supportOpen || globalSearchOpen
     || openVenueId !== null || openSchedule !== null || openPost !== null || openListing !== null
     || openNotice !== null || displayTarget !== null || legalDoc !== null || gtoInit !== null;
   // 비로그인도 페이지를 연다 — CustomerDashboardPage 가 user 없으면 APIS식 로그인 랜딩을 렌더(오너 레퍼런스 2026-08-27)
@@ -2421,7 +2373,8 @@ export default function App() {
   // GTO 등 무거운 탭 위에서 '내 정보'를 열 때의 풀 마운트 프레임 드롭 제거(changeTab 과 같은 조리법).
   const meEverOpenedRef = useRef(false);
   if (voucherWalletOpen) meEverOpenedRef.current = true; // 렌더 중 latch(단조) — 헤더 🎟 등 모든 열림 경로를 커버
-  const openMeCb = useCallback(() => {
+  const openMeCb = useCallback((tab: MeTab = 'dashboard') => {
+    setMeTab(tab);
     if (meEverOpenedRef.current) {
       withViewTransition(() => flushSync(() => setVoucherWalletOpen(true)), () => startTransition(() => setVoucherWalletOpen(true)));
     } else {
@@ -2470,8 +2423,7 @@ export default function App() {
         onOpenLogin={openLoginCb}
         onNavigateNotification={handleNavigateNotification}
         onHome={handleHome}
-        onOpenProfile={openProfileCb}
-        onOpenVouchers={openVouchersCb}
+        onOpenMe={openMeCb}
         suppressed={openVenueId !== null}
       />
 
@@ -2498,7 +2450,7 @@ export default function App() {
 
       {/* 본인인증 유도 배너 (미인증·PortOne 설정 시) */}
       {user && !user.verified && PORTONE_CONFIGURED && (
-        <button type="button" onClick={() => setProfileOpen(true)}
+        <button type="button" onClick={() => openMeCb('security')}
           className="w-full flex items-center gap-2 bg-accent-300/[0.08] border-b border-accent-400/30 px-page-x py-2 text-left hover:bg-accent-300/[0.12] transition-colors">
           <span className="text-accent-300" aria-hidden><Icon name="lock" size={14} /></span>
           <span className="flex-1 text-2xs text-accent-300">휴대폰 본인인증이 필요합니다. 안전한 이용을 위해 인증해 주세요.</span>
@@ -2507,7 +2459,7 @@ export default function App() {
       )}
 
       {/* 본인인증 게이트 안내 시트(#31) — 미인증 회원이 민감 기능 시도 시 자동 표시 */}
-      <VerifyGateSheet onStart={() => setProfileOpen(true)} />
+      <VerifyGateSheet onStart={() => openMeCb('security')} />
 
       {/* 첫 진입 온보딩(#29)은 오너 지시(2026-08-28)로 삭제 — localStorage 'nuri:persona' 소비처
           (초기 탭 결정)는 기존 선택 사용자 보존을 위해 유지 */}
@@ -2524,7 +2476,9 @@ export default function App() {
               if (n) { handleMarkRead([n.id]); handleNavigateNotification(n); }
             }}
             onOpenPost={(pp) => { setVoucherWalletOpen(false); changeTab('community'); setOpenPost(pp); }}
-            onOpenProfile={() => { setVoucherWalletOpen(false); setProfileOpen(true); }}
+            initialTab={meTab}
+            onOpenLegal={(d) => setLegalDoc(d)}
+            onOpenSupport={() => setSupportOpen(true)}
             onOpenMarket={() => {
               setVoucherWalletOpen(false);
               window.dispatchEvent(new CustomEvent('nuri:community-section', { detail: 'market' }));
@@ -3111,15 +3065,6 @@ export default function App() {
         onDelete={handleDeletePost}
         venues={venues}
         onVenueClick={(vid) => { setOpenPost(null); handleVenueClick(vid); }}
-      />
-      )}
-
-      {profileOpen && (
-      <ProfileModal
-        open
-        onClose={() => setProfileOpen(false)}
-        onOpenLegal={(d) => setLegalDoc(d)}
-        onOpenSupport={() => setSupportOpen(true)}
       />
       )}
 
