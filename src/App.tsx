@@ -2014,7 +2014,7 @@ export default function App() {
     // /support (1:1 문의 답변 알림) → 고객센터 모달 열기
     if (link === '/support') { setSupportOpen(true); return; }
     // /wallet (🎟 이용권 도착) → 내 지갑(이용권 대시보드) 바로 열기
-    if (link === '/wallet') { setVoucherWalletOpen(true); return; }
+    if (link === '/wallet') { setMeTab('dashboard'); setVoucherWalletOpen(true); return; } // 초기 탭 명시 — 보안 탭 진입 뒤 stale 방지
     // '/' (홈 안내형 알림) → 홈 탭으로 — 제목만 다시 토스트하는 막다른 길 방지
     if (link === '/') { changeTab('home'); return; }
     toast.show(n.title, 'info');
@@ -3014,7 +3014,7 @@ export default function App() {
                 onUpdateImage={handleUpdateVenueImage}
                 onUpdateImages={handleUpdateVenueImages}
                 onSelectSchedule={handleScheduleSelect}
-                onOpenWallet={() => setVoucherWalletOpen(true)}
+                onOpenWallet={() => openMeCb()}
               />
             )}
           </Suspense>
