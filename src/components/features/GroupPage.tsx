@@ -16,6 +16,7 @@ import { relativeTime } from './MarketplaceTab';
 import {
   GROUP_KIND_LABEL, type Venue, type GroupMember, type GroupMessage, type GroupPost,
   getMyMembership, getGroupMembers, joinGroup, approveMember, removeMember,
+  setGroupJoinApproval, setGroupMemberRole,
   getGroupMessages, sendGroupMessage, subscribeGroupMessages, deleteGroupMessage,
   getGroupPosts, createGroupPost, deleteGroupPost,
   getVenueNotices, createVenueNotice, deleteVenueNotice, type VenueNotice,
@@ -43,6 +44,9 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
   // 팀 프로필(소개·전화·카톡) — 저장 직후 상위 목록이 갱신되기 전까지 이 화면에 즉시 반영할 오버라이드
   const [profile, setProfile] = useState<{ description: string; phone: string; kakao: string } | null>(null);
   const [profileEditing, setProfileEditing] = useState(false);
+  // 가입 방식은 group prop 에 실려 오는데 이 화면에서 group 을 다시 읽을 수 없다(부모 소유).
+  // 팀 프로필과 같은 방식으로 저장 직후 화면에만 즉시 반영할 오버라이드를 둔다.
+  const [joinPolicy, setJoinPolicy] = useState<boolean | null>(null);
 
   const isAdmin = user?.role === 'admin';
   const isManager = !!group && (isAdmin || group.ownerId === user?.id || membership?.role === 'manager');
@@ -60,7 +64,7 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
 
   useEffect(() => {
     if (!open || !group) return;
-    setMembership(null); setMembers([]); setTab('chat'); setProfile(null); setProfileEditing(false);
+    setMembership(null); setMembers([]); setTab('chat'); setProfile(null); setProfileEditing(false); setJoinPolicy(null);
     getVenueNotices(group.id).then(setNotices).catch(() => {});
     if (user) getMyMembership(group.id).then(setMembership).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -77,6 +81,29 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
   const kakao = profile?.kakao ?? group.kakaoUrl ?? '';
   const openProfileEdit = () => setProfileEditing(true);
   const approvedMembers = members.filter((m) => m.status === 'approved');
+  // 운영진 지정은 **개설자만**(서버도 같은 규칙). 사이트 관리자도 대신 할 수 있게 둔다.
+  const isOwner = !!group && (isAdmin || group.ownerId === user?.id);
+  const staffCount = approvedMembers.filter((m) => m.role === 'manager').length;
+
+  /** 운영진 지정/해제 — 상한(개설자 포함 5명)은 서버가 강제한다. 여기서는 실패 메시지를 그대로 보여 준다. */
+  const toggleStaff = async (m: { id: string; name: string; role?: string }) => {
+    const next = m.role === 'manager' ? 'member' : 'manager';
+    try {
+      await setGroupMemberRole(m.id, next);
+      toast.show(next === 'manager' ? `${m.name} 님을 운영진으로 지정했어요` : `${m.name} 님의 운영진을 해제했어요`, 'success');
+      reloadMembers();
+    } catch (e) { toast.show(e instanceof Error ? e.message : '변경 실패', 'error'); }
+  };
+
+  /** 가입 방식 변경 — 운영진이면 가능(서버 is_group_manager) */
+  const changeJoinPolicy = async (value: boolean) => {
+    if (!group) return;
+    try {
+      await setGroupJoinApproval(group.id, value);
+      setJoinPolicy(value);
+      toast.show(value ? '이제 운영진이 승인해야 가입됩니다' : '이제 누구나 바로 가입할 수 있어요', 'success');
+    } catch (e) { toast.show(e instanceof Error ? e.message : '변경 실패', 'error'); }
+  };
   const pendingMembers = members.filter((m) => m.status === 'pending');
 
   const doJoin = async () => {
@@ -248,6 +275,25 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
               </button>
               {managePanel && (
                 <div className="mt-2 space-y-2 animate-slide-up">
+                  {/* 가입 방식 — 개설 때 한 번 정하면 끝이었다(오너 지적). 여기서 언제든 바꾼다.
+                      개설 폼과 **같은 2지선다 문법**을 쓴다: 같은 결정을 두 곳에서 다르게 물으면 헷갈린다. */}
+                  <div>
+                    <p className="mb-1 text-2xs font-bold text-ink-secondary">가입 방식</p>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {([[true, '승인제', '운영진이 수락해야 가입'], [false, '자동 가입', '누구나 바로 가입']] as const).map(([v, label, desc]) => {
+                        const on = (joinPolicy ?? group.joinApproval ?? true) === v;
+                        return (
+                          <button key={String(v)} type="button" onClick={() => changeJoinPolicy(v)} aria-pressed={on}
+                            className={['rounded-input border px-3 py-2 text-left transition-colors duration-[var(--dur-fast)]',
+                              on ? 'border-accent-400/45 bg-accent-300/15' : 'chip-aura'].join(' ')}>
+                            <span className={['block text-xs font-bold', on ? 'text-accent-200' : 'text-ink-primary'].join(' ')}>{label}</span>
+                            <span className="block text-2xs text-ink-muted">{desc}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   {pendingMembers.length > 0 && (
                     <div>
                       <p className="text-2xs font-bold text-accent-300 mb-1">가입 신청 ({pendingMembers.length})</p>
@@ -266,15 +312,26 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
                     </div>
                   )}
                   <div>
-                    <p className="text-2xs font-bold text-ink-secondary mb-1">멤버 ({approvedMembers.length})</p>
+                    <p className="text-2xs font-bold text-ink-secondary mb-1">
+                      멤버 ({approvedMembers.length})
+                      {/* 상한이 있는 값은 남은 자리를 보여 준다 — 누르고 나서 거절당하는 것보다 낫다 */}
+                      <span className="ml-1.5 font-normal text-ink-muted tabular-nums">운영진 {staffCount}/5</span>
+                    </p>
                     <ul className="space-y-1">
                       {approvedMembers.map((m) => (
-                        <li key={m.id} className="flex items-center gap-2 rounded-input bg-surface-high px-2.5 py-1.5">
+                        <li key={m.id} className="flex items-center gap-2 rounded-input border card-aura-sub px-2.5 py-1.5">
                           <Avatar name={m.name} color={m.color} size={22} />
-                          <span className="text-xs text-ink-primary">{m.name}</span>
-                          {m.role === 'manager' && <span className="text-2xs font-bold text-accent-300">매니저</span>}
+                          <span className="min-w-0 flex-1 truncate text-xs text-ink-primary">{m.name}</span>
+                          {m.role === 'manager' && <span className="shrink-0 rounded-badge chip-aura px-1.5 py-0.5 text-2xs font-bold">운영진</span>}
+                          {/* 운영진 지정/해제는 **개설자만**(서버도 같은 규칙). 개설자 자신의 행에는 안 그린다. */}
+                          {isOwner && m.userId !== group?.ownerId && (
+                            <button type="button" onClick={() => toggleStaff(m)}
+                              className="shrink-0 text-2xs font-bold text-accent-300 hover:text-accent-200">
+                              {m.role === 'manager' ? '운영진 해제' : '운영진 지정'}
+                            </button>
+                          )}
                           {m.role !== 'manager' && m.userId !== user?.id && (
-                            <button type="button" onClick={() => doKick(m, '강제 탈퇴')} className="ml-auto text-2xs text-ink-muted hover:text-danger-light">추방</button>
+                            <button type="button" onClick={() => doKick(m, '강제 탈퇴')} className="shrink-0 text-2xs text-ink-muted hover:text-danger-light">추방</button>
                           )}
                         </li>
                       ))}

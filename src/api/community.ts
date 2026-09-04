@@ -1028,6 +1028,21 @@ export async function getPendingGroups(): Promise<Venue[]> {
   if (error) throw error;
   return (data ?? []).map(rowToVenue);
 }
+/** 그룹 가입 방식 변경 — 서버가 is_group_manager 로 권한을 강제한다(운영진 가능). */
+export async function setGroupJoinApproval(groupId: string, value: boolean): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('set_group_join_approval', { p_group_id: groupId, p_value: value });
+  if (error) throw new Error(error.message);
+}
+
+/** 운영진 지정/해제 — 서버가 **개설자만** 허용하고 개설자 포함 5명 상한을 강제한다.
+ *  운영진이 서로를 올릴 수 있으면 상한이 사실상 무의미해지므로 권한을 개설자로 좁혔다. */
+export async function setGroupMemberRole(memberId: string, role: 'manager' | 'member'): Promise<void> {
+  if (IS_MOCK) return;
+  const { error } = await supabase.rpc('set_group_member_role', { p_member_id: memberId, p_role: role });
+  if (error) throw new Error(error.message);
+}
+
 export async function approveGroup(groupId: string): Promise<void> {
   if (IS_MOCK) return;
   const { error } = await supabase.from('venues').update({ approved: true }).eq('id', groupId);
