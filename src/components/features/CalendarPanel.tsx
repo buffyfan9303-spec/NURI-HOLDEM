@@ -494,28 +494,35 @@ function BankrollCard({ date, rows, onChanged, onPickDate, toast }: {
           onClick={() => setMode('memo')} className={tabCls(mode === 'memo')}>일정</button>
       </div>
 
-      <div className="mt-1.5 flex flex-wrap gap-1.5">
-        {/* 날짜 — 달력 선택과 같은 값. 여기서 바꾸면 위 달력도 그 날로 옮겨간다(단일 출처). */}
-        <input type="date" value={date} onChange={(e) => e.target.value && onPickDate(e.target.value)}
-          aria-label="날짜" className="input min-w-0 flex-1 text-sm tabular-nums" />
+      {/* ⚠ `flex-wrap` + 자식마다 `min-w-0` 은 **줄바꿈이 영영 안 일어난다** — 0까지 줄일 수 있다고
+          선언하면 wrap 조건('더 못 줄임')에 도달하지 못해 컨트롤 5개가 한 줄에서 뭉개진다.
+          그 상태에서 type=date 는 내부 스피너 폭이 고정이라 글자가 먼저 깨지고 '메모(선택)'이 잘렸다.
+          → wrap 에 기대지 않고 줄을 명시한다(2026-09-05 오너 스크린샷). */}
+      <div className="mt-1.5 space-y-1.5">
+        <div className="flex gap-1.5">
+          {/* 날짜 — 달력 선택과 같은 값. 여기서 바꾸면 위 달력도 그 날로 옮겨간다(단일 출처). */}
+          <input type="date" value={date} onChange={(e) => e.target.value && onPickDate(e.target.value)}
+            aria-label="날짜" className="input min-w-0 flex-1 text-sm tabular-nums" />
+          {mode === 'bankroll' && (
+            <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="numeric"
+              placeholder="금액" aria-label="금액" className="input w-28 shrink-0 text-sm tabular-nums" />
+          )}
+        </div>
 
-        {mode === 'bankroll' ? (<>
-          <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="numeric"
-            placeholder="금액" aria-label="금액" className="input min-w-0 flex-1 text-sm tabular-nums" />
+        <div className="flex gap-1.5">
           <input value={memo} onChange={(e) => setMemo(e.target.value)} maxLength={40}
-            placeholder="메모(선택)" aria-label="메모" className="input min-w-0 flex-[2] text-sm" />
-          <div className="flex gap-1.5">
+            placeholder={mode === 'bankroll' ? '메모(선택)' : '일정 내용'}
+            aria-label={mode === 'bankroll' ? '메모' : '일정 내용'} className="input min-w-0 flex-1 text-sm" />
+          {mode === 'bankroll' ? (<>
             <button type="button" onClick={() => save(1)} disabled={busy} aria-label="플러스로 기록"
-              className="min-h-[44px] rounded-input border border-emerald-400/50 bg-emerald-400/10 px-3.5 text-sm font-bold stat-emerald disabled:opacity-50">＋</button>
+              className="min-h-[44px] shrink-0 rounded-input border border-emerald-400/50 bg-emerald-400/10 px-4 text-sm font-bold stat-emerald disabled:opacity-50">＋</button>
             <button type="button" onClick={() => save(-1)} disabled={busy} aria-label="마이너스로 기록"
-              className="min-h-[44px] rounded-input border border-danger/40 bg-danger/10 px-3.5 text-sm font-bold text-danger-deep dark:text-danger-light disabled:opacity-50">－</button>
-          </div>
-        </>) : (<>
-          <input value={memo} onChange={(e) => setMemo(e.target.value)} maxLength={40}
-            placeholder="일정 내용" aria-label="일정 내용" className="input min-w-0 flex-[2] text-sm" />
-          <button type="button" onClick={() => save(0)} disabled={busy}
-            className="btn-primary min-h-[44px] shrink-0 px-4 text-sm">저장</button>
-        </>)}
+              className="min-h-[44px] shrink-0 rounded-input border border-danger/40 bg-danger/10 px-4 text-sm font-bold text-danger-deep dark:text-danger-light disabled:opacity-50">－</button>
+          </>) : (
+            <button type="button" onClick={() => save(0)} disabled={busy}
+              className="btn-primary min-h-[44px] shrink-0 px-4 text-sm">저장</button>
+          )}
+        </div>
       </div>
 
       {dayRows.length > 0 && (

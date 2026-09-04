@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect, useMemo, type ReactNode } from 'react';
 import Modal from '../atoms/Modal';
+import MarqueeText from '../atoms/MarqueeText';
 import Icon, { type IconName } from '../atoms/Icon';
 import ImageLightbox from '../atoms/ImageLightbox';
 import CommentThread from './CommentThread';
@@ -1341,42 +1342,6 @@ function BlindStructure({ schedule, alwaysOpen = false }: { schedule: Schedule; 
   );
 }
 
-// ── 값 마퀴 — 칸 폭을 넘는 값이 줄바꿈 대신 옆으로 흐르고 무한 루프로 돌아온다 ──────
-// 내용 2회 복제 + translateX(-50%) 무한 루프(모션 헌법 §20.4 #1 '무한 루프' 허용 예외 —
-// transform 전용·컴포지터 상주). 넘치지 않으면 정적 표시(애니메이션 자체를 붙이지 않음).
-// prefers-reduced-motion 은 index.css 동작 줄이기 블록에서 truncate 폴백.
-function MarqueeText({ text, className = '' }: { text: string; className?: string }) {
-  const viewportRef = useRef<HTMLDivElement>(null);
-  const measureRef = useRef<HTMLSpanElement>(null);
-  const [loopW, setLoopW] = useState(0); // 0 = 넘치지 않음(정적)
-  useEffect(() => {
-    const vp = viewportRef.current, ms = measureRef.current;
-    if (!vp || !ms) return;
-    const check = () => setLoopW(ms.offsetWidth > vp.clientWidth + 1 ? ms.offsetWidth : 0);
-    check();
-    const ro = new ResizeObserver(check); // 폰트 로드·회전·2-pane 리사이즈에도 재판정
-    ro.observe(vp);
-    return () => ro.disconnect();
-  }, [text]);
-  const GAP = 32; // 복제본 사이 간격(px) — pr-8 과 일치해야 -50% 지점이 정확히 맞물린다
-  return (
-    <div ref={viewportRef} className={`relative min-w-0 overflow-hidden ${className}`}>
-      {/* 측정 전용(불가시) 상주 — 마퀴 전환 뒤에도 '더는 안 넘침' 복귀 판정 가능 */}
-      <span ref={measureRef} aria-hidden className="invisible absolute left-0 top-0 whitespace-nowrap">{text}</span>
-      {loopW > 0 ? (
-        <div
-          className="marquee-loop flex w-max"
-          style={{ '--marquee-dur': `${Math.max(6, Math.round((loopW + GAP) / 28))}s` } as React.CSSProperties}
-        >
-          <span className="whitespace-nowrap pr-8">{text}</span>
-          <span className="whitespace-nowrap pr-8" aria-hidden>{text}</span>
-        </div>
-      ) : (
-        <span className="block truncate">{text}</span>
-      )}
-    </div>
-  );
-}
 
 // 게임 정보 2열 정의 행 — 라벨(dt) 좌 / 값(dd) 우. 긴 값은 MarqueeText 가 옆으로 흘린다.
 // dl > div > dt+dd 는 HTML5 유효 구조 — 행 단위 구분선을 주려면 래퍼가 필요하다.

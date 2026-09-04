@@ -47,6 +47,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import Modal from '../atoms/Modal';
 import Icon from '../atoms/Icon';
+import MarqueeText from '../atoms/MarqueeText';
 import { useToast } from '../atoms/Toast';
 import { tierCss } from '../atoms/TierBadge';
 import { useAuth } from '../../contexts/AuthContext';
@@ -183,6 +184,12 @@ function colorBoxStyle(tier?: ShoutTier | null, color?: ShoutColor | null): CSSP
     borderColor: tierCss(v, 0.55),
     backgroundImage: `linear-gradient(90deg, ${tierCss(v, 0.14)}, transparent)`,
   };
+}
+/** 닉네임은 **글자**라 4.5:1 이 필요하다. 라이트에서 --tier-*-vivid 는 장식급(#3381DF)이고
+ *  텍스트급 짝은 -vivid 를 뗀 것(#0059C4)이다 — TitleChip 이 쓰는 colorVar/vividVar 규약과 같다. */
+function colorTextStyle(tier?: ShoutTier | null, color?: ShoutColor | null): CSSProperties | undefined {
+  const v = shoutVar(tier, color);
+  return v ? { color: tierCss(v.replace('-vivid', '')) } : undefined;
 }
 /** 아이콘은 '색으로만 등급을 알리는' 비텍스트 지점이라 vivid 를 알파 없이 쓴다(3:1 기준). */
 function colorIconStyle(tier?: ShoutTier | null, color?: ShoutColor | null): CSSProperties | undefined {
@@ -659,35 +666,43 @@ export default function CommunityShoutBar({ className }: { className?: string })
 
   return (
     // min-h 로 자리를 미리 잡는다 — 로딩→도착에서 아래 콘텐츠가 밀리지 않게(CLS 0)
-    <div ref={rootRef} className={['min-h-[3.25rem]', className ?? ''].join(' ')}>
+    // 57px = py-2.5(20) + 테두리(2) + h-8 버튼 줄(32)+3. 등급이 바뀌어도 높이를 버튼이 지배하므로 고정이다.
+    // 예전 3.25rem(52px)은 **덜 잡고 있었다** — 카드가 실측 57px 이라 도착할 때 5px 만큼 아래가 밀렸다.
+    <div ref={rootRef} className={['min-h-[3.5625rem]', className ?? ''].join(' ')}>
       {/* 카드는 **하나뿐이다.** 방송 중 ↔ 기본 문구가 같은 DOM 을 갈아 끼우므로 전환에서 리마운트도,
-          높이 점프도 없다. 자동 순환(마퀴·캐러셀)은 쓰지 않는다 — 상시 움직이는 배너는 모션 헌법의
-          무한 루프 예외를 새로 만들 이유가 없고, 오너가 가장 싫어하는 '끊김'의 주범이다. */}
+          높이 점프도 없다. 20초 슬롯 순환은 페이드로만 갈아 끼운다(캐러셀 슬라이드 아님).
+          ⚠ 2026-09-05 오너 지시로 **가로 전광판**을 도입했다: 한 줄이 칸을 넘칠 때만 MarqueeText 가
+          옆으로 흘린다. 예전 주석은 '마퀴 금지'라고 못 박아 뒀었는데, 그때 막으려던 것은 '문구가
+          제멋대로 슬라이드로 갈리는 캐러셀'이었다. 지금 것은 넘치는 한 줄에만 붙는 transform 전용
+          루프(모션 헌법 §20.4 #1 무한 루프 예외)라 레이아웃을 건드리지 않고, 안 넘치면 아예 안 붙는다. */}
       <div
         data-testid={drawShout ? 'shout-live' : 'shout-idle'}
         className={['rounded-aura border px-3 py-2.5',
           skin ? skin.box : 'card-aura'].join(' ')}
         style={drawShout ? colorBoxStyle(drawShout.tier, drawShout.color) : undefined}
       >
-        <div className="flex items-start gap-2">
+        <div className="flex items-center gap-2">
           <Icon name="megaphone" size={16}
-                className={['mt-0.5 shrink-0', skin ? skin.icon : 'text-accent-300'].join(' ')}
+                className={['shrink-0', skin ? skin.icon : 'text-accent-300'].join(' ')}
                 style={drawShout ? colorIconStyle(drawShout.tier, drawShout.color) : undefined} />
-          {/* min-h = 본문 두 줄. 20초마다 문구가 갈릴 때 카드 높이가 들썩이지 않게 **공간을 미리 예약**한다
-              (모션 헌법: CLS 는 진입 애니가 아니라 공간 예약으로만 해결한다). height 를 애니메이트하지
-              않는 이유도 같다 — 레이아웃 애니는 화이트리스트 밖이다. */}
-          <div className="min-h-[2.5rem] min-w-0 flex-1"
+          {/* 한 줄 전광판. min-h 로 자리를 미리 잡는다 — 20초마다 문구가 갈릴 때 카드가 들썩이지
+              않게 **공간을 예약**한다(CLS 는 진입 애니가 아니라 공간 예약으로 푼다). 1.75rem 은
+              board 등급의 text-base(leading-snug 22px)까지 덮는 값이라 등급이 섞여도 높이가 고정된다. */}
+          <div className="flex min-h-[1.75rem] min-w-0 flex-1 items-center"
                style={{ transition: 'opacity var(--dur-base) var(--ease)', opacity: vis ? 1 : 0 }}>
             {drawShout && skin ? (
-              <>
-                <p className={['break-words font-bold leading-snug text-ink-primary', skin.text].join(' ')}>{drawShout.message}</p>
-                <p className="mt-0.5 text-2xs text-ink-muted">{drawShout.nickname} · 방송 중</p>
-              </>
+              <MarqueeText className="w-full" text={`${drawShout.nickname} · ${drawShout.message} · 방송 중`}>
+                <span className="text-2xs font-bold" style={colorTextStyle(drawShout.tier, drawShout.color)}>{drawShout.nickname}</span>
+                <span className="mx-1.5 text-2xs text-ink-muted">·</span>
+                <span className={['font-bold leading-snug text-ink-primary', skin.text].join(' ')}>{drawShout.message}</span>
+                <span className="ml-1.5 text-2xs text-ink-muted">· 방송 중</span>
+              </MarqueeText>
             ) : (
-              <>
-                <p data-testid="shout-idle-line" className="break-words text-sm font-semibold leading-snug text-ink-secondary">{drawLine}</p>
-                <p className="mt-0.5 text-2xs text-ink-muted">누리홀덤 안내</p>
-              </>
+              <MarqueeText className="w-full" testId="shout-idle-line" text={`누리홀덤 안내 · ${drawLine}`}>
+                <span className="text-2xs font-bold text-accent-300">누리홀덤 안내</span>
+                <span className="mx-1.5 text-2xs text-ink-muted">·</span>
+                <span className="text-sm font-semibold leading-snug text-ink-secondary">{drawLine}</span>
+              </MarqueeText>
             )}
           </div>
           {drawShout && (isAdmin || user?.id === drawShout.userId) && (

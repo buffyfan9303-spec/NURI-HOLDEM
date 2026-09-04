@@ -8,6 +8,7 @@ import { getEquippedMarks, getNickColors, isBumped } from '../../api/community';
 import { getAppSetting, COMMUNITY_ADS_EVERY_KEY, COMMUNITY_ADS_EVERY_DEFAULT, parseAdsEvery } from '../../api/settings';
 import { pinnedFirst } from '../../lib/pinnedFirst';
 import TitleChip from '../atoms/TitleChip';
+import MarqueeText from '../atoms/MarqueeText';
 import { tierCss } from '../atoms/TierBadge';
 import { nickColorVar } from '../../lib/cosmetics';
 import { useTitlePoints } from '../../lib/useTitles';
@@ -831,25 +832,30 @@ const PostRow = memo(function PostRow({ post, onClick, hot = false, selected = f
       {hot
         ? <span className="shrink-0 rounded-badge bg-danger/15 px-1 text-2xs font-extrabold leading-none tracking-wide text-danger-light">HOT</span>
         : <span className={['shrink-0 rounded-badge px-1 py-0.5 text-2xs font-semibold leading-none', categoryPillClass(post.category)].join(' ')}>{catLabel}</span>}
-      <span className="min-w-0 flex-1 truncate">
+      {/* 제목**만** 전광판으로 흘린다(오너 지시 2026-09-05). 배지는 고정이다 —
+          예전엔 이 칸 전체가 truncate 라 제목이 길면 뒤의 [댓글수]·사진수·응원까지 같이 잘렸다.
+          그건 '훑어보는 정보'라 흘러가거나 잘리면 목록의 기능 자체가 사라진다.
+          MarqueeText 는 **넘칠 때만** 애니메이션을 붙이므로 짧은 제목은 지금과 똑같이 정적이다. */}
+      <span className="flex min-w-0 flex-1 items-center">
         {/* NEW 도트(Phase 14, pokergosu 리스트 밀도) — 24시간 이내 글 */}
         {Date.now() - new Date(post.createdAt).getTime() < 24 * 3600_000 && (
-          <span aria-label="새 글" className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-danger align-middle" />
+          <span aria-label="새 글" className="mr-1 h-1.5 w-1.5 shrink-0 rounded-full bg-danger" />
         )}
-        <span className="text-sm font-bold leading-tight text-ink-primary">{post.title || post.content.slice(0, 40)}</span>
+        <MarqueeText text={post.title || post.content.slice(0, 40)}
+          className="min-w-0 flex-1 text-sm font-bold leading-tight text-ink-primary" />
         {(replay || hand) && (
-          <span className="ml-1 align-middle text-accent-300" aria-label={replay ? '리플레이 첨부' : '핸드 첨부'}>
+          <span className="ml-1 shrink-0 text-accent-300" aria-label={replay ? '리플레이 첨부' : '핸드 첨부'}>
             <Icon name={replay ? 'cards' : 'spade'} size={12} className="inline align-[-2px]" />
           </span>
         )}
         {imgCount > 0 && (
-          <span className="ml-1 align-middle text-2xs tabular-nums text-ink-muted" aria-label={`사진 ${imgCount}장`}>
+          <span className="ml-1 shrink-0 text-2xs tabular-nums text-ink-muted" aria-label={`사진 ${imgCount}장`}>
             <Icon name="image" size={12} className="inline align-[-2px]" />{imgCount > 1 ? imgCount : ''}
           </span>
         )}
-        {post.commentCount > 0 && <span className="ml-1 align-middle text-xs font-bold tabular-nums text-accent-300">[{post.commentCount}]</span>}
+        {post.commentCount > 0 && <span className="ml-1 shrink-0 text-xs font-bold tabular-nums text-accent-300">[{post.commentCount}]</span>}
         {(post.cheerCount ?? 0) > 0 && (
-          <span className="ml-1 align-middle text-2xs font-bold tabular-nums text-accent-200" aria-label={`응원 ${post.cheerCount}`}>
+          <span className="ml-1 shrink-0 text-2xs font-bold tabular-nums text-accent-200" aria-label={`응원 ${post.cheerCount}`}>
             <Icon name="chip-stack" size={11} className="inline align-[-1px]" />{post.cheerCount}
           </span>
         )}
