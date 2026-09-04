@@ -20,7 +20,9 @@ export default function MarqueeText({ text, children, className = '', testId }: 
   /** ⚠ 뷰포트에만 붙는다 — 내용은 2벌 복제되므로 자식에 달면 getByTestId 가 strict mode 로 터진다. */
   testId?: string;
 }) {
-  const viewportRef = useRef<HTMLDivElement>(null);
+  // ⚠ span 이다(div 아님) — 공지 행처럼 <button> 안에 들어가는 곳이 있는데
+  //   <button> 은 phrasing content 만 받는다. block/flex 를 명시해 겉보기는 div 와 같다.
+  const viewportRef = useRef<HTMLSpanElement>(null);
   const measureRef = useRef<HTMLSpanElement>(null);
   const [loopW, setLoopW] = useState(0); // 0 = 넘치지 않음(정적)
   useEffect(() => {
@@ -35,20 +37,20 @@ export default function MarqueeText({ text, children, className = '', testId }: 
   const body = children ?? text;
   const GAP = 32; // 복제본 사이 간격(px) — pr-8 과 일치해야 -50% 지점이 정확히 맞물린다
   return (
-    <div ref={viewportRef} data-testid={testId} className={`relative min-w-0 overflow-hidden ${className}`}>
+    <span ref={viewportRef} data-testid={testId} className={`relative block min-w-0 overflow-hidden ${className}`}>
       {/* 측정 전용(불가시) 상주 — 마퀴 전환 뒤에도 '더는 안 넘침' 복귀 판정이 가능하다 */}
       <span ref={measureRef} aria-hidden className="invisible absolute left-0 top-0 whitespace-nowrap">{body}</span>
       {loopW > 0 ? (
-        <div
+        <span
           className="marquee-loop flex w-max"
           style={{ '--marquee-dur': `${Math.max(6, Math.round((loopW + GAP) / 28))}s` } as CSSProperties}
         >
           <span className="whitespace-nowrap pr-8">{body}</span>
           <span className="whitespace-nowrap pr-8" aria-hidden>{body}</span>
-        </div>
+        </span>
       ) : (
         <span className="block truncate">{body}</span>
       )}
-    </div>
+    </span>
   );
 }

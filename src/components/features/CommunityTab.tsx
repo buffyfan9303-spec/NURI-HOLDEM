@@ -347,18 +347,24 @@ function CommunityTab({
       )}
 
       {(visitedSecs.has('board') || section === 'board') && (
-        <div data-sec="board" style={{ display: section === 'board' ? undefined : 'none' }}
-          className="lg:flex lg:items-start lg:gap-4">
+        <div data-sec="board" style={{ display: section === 'board' ? undefined : 'none' }}>
+          {/* 공지는 게시판 **전체**에 걸리는 안내다. 예전엔 좌측 목록 pane 안에 있어서
+              1440px 에서 510px — 화면의 35% 만 쓰고, 바로 오른쪽 660px 는
+              '게시글을 선택하면 여기에 상세가 표시됩니다' 빈 자리였다(오너: "공지 칸이 절반이야").
+              2-pane **위로** 올려 전체 폭을 쓴다. lg 미만(모바일)은 원래 단일 컬럼이라 변화 없다. */}
+          {((notices && notices.length > 0) || isAdmin) && (
+            <div className="mb-2">
+              <NoticeSection notices={notices ?? []} onSelect={onSelectNotice}
+                canWrite={isAdmin} onWrite={onWriteNotice} />
+            </div>
+          )}
+          <div className="lg:flex lg:items-start lg:gap-4">
           {/* 좌측: 목록(압축) — 19rem(304px)은 PostRow 고정 메타(작성자+칭호+시간+조회 ≈368px)보다
               좁아 제목이 0px로 뭉개지고 조회수가 행 밖으로 잘렸다(PC 1280·1536 점검 2026-08-28).
               lg 24rem / xl 30rem: 1280 기준 우측 상세는 692px 확보(max-w-3xl 읽기폭과 근접). */}
           <div className="min-w-0 lg:w-[24rem] lg:shrink-0 xl:w-[30rem]">
             <FeedSectionM
               posts={boardPosts}
-              notices={notices}
-              isAdmin={isAdmin}
-              onWriteNotice={onWriteNotice}
-              onSelectNotice={onSelectNotice}
               onOpenWrite={openWriteFree}
               onLike={onLikePost}
               onSelectPost={isDesktop ? setBoardSelected : onSelectPost}
@@ -386,6 +392,7 @@ function CommunityTab({
               </div>
             )}
           </aside>
+          </div>
         </div>
       )}
 
@@ -457,16 +464,12 @@ function SectionTab({ active, label, onClick }: { active: boolean; label: string
 // ── 전역 피드 ────────────────────────────────────────────────────────────────
 
 function FeedSection({
-  posts, notices, isAdmin, onWriteNotice, onSelectNotice, onOpenWrite, onLike, onSelectPost,
+  posts, onOpenWrite, onLike, onSelectPost,
   selectedId,
   placeholder = '나누고 싶은 이야기를 적어보세요…', emptyText = '첫 게시글을 남겨보세요',
   enableCategory = false,
 }: {
   posts: CommunityPost[];
-  notices?: MarketplaceNotice[];
-  isAdmin?: boolean;
-  onWriteNotice?: () => void;
-  onSelectNotice?: (notice: MarketplaceNotice) => void;
   onOpenWrite: () => void;
   onLike: (id: string) => void;
   onSelectPost: (p: CommunityPost) => void;
@@ -575,11 +578,6 @@ function FeedSection({
           로그인하면 게시글을 작성할 수 있어요 — <b className="text-accent-300">로그인하기 →</b>
         </button>
       )}
-
-      {/* ── 관리자 공지 (게시판 맨 위) ───────────────────────── */}
-      {(notices && notices.length > 0) || isAdmin ? (
-        <NoticeSection notices={notices ?? []} onSelect={onSelectNotice} canWrite={isAdmin} onWrite={onWriteNotice} />
-      ) : null}
 
       {/* 검색 + 카테고리 필터 */}
       {posts.length > 0 && (

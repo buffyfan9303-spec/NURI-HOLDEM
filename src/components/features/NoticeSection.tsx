@@ -11,6 +11,7 @@
 //   색 텍스트를 쓰지 않으므로 라이트/다크 대비 문제가 구조적으로 생기지 않는다.
 //   글로우(.ring-aura-glow)는 쓰지 않는다 — 반복 카드이고, 화면당 1곳 규칙의 주인공이 아니다.
 import Icon, { type IconName } from '../atoms/Icon';
+import MarqueeText from '../atoms/MarqueeText';
 import type { MarketplaceNotice, NoticeType } from '../../api/marketplace';
 import { relativeTime } from '../../lib/relativeTime';
 
@@ -51,20 +52,25 @@ export function NoticeBadge({ type }: { type: NoticeType }) {
  * 공지 한 줄 — 높이 44px(--row-h-sm)로 게시글 행과 리듬을 맞춘다.
  * 오너 지시(2026-08-27) 유지: 목록은 **제목만** 한 줄, 본문·작성자는 눌러서 상세에서.
  */
-export function NoticeRow({ notice, onSelect }: { notice: MarketplaceNotice; onSelect?: (n: MarketplaceNotice) => void }) {
-  // 마커는 **정보를 담을 때만** 보여준다. 대부분의 공지는 'pinned' 라 행마다 같은 타일을 반복하면
-  // 왼쪽에 보라 기둥만 생기고 알려주는 건 0이다(실측 스크린샷). 기본형은 점, 예외형(이벤트·주의)만
-  // 타일 — 자리 폭은 24px 로 고정해 섞여 있어도 제목 시작선이 흔들리지 않는다.
+export function NoticeRow({ notice, onSelect, reserveMarker }: {
+  notice: MarketplaceNotice;
+  onSelect?: (n: MarketplaceNotice) => void;
+  /** 이 목록에 이벤트·주의(타일)가 섞여 있는가. 섞여 있을 때만 pinned 행이 24px 를 비워
+   *  제목 시작선을 맞춘다. 전부 pinned 인 목록(대부분)은 그 자리를 아예 쓰지 않는다. */
+  reserveMarker?: boolean;
+}) {
+  // 마커는 **정보를 담을 때만** 보여준다. 대부분의 공지는 'pinned' 인데, 예전엔 그 행마다 점을
+  // 찍어 왼쪽에 점 기둥만 생기고 알려주는 건 0이었다(오너 지시 2026-09-05 "점 제외").
+  // → pinned 는 마커 없음. 예외형(이벤트·주의)만 타일. 섞인 목록에서만 24px 를 비워 시작선을 맞춘다.
+  // 375px 실측: 점+gap 을 걷어내 제목 칸이 223px → 257px(가장 긴 공지 가시율 59% → 68%).
   const body = (
     <>
-      {notice.type === 'pinned' ? (
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center" aria-hidden>
-          <span className="h-1.5 w-1.5 rounded-full bg-accent-400/70" />
-        </span>
-      ) : (
-        <NoticeTile type={notice.type} />
-      )}
-      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{notice.title}</span>
+      {notice.type === 'pinned'
+        ? (reserveMarker ? <span className="h-6 w-6 shrink-0" aria-hidden /> : null)
+        : <NoticeTile type={notice.type} />}
+      {/* 잘라내지 않고 흘린다 — 공지 제목은 14~38자라 잘리면 '무엇에 대한 공지'인지가 사라진다.
+          MarqueeText 는 넘칠 때만 애니메이션을 붙이므로 짧은 공지는 지금과 똑같이 정적이다. */}
+      <MarqueeText text={notice.title} className="min-w-0 flex-1 text-sm font-semibold text-ink-primary" />
       <span className="shrink-0 text-2xs tabular-nums text-ink-muted">{relativeTime(notice.createdAt, { dateAfterDays: 7 })}</span>
     </>
   );
@@ -98,6 +104,8 @@ export default function NoticeSection({
   emptyText?: string;
 }) {
   const rows = limit ? notices.slice(0, limit) : notices;
+  // 타일이 하나라도 섞여 있을 때만 pinned 행이 자리를 비운다(전부 pinned 면 왼쪽 여백 0).
+  const reserveMarker = rows.some((r) => r.type !== 'pinned');
   return (
     <section className="rounded-aura border card-aura p-3">
       <div className="flex items-center gap-2 border-b border-border-subtle pb-1.5">
@@ -119,7 +127,7 @@ export default function NoticeSection({
         <p className="py-6 text-center text-2xs text-ink-muted">{emptyText}</p>
       ) : (
         <ul className="mt-1 space-y-0.5">
-          {rows.map((n) => <NoticeRow key={n.id} notice={n} onSelect={onSelect} />)}
+          {rows.map((n) => <NoticeRow key={n.id} notice={n} onSelect={onSelect} reserveMarker={reserveMarker} />)}
         </ul>
       )}
     </section>

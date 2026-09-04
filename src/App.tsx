@@ -2869,8 +2869,12 @@ export default function App() {
                         // 행은 NoticeSection 의 NoticeRow 단일 출처 — 커뮤니티·장터·딜러와 마커·높이(44px)·타이포가 같다.
                         // 껍데기(접이식 헤더)만 여기 고유다: 첫 화면 밀도 우선이라 기본 접힘이어야 한다.
                         <ul className="p-2 pt-0 space-y-0.5">
-                          {browseNotices.slice(0, 3).map((n) => (
-                            <NoticeRow key={n.id} notice={n} onSelect={setOpenNotice} />
+                          {/* reserveMarker: 이 3건에 이벤트·주의(타일)가 섞여 있을 때만 pinned 행이
+                              24px 를 비운다 — 전부 pinned 면(대부분) 왼쪽 여백 없이 제목부터 시작한다.
+                              NoticeSection 과 같은 규칙을 여기서도 지켜야 두 화면의 행이 어긋나지 않는다. */}
+                          {browseNotices.slice(0, 3).map((n, _i, arr) => (
+                            <NoticeRow key={n.id} notice={n} onSelect={setOpenNotice}
+                              reserveMarker={arr.some((x) => x.type !== 'pinned')} />
                           ))}
                         </ul>
                       ) : (
