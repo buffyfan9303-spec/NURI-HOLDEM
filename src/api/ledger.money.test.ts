@@ -6,7 +6,7 @@
 //
 // 실행: npx vitest run src/api/ledger.money.test.ts
 import { describe, it, expect } from 'vitest';
-import { buyinFinance, discountSummary, cardUnit, wonToMan, type LedgerBuyin } from './ledger';
+import { buyinFinance, discountSummary, isBuyinExcluded, cardUnit, wonToMan, type LedgerBuyin } from './ledger';
 
 // 10만원 게임 · 카드 11만원(수수료 반영) · 할인 이벤트 2종(5만/3만)
 const SESSION = {
@@ -285,5 +285,43 @@ describe('가게지원 가치 — 매장이 실제로 부담한 몫', () => {
     expect(f.entry).toBe(0.5);
     expect(f.value).toBe(50_000);
     expect(f.value / SESSION.buyinAmount).toBe(f.entry);
+  });
+});
+
+// ── 정산 제외 판정 (오너 지시 2026-09-05) ────────────────────────────────────
+// "가게지원은 바인엔 포함되지만 정산 때 관계자·신규처럼 빼고 정산 가능하게" + "티켓·현금·카드도".
+describe('정산 제외 — 방문자 유형 × 결제수단', () => {
+  const VT: Record<string, string> = { 파이리: 'staff', 손님: 'regular' };
+  const ex = (b: LedgerBuyin, keys: string[]) =>
+    isBuyinExcluded(b, new Set(keys), (nm) => VT[nm]);
+
+  it('아무것도 안 고르면 아무것도 빠지지 않는다', () => {
+    expect(ex(buyin({ paymentMethod: 'support' }), [])).toBe(false);
+  });
+
+  it('관계자 제외 — 그 사람의 바인이 결제수단과 무관하게 빠진다', () => {
+    expect(ex(buyin({ playerName: '파이리', paymentMethod: 'cash' }), ['visitor:staff'])).toBe(true);
+    expect(ex(buyin({ playerName: '손님', paymentMethod: 'cash' }), ['visitor:staff'])).toBe(false);
+  });
+
+  it('결제수단 제외 — 가게지원·티켓·현금을 각각 뺄 수 있다', () => {
+    expect(ex(buyin({ playerName: '손님', paymentMethod: 'support' }), ['method:support'])).toBe(true);
+    expect(ex(buyin({ playerName: '손님', paymentMethod: 'ticket' }), ['method:ticket'])).toBe(true);
+    expect(ex(buyin({ playerName: '손님', paymentMethod: 'cash' }), ['method:ticket'])).toBe(false);
+  });
+
+  it('분납은 쓰인 수단이 **전부** 제외 대상일 때만 빠진다', () => {
+    const mixed = buyin({ playerName: '손님', isSplit: true, cashAmount: 40_000, ticketCount: 1 });
+    expect(ex(mixed, ['method:ticket'])).toBe(false);          // 일부만 제외 → 남긴다
+    expect(ex(mixed, ['method:ticket', 'method:cash'])).toBe(true); // 전부 제외 → 뺀다
+  });
+
+  it('분납이라도 방문자 유형이 걸리면 통째로 빠진다', () => {
+    const b = buyin({ playerName: '파이리', isSplit: true, cashAmount: 100_000 });
+    expect(ex(b, ['visitor:staff'])).toBe(true);
+  });
+
+  it('유형이 없는(미지정) 손님은 유형 제외에 걸리지 않는다', () => {
+    expect(ex(buyin({ playerName: '무명', paymentMethod: 'cash' }), ['visitor:staff'])).toBe(false);
   });
 });

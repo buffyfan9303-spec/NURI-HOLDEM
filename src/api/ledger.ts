@@ -227,6 +227,37 @@ export function autoDiscountIndex(discounts: DiscountPreset[] | undefined, level
  *  entryLoss = 할인으로 깎인 엔트리 환산량(10만 게임 5만 할인 = 0.5)
  *  ⚠ 분납도 discountIndex 로 일원화돼 있어 동일하게 잡힌다(2026-07 '레벨 할인' 사건의 교훈). */
 export interface DiscountSummary { count: number; total: number; entryLoss: number }
+/**
+ * 정산 제외 판정 — 이 바인이 정산에서 빠지는가.
+ * 키 형식: `visitor:<유형>` · `method:<결제수단>` (오너 지시 2026-09-05
+ * "관계자·신규처럼 빼고 정산", "티켓·현금·카드도 뺄 수 있게").
+ *
+ * 제외는 **행 단위**다 — 금액만 반쪽으로 빼면 엔트리와 금액이 어긋난다.
+ * 분납은 수단이 섞여 있으므로 **쓰인 수단이 전부 제외 대상일 때만** 뺀다:
+ * 현금+티켓 분납에서 '티켓'만 제외했을 때 그 행을 뺄지 말지는 정답이 없어, 남기는 쪽을 고른다
+ * (덜 빼는 실수가 더 빼는 실수보다 되돌리기 쉽다).
+ *
+ * visitorOf 는 이름 → 방문자 유형. 바인 행에는 유형이 없어 로스터에서 잇는다.
+ */
+export function isBuyinExcluded(
+  b: LedgerBuyin,
+  exKeys: ReadonlySet<string>,
+  visitorOf: (playerName: string) => string | null | undefined,
+): boolean {
+  if (exKeys.size === 0) return false;
+  const vt = visitorOf(b.playerName);
+  if (vt && exKeys.has(`visitor:${vt}`)) return true;
+  if (b.isSplit) {
+    const used: PaymentMethod[] = [];
+    if (b.cashAmount > 0) used.push('cash');
+    if (b.cardAmount > 0) used.push('card');
+    if (b.transferAmount > 0) used.push('transfer');
+    if (b.ticketCount > 0) used.push('ticket');
+    return used.length > 0 && used.every((m) => exKeys.has(`method:${m}`));
+  }
+  return exKeys.has(`method:${b.paymentMethod}`);
+}
+
 export function discountSummary(
   buyins: LedgerBuyin[],
   s: { buyinAmount: number; discounts?: DiscountPreset[] },

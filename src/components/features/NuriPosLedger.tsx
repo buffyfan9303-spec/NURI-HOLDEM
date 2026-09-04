@@ -11,7 +11,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import Icon from '../atoms/Icon';
 import { deleteLedgerPlayerAtomic, CELL_TAKEN, cancelMyRecentBuyin,
   type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type LedgerSessionListItem, type DiscountPreset, type EarlyType, type LedgerGame, type LedgerCloseSnapshot, type LedgerLossSummary,
-  visitorLabel, wonToMan, WON_PER_MAN, buyinFinance, earlyTypeOf, setBuyinEarly, MAIN_GAME_SEQ, ledgerLossSummary,
+  visitorLabel, wonToMan, WON_PER_MAN, buyinFinance, isBuyinExcluded, earlyTypeOf, setBuyinEarly, MAIN_GAME_SEQ, ledgerLossSummary,
   cardUnit, discountAmountOf, autoDiscountIndex, discountSummary, type DiscountSummary,
   getLedgerSession, getLedgerGames, saveLedgerSession, openLedgerSession, closeLedgerSession, reopenLedgerSession, deleteLedgerSession,
   setRegistrationClosed, getLastLedgerSettings, getLedgerSessionList, getLedgerAccessUserIds, notifyLedgerOpen,
@@ -61,6 +61,8 @@ const manVal   = (won: number): number | '' => (won ? won / WON_PER_MAN : '');
 const parseMan = (v: string): number => Math.max(0, Math.round((parseFloat(v) || 0) * WON_PER_MAN));
 
 const METHOD_SHORT: Record<PaymentMethod, string> = { ticket: 'T', cash: '현', transfer: '이', card: '카', support: '지원' };
+/** 정산 제외 패널·마감 메모용 전체 이름 */
+const METHOD_LABEL: Record<PaymentMethod, string> = { ticket: '티켓', cash: '현금', transfer: '이체', card: '카드', support: '가게지원' };
 // 유형 빠른 선택(고정) + 직접입력은 별도
 const VISITOR_OPTS: { code: string; label: string }[] = [
   { code: 'new', label: '신규방문' }, { code: 'regular', label: '기존손님' },
@@ -479,46 +481,87 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     return filtered;
   }, [players, buyins, query, sortBy]);
 
-  // 가게지원 제외 보기 — 기본은 포함(오너: "바인·엔트리 둘 다 넣긴 해야 된다").
-  // ⚠ 보기 필터일 뿐이다. 마감이 남기는 기록은 이 값을 쓰지 않는다(아래 handleClose 참고).
-  const [exSupport, setExSupport] = useState(false);
+  // ── 정산 제외 필터 (오너 지시 2026-09-05) ─────────────────────────────────
+  // "가게지원은 바인엔 포함되지만 정산 때 관계자·신규처럼 빼고 정산 가능하게" +
+  // "티켓/현금/카드 등도 뺄 수 있게" → 축이 둘인 하나의 필터로 일반화한다.
+  // 키 형식: `visitor:<유형>` · `method:<결제수단>`. 기본은 아무것도 제외하지 않음(전부 포함).
+  const [exKeys, setExKeys] = useState<Set<string>>(() => new Set());
+
+  // 방문자 유형은 플레이어에 붙어 있다 — 바인에는 없으므로 이름으로 잇는다.
+  const visitorByName = useMemo(
+    () => new Map(players.map((p) => [p.name, p.visitorType ?? ''])),
+    [players],
+  );
+
+  // 판정 자체는 업무 규칙이라 api/ledger.ts 에 있다(테스트 대상). 여기서는 로스터만 이어 준다.
+  const isExcluded = useCallback(
+    (b: LedgerBuyin): boolean => isBuyinExcluded(b, exKeys, (nm) => visitorByName.get(nm)),
+    [exKeys, visitorByName],
+  );
+
+  // 제외 후보별 건수 — 무엇을 빼는지 모르고 누르면 정산이 틀어진다. 체크박스 옆에 그대로 보여준다.
+  const exCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    const bump = (k: string) => m.set(k, (m.get(k) ?? 0) + 1);
+    for (const b of buyins) {
+      const vt = visitorByName.get(b.playerName);
+      if (vt) bump(`visitor:${vt}`);
+      if (!b.isSplit) bump(`method:${b.paymentMethod}`);
+    }
+    return m;
+  }, [buyins, visitorByName]);
+
+  /** 마감 메모에 자동으로 적힐 제외 요약 — 무엇을 빼고 정산했는지가 기록에 남아야 감사가 된다. */
+  const exNote = useMemo(() => {
+    if (exKeys.size === 0) return '';
+    const labels = [...exKeys].map((k) => {
+      const [kind, val] = k.split(':');
+      return kind === 'visitor' ? visitorLabel(val) : (METHOD_LABEL[val as PaymentMethod] ?? val);
+    });
+    return `정산 제외: ${labels.join('·')}`;
+  }, [exKeys]);
 
   const stats = useMemo(() => {
-    let totalBuyins = 0, ticket = 0, ticketUnpaid = 0, revenue = 0, unpaid = 0, support = 0, entries = 0;
-    // 지원분을 따로 쌓아 둔다 — 빼서 보고 싶을 때 다시 훑지 않고 감산 한 번으로 끝낸다.
-    let supportEntries = 0, supportValue = 0;
+    // 전체(기록)와 제외 적용(정산 기준)을 한 번에 센다 — 목록을 두 번 훑지 않는다.
+    const mk = () => ({ totalBuyins: 0, entries: 0, ticket: 0, ticketUnpaid: 0, revenue: 0, unpaid: 0, support: 0, value: 0 });
+    const all = mk(), kept = mk();
     for (const b of buyins) {
-      totalBuyins++;
       const f = buyinFinance(b, session);
-      revenue += f.paid; unpaid += f.unpaid; entries += f.entry;
-      ticket += f.ticketPaid; ticketUnpaid += f.ticketUnpaid; support += f.support;
-      if (f.support > 0) { supportEntries += f.entry; supportValue += f.value; }
+      const targets = isExcluded(b) ? [all] : [all, kept];
+      for (const t of targets) {
+        t.totalBuyins++; t.entries += f.entry; t.revenue += f.paid; t.unpaid += f.unpaid;
+        t.ticket += f.ticketPaid; t.ticketUnpaid += f.ticketUnpaid; t.support += f.support; t.value += f.value;
+      }
     }
     // #20: 할인 엔트리 수 · 금일 총 할인액 — 마감정산/요약바가 같은 계산(discountSummary)을 쓴다.
-    const discount = discountSummary(buyins, session);
-    return { totalBuyins, entries, ticket, ticketUnpaid, revenue, unpaid, support, discount,
-             supportEntries, supportValue };
-  }, [buyins, session]);
+    const discount = discountSummary(buyins.filter((b) => !isExcluded(b)), session);
+    // 무엇이 빠졌는지 — 화면에 그대로 밝힌다(모르고 정산하는 일이 없게).
+    const removed = {
+      count: all.totalBuyins - kept.totalBuyins,
+      entries: all.entries - kept.entries,
+      value: all.value - kept.value,
+      revenue: all.revenue - kept.revenue,
+    };
+    // 밖에서 쓰는 이름은 '제외 적용' 값이다 — 오너가 그 숫자로 정산하기 때문이다.
+    return { ...kept, discount, all, removed };
+  }, [buyins, session, isExcluded]);
 
   // 플레이어별 총 바이인/미수(금액) — 행마다 buyins 전체를 훑던 것(O(행×바인))을
   // buyins 1회 집계 맵(O(바인))으로 전환. 리스트 렌더에서 두 번 호출돼 재계산 부담이 컸음.
   const playerTotalsMap = useMemo(() => {
-    const m = new Map<string, { paid: number; unpaid: number; value: number; supportValue: number }>();
+    const m = new Map<string, { paid: number; unpaid: number; value: number }>();
     for (const b of buyins) {
       const f = buyinFinance(b, session);
-      const cur = m.get(b.playerName) ?? { paid: 0, unpaid: 0, value: 0, supportValue: 0 };
+      const cur = m.get(b.playerName) ?? { paid: 0, unpaid: 0, value: 0 };
       cur.paid += f.paid; cur.unpaid += f.unpaid;
       // '총바인' 열에 쓰는 바인 **가치** — 티켓은 단가 전액, 지원은 단가−할인(BuyinFinance.value 주석).
-      const v = f.value;
-      cur.value += v;
-      if (f.support > 0) cur.supportValue += v; // '가게지원 제외' 보기에서 감산할 몫
+      // 정산 제외된 행은 여기서도 빠진다 → **행 합계의 합이 언제나 총계와 맞는다.**
+      if (!isExcluded(b)) cur.value += f.value;
       m.set(b.playerName, cur);
     }
     return m;
-  }, [buyins, session]);
-  const playerTotals = (name: string) => playerTotalsMap.get(name) ?? { paid: 0, unpaid: 0, value: 0, supportValue: 0 };
-  /** 화면에 그릴 총바인 — '가게지원 제외' 보기면 지원분을 뺀다 */
-  const shownValue = (t: { value: number; supportValue: number }) => t.value - (exSupport ? t.supportValue : 0);
+  }, [buyins, session, isExcluded]);
+  const playerTotals = (name: string) => playerTotalsMap.get(name) ?? { paid: 0, unpaid: 0, value: 0 };
 
   // ── 액션 ──────────────────────────────────────────────────────────────────
   const handleOpen = async (s: LedgerSession) => {
@@ -1239,12 +1282,12 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                             <b className="text-accent-200">{cnt}회{closed ? '' : ' +'}</b>
                             {/* 회수와 같은 정의로 — 티켓·지원도 단가만큼. paid+unpaid 로 두면
                                 티켓 바인이 '1회 / 0만' 이 된다(오너 보고 2026-09-05). */}
-                            <span className="block text-ink-secondary">{wonToMan(shownValue(tot))}만</span>
+                            <span className="block text-ink-secondary">{wonToMan(tot.value)}만</span>
                           </button>
                         ) : first ? (
                           <span className="leading-tight block text-left">
                             <b className="text-accent-200">{cnt}회</b>
-                            <span className="block text-ink-secondary">{wonToMan(shownValue(tot))}만</span>
+                            <span className="block text-ink-secondary">{wonToMan(tot.value)}만</span>
                           </span>
                         ) : ''}
                       </td>
@@ -1261,10 +1304,16 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       {/* 정산 바 (고정) */}
       {/* 정산바 오프셋 = --tabbar-safe − 0.75rem (탭바에 딱 붙이는 의도적 파생값, TB1a) */}
       <div className="fixed bottom-[calc(var(--tabbar-safe)-0.75rem)] lg:bottom-0 left-0 right-0 z-30 mx-auto max-w-6xl bg-surface-mid border-t border-x border-border-default rounded-t-card lg:rounded-none lg:border-x-0 px-page-x py-2">
+        {/* 정산 제외 — 오너 지시: "관계자·신규처럼 빼고 정산", "티켓·현금·카드도 뺄 수 있게".
+            정산바 **안** 최상단에 둔다. 바는 bottom 고정이라 펼치면 위로 자라 숫자를 가리지 않는다. */}
+        <SettleFilter
+          exKeys={exKeys} setExKeys={setExKeys} counts={exCounts}
+          removed={stats.removed} players={players}
+        />
         <div className="flex items-center gap-2">
           <div className="grid grid-cols-4 gap-2 flex-1 text-center">
-            <Metric label={exSupport ? '총 엔트리(지원 제외)' : '총 엔트리'}
-              value={(stats.entries - (exSupport ? stats.supportEntries : 0)).toLocaleString(undefined, { maximumFractionDigits: 1 })} />
+            <Metric label={exKeys.size > 0 ? '총 엔트리(제외 적용)' : '총 엔트리'}
+              value={stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} />
             <Metric label="회수 티켓" value={`${stats.ticket}장`} />
             <Metric label="완납 매출" value={`${wonToMan(stats.revenue)}만`} tone="emerald" />
             <Metric label="미수금" value={`${wonToMan(stats.unpaid)}만`} tone="danger" />
@@ -1290,17 +1339,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
             {stats.discount.count > 0 && (stats.ticketUnpaid > 0 || stats.support > 0) && <span className="text-ink-muted"> · </span>}
             {stats.ticketUnpaid > 0 && <span className="text-danger-light">티켓 미수 {stats.ticketUnpaid}장</span>}
             {stats.ticketUnpaid > 0 && stats.support > 0 && <span className="text-ink-muted"> · </span>}
-            {stats.support > 0 && (
-              // 이미 '가게지원 N건'이 뜨던 자리를 그대로 토글로 쓴다 — 새 줄을 만들지 않는다.
-              // 켜면 총 엔트리·총바인에서 지원분을 뺀다(매출·미수는 지원이 원래 0원이라 무관).
-              <button type="button" onClick={() => setExSupport((v) => !v)}
-                aria-pressed={exSupport}
-                title={exSupport ? '가게지원을 다시 포함해서 봅니다' : '가게지원을 뺀 숫자로 봅니다(보기 전용 — 마감 기록은 그대로)'}
-                className={['rounded-badge px-1.5 py-0.5 font-semibold transition-colors',
-                  exSupport ? 'bg-indigo-500/20 text-indigo-200 ring-1 ring-indigo-400/50' : 'text-indigo-300 hover:bg-indigo-500/10'].join(' ')}>
-                가게지원 {stats.support}건{exSupport ? ` 제외됨 (−${wonToMan(stats.supportValue)}만)` : ' · 빼고 보기'}
-              </button>
-            )}
+            {stats.support > 0 && <span className="text-indigo-300">가게지원 {stats.support}건</span>}
           </p>
         )}
       </div>
@@ -1399,6 +1438,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
         <CloseModal
           stats={stats}
           unpaidPlayers={rows.map((r) => ({ name: r.name, unpaid: playerTotals(r.name).unpaid })).filter((x) => x.unpaid > 0).sort((a, b) => b.unpaid - a.unpaid)}
+          exNote={exNote}
           onClose={() => setCloseOpen(false)}
           onConfirm={handleClose}
         />
@@ -2569,12 +2609,23 @@ function AmountRow({ label, value, set, danger }: { label: string; value: number
 }
 
 // ── 장부 마감 모달 ────────────────────────────────────────────────────────────
-function CloseModal({ stats, unpaidPlayers, onClose, onConfirm }: {
-  stats: { totalBuyins: number; entries: number; ticket: number; ticketUnpaid: number; revenue: number; unpaid: number; support: number; discount: DiscountSummary; supportEntries: number; supportValue: number };
+function CloseModal({ stats, unpaidPlayers, exNote, onClose, onConfirm }: {
+  /** 위 숫자들은 **정산 제외를 적용한 값**이다(오너가 그 숫자로 정산한다).
+   *  제외 전 원본은 stats.all 에 그대로 있고, 아래에서 나란히 보여 준다. */
+  stats: {
+    totalBuyins: number; entries: number; ticket: number; ticketUnpaid: number;
+    revenue: number; unpaid: number; support: number; discount: DiscountSummary;
+    all: { totalBuyins: number; entries: number; revenue: number; unpaid: number; value: number };
+    removed: { count: number; entries: number; value: number; revenue: number };
+  };
   unpaidPlayers: { name: string; unpaid: number }[];
+  /** '정산 제외: 관계자·가게지원' — 메모에 미리 채워 감사 흔적을 남긴다(수정 가능) */
+  exNote: string;
   onClose: () => void; onConfirm: (memo: string) => void;
 }) {
-  const [memo, setMemo] = useState('');
+  // 제외를 걸고 마감하면 **무엇을 뺐는지가 기록에 남아야 한다** — 나중에 숫자만 보면 알 수 없다.
+  // 미리 채우되 잠그지는 않는다(사장님이 지우거나 덧붙일 수 있다).
+  const [memo, setMemo] = useState(exNote ? `${exNote}\n` : '');
   return (
     <Overlay title="정산 마감 · 금일 통계" onClose={onClose}>
       <div className="space-y-3">
@@ -2587,14 +2638,25 @@ function CloseModal({ stats, unpaidPlayers, onClose, onConfirm }: {
           <SummaryStat label="가게지원" value={`${stats.support}건`} />
         </div>
 
-        {/* 마감 기록의 숫자는 **있는 그대로** 남긴다(정산 기록이 화면 토글로 달라지면 장부가 아니다).
-            대신 지원을 뺀 값을 여기서 같이 읽을 수 있게 한 줄로 병기한다(오너 지시 2026-09-05). */}
-        {stats.support > 0 && (
-          <p className="text-2xs text-ink-muted">
-            가게지원 <b className="tabular-nums text-indigo-300">{stats.support}건</b>을 빼면 —
-            총 엔트리 <b className="tabular-nums text-ink-secondary">{(stats.entries - stats.supportEntries).toLocaleString(undefined, { maximumFractionDigits: 1 })}</b>
-            {` · 총바인 `}<b className="tabular-nums text-ink-secondary">{wonToMan(stats.supportValue)}만원 차감</b>
-          </p>
+        {/* 제외를 걸었으면 **위 숫자가 무엇을 뺀 결과인지**와 제외 전 원본을 나란히 세운다.
+            둘 중 하나만 보여 주면 나중에 "그날 진짜 몇 엔트리였지?"에 답할 수 없다. */}
+        {stats.removed.count > 0 && (
+          <div className="rounded-input border border-danger/30 bg-danger/[0.06] p-2.5">
+            <p className="mb-1 flex items-center gap-1 text-2xs font-bold text-danger-light">
+              <Icon name="filter" size={12} className="shrink-0" />{exNote || '정산 제외'}
+            </p>
+            <p className="text-2xs text-ink-secondary">
+              위 숫자는 <b>바인 {stats.removed.count}건</b>을 뺀 정산 기준입니다
+              {` (엔트리 −${stats.removed.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} · 총바인 −${wonToMan(stats.removed.value)}만원`}
+              {stats.removed.revenue > 0 ? ` · 매출 −${wonToMan(stats.removed.revenue)}만원` : ''}).
+            </p>
+            <p className="mt-1 text-2xs text-ink-muted">
+              제외 전 원본 — 바인 <b className="tabular-nums text-ink-secondary">{stats.all.totalBuyins}회</b>
+              {` · 엔트리 `}<b className="tabular-nums text-ink-secondary">{stats.all.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })}</b>
+              {` · 완납 매출 `}<b className="tabular-nums text-ink-secondary">{wonToMan(stats.all.revenue)}만원</b>
+              {`. 바인 기록 자체는 지워지지 않습니다.`}
+            </p>
+          </div>
         )}
 
         {/* #20: 할인은 '덜 받은 돈'이라 매출 옆에 같이 서야 한다.
@@ -2708,6 +2770,91 @@ function SummaryStat({ label, value, tone }: { label: string; value: string; ton
     <div className="rounded-input bg-surface-low border border-border-subtle py-2 text-center">
       <p className={['text-base font-extrabold tabular-nums', c].join(' ')}>{value}</p>
       <p className="text-2xs text-ink-muted mt-0.5">{label}</p>
+    </div>
+  );
+}
+
+// ── 정산 제외 필터 ────────────────────────────────────────────────────────────
+// 오너 지시(2026-09-05): "가게지원은 바인엔 포함되지만 정산 때 관계자·신규처럼 빼고 정산 가능하게",
+//                       "티켓·현금·카드 등도 뺄 수 있게".
+// 축이 둘(방문자 유형 × 결제수단)뿐이라 별도 화면을 만들지 않고 정산바 바로 위에 접어 둔다 —
+// 지금 보는 숫자가 '무엇을 뺀 결과'인지 같은 시야에서 읽혀야 오정산이 안 난다.
+function SettleFilter({ exKeys, setExKeys, counts, removed, players }: {
+  exKeys: Set<string>;
+  setExKeys: (f: (prev: Set<string>) => Set<string>) => void;
+  counts: Map<string, number>;
+  removed: { count: number; entries: number; value: number; revenue: number };
+  players: LedgerPlayer[];
+}) {
+  const [open, setOpen] = useState(false);
+  const toggle = (k: string) => setExKeys((prev) => {
+    const next = new Set(prev);
+    if (next.has(k)) next.delete(k); else next.add(k);
+    return next;
+  });
+
+  // 유형은 고정 4종 + 매장이 손으로 적은 커스텀 값까지(로스터에 실제로 있는 것만 보여준다).
+  const visitorKeys = useMemo(() => {
+    const seen = new Set<string>();
+    for (const p of players) if (p.visitorType) seen.add(p.visitorType);
+    for (const k of ['new', 'regular', 'staff', 'other']) if (counts.has(`visitor:${k}`)) seen.add(k);
+    return [...seen];
+  }, [players, counts]);
+
+  const methodKeys: PaymentMethod[] = ['cash', 'card', 'transfer', 'ticket', 'support'];
+  const chip = (k: string, label: string) => {
+    const c = counts.get(k) ?? 0;
+    if (c === 0) return null; // 없는 것을 고르게 두면 '뺐는데 안 변한다'는 혼란만 남는다
+    const on = exKeys.has(k);
+    return (
+      <button key={k} type="button" onClick={() => toggle(k)} aria-pressed={on}
+        className={['rounded-badge border px-2 py-1 text-2xs font-semibold tabular-nums transition-colors',
+          on ? 'border-danger/50 bg-danger/15 text-danger-light line-through'
+             : 'border-border-default text-ink-secondary hover:text-ink-primary'].join(' ')}>
+        {label} {c}
+      </button>
+    );
+  };
+
+  return (
+    <div className="pb-1">
+      <div className="rounded-input border border-border-subtle bg-surface-low/70 px-2.5 py-1.5">
+        <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
+          className="flex w-full items-center gap-1.5 text-left text-2xs font-bold text-ink-secondary">
+          <Icon name="filter" size={12} className={['shrink-0 transition-transform', open ? '' : '-rotate-90'].join(' ')} />
+          정산 제외
+          {exKeys.size === 0
+            ? <span className="font-normal text-ink-muted">— 전부 포함</span>
+            : (
+              <span className="text-danger-light">
+                {exKeys.size}개 · 바인 {removed.count}건 · 엔트리 −{removed.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} · −{wonToMan(removed.value)}만
+              </span>
+            )}
+        </button>
+
+        {open && (
+          <div className="mt-1.5 space-y-1.5 border-t border-border-subtle pt-1.5">
+            <div className="flex flex-wrap items-center gap-1">
+              <span className="w-14 shrink-0 text-2xs text-ink-muted">방문 유형</span>
+              {visitorKeys.map((v) => chip(`visitor:${v}`, visitorLabel(v)))}
+            </div>
+            <div className="flex flex-wrap items-center gap-1">
+              <span className="w-14 shrink-0 text-2xs text-ink-muted">결제수단</span>
+              {methodKeys.map((m) => chip(`method:${m}`, METHOD_LABEL[m]))}
+            </div>
+            {/* 무엇이 빠지는지 숫자로 밝힌다 — 모르고 정산하면 배분이 틀어진다 */}
+            <p className="text-2xs text-ink-muted">
+              제외한 항목은 총 엔트리·총바인·매출·미수에서 모두 빠집니다.
+              바인 기록 자체는 지워지지 않고, 무엇을 뺐는지는 마감 메모에 자동으로 적힙니다.
+              {' '}분납은 <b className="text-ink-secondary">쓰인 수단이 전부 제외 대상일 때만</b> 빠집니다.
+            </p>
+            {exKeys.size > 0 && (
+              <button type="button" onClick={() => setExKeys(() => new Set())}
+                className="text-2xs font-semibold text-accent-300 hover:text-accent-200">전부 포함으로 되돌리기</button>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
