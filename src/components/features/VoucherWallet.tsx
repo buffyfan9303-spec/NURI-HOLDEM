@@ -127,7 +127,7 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false }
             업주는 왜 안 되는지 모른다. 인증 전에 이미 받아 둔 이용권도 사용만 막히므로
             (2026-08-27 게이트 도입 이전 발급분이 실제로 남아 있다) 여기서 미리 짚는다. */}
         {!loading && !user?.verified && active.length > 0 && (
-          <div className="mb-2 rounded-card border border-danger/40 bg-danger/[0.08] p-3">
+          <div className="mb-2 rounded-aura border border-danger/40 bg-danger/[0.08] p-3">
             <p className="flex items-start gap-1.5 text-xs font-bold text-danger-deep dark:text-danger-light">
               <Icon name="alert" size={14} className="mt-0.5 shrink-0" />
               본인인증을 완료해야 이용권을 사용할 수 있어요
@@ -142,7 +142,13 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false }
             )}
           </div>
         )}
-        {loading ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
+        {loading ? (
+            /* 실제 매장 카드와 같은 높이로 자리를 예약한다. 한 줄짜리 '불러오는 중…' 은
+               목록이 도착하는 순간 아래를 밀어 올린다 — 이 지갑이 고치려던 그 CLS 다. */
+            <div className="space-y-3" aria-busy="true">
+              {[0, 1].map((i) => <div key={i} className="skeleton h-[104px] rounded-aura" />)}
+            </div>
+          )
           : venueGroups.length === 0 ? <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="ticket" />} title="보유한 매장이용권이 없습니다." /></div>
             : <div className="space-y-3">{venueGroups.map((g) => {
               // 머리글이 '{매장명} 매장이용권'을 통째로 말한다(오너 지시 #19).
@@ -163,7 +169,7 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false }
                         className={`${GROUP_HEAD_CLS} w-full rounded-input transition-colors duration-[var(--dur-fast)] hover:bg-surface-high/50`}>{head}</button>
                     : <p className={GROUP_HEAD_CLS}>{head}</p>}
                   <ul className="space-y-1.5">{g.stacks.map((s) => (
-                    <li key={s.title} className="flex items-center gap-2 rounded-input border border-accent-400/40 bg-accent-300/[0.05] px-3 py-2">
+                    <li key={s.title} className="flex items-center gap-2 rounded-input border border-accent-400/40 bg-accent-300/[0.05] px-3 py-2 transition-colors duration-[var(--dur-fast)] hover:bg-accent-300/[0.10] hover:border-accent-400/60">
                       <Icon name="ticket" size={18} className="shrink-0 text-accent-300" />
                       <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">
                         {/* 머리글이 이미 매장명을 말했다. 업주가 제목에 손으로 박아 둔 매장명까지 그대로 두면
@@ -197,7 +203,7 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false }
         <section className="space-y-2">
           <Head icon="ticket" tone="cyan" title="이용권 사용 내역" count={usedHistory.length} unit="건" />
           <ul className="space-y-1">{usedHistory.map((v) => (
-            <li key={v.id} className="flex items-center gap-2 rounded-input border card-aura-sub px-3 py-2 text-2xs">
+            <li key={v.id} className="flex items-center gap-2 rounded-input border card-aura-sub px-3 py-2 text-2xs transition-colors duration-[var(--dur-fast)] hover:bg-surface-high/50">
               <span className="shrink-0 text-ink-muted tabular-nums">{fmtDate(v.usedAt!)}</span>
               {/* #4: 이용권은 발급 매장에서만 쓸 수 있다(서버 redeem_* 3경로 모두 used_venue_id := venue_id).
                   usedVenueName 을 앞세우면 '다른 매장에서 썼을 수도 있다'는 없는 개념을 암시한다. */}
