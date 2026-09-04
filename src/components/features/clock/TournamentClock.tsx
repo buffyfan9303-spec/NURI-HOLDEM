@@ -920,9 +920,10 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
                 <input list="clk-finish-players" value={r.name}
                   onChange={(e) => setFinishRows((rs) => (rs ? rs.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)) : rs))}
                   placeholder="이름(닉네임)" className="input min-w-0 flex-1 text-sm" />
-                <input value={r.prize} inputMode="numeric"
-                  onChange={(e) => setFinishRows((rs) => (rs ? rs.map((x, j) => (j === i ? { ...x, prize: e.target.value.replace(/[^\d.]/g, '') } : x)) : rs))}
-                  placeholder="상금(만)" className="input w-20 text-sm tabular-nums" />
+                {/* 숫자(만원) 또는 "nT"(티켓 n장 — 오너 2026-09-05). 순위 입력 화면(VenueManageTab)과 같은 규칙. */}
+                <input value={r.prize} inputMode="text"
+                  onChange={(e) => setFinishRows((rs) => (rs ? rs.map((x, j) => (j === i ? { ...x, prize: e.target.value.replace(/[^\d.tT]/g, '').replace(/t/g, 'T') } : x)) : rs))}
+                  placeholder="상금(만·1T)" title="만원 단위 · 티켓 상금은 1T, 2T (1T = 10만원)" className="input w-20 text-sm tabular-nums" />
               </div>
             ))}
             <div className="flex gap-2 pt-1">
