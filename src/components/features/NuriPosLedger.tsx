@@ -479,34 +479,46 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     return filtered;
   }, [players, buyins, query, sortBy]);
 
+  // 가게지원 제외 보기 — 기본은 포함(오너: "바인·엔트리 둘 다 넣긴 해야 된다").
+  // ⚠ 보기 필터일 뿐이다. 마감이 남기는 기록은 이 값을 쓰지 않는다(아래 handleClose 참고).
+  const [exSupport, setExSupport] = useState(false);
+
   const stats = useMemo(() => {
     let totalBuyins = 0, ticket = 0, ticketUnpaid = 0, revenue = 0, unpaid = 0, support = 0, entries = 0;
+    // 지원분을 따로 쌓아 둔다 — 빼서 보고 싶을 때 다시 훑지 않고 감산 한 번으로 끝낸다.
+    let supportEntries = 0, supportValue = 0;
     for (const b of buyins) {
       totalBuyins++;
       const f = buyinFinance(b, session);
       revenue += f.paid; unpaid += f.unpaid; entries += f.entry;
       ticket += f.ticketPaid; ticketUnpaid += f.ticketUnpaid; support += f.support;
+      if (f.support > 0) { supportEntries += f.entry; supportValue += buyinValue(f, session); }
     }
     // #20: 할인 엔트리 수 · 금일 총 할인액 — 마감정산/요약바가 같은 계산(discountSummary)을 쓴다.
     const discount = discountSummary(buyins, session);
-    return { totalBuyins, entries, ticket, ticketUnpaid, revenue, unpaid, support, discount };
+    return { totalBuyins, entries, ticket, ticketUnpaid, revenue, unpaid, support, discount,
+             supportEntries, supportValue };
   }, [buyins, session]);
 
   // 플레이어별 총 바이인/미수(금액) — 행마다 buyins 전체를 훑던 것(O(행×바인))을
   // buyins 1회 집계 맵(O(바인))으로 전환. 리스트 렌더에서 두 번 호출돼 재계산 부담이 컸음.
   const playerTotalsMap = useMemo(() => {
-    const m = new Map<string, { paid: number; unpaid: number; value: number }>();
+    const m = new Map<string, { paid: number; unpaid: number; value: number; supportValue: number }>();
     for (const b of buyins) {
       const f = buyinFinance(b, session);
-      const cur = m.get(b.playerName) ?? { paid: 0, unpaid: 0, value: 0 };
+      const cur = m.get(b.playerName) ?? { paid: 0, unpaid: 0, value: 0, supportValue: 0 };
       cur.paid += f.paid; cur.unpaid += f.unpaid;
       // '총바인' 열에 쓰는 바인 **가치** — 티켓·지원도 단가만큼 친다(buyinValue 주석 참고).
-      cur.value += buyinValue(f, session);
+      const v = buyinValue(f, session);
+      cur.value += v;
+      if (f.support > 0) cur.supportValue += v; // '가게지원 제외' 보기에서 감산할 몫
       m.set(b.playerName, cur);
     }
     return m;
   }, [buyins, session]);
-  const playerTotals = (name: string) => playerTotalsMap.get(name) ?? { paid: 0, unpaid: 0, value: 0 };
+  const playerTotals = (name: string) => playerTotalsMap.get(name) ?? { paid: 0, unpaid: 0, value: 0, supportValue: 0 };
+  /** 화면에 그릴 총바인 — '가게지원 제외' 보기면 지원분을 뺀다 */
+  const shownValue = (t: { value: number; supportValue: number }) => t.value - (exSupport ? t.supportValue : 0);
 
   // ── 액션 ──────────────────────────────────────────────────────────────────
   const handleOpen = async (s: LedgerSession) => {
@@ -1227,12 +1239,12 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                             <b className="text-accent-200">{cnt}회{closed ? '' : ' +'}</b>
                             {/* 회수와 같은 정의로 — 티켓·지원도 단가만큼. paid+unpaid 로 두면
                                 티켓 바인이 '1회 / 0만' 이 된다(오너 보고 2026-09-05). */}
-                            <span className="block text-ink-secondary">{wonToMan(tot.value)}만</span>
+                            <span className="block text-ink-secondary">{wonToMan(shownValue(tot))}만</span>
                           </button>
                         ) : first ? (
                           <span className="leading-tight block text-left">
                             <b className="text-accent-200">{cnt}회</b>
-                            <span className="block text-ink-secondary">{wonToMan(tot.value)}만</span>
+                            <span className="block text-ink-secondary">{wonToMan(shownValue(tot))}만</span>
                           </span>
                         ) : ''}
                       </td>
@@ -1251,7 +1263,8 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       <div className="fixed bottom-[calc(var(--tabbar-safe)-0.75rem)] lg:bottom-0 left-0 right-0 z-30 mx-auto max-w-6xl bg-surface-mid border-t border-x border-border-default rounded-t-card lg:rounded-none lg:border-x-0 px-page-x py-2">
         <div className="flex items-center gap-2">
           <div className="grid grid-cols-4 gap-2 flex-1 text-center">
-            <Metric label="총 엔트리" value={stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} />
+            <Metric label={exSupport ? '총 엔트리(지원 제외)' : '총 엔트리'}
+              value={(stats.entries - (exSupport ? stats.supportEntries : 0)).toLocaleString(undefined, { maximumFractionDigits: 1 })} />
             <Metric label="회수 티켓" value={`${stats.ticket}장`} />
             <Metric label="완납 매출" value={`${wonToMan(stats.revenue)}만`} tone="emerald" />
             <Metric label="미수금" value={`${wonToMan(stats.unpaid)}만`} tone="danger" />
@@ -1277,7 +1290,17 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
             {stats.discount.count > 0 && (stats.ticketUnpaid > 0 || stats.support > 0) && <span className="text-ink-muted"> · </span>}
             {stats.ticketUnpaid > 0 && <span className="text-danger-light">티켓 미수 {stats.ticketUnpaid}장</span>}
             {stats.ticketUnpaid > 0 && stats.support > 0 && <span className="text-ink-muted"> · </span>}
-            {stats.support > 0 && <span className="text-indigo-300">가게지원 {stats.support}건</span>}
+            {stats.support > 0 && (
+              // 이미 '가게지원 N건'이 뜨던 자리를 그대로 토글로 쓴다 — 새 줄을 만들지 않는다.
+              // 켜면 총 엔트리·총바인에서 지원분을 뺀다(매출·미수는 지원이 원래 0원이라 무관).
+              <button type="button" onClick={() => setExSupport((v) => !v)}
+                aria-pressed={exSupport}
+                title={exSupport ? '가게지원을 다시 포함해서 봅니다' : '가게지원을 뺀 숫자로 봅니다(보기 전용 — 마감 기록은 그대로)'}
+                className={['rounded-badge px-1.5 py-0.5 font-semibold transition-colors',
+                  exSupport ? 'bg-indigo-500/20 text-indigo-200 ring-1 ring-indigo-400/50' : 'text-indigo-300 hover:bg-indigo-500/10'].join(' ')}>
+                가게지원 {stats.support}건{exSupport ? ` 제외됨 (−${wonToMan(stats.supportValue)}만)` : ' · 빼고 보기'}
+              </button>
+            )}
           </p>
         )}
       </div>
@@ -2547,7 +2570,7 @@ function AmountRow({ label, value, set, danger }: { label: string; value: number
 
 // ── 장부 마감 모달 ────────────────────────────────────────────────────────────
 function CloseModal({ stats, unpaidPlayers, onClose, onConfirm }: {
-  stats: { totalBuyins: number; entries: number; ticket: number; ticketUnpaid: number; revenue: number; unpaid: number; support: number; discount: DiscountSummary };
+  stats: { totalBuyins: number; entries: number; ticket: number; ticketUnpaid: number; revenue: number; unpaid: number; support: number; discount: DiscountSummary; supportEntries: number; supportValue: number };
   unpaidPlayers: { name: string; unpaid: number }[];
   onClose: () => void; onConfirm: (memo: string) => void;
 }) {
@@ -2563,6 +2586,16 @@ function CloseModal({ stats, unpaidPlayers, onClose, onConfirm }: {
           <SummaryStat label="회수 티켓" value={`${stats.ticket}장`} />
           <SummaryStat label="가게지원" value={`${stats.support}건`} />
         </div>
+
+        {/* 마감 기록의 숫자는 **있는 그대로** 남긴다(정산 기록이 화면 토글로 달라지면 장부가 아니다).
+            대신 지원을 뺀 값을 여기서 같이 읽을 수 있게 한 줄로 병기한다(오너 지시 2026-09-05). */}
+        {stats.support > 0 && (
+          <p className="text-2xs text-ink-muted">
+            가게지원 <b className="tabular-nums text-indigo-300">{stats.support}건</b>을 빼면 —
+            총 엔트리 <b className="tabular-nums text-ink-secondary">{(stats.entries - stats.supportEntries).toLocaleString(undefined, { maximumFractionDigits: 1 })}</b>
+            {` · 총바인 `}<b className="tabular-nums text-ink-secondary">{wonToMan(stats.supportValue)}만원 차감</b>
+          </p>
+        )}
 
         {/* #20: 할인은 '덜 받은 돈'이라 매출 옆에 같이 서야 한다.
             예전엔 마감정산 어디에도 없어서, 5만 할인 20건(=100만)이 그냥 매출 미달로만 보였다.
