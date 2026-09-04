@@ -5,6 +5,7 @@ import ImageLightbox from '../atoms/ImageLightbox';
 import CommentThread from './CommentThread';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
+import { isScheduleLiked, toggleScheduleLike } from '../../api/calendar';
 import StatefulActionButton from '../atoms/StatefulActionButton';
 import HoldToConfirmButton from '../atoms/HoldToConfirmButton';
 import { getMyReservation, createReservation, cancelMyReservation, getOwnerReservations, type Reservation, type OwnerReservation } from '../../api/reservations';
@@ -851,8 +852,38 @@ function StatRow({ label, value }: { label: string; value: string }) {
 // ── 캘린더 등록 · 공유 링크 줄 ────────────────────────────────────────────────
 function CalendarShareRow({ schedule }: { schedule: Schedule }) {
   const toast = useToast();
+  const { user } = useAuth();
+  const [liked, setLiked] = useState(false);
+  const [likeBusy, setLikeBusy] = useState(false);
+  // 상세를 열 때 이 대회 하나만 확인한다(전체 찜 목록을 받지 않는다).
+  useEffect(() => {
+    if (!user) { setLiked(false); return; }
+    let alive = true;
+    isScheduleLiked(schedule.id).then((v) => { if (alive) setLiked(v); }).catch(() => {});
+    return () => { alive = false; };
+  }, [user, schedule.id]);
+
+  const toggleLike = async () => {
+    if (!user) { toast.show('로그인하면 캘린더에 담을 수 있어요', 'info'); return; }
+    const next = !liked;
+    setLiked(next); setLikeBusy(true);          // 낙관적 — 실패하면 되돌린다
+    try {
+      await toggleScheduleLike(schedule.id, next);
+      toast.show(next ? '내 캘린더에 담았어요' : '캘린더에서 뺐어요', 'success');
+    } catch (e) {
+      setLiked(!next);
+      toast.show(e instanceof Error ? e.message : '변경 실패', 'error');
+    } finally { setLikeBusy(false); }
+  };
+
   return (
-    <div className="grid grid-cols-2 gap-2">
+    <div className="grid grid-cols-3 gap-2">
+      {/* 찜 = 앱 내 캘린더에 담기. 파이프라인상 '예약' 앞 단계(관심 표시)라 예약 CTA 와 나란히 두지 않는다. */}
+      <button type="button" onClick={toggleLike} disabled={likeBusy} aria-pressed={liked}
+        className={['flex items-center justify-center gap-1.5 rounded-input border py-2 text-xs font-bold transition-colors disabled:opacity-60',
+          liked ? 'border-transparent chip-aura' : 'border-border-default bg-surface-high text-ink-secondary hover:border-accent-400/50 hover:text-accent-300'].join(' ')}>
+        <Icon name={liked ? 'heart-fill' : 'heart'} size={14} className="shrink-0" />{liked ? '찜함' : '찜'}
+      </button>
       {/* 구글 캘린더 바로 등록 — 다운로드 없이 새 창에서 '저장'만 누르면 끝 */}
       <button type="button"
         onClick={() => {
@@ -868,7 +899,7 @@ function CalendarShareRow({ schedule }: { schedule: Schedule }) {
           }
         }}
         className="flex items-center justify-center gap-1.5 rounded-input border border-border-default bg-surface-high py-2 text-xs font-bold text-ink-secondary transition-colors hover:border-accent-400/50 hover:text-accent-300">
-        <Icon name="calendar" size={14} className="shrink-0" />내 캘린더에 추가
+        <Icon name="calendar" size={14} className="shrink-0" />기기 캘린더
       </button>
       {/* 공유 링크 복사 — 이 대회로 바로 열리는 주소 */}
       <button type="button"

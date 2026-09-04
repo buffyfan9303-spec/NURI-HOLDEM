@@ -14,6 +14,14 @@ export async function getMyLikedScheduleIds(): Promise<Set<string>> {
   return new Set((data ?? []).map((r: { schedule_id: string }) => r.schedule_id));
 }
 
+/** 이 대회 하나만 찜 여부 확인 — 상세 모달용. 전체 목록을 받아오지 않는다. */
+export async function isScheduleLiked(scheduleId: string): Promise<boolean> {
+  if (IS_MOCK) return false;
+  const { data } = await supabase.from('schedule_likes')
+    .select('schedule_id').eq('schedule_id', scheduleId).maybeSingle();
+  return !!data;
+}
+
 /** 찜 토글. 켜진 상태를 돌려준다(낙관적 UI 가 되돌릴 때 쓴다). */
 export async function toggleScheduleLike(scheduleId: string, on: boolean): Promise<boolean> {
   if (IS_MOCK) return on;
