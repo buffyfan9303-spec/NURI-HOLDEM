@@ -2841,7 +2841,10 @@ export default function App() {
 
                 {/* P0-1c: 공지 아코디언은 매 진입 정보가 아니라 '지난 대회' 아래로(오너 진단) */}
           {(browseNotices.length > 0 || isAdmin || !noticesLoaded) && (
-                  <div className="px-page-x pt-3">
+                  <div className="pt-3">
+                    {/* ⚠ px-page-x 를 다시 주지 않는다 — 부모 래퍼가 이미 준다. 이중으로 걸면
+                        이 카드만 좌우 17px 씩 안으로 들어가(1rem=17px) 바로 위 '지난 대회' 카드와
+                        **모서리가 어긋난다**(375px 실측 x=34/307 vs 형제 x=17/341). */}
                     <section className="rounded-aura border card-aura overflow-hidden">
                       <header className="flex items-center justify-between px-3 py-2 border-b border-border-subtle">
                         <button
@@ -2890,7 +2893,7 @@ export default function App() {
                     (알림함·마이에서도 같은 정보에 접근 가능해 기능 손실 없음) */}
           {/* 손님: 오늘 내 바인(참가) 요청 상태 배너 */}
                 {myTodayRes.length > 0 && (
-                  <div className="animate-fade-in overflow-hidden px-page-x pt-3 space-y-1.5">
+                  <div className="animate-fade-in overflow-hidden pt-3 space-y-1.5">
                     <p className="flex items-center gap-1 px-1 text-2xs font-bold text-ink-secondary"><Icon name="cards" size={13} /> 오늘 예약한 대회</p>
                     {myTodayRes.map((r) => {
                       const sc = schedules.find((x) => x.id === r.scheduleId);
@@ -2914,7 +2917,7 @@ export default function App() {
                 )}
 
                 {myBuyinReqs.length > 0 && (
-                  <div className="animate-fade-in overflow-hidden px-page-x pt-3 space-y-1.5">
+                  <div className="animate-fade-in overflow-hidden pt-3 space-y-1.5">
                     <p className="flex items-center gap-1 px-1 text-2xs font-bold text-ink-secondary"><Icon name="chip" size={13} /> 내 참가 게임 · 바인 요청</p>
                     {myBuyinReqs.map((r) => (
                       <div key={r.id} className={['flex items-center gap-2 rounded-aura border px-3 py-2 text-xs',
@@ -2930,7 +2933,7 @@ export default function App() {
             {/* 16-1 이어서 하기 — 재방문 사용자의 반복 여정(최근 매장 → 체크인/오늘 대회)을 한 탭으로.
                     비로그인·이력 없음이면 DOM 미렌더(10-1 원칙). */}
                 {recentVenue && (
-                  <div className="px-page-x pt-3">
+                  <div className="pt-3">
                     <button type="button" onClick={() => handleVenueClick(recentVenue.venueId)}
                       className="w-full flex items-center gap-2.5 rounded-aura border card-aura px-3 py-2.5 text-left hover:border-accent-400/50 transition-colors">
                       <span className="shrink-0 text-accent-300" aria-hidden><Icon name="refresh" size={18} /></span>

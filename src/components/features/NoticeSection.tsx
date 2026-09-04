@@ -114,7 +114,12 @@ export default function NoticeSection({
         </span>
         <div className="flex min-w-0 flex-1 items-baseline gap-x-2">
           <h2 className="text-sm font-bold text-ink-primary">공지사항</h2>
-          <span className="text-2xs font-semibold tabular-nums text-ink-muted">{notices.length}건</span>
+          {/* ⚠ limit 로 잘릴 때 전체 개수만 적으면 거짓이 된다 — 더보기도 스크롤도 없어서
+              잘린 공지에 도달할 방법이 아예 없기 때문이다(딜러가 limit={5}).
+              잘렸을 때만 '표시/전체' 로 적어 숨은 것이 있음을 드러낸다. */}
+          <span className="text-2xs font-semibold tabular-nums text-ink-muted">
+            {rows.length < notices.length ? `${rows.length}/${notices.length}건` : `${notices.length}건`}
+          </span>
         </div>
         {canWrite && onWrite && (
           <button type="button" onClick={onWrite}
