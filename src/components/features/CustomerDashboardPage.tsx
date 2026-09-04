@@ -74,7 +74,7 @@ const ME_TABS: { key: MeTab; label: string }[] = [
   { key: 'security',  label: '보안' },
 ];
 
-export default function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification, onOpenPost, onOpenMarket, initialTab = 'dashboard', onOpenLegal, onOpenSupport }: {
+export default function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification, onOpenPost, onOpenMarket, onOpenRanking, initialTab = 'dashboard', onOpenLegal, onOpenSupport }: {
   open: boolean; onClose: () => void;
   /** 미읽음 알림 미리보기(상위 3개) — 프로필 메뉴까지 안 가도 되게 */
   unread?: { id: string; title: string; message: string; createdAt: string }[];
@@ -82,6 +82,8 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
   /** '내 것' 허브 — 흩어져 있던 내 글·내 거래·프로필을 이 화면에서 잇는다 */
   onOpenPost?: (p: CommunityPost) => void;
   onOpenMarket?: () => void;
+  /** 랭킹 상점(커뮤니티 → 랭킹) — 마크·프레임·닉네임색을 사는 곳. 내 정보에서 바로 갈 수 있어야 한다(오너 2026-09-04) */
+  onOpenRanking?: () => void;
   /** 열릴 때 보여줄 탭(본인인증 배너·비밀번호 OTP 복귀 → 'security') — 열림마다 이 값으로 리셋 */
   initialTab?: MeTab;
   /** 프로필 탭 하단 약관·고객센터(구 ProfileModal props 그대로) */
@@ -372,6 +374,15 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
                 className="rounded-aura border card-aura px-3 py-2.5 text-left">
                 <span className="flex items-center gap-2 text-sm font-bold text-ink-primary"><span className="flex h-6 w-6 items-center justify-center rounded-[6px] tile-grad tile-grad-cyan"><Icon name="cart" size={13} /></span> 내 장터 거래</span>
                 <span className="block text-2xs text-ink-muted mt-0.5">판매목록 · 채팅 · 찜</span>
+              </button>
+            )}
+            {/* 랭킹 상점 — 활동점수를 쓰는 유일한 곳인데 커뮤니티 안쪽 서브탭에만 있어 찾기 어려웠다(오너 2026-09-04).
+                점수가 보이는 이 화면에서 바로 갈 수 있어야 '모은다 → 쓴다'가 이어진다. */}
+            {onOpenRanking && (
+              <button type="button" onClick={onOpenRanking}
+                className="rounded-aura border card-aura px-3 py-2.5 text-left">
+                <span className="flex items-center gap-2 text-sm font-bold text-ink-primary"><span className="flex h-6 w-6 items-center justify-center rounded-[6px] tile-grad tile-grad-fuchsia"><Icon name="medal" size={13} /></span> 랭킹 · 상점</span>
+                <span className="block text-2xs text-ink-muted mt-0.5">마크 · 카드 프레임 · 닉네임 색</span>
               </button>
             )}
           </div>

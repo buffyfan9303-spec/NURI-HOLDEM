@@ -78,7 +78,17 @@ Deno.serve(async (req: Request) => {
   return json({ mode: 'digest', candidates: rows?.length ?? 0, sent, failed });
 });
 
-function digestHtml(nick: string, vname: string, vn: number, n: number): string {
+/** HTML 이스케이프 — 매장명·닉네임은 **사용자가 정하는 값**이라 그대로 넣으면 메일 본문에 마크업이 주입된다.
+ *  (업주가 매장 이름에 <a href=...> 를 넣으면 전 구독자에게 그 링크가 발송된다 — 2026-09-04 리뷰 지적) */
+function esc(v: unknown): string {
+  return String(v ?? '').replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string
+  ));
+}
+
+function digestHtml(nickRaw: string, vnameRaw: string, vn: number, n: number): string {
+  const nick = esc(nickRaw);
+  const vname = esc(vnameRaw);
   const more = vn > 1 ? ` 외 ${vn - 1}곳` : '';
   return `<div style="font-family:'Apple SD Gothic Neo',Pretendard,sans-serif;max-width:480px;margin:0 auto;background:#0b0c10;color:#e8e9ed;border-radius:14px;padding:28px">
   <p style="font-size:12px;letter-spacing:2px;color:#8b94e8;margin:0 0 6px">NURI HOLDEM</p>

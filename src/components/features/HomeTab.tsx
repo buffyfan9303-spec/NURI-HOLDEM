@@ -175,10 +175,19 @@ export default function HomeTab({
         banners={banners}
         onBannerUrl={(url) => {
           // 관리자가 넣은 링크. 외부는 새 탭(noopener — opener 를 통한 탭내빙 차단),
-          // 내부 경로('/...')는 같은 탭. javascript: 같은 스킴은 애초에 열지 않는다.
+          // 내부 경로는 같은 탭. javascript: 같은 스킴은 애초에 열지 않는다.
+          //
+          // ⚠ '/' 로 시작한다고 내부가 아니다(2026-09-04 리뷰): `//evil.com` 은 프로토콜 상대 URL 이고
+          //   `/\evil.com` 도 브라우저가 외부로 해석한다 — 둘 다 예전 검사를 통과해 **같은 탭**으로
+          //   외부 사이트에 착지했다(오픈 리다이렉트). 문자열 앞머리를 보지 말고 URL 로 파싱해
+          //   **origin 이 우리와 같은지**로 판정한다.
           const u = url.trim();
-          if (/^https?:\/\//i.test(u)) { window.open(u, '_blank', 'noopener,noreferrer'); return; }
-          if (u.startsWith('/')) { window.location.assign(u); return; }
+          if (!u) return;
+          let parsed: URL;
+          try { parsed = new URL(u, window.location.origin); } catch { return; }
+          if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return;  // javascript:·data: 차단
+          if (parsed.origin === window.location.origin) { window.location.assign(parsed.pathname + parsed.search + parsed.hash); return; }
+          window.open(parsed.href, '_blank', 'noopener,noreferrer');
         }}
         onBanner={(a) => {
           if (a === 'nurimind') { window.open('https://www.nurimind.co.kr', '_blank', 'noopener'); return; }

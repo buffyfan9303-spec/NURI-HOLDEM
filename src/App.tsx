@@ -2547,6 +2547,14 @@ export default function App() {
               window.dispatchEvent(new CustomEvent('nuri:community-section', { detail: 'market' }));
               try { sessionStorage.setItem('nuri:community-section', 'market'); } catch { /* noop */ }
               changeTab('community');
+            }}
+            // 랭킹 상점 — 위 장터와 **같은 조리법**(섹션 이벤트 + 세션 기억 + 탭 이동).
+            // 커뮤니티가 아직 안 떠 있을 수도 있어 이벤트만으로는 부족하다 → sessionStorage 가 도착 후 복원한다.
+            onOpenRanking={() => {
+              setVoucherWalletOpen(false);
+              window.dispatchEvent(new CustomEvent('nuri:community-section', { detail: 'rank' }));
+              try { sessionStorage.setItem('nuri:community-section', 'rank'); } catch { /* noop */ }
+              changeTab('community');
             }} />
         </Suspense>
       )}

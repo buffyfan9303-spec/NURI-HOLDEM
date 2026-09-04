@@ -815,6 +815,53 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
         </section>
       )}
 
+      {/* 오늘 진행 단계 — 파이프라인을 **눈에 보이게** 한다(포스터 → 장부 → 클락 → 순위 → 정산).
+          '지금 할 일'이 다음 한 걸음을 말한다면, 이 줄은 전체 사슬에서 지금 어디인지를 말한다.
+          판정값은 전부 이미 있는 것을 재사용 — 새 쿼리 0건. 글로우 없음(주인공은 아래 KPI 밴드). */}
+      {!loading && caps.ledger && (() => {
+        const todayPoster = schedules.some((x) => x.venueId === venueId && x.date === d && x.approved);
+        const closed = !!session?.closed;
+        const steps: { key: string; label: string; done: boolean; go: () => void }[] = [
+          { key: 'posters', label: '포스터', done: todayPoster, go: () => onGoto('posters') },
+          { key: 'ledger',  label: '장부',   done: started,     go: () => onGoto('ledger') },
+          { key: 'clock',   label: '클락',   done: clockActive || closed, go: () => onGoto('clock') },
+          { key: 'ranking', label: '순위',   done: hasRankToday === true, go: () => onGoto('ranking') },
+          // 정산은 별도 화면이 아니라 장부의 마감이다 — 미수가 남아 있으면 아직 끝난 게 아니다.
+          { key: 'settle',  label: '정산',   done: closed && fin.unpaid === 0, go: () => onGoto('ledger') },
+        ];
+        const curIdx = steps.findIndex((x) => !x.done);
+        return (
+          <section className="rounded-card border border-border-subtle bg-surface-low p-2.5" aria-label="오늘 진행 단계">
+            <ol className="flex items-center gap-1">
+              {steps.map((st, i) => {
+                const current = i === curIdx;
+                return (
+                  <li key={st.key} className="flex min-w-0 flex-1 items-center gap-1">
+                    <button type="button" onClick={st.go}
+                      aria-current={current ? 'step' : undefined}
+                      className={['flex min-h-[44px] w-full flex-col items-center justify-center gap-0.5 rounded-input px-1 transition-colors',
+                        current ? 'chip-aura' : 'hover:bg-surface-high/50'].join(' ')}>
+                      <span className={['flex h-5 w-5 items-center justify-center rounded-full text-2xs font-bold',
+                        st.done ? 'bg-emerald-400/20 text-emerald-400'
+                          : current ? 'bg-accent-300 text-white' : 'bg-surface-float text-ink-muted'].join(' ')}>
+                        {st.done ? <Icon name="check" size={11} /> : i + 1}
+                      </span>
+                      <span className={['truncate text-2xs font-semibold',
+                        st.done ? 'text-ink-secondary' : current ? 'text-accent-200' : 'text-ink-muted'].join(' ')}>
+                        {st.label}
+                      </span>
+                    </button>
+                    {i < steps.length - 1 && (
+                      <span aria-hidden className={['h-px w-2 shrink-0', st.done ? 'bg-emerald-400/40' : 'bg-border-subtle'].join(' ')} />
+                    )}
+                  </li>
+                );
+              })}
+            </ol>
+          </section>
+        );
+      })()}
+
       {/* 지금 할 일 — 시간대·운영 상태 인지형 다음 행동 카드(대시보드 = 행동 안내판) */}
       {(() => {
         if (loading) return null;

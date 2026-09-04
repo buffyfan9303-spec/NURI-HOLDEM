@@ -20,7 +20,7 @@ import {
   loadCosmetics, frameCosmetics, nickColorCosmetics, nickColorVar,
   FALLBACK_COSMETICS, type Cosmetic,
 } from '../../lib/cosmetics';
-import { drawProfileCard, downloadProfileCard } from '../../lib/profileCard';
+import { drawProfileCard, downloadProfileCard, frameLabel, DEFAULT_FRAME } from '../../lib/profileCard';
 import { getGlobalRankingTotals, type GlobalRankingTotal } from '../../api/rankings';
 import { onColorInkClass } from '../../lib/color';
 import { useToast } from '../atoms/Toast';
@@ -1055,16 +1055,27 @@ export default function TierLeaderboard() {
 
                   {/* 미리보기 — 실제로 저장될 그림 그대로. 고른 프레임이 어떻게 굽히는지가 곧 가격의 근거다.
                       캔버스 픽셀은 640x880 고정이고 CSS 로만 줄여 그린다(공간이 미리 잡혀 있어 CLS 0). */}
-                  <div className="mt-2 flex items-start gap-3">
+                  {/* 레이아웃(오너 2026-09-04 "이미지가 왼쪽에 크게 있고 오른쪽에 공란이 너무 많아"):
+                      220px 세로 카드 옆에 두 줄짜리 텍스트를 items-start 로 붙여 둬서 오른쪽 아래가
+                      통째로 비었다. 캔버스 비율(160:220 = 640:880)은 정확하니 이미지가 아니라 **배치** 문제다.
+                      ① 세로 중앙 정렬로 빈 아래를 없애고 ② 오른쪽에 '지금 장착' 실체를 하나 더 얹어
+                      두 열의 무게를 맞춘다 ③ 좁은 폭에서는 아예 위아래로 쌓는다(옆에 두면 텍스트가 눌린다). */}
+                  <div className="mt-2 flex flex-col items-center gap-3 sm:flex-row sm:items-center">
                     <canvas ref={setCardEl} width={640} height={880} aria-label="프로필 공유 카드 미리보기"
-                            className="h-[13.75rem] w-40 shrink-0 rounded-card border border-border-subtle" />
-                    <div className="min-w-0 flex-1">
+                            className="h-[15.4rem] w-[11.2rem] shrink-0 rounded-card border border-border-subtle" />
+                    <div className="min-w-0 w-full flex-1 space-y-2">
+                      <div className="rounded-input border border-border-subtle bg-surface-low px-2.5 py-2">
+                        <p className="text-2xs text-ink-muted">지금 장착</p>
+                        <p className="mt-0.5 truncate text-sm font-bold text-ink-primary">
+                          {frameLabel(equippedFrame ?? DEFAULT_FRAME)}
+                        </p>
+                      </div>
                       <p className="text-2xs leading-relaxed text-ink-muted">
                         인스타·카톡에 올릴 수 있는 이미지로 저장합니다. 프레임을 사면 바로 적용되고,
                         소장한 프레임은 언제든 바꿔 달 수 있어요.
                       </p>
                       <button type="button" onClick={handleSaveCard}
-                        className="btn-primary mt-2 w-full py-2 text-xs">
+                        className="btn-primary w-full py-2 text-xs">
                         <span className="inline-flex items-center gap-1"><Icon name="download" size={13} className="shrink-0" />카드 이미지 저장</span>
                       </button>
                     </div>
