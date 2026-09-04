@@ -613,12 +613,15 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       await reloadSession();
       setCloseOpen(false);
       // 마감 요약 한 줄 — 바인·매출(실수금)·미수 건수(통계와 동일한 buyinFinance 규칙)
-      const fins = buyins.map((b) => buyinFinance(b, session));
+      // ⚠ 방금 읽은 마감 모달과 **같은 모집단**이어야 한다. 예전엔 여기만 전체 buyins 를 써서,
+      //   정산 제외를 걸고 마감하면 모달과 토스트가 서로 다른 매출·할인을 말했다(2026-09-05 감사).
+      const kept = buyins.filter((b) => !isExcluded(b));
+      const fins = kept.map((b) => buyinFinance(b, session));
       const rev = fins.reduce((s, f) => s + f.paid, 0);
       const unpaidCnt = fins.filter((f) => f.unpaid > 0 || f.ticketUnpaid > 0).length;
       // #20: 할인은 '덜 받은 돈'이라 마감 한 줄에도 같이 선다 — 매출만 보면 왜 덜 들어왔는지 알 수 없다.
-      const dsum = discountSummary(buyins, session);
-      let closeMsg = `마감 완료. 오늘 바인 ${buyins.length} · 매출 ${wonToMan(rev)}만${dsum.count ?` · 할인 ${dsum.count}엔트리 −${wonToMan(dsum.total)}만` : ''}${unpaidCnt ? ` · 미수 ${unpaidCnt}건` : ' · 미수 없음'}`;
+      const dsum = discountSummary(kept, session);
+      let closeMsg = `마감 완료.${exNote ? ` (${exNote})` : ''} 오늘 바인 ${kept.length} · 매출 ${wonToMan(rev)}만${dsum.count ?` · 할인 ${dsum.count}건 현금 −${wonToMan(dsum.cashTotal)}만` : ''}${unpaidCnt ? ` · 미수 ${unpaidCnt}건` : ' · 미수 없음'}`;
       // 클락 연동 마감 시: 클락 최종 인원 vs 장부 인원 차이(정산 누수 조기 경보)
       // ⚠(경고 이모지)를 메시지에 심고 includes('⚠')로 분기하던 코드였다 — 문자열이 곧 제어 플래그라
       // 이모지 한 글자만 지워도 error 토스트가 조용히 success 로 바뀐다. 불리언으로 분리한다.
@@ -1964,9 +1967,17 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
     formToast.show(`'${p.name}' 프리셋 적용 · 채워진 항목만 반영했어요(수정 가능)`, 'success');
   };
 
-  // 단가를 넘는 할인은 그 바인을 통째로 '없는 것'으로 만든다 —
-  // entry 0 · 가치 0 · 매출 0 (실측). 5만을 50만으로 오타 내면 조용히 사라지므로 저장 전에 막는다.
-  const badDisc = discs.findIndex((d) => d.amount > 0 && cash > 0 && d.amount > cash);
+  // 할인 상한 — **적용될 수 있는 가장 싼 단가 미만**이어야 한다.
+  //  · 단가 이상이면 그 바인이 entry 0 · 가치 0 · 매출 0 으로 '없는 기록'이 된다(실측).
+  //  · 더 중요한 이유: 그때 nonSplitSnapshot 이 **0원**을 저장하는데, buyinFinance 의
+  //    `stored > 0` 센티널은 '저장된 0'과 '미저장 레거시'를 구분하지 못한다.
+  //    그러면 나중에 할인 프리셋을 고치는 순간 그 행의 매출이 **되살아난다**
+  //    (무료로 들여보낸 손님이 10만 매출로 부활 — 2026-09-05 감사).
+  //    여기서 0원 스냅샷이 생기지 않게 막으면 센티널이 다시 성립한다. ⚠ 이 결합을 깨지 말 것.
+  //  · 카드단가도 본다. 현금 10만·카드 5만 세션에서 8만 할인은 현금 기준으론 통과하지만
+  //    카드 바인에서 0원 스냅샷을 만든다.
+  const minUnit = card > 0 ? Math.min(cash, card) : cash;
+  const badDisc = discs.findIndex((d) => d.amount > 0 && minUnit > 0 && d.amount >= minUnit);
 
   const submit = () => {
     if (cash <= 0) return;
@@ -2149,7 +2160,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
               <span className="w-9 shrink-0 text-2xs font-bold text-accent-300">할인{i + 1}</span>
               <input value={d.label} onChange={(e) => setDisc(i, { label: e.target.value })} maxLength={20} placeholder="예) 1레벨" className="input min-w-0 flex-1 text-sm" />
               <div className="relative w-20 shrink-0">
-                <input type="number" inputMode="decimal" step="0.1" min="0" max={cash > 0 ? cash / WON_PER_MAN : undefined} value={manVal(d.amount)} onChange={(e) => setDisc(i, { amount: parseMan(e.target.value) })} placeholder="할인액" aria-invalid={badDisc === i}
+                <input type="number" inputMode="decimal" step="0.1" min="0" max={minUnit > 0 ? (minUnit - 1) / WON_PER_MAN : undefined} value={manVal(d.amount)} onChange={(e) => setDisc(i, { amount: parseMan(e.target.value) })} placeholder="할인액" aria-invalid={badDisc === i}
                   className={['input w-full pr-6 text-sm tabular-nums', badDisc === i ? 'border-danger text-danger-light' : ''].join(' ')} />
                 <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">만</span>
               </div>
@@ -2168,8 +2179,10 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
             할인액만큼 차감해 엔트리를 비례 계산 — 예) 10만 게임에 5만 할인 = <b className="text-accent-300">0.5 엔트리</b>.<br />
             {badDisc >= 0 && (
               <b className="block text-danger-light">
-                할인{badDisc + 1}이 바인 단가({wonToMan(cash)}만)보다 큽니다 — 그대로 두면 그 바인이
-                엔트리 0 · 매출 0 으로 잡혀 **없는 기록**이 됩니다. 단가 이하로 고쳐 주세요.
+                할인{badDisc + 1}이 단가({wonToMan(minUnit)}만{card > 0 && card !== cash ? ' · 현금·카드 중 낮은 쪽' : ''}) 이상입니다 —
+                그대로 두면 그 바인이 엔트리 0 · 매출 0 으로 잡혀 **없는 기록**이 되고,
+                나중에 할인을 고치면 없던 매출이 되살아납니다. 단가보다 낮게 고쳐 주세요.
+                (전액 무료는 할인이 아니라 <b className="text-indigo-300">가게지원</b>으로 기록하세요)
               </b>
             )}
             <b className="text-accent-300">LV</b> 칸에 레벨을 적으면 <b className="text-accent-300">그 레벨까지 들어온 바인에 자동 적용</b>됩니다(예: 1LV 5만 · 2LV 3만 → 1레벨 5만, 2레벨 3만, 3레벨부터 없음). 결제창에서 언제든 바꿀 수 있습니다.
@@ -2486,9 +2499,18 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
 
               {/* 직전과 동일(zap) — 리바인 대부분은 그 손님의 직전 결제수단 반복이다 */}
               {lastPick && (
-                <button type="button" disabled={busy} onClick={() => onPick(lastPick.method, lastPick.isUnpaid, lastPick.discountIndex)}
+                // ⚠ 할인은 **화면의 현재 값(discIdx)** 을 따른다. 예전엔 직전 바인에 박힌
+                //   discountIndex 를 그대로 저장해, 헤더가 '할인 없음 · 받을 금액 10만'이라고
+                //   적어 놓은 상태에서 이 버튼만 5만을 저장했다. 레벨은 앞으로만 가므로 직전 바인은
+                //   언제나 더 큰 할인 = **과소청구가 기본 방향**이었다(2026-09-05 감사).
+                //   반복하는 것은 '수단·완납여부'지 '그때의 할인'이 아니다.
+                <button type="button" disabled={busy} onClick={() => onPick(lastPick.method, lastPick.isUnpaid, discIdx)}
                   className="w-full h-12 inline-flex items-center justify-center gap-1.5 rounded-input border border-accent-300 bg-accent-300/15 text-accent-300 font-bold text-sm active:scale-95 transition hover:bg-accent-300/25 disabled:opacity-50 disabled:pointer-events-none">
+                  {/* 라벨도 화면 기준으로 말한다 — 직전 바인의 '·할인'을 그대로 적으면 거짓말이 된다 */}
                   <Icon name="zap" size={15} className="shrink-0" />직전과 동일 — {lastPick.label}
+                  {discIdx > 0
+                    ? <span className="text-2xs font-semibold opacity-80"> · {discs[discIdx - 1]?.label || `할인${discIdx}`} −{wonToMan(discWon)}만</span>
+                    : <span className="text-2xs font-semibold opacity-70"> · 할인 없음</span>}
                 </button>
               )}
 
@@ -2524,8 +2546,12 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
                 })}
               </div>
 
-              {/* 가게지원 — 수납이 없으므로 완납/미수 축 밖에 둔다(할인도 무의미) */}
-              <button type="button" disabled={busy} onClick={() => onPick('support', false, 0)}
+              {/* 가게지원 — 수납이 없으므로 완납/미수 축 밖에 둔다.
+                  ⚠ 할인은 다른 수단과 **같은 규칙**으로 받는다. 예전엔 여기만 0 을 강제해,
+                     ledger.ts 의 support 분기(value = 단가−disc)가 도달 불가능한 죽은 코드였고
+                     화면 상태줄이 '이 바인 0.5 엔트리'라고 적어 놓고도 1.0 으로 저장됐다.
+                     티켓은 discIdx 를 받는데 지원만 안 받는 비대칭이기도 했다(2026-09-05 감사). */}
+              <button type="button" disabled={busy} onClick={() => onPick('support', false, discIdx)}
                 className="w-full h-11 rounded-input border border-indigo-400/50 bg-indigo-500/10 text-indigo-300 font-bold text-sm active:scale-95 transition hover:bg-indigo-500/20 disabled:opacity-50 disabled:pointer-events-none">
                 가게지원 <span className="text-2xs font-semibold opacity-70">· 수납 없음</span>
               </button>

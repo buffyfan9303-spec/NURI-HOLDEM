@@ -145,7 +145,7 @@ describe('applyToLedger · 프리셋 → 장부 세션(PL2a)', () => {
     expect(p.gameType).toBe('gtd');
     expect(p.isAddon).toBe(true);
     expect(p.addonStack).toBe(100_000);
-    expect(p.discounts).toEqual([{ label: '1레벨', amount: 10_000 }]); // amountWon → 장부 amount(원)
+    expect(p.discounts).toEqual([{ label: '1레벨', amount: 10_000, level: 0 }]); // amountWon → 장부 amount(원) · level 동반
     expect(p.dealers).toBe('김딜러');
     expect(p.tournamentStartTime).toBe('19:30');
   });
@@ -182,7 +182,7 @@ describe('PL3 변환기 · 클락 프리셋·회차 스냅샷 → 프리셋', ()
     expect(d.title).toBe('주말 하이롤러');
     expect(d.buyInWon).toBe(100_000);
     expect(d.ledger?.cardAmountWon).toBe(110_000);
-    expect(d.ledger?.discounts).toEqual([{ label: '1레벨', amountWon: 20_000 }]);
+    expect(d.ledger?.discounts).toEqual([{ label: '1레벨', amountWon: 20_000, level: 0 }]);
     expect(d.startStack).toBe(30_000);              // 클락 설정 우선
     expect(d.clock?.regCloseLevel).toBe(8);
     expect(d.prizeType).toBe('GTD');
@@ -217,5 +217,28 @@ describe('presetFromSchedule / presetFromPosterForm · 왕복 단위 무손실(1
     const back = applyToPoster(d);
     expect(back.prizeAmount).toBe(110);
     expect(back.rankingPrizes?.[0]).toEqual({ rank: '1', amount: 50, unit: '만원' });
+  });
+});
+
+// ── 할인 자동적용 레벨(#20)이 프리셋 왕복에서 살아남는가 ──────────────────────
+// 2026-09-05 감사: 이 값이 조용히 버려져, 프리셋을 불러온 순간 레벨 자동 할인이 꺼졌다.
+// 프리셋 화면은 '그대로 적용'이라고 적혀 있어 꺼진 줄 모르고 하루를 돌린다.
+describe('할인 level 왕복 보존 (#20 회귀 방지)', () => {
+  it('장부 → 프리셋 → 장부 로 돌아도 level 이 유지된다', () => {
+    const ledgerDiscounts = [
+      { label: '1레벨', amount: 50_000, level: 1 },
+      { label: '2레벨', amount: 30_000, level: 2 },
+    ];
+    // 장부 → 프리셋
+    const toPreset = ledgerDiscounts.map((x) => ({ label: x.label ?? '', amountWon: x.amount ?? 0, level: x.level ?? 0 }));
+    expect(toPreset).toEqual([
+      { label: '1레벨', amountWon: 50_000, level: 1 },
+      { label: '2레벨', amountWon: 30_000, level: 2 },
+    ]);
+    // 프리셋 → 장부
+    const back = toPreset.map((x) => ({ label: x.label ?? '', amount: x.amountWon ?? 0, level: x.level ?? 0 }));
+    expect(back).toEqual(ledgerDiscounts);
+    // 핵심: level 이 0 으로 떨어지지 않는다 — 떨어지면 autoDiscountIndex 가 영영 0 을 돌려준다
+    expect(back.every((d) => d.level > 0)).toBe(true);
   });
 });

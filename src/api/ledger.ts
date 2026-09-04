@@ -126,8 +126,10 @@ export interface BuyinFinance {
   paid: number; unpaid: number; entry: number; ticketPaid: number; ticketUnpaid: number; support: number;
   /** 이 바인의 **가치**(원) — '총바인' 열이 쓴다. 매출(paid)과 다른 개념이다.
    *  매출은 '실제 받은 현금'이라 티켓·지원이 0인 게 맞지만, 총바인은 '만들어진 바인의 가치'다.
-   *  대부분 value/단가 === entry 다(아래 각 분기 참고). 예외는 레거시 스냅샷 현금 행뿐 —
-   *  거기서는 실제 받은 금액(스냅샷)을 존중하고 entry 는 세션 단가로 계산되기 때문이다. */
+   *  대부분 value/단가 === entry 지만 **예외가 둘** 있다(2026-09-05 감사에서 정정):
+   *   ① 카드단가 ≠ 현금단가 인 모든 카드 행 — value 는 실수령(카드단가 기준)이고
+   *      entry 는 좌석 가치(현금단가 기준)라 애초에 다른 척도다. 카드 11만/현금 10만이면 1.1.
+   *   ② 레거시 스냅샷 현금 행 — 실제 받은 금액을 존중하고 entry 는 세션 단가로 계산된다. */
   value: number;
 }
 
@@ -180,6 +182,10 @@ export function buyinFinance(b: LedgerBuyin, s: { buyinAmount: number; cardAmoun
     return { ...z, entry, ticketPaid: b.isUnpaid ? 0 : 1, ticketUnpaid: b.isUnpaid ? 1 : 0,
              value: Math.max(0, entryUnit - disc) };
   }
+  // ⚠ `stored > 0` 이 '스냅샷 있음'의 센티널이다 — 금액 0 과 미저장을 구분하지 못한다.
+  //   이것이 성립하는 근거는 **입력 쪽에서 할인 < 단가를 강제**하기 때문이다
+  //   (NuriPosLedger 의 badDisc). 그 가드를 풀면 0원 스냅샷이 생기고, 그 행은 나중에
+  //   할인·단가를 고칠 때 매출이 되살아난다(2026-09-05 감사에서 확인). 두 곳은 한 쌍이다.
   // 스냅샷 우선(2026-08-18 전환): 기록 시점 net 금액이 amounts 칸에 저장돼 있으면 그 값이 정본 —
   // 이후 세션 단가·할인을 고쳐도 과거 기록이 소급 변형되지 않는다(실제 받은 현금 = 장부).
   // 저장 금액이 0인 행은 전환 이전 레거시 — 기존처럼 세션 참조로 계산(하위호환).

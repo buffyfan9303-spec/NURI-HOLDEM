@@ -180,7 +180,8 @@ export function applyToLedger(d: GamePresetData): Partial<LedgerSession> & { tou
   if (ns.cardAmountWon != null) p.cardAmount = ns.cardAmountWon;
   if (ns.targetEntries) p.targetEntries = ns.targetEntries;
   if (ns.maxEntries) p.maxEntries = ns.maxEntries;
-  if (ns.discounts?.length) p.discounts = ns.discounts.map((x) => ({ label: x.label ?? '', amount: x.amountWon ?? 0 }));
+  // level 까지 옮긴다 — 빠뜨리면 프리셋을 불러온 순간 레벨 자동 할인이 꺼진 채로 시작한다.
+  if (ns.discounts?.length) p.discounts = ns.discounts.map((x) => ({ label: x.label ?? '', amount: x.amountWon ?? 0, level: x.level ?? 0 }));
   if (ns.dealers) p.dealers = ns.dealers;
   if (ns.eventMemo) p.eventMemo = ns.eventMemo;
   if (ns.tournamentStartTime) p.tournamentStartTime = ns.tournamentStartTime;
@@ -283,7 +284,7 @@ export function presetFromRound(sess: LedgerSession, clockCfg?: ClockConfig | nu
       cardAmountWon: sess.cardAmount ?? undefined,
       targetEntries: sess.targetEntries || undefined,
       maxEntries: sess.maxEntries || undefined,
-      discounts: sess.discounts?.length ? sess.discounts.map((x) => ({ label: x.label ?? '', amountWon: x.amount ?? 0 })) : undefined,
+      discounts: sess.discounts?.length ? sess.discounts.map((x) => ({ label: x.label ?? '', amountWon: x.amount ?? 0, level: x.level ?? 0 })) : undefined,
       dealers: sess.dealers || undefined,
       eventMemo: sess.eventMemo || undefined,
       tournamentStartTime: localHHMM(sess.tournamentStart),

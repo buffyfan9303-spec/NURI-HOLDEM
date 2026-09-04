@@ -26,7 +26,9 @@ export interface PresetLedgerData {
   cardAmountWon?: number | null; // 카드단가(원 · null=현금단가 적용)
   targetEntries?: number;    // 기준 엔트리(GTD)
   maxEntries?: number;       // 맥스 엔트리(엔트리 게임)
-  discounts?: { label: string; amountWon: number }[]; // 할인 프리셋(원)
+  // 할인 프리셋(원). ⚠ level(자동 적용 레벨)까지 실어야 한다 — 빠뜨리면 프리셋 왕복 한 번에
+  // #20 레벨 자동 할인이 **조용히 꺼진다**(2026-09-05 감사에서 확인).
+  discounts?: { label: string; amountWon: number; level?: number }[];
   dealers?: string;          // 딜러 명단(줄바꿈 구분)
   eventMemo?: string;        // 이벤트 비고
   tournamentStartTime?: string; // 토너먼트 스타트 시각 'HH:MM'(날짜는 세션에서)
