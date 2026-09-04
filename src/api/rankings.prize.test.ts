@@ -51,3 +51,18 @@ describe('formatPrize — 매장 설정에 따라 1T / 10만', () => {
     expect(formatPrize('상품권')).toBe('상품권');
   });
 });
+
+// ── 프리셋·포스터 순위 상금(unit 'T') — 티켓 장수가 원 가치로 환산되고 상수가 한 값인지 ──
+import { rankingPrizeWon, TICKET_WON } from '../lib/units';
+describe('rankingPrizeWon — unit T', () => {
+  it('1T = 100,000원 · 3T = 300,000원', () => {
+    expect(rankingPrizeWon({ amount: 1, unit: 'T' })).toBe(100_000);
+    expect(rankingPrizeWon({ amount: 3, unit: 'T' })).toBe(300_000);
+  });
+  it('TICKET_WON 과 TICKET_MAN 은 같은 값이어야 한다(서버 parse_prize_man 과 동일)', () => {
+    expect(TICKET_WON).toBe(TICKET_MAN * 10_000);
+  });
+  it('amountWon(정규형)이 있으면 그것이 우선', () => {
+    expect(rankingPrizeWon({ amount: 1, unit: 'T', amountWon: 123 })).toBe(123);
+  });
+});

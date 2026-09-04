@@ -23,7 +23,7 @@ import IntegratedSearchBar, { expandRegions } from './components/features/Integr
 import type { SearchState } from './components/features/IntegratedSearchBar';
 import ScheduleCard from './components/features/ScheduleCard';
 import ScheduleTable from './components/features/ScheduleTable';
-import { getWeeklyMoneyinKings, getRankingsBulk, parsePrizeMan, type WeeklyKing, type RankingEntry } from './api/rankings';
+import { getWeeklyMoneyinKings, getRankingsBulk, formatPrize, type WeeklyKing, type RankingEntry } from './api/rankings';
 import { getReservationCounts, getMyReservations, type MyReservationRow } from './api/reservations';
 import { getVenueRatings } from './api/reviews';
 import NotificationPanel from './components/features/NotificationPanel';
@@ -3395,8 +3395,9 @@ const PastTournaments = memo(function PastTournaments({ schedules, onSelect }: {
                           {medal(e.position) ?? `${e.position}위`}
                         </span>
                         <span className="min-w-0 flex-1 truncate font-semibold text-ink-primary">{e.nickname}</span>
-                        {/* prize 는 만원 단위 텍스트 — 개인 대시보드(CustomerDashboardPage)와 같은 표기로 맞춘다 */}
-                        {e.prize && <span className="shrink-0 text-xs tabular-nums text-accent-300">{parsePrizeMan(e.prize) ? `${parsePrizeMan(e.prize).toLocaleString()}만` : e.prize}</span>}
+                        {/* 개인 대시보드와 같은 포매터 — 여러 매장이 섞이는 화면이라 티켓은 "1T"(매장 설정 무관).
+                            예전엔 여기만 parsePrizeMan+'만' 이라 같은 사람이 두 화면에서 '1T' 와 '10만' 을 따로 봤다. */}
+                        {e.prize && <span className="shrink-0 text-xs tabular-nums text-accent-300">{formatPrize(e.prize)}</span>}
                       </li>
                     ))}
                   </ul>

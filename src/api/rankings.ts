@@ -166,7 +166,8 @@ export function placementPoints(position: number): number {
   }
 }
 
-/** 티켓 1장의 가치(만원). 오너 규칙(2026-09-05) "1T 는 10만원" — 서버 parse_prize_man 과 같은 상수. */
+/** 티켓 1장의 가치(만원). 오너 규칙(2026-09-05) "1T 는 10만원" — 서버 parse_prize_man·lib/units TICKET_WON 과 같은 값.
+ *  ⚠ 장부(ledger.ts)의 티켓은 '세션 현금단가' 로 계산되는 다른 척도다. 여기 상수를 장부에 쓰지 말 것. */
 export const TICKET_MAN = 10;
 
 /** "1T" · "2 t" 처럼 **정수+T** 만 티켓 표기로 인정한다. 장수를 돌려주고, 아니면 0. */

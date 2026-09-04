@@ -39,7 +39,7 @@ export function clockPatchFromSchedule(sc: Schedule): Partial<ClockConfig> {
  *  단위가 돈이 아닌 항목(%·pts·이용권 등)은 오환산 위험이라 제외한다. */
 export function clockPrizesFromSchedule(sc: Schedule): ClockPrizeRow[] | null {
   const rows = (sc.rankingPrizes ?? [])
-    .filter((r) => (r.amount ?? 0) > 0 && (r.unit == null || r.unit === '만원' || r.unit === '원'))
+    .filter((r) => (r.amount ?? 0) > 0 && (r.unit == null || r.unit === '만원' || r.unit === '원' || r.unit === 'T'))
     .map((r) => ({ place: r.rank, amount: rankingPrizeWon(r) }));
   return rows.length > 0 ? rows : null;
 }
@@ -49,8 +49,11 @@ export function clockPrizesFromSchedule(sc: Schedule): ClockPrizeRow[] | null {
  *  금액은 전부 원 정규형(*Won)으로 적고, 구형 필드는 표시 호환용으로만 함께 채운다. */
 export function presetFromSchedule(sc: Schedule): GamePresetData {
   const prizes = (sc.rankingPrizes ?? [])
-    .filter((r) => (r.amount ?? 0) > 0 && (r.unit == null || r.unit === '만원' || r.unit === '원'))
-    .map((r) => ({ rank: r.rank, amount: r.unit === '원' ? Math.round(r.amount / 10_000) : r.amount, unit: '만원', amountWon: rankingPrizeWon(r) }));
+    .filter((r) => (r.amount ?? 0) > 0 && (r.unit == null || r.unit === '만원' || r.unit === '원' || r.unit === 'T'))
+    // 티켓(unit 'T')은 장수·'T' 를 그대로 보존한다 — 만원으로 눌러 버리면 '1T' 표기를 복원할 수 없다.
+    .map((r) => r.unit === 'T'
+      ? ({ rank: r.rank, amount: r.amount, unit: 'T', amountWon: rankingPrizeWon(r) })
+      : ({ rank: r.rank, amount: r.unit === '원' ? Math.round(r.amount / 10_000) : r.amount, unit: '만원', amountWon: rankingPrizeWon(r) }));
   return {
     title: sc.title,
     gameType: sc.buyIn?.gameType ?? '',
@@ -98,7 +101,7 @@ function dropEmpty<T extends object>(o: T): T | undefined {
  *  ⚠ 빈 단위('')는 돈으로 추측하지 않는다(PL1b와 동일 규칙) — 자유입력 단위의 만원 오추정이 곧 1만 배 사고다. */
 function moneyPrizeRows(d: GamePresetData): ClockPrizeRow[] {
   return (d.rankingPrizes ?? [])
-    .filter((r) => ((r.amountWon ?? r.amount) ?? 0) > 0 && (r.amountWon != null || r.unit == null || r.unit === '만원' || r.unit === '원'))
+    .filter((r) => ((r.amountWon ?? r.amount) ?? 0) > 0 && (r.amountWon != null || r.unit == null || r.unit === '만원' || r.unit === '원' || r.unit === 'T'))
     .map((r) => ({ place: r.rank, amount: rankingPrizeWon(r) }));
 }
 
