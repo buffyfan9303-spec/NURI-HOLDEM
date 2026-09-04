@@ -23,7 +23,7 @@ export default function StoreToolsPanel() {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {tools.map((t) => (
           <button key={t.key} type="button" onClick={() => setActive(t.key)}
-            className="flex w-full items-center gap-2 rounded-card border border-border-default bg-surface-low p-3 text-left transition-colors hover:border-accent-400/40 hover:bg-surface-high active:scale-[0.98]">
+            className="flex w-full items-center gap-2 rounded-aura border card-aura p-3 text-left transition-colors hover:border-accent-400/40 hover:bg-surface-high active:scale-[0.98]">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-input bg-accent-300/15 text-accent-300" aria-hidden>
               <Icon name={t.icon} size={16} strokeWidth={1.8} />
             </span>

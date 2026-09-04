@@ -779,10 +779,12 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       {/* 📊 주간 흐름(조회→예약→방문) — '왜 예약이 없는지'에 데이터로 답하는 첫 카드.
           조회수 추적(2026-08-17 신설)이 쌓이기 시작한 뒤부터 의미가 생긴다.
           ⚠ 카피에 '퍼널·전환율' 같은 외래 분석 용어 금지(오너 지시) — 자연스러운 한국어로 풀어 쓴다.
-          card-elev: 위아래 DashCard·KPI 헤드라인과 같은 카드 문법으로 통일(이 카드만 평면이었다).
-          surface-low 라 티어 규칙(index.css .card-elev 주석) 충족. 내부 3칸은 surface-high 라 손대지 않는다. */}
+          v6 아우라(2026-09-04): card-elev(v4 수직 광원 background-image)와 card-aura(겹친 box-shadow)가
+          한 뷰포트에 공존해 카드마다 테두리 밝기가 달라 보였다 — card-aura 로 통일한다.
+          두 문법은 역할이 겹치므로 card-elev 는 반드시 **제거**한다(남기면 그림자가 이중이 된다).
+          내부 3칸은 surface-high 라 손대지 않는다. */}
       {!loading && funnel && funnel.tournaments > 0 && (
-        <section className="card-elev rounded-card border border-border-subtle bg-surface-low p-3">
+        <section className="rounded-aura border card-aura p-3">
           <div className="flex items-baseline justify-between gap-2">
             <h3 className="flex items-center gap-2 text-sm font-bold text-ink-primary"><Icon name="filter" size={13} className="shrink-0 text-ink-muted" />최근 7일 흐름 <span className="font-normal text-ink-muted">조회→예약→방문 · 대회 {funnel.tournaments}개</span></h3>
             <button type="button" onClick={() => onGoto('stats')} className="shrink-0 text-2xs font-bold text-accent-300">통계 →</button>
@@ -1189,7 +1191,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
 function DashCard({ title, badge, onClick, children, show = true }: { title: string; badge?: ReactNode; onClick: () => void; children: ReactNode; show?: boolean }) {
   if (!show) return null;
   return (
-    <section className="card-elev rounded-card border border-border-subtle bg-surface-low p-3">
+    <section className="rounded-aura border card-aura p-3">
       <button type="button" onClick={onClick} className="flex w-full items-center justify-between gap-2 mb-2 group">
         <span className="flex items-center gap-2 text-sm font-bold text-ink-primary">{title}</span>
         <span className="flex items-center gap-1">

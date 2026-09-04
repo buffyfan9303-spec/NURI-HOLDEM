@@ -82,7 +82,7 @@ export default function VenueCustomizePanel({ venueId }: { venueId: string }) {
 
   return (
     <div className="space-y-3">
-      <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
+      <section className="rounded-aura border card-aura p-3 space-y-2">
         <h3 className="text-sm font-bold text-ink-primary">매장 페이지 탭 순서</h3>
         <p className="text-2xs text-ink-muted">손님이 매장을 열었을 때 보이는 탭 순서를 정하세요. 가장 위가 가장 왼쪽에 노출됩니다.</p>
         <ul className="space-y-1">
@@ -171,7 +171,7 @@ function VenueContactSection({ venueId }: { venueId: string }) {
   };
 
   return (
-    <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-3">
+    <section className="rounded-aura border card-aura p-3 space-y-3">
       <div className="space-y-1">
         <h3 className="text-sm font-bold text-ink-primary">위치 · 연락처 · 영업시간 · 카카오톡</h3>
         <p className="text-2xs text-ink-muted">매장 페이지 「매장 소개」에 그대로 나갑니다. 연락처는 <span className="font-semibold text-accent-300">1개 필수 · 최대 5개</span>이며, 손님 화면에서 번호마다 따로 전화가 걸립니다.</p>
@@ -248,7 +248,7 @@ function SlugEditor({ venueId }: { venueId: string }) {
   };
 
   return (
-    <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
+    <section className="rounded-aura border card-aura p-3 space-y-2">
       <h3 className="text-sm font-bold text-ink-primary">내 매장 링크 <span className="text-2xs font-normal text-ink-muted">(공유 주소를 원하는 이름으로)</span></h3>
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="shrink-0 text-xs font-semibold tabular-nums text-ink-muted">nuriholdem.com/s/</span>
@@ -385,7 +385,7 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
     <div className="space-y-3">
       {canConfigure && (<>
         {/* ① 보드 종류 — 자동 산출 6종 + 커스텀 */}
-        <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
+        <section className="rounded-aura border card-aura p-3 space-y-2">
           <h3 className="text-sm font-bold text-ink-primary">랭킹 보드 종류 <span className="text-2xs font-normal text-ink-muted">(1~2개 선택 · 웹 데이터 자동 산출)</span></h3>
           <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
             {allBoards.map((m) => {
@@ -446,7 +446,7 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
         </section>
 
         {/* ③ 1~3등 칭호 */}
-        <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
+        <section className="rounded-aura border card-aura p-3 space-y-2">
           <h3 className="text-sm font-bold text-ink-primary">1~3등 칭호 <span className="text-2xs font-normal text-ink-muted">(예: 로티아레나 포식자)</span></h3>
           <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
             {[1, 2, 3].map((r) => (
@@ -461,7 +461,7 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
         </section>
 
         {/* ④ 기준 점수 — 오너 #18: 5등 고정이었던 것을 [+]로 원하는 등수까지 */}
-        <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
+        <section className="rounded-aura border card-aura p-3 space-y-2">
           <h3 className="text-sm font-bold text-ink-primary">기준 점수 <span className="text-2xs font-normal text-ink-muted">(순위 등록 시 등수별 부여 점수 · 설정하지 않은 등수는 1점)</span></h3>
           <div className="grid grid-cols-5 gap-1.5">
             {points.map((p, i) => (
@@ -578,7 +578,7 @@ export function ScorePointsPanel({ venueId, customBoards = [] }: { venueId: stri
   };
 
   return (
-    <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-3">
+    <section className="rounded-aura border card-aura p-3 space-y-3">
       <div>
         <h3 className="text-sm font-bold text-ink-primary">포인트 지급 · 차감</h3>
         <p className="text-2xs text-ink-muted mt-0.5">이벤트·미션 보상 등 자유 점수를 <span className="font-semibold text-accent-300">날짜·보드별</span>로 매일 기록합니다. 커스텀 보드는 여기서 입력한 명단으로만 순위가 만들어집니다. <span className="font-semibold text-accent-300">사유는 필수</span>입니다. 나중에"이 점수 왜 나갔나"를 되짚는 유일한 단서예요.</p>
@@ -700,7 +700,7 @@ export function ScoreCalendar({ venueId, customBoards = [] }: { venueId: string;
   };
 
   return (
-    <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2.5">
+    <section className="rounded-aura border card-aura p-3 space-y-2.5">
       <div className="flex items-center gap-2">
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-bold text-ink-primary">일별 기록 달력</h3>

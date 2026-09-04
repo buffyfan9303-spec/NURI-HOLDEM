@@ -285,7 +285,7 @@ ${cards}
   // '기능이 잠시 꺼졌다'를 말해 주는 것이 빈 화면·조용한 실패보다 낫다(레코드는 그대로 보존).
   if (!idOn) {
     return (
-      <div className="rounded-card border border-border-default bg-surface-low p-6 text-center">
+      <div className="rounded-aura border card-aura p-6 text-center">
         <Icon name="ticket" size={22} className="mx-auto text-ink-muted" />
         <p className="mt-2 text-sm font-bold text-ink-primary">매장이용권은 현재 비활성화되어 있습니다</p>
         <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">
@@ -298,7 +298,7 @@ ${cards}
   return (
     <div className="space-y-3">
       {/* 0) 이용 내역 — 실시간(발급·사용). 장부/이용권 권한 직원도 열람 — 기본 열림 */}
-      <div className="rounded-card border border-border-default bg-surface-low p-2.5">
+      <div className="rounded-aura border card-aura p-2.5">
         <div className="mb-1.5 flex items-center justify-between gap-2">
           <p className="flex items-center gap-1.5 text-xs font-bold text-accent-300"><Icon name="ticket" size={14} /> 이용 내역 <span className="font-normal text-ink-muted">· 실시간</span></p>
           <button type="button" onClick={reload} disabled={loading}

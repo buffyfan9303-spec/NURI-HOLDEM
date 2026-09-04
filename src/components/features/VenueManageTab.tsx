@@ -579,7 +579,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
 
           <div className="mt-3 min-w-0 flex-1 space-y-3 lg:mt-0">
             {dItem?.locked && (
-              <div className="space-y-2 rounded-card border border-border-default bg-surface-low p-5 text-center">
+              <div className="space-y-2 rounded-aura border card-aura p-5 text-center">
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-surface-high text-ink-muted"><Icon name="lock" size={22} /></div>
                 <p className="text-sm font-bold text-ink-primary">{dItem.label} · 접근 권한이 없습니다</p>
                 <p className="t-desc break-keep text-ink-muted">이 기능은 업주가 권한을 부여해야 사용할 수 있어요.<br />매장 업주에게 <span className="font-semibold text-accent-300">장부·순위 권한</span>을 요청하세요.</p>
@@ -624,6 +624,9 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                 desc={renderSection === 'game' ? SECTION_DESC[renderGameStep]
                   : renderSection === 'settings' ? SECTION_DESC[renderSettingsTab]
                   : renderSection ? SECTION_DESC[renderSection] : ''}
+                icon={renderSection === 'game' ? SECTION_ICON[renderGameStep]
+                  : renderSection === 'settings' ? SECTION_ICON[renderSettingsTab]
+                  : renderSection ? SECTION_ICON[renderSection] : undefined}
                 action={renderSection === 'game' && renderGameStep === 'posters' && canPosters
                   ? <button type="button" onClick={onCreatePoster} className="btn-primary">+ 새 게임</button>
                   : undefined}
@@ -1826,7 +1829,7 @@ function VenueCreateForm({ onCreated }: { onCreated: () => Promise<void> }) {
         </button>
       </div>
 
-      <div className="space-y-3 rounded-card border border-border-default bg-surface-low p-4">
+      <div className="space-y-3 rounded-aura border card-aura p-4">
         {/* 대표 이미지(선택) */}
         <div>
           <p className="mb-1 text-2xs font-bold text-ink-secondary">대표 이미지 <span className="font-normal text-ink-muted">(선택)</span></p>
@@ -1874,7 +1877,7 @@ function StaffHub({ venueId }: { venueId: string }) {
       {items.map((it) => {
         const isOpen = open === it.id;
         return (
-          <div key={it.id} className="rounded-card border border-border-default bg-surface-low overflow-hidden">
+          <div key={it.id} className="rounded-aura border card-aura overflow-hidden">
             <button type="button" onClick={() => setOpen(isOpen ? '' : it.id)}
               className="flex w-full items-center justify-between p-3 text-left transition-colors hover:bg-surface-high">
               <span className="text-sm font-bold text-ink-primary">{it.label}</span>
@@ -2089,7 +2092,7 @@ function StaffManager({ venueId }: { venueId: string }) {
                 {staff.map((s) => {
                   const hasAccess = access.includes(s.id);
                   return (
-                  <li key={s.id} className="p-3 rounded-card bg-surface-low border border-border-subtle space-y-2">
+                  <li key={s.id} className="p-3 rounded-aura border card-aura space-y-2">
                     <div className="flex items-center gap-3">
                       <div className={['w-9 h-9 shrink-0 rounded-full flex items-center justify-center text-xs font-bold', onColorInkClass(s.avatarColor ?? '#5A6175')].join(' ')}
                         style={{ background: s.avatarColor ?? '#5A6175' }}>

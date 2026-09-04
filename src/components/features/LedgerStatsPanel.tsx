@@ -672,7 +672,7 @@ function StatIcon({ name, className = '' }: { name: IconName; className?: string
 function StatCard({ label, value, sub, icon, danger, emerald, gold }: { label: string; value: string; sub?: string; icon: IconName; danger?: boolean; emerald?: boolean; gold?: boolean }) {
   const c = danger ? 'text-danger-light' : emerald ? 'text-emerald-400' : gold ? 'text-accent-300' : 'text-ink-primary';
   return (
-    <div className="rounded-card bg-surface-low border border-border-default p-2.5 flex flex-col min-h-[5.25rem]">
+    <div className="rounded-aura border card-aura p-2.5 flex flex-col min-h-[5.25rem]">
       <div className="flex items-start justify-between gap-1">
         <p className="text-xs font-medium text-ink-secondary leading-tight">{label}</p>
         <StatIcon name={icon} className="text-ink-muted shrink-0" />
@@ -876,7 +876,7 @@ export function PosSettingsPanel({ venueId }: { venueId: string }) {
   };
 
   return (
-    <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-3">
+    <section className="rounded-aura border card-aura p-3 space-y-3">
       <h3 className="text-sm font-bold text-ink-primary">설정</h3>
       <div className="space-y-1.5">
         <p className="text-2xs font-semibold text-ink-secondary">포스(바인 취소) 비밀번호{hasPw && <span className="text-emerald-400"> · 설정됨</span>}</p>
@@ -895,7 +895,9 @@ export function PosSettingsPanel({ venueId }: { venueId: string }) {
         </div>
         <button type="button" role="switch" aria-checked={!mute} onClick={toggleMute}
           className={['relative h-6 w-11 shrink-0 rounded-full transition-colors', !mute ? 'bg-accent-300' : 'bg-surface-float'].join(' ')}>
-          <span className={['absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-[left]', !mute ? 'left-[1.4rem]' : 'left-0.5'].join(' ')} />
+          {/* left 는 모션 헌법 §4 가 금지한 레이아웃 속성이다(매 프레임 레이아웃 재계산).
+              위치는 left-0.5 로 고정하고 이동만 transform 으로 — 시각 결과는 같고 합성만으로 처리된다. */}
+          <span className={['absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform', !mute ? 'translate-x-[1.15rem]' : 'translate-x-0'].join(' ')} />
         </button>
       </div>
 

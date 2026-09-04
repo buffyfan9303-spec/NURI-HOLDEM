@@ -30,7 +30,7 @@ export default function AnnouncePanel({ venueId }: { venueId: string }) {
   };
 
   return (
-    <section className="rounded-card border border-border-default bg-surface-low p-4 space-y-2.5">
+    <section className="rounded-aura border card-aura p-4 space-y-2.5">
       <div className="flex items-center justify-between gap-2">
         <h3 className="flex items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="megaphone" size={15} className="shrink-0" />팔로워에게 알림 보내기</h3>
         <span className="text-2xs text-ink-muted">팔로워 <b className="text-accent-300">{status.followers}</b> · 오늘 {status.sentToday}/3</span>

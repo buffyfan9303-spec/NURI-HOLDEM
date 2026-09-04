@@ -225,7 +225,7 @@ function MarketplaceTab({
         // [DS] MO-6 스켈레톤 — 실제 ListingRow 골격 복제(배지행+제목+모바일 메타행, --row-h-md 계약).
         // BoardHeader 를 스켈레톤에도 그대로 렌더 — 전엔 데이터 도착 때 데스크톱 헤더 행이
         // 나중에 끼어들어 목록 전체가 한 번 더 밀렸다.
-        <div className="rounded-card border border-border-default bg-surface-low overflow-hidden" aria-hidden>
+        <div className="rounded-aura border card-aura overflow-hidden" aria-hidden>
           <BoardHeader />
           {Array.from({ length: 7 }).map((_, i) => (
             <div key={i} className="grid min-h-[var(--row-h-md)] grid-cols-[1fr_auto] items-center gap-2 border-b border-border-subtle px-3 py-2.5 last:border-b-0 sm:grid-cols-[3rem_1fr_5rem_6rem_5rem_5rem]">
@@ -244,7 +244,7 @@ function MarketplaceTab({
           <EmptyState icon={<Icon name="package" />} title="조건에 맞는 글이 없습니다" />
         </div>
       ) : (
-        <div className="rounded-card border border-border-default bg-surface-low overflow-hidden">
+        <div className="rounded-aura border card-aura overflow-hidden">
           <BoardHeader />
           <ul>
             {shown.map((l, idx) => (

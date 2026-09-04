@@ -216,7 +216,7 @@ function RankVerifyAdminCard() {
     finally { setBusy(null); }
   };
   return (
-    <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
+    <section className="rounded-aura border card-aura p-3 space-y-2">
       <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="trophy" size={15} className="shrink-0" />순위 인증 승인 <span className="text-xs font-normal text-ink-muted">— <b className="text-ink-secondary">대회(토너먼트) 입상만 승인</b>합니다. 일반 펍 정기 게임 증빙은 <b className="text-ink-secondary">반려</b>하세요 · 승인/거절 시 신분증 즉시 삭제 · 승인분은 100만원당 1점으로 국내 순위 합산</span></p>
       {list.length === 0 ? <p className="py-2 text-center text-2xs text-ink-muted">대기 중인 신청이 없습니다.</p> : (
         <ul className="space-y-1.5">
@@ -326,7 +326,7 @@ function CommunityAdsCard() {
     return { label: '게재중', on: true };
   };
   return (
-    <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
+    <section className="rounded-aura border card-aura p-3 space-y-2">
       <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="megaphone" size={15} className="shrink-0" />커뮤니티 광고 5칸 <span className="text-xs font-normal text-ink-muted">게시판 글 N개마다 [AD] 한 줄. ▲▼로 순서 변경 · '노출' 로 켜고 끔 · 제목 비우면 게재 중단</span></p>
       <div className="flex flex-wrap items-center gap-1.5 rounded-input border border-border-subtle bg-surface-high/40 p-1.5 text-xs">
         <label htmlFor="ads-every" className="text-ink-secondary">게시판 글</label>
@@ -438,7 +438,7 @@ function MissionsAdminCard() {
   };
 
   return (
-    <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
+    <section className="rounded-aura border card-aura p-3 space-y-2">
       <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="target" size={15} className="shrink-0" />주간 미션 관리 <span className="text-xs font-normal text-ink-muted">랭킹 &gt; 미션 보드에 노출. 매주 월요일 진행도 리셋</span></p>
       {/* 고정 미션 안내 */}
       <ul className="space-y-1">
@@ -560,7 +560,7 @@ function HallOfFameAdminCard() {
     .filter((p, i, a) => a.indexOf(p) === i).sort().reverse();
 
   return (
-    <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
+    <section className="rounded-aura border card-aura p-3 space-y-2">
       <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="trophy" size={15} className="shrink-0" />명예의 전당 등록 <span className="text-xs font-normal text-ink-muted">랭킹 &gt; 명예의 전당. 등록한 달은 자동 집계보다 우선</span></p>
       <p className="text-xs leading-relaxed text-ink-muted">
         노출 기준은 <b className="text-ink-secondary">직전 달</b>입니다(현재 <b className="text-ink-secondary">{last}</b>).
@@ -685,7 +685,7 @@ function ShoutsAdminCard() {
     finally { setBusy(null); }
   };
   return (
-    <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
+    <section className="rounded-aura border card-aura p-3 space-y-2">
       <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="megaphone" size={15} className="shrink-0" />외치기 관리 <span className="text-xs font-normal text-ink-muted">활동점수로 구매한 커뮤니티 강조 메시지. 대기열 순서대로 20초씩 1회 방송</span></p>
       {rows === null ? (
         <ul className="space-y-1">{[0, 1, 2].map((i) => <li key={i} className="skeleton h-9 rounded-input" />)}</ul>
@@ -779,7 +779,7 @@ function PostsAdminPanel({ posts }: { posts: CommunityPost[] }) {
     finally { setBusy(null); }
   };
   return (
-    <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
+    <section className="rounded-aura border card-aura p-3 space-y-2">
       <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="pin" size={15} className="shrink-0" />게시물 노출 <span className="text-xs font-normal text-ink-muted">최근 50개. 고정 = 게시판 맨 위 · 블라인드 = 작성자·운영자만 열람</span></p>
       <div className="flex gap-1 overflow-x-auto scrollbar-none">
         {BOARD_FILTER_CATEGORIES.map((c) => (
@@ -864,7 +864,7 @@ function NoticesAdminPanel({ onChanged }: { onChanged?: () => void }) {
     finally { setBusy(false); }
   };
   return (
-    <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
+    <section className="rounded-aura border card-aura p-3 space-y-2">
       <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="megaphone" size={15} className="shrink-0" />공지 노출 순서 <span className="text-xs font-normal text-ink-muted">▲▼로 순서 변경. 작성·수정은 커뮤니티 탭의 공지 쓰기에서</span></p>
       {rows === null ? (
         <ul className="space-y-1">{[0, 1].map((i) => <li key={i} className="skeleton h-9 rounded-input" />)}</ul>
@@ -939,9 +939,9 @@ function SupportInquiriesPanel() {
         </label>
       </div>
       {rows === null ? <p className="py-8 text-center text-2xs text-ink-muted">불러오는 중…</p>
-        : list.length === 0 ? <p className="rounded-card border border-border-subtle bg-surface-low py-8 text-center text-2xs text-ink-muted">{onlyOpen ? '미답변 문의가 없습니다.' : '접수된 문의가 없습니다.'}</p>
+        : list.length === 0 ? <p className="rounded-aura border card-aura py-8 text-center text-2xs text-ink-muted">{onlyOpen ? '미답변 문의가 없습니다.' : '접수된 문의가 없습니다.'}</p>
         : <ul className="space-y-2.5">{list.map((q) => (
-            <li key={q.id} className="rounded-card border border-border-default bg-surface-low p-3">
+            <li key={q.id} className="rounded-aura border card-aura p-3">
               <div className="flex items-center gap-2">
                 <span className="rounded-badge bg-surface-float px-1.5 py-0.5 text-[9px] font-bold text-ink-secondary">{q.category}</span>
                 <span className={['rounded-badge px-1.5 py-0.5 text-[9px] font-bold', q.status === 'answered' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'].join(' ')}>{q.status === 'answered' ? '답변완료' : '답변대기'}</span>
@@ -998,7 +998,7 @@ function ErrorLogPanel() {
   };
 
   return (
-    <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
+    <section className="rounded-aura border card-aura p-3 space-y-2">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-bold text-ink-primary">수집 내역 <span className="text-xs font-normal text-ink-muted">(최근 {rows.length}건)</span></h3>
         <div className="flex gap-1.5">
@@ -1142,7 +1142,7 @@ function PlatformStatsCard() {
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {cells.map((c) => (
-          <div key={c.label} className="rounded-card border border-border-subtle bg-surface-low p-3 text-center">
+          <div key={c.label} className="rounded-aura border card-aura p-3 text-center">
             <p className={`text-xl font-extrabold leading-none tabular-nums ${c.accent ? 'text-accent-300' : 'text-ink-primary'}`}>{c.value}</p>
             <p className="mt-1 text-2xs text-ink-muted">{c.label}</p>
             {c.sub && <p className="text-2xs text-ink-muted">{c.sub}</p>}
@@ -1162,7 +1162,7 @@ function PlanUsageCard() {
   if (rows.length === 0) return null;
   const worst = Math.max(...rows.map((r) => r.pct));
   return (
-    <section className="rounded-card border border-border-subtle bg-surface-low p-3">
+    <section className="rounded-aura border card-aura p-3">
       <header className="mb-2 flex items-center justify-between gap-2">
         <span className="flex items-center gap-1.5 text-xs font-bold text-ink-primary"><Icon name="banknote" size={14} className="shrink-0" />Supabase 무료 한도</span>
         <span className={['text-2xs font-bold', worst >= 90 ? 'text-danger-light' : worst >= 70 ? 'text-amber-300' : 'text-emerald-400'].join(' ')}>
@@ -1218,6 +1218,8 @@ export default function AdminTab({
           <SectionHeader
             title={ADMIN_SECTIONS.find((a) => a.id === section)?.label ?? ''}
             desc={ADMIN_DESC[section]}
+            icon={ADMIN_SECTIONS.find((a) => a.id === section)?.icon}
+            tone="indigo"
           />
           {section === 'analytics' && <PlatformStatsCard />}
           {section === 'venues' && (

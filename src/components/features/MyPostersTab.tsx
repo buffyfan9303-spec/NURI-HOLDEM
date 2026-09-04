@@ -200,7 +200,7 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUse
   };
 
   return (
-    <li className="rounded-card bg-surface-low border border-border-default overflow-hidden">
+    <li className="rounded-aura border card-aura overflow-hidden">
       <div className="flex items-start sm:items-center gap-3 p-3">
         <div aria-hidden className="w-12 h-16 shrink-0 rounded-input overflow-hidden flex items-center justify-center"
           style={schedule.posterUrl ? undefined : { background: `linear-gradient(135deg, ${schedule.posterColor ?? '#1a1d24'}ee, #0a0c0f)` }}>

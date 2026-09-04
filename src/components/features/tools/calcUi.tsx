@@ -5,7 +5,7 @@ import { useState, type ReactNode } from 'react';
  *  카드 안에서는 보통 desc(한 줄 설명)만 쓴다. */
 export function CalcCard({ title, desc, className, children }: { title?: string; desc?: string; className?: string; children: ReactNode }) {
   return (
-    <div className={['space-y-3 rounded-card border border-border-default bg-surface-low p-3', className ?? ''].join(' ')}>
+    <div className={['space-y-3 rounded-aura border card-aura p-3', className ?? ''].join(' ')}>
       {(title || desc) && (
         <div>
           {title && <p className="text-sm font-bold text-ink-primary">{title}</p>}

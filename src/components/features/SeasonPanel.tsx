@@ -93,7 +93,7 @@ export default function SeasonPanel({ venueId, canManage = false, venueName }: {
 
       {/* 시즌 생성 폼 */}
       {canManage && !active && creating && (
-        <div className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
+        <div className="rounded-aura border card-aura p-3 space-y-2">
           <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} placeholder="시즌 이름 (예: 2026 여름 시즌)" className="input w-full text-sm" />
           <div className="flex items-center gap-2 text-2xs text-ink-muted">
             <label className="flex-1">시작 <input type="date" value={startsOn} onChange={(e) => setStartsOn(e.target.value)} className="input mt-0.5 w-full text-xs" /></label>
@@ -124,7 +124,7 @@ export default function SeasonPanel({ venueId, canManage = false, venueName }: {
           )}
         </div>
       ) : !creating && (
-        <p className="rounded-card border border-border-subtle bg-surface-low py-4 text-center text-2xs text-ink-muted">진행 중인 시즌이 없습니다.{canManage ? " '시즌 시작'으로 분기 리그를 열어보세요." : ''}</p>
+        <p className="rounded-aura border card-aura py-4 text-center text-2xs text-ink-muted">진행 중인 시즌이 없습니다.{canManage ? " '시즌 시작'으로 분기 리그를 열어보세요." : ''}</p>
       )}
 
       {/* 🏆 역대 챔피언(명예의 전당) */}
@@ -162,7 +162,7 @@ export default function SeasonPanel({ venueId, canManage = false, venueName }: {
           <p className="mb-1.5 flex items-center gap-1 text-2xs font-bold text-ink-muted"><Icon name="archive" size={12} className="shrink-0" />지난 시즌</p>
           <ul className="space-y-1.5">
             {archived.map((s) => (
-              <li key={s.id} className="rounded-card border border-border-subtle bg-surface-low">
+              <li key={s.id} className="rounded-aura border card-aura">
                 <button type="button" onClick={() => openArchive(s.id)} className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left">
                   <span className="min-w-0 truncate text-sm font-semibold text-ink-primary">{s.name}</span>
                   <span className="shrink-0 text-2xs text-ink-muted">{s.startsOn}~{s.endsOn} {archiveId === s.id ? '▲' : '▼'}</span>

@@ -70,7 +70,7 @@ export default function LeaguePanel({ venueId, canConfigure }: { venueId: string
 
       {/* 새 리그 만들기 */}
       {canConfigure && (
-        <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-1.5">
+        <section className="rounded-aura border card-aura p-3 space-y-1.5">
           <h3 className="text-sm font-bold text-ink-primary">새 연합 리그 만들기</h3>
           <div className="flex gap-1.5">
             <input value={name} onChange={(e) => setName(e.target.value)} maxLength={20} placeholder="리그 이름 (예: 경기북부 챔피언십)" className="input min-w-0 flex-1 text-sm" />
@@ -273,7 +273,7 @@ function LeagueCard({ league, isOwner, members, venueId, canConfigure, onChanged
   };
 
   return (
-    <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2.5">
+    <section className="rounded-aura border card-aura p-3 space-y-2.5">
       <div className="flex flex-wrap items-center gap-2">
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-1.5 text-sm font-extrabold text-ink-primary"><Icon name="trophy" size={15} className="shrink-0 text-gold-300" />{league.name}</p>

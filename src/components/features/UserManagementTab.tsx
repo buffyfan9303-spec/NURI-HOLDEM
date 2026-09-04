@@ -247,7 +247,7 @@ function UserRow({ user, onUpdate }: { user: User; onUpdate: (id: string, patch:
     pending.type === 'ban'     ? '영구 정지' : '강제 탈퇴';
 
   return (
-    <li className="rounded-card border border-border-default bg-surface-low overflow-hidden">
+    <li className="rounded-aura border card-aura overflow-hidden">
       <div className="flex items-center gap-2 p-2.5">
         <div
           className={['w-9 h-9 shrink-0 rounded-full flex items-center justify-center text-sm font-bold', onColorInkClass(user.avatarColor ?? '#5A6175')].join(' ')}
@@ -673,7 +673,7 @@ function PostModeration({
       ) : (
         <ul className="space-y-1.5">
           {filtered.map((p) => (
-            <li key={p.id} className="p-2.5 rounded-card border border-border-default bg-surface-low">
+            <li key={p.id} className="p-2.5 rounded-aura border card-aura">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5 min-w-0">
                   <span className="text-2xs px-1.5 py-0.5 rounded-badge bg-surface-high border border-border-default text-ink-secondary shrink-0">

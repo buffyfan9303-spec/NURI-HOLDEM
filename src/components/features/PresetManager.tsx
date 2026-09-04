@@ -89,7 +89,7 @@ export default function PresetManager({ venueId }: { venueId: string }) {
   if (editing) {
     const d = editing.data;
     return (
-      <section className="space-y-2.5 rounded-card border border-border-default bg-surface-low p-3">
+      <section className="space-y-2.5 rounded-aura border card-aura p-3">
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-sm font-bold text-ink-primary">{editing.id ? '프리셋 수정' : '새 프리셋'}</h3>
           <button type="button" onClick={() => setEditing(null)} className="text-lg leading-none text-ink-muted">✕</button>
@@ -202,9 +202,9 @@ export default function PresetManager({ venueId }: { venueId: string }) {
         </div>
       )}
       {presets === null ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
-        : presets.length === 0 ? <p className="rounded-card border border-border-subtle bg-surface-low py-6 text-center text-2xs text-ink-muted">저장된 프리셋이 없습니다. 위 ‘지난 게임에서 만들기’가 가장 빠릅니다.</p>
+        : presets.length === 0 ? <p className="rounded-aura border card-aura py-6 text-center text-2xs text-ink-muted">저장된 프리셋이 없습니다. 위 ‘지난 게임에서 만들기’가 가장 빠릅니다.</p>
           : <ul className="space-y-1.5">{presets.map((p) => (
-            <li key={p.id} className="rounded-card border border-border-subtle bg-surface-low px-3 py-2.5">
+            <li key={p.id} className="rounded-aura border card-aura px-3 py-2.5">
               <div className="flex items-center justify-between gap-2">
                 <p className="flex min-w-0 items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="clipboard" size={14} className="shrink-0" /><span className="truncate">{p.name}</span></p>
                 <div className="flex shrink-0 gap-1">

@@ -160,7 +160,7 @@ export default function StaffSchedule({ venueId }: { venueId: string }) {
   const totalHours = summary.reduce((s, r) => s + r.hours, 0);
 
   return (
-    <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-3">
+    <section className="rounded-aura border card-aura p-3 space-y-3">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h3 className="text-sm font-bold text-ink-primary">딜러 출근 스케줄</h3>
         <div className="flex items-center gap-1">

@@ -1185,7 +1185,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
       </section>
 
       {/* 기본 정보 */}
-      <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
+      <section className="rounded-aura border card-aura p-3 space-y-2">
         <Field label="대회명">
           <input value={cfg.title} onChange={(e) => set({ title: e.target.value })} maxLength={60} className="input w-full text-sm" />
         </Field>
@@ -1223,7 +1223,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
       </section>
 
       {/* 블라인드 구조 — 접기/펴기 */}
-      <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
+      <section className="rounded-aura border card-aura p-3 space-y-2">
         <button type="button" onClick={() => setBldOpen((v) => !v)} className="w-full flex items-center justify-between py-0.5">
           <span className="text-2xs font-semibold text-ink-secondary">블라인드 구조 · {totalLevels}레벨</span>
           <span className="text-2xs font-bold text-accent-300">{bldOpen ? '접기 ▲' : '펼치기 ▼'}</span>
@@ -1283,7 +1283,7 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
       </section>
 
       {/* 프라이즈 */}
-      <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
+      <section className="rounded-aura border card-aura p-3 space-y-2">
         <p className="text-2xs font-semibold text-ink-secondary">프라이즈 <span className="font-normal text-ink-muted">· 금액은 원 단위로 입력 (예: 50만원 → 500000)</span></p>
         <div className="space-y-1">
           {cfg.prizes.map((p, i) => (

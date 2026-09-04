@@ -177,7 +177,7 @@ export function MyListingsModal({ open, onClose, onOpenListing, onChanged }: {
             <p className="text-2xs mt-1">중고장터에서 "글쓰기"로 등록하세요.</p>
           </div>
         ) : items.map((l) => (
-          <div key={l.id} className="rounded-card border border-border-subtle bg-surface-low p-2.5 space-y-2">
+          <div key={l.id} className="rounded-aura border card-aura p-2.5 space-y-2">
             <div className="flex items-center gap-3">
               <button type="button" onClick={() => onOpenListing(l)} className="shrink-0"><Thumb src={l.images[0] ?? null} /></button>
               <button type="button" onClick={() => onOpenListing(l)} className="flex-1 min-w-0 text-left">
@@ -243,7 +243,7 @@ export function MyLikesModal({ open, onClose, onOpenListing }: {
           </div>
         ) : items.map((l) => (
           <button key={l.id} type="button" onClick={() => onOpenListing(l)}
-            className="w-full text-left flex items-center gap-3 rounded-card border border-border-subtle bg-surface-low p-2.5 hover:bg-surface-high active:bg-surface-float transition-colors">
+            className="w-full text-left flex items-center gap-3 rounded-aura border card-aura p-2.5 hover:bg-surface-high active:bg-surface-float transition-colors">
             <Thumb src={l.images[0] ?? null} />
             <div className="flex-1 min-w-0">
               <p className={['text-sm font-semibold truncate', l.status === 'sold' ? 'text-ink-muted line-through decoration-1' : 'text-ink-primary'].join(' ')}>{l.title}</p>

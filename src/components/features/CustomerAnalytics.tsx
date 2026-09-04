@@ -83,7 +83,7 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
   };
 
   return (
-    <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2.5">
+    <section className="rounded-aura border card-aura p-3 space-y-2.5">
       <div className="flex flex-wrap items-center gap-2">
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-bold text-ink-primary">고객 분석</h3>

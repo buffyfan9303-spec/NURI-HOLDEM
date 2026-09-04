@@ -350,7 +350,7 @@ export default function ToolsPanel() {
           ⚠ button 안에는 phrasing content 만 — 자식은 전부 span 이다(div 중첩 금지). */}
       <button type="button" onClick={() => open('drill')}
         aria-label={`오늘의 드릴 · ${drillTotal}문제 중 ${drillDone}문제 완료. 열기`}
-        className="card-elev block w-full space-y-2 rounded-card border border-border-default bg-surface-low px-3.5 py-3 text-left hover:border-accent-400/40">
+        className="card-elev block w-full space-y-2 rounded-aura border card-aura px-3.5 py-3 text-left hover:border-accent-400/40">
         <span className="flex items-center justify-between gap-2">
           <span className="inline-flex min-w-0 items-center gap-1.5">
             <Icon name="target" size={14} className="shrink-0 text-accent-300" aria-hidden />
@@ -509,7 +509,7 @@ function ToolCard({ name, desc, icon, onClick, fav, onToggleFav, testId, tone = 
           설명은 ≤13자 완결형 명사구 한 줄(TOOLS[].desc 전면 개고). 이름은 안 자른다(2줄 허용) — 같은 행 칸 높이는 그리드 auto-rows-fr + h-full 이 맞춘다.
           아이콘 행 오른쪽 자리는 즐겨찾기 별(형제 버튼, 우상단). 레퍼런스 aura-ui 피처 카드 문법(아이콘 타일 위 · 제목 · 한 줄 설명). */}
       <button type="button" onClick={onClick} data-testid={testId}
-        className="card-elev flex h-full w-full flex-col items-start gap-2 rounded-card border border-border-default bg-surface-low px-2.5 py-2.5 text-left hover:border-accent-400/40">
+        className="card-elev flex h-full w-full flex-col items-start gap-2 rounded-aura border card-aura px-2.5 py-2.5 text-left hover:border-accent-400/40">
         <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-input tile-grad tile-grad-${tone}`}>
           <Icon name={icon} size={16} strokeWidth={1.8} aria-hidden />
         </span>

@@ -145,7 +145,19 @@
      transform/색만(헌법 화이트리스트) · --dur-fast · 터치 기기는 hover 가 없어 영향 0 */
   @media (hover: hover) and (pointer: fine) {
     .card-aura { transition: transform var(--dur-fast) var(--ease-out-ui), border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease); }
-    .card-aura:hover { border-color: rgb(var(--border-strong) / 0.85); transform: translateY(-2px);
+    /* ⚠ hover 는 **누를 수 있는 면에만**(2026-09-04 전수 조사): .card-aura 66곳 중 클릭 가능은 11곳뿐인데
+       로딩 스켈레톤·빈 상태 문단·정보 카드까지 PC 에서 2px 떠오르고 3px accent 링이 켜졌다 —
+       '누를 수 있다'는 거짓 신호다. :is() 는 인자 중 최고 특이도를 취해 (0,2,0) 이므로
+       .card-aura.ring-aura-glow:hover(0,3,0) 과 html.light 짝(0,2,1) 이 그대로 이긴다. */
+    /* 전역 프레스 규칙(0,1,1)이 .card-aura(0,1,0) 의 transition 을 이겨 그림자만 0ms 로 튀고
+       리프트만 부드럽던 어긋남 — 클릭 가능한 카드에만 뒤에서 다시 선언해 되찾는다.
+       전역 목록에 box-shadow 를 더하면 274곳 전부에 켜지므로 그렇게 하지 않는다. */
+    :is(a, button, [role="button"]).card-aura {
+      transition-property: transform, border-color, box-shadow;
+      transition-duration: var(--dur-fast);
+      transition-timing-function: var(--ease);
+    }
+    :is(a, button, [role="button"]).card-aura:hover { border-color: rgb(var(--border-strong) / 0.85); transform: translateY(-2px);
       box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 20px 25px rgb(0 0 0 / 0.10), 0 8px 10px rgb(0 0 0 / 0.04), 0 0 0 3px rgb(var(--accent-300) / 0.10); }
   }
   /* ⚠ 글로우 카드의 hover — 오너 리포트 2026-09-04 "마우스 올리면 뒤 그라데이션이 갑자기 확 없어진다".
@@ -179,7 +191,7 @@
         0 16px 32px -14px rgb(11 18 32 / 0.25);
     }
   }
-  @media (prefers-reduced-motion: reduce) { .card-aura:hover { transform: none; } }
+  @media (prefers-reduced-motion: reduce) { :is(a, button, [role="button"]).card-aura:hover { transform: none; } }
   /* 카드 속 카드(시안 Sub-Card #151C30) — 수면 분석 캡슐처럼 한 단계 밝은 면 + 4% 헤어라인 */
   .card-aura-sub {
     background-color: rgb(var(--surface-mid));
@@ -198,7 +210,7 @@
     box-shadow: inset 0 1px 0 rgb(255 255 255), 0 1px 2px rgb(11 18 32 / 0.04), 0 12px 32px -16px rgb(11 18 32 / 0.18);
   }
   @media (hover: hover) and (pointer: fine) {
-    html.light .card-aura:hover { border-color: rgb(11 18 32 / 0.12); box-shadow: inset 0 1px 0 rgb(255 255 255), 0 2px 4px rgb(11 18 32 / 0.05), 0 20px 40px -18px rgb(11 18 32 / 0.22); }
+    html.light :is(a, button, [role="button"]).card-aura:hover { border-color: rgb(11 18 32 / 0.12); box-shadow: inset 0 1px 0 rgb(255 255 255), 0 2px 4px rgb(11 18 32 / 0.05), 0 20px 40px -18px rgb(11 18 32 / 0.22); }
   }
   /* 라이트 크롬(헤더·탭바)은 지면색(#F5F7FB) 반투명이 아니라 순백 78% — 스크롤 콘텐츠가 비치되 글자는 흰 종이 위에 남는다 */
   html.light .glass-chrome::before, html.light .glass-strong { background-color: rgb(255 255 255 / 0.78); }
@@ -622,6 +634,10 @@
      다크 양끝 실측 vs base: #fff 18.42 / accent-200 8.83 · 라이트 vs #F5F6F8: ink-primary 16.75 / accent-400 7.04 */
   /* 그라데이션 헤어라인 링(v6) — Magic UI shine-border 의 정적 판. 1px 패딩 레이어를 그라데이션으로 칠하고
      mask xor 로 안쪽을 도려내 테두리만 남긴다(추가 DOM 0 · 애니 없음). 호스트에 relative 필요. 히어로·피처 카드 한두 곳에만. */
+  /* card-aura 의 회색 테두리(border-strong 55%) 안쪽에 ring-aura 의 보라 1px 이 겹쳐 선이 두 겹으로
+     읽혔다(2026-09-04 조사). 링을 쓸 땐 회색 테두리가 링에 자리를 내준다 — 레이아웃은 그대로(1px 유지). */
+  .card-aura.ring-aura { border-color: transparent; }
+  html.light .card-aura.ring-aura { border-color: transparent; }
   .ring-aura { position: relative; }
   .ring-aura::before {
     content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none;
@@ -979,6 +995,10 @@ body { overscroll-behavior-y: contain; }
      framer-motion 은 main.tsx 의 MotionConfig reducedMotion="user" 가 별도로 처리. */
   .animate-fade-in, .animate-fade-out, .animate-slide-up, .animate-slide-down,
   .tab-anim-r, .tab-anim-l, .skeleton, .confetti, .anim-pop, .poster-marquee { animation: none !important; }
+  /* ::details-content 는 위 전역 * 셀렉터가 못 잡는다(의사 요소가 아니라 UA 생성 트리라 * 에 안 걸린다) —
+     별도로 끈다. block-size 전환은 헌법 §4 의 grid-template-rows 0fr→1fr 예외와 성격이 같아
+     구현은 그대로 두되, 모션 민감 사용자에게는 즉시 열리게 한다(2026-09-04 조사). */
+  details::details-content { transition: none !important; }
   /* 값 마퀴 → 정적 truncate 폴백: 트랙을 블록 말줄임으로 바꾸고 복제본은 숨긴다 */
   .marquee-loop {
     animation: none !important;
@@ -1000,6 +1020,9 @@ body { overscroll-behavior-y: contain; }
    흰 배경 5.39:1 · surface-low(#F2F3F5 계열) 4.77:1. (2026-08-28 일정 표 상금 골드화로 노출 확대)*/
 html.light .text-gold-200, html.light .text-gold-300, html.light .text-gold-400 { color: #8F6200; }
 html.light .text-emerald-300, html.light .text-emerald-400 { color: #0A8F5C; }
+/* 은메달(2위) — slate 계열만 이 보정 목록에서 빠져 있어 라이트 명예의 전당에서 1.10:1 이었다(2026-09-04 조사).
+   다크의 은색 색조(#E2E8F0)는 그대로 두고 라이트에만 딥 슬레이트를 준다. */
+html.light .text-slate-200 { color: #475569; }
 html.light .text-danger-light { color: #D63A4E; }
 /* 액센트 텍스트 — 라이트에선 100/200 변수가 연한 틴트(비텍스트)라 텍스트로 쓰인 곳만 딥 톤 교정.
    300/400 은 변수 자체가 딥(6.78/8.09:1)이라 오버라이드 불필요 — 목록에서 제거(2026-08-27). */
@@ -1096,6 +1119,13 @@ html.light .text-pink-300 { color: #BE185D; }
    시각 크기는 그대로 두고 손가락이 닿는 영역만 최소 44×44 로(iOS HIG 44pt).
    ::after 는 버튼 내부 요소라 클릭이 그대로 버튼에 전달된다.
    ⚠ 부모가 overflow:hidden 이면 확장분이 잘린다 — 그런 자리는 실제 크기를 키울 것. */
+/* 장부 바인 셀 hover — 채워진 셀은 tone 이 색을 4갈래로 나누므로 갈래마다 색 유틸을 더하지 않고
+   안쪽 링만 얹는다(box-shadow 는 모션 헌법 §4 화이트리스트). 예전엔 빈 '+' 셀에만 hover 가 있어
+   **입력된 칸보다 빈 칸이 더 눌러 보였다**(2026-09-04 조사). */
+@media (hover: hover) and (pointer: fine) {
+  .cell-hover { transition: box-shadow var(--dur-fast) var(--ease-out-ui); }
+  .cell-hover:hover { box-shadow: inset 0 0 0 2px rgb(var(--accent-300) / 0.35); }
+}
 .hit { position: relative; }
 .hit::after {
   content: "";

@@ -881,7 +881,9 @@ function CalendarShareRow({ schedule }: { schedule: Schedule }) {
       {/* 찜 = 앱 내 캘린더에 담기. 파이프라인상 '예약' 앞 단계(관심 표시)라 예약 CTA 와 나란히 두지 않는다. */}
       <button type="button" onClick={toggleLike} disabled={likeBusy} aria-pressed={liked}
         className={['flex items-center justify-center gap-1.5 rounded-input border py-2 text-xs font-bold transition-colors disabled:opacity-60',
-          liked ? 'border-transparent chip-aura' : 'border-border-default bg-surface-high text-ink-secondary hover:border-accent-400/50 hover:text-accent-300'].join(' ')}>
+          // .chip-aura 가 border:1px solid 를 자체 공급한다 — border-transparent 를 같이 주면 다크에서만
+          // 그 테두리를 덮어 라이트와 모양이 갈리고, hover 때 없던 인디고 선이 튀어나온다(3fd2c47 과 같은 계열).
+          liked ? 'chip-aura' : 'border-border-default bg-surface-high text-ink-secondary hover:border-accent-400/50 hover:text-accent-300'].join(' ')}>
         <Icon name={liked ? 'heart-fill' : 'heart'} size={14} className="shrink-0" />{liked ? '찜함' : '찜'}
       </button>
       {/* 구글 캘린더 바로 등록 — 다운로드 없이 새 창에서 '저장'만 누르면 끝 */}

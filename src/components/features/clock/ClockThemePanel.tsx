@@ -97,7 +97,7 @@ export default function ClockThemePanel({ venueId }: { venueId: string }) {
 
   if (!loaded) {
     // 스켈레톤 높이 = 실제 카드와 동일(로드 후 아래 내용이 밀리지 않게 — CLS 0)
-    return <section className="rounded-card border border-border-default bg-surface-low p-3" style={{ minHeight: 300 }}>
+    return <section className="rounded-aura border card-aura p-3" style={{ minHeight: 300 }}>
       <p className="py-10 text-center text-2xs text-ink-muted">클락 화면 설정 불러오는 중…</p>
     </section>;
   }
@@ -105,7 +105,7 @@ export default function ClockThemePanel({ venueId }: { venueId: string }) {
   const previewVars = clockThemeVars(cur);
 
   return (
-    <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2.5">
+    <section className="rounded-aura border card-aura p-3 space-y-2.5">
       <div>
         <h3 className="text-sm font-bold text-ink-primary">클락 화면 <span className="text-2xs font-normal text-ink-muted">(TV 송출 · 관전 화면)</span></h3>
         <p className="mt-0.5 text-2xs text-ink-muted">

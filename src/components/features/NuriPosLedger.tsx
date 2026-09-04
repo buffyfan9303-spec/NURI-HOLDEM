@@ -718,7 +718,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                 const liveN = items.filter((x) => !x.closed && !x.regClosed).length;
                 const closedN = items.filter((x) => x.closed).length;
                 return (
-                  <div key={date} className="rounded-card border border-border-subtle bg-surface-low overflow-hidden">
+                  <div key={date} className="rounded-aura border card-aura overflow-hidden">
                     {/* 날짜 헤더 — 접기/펼치기(그날 게임 묶음) */}
                     <button type="button"
                       onClick={() => setCollapsedDates((prev) => { const n = new Set(prev); if (n.has(date)) n.delete(date); else n.add(date); return n; })}
@@ -734,8 +734,11 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                       <ul className="border-t border-border-subtle divide-y divide-border-subtle">
                         {items.map((s) => {
                           const canOpen = fullAccess || s.operators.length === 0 || (!!user && s.operators.includes(user.id));
+                          // 열 수 없는 회차(담당자 아님)는 hover 하이라이트도 주지 않는다 —
+                          // '안 되는데 반응은 한다'가 한 행에서 충돌했다(2026-09-04 조사).
                           return (
-                          <li key={`${s.sessionDate}#${s.gameSeq}`} className="flex items-center hover:bg-surface-high/40 transition-colors">
+                          <li key={`${s.sessionDate}#${s.gameSeq}`}
+                              className={['flex items-center transition-colors', canOpen ? 'hover:bg-surface-high/40' : ''].join(' ')}>
                             <button type="button" disabled={!canOpen} onClick={() => canOpen && openBoard(s.sessionDate, s.gameSeq)}
                               className={['flex-1 min-w-0 flex items-center gap-2.5 px-3 py-2.5 text-left', canOpen ? '' : 'opacity-50 cursor-not-allowed'].join(' ')}>
                               <span className={['shrink-0 text-2xs font-bold px-1.5 py-0.5 rounded-badge border', s.gameSeq === MAIN_GAME_SEQ ? 'bg-surface-float text-ink-muted border-border-default' : 'bg-accent-300/15 text-accent-300 border-accent-400/40'].join(' ')}>{gl(s.gameSeq)}</span>
@@ -835,7 +838,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       )}
 
       {/* 세션 요약 */}
-      <div className="rounded-card border border-border-default bg-surface-low p-2.5 flex items-center gap-2 flex-wrap">
+      <div className="rounded-aura border card-aura p-2.5 flex items-center gap-2 flex-wrap">
         <span className="text-sm font-bold text-ink-primary">{session.title || '세션'}</span>
         <span className="text-2xs text-ink-muted">현금 {wonToMan(session.buyinAmount)}만원
           {session.cardAmount && session.cardAmount > 0 ? ` · 카드 ${wonToMan(session.cardAmount)}만원` : ' · 카드=현금'}</span>
@@ -978,7 +981,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
 
       {/* PL3: 마감 직후 프리셋 저장 유도 한 줄 — 이 회차(장부+클락 설정+포스터)가 authoring 재료 */}
       {closed && canManage && (
-        <div className="flex items-center gap-2 rounded-card border border-border-subtle bg-surface-low px-3 py-2">
+        <div className="flex items-center gap-2 rounded-aura border card-aura px-3 py-2">
           <Icon name="copy" size={15} className="shrink-0 text-accent-300" />
           <p className="min-w-0 flex-1 truncate text-2xs text-ink-secondary">
             {roundPresetState === 'done'
@@ -996,7 +999,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
 
       {/* 마감 직후 다음 단계 — 순위 입력(참가자 명단 프리필) → 주간 리포트. 마감→정산 동선을 클릭 1번으로 */}
       {closed && (onMakeRankingDraft || onOpenStats) && (
-        <div className="flex flex-wrap items-center gap-1.5 rounded-card border border-border-subtle bg-surface-low p-2">
+        <div className="flex flex-wrap items-center gap-1.5 rounded-aura border card-aura p-2">
           <span className="px-1 text-2xs font-bold text-ink-muted">다음 단계</span>
           {onMakeRankingDraft && (
             <button type="button"
@@ -1173,7 +1176,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                             <td key={e} className={cls}>
                               <button type="button" disabled={closed}
                                 onClick={() => !closed && setSelected({ playerName: r.name, entryNo: e, buyin: c })}
-                                className={['w-full h-full rounded-input border-2 flex flex-col items-center justify-center leading-none', tone, closed ? 'cursor-default' : ''].join(' ')}>
+                                className={['w-full h-full rounded-input border-2 flex flex-col items-center justify-center leading-none', tone, closed ? 'cursor-default' : 'cell-hover'].join(' ')}>
                                 <span className="text-[11px] font-extrabold">{topLabel}{c.discountIndex > 0 ? '*' : ''}</span>
                                 {et !== 'none'
                                   ? <span className="text-[10px] font-bold text-amber-300 leading-none">{et === 'double' ? '더블얼리' : '얼리'}</span>

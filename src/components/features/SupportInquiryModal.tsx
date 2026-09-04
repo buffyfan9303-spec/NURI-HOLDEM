@@ -59,7 +59,7 @@ export default function SupportInquiryModal({ open, onClose }: { open: boolean; 
     <Modal open={open} onClose={onClose} title="고객센터 · 1:1 문의" maxWidth="md" variant="sheet">
       <div className="space-y-4 p-4">
         {/* 접수 폼 */}
-        <section className="space-y-2 rounded-card border border-border-default bg-surface-low p-3">
+        <section className="space-y-2 rounded-aura border card-aura p-3">
           <p className="text-2xs text-ink-muted">운영자가 확인 후 답변드립니다. (운영시간 내 순차 처리)</p>
           <div className="flex flex-wrap gap-1.5">
             {INQUIRY_CATEGORIES.map((c) => (
@@ -79,9 +79,9 @@ export default function SupportInquiryModal({ open, onClose }: { open: boolean; 
         <section className="space-y-2">
           <h3 className="text-xs font-bold text-ink-secondary">내 문의 내역</h3>
           {list === null ? <p className="py-4 text-center text-2xs text-ink-muted">불러오는 중…</p>
-            : list.length === 0 ? <p className="rounded-card border border-border-subtle bg-surface-low py-5 text-center text-2xs text-ink-muted">접수한 문의가 없습니다.</p>
+            : list.length === 0 ? <p className="rounded-aura border card-aura py-5 text-center text-2xs text-ink-muted">접수한 문의가 없습니다.</p>
             : <ul className="space-y-2">{list.map((q) => (
-                <li key={q.id} className="rounded-card border border-border-subtle bg-surface-low p-3">
+                <li key={q.id} className="rounded-aura border card-aura p-3">
                   <div className="flex items-center gap-2">
                     <span className="rounded-badge bg-surface-float px-1.5 py-0.5 text-[9px] font-bold text-ink-secondary">{q.category}</span>
                     <span className={['rounded-badge px-1.5 py-0.5 text-[9px] font-bold', q.status === 'answered' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'].join(' ')}>

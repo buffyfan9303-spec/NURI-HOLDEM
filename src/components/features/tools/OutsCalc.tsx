@@ -55,7 +55,7 @@ export default function OutsCalc() {
       </div>
 
       {mode === 'cards' ? (
-        <Suspense fallback={<p className="rounded-card border border-border-default bg-surface-low py-10 text-center text-2xs text-ink-muted">카드 계산기 불러오는 중…</p>}>
+        <Suspense fallback={<p className="rounded-aura border card-aura py-10 text-center text-2xs text-ink-muted">카드 계산기 불러오는 중…</p>}>
           {/* 앱이 센 아웃 개수를 직접 입력 모드에도 옮겨 담는다 — 모드를 바꿔도 그 핸드가 이어진다 */}
           <OutsFromCards onCounted={(n, s) => { setOuts(n); setStreet(s); }} />
         </Suspense>
@@ -94,7 +94,7 @@ export default function OutsCalc() {
         </CalcCard>
       )}
 
-      <div className="space-y-1.5 rounded-card border border-border-default bg-surface-low p-3">
+      <div className="space-y-1.5 rounded-aura border card-aura p-3">
         <p className="text-2xs leading-relaxed text-ink-muted">상대 베팅이 팟 대비 이 비율보다 작으면 콜이 이득입니다. (예: 3:1 이상이면 콜)</p>
         {/* 중복 인지 제거 — 실제 팟·콜 금액 대입은 팟 오즈 계산기로(딥링크, 계산 로직 불변) */}
         <a href="#tool=pot" className="block text-2xs font-semibold text-accent-300 transition-colors hover:text-accent-200">

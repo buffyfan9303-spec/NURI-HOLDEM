@@ -114,7 +114,7 @@ export default function HomeBannersCard() {
   };
 
   return (
-    <section className="rounded-card border border-border-default bg-surface-low p-3 space-y-2">
+    <section className="rounded-aura border card-aura p-3 space-y-2">
       <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary">
         <Icon name="image" size={15} className="shrink-0" />홈 상단 배너
         <span className="text-xs font-normal text-ink-muted">

@@ -44,7 +44,7 @@ export default function ReportQueue() {
   return (
     <ul className="space-y-1.5">
       {reports.map((r) => (
-        <li key={r.id} className="rounded-card border border-border-default bg-surface-low p-2.5 space-y-2">
+        <li key={r.id} className="rounded-aura border card-aura p-2.5 space-y-2">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-2xs px-1.5 py-0.5 rounded-badge bg-danger/15 text-danger-light border border-danger/30 font-semibold">{TYPE_LABEL[r.targetType] ?? r.targetType}</span>
             <span className="text-xs font-semibold text-ink-primary">{r.reason}</span>
