@@ -169,8 +169,11 @@ export default function CalendarPanel({ schedules, onSelect, active }: {
         <Stat label="내 기록" value={`${summary.bankrollSum >= 0 ? '+' : ''}${won(summary.bankrollSum)}`} tone={summary.bankrollSum >= 0 ? 'emerald' : 'danger'} />
       </div>
 
-      {/* 월 그리드 */}
-      <section className="rounded-aura border card-aura p-2">
+      {/* 월 그리드 — 이 화면의 주인공 면이라 아우라 헤어라인(.ring-aura)을 준다.
+          글로우(.ring-aura-glow)는 쓰지 않는다: 화면당 1곳 규칙의 '주인공'은 지금 진행 중인 무언가를
+          가리키는 신호인데, 캘린더는 상시 화면이라 늘 빛나면 신호가 아니라 배경이 된다.
+          헤어라인만으로도 '여기가 중심'이 서고, 아래 카드들과 위계가 갈린다. */}
+      <section className="rounded-aura border card-aura ring-aura p-2">
         <div className="grid grid-cols-7 pb-1">
           {DAYS_KO.map((d, i) => (
             <span key={d} className={['text-center text-2xs font-semibold', i === 0 ? 'text-danger-light' : i === 6 ? 'text-accent-200' : 'text-ink-muted'].join(' ')}>{d}</span>
@@ -262,10 +265,14 @@ export default function CalendarPanel({ schedules, onSelect, active }: {
 
       <BankrollCard date={picked} rows={bankroll} onChanged={reload} toast={toast} />
 
-      {/* 이름 매칭 안내 — 바이인이 안 잡히는 유일한 이유라 화면에서 미리 알려준다 */}
+      {/* 이름 매칭 안내 — 바이인이 안 잡히는 두 가지 이유를 둘 다 적는다.
+          두 번째(동명이인 숨김)를 안 적으면 "분명 쳤는데 왜 없지?" 가 영원히 안 풀린다. */}
       <p className="px-1 text-2xs leading-relaxed text-ink-muted">
         바이인·머니인 기록은 매장 장부에 적힌 <b className="text-ink-secondary">이름</b>으로 찾습니다.
         기록이 비어 있다면 내 정보에서 실명·닉네임이 매장에 알린 이름과 같은지 확인해 주세요.
+        <br />
+        내 이름과 <b className="text-ink-secondary">똑같은 이름을 쓰는 회원이 있으면</b> 그 이름의 기록은
+        보여 드리지 않습니다 — 남의 기록이 섞이는 것을 막기 위해서예요. 닉네임을 조금 바꾸면 다시 보입니다.
       </p>
 
       {/* 찜한 다가올 게임 — 캘린더 밖에서도 한눈에 */}

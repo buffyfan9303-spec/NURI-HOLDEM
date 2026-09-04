@@ -520,11 +520,22 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
 
       {/* ② 스티키 상단 바 — 매장명 + 라이브 인디케이터 + 날짜. 컬럼 스코프 sticky(--stack-top 아래) */}
       <div className="sticky top-[calc(var(--stack-top,6.0625rem)-1px)] z-20 -mb-1 border-b border-border-subtle bg-surface-base py-2 before:pointer-events-none before:absolute before:inset-x-0 before:-top-3 before:h-3 before:bg-surface-base">
+        {/* 이 줄은 파이프라인의 '지금 어디' 표지판이다 — 매장 · 진행 여부 · 날짜.
+            2026-09-04 오너 지시로 다듬음. 원칙 3가지:
+             ① **한 줄 유지** — 스티키라 높이를 늘리면 PC 대시보드의 세로를 영구히 먹는다(업주는 밀도 우선).
+             ② 위계: 매장명(주인공) > 라이브(상태) > 날짜(맥락). 종전엔 셋이 같은 평면에 있었고
+                날짜는 11.7px 회색이라 '오늘 무슨 요일 장부를 보는 중인지'가 안 읽혔다.
+             ③ 아우라 문법 편입 — 주변이 전부 card-aura 인데 이 줄만 아무 처리가 없어 떠 보였다.
+                타일(tile-grad)은 Head 패턴 그대로. 글로우는 쓰지 않는다(화면당 1곳 규칙 — 대시보드는 KPI 밴드가 주인공). */}
         <div className="flex items-center justify-between gap-2">
           <span className="flex min-w-0 items-center gap-2">
-            <span className="truncate text-base font-bold text-ink-primary">{venueName}</span>
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-input tile-grad" aria-hidden>
+              <Icon name="store" size={13} />
+            </span>
+            <span className="truncate text-base font-bold leading-none text-ink-primary">{venueName}</span>
             {liveWidget && (
-              <span className="flex shrink-0 items-center gap-1 text-2xs font-bold text-emerald-400">
+              /* 상태는 '글자'가 아니라 '칩' — 스티키에 상시 떠 있으므로 형태로도 구분돼야 스캔된다 */
+              <span className="flex shrink-0 items-center gap-1 rounded-chip border border-emerald-400/40 bg-emerald-400/10 px-1.5 py-0.5 text-2xs font-bold text-emerald-400">
                 <span className="relative flex h-1.5 w-1.5" aria-hidden>
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
                   <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
@@ -533,7 +544,15 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
               </span>
             )}
           </span>
-          <span className="shrink-0 text-2xs tabular-nums text-ink-muted">{d.slice(5).replace('-', '/')} ({DOW[todayDow]})</span>
+          {/* 날짜 — 2xs 회색에서 xs 로. '오늘'을 앞에 붙여 '내가 지금 오늘 장부를 보는 중'이 한눈에 들어오게.
+              tabular-nums 는 유지(날짜가 바뀌어도 폭이 안 흔들린다). */}
+          <span className="flex shrink-0 items-baseline gap-1.5 text-xs">
+            <span className="font-semibold text-ink-secondary">오늘</span>
+            <span className="tabular-nums text-ink-muted">{d.slice(5).replace('-', '.')}</span>
+            <span className={['font-semibold', todayDow === 0 ? 'text-danger-light' : todayDow === 6 ? 'text-accent-200' : 'text-ink-muted'].join(' ')}>
+              {DOW[todayDow]}
+            </span>
+          </span>
         </div>
       </div>
 
