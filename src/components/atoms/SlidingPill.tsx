@@ -130,6 +130,9 @@ export default function SlidingPill({ containerRef, activeKey, className = '', u
     <span
       ref={pillRef}
       aria-hidden
+      // VT 스코프 안에서 이 알약에 자기 view-transition-name 을 붙이기 위한 표식(index.css).
+      // 정지된 탭바 스냅샷 안에 있으면 FLIP 이동이 가려지므로 VT 가 알약만 따로 보간하게 한다.
+      data-sliding-pill
       // origin-top-left: FLIP scale 보정의 수학이 좌상단 원점을 전제로 한다
       className={['pointer-events-none absolute left-0 top-0 z-0 origin-top-left opacity-0 will-change-transform', className].join(' ')}
     />

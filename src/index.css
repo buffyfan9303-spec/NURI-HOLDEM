@@ -101,21 +101,12 @@
   .glass-chrome { background-color: transparent; }
   .glass-chrome::before {
     content: ''; position: absolute; inset: 0; z-index: -1;
-    background-color: rgb(var(--surface-base) / 0.82);
-    -webkit-backdrop-filter: blur(20px) saturate(160%);
-    backdrop-filter: blur(20px) saturate(160%);
-  }
-  /* PC(lg+)는 불투명 — 오너 리포트 2026-09-04 "스크롤 내리면 헤더 뒤로 내용이 희미하게 보인다".
-     원인은 blur 부족이 아니라 **비대칭**이다: 헤더 바로 아래 PC GNB(`[data-stack-tabbar]`)가
-     완전 불투명 rgb(var(--surface-base)) 인데 그 위 헤더만 0.82 반투명이라, 유리가 '의도'가 아니라
-     '덜 칠해진 것'으로 읽힌다(실측: 둘 사이 틈은 0px — 틈 문제가 아니었다).
-     모바일은 헤더 아래에 그 불투명 띠가 없어 iOS 계열 유리가 그대로 맞으므로 lg 미만은 유지한다.
-     부수 효과로 PC 에서 상시 backdrop-filter 한 겹이 사라져 스크롤 페인트 비용도 준다(§5 측정 게이트에 유리). */
-  @media (min-width: 1024px) {
-    .glass-chrome::before {
-      background-color: rgb(var(--surface-base));
-      -webkit-backdrop-filter: none; backdrop-filter: none;
-    }
+    /* 2026-09-04 2차: 모바일도 불투명. 오너가 PC 에 이어 모바일에서도 같은 증상을 보고했다
+       ("헤더 로고·프로필 아이콘 쪽에 스크롤 내리면 위 콘텐츠가 비친다"). 0.82 반투명 + blur(20px)
+       로는 대비 높은 포스터·표가 지나갈 때 형태가 그대로 읽힌다 — 유리가 '의도'가 아니라
+       '덜 칠해진 것'으로 보인다. 헤더는 상시 떠 있는 크롬이라 여기서만큼은 가독성이 이긴다.
+       (필터를 걷어내 상시 backdrop-filter 한 겹도 사라진다 — §20.4 #5 측정 게이트에 유리) */
+    background-color: rgb(var(--surface-base));
   }
   @supports not (backdrop-filter: blur(1px)) {
     .glass, .glass-strong, .glass-chrome::before { background-color: rgb(var(--surface-base)); }
@@ -1356,6 +1347,11 @@ html[data-vt-scope='community-sec'] [data-community-secbar] { view-transition-na
    본문만 크로스페이드되고 탭바는 제자리에 고정된다(2026-08-29 오너 지적: 소메뉴에 모션이 없다).
    상시 name 을 주면 매장 페이지를 닫을 때 old-only 스냅샷이 얼어붙는다 — 커뮤니티 서브탭에서 실측한 그 함정. */
 html[data-vt-scope='venue-tab'] [data-venue-tabbar] { view-transition-name: venue-tabbar; }
+/* 탭바는 정지 스냅샷(아래 animation:none)이라 그 안의 SlidingPill FLIP 이동이 **통째로 가려진다** —
+   알약이 미끄러지는 0.3초를 사용자가 못 본다(2026-09-04 실측). 알약에 자기 이름을 주면
+   VT 가 옛 위치 → 새 위치를 보간해 준다: 정지된 탭바 위에서 알약만 분리돼 미끄러진다.
+   범위를 scope 안으로 한정하는 이유는 탭바와 같다 — 상시 name 은 페이지를 닫을 때 잔상이 된다. */
+html[data-vt-scope='venue-tab'] [data-venue-tabbar] [data-sliding-pill] { view-transition-name: venue-pill; }
 
 /* 매장 페이지 탭 전환 — **탭바 아래만 움직인다**(2026-08-29 오너 지적).
    방향 애니(vt-push-*)는 root 에 걸려 있어서, 이름을 주지 않으면 헤더·히어로·행동 버튼까지
@@ -1378,10 +1374,13 @@ html[data-vt-scope='venue-tab']::view-transition-new(root) { animation: none; }
 html[data-vt-scope='venue-tab']::view-transition-new(venue-tabpanel) {
   background-color: rgb(var(--surface-base));
 }
-@keyframes vt-panel-out-l { to   { opacity: 0; transform: translateX(-10px); } }
-@keyframes vt-panel-out-r { to   { opacity: 0; transform: translateX(10px); } }
-@keyframes vt-panel-in-r  { from { transform: translateX(10px); } }
-@keyframes vt-panel-in-l  { from { transform: translateX(-10px); } }
+/* 이동 거리 10 → 18px(2026-09-04 오너 재리포트). 0.3초에 10px 는 '움직였나?' 수준이라
+   전환이 아예 없는 것으로 읽혔다. 새 패널에 페이드는 넣지 않는다 — 반투명으로 만들면
+   2026-08-29 에 고친 '글자가 두 벌로 겹쳐 보이는' 문제가 그대로 돌아온다(배경 불투명이 그 해법이었다). */
+@keyframes vt-panel-out-l { to   { opacity: 0; transform: translateX(-18px); } }
+@keyframes vt-panel-out-r { to   { opacity: 0; transform: translateX(18px); } }
+@keyframes vt-panel-in-r  { from { transform: translateX(18px); } }
+@keyframes vt-panel-in-l  { from { transform: translateX(-18px); } }
 html[data-vt-scope='venue-tab'][data-vt-dir='forward']::view-transition-old(venue-tabpanel) { animation: vt-panel-out-l var(--dur-fast) var(--ease-out) both; }
 html[data-vt-scope='venue-tab'][data-vt-dir='forward']::view-transition-new(venue-tabpanel) { animation: vt-panel-in-r  var(--dur-tab)  var(--ease)     both; }
 html[data-vt-scope='venue-tab'][data-vt-dir='back']::view-transition-old(venue-tabpanel)    { animation: vt-panel-out-r var(--dur-fast) var(--ease-out) both; }

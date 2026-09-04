@@ -49,8 +49,12 @@ describe('하위 탭 전환 · 스코프와 CSS 규칙의 1:1', () => {
     const text = rules.join('\n');
 
     // ① 탭바·본문에 스냅샷 이름이 붙는다(전환 중에만).
+    //    최소 2개(탭바·본문). **더 있어도 된다** — 2026-09-04 에 venue-tab 이 3개가 됐다:
+    //    정지된 탭바 스냅샷 안에서는 SlidingPill 의 FLIP 이동이 통째로 가려지므로(실측),
+    //    알약에 자기 이름을 줘 VT 가 옛→새 위치를 보간하게 했다. 이름이 늘어도 이 게이트가
+    //    지키려는 것(root 정지 + 본문 4방향)은 아래 ②③ 이 그대로 강제한다.
     const names = [...text.matchAll(/view-transition-name:\s*([a-z0-9-]+)/g)].map((m) => m[1]);
-    expect(names.length, `${scope}: view-transition-name 부여 규칙이 2개(탭바·본문) 필요하다`).toBe(2);
+    expect(names.length, `${scope}: view-transition-name 부여 규칙이 최소 2개(탭바·본문) 필요하다`).toBeGreaterThanOrEqual(2);
 
     // ② root 기본 연출 정지 — 탭바 위쪽(헤더·히어로)이 통째로 밀리지 않게.
     expect(text, `${scope}: root 정지 규칙이 없다. 페이지 전체가 밀린다`).toMatch(/::view-transition-old\(root\)/);

@@ -18,10 +18,13 @@ type Phase = 'starting' | 'scanning' | 'unsupported' | 'denied';
 interface QrScanModalProps {
   open: boolean;
   onClose: () => void;
-  venueId: string;
+  /** 특정 매장으로 한정할 때만 준다. **생략하면 아무 매장의 체크인 QR이나 받는다**
+   *  (헤더의 출석 스캔처럼 매장이 미리 정해지지 않은 진입점용). */
+  venueId?: string;
   venueName?: string;
-  /** 이 매장의 체크인 QR 이 확인됐을 때만 호출 — 부모가 체크인 RPC 를 실행한다(스캔 전 체크인 발생 금지). */
-  onMatch: () => void;
+  /** 체크인 QR 이 확인됐을 때만 호출 — 부모가 체크인 RPC 를 실행한다(스캔 전 체크인 발생 금지).
+   *  인자는 **스캔된 매장 id** 다: venueId 를 생략한 호출부는 이 값으로 어디에 체크인할지 정한다. */
+  onMatch: (scannedVenueId: string) => void;
 }
 
 /** 스캔 원문에서 체크인 대상 매장 id 추출 — 인쇄 QR 은 `${origin}/?checkin=<venueId>` 형식(checkinUrl). */
@@ -83,7 +86,8 @@ export default function QrScanModal({ open, onClose, venueId, venueName, onMatch
             const raw = codes[0]?.rawValue;
             if (!raw || !alive || matched) return;
             const scanned = checkinIdOf(raw);
-            if (scanned === venueId) { matched = true; onMatchRef.current(); return; }
+            // venueId 를 안 준 호출부는 아무 매장 QR 이나 받는다(어느 매장인지는 인자로 넘긴다)
+            if (scanned && (!venueId || scanned === venueId)) { matched = true; onMatchRef.current(scanned); return; }
             // 남의 매장 QR·무관한 QR — 체크인하지 않고 계속 스캔(같은 문자열 setState 는 재렌더 없음)
             setWarn(scanned ? '이 매장의 QR이 아닙니다' : '체크인 QR이 아니에요. 매장에 비치된 체크인 QR을 비춰 주세요');
           } catch { /* 프레임 미준비 등 일시 실패 — 다음 틱에 재시도 */ }

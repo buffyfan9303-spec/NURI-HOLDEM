@@ -354,7 +354,7 @@ export default function CalendarPanel({ schedules, onSelect, onVenue, onLogin, a
         </section>
       )}
 
-      <BankrollCard date={picked} rows={bankroll} onChanged={reload} toast={toast} />
+      <BankrollCard date={picked} rows={bankroll} onChanged={reload} onPickDate={setPicked} toast={toast} />
 
       {/* 찜한 다가올 게임 — 캘린더 밖에서도 한눈에. 헤더 수와 목록은 같은 배열에서 나온다. */}
       {likedUpcoming.length > 0 && (
@@ -401,21 +401,30 @@ function Stat({ label, value, sub, tone }: { label: string; value: string; sub?:
 }
 
 /** 수기 뱅크롤 — 자동 집계가 못 잡는 현금 게임·타 매장 결과를 유저가 직접 +/- 로 적는다. */
-function BankrollCard({ date, rows, onChanged, toast }: {
+/** 내가 적는 기록 — 뱅크롤(금액)과 일정(메모) 두 가지를 한 카드에서, 모드를 갈라 받는다.
+ *  저장은 둘 다 bankroll_entries 한 테이블로 간다(금액 0 = 일정). DB 제약: amount<>0 or memo<>''. */
+function BankrollCard({ date, rows, onChanged, onPickDate, toast }: {
   date: string;
   rows: BankrollEntry[];
   onChanged: () => void;
+  /** 날짜 입력이 달력 선택을 그대로 움직인다 — 두 값을 따로 두면 저장한 날과 보이는 날이 어긋난다 */
+  onPickDate: (d: string) => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   toast: { show: (m: string, t?: any) => void };
 }) {
+  const [mode, setMode] = useState<'bankroll' | 'memo'>('bankroll');
   const [amount, setAmount] = useState('');
   const [memo, setMemo] = useState('');
   const [busy, setBusy] = useState(false);
   const dayRows = rows.filter((r) => r.entryDate === date);
-  const total = rows.reduce((a, r) => a + r.amount, 0); // 일정(0원)은 합계에 영향 없다
 
-  /** sign 0 = 금액 없는 기타 스케줄(메모만). DB 제약은 '금액이 있거나 메모가 있거나'다. */
-  const add = async (sign: 1 | -1 | 0) => {
+  // 손익 — 불러온 범위 전체 기준. 합계 하나면 '얼마 넣고 얼마 벌었는지'가 안 보인다(오너 지시).
+  const money = rows.filter((r) => r.amount !== 0);
+  const plus = money.filter((r) => r.amount > 0).reduce((a, r) => a + r.amount, 0);
+  const minus = money.filter((r) => r.amount < 0).reduce((a, r) => a + r.amount, 0); // 음수
+  const net = plus + minus;
+
+  const save = async (sign: 1 | -1 | 0) => {
     const n = Math.trunc(Number(amount.replace(/[^0-9]/g, '')));
     if (sign === 0) {
       if (!memo.trim()) { toast.show('내용을 입력해 주세요', 'error'); return; }
@@ -442,6 +451,11 @@ function BankrollCard({ date, rows, onChanged, toast }: {
     finally { setBusy(false); }
   };
 
+  const tabCls = (on: boolean) => [
+    'min-h-[38px] flex-1 rounded-input px-3 text-xs font-bold transition-colors',
+    on ? 'chip-aura' : 'text-ink-muted hover:text-ink-secondary',
+  ].join(' ');
+
   return (
     <section className="rounded-aura border card-aura p-3">
       <div className="flex items-center gap-2 border-b border-border-subtle pb-1.5">
@@ -452,32 +466,63 @@ function BankrollCard({ date, rows, onChanged, toast }: {
           <h3 className="text-sm font-bold text-ink-primary">내가 적는 기록</h3>
           <span className="text-2xs text-ink-secondary">뱅크롤 · 일정</span>
         </div>
-        <span className={['shrink-0 text-sm font-extrabold tabular-nums', total >= 0 ? 'stat-emerald' : 'text-danger-deep dark:text-danger-light'].join(' ')}>
-          {total >= 0 ? '+' : ''}{won(total)}
-        </span>
       </div>
 
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="numeric"
-          placeholder="금액(일정은 비워 두세요)" aria-label="금액" className="input min-w-0 flex-1 text-sm tabular-nums" />
-        <input value={memo} onChange={(e) => setMemo(e.target.value)} maxLength={40}
-          placeholder="내용" aria-label="내용" className="input min-w-0 flex-1 text-sm" />
-        <div className="flex gap-1.5">
-          <button type="button" onClick={() => add(1)} disabled={busy} aria-label="플러스로 기록"
-            className="min-h-[44px] rounded-input border border-emerald-400/50 bg-emerald-400/10 px-3 text-sm font-bold stat-emerald disabled:opacity-50">＋</button>
-          <button type="button" onClick={() => add(-1)} disabled={busy} aria-label="마이너스로 기록"
-            className="min-h-[44px] rounded-input border border-danger/40 bg-danger/10 px-3 text-sm font-bold text-danger-deep dark:text-danger-light disabled:opacity-50">－</button>
-          {/* 금액 없이 내용만 — 예약·찜과 달리 아무 일정이나 적어 두는 칸(오너 지시 2026-09-04) */}
-          <button type="button" onClick={() => add(0)} disabled={busy} aria-label="일정으로 기록"
-            className="min-h-[44px] rounded-input chip-aura px-3 text-xs font-bold disabled:opacity-50">일정</button>
+      {/* 손익 3칸 — 수입/지출/손익. 지출은 이미 음수라 부호를 또 붙이지 않는다. */}
+      <div className="mt-2 grid grid-cols-3 gap-1.5">
+        <div className="rounded-input bg-surface-high/60 px-2 py-1.5 text-center">
+          <p className="text-2xs text-ink-muted">수입</p>
+          <p className="text-sm font-extrabold tabular-nums stat-emerald">+{won(plus)}</p>
         </div>
+        <div className="rounded-input bg-surface-high/60 px-2 py-1.5 text-center">
+          <p className="text-2xs text-ink-muted">지출</p>
+          <p className="text-sm font-extrabold tabular-nums text-danger-deep dark:text-danger-light">{won(minus)}</p>
+        </div>
+        <div className="rounded-input bg-surface-high/60 px-2 py-1.5 text-center">
+          <p className="text-2xs text-ink-muted">손익</p>
+          <p className={['text-sm font-extrabold tabular-nums', net >= 0 ? 'stat-emerald' : 'text-danger-deep dark:text-danger-light'].join(' ')}>
+            {net >= 0 ? '+' : ''}{won(net)}
+          </p>
+        </div>
+      </div>
+
+      {/* 무엇을 적는 중인지 먼저 고른다 — 예전엔 한 줄에 5개가 섞여 모드가 안 보였다 */}
+      <div className="mt-2 flex gap-1.5" role="tablist" aria-label="기록 종류">
+        <button type="button" role="tab" aria-selected={mode === 'bankroll'}
+          onClick={() => setMode('bankroll')} className={tabCls(mode === 'bankroll')}>뱅크롤</button>
+        <button type="button" role="tab" aria-selected={mode === 'memo'}
+          onClick={() => setMode('memo')} className={tabCls(mode === 'memo')}>일정</button>
+      </div>
+
+      <div className="mt-1.5 flex flex-wrap gap-1.5">
+        {/* 날짜 — 달력 선택과 같은 값. 여기서 바꾸면 위 달력도 그 날로 옮겨간다(단일 출처). */}
+        <input type="date" value={date} onChange={(e) => e.target.value && onPickDate(e.target.value)}
+          aria-label="날짜" className="input min-w-0 flex-1 text-sm tabular-nums" />
+
+        {mode === 'bankroll' ? (<>
+          <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="numeric"
+            placeholder="금액" aria-label="금액" className="input min-w-0 flex-1 text-sm tabular-nums" />
+          <input value={memo} onChange={(e) => setMemo(e.target.value)} maxLength={40}
+            placeholder="메모(선택)" aria-label="메모" className="input min-w-0 flex-[2] text-sm" />
+          <div className="flex gap-1.5">
+            <button type="button" onClick={() => save(1)} disabled={busy} aria-label="플러스로 기록"
+              className="min-h-[44px] rounded-input border border-emerald-400/50 bg-emerald-400/10 px-3.5 text-sm font-bold stat-emerald disabled:opacity-50">＋</button>
+            <button type="button" onClick={() => save(-1)} disabled={busy} aria-label="마이너스로 기록"
+              className="min-h-[44px] rounded-input border border-danger/40 bg-danger/10 px-3.5 text-sm font-bold text-danger-deep dark:text-danger-light disabled:opacity-50">－</button>
+          </div>
+        </>) : (<>
+          <input value={memo} onChange={(e) => setMemo(e.target.value)} maxLength={40}
+            placeholder="일정 내용" aria-label="일정 내용" className="input min-w-0 flex-[2] text-sm" />
+          <button type="button" onClick={() => save(0)} disabled={busy}
+            className="btn-primary min-h-[44px] shrink-0 px-4 text-sm">저장</button>
+        </>)}
       </div>
 
       {dayRows.length > 0 && (
         <ul className="mt-2 space-y-0.5">
           {dayRows.map((r) => (
             <li key={r.id} className="flex min-h-[var(--row-h-sm)] items-center gap-2 rounded-input px-2">
-              {/* 금액 0 = 기타 스케줄 — '+0' 을 그리면 돈 기록으로 오해된다 */}
+              {/* 금액 0 = 일정 — '+0' 을 그리면 돈 기록으로 오해된다 */}
               {r.amount === 0 ? (
                 <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{r.memo}</span>
               ) : (<>

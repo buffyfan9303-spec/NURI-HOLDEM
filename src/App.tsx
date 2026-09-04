@@ -113,6 +113,7 @@ import type { MarketplaceListing, MarketplaceNotice } from './api/marketplace';
 // 모달류 — 첫 화면에 필요 없으므로 열 때만 로드(메인 번들 축소)
 const AuthModal            = lazyWithReload(() => import('./components/features/AuthModal'));
 const ScheduleDetailModal  = lazyWithReload(() => import('./components/features/ScheduleDetailModal'));
+const MyVoucherSheet       = lazyWithReload(() => import('./components/features/MyVoucherSheet'));
 const PostDetailModal      = lazyWithReload(() => import('./components/features/PostDetailModal'));
 const ListingDetailModal   = lazyWithReload(() => import('./components/features/ListingDetailModal'));
 const NoticeDetailModal    = lazyWithReload(() => import('./components/features/NoticeDetailModal'));
@@ -174,8 +175,10 @@ interface TabDef { id: TabId; label: string; }
 
 const AppHeader = memo(function AppHeader({
   unreadCount, notifications, onMarkRead, onOpenLogin, onNavigateNotification, onHome, onOpenMe,
-  onGotoTab, activeTab, suppressed = false, onUnreadMessagesChange,
+  onGotoTab, activeTab, suppressed = false, onUnreadMessagesChange, onVenue,
 }: {
+  /** 이용권 시트에서 그 매장으로 — 사슬 끝에서 막다른 길을 만들지 않는다 */
+  onVenue?: (venueId: string) => void;
   /** (미사용 — 텍스트 내비로 대체) 모바일 헤더 좌측 큰 타이틀 */
   title?: string;
   /** 모바일 헤더 텍스트 내비 강조용 현재 탭 */
@@ -198,6 +201,7 @@ const AppHeader = memo(function AppHeader({
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [notifOpen,    setNotifOpen] = useState(false);
+  const [voucherOpen,  setVoucherOpen] = useState(false);
   const [userMenuOpen, setUserMenu]  = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
@@ -295,6 +299,26 @@ const AppHeader = memo(function AppHeader({
             <Icon name="mail" size={18} strokeWidth={1.8} />
             <UnreadBadge count={unreadCount} className="absolute -top-0.5 -right-0.5 ring-2 ring-surface-base" />
           </button>
+
+          {/* 이용권 · 출석 — 오너 지시(2026-09-04): "알림 옆에 매장 이용권 아이콘".
+              담는 것은 **매장이용권 지갑과 출석 QR 둘뿐**이다(그 밖은 각자 탭이 있다).
+              ⚠ 이용권 지갑은 통합 킬스위치(identity_voucher_enabled)에 묶여 시트 안에서 가려진다.
+                 출석 QR 은 이용권과 무관하므로 스위치와 관계없이 동작한다 — 그래서 버튼은 항상 보인다.
+              비로그인에는 그리지 않는다(눌러도 로그인 안내만 나오는 죽은 칸이 된다). */}
+          {user && (
+            <button
+              type="button"
+              onClick={() => setVoucherOpen(true)}
+              aria-label="이용권 · 출석"
+              className={[
+                'relative w-9 h-9 flex items-center justify-center rounded-full',
+                'transition-colors duration-[var(--dur-fast)] ease-out active:scale-90',
+                'text-ink-secondary hover:text-ink-primary hover:bg-surface-high',
+              ].join(' ')}
+            >
+              <Icon name="ticket" size={18} strokeWidth={1.8} />
+            </button>
+          )}
 
           {/* 로그인 / 유저 메뉴 */}
           {user ? (
@@ -406,6 +430,13 @@ const AppHeader = memo(function AppHeader({
           )}
         </div>
       </div>
+
+      {/* 이용권 · 출석 시트 — 열렸을 때만 청크를 받는다 */}
+      {voucherOpen && (
+        <Suspense fallback={null}>
+          <MyVoucherSheet open onClose={() => setVoucherOpen(false)} onVenue={onVenue} />
+        </Suspense>
+      )}
 
       {/* 쪽지+알림 패널 — viewport 기준 fixed 위치 */}
       <NotificationPanel
@@ -2482,6 +2513,7 @@ export default function App() {
         onNavigateNotification={handleNavigateNotification}
         onHome={handleHome}
         onOpenMe={openMeCb}
+        onVenue={handleVenueClick}
         suppressed={openVenueId !== null}
       />
 
