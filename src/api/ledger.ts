@@ -145,7 +145,12 @@ export function buyinFinance(b: LedgerBuyin, s: { buyinAmount: number; cardAmoun
     //   '회수 티켓 1장인데 엔트리 0'으로 잡히는 모순이 있었다(빠른입력 티켓은 엔트리 1).
     //   비분납 티켓 결제와 동일하게 1장 = 바인 1회(엔트리 1)로 환산한다.
     const paid = b.cashAmount + b.cardAmount + b.transferAmount;
-    const ticketWon = b.ticketCount * entryUnit; // 티켓 1장 = 바인 1회 상당
+    // 티켓 1장 = 바인 1회 상당(액면가). 분납은 현금·카드 칸에 **이미 할인이 빠진 실수령액**이
+    // 들어오므로 여기서 할인을 또 빼면 이중 차감이 된다 — 그래서 액면가 그대로 쓴다.
+    // ⚠ 남아 있는 어긋남: `티켓만 1장 + 할인` 분납은 entry 1 인데, 같은 조합을 빠른입력으로
+    //   찍으면 0.5 다(비분납은 할인을 탄다). 분납에서 티켓만 골라 놓고 할인까지 고르는 조합이라
+    //   실사용 빈도가 낮고(운영 DB: 분납 0건·할인 0건), 올바른 규칙이 하나로 정해지지 않아 남겨 둔다.
+    const ticketWon = b.ticketCount * entryUnit;
     const total = paid + b.unpaidAmount + ticketWon;
     const isTicketUnpaid = b.unpaidAmount > 0 && paid === 0 && b.ticketCount > 0;
     return {
@@ -164,14 +169,16 @@ export function buyinFinance(b: LedgerBuyin, s: { buyinAmount: number; cardAmoun
   // 가게지원 = 매장이 참가비를 대신 부담. 할인 이벤트가 걸려 있으면 매장이 그만큼 덜 부담하므로
   // 가치도 단가−할인이다(entry 와 정확히 같은 비율 — value/단가 === entry).
   if (b.paymentMethod === 'support') return { ...z, entry, support: 1, value: Math.max(0, entryUnit - disc) };
-  // ⚠ 티켓은 **언제나 단가 전액**이다(오너 결정 2026-09-05 "티켓도 동일 가치로 계산해야해").
-  //   티켓은 이미 참가비를 대신 낸 고정 가치의 증서라, 현금 할인을 또 적용할 근거가 없다.
-  //   그래서 위에서 계산한 할인 반영 entry 를 쓰지 않고 1 로 고정한다.
-  //   예전에는 여기서 할인이 먹혀 같은 '티켓 1장'이 비분납 0.5 · 분납 1 로 갈렸다(2026-09-05 조사).
-  //   더 나쁜 것은 그 할인이 운영자 선택이 아니라 클락 레벨 자동 할인으로 티켓 버튼에까지 붙었다는 점이다.
-  //   ⚠ 짝을 이루는 규칙이 discountSummary 에 있다 — 티켓 행의 할인은 '덜 받은 돈'에서 뺀다.
+  // 티켓 1장 = 바인 1회. 가치는 **단가 전액이 기본**이되, 할인이 입력돼 있으면 그만큼 뺀다.
+  //   (오너 정정 2026-09-05: "할인이 걸리면 할인은 따로 입력할 테니까,
+  //    티켓이라고 무조건 10으로 입력하면 안 되지.")
+  //   즉 '1T = 단가' 는 할인이 없을 때의 이야기다. 할인은 운영자가 따로 넣는 값이라 그대로 반영한다.
+  //   ⚠ 이전 결함은 '할인'이 아니라 **가치가 통째로 0원**이던 것이었다(총바인 열이 0만으로 찍힘).
+  //     그 수정은 value 로 유지되고, 여기서 되돌리는 것은 할인 무시뿐이다.
+  //   가게지원과 같은 규칙이 된다 — 둘 다 '현금은 안 받았지만 자리는 찼다'.
   if (b.paymentMethod === 'ticket') {
-    return { ...z, entry: 1, ticketPaid: b.isUnpaid ? 0 : 1, ticketUnpaid: b.isUnpaid ? 1 : 0, value: entryUnit };
+    return { ...z, entry, ticketPaid: b.isUnpaid ? 0 : 1, ticketUnpaid: b.isUnpaid ? 1 : 0,
+             value: Math.max(0, entryUnit - disc) };
   }
   // 스냅샷 우선(2026-08-18 전환): 기록 시점 net 금액이 amounts 칸에 저장돼 있으면 그 값이 정본 —
   // 이후 세션 단가·할인을 고쳐도 과거 기록이 소급 변형되지 않는다(실제 받은 현금 = 장부).
@@ -264,11 +271,6 @@ export function discountSummary(
 ): DiscountSummary {
   let count = 0, total = 0;
   for (const b of buyins) {
-    // ⚠ 티켓 행의 할인은 세지 않는다 — 티켓은 단가 전액으로 치기로 했으므로(buyinFinance 티켓 분기)
-    //   거기 붙은 할인은 '덜 받은 돈'이 아니다(애초에 현금을 받은 적이 없다).
-    //   세면 할인 총액이 부풀고, entryLoss(=총액/단가)가 실제 엔트리 차감과 어긋난다.
-    //   그 할인은 운영자가 고른 것도 아니다 — 클락 레벨 자동 할인이 티켓 버튼에도 붙는다.
-    if (!b.isSplit && b.paymentMethod === 'ticket') continue;
     const amt = discountAmountOf(s, b.discountIndex);
     if (b.discountIndex > 0 && amt > 0) { count++; total += amt; }
   }
