@@ -130,11 +130,13 @@ export default function CustomerAnalytics({ venueId }: { venueId: string }) {
           {filtered.slice(0, 200).map((r) => (
             <li key={r.name} className="rounded-input border border-border-subtle bg-surface-high px-2.5 py-2">
               <div className="flex items-center justify-between gap-2">
-                <p className="min-w-0 truncate text-sm font-bold text-ink-primary">
-                  {r.name}
-                  {r.buyins >= 5 && <span className="ml-1.5 rounded-badge bg-accent-300/15 px-1.5 py-0.5 text-2xs font-bold text-accent-300">단골</span>}
-                  {r.unpaidCount > 0 && <span className="ml-1 rounded-badge bg-danger/15 px-1.5 py-0.5 text-2xs font-bold text-danger-light">미수 {r.unpaidCount}</span>}
-                  {aliases[r.name.trim().toLowerCase()] && <span className="ml-1 rounded-badge bg-emerald-500/15 px-1.5 py-0.5 inline-flex items-center gap-0.5 text-2xs font-bold text-emerald-300"><Icon name="link" size={11} className="shrink-0" />{aliases[r.name.trim().toLowerCase()].display}</span>}
+                {/* ⚠ 배지를 이름과 같은 truncate 에 두면 이름이 길 때 **미수 건수**가 먼저 사라진다 —
+                    업주가 이 목록을 여는 이유 자체다. 이름만 줄이고 배지는 shrink-0 로 지킨다. */}
+                <p className="flex min-w-0 flex-1 items-center gap-1 text-sm font-bold text-ink-primary">
+                  <span className="min-w-0 truncate">{r.name}</span>
+                  {r.buyins >= 5 && <span className="shrink-0 rounded-badge bg-accent-300/15 px-1.5 py-0.5 text-2xs font-bold text-accent-300">단골</span>}
+                  {r.unpaidCount > 0 && <span className="shrink-0 rounded-badge bg-danger/15 px-1.5 py-0.5 text-2xs font-bold text-danger-light">미수 {r.unpaidCount}</span>}
+                  {aliases[r.name.trim().toLowerCase()] && <span className="shrink-0 rounded-badge bg-emerald-500/15 px-1.5 py-0.5 inline-flex items-center gap-0.5 text-2xs font-bold text-emerald-300"><Icon name="link" size={11} className="shrink-0" />{aliases[r.name.trim().toLowerCase()].display}</span>}
                 </p>
                 {r.lastVisit && <span className="shrink-0 text-2xs tabular-nums text-ink-muted">최근 {r.lastVisit.slice(5)}</span>}
               </div>

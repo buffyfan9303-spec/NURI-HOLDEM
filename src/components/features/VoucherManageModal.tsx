@@ -317,9 +317,10 @@ ${cards}
                   e.t === 'used' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-accent-300/15 text-accent-300'].join(' ')}>
                   <Icon name={e.t === 'used' ? 'arrow-down-left' : 'arrow-up-right'} size={10} className="mr-0.5 inline-block align-[-1px] shrink-0" />{e.t === 'used' ? '사용(받음)' : '발급(보냄)'}
                 </span>
-                <span className="min-w-0 flex-1 truncate text-ink-secondary">
-                  <b className="text-ink-primary">{e.who || '회원'}</b> · {e.title}
-                  {e.n > 1 && <b className="ml-1 text-accent-300">×{e.n}</b>}
+                {/* ⚠ 회원명+이용권명이 길면 **몇 장을 발급/사용했는지**가 사라졌다 — 수량이 이 내역의 핵심이다. */}
+                <span className="flex min-w-0 flex-1 items-center gap-1 text-ink-secondary">
+                  <span className="min-w-0 truncate"><b className="text-ink-primary">{e.who || '회원'}</b> · {e.title}</span>
+                  {e.n > 1 && <b className="shrink-0 text-accent-300">×{e.n}</b>}
                 </span>
                 <span className="shrink-0 tabular-nums text-ink-muted">{fmtFeed(e.at)}</span>
               </li>

@@ -236,12 +236,15 @@ function RankVerifyAdminCard() {
           {list.map((v) => (
             <li key={v.id} className="flex flex-wrap items-center gap-1.5 rounded-input border border-border-subtle bg-surface-high/40 p-2 text-2xs">
               <span className="font-bold text-ink-primary">{v.nickname}</span>
-              <span className="min-w-0 flex-1 truncate text-ink-secondary">
-                {v.eventName} · <b className="text-emerald-300 tabular-nums">{(v.amountWon / 10000).toLocaleString()}만</b>
-                <span className="ml-1 text-ink-muted">{v.isOverseas ? '해외' : '국내'}</span>
+              {/* ⚠ 대회명이 길면 **상금액**과 **'대회 아니면 반려' 경고**가 동시에 사라졌다.
+                  이 줄을 보고 승인/반려를 누르는 화면이라 손실이 가장 큰 자리다(경고는 오너 #11 로 넣은 것). */}
+              <span className="flex min-w-0 flex-1 items-center gap-1 text-ink-secondary">
+                <span className="min-w-0 truncate">{v.eventName}</span>
+                <b className="shrink-0 text-emerald-300 tabular-nums">{(v.amountWon / 10000).toLocaleString()}만</b>
+                <span className="shrink-0 text-ink-muted">{v.isOverseas ? '해외' : '국내'}</span>
                 {/* 구버전 화면에서 '일반 펍'으로 접수된 대기 건 — 승인 대상이 아니라는 표시(오너 #11) */}
                 {v.eventKind !== 'official' && (
-                  <span className="ml-1 rounded-badge bg-amber-500/15 px-1.5 py-0.5 font-bold text-amber-300">{EVENT_KIND_LABEL[v.eventKind]} 신고 · 대회 아니면 반려</span>
+                  <span className="shrink-0 rounded-badge bg-amber-500/15 px-1.5 py-0.5 font-bold text-amber-300">{EVENT_KIND_LABEL[v.eventKind]} 신고 · 대회 아니면 반려</span>
                 )}
               </span>
               <button type="button" onClick={() => view(v.proofPath)} className="rounded-input border border-border-default px-2 py-1 font-bold text-ink-secondary hover:text-ink-primary">증빙</button>
@@ -1679,11 +1682,12 @@ function StaffRow({ staff, onChanged }: { staff: VenueStaff; onChanged: () => vo
   return (
     <li className="flex items-center gap-1.5 px-2 py-1.5 rounded-input bg-surface-high border border-border-subtle">
       <div className="flex-1 min-w-0">
-        <p className="text-xs font-semibold text-ink-primary truncate">
-          {staff.name || staff.login}
+        {/* ⚠ 관리자가 이 목록에서 확인할 것이 **계정 연결 여부**인데 이름 길이에 따라 사라졌다. */}
+        <p className="flex items-center gap-1 text-xs font-semibold text-ink-primary">
+          <span className="min-w-0 truncate">{staff.name || staff.login}</span>
           {staff.userId
-            ? <span className="ml-1 text-2xs font-normal text-emerald-400">계정연결</span>
-            : <span className="ml-1 text-2xs font-normal text-ink-muted">미가입</span>}
+            ? <span className="shrink-0 text-2xs font-normal text-emerald-400">계정연결</span>
+            : <span className="shrink-0 text-2xs font-normal text-ink-muted">미가입</span>}
         </p>
         <p className="text-2xs text-ink-muted truncate">아이디: {staff.login}</p>
       </div>

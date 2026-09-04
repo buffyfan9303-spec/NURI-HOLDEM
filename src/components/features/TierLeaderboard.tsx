@@ -858,9 +858,12 @@ export default function TierLeaderboard() {
               {domestic.map((r, i) => (
                 <li key={r.nickname} className="flex items-center gap-2.5 rounded-input bg-surface-high px-3 py-2">
                   <span className="w-6 shrink-0 text-center text-sm font-extrabold tabular-nums text-accent-300">{i + 1}</span>
-                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">
-                    {r.nickname}
-                    <span className="block text-2xs font-normal text-ink-muted tabular-nums">
+                  {/* ⚠ 부모에 truncate(nowrap+overflow+ellipsis)를 걸고 자식을 block 으로 두면
+                      통계 줄은 **말줄임표조차 없이 하드 클립**된다 — ellipsis 는 부모의 인라인 콘텐츠에만
+                      적용되기 때문이다. 누적 금액이 커질수록 먼저 사라졌다. 줄마다 각자 줄인다. */}
+                  <span className="flex min-w-0 flex-1 flex-col text-sm font-semibold text-ink-primary">
+                    <span className="truncate">{r.nickname}</span>
+                    <span className="truncate text-2xs font-normal text-ink-muted tabular-nums">
                       대회 {r.wins}회{r.overseas > 0 ? ` · 해외 ${r.overseas}회` : ''} · 누적 {(r.totalWon / 10000).toLocaleString()}만
                     </span>
                   </span>

@@ -2066,10 +2066,12 @@ function StaffManager({ venueId }: { venueId: string }) {
               <ul className="space-y-1.5">
                 {invites.map((iv) => (
                   <li key={iv.id} className="flex items-center gap-2 p-2.5 rounded-input bg-surface-low border border-amber-500/30">
-                    <span className="flex-1 min-w-0 truncate">
-                      <span className="text-sm text-ink-primary">{iv.name}</span>
-                      <span className="text-2xs text-ink-muted"> · {iv.email}</span>
-                      <span className="text-2xs text-amber-400"> · 수락 대기</span>
+                    {/* ⚠ 셋을 한 truncate 에 넣어 이름이 길면 **누구에게 보낸 초대인지(이메일)** 와
+                        상태가 함께 사라지고 옆의 '취소' 버튼만 남았다. 이메일도 가변이라 각자 줄인다. */}
+                    <span className="flex flex-1 min-w-0 items-center gap-1">
+                      <span className="max-w-[45%] shrink-0 truncate text-sm text-ink-primary">{iv.name}</span>
+                      <span className="min-w-0 flex-1 truncate text-2xs text-ink-muted">· {iv.email}</span>
+                      <span className="shrink-0 text-2xs text-amber-400">· 수락 대기</span>
                     </span>
                     <button type="button" onClick={() => cancel(iv.id)} className="text-2xs px-2.5 py-1.5 rounded-input text-ink-muted hover:text-danger-light transition-colors">취소</button>
                   </li>

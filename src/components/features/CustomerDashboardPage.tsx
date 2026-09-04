@@ -423,8 +423,11 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
                     }}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <p className="min-w-0 truncate text-sm font-semibold text-ink-primary">{r.title}
-                        {upcoming && <span className="ml-1.5 rounded-badge bg-emerald-400/15 px-1.5 py-0.5 text-2xs font-bold text-emerald-400 align-middle">예정</span>}
+                      {/* ⚠ '예정' 은 지난 예약과 다가올 예약을 가르는 **유일한 표시**인데
+                          대회명이 길면 그것부터 사라졌다(우측 날짜는 shrink-0 라 살아남았다). */}
+                      <p className="flex min-w-0 flex-1 items-center gap-1.5 text-sm font-semibold text-ink-primary">
+                        <span className="min-w-0 truncate">{r.title}</span>
+                        {upcoming && <span className="shrink-0 rounded-badge bg-emerald-400/15 px-1.5 py-0.5 text-2xs font-bold text-emerald-400">예정</span>}
                       </p>
                       <span className="shrink-0 text-2xs tabular-nums text-ink-muted">{r.date}{r.startTime ? ` ${r.startTime.slice(0, 5)}` : ''}</span>
                     </div>

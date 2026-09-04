@@ -171,14 +171,18 @@ export default function VoucherWallet({ onNeedVerify, onVenue, compact = false }
                   <ul className="space-y-1.5">{g.stacks.map((s) => (
                     <li key={s.title} className="flex items-center gap-2 rounded-input border border-accent-400/40 bg-accent-300/[0.05] px-3 py-2 transition-colors duration-[var(--dur-fast)] hover:bg-accent-300/[0.10] hover:border-accent-400/60">
                       <Icon name="ticket" size={18} className="shrink-0 text-accent-300" />
-                      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">
+                      <span className="flex min-w-0 flex-1 items-center gap-1.5 text-sm font-semibold text-ink-primary">
                         {/* 머리글이 이미 매장명을 말했다. 업주가 제목에 손으로 박아 둔 매장명까지 그대로 두면
                             '로티아레나 로티아레나 매장이용권'이 된다(라이브 101장 중 100장이 그 형태). */}
-                        {stripVenuePrefix(s.title, g.name)} <span className="text-2xs text-ink-muted">×{s.ids.length}</span>
+                        <span className="min-w-0 truncate">{stripVenuePrefix(s.title, g.name)}</span>
+                        {/* ⚠ 장수·만료는 제목과 같은 truncate 에 두지 않는다 — 제목이 길면
+                            '몇 장 남았는지'와 '며칠 뒤 사라지는지'가 먼저 잘렸다.
+                            만료 임박(D-N)은 이 화면에서 손실이 가장 큰 정보다(놓치면 이용권이 소멸한다). */}
+                        <span className="shrink-0 text-2xs font-normal text-ink-muted">×{s.ids.length}</span>
                         {s.expiries[0] && (() => {
                           const d = Math.ceil((new Date(s.expiries[0]!).getTime() - Date.now()) / 86400000);
                           return (
-                            <span className={['ml-1.5 align-middle text-2xs font-bold tabular-nums', d <= 7 ? 'text-danger-light' : 'text-ink-muted'].join(' ')}>
+                            <span className={['shrink-0 text-2xs font-bold tabular-nums', d <= 7 ? 'text-danger-light' : 'text-ink-muted'].join(' ')}>
                               ~{new Date(s.expiries[0]!).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' })}{d <= 7 ? ` · D-${Math.max(0, d)}` : ''}
                             </span>
                           );
