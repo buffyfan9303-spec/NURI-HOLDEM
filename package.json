@@ -10,6 +10,7 @@
     "thumbs": "node scripts/gen-thumbs.mjs",
     "legal": "node scripts/gen-legal.mjs",
     "legal:check": "node scripts/gen-legal.mjs --check",
+    "playstore:assets": "node scripts/playstore-shots.mjs --fixture && node scripts/playstore-feature.mjs",
     "bundle:budget": "node scripts/bundle-budget.mjs",
     "bundle:budget:update": "node scripts/bundle-budget.mjs --update",
     "lint": "eslint .",

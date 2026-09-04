@@ -45,3 +45,9 @@ dist-ssr
 service-account*.json
 *.dump
 *.sql.gz
+
+# Play Console 업로드용 생성물 — scripts/playstore-*.mjs 로 언제든 다시 만든다.
+# PNG 합계 5MB 대라 리포에 넣지 않는다(스크립트가 정본).
+playstore/screenshots/
+playstore/screenshots-real/
+playstore/*.png
