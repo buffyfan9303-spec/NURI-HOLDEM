@@ -139,6 +139,9 @@ const LiveGamesTab   = lazyWithReload(() => import('./components/features/LiveGa
 const LiveGamesTabM   = memo(LiveGamesTab);
 const CommunityTabM   = memo(CommunityTab);
 const ToolsPanelM     = memo(ToolsPanel);
+// 캘린더는 5개 API 를 병렬로 부르는 데이터 화면이라 lazy — 첫 화면(홈) 번들에 끌고 들어가지 않는다.
+const CalendarPanelLazy = lazyWithReload(() => import('./components/features/CalendarPanel'));
+const CalendarPanelM  = memo(CalendarPanelLazy);
 const VenueManageTabM = memo(VenueManageTab); // 내 매장 keep-alive 전환에 필수 — 숨김 상태에서 App 재렌더에 끌려가지 않게
 const CustomerDashboardPage = lazyWithReload(() => import('./components/features/CustomerDashboardPage'));
 import type { MeTab } from './components/features/CustomerDashboardPage'; // 타입만(런타임 0)
@@ -164,7 +167,7 @@ function OverlayFallback() {
 // ── 탭 정의 ──────────────────────────────────────────────────────────────────
 
 // P1(오너 승인 2026-08-27): 'home' 신설 — 기존 browse(일정 탐색)는 탭바에서 내려간 서브 화면.
-type TabId = 'home' | 'browse' | 'live' | 'community' | 'market' | 'tools' | 'my-store' | 'admin';
+type TabId = 'home' | 'browse' | 'live' | 'community' | 'market' | 'tools' | 'calendar' | 'my-store' | 'admin';
 interface TabDef { id: TabId; label: string; }
 
 // ── 헤더 ─────────────────────────────────────────────────────────────────────
@@ -258,7 +261,7 @@ const AppHeader = memo(function AppHeader({
           </button>
           <span className="h-4 w-px shrink-0 bg-border-default" aria-hidden />
           <span className="min-w-0 truncate text-base font-extrabold tracking-tight text-ink-primary" aria-current="page">
-            {({ home: '홈', browse: '일정 탐색', live: '라이브', community: '커뮤니티', market: '중고장터', tools: 'GTO', 'my-store': '내 매장', admin: '관리자 설정' } as Record<string, string>)[activeTab ?? 'home'] ?? '홈'}
+            {TAB_LABEL[activeTab ?? 'home']}
           </span>
         </div>
 
@@ -432,6 +435,14 @@ const AppHeader = memo(function AppHeader({
 const tabIcon = (children: ReactNode) => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{children}</svg>
 );
+/** 헤더 텍스트 내비 라벨 — Record<TabId> 라 탭을 추가하면 TS 가 누락을 잡는다.
+ *  (예전엔 인라인 객체를 Record<string,string> 으로 캐스팅해 뒀는데, 그러면 유니언과 연결이 끊겨
+ *   새 탭이 조용히 ?? '홈' 폴백으로 떨어진다 — 2026-09-04 캘린더 탭에서 실제로 그랬다.) */
+const TAB_LABEL: Record<TabId, string> = {
+  home: '홈', browse: '일정 탐색', live: '라이브', community: '커뮤니티', market: '중고장터',
+  tools: 'GTO', calendar: '캘린더', 'my-store': '내 매장', admin: '관리자 설정',
+};
+
 const TAB_ICON: Record<TabId, ReactNode> = {
   home: tabIcon(<><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" /><path d="M9 22V12h6v10" /></>),
   browse: tabIcon(<><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></>),
@@ -439,6 +450,7 @@ const TAB_ICON: Record<TabId, ReactNode> = {
   community: tabIcon(<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5Z" />),
   market: tabIcon(<><path d="M3 6h18l-1.6 11.2A2 2 0 0 1 17.4 19H6.6a2 2 0 0 1-2-1.8L3 6Z" /><path d="M8.5 6V5a3.5 3.5 0 0 1 7 0v1" /></>),
   tools: tabIcon(<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.8-.7-.7-2.8 2.5-2.5Z" />),
+  calendar: tabIcon(<><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="m9 16 2 2 4-4" /></>),
   'my-store': tabIcon(<><path d="M3 9.5 5 4h14l2 5.5" /><path d="M4 9.5V20a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9.5" /><path d="M9 21v-6h6v6" /></>),
   admin: tabIcon(<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />),
 };
@@ -614,7 +626,9 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
     { key: 'live', tab: 'live', label: '라이브' },
     { key: 'community', tab: 'community', label: '커뮤니티' },
     { key: 'tools', tab: 'tools', label: 'GTO' },
-    hasStore ? { key: 'my-store', tab: 'my-store', label: '내 매장' } : { key: 'me', label: '내 정보' },
+    // 오너 지시(2026-09-04): 일반 유저의 5번째 칸은 '내 정보'가 아니라 **캘린더**.
+    // '내 정보'는 헤더 아바타가 유일 진입점이다(2026-09-04 통합 — 진입점 1개 원칙).
+    hasStore ? { key: 'my-store', tab: 'my-store', label: '내 매장' } : { key: 'calendar', tab: 'calendar', label: '캘린더' },
   ];
   // 장터 화면에선 '커뮤니티' 칸을 활성으로(장터 진입 경로가 커뮤니티)
   // 탐색 화면(browse)은 홈의 서브 화면 — 탭바에선 홈 칸을 활성으로
@@ -737,7 +751,7 @@ export default function App() {
   const [activeTab, setActiveTab]     = useState<TabId>(() => {
     try {
       const t = new URLSearchParams(window.location.search).get('tab');
-      const valid: TabId[] = ['home', 'browse', 'live', 'community', 'market', 'tools', 'my-store', 'admin'];
+      const valid: TabId[] = ['home', 'browse', 'live', 'community', 'market', 'tools', 'calendar', 'my-store', 'admin'];
       if ((valid as string[]).includes(t ?? '')) return t as TabId;
       return 'home';
     } catch { return 'home'; }
@@ -778,7 +792,7 @@ export default function App() {
     // 첫 방문(lazy 청크)은 Suspense 가 끼므로 기존 startTransition 유지(이전 화면 유지 효과 동일).
     if (visitedTabs.has(t)) {
       // 애플식 방향성: 탭바에서 오른쪽 탭으로 가면 새 화면이 오른쪽에서 밀려 들어온다(반대는 반대).
-      const ORDER: TabId[] = ['home', 'browse', 'live', 'community', 'tools', 'my-store', 'admin'];
+      const ORDER: TabId[] = ['home', 'browse', 'live', 'community', 'tools', 'calendar', 'my-store', 'admin'];
       const from = ORDER.indexOf(activeTabRef.current);
       const to = ORDER.indexOf(t);
       withViewTransition(
@@ -1646,10 +1660,16 @@ export default function App() {
       { id: 'community', label: '커뮤니티' },
       { id: 'tools',     label: 'GTO' },
     ];
+    // 오너 지시(2026-09-04): 매장 보유자에게는 캘린더 칸을 주지 않는다 — '내 매장' 안에 넣는다.
+    // 하단 탭바의 `hasStore ? 내 매장 : 캘린더` 규칙과 같은 분기라 PC/모바일이 어긋나지 않는다.
     if (isOwner || isStaff || isAdmin) base.push({ id: 'my-store', label: '내 매장' });
+    else base.push({ id: 'calendar', label: '캘린더' });
     if (isAdmin)            base.push({ id: 'admin',       label: '관리자 설정' });
     return base;
   }, [isOwner, isStaff, isAdmin]);
+
+  // 매장 보유 여부(상단 탭 목록 기준) — 하단 탭바의 hasStore 와 같은 판정이어야 PC/모바일이 안 어긋난다
+  const hasStoreTabs = useMemo(() => tabs.some((t) => t.id === 'my-store'), [tabs]);
 
   // 커뮤니티 탭 새 글 점(모바일 탭바) — 마지막 방문 이후 새 글이 있으면 골드 점
   const [commSeenAt, setCommSeenAt] = useState(() => { try { return localStorage.getItem('nuri:comm-seen') ?? ''; } catch { return ''; } });
@@ -2933,6 +2953,16 @@ export default function App() {
         </main>
       )}
 
+      {/* 캘린더 — 파이프라인의 유저 쪽 거울(찜·예약·바이인·머니인 + 수기 뱅크롤).
+          매장 보유자는 이 탭이 없고 '내 매장' 안에서 같은 화면을 본다. */}
+      {!hasStoreTabs && (activeTab === 'calendar' || visitedTabs.has('calendar')) && (
+        <main data-tab="calendar" className="tab-pane" style={activeTab !== 'calendar' ? { display: 'none' } : undefined}>
+          <ErrorBoundary inline resetKey="calendar">
+            <CalendarPanelM schedules={schedules} onSelect={handleScheduleSelect} active={activeTab === 'calendar'} />
+          </ErrorBoundary>
+        </main>
+      )}
+
       {/* 내 매장 — 게임관리 + 매장운영 통합 허브 (업주/직원/운영자)
           keep-alive: 가장 무거운 스위트(장부·클락·통계)를 탭 전환마다 완전 재마운트하던 것이
           '다른 탭→내 매장' 멈칫의 근본 원인. 다른 탭과 같은 display 토글로 전환하고,
@@ -2942,6 +2972,7 @@ export default function App() {
           <ErrorBoundary inline resetKey="my-store">
           <VenueManageTabM
             schedules={schedules}
+            onOpenSchedule={handleScheduleSelect}
             deepSection={myStoreDeep}
             onConsumeDeepSection={handleConsumeMyStoreDeep}
             tabActive={activeTab === 'my-store'}

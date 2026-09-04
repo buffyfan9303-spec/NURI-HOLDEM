@@ -12,7 +12,7 @@ test.describe('정적 앱 셸 — 첫 페인트', () => {
     await page.goto('/');
 
     await expect(page.locator('text=홈').first(), '헤더 타이틀이 없다').toBeVisible();
-    for (const label of ['홈', '라이브', '커뮤니티', 'GTO', '내 정보']) {
+    for (const label of ['홈', '라이브', '커뮤니티', 'GTO', '캘린더']) {
       await expect(page.locator(`nav >> text=${label}`).first(), `탭바에 ${label} 이 없다`).toBeVisible();
     }
     // MO-5 에서 셸 스켈레톤이 .skeleton(내부 @apply animate-pulse) 클래스로 통일됐다

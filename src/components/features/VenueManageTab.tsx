@@ -1,4 +1,5 @@
 import { useEffect, useState, useDeferredValue, type ReactNode, useRef, memo, useCallback, useMemo } from 'react';
+import { lazyWithReload } from '../../lib/lazyWithReload';
 import Icon, { type IconName } from '../atoms/Icon';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBackClose } from '../../lib/backstack';
@@ -40,7 +41,7 @@ import { onColorInkClass } from '../../lib/color';
 // IA2: 포스터·장부·클락·순위 4개 최상위 문(門)이 'game' 섹션의 4단계 스텝으로 통합 —
 // 순차 운영 제품은 객체형이 아니라 워크플로형 내비여야 한다(§13-C). 자식 컴포넌트 props 무변경.
 // IA3c: 프리셋·매장랭킹·매장꾸미기·이용권·POS설정 5개 문(門)이 '매장 설정' 하위탭으로 통합
-type Section = 'dashboard' | 'game' | 'stats' | 'staff' | 'attendance' | 'settings';
+type Section = 'dashboard' | 'game' | 'calendar' | 'stats' | 'staff' | 'attendance' | 'settings';
 type GameStep = 'posters' | 'ledger' | 'clock' | 'ranking';
 type SettingsTab = 'page' | 'presets' | 'pos' | 'voucher' | 'optools' | 'danger';
 /** keep-alive box()·visited 의 단위 — 섹션 / 게임 스텝 / 설정 하위탭 */
@@ -159,8 +160,13 @@ const StaffSelfAttendanceM = memo(StaffSelfAttendance);
 //   gap-1 (4.25px) 아이콘↔글자·라벨↔값 / gap-2 (8.5) 요소 그룹 /
 //   gap-3 (12.75) 카드 패딩·카드 사이·블록 사이 / gap-5 (21.25) 그룹·섹션 경계
 //  행간은 §T1 역할표(index.css) — 설명문 t-desc(12.75/19.13)+break-keep, 메타 text-2xs(11.69/15.94).
-export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster, onDeletePoster, deepSection, onConsumeDeepSection, tabActive = true }: {
+// '내 캘린더' 섹션 — App 의 하단 탭 캘린더와 **같은 컴포넌트**다(중복 구현 금지).
+const CalendarPanelM = memo(lazyWithReload(() => import('./CalendarPanel')));
+
+export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster, onDeletePoster, onOpenSchedule, deepSection, onConsumeDeepSection, tabActive = true }: {
   schedules: Schedule[]; onCreatePoster: () => void; onEditPoster: (id: string) => void; onDeletePoster: (id: string) => void;
+  /** '내 캘린더' 행 → 대회 상세. 없으면 행이 클릭되지 않을 뿐 화면은 그대로 뜬다 */
+  onOpenSchedule?: (s: Schedule) => void;
   /** 알림 딥링크 등 외부 진입 — 지정 섹션/게임스텝으로 바로 이동(1회 소비, 구 id 는 LINK-MAP 이 정규화) */
   deepSection?: Section | GameStep | null;
   onConsumeDeepSection?: () => void;
@@ -429,6 +435,9 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   const available: { id: Section; label: string; group: NavGroup; locked?: boolean }[] = [{ id: 'dashboard', label: '대시보드', group: '오늘' }];
   // IA2: 포스터·장부·클락·순위 = '게임 진행' 한 문(門)의 4단계 스텝(권한 없으면 잠금 노출 유지)
   available.push({ id: 'game', label: '게임 진행', group: '오늘', locked: !ledgerOk && !canPosters });
+  // 오너 지시(2026-09-04): 매장 보유자에게는 하단 탭 캘린더를 주지 않고 여기 넣는다.
+  // 업주도 플레이어라 자기 예약·바이인·머니인·뱅크롤을 본다 — 매장 장부(매출·손님)와는 다른 축이다.
+  available.push({ id: 'calendar', label: '내 캘린더', group: '오늘' });
   if (manageOk) available.push({ id: 'stats',  label: '매출·손님', group: '분석' });
   // ATT-FIX: '내 출퇴근 기록'이 장부 권한(ledgerOk)에 묶여 있어 장부 권한 없는 직원이
   // 자기 출퇴근을 못 보던 오게이팅 — 이 탭에 들어온 소속 구성원이면 누구나
@@ -636,6 +645,9 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                     active={tabActive && renderSection === 'dashboard'} caps={caps} />
                   {manageOk && <div className="mt-5"><AnnouncePanelM venueId={venueId} /></div>}
                 </>)}
+                {visited.includes('calendar') && box('calendar',
+                  <CalendarPanelM schedules={schedules} onSelect={onOpenSchedule ?? (() => {})}
+                    active={tabActive && renderSection === 'calendar'} />)}
                 {visited.includes('posters') && canPosters && box('posters', <MyPostersTabM schedules={schedules} onCreate={onCreatePoster} onEdit={onEditPoster} onDelete={onDeletePoster}
                   onGotoRanking={ledgerOk ? onGotoRankingFromPosters : undefined}
                   onOpenLedger={ledgerOk ? onOpenLedgerFromPosters : undefined} />)}
@@ -678,6 +690,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
 const SECTION_DESC: Record<Section | GameStep | SettingsTab, string> = {
   dashboard: '매장 운영 현황을 한눈에 · 오늘 장부·클락·추세·단골',
   game: '포스터 → 장부 → 클락 → 순위, 게임 하나를 단계로 진행합니다',
+  calendar: '내 예약·찜·바이인·머니인 기록과 직접 적는 뱅크롤',
   posters: '게임(포스터)별 예약 관리. 게임을 누르면 예약 리스트가 펼쳐집니다',
   presets: '게임 내용·듀레이션을 템플릿으로 저장 · 포스터/장부 없이 만들고 수정',
   ledger: '게임(세션)별 장부. 날짜·게임명으로 검색해 열람·수정하세요',
@@ -702,6 +715,7 @@ const ic = (children: ReactNode) => (
 );
 const SECTION_ICON: Record<Section | GameStep | SettingsTab, ReactNode> = {
   game: ic(<><polygon points="6 4 20 12 6 20 6 4" /></>),
+  calendar: ic(<><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="m9 16 2 2 4-4" /></>),
   dashboard: ic(<><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /></>),
   posters: ic(<><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-4.5-4.5L6 21" /></>),
   presets: ic(<><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 8h6M9 12h6M9 16h4" /></>),

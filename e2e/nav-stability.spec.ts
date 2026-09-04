@@ -43,7 +43,9 @@ import { installNavProbe, aimProbeAtTab, resetProbe, readProbe, currentScreen } 
 
 type Row = { id: string; scenario: string; expected: string; got: string; blockedMs: number; lost: number; ok: boolean };
 
-const TAB_INDEX = { home: 0, live: 1, community: 2, tools: 3, me: 4 } as const;
+// 5번째 칸은 2026-09-04 오너 지시로 '내 정보' → '캘린더' 로 바뀌었다(내 정보는 헤더 아바타가 유일 진입점).
+// 인덱스 4는 그대로 — 칸 수 5도 그대로다.
+const TAB_INDEX = { home: 0, live: 1, community: 2, tools: 3, calendar: 4 } as const;
 type TabKey = keyof typeof TAB_INDEX;
 
 test.describe('내비게이션 안정성 — 입력 유실 0 · 뒤로가기 도착 100%', () => {
