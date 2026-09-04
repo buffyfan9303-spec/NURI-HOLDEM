@@ -15,6 +15,7 @@ import { getReservationCounts, getVenueRegulars, subscribeReservations, type Ven
 import { aiGenerate } from '../../api/ai';
 import { getVenueRankings } from '../../api/rankings';
 import { Skeleton } from '../atoms/Skeleton';
+import LoadErrorCard from '../atoms/LoadErrorCard';
 import RegularsModal from './RegularsModal';
 import DealerShiftsModal from './DealerShiftsModal';
 import VoucherManageModal from './VoucherManageModal';
@@ -175,6 +176,10 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
     } catch { setPayOrder(['cash', 'card', 'transfer']); }
   }, [venueId]);
   const [loading, setLoading] = useState(true);
+  // 오늘 장부 3종(세션·바인·명단) 조회 실패 — '미시작'과 갈라놓기 위한 세 번째 상태.
+  // 이게 없을 때 대시보드는 실패를 '미시작'으로 위장했고, '지금 할 일'이 그 거짓 근거로
+  // [장부 시작하기]를 권했다(누르면 진행 중이던 장부의 마감·단가·할인이 덮인다).
+  const [loadErr, setLoadErr] = useState<unknown>(null);
 
   const upcoming = schedules
     .filter((s) => s.venueId === venueId && s.date >= d)
@@ -184,25 +189,35 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   const venueName = schedules.find((s) => s.venueId === venueId)?.pubName || '내 매장';
 
   const reload = useCallback(() => {
-    getLedgerSession(venueId, d).then(setSession).catch(() => {});
-    getLedgerBuyins(venueId, d).then(setBuyins).catch(() => {});
-    getLedgerPlayers(venueId, d).then(setPlayers).catch(() => {});
-    getClockState(venueId).then(setClock).catch(() => {});
-    getVenueClocks(venueId).then(setVenueClocks).catch(() => {});
-    getPendingBuyinRequests(venueId, d).then(setPendingReqs).catch(() => {});
-    getStaffSchedule(venueId, d, d).then(setShifts).catch(() => {});
-    getStaffSchedule(venueId, mr.start, mr.end).then(setMonthShifts).catch(() => {});
-    getStaffWages(venueId).then(setWages).catch(() => {});
-    getLedgerRange(venueId, d14[0], d14[13]).then(setRange).catch(() => {});
-    getVenueRegulars(venueId).then(setRegulars).catch(() => {});
-    getVenueRankings(venueId, d).then(({ entries }) => setHasRankToday(entries.length > 0)).catch(() => {});
-    getVenueWeeklyFunnel(venueId).then(setFunnel).catch(() => {});
-    listStaleOpenSessions(venueId).then(setStaleOpen).catch(() => {});
-    getPosterOpsSummaries(venueId).then((sums) => setPendingRanks(Object.values(sums).filter((s) => s.closed && !s.hasRankings && s.date < d).sort((a, b) => b.date.localeCompare(a.date)))).catch(() => {});
     const ids = schedules.filter((s) => s.venueId === venueId && s.date >= d).map((s) => s.id);
-    if (ids.length) getReservationCounts(ids).then(setResCounts).catch(() => {});
-    else setResCounts({});
-    setLoading(false);
+    if (!ids.length) setResCounts({});
+    // ⚠ 오늘 장부 3종만은 실패를 삼키지 않는다 — 이 화면의 모든 거짓 요약('미시작'·'지금 할 일')의 근원이다.
+    const core = Promise.all([
+      getLedgerSession(venueId, d).then(setSession),
+      getLedgerBuyins(venueId, d).then(setBuyins),
+      getLedgerPlayers(venueId, d).then(setPlayers),
+      // 장부 권한이 없는 직원은 애초에 이 3종을 볼 수 없다(RLS 거절이 정상) — 그 거절을
+      // 장애로 띄우면 포스터·출근 안내까지 같이 사라진다. 실패 분기는 장부를 보는 사람에게만.
+    ]).then(() => setLoadErr(null), (e) => setLoadErr(caps.ledger ? e : null));
+    // ⚠ 종전엔 promise 를 띄운 **직후 동기로** setLoading(false) 였다. 그래서 매 진입마다
+    //   로딩이 데이터보다 먼저 끝나고, 스켈레톤 뒤에 초기값(0·없음) 화면이 한 번 확정돼 보였다.
+    //   ('이번 주 엔트리 0' · '단골 없음' · '오늘 근무 없음' — 전부 이 한 줄이 원인)
+    return Promise.all([
+      core,
+      getClockState(venueId).then(setClock).catch(() => {}),
+      getVenueClocks(venueId).then(setVenueClocks).catch(() => {}),
+      getPendingBuyinRequests(venueId, d).then(setPendingReqs).catch(() => {}),
+      getStaffSchedule(venueId, d, d).then(setShifts).catch(() => {}),
+      getStaffSchedule(venueId, mr.start, mr.end).then(setMonthShifts).catch(() => {}),
+      getStaffWages(venueId).then(setWages).catch(() => {}),
+      getLedgerRange(venueId, d14[0], d14[13]).then(setRange).catch(() => {}),
+      getVenueRegulars(venueId).then(setRegulars).catch(() => {}),
+      getVenueRankings(venueId, d).then(({ entries }) => setHasRankToday(entries.length > 0)).catch(() => {}),
+      getVenueWeeklyFunnel(venueId).then(setFunnel).catch(() => {}),
+      listStaleOpenSessions(venueId).then(setStaleOpen).catch(() => {}),
+      getPosterOpsSummaries(venueId).then((sums) => setPendingRanks(Object.values(sums).filter((s) => s.closed && !s.hasRankings && s.date < d).sort((a, b) => b.date.localeCompare(a.date)))).catch(() => {}),
+      ids.length ? getReservationCounts(ids).then(setResCounts).catch(() => {}) : Promise.resolve(),
+    ]).then(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [venueId, d]);
 
@@ -248,8 +263,10 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
     try { localStorage.setItem('nuri:last-round-intent', JSON.stringify({ venueId, at: Date.now() })); } catch { /* noop */ }
     onGoto('ledger');
   };
-  const ledgerStatus = !started ? '미시작' : session?.closed ? '정산 마감' : session?.regClosed ? '레지 마감' : '진행중';
-  const ledgerStatusCls = !started
+  // ⚠ 아직 못 읽은 동안 '미시작'이라고 단언하지 않는다 — 본문은 스켈레톤인데 배지만 결론을 말하면
+  //   그 배지가 곧 '장부 시작하기'를 정당화하는 거짓 근거가 된다.
+  const ledgerStatus = loading ? '확인 중' : !started ? '미시작' : session?.closed ? '정산 마감' : session?.regClosed ? '레지 마감' : '진행중';
+  const ledgerStatusCls = loading || !started
     ? 'bg-surface-float text-ink-muted'
     : session?.closed ? 'bg-ink-muted/20 text-ink-secondary'
     : session?.regClosed ? 'bg-gold-400/15 text-gold-300'
@@ -557,7 +574,11 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       </div>
 
       {/* ③ KPI 헤드라인 — 오늘 장부 핵심 숫자를 헤더로 격상(eyebrow 상태 pill + 큰 숫자). 탭하면 장부로. */}
-      {caps.ledger && (
+      {caps.ledger && (loadErr ? (
+        /* 실패는 '미시작'이 아니다 — 배지·숫자·[장부로 이동]을 통째로 걷어내고 못 불러왔다고 말한다.
+           (카드 안 '다시 시도' 버튼이 button 중첩이 되지 않게 밴드 자체를 대체한다) */
+        <LoadErrorCard error={loadErr} what="오늘 장부" onRetry={() => { setLoading(true); reload(); }} />
+      ) : (
         <button type="button" onClick={() => onGoto('ledger')}
           className="section-alt block w-full rounded-card p-3 text-left transition-colors hover:border-border-default">{/* v6.3 KPI 밴드(레퍼런스 교차 밴드) — 대시보드 1곳 한정 */}
           <span className="flex items-center gap-2">
@@ -595,7 +616,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
             </span>
           )}
         </button>
-      )}
+      ))}
 
       {/* 🔴 라이브 운영 현황 — 진행 클락 + 대기 바인요청을 한 카드에. 운영 중일 때만 노출(상황 인지형 커맨드센터) */}
       {!loading && liveWidget && (
@@ -822,7 +843,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
       {/* 오늘 진행 단계 — 파이프라인을 **눈에 보이게** 한다(포스터 → 장부 → 클락 → 순위 → 정산).
           '지금 할 일'이 다음 한 걸음을 말한다면, 이 줄은 전체 사슬에서 지금 어디인지를 말한다.
           판정값은 전부 이미 있는 것을 재사용 — 새 쿼리 0건. 글로우 없음(주인공은 아래 KPI 밴드). */}
-      {!loading && caps.ledger && (() => {
+      {!loading && !loadErr && caps.ledger && (() => {
         const todayPoster = schedules.some((x) => x.venueId === venueId && x.date === d && x.approved);
         const closed = !!session?.closed;
         const steps: { key: string; label: string; done: boolean; go: () => void }[] = [
@@ -868,7 +889,9 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
 
       {/* 지금 할 일 — 시간대·운영 상태 인지형 다음 행동 카드(대시보드 = 행동 안내판) */}
       {(() => {
-        if (loading) return null;
+        // ⚠ 이 카드의 모든 분기가 session/started 를 근거로 삼는다. 못 불러왔으면 침묵한다 —
+        //   '장부 시작하기'는 되돌릴 수 없는 조작이고, 위의 LoadErrorCard 가 이미 이유와 재시도를 준다.
+        if (loading || loadErr) return null;
         const todayPoster = schedules.some((s) => s.venueId === venueId && s.date === d && s.approved);
         const hour = new Date().getHours();
         let todo: { icon: IconName; title: string; desc: string; cta: string; onClick: () => void; tone: 'warn' | 'gold' | 'ok' } | null = null;

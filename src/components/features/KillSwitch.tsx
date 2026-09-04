@@ -7,13 +7,17 @@ import Modal from '../atoms/Modal';
 import { useToast } from '../atoms/Toast';
 import { killSwitchIsSet, setKillPassword, killVenue } from '../../api/killswitch';
 import Icon from '../atoms/Icon';
+import LoadErrorCard from '../atoms/LoadErrorCard';
 
 const CONFIRM_PHRASE = '영구 삭제';
 
 export default function KillSwitch({ venueId }: { venueId: string }) {
   const toast = useToast();
   const [open, setOpen] = useState(false);
-  const [pwIsSet, setPwIsSet] = useState<boolean | null>(null); // null=확인중
+  const [pwIsSet, setPwIsSet] = useState<boolean | null>(null); // null=아직 모름(확인 중 또는 실패)
+  // '설정 안 됨'과 '못 물어봄'을 가르는 세 번째 갈래. 모르는 상태로 버튼을 열어 두면
+  // 이미 설정한 업주가 '최초 설정' 폼에 들어가 서버 거부로 막다른 길에 갇힌다.
+  const [statusErr, setStatusErr] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
 
   // 설정 플로우
@@ -26,7 +30,10 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
   const [confirmText, setConfirmText] = useState('');
   const [err, setErr] = useState('');
 
-  const refreshStatus = () => killSwitchIsSet(venueId).then(setPwIsSet).catch(() => setPwIsSet(false));
+  const refreshStatus = () => {
+    setStatusErr(null);
+    killSwitchIsSet(venueId).then(setPwIsSet).catch((e) => { setStatusErr(e); setPwIsSet(null); });
+  };
   useEffect(() => { refreshStatus(); }, [venueId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const reset = () => {
@@ -48,6 +55,8 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
       setOpen(false);
     } catch (e) {
       setErr(e instanceof Error ? e.message : '설정에 실패했습니다.');
+      // 서버가 '이미 설정됨'으로 거부했을 수 있다 → 상태를 다시 물어 화면을 실제와 맞춘다(막다른 길 방지)
+      refreshStatus();
     } finally { setBusy(false); }
   };
 
@@ -78,19 +87,35 @@ export default function KillSwitch({ venueId }: { venueId: string }) {
             내 매장의 <b className="text-ink-secondary">모든 데이터(장부·순위·이용권·직원·클락·로그 전부)</b>를 영구 삭제합니다.
             <b className="text-danger"> 복구할 수 없습니다.</b> 업주 본인 확인 → 킬스위치 비밀번호 → 최종 확인 3단계를 거칩니다.
           </p>
+          {/* 안내 문구는 '설정 여부를 아는 동안'에만. 모르면 아무 약속도 하지 않는다. */}
           {pwIsSet === false && (
             <p className="mt-1 text-2xs text-ink-muted">처음 누르면 <b className="text-ink-secondary">킬스위치 비밀번호</b>를 먼저 설정합니다(이후 변경 불가).</p>
           )}
+          {pwIsSet === true && (
+            <p className="mt-1 text-2xs text-ink-muted">이 매장은 <b className="text-ink-secondary">킬스위치 비밀번호가 이미 설정</b>되어 있습니다(변경·재설정 불가).</p>
+          )}
+          {statusErr !== null && (
+            <p className="mt-1 text-2xs text-ink-muted">킬스위치 비밀번호가 설정돼 있는지 <b className="text-ink-secondary">확인하지 못했습니다.</b> 확인 전에는 진행할 수 없습니다.</p>
+          )}
         </div>
       </div>
-      <button
-        type="button"
-        onClick={() => { reset(); setOpen(true); }}
-        disabled={pwIsSet === null}
-        className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-input border border-danger/50 bg-danger/10 py-2.5 text-sm font-bold text-danger transition-colors hover:bg-danger/20 disabled:opacity-50"
-      >
-        {pwIsSet === null ? '확인 중…' : <><Icon name={pwIsSet ? 'bomb' : 'lock'} size={15} className="shrink-0" />{pwIsSet ? '매장 전체 영구 삭제' : '킬스위치 비밀번호 설정'}</>}
-      </button>
+      {/* 세 갈래: 실패(다시 시도) → 확인 중 → 상태에 맞는 버튼.
+          ⚠ 실패 분기가 먼저다. 모르는 채로 버튼을 열면 이미 설정한 업주가 '최초 설정' 폼에 들어가
+             서버 거부로 막다른 길에 갇힌다(고치는 건 문구와 막다른 길이지, 삭제 게이트가 아니다). */}
+      {statusErr !== null ? (
+        <div className="mt-2.5">
+          <LoadErrorCard error={statusErr} onRetry={refreshStatus} what="킬스위치 설정 상태" compact />
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => { reset(); setOpen(true); }}
+          disabled={pwIsSet === null}
+          className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-input border border-danger/50 bg-danger/10 py-2.5 text-sm font-bold text-danger transition-colors hover:bg-danger/20 disabled:opacity-50"
+        >
+          {pwIsSet === null ? '확인 중…' : <><Icon name={pwIsSet ? 'bomb' : 'lock'} size={15} className="shrink-0" />{pwIsSet ? '매장 전체 영구 삭제' : '킬스위치 비밀번호 설정'}</>}
+        </button>
+      )}
 
       <Modal open={open} onClose={close} title="매장 킬스위치" variant="center" maxWidth="sm" dismissOnBackdrop={false}>
         <div className="space-y-3.5 p-4">

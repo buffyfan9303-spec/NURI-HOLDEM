@@ -966,12 +966,21 @@ function WithdrawAccountSection() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [summary, setSummary] = useState<{ vouchers: number; posts: number } | null>(null);
+  // ⚠ 조회 실패를 0/0 으로 삼키면 아래 경고 박스가 **통째로 사라진다**(조건이 vouchers>0||posts>0).
+  //   그러면 사용자는 이용권·작성 글을 잃는다는 사실을 모른 채 되돌릴 수 없는 탈퇴를 진행한다.
+  //   실패는 값으로 남겨 확인창이 '모른다'고 말하게 한다(MyPostersTab 삭제 확인창과 같은 원칙).
+  const [sumFailed, setSumFailed] = useState(false);
   // 소셜(카카오) 계정은 비밀번호가 없다 — 재인증을 '영구 삭제' 타이핑 확인으로 폴백
   const [social, setSocial] = useState(false);
 
+  const loadSummary = () => {
+    setSumFailed(false);
+    getMyAccountSummary().then(setSummary).catch(() => { setSummary(null); setSumFailed(true); });
+  };
+
   const start = () => {
     setPassword(''); setSummary(null); setOpen(true);
-    getMyAccountSummary().then(setSummary).catch(() => setSummary({ vouchers: 0, posts: 0 }));
+    loadSummary();
     if (!IS_MOCK) {
       supabase.auth.getSession().then(({ data }) => {
         const prov = (data.session?.user.app_metadata as { provider?: string } | undefined)?.provider;
@@ -1015,12 +1024,21 @@ function WithdrawAccountSection() {
             탈퇴 시 <b className="text-danger">실명·전화번호·본인인증 정보·생년월일 등 개인정보가 즉시 파기</b>되고 계정이 폐쇄되며, <b className="text-ink-primary">다시 로그인할 수 없습니다.</b> 보유 중인 매장이용권 등은 함께 사라집니다.
             <br />매장 대표는 매장을 먼저 정리(삭제/양도)한 뒤 탈퇴할 수 있습니다.
           </p>
-          {/* 탈퇴 시 함께 사라지는 데이터 안내(실수 방지) */}
-          {summary && (summary.vouchers > 0 || summary.posts > 0) && (
+          {/* 탈퇴 시 함께 사라지는 데이터 안내(실수 방지).
+              ⚠ 실패 분기가 '값 있음'보다 **먼저** 와야 한다 — 순서가 뒤집히면 실패가 다시 '없음'으로 위장된다. */}
+          {sumFailed ? (
+            <div className="flex items-center gap-2 rounded-input border border-amber-500/30 bg-amber-500/[0.06] px-3 py-2 text-2xs text-amber-200">
+              <span className="flex-1 leading-relaxed">보유 이용권·작성 글 수를 <b className="text-amber-200">확인하지 못했습니다</b> — 이용권·작성 글이 있을 수 있습니다. 탈퇴하면 그 연결이 사라지거나 익명 처리됩니다.</span>
+              <button type="button" onClick={loadSummary}
+                className="shrink-0 rounded-input border border-amber-500/40 px-2 py-1 text-2xs font-bold text-amber-200 active:opacity-80">
+                다시 확인
+              </button>
+            </div>
+          ) : summary && (summary.vouchers > 0 || summary.posts > 0) ? (
             <div className="rounded-input border border-amber-500/30 bg-amber-500/[0.06] px-3 py-2 text-2xs text-amber-200">
               탈퇴하면 <b className="text-amber-200">보유 이용권 {summary.vouchers}개</b> · <b className="text-amber-200">작성 글 {summary.posts}개</b>의 연결이 사라지거나 익명 처리됩니다. 신중히 결정해 주세요.
             </div>
-          )}
+          ) : null}
           <label className="block">
             <span className="mb-1 block text-2xs font-semibold text-ink-secondary">
               {social ? "본인 확인 · '영구 삭제' 를 입력하세요 (카카오 계정은 비밀번호가 없어요)" : '본인 확인. 현재 비밀번호를 입력하세요'}

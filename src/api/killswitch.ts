@@ -6,7 +6,10 @@ import { supabase, IS_MOCK } from '../lib/supabase';
 export async function killSwitchIsSet(venueId: string): Promise<boolean> {
   if (IS_MOCK) return false;
   const { data, error } = await supabase.rpc('kill_switch_is_set', { p_venue_id: venueId });
-  if (error) return false;
+  // ⚠ 예전엔 조회 실패를 false('미설정')로 뭉갰다 → 이미 비밀번호를 설정한 업주에게 '최초 설정'
+  //   화면을 내밀고, 새 비밀번호를 넣으면 서버가 거부하는 **막다른 길**이 됐다.
+  //   '설정 안 됨'과 '못 물어봄'은 다른 답이다 — 실패는 실패로 올린다.
+  if (error) throw new Error(error.message);
   return data === true;
 }
 

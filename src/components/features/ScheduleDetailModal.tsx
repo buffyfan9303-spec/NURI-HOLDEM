@@ -24,6 +24,7 @@ import { enablePush, pushSupported } from '../../api/push';
 import QRCode from 'qrcode';
 import { requestBuyin, buyinRequestUrl, kstToday } from '../../api/ledger';
 import SlidingPill from '../atoms/SlidingPill';
+import LoadErrorCard from '../atoms/LoadErrorCard';
 import { goSubTab } from '../../lib/subTabTransition';
 
 interface ScheduleDetailModalProps {
@@ -993,15 +994,29 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
   // 예약 내역(예약명·날짜·시간)은 '이 포스터의 매장' 업주/운영자만 — 타 매장 업주·일반 노출 차단
   const isManager = user?.role === 'admin'
     || (user?.role === 'venue_owner' && ((!!ownerId && user.id === ownerId) || (!!venueId && user.venueId === venueId)));
-  const [resList, setResList] = useState<OwnerReservation[]>([]);
+  // mine 과 같은 센티넬 문법 — undefined = 아직 모름(미조회 또는 실패) · [] = 조회했고 예약 없음.
+  // 둘을 [] 하나로 겸하면 조회가 실패해도 '예약 0명 / 예약이 없습니다'로 보이고,
+  // 업주는 실제 예약자가 있는데도 좌석을 준비하지 않거나 대회를 접는다(2026-09-05 전수 조사).
+  const [resList, setResList] = useState<OwnerReservation[] | undefined>(undefined);
+  const [resErr, setResErr] = useState<unknown>(null);
   const [resOpen, setResOpen] = useState(false);
-  const loadRes = () => { if (isManager) getOwnerReservations(scheduleId).then(setResList).catch(() => {}); };
+  const loadRes = () => {
+    if (!isManager) { setResErr(null); setResList([]); return; }
+    setResErr(null);
+    getOwnerReservations(scheduleId)
+      .then(setResList)
+      .catch((e) => { setResErr(e); setResList(undefined); });
+  };
   useEffect(() => {
     setName(user?.nickname || user?.name || '');
     if (user) getMyReservation(scheduleId).then(setMine).catch(() => {});
     else setMine(null);
   }, [scheduleId, user]);
-  useEffect(() => { if (isManager) getOwnerReservations(scheduleId).then(setResList).catch(() => {}); else setResList([]); }, [scheduleId, isManager]);
+  useEffect(() => { loadRes(); }, [scheduleId, isManager]); // eslint-disable-line react-hooks/exhaustive-deps
+  // 업주 요약 한 줄 — 모르는 동안에는 숫자를 말하지 않는다.
+  const resSummary = resErr !== null ? '예약 인원을 불러오지 못했어요'
+    : resList === undefined ? '예약 인원 확인 중…'
+    : `예약 ${resList.length}명`;
 
   const act = async () => {
     if (!user) { toast.show('로그인 후 예약할 수 있습니다', 'error'); promptLogin(); return; }
@@ -1069,7 +1084,7 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
           className="flex min-w-0 flex-1 items-center gap-2 text-left">
           <span className="shrink-0 text-sm font-bold text-accent-300">참가 예약</span>
           <span className="min-w-0 flex-1 truncate text-2xs text-ink-muted">
-            {mine === undefined ? ' ' : mine ? `예약자: ${mine.displayName}` : isManager ? `예약 ${resList.length}명` : '미리 자리 잡아두기'}
+            {mine === undefined ? ' ' : mine ? `예약자: ${mine.displayName}` : isManager ? resSummary : '미리 자리 잡아두기'}
           </span>
           {mine && <span className="shrink-0 text-2xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-badge">예약 완료</span>}
           {mine === null && ended && <span className="shrink-0 text-2xs font-bold text-ink-muted bg-surface-high border border-border-default px-2 py-0.5 rounded-badge">종료</span>}
@@ -1193,11 +1208,17 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
       {isManager && (
         <div className="mt-1 border-t border-accent-400/20 pt-2">
           <button type="button" onClick={() => setResOpen((v) => !v)} className="flex w-full items-center justify-between gap-2 text-left">
-            <span className="text-2xs font-bold text-accent-300">예약 내역 <span className="font-normal text-ink-muted">({resList.length})</span></span>
+            <span className="text-2xs font-bold text-accent-300">예약 내역 <span className="font-normal text-ink-muted">({resErr !== null ? '불러오지 못함' : resList === undefined ? '확인 중' : resList.length})</span></span>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className={['text-ink-muted transition-transform', resOpen ? 'rotate-180' : ''].join(' ')} aria-hidden><polyline points="6 9 12 15 18 9" /></svg>
           </button>
+          {/* 실패 → 확인 중 → 빈 상태 → 목록. ⚠ 실패가 빈 상태보다 먼저다 —
+              순서가 뒤집히면 조회 실패가 '예약이 없습니다'로 위장된다. */}
           {resOpen && (
-            resList.length === 0
+            resErr !== null
+              ? <div className="mt-1.5"><LoadErrorCard error={resErr} onRetry={loadRes} what="예약 내역" compact /></div>
+              : resList === undefined
+              ? <div className="skeleton mt-1.5 h-14 w-full rounded-input" aria-busy="true" />
+              : resList.length === 0
               ? <p className="py-2 text-center text-2xs text-ink-muted">예약이 없습니다.</p>
               : <ul className="mt-1.5 max-h-60 space-y-1 overflow-y-auto">
                   {resList.map((r) => (

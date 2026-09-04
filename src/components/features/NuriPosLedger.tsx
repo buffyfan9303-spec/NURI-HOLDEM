@@ -140,6 +140,9 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const [sessionList, setSessionList] = useState<LedgerSessionListItem[]>([]);
   const [collapsedDates, setCollapsedDates] = useState<Set<string>>(new Set()); // 장부 목록 날짜별 접기(사이드 늘면 단축)
   const [listLoading, setListLoading] = useState(true);
+  // 목록도 보드와 같은 세 갈래(로딩/실패/빈값) — 실패를 '없음'으로 두면 업주가 안내대로
+  // "+ 장부 추가"를 눌러 서버에 이미 있는 그 날짜에 중복 장부를 만든다.
+  const [listError, setListError] = useState<unknown>(null);
   const [listQuery, setListQuery] = useState('');
   const [filterFrom, setFilterFrom] = useState(''); // 기간 필터 시작일
   const [filterTo, setFilterTo]     = useState(''); // 기간 필터 종료일
@@ -186,11 +189,12 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
 
   const loadList = useCallback(() => {
     setListLoading(true);
+    setListError(null);
     getLedgerSessionList(venueId).then((list) => {
       setSessionList(list);
       const ds = [...new Set(list.map((s) => s.sessionDate))]; // 최신순(날짜 desc)
       setCollapsedDates(new Set(ds.slice(1))); // 최신 날짜만 펼침, 과거 날짜는 접어 목록 단축
-    }).catch(() => {}).finally(() => setListLoading(false));
+    }).catch((e) => setListError(e)).finally(() => setListLoading(false));
   }, [venueId]);
   useEffect(() => { if (mode === 'list') loadList(); }, [mode, loadList]);
 
@@ -699,6 +703,9 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
 
         {listLoading ? (
           <SkeletonList rows={5} rowClassName="h-14" />
+        ) : listError ? (
+          /* ⚠ 실패 분기는 반드시 빈 상태보다 먼저 — 뒤에 두면 '없음'이 계속 이긴다 */
+          <LoadErrorCard error={listError} what="장부 목록" onRetry={loadList} />
         ) : sessionList.length === 0 ? (
           <EmptyState title="아직 작성한 장부가 없습니다" hint='"+ 장부 추가"를 누르면 오늘 장부가 열립니다' />
         ) : filtered.length === 0 ? (

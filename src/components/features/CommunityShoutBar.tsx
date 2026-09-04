@@ -297,8 +297,14 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
   // 지금 사면 언제 나가는가 — **서버가 계산한 다음 빈 자리**다(null = 아직 못 받음).
   // ⚠ 예전에는 max(expires_at) 으로 유추했다. 예약(20260830n)이 생기면 그 값은 며칠 뒤가 될 수
   //   있어 '내 차례 3일 뒤'라는 거짓말이 된다 — 실제로는 그 앞의 빈 자리에 들어간다.
-  const [nextFreeAt, setNextFreeAt] = useState<number | null>(null);
-  const [queueLen, setQueueLen] = useState(0);
+  // undefined = 아직 모름(조회 전 또는 실패) · null = 서버가 '앞에 아무도 없다'고 답한 상태.
+  // 예전엔 실패도 null 로 뭉갰다 → 앞에 대기열이 있는데도 '지금 바로'라고 약속했고,
+  // 사용자는 즉시 송출을 기대하며 활동점수를 썼다(2026-09-05 전수 조사).
+  const [nextFreeAt, setNextFreeAt] = useState<number | null | undefined>(undefined);
+  const [queueLen, setQueueLen] = useState<number | undefined>(undefined);
+  const [queueErr, setQueueErr] = useState<unknown>(null);
+  // '다시 확인'으로 두 조회(대기열 길이 · 다음 빈 자리)를 함께 되돌린다
+  const [queueNonce, setQueueNonce] = useState(0);
   // 예약 등급 전용 — datetime-local 값('YYYY-MM-DDTHH:mm', 로컬 시각)
   const [reserveAt, setReserveAt] = useState('');
 
@@ -311,9 +317,18 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
       // 화면에서도 한 번 더 막는다 — 누가 다시 active 를 켜도 '판매 중지'가 화면 규약으로 남게.
       .then((all) => setTiers(all.filter((s) => s.kind === 'shout' && s.key !== 'shout_board').sort((a, b) => a.sort - b.sort)))
       .catch(() => {});
-    // 대기열 길이 — '내 차례가 언제인지'를 **사기 전에** 보여주기 위해서다.
-    getLiveShouts(50).then((v) => setQueueLen(v.length)).catch(() => setQueueLen(0));
   }, [open]);
+  // 대기열 길이 — '내 차례가 언제인지'를 **사기 전에** 보여주기 위해서다.
+  // ⚠ 실패를 0('대기열 비었음')으로 뭉개면 화면이 '지금 바로 방송'이라고 거짓 약속을 한다.
+  useEffect(() => {
+    if (!open) return;
+    let live = true;
+    setQueueErr(null);
+    getLiveShouts(50)
+      .then((v) => { if (live) setQueueLen(v.length); })
+      .catch((e) => { if (live) { setQueueErr(e); setQueueLen(undefined); } });
+    return () => { live = false; };
+  }, [open, queueNonce]);
   useEffect(() => {
     if (open) { setText(''); setTier('basic'); setColor('gold'); setReserveAt(''); }
   }, [open]);
@@ -329,11 +344,12 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
   useEffect(() => {
     if (!open || isReserve) return;
     let live = true;
+    setNextFreeAt(undefined); // 등급을 바꾸면 이전 등급의 답을 잠시라도 그대로 보여주지 않는다
     getShoutQueueInfo(slotSec)
       .then((q) => { if (live) setNextFreeAt(q.nextFreeAt ? ms(q.nextFreeAt) : null); })
-      .catch(() => { if (live) setNextFreeAt(null); });
+      .catch(() => { if (live) setNextFreeAt(undefined); });
     return () => { live = false; };
-  }, [open, isReserve, slotSec]);
+  }, [open, isReserve, slotSec, queueNonce]);
 
   const trimmed = text.trim();
   const tooShort = trimmed.length < rules.minLen;
@@ -341,7 +357,8 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
   const hasLink = /https?:\/\/|www\./i.test(trimmed);
   const poor = balance !== null && cost > 0 && balance.available < cost;
   // 내 차례 예상 — 서버가 준 '다음 빈 자리'. 예약된 창은 이미 건너뛴 값이다.
-  const myTurnLabel = nextFreeAt === null ? '지금 바로' : waitLabel(nextFreeAt - Date.now());
+  // 못 받았으면(undefined) 시각을 지어내지 않는다 — null(=앞에 아무도 없음)과는 다른 답이다.
+  const myTurnLabel = nextFreeAt === undefined ? null : nextFreeAt === null ? '지금 바로' : waitLabel(nextFreeAt - Date.now());
   // 예약 입력 경계 — 서버 buy_shout 의 RESERVE_MIN_LEAD / RESERVE_MAX_LEAD 와 같은 값.
   // datetime-local 은 **로컬 시각 문자열**이라 toISOString(UTC)을 넣으면 안 된다 — 시차만큼 어긋난다.
   const localInput = (t: number) => {
@@ -389,11 +406,23 @@ export function ShoutComposer({ open, onClose, onPosted }: { open: boolean; onCl
       <div className="space-y-3 p-4">
         <p className="text-2xs leading-relaxed text-ink-muted">
           커뮤니티 맨 위에서 <b className="text-ink-secondary">{slotSec}초 동안 한 번</b> 방송됩니다.
+          {/* ⚠ '지금 바로'는 **확인된 뒤에만** 말한다. 대기열을 모르는 동안 그렇게 약속하면
+              사용자는 즉시 송출을 기대하고 활동점수를 쓰지만 실제로는 앞선 대기열 뒤에 붙는다. */}
           {isReserve
             ? <> 예약은 <b className="text-accent-300">고른 시각</b>에 그 자리를 미리 잡아 둡니다. 대기열을 기다리지 않아요.</>
-            : queueLen > 0
-              ? <> 지금 앞에 <b className="text-ink-secondary">{queueLen}개</b>가 있어 <b className="text-accent-300">{myTurnLabel}</b> 내 차례예요.</>
-              : <> 대기열이 비어 있어 <b className="text-accent-300">지금 바로</b> 방송돼요.</>}
+            : queueLen === undefined
+              ? <> 대기열을 {queueErr !== null ? '불러오지 못했어요' : '확인하는 중이에요'}. 앞선 대기가 있으면 <b className="text-ink-secondary">그 뒤 순서로</b> 방송됩니다.
+                  {queueErr !== null && (
+                    <button type="button" onClick={() => setQueueNonce((n) => n + 1)}
+                      className="ml-1 rounded-badge border border-border-subtle bg-surface-high px-2 py-0.5 text-2xs font-bold text-ink-secondary">
+                      다시 확인
+                    </button>
+                  )}</>
+              : queueLen > 0
+                ? <> 지금 앞에 <b className="text-ink-secondary">{queueLen}개</b>가 있어 {myTurnLabel
+                    ? <><b className="text-accent-300">{myTurnLabel}</b> 내 차례예요.</>
+                    : <>그 뒤 순서로 방송돼요.</>}</>
+                : <> 대기열이 비어 있어 <b className="text-accent-300">지금 바로</b> 방송돼요.</>}
           {' '}활동점수 <b className="text-accent-300">{cost.toLocaleString()}점</b>이 사용되며, 등급 점수(누적)는 줄지 않아요.
         </p>
 

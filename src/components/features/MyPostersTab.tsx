@@ -15,6 +15,7 @@ import HoldToConfirmButton from '../atoms/HoldToConfirmButton';
 import { getComments, logActivity } from '../../api/community';
 import { createUndoQueue } from '../../lib/undoableDelete';
 import Icon from '../atoms/Icon';
+import LoadErrorCard from '../atoms/LoadErrorCard';
 
 // 예약 명단 CSV 내보내기 (엑셀 한글 호환)
 function exportReservationsCsv(schedule: Schedule, reservations: Reservation[]) {
@@ -155,9 +156,19 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUse
   const askDelete = () => {
     setConfirming(true);
     // 문의 수도 같다 — 실패를 0 으로 적으면 '문의 0건이 삭제됩니다'가 거짓이 된다.
-    if (qnaCount === null) getComments({ scheduleId: schedule.id }).then((cs) => setQnaCount(cs.length)).catch(() => setQnaCount(-1));
-    // 예약 수를 아직 모르면(패널을 안 펼쳤거나 실패) 확인창을 위해 지금 읽는다.
-    if (reservations === null) loadRes();
+    // ⚠ 실패(-1)일 때도 다시 읽어야 한다. `=== null` 만 보면 확인창의 '다시 확인'이
+    //   실제로는 아무것도 다시 읽지 않는 장식 버튼이 된다.
+    if (qnaCount === null || qnaCount < 0) {
+      setQnaCount(null);
+      getComments({ scheduleId: schedule.id }).then((cs) => setQnaCount(cs.length)).catch(() => setQnaCount(-1));
+    }
+    // 확인창의 '예약자 N명'은 **삭제 대상 포스터(schedule.id)** 의 예약이어야 한다.
+    // 날짜 칩으로 같은 게임의 다른 날짜를 보던 중이었다면 화면의 수는 지워지지 않는 날짜의 것이다 —
+    // 9/10 '0명'을 보고 9/5 포스터를 지우면 9/5 예약자가 CASCADE 로 통째로 사라진다.
+    // 그래서 아직 모르거나(패널 미개봉·실패) 다른 날짜를 보고 있으면 schedule.id 로 다시 읽는다.
+    if (reservations === null || resSchedId !== schedule.id) {
+      setResSchedId(schedule.id); setReservations(null); loadRes(schedule.id);
+    }
   };
   const [open, setOpen] = useState(false);
   // 연결 장부 펼침 — 한 포스터에 여러 장부(멀티데이·사이드) 최신순
@@ -176,10 +187,14 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUse
   // ⚠ 실패를 [] 로 삼키면 '예약 없음'과 구분이 안 된다. 그 값이 아래 **되돌릴 수 없는 삭제 확인창**의
   //   '예약자 N명'을 만들기 때문에, 조회 실패가 곧 '0명이 삭제됩니다'라는 거짓 승인으로 이어졌다
   //   (2026-09-05 전수 조사). 실패는 값으로 남겨 확인창이 '모른다'고 말할 수 있게 한다.
-  const [resFailed, setResFailed] = useState(false);
+  //   ⚠ 실패에 [] 를 적으면 안 되는 이유가 하나 더 있다: 이 화면의 모든 '다시 읽기' 조건이
+  //   `reservations === null` 이라, [] 를 적는 순간 재시도 경로가 통째로 죽는다(확인창의 '다시 확인'도,
+  //   패널을 접었다 펴는 것도 아무것도 다시 읽지 않는 막다른 길이 됐다). 실패는 null 로 되돌린다.
+  const [resErr, setResErr] = useState<unknown>(null);
   const loadRes = (sid: string = resSchedId) => {
-    setResFailed(false);
-    getReservations(sid).then(setReservations).catch(() => { setReservations([]); setResFailed(true); });
+    setResErr(null);
+    getReservations(sid).then((rs) => { setResErr(null); setReservations(rs); })
+      .catch((e) => { setReservations(null); setResErr(e); });
   };
   const toggle = () => { const next = !open; setOpen(next); if (next && reservations === null) loadRes(); };
   // 예약 삭제 유예 큐 — RLS sr_insert 의 with check 가 user_id = auth.uid() 하나뿐이라
@@ -288,8 +303,8 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUse
                 예전엔 조회 실패가 그대로 '0명'이 되어, 실제 예약자가 있는 포스터를 '아무도 없다'고
                 안심시키며 지우게 했다(CASCADE 로 예약 영구 소멸). */}
             <li>· 예약자 <b className="text-ink-primary tabular-nums">
-              {resFailed || reservations === null ? '?' : `${reservations.length}명`}
-            </b>{resFailed || reservations === null ? ' — 확인하지 못했습니다' : '이 함께 영구 삭제됩니다 (손님에게 알림은 가지 않습니다)'}</li>
+              {resErr != null ? '?' : reservations === null ? '…' : `${reservations.length}명`}
+            </b>{resErr != null ? ' — 확인하지 못했습니다' : reservations === null ? ' — 확인하는 중입니다' : '이 함께 영구 삭제됩니다 (손님에게 알림은 가지 않습니다)'}</li>
             <li>· 포스터 문의(Q&amp;A) <b className="text-ink-primary tabular-nums">
               {qnaCount === null ? '…' : qnaCount < 0 ? '?' : `${qnaCount}건`}
             </b>{qnaCount != null && qnaCount < 0 ? ' — 확인하지 못했습니다' : '이 함께 영구 삭제됩니다'}</li>
@@ -299,8 +314,8 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUse
             <button type="button" onClick={() => setConfirming(false)}
               className="flex-1 rounded-input border border-border-default py-2 text-xs font-semibold text-ink-secondary active:opacity-80">취소</button>
             {/* 무엇이 지워지는지 모르는 채로는 지우지 못하게 한다 — 다시 시도할 길을 준다 */}
-            {resFailed || reservations === null || qnaCount === null || qnaCount < 0 ? (
-              <button type="button" onClick={() => { setQnaCount(null); askDelete(); }}
+            {resErr != null || reservations === null || qnaCount === null || qnaCount < 0 ? (
+              <button type="button" onClick={askDelete}
                 className="flex-1 rounded-input border border-border-default py-2 text-xs font-bold text-ink-secondary">
                 다시 확인
               </button>
@@ -383,7 +398,11 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUse
               })}
             </div>
           )}
-          {reservations === null ? (
+          {/* 실패 → 확인 중 → 빈 상태 → 목록. ⚠ 실패가 먼저다 — 뒤에 두면 조회 실패가
+              '아직 예약자가 없습니다'로 위장되고, 업주는 좌석을 준비하지 않는다. */}
+          {resErr != null ? (
+            <LoadErrorCard error={resErr} what="예약 명단" onRetry={() => loadRes()} compact />
+          ) : reservations === null ? (
             <p className="text-2xs text-ink-muted text-center py-2">불러오는 중…</p>
           ) : reservations.length === 0 ? (
             <p className="text-2xs text-ink-muted text-center py-2">아직 예약자가 없습니다.</p>

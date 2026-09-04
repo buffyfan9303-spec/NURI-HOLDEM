@@ -41,6 +41,7 @@ import { adminListRankVerifications, adminDecideRankVerification, signedVerifyUr
 import { getAllInquiries, answerInquiry, subscribeInquiries, type SupportInquiry } from '../../api/support';
 import { aiGenerate } from '../../api/ai';
 import Icon from '../atoms/Icon';
+import LoadErrorCard from '../atoms/LoadErrorCard';
 
 // 1·2·3위 색 — 이모지 👑🥈🥉는 OS마다 금/은/동 색조가 달라 순위 서열이 뒤집혀 보였다.
 // 아이콘 + 토큰 색으로 옮겨 서열을 앱이 통제한다(App.tsx 시상대와 같은 규약).
@@ -112,8 +113,9 @@ function BoostContactCard() {
 function VenueOwnerRequestsCard() {
   const toast = useToast();
   const [reqs, setReqs] = useState<OwnerRequest[]>([]);
+  const [err, setErr] = useState<unknown>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const load = () => { adminListVenueOwnerRequests().then(setReqs).catch(() => {}); };
+  const load = () => { adminListVenueOwnerRequests().then((r) => { setErr(null); setReqs(r); }).catch((e) => { setErr(e); setReqs([]); }); };
   useEffect(load, []);
   const decide = async (r: OwnerRequest, approve: boolean) => {
     setBusy(r.venueId + r.userId);
@@ -124,10 +126,13 @@ function VenueOwnerRequestsCard() {
     } catch (e) { toast.show(e instanceof Error ? e.message : '처리 실패', 'error'); }
     setBusy(null);
   };
-  if (reqs.length === 0) return null;
+  // 실패했을 때는 카드를 남긴다 — 조회 실패로 카드가 통째로 사라지면
+  // 운영자는 '이런 대기열이 있다'는 것조차 모른 채 업주 권한 요청을 묻어버린다.
+  if (err == null && reqs.length === 0) return null;
   return (
     <section className="rounded-card border border-accent-400/30 bg-accent-300/[0.04] p-3 space-y-2">
       <h3 className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-accent-300"><Icon name="briefcase" size={15} className="shrink-0" />공동 업주(사장님) 초대 승인 <span className="text-2xs font-normal text-ink-muted">· 승인 시 공동 업주 활성</span></h3>
+      {err != null ? <LoadErrorCard error={err} what="공동 업주 초대 승인 대기열" onRetry={load} compact /> : (
       <ul className="space-y-1.5">
         {reqs.map((r) => (
           <li key={r.venueId + r.userId} className="flex items-center gap-2 rounded-input border border-border-subtle bg-surface-low px-2.5 py-2">
@@ -140,6 +145,7 @@ function VenueOwnerRequestsCard() {
           </li>
         ))}
       </ul>
+      )}
     </section>
   );
 }
@@ -147,8 +153,9 @@ function VenueOwnerRequestsCard() {
 function VoucherQuotaAdminCard() {
   const toast = useToast();
   const [reqs, setReqs] = useState<AdminCreditRequest[]>([]);
+  const [err, setErr] = useState<unknown>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const load = () => { adminListVoucherCreditRequests().then(setReqs).catch(() => {}); };
+  const load = () => { adminListVoucherCreditRequests().then((r) => { setErr(null); setReqs(r); }).catch((e) => { setErr(e); setReqs([]); }); };
   useEffect(load, []);
   const decide = async (r: AdminCreditRequest, approve: boolean) => {
     setBusy(r.id);
@@ -159,12 +166,14 @@ function VoucherQuotaAdminCard() {
     } catch (e) { toast.show(e instanceof Error ? e.message : '처리 실패', 'error'); }
     setBusy(null);
   };
-  if (reqs.length === 0) return null;
+  // 실패 시에는 카드를 남긴다(위 공동 업주 카드와 같은 이유 — 사라지면 대기열의 존재 자체가 숨는다)
+  if (err == null && reqs.length === 0) return null;
   // W2-1 VCH-1(§12-A-2): 유상 충전 승인 경로 폐쇄 — 서버(admin_decide approve)도 raise.
   // 잔여 pending 은 반려(정리)만 가능. 한도 조정이 필요하면 admin_grant_voucher_quota(수동 레버).
   return (
     <section className="rounded-card border border-accent-400/30 bg-accent-300/[0.04] p-3 space-y-2">
       <h3 className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-accent-300"><Icon name="cart" size={15} className="shrink-0" />이용권 충전 요청 <span className="text-2xs font-normal text-danger-light">· 유상 충전 폐쇄(§12-A) · 반려만 가능</span></h3>
+      {err != null ? <LoadErrorCard error={err} what="이용권 충전 요청" onRetry={load} compact /> : (
       <ul className="space-y-1.5">
         {reqs.map((r) => (
           <li key={r.id} className="flex items-center gap-2 rounded-input border border-border-subtle bg-surface-low px-2.5 py-2">
@@ -176,6 +185,7 @@ function VoucherQuotaAdminCard() {
           </li>
         ))}
       </ul>
+      )}
     </section>
   );
 }
@@ -183,6 +193,7 @@ function VoucherQuotaAdminCard() {
 function RankVerifyAdminCard() {
   const toast = useToast();
   const [list, setList] = useState<RankVerification[]>([]);
+  const [err, setErr] = useState<unknown>(null);
   const [busy, setBusy] = useState<string | null>(null);
   // AI 검사 소견(신청 id별) — 참고용, 최종 판단은 운영자
   const [aiNotes, setAiNotes] = useState<Record<string, string>>({});
@@ -198,7 +209,7 @@ function RankVerifyAdminCard() {
     } catch (e) { toast.show(e instanceof Error ? e.message : 'AI 검사 실패', 'error'); }
     setAiBusy(null);
   };
-  const reload = () => { adminListRankVerifications().then(setList).catch(() => {}); };
+  const reload = () => { adminListRankVerifications().then((r) => { setErr(null); setList(r); }).catch((e) => { setErr(e); setList([]); }); };
   useEffect(() => { reload(); }, []);
   const view = async (path?: string | null) => {
     if (!path) return;
@@ -218,7 +229,9 @@ function RankVerifyAdminCard() {
   return (
     <section className="rounded-aura border card-aura p-3 space-y-2">
       <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="trophy" size={15} className="shrink-0" />순위 인증 승인 <span className="text-xs font-normal text-ink-muted">— <b className="text-ink-secondary">대회(토너먼트) 입상만 승인</b>합니다. 일반 펍 정기 게임 증빙은 <b className="text-ink-secondary">반려</b>하세요 · 승인/거절 시 신분증 즉시 삭제 · 승인분은 100만원당 1점으로 국내 순위 합산</span></p>
-      {list.length === 0 ? <p className="py-2 text-center text-2xs text-ink-muted">대기 중인 신청이 없습니다.</p> : (
+      {/* 실패를 '대기 중인 신청이 없습니다'로 단언하면 인증 요청이 조용히 묻힌다 — 실패 분기가 먼저 온다 */}
+      {err != null ? <LoadErrorCard error={err} what="순위 인증 신청" onRetry={reload} compact />
+        : list.length === 0 ? <p className="py-2 text-center text-2xs text-ink-muted">대기 중인 신청이 없습니다.</p> : (
         <ul className="space-y-1.5">
           {list.map((v) => (
             <li key={v.id} className="flex flex-wrap items-center gap-1.5 rounded-input border border-border-subtle bg-surface-high/40 p-2 text-2xs">
@@ -638,8 +651,9 @@ function ShoutsAdminCard() {
   // 환불 사유 입력 단계(회원 관리 패널과 같은 문법: 선택 → 사유 → 확정)
   const [refundId, setRefundId] = useState<string | null>(null);
   const [reason, setReason] = useState('');
+  const [err, setErr] = useState<unknown>(null);
   const reload = useCallback(() => {
-    adminListShouts(50).then(setRows).catch(() => setRows([]));
+    adminListShouts(50).then((r) => { setErr(null); setRows(r); }).catch((e) => { setErr(e); setRows([]); });
     adminShoutRefunds(50).then(setRefunds).catch(() => setRefunds({}));
   }, []);
   useEffect(() => { reload(); }, [reload]);
@@ -689,6 +703,8 @@ function ShoutsAdminCard() {
       <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="megaphone" size={15} className="shrink-0" />외치기 관리 <span className="text-xs font-normal text-ink-muted">활동점수로 구매한 커뮤니티 강조 메시지. 대기열 순서대로 20초씩 1회 방송</span></p>
       {rows === null ? (
         <ul className="space-y-1">{[0, 1, 2].map((i) => <li key={i} className="skeleton h-9 rounded-input" />)}</ul>
+      ) : err != null ? (
+        <LoadErrorCard error={err} what="외침 목록" onRetry={reload} compact />
       ) : rows.length === 0 ? (
         <p className="py-3 text-center text-xs text-ink-muted">아직 구매된 외침이 없습니다</p>
       ) : (
@@ -898,6 +914,7 @@ function NoticesAdminPanel({ onChanged }: { onChanged?: () => void }) {
 function SupportInquiriesPanel() {
   const toast = useToast();
   const [rows, setRows] = useState<SupportInquiry[] | null>(null);
+  const [err, setErr] = useState<unknown>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [aiBusy, setAiBusy] = useState<string | null>(null);
@@ -915,7 +932,7 @@ function SupportInquiriesPanel() {
     finally { setAiBusy(null); }
   };
 
-  const load = useCallback(() => { getAllInquiries().then(setRows).catch(() => setRows([])); }, []);
+  const load = useCallback(() => { getAllInquiries().then((r) => { setErr(null); setRows(r); }).catch((e) => { setErr(e); setRows([]); }); }, []);
   useEffect(() => { load(); return subscribeInquiries(load); }, [load]); // #14 신규 문의/답변 실시간 반영
 
   const send = async (id: string) => {
@@ -933,12 +950,14 @@ function SupportInquiriesPanel() {
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <p className="text-2xs text-ink-muted">미답변 <b className="text-amber-300">{openCount}</b>건</p>
+        {/* 조회가 실패했으면 '미답변 0건'은 거짓말이다 — 개수를 숨기고 아래 실패 카드가 말하게 둔다 */}
+        <p className="text-2xs text-ink-muted">미답변 <b className="text-amber-300">{err != null ? '—' : openCount}</b>건</p>
         <label className="ml-auto flex items-center gap-1.5 text-2xs text-ink-secondary">
           <input type="checkbox" checked={onlyOpen} onChange={(e) => setOnlyOpen(e.target.checked)} /> 미답변만
         </label>
       </div>
       {rows === null ? <p className="py-8 text-center text-2xs text-ink-muted">불러오는 중…</p>
+        : err != null ? <LoadErrorCard error={err} what="1:1 문의" onRetry={load} />
         : list.length === 0 ? <p className="rounded-aura border card-aura py-8 text-center text-2xs text-ink-muted">{onlyOpen ? '미답변 문의가 없습니다.' : '접수된 문의가 없습니다.'}</p>
         : <ul className="space-y-2.5">{list.map((q) => (
             <li key={q.id} className="rounded-aura border card-aura p-3">
@@ -1037,8 +1056,12 @@ function ErrorLogPanel() {
 function PendingGroupsPanel({ onChanged }: { onChanged: () => void }) {
   const toast = useToast();
   const [groups, setGroups] = useState<Venue[]>([]);
+  const [err, setErr] = useState<unknown>(null);
   const [loading, setLoading] = useState(true);
-  const reload = () => { setLoading(true); getPendingGroups().then(setGroups).catch(() => {}).finally(() => setLoading(false)); };
+  const reload = () => {
+    setLoading(true);
+    getPendingGroups().then((g) => { setErr(null); setGroups(g); }).catch((e) => { setErr(e); setGroups([]); }).finally(() => setLoading(false));
+  };
   useEffect(() => { reload(); }, []);
   const approve = async (g: Venue) => {
     try { await approveGroup(g.id); toast.show(`'${g.name}' 그룹을 승인했습니다`, 'success'); reload(); onChanged(); }
@@ -1052,8 +1075,11 @@ function PendingGroupsPanel({ onChanged }: { onChanged: () => void }) {
   if (loading) return <p className="py-3 text-center text-2xs text-ink-muted">불러오는 중…</p>;
   return (
     <section className="rounded-card border border-accent-400/30 bg-surface-low p-3 space-y-2">
-      <h3 className="text-sm font-bold text-accent-300">그룹 개설 승인 ({groups.length})</h3>
-      {groups.length === 0 ? (
+      {/* 실패했을 때 '(0)' 은 거짓말이라 개수를 감춘다 — 아래 실패 카드가 이유를 말한다 */}
+      <h3 className="text-sm font-bold text-accent-300">그룹 개설 승인{err == null ? ` (${groups.length})` : ''}</h3>
+      {err != null ? (
+        <LoadErrorCard error={err} what="그룹 개설 신청" onRetry={reload} compact />
+      ) : groups.length === 0 ? (
         <p className="text-2xs text-ink-muted py-1">대기 중인 그룹 개설 신청이 없습니다</p>
       ) : (
         <ul className="space-y-2">

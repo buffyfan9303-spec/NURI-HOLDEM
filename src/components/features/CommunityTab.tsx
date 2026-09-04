@@ -307,9 +307,13 @@ function CommunityTab({
       {/* 스크롤해도 항상 보이도록 헤더+메인탭 바로 아래에 고정.
           data-community-secbar: 서브섹션 View Transition(root 스냅샷)에서 제외 — 헤더·하단 탭바와 같은
           '상시 크롬'이라 전환 블러/슬라이드에 딸려 움직이면 안 된다(index.css VT 예외 블록 참조) */}
-      <div data-community-secbar="" className="sticky top-[calc(theme(spacing.header-h)+env(safe-area-inset-top)-0.5rem)] lg:top-[calc(theme(spacing.header-h)+theme(spacing.tab-h)-0.5rem)] z-30 -mx-page-x px-page-x bg-surface-base border-b border-border-subtle pt-2.5 pb-2 lg:pt-2.5 before:pointer-events-none before:absolute before:inset-x-0 before:-top-4 before:h-4 before:bg-surface-base">
-        <div ref={secBarRef} className="relative flex items-center gap-1 overflow-x-auto scrollbar-none rounded-input bg-surface-high px-0.5 py-1.5">
+      <div data-community-secbar="" className="sticky top-[calc(theme(spacing.header-h)+env(safe-area-inset-top)-0.5rem)] lg:top-[calc(theme(spacing.header-h)+theme(spacing.tab-h)-0.5rem)] z-30 -mx-page-x px-page-x bg-surface-base border-b border-border-subtle pt-2 pb-2 lg:pt-2 before:pointer-events-none before:absolute before:inset-x-0 before:-top-4 before:h-4 before:bg-surface-base">
+        <div ref={secBarRef} className="relative flex items-center gap-1 overflow-x-auto scrollbar-none rounded-input bg-surface-high p-0.5">
           {/* 활성 탭 뒤 글로우(오너 지시 2026-09-05) — pill-active = --grad-cta 채움 + 18px 블룸.
+                ⚠ 블룸을 다 보이려고 세로 여백을 키우지 않는다(2026-09-05 실측): overflow 는 **패딩 박스**에서
+                  자르므로 여백 4.25px 이면 18px 중 4.25px 만 더 보인다 — 원래 2px 과 눈에 띄는 차이가 없는데
+                  트레이만 두꺼워져 '테두리 공백이 크다'는 지적을 받았다. 채움(--grad-cta)이 활성 표시의 본체이고
+                  블룸은 그 가장자리를 부드럽게 하는 역할이라, 잘려도 목적은 달성된다.
                 하단 메인 탭바와 같은 문법이고, 활성 탭은 정의상 1개라 '글로우는 화면당 1곳' 규칙과 충돌하지 않는다.
                 (ring-aura-glow 는 쓰지 않는다 — 카드 후광이고 이 화면엔 이미 유료광고 카드의 강조가 있다) */}
             <SlidingPill containerRef={secBarRef} activeKey={shownSec} className="rounded-[6px] pill-active" />
