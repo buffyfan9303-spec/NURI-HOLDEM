@@ -374,7 +374,9 @@ export default function GroupPage({ group, open, onClose }: { group: Venue | nul
 function GroupChat({ groupId, canManage }: { groupId: string; canManage: boolean }) {
   const { user } = useAuth();
   const toast = useToast();
-  const [messages, setMessages] = useState<GroupMessage[]>([]);
+  // null = 아직 안 불러옴. 같은 파일 GroupRanking 이 이미 이 문법을 쓴다 — 채팅·게시판만 빠져 있어
+  // 대화가 쌓인 그룹에서도 열 때마다 '첫 메시지를 남겨보세요'가 먼저 떴다(2026-09-05 전수 조사).
+  const [messages, setMessages] = useState<GroupMessage[] | null>(null);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
@@ -382,10 +384,10 @@ function GroupChat({ groupId, canManage }: { groupId: string; canManage: boolean
   useEffect(() => {
     let active = true;
     getGroupMessages(groupId, 80).then((m) => { if (active) setMessages(m.reverse()); }).catch(() => {});
-    const unsub = subscribeGroupMessages(groupId, (m) => setMessages((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m])));
+    const unsub = subscribeGroupMessages(groupId, (m) => setMessages((prev) => ((prev ?? []).some((x) => x.id === m.id) ? prev : [...(prev ?? []), m])));
     return () => { active = false; unsub(); };
   }, [groupId]);
-  useEffect(() => { endRef.current?.scrollIntoView({ block: 'end' }); }, [messages.length]);
+  useEffect(() => { endRef.current?.scrollIntoView({ block: 'end' }); }, [messages?.length]);
 
   const send = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -394,7 +396,7 @@ function GroupChat({ groupId, canManage }: { groupId: string; canManage: boolean
     setSending(true);
     try {
       const m = await sendGroupMessage(groupId, { userName: user.nickname ?? user.name, userColor: user.avatarColor, content: body });
-      setMessages((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]));
+      setMessages((prev) => ((prev ?? []).some((x) => x.id === m.id) ? prev : [...(prev ?? []), m]));
       setDraft('');
     } catch (err) { toast.show(err instanceof Error ? err.message : '전송 실패', 'error'); }
     finally { setSending(false); }
@@ -403,7 +405,7 @@ function GroupChat({ groupId, canManage }: { groupId: string; canManage: boolean
   return (
     <div className="space-y-2">
       <ul className="space-y-1.5 max-h-[55vh] overflow-y-auto">
-        {messages.length === 0 ? <p className="py-8 text-center text-2xs text-ink-muted">첫 메시지를 남겨보세요</p> : messages.map((m) => (
+        {messages === null ? <p className="py-8 text-center text-2xs text-ink-muted">불러오는 중…</p> : messages.length === 0 ? <p className="py-8 text-center text-2xs text-ink-muted">첫 메시지를 남겨보세요</p> : messages.map((m) => (
           <li key={m.id} className="flex items-start gap-2">
             <Avatar name={m.userName} color={m.userColor} size={24} className="mt-0.5" />
             <div className="flex-1 min-w-0">
@@ -411,7 +413,7 @@ function GroupChat({ groupId, canManage }: { groupId: string; canManage: boolean
                 <span className="font-semibold text-ink-primary truncate">{m.userName}</span>
                 <span className="text-ink-muted ml-auto shrink-0">{relativeTime(m.createdAt)}</span>
                 {(canManage || m.userId === user?.id) && (
-                  <button type="button" onClick={() => deleteGroupMessage(m.id).then(() => setMessages((p) => p.filter((x) => x.id !== m.id)))} aria-label="삭제" className="shrink-0 text-ink-muted hover:text-danger-light">×</button>
+                  <button type="button" onClick={() => deleteGroupMessage(m.id).then(() => setMessages((p) => (p ?? []).filter((x) => x.id !== m.id)))} aria-label="삭제" className="shrink-0 text-ink-muted hover:text-danger-light">×</button>
                 )}
               </div>
               <p className="text-xs text-ink-primary leading-snug mt-0.5 break-words whitespace-pre-wrap">{m.content}</p>
@@ -432,7 +434,8 @@ function GroupChat({ groupId, canManage }: { groupId: string; canManage: boolean
 function GroupBoard({ groupId, canManage }: { groupId: string; canManage: boolean }) {
   const { user } = useAuth();
   const toast = useToast();
-  const [posts, setPosts] = useState<GroupPost[]>([]);
+  // 채팅과 같은 이유로 미로드를 가른다
+  const [posts, setPosts] = useState<GroupPost[] | null>(null);
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -469,7 +472,7 @@ function GroupBoard({ groupId, canManage }: { groupId: string; canManage: boolea
           <div className="flex justify-end"><button type="submit" disabled={sending || !content.trim()} className="btn-primary px-4 disabled:opacity-60">등록</button></div>
         </form>
       )}
-      {posts.length === 0 ? <p className="py-8 text-center text-2xs text-ink-muted">첫 글을 남겨보세요</p> : (
+      {posts === null ? <p className="py-8 text-center text-2xs text-ink-muted">불러오는 중…</p> : posts.length === 0 ? <p className="py-8 text-center text-2xs text-ink-muted">첫 글을 남겨보세요</p> : (
         <ul className="space-y-2">
           {posts.map((p) => (
             <li key={p.id} className="rounded-card border border-border-subtle bg-surface-low p-3">

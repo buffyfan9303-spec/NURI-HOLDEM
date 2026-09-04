@@ -973,7 +973,11 @@ function BuyinRequestBox({ venueId, eventDate }: { venueId: string; eventDate: s
 function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regInfo }: { scheduleId: string; ownerId?: string | null; venueId?: string | null; date: string; startTime: string; sched: Schedule; regInfo?: RegInfo }) {
   const { user } = useAuth();
   const toast = useToast();
-  const [mine, setMine] = useState<Reservation | null>(null);
+  // undefined = 아직 조회 안 함 · null = 조회했고 예약 없음.
+  // 둘을 null 하나로 겸하면, 이미 예약한 사람에게 매번 '예약하기' 를 먼저 내밀고(모달은 열 때마다
+  // 새로 마운트된다) 누르면 '이미 등록된 닉네임입니다' 에러가 난다 — 사용자 잘못이 아닌데
+  // 사용자 탓으로 돌리는 형태다(2026-09-05 전수 조사).
+  const [mine, setMine] = useState<Reservation | null | undefined>(undefined);
   // 컴팩트 재구성(오너 지시 2026-08-27) — 예약 UI 는 기본 접힘. 한 줄 요약 + '더보기'로 펼친다.
   // CTA('예약하기')는 접힘 행 우측에 항상 노출 — 누르면 펼쳐져 닉네임 입력부터 이어진다.
   const [expanded, setExpanded] = useState(false);
@@ -1065,10 +1069,10 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
           className="flex min-w-0 flex-1 items-center gap-2 text-left">
           <span className="shrink-0 text-sm font-bold text-accent-300">참가 예약</span>
           <span className="min-w-0 flex-1 truncate text-2xs text-ink-muted">
-            {mine ? `예약자: ${mine.displayName}` : isManager ? `예약 ${resList.length}명` : '미리 자리 잡아두기'}
+            {mine === undefined ? ' ' : mine ? `예약자: ${mine.displayName}` : isManager ? `예약 ${resList.length}명` : '미리 자리 잡아두기'}
           </span>
           {mine && <span className="shrink-0 text-2xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-badge">예약 완료</span>}
-          {!mine && ended && <span className="shrink-0 text-2xs font-bold text-ink-muted bg-surface-high border border-border-default px-2 py-0.5 rounded-badge">종료</span>}
+          {mine === null && ended && <span className="shrink-0 text-2xs font-bold text-ink-muted bg-surface-high border border-border-default px-2 py-0.5 rounded-badge">종료</span>}
           <span className="flex shrink-0 items-center gap-0.5 text-2xs font-bold text-ink-muted">
             {expanded ? '접기' : '더보기'}
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
@@ -1076,7 +1080,7 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
           </span>
         </button>
         {/* 예약 CTA 는 접혀 있어도 숨기지 않는다 — 누르면 예약 UI(닉네임 입력)가 펼쳐진다 */}
-        {!mine && !ended && !expanded && (
+        {mine === null && !ended && !expanded && (
           <button type="button" onClick={() => setExpanded(true)}
             className="btn-primary shrink-0 px-3 py-1.5 text-xs">
             예약하기
@@ -1093,7 +1097,7 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
           예약엔 <b className="text-ink-secondary">로그인·본인인증</b>이 필요해요 — 노쇼 방지를 위한 자리 보장 장치예요.
         </p>
       )}
-      {!mine && !ended && (
+      {mine === null && !ended && (
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="닉네임 또는 실명" maxLength={30} className="input w-full text-sm" />
       )}
       {/* 예약 성공 패널 — 완료 순간에 다음 행동을 제안(캘린더 등록·1시간 전 알림). 서버
@@ -1129,7 +1133,7 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
             정당화되지 않는다. 그래서 '무엇을·누구에게·왜·언제까지'를 CTA 바로 위에서 전부 밝히고,
             그 상태에서 누르는 예약을 동의의 의사표시로 본다(처리방침 제9조와 항목이 일치해야 한다).
           접지 않는 이유: 접힌 고지는 고지가 아니다. 여기만은 '더보기' 뒤로 숨기지 않는다. */}
-      {!mine && !ended && (
+      {mine === null && !ended && (
         <div className="rounded-input border border-border-default bg-surface-base/50 px-2.5 py-2">
           <p className="flex items-start gap-1.5 text-2xs font-bold leading-relaxed text-ink-secondary">
             <Icon name="lock" size={12} className="mt-0.5 shrink-0" />
@@ -1150,8 +1154,13 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
         </div>
       )}
 
-      {/* 취소는 종료 후에도 열어둔다 — 막는 건 '새 예약'이지 이미 남긴 기록의 정리가 아니다 */}
-      {mine ? (
+      {/* 취소는 종료 후에도 열어둔다 — 막는 건 '새 예약'이지 이미 남긴 기록의 정리가 아니다.
+          ⚠ 미조회(undefined) 구간에는 **같은 높이의 자리만 예약**한다. 예전엔 곧바로 예약하기 버튼을
+             그려서, 이미 예약한 사람이 그걸 누르고 '이미 등록된 닉네임입니다' 에러를 맞았다.
+             CLAUDE.md — CLS 는 진입 애니가 아니라 공간 예약으로 해결한다. */}
+      {mine === undefined ? (
+        <div className="skeleton h-[46px] w-full rounded-input" aria-busy="true" />
+      ) : mine ? (
         <HoldToConfirmButton onConfirm={act} disabled={busy} holdingLabel="취소하는 중…"
           className="w-full py-3 rounded-input text-sm font-bold transition-colors disabled:opacity-60 bg-surface-high text-danger-light border border-danger/40">
           꾹 눌러 예약 취소

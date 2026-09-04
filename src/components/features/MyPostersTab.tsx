@@ -154,7 +154,10 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUse
   const [qnaCount, setQnaCount] = useState<number | null>(null);
   const askDelete = () => {
     setConfirming(true);
-    if (qnaCount === null) getComments({ scheduleId: schedule.id }).then((cs) => setQnaCount(cs.length)).catch(() => setQnaCount(0));
+    // 문의 수도 같다 — 실패를 0 으로 적으면 '문의 0건이 삭제됩니다'가 거짓이 된다.
+    if (qnaCount === null) getComments({ scheduleId: schedule.id }).then((cs) => setQnaCount(cs.length)).catch(() => setQnaCount(-1));
+    // 예약 수를 아직 모르면(패널을 안 펼쳤거나 실패) 확인창을 위해 지금 읽는다.
+    if (reservations === null) loadRes();
   };
   const [open, setOpen] = useState(false);
   // 연결 장부 펼침 — 한 포스터에 여러 장부(멀티데이·사이드) 최신순
@@ -170,7 +173,14 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUse
   const [reservations, setReservations] = useState<Reservation[] | null>(null);
   const d = new Date(schedule.date);
 
-  const loadRes = (sid: string = resSchedId) => { getReservations(sid).then(setReservations).catch(() => setReservations([])); };
+  // ⚠ 실패를 [] 로 삼키면 '예약 없음'과 구분이 안 된다. 그 값이 아래 **되돌릴 수 없는 삭제 확인창**의
+  //   '예약자 N명'을 만들기 때문에, 조회 실패가 곧 '0명이 삭제됩니다'라는 거짓 승인으로 이어졌다
+  //   (2026-09-05 전수 조사). 실패는 값으로 남겨 확인창이 '모른다'고 말할 수 있게 한다.
+  const [resFailed, setResFailed] = useState(false);
+  const loadRes = (sid: string = resSchedId) => {
+    setResFailed(false);
+    getReservations(sid).then(setReservations).catch(() => { setReservations([]); setResFailed(true); });
+  };
   const toggle = () => { const next = !open; setOpen(next); if (next && reservations === null) loadRes(); };
   // 예약 삭제 유예 큐 — RLS sr_insert 의 with check 가 user_id = auth.uid() 하나뿐이라
   // 업주도 운영자도 손님 예약을 대신 INSERT 할 수 없다(= 지우면 앱으로는 절대 복구 불가).
@@ -274,17 +284,32 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUse
         <div className="border-t border-danger/30 bg-danger/10 px-3 py-2.5 space-y-2">
           <p className="flex items-center gap-1 text-xs font-bold text-danger-light"><Icon name="alert" size={13} className="shrink-0" />‘{schedule.title}’ 게임을 삭제합니다 — 되돌릴 수 없습니다</p>
           <ul className="space-y-0.5 text-2xs leading-relaxed text-ink-secondary">
-            <li>· 예약자 <b className="text-ink-primary tabular-nums">{reservations?.length ?? resCount ?? 0}명</b>이 함께 영구 삭제됩니다 (손님에게 알림은 가지 않습니다)</li>
-            <li>· 포스터 문의(Q&amp;A) <b className="text-ink-primary tabular-nums">{qnaCount === null ? '…' : `${qnaCount}건`}</b>이 함께 영구 삭제됩니다</li>
+            {/* 되돌릴 수 없는 행위의 확인창은 **모르는 숫자를 말하지 않는다**.
+                예전엔 조회 실패가 그대로 '0명'이 되어, 실제 예약자가 있는 포스터를 '아무도 없다'고
+                안심시키며 지우게 했다(CASCADE 로 예약 영구 소멸). */}
+            <li>· 예약자 <b className="text-ink-primary tabular-nums">
+              {resFailed || reservations === null ? '?' : `${reservations.length}명`}
+            </b>{resFailed || reservations === null ? ' — 확인하지 못했습니다' : '이 함께 영구 삭제됩니다 (손님에게 알림은 가지 않습니다)'}</li>
+            <li>· 포스터 문의(Q&amp;A) <b className="text-ink-primary tabular-nums">
+              {qnaCount === null ? '…' : qnaCount < 0 ? '?' : `${qnaCount}건`}
+            </b>{qnaCount != null && qnaCount < 0 ? ' — 확인하지 못했습니다' : '이 함께 영구 삭제됩니다'}</li>
             <li>{ledgerDate ? '· 연결된 장부와 매출은 지워지지 않습니다. 이 게임과의 연결만 끊깁니다' : '· 연결된 장부는 없습니다'}</li>
           </ul>
           <div className="flex items-center gap-2">
             <button type="button" onClick={() => setConfirming(false)}
               className="flex-1 rounded-input border border-border-default py-2 text-xs font-semibold text-ink-secondary active:opacity-80">취소</button>
-            <HoldToConfirmButton onConfirm={() => { onDelete(); setConfirming(false); }} holdingLabel="삭제하는 중…"
-              className="flex-1 rounded-input border border-danger/50 bg-danger/20 py-2 text-xs font-bold text-danger-light">
-              꾹 눌러 삭제
-            </HoldToConfirmButton>
+            {/* 무엇이 지워지는지 모르는 채로는 지우지 못하게 한다 — 다시 시도할 길을 준다 */}
+            {resFailed || reservations === null || qnaCount === null || qnaCount < 0 ? (
+              <button type="button" onClick={() => { setQnaCount(null); askDelete(); }}
+                className="flex-1 rounded-input border border-border-default py-2 text-xs font-bold text-ink-secondary">
+                다시 확인
+              </button>
+            ) : (
+              <HoldToConfirmButton onConfirm={() => { onDelete(); setConfirming(false); }} holdingLabel="삭제하는 중…"
+                className="flex-1 rounded-input border border-danger/50 bg-danger/20 py-2 text-xs font-bold text-danger-light">
+                꾹 눌러 삭제
+              </HoldToConfirmButton>
+            )}
           </div>
         </div>
       )}

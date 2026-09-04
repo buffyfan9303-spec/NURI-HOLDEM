@@ -103,7 +103,10 @@ export default function PostDetailModal({
     onLike(post.id);
     setHeartKey((k) => k + 1);
   };
-  const [replies, setReplies] = useState<Comment[]>([]);
+  // null = 아직 안 불러옴 · [] = 조회했고 댓글 없음.
+  // 하나로 겸하면 글을 열 때마다(그리고 PC 2단에서 글을 갈아탈 때마다) '댓글 0 · 첫 댓글을
+  // 남겨보세요'가 먼저 뜨고, 목록이 도착하며 아래가 밀린다(2026-09-05 전수 조사).
+  const [replies, setReplies] = useState<Comment[] | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
   const toast = useToast();
   const [myReaction, setMyReaction] = useState<ReactionType | null>(null);
@@ -141,7 +144,7 @@ export default function PostDetailModal({
     getMyReaction(post.id).then((r) => { if (active) setMyReaction(r); }).catch(() => {});
     incrementPostView(post.id).catch(() => {});
     // 댓글 실제 조회 — 이전에는 로컬 state에만 쌓여 새로고침 시 사라졌다(저장 안 됨).
-    setReplies([]);
+    setReplies(null);
     getComments({ postId: post.id })
       .then((cs) => {
         if (!active) return;
@@ -288,12 +291,12 @@ export default function PostDetailModal({
       userId: user.id, userName: user.name, userRole: user.role,
       isOwner: user.role === 'venue_owner', content,
     })
-      .then((saved) => setReplies((prev) => [saved, ...prev]))
+      .then((saved) => setReplies((prev) => [saved, ...(prev ?? [])]))
       .catch((err) => toast.show(err instanceof Error ? err.message : '댓글 등록에 실패했습니다', 'error'));
   };
   const handleDeleteComment = (commentId: string) => {
     deleteComment(commentId) // 권한은 RLS(본인·관리자)가 강제
-      .then(() => setReplies((prev) => prev.filter((c) => c.id !== commentId && c.parentId !== commentId)))
+      .then(() => setReplies((prev) => (prev ?? []).filter((c) => c.id !== commentId && c.parentId !== commentId)))
       .catch((err) => toast.show(err instanceof Error ? err.message : '삭제에 실패했습니다', 'error'));
   };
 
@@ -626,13 +629,14 @@ export default function PostDetailModal({
               post.commentCount 는 DB 트리거가 같은 값을 넣어주는 컬럼이라 더하면 2배가 된다.
               (트리거 도입 전에는 항상 0이라 0+n 으로 우연히 맞아 보였을 뿐이다.
                App.tsx 가 posts 갱신마다 openPost 를 덮어쓰므로 리얼타임 갱신 때 반드시 드러난다.) */}
-          <h3 className="text-sm font-bold text-ink-primary">댓글 <span className="tabular-nums text-ink-secondary">{replies.length}</span></h3>
+          <h3 className="text-sm font-bold text-ink-primary">댓글 <span className="tabular-nums text-ink-secondary">{replies?.length ?? ''}</span></h3>
           <CommentThread
-            comments={replies}
+            comments={replies ?? []}
             onSubmit={handleSubmitComment}
             onDelete={handleDeleteComment}
             moderator={user?.role === 'admin'}
-            emptyText="첫 댓글을 남겨보세요"
+            /* 미로드 구간에는 빈 상태 문구를 내지 않는다 — '없다'는 아직 사실이 아니다 */
+            emptyText={replies === null ? ' ' : '첫 댓글을 남겨보세요'}
             /* 응원은 커뮤니티 글 댓글에만 배선한다 — 요강 Q&A·매장 댓글은 이 props 를 안 받아
                종전 화면 그대로다(서버 send_cheer 도 post_id 없는 댓글은 거절한다). */
             cheers={cCheers}

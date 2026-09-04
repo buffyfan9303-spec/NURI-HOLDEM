@@ -31,7 +31,8 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
   const canIssue = isAdmin || (user?.role === 'venue_owner' && user?.venueId === venueId);
 
   const [list, setList] = useState<Voucher[]>([]);
-  const [loading, setLoading] = useState(false);
+  // "아직 내역이 없습니다"를 먼저 보여주면 업주가 발급이 실패한 줄 알고 **다시 발급**한다
+  const [loading, setLoading] = useState(true);
   // 이 매장의 이름 — 이미 불러온 이용권 행의 조인 값에서 읽는다(추가 조회 0). 첫 발급 전에는 null 이라 미리보기를 내린다.
   const venueName = list.find((v) => v.venueName)?.venueName ?? null;
   const [title, setTitle] = useState('매장이용권');

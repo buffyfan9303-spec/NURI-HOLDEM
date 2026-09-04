@@ -69,7 +69,8 @@ export default function NotificationPanel({
   const [mode, setMode] = useState<'messages' | 'notifs'>('messages');
   const [msgView, setMsgView] = useState<'list' | 'thread' | 'compose'>('list');
   const [threads, setThreads] = useState<MessageThread[]>([]);
-  const [threadsLoading, setThreadsLoading] = useState(false);
+  // 열자마자 "주고받은 쪽지가 없습니다"가 스치던 것 — 미로드를 로딩으로 시작해 가른다
+  const [threadsLoading, setThreadsLoading] = useState(true);
   const [activeOther, setActiveOther] = useState<{ id: string; name: string; color: string | null } | null>(null);
   const [msgs, setMsgs] = useState<DirectMessage[]>([]);
   const [msgsLoading, setMsgsLoading] = useState(false);

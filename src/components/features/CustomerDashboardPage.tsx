@@ -85,7 +85,9 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
   const [percentile, setPercentile] = useState<number | null>(null); // 전국 상위 N%(prizePoints 기준)
   const [refStats, setRefStats] = useState<ReferralStats>({ invited: 0, rewarded: 0 }); // 친구 초대 현황
   const [championships, setChampionships] = useState(0); // 시즌 우승 횟수(영구 배지)
-  const [loading, setLoading] = useState(false);
+  // 첫 프레임에 loading 이 false 면 방문·예약·입상 세 섹션이 동시에 "아직 없습니다"로 떨어진다
+  // — reload() 안의 setLoading(true) 는 useEffect 라 페인트 뒤에 돈다(2026-09-05 전수 조사).
+  const [loading, setLoading] = useState(true);
   const [badgeStats, setBadgeStats] = useState<BadgeStats | null>(null); // 내 업적(랭킹 탭에서 이전)
   const [achOpen, setAchOpen] = useState(false); // 내 업적 접기/펼치기 — 기본 닫힘
   const [myPosts, setMyPosts] = useState<CommunityPost[]>([]); // 내가 쓴 글 — 그동안 찾을 화면 자체가 없었다
