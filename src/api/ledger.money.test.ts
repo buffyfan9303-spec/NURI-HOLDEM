@@ -6,7 +6,7 @@
 //
 // 실행: npx vitest run src/api/ledger.money.test.ts
 import { describe, it, expect } from 'vitest';
-import { buyinFinance, discountSummary, isBuyinExcluded, cardUnit, wonToMan, type LedgerBuyin } from './ledger';
+import { buyinFinance, discountSummary, isBuyinExcluded, nonSplitSnapshot, SNAPSHOT_SINCE, cardUnit, wonToMan, type LedgerBuyin } from './ledger';
 
 // 10만원 게임 · 카드 11만원(수수료 반영) · 할인 이벤트 2종(5만/3만)
 const SESSION = {
@@ -368,5 +368,70 @@ describe('할인 집계 — 덜 받은 현금과 엔트리 차감을 가른다',
       buyin({ playerName: 'B', paymentMethod: 'ticket', discountIndex: 1 }),
     ], SESSION);
     expect(d).toMatchObject({ count: 2, total: 100_000, cashTotal: 50_000, entryLoss: 1 });
+  });
+});
+
+// ── 정산 대차 항등식 (오너 2026-09-05 "장부가 핵심인데 논리에 안 맞는다") ─────
+//   정가(gross) − 할인(disc) = 순액(value) = tender 합 (현금+카드+이체+티켓+지원+미수)
+// 행마다 성립해야 합계표가 맞는다. 결제수단·할인·분납 전 조합을 돈다.
+describe('정산 대차 — gross − disc === value === Σtender', () => {
+  const sumT = (f: ReturnType<typeof buyinFinance>) =>
+    f.tender.cash + f.tender.card + f.tender.transfer + f.tender.ticket + f.tender.support + f.tender.unpaid;
+  const cases: [string, LedgerBuyin][] = [
+    ['현금', buyin({ paymentMethod: 'cash', cashAmount: 100_000 })],
+    ['현금+할인5만', buyin({ paymentMethod: 'cash', discountIndex: 1, cashAmount: 50_000 })],
+    ['카드(11만)', buyin({ paymentMethod: 'card', cardAmount: 110_000 })],
+    ['카드+할인5만', buyin({ paymentMethod: 'card', discountIndex: 1, cardAmount: 60_000 })],
+    ['이체 미수', buyin({ paymentMethod: 'transfer', isUnpaid: true, transferAmount: 100_000 })],
+    ['티켓', buyin({ paymentMethod: 'ticket' })],
+    ['티켓+할인5만', buyin({ paymentMethod: 'ticket', discountIndex: 1 })],
+    ['가게지원', buyin({ paymentMethod: 'support' })],
+    ['가게지원+할인5만', buyin({ paymentMethod: 'support', discountIndex: 1 })],
+    ['분납 카드4만+티켓1', buyin({ isSplit: true, cardAmount: 40_000, ticketCount: 1 })],
+    ['분납 현금5만+할인5만', buyin({ isSplit: true, cashAmount: 50_000, discountIndex: 1 })],
+    ['분납 현금3만+미수7만', buyin({ isSplit: true, cashAmount: 30_000, unpaidAmount: 70_000 })],
+  ];
+  for (const [name, b] of cases) {
+    it(`${name}: 항등식 성립`, () => {
+      const f = buyinFinance(b, SESSION);
+      expect(f.gross - f.disc).toBe(f.value);
+      expect(sumT(f)).toBe(f.value);
+    });
+  }
+
+  it('티켓 1장 = 단가 10만이 tender.ticket 에 돈으로 선다 (매출 paid 는 0)', () => {
+    const f = buyinFinance(buyin({ paymentMethod: 'ticket' }), SESSION);
+    expect(f.tender.ticket).toBe(100_000);
+    expect(f.gross).toBe(100_000);
+    expect(f.paid).toBe(0);
+  });
+
+  it('할인 5만 현금: 정가 10만 − 할인 5만 = 순액 5만 = 현금 5만', () => {
+    const f = buyinFinance(buyin({ paymentMethod: 'cash', discountIndex: 1, cashAmount: 50_000 }), SESSION);
+    expect(f).toMatchObject({ gross: 100_000, disc: 50_000, value: 50_000 });
+    expect(f.tender.cash).toBe(50_000);
+  });
+});
+
+// ── 스냅샷 센티널 — 금액이 아니라 기록 시각 ─────────────────────────────────
+describe('스냅샷 센티널(SNAPSHOT_SINCE) — 100% 할인 0원이 되살아나지 않는다', () => {
+  it('전환 이후 0원 스냅샷(무료 이벤트)은 할인 프리셋을 지워도 매출 0 이다', () => {
+    const free = { ...SESSION, discounts: [{ label: '무료', amount: 100_000 }] };
+    const snap = nonSplitSnapshot('cash', 1, free);          // cash_amount 0 저장
+    expect(snap.cash_amount).toBe(0);
+    const b = buyin({ paymentMethod: 'cash', discountIndex: 1, cashAmount: snap.cash_amount,
+                      buyinAt: '2026-09-05T12:00:00Z' });
+    const later = { ...SESSION, discounts: [{ label: '무료', amount: 0 }] }; // 프리셋 비움
+    expect(buyinFinance(b, later).paid).toBe(0);              // 예전엔 100_000 으로 부활
+  });
+
+  it('전환 이전(레거시) 0원 행만 세션 참조로 재계산한다', () => {
+    const b = buyin({ paymentMethod: 'cash', cashAmount: 0, buyinAt: '2026-07-01T12:00:00Z' });
+    expect(buyinFinance(b, SESSION).paid).toBe(100_000);      // 레거시 하위호환
+  });
+
+  it('SNAPSHOT_SINCE 이후 buyinAt 이면 저장값 0 이 그대로 0 이다', () => {
+    const b = buyin({ paymentMethod: 'cash', cashAmount: 0, buyinAt: `${SNAPSHOT_SINCE}T00:00:00Z` });
+    expect(buyinFinance(b, SESSION).paid).toBe(0);
   });
 });

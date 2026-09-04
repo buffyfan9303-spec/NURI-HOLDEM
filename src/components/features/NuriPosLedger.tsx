@@ -12,7 +12,7 @@ import Icon from '../atoms/Icon';
 import { deleteLedgerPlayerAtomic, CELL_TAKEN, cancelMyRecentBuyin,
   type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type LedgerSessionListItem, type DiscountPreset, type EarlyType, type LedgerGame, type LedgerCloseSnapshot, type LedgerLossSummary,
   visitorLabel, wonToMan, WON_PER_MAN, buyinFinance, isBuyinExcluded, earlyTypeOf, setBuyinEarly, MAIN_GAME_SEQ, ledgerLossSummary,
-  cardUnit, discountAmountOf, autoDiscountIndex, discountSummary, type DiscountSummary,
+  cardUnit, discountAmountOf, autoDiscountIndex, discountSummary, type DiscountSummary, ZERO_TENDER, type Tender,
   getLedgerSession, getLedgerGames, saveLedgerSession, openLedgerSession, closeLedgerSession, reopenLedgerSession, deleteLedgerSession,
   setRegistrationClosed, getLastLedgerSettings, getLedgerSessionList, getLedgerAccessUserIds, notifyLedgerOpen,
   getLedgerBuyins, upsertBuyin, upsertBuyinSplit, cancelBuyin,
@@ -523,7 +523,9 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
 
   const stats = useMemo(() => {
     // 전체(기록)와 제외 적용(정산 기준)을 한 번에 센다 — 목록을 두 번 훑지 않는다.
-    const mk = () => ({ totalBuyins: 0, entries: 0, ticket: 0, ticketUnpaid: 0, revenue: 0, unpaid: 0, support: 0, value: 0 });
+    const mk = () => ({ totalBuyins: 0, entries: 0, ticket: 0, ticketUnpaid: 0, revenue: 0, unpaid: 0, support: 0, value: 0,
+                        // 대차표: 정가 − 할인 = 순액(value) = tender 합. 행마다 성립하므로 합계도 성립한다.
+                        gross: 0, disc: 0, tender: { ...ZERO_TENDER } });
     const all = mk(), kept = mk();
     for (const b of buyins) {
       const f = buyinFinance(b, session);
@@ -531,6 +533,9 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       for (const t of targets) {
         t.totalBuyins++; t.entries += f.entry; t.revenue += f.paid; t.unpaid += f.unpaid;
         t.ticket += f.ticketPaid; t.ticketUnpaid += f.ticketUnpaid; t.support += f.support; t.value += f.value;
+        t.gross += f.gross; t.disc += f.disc;
+        t.tender.cash += f.tender.cash; t.tender.card += f.tender.card; t.tender.transfer += f.tender.transfer;
+        t.tender.ticket += f.tender.ticket; t.tender.support += f.tender.support; t.tender.unpaid += f.tender.unpaid;
       }
     }
     // #20: 할인 엔트리 수 · 금일 총 할인액 — 마감정산/요약바가 같은 계산(discountSummary)을 쓴다.
@@ -1317,7 +1322,8 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
           <div className="grid grid-cols-4 gap-2 flex-1 text-center">
             <Metric label={exKeys.size > 0 ? '총 엔트리(제외 적용)' : '총 엔트리'}
               value={stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} />
-            <Metric label="회수 티켓" value={`${stats.ticket}장`} />
+            {/* 티켓은 '장'이 아니라 **돈**으로도 보인다 — 1장 = 단가. 정산 대차의 한 줄이다. */}
+            <Metric label={`티켓 ${stats.ticket}장`} value={`${wonToMan(stats.tender.ticket)}만`} />
             <Metric label="완납 매출" value={`${wonToMan(stats.revenue)}만`} tone="emerald" />
             <Metric label="미수금" value={`${wonToMan(stats.unpaid)}만`} tone="danger" />
           </div>
@@ -1976,8 +1982,10 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
   //    여기서 0원 스냅샷이 생기지 않게 막으면 센티널이 다시 성립한다. ⚠ 이 결합을 깨지 말 것.
   //  · 카드단가도 본다. 현금 10만·카드 5만 세션에서 8만 할인은 현금 기준으론 통과하지만
   //    카드 바인에서 0원 스냅샷을 만든다.
+  // 100% 할인(무료 이벤트)은 허용한다 — 0원 스냅샷이 위험하던 문제는 buyinFinance 의 센티널을
+  // 날짜 기준으로 바꿔 닫았다(SNAPSHOT_SINCE). 단가를 **넘는** 할인만 막는다(entry 가 음수 방향).
   const minUnit = card > 0 ? Math.min(cash, card) : cash;
-  const badDisc = discs.findIndex((d) => d.amount > 0 && minUnit > 0 && d.amount >= minUnit);
+  const badDisc = discs.findIndex((d) => d.amount > 0 && minUnit > 0 && d.amount > minUnit);
 
   const submit = () => {
     if (cash <= 0) return;
@@ -2160,7 +2168,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
               <span className="w-9 shrink-0 text-2xs font-bold text-accent-300">할인{i + 1}</span>
               <input value={d.label} onChange={(e) => setDisc(i, { label: e.target.value })} maxLength={20} placeholder="예) 1레벨" className="input min-w-0 flex-1 text-sm" />
               <div className="relative w-20 shrink-0">
-                <input type="number" inputMode="decimal" step="0.1" min="0" max={minUnit > 0 ? (minUnit - 1) / WON_PER_MAN : undefined} value={manVal(d.amount)} onChange={(e) => setDisc(i, { amount: parseMan(e.target.value) })} placeholder="할인액" aria-invalid={badDisc === i}
+                <input type="number" inputMode="decimal" step="0.1" min="0" max={minUnit > 0 ? minUnit / WON_PER_MAN : undefined} value={manVal(d.amount)} onChange={(e) => setDisc(i, { amount: parseMan(e.target.value) })} placeholder="할인액" aria-invalid={badDisc === i}
                   className={['input w-full pr-6 text-sm tabular-nums', badDisc === i ? 'border-danger text-danger-light' : ''].join(' ')} />
                 <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">만</span>
               </div>
@@ -2179,10 +2187,8 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
             할인액만큼 차감해 엔트리를 비례 계산 — 예) 10만 게임에 5만 할인 = <b className="text-accent-300">0.5 엔트리</b>.<br />
             {badDisc >= 0 && (
               <b className="block text-danger-light">
-                할인{badDisc + 1}이 단가({wonToMan(minUnit)}만{card > 0 && card !== cash ? ' · 현금·카드 중 낮은 쪽' : ''}) 이상입니다 —
-                그대로 두면 그 바인이 엔트리 0 · 매출 0 으로 잡혀 **없는 기록**이 되고,
-                나중에 할인을 고치면 없던 매출이 되살아납니다. 단가보다 낮게 고쳐 주세요.
-                (전액 무료는 할인이 아니라 <b className="text-indigo-300">가게지원</b>으로 기록하세요)
+                할인{badDisc + 1}이 단가({wonToMan(minUnit)}만{card > 0 && card !== cash ? ' · 현금·카드 중 낮은 쪽' : ''})보다 큽니다 —
+                단가 이하로 고쳐 주세요. (단가와 같은 100% 할인은 됩니다 = 무료 이벤트)
               </b>
             )}
             <b className="text-accent-300">LV</b> 칸에 레벨을 적으면 <b className="text-accent-300">그 레벨까지 들어온 바인에 자동 적용</b>됩니다(예: 1LV 5만 · 2LV 3만 → 1레벨 5만, 2레벨 3만, 3레벨부터 없음). 결제창에서 언제든 바꿀 수 있습니다.
@@ -2654,6 +2660,7 @@ function CloseModal({ stats, unpaidPlayers, exNote, onClose, onConfirm }: {
   stats: {
     totalBuyins: number; entries: number; ticket: number; ticketUnpaid: number;
     revenue: number; unpaid: number; support: number; discount: DiscountSummary;
+    value: number; gross: number; disc: number; tender: Tender;
     all: { totalBuyins: number; entries: number; revenue: number; unpaid: number; value: number };
     removed: { count: number; entries: number; value: number; revenue: number };
   };
@@ -2671,10 +2678,47 @@ function CloseModal({ stats, unpaidPlayers, exNote, onClose, onConfirm }: {
         <div className="grid grid-cols-2 gap-2">
           <SummaryStat label="총 바인" value={`${stats.totalBuyins}회`} />
           <SummaryStat label="총 엔트리" value={stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} />
-          <SummaryStat label="완납 매출" value={`${wonToMan(stats.revenue)}만원`} tone="emerald" />
-          <SummaryStat label="당일 미수금" value={`${wonToMan(stats.unpaid)}만원`} tone="danger" />
-          <SummaryStat label="회수 티켓" value={`${stats.ticket}장`} />
-          <SummaryStat label="가게지원" value={`${stats.support}건`} />
+        </div>
+
+        {/* ── 정산 대차표 ──────────────────────────────────────────────────
+            매장이 정산할 때 확인하는 항등식 하나를 그대로 그린다(오너 2026-09-05 "논리에 안 맞는다"):
+              정가 총액 − 할인 = 순 바인액 = 현금 + 카드 + 이체 + 티켓 + 가게지원 + 미수
+            예전엔 티켓·지원이 '장·건'으로만 있고 바인 총액 자체가 없어서,
+            "티켓 3장이 돈으로 얼마인지", "할인이 어디서 얼마 빠졌는지"가 보이지 않았다.
+            티켓 1장 = 단가(할인 없을 때 10만)로 여기 **돈으로** 선다. */}
+        <div className="rounded-input border border-border-default bg-surface-low/60 p-2.5 text-xs">
+          <p className="mb-1.5 flex items-center gap-1 text-2xs font-bold text-ink-secondary">
+            <Icon name="notebook" size={12} className="shrink-0" />정산 대차
+          </p>
+          <dl className="space-y-0.5 tabular-nums">
+            <div className="flex justify-between"><dt className="text-ink-muted">바인 정가 총액 <span className="text-2xs">({stats.totalBuyins}회)</span></dt><dd className="font-semibold text-ink-primary">{wonToMan(stats.gross)}만원</dd></div>
+            <div className="flex justify-between"><dt className="text-ink-muted">− 할인 <span className="text-2xs">({stats.discount.count}건)</span></dt><dd className="font-semibold text-danger-light">−{wonToMan(stats.disc)}만원</dd></div>
+            <div className="flex justify-between border-t border-border-subtle pt-1"><dt className="font-bold text-ink-secondary">= 순 바인액</dt><dd className="font-bold text-ink-primary">{wonToMan(stats.value)}만원</dd></div>
+          </dl>
+          <p className="mt-2 mb-1 text-2xs font-bold text-ink-secondary">수납 내역 — 순 바인액을 무엇으로 받았나</p>
+          <dl className="space-y-0.5 tabular-nums">
+            <div className="flex justify-between"><dt className="text-ink-muted">현금</dt><dd className="text-emerald-300">{wonToMan(stats.tender.cash)}만원</dd></div>
+            <div className="flex justify-between"><dt className="text-ink-muted">카드</dt><dd className="text-emerald-300">{wonToMan(stats.tender.card)}만원</dd></div>
+            <div className="flex justify-between"><dt className="text-ink-muted">이체</dt><dd className="text-emerald-300">{wonToMan(stats.tender.transfer)}만원</dd></div>
+            <div className="flex justify-between"><dt className="text-ink-muted">티켓 <span className="text-2xs">({stats.ticket}장{stats.ticketUnpaid > 0 ? ` +미수 ${stats.ticketUnpaid}장` : ''})</span></dt><dd className="text-accent-200">{wonToMan(stats.tender.ticket)}만원</dd></div>
+            <div className="flex justify-between"><dt className="text-ink-muted">가게지원 <span className="text-2xs">({stats.support}건)</span></dt><dd className="text-indigo-300">{wonToMan(stats.tender.support)}만원</dd></div>
+            <div className="flex justify-between"><dt className="text-ink-muted">미수</dt><dd className="text-danger-light">{wonToMan(stats.tender.unpaid)}만원</dd></div>
+            {(() => {
+              const t = stats.tender;
+              const sum = t.cash + t.card + t.transfer + t.ticket + t.support + t.unpaid;
+              const ok = Math.abs(sum - stats.value) < 1;
+              return (
+                <div className={['flex justify-between border-t border-border-subtle pt-1 font-bold', ok ? 'text-ink-primary' : 'text-danger-light'].join(' ')}>
+                  <dt className="flex items-center gap-1">합계 {ok ? '· 순 바인액과 일치' : <><Icon name="alert" size={12} className="shrink-0" />순 바인액과 불일치</>}</dt>
+                  <dd>{wonToMan(sum)}만원</dd>
+                </div>
+              );
+            })()}
+          </dl>
+          <p className="mt-1.5 text-2xs text-ink-muted">
+            완납 매출(실수령) = 현금+카드+이체 = <b className="tabular-nums text-emerald-300">{wonToMan(stats.revenue)}만원</b>.
+            티켓·가게지원은 자리를 채웠지만 현금이 오가지 않은 몫이라 매출과 따로 섭니다.
+          </p>
         </div>
 
         {/* 제외를 걸었으면 **위 숫자가 무엇을 뺀 결과인지**와 제외 전 원본을 나란히 세운다.

@@ -122,8 +122,18 @@ export function cardUnit(s: { buyinAmount: number; cardAmount: number | null }):
   return s.cardAmount && s.cardAmount > 0 ? s.cardAmount : s.buyinAmount;
 }
 
+/** 수납 수단별 분해(원). 합 === value. 정산 대차표의 오른쪽 변이다. */
+export interface Tender { cash: number; card: number; transfer: number; ticket: number; support: number; unpaid: number }
+export const ZERO_TENDER: Tender = { cash: 0, card: 0, transfer: 0, ticket: 0, support: 0, unpaid: 0 };
+
 export interface BuyinFinance {
   paid: number; unpaid: number; entry: number; ticketPaid: number; ticketUnpaid: number; support: number;
+  /** 정가(원) — 이 바인이 할인 전에 얼마짜리였나. 비분납은 단가(카드는 카드단가), 분납은 value+disc. */
+  gross: number;
+  /** 이 행에 적용된 할인액(원). gross − disc === value. */
+  disc: number;
+  /** 수납 분해. cash+card+transfer+ticket+support+unpaid === value. 정산 대차표가 이걸 합산한다. */
+  tender: Tender;
   /** 이 바인의 **가치**(원) — '총바인' 열이 쓴다. 매출(paid)과 다른 개념이다.
    *  매출은 '실제 받은 현금'이라 티켓·지원이 0인 게 맞지만, 총바인은 '만들어진 바인의 가치'다.
    *  대부분 value/단가 === entry 지만 **예외가 둘** 있다(2026-09-05 감사에서 정정):
@@ -136,7 +146,8 @@ export interface BuyinFinance {
 /** 바인 1건의 매출/미수/엔트리(할인 반영). 엔트리 = (단가 - 할인)/단가. */
 export function buyinFinance(b: LedgerBuyin, s: { buyinAmount: number; cardAmount: number | null; discounts?: DiscountPreset[] }): BuyinFinance {
   const entryUnit = s.buyinAmount;
-  const z: BuyinFinance = { paid: 0, unpaid: 0, entry: 0, ticketPaid: 0, ticketUnpaid: 0, support: 0, value: 0 };
+  const z: BuyinFinance = { paid: 0, unpaid: 0, entry: 0, ticketPaid: 0, ticketUnpaid: 0, support: 0, value: 0,
+                            gross: 0, disc: 0, tender: { ...ZERO_TENDER } };
   if (b.isSplit) {
     // 분납 = 결제수단 쪼개기(예: 카드 4만 + 티켓 1장). 실제 받은 현금성 금액이 매출, 미수는 별도 입력값.
     // 할인 이벤트가 걸리면 그만큼 덜 받으므로 할인분은 애초에 입력 금액에 포함되지 않는다.
@@ -155,6 +166,8 @@ export function buyinFinance(b: LedgerBuyin, s: { buyinAmount: number; cardAmoun
     const ticketWon = b.ticketCount * entryUnit;
     const total = paid + b.unpaidAmount + ticketWon;
     const isTicketUnpaid = b.unpaidAmount > 0 && paid === 0 && b.ticketCount > 0;
+    // 분납의 할인은 입력 금액에 이미 빠져 있다(위 주석). 정가는 그래서 total + disc 로 복원한다.
+    const splitDisc = discountAmountOf(s, b.discountIndex);
     return {
       ...z,
       paid,
@@ -163,14 +176,20 @@ export function buyinFinance(b: LedgerBuyin, s: { buyinAmount: number; cardAmoun
       ticketPaid: isTicketUnpaid ? 0 : b.ticketCount,
       ticketUnpaid: isTicketUnpaid ? b.ticketCount : 0,
       value: total, // 현금성 + 미수 + 티켓 환산 — 분납은 total 이 곧 가치다
-
+      gross: total + splitDisc,
+      disc: splitDisc,
+      tender: { cash: b.cashAmount, card: b.cardAmount, transfer: b.transferAmount,
+                ticket: ticketWon, support: 0, unpaid: b.unpaidAmount },
     };
   }
   const disc = (s.discounts && b.discountIndex > 0 && s.discounts[b.discountIndex - 1]) ? s.discounts[b.discountIndex - 1].amount : 0;
   const entry = entryUnit > 0 ? Math.max(0, entryUnit - disc) / entryUnit : 1;
   // 가게지원 = 매장이 참가비를 대신 부담. 할인 이벤트가 걸려 있으면 매장이 그만큼 덜 부담하므로
   // 가치도 단가−할인이다(entry 와 정확히 같은 비율 — value/단가 === entry).
-  if (b.paymentMethod === 'support') return { ...z, entry, support: 1, value: Math.max(0, entryUnit - disc) };
+  if (b.paymentMethod === 'support') {
+    const v = Math.max(0, entryUnit - disc);
+    return { ...z, entry, support: 1, value: v, gross: entryUnit, disc, tender: { ...ZERO_TENDER, support: v } };
+  }
   // 티켓 1장 = 바인 1회. 가치는 **단가 전액이 기본**이되, 할인이 입력돼 있으면 그만큼 뺀다.
   //   (오너 정정 2026-09-05: "할인이 걸리면 할인은 따로 입력할 테니까,
   //    티켓이라고 무조건 10으로 입력하면 안 되지.")
@@ -179,21 +198,33 @@ export function buyinFinance(b: LedgerBuyin, s: { buyinAmount: number; cardAmoun
   //     그 수정은 value 로 유지되고, 여기서 되돌리는 것은 할인 무시뿐이다.
   //   가게지원과 같은 규칙이 된다 — 둘 다 '현금은 안 받았지만 자리는 찼다'.
   if (b.paymentMethod === 'ticket') {
+    const v = Math.max(0, entryUnit - disc);
     return { ...z, entry, ticketPaid: b.isUnpaid ? 0 : 1, ticketUnpaid: b.isUnpaid ? 1 : 0,
-             value: Math.max(0, entryUnit - disc) };
+             value: v, gross: entryUnit, disc, tender: { ...ZERO_TENDER, ticket: v } };
   }
-  // ⚠ `stored > 0` 이 '스냅샷 있음'의 센티널이다 — 금액 0 과 미저장을 구분하지 못한다.
-  //   이것이 성립하는 근거는 **입력 쪽에서 할인 < 단가를 강제**하기 때문이다
-  //   (NuriPosLedger 의 badDisc). 그 가드를 풀면 0원 스냅샷이 생기고, 그 행은 나중에
-  //   할인·단가를 고칠 때 매출이 되살아난다(2026-09-05 감사에서 확인). 두 곳은 한 쌍이다.
   // 스냅샷 우선(2026-08-18 전환): 기록 시점 net 금액이 amounts 칸에 저장돼 있으면 그 값이 정본 —
   // 이후 세션 단가·할인을 고쳐도 과거 기록이 소급 변형되지 않는다(실제 받은 현금 = 장부).
-  // 저장 금액이 0인 행은 전환 이전 레거시 — 기존처럼 세션 참조로 계산(하위호환).
+  // ⚠ '스냅샷이 있는가'는 **금액이 아니라 기록 시각**으로 판정한다.
+  //   예전 `stored > 0` 은 '저장된 0원'(전액 할인·무료 이벤트)과 '미저장 레거시'를 구분하지 못해,
+  //   무료 손님 행이 나중에 할인 프리셋을 고치는 순간 10만 매출로 되살아났다(2026-09-05 감사).
+  //   전환일 이후 기록은 nonSplitSnapshot 이 반드시 금액을 썼으므로 0 도 진짜 0 이다.
+  //   운영 DB 실측: 전환 이전 행 0건 — legacy 분기는 오늘 데이터에서 한 번도 타지 않는다.
   const stored = b.cashAmount + b.cardAmount + b.transferAmount;
   const payUnit = b.paymentMethod === 'card' ? cardUnit(s) : s.buyinAmount;
-  const effPay = stored > 0 ? stored : Math.max(0, payUnit - disc);
-  return b.isUnpaid ? { ...z, entry, unpaid: effPay, value: effPay } : { ...z, entry, paid: effPay, value: effPay };
+  const legacy = stored === 0 && b.buyinAt < SNAPSHOT_SINCE;
+  const effPay = legacy ? Math.max(0, payUnit - disc) : stored;
+  const t: Tender = { ...ZERO_TENDER };
+  if (b.isUnpaid) t.unpaid = effPay;
+  else if (b.paymentMethod === 'card') t.card = effPay;
+  else if (b.paymentMethod === 'transfer') t.transfer = effPay;
+  else t.cash = effPay;
+  return b.isUnpaid
+    ? { ...z, entry, unpaid: effPay, value: effPay, gross: payUnit, disc, tender: t }
+    : { ...z, entry, paid: effPay, value: effPay, gross: payUnit, disc, tender: t };
 }
+
+/** 비분납 현금/카드/이체가 net 금액 스냅샷을 amounts 칸에 쓰기 시작한 날(2026-08-18 전환). */
+export const SNAPSHOT_SINCE = '2026-08-18';
 
 /** 기록 시점 확정 금액(스냅샷) — 비분납 현금/카드/이체는 net(단가−할인)을 amounts 칸에 저장한다.
  *  buyinFinance 가 저장 금액을 우선하므로, 이후 세션 단가·할인 수정이 과거 기록에 소급되지 않는다.
