@@ -699,6 +699,21 @@
   .stat-violet  { color: #A78BFA; }  html.light .stat-violet  { color: #6D28D9; }
   .stat-indigo  { color: #818CF8; }  html.light .stat-indigo  { color: #4338CA; }
   .stat-fuchsia { color: #E879F9; }  html.light .stat-fuchsia { color: #A21CAF; }
+  /* 캘린더 날짜 셀 — 선택이 '툭' 바뀌지 않게(오너 지시 2026-09-04 "부드럽고 글로우도").
+     선택된 날은 화면에 **정확히 하나**뿐이라 글로우를 줘도 '화면당 1곳' 규칙과 충돌하지 않는다
+     (반복 카드에 글로우를 뿌리는 것과는 다르다). 글로우는 tailwind shadow-glow(16px 블룸) —
+     활성 칩용으로 이미 정의된 값이라 새 토큰을 만들지 않는다. box-shadow 를 --dur-fast(.15s)로
+     두면 '툭' 끊겨 --dur-base 로 둔다(.ring-aura-glow 가 같은 이유로 --dur-base 를 쓴다). */
+  .cal-day {
+    transition: background-color var(--dur-fast) var(--ease-out-ui),
+                box-shadow var(--dur-base) var(--ease-out-ui),
+                transform var(--dur-fast) var(--ease-out-ui);
+  }
+  .cal-day:active { transform: scale(0.94); }
+  @media (prefers-reduced-motion: reduce) {
+    .cal-day { transition: background-color var(--dur-fast) linear; }
+    .cal-day:active { transform: none; }
+  }
   .chip-aura { background-color: rgb(99 102 241 / 0.10); border: 1px solid rgb(99 102 241 / 0.22); color: rgb(var(--accent-200)); }
   /* 탭 타깃 확장 — 보이는 높이는 그대로(32px 칩), 누르는 영역만 위아래 6px 씩 늘려 44px(WCAG 2.5.5 / Apple HIG).
      가로는 늘리지 않는다(칩 사이 gap 6px 라 겹친다). Tailwind before:content-[''] 는 JSX 문자열 이스케이프 때문에 추출기가 못 잡아 유틸로 둔다. */

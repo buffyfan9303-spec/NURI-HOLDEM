@@ -189,7 +189,7 @@ export default function PosterCarousel({ schedules, onSelect, onBanner, banners 
         aria-label={dup ? undefined : s.alt}
         // 오너 지시(2026-08-27 4차): 풀폭 1장 — w-full(=스크롤러 clientWidth) × aspect 960/448.
         // 풀블리드 배너라 rounded 는 카드가 아니라 lg 캡 상태의 뷰포트에만(모바일은 모서리 없음).
-        className="relative aspect-[960/448] w-full shrink-0 snap-start overflow-hidden bg-surface-mid text-left"
+        className="relative aspect-[960/448] w-full shrink-0 snap-start snap-always overflow-hidden bg-surface-mid text-left"
         style={b ? { background: b.bg } : undefined}
       >
         {b ? (
@@ -254,9 +254,6 @@ export default function PosterCarousel({ schedules, onSelect, onBanner, banners 
   useEffect(() => {
     const vp = vpRef.current;
     if (!vp) return;
-    // 터치 제스처 시작 시점의 scrollLeft — 음수 = 진행 중 제스처 없음.
-    // 랩이 제스처 도중 되감으면 같은 ±half 로 동보정해 '시작 카드' 좌표를 랩 좌표계에 유지한다.
-    let touchBase = -1;
 
     // ── 기하 캐시(2026-08-29 실측) — scrollWidth·clientWidth 를 스크롤 핫패스에서 걷어낸다 ──
     // wrap 은 **캐러셀 스크롤 이벤트마다** scrollWidth/clientWidth 를 읽었다. 자동 트윈이 매
@@ -311,8 +308,8 @@ export default function PosterCarousel({ schedules, onSelect, onBanner, banners 
       //   임계를 못 건드려 진동이 원천 차단된다. 자동 스텝의 최대 타깃도 half+w 라 랩이
       //   '비행 중'이 아닌 '착지 후'에만 일어난다(smooth 취소 → snap 역행 없음). 랩 전후는
       //   복제 세트의 같은 카드라 픽셀 동일 — 텔레포트는 보이지 않는다.
-      if (vp.scrollLeft >= half + w) { vp.scrollLeft -= half; if (touchBase >= 0) touchBase -= half; }
-      else if (vp.scrollLeft <= 0) { vp.scrollLeft += half; if (touchBase >= 0) touchBase += half; }
+      if (vp.scrollLeft >= half + w) vp.scrollLeft -= half;
+      else if (vp.scrollLeft <= 0) vp.scrollLeft += half;
     };
     vp.addEventListener('scroll', wrap, { passive: true });
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -345,45 +342,12 @@ export default function PosterCarousel({ schedules, onSelect, onBanner, banners 
       tweenRaf = requestAnimationFrame(frame);
     };
 
-    // ② 터치 플릭 클램프(오너 지시 2026-08-28: "미는 속도에 따라 여러 장이 넘어간다") —
-    // 손을 놓는 순간 '시작 카드 기준 ±1장'으로만 정착한다. 마우스 휠·트랙패드는 불변(터치 한정).
-    // · touchstart: 시작 scrollLeft 기록(진행 중 자동 트윈 취소는 기존 pause 가 담당).
-    // · touchend(마지막 손가락): 이동량 < 카드 폭 12% → 제자리 복귀, 이상 → 이동 방향으로 1장.
-    //   목표 인덱스는 랩 좌표계 (0, half+w] 로 사전 텔레포트(±half — 복제 세트 동일 픽셀이라
-    //   보이지 않음) 후 기존 rAF 트윈(EASE·STEP_MS)으로 정착 — 트윈 중 snap 해제·착지 후 복원은
-    //   tweenTo 문법 그대로. 프로그래매틱 scrollLeft 세트는 UA 플릭 관성 스크롤을 중단시키는
-    //   표준 동작 + 트윈이 매 프레임 scrollLeft 를 쓰므로 관성이 이길 수 없다(Chromium 터치 에뮬 실검증).
-    // · prefers-reduced-motion: 트윈 대신 instant 세트(±1 클램프 규칙은 동일).
-    const onTouchStart = (e: TouchEvent) => {
-      if (e.touches.length === 1) touchBase = vp.scrollLeft; // 첫 손가락만 — 추가 손가락은 시작점 유지
-    };
-    const onTouchEnd = (e: TouchEvent) => {
-      if (e.touches.length > 0 || touchBase < 0) return;
-      const base = touchBase;
-      touchBase = -1;
-      geo();
-      const half = trackW / 2;
-      const w = cardW || vpW;
-      if (!w || half <= vpW) return;
-      const delta = vp.scrollLeft - base;
-      const dir = Math.abs(delta) < w * 0.12 ? 0 : Math.sign(delta);
-      let from = vp.scrollLeft;
-      // 시작 카드에서 '다음/이전 한 장'. round 로 잡으면 시작점이 카드 경계를 벗어나 있을 때
-      // (자동 트윈 도중 잡기 등) 반올림이 진행 방향으로 한 칸 더 튄다 — 방향별 floor/ceil 이 정확하다.
-      const EPS = 0.5; // 서브픽셀 오차가 floor/ceil 을 한 칸 밀지 않도록
-      let target = dir > 0 ? (Math.floor((base + EPS) / w) + 1) * w
-        : dir < 0 ? (Math.ceil((base - EPS) / w) - 1) * w
-          : Math.round(base / w) * w;
-      // 랩 좌표계 클램프 — 트윈은 절대 좌표를 쓰므로 목표·현재를 (0, half+w] 안으로 사전 랩.
-      // (target=half+w 경계는 자동 스텝과 동일하게 허용 — 착지 후 wrap 이 w 로 되감는다.)
-      if (target <= 0) { from += half; target += half; vp.scrollLeft = from; }
-      else if (target > half + w) { from -= half; target -= half; vp.scrollLeft = from; }
-      if (reduced) { vp.scrollLeft = target; return; }
-      tweenTo(from, target);
-    };
-    vp.addEventListener('touchstart', onTouchStart, { passive: true });
-    vp.addEventListener('touchend', onTouchEnd, { passive: true });
-    vp.addEventListener('touchcancel', onTouchEnd, { passive: true });
+    // ② 터치 플릭 = **브라우저에 맡긴다**(2026-09-04). 예전엔 touchend 에서 rAF 트윈으로
+    //    '시작 카드 ±1장'을 강제했는데, 그 트윈이 UA 의 관성 스크롤과 같은 scrollLeft 를 두고
+    //    싸워 손으로 밀면 중간에 끊겼다(오너 리포트). 목적이던 '한 번에 한 장'은 슬라이드의
+    //    `scroll-snap-stop: always`(snap-always) 로 UA 가 자기 관성 곡선 위에서 달성한다 —
+    //    아무리 세게 밀어도 다음 스냅 지점을 건너뛰지 않는다. JS 가 낄 자리가 없어졌다.
+    //    (자동 스텝 트윈은 그대로 — 그건 사용자 입력과 겹치지 않고 pause 가 막아 준다.)
 
     let pauseUntil = 0;
     const pause = () => { pauseUntil = performance.now() + 6000; cancelTween(); }; // 수동 스와이프 감지 → 트윈 즉시 취소
@@ -414,9 +378,6 @@ export default function PosterCarousel({ schedules, onSelect, onBanner, banners 
       mo?.disconnect();
       window.removeEventListener('resize', markGeoDirty);
       vp.removeEventListener('scroll', wrap);
-      vp.removeEventListener('touchstart', onTouchStart);
-      vp.removeEventListener('touchend', onTouchEnd);
-      vp.removeEventListener('touchcancel', onTouchEnd);
       vp.removeEventListener('touchstart', pause);
       vp.removeEventListener('wheel', pause);
       vp.removeEventListener('pointerdown', pause);

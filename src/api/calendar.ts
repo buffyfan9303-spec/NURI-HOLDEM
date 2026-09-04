@@ -42,36 +42,7 @@ export async function toggleScheduleLike(scheduleId: string, on: boolean): Promi
 }
 
 // ── 바이인 기록(행 단위) ──────────────────────────────────────────────────────
-export interface BuyinRow {
-  sessionDate: string;      // 'YYYY-MM-DD'
-  venueId: string | null;
-  venueName: string;
-  title: string;
-  entryNo: number | null;
-  amount: number;
-  buyinAt: string | null;
-}
 
-/**
- * 내 바이인 기록. ledger_buyins 에는 user_id 가 없어(장부는 매장 직원이 손으로 적는 표)
- * 서버 RPC 가 real_name/nickname/name 으로 매칭한다 — my_play_history 와 **같은 규칙**.
- * 그래서 프로필 이름을 바꾸면 과거 기록이 안 잡힐 수 있다(화면에서 그 사실을 안내한다).
- */
-export async function getMyBuyinHistory(limit = 200): Promise<BuyinRow[]> {
-  if (IS_MOCK) return [];
-  const { data, error } = await supabase.rpc('my_buyin_history', { p_limit: limit });
-  if (error) throw new Error(error.message);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((r: any): BuyinRow => ({
-    sessionDate: r.session_date,
-    venueId: r.venue_id ?? null,
-    venueName: r.venue_name ?? '',
-    title: r.title ?? '',
-    entryNo: r.entry_no ?? null,
-    amount: Number(r.amount ?? 0),
-    buyinAt: r.buyin_at ?? null,
-  }));
-}
 
 // ── 수기 뱅크롤 ──────────────────────────────────────────────────────────────
 export interface BankrollEntry {
@@ -100,7 +71,10 @@ export async function addBankrollEntry(e: Omit<BankrollEntry, 'id'>): Promise<vo
   const { data: u } = await supabase.auth.getUser();
   const uid = u.user?.id;
   if (!uid) throw new Error('로그인이 필요합니다.');
-  if (!Number.isFinite(e.amount) || e.amount === 0) throw new Error('금액을 입력해 주세요 (0은 기록할 수 없어요)');
+  // DB 제약(bankroll_entry_not_empty)과 같은 규칙: 금액이 있거나 메모가 있거나.
+  // amount 0 = 기타 스케줄(메모만) — 오너 지시 2026-09-04 로 허용됐다.
+  if (!Number.isFinite(e.amount)) throw new Error('금액이 올바르지 않아요');
+  if (e.amount === 0 && !e.memo.trim()) throw new Error('금액이나 내용 중 하나는 입력해 주세요');
   const { error } = await supabase.from('bankroll_entries').insert({
     user_id: uid, entry_date: e.entryDate, amount: Math.trunc(e.amount), memo: e.memo.trim(),
   });
