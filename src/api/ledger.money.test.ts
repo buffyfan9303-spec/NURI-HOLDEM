@@ -324,3 +324,49 @@ describe('정산 제외 — 방문자 유형 × 결제수단', () => {
     expect(ex(buyin({ playerName: '무명', paymentMethod: 'cash' }), ['visitor:staff'])).toBe(false);
   });
 });
+
+// ── 할인 집계 정합성 (2026-09-05 자체 감사, 실측 표 기반) ─────────────────────
+// 오너 지시: "할인이나 이런 것 모두 제대로 적용되도록 점검해서 다시 해줘".
+describe('할인 집계 — 덜 받은 현금과 엔트리 차감을 가른다', () => {
+  it("티켓 할인은 '깎아 준 총액'에는 들어가지만 '덜 받은 현금'에는 안 들어간다", () => {
+    // 티켓은 애초에 현금을 받지 않는다 → 할인해도 매출이 줄지 않는다.
+    const d = discountSummary([buyin({ paymentMethod: 'ticket', discountIndex: 1 })], SESSION);
+    expect(d.count).toBe(1);
+    expect(d.total).toBe(50_000);      // 깎아 준 총액
+    expect(d.cashTotal).toBe(0);       // 덜 받은 현금은 0
+    expect(d.entryLoss).toBe(0.5);     // 엔트리는 실제로 0.5 깎였다
+  });
+
+  it('가게지원 할인도 같다 — 현금은 0, 엔트리는 깎인다', () => {
+    const d = discountSummary([buyin({ paymentMethod: 'support', discountIndex: 1 })], SESSION);
+    expect(d).toMatchObject({ total: 50_000, cashTotal: 0, entryLoss: 0.5 });
+  });
+
+  it('현금 할인은 둘 다 잡힌다', () => {
+    const d = discountSummary([buyin({ paymentMethod: 'cash', discountIndex: 1 })], SESSION);
+    expect(d).toMatchObject({ total: 50_000, cashTotal: 50_000, entryLoss: 0.5 });
+  });
+
+  it('entryLoss 는 추정식이 아니라 실제 entry 에서 나온다 — 액면가 경로에서 0 이다', () => {
+    // 분납 티켓은 액면가로 돌아 할인이 엔트리를 깎지 않는다.
+    // 예전의 `총할인액/단가` 추정식은 여기서 0.5 라고 거짓말했다(실측 1 vs 0.5).
+    const split = buyin({ isSplit: true, ticketCount: 1, discountIndex: 1 });
+    expect(buyinFinance(split, SESSION).entry).toBe(1);
+    expect(discountSummary([split], SESSION).entryLoss).toBe(0);
+  });
+
+  it('할인이 단가보다 크면 엔트리 차감은 1 을 넘지 않는다', () => {
+    const S2 = { ...SESSION, discounts: [{ label: '과다', amount: 120_000 }] };
+    const f = buyinFinance(buyin({ paymentMethod: 'cash', discountIndex: 1 }), S2);
+    expect(f.entry).toBe(0);           // 바인이 통째로 '없는 것'이 된다 → 입력에서 막는다
+    expect(discountSummary([buyin({ paymentMethod: 'cash', discountIndex: 1 })], S2).entryLoss).toBe(1);
+  });
+
+  it('여러 건 합산 — 현금 1건 + 티켓 1건', () => {
+    const d = discountSummary([
+      buyin({ playerName: 'A', paymentMethod: 'cash', discountIndex: 1 }),
+      buyin({ playerName: 'B', paymentMethod: 'ticket', discountIndex: 1 }),
+    ], SESSION);
+    expect(d).toMatchObject({ count: 2, total: 100_000, cashTotal: 50_000, entryLoss: 1 });
+  });
+});

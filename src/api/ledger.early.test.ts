@@ -232,7 +232,7 @@ describe('discountSummary · 마감정산의 할인 엔트리 · 총 할인액',
   ] };
   it('오너 예시 · 5만 할인 1건이 들어가면 할인 엔트리 1 · 총 할인 5만', () => {
     const r = discountSummary([buyin({ discountIndex: 1 }), buyin({ playerName: 'q' })], S);
-    expect(r).toEqual({ count: 1, total: 50_000, entryLoss: 0.5 });
+    expect(r).toEqual({ count: 1, total: 50_000, cashTotal: 50_000, entryLoss: 0.5 });
   });
   it('여러 건 합산 · 5만 + 5만 + 3만 = 13만 / 3건', () => {
     const r = discountSummary(
@@ -247,8 +247,8 @@ describe('discountSummary · 마감정산의 할인 엔트리 · 총 할인액',
   });
   it('할인 없음(0) · 빈 자리(금액 0)는 집계되지 않는다', () => {
     const s0 = { ...S, discounts: [{ label: '', amount: 0, level: 1 }] };
-    expect(discountSummary([buyin({ discountIndex: 1 })], s0)).toEqual({ count: 0, total: 0, entryLoss: 0 });
-    expect(discountSummary([buyin()], S)).toEqual({ count: 0, total: 0, entryLoss: 0 });
+    expect(discountSummary([buyin({ discountIndex: 1 })], s0)).toEqual({ count: 0, total: 0, cashTotal: 0, entryLoss: 0 });
+    expect(discountSummary([buyin()], S)).toEqual({ count: 0, total: 0, cashTotal: 0, entryLoss: 0 });
   });
   it('단가 0(미설정)이어도 터지지 않는다', () => {
     expect(discountSummary([buyin({ discountIndex: 1 })], { buyinAmount: 0, discounts: S.discounts }).entryLoss).toBe(0);

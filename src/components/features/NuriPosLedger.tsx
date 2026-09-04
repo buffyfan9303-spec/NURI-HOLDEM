@@ -1335,7 +1335,8 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
         </div>
         {(stats.support > 0 || stats.ticketUnpaid > 0 || stats.discount.count > 0) && (
           <p className="text-2xs text-center mt-0.5">
-            {stats.discount.count > 0 && <span className="text-accent-300">할인 {stats.discount.count}엔트리 · −{wonToMan(stats.discount.total)}만</span>}
+            {/* '−N만'은 **덜 받은 현금**이다 → cashTotal. 깎아 준 총액은 마감 모달에서 따로 본다. */}
+            {stats.discount.count > 0 && <span className="text-accent-300">할인 {stats.discount.count}건 · 엔트리 −{stats.discount.entryLoss.toLocaleString(undefined, { maximumFractionDigits: 2 })} · 현금 −{wonToMan(stats.discount.cashTotal)}만</span>}
             {stats.discount.count > 0 && (stats.ticketUnpaid > 0 || stats.support > 0) && <span className="text-ink-muted"> · </span>}
             {stats.ticketUnpaid > 0 && <span className="text-danger-light">티켓 미수 {stats.ticketUnpaid}장</span>}
             {stats.ticketUnpaid > 0 && stats.support > 0 && <span className="text-ink-muted"> · </span>}
@@ -1963,8 +1964,13 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
     formToast.show(`'${p.name}' 프리셋 적용 · 채워진 항목만 반영했어요(수정 가능)`, 'success');
   };
 
+  // 단가를 넘는 할인은 그 바인을 통째로 '없는 것'으로 만든다 —
+  // entry 0 · 가치 0 · 매출 0 (실측). 5만을 50만으로 오타 내면 조용히 사라지므로 저장 전에 막는다.
+  const badDisc = discs.findIndex((d) => d.amount > 0 && cash > 0 && d.amount > cash);
+
   const submit = () => {
     if (cash <= 0) return;
+    if (badDisc >= 0) return; // 아래 경고 문구가 이유를 말한다
     const tStart = startISO;
     // #21: 장부에 적은 얼리 '레벨'을 세션의 얼리 '분'으로 환산해 함께 저장한다.
     //   왜: 지금까지 이 환산은 클락 화면을 실제로 연 사람만 했다(TournamentClock). 클락을 안 열면
@@ -2143,7 +2149,8 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
               <span className="w-9 shrink-0 text-2xs font-bold text-accent-300">할인{i + 1}</span>
               <input value={d.label} onChange={(e) => setDisc(i, { label: e.target.value })} maxLength={20} placeholder="예) 1레벨" className="input min-w-0 flex-1 text-sm" />
               <div className="relative w-20 shrink-0">
-                <input type="number" inputMode="decimal" step="0.1" min="0" value={manVal(d.amount)} onChange={(e) => setDisc(i, { amount: parseMan(e.target.value) })} placeholder="할인액" className="input w-full pr-6 text-sm tabular-nums" />
+                <input type="number" inputMode="decimal" step="0.1" min="0" max={cash > 0 ? cash / WON_PER_MAN : undefined} value={manVal(d.amount)} onChange={(e) => setDisc(i, { amount: parseMan(e.target.value) })} placeholder="할인액" aria-invalid={badDisc === i}
+                  className={['input w-full pr-6 text-sm tabular-nums', badDisc === i ? 'border-danger text-danger-light' : ''].join(' ')} />
                 <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">만</span>
               </div>
               {/* #20: 이 칸이 '자동 적용'의 전부다. 비워 두면 예전과 똑같이 수기 선택 전용으로 남는다. */}
@@ -2159,6 +2166,12 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
           )}
           <p className="text-2xs leading-relaxed text-ink-muted">
             할인액만큼 차감해 엔트리를 비례 계산 — 예) 10만 게임에 5만 할인 = <b className="text-accent-300">0.5 엔트리</b>.<br />
+            {badDisc >= 0 && (
+              <b className="block text-danger-light">
+                할인{badDisc + 1}이 바인 단가({wonToMan(cash)}만)보다 큽니다 — 그대로 두면 그 바인이
+                엔트리 0 · 매출 0 으로 잡혀 **없는 기록**이 됩니다. 단가 이하로 고쳐 주세요.
+              </b>
+            )}
             <b className="text-accent-300">LV</b> 칸에 레벨을 적으면 <b className="text-accent-300">그 레벨까지 들어온 바인에 자동 적용</b>됩니다(예: 1LV 5만 · 2LV 3만 → 1레벨 5만, 2레벨 3만, 3레벨부터 없음). 결제창에서 언제든 바꿀 수 있습니다.
           </p>
         </div>
@@ -2676,7 +2689,15 @@ function CloseModal({ stats, unpaidPlayers, exNote, onClose, onConfirm }: {
                 <SummaryStat label="엔트리 차감" value={`−${stats.discount.entryLoss.toLocaleString(undefined, { maximumFractionDigits: 2 })}`} />
               </div>
               <p className="mt-1.5 text-2xs text-ink-muted">
-                할인이 없었다면 완납 매출은 <b className="tabular-nums text-ink-secondary">{wonToMan(stats.revenue + stats.discount.total)}만원</b>입니다.
+                {/* ⚠ cashTotal 이다(total 아님) — 티켓·가게지원은 할인해도 받을 현금이 0원이라
+                    매출이 줄지 않는다. total 을 쓰면 없던 매출을 있었던 것처럼 부풀린다. */}
+                할인이 없었다면 완납 매출은 <b className="tabular-nums text-ink-secondary">{wonToMan(stats.revenue + stats.discount.cashTotal)}만원</b>입니다.
+                {stats.discount.total !== stats.discount.cashTotal && (
+                  <span className="block text-ink-muted">
+                    (깎아 준 총액 {wonToMan(stats.discount.total)}만원 중 현금으로 덜 받은 것은 {wonToMan(stats.discount.cashTotal)}만원 —
+                    나머지는 티켓·가게지원이라 원래 현금이 오가지 않습니다)
+                  </span>
+                )}
               </p>
             </>
           )}

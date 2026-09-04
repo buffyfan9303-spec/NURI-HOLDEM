@@ -233,7 +233,17 @@ export function autoDiscountIndex(discounts: DiscountPreset[] | undefined, level
  *  total  = 그 할인액의 합(원)
  *  entryLoss = 할인으로 깎인 엔트리 환산량(10만 게임 5만 할인 = 0.5)
  *  ⚠ 분납도 discountIndex 로 일원화돼 있어 동일하게 잡힌다(2026-07 '레벨 할인' 사건의 교훈). */
-export interface DiscountSummary { count: number; total: number; entryLoss: number }
+export interface DiscountSummary {
+  /** 할인이 적용된 바인 건수 */
+  count: number;
+  /** 깎아 준 총액(원) — 결제수단 무관. '고객에게 얼마를 깎아 줬나'. */
+  total: number;
+  /** 그중 **실제로 덜 받은 현금**(원). 티켓·가게지원은 받을 현금이 0원이라 제외된다.
+   *  '할인이 없었다면 매출은 얼마였나'는 반드시 이 값을 써야 한다. */
+  cashTotal: number;
+  /** 실제 엔트리 차감 합 — 추정식이 아니라 buyinFinance 의 entry 에서 뽑는다. */
+  entryLoss: number;
+}
 /**
  * 정산 제외 판정 — 이 바인이 정산에서 빠지는가.
  * 키 형식: `visitor:<유형>` · `method:<결제수단>` (오너 지시 2026-09-05
@@ -267,14 +277,26 @@ export function isBuyinExcluded(
 
 export function discountSummary(
   buyins: LedgerBuyin[],
-  s: { buyinAmount: number; discounts?: DiscountPreset[] },
+  // cardAmount 는 선택 — 호출부(테스트 포함)가 세션 일부만 넘기는 곳이 있어 없으면 현금 단가로 본다.
+  s: { buyinAmount: number; cardAmount?: number | null; discounts?: DiscountPreset[] },
 ): DiscountSummary {
-  let count = 0, total = 0;
+  const sf = { ...s, cardAmount: s.cardAmount ?? null };
+  let count = 0, total = 0, cashTotal = 0, entryLoss = 0;
   for (const b of buyins) {
-    const amt = discountAmountOf(s, b.discountIndex);
-    if (b.discountIndex > 0 && amt > 0) { count++; total += amt; }
+    const amt = discountAmountOf(sf, b.discountIndex);
+    if (b.discountIndex <= 0 || amt <= 0) continue;
+    count++;
+    total += amt;
+    // ⚠ '덜 받은 돈'은 **현금이 오가는 수단에서만** 생긴다.
+    //   티켓·가게지원은 할인을 해도 받을 현금이 애초에 0원이라 매출이 줄지 않는다.
+    //   예전엔 total 하나로 뭉뚱그려, 마감 모달의 "할인이 없었다면 완납 매출은 …"이
+    //   티켓 할인까지 더해 과대 계상했다(2026-09-05 실측).
+    if (b.isSplit || (b.paymentMethod !== 'ticket' && b.paymentMethod !== 'support')) cashTotal += amt;
+    // ⚠ 엔트리 차감은 **실제 계산에서 뽑는다.** 예전의 `총할인액/단가` 추정식은
+    //   액면가로 도는 경로(분납 티켓)에서 어긋났다 — 실측: entryLoss 1 vs 실제 차감 0.5.
+    entryLoss += Math.max(0, 1 - buyinFinance(b, sf).entry);
   }
-  return { count, total, entryLoss: s.buyinAmount > 0 ? total / s.buyinAmount : 0 };
+  return { count, total, cashTotal, entryLoss };
 }
 
 export interface LedgerLossSummary { buyins: number; people: number; revenue: number; unpaid: number }
