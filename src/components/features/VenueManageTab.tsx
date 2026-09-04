@@ -7,7 +7,7 @@ import { useToast } from '../atoms/Toast';
 import type { User, VenueInvite } from '../../api/auth';
 import { getMyVenueStaff, getMyVenueInvites, inviteStaffByEmail, cancelStaffInvite, removeStaff, setStaffTitle } from '../../api/auth';
 import { msgOf } from '../../lib/dbError';
-import { getVenueRankings, saveVenueRankings, getVenuePageConfig, placementPointsOf, prizeUnitRisk, searchRankingMembers, resolveRankingMembers, type VenuePageConfig, type RankingEntry, type RankMember } from '../../api/rankings';
+import { getVenueRankings, saveVenueRankings, getVenuePageConfig, placementPointsOf, prizeUnitRisk, parsePrizeTickets, searchRankingMembers, resolveRankingMembers, type VenuePageConfig, type RankingEntry, type RankMember } from '../../api/rankings';
 import { canAccessLedger, canManagePos, getLedgerAccessUserIds, grantLedgerAccess, revokeLedgerAccess } from '../../api/ledger';
 import { getAllVenues, createMyVenue, getMyVenue, getVenueStaff, type Venue } from '../../api/community';
 import { getLedgerRange } from '../../api/ledger';
@@ -1671,16 +1671,20 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
                   (placeholder 만으로는 입력 시작하는 순간 단위가 화면에서 사라진다) */}
               <div className="relative min-w-0 col-start-2 row-start-2 lg:col-auto lg:row-auto">
                 <input
-                  type="text" inputMode="numeric" value={row.prize} maxLength={12}
-                  onChange={(e) => update(i, 'prize', e.target.value.replace(/[^\d.]/g, ''))}
+                  type="text" inputMode="text" value={row.prize} maxLength={12}
+                  // 숫자(만원) 또는 "nT"(티켓 n장 — 오너 2026-09-05). 그 외 문자는 버린다.
+                  onChange={(e) => update(i, 'prize', e.target.value.replace(/[^\d.tT]/g, '').replace(/t/g, 'T'))}
                   onKeyDown={(e) => { if (e.nativeEvent.isComposing) return; /* 한글 조합 확정 Enter 를 제출로 오인하지 않게 */ if (e.key === 'Enter' && i === rows.length - 1) addRow(); }}
                   placeholder="프라이즈"
-                  aria-label="프라이즈 (만원 단위)"
-                  title="만원 단위 · 100만원이면 100, 1,000만원이면 1000"
+                  aria-label="프라이즈 (만원 단위 · 티켓은 1T)"
+                  title="만원 단위 · 100만원이면 100, 1,000만원이면 1000 · 티켓 상금은 1T, 2T (1T = 10만원)"
                   className={['input w-full min-w-0 text-sm py-2 pr-7',
                     prizeUnitRisk(row.prize) !== 'ok' ? 'border-amber-400/70 focus:border-amber-400 focus:ring-amber-400' : ''].join(' ')}
                 />
-                <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">만</span>
+                {/* 티켓 표기("1T")면 접미 '만' 이 거짓말이 되므로 숨긴다 */}
+                {parsePrizeTickets(row.prize) === 0 && (
+                  <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">만</span>
+                )}
               </div>
               <button
                 type="button" onClick={() => removeRow(i)} aria-label="줄 삭제"

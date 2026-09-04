@@ -18,7 +18,7 @@ import { myVisitedVenues, myPlayHistory, type VisitedVenue, type PlayHistory } f
 import { wonToMan } from '../../api/ledger';
 import { getMyReservations, cancelMyReservation, type MyReservationRow } from '../../api/reservations';
 import { getPostsByUser, type CommunityPost } from '../../api/community';
-import { getMyRankingHistory, getGlobalRankingTotals, parsePrizeMan, placementPoints, type MyRankingRow } from '../../api/rankings';
+import { getMyRankingHistory, getGlobalRankingTotals, parsePrizeMan, placementPoints, type MyRankingRow , formatPrize } from '../../api/rankings';
 import { shareRecordCard, shareRecordCardKakao } from '../../lib/recordCard';
 import { kakaoConfigured, kakaoShareLink } from '../../lib/kakao';
 import { getMyReferralStats, inviteUrl, type ReferralStats } from '../../api/referrals';
@@ -460,7 +460,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
                       <p className="truncate text-sm font-semibold text-ink-primary">{r.venueName}</p>
                       <p className="text-2xs tabular-nums text-ink-muted">{r.date}</p>
                     </div>
-                    {r.prize && <span className="inline-flex shrink-0 items-center gap-1 text-xs font-bold tabular-nums text-gold-300"><Icon name="trophy" size={12} /> {parsePrizeMan(r.prize) ? parsePrizeMan(r.prize) + '만' : r.prize}</span>}
+                    {r.prize && <span className="inline-flex shrink-0 items-center gap-1 text-xs font-bold tabular-nums text-gold-300"><Icon name="trophy" size={12} /> {formatPrize(r.prize)}</span>}
                   </li>
                 ))}</ul></>}
           </section>

@@ -370,6 +370,7 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
         rankTitles: cfg.rankTitles,
         placementPoints: cfg.placementPoints,
         customBoards: cfg.customBoards,
+        ticketPrizeDisplay: cfg.ticketPrizeDisplay, // 티켓 상금 표기(1T / 10만) — 이 허브 소유 키
       };
       await setVenuePageConfig(venueId, next);
       setCfg(next);
@@ -458,6 +459,27 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
               </label>
             ))}
           </div>
+        </section>
+
+        {/* 티켓 상금 표기 — 오너 2026-09-05: "머니인·순위엔 1T 로 표기하되 매장이 선택할 수 있게".
+            가치는 어느 쪽이든 1T = 10만(TICKET_MAN). 장부는 항상 만원 가치라 이 설정과 무관하다. */}
+        <section className="rounded-aura border card-aura p-3 space-y-2">
+          <h3 className="text-sm font-bold text-ink-primary">티켓 상금 표기 <span className="text-2xs font-normal text-ink-muted">(순위 입력에 1T·2T 로 적은 상금이 손님에게 보이는 방식)</span></h3>
+          <div className="flex gap-1.5" role="radiogroup" aria-label="티켓 상금 표기">
+            {([['ticket', '티켓 장수', '예) 1T'], ['won', '만원 가치', '예) 10만']] as const).map(([v, label, ex]) => {
+              const on = (cfg.ticketPrizeDisplay ?? 'ticket') === v;
+              return (
+                <button key={v} type="button" role="radio" aria-checked={on}
+                  onClick={() => setCfg((c) => ({ ...c, ticketPrizeDisplay: v }))}
+                  className={['flex-1 rounded-input border px-3 py-2 text-left transition-colors',
+                    on ? 'border-accent-400/50 bg-accent-300/15 text-ink-primary' : 'border-border-default text-ink-secondary hover:text-ink-primary'].join(' ')}>
+                  <span className="block text-xs font-bold">{label}</span>
+                  <span className="block text-2xs text-ink-muted">{ex}</span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-2xs text-ink-muted">머니인 포인트는 표기와 무관하게 1T = 10만원으로 계산됩니다. 장부의 티켓은 항상 만원 가치로 잡힙니다.</p>
         </section>
 
         {/* ④ 기준 점수 — 오너 #18: 5등 고정이었던 것을 [+]로 원하는 등수까지 */}

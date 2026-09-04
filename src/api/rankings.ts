@@ -166,11 +166,41 @@ export function placementPoints(position: number): number {
   }
 }
 
-// 프라이즈 텍스트 → 만원 숫자(만원 단위 입력 기준, 콤마/단위 제거 후 첫 숫자)
+/** 티켓 1장의 가치(만원). 오너 규칙(2026-09-05) "1T 는 10만원" — 서버 parse_prize_man 과 같은 상수. */
+export const TICKET_MAN = 10;
+
+/** "1T" · "2 t" 처럼 **정수+T** 만 티켓 표기로 인정한다. 장수를 돌려주고, 아니면 0. */
+export function parsePrizeTickets(prize?: string | null): number {
+  if (!prize) return 0;
+  const m = String(prize).replace(/,/g, '').match(/^\s*(\d*\.?\d+)\s*[tT]\s*$/);
+  return m ? parseFloat(m[1]) : 0;
+}
+
+// 프라이즈 텍스트 → 만원 숫자(만원 단위 입력 기준, 콤마/단위 제거 후 첫 숫자).
+// "nT"(티켓) 는 n × 10만 — 서버 parse_prize_man(20260905e) 과 정확히 같은 규칙이라
+// 머니인 포인트·시즌 합산이 화면과 어긋나지 않는다.
 export function parsePrizeMan(prize?: string | null): number {
   if (!prize) return 0;
+  const t = parsePrizeTickets(prize);
+  if (t > 0) return Math.round(t * TICKET_MAN);
   const m = String(prize).replace(/,/g, '').match(/\d+(?:\.\d+)?/);
   return m ? Math.round(parseFloat(m[0])) : 0;
+}
+
+/**
+ * 상금 표시 문자열. 티켓 상금은 매장 설정에 따라 "1T"(기본) 또는 "10만" 으로 보인다
+ * (오너: "머니인이나 순위 같은 데는 1T 로 표기하되 ... 매장이 선택할 수 있게").
+ * 숫자 상금은 언제나 "N만". cfg 가 없는 화면(내 정보·리그처럼 여러 매장이 섞이는 곳)은 티켓 표기.
+ */
+export function formatPrize(prize: string | null | undefined, cfg?: Pick<VenuePageConfig, 'ticketPrizeDisplay'> | null): string {
+  if (!prize) return '';
+  const t = parsePrizeTickets(prize);
+  if (t > 0) {
+    const n = Number.isInteger(t) ? String(t) : t.toLocaleString(undefined, { maximumFractionDigits: 1 });
+    return cfg?.ticketPrizeDisplay === 'won' ? `${Math.round(t * TICKET_MAN)}만` : `${n}T`;
+  }
+  const man = parsePrizeMan(prize);
+  return man > 0 ? `${man.toLocaleString()}만` : String(prize);
 }
 
 // ── 프라이즈 단위 오입력 감지 ────────────────────────────────────────────────
@@ -263,6 +293,9 @@ export interface VenuePageConfig {
   customBoards?: CustomBoard[];           // 커스텀 보드 정의(최대 3)
   notifyStaff?: boolean;                  // 직원 호출/공지 알림 수신
   clockTheme?: import('../components/features/clock/clockTheme').ClockTheme; // TV 송출 클락 테마 v1
+  /** 순위·머니인에서 티켓 상금을 어떻게 보일지 — 'ticket'(기본, "1T") | 'won'("10만").
+   *  가치는 어느 쪽이든 1T = 10만(TICKET_MAN). 장부는 항상 만원 가치라 이 설정과 무관하다. */
+  ticketPrizeDisplay?: 'ticket' | 'won';
 }
 
 export const isCustomBoard = (id: string): boolean => id.startsWith('custom:');

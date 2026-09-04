@@ -11,7 +11,7 @@ import {
   type League, type LeagueMember, type LeagueEntry, type LeagueMemberStatus,
   type LeagueVenueStatus, type LeagueLiveStatus, type LeagueItmPlayer,
 } from '../../api/leagues';
-import { getVenueRankings } from '../../api/rankings';
+import { getVenueRankings , formatPrize } from '../../api/rankings';
 
 const STATUS_BADGE: Record<LeagueMemberStatus, { label: string; cls: string }> = {
   pending:  { label: '대기', cls: 'bg-amber-500/15 text-amber-400' },
@@ -221,7 +221,7 @@ function LeagueLiveBoard({ league, isOwner, members, venueId, canConfigure, onCh
                   <span className="w-5 text-right font-bold tabular-nums text-accent-300">{p.place ?? i + 1}</span>
                   <span className="min-w-0 flex-1 truncate font-semibold text-ink-primary">{p.name}</span>
                   <span className="shrink-0 rounded-badge bg-surface-float px-1.5 py-0.5 text-[9px] font-bold text-ink-secondary">{p.venue}</span>
-                  {p.prize && <span className="shrink-0 text-2xs text-gold-300">{p.prize}</span>}
+                  {p.prize && <span className="shrink-0 text-2xs text-gold-300">{formatPrize(p.prize)}</span>}
                 </li>
               ))}
             </ul>

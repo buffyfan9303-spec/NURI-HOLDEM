@@ -33,6 +33,7 @@ import {
   getVenueRankings, getVenueRankingTotals, subscribeRankings, rankDisplay, getVenueRealNameOptIns,
   getVenuePageConfig, getScoreEntries, getVenuePlayerCounts,
   boardLabel, boardDesc, boardUnit, isCustomBoard, customKeyOf, boardPeriodStart,
+  formatPrize,
   type RankingEntry, type RankingTotal, type VenuePageConfig, type RankBoardId, type ScoreEntry, type PlayerCounts,
 } from '../../api/rankings';
 import { listVenueCheckins } from '../../api/checkins';
@@ -1231,7 +1232,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
                     const { main: rMain, sub: rSub } = rankDisplay(e, realNameOptIns);
                     return (
                       <span key={`${ev}-${e.position}`} className="text-2xs px-2 py-0.5 rounded-badge bg-surface-float text-ink-primary">
-                        {e.position}. {rMain}{rSub ? `(${rSub})` : ''}{e.prize ? ` · ${e.prize}점` : ''}
+                        {e.position}. {rMain}{rSub ? `(${rSub})` : ''}{e.prize ? ` · ${formatPrize(e.prize, cfg)}` : ''}
                       </span>
                     );
                   })}
