@@ -129,16 +129,16 @@ function MarketplaceTab({
       {user && (
         <div className="flex gap-2">
           <button type="button" onClick={() => setMyListOpen(true)}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-input bg-surface-high border border-border-default text-xs font-semibold text-ink-secondary hover:text-ink-primary transition-colors">
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-input chip-aura text-xs font-semibold transition-colors">
             <Icon name="package" size={14} className="shrink-0" />내 판매목록
           </button>
           {/* 찜은 재방문 1순위 동선이라 판매목록·메시지함과 같은 높이에 둔다 */}
           <button type="button" onClick={() => setLikesOpen(true)}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-input bg-surface-high border border-border-default text-xs font-semibold text-ink-secondary hover:text-ink-primary transition-colors">
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-input chip-aura text-xs font-semibold transition-colors">
             <Icon name="heart" size={14} className="shrink-0" />찜한 매물
           </button>
           <button type="button" onClick={() => setMsgOpen(true)}
-            className="flex-1 relative flex items-center justify-center gap-1.5 py-2 rounded-input bg-surface-high border border-border-default text-xs font-semibold text-ink-secondary hover:text-ink-primary transition-colors">
+            className="flex-1 relative flex items-center justify-center gap-1.5 py-2 rounded-input chip-aura text-xs font-semibold transition-colors">
             <Icon name="comment" size={14} className="shrink-0" />메시지함
             {msgCount > 0 && <span className="ml-0.5 inline-flex items-center justify-center min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-accent-300 text-white text-2xs font-bold tabular-nums">{msgCount}</span>}
           </button>

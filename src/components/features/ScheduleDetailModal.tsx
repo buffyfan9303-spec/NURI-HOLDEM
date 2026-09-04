@@ -1,6 +1,6 @@
-import { useRef, useState, useEffect, useMemo } from 'react';
+import { useRef, useState, useEffect, useMemo, type ReactNode } from 'react';
 import Modal from '../atoms/Modal';
-import Icon from '../atoms/Icon';
+import Icon, { type IconName } from '../atoms/Icon';
 import ImageLightbox from '../atoms/ImageLightbox';
 import CommentThread from './CommentThread';
 import { useAuth } from '../../contexts/AuthContext';
@@ -82,6 +82,20 @@ function minLabel(ms: number): string {
 }
 const blindText = (l?: ClockLevel): string =>
   l ? `${l.sb.toLocaleString()}/${l.bb.toLocaleString()}${l.ante > 0 ? ` (${l.ante.toLocaleString()})` : ''}` : '—';
+
+// 섹션 머리 — 유저 화면(내 정보·공지·홈)과 같은 아우라 Head 어휘(tile-grad 타일 + 제목).
+// 이 모달만 맨 <h3> 9개로 남아 다른 디자인 시스템처럼 읽혔다(2026-09-04 전수 조사).
+// 모달이라 글로우는 쓰지 않는다 — 글로우는 화면당 1곳, 주인공 면에만(CLAUDE.md).
+function Head({ icon, tile = '', children }: { icon: IconName; tile?: string; children: ReactNode }) {
+  return (
+    <div className="mb-1.5 flex items-center gap-2">
+      <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-input tile-grad${tile ? ` tile-grad${tile}` : ''}`} aria-hidden>
+        <Icon name={icon} size={13} />
+      </span>
+      <h3 className="text-sm font-bold text-ink-primary">{children}</h3>
+    </div>
+  );
+}
 
 export default function ScheduleDetailModal({
   schedule: scheduleProp, open, onClose, onVenueClick, rating, comments, onSubmitComment, onDeleteComment, onDeletePoster, inline, regInfo,
@@ -415,7 +429,7 @@ export default function ScheduleDetailModal({
             원래 폴백 문구('현장 안내'·'미정'·'메인 토너먼트')를 갖고 있던 행은 그 문구가 곧 답이라 유지한다.
             긴 값은 줄바꿈 대신 가로 마퀴 루프(MarqueeText)로 옆으로 흐른다(기존 문법 유지). */}
         <section>
-          <h3 className="text-sm font-bold text-ink-primary mb-1">게임 정보</h3>
+          <Head icon="info">게임 정보</Head>
           <dl className="divide-y divide-border-subtle border-y border-border-subtle">
             <InfoRow label="게임명" value={schedule.title} />
             <InfoRow label="날짜" value={`${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()} (${dow})`} />
@@ -441,7 +455,7 @@ export default function ScheduleDetailModal({
         {/* 프로모션 */}
         {schedule.promotions && schedule.promotions.length > 0 && (
           <section>
-            <h3 className="text-sm font-bold text-ink-primary mb-1.5">프로모션 / 얼리칩</h3>
+            <Head icon="gift" tile="-fuchsia">프로모션 / 얼리칩</Head>
             <ul className="space-y-1.5">
               {/* 긴 detail(예: 사전예약 얼리칩 조건)이 shrink-0 한 줄 강제로 행 밖으로 삐져나가던
                   오버플로 수정 — 배지·제목 한 줄 + 설명은 아래 전체 폭 줄바꿈 스택으로. */}
@@ -470,7 +484,7 @@ export default function ScheduleDetailModal({
         {/* 사이드 이벤트 */}
         {schedule.sideEvents && schedule.sideEvents.length > 0 && (
           <section>
-            <h3 className="text-sm font-bold text-ink-primary mb-1.5">사이드 이벤트</h3>
+            <Head icon="dice" tile="-cyan">사이드 이벤트</Head>
             <div className="grid grid-cols-2 gap-2">
               {schedule.sideEvents.map((se, i) => (
                 <div key={i} className="rounded-input bg-surface-high border border-border-subtle px-2.5 py-2">
@@ -486,7 +500,7 @@ export default function ScheduleDetailModal({
         {/* 규정 — 대회 운영 규칙이라 매장 탭이 아니라 메인에 둔다 */}
         {schedule.rules && schedule.rules.length > 0 && (
           <section className="reveal">
-            <h3 className="text-sm font-bold text-ink-primary mb-1.5">운영 규정</h3>
+            <Head icon="scale" tile="-indigo">운영 규정</Head>
             <ul className="space-y-1 text-xs text-ink-secondary">
               {schedule.rules.map((r, i) => (
                 <li key={i} className="flex items-start gap-1.5">
@@ -501,7 +515,7 @@ export default function ScheduleDetailModal({
         {/* 상세 설명 */}
         {schedule.description && (
           <section className="reveal">
-            <h3 className="text-sm font-bold text-ink-primary mb-1.5">상세 설명</h3>
+            <Head icon="book-open" tile="-indigo">상세 설명</Head>
             <p className="text-xs text-ink-secondary leading-relaxed whitespace-pre-wrap">
               {schedule.description}
             </p>
@@ -514,7 +528,7 @@ export default function ScheduleDetailModal({
         {/* 블라인드 (선택) — 직접 입력 텍스트 */}
         {schedule.blinds && (
           <section>
-            <h3 className="text-sm font-bold text-ink-primary mb-1.5">블라인드</h3>
+            <Head icon="blinds" tile="-cyan">블라인드</Head>
             <p className="text-xs text-ink-secondary leading-relaxed whitespace-pre-wrap rounded-input bg-surface-high border border-border-subtle px-3 py-2">
               {schedule.blinds}
             </p>
@@ -556,7 +570,7 @@ export default function ScheduleDetailModal({
         {/* ── 순위별 상금 — APIS 문법: 상금이 핵심 정보라 접지 않고 상시 노출 ── */}
         {schedule.rankingPrizes && schedule.rankingPrizes.length > 0 ? (
           <section>
-            <h3 className="text-sm font-bold text-ink-primary mb-1.5">순위별 상금</h3>
+            <Head icon="trophy" tile="-amber">순위별 상금</Head>
             <div className="overflow-hidden rounded-aura border border-border-subtle bg-surface-high">
               <table className="w-full text-xs">
                 <tbody>
@@ -635,7 +649,7 @@ export default function ScheduleDetailModal({
           <section className="reveal space-y-3">
             {schedule.partners && schedule.partners.length > 0 && (
               <div>
-                <h3 className="text-sm font-bold text-ink-primary mb-1.5">파트너 / 시드권 발행</h3>
+                <Head icon="ticket" tile="-fuchsia">파트너 / 시드권 발행</Head>
                 <div className="flex flex-wrap gap-1.5">
                   {/* max-w-full: 긴 파트너명(띄어쓰기 없는 영문 등)이 칩째로 화면 밖으로 나가지 않게 칩 안에서 줄바꿈 */}
                   {schedule.partners.map((p) => (
@@ -652,7 +666,7 @@ export default function ScheduleDetailModal({
             )}
             {schedule.paymentMethods && schedule.paymentMethods.length > 0 && (
               <div>
-                <h3 className="text-sm font-bold text-ink-primary mb-1.5">결제 수단</h3>
+                <Head icon="wallet" tile="-indigo">결제 수단</Head>
                 <div className="flex flex-wrap gap-1.5">
                   {schedule.paymentMethods.map((m) => (
                     <span

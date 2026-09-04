@@ -83,8 +83,8 @@ export default function NoticeFormModal({ open, onClose, onSubmit, editing }: No
                 className={[
                   'flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-input border text-xs font-semibold transition-colors',
                   type === o.id
-                    ? 'chip-aura border-transparent'
-                    : 'border-border-default bg-surface-high text-ink-muted hover:text-ink-secondary',
+                    ? 'border-transparent bg-accent-300 text-white'
+                    : 'chip-aura',
                 ].join(' ')}
               >
                 {/* 독자가 볼 마커를 작성자가 그대로 본다 — 유형 선택이 추상적인 라벨 고르기가 아니게 된다 */}
@@ -108,8 +108,8 @@ export default function NoticeFormModal({ open, onClose, onSubmit, editing }: No
                 className={[
                   'min-h-[44px] rounded-input border text-2xs font-semibold transition-colors',
                   board === o.id
-                    ? 'chip-aura border-transparent'
-                    : 'border-border-default bg-surface-high text-ink-muted hover:text-ink-secondary',
+                    ? 'border-transparent bg-accent-300 text-white'
+                    : 'chip-aura',
                 ].join(' ')}
               >
                 {o.label}

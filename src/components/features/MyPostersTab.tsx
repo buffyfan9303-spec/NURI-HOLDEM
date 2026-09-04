@@ -91,7 +91,7 @@ export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete, on
         const cntOf = (k: string) => myPosters.filter((p) => isoOf(p) === k).length;
         const shown = dateFilter ? myPosters.filter((p) => isoOf(p) === dateFilter) : myPosters;
         const dow = ['일', '월', '화', '수', '목', '금', '토'];
-        const chip = (on: boolean) => ['shrink-0 rounded-input px-2.5 py-1.5 text-2xs font-bold transition-colors', on ? 'bg-accent-300 text-white' : 'bg-surface-high text-ink-secondary hover:text-ink-primary border border-border-default'].join(' ');
+        const chip = (on: boolean) => ['shrink-0 rounded-input px-2.5 py-1.5 text-2xs font-bold transition-colors', on ? 'bg-accent-300 text-white' : 'chip-aura'].join(' ');
         return (
           <>
             {/* 날짜 선택 — 예약을 날짜별로 관리(장부 날짜 선택과 동일한 방식) */}
