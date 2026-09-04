@@ -2750,6 +2750,62 @@ export default function App() {
             {/* PC 3컬럼: 중앙 콘텐츠 + 우측 위젯 레일(xl 이상) — 바이낸스식 정보 밀도 */}
             <div className="flex items-start gap-4">
               <div className="min-w-0 flex-1">
+                {/* 공지는 **늘 최상단**이다(오너 지시 2026-09-05).
+                    ⚠ 이는 예전 진단(P0-1c "매 진입 정보가 아니라 '지난 대회' 아래로")을 되돌린 것이다.
+                       그때 아래로 내린 이유는 첫 화면 밀도였고, 그 대가로 커뮤니티·장터·딜러(전부 0번째)와
+                       위치가 달라 '공지가 어디 있는지'가 화면마다 달랐다. 접힘 기본값을 유지해
+                       밀도 손실은 헤더 한 줄(50px)로 묶는다.
+                    ⚠ 아래 MO-7B 주석의 '늦게 와서 목록 위에 끼어들면 계단식 밀림' 함정에 걸리지 않는다:
+                       이 블록의 조건에 `!noticesLoaded` 가 있어 **로딩 중에도 자리를 잡고 있다**
+                       (개인화 블록들과 달리 auth 왕복을 기다리지 않는다). 단, 로드 결과가 0건이고
+                       관리자도 아니면 그때 사라지며 아래가 올라온다 — board='all' 공지가 상시 있어
+                       실사용에선 발생하지 않지만, 공지를 전부 지우면 재발할 수 있는 자리다. */}
+          {(browseNotices.length > 0 || isAdmin || !noticesLoaded) && (
+                  <div className="pt-3">
+                    {/* ⚠ px-page-x 를 다시 주지 않는다 — 부모 래퍼가 이미 준다. 이중으로 걸면
+                        이 카드만 좌우 17px 씩 안으로 들어가(1rem=17px) 바로 위 '지난 대회' 카드와
+                        **모서리가 어긋난다**(375px 실측 x=34/307 vs 형제 x=17/341). */}
+                    <section className="rounded-aura border card-aura overflow-hidden">
+                      <header className="flex items-center justify-between px-3 py-2 border-b border-border-subtle">
+                        <button
+                          type="button"
+                          onClick={() => setNoticesOpen((v) => !v)}
+                          aria-expanded={noticesOpen}
+                          // 글자 높이 그대로면 17px 다. 헤더의 py-2 를 음수 마진으로 되먹여
+                          // 헤더 높이는 유지한 채 손가락이 닿는 영역만 33px 로 넓힌다.
+                          className="-my-2 py-2 -ml-1 pl-1 pr-2 flex items-center gap-1.5 text-xs font-bold text-accent-300 focus:outline-none"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden
+                            className={['transition-transform duration-[var(--dur-base)]', noticesOpen ? '' : '-rotate-90'].join(' ')}>
+                            <polyline points="6 9 12 15 18 9" />
+                          </svg>
+                          공지사항 {browseNotices.length > 0 && <span className="text-2xs text-ink-muted font-normal">({browseNotices.length})</span>}
+                        </button>
+                        {isAdmin && (
+                          <button type="button" onClick={() => setNoticeFormOpen(true)} className="-my-2 py-2 pl-2 text-2xs text-accent-300 hover:text-accent-200 font-semibold">
+                            + 공지 작성
+                          </button>
+                        )}
+                      </header>
+                      {noticesOpen && (browseNotices.length > 0 ? (
+                        // 행은 NoticeSection 의 NoticeRow 단일 출처 — 커뮤니티·장터·딜러와 마커·높이(44px)·타이포가 같다.
+                        // 껍데기(접이식 헤더)만 여기 고유다: 첫 화면 밀도 우선이라 기본 접힘이어야 한다.
+                        <ul className="p-2 pt-0 space-y-0.5">
+                          {/* reserveMarker: 이 3건에 이벤트·주의(타일)가 섞여 있을 때만 pinned 행이
+                              24px 를 비운다 — 전부 pinned 면(대부분) 왼쪽 여백 없이 제목부터 시작한다.
+                              NoticeSection 과 같은 규칙을 여기서도 지켜야 두 화면의 행이 어긋나지 않는다. */}
+                          {browseNotices.slice(0, 3).map((n, _i, arr) => (
+                            <NoticeRow key={n.id} notice={n} onSelect={setOpenNotice}
+                              reserveMarker={arr.some((x) => x.type !== 'pinned')} />
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="px-3 py-3 text-center text-2xs text-ink-muted">등록된 공지가 없습니다</p>
+                      ))}
+                    </section>
+                  </div>
+                )}
                 {!schedulesLoaded ? (
                   <ScheduleSkeletonGrid viewMode={viewMode} />
                 ) : schedulesError && schedules.length === 0 ? (
@@ -2839,53 +2895,6 @@ export default function App() {
                 {/* 🏁 지난 대회 — 완료된 대회 아카이브(결과는 상세에서) */}
                 <PastTournaments schedules={schedules} onSelect={handleScheduleSelect} />
 
-                {/* P0-1c: 공지 아코디언은 매 진입 정보가 아니라 '지난 대회' 아래로(오너 진단) */}
-          {(browseNotices.length > 0 || isAdmin || !noticesLoaded) && (
-                  <div className="pt-3">
-                    {/* ⚠ px-page-x 를 다시 주지 않는다 — 부모 래퍼가 이미 준다. 이중으로 걸면
-                        이 카드만 좌우 17px 씩 안으로 들어가(1rem=17px) 바로 위 '지난 대회' 카드와
-                        **모서리가 어긋난다**(375px 실측 x=34/307 vs 형제 x=17/341). */}
-                    <section className="rounded-aura border card-aura overflow-hidden">
-                      <header className="flex items-center justify-between px-3 py-2 border-b border-border-subtle">
-                        <button
-                          type="button"
-                          onClick={() => setNoticesOpen((v) => !v)}
-                          aria-expanded={noticesOpen}
-                          // 글자 높이 그대로면 17px 다. 헤더의 py-2 를 음수 마진으로 되먹여
-                          // 헤더 높이는 유지한 채 손가락이 닿는 영역만 33px 로 넓힌다.
-                          className="-my-2 py-2 -ml-1 pl-1 pr-2 flex items-center gap-1.5 text-xs font-bold text-accent-300 focus:outline-none"
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden
-                            className={['transition-transform duration-[var(--dur-base)]', noticesOpen ? '' : '-rotate-90'].join(' ')}>
-                            <polyline points="6 9 12 15 18 9" />
-                          </svg>
-                          공지사항 {browseNotices.length > 0 && <span className="text-2xs text-ink-muted font-normal">({browseNotices.length})</span>}
-                        </button>
-                        {isAdmin && (
-                          <button type="button" onClick={() => setNoticeFormOpen(true)} className="-my-2 py-2 pl-2 text-2xs text-accent-300 hover:text-accent-200 font-semibold">
-                            + 공지 작성
-                          </button>
-                        )}
-                      </header>
-                      {noticesOpen && (browseNotices.length > 0 ? (
-                        // 행은 NoticeSection 의 NoticeRow 단일 출처 — 커뮤니티·장터·딜러와 마커·높이(44px)·타이포가 같다.
-                        // 껍데기(접이식 헤더)만 여기 고유다: 첫 화면 밀도 우선이라 기본 접힘이어야 한다.
-                        <ul className="p-2 pt-0 space-y-0.5">
-                          {/* reserveMarker: 이 3건에 이벤트·주의(타일)가 섞여 있을 때만 pinned 행이
-                              24px 를 비운다 — 전부 pinned 면(대부분) 왼쪽 여백 없이 제목부터 시작한다.
-                              NoticeSection 과 같은 규칙을 여기서도 지켜야 두 화면의 행이 어긋나지 않는다. */}
-                          {browseNotices.slice(0, 3).map((n, _i, arr) => (
-                            <NoticeRow key={n.id} notice={n} onSelect={setOpenNotice}
-                              reserveMarker={arr.some((x) => x.type !== 'pinned')} />
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="px-3 py-3 text-center text-2xs text-ink-muted">등록된 공지가 없습니다</p>
-                      ))}
-                    </section>
-                  </div>
-                )}
 
                 {/* [DS] MO-7B 규칙 A — 개인화 블록(오늘예약·바인요청·이어서하기)은 auth 왕복
                     '뒤'에 도착해 목록 위에 끼어들며 매 로그인 부팅마다 계단식 밀림을 만들었다.
