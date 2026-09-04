@@ -11,7 +11,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import Icon from '../atoms/Icon';
 import { deleteLedgerPlayerAtomic, CELL_TAKEN, cancelMyRecentBuyin,
   type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type LedgerSessionListItem, type DiscountPreset, type EarlyType, type LedgerGame, type LedgerCloseSnapshot, type LedgerLossSummary,
-  visitorLabel, wonToMan, WON_PER_MAN, buyinFinance, earlyTypeOf, setBuyinEarly, MAIN_GAME_SEQ, ledgerLossSummary,
+  visitorLabel, wonToMan, WON_PER_MAN, buyinFinance, buyinValue, earlyTypeOf, setBuyinEarly, MAIN_GAME_SEQ, ledgerLossSummary,
   cardUnit, discountAmountOf, autoDiscountIndex, discountSummary, type DiscountSummary,
   getLedgerSession, getLedgerGames, saveLedgerSession, openLedgerSession, closeLedgerSession, reopenLedgerSession, deleteLedgerSession,
   setRegistrationClosed, getLastLedgerSettings, getLedgerSessionList, getLedgerAccessUserIds, notifyLedgerOpen,
@@ -495,16 +495,18 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   // 플레이어별 총 바이인/미수(금액) — 행마다 buyins 전체를 훑던 것(O(행×바인))을
   // buyins 1회 집계 맵(O(바인))으로 전환. 리스트 렌더에서 두 번 호출돼 재계산 부담이 컸음.
   const playerTotalsMap = useMemo(() => {
-    const m = new Map<string, { paid: number; unpaid: number }>();
+    const m = new Map<string, { paid: number; unpaid: number; value: number }>();
     for (const b of buyins) {
       const f = buyinFinance(b, session);
-      const cur = m.get(b.playerName) ?? { paid: 0, unpaid: 0 };
+      const cur = m.get(b.playerName) ?? { paid: 0, unpaid: 0, value: 0 };
       cur.paid += f.paid; cur.unpaid += f.unpaid;
+      // '총바인' 열에 쓰는 바인 **가치** — 티켓·지원도 단가만큼 친다(buyinValue 주석 참고).
+      cur.value += buyinValue(f, session);
       m.set(b.playerName, cur);
     }
     return m;
   }, [buyins, session]);
-  const playerTotals = (name: string) => playerTotalsMap.get(name) ?? { paid: 0, unpaid: 0 };
+  const playerTotals = (name: string) => playerTotalsMap.get(name) ?? { paid: 0, unpaid: 0, value: 0 };
 
   // ── 액션 ──────────────────────────────────────────────────────────────────
   const handleOpen = async (s: LedgerSession) => {
@@ -1223,12 +1225,14 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                             title="+1 바인 · 결제수단 선택"
                             className="block w-full rounded-input px-0.5 py-0.5 text-left leading-tight transition-colors hover:bg-accent-300/10 disabled:cursor-default disabled:hover:bg-transparent">
                             <b className="text-accent-200">{cnt}회{closed ? '' : ' +'}</b>
-                            <span className="block text-ink-secondary">{wonToMan(tot.paid + tot.unpaid)}만</span>
+                            {/* 회수와 같은 정의로 — 티켓·지원도 단가만큼. paid+unpaid 로 두면
+                                티켓 바인이 '1회 / 0만' 이 된다(오너 보고 2026-09-05). */}
+                            <span className="block text-ink-secondary">{wonToMan(tot.value)}만</span>
                           </button>
                         ) : first ? (
                           <span className="leading-tight block text-left">
                             <b className="text-accent-200">{cnt}회</b>
-                            <span className="block text-ink-secondary">{wonToMan(tot.paid + tot.unpaid)}만</span>
+                            <span className="block text-ink-secondary">{wonToMan(tot.value)}만</span>
                           </span>
                         ) : ''}
                       </td>

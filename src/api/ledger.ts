@@ -163,6 +163,22 @@ export function buyinFinance(b: LedgerBuyin, s: { buyinAmount: number; cardAmoun
   return b.isUnpaid ? { ...z, entry, unpaid: effPay } : { ...z, entry, paid: effPay };
 }
 
+/**
+ * 바인 1건의 **가치**(원) — '총바인' 열이 쓰는 값. 매출(paid)과는 다른 개념이다.
+ *
+ * 왜 따로 두나: 매출은 '실제 받은 현금'이라 티켓·가게지원이 0인 게 맞다(이용권은 미리 판 것,
+ * 지원은 매장이 부담). 하지만 '총바인'은 **이 손님이 만든 바인의 가치**라 티켓 1장도 단가만큼
+ * 쳐야 한다 — 같은 칸의 '회' 가 이미 티켓을 세고 있어서, 금액만 빼면 회수와 금액이 갈린다
+ * (오너 보고 2026-09-05: "티켓 1 = 10만원인데 바인 금액이 10이 안 올라").
+ *
+ * 티켓·지원은 buyinFinance 가 **장수/건수**로 돌려주므로 단가를 곱한다.
+ * 분납도 같은 식으로 맞는다: paid=현금성 · unpaid=미수 · ticketPaid=ticketCount → 합이 곧 total.
+ * 할인은 이미 paid 쪽에 반영돼 있다(비분납은 net 저장, 분납은 애초에 덜 받은 금액이 입력된다).
+ */
+export function buyinValue(f: BuyinFinance, s: { buyinAmount: number }): number {
+  return f.paid + f.unpaid + (f.ticketPaid + f.ticketUnpaid + f.support) * s.buyinAmount;
+}
+
 /** 기록 시점 확정 금액(스냅샷) — 비분납 현금/카드/이체는 net(단가−할인)을 amounts 칸에 저장한다.
  *  buyinFinance 가 저장 금액을 우선하므로, 이후 세션 단가·할인 수정이 과거 기록에 소급되지 않는다.
  *  (서버 approve_buyin_request 는 처음부터 이 방식 — 클라 기록을 같은 원리로 정렬) */

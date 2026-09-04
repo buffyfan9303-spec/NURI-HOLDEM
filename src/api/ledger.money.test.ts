@@ -6,7 +6,7 @@
 //
 // 실행: npx vitest run src/api/ledger.money.test.ts
 import { describe, it, expect } from 'vitest';
-import { buyinFinance, cardUnit, wonToMan, type LedgerBuyin } from './ledger';
+import { buyinFinance, buyinValue, cardUnit, wonToMan, type LedgerBuyin } from './ledger';
 
 // 10만원 게임 · 카드 11만원(수수료 반영) · 할인 이벤트 2종(5만/3만)
 const SESSION = {
@@ -187,5 +187,52 @@ describe('합계 정합성 · 여러 바인의 매출 합이 기대와 일치', 
     expect(t.unpaid).toBe(100_000);
     expect(t.ticket).toBe(1);
     expect(t.entry).toBeCloseTo(4.5, 10); // 1 + 0.5 + 1 + 1 + 1
+  });
+});
+
+// ── 총바인 '가치'(buyinValue) — 매출과 다른 개념 ─────────────────────────────
+// 오너 보고(2026-09-05): "티켓 1을 클릭하면 1티켓의 가치는 10만원인데 바인 금액이 10이 안 올라가".
+// 운영 DB 실측: payment_method='ticket' 2건이 현금성 0 · 미수 0 이라 '총바인' 열이 0원이었다.
+// 같은 칸의 '회'는 티켓을 세고 있었으므로 회수와 금액의 정의가 갈려 있었다.
+// ⚠ 매출(paid)은 티켓을 0으로 두는 것이 맞다 — 여기서 고치는 것은 '가치' 한 곳뿐이다.
+describe('총바인 가치(buyinValue) — 티켓·지원도 단가만큼', () => {
+  const value = (b: LedgerBuyin) => buyinValue(buyinFinance(b, SESSION), SESSION);
+
+  it('티켓 1장 = 10만 가치 · 매출은 여전히 0', () => {
+    const b = buyin({ paymentMethod: 'ticket' });
+    expect(buyinFinance(b, SESSION).paid).toBe(0);   // 매출은 안 잡힌다(회귀 방지)
+    expect(value(b)).toBe(100_000);                  // 총바인은 잡힌다
+  });
+
+  it('티켓 미수도 10만 가치 — 자리는 채웠다', () => {
+    expect(value(buyin({ paymentMethod: 'ticket', isUnpaid: true }))).toBe(100_000);
+  });
+
+  it('가게지원 = 10만 가치 · 매출 0', () => {
+    const b = buyin({ paymentMethod: 'support' });
+    expect(buyinFinance(b, SESSION).paid).toBe(0);
+    expect(value(b)).toBe(100_000);
+  });
+
+  it('현금 완납은 매출과 가치가 같다', () => {
+    expect(value(buyin({ paymentMethod: 'cash' }))).toBe(100_000);
+  });
+
+  it('미수는 가치에 포함된다(받을 돈도 바인이다)', () => {
+    expect(value(buyin({ paymentMethod: 'cash', isUnpaid: true }))).toBe(100_000);
+  });
+
+  it('할인 5만이 걸린 현금 = 가치 5만(덜 받은 만큼만)', () => {
+    expect(value(buyin({ paymentMethod: 'cash', discountIndex: 1 }))).toBe(50_000);
+  });
+
+  it('분납 카드 4만 + 티켓 1장 = 가치 14만 · 매출은 4만', () => {
+    const b = buyin({ isSplit: true, cardAmount: 40_000, ticketCount: 1 });
+    expect(buyinFinance(b, SESSION).paid).toBe(40_000);
+    expect(value(b)).toBe(140_000);
+  });
+
+  it('분납 현금 3만 + 미수 7만 = 가치 10만', () => {
+    expect(value(buyin({ isSplit: true, cashAmount: 30_000, unpaidAmount: 70_000 }))).toBe(100_000);
   });
 });
