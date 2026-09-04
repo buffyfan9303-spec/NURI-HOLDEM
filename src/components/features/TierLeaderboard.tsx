@@ -166,6 +166,14 @@ function ActivityBoardSkeleton() {
   );
 }
 
+/** 상점 액션 버튼의 **고정 박스** — 구매/장착/해제 세 상태가 같은 크기를 쓰게 한다.
+ *  테두리를 항상 1px 잡아 두는 것이 핵심이다(활성일 때만 transparent):
+ *  예전엔 활성 상태만 테두리가 없어 누르는 순간 높이가 2px 줄었다 늘었다 — 그게 오너가 본 '툭' 이다.
+ *  바뀌는 것을 색·글자로만 한정하면 transition-colors 하나로 부드러워진다(모션 헌법 §4). */
+const SHOP_BTN = 'mt-1.5 inline-flex w-full min-h-[30px] items-center justify-center gap-1 rounded-input border px-2 py-1.5 text-2xs font-bold transition-colors disabled:opacity-50';
+const SHOP_BTN_ON = 'border-transparent bg-accent-300 text-white';
+const SHOP_BTN_OFF = 'border-accent-400/40 text-accent-300 hover:bg-accent-300/10';
+
 export default function TierLeaderboard() {
   const { user, refreshProfile } = useAuth();
   const [rows, setRows] = useState<LeaderboardEntry[]>([]);
@@ -939,14 +947,17 @@ export default function TierLeaderboard() {
                 </span>
               </div>
 
-              {/* ── 쓰는 이유 ─────────────────────────────────────────────────
-                  '버는 이유(도달 마크)'와 '쓰는 이유(구매 상품)'를 절대 섞지 않는다.
+              {/* ── 점수로 사는 것 ─────────────────────────────────────────────────
+                  '활동으로 얻는 것(도달 마크)'과 '점수로 사는 것(구매 상품)'을 절대 섞지 않는다.
                   섞이면 이미 해금해 장착 중인 마크가 '사야 하는 것'으로 보여 산 걸 빼앗는 회귀가 된다
                   (spent_points 를 activity_points 와 분리한 이유가 정확히 그것이었다). */}
               <div className="flex items-center gap-1.5 pt-1">
-                <Icon name="wallet" size={13} className="shrink-0 text-accent-300" />
-                <p className="shrink-0 text-2xs font-extrabold text-accent-300">쓰는 이유</p>
-                <p className="shrink-0 text-2xs text-ink-muted">사용 가능 점수로 삽니다</p>
+                {/* 카피(오너 2026-09-04): '쓰는 이유/버는 이유'는 내부 용어라 사용자에게 안 읽힌다.
+                    두 구역이 섞이면 안 된다는 원칙은 그대로 두고, 말만 사용자 언어로 바꾼다.
+                    아이콘도 지갑(추상) → 카트(산다)로 — 아래 '활동으로 얻는 것'의 메달과 짝이 맞는다. */}
+                <Icon name="cart" size={13} className="shrink-0 text-accent-300" />
+                <p className="shrink-0 text-2xs font-extrabold text-accent-300">점수로 사는 것</p>
+                <p className="shrink-0 text-2xs text-ink-muted">사용 가능 점수로 구매합니다</p>
                 <span className="h-px flex-1 bg-border-subtle" />
               </div>
 
@@ -988,15 +999,14 @@ export default function TierLeaderboard() {
                         {own ? (
                           <button type="button" disabled={equipBusy !== null}
                             onClick={() => handleEquip(on ? null : mk.key)}
-                            className={['mt-1.5 w-full rounded-input px-2 py-1.5 text-2xs font-bold transition-colors',
-                              on ? 'bg-accent-300 text-white' : 'border border-accent-400/40 text-accent-300 hover:bg-accent-300/10'].join(' ')}>
+                            className={[SHOP_BTN, on ? SHOP_BTN_ON : SHOP_BTN_OFF].join(' ')}>
                             {equipPending(mk.key, on)
                               ? '적용 중…' : on ? '✓ 장착 중 · 해제' : own.source === 'own' ? '소장 중 · 장착' : '장착하기'}
                           </button>
                         ) : (
                           <button type="button" disabled={buying !== null || poor || !markSku}
                             onClick={() => handleBuyMark(mk)} title={markSku?.descr}
-                            className="mt-1.5 inline-flex w-full items-center justify-center gap-1 rounded-input border border-accent-400/40 px-2 py-1.5 text-2xs font-bold tabular-nums text-accent-300 transition-colors hover:bg-accent-300/10 disabled:opacity-50">
+                            className={[SHOP_BTN, SHOP_BTN_OFF, 'tabular-nums'].join(' ')}>
                             {buying === mk.key ? '구매 중…'
                               : !markSku ? '판매 준비 중'
                                 : poor ? `${price.toLocaleString()}점 부족` : `${price.toLocaleString()}점 소장`}
@@ -1076,14 +1086,13 @@ export default function TierLeaderboard() {
                           {own ? (
                             <button type="button" disabled={equipBusy !== null}
                               onClick={() => handleEquipCosmetic(c, on)}
-                              className={['mt-1.5 w-full rounded-input px-2 py-1.5 text-2xs font-bold transition-colors',
-                                on ? 'bg-accent-300 text-white' : 'border border-accent-400/40 text-accent-300 hover:bg-accent-300/10'].join(' ')}>
+                              className={[SHOP_BTN, on ? SHOP_BTN_ON : SHOP_BTN_OFF].join(' ')}>
                               {equipPending(c.key, on) ? '적용 중…' : on ? '✓ 적용 중 · 해제' : '소장 중 · 적용'}
                             </button>
                           ) : (
                             <button type="button" disabled={buying !== null || poor}
                               onClick={() => handleBuyCosmetic(c)}
-                              className="mt-1.5 inline-flex w-full items-center justify-center gap-1 rounded-input border border-accent-400/40 px-2 py-1.5 text-2xs font-bold tabular-nums text-accent-300 transition-colors hover:bg-accent-300/10 disabled:opacity-50">
+                              className={[SHOP_BTN, SHOP_BTN_OFF, 'tabular-nums'].join(' ')}>
                               {buying === c.key ? '구매 중…'
                                 : poor ? `${frameSku.price.toLocaleString()}점 부족` : `${frameSku.price.toLocaleString()}점 소장`}
                             </button>
@@ -1132,14 +1141,13 @@ export default function TierLeaderboard() {
                           {own ? (
                             <button type="button" disabled={equipBusy !== null}
                               onClick={() => handleEquipCosmetic(c, on)}
-                              className={['mt-1.5 w-full rounded-input px-2 py-1.5 text-2xs font-bold transition-colors',
-                                on ? 'bg-accent-300 text-white' : 'border border-accent-400/40 text-accent-300 hover:bg-accent-300/10'].join(' ')}>
+                              className={[SHOP_BTN, on ? SHOP_BTN_ON : SHOP_BTN_OFF].join(' ')}>
                               {equipPending(c.key, on) ? '적용 중…' : on ? '✓ 적용 중 · 해제' : '소장 중 · 적용'}
                             </button>
                           ) : (
                             <button type="button" disabled={buying !== null || poor}
                               onClick={() => handleBuyCosmetic(c)}
-                              className="mt-1.5 inline-flex w-full items-center justify-center gap-1 rounded-input border border-accent-400/40 px-2 py-1.5 text-2xs font-bold tabular-nums text-accent-300 transition-colors hover:bg-accent-300/10 disabled:opacity-50">
+                              className={[SHOP_BTN, SHOP_BTN_OFF, 'tabular-nums'].join(' ')}>
                               {buying === c.key ? '구매 중…'
                                 : poor ? `${nickSku.price.toLocaleString()}점 부족` : `${nickSku.price.toLocaleString()}점 소장`}
                             </button>
@@ -1294,12 +1302,12 @@ export default function TierLeaderboard() {
                 응원은 <b className="text-ink-secondary">받는 사람에게 점수가 가지 않습니다</b> — 표시와 알림만 남고 점수는 소멸해요.
               </p>
 
-              {/* ── 버는 이유 — 여기 있는 16종은 **살 수 없다.** 점수로만 열린다.
-                  위(쓰는 이유)와 시각적으로 갈라 두지 않으면 '해금한 마크를 또 사야 하나'로 읽힌다. */}
+              {/* ── 활동으로 얻는 것 — 여기 있는 16종은 **살 수 없다.** 점수로만 열린다.
+                  위(점수로 사는 것)와 시각적으로 갈라 두지 않으면 '해금한 마크를 또 사야 하나'로 읽힌다. */}
               <div className="flex items-center gap-1.5 pt-2">
-                <Icon name="trending-up" size={13} className="shrink-0 text-emerald-300" />
-                <p className="shrink-0 text-2xs font-extrabold text-emerald-300">버는 이유</p>
-                <p className="shrink-0 text-2xs text-ink-muted">활동으로만 열립니다 · 살 수 없어요</p>
+                <Icon name="medal" size={13} className="shrink-0 text-emerald-300" />
+                <p className="shrink-0 text-2xs font-extrabold text-emerald-300">활동으로 얻는 것</p>
+                <p className="shrink-0 text-2xs text-ink-muted">점수가 쌓이면 자동으로 열려요 · 구매 불가</p>
                 <span className="h-px flex-1 bg-border-subtle" />
               </div>
               <p className="text-2xs font-bold text-ink-secondary">모으는 마크 <span className="font-normal text-ink-muted">점수에 도달하면 영구 해금(차감 없음)</span></p>

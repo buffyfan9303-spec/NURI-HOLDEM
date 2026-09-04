@@ -5,6 +5,7 @@ import Modal from '../atoms/Modal';
 import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import { submitInquiry, getMyInquiries, deleteMyInquiry, INQUIRY_CATEGORIES, type SupportInquiry } from '../../api/support';
+import { promptLogin } from '../../lib/requireLogin';
 
 export default function SupportInquiryModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { user } = useAuth();
@@ -32,6 +33,27 @@ export default function SupportInquiryModal({ open, onClose }: { open: boolean; 
     if (!window.confirm('이 문의를 삭제할까요?')) return;
     try { await deleteMyInquiry(id); load(); } catch (e) { toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'); }
   };
+
+  // 이 모달은 **푸터에서 열리고 푸터는 비로그인에게도 보인다.** 예전엔 비로그인도 폼이 전부 보여서
+  // 카테고리 고르고 제목·내용을 다 쓴 **뒤에야** '로그인이 필요합니다' 토스트를 받았다 —
+  // 접수도 안 되고 쓴 글도 날아가는 막다른 길이었다(오너 리포트 2026-09-04 "1:1 문의가 제대로 안 된다").
+  // 쓰기 전에 막고, 집안 표준 promptLogin() 으로 로그인 모달까지 이어 준다.
+  if (!user) {
+    return (
+      <Modal open={open} onClose={onClose} title="고객센터 · 1:1 문의" maxWidth="md" variant="sheet">
+        <div className="p-6 text-center">
+          <p className="text-sm font-bold text-ink-primary">로그인하면 문의를 접수할 수 있어요</p>
+          <p className="mt-1 text-2xs leading-relaxed text-ink-secondary">
+            답변을 받아 보려면 계정이 필요합니다. 접수한 문의와 답변은 이 화면에서 확인할 수 있어요.
+          </p>
+          <button type="button" onClick={() => { onClose(); promptLogin(); }}
+            className="btn-primary mx-auto mt-4 w-full max-w-[220px] py-2.5 text-sm">
+            로그인하기
+          </button>
+        </div>
+      </Modal>
+    );
+  }
 
   return (
     <Modal open={open} onClose={onClose} title="고객센터 · 1:1 문의" maxWidth="md" variant="sheet">

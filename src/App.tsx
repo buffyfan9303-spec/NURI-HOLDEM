@@ -2958,7 +2958,7 @@ export default function App() {
       {!hasStoreTabs && (activeTab === 'calendar' || visitedTabs.has('calendar')) && (
         <main data-tab="calendar" className="tab-pane" style={activeTab !== 'calendar' ? { display: 'none' } : undefined}>
           <ErrorBoundary inline resetKey="calendar">
-            <CalendarPanelM schedules={schedules} onSelect={handleScheduleSelect} active={activeTab === 'calendar'} />
+            <CalendarPanelM schedules={schedules} onSelect={handleScheduleSelect} onVenue={handleVenueClick} onLogin={() => setAuthOpen(true)} active={activeTab === 'calendar'} />
           </ErrorBoundary>
         </main>
       )}

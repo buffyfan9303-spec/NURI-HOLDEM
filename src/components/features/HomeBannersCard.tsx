@@ -90,7 +90,13 @@ export default function HomeBannersCard() {
     [next[i], next[j]] = [next[j], next[i]];
     setRows(next);                       // 낙관적 반영 — 실패하면 reload 가 되돌린다
     setBusy(rows[i].id);
-    try { await reorderHomeBanners(next.map((r) => r.id)); }
+    try {
+      await reorderHomeBanners(next.map((r) => r.id));
+      // ⚠ 성공해도 반드시 다시 읽는다. 서버는 sort_order 를 0..n 으로 다시 매기는데 로컬 rows 의
+      //   sortOrder 는 옛 값 그대로라, 이어서 '수정 저장'·'켜기/끄기' 를 누르면 그 옛 값이 payload 에
+      //   실려 방금 바꾼 순서가 되돌아간다(2026-09-04 리뷰 지적).
+      reload();
+    }
     catch (e) { toast.show(e instanceof Error ? e.message : '순서 변경 실패', 'error'); reload(); }
     finally { setBusy(null); }
   };
@@ -160,7 +166,11 @@ export default function HomeBannersCard() {
 
       {/* 목록 */}
       {rows.length === 0 ? (
-        <p className="py-4 text-center text-xs text-ink-muted">등록된 배너가 없습니다</p>
+        <p className="py-4 text-center text-xs leading-relaxed text-ink-muted">
+          등록된 배너가 없습니다.<br />
+          <span className="text-ink-secondary">비어 있는 동안에는 앱에 내장된 기본 배너가 대신 표시됩니다</span> —
+          여기에 한 장이라도 등록하면 그때부터 이 목록이 홈 캐러셀을 대신합니다.
+        </p>
       ) : (
         <ul className="space-y-1.5">
           {rows.map((b, i) => {
