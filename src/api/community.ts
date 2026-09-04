@@ -21,6 +21,8 @@ export interface Venue {
   /** 위경도 — 카카오 지오코딩 라이트백(set_venue_coords). 거리순 정렬용, 없으면 정렬 뒤로 */
   lat?: number | null; lng?: number | null;
   joinApproval?: boolean;// 비-매장 그룹: 가입 시 개설자 승인 필요 여부
+  /** 그룹 개설 목적 — 운영자 승인 판단용(비공개). 공개 소개(description)와 별개다. */
+  openPurpose?: string;
   slug?: string | null;  // 커스텀 공유 링크(/s/<slug>) — 업주 설정, 전역 유니크
   /** 다중 연락처(오너 #17). 신 필드 우선, 없으면 contactPhone 폴백 — venueContacts() 를 쓸 것 */
   contacts?: VenueContact[];
@@ -136,6 +138,7 @@ const rowToVenue = (r: any): Venue => ({
   images: r.images ?? [],
   kind: r.kind ?? 'venue',
   joinApproval: r.join_approval ?? true,
+  openPurpose: r.open_purpose ?? '',
   slug: r.slug ?? null,
   contacts: rowToContacts(r.contact_phones),
 });
@@ -841,10 +844,11 @@ export interface GroupMessage { id: string; groupId: string; userId: string; use
 export interface GroupPost { id: string; groupId: string; authorId: string; authorName: string; authorColor?: string; title?: string; content: string; createdAt: string; }
 
 /** 그룹 생성 요청(운영자 승인 전 approved=false). 생성자=매니저. 반환: 그룹 id */
-export async function createGroup(input: { name: string; kind: GroupKind; region?: string; description?: string; joinApproval: boolean }): Promise<string> {
+export async function createGroup(input: { name: string; kind: GroupKind; region?: string; description?: string; joinApproval: boolean; purpose: string }): Promise<string> {
   if (IS_MOCK) return '';
   const { data, error } = await supabase.rpc('create_group', {
     p_name: input.name, p_kind: input.kind, p_region: input.region ?? '', p_description: input.description ?? '', p_join_approval: input.joinApproval,
+    p_purpose: input.purpose,
   });
   if (error) throw error;
   return data as string;

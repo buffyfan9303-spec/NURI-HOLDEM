@@ -1064,7 +1064,19 @@ function PendingGroupsPanel({ onChanged }: { onChanged: () => void }) {
                 <span className="text-sm font-semibold text-ink-primary">{g.name}</span>
                 {g.region && <span className="text-2xs text-ink-muted">{g.region}</span>}
               </div>
-              {g.description && <p className="mt-1 text-2xs text-ink-secondary line-clamp-2">{g.description}</p>}
+              {/* 가입 방식 — 자동가입 그룹이 더 위험한데 예전엔 이 정보 없이 승인하고 있었다 */}
+              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                <span className={['rounded-badge px-1.5 py-0.5 text-2xs font-bold',
+                  g.joinApproval === false ? 'bg-danger/15 text-danger-light' : 'chip-aura'].join(' ')}>
+                  {g.joinApproval === false ? '자동 가입' : '승인제'}
+                </span>
+              </div>
+              {/* 개설 목적 — 승인 판단의 근거. 없으면 그 사실을 드러낸다(구 클라이언트로 신청한 건) */}
+              <p className="mt-1 text-2xs text-ink-secondary">
+                <b className="text-ink-primary">목적</b>{' '}
+                {g.openPurpose?.trim() ? g.openPurpose : <span className="text-ink-muted">미기재 — 신청자에게 확인 필요</span>}
+              </p>
+              {g.description && <p className="mt-1 text-2xs text-ink-muted line-clamp-2">소개 · {g.description}</p>}
               <div className="mt-1.5 flex gap-1.5">
                 <button type="button" onClick={() => approve(g)} className="btn-primary text-2xs px-3 py-1">승인</button>
                 <button type="button" onClick={() => reject(g)} className="rounded-input border border-border-default px-3 py-1 text-2xs text-ink-muted hover:text-danger-light">거절</button>

@@ -1337,15 +1337,18 @@ function CreateGroupModal({ onClose, onCreated }: { onClose: () => void; onCreat
   const [region, setRegion] = useState('');
   const [description, setDescription] = useState('');
   const [joinApproval, setJoinApproval] = useState(true);
+  const [purpose, setPurpose] = useState('');
   const [sending, setSending] = useState(false);
   const KINDS: GroupKind[] = ['dealer_team', 'club', 'youtuber', 'other'];
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) { toast.show('그룹 이름을 입력해 주세요', 'error'); return; }
+    // 목적이 비면 운영자가 이름·종류만 보고 판단해야 한다 — 승인 심사가 성립하지 않는다.
+    if (purpose.trim().length < 10) { toast.show('개설 목적을 10자 이상 적어 주세요', 'error'); return; }
     setSending(true);
     try {
-      await createGroup({ name, kind, region, description, joinApproval });
+      await createGroup({ name, kind, region, description, joinApproval, purpose });
       toast.show('그룹 개설을 신청했습니다. 운영자 승인 후 공개됩니다.', 'success');
       onCreated();
     } catch (err) { toast.show(err instanceof Error ? err.message : '개설 실패', 'error'); }
@@ -1379,12 +1382,38 @@ function CreateGroupModal({ onClose, onCreated }: { onClose: () => void; onCreat
           <span className="block text-2xs text-ink-secondary mb-1">소개 (선택)</span>
           <textarea value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} rows={3} placeholder="그룹 소개를 적어주세요" className="input w-full resize-none text-sm" />
         </label>
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" checked={joinApproval} onChange={(e) => setJoinApproval(e.target.checked)} className="accent-accent-300" />
-          <span className="text-xs text-ink-secondary">가입 시 내 승인 필요 (해제 시 누구나 즉시 가입)</span>
+        {/* 개설 목적 — 공개 소개와 **분리**한다. 이건 운영자가 승인을 판단하려고 읽는 글이고,
+            소개는 사람들에게 보이는 글이다. 하나로 합치면 심사용 문장이 공개 소개에 섞인다. */}
+        <label className="block">
+          <span className="block text-2xs text-ink-secondary mb-1">
+            개설 목적 <span className="text-danger">*</span>
+            <span className="ml-1 text-ink-muted">운영자만 봅니다 · 공개되지 않아요</span>
+          </span>
+          <textarea value={purpose} onChange={(e) => setPurpose(e.target.value)} maxLength={300} rows={3}
+            placeholder="어떤 사람들이 무엇을 하려고 모이는 그룹인지 적어 주세요. 운영자가 이 내용으로 승인 여부를 판단합니다."
+            className="input w-full resize-none text-sm" />
+          <span className="mt-0.5 block text-right text-2xs tabular-nums text-ink-muted">{purpose.trim().length}/300</span>
         </label>
+
+        {/* 가입 방식 — 예전엔 작은 체크박스 하나라 고른 줄 모르고 지나갔다(오너 지적).
+            두 갈래를 나란히 놓아 **반드시 고르는 것**으로 만든다. 기본은 종전대로 승인제. */}
+        <div>
+          <span className="block text-2xs text-ink-secondary mb-1">멤버 가입 방식 <span className="text-danger">*</span></span>
+          <div className="grid grid-cols-2 gap-1.5">
+            {([[true, '승인제', '내가 수락해야 가입'], [false, '자동 가입', '누구나 바로 가입']] as const).map(([v, label, desc]) => (
+              <button key={String(v)} type="button" onClick={() => setJoinApproval(v)}
+                aria-pressed={joinApproval === v}
+                className={['rounded-input border px-3 py-2 text-left transition-colors duration-[var(--dur-fast)]',
+                  joinApproval === v ? 'border-accent-400/45 bg-accent-300/15' : 'chip-aura'].join(' ')}>
+                <span className={['block text-xs font-bold', joinApproval === v ? 'text-accent-200' : 'text-ink-primary'].join(' ')}>{label}</span>
+                <span className="block text-2xs text-ink-muted">{desc}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
         <p className="text-2xs text-ink-muted">개설하면 내가 매니저가 되며, 운영자 승인 후 목록에 공개됩니다.</p>
-        <button type="submit" disabled={sending || !name.trim()} className="btn-primary w-full disabled:opacity-60">{sending ? '신청 중…' : '개설 신청'}</button>
+        <button type="submit" disabled={sending || !name.trim() || purpose.trim().length < 10} className="btn-primary w-full disabled:opacity-60">{sending ? '신청 중…' : '개설 신청'}</button>
       </form>
     </Modal>
   );
