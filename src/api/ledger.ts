@@ -174,6 +174,13 @@ export function buyinFinance(b: LedgerBuyin, s: { buyinAmount: number; cardAmoun
  * 티켓·지원은 buyinFinance 가 **장수/건수**로 돌려주므로 단가를 곱한다.
  * 분납도 같은 식으로 맞는다: paid=현금성 · unpaid=미수 · ticketPaid=ticketCount → 합이 곧 total.
  * 할인은 이미 paid 쪽에 반영돼 있다(비분납은 net 저장, 분납은 애초에 덜 받은 금액이 입력된다).
+ *
+ * ⚠ 미해결(오너 결정 대기): **할인이 걸린 티켓**은 여기서 단가 전액으로 친다.
+ *   그런데 entry 는 비분납 경로에서만 할인을 반영해 0.5 가 되고 분납 경로에서는 1 이다
+ *   — 같은 '티켓 1장'이 경로에 따라 엔트리가 2배 차이 난다(2026-09-05 조사).
+ *   게다가 그 할인은 운영자가 고르지 않아도 클락 레벨 자동 할인으로 티켓 버튼에까지 붙는다.
+ *   '이용권으로 참가비를 대신 낸 것에 현금 할인을 또 적용하는 게 맞는가'는 회계 판단이라
+ *   여기서 임의로 정하지 않았다. 정해지면 entry 와 이 함수를 **같은 커밋에서** 맞춰야 한다.
  */
 export function buyinValue(f: BuyinFinance, s: { buyinAmount: number }): number {
   return f.paid + f.unpaid + (f.ticketPaid + f.ticketUnpaid + f.support) * s.buyinAmount;

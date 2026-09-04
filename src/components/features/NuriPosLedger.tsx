@@ -2300,7 +2300,11 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
   const [transfer, setTransfer] = useState<number>(init?.transferAmount ?? 0);
   const [tkt, setTkt]           = useState<number>(init?.ticketCount ?? 0);
   const [unpaidAmt, setUnpaidAmt] = useState<number>(init?.unpaidAmount ?? 0);
-  const splitTotal = cash + card + transfer + unpaidAmt;
+  // ⚠ 티켓을 빼면 화면이 저장값과 다른 말을 한다 — 카드 4만 + 티켓 1장을 넣어도 '합계 4만원'이라
+  //   적어 놓고 저장은 14만 상당(entry 1.4)으로 한다. 티켓만 1장이면 '합계 0만원'인데 저장은 된다
+  //   (바로 아래 canSaveSplit 이 tkt>0 만으로도 허용한다 — 합계가 0인데 저장되는 모순).
+  //   buyinFinance 분납 분기(ledger.ts ticketWon)와 같은 식으로 단가 환산해 맞춘다.
+  const splitTotal = cash + card + transfer + unpaidAmt + tkt * session.buyinAmount;
   const canSaveSplit = splitTotal > 0 || tkt > 0;
   const submitSplit = () => onPickSplit({ cashAmount: cash, cardAmount: card, transferAmount: transfer, ticketCount: tkt, unpaidAmount: unpaidAmt, discountIndex: discIdx });
 
