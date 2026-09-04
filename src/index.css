@@ -601,9 +601,13 @@
   .tile-grad-indigo  { background-image: linear-gradient(135deg, #6366F1 0%, #4338CA 100%); box-shadow: 0 6px 12px -4px rgb(99 102 241 / 0.35); }
   .tile-grad-fuchsia { background-image: linear-gradient(135deg, #C026D3 0%, #A21CAF 100%); box-shadow: 0 6px 12px -4px rgb(217 70 239 / 0.35); }
   .tile-grad-cyan    { background-image: linear-gradient(135deg, #0891B2 0%, #0E7490 100%); box-shadow: 0 6px 12px -4px rgb(6 182 212 / 0.35); }
+  /* 경고 톤 — '주의' 공지 전용. gold 팔레트(400→500)라 브랜드 안에 있고,
+     다른 타일과 달리 밝은 면이라 흰 글자가 2:1 밖에 안 나온다 → 잉크를 어둡게 뒤집는다(실측 12:1). */
+  .tile-grad-amber   { color: #241A00; background-image: linear-gradient(135deg, #F0B90B 0%, #C99400 100%); box-shadow: 0 6px 12px -4px rgb(240 185 11 / 0.35); }
   html.light .tile-grad-indigo { box-shadow: 0 6px 12px -4px rgb(99 102 241 / 0.28); }
   html.light .tile-grad-fuchsia { box-shadow: 0 6px 12px -4px rgb(217 70 239 / 0.28); }
   html.light .tile-grad-cyan { box-shadow: 0 6px 12px -4px rgb(6 182 212 / 0.28); }
+  html.light .tile-grad-amber { box-shadow: 0 6px 12px -4px rgb(240 185 11 / 0.28); }
   /* 섹션 밴드(레퍼런스 bg-gray-50 교차 밴드) — PC 대시보드 KPI 밴드 1곳 한정. 모바일 피드에는 붙이지 않는다(3중 선). */
   .section-alt { background-color: rgb(var(--surface-low) / 0.5); border: 1px solid rgb(255 255 255 / 0.06); }
   html.light .section-alt { background-color: rgb(255 255 255 / 0.6); border-color: rgb(11 18 32 / 0.06); }

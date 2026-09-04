@@ -11,6 +11,7 @@ import { relativeTime } from './MarketplaceTab';
 import ICMCalculator from './ICMCalculator';
 import NoticeDetailModal from './NoticeDetailModal';
 import { getNotices, type MarketplaceNotice } from '../../api/marketplace';
+import NoticeSection from './NoticeSection';
 import SegmentedTabs from '../atoms/SegmentedTabs';
 import Icon from '../atoms/Icon';
 import EmptyState from '../atoms/EmptyState';
@@ -114,28 +115,7 @@ export default function DealerCommunity() {
         <span className="font-semibold text-danger-light"><Icon name="alert" size={12} className="mr-0.5 inline-block align-[-1px] shrink-0" />불법 사행성·환전·도박 알선 관련 구인·구직은 강제 탈퇴 및 처벌 대상</span>{notices.length > 0 ? '입니다. 자세한 규정은 아래 공지를 확인하세요.' : '입니다.'}
       </div>
 
-      {notices.length > 0 && (
-        <section className="rounded-aura border card-aura overflow-hidden">
-          <header className="px-3 py-2 border-b border-border-subtle">
-            <h3 className="text-sm font-bold text-ink-primary">공지사항</h3>
-          </header>
-          <ul>
-            {notices.slice(0, 5).map((n) => (
-              <li key={n.id} className="border-b border-border-subtle last:border-b-0">
-                <button type="button" onClick={() => setOpenNotice(n)} className="w-full text-left px-3 py-2 hover:bg-surface-high/50 transition-colors">
-                  {/* 오너 결정 2026-09-03: 게시판 공지 행과 같은 '제목 · 날짜' 한 줄 — 본문은 눌러서 상세(NoticeDetailModal)에서.
-                      되돌릴 때는 아래 미리보기 블록을 복구:
-                      {n.body && <p className="mt-0.5 text-2xs text-ink-muted line-clamp-2 leading-snug">{n.body}</p>} */}
-                  <p className="flex items-center gap-2 text-xs font-semibold text-ink-primary">
-                    <span className="min-w-0 flex-1 truncate">{n.title}</span>
-                    <span className="shrink-0 text-2xs font-normal tabular-nums text-ink-muted">{relativeTime(n.createdAt)}</span>
-                  </p>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      {notices.length > 0 && <NoticeSection notices={notices} onSelect={setOpenNotice} limit={5} />}
 
       {/* ICM 계산기 + 글쓰기 — 모바일에서 반반(두 칸 동일 너비). ICM 펼치면 아래 풀폭 */}
       <div className="grid grid-cols-2 gap-2">

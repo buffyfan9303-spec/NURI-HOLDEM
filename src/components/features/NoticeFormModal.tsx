@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import Modal from '../atoms/Modal';
 import { useToast } from '../atoms/Toast';
 import type { NoticeType, NoticeBoard, MarketplaceNotice } from '../../api/marketplace';
+import { NoticeTile } from './NoticeSection';
 
 export interface NoticeFormData {
   type: NoticeType;
@@ -78,13 +79,16 @@ export default function NoticeFormModal({ open, onClose, onSubmit, editing }: No
                 key={o.id}
                 type="button"
                 onClick={() => setType(o.id)}
+                aria-pressed={type === o.id}
                 className={[
-                  'flex-1 py-2 text-xs font-semibold rounded-input border transition-colors',
+                  'flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-input border text-xs font-semibold transition-colors',
                   type === o.id
-                    ? 'bg-accent-300/20 border-accent-300 text-accent-300'
-                    : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary',
+                    ? 'chip-aura border-transparent'
+                    : 'border-border-default bg-surface-high text-ink-muted hover:text-ink-secondary',
                 ].join(' ')}
               >
+                {/* 독자가 볼 마커를 작성자가 그대로 본다 — 유형 선택이 추상적인 라벨 고르기가 아니게 된다 */}
+                <NoticeTile type={o.id} size={18} />
                 {o.label}
               </button>
             ))}
@@ -100,11 +104,12 @@ export default function NoticeFormModal({ open, onClose, onSubmit, editing }: No
                 key={o.id}
                 type="button"
                 onClick={() => setBoard(o.id)}
+                aria-pressed={board === o.id}
                 className={[
-                  'py-2 text-2xs font-semibold rounded-input border transition-colors',
+                  'min-h-[44px] rounded-input border text-2xs font-semibold transition-colors',
                   board === o.id
-                    ? 'bg-accent-300/20 border-accent-300 text-accent-300'
-                    : 'bg-surface-high border-border-default text-ink-muted hover:text-ink-secondary',
+                    ? 'chip-aura border-transparent'
+                    : 'border-border-default bg-surface-high text-ink-muted hover:text-ink-secondary',
                 ].join(' ')}
               >
                 {o.label}
@@ -115,8 +120,9 @@ export default function NoticeFormModal({ open, onClose, onSubmit, editing }: No
 
         {/* 제목 */}
         <div>
-          <label className="block text-xs font-medium text-ink-secondary mb-1.5">
-            제목 <span className="text-danger ml-0.5">*</span>
+          <label className="mb-1.5 flex items-baseline justify-between text-xs font-medium text-ink-secondary">
+            <span>제목 <span className="ml-0.5 text-danger">*</span></span>
+            <span className="text-2xs tabular-nums text-ink-muted">{title.length}/80</span>
           </label>
           <input
             type="text"
@@ -131,7 +137,10 @@ export default function NoticeFormModal({ open, onClose, onSubmit, editing }: No
 
         {/* 본문 */}
         <div>
-          <label className="block text-xs font-medium text-ink-secondary mb-1.5">내용</label>
+          <label className="mb-1.5 flex items-baseline justify-between text-xs font-medium text-ink-secondary">
+            <span>내용</span>
+            <span className="text-2xs tabular-nums text-ink-muted">{body.length}/2000</span>
+          </label>
           <textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}

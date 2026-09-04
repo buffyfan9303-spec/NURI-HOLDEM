@@ -16,6 +16,7 @@ import type { Venue, Comment, CommunityPost, LiveMessage, PostCategory, GroupKin
 import { getLiveMessages, addLiveMessage, deleteLiveMessage, subscribeLiveWall, createMyVenue, createGroup, GROUP_KIND_LABEL, getMyOwnedCommunities, getMyJoinedGroups, removeMember } from '../../api/community';
 import { REGION_CHIPS } from './IntegratedSearchBar';
 import type { MarketplaceNotice } from '../../api/marketplace';
+import NoticeSection from './NoticeSection';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBlocks } from '../../contexts/BlockContext';
 import { useBackClose } from '../../lib/backstack';
@@ -571,55 +572,7 @@ function FeedSection({
 
       {/* ── 관리자 공지 (게시판 맨 위) ───────────────────────── */}
       {(notices && notices.length > 0) || isAdmin ? (
-        <section className="rounded-aura border card-aura overflow-hidden">
-          <header className="flex items-center justify-between px-3 py-2 border-b border-border-subtle">
-            <h2 className="inline-flex items-center gap-1.5 text-sm font-bold text-ink-primary">
-              공지사항
-              {notices && <span className="text-2xs font-semibold tabular-nums text-ink-muted">({notices.length})</span>}
-            </h2>
-            {isAdmin && (
-              <button
-                type="button"
-                onClick={onWriteNotice}
-                className="text-2xs text-accent-300 hover:text-accent-200 font-semibold"
-              >
-                + 공지 작성
-              </button>
-            )}
-          </header>
-          {notices && notices.length > 0 ? (
-            <ul>
-              {notices.map((n) => (
-                <li
-                  key={n.id}
-                  onClick={() => onSelectNotice?.(n)}
-                  role={onSelectNotice ? 'button' : undefined}
-                  tabIndex={onSelectNotice ? 0 : undefined}
-                  onKeyDown={(e) => {
-                    if (onSelectNotice && (e.key === 'Enter' || e.key === ' ')) {
-                      e.preventDefault();
-                      onSelectNotice(n);
-                    }
-                  }}
-                  className={[
-                    'px-3 py-2 border-b border-border-subtle last:border-b-0 transition-colors focus:outline-none',
-                    onSelectNotice
-                      ? 'hover:bg-surface-high/50 focus-visible:bg-surface-high/50 cursor-pointer'
-                      : 'cursor-default',
-                  ].join(' ')}
-                >
-                  {/* 오너 지시(2026-08-27): 공지는 제목만 한 줄 — 본문·작성자는 눌러서 상세에서 */}
-                  <p className="flex items-center gap-2 text-xs font-semibold text-ink-primary">
-                    <span className="min-w-0 flex-1 truncate">{n.title}</span>
-                    <span className="shrink-0 text-2xs font-normal tabular-nums text-ink-muted">{relativeTime(n.createdAt)}</span>
-                  </p>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="px-3 py-3 text-center text-2xs text-ink-muted">등록된 공지가 없습니다</p>
-          )}
-        </section>
+        <NoticeSection notices={notices ?? []} onSelect={onSelectNotice} canWrite={isAdmin} onWrite={onWriteNotice} />
       ) : null}
 
       {/* 검색 + 카테고리 필터 */}

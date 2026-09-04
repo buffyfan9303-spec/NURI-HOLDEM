@@ -28,6 +28,7 @@ import { getReservationCounts, getMyReservations, type MyReservationRow } from '
 import { getVenueRatings } from './api/reviews';
 import NotificationPanel from './components/features/NotificationPanel';
 import VerifyGateSheet from './components/features/VerifyGateSheet';
+import { NoticeRow } from './components/features/NoticeSection';
 import { decodeSpot, readGtoHash } from './components/features/gto/gtoShare';
 import type { DeepGtoInit } from './components/features/gto/useDeepGto';
 import type { PosterFormData } from './components/features/PosterFormModal';
@@ -2788,18 +2789,11 @@ export default function App() {
                         )}
                       </header>
                       {noticesOpen && (browseNotices.length > 0 ? (
-                        <ul>
+                        // 행은 NoticeSection 의 NoticeRow 단일 출처 — 커뮤니티·장터·딜러와 마커·높이(44px)·타이포가 같다.
+                        // 껍데기(접이식 헤더)만 여기 고유다: 첫 화면 밀도 우선이라 기본 접힘이어야 한다.
+                        <ul className="p-2 pt-0 space-y-0.5">
                           {browseNotices.slice(0, 3).map((n) => (
-                            <li key={n.id}>
-                              <button
-                                type="button"
-                                onClick={() => setOpenNotice(n)}
-                                className="w-full text-left px-3 py-2 border-b border-border-subtle last:border-b-0 hover:bg-surface-high/50 transition-colors focus:outline-none"
-                              >
-                                {/* 커뮤니티 공지와 동일 문법: 제목만 1행 — 본문은 열어서 확인 */}
-                                <p className="text-xs font-semibold text-ink-primary truncate">{n.title}</p>
-                              </button>
-                            </li>
+                            <NoticeRow key={n.id} notice={n} onSelect={setOpenNotice} />
                           ))}
                         </ul>
                       ) : (

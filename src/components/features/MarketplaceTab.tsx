@@ -1,7 +1,7 @@
 import { memo, useMemo, useState, useEffect } from 'react';
 import type {
   ListingCategory, ListingCondition, ListingStatus,
-  MarketplaceListing, MarketplaceNotice, NoticeType,
+  MarketplaceListing, MarketplaceNotice,
 } from '../../api/marketplace';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBlocks } from '../../contexts/BlockContext';
@@ -12,6 +12,7 @@ import Icon from '../atoms/Icon';
 import EmptyState from '../atoms/EmptyState';
 import { onColorInkClass } from '../../lib/color';
 import { goSubTab } from '../../lib/subTabTransition';
+import NoticeSection from './NoticeSection';
 
 // ── 상수 ─────────────────────────────────────────────────────────────────────
 
@@ -42,12 +43,6 @@ const STATUS_MAP: Record<ListingStatus, { label: string; cls: string }> = {
   on_sale:  { label: '판매중',   cls: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
   reserved: { label: '예약중',   cls: 'bg-amber-500/15 text-amber-400 border-amber-500/30'      },
   sold:     { label: '거래완료', cls: 'bg-surface-float text-ink-muted border-border-default'   },
-};
-
-const NOTICE_STYLE: Record<NoticeType, { icon: string; cls: string; iconBg: string }> = {
-  pinned:  { icon: '공', cls: 'border-accent-400/40    bg-accent-300/[0.06]',    iconBg: 'bg-accent-300/20 text-accent-300' },
-  event:   { icon: '이', cls: 'border-blue-500/40    bg-blue-500/[0.06]',    iconBg: 'bg-blue-500/20 text-blue-400' },
-  caution: { icon: '주', cls: 'border-amber-500/40   bg-amber-500/[0.06]',   iconBg: 'bg-amber-500/20 text-amber-400' },
 };
 
 function relativeTime(iso: string): string {
@@ -296,53 +291,7 @@ function NoticeBoard({
   onSelect: (n: MarketplaceNotice) => void;
 }) {
   return (
-    <section className="rounded-aura border card-aura overflow-hidden">
-      <header className="flex items-center justify-between px-3 py-2 border-b border-border-subtle">
-        <h2 className="inline-flex items-center gap-1.5 text-sm font-bold text-ink-primary">
-          공지사항
-          <span className="text-2xs font-semibold tabular-nums text-ink-muted">({notices.length})</span>
-        </h2>
-        {canWrite && (
-          <button
-            type="button"
-            onClick={onWrite}
-            className="text-2xs text-accent-300 hover:text-accent-200 font-semibold"
-          >
-            + 공지 작성
-          </button>
-        )}
-      </header>
-      {notices.length === 0 ? (
-        <p className="py-4 text-center text-2xs text-ink-muted">등록된 공지가 없습니다</p>
-      ) : (
-        <ul>
-          {notices.map((n) => {
-            const style = NOTICE_STYLE[n.type];
-            return (
-              <li key={n.id} className="border-b border-border-subtle last:border-b-0">
-                <button
-                  type="button"
-                  onClick={() => onSelect(n)}
-                  className="w-full text-left flex items-center gap-2 px-3 py-2 hover:bg-surface-high/50 transition-colors"
-                >
-                  <span className={[
-                    'shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-2xs',
-                    style.iconBg,
-                  ].join(' ')}>
-                    {style.icon}
-                  </span>
-                  {/* 오너 지시(2026-08-27): 공지는 제목만 한 줄 — 본문은 눌러서 상세(커뮤니티 공지와 동일 문법) */}
-                  <p className="flex min-w-0 flex-1 items-center gap-2 text-xs font-semibold text-ink-primary">
-                    <span className="min-w-0 flex-1 truncate">{n.title}</span>
-                    <span className="shrink-0 text-2xs font-normal tabular-nums text-ink-muted">{relativeTime(n.createdAt)}</span>
-                  </p>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </section>
+    <NoticeSection notices={notices} onSelect={onSelect} canWrite={canWrite} onWrite={onWrite} />
   );
 }
 
