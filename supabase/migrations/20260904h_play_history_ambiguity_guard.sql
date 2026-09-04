@@ -1,4 +1,4 @@
--- 20260904f — my_play_history 동명이인 fail-closed 가드 (20260904d 의 같은 처방을 기존 함수로 이관)
+-- 20260904h — my_play_history 동명이인 fail-closed 가드 (20260904d 의 같은 처방을 기존 함수로 이관)
 --
 -- 왜: ledger_buyins 에는 user_id 가 없다(장부는 매장 직원이 손으로 적는 표라 player_name 문자열이
 --   유일한 연결고리). my_play_history 는 profiles 의 real_name/nickname/name 3개와 btrim(player_name)
