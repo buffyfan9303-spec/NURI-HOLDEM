@@ -6,7 +6,7 @@
 //
 // 실행: npx vitest run src/api/ledger.money.test.ts
 import { describe, it, expect } from 'vitest';
-import { buyinFinance, buyinValue, cardUnit, wonToMan, type LedgerBuyin } from './ledger';
+import { buyinFinance, discountSummary, cardUnit, wonToMan, type LedgerBuyin } from './ledger';
 
 // 10만원 게임 · 카드 11만원(수수료 반영) · 할인 이벤트 2종(5만/3만)
 const SESSION = {
@@ -196,7 +196,7 @@ describe('합계 정합성 · 여러 바인의 매출 합이 기대와 일치', 
 // 같은 칸의 '회'는 티켓을 세고 있었으므로 회수와 금액의 정의가 갈려 있었다.
 // ⚠ 매출(paid)은 티켓을 0으로 두는 것이 맞다 — 여기서 고치는 것은 '가치' 한 곳뿐이다.
 describe('총바인 가치(buyinValue) — 티켓·지원도 단가만큼', () => {
-  const value = (b: LedgerBuyin) => buyinValue(buyinFinance(b, SESSION), SESSION);
+  const value = (b: LedgerBuyin) => buyinFinance(b, SESSION).value;
 
   it('티켓 1장 = 10만 가치 · 매출은 여전히 0', () => {
     const b = buyin({ paymentMethod: 'ticket' });
@@ -234,5 +234,56 @@ describe('총바인 가치(buyinValue) — 티켓·지원도 단가만큼', () =
 
   it('분납 현금 3만 + 미수 7만 = 가치 10만', () => {
     expect(value(buyin({ isSplit: true, cashAmount: 30_000, unpaidAmount: 70_000 }))).toBe(100_000);
+  });
+});
+
+// ── 티켓 = 언제나 단가 전액 (오너 결정 2026-09-05 "티켓도 동일 가치로 계산해야해") ──
+// 예전엔 비분납 티켓만 할인을 먹어 같은 '티켓 1장'이 경로에 따라 엔트리 0.5 / 1 로 갈렸다.
+// 더 나쁜 것은 그 할인이 운영자 선택이 아니라 **클락 레벨 자동 할인**이 티켓 버튼에도 붙은 것이다.
+describe('티켓 동일 가치 — 할인이 걸려도 단가 전액·엔트리 1', () => {
+  it('비분납 티켓 + 할인5만 → 엔트리 1 (예전 0.5)', () => {
+    const f = buyinFinance(buyin({ paymentMethod: 'ticket', discountIndex: 1 }), SESSION);
+    expect(f.entry).toBe(1);
+    expect(f.value).toBe(100_000);
+    expect(f.paid).toBe(0);          // 매출은 여전히 0 — 이 커밋이 건드리지 않는 축
+  });
+
+  it('분납 티켓1 + 할인5만 → 엔트리 1 · 두 경로가 같은 값', () => {
+    const split = buyinFinance(buyin({ isSplit: true, ticketCount: 1, discountIndex: 1 }), SESSION);
+    const flat  = buyinFinance(buyin({ paymentMethod: 'ticket', discountIndex: 1 }), SESSION);
+    expect(split.entry).toBe(1);
+    expect(split.entry).toBe(flat.entry);   // 같은 사건 = 같은 값
+    expect(split.value).toBe(flat.value);
+  });
+
+  it('티켓 미수도 단가 전액', () => {
+    const f = buyinFinance(buyin({ paymentMethod: 'ticket', isUnpaid: true, discountIndex: 1 }), SESSION);
+    expect(f).toMatchObject({ entry: 1, value: 100_000, ticketUnpaid: 1, ticketPaid: 0 });
+  });
+
+  it("할인 집계는 티켓 행을 세지 않는다 — 현금을 받은 적이 없어 '덜 받은 돈'이 아니다", () => {
+    const rows = [
+      buyin({ playerName: 'A', paymentMethod: 'cash', discountIndex: 1 }),   // 진짜 할인(5만)
+      buyin({ playerName: 'B', paymentMethod: 'ticket', discountIndex: 1 }), // 자동으로 붙은 것 — 제외
+    ];
+    const d = discountSummary(rows, SESSION);
+    expect(d.count).toBe(1);
+    expect(d.total).toBe(50_000);
+    expect(d.entryLoss).toBe(0.5);   // 실제 엔트리 차감(현금 1건 0.5)과 일치
+  });
+});
+
+// ── 가게지원 — 티켓과 달리 할인을 반영한다(매장이 그만큼 덜 부담한다) ──
+describe('가게지원 가치 — 매장이 실제로 부담한 몫', () => {
+  it('할인 없으면 단가 전액 · 엔트리 1', () => {
+    const f = buyinFinance(buyin({ paymentMethod: 'support' }), SESSION);
+    expect(f).toMatchObject({ entry: 1, value: 100_000, support: 1, paid: 0 });
+  });
+
+  it('할인5만이면 5만 부담 · 엔트리 0.5 — value/단가 === entry', () => {
+    const f = buyinFinance(buyin({ paymentMethod: 'support', discountIndex: 1 }), SESSION);
+    expect(f.entry).toBe(0.5);
+    expect(f.value).toBe(50_000);
+    expect(f.value / SESSION.buyinAmount).toBe(f.entry);
   });
 });

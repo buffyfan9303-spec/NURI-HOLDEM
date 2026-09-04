@@ -11,7 +11,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import Icon from '../atoms/Icon';
 import { deleteLedgerPlayerAtomic, CELL_TAKEN, cancelMyRecentBuyin,
   type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type LedgerSessionListItem, type DiscountPreset, type EarlyType, type LedgerGame, type LedgerCloseSnapshot, type LedgerLossSummary,
-  visitorLabel, wonToMan, WON_PER_MAN, buyinFinance, buyinValue, earlyTypeOf, setBuyinEarly, MAIN_GAME_SEQ, ledgerLossSummary,
+  visitorLabel, wonToMan, WON_PER_MAN, buyinFinance, earlyTypeOf, setBuyinEarly, MAIN_GAME_SEQ, ledgerLossSummary,
   cardUnit, discountAmountOf, autoDiscountIndex, discountSummary, type DiscountSummary,
   getLedgerSession, getLedgerGames, saveLedgerSession, openLedgerSession, closeLedgerSession, reopenLedgerSession, deleteLedgerSession,
   setRegistrationClosed, getLastLedgerSettings, getLedgerSessionList, getLedgerAccessUserIds, notifyLedgerOpen,
@@ -492,7 +492,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       const f = buyinFinance(b, session);
       revenue += f.paid; unpaid += f.unpaid; entries += f.entry;
       ticket += f.ticketPaid; ticketUnpaid += f.ticketUnpaid; support += f.support;
-      if (f.support > 0) { supportEntries += f.entry; supportValue += buyinValue(f, session); }
+      if (f.support > 0) { supportEntries += f.entry; supportValue += f.value; }
     }
     // #20: 할인 엔트리 수 · 금일 총 할인액 — 마감정산/요약바가 같은 계산(discountSummary)을 쓴다.
     const discount = discountSummary(buyins, session);
@@ -508,8 +508,8 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       const f = buyinFinance(b, session);
       const cur = m.get(b.playerName) ?? { paid: 0, unpaid: 0, value: 0, supportValue: 0 };
       cur.paid += f.paid; cur.unpaid += f.unpaid;
-      // '총바인' 열에 쓰는 바인 **가치** — 티켓·지원도 단가만큼 친다(buyinValue 주석 참고).
-      const v = buyinValue(f, session);
+      // '총바인' 열에 쓰는 바인 **가치** — 티켓은 단가 전액, 지원은 단가−할인(BuyinFinance.value 주석).
+      const v = f.value;
       cur.value += v;
       if (f.support > 0) cur.supportValue += v; // '가게지원 제외' 보기에서 감산할 몫
       m.set(b.playerName, cur);
