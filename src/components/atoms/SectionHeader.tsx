@@ -24,6 +24,32 @@ interface Props {
   action?: ReactNode;
 }
 
+/** 섹션 아이콘 타일 — 아우라 v6 문법(tile-grad · 예약=indigo · 이용권=cyan · 전적=violet · 내 글=fuchsia). 글로우 0. */
+export function SectionTile({ icon, tone }: { icon: IconName; tone: Tone }) {
+  return (
+    <span className={['flex h-7 w-7 shrink-0 items-center justify-center rounded-input tile-grad', tone === 'violet' ? '' : `tile-grad-${tone}`].join(' ')} aria-hidden>
+      <Icon name={icon} size={14} />
+    </span>
+  );
+}
+
+/** 유저 화면용 컴팩트 섹션 헤더 — h2 text-sm font-bold + 'N개' ink-muted + 설명 ink-secondary + 헤어라인(border-b pb-1.5).
+ *  위 SectionHeader(업주·관리자, text-fluid-lg + 우측 액션)와 문법은 같고 밀도만 다르다.
+ *  ⚠ 여기 사는 이유: 내 정보 대시보드와 이용권 지갑(VoucherWallet)이 **같은 머리글**을 써야 하는데,
+ *    한쪽이 다른 쪽을 import 하면 순환 참조가 된다(대시보드 → 지갑). 공용 원자가 두 화면의 유일한 정본이다. */
+export function SectionHead({ icon, tone, title, count, unit = '개', desc }: { icon: IconName; tone: Tone; title: string; count?: number; unit?: string; desc?: string }) {
+  return (
+    <div className="flex items-center gap-2 border-b border-border-subtle pb-1.5">
+      <SectionTile icon={icon} tone={tone} />
+      <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 gap-y-0">
+        <h2 className="text-sm font-bold text-ink-primary">{title}</h2>
+        {count != null && <span className="text-2xs font-semibold tabular-nums text-ink-muted">{count}{unit}</span>}
+        {desc && <span className="text-2xs text-ink-secondary">{desc}</span>}
+      </div>
+    </div>
+  );
+}
+
 export default function SectionHeader({ title, desc, icon, tone = 'violet', action }: Props) {
   return (
     <header className="flex items-end justify-between gap-3 border-b border-border-subtle pb-3">

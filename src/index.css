@@ -705,6 +705,37 @@
     .cal-day { transition: background-color var(--dur-fast) linear; }
     .cal-day:active { transform: none; }
   }
+  /* 카드 hover 글로우 — card-aura 의 겹친 그림자를 **유지한 채** 블룸 한 겹을 더한다.
+     ⚠ shadow-glow 유틸을 얹으면 안 된다: box-shadow 는 합쳐지지 않고 교체돼 4겹 깊이가 통째로 사라진다
+       (card-elev 가 GTO 카드 24장의 그림자를 지웠던 것과 같은 기전 — 2026-09-04 실측).
+     글로우는 상시가 아니라 hover 에만 켜진다: 포인터는 하나뿐이라 동시에 빛나는 카드도 하나뿐이고,
+     그래서 '글로우는 화면당 1곳' 규칙과 충돌하지 않는다(.cal-day 선택 날짜와 같은 논리).
+     퍼짐 18px 짜리 그림자는 --dur-fast(.15s)에 바뀌면 '툭' 끊긴다 → --dur-base. */
+  .card-glow-hover {
+    transition: box-shadow var(--dur-base) var(--ease-out-ui),
+                border-color var(--dur-fast) var(--ease),
+                transform var(--dur-fast) var(--ease-out-ui);
+  }
+  @media (hover: hover) {
+    .card-glow-hover:hover {
+      border-color: rgb(var(--border-strong) / 0.85);
+      transform: translateY(-1px);
+      box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04),
+                  0 10px 15px rgb(0 0 0 / 0.10),
+                  0 4px 6px rgb(0 0 0 / 0.06),
+                  0 0 0 1px rgb(0 0 0 / 0.02),
+                  0 0 18px rgb(129 140 248 / 0.28);
+    }
+    html.light .card-glow-hover:hover {
+      border-color: rgb(11 18 32 / 0.12);
+      box-shadow: inset 0 1px 0 rgb(255 255 255),
+                  0 2px 4px rgb(11 18 32 / 0.05),
+                  0 20px 40px -18px rgb(11 18 32 / 0.22),
+                  0 0 18px rgb(79 70 229 / 0.22);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) { .card-glow-hover:hover { transform: none; } }
+
   .chip-aura { background-color: rgb(99 102 241 / 0.10); border: 1px solid rgb(99 102 241 / 0.22); color: rgb(var(--accent-200)); }
   /* 탭 타깃 확장 — 보이는 높이는 그대로(32px 칩), 누르는 영역만 위아래 6px 씩 늘려 44px(WCAG 2.5.5 / Apple HIG).
      가로는 늘리지 않는다(칩 사이 gap 6px 라 겹친다). Tailwind before:content-[''] 는 JSX 문자열 이스케이프 때문에 추출기가 못 잡아 유틸로 둔다. */

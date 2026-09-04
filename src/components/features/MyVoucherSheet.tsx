@@ -1,11 +1,12 @@
 // src/components/features/MyVoucherSheet.tsx
-// 헤더 [이용권 · 출석] 시트 — **출석 QR + 기존 지갑 진입점** 둘뿐이다.
+// 헤더 [이용권 · 출석] 시트 — **출석 QR + 매장이용권 지갑** 둘이다.
 //
-// ⚠ 2026-09-05 정정: 처음엔 여기에 이용권 목록을 직접 그렸는데, 그건 중복이었다.
-//   CustomerDashboardPage 의 '내 매장이용권' 섹션이 이미 매장별 그룹핑·만료 D-day·인증 게이트 사전고지·
-//   사용(3경로)·사용 내역까지 전부 갖고 있다. 목록을 두 벌 유지하면 반드시 갈라진다 —
-//   여기서는 **보내기만** 하고 지갑은 한 곳으로 둔다.
-//   남긴 것은 출석 QR 하나다: 매장이 정해지지 않은 상태에서 스캔할 수 있는 경로가 여기밖에 없다
+// ⚠ 목록을 여기에 손으로 다시 그리지 않는다(2026-09-04 에 그 중복을 만들었다가 되돌렸다).
+//   보유·매장별 그룹·만료 D-day·인증 게이트 사전고지·사용(3경로)·사용 내역은 전부
+//   VoucherWallet 하나가 갖고 있고, 내 정보(대시보드)와 이 시트가 **같은 컴포넌트**를 쓴다.
+//   오너 지시(2026-09-05): "매장이용권 아이콘에 보유내역·전송 등 매장이용권 관련 기능을 —
+//   대시보드와 똑같이 말고 이용권 내역만." → 대시보드의 나머지(전적·방문·초대)는 오지 않는다.
+//   출석 QR 은 이 시트에만 있다: 매장이 정해지지 않은 상태에서 스캔할 수 있는 경로가 여기뿐이다
 //   (VenuePage 의 체크인은 이미 그 매장 안에 들어가 있어야 누를 수 있다).
 //
 // ⚠ 이 시트는 **App 루트에서 렌더한다**(헤더 안이 아니라). 헤더는 sticky z-50 이라 스태킹 컨텍스트를
@@ -16,9 +17,9 @@ import { useState } from 'react';
 import Modal from '../atoms/Modal';
 import Icon from '../atoms/Icon';
 import QrScanModal from './QrScanModal';
+import VoucherWallet from './VoucherWallet';
 import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
-import { useIdentityEnabled } from '../../lib/identityFlag';
 import { checkIn, getMyCheckinStreak } from '../../api/checkins';
 
 export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet }: {
@@ -26,12 +27,11 @@ export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet }:
   onClose: () => void;
   /** 체크인한 매장으로 — 사슬 끝에서 막다른 길을 만들지 않는다 */
   onVenue?: (venueId: string) => void;
-  /** 내 정보(지갑)로 — 이용권 목록의 정본은 그쪽이다 */
+  /** 내 정보로 — 본인인증(보안 탭)·프로필 설정처럼 시트 밖에서 해야 하는 일의 출구 */
   onOpenWallet: () => void;
 }) {
   const { user } = useAuth();
   const toast = useToast();
-  const voucherOn = useIdentityEnabled();
   const [scanOpen, setScanOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -54,7 +54,9 @@ export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet }:
   return (
     <>
       <Modal open={open} onClose={onClose} title="이용권 · 출석">
-        <div className="space-y-3">
+        {/* Modal 본문(flex-1 overflow-y-auto)은 패딩을 주지 않는다 — 소비자가 넣는 규약이다.
+            이 파일만 빠뜨려 카드가 시트 모서리에 붙어 있었다(2026-09-05 검증). */}
+        <div className="space-y-3 p-4">
 
           {/* ── 출석 QR — 이 시트에만 있는 기능 ── */}
           <section className="rounded-aura border card-aura p-3">
@@ -77,22 +79,14 @@ export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet }:
             </button>
           </section>
 
-          {/* ── 이용권은 '보내기'만 — 목록의 정본은 내 정보다 ──
-              킬스위치가 꺼져 있으면 지갑 쪽 이용권 섹션 자체가 안 그려지므로 이 줄도 함께 감춘다
-              (눌러도 아무것도 없는 죽은 칸을 만들지 않는다). */}
-          {voucherOn && (
-            <button type="button" onClick={() => { onClose(); onOpenWallet(); }}
-              className="flex w-full items-center gap-2.5 rounded-aura border card-aura p-3 text-left transition-colors duration-[var(--dur-fast)] hover:bg-surface-high/50">
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-input tile-grad" aria-hidden>
-                <Icon name="ticket" size={14} />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-bold text-ink-primary">내 매장이용권</span>
-                <span className="block text-2xs text-ink-muted">받은 이용권과 사용 내역 보기</span>
-              </span>
-              <Icon name="chevron-right" size={16} className="shrink-0 text-ink-muted" />
-            </button>
-          )}
+          {/* ── 매장이용권 지갑 — 대시보드와 같은 정본(킬스위치 OFF 면 스스로 아무것도 그리지 않는다) ──
+              본인인증 CTA 는 시트 안에서 끝낼 수 없으니 내 정보로 넘긴다.
+              매장 머리글을 누르면 발급 매장으로 — 사슬 끝에서 막다른 길을 만들지 않는다. */}
+          <VoucherWallet
+            compact
+            onNeedVerify={() => { onClose(); onOpenWallet(); }}
+            onVenue={onVenue && ((venueId) => { onClose(); onVenue(venueId); })}
+          />
 
         </div>
       </Modal>
