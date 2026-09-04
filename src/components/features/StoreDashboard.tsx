@@ -23,6 +23,7 @@ import Modal from '../atoms/Modal';
 import { getAppSetting, BOOST_CONTACT_EMAIL_KEY, BOOST_CONTACT_PHONE_KEY } from '../../api/settings';
 import { getStaffSchedule, getStaffWages, subscribeStaffSchedule, type StaffShift, type StaffWage } from '../../api/staffSchedule';
 import { getUpcomingBirthdays } from '../../api/crm';
+import { relativeTime } from '../../lib/relativeTime';
 
 const localToday = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD (로컬)
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
@@ -297,7 +298,6 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
   }, [liveWidget, active]);
   const fmtClock = (ms: number) => { const t = Math.floor(ms / 1000); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
   const gameLabel = (g: number | null) => g == null ? '미지정' : g <= 1 ? '메인' : `사이드${g - 1}`;
-  const timeAgo = (iso: string) => { const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); return s < 60 ? '방금' : s < 3600 ? `${Math.floor(s / 60)}분 전` : `${Math.floor(s / 3600)}시간 전`; };
   // 위젯 인라인 승인/거절 — 장부로 안 넘어가고 즉시 처리(승인=요청 게임에 추가, 결제 기록은 장부에서 별도)
   const quickApprove = async (r: BuyinRequest) => {
     setReqBusy(r.id);
@@ -663,7 +663,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                     {pendingReqs.slice(0, 3).map((r) => (
                       <li key={r.id} className="relative flex items-center gap-2 text-xs">
                         <span className="min-w-0 flex-1 truncate text-ink-secondary">{r.playerName}</span>
-                        <span className="shrink-0 text-2xs tabular-nums text-ink-muted">{timeAgo(r.createdAt)}</span>
+                        <span className="shrink-0 text-2xs tabular-nums text-ink-muted">{relativeTime(r.createdAt)}</span>
                         <span className="shrink-0 rounded-badge bg-surface-float px-1 py-0.5 text-2xs text-ink-muted">{gameLabel(r.requestedGameSeq)}</span>
                         {/* ⚠ 승인(✓)과 거절(✕)이 24px 로 6px 간격에 붙어 있었다.
                             접수대에서 한 손으로 누르는 자리인데, 오탭하면 손님이 거절되거나
@@ -781,7 +781,9 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           ⚠ 카피에 '퍼널·전환율' 같은 외래 분석 용어 금지(오너 지시) — 자연스러운 한국어로 풀어 쓴다.
           v6 아우라(2026-09-04): card-elev(v4 수직 광원 background-image)와 card-aura(겹친 box-shadow)가
           한 뷰포트에 공존해 카드마다 테두리 밝기가 달라 보였다 — card-aura 로 통일한다.
-          두 문법은 역할이 겹치므로 card-elev 는 반드시 **제거**한다(남기면 그림자가 이중이 된다).
+          두 문법은 역할이 겹치므로 card-elev 는 반드시 **제거**한다. 이중이 되는 게 아니라 **사라진다** —
+          box-shadow 는 합쳐지지 않고 교체되고, .card-elev(index.css 1585)가 .card-aura(136)보다 뒤에
+          같은 특이도로 있어 겹친 그림자가 홑 inset 1줄로 덮인다(2026-09-04 GTO 탭 24장 실측).
           내부 3칸은 surface-high 라 손대지 않는다. */}
       {!loading && funnel && funnel.tournaments > 0 && (
         <section className="rounded-aura border card-aura p-3">

@@ -13,6 +13,7 @@ import SegmentedTabs from '../atoms/SegmentedTabs';
 import Icon, { type IconName } from '../atoms/Icon';
 import { onColorInkClass } from '../../lib/color';
 import { goSubTab } from '../../lib/subTabTransition';
+import { relativeTime } from '../../lib/relativeTime';
 
 /** 쪽지 → 알림 진열 순서 — 하위 탭 전환 방향(forward/back) 기준. */
 const NOTIF_MODE_ORDER = ['messages', 'notifs'] as const;
@@ -42,13 +43,6 @@ const TYPE_GLYPH: Record<NotificationType, IconName> = {
   reminder: 'clock',
 };
 
-function relativeTime(iso: string): string {
-  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (diff < 60)    return '방금 전';
-  if (diff < 3600)  return `${Math.floor(diff / 60)}분 전`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}시간 전`;
-  return `${Math.floor(diff / 86400)}일 전`;
-}
 
 // 말풍선 옆 시각 — 당일이면 HH:MM, 그 외엔 M/D
 function bubbleTime(iso: string): string {

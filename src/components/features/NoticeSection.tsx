@@ -12,6 +12,7 @@
 //   글로우(.ring-aura-glow)는 쓰지 않는다 — 반복 카드이고, 화면당 1곳 규칙의 주인공이 아니다.
 import Icon, { type IconName } from '../atoms/Icon';
 import type { MarketplaceNotice, NoticeType } from '../../api/marketplace';
+import { relativeTime } from '../../lib/relativeTime';
 
 // 내보내지 않는다 — 이 파일은 컴포넌트 파일이라 상수를 export 하면 Fast Refresh 가 깨진다
 // (react-refresh/only-export-components). 톤이 필요하면 NoticeTile·NoticeBadge 를 쓴다.
@@ -45,15 +46,6 @@ export function NoticeBadge({ type }: { type: NoticeType }) {
   );
 }
 
-function relativeTime(iso: string): string {
-  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (diff < 60) return '방금';
-  if (diff < 3600) return `${Math.floor(diff / 60)}분 전`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}시간 전`;
-  if (diff < 604800) return `${Math.floor(diff / 86400)}일 전`;
-  const d = new Date(iso);
-  return `${d.getMonth() + 1}.${d.getDate()}`;
-}
 
 /**
  * 공지 한 줄 — 높이 44px(--row-h-sm)로 게시글 행과 리듬을 맞춘다.
@@ -73,7 +65,7 @@ export function NoticeRow({ notice, onSelect }: { notice: MarketplaceNotice; onS
         <NoticeTile type={notice.type} />
       )}
       <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{notice.title}</span>
-      <span className="shrink-0 text-2xs tabular-nums text-ink-muted">{relativeTime(notice.createdAt)}</span>
+      <span className="shrink-0 text-2xs tabular-nums text-ink-muted">{relativeTime(notice.createdAt, { dateAfterDays: 7 })}</span>
     </>
   );
   const cls = 'flex w-full min-h-[var(--row-h-sm)] items-center gap-2.5 rounded-input px-2.5 py-2 text-left transition-colors';

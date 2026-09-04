@@ -38,6 +38,7 @@ import SlidingPill from '../atoms/SlidingPill';
 import { useIsDesktop } from '../../lib/responsive';
 import { thumbUrl, thumbSrcSet } from '../../lib/imageUrl';
 import { BOARD_FILTER_CATEGORIES, categoryPillClass } from '../../lib/postCategory';
+import { relativeTime } from '../../lib/relativeTime';
 
 interface CommunityTabProps {
   /** 장터 화면 임베드 슬롯 — 서브탭을 유지한 채 커뮤니티 안에서 장터를 보여준다 */
@@ -82,13 +83,6 @@ const SEC_ORDER: Section[] = ['venues', 'board', 'live', 'rank', 'market', 'deal
 const BOARD_CATEGORIES = BOARD_FILTER_CATEGORIES;
 
 
-function relativeTime(iso: string): string {
-  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (diff < 60)    return '방금 전';
-  if (diff < 3600)  return `${Math.floor(diff/60)}분 전`;
-  if (diff < 86400) return `${Math.floor(diff/3600)}시간 전`;
-  return `${Math.floor(diff/86400)}일 전`;
-}
 
 // 섹션 루트 memo (2026-08-28) — 서브탭 전환은 section state 로 CommunityTab 을 재렌더하는데,
 // keep-alive + 유휴 프리마운트로 6개 섹션이 전부 마운트돼 있으면 그 재렌더가 전 섹션으로 번진다.

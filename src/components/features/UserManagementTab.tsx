@@ -13,6 +13,7 @@ import type {
 import Icon from '../atoms/Icon';
 import { onColorInkClass } from '../../lib/color';
 import { goSubTab } from '../../lib/subTabTransition';
+import { relativeTime } from '../../lib/relativeTime';
 
 /** 회원 → 게시글 진열 순서 — 하위 탭 전환 방향(forward/back) 기준. */
 const USERMGMT_ORDER = ['users', 'posts'] as const;
@@ -49,12 +50,6 @@ const STATUS_LABEL: Record<UserStatus, { label: string; cls: string }> = {
   withdrawn: { label: '강제탈퇴', cls: 'bg-zinc-500/20 text-zinc-300 border-zinc-500/40' },
 };
 
-function relativeTime(iso: string): string {
-  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (diff < 3600)  return `${Math.floor(diff/60)}분 전`;
-  if (diff < 86400) return `${Math.floor(diff/3600)}시간 전`;
-  return `${Math.floor(diff/86400)}일 전`;
-}
 
 export default function UserManagementTab({
   users, posts, onUpdateUser, onDeletePost,

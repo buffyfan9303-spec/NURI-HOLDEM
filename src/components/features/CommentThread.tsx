@@ -9,6 +9,7 @@ import { useTitlePoints } from '../../lib/useTitles';
 import { getEquippedMarks, getNickColors } from '../../api/community';
 import { tierCss } from '../atoms/TierBadge';
 import { nickColorVar } from '../../lib/cosmetics';
+import { relativeTime } from '../../lib/relativeTime';
 
 interface CommentThreadProps {
   comments: Comment[];
@@ -33,13 +34,6 @@ interface CommentThreadProps {
   cheerBusy?: boolean;
 }
 
-function relativeTime(iso: string): string {
-  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (diff < 60)    return '방금 전';
-  if (diff < 3600)  return `${Math.floor(diff / 60)}분 전`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}시간 전`;
-  return `${Math.floor(diff / 86400)}일 전`;
-}
 
 // ── 읽기시점 재그룹(검증 #05) ────────────────────────────────────────────────
 // 과거 버그: 대댓글의 replies 를 하드코딩 빈 배열로 렌더 → 3레벨 이상 댓글이 화면에서
