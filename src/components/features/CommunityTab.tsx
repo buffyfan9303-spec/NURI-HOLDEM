@@ -39,6 +39,7 @@ import { useIsDesktop } from '../../lib/responsive';
 import { thumbUrl, thumbSrcSet } from '../../lib/imageUrl';
 import { BOARD_FILTER_CATEGORIES, categoryPillClass } from '../../lib/postCategory';
 import { relativeTime } from '../../lib/relativeTime';
+import { markProgrammaticScroll } from '../../lib/useScrollY';
 
 interface CommunityTabProps {
   /** 장터 화면 임베드 슬롯 — 서브탭을 유지한 채 커뮤니티 안에서 장터를 보여준다 */
@@ -184,6 +185,8 @@ function CommunityTab({
   useLayoutEffect(() => {
     if (!needScrollRef.current) return;
     needScrollRef.current = false;
+    // 이 점프는 손짓이 아니다 — 알리지 않으면 하단 탭바 자동숨김이 '확 긁었다'로 읽어 깜빡인다.
+    markProgrammaticScroll();
     window.scrollTo({ top: secScrollRef.current.get(section) ?? 0, behavior: 'instant' as ScrollBehavior });
   }, [section]);
   // 이미 마운트된 상태(keep-alive)에서 외부가 섹션을 지정할 때 — 예: 대시보드 '내 장터 거래'
@@ -305,8 +308,11 @@ function CommunityTab({
           data-community-secbar: 서브섹션 View Transition(root 스냅샷)에서 제외 — 헤더·하단 탭바와 같은
           '상시 크롬'이라 전환 블러/슬라이드에 딸려 움직이면 안 된다(index.css VT 예외 블록 참조) */}
       <div data-community-secbar="" className="sticky top-[calc(theme(spacing.header-h)+env(safe-area-inset-top)-0.5rem)] lg:top-[calc(theme(spacing.header-h)+theme(spacing.tab-h)-0.5rem)] z-30 -mx-page-x px-page-x bg-surface-base border-b border-border-subtle pt-2.5 pb-2 lg:pt-2.5 before:pointer-events-none before:absolute before:inset-x-0 before:-top-4 before:h-4 before:bg-surface-base">
-        <div ref={secBarRef} className="relative flex items-center gap-1 overflow-x-auto scrollbar-none rounded-input bg-surface-high p-0.5">
-          <SlidingPill containerRef={secBarRef} activeKey={shownSec} underline className="rounded-full bg-accent-300" />
+        <div ref={secBarRef} className="relative flex items-center gap-1 overflow-x-auto scrollbar-none rounded-input bg-surface-high px-0.5 py-1.5">
+          {/* 활성 탭 뒤 글로우(오너 지시 2026-09-05) — pill-active = --grad-cta 채움 + 18px 블룸.
+                하단 메인 탭바와 같은 문법이고, 활성 탭은 정의상 1개라 '글로우는 화면당 1곳' 규칙과 충돌하지 않는다.
+                (ring-aura-glow 는 쓰지 않는다 — 카드 후광이고 이 화면엔 이미 유료광고 카드의 강조가 있다) */}
+            <SlidingPill containerRef={secBarRef} activeKey={shownSec} className="rounded-[6px] pill-active" />
           <SectionTab active={shownSec === 'venues'} label="홀덤펍" onClick={() => setSection('venues')} />
           <SectionTab active={shownSec === 'board'}  label="게시판" onClick={() => setSection('board')} />
           <SectionTab active={shownSec === 'live'}   label="실시간" onClick={() => setSection('live')} />
@@ -433,7 +439,8 @@ function SectionTab({ active, label, onClick }: { active: boolean; label: string
         'relative flex-[1_0_auto] px-2 py-2 t-tab rounded-[6px] whitespace-nowrap',
         'transition-colors',
         'focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0',
-        active ? 'text-ink-primary font-bold' : 'text-ink-secondary hover:text-ink-primary',
+        // 채움 알약(--grad-cta) 위에서는 흰 글자여야 읽힌다 — ink-primary 는 라이트에서 약 2.4:1
+                active ? 'text-white font-bold' : 'text-ink-secondary hover:text-ink-primary',
       ].join(' ')}
     >
       {/* 활성 배경은 부모의 공용 SlidingPill 이 미끄러지며 그린다 — 탭별 개별 팝인 제거 */}
@@ -626,7 +633,7 @@ function FeedSection({
                       'inline-flex items-center h-8 px-3 rounded-chip border text-2xs font-bold leading-none transition-colors',
                       cat === c.id
                         ? 'border-accent-300 bg-accent-300 text-white'
-                        : 'border-transparent bg-surface-high text-ink-secondary hover:text-ink-primary',
+                        : 'chip-aura',
                     ].join(' ')}>
                       {c.label}
                     </span>
@@ -1082,7 +1089,7 @@ function MyCommunitiesAction({ onSelectVenue, onCreated }: {
 
   return (
     <div className="rounded-aura border card-aura">
-      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left">
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="w-full flex items-center gap-2.5 rounded-aura px-3 py-2.5 text-left transition-colors duration-[var(--dur-fast)] hover:bg-surface-high/50">
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-input tile-grad">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" /></svg>
         </span>
@@ -1121,7 +1128,7 @@ function MyCommunitiesAction({ onSelectVenue, onCreated }: {
                 {joined.map((j) => (
                   <li key={j.membershipId} className="flex items-center gap-1.5 rounded-input bg-surface-high px-2.5 py-1.5">
                     <button type="button" onClick={() => onSelectVenue(j.group.id)} className="flex items-center gap-1.5 min-w-0 flex-1 text-left">
-                      <span className="shrink-0 rounded-badge bg-surface-float px-1.5 py-0.5 text-2xs font-bold text-ink-secondary">{GROUP_KIND_LABEL[j.group.kind ?? 'other']}</span>
+                      <span className="shrink-0 rounded-badge chip-aura px-1.5 py-0.5 text-2xs font-bold">{GROUP_KIND_LABEL[j.group.kind ?? 'other']}</span>
                       <span className="text-xs font-semibold text-ink-primary truncate">{j.group.name}</span>
                       {j.status === 'pending' && <span className="text-2xs text-ink-muted">대기</span>}
                     </button>
@@ -1354,7 +1361,7 @@ function CreateGroupModal({ onClose, onCreated }: { onClose: () => void; onCreat
             {KINDS.map((k) => (
               <button key={k} type="button" onClick={() => setKind(k)}
                 className={['rounded-badge border px-3 py-1.5 text-xs font-semibold transition-colors',
-                  kind === k ? 'bg-accent-300/15 text-accent-200 border-accent-400/45' : 'bg-surface-high text-ink-secondary border-border-default'].join(' ')}>
+                  kind === k ? 'bg-accent-300/15 text-accent-200 border-accent-400/45' : 'chip-aura'].join(' ')}>
                 {GROUP_KIND_LABEL[k]}
               </button>
             ))}
@@ -1470,7 +1477,7 @@ function LiveWallSection() {
         // 스켈레톤 — 텍스트 깜빡임 대신 피드 행 형태의 시머 로더
         <ul className="space-y-1" aria-hidden>
           {Array.from({ length: 6 }).map((_, i) => (
-            <li key={i} className="flex items-start gap-2 px-2.5 py-1.5 rounded-input bg-surface-low border border-border-subtle">
+            <li key={i} className="flex items-start gap-2 px-2.5 py-1.5 rounded-input border card-aura">
               <div className="skeleton h-6 w-6 shrink-0 rounded-full" />
               {/* [DS] MO-6: 실제 행의 줄 높이를 복제(이름행 16px + 본문행 18px) — 교체 시 높이 유지 */}
               <div className="min-w-0 flex-1">
@@ -1485,7 +1492,7 @@ function LiveWallSection() {
       ) : (
         <ul className="space-y-1">
           {messages.map((m) => (
-            <li key={m.id} className="flex items-start gap-2 px-2.5 py-1.5 rounded-input bg-surface-low border border-border-subtle">
+            <li key={m.id} className="flex items-start gap-2 px-2.5 py-1.5 rounded-input border card-aura">
               <Avatar name={m.userName} src={m.userAvatar} color={m.userColor} size={24} className="mt-0.5" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1 text-2xs">

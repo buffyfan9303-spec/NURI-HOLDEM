@@ -65,3 +65,14 @@ export function useScrollY(cb: Sub) {
     };
   }, [cb]);
 }
+
+/** 프로그램이 옮긴 스크롤 창 — 탭·섹션 복원처럼 **손짓이 아닌** 스크롤을 구독자에게 알린다.
+ *
+ *  왜 필요한가: window.scrollTo 는 구독자에게 |dy| 수백 px 짜리 스크롤 이벤트 한 발로 도착한다.
+ *  하단 탭바 자동숨김은 그것을 '사용자가 확 긁었다'로 읽어 즉시 숨기거나 띄운다 — 커뮤니티 하위탭을
+ *  옮길 때마다 탭바가 깜빡인 원인이 정확히 이것이었다(2026-09-05 실측).
+ *  이동량 크기로 추정하지 않고 **옮긴 쪽이 직접 알린다** — 크기 추정은 빠른 플링을 함께 삼킨다.
+ */
+let progUntil = 0;
+export function markProgrammaticScroll(ms = 300) { progUntil = performance.now() + ms; }
+export function isProgrammaticScroll() { return performance.now() < progUntil; }

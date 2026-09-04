@@ -60,7 +60,7 @@ import type { ReplayData } from './lib/hand';
 import type { MarketplaceFormData } from './components/features/MarketplaceFormModal';
 import { pushLayer, useBackClose } from './lib/backstack';
 import { useVisibilityRefresh } from './lib/useVisibilityRefresh';
-import { useScrollY } from './lib/useScrollY';
+import { useScrollY, isProgrammaticScroll } from './lib/useScrollY';
 import { useIsDesktop, useIsMdUp } from './lib/responsive';
 import { sweepScrollLocks } from './lib/scrollLock';
 import HomeTab from './components/features/HomeTab';
@@ -175,10 +175,10 @@ interface TabDef { id: TabId; label: string; }
 
 const AppHeader = memo(function AppHeader({
   unreadCount, notifications, onMarkRead, onOpenLogin, onNavigateNotification, onHome, onOpenMe,
-  onGotoTab, activeTab, suppressed = false, onUnreadMessagesChange, onVenue,
+  onGotoTab, activeTab, suppressed = false, onUnreadMessagesChange, onOpenVoucher,
 }: {
-  /** 이용권 시트에서 그 매장으로 — 사슬 끝에서 막다른 길을 만들지 않는다 */
-  onVenue?: (venueId: string) => void;
+  /** [이용권 · 출석] 버튼 — 시트 자체는 **App 루트**에서 렌더한다(헤더 안이면 하단 탭바에 덮인다) */
+  onOpenVoucher: () => void;
   /** (미사용 — 텍스트 내비로 대체) 모바일 헤더 좌측 큰 타이틀 */
   title?: string;
   /** 모바일 헤더 텍스트 내비 강조용 현재 탭 */
@@ -201,7 +201,6 @@ const AppHeader = memo(function AppHeader({
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [notifOpen,    setNotifOpen] = useState(false);
-  const [voucherOpen,  setVoucherOpen] = useState(false);
   const [userMenuOpen, setUserMenu]  = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
@@ -308,7 +307,7 @@ const AppHeader = memo(function AppHeader({
           {user && (
             <button
               type="button"
-              onClick={() => setVoucherOpen(true)}
+              onClick={onOpenVoucher}
               aria-label="이용권 · 출석"
               className={[
                 'relative w-9 h-9 flex items-center justify-center rounded-full',
@@ -430,13 +429,6 @@ const AppHeader = memo(function AppHeader({
           )}
         </div>
       </div>
-
-      {/* 이용권 · 출석 시트 — 열렸을 때만 청크를 받는다 */}
-      {voucherOpen && (
-        <Suspense fallback={null}>
-          <MyVoucherSheet open onClose={() => setVoucherOpen(false)} onVenue={onVenue} />
-        </Suspense>
-      )}
 
       {/* 쪽지+알림 패널 — viewport 기준 fixed 위치 */}
       <NotificationPanel
@@ -637,6 +629,10 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
     // ⚠ 반드시 scrollHeight 읽기 **앞에서** 끊어야 의미가 있다(읽고 나서 버리면 비용은 그대로).
     if (isDesktop) return;
     const st = tb2Ref.current;
+    // 프로그램이 옮긴 스크롤(하위탭 섹션 복원 등)은 손짓이 아니다 — 판정하지 않고 탭바를 되살린다.
+    // ⚠ setHidden(false) 가 함께 있어야 한다: 가드만 두면 '스크롤로 숨은 채 하위탭을 옮기면
+    //   계속 숨어 있는' 잔존 hidden 이 남는다(아래 578줄 주석이 경고한 그 상태 — 실측으로 재현했다).
+    if (isProgrammaticScroll()) { setHidden(false); st.lastY = sy; st.acc = 0; return; }
     if (performance.now() < suppressUntil.current) { st.lastY = sy; st.acc = 0; return; }
     const max = document.documentElement.scrollHeight - window.innerHeight;
     if (max < 200) { setHidden(false); st.lastY = sy; st.acc = 0; return; }  // 짧은 화면 — 내비 영구 소멸·깜빡임 방지
@@ -1304,6 +1300,7 @@ export default function App() {
   const [legalDoc, setLegalDoc] = useState<LegalDoc | null>(null); // 약관·정책 모달
   const [supportOpen, setSupportOpen] = useState(false); // 1:1 고객센터 문의
   const [voucherWalletOpen, setVoucherWalletOpen] = useState(false);
+  const [voucherSheetOpen, setVoucherSheetOpen] = useState(false); // 헤더 [이용권·출석] 시트(루트 렌더)
   // 통합 '내 정보' 페이지(2026-09-04: 대시보드+프로필 관리 합침)의 진입 탭 — 열 때마다 이 값으로 리셋된다
   const [meTab, setMeTab] = useState<MeTab>('dashboard');
   // 비밀번호 변경 OTP 진행 중 페이지가 리로드되면(모바일에서 메일 앱을 다녀온 경우)
@@ -2513,7 +2510,7 @@ export default function App() {
         onNavigateNotification={handleNavigateNotification}
         onHome={handleHome}
         onOpenMe={openMeCb}
-        onVenue={handleVenueClick}
+        onOpenVoucher={() => setVoucherSheetOpen(true)}
         suppressed={openVenueId !== null}
       />
 
@@ -3079,6 +3076,19 @@ export default function App() {
           </div>
         );
       })()}
+
+      {/* 이용권 · 출석 시트 — **루트**에서 렌더한다. 헤더(sticky z-50) 안에서 그리면
+          Modal 의 fixed z-[60] 이 헤더 스태킹 컨텍스트에 갇혀 하단 탭바에 덮인다(실측). */}
+      {voucherSheetOpen && (
+        <Suspense fallback={null}>
+          <MyVoucherSheet
+            open
+            onClose={() => setVoucherSheetOpen(false)}
+            onVenue={handleVenueClick}
+            onOpenWallet={() => openMeCb('dashboard')}
+          />
+        </Suspense>
+      )}
 
       {authOpen && (
         <AuthModal key={authMode} open onClose={() => { setAuthOpen(false); setAuthMode('login'); }} initialMode={authMode} />
