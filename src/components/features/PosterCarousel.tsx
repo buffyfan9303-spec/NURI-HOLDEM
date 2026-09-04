@@ -21,6 +21,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { thumbUrl } from '../../lib/imageUrl';
 import type { Schedule } from '../../api/schedules';
+import type { HomeBanner } from '../../api/homeBanners';
 
 const DAYS_KO = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
@@ -108,7 +109,8 @@ const BRAND_SLIDES: {
     title: 'NURI HOLDEM', sub: '전국 홀덤 일정, 한곳에서 ›', titleColor: '#D9B25A', subColor: '#DCE4DC',
   },
 ];
-const STATIC_COUNT = POSTER_SLIDES.length + BRAND_SLIDES.length;
+// 고정 슬라이드 수 — eager 로딩 힌트에만 쓴다. 관리자 배너가 들어오면 장수가 달라지므로
+// 컴포넌트 안에서 실제 배너 수로 다시 센다(아래 staticCount).
 
 type Slide = {
   key: string; alt: string;
@@ -119,11 +121,17 @@ type Slide = {
   brand?: (typeof BRAND_SLIDES)[number];
 };
 
-export default function PosterCarousel({ schedules, onSelect, onBanner }: {
+export default function PosterCarousel({ schedules, onSelect, onBanner, banners = [], onBannerUrl }: {
   schedules: Schedule[];
   onSelect: (s: Schedule) => void;
   onBanner: (action: BannerAction) => void;
+  /** 관리자 등록 배너(home_banners). 하나라도 있으면 아래 POSTER_SLIDES 하드코딩을 **대체**한다 —
+   *  둘 다 띄우면 오너가 관리 화면에서 지운 배너가 화면에 남아 있는 것처럼 보인다.
+   *  비어 있으면(도입 첫날) 기존 하드코딩이 그대로 떠서 회귀가 없다. */
+  banners?: HomeBanner[];
+  onBannerUrl?: (url: string) => void;
 }) {
+  const staticCount = (banners.length > 0 ? banners.length : POSTER_SLIDES.length) + BRAND_SLIDES.length;
   const slides = useMemo<Slide[]>(() => {
     const today = new Date().toLocaleDateString('en-CA');
     // 같은 포스터의 연속 회차(기간제 게임)는 첫 회차 1장만 — 마퀴에 동일 카드 도배 방지
@@ -144,16 +152,23 @@ export default function PosterCarousel({ schedules, onSelect, onBanner }: {
           onClick: () => onSelect(s),
         };
       });
-    const posters = POSTER_SLIDES.map((b, i): Slide => ({
-      key: `p:${i}`, src: b.src, alt: b.alt, title: b.title, sub: b.sub,
-      onClick: () => onBanner(b.action),
-    }));
+    // 관리자 배너가 있으면 그것이 곧 고정 포스터 자리다(하드코딩 대체).
+    const posters: Slide[] = banners.length > 0
+      ? banners.map((b): Slide => ({
+        key: `db:${b.id}`, src: b.imageUrl, alt: b.title || '배너', title: b.title, sub: b.subtitle,
+        onClick: () => { if (b.linkUrl) onBannerUrl?.(b.linkUrl); },
+      }))
+      : POSTER_SLIDES.map((b, i): Slide => ({
+        key: `p:${i}`, src: b.src, alt: b.alt, title: b.title, sub: b.sub,
+        onClick: () => onBanner(b.action),
+      }));
     const brands = BRAND_SLIDES.map((b): Slide => ({
       key: `b:${b.key}`, alt: b.alt, brand: b, onClick: () => onBanner(b.action),
     }));
     // 포스터 → 브랜드 순으로 섞어 배치(포스터 2 · 브랜드 4 · 일정 포스터)
-    return [posters[0], posters[1], ...brands, ...dyn];
-  }, [schedules, onSelect, onBanner]);
+    // 배너(관리자 또는 하드코딩) → 브랜드 → 일정 포스터. 관리자 배너는 등록 순서(sort_order) 그대로 앞에 선다.
+    return [...posters, ...brands, ...dyn];
+  }, [schedules, onSelect, onBanner, banners, onBannerUrl]);
 
   // 고정 슬라이드만으로도 3장 이상 — 항상 루프(2배 복제 + scrollLeft ±half 랩).
   // ⚠ 풀폭 전환으로 세트 안 w-page-x 스페이서는 제거 — 카드 폭 = clientWidth 라 세트 폭이
@@ -206,7 +221,7 @@ export default function PosterCarousel({ schedules, onSelect, onBanner }: {
               // ⚠ 마퀴 안에서 lazy 는 '빈 배너'가 된다 — transform 이동은 스크롤이 아니라
               //    브라우저 지연 로딩 휴리스틱이 안 깨어난다(오너 실기기 리포트). 고정 슬라이드는
               //    전부 eager, 일정 포스터(thumbUrl 960)만 4장째부터 lazy.
-              loading={i < STATIC_COUNT + 3 ? 'eager' : 'lazy'}
+              loading={i < staticCount + 3 ? 'eager' : 'lazy'}
               decoding="async"
             />
             {/* 하단 스크림 — 포스터 위 고정 다크(테마 무관 가독) */}

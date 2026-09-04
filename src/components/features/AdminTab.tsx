@@ -25,6 +25,7 @@ import { supabase } from '../../lib/supabase';
 import { getAppSetting, setAppSetting, BOOST_CONTACT_EMAIL_KEY, BOOST_CONTACT_PHONE_KEY, COMMUNITY_ADS_EVERY_KEY, COMMUNITY_ADS_EVERY_DEFAULT, parseAdsEvery } from '../../api/settings';
 import { getAdminPlatformStats, getFreePlanUsage, type PlatformStats, type PlanUsageRow } from '../../api/adminStats';
 import { getAllCommunityAds, saveCommunityAd, type CommunityAd } from '../../api/ads';
+import HomeBannersCard from './HomeBannersCard';
 import {
   MISSIONS, adminListCustomMissions, adminSaveCustomMission, adminDeleteCustomMission,
   type CustomMissionRow, type MissionGoalType,
@@ -66,7 +67,7 @@ type Section = 'analytics' | 'pending' | 'reorder' | 'exposure' | 'users' | 'ven
 // 노출 순서 하위 항목: 포스터(요강) / 매장
 type ReorderTarget = 'posters' | 'venues';
 // 노출 관리 하위 항목(2026-09-03 오너): 광고 / 외치기 / 게시물 / 공지
-type ExposureTarget = 'ads' | 'shouts' | 'posts' | 'notices';
+type ExposureTarget = 'banners' | 'ads' | 'shouts' | 'posts' | 'notices';
 
 // ── ⚡ 부스트 문의 연락처(운영자) — 업주 '포스터 상단 고정' 카드에 표시될 메일·전화 ──
 function BoostContactCard() {
@@ -1198,7 +1199,7 @@ export default function AdminTab({
   // 뒤로가기 — 비기본 섹션에선 먼저 기본(운영분석)으로 돌아오고, 그 다음에야 탭을 빠져나가게(일정탐색으로 바로 튐 방지)
   useBackClose(section !== 'analytics', () => setSection('analytics'));
   const [reorderTarget, setReorderTarget] = useState<ReorderTarget>('posters');
-  const [exposureTarget, setExposureTarget] = useState<ExposureTarget>('ads');
+  const [exposureTarget, setExposureTarget] = useState<ExposureTarget>('banners');
 
   const pending = schedules.filter((s) => !s.approved);
 
@@ -1253,11 +1254,13 @@ export default function AdminTab({
           {section === 'exposure' && (
             <div className="space-y-3">
               <div className="flex items-center gap-1 bg-surface-high rounded-input p-0.5">
+                <SubPill active={exposureTarget === 'banners'} onClick={() => setExposureTarget('banners')}>배너</SubPill>
                 <SubPill active={exposureTarget === 'ads'} onClick={() => setExposureTarget('ads')}>광고</SubPill>
                 <SubPill active={exposureTarget === 'shouts'} onClick={() => setExposureTarget('shouts')}>외치기</SubPill>
                 <SubPill active={exposureTarget === 'posts'} onClick={() => setExposureTarget('posts')}>게시물</SubPill>
                 <SubPill active={exposureTarget === 'notices'} onClick={() => setExposureTarget('notices')}>공지</SubPill>
               </div>
+              {exposureTarget === 'banners' && <HomeBannersCard />}
               {exposureTarget === 'ads' && <CommunityAdsCard />}
               {exposureTarget === 'shouts' && <ShoutsAdminCard />}
               {exposureTarget === 'posts' && <PostsAdminPanel posts={posts} />}

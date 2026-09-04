@@ -29,6 +29,7 @@ import { getVenueRatings } from './api/reviews';
 import NotificationPanel from './components/features/NotificationPanel';
 import VerifyGateSheet from './components/features/VerifyGateSheet';
 import { NoticeRow } from './components/features/NoticeSection';
+import { getActiveHomeBanners, type HomeBanner } from './api/homeBanners';
 import { decodeSpot, readGtoHash } from './components/features/gto/gtoShare';
 import type { DeepGtoInit } from './components/features/gto/useDeepGto';
 import type { PosterFormData } from './components/features/PosterFormModal';
@@ -1395,6 +1396,13 @@ export default function App() {
   const reloadPosts     = useCallback(() => { getPosts().then((v) => { setPosts(v); writeSnap('posts', v); }).catch(() => {}); }, []);
   const reloadComments  = useCallback(() => { getComments({}).then(setComments).catch(() => {}); }, []);
   const reloadNotices   = useCallback(() => { getNotices().then((v) => { setNotices(v); writeSnap('notices', v); setNoticesLoaded(true); }).catch(() => {}); }, []);
+  // 홈 상단 배너(home_banners) — 관리자가 등록한 것만. 비면 PosterCarousel 이 기존 하드코딩으로 폴백한다.
+  // 스냅샷 캐시를 쓰는 이유: 첫 화면 최상단이라 늦게 도착하면 캐러셀이 통째로 밀린다(CLS).
+  const [homeBanners, setHomeBanners] = useState<HomeBanner[]>(() => readSnap<HomeBanner[]>('home-banners') ?? []);
+  const reloadHomeBanners = useCallback(() => {
+    getActiveHomeBanners().then((v) => { setHomeBanners(v); writeSnap('home-banners', v); }).catch(() => {});
+  }, []);
+  useEffect(() => { reloadHomeBanners(); }, [reloadHomeBanners]);
 
   // 공개 데이터 초기 로드 — **첫 화면(일정탐색)에 필요한 것만** 즉시 받는다.
   // 예전엔 게시글·댓글·장터까지 6종을 부팅과 동시에 쐈다. 사용자가 기다리는 건 대회 목록인데
@@ -2565,6 +2573,7 @@ export default function App() {
             liveCount={liveClocks.length}
             regInfoBySchedule={regInfoBySchedule}
             onTools={() => changeTab('tools')}
+            banners={homeBanners}
             onSelect={handleScheduleSelect}
             onVenue={handleVenueClick}
             onExplore={() => changeTab('browse')}

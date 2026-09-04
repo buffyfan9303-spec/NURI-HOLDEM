@@ -6,6 +6,7 @@
 import { useMemo } from 'react';
 import Icon from '../atoms/Icon';
 import PosterCarousel from './PosterCarousel';
+import type { HomeBanner } from '../../api/homeBanners';
 import WeeklyBestStrip from './WeeklyBestStrip';
 import ScheduleCard from './ScheduleCard';
 import type { Schedule } from '../../api/schedules';
@@ -25,7 +26,7 @@ const openNowSeen = () => { try { return localStorage.getItem(OPENNOW_SEEN) === 
 // 헤드라인의 라이브/일정 문구가 '지금'의 맥락은 이미 담고 있어 정보 손실이 없다.
 
 export default function HomeTab({
-  schedules, loaded, clocksLoaded, liveCount, regInfoBySchedule, onTools, onSelect, onVenue, onExplore, onLive, onRotiCommunity, active,
+  schedules, loaded, clocksLoaded, liveCount, regInfoBySchedule, onTools, onSelect, onVenue, onExplore, onLive, onRotiCommunity, active, banners = [],
 }: {
   schedules: Schedule[];
   loaded: boolean;
@@ -34,6 +35,8 @@ export default function HomeTab({
   /** 클락 응답 도착 여부 — 도착 전 '지금 등록 가능' 자리 예약 판단 */
   clocksLoaded: boolean;
   onTools: () => void;
+  /** 관리자 등록 홈 배너(home_banners) — 비면 PosterCarousel 이 기존 하드코딩으로 폴백 */
+  banners?: HomeBanner[];
   /** 캐러셀 로티아레나 배너 → 로티아레나 매장 커뮤니티 페이지 */
   onRotiCommunity: () => void;
   regInfoBySchedule: ReadonlyMap<string, RegInfo>;
@@ -165,10 +168,18 @@ export default function HomeTab({
         </section>
       )}
 
-      {/* 포스터 캐러셀 — 고정 배너(로티아레나·도구·NURI) + 부스트 우선 대회 포스터 */}
+      {/* 포스터 캐러셀 — 관리자 배너(home_banners) 또는 고정 배너 + 브랜드 + 부스트 우선 대회 포스터 */}
       <PosterCarousel
         schedules={schedules}
         onSelect={onSelect}
+        banners={banners}
+        onBannerUrl={(url) => {
+          // 관리자가 넣은 링크. 외부는 새 탭(noopener — opener 를 통한 탭내빙 차단),
+          // 내부 경로('/...')는 같은 탭. javascript: 같은 스킴은 애초에 열지 않는다.
+          const u = url.trim();
+          if (/^https?:\/\//i.test(u)) { window.open(u, '_blank', 'noopener,noreferrer'); return; }
+          if (u.startsWith('/')) { window.location.assign(u); return; }
+        }}
         onBanner={(a) => {
           if (a === 'nurimind') { window.open('https://www.nurimind.co.kr', '_blank', 'noopener'); return; }
           if (a === 'tools') onTools(); else if (a === 'explore') onExplore(); else onRotiCommunity();
