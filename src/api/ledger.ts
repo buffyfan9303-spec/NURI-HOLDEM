@@ -1055,10 +1055,12 @@ export async function getPendingBuyinRequests(venueId: string, date: string): Pr
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({ id: r.id, venueId: r.venue_id, sessionDate: r.session_date, playerName: r.player_name, userId: r.user_id, note: r.note ?? null, status: r.status, createdAt: r.created_at, requestedGameSeq: r.requested_game_seq ?? null, voucherId: r.voucher_id ?? null }));
 }
-/** 운영자: 요청 승인 → 해당 게임(gameSeq) 명단에 추가 + 요청 approved. */
-export async function approveBuyinRequest(id: string, gameSeq = MAIN_GAME_SEQ, recordBuyin = false, payMethod: 'cash' | 'card' | 'transfer' = 'cash', split?: { cash: number; card: number; transfer: number }): Promise<void> {
+/** 운영자: 요청 승인 → 해당 게임(gameSeq) 명단에 추가 + 요청 approved.
+ *  discountIndex(1~5, 0=없음): 접수대 결제 모달과 같은 할인 자리번호. 서버(20260905d)가 정가−할인을
+ *  스냅샷으로 저장하고 카드는 카드단가를 쓴다 — 예전엔 이 경로만 할인이 통째로 빠지고 카드도 현금단가였다. */
+export async function approveBuyinRequest(id: string, gameSeq = MAIN_GAME_SEQ, recordBuyin = false, payMethod: 'cash' | 'card' | 'transfer' = 'cash', split?: { cash: number; card: number; transfer: number }, discountIndex = 0): Promise<void> {
   if (IS_MOCK) return;
-  const { error } = await supabase.rpc('approve_buyin_request', { p_request_id: id, p_game_seq: gameSeq, p_record_buyin: recordBuyin, p_pay_method: payMethod, p_split: !!split, p_cash: split?.cash ?? 0, p_card: split?.card ?? 0, p_transfer: split?.transfer ?? 0 });
+  const { error } = await supabase.rpc('approve_buyin_request', { p_request_id: id, p_game_seq: gameSeq, p_record_buyin: recordBuyin, p_pay_method: payMethod, p_split: !!split, p_cash: split?.cash ?? 0, p_card: split?.card ?? 0, p_transfer: split?.transfer ?? 0, p_discount_index: discountIndex });
   if (error) throw new Error(error.message);
 }
 /** 운영자: 요청 거절. */

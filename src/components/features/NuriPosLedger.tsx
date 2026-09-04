@@ -309,7 +309,10 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     }
     setPendingReqs((prev) => prev.filter((x) => x.id !== r.id));
     setPayPick(null); setSplitFor(null);
-    return approveBuyinRequest(r.id, target, withBuyin, payMethod, split)
+    // 접수대 결제 모달과 같은 규칙으로 '지금 레벨의 자동 할인'을 실어 보낸다.
+    // 예전엔 QR 승인 경로만 할인이 통째로 빠져, 같은 레벨인데 창구에 따라 금액이 갈렸다(2026-09-05 감사).
+    const discIdx = autoDiscountIndex(session.discounts, clockLevelNow());
+    return approveBuyinRequest(r.id, target, withBuyin, payMethod, split, discIdx)
       .then(() => { toast.show(`${r.playerName} 승인 · ${gLabel(target)} 명단 추가${r.voucherId ? ' + 티켓 기록(이용권)' : withBuyin ? (split ? ' + 분할 바인 기록' :` + ${payMethod === 'card' ? '카드' : payMethod === 'transfer' ? '이체' : '현금'} 바인 기록`) : ''}`, 'success'); loadPending(); })
       .catch((e) => { toast.show(e instanceof Error ? e.message : '승인 실패', 'error'); loadPending(); });
   };
@@ -330,7 +333,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     if (plan.mixed && !window.confirm(`${plan.groups.map((g) => `${gLabel(g.gameSeq)} ${g.items.length}명`).join(' / ')}으로 나눠 승인합니다.\n계속할까요?`)) return;
     const n = flat.length;
     setPendingReqs(plan.skipped); // 낙관: 승인 대상만 비우고 '게임 미개설' 보류 건은 목록에 남긴다
-    Promise.all(flat.map((x) => approveBuyinRequest(x.id, x.seq).catch(() => null)))
+    Promise.all(flat.map((x) => approveBuyinRequest(x.id, x.seq, false, 'cash', undefined, autoDiscountIndex(session.discounts, clockLevelNow())).catch(() => null)))
       .then(() => {
         const spread = plan.groups.map((g) => `${gLabel(g.gameSeq)} ${g.items.length}`).join(' · ');
         toast.show(`${n}건 승인. ${spread}${plan.skipped.length ?` · ${plan.skipped.length}건 보류(게임 미개설)` : ''}`, 'success');
