@@ -689,7 +689,11 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
               key={key} type="button"
               // 같은 탭 재탭 = 맨 위로(iOS 관례). 다른 탭 이동은 changeTab 의 스크롤 저장/복원이 맡는다 —
               // 예전엔 무조건 맨 위로 튕겨서, 목록을 한참 내려 보다 다른 탭을 잠깐 다녀오면 위치를 전부 잃었다.
-              onClick={() => { if (tab) { if (tab === shown) { window.scrollTo({ top: 0, behavior: 'smooth' }); } else { setOptimistic(tab); onChange(tab); } } else onOpenMe(); }}
+              // ⚠ 재탭 판정은 **실제 탭(active)** 으로 한다. shown 은 표시용으로 접은 값이라
+              //   browse 에서 shown='home' 이 되고, 그러면 홈 버튼이 '재탭'으로 잘못 잡혀
+              //   맨 위로 스크롤만 하고 홈에 영영 못 간다(2026-09-05 전수 조사). 모바일에는
+              //   상단 GNB 가 없어 이 탭바가 유일한 내비라 그대로 갇힌다.
+              onClick={() => { if (tab) { if (tab === active) { window.scrollTo({ top: 0, behavior: 'smooth' }); } else { setOptimistic(tab); onChange(tab); } } else onOpenMe(); }}
               aria-current={on ? 'page' : undefined}
               // 접근성 이름을 버튼에 고정 — 배지 span 의 aria-label 이 DOM 순서상 라벨보다 앞이라 이름이
               // '진행 중 2게임 라이브' 로 뒤집혔다(게임이 돌 때마다 e2e /^라이브/ 가 깨지던 원인). 이름 = '라이브, 진행 중 2게임'.
@@ -778,7 +782,14 @@ export default function App() {
   const [activeTab, setActiveTab]     = useState<TabId>(() => {
     try {
       const t = new URLSearchParams(window.location.search).get('tab');
-      const valid: TabId[] = ['home', 'browse', 'live', 'community', 'market', 'tools', 'calendar', 'my-store', 'admin'];
+      // market 은 최상위 탭이 아니라 **커뮤니티의 서브섹션**이다. 그대로 두면 아래 '없는 탭' 가드가
+      // 홈으로 되돌려, PWA 바로가기 '중고장터'가 라벨이 약속한 곳에 영영 도달하지 못했다
+      // (그 전에 본문이 빈 화면 한 프레임). CommunityTab 이 마운트 때 읽는 통로에 미리 심어 보낸다.
+      if (t === 'market') {
+        try { sessionStorage.setItem('nuri:community-section', 'market'); } catch { /* noop */ }
+        return 'community';
+      }
+      const valid: TabId[] = ['home', 'browse', 'live', 'community', 'tools', 'calendar', 'my-store', 'admin'];
       if ((valid as string[]).includes(t ?? '')) return t as TabId;
       return 'home';
     } catch { return 'home'; }
