@@ -1,7 +1,7 @@
 // src/components/atoms/ActivityBadges.tsx
 // 프로필 활동 점수 + 뱃지 진열장.
 //  - 커뮤니티 랭킹 점수: 활동 점수(접속/글/댓글). TierBadge 등급과 연동.
-//  - 매장 방문 점수: 예약 후 방문(지난 일정 예약) 횟수.
+//  - 매장 방문 점수: QR 체크인 방문 일수(매장별 KST 날짜 distinct — getMyVisitStats, 2026-09-05 #8). 예약은 '예정 N' 으로만.
 import TierBadge, { tierCss } from './TierBadge';
 
 /* 획득 칩 4단계 색 — 구 등급 팔레트(#5FA8FF·#4FCB98·#B388FF·#FFD700)를 리터럴로 들고 있었다.

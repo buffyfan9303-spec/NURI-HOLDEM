@@ -2,7 +2,8 @@
 // '내 정보' 통합 페이지(오너 지시 2026-09-03) — [대시보드 · 프로필 · 설정 · 보안] 4탭.
 //   대시보드 = 이 파일 본문, 프로필/설정/보안 = ProfilePanels(구 ProfileModal) 패널 그대로.
 //   진입점은 헤더 아바타 메뉴('내 정보')·모바일 탭바 5칸·/wallet 딥링크·본인인증 배너(보안 탭) 뿐이다.
-// 내 매장이용권(매장별) + 매장 이용내역(방문·머니인·금액). 매장이용권은 금전적 가치 없음.
+// 내 매장이용권(매장별) + 매장 이용내역(방문·참가(바인)·참가비). 매장이용권은 금전적 가치 없음.
+//   '방문' = QR 체크인(매장별 KST 날짜 distinct), '참가' = 장부 바인 — 둘 다 머니인(입상)과 다른 단위다(점검 #6·#8).
 // 사용(회수) = 발급 매장 QR 스캔 또는 그 매장 업주 전화번호로만. 유저 간 전송 불가.
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useToast } from '../atoms/Toast';
@@ -16,7 +17,8 @@ import { goSubTab } from '../../lib/subTabTransition';
 import type { LegalDoc } from './LegalDocsModal';
 import { myVisitedVenues, myPlayHistory, type VisitedVenue, type PlayHistory } from '../../api/vouchers';
 import { wonToMan } from '../../api/ledger';
-import { getMyReservations, cancelMyReservation, type MyReservationRow } from '../../api/reservations';
+import { getMyReservations, getMyVisitStats, cancelMyReservation, type MyReservationRow } from '../../api/reservations';
+import { useBackClose } from '../../lib/backstack';
 import { getPostsByUser, type CommunityPost } from '../../api/community';
 import { getMyRankingHistory, getGlobalRankingTotals, placementPoints, type MyRankingRow } from '../../api/rankings';
 import { shareRecordCard, shareRecordCardKakao } from '../../lib/recordCard';
@@ -91,6 +93,8 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
   const [badgeStats, setBadgeStats] = useState<BadgeStats | null>(null); // 내 업적(랭킹 탭에서 이전)
   const [achOpen, setAchOpen] = useState(false); // 내 업적 접기/펼치기 — 기본 닫힘
   const [myPosts, setMyPosts] = useState<CommunityPost[]>([]); // 내가 쓴 글 — 그동안 찾을 화면 자체가 없었다
+  const [myPostTotal, setMyPostTotal] = useState(0); // 내 글 총수 — 목록 limit(20)과 무관한 count(점검 #26)
+  const [visitStats, setVisitStats] = useState({ visits: 0, upcoming: 0, total: 0 }); // 헤더 '방문' — 프로필 탭과 같은 함수·같은 단위(점검 #8)
   const recordsRef = useRef<HTMLElement | null>(null); // '내 전적' 버튼 → 기존 입상 기록 섹션 앵커 스크롤
   // 4탭 상태 — 페이지가 소유(ProfilePanels 는 controlled). 열릴 때마다 initialTab 으로 리셋(keep-alive 재열림 포함).
   const [tab, setTab] = useState<MeTab>(initialTab);
@@ -99,8 +103,8 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
   const goTab = useCallback((v: MeTab) => goSubTab('profile-tab', ME_TAB_ORDER, tab, v, () => setTab(v)), [tab]);
 
   useEffect(() => {
-    if (!open || !user) { setMyPosts([]); return; }
-    getPostsByUser(user.id).then(setMyPosts).catch(() => {});
+    if (!open || !user) { setMyPosts([]); setMyPostTotal(0); return; }
+    getPostsByUser(user.id).then(({ posts, total }) => { setMyPosts(posts); setMyPostTotal(total); }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, user?.id]);
 
@@ -109,13 +113,14 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
     Promise.all([
       myVisitedVenues(), myPlayHistory(),
       getMyReservations().catch(() => [] as MyReservationRow[]),
+      getMyVisitStats().catch(() => ({ visits: 0, upcoming: 0, total: 0 })),
       user?.nickname ? getMyRankingHistory(user.nickname, 200).catch(() => [] as MyRankingRow[]) : Promise.resolve([] as MyRankingRow[]),
       user?.nickname ? getMyReferralStats().catch(() => ({ invited: 0, rewarded: 0 })) : Promise.resolve({ invited: 0, rewarded: 0 }),
       user?.nickname ? getMyChampionships(user.nickname).catch(() => 0) : Promise.resolve(0),
       user?.nickname ? getGlobalRankingTotals('all').catch(() => []) : Promise.resolve([]),
     ])
-      .then(([vi, pl, rv, rk, rs, ch, gt]) => {
-        setVisits(vi); setPlays(pl); setResv(rv); setRanks(rk); setRefStats(rs); setChampionships(ch);
+      .then(([vi, pl, rv, vs, rk, rs, ch, gt]) => {
+        setVisits(vi); setPlays(pl); setResv(rv); setVisitStats(vs); setRanks(rk); setRefStats(rs); setChampionships(ch);
         // 전국 상위 N% — 대회 입상 횟수 기준(랭킹 허브 '머니인' 보드와 같은 careerCompare 정렬, 서버가 이미 정렬). 상금 무관.
         const nick = user?.nickname?.trim().toLowerCase();
         const idx = nick ? gt.findIndex((t) => t.nickname.trim().toLowerCase() === nick) : -1;
@@ -142,26 +147,28 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
   // 숨김 중 로그인이 확정되면(user 등장) 갈래 전환은 자연 리렌더로 처리된다.
   if (!user) return <LoginLanding onClose={onClose} hidden={hidden} />;
 
-  const usageMap = new Map<string, { name: string; visits: number; moneyin: number; amount: number; lastAt: string | null }>();
-  for (const x of visits) usageMap.set(x.venueId, { name: x.venueName ?? '매장', visits: x.visits, moneyin: 0, amount: 0, lastAt: null });
+  const usageMap = new Map<string, { name: string; visits: number; buyins: number; amount: number; lastAt: string | null }>();
+  for (const x of visits) usageMap.set(x.venueId, { name: x.venueName ?? '매장', visits: x.visits, buyins: 0, amount: 0, lastAt: null });
   for (const p of plays) {
-    const e = usageMap.get(p.venueId) ?? { name: p.venueName ?? '매장', visits: 0, moneyin: 0, amount: 0, lastAt: null };
-    e.moneyin = p.moneyinCount; e.amount = p.totalAmount; e.lastAt = p.lastAt;
+    const e = usageMap.get(p.venueId) ?? { name: p.venueName ?? '매장', visits: 0, buyins: 0, amount: 0, lastAt: null };
+    e.buyins = p.buyinCount; e.amount = p.totalAmount; e.lastAt = p.lastAt;
     usageMap.set(p.venueId, e);
   }
-  const usage = [...usageMap.values()].sort((a, b) => (b.moneyin + b.visits) - (a.moneyin + a.visits));
-  // 하이라이트 — 총 머니인/누적액 + 최다 머니인(횟수) 매장 + 최다 머니인(금액) 매장
-  const totalVisits = visits.reduce((s, v) => s + v.visits, 0); // 스탯 3열용 — 이미 내려온 방문 데이터 재사용(새 fetch 0)
-  const totalMoneyin = plays.reduce((s, p) => s + p.moneyinCount, 0);
+  const usage = [...usageMap.values()].sort((a, b) => (b.buyins + b.visits) - (a.buyins + a.visits));
+  // 입상(머니인) 횟수 — 이미 내려온 ranks 를 매장 이름으로 센다(표시 전용 — usage 는 venueId, ranks 는 매장명뿐이라 이름 조인).
+  const rankCountByVenue = new Map<string, number>();
+  for (const r of ranks) rankCountByVenue.set(r.venueName, (rankCountByVenue.get(r.venueName) ?? 0) + 1);
+  // 하이라이트 — 총 참가(바인)/누적 참가비 + 최다 참가(횟수) 매장 + 최다 참가비 매장. 참가비는 상품 가격 정보라 표시 유지(§28).
+  const totalBuyins = plays.reduce((s, p) => s + p.buyinCount, 0);
   const totalSpent = plays.reduce((s, p) => s + p.totalAmount, 0);
-  const topMoneyin = [...usage].filter((u) => u.moneyin > 0).sort((a, b) => b.moneyin - a.moneyin)[0] ?? null;
+  const topBuyins = [...usage].filter((u) => u.buyins > 0).sort((a, b) => b.buyins - a.buyins)[0] ?? null;
   const topAmount = [...usage].filter((u) => u.amount > 0).sort((a, b) => b.amount - a.amount)[0] ?? null;
   const fmtDate = (iso: string | null) => { if (!iso) return ''; const d = new Date(iso); return `${d.getMonth() + 1}/${d.getDate()}`; };
 
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-surface-base pt-[env(safe-area-inset-top)]" style={hidden ? { display: 'none' } : undefined}>
       <header className="flex h-header-h shrink-0 items-center gap-2 px-page-x">
-        <button type="button" onClick={() => { sessionStorage.removeItem('nh_pw_otp'); onClose(); }} aria-label="닫기" className="flex h-9 w-9 items-center justify-center rounded-full text-ink-secondary hover:bg-surface-high">
+        <button type="button" onClick={() => { sessionStorage.removeItem('nh_pw_otp'); onClose(); }} aria-label="닫기" className="-ml-2 flex h-11 w-11 items-center justify-center rounded-full text-ink-secondary hover:bg-surface-high">
           <Icon name="back" size={20} />
         </button>
         <h1 className="text-lg font-bold text-ink-primary">내 정보</h1>
@@ -174,11 +181,12 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
       <div className="flex-1 overflow-y-auto">
         {/* 본문 — 탭 전환의 방향성 푸시 대상(탭바는 제자리 고정) */}
         <div data-profile-panel="">
-        {tab !== 'dashboard' ? (
-          <div className="mx-auto w-full max-w-md">
-            <ProfilePanels open={open} tab={tab} onClose={onClose} onOpenLegal={onOpenLegal} onOpenSupport={onOpenSupport} />
-          </div>
-        ) : (
+        {/* 프로필·설정·보안 패널은 keep-alive(hidden 토글) — 설정 탭에서 편집 중(닉네임·크롭 사진) 대시보드를 다녀와도
+            입력이 남는다(점검 #18). 상태는 ProfilePanels 본체에 있어 대시보드 표시 중엔 'profile' 로 접어 두기만 한다. */}
+        <div hidden={tab === 'dashboard'} className="mx-auto w-full max-w-md">
+          <ProfilePanels open={open} tab={tab === 'dashboard' ? 'profile' : tab} onClose={onClose} onOpenLegal={onOpenLegal} onOpenSupport={onOpenSupport} />
+        </div>
+        {tab === 'dashboard' && (
         <div className="mx-auto w-full max-w-2xl space-y-4 px-page-x py-section">
           {/* 통합 프로필 아이덴티티 헤더(오너 지시 2026-08-27) — ProfileModal '프로필' 탭과 같은 정본.
               커버 밴드(등급색 틴트) + 오버랩 아바타(등급 링) + 닉네임·등급·칭호·인증 + 등급 진행바. */}
@@ -192,8 +200,8 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
               verified={idOn && user.verified}
               stats={[
                 { label: '활동점수', value: (user.activityPoints ?? 0).toLocaleString() },
-                { label: '내 글', value: String(myPosts.length) },
-                { label: '방문', value: `${totalVisits}회` },
+                { label: '내 글', value: String(myPostTotal) },
+                { label: '방문', value: `${visitStats.visits}회` },
               ]}
               actions={
                 <div className="grid w-full grid-cols-2 gap-2">
@@ -322,7 +330,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
           {/* 내가 쓴 글 — 커뮤니티에 흩어진 내 글을 다시 찾을 유일한 화면 */}
           {myPosts.length > 0 && onOpenPost && (
             <section className="rounded-aura border card-aura p-3">
-              <Head icon="edit" tone="fuchsia" title="내가 쓴 글" count={myPosts.length} />
+              <Head icon="edit" tone="fuchsia" title="내가 쓴 글" count={myPostTotal} />
               <ul className="mt-2 space-y-1">
                 {myPosts.slice(0, 5).map((mp) => (
                   <li key={mp.id}>
@@ -350,7 +358,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
             </div>
           )}
 
-          {/* 하이라이트 요약 — 방문·머니인·최다 머니인 매장/금액
+          {/* 하이라이트 요약 — 방문 매장·참가(바인)·누적 참가비·최다 참가 매장/참가비 매장
               ⚠ '보유 이용권' 통합 스탯 제거(오너 지시 #4, 2026-08-29):
                  이용권은 **매장마다 개별 매장이용권**만 존재한다. 매장을 가로질러 합산한 'N장'은
                  그 전제와 어긋나는 수치다(어느 매장에서 쓸 수 있는 N장인지 답이 없다).
@@ -359,13 +367,13 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
             <section className="space-y-2">
               <div className="grid grid-cols-3 gap-2">
                 <Stat label="방문 매장" value={`${usage.length}곳`} />
-                <Stat label="총 머니인" value={`${totalMoneyin}회`} />
-                <Stat label="누적 머니인액" value={totalSpent ? wonToMan(totalSpent) + '만' : '-'} accent />
+                <Stat label="참가(바인)" value={`${totalBuyins}회`} />
+                <Stat label="누적 참가비" value={totalSpent ? wonToMan(totalSpent) + '만' : '-'} accent />
               </div>
-              {(topMoneyin || topAmount) && (
+              {(topBuyins || topAmount) && (
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {topMoneyin && <HiCard title="최다 머니인 매장" name={topMoneyin.name} detail={`머니인 ${topMoneyin.moneyin}회 · 누적 ${topMoneyin.amount ? wonToMan(topMoneyin.amount) + '만' : '-'}`} />}
-                  {topAmount && <HiCard title="최다 머니인 금액" name={topAmount.name} detail={`${wonToMan(topAmount.amount)}만 · ${topAmount.moneyin}회`} />}
+                  {topBuyins && <HiCard title="최다 참가 매장" name={topBuyins.name} detail={`참가 ${topBuyins.buyins}회 · 누적 참가비 ${topBuyins.amount ? wonToMan(topBuyins.amount) + '만' : '-'}`} />}
+                  {topAmount && <HiCard title="최다 참가비 매장" name={topAmount.name} detail={`${wonToMan(topAmount.amount)}만 · 참가 ${topAmount.buyins}회`} />}
                 </div>
               )}
             </section>
@@ -382,7 +390,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
           <section className="space-y-2">
             <Head icon="store" tone="cyan" title="매장 이용·참가 내역" count={usage.length} unit="곳" />
             {loading ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
-              : usage.length === 0 ? <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="store" />} title="방문·머니인 기록이 아직 없습니다." /></div>
+              : usage.length === 0 ? <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="store" />} title="방문·참가 기록이 아직 없습니다." /></div>
                 : <ul className="space-y-1.5">{usage.map((u, i) => (
                   <li key={i} className="rounded-input border border-border-subtle bg-surface-low px-3 py-2">
                     <div className="flex items-center justify-between gap-2">
@@ -391,8 +399,9 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
                     </div>
                     <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-2xs text-ink-muted">
                       <span>방문 <b className="text-ink-secondary tabular-nums">{u.visits}</b>회</span>
-                      <span>머니인 <b className="text-ink-secondary tabular-nums">{u.moneyin}</b>회</span>
-                      <span>누적 <b className="text-accent-300 tabular-nums">{u.amount ? wonToMan(u.amount) + '만' : '-'}</b></span>
+                      <span>참가 <b className="text-ink-secondary tabular-nums">{u.buyins}</b>회</span>
+                      <span>입상 <b className="text-ink-secondary tabular-nums">{rankCountByVenue.get(u.name) ?? 0}</b>회</span>
+                      <span>참가비 <b className="text-accent-300 tabular-nums">{u.amount ? wonToMan(u.amount) + '만' : '-'}</b></span>
                     </div>
                   </li>
                 ))}</ul>}
@@ -501,7 +510,7 @@ function LoginLanding({ onClose, hidden = false }: { onClose: () => void; hidden
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-surface-base pt-[env(safe-area-inset-top)]" style={hidden ? { display: 'none' } : undefined}>
       <header className="flex h-header-h shrink-0 items-center gap-2 border-b border-border-subtle px-page-x">
-        <button type="button" onClick={onClose} aria-label="닫기" className="flex h-9 w-9 items-center justify-center rounded-full text-ink-secondary hover:bg-surface-high">
+        <button type="button" onClick={onClose} aria-label="닫기" className="-ml-2 flex h-11 w-11 items-center justify-center rounded-full text-ink-secondary hover:bg-surface-high">
           <Icon name="back" size={20} />
         </button>
         {/* 우상단 칩 — 로그인 없이도 눌러볼 게 하나는 있어야 한다(가벼운 재미 → 도구 탭 유입) */}
@@ -806,17 +815,20 @@ function HiCard({ title, name, detail }: { title: string; name: string; detail: 
 
 /** 레벨 도감 — 전체 12레벨·칭호·필요 점수 + 현재 레벨 강조 + 점수 올리는 법. */
 function LevelGuideModal({ points, onClose }: { points: number; onClose: () => void }) {
+  useBackClose(true, onClose); // 손제작 시트도 뒤로가기 겹 등록 — 안 하면 뒤로가기가 '내 정보' 전체를 닫고 keep-alive 로 도감이 열린 채 남는다(점검 #7)
   const idOn = useIdentityEnabled(); // 못 받는 보상을 '받는다'고 적어 두지 않기 위해
   const tiers = allTiers();
   const cur = tierOf(points);
   return (
     <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center">
       <button type="button" aria-label="닫기" onClick={onClose} className="absolute inset-0 bg-black/70" />
-      <div className="relative max-h-[85vh] w-full max-w-md overflow-y-auto rounded-t-dialog border border-border-default bg-surface-mid p-4 animate-slide-up sm:rounded-dialog">
+      {/* 루트는 flex 열 + 본문만 스크롤 → 헤더·× 고정(점검 #27). 하단은 홈 인디케이터 safe-area 를 더해 마지막 항목이 안 가린다(#14). */}
+      <div className="relative flex max-h-[85vh] w-full max-w-md flex-col rounded-t-dialog border border-border-default bg-surface-mid p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] animate-slide-up sm:rounded-dialog sm:pb-4">
         <div className="mb-2 flex items-center justify-between gap-2">
           <p className="flex items-center gap-1.5 text-sm font-bold text-ink-primary"><Icon name="medal" size={15} /> 레벨 도감</p>
-          <button type="button" onClick={onClose} aria-label="닫기" className="text-ink-muted"><Icon name="close" size={18} /></button>
+          <button type="button" onClick={onClose} aria-label="닫기" className="hit text-ink-muted"><Icon name="close" size={18} /></button>
         </div>
+        <div className="min-h-0 flex-1 overflow-y-auto">
         <p className="mb-3 text-2xs leading-relaxed text-ink-muted">활동점수가 쌓이면 레벨이 오릅니다. 지금은 <b className="text-accent-300">Lv {cur.level} · {cur.title}</b>.</p>
         <ul className="space-y-1.5">
           {tiers.map((t) => {
@@ -844,6 +856,7 @@ function LevelGuideModal({ points, onClose }: { points: number; onClose: () => v
           · 접속 +1 · 글쓰기 +3 · 댓글 +1<br />
           · 친구 초대(본인인증) +500 · 추천 가입 +300{!idOn && <span className="text-ink-muted">본인인증 준비 중이라 잠시 중단</span>}<br />
           · 시즌 1·2·3위 +1,000 / +500 / +300
+        </div>
         </div>
       </div>
     </div>
