@@ -12,6 +12,8 @@ import Icon from '../atoms/Icon';
 import UnderlineTabs from '../atoms/UnderlineTabs';
 import { SectionHead as Head, SectionTile as Tile } from '../atoms/SectionHeader'; // 섹션 머리글·타일 정본(지갑과 공유)
 import EmptyState from '../atoms/EmptyState';
+import LoadErrorCard from '../atoms/LoadErrorCard';
+import { SkeletonList } from '../atoms/Skeleton';
 import { goSubTab } from '../../lib/subTabTransition';
 import type { LegalDoc } from './LegalDocsModal';
 import { myVisitedVenues, myPlayHistory, type VisitedVenue, type PlayHistory } from '../../api/vouchers';
@@ -88,6 +90,11 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
   // 첫 프레임에 loading 이 false 면 방문·예약·입상 세 섹션이 동시에 "아직 없습니다"로 떨어진다
   // — reload() 안의 setLoading(true) 는 useEffect 라 페인트 뒤에 돈다(2026-09-05 전수 조사).
   const [loading, setLoading] = useState(true);
+  // 섹션별 조회 실패 — 이 세 줄이 없던 동안 실패는 전부 '아직 없습니다'(빈 상태)로 보였다.
+  // 방문 기록이 있는데도 '기록 없음'이 뜨면 사용자는 매장이 자기 방문을 안 찍었다고 오해한다.
+  const [usageErr, setUsageErr] = useState<unknown>(null);  // 매장 이용·참가 내역
+  const [resvErr, setResvErr] = useState<unknown>(null);    // 대회 참가(예약) 내역
+  const [ranksErr, setRanksErr] = useState<unknown>(null);  // 내 입상 기록
   const [badgeStats, setBadgeStats] = useState<BadgeStats | null>(null); // 내 업적(랭킹 탭에서 이전)
   const [achOpen, setAchOpen] = useState(false); // 내 업적 접기/펼치기 — 기본 닫힘
   const [myPosts, setMyPosts] = useState<CommunityPost[]>([]); // 내가 쓴 글 — 그동안 찾을 화면 자체가 없었다
@@ -104,24 +111,39 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, user?.id]);
 
+  // 왜 allSettled 인가(2026-09-05): 여기는 서로 다른 7개 조회다. Promise.all + 바깥 catch(()=>{})
+  // 였을 때는 하나만 실패해도 **성공한 나머지까지 버려지고** 실패가 통째로 삼켜져,
+  // 세 섹션이 동시에 '아직 없습니다'로 떨어졌다 — 실패를 빈 결과로 위장하는 바로 그 패턴이다.
+  // 이제 성공한 섹션은 그리고, 실패한 섹션만 이유와 재시도(LoadErrorCard)를 보여준다.
   const reload = () => {
     setLoading(true);
-    Promise.all([
+    Promise.allSettled([
       myVisitedVenues(), myPlayHistory(),
-      getMyReservations().catch(() => [] as MyReservationRow[]),
-      user?.nickname ? getMyRankingHistory(user.nickname, 200).catch(() => [] as MyRankingRow[]) : Promise.resolve([] as MyRankingRow[]),
-      user?.nickname ? getMyReferralStats().catch(() => ({ invited: 0, rewarded: 0 })) : Promise.resolve({ invited: 0, rewarded: 0 }),
-      user?.nickname ? getMyChampionships(user.nickname).catch(() => 0) : Promise.resolve(0),
-      user?.nickname ? getGlobalRankingTotals('all').catch(() => []) : Promise.resolve([]),
+      getMyReservations(),
+      user?.nickname ? getMyRankingHistory(user.nickname, 200) : Promise.resolve([] as MyRankingRow[]),
+      user?.nickname ? getMyReferralStats() : Promise.resolve({ invited: 0, rewarded: 0 }),
+      user?.nickname ? getMyChampionships(user.nickname) : Promise.resolve(0),
+      user?.nickname ? getGlobalRankingTotals('all') : Promise.resolve([]),
     ])
       .then(([vi, pl, rv, rk, rs, ch, gt]) => {
-        setVisits(vi); setPlays(pl); setResv(rv); setRanks(rk); setRefStats(rs); setChampionships(ch);
+        if (vi.status === 'fulfilled') setVisits(vi.value);
+        if (pl.status === 'fulfilled') setPlays(pl.value);
+        // 이용 내역 섹션은 방문+머니인 두 조회를 합쳐 그린다 — 둘 중 하나만 깨져도 숫자가 틀리므로 실패로 본다
+        setUsageErr(vi.status === 'rejected' ? vi.reason : pl.status === 'rejected' ? pl.reason : null);
+        if (rv.status === 'fulfilled') setResv(rv.value);
+        setResvErr(rv.status === 'rejected' ? rv.reason : null);
+        if (rk.status === 'fulfilled') setRanks(rk.value);
+        setRanksErr(rk.status === 'rejected' ? rk.reason : null);
+        if (rs.status === 'fulfilled') setRefStats(rs.value);
+        if (ch.status === 'fulfilled') setChampionships(ch.value);
         // 전국 상위 N% — 대회 입상 횟수 기준(랭킹 허브 '머니인' 보드와 같은 careerCompare 정렬, 서버가 이미 정렬). 상금 무관.
+        // 실패하면 백분위 자체를 숨긴다(null) — 0%·100% 같은 그럴듯한 거짓 숫자를 만들지 않는다.
+        const totals = gt.status === 'fulfilled' ? gt.value : [];
         const nick = user?.nickname?.trim().toLowerCase();
-        const idx = nick ? gt.findIndex((t) => t.nickname.trim().toLowerCase() === nick) : -1;
-        setPercentile(idx >= 0 ? Math.max(1, Math.round(((idx + 1) / gt.length) * 100)) : null);
+        const idx = nick ? totals.findIndex((t) => t.nickname.trim().toLowerCase() === nick) : -1;
+        setPercentile(idx >= 0 ? Math.max(1, Math.round(((idx + 1) / totals.length) * 100)) : null);
       })
-      .catch(() => {}).finally(() => setLoading(false));
+      .finally(() => setLoading(false));
   };
   // 왜 user?.id 의존성: 비로그인 랜딩에서 이메일 로그인(AuthModal이 이 페이지 위에 뜸) 성공 시
   // open 은 그대로 true 라 [open]만으로는 재조회가 없다 — user 확정 순간 대시보드 데이터를 채운다.
@@ -381,7 +403,11 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
 
           <section className="space-y-2">
             <Head icon="store" tone="cyan" title="매장 이용·참가 내역" count={usage.length} unit="곳" />
-            {loading ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
+            {/* 확인 중 → 실패 → 빈 상태 → 목록. 스켈레톤 행 높이(h-14=56px)는 아래 실제 행과 맞춘다
+                (border 2 + py-2 16 + text-sm 20 + mt-1 4 + text-2xs 15 = 57px) — 한 줄짜리
+                "불러오는 중…"(63px)에서 목록(3행 180px)으로 바뀌며 아래 섹션이 통째로 밀리던 것을 없앤다. */}
+            {loading ? <SkeletonList rows={3} rowClassName="h-14" />
+              : usageErr != null ? <LoadErrorCard error={usageErr} what="매장 이용 내역" onRetry={reload} compact />
               : usage.length === 0 ? <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="store" />} title="방문·머니인 기록이 아직 없습니다." /></div>
                 : <ul className="space-y-1.5">{usage.map((u, i) => (
                   <li key={i} className="rounded-input border border-border-subtle bg-surface-low px-3 py-2">
@@ -401,7 +427,10 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
           {/* 대회 참가(예약) 내역 — 내가 예약했던 대회들 */}
           <section className="space-y-2">
             <Head icon="calendar-check" tone="indigo" title="대회 참가 내역" count={resv.length} unit="건" desc="참가 예약 기준" />
-            {loading ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
+            {/* ⚠ 여기서 실패를 '예약 없음'으로 보여주면 손님이 이미 잡아 둔 자리를 다시 예약하거나,
+                예약이 사라진 줄 알고 매장에 전화한다 — 실패는 실패로 말하고 재시도를 준다. */}
+            {loading ? <SkeletonList rows={3} rowClassName="h-14" />
+              : resvErr != null ? <LoadErrorCard error={resvErr} what="대회 참가 내역" onRetry={reload} compact />
               : resv.length === 0 ? <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="calendar-check" />} title="아직 참가 예약한 대회가 없습니다." /></div>
                 : <ul className="space-y-1.5">{resv.slice(0, 15).map((r) => {
                   const upcoming = r.date >= new Date().toLocaleDateString('en-CA');
@@ -443,7 +472,8 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
           {/* 내 입상 기록 — 매장 순위 등록에서 내 닉네임이 잡힌 이력. '내 전적' 버튼의 앵커. */}
           <section ref={recordsRef} className="scroll-mt-4 space-y-2">
             <Head icon="trophy" tone="violet" title="내 입상 기록" count={ranks.length} unit="회" desc="매장 순위 등록 기준" />
-            {loading ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
+            {loading ? <SkeletonList rows={3} rowClassName="h-14" />
+              : ranksErr != null ? <LoadErrorCard error={ranksErr} what="입상 기록" onRetry={reload} compact />
               : !user?.nickname ? <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="trophy" />} title="프로필에서 아이디(닉네임)를 설정하면 입상 기록이 자동 연결됩니다." action={<button type="button" onClick={() => goTab('settings')} className="btn-ghost px-3 py-1.5 text-2xs">아이디 설정하기</button>} /></div>
               : ranks.length === 0 ? <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="trophy" />} title="아직 입상 기록이 없습니다." hint="매장에서 순위가 등록되면 자동으로 표시됩니다." /></div>
                 : <><RecordSummary rows={ranks} percentile={percentile} nickname={user?.nickname ?? ''} /><RankTrendChart rows={ranks} />
