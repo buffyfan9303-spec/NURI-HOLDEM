@@ -6,7 +6,9 @@ export interface Coupon { id: string; customerName: string; title: string; statu
 
 export async function getCustomerProfile(venueId: string, name: string): Promise<CustomerProfile | null> {
   if (IS_MOCK) return null;
-  const { data } = await supabase.from('customer_profiles').select('*').eq('venue_id', venueId).eq('name', name).maybeSingle();
+  // 조회 실패를 null(=미등록)로 돌려주면 화면엔 빈 생일이 뜨고, 그 상태로 저장하면 기존 값을 덮어쓴다.
+  const { data, error } = await supabase.from('customer_profiles').select('*').eq('venue_id', venueId).eq('name', name).maybeSingle();
+  if (error) throw error;
   return data ? { name, birthday: data.birthday ?? null, phone: data.phone ?? null, memo: data.memo ?? null } : null;
 }
 
@@ -74,7 +76,9 @@ export async function getUpcomingBirthdays(venueId: string): Promise<{ name: str
 
 export async function getCoupons(venueId: string, customerName: string): Promise<Coupon[]> {
   if (IS_MOCK) return [];
-  const { data } = await supabase.from('coupons').select('*').eq('venue_id', venueId).eq('customer_name', customerName).order('created_at', { ascending: false });
+  // 실패를 []로 돌려주면 화면이 '활성 쿠폰 0장'이 되어, 이미 준 쿠폰을 또 발급하게 된다.
+  const { data, error } = await supabase.from('coupons').select('*').eq('venue_id', venueId).eq('customer_name', customerName).order('created_at', { ascending: false });
+  if (error) throw error;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({ id: r.id, customerName: r.customer_name, title: r.title, status: r.status, expiresAt: r.expires_at ?? null, createdAt: r.created_at }));
 }
@@ -87,5 +91,9 @@ export async function issueCoupon(venueId: string, customerName: string, title: 
 
 export async function setCouponStatus(id: string, status: string): Promise<void> {
   if (IS_MOCK) return;
-  await supabase.from('coupons').update({ status }).eq('id', id);
+  // 에러를 버리면 '사용 처리했습니다' 토스트만 뜨고 쿠폰은 그대로 남는다 — 같은 혜택을 두 번 주게 된다.
+  // RLS 로 0행만 걸러진 경우도 error 가 없으므로, 반영된 행을 돌려받아 확인한다(reservations.ts 삭제와 같은 패턴).
+  const { data, error } = await supabase.from('coupons').update({ status }).eq('id', id).select('id');
+  if (error) throw error;
+  if (!data || data.length === 0) throw new Error('쿠폰을 변경할 권한이 없습니다');
 }

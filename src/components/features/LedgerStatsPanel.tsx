@@ -10,6 +10,7 @@ import {
 import { toCsv, downloadCsv } from '../../lib/csv';
 import Icon from '../atoms/Icon';
 import LoadErrorCard from '../atoms/LoadErrorCard';
+import { Skeleton } from '../atoms/Skeleton';
 import { getMyVenueNotifyMute, setMyVenueNotifyMute } from '../../api/auth';
 import { useAuth } from '../../contexts/AuthContext';
 import { listVenueOwners, addVenueOwner, removeVenueOwner, transferVenuePrimary, type VenueOwner } from '../../api/community';
@@ -282,7 +283,13 @@ function StatsView({ venueId }: { venueId: string }) {
       </div>
 
       {loading ? (
-        <p className="text-center py-6 text-2xs text-ink-muted">불러오는 중…</p>
+        // 뼈대 높이를 실제 카드(StatCard min-h-[5.25rem] · Mini ≈ 3.1rem)와 맞춘다 —
+        // '불러오는 중…' 한 줄이던 자리에 수백 px 통계가 들어오면서 화면이 아래로 주르륵 밀렸다.
+        <div className="space-y-2" aria-busy="true">
+          <div className="grid grid-cols-3 gap-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-[5.25rem]" />)}</div>
+          <div className="grid grid-cols-3 gap-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-[5.25rem]" />)}</div>
+          <div className="grid grid-cols-4 gap-1.5">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-[3.1rem]" />)}</div>
+        </div>
       ) : period === 'ai' ? (
         <div className="space-y-2">
           <SegmentedTabs grow className="flex w-full"
@@ -317,6 +324,20 @@ function StatsView({ venueId }: { venueId: string }) {
             </div>
           )}
 
+          {/* '기록이 없어서 0' 과 '실제로 0원' 은 다른 상태다 — 숫자(0도 사실이다)는 그대로 두고 이유만 한 줄 덧붙인다.
+              실패는 위쪽 LoadErrorCard 가 따로 말하므로, 여기서 셋이 서로 헷갈리지 않는다. */}
+          {m.total === 0 && (
+            <p className="flex items-start gap-1.5 rounded-input border border-border-default bg-surface-high px-2.5 py-2 text-2xs leading-relaxed text-ink-secondary">
+              <Icon name="info" size={12} className="mt-px shrink-0 text-ink-muted" />
+              <span>
+                {excludeTypes.size > 0 && buyins.length > 0
+                  ? '제외 필터에 걸려 집계할 바인이 남지 않았습니다. 위 ‘바인 제외’에서 유형을 해제해 보세요.'
+                  : period === 'day' ? `${date} 장부에 기록된 바인이 없습니다.` : '이 기간 장부에 기록된 바인이 없습니다.'}
+                {' '}아래 숫자가 0인 이유이며, 불러오기 실패가 아닙니다.
+              </span>
+            </p>
+          )}
+
           {/* 주요 지표 — 아이콘 카드 */}
           <div className="grid grid-cols-3 gap-2">
             <StatCard label="총 엔트리" value={m.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} icon="users" />
@@ -341,16 +362,17 @@ function StatsView({ venueId }: { venueId: string }) {
             <Mini label="객단가/엔트리" value={`${wonToMan(Math.round(m.arpEntry))}만`} hint="미수 포함" />
             {period === 'day'
               ? <Mini label="가게지원" value={`${m.support}건`} />
-              : <Mini label="일평균 매출" value={`${m.avgRevenuePerDay.toLocaleString(undefined, { maximumFractionDigits: 0 })}원`} />}
+              : <Mini label="일평균 매출" value={`${m.avgRevenuePerDay.toLocaleString(undefined, { maximumFractionDigits: 0 })}원`} hint="완납 기준" />}
           </div>
 
           {reqStats && reqStats.total > 0 && (
             <Section icon="users" title="바인 요청 현황" suffix="· 손님 QR 요청">
-              <div className="grid grid-cols-4 gap-1.5 text-center">
-                <div className="rounded-input bg-surface-high border border-border-default py-1.5"><p className="text-base font-bold text-ink-primary tabular-nums">{reqStats.total}</p><p className="text-[11px] text-ink-muted">요청</p></div>
-                <div className="rounded-input bg-surface-high border border-border-default py-1.5"><p className="text-base font-bold text-emerald-400 tabular-nums">{reqStats.approved}</p><p className="text-[11px] text-ink-muted">승인</p></div>
-                <div className="rounded-input bg-surface-high border border-border-default py-1.5"><p className="text-base font-bold text-accent-300 tabular-nums">{reqStats.approveRate}%</p><p className="text-[11px] text-ink-muted">승인율</p></div>
-                <div className="rounded-input bg-surface-high border border-border-default py-1.5"><p className="text-base font-bold text-ink-primary tabular-nums">{reqStats.avgWaitMin != null ? reqStats.avgWaitMin + '분' : ' · '}</p><p className="text-[11px] text-ink-muted">평균 대기</p></div>
+              <div className="grid grid-cols-4 gap-1.5">
+                <Mini label="요청" value={`${reqStats.total}`} />
+                <Mini label="승인" value={`${reqStats.approved}`} tone="emerald" />
+                <Mini label="승인율" value={`${reqStats.approveRate}%`} tone="accent" />
+                {/* 대기 기록이 없을 때 ' · ' 를 찍으면 '0분'인지 '아직 없음'인지 구분이 안 됐다 */}
+                <Mini label="평균 대기" value={reqStats.avgWaitMin != null ? `${reqStats.avgWaitMin}분` : '-'} />
               </div>
             </Section>
           )}
@@ -358,15 +380,17 @@ function StatsView({ venueId }: { venueId: string }) {
           {m.sideGameCount > 0 && (
             <Section icon="users" title="게임별 구분" suffix="· 메인 / 사이드">
               <div className="grid grid-cols-2 gap-1.5">
-                <div className="rounded-input bg-surface-high border border-border-default py-2 text-center">
+                {/* 두 타일은 같은 지표(엔트리·매출)를 좌우로 비교한다 — 중앙정렬이면 '12'와 '3.5'가 서로 다른 x 에 놓여
+                    한눈에 대소를 못 읽는다. 좌측 정렬이라야 같은 폭 타일끼리 값의 시작점이 세로로 맞는다. */}
+                <div className="rounded-input bg-surface-high border border-border-default px-2.5 py-2">
                   <p className="text-2xs text-ink-muted">메인</p>
                   <p className="text-sm font-bold text-ink-primary tabular-nums">{m.mainEntries.toLocaleString(undefined, { maximumFractionDigits: 1 })} 엔트리</p>
-                  <p className="text-2xs text-emerald-400 tabular-nums">{wonToMan(m.mainRev)}만</p>
+                  <p className="text-2xs text-emerald-400 tabular-nums">완납 {wonToMan(m.mainRev)}만</p>
                 </div>
-                <div className="rounded-input bg-accent-300/[0.06] border border-accent-400/30 py-2 text-center">
+                <div className="rounded-input bg-accent-300/[0.06] border border-accent-400/30 px-2.5 py-2">
                   <p className="text-2xs text-accent-300">사이드 · {m.sideGameCount}게임</p>
                   <p className="text-sm font-bold text-ink-primary tabular-nums">{m.sideEntries.toLocaleString(undefined, { maximumFractionDigits: 1 })} 엔트리</p>
-                  <p className="text-2xs text-emerald-400 tabular-nums">{wonToMan(m.sideRev)}만</p>
+                  <p className="text-2xs text-emerald-400 tabular-nums">완납 {wonToMan(m.sideRev)}만</p>
                 </div>
               </div>
             </Section>
@@ -430,22 +454,10 @@ function StatsView({ venueId }: { venueId: string }) {
           {clockAgg && (
             <Section icon="clock" title="클락 최종 (보정 포함)" suffix="· 운영자 클락 집계">
               <div className="grid grid-cols-4 gap-1.5">
-                <div className="rounded-input bg-surface-high border border-border-default py-1.5 text-center">
-                  <p className="text-base font-bold text-accent-300 tabular-nums">{clockAgg.entries}</p>
-                  <p className="text-[11px] text-ink-muted">엔트리</p>
-                </div>
-                <div className="rounded-input bg-surface-high border border-border-default py-1.5 text-center">
-                  <p className="text-base font-bold text-emerald-400 tabular-nums">{clockAgg.alive}</p>
-                  <p className="text-[11px] text-ink-muted">생존</p>
-                </div>
-                <div className="rounded-input bg-surface-high border border-border-default py-1.5 text-center">
-                  <p className="text-base font-bold text-ink-primary tabular-nums">{clockAgg.eliminations}</p>
-                  <p className="text-[11px] text-ink-muted">아웃</p>
-                </div>
-                <div className="rounded-input bg-surface-high border border-border-default py-1.5 text-center">
-                  <p className="text-base font-bold text-amber-300 tabular-nums">{clockAgg.earlies}</p>
-                  <p className="text-[11px] text-ink-muted">얼리(칩단위)</p>
-                </div>
+                <Mini label="엔트리" value={`${clockAgg.entries}`} tone="accent" />
+                <Mini label="생존" value={`${clockAgg.alive}`} tone="emerald" />
+                <Mini label="아웃" value={`${clockAgg.eliminations}`} />
+                <Mini label="얼리(칩단위)" value={`${clockAgg.earlies}`} tone="amber" />
               </div>
               <p className="text-2xs text-ink-muted mt-1.5 leading-relaxed">
                 마감 시 클락에서 손보정된 최종 수치(생존·아웃 포함)입니다. <b className="text-ink-secondary">장부 총 엔트리({m.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })})는 바인 기록 기준</b>이라 다를 수 있어요. 통계·정산은 장부 기준, 이 값은 운영 참고용입니다. 얼리는 <b className="text-ink-secondary">기준칩 배수 합</b>(더블얼리 1명 = 2)이며, 2026-08-30 이전 마감분은 인원 수로 기록돼 있어 그대로 표시됩니다.{clockAgg.games > 1 ? ` (게임 ${clockAgg.games}개 합산)` : ''}
@@ -456,10 +468,7 @@ function StatsView({ venueId }: { venueId: string }) {
           <Section icon="card" title="결제 수단별 바인 수">
             <div className="grid grid-cols-5 gap-1.5">
               {(['ticket', 'cash', 'transfer', 'card', 'support'] as PaymentMethod[]).map((k) => (
-                <div key={k} className="rounded-input bg-surface-high border border-border-default py-1.5 text-center">
-                  <p className="text-base font-bold text-ink-primary tabular-nums">{m.byMethod[k]}</p>
-                  <p className="text-[11px] text-ink-muted">{METHOD_LABEL[k]}</p>
-                </div>
+                <Mini key={k} label={METHOD_LABEL[k]} value={`${m.byMethod[k]}`} />
               ))}
             </div>
           </Section>
@@ -468,10 +477,7 @@ function StatsView({ venueId }: { venueId: string }) {
             <Section icon="usercheck" title="방문 유형" suffix="(명단 기준)">
               <div className="grid grid-cols-4 gap-1.5">
                 {(['new', 'regular', 'staff', 'other'] as VisitorType[]).map((k) => (
-                  <div key={k} className="rounded-input bg-surface-high border border-border-default py-1.5 text-center">
-                    <p className="text-base font-bold text-ink-primary tabular-nums">{m.visitor[k]}</p>
-                    <p className="text-[11px] text-ink-muted">{VISITOR_LABEL[k]}</p>
-                  </div>
+                  <Mini key={k} label={VISITOR_LABEL[k]} value={`${m.visitor[k]}`} />
                 ))}
               </div>
             </Section>
@@ -479,14 +485,15 @@ function StatsView({ venueId }: { venueId: string }) {
 
           <Section icon="trophy" title="바인 횟수 순위 (TOP 10)">
             {m.ranking.length === 0 ? (
-              <p className="text-2xs text-ink-muted text-center py-2">데이터 없음</p>
+              <p className="text-2xs text-ink-muted text-center py-2">이 기간 바인 기록 없음</p>
             ) : (
               <ul className="space-y-1">
                 {m.ranking.slice(0, 10).map(([name, cnt], i) => (
                   <li key={name} className="flex items-center gap-2 px-2 py-2 rounded-input bg-surface-high border border-border-default">
                     <span className={['w-5 text-center text-xs font-bold tabular-nums', i === 0 ? 'text-accent-300' : i === 2 ? 'text-amber-600' : 'text-ink-secondary'].join(' ')}>{i + 1}</span>
-                    <span className="flex-1 text-xs font-semibold text-ink-primary truncate">{name}</span>
-                    <span className="text-xs font-bold text-ink-secondary tabular-nums">{cnt}회</span>
+                    {/* 긴 닉네임은 잘리되 title 로 전체를 볼 수 있게 — 잘린 이름만 남으면 누구인지 확인할 길이 없다 */}
+                    <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary" title={name}>{name}</span>
+                    <span className="w-14 shrink-0 text-right text-xs font-bold text-ink-secondary tabular-nums">{cnt}회</span>
                   </li>
                 ))}
               </ul>
@@ -500,13 +507,14 @@ function StatsView({ venueId }: { venueId: string }) {
               <ul className="space-y-1">
                 {m.unpaidRanking.map(([name, amt]) => (
                   <li key={name} className="flex items-center gap-2 px-2 py-2 rounded-input bg-danger/[0.06] border border-danger/30">
-                    <span className="flex-1 text-xs font-semibold text-ink-primary truncate">{name}</span>
-                    <span className="text-xs font-bold text-danger-light tabular-nums">{amt.toLocaleString()}원</span>
+                    <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary" title={name}>{name}</span>
+                    {/* 합계 행과 같은 폭·같은 우측 정렬 — 금액 자릿수가 세로로 맞아야 큰 미수가 눈에 띈다 */}
+                    <span className="w-28 shrink-0 text-right text-xs font-bold text-danger-light tabular-nums">{amt.toLocaleString()}원</span>
                   </li>
                 ))}
-                <li className="flex items-center justify-between px-2 pt-1 text-2xs">
-                  <span className="text-ink-muted">미수 합계</span>
-                  <span className="font-extrabold text-danger-light tabular-nums">{m.unpaid.toLocaleString()}원</span>
+                <li className="flex items-center gap-2 border border-transparent px-2 pt-1 text-2xs">
+                  <span className="min-w-0 flex-1 text-ink-muted">미수 합계</span>
+                  <span className="w-28 shrink-0 text-right font-extrabold text-danger-light tabular-nums">{m.unpaid.toLocaleString()}원</span>
                 </li>
               </ul>
             )}
@@ -556,22 +564,23 @@ function DowStats({ dow, rangeLabel = '전체' }: { dow: Record<number, { entrie
 
   return (
     <div className="space-y-3">
-      <p className="text-2xs text-ink-muted">요일별 통계 · {rangeLabel} 기준 · 영업 {totalDays}일 · <b className="text-ink-secondary">핵심: 기준 엔트리 달성률</b></p>
+      {/* 이 표의 매출·객단가는 전부 완납(실제 수납) 기준이다 — 기간 탭의 '객단가/인'(미수 포함)과 산식이 달라 한 줄로 못박는다. */}
+      <p className="text-2xs text-ink-muted">요일별 통계 · {rangeLabel} 기준 · 영업 {totalDays}일 · 매출·객단가는 <b className="text-ink-secondary">완납(실제 수납) 기준</b> · <b className="text-ink-secondary">핵심: 기준 엔트리 달성률</b></p>
 
       {/* 요약 — 기준 달성률 핵심 */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Mini label="기준 달성률" value={overallFill !== null ? `${overallFill}%` : '기준 미설정'} />
         <Mini label="영업일" value={`${totalDays}일`} />
         <Mini label="총 엔트리" value={totalEntries.toLocaleString(undefined, { maximumFractionDigits: 0 })} />
-        <Mini label="총 매출(만)" value={wonToMan(totalRevenue)} />
+        <Mini label="총 매출(만)" value={wonToMan(totalRevenue)} hint="완납 기준" />
       </div>
 
       {/* 최고 / 최저 요일 하이라이트 */}
       <div className="grid grid-cols-2 gap-2">
         <DowHilite tone="emerald" cap="가장 활발한 요일" w={best.w}
-          a={`일평균 ${best.avgEntry.toFixed(1)} 엔트리`} b={`${wonToMan(best.avgRevenue)}만/일 · 객단가 ${wonToMan(best.perEntry)}만`} />
+          a={`일평균 ${best.avgEntry.toFixed(1)} 엔트리`} b={`${wonToMan(best.avgRevenue)}만/일 · 완납 객단가 ${wonToMan(best.perEntry)}만`} />
         <DowHilite tone="rose" cap="가장 부진한 요일" w={worst.w}
-          a={`일평균 ${worst.avgEntry.toFixed(1)} 엔트리`} b={multi ? `${wonToMan(worst.avgRevenue)}만/일 · 객단가 ${wonToMan(worst.perEntry)}만` : '비교할 다른 요일 데이터 필요'} />
+          a={`일평균 ${worst.avgEntry.toFixed(1)} 엔트리`} b={multi ? `${wonToMan(worst.avgRevenue)}만/일 · 완납 객단가 ${wonToMan(worst.perEntry)}만` : '비교할 다른 요일 데이터 필요'} />
       </div>
 
       {/* 막대 차트 — 엔트리/매출 토글 */}
@@ -610,19 +619,26 @@ function DowStats({ dow, rangeLabel = '전체' }: { dow: Record<number, { entrie
       </div>
 
       {/* 상세 표 */}
+      {/* 비교하는 숫자 열은 우측 정렬 + tabular-nums 로 자릿수를 세로로 맞춘다.
+          가운데 정렬이면 '3.0' 과 '12.4' 의 일의 자리가 서로 다른 x 에 놓여, 요일 간 대소를 눈으로 못 훑는다.
+          머리글도 같은 우측 정렬 — 머리와 값의 정렬이 어긋나면 어느 열인지 매번 다시 확인해야 한다. */}
       <div className="overflow-x-auto scrollbar-none">
-        <table className="w-full text-center border-separate border-spacing-0 min-w-[19rem]">
+        <table className="w-full text-left border-separate border-spacing-0 min-w-[19rem]">
           <thead><tr className="text-2xs text-ink-muted">
-            <th className="py-1 text-left pl-1">요일</th><th>영업일</th><th>일평균<br/>엔트리</th><th>일평균<br/>매출(만)</th><th>객단가<br/>(만)</th>
+            <th scope="col" className="py-1 pl-1 font-normal">요일</th>
+            <th scope="col" className="py-1 pr-1 text-right font-normal">영업일</th>
+            <th scope="col" className="py-1 pr-1 text-right font-normal"><span className="block">일평균</span>엔트리</th>
+            <th scope="col" className="py-1 pr-1 text-right font-normal"><span className="block">일평균</span>매출(만)</th>
+            <th scope="col" className="py-1 pr-1 text-right font-normal"><span className="block">완납 객단가</span>(만)</th>
           </tr></thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.w} className={['text-xs', r.days === 0 ? 'opacity-40' : ''].join(' ')}>
-                <td className="py-1.5 text-left pl-1 font-bold text-accent-300">{DOW[r.w]}</td>
-                <td className="text-ink-secondary tabular-nums">{r.days || '-'}</td>
-                <td className={['tabular-nums font-bold', r.w === best.w && multi ? 'text-emerald-400' : r.w === worst.w && multi ? 'text-rose-400' : 'text-ink-primary'].join(' ')}>{r.days ? r.avgEntry.toFixed(1) : '-'}</td>
-                <td className="text-ink-secondary tabular-nums">{r.days ? wonToMan(r.avgRevenue) : '-'}</td>
-                <td className="text-ink-secondary tabular-nums">{r.entries ? wonToMan(r.perEntry) : '-'}</td>
+                <th scope="row" className="py-1.5 pl-1 text-left font-bold text-accent-300">{DOW[r.w]}</th>
+                <td className="pr-1 text-right text-ink-secondary tabular-nums">{r.days || '-'}</td>
+                <td className={['pr-1 text-right tabular-nums font-bold', r.w === best.w && multi ? 'text-emerald-400' : r.w === worst.w && multi ? 'text-rose-400' : 'text-ink-primary'].join(' ')}>{r.days ? r.avgEntry.toFixed(1) : '-'}</td>
+                <td className="pr-1 text-right text-ink-secondary tabular-nums">{r.days ? wonToMan(r.avgRevenue) : '-'}</td>
+                <td className="pr-1 text-right text-ink-secondary tabular-nums">{r.entries ? wonToMan(r.perEntry) : '-'}</td>
               </tr>
             ))}
           </tbody>
@@ -646,8 +662,8 @@ function DowHilite({ tone, cap, w, a, b }: { tone: 'emerald' | 'rose'; cap: stri
     <div className={['rounded-card border p-2.5', ring].join(' ')}>
       <p className="text-2xs text-ink-muted">{cap}</p>
       <p className={['text-lg font-extrabold leading-tight', head].join(' ')}>{DOW[w]}요일</p>
-      <p className="text-[11px] text-ink-primary mt-0.5 leading-tight">{a}</p>
-      <p className="text-2xs text-ink-muted mt-0.5 leading-tight">{b}</p>
+      <p className="text-[11px] text-ink-primary mt-0.5 leading-tight tabular-nums">{a}</p>
+      <p className="text-2xs text-ink-muted mt-0.5 leading-tight tabular-nums">{b}</p>
     </div>
   );
 }
@@ -678,15 +694,22 @@ function StatCard({ label, value, sub, icon, danger, emerald, gold }: { label: s
         <StatIcon name={icon} className="text-ink-muted shrink-0" />
       </div>
       <p className={['mt-auto pt-2 text-lg font-extrabold tabular-nums leading-none', c].join(' ')}>{value}</p>
-      {sub && <p className="text-[11px] text-ink-muted mt-1 leading-tight">{sub}</p>}
+      {sub && <p className="text-[11px] text-ink-muted mt-1 leading-tight tabular-nums">{sub}</p>}
     </div>
   );
 }
 
-function Mini({ label, value, hint }: { label: string; value: string; hint?: string }) {
+// 지표 타일 — 통계 화면의 작은 숫자 칸은 전부 이 하나로 모은다.
+// (요청/승인·결제수단·방문유형·클락 집계가 각자 py-1.5 인라인 div 를 복사해 쓰고 있었고,
+//  그래서 같은 성격의 칸인데 줄마다 높이·여백이 미세하게 달랐다.)
+type MiniTone = 'default' | 'emerald' | 'accent' | 'amber';
+const MINI_TONE: Record<MiniTone, string> = {
+  default: 'text-ink-primary', emerald: 'text-emerald-400', accent: 'text-accent-300', amber: 'text-amber-300',
+};
+function Mini({ label, value, hint, tone = 'default' }: { label: string; value: string; hint?: string; tone?: MiniTone }) {
   return (
     <div className="rounded-input bg-surface-high border border-border-default py-2 px-1 text-center" title={hint}>
-      <p className="text-base font-bold text-ink-primary tabular-nums leading-none">{value}</p>
+      <p className={['text-base font-bold tabular-nums leading-none', MINI_TONE[tone]].join(' ')}>{value}</p>
       <p className="text-[11px] text-ink-muted mt-1 leading-tight">{label}{hint ? <span className="block text-[10px] text-ink-muted/70">{hint}</span> : null}</p>
     </div>
   );
@@ -725,11 +748,11 @@ function buildAiReport(m: StatsAgg, days = 7): { empty: boolean; sales: string; 
   const weak = dows.filter((d) => d.avg < meanAvg).sort((a, b) => a.avg - b.avg).slice(0, 2).map((d) => DOW[d.w]);
   const top = m.ranking.slice(0, 2).map(([n]) => n);
 
-  // 사이드 게임 수익 기여도 — 메인 대비 사이드 매출 비중 진단
+  // 사이드 게임 매출 기여도 — 메인 대비 사이드 매출 비중 진단
   const totalRev = m.mainRev + m.sideRev;
   const sideShare = totalRev > 0 ? (m.sideRev / totalRev) * 100 : 0;
   const sideLine = m.sideGameCount > 0
-    ? ` 또한 사이드 게임 ${m.sideGameCount}종이 전체 매출의 약 ${Math.round(sideShare)}%(${man(m.sideRev)}만 원·${m.sideEntries.toFixed(0)} 엔트리)를 책임집니다. ${sideShare >= 30 ? '사이드가 핵심 수익원이니 라인업을 더 늘려보세요' : sideShare >= 10 ? '사이드가 메인 매출을 잘 보완하고 있습니다' : '사이드 비중이 낮아 시간대·홍보를 조정할 여지가 있습니다'}.`
+    ? ` 또한 사이드 게임 ${m.sideGameCount}종이 전체 매출의 약 ${Math.round(sideShare)}%(${man(m.sideRev)}만 원·${m.sideEntries.toFixed(0)} 엔트리)를 책임집니다. ${sideShare >= 30 ? '사이드가 핵심 매출원이니 라인업을 더 늘려보세요' : sideShare >= 10 ? '사이드가 메인 매출을 잘 보완하고 있습니다' : '사이드 비중이 낮아 시간대·홍보를 조정할 여지가 있습니다'}.`
     : ' 아직 사이드 게임 기록이 없습니다. 새틀라이트·하이롤러 같은 사이드를 1~2종 추가하면 객단가를 끌어올릴 수 있습니다.';
 
   // 요일별 진단(안좋은 날)
@@ -942,7 +965,8 @@ function OwnerManageCard({ venueId }: { venueId: string }) {
         <ul className="space-y-1">
           {owners.map((o) => (
             <li key={o.userId} className="flex items-center gap-2 rounded-input border border-border-default bg-surface-base px-2.5 py-1.5">
-              <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary">{o.name ? `${o.name}(${o.nickname})` : o.nickname}</span>
+              {/* 잘린 이름만 남으면 동명이인 구분이 안 된다 — 다른 목록과 같이 title 로 전체를 남긴다. */}
+              <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-primary" title={o.name ? `${o.name}(${o.nickname})` : o.nickname}>{o.name ? `${o.name}(${o.nickname})` : o.nickname}</span>
               {o.status === 'pending' && <span className="shrink-0 rounded-badge bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-400">승인 대기</span>}
               {o.isPrimary
                 ? <span className="shrink-0 rounded-badge bg-accent-300/15 px-1.5 py-0.5 text-[10px] font-bold text-accent-300">대표</span>
