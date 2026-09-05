@@ -1294,6 +1294,7 @@ export default function App() {
   // 쪽지 미읽음 — Realtime 금지(연결 예산): 90s 폴링 + 패널 열 때(NotificationPanel 이 콜백으로 갱신)
   const [unreadMsgs,    setUnreadMsgs]    = useState(0);
   const [posts,         setPosts]         = useState<CommunityPost[]>(() => readSnap<CommunityPost[]>('posts') ?? []);
+  const [postsErr,      setPostsErr]      = useState<unknown>(null);
   const [listings,      setListings]      = useState<MarketplaceListing[]>(() => readSnap<MarketplaceListing[]>('listings') ?? []);
   const [marketLoaded,  setMarketLoaded]  = useState(() => readSnap<MarketplaceListing[]>('listings') != null); // 장터 첫 로딩 여부 — 스냅샷 있으면 스켈레톤 생략
   const [notices,       setNotices]       = useState<MarketplaceNotice[]>(() => readSnap<MarketplaceNotice[]>('notices') ?? []);
@@ -1478,7 +1479,9 @@ export default function App() {
     } else ptrSettle(-52, '0');
   };
   const reloadVenues    = useCallback(() => { getVenues().then((v) => { setVenues((prev) => (sameJson(prev, v) ? prev : v)); writeSnap('venues', v); }).catch(() => {}); }, []);  
-  const reloadPosts     = useCallback(() => { getPosts().then((v) => { setPosts(v); writeSnap('posts', v); }).catch(() => {}); }, []);
+  // 조회 실패를 [] 로 두면 게시판이 '첫 게시글을 남겨보세요'(빈 상태)로 위장한다 — 실패는 상태로 올린다.
+  //  직전에 성공한 목록은 지우지 않는다(오프라인에서 읽던 글이 사라지지 않게).
+  const reloadPosts     = useCallback(() => { getPosts().then((v) => { setPosts(v); setPostsErr(null); writeSnap('posts', v); }).catch((e) => setPostsErr(e)); }, []);
   const reloadComments  = useCallback(() => { getComments({}).then(setComments).catch(() => {}); }, []);
   const reloadNotices   = useCallback(() => { getNotices().then((v) => { setNotices(v); writeSnap('notices', v); setNoticesLoaded(true); }).catch(() => {}); }, []);
   // 홈 상단 배너(home_banners) — 관리자가 등록한 것만. 비면 PosterCarousel 이 기존 하드코딩으로 폴백한다.
@@ -1539,7 +1542,8 @@ export default function App() {
     // 5개 응답을 한 콜백에서 일괄 반영(5렌더→1렌더) — 부팅 리렌더 폭풍 계측의 직접 조치
     Promise.allSettled([getPosts(), getComments({}), getListings(), getVenueRatings(), clockMod().then((m) => m.getRunningClocks())])
       .then(([pr, cr, lr, rr, kr]) => {
-        if (pr.status === 'fulfilled') { setPosts(pr.value); writeSnap('posts', pr.value); }
+        if (pr.status === 'fulfilled') { setPosts(pr.value); setPostsErr(null); writeSnap('posts', pr.value); }
+        else setPostsErr(pr.reason);
         if (cr.status === 'fulfilled') setComments(cr.value);
         if (lr.status === 'fulfilled') { setListings(lr.value); writeSnap('listings', lr.value); }
         setMarketLoaded(true);
@@ -3087,6 +3091,8 @@ export default function App() {
         <main data-tab="community" className="tab-pane px-page-x pb-section" style={activeTab !== 'community' ? { display: 'none' } : undefined}>
           <ErrorBoundary inline resetKey="community">
           <CommunityTabM
+            postsErr={postsErr}
+            onRetryPosts={reloadPosts}
             // keep-alive 로 숨어 있는 동안에는 뒤로가기 겹을 들지 않게 한다 —
             // 숨은 탭이 겹을 들고 있으면 사용자의 뒤로가기가 화면 변화 없이 소진된다(먹통).
             active={activeTab === 'community' || activeTab === 'market'}

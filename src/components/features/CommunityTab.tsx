@@ -26,6 +26,7 @@ import TierLeaderboard from './TierLeaderboard';
 import CommunityShoutBar from './CommunityShoutBar';
 import { useToast } from '../atoms/Toast';
 import EmptyState from '../atoms/EmptyState';
+import LoadErrorCard from '../atoms/LoadErrorCard';
 import { filterContent } from '../../lib/content-filter';
 import { parseAttachments } from '../../lib/hand';
 import { MiniCard } from '../atoms/HandCards';
@@ -47,6 +48,9 @@ interface CommunityTabProps {
   venues: Venue[];
   comments: Comment[];
   posts: CommunityPost[];
+  /** 게시글 조회 실패 — 있으면 빈 상태 대신 오류·재시도를 보인다 */
+  postsErr?: unknown;
+  onRetryPosts?: () => void;
   /** 운영자 공지 (전역 피드 최상단에 핀 고정) */
   notices?: MarketplaceNotice[];
   isAdmin?: boolean;
@@ -99,7 +103,7 @@ const DealerCommunityM     = memo(DealerCommunity);
 const OwnerCommunityM      = memo(OwnerCommunity);
 
 function CommunityTab({
-  venues, comments, posts: rawPosts, notices = [], isAdmin = false, onWriteNotice, onSelectNotice,
+  venues, comments, posts: rawPosts, postsErr = null, onRetryPosts, notices = [], isAdmin = false, onWriteNotice, onSelectNotice,
   onSelectVenue, onSelectPost, onOpenWrite, onLikePost, onDeletePost, onReloadVenues, marketSlot,
   active = true,
 }: CommunityTabProps) {
@@ -353,6 +357,8 @@ function CommunityTab({
           <div className="min-w-0 lg:w-[24rem] lg:shrink-0 xl:w-[30rem]">
             <FeedSectionM
               posts={boardPosts}
+              postsErr={postsErr}
+              onRetryPosts={onRetryPosts}
               onOpenWrite={openWriteFree}
               onLike={onLikePost}
               onSelectPost={isDesktop ? setBoardSelected : onSelectPost}
@@ -460,12 +466,15 @@ function SectionTab({ active, label, onClick }: { active: boolean; label: string
 // ── 전역 피드 ────────────────────────────────────────────────────────────────
 
 function FeedSection({
-  posts, onOpenWrite, onLike, onSelectPost,
+  posts, postsErr = null, onRetryPosts, onOpenWrite, onLike, onSelectPost,
   selectedId,
   placeholder = '나누고 싶은 이야기를 적어보세요…', emptyText = '첫 게시글을 남겨보세요',
   enableCategory = false,
 }: {
   posts: CommunityPost[];
+  /** 목록 조회 실패(있으면 빈 상태 대신 오류·재시도를 보인다 — 실패를 '글 없음'으로 위장하지 않는다) */
+  postsErr?: unknown;
+  onRetryPosts?: () => void;
   onOpenWrite: () => void;
   onLike: (id: string) => void;
   onSelectPost: (p: CommunityPost) => void;
@@ -671,7 +680,13 @@ function FeedSection({
           {/* 글이 없어도 광고 칸은 산다 — 게재 미리보기 겸. 광고는 언제나 **맨 위**(오너 2026-09-05).
               AdRow 는 <li> 라 <ul> 로 감싼다(#25). */}
           {ads[0] && <ul className="rounded-aura border card-aura overflow-hidden"><AdRow ad={ads[0]} /></ul>}
-          <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="edit" />} title={posts.length === 0 ? emptyText : '검색 결과가 없습니다'} /></div>
+          {/* 조회 실패 / 아직 글 없음 / 검색 결과 없음 — 셋은 서로 다른 상태다. 실패를 '글 없음'으로 적으면
+              손님은 게시판이 비었다고 믿고 떠난다(문서 §5 '빈 결과·조회 실패를 구분'). */}
+          {postsErr != null && posts.length === 0 ? (
+            <LoadErrorCard error={postsErr} what="게시글" onRetry={onRetryPosts} />
+          ) : (
+            <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="edit" />} title={posts.length === 0 ? emptyText : '검색 결과가 없습니다'} /></div>
+          )}
         </>
       ) : view === 'compact' ? (
         <>
