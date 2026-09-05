@@ -49,7 +49,7 @@ const KIND: Record<Kind, { label: string; dot: string; icon: IconName }> = {
 interface DayItem { kind: Kind; title: string; detail: string; amount?: number; scheduleId?: string; venueId?: string }
 
 
-export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onVenue, onLogin, active }: {
+export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onVenue, onLogin, active, resVersion = 0 }: {
   schedules: Schedule[];
   onSelect: (s: Schedule) => void;
   /** scheduleId 만 아는 항목(예약)을 열 때 — App 이 목록 → 없으면 권한을 지키는 단건 조회로 잇는다(F09).
@@ -61,6 +61,9 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
   onLogin?: () => void;
   /** 탭이 화면에 떠 있는가 — keep-alive 라 숨어 있을 때 로드하지 않는다 */
   active: boolean;
+  /** 예약이 바뀌었다는 App 의 신호(F06). 캘린더가 떠 있는 채 위에서 예약/취소가 나면 여기서만 다시 읽는다.
+   *  ⚠ 예약 표시만 갱신한다 — 수기 재무 기록(bankroll_entries)은 읽기 그대로, 장부 금액 자동 복제 없음. */
+  resVersion?: number;
 }) {
   const { user } = useAuth();
   const toast = useToast();
@@ -108,6 +111,15 @@ export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onV
     wasActive.current = active;
     if (active && (!loaded || became)) void reload();
   }, [active, loaded, reload]);
+
+  // ③ 캘린더 탭이 계속 떠 있는 동안 그 위(상세 모달·'내 정보')에서 예약/취소가 일어난 경우.
+  //    ② 는 '다시 보이게 될 때'만 읽으므로 이 경우를 못 잡는다 — 숨어 있을 때 온 신호는 ② 가 흡수한다.
+  const seenResV = useRef(resVersion);
+  useEffect(() => {
+    if (seenResV.current === resVersion) return;
+    seenResV.current = resVersion;
+    if (active) void reload();
+  }, [resVersion, active, reload]);
 
   /** 날짜 → 항목들. 세 소스(찜·예약·수기)를 한 맵으로 모으는 곳이 여기 하나뿐이어야 마커와 목록이 안 어긋난다.
    *  ⚠ 매장 장부 바이인·랭킹 머니인은 **넣지 않는다**(오너 지시 2026-09-04) — 그건 유저가 직접 적는다. */

@@ -77,6 +77,7 @@ import { compareByStartThenBoost } from './lib/scheduleSort';
 import { readSnap, writeSnap } from './lib/snapshot';
 import { applyScheduleSeo, applyVenueSeo, resetSeo } from './lib/seo';
 import { createUndoQueue } from './lib/undoableDelete';
+import { commitSchedules } from './lib/scheduleCommit';
 import { scheduleStatus } from './lib/scheduleStatus';
 import { resolveScheduleLink } from './lib/scheduleLink';
 import LoadErrorCard from './components/atoms/LoadErrorCard';
@@ -1267,6 +1268,13 @@ export default function App() {
     // visitedTabs 는 안정 Set 인스턴스 — 참조 불변
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schedulesLoaded, isOwner, isAdmin, user?.role]);
+  // 예약이 바뀌었다는 신호 하나(F06) — 값이 아니라 '다시 읽어라'만 나른다.
+  // 왜 카운터인가: 예약/취소는 상세 모달(ReserveBox)과 '내 정보'(스와이프 취소) 두 곳에서 일어나는데
+  // 그 결과를 보는 곳은 App 이 들고 있는 셋(홈 '오늘 예약한 대회' · 카드 '예약 N' · 캘린더 탭)이다.
+  // 새 전역 store·이벤트 버스 대신 myStoreHomeNonce 와 같은 조리법(카운터 1 + 콜백 prop)으로 잇는다.
+  // ⚠ 숫자는 낙관 증감이 아니라 서버 재조회로만 바꾼다 — 실패해도 화면 숫자가 서버와 갈리지 않는다.
+  const [resVersion, setResVersion] = useState(0);
+  const bumpResVersion = useCallback(() => setResVersion((v) => v + 1), []);
   // FOMO 뱃지용 예약자 수 — 다가오는 대회만 1회 조회.
   // ⚠ [schedules] 배열 의존이면 스냅샷→네트워크 교체(내용 동일)에도 재조회·리렌더가 났다 —
   //   id 집합 문자열 키로 좁혀 '같은 대회 목록'이면 건너뛴다(PastTournaments pastKey 패턴).
@@ -1277,7 +1285,8 @@ export default function App() {
   useEffect(() => {
     if (!resIdsKey) { setBrowseResCounts({}); return; }
     getReservationCounts(resIdsKey.split('|')).then(setBrowseResCounts).catch(() => {});
-  }, [resIdsKey]);
+    // resVersion: 내가 예약/취소한 직후 '예약 N'·'마감 임박'이 낡은 채 남지 않게 한 번 더 읽는다
+  }, [resIdsKey, resVersion]);
   const [venues,        setVenues]        = useState<Venue[]>(() => readSnap<Venue[]>('venues') ?? []);
   const venueById = useMemo(() => new Map(venues.map((v) => [v.id, v])), [venues]);
   const [comments,      setComments]      = useState<Comment[]>([]);
@@ -1379,19 +1388,37 @@ export default function App() {
   // keep-alive 탭들의 memo 를 깨지 않게. 동일 참조 반환 시 React 는 리렌더 자체를 생략한다.
   // (목록이 작아 stringify 비용은 수 ms — memo 파손 비용보다 훨씬 싸다)
   const sameJson = (a: unknown, b: unknown) => { try { return JSON.stringify(a) === JSON.stringify(b); } catch { return false; } };
+
+  // 포스터 삭제 유예 큐 — schedules 삭제는 예약(schedule_reservations)과 문의(comments)를
+  // FK CASCADE 로 물리 삭제한다(ledger_sessions 만 SET NULL 로 살아남는다).
+  // 지운 뒤 되살릴 방법이 없으므로 '5초 동안 서버로 안 보내기'가 유일한 실행취소다.
+  // ⚠ 선언 위치가 아래 재조회 헬퍼보다 위여야 한다 — 유예 중인 id 를 재조회 커밋에서 걸러야 하기 때문.
+  const posterDeleteQ = useMemo(() => createUndoQueue(5000), []);
+  // 일정 커밋 순서 가드(F11) — 이 ref 가 '가장 마지막에 발행된 요청' 번호다.
+  // 기존 관행 그대로(AvailabilityField reqIdRef · NuriPosLedger reloadSeq): 발행 시 ++, 커밋 전 비교.
+  // 커밋 지점이 둘(아래 reloadSchedules · 부팅 allSettled)이라 판정은 commitSchedules 하나로 모았다.
+  const schedReqRef = useRef(0);
   const reloadSchedules = useCallback(() => {
+    const my = ++schedReqRef.current;
     getSchedules()
       .then((v) => {
-        setSchedules((prev) => (sameJson(prev, v) ? prev : v)); setSchedulesError(null);
-        writeSnap('schedules', v); // 다음 방문의 '즉시 콘텐츠' — realtime 재조회도 이 길을 지나므로 자동 최신화
         // 서드파티(GA·AdSense) 게이트 해제 — **네트워크 응답** 이 왔다는 신호.
         // ⚠ schedulesLoaded 에 걸면 안 된다: 캐시 복원이 그 플래그를 부팅 즉시 켜므로
         //   광고가 재검증 요청과 대역폭을 다시 다투게 된다(이 게이트를 만든 이유가 무색해짐).
+        // 늦게 온 응답이라 커밋을 버리더라도 '응답은 왔다'는 사실은 그대로다 → 가드 밖.
         window.dispatchEvent(new Event('nuri:first-data-requested'));
+        const next = commitSchedules(v, my, schedReqRef.current, posterDeleteQ.keys());
+        if (!next) return; // 더 새 요청이 이미 나갔다 — 구값으로 화면도 스냅샷도 되돌리지 않는다
+        setSchedules((prev) => (sameJson(prev, next) ? prev : next)); setSchedulesError(null);
+        writeSnap('schedules', next); // 다음 방문의 '즉시 콘텐츠' — realtime 재조회도 이 길을 지나므로 자동 최신화
       })
-      .catch((e) => setSchedulesError(e))
+      // 오류는 가드 안 — 늦게 실패한 구요청이 새 성공의 '오류 없음'을 덮으면
+      // 멀쩡한 목록 위(정확히는 목록이 0건일 때) LoadErrorCard 가 뜬다.
+      .catch((e) => { if (my === schedReqRef.current) setSchedulesError(e); })
+      // 반면 '로딩 끝' 은 가드하지 않는다 — 최신 요청이 영영 안 끝나면 스켈레톤이 갇힌다.
+      // 어느 응답이든 한 번 왔으면 스켈레톤은 걷고, 화면은 스냅샷/직전 성공값을 보여준다(기존 동작).
       .finally(() => setSchedulesLoaded(true));
-  }, []);
+  }, [posterDeleteQ]);
   // 당겨서 새로고침(유튜브·당근) — 최상단에서 아래로 56px+ 당기면 갱신
   // [DS] MO-4: 드래그 값은 React 상태 밖(§20.5 #2) — 예전엔 touchmove 마다 setPtr 로
   // App 전체가 프레임당 리렌더됐고, in-flow height 인디케이터가 리스트 전체를 매 프레임 밀었다.
@@ -1469,19 +1496,25 @@ export default function App() {
     // 실측(2026-08-17 끊김 심층분석): 부팅 5초간 App 풀 리렌더가 ~17회였다 — setState 가
     // 각자 다른 마이크로태스크에서 발화한 탓. React 18 자동 배칭은 '같은 콜백 안'만 묶으므로,
     // 세 응답을 allSettled 로 모아 **한 콜백에서 일괄 반영**한다(3렌더→1렌더).
+    // 부팅 조회도 reloadSchedules 와 같은 번호표를 뽑는다 — 둘은 같은 state·같은 스냅샷을 쓰므로
+    // 한쪽만 가드하면 '늦게 온 부팅 응답이 복귀 재조회 결과를 덮는' 경로가 그대로 남는다(F11).
+    const my = ++schedReqRef.current;
     Promise.allSettled([getSchedules(), getVenues(), getNotices()]).then(([sr, vr, nr]) => {
       if (sr.status === 'fulfilled') {
-        setSchedules((prev) => (sameJson(prev, sr.value) ? prev : sr.value));
-        setSchedulesError(null);
-        writeSnap('schedules', sr.value);
-        window.dispatchEvent(new Event('nuri:first-data-requested')); // 광고 게이트(응답 후)
-      } else setSchedulesError(sr.reason);
-      setSchedulesLoaded(true);
+        window.dispatchEvent(new Event('nuri:first-data-requested')); // 광고 게이트(응답 후 — 커밋 여부와 무관)
+        const next = commitSchedules(sr.value, my, schedReqRef.current, posterDeleteQ.keys());
+        if (next) {
+          setSchedules((prev) => (sameJson(prev, next) ? prev : next));
+          setSchedulesError(null);
+          writeSnap('schedules', next);
+        }
+      } else if (my === schedReqRef.current) setSchedulesError(sr.reason);
+      setSchedulesLoaded(true); // 스켈레톤은 가드하지 않는다(reloadSchedules 의 finally 와 같은 이유)
       if (vr.status === 'fulfilled') { setVenues((prev) => (sameJson(prev, vr.value) ? prev : vr.value)); writeSnap('venues', vr.value); }
       if (nr.status === 'fulfilled') { setNotices(nr.value); writeSnap('notices', nr.value); setNoticesLoaded(true); }
     });
-     
-  }, []);
+    // posterDeleteQ 는 useMemo([]) 안정 참조 — 의존성에 넣어도 부팅 1회 그대로다
+  }, [posterDeleteQ]);
   // (서드파티 게이트 신호는 reloadSchedules 의 네트워크 성공 콜백에서 발사 — 위 주석 참고.
   //  schedulesLoaded 기반이었으나 캐시 복원이 그 플래그를 즉시 켜게 되면서 이전했다.)
 
@@ -1815,8 +1848,9 @@ export default function App() {
     getMyReservations(30)
       .then((list) => { setMyTodayRes(list.filter((r) => r.date === today)); setMyTodayResErr(null); })
       .catch((e) => setMyTodayResErr(e)); // 직전 성공 목록은 지우지 않는다
+    // resVersion: 상세 모달·'내 정보' 어느 쪽에서 예약/취소해도 홈 '오늘 예약한 대회'가 따라온다(F06)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  }, [user?.id, resVersion]);
   useEffect(() => { loadMyTodayRes(); }, [loadMyTodayRes]);
 
   // ── 핸들러 ─────────────────────────────────────────────────────────────
@@ -2325,10 +2359,6 @@ export default function App() {
       .catch(() => { toast.show('저장에 실패했습니다', 'error'); reloadVenues(); });
   }, [toast, reloadVenues]);
 
-  // 포스터 삭제 유예 큐 — schedules 삭제는 예약(schedule_reservations)과 문의(comments)를
-  // FK CASCADE 로 물리 삭제한다(ledger_sessions 만 SET NULL 로 살아남는다).
-  // 지운 뒤 되살릴 방법이 없으므로 '5초 동안 서버로 안 보내기'가 유일한 실행취소다.
-  const posterDeleteQ = useMemo(() => createUndoQueue(5000), []);
   const handleDeletePoster = useCallback((id: string) => {
     const target = schedules.find((s) => s.id === id);
     setSchedules((prev) => prev.filter((s) => s.id !== id));
@@ -2636,6 +2666,7 @@ export default function App() {
             onOpenSchedule={(sid, vid) => openScheduleById(sid, { returnToMe: true, fallbackVenueId: vid })}
             onOpenPost={(pp) => { setVoucherWalletOpen(false); changeTab('community'); setOpenPost(pp); }}
             initialTab={meTab}
+            onReservationChange={bumpResVersion}
             onOpenLegal={(d) => setLegalDoc(d)}
             onOpenSupport={() => setSupportOpen(true)}
             onOpenMarket={() => {
@@ -3093,7 +3124,7 @@ export default function App() {
       {!hasStoreTabs && (activeTab === 'calendar' || visitedTabs.has('calendar')) && (
         <main data-tab="calendar" className="tab-pane" style={activeTab !== 'calendar' ? { display: 'none' } : undefined}>
           <ErrorBoundary inline resetKey="calendar">
-            <CalendarPanelM schedules={schedules} onSelect={handleScheduleSelect} onOpenSchedule={openScheduleById} onVenue={handleVenueClick} onLogin={() => setAuthOpen(true)} active={activeTab === 'calendar'} />
+            <CalendarPanelM schedules={schedules} onSelect={handleScheduleSelect} onOpenSchedule={openScheduleById} onVenue={handleVenueClick} onLogin={() => setAuthOpen(true)} active={activeTab === 'calendar'} resVersion={resVersion} />
           </ErrorBoundary>
         </main>
       )}
@@ -3207,6 +3238,7 @@ export default function App() {
         }
         onDeleteComment={handleDeleteComment}
         onDeletePoster={handleDeletePoster}
+        onReservationChange={bumpResVersion}
       />
       )}
 
