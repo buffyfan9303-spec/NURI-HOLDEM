@@ -110,14 +110,18 @@ export async function getSchedules(): Promise<Schedule[]> {
 }
 
 // ── 단건 조회 ─────────────────────────────────────────────────────────────────
+// 알림·내 예약이 가리키는 대회가 메모리 목록에 없을 때 쓴다(권한은 목록과 같은 RLS 를 그대로 탄다 —
+// schedules_select: approved OR 본인 포스터 OR admin. 즉 목록보다 넓게 노출될 수 없다).
+// ⚠ null 은 '없음/볼 권한 없음' 만 뜻한다. 조회 **실패**(오프라인·5xx)는 throw 로 드러낸다 —
+//   실패를 null 로 뭉개면 살아 있는 포스터가 '내려간 포스터' 로 안내된다(F09).
 export async function getScheduleById(id: string): Promise<Schedule | null> {
   if (IS_MOCK) {
     const { MOCK_SCHEDULES } = await import('../mock/data');
     return MOCK_SCHEDULES.find((s) => s.id === id) ?? null;
   }
-  const { data, error } = await supabase.from('schedules').select('*').eq('id', id).single();
-  if (error) return null;
-  return rowToSchedule(data);
+  const { data, error } = await supabase.from('schedules').select('*').eq('id', id).maybeSingle();
+  if (error) throw error;
+  return data ? rowToSchedule(data) : null;
 }
 
 // ── 업주: 포스터 등록 ─────────────────────────────────────────────────────────

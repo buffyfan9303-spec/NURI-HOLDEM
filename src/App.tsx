@@ -78,12 +78,13 @@ import { readSnap, writeSnap } from './lib/snapshot';
 import { applyScheduleSeo, applyVenueSeo, resetSeo } from './lib/seo';
 import { createUndoQueue } from './lib/undoableDelete';
 import { scheduleStatus } from './lib/scheduleStatus';
+import { resolveScheduleLink } from './lib/scheduleLink';
 import LoadErrorCard from './components/atoms/LoadErrorCard';
 import { SpringButton } from './components/atoms/StatefulActionButton';
 import { useAuth } from './contexts/AuthContext';
 import { listAllUsers, updateUserStatus, approveOwner } from './api/auth';
 import { bumpScheduleView,
-  getSchedules, createSchedule, updateSchedule, deleteSchedule, subscribeSchedules,
+  getSchedules, getScheduleById, createSchedule, updateSchedule, deleteSchedule, subscribeSchedules,
 } from './api/schedules';
 import { getPostById,
   getVenues, getComments, getPosts, addComment, addPost, togglePostLike, deletePost, subscribePosts, subscribeComments,
@@ -1985,13 +1986,55 @@ export default function App() {
       () => startTabTransition(() => setOpenSchedule(s)),
     );
   }, []);
+  // [F09] '내 정보'(예약 내역·알림 미리보기)에서 연 상세는 닫을 때 **내 정보로 돌아온다**.
+  //   대시보드(z-60)가 page 모달(z-55)을 덮으므로 여는 쪽이 먼저 대시보드를 닫아야 한다 —
+  //   z-index 를 올리는 대신 기존 '한 겹씩' 오버레이 계약을 그대로 두고, 이 ref 로 출발지만 기억한다.
+  //   (예전엔 닫으면 홈으로 떨어졌다.)
+  const meReturnRef = useRef(false);
   const closeSchedule = useCallback(() => {
+    const backToMe = meReturnRef.current;
+    meReturnRef.current = false;
+    const commit = () => { setOpenSchedule(null); if (backToMe) setVoucherWalletOpen(true); };
     withViewTransition(
-      () => flushSync(() => setOpenSchedule(null)), // new 쪽: 카드가 이름을 되찾아 역모핑
-      () => setOpenSchedule(null),
+      () => flushSync(commit), // new 쪽: 카드가 이름을 되찾아 역모핑
+      commit,
     );
     window.setTimeout(() => setVtPosterId(null), 350); // 역모핑 종료 후 이름 해제(전환 중 제거 금지)
   }, []);
+  // 상세가 closeSchedule 을 거치지 않고 닫히는 길이 여럿이다(상세 안 매장 이름 탭 → handleVenueClick,
+  // 로고 → handleHome, 포스터 삭제). 그때 복귀 표시가 남아 있으면 **다음에 연 아무 상세**를 닫을 때
+  // 엉뚱하게 '내 정보' 가 열린다 — 상세가 닫히는 모든 길에서 한 곳으로 지운다.
+  useEffect(() => { if (openSchedule === null) meReturnRef.current = false; }, [openSchedule]);
+
+  // [F09] scheduleId 하나로 '정확히 그 대회' 를 연다 — 알림·홈 오늘예약·내 정보 예약 행·캘린더 공용.
+  //   목록(schedules)은 browse/live/my-store/admin 탭에서만 갱신되므로, 다른 탭에 머문 사용자에게
+  //   살아 있는 포스터가 목록에 없을 수 있다. 없다고 '내려간 포스터' 로 단정하지 않고
+  //   권한을 지키는 단건 조회(getScheduleById, RLS 는 목록과 동일)로 한 번 더 확인한다.
+  //   조리법은 이미 쓰고 있는 /posts/:id 폴백과 같다.
+  const openScheduleById = useCallback((id: string, opts?: { returnToMe?: boolean; fallbackVenueId?: string | null }) => {
+    const show = (s: Schedule) => {
+      if (opts?.returnToMe) { meReturnRef.current = true; setVoucherWalletOpen(false); }
+      handleScheduleSelect(s);
+    };
+    const t = resolveScheduleLink(schedules, id);
+    if (t.kind === 'open') { show(t.schedule); return; }
+    if (t.kind === 'unavailable') { toast.show('대회 정보를 확인할 수 없습니다', 'info'); return; }
+    getScheduleById(t.id).then((fetched) => {
+      const r = resolveScheduleLink(schedules, t.id, fetched);
+      if (r.kind === 'open') { show(r.schedule); return; }
+      // 내려갔거나 아직 승인 전(= 볼 권한 없음). 매장이라도 알면 그쪽으로 잇는다(막다른 길 금지).
+      if (opts?.fallbackVenueId) {
+        setVoucherWalletOpen(false); // 매장 페이지(z-40)는 대시보드(z-60) 아래라 먼저 비켜준다
+        toast.show('대회 정보를 확인할 수 없어 매장 페이지로 이동합니다', 'info');
+        handleVenueClick(opts.fallbackVenueId);
+        return;
+      }
+      toast.show('대회 정보를 확인할 수 없습니다. 종료되었거나 내려갔을 수 있어요', 'info');
+    }).catch(() => {
+      // 조회 '실패' 를 '없음' 으로 위장하지 않는다 — 사용자는 다시 눌러 재시도할 수 있다.
+      toast.show('대회 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요', 'error');
+    });
+  }, [schedules, handleScheduleSelect, handleVenueClick, toast]);
 
   // ── 오버레이 '자리 예약'(뒤로가기 겹) ────────────────────────────────────
   // 오너 지적: "페이지에 들어갔다가 나오면 갑자기 홈으로 가버린다."
@@ -2046,17 +2089,12 @@ export default function App() {
   }, []);
 
   // 알림 클릭 → 해당 페이지로 이동
-  const handleNavigateNotification = useCallback((n: AppNotification) => {
+  const handleNavigateNotification = useCallback((n: AppNotification, opts?: { returnToMe?: boolean }) => {
     setNotifications((prev) => prev.map((x) => x.id === n.id ? { ...x, read: true } : x));
     const link = n.link ?? '';
-    // /schedules/:id
+    // /schedules/:id — 목록에 없으면 단건 조회로 한 번 더 확인한다(F09: '내려간 포스터' 단정 금지)
     const sm = link.match(/^\/schedules\/(.+)$/);
-    if (sm) {
-      const sched = schedules.find((s) => s.id === sm[1]);
-      if (sched) setOpenSchedule(sched);
-      else toast.show('종료되었거나 내려간 포스터예요', 'info'); // 조용한 무반응 방지
-      return;
-    }
+    if (sm) { openScheduleById(sm[1], opts); return; }
     // /community/:venueId
     const cm = link.match(/^\/community\/(.+)$/);
     if (cm) { setOpenVenueId(cm[1]); return; }
@@ -2106,7 +2144,7 @@ export default function App() {
     if (link === '/') { changeTab('home'); return; }
     toast.show(n.title, 'info');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [schedules, isAdmin, toast]);
+  }, [openScheduleById, isAdmin, toast]);
 
   const handleSubmitVenueComment = useCallback(
     (venueId: string, content: string, parentId?: string) => {
@@ -2580,9 +2618,15 @@ export default function App() {
             unread={notifications.filter((n) => !n.read)}
             onOpenNotification={(id) => {
               const n = notifications.find((x) => x.id === id);
-              setVoucherWalletOpen(false);
-              if (n) { handleMarkRead([n.id]); handleNavigateNotification(n); }
+              if (!n) { setVoucherWalletOpen(false); return; }
+              handleMarkRead([n.id]);
+              // [F09-c] 포스터 상세로 가는 알림은 openScheduleById 가 대시보드 개폐까지 맡는다 —
+              //   못 열면 '내 정보' 에 그대로 남고, 열었다가 닫으면 홈이 아니라 '내 정보' 로 돌아온다.
+              if (!/^\/schedules\//.test(n.link ?? '')) setVoucherWalletOpen(false);
+              handleNavigateNotification(n, { returnToMe: true });
             }}
+            // [F09-b] 예약 행 → 그 대회 상세(scheduleId 로만). 닫으면 다시 '내 정보' 로.
+            onOpenSchedule={(sid, vid) => openScheduleById(sid, { returnToMe: true, fallbackVenueId: vid })}
             onOpenPost={(pp) => { setVoucherWalletOpen(false); changeTab('community'); setOpenPost(pp); }}
             initialTab={meTab}
             onOpenLegal={(d) => setLegalDoc(d)}
@@ -2625,7 +2669,10 @@ export default function App() {
       <LevelUpWatcher points={user?.activityPoints} />
 
       <PendingApprovalBanner />
-      <InstallBanner />
+      {/* [F10] 설치 안내는 전면(페이지성) 오버레이 위에 남지 않는다 — 상세 본문·CTA·내 정보·매장을 가렸다.
+          z-index 를 올리는 대신 하단 탭바와 **같은 오버레이 상태**를 쓴다(fullOverlayOpen).
+          언마운트해도 안전한 이유: beforeinstallprompt 참조를 모듈 스코프에서 잡아 둔다(InstallBanner.tsx). */}
+      {!fullOverlayOpen && <InstallBanner />}
       <TierCelebration />
 
       <TabBar tabs={pcTabs} active={activeTab} onChange={changeTab} />
@@ -2910,11 +2957,10 @@ export default function App() {
                   <div className="animate-fade-in overflow-hidden pt-3 space-y-1.5">
                     <p className="flex items-center gap-1 px-1 text-2xs font-bold text-ink-secondary"><Icon name="cards" size={13} /> 오늘 예약한 대회</p>
                     {myTodayRes.map((r) => {
-                      const sc = schedules.find((x) => x.id === r.scheduleId);
                       return (
                         <button key={r.scheduleId} type="button"
-                          // 일정이 목록에서 사라졌으면(매장 삭제 등) 무반응 대신 안내 — 무반응 클릭 금지
-                          onClick={() => { if (sc) setOpenSchedule(sc); else toast.show('대회 정보를 찾을 수 없습니다. 매장에서 일정이 변경됐을 수 있어요', 'info'); }}
+                          // [F09] 목록에 없으면 단건 조회 → 그래도 없으면 매장 페이지로. 무반응 클릭 금지.
+                          onClick={() => openScheduleById(r.scheduleId, { fallbackVenueId: r.venueId })}
                           className="w-full flex items-center gap-2.5 rounded-aura border border-accent-400/45 bg-gradient-to-r from-accent-300/[0.12] to-transparent px-3 py-2.5 text-left hover:border-accent-300 transition-colors">
                           <span className="shrink-0 text-accent-300" aria-hidden><Icon name="cards" size={18} /></span>
                           <span className="min-w-0 flex-1">
@@ -3035,7 +3081,7 @@ export default function App() {
       {!hasStoreTabs && (activeTab === 'calendar' || visitedTabs.has('calendar')) && (
         <main data-tab="calendar" className="tab-pane" style={activeTab !== 'calendar' ? { display: 'none' } : undefined}>
           <ErrorBoundary inline resetKey="calendar">
-            <CalendarPanelM schedules={schedules} onSelect={handleScheduleSelect} onVenue={handleVenueClick} onLogin={() => setAuthOpen(true)} active={activeTab === 'calendar'} />
+            <CalendarPanelM schedules={schedules} onSelect={handleScheduleSelect} onOpenSchedule={openScheduleById} onVenue={handleVenueClick} onLogin={() => setAuthOpen(true)} active={activeTab === 'calendar'} />
           </ErrorBoundary>
         </main>
       )}

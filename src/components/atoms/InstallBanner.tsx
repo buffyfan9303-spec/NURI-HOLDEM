@@ -9,29 +9,44 @@ interface BIPEvent extends Event {
 }
 const DISMISS_KEY = 'nh-install-dismissed';
 
+// beforeinstallprompt 는 **페이지당 1회만** 발화한다. 이 배너는 전면 오버레이(상세·내 정보·매장)가
+// 열려 있는 동안 App 이 언마운트하므로(F10), 이벤트를 컴포넌트 안에서만 기다리면 그 사이에 발화한
+// 참조를 영영 못 잡아 설치 기능이 통째로 사라진다 → 모듈 로드 시점에 붙잡아 둔다.
+// (CustomerDashboardPage.tsx 도 같은 조리법으로 저장만 한다 — prompt() 는 여전히 1회.)
+let deferred: BIPEvent | null = null;
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferred = e as BIPEvent; });
+}
+
+/** 이미 설치(standalone)했거나 닫은 적이 있으면 다시 띄우지 않는다 */
+function suppressed(): boolean {
+  try {
+    if (window.matchMedia('(display-mode: standalone)').matches) return true;
+    return !!localStorage.getItem(DISMISS_KEY);
+  } catch { return false; }
+}
+
 export default function InstallBanner() {
-  const [evt, setEvt] = useState<BIPEvent | null>(null);
-  const [show, setShow] = useState(false);
+  const [evt, setEvt] = useState<BIPEvent | null>(deferred);
+  // 닫힘은 localStorage 에도 남으므로(아래 dismiss) 오버레이로 언마운트됐다 돌아와도 되살아나지 않는다.
+  const [hidden, setHidden] = useState(suppressed);
 
   useEffect(() => {
-    try {
-      if (window.matchMedia('(display-mode: standalone)').matches) return;
-      if (localStorage.getItem(DISMISS_KEY)) return;
-    } catch { /* noop */ }
-    const onP = (e: Event) => { e.preventDefault(); setEvt(e as BIPEvent); setShow(true); };
+    if (suppressed()) return;
+    const onP = (e: Event) => { e.preventDefault(); setEvt(e as BIPEvent); };
     window.addEventListener('beforeinstallprompt', onP);
     return () => window.removeEventListener('beforeinstallprompt', onP);
   }, []);
 
-  const dismiss = () => { setShow(false); try { localStorage.setItem(DISMISS_KEY, '1'); } catch { /* noop */ } };
+  const dismiss = () => { setHidden(true); try { localStorage.setItem(DISMISS_KEY, '1'); } catch { /* noop */ } };
   const install = async () => {
     if (!evt) return;
-    setShow(false);
+    setHidden(true);
     try { await evt.prompt(); } catch { /* 사용자 취소 등 무시 */ }
     try { localStorage.setItem(DISMISS_KEY, '1'); } catch { /* noop */ }
   };
 
-  if (!show || !evt) return null;
+  if (hidden || !evt) return null;
   return (
     // 모바일: 하단 탭바(z-50, ~5.75rem)를 덮지 않게 그 위로 — PC는 기존 위치
     <div className="fixed bottom-[var(--tabbar-float)] lg:bottom-3 left-1/2 z-[60] w-[min(92%,28rem)] -translate-x-1/2 animate-slide-up">

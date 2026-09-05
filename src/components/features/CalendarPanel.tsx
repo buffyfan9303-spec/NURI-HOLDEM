@@ -49,9 +49,12 @@ const KIND: Record<Kind, { label: string; dot: string; icon: IconName }> = {
 interface DayItem { kind: Kind; title: string; detail: string; amount?: number; scheduleId?: string; venueId?: string }
 
 
-export default function CalendarPanel({ schedules, onSelect, onVenue, onLogin, active }: {
+export default function CalendarPanel({ schedules, onSelect, onOpenSchedule, onVenue, onLogin, active }: {
   schedules: Schedule[];
   onSelect: (s: Schedule) => void;
+  /** scheduleId 만 아는 항목(예약)을 열 때 — App 이 목록 → 없으면 권한을 지키는 단건 조회로 잇는다(F09).
+   *  캘린더는 browse 탭이 아니라 목록이 낡을 수 있는 자리다: '없음' 으로 단정하면 살아 있는 대회가 막힌다. */
+  onOpenSchedule?: (scheduleId: string, opts?: { fallbackVenueId?: string | null }) => void;
   /** 매장 페이지로 — 예약한 대회가 현재 로드된 일정에 없을 때의 대체 경로 */
   onVenue?: (venueId: string) => void;
   /** 비로그인 안내에서 바로 로그인 — 없으면 버튼을 그리지 않는다(무반응 클릭 금지) */
@@ -118,7 +121,7 @@ export default function CalendarPanel({ schedules, onSelect, onVenue, onLogin, a
       if (likes.has(s.id)) push(s.date, { kind: 'like', title: s.title, detail: s.pubName ?? '', scheduleId: s.id });
     });
     reservations.forEach((r) => push(r.date, {
-      kind: 'reserve', title: r.title, scheduleId: r.scheduleId,
+      kind: 'reserve', title: r.title, scheduleId: r.scheduleId, venueId: r.venueId ?? undefined,
       detail: [r.venueName, r.startTime?.slice(0, 5)].filter(Boolean).join(' · '),
     }));
     // 한 테이블(bankroll_entries)이 둘을 겸한다 — 금액이 있으면 뱅크롤, 0 이면 기타 스케줄(메모만).
@@ -293,6 +296,8 @@ export default function CalendarPanel({ schedules, onSelect, onVenue, onLogin, a
               const s = it.scheduleId ? scheduleById.get(it.scheduleId) : undefined;
               // 대회로 갈 수 없으면 매장으로라도 잇는다 — 사슬 끝에서 막다른 길을 만들지 않는다
               const vid = !s && it.venueId && onVenue ? it.venueId : undefined;
+              // 목록에 없는 예약(=이 탭이 낡았거나 목록 밖 대회)은 id 로 다시 확인해 연다.
+              const byId = !s && it.scheduleId && onOpenSchedule ? it.scheduleId : undefined;
               const Row = (
                 <>
                   <span className={['flex h-6 w-6 shrink-0 items-center justify-center rounded-full', KIND[it.kind].dot, 'bg-opacity-20'].join(' ')} aria-hidden>
@@ -309,6 +314,8 @@ export default function CalendarPanel({ schedules, onSelect, onVenue, onLogin, a
                 <li key={`${it.kind}:${i}`}>
                   {s ? (
                     <button type="button" onClick={() => onSelect(s)} className={`${cls} transition-colors hover:bg-surface-high/50`}>{Row}</button>
+                  ) : byId ? (
+                    <button type="button" onClick={() => onOpenSchedule!(byId, { fallbackVenueId: it.venueId ?? null })} className={`${cls} transition-colors hover:bg-surface-high/50`}>{Row}</button>
                   ) : vid ? (
                     <button type="button" onClick={() => onVenue!(vid)} className={`${cls} transition-colors hover:bg-surface-high/50`}>{Row}</button>
                   ) : (
