@@ -657,6 +657,7 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   <CalendarPanelM schedules={schedules} onSelect={onOpenSchedule ?? (() => {})}
                     active={tabActive && renderSection === 'calendar'} />)}
                 {visited.includes('posters') && canPosters && box('posters', <MyPostersTabM schedules={schedules} onCreate={onCreatePoster} onEdit={onEditPoster} onDelete={onDeletePoster}
+                  active={tabActive && renderSection === 'game' && renderGameStep === 'posters'}
                   onGotoRanking={ledgerOk ? onGotoRankingFromPosters : undefined}
                   onOpenLedger={ledgerOk ? onOpenLedgerFromPosters : undefined} />)}
                 {visited.includes('presets') && canSettingsTab('presets') && box('presets', <PresetManagerM venueId={venueId} />)}

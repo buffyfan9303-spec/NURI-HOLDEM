@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Schedule } from '../../api/schedules';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../atoms/Toast';
 import {
-  getReservations, deleteReservation, updateReservationName, getVenueReserverCounts, subscribeReservations,
-  getReservationCounts, getCustomerActivity, type Reservation, type CustomerActivity,
+  getOwnerReservations, deleteReservation, updateReservationName, getVenueReserverCounts, subscribeReservations,
+  getReservationCounts, getCustomerActivity, type OwnerReservation, type CustomerActivity,
 } from '../../api/reservations';
-import { getPosterOpsSummaries, getScheduleLedgers, type PosterOpsSummary, type ScheduleLedgerItem } from '../../api/ledger';
-import { listVenueCheckins } from '../../api/checkins';
+import { getPosterOpsSummaries, getScheduleLedgers, subscribeLedger, type PosterOpsSummary, type ScheduleLedgerItem } from '../../api/ledger';
+import { subscribeCheckins } from '../../api/checkins';
 import { toCsv, downloadCsv } from '../../lib/csv';
 import { thumbUrl, thumbSrcSet } from '../../lib/imageUrl';
 import EmptyState from '../atoms/EmptyState';
@@ -16,9 +16,10 @@ import { getComments, logActivity } from '../../api/community';
 import { createUndoQueue } from '../../lib/undoableDelete';
 import Icon from '../atoms/Icon';
 import LoadErrorCard from '../atoms/LoadErrorCard';
+import { isVisited, createReqGuard } from '../../lib/ownerReservations';
 
 // 예약 명단 CSV 내보내기 (엑셀 한글 호환)
-function exportReservationsCsv(schedule: Schedule, reservations: Reservation[]) {
+function exportReservationsCsv(schedule: Schedule, reservations: OwnerReservation[]) {
   const csv = toCsv(
     ['번호', '예약자', '예약시각'],
     reservations.map((r, i) => [i + 1, r.displayName, new Date(r.createdAt).toLocaleString('ko-KR')]),
@@ -36,14 +37,15 @@ interface MyPostersTabProps {
   onOpenLedger?: (s: Schedule, existingDate: string | null) => void;
   /** '순위 미입력' 뱃지 클릭 — 해당 날짜의 순위 입력 화면으로 */
   onGotoRanking?: (date: string) => void;
+  /** 이 판이 실제로 보이는가('내 매장' 탭 + 게임관리 → 게임 스텝). keep-alive(display:none) 로
+   *  숨은 동안은 구독을 끊고, 다시 보일 때 한 번 재검증한다(StoreDashboard 와 같은 배선). */
+  active?: boolean;
 }
 
 /** 게임 관리 — 승인 업주가 본인 포스터(게임)와 예약을 관리. */
-export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete, onOpenLedger, onGotoRanking }: MyPostersTabProps) {
+export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete, onOpenLedger, onGotoRanking, active = true }: MyPostersTabProps) {
   const { user, isApprovedOwner } = useAuth();
   const [reserverCounts, setReserverCounts] = useState<Record<string, number>>({});
-  const [visitedNames, setVisitedNames] = useState<Set<string>>(new Set());
-  const [visitedUserIds, setVisitedUserIds] = useState<Set<string>>(new Set()); // 방문 판정 1순위(계정 ID)
   const [ops, setOps] = useState<Record<string, PosterOpsSummary>>({}); // scheduleId → 연결 장부 운영 요약
   const [dateFilter, setDateFilter] = useState<string>(''); // ''=전체 / iso=그 날짜 예약만 관리
 
@@ -52,28 +54,36 @@ export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete, on
 
   const [resCounts, setResCounts] = useState<Record<string, number>>({}); // scheduleId → 예약 수
   useEffect(() => {
-    if (!venueId) return;
+    if (!venueId || !active) return; // 숨은 동안엔 채널을 물고 있지 않는다 — 다시 보일 때 아래 reload 가 재검증
     const ids = myPosters.map((p) => p.id);
     const reload = () => {
       getVenueReserverCounts(venueId).then(setReserverCounts).catch(() => {});
-      const t0 = new Date(); t0.setHours(0, 0, 0, 0);
-      listVenueCheckins(venueId, t0.toISOString()).then((cs) => {
-        setVisitedNames(new Set(cs.map((c) => (c.displayName ?? '').trim().toLowerCase()).filter(Boolean)));
-        setVisitedUserIds(new Set(cs.map((c) => c.userId).filter(Boolean)));
-      }).catch(() => {});
       getReservationCounts(ids).then(setResCounts).catch(() => {});
     };
     reload();
     return subscribeReservations(reload, ids); // 실시간: 내 포스터 예약만 수신(서버 필터 — 전 매장 수신 방지)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [venueId, myPosters.length]);
+  }, [venueId, myPosters.length, active]);
 
-  // 포스터 ↔ 장부 운영 요약 — '장부' 버튼 분기 + 바인·매출 미니칩 + 순위 미입력 뱃지
-  useEffect(() => {
+  // 포스터 ↔ 장부 운영 요약 — '장부' 버튼 분기 + 바인·매출 미니칩 + 순위 미입력 뱃지.
+  // ⚠ venueId 만 보면 keep-alive 로 숨어 있는 동안 일어난 장부 개설·마감·순위 저장이 반영되지 않아
+  //   '장부 +'·'순위 미입력'·바인/매출 칩이 낡은 채 남는다(새로고침해야 맞는 값이 나왔다).
+  //   다시 보일 때(active 상승) 재조회하고, 보고 있는 동안은 장부 변경을 구독한다.
+  const reloadOps = useCallback(() => {
     if (!venueId || !onOpenLedger) return;
     getPosterOpsSummaries(venueId).then(setOps).catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [venueId]);
+  }, [venueId, onOpenLedger]);
+  useEffect(() => { if (active) reloadOps(); }, [active, reloadOps]);
+  // 순위 저장은 장부 테이블을 건드리지 않으므로 구독으로는 오지 않는다 — 그 갱신은 위 active 상승분이 맡는다
+  useEffect(() => { if (active && venueId) return subscribeLedger(venueId, reloadOps); }, [active, venueId, reloadOps]);
+
+  // 체크인은 예약 테이블을 건드리지 않는다 — 손님이 QR 체크인해도 '✓ 방문' 이 안 뜨던 이유.
+  // 펼쳐 둔 명단만 다시 읽도록 신호만 올린다(명단과 방문 판정은 같은 RPC 가 함께 준다).
+  const [checkinNonce, setCheckinNonce] = useState(0);
+  useEffect(() => {
+    if (!active || !venueId) return;
+    return subscribeCheckins(venueId, () => setCheckinNonce((n) => n + 1));
+  }, [active, venueId]);
 
   if (user?.role === 'venue_owner' && !isApprovedOwner) return <PendingApprovalView />;
 
@@ -108,10 +118,11 @@ export default function MyPostersTab({ schedules, onCreate, onEdit, onDelete, on
             </div>
             <ul className="space-y-2">
               {shown.map((p) => (
-                <PosterRow key={p.id} schedule={p} venueId={venueId} reserverCounts={reserverCounts} visitedNames={visitedNames} visitedUserIds={visitedUserIds}
+                <PosterRow key={p.id} schedule={p} venueId={venueId} reserverCounts={reserverCounts}
                   onEdit={() => onEdit(p.id)} onDelete={() => onDelete(p.id)}
                   ops={ops[p.id] ?? null}
-                  resCount={resCounts[p.id] ?? 0}
+                  resCounts={resCounts}
+                  checkinNonce={checkinNonce}
                   onLedgerAt={onOpenLedger ? (d) => onOpenLedger(p, d) : undefined}
                   onRanking={onGotoRanking}
                   gameDates={myPosters.filter((q) => q.title.trim() === p.title.trim()).map((q) => ({ id: q.id, date: isoOf(q) })).sort((a, b) => a.date.localeCompare(b.date))} />
@@ -141,12 +152,14 @@ function PendingApprovalView() {
 }
 
 // ── 단일 게임 행 + 예약 관리 패널 ─────────────────────────────────────────────
-function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUserIds, onEdit, onDelete, ops, resCount, onLedgerAt, onRanking, gameDates }: {
-  schedule: Schedule; venueId?: string; reserverCounts: Record<string, number>; visitedNames?: Set<string>; visitedUserIds?: Set<string>;
+function PosterRow({ schedule, venueId, reserverCounts, onEdit, onDelete, ops, resCounts, checkinNonce, onLedgerAt, onRanking, gameDates }: {
+  schedule: Schedule; venueId?: string; reserverCounts: Record<string, number>;
   onEdit: () => void; onDelete: () => void;
-  ops?: PosterOpsSummary | null; resCount?: number; onLedgerAt?: (date: string | null) => void; onRanking?: (date: string) => void;
+  ops?: PosterOpsSummary | null; resCounts: Record<string, number>; checkinNonce?: number;
+  onLedgerAt?: (date: string | null) => void; onRanking?: (date: string) => void;
   gameDates?: { id: string; date: string }[]; // 같은 제목(같은 게임)의 날짜별 스케줄 — 예약을 날짜별로 전환
 }) {
+  const resCount = resCounts[schedule.id] ?? 0;
   const ledgerDate = ops?.date ?? null;
   const toast = useToast();
   const [confirming, setConfirming] = useState(false);
@@ -166,7 +179,9 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUse
     // 날짜 칩으로 같은 게임의 다른 날짜를 보던 중이었다면 화면의 수는 지워지지 않는 날짜의 것이다 —
     // 9/10 '0명'을 보고 9/5 포스터를 지우면 9/5 예약자가 CASCADE 로 통째로 사라진다.
     // 그래서 아직 모르거나(패널 미개봉·실패) 다른 날짜를 보고 있으면 schedule.id 로 다시 읽는다.
-    if (reservations === null || resSchedId !== schedule.id) {
+    //   패널을 닫아 둔 사이에 예약이 늘었을 수도 있다 — 실시간 예약 수와 화면의 명단 수가
+    //   어긋나면 그것도 '모르는 상태'로 보고 다시 읽는다(적게 세어 승인시키지 않는다).
+    if (reservations === null || resSchedId !== schedule.id || reservations.length !== resCount) {
       setResSchedId(schedule.id); setReservations(null); loadRes(schedule.id);
     }
   };
@@ -178,10 +193,17 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUse
   const [resSchedId, setResSchedId] = useState(schedule.id);
   const toggleLedgers = () => {
     if (!ledgerDate) { onLedgerAt?.(null); return; } // 연결 장부 없음 -> 바로 새 등록
-    const next = !ledgersOpen; setLedgersOpen(next);
-    if (next && ledgers === null && venueId) getScheduleLedgers(venueId, schedule.id).then(setLedgers).catch(() => setLedgers([]));
+    setLedgersOpen((v) => !v);
   };
-  const [reservations, setReservations] = useState<Reservation[] | null>(null);
+  // 펼친 장부 목록은 펼칠 때마다, 그리고 운영 요약이 바뀔 때마다 다시 읽는다 —
+  // 예전엔 첫 1회만 읽어서 장부를 열고 돌아와도 '진행중/마감'이 낡은 채 남았다.
+  useEffect(() => {
+    if (!ledgersOpen || !venueId) return;
+    let live = true;
+    getScheduleLedgers(venueId, schedule.id).then((v) => { if (live) setLedgers(v); }).catch(() => { if (live) setLedgers([]); });
+    return () => { live = false; };
+  }, [ledgersOpen, venueId, schedule.id, ops?.date, ops?.closed]);
+  const [reservations, setReservations] = useState<OwnerReservation[] | null>(null);
   const d = new Date(schedule.date);
 
   // ⚠ 실패를 [] 로 삼키면 '예약 없음'과 구분이 안 된다. 그 값이 아래 **되돌릴 수 없는 삭제 확인창**의
@@ -191,35 +213,54 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUse
   //   `reservations === null` 이라, [] 를 적는 순간 재시도 경로가 통째로 죽는다(확인창의 '다시 확인'도,
   //   패널을 접었다 펴는 것도 아무것도 다시 읽지 않는 막다른 길이 됐다). 실패는 null 로 되돌린다.
   const [resErr, setResErr] = useState<unknown>(null);
-  const loadRes = (sid: string = resSchedId) => {
+  // 응답 순서 가드 — 날짜 칩 A→B 연타 시 A 의 늦은 응답이 B 명단을 덮으면,
+  // 그 인원 수가 그대로 삭제 확인창의 '예약자 N명'이 된다(다른 날짜의 수로 승인하게 됨).
+  const reqGuard = useMemo(() => createReqGuard(), []);
+  // 명단은 업주 RPC(schedule_reservations_for_owner) 하나만 쓴다 — 일정 상세와 같은 정본이라
+  // 두 화면의 '✓ 방문'이 갈리지 않고, 방문 판정도 서버가 그 일정 날짜(KST)로 한다.
+  const loadRes = useCallback((sid: string) => {
+    const token = reqGuard.start();
     setResErr(null);
-    getReservations(sid).then((rs) => { setResErr(null); setReservations(rs); })
-      .catch((e) => { setReservations(null); setResErr(e); });
-  };
-  const toggle = () => { const next = !open; setOpen(next); if (next && reservations === null) loadRes(); };
+    // RPC 는 매장이 연결된 포스터만 명단을 준다(can_manage_pos 게이트). 매장 미연결 포스터에서
+    // 빈 배열을 '예약 0명'으로 보여주면 삭제 확인창이 다시 거짓 승인이 된다 — 모른다고 말한다.
+    if (!schedule.venueId) { setReservations(null); setResErr(new Error('이 게임에 매장이 연결되어 있지 않아 예약 명단을 확인할 수 없습니다')); return; }
+    getOwnerReservations(sid).then((rs) => { if (!reqGuard.accept(token)) return; setResErr(null); setReservations(rs); })
+      .catch((e) => { if (!reqGuard.accept(token)) return; setReservations(null); setResErr(e); });
+  }, [reqGuard, schedule.venueId]);
+  const toggle = () => { const next = !open; setOpen(next); if (next && reservations === null) loadRes(resSchedId); };
+  // 예약 수(실시간 구독)가 바뀌면 펼쳐 둔 명단도 다시 읽는다 — 칩 '예약 4'와 명단 '3명'이 어긋나면
+  // CSV·삭제 확인창이 그 낡은 수를 근거로 쓴다. ⚠ 길이 비교로 하지 않는다: 5초 유예 중인 삭제가
+  // 곧바로 되살아난다(낙관 제거 ≠ 서버 반영). '보고 있는 날짜의 수가 실제로 바뀐 뒤'에만 읽는다.
+  const listRev = `${resCounts[resSchedId] ?? 0}#${checkinNonce ?? 0}`;
+  const seenRevRef = useRef({ sid: resSchedId, rev: listRev });
+  useEffect(() => {
+    const prev = seenRevRef.current;
+    seenRevRef.current = { sid: resSchedId, rev: listRev };
+    if (open && prev.sid === resSchedId && prev.rev !== listRev) loadRes(resSchedId);
+  }, [listRev, open, resSchedId, loadRes]);
   // 예약 삭제 유예 큐 — RLS sr_insert 의 with check 가 user_id = auth.uid() 하나뿐이라
   // 업주도 운영자도 손님 예약을 대신 INSERT 할 수 없다(= 지우면 앱으로는 절대 복구 불가).
   // 그래서 '지운 뒤 되살리기'가 아니라 '5초 동안 서버로 안 보내기'로 실행취소를 만든다.
   const resDeleteQ = useMemo(() => createUndoQueue(5000), []);
-  const onDel = (r: Reservation) => {
+  const onDel = (r: OwnerReservation) => {
     setReservations((arr) => (arr ?? []).filter((x) => x.id !== r.id));
     resDeleteQ.schedule(r.id, () => {
       deleteReservation(r.id)
         // 예약 삭제는 여태 아무 흔적도 안 남아 '누가 지웠는지' 추적이 불가능했다
         .then(() => logActivity({ action: 'delete', targetType: 'reservation', targetId: r.id, targetSummary: `${schedule.title} / ${r.displayName}` }))
-        .catch((e) => { toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'); loadRes(); });
+        .catch((e) => { toast.show(e instanceof Error ? e.message : '삭제 실패', 'error'); loadRes(resSchedId); });
     });
     toast.show(`‘${r.displayName}’ 예약 삭제됨`, 'info', {
       durationMs: 5000, // 유예 시간과 일치 — 더 길면 이미 삭제된 뒤에도 되돌리기가 눌러지는 것처럼 보인다
       action: { label: '되돌리기', onClick: () => {
         if (!resDeleteQ.cancel(r.id)) { toast.show('이미 삭제되어 되돌릴 수 없습니다', 'error'); return; }
-        // getReservations 가 created_at 오름차순이라 같은 기준으로 되끼운다(번호가 뒤섞이지 않게)
+        // 명단 RPC 가 created_at 오름차순이라 같은 기준으로 되끼운다(번호가 뒤섞이지 않게)
         setReservations((arr) => ((arr ?? []).some((x) => x.id === r.id) ? arr : [...(arr ?? []), r].sort((a, b) => a.createdAt.localeCompare(b.createdAt))));
         toast.show('삭제를 취소했습니다', 'success');
       } },
     });
   };
-  const onRename = async (r: Reservation) => {
+  const onRename = async (r: OwnerReservation) => {
     const n = window.prompt('예약자 이름 수정', r.displayName); if (n === null) return;
     try { await updateReservationName(r.id, n); setReservations((arr) => (arr ?? []).map((x) => (x.id === r.id ? { ...x, displayName: n.trim() } : x))); } catch (e) { toast.show(e instanceof Error ? e.message : '수정 실패', 'error'); }
   };
@@ -241,12 +282,12 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUse
           <p className="text-sm font-medium text-ink-primary truncate">{schedule.title}</p>
           <p className="text-2xs text-ink-muted mt-0.5">{d.getMonth() + 1}/{d.getDate()} {schedule.startTime} · 바이인 {schedule.buyIn.amount.toLocaleString()}</p>
           {/* 운영 현황 미니칩 — 예약·바인·매출(연결 장부 기준). 게임관리가 곧 운영 현황판 */}
-          {(ops || (resCount ?? 0) > 0 || (schedule.viewCount ?? 0) > 0) && (
+          {(ops || resCount > 0 || (schedule.viewCount ?? 0) > 0) && (
             <span className="mt-1 flex flex-wrap items-center gap-1 text-2xs font-semibold tabular-nums">
               {(schedule.viewCount ?? 0) > 0 && (
                 <span className="rounded-badge bg-surface-high px-1.5 py-0.5 text-ink-secondary">조회 {schedule.viewCount}</span>
               )}
-              {(resCount ?? 0) > 0 && (
+              {resCount > 0 && (
                 <span className="rounded-badge bg-surface-high px-1.5 py-0.5 text-ink-secondary">예약 {resCount}</span>
               )}
               {ops && (
@@ -338,7 +379,7 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUse
           </button>
         )}
         <div className="flex items-stretch divide-x divide-border-subtle">
-          <button type="button" onClick={toggle} className="flex-1 py-2.5 text-xs font-semibold text-accent-300 active:bg-surface-high/60">예약 {reservations ? reservations.length : (resCount ?? 0) || ''}{open ? ' ▲' : ' ▼'}</button>
+          <button type="button" onClick={toggle} className="flex-1 py-2.5 text-xs font-semibold text-accent-300 active:bg-surface-high/60">예약 {reservations ? reservations.length : resCount || ''}{open ? ' ▲' : ' ▼'}</button>
           {onLedgerAt && (
             <button type="button" onClick={toggleLedgers}
               className={['flex-1 py-2.5 text-xs font-semibold active:bg-surface-high/60', ledgerDate ? 'text-emerald-400' : 'text-ink-secondary'].join(' ')}>
@@ -401,7 +442,7 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUse
           {/* 실패 → 확인 중 → 빈 상태 → 목록. ⚠ 실패가 먼저다 — 뒤에 두면 조회 실패가
               '아직 예약자가 없습니다'로 위장되고, 업주는 좌석을 준비하지 않는다. */}
           {resErr != null ? (
-            <LoadErrorCard error={resErr} what="예약 명단" onRetry={() => loadRes()} compact />
+            <LoadErrorCard error={resErr} what="예약 명단" onRetry={() => loadRes(resSchedId)} compact />
           ) : reservations === null ? (
             <p className="text-2xs text-ink-muted text-center py-2">불러오는 중…</p>
           ) : reservations.length === 0 ? (
@@ -414,7 +455,7 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUse
               </div>
               {reservations.map((r, i) => (
                 <ReservationItem key={r.id || i} idx={i + 1} res={r} venueId={venueId}
-                  visited={((!!r.userId && visitedUserIds?.has(r.userId)) || visitedNames?.has((r.displayName ?? '').trim().toLowerCase())) ?? false}
+                  visited={isVisited(r)}
                   regular={(reserverCounts[r.displayName] ?? 0) >= 5}
                   reserveCount={reserverCounts[r.displayName] ?? 0}
                   onDelete={() => onDel(r)} onRename={() => onRename(r)} />
@@ -430,7 +471,7 @@ function PosterRow({ schedule, venueId, reserverCounts, visitedNames, visitedUse
 // ── 예약자 1명 + (단골 5회+) 고객 활동내역 ────────────────────────────────────
 function ReservationItem({ idx, res, venueId, visited, regular, reserveCount, onDelete, onRename }: {
   visited?: boolean;
-  idx: number; res: Reservation; venueId?: string; regular: boolean; reserveCount: number;
+  idx: number; res: OwnerReservation; venueId?: string; regular: boolean; reserveCount: number;
   onDelete: () => void; onRename: () => void;
 }) {
   const [showCustomer, setShowCustomer] = useState(false);
