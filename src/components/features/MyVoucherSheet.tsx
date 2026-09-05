@@ -18,7 +18,7 @@ import Modal from '../atoms/Modal';
 import Icon from '../atoms/Icon';
 import QrScanModal from './QrScanModal';
 import VoucherWallet from './VoucherWallet';
-import { listMyVouchers } from '../../api/vouchers';
+import { listMyVouchers, isHeldVoucher } from '../../api/vouchers';
 import { useIdentityEnabled } from '../../lib/identityFlag';
 import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
@@ -121,8 +121,9 @@ function VenueVoucherCounts({ onVenue }: { onVenue?: (venueId: string) => void }
     listMyVouchers()
       .then((vs) => {
         const m = new Map<string, { venueId: string; name: string; count: number }>();
+        const nowMs = Date.now();
         for (const v of vs) {
-          if (v.usedAt) continue; // 쓴 것은 보유가 아니다
+          if (!isHeldVoucher(v, nowMs)) continue; // 쓴 것·회수된 것·만료된 것은 보유가 아니다 — 지갑(VoucherWallet)과 같은 술어
           const cur = m.get(v.venueId) ?? { venueId: v.venueId, name: v.venueName ?? '매장', count: 0 };
           cur.count += 1; m.set(v.venueId, cur);
         }

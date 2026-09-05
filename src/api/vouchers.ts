@@ -30,6 +30,13 @@ export interface Voucher {
   /** 발급 근거(2026-09-05 정책) — 2026-09-05 이전 발급분은 null */
   issueReason: VoucherReason | null;
 }
+/**
+ * '보유 중' 판정의 단일 정본 — 지갑(VoucherWallet)과 시트의 매장별 장수(MyVoucherSheet)가 같이 쓴다.
+ * 회수(revoke)는 used_at 을 건드리지 않고 status='revoked' 만 세팅하고, 만료는 status 가 active 인 채
+ * expires_at 만 지난다 — usedAt 만 걸러 세면 둘 다 '보유'로 부풀려진다(2026-09-05 점검 #9).
+ */
+export const isHeldVoucher = (v: Pick<Voucher, 'status' | 'expiresAt'>, now = Date.now()): boolean =>
+  v.status === 'active' && (!v.expiresAt || new Date(v.expiresAt).getTime() > now);
 /** 발급 근거(사유) — 서버 issue_voucher 가 같은 목록으로 검증한다. 순위·시상 사유는 목록에 없고 서버가 거절한다. */
 export type VoucherReason = 'welcome' | 'visit' | 'event' | 'service' | 'other';
 export const VOUCHER_REASONS: { value: VoucherReason; label: string; hint: string }[] = [
