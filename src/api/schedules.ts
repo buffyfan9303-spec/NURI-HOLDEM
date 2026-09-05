@@ -16,7 +16,12 @@ export interface SeatVoucher  { label: string; count: number; }
 export interface BuyInInfo    { amount: number; rebuy?: number; rebuyLimit?: number; addon?: number; addonStack?: number; startStack?: number; rebuyStack?: number; gameType?: string; }
 export interface SideEvent    { name: string; startBefore: string; buyIn?: number; note?: string; }
 export interface RankingPrize { rank: string; amount: number; unit?: string; }
-export interface Promotion    { badge?: string; title: string; detail?: string; }
+/** 포스터의 이벤트·프로모션 한 줄.
+ *  `discountWon` 이 있으면 **참가비 할인 이벤트**로, 장부가 그대로 가져다 쓸 수 있다(오너 지시 2026-09-06).
+ *  · discountWon — 할인액(원). 0/undefined = 그냥 안내 문구(종전 동작 그대로).
+ *  · level       — 자동 적용 기준 레벨(N레벨까지). 0/undefined = 수기 선택 전용.
+ *  두 값은 장부의 DiscountPreset{label, amount, level} 과 1:1 로 대응한다(src/api/ledger.ts). */
+export interface Promotion    { badge?: string; title: string; detail?: string; discountWon?: number; level?: number; }
 
 export interface Schedule {
   id: string; title: string; venueId: string; pubName: string; region: string; address?: string;
