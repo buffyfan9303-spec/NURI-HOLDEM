@@ -6,6 +6,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { uploadPoster } from '../../lib/storage';
 import { filterContent } from '../../lib/content-filter';
 import type { Schedule, Promotion } from '../../api/schedules';
+import { DISCOUNT_TYPES, discountTexts, retypePromotion, type DiscountType } from '../../lib/promotionLabel';
 import { wonToMan, manToWon } from '../../lib/units';
 import { REGION_CHIPS } from './IntegratedSearchBar';
 import { generateBlinds } from '../../api/clock';
@@ -647,7 +648,7 @@ export default function PosterFormModal({ open, onClose, schedule, onSubmit, ven
         </FieldWrap>
 
         {/* 이벤트 · 프로모션 — 배지 + 내용 (포스터에 50%·5만 등 배지로 표시) */}
-        <FieldWrap label={`이벤트 · 프로모션 (${form.events.length}/${MAX_EVENTS}) · 50%·5만 등 배지 · 할인액`}>
+        <FieldWrap label={`이벤트 · 프로모션 (${form.events.length}/${MAX_EVENTS}) · 할인유형을 고르면 배지·내용 자동`}>
           <PromotionEditor items={form.events} onChange={(v) => update('events', v)} buyIn={form.buyIn} />
         </FieldWrap>
 
@@ -763,23 +764,19 @@ function PromotionEditor({ items, onChange, buyIn }: {
   /** 참가비(원) — 할인액이 참가비를 넘으면 장부가 저장을 막으므로 여기서 미리 알린다. 0=미입력 */
   buyIn: number;
 }) {
+  // 프리셋도 각자 유형을 갖는다. 손으로 쓴 배지·내용(예: '50%')은 자동값과 다르므로 아래 규칙이 보존한다.
   const PRESETS: Promotion[] = [
-    { badge: '50%', title: '첫 방문 50% 할인' }, // 비율 할인은 금액이 고정되지 않아 할인액 없이 문구로만
-    { badge: '5만', title: '1LV 바인 5만', discountWon: 50_000, level: 1 },
-    { badge: '7만', title: '첫 바인 7만', discountWon: 70_000 },
-    { badge: '얼리칩', title: '사전예약 얼리칩' },
-    { badge: 'NEW', title: '신규 이벤트' },
-    { badge: '할인', title: '할인 이벤트' },
+    { discountType: 'firstVisit', badge: '50%', title: '첫 방문 50% 할인' }, // 비율 할인은 금액이 고정되지 않아 할인액 없이 문구로만
+    { discountType: 'level',      badge: '5만', title: '1LV 바인 5만', discountWon: 50_000, level: 1 },
+    { discountType: 'firstBuyin', badge: '7만', title: '첫 바인 7만', discountWon: 70_000 },
+    { discountType: 'advance',    badge: '얼리칩', title: '사전예약 얼리칩' },
+    { discountType: 'custom',     badge: 'NEW', title: '신규 이벤트' },
+    { discountType: 'custom',     badge: '할인', title: '할인 이벤트' },
   ];
-  const badgeOf = (won: number) => `${wonToMan(won)}만`;
   const setAt = (i: number, patch: Partial<Promotion>) =>
     onChange(items.map((x, k) => (k === i ? { ...x, ...patch } : x)));
-  // 배지 자동 채움 — 비어 있거나 '직전 할인액이 만든 값' 그대로일 때만. 사람이 고친 배지는 건드리지 않는다.
-  const setDiscount = (i: number, won: number) => {
-    const cur = items[i];
-    const auto = !cur.badge?.trim() || cur.badge === badgeOf(cur.discountWon ?? 0);
-    setAt(i, { discountWon: won, ...(auto && won > 0 ? { badge: badgeOf(won) } : {}) });
-  };
+  // 유형·할인액·레벨 중 무엇이 바뀌든 태그·내용을 다시 만든다(사람이 고친 값은 보존 — lib/promotionLabel).
+  const retype = (i: number, patch: Partial<Promotion>) => setAt(i, retypePromotion(items[i], patch));
   const add = (p?: Promotion) => {
     if (items.length >= MAX_EVENTS) return;
     onChange([...items, p ?? { badge: '', title: '' }]);
@@ -791,28 +788,38 @@ function PromotionEditor({ items, onChange, buyIn }: {
           {items.map((p, i) => {
             const won = p.discountWon ?? 0;
             const over = won > 0 && buyIn > 0 && won > buyIn;
+            const ledgerLabel = discountTexts(p).ledger;
             return (
               <li key={i} className="space-y-1 rounded-input border border-border-subtle bg-surface-low p-1.5">
+                <div className="flex items-center gap-1.5">
+                  <span className="shrink-0 text-2xs text-ink-muted">할인유형</span>
+                  {/* 유형을 고르면 아래 배지·내용이 저절로 채워진다(손으로 고친 값은 그대로 둔다) */}
+                  <select value={p.discountType ?? 'custom'} aria-label={`프로모션 ${i + 1} 할인유형`}
+                    onChange={(e) => retype(i, { discountType: e.target.value as DiscountType })}
+                    className="input min-w-0 flex-1 text-sm">
+                    {DISCOUNT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.name}</option>)}
+                  </select>
+                  <button type="button" onClick={() => onChange(items.filter((_, k) => k !== i))}
+                    aria-label="삭제" className="text-ink-muted hover:text-danger text-2xs px-1 shrink-0">✕</button>
+                </div>
                 <div className="flex items-center gap-1.5">
                   <input value={p.badge ?? ''} onChange={(e) => setAt(i, { badge: e.target.value })} maxLength={6}
                     placeholder="배지" className="input w-16 shrink-0 text-center text-sm font-bold text-accent-300" />
                   <input value={p.title} onChange={(e) => setAt(i, { title: e.target.value })} maxLength={40}
                     placeholder="내용 (예: 첫 방문 50% 할인)" className="input flex-1 min-w-0 text-sm" />
-                  <button type="button" onClick={() => onChange(items.filter((_, k) => k !== i))}
-                    aria-label="삭제" className="text-ink-muted hover:text-danger text-2xs px-1 shrink-0">✕</button>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <span className="shrink-0 text-2xs text-ink-muted">참가비 할인</span>
                   <div className="relative w-20 shrink-0">
                     <input type="number" inputMode="decimal" step="0.1" min="0" aria-label={`프로모션 ${i + 1} 할인액(만원)`}
-                      value={won ? wonToMan(won) : ''} onChange={(e) => setDiscount(i, manToWon(Math.max(0, parseFloat(e.target.value) || 0)))}
+                      value={won ? wonToMan(won) : ''} onChange={(e) => retype(i, { discountWon: manToWon(Math.max(0, parseFloat(e.target.value) || 0)) })}
                       placeholder="없음" aria-invalid={over}
                       className={['input w-full pr-6 text-sm tabular-nums', over ? 'border-danger text-danger-light' : ''].join(' ')} />
                     <span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">만</span>
                   </div>
                   <div className="relative w-16 shrink-0">
                     <input type="number" inputMode="numeric" min="0" max="60" aria-label={`프로모션 ${i + 1} 자동 적용 레벨`}
-                      value={p.level || ''} onChange={(e) => setAt(i, { level: Math.max(0, Math.min(60, parseInt(e.target.value, 10) || 0)) })}
+                      value={p.level || ''} onChange={(e) => retype(i, { level: Math.max(0, Math.min(60, parseInt(e.target.value, 10) || 0)) })}
                       placeholder="자동" className="input w-full pr-6 text-sm tabular-nums" />
                     <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-2xs font-bold text-ink-muted">LV</span>
                   </div>
@@ -820,7 +827,7 @@ function PromotionEditor({ items, onChange, buyIn }: {
                     {over
                       ? <b className="text-danger-light">참가비({wonToMan(buyIn)}만)보다 큽니다 — 참가비 이하로 적어 주세요.</b>
                       : won > 0
-                        ? <>장부가 <b className="text-accent-300">−{wonToMan(won)}만 할인</b>으로 가져갑니다{p.level ? <> · <b className="text-accent-300">{p.level}LV</b>까지 자동</> : null}</>
+                        ? <>장부가 <b className="text-accent-300">−{wonToMan(won)}만 할인</b>으로 가져갑니다{ledgerLabel ? <> · 라벨 <b className="text-accent-300">{ledgerLabel}</b></> : null}{p.level ? <> · <b className="text-accent-300">{p.level}LV</b>까지 자동</> : null}</>
                         : '금액을 적으면 장부 할인으로 쓸 수 있어요'}
                   </p>
                 </div>

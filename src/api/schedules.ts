@@ -1,5 +1,8 @@
 ﻿// src/api/schedules.ts
 import { supabase, IS_MOCK } from '../lib/supabase';
+import type { DiscountType } from '../lib/promotionLabel';
+
+export type { DiscountType };
 
 /** 일정(포스터/게임) 변경 실시간 구독 — 다른 기기/사용자의 등록·수정·삭제를 자동 반영 */
 export function subscribeSchedules(onChange: () => void): () => void {
@@ -20,8 +23,10 @@ export interface RankingPrize { rank: string; amount: number; unit?: string; }
  *  `discountWon` 이 있으면 **참가비 할인 이벤트**로, 장부가 그대로 가져다 쓸 수 있다(오너 지시 2026-09-06).
  *  · discountWon — 할인액(원). 0/undefined = 그냥 안내 문구(종전 동작 그대로).
  *  · level       — 자동 적용 기준 레벨(N레벨까지). 0/undefined = 수기 선택 전용.
- *  두 값은 장부의 DiscountPreset{label, amount, level} 과 1:1 로 대응한다(src/api/ledger.ts). */
-export interface Promotion    { badge?: string; title: string; detail?: string; discountWon?: number; level?: number; }
+ *  · discountType — 할인유형(오너 지시 2026-09-06). 고르면 태그·내용·장부 라벨을 lib/promotionLabel 이 만든다.
+ *                   undefined = 유형 개념이 없던 기존 데이터 → 'custom' 과 같게 다뤄 자동 생성 없음(하위호환).
+ *  세 값은 장부의 DiscountPreset{label, amount, level} 과 1:1 로 대응한다(src/api/ledger.ts). */
+export interface Promotion    { badge?: string; title: string; detail?: string; discountWon?: number; level?: number; discountType?: DiscountType; }
 
 export interface Schedule {
   id: string; title: string; venueId: string; pubName: string; region: string; address?: string;

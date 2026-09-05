@@ -44,6 +44,26 @@ describe('discountsFromPromotions', () => {
     expect(r.discounts).toEqual([...cur, { label: '2레벨', amount: 30_000, level: 2 }]);
   });
 
+  it('할인유형이 있으면 유형의 짧은 라벨을 쓴다 — 40자 내용이 장부 칩에 실려 표를 밀지 않게', () => {
+    const r = discountsFromPromotions([
+      p({ discountType: 'level', badge: '5만', title: '1LV 바인 5만 · 오픈 전 예약자', discountWon: 50_000, level: 1 }),
+      p({ discountType: 'firstBuyin', title: '첫 바인 7만', discountWon: 70_000 }),
+      p({ discountType: 'firstVisit', title: '첫 방문 5만 할인', discountWon: 50_000 }),
+      p({ discountType: 'rebuy', title: '리바인 3만 할인', discountWon: 30_000 }),
+      p({ discountType: 'advance', title: '사전예약 2만 할인', discountWon: 20_000 }),
+    ]);
+    expect(r.discounts.map((d) => d.label)).toEqual(['1레벨', '첫 바인', '첫 방문', '리바인', '사전예약']);
+    expect(r.added).toBe(5);
+  });
+
+  it("'직접 입력' 유형은 라벨을 만들지 않아 종전 폴백(내용 → 배지)을 그대로 탄다", () => {
+    const r = discountsFromPromotions([
+      p({ discountType: 'custom', badge: '할인', title: '할인 이벤트', discountWon: 50_000 }),
+      p({ discountType: 'custom', badge: 'NEW', title: '', discountWon: 30_000 }),
+    ]);
+    expect(r.discounts.map((d) => d.label)).toEqual(['할인 이벤트', 'NEW']);
+  });
+
   it('같은 라벨·금액은 중복으로 건너뛴다(두 번 눌러도 안 늘어난다)', () => {
     const promos = [p({ title: '1레벨', discountWon: 50_000, level: 1 })];
     const once = discountsFromPromotions(promos, []);
