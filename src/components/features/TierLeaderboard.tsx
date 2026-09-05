@@ -56,13 +56,13 @@ const BOARD_LABEL: Record<Board, string> = {
   league: '주간 리그', badges: '업적', missions: '미션', hall: '명예의 전당',
 };
 const BOARD_DESC: Record<Board, string> = {
-  domestic: '대회(토너먼트) 입상만 인정. 해외 대회도 포함하며, 운영자가 승인한 건에 한해 100만원(10T)당 1점으로 합산합니다. 일반 펍 정기 게임은 포함되지 않습니다.',
-  verify: '대회 입상 증빙 2장(머니인·신분증)을 올려 운영자 승인을 받으면 국내 순위에 합산됩니다. 대회만 인정되며(일반 펍 제외) 100만원(10T)당 1점입니다.',
+  domestic: '대회(토너먼트) 입상만 인정. 해외 대회도 포함하며, 운영자가 승인한 건에 한해 100만원(100T)당 1점으로 합산합니다. 일반 펍 정기 게임은 포함되지 않습니다.',
+  verify: '대회 입상 증빙 2장(머니인·신분증)을 올려 운영자 승인을 받으면 국내 순위에 합산됩니다. 대회만 인정되며(일반 펍 제외) 100만원(100T)당 1점입니다.',
   shop: '모으는 마크는 활동점수 도달로 영구 해금(차감 없음)이고, 나머지(꾸미기 마크·프레임·닉네임 색·시즌 뱃지·외치기·응원·끌올)는 사용 가능 점수로 삽니다. 소장한 것은 영구히 남고, 무엇을 사도 누적 점수(등급 기준)는 줄지 않습니다.',
   activity: '접속·글쓰기·댓글 활동 점수. 등급(2·3~AA)과 연동. 아래 주간 미션을 달성하면 점수를 바로 받아요.',
-  moneyin: '전국 매장 머니인 점수. 100만원(10T)당 1점으로 합산합니다(임계 미만은 점수 없음).',
+  moneyin: '전국 매장 머니인 점수. 100만원(100T)당 1점으로 합산합니다(임계 미만은 점수 없음).',
   prize: '전국 매장 프라이즈 점수 합산(금전적 가치 없음).',
-  league: '이번 주 활약(체크인 ×3 + 머니인 점수). 머니인은 100만원(10T)당 1점. 월요일마다 새로 시작!',
+  league: '이번 주 활약(체크인 ×3 + 머니인 점수). 머니인은 100만원(100T)당 1점. 월요일마다 새로 시작!',
   badges: '조건을 달성하면 자동으로 열리는 업적 뱃지. 모아서 프로필을 채우세요.',
   missions: '이번 주 미션. 달성하면 활동점수 보상을 바로 받아요. 월요일 리셋.',
   hall: '지난달 가장 빛난 플레이어 TOP3. 운영자가 직접 선정하며, 선정이 없는 달은 입상 기록으로 자동 집계됩니다.',
@@ -910,7 +910,7 @@ export default function TierLeaderboard() {
                   onClick={submitVerify}
                   className="btn-primary w-full disabled:opacity-50">{vBusy ? '제출 중…' : '인증 요청'}</button>
                 <p className="text-2xs leading-relaxed text-ink-muted">
-                  운영자가 <b className="text-ink-secondary">대회 입상으로 승인한 건</b>만 국내 순위에 합산되며, <b className="text-ink-secondary">100만원(10T)당 1점</b>입니다(임계 미만은 점수 없음). 대회 여부는 증빙을 보고 운영자가 최종 판정합니다. <b className="text-ink-secondary">신분증 이미지는 승인·거절 즉시 삭제</b>되며 다른 용도로 사용되지 않습니다. AI 생성·조작 이미지는 반려됩니다.
+                  운영자가 <b className="text-ink-secondary">대회 입상으로 승인한 건</b>만 국내 순위에 합산되며, <b className="text-ink-secondary">100만원(100T)당 1점</b>입니다(임계 미만은 점수 없음). 대회 여부는 증빙을 보고 운영자가 최종 판정합니다. <b className="text-ink-secondary">신분증 이미지는 승인·거절 즉시 삭제</b>되며 다른 용도로 사용되지 않습니다. AI 생성·조작 이미지는 반려됩니다.
                 </p>
               </div>
               {myVerifs && myVerifs.length > 0 && (
@@ -1396,7 +1396,7 @@ export default function TierLeaderboard() {
           ) : globalRows.length === 0 ? (
             <EmptyState
               title="아직 집계된 매장 순위가 없어요"
-              hint="매장이 대회 순위를 올리면 100만원(10T)당 1점으로 이 표에 합산됩니다"
+              hint="매장이 대회 순위를 올리면 100만원(100T)당 1점으로 이 표에 합산됩니다"
               icon={<Icon name="chart" />}
             />
           ) : (

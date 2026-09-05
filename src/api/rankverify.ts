@@ -22,7 +22,7 @@ export const EVENT_KIND_LABEL: Record<RankEventKind, string> = {
 /** 신규 신청·승인이 가질 수 있는 유일한 구분(오너 #11). 서버 RLS·CHECK 와 같은 값이다. */
 export const VERIFIABLE_EVENT_KIND: RankEventKind = 'official';
 
-/** 국내 순위 인정 임계 — 100만원(10T)당 1점. 계산 자체는 서버(moneyin_points)에만 있다. */
+/** 국내 순위 인정 임계 — 100만원(100T)당 1점. 계산 자체는 서버(moneyin_points)에만 있다. */
 export const MONEYIN_UNIT_WON = 1_000_000;
 
 export interface RankVerification {

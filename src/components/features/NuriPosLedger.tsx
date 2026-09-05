@@ -972,7 +972,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
                   {r.voucherId == null && (
                     <button type="button" onClick={() => setPayPick(payPick === r.id ? null : r.id)} title="승인 + 바인 1건 기록(결제수단 선택)" className={['shrink-0 inline-flex h-10 items-center rounded-input px-2.5 text-2xs font-bold', payPick === r.id ? 'bg-emerald-600 text-ink-inverse' : 'bg-emerald-500/90 text-ink-inverse hover:bg-emerald-500', 'gap-0.5'].join(' ')}>✓+<Icon name="banknote" size={13} className="shrink-0" /></button>
                   )}
-                  <button type="button" onClick={() => approveReq(r)} title={r.voucherId ? '승인(티켓 1장 자동 기록)' : '승인만(명단 추가)'} className="shrink-0 inline-flex h-10 items-center rounded-input border border-emerald-500/50 px-3 text-2xs font-bold text-emerald-300 hover:bg-emerald-500/10">{r.voucherId ? '✓ 승인·티켓' : '승인'}</button>
+                  <button type="button" onClick={() => approveReq(r)} title={r.voucherId ? '승인(이용권 1장 → 티켓 바인 자동 기록)' : '승인만(명단 추가)'} className="shrink-0 inline-flex h-10 items-center rounded-input border border-emerald-500/50 px-3 text-2xs font-bold text-emerald-300 hover:bg-emerald-500/10">{r.voucherId ? '✓ 승인·티켓' : '승인'}</button>
                   <button type="button" onClick={() => setRejectFor(rejectFor === r.id ? null : r.id)} aria-label="거절" className={['shrink-0 inline-flex h-10 min-w-[2.5rem] items-center justify-center rounded-input border px-2.5 text-2xs font-bold', rejectFor === r.id ? 'border-danger/50 bg-danger/10 text-danger-light' : 'border-border-default text-ink-muted hover:text-danger-light hover:border-danger/40'].join(' ')}>✕</button>
                 </div>
                 {payPick === r.id && (
@@ -1328,7 +1328,8 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
             <Metric label={exKeys.size > 0 ? '총 엔트리(제외 적용)' : '총 엔트리'}
               value={stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} />
             {/* 티켓은 '장'이 아니라 **돈**으로도 보인다 — 1장 = 단가. 정산 대차의 한 줄이다. */}
-            <Metric label={`티켓 ${stats.ticket.toLocaleString(undefined, { maximumFractionDigits: 1 })}T`} value={`${wonToMan(stats.tender.ticket)}만`} />
+            {/* 1T = 1만원이라 'NT' 와 'X만' 은 같은 수 — 한 번만 적는다. 미수 티켓은 아래 줄이 따로 보여준다. */}
+            <Metric label="티켓" value={`${stats.ticket.toLocaleString(undefined, { maximumFractionDigits: 1 })}T`} />
             <Metric label="완납 매출" value={`${wonToMan(stats.revenue)}만`} tone="emerald" />
             <Metric label="미수금" value={`${wonToMan(stats.unpaid)}만`} tone="danger" />
           </div>
@@ -2400,8 +2401,8 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
   const [transfer, setTransfer] = useState<number>(init?.transferAmount ?? 0);
   const [tkt, setTkt]           = useState<number>(init?.ticketCount ?? 0);
   const [unpaidAmt, setUnpaidAmt] = useState<number>(init?.unpaidAmount ?? 0);
-  // ⚠ 티켓을 빼면 화면이 저장값과 다른 말을 한다 — 카드 4만 + 티켓 1장을 넣어도 '합계 4만원'이라
-  //   적어 놓고 저장은 14만 상당(entry 1.4)으로 한다. 티켓만 1장이면 '합계 0만원'인데 저장은 된다
+  // ⚠ 티켓을 빼면 화면이 저장값과 다른 말을 한다 — 카드 4만 + 6T 를 넣어도 '합계 4만원'이라
+  //   적어 놓고 저장은 10만(entry 1.0)으로 한다. 티켓만 10T 면 '합계 0만원'인데 저장은 된다
   //   (바로 아래 canSaveSplit 이 tkt>0 만으로도 허용한다 — 합계가 0인데 저장되는 모순).
   //   buyinFinance 분납 분기(ledger.ts ticketWon)와 같은 식으로 단가 환산해 맞춘다.
   const splitTotal = cash + card + transfer + unpaidAmt + tkt * TICKET_WON;
@@ -2550,7 +2551,8 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
                           : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'].join(' ')}>
                       <span className="block leading-tight">{m.label} {unpaidMode ? '미수' : '완납'}</span>
                       <span className="block text-2xs font-semibold opacity-70 tabular-nums">
-                        {due === null ? '티켓 1장' : `${wonToMan(due)}만`}{discIdx > 0 ? ' ·할인' : ''}
+                        {/* 티켓은 자리 1개 = (단가−할인)/1만 T — 10만 게임 10T, 5만 할인이면 5T */}
+                        {due === null ? `${Math.max(0, session.buyinAmount - discWon) / WON_PER_MAN}T` : `${wonToMan(due)}만`}{discIdx > 0 ? ' ·할인' : ''}
                       </span>
                     </button>
                   );
@@ -2691,7 +2693,7 @@ function CloseModal({ stats, unpaidPlayers, exNote, onClose, onConfirm }: {
               정가 총액 − 할인 = 순 바인액 = 현금 + 카드 + 이체 + 티켓 + 가게지원 + 미수
             예전엔 티켓·지원이 '장·건'으로만 있고 바인 총액 자체가 없어서,
             "티켓 3장이 돈으로 얼마인지", "할인이 어디서 얼마 빠졌는지"가 보이지 않았다.
-            티켓 1장 = 단가(할인 없을 때 10만)로 여기 **돈으로** 선다. */}
+            티켓은 T(1T=1만원) — 10만 자리를 티켓으로 내면 10T = 10만원으로 여기 **돈으로** 선다. */}
         <div className="rounded-input border border-border-default bg-surface-low/60 p-2.5 text-xs">
           <p className="mb-1.5 flex items-center gap-1 text-2xs font-bold text-ink-secondary">
             <Icon name="notebook" size={12} className="shrink-0" />정산 대차

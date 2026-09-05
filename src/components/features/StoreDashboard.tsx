@@ -246,7 +246,9 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
     (a, b) => {
       if (!session) return a;
       const f = buyinFinance(b, session);
-      a.paid += f.paid; a.unpaid += f.unpaid; a.entry += f.entry; a.ticket += f.ticketPaid;
+      // 회수 '장' = 티켓을 쓴 바인 **건수**(발행 N장과 같은 척도). ticketPaid 는 이제 T(1만원) 단위라
+      // 그대로 더하면 '발행 2장 / 회수 20장' 처럼 단위가 갈린다(2026-09-05 감사).
+      a.paid += f.paid; a.unpaid += f.unpaid; a.entry += f.entry; a.ticket += f.ticketPaid > 0 ? 1 : 0;
       return a;
     },
     { paid: 0, unpaid: 0, entry: 0, ticket: 0 },
@@ -419,7 +421,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
     if (!days.includes(b.sessionDate)) continue;
     // 분납 티켓도 buyinFinance가 ticketPaid에 포함해 반환한다(과거엔 대시보드만 누락)
     const s = sessByGame.get(`${b.sessionDate}#${b.gameSeq}`);
-    if (s) weekTicket += buyinFinance(b, s).ticketPaid;
+    if (s) weekTicket += buyinFinance(b, s).ticketPaid > 0 ? 1 : 0; // 건수(발행 장수와 같은 척도)
   }
   // 매장이용권 발행/시상(세션 입력값) — 7일 / 오늘
   let weekVoucher = 0;
@@ -1144,7 +1146,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
                 <Stat label="7일 회수" value={`${weekTicket}`} unit="장" />
                 <Stat label="오늘 회수" value={`${fin.ticket}`} unit="장" />
               </div>
-              <p className="mt-2 t-desc break-keep text-ink-muted">발행=장부에서 입력한 발급/시상 · 회수=티켓으로 바인한 합계.</p>
+              <p className="mt-2 t-desc break-keep text-ink-muted">발행=장부에서 입력한 발급/시상 · 회수=티켓으로 바인한 건수(금액은 장부 정산 대차표에서 T 로).</p>
             </>
           )}
         </DashCard>

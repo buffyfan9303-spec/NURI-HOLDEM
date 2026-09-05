@@ -423,7 +423,7 @@ export async function getVenuePlayerCounts(venueId: string): Promise<PlayerCount
 /**
  * 전 매장 통합 랭킹(커뮤니티 랭킹) — 닉네임별 머니인 점수·횟수·프라이즈 점수.
  *
- * moneyinPoints 가 머니인 보드의 정렬 기준이다(오너 #6): 100만원(10T)당 1점.
+ * moneyinPoints 가 머니인 보드의 정렬 기준이다(오너 #6): 100만원(100T)당 1점.
  *   계산은 서버 `public.moneyin_points()` 한 곳에만 있다 — 여기서 재계산하면 규칙이 둘로 갈린다.
  * moneyinCount(입상 횟수)는 없애지 않고 보조 정보로 계속 내려준다.
  */
