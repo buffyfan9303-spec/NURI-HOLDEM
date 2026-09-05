@@ -1261,11 +1261,14 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
                       <div className="min-w-0">
                         <p className="flex items-center gap-1 truncate text-xs font-semibold text-ink-primary">
                           <span className="truncate">{r.realName ? `${r.realName}(${r.nickname ?? '-'})` : (r.nickname ?? '비회원')}</span>
-                          {/* 예약→방문 전환 표시 — 당일 체크인 있으면 ✓, 종료 후에도 없으면 노쇼 */}
+                          {/* 예약→방문 전환 표시. 종료 후 체크인 기록이 없으면 '방문 확인 안 됨' —
+                              **'노쇼' 로 단정하지 않는다**(오너 결정 2026-09-06): 체크인을 운영하지 않는 매장에서는
+                              실제로 온 손님까지 전원 노쇼로 보였다. 우리가 아는 것은 '기록이 없다'까지다. */}
                           {r.visited
                             ? <span className="shrink-0 rounded-badge bg-emerald-500/15 px-1 py-0.5 text-2xs font-bold leading-none text-emerald-400">방문 완료</span>
                             : ended
-                              ? <span className="shrink-0 rounded-badge border border-border-default bg-surface-high px-1 py-0.5 text-2xs font-bold leading-none text-ink-muted">노쇼</span>
+                              ? <span title="이 대회 당일 이 매장의 체크인 기록이 없습니다. 체크인(QR)을 운영하지 않는 날이면 방문 여부를 알 수 없습니다."
+                                  className="shrink-0 rounded-badge border border-border-default bg-surface-high px-1 py-0.5 text-2xs font-bold leading-none text-ink-muted">방문 확인 안 됨</span>
                               : null}
                         </p>
                         <p className="truncate text-2xs text-ink-muted">예약명: {r.displayName}</p>

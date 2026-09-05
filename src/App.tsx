@@ -90,7 +90,6 @@ import { bumpScheduleView,
 import { getPostById,
   getVenues, getComments, getPosts, addComment, addPost, togglePostLike, deletePost, subscribePosts, subscribeComments,
   updateVenueDescription, updateVenueImage, updateVenueImages, deleteComment, logActivity,
-  getMyFollowedVenueIds,
 } from './api/community';
 import { getListings, getNotices, createNotice, updateNotice, deleteNotice, createListing, deleteListing } from './api/marketplace';
 import { enablePush, isPushSubscribed, pushSupported } from './api/push';
@@ -1020,8 +1019,6 @@ export default function App() {
     bumpScheduleView(sid).catch(() => {});
   }, [openSchedule?.id]);
   const [displayTarget, setDisplayTarget] = useState<{ venueId: string; gameSeq: number } | null>(null); // 관전/대형 디스플레이
-  const [followedIds, setFollowedIds] = useState<Set<string>>(new Set()); // 팔로우한 매장 id
-  const [followedOnly, setFollowedOnly] = useState(false); // 일정탐색: 팔로우 매장 포스터만
   // 📍 가까운 순(Phase 14 보류 해제 — venues.lat/lng 신설): 위치 1회 요청, 거부 시 지역 필터 안내.
   const [nearSort, setNearSort] = useState(false);
   const [myPos, setMyPos] = useState<{ lat: number; lng: number } | null>(null);
@@ -1781,12 +1778,10 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabs, activeTab, authLoading]);
 
-  // 팔로우한 매장 id 로드(로그인 시)
-  useEffect(() => {
-    if (!user) { setFollowedIds(new Set()); setFollowedOnly(false); return; }
-    getMyFollowedVenueIds().then((ids) => setFollowedIds(new Set(ids))).catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  // ⚠ '팔로우 매장만' 필터가 2026-08-27(f2e1d0b) 에 화면에서 빠진 뒤로, App 이 들고 있던
+  //   팔로우 목록(followedIds)은 소비자가 0 이었다 — 로그인할 때마다 쓰지 않는 조회를 한 번 더 하고 있었다.
+  //   오너 결정(2026-09-06)으로 필터를 걷어내면서 이 로드도 함께 제거한다.
+  //   매장 페이지의 팔로우 버튼은 자기 상태를 스스로 관리한다(src/lib/venueFollow.ts).
 
   const visibleSchedules = useMemo(() => {
     const list = schedules.filter((s) => s.approved);
@@ -1813,8 +1808,7 @@ export default function App() {
       const matchGr = !searchState.grade || s.grade === searchState.grade; // 등급 축(Phase 14)
       // 예산 축(UX-2) — 바이인 상한(원). 금액 미입력(0)은 통과(무료·미정 대회를 숨기지 않는다)
       const matchB = !searchState.budget || (s.buyIn?.amount ?? 0) <= searchState.budget;
-      const matchFollow = !followedOnly || (!!s.venueId && followedIds.has(s.venueId));
-      return matchQ && matchD && matchR && matchF && matchG && matchC && matchGr && matchB && matchFollow;
+      return matchQ && matchD && matchR && matchF && matchG && matchC && matchGr && matchB;
     })
       // 정렬이 아예 없어서 '업주가 정한 진열 순서'로 나왔다 — 손님은 '지금 갈 수 있는 게 뭐지'를
       // 시간순으로 훑을 수가 없었다. 1차 키는 날짜+시각, 부스트는 동시각 tie-break(scheduleSort.ts).
@@ -1830,7 +1824,7 @@ export default function App() {
         }
         return compareByStartThenBoost(a, b);
       });
-  }, [schedules, searchState, followedOnly, followedIds, nearSort, myPos, venueById]);
+  }, [schedules, searchState, nearSort, myPos, venueById]);
   // 날짜 슬라이더 점 표시용 — 승인된 대회가 있는 날짜 집합(헛탭 방지)
   const eventDates = useMemo(() => new Set(schedules.filter((sc) => sc.approved).map((sc) => sc.date)), [schedules]);
   // 📍 가까운 순일 때 카드에 실제 거리를 보여준다 — 정렬만 하고 숫자를 감추면 체감·검증 불가
@@ -2916,7 +2910,7 @@ export default function App() {
                 ) : schedulesError && schedules.length === 0 ? (
                   <LoadErrorCard error={schedulesError} what="대회 목록"
                     onRetry={() => { setSchedulesLoaded(false); reloadSchedules(); }} />
-                ) : visibleSchedules.length === 0 && !hasActiveSearchFilter && !followedOnly ? (
+                ) : visibleSchedules.length === 0 && !hasActiveSearchFilter ? (
                   // P0-2(오너 진단): 0건 빈 일러스트가 화면 중앙을 차지하던 것 → 슬림 안내 1줄 +
                   // '지금 진행 중' 콘텐츠 승격. 아래 지난 대회·공지가 그 자리로 올라온다.
                   <div className="space-y-2">
@@ -2949,9 +2943,7 @@ export default function App() {
                       searchState.competitionOnly && '대회',
                       searchState.budget != null && `예산 ${searchState.budget / 10000}만↓`,
                     ].filter(Boolean).join(' · ')}
-                    followedOnly={followedOnly}
                     onClearFilters={() => searchBarRef.current?.clearAll()}
-                    onClearFollow={() => setFollowedOnly(false)}
                     upcoming={schedules.filter((s) => s.approved && scheduleStatus(s.date, s.startTime) !== 'ended').length}
                   />
                 ) : viewMode === 'table' ? (
@@ -3646,11 +3638,9 @@ function ScheduleSkeletonGrid({ viewMode }: { viewMode: 'grid' | 'list' | 'table
 // 예전엔 '검색 결과가 없습니다' 한 줄로 끝나 다음에 누를 것이 하나도 없었다 —
 // 사용자는 자기가 잘못 검색한 줄 알거나 '대회가 없는 서비스'로 오해하고 나간다.
 // 그래서 ① 왜 비었는지(필터 때문인지 진짜 없는 건지)를 구분해 말하고 ② 반드시 다음 행동을 하나 준다.
-function EmptyState({ filtered, followedOnly, onClearFilters, onClearFollow, upcoming, filterSummary }: {
+function EmptyState({ filtered, onClearFilters, upcoming, filterSummary }: {
   filtered: boolean;          // 검색어·날짜·지역 등 조건이 걸려 있는가
-  followedOnly: boolean;
   onClearFilters: () => void;
-  onClearFollow: () => void;
   upcoming: number;           // 조건을 풀면 보일 예정 대회 수
   /** 현재 걸린 조건 요약 — '무엇 때문에 0건인지'를 보여줘야 사용자가 하나만 풀 수 있다 */
   filterSummary?: string;
@@ -3664,12 +3654,7 @@ function EmptyState({ filtered, followedOnly, onClearFilters, onClearFollow, upc
         <line x1="16" y1="22" x2="28" y2="22" />
         <line x1="22" y1="16" x2="22" y2="28" />
       </svg>
-      {followedOnly ? (
-        <>
-          <p className="text-sm">팔로우한 매장의 예정 대회가 없어요</p>
-          <button type="button" onClick={onClearFollow} className="btn-primary px-4 py-2 text-xs">전체 매장 보기</button>
-        </>
-      ) : filtered ? (
+      {filtered ? (
         <>
           <p className="text-sm">조건에 맞는 대회가 없어요</p>
           {filterSummary && <p className="max-w-xs text-center text-2xs text-ink-muted">걸린 조건: <b className="text-ink-secondary">{filterSummary}</b>검색바에서 하나만 풀어도 달라져요</p>}
