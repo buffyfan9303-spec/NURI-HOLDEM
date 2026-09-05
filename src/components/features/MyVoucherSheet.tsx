@@ -32,7 +32,7 @@ export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet }:
   /** 내 정보로 — 본인인증(보안 탭)·프로필 설정처럼 시트 밖에서 해야 하는 일의 출구 */
   onOpenWallet: () => void;
 }) {
-  const { user } = useAuth();
+  const { user, refreshProfile } = useAuth();
   const toast = useToast();
   const [scanOpen, setScanOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -43,8 +43,10 @@ export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet }:
     if (busy) return;
     setBusy(true);
     try {
-      const name = await checkIn(venueId);
-      const streak = await getMyCheckinStreak().catch(() => 0);
+      const { name, streak: served } = await checkIn(venueId);
+      const streak = served ?? await getMyCheckinStreak().catch(() => 0);
+      // 프로필 점수·랭킹 내 순위가 재로그인 없이 따라오도록
+      await refreshProfile().catch(() => {});
       toast.show(`${name || '매장'} 출석 완료${streak >= 2 ? ` · ${streak}일 연속` : ''}`, 'success');
       onClose();
       onVenue?.(venueId);

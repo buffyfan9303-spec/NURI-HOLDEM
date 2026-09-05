@@ -1033,18 +1033,20 @@ export async function venueTodayGames(venueId: string): Promise<{ gameSeq: numbe
   return (data ?? []).map((r: any) => ({ gameSeq: r.game_seq, title: r.title }));
 }
 export interface MyBuyinRequest { id: string; venueId: string; venueName: string; status: 'pending' | 'approved' | 'rejected'; requestedGameSeq: number | null; gameSeq: number | null; rejectReason: string | null; }
-/** 손님: 오늘 내가 보낸 바인 요청(매장명·상태) — 홈 배너용(RLS 본인 select). */
+/** get_my_buyin_requests_current 반환 행 → 화면 모델. venue_name 은 매장이 RLS 밖(승인 취소)이면 null. */
+export function toMyBuyinRequest(r: { id: string; venue_id: string; status: MyBuyinRequest['status']; requested_game_seq?: number | null; game_seq?: number | null; resolve_note?: string | null; venue_name?: string | null }): MyBuyinRequest {
+  return { id: r.id, venueId: r.venue_id, venueName: r.venue_name ?? '매장', status: r.status, requestedGameSeq: r.requested_game_seq ?? null, gameSeq: r.game_seq ?? null, rejectReason: r.resolve_note ?? null };
+}
+/** 손님: 지금 진행 중인 장부(영업일)에 내가 보낸 바인 요청(매장명·상태) — 홈 배너·라이브 '내 토너'용.
+ *  날짜 규칙은 서버(20260905j)가 정한다: 어제 장부가 미마감이면 어제 행도 보이고, 마감되면 사라진다.
+ *  로컬 '오늘' .eq 는 자정 넘긴 요청을 놓쳤고, [오늘, 어제] .in 은 끝난 요청을 종일 보여준다 — 둘 다 금지. */
 export async function getMyBuyinRequestsToday(): Promise<MyBuyinRequest[]> {
   if (IS_MOCK) return [];
   const u = await currentUser();
   if (!u) return [];
-  const today = new Date().toLocaleDateString('en-CA');
-  const { data, error } = await supabase.from('ledger_buyin_requests')
-    .select('id, venue_id, status, requested_game_seq, game_seq, resolve_note, venues(name)')
-    .eq('user_id', u.id).eq('session_date', today).order('created_at', { ascending: false });
+  const { data, error } = await supabase.rpc('get_my_buyin_requests_current');
   if (error) return [];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((r: any) => ({ id: r.id, venueId: r.venue_id, venueName: r.venues?.name ?? '매장', status: r.status, requestedGameSeq: r.requested_game_seq ?? null, gameSeq: r.game_seq ?? null, rejectReason: r.resolve_note ?? null }));
+  return (data ?? []).map(toMyBuyinRequest);
 }
 /** 운영자: 그날 대기중(pending) 바인 요청 목록. */
 export async function getPendingBuyinRequests(venueId: string, date: string): Promise<BuyinRequest[]> {

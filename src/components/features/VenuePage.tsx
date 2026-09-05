@@ -94,7 +94,7 @@ export default function VenuePage({
   onSelectSchedule, onOpenWallet,
 }: VenuePageProps) {
   const [tab, setTabState] = useState<Tab>('about');
-  const { user, isApprovedOwner } = useAuth();
+  const { user, isApprovedOwner, refreshProfile } = useAuth();
   const toast = useToast();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   // 매장 별점(방문 후기 평균) — 매장명 옆 ⭐
@@ -230,17 +230,22 @@ export default function VenuePage({
     if (checkinBusy) return;
     setCheckinBusy(true);
     try {
-      const name = await checkIn(venue!.id);
-      const streak = await getMyCheckinStreak().catch(() => 0);
+      const { name, points, streak: served } = await checkIn(venue!.id);
+      // 점수·연속일은 서버(check_in, 20260905k)가 단일 출처 — 같은 날 두 번째 체크인은 points 0 이라 '+N점' 을 붙이지 않는다.
+      // '이 매장 방문 N회' 는 +1 이 아니라 재조회(같은 날 2회 스캔은 날짜 distinct 와 어긋난다).
+      const [streak, visited] = await Promise.all([
+        served ?? getMyCheckinStreak().catch(() => 0),
+        myVisitedVenues().catch(() => []),
+      ]);
+      await refreshProfile().catch(() => {});
       // ICON-2(오너 지시 2026-08-29): 토스트는 문자열만 받으므로 아이콘을 넣을 수 없다 →
       // 이모지를 그냥 뺀다. 'success' 톤(초록)이 이미 축하 신호라 🎉 는 중복이었고,
       // 🔥 는 OS 마다 다른 그림으로 떠서 통제가 안 됐다(같은 이유로 본문 전역에서 제거).
       const fire = streak >= 2 ? ` · ${streak}일 연속` : '';
-      const bonus = streak > 0 && streak % 7 === 0 ? ' · 7일 연속 보너스 +10점!' : '';
       // 16-4 성공 = 다음 여정의 출발점: 오늘 대회가 있으면 바로 열어볼 수 있게.
-      toast.show(`${name || venue!.name} 체크인 완료! 출석 도장 +3점${fire}${bonus}`, 'success',
+      toast.show(`${name || venue!.name} 체크인 완료!${points > 0 ? ` 출석 도장 +${points}점` : ''}${fire}`, 'success',
         todayPosters.length > 0 ? { action: { label: '오늘 대회 보기', onClick: () => onSelectSchedule?.(todayPosters[0]) } } : undefined);
-      setMyAct((cur) => (cur ? { ...cur, streak } : { streak, visits: 0 }));
+      setMyAct({ streak, visits: visited.find((v) => v.venueId === venue!.id)?.visits ?? 0 });
     } catch (e) { toast.show(e instanceof Error ? e.message : '체크인 실패', 'error'); }
     finally { setCheckinBusy(false); }
   };

@@ -752,7 +752,7 @@ function PendingApprovalBanner() {
 
 // 데스크탑(lg+) 여부 — 일정탐색 2-pane 분기용
 export default function App() {
-  const { user, isAdmin, isOwner, loading: authLoading } = useAuth();
+  const { user, isAdmin, isOwner, loading: authLoading, refreshProfile } = useAuth();
   const toast = useToast();
 
   // UI 상태
@@ -1050,14 +1050,13 @@ export default function App() {
     if (!cv) return;
     if (!user) { setAuthOpen(true); return; }
     checkIn(cv)
-      .then(async (name) => {
-        const streak = await getMyCheckinStreak().catch(() => 0);
-        const bonus = streak > 0 && streak % 7 === 0 ? ` · 7일 연속 보너스 +10점!` : '';
+      .then(async ({ name, points, streak: served }) => {
+        // 점수·연속일은 서버(check_in, 20260905k)가 단일 출처 — 같은 날 두 번째 체크인은 points 0 이라 '+N점' 을 붙이지 않는다.
+        const streak = served ?? await getMyCheckinStreak().catch(() => 0);
+        // 프로필 점수·랭킹 내 순위·레벨업 축하가 재로그인 없이 따라오도록
+        await refreshProfile().catch(() => {});
         const fire = streak >= 2 ? ` · ${streak}일 연속` : '';
-        // 🎁 오픈 이벤트(~2026-08-03): 출석 도장 2배 — 서버(check_in)와 동일한 KST 날짜 게이트
-        const kstToday = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
-        const eventOn = kstToday >= '2026-07-20' && kstToday <= '2026-08-03';
-        toast.show(`${name || '매장'} 체크인 완료! 출석 도장 +${eventOn ? '6점 (오픈 이벤트 2배!)' : '3점'}${fire}${bonus}`, 'success');
+        toast.show(`${name || '매장'} 체크인 완료!${points > 0 ? ` 출석 도장 +${points}점` : ''}${fire}`, 'success');
         // 매장 QR 스캔은 '그 매장에 와 있다'는 뜻 — 홈이 아니라 그 매장 페이지(오늘 대회·내 활동)에 착지
         setOpenVenueId(cv);
       })
