@@ -193,6 +193,15 @@ export async function getPostById(postId: string): Promise<CommunityPost | null>
   return { ...rowToPost(res.data), liked: (liked.data ?? []).length > 0 };
 }
 
+/** 숨김(blinded) 글의 열람 차단 판정 — 서버 RLS(20260905m posts_select)와 같은 식: 작성자·운영자만 본다.
+ *  상세(PostDetailModal)가 딥링크·알림·피드 세 진입점을 이 한 곳으로 덮는다. */
+export function isPostHidden(
+  post: Pick<CommunityPost, 'blinded' | 'userId'>,
+  user: { id: string; role: UserRole } | null | undefined,
+): boolean {
+  return !!post.blinded && user?.role !== 'admin' && user?.id !== post.userId;
+}
+
 /** 운영자: 게시글 블라인드(신고 누적 숨김) 해제/설정 */
 export async function adminSetPostBlinded(postId: string, blinded: boolean): Promise<void> {
   if (IS_MOCK) return;
