@@ -21,13 +21,12 @@ function walk(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-/** 소스 전체에서 실제로 쓰인 스코프 이름을 모은다(goSubTab 호출 + 참조 구현 2곳의 인라인 조리법). */
+/** 소스 전체에서 실제로 쓰인 스코프 이름을 모은다(goSubTab 호출 — 2026-09-05 부터 인라인 조리법 0곳). */
 function usedScopes(): Set<string> {
   const scopes = new Set<string>();
   for (const f of walk(SRC)) {
     const t = readFileSync(f, 'utf8');
     for (const m of t.matchAll(/goSubTab\(\s*'([a-z0-9-]+)'/g)) scopes.add(m[1]);
-    for (const m of t.matchAll(/dataset\.vtScope = '([a-z0-9-]+)'/g)) scopes.add(m[1]);
   }
   return scopes;
 }

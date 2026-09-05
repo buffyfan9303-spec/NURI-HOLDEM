@@ -1,6 +1,5 @@
 import { memo, useState, useMemo, useCallback, useEffect, useLayoutEffect, useRef, Fragment, useTransition, startTransition, type ReactNode } from 'react';
-import { flushSync } from 'react-dom';
-import { withViewTransition } from '../../lib/viewTransition';
+import { goSubTab } from '../../lib/subTabTransition';
 import { promptLogin } from '../../lib/requireLogin';
 import { useSkeletonGate } from '../../lib/useSkeletonGate';
 import { getActiveCommunityAds, type CommunityAd } from '../../api/ads';
@@ -150,21 +149,10 @@ function CommunityTab({
     lastCommunitySection = s;
     setShownSec(s);
     if (visitedSecs.has(s)) {
-      const from = SEC_ORDER.indexOf(activeSecRef.current);
-      const to = SEC_ORDER.indexOf(s);
       // 서브섹션 전환 동안만 서브탭 바를 root 스냅샷에서 제외(자기 이름의 스냅샷 — index.css 마커 참조).
       // 상시 name 이면 메인 탭 전환(커뮤니티→홈)에서 old-only 스냅샷이 전환 내내 얼어붙는 잔상을 실측했다.
-      // 마커는 old 캡처(startViewTransition 호출 시점) 전에 켜져 있어야 하고, new 캡처가 끝난 뒤에 꺼야
-      // 하므로 전환 duration(--dur-panel .26s)보다 넉넉한 타이머로 해제한다(vtDir 마커와 같은 조리법).
-      document.documentElement.dataset.vtScope = 'community-sec';
-      withViewTransition(
-        () => { flushSync(() => setSectionState(s)); },
-        () => startSecTransition(() => setSectionState(s)),
-        to >= from ? 'forward' : 'back',
-      );
-      window.setTimeout(() => {
-        if (document.documentElement.dataset.vtScope === 'community-sec') delete document.documentElement.dataset.vtScope;
-      }, 450);
+      // 마커의 켜고 끄기는 goSubTab 이 전환 수명에 맞춰 한다(고정 타이머 금지 — 느린 기기에서 도중에 풀린다).
+      goSubTab('community-sec', SEC_ORDER, activeSecRef.current, s, () => setSectionState(s));
     } else {
       startSecTransition(() => setSectionState(s));
     }

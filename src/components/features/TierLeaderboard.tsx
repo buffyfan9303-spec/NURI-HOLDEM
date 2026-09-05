@@ -1,7 +1,6 @@
 // src/components/features/TierLeaderboard.tsx
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { flushSync } from 'react-dom';
-import { withViewTransition } from '../../lib/viewTransition';
+import { goSubTab } from '../../lib/subTabTransition';
 import {
   getDomesticRankings, myRankVerifications, submitRankVerification,
   EVENT_KIND_LABEL, type RankVerification, type DomesticRow,
@@ -184,19 +183,11 @@ export default function TierLeaderboard() {
    * 랭킹 세부 탭 전환 — 매장 서브탭(VenuePage)과 같은 방향성 푸시.
    * 탭바는 전환 중 자기 스냅샷 이름을 가져 제자리에 고정되고, 아래 본문만 밀린다.
    * (상시 name 을 주면 화면을 떠날 때 탭바 잔상이 얼어붙는다 — VenuePage 에서 실측된 함정.)
+   * 조리법은 goSubTab 하나 — 마커 수명 = 전환 수명. 고정 타이머는 느린 기기에서 전환 도중 풀려
+   * 탭바 위쪽(내 등급·헤더)이 blur 로 밀렸다 돌아왔다(오너 지적 2026-09-05, CPU×8 실측).
    */
   const goBoard = useCallback((next: Board) => {
-    if (next === board) return;                   // 같은 탭 재탭 — 무의미한 스냅샷 방지
-    const from = RANK_TABS.indexOf(board), to = RANK_TABS.indexOf(next);
-    document.documentElement.dataset.vtScope = 'rank-tab';
-    withViewTransition(
-      () => { flushSync(() => setBoard(next)); },
-      () => setBoard(next),                       // 미지원·모션축소 — 즉시 전환
-      to >= from ? 'forward' : 'back',
-    );
-    window.setTimeout(() => {
-      if (document.documentElement.dataset.vtScope === 'rank-tab') delete document.documentElement.dataset.vtScope;
-    }, 450);
+    goSubTab('rank-tab', RANK_TABS, board, next, () => setBoard(next));
   }, [board]);
   // 순위표 행의 닉네임 색 — rows 가 바뀔 때만 일괄 조회한다(행마다 부르지 않는다).
   const [rowNickTokens, setRowNickTokens] = useState<Record<string, string>>({});

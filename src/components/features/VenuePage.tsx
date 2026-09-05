@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback, useSyncExternalStore, type ReactNode } from 'react';
-import { flushSync } from 'react-dom';
-import { withViewTransition } from '../../lib/viewTransition';
+import { goSubTab } from '../../lib/subTabTransition';
 import { onColorInkClass } from '../../lib/color';
 import { Map, MapMarker, useKakaoLoader } from 'react-kakao-maps-sdk';
 import {
@@ -150,21 +149,11 @@ export default function VenuePage({
    *   ① 진열 순서로 forward/back 을 정해 밀리는 방향이 손가락 방향과 맞게 하고
    *   ② 전환 동안만 탭바에 자기 스냅샷 이름을 줘(vtScope) 본문만 크로스페이드되게 한다.
    *      상시 name 이면 페이지를 닫을 때 탭바 스냅샷이 얼어붙는 잔상이 생긴다(실측된 함정).
-   *   ③ 마커 해제는 전환 duration(--dur-panel)보다 넉넉히 뒤에서 — new 캡처가 끝난 뒤여야 한다.
+   *   ③ 마커 해제는 전환이 실제로 끝난 뒤(finished) — goSubTab/withViewTransition 이 맡는다.
+   *      고정 타이머는 느린 기기에서 전환보다 먼저 끝나 root 가 blur 로 밀렸다(2026-09-05 실측).
    */
   const setTab = useCallback((next: Tab) => {
-    if (next === tab) return;                       // 같은 탭 재탭 — 무의미한 스냅샷 방지
-    const from = orderedTabs.indexOf(tab);
-    const to = orderedTabs.indexOf(next);
-    document.documentElement.dataset.vtScope = 'venue-tab';
-    withViewTransition(
-      () => { flushSync(() => setTabState(next)); },
-      () => setTabState(next),                      // 미지원·모션축소 — 즉시 전환(기존 동작)
-      to >= from ? 'forward' : 'back',
-    );
-    window.setTimeout(() => {
-      if (document.documentElement.dataset.vtScope === 'venue-tab') delete document.documentElement.dataset.vtScope;
-    }, 450);
+    goSubTab('venue-tab', orderedTabs, tab, next, () => setTabState(next));
   }, [tab, orderedTabs]);
 
   // 배경 스크롤 잠금 (페이지가 열려있는 동안) — 뷰포트 스크롤러는 html이라 공용 유틸 사용

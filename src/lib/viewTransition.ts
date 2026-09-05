@@ -136,7 +136,17 @@ function ensureInputRescue() {
   window.addEventListener('click', onClickCapture, true);
 }
 
-export function withViewTransition(update: () => void, fallback?: () => void, dir?: VTDirection): void {
+/** 스코프 마커 세대 — 같은 스코프의 연타에서 이전 전환의 정리가 새 전환의 마커를 지우지 않게 한다. */
+let scopeSeq = 0;
+
+/**
+ * @param scope `html[data-vt-scope='…']` 마커. 전환 시작 전에 켜고 **전환이 실제로 끝날 때(finished)** 끈다.
+ *   ⚠ 예전엔 호출측이 고정 450ms 타이머로 껐다. 느린 기기에선 캡처+커밋+애니(.3s)가 450ms 를 넘겨
+ *   전환 **도중에** 마커가 풀렸고, 그 순간 root 정지 규칙이 사라져 root 에 vt-push-*(blur) 가 새로 걸렸다 —
+ *   '탭바 위쪽이 흐릿해졌다 돌아오는' 증상(2026-09-05 CPU×8 실측: 459ms 마커 삭제 → 487ms root vt-push-in-r).
+ *   마커의 수명은 타이머가 아니라 전환 자신이어야 한다.
+ */
+export function withViewTransition(update: () => void, fallback?: () => void, dir?: VTDirection, scope?: string): void {
   const d = document as VTDocument;
   // document.hidden: 숨긴 문서에서 startViewTransition 은 InvalidStateError 로 abort 되고,
   // 그 ready/finished 거부가 unhandledrejection 으로 새어 에러 수집망(Sentry)을 오염시킨다.
@@ -151,8 +161,14 @@ export function withViewTransition(update: () => void, fallback?: () => void, di
     // 속성은 남아 있어도 다음 호출이 덮으므로 정리 타이머가 필요 없다.
     if (dir) document.documentElement.dataset.vtDir = dir;
     else delete document.documentElement.dataset.vtDir;
+    const seq = ++scopeSeq;
+    if (scope) document.documentElement.dataset.vtScope = scope;
+    const clearScope = () => {
+      if (scope && seq === scopeSeq && document.documentElement.dataset.vtScope === scope) delete document.documentElement.dataset.vtScope;
+    };
     const t = d.startViewTransition.call(document, update);
-    if (t) {
+    if (!t) { clearScope(); return; }
+    {
       active = t;
       // 상한 — 애니메이션이 어떤 이유로든 안 끝나도 스냅샷이 화면에 눌러앉지 않게 한다.
       activeTimer = window.setTimeout(() => {
@@ -162,7 +178,8 @@ export function withViewTransition(update: () => void, fallback?: () => void, di
       // 전환 자체의 취소(연타로 다음 전환이 이번 것을 대체, 탭 백그라운드 전환 등)는 정상 동작 —
       // 거부를 소비해 unhandledrejection 소음을 차단한다(update 커밋은 어느 경우에도 실행됨).
       t.ready?.catch(() => {});
-      t.finished?.then(() => release(t), () => release(t));
+      // finished 는 skipTransition·연타 취소에서도 settle 된다 — 마커는 여기서만 걷는다.
+      t.finished?.then(() => { release(t); clearScope(); }, () => { release(t); clearScope(); });
       t.updateCallbackDone?.catch(() => {});
     }
   } else {

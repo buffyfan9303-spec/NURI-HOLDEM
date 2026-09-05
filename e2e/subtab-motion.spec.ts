@@ -162,3 +162,42 @@ test.describe('하위 탭 — 방향성 푸시가 실제로 돈다', () => {
     expectPanelPush(samples, 'notif-panel', 'notif-tabbar');
   });
 });
+
+// ── 스코프 마커 수명 = 전환 수명(2026-09-05 오너 지적: "랭킹 소메뉴를 옮기면 내 등급부터 맨 위까지 흐릿해졌다 돌아온다") ──
+// 빠른 PC 에선 재현되지 않고 CPU×8 에서만 난다: 마커가 고정 450ms 타이머로 풀리면 전환 **도중**에 root 정지
+// 규칙이 사라져 root 에 vt-push-*(blur) 가 새로 걸린다(수정 전 실측: 459ms 마커 삭제 → 487ms root vt-push-in-r).
+// 랭킹 허브는 비로그인으로도 보이므로 이 게이트는 자격 증명 없이 돈다.
+test.describe('하위 탭 — 느린 기기에서도 root 는 끝까지 정지', () => {
+  test('🔴 CPU ×8 랭킹 세부 탭: 마커가 전환 도중 풀리지 않는다', async ({ page }) => {
+    await stabilizeBackstack(page);
+    await page.goto('/');
+    const community = page.locator('nav').getByRole('button', { name: '커뮤니티', exact: true }).first();
+    await expect(community).toBeVisible({ timeout: 20_000 });
+    await dismissOverlays(page);
+    await community.click();
+    const tab = page.getByRole('button', { name: '랭킹', exact: true }).first();
+    await expect(tab).toBeVisible({ timeout: 15_000 });
+    await tab.click();
+    const bar = page.locator('[data-rank-tabbar]');
+    await expect(bar).toBeVisible({ timeout: 15_000 });
+    await page.waitForTimeout(900); // 섹션 전환(VT)과 초기 로드가 끝난 뒤에 잰다
+
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 8 });
+    try {
+      const samples = await probe(page, bar.getByRole('button', { name: /주간/ }).first());
+      const joined = samples.join('\n');
+      // root 가 한 프레임이라도 밀리면(blur) 실패 — 마커가 전환보다 먼저 풀렸다는 뜻.
+      expect(samples.filter((x) => /\(root\) :: vt-push-/.test(x)), `느린 기기에서 root 가 밀렸다(마커가 전환 도중 풀림)
+실측:
+${joined}`).toEqual([]);
+      // 마커가 풀리면 본문도 UA 기본 크로스페이드로 떨어진다 — 그것도 잡는다.
+      expect(samples.filter((x) => x.startsWith('::view-transition-new(rank-panel) :: -ua-')), `본문이 UA 크로스페이드로 떨어졌다
+실측:
+${joined}`).toEqual([]);
+      expectPanelPush(samples, 'rank-panel', 'rank-tabbar');
+    } finally {
+      await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+    }
+  });
+});

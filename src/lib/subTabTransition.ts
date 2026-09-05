@@ -12,12 +12,11 @@
 //      ⚠ 상시 name 을 주면 화면을 떠날 때 old-only 스냅샷이 전환 내내 얼어붙는 잔상이 된다
 //        (커뮤니티 서브탭에서 실측된 함정 — VenuePage 주석 참조).
 //   ③ 커밋은 flushSync — 스냅샷 뒤에서 동기적으로 끝나야 중간 상태가 화면에 새지 않는다.
-//   ④ 마커 해제는 전환 duration(--dur-panel .26s)보다 넉넉히 뒤 — new 캡처가 끝난 다음이어야 한다.
+//   ④ 마커 해제는 **전환이 실제로 끝난 뒤(finished)** — withViewTransition 이 맡는다.
+//      예전의 고정 450ms 타이머는 느린 기기에서 전환(캡처+커밋+.3s)보다 먼저 끝나 root 정지 규칙이
+//      도중에 풀렸다 → 탭바 위쪽(헤더·내 등급)이 blur 로 밀렸다 돌아오는 증상(2026-09-05 CPU×8 실측).
 import { flushSync } from 'react-dom';
 import { withViewTransition } from './viewTransition';
-
-/** 마커 해제 시점 — --dur-panel(.26s) + 캡처 여유. venue-tab·rank-tab 이 쓰던 값 그대로. */
-const CLEAR_MS = 450;
 
 /**
  * 하위 탭 하나를 방향성 푸시로 전환한다.
@@ -39,13 +38,10 @@ export function goSubTab<T extends string>(
   if (from === to) return;                       // 같은 탭 재탭 — 무의미한 스냅샷 방지
   const a = order.indexOf(from);
   const b = order.indexOf(to);
-  document.documentElement.dataset.vtScope = scope;
   withViewTransition(
     () => { flushSync(commit); },
     commit,                                      // 미지원·모션축소 — 즉시 전환(기존 동작 그대로)
     b >= a ? 'forward' : 'back',
+    scope,                                       // 마커 수명 = 전환 수명
   );
-  window.setTimeout(() => {
-    if (document.documentElement.dataset.vtScope === scope) delete document.documentElement.dataset.vtScope;
-  }, CLEAR_MS);
 }
