@@ -32,7 +32,7 @@ import {
   getVenueRankings, getVenueRankingTotals, subscribeRankings, rankDisplay, getVenueRealNameOptIns,
   getVenuePageConfig, getScoreEntries, getVenuePlayerCounts,
   boardLabel, boardDesc, boardUnit, isCustomBoard, customKeyOf, boardPeriodStart,
-  formatPrize,
+  DEFAULT_RANK_METRICS, RANK_METRIC_LABEL,
   type RankingEntry, type RankingTotal, type VenuePageConfig, type RankBoardId, type ScoreEntry, type PlayerCounts,
 } from '../../api/rankings';
 import { listVenueCheckins } from '../../api/checkins';
@@ -1058,7 +1058,11 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
   useEffect(() => { const e = rankPanelCache.get(venueId); if (e && metric) writeRankCache(venueId, { ...e, metric }); }, [metric, venueId]);
 
   // 업주가 고른 보드(1~2개). 미설정 시 기본 2종.
-  const metrics: RankBoardId[] = (cfg?.rankMetrics && cfg.rankMetrics.length > 0 ? cfg.rankMetrics : (['score', 'prize'] as RankBoardId[])).slice(0, 2);
+  // 'prize'(상금 합산) 보드는 2026-09-05 폐지 — 저장된 설정에 남아 있어도 걸러 낸다(page_config 데이터는 건드리지 않는다).
+  const metrics: RankBoardId[] = (() => {
+    const known = (cfg?.rankMetrics ?? []).filter((m) => isCustomBoard(m) || m in RANK_METRIC_LABEL);
+    return (known.length > 0 ? known : DEFAULT_RANK_METRICS).slice(0, 2);
+  })();
   const cur: RankBoardId = metric && metrics.includes(metric) ? metric : metrics[0];
 
   // 수동 포인트 합산(기본 매장 포인트 보드 — 커스텀 보드 항목 제외)
@@ -1088,21 +1092,21 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
         m.set(k, c);
       }
       return [...m.values()]
-        .map((x) => ({ nickname: x.name, realName: '', moneyPoints: 0, prizeMan: 0, appearances: 0, bestPosition: 0, value: x.value }))
+        .map((x) => ({ nickname: x.name, realName: '', moneyPoints: 0, appearances: 0, bestPosition: 0, value: x.value }))
         .filter((b) => b.value > 0)
         .sort((a, b) => b.value - a.value);
     }
     // 출석왕: QR 체크인 누적 — 체크인 기록이 1건이라도 있으면 그 기준(없으면 장부 방문 폴백)
     if (cur === 'visit_count' && checkinRows.length > 0) {
       return checkinRows
-        .map((p) => ({ nickname: p.name, realName: '', moneyPoints: 0, prizeMan: 0, appearances: 0, bestPosition: 0, value: p.count }))
+        .map((p) => ({ nickname: p.name, realName: '', moneyPoints: 0, appearances: 0, bestPosition: 0, value: p.count }))
         .filter((b) => b.value > 0)
         .sort((a, b) => b.value - a.value);
     }
     // 바인왕/출석왕(폴백): 장부 집계(전 플레이어) 기반 — 랭킹 등록 여부와 무관
     if (cur === 'buyin_count' || cur === 'visit_count') {
       return playerCounts
-        .map((p) => ({ nickname: p.name, realName: '', moneyPoints: 0, prizeMan: 0, appearances: 0, bestPosition: 0, value: cur === 'buyin_count' ? p.buyins : p.visits }))
+        .map((p) => ({ nickname: p.name, realName: '', moneyPoints: 0, appearances: 0, bestPosition: 0, value: cur === 'buyin_count' ? p.buyins : p.visits }))
         .filter((b) => b.value > 0)
         .sort((a, b) => b.value - a.value);
     }
@@ -1111,7 +1115,6 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
       const buyins = buyinCounts[k] ?? 0;
       const value =
         cur === 'score'         ? t.moneyPoints + (manualByName[k] ?? 0)
-        : cur === 'prize'         ? t.prizeMan
         : cur === 'moneyin_count' ? t.appearances
         : buyins >= 5 ? Math.round((t.appearances / buyins) * 100) : -1; // rate: 표본 5바인 미만 제외
       return { ...t, value };
@@ -1121,12 +1124,13 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
       for (const [k, pts] of Object.entries(manualByName)) {
         if (!base.some((b) => b.nickname.toLowerCase() === k)) {
           const src = manual.find((e) => e.name.trim().toLowerCase() === k);
-          base.push({ nickname: src?.name ?? k, realName: '', moneyPoints: 0, prizeMan: 0, appearances: 0, bestPosition: 0, value: pts });
+          base.push({ nickname: src?.name ?? k, realName: '', moneyPoints: 0, appearances: 0, bestPosition: 0, value: pts });
         }
       }
     }
     return base.filter((b) => b.value >= 0)
-      .sort((a, b) => (b.value - a.value) || (b.prizeMan - a.prizeMan) || (b.moneyPoints - a.moneyPoints));
+      // 동점은 비금전 규칙으로만 가른다(등수 점수 → 최고 등수 → 이름) — 상금 합산 동점결정은 2026-09-05 폐지.
+      .sort((a, b) => (b.value - a.value) || (b.moneyPoints - a.moneyPoints) || (a.bestPosition - b.bestPosition) || a.nickname.localeCompare(b.nickname));
   }, [totals, cur, manualByName, buyinCounts, manual, playerCounts, checkinRows, cfg]);
 
   if (loading) return <SkeletonList rows={6} rowClassName="h-14" />;
@@ -1221,7 +1225,7 @@ function VenueRankingPanel({ venueId }: { venueId: string }) {
                     const { main: rMain, sub: rSub } = rankDisplay(e, realNameOptIns);
                     return (
                       <span key={`${ev}-${e.position}`} className="text-2xs px-2 py-0.5 rounded-badge bg-surface-float text-ink-primary">
-                        {e.position}. {rMain}{rSub ? `(${rSub})` : ''}{e.prize ? ` · ${formatPrize(e.prize, cfg)}` : ''}
+                        {e.position}. {rMain}{rSub ? `(${rSub})` : ''}
                       </span>
                     );
                   })}

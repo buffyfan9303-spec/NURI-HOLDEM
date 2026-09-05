@@ -24,7 +24,7 @@ import {
 import { listGamePresets, saveGamePreset, type GamePreset } from '../../../api/presets';
 import { applyToClock, presetFromClockConfig } from '../../../lib/gameInherit';
 import PresetPicker from '../PresetPicker';
-import { saveVenueRankings, prizeUnitRisk, getVenueRankings } from '../../../api/rankings';
+import { saveVenueRankings, getVenueRankings } from '../../../api/rankings';
 import LoadErrorCard from '../../atoms/LoadErrorCard';
 import { msgOf } from '../../../lib/dbError';
 import Modal from '../../atoms/Modal';
@@ -454,8 +454,10 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
     }
   }, [playTones]);
 
-  // 토너 종료 → 입상 순위 자동 초안(장부 연동 시): cfg.prizes 자리수만큼 행 + 장부 참가자 자동완성 → saveVenueRankings
-  const [finishRows, setFinishRows] = useState<{ name: string; prize: string }[] | null>(null);
+  // 토너 종료 → 입상 순위 초안(장부 연동 시): 입상 자릿수만큼 빈 행(이름만) + 장부 참가자 자동완성 → saveVenueRankings.
+  // 상금은 넣지 않는다(2026-09-05 법적위험완화 v3) — 클락 프라이즈 표(cfg.prizes)는 클락 표시용일 뿐 순위로 흐르지 않는다.
+  const [finishRows, setFinishRows] = useState<{ name: string }[] | null>(null);
+  const seedFinishRows = (places: number) => Array.from({ length: places > 0 ? places : 3 }, () => ({ name: '' }));
   const [finishBusy, setFinishBusy] = useState(false);
   // END(조기 종료) 경로 — 실전 토너는 대부분 헤즈업 딜/우승 확정으로 블라인드가 남은 채 끝난다.
   // 예전엔 이 경로가 순위 입력을 통째로 건너뛰어 매장 순위·시즌·전적 데이터가 비었다.
@@ -463,35 +465,26 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
   const handleEnd = () => {
     if (canManage && state.sessionDate && !finishRows) {
       setEndAfterFinish(true);
-      setFinishRows(cfg.prizes.length
-        ? cfg.prizes.map((pz) => ({ name: '', prize: pz.amount >= 10000 ? String(Math.round(pz.amount / 10000)) : (pz.amount ? String(pz.amount) : '') }))
-        : [{ name: '', prize: '' }, { name: '', prize: '' }, { name: '', prize: '' }]);
+      setFinishRows(seedFinishRows(cfg.prizes.length));
       return; // 모달에서 '순위 저장 후 종료' 또는 '입력 없이 종료'를 고른다
     }
     onEnd();
   };
   const saveFinishRanks = async () => {
     if (!state.sessionDate || !finishRows) return;
-    const entries = finishRows.filter((r) => r.name.trim()).map((r) => ({ nickname: r.name.trim(), realName: '', prize: r.prize.trim() }));
+    const entries = finishRows.filter((r) => r.name.trim()).map((r) => ({ nickname: r.name.trim(), realName: '' }));
     if (!entries.length) { toast.show('최소 1명의 입상자를 입력하세요', 'error'); return; }
-    // 이 칸도 만원 단위다. cfg.prizes 자동 채움은 10,000원 미만 금액을 만원 값으로 그대로 넘기므로
-    // (`p.amount >= 10000 ? … : String(p.amount)`), 순위 입력 화면과 같은 기준으로 한 번 더 거른다.
-    const wrongUnit = entries.filter((e) => prizeUnitRisk(e.prize) === 'impossible');
-    if (wrongUnit.length > 0 && !window.confirm(
-      `상금이 원 단위로 입력된 것 같습니다 (${wrongUnit.map((e) => e.prize).join(', ')}).\n\n`
-      + '이 칸은 만원 단위입니다. 100만원이면 100.\n\n이대로 저장하면 매장·전국 프라이즈 순위가 크게 왜곡됩니다. 그래도 저장할까요?',
-    )) return;
     setFinishBusy(true);
     try {
       // 같은 (날짜, 이벤트)에 이미 저장된 순위가 있으면 통째 교체됨을 알린다 — 무음 대체 방지
       const evName = (cfg.title || '').trim();
       const prevRanks = await getVenueRankings(state.venueId, state.sessionDate).catch(() => ({ date: null, entries: [] }));
       const clash = prevRanks.entries.filter((pe) => (pe.eventName ?? '') === evName).length;
-      if (clash > 0 && !window.confirm(`'${evName || '메인'}' 이벤트에 이미 저장된 순위 ${clash}명이 있습니다.\n저장하면 기존 순위·점수 지급이 이 결과로 교체됩니다. 계속할까요?`)) {
+      if (clash > 0 && !window.confirm(`'${evName || '메인'}' 이벤트에 이미 저장된 순위 ${clash}명이 있습니다.\n저장하면 기존 순위가 이 결과로 교체됩니다(과거 상금 기록은 그대로 남습니다). 계속할까요?`)) {
         setFinishBusy(false); return;
       }
       await saveVenueRankings(state.venueId, state.sessionDate, entries, evName);
-      toast.show(`입상 ${entries.length}명 순위 저장 완료. 매장 순위·시즌·머니인킹에 반영됩니다`, 'success');
+      toast.show(`입상 ${entries.length}명 순위 저장 완료. 매장 순위·시즌에 반영됩니다`, 'success');
       setFinishRows(null);
       if (endAfterFinish) { setEndAfterFinish(false); onEnd(); } // END 경로였으면 이어서 종료(최종 확인은 onEnd 의 confirm)
     } catch (e) { toast.show(e instanceof Error ? e.message : '저장 실패', 'error'); }
@@ -512,9 +505,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
     if (cu.finished) {
       playChime('finish');
       if (canManage && state.sessionDate) {
-        setFinishRows(cfg.prizes.length
-          ? cfg.prizes.map((p) => ({ name: '', prize: p.amount >= 10000 ? String(Math.round(p.amount / 10000)) : (p.amount ? String(p.amount) : '') }))
-          : [{ name: '', prize: '' }, { name: '', prize: '' }, { name: '', prize: '' }]);
+        setFinishRows(seedFinishRows(cfg.prizes.length));
       }
       return;
     }
@@ -910,7 +901,7 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
       {finishRows && state.sessionDate && active && (
         <Modal open onClose={() => { setFinishRows(null); setEndAfterFinish(false); }} title="입상 순위 입력" maxWidth="md" variant="sheet">
           <div className="space-y-2 p-4">
-            <p className="text-2xs text-ink-muted">저장하면 매장 순위·시즌·머니인킹에 자동 반영 · 이름은 장부에서 자동완성 · 상금은 만원 단위.</p>
+            <p className="text-2xs text-ink-muted">저장하면 매장 순위·시즌에 자동 반영 · 이름은 장부에서 자동완성 · 등수만 기록합니다(상금 입력 없음).</p>
             <datalist id="clk-finish-players">
               {[...new Set(buyins.map((b) => b.playerName).filter(Boolean))].map((n) => <option key={n} value={n} />)}
             </datalist>
@@ -920,14 +911,10 @@ function ClockLive({ state, canManage, onChange, onOpenSettings, onEnd, active =
                 <input list="clk-finish-players" value={r.name}
                   onChange={(e) => setFinishRows((rs) => (rs ? rs.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)) : rs))}
                   placeholder="이름(닉네임)" className="input min-w-0 flex-1 text-sm" />
-                {/* 숫자(만원) 또는 "nT"(티켓 n장 — 오너 2026-09-05). 순위 입력 화면(VenueManageTab)과 같은 규칙. */}
-                <input value={r.prize} inputMode="text"
-                  onChange={(e) => setFinishRows((rs) => (rs ? rs.map((x, j) => (j === i ? { ...x, prize: e.target.value.replace(/[^\d.tT]/g, '').replace(/t/g, 'T') } : x)) : rs))}
-                  placeholder="상금(만·T)" title="만원 단위 · 티켓 상금은 10T, 20T (1T = 1만원)" className="input w-20 text-sm tabular-nums" />
               </div>
             ))}
             <div className="flex gap-2 pt-1">
-              <button type="button" onClick={() => setFinishRows((rs) => [...(rs ?? []), { name: '', prize: '' }])} className="btn-ghost shrink-0 text-2xs">+ 줄 추가</button>
+              <button type="button" onClick={() => setFinishRows((rs) => [...(rs ?? []), { name: '' }])} className="btn-ghost shrink-0 text-2xs">+ 줄 추가</button>
               <button type="button" disabled={finishBusy} onClick={saveFinishRanks} className="btn-primary flex-1 text-sm disabled:opacity-50">{finishBusy ? '저장 중…' : endAfterFinish ? '순위 저장 후 종료' : '순위 저장'}</button>
             </div>
             {endAfterFinish && (
@@ -1290,8 +1277,8 @@ function ClockSettings({ venueId, canManage, presets, sessions, initial, hasLive
           {cfg.prizes.map((p, i) => (
             <div key={i} className="flex items-center gap-1.5">
               <input value={p.place} onChange={(e) => setPrize(i, { place: e.target.value })} className="input w-20 text-sm shrink-0" />
-              {/* 단위 표시가 없어 '50'(만원)과 '500000'(원)이 뒤섞였고, 순위 초안이 만원 환산을
-                  amount>=10000 여부로 추측해 1/10,000로 기록되는 일이 있었다 → 단위를 명시한다. */}
+              {/* 단위 표시가 없어 '50'(만원)과 '500000'(원)이 뒤섞였다 → 단위를 명시한다.
+                  (이 표는 클락 화면 표시용이다 — 2026-09-05 부터 순위 저장으로 흐르지 않는다.) */}
               <div className="relative flex-1">
                 <input type="number" inputMode="numeric" value={p.amount || ''} onChange={(e) => setPrize(i, { amount: +e.target.value || 0 })}
                   placeholder="500000" className="input w-full text-sm tabular-nums pr-8" />

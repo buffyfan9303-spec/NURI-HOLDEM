@@ -20,7 +20,7 @@ import {
   FALLBACK_COSMETICS, type Cosmetic,
 } from '../../lib/cosmetics';
 import { drawProfileCard, downloadProfileCard, frameLabel, DEFAULT_FRAME } from '../../lib/profileCard';
-import { getGlobalRankingTotals, type GlobalRankingTotal } from '../../api/rankings';
+import { getGlobalRankingTotals, CAREER_PERIOD_LABEL, type GlobalRankingTotal, type CareerPeriod } from '../../api/rankings';
 import { onColorInkClass } from '../../lib/color';
 import { useToast } from '../atoms/Toast';
 import EmptyState from '../atoms/EmptyState';
@@ -34,7 +34,6 @@ import {
 } from '../../lib/shopMarks';
 import { getHallOfFame, type HallBoard } from '../../lib/hallOfFame';
 import {
-  getWeeklyLeague, leagueTierOf, LEAGUE_TIERS, type LeagueRow,
   MISSIONS, getActiveMissions, getMissionProgress, claimMission, type Mission, type MissionProgress,
   BADGES, getMyBadgeStats, type BadgeStats,
   getMyEquippedMark, setEquippedMark as saveEquippedMark,
@@ -46,22 +45,21 @@ const HALL_TONE = ['text-gold-300', 'text-slate-200', 'text-amber-600'] as const
 const PODIUM_TONE = ['text-slate-200', 'text-gold-300', 'text-amber-600'] as const; // 시상대 배치는 2·1·3위 순
 
 // 통합 랭킹 허브 — 활동/머니인/프라이즈 + 주간 리그·업적·미션·명예의 전당(충성도)
-type Board = 'activity' | 'moneyin' | 'prize' | 'league' | 'badges' | 'missions' | 'hall' | 'shop' | 'domestic' | 'verify';
+type Board = 'activity' | 'moneyin' | 'badges' | 'missions' | 'hall' | 'shop' | 'domestic' | 'verify';
 // 탭바에 실제로 보이는 순서 — 전환 방향(좌/우)이 이 순서에서 나온다.
 // map 과 방향 계산이 각자 배열을 들면 언젠가 어긋나므로 하나만 둔다.
-const RANK_TABS: Board[] = ['activity', 'league', 'hall', 'moneyin', 'domestic', 'verify', 'shop'];
+// 주간 리그는 2026-09-05 삭제(오너). 머니인 = 전국 대회 입상 경력.
+const RANK_TABS: Board[] = ['activity', 'moneyin', 'hall', 'domestic', 'verify', 'shop'];
 const BOARD_LABEL: Record<Board, string> = {
-  activity: '활동 순위', moneyin: '머니인', prize: '프라이즈', shop: '상점', domestic: '국내 순위', verify: '순위 인증',
-  league: '주간 리그', badges: '업적', missions: '미션', hall: '명예의 전당',
+  activity: '활동 순위', moneyin: '머니인', shop: '상점', domestic: '국내 순위', verify: '순위 인증',
+  badges: '업적', missions: '미션', hall: '명예의 전당',
 };
 const BOARD_DESC: Record<Board, string> = {
   domestic: '대회(토너먼트) 입상만 인정. 해외 대회도 포함하며, 운영자가 승인한 건에 한해 100만원(100T)당 1점으로 합산합니다. 일반 펍 정기 게임은 포함되지 않습니다.',
   verify: '대회 입상 증빙 2장(머니인·신분증)을 올려 운영자 승인을 받으면 국내 순위에 합산됩니다. 대회만 인정되며(일반 펍 제외) 100만원(100T)당 1점입니다.',
   shop: '모으는 마크는 활동점수 도달로 영구 해금(차감 없음)이고, 나머지(꾸미기 마크·프레임·닉네임 색·시즌 뱃지·외치기·응원·끌올)는 사용 가능 점수로 삽니다. 소장한 것은 영구히 남고, 무엇을 사도 누적 점수(등급 기준)는 줄지 않습니다.',
   activity: '접속·글쓰기·댓글 활동 점수. 등급(2·3~AA)과 연동. 아래 주간 미션을 달성하면 점수를 바로 받아요.',
-  moneyin: '전국 매장 머니인 점수. 100만원(100T)당 1점으로 합산합니다(임계 미만은 점수 없음).',
-  prize: '전국 매장 프라이즈 점수 합산(금전적 가치 없음).',
-  league: '이번 주 활약(체크인 ×3 + 머니인 점수). 머니인은 100만원(100T)당 1점. 월요일마다 새로 시작!',
+  moneyin: '전국 대회 머니인(입상) 경력 순위. 매장이 등록한 대회 순위 기록만 세며 상금·금액은 보지 않습니다 — 입상 횟수 → 우승 → TOP3 → 최고 등수 순.',
   badges: '조건을 달성하면 자동으로 열리는 업적 뱃지. 모아서 프로필을 채우세요.',
   missions: '이번 주 미션. 달성하면 활동점수 보상을 바로 받아요. 월요일 리셋.',
   hall: '지난달 가장 빛난 플레이어 TOP3. 운영자가 직접 선정하며, 선정이 없는 달은 입상 기록으로 자동 집계됩니다.',
@@ -173,6 +171,99 @@ const SHOP_BTN = 'mt-1.5 inline-flex w-full min-h-[30px] items-center justify-ce
 const SHOP_BTN_ON = 'border-transparent bg-accent-300 text-white';
 const SHOP_BTN_OFF = 'border-accent-400/40 text-accent-300 hover:bg-accent-300/10';
 
+/** 전국 대회 머니인 입상 경력 보드(오너 결정 2026-09-05) — 상금·금액 없이 '입상 경력'만 강조한다.
+ *  기간 칩(전체·올해·최근 90일) · 내 경력 카드(전국 순위·상위 %) · 목록(입상 횟수 큰 숫자 + 우승·TOP3·최고 등수·매장 수·최근 입상). */
+function CareerBoard({ myNick, nickStyle, markPrefix }: {
+  myNick: string | null;
+  nickStyle: (r: unknown) => CSSProperties | undefined;
+  markPrefix: (r: unknown) => string;
+}) {
+  const [period, setPeriod] = useState<CareerPeriod>('all');
+  const [rows, setRows] = useState<GlobalRankingTotal[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [tick, setTick] = useState(0); // 실패 후 '다시' — 같은 기간이라도 재조회
+  useEffect(() => {
+    let alive = true;
+    setRows(null); setFailed(false);
+    getGlobalRankingTotals(period)
+      .then((r) => { if (alive) setRows(r); })
+      .catch(() => { if (alive) { setRows([]); setFailed(true); } });
+    return () => { alive = false; };
+  }, [period, tick]);
+  const key = (myNick ?? '').trim().toLowerCase();
+  const myIdx = rows && key ? rows.findIndex((r) => r.nickname.trim().toLowerCase() === key) : -1;
+  const me = myIdx >= 0 && rows ? rows[myIdx] : null;
+  const pct = me && rows ? Math.max(1, Math.round(((myIdx + 1) / rows.length) * 100)) : null;
+  const fmtDate = (d: string | null) => (d ? d.slice(2).replace(/-/g, '.') : '');
+  return (
+    <div className="space-y-2">
+      {/* 기간 — 경력은 누적이 본질이라 '전체'가 기본. 올해·최근 90일은 현역 감각용. */}
+      <div className="flex gap-1.5" role="group" aria-label="집계 기간">
+        {(Object.keys(CAREER_PERIOD_LABEL) as CareerPeriod[]).map((p) => (
+          <button key={p} type="button" onClick={() => setPeriod(p)} aria-pressed={period === p}
+            className={['min-h-9 rounded-chip border px-3 text-2xs font-bold transition-colors',
+              period === p ? 'border-transparent bg-accent-300 text-white' : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
+            {CAREER_PERIOD_LABEL[p]}
+          </button>
+        ))}
+      </div>
+      {rows === null ? (
+        <RowSkeleton rows={8} />
+      ) : failed ? (
+        <EmptyState title="경력을 불러오지 못했어요" hint="잠시 후 다시 열어 주세요" icon={<Icon name="alert" />}
+          action={<button type="button" onClick={() => setTick((t) => t + 1)} className="btn-ghost px-3 py-1.5 text-xs">다시 불러오기</button>} />
+      ) : rows.length === 0 ? (
+        <EmptyState
+          title={period === 'all' ? '아직 집계된 대회 입상이 없어요' : '이 기간의 대회 입상이 없어요'}
+          hint="매장이 대회 순위를 올리면 입상 경력이 이 표에 자동으로 오릅니다"
+          icon={<Icon name="trophy" />}
+        />
+      ) : (
+        <>
+          {/* 내 경력 — 전국 순위·상위 % 와 경력 한 줄. 로그인 전엔 그리지 않는다. */}
+          {myNick && (me ? (
+            <div className="rounded-card border border-accent-400/40 bg-accent-300/[0.08] px-3 py-2.5">
+              <div className="flex items-baseline justify-between gap-2">
+                <p className="min-w-0 truncate text-xs font-bold text-accent-300">내 대회 입상 경력 <span className="font-normal text-ink-muted">· {CAREER_PERIOD_LABEL[period]}</span></p>
+                <p className="shrink-0 text-xs font-extrabold tabular-nums text-ink-primary">전국 {myIdx + 1}위 <span className="font-semibold text-ink-muted">· 상위 {pct}%</span></p>
+              </div>
+              <p className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-2xs tabular-nums text-ink-secondary">
+                <span>입상 <b className="text-ink-primary">{me.moneyinCount}</b>회</span>
+                <span>우승 <b className="text-ink-primary">{me.wins}</b>회</span>
+                <span>TOP3 <b className="text-ink-primary">{me.top3}</b>회</span>
+                <span>최고 <b className="text-ink-primary">{me.bestPosition}</b>위</span>
+                <span>매장 <b className="text-ink-primary">{me.venues}</b>곳</span>
+                {me.lastDate && <span>최근 {fmtDate(me.lastDate)}</span>}
+              </p>
+            </div>
+          ) : (
+            <p className="rounded-card border border-border-subtle bg-surface-high px-3 py-2 text-center text-2xs text-ink-muted">아직 내 대회 입상 기록이 없어요 — 매장이 대회 순위를 올리면 자동으로 오릅니다</p>
+          ))}
+          <ul className="overflow-hidden rounded-card border border-border-subtle bg-surface-high">
+            {rows.slice(0, 50).map((r, i) => {
+              const isMe = i === myIdx;
+              return (
+                <li key={r.nickname} className={['flex items-center gap-2.5 border-b border-border-subtle px-3 py-2 last:border-b-0', isMe ? 'bg-accent-300/[0.08]' : ''].join(' ')}>
+                  <RankNum n={i + 1} />
+                  <div className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-ink-primary" style={nickStyle(r)}>{markPrefix(r)}{r.nickname}{isMe && <span className="ml-1 text-2xs font-semibold text-accent-300">(나)</span>}</span>
+                    <span className="block truncate text-2xs tabular-nums text-ink-muted">우승 {r.wins} · TOP3 {r.top3} · 최고 {r.bestPosition}위 · 매장 {r.venues}곳</span>
+                  </div>
+                  <span className="shrink-0 text-right">
+                    <span className="block text-sm font-bold tabular-nums text-accent-300">입상 {r.moneyinCount}회</span>
+                    {r.lastDate && <span className="block text-2xs tabular-nums text-ink-muted">{fmtDate(r.lastDate)}</span>}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="pt-0.5 text-center text-2xs text-ink-muted">매장이 등록한 대회 순위(입상)만 집계 · 상금·금액과 무관 · 상위 50명</p>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function TierLeaderboard() {
   const { user, refreshProfile } = useAuth();
   const [rows, setRows] = useState<LeaderboardEntry[]>([]);
@@ -191,11 +282,8 @@ export default function TierLeaderboard() {
   }, [board]);
   // 순위표 행의 닉네임 색 — rows 가 바뀔 때만 일괄 조회한다(행마다 부르지 않는다).
   const [rowNickTokens, setRowNickTokens] = useState<Record<string, string>>({});
-  const [global, setGlobal] = useState<GlobalRankingTotal[]>([]);
-  const [globalLoaded, setGlobalLoaded] = useState(false);
   // 충성도 허브 — 주간 리그/업적/미션/명예의 전당(보드 진입 시 1회 로드)
   const toast = useToast();
-  const [league, setLeague] = useState<LeagueRow[] | null>(null);
   const [badgeStats, setBadgeStats] = useState<BadgeStats | null>(null);
   const [equippedMark, setEquippedMark] = useState<string | null | undefined>(undefined); // 상점: 장착 마크(undefined=미로드)
   const [equipBusy, setEquipBusy] = useState<string | null>(null);
@@ -431,7 +519,6 @@ export default function TierLeaderboard() {
   const [hall, setHall] = useState<HallBoard | null>(null);
   const [claiming, setClaiming] = useState<string | null>(null);
   useEffect(() => {
-    if (board === 'league' && league === null) getWeeklyLeague(20).then(setLeague).catch(() => setLeague([]));
     if (board === 'badges' && badgeStats === null && user) {
       getMyBadgeStats(user.nickname ?? null, user.activityPoints ?? 0).then(setBadgeStats).catch(() => {});
     }
@@ -502,25 +589,6 @@ export default function TierLeaderboard() {
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [user?.activityPoints]);
-
-  // 머니인/프라이즈 보드 — 전 매장 통합 집계(최초 진입 시 1회 로드)
-  useEffect(() => {
-    if (board === 'activity' || globalLoaded) return;
-    let active = true;
-    getGlobalRankingTotals()
-      .then((r) => { if (active) { setGlobal(r); setGlobalLoaded(true); } })
-      .catch(() => { if (active) setGlobalLoaded(true); });
-    return () => { active = false; };
-  }, [board, globalLoaded]);
-
-  // 머니인 보드 정렬 기준 = moneyinPoints(100만원당 1점, 서버 계산). 동점이면 상금 누적 → 최고 등수.
-  const globalRows = useMemo(() => {
-    const arr = [...global];
-    arr.sort((a, b) => board === 'prize'
-      ? (b.prizePoints - a.prizePoints) || (b.moneyinCount - a.moneyinCount)
-      : (b.moneyinPoints - a.moneyinPoints) || (b.prizePoints - a.prizePoints) || (a.bestPosition - b.bestPosition));
-    return arr.slice(0, 30);
-  }, [global, board]);
 
   const myProg = user ? tierProgress(user.activityPoints ?? 0) : null;
   const isAdmin = user?.role === 'admin';
@@ -722,99 +790,7 @@ export default function TierLeaderboard() {
         {/* 보드 설명 — 1행/2행이 섞이면 탭을 옮길 때마다 아래가 통째로 밀린다. 2행분을 예약. */}
         <p className="mb-2 min-h-[2.25rem] t-desc text-ink-muted">{BOARD_DESC[board]}</p>
 
-        {board === 'league' ? (
-          league === null ? <RowSkeleton rows={6} />
-          : league.length === 0 ? (
-            <EmptyState
-              title="이번 주 리그가 비어 있어요"
-              hint="매장 QR 체크인(+3)·머니인(100만원당 +1)으로 첫 점수를 올려보세요"
-              icon={<Icon name="medal" />}
-            />
-          )
-          : (() => {
-            // 리그 UI(레퍼런스: 리스트 사이 "내 카드" 빅 강조 + 상단 승급 안내 배너)
-            const me = user ? league.find((r) => r.userId === user.id) ?? null : null;
-            const myRank = me ? league.indexOf(me) + 1 : null;
-            const nextTier = me ? [...LEAGUE_TIERS].reverse().find((t) => t.min > me.score) ?? null : null;
-            return (
-              <div className="space-y-2">
-                {/* 승급 안내 배너 — 다음 티어까지 남은 점수 */}
-                {me && (
-                  <div className="rounded-card border border-accent-400/30 bg-accent-300/10 px-3 py-2 text-center text-xs font-semibold text-accent-300">
-                    {nextTier
-                      ? <span className="inline-flex flex-wrap items-center justify-center gap-1">{`${nextTier.min - me.score}점만 더 모으면`}<Icon name={nextTier.icon} size={13} className={['shrink-0', nextTier.tone].join(' ')} />{`${nextTier.label} 티어로 승급해요`}</span>
-                      : <span className="inline-flex items-center justify-center gap-1"><Icon name="gem" size={13} className="shrink-0 text-sky-300" />최고 티어. 이번 주 왕좌를 지키세요!</span>}
-                  </div>
-                )}
-                <ul className="overflow-hidden rounded-card border border-border-subtle bg-surface-high">
-                  {league.map((r, i) => {
-                    const t = leagueTierOf(r.score);
-                    const isMe = user?.id === r.userId;
-                    if (isMe) {
-                      // 내 순위 빅 카드 — 리스트 흐름 속 인라인 강조(이미지 패턴)
-                      return (
-                        <li key={r.userId} className="border-b border-y border-accent-400/40 bg-accent-300/[0.08] px-3 py-3 last:border-b-0">
-                          <div className="flex items-center gap-3">
-                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-300 text-base font-extrabold text-white">
-                              {r.nickname.slice(0, 1)}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-xs font-bold text-accent-300">{myRank}위 · <span style={nickStyle(r)}>{markPrefix(r)}{r.nickname}</span> <span className="text-ink-muted font-semibold">(나)</span></p>
-                              <p className="text-2xl font-extrabold leading-tight tabular-nums text-ink-primary">
-                                {r.score}<span className="ml-0.5 text-xs font-bold text-ink-muted">점</span>
-                              </p>
-                              <p className="text-2xs text-ink-muted">체크인 {r.checkins}회 · 입상 {r.placements}회</p>
-                            </div>
-                            {t && (
-                              <span className="inline-flex shrink-0 items-center gap-1 rounded-badge border border-accent-400/40 bg-surface-float px-2 py-1 text-xs font-bold text-accent-300">
-                                <Icon name={t.icon} size={13} className={['shrink-0', t.tone].join(' ')} />{t.label}
-                              </span>
-                            )}
-                          </div>
-                        </li>
-                      );
-                    }
-                    return (
-                      <li key={r.userId} className="flex items-center gap-2.5 border-b border-border-subtle px-3 py-2 last:border-b-0">
-                        <RankNum n={i + 1} />
-                        <div className="min-w-0 flex-1">
-                          <span className="text-sm font-semibold text-ink-primary truncate" style={nickStyle(r)}>{markPrefix(r)}{r.nickname}</span>
-                          <span className="block text-2xs text-ink-muted">체크인 {r.checkins}회 · 입상 {r.placements}회</span>
-                        </div>
-                        {t && <span className="inline-flex shrink-0 items-center gap-1 rounded-badge bg-surface-float px-1.5 py-0.5 text-2xs font-bold text-ink-secondary"><Icon name={t.icon} size={11} className={['shrink-0', t.tone].join(' ')} />{t.label}</span>}
-                        <span className="w-12 shrink-0 text-right text-xs font-bold tabular-nums text-accent-300">{r.score}</span>
-                      </li>
-                    );
-                  })}
-                </ul>
-                {/* TOP20 밖이거나 이번 주 무활동 — 입장 안내 */}
-                {user && !me && !isAdmin && (
-                  <p className="rounded-card border border-border-subtle bg-surface-high px-3 py-2 text-center text-2xs text-ink-muted">
-                    아직 이번 주 리그 점수가 없어요 — 체크인(+3)·머니인(100만원당 +1)으로 리그에 입장하세요!
-                  </p>
-                )}
-                {/* 티어 메달 진열장 — 브론즈~다이아(레퍼런스 하단 메달 행). 내 티어 하이라이트, 미달성은 흐림 */}
-                <div className="grid grid-cols-5 gap-1.5">
-                  {[...LEAGUE_TIERS].reverse().map((t) => {
-                    const mine = me ? leagueTierOf(me.score)?.key === t.key : false;
-                    const reached = me ? me.score >= t.min : false;
-                    return (
-                      <div key={t.key}
-                        className={['card-sink rounded-card border px-1 py-2 text-center transition-colors',
-                          mine ? 'border-accent-400/60 bg-accent-300/10'
-                            : reached ? 'border-border-subtle bg-surface-high'
-                            : 'border-border-subtle bg-surface-high opacity-40'].join(' ')}>
-                        <Icon name={t.icon} size={22} className={['mx-auto', t.tone].join(' ')} />
-                        <p className={['mt-1 text-2xs font-bold', mine ? 'text-accent-300' : 'text-ink-secondary'].join(' ')}>{t.label}</p>
-                        <p className="text-2xs tabular-nums text-ink-muted">{t.min}점~</p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })()
-        ) : board === 'missions' ? (
+        {board === 'missions' ? (
           missionsBlock
         ) : board === 'badges' ? (
           !user ? <p className="py-6 text-center t-desc text-ink-muted">로그인하면 업적을 모을 수 있습니다</p>
@@ -1381,36 +1357,8 @@ export default function TierLeaderboard() {
               </p>
             </div>
           )
-        ) : board !== 'activity' ? (
-          !globalLoaded ? (
-            <RowSkeleton rows={8} />
-          ) : globalRows.length === 0 ? (
-            <EmptyState
-              title="아직 집계된 매장 순위가 없어요"
-              hint="매장이 대회 순위를 올리면 100만원(100T)당 1점으로 이 표에 합산됩니다"
-              icon={<Icon name="chart" />}
-            />
-          ) : (
-            <ul className="rounded-card border border-border-subtle bg-surface-high overflow-hidden">
-              {globalRows.map((r, i) => (
-                <li key={r.nickname} className="flex items-center gap-2.5 px-3 py-2 border-b border-border-subtle last:border-b-0">
-                  <RankNum n={i + 1} />
-                  <div className="flex-1 min-w-0">
-                    <span className="text-sm font-semibold text-ink-primary truncate" style={nickStyle(r)}>{markPrefix(r)}{r.nickname}</span>
-                    <span className="block text-2xs text-ink-muted">매장 {r.venues}곳 · 최고 {r.bestPosition}등</span>
-                  </div>
-                  <span className="text-right">
-                    <span className="block text-sm font-bold tabular-nums text-accent-300">
-                      {board === 'prize' ? `${r.prizePoints.toLocaleString()}점` : `${r.moneyinPoints.toLocaleString()}점`}
-                    </span>
-                    <span className="block text-2xs text-ink-muted tabular-nums">
-                      {board === 'prize' ? `머니인 ${r.moneyinCount}회` : `입상 ${r.moneyinCount}회`}
-                    </span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )
+        ) : board === 'moneyin' ? (
+          <CareerBoard myNick={user?.nickname ?? null} nickStyle={nickStyle} markPrefix={markPrefix} />
         ) : loading ? (
           <ActivityBoardSkeleton />
         ) : rows.length === 0 ? (

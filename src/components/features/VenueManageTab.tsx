@@ -7,7 +7,7 @@ import { useToast } from '../atoms/Toast';
 import type { User, VenueInvite } from '../../api/auth';
 import { getMyVenueStaff, getMyVenueInvites, inviteStaffByEmail, cancelStaffInvite, removeStaff, setStaffTitle } from '../../api/auth';
 import { msgOf } from '../../lib/dbError';
-import { getVenueRankings, saveVenueRankings, getVenuePageConfig, placementPointsOf, prizeUnitRisk, parsePrizeTickets, searchRankingMembers, resolveRankingMembers, type VenuePageConfig, type RankingEntry, type RankMember } from '../../api/rankings';
+import { getVenueRankings, saveVenueRankings, getVenuePageConfig, placementPointsOf, searchRankingMembers, resolveRankingMembers, type VenuePageConfig, type RankingEntry, type RankMember } from '../../api/rankings';
 import { canAccessLedger, canManagePos, getLedgerAccessUserIds, grantLedgerAccess, revokeLedgerAccess } from '../../api/ledger';
 import { getAllVenues, createMyVenue, getMyVenue, getVenueStaff, type Venue } from '../../api/community';
 import { getLedgerRange } from '../../api/ledger';
@@ -26,7 +26,7 @@ import { StaffWageManager, StaffSettlement, StaffWorkLog, StaffSelfAttendance } 
 import StoreDashboard from './StoreDashboard';
 import { VoucherManagePanel } from './VoucherManageModal';
 import { useIdentityEnabled } from '../../lib/identityFlag'; // 본인인증·매장이용권 통합 킬스위치(2026-08-29)
-import { listVoucherNotes, iCanViewVouchers, getVoucherAccessUserIds, grantVoucherAccess, revokeVoucherAccess, findUserForTransfer, issueVoucher, isVoucherIssueApproved, getVoucherQuota, type TransferTarget } from '../../api/vouchers';
+import { iCanViewVouchers, getVoucherAccessUserIds, grantVoucherAccess, revokeVoucherAccess, findUserForTransfer, type TransferTarget } from '../../api/vouchers';
 import MyPostersTab from './MyPostersTab';
 import VenueCustomizePanel, { VenueRankHub } from './VenueCustomizePanel';
 import SectionHeader from '../atoms/SectionHeader';
@@ -870,7 +870,7 @@ function SectionBtn({ active, onClick, icon, children, locked }: {
 // ── 일일 순위 입력 ────────────────────────────────────────────────────────────
 // Row 정의는 lib/rankingDraft 에 둔다 — 임시 초안으로 직렬화·복원되는 값이라 두 곳이 어긋나면 복구가 깨진다.
 type Row = RankRow;
-const emptyRow = (): Row => ({ nickname: '', realName: '', prize: '', voucher: '', note: '' });
+const emptyRow = (): Row => ({ nickname: '', realName: '' });
 // 그날 열린 게임 후보 — 메인(포스터 제목) · 사이드(포스터 sideEvents) · 장부(장부만 있는 게임)
 type GameOpt = { name: string; kind: 'main' | 'side' | 'ledger' };
 
@@ -1020,7 +1020,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
     //   그대로 저장되기 쉬웠고, 지우는 것이 치는 것보다 오래 걸렸다. 장부 명단은 사라지지
     //   않는다 — 아래 '📒 그날 장부 명단' 패널(＋/전체 추가)과 닉네임 자동완성 후보로 남는다.
     const base: Row[] = mine.length
-      ? mine.map((e) => ({ nickname: e.nickname, realName: e.realName, prize: e.prize ?? '', voucher: '', note: '' }))
+      ? mine.map((e) => ({ nickname: e.nickname, realName: e.realName })) // 과거 상금(prize)은 서버가 승계한다 — 화면·초안에 싣지 않는다
       : [emptyRow()];
     const kept = readRowsDraft(dkey);
     // 기준선은 항상 '원본'. 복구본을 기준선으로 잡으면 아래 보관 효과가 초안을 즉시 지워버린다.
@@ -1071,17 +1071,16 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
   const [memCands, setMemCands] = useState<RankMember[]>([]);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── 행 ↔ 회원 대조(이용권 전송 대상 특정) ──────────────────────────────────
-  // 왜 닉네임(소문자)을 키로 쓰나: 이용권 멱등 키가 AWARD:{날짜}:{게임}:{닉네임} 라
-  //   '누구에게 보냈는가'의 단위가 이미 닉네임이다. 행 인덱스로 잡으면 ▲▼ 재배치에
-  //   따라다니지 못하고, RankRow 에는 안정적인 id 가 없다(초안 직렬화 포맷 고정).
+  // ── 행 ↔ 회원 대조(동명이인 확정 · 회원 표시) ─────────────────────────────
+  // 왜 닉네임(소문자)을 키로 쓰나: 행 인덱스로 잡으면 ▲▼ 재배치에 따라다니지 못하고,
+  //   RankRow 에는 안정적인 id 가 없다(초안 직렬화 포맷 고정).
   // 값의 의미: undefined = 아직 조회 안 함 · [] = 비회원 · 1개 = 회원 확정 · 2개↑ = 동명이인.
   const [memberMap, setMemberMap] = useState<Record<string, RankMember[]>>({});
   // 업주가 자동완성에서 직접 고른 확정값 — 동명이인이어도 이 선택이 이깁니다.
   // null = '비회원으로 등록'을 명시적으로 고른 것.
   const [pickedMap, setPickedMap] = useState<Record<string, RankMember | null>>({});
   const nickKey = (s: string) => s.trim().toLowerCase();
-  /** 이 이름의 지급 대상 — 확정 회원 / 비회원(null) / 동명이인·미조회('ambiguous'|'unknown') */
+  /** 이 이름의 회원 판정 — 확정 회원 / 비회원(null) / 동명이인·미조회('ambiguous'|'unknown') */
   const targetOf = (nick: string): RankMember | null | 'ambiguous' | 'unknown' => {
     const k = nickKey(nick);
     if (!k) return 'unknown';
@@ -1152,13 +1151,13 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
     if (!nick) return;
     setRows((r) => {
       if (r.some((row) => row.nickname.trim() === nick)) return r;
-      const emptyIdx = r.findIndex((row) => !row.nickname.trim() && !row.realName.trim() && !row.prize.trim());
+      const emptyIdx = r.findIndex((row) => !row.nickname.trim() && !row.realName.trim());
       if (emptyIdx >= 0) return r.map((row, idx) => (idx === emptyIdx ? { ...row, nickname: nick, realName: real || row.realName } : row));
       return [...r, { ...emptyRow(), nickname: nick, realName: real }];
     });
   };
   const addAllFromLedger = () => { for (const p of ledgerPlayers) addFromLedger(p.name); };
-  // 줄 삭제는 닉네임만 지우는 게 아니다 — 실명·프라이즈·이용권 개수·비고가 한꺼번에 날아간다.
+  // 줄 삭제는 닉네임만 지우는 게 아니다 — 실명도 함께 날아간다.
   // 저장 전이라 서버에도 없고, 초안은 '지워진 뒤 상태'를 보관하므로 여기선 아무 보호가 안 된다.
   // 왜 유예 큐(lib/undoableDelete)가 아닌가: 저건 '서버에 나가면 복구 경로가 0'인 조작을 위한 장치다.
   //   여기는 로컬 배열이라 유예할 요청 자체가 없고, 유예하면 '지웠는데 화면에 남는' 상태가 생긴다.
@@ -1168,7 +1167,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
     if (rows.length <= 1 || !removed) return; // 마지막 한 줄은 남긴다(기존 동작 유지)
     setRows((r) => r.filter((_, idx) => idx !== i));
     setSugRow(null); // 자동완성은 행 인덱스로 열려 있어 삭제 후엔 남의 줄에 붙는다
-    const filled = removed.nickname.trim() || removed.realName.trim() || removed.prize.trim() || removed.voucher.trim() || removed.note.trim();
+    const filled = removed.nickname.trim() || removed.realName.trim();
     if (!filled) return; // 빈 줄까지 토스트를 띄우면 잔소리가 된다
     toast.show(`${i + 1}위 '${removed.nickname.trim() || '이름 없음'}' 줄을 지웠습니다`, 'info', {
       action: { label: '되돌리기', onClick: () => setRows((r) => [...r.slice(0, i), removed, ...r.slice(i)]) },
@@ -1203,123 +1202,17 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
     moveRow(from, n - 1);
   };
 
-  // ── 매장이용권 전송(행 단위) ───────────────────────────────────────────────
-  // 오너 지시(2026-08-28): 순위 저장과 이용권 지급을 갈라, 줄마다 개수를 넣고
-  //   그 줄의 '전송'을 눌렀을 때만 그 한 명에게 나가게 한다.
-  // 왜 행 단위인가: 일괄 발급은 한 명이 막히면 나머지가 어디까지 나갔는지 알 수 없었다.
-  //   (미가입·미인증·한도부족이 전부 '미지급 N명'으로 뭉개졌고, issued===0 이면 그 표시조차
-  //   사라졌다.) 한 번에 한 명이면 성공·실패가 그 줄에 그대로 남는다.
-  const awardKeyBase = `AWARD:${date}:${(eventName || '메인').trim()}`;
-  // 킬스위치(2026-08-29) — 이용권이 꺼지면 이 화면에서 '순위'만 남는다.
-  // 순위 저장은 이용권과 이미 완전히 분리돼 있으므로(오너 지시 2026-08-28) 저장 경로는 무손실.
-  const vchOn = useIdentityEnabled();
-  const [sendMap, setSendMap] = useState<Record<string, { status: 'busy' | 'sent' | 'error'; count?: number; msg?: string }>>({});
-  // 이미 보낸 줄은 새로고침·재진입 후에도 '전송됨'으로 보여야 한다 — 중복 발급의 대부분은
-  // '보냈는지 기억이 안 나서 한 번 더'였다. 발급 note 의 AWARD 마커를 되읽어 복원한다.
-  useEffect(() => {
-    // 날짜·게임이 바뀌면 '누가 누구인지'와 '누구에게 보냈는지'를 함께 리셋한다 —
-    // 한쪽만 남으면 다른 게임의 확정 대상이 이 게임 줄에 붙는다.
-    setSendMap({});
-    setPickedMap({});
-    if (!canEdit || !vchOn) return; // 이용권 OFF — 멱등 마커 조회도 불필요(조회 0)
-    let alive = true;
-    listVoucherNotes(venueId, awardKeyBase)
-      .then((notes) => {
-        if (!alive) return;
-        const seeded: Record<string, { status: 'sent' }> = {};
-        for (const nt of notes) {
-          const at = nt.lastIndexOf(`${awardKeyBase}:`);
-          if (at < 0) continue;
-          const nick = nt.slice(at + awardKeyBase.length + 1).trim();
-          if (nick) seeded[nickKey(nick)] = { status: 'sent' };
-        }
-        setSendMap(seeded);
-      })
-      .catch(() => { /* 조회 실패 — 전송 자체는 막지 않는다(서버가 최종 판정) */ });
-    return () => { alive = false; };
-  }, [venueId, awardKeyBase, canEdit, vchOn]);
-
-  // ── 매장 단위 발급 게이트(승인·잔여 한도) ──────────────────────────────────
-  // 왜 필요한가: 승인 전 매장이거나 한도가 0이면 '전송'은 줄마다 눌러 봐야 서버에서
-  //   거절된다. 20줄이면 20번을 눌러 20개의 같은 실패를 본 뒤에야 원인을 안다.
-  //   그것도 각 줄의 잘린 한 줄짜리 문구로. 매장 단위 사실은 매장 단위로 한 번만 말한다.
-  // 왜 서버 판정을 그대로 두는가: 여기 값은 화면을 연 시점의 스냅샷이라 최종 권위가 아니다.
-  //   (다른 창에서 발급했거나 운영자가 승인을 바꿀 수 있다) 미리 알리되 막지는 않는다 —
-  //   단 '확실히 안 되는' 두 경우(미승인·잔여 0)만 버튼을 잠근다.
-  const [issueApproved, setIssueApproved] = useState<boolean | null>(null); // null = 확인 중
-  const [quotaLeft, setQuotaLeft] = useState<number | null>(null);          // null = 알 수 없음
-  useEffect(() => {
-    if (!canEdit || !vchOn) return; // 이용권 OFF — 승인·한도는 화면에 없는 개념이라 조회하지 않는다
-    let alive = true;
-    isVoucherIssueApproved(venueId).then((v) => { if (alive) setIssueApproved(v); }).catch(() => { if (alive) setIssueApproved(null); });
-    getVoucherQuota(venueId).then((q) => { if (alive) setQuotaLeft(q); }).catch(() => { if (alive) setQuotaLeft(null); });
-    return () => { alive = false; };
-  }, [venueId, canEdit, vchOn]);
-  /** 매장 차원에서 전송이 막혀 있으면 그 사유 — 줄 단위 판정보다 먼저 본다 */
-  const venueSendBlock = (): string | null => {
-    if (issueApproved === false) return '운영자 승인 전이라 이용권을 보낼 수 없습니다. 순위 저장은 그대로 됩니다';
-    if (quotaLeft !== null && quotaLeft <= 0) return '발급 한도가 0개입니다. 운영자에게 문의해 주세요 (순위 저장은 그대로 됩니다)';
-    return null;
-  };
-
-  /** 이 줄이 지금 전송 가능한가 — 버튼 활성/비활성과 안내 문구의 단일 소스 */
-  const sendGate = (row: Row): { ok: boolean; reason: string; target: RankMember | null } => {
-    const blocked = venueSendBlock();
-    if (blocked) return { ok: false, reason: blocked, target: null };
-    const nick = row.nickname.trim();
-    if (!nick) return { ok: false, reason: '닉네임을 먼저 입력해 주세요', target: null };
-    const t = targetOf(nick);
-    if (t === 'unknown') return { ok: false, reason: '회원 확인 중…', target: null };
-    if (t === null) return { ok: false, reason: '비회원 · 가입·인증 후 지급 가능', target: null };
-    if (t === 'ambiguous') return { ok: false, reason: '동명이인. 닉네임 칸에서 받는 분을 골라 주세요', target: null };
-    if (vchOn && !t.verified) return { ok: false, reason: '본인인증 전 회원 · 인증 후 지급 가능', target: null };
-    return { ok: true, reason: '', target: t };
-  };
-
-  const sendVoucher = async (i: number) => {
-    const row = rows[i];
-    if (!row) return;
-    const nick = row.nickname.trim();
-    const k = nickKey(nick);
-    const gate = sendGate(row);
-    if (!gate.ok || !gate.target) { toast.show(gate.reason, 'error'); return; }
-    const cnt = parseInt(row.voucher, 10);
-    if (!Number.isFinite(cnt) || cnt < 1) { toast.show('보낼 이용권 개수를 입력해 주세요', 'error'); return; }
-    if (sendMap[k]?.status === 'sent' && !window.confirm(
-      `'${nick}' 에게는 이 게임(${eventName || '메인'}) 이용권을 이미 보냈습니다.\n\n`
-      + '한 번 더 누르면 이용권이 추가로 발급됩니다. 계속할까요?',
-    )) return;
-    const n = Math.min(1000, cnt);
-    setSendMap((m) => ({ ...m, [k]: { status: 'busy' } }));
-    try {
-      await issueVoucher(venueId, {
-        title: '순위 시상', count: n, holderUserId: gate.target.id, holderName: gate.target.nickname,
-        note: `${row.note.trim() || '순위 시상'} · ${awardKeyBase}:${nick}`,
-      });
-      setSendMap((m) => ({ ...m, [k]: { status: 'sent', count: n } }));
-      // 잔여 한도는 화면에 계속 떠 있는 숫자다 — 보낸 만큼 즉시 깎아야 다음 줄에서 맞는다
-      setQuotaLeft((q) => (q === null ? q : Math.max(0, q - n)));
-      toast.show(`'${nick}' 에게 매장이용권 ${n}개를 보냈습니다`, 'success');
-    } catch (e) {
-      // 실패 사유는 그 줄에 그대로 남긴다 — 한도부족과 미인증은 다음 행동이 완전히 다르다
-      setSendMap((m) => ({ ...m, [k]: { status: 'error', msg: e instanceof Error ? e.message : '전송에 실패했습니다' } }));
-    }
-  };
+  // 날짜·게임이 바뀌면 '누가 누구인지'(동명이인 확정)를 리셋한다 — 남겨 두면 다른 게임의 확정 대상이 이 게임 줄에 붙는다.
+  useEffect(() => { setPickedMap({}); }, [venueId, date, eventName]);
+  // 이용권 전송·발급 한도·AWARD 마커·상금 입력은 2026-09-05(법적위험완화 v3)에 이 화면에서 제거됐다.
+  // 순위는 참가자·등수 기록일 뿐이며, 순위를 근거로 이용권·포인트를 지급하지 않는다
+  // (서버 save_venue_rankings 도 활동점수를 만들지 않고, issue_voucher 는 '순위 시상' 사유를 거절한다 — 20260905g).
 
   const save = async () => {
-    const clean = rows.filter((r) => r.nickname.trim() || r.realName.trim() || r.prize.trim());
+    const clean = rows.filter((r) => r.nickname.trim() || r.realName.trim());
     if (clean.length === 0) return toast.show('순위를 한 명 이상 입력해 주세요', 'error');
     if (clean.some((r) => !r.nickname.trim()))
-      return toast.show('각 줄에 닉네임을 입력해 주세요 (실명·프라이즈는 선택)', 'error');
-    // 프라이즈는 만원 단위 — 1억(10,000만) 이상은 원 단위 오입력이 거의 확실하다.
-    // 저장되는 순간 매장·전국 프라이즈 보드에 그대로 누적되고, 되돌리려면 그 날짜 순위를
-    // 통째로 다시 입력해야 해서 인라인 경고만으로는 부족하다. 여기서 한 번 붙잡는다.
-    const wrongUnit = clean.filter((r) => prizeUnitRisk(r.prize) === 'impossible');
-    if (wrongUnit.length > 0 && !window.confirm(
-      `프라이즈가 원 단위로 입력된 것 같습니다 (${wrongUnit.map((r) => r.prize).join(', ')}).\n\n`
-      + '이 칸은 만원 단위입니다. 100만원이면 100, 1,000만원이면 1000. 티켓 상금은 10T·20T(1T=1만원).\n\n'
-      + '이대로 저장하면 매장·전국 프라이즈 순위가 크게 왜곡됩니다. 그래도 저장할까요?',
-    )) return;
+      return toast.show('각 줄에 닉네임을 입력해 주세요 (실명은 선택)', 'error');
     setSaving(true);
     try {
       // ⚠ 순위 저장은 매장이용권과 완전히 분리돼 있다(오너 지시 2026-08-28).
@@ -1327,25 +1220,14 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
       //   그 루프의 실패(미가입·미인증·한도부족)는 issued===0 일 때 토스트에서 아예
       //   사라졌고, 반대로 실패 문구만 본 사장님은 순위까지 안 저장된 줄 알았다.
       //   이제 이 함수는 순위만 저장한다 — 이용권은 행마다 '전송' 버튼으로만 나간다.
-      await saveVenueRankings(venueId, date, clean.map(({ nickname, realName, prize }) => ({ nickname, realName, prize })), eventName);
+      await saveVenueRankings(venueId, date, clean.map(({ nickname, realName }) => ({ nickname, realName })), eventName);
       // 저장 성공 = 서버가 정본이므로 임시 초안을 폐기한다. 남겨두면 다음 진입 때 낡은 초안이
       // 되살아나고, 저장이 (날짜+게임) 전체 교체라 방금 저장한 순위를 덮어쓸 수 있다.
       baselineRef.current = JSON.stringify(rows); // 저장 직후 화면 = 새 기준선
       clearRowsDraft(dkey);
       setDrafted(false);
       setRestorable(null);
-      // 이용권 칸에 숫자만 넣고 전송을 안 누른 줄은 여기서 짚어 준다 — 저장과 전송이
-      // 갈라졌으니 '저장했으니 나갔겠지'라는 예전 기대가 남아 있으면 그게 곧 미지급이다.
-      const pending = clean.filter((r) => {
-        const c = parseInt(r.voucher, 10);
-        return c > 0 && sendMap[nickKey(r.nickname)]?.status !== 'sent';
-      }).length;
-      toast.show(
-        pending > 0
-          ? `순위 저장 완료. 이용권 ${pending}줄은 아직 전송 전입니다. 줄 오른쪽 '전송'을 눌러 주세요`
-          : '순위 저장 완료. 닉네임이 일치하는 회원에게 포인트가 반영됩니다',
-        pending > 0 ? 'info' : 'success',
-      );
+      toast.show('순위 저장 완료. 매장 순위와 시즌 집계에 반영됩니다', 'success');
     } catch (e) {
       toast.show(e instanceof Error ? e.message : '저장에 실패했습니다', 'error');
     } finally {
@@ -1492,41 +1374,13 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
       {/* 오너 지시(2026-08-27): 안내가 쓸데없이 길다 — 핵심 1줄 + 나머지는 접힘 */}
       <details className="group/rkhelp t-desc break-keep text-ink-muted">
         <summary className="cursor-pointer list-none">
-          <span className="text-accent-300 dark:text-accent-200 font-semibold">닉네임 필수</span> · 프라이즈는 <span className="text-accent-300 dark:text-accent-200 font-semibold">만원 단위</span>(100만원=100) · 티켓은 <span className="text-accent-300 dark:text-accent-200 font-semibold">T</span>(1T=1만원)
+          <span className="text-accent-300 dark:text-accent-200 font-semibold">닉네임 필수</span> · 실명 선택 · 줄 순서가 곧 등수
           <span className="ml-1 text-ink-muted underline decoration-border-default underline-offset-2 group-open/rkhelp:hidden">자세히</span>
         </summary>
         <p className="mt-1">
-          실명·프라이즈는 선택입니다. 1,000만원은 <span className="text-accent-300 font-semibold">1000</span>(원 단위로 치면 순위 점수가 1만 배로 잘못 쌓입니다). 티켓 상금은 <span className="text-accent-300 font-semibold">10T·20T</span> 처럼 적습니다(1T = 1만원 · 손님에게 10T 로 보일지 10만으로 보일지는 매장 랭킹 설정에서). 등수마다 <span className="text-accent-300 font-semibold">기준 점수(+N점)</span>가 자동 부여되고, 프라이즈는 <span className="text-accent-300 font-semibold">매장 커뮤니티 순위 점수</span>로만 쓰입니다(금전적 가치 없음). 손님 화면엔 <span className="text-accent-300 font-semibold">실명(닉네임) 형식</span>으로 닉네임 일부를 가려 표시됩니다(예: 누리홀덤(나*리)).
+          순위는 <span className="text-accent-300 font-semibold">참가자와 최종 등수</span>만 기록합니다(상금·이용권 입력 없음). 등수마다 매장 랭킹 설정의 <span className="text-accent-300 font-semibold">기준 점수(+N점)</span>가 매장 순위·시즌 집계에만 쓰이며, 금전적 가치나 보상으로 바뀌지 않습니다. 손님 화면엔 <span className="text-accent-300 font-semibold">닉네임</span>으로 표시되고, 실명은 본인이 프로필에서 선택한 경우에만 보입니다. 같은 닉네임 회원이 둘 이상(<span className="text-amber-300 font-semibold">중복</span>)이면 닉네임 칸 자동완성에서 기록 주인을 먼저 골라 주세요.
         </p>
-        {vchOn && <p className="mt-1">
-          <b className="text-accent-300">매장이용권은 순위 저장과 따로 나갑니다.</b> 개수를 넣고 그 줄 맨 오른쪽 <b className="text-accent-300">전송</b>을 눌러야 그 한 명에게 발급됩니다. 저장만으로는 나가지 않습니다. 비회원·본인인증 전 회원 줄은 전송 버튼이 비활성이고, 같은 닉네임 회원이 둘 이상(<span className="text-amber-300 font-semibold">중복</span>)이면 닉네임 칸 자동완성에서 받는 분을 먼저 골라 주세요.
-        </p>}
-        {!vchOn && <p className="mt-1">같은 닉네임 회원이 둘 이상(<span className="text-amber-300 font-semibold">중복</span>)이면 닉네임 칸 자동완성에서 기록 주인을 먼저 골라 주세요.</p>}
       </details>
-
-      {/* 매장 차원 발급 게이트 — 줄마다 눌러 실패를 20번 확인하기 전에 한 번 말한다.
-          순위 저장과 이용권 전송이 갈라져 있다는 사실을 여기서 다시 못 박는다(저장은 항상 된다). */}
-      {vchOn && (() => {
-        const blocked = venueSendBlock();
-        if (blocked) {
-          return (
-            <p className="t-desc break-keep flex items-start gap-2 rounded-input border border-danger/40 bg-danger/[0.08] px-3 py-2 text-danger-deep dark:text-danger-light">
-              <Icon name="alert" size={13} className="mt-0.5 shrink-0" />
-              <span><b>이용권 전송이 잠겨 있습니다</b> — {blocked}</span>
-            </p>
-          );
-        }
-        // 한도가 얼마 안 남았으면 미리 보여 준다 — 20줄을 다 치고 나서 3줄째에 막히는 게 최악이다
-        if (quotaLeft !== null && quotaLeft <= 50) {
-          return (
-            <p className="t-desc break-keep flex items-start gap-2 rounded-input border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-amber-200">
-              <Icon name="alert" size={13} className="mt-0.5 shrink-0" />
-              <span>남은 발급 한도 <b className="tabular-nums">{quotaLeft.toLocaleString()}개</b>시상 전에 확인해 주세요. 한도 추가는 운영자 문의.</span>
-            </p>
-          );
-        }
-        return null;
-      })()}
 
       {/* 저장 전 입력분 안내 — 초안은 자동 보관되지만, 상태를 보여주지 않으면 사장님이 오탭을 눈치채지 못한다 */}
       {(drafted || restorable) && (
@@ -1551,20 +1405,15 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
         <ul className="space-y-1">
           {rows.map((row, i) => (
             <li key={i}
-              // 모바일 3행(칸 잘림·경계 어긋남 교정 — 오너 스크린샷): 닉네임·실명 / 프라이즈·이용권 / 비고
-              // ⚠ 이 그리드는 명시 col-start 와 자동배치가 섞여 있다 — 이용권(5)·전송(7) 칸을
-              //   숨기면서 8열 정의를 그대로 두면 비고·삭제가 빈 칸을 건너뛰어 어긋난다.
-              //   그래서 열 정의도 같은 조건으로 6열(등수·닉네임·실명·프라이즈·비고·삭제)로 줄인다.
+              // 한 줄 4열(등수·닉네임·실명·삭제) — 2026-09-05 상금·이용권·비고 칸 제거(법적위험완화 v3).
+              // 모바일·PC 같은 구조이고 PC 는 등수 열만 가로로 편다. 빈 자리를 광고·여백으로 채우지 않는다.
               className={['grid grid-cols-[2.5rem_minmax(0,1fr)_minmax(0,1fr)_2rem] items-center gap-1.5 rounded-input border p-1.5 transition-colors',
-                vchOn
-                  ? 'lg:grid-cols-[5.75rem_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_5rem_minmax(0,1.2fr)_5.25rem_2rem]'
-                  : 'lg:grid-cols-[5.75rem_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_2rem]',
+                'lg:grid-cols-[5.75rem_minmax(0,1.4fr)_minmax(0,1fr)_2rem]',
                 // 방금 옮긴 줄만 잠깐 물들인다 — 줄이 전부 똑같이 생겨서 어디로 갔는지 눈으로 못 쫓는다
                 moved?.i === i ? 'border-accent-400/70 bg-accent-300/[0.07]' : 'border-border-subtle bg-surface-low/40'].join(' ')}>
               {/* 등수 = 행 순서. 순서를 못 바꾸면 정정 수단이 '지우고 다시 치기'뿐이라 ▲▼를 등수에 붙인다.
-                  모바일은 2줄 그리드의 비어 있던 왼쪽 아래 칸을 세로로 흡수하고(row-span-2),
-                  PC는 한 줄짜리라 가로로 편다(첫 열만 넓힘). */}
-              <span className="row-span-3 lg:row-span-1 flex flex-col lg:flex-row items-center justify-center gap-0.5">
+                  모바일은 세로, PC는 가로로 편다(첫 열만 넓힘). */}
+              <span className="flex flex-col lg:flex-row items-center justify-center gap-0.5">
                 <button
                   type="button" onClick={() => moveRow(i, i - 1)} disabled={i === 0}
                   aria-label={`${i + 1}위를 한 칸 위로`} title="위로 · 등수 올리기"
@@ -1633,12 +1482,6 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
                               <span className="shrink-0 rounded-badge bg-amber-500/15 px-1.5 py-0.5 text-2xs font-bold text-amber-300"
                                 title="같은 닉네임의 회원이 둘 이상입니다. 실명을 보고 골라 주세요">중복</span>
                             )}
-                            {/* 킬스위치 OFF 면 '미인증' 은 아무것도 막지 않는다 — 남겨두면 존재하지 않는
-                                인증 화면으로 가라는 뜻 없는 경고가 된다(순위 기록은 원래 인증과 무관). */}
-                            {vchOn && !c.verified && (
-                              <span className="shrink-0 rounded-badge bg-rose-500/15 px-1.5 py-0.5 text-2xs font-bold text-rose-300"
-                                title="미인증 회원. 본인인증 전이라 순위 기록은 되지만 매장이용권은 지급할 수 없어요"><Icon name="alert" size={9} className="mr-0.5 inline-block align-[-1px] shrink-0" />미인증</span>
-                            )}
                             <span className="truncate font-semibold text-ink-primary">{c.nickname}{c.realName ? <span className="font-normal text-ink-muted"> · {c.realName}</span> : null}</span>
                           </button>
                         </li>
@@ -1646,8 +1489,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
                     </ul>
                   );
                 })()}
-                {/* 회원 여부 — 체크=회원, 회색 원=비회원(미가입이면 점수·이용권 안 감), ⚠=동명이인.
-                    판정 근거가 이용권 전송 가능 여부와 같은 소스라, 여기 뜬 표시와 전송 버튼 상태가 어긋나지 않는다. */}
+                {/* 회원 여부 — 체크=회원, 회색 원=비회원, ⚠=동명이인(후보에서 선택 필요). 순위 기록은 인증과 무관하다. */}
                 {row.nickname.trim() !== '' && (() => {
                   const t = targetOf(row.nickname);
                   if (t === 'unknown') return null;
@@ -1655,9 +1497,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
                   const [icon, tone, label]: [IconName, string, string] =
                     t === 'ambiguous' ? ['alert', 'text-amber-300', '동명이인. 후보에서 선택 필요']
                     : t === null ? ['circle', 'text-ink-muted', '비회원']
-                      : !vchOn ? ['check-circle', 'text-emerald-400', '회원']
-                      : t.verified ? ['check-circle', 'text-emerald-400', '회원(본인인증 완료)']
-                      : ['circle', 'text-amber-300', '회원 · 본인인증 전'];
+                      : ['check-circle', 'text-emerald-400', '회원'];
                   return (
                     <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2" title={label}>
                       <Icon name={icon} size={14} className={tone} role="img" aria-hidden={false} aria-label={label} />
@@ -1671,106 +1511,16 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
                 placeholder="실명"
                 className="input w-full min-w-0 text-sm py-2 col-start-3 row-start-1 lg:col-auto lg:row-auto"
               />
-              {/* 프라이즈는 '만원 단위'다. 단위 표기가 없어 원 단위로 치면 매장·전국 프라이즈
-                  랭킹이 1만 배로 오염되므로, 값이 지워져도 안 사라지는 고정 suffix 로 못 박는다.
-                  (placeholder 만으로는 입력 시작하는 순간 단위가 화면에서 사라진다) */}
-              <div className="relative min-w-0 col-start-2 row-start-2 lg:col-auto lg:row-auto">
-                <input
-                  type="text" inputMode="text" value={row.prize} maxLength={12}
-                  // 숫자(만원) 또는 "nT"(티켓 n장 — 오너 2026-09-05). 그 외 문자는 버린다.
-                  onChange={(e) => update(i, 'prize', e.target.value.replace(/[^\d.tT]/g, '').replace(/t/g, 'T'))}
-                  onKeyDown={(e) => { if (e.nativeEvent.isComposing) return; /* 한글 조합 확정 Enter 를 제출로 오인하지 않게 */ if (e.key === 'Enter' && i === rows.length - 1) addRow(); }}
-                  placeholder="프라이즈"
-                  aria-label="프라이즈 (만원 단위 · 티켓은 T)"
-                  title="만원 단위 · 100만원이면 100, 1,000만원이면 1000 · 티켓 상금은 10T, 20T (1T = 1만원)"
-                  className={['input w-full min-w-0 text-sm py-2 pr-7',
-                    prizeUnitRisk(row.prize) !== 'ok' ? 'border-amber-400/70 focus:border-amber-400 focus:ring-amber-400' : ''].join(' ')}
-                />
-                {/* 티켓 표기("1T")면 접미 '만' 이 거짓말이 되므로 숨긴다 */}
-                {parsePrizeTickets(row.prize) === 0 && (
-                  <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">만</span>
-                )}
-              </div>
               <button
                 type="button" onClick={() => removeRow(i)} aria-label="줄 삭제"
                 className="h-9 w-9 justify-self-center flex items-center justify-center rounded-input text-ink-muted hover:text-danger transition-colors col-start-4 row-start-1 lg:col-auto lg:row-auto lg:order-last"
               >
                 <Icon name="close" size={14} />
               </button>
-              {/* 모바일 2줄(고정 그리드로 칸 경계 정렬) · PC는 같은 행에 이어짐 */}
-              {vchOn && (
-                <div className="relative col-start-3 row-start-2 lg:col-start-5 lg:row-auto min-w-0 lg:w-auto">
-                  <input type="number" inputMode="numeric" value={row.voucher} onChange={(e) => update(i, 'voucher', e.target.value.replace(/[^\d]/g, ''))} placeholder="이용권" className="input w-full text-sm py-2 pr-7 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" />
-                  <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-2xs text-ink-muted">개</span>
-                </div>
-              )}
-              {/* 이용권 칸이 빠지면 모바일 2행 오른쪽이 비므로 비고가 그 폭을 흡수한다(빈 칸 방지) */}
-              <input type="text" value={row.note} onChange={(e) => update(i, 'note', e.target.value)} maxLength={50} placeholder="비고" className={['input row-start-3 lg:col-auto lg:row-auto w-full min-w-0 text-sm py-2', vchOn ? 'col-start-2' : 'col-start-2 col-span-2'].join(' ')} />
-              {/* 맨 오른쪽 '전송' — 이 줄 한 명에게만 나간다(오너 지시 2026-08-28).
-                  비회원·미인증·동명이인 줄은 아예 눌리지 않는다: 예전엔 눌러 봐야 서버에서 막혔고
-                  그 실패가 '미지급 N명'으로 뭉개져 누가 왜 못 받았는지 알 수 없었다. */}
-              {vchOn && (() => {
-                const nick = row.nickname.trim();
-                const st = sendMap[nickKey(nick)];
-                const gate = sendGate(row);
-                const cnt = parseInt(row.voucher, 10);
-                const busy = st?.status === 'busy';
-                const sent = st?.status === 'sent';
-                const canSend = gate.ok && Number.isFinite(cnt) && cnt > 0 && !busy;
-                return (
-                  <button
-                    type="button" onClick={() => sendVoucher(i)} disabled={!canSend}
-                    title={gate.ok ? (sent ? '이미 보냈습니다. 다시 누르면 추가 발급됩니다' : '이 줄의 이용권을 지금 전송') : gate.reason}
-                    className={['col-start-3 row-start-3 lg:col-start-7 lg:row-auto h-9 w-full rounded-input border px-2 text-2xs font-bold transition-colors disabled:cursor-not-allowed',
-                      sent ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
-                        : st?.status === 'error' ? 'border-rose-500/40 bg-rose-500/10 text-rose-300'
-                          : canSend ? 'border-accent-400/60 bg-accent-300/10 text-accent-300 hover:bg-accent-300/20'
-                            : 'border-border-subtle bg-surface-high/40 text-ink-muted'].join(' ')}
-                  >
-                    {busy ? '전송 중…' : sent ? '✓ 전송됨' : <span className="inline-flex items-center justify-center gap-1"><Icon name="ticket" size={12} className="shrink-0" />전송</span>}
-                  </button>
-                );
-              })()}
-              {/* 행 단위 결과 — 성공은 개수까지, 실패는 서버가 준 사유 그대로. 토스트로 흘려보내면
-                  20줄 중 어느 줄 얘기인지 알 수 없어 '누구에게 다시 보내야 하나'가 사라진다. */}
-              {vchOn && (() => {
-                const nick = row.nickname.trim();
-                const st = sendMap[nickKey(nick)];
-                const gate = sendGate(row);
-                const cnt = parseInt(row.voucher, 10);
-                const wants = Number.isFinite(cnt) && cnt > 0;
-                // 매장 차원 사유(미승인·한도 0)는 위 배너가 한 번 말한다 — 줄마다 반복하면 20줄이 같은 문장으로 덮인다
-                const venueLevel = venueSendBlock();
-                const msg = st?.status === 'sent' ? { tone: 'ok', text: `매장이용권 ${st.count ? `${st.count}개 ` : ''}전송 완료` }
-                  : st?.status === 'error' ? { tone: 'err', text: st.msg ?? '전송에 실패했습니다' }
-                    : wants && !gate.ok && gate.reason !== '회원 확인 중…' && gate.reason !== venueLevel ? { tone: 'warn', text: gate.reason }
-                      : null;
-                if (!msg) return null;
-                return (
-                  <p className={['col-start-2 col-span-2 row-start-4 lg:col-start-2 lg:col-span-6 min-w-0 truncate text-2xs',
-                    msg.tone === 'ok' ? 'text-emerald-300' : msg.tone === 'err' ? 'text-rose-300' : 'text-amber-200'].join(' ')}
-                    title={msg.text}>
-                    {msg.tone === 'ok' ? '✓ ' : msg.tone === 'err' ? '✕ ' : '· '}{msg.text}
-                  </p>
-                );
-              })()}
             </li>
           ))}
         </ul>
       )}
-
-      {/* 프라이즈 단위 오입력 경고 — 저장 버튼을 누르기 전에 어느 등수가 이상한지 짚어 준다.
-          막지 않는 이유: 1,000만원 프라이즈는 실제로 있어서, 차단하면 정상 입력을 잃는다. */}
-      {(() => {
-        const bad = rows.map((r, i) => ({ no: i + 1, risk: prizeUnitRisk(r.prize) })).filter((x) => x.risk !== 'ok');
-        if (bad.length === 0) return null;
-        return (
-          <p className="t-desc break-keep rounded-input border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-amber-200">
-            <Icon name="alert" size={12} className="mr-0.5 inline-block align-[-1px] shrink-0" /><b>{bad.map((x) => `${x.no}위`).join(', ')}</b> 프라이즈가 큽니다. 이 칸은<b>만원 단위</b>예요.
-            100만원이면 <b>100</b>, 1,000만원이면 <b>1000</b>, 티켓은 <b>10T</b>(1T=1만원). 원 단위로 치면 매장·전국 프라이즈 순위가 크게 왜곡됩니다.
-          </p>
-        );
-      })()}
 
       <button type="button" onClick={addRow}
         className="w-full py-2 rounded-input border border-dashed border-border-default text-xs font-semibold text-ink-secondary hover:text-ink-primary hover:border-accent-400/50 transition-colors">

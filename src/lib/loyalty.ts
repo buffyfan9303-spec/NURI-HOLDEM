@@ -11,48 +11,26 @@ import type { IconName } from '../components/atoms/Icon';
 // ⚠ SHOP_MARKS(상점 마크)만은 이모지를 유지한다 — 닉네임 앞에 **문자열로 결합**돼 유통되는
 //   유저 보유 아이템이라, 글리프를 바꾸면 이미 산 아이템이 다른 물건이 된다.
 
-// ── 주간 리그 ────────────────────────────────────────────────────────────────
-export interface LeagueRow { userId: string; nickname: string; score: number; checkins: number; placements: number }
-export interface LeagueTier { key: string; label: string; icon: IconName; tone: string; min: number }
-export const LEAGUE_TIERS: LeagueTier[] = [
-  { key: 'diamond',  label: '다이아',   icon: 'gem',    tone: 'text-sky-300',     min: 100 },
-  { key: 'platinum', label: '플래티넘', icon: 'medal',  tone: 'text-slate-200',   min: 50 },
-  { key: 'goldT',    label: '골드',     icon: 'medal',  tone: 'text-gold-300',    min: 25 },
-  { key: 'silver',   label: '실버',     icon: 'circle', tone: 'text-slate-400',   min: 10 },
-  { key: 'bronze',   label: '브론즈',   icon: 'circle', tone: 'text-amber-700',   min: 1 },
-];
-export function leagueTierOf(score: number): LeagueTier | null {
-  return LEAGUE_TIERS.find((t) => score >= t.min) ?? null;
-}
-export async function getWeeklyLeague(limit = 20): Promise<LeagueRow[]> {
-  if (IS_MOCK) return [];
-  const { data, error } = await supabase.rpc('weekly_league', { p_limit: limit });
-  if (error) return [];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((r: any) => ({
-    userId: r.user_id, nickname: String(r.nickname ?? '회원'),
-    score: Number(r.score) || 0, checkins: Number(r.checkins) || 0, placements: Number(r.placements) || 0,
-  }));
-}
+// 주간 리그(weekly_league)의 클라이언트 호출은 2026-09-05 제거(법적위험완화 v3) — 상금 기준 항목이 섞인 파생 점수라
+// 랭킹 허브가 '미산정'으로 표시한다. 서버 함수는 그대로 남아 있다.
 
 // ── 주간 미션 ────────────────────────────────────────────────────────────────
-export type MissionGoalType = 'checkin' | 'post' | 'moneyin';
+export type MissionGoalType = 'checkin' | 'post'; // 'moneyin'(순위 등재)은 2026-09-05 종료 — 순위를 근거로 포인트를 주지 않는다
 export interface Mission { key: string; title: string; goal: number; reward: number; desc: string; type: MissionGoalType }
 // 고정 미션은 custom_missions(DB)로 이관됨 — 운영자가 기본 미션까지 전부 수정/중단/삭제 가능.
-// (claim_mission RPC의 옛 하드코딩 키 checkin2/post1/moneyin1 분기는 그대로 남아있어도 무해)
+// (claim_mission RPC의 옛 하드코딩 키 checkin2/post1 분기는 그대로 남아있어도 무해 — moneyin1 은 서버가 거절)
 export const MISSIONS: Mission[] = [];
 
 // 운영자 커스텀 미션(custom_missions) — 활성만 미션 보드에 병합. key는 'c<id>'.
 const GOAL_TYPE_LABEL: Record<MissionGoalType, (n: number) => string> = {
   checkin: (n) => `이번 주에 매장 QR 체크인을 ${n}번 하세요`,
   post: (n) => `이번 주에 커뮤니티 글을 ${n}개 쓰세요`,
-  moneyin: (n) => `이번 주에 대회 순위(머니인)에 ${n}번 들어보세요`,
 };
 export interface CustomMissionRow { id: number; title: string; goal_type: MissionGoalType; goal: number; reward: number; active: boolean }
 export async function getActiveMissions(): Promise<Mission[]> {
   if (IS_MOCK) return MISSIONS;
   const { data } = await supabase.from('custom_missions').select('*').eq('active', true).order('id');
-  const customs: Mission[] = ((data ?? []) as CustomMissionRow[]).map((r) => ({
+  const customs: Mission[] = ((data ?? []) as CustomMissionRow[]).filter((r) => r.goal_type in GOAL_TYPE_LABEL).map((r) => ({
     key: `c${r.id}`, title: r.title, goal: r.goal, reward: r.reward,
     desc: GOAL_TYPE_LABEL[r.goal_type]?.(r.goal) ?? '', type: r.goal_type,
   }));
@@ -83,18 +61,15 @@ function weekStartStr(): string {
   return mon.toLocaleDateString('en-CA');
 }
 export interface MissionProgress { key: string; current: number; claimed: boolean }
-export async function getMissionProgress(nickname: string | null, missions: Mission[] = MISSIONS): Promise<MissionProgress[]> {
+export async function getMissionProgress(_nickname: string | null, missions: Mission[] = MISSIONS): Promise<MissionProgress[]> {
   if (IS_MOCK) return missions.map((m) => ({ key: m.key, current: 0, claimed: false }));
   const ws = weekStartStr();
   const uid = (await currentUser())?.id;
   if (!uid) return missions.map((m) => ({ key: m.key, current: 0, claimed: false }));
   const wsIso = new Date(`${ws}T00:00:00`).toISOString();
-  const [ck, po, mo, cl] = await Promise.all([
+  const [ck, po, cl] = await Promise.all([
     supabase.from('checkins').select('id', { count: 'exact', head: true }).eq('user_id', uid).gte('created_at', wsIso),
     supabase.from('community_posts').select('id', { count: 'exact', head: true }).eq('user_id', uid).gte('created_at', wsIso),
-    nickname
-      ? supabase.from('venue_rankings').select('id', { count: 'exact', head: true }).ilike('nickname', nickname).gte('ranking_date', ws)
-      : Promise.resolve({ count: 0 } as { count: number | null }),
     supabase.from('mission_claims').select('mission_key').eq('user_id', uid).eq('week_start', ws),
   ]);
   const claimed = new Set(((cl as { data?: { mission_key: string }[] }).data ?? []).map((r) => r.mission_key));
@@ -102,7 +77,6 @@ export async function getMissionProgress(nickname: string | null, missions: Miss
   const byType: Record<MissionGoalType, number> = {
     checkin: (ck as { count: number | null }).count ?? 0,
     post: (po as { count: number | null }).count ?? 0,
-    moneyin: (mo as { count: number | null }).count ?? 0,
   };
   return missions.map((m) => ({ key: m.key, current: byType[m.type] ?? 0, claimed: claimed.has(m.key) }));
 }

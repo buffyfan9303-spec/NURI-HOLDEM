@@ -7,7 +7,6 @@ import { useMemo } from 'react';
 import Icon from '../atoms/Icon';
 import PosterCarousel from './PosterCarousel';
 import type { HomeBanner } from '../../api/homeBanners';
-import WeeklyBestStrip from './WeeklyBestStrip';
 import ScheduleCard from './ScheduleCard';
 import type { Schedule } from '../../api/schedules';
 import type { RegInfo } from '../../lib/regStatus';
@@ -26,7 +25,7 @@ const openNowSeen = () => { try { return localStorage.getItem(OPENNOW_SEEN) === 
 // 헤드라인의 라이브/일정 문구가 '지금'의 맥락은 이미 담고 있어 정보 손실이 없다.
 
 export default function HomeTab({
-  schedules, loaded, clocksLoaded, liveCount, regInfoBySchedule, onTools, onSelect, onVenue, onExplore, onLive, onRotiCommunity, active, banners = [],
+  schedules, loaded, clocksLoaded, liveCount, regInfoBySchedule, onTools, onSelect, onVenue, onExplore, onLive, onRotiCommunity, banners = [],
 }: {
   schedules: Schedule[];
   loaded: boolean;
@@ -44,7 +43,6 @@ export default function HomeTab({
   onVenue: (venueId: string) => void;
   onExplore: () => void;
   onLive: () => void;
-  active: boolean;
 }) {
   const now = new Date();
   const today = now.toLocaleDateString('en-CA');
@@ -259,8 +257,7 @@ export default function HomeTab({
 
       {/* 커뮤니티 인기글 1행은 오너 지시(2026-08-27)로 제거 — 홈은 일정·포스터에 집중 */}
 
-      {/* 주간 머니인 킹(브라우즈에서 이사) — 홈의 마지막 줄 */}
-      <WeeklyBestStrip active={active} />
+      {/* 주간 머니인 킹 스트립은 2026-09-05 제거(법적위험완화 v3 — 상금 기준 정렬 위젯) */}
     </div>
   );
 }

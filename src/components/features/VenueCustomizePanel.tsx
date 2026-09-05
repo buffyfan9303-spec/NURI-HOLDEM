@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useToast } from '../atoms/Toast';
 import Icon from '../atoms/Icon';
-import {
+import { DEFAULT_RANK_METRICS,
   getVenuePageConfig, setVenuePageConfig, getScoreEntries, addScoreEntry, deleteScoreEntry,
   getVenueRankingTotals, getVenuePlayerCounts, DEFAULT_PLACEMENT_POINTS,
   boardLabel, boardDesc, boardUnit, isCustomBoard, customKeyOf, boardPeriodStart, BOARD_PERIOD_LABEL,
@@ -21,7 +21,7 @@ const PAGE_TABS: { key: string; label: string }[] = [
   { key: 'community', label: '커뮤니티' },
 ];
 // 웹 데이터로 자동 산출되는 기본 보드 6종
-const BUILTIN_METRICS: RankBoardId[] = ['score', 'prize', 'moneyin_count', 'moneyin_rate', 'buyin_count', 'visit_count'];
+const BUILTIN_METRICS: RankBoardId[] = ['score', 'moneyin_count', 'moneyin_rate', 'buyin_count', 'visit_count']; // 'prize'(상금 합산)는 2026-09-05 폐지
 // 커스텀 보드 상한 — 오너 #18("포인트 지급/차감 메뉴를 더 추가"). 그 드롭다운의 항목이 곧
 // 이 보드들이라, 상한 3 이 메뉴 길이의 상한이었다. 6 으로 올린다(보드 종류 선택은 여전히 2개까지).
 const MAX_CUSTOM_BOARDS = 6;
@@ -299,11 +299,11 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
 
   const customBoards = cfg.customBoards ?? [];
   const allBoards: RankBoardId[] = [...BUILTIN_METRICS, ...customBoards.map((b) => `custom:${b.key}`)];
-  const metrics = (cfg.rankMetrics ?? ['score', 'prize']).filter((m) => allBoards.includes(m)).slice(0, 2);
+  const metrics = (cfg.rankMetrics ?? DEFAULT_RANK_METRICS).filter((m) => allBoards.includes(m)).slice(0, 2);
 
   const toggleMetric = (m: RankBoardId) => {
     setCfg((c) => {
-      const cur = ((c.rankMetrics ?? ['score', 'prize']) as RankBoardId[]).filter((x) => allBoards.includes(x)).slice(0, 2);
+      const cur = ((c.rankMetrics ?? DEFAULT_RANK_METRICS) as RankBoardId[]).filter((x) => allBoards.includes(x)).slice(0, 2);
       if (cur.includes(m)) {
         if (cur.length === 1) return c; // 최소 1개
         return { ...c, rankMetrics: cur.filter((x) => x !== m) };
@@ -370,7 +370,6 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
         rankTitles: cfg.rankTitles,
         placementPoints: cfg.placementPoints,
         customBoards: cfg.customBoards,
-        ticketPrizeDisplay: cfg.ticketPrizeDisplay, // 티켓 상금 표기(1T / 10만) — 이 허브 소유 키
       };
       await setVenuePageConfig(venueId, next);
       setCfg(next);
@@ -461,26 +460,7 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
           </div>
         </section>
 
-        {/* 티켓 상금 표기 — 오너 2026-09-05: "머니인·순위엔 1T 로 표기하되 매장이 선택할 수 있게".
-            가치는 어느 쪽이든 1T = 1만원(TICKET_MAN). 장부는 항상 만원 가치라 이 설정과 무관하다. */}
-        <section className="rounded-aura border card-aura p-3 space-y-2">
-          <h3 className="text-sm font-bold text-ink-primary">티켓 상금 표기 <span className="text-2xs font-normal text-ink-muted">(순위 입력에 1T·2T 로 적은 상금이 손님에게 보이는 방식)</span></h3>
-          <div className="flex gap-1.5" role="radiogroup" aria-label="티켓 상금 표기">
-            {([['ticket', '티켓 단위', '예) 10T'], ['won', '만원 가치', '예) 10만']] as const).map(([v, label, ex]) => {
-              const on = (cfg.ticketPrizeDisplay ?? 'ticket') === v;
-              return (
-                <button key={v} type="button" role="radio" aria-checked={on}
-                  onClick={() => setCfg((c) => ({ ...c, ticketPrizeDisplay: v }))}
-                  className={['flex-1 rounded-input border px-3 py-2 text-left transition-colors',
-                    on ? 'border-accent-400/50 bg-accent-300/15 text-ink-primary' : 'border-border-default text-ink-secondary hover:text-ink-primary'].join(' ')}>
-                  <span className="block text-xs font-bold">{label}</span>
-                  <span className="block text-2xs text-ink-muted">{ex}</span>
-                </button>
-              );
-            })}
-          </div>
-          <p className="text-2xs text-ink-muted">1T = 1만원입니다(10만 바인 = 10T). 머니인 포인트는 표기와 무관하게 이 가치로 계산되고, 장부 대차표는 항상 만원 가치로 보입니다.</p>
-        </section>
+        {/* '티켓 상금 표기' 설정은 2026-09-05 제거 — 순위에 상금을 입력하지 않으므로 소비처가 0 이다(저장된 page_config 값은 그대로). */}
 
         {/* ④ 기준 점수 — 오너 #18: 5등 고정이었던 것을 [+]로 원하는 등수까지 */}
         <section className="rounded-aura border card-aura p-3 space-y-2">
@@ -509,8 +489,8 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
             )}
           </div>
           <p className="text-2xs text-ink-muted">
-            한 등수당 <span className="font-semibold text-accent-300">최대 {PLACEMENT_POINT_MAX}점</span>입니다 — 서버가 지급 순간에 같은 상한으로 잘라내기 때문에,
-            더 큰 값을 저장해 두면 <span className="font-semibold">저장은 되는데 실제 지급은 {PLACEMENT_POINT_MAX}점</span>이 됩니다. 등수는 최대 {MAX_PLACEMENT_ROWS}등까지 정할 수 있어요.
+            한 등수당 <span className="font-semibold text-accent-300">최대 {PLACEMENT_POINT_MAX}점</span>입니다 — 서버가 집계 순간에 같은 상한으로 잘라내기 때문에,
+            더 큰 값을 저장해 두면 <span className="font-semibold">저장은 되는데 실제 집계는 {PLACEMENT_POINT_MAX}점</span>이 됩니다. 등수는 최대 {MAX_PLACEMENT_ROWS}등까지 정할 수 있어요.
           </p>
           <button type="button" onClick={() => setCfg((c) => ({ ...c, placementPoints: [...DEFAULT_PLACEMENT_POINTS] }))} className="btn-ghost text-2xs px-2">기본값(10·7·5·3·2)으로</button>
         </section>
@@ -834,7 +814,6 @@ function RankBoardPreview({ venueId, cfg }: { venueId: string; cfg: VenuePageCon
           const k = t.nickname.toLowerCase();
           const buyins = buyinBy[k] ?? 0;
           const value = metric === 'score' ? t.moneyPoints + (manualBy[k] ?? 0)
-            : metric === 'prize' ? t.prizeMan
             : metric === 'moneyin_count' ? t.appearances
             : buyins >= 5 ? Math.round((t.appearances / buyins) * 100) : -1;
           return { name: t.nickname, value };

@@ -148,12 +148,11 @@ export async function getRankingsBulk(
 }
 
 // ── 매장 커뮤니티 누적 순위 ────────────────────────────────────────────────────
-// 머니인 순위 = 순위(등수) 점수 누적, 프라이즈 순위 = 누적 프라이즈 금액(만원)
+// 매장 포인트 = 등수 점수 누적(비금전). 상금(프라이즈) 합산은 2026-09-05 폐지(법적위험완화 v3).
 export interface RankingTotal {
   nickname: string;
   realName: string;
   moneyPoints: number; // 머니인(순위점수) 누적
-  prizeMan: number;    // 프라이즈 누적(만원)
   appearances: number; // 등록 횟수
   bestPosition: number;
 }
@@ -205,29 +204,10 @@ export function formatPrize(prize: string | null | undefined, cfg?: Pick<VenuePa
   return man > 0 ? `${man.toLocaleString()}만` : String(prize);
 }
 
-// ── 프라이즈 단위 오입력 감지 ────────────────────────────────────────────────
-// 왜 필요한가: prize 는 '만원 단위' 자유 텍스트인데 순위 입력칸엔 단위 표기가 없었다.
-//   1등 100만원을 '1000000'(원)으로 치면 그 한 줄이 매장 프라이즈 보드와
-//   전국 통합 랭킹(global_ranking_totals)을 1만 배로 오염시키고, 되돌리려면
-//   그 날짜 순위를 통째로 다시 입력해야 한다.
-// 왜 차단이 아니라 경고인가: 1,000만원 프라이즈는 실제로 존재해서 막으면 정상 입력을 잃는다.
-//   1억(10,000만) 이상만 '사실상 불가'로 보고 저장 직전에 한 번 되묻는다.
-export const PRIZE_SUSPECT_MAN = 1_000;      // 1,000만원 — 원 단위 오입력 의심(경고만)
-export const PRIZE_IMPOSSIBLE_MAN = 10_000;  // 1억 — 펍 단일 입상금으로 사실상 불가(저장 전 재확인)
-
-export type PrizeUnitRisk = 'ok' | 'suspect' | 'impossible';
-/** 프라이즈 입력값의 단위 오입력 위험도 — 입력칸 경고와 저장 전 확인이 같은 기준을 쓰도록 단일화 */
-export function prizeUnitRisk(prize?: string | null): PrizeUnitRisk {
-  const man = parsePrizeMan(prize);
-  if (man >= PRIZE_IMPOSSIBLE_MAN) return 'impossible';
-  if (man >= PRIZE_SUSPECT_MAN) return 'suspect';
-  return 'ok';
-}
-
 export async function getVenueRankingTotals(venueId: string, cfg?: VenuePageConfig | null): Promise<RankingTotal[]> {
   if (IS_MOCK) return [];
   const { data, error } = await supabase
-    .from('venue_rankings').select('nickname, real_name, position, prize, ranking_date')
+    .from('venue_rankings').select('nickname, real_name, position, ranking_date')
     .eq('venue_id', venueId);
   if (error) throw error;
   const map = new Map<string, RankingTotal & { _lastDate: string }>();
@@ -237,10 +217,9 @@ export async function getVenueRankingTotals(venueId: string, cfg?: VenuePageConf
     if (!nick) continue;
     const key = nick.toLowerCase();
     const cur = map.get(key) ?? {
-      nickname: nick, realName: '', moneyPoints: 0, prizeMan: 0, appearances: 0, bestPosition: 9999, _lastDate: '',
+      nickname: nick, realName: '', moneyPoints: 0, appearances: 0, bestPosition: 9999, _lastDate: '',
     };
     cur.moneyPoints += cfg ? placementPointsOf(r.position, cfg) : placementPoints(r.position);
-    cur.prizeMan += parsePrizeMan(r.prize);
     cur.appearances += 1;
     cur.bestPosition = Math.min(cur.bestPosition, r.position);
     const d = String(r.ranking_date ?? '');
@@ -252,14 +231,14 @@ export async function getVenueRankingTotals(venueId: string, cfg?: VenuePageConf
 }
 
 // ── 매장 페이지 구성(업주 설정) — venues.page_config jsonb ─────────────────────
-export type RankMetric = 'score' | 'prize' | 'moneyin_count' | 'moneyin_rate' | 'buyin_count' | 'visit_count';
+// 'prize'(상금 합산 보드)는 2026-09-05 폐지 — 저장된 page_config 에 남아 있어도 화면이 걸러 낸다(데이터는 그대로).
+export type RankMetric = 'score' | 'moneyin_count' | 'moneyin_rate' | 'buyin_count' | 'visit_count';
 export const RANK_METRIC_LABEL: Record<RankMetric, string> = {
-  score: '매장 포인트', prize: '프라이즈 점수', moneyin_count: '머니인 횟수', moneyin_rate: '머니인 비율',
+  score: '매장 포인트', moneyin_count: '머니인 횟수', moneyin_rate: '머니인 비율',
   buyin_count: '바인왕(참여)', visit_count: '출석왕(방문)',
 };
 export const RANK_METRIC_DESC: Record<RankMetric, string> = {
   score: '등수 점수(설정 가능) + 수동 지급 포인트 합산',
-  prize: '순위 등록 시 입력한 프라이즈 점수 누적',
   moneyin_count: '순위(입상) 등록 횟수',
   moneyin_rate: '머니인 횟수 ÷ 바인 횟수 (장부 기준, 5바인 이상만 표시)',
   buyin_count: '장부 바인 횟수 누적 · 가장 많이 참여한 플레이어',
@@ -286,17 +265,18 @@ export function boardPeriodStart(board?: CustomBoard | null): string | null {
 }
 /** 보드 id — 기본 6종(RankMetric) 또는 'custom:<key>' */
 export type RankBoardId = RankMetric | string;
+/** 미설정 매장의 기본 보드 — 상금 보드 폐지 후 비금전 두 보드(등수 점수 · 입상 횟수) */
+export const DEFAULT_RANK_METRICS: RankBoardId[] = ['score', 'moneyin_count'];
 
 export interface VenuePageConfig {
   tabOrder?: string[];                    // 매장 페이지 탭 순서(키 배열)
-  rankMetrics?: RankBoardId[];            // 순위 탭 보드(1~2개), 미설정 시 ['score','prize']
+  rankMetrics?: RankBoardId[];            // 순위 탭 보드(1~2개), 미설정 시 DEFAULT_RANK_METRICS
   rankTitles?: Record<string, string>;    // '1'|'2'|'3' → 커스텀 칭호 (예: 로티아레나 포식자)
   placementPoints?: number[];             // 1등부터의 점수 매핑(그 외 등수 = 마지막 값 또는 1)
   customBoards?: CustomBoard[];           // 커스텀 보드 정의(최대 3)
   notifyStaff?: boolean;                  // 직원 호출/공지 알림 수신
   clockTheme?: import('../components/features/clock/clockTheme').ClockTheme; // TV 송출 클락 테마 v1
-  /** 순위·머니인에서 티켓 상금을 어떻게 보일지 — 'ticket'(기본, "10T") | 'won'("10만").
-   *  가치는 어느 쪽이든 1T = 1만원(TICKET_MAN). 장부 대차표는 항상 만원 가치라 이 설정과 무관하다. */
+  /** 레거시(2026-09-05 순위·금액 분리 이후 UI 소비자 0) — 저장된 page_config 키 호환·formatPrize 테스트용으로만 남긴다. 다시 UI 에 붙이지 말 것. */
   ticketPrizeDisplay?: 'ticket' | 'won';
 }
 
@@ -421,69 +401,38 @@ export async function getVenuePlayerCounts(venueId: string): Promise<PlayerCount
 }
 
 /**
- * 전 매장 통합 랭킹(커뮤니티 랭킹) — 닉네임별 머니인 점수·횟수·프라이즈 점수.
- *
- * moneyinPoints 가 머니인 보드의 정렬 기준이다(오너 #6): 100만원(100T)당 1점.
- *   계산은 서버 `public.moneyin_points()` 한 곳에만 있다 — 여기서 재계산하면 규칙이 둘로 갈린다.
- * moneyinCount(입상 횟수)는 없애지 않고 보조 정보로 계속 내려준다.
+ * 전국 대회 머니인 입상 경력(비금전) — 오너 결정 2026-09-05: 전국 랭킹은 '대회 머니인 입상 경력'만 센다.
+ *  매장이 등록한 대회 순위(venue_rankings)에서 입상 횟수·우승·TOP3·최고 등수·입상 매장 수·최근 입상일을 집계한다.
+ *  상금·금액은 어디에도 쓰지 않는다(20260905h global_ranking_totals). 정렬은 careerCompare 한 곳.
+ *  주간 머니인 킹·주간 리그는 삭제됐다.
  */
 export interface GlobalRankingTotal {
-  nickname: string; moneyinCount: number; moneyinPoints: number; prizePoints: number; bestPosition: number; venues: number;
+  nickname: string; moneyinCount: number; wins: number; top3: number; bestPosition: number; venues: number; lastDate: string | null;
 }
-export async function getGlobalRankingTotals(): Promise<GlobalRankingTotal[]> {
+export type CareerPeriod = 'all' | 'year' | '90d';
+export const CAREER_PERIOD_LABEL: Record<CareerPeriod, string> = { all: '전체', year: '올해', '90d': '최근 90일' };
+/** 기간 → 서버 p_since(YYYY-MM-DD, 로컬 날짜). 'all' 은 null. */
+export function careerSince(period: CareerPeriod, now = new Date()): string | null {
+  if (period === 'all') return null;
+  const d = period === 'year' ? new Date(now.getFullYear(), 0, 1) : new Date(now.getTime() - 90 * 86_400_000);
+  return d.toLocaleDateString('en-CA');
+}
+/** 입상 횟수 → 우승 → TOP3 → 최고 등수 → 최근 입상 → 이름. 서버 ORDER BY 와 같은 규칙(화면·백분위가 한 규칙을 쓴다). */
+export function careerCompare(a: GlobalRankingTotal, b: GlobalRankingTotal): number {
+  return (b.moneyinCount - a.moneyinCount) || (b.wins - a.wins) || (b.top3 - a.top3) || (a.bestPosition - b.bestPosition)
+    || (b.lastDate ?? '').localeCompare(a.lastDate ?? '') || a.nickname.localeCompare(b.nickname);
+}
+export async function getGlobalRankingTotals(period: CareerPeriod = 'all'): Promise<GlobalRankingTotal[]> {
   if (IS_MOCK) return [];
-  const { data, error } = await supabase.rpc('global_ranking_totals');
-  if (error) return [];
+  const { data, error } = await supabase.rpc('global_ranking_totals', { p_since: careerSince(period) });
+  if (error) throw error; // 실패를 '0건'으로 위장하면 화면이 '아직 없어요'로 굳는다(2026-09-05 감사)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((r: any) => ({
-    nickname: String(r.nickname), moneyinCount: Number(r.moneyin_count) || 0,
-    moneyinPoints: Number(r.moneyin_points) || 0,
-    prizePoints: Number(r.prize_points) || 0, bestPosition: Number(r.best_position) || 0, venues: Number(r.venues) || 0,
-  }));
+  return ((data ?? []) as any[]).map((r) => ({
+    nickname: String(r.nickname ?? ''), moneyinCount: Number(r.moneyin_count) || 0, wins: Number(r.wins) || 0, top3: Number(r.top3) || 0,
+    bestPosition: Number(r.best_position) || 0, venues: Number(r.venues) || 0, lastDate: r.last_date ? String(r.last_date) : null,
+  })).sort(careerCompare);
 }
 
-// ── 주간 베스트(이번 주 머니인 킹 TOP3) — 메인 상단 롤링 위젯용 ─────────────────
-// 주초라 이번 주 기록이 아직 없으면 지난주 킹으로 폴백(라벨용 isLastWeek 플래그).
-//
-// 2026-08-29(오너 #6): 예전엔 여기서 venue_rankings 를 통째로 받아 클라이언트가 행 수를 셌다.
-//   그러면 '머니인 킹'이 금액과 무관한 횟수 1위가 되어 주간리그·머니인 탭의 새 규칙과 어긋나고,
-//   같은 규칙이 서버·클라이언트 두 곳에 생긴다. 집계를 weekly_moneyin_kings RPC 로 옮겨
-//   moneyin_points() 단일 정의를 그대로 쓰게 했다(전량 전송도 함께 사라진다).
-// 2026-08-30(오너 #15): 닉네임 옆에 '그 주에 가장 점수를 많이 딴 매장'을 괄호로 붙인다.
-//   집계는 weekly_moneyin_kings 안에서 같은 CTE 로 한다 — 매장을 따로 조회하면 왕복이 2회가 되고
-//   두 응답의 주간 창이 갈릴 수 있다. 같은 쿼리에서 뽑으면 '이 점수를 어디서 벌었나'가 정의상 일치한다.
-//   승인·활성 매장이 하나도 없으면 undefined — 화면은 괄호를 아예 그리지 않는다(빈 괄호 금지).
-export interface WeeklyKing { nickname: string; moneyinCount: number; moneyinPoints: number; bestPosition: number; topVenue?: string }
-export interface WeeklyKings { kings: WeeklyKing[]; isLastWeek: boolean }
-
-async function moneyinKingsBetween(fromStr: string, toStr: string | null, limit: number): Promise<WeeklyKing[]> {
-  const { data, error } = await supabase.rpc('weekly_moneyin_kings', {
-    p_from: fromStr, p_to: toStr, p_limit: limit,
-  });
-  if (error) return [];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((r: any) => ({
-    nickname: String(r.nickname ?? ''),
-    moneyinCount: Number(r.moneyin_count) || 0,
-    moneyinPoints: Number(r.moneyin_points) || 0,
-    bestPosition: Number(r.best_position) || 0,
-    topVenue: String(r.top_venue ?? '').trim() || undefined,
-  }));
-}
-
-export async function getWeeklyMoneyinKings(limit = 3): Promise<WeeklyKings> {
-  if (IS_MOCK) return { kings: [], isLastWeek: false };
-  const now = new Date();
-  const mon = new Date(now);
-  mon.setDate(now.getDate() - ((now.getDay() + 6) % 7)); // 이번 주 월요일
-  const monStr = mon.toLocaleDateString('en-CA');
-  const thisWeek = await moneyinKingsBetween(monStr, null, limit);
-  if (thisWeek.length > 0) return { kings: thisWeek, isLastWeek: false };
-  const lastMon = new Date(mon);
-  lastMon.setDate(mon.getDate() - 7);
-  const lastWeek = await moneyinKingsBetween(lastMon.toLocaleDateString('en-CA'), monStr, limit);
-  return { kings: lastWeek, isLastWeek: true };
-}
 
 // ── 내 입상 기록(개인 대시보드) — 닉네임 기준 전 매장 순위 등록 이력 ────────────
 export interface MyRankingRow { date: string; venueName: string; position: number; prize: string | null }
@@ -549,24 +498,23 @@ export async function resolveRankingMembers(names: string[]): Promise<Map<string
   return out;
 }
 
+/**
+ * 순위 저장 — 참가자·등수만 보낸다(법적위험완화 v3, 2026-09-05).
+ *  · 상금(prize)은 더 이상 입력·전송하지 않는다. 서버(save_venue_rankings, 20260905g)는 입력값의 prize 를 무시하고
+ *    같은 (매장·날짜·게임·닉네임) 행에 남아 있던 과거 prize 만 그대로 승계한다 — 재저장이 과거 원본을 공란으로 덮지 않는다.
+ *  · 저장은 이용권·활동점수 어느 것도 만들지 않는다(서버에서 제거).
+ *  · 구형 3-인자 RPC 폴백은 삭제 — 운영 DB 는 4-인자만 남겼다(20260905g DROP). 이벤트 차원을 무시하고 그 날짜 전체를 지우던 경로였다.
+ */
 export async function saveVenueRankings(
   venueId: string,
   date: string,
-  entries: { nickname: string; realName: string; prize?: string }[],
+  entries: { nickname: string; realName: string }[],
   eventName = '',
 ): Promise<void> {
   if (IS_MOCK) return;
-  const payload = entries.map((e) => ({ nickname: e.nickname, realName: e.realName, prize: e.prize ?? '' }));
+  const payload = entries.map((e) => ({ nickname: e.nickname, realName: e.realName }));
   const { error } = await supabase.rpc('save_venue_rankings', {
     p_venue_id: venueId, p_date: date, p_entries: payload, p_event: eventName,
   });
-  if (!error) return;
-  // 구버전 RPC(3-인자) — 이벤트 차원 마이그레이션 전: 기본 게임('')은 기존 방식으로 저장
-  if ((error.code === 'PGRST202' || /p_event/.test(error.message ?? '')) && !eventName) {
-    const { error: e2 } = await supabase.rpc('save_venue_rankings', { p_venue_id: venueId, p_date: date, p_entries: payload });
-    if (e2) throw e2;
-    return;
-  }
-  if (error.code === 'PGRST202') throw new Error('게임(이벤트)별 저장은 DB 업데이트 후 가능합니다. 운영자에게 문의하세요');
-  throw error;
+  if (error) throw error;
 }

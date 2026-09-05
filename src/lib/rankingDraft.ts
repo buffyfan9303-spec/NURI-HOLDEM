@@ -13,10 +13,18 @@
 // 왜 TTL 인가: 저장이 (날짜+게임) 단위 '전체 교체'(save_venue_rankings)라, 오래된 초안이
 //   되살아나 저장되면 이미 저장된 순위를 덮어쓴다. 복구 가치가 있는 건 대회 다음날까지다.
 
+// 2026-09-05(법적위험완화 v3): prize·voucher·note 를 뺐다 — 순위 입력은 참가자·등수만 받는다.
+// 48h 안의 구형 초안에 남은 세 필드는 readRowsDraft 가 버린다(신규 저장·발급으로 재유입 금지).
 export interface RankRow {
-  nickname: string; realName: string; prize: string; voucher: string; note: string;
-  member?: boolean | null;
+  nickname: string; realName: string;
 }
+
+/** 구형 초안 호환 — 참가자 필드만 남긴다(prize·voucher·note 는 어떤 경로로도 되살리지 않는다). */
+const sanitizeRows = (rows: unknown): RankRow[] =>
+  (Array.isArray(rows) ? rows : []).map((r) => {
+    const o = (r ?? {}) as Record<string, unknown>;
+    return { nickname: String(o.nickname ?? ''), realName: String(o.realName ?? '') };
+  });
 
 const PREFIX = 'nuri:rank-draft:';
 export const RANK_DRAFT_TTL_MS = 48 * 60 * 60 * 1000; // 48시간
@@ -30,7 +38,7 @@ export const rankDraftKey = (venueId: string, date: string, eventName: string) =
 
 /** 의미 있는 입력이 하나라도 있는가 — 빈 줄만 있는 상태를 초안으로 남기면 복원이 오히려 방해된다 */
 export function hasRowContent(rows: RankRow[]): boolean {
-  return rows.some((r) => r.nickname.trim() || r.realName.trim() || r.prize.trim() || r.voucher.trim() || r.note.trim());
+  return rows.some((r) => r.nickname.trim() || r.realName.trim());
 }
 
 export function writeRowsDraft(key: string, rows: RankRow[], now = Date.now()): void {
@@ -45,7 +53,7 @@ export function writeRowsDraft(key: string, rows: RankRow[], now = Date.now()): 
 
 export function readRowsDraft(key: string, now = Date.now()): RankRow[] | null {
   const fresh = (e: DraftEntry | undefined | null) =>
-    e && Array.isArray(e.rows) && e.rows.length > 0 && now - e.ts <= RANK_DRAFT_TTL_MS ? e.rows : null;
+    e && Array.isArray(e.rows) && e.rows.length > 0 && now - e.ts <= RANK_DRAFT_TTL_MS ? (() => { const r = sanitizeRows(e.rows); return hasRowContent(r) ? r : null; })() : null;
   const m = fresh(mem.get(key));
   if (m) return m;
   try {

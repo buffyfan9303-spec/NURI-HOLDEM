@@ -23,7 +23,7 @@ import IntegratedSearchBar, { expandRegions } from './components/features/Integr
 import type { SearchState } from './components/features/IntegratedSearchBar';
 import ScheduleCard from './components/features/ScheduleCard';
 import ScheduleTable from './components/features/ScheduleTable';
-import { getWeeklyMoneyinKings, getRankingsBulk, formatPrize, type WeeklyKing, type RankingEntry } from './api/rankings';
+import { getRankingsBulk, type RankingEntry } from './api/rankings';
 import { getReservationCounts, getMyReservations, type MyReservationRow } from './api/reservations';
 import { getVenueRatings } from './api/reviews';
 import NotificationPanel from './components/features/NotificationPanel';
@@ -35,7 +35,7 @@ import type { DeepGtoInit } from './components/features/gto/useDeepGto';
 import type { PosterFormData } from './components/features/PosterFormModal';
 import NuriHoldemLogo from './components/atoms/NuriHoldemLogo';
 import NuriMark from './components/atoms/NuriMark';
-import Icon, { type IconName } from './components/atoms/Icon';
+import Icon from './components/atoms/Icon';
 import Avatar from './components/atoms/Avatar';
 import ThemeToggle from './components/atoms/ThemeToggle';
 import { useTheme } from './contexts/ThemeContext';
@@ -2658,7 +2658,6 @@ export default function App() {
               const roti = venues.find((v) => v.name.replace(/\s+/g, '').includes('로티아레나'));
               if (roti) handleVenueClick(roti.id); else changeTab('community');
             }}
-            active={activeTab === 'home'}
           />
         </main>
       )}
@@ -3402,9 +3401,7 @@ const PastTournaments = memo(function PastTournaments({ schedules, onSelect }: {
                           {medal(e.position) ?? `${e.position}위`}
                         </span>
                         <span className="min-w-0 flex-1 truncate font-semibold text-ink-primary">{e.nickname}</span>
-                        {/* 개인 대시보드와 같은 포매터 — 여러 매장이 섞이는 화면이라 티켓은 "1T"(매장 설정 무관).
-                            예전엔 여기만 parsePrizeMan+'만' 이라 같은 사람이 두 화면에서 '1T' 와 '10만' 을 따로 봤다. */}
-                        {e.prize && <span className="shrink-0 text-xs tabular-nums text-accent-300">{formatPrize(e.prize)}</span>}
+                        {/* 상금 표기는 2026-09-05 제거(법적위험완화 v3) — 지난 대회 결과는 등수·닉네임만 */}
                       </li>
                     ))}
                   </ul>
@@ -3422,30 +3419,19 @@ const PastTournaments = memo(function PastTournaments({ schedules, onSelect }: {
   );
 });
 
-// ── PC 우측 위젯 레일(일정탐색) — 오늘 요약·주간 머니인 킹·HOT 게시글 ──────────
+// ── PC 우측 위젯 레일(일정탐색) — 곧 시작·HOT 게시글 (주간 머니인 킹은 2026-09-05 제거) ─────
 const BrowseSideRail = memo(function BrowseSideRail({ posts, schedules, onSelectPost, onSelectSchedule }: {
   posts: CommunityPost[];
   schedules: Schedule[];
   onSelectPost: (p: CommunityPost) => void;
   onSelectSchedule: (s: Schedule) => void;
 }) {
-  const [kings, setKings] = useState<WeeklyKing[]>([]);
-  useEffect(() => {
-    getWeeklyMoneyinKings(3).then((r) => setKings(r.kings)).catch(() => {});
-  }, []);
   const today = new Date().toLocaleDateString('en-CA');
   const { isBlocked } = useBlocks();
   const hot = [...posts]
     .filter((p) => !isBlocked(p.userId) && !p.blinded && (p.viewCount ?? 0) > 0 && Date.now() - new Date(p.createdAt).getTime() < 6 * 3600 * 1000)
     .sort((a, b) => (b.viewCount ?? 0) - (a.viewCount ?? 0))
     .slice(0, 3);
-  // 순위 표식 — 이모지는 OS 마다 그림이 달라 1·2·3위의 위계가 기기별로 뒤집혀 보였다.
-  // 색(금·은·동)으로 위계를 주고 글리프는 하나로 통일한다.
-  const medal: { name: IconName; tone: string }[] = [
-    { name: 'crown', tone: 'text-gold-300' },
-    { name: 'medal', tone: 'text-slate-200' },
-    { name: 'medal', tone: 'text-amber-600' },
-  ];
   // 곧 시작 — 오늘 이후 가장 가까운 대회 3개(날짜→시간 순)
   const upcoming = [...schedules]
     .filter((s) => s.approved && s.date >= today)
@@ -3474,22 +3460,6 @@ const BrowseSideRail = memo(function BrowseSideRail({ posts, schedules, onSelect
                     <span className="block truncate text-xs text-ink-muted">{s.pubName} · {s.startTime}</span>
                   </span>
                 </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {/* 주간 머니인 킹 */}
-      {kings.length > 0 && (
-        <section className="reveal rounded-card border border-accent-400/25 bg-surface-low overflow-hidden">
-          <header className="border-b border-border-subtle px-3 py-2 text-xs font-bold text-accent-300">이번 주 머니인 킹</header>
-          <ul>
-            {kings.map((k, i) => (
-              <li key={k.nickname} className="flex items-center gap-2 border-b border-border-subtle px-3 py-2 last:border-b-0">
-                <Icon name={medal[i]?.name ?? 'medal'} size={15} className={['shrink-0', medal[i]?.tone ?? 'text-ink-muted'].join(' ')} />
-                <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink-primary">{k.nickname}</span>
-                <span className="shrink-0 text-xs tabular-nums text-ink-muted">{k.moneyinCount}회</span>
               </li>
             ))}
           </ul>
