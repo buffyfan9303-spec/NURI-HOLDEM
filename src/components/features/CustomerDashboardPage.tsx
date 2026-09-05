@@ -57,7 +57,7 @@ const ME_TABS: { key: MeTab; label: string }[] = [
   { key: 'security',  label: '보안' },
 ];
 
-export default function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification, onOpenPost, onOpenMarket, onOpenRanking, initialTab = 'dashboard', onOpenLegal, onOpenSupport }: {
+export default function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification, onOpenPost, onOpenMarket, onOpenRanking, initialTab = 'dashboard', onOpenLegal, onOpenSupport, onReservationChange }: {
   open: boolean; onClose: () => void;
   /** 미읽음 알림 미리보기(상위 3개) — 프로필 메뉴까지 안 가도 되게 */
   unread?: { id: string; title: string; message: string; createdAt: string }[];
@@ -72,6 +72,9 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
   /** 프로필 탭 하단 약관·고객센터(구 ProfileModal props 그대로) */
   onOpenLegal?: (d: LegalDoc) => void;
   onOpenSupport?: () => void;
+  /** 여기서 예약을 취소했다 — App 이 홈 '오늘 예약한 대회'·카드 '예약 N'·캘린더를 다시 읽는다(F06).
+   *  상세 모달(ReserveBox)과 같은 신호를 쓰므로 어느 경로로 취소해도 숫자가 갈리지 않는다. */
+  onReservationChange?: () => void;
 }) {
   const { user } = useAuth();
   const toast = useToast();
@@ -414,6 +417,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
                         await cancelMyReservation(r.scheduleId);
                         toast.show('예약을 취소했습니다', 'success');
                         setResv((prev) => prev.filter((x) => x.scheduleId !== r.scheduleId));
+                        onReservationChange?.(); // 홈·카드 '예약 N'·캘린더도 같은 사실을 보게 한다(F06)
                       } catch (e) {
                         toast.show(e instanceof Error ? e.message : '예약 취소 실패', 'error');
                       }

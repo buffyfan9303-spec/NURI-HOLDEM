@@ -40,6 +40,9 @@ interface ScheduleDetailModalProps {
   onDeleteComment?: (commentId: string) => void;
   /** 관리자 마스터 삭제(포스터) */
   onDeletePoster?: (id: string) => void;
+  /** 내 예약/취소가 성공했다 — App 이 홈 '오늘 예약한 대회'·카드 '예약 N'·캘린더를 다시 읽는다(F06).
+   *  값을 나르지 않는 신호다. 실패하면 호출하지 않으므로 화면 숫자가 서버보다 앞서가지 않는다. */
+  onReservationChange?: () => void;
   /** 데스크탑 2-pane 우측 패널로 인라인 렌더 */
   inline?: boolean;
   /** UX-1: 라이브 클락 실측 레지 상태 — '매장에 확인해 주세요'를 실제 답으로 교체 */
@@ -100,7 +103,7 @@ function Head({ icon, tile = '', children }: { icon: IconName; tile?: string; ch
 }
 
 export default function ScheduleDetailModal({
-  schedule: scheduleProp, open, onClose, onVenueClick, rating, comments, onSubmitComment, onDeleteComment, onDeletePoster, inline, regInfo,
+  schedule: scheduleProp, open, onClose, onVenueClick, rating, comments, onSubmitComment, onDeleteComment, onDeletePoster, inline, regInfo, onReservationChange,
 }: ScheduleDetailModalProps) {
   const [tab, setTab] = useState<Tab>('main');
   const [lightbox, setLightbox] = useState(false);
@@ -412,7 +415,8 @@ export default function ScheduleDetailModal({
         {/* status 를 계산해 넘기지 않고 date/startTime 을 넘긴다 — 모달을 열어둔 채 종료 시각을
             넘길 수 있어, 클릭 시점에 다시 판정해야 하기 때문 */}
         <ReserveBox scheduleId={schedule.id} ownerId={schedule.ownerId} venueId={schedule.venueId}
-          date={schedule.date} startTime={schedule.startTime} sched={schedule} regInfo={regInfo} />
+          date={schedule.date} startTime={schedule.startTime} sched={schedule} regInfo={regInfo}
+          onReservationChange={onReservationChange} />
 
         {/* 현장 바인(참가) 요청 — 대회 당일에만 연다. 요청이 '오늘' 장부로 들어가기 때문(위 kToday 주석)
             지난 대회에선 안내조차 띄우지 않는다 — 할 수 있는 게 없어 소음일 뿐이라. */}
@@ -972,7 +976,7 @@ function BuyinRequestBox({ venueId, eventDate }: { venueId: string; eventDate: s
   );
 }
 
-function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regInfo }: { scheduleId: string; ownerId?: string | null; venueId?: string | null; date: string; startTime: string; sched: Schedule; regInfo?: RegInfo }) {
+function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regInfo, onReservationChange }: { scheduleId: string; ownerId?: string | null; venueId?: string | null; date: string; startTime: string; sched: Schedule; regInfo?: RegInfo; onReservationChange?: () => void }) {
   const { user } = useAuth();
   const toast = useToast();
   // undefined = 아직 조회 안 함 · null = 조회했고 예약 없음.
@@ -1026,6 +1030,7 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
     try {
       await cancelMyReservation(scheduleId); setMine(null); toast.show('예약을 취소했습니다', 'info');
       loadRes();
+      onReservationChange?.(); // 홈·카드 '예약 N'·캘린더까지 같은 사실을 보게 한다(F06)
     } catch (e) {
       toast.show(e instanceof Error ? e.message : '처리 실패', 'error');
     }
@@ -1055,6 +1060,7 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
     setMine({ id: '', scheduleId, userId: user.id, displayName: n, createdAt: new Date().toISOString() });
     setJustReserved(true); // 성공 패널이 다음 행동(캘린더·알림)까지 안내 — 토스트 대체
     loadRes();
+    onReservationChange?.(); // 서버 저장이 이미 성공한 뒤다 — 여기서 실패해도 '예약 실패'가 아니다(F06)
   };
   // D-day — 대회는 보통 며칠 뒤라, 잊지 않게 하는 장치(캘린더·알림)와 함께 보여준다
   const ddayNum = Math.round((new Date(date + 'T00:00:00').getTime() - new Date(new Date().toLocaleDateString('en-CA') + 'T00:00:00').getTime()) / 86400000);

@@ -80,6 +80,28 @@ describe('같은 대상을 다시 지우면 타이머가 겹치지 않는다', (
   });
 });
 
+// keys() 는 '유예 중인 행을 재조회 결과에서 빼는' 필터의 입력이다(App 의 일정 커밋 게이트).
+// 여기서 흘리면 방금 지운 포스터가 목록에 되살아난다.
+describe('keys. 아직 안 나간 대상만 정확히 말한다', () => {
+  it('대기 중인 것만 담고, 취소·실행된 것은 빠진다', () => {
+    const q = createUndoQueue(5000);
+    expect(q.keys()).toEqual([]);
+    q.schedule('a', vi.fn()); q.schedule('b', vi.fn());
+    expect([...q.keys()].sort()).toEqual(['a', 'b']);
+    q.cancel('a');
+    expect(q.keys()).toEqual(['b']);
+    vi.advanceTimersByTime(5000);
+    expect(q.keys()).toEqual([]); // 서버로 나간 뒤에는 더 이상 거르지 않는다(서버가 정본)
+  });
+
+  it('flushAll 뒤에는 비어 있다', () => {
+    const q = createUndoQueue(5000);
+    q.schedule('a', vi.fn());
+    q.flushAll();
+    expect(q.keys()).toEqual([]);
+  });
+});
+
 describe('flushAll. 화면을 벗어날 때 "지웠는데 안 지워짐"을 막는다', () => {
   it('대기 중인 것들을 즉시 전부 내보낸다', () => {
     const a = vi.fn(); const b = vi.fn();

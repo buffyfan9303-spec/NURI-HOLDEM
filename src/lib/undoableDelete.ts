@@ -11,6 +11,8 @@ export interface UndoQueue {
   cancel(key: string): boolean;
   /** 대기 중인 삭제를 즉시 실행 — 화면 이탈 시 '지웠는데 안 지워짐'을 막는다 */
   flushAll(): void;
+  /** 아직 안 나간 대상들. 유예 중 재조회가 '이미 화면에서 지운 행'을 되살리지 않게 걸러낼 때 쓴다. */
+  keys(): string[];
   readonly size: number;
 }
 
@@ -32,6 +34,7 @@ export function createUndoQueue(delayMs = 5000): UndoQueue {
     flushAll() {
       for (const [k, e] of [...q]) { clearTimeout(e.timer); q.delete(k); e.run(); }
     },
+    keys() { return [...q.keys()]; },
     get size() { return q.size; },
   };
 }
