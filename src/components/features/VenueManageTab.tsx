@@ -32,6 +32,7 @@ import { type LedgerLinkTarget } from '../../lib/ledgerLink';
 import { rankingEventOf } from '../../lib/rankingGame'; // 게임 이름(순위 event) 규칙 — F02
 import VenueCustomizePanel, { VenueRankHub } from './VenueCustomizePanel';
 import SectionHeader from '../atoms/SectionHeader';
+import LoadErrorCard from '../atoms/LoadErrorCard';
 import SlidingPill from '../atoms/SlidingPill';
 import { getSchedules, type Schedule } from '../../api/schedules';
 import { getLedgerBuyins, kstToday, getPendingBuyinRequests, subscribeBuyinRequests, getLedgerGames, MAIN_GAME_SEQ, type LedgerGame } from '../../api/ledger';
@@ -213,6 +214,11 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   const idOn = useIdentityEnabled();
   const voucherView = voucherViewRaw && idOn;
   const [permsLoaded, setPermsLoaded] = useState(false);
+  // 권한 '조회 실패'는 '권한 없음'이 아니다(§5-4). 예전엔 catch 가 section=null 로만 떨어져
+  // 네트워크 순단·401 이 "이 매장에서 사용 가능한 메뉴가 없습니다"로 보였다 — 사장님이
+  // 업주에게 권한을 요청하러 가는 헛걸음. 실패는 실패로 말하고 재시도 수단을 준다.
+  const [permsError, setPermsError] = useState<unknown>(null);
+  const [permsNonce, setPermsNonce] = useState(0); // '다시 시도' — 권한 조회 효과 재실행
   const [rankingDraft, setRankingDraft] = useState<{ date: string; names: string[]; event?: string } | null>(null);
   const [clockSeed, setClockSeed] = useState<string | null>(null); // 장부→클락 연동 날짜
   const [clockSeedGame, setClockSeedGame] = useState(1); // 장부→클락 연동 게임(game_seq)
@@ -320,8 +326,9 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
 
   // 시즌 '역대 챔피언' 카드 공유에 찍히는 매장명 — prop 이 비어 있어 카드에서 매장명 줄이 통째로
   // 빠져 있었다. 첫 진입 비용 0 을 지키려고 '매장 설정 > 매장 페이지'를 실제로 연 뒤에만 조회한다.
+  // U1: 게임 진행 문맥 줄(매장 › 날짜 › 게임)도 같은 값을 쓴다 — 게임 스텝을 한 번이라도 열면 함께 조회.
   const [venueName, setVenueName] = useState('');
-  const needVenueName = visited.includes('page');
+  const needVenueName = visited.includes('page') || visited.some(isGameStep);
   useEffect(() => {
     if (!venueId || !needVenueName) return;
     if (isAdmin) { setVenueName(adminVenues.find((v) => v.id === venueId)?.name ?? ''); return; }
@@ -407,20 +414,22 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     if (isAdmin) {
       setLedgerOk(true); setManageOk(true); setVoucherView(true);
       setSection((s) => s ?? 'dashboard');
+      setPermsError(null);
       setPermsLoaded(true);
       return () => { alive = false; };
     }
     setPermsLoaded(false);
+    setPermsError(null);
     Promise.all([canAccessLedger(venueId), canManagePos(venueId), iCanViewVouchers(venueId)])
       .then(([l, m, vv]) => {
         if (!alive) return;
         setLedgerOk(l); setManageOk(m); setVoucherView(vv);
         setSection((s) => s ?? 'dashboard');
       })
-      .catch(() => { if (alive) setSection(null); })
+      .catch((e) => { if (alive) { setPermsError(e ?? new Error('권한 조회 실패')); setSection(null); } })
       .finally(() => { if (alive) setPermsLoaded(true); });
     return () => { alive = false; };
-  }, [venueId, isAdmin]);
+  }, [venueId, isAdmin, permsNonce]);
 
   // L4: 권한을 부여받은 직후 창에 다시 포커스되면 권한 재조회 → 재진입/새로고침 없이 탭 갱신
   useEffect(() => {
@@ -473,6 +482,23 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   const renderGameStep = useDeferredValue(gameStep); // 스텝 전환도 deferred — 무거운 판 렌더가 칩 하이라이트를 막지 않게
   const dItem = available.find((a) => a.id === renderSection); // deferred 기준 — 헤더·잠금화면·콘텐츠가 한 번에 원자적으로 전환
 
+  // ── U1: 스텝 공통 문맥(매장 › 날짜 › 게임) ────────────────────────────────
+  // 왜: 포스터→장부→클락→순위를 오갈 때 "지금 어느 대회를 만지는 중인가"가 화면 어디에도 없었다.
+  //   날짜는 스텝마다 각자의 입력칸 안에만 있고, 게임은 칩 바가 있는 날(멀티게임)에만 보였다.
+  //   그래서 사이드 게임 마감 중에 메인 장부를 열어 놓고도 눈치채기 어려웠다.
+  // 값의 출처는 전부 기존 상태다(새 상태 0) — 셸이 이번 스텝에 직접 건넨 대상이 있으면 그것,
+  //   없으면 '오늘 + 칩 바가 고른 게임'(clockSeedGame = 매장 수준 현재 게임의 정본).
+  // ⚠ 알려진 천장: 자식(장부·클락·순위) 안에서 사용자가 날짜 입력칸을 직접 옮기면 셸은 알 수 없다
+  //   — 위로 보고하는 계약이 없다. 정확히 하려면 자식이 현재 (날짜·gameSeq)를 올려주는 prop 이
+  //   필요하고 그건 자식 계약 변경이라 이번 범위 밖이다(각 스텝의 날짜 입력칸은 그대로 남아 있다).
+  const ctxDate = renderGameStep === 'ledger' ? (ledgerSeed?.date ?? null)
+    : renderGameStep === 'clock' ? clockSeed
+      : renderGameStep === 'ranking' ? (rankingDraft?.date ?? null)
+        : null;
+  const ctxGame = renderGameStep === 'ledger' ? (ledgerSeed?.title?.trim() || undefined)
+    : renderGameStep === 'ranking' ? (rankingDraft ? (rankingDraft.event?.trim() || '메인') : undefined)
+      : undefined;
+
   if (!user) return null;
   // 업주: 소속 매장이 없으면 '매장 생성' 화면. 직원: 매장/직원 승인 대기 안내.
   if (!isAdmin && !venueId) {
@@ -505,8 +531,16 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
         <p className="py-16 text-center text-sm text-ink-muted">관리할 매장을 선택하세요.</p>
       ) : !permsLoaded ? (
         <p className="py-16 text-center text-sm text-ink-muted">불러오는 중…</p>
+      ) : permsError ? (
+        // 조회 실패 — '메뉴 없음'(빈 상태)과 구분해서 보여주고, 재시도로 되살린다
+        <LoadErrorCard what="매장 권한" error={permsError} onRetry={() => setPermsNonce((n) => n + 1)} />
       ) : section === null ? (
-        <p className="py-16 text-center text-sm text-ink-muted">이 매장에서 사용 가능한 메뉴가 없습니다.<br />업주에게 장부 권한을 요청하세요.</p>
+        // 문장 사이의 <br /> 를 문단 2개로 — 폭마다 줄바꿈 위치를 손으로 박지 않고,
+        // break-keep 이 '사용 / 가능한' 처럼 어절 중간에서 끊기는 것을 막는다(§5-한글).
+        <div className="mx-auto max-w-md space-y-1 py-16 text-center text-sm text-ink-muted">
+          <p className="break-keep">이 매장에서 사용 가능한 메뉴가 없습니다.</p>
+          <p className="break-keep">업주에게 장부 권한을 요청하세요.</p>
+        </div>
       ) : (
         <>
         {/* ST1 상시 게임 바 — 통계·직원 등 어느 섹션에서도 진행 클락·대기 바인요청이 보인다.
@@ -590,14 +624,21 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
               <div className="space-y-2 rounded-aura border card-aura p-5 text-center">
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-surface-high text-ink-muted"><Icon name="lock" size={22} /></div>
                 <p className="text-sm font-bold text-ink-primary">{dItem.label} · 접근 권한이 없습니다</p>
-                <p className="t-desc break-keep text-ink-muted">이 기능은 업주가 권한을 부여해야 사용할 수 있어요.<br />매장 업주에게 <span className="font-semibold text-accent-300">장부·순위 권한</span>을 요청하세요.</p>
+                {/* 문장 사이 <br /> 제거 — 1280/1440 PC 에서는 한 줄에 들어가 빈 줄만 남았고,
+                    좁은 폭에서는 박아둔 위치와 자연 줄바꿈이 겹쳐 세 줄이 됐다. 문단 2개 + break-keep. */}
+                <div className="mx-auto max-w-sm space-y-1">
+                  <p className="t-desc break-keep text-ink-muted">이 기능은 업주가 권한을 부여해야 사용할 수 있어요.</p>
+                  <p className="t-desc break-keep text-ink-muted">매장 업주에게 <span className="font-semibold text-accent-300">장부·순위 권한</span>을 요청하세요.</p>
+                </div>
               </div>
             )}
             {/* IA2 잔여 — 게임 선택 칩 바(원문: '상단에 게임 선택 칩 바, 아래에 4단계 스테퍼').
-                멀티게임(메인+사이드) 날에만 노출 — 단일 게임이면 바 자체를 그리지 않아 잡음 0 */}
+                U1: 그 위에 스텝 공통 문맥 줄(매장 › 날짜 › 게임)이 항상 붙는다 — 칩 줄만 멀티게임 날에 나온다.
+                위치는 스테퍼·섹션 헤더보다 위 = 작업 영역의 첫 줄. 읽는 순서가 '대상 → 단계 → 작업'이 된다. */}
             {renderSection === 'game' && !dItem?.locked && (
               <GameChipBar venueId={venueId} active={tabActive} step={renderGameStep} current={clockSeedGame}
-                canPosters={canPosters} onPick={onPickGame} onNewGame={onCreatePoster} />
+                canPosters={canPosters} onPick={onPickGame} onNewGame={onCreatePoster}
+                venueName={venueName} ctxDate={ctxDate} ctxGame={ctxGame} />
             )}
             {/* IA2 게임 진행 4단계 스테퍼 — 섹션을 떠나지 않고 작업판만 교체(포스터→장부→클락→순위) */}
             {renderSection === 'game' && !dItem?.locked && (
@@ -664,7 +705,10 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
                   onGotoRanking={ledgerOk ? onGotoRankingFromPosters : undefined}
                   onOpenLedger={ledgerOk ? onOpenLedgerFromPosters : undefined} />)}
                 {visited.includes('presets') && canSettingsTab('presets') && box('presets', <PresetManagerM venueId={venueId} />)}
-                {visited.includes('ledger') && ledgerOk && box('ledger', <NuriPosLedgerM venueId={venueId} canManage={manageOk} active={tabActive && renderSection === 'game' && renderGameStep === 'ledger'} seed={ledgerSeed}
+                {/* venueName: 장부 엑셀 내보내기의 머리글·파일명에 찍히는 값. 안 넘겨서 마감 파일이
+                    전부 'NURI POS_…' 로 나갔다 — 매장이 여럿인 운영자가 파일만 보고 구분할 수 없었다.
+                    비면 컴포넌트 기본값('NURI POS')이 그대로라 회귀 없음. */}
+                {visited.includes('ledger') && ledgerOk && box('ledger', <NuriPosLedgerM venueId={venueId} canManage={manageOk} venueName={venueName || undefined} active={tabActive && renderSection === 'game' && renderGameStep === 'ledger'} seed={ledgerSeed}
                   followGame={ledgerFollow}
                   onMakeRankingDraft={onMakeRankingDraft}
                   onOpenClock={onOpenClockFromLedger}
@@ -803,12 +847,19 @@ const StoreLiveBar = memo(function StoreLiveBar({ venueId, active, onGoto }: {
 // 상단에서 현재 게임을 한 곳에서 전환한다. 그동안 이 동선은 장부 GameSwitcher·클락 MultiClockOverview·
 // 순위 게임칩으로 화면마다 흩어져 있었다(각 화면 내부 장치는 보존 — 이 바는 매장 수준 전환의 정문).
 // 데이터는 오늘 장부 게임 목록(getLedgerGames) 재사용 — 구독·틱 0, active 로드 + 포커스/스텝 전환 시 갱신.
-// 단일 게임 날(사이드 0)은 바 자체를 그리지 않는다(잡음 0). 칩 문법 = browse 필터 레일과 동일(h-9·rounded-badge).
-const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, canPosters, onPick, onNewGame }: {
+// 칩 문법 = browse 필터 레일과 동일(h-9·rounded-badge). 단일 게임 날(사이드 0)엔 **칩 줄만** 접는다 —
+// U1 문맥 줄(매장 › 날짜 › 게임)은 스텝 4개 어디서나 같은 자리에 남아야 하므로 바 자체를 지우지 않는다.
+const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, canPosters, onPick, onNewGame, venueName, ctxDate, ctxGame }: {
   venueId: string; active: boolean; step: GameStep; current: number; canPosters: boolean;
   onPick: (seq: number, title?: string) => void;
   /** '+ 새 게임' = 기존 포스터 만들기(포스터 단계 헤더의 '+ 새 게임'과 같은 동작·카피) */
   onNewGame: () => void;
+  /** U1 문맥 줄의 매장명 — 비어 있으면 그 칸을 아예 그리지 않는다(자리표시자로 거짓말하지 않는다) */
+  venueName: string;
+  /** 셸이 이번 스텝에 건넨 대상 날짜(en-CA). null 이면 '오늘' = 아래 칩이 조회하는 바로 그 날짜 */
+  ctxDate: string | null;
+  /** 셸이 아는 대상 게임 이름(포스터 제목·순위 이벤트). 없으면 칩 라벨(메인/사이드N)로 대체 */
+  ctxGame?: string;
 }) {
   const [games, setGames] = useState<LedgerGame[]>([]);
   const reload = useCallback(() => { getLedgerGames(venueId, kstToday()).then(setGames).catch(() => {}); }, [venueId]);
@@ -819,28 +870,57 @@ const GameChipBar = memo(function GameChipBar({ venueId, active, step, current, 
     window.addEventListener('focus', reload);
     return () => window.removeEventListener('focus', reload);
   }, [active, reload]);
-  if (games.length <= 1) return null;
   const label = (seq: number) => (seq === MAIN_GAME_SEQ ? '메인' : `사이드${seq - 1}`);
+  // ── U1 문맥 줄(매장 › 날짜 › 게임) ─────────────────────────────────────────
+  // 날짜: 셸이 이 스텝에 대상을 건넸으면 그 날짜, 아니면 오늘(= 칩·클락 시드·순위 초기값이 모두 쓰는 날짜).
+  // 게임: 셸이 아는 이름(포스터 제목/순위 이벤트) → 없으면 오늘 장부 게임 라벨(메인/사이드N + 제목).
+  //   장부가 하나도 없는 날에도 '미개설' 같은 단정을 하지 않는다 — 선택된 게임 라벨만 말한다.
+  const today = kstToday();
+  const d = ctxDate ?? today;
+  const dt = new Date(`${d}T00:00:00`);
+  const dLabel = Number.isNaN(dt.getTime()) ? d
+    : dt.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' }) + (d === today ? ' · 오늘' : '');
+  const cur = games.find((g) => g.gameSeq === current);
+  const gLabel = (ctxGame ?? '').trim() || (cur?.title ? `${label(current)} · ${cur.title}` : label(current));
+  const sep = <Icon name="chevron-right" size={11} className="shrink-0 text-ink-muted/60" />;
   return (
-    <div role="group" aria-label="오늘 게임 선택" className="flex items-center gap-2 overflow-x-auto">
-      <span className="shrink-0 text-2xs font-bold text-ink-muted">오늘 게임</span>
-      {games.map((g) => {
-        const on = g.gameSeq === current;
-        return (
-          <button key={g.gameSeq} type="button" aria-pressed={on} onClick={() => onPick(g.gameSeq, g.title)}
-            className={['inline-flex h-9 shrink-0 items-center gap-1 rounded-badge px-3.5 text-xs font-bold leading-none transition-colors',
-              on ? 'bg-accent-300/15 text-accent-300' : 'bg-surface-high text-ink-secondary hover:bg-surface-float/70'].join(' ')}>
-            <span>{label(g.gameSeq)}</span>
-            {g.title && <span className="max-w-[8rem] truncate font-semibold opacity-80">· {g.title}</span>}
-            {g.closed && <span className="text-2xs opacity-70">마감</span>}
-          </button>
-        );
-      })}
-      {canPosters && (
-        <button type="button" onClick={onNewGame}
-          className="inline-flex h-9 shrink-0 items-center rounded-badge border border-dashed border-accent-400/40 px-3.5 text-xs font-bold leading-none text-accent-300 transition-colors hover:bg-accent-300/10">
-          + 새 게임
-        </button>
+    <div className="space-y-2">
+      {/* 스텝 4개(포스터·장부·클락·순위) 공통 위치·공통 문법 — "지금 어느 대회를 만지는 중인가"를
+          스텝을 옮겨도 같은 자리에서 계속 읽는다. 각 스텝의 날짜·게임 입력칸은 그대로 정본으로 남는다. */}
+      <p className="flex min-w-0 items-center gap-1 text-2xs">
+        <span className="sr-only">작업 대상 </span>
+        <Icon name="store" size={12} className="shrink-0 text-ink-muted" />
+        {venueName && (<>
+          <span className="min-w-0 max-w-[14rem] truncate font-bold text-ink-primary">{venueName}</span>
+          {sep}
+        </>)}
+        <span className="shrink-0 tabular-nums text-ink-secondary">{dLabel}</span>
+        {sep}
+        <span className="min-w-0 truncate font-bold text-accent-300">{gLabel}</span>
+      </p>
+      {/* 멀티게임(메인+사이드) 날에만 나오는 전환 줄 — 단일 게임이면 접는다(잡음 0, 종전 동작 유지) */}
+      {games.length > 1 && (
+        <div role="group" aria-label="오늘 게임 선택" className="flex items-center gap-2 overflow-x-auto">
+          <span className="shrink-0 text-2xs font-bold text-ink-muted">오늘 게임</span>
+          {games.map((g) => {
+            const on = g.gameSeq === current;
+            return (
+              <button key={g.gameSeq} type="button" aria-pressed={on} onClick={() => onPick(g.gameSeq, g.title)}
+                className={['inline-flex h-9 shrink-0 items-center gap-1 rounded-badge px-3.5 text-xs font-bold leading-none transition-colors',
+                  on ? 'bg-accent-300/15 text-accent-300' : 'bg-surface-high text-ink-secondary hover:bg-surface-float/70'].join(' ')}>
+                <span>{label(g.gameSeq)}</span>
+                {g.title && <span className="max-w-[8rem] truncate font-semibold opacity-80">· {g.title}</span>}
+                {g.closed && <span className="text-2xs opacity-70">마감</span>}
+              </button>
+            );
+          })}
+          {canPosters && (
+            <button type="button" onClick={onNewGame}
+              className="inline-flex h-9 shrink-0 items-center rounded-badge border border-dashed border-accent-400/40 px-3.5 text-xs font-bold leading-none text-accent-300 transition-colors hover:bg-accent-300/10">
+              + 새 게임
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
