@@ -27,11 +27,15 @@ export interface Reservation { id: string; scheduleId: string; userId: string; d
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const rowToRes = (r: any): Reservation => ({ id: r.id, scheduleId: r.schedule_id, userId: r.user_id, displayName: r.display_name, createdAt: r.created_at });
 
+// ⚠ 실패(401/403/500/오프라인)를 null 로 돌려주지 않는다 — null 은 '조회했고 예약이 없다'는 뜻이라,
+//   이미 예약한 손님에게 '예약하기'를 다시 내밀고 누르면 '이미 등록된 닉네임입니다'가 났다(F08).
+//   비로그인은 실패가 아니므로 그대로 null. 형제 getReservations 와 같은 throw 관행.
 export async function getMyReservation(scheduleId: string): Promise<Reservation | null> {
   if (IS_MOCK) return null;
   const user = await currentUser();
   if (!user) return null;
-  const { data } = await supabase.from('schedule_reservations').select('*').eq('schedule_id', scheduleId).eq('user_id', user.id).maybeSingle();
+  const { data, error } = await supabase.from('schedule_reservations').select('*').eq('schedule_id', scheduleId).eq('user_id', user.id).maybeSingle();
+  if (error) throw error;
   return data ? rowToRes(data) : null;
 }
 
@@ -59,7 +63,9 @@ export async function getOwnerReservations(scheduleId: string): Promise<OwnerRes
 //   명단은 계속 감추고, 인원 수만 주는 공개 RPC로 집계한다.
 export async function getReservationCounts(scheduleIds: string[]): Promise<Record<string, number>> {
   if (IS_MOCK || scheduleIds.length === 0) return {};
-  const { data } = await supabase.rpc('schedule_reservation_counts', { p_ids: scheduleIds });
+  const { data, error } = await supabase.rpc('schedule_reservation_counts', { p_ids: scheduleIds });
+  // 실패를 {} 로 돌려주면 탐색 카드의 '예약 N명'이 0 으로, 마감임박 뱃지는 통째로 사라진다(F08).
+  if (error) throw error;
   const m: Record<string, number> = {};
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (data ?? []).forEach((r: any) => { m[r.schedule_id] = r.cnt ?? 0; });
@@ -73,12 +79,16 @@ export async function createReservation(scheduleId: string, displayName: string)
   if (error) throw new Error(error.message);
 }
 
+// .select('id') 를 붙이는 이유는 형제 deleteReservation 과 같다 — RLS 나 '이미 지워진 예약'에 걸리면
+// Supabase 는 error 없이 0행을 반환한다. 그대로 두면 호출자가 '예약을 취소했습니다'를 띄우고
+// 화면에서 지우지만 서버에는 예약이 그대로 남는다(F06-b). 세션 없음도 성공이 아니다.
 export async function cancelMyReservation(scheduleId: string): Promise<void> {
   if (IS_MOCK) return;
   const user = await currentUser();
-  if (!user) return;
-  const { error } = await supabase.from('schedule_reservations').delete().eq('schedule_id', scheduleId).eq('user_id', user.id);
+  if (!user) throw new Error('로그인이 필요합니다');
+  const { data, error } = await supabase.from('schedule_reservations').delete().eq('schedule_id', scheduleId).eq('user_id', user.id).select('id');
   if (error) throw error;
+  if (!data || data.length === 0) throw new Error('취소할 예약을 찾지 못했습니다. 화면을 새로 불러와 확인해 주세요');
 }
 
 /** 업주: 예약 삭제 / 이름 수정 */
@@ -107,15 +117,17 @@ export async function getMyVisitStats(): Promise<{ visits: number; upcoming: num
     .from('schedule_reservations')
     .select('schedule_id, schedules!inner(date)')
     .eq('user_id', user.id);
-  if (error || !data) return empty;
+  // 실패를 {0,0,0} 으로 돌려주면 프로필 방문 뱃지가 전부 '미획득'으로 떨어진다(F08).
+  if (error) throw error;
+  const rows = (data ?? []) as unknown as { schedules?: { date?: string } }[];
   const today = new Date().toLocaleDateString('en-CA');
   let visits = 0, upcoming = 0;
-  for (const r of data as unknown as { schedules?: { date?: string } }[]) {
+  for (const r of rows) {
     const d = r.schedules?.date;
     if (!d) continue;
     if (d < today) visits++; else upcoming++;
   }
-  return { visits, upcoming, total: data.length };
+  return { visits, upcoming, total: rows.length };
 }
 
 /** 이 매장의 예약자 이름별 누적 예약 횟수(단골 판별: 5회+) */
@@ -202,7 +214,8 @@ export async function getMyReservations(limit = 30): Promise<MyReservationRow[]>
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
     .limit(limit);
-  if (error) return [];
+  // 실패를 [] 로 돌려주면 캘린더·내 정보·홈이 '예약 없음'으로 위장한다(F08).
+  if (error) throw error;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({
     scheduleId: r.schedule_id, displayName: r.display_name, reservedAt: r.created_at,

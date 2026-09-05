@@ -21,6 +21,7 @@ import {
 import { pushSupported, isPushSubscribed, enablePush, disablePush } from '../../api/push';
 import AvatarCropper from './AvatarCropper';
 import ActivityBadges from '../atoms/ActivityBadges';
+import LoadErrorCard from '../atoms/LoadErrorCard';
 import Icon from '../atoms/Icon';
 import TierBadge, { tierProgress, tierCss, tierVividVar } from '../atoms/TierBadge';
 import TitleChip from '../atoms/TitleChip';
@@ -73,7 +74,14 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
   // 본인인증·매장이용권 킬스위치(2026-08-29) — 꺼져 있으면 인증 진입부와 '이용권' 프레이밍을 모두 내린다.
   const idOn = useIdentityEnabled();
   const [visitStats, setVisitStats] = useState({ visits: 0, upcoming: 0, total: 0 });
-  useEffect(() => { if (open) getMyVisitStats().then(setVisitStats).catch(() => {}); }, [open]);
+  // 조회 실패를 {0,0,0} 으로 두면 방문 뱃지가 전부 '미획득'으로 보인다 — 획득한 뱃지를 뺏는 셈이라
+  // 실패는 뱃지 자리에 재시도 카드로 드러낸다(F08).
+  const [visitErr, setVisitErr] = useState<unknown>(null);
+  const loadVisitStats = useCallback(() => {
+    setVisitErr(null);
+    getMyVisitStats().then((v) => { setVisitStats(v); setVisitErr(null); }).catch((e) => setVisitErr(e));
+  }, []);
+  useEffect(() => { if (open) loadVisitStats(); }, [open, loadVisitStats]);
 
   // ── 랭킹 공개 설정(오너 #14) ────────────────────────────────────────────
   // 두 항목은 서로 다른 것을 가린다 — 합치지 않는다:
@@ -326,7 +334,9 @@ export default function ProfilePanels({ open, onClose, onOpenLegal, onOpenSuppor
           />
 
           {/* 내 활동 · 뱃지 진열장 */}
-          <ActivityBadges points={user?.activityPoints ?? 0} visits={visitStats.visits} upcoming={visitStats.upcoming} />
+          {visitErr !== null
+            ? <LoadErrorCard error={visitErr} onRetry={loadVisitStats} what="내 활동 기록" compact />
+            : <ActivityBadges points={user?.activityPoints ?? 0} visits={visitStats.visits} upcoming={visitStats.upcoming} />}
           {/* 계정 정보 (읽기 전용) — 2xs 라벨 위 / 값 카드 아래 고정 높이 행 */}
           <div className="space-y-3">
             <div>

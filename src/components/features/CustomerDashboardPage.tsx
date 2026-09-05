@@ -12,6 +12,8 @@ import Icon from '../atoms/Icon';
 import UnderlineTabs from '../atoms/UnderlineTabs';
 import { SectionHead as Head, SectionTile as Tile } from '../atoms/SectionHeader'; // 섹션 머리글·타일 정본(지갑과 공유)
 import EmptyState from '../atoms/EmptyState';
+import LoadErrorCard from '../atoms/LoadErrorCard';
+import { msgOf } from '../../lib/dbError';
 import { goSubTab } from '../../lib/subTabTransition';
 import type { LegalDoc } from './LegalDocsModal';
 import { myVisitedVenues, myPlayHistory, type VisitedVenue, type PlayHistory } from '../../api/vouchers';
@@ -81,6 +83,8 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
   const [visits, setVisits] = useState<VisitedVenue[]>([]);
   const [plays, setPlays] = useState<PlayHistory[]>([]);
   const [resv, setResv] = useState<MyReservationRow[]>([]);   // 대회 참가(예약) 이력
+  // 조회 '실패' 는 '예약 0건' 과 다른 상태다 — 빈 상태로 접으면 예약한 사람에게 '없습니다'라고 말하게 된다(F08).
+  const [resvErr, setResvErr] = useState<unknown>(null);
   const [ranks, setRanks] = useState<MyRankingRow[]>([]);     // 내 입상 기록(닉네임 기준)
   const [refStats, setRefStats] = useState<ReferralStats>({ invited: 0, rewarded: 0 }); // 친구 초대 현황
   const [percentile, setPercentile] = useState<number | null>(null); // 전국 상위 N% — 대회 입상 횟수 기준(상금 무관, 2026-09-05)
@@ -106,16 +110,18 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
 
   const reload = () => {
     setLoading(true);
+    setResvErr(null);
     Promise.all([
       myVisitedVenues(), myPlayHistory(),
-      getMyReservations().catch(() => [] as MyReservationRow[]),
+      // null = 조회 실패. 직전에 성공한 목록은 그대로 두고(오프라인에서 내역이 사라지지 않게) 실패만 드러낸다.
+      getMyReservations().catch((e) => { setResvErr(e); return null; }),
       user?.nickname ? getMyRankingHistory(user.nickname, 200).catch(() => [] as MyRankingRow[]) : Promise.resolve([] as MyRankingRow[]),
       user?.nickname ? getMyReferralStats().catch(() => ({ invited: 0, rewarded: 0 })) : Promise.resolve({ invited: 0, rewarded: 0 }),
       user?.nickname ? getMyChampionships(user.nickname).catch(() => 0) : Promise.resolve(0),
       user?.nickname ? getGlobalRankingTotals('all').catch(() => []) : Promise.resolve([]),
     ])
       .then(([vi, pl, rv, rk, rs, ch, gt]) => {
-        setVisits(vi); setPlays(pl); setResv(rv); setRanks(rk); setRefStats(rs); setChampionships(ch);
+        setVisits(vi); setPlays(pl); if (rv) setResv(rv); setRanks(rk); setRefStats(rs); setChampionships(ch);
         // 전국 상위 N% — 대회 입상 횟수 기준(랭킹 허브 '머니인' 보드와 같은 careerCompare 정렬, 서버가 이미 정렬). 상금 무관.
         const nick = user?.nickname?.trim().toLowerCase();
         const idx = nick ? gt.findIndex((t) => t.nickname.trim().toLowerCase() === nick) : -1;
@@ -400,8 +406,9 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
 
           {/* 대회 참가(예약) 내역 — 내가 예약했던 대회들 */}
           <section className="space-y-2">
-            <Head icon="calendar-check" tone="indigo" title="대회 참가 내역" count={resv.length} unit="건" desc="참가 예약 기준" />
+            <Head icon="calendar-check" tone="indigo" title="대회 참가 내역" count={resvErr !== null && resv.length === 0 ? undefined : resv.length} unit="건" desc="참가 예약 기준" />
             {loading ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
+              : resvErr !== null && resv.length === 0 ? <LoadErrorCard error={resvErr} onRetry={reload} what="대회 참가 내역" compact />
               : resv.length === 0 ? <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="calendar-check" />} title="아직 참가 예약한 대회가 없습니다." /></div>
                 : <ul className="space-y-1.5">{resv.slice(0, 15).map((r) => {
                   const upcoming = r.date >= new Date().toLocaleDateString('en-CA');
@@ -415,7 +422,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
                         toast.show('예약을 취소했습니다', 'success');
                         setResv((prev) => prev.filter((x) => x.scheduleId !== r.scheduleId));
                       } catch (e) {
-                        toast.show(e instanceof Error ? e.message : '예약 취소 실패', 'error');
+                        toast.show(msgOf(e, '예약 취소 실패'), 'error');
                       }
                     }}
                   >
