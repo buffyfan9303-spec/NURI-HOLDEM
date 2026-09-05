@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
 import Modal from '../atoms/Modal';
 import Icon from '../atoms/Icon';
+import LoadErrorCard from '../atoms/LoadErrorCard';
 import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import QRCode from 'qrcode';
@@ -33,6 +34,10 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
   const [list, setList] = useState<Voucher[]>([]);
   // "아직 내역이 없습니다"를 먼저 보여주면 업주가 발급이 실패한 줄 알고 **다시 발급**한다
   const [loading, setLoading] = useState(true);
+  // 같은 이유로 '조회 실패'도 빈 상태로 보이면 안 된다(2026-09-05 U4). 목록 조회는 RLS 게이트
+  // 뒤에 있어, 권한이 빠진 직원 계정에서는 42501 로 떨어지고 화면은 '이용권 0장'이 됐다 —
+  // 직원은 발급이 안 된 줄 알고 다시 발급하거나 손님에게 "없다"고 답한다. 그래서 실패는 실패로 말한다.
+  const [listErr, setListErr] = useState<unknown>(null);
   // 이 매장의 이름 — 이미 불러온 이용권 행의 조인 값에서 읽는다(추가 조회 0). 첫 발급 전에는 null 이라 미리보기를 내린다.
   const venueName = list.find((v) => v.venueName)?.venueName ?? null;
   const [title, setTitle] = useState('매장이용권');
@@ -72,7 +77,8 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
   const reload = () => {
     if (!idOn) return; // 킬스위치 OFF — 꺼진 기능이 조용히 조회를 돌지 않게(무료 egress 예산)
     setLoading(true);
-    listVenueVouchers(venueId).then(setList).catch(() => {}).finally(() => setLoading(false));
+    listVenueVouchers(venueId).then((v) => { setList(v); setListErr(null); })
+      .catch((e) => setListErr(e)).finally(() => setLoading(false));
     if (canIssue) voucherHolderStats(venueId).then(setStats).catch(() => {});
     if (canIssue) voucherHolderProfiles(venueId).then((ps) => setProfileMap(new Map(ps.map((p) => [p.userId, p])))).catch(() => {});
     isVoucherIssueApproved(venueId).then(setApproved).catch(() => {});
@@ -310,7 +316,10 @@ ${cards}
             <Icon name="refresh" size={12} className={loading ? 'animate-spin' : ''} /> 새로고침
           </button>
         </div>
-        {feed.length === 0 ? (
+        {listErr != null && list.length === 0 ? (
+          // 실패가 빈 상태보다 먼저. 이미 받아 둔 목록이 있으면(재조회 실패) 보던 내역은 그대로 둔다.
+          <LoadErrorCard error={listErr} what="이용권 내역" onRetry={reload} compact />
+        ) : feed.length === 0 ? (
           <p className="py-3 text-center text-2xs text-ink-muted">아직 내역이 없습니다. 발급·사용되면 즉시 표시됩니다.</p>
         ) : (
           <ul className="max-h-56 space-y-1 overflow-y-auto">
@@ -577,6 +586,7 @@ ${cards}
           <input value={holderQuery} onChange={(e) => setHolderQuery(e.target.value)} placeholder="보유자 검색 (실명·닉네임)" className="input mb-1.5 w-full text-sm" />
         )}
         {loading ? <p className="py-3 text-center text-2xs text-ink-muted">불러오는 중…</p>
+          : listErr != null && list.length === 0 ? <LoadErrorCard error={listErr} what="보유자 현황" onRetry={reload} compact />
           : holders.length === 0 ? <p className="py-3 text-center text-2xs text-ink-muted">배포된 이용권이 없습니다.</p>
           : shownHolders.length === 0 ? <p className="py-3 text-center text-2xs text-ink-muted">검색 결과가 없습니다.</p>
           : <ul className="space-y-1.5">

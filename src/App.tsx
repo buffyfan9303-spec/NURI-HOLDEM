@@ -1297,6 +1297,9 @@ export default function App() {
   const [postsErr,      setPostsErr]      = useState<unknown>(null);
   const [listings,      setListings]      = useState<MarketplaceListing[]>(() => readSnap<MarketplaceListing[]>('listings') ?? []);
   const [marketLoaded,  setMarketLoaded]  = useState(() => readSnap<MarketplaceListing[]>('listings') != null); // 장터 첫 로딩 여부 — 스냅샷 있으면 스켈레톤 생략
+  // 장터 조회 실패 — 이게 없던 동안 실패는 '조건에 맞는 글이 없습니다'(빈 상태)로 보였다.
+  // LoadErrorCard 주석이 기록한 그 사고(등록이 100% 실패하는데 '매물이 없네'로 보임)의 목록 쪽 잔재다.
+  const [marketError,   setMarketError]   = useState<unknown>(null);
   const [notices,       setNotices]       = useState<MarketplaceNotice[]>(() => readSnap<MarketplaceNotice[]>('notices') ?? []);
   // MO-7B: 공지 스냅샷조차 없는 최초 방문에서 섹션이 늦게 끼어들며 목록을 밀지 않도록,
   // 응답 전에는 섹션 셸(헤더만)을 자리에 둔다. 스냅샷이 있으면 이미 확정 상태.
@@ -1546,6 +1549,7 @@ export default function App() {
         else setPostsErr(pr.reason);
         if (cr.status === 'fulfilled') setComments(cr.value);
         if (lr.status === 'fulfilled') { setListings(lr.value); writeSnap('listings', lr.value); }
+        setMarketError(lr.status === 'rejected' ? lr.reason : null);
         setMarketLoaded(true);
         if (rr.status === 'fulfilled') setVenueRatings(rr.value);
         if (kr.status === 'fulfilled') { setLiveCount(kr.value.length); setLiveClocks(kr.value); }
@@ -1678,7 +1682,8 @@ export default function App() {
       case 'community':
         reloadPosts(); reloadComments();
         // 장터는 커뮤니티 서브탭 — 복귀 갱신도 함께(은퇴한 market 탭의 케이스 흡수)
-        getListings().then((l) => { setListings(l); setMarketLoaded(true); writeSnap('listings', l); }).catch(() => setMarketLoaded(true));
+        getListings().then((l) => { setListings(l); setMarketError(null); setMarketLoaded(true); writeSnap('listings', l); })
+          .catch((e) => { setMarketError(e); setMarketLoaded(true); });
         break;
       case 'admin':
         reloadSchedules(); reloadVenues();
@@ -2573,12 +2578,17 @@ export default function App() {
     setPostFormOpen(true);
   }, []);
   const handleMarketCreate = useCallback(() => { if (ensureVerified(userRefForGate.current, '중고장터 등록')) setMarketFormOpen(true); }, []);
-  const handleListingsChanged = useCallback(() => { getListings().then(setListings).catch(() => {}); }, []);
+  // 목록 재조회 정본 — 등록·상태변경 후 갱신과 실패 카드의 '다시 시도'가 같은 함수를 쓴다(껍데기 버튼 방지).
+  const handleListingsChanged = useCallback(() => {
+    getListings().then((l) => { setListings(l); setMarketError(null); writeSnap('listings', l); })
+      .catch((e) => setMarketError(e))
+      .finally(() => setMarketLoaded(true));
+  }, []);
   const marketSlot = useMemo(() => (
-    <MarketplaceTab listings={listings} loading={!marketLoaded} notices={marketNotices}
+    <MarketplaceTab listings={listings} loading={!marketLoaded} error={marketError} notices={marketNotices}
       onSelect={setOpenListing} onSelectNotice={setOpenNotice} onCreate={handleMarketCreate}
       canWriteNotice={isAdmin} onWriteNotice={handleWriteNotice} onListingsChanged={handleListingsChanged} />
-  ), [listings, marketLoaded, marketNotices, isAdmin, handleMarketCreate, handleWriteNotice, handleListingsChanged]);
+  ), [listings, marketLoaded, marketError, marketNotices, isAdmin, handleMarketCreate, handleWriteNotice, handleListingsChanged]);
 
   // ── 렌더 ──────────────────────────────────────────────────────────────
 

@@ -10,6 +10,7 @@ import { findUserForTransfer, type TransferTarget } from '../../api/vouchers';
 import { blockUser } from '../../api/blocks';
 import { useToast } from '../atoms/Toast';
 import SegmentedTabs from '../atoms/SegmentedTabs';
+import LoadErrorCard from '../atoms/LoadErrorCard';
 import Icon, { type IconName } from '../atoms/Icon';
 import { onColorInkClass } from '../../lib/color';
 import { goSubTab } from '../../lib/subTabTransition';
@@ -71,6 +72,11 @@ export default function NotificationPanel({
   const [threads, setThreads] = useState<MessageThread[]>([]);
   // 열자마자 "주고받은 쪽지가 없습니다"가 스치던 것 — 미로드를 로딩으로 시작해 가른다
   const [threadsLoading, setThreadsLoading] = useState(true);
+  // 조회 실패 — 이 두 줄이 없던 동안 `.catch(() => {})` 가 실패를 삼켜, 서버가 거부하거나
+  // 네트워크가 끊겨도 화면은 '주고받은 쪽지가 없습니다'였다. 장터 거래 문의가 오간 사용자는
+  // 상대가 대화를 지운 줄 알고 다시 글을 쓰거나 거래를 접는다 — 실패는 실패로 말한다.
+  const [threadsErr, setThreadsErr] = useState<unknown>(null);
+  const [msgsErr, setMsgsErr] = useState<unknown>(null);
   const [activeOther, setActiveOther] = useState<{ id: string; name: string; color: string | null } | null>(null);
   const [msgs, setMsgs] = useState<DirectMessage[]>([]);
   const [msgsLoading, setMsgsLoading] = useState(false);
@@ -89,8 +95,8 @@ export default function NotificationPanel({
   const reloadThreads = useCallback(() => {
     setThreadsLoading(true);
     listMyThreads()
-      .then((ts) => { setThreads(ts); reportUnread(ts); })
-      .catch(() => {})
+      .then((ts) => { setThreads(ts); setThreadsErr(null); reportUnread(ts); })
+      .catch((e) => setThreadsErr(e))
       .finally(() => setThreadsLoading(false));
   }, [reportUnread]);
 
@@ -104,23 +110,29 @@ export default function NotificationPanel({
     if (!open) { setMsgView('list'); setActiveOther(null); setDraft(''); setQuery(''); setResults([]); }
   }, [open]);
 
+  // 대화 본문 조회 정본 — 처음 열 때와 실패 카드의 '다시 시도'가 같은 함수를 쓴다(껍데기 버튼 방지).
+  const loadThread = useCallback((otherId: string) => {
+    setMsgsLoading(true);
+    listThread(otherId)
+      .then((ms) => { setMsgs(ms); setMsgsErr(null); })
+      .catch((e) => setMsgsErr(e))
+      .finally(() => setMsgsLoading(false));
+  }, []);
+
   // ── 스레드 열기: 쪽지 로드 + 읽음 스탬프 + 로컬 미읽음 0 ──
   const openThread = useCallback((other: { id: string; name: string; color: string | null }) => {
     setActiveOther(other);
     setMsgView('thread');
     setMsgs([]);
-    setMsgsLoading(true);
-    listThread(other.id)
-      .then(setMsgs)
-      .catch(() => {})
-      .finally(() => setMsgsLoading(false));
+    setMsgsErr(null);
+    loadThread(other.id);
     markThreadRead(other.id).catch(() => {});
     setThreads((prev) => {
       const next = prev.map((t) => t.otherId === other.id ? { ...t, unread: 0 } : t);
       reportUnread(next);
       return next;
     });
-  }, [reportUnread]);
+  }, [reportUnread, loadThread]);
 
   // 스레드 화면: 새 쪽지가 붙을 때마다 맨 아래로
   useEffect(() => {
@@ -346,7 +358,10 @@ export default function NotificationPanel({
         {/* ── 쪽지: 스레드 목록 ── */}
         {mode === 'messages' && msgView === 'list' && (
           <ul data-notif-panel="" className="flex-1 overflow-y-auto">
-            {threads.length === 0 ? (
+            {threadsErr != null && threads.length === 0 ? (
+              // 실패가 빈 상태보다 먼저다 — 목록이 이미 있으면(재조회 실패) 보던 목록은 그대로 둔다.
+              <li className="p-3"><LoadErrorCard error={threadsErr} what="쪽지 목록" onRetry={reloadThreads} compact /></li>
+            ) : threads.length === 0 ? (
               <li className="flex flex-col items-center justify-center py-12 gap-2 text-ink-muted">
                 <Icon name="comment" size={32} strokeWidth={1.5} />
                 <p className="text-xs">{threadsLoading ? '쪽지를 불러오는 중…' : '주고받은 쪽지가 없습니다'}</p>
@@ -402,7 +417,10 @@ export default function NotificationPanel({
         {mode === 'messages' && msgView === 'thread' && (
           <>
             <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto px-4 py-3">
-              {msgs.length === 0 ? (
+              {msgsErr != null && msgs.length === 0 ? (
+                // ⚠ 실패를 '첫 쪽지를 보내 보세요'로 보여주면 사용자가 이미 한 말을 처음부터 다시 쓴다.
+                <LoadErrorCard error={msgsErr} what="대화 내용" onRetry={() => { if (activeOther) loadThread(activeOther.id); }} compact />
+              ) : msgs.length === 0 ? (
                 <p className="py-10 text-center text-xs text-ink-muted">
                   {msgsLoading ? '쪽지를 불러오는 중…' : '첫 쪽지를 보내 보세요'}
                 </p>

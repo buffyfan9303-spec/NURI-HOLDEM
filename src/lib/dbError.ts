@@ -32,6 +32,16 @@ export function isOffline(e: unknown): boolean {
   return /failed to fetch|networkerror|network request failed|load failed|ERR_INTERNET/i.test(m);
 }
 
+/** 인가 거부(RLS/권한) — '조회 실패'와도, '아직 없음'과도 다른 세 번째 상태.
+ *  왜 따로 구분하나: 같은 빈 화면이라도 '못 불러왔다'는 다시 시도할 일이고,
+ *  '권한이 없다'는 사용자가 잘못 누른 것이 아니라 계정에 권한을 받아야 하는 일이다.
+ *  둘을 같은 문장으로 보여주면 직원이 자기 잘못인 줄 알고 같은 버튼을 계속 누른다. */
+export function isDenied(e: unknown): boolean {
+  if (e == null) return false;
+  const r = asRecord(e);
+  return str(r.code) === '42501' || r.status === 403;
+}
+
 /**
  * 오류 → 사용자에게 보여줄 한 문장.
  * @param fallback 아무 단서도 없을 때 쓸 기본 문구(호출부의 맥락을 담아 넘길 것 — 예: '장부 저장 실패')

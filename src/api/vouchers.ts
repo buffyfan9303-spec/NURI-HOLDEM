@@ -265,9 +265,13 @@ export async function voucherUsageByVenue(venueId: string): Promise<VoucherUsage
   return (data ?? []).map((r: any) => ({ usedVenueId: r.used_venue_id ?? null, venueName: r.venue_name ?? null, usedCount: Number(r.used_count) || 0 }));
 }
 
+// ⚠ error 를 버리지 않는다(2026-09-05): `const { data } = ...` 로 받으면 RLS 거부·네트워크 끊김이
+//   전부 빈 배열이 되어 '내 정보'가 '방문 기록이 아직 없습니다'로 보였다 — 실패의 빈 결과 위장.
+//   호출부 3곳(App '이어서 하기' · VenuePage · CustomerDashboardPage)은 모두 이미 실패를 받는다.
 export async function myVisitedVenues(): Promise<VisitedVenue[]> {
   if (IS_MOCK) return [];
-  const { data } = await supabase.rpc('my_visited_venues');
+  const { data, error } = await supabase.rpc('my_visited_venues');
+  if (error) throw error;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({ venueId: r.venue_id, venueName: r.venue_name ?? null, visits: Number(r.visits) || 0 }));
 }
@@ -335,7 +339,8 @@ export async function iCanViewVouchers(venueId: string): Promise<boolean> {
  *  SQL 은 손대지 않고 클라 매핑에서만 buyinCount 로 바로잡는다. */
 export async function myPlayHistory(): Promise<PlayHistory[]> {
   if (IS_MOCK) return [];
-  const { data } = await supabase.rpc('my_play_history');
+  const { data, error } = await supabase.rpc('my_play_history');
+  if (error) throw error;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((r: any) => ({ venueId: r.venue_id, venueName: r.venue_name ?? null, buyinCount: Number(r.moneyin_count) || 0, totalAmount: Number(r.total_amount) || 0, lastAt: r.last_at ?? null }));
 }

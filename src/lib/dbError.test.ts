@@ -4,7 +4,7 @@
 // 구분하지 못한다. 특히 서버가 사용자를 향해 직접 쓴 문장(raise exception)을 번역해버리면
 // 정보가 오히려 줄어드므로, 그 경계를 여기서 못 박는다.
 import { describe, it, expect } from 'vitest';
-import { msgOf, isOffline } from './dbError';
+import { msgOf, isOffline, isDenied } from './dbError';
 
 describe('msgOf. 서버가 준 이유를 살린다', () => {
   it('🔴 Supabase 오류는 평범한 객체다. instanceof Error 로는 못 읽는다', () => {
@@ -32,6 +32,15 @@ describe('msgOf. 서버가 준 이유를 살린다', () => {
     expect(msgOf(new TypeError('Failed to fetch'))).toContain('네트워크');
     expect(isOffline(new TypeError('Failed to fetch'))).toBe(true);
     expect(isOffline({ code: '42501', message: 'denied' })).toBe(false);
+  });
+
+  it('🔴 권한 거부는 조회 실패와 다른 상태다. 카드 문구가 갈라져야 한다', () => {
+    expect(isDenied({ code: '42501', message: 'permission denied for table ledger' })).toBe(true);
+    expect(isDenied({ status: 403 })).toBe(true);
+    // 네트워크·서버 오류는 '권한 없음'이 아니다 — 재시도로 풀리는 부류라 뭉치면 안 된다
+    expect(isDenied(new TypeError('Failed to fetch'))).toBe(false);
+    expect(isDenied({ code: 'PGRST202' })).toBe(false);
+    expect(isDenied(null)).toBe(false);
   });
 
   it('평범한 Error 도 메시지를 살린다', () => {
