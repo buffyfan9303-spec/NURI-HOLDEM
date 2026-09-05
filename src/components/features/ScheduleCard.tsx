@@ -341,8 +341,12 @@ function ListCard({
           )}
         </div>
 
-        {/* 2행 — 게임명(최대 2줄) */}
-        <h3 className="mt-1 line-clamp-2 text-sm font-bold leading-snug tracking-tight text-ink-primary">
+        {/* 2행 — 게임명(최대 2줄)
+            break-keep: 브라우저 기본(word-break:normal)은 한글을 **음절 단위**로 아무 데서나 꺾는다.
+            360px 에서 중앙 열이 ~170px 밖에 안 돼 '나이트 토너먼트' 가 '나이트 토너'/'먼트' 로 갈렸다 —
+            대회명은 1차 식별자라 어절 단위(keep-all)로 접는다. [overflow-wrap:anywhere] 는
+            띄어쓰기 없는 초장문 토큰만 예외로 절단(Toast·VoucherWallet 과 같은 짝). */}
+        <h3 className="mt-1 line-clamp-2 break-keep [overflow-wrap:anywhere] text-sm font-bold leading-snug tracking-tight text-ink-primary">
           {schedule.isPremium && <span className="mr-1 align-middle text-2xs font-extrabold text-accent-200">TOP</span>}
           {schedule.title}
         </h3>
@@ -372,7 +376,10 @@ function ListCard({
         <p className="mt-1 text-sm font-extrabold tabular-nums leading-none text-ink-primary">
           {schedule.buyIn.amount > 0 ? schedule.buyIn.amount.toLocaleString() : '—'}
         </p>
-        <p className={`mt-1.5 whitespace-nowrap text-2xs font-bold leading-none ${sub ? 'text-gold-300' : 'text-ink-muted'}`}>
+        {/* tabular-nums: 같은 열의 '1000만 GTD'·'500만 GTD' 자릿수를 세로로 맞춘다 —
+            바로 위 바이인 금액·그리드 카드의 같은 값은 이미 tabular-nums 인데 여기만 빠져 있어
+            행마다 GTD 글자 위치가 흔들렸다(§28: 참가비·GTD 는 상품 가격 정보라 표시 유지). */}
+        <p className={`mt-1.5 whitespace-nowrap text-2xs font-bold tabular-nums leading-none ${sub ? 'text-gold-300' : 'text-ink-muted'}`}>
           {sub ?? '—'}
         </p>
       </div>
@@ -458,7 +465,9 @@ function GridCard({ schedule, onVenueClick, onSelect, rating, priority, distance
       {/* 본문 */}
       <div className="flex flex-col gap-1.5 p-2.5">
         <h3 className={[
-          'text-sm font-bold tracking-tight leading-tight line-clamp-2',
+          // break-keep — 목록 카드와 같은 이유. 그리드는 360px 2열이라 카드 폭이 ~150px 로
+          // 더 좁아 음절 절단이 더 자주 났다(예: '홀덤 스페'/'셜').
+          'text-sm font-bold tracking-tight leading-tight line-clamp-2 break-keep [overflow-wrap:anywhere]',
           // accent-300 은 다크 카드 위 3.71:1(AA 미달) — 액센트 '텍스트' 토큰인 200 으로(8.18 / 6.34)
           schedule.isPremium ? 'text-accent-200' : 'text-ink-primary',
         ].join(' ')}>
