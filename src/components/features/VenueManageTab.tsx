@@ -1312,7 +1312,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
     const wrongUnit = clean.filter((r) => prizeUnitRisk(r.prize) === 'impossible');
     if (wrongUnit.length > 0 && !window.confirm(
       `프라이즈가 원 단위로 입력된 것 같습니다 (${wrongUnit.map((r) => r.prize).join(', ')}).\n\n`
-      + '이 칸은 만원 단위입니다. 100만원이면 100, 1,000만원이면 1000. 티켓 상금은 1T·2T.\n\n'
+      + '이 칸은 만원 단위입니다. 100만원이면 100, 1,000만원이면 1000. 티켓 상금은 10T·20T(1T=1만원).\n\n'
       + '이대로 저장하면 매장·전국 프라이즈 순위가 크게 왜곡됩니다. 그래도 저장할까요?',
     )) return;
     setSaving(true);
@@ -1487,11 +1487,11 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
       {/* 오너 지시(2026-08-27): 안내가 쓸데없이 길다 — 핵심 1줄 + 나머지는 접힘 */}
       <details className="group/rkhelp t-desc break-keep text-ink-muted">
         <summary className="cursor-pointer list-none">
-          <span className="text-accent-300 dark:text-accent-200 font-semibold">닉네임 필수</span> · 프라이즈는 <span className="text-accent-300 dark:text-accent-200 font-semibold">만원 단위</span>(100만원=100) · 티켓은 <span className="text-accent-300 dark:text-accent-200 font-semibold">1T</span>
+          <span className="text-accent-300 dark:text-accent-200 font-semibold">닉네임 필수</span> · 프라이즈는 <span className="text-accent-300 dark:text-accent-200 font-semibold">만원 단위</span>(100만원=100) · 티켓은 <span className="text-accent-300 dark:text-accent-200 font-semibold">T</span>(1T=1만원)
           <span className="ml-1 text-ink-muted underline decoration-border-default underline-offset-2 group-open/rkhelp:hidden">자세히</span>
         </summary>
         <p className="mt-1">
-          실명·프라이즈는 선택입니다. 1,000만원은 <span className="text-accent-300 font-semibold">1000</span>(원 단위로 치면 순위 점수가 1만 배로 잘못 쌓입니다). 티켓 상금은 <span className="text-accent-300 font-semibold">1T·2T</span> 로 적습니다(1T = 10만원 · 손님에게 1T 로 보일지 10만으로 보일지는 매장 랭킹 설정에서). 등수마다 <span className="text-accent-300 font-semibold">기준 점수(+N점)</span>가 자동 부여되고, 프라이즈는 <span className="text-accent-300 font-semibold">매장 커뮤니티 순위 점수</span>로만 쓰입니다(금전적 가치 없음). 손님 화면엔 <span className="text-accent-300 font-semibold">실명(닉네임) 형식</span>으로 닉네임 일부를 가려 표시됩니다(예: 누리홀덤(나*리)).
+          실명·프라이즈는 선택입니다. 1,000만원은 <span className="text-accent-300 font-semibold">1000</span>(원 단위로 치면 순위 점수가 1만 배로 잘못 쌓입니다). 티켓 상금은 <span className="text-accent-300 font-semibold">10T·20T</span> 처럼 적습니다(1T = 1만원 · 손님에게 10T 로 보일지 10만으로 보일지는 매장 랭킹 설정에서). 등수마다 <span className="text-accent-300 font-semibold">기준 점수(+N점)</span>가 자동 부여되고, 프라이즈는 <span className="text-accent-300 font-semibold">매장 커뮤니티 순위 점수</span>로만 쓰입니다(금전적 가치 없음). 손님 화면엔 <span className="text-accent-300 font-semibold">실명(닉네임) 형식</span>으로 닉네임 일부를 가려 표시됩니다(예: 누리홀덤(나*리)).
         </p>
         {vchOn && <p className="mt-1">
           <b className="text-accent-300">매장이용권은 순위 저장과 따로 나갑니다.</b> 개수를 넣고 그 줄 맨 오른쪽 <b className="text-accent-300">전송</b>을 눌러야 그 한 명에게 발급됩니다. 저장만으로는 나가지 않습니다. 비회원·본인인증 전 회원 줄은 전송 버튼이 비활성이고, 같은 닉네임 회원이 둘 이상(<span className="text-amber-300 font-semibold">중복</span>)이면 닉네임 칸 자동완성에서 받는 분을 먼저 골라 주세요.
@@ -1676,8 +1676,8 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
                   onChange={(e) => update(i, 'prize', e.target.value.replace(/[^\d.tT]/g, '').replace(/t/g, 'T'))}
                   onKeyDown={(e) => { if (e.nativeEvent.isComposing) return; /* 한글 조합 확정 Enter 를 제출로 오인하지 않게 */ if (e.key === 'Enter' && i === rows.length - 1) addRow(); }}
                   placeholder="프라이즈"
-                  aria-label="프라이즈 (만원 단위 · 티켓은 1T)"
-                  title="만원 단위 · 100만원이면 100, 1,000만원이면 1000 · 티켓 상금은 1T, 2T (1T = 10만원)"
+                  aria-label="프라이즈 (만원 단위 · 티켓은 T)"
+                  title="만원 단위 · 100만원이면 100, 1,000만원이면 1000 · 티켓 상금은 10T, 20T (1T = 1만원)"
                   className={['input w-full min-w-0 text-sm py-2 pr-7',
                     prizeUnitRisk(row.prize) !== 'ok' ? 'border-amber-400/70 focus:border-amber-400 focus:ring-amber-400' : ''].join(' ')}
                 />
@@ -1762,7 +1762,7 @@ function RankingEditor({ venueId, canEdit, draft, gameSel }: {
         return (
           <p className="t-desc break-keep rounded-input border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-amber-200">
             <Icon name="alert" size={12} className="mr-0.5 inline-block align-[-1px] shrink-0" /><b>{bad.map((x) => `${x.no}위`).join(', ')}</b> 프라이즈가 큽니다. 이 칸은<b>만원 단위</b>예요.
-            100만원이면 <b>100</b>, 1,000만원이면 <b>1000</b>, 티켓은 <b>1T</b>. 원 단위로 치면 매장·전국 프라이즈 순위가 크게 왜곡됩니다.
+            100만원이면 <b>100</b>, 1,000만원이면 <b>1000</b>, 티켓은 <b>10T</b>(1T=1만원). 원 단위로 치면 매장·전국 프라이즈 순위가 크게 왜곡됩니다.
           </p>
         );
       })()}

@@ -13,12 +13,12 @@ export function presetPrizeWon(d: { prizeAmountWon?: number; prizeAmount?: numbe
   return d.prizeAmount != null ? manToWon(d.prizeAmount) : 0;
 }
 
-/** 티켓 1장의 가치(원). api/rankings TICKET_MAN(10만) 과 같은 값 — 서버 parse_prize_man 과도 동일.
- *  ⚠ 장부(ledger.ts)의 티켓은 '세션 현금단가' 로 계산되는 다른 척도다 — 여기 상수를 장부에 쓰지 말 것. */
-export const TICKET_WON = 100_000;
+/** 티켓 단위 T 의 가치(원). **1T = 1만원**(오너 결정 2026-09-05). api/rankings TICKET_MAN·서버 parse_prize_man 과 같은 값.
+ *  장부 분납의 ticketCount(T) 환산도 이 상수를 쓴다 — 순위·장부·이용권이 한 단위로 묶인다. */
+export const TICKET_WON = 10_000;
 
 /** 순위별 상금 항목 읽기 — 신형 amountWon(원) 우선, 구형 amount+unit 폴백(unit 기본 '만원').
- *  unit 'T' 는 티켓 장수(오너 2026-09-05) → 장수 × TICKET_WON. */
+ *  unit 'T' 는 티켓 T 수(1T = 1만원) → T × TICKET_WON. */
 export function rankingPrizeWon(e: { amountWon?: number; amount?: number; unit?: string }): number {
   if (e.amountWon != null) return e.amountWon;
   if (e.amount == null) return 0;

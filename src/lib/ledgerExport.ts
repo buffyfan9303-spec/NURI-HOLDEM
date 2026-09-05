@@ -82,7 +82,7 @@ export function buildLedgerHtml(input: LedgerExportInput): string {
   ].filter(Boolean).join('<br>');
 
   const totalColspan = maxEntry + 5;
-  const summary = `총 엔트리 ${entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} · 총 바인 ${totalBuyins} · 회수 티켓 ${ticket}장 · 완납 매출 ${wonToMan(revenue)}만원 · 당일 미수금 ${wonToMan(unpaid)}만원 · 가게지원 ${support}건`;
+  const summary = `총 엔트리 ${entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} · 총 바인 ${totalBuyins} · 회수 티켓 ${ticket.toLocaleString(undefined, { maximumFractionDigits: 1 })}T(1T=1만원) · 완납 매출 ${wonToMan(revenue)}만원 · 당일 미수금 ${wonToMan(unpaid)}만원 · 가게지원 ${support}건`;
 
   return `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
 <head><meta charset="utf-8"><style>

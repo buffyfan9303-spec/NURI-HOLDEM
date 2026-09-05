@@ -61,12 +61,12 @@ describe('단순 결제 · 할인 없음', () => {
 
   it('티켓(이용권)은 현금 매출이 아니다. 매출 0, 티켓 1장 회수', () => {
     const f = buyinFinance(buyin({ paymentMethod: 'ticket' }), SESSION);
-    expect(f).toMatchObject({ paid: 0, ticketPaid: 1, ticketUnpaid: 0, entry: 1 });
+    expect(f).toMatchObject({ paid: 0, ticketPaid: 10, ticketUnpaid: 0, entry: 1 });
   });
 
   it('티켓 미수(가불) = 회수 티켓이 아니라 미수 티켓', () => {
     const f = buyinFinance(buyin({ paymentMethod: 'ticket', isUnpaid: true }), SESSION);
-    expect(f).toMatchObject({ ticketPaid: 0, ticketUnpaid: 1 });
+    expect(f).toMatchObject({ ticketPaid: 0, ticketUnpaid: 10 });
   });
 });
 
@@ -116,7 +116,7 @@ describe('할인 이벤트 적용 (discountIndex)', () => {
 
 describe('분납 (결제수단 쪼개기)', () => {
   it('카드 4만 + 티켓 6만 상당 → 실제 받은 금액만 매출', () => {
-    const f = buyinFinance(buyin({ isSplit: true, cardAmount: 40_000, ticketCount: 1 }), SESSION);
+    const f = buyinFinance(buyin({ isSplit: true, cardAmount: 40_000, ticketCount: 10 }), SESSION); // 10T = 10만
     expect(f.paid).toBe(40_000);
   });
 
@@ -185,7 +185,7 @@ describe('합계 정합성 · 여러 바인의 매출 합이 기대와 일치', 
 
     expect(t.paid).toBe(150_000);
     expect(t.unpaid).toBe(100_000);
-    expect(t.ticket).toBe(1);
+    expect(t.ticket).toBe(10);
     expect(t.entry).toBeCloseTo(4.5, 10); // 1 + 0.5 + 1 + 1 + 1
   });
 });
@@ -226,8 +226,8 @@ describe('총바인 가치(buyinValue) — 티켓·지원도 단가만큼', () =
     expect(value(buyin({ paymentMethod: 'cash', discountIndex: 1 }))).toBe(50_000);
   });
 
-  it('분납 카드 4만 + 티켓 1장 = 가치 14만 · 매출은 4만', () => {
-    const b = buyin({ isSplit: true, cardAmount: 40_000, ticketCount: 1 });
+  it('분납 카드 4만 + 티켓 10T(=10만) = 가치 14만 · 매출은 4만', () => {
+    const b = buyin({ isSplit: true, cardAmount: 40_000, ticketCount: 10 }); // 10T = 10만
     expect(buyinFinance(b, SESSION).paid).toBe(40_000);
     expect(value(b)).toBe(140_000);
   });
@@ -242,9 +242,9 @@ describe('총바인 가치(buyinValue) — 티켓·지원도 단가만큼', () =
 //                        티켓이라고 무조건 10으로 입력하면 안 되지."
 // 원래 결함은 '할인'이 아니라 **가치가 통째로 0원**이던 것이었다(총바인 0만). 그 수정만 남긴다.
 describe('티켓 가치 — 할인 없으면 단가 전액, 있으면 그만큼', () => {
-  it('할인 없는 티켓 = 단가 전액 · 엔트리 1 — "1T = 10만"', () => {
+  it('할인 없는 티켓 = 단가 전액 · 엔트리 1 — 10T = 10만(1T=1만원)', () => {
     const f = buyinFinance(buyin({ paymentMethod: 'ticket' }), SESSION);
-    expect(f).toMatchObject({ entry: 1, value: 100_000, ticketPaid: 1, paid: 0 });
+    expect(f).toMatchObject({ entry: 1, value: 100_000, ticketPaid: 10, paid: 0 });
   });
 
   it('할인5만이 입력된 티켓 → 가치 5만 · 엔트리 0.5 (무조건 10만이 아니다)', () => {
@@ -257,7 +257,7 @@ describe('티켓 가치 — 할인 없으면 단가 전액, 있으면 그만큼'
 
   it('티켓 미수도 같은 규칙', () => {
     const f = buyinFinance(buyin({ paymentMethod: 'ticket', isUnpaid: true, discountIndex: 1 }), SESSION);
-    expect(f).toMatchObject({ entry: 0.5, value: 50_000, ticketUnpaid: 1, ticketPaid: 0 });
+    expect(f).toMatchObject({ entry: 0.5, value: 50_000, ticketUnpaid: 5, ticketPaid: 0 });
   });
 
   it("할인 집계는 티켓 행도 센다 — 따로 입력한 할인이라 '덜 받은 돈'이 맞다", () => {
@@ -310,7 +310,7 @@ describe('정산 제외 — 방문자 유형 × 결제수단', () => {
   });
 
   it('분납은 쓰인 수단이 **전부** 제외 대상일 때만 빠진다', () => {
-    const mixed = buyin({ playerName: '손님', isSplit: true, cashAmount: 40_000, ticketCount: 1 });
+    const mixed = buyin({ playerName: '손님', isSplit: true, cashAmount: 40_000, ticketCount: 10 });
     expect(ex(mixed, ['method:ticket'])).toBe(false);          // 일부만 제외 → 남긴다
     expect(ex(mixed, ['method:ticket', 'method:cash'])).toBe(true); // 전부 제외 → 뺀다
   });
@@ -350,7 +350,7 @@ describe('할인 집계 — 덜 받은 현금과 엔트리 차감을 가른다',
   it('entryLoss 는 추정식이 아니라 실제 entry 에서 나온다 — 액면가 경로에서 0 이다', () => {
     // 분납 티켓은 액면가로 돌아 할인이 엔트리를 깎지 않는다.
     // 예전의 `총할인액/단가` 추정식은 여기서 0.5 라고 거짓말했다(실측 1 vs 0.5).
-    const split = buyin({ isSplit: true, ticketCount: 1, discountIndex: 1 });
+    const split = buyin({ isSplit: true, ticketCount: 10, discountIndex: 1 });
     expect(buyinFinance(split, SESSION).entry).toBe(1);
     expect(discountSummary([split], SESSION).entryLoss).toBe(0);
   });
@@ -387,7 +387,7 @@ describe('정산 대차 — gross − disc === value === Σtender', () => {
     ['티켓+할인5만', buyin({ paymentMethod: 'ticket', discountIndex: 1 })],
     ['가게지원', buyin({ paymentMethod: 'support' })],
     ['가게지원+할인5만', buyin({ paymentMethod: 'support', discountIndex: 1 })],
-    ['분납 카드4만+티켓1', buyin({ isSplit: true, cardAmount: 40_000, ticketCount: 1 })],
+    ['분납 카드4만+티켓10T', buyin({ isSplit: true, cardAmount: 40_000, ticketCount: 10 })],
     ['분납 현금5만+할인5만', buyin({ isSplit: true, cashAmount: 50_000, discountIndex: 1 })],
     ['분납 현금3만+미수7만', buyin({ isSplit: true, cashAmount: 30_000, unpaidAmount: 70_000 })],
   ];
@@ -402,6 +402,7 @@ describe('정산 대차 — gross − disc === value === Σtender', () => {
   it('티켓 1장 = 단가 10만이 tender.ticket 에 돈으로 선다 (매출 paid 는 0)', () => {
     const f = buyinFinance(buyin({ paymentMethod: 'ticket' }), SESSION);
     expect(f.tender.ticket).toBe(100_000);
+    expect(f.ticketPaid).toBe(10); // 자리 1개 = 10T
     expect(f.gross).toBe(100_000);
     expect(f.paid).toBe(0);
   });

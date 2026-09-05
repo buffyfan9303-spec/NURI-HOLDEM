@@ -166,11 +166,12 @@ export function placementPoints(position: number): number {
   }
 }
 
-/** 티켓 1장의 가치(만원). 오너 규칙(2026-09-05) "1T 는 10만원" — 서버 parse_prize_man·lib/units TICKET_WON 과 같은 값.
- *  ⚠ 장부(ledger.ts)의 티켓은 '세션 현금단가' 로 계산되는 다른 척도다. 여기 상수를 장부에 쓰지 말 것. */
-export const TICKET_MAN = 10;
+/** 티켓 단위 T 의 가치(만원). **1T = 1만원**(오너 결정 2026-09-05 — 10만 바인 = 10T).
+ *  예전(같은 날 오전) 1T=10만 은 장부 분납에서 티켓을 나눌 수 없어 폐기했다.
+ *  서버 parse_prize_man(20260905f)·lib/units TICKET_WON(10_000)·장부 분납 ticketWon 이 전부 이 값을 쓴다. */
+export const TICKET_MAN = 1;
 
-/** "1T" · "2 t" 처럼 **정수+T** 만 티켓 표기로 인정한다. 장수를 돌려주고, 아니면 0. */
+/** "10T" · "5 t" 처럼 **숫자+T** 만 티켓 표기로 인정한다. T 수를 돌려주고, 아니면 0. */
 export function parsePrizeTickets(prize?: string | null): number {
   if (!prize) return 0;
   const m = String(prize).replace(/,/g, '').match(/^\s*(\d*\.?\d+)\s*[tT]\s*$/);
@@ -178,7 +179,7 @@ export function parsePrizeTickets(prize?: string | null): number {
 }
 
 // 프라이즈 텍스트 → 만원 숫자(만원 단위 입력 기준, 콤마/단위 제거 후 첫 숫자).
-// "nT"(티켓) 는 n × 10만 — 서버 parse_prize_man(20260905e) 과 정확히 같은 규칙이라
+// "nT"(티켓) 는 n × TICKET_MAN(=n 만원) — 서버 parse_prize_man(20260905f) 과 정확히 같은 규칙이라
 // 머니인 포인트·시즌 합산이 화면과 어긋나지 않는다.
 export function parsePrizeMan(prize?: string | null): number {
   if (!prize) return 0;
@@ -189,7 +190,7 @@ export function parsePrizeMan(prize?: string | null): number {
 }
 
 /**
- * 상금 표시 문자열. 티켓 상금은 매장 설정에 따라 "1T"(기본) 또는 "10만" 으로 보인다
+ * 상금 표시 문자열. 티켓 상금은 매장 설정에 따라 "10T"(기본) 또는 "10만" 으로 보인다
  * (오너: "머니인이나 순위 같은 데는 1T 로 표기하되 ... 매장이 선택할 수 있게").
  * 숫자 상금은 언제나 "N만". cfg 가 없는 화면(내 정보·리그처럼 여러 매장이 섞이는 곳)은 티켓 표기.
  */
@@ -294,8 +295,8 @@ export interface VenuePageConfig {
   customBoards?: CustomBoard[];           // 커스텀 보드 정의(최대 3)
   notifyStaff?: boolean;                  // 직원 호출/공지 알림 수신
   clockTheme?: import('../components/features/clock/clockTheme').ClockTheme; // TV 송출 클락 테마 v1
-  /** 순위·머니인에서 티켓 상금을 어떻게 보일지 — 'ticket'(기본, "1T") | 'won'("10만").
-   *  가치는 어느 쪽이든 1T = 10만(TICKET_MAN). 장부는 항상 만원 가치라 이 설정과 무관하다. */
+  /** 순위·머니인에서 티켓 상금을 어떻게 보일지 — 'ticket'(기본, "10T") | 'won'("10만").
+   *  가치는 어느 쪽이든 1T = 1만원(TICKET_MAN). 장부 대차표는 항상 만원 가치라 이 설정과 무관하다. */
   ticketPrizeDisplay?: 'ticket' | 'won';
 }
 

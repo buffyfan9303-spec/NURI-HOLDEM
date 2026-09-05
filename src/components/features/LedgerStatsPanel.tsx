@@ -326,7 +326,7 @@ function StatsView({ venueId }: { venueId: string }) {
           <div className="grid grid-cols-3 gap-2">
             <StatCard label="완납 매출액" value={`${m.revenue.toLocaleString()} 원`} icon="wallet" emerald />
             <StatCard label="미수 금액" value={`${m.unpaid.toLocaleString()} 원`} icon="alert" danger={m.unpaid > 0} />
-            <StatCard label="회수 티켓" value={`${m.ticket} 장`} icon="ticket" gold sub={m.ticketUnpaid > 0 ? `미수 ${m.ticketUnpaid}` : undefined} />
+            <StatCard label="회수 티켓" value={`${m.ticket.toLocaleString(undefined, { maximumFractionDigits: 1 })}T`} icon="ticket" gold sub={m.ticketUnpaid > 0 ? `미수 ${m.ticketUnpaid.toLocaleString(undefined, { maximumFractionDigits: 1 })}T` : '1T = 1만원'} />
           </div>
 
           {/* 보조 지표 */}

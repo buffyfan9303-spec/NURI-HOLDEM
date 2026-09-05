@@ -1,4 +1,5 @@
 // src/components/features/NuriPosLedger.tsx
+import { TICKET_WON } from '../../lib/units'; // 티켓 T 단위(1T=1만원) — 분납 합계 환산
 import { useIsDesktop } from '../../lib/responsive';
 import HoldToConfirmButton from '../atoms/HoldToConfirmButton';
 // NURI POS 장부 — 표(table) 형태. 장부 입장 시 세션 설정(담당직원·게임·단가·이벤트·딜러) → 보드.
@@ -12,6 +13,7 @@ import Icon from '../atoms/Icon';
 import { deleteLedgerPlayerAtomic, CELL_TAKEN, cancelMyRecentBuyin,
   type LedgerBuyin, type LedgerSession, type LedgerPlayer, type PaymentMethod, type LedgerSessionListItem, type DiscountPreset, type EarlyType, type LedgerGame, type LedgerCloseSnapshot, type LedgerLossSummary,
   visitorLabel, wonToMan, WON_PER_MAN, buyinFinance, isBuyinExcluded, earlyTypeOf, setBuyinEarly, MAIN_GAME_SEQ, ledgerLossSummary,
+  
   cardUnit, discountAmountOf, autoDiscountIndex, discountSummary, type DiscountSummary, ZERO_TENDER, type Tender,
   getLedgerSession, getLedgerGames, saveLedgerSession, openLedgerSession, closeLedgerSession, reopenLedgerSession, deleteLedgerSession,
   setRegistrationClosed, getLastLedgerSettings, getLedgerSessionList, getLedgerAccessUserIds, notifyLedgerOpen,
@@ -1326,7 +1328,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
             <Metric label={exKeys.size > 0 ? '총 엔트리(제외 적용)' : '총 엔트리'}
               value={stats.entries.toLocaleString(undefined, { maximumFractionDigits: 1 })} />
             {/* 티켓은 '장'이 아니라 **돈**으로도 보인다 — 1장 = 단가. 정산 대차의 한 줄이다. */}
-            <Metric label={`티켓 ${stats.ticket}장`} value={`${wonToMan(stats.tender.ticket)}만`} />
+            <Metric label={`티켓 ${stats.ticket.toLocaleString(undefined, { maximumFractionDigits: 1 })}T`} value={`${wonToMan(stats.tender.ticket)}만`} />
             <Metric label="완납 매출" value={`${wonToMan(stats.revenue)}만`} tone="emerald" />
             <Metric label="미수금" value={`${wonToMan(stats.unpaid)}만`} tone="danger" />
           </div>
@@ -1350,7 +1352,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
             {/* '−N만'은 **덜 받은 현금**이다 → cashTotal. 깎아 준 총액은 마감 모달에서 따로 본다. */}
             {stats.discount.count > 0 && <span className="text-accent-300">할인 {stats.discount.count}건 · 엔트리 −{stats.discount.entryLoss.toLocaleString(undefined, { maximumFractionDigits: 2 })} · 현금 −{wonToMan(stats.discount.cashTotal)}만</span>}
             {stats.discount.count > 0 && (stats.ticketUnpaid > 0 || stats.support > 0) && <span className="text-ink-muted"> · </span>}
-            {stats.ticketUnpaid > 0 && <span className="text-danger-light">티켓 미수 {stats.ticketUnpaid}장</span>}
+            {stats.ticketUnpaid > 0 && <span className="text-danger-light">티켓 미수 {stats.ticketUnpaid.toLocaleString(undefined, { maximumFractionDigits: 1 })}T</span>}
             {stats.ticketUnpaid > 0 && stats.support > 0 && <span className="text-ink-muted"> · </span>}
             {stats.support > 0 && <span className="text-indigo-300">가게지원 {stats.support}건</span>}
           </p>
@@ -2402,7 +2404,7 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
   //   적어 놓고 저장은 14만 상당(entry 1.4)으로 한다. 티켓만 1장이면 '합계 0만원'인데 저장은 된다
   //   (바로 아래 canSaveSplit 이 tkt>0 만으로도 허용한다 — 합계가 0인데 저장되는 모순).
   //   buyinFinance 분납 분기(ledger.ts ticketWon)와 같은 식으로 단가 환산해 맞춘다.
-  const splitTotal = cash + card + transfer + unpaidAmt + tkt * session.buyinAmount;
+  const splitTotal = cash + card + transfer + unpaidAmt + tkt * TICKET_WON;
   const canSaveSplit = splitTotal > 0 || tkt > 0;
   const submitSplit = () => onPickSplit({ cashAmount: cash, cardAmount: card, transferAmount: transfer, ticketCount: tkt, unpaidAmount: unpaidAmt, discountIndex: discIdx });
 
@@ -2583,7 +2585,8 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
               <AmountRow label="미수" value={unpaidAmt} set={setUnpaidAmt} danger />
               <div className="grid grid-cols-2 gap-2">
                 <label className="block">
-                  <span className="block text-2xs text-ink-muted mb-0.5">티켓(장)</span>
+                  {/* T 단위(1T = 1만원). 10만 자리를 티켓으로 다 내면 10, 5만만 티켓이면 5 — 그래서 나눌 수 있다. */}
+                  <span className="block text-2xs text-ink-muted mb-0.5">티켓(T · 1T=1만원)</span>
                   <input type="number" inputMode="numeric" min={0} value={tkt || ''} onChange={(e) => setTkt(Math.max(0, parseInt(e.target.value, 10) || 0))}
                     placeholder="0" className="input w-full text-sm tabular-nums" />
                 </label>
@@ -2703,7 +2706,7 @@ function CloseModal({ stats, unpaidPlayers, exNote, onClose, onConfirm }: {
             <div className="flex justify-between"><dt className="text-ink-muted">현금</dt><dd className="text-emerald-300">{wonToMan(stats.tender.cash)}만원</dd></div>
             <div className="flex justify-between"><dt className="text-ink-muted">카드</dt><dd className="text-emerald-300">{wonToMan(stats.tender.card)}만원</dd></div>
             <div className="flex justify-between"><dt className="text-ink-muted">이체</dt><dd className="text-emerald-300">{wonToMan(stats.tender.transfer)}만원</dd></div>
-            <div className="flex justify-between"><dt className="text-ink-muted">티켓 <span className="text-2xs">({stats.ticket}장{stats.ticketUnpaid > 0 ? ` +미수 ${stats.ticketUnpaid}장` : ''})</span></dt><dd className="text-accent-200">{wonToMan(stats.tender.ticket)}만원</dd></div>
+            <div className="flex justify-between"><dt className="text-ink-muted">티켓 <span className="text-2xs">({stats.ticket.toLocaleString(undefined, { maximumFractionDigits: 1 })}T{stats.ticketUnpaid > 0 ? ` +미수 ${stats.ticketUnpaid.toLocaleString(undefined, { maximumFractionDigits: 1 })}T` : ''} · 1T=1만)</span></dt><dd className="text-accent-200">{wonToMan(stats.tender.ticket)}만원</dd></div>
             <div className="flex justify-between"><dt className="text-ink-muted">가게지원 <span className="text-2xs">({stats.support}건)</span></dt><dd className="text-indigo-300">{wonToMan(stats.tender.support)}만원</dd></div>
             <div className="flex justify-between"><dt className="text-ink-muted">미수</dt><dd className="text-danger-light">{wonToMan(stats.tender.unpaid)}만원</dd></div>
             {(() => {
@@ -2777,7 +2780,7 @@ function CloseModal({ stats, unpaidPlayers, exNote, onClose, onConfirm }: {
         </div>
 
         {stats.ticketUnpaid > 0 && (
-          <p className="text-2xs font-semibold text-danger-light">티켓 미수 {stats.ticketUnpaid}장 — 회수 티켓 집계에서 빠져 있습니다.</p>
+          <p className="text-2xs font-semibold text-danger-light">티켓 미수 {stats.ticketUnpaid.toLocaleString(undefined, { maximumFractionDigits: 1 })}T — 회수 티켓 집계에서 빠져 있습니다.</p>
         )}
 
         {/* 미수자 리스트 */}

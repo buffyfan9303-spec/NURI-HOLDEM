@@ -38,42 +38,42 @@ describe('분납 티켓 · 엔트리·티켓 집계 (critical 회귀 방지)', (
   const S = session();
 
   it('🔴 티켓 1장만으로 분납 저장 시 엔트리 1 (0이면 안 된다)', () => {
-    const f = buyinFinance(buyin({ isSplit: true, ticketCount: 1 }), S);
+    const f = buyinFinance(buyin({ isSplit: true, ticketCount: 10 }), S);
     expect(f.entry).toBe(1);
     expect(f.entry).not.toBe(0);
   });
 
   it('🔴 티켓 1장 = 회수 티켓 1장으로 집계된다', () => {
-    const f = buyinFinance(buyin({ isSplit: true, ticketCount: 1 }), S);
-    expect(f.ticketPaid).toBe(1);
+    const f = buyinFinance(buyin({ isSplit: true, ticketCount: 10 }), S);
+    expect(f.ticketPaid).toBe(10);
   });
 
   it('티켓은 현금 매출이 아니다. paid 0', () => {
-    expect(buyinFinance(buyin({ isSplit: true, ticketCount: 1 }), S).paid).toBe(0);
+    expect(buyinFinance(buyin({ isSplit: true, ticketCount: 10 }), S).paid).toBe(0);
   });
 
   it('빠른입력 티켓과 분납 티켓의 엔트리가 동일하다(입력 경로가 달라도 같은 값)', () => {
     const quick = buyinFinance(buyin({ paymentMethod: 'ticket' }), S);
-    const split = buyinFinance(buyin({ isSplit: true, ticketCount: 1 }), S);
+    const split = buyinFinance(buyin({ isSplit: true, ticketCount: 10 }), S);
     expect(split.entry).toBe(quick.entry);
     expect(split.ticketPaid).toBe(quick.ticketPaid);
   });
 
   it('카드 4만 + 티켓 1장 = 매출 4만 · 엔트리 1.4 (현금성 4만 + 티켓 10만 상당)', () => {
-    const f = buyinFinance(buyin({ isSplit: true, cardAmount: 40_000, ticketCount: 1 }), S);
+    const f = buyinFinance(buyin({ isSplit: true, cardAmount: 40_000, ticketCount: 10 }), S);
     expect(f.paid).toBe(40_000);
     expect(f.entry).toBeCloseTo(1.4, 10);
-    expect(f.ticketPaid).toBe(1);
+    expect(f.ticketPaid).toBe(10);
   });
 
   it('티켓 2장 = 엔트리 2', () => {
-    expect(buyinFinance(buyin({ isSplit: true, ticketCount: 2 }), S).entry).toBe(2);
+    expect(buyinFinance(buyin({ isSplit: true, ticketCount: 20 }), S).entry).toBe(2);
   });
 
   it('티켓 + 미수만 있으면 미수 티켓으로 분류(회수 아님)', () => {
-    const f = buyinFinance(buyin({ isSplit: true, ticketCount: 1, unpaidAmount: 100_000 }), S);
+    const f = buyinFinance(buyin({ isSplit: true, ticketCount: 10, unpaidAmount: 100_000 }), S);
     expect(f.ticketPaid).toBe(0);
-    expect(f.ticketUnpaid).toBe(1);
+    expect(f.ticketUnpaid).toBe(10);
   });
 });
 
@@ -135,7 +135,7 @@ describe('화면 간 합계 일치. 장부·통계·엑셀이 같은 규칙을 �
     buyin({ paymentMethod: 'cash' }),                     // 10만
     buyin({ paymentMethod: 'cash', discountIndex: 1 }),   // 5만(할인)
     buyin({ paymentMethod: 'ticket' }),                   // 티켓 1
-    buyin({ isSplit: true, cashAmount: 40_000, ticketCount: 1 }), // 분납: 4만 + 티켓1
+    buyin({ isSplit: true, cashAmount: 40_000, ticketCount: 10 }), // 분납: 4만 + 티켓1
     buyin({ paymentMethod: 'cash', isUnpaid: true }),     // 미수 10만
   ];
 
@@ -153,15 +153,15 @@ describe('화면 간 합계 일치. 장부·통계·엑셀이 같은 규칙을 �
     const t = agg();
     expect(t.paid).toBe(190_000);   // 10만 + 5만 + 0 + 4만 + 0
     expect(t.unpaid).toBe(100_000);
-    expect(t.ticket).toBe(2);       // 빠른입력 티켓 1 + 분납 티켓 1
+    expect(t.ticket).toBe(20);       // 빠른입력 티켓 1 + 분납 티켓 1
     expect(t.entry).toBeCloseTo(4.9, 10); // 1 + 0.5 + 1 + 1.4 + 1
   });
 
   it('티켓은 매출에 포함되지 않는다(현금성 매출과 구분)', () => {
-    const onlyTickets = [buyin({ paymentMethod: 'ticket' }), buyin({ isSplit: true, ticketCount: 1 })]
+    const onlyTickets = [buyin({ paymentMethod: 'ticket' }), buyin({ isSplit: true, ticketCount: 10 })]
       .map((b) => buyinFinance(b, S));
     expect(onlyTickets.reduce((s, f) => s + f.paid, 0)).toBe(0);
-    expect(onlyTickets.reduce((s, f) => s + f.ticketPaid, 0)).toBe(2);
+    expect(onlyTickets.reduce((s, f) => s + f.ticketPaid, 0)).toBe(20);
   });
 });
 

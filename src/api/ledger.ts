@@ -1,5 +1,6 @@
 // src/api/ledger.ts — NURI POS 장부 시스템 API
 import { supabase, IS_MOCK } from '../lib/supabase';
+import { TICKET_WON } from '../lib/units';
 import { currentUser } from './_session';
 import type { ClockConfig as ClockConfigT } from './clock'; // 타입 전용 — 런타임 순환 없음
 
@@ -127,7 +128,10 @@ export interface Tender { cash: number; card: number; transfer: number; ticket: 
 export const ZERO_TENDER: Tender = { cash: 0, card: 0, transfer: 0, ticket: 0, support: 0, unpaid: 0 };
 
 export interface BuyinFinance {
-  paid: number; unpaid: number; entry: number; ticketPaid: number; ticketUnpaid: number; support: number;
+  paid: number; unpaid: number; entry: number;
+  /** 회수 티켓(T 단위, 1T = 1만원). 비분납 'ticket' 행은 (단가−할인)/1만, 분납은 ticketCount 그대로. */
+  ticketPaid: number; ticketUnpaid: number;
+  support: number;
   /** 정가(원) — 이 바인이 할인 전에 얼마짜리였나. 비분납은 단가(카드는 카드단가), 분납은 value+disc. */
   gross: number;
   /** 이 행에 적용된 할인액(원). gross − disc === value. */
@@ -158,12 +162,11 @@ export function buyinFinance(b: LedgerBuyin, s: { buyinAmount: number; cardAmoun
     //   '회수 티켓 1장인데 엔트리 0'으로 잡히는 모순이 있었다(빠른입력 티켓은 엔트리 1).
     //   비분납 티켓 결제와 동일하게 1장 = 바인 1회(엔트리 1)로 환산한다.
     const paid = b.cashAmount + b.cardAmount + b.transferAmount;
-    // 티켓 1장 = 바인 1회 상당(액면가). 분납은 현금·카드 칸에 **이미 할인이 빠진 실수령액**이
-    // 들어오므로 여기서 할인을 또 빼면 이중 차감이 된다 — 그래서 액면가 그대로 쓴다.
-    // ⚠ 남아 있는 어긋남: `티켓만 1장 + 할인` 분납은 entry 1 인데, 같은 조합을 빠른입력으로
-    //   찍으면 0.5 다(비분납은 할인을 탄다). 분납에서 티켓만 골라 놓고 할인까지 고르는 조합이라
-    //   실사용 빈도가 낮고(운영 DB: 분납 0건·할인 0건), 올바른 규칙이 하나로 정해지지 않아 남겨 둔다.
-    const ticketWon = b.ticketCount * entryUnit;
+    // ⚠ ticketCount 는 **T 단위**다(1T = 1만원, 오너 결정 2026-09-05). DB 컬럼명(ticket_count)은 그대로 두고
+    //   의미만 바꿨다 — 운영 DB 분납 행 0 이라 소급 없음. 10만 자리를 티켓으로 다 내면 10T,
+    //   5만만 티켓이면 5T + 현금 5만. 예전 '1장 = 단가' 는 이렇게 나눌 수 없어서 폐기했다.
+    //   분납은 현금·카드 칸에 이미 할인이 빠진 실수령액이 들어오므로 여기서 할인을 또 빼지 않는다.
+    const ticketWon = b.ticketCount * TICKET_WON;
     const total = paid + b.unpaidAmount + ticketWon;
     const isTicketUnpaid = b.unpaidAmount > 0 && paid === 0 && b.ticketCount > 0;
     // 분납의 할인은 입력 금액에 이미 빠져 있다(위 주석). 정가는 그래서 total + disc 로 복원한다.
@@ -199,7 +202,8 @@ export function buyinFinance(b: LedgerBuyin, s: { buyinAmount: number; cardAmoun
   //   가게지원과 같은 규칙이 된다 — 둘 다 '현금은 안 받았지만 자리는 찼다'.
   if (b.paymentMethod === 'ticket') {
     const v = Math.max(0, entryUnit - disc);
-    return { ...z, entry, ticketPaid: b.isUnpaid ? 0 : 1, ticketUnpaid: b.isUnpaid ? 1 : 0,
+    const t = v / TICKET_WON; // 자리 1개를 T 로 — 10만 게임 10T, 5만 할인이면 5T
+    return { ...z, entry, ticketPaid: b.isUnpaid ? 0 : t, ticketUnpaid: b.isUnpaid ? t : 0,
              value: v, gross: entryUnit, disc, tender: { ...ZERO_TENDER, ticket: v } };
   }
   // 스냅샷 우선(2026-08-18 전환): 기록 시점 net 금액이 amounts 칸에 저장돼 있으면 그 값이 정본 —
