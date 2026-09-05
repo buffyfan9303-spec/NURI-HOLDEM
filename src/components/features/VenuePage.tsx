@@ -926,8 +926,11 @@ function VenueChat({ venueId, canManage }: { venueId: string; canManage: boolean
               <div className="flex items-center gap-1 text-2xs">
                 <span className="font-semibold text-ink-primary truncate">{m.userName}</span>
                 <span className="text-ink-muted ml-auto shrink-0">{relativeTime(m.createdAt)}</span>
+                {/* ⚠ `hit`(::after 44px 확장) 금지 — 12px 아이콘을 44px 로 늘리면 히트박스가 **본문 첫 줄 위를 덮어**
+                    메시지를 읽으려 탭한 손가락이 확인 없이 삭제를 실행한다(되돌리기 없음, 커뮤니티 라이브월과 같은 결함).
+                    실제 박스를 키우고 음수 마진으로 되돌린다: 마진박스 16px = 이름행 높이라 행 높이가 그대로다. */}
                 {(canManage || m.userId === user?.id) && (
-                  <button type="button" onClick={() => deleteVenueMessage(m.id).then(() => setMessages((p) => p.filter((x) => x.id !== m.id))).catch(() => {})} aria-label="삭제" className="hit shrink-0 text-ink-muted hover:text-danger-light"><Icon name="close" size={12} /></button>
+                  <button type="button" onClick={() => deleteVenueMessage(m.id).then(() => setMessages((p) => p.filter((x) => x.id !== m.id))).catch(() => {})} aria-label="삭제" className="-my-3.5 flex h-11 w-11 shrink-0 items-center justify-center text-ink-muted hover:text-danger-light"><Icon name="close" size={12} /></button>
                 )}
               </div>
               <p className="text-xs text-ink-primary leading-snug mt-0.5 break-words whitespace-pre-wrap">{m.content}</p>
