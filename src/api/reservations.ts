@@ -1,6 +1,7 @@
 // src/api/reservations.ts — 포스터(게임) 예약 + 단골 고객 활동내역 CRM
 import { supabase, IS_MOCK } from '../lib/supabase';
 import { currentUser } from './_session';
+import { countVisitDays } from './checkins';
 
 /** 예약 변경 실시간 구독 — 신규/취소 예약을 게임관리에 자동 반영.
  *  ⚡ 트래픽 대비: scheduleIds 를 주면 그 포스터들의 예약만 수신한다(서버 필터).
@@ -96,26 +97,27 @@ export async function updateReservationName(id: string, name: string): Promise<v
   if (error) throw error;
 }
 
-/** 내 활동 통계 — 예약 후 매장 방문(지난 일정) / 예정 / 전체 횟수. 프로필 뱃지·점수용. */
+/** 내 활동 통계 — 방문(QR 체크인, 매장별 KST 날짜 distinct) / 예정 예약 / 예약 전체 건수. 프로필 뱃지·점수용.
+ *  '방문' = public.checkins 만(오너 결정 2026-09-05, 점검 #8) — 예약은 노쇼가 섞여 방문이 아니다(20260829g 정의).
+ *  my_visited_venues(20260905l)·getMyBadgeStats 와 같은 단위라 대시보드 헤더·프로필 탭·뱃지 임계가 한 숫자다. */
 export async function getMyVisitStats(): Promise<{ visits: number; upcoming: number; total: number }> {
   const empty = { visits: 0, upcoming: 0, total: 0 };
   if (IS_MOCK) return empty;
   const user = await currentUser();
   if (!user) return empty;
-  // schedule_reservations → schedules(date) 조인. 지난 날짜 예약 = 방문으로 집계.
-  const { data, error } = await supabase
-    .from('schedule_reservations')
-    .select('schedule_id, schedules!inner(date)')
-    .eq('user_id', user.id);
-  if (error || !data) return empty;
+  // 예약(schedule_reservations → schedules.date)은 '예정' 만 센다. 체크인은 RLS checkins_select(본인 행)로 직접 읽는다.
+  const [rv, ck] = await Promise.all([
+    supabase.from('schedule_reservations').select('schedule_id, schedules!inner(date)').eq('user_id', user.id),
+    supabase.from('checkins').select('venue_id, created_at').eq('user_id', user.id),
+  ]);
+  if (rv.error || !rv.data) return empty;
   const today = new Date().toLocaleDateString('en-CA');
-  let visits = 0, upcoming = 0;
-  for (const r of data as unknown as { schedules?: { date?: string } }[]) {
+  let upcoming = 0;
+  for (const r of rv.data as unknown as { schedules?: { date?: string } }[]) {
     const d = r.schedules?.date;
-    if (!d) continue;
-    if (d < today) visits++; else upcoming++;
+    if (d && d >= today) upcoming++;
   }
-  return { visits, upcoming, total: data.length };
+  return { visits: countVisitDays((ck.data ?? []) as { venue_id: string; created_at: string }[]), upcoming, total: rv.data.length };
 }
 
 /** 이 매장의 예약자 이름별 누적 예약 횟수(단골 판별: 5회+) */

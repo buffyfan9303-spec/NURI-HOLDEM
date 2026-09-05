@@ -2,6 +2,7 @@
 // 미션/뱃지는 코드 규칙(서버 검증은 claim_mission RPC), 리그·전당은 집계 조회.
 import { supabase, IS_MOCK } from './supabase';
 import { currentUser } from '../api/_session';
+import { countVisitDays } from '../api/checkins';
 import type { IconName } from '../components/atoms/Icon';
 
 // ── 티어·뱃지 글리프를 이모지 → 아이콘으로 (ICON-2, 2026-08-29) ────────────────
@@ -114,14 +115,15 @@ export async function getMyBadgeStats(nickname: string | null, points: number): 
     nickname
       ? supabase.from('venue_rankings').select('position').ilike('nickname', nickname)
       : Promise.resolve({ data: [] as { position: number }[] }),
-    supabase.from('checkins').select('id', { count: 'exact', head: true }).eq('user_id', uid),
+    // 방문 = 매장별 KST 날짜 distinct(getMyVisitStats·my_visited_venues 와 같은 단위, 점검 #8) — raw count 면 뱃지 임계가 어긋난다
+    supabase.from('checkins').select('venue_id, created_at').eq('user_id', uid),
     supabase.from('profiles').select('checkin_streak').eq('id', uid).single(),
   ]);
   const positions = ((vr as { data?: { position: number }[] }).data ?? []).map((r) => r.position);
   return {
     moneyin: positions.length,
     bestPosition: positions.length ? Math.min(...positions) : 9999,
-    visits: (ck as { count: number | null }).count ?? 0,
+    visits: countVisitDays(((ck as { data?: { venue_id: string; created_at: string }[] }).data ?? [])),
     streak: (pf as { data?: { checkin_streak?: number } }).data?.checkin_streak ?? 0,
     points,
   };

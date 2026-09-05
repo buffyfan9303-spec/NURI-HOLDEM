@@ -170,13 +170,15 @@ const rowToPost = (r: any): CommunityPost => ({
   pinnedAt:    r.pinned_at ?? null,
 });
 
-/** 내가 쓴 글 — 개인 허브('내 대시보드')용. 목록 50건 제한과 무관하게 본인 글만 조회 */
-export async function getPostsByUser(userId: string, limit = 20): Promise<CommunityPost[]> {
-  if (IS_MOCK) return [];
-  const res = await supabase.from('community_posts').select('*').eq('user_id', userId)
+/** 내가 쓴 글 — 개인 허브('내 대시보드')용. 목록 50건 제한과 무관하게 본인 글만 조회.
+ *  total = 같은 쿼리에 얹은 count(exact) — 목록은 limit 만큼, 스탯 숫자는 상한 없이(점검 #26, 왕복 1회 유지). */
+export async function getPostsByUser(userId: string, limit = 20): Promise<{ posts: CommunityPost[]; total: number }> {
+  if (IS_MOCK) return { posts: [], total: 0 };
+  const res = await supabase.from('community_posts').select('*', { count: 'exact' }).eq('user_id', userId)
     .order('created_at', { ascending: false }).limit(limit);
-  if (res.error) return [];
-  return (res.data ?? []).map(rowToPost);
+  if (res.error) return { posts: [], total: 0 };
+  const posts = (res.data ?? []).map(rowToPost);
+  return { posts, total: res.count ?? posts.length };
 }
 
 /** 단건 게시글 — 공유 딥링크·알림 링크가 목록(최근 50건) 밖의 글을 가리킬 때 사용 */

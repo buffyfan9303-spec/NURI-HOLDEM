@@ -42,7 +42,8 @@ export const VOUCHER_REASONS: { value: VoucherReason; label: string; hint: strin
 export const voucherReasonLabel = (r: string | null | undefined): string => VOUCHER_REASONS.find((x) => x.value === r)?.label ?? '';
 export interface VoucherUsage { usedVenueId: string | null; venueName: string | null; usedCount: number }
 export interface VisitedVenue { venueId: string; venueName: string | null; visits: number }
-export interface PlayHistory { venueId: string; venueName: string | null; moneyinCount: number; totalAmount: number; lastAt: string | null }
+/** 매장별 참가(바인) 이력 — buyinCount = 장부 바인 횟수, totalAmount = 낸 참가비 합. 머니인(입상)이 아니다(점검 #6). */
+export interface PlayHistory { venueId: string; venueName: string | null; buyinCount: number; totalAmount: number; lastAt: string | null }
 export interface TransferTarget { id: string; display: string; verified?: boolean }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -322,12 +323,14 @@ export async function iCanViewVouchers(venueId: string): Promise<boolean> {
   return data === true;
 }
 
-/** 내 매장 이용내역(머니인 횟수·금액) — 장부 바인을 실명/닉네임 일치로 집계. */
+/** 내 매장 이용내역(바인 횟수·참가비) — 장부 바인을 실명/닉네임 일치로 집계.
+ *  와이어 컬럼 moneyin_count 는 서버(my_play_history)가 그 이름으로 돌려주는 **바인 횟수**다 — 라이브 함수에 저장소 밖 가드가 있어
+ *  SQL 은 손대지 않고 클라 매핑에서만 buyinCount 로 바로잡는다. */
 export async function myPlayHistory(): Promise<PlayHistory[]> {
   if (IS_MOCK) return [];
   const { data } = await supabase.rpc('my_play_history');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((r: any) => ({ venueId: r.venue_id, venueName: r.venue_name ?? null, moneyinCount: Number(r.moneyin_count) || 0, totalAmount: Number(r.total_amount) || 0, lastAt: r.last_at ?? null }));
+  return (data ?? []).map((r: any) => ({ venueId: r.venue_id, venueName: r.venue_name ?? null, buyinCount: Number(r.moneyin_count) || 0, totalAmount: Number(r.total_amount) || 0, lastAt: r.last_at ?? null }));
 }
 
 // ── 발급 한도(쿼터) — 운영진 승인 충전 + 충전(구매) 요청 ─────────────────────
