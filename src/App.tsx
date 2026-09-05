@@ -29,7 +29,7 @@ import { getVenueRatings } from './api/reviews';
 import NotificationPanel from './components/features/NotificationPanel';
 import VerifyGateSheet from './components/features/VerifyGateSheet';
 import { NoticeRow } from './components/features/NoticeSection';
-import { getActiveHomeBanners, type HomeBanner } from './api/homeBanners';
+import { getActiveHomeBanners, type HomeBannerFeed } from './api/homeBanners';
 import { decodeSpot, readGtoHash } from './components/features/gto/gtoShare';
 import type { DeepGtoInit } from './components/features/gto/useDeepGto';
 import type { PosterFormData } from './components/features/PosterFormModal';
@@ -1483,7 +1483,7 @@ export default function App() {
   const reloadNotices   = useCallback(() => { getNotices().then((v) => { setNotices(v); writeSnap('notices', v); setNoticesLoaded(true); }).catch(() => {}); }, []);
   // 홈 상단 배너(home_banners) — 관리자가 등록한 것만. 비면 PosterCarousel 이 기존 하드코딩으로 폴백한다.
   // 스냅샷 캐시를 쓰는 이유: 첫 화면 최상단이라 늦게 도착하면 캐러셀이 통째로 밀린다(CLS).
-  const [homeBanners, setHomeBanners] = useState<HomeBanner[]>(() => readSnap<HomeBanner[]>('home-banners') ?? []);
+  const [homeBanners, setHomeBanners] = useState<HomeBannerFeed>(() => readSnap<HomeBannerFeed>('home-banners') ?? { banners: [], configured: false });
   const reloadHomeBanners = useCallback(() => {
     getActiveHomeBanners().then((v) => { setHomeBanners(v); writeSnap('home-banners', v); }).catch(() => {});
   }, []);
@@ -2732,7 +2732,8 @@ export default function App() {
             liveCount={liveClocks.length}
             regInfoBySchedule={regInfoBySchedule}
             onTools={() => changeTab('tools')}
-            banners={homeBanners}
+            banners={homeBanners.banners}
+            bannersConfigured={homeBanners.configured}
             onSelect={handleScheduleSelect}
             onVenue={handleVenueClick}
             onExplore={() => changeTab('browse')}

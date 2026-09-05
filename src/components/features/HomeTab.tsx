@@ -25,7 +25,7 @@ const openNowSeen = () => { try { return localStorage.getItem(OPENNOW_SEEN) === 
 // 헤드라인의 라이브/일정 문구가 '지금'의 맥락은 이미 담고 있어 정보 손실이 없다.
 
 export default function HomeTab({
-  schedules, loaded, clocksLoaded, liveCount, regInfoBySchedule, onTools, onSelect, onVenue, onExplore, onLive, onRotiCommunity, banners = [],
+  schedules, loaded, clocksLoaded, liveCount, regInfoBySchedule, onTools, onSelect, onVenue, onExplore, onLive, onRotiCommunity, banners = [], bannersConfigured = false,
 }: {
   schedules: Schedule[];
   loaded: boolean;
@@ -34,8 +34,10 @@ export default function HomeTab({
   /** 클락 응답 도착 여부 — 도착 전 '지금 등록 가능' 자리 예약 판단 */
   clocksLoaded: boolean;
   onTools: () => void;
-  /** 관리자 등록 홈 배너(home_banners) — 비면 PosterCarousel 이 기존 하드코딩으로 폴백 */
+  /** 관리자 등록 홈 배너(home_banners) 중 지금 게재 중인 것 */
   banners?: HomeBanner[];
+  /** 표에 행이 하나라도 있는가 — 하드코딩 폴백은 '아직 등록 전'일 때만(관리자가 전부 숨기면 비운다) */
+  bannersConfigured?: boolean;
   /** 캐러셀 로티아레나 배너 → 로티아레나 매장 커뮤니티 페이지 */
   onRotiCommunity: () => void;
   regInfoBySchedule: ReadonlyMap<string, RegInfo>;
@@ -171,6 +173,7 @@ export default function HomeTab({
         schedules={schedules}
         onSelect={onSelect}
         banners={banners}
+        bannersConfigured={bannersConfigured}
         onBannerUrl={(url) => {
           // 관리자가 넣은 링크. 외부는 새 탭(noopener — opener 를 통한 탭내빙 차단),
           // 내부 경로는 같은 탭. javascript: 같은 스킴은 애초에 열지 않는다.

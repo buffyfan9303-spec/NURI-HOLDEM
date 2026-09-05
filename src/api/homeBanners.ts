@@ -38,16 +38,30 @@ const today = () => new Date().toLocaleDateString('en-CA');
  * 만료 '삭제'(purge_expired_home_banners)와 무관하게 노출은 이 필터가 끊는다 —
  * 정리 함수가 안 돌아도 지난 배너가 화면에 남지 않는다.
  */
-export async function getActiveHomeBanners(): Promise<HomeBanner[]> {
-  if (IS_MOCK) return [];
+export interface HomeBannerFeed {
+  /** 지금 게재 중인 배너(순서대로) */
+  banners: HomeBanner[];
+  /** 표에 행이 하나라도 있는가. **'아직 등록 전'과 '관리자가 전부 숨김'을 가르는 값**이다 —
+   *  둘을 같은 빈 배열로 뭉개면 관리자가 배너를 모두 끈 순간 코드에 박힌 기본 배너가 되살아나
+   *  '지웠는데 그대로 있다'가 된다(운영 불가). 조회는 한 번 그대로다(이미 전체 행을 읽고 있었다). */
+  configured: boolean;
+}
+
+export async function getActiveHomeBanners(): Promise<HomeBannerFeed> {
+  if (IS_MOCK) return { banners: [], configured: false };
   const t = today();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('home_banners').select('*')
     .order('sort_order').order('created_at');
-  return (data ?? []).map(rowToBanner).filter((b) =>
-    b.active && b.imageUrl.trim()
-    && (!b.startsAt || b.startsAt <= t)
-    && (!b.endsAt || b.endsAt >= t));
+  if (error) throw error;   // 조회 실패를 '등록 전'으로 오인해 기본 배너를 띄우지 않는다
+  const rows = (data ?? []).map(rowToBanner);
+  return {
+    banners: rows.filter((b) =>
+      b.active && b.imageUrl.trim()
+      && (!b.startsAt || b.startsAt <= t)
+      && (!b.endsAt || b.endsAt >= t)),
+    configured: rows.length > 0,
+  };
 }
 
 /** 관리자: 전체 목록(꺼진 것·만료된 것 포함). */

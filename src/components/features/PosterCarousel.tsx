@@ -121,17 +121,20 @@ type Slide = {
   brand?: (typeof BRAND_SLIDES)[number];
 };
 
-export default function PosterCarousel({ schedules, onSelect, onBanner, banners = [], onBannerUrl }: {
+export default function PosterCarousel({ schedules, onSelect, onBanner, banners = [], bannersConfigured = false, onBannerUrl }: {
   schedules: Schedule[];
   onSelect: (s: Schedule) => void;
   onBanner: (action: BannerAction) => void;
-  /** 관리자 등록 배너(home_banners). 하나라도 있으면 아래 POSTER_SLIDES 하드코딩을 **대체**한다 —
-   *  둘 다 띄우면 오너가 관리 화면에서 지운 배너가 화면에 남아 있는 것처럼 보인다.
-   *  비어 있으면(도입 첫날) 기존 하드코딩이 그대로 떠서 회귀가 없다. */
+  /** 관리자 등록 배너(home_banners) 중 **지금 게재 중인 것**. 하드코딩 POSTER_SLIDES 를 대체한다. */
   banners?: HomeBanner[];
+  /** home_banners 에 행이 하나라도 있는가. 하드코딩 폴백은 **아직 한 줄도 등록되지 않았을 때만** 쓴다 —
+   *  관리자가 전부 끄거나 기간을 넘긴 상태(configured=true, banners=[])에서 기본 배너가 되살아나면
+   *  '관리 화면에서 내렸는데 홈에 그대로 있다'가 되어 운영이 불가능해진다. */
+  bannersConfigured?: boolean;
   onBannerUrl?: (url: string) => void;
 }) {
-  const staticCount = (banners.length > 0 ? banners.length : POSTER_SLIDES.length) + BRAND_SLIDES.length;
+  const useFallback = banners.length === 0 && !bannersConfigured;
+  const staticCount = (useFallback ? POSTER_SLIDES.length : banners.length) + BRAND_SLIDES.length;
   const slides = useMemo<Slide[]>(() => {
     const today = new Date().toLocaleDateString('en-CA');
     // 같은 포스터의 연속 회차(기간제 게임)는 첫 회차 1장만 — 마퀴에 동일 카드 도배 방지
@@ -153,14 +156,14 @@ export default function PosterCarousel({ schedules, onSelect, onBanner, banners 
         };
       });
     // 관리자 배너가 있으면 그것이 곧 고정 포스터 자리다(하드코딩 대체).
-    const posters: Slide[] = banners.length > 0
-      ? banners.map((b): Slide => ({
-        key: `db:${b.id}`, src: b.imageUrl, alt: b.title || '배너', title: b.title, sub: b.subtitle,
-        onClick: () => { if (b.linkUrl) onBannerUrl?.(b.linkUrl); },
-      }))
-      : POSTER_SLIDES.map((b, i): Slide => ({
+    const posters: Slide[] = useFallback
+      ? POSTER_SLIDES.map((b, i): Slide => ({
         key: `p:${i}`, src: b.src, alt: b.alt, title: b.title, sub: b.sub,
         onClick: () => onBanner(b.action),
+      }))
+      : banners.map((b): Slide => ({
+        key: `db:${b.id}`, src: b.imageUrl, alt: b.title || '배너', title: b.title, sub: b.subtitle,
+        onClick: () => { if (b.linkUrl) onBannerUrl?.(b.linkUrl); },
       }));
     const brands = BRAND_SLIDES.map((b): Slide => ({
       key: `b:${b.key}`, alt: b.alt, brand: b, onClick: () => onBanner(b.action),
@@ -168,7 +171,7 @@ export default function PosterCarousel({ schedules, onSelect, onBanner, banners 
     // 포스터 → 브랜드 순으로 섞어 배치(포스터 2 · 브랜드 4 · 일정 포스터)
     // 배너(관리자 또는 하드코딩) → 브랜드 → 일정 포스터. 관리자 배너는 등록 순서(sort_order) 그대로 앞에 선다.
     return [...posters, ...brands, ...dyn];
-  }, [schedules, onSelect, onBanner, banners, onBannerUrl]);
+  }, [schedules, onSelect, onBanner, banners, useFallback, onBannerUrl]);
 
   // 고정 슬라이드만으로도 3장 이상 — 항상 루프(2배 복제 + scrollLeft ±half 랩).
   // ⚠ 풀폭 전환으로 세트 안 w-page-x 스페이서는 제거 — 카드 폭 = clientWidth 라 세트 폭이
