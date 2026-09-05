@@ -30,6 +30,36 @@ describe('discountsFromPromotions', () => {
     expect(r.added).toBe(3);
   });
 
+  it('⚠ 업주가 직접 쓴 짧은 내용은 유형 라벨보다 우선한다 — 같은 유형의 서로 다른 할인이 사라지면 안 된다', () => {
+    const r = discountsFromPromotions([
+      p({ discountType: 'firstVisit', title: '여성 첫 방문 5만 할인', discountWon: 50_000 }),
+      p({ discountType: 'firstVisit', title: '남성 첫 방문 5만 할인', discountWon: 50_000 }),
+    ]);
+    // 둘 다 '첫 방문'으로 뭉치면 라벨+금액 중복 판정에 걸려 두 번째가 조용히 사라진다
+    expect(r.discounts.map((d) => d.label)).toEqual(['여성 첫 방문 5만 할인', '남성 첫 방문 5만 할인']);
+    expect(r.added).toBe(2);
+    expect(r.duplicates).toBe(0);
+  });
+
+  it('⚠ 라벨·금액이 같아도 자동 적용 레벨이 다르면 장부에서 다르게 동작한다 — 중복이 아니다', () => {
+    const r = discountsFromPromotions([
+      p({ discountType: 'firstBuyin', title: '첫 바인 5만 할인', discountWon: 50_000 }),
+      p({ discountType: 'firstBuyin', title: '첫 바인 5만 할인', discountWon: 50_000, level: 3 }),
+    ]);
+    expect(r.discounts).toEqual([
+      { label: '첫 바인', amount: 50_000, level: 0 },
+      { label: '첫 바인', amount: 50_000, level: 3 },
+    ]);
+    expect(r.added).toBe(2);
+  });
+
+  it('내용이 라벨 상한(20자)을 넘으면 유형 라벨로 내린다', () => {
+    const r = discountsFromPromotions([
+      p({ discountType: 'level', title: '1LV 바인 5만 할인 · 오픈채팅 사전예약자 한정', discountWon: 50_000, level: 1 }),
+    ]);
+    expect(r.discounts[0].label).toBe('1레벨');
+  });
+
   it('5칸 상한을 넘기지 않고, 남은 것은 skipped 로 알린다', () => {
     const many = Array.from({ length: 7 }, (_, i) => p({ title: `할인${i}`, discountWon: (i + 1) * 10_000 }));
     const r = discountsFromPromotions(many, [{ label: '기존', amount: 10_000, level: 0 }]);
@@ -44,10 +74,11 @@ describe('discountsFromPromotions', () => {
     expect(r.discounts).toEqual([...cur, { label: '2레벨', amount: 30_000, level: 2 }]);
   });
 
-  it('할인유형이 있으면 유형의 짧은 라벨을 쓴다 — 40자 내용이 장부 칩에 실려 표를 밀지 않게', () => {
+  it('자동 생성 문구는 유형의 짧은 라벨로 바뀐다 — 긴 내용이 장부 칩에 실려 표를 밀지 않게', () => {
     const r = discountsFromPromotions([
-      p({ discountType: 'level', badge: '5만', title: '1LV 바인 5만 · 오픈 전 예약자', discountWon: 50_000, level: 1 }),
-      p({ discountType: 'firstBuyin', title: '첫 바인 7만', discountWon: 70_000 }),
+      // 자동 생성값과 같은 내용 → 유형 라벨로 짧게
+      p({ discountType: 'level', badge: '5만', title: '1LV 바인 5만 할인', discountWon: 50_000, level: 1 }),
+      p({ discountType: 'firstBuyin', title: '첫 바인 7만 할인', discountWon: 70_000 }),
       p({ discountType: 'firstVisit', title: '첫 방문 5만 할인', discountWon: 50_000 }),
       p({ discountType: 'rebuy', title: '리바인 3만 할인', discountWon: 30_000 }),
       p({ discountType: 'advance', title: '사전예약 2만 할인', discountWon: 20_000 }),

@@ -117,8 +117,10 @@ const TYPE_LEDGER: Record<DiscountType, string | null> = {
 /** 포스터 상세에 보이는 한 줄. 금액이 있으면 문구에 넣는다(§28 — 참가비 할인액은 상품 가격 정보라 표시 대상). */
 function titleOf(type: DiscountType, amount: string | null, level: number): string | null {
   switch (type) {
-    case 'level':      return level > 0 ? `${level}LV 바인${amount ? ` ${amount}` : ' 할인'}` : `레벨 할인${amount ? ` ${amount}` : ''}`;
-    case 'firstBuyin': return `첫 바인${amount ? ` ${amount}` : ' 할인'}`;
+    // ⚠ 금액이 있어도 '할인'을 빼지 않는다. '첫 바인 5만'은 참가비 8만 대회에서
+    //   '첫 바인은 5만'(실제로는 5만을 깎아 3만)으로 읽힌다 — 제목 줄만 공유되면 가격 오표기다.
+    case 'level':      return level > 0 ? `${level}LV 바인 ${amount ? `${amount} ` : ''}할인` : `레벨 ${amount ? `${amount} ` : ''}할인`;
+    case 'firstBuyin': return `첫 바인 ${amount ? `${amount} ` : ''}할인`;
     case 'firstVisit': return `첫 방문 ${amount ? `${amount} ` : ''}할인`;
     case 'rebuy':      return `리바인 ${amount ? `${amount} ` : ''}할인`;
     case 'advance':    return `사전예약 ${amount ? `${amount} ` : ''}할인`;
@@ -164,9 +166,13 @@ export function retypePromotion(cur: PromotionLike, patch: Partial<PromotionLike
   const auto = discountTexts(next);                  // 바뀐 뒤 만들어야 할 문구
   const keepBadge = !!cur.badge?.trim() && cur.badge !== before.badge;
   const keepTitle = !!cur.title?.trim() && cur.title !== before.title;
+  // ⚠ 자동 태그는 '갱신'뿐 아니라 '비우기'까지 해야 한다. 금액을 10,500원처럼 태그 폭을 넘는 값으로
+  //   바꾸면 auto.badge 가 유형 약칭으로 내려가는데, 그때 옛 금액 태그('5만')를 그대로 두면
+  //   손님 화면의 할인 표기가 실제 금액과 어긋난다(§28 가격 고지). 손으로 고친 태그는 그대로 둔다.
+  const amountChanged = patch.discountWon !== undefined && patch.discountWon !== cur.discountWon;
   return {
     ...next,
-    ...(auto.badge !== null && !keepBadge ? { badge: auto.badge } : {}),
+    ...(!keepBadge && (auto.badge !== null || amountChanged) ? { badge: auto.badge ?? '' } : {}),
     ...(auto.title !== null && !keepTitle ? { title: auto.title } : {}),
   };
 }

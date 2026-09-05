@@ -36,7 +36,7 @@ import { getClockState, saveClockState, saveClockLevel, subscribeClock, defaultC
 import { getMyVenueStaff, searchMembersForRanking, type User } from '../../api/auth';
 import { useBackClose } from '../../lib/backstack';
 import { planBuyinApprovals } from '../../lib/buyinApproval';
-import { discountsFromPromotions } from '../../lib/posterDiscounts';
+import { discountsFromPromotions, ledgerLabelOf } from '../../lib/posterDiscounts';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import EmptyState from '../atoms/EmptyState';
 import SegmentedTabs from '../atoms/SegmentedTabs';
@@ -2258,7 +2258,7 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
               <Icon name="copy" size={13} className="shrink-0" />
               포스터 할인 가져오기 ({posterDiscs.length}개)
               <span className="min-w-0 flex-1 truncate text-right font-normal text-ink-muted">
-                {posterDiscs.map((p) => `${p.title || p.badge || '할인'} −${wonToMan(p.discountWon ?? 0)}만`).join(' · ')}
+                {posterDiscs.map((p) => `${ledgerLabelOf(p)} −${wonToMan(p.discountWon ?? 0)}만`).join(' · ')}
               </span>
             </button>
           )}

@@ -71,7 +71,7 @@ describe('promotionView', () => {
       .toEqual({ pill: '3만 할인', isDiscount: true, sub: '2레벨까지' });
   });
   it('배지가 금액 그대로면(할인유형이 채운 태그) 보조 줄에서 같은 말을 반복하지 않는다', () => {
-    expect(promotionView({ badge: '5만', title: '1LV 바인 5만', discountWon: 50_000, level: 1 }))
+    expect(promotionView({ badge: '5만', title: '1LV 바인 5만 할인', discountWon: 50_000, level: 1 }))
       .toEqual({ pill: '5만 할인', isDiscount: true, sub: '1레벨까지' });
   });
   it('할인액이 0이면 배지가 그대로 배지 자리를 지킨다', () => {
@@ -83,7 +83,7 @@ describe('promotionView', () => {
 describe('discountTexts — 할인유형이 만드는 태그·내용·장부 라벨', () => {
   it('레벨 할인은 레벨 번호가 세 문구를 모두 가른다(level 을 쓰는 유일한 유형)', () => {
     expect(discountTexts({ title: '', discountType: 'level', discountWon: 50_000, level: 1 }))
-      .toEqual({ badge: '5만', title: '1LV 바인 5만', ledger: '1레벨' });
+      .toEqual({ badge: '5만', title: '1LV 바인 5만 할인', ledger: '1레벨' });
     expect(discountTexts({ title: '', discountType: 'level', level: 3 }))
       .toEqual({ badge: '레벨', title: '3LV 바인 할인', ledger: '3레벨' });
     expect(discountTexts({ title: '', discountType: 'level' }))
@@ -92,7 +92,7 @@ describe('discountTexts — 할인유형이 만드는 태그·내용·장부 라
 
   it('금액이 있으면 태그는 금액 · 내용에도 금액이 들어간다(§28 — 참가비 할인액은 표시 대상)', () => {
     expect(discountTexts({ title: '', discountType: 'firstBuyin', discountWon: 50_000 }))
-      .toEqual({ badge: '5만', title: '첫 바인 5만', ledger: '첫 바인' });
+      .toEqual({ badge: '5만', title: '첫 바인 5만 할인', ledger: '첫 바인' });
     expect(discountTexts({ title: '', discountType: 'firstVisit', discountWon: 50_000 }))
       .toEqual({ badge: '5만', title: '첫 방문 5만 할인', ledger: '첫 방문' });
     expect(discountTexts({ title: '', discountType: 'rebuy', discountWon: 30_000 }))
@@ -159,8 +159,8 @@ describe('retypePromotion — 자동 채움은 하되 사람이 고친 값은 �
   });
 
   it('레벨을 바꾸면 자동 문구가 레벨을 따라간다', () => {
-    const cur = { badge: '5만', title: '1LV 바인 5만', discountType: 'level' as const, discountWon: 50_000, level: 1 };
-    expect(retypePromotion(cur, { level: 3 }).title).toBe('3LV 바인 5만');
+    const cur = { badge: '5만', title: '1LV 바인 5만 할인', discountType: 'level' as const, discountWon: 50_000, level: 1 };
+    expect(retypePromotion(cur, { level: 3 }).title).toBe('3LV 바인 5만 할인');
   });
 
   it("'직접 입력'으로 바꿔도 이미 보이던 태그·내용을 지우지 않는다", () => {

@@ -27,6 +27,16 @@ export interface PosterDiscountImport {
  *   참조하므로, 칸의 내용이 바뀌면 지난 바인의 계산 금액이 조용히 달라진다.
  *   그래서 비워 둔 중간 칸도 재사용하지 않고 그대로 둔다.
  */
+/** 한 프로모션이 장부 할인 칸에 실제로 넣을 라벨 — 미리보기와 삽입이 같은 말을 하게 하는 단일 출처.
+ *  버튼이 '1LV 바인 5만 할인' 을 예고하고 실제로는 '1레벨' 이 들어가면, 업주는 가져오기가 이름을
+ *  임의로 바꾼 것으로 읽고 '이미 있는 할인인지' 눈대조가 어긋난다(중복 판정도 라벨 기준이다). */
+export function ledgerLabelOf(p: Promotion): string {
+  const t = discountTexts(p);
+  const own = p.title?.trim() || '';
+  const handWritten = own && own !== t.title && own.length <= LABEL_MAX ? own : '';
+  return (handWritten || t.ledger || own || p.badge?.trim() || '할인').slice(0, LABEL_MAX);
+}
+
 export function discountsFromPromotions(
   promotions: readonly Promotion[] | undefined,
   existing: readonly DiscountPreset[] = [],
@@ -39,10 +49,16 @@ export function discountsFromPromotions(
     // 라벨 폴백: 유형 라벨 → 내용 → 배지 → '할인'. 장부 결제창 칩에 그대로 뜨는 글자다.
     // 유형 라벨을 앞에 두는 이유: 내용은 40자까지 허용이라('1LV 바인 5만 · 오픈 전 예약자') 칩이 표를 밀어낸다.
     // 유형이 없는 기존 데이터는 ledger 가 null 이라 종전 폴백(내용 → 배지 → '할인') 그대로다.
-    const label = (discountTexts(p).ledger || p.title?.trim() || p.badge?.trim() || '할인').slice(0, LABEL_MAX);
-    if (discounts.some((d) => d.amount === amount && (d.label ?? '') === label)) { duplicates++; continue; }
+    // 라벨 우선순위: **업주가 직접 쓴 짧은 내용** → 유형 라벨 → 내용 → 배지 → '할인'.
+    // ⚠ 유형 라벨을 무조건 앞세우면 '여성 첫 방문 5만'·'남성 첫 방문 5만' 이 둘 다 '첫 방문'이 되어
+    //   아래 중복 판정(라벨+금액)에 걸려 **두 번째가 조용히 사라진다**(자동 적용 레벨까지 함께 유실).
+    //   유형 라벨은 내용이 자동 생성값이거나 칩에 실리기엔 긴 경우에만 쓴다.
+    const label = ledgerLabelOf(p);
+    // 자동 적용 레벨이 다르면 장부에서 다르게 동작하는 프리셋이다 — 같은 라벨·금액이어도 중복이 아니다.
+    const level = Math.max(0, Math.round(p.level ?? 0));
+    if (discounts.some((d) => d.amount === amount && (d.label ?? '') === label && (d.level ?? 0) === level)) { duplicates++; continue; }
     if (discounts.length >= MAX_LEDGER_DISCOUNTS) { skipped++; continue; }
-    discounts.push({ label, amount, level: Math.max(0, Math.round(p.level ?? 0)) });
+    discounts.push({ label, amount, level });
     added++;
   }
   return { discounts, added, skipped, duplicates };
