@@ -1969,7 +1969,8 @@ export default function App() {
   // 뒤로가기로 풀스크린 디스플레이 닫기 — App 레벨(초기 null→effect 세팅)이라 StrictMode 더블인보크 레이스 회피
   useBackClose(displayTarget !== null, closeDisplay);
   // 뒤로가기로 내 정보(지갑) 페이지 닫기 — 동일하게 App 레벨 게이트
-  useBackClose(voucherWalletOpen, () => setVoucherWalletOpen(false));
+  //  X 버튼(CustomerDashboardPage)과 같은 결과 — 비밀번호 OTP 대기 마커도 함께 내린다
+  useBackClose(voucherWalletOpen, () => { sessionStorage.removeItem('nh_pw_otp'); setVoucherWalletOpen(false); });
 
   // [DS] MO-8B: 포스터 모핑 — '지금 열리는' 카드 1장에만 view-transition-name 을 부여한다.
   // 이름이 문서에 2개 이상이면 전환이 통째로 취소되므로, 열림 중에는 카드가 이름을 잃고

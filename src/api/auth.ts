@@ -451,17 +451,24 @@ export async function approveOwner(userId: string, approve: boolean): Promise<vo
 // ── 내 프로필 수정 ────────────────────────────────────────────────────────────
 export interface ProfilePatch {
   name?: string;
-  avatarUrl?: string;
+  /** null = 사진 제거(avatar_url 을 NULL 로) · undefined = 변경 없음 */
+  avatarUrl?: string | null;
   avatarColor?: string;
+}
+
+/** ProfilePatch → profiles 행 패치. undefined 는 건너뛰고 null 은 그대로 싣는다(사진 제거가 저장되는 길). */
+export function profilePatchToRow(patch: ProfilePatch): Record<string, unknown> {
+  const dbPatch: Record<string, unknown> = {};
+  if (patch.name        !== undefined) dbPatch.name         = patch.name;
+  if (patch.avatarUrl   !== undefined) dbPatch.avatar_url   = patch.avatarUrl;
+  if (patch.avatarColor !== undefined) dbPatch.avatar_color = patch.avatarColor;
+  return dbPatch;
 }
 
 export async function updateMyProfile(patch: ProfilePatch): Promise<User> {
   if (IS_MOCK) throw new Error('Mock mode: handled in AuthContext');
 
-  const dbPatch: Record<string, unknown> = {};
-  if (patch.name        !== undefined) dbPatch.name         = patch.name;
-  if (patch.avatarUrl   !== undefined) dbPatch.avatar_url   = patch.avatarUrl;
-  if (patch.avatarColor !== undefined) dbPatch.avatar_color = patch.avatarColor;
+  const dbPatch = profilePatchToRow(patch);
 
   const authUser = await currentUser();
   if (!authUser) throw new Error('로그인이 필요합니다');

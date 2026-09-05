@@ -176,7 +176,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
         <div data-profile-panel="">
         {tab !== 'dashboard' ? (
           <div className="mx-auto w-full max-w-md">
-            <ProfilePanels open={open} tab={tab} onTabChange={goTab} onClose={onClose} onOpenLegal={onOpenLegal} onOpenSupport={onOpenSupport} />
+            <ProfilePanels open={open} tab={tab} onClose={onClose} onOpenLegal={onOpenLegal} onOpenSupport={onOpenSupport} />
           </div>
         ) : (
         <div className="mx-auto w-full max-w-2xl space-y-4 px-page-x py-section">
