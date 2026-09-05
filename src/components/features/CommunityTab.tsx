@@ -1517,9 +1517,12 @@ function LiveWallSection() {
                     <span className="font-bold text-danger-light bg-danger/15 px-1 rounded-badge leading-none">운영자</span>
                   )}
                   <span className="text-ink-muted ml-auto shrink-0">{relativeTime(m.createdAt)}</span>
+                  {/* ⚠ 삭제 버튼에 `hit`(::after 44px 확장)을 쓰면 안 된다 — 확장된 히트박스가 **본문 첫 줄 위를 덮어**
+                      본문을 읽으려 탭한 손가락이 확인 없이 삭제를 실행한다(되돌리기 없음). 실제 박스를 키우고
+                      음수 마진으로 행 높이를 되돌린다: 마진박스 16px = 이름행 높이라 스켈레톤 계약(위 h-4+18px)이 유지된다. */}
                   {canDelete(m) && (
                     <button type="button" onClick={() => remove(m)} aria-label="삭제"
-                      className="hit shrink-0 text-ink-muted hover:text-danger-light leading-none">
+                      className="-my-3.5 -mr-1 flex h-11 w-11 shrink-0 items-center justify-center text-ink-muted hover:text-danger-light">
                       <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><line x1="2" y1="2" x2="12" y2="12" /><line x1="12" y1="2" x2="2" y2="12" /></svg>
                     </button>
                   )}

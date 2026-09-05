@@ -104,7 +104,8 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
   const [achOpen, setAchOpen] = useState(false); // 내 업적 접기/펼치기 — 기본 닫힘
   const [myPosts, setMyPosts] = useState<CommunityPost[]>([]); // 내가 쓴 글 — 그동안 찾을 화면 자체가 없었다
   const [myPostTotal, setMyPostTotal] = useState(0); // 내 글 총수 — 목록 limit(20)과 무관한 count(점검 #26)
-  const [visitStats, setVisitStats] = useState({ visits: 0, upcoming: 0, total: 0 }); // 헤더 '방문' — 프로필 탭과 같은 함수·같은 단위(점검 #8)
+  // null = 아직 한 번도 성공한 적 없음(미조회·실패). 0 으로 두면 조회 실패가 '방문 0회' 라는 단정으로 보인다(F08).
+  const [visitStats, setVisitStats] = useState<{ visits: number; upcoming: number; total: number } | null>(null); // 헤더 '방문' — 프로필 탭과 같은 함수·같은 단위(점검 #8)
   const recordsRef = useRef<HTMLElement | null>(null); // '내 전적' 버튼 → 기존 입상 기록 섹션 앵커 스크롤
   // 4탭 상태 — 페이지가 소유(ProfilePanels 는 controlled). 열릴 때마다 initialTab 으로 리셋(keep-alive 재열림 포함).
   const [tab, setTab] = useState<MeTab>(initialTab);
@@ -213,7 +214,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
               stats={[
                 { label: '활동점수', value: (user.activityPoints ?? 0).toLocaleString() },
                 { label: '내 글', value: String(myPostTotal) },
-                { label: '방문', value: `${visitStats.visits}회` },
+                { label: '방문', value: visitStats ? `${visitStats.visits}회` : '—' },
               ]}
               actions={
                 <div className="grid w-full grid-cols-2 gap-2">

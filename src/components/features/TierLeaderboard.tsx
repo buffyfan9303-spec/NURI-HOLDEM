@@ -8,7 +8,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import TierBadge, { tierOf, tierColor, tierProgress, allTiers, isAceRank, ACE_TOP_RANK, ACE_MIN_POINTS, tierCss, ACE_VAR } from '../atoms/TierBadge';
 import {
-  getActivityLeaderboard, getMyPointBalance, lacksPoints, getShoutRules,
+  getActivityLeaderboard, getMyPointBalance, buyLabel, lacksPoints, getShoutRules,
   getShopSkus, getMyOwnedMarks, buyMark, SHOUT_SLOT_SECONDS, CHEER_DAILY_CAP, BUMP_SLOTS,
   getMyCosmetics, buyCosmetic, setEquippedCosmetic, getNickColors,
   getBuyableSeasonBadges, getMySeasonBadges, buySeasonBadge, buyNicknameReset,
@@ -1016,7 +1016,7 @@ export default function TierLeaderboard() {
                             className={[SHOP_BTN, SHOP_BTN_OFF, 'tabular-nums'].join(' ')}>
                             {buying === mk.key ? '구매 중…'
                               : !markSku ? '판매 준비 중'
-                                : poor && balance ? `${price.toLocaleString()}점 부족` : `${price.toLocaleString()}점 소장`}
+                                : buyLabel(balance, price, '소장')}
                           </button>
                         )}
                       </div>
@@ -1112,7 +1112,7 @@ export default function TierLeaderboard() {
                               onClick={() => handleBuyCosmetic(c)}
                               className={[SHOP_BTN, SHOP_BTN_OFF, 'tabular-nums'].join(' ')}>
                               {buying === c.key ? '구매 중…'
-                                : poor && balance ? `${frameSku.price.toLocaleString()}점 부족` : `${frameSku.price.toLocaleString()}점 소장`}
+                                : buyLabel(balance, frameSku.price, '소장')}
                             </button>
                           )}
                         </div>
@@ -1167,7 +1167,7 @@ export default function TierLeaderboard() {
                               onClick={() => handleBuyCosmetic(c)}
                               className={[SHOP_BTN, SHOP_BTN_OFF, 'tabular-nums'].join(' ')}>
                               {buying === c.key ? '구매 중…'
-                                : poor && balance ? `${nickSku.price.toLocaleString()}점 부족` : `${nickSku.price.toLocaleString()}점 소장`}
+                                : buyLabel(balance, nickSku.price, '소장')}
                             </button>
                           )}
                         </div>
@@ -1226,7 +1226,7 @@ export default function TierLeaderboard() {
                               onClick={() => handleBuySeasonBadge(b)}
                               className="shrink-0 rounded-input border border-accent-400/40 px-2.5 py-1.5 text-2xs font-bold tabular-nums text-accent-300 transition-colors hover:bg-accent-300/10 disabled:opacity-50">
                               {buying === b.seasonId ? '구매 중…'
-                                : poor && balance ? `${seasonSku.price.toLocaleString()}점 부족` : `${seasonSku.price.toLocaleString()}점 받기`}
+                                : buyLabel(balance, seasonSku.price, '받기')}
                             </button>
                           </li>
                         );
@@ -1256,8 +1256,7 @@ export default function TierLeaderboard() {
                       onClick={handleBuyNickReset}
                       className="shrink-0 rounded-input border border-accent-400/40 px-2.5 py-1.5 text-2xs font-bold tabular-nums text-accent-300 transition-colors hover:bg-accent-300/10 disabled:opacity-50">
                       {nickResetBusy ? '적용 중…'
-                        : balance !== null && balance.available < nickChangeSku.price
-                          ? `${nickChangeSku.price.toLocaleString()}점 부족` : `${nickChangeSku.price.toLocaleString()}점`}
+                        : buyLabel(balance, nickChangeSku.price, '')}
                     </button>
                   ) : (
                     <span className="shrink-0 rounded-badge bg-surface-float px-2 py-1 text-2xs font-bold text-ink-muted">필요 없음</span>

@@ -1495,6 +1495,16 @@ export function lacksPoints(balance: PointBalance | null, price: number): boolea
   return balance === null || balance.available < price;
 }
 
+/** 상점 구매 버튼 라벨 — **비활성 이유를 라벨이 말하게** 한다.
+ *  잔액을 아직 모르면(미도착·조회 실패) 버튼은 잠기는데 라벨이 'N점 소장'이면
+ *  손님은 이유를 모른 채 앞이 막힌다(2026-09-06 리뷰). getMyPointBalance 는 실패를 null 로
+ *  접어 resolve 하므로 '미도착'과 '실패'는 화면상 같은 상태다 — 둘 다 '잔액 확인 중'. */
+export function buyLabel(balance: PointBalance | null, price: number, verb: string): string {
+  if (balance === null) return '잔액 확인 중';
+  if (balance.available < price) return `${price.toLocaleString()}점 부족`;
+  return verb ? `${price.toLocaleString()}점 ${verb}` : `${price.toLocaleString()}점`;
+}
+
 /** 외치기 규칙(가격·쿨다운·길이 한도) — 서버가 단일 출처, 클라이언트는 표시만 한다 */
 export async function getShoutRules(): Promise<ShoutRules> {
   // ⚠ 서버 shout_rules() 와 반드시 같은 값이어야 한다. 폴백이 낮으면 화면은 30점이라 말하고

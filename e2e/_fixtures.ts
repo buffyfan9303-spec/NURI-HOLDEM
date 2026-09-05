@@ -40,7 +40,9 @@ export function isAllowedRequest(method: string, url: string, writesAllowed = WR
     const name = rest.slice(4).split(/[?/]/)[0];
     if (READ_ONLY_RPCS.has(name)) return true;
   }
-  if (service === 'auth' && /^token\?.*grant_type=refresh_token/.test(rest)) return true; // 세션 유지 — 데이터 변이 아님
+  // 세션 발급·갱신·폐기는 **앱 데이터 변이가 아니다** — UI 로그인 스펙(auth-smoke·auto-login)이 이걸 지나간다.
+  // signup(계정 생성)·user(비밀번호 변경)·recover·verify 는 진짜 변이라 계속 막는다.
+  if (service === 'auth' && /^(token\?.*grant_type=(password|refresh_token)|logout(\?|$))/.test(rest)) return true;
   return writesAllowed && ref !== PROD_REF;
 }
 

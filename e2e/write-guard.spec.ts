@@ -17,7 +17,12 @@ test.describe('E2E 쓰기 차단 가드', () => {
     expect(isAllowedRequest('DELETE', `${P}/rest/v1/schedule_reservations?id=eq.x`, true)).toBe(false);
     expect(isAllowedRequest('POST', `${P}/storage/v1/object/avatars/x.webp`, true)).toBe(false);
     expect(isAllowedRequest('POST', `${P}/functions/v1/poster-ocr`, true)).toBe(false);
-    expect(isAllowedRequest('POST', `${P}/auth/v1/token?grant_type=password`, true)).toBe(false);
+    // 세션 발급·폐기는 통과(UI 로그인 스펙이 지나간다) — 계정 변이는 계속 차단
+    expect(isAllowedRequest('POST', `${P}/auth/v1/token?grant_type=password`, false)).toBe(true);
+    expect(isAllowedRequest('POST', `${P}/auth/v1/logout`, false)).toBe(true);
+    expect(isAllowedRequest('POST', `${P}/auth/v1/signup`, true)).toBe(false);
+    expect(isAllowedRequest('PUT', `${P}/auth/v1/user`, true)).toBe(false);
+    expect(isAllowedRequest('POST', `${P}/auth/v1/recover`, true)).toBe(false);
   });
   test('격리 프로젝트: E2E_ALLOW_WRITES=1 일 때만 쓰기 통과', () => {
     expect(isAllowedRequest('POST', `${ISO}/rest/v1/clock_states`, true)).toBe(true);

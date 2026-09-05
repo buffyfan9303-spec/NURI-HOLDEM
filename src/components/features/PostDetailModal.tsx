@@ -142,7 +142,7 @@ export default function PostDetailModal({
     openedAtRef.current = performance.now();
     let active = true;
     getMyReaction(post.id).then((r) => { if (active) setMyReaction(r); }).catch(() => {});
-    incrementPostView(post.id).catch(() => {});
+    if (!isPostHidden(post, user)) incrementPostView(post.id).catch(() => {});  // 숨김 글은 집계하지 않는다
     // 댓글 실제 조회 — 이전에는 로컬 state에만 쌓여 새로고침 시 사라졌다(저장 안 됨).
     setReplies(null);
     getComments({ postId: post.id })
@@ -338,6 +338,7 @@ export default function PostDetailModal({
             2026-08-30 순서 반전: 카테고리·조회수를 제목 **위** 오버라인으로 올린다.
             예전엔 18px 제목 바로 밑에 11px 색 알약이 붙어 둘이 같은 층으로 읽혔다 —
             게시판(어디) → 제목(무엇) 순서가 목록에서 들어온 사람의 실제 독해 순서다. */}
+        {!hidden && (
         <div className="space-y-1.5">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className={['inline-flex shrink-0 items-center rounded-badge px-1.5 py-0.5 text-2xs font-semibold leading-none', categoryPillClass(post.category)].join(' ')}>
@@ -356,6 +357,7 @@ export default function PostDetailModal({
             <h3 className="text-xl sm:text-2xl font-bold text-ink-primary leading-tight tracking-tight break-words">{post.title}</h3>
           )}
         </div>
+        )}
 
         {/* ── 작성자 정보 ─────────────────────────────────── */}
         {/* border-subtle(다크 1.11:1 · 라이트 1.23:1)은 비텍스트 3:1 기준에서 사실상 안 보이는 선이었다
@@ -363,6 +365,7 @@ export default function PostDetailModal({
             2026-08-30: 공유는 아래 반응 줄로 내렸다(같은 '이 글 메뉴' 가족이고,
             헤더 우측 4버튼이 폭을 먹어 이름+칩이 3줄로 접히던 원인이었다).
             여기 남는 신고·차단·삭제는 '가끔 쓰는 관리 동작'이라 한 덩어리로 묶어 우측에 둔다. */}
+        {!hidden && (
         <header className="mt-3 flex items-center gap-2.5 border-b border-border-default pb-3">
           {/* 2026-08-30: 여기 있던 `!object-contain` 땜질을 제거했다 — Avatar 의 기본값이 contain 이 됐다.
               (근거 실측은 유지: 이 글 작성자 아바타가 256×151 로고인데 object-cover 가 가로 59% 만 남겨
@@ -434,6 +437,7 @@ export default function PostDetailModal({
             )}
           </div>
         </header>
+        )}
 
         {/* 신고 누적 자동 숨김 안내 — 배너는 blinded 면 항상(운영자에겐 해제 버튼), 아래 본문·사진·댓글은 hidden 이면 미렌더 */}
         {post.blinded && (
