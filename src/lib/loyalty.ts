@@ -29,7 +29,8 @@ const GOAL_TYPE_LABEL: Record<MissionGoalType, (n: number) => string> = {
 export interface CustomMissionRow { id: number; title: string; goal_type: MissionGoalType; goal: number; reward: number; active: boolean }
 export async function getActiveMissions(): Promise<Mission[]> {
   if (IS_MOCK) return MISSIONS;
-  const { data } = await supabase.from('custom_missions').select('*').eq('active', true).order('id');
+  const { data, error } = await supabase.from('custom_missions').select('*').eq('active', true).order('id');
+  if (error) throw error; // 실패를 '미션 없음'으로 위장하면 화면이 '준비 중'으로 굳는다(2026-09-05 점검 #20)
   const customs: Mission[] = ((data ?? []) as CustomMissionRow[]).filter((r) => r.goal_type in GOAL_TYPE_LABEL).map((r) => ({
     key: `c${r.id}`, title: r.title, goal: r.goal, reward: r.reward,
     desc: GOAL_TYPE_LABEL[r.goal_type]?.(r.goal) ?? '', type: r.goal_type,

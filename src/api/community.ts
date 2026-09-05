@@ -1478,6 +1478,11 @@ export interface ShoutRules {
   ttlHours: number;
 }
 export interface PointBalance { total: number; spent: number; available: number }
+/** 상점 구매 가능 판정 — 잔액을 아직 모르면(미도착·조회 실패) '부족'과 같게 잠근다.
+ *  null 을 통과시키면 버튼이 열리고 서버 spend 가 '점수 부족'으로 거절한다(2026-09-05 점검 #19). */
+export function lacksPoints(balance: PointBalance | null, price: number): boolean {
+  return balance === null || balance.available < price;
+}
 
 /** 외치기 규칙(가격·쿨다운·길이 한도) — 서버가 단일 출처, 클라이언트는 표시만 한다 */
 export async function getShoutRules(): Promise<ShoutRules> {
