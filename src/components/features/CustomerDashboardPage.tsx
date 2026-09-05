@@ -18,7 +18,7 @@ import { myVisitedVenues, myPlayHistory, type VisitedVenue, type PlayHistory } f
 import { wonToMan } from '../../api/ledger';
 import { getMyReservations, cancelMyReservation, type MyReservationRow } from '../../api/reservations';
 import { getPostsByUser, type CommunityPost } from '../../api/community';
-import { getMyRankingHistory, placementPoints, type MyRankingRow } from '../../api/rankings';
+import { getMyRankingHistory, getGlobalRankingTotals, placementPoints, type MyRankingRow } from '../../api/rankings';
 import { shareRecordCard, shareRecordCardKakao } from '../../lib/recordCard';
 import { kakaoConfigured, kakaoShareLink } from '../../lib/kakao';
 import { getMyReferralStats, inviteUrl, type ReferralStats } from '../../api/referrals';
@@ -83,6 +83,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
   const [resv, setResv] = useState<MyReservationRow[]>([]);   // 대회 참가(예약) 이력
   const [ranks, setRanks] = useState<MyRankingRow[]>([]);     // 내 입상 기록(닉네임 기준)
   const [refStats, setRefStats] = useState<ReferralStats>({ invited: 0, rewarded: 0 }); // 친구 초대 현황
+  const [percentile, setPercentile] = useState<number | null>(null); // 전국 상위 N% — 대회 입상 횟수 기준(상금 무관, 2026-09-05)
   const [championships, setChampionships] = useState(0); // 시즌 우승 횟수(영구 배지)
   // 첫 프레임에 loading 이 false 면 방문·예약·입상 세 섹션이 동시에 "아직 없습니다"로 떨어진다
   // — reload() 안의 setLoading(true) 는 useEffect 라 페인트 뒤에 돈다(2026-09-05 전수 조사).
@@ -111,10 +112,14 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
       user?.nickname ? getMyRankingHistory(user.nickname, 200).catch(() => [] as MyRankingRow[]) : Promise.resolve([] as MyRankingRow[]),
       user?.nickname ? getMyReferralStats().catch(() => ({ invited: 0, rewarded: 0 })) : Promise.resolve({ invited: 0, rewarded: 0 }),
       user?.nickname ? getMyChampionships(user.nickname).catch(() => 0) : Promise.resolve(0),
+      user?.nickname ? getGlobalRankingTotals('all').catch(() => []) : Promise.resolve([]),
     ])
-      .then(([vi, pl, rv, rk, rs, ch]) => {
+      .then(([vi, pl, rv, rk, rs, ch, gt]) => {
         setVisits(vi); setPlays(pl); setResv(rv); setRanks(rk); setRefStats(rs); setChampionships(ch);
-        // 전국 상위 N%(상금 합산 기준)는 2026-09-05 미산정으로 전환(법적위험완화 v3) — 새 기준이 정해지기 전엔 계산하지 않는다.
+        // 전국 상위 N% — 대회 입상 횟수 기준(랭킹 허브 '머니인' 보드와 같은 careerCompare 정렬, 서버가 이미 정렬). 상금 무관.
+        const nick = user?.nickname?.trim().toLowerCase();
+        const idx = nick ? gt.findIndex((t) => t.nickname.trim().toLowerCase() === nick) : -1;
+        setPercentile(idx >= 0 ? Math.max(1, Math.round(((idx + 1) / gt.length) * 100)) : null);
       })
       .catch(() => {}).finally(() => setLoading(false));
   };
@@ -441,7 +446,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
             {loading ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
               : !user?.nickname ? <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="trophy" />} title="프로필에서 아이디(닉네임)를 설정하면 입상 기록이 자동 연결됩니다." action={<button type="button" onClick={() => goTab('settings')} className="btn-ghost px-3 py-1.5 text-2xs">아이디 설정하기</button>} /></div>
               : ranks.length === 0 ? <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="trophy" />} title="아직 입상 기록이 없습니다." hint="매장에서 순위가 등록되면 자동으로 표시됩니다." /></div>
-                : <><RecordSummary rows={ranks} nickname={user?.nickname ?? ''} /><RankTrendChart rows={ranks} />
+                : <><RecordSummary rows={ranks} percentile={percentile} nickname={user?.nickname ?? ''} /><RankTrendChart rows={ranks} />
                 <ul className="space-y-1.5">{ranks.slice(0, 15).map((r, i) => (
                   <li key={i} className="flex items-center gap-2.5 rounded-input border border-border-subtle bg-surface-low px-3 py-2">
                     <span className={['flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-2xs font-extrabold tabular-nums',
@@ -669,8 +674,8 @@ function SwipeCancelRow({ cancelable, onCancel, children }: { cancelable: boolea
 }
 
 /** 내 토너먼트 전적 요약 — 입상 기록(닉네임 매칭)에서 우승·입상·승률·누적 포인트·즐겨찾는 매장 집계.
- *  누적 상금·전국 백분위(상금 합산 기준)는 2026-09-05 제거(법적위험완화 v3) — 공유 카드에도 싣지 않는다. */
-function RecordSummary({ rows, nickname }: { rows: MyRankingRow[]; nickname: string }) {
+ *  누적 상금은 2026-09-05 제거(법적위험완화 v3). 전국 백분위는 대회 입상 횟수 기준(상금 무관)으로 표시한다. */
+function RecordSummary({ rows, percentile, nickname }: { rows: MyRankingRow[]; percentile: number | null; nickname: string }) {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const n = rows.length;
@@ -686,7 +691,7 @@ function RecordSummary({ rows, nickname }: { rows: MyRankingRow[]; nickname: str
   for (const r of rows) freq.set(r.venueName, (freq.get(r.venueName) ?? 0) + 1);
   const fav = [...freq.entries()].sort((a, b) => b[1] - a[1])[0] ?? null;
 
-  const cardData = () => ({ nickname: nickname || '플레이어', wins, cashes, records: n, winRate, bestPosition: best, points });
+  const cardData = () => ({ nickname: nickname || '플레이어', wins, cashes, records: n, winRate, bestPosition: best, points, percentile });
   const doShare = async () => {
     if (busy) return;
     setBusy(true);
@@ -709,6 +714,7 @@ function RecordSummary({ rows, nickname }: { rows: MyRankingRow[]; nickname: str
     <div className="mb-2 rounded-aura border card-aura p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
         <p className="flex flex-wrap items-center gap-1 text-xs font-bold text-gold-300"><Icon name="trophy" size={13} /> 내 토너먼트 전적 <span className="font-normal text-ink-muted">(기록 {n}회)</span>
+          {percentile != null && <span className="ml-1.5 rounded-badge bg-accent-300/15 px-1.5 py-0.5 text-2xs text-accent-300" title="전국 대회 입상 횟수 기준">전국 상위 {percentile}%</span>}
         </p>
         <div className="flex shrink-0 gap-1">
           {kakaoConfigured() && <button type="button" onClick={doKakao} disabled={busy} className="shrink-0 rounded-chip px-2 py-1 text-2xs font-bold text-[#3C1E1E] disabled:opacity-50" style={{ background: '#FEE500' }}>카톡</button>}
@@ -725,7 +731,7 @@ function RecordSummary({ rows, nickname }: { rows: MyRankingRow[]; nickname: str
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs text-ink-muted">
         {fav && <span>자주 입상 <b className="text-ink-secondary">{fav[0]}</b> ({fav[1]}회)</span>}
-        <span>전국 백분위 · 미산정(집계 기준 결정 전)</span>
+        <span>전국 순위는 대회 입상 횟수 기준(상금 무관)</span>
       </div>
     </div>
   );

@@ -53,7 +53,7 @@ export function writeRowsDraft(key: string, rows: RankRow[], now = Date.now()): 
 
 export function readRowsDraft(key: string, now = Date.now()): RankRow[] | null {
   const fresh = (e: DraftEntry | undefined | null) =>
-    e && Array.isArray(e.rows) && e.rows.length > 0 && now - e.ts <= RANK_DRAFT_TTL_MS ? sanitizeRows(e.rows) : null;
+    e && Array.isArray(e.rows) && e.rows.length > 0 && now - e.ts <= RANK_DRAFT_TTL_MS ? (() => { const r = sanitizeRows(e.rows); return hasRowContent(r) ? r : null; })() : null;
   const m = fresh(mem.get(key));
   if (m) return m;
   try {

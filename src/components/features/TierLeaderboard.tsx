@@ -2,8 +2,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { goSubTab } from '../../lib/subTabTransition';
 import {
-  myRankVerifications, submitRankVerification,
-  EVENT_KIND_LABEL, type RankVerification,
+  getDomesticRankings, myRankVerifications, submitRankVerification,
+  EVENT_KIND_LABEL, type RankVerification, type DomesticRow,
 } from '../../api/rankverify';
 import { useAuth } from '../../contexts/AuthContext';
 import TierBadge, { tierOf, tierColor, tierProgress, allTiers, isAceRank, ACE_TOP_RANK, ACE_MIN_POINTS, tierCss, ACE_VAR } from '../atoms/TierBadge';
@@ -20,6 +20,7 @@ import {
   FALLBACK_COSMETICS, type Cosmetic,
 } from '../../lib/cosmetics';
 import { drawProfileCard, downloadProfileCard, frameLabel, DEFAULT_FRAME } from '../../lib/profileCard';
+import { getGlobalRankingTotals, CAREER_PERIOD_LABEL, type GlobalRankingTotal, type CareerPeriod } from '../../api/rankings';
 import { onColorInkClass } from '../../lib/color';
 import { useToast } from '../atoms/Toast';
 import EmptyState from '../atoms/EmptyState';
@@ -44,21 +45,21 @@ const HALL_TONE = ['text-gold-300', 'text-slate-200', 'text-amber-600'] as const
 const PODIUM_TONE = ['text-slate-200', 'text-gold-300', 'text-amber-600'] as const; // 시상대 배치는 2·1·3위 순
 
 // 통합 랭킹 허브 — 활동/머니인/프라이즈 + 주간 리그·업적·미션·명예의 전당(충성도)
-type Board = 'activity' | 'moneyin' | 'league' | 'badges' | 'missions' | 'hall' | 'shop' | 'domestic' | 'verify';
+type Board = 'activity' | 'moneyin' | 'badges' | 'missions' | 'hall' | 'shop' | 'domestic' | 'verify';
 // 탭바에 실제로 보이는 순서 — 전환 방향(좌/우)이 이 순서에서 나온다.
 // map 과 방향 계산이 각자 배열을 들면 언젠가 어긋나므로 하나만 둔다.
-const RANK_TABS: Board[] = ['activity', 'league', 'hall', 'moneyin', 'domestic', 'verify', 'shop'];
+// 주간 리그는 2026-09-05 삭제(오너). 머니인 = 전국 대회 입상 경력.
+const RANK_TABS: Board[] = ['activity', 'moneyin', 'hall', 'domestic', 'verify', 'shop'];
 const BOARD_LABEL: Record<Board, string> = {
   activity: '활동 순위', moneyin: '머니인', shop: '상점', domestic: '국내 순위', verify: '순위 인증',
-  league: '주간 리그', badges: '업적', missions: '미션', hall: '명예의 전당',
+  badges: '업적', missions: '미션', hall: '명예의 전당',
 };
 const BOARD_DESC: Record<Board, string> = {
-  domestic: '국내 순위는 현재 미산정입니다 — 상금 기준 합산을 중단했습니다(2026-09-05). 인증 신청 기록은 그대로 보관되며, 비금전 기준이 정해지면 다시 집계됩니다.',
-  verify: '대회 입상 증빙 2장(머니인·신분증)을 올려 운영자 승인을 받으면 인증 기록으로 보관됩니다. 대회만 인정됩니다(일반 펍 제외). 점수 합산 기준은 현재 미정(미산정)입니다.',
+  domestic: '대회(토너먼트) 입상만 인정. 해외 대회도 포함하며, 운영자가 승인한 건에 한해 100만원(100T)당 1점으로 합산합니다. 일반 펍 정기 게임은 포함되지 않습니다.',
+  verify: '대회 입상 증빙 2장(머니인·신분증)을 올려 운영자 승인을 받으면 국내 순위에 합산됩니다. 대회만 인정되며(일반 펍 제외) 100만원(100T)당 1점입니다.',
   shop: '모으는 마크는 활동점수 도달로 영구 해금(차감 없음)이고, 나머지(꾸미기 마크·프레임·닉네임 색·시즌 뱃지·외치기·응원·끌올)는 사용 가능 점수로 삽니다. 소장한 것은 영구히 남고, 무엇을 사도 누적 점수(등급 기준)는 줄지 않습니다.',
   activity: '접속·글쓰기·댓글 활동 점수. 등급(2·3~AA)과 연동. 아래 주간 미션을 달성하면 점수를 바로 받아요.',
-  moneyin: '전국 종합 머니인 점수는 현재 미산정입니다 — 상금 기준 합산을 중단했고(2026-09-05), 비금전 전국 기준은 아직 정해지지 않았습니다.',
-  league: '주간 리그 점수는 현재 미산정입니다 — 상금 기준 항목을 중단했고(2026-09-05), 새 기준은 아직 정해지지 않았습니다.',
+  moneyin: '전국 대회 머니인(입상) 경력 순위. 매장이 등록한 대회 순위 기록만 세며 상금·금액은 보지 않습니다 — 입상 횟수 → 우승 → TOP3 → 최고 등수 순.',
   badges: '조건을 달성하면 자동으로 열리는 업적 뱃지. 모아서 프로필을 채우세요.',
   missions: '이번 주 미션. 달성하면 활동점수 보상을 바로 받아요. 월요일 리셋.',
   hall: '지난달 가장 빛난 플레이어 TOP3. 운영자가 직접 선정하며, 선정이 없는 달은 입상 기록으로 자동 집계됩니다.',
@@ -170,16 +171,96 @@ const SHOP_BTN = 'mt-1.5 inline-flex w-full min-h-[30px] items-center justify-ce
 const SHOP_BTN_ON = 'border-transparent bg-accent-300 text-white';
 const SHOP_BTN_OFF = 'border-accent-400/40 text-accent-300 hover:bg-accent-300/10';
 
-/** 금액 파생 전국·주간 보드 — 2026-09-05 법적위험완화 v3: 상금 기준 합산을 중단했고 비금전 기준은 미정이라
- *  '미산정'으로 명시한다(새 공식을 만들지 않는다). 매장별 대회 결과·개인 전적은 그대로 남아 있다. */
-function NotComputed({ board }: { board: 'moneyin' | 'league' | 'domestic' }) {
-  const title = board === 'league' ? '주간 리그는 현재 미산정입니다' : board === 'domestic' ? '국내 순위는 현재 미산정입니다' : '전국 머니인 점수는 현재 미산정입니다';
+/** 전국 대회 머니인 입상 경력 보드(오너 결정 2026-09-05) — 상금·금액 없이 '입상 경력'만 강조한다.
+ *  기간 칩(전체·올해·최근 90일) · 내 경력 카드(전국 순위·상위 %) · 목록(입상 횟수 큰 숫자 + 우승·TOP3·최고 등수·매장 수·최근 입상). */
+function CareerBoard({ myNick, nickStyle, markPrefix }: {
+  myNick: string | null;
+  nickStyle: (r: unknown) => CSSProperties | undefined;
+  markPrefix: (r: unknown) => string;
+}) {
+  const [period, setPeriod] = useState<CareerPeriod>('all');
+  const [rows, setRows] = useState<GlobalRankingTotal[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [tick, setTick] = useState(0); // 실패 후 '다시' — 같은 기간이라도 재조회
+  useEffect(() => {
+    let alive = true;
+    setRows(null); setFailed(false);
+    getGlobalRankingTotals(period)
+      .then((r) => { if (alive) setRows(r); })
+      .catch(() => { if (alive) { setRows([]); setFailed(true); } });
+    return () => { alive = false; };
+  }, [period, tick]);
+  const key = (myNick ?? '').trim().toLowerCase();
+  const myIdx = rows && key ? rows.findIndex((r) => r.nickname.trim().toLowerCase() === key) : -1;
+  const me = myIdx >= 0 && rows ? rows[myIdx] : null;
+  const pct = me && rows ? Math.max(1, Math.round(((myIdx + 1) / rows.length) * 100)) : null;
+  const fmtDate = (d: string | null) => (d ? d.slice(2).replace(/-/g, '.') : '');
   return (
-    <EmptyState
-      title={title}
-      hint="상금 기준 합산을 중단했습니다(2026-09-05). 비금전 집계 기준이 정해지면 다시 계산됩니다. 매장별 대회 결과는 각 매장 페이지, 내 전적은 내 정보에서 볼 수 있어요"
-      icon={<Icon name="chart" />}
-    />
+    <div className="space-y-2">
+      {/* 기간 — 경력은 누적이 본질이라 '전체'가 기본. 올해·최근 90일은 현역 감각용. */}
+      <div className="flex gap-1.5" role="group" aria-label="집계 기간">
+        {(Object.keys(CAREER_PERIOD_LABEL) as CareerPeriod[]).map((p) => (
+          <button key={p} type="button" onClick={() => setPeriod(p)} aria-pressed={period === p}
+            className={['min-h-9 rounded-chip border px-3 text-2xs font-bold transition-colors',
+              period === p ? 'border-transparent bg-accent-300 text-white' : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
+            {CAREER_PERIOD_LABEL[p]}
+          </button>
+        ))}
+      </div>
+      {rows === null ? (
+        <RowSkeleton rows={8} />
+      ) : failed ? (
+        <EmptyState title="경력을 불러오지 못했어요" hint="잠시 후 다시 열어 주세요" icon={<Icon name="alert" />}
+          action={<button type="button" onClick={() => setTick((t) => t + 1)} className="btn-ghost px-3 py-1.5 text-xs">다시 불러오기</button>} />
+      ) : rows.length === 0 ? (
+        <EmptyState
+          title={period === 'all' ? '아직 집계된 대회 입상이 없어요' : '이 기간의 대회 입상이 없어요'}
+          hint="매장이 대회 순위를 올리면 입상 경력이 이 표에 자동으로 오릅니다"
+          icon={<Icon name="trophy" />}
+        />
+      ) : (
+        <>
+          {/* 내 경력 — 전국 순위·상위 % 와 경력 한 줄. 로그인 전엔 그리지 않는다. */}
+          {myNick && (me ? (
+            <div className="rounded-card border border-accent-400/40 bg-accent-300/[0.08] px-3 py-2.5">
+              <div className="flex items-baseline justify-between gap-2">
+                <p className="min-w-0 truncate text-xs font-bold text-accent-300">내 대회 입상 경력 <span className="font-normal text-ink-muted">· {CAREER_PERIOD_LABEL[period]}</span></p>
+                <p className="shrink-0 text-xs font-extrabold tabular-nums text-ink-primary">전국 {myIdx + 1}위 <span className="font-semibold text-ink-muted">· 상위 {pct}%</span></p>
+              </div>
+              <p className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-2xs tabular-nums text-ink-secondary">
+                <span>입상 <b className="text-ink-primary">{me.moneyinCount}</b>회</span>
+                <span>우승 <b className="text-ink-primary">{me.wins}</b>회</span>
+                <span>TOP3 <b className="text-ink-primary">{me.top3}</b>회</span>
+                <span>최고 <b className="text-ink-primary">{me.bestPosition}</b>위</span>
+                <span>매장 <b className="text-ink-primary">{me.venues}</b>곳</span>
+                {me.lastDate && <span>최근 {fmtDate(me.lastDate)}</span>}
+              </p>
+            </div>
+          ) : (
+            <p className="rounded-card border border-border-subtle bg-surface-high px-3 py-2 text-center text-2xs text-ink-muted">아직 내 대회 입상 기록이 없어요 — 매장이 대회 순위를 올리면 자동으로 오릅니다</p>
+          ))}
+          <ul className="overflow-hidden rounded-card border border-border-subtle bg-surface-high">
+            {rows.slice(0, 50).map((r, i) => {
+              const isMe = i === myIdx;
+              return (
+                <li key={r.nickname} className={['flex items-center gap-2.5 border-b border-border-subtle px-3 py-2 last:border-b-0', isMe ? 'bg-accent-300/[0.08]' : ''].join(' ')}>
+                  <RankNum n={i + 1} />
+                  <div className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-ink-primary" style={nickStyle(r)}>{markPrefix(r)}{r.nickname}{isMe && <span className="ml-1 text-2xs font-semibold text-accent-300">(나)</span>}</span>
+                    <span className="block truncate text-2xs tabular-nums text-ink-muted">우승 {r.wins} · TOP3 {r.top3} · 최고 {r.bestPosition}위 · 매장 {r.venues}곳</span>
+                  </div>
+                  <span className="shrink-0 text-right">
+                    <span className="block text-sm font-bold tabular-nums text-accent-300">입상 {r.moneyinCount}회</span>
+                    {r.lastDate && <span className="block text-2xs tabular-nums text-ink-muted">{fmtDate(r.lastDate)}</span>}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="pt-0.5 text-center text-2xs text-ink-muted">매장이 등록한 대회 순위(입상)만 집계 · 상금·금액과 무관 · 상위 50명</p>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -283,6 +364,7 @@ export default function TierLeaderboard() {
     ? new Date(new Date(user.nameChangedAt).getTime() + 30 * 24 * 3600_000).toLocaleDateString('ko-KR')
     : '';
   const reloadBalance = useRef(() => { getMyPointBalance().then(setBalance).catch(() => {}); }).current;
+  const [domestic, setDomestic] = useState<DomesticRow[] | null>(null);
   const [myVerifs, setMyVerifs] = useState<RankVerification[] | null>(null);
   // 오너 #11(2026-08-30): 대회 구분 선택 제거 — 순위 인증은 '대회'만 받는다.
   //   일반 펍(정기 게임)은 인증 대상이 아니고, 서버 RLS 도 event_kind='official' 만 통과시킨다.
@@ -448,6 +530,7 @@ export default function TierLeaderboard() {
         .catch(() => setMissions([]));
     }
     if (board === 'hall' && hall === null) getHallOfFame().then(setHall).catch(() => setHall({ label: '', rows: [], source: 'auto' }));
+    if (board === 'domestic' && domestic === null) getDomesticRankings(30).then(setDomestic).catch(() => setDomestic([]));
     if (board === 'verify' && myVerifs === null && user) myRankVerifications().then(setMyVerifs).catch(() => setMyVerifs([]));
     if (board === 'shop' && equippedMark === undefined && user) {
       getMyEquippedMark().then((k) => setEquippedMark(k)).catch(() => setEquippedMark(null));
@@ -707,9 +790,7 @@ export default function TierLeaderboard() {
         {/* 보드 설명 — 1행/2행이 섞이면 탭을 옮길 때마다 아래가 통째로 밀린다. 2행분을 예약. */}
         <p className="mb-2 min-h-[2.25rem] t-desc text-ink-muted">{BOARD_DESC[board]}</p>
 
-        {board === 'league' ? (
-          <NotComputed board="league" />
-        ) : board === 'missions' ? (
+        {board === 'missions' ? (
           missionsBlock
         ) : board === 'badges' ? (
           !user ? <p className="py-6 text-center t-desc text-ink-muted">로그인하면 업적을 모을 수 있습니다</p>
@@ -730,7 +811,34 @@ export default function TierLeaderboard() {
             </div>
           )
         ) : board === 'domestic' ? (
-          <NotComputed board="domestic" />
+          domestic === null ? <RowSkeleton rows={6} />
+          : domestic.length === 0 ? (
+            <EmptyState
+              title="아직 인증된 입상이 없어요"
+              hint="'순위 인증' 탭에서 대회 입상 증빙을 올리면 이 순위에 합산됩니다"
+              icon={<Icon name="trophy" />}
+              action={<button type="button" onClick={() => setBoard('verify')} className="btn-primary px-4 py-2 text-xs">순위 인증하러 가기</button>}
+            />
+          )
+          : (
+            <ul className="space-y-1">
+              {domestic.map((r, i) => (
+                <li key={r.nickname} className="flex items-center gap-2.5 rounded-input bg-surface-high px-3 py-2">
+                  <span className="w-6 shrink-0 text-center text-sm font-extrabold tabular-nums text-accent-300">{i + 1}</span>
+                  {/* ⚠ 부모에 truncate(nowrap+overflow+ellipsis)를 걸고 자식을 block 으로 두면
+                      통계 줄은 **말줄임표조차 없이 하드 클립**된다 — ellipsis 는 부모의 인라인 콘텐츠에만
+                      적용되기 때문이다. 누적 금액이 커질수록 먼저 사라졌다. 줄마다 각자 줄인다. */}
+                  <span className="flex min-w-0 flex-1 flex-col text-sm font-semibold text-ink-primary">
+                    <span className="truncate">{r.nickname}</span>
+                    <span className="truncate text-2xs font-normal text-ink-muted tabular-nums">
+                      대회 {r.wins}회{r.overseas > 0 ? ` · 해외 ${r.overseas}회` : ''} · 누적 {(r.totalWon / 10000).toLocaleString()}만
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-sm font-extrabold tabular-nums text-emerald-300">{r.points.toLocaleString()}점</span>
+                </li>
+              ))}
+            </ul>
+          )
         ) : board === 'verify' ? (
           !user ? <p className="py-6 text-center t-desc text-ink-muted">로그인하면 입상 인증을 신청할 수 있습니다</p>
           : (
@@ -769,7 +877,7 @@ export default function TierLeaderboard() {
                   onClick={submitVerify}
                   className="btn-primary w-full disabled:opacity-50">{vBusy ? '제출 중…' : '인증 요청'}</button>
                 <p className="text-2xs leading-relaxed text-ink-muted">
-                  운영자가 <b className="text-ink-secondary">대회 입상으로 승인한 건</b>만 인증 기록으로 보관됩니다. 점수 합산 기준은 현재 미정(미산정)이라 국내 순위에는 반영되지 않습니다. 대회 여부는 증빙을 보고 운영자가 최종 판정합니다. <b className="text-ink-secondary">신분증 이미지는 승인·거절 즉시 삭제</b>되며 다른 용도로 사용되지 않습니다. AI 생성·조작 이미지는 반려됩니다.
+                  운영자가 <b className="text-ink-secondary">대회 입상으로 승인한 건</b>만 국내 순위에 합산되며, <b className="text-ink-secondary">100만원(100T)당 1점</b>입니다(임계 미만은 점수 없음). 대회 여부는 증빙을 보고 운영자가 최종 판정합니다. <b className="text-ink-secondary">신분증 이미지는 승인·거절 즉시 삭제</b>되며 다른 용도로 사용되지 않습니다. AI 생성·조작 이미지는 반려됩니다.
                 </p>
               </div>
               {myVerifs && myVerifs.length > 0 && (
@@ -1250,7 +1358,7 @@ export default function TierLeaderboard() {
             </div>
           )
         ) : board === 'moneyin' ? (
-          <NotComputed board="moneyin" />
+          <CareerBoard myNick={user?.nickname ?? null} nickStyle={nickStyle} markPrefix={markPrefix} />
         ) : loading ? (
           <ActivityBoardSkeleton />
         ) : rows.length === 0 ? (

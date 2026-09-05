@@ -276,8 +276,7 @@ export interface VenuePageConfig {
   customBoards?: CustomBoard[];           // 커스텀 보드 정의(최대 3)
   notifyStaff?: boolean;                  // 직원 호출/공지 알림 수신
   clockTheme?: import('../components/features/clock/clockTheme').ClockTheme; // TV 송출 클락 테마 v1
-  /** 순위·머니인에서 티켓 상금을 어떻게 보일지 — 'ticket'(기본, "10T") | 'won'("10만").
-   *  가치는 어느 쪽이든 1T = 1만원(TICKET_MAN). 장부 대차표는 항상 만원 가치라 이 설정과 무관하다. */
+  /** 레거시(2026-09-05 순위·금액 분리 이후 UI 소비자 0) — 저장된 page_config 키 호환·formatPrize 테스트용으로만 남긴다. 다시 UI 에 붙이지 말 것. */
   ticketPrizeDisplay?: 'ticket' | 'won';
 }
 
@@ -401,8 +400,39 @@ export async function getVenuePlayerCounts(venueId: string): Promise<PlayerCount
   return (data ?? []).map((r: any) => ({ name: String(r.name), buyins: Number(r.buyin_count) || 0, visits: Number(r.visit_count) || 0 }));
 }
 
-// 전 매장 통합 머니인 점수·주간 머니인 킹(global_ranking_totals · weekly_moneyin_kings)의 클라이언트 호출은
-// 2026-09-05 제거(법적위험완화 v3) — 상금 기준 파생 점수라 '미산정'으로 표시한다. 서버 함수는 그대로 남아 있다.
+/**
+ * 전국 대회 머니인 입상 경력(비금전) — 오너 결정 2026-09-05: 전국 랭킹은 '대회 머니인 입상 경력'만 센다.
+ *  매장이 등록한 대회 순위(venue_rankings)에서 입상 횟수·우승·TOP3·최고 등수·입상 매장 수·최근 입상일을 집계한다.
+ *  상금·금액은 어디에도 쓰지 않는다(20260905h global_ranking_totals). 정렬은 careerCompare 한 곳.
+ *  주간 머니인 킹·주간 리그는 삭제됐다.
+ */
+export interface GlobalRankingTotal {
+  nickname: string; moneyinCount: number; wins: number; top3: number; bestPosition: number; venues: number; lastDate: string | null;
+}
+export type CareerPeriod = 'all' | 'year' | '90d';
+export const CAREER_PERIOD_LABEL: Record<CareerPeriod, string> = { all: '전체', year: '올해', '90d': '최근 90일' };
+/** 기간 → 서버 p_since(YYYY-MM-DD, 로컬 날짜). 'all' 은 null. */
+export function careerSince(period: CareerPeriod, now = new Date()): string | null {
+  if (period === 'all') return null;
+  const d = period === 'year' ? new Date(now.getFullYear(), 0, 1) : new Date(now.getTime() - 90 * 86_400_000);
+  return d.toLocaleDateString('en-CA');
+}
+/** 입상 횟수 → 우승 → TOP3 → 최고 등수 → 최근 입상 → 이름. 서버 ORDER BY 와 같은 규칙(화면·백분위가 한 규칙을 쓴다). */
+export function careerCompare(a: GlobalRankingTotal, b: GlobalRankingTotal): number {
+  return (b.moneyinCount - a.moneyinCount) || (b.wins - a.wins) || (b.top3 - a.top3) || (a.bestPosition - b.bestPosition)
+    || (b.lastDate ?? '').localeCompare(a.lastDate ?? '') || a.nickname.localeCompare(b.nickname);
+}
+export async function getGlobalRankingTotals(period: CareerPeriod = 'all'): Promise<GlobalRankingTotal[]> {
+  if (IS_MOCK) return [];
+  const { data, error } = await supabase.rpc('global_ranking_totals', { p_since: careerSince(period) });
+  if (error) throw error; // 실패를 '0건'으로 위장하면 화면이 '아직 없어요'로 굳는다(2026-09-05 감사)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return ((data ?? []) as any[]).map((r) => ({
+    nickname: String(r.nickname ?? ''), moneyinCount: Number(r.moneyin_count) || 0, wins: Number(r.wins) || 0, top3: Number(r.top3) || 0,
+    bestPosition: Number(r.best_position) || 0, venues: Number(r.venues) || 0, lastDate: r.last_date ? String(r.last_date) : null,
+  })).sort(careerCompare);
+}
+
 
 // ── 내 입상 기록(개인 대시보드) — 닉네임 기준 전 매장 순위 등록 이력 ────────────
 export interface MyRankingRow { date: string; venueName: string; position: number; prize: string | null }

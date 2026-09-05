@@ -30,7 +30,7 @@ export interface CustomMissionRow { id: number; title: string; goal_type: Missio
 export async function getActiveMissions(): Promise<Mission[]> {
   if (IS_MOCK) return MISSIONS;
   const { data } = await supabase.from('custom_missions').select('*').eq('active', true).order('id');
-  const customs: Mission[] = ((data ?? []) as CustomMissionRow[]).map((r) => ({
+  const customs: Mission[] = ((data ?? []) as CustomMissionRow[]).filter((r) => r.goal_type in GOAL_TYPE_LABEL).map((r) => ({
     key: `c${r.id}`, title: r.title, goal: r.goal, reward: r.reward,
     desc: GOAL_TYPE_LABEL[r.goal_type]?.(r.goal) ?? '', type: r.goal_type,
   }));

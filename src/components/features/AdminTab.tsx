@@ -416,7 +416,8 @@ function MissionsAdminCard() {
   useEffect(() => { reload(); }, [reload]);
 
   const resetForm = () => { setEditRow(null); setTitle(''); setGoalType('checkin'); setGoal(3); setReward(30); };
-  const startEdit = (m: CustomMissionRow) => { setEditRow(m); setTitle(m.title); setGoalType(m.goal_type); setGoal(m.goal); setReward(m.reward); };
+  // 'moneyin'(순위 등재) 유형은 2026-09-05 종료 — 옵션에 없으므로 편집 시 체크인으로 폴백(서버도 보상을 거절한다)
+  const startEdit = (m: CustomMissionRow) => { setEditRow(m); setTitle(m.title); setGoalType(GOAL_TYPE_OPTIONS.some((o) => o.value === m.goal_type) ? m.goal_type : 'checkin'); setGoal(m.goal); setReward(m.reward); };
   const save = async () => {
     if (!title.trim()) { toast.show('미션 이름을 입력해 주세요', 'error'); return; }
     setBusy(true);
@@ -470,13 +471,15 @@ function MissionsAdminCard() {
               {m.active ? '진행중' : '중단'}
             </span>
             <span className="font-bold text-ink-primary">{m.title}</span>
-            <span className="text-ink-muted">{GOAL_TYPE_OPTIONS.find((o) => o.value === m.goal_type)?.label.replace('N', String(m.goal))}</span>
+            <span className="text-ink-muted">{GOAL_TYPE_OPTIONS.find((o) => o.value === m.goal_type)?.label.replace('N', String(m.goal)) ?? '종료된 유형(대회 순위 기반 · 2026-09-05)'}</span>
             <span className="font-bold text-emerald-400">+{m.reward}점</span>
             <span className="ml-auto flex gap-1">
               <button type="button" onClick={() => startEdit(m)} disabled={busy} className="btn-ghost px-2 py-1 text-2xs text-accent-300 disabled:opacity-60">수정</button>
-              <button type="button" onClick={() => toggle(m)} disabled={busy} className="btn-ghost px-2 py-1 text-2xs disabled:opacity-60">
-                {m.active ? '중단' : '재개'}
-              </button>
+              {(m.active || GOAL_TYPE_OPTIONS.some((o) => o.value === m.goal_type)) && (
+                <button type="button" onClick={() => toggle(m)} disabled={busy} className="btn-ghost px-2 py-1 text-2xs disabled:opacity-60">
+                  {m.active ? '중단' : '재개'}
+                </button>
+              )}
               <button type="button" onClick={() => remove(m)} disabled={busy} className="btn-ghost px-2 py-1 text-2xs text-danger-light disabled:opacity-60">삭제</button>
             </span>
           </li>

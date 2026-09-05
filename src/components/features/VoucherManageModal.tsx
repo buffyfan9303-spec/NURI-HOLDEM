@@ -9,7 +9,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import QRCode from 'qrcode';
 import { checkinUrl } from '../../api/checkins';
 import { buyinRequestUrl } from '../../api/ledger';
-import { listVenueVouchers, issueVoucher, deleteVouchers, revokeVouchers, findUserForTransfer, findUserByPhone, voucherHolderStats, isVoucherIssueApproved, voucherHolderProfiles, subscribeVenueVouchers, type Voucher, type VoucherHolderStats, type TransferTarget, type VoucherHolderProfile, type BulkResult, getVoucherQuota } from '../../api/vouchers';
+import { listVenueVouchers, issueVoucher, deleteVouchers, revokeVouchers, findUserForTransfer, findUserByPhone, voucherHolderStats, isVoucherIssueApproved, voucherHolderProfiles, subscribeVenueVouchers, type Voucher, type VoucherHolderStats, type TransferTarget, type VoucherHolderProfile, type BulkResult, getVoucherQuota, VOUCHER_REASONS, voucherReasonLabel, type VoucherReason } from '../../api/vouchers';
 import { useIdentityEnabled } from '../../lib/identityFlag'; // 본인인증·매장이용권 통합 킬스위치(2026-08-29)
 import { voucherGroupLabel, stripVenuePrefix } from '../../lib/voucherLabel'; // 손님 지갑 표기 규칙(오너 지시 #19)과 같은 함수로 미리보기
 
@@ -36,6 +36,8 @@ export function VoucherManagePanel({ venueId, prefillReceiver }: { venueId: stri
   // 이 매장의 이름 — 이미 불러온 이용권 행의 조인 값에서 읽는다(추가 조회 0). 첫 발급 전에는 null 이라 미리보기를 내린다.
   const venueName = list.find((v) => v.venueName)?.venueName ?? null;
   const [title, setTitle] = useState('매장이용권');
+  const [reason, setReason] = useState<VoucherReason>('visit'); // 발급 근거(2026-09-05 정책) — 서버가 기록·검증
+  const [reasonNote, setReasonNote] = useState('');
   const [count, setCount] = useState(1);
   // 만료일(선택) — 비우면 무기한. 서버는 KST 자정 직전으로 저장돼 그날까지 사용 가능.
   const [expiry, setExpiry] = useState('');
@@ -210,13 +212,14 @@ ${cards}
     } catch (e) { toast.show(e instanceof Error ? e.message : '인쇄 준비 실패', 'error'); }
   };
   const issue = async () => {
+    if (reason === 'other' && !reasonNote.trim()) { toast.show('기타 사유는 비고에 발급 이유를 적어 주세요', 'error'); return; }
     // 받는 손님 미지정이 기본 경로라 실수로 '매장 보관'에 들어가던 사고 — 한 번 확인
     if (!recvUserId && !window.confirm(`받는 손님 없이 매장 보관용으로 ${count}개를 발급할까요?\n\n손님에게 주려면 [취소] 후 '받는 손님'을 지정하세요.`)) return;
     setBusy(true);
     try {
-      await issueVoucher(venueId, { title, count, holderUserId: recvUserId ?? undefined, holderName: recvDisplay || undefined, expiresAt: expiry ? `${expiry}T23:59:59+09:00` : null });
+      await issueVoucher(venueId, { title, count, holderUserId: recvUserId ?? undefined, holderName: recvDisplay || undefined, expiresAt: expiry ? `${expiry}T23:59:59+09:00` : null, reason, note: reason === 'other' ? reasonNote.trim() || undefined : undefined });
       toast.show(`매장이용권 ${count}개를 ${recvDisplay ? recvDisplay + '님께 ' : ''}배포했습니다`, 'success');
-      setTitle('매장이용권'); setCount(1); setExpiry(''); setRecvUserId(null); setRecvDisplay(''); setRecvMode('none'); setCands([]);
+      setTitle('매장이용권'); setCount(1); setExpiry(''); setRecvUserId(null); setRecvDisplay(''); setRecvMode('none'); setCands([]); setReasonNote('');
       reload(); reloadQuota();
     } catch (e) {
       const msg = e instanceof Error ? e.message : '배포 실패';
@@ -351,6 +354,20 @@ ${cards}
                   <span className="self-center pl-0.5 text-2xs text-ink-muted">개</span>
                 </div>
               </div>
+              {/* 발급 근거(2026-09-05 정책) — 모든 발급에 사유를 남긴다. 순위·시상 사유는 목록에 없고, 제목·비고에 적어도 서버가 거절한다. */}
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="발급 근거">
+                {VOUCHER_REASONS.map((o) => (
+                  <button key={o.value} type="button" onClick={() => setReason(o.value)} aria-pressed={reason === o.value} title={o.hint}
+                    className={['min-h-9 rounded-chip border px-2.5 text-2xs font-bold transition-colors',
+                      reason === o.value ? 'border-transparent bg-accent-300 text-white' : 'border-border-default bg-surface-high text-ink-secondary hover:text-ink-primary'].join(' ')}>
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+              {reason === 'other' && (
+                <input value={reasonNote} onChange={(e) => setReasonNote(e.target.value)} maxLength={80} placeholder="기타 사유 — 발급 이유를 적어 주세요(필수)" className="input w-full text-sm" />
+              )}
+              <p className="text-2xs text-ink-muted">대회 순위·입상을 근거로 한 이용권은 발급할 수 없습니다(2026-09-05). 발급 근거는 기록에 남습니다.</p>
               {/* 손님 화면 미리보기(오너 지시 #19) — 매장명은 **자동으로 붙는다**.
                   왜 필요한가: 라이브 데이터 101장 중 100장의 제목에 업주가 '로티아레나'를 손으로 타이핑해
                   두었다. 이제 그럴 필요가 없고, 그렇게 해도 중복은 표시 단계에서 걷힌다는 걸 여기서 보여 준다.
@@ -598,7 +615,7 @@ ${cards}
                           : <ul className="space-y-0.5">
                               {g.used.slice().sort((a, b) => (b.usedAt ?? '').localeCompare(a.usedAt ?? '')).map((v) => (
                                 <li key={v.id} className="flex items-center justify-between gap-2 text-[11px]">
-                                  <span className="min-w-0 flex-1 truncate text-ink-secondary">{v.title}</span>
+                                  <span className="min-w-0 flex-1 truncate text-ink-secondary">{v.title}{v.issueReason && <span className="ml-1 text-ink-muted">· {voucherReasonLabel(v.issueReason)}</span>}</span>
                                   <span className="shrink-0 tabular-nums text-ink-muted">{fmtDateTime(v.usedAt)}</span>
                                 </li>
                               ))}

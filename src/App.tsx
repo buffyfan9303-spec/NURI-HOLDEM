@@ -2658,7 +2658,6 @@ export default function App() {
               const roti = venues.find((v) => v.name.replace(/\s+/g, '').includes('로티아레나'));
               if (roti) handleVenueClick(roti.id); else changeTab('community');
             }}
-            active={activeTab === 'home'}
           />
         </main>
       )}

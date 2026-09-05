@@ -67,6 +67,11 @@ describe('무엇을 초안으로 남기는가', () => {
     expect(Object.keys(rows[0])).toEqual(['nickname', 'realName']);
   });
 
+  it('상금·비고만 적힌 구형 초안은 초안 자체가 없는 것으로 본다(빈 줄 복원 배너 방지)', () => {
+    localStorage.setItem(K(''), JSON.stringify({ ts: Date.now(), rows: [{ nickname: '', realName: '', prize: '100', voucher: '1', note: '시상' }] }));
+    expect(readRowsDraft(K(''))).toBeNull();
+  });
+
   it('내용이 사라지면(전부 지움) 초안도 함께 지워진다', () => {
     writeRowsDraft(K(''), [row({ nickname: 'a' })]);
     expect(readRowsDraft(K(''))).not.toBeNull();

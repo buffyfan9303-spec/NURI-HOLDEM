@@ -27,7 +27,19 @@ export interface Voucher {
   usedVenueId: string | null; usedVenueName: string | null; usedAt: string | null; createdAt: string;
   /** 유효기간(없으면 무기한) — 만료 시 사용 RPC 가 서버에서 거부한다 */
   expiresAt: string | null;
+  /** 발급 근거(2026-09-05 정책) — 2026-09-05 이전 발급분은 null */
+  issueReason: VoucherReason | null;
 }
+/** 발급 근거(사유) — 서버 issue_voucher 가 같은 목록으로 검증한다. 순위·시상 사유는 목록에 없고 서버가 거절한다. */
+export type VoucherReason = 'welcome' | 'visit' | 'event' | 'service' | 'other';
+export const VOUCHER_REASONS: { value: VoucherReason; label: string; hint: string }[] = [
+  { value: 'visit', label: '방문 감사', hint: '재방문·단골 감사' },
+  { value: 'welcome', label: '첫 방문 환영', hint: '신규 손님 환영' },
+  { value: 'event', label: '이벤트·프로모션', hint: '참가 인원 무관 이벤트' },
+  { value: 'service', label: '서비스 보상', hint: '불편 사과·서비스 차원' },
+  { value: 'other', label: '기타(비고 필수)', hint: '비고에 이유를 적어야 발급됩니다' },
+];
+export const voucherReasonLabel = (r: string | null | undefined): string => VOUCHER_REASONS.find((x) => x.value === r)?.label ?? '';
 export interface VoucherUsage { usedVenueId: string | null; venueName: string | null; usedCount: number }
 export interface VisitedVenue { venueId: string; venueName: string | null; visits: number }
 export interface PlayHistory { venueId: string; venueName: string | null; moneyinCount: number; totalAmount: number; lastAt: string | null }
@@ -42,6 +54,7 @@ function mapRow(r: any): Voucher {
     usedVenueId: r.used_venue_id ?? null, usedVenueName: r.used_venue?.name ?? null,
     usedAt: r.used_at ?? null, createdAt: r.created_at,
     expiresAt: r.expires_at ?? null,
+    issueReason: (r.issue_reason as VoucherReason | null) ?? null,
   };
 }
 
@@ -99,22 +112,14 @@ export async function listMyVouchers(): Promise<Voucher[]> {
   return rows;
 }
 
-/** 시상 멱등 키 조회 — note 에 AWARD:{date}:{event}:{nick} 마커가 있는 발급분(중복 발급 차단용) */
-export async function listVoucherNotes(venueId: string, noteLike: string): Promise<string[]> {
-  if (IS_MOCK) return [];
-  const { data } = await supabase.from('store_vouchers')
-    .select('note').eq('venue_id', venueId).like('note', `%${noteLike}%`).limit(500);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((r: any) => (r.note as string) ?? '').filter(Boolean);
-}
-
-export async function issueVoucher(venueId: string, input: { title: string; count?: number; holderName?: string; holderUserId?: string; note?: string; expiresAt?: string | null }): Promise<void> {
+export async function issueVoucher(venueId: string, input: { title: string; count?: number; holderName?: string; holderUserId?: string; note?: string; expiresAt?: string | null; reason: VoucherReason }): Promise<void> {
   if (IS_MOCK) return;
   assertVoucherOn();
   const { error } = await supabase.rpc('issue_voucher', {
     p_venue_id: venueId, p_title: input.title, p_count: input.count ?? 1,
     p_holder_name: input.holderName ?? null, p_holder_user_id: input.holderUserId ?? null, p_note: input.note ?? null,
     p_expires_at: input.expiresAt ?? null,
+    p_reason: input.reason, // 발급 근거 — 서버가 목록 검증·기록(20260905h). 순위·시상은 서버가 거절.
   });
   if (error) throw new Error(error.message);
 }

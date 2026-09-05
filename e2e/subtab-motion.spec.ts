@@ -138,7 +138,7 @@ test.describe('하위 탭 — 방향성 푸시가 실제로 돈다', () => {
     await gotoCommunitySection(page, '랭킹');
     const bar = page.locator('[data-rank-tabbar]');
     await expect(bar).toBeVisible({ timeout: 15_000 });
-    const samples = await probe(page, bar.getByRole('button', { name: /주간/ }).first());
+    const samples = await probe(page, bar.getByRole('button', { name: /명예/ }).first());
     expectPanelPush(samples, 'rank-panel', 'rank-tabbar');
   });
 
@@ -185,7 +185,7 @@ test.describe('하위 탭 — 느린 기기에서도 root 는 끝까지 정지',
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 8 });
     try {
-      const samples = await probe(page, bar.getByRole('button', { name: /주간/ }).first());
+      const samples = await probe(page, bar.getByRole('button', { name: /명예/ }).first());
       const joined = samples.join('\n');
       // root 가 한 프레임이라도 밀리면(blur) 실패 — 마커가 전환보다 먼저 풀렸다는 뜻.
       expect(samples.filter((x) => /\(root\) :: vt-push-/.test(x)), `느린 기기에서 root 가 밀렸다(마커가 전환 도중 풀림)

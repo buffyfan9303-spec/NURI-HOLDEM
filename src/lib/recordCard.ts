@@ -19,6 +19,7 @@ export interface RecordCardData {
   winRate: number;      // 우승률 %
   bestPosition: number;
   points: number;       // 누적 포인트
+  percentile?: number | null; // 전국 상위 N% — 대회 입상 횟수 기준(상금 무관)
 }
 
 const N = (v: number) => v.toLocaleString('ko-KR');
@@ -49,6 +50,19 @@ export async function buildRecordCardBlob(d: RecordCardData): Promise<Blob> {
   x.fillStyle = INK; x.font = '800 76px sans-serif';
   const nick = '@' + d.nickname;
   x.fillText(nick.length > 16 ? nick.slice(0, 15) + '…' : nick, 72, 268);
+
+  // 전국 상위 N% 배지 — 대회 입상 횟수 기준(2026-09-05, 상금 기준 아님)
+  if (d.percentile != null) {
+    const bw = 520, bh = 120, bx = 72, by = 312;
+    x.fillStyle = 'rgba(252,213,53,0.10)';
+    roundRect(x, bx, by, bw, bh, 24); x.fill();
+    x.strokeStyle = 'rgba(252,213,53,0.45)'; x.lineWidth = 2;
+    roundRect(x, bx, by, bw, bh, 24); x.stroke();
+    x.fillStyle = MUTED; x.font = '600 30px sans-serif';
+    x.fillText('전국 대회 입상 경력 중', bx + 36, by + 50);
+    x.fillStyle = GOLD; x.font = '800 64px sans-serif';
+    x.fillText(`상위 ${d.percentile}%`, bx + 36, by + 104);
+  }
 
   // 스탯 그리드 2x3
   const cells: [string, string][] = [

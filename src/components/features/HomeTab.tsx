@@ -43,7 +43,6 @@ export default function HomeTab({
   onVenue: (venueId: string) => void;
   onExplore: () => void;
   onLive: () => void;
-  active: boolean;
 }) {
   const now = new Date();
   const today = now.toLocaleDateString('en-CA');
