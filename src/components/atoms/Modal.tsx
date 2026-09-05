@@ -320,8 +320,10 @@ export default function Modal({
             // 시트는 아래에서 올라오고(sheet-up), 가운데 모달은 기존의 짧은 넛지(slide-up).
             // 열림과 닫힘이 같은 문법을 쓰게 맞춘 것 — 예전엔 닫힘만 100% 이동이라 짝이 안 맞았다.
             : (variant === 'sheet' ? 'animate-sheet-up' : 'animate-slide-up'),
+          // 시트는 홈 인디케이터(safe-area) 높이를 원자에서 예약한다 — border-box 라 88vh 안에 포함되고,
+          // 소비자의 sticky 푸터 bottom:0 기준선도 그만큼 올라간다. 소비자는 자체 보정을 두지 않는다(이중 예약).
           variant === 'sheet'
-            ? 'rounded-t-dialog sm:rounded-dialog sm:my-auto sm:max-h-[85vh]'
+            ? 'rounded-t-dialog sm:rounded-dialog sm:my-auto sm:max-h-[85vh] pb-[env(safe-area-inset-bottom)] sm:pb-0'
             : 'rounded-dialog my-auto max-h-[85vh]',
           MAX_W[maxWidth],
           'flex flex-col overflow-hidden',
