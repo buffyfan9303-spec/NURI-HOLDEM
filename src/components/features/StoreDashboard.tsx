@@ -552,6 +552,11 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
               <Icon name="store" size={13} />
             </span>
             <span className="truncate text-base font-bold leading-none text-ink-primary">{venueName}</span>
+            {/* 모바일: 날짜는 매장명 **옆**에 붙는다. 예전엔 우측 끝 블록이라 좁은 폭에서 '로티아레나 ……… 09.05 금' 처럼
+                양끝으로 찢어져 이상했다(오너 2026-09-05). PC 는 아래 우측 블록 그대로(밀도·한 줄 원칙). */}
+            <span className="shrink-0 text-2xs tabular-nums text-ink-muted lg:hidden">
+              · {d.slice(5).replace('-', '.')} <span className={['font-semibold', todayDow === 0 ? 'text-danger-light' : todayDow === 6 ? 'text-accent-200' : 'text-ink-secondary'].join(' ')}>{DOW[todayDow]}</span>
+            </span>
             {liveWidget && (
               /* 상태는 '글자'가 아니라 '칩' — 스티키에 상시 떠 있으므로 형태로도 구분돼야 스캔된다 */
               <span className="flex shrink-0 items-center gap-1 rounded-chip border border-emerald-400/40 bg-emerald-400/10 px-1.5 py-0.5 text-2xs font-bold text-emerald-400">
@@ -565,7 +570,7 @@ export default function StoreDashboard({ venueId, schedules, onGoto, onCreatePos
           </span>
           {/* 날짜 — 2xs 회색에서 xs 로. '오늘'을 앞에 붙여 '내가 지금 오늘 장부를 보는 중'이 한눈에 들어오게.
               tabular-nums 는 유지(날짜가 바뀌어도 폭이 안 흔들린다). */}
-          <span className="flex shrink-0 items-baseline gap-1.5 text-xs">
+          <span className="hidden shrink-0 items-baseline gap-1.5 text-xs lg:flex">
             <span className="font-semibold text-ink-secondary">오늘</span>
             <span className="tabular-nums text-ink-muted">{d.slice(5).replace('-', '.')}</span>
             <span className={['font-semibold', todayDow === 0 ? 'text-danger-light' : todayDow === 6 ? 'text-accent-200' : 'text-ink-muted'].join(' ')}>

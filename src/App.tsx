@@ -540,7 +540,7 @@ const TabBar = memo(function TabBar({
 });
 
 // ── 모바일 하단 탭바(Riot Mobile 스타일) — 플로팅 알약 + 아이콘/라벨 + 프레스 스프링 ──
-const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, count, onOpenMe, overlayOpen }: {
+const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, count, onOpenMe, overlayOpen, onSameTap }: {
   tabs: TabDef[]; active: TabId; onChange: (t: TabId) => void;
   dot?: Partial<Record<TabId, boolean>>;
   /** 숫자 배지(예: 라이브 'N게임 진행중') — dot 보다 정보량이 높은 칸에만 */
@@ -549,6 +549,8 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
   onOpenMe: () => void;
   /** 전면 오버레이('내 정보'·매장 페이지·상세 등) 열림 여부 — 개폐 순간마다 잔존 hidden 을 리셋 */
   overlayOpen: boolean;
+  /** 이미 활성인 탭을 다시 눌렀을 때 — 기본은 맨 위로 스크롤, '내 매장'은 대시보드 복귀에 쓴다 */
+  onSameTap?: (t: TabId) => void;
 }) {
   // 5칸 고정: 일정/라이브/커뮤니티/장터 + (업주·직원·관리자=내 매장 | 일반=내 정보)
   // 관리자 설정·도구는 프로필 메뉴에서 진입(탭바는 핵심 동선만)
@@ -693,7 +695,7 @@ const MobileTabBar = memo(function MobileTabBar({ tabs, active, onChange, dot, c
               //   browse 에서 shown='home' 이 되고, 그러면 홈 버튼이 '재탭'으로 잘못 잡혀
               //   맨 위로 스크롤만 하고 홈에 영영 못 간다(2026-09-05 전수 조사). 모바일에는
               //   상단 GNB 가 없어 이 탭바가 유일한 내비라 그대로 갇힌다.
-              onClick={() => { if (tab) { if (tab === active) { window.scrollTo({ top: 0, behavior: 'smooth' }); } else { setOptimistic(tab); onChange(tab); } } else onOpenMe(); }}
+              onClick={() => { if (tab) { if (tab === active) { window.scrollTo({ top: 0, behavior: 'smooth' }); onSameTap?.(tab); } else { setOptimistic(tab); onChange(tab); } } else onOpenMe(); }}
               aria-current={on ? 'page' : undefined}
               // 접근성 이름을 버튼에 고정 — 배지 span 의 aria-label 이 DOM 순서상 라벨보다 앞이라 이름이
               // '진행 중 2게임 라이브' 로 뒤집혔다(게임이 돌 때마다 e2e /^라이브/ 가 깨지던 원인). 이름 = '라이브, 진행 중 2게임'.
@@ -886,9 +888,12 @@ export default function App() {
     trail.push(item);
   }, [activeTab, clearTabTrail, commitTab]);
 
+  // 하단 '내 매장' 탭을 누른 횟수 — VenueManageTab 이 이 값이 바뀔 때마다 대시보드로 돌아간다(재탭 포함).
+  const [myStoreHomeNonce, setMyStoreHomeNonce] = useState(0);
   const changeTab = useCallback((t: TabId) => {
     // 탭 이동은 '화면 전환' — 떠 있는 매장 페이지 오버레이는 닫는다(탭을 눌렀는데 그대로 보이는 혼란 방지)
     closeOverlaysRef.current?.();
+    if (t === 'my-store') setMyStoreHomeNonce((v) => v + 1); // 다른 탭에서 넘어와도 대시보드부터
     if (t === 'home') clearTabTrail(); // 홈을 직접 누르면 이력의 뿌리로 — 쌓아 둔 겹을 정리
     commitTab(t);
   }, [clearTabTrail, commitTab]);
@@ -2626,6 +2631,7 @@ export default function App() {
       <TabBar tabs={pcTabs} active={activeTab} onChange={changeTab} />
       {/* 모바일 하단 탭바(Riot Mobile 스타일) — 상단 GNB 대체 */}
       <MobileTabBar tabs={tabs} active={activeTab} onChange={changeTab} dot={tabDot} count={tabCount}
+        onSameTap={(t) => { if (t === 'my-store') setMyStoreHomeNonce((v) => v + 1); }}
         onOpenMe={openMeCb} overlayOpen={fullOverlayOpen} />
 
       {/* 일정 탐색 */}
@@ -3048,6 +3054,7 @@ export default function App() {
             deepSection={myStoreDeep}
             onConsumeDeepSection={handleConsumeMyStoreDeep}
             tabActive={activeTab === 'my-store'}
+            homeNonce={myStoreHomeNonce}
             onCreatePoster={handleCreatePosterFromStore}
             onEditPoster={handleEditPosterFromStore}
             onDeletePoster={handleDeletePoster}

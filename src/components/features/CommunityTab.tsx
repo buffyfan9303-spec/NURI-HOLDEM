@@ -691,22 +691,24 @@ function FeedSection({
       {posts.length === 0 ? (
         <>
           <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="edit" />} title={emptyText} /></div>
-          {/* 글이 없어도 광고 칸은 산다 — 게재 미리보기 겸 */}
+          {/* 글이 없어도 광고 칸은 산다 — 게재 미리보기 겸. 광고는 언제나 **맨 위**(오너 2026-09-05). */}
           {ads[0] && <div className="rounded-aura border card-aura overflow-hidden"><AdRow ad={ads[0]} /></div>}
         </>
       ) : listSource.length === 0 ? (
         <>
-          <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="edit" />} title={pinHot ? '다른 글이 없습니다' : '검색 결과가 없습니다'} /></div>
-          {/* 글이 없어도 광고 칸은 산다 — 게재 미리보기 겸 */}
           {ads[0] && <div className="rounded-aura border card-aura overflow-hidden"><AdRow ad={ads[0]} /></div>}
+          <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="edit" />} title={pinHot ? '다른 글이 없습니다' : '검색 결과가 없습니다'} /></div>
         </>
       ) : view === 'compact' ? (
         <>
           <div className="rounded-aura border card-aura overflow-hidden">
             <ul>
+              {/* 첫 광고는 언제나 **맨 위**(오너 2026-09-05 "AD 가 중간에 가 있다"). 예전엔 N번째 글 뒤에 첫 광고가
+                  들어가 글이 적으면 리스트 끝에, 많으면 중간에 떴다. 이후 광고는 N개마다 다음 칸(ads[1], ads[2]…). */}
+              {ads[0] && <AdRow ad={ads[0]} />}
               {shown.map((p, i) => {
-                const ad = ads[Math.floor(i / adsEvery)];
-                const showAd = i % adsEvery === adsEvery - 1 && !!ad; // 글 N개마다 광고 한 칸(관리자 설정)
+                const ad = ads[Math.floor(i / adsEvery) + 1];
+                const showAd = i % adsEvery === adsEvery - 1 && !!ad; // 글 N개마다 다음 광고 한 칸(관리자 설정)
                 return (
                   <Fragment key={p.id}>
                     <PostRow post={p} mark={authorMarks[p.userId] ?? ''} titlePts={titleOf(p.userId)} selected={p.id === selectedId} onClick={() => onSelectPost(p)} />
@@ -714,8 +716,6 @@ function FeedSection({
                   </Fragment>
                 );
               })}
-              {/* 글이 적어도 광고 1칸은 보이게 — N개 미만이면 리스트 끝에 첫 광고 */}
-              {shown.length < adsEvery && ads[0] && <AdRow ad={ads[0]} />}
             </ul>
           </div>
           {listSource.length > visible && (
@@ -726,8 +726,10 @@ function FeedSection({
         <>
           {/* 피드(카드) 모드 — 오너 레퍼런스: 독립 라운드 카드 스택, 광고도 같은 카드 문법 */}
           <ul className="space-y-2">
+            {/* 첫 광고는 언제나 맨 위 — 컴팩트 목록과 같은 규칙 */}
+            {ads[0] && <AdRow ad={ads[0]} card />}
             {shown.map((p, i) => {
-              const ad = ads[Math.floor(i / adsEvery)];
+              const ad = ads[Math.floor(i / adsEvery) + 1];
               const showAd = i % adsEvery === adsEvery - 1 && !!ad;
               return (
                 <Fragment key={p.id}>
@@ -736,7 +738,6 @@ function FeedSection({
                 </Fragment>
               );
             })}
-            {shown.length < adsEvery && ads[0] && <AdRow ad={ads[0]} card />}
           </ul>
           {listSource.length > visible && (
             <InfiniteSentinel onMore={() => setVisible((v) => v + 15)} remain={listSource.length - visible} />

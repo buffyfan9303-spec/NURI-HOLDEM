@@ -163,7 +163,7 @@ const StaffSelfAttendanceM = memo(StaffSelfAttendance);
 // '내 캘린더' 섹션 — App 의 하단 탭 캘린더와 **같은 컴포넌트**다(중복 구현 금지).
 const CalendarPanelM = memo(lazyWithReload(() => import('./CalendarPanel')));
 
-export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster, onDeletePoster, onOpenSchedule, deepSection, onConsumeDeepSection, tabActive = true }: {
+export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster, onDeletePoster, onOpenSchedule, deepSection, onConsumeDeepSection, tabActive = true, homeNonce = 0 }: {
   schedules: Schedule[]; onCreatePoster: () => void; onEditPoster: (id: string) => void; onDeletePoster: (id: string) => void;
   /** '내 캘린더' 행 → 대회 상세. 없으면 행이 클릭되지 않을 뿐 화면은 그대로 뜬다 */
   onOpenSchedule?: (s: Schedule) => void;
@@ -172,6 +172,9 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   onConsumeDeepSection?: () => void;
   /** 탭 keep-alive: '내 매장' 탭이 화면에 보이는가 — 숨김이면 섹션 active 를 전부 끈다(구독·틱 정지) */
   tabActive?: boolean;
+  /** 하단 '내 매장' 탭을 누른 횟수 — 바뀔 때마다 대시보드로 돌아간다(오너 2026-09-05:
+   *  "다른 걸 보다가 내 매장 탭을 누르면 대시보드로"). keep-alive 라 그냥 두면 마지막 섹션(장부 등)이 남는다. */
+  homeNonce?: number;
 }) {
   const { user, refreshProfile } = useAuth();
   const toast = useToast();
@@ -292,6 +295,8 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
   }, [goStep]);
   // 뒤로가기 3단(§13-C): ①게임 스텝(직전 스텝 1회) → ②섹션(대시보드) → ③탭 이탈
   useBackClose(!!section && section !== 'dashboard', () => gotoSection('dashboard'));
+  // 하단 탭 '내 매장' 을 누를 때마다(재탭 포함) 대시보드로 — 0 은 초기값이라 건너뛴다
+  useEffect(() => { if (homeNonce > 0) gotoSection('dashboard'); }, [homeNonce, gotoSection]);
   useBackClose(section === 'game' && stepHist.length > 0, () => {
     setStepHist((h) => {
       const prev = h[h.length - 1];

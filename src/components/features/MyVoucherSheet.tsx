@@ -13,11 +13,13 @@
 //   만들고, 그 안에서 Modal 의 fixed z-[60] 이 갇혀 하단 탭바(fixed z-50, DOM 후순위)에 덮였다 —
 //   시트 아래쪽 약 100px 이 잘려 버튼이 아예 안 보였다(오너 스크린샷). QrScanModal 이 2026-08-28 에
 //   createPortal 로 고친 것과 같은 결함이라, 여기서는 애초에 루트에서 렌더해 원인을 없앤다.
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Modal from '../atoms/Modal';
 import Icon from '../atoms/Icon';
 import QrScanModal from './QrScanModal';
 import VoucherWallet from './VoucherWallet';
+import { listMyVouchers } from '../../api/vouchers';
+import { useIdentityEnabled } from '../../lib/identityFlag';
 import { useToast } from '../atoms/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import { checkIn, getMyCheckinStreak } from '../../api/checkins';
@@ -79,6 +81,10 @@ export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet }:
             </button>
           </section>
 
+          {/* ── 자주 가는 매장 이용권 — 매장별 보유 장수(오너 2026-09-05 "출석만 있는데 매장별 갯수도").
+              킬스위치와 무관하게 **보유 장수는 보인다**(레코드는 늘 있다). 사용·전송은 아래 지갑(스위치 ON)에서. ── */}
+          <VenueVoucherCounts onVenue={onVenue && ((venueId) => { onClose(); onVenue(venueId); })} />
+
           {/* ── 매장이용권 지갑 — 대시보드와 같은 정본(킬스위치 OFF 면 스스로 아무것도 그리지 않는다) ──
               본인인증 CTA 는 시트 안에서 끝낼 수 없으니 내 정보로 넘긴다.
               매장 머리글을 누르면 발급 매장으로 — 사슬 끝에서 막다른 길을 만들지 않는다. */}
@@ -94,5 +100,70 @@ export default function MyVoucherSheet({ open, onClose, onVenue, onOpenWallet }:
       {/* 매장을 미리 정하지 않는다 — 스캔된 QR 이 대상 매장을 알려준다 */}
       <QrScanModal open={scanOpen} onClose={() => setScanOpen(false)} onMatch={onScanned} />
     </>
+  );
+}
+
+
+/**
+ * 매장별 보유 이용권 장수 — 많은 순(= 자주 가는 매장). 이용권은 실물 1장 = 자리 1개라 여기 단위는 '장'이 맞다
+ * (장부의 T 단위와 다르다). 킬스위치 OFF 여도 장수는 보여 준다 — 손님이 '몇 장 있는지'를 못 보는 게 더 이상하다.
+ * 로딩은 실제 행과 같은 높이의 스켈레톤으로 자리를 예약한다(CLS 0).
+ */
+function VenueVoucherCounts({ onVenue }: { onVenue?: (venueId: string) => void }) {
+  const { user } = useAuth();
+  const idOn = useIdentityEnabled();
+  const [rows, setRows] = useState<{ venueId: string; name: string; count: number }[] | null>(null);
+  useEffect(() => {
+    if (!user?.id) { setRows([]); return; }
+    let alive = true;
+    listMyVouchers()
+      .then((vs) => {
+        const m = new Map<string, { venueId: string; name: string; count: number }>();
+        for (const v of vs) {
+          if (v.usedAt) continue; // 쓴 것은 보유가 아니다
+          const cur = m.get(v.venueId) ?? { venueId: v.venueId, name: v.venueName ?? '매장', count: 0 };
+          cur.count += 1; m.set(v.venueId, cur);
+        }
+        if (alive) setRows([...m.values()].sort((a, b) => b.count - a.count).slice(0, 5));
+      })
+      .catch(() => { if (alive) setRows([]); });
+    return () => { alive = false; };
+  }, [user?.id]);
+  if (!user) return null;
+  return (
+    <section className="rounded-aura border card-aura p-3">
+      <div className="flex items-center gap-2 border-b border-border-subtle pb-1.5">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-input tile-grad tile-grad-fuchsia" aria-hidden>
+          <Icon name="ticket" size={14} />
+        </span>
+        <div className="flex min-w-0 flex-1 items-baseline gap-x-2">
+          <h3 className="text-sm font-bold text-ink-primary">자주 가는 매장 이용권</h3>
+          <span className="text-2xs text-ink-secondary">보유 장수 많은 순</span>
+        </div>
+      </div>
+      {rows === null ? (
+        <div className="mt-2 space-y-1.5" aria-busy="true">
+          {[0, 1].map((i) => <div key={i} className="skeleton h-11 rounded-input" />)}
+        </div>
+      ) : rows.length === 0 ? (
+        <p className="mt-2 py-2 text-center text-2xs text-ink-muted">보유한 매장이용권이 없어요</p>
+      ) : (
+        <ul className="mt-2 space-y-1.5">
+          {rows.map((r) => (
+            <li key={r.venueId}>
+              <button type="button" onClick={() => onVenue?.(r.venueId)} disabled={!onVenue}
+                className="flex min-h-[44px] w-full items-center gap-2 rounded-input border card-aura-sub px-3 py-2 text-left transition-colors duration-[var(--dur-fast)] hover:bg-surface-high/50 disabled:cursor-default">
+                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-primary">{r.name}</span>
+                <span className="shrink-0 text-sm font-bold tabular-nums text-accent-200">{r.count}<span className="ml-0.5 text-2xs font-semibold text-ink-muted">장</span></span>
+                {onVenue && <Icon name="chevron-right" size={14} className="shrink-0 text-ink-muted" />}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {!idOn && rows && rows.length > 0 && (
+        <p className="mt-2 text-2xs text-ink-muted">사용·전송은 본인인증 오픈 후 이 시트에서 바로 할 수 있어요.</p>
+      )}
+    </section>
   );
 }
