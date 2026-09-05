@@ -33,7 +33,10 @@ export default function RegularsModal({ open, onClose, venueId, exclude = [] }: 
             {rows.map((r, i) => <RegularRow key={r.name} idx={i + 1} r={r} venueId={venueId} />)}
           </ul>
         )}
-        <p className="text-2xs text-ink-muted">장부 바인 기록 기준 · 직원(관계자) 제외 · 5회 이상 ‘단골’</p>
+        <div className="space-y-0.5 text-2xs leading-relaxed text-ink-muted">
+          <p>장부 바인 기록 기준 · 직원(관계자) 제외 · 5회 이상 ‘단골’</p>
+          <p>완납 누적은 실제 수납된 참가비입니다(미수·이용권·가게지원 제외) · 통계·CSV와 같은 기준</p>
+        </div>
       </div>
     </Modal>
   );
@@ -78,8 +81,12 @@ function RegularRow({ idx, r, venueId }: { idx: number; r: VenueRegular; venueId
               <Cell label="방문" v={`${act.visits}회`} />
               <Cell label="머니인" v={`${act.moneyIn}회`} />
               <Cell label="예약" v={`${act.reservations}회`} />
-              <Cell label="누적" v={`${wonToMan(act.amount)}만`} gold />
+              {/* '누적'만 쓰면 실제 받은 돈인지 평가액인지 알 수 없다 — 통계 '완납 매출'과 같은 기준임을 라벨로 못박는다 */}
+              <Cell label="완납 누적" v={`${wonToMan(act.amount)}만`} gold />
               <Cell label="객단가" v={act.buyins ? `${wonToMan(Math.round(act.amount / act.buyins))}만` : '-'} />
+              <Cell label="미수" v={`${wonToMan(act.unpaid)}만`} />
+              <Cell label="회수 이용권" v={`${Math.round(act.ticket * 10) / 10}T`} />
+              <Cell label="가게지원" v={`${act.support}회`} />
             </div>
           )}
           <div className="mt-2 space-y-1.5 border-t border-border-subtle pt-2">

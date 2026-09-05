@@ -361,8 +361,44 @@ export function ledgerLossSummary(
   return { buyins: buyins.length, people: names.size, revenue, unpaid };
 }
 
+/** 손님 1명의 장부 금액 — CRM(단골 관리·예약자 고객정보)이 쓰는 합산. */
+export interface CustomerLedgerTotals {
+  /** 실제 수납된 참가비(원). 통계 '완납 매출' · CSV '완납매출(원)' 과 같은 수. */
+  paid: number;
+  /** 아직 안 받은 참가비(원). paid 와 합치지 않는다. */
+  unpaid: number;
+  /** 회수한 이용권(T 단위, 1T = 1만원). CSV '회수티켓' 과 같은 수. */
+  ticket: number;
+  /** 가게지원 건수 — 현금이 오가지 않은 참가. */
+  support: number;
+}
+
+/** CRM 고객 금액 합산 — 장부·통계·CSV 와 **같은 정본**(buyinFinance)으로 계산한다.
+ *  왜 별도 함수인가: 예전 CRM(getCustomerActivity)은 '현재 세션 현금단가 × 건수'로 다시 합산해
+ *  카드단가·할인 프리셋·기록 시점 수납 스냅샷을 통째로 무시했다. 그래서 같은 손님·같은 기간인데도
+ *  단골 관리의 '누적'과 통계의 '완납 매출'·CSV가 갈렸다(2026-09-05 감사 F04).
+ *  세션 짝짓기 키는 통계 패널과 동일한 `날짜#게임`이고, 짝이 없을 때의 빈 세션도 통계 패널과 같게 둔다
+ *  (LedgerStatsPanel 의 fin() 과 한 글자도 다르면 두 화면이 또 갈린다).
+ *  ⚠ 실수납·미수·이용권·가게지원은 의미가 다르므로 하나로 합치지 않는다 — 화면이 각각 표시한다. */
+export function customerLedgerTotals(
+  buyins: LedgerBuyin[],
+  sessions: Pick<LedgerSession, 'sessionDate' | 'gameSeq' | 'buyinAmount' | 'cardAmount' | 'discounts'>[],
+): CustomerLedgerTotals {
+  const byKey = new Map(sessions.map((s) => [`${s.sessionDate}#${s.gameSeq}`, s]));
+  const t: CustomerLedgerTotals = { paid: 0, unpaid: 0, ticket: 0, support: 0 };
+  for (const b of buyins) {
+    const f = buyinFinance(b, byKey.get(`${b.sessionDate}#${b.gameSeq}`) ?? { buyinAmount: 0, cardAmount: null, discounts: [] });
+    t.paid += f.paid;
+    t.unpaid += f.unpaid;
+    t.ticket += f.ticketPaid;
+    t.support += f.support;
+  }
+  return t;
+}
+
+/** ledger_buyins 행 → LedgerBuyin. CRM(reservations.ts)도 같은 변환을 써야 금액이 갈리지 않아 export 한다. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const rowToBuyin = (r: any): LedgerBuyin => ({
+export const rowToBuyin = (r: any): LedgerBuyin => ({
   id: r.id, venueId: r.venue_id, sessionDate: r.session_date, gameSeq: r.game_seq ?? MAIN_GAME_SEQ,
   playerName: r.player_name, entryNo: r.entry_no,
   paymentMethod: r.payment_method as PaymentMethod, isUnpaid: !!r.is_unpaid,

@@ -1,6 +1,7 @@
 // src/api/reservations.ts — 포스터(게임) 예약 + 단골 고객 활동내역 CRM
 import { supabase, IS_MOCK } from '../lib/supabase';
 import { currentUser } from './_session';
+import { customerLedgerTotals, rowToBuyin, MAIN_GAME_SEQ } from './ledger';
 
 /** 예약 변경 실시간 구독 — 신규/취소 예약을 게임관리에 자동 반영.
  *  ⚡ 트래픽 대비: scheduleIds 를 주면 그 포스터들의 예약만 수신한다(서버 필터).
@@ -152,14 +153,26 @@ export async function getVenueRegulars(venueId: string): Promise<VenueRegular[]>
     .sort((a, b) => (b.buyins - a.buyins) || (b.visits - a.visits));
 }
 
-/** 단골 고객 활동내역 — 이름 매칭. 바이인/방문/금액(장부) + 머니인(랭킹) + 예약. */
-export interface CustomerActivity { name: string; buyins: number; visits: number; amount: number; moneyIn: number; reservations: number; }
+/** 단골 고객 활동내역 — 이름 매칭. 바이인/방문/금액(장부) + 머니인(랭킹) + 예약.
+ *  금액은 장부·통계·CSV 와 같은 정본(customerLedgerTotals → buyinFinance)으로만 계산한다.
+ *  amount(실수납)·unpaid(미수)·ticket(회수 이용권 T)·support(가게지원 건수)는 서로 다른 의미다. */
+export interface CustomerActivity {
+  name: string; buyins: number; visits: number;
+  /** 실제 수납된 참가비 누적(원) — 통계 '완납 매출' 과 같은 기준. 미수·이용권·가게지원은 빠져 있다. */
+  amount: number;
+  unpaid: number; ticket: number; support: number;
+  moneyIn: number; reservations: number;
+}
 export async function getCustomerActivity(venueId: string, name: string): Promise<CustomerActivity> {
-  const base: CustomerActivity = { name, buyins: 0, visits: 0, amount: 0, moneyIn: 0, reservations: 0 };
+  const base: CustomerActivity = { name, buyins: 0, visits: 0, amount: 0, unpaid: 0, ticket: 0, support: 0, moneyIn: 0, reservations: 0 };
   if (IS_MOCK) return base;
   const [{ data: bs }, { data: sess }, { data: rk }, resCounts] = await Promise.all([
-    supabase.from('ledger_buyins').select('session_date, game_seq, payment_method, is_unpaid, is_split, cash_amount, card_amount, transfer_amount, unpaid_amount, discount_index').eq('venue_id', venueId).eq('player_name', name),
-    supabase.from('ledger_sessions').select('session_date, game_seq, buyin_amount').eq('venue_id', venueId),
+    // buyinFinance 가 보는 필드 전부 — 분납 분해·티켓 T·미수액·할인 프리셋 index·기록 시점 스냅샷(cash/card/transfer)·buyin_at.
+    supabase.from('ledger_buyins')
+      .select('id, venue_id, session_date, game_seq, player_name, entry_no, payment_method, is_unpaid, is_split, cash_amount, card_amount, transfer_amount, ticket_count, unpaid_amount, discount_index, buyin_at')
+      .eq('venue_id', venueId).eq('player_name', name),
+    // 현금단가만으론 부족하다 — 카드단가(card_amount)·할인 프리셋(discounts)까지 있어야 통계·CSV 와 같은 값이 나온다.
+    supabase.from('ledger_sessions').select('session_date, game_seq, buyin_amount, card_amount, discounts').eq('venue_id', venueId),
     // 머니인(입상) — venue_rankings에는 name 컬럼이 없음: 닉네임/실명 둘 다 매칭
     supabase.from('venue_rankings').select('id, nickname, real_name').eq('venue_id', venueId),
     getVenueReserverCounts(venueId),
@@ -169,22 +182,27 @@ export async function getCustomerActivity(venueId: string, name: string): Promis
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (r: any) => String(r.nickname ?? '').trim().toLowerCase() === nameKey || String(r.real_name ?? '').trim().toLowerCase() === nameKey,
   ).length;
-  const unit = new Map<string, number>();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (sess ?? []).forEach((s: any) => unit.set(s.session_date + '#' + (s.game_seq ?? 1), s.buyin_amount ?? 0));
+  const rows = (bs ?? []) as any[];
   const dates = new Set<string>();
-  let amount = 0;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (bs ?? []).forEach((b: any) => {
-    dates.add(b.session_date);
-    if (b.is_split) amount += (b.cash_amount ?? 0) + (b.card_amount ?? 0) + (b.transfer_amount ?? 0);
-    else if (b.payment_method !== 'support' && b.payment_method !== 'ticket' && !b.is_unpaid) amount += unit.get(b.session_date + '#' + (b.game_seq ?? 1)) ?? 0;
-  });
+  rows.forEach((b) => dates.add(b.session_date));
+  const fin = customerLedgerTotals(
+    rows.map(rowToBuyin),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ((sess ?? []) as any[]).map((s) => ({
+      sessionDate: s.session_date, gameSeq: s.game_seq ?? MAIN_GAME_SEQ,
+      buyinAmount: s.buyin_amount ?? 0, cardAmount: s.card_amount ?? null,
+      discounts: Array.isArray(s.discounts) ? s.discounts : [],
+    })),
+  );
   return {
     name,
-    buyins: (bs ?? []).length,
+    buyins: rows.length,
     visits: dates.size,
-    amount,
+    amount: fin.paid,
+    unpaid: fin.unpaid,
+    ticket: fin.ticket,
+    support: fin.support,
     moneyIn: moneyInCnt,
     reservations: resCounts[name] ?? 0,
   };
