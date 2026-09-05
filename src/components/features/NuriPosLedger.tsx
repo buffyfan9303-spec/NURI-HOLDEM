@@ -81,6 +81,8 @@ interface SelectedCell { playerName: string; entryNo: number; buyin: LedgerBuyin
 /** 게임관리 '장부' 바로가기 시드 — 연결 장부가 있으면 그 날짜로 바로, 없으면 포스터 정보 프리필로 새 등록 */
 export interface LedgerSeed {
   date: string;          // 열 장부 날짜(연결 장부 날짜 or 포스터 날짜)
+  /** 열 게임(1=메인, 2+=사이드). 연결 장부 목록에서 고른 그 게임 — 없으면 메인. 날짜만 넘기면 같은 날 사이드 장부가 메인으로 착지했다(F01). */
+  gameSeq?: number;
   scheduleId: string;
   isNew: boolean;        // true=연결 장부 없음 → 시작 설정에 포스터 프리필
   title?: string;
@@ -221,7 +223,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
       };
     }
     setDate(seed.date);
-    setGameSeq(MAIN_GAME_SEQ); // 포스터→장부 진입은 메인 게임
+    setGameSeq(seed.gameSeq ?? MAIN_GAME_SEQ); // 연결 장부 목록에서 고른 게임 그대로(새 장부는 메인)
     setMode('board');
   }, [seed]);
   // 장부 삭제는 바인·명단·세션을 통째로 지우는 하드 삭제 RPC라 복구 수단이 0이다.

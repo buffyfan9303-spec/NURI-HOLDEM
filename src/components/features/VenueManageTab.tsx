@@ -28,6 +28,7 @@ import { VoucherManagePanel } from './VoucherManageModal';
 import { useIdentityEnabled } from '../../lib/identityFlag'; // 본인인증·매장이용권 통합 킬스위치(2026-08-29)
 import { iCanViewVouchers, getVoucherAccessUserIds, grantVoucherAccess, revokeVoucherAccess, findUserForTransfer, type TransferTarget } from '../../api/vouchers';
 import MyPostersTab from './MyPostersTab';
+import { type LedgerLinkTarget } from '../../lib/ledgerLink';
 import VenueCustomizePanel, { VenueRankHub } from './VenueCustomizePanel';
 import SectionHeader from '../atoms/SectionHeader';
 import SlidingPill from '../atoms/SlidingPill';
@@ -286,10 +287,10 @@ export default function VenueManageTab({ schedules, onCreatePoster, onEditPoster
     setGameSel(null); // 포스터가 지정한 날짜가 우선 — 칩 픽 신호가 마운트 시 오늘로 덮지 않게
     setRankingDraft({ date, names: [] }); goStep('ranking');
   }, [goStep]);
-  const onOpenLedgerFromPosters = useCallback((s: Schedule, existingDate: string | null) => {
+  const onOpenLedgerFromPosters = useCallback((s: Schedule, existing: LedgerLinkTarget | null) => {
     const schedDate = new Date(s.date).toLocaleDateString('en-CA');
-    setLedgerSeed(existingDate
-      ? { date: existingDate, scheduleId: s.id, isNew: false }
+    setLedgerSeed(existing
+      ? { date: existing.date, gameSeq: existing.gameSeq, scheduleId: s.id, isNew: false }
       : { date: schedDate, scheduleId: s.id, isNew: true, title: s.title, buyinAmount: s.buyIn?.amount ?? 0, gtd: !!s.guaranteed });
     goStep('ledger', { keepLedgerSeed: true });
   }, [goStep]);
