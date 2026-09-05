@@ -206,14 +206,16 @@ export async function getCustomerActivity(venueId: string, name: string): Promis
 }
 
 // ── 내 대회 참가(예약) 이력 — 개인 대시보드 ───────────────────────────────────
-export interface MyReservationRow { scheduleId: string; title: string; date: string; startTime: string | null; venueName: string | null; displayName: string; reservedAt: string }
+// venueId: 대회가 목록에 없거나 내려갔을 때 '매장 페이지'로라도 잇기 위한 폴백 키(F09).
+//   이름·날짜 매칭이 아니라 schedules.venue_id 원본을 그대로 실어 온다. 매장 미연결 포스터는 null.
+export interface MyReservationRow { scheduleId: string; title: string; date: string; startTime: string | null; venueId: string | null; venueName: string | null; displayName: string; reservedAt: string }
 export async function getMyReservations(limit = 30): Promise<MyReservationRow[]> {
   if (IS_MOCK) return [];
   const user = await currentUser();
   if (!user) return [];
   const { data, error } = await supabase
     .from('schedule_reservations')
-    .select('schedule_id, display_name, created_at, schedules(title, date, start_time, venues(name))')
+    .select('schedule_id, display_name, created_at, schedules(title, date, start_time, venue_id, venues(name))')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
     .limit(limit);
@@ -223,7 +225,8 @@ export async function getMyReservations(limit = 30): Promise<MyReservationRow[]>
   return (data ?? []).map((r: any) => ({
     scheduleId: r.schedule_id, displayName: r.display_name, reservedAt: r.created_at,
     title: r.schedules?.title ?? '(대회)', date: r.schedules?.date ?? '',
-    startTime: r.schedules?.start_time ?? null, venueName: r.schedules?.venues?.name ?? null,
+    startTime: r.schedules?.start_time ?? null,
+    venueId: r.schedules?.venue_id ?? null, venueName: r.schedules?.venues?.name ?? null,
   }));
 }
 

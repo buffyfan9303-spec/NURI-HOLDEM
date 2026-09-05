@@ -61,11 +61,14 @@ const ME_TABS: { key: MeTab; label: string }[] = [
   { key: 'security',  label: '보안' },
 ];
 
-export default function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification, onOpenPost, onOpenMarket, onOpenRanking, initialTab = 'dashboard', onOpenLegal, onOpenSupport }: {
+export default function CustomerDashboardPage({ open, onClose, unread = [], onOpenNotification, onOpenSchedule, onOpenPost, onOpenMarket, onOpenRanking, initialTab = 'dashboard', onOpenLegal, onOpenSupport }: {
   open: boolean; onClose: () => void;
   /** 미읽음 알림 미리보기(상위 3개) — 프로필 메뉴까지 안 가도 되게 */
   unread?: { id: string; title: string; message: string; createdAt: string }[];
   onOpenNotification?: (id: string) => void;
+  /** 예약 행 → 그 대회 상세(F09). App 이 이 페이지를 닫고 상세를 연 뒤, 닫으면 여기로 되돌린다 —
+   *  대시보드(z-60)가 page 모달(z-55)을 덮으므로 z-index 가 아니라 오버레이 상태로 푼다. */
+  onOpenSchedule?: (scheduleId: string, venueId?: string | null) => void;
   /** '내 것' 허브 — 흩어져 있던 내 글·내 거래·프로필을 이 화면에서 잇는다 */
   onOpenPost?: (p: CommunityPost) => void;
   onOpenMarket?: () => void;
@@ -425,6 +428,10 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
                   <SwipeCancelRow
                     key={`${r.scheduleId}-${r.reservedAt}`}
                     cancelable={upcoming}
+                    // [F09-b] 예약한 그 대회로(scheduleId 로만 — 제목·날짜 매칭 금지).
+                    //   목록에 없으면 App 이 단건 조회로 확인하고, 그래도 없으면 매장 페이지로 잇는다.
+                    onOpen={onOpenSchedule ? () => onOpenSchedule(r.scheduleId, r.venueId) : undefined}
+                    openLabel={`${r.title} 상세 보기`}
                     onCancel={async () => {
                       try {
                         await cancelMyReservation(r.scheduleId);
@@ -435,19 +442,21 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
                       }
                     }}
                   >
-                    <div className="flex items-center justify-between gap-2">
+                    {/* 행 본문이 <button> 안에 들어가므로(상세 이동) 블록 요소 대신 span 으로 짠다 —
+                        <div>/<p> 를 버튼에 넣으면 HTML 로 유효하지 않다. 보이는 모양은 그대로. */}
+                    <span className="flex items-center justify-between gap-2">
                       {/* ⚠ '예정' 은 지난 예약과 다가올 예약을 가르는 **유일한 표시**인데
                           대회명이 길면 그것부터 사라졌다(우측 날짜는 shrink-0 라 살아남았다). */}
-                      <p className="flex min-w-0 flex-1 items-center gap-1.5 text-sm font-semibold text-ink-primary">
+                      <span className="flex min-w-0 flex-1 items-center gap-1.5 text-sm font-semibold text-ink-primary">
                         <span className="min-w-0 truncate">{r.title}</span>
                         {upcoming && <span className="shrink-0 rounded-badge bg-emerald-400/15 px-1.5 py-0.5 text-2xs font-bold text-emerald-400">예정</span>}
-                      </p>
+                      </span>
                       <span className="shrink-0 text-2xs tabular-nums text-ink-muted">{r.date}{r.startTime ? ` ${r.startTime.slice(0, 5)}` : ''}</span>
-                    </div>
-                    <p className="mt-0.5 flex flex-wrap gap-x-3 text-2xs text-ink-muted">
+                    </span>
+                    <span className="mt-0.5 flex flex-wrap gap-x-3 text-2xs text-ink-muted">
                       {r.venueName && <span>{r.venueName}</span>}
                       <span>예약명 <b className="text-ink-secondary">{r.displayName}</b></span>
-                    </p>
+                    </span>
                   </SwipeCancelRow>
                   );
                 })}</ul>}
@@ -636,7 +645,12 @@ function LoginLanding({ onClose, hidden = false }: { onClose: () => void; hidden
 }
 
 /** 예약 행 스와이프 취소 — 모바일은 왼쪽으로 밀고, PC는 호버로 취소 버튼 노출. */
-function SwipeCancelRow({ cancelable, onCancel, children }: { cancelable: boolean; onCancel: () => void; children: React.ReactNode }) {
+function SwipeCancelRow({ cancelable, onCancel, onOpen, openLabel, children }: {
+  cancelable: boolean; onCancel: () => void;
+  /** 행 본문 탭 → 상세로. 없으면 예전처럼 읽기 전용 행이다. */
+  onOpen?: () => void; openLabel?: string;
+  children: React.ReactNode;
+}) {
   const [dx, setDx] = useState(0);
   const [busy, setBusy] = useState(false);
   const start = useRef<{ x: number; y: number; dx: number } | null>(null);
@@ -683,7 +697,15 @@ function SwipeCancelRow({ cancelable, onCancel, children }: { cancelable: boolea
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
       >
-        {children}
+        {onOpen ? (
+          // 스와이프로 취소 버튼이 열려 있는 동안의 탭은 '닫기'다 — 밀어 놓고 누른 손가락이
+          // 엉뚱하게 상세를 열지 않게(취소하려던 행이 화면 밖으로 사라지는 사고 방지).
+          <button type="button" aria-label={openLabel}
+            onClick={() => { if (dx !== 0) { setDx(0); return; } onOpen(); }}
+            className="block w-full text-left">
+            {children}
+          </button>
+        ) : children}
       </div>
     </li>
   );
