@@ -19,6 +19,7 @@ import {
   generateBlinds, getVenueClocks, subscribeClock, effectiveLevel,
   type ClockState, type ClockLevel,
 } from '../../api/clock';
+import { promotionView } from '../../lib/promotionLabel';
 import { promptLogin, openPostForm, ensureVerified } from '../../lib/requireLogin';
 import { googleCalendarUrl, icsDataUrl, isIOS } from '../../lib/calendar';
 import { enablePush, pushSupported } from '../../api/push';
@@ -124,6 +125,13 @@ export default function ScheduleDetailModal({
 
   const d = new Date(schedule.date);
   const dow = DAYS_KO[d.getDay()];
+  // 프로모션 표시 요소(lib/promotionLabel) — 할인액이 있으면 금액이 배지 자리를 갖고, 없으면 종전 배지 그대로.
+  // 목록 전체를 한 번 훑어 (a) 배지 열을 그릴지 (b) 할인이 하나라도 있는지를 먼저 정한다:
+  // 할인이 없는 기존 포스터는 종전 액센트 톤을 그대로 유지해야 지금보다 밋밋해지지 않는다.
+  const promos = schedule.promotions ?? [];
+  const promoViews = promos.map(promotionView);
+  const promoHasPill = promoViews.some((v) => v.pill);
+  const promoHasDiscount = promoViews.some((v) => v.isDiscount);
   const qnaComments = comments.filter((c) => c.scheduleId === schedule.id);
   // 끝난 대회에 '예약하기'가 살아 있으면 손님은 참가된 줄 알고 업주 명단엔 유령 예약이 남는다
   const status = scheduleStatus(schedule.date, schedule.startTime);
@@ -472,30 +480,51 @@ export default function ScheduleDetailModal({
         </section>
 
         {/* 프로모션 */}
-        {schedule.promotions && schedule.promotions.length > 0 && (
+        {promos.length > 0 && (
           <section>
             <Head icon="gift" tile="-fuchsia">프로모션 / 얼리칩</Head>
-            <ul className="space-y-1.5">
-              {/* 긴 detail(예: 사전예약 얼리칩 조건)이 shrink-0 한 줄 강제로 행 밖으로 삐져나가던
-                  오버플로 수정 — 배지·제목 한 줄 + 설명은 아래 전체 폭 줄바꿈 스택으로. */}
-              {schedule.promotions.map((p, i) => (
-                <li
-                  key={i}
-                  className="px-3 py-2 rounded-input border border-accent-400/30 bg-accent-300/[0.04]"
-                >
-                  <div className="flex items-center gap-2">
-                    {p.badge && (
-                      <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-badge bg-accent-300 text-white text-2xs font-bold leading-none">
-                        {p.badge}
+            {/* 배지를 고정폭 열로 묶어 **제목 시작선을 카드마다 같게** 맞춘다 — 예전에는 배지 폭이
+                내용 폭이라 '첫방문'과 '1LV' 사이에서 제목이 들쭉날쭉했고 세로로 훑을 때 눈이 튀었다.
+                할인액이 있는 줄만 금액을 채운 알약으로 올려 '얼마 싸지는가'가 제일 먼저 읽히고,
+                나머지 배지는 한 단계 낮춘 톤으로 내려 할인과 경쟁하지 않게 한다(오너 지적 2026-09-06).
+                긴 detail(예: 사전예약 얼리칩 조건)은 잘라 숨기지 않고 제목 아래 전체 폭 줄바꿈 줄로
+                푼다 — shrink-0 한 줄 강제로 행 밖에 삐져나가던 예전 오버플로를 다시 만들지 않는다. */}
+            <ul className="space-y-1">
+              {promos.map((p, i) => {
+                const v = promoViews[i];
+                return (
+                  <li
+                    key={i}
+                    className={`flex items-start gap-2.5 px-3 py-2 rounded-input border ${
+                      v.isDiscount ? 'border-accent-400/50 bg-accent-300/[0.08]'
+                        : promoHasDiscount ? 'border-border-subtle bg-surface-high'
+                          : 'border-accent-400/30 bg-accent-300/[0.04]'
+                    }`}
+                  >
+                    {promoHasPill && (
+                      <span className="w-[4.75rem] shrink-0">
+                        {v.pill && (
+                          <span
+                            className={`block px-1 py-0.5 rounded-badge text-center text-2xs font-bold leading-tight break-keep [overflow-wrap:anywhere] ${
+                              v.isDiscount ? 'bg-accent-300 text-white tabular-nums'
+                                : promoHasDiscount ? 'border border-border-default bg-surface-float text-ink-secondary'
+                                  : 'bg-accent-300 text-white'
+                            }`}
+                          >
+                            {v.pill}
+                          </span>
+                        )}
                       </span>
                     )}
-                    <span className="min-w-0 flex-1 whitespace-normal break-keep [overflow-wrap:anywhere] text-sm text-ink-primary font-semibold">{p.title}</span>
-                  </div>
-                  {p.detail && (
-                    <p className="mt-1 min-w-0 whitespace-normal break-keep [overflow-wrap:anywhere] text-2xs leading-relaxed text-ink-muted">{p.detail}</p>
-                  )}
-                </li>
-              ))}
+                    <span className="min-w-0 flex-1">
+                      <span className="block whitespace-normal break-keep [overflow-wrap:anywhere] text-sm leading-snug text-ink-primary font-semibold">{p.title}</span>
+                      {v.sub && (
+                        <span className="mt-0.5 block whitespace-normal break-keep [overflow-wrap:anywhere] text-2xs leading-snug text-ink-muted">{v.sub}</span>
+                      )}
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           </section>
         )}
