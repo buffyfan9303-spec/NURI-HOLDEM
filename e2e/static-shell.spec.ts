@@ -75,8 +75,10 @@ test.describe('정적 앱 셸 — 첫 페인트', () => {
     const html = await (await page.request.get('/')).text();
     await page.goto('/');
     await page.waitForSelector('button[aria-label^="알림"]', { timeout: 15_000 });
-    // MO-7A: 셸 스켈레톤이 ListCard 골격 복제로 바뀌며 대표 클래스도 그 컨테이너로 교체
-    for (const cls of ['h-header-h', 'bg-surface-mid shadow-dialog', 'rounded-card border border-border-subtle bg-surface-low']) {
+    // MO-7A: 셸 스켈레톤이 ListCard 골격 복제로 바뀌며 대표 클래스도 그 컨테이너로 교체.
+    // 2026-09-05: 홈 목록 컨테이너는 아우라 v6 카드(rounded-aura border card-aura)다 — 예전 값(rounded-card …)은
+    //   주간 머니인 킹 스트립이 우연히 만족시키고 있었고, 그 스트립이 제거되자(법적위험완화 v3) 셸과 앱의 불일치가 드러났다.
+    for (const cls of ['h-header-h', 'bg-surface-mid shadow-dialog', 'rounded-aura border card-aura']) {
       expect(html, `셸에서 '${cls}' 가 사라졌다`).toContain(cls);
       const inApp = await page.evaluate(
         (c) => document.querySelector(`[class*="${c.split(' ')[0]}"]`) != null, cls,

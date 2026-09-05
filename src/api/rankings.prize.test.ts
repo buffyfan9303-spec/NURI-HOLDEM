@@ -1,7 +1,7 @@
 // 순위 상금의 티켓 표기(nT) — 서버 parse_prize_man(20260905f, 1T = 1만원) 과 같은 규칙인지 값으로 못 박는다.
 // DB 실측표(2026-09-05): '1T'→1 · '2 t'→2 · '10T'→10 · '1.5T'→2(반올림) · '400'→400 · '1,000'→1000 · '1T0'→1 · 'T'→0
 import { describe, it, expect } from 'vitest';
-import { parsePrizeMan, parsePrizeTickets, formatPrize, prizeUnitRisk, TICKET_MAN } from './rankings';
+import { parsePrizeMan, parsePrizeTickets, formatPrize, TICKET_MAN } from './rankings';
 
 describe('티켓 상금 파서 — 서버와 동일 규칙', () => {
   it.each([
@@ -24,10 +24,6 @@ describe('티켓 상금 파서 — 서버와 동일 규칙', () => {
     expect(TICKET_MAN).toBe(1);
   });
 
-  it('티켓 상금은 단위 경고에 걸리지 않는다', () => {
-    expect(prizeUnitRisk('1T')).toBe('ok');
-    expect(prizeUnitRisk('10T')).toBe('ok');
-  });
 });
 
 describe('formatPrize — 매장 설정에 따라 10T / 10만', () => {

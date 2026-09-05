@@ -2,8 +2,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { goSubTab } from '../../lib/subTabTransition';
 import {
-  getDomesticRankings, myRankVerifications, submitRankVerification,
-  EVENT_KIND_LABEL, type RankVerification, type DomesticRow,
+  myRankVerifications, submitRankVerification,
+  EVENT_KIND_LABEL, type RankVerification,
 } from '../../api/rankverify';
 import { useAuth } from '../../contexts/AuthContext';
 import TierBadge, { tierOf, tierColor, tierProgress, allTiers, isAceRank, ACE_TOP_RANK, ACE_MIN_POINTS, tierCss, ACE_VAR } from '../atoms/TierBadge';
@@ -20,7 +20,6 @@ import {
   FALLBACK_COSMETICS, type Cosmetic,
 } from '../../lib/cosmetics';
 import { drawProfileCard, downloadProfileCard, frameLabel, DEFAULT_FRAME } from '../../lib/profileCard';
-import { getGlobalRankingTotals, type GlobalRankingTotal } from '../../api/rankings';
 import { onColorInkClass } from '../../lib/color';
 import { useToast } from '../atoms/Toast';
 import EmptyState from '../atoms/EmptyState';
@@ -34,7 +33,6 @@ import {
 } from '../../lib/shopMarks';
 import { getHallOfFame, type HallBoard } from '../../lib/hallOfFame';
 import {
-  getWeeklyLeague, leagueTierOf, LEAGUE_TIERS, type LeagueRow,
   MISSIONS, getActiveMissions, getMissionProgress, claimMission, type Mission, type MissionProgress,
   BADGES, getMyBadgeStats, type BadgeStats,
   getMyEquippedMark, setEquippedMark as saveEquippedMark,
@@ -46,22 +44,21 @@ const HALL_TONE = ['text-gold-300', 'text-slate-200', 'text-amber-600'] as const
 const PODIUM_TONE = ['text-slate-200', 'text-gold-300', 'text-amber-600'] as const; // 시상대 배치는 2·1·3위 순
 
 // 통합 랭킹 허브 — 활동/머니인/프라이즈 + 주간 리그·업적·미션·명예의 전당(충성도)
-type Board = 'activity' | 'moneyin' | 'prize' | 'league' | 'badges' | 'missions' | 'hall' | 'shop' | 'domestic' | 'verify';
+type Board = 'activity' | 'moneyin' | 'league' | 'badges' | 'missions' | 'hall' | 'shop' | 'domestic' | 'verify';
 // 탭바에 실제로 보이는 순서 — 전환 방향(좌/우)이 이 순서에서 나온다.
 // map 과 방향 계산이 각자 배열을 들면 언젠가 어긋나므로 하나만 둔다.
 const RANK_TABS: Board[] = ['activity', 'league', 'hall', 'moneyin', 'domestic', 'verify', 'shop'];
 const BOARD_LABEL: Record<Board, string> = {
-  activity: '활동 순위', moneyin: '머니인', prize: '프라이즈', shop: '상점', domestic: '국내 순위', verify: '순위 인증',
+  activity: '활동 순위', moneyin: '머니인', shop: '상점', domestic: '국내 순위', verify: '순위 인증',
   league: '주간 리그', badges: '업적', missions: '미션', hall: '명예의 전당',
 };
 const BOARD_DESC: Record<Board, string> = {
-  domestic: '대회(토너먼트) 입상만 인정. 해외 대회도 포함하며, 운영자가 승인한 건에 한해 100만원(100T)당 1점으로 합산합니다. 일반 펍 정기 게임은 포함되지 않습니다.',
-  verify: '대회 입상 증빙 2장(머니인·신분증)을 올려 운영자 승인을 받으면 국내 순위에 합산됩니다. 대회만 인정되며(일반 펍 제외) 100만원(100T)당 1점입니다.',
+  domestic: '국내 순위는 현재 미산정입니다 — 상금 기준 합산을 중단했습니다(2026-09-05). 인증 신청 기록은 그대로 보관되며, 비금전 기준이 정해지면 다시 집계됩니다.',
+  verify: '대회 입상 증빙 2장(머니인·신분증)을 올려 운영자 승인을 받으면 인증 기록으로 보관됩니다. 대회만 인정됩니다(일반 펍 제외). 점수 합산 기준은 현재 미정(미산정)입니다.',
   shop: '모으는 마크는 활동점수 도달로 영구 해금(차감 없음)이고, 나머지(꾸미기 마크·프레임·닉네임 색·시즌 뱃지·외치기·응원·끌올)는 사용 가능 점수로 삽니다. 소장한 것은 영구히 남고, 무엇을 사도 누적 점수(등급 기준)는 줄지 않습니다.',
   activity: '접속·글쓰기·댓글 활동 점수. 등급(2·3~AA)과 연동. 아래 주간 미션을 달성하면 점수를 바로 받아요.',
-  moneyin: '전국 매장 머니인 점수. 100만원(100T)당 1점으로 합산합니다(임계 미만은 점수 없음).',
-  prize: '전국 매장 프라이즈 점수 합산(금전적 가치 없음).',
-  league: '이번 주 활약(체크인 ×3 + 머니인 점수). 머니인은 100만원(100T)당 1점. 월요일마다 새로 시작!',
+  moneyin: '전국 종합 머니인 점수는 현재 미산정입니다 — 상금 기준 합산을 중단했고(2026-09-05), 비금전 전국 기준은 아직 정해지지 않았습니다.',
+  league: '주간 리그 점수는 현재 미산정입니다 — 상금 기준 항목을 중단했고(2026-09-05), 새 기준은 아직 정해지지 않았습니다.',
   badges: '조건을 달성하면 자동으로 열리는 업적 뱃지. 모아서 프로필을 채우세요.',
   missions: '이번 주 미션. 달성하면 활동점수 보상을 바로 받아요. 월요일 리셋.',
   hall: '지난달 가장 빛난 플레이어 TOP3. 운영자가 직접 선정하며, 선정이 없는 달은 입상 기록으로 자동 집계됩니다.',
@@ -173,6 +170,19 @@ const SHOP_BTN = 'mt-1.5 inline-flex w-full min-h-[30px] items-center justify-ce
 const SHOP_BTN_ON = 'border-transparent bg-accent-300 text-white';
 const SHOP_BTN_OFF = 'border-accent-400/40 text-accent-300 hover:bg-accent-300/10';
 
+/** 금액 파생 전국·주간 보드 — 2026-09-05 법적위험완화 v3: 상금 기준 합산을 중단했고 비금전 기준은 미정이라
+ *  '미산정'으로 명시한다(새 공식을 만들지 않는다). 매장별 대회 결과·개인 전적은 그대로 남아 있다. */
+function NotComputed({ board }: { board: 'moneyin' | 'league' | 'domestic' }) {
+  const title = board === 'league' ? '주간 리그는 현재 미산정입니다' : board === 'domestic' ? '국내 순위는 현재 미산정입니다' : '전국 머니인 점수는 현재 미산정입니다';
+  return (
+    <EmptyState
+      title={title}
+      hint="상금 기준 합산을 중단했습니다(2026-09-05). 비금전 집계 기준이 정해지면 다시 계산됩니다. 매장별 대회 결과는 각 매장 페이지, 내 전적은 내 정보에서 볼 수 있어요"
+      icon={<Icon name="chart" />}
+    />
+  );
+}
+
 export default function TierLeaderboard() {
   const { user, refreshProfile } = useAuth();
   const [rows, setRows] = useState<LeaderboardEntry[]>([]);
@@ -191,11 +201,8 @@ export default function TierLeaderboard() {
   }, [board]);
   // 순위표 행의 닉네임 색 — rows 가 바뀔 때만 일괄 조회한다(행마다 부르지 않는다).
   const [rowNickTokens, setRowNickTokens] = useState<Record<string, string>>({});
-  const [global, setGlobal] = useState<GlobalRankingTotal[]>([]);
-  const [globalLoaded, setGlobalLoaded] = useState(false);
   // 충성도 허브 — 주간 리그/업적/미션/명예의 전당(보드 진입 시 1회 로드)
   const toast = useToast();
-  const [league, setLeague] = useState<LeagueRow[] | null>(null);
   const [badgeStats, setBadgeStats] = useState<BadgeStats | null>(null);
   const [equippedMark, setEquippedMark] = useState<string | null | undefined>(undefined); // 상점: 장착 마크(undefined=미로드)
   const [equipBusy, setEquipBusy] = useState<string | null>(null);
@@ -276,7 +283,6 @@ export default function TierLeaderboard() {
     ? new Date(new Date(user.nameChangedAt).getTime() + 30 * 24 * 3600_000).toLocaleDateString('ko-KR')
     : '';
   const reloadBalance = useRef(() => { getMyPointBalance().then(setBalance).catch(() => {}); }).current;
-  const [domestic, setDomestic] = useState<DomesticRow[] | null>(null);
   const [myVerifs, setMyVerifs] = useState<RankVerification[] | null>(null);
   // 오너 #11(2026-08-30): 대회 구분 선택 제거 — 순위 인증은 '대회'만 받는다.
   //   일반 펍(정기 게임)은 인증 대상이 아니고, 서버 RLS 도 event_kind='official' 만 통과시킨다.
@@ -431,7 +437,6 @@ export default function TierLeaderboard() {
   const [hall, setHall] = useState<HallBoard | null>(null);
   const [claiming, setClaiming] = useState<string | null>(null);
   useEffect(() => {
-    if (board === 'league' && league === null) getWeeklyLeague(20).then(setLeague).catch(() => setLeague([]));
     if (board === 'badges' && badgeStats === null && user) {
       getMyBadgeStats(user.nickname ?? null, user.activityPoints ?? 0).then(setBadgeStats).catch(() => {});
     }
@@ -443,7 +448,6 @@ export default function TierLeaderboard() {
         .catch(() => setMissions([]));
     }
     if (board === 'hall' && hall === null) getHallOfFame().then(setHall).catch(() => setHall({ label: '', rows: [], source: 'auto' }));
-    if (board === 'domestic' && domestic === null) getDomesticRankings(30).then(setDomestic).catch(() => setDomestic([]));
     if (board === 'verify' && myVerifs === null && user) myRankVerifications().then(setMyVerifs).catch(() => setMyVerifs([]));
     if (board === 'shop' && equippedMark === undefined && user) {
       getMyEquippedMark().then((k) => setEquippedMark(k)).catch(() => setEquippedMark(null));
@@ -502,25 +506,6 @@ export default function TierLeaderboard() {
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [user?.activityPoints]);
-
-  // 머니인/프라이즈 보드 — 전 매장 통합 집계(최초 진입 시 1회 로드)
-  useEffect(() => {
-    if (board === 'activity' || globalLoaded) return;
-    let active = true;
-    getGlobalRankingTotals()
-      .then((r) => { if (active) { setGlobal(r); setGlobalLoaded(true); } })
-      .catch(() => { if (active) setGlobalLoaded(true); });
-    return () => { active = false; };
-  }, [board, globalLoaded]);
-
-  // 머니인 보드 정렬 기준 = moneyinPoints(100만원당 1점, 서버 계산). 동점이면 상금 누적 → 최고 등수.
-  const globalRows = useMemo(() => {
-    const arr = [...global];
-    arr.sort((a, b) => board === 'prize'
-      ? (b.prizePoints - a.prizePoints) || (b.moneyinCount - a.moneyinCount)
-      : (b.moneyinPoints - a.moneyinPoints) || (b.prizePoints - a.prizePoints) || (a.bestPosition - b.bestPosition));
-    return arr.slice(0, 30);
-  }, [global, board]);
 
   const myProg = user ? tierProgress(user.activityPoints ?? 0) : null;
   const isAdmin = user?.role === 'admin';
@@ -723,97 +708,7 @@ export default function TierLeaderboard() {
         <p className="mb-2 min-h-[2.25rem] t-desc text-ink-muted">{BOARD_DESC[board]}</p>
 
         {board === 'league' ? (
-          league === null ? <RowSkeleton rows={6} />
-          : league.length === 0 ? (
-            <EmptyState
-              title="이번 주 리그가 비어 있어요"
-              hint="매장 QR 체크인(+3)·머니인(100만원당 +1)으로 첫 점수를 올려보세요"
-              icon={<Icon name="medal" />}
-            />
-          )
-          : (() => {
-            // 리그 UI(레퍼런스: 리스트 사이 "내 카드" 빅 강조 + 상단 승급 안내 배너)
-            const me = user ? league.find((r) => r.userId === user.id) ?? null : null;
-            const myRank = me ? league.indexOf(me) + 1 : null;
-            const nextTier = me ? [...LEAGUE_TIERS].reverse().find((t) => t.min > me.score) ?? null : null;
-            return (
-              <div className="space-y-2">
-                {/* 승급 안내 배너 — 다음 티어까지 남은 점수 */}
-                {me && (
-                  <div className="rounded-card border border-accent-400/30 bg-accent-300/10 px-3 py-2 text-center text-xs font-semibold text-accent-300">
-                    {nextTier
-                      ? <span className="inline-flex flex-wrap items-center justify-center gap-1">{`${nextTier.min - me.score}점만 더 모으면`}<Icon name={nextTier.icon} size={13} className={['shrink-0', nextTier.tone].join(' ')} />{`${nextTier.label} 티어로 승급해요`}</span>
-                      : <span className="inline-flex items-center justify-center gap-1"><Icon name="gem" size={13} className="shrink-0 text-sky-300" />최고 티어. 이번 주 왕좌를 지키세요!</span>}
-                  </div>
-                )}
-                <ul className="overflow-hidden rounded-card border border-border-subtle bg-surface-high">
-                  {league.map((r, i) => {
-                    const t = leagueTierOf(r.score);
-                    const isMe = user?.id === r.userId;
-                    if (isMe) {
-                      // 내 순위 빅 카드 — 리스트 흐름 속 인라인 강조(이미지 패턴)
-                      return (
-                        <li key={r.userId} className="border-b border-y border-accent-400/40 bg-accent-300/[0.08] px-3 py-3 last:border-b-0">
-                          <div className="flex items-center gap-3">
-                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-300 text-base font-extrabold text-white">
-                              {r.nickname.slice(0, 1)}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-xs font-bold text-accent-300">{myRank}위 · <span style={nickStyle(r)}>{markPrefix(r)}{r.nickname}</span> <span className="text-ink-muted font-semibold">(나)</span></p>
-                              <p className="text-2xl font-extrabold leading-tight tabular-nums text-ink-primary">
-                                {r.score}<span className="ml-0.5 text-xs font-bold text-ink-muted">점</span>
-                              </p>
-                              <p className="text-2xs text-ink-muted">체크인 {r.checkins}회 · 입상 {r.placements}회</p>
-                            </div>
-                            {t && (
-                              <span className="inline-flex shrink-0 items-center gap-1 rounded-badge border border-accent-400/40 bg-surface-float px-2 py-1 text-xs font-bold text-accent-300">
-                                <Icon name={t.icon} size={13} className={['shrink-0', t.tone].join(' ')} />{t.label}
-                              </span>
-                            )}
-                          </div>
-                        </li>
-                      );
-                    }
-                    return (
-                      <li key={r.userId} className="flex items-center gap-2.5 border-b border-border-subtle px-3 py-2 last:border-b-0">
-                        <RankNum n={i + 1} />
-                        <div className="min-w-0 flex-1">
-                          <span className="text-sm font-semibold text-ink-primary truncate" style={nickStyle(r)}>{markPrefix(r)}{r.nickname}</span>
-                          <span className="block text-2xs text-ink-muted">체크인 {r.checkins}회 · 입상 {r.placements}회</span>
-                        </div>
-                        {t && <span className="inline-flex shrink-0 items-center gap-1 rounded-badge bg-surface-float px-1.5 py-0.5 text-2xs font-bold text-ink-secondary"><Icon name={t.icon} size={11} className={['shrink-0', t.tone].join(' ')} />{t.label}</span>}
-                        <span className="w-12 shrink-0 text-right text-xs font-bold tabular-nums text-accent-300">{r.score}</span>
-                      </li>
-                    );
-                  })}
-                </ul>
-                {/* TOP20 밖이거나 이번 주 무활동 — 입장 안내 */}
-                {user && !me && !isAdmin && (
-                  <p className="rounded-card border border-border-subtle bg-surface-high px-3 py-2 text-center text-2xs text-ink-muted">
-                    아직 이번 주 리그 점수가 없어요 — 체크인(+3)·머니인(100만원당 +1)으로 리그에 입장하세요!
-                  </p>
-                )}
-                {/* 티어 메달 진열장 — 브론즈~다이아(레퍼런스 하단 메달 행). 내 티어 하이라이트, 미달성은 흐림 */}
-                <div className="grid grid-cols-5 gap-1.5">
-                  {[...LEAGUE_TIERS].reverse().map((t) => {
-                    const mine = me ? leagueTierOf(me.score)?.key === t.key : false;
-                    const reached = me ? me.score >= t.min : false;
-                    return (
-                      <div key={t.key}
-                        className={['card-sink rounded-card border px-1 py-2 text-center transition-colors',
-                          mine ? 'border-accent-400/60 bg-accent-300/10'
-                            : reached ? 'border-border-subtle bg-surface-high'
-                            : 'border-border-subtle bg-surface-high opacity-40'].join(' ')}>
-                        <Icon name={t.icon} size={22} className={['mx-auto', t.tone].join(' ')} />
-                        <p className={['mt-1 text-2xs font-bold', mine ? 'text-accent-300' : 'text-ink-secondary'].join(' ')}>{t.label}</p>
-                        <p className="text-2xs tabular-nums text-ink-muted">{t.min}점~</p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })()
+          <NotComputed board="league" />
         ) : board === 'missions' ? (
           missionsBlock
         ) : board === 'badges' ? (
@@ -835,34 +730,7 @@ export default function TierLeaderboard() {
             </div>
           )
         ) : board === 'domestic' ? (
-          domestic === null ? <RowSkeleton rows={6} />
-          : domestic.length === 0 ? (
-            <EmptyState
-              title="아직 인증된 입상이 없어요"
-              hint="'순위 인증' 탭에서 대회 입상 증빙을 올리면 이 순위에 합산됩니다"
-              icon={<Icon name="trophy" />}
-              action={<button type="button" onClick={() => setBoard('verify')} className="btn-primary px-4 py-2 text-xs">순위 인증하러 가기</button>}
-            />
-          )
-          : (
-            <ul className="space-y-1">
-              {domestic.map((r, i) => (
-                <li key={r.nickname} className="flex items-center gap-2.5 rounded-input bg-surface-high px-3 py-2">
-                  <span className="w-6 shrink-0 text-center text-sm font-extrabold tabular-nums text-accent-300">{i + 1}</span>
-                  {/* ⚠ 부모에 truncate(nowrap+overflow+ellipsis)를 걸고 자식을 block 으로 두면
-                      통계 줄은 **말줄임표조차 없이 하드 클립**된다 — ellipsis 는 부모의 인라인 콘텐츠에만
-                      적용되기 때문이다. 누적 금액이 커질수록 먼저 사라졌다. 줄마다 각자 줄인다. */}
-                  <span className="flex min-w-0 flex-1 flex-col text-sm font-semibold text-ink-primary">
-                    <span className="truncate">{r.nickname}</span>
-                    <span className="truncate text-2xs font-normal text-ink-muted tabular-nums">
-                      대회 {r.wins}회{r.overseas > 0 ? ` · 해외 ${r.overseas}회` : ''} · 누적 {(r.totalWon / 10000).toLocaleString()}만
-                    </span>
-                  </span>
-                  <span className="shrink-0 text-sm font-extrabold tabular-nums text-emerald-300">{r.points.toLocaleString()}점</span>
-                </li>
-              ))}
-            </ul>
-          )
+          <NotComputed board="domestic" />
         ) : board === 'verify' ? (
           !user ? <p className="py-6 text-center t-desc text-ink-muted">로그인하면 입상 인증을 신청할 수 있습니다</p>
           : (
@@ -901,7 +769,7 @@ export default function TierLeaderboard() {
                   onClick={submitVerify}
                   className="btn-primary w-full disabled:opacity-50">{vBusy ? '제출 중…' : '인증 요청'}</button>
                 <p className="text-2xs leading-relaxed text-ink-muted">
-                  운영자가 <b className="text-ink-secondary">대회 입상으로 승인한 건</b>만 국내 순위에 합산되며, <b className="text-ink-secondary">100만원(100T)당 1점</b>입니다(임계 미만은 점수 없음). 대회 여부는 증빙을 보고 운영자가 최종 판정합니다. <b className="text-ink-secondary">신분증 이미지는 승인·거절 즉시 삭제</b>되며 다른 용도로 사용되지 않습니다. AI 생성·조작 이미지는 반려됩니다.
+                  운영자가 <b className="text-ink-secondary">대회 입상으로 승인한 건</b>만 인증 기록으로 보관됩니다. 점수 합산 기준은 현재 미정(미산정)이라 국내 순위에는 반영되지 않습니다. 대회 여부는 증빙을 보고 운영자가 최종 판정합니다. <b className="text-ink-secondary">신분증 이미지는 승인·거절 즉시 삭제</b>되며 다른 용도로 사용되지 않습니다. AI 생성·조작 이미지는 반려됩니다.
                 </p>
               </div>
               {myVerifs && myVerifs.length > 0 && (
@@ -1381,36 +1249,8 @@ export default function TierLeaderboard() {
               </p>
             </div>
           )
-        ) : board !== 'activity' ? (
-          !globalLoaded ? (
-            <RowSkeleton rows={8} />
-          ) : globalRows.length === 0 ? (
-            <EmptyState
-              title="아직 집계된 매장 순위가 없어요"
-              hint="매장이 대회 순위를 올리면 100만원(100T)당 1점으로 이 표에 합산됩니다"
-              icon={<Icon name="chart" />}
-            />
-          ) : (
-            <ul className="rounded-card border border-border-subtle bg-surface-high overflow-hidden">
-              {globalRows.map((r, i) => (
-                <li key={r.nickname} className="flex items-center gap-2.5 px-3 py-2 border-b border-border-subtle last:border-b-0">
-                  <RankNum n={i + 1} />
-                  <div className="flex-1 min-w-0">
-                    <span className="text-sm font-semibold text-ink-primary truncate" style={nickStyle(r)}>{markPrefix(r)}{r.nickname}</span>
-                    <span className="block text-2xs text-ink-muted">매장 {r.venues}곳 · 최고 {r.bestPosition}등</span>
-                  </div>
-                  <span className="text-right">
-                    <span className="block text-sm font-bold tabular-nums text-accent-300">
-                      {board === 'prize' ? `${r.prizePoints.toLocaleString()}점` : `${r.moneyinPoints.toLocaleString()}점`}
-                    </span>
-                    <span className="block text-2xs text-ink-muted tabular-nums">
-                      {board === 'prize' ? `머니인 ${r.moneyinCount}회` : `입상 ${r.moneyinCount}회`}
-                    </span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )
+        ) : board === 'moneyin' ? (
+          <NotComputed board="moneyin" />
         ) : loading ? (
           <ActivityBoardSkeleton />
         ) : rows.length === 0 ? (

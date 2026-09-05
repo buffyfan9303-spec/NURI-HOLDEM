@@ -401,7 +401,6 @@ function CommunityAdsCard() {
 const GOAL_TYPE_OPTIONS: { value: MissionGoalType; label: string }[] = [
   { value: 'checkin', label: '매장 체크인 N회' },
   { value: 'post', label: '게시글 N개 쓰기' },
-  { value: 'moneyin', label: '머니인 N회' },
 ];
 function MissionsAdminCard() {
   const toast = useToast();
@@ -500,7 +499,7 @@ function MissionsAdminCard() {
         <button type="button" onClick={save} disabled={busy} className="btn-primary px-3 py-1.5 text-xs disabled:opacity-60">{editRow ? '수정 저장' : '+ 추가'}</button>
         {editRow && <button type="button" onClick={resetForm} disabled={busy} className="btn-ghost px-3 py-1.5 text-xs disabled:opacity-60">취소</button>}
       </div>
-      <p className="text-xs text-ink-muted">유형은 체크인·게시글·머니인 3가지. 달성 검증은 서버(claim_mission RPC)가 자동으로 합니다.</p>
+      <p className="text-xs text-ink-muted">유형은 체크인·게시글 2가지(대회 순위 기반 미션은 2026-09-05 종료). 달성 검증은 서버(claim_mission RPC)가 자동으로 합니다.</p>
     </section>
   );
 }

@@ -64,9 +64,9 @@ export default function SeasonPanel({ venueId, canManage = false, venueName }: {
   };
   const doEnd = async () => {
     if (busy || !active) return;
-    if (!window.confirm('시즌을 종료하고 상위 3명에게 보상(활동점수)을 지급할까요? 되돌릴 수 없습니다.')) return;
+    if (!window.confirm('시즌을 종료하고 순위를 명예의 전당에 기록할까요? 되돌릴 수 없습니다.')) return;
     setBusy(true);
-    try { const n = await endVenueSeason(active.id); toast.show(`시즌 종료 · ${n}명 기록 아카이브 + 상위 보상 지급`, 'success'); load(); }
+    try { const n = await endVenueSeason(active.id); toast.show(`시즌 종료 · ${n}명 기록 아카이브`, 'success'); load(); }
     catch (e) { toast.show(e instanceof Error ? e.message : '종료 실패', 'error'); } finally { setBusy(false); }
   };
   const openArchive = async (id: string) => {
@@ -99,7 +99,7 @@ export default function SeasonPanel({ venueId, canManage = false, venueName }: {
             <label className="flex-1">시작 <input type="date" value={startsOn} onChange={(e) => setStartsOn(e.target.value)} className="input mt-0.5 w-full text-xs" /></label>
             <label className="flex-1">종료 <input type="date" value={endsOn} onChange={(e) => setEndsOn(e.target.value)} className="input mt-0.5 w-full text-xs" /></label>
           </div>
-          <p className="text-2xs text-ink-muted">종료일이 지나면 자동으로 마감·보상됩니다(상위 3명 활동점수 1000/500/300점).</p>
+          <p className="text-2xs text-ink-muted">종료일이 지나면 자동으로 마감되고 순위가 명예의 전당에 기록됩니다(포인트·보상 지급 없음).</p>
           <div className="flex gap-1.5">
             <button type="button" onClick={() => setCreating(false)} className="btn-ghost flex-1 text-2xs">취소</button>
             <button type="button" onClick={doCreate} disabled={busy} className="btn-primary flex-1 text-2xs disabled:opacity-50">{busy ? '생성 중…' : '시즌 시작'}</button>

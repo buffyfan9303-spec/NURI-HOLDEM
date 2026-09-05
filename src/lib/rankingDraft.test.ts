@@ -22,7 +22,7 @@ class MemStorage {
 }
 
 const row = (over: Partial<RankRow> = {}): RankRow =>
-  ({ nickname: '', realName: '', prize: '', voucher: '', note: '', ...over });
+  ({ nickname: '', realName: '', ...over });
 
 const K = (event = '') => rankDraftKey('v1', '2026-07-26', event);
 
@@ -54,12 +54,17 @@ describe('무엇을 초안으로 남기는가', () => {
     expect(readRowsDraft(K(''))).toBeNull();
   });
 
-  it('어느 칸이든 값이 하나라도 있으면 내용으로 본다', () => {
+  it('참가자(닉네임·실명)만 내용으로 본다', () => {
     expect(hasRowContent([row()])).toBe(false);
     expect(hasRowContent([row({ nickname: 'a' })])).toBe(true);
-    expect(hasRowContent([row({ prize: '100' })])).toBe(true);
-    expect(hasRowContent([row({ voucher: '1' })])).toBe(true);
-    expect(hasRowContent([row({ note: '메모' })])).toBe(true);
+    expect(hasRowContent([row({ realName: '홍길동' })])).toBe(true);
+  });
+
+  it('🔴 구형 초안의 prize·voucher·note 는 되살아나지 않는다 — 과거 상금·이용권 값이 신규 저장·발급으로 재유입되지 않는다(법적위험완화 v3)', () => {
+    localStorage.setItem(K(''), JSON.stringify({ ts: Date.now(), rows: [{ nickname: 'a', realName: '', prize: '100', voucher: '2', note: '시상' }, { nickname: 'b', realName: '' }] }));
+    const rows = readRowsDraft(K(''))!;
+    expect(rows).toEqual([{ nickname: 'a', realName: '' }, { nickname: 'b', realName: '' }]);
+    expect(Object.keys(rows[0])).toEqual(['nickname', 'realName']);
   });
 
   it('내용이 사라지면(전부 지움) 초안도 함께 지워진다', () => {

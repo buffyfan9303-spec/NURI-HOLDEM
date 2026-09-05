@@ -18,7 +18,7 @@ import { myVisitedVenues, myPlayHistory, type VisitedVenue, type PlayHistory } f
 import { wonToMan } from '../../api/ledger';
 import { getMyReservations, cancelMyReservation, type MyReservationRow } from '../../api/reservations';
 import { getPostsByUser, type CommunityPost } from '../../api/community';
-import { getMyRankingHistory, getGlobalRankingTotals, parsePrizeMan, placementPoints, type MyRankingRow , formatPrize } from '../../api/rankings';
+import { getMyRankingHistory, placementPoints, type MyRankingRow } from '../../api/rankings';
 import { shareRecordCard, shareRecordCardKakao } from '../../lib/recordCard';
 import { kakaoConfigured, kakaoShareLink } from '../../lib/kakao';
 import { getMyReferralStats, inviteUrl, type ReferralStats } from '../../api/referrals';
@@ -82,7 +82,6 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
   const [plays, setPlays] = useState<PlayHistory[]>([]);
   const [resv, setResv] = useState<MyReservationRow[]>([]);   // 대회 참가(예약) 이력
   const [ranks, setRanks] = useState<MyRankingRow[]>([]);     // 내 입상 기록(닉네임 기준)
-  const [percentile, setPercentile] = useState<number | null>(null); // 전국 상위 N%(prizePoints 기준)
   const [refStats, setRefStats] = useState<ReferralStats>({ invited: 0, rewarded: 0 }); // 친구 초대 현황
   const [championships, setChampionships] = useState(0); // 시즌 우승 횟수(영구 배지)
   // 첫 프레임에 loading 이 false 면 방문·예약·입상 세 섹션이 동시에 "아직 없습니다"로 떨어진다
@@ -110,19 +109,12 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
       myVisitedVenues(), myPlayHistory(),
       getMyReservations().catch(() => [] as MyReservationRow[]),
       user?.nickname ? getMyRankingHistory(user.nickname, 200).catch(() => [] as MyRankingRow[]) : Promise.resolve([] as MyRankingRow[]),
-      user?.nickname ? getGlobalRankingTotals().catch(() => []) : Promise.resolve([]),
       user?.nickname ? getMyReferralStats().catch(() => ({ invited: 0, rewarded: 0 })) : Promise.resolve({ invited: 0, rewarded: 0 }),
       user?.nickname ? getMyChampionships(user.nickname).catch(() => 0) : Promise.resolve(0),
     ])
-      .then(([vi, pl, rv, rk, gt, rs, ch]) => {
+      .then(([vi, pl, rv, rk, rs, ch]) => {
         setVisits(vi); setPlays(pl); setResv(rv); setRanks(rk); setRefStats(rs); setChampionships(ch);
-        // 전국 상위 N% — prizePoints(누적 포인트) 기준 순위. 닉네임 매칭.
-        const nick = user?.nickname?.toLowerCase();
-        if (nick && gt.length) {
-          const sorted = [...gt].sort((a, b) => b.prizePoints - a.prizePoints);
-          const idx = sorted.findIndex((t) => t.nickname.toLowerCase() === nick);
-          setPercentile(idx >= 0 ? Math.max(1, Math.round(((idx + 1) / sorted.length) * 100)) : null);
-        } else setPercentile(null);
+        // 전국 상위 N%(상금 합산 기준)는 2026-09-05 미산정으로 전환(법적위험완화 v3) — 새 기준이 정해지기 전엔 계산하지 않는다.
       })
       .catch(() => {}).finally(() => setLoading(false));
   };
@@ -449,7 +441,7 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
             {loading ? <p className="py-6 text-center text-2xs text-ink-muted">불러오는 중…</p>
               : !user?.nickname ? <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="trophy" />} title="프로필에서 아이디(닉네임)를 설정하면 입상 기록이 자동 연결됩니다." action={<button type="button" onClick={() => goTab('settings')} className="btn-ghost px-3 py-1.5 text-2xs">아이디 설정하기</button>} /></div>
               : ranks.length === 0 ? <div className="rounded-aura border card-aura"><EmptyState icon={<Icon name="trophy" />} title="아직 입상 기록이 없습니다." hint="매장에서 순위가 등록되면 자동으로 표시됩니다." /></div>
-                : <><RecordSummary rows={ranks} percentile={percentile} nickname={user?.nickname ?? ''} /><RankTrendChart rows={ranks} />
+                : <><RecordSummary rows={ranks} nickname={user?.nickname ?? ''} /><RankTrendChart rows={ranks} />
                 <ul className="space-y-1.5">{ranks.slice(0, 15).map((r, i) => (
                   <li key={i} className="flex items-center gap-2.5 rounded-input border border-border-subtle bg-surface-low px-3 py-2">
                     <span className={['flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-2xs font-extrabold tabular-nums',
@@ -460,7 +452,6 @@ export default function CustomerDashboardPage({ open, onClose, unread = [], onOp
                       <p className="truncate text-sm font-semibold text-ink-primary">{r.venueName}</p>
                       <p className="text-2xs tabular-nums text-ink-muted">{r.date}</p>
                     </div>
-                    {r.prize && <span className="inline-flex shrink-0 items-center gap-1 text-xs font-bold tabular-nums text-gold-300"><Icon name="trophy" size={12} /> {formatPrize(r.prize)}</span>}
                   </li>
                 ))}</ul></>}
           </section>
@@ -677,8 +668,9 @@ function SwipeCancelRow({ cancelable, onCancel, children }: { cancelable: boolea
   );
 }
 
-/** 내 토너먼트 전적 요약 — 입상 기록(닉네임 매칭)에서 우승·입상·승률·누적 상금·즐겨찾는 매장 집계. */
-function RecordSummary({ rows, percentile, nickname }: { rows: MyRankingRow[]; percentile: number | null; nickname: string }) {
+/** 내 토너먼트 전적 요약 — 입상 기록(닉네임 매칭)에서 우승·입상·승률·누적 포인트·즐겨찾는 매장 집계.
+ *  누적 상금·전국 백분위(상금 합산 기준)는 2026-09-05 제거(법적위험완화 v3) — 공유 카드에도 싣지 않는다. */
+function RecordSummary({ rows, nickname }: { rows: MyRankingRow[]; nickname: string }) {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const n = rows.length;
@@ -688,14 +680,13 @@ function RecordSummary({ rows, percentile, nickname }: { rows: MyRankingRow[]; p
   const best = Math.min(...rows.map((r) => r.position));
   const avg = Math.round((rows.reduce((s, r) => s + r.position, 0) / n) * 10) / 10;
   const winRate = Math.round((wins / n) * 100);                   // 우승률
-  const prizeMan = rows.reduce((s, r) => s + parsePrizeMan(r.prize), 0); // 누적 상금(만원)
   const points = rows.reduce((s, r) => s + placementPoints(r.position), 0); // 누적 포인트
   // 자주 입상하는 매장(빈도)
   const freq = new Map<string, number>();
   for (const r of rows) freq.set(r.venueName, (freq.get(r.venueName) ?? 0) + 1);
   const fav = [...freq.entries()].sort((a, b) => b[1] - a[1])[0] ?? null;
 
-  const cardData = () => ({ nickname: nickname || '플레이어', wins, cashes, records: n, winRate, bestPosition: best, prizeMan, points, percentile });
+  const cardData = () => ({ nickname: nickname || '플레이어', wins, cashes, records: n, winRate, bestPosition: best, points });
   const doShare = async () => {
     if (busy) return;
     setBusy(true);
@@ -718,7 +709,6 @@ function RecordSummary({ rows, percentile, nickname }: { rows: MyRankingRow[]; p
     <div className="mb-2 rounded-aura border card-aura p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
         <p className="flex flex-wrap items-center gap-1 text-xs font-bold text-gold-300"><Icon name="trophy" size={13} /> 내 토너먼트 전적 <span className="font-normal text-ink-muted">(기록 {n}회)</span>
-          {percentile != null && <span className="ml-1.5 rounded-badge bg-accent-300/15 px-1.5 py-0.5 text-2xs text-accent-300">전국 상위 {percentile}%</span>}
         </p>
         <div className="flex shrink-0 gap-1">
           {kakaoConfigured() && <button type="button" onClick={doKakao} disabled={busy} className="shrink-0 rounded-chip px-2 py-1 text-2xs font-bold text-[#3C1E1E] disabled:opacity-50" style={{ background: '#FEE500' }}>카톡</button>}
@@ -731,11 +721,11 @@ function RecordSummary({ rows, percentile, nickname }: { rows: MyRankingRow[]; p
         <Stat label="우승률" value={`${winRate}%`} accent />
         <Stat label="최고 순위" value={`${best}위`} />
         <Stat label="평균 순위" value={`${avg}위`} />
-        <Stat label="누적 상금" value={prizeMan ? `${prizeMan.toLocaleString()}만` : '-'} accent />
+        <Stat label="누적 포인트" value={`${points.toLocaleString()}점`} accent />
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs text-ink-muted">
         {fav && <span>자주 입상 <b className="text-ink-secondary">{fav[0]}</b> ({fav[1]}회)</span>}
-        <span>누적 포인트 <b className="text-ink-secondary tabular-nums">{points.toLocaleString()}</b>점</span>
+        <span>전국 백분위 · 미산정(집계 기준 결정 전)</span>
       </div>
     </div>
   );

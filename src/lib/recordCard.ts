@@ -18,9 +18,7 @@ export interface RecordCardData {
   records: number;      // 기록(대회 수)
   winRate: number;      // 우승률 %
   bestPosition: number;
-  prizeMan: number;     // 누적 상금(만원)
   points: number;       // 누적 포인트
-  percentile: number | null; // 전국 상위 N%
 }
 
 const N = (v: number) => v.toLocaleString('ko-KR');
@@ -52,26 +50,13 @@ export async function buildRecordCardBlob(d: RecordCardData): Promise<Blob> {
   const nick = '@' + d.nickname;
   x.fillText(nick.length > 16 ? nick.slice(0, 15) + '…' : nick, 72, 268);
 
-  // 전국 상위 N% 배지
-  if (d.percentile != null) {
-    const bw = 520, bh = 120, bx = 72, by = 312;
-    x.fillStyle = 'rgba(252,213,53,0.10)';
-    roundRect(x, bx, by, bw, bh, 24); x.fill();
-    x.strokeStyle = 'rgba(252,213,53,0.45)'; x.lineWidth = 2;
-    roundRect(x, bx, by, bw, bh, 24); x.stroke();
-    x.fillStyle = MUTED; x.font = '600 30px sans-serif';
-    x.fillText('전국 플레이어 중', bx + 36, by + 50);
-    x.fillStyle = GOLD; x.font = '800 64px sans-serif';
-    x.fillText(`상위 ${d.percentile}%`, bx + 36, by + 104);
-  }
-
   // 스탯 그리드 2x3
   const cells: [string, string][] = [
     ['우승', `${N(d.wins)}회`],
     ['입상 TOP3', `${N(d.cashes)}회`],
     ['우승률', `${d.winRate}%`],
     ['최고 순위', d.bestPosition ? `${d.bestPosition}위` : '-'],
-    ['누적 상금', d.prizeMan ? `${N(d.prizeMan)}만` : '-'],
+    ['누적 포인트', `${N(d.points)}점`],
     ['기록', `${N(d.records)}회`],
   ];
   const gx = 72, gy = 500, gw = (S - 144), cw = gw / 3, ch = 200;
@@ -88,9 +73,7 @@ export async function buildRecordCardBlob(d: RecordCardData): Promise<Blob> {
     x.fillText(cells[i][0], cx, cy + 132);
   }
 
-  // 누적 포인트 라인
-  x.fillStyle = MUTED; x.font = '500 30px sans-serif';
-  x.fillText(`누적 포인트 ${N(d.points)}점`, gx, gy + 2 * ch + 64);
+  // 전국 백분위·누적 상금은 2026-09-05 카드에서 뺐다(법적위험완화 v3 — 금액 파생 표시 금지).
 
   // 푸터
   x.fillStyle = LINE; x.fillRect(72, S - 96, S - 144, 1);
@@ -226,7 +209,7 @@ export async function shareRecordCard(d: RecordCardData): Promise<'shared' | 'do
   const nav = navigator as Navigator & { canShare?: (data: ShareData) => boolean };
   if (nav.canShare && nav.canShare({ files: [file] }) && navigator.share) {
     try {
-      await navigator.share({ files: [file], title: 'NURI HOLDEM 전적', text: `내 홀덤 토너먼트 전적 (전국 상위 ${d.percentile ?? '-'}%)\n나도 기록 남기기 👉 ${inviteUrl(d.nickname)}`, url: inviteUrl(d.nickname) });
+      await navigator.share({ files: [file], title: 'NURI HOLDEM 전적', text: `내 홀덤 토너먼트 전적 · 우승 ${d.wins}회\n나도 기록 남기기 👉 ${inviteUrl(d.nickname)}`, url: inviteUrl(d.nickname) });
       return 'shared';
     } catch (e) {
       if ((e as Error).name === 'AbortError') return 'shared'; // 사용자가 취소 — 에러 아님
@@ -247,7 +230,7 @@ export async function shareRecordCardKakao(d: RecordCardData): Promise<boolean> 
   const blob = await buildRecordCardBlob(d);
   return kakaoShareImage(blob, {
     title: 'NURI HOLDEM 내 전적',
-    description: `전국 상위 ${d.percentile ?? '-'}% · 우승 ${d.wins}회 · 우승률 ${d.winRate}%`,
+    description: `우승 ${d.wins}회 · 우승률 ${d.winRate}% · 기록 ${d.records}회`,
     link: inviteUrl(d.nickname),
   });
 }

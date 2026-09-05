@@ -11,7 +11,7 @@ import {
   type League, type LeagueMember, type LeagueEntry, type LeagueMemberStatus,
   type LeagueVenueStatus, type LeagueLiveStatus, type LeagueItmPlayer,
 } from '../../api/leagues';
-import { getVenueRankings , formatPrize } from '../../api/rankings';
+import { getVenueRankings } from '../../api/rankings';
 
 const STATUS_BADGE: Record<LeagueMemberStatus, { label: string; cls: string }> = {
   pending:  { label: '대기', cls: 'bg-amber-500/15 text-amber-400' },
@@ -127,12 +127,10 @@ function LeagueLiveBoard({ league, isOwner, members, venueId, canConfigure, onCh
         const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const r = await getVenueRankings(venueId, today).catch(() => ({ entries: [] as any[] }));
-        // 입상권(prize 있는 순위)만 ITM 으로 보고 — 실제 등수(position) 사용
+        // 그날 저장된 순위 전원을 ITM 으로 본다 — 실제 등수(position) 사용. 상금은 2026-09-05 부터 순위에 없다(법적위험완화 v3).
         itm = (r.entries ?? [])
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .filter((e: any) => (e.prize ?? '').toString().trim() !== '')
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .map((e: any) => ({ name: e.nickname || e.realName || '참가자', place: e.position, prize: e.prize || undefined }));
+          .map((e: any) => ({ name: e.nickname || e.realName || '참가자', place: e.position }));
       }
       await setLeagueStatus(league.id, venueId, status, entries, itm);
       toast.show(status === 'running' ? '진행 중으로 표시했습니다' : status === 'settled' ? `정산 완료 · 입상 ${itm?.length ?? 0}명 보고됨` :'시작 전으로 되돌렸습니다', 'success');
@@ -221,7 +219,6 @@ function LeagueLiveBoard({ league, isOwner, members, venueId, canConfigure, onCh
                   <span className="w-5 text-right font-bold tabular-nums text-accent-300">{p.place ?? i + 1}</span>
                   <span className="min-w-0 flex-1 truncate font-semibold text-ink-primary">{p.name}</span>
                   <span className="shrink-0 rounded-badge bg-surface-float px-1.5 py-0.5 text-[9px] font-bold text-ink-secondary">{p.venue}</span>
-                  {p.prize && <span className="shrink-0 text-2xs text-gold-300">{formatPrize(p.prize)}</span>}
                 </li>
               ))}
             </ul>

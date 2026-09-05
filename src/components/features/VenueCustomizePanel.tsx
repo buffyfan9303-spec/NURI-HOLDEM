@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useToast } from '../atoms/Toast';
 import Icon from '../atoms/Icon';
-import {
+import { DEFAULT_RANK_METRICS,
   getVenuePageConfig, setVenuePageConfig, getScoreEntries, addScoreEntry, deleteScoreEntry,
   getVenueRankingTotals, getVenuePlayerCounts, DEFAULT_PLACEMENT_POINTS,
   boardLabel, boardDesc, boardUnit, isCustomBoard, customKeyOf, boardPeriodStart, BOARD_PERIOD_LABEL,
@@ -21,7 +21,7 @@ const PAGE_TABS: { key: string; label: string }[] = [
   { key: 'community', label: '커뮤니티' },
 ];
 // 웹 데이터로 자동 산출되는 기본 보드 6종
-const BUILTIN_METRICS: RankBoardId[] = ['score', 'prize', 'moneyin_count', 'moneyin_rate', 'buyin_count', 'visit_count'];
+const BUILTIN_METRICS: RankBoardId[] = ['score', 'moneyin_count', 'moneyin_rate', 'buyin_count', 'visit_count']; // 'prize'(상금 합산)는 2026-09-05 폐지
 // 커스텀 보드 상한 — 오너 #18("포인트 지급/차감 메뉴를 더 추가"). 그 드롭다운의 항목이 곧
 // 이 보드들이라, 상한 3 이 메뉴 길이의 상한이었다. 6 으로 올린다(보드 종류 선택은 여전히 2개까지).
 const MAX_CUSTOM_BOARDS = 6;
@@ -299,11 +299,11 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
 
   const customBoards = cfg.customBoards ?? [];
   const allBoards: RankBoardId[] = [...BUILTIN_METRICS, ...customBoards.map((b) => `custom:${b.key}`)];
-  const metrics = (cfg.rankMetrics ?? ['score', 'prize']).filter((m) => allBoards.includes(m)).slice(0, 2);
+  const metrics = (cfg.rankMetrics ?? DEFAULT_RANK_METRICS).filter((m) => allBoards.includes(m)).slice(0, 2);
 
   const toggleMetric = (m: RankBoardId) => {
     setCfg((c) => {
-      const cur = ((c.rankMetrics ?? ['score', 'prize']) as RankBoardId[]).filter((x) => allBoards.includes(x)).slice(0, 2);
+      const cur = ((c.rankMetrics ?? DEFAULT_RANK_METRICS) as RankBoardId[]).filter((x) => allBoards.includes(x)).slice(0, 2);
       if (cur.includes(m)) {
         if (cur.length === 1) return c; // 최소 1개
         return { ...c, rankMetrics: cur.filter((x) => x !== m) };
@@ -509,8 +509,8 @@ export function VenueRankHub({ venueId, canConfigure }: { venueId: string; canCo
             )}
           </div>
           <p className="text-2xs text-ink-muted">
-            한 등수당 <span className="font-semibold text-accent-300">최대 {PLACEMENT_POINT_MAX}점</span>입니다 — 서버가 지급 순간에 같은 상한으로 잘라내기 때문에,
-            더 큰 값을 저장해 두면 <span className="font-semibold">저장은 되는데 실제 지급은 {PLACEMENT_POINT_MAX}점</span>이 됩니다. 등수는 최대 {MAX_PLACEMENT_ROWS}등까지 정할 수 있어요.
+            한 등수당 <span className="font-semibold text-accent-300">최대 {PLACEMENT_POINT_MAX}점</span>입니다 — 서버가 집계 순간에 같은 상한으로 잘라내기 때문에,
+            더 큰 값을 저장해 두면 <span className="font-semibold">저장은 되는데 실제 집계는 {PLACEMENT_POINT_MAX}점</span>이 됩니다. 등수는 최대 {MAX_PLACEMENT_ROWS}등까지 정할 수 있어요.
           </p>
           <button type="button" onClick={() => setCfg((c) => ({ ...c, placementPoints: [...DEFAULT_PLACEMENT_POINTS] }))} className="btn-ghost text-2xs px-2">기본값(10·7·5·3·2)으로</button>
         </section>
@@ -834,7 +834,6 @@ function RankBoardPreview({ venueId, cfg }: { venueId: string; cfg: VenuePageCon
           const k = t.nickname.toLowerCase();
           const buyins = buyinBy[k] ?? 0;
           const value = metric === 'score' ? t.moneyPoints + (manualBy[k] ?? 0)
-            : metric === 'prize' ? t.prizeMan
             : metric === 'moneyin_count' ? t.appearances
             : buyins >= 5 ? Math.round((t.appearances / buyins) * 100) : -1;
           return { name: t.nickname, value };
