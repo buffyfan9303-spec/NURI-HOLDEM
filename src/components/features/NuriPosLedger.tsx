@@ -36,6 +36,7 @@ import { getClockState, saveClockState, saveClockLevel, subscribeClock, defaultC
 import { getMyVenueStaff, searchMembersForRanking, type User } from '../../api/auth';
 import { useBackClose } from '../../lib/backstack';
 import { planBuyinApprovals } from '../../lib/buyinApproval';
+import { discountsFromPromotions } from '../../lib/posterDiscounts';
 import LoadErrorCard from '../atoms/LoadErrorCard';
 import EmptyState from '../atoms/EmptyState';
 import SegmentedTabs from '../atoms/SegmentedTabs';
@@ -133,6 +134,9 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
   const [hasPw, setHasPw]     = useState(false);
   const [selected, setSelected] = useState<SelectedCell | null>(null);
   const [payBusy, setPayBusy] = useState(false); // 결제 저장 중 — 더블탭 이중 기록 방지
+  // 보드 상단 '바인 할인' 고정 선택. null = 자동(클락 레벨) — **기본값이라 기존 운영이 그대로다**.
+  // 0 = 할인 없음 고정, 1~5 = 그 프리셋 고정. 결제창·QR 승인이 모두 이 값을 기본으로 받는다.
+  const [discPick, setDiscPick] = useState<number | null>(null);
   const [query, setQuery]     = useState('');
   const [addOpen, setAddOpen] = useState(false);
   const [newName, setNewName] = useState('');
@@ -315,9 +319,9 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     }
     setPendingReqs((prev) => prev.filter((x) => x.id !== r.id));
     setPayPick(null); setSplitFor(null);
-    // 접수대 결제 모달과 같은 규칙으로 '지금 레벨의 자동 할인'을 실어 보낸다.
+    // 접수대 결제 모달과 **같은 기본 할인**을 실어 보낸다(보드 상단 고정 선택 → 없으면 레벨 자동).
     // 예전엔 QR 승인 경로만 할인이 통째로 빠져, 같은 레벨인데 창구에 따라 금액이 갈렸다(2026-09-05 감사).
-    const discIdx = autoDiscountIndex(session.discounts, clockLevelNow());
+    const discIdx = defaultDiscIdx();
     return approveBuyinRequest(r.id, target, withBuyin, payMethod, split, discIdx)
       .then(() => { toast.show(`${r.playerName} 승인 · ${gLabel(target)} 명단 추가${r.voucherId ? ' + 티켓 기록(이용권)' : withBuyin ? (split ? ' + 분할 바인 기록' :` + ${payMethod === 'card' ? '카드' : payMethod === 'transfer' ? '이체' : '현금'} 바인 기록`) : ''}`, 'success'); loadPending(); })
       .catch((e) => { toast.show(e instanceof Error ? e.message : '승인 실패', 'error'); loadPending(); });
@@ -339,7 +343,7 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     if (plan.mixed && !window.confirm(`${plan.groups.map((g) => `${gLabel(g.gameSeq)} ${g.items.length}명`).join(' / ')}으로 나눠 승인합니다.\n계속할까요?`)) return;
     const n = flat.length;
     setPendingReqs(plan.skipped); // 낙관: 승인 대상만 비우고 '게임 미개설' 보류 건은 목록에 남긴다
-    Promise.all(flat.map((x) => approveBuyinRequest(x.id, x.seq, false, 'cash', undefined, autoDiscountIndex(session.discounts, clockLevelNow())).catch(() => null)))
+    Promise.all(flat.map((x) => approveBuyinRequest(x.id, x.seq, false, 'cash', undefined, defaultDiscIdx()).catch(() => null)))
       .then(() => {
         const spread = plan.groups.map((g) => `${gLabel(g.gameSeq)} ${g.items.length}`).join(' · ');
         toast.show(`${n}건 승인. ${spread}${plan.skipped.length ?` · ${plan.skipped.length}건 보류(게임 미개설)` : ''}`, 'success');
@@ -362,6 +366,14 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
     if (!clock || clock.sessionDate !== date) return 0;
     return currentLevelNo(clock);
   }, [clock, date]);
+  /** 새 바인의 기본 할인 자리번호 — 보드 상단 고정 선택이 있으면 그것, 없으면 클락 레벨 자동(#20).
+   *  ⚠ 결제창·QR 단건 승인·QR 일괄 승인이 **모두** 이 함수를 쓴다. 창구에 따라 금액이 갈리면 안 된다. */
+  const defaultDiscIdx = useCallback(
+    (): number => discPick ?? autoDiscountIndex(session.discounts, clockLevelNow()),
+    [discPick, session.discounts, clockLevelNow],
+  );
+  // 날짜·게임을 옮기면 할인 프리셋 목록 자체가 달라진다 — 자리번호를 물고 가면 다른 금액이 된다.
+  useEffect(() => { setDiscPick(null); }, [date, gameSeq]);
   const clockEarlyNow = useCallback((): EarlyType | null => {
     const no = clockLevelNow();
     if (no <= 0 || !clock) return null;
@@ -1117,6 +1129,38 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
         </div>
       )}
 
+      {/* 바인 할인 빠른 선택 — 새로 찍는 바인의 기본 할인. 상시 크롬이라 진입 애니 없음(§20.4-7).
+          프리셋이 하나도 없으면 줄 자체를 그리지 않는다(빈 크롬 금지). */}
+      {!closed && session.discounts.some((d) => d.amount > 0) && (
+        <div className="flex flex-wrap items-center gap-1.5 rounded-input border border-border-subtle bg-surface-low px-2 py-1.5">
+          <span className="shrink-0 text-2xs font-bold text-ink-muted">바인 할인</span>
+          {(() => {
+            const autoIdx = autoDiscountIndex(session.discounts, clockLevelNow());
+            const chip = (on: boolean) => ['min-h-11 rounded-badge border px-3 text-xs font-bold transition-colors',
+              on ? 'border-accent-400/40 bg-accent-300/15 text-accent-300' : 'border-border-default text-ink-muted hover:text-ink-secondary'].join(' ');
+            return (
+              <>
+                <button type="button" onClick={() => setDiscPick(null)} className={chip(discPick === null)}>
+                  자동{autoIdx > 0 ? ` · ${session.discounts[autoIdx - 1]?.label || `할인${autoIdx}`}` : ''}
+                </button>
+                <button type="button" onClick={() => setDiscPick(0)} className={chip(discPick === 0)}>할인 없음</button>
+                {/* 비운 자리(0원)는 감추되 자리번호는 그대로 — 바인 계산의 기준이라 재배열 불가 */}
+                {session.discounts.map((d, i) => (d.amount <= 0 ? null : (
+                  <button key={i} type="button" onClick={() => setDiscPick(i + 1)} className={chip(discPick === i + 1)}>
+                    <span className="tabular-nums">{d.label || `할인${i + 1}`} −{wonToMan(d.amount)}만</span>
+                  </button>
+                )))}
+                <p className="min-w-0 flex-1 break-keep text-2xs leading-tight text-ink-muted">
+                  {discPick === null
+                    ? '클락 레벨에 맞춰 자동으로 골라 줍니다. 결제창에서 건별로 바꿀 수 있어요.'
+                    : '새 바인·QR 승인의 기본값입니다. 결제창에서 건별로 바꿀 수 있어요.'}
+                </p>
+              </>
+            );
+          })()}
+        </div>
+      )}
+
       {/* 검색 + 유저 추가 */}
       {!closed && (
         <div className="space-y-1.5">
@@ -1385,7 +1429,8 @@ export default function NuriPosLedger({ venueId, canManage, venueName = 'NURI PO
         <PaymentModal
           cell={selected} hasPw={hasPw} session={session}
           levelNo={clockLevelNow()}
-          autoDiscIdx={autoDiscountIndex(session.discounts, clockLevelNow())}
+          autoDiscIdx={defaultDiscIdx()}
+          autoFromLevel={discPick === null}
           autoEarly={selected.entryNo === 1 ? clockEarlyNow() : 'none'}
           lastPick={(() => {
             // 신규 기록일 때만 — 그 손님의 직전 바인과 동일하게 원탭 반복(하룻밤 100+ 바인의 왕복 절감)
@@ -1900,6 +1945,23 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
       : arr.map((d, idx) => (idx === i ? { label: '', amount: 0, level: 0 } : d))
   ));
 
+  // 연결된 포스터의 '할인액이 붙은' 프로모션 — 없으면 가져오기 버튼 자체를 그리지 않는다(껍데기 버튼 금지).
+  const posterDiscs = useMemo(
+    () => (schedules.find((s) => s.id === schedId)?.promotions ?? []).filter((p) => (p.discountWon ?? 0) > 0),
+    [schedules, schedId],
+  );
+  // 포스터 → 장부 할인 프리셋. 기존 칸은 덮지 않고 뒤에 덧붙인다(자리번호가 바인 계산의 기준).
+  const importPosterDiscs = () => {
+    const r = discountsFromPromotions(posterDiscs, discs);
+    setDiscs(r.discounts);
+    const notes = [
+      r.added > 0 ? `포스터 할인 ${r.added}개를 가져왔습니다` : '새로 가져올 할인이 없습니다',
+      r.duplicates > 0 ? `${r.duplicates}개는 이미 있어 건너뜀` : '',
+      r.skipped > 0 ? `${r.skipped}개는 5칸이 차서 못 넣었습니다` : '',
+    ].filter(Boolean);
+    formToast.show(notes.join(' · '), r.added > 0 ? 'success' : 'info');
+  };
+
   // 프리셋 게임 클릭 → 아래 내용 자동입력(수정 가능). 담당직원(operId)은 프리셋과 무관 → 그대로 유지.
   const applyPreset = (p: LedgerPreset) => {
     setTitle(p.title);
@@ -2189,6 +2251,17 @@ function SessionForm({ base, mode, operatorName, onSubmit, onCancel, embedded, p
 
       <Field label="할인 이벤트 (최대 5) · 선택">
         <div className="space-y-1.5">
+          {/* 포스터에 적은 할인을 다시 타이핑하지 않게 — 연결 포스터에 할인액이 있을 때만 보인다 */}
+          {posterDiscs.length > 0 && (
+            <button type="button" onClick={importPosterDiscs}
+              className="flex w-full items-center gap-1.5 rounded-input border border-accent-400/40 bg-accent-300/10 px-2 py-1.5 text-2xs font-bold text-accent-300 transition-colors hover:bg-accent-300/15">
+              <Icon name="copy" size={13} className="shrink-0" />
+              포스터 할인 가져오기 ({posterDiscs.length}개)
+              <span className="min-w-0 flex-1 truncate text-right font-normal text-ink-muted">
+                {posterDiscs.map((p) => `${p.title || p.badge || '할인'} −${wonToMan(p.discountWon ?? 0)}만`).join(' · ')}
+              </span>
+            </button>
+          )}
           {discs.map((d, i) => (
             <div key={i} className="flex items-center gap-1.5">
               <span className="w-9 shrink-0 text-2xs font-bold text-accent-300">할인{i + 1}</span>
@@ -2371,12 +2444,14 @@ function Overlay({ title, onClose, children }: { title: string; onClose: () => v
 // ── 2-Tap 결제 입력 모달 ──────────────────────────────────────────────────────
 interface SplitInput { cashAmount: number; cardAmount: number; transferAmount: number; ticketCount: number; unpaidAmount: number; discountIndex: number; }
 
-function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCancelBuyin, onSetEarly, lastPick, busy = false, levelNo = 0, autoDiscIdx = 0, autoEarly = null }: {
+function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCancelBuyin, onSetEarly, lastPick, busy = false, levelNo = 0, autoDiscIdx = 0, autoFromLevel = true, autoEarly = null }: {
   cell: SelectedCell; hasPw: boolean; session: LedgerSession;
   /** 연동 클락의 지금 레벨(1-based, 0=미연동) — 얼리·할인 자동 적용의 근거를 화면에 밝힌다 */
   levelNo?: number;
   /** 그 레벨에서 자동 적용될 할인 자리번호(0=없음). 신규 기록의 초기값일 뿐 — 언제든 바꿀 수 있다(#20) */
   autoDiscIdx?: number;
+  /** autoDiscIdx 의 출처 — true=클락 레벨 자동, false=보드 상단에서 운영자가 고정한 값. 문구를 정직하게 가른다. */
+  autoFromLevel?: boolean;
   /** 신규 기록이 지금 저장되면 확정될 얼리 유형(null=클락 미연동 → 시각 자동판정에 맡김) */
   autoEarly?: EarlyType | null;
   onClose: () => void;
@@ -2521,9 +2596,11 @@ function PaymentModal({ cell, hasPw, session, onClose, onPick, onPickSplit, onCa
                   </div>
                   <p className="text-2xs text-ink-muted">
                     {autoKept
-                      ? <span className="text-accent-300">LV {levelNo} 자동 적용 — 다른 할인이나 ‘없음’으로 바꿔도 됩니다.</span>
+                      ? <span className="text-accent-300">
+                          {autoFromLevel ? `LV ${levelNo} 자동 적용` : '보드 상단에서 고른 기본 할인'} — 다른 할인이나 ‘없음’으로 바꿔도 됩니다.
+                        </span>
                       : (autoDiscIdx > 0 && !cell.buyin)
-                        ? <>자동 적용({discs[autoDiscIdx - 1]?.label || `할인${autoDiscIdx}`})을 직접 바꿨습니다.</>
+                        ? <>{autoFromLevel ? '자동 적용' : '기본값'}({discs[autoDiscIdx - 1]?.label || `할인${autoDiscIdx}`})을 직접 바꿨습니다.</>
                         : '할인액만큼 차감해 엔트리를 비례 계산합니다.'}
                   </p>
                 </div>
