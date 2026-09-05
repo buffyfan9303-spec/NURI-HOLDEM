@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useMemo, type ReactNode } from 'react';
+import { useCallback, useRef, useState, useEffect, useMemo, type ReactNode } from 'react';
 import Modal from '../atoms/Modal';
 import MarqueeText from '../atoms/MarqueeText';
 import Icon, { type IconName } from '../atoms/Icon';
@@ -26,6 +26,7 @@ import QRCode from 'qrcode';
 import { requestBuyin, buyinRequestUrl, kstToday } from '../../api/ledger';
 import SlidingPill from '../atoms/SlidingPill';
 import LoadErrorCard from '../atoms/LoadErrorCard';
+import { msgOf } from '../../lib/dbError';
 import { goSubTab } from '../../lib/subTabTransition';
 
 interface ScheduleDetailModalProps {
@@ -980,6 +981,9 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
   // 새로 마운트된다) 누르면 '이미 등록된 닉네임입니다' 에러가 난다 — 사용자 잘못이 아닌데
   // 사용자 탓으로 돌리는 형태다(2026-09-05 전수 조사).
   const [mine, setMine] = useState<Reservation | null | undefined>(undefined);
+  // 세 번째 상태 — 조회 '실패'. undefined(미조회)·null(예약 없음) 어느 쪽으로도 접지 않는다.
+  // API 가 오류를 null 로 삼키던 시절엔 실패가 곧 '예약하기' 재노출이었다(F08).
+  const [mineErr, setMineErr] = useState<unknown>(null);
   // 컴팩트 재구성(오너 지시 2026-08-27) — 예약 UI 는 기본 접힘. 한 줄 요약 + '더보기'로 펼친다.
   // CTA('예약하기')는 접힘 행 우측에 항상 노출 — 누르면 펼쳐져 닉네임 입력부터 이어진다.
   const [expanded, setExpanded] = useState(false);
@@ -1008,11 +1012,18 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
       .then(setResList)
       .catch((e) => { setResErr(e); setResList(undefined); });
   };
+  const loadMine = useCallback(() => {
+    if (!user) { setMineErr(null); setMine(null); return; }
+    setMineErr(null);
+    getMyReservation(scheduleId)
+      .then((r) => { setMine(r); setMineErr(null); })
+      // 직전에 성공한 값은 지우지 않는다 — 순단 때문에 '예약 완료'가 사라지면 중복 예약을 부른다.
+      .catch((e) => setMineErr(e));
+  }, [scheduleId, user]);
   useEffect(() => {
     setName(user?.nickname || user?.name || '');
-    if (user) getMyReservation(scheduleId).then(setMine).catch(() => {});
-    else setMine(null);
-  }, [scheduleId, user]);
+    loadMine();
+  }, [scheduleId, user, loadMine]);
   useEffect(() => { loadRes(); }, [scheduleId, isManager]); // eslint-disable-line react-hooks/exhaustive-deps
   // 업주 요약 한 줄 — 모르는 동안에는 숫자를 말하지 않는다.
   const resSummary = resErr !== null ? '예약 인원을 불러오지 못했어요'
@@ -1027,7 +1038,8 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
       await cancelMyReservation(scheduleId); setMine(null); toast.show('예약을 취소했습니다', 'info');
       loadRes();
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : '처리 실패', 'error');
+      toast.show(msgOf(e, '예약 취소 실패'), 'error');
+      loadMine(); // 0행 삭제(이미 취소됨)일 수 있다 — 화면을 서버 상태로 되돌린다
     }
     finally { setBusy(false); }
   };
@@ -1085,7 +1097,8 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
           className="flex min-w-0 flex-1 items-center gap-2 text-left">
           <span className="shrink-0 text-sm font-bold text-accent-300">참가 예약</span>
           <span className="min-w-0 flex-1 truncate text-2xs text-ink-muted">
-            {mine === undefined ? ' ' : mine ? `예약자: ${mine.displayName}` : isManager ? resSummary : '미리 자리 잡아두기'}
+            {mineErr !== null && mine === undefined ? '예약 정보를 불러오지 못했어요'
+              : mine === undefined ? ' ' : mine ? `예약자: ${mine.displayName}` : isManager ? resSummary : '미리 자리 잡아두기'}
           </span>
           {mine && <span className="shrink-0 text-2xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-badge">예약 완료</span>}
           {mine === null && ended && <span className="shrink-0 text-2xs font-bold text-ink-muted bg-surface-high border border-border-default px-2 py-0.5 rounded-badge">종료</span>}
@@ -1174,7 +1187,9 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
           ⚠ 미조회(undefined) 구간에는 **같은 높이의 자리만 예약**한다. 예전엔 곧바로 예약하기 버튼을
              그려서, 이미 예약한 사람이 그걸 누르고 '이미 등록된 닉네임입니다' 에러를 맞았다.
              CLAUDE.md — CLS 는 진입 애니가 아니라 공간 예약으로 해결한다. */}
-      {mine === undefined ? (
+      {mineErr !== null && mine === undefined ? (
+        <LoadErrorCard error={mineErr} onRetry={loadMine} what="내 예약 정보" compact />
+      ) : mine === undefined ? (
         <div className="skeleton h-[46px] w-full rounded-input" aria-busy="true" />
       ) : mine ? (
         <HoldToConfirmButton onConfirm={act} disabled={busy} holdingLabel="취소하는 중…"
@@ -1192,7 +1207,8 @@ function ReserveBox({ scheduleId, ownerId, venueId, date, startTime, sched, regI
         </div>
       )}
       <p className="text-2xs text-ink-muted">
-        {mine ? `예약자: ${mine.displayName}`
+        {mineErr !== null && mine === undefined ? '예약 여부를 확인하지 못했습니다. 다시 시도해 주세요.'
+          : mine ? `예약자: ${mine.displayName}`
           : ended ? '이미 끝난 대회라 예약이 닫혔습니다. 다음 대회 일정을 확인해 주세요.'
           : status === 'live' ? (
               // UX-1: 클락 실측이 있으면 '매장에 확인해 주세요' 대신 실제 답을 준다(서버는 답을 알고 있었다)

@@ -1804,12 +1804,19 @@ export default function App() {
     .map((r) => ({ venueId: r.venueId, venueName: r.venueName, gameSeq: r.gameSeq })), [myBuyinReqs]);
   // 🎫 오늘 예약한 대회 — 대회 당일 홈에서 '내 예약'이 안 보이던 격차(예약→방문 전환 지원)
   const [myTodayRes, setMyTodayRes] = useState<MyReservationRow[]>([]);
-  useEffect(() => {
-    if (!user) { setMyTodayRes([]); return; }
+  // 조회 실패를 빈 목록으로 두면 대회 당일 홈에서 '내 예약'이 통째로 사라진다 —
+  // 사용자는 예약이 취소된 줄 알고 다시 예약한다. 실패는 한 줄로 드러내고 재시도를 준다(F08).
+  const [myTodayResErr, setMyTodayResErr] = useState<unknown>(null);
+  const loadMyTodayRes = useCallback(() => {
+    if (!user) { setMyTodayRes([]); setMyTodayResErr(null); return; }
+    setMyTodayResErr(null);
     const today = new Date().toLocaleDateString('en-CA');
-    getMyReservations(30).then((list) => setMyTodayRes(list.filter((r) => r.date === today))).catch(() => {});
+    getMyReservations(30)
+      .then((list) => { setMyTodayRes(list.filter((r) => r.date === today)); setMyTodayResErr(null); })
+      .catch((e) => setMyTodayResErr(e)); // 직전 성공 목록은 지우지 않는다
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
+  useEffect(() => { loadMyTodayRes(); }, [loadMyTodayRes]);
 
   // ── 핸들러 ─────────────────────────────────────────────────────────────
 
@@ -2906,6 +2913,11 @@ export default function App() {
                     결과가 오기 전에는 자리를 만들지 않고, 오면 목록 아래에 붙인다 — 상단 스택 불변.
                     (알림함·마이에서도 같은 정보에 접근 가능해 기능 손실 없음) */}
           {/* 손님: 오늘 내 바인(참가) 요청 상태 배너 */}
+                {myTodayResErr !== null && myTodayRes.length === 0 && (
+                  <div className="pt-3">
+                    <LoadErrorCard error={myTodayResErr} onRetry={loadMyTodayRes} what="오늘 예약한 대회" compact />
+                  </div>
+                )}
                 {myTodayRes.length > 0 && (
                   <div className="animate-fade-in overflow-hidden pt-3 space-y-1.5">
                     <p className="flex items-center gap-1 px-1 text-2xs font-bold text-ink-secondary"><Icon name="cards" size={13} /> 오늘 예약한 대회</p>
